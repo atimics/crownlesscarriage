@@ -56,6 +56,42 @@ Run at least 1,000 seeds for ten simulated years. Record:
 The acceptable band must be established through playtesting; universal
 prosperity and universal collapse are both failures.
 
+### 5a. Locomotion invariants
+
+Both locomotion families must pass renderer-free tests. Robotic morphologies
+must preserve every rigid segment, respect swing/support budgets, retain pinned
+contacts, and produce bounded support feedback. Biomechanical morphologies must
+retain their bone graph and mass, keep joints inside anatomical limits, recruit
+the correct side of an antagonistic muscle pair, generate passive ligament
+response, fall under gravity without support, remain still when gravity is
+balanced by an equal external force, and report reaction torque or body impulse
+when a contact constrains motion.
+
+The biped fixture must traverse heel, flat, toe, and swing phases with both
+legs; keep stance feet fixed; preserve thigh and shin lengths; keep knee angles
+inside their declared limits; produce muscle-driven arm motion while walking
+and damp it at rest; discard ground contacts while airborne; hand unsupported
+motion to a ragdoll; preserve limb lengths through free fall and terrain impact;
+make terrain contact with multiple body landmarks; keep post-impact upward
+center-of-mass speed below the non-bouncing limit; recover through sustained
+brace, kneel, and stand stages; bound every frame-to-frame recovery pose change
+across every rendered landmark, including heel, ball, and toe; limit the
+visible skin blend change at fall and recovery handoffs;
+accelerate rather than teleport to requested speed;
+generate a ground reaction near body weight; brake within a bounded distance;
+keep its aggregate body root inside the anatomical support-height band; and
+enter, traverse, and leave its biomechanical climbing mode without changing
+bone lengths, exceeding anatomical arm reach, flipping an IK bend plane,
+instantaneously acquiring a contact, or exceeding the whole-pose per-frame
+continuity bound. A biped whose ragdoll remains active must be refused climb
+admission even when its navigation body is grounded. Local-world
+fixtures must climb the actual 1.65-unit tower and fall from at least three
+edges; after street impact, both center-of-mass and worst-particle upward speed
+must remain below the non-bouncing bound, and body contact may not disappear for
+more than four consecutive frames before recovery. Release-to-street time must
+remain within the authored gravity band for every tested edge, and the generic
+ragdoll fixture must reach its plane within a bounded free-fall frame window.
+
 ### 6. Causal provenance
 
 Every surfaced situation must trace through finite ledger parents to concrete

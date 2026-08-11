@@ -91,7 +91,7 @@ behaviour understandable.
 
 Shipments are authoritative records containing:
 
-- Origin and destination
+- Origin, current leg destination, and final destination
 - Cargo and quantity
 - Route
 - Departure and expected arrival
@@ -102,6 +102,11 @@ Shipments are authoritative records containing:
 Carriages are instantiated physically near the player or when a situation uses
 them. The simulation does not require every shipment to remain a local-map
 entity.
+
+The implemented proof plans freight against final regional need, retains that
+intent through multiple transfers, unloads limited cargo at distressed hubs,
+and reroutes onward if a road changes. Loss is resolved independently on every
+leg and remains the parent of later shortages or political responses.
 
 ## Government and faction response
 
@@ -118,6 +123,12 @@ Factions respond based on interests and observed outcomes. They may lobby,
 withhold labour, hoard resources, sponsor smugglers, hire bandits, offer relief,
 or challenge policy. Their actions consume resources or relationships rather
 than appearing from a probability roll alone.
+
+The proof currently models treasury revenue, emergency grain purchased from
+outside the region, proactive road maintenance, changing crown/guild/commons
+support, and faction-funded deep hunts. These responses are deliberately
+capable of superseding a player charter: the world does not reserve its crises
+for the player.
 
 ## Causal event ledger
 
@@ -155,6 +166,11 @@ A world condition becomes a playable situation only if it contains:
 
 The situation engine presents only the best one or two situations in a region.
 It does not expose every threshold crossing as a quest.
+
+Generation II persists relief charters, road compacts, depth warrants, and
+quiet black-market commissions. Each stores a sponsor, causal event, target,
+progress, reward, deadline, and status. Trading, repairing, and expeditions
+resolve the same records shown on the situation board.
 
 ## Simulation invariants
 
