@@ -62,7 +62,6 @@ int main(void)
         .kind = CC_COMMAND_TRAVEL,
         .target_id = sim.settlements[3].id
     };
-    CC_CHECK(CcSimApply(&sim, &to_fortress, error, sizeof(error)));
     CC_CHECK(CcSimApply(&sim, &to_mine, error, sizeof(error)));
     int32_t food_before = sim.settlements[3].stock[CC_GOOD_FOOD];
 

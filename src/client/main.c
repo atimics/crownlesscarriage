@@ -468,7 +468,7 @@ static void DrawLocalHeader(const CcSim *sim, const LocalState *local)
     const CcSettlement *place = CcSimSettlement(sim, sim->player.location_id);
     DrawText(place != NULL ? place->name : "THE ROAD", 26, 18, 27, INK);
     DrawText(local->market_interior ? "MARKET HOUSE / PROCEDURAL FOOT CONTACTS" :
-             "STREET LEVEL / PHYSICAL POD LOCOMOTION", 28, 51, 11, TEAL);
+             "STREET LEVEL / BIOMECHANICAL MOVEMENT DOJO", 28, 51, 11, TEAL);
     DrawText(TextFormat("DAY %04d", sim->current_day), 790, 24, 15, CC_GOLD);
     DrawText(TextFormat("CROWNS %03" PRId64, sim->player.coins), 895, 24, 15, CC_GOLD);
     DrawText(TextFormat("CARGO %02d/%02d", CcPlayerCargoUsed(&sim->player),
@@ -545,8 +545,9 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
         if (second[0] != '\0') DrawText(second, 966, 582, 10, INK);
     }
     if (local->agent.morphology == CC_MORPHOLOGY_BIPED) {
-        DrawText(TextFormat("BIO BIPED / %s / muscles %.0f%%",
+        DrawText(TextFormat("BIO BIPED / %s / %s / muscles %.0f%%",
                             CcLocalTraversalName(local->agent.traversal),
+                            CcHumanoidActionName(local->agent.humanoid.action),
                             CcBiomechRigMeanActivation(
                                 &local->agent.humanoid.body) * 100.0f),
                  966, 605, 9, CC_VIOLET);
@@ -608,7 +609,7 @@ static void DrawLocalFooter(const CcSim *sim, const LocalState *local)
 {
     DrawPanel((Rectangle){20.0f, 664.0f, 1240.0f, 76.0f}, PANEL);
     DrawText(LocalPrompt(sim, local), 38, 681, 13, CC_GOLD);
-    DrawText("G village alarm   Q situations   TAB ledger   . day   K week",
+    DrawText("SPACE strike   X guard   G alarm   Q situations   TAB ledger",
              38, 708, 10, MUTED);
     DrawText("M map case at carriage   F5 save   F9 load   N new world",
              804, 693, 10, MUTED);
@@ -1339,6 +1340,25 @@ static void HandleInput(CcSim *sim, int32_t *selected, ClientView *view,
     }
 
     if (*view == VIEW_LOCAL) {
+        if (IsKeyPressed(KEY_X) &&
+            local->agent.morphology == CC_MORPHOLOGY_BIPED) {
+            bool guarded = local->agent.humanoid.action !=
+                           CC_HUMANOID_ACTION_GUARD;
+            CcHumanoidGaitSetGuarded(&local->agent.humanoid, guarded);
+            (void)snprintf(
+                message, message_capacity, "%s",
+                guarded ? "You settle behind your hands and hips; X releases the guard." :
+                          "You release the guarded stance.");
+        }
+        if (IsKeyPressed(KEY_SPACE) &&
+            local->agent.morphology == CC_MORPHOLOGY_BIPED) {
+            bool struck = CcHumanoidGaitBeginStrike(
+                &local->agent.humanoid, 1);
+            (void)snprintf(
+                message, message_capacity, "%s",
+                struck ? "The thrust travels from feet through hip, spine, shoulder, and hand." :
+                         "No strike: the body is already committed to another action.");
+        }
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
             CcLocalAgentPickTarget(&local->agent, GetMousePosition(), local_target,
                                    local_bounds, local->market_interior)) {
@@ -1493,11 +1513,12 @@ int main(int argc, char **argv)
                               strcmp(argv[1], "--capture-walk-cycle") == 0;
     bool capture_map_case = argc >= 2 &&
                             strcmp(argv[1], "--capture-map-case") == 0;
+    bool capture_dojo = argc >= 2 && strcmp(argv[1], "--capture-dojo") == 0;
     bool capture = argc >= 2 &&
                    (strcmp(argv[1], "--capture") == 0 || capture_board ||
                     capture_interior || capture_navigation || capture_limbs ||
                     capture_walk_cycle || capture_defense ||
-                    capture_downclimb || capture_map_case);
+                    capture_downclimb || capture_map_case || capture_dojo);
     const char *capture_path = argc >= 3 ? argv[2] : "architecture-proof.png";
     char save_path[640];
     CampaignSavePath(save_path, sizeof(save_path));
@@ -1560,6 +1581,19 @@ int main(int argc, char **argv)
                      local.course.raiders_retreating,
                      local.course.raider_resolve,
                      local.course.defenses_completed, fighting_frames);
+    }
+    if (capture_dojo) {
+        local.course.alarm_countdown = 1000.0f;
+        CcLocalCourseRunner *swimmer = &local.course.runners[0];
+        CcLocalAgentInit(&swimmer->agent, (Vector2){13.90f, 9.78f}, false);
+        swimmer->agent.crowned = false;
+        swimmer->agent.tunic_color = swimmer->marker_color;
+        (void)CcLocalAgentSetExactTarget(
+            &swimmer->agent, (Vector3){9.40f, 0.0f, 9.72f}, false);
+        for (int32_t frame = 0; frame < 420; ++frame) {
+            CcLocalCourseUpdate(&local.course, &sim, 1.0f / 60.0f);
+            if (swimmer->agent.swimming && frame > 90) break;
+        }
     }
     if (capture_interior) {
         local.market_interior = true;

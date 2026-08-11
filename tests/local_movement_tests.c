@@ -661,6 +661,7 @@ int main(void)
     bool runner_climbed[CC_LOCAL_COURSE_RUNNER_COUNT] = {false};
     bool runner_descended[CC_LOCAL_COURSE_RUNNER_COUNT] = {false};
     bool runner_ragdolled[CC_LOCAL_COURSE_RUNNER_COUNT] = {false};
+    bool runner_swam[CC_LOCAL_COURSE_RUNNER_COUNT] = {false};
     int32_t runner_advances[CC_LOCAL_COURSE_RUNNER_COUNT] = {0};
     for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
         CcLocalAgent *runner = &course.runners[i].agent;
@@ -695,6 +696,15 @@ int main(void)
                                   runner->traversal == CC_TRAVERSAL_DESCEND;
             runner_ragdolled[i] = runner_ragdolled[i] ||
                                   runner->traversal == CC_TRAVERSAL_RAGDOLL;
+            runner_swam[i] = runner_swam[i] ||
+                             runner->traversal == CC_TRAVERSAL_SWIM;
+            if (runner->traversal == CC_TRAVERSAL_SWIM &&
+                (runner->humanoid.action != CC_HUMANOID_ACTION_SWIM ||
+                 runner->humanoid.planted_count != 0 || runner->grounded)) {
+                (void)fprintf(stderr,
+                              "swimmer retained terrestrial support contacts\n");
+                return 1;
+            }
             if (!isfinite(runner->position.x) ||
                 !isfinite(runner->position.y) ||
                 !isfinite(runner->position.z) || runner->position.x < 0.0f ||
@@ -709,10 +719,12 @@ int main(void)
     int32_t climbers = 0;
     int32_t descenders = 0;
     int32_t ragdolls = 0;
+    int32_t swimmers = 0;
     for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
         climbers += runner_climbed[i] ? 1 : 0;
         descenders += runner_descended[i] ? 1 : 0;
         ragdolls += runner_ragdolled[i] ? 1 : 0;
+        swimmers += runner_swam[i] ? 1 : 0;
         if (runner_travel[i] < 3.0f || runner_advances[i] < 3) {
             Vector2 position = CcLocalAgentPosition(&course.runners[i].agent);
             const CcLocalAgent *stalled = &course.runners[i].agent;
@@ -728,10 +740,11 @@ int main(void)
         }
     }
     if (climbers != CC_LOCAL_COURSE_RUNNER_COUNT ||
-        descenders != CC_LOCAL_COURSE_RUNNER_COUNT || ragdolls != 0) {
+        descenders != CC_LOCAL_COURSE_RUNNER_COUNT || ragdolls != 0 ||
+        swimmers < 1) {
         (void)fprintf(stderr,
-                      "course traversal failed: climb %d descend %d ragdoll %d\n",
-                      climbers, descenders, ragdolls);
+                      "course traversal failed: climb %d descend %d swim %d ragdoll %d\n",
+                      climbers, descenders, swimmers, ragdolls);
         return 1;
     }
 

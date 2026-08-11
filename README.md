@@ -43,7 +43,10 @@ Controls:
   choose their next marked contact route there. Press `G` to sound the village
   alarm: training is interrupted, guards take obstacle-aware rally routes,
   form an interception line, repel incoming scouts, and return to duty. Alarm
-  frequency also responds to the simulated region's bandit influence.
+  frequency also responds to the simulated region's bandit influence. The
+  route crosses a buoyancy trench where the same skeleton releases its ground
+  contacts, swims under buoyancy and drag, and reacquires land. Press `Space`
+  to strike with the player body and `X` to enter or leave guard.
   `F`
   uses a nearby door, notice board, or carriage.
 - The humanoid biped is the playable, tuned body plan. Quadruped, hexapod, and
@@ -92,8 +95,8 @@ includes one reusable local settlement grammar, an enterable economy-backed
 market, visible animation rigs over the cute prototype characters, and a
 physical three-slot map case whose tradeable, persistent charts each describe
 one route through an aged and fallible cartographer's projection. Route
-encounters, deeper interiors, character
-combat, and dungeon maps remain the next projection layers; each will submit
+encounters, deeper interiors, consequential combat, and dungeon maps remain
+the next projection layers; each will submit
 validated outcomes to the same core rather than maintaining a second world.
 
 ## North star
@@ -170,6 +173,10 @@ The current executable proves:
 - Biomechanical biped climbing on the same skeleton and hero skin as walking,
   with human-length reach tests, transported knee/elbow planes, progressive
   hand and foot contacts, a supported top-out, and no handoff to the robot shell
+- A shared human action layer for locomotion, guard, muscle-driven strike,
+  clamber, swim, fall, and recovery. Strikes expose one physical impact window;
+  swimming removes ground support and applies buoyancy and drag without
+  invoking ragdoll
 - Force-driven whole-body motion with aggregate bone mass, gravity, damping,
   ground-reaction support, friction-limited propulsion and braking, lateral
   balance, and collision impulses; navigation supplies intent rather than
