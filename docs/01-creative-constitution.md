@@ -46,6 +46,11 @@ No major state is surfaced without:
 The detailed ledger is optional evidence, never the primary storytelling
 interface.
 
+The default view is character-scale and local. The kingdom map is a secondary
+planning instrument reached through the carriage or a shortcut; it helps the
+player decide where to go, but it is not where ordinary play, trade, discovery,
+or consequences live.
+
 ### 3. Every journey is a commitment
 
 A departure consumes time and limited capacity. Passengers, cargo, guards,
@@ -97,6 +102,19 @@ player cannot understand or influence create a busy world, not a living one.
   goals and three materially different interventions.
 - A single player action has a bounded effect. One wagon cannot feed an entire
   kingdom unless the situation establishes why that wagon is pivotal.
+
+## Presentation hierarchy contract
+
+- The game opens and returns from journeys at character scale.
+- Local movement, people, buildings, interiors, and physical symptoms are the
+  primary interface to the world.
+- The kingdom map answers where to travel, what a journey commits, and which
+  large-scale pressures are known; it does not replace exploration.
+- Strategic facts that matter to the player must project into at least one
+  local sensory or social expression before requiring a statistics panel.
+- Choosing a destination is only the beginning of an adventure. Arrival,
+  interruption, negotiation, fighting, trade, and consequence occur in local
+  scenes.
 
 ## Time contract
 

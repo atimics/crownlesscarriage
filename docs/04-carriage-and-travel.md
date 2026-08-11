@@ -47,6 +47,32 @@ Progression unlocks new choices rather than only larger numbers:
 Modules should create political, narrative, and route opportunities in
 addition to modifying combat or capacity.
 
+## Walker-chassis hypothesis
+
+**Hypothesis:** the Crownless Carriage is an old articulated walker built to
+keep using imperial roads after bridges, causeways, and mountain cuts began to
+collapse. This would make the generalized limb system part of the central
+travel decision rather than an unrelated character-animation feature.
+
+The walker must expand route choice without erasing geography:
+
+- An intact road remains faster, quieter, cheaper, and easier on cargo.
+- A ruined direct road may be crossable, but strains particular limbs, consumes
+  replacement parts, exposes the carriage at bottlenecks, and risks a fall.
+- The intact detour costs days and provisions and may cross monster habitat,
+  hostile jurisdiction, or a smuggling corridor.
+- Cargo mass, distribution, passengers, weather, traction, and limb damage
+  change which crossings are currently safe.
+- Losing a limb changes the available gait and support margin instead of merely
+  subtracting vehicle hit points.
+- Repairs require mechanics, salvage, specialist workshops, or black-market
+  components, tying locomotion back into settlement economies.
+
+The vertical slice should retain this hypothesis only if route tests show a
+legible choice between a dangerous physical crossing and a costly ecological
+detour. If the walker simply ignores closed roads, it undermines the strategic
+simulation and should be constrained or removed.
+
 ## Kingdom map
 
 The map is a planning surface, not a second management game. It shows:

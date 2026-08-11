@@ -10,6 +10,8 @@ accidentally reintroduce rejected scope.
 - [0002 — Use aggregate simulation with named-character promotion](0002-aggregate-population.md)
 - [0003 — Use a route graph with persistent procedural segments](0003-route-segments.md)
 - [0004 — Separate the deterministic simulation core from raylib](0004-simulation-boundary.md)
+- [0005 — Build the proof in C17, raylib, and SQLite](0005-c-raylib-sqlite.md)
+- [0006 — Freight retains intent and the world may answer its own crises](0006-logistics-and-agency.md)
 
 ## Record template
 
