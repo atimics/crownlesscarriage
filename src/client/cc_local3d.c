@@ -1620,6 +1620,22 @@ static bool HasSmugglerRoad(const CcSim *sim, CcId settlement_id)
     return false;
 }
 
+/* Raylib's default 16x16 sphere is excessive for this fixed isometric camera. */
+static void DrawSmallSphere(Vector3 center, float radius, Color color)
+{
+    DrawSphereEx(center, radius, 6, 8, color);
+}
+
+static void DrawCharacterSphere(Vector3 center, float radius, Color color)
+{
+    DrawSphereEx(center, radius, 8, 8, color);
+}
+
+static void DrawScenerySphere(Vector3 center, float radius, Color color)
+{
+    DrawSphereEx(center, radius, 10, 12, color);
+}
+
 static void DrawBox(Vector3 center, Vector3 size, Color color)
 {
     DrawCubeV(center, size, color);
@@ -1636,8 +1652,9 @@ static void DrawBuilding(float x, float z, float width, float depth, float heigh
     if (door) {
         DrawBox((Vector3){center.x, 0.92f, z + depth + 0.025f},
                 (Vector3){0.72f, 1.84f, 0.05f}, (Color){43, 34, 37, 255});
-        DrawSphere((Vector3){center.x + 0.25f, 0.92f, z + depth + 0.06f},
-                   0.035f, WORLD_GOLD);
+        DrawSmallSphere((Vector3){center.x + 0.25f, 0.92f,
+                                  z + depth + 0.06f},
+                        0.035f, WORLD_GOLD);
     }
     DrawBox((Vector3){x + 0.42f, height * 0.60f, z + depth + 0.03f},
             (Vector3){0.42f, 0.58f, 0.04f}, Fade(WORLD_TEAL, 0.78f));
@@ -1681,7 +1698,7 @@ static void DrawBoneSegment(Vector3 a, Vector3 b, Color color)
 
 static void DrawBoneJoint(Vector3 point, Color color)
 {
-    DrawSphere(point, 0.045f, color);
+    DrawSmallSphere(point, 0.045f, color);
 }
 
 static void DrawPuppet3D(Vector3 position, float scale, float yaw, Color tunic,
@@ -1756,15 +1773,17 @@ static void DrawPuppet3D(Vector3 position, float scale, float yaw, Color tunic,
     DrawCylinderEx(shoulder_l, hand_l, 0.065f * scale, 0.055f * scale, 8, tunic);
     DrawCylinderEx(shoulder_r, hand_r, 0.065f * scale, 0.055f * scale, 8, tunic);
     Vector3 head = LocalPoint(position, 0.0f, 1.62f * scale + bob, 0.0f, yaw);
-    DrawSphere(head,
-               0.19f * scale, (Color){222, 174, 139, 255});
-    DrawSphere(LocalPoint(position, 0.0f, 1.75f * scale + bob, -0.02f, yaw),
-               0.145f * scale, (Color){58, 43, 45, 255});
+    DrawCharacterSphere(head, 0.19f * scale, (Color){222, 174, 139, 255});
+    DrawCharacterSphere(
+        LocalPoint(position, 0.0f, 1.75f * scale + bob, -0.02f, yaw),
+        0.145f * scale, (Color){58, 43, 45, 255});
 
-    DrawSphere(LocalPoint(position, -0.065f * scale, 1.64f * scale + bob,
-                          0.175f * scale, yaw), 0.024f * scale, WORLD_VOID);
-    DrawSphere(LocalPoint(position, 0.065f * scale, 1.64f * scale + bob,
-                          0.175f * scale, yaw), 0.024f * scale, WORLD_VOID);
+    DrawSmallSphere(LocalPoint(position, -0.065f * scale,
+                               1.64f * scale + bob, 0.175f * scale, yaw),
+                    0.024f * scale, WORLD_VOID);
+    DrawSmallSphere(LocalPoint(position, 0.065f * scale,
+                               1.64f * scale + bob, 0.175f * scale, yaw),
+                    0.024f * scale, WORLD_VOID);
 
     Vector3 offset = LocalPoint((Vector3){0.0f, 0.0f, 0.0f},
                                 0.025f, 0.012f, 0.050f, yaw);
@@ -1801,8 +1820,9 @@ static void DrawPuppet3D(Vector3 position, float scale, float yaw, Color tunic,
         DrawBoneJoint(joints[joint], rig);
     }
     if (player) {
-        DrawSphere(LocalPoint(position, 0.0f, 2.08f * scale + bob, 0.0f, yaw),
-                   0.065f, WORLD_GOLD);
+        DrawSmallSphere(
+            LocalPoint(position, 0.0f, 2.08f * scale + bob, 0.0f, yaw),
+            0.065f, WORLD_GOLD);
     }
 }
 
@@ -1881,8 +1901,8 @@ static void DrawBiomechanicalBiped(const CcLocalAgent *agent)
                        PhysicsAdd(pelvis, fallen_back),
                        0.17f, 0.25f, 5,
                        Fade((Color){73, 55, 91, 255}, fallen_weight));
-        DrawSphere(pelvis, 0.18f,
-                   Fade((Color){44, 61, 65, 255}, fallen_weight));
+        DrawCharacterSphere(pelvis, 0.18f,
+                            Fade((Color){44, 61, 65, 255}, fallen_weight));
         DrawCylinderEx(pelvis, FromLimbVector(pose->spine),
                        0.18f, 0.22f, 10,
                        Fade((Color){38, 105, 112, 255}, fallen_weight));
@@ -1933,11 +1953,12 @@ static void DrawBiomechanicalBiped(const CcLocalAgent *agent)
                        tunic);
         DrawCylinderEx(elbow, hand, 0.055f, 0.044f, 8,
                        (Color){54, 66, 71, 255});
-        DrawSphere(shoulder, 0.092f, (Color){223, 173, 67, 255});
-        DrawSphere(hand, 0.055f, (Color){221, 174, 118, 255});
+        DrawCharacterSphere(shoulder, 0.092f,
+                            (Color){223, 173, 67, 255});
+        DrawSmallSphere(hand, 0.055f, (Color){221, 174, 118, 255});
     }
 
-    DrawSphere(head, 0.18f, (Color){221, 174, 118, 255});
+    DrawCharacterSphere(head, 0.18f, (Color){221, 174, 118, 255});
     Vector3 head_up = PhysicsNormalizeOr(PhysicsSubtract(head, neck),
                                          (Vector3){0.0f, 1.0f, 0.0f});
     Vector3 fallback_right = {cosf(upper_yaw), 0.0f, -sinf(upper_yaw)};
@@ -1951,17 +1972,19 @@ static void DrawBiomechanicalBiped(const CcLocalAgent *agent)
     Vector3 hair = PhysicsAdd(
         PhysicsAdd(head, PhysicsScale(head_up, 0.10f)),
         PhysicsScale(head_forward, -0.025f));
-    DrawSphere(hair, 0.145f, (Color){52, 46, 51, 255});
+    DrawCharacterSphere(hair, 0.145f, (Color){52, 46, 51, 255});
     Vector3 eye_center = PhysicsAdd(
         PhysicsAdd(head, PhysicsScale(head_up, 0.01f)),
         PhysicsScale(head_forward, 0.165f));
-    DrawSphere(PhysicsAdd(eye_center, PhysicsScale(head_right, -0.058f)),
-               0.022f, WORLD_VOID);
-    DrawSphere(PhysicsAdd(eye_center, PhysicsScale(head_right, 0.058f)),
-               0.022f, WORLD_VOID);
+    DrawSmallSphere(PhysicsAdd(eye_center,
+                               PhysicsScale(head_right, -0.058f)),
+                    0.022f, WORLD_VOID);
+    DrawSmallSphere(PhysicsAdd(eye_center,
+                               PhysicsScale(head_right, 0.058f)),
+                    0.022f, WORLD_VOID);
     if (agent->crowned) {
-        DrawSphere(PhysicsAdd(head, PhysicsScale(head_up, 0.30f)),
-                   0.060f, WORLD_GOLD);
+        DrawSmallSphere(PhysicsAdd(head, PhysicsScale(head_up, 0.30f)),
+                        0.060f, WORLD_GOLD);
     }
 
     Vector3 rig_offset = LocalPoint((Vector3){0}, 0.022f, 0.010f, 0.040f,
@@ -1976,8 +1999,8 @@ static void DrawBiomechanicalBiped(const CcLocalAgent *agent)
         reaction_end.z += gait->ground_reaction.z / gait->body.total_mass * 0.012f;
     }
     if (upright_weight > 0.01f) {
-        DrawSphere(Add3(physical_root, rig_offset), 0.052f,
-                   Fade(WORLD_TEAL, upright_weight));
+        DrawSmallSphere(Add3(physical_root, rig_offset), 0.052f,
+                        Fade(WORLD_TEAL, upright_weight));
         DrawCylinderEx(Add3(physical_root, rig_offset),
                        Add3(reaction_end, rig_offset), 0.014f, 0.008f, 6,
                        Fade(WORLD_TEAL, 0.82f * upright_weight));
@@ -2069,10 +2092,12 @@ static void DrawRobotShell(const CcLocalAgent *agent)
         DrawOrientedBox(body, (Vector3){0.0f, 0.02f, 0.22f},
                         (Vector3){0.24f, 0.18f, 0.28f}, agent->facing_yaw,
                         (Color){225, 177, 68, 255});
-        DrawSphere(LocalPoint(body, -0.085f, 0.06f, 0.34f, agent->facing_yaw),
-                   0.040f, WORLD_VOID);
-        DrawSphere(LocalPoint(body, 0.085f, 0.06f, 0.34f, agent->facing_yaw),
-                   0.040f, WORLD_VOID);
+        DrawSmallSphere(
+            LocalPoint(body, -0.085f, 0.06f, 0.34f, agent->facing_yaw),
+            0.040f, WORLD_VOID);
+        DrawSmallSphere(
+            LocalPoint(body, 0.085f, 0.06f, 0.34f, agent->facing_yaw),
+            0.040f, WORLD_VOID);
     }
     Vector3 rig_offset = LocalPoint((Vector3){0}, 0.022f, 0.010f, 0.040f,
                                     agent->facing_yaw);
@@ -2092,10 +2117,10 @@ static void DrawRobotShell(const CcLocalAgent *agent)
             Vector3 rig_a = Add3(a, rig_offset);
             Vector3 rig_b = Add3(b, rig_offset);
             DrawCylinderEx(rig_a, rig_b, 0.022f, 0.022f, 7, bone);
-            DrawSphere(rig_a, 0.046f, bone);
+            DrawSmallSphere(rig_a, 0.046f, bone);
         }
         Vector3 foot = FromLimbVector(limb->joints[spec->segment_count]);
-        DrawSphere(foot, 0.076f, bone);
+        DrawSmallSphere(foot, 0.076f, bone);
         Color foot_color = limb->state == CC_LIMB_SWING ?
                            Fade(WORLD_VIOLET, 0.72f) :
                            limb->state == CC_LIMB_DISABLED ?
@@ -2185,10 +2210,12 @@ static void DrawRobotShell(const CcLocalAgent *agent)
                        (Color){42, 128, 136, 255});
         DrawCylinderEx(elbow_r, hand_r, 0.055f, 0.045f, 8,
                        (Color){54, 66, 71, 255});
-        DrawSphere(shoulder_l, 0.095f, (Color){223, 173, 67, 255});
-        DrawSphere(shoulder_r, 0.095f, (Color){223, 173, 67, 255});
-        DrawSphere(hand_l, 0.055f, (Color){221, 174, 118, 255});
-        DrawSphere(hand_r, 0.055f, (Color){221, 174, 118, 255});
+        DrawCharacterSphere(shoulder_l, 0.095f,
+                            (Color){223, 173, 67, 255});
+        DrawCharacterSphere(shoulder_r, 0.095f,
+                            (Color){223, 173, 67, 255});
+        DrawSmallSphere(hand_l, 0.055f, (Color){221, 174, 118, 255});
+        DrawSmallSphere(hand_r, 0.055f, (Color){221, 174, 118, 255});
 
         Vector3 visual_spine_base = Add3(spine_base, rig_offset);
         Vector3 visual_chest = Add3(chest, rig_offset);
@@ -2219,22 +2246,26 @@ static void DrawRobotShell(const CcLocalAgent *agent)
 
         Vector3 head = LocalPoint(body, 0.0f, 0.81f, hero_lean * 1.25f,
                                   upper_yaw);
-        DrawSphere(head, 0.18f, (Color){221, 174, 118, 255});
-        DrawSphere(LocalPoint(body, 0.0f, 0.91f,
-                              -0.025f + hero_lean * 1.25f, upper_yaw),
-                   0.145f, (Color){52, 46, 51, 255});
-        DrawSphere(LocalPoint(body, -0.058f, 0.82f,
-                              0.165f + hero_lean * 1.25f, upper_yaw),
-                   0.022f, WORLD_VOID);
-        DrawSphere(LocalPoint(body, 0.058f, 0.82f,
-                              0.165f + hero_lean * 1.25f, upper_yaw),
-                   0.022f, WORLD_VOID);
-        DrawSphere(LocalPoint(body, 0.0f, 1.11f, hero_lean * 1.20f,
-                              upper_yaw),
-                   0.060f, WORLD_GOLD);
+        DrawCharacterSphere(head, 0.18f, (Color){221, 174, 118, 255});
+        DrawCharacterSphere(
+            LocalPoint(body, 0.0f, 0.91f,
+                       -0.025f + hero_lean * 1.25f, upper_yaw),
+            0.145f, (Color){52, 46, 51, 255});
+        DrawSmallSphere(
+            LocalPoint(body, -0.058f, 0.82f,
+                       0.165f + hero_lean * 1.25f, upper_yaw),
+            0.022f, WORLD_VOID);
+        DrawSmallSphere(
+            LocalPoint(body, 0.058f, 0.82f,
+                       0.165f + hero_lean * 1.25f, upper_yaw),
+            0.022f, WORLD_VOID);
+        DrawSmallSphere(
+            LocalPoint(body, 0.0f, 1.11f, hero_lean * 1.20f, upper_yaw),
+            0.060f, WORLD_GOLD);
     } else {
-        DrawSphere(LocalPoint(body, 0.0f, 0.52f, 0.0f, agent->facing_yaw),
-                   0.065f, WORLD_GOLD);
+        DrawSmallSphere(
+            LocalPoint(body, 0.0f, 0.52f, 0.0f, agent->facing_yaw),
+            0.065f, WORLD_GOLD);
     }
 }
 
@@ -2252,7 +2283,7 @@ static void DrawCarriage3D(void)
     Vector3 wheels[] = {{0.79f, 0.42f, 6.05f}, {1.91f, 0.42f, 6.05f},
                         {0.79f, 0.42f, 7.05f}, {1.91f, 0.42f, 7.05f}};
     for (int32_t i = 0; i < 4; ++i) {
-        DrawSphere(wheels[i], 0.34f, (Color){38, 31, 31, 255});
+        DrawScenerySphere(wheels[i], 0.34f, (Color){38, 31, 31, 255});
         DrawSphereWires(wheels[i], 0.35f, 7, 7, WORLD_GOLD);
     }
 }
@@ -2285,14 +2316,15 @@ static void DrawDungeon3D(const CcDungeon *dungeon)
     DrawBox((Vector3){8.35f, 1.02f, 7.55f}, (Vector3){0.72f, 2.04f, 0.035f},
             (Color){8, 5, 14, 255});
     float pulse = 0.06f + (float)dungeon->regional_pressure / 500.0f;
-    DrawSphere((Vector3){8.35f, 1.12f, 7.59f}, pulse, Fade(WORLD_VIOLET, 0.82f));
+    DrawScenerySphere((Vector3){8.35f, 1.12f, 7.59f}, pulse,
+                      Fade(WORLD_VIOLET, 0.82f));
 }
 
 static void DrawTree(float x, float z, Color leaves)
 {
     DrawCylinder((Vector3){x, 0.0f, z}, 0.13f, 0.10f, 1.30f, 7,
                  (Color){80, 57, 43, 255});
-    DrawSphere((Vector3){x, 1.68f, z}, 0.58f, leaves);
+    DrawScenerySphere((Vector3){x, 1.68f, z}, 0.58f, leaves);
     DrawSphereWires((Vector3){x, 1.68f, z}, 0.59f, 7, 7, Fade(WORLD_INK, 0.12f));
 }
 
@@ -2437,11 +2469,11 @@ static void DrawCourseRunners(const CcLocalCourse *course)
                 hand, PhysicsScale(spear_direction, spear_length));
             DrawCylinderEx(hand, spear_tip, 0.022f, 0.013f, 7,
                            (Color){128, 92, 55, 255});
-            DrawSphere(spear_tip, 0.038f, WORLD_GOLD);
+            DrawSmallSphere(spear_tip, 0.038f, WORLD_GOLD);
             Vector3 shield_hand = FromLimbVector(
                 runner->agent.humanoid.pose.hand[0]);
-            DrawSphere(shield_hand, 0.105f,
-                       (Color){55, 74, 78, 255});
+            DrawCharacterSphere(shield_hand, 0.105f,
+                                (Color){55, 74, 78, 255});
             DrawSphereWires(shield_hand, 0.108f, 6, 6,
                             runner->marker_color);
         }
