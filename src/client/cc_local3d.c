@@ -1620,20 +1620,53 @@ static bool HasSmugglerRoad(const CcSim *sim, CcId settlement_id)
     return false;
 }
 
+typedef struct SphereModelCache {
+    Model small;
+    Model character;
+    Model scenery;
+    bool ready;
+} SphereModelCache;
+
+static SphereModelCache sphere_models = {0};
+
+void CcLocalRendererInit(void)
+{
+    if (sphere_models.ready) return;
+    sphere_models.small = LoadModelFromMesh(GenMeshSphere(1.0f, 6, 8));
+    sphere_models.character = LoadModelFromMesh(GenMeshSphere(1.0f, 8, 8));
+    sphere_models.scenery = LoadModelFromMesh(GenMeshSphere(1.0f, 10, 12));
+    sphere_models.ready = true;
+}
+
+void CcLocalRendererShutdown(void)
+{
+    if (!sphere_models.ready) return;
+    UnloadModel(sphere_models.small);
+    UnloadModel(sphere_models.character);
+    UnloadModel(sphere_models.scenery);
+    sphere_models = (SphereModelCache){0};
+}
+
+static void DrawSphereModel(Model model, Vector3 center, float radius, Color color)
+{
+    DrawModelEx(model, center, (Vector3){0.0f, 1.0f, 0.0f}, 0.0f,
+                (Vector3){radius, radius, radius}, color);
+}
+
 /* Raylib's default 16x16 sphere is excessive for this fixed isometric camera. */
 static void DrawSmallSphere(Vector3 center, float radius, Color color)
 {
-    DrawSphereEx(center, radius, 6, 8, color);
+    DrawSphereModel(sphere_models.small, center, radius, color);
 }
 
 static void DrawCharacterSphere(Vector3 center, float radius, Color color)
 {
-    DrawSphereEx(center, radius, 8, 8, color);
+    DrawSphereModel(sphere_models.character, center, radius, color);
 }
 
 static void DrawScenerySphere(Vector3 center, float radius, Color color)
 {
-    DrawSphereEx(center, radius, 10, 12, color);
+    DrawSphereModel(sphere_models.scenery, center, radius, color);
 }
 
 static void DrawBox(Vector3 center, Vector3 size, Color color)

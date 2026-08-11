@@ -1536,6 +1536,7 @@ int main(int argc, char **argv)
     SetTargetFPS(render_benchmark ? 0 : 60);
     RenderTexture2D local_target = LoadRenderTexture(914, 570);
     SetTextureFilter(local_target.texture, TEXTURE_FILTER_BILINEAR);
+    CcLocalRendererInit();
 
     CcSim sim;
     CcSimInit(&sim, UINT32_C(0xc0a71a9e));
@@ -1633,6 +1634,7 @@ int main(int argc, char **argv)
         if (walk_cycle_mask != UINT32_C(0xff)) {
             (void)fprintf(stderr, "could not sample every walk pose (mask 0x%02x)\n",
                           walk_cycle_mask);
+            CcLocalRendererShutdown();
             UnloadRenderTexture(local_target);
             CloseWindow();
             return 1;
@@ -1721,6 +1723,7 @@ int main(int argc, char **argv)
 
     double render_benchmark_elapsed = render_benchmark ?
         GetTime() - render_benchmark_started : 0.0;
+    CcLocalRendererShutdown();
     UnloadRenderTexture(local_target);
     CloseWindow();
     if (render_benchmark) {
