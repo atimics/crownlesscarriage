@@ -13,14 +13,16 @@
 #define CC_MAX_BANDITS 3
 #define CC_MAX_MONSTERS 3
 #define CC_MAX_DUNGEONS 3
+#define CC_MAX_MAPS CC_MAX_ROUTES
 #define CC_MAX_SITUATIONS 12
 #define CC_MAX_EVENTS 256
 #define CC_NAME_CAPACITY 32
 #define CC_EVENT_TEXT_CAPACITY 144
 #define CC_CARGO_CAPACITY 12
+#define CC_MAP_CAPACITY 3
 
-#define CC_SIM_SCHEMA_VERSION 2
-#define CC_GENERATOR_VERSION 2
+#define CC_SIM_SCHEMA_VERSION 3
+#define CC_GENERATOR_VERSION 3
 
 typedef uint64_t CcId;
 typedef int64_t CcMoney;
@@ -37,7 +39,8 @@ typedef enum CcEntityKind {
     CC_ENTITY_DUNGEON = 8,
     CC_ENTITY_EVENT = 9,
     CC_ENTITY_PLAYER_COMPANY = 10,
-    CC_ENTITY_SITUATION = 11
+    CC_ENTITY_SITUATION = 11,
+    CC_ENTITY_MAP = 12
 } CcEntityKind;
 
 typedef enum CcGood {
@@ -91,7 +94,9 @@ typedef enum CcEventKind {
     CC_EVENT_SITUATION_CREATED,
     CC_EVENT_SITUATION_RESOLVED,
     CC_EVENT_SITUATION_FAILED,
-    CC_EVENT_PLAYER_AMBUSH
+    CC_EVENT_PLAYER_AMBUSH,
+    CC_EVENT_MAP_BOUGHT,
+    CC_EVENT_MAP_SOLD
 } CcEventKind;
 
 typedef enum CcCommandKind {
@@ -99,7 +104,9 @@ typedef enum CcCommandKind {
     CC_COMMAND_TRADE,
     CC_COMMAND_TRAVEL,
     CC_COMMAND_REPAIR_ROUTE,
-    CC_COMMAND_CHANGE_DUNGEON
+    CC_COMMAND_CHANGE_DUNGEON,
+    CC_COMMAND_BUY_MAP,
+    CC_COMMAND_SELL_MAP
 } CcCommandKind;
 
 typedef struct CcKingdom {
@@ -141,6 +148,20 @@ typedef struct CcRoute {
     bool closed;
     bool smuggler_route;
 } CcRoute;
+
+typedef struct CcMap {
+    CcId id;
+    CcId route_id;
+    CcId maker_settlement_id;
+    CcId owner_id;
+    char name[CC_NAME_CAPACITY];
+    int32_t surveyed_day;
+    int32_t accuracy;
+    int32_t recorded_condition;
+    int32_t recorded_danger;
+    int32_t ask_price;
+    bool contraband;
+} CcMap;
 
 typedef struct CcFaction {
     CcId id;
@@ -244,6 +265,7 @@ typedef struct CcPlayerCompany {
     int32_t cargo[CC_GOOD_COUNT];
     int32_t cargo_capacity;
     int32_t passenger_capacity;
+    int32_t map_capacity;
     int32_t reputation;
 } CcPlayerCompany;
 
@@ -265,6 +287,7 @@ typedef struct CcSim {
     CcKingdom kingdoms[CC_MAX_KINGDOMS];
     CcSettlement settlements[CC_MAX_SETTLEMENTS];
     CcRoute routes[CC_MAX_ROUTES];
+    CcMap maps[CC_MAX_MAPS];
     CcFaction factions[CC_MAX_FACTIONS];
     CcShipment shipments[CC_MAX_SHIPMENTS];
     CcBanditGroup bandits[CC_MAX_BANDITS];
@@ -276,6 +299,7 @@ typedef struct CcSim {
     int32_t kingdom_count;
     int32_t settlement_count;
     int32_t route_count;
+    int32_t map_count;
     int32_t faction_count;
     int32_t shipment_count;
     int32_t bandit_count;
@@ -308,11 +332,14 @@ const CcSettlement *CcSimSettlement(const CcSim *sim, CcId id);
 CcSettlement *CcSimSettlementMutable(CcSim *sim, CcId id);
 const CcRoute *CcSimRoute(const CcSim *sim, CcId id);
 const CcRoute *CcSimRouteBetween(const CcSim *sim, CcId a, CcId b);
+const CcMap *CcSimMap(const CcSim *sim, CcId id);
+const CcMap *CcSimMapForRoute(const CcSim *sim, CcId route_id, CcId owner_id);
 const CcEvent *CcSimRecentEvent(const CcSim *sim, int32_t offset);
 const CcSituation *CcSimSituationForSettlement(const CcSim *sim, CcId settlement_id);
 int32_t CcSimActiveSituationCount(const CcSim *sim);
 int32_t CcSimIncomingGood(const CcSim *sim, CcId settlement_id, CcGood good);
 int32_t CcSimRouteDanger(const CcSim *sim, CcId route_id);
 int32_t CcPlayerCargoUsed(const CcPlayerCompany *player);
+int32_t CcPlayerMapCount(const CcSim *sim);
 
 #endif

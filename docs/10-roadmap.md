@@ -47,11 +47,11 @@ save/load tests.
 Every generated settlement has a machine-readable reason to exist, a visible
 grammar, an external dependency, and a recoverable vulnerability.
 
-## Stage 3 — Carriage map and commitments
+## Stage 3 — Physical cartography and commitments
 
 ### Work
 
-- Build the kingdom map.
+- Build capacity-limited, tradeable route-map objects and the carriage map case.
 - Implement route planning and exact travel duration.
 - Add manifests, passengers, cargo, crew, and modules.
 - Instantiate shipments and important travellers visually.

@@ -24,6 +24,7 @@ The carriage has a small number of understandable capacities:
 - Supplies
 - Guard or scout positions
 - Specialized modules
+- Map-case slots
 
 Passengers and cargo compete directly. Carrying refugees may mean leaving
 commercial goods behind. An armoured coach may survive ambushes but arrive too
@@ -73,20 +74,34 @@ legible choice between a dangerous physical crossing and a costly ecological
 detour. If the walker simply ignores closed roads, it undermines the strategic
 simulation and should be constrained or removed.
 
-## Kingdom map
+## Physical cartography
 
-The map is a planning surface, not a second management game. It shows:
+**Contract:** there is no free, omniscient kingdom map. A map is an
+authoritative tradeable object carried in the carriage map case. Each sheet
+depicts one route and its two termini.
 
-- Settlements and known locations
-- Routes, travel times, tolls, and capacity
-- Known security and environmental hazards
-- Active closures and political restrictions
-- Visible shipments, armies, and important travellers
-- Deadlines and estimated arrival
-- Information age or uncertainty where relevant
+A chart records:
 
-The player selects a destination, route, manifest, companions, and legal
-posture before committing.
+- Stable map and route identity
+- Maker and place of origin
+- Survey date and accuracy
+- The road condition and danger claimed when surveyed
+- Legal or contraband status
+- Current owner and market price
+
+The carriage carries only a small number of sheets. Buying a safer road map may
+mean selling the illicit tunnel chart needed later. A settlement may sell maps
+made there, while smugglers trade suppressed routes. Following a route requires
+owning its chart and being at one of its endpoints.
+
+Changing sheets morphs the presentation because every cartographer chooses a
+different orientation, scale, curvature, omissions, and annotation. These
+views are arguments about the world, not live telemetry. Closures, troop
+movements, or new dangers may therefore contradict the ink.
+
+The player selects a physical chart, manifest, companions, and legal posture
+before committing. Wider atlases or copying equipment may later be carriage
+modules, but cannot restore a universal strategic screen.
 
 ## Travel commitment
 

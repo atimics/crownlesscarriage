@@ -28,6 +28,15 @@ int main(void)
     };
     CC_CHECK(CcSimApply(&sim, &to_market, error, sizeof(error)));
 
+    const CcMap *bridge_map = CcSimMapForRoute(
+        &sim, sim.routes[1].id, sim.player.location_id);
+    CC_CHECK(bridge_map != NULL);
+    CcCommand buy_bridge_map = {
+        .kind = CC_COMMAND_BUY_MAP,
+        .target_id = bridge_map->id
+    };
+    CC_CHECK(CcSimApply(&sim, &buy_bridge_map, error, sizeof(error)));
+
     CcCommand repair = {
         .kind = CC_COMMAND_REPAIR_ROUTE,
         .target_id = sim.routes[1].id
@@ -39,6 +48,16 @@ int main(void)
         .kind = CC_COMMAND_TRAVEL,
         .target_id = sim.settlements[2].id
     };
+    CC_CHECK(CcSimApply(&sim, &to_fortress, error, sizeof(error)));
+
+    const CcMap *mine_map = CcSimMapForRoute(
+        &sim, sim.routes[2].id, sim.player.location_id);
+    CC_CHECK(mine_map != NULL);
+    CcCommand buy_mine_map = {
+        .kind = CC_COMMAND_BUY_MAP,
+        .target_id = mine_map->id
+    };
+    CC_CHECK(CcSimApply(&sim, &buy_mine_map, error, sizeof(error)));
     CcCommand to_mine = {
         .kind = CC_COMMAND_TRAVEL,
         .target_id = sim.settlements[3].id

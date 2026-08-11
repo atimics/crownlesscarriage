@@ -74,7 +74,7 @@ stale ID cannot silently refer to a different entity.
 
 ## Presentation responsibilities
 
-- Kingdom-map visualization
+- Physical map-case visualization of carried or locally offered route charts
 - Active city or route segment
 - Local navigation, animation, and combat
 - Instantiating strategic entities near the player
@@ -377,6 +377,7 @@ A save contains:
 - Route and dungeon mutations
 - Discovered information
 - Player company, carriage, crew, cargo, and reputation
+- Physical map objects, ownership, map-case capacity, survey claims, and prices
 - Deterministic stream states or counters
 
 Procedural decoration is regenerated. Meaningful mutation is stored.
@@ -384,7 +385,9 @@ Procedural decoration is regenerated. Meaningful mutation is stored.
 The architecture proof stores authoritative records in SQLite tables for world
 metadata, kingdoms, settlements, routes, factions, shipments, bandit groups,
 monster populations, dungeons, situations, causal events, and the player
-company. Shipment intent is stored separately from its current route leg. A
+company. Physical route charts are stored as stable map-object rows rather
+than reconstructed presentation state. Shipment intent is stored separately
+from its current route leg. A
 save is one atomic transaction. Loading validates its schema, references, and
 exact state hash before accepting it.
 

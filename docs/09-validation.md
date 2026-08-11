@@ -23,10 +23,17 @@ interventions must reproduce the uninterrupted run.
 Previously altered route and dungeon segments must retain authoritative
 mutations.
 
+Map identity, ownership, survey claims, legality, price, and carriage map-case
+capacity must also survive an exact state-hash round trip.
+
 ### 3. Referential integrity
 
 No active route, shipment, situation, character memory, or causal event may
 reference a missing or generation-mismatched entity.
+
+Every physical map must reference an existing route and maker, have exactly one
+valid owner, and be refused for travel when it is not carried or when the
+carriage is not at one of its route endpoints.
 
 ### 4. Economic invariants
 

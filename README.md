@@ -13,7 +13,7 @@ living-world simulation, a SQLite save, a headless runner, and a raylib
 orthographic 3D isometric client. The player occupies the same depth-buffered
 world as buildings and inhabitants, walks against solid geometry, enters the
 market, trades in person, and approaches the carriage when they need the
-secondary kingdom map for a journey.
+physical map case for a journey.
 
 ## Play the living-world spine
 
@@ -51,10 +51,13 @@ Controls:
   they are not currently exposed as player characters.
 - Enter the market and approach its factor; `1`, `2`, `3` buy food, materials,
   or tools, and `Shift` sells.
-- `M` opens or closes the secondary kingdom map. Click a destination and press
-  `Enter` to commit to a direct route; arrival returns to street-level play.
+- Approach the carriage and press F or M to open its physical map case. Each
+  carried sheet depicts one route rather than revealing an omniscient kingdom
+  screen. Use the arrow keys or click a sheet, B to buy a locally offered
+  chart, S to sell one, and Enter to follow an owned chart from the correct
+  endpoint. The case carries three maps.
 - `.` advances one day; `K` advances one week.
-- `R` repairs a selected contested route from the kingdom map.
+- R repairs a selected contested route from its chart.
 - `E` launches an expedition when standing beside the local dungeon entrance.
 - `Q` opens the live situation board; `Tab` opens the causal event ledger.
 - `F5` saves and `F9` loads SQLite (`Cmd/Ctrl+S` also saves).
@@ -87,7 +90,9 @@ desktop operating systems may throttle hidden windows.
 This is still an architecture proof rather than the finished RPG. It now
 includes one reusable local settlement grammar, an enterable economy-backed
 market, visible animation rigs over the cute prototype characters, and a
-secondary journey-planning map. Route encounters, deeper interiors, character
+physical three-slot map case whose tradeable, persistent charts each describe
+one route through an aged and fallible cartographer's projection. Route
+encounters, deeper interiors, character
 combat, and dungeon maps remain the next projection layers; each will submit
 validated outcomes to the same core rather than maintaining a second world.
 
@@ -194,8 +199,9 @@ The current executable proves:
 - A human-scale local-world convention: the player is about 1.9 world units
   tall, doors are 1.84 units, and buildings are 3.2–4.2 units; traversal geometry
   uses the same units and collision volumes as its rendering
-- A carriage-gated kingdom map used for planning and commitments rather than as
-  the primary play space
+- A carriage-gated physical cartography system: maps are capacity-limited,
+  tradeable, persistent objects with one depicted route, provenance, age,
+  accuracy, legality, recorded conditions, and no omniscient world view
 - A bounded causal event ledger explaining what changed and why
 - Normalized, transactional SQLite persistence with exact state-hash round trips
 - Deterministic, persistence, and crisis-scenario automated tests

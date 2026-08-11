@@ -52,7 +52,7 @@ respond to a player decision.
 - Company charter and player identity
 - Passenger and cargo capacity
 - Carriage progression
-- Kingdom map and route planning
+- Physical cartography and route commitments
 - Explicit travel commitments
 - Persistent procedural route segments
 
