@@ -1,6 +1,6 @@
 #include "sim/cc_sim.h"
 
-#include <assert.h>
+#include "test_support.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -21,13 +21,13 @@ int main(void)
     CcSimInit(&first, UINT32_C(0x10203040));
     CcSimInit(&second, UINT32_C(0x50607080));
 
-    assert(strcmp(first.settlements[0].name, second.settlements[0].name) != 0 ||
+    CC_CHECK(strcmp(first.settlements[0].name, second.settlements[0].name) != 0 ||
            first.settlements[0].map_x != second.settlements[0].map_x ||
            first.settlements[0].map_y != second.settlements[0].map_y);
-    assert(CcSimHash(&first) != CcSimHash(&second));
-    assert(CcSimActiveSituationCount(&first) >= 3);
-    assert(CcSimSituationForSettlement(&first, first.settlements[3].id) != NULL);
-    assert(CcSimRouteDanger(&first, first.routes[6].id) >
+    CC_CHECK(CcSimHash(&first) != CcSimHash(&second));
+    CC_CHECK(CcSimActiveSituationCount(&first) >= 3);
+    CC_CHECK(CcSimSituationForSettlement(&first, first.settlements[3].id) != NULL);
+    CC_CHECK(CcSimRouteDanger(&first, first.routes[6].id) >
            CcSimRouteDanger(&first, first.routes[0].id));
 
     CcSimAdvanceDays(&first, 55);
@@ -39,7 +39,7 @@ int main(void)
             has_multileg_freight = true;
         }
     }
-    assert(has_multileg_freight);
+    CC_CHECK(has_multileg_freight);
 
     int32_t initial_support[CC_MAX_FACTIONS];
     for (int32_t i = 0; i < first.faction_count; ++i) {
@@ -49,16 +49,16 @@ int main(void)
     CcSimAdvanceDays(&first, 29);
 
     char error[192];
-    assert(CcSimValidate(&first, error, sizeof(error)));
+    CC_CHECK(CcSimValidate(&first, error, sizeof(error)));
     bool politics_changed = false;
     for (int32_t i = 0; i < first.faction_count; ++i) {
         if (first.factions[i].support != initial_support[i]) politics_changed = true;
     }
-    assert(politics_changed);
-    assert(first.kingdoms[0].treasury != initial_treasury);
-    assert(CountEvents(&first, CC_EVENT_FACTION_SHIFT) >= 3);
-    assert(CountEvents(&first, CC_EVENT_KINGDOM_ACTION) >= 1);
-    assert(CountEvents(&first, CC_EVENT_SITUATION_FAILED) >= 1);
+    CC_CHECK(politics_changed);
+    CC_CHECK(first.kingdoms[0].treasury != initial_treasury);
+    CC_CHECK(CountEvents(&first, CC_EVENT_FACTION_SHIFT) >= 3);
+    CC_CHECK(CountEvents(&first, CC_EVENT_KINGDOM_ACTION) >= 1);
+    CC_CHECK(CountEvents(&first, CC_EVENT_SITUATION_FAILED) >= 1);
 
     bool has_causal_child = false;
     for (int32_t i = 0; i < first.event_count; ++i) {
@@ -70,21 +70,21 @@ int main(void)
             has_causal_child = true;
         }
     }
-    assert(has_causal_child);
+    CC_CHECK(has_causal_child);
 
     for (uint32_t seed = 1U; seed <= 8U; ++seed) {
         CcSim sim;
         CcSimInit(&sim, seed * UINT32_C(0x9e3779b9));
         for (int32_t quarter = 0; quarter < 12; ++quarter) {
             CcSimAdvanceDays(&sim, 91);
-            assert(CcSimValidate(&sim, error, sizeof(error)));
+            CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
         }
         int32_t total_hunger = 0;
         for (int32_t i = 0; i < sim.settlement_count; ++i) {
             total_hunger += sim.settlements[i].hunger;
         }
-        assert(total_hunger / sim.settlement_count < 70);
-        assert(sim.monsters[0].pressure < 95);
+        CC_CHECK(total_hunger / sim.settlement_count < 70);
+        CC_CHECK(sim.monsters[0].pressure < 95);
     }
 
     puts("Living-world feedback tests passed");

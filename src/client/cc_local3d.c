@@ -1555,11 +1555,14 @@ static void DrawOrientedBox(Vector3 base, Vector3 local_center, Vector3 size,
     rlPopMatrix();
 }
 
-static void DrawBone(Vector3 a, Vector3 b, Color color)
+static void DrawBoneSegment(Vector3 a, Vector3 b, Color color)
 {
     DrawCylinderEx(a, b, 0.028f, 0.028f, 7, color);
-    DrawSphere(a, 0.045f, color);
-    DrawSphere(b, 0.045f, color);
+}
+
+static void DrawBoneJoint(Vector3 point, Color color)
+{
+    DrawSphere(point, 0.045f, color);
 }
 
 static void DrawPuppet3D(Vector3 position, float scale, float yaw, Color tunic,
@@ -1659,17 +1662,25 @@ static void DrawPuppet3D(Vector3 position, float scale, float yaw, Color tunic,
     knee_r = Add3(knee_r, offset);
     foot_l = Add3(foot_l, offset);
     foot_r = Add3(foot_r, offset);
-    DrawBone(hip, chest, rig);
-    DrawBone(chest, neck, rig);
-    DrawBone(shoulder_l, shoulder_r, rig);
-    DrawBone(shoulder_l, elbow_l, rig);
-    DrawBone(elbow_l, hand_l, rig);
-    DrawBone(shoulder_r, elbow_r, rig);
-    DrawBone(elbow_r, hand_r, rig);
-    DrawBone(hip, knee_l, rig);
-    DrawBone(knee_l, foot_l, rig);
-    DrawBone(hip, knee_r, rig);
-    DrawBone(knee_r, foot_r, rig);
+    DrawBoneSegment(hip, chest, rig);
+    DrawBoneSegment(chest, neck, rig);
+    DrawBoneSegment(shoulder_l, shoulder_r, rig);
+    DrawBoneSegment(shoulder_l, elbow_l, rig);
+    DrawBoneSegment(elbow_l, hand_l, rig);
+    DrawBoneSegment(shoulder_r, elbow_r, rig);
+    DrawBoneSegment(elbow_r, hand_r, rig);
+    DrawBoneSegment(hip, knee_l, rig);
+    DrawBoneSegment(knee_l, foot_l, rig);
+    DrawBoneSegment(hip, knee_r, rig);
+    DrawBoneSegment(knee_r, foot_r, rig);
+    const Vector3 joints[] = {
+        hip, chest, neck, shoulder_l, shoulder_r, elbow_l, elbow_r,
+        hand_l, hand_r, knee_l, knee_r, foot_l, foot_r
+    };
+    for (int32_t joint = 0;
+         joint < (int32_t)(sizeof(joints) / sizeof(joints[0])); ++joint) {
+        DrawBoneJoint(joints[joint], rig);
+    }
     if (player) {
         DrawSphere(LocalPoint(position, 0.0f, 2.08f * scale + bob, 0.0f, yaw),
                    0.065f, WORLD_GOLD);
@@ -1852,11 +1863,17 @@ static void DrawBiomechanicalBiped(const CcLocalAgent *agent)
                        Add3(reaction_end, rig_offset), 0.014f, 0.008f, 6,
                        Fade(WORLD_TEAL, 0.82f * upright_weight));
     }
-    DrawBone(Add3(pelvis, rig_offset), Add3(FromLimbVector(pose->spine),
-                                            rig_offset), WORLD_GOLD);
-    DrawBone(Add3(FromLimbVector(pose->spine), rig_offset),
-             Add3(chest, rig_offset), WORLD_GOLD);
-    DrawBone(Add3(chest, rig_offset), Add3(neck, rig_offset), WORLD_GOLD);
+    Vector3 rig_pelvis = Add3(pelvis, rig_offset);
+    Vector3 rig_spine = Add3(FromLimbVector(pose->spine), rig_offset);
+    Vector3 rig_chest = Add3(chest, rig_offset);
+    Vector3 rig_neck = Add3(neck, rig_offset);
+    DrawBoneSegment(rig_pelvis, rig_spine, WORLD_GOLD);
+    DrawBoneSegment(rig_spine, rig_chest, WORLD_GOLD);
+    DrawBoneSegment(rig_chest, rig_neck, WORLD_GOLD);
+    DrawBoneJoint(rig_pelvis, WORLD_GOLD);
+    DrawBoneJoint(rig_spine, WORLD_GOLD);
+    DrawBoneJoint(rig_chest, WORLD_GOLD);
+    DrawBoneJoint(rig_neck, WORLD_GOLD);
     for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
         Color bone = HumanoidContactColor(gait->feet[leg].contact);
         Vector3 hip = Add3(FromLimbVector(pose->hip[leg]), rig_offset);
@@ -1865,17 +1882,27 @@ static void DrawBiomechanicalBiped(const CcLocalAgent *agent)
         Vector3 heel = Add3(FromLimbVector(pose->heel[leg]), rig_offset);
         Vector3 ball = Add3(FromLimbVector(pose->ball[leg]), rig_offset);
         Vector3 toe = Add3(FromLimbVector(pose->toe[leg]), rig_offset);
-        DrawBone(hip, knee, bone);
-        DrawBone(knee, ankle, bone);
-        DrawBone(ankle, heel, bone);
-        DrawBone(heel, ball, bone);
-        DrawBone(ball, toe, bone);
+        DrawBoneSegment(hip, knee, bone);
+        DrawBoneSegment(knee, ankle, bone);
+        DrawBoneSegment(ankle, heel, bone);
+        DrawBoneSegment(heel, ball, bone);
+        DrawBoneSegment(ball, toe, bone);
+        DrawBoneJoint(hip, bone);
+        DrawBoneJoint(knee, bone);
+        DrawBoneJoint(ankle, bone);
+        DrawBoneJoint(heel, bone);
+        DrawBoneJoint(ball, bone);
+        DrawBoneJoint(toe, bone);
     }
     for (int32_t arm = 0; arm < CC_HUMANOID_ARM_COUNT; ++arm) {
-        DrawBone(Add3(FromLimbVector(pose->shoulder[arm]), rig_offset),
-                 Add3(FromLimbVector(pose->elbow[arm]), rig_offset), WORLD_GOLD);
-        DrawBone(Add3(FromLimbVector(pose->elbow[arm]), rig_offset),
-                 Add3(FromLimbVector(pose->hand[arm]), rig_offset), WORLD_GOLD);
+        Vector3 shoulder = Add3(FromLimbVector(pose->shoulder[arm]), rig_offset);
+        Vector3 elbow = Add3(FromLimbVector(pose->elbow[arm]), rig_offset);
+        Vector3 hand = Add3(FromLimbVector(pose->hand[arm]), rig_offset);
+        DrawBoneSegment(shoulder, elbow, WORLD_GOLD);
+        DrawBoneSegment(elbow, hand, WORLD_GOLD);
+        DrawBoneJoint(shoulder, WORLD_GOLD);
+        DrawBoneJoint(elbow, WORLD_GOLD);
+        DrawBoneJoint(hand, WORLD_GOLD);
     }
 }
 
@@ -2047,16 +2074,29 @@ static void DrawRobotShell(const CcLocalAgent *agent)
         Vector3 visual_spine_base = Add3(spine_base, rig_offset);
         Vector3 visual_chest = Add3(chest, rig_offset);
         Vector3 visual_neck = Add3(neck, rig_offset);
-        DrawBone(visual_spine_base, visual_chest, WORLD_GOLD);
-        DrawBone(visual_chest, visual_neck, WORLD_GOLD);
-        DrawBone(Add3(shoulder_l, rig_offset), Add3(shoulder_r, rig_offset),
-                 WORLD_GOLD);
-        DrawBone(Add3(shoulder_l, rig_offset), Add3(elbow_l, rig_offset),
-                 WORLD_GOLD);
-        DrawBone(Add3(elbow_l, rig_offset), Add3(hand_l, rig_offset), WORLD_GOLD);
-        DrawBone(Add3(shoulder_r, rig_offset), Add3(elbow_r, rig_offset),
-                 WORLD_GOLD);
-        DrawBone(Add3(elbow_r, rig_offset), Add3(hand_r, rig_offset), WORLD_GOLD);
+        Vector3 visual_shoulder_l = Add3(shoulder_l, rig_offset);
+        Vector3 visual_shoulder_r = Add3(shoulder_r, rig_offset);
+        Vector3 visual_elbow_l = Add3(elbow_l, rig_offset);
+        Vector3 visual_elbow_r = Add3(elbow_r, rig_offset);
+        Vector3 visual_hand_l = Add3(hand_l, rig_offset);
+        Vector3 visual_hand_r = Add3(hand_r, rig_offset);
+        DrawBoneSegment(visual_spine_base, visual_chest, WORLD_GOLD);
+        DrawBoneSegment(visual_chest, visual_neck, WORLD_GOLD);
+        DrawBoneSegment(visual_shoulder_l, visual_shoulder_r, WORLD_GOLD);
+        DrawBoneSegment(visual_shoulder_l, visual_elbow_l, WORLD_GOLD);
+        DrawBoneSegment(visual_elbow_l, visual_hand_l, WORLD_GOLD);
+        DrawBoneSegment(visual_shoulder_r, visual_elbow_r, WORLD_GOLD);
+        DrawBoneSegment(visual_elbow_r, visual_hand_r, WORLD_GOLD);
+        Vector3 visual_joints[] = {
+            visual_spine_base, visual_chest,      visual_neck,
+            visual_shoulder_l, visual_shoulder_r, visual_elbow_l,
+            visual_elbow_r,    visual_hand_l,     visual_hand_r,
+        };
+        for (size_t joint_index = 0;
+             joint_index < sizeof(visual_joints) / sizeof(visual_joints[0]);
+             joint_index++) {
+            DrawBoneJoint(visual_joints[joint_index], WORLD_GOLD);
+        }
 
         Vector3 head = LocalPoint(body, 0.0f, 0.81f, hero_lean * 1.25f,
                                   upper_yaw);
