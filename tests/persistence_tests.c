@@ -1,7 +1,7 @@
 #include "persistence/cc_save.h"
 #include "sim/cc_sim.h"
 
-#include <assert.h>
+#include "test_support.h"
 #include <stdio.h>
 
 int main(void)
@@ -17,16 +17,16 @@ int main(void)
         .kind = CC_COMMAND_TRAVEL,
         .target_id = original.settlements[1].id
     };
-    assert(CcSimApply(&original, &command, error, sizeof(error)));
+    CC_CHECK(CcSimApply(&original, &command, error, sizeof(error)));
     uint64_t expected = CcSimHash(&original);
-    assert(CcSaveWrite(path, &original, error, sizeof(error)));
+    CC_CHECK(CcSaveWrite(path, &original, error, sizeof(error)));
 
     CcSim restored;
-    assert(CcSaveRead(path, &restored, error, sizeof(error)));
-    assert(CcSimHash(&restored) == expected);
-    assert(restored.current_day == original.current_day);
-    assert(restored.player.location_id == original.player.location_id);
-    assert(restored.event_count == original.event_count);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(CcSimHash(&restored) == expected);
+    CC_CHECK(restored.current_day == original.current_day);
+    CC_CHECK(restored.player.location_id == original.player.location_id);
+    CC_CHECK(restored.event_count == original.event_count);
 
     (void)remove(path);
     puts("SQLite persistence tests passed");

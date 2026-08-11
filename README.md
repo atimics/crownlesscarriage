@@ -67,6 +67,23 @@ Run the simulation without graphics or execute the verification suite with:
 ctest --test-dir build --output-on-failure
 ```
 
+Build a Release configuration and run the repeatable headless performance
+workloads with:
+
+```sh
+cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release -DCC_BUILD_CLIENT=OFF
+cmake --build build-release --parallel
+./build-release/crownless_benchmark
+```
+
+The benchmark reports CPU time per simulated day and per biomechanical-agent
+step together with a checksum, so optimizations can be compared without
+silently removing work.
+
+The client executable also accepts `--benchmark-render 600` to time a fixed
+number of frames. Its benchmark window intentionally remains visible because
+desktop operating systems may throttle hidden windows.
+
 This is still an architecture proof rather than the finished RPG. It now
 includes one reusable local settlement grammar, an enterable economy-backed
 market, visible animation rigs over the cute prototype characters, and a

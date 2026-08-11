@@ -7,7 +7,9 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 
 option(CC_BUILD_CLIENT "Build the raylib orthographic 3D isometric client" ON)
+option(CC_BUILD_BENCHMARKS "Build repeatable headless benchmarks" ON)
 option(CC_ENABLE_STRICT_WARNINGS "Enable strict compiler warnings" ON)
+option(CC_WARNINGS_AS_ERRORS "Treat project warnings as build errors" OFF)
 
 function(cc_strict_warnings target)
     if(NOT CC_ENABLE_STRICT_WARNINGS)
@@ -15,10 +17,16 @@ function(cc_strict_warnings target)
     endif()
     if(MSVC)
         target_compile_options(${target} PRIVATE /W4)
+        if(CC_WARNINGS_AS_ERRORS)
+            target_compile_options(${target} PRIVATE /WX)
+        endif()
     else()
         target_compile_options(${target} PRIVATE
             -Wall -Wextra -Wpedantic -Wshadow -Wconversion
         )
+        if(CC_WARNINGS_AS_ERRORS)
+            target_compile_options(${target} PRIVATE -Werror)
+        endif()
     endif()
 endfunction()
 
@@ -50,6 +58,19 @@ cc_strict_warnings(crownless_persistence)
 add_executable(crownless_sim_runner tools/sim_runner.c)
 target_link_libraries(crownless_sim_runner PRIVATE crownless_persistence)
 cc_strict_warnings(crownless_sim_runner)
+
+if(CC_BUILD_BENCHMARKS)
+    add_executable(crownless_benchmark tools/benchmark.c)
+    target_link_libraries(crownless_benchmark PRIVATE
+        crownless_sim crownless_locomotion
+    )
+    cc_strict_warnings(crownless_benchmark)
+    add_custom_target(run_benchmarks
+        COMMAND crownless_benchmark
+        DEPENDS crownless_benchmark
+        USES_TERMINAL
+    )
+endif()
 
 if(CC_BUILD_CLIENT)
     include(FetchContent)

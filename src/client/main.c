@@ -1236,6 +1236,18 @@ static void HandleInput(CcSim *sim, int32_t *selected, ClientView *view,
 
 int main(int argc, char **argv)
 {
+    bool render_benchmark = argc >= 2 &&
+                            strcmp(argv[1], "--benchmark-render") == 0;
+    int32_t render_benchmark_frames = 600;
+    if (render_benchmark && argc >= 3) {
+        char *end = NULL;
+        long parsed = strtol(argv[2], &end, 10);
+        if (end == argv[2] || *end != '\0' || parsed <= 0 || parsed > INT32_MAX) {
+            (void)fprintf(stderr, "Render benchmark frame count is invalid.\n");
+            return 1;
+        }
+        render_benchmark_frames = (int32_t)parsed;
+    }
     bool capture_board = argc >= 2 && strcmp(argv[1], "--capture-board") == 0;
     bool capture_interior = argc >= 2 && strcmp(argv[1], "--capture-interior") == 0;
     bool capture_navigation = argc >= 2 && strcmp(argv[1], "--capture-nav") == 0;
@@ -1255,6 +1267,7 @@ int main(int argc, char **argv)
     char save_path[640];
     CampaignSavePath(save_path, sizeof(save_path));
 
+    if (render_benchmark) SetTraceLogLevel(LOG_WARNING);
     SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_WINDOW_RESIZABLE |
                    (capture ? FLAG_WINDOW_HIDDEN : 0U));
     InitWindow(1280, 760, "Crownless Carriage — living world spine");
@@ -1264,14 +1277,15 @@ int main(int argc, char **argv)
         return 1;
     }
     SetWindowMinSize(1080, 680);
-    SetTargetFPS(60);
+    SetTargetFPS(render_benchmark ? 0 : 60);
     RenderTexture2D local_target = LoadRenderTexture(914, 570);
     SetTextureFilter(local_target.texture, TEXTURE_FILTER_BILINEAR);
 
     CcSim sim;
     CcSimInit(&sim, UINT32_C(0xc0a71a9e));
-    if (capture) CcSimAdvanceDays(&sim, 28);
-    int32_t selected = capture ? 3 : SettlementIndex(&sim, sim.player.location_id);
+    if (capture || render_benchmark) CcSimAdvanceDays(&sim, 28);
+    int32_t selected = capture || render_benchmark ?
+                       3 : SettlementIndex(&sim, sim.player.location_id);
     ClientView view = capture_board ? VIEW_SITUATIONS : VIEW_LOCAL;
     ClientView return_view = VIEW_LOCAL;
     LocalState local;
@@ -1366,6 +1380,8 @@ int main(int argc, char **argv)
     char message[256] = "Click any surface: the biped walks there with planted procedural feet.";
     int capture_frames = 0;
     int walk_frame_count = 0;
+    int32_t render_benchmark_count = 0;
+    double render_benchmark_started = GetTime();
 
     Rectangle local_bounds = {17.0f, 81.0f, 914.0f, 570.0f};
     while (!WindowShouldClose()) {
@@ -1412,7 +1428,10 @@ int main(int argc, char **argv)
         if (view == VIEW_SITUATIONS) DrawSituationBoard(&sim);
         EndDrawing();
 
-        if (capture_walk_cycle) {
+        if (render_benchmark) {
+            render_benchmark_count += 1;
+            if (render_benchmark_count >= render_benchmark_frames) break;
+        } else if (capture_walk_cycle) {
             capture_frames += 1;
             if (capture_frames <= 2) continue;
             char frame_path[768];
@@ -1430,9 +1449,18 @@ int main(int argc, char **argv)
         }
     }
 
+    double render_benchmark_elapsed = render_benchmark ?
+        GetTime() - render_benchmark_started : 0.0;
     UnloadRenderTexture(local_target);
     CloseWindow();
-    if (capture_walk_cycle) {
+    if (render_benchmark) {
+        (void)printf("render: frames=%d seconds=%.6f ms/frame=%.3f fps=%.1f\n",
+                     render_benchmark_count, render_benchmark_elapsed,
+                     render_benchmark_elapsed * 1000.0 /
+                         (double)render_benchmark_count,
+                     (double)render_benchmark_count /
+                         render_benchmark_elapsed);
+    } else if (capture_walk_cycle) {
         (void)printf("captured %d walk-cycle frames with prefix %s\n",
                      walk_frame_count, capture_path);
     } else if (capture) {
