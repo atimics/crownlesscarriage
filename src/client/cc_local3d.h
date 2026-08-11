@@ -107,6 +107,8 @@ void CcLocalCourseUpdate(CcLocalCourse *course, const CcSim *sim,
                          float delta_time);
 void CcLocalCourseRaiseAlarm(CcLocalCourse *course);
 
+void CcLocalRendererInit(void);
+void CcLocalRendererShutdown(void);
 void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                          const CcLocalCourse *course, float clock,
                          RenderTexture2D target, Rectangle destination);
