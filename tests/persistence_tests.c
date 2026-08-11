@@ -26,6 +26,11 @@ int main(void)
     CC_CHECK(CcSimHash(&restored) == expected);
     CC_CHECK(restored.current_day == original.current_day);
     CC_CHECK(restored.player.location_id == original.player.location_id);
+    CC_CHECK(restored.player.map_capacity == original.player.map_capacity);
+    CC_CHECK(restored.map_count == original.map_count);
+    CC_CHECK(restored.maps[0].owner_id == original.maps[0].owner_id);
+    CC_CHECK(restored.maps[0].recorded_danger ==
+             original.maps[0].recorded_danger);
     CC_CHECK(restored.event_count == original.event_count);
 
     (void)remove(path);

@@ -23,14 +23,38 @@ int main(void)
 {
     CcSim first;
     CcSim second;
+    char error[160];
     CcSimInit(&first, UINT32_C(0x12345678));
     CcSimInit(&second, UINT32_C(0x12345678));
     CC_CHECK(CcSimHash(&first) == CcSimHash(&second));
     ApplySequence(&first);
     ApplySequence(&second);
     CC_CHECK(CcSimHash(&first) == CcSimHash(&second));
+    CC_CHECK(first.map_count == first.route_count);
+    CC_CHECK(CcPlayerMapCount(&first) == 1);
+    CC_CHECK(CcSimMapForRoute(&first, first.routes[0].id,
+                             first.player.id) != NULL);
+    CcCommand uncharted_travel = {
+        .kind = CC_COMMAND_TRAVEL,
+        .target_id = first.settlements[2].id
+    };
+    CC_CHECK(!CcSimApply(&first, &uncharted_travel, error, sizeof(error)));
 
-    char error[160];
+    const CcMap *offered = CcSimMapForRoute(
+        &first, first.routes[1].id, first.player.location_id);
+    CC_CHECK(offered != NULL);
+    CcId offered_id = offered->id;
+    first.player.coins = 100;
+    CcCommand buy_map = {.kind = CC_COMMAND_BUY_MAP, .target_id = offered_id};
+    CC_CHECK(CcSimApply(&first, &buy_map, error, sizeof(error)));
+    CC_CHECK(CcPlayerMapCount(&first) == 2);
+    CC_CHECK(CcSimMap(&first, offered_id)->owner_id == first.player.id);
+    CcCommand sell_map = {.kind = CC_COMMAND_SELL_MAP, .target_id = offered_id};
+    CC_CHECK(CcSimApply(&first, &sell_map, error, sizeof(error)));
+    CC_CHECK(CcPlayerMapCount(&first) == 1);
+    CC_CHECK(CcSimMap(&first, offered_id)->owner_id ==
+             first.player.location_id);
+
     CC_CHECK(CcSimValidate(&first, error, sizeof(error)));
     CcSim different;
     CcSimInit(&different, UINT32_C(0x87654321));

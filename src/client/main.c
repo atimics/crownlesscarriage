@@ -56,12 +56,6 @@ static void CampaignSavePath(char *path, size_t capacity)
     (void)snprintf(path, capacity, "crownless_campaign.ccsave");
 }
 
-static Vector2 SettlementPoint(const CcSettlement *settlement)
-{
-    return (Vector2){55.0f + (float)settlement->map_x,
-                     61.0f + (float)settlement->map_y};
-}
-
 static const CcKingdom *KingdomById(const CcSim *sim, CcId id)
 {
     for (int32_t i = 0; i < sim->kingdom_count; ++i) {
@@ -113,38 +107,11 @@ static Color KingdomColor(const CcSim *sim, CcId id)
     return (Color){kingdom->color_r, kingdom->color_g, kingdom->color_b, 255};
 }
 
-static int32_t SettlementIndex(const CcSim *sim, CcId id)
-{
-    for (int32_t i = 0; i < sim->settlement_count; ++i) {
-        if (sim->settlements[i].id == id) return i;
-    }
-    return -1;
-}
-
 static void DrawPanel(Rectangle bounds, Color color)
 {
     DrawRectangleRounded(bounds, 0.08f, 8, color);
     DrawRectangleRoundedLinesEx(bounds, 0.08f, 8, 1.0f,
                                 (Color){87, 115, 112, 180});
-}
-
-static void DrawDashedLine(Vector2 start, Vector2 end, float thickness,
-                           Color color, bool dashed)
-{
-    Vector2 delta = {end.x - start.x, end.y - start.y};
-    float length = sqrtf(delta.x * delta.x + delta.y * delta.y);
-    if (length < 0.01f) return;
-    Vector2 direction = {delta.x / length, delta.y / length};
-    float dash = dashed ? 10.0f : length;
-    float gap = dashed ? 7.0f : 0.0f;
-    for (float distance = 0.0f; distance < length; distance += dash + gap) {
-        float finish = fminf(length, distance + dash);
-        Vector2 a = {start.x + direction.x * distance,
-                     start.y + direction.y * distance};
-        Vector2 b = {start.x + direction.x * finish,
-                     start.y + direction.y * finish};
-        DrawLineEx(a, b, thickness, color);
-    }
 }
 
 static void DrawBar(int x, int y, int width, const char *label,
@@ -501,7 +468,7 @@ static void DrawLocalHeader(const CcSim *sim, const LocalState *local)
     const CcSettlement *place = CcSimSettlement(sim, sim->player.location_id);
     DrawText(place != NULL ? place->name : "THE ROAD", 26, 18, 27, INK);
     DrawText(local->market_interior ? "MARKET HOUSE / PROCEDURAL FOOT CONTACTS" :
-             "STREET LEVEL / PHYSICAL POD LOCOMOTION", 28, 51, 11, TEAL);
+             "STREET LEVEL / BIOMECHANICAL MOVEMENT DOJO", 28, 51, 11, TEAL);
     DrawText(TextFormat("DAY %04d", sim->current_day), 790, 24, 15, CC_GOLD);
     DrawText(TextFormat("CROWNS %03" PRId64, sim->player.coins), 895, 24, 15, CC_GOLD);
     DrawText(TextFormat("CARGO %02d/%02d", CcPlayerCargoUsed(&sim->player),
@@ -578,8 +545,9 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
         if (second[0] != '\0') DrawText(second, 966, 582, 10, INK);
     }
     if (local->agent.morphology == CC_MORPHOLOGY_BIPED) {
-        DrawText(TextFormat("BIO BIPED / %s / muscles %.0f%%",
+        DrawText(TextFormat("BIO BIPED / %s / %s / muscles %.0f%%",
                             CcLocalTraversalName(local->agent.traversal),
+                            CcHumanoidActionName(local->agent.humanoid.action),
                             CcBiomechRigMeanActivation(
                                 &local->agent.humanoid.body) * 100.0f),
                  966, 605, 9, CC_VIOLET);
@@ -623,7 +591,9 @@ static const char *LocalPrompt(const CcSim *sim, const LocalState *local)
         return "LEFT CLICK any floor point   the biped steers around solid furniture";
     }
     if (GridDistance(position, LOCAL_MARKET) < 1.30f) return "F  enter the market house";
-    if (GridDistance(position, LOCAL_CARRIAGE) < 1.35f) return "F  plan a carriage journey";
+    if (GridDistance(position, LOCAL_CARRIAGE) < 1.35f) {
+        return "F  unlatch the carriage map case";
+    }
     if (GridDistance(position, LOCAL_NOTICE) < 1.15f) return "F  read the live situation board";
     if (DungeonAtSettlement(sim, sim->player.location_id) != NULL &&
         GridDistance(position, LOCAL_DUNGEON) < 1.35f) return "E  mount a three-day expedition";
@@ -639,11 +609,15 @@ static void DrawLocalFooter(const CcSim *sim, const LocalState *local)
 {
     DrawPanel((Rectangle){20.0f, 664.0f, 1240.0f, 76.0f}, PANEL);
     DrawText(LocalPrompt(sim, local), 38, 681, 13, CC_GOLD);
-    DrawText("G village alarm   Q situations   TAB ledger   . day   K week",
+    DrawText("SPACE strike   X guard   G alarm   Q situations   TAB ledger",
              38, 708, 10, MUTED);
-    DrawText("M map   F5 save   F9 load   N new world", 884, 693, 10, MUTED);
+    DrawText("M map case at carriage   F5 save   F9 load   N new world",
+             804, 693, 10, MUTED);
 }
 
+#if 0
+/* The former omniscient kingdom map is intentionally retired. Physical route
+   charts below are the only travel-planning projection. */
 static void DrawTerritories(const CcSim *sim)
 {
     for (int32_t kingdom = 0; kingdom < sim->kingdom_count; ++kingdom) {
@@ -929,15 +903,246 @@ static void DrawSettlementPanel(const CcSim *sim, int32_t selected)
         }
     }
 }
+#endif
+
+static bool MapVisibleAtCarriage(const CcSim *sim, const CcMap *map)
+{
+    return sim != NULL && map != NULL &&
+           (map->owner_id == sim->player.id ||
+            map->owner_id == sim->player.location_id);
+}
+
+static int32_t FirstVisibleMapIndex(const CcSim *sim)
+{
+    if (sim == NULL) return -1;
+    for (int32_t i = 0; i < sim->map_count; ++i) {
+        const CcMap *map = &sim->maps[i];
+        const CcRoute *route = CcSimRoute(sim, map->route_id);
+        if (map->owner_id == sim->player.id && route != NULL &&
+            (route->from_id == sim->player.location_id ||
+             route->to_id == sim->player.location_id)) return i;
+    }
+    for (int32_t i = 0; i < sim->map_count; ++i) {
+        if (sim->maps[i].owner_id == sim->player.location_id) return i;
+    }
+    for (int32_t i = 0; i < sim->map_count; ++i) {
+        if (sim->maps[i].owner_id == sim->player.id) return i;
+    }
+    return -1;
+}
+
+static int32_t StepVisibleMapIndex(const CcSim *sim, int32_t selected,
+                                   int32_t direction)
+{
+    if (sim == NULL || sim->map_count <= 0) return -1;
+    int32_t index = selected;
+    for (int32_t step = 0; step < sim->map_count; ++step) {
+        index = (index + direction + sim->map_count) % sim->map_count;
+        if (MapVisibleAtCarriage(sim, &sim->maps[index])) return index;
+    }
+    return selected;
+}
+
+static const CcMap *SelectedVisibleMap(const CcSim *sim, int32_t selected)
+{
+    if (sim == NULL || selected < 0 || selected >= sim->map_count ||
+        !MapVisibleAtCarriage(sim, &sim->maps[selected])) return NULL;
+    return &sim->maps[selected];
+}
+
+static CcId RouteOtherEnd(const CcRoute *route, CcId here)
+{
+    if (route == NULL) return 0U;
+    if (route->from_id == here) return route->to_id;
+    if (route->to_id == here) return route->from_id;
+    return 0U;
+}
+
+static Vector2 ChartEndpoint(const CcMap *map, bool far_end)
+{
+    uint32_t mark = (uint32_t)(map->id & UINT64_C(0xffffffff));
+    float angle = ((float)(mark % 101U) / 100.0f - 0.5f) * 1.05f;
+    float half = 188.0f + (float)((mark >> 8U) % 29U);
+    float sign = far_end ? 1.0f : -1.0f;
+    return (Vector2){605.0f + cosf(angle) * half * sign,
+                     363.0f + sinf(angle) * half * sign};
+}
+
+static void DrawChartRoute(const CcMap *map, Color ink)
+{
+    Vector2 a = ChartEndpoint(map, false);
+    Vector2 b = ChartEndpoint(map, true);
+    Vector2 delta = {b.x - a.x, b.y - a.y};
+    float length = sqrtf(delta.x * delta.x + delta.y * delta.y);
+    Vector2 normal = length > 0.01f ?
+        (Vector2){-delta.y / length, delta.x / length} : (Vector2){0.0f, 1.0f};
+    float error = (float)(100 - map->accuracy) / 100.0f;
+    float bend = ((map->id >> 20U) & 1U ? 1.0f : -1.0f) *
+                 (24.0f + error * 74.0f);
+    Vector2 previous = a;
+    for (int32_t step = 1; step <= 28; ++step) {
+        float t = (float)step / 28.0f;
+        float arch = 4.0f * t * (1.0f - t);
+        Vector2 point = {a.x + delta.x * t + normal.x * bend * arch,
+                         a.y + delta.y * t + normal.y * bend * arch};
+        if (!map->contraband || (step % 3) != 0) {
+            DrawLineEx(previous, point, 3.0f, ink);
+        }
+        previous = point;
+    }
+    for (int32_t mark = 1; mark <= 3; ++mark) {
+        float t = (float)mark / 4.0f;
+        Vector2 point = {a.x + delta.x * t, a.y + delta.y * t};
+        DrawCircleV(point, 4.0f, Fade(ink, 0.72f));
+        DrawCircleLinesV(point, 7.0f, Fade(ink, 0.32f));
+    }
+}
+
+static void DrawChartTown(Vector2 point, const CcSettlement *place, bool current,
+                          Color ink)
+{
+    DrawCircleV(point, current ? 19.0f : 15.0f, Fade(ink, 0.16f));
+    DrawPoly(point, place != NULL && place->function == CC_SETTLEMENT_FORTRESS ? 4 : 6,
+             current ? 12.0f : 9.0f, 0.0f, ink);
+    const char *name = place != NULL ? place->name : "Unknown terminus";
+    int width = MeasureText(name, 15);
+    DrawText(name, (int)point.x - width / 2, (int)point.y + 24, 15, ink);
+    if (current) DrawText("CARRIAGE", (int)point.x - 34, (int)point.y - 38, 10, DANGER);
+}
+
+static void DrawMap(const CcSim *sim, int32_t selected, float clock)
+{
+    (void)clock;
+    DrawPanel((Rectangle){20.0f, 82.0f, 900.0f, 568.0f},
+              (Color){11, 20, 24, 248});
+    DrawText("CARRIAGE MAP CASE", 38, 101, 18, CC_GOLD);
+    DrawText(TextFormat("%d / %d PHYSICAL CHARTS", CcPlayerMapCount(sim),
+                        sim->player.map_capacity), 38, 126, 10, MUTED);
+
+    int32_t row = 0;
+    for (int32_t i = 0; i < sim->map_count; ++i) {
+        const CcMap *map = &sim->maps[i];
+        if (!MapVisibleAtCarriage(sim, map)) continue;
+        bool owned = map->owner_id == sim->player.id;
+        int y = 154 + row * 51;
+        Color paper_color = map->contraband ? (Color){57, 34, 55, 255} :
+                                              (Color){52, 48, 37, 255};
+        if (i == selected) {
+            paper_color = map->contraband ? (Color){96, 49, 91, 255} :
+                                            (Color){91, 78, 49, 255};
+        }
+        DrawRectangleRounded((Rectangle){37.0f, (float)y, 226.0f, 43.0f},
+                             0.16f, 5, paper_color);
+        DrawText(map->name, 48, y + 7, 11, INK);
+        DrawText(owned ? "IN THE CASE" : TextFormat("FOR SALE  %d C", map->ask_price),
+                 48, y + 25, 9, owned ? TEAL : CC_GOLD);
+        if (map->contraband) DrawText("ILLICIT", 205, y + 25, 8, CC_VIOLET);
+        row += 1;
+    }
+    if (row == 0) DrawText("No charts are present at this stop.", 42, 172, 11, MUTED);
+
+    const CcMap *map = SelectedVisibleMap(sim, selected);
+    Rectangle paper = {282.0f, 105.0f, 620.0f, 525.0f};
+    DrawRectangleRounded(paper, 0.025f, 4,
+                         map != NULL && map->contraband ?
+                         (Color){158, 132, 119, 255} : (Color){214, 197, 151, 255});
+    DrawRectangleRoundedLinesEx(paper, 0.025f, 4, 2.0f,
+                                (Color){91, 69, 46, 220});
+    if (map == NULL) {
+        DrawText("THE CASE IS EMPTY", 452, 335, 22, (Color){83, 65, 46, 255});
+        return;
+    }
+    const CcRoute *route = CcSimRoute(sim, map->route_id);
+    const CcSettlement *from = route != NULL ? CcSimSettlement(sim, route->from_id) : NULL;
+    const CcSettlement *to = route != NULL ? CcSimSettlement(sim, route->to_id) : NULL;
+    Color chart_ink = map->contraband ? (Color){86, 31, 72, 255} :
+                                       (Color){66, 57, 43, 255};
+    DrawText(map->name, 307, 125, 20, chart_ink);
+    DrawText(TextFormat("surveyed day %d  /  hand %02d", map->surveyed_day,
+                        map->accuracy), 309, 151, 10, Fade(chart_ink, 0.75f));
+    DrawChartRoute(map, chart_ink);
+    DrawChartTown(ChartEndpoint(map, false), from,
+                  from != NULL && from->id == sim->player.location_id, chart_ink);
+    DrawChartTown(ChartEndpoint(map, true), to,
+                  to != NULL && to->id == sim->player.location_id, chart_ink);
+
+    Vector2 compass = {847.0f, 173.0f};
+    DrawCircleLinesV(compass, 24.0f, Fade(chart_ink, 0.45f));
+    float tilt = ((float)((map->id >> 12U) % 31U) - 15.0f) * 0.012f;
+    DrawLineEx(compass, (Vector2){compass.x + sinf(tilt) * 21.0f,
+                                  compass.y - cosf(tilt) * 21.0f}, 2.0f, chart_ink);
+    DrawText("N?", 838, 202, 10, chart_ink);
+    DrawText(map->contraband ? "Copied under shuttered lanterns" :
+                              "Distances are the cartographer's argument",
+             309, 596, 10, Fade(chart_ink, 0.74f));
+}
+
+static void DrawSettlementPanel(const CcSim *sim, int32_t selected)
+{
+    Rectangle panel = {938.0f, 82.0f, 322.0f, 568.0f};
+    DrawPanel(panel, PANEL);
+    const CcMap *map = SelectedVisibleMap(sim, selected);
+    const CcSettlement *here = CcSimSettlement(sim, sim->player.location_id);
+    DrawText("CARTOGRAPHER'S CASE", 958, 102, 12, TEAL);
+    DrawText(here != NULL ? here->name : "Unknown stop", 958, 125, 22, INK);
+    DrawText(TextFormat("CROWNS %" PRId64 "   CASE %d/%d", sim->player.coins,
+                        CcPlayerMapCount(sim), sim->player.map_capacity),
+             958, 154, 10, MUTED);
+    if (map == NULL) {
+        DrawText("No carried or locally offered", 958, 204, 12, MUTED);
+        DrawText("route maps are available.", 958, 223, 12, MUTED);
+        return;
+    }
+    const CcRoute *route = CcSimRoute(sim, map->route_id);
+    const CcSettlement *from = route != NULL ? CcSimSettlement(sim, route->from_id) : NULL;
+    const CcSettlement *to = route != NULL ? CcSimSettlement(sim, route->to_id) : NULL;
+    const CcSettlement *maker = CcSimSettlement(sim, map->maker_settlement_id);
+    DrawText("THIS OBJECT DEPICTS", 958, 193, 10, MUTED);
+    DrawText(from != NULL ? from->name : "Unknown", 958, 214, 16, INK);
+    DrawText("TO", 958, 235, 9, MUTED);
+    DrawText(to != NULL ? to->name : "Unknown", 958, 252, 16, INK);
+    DrawText(TextFormat("MAKER  %s", maker != NULL ? maker->name : "unknown"),
+             958, 289, 10, MUTED);
+    DrawText(TextFormat("AGE    %d days", sim->current_day - map->surveyed_day),
+             958, 308, 10, MUTED);
+    DrawBar(958, 337, 124, "ACCURACY", map->accuracy, TEAL);
+    DrawBar(958, 361, 124, "ROAD INK", map->recorded_condition, CC_GOLD);
+    DrawBar(958, 385, 124, "DANGER", map->recorded_danger, DANGER);
+    DrawText("These are recorded claims,", 958, 421, 10, MUTED);
+    DrawText("not live world-state telemetry.", 958, 437, 10, MUTED);
+
+    bool owned = map->owner_id == sim->player.id;
+    CcId destination_id = route != NULL ? RouteOtherEnd(route, sim->player.location_id) : 0U;
+    const CcSettlement *destination = CcSimSettlement(sim, destination_id);
+    if (!owned) {
+        DrawText(TextFormat("B  BUY FOR %d CROWNS", map->ask_price),
+                 958, 486, 13, CC_GOLD);
+    } else {
+        DrawText(TextFormat("S  SELL FOR %d CROWNS", map->ask_price * 2 / 3),
+                 958, 486, 11, MUTED);
+        DrawText(destination != NULL ?
+                 TextFormat("ENTER  FOLLOW TO %s", destination->name) :
+                 "This sheet begins elsewhere.",
+                 958, 511, destination != NULL ? 12 : 11,
+                 destination != NULL ? CC_GOLD : MUTED);
+        if (route != NULL && route->closed && destination != NULL) {
+            DrawText("R  attempt work at the route", 958, 535, 10, TEAL);
+        }
+    }
+    DrawText("LEFT/RIGHT  leaf through objects", 958, 584, 9, MUTED);
+    DrawText("M  close case   Q situations", 958, 604, 9, MUTED);
+    DrawText("No chart reveals the whole world.", 958, 624, 9,
+             map->contraband ? CC_VIOLET : MUTED);
+}
 
 static void DrawHeader(const CcSim *sim)
 {
     DrawText("CROWNLESS CARRIAGE", 26, 20, 27, INK);
-    DrawText("JOURNEY PLANNING / THE SECONDARY KINGDOM LAYER", 28, 53, 11, TEAL);
+    DrawText("PHYSICAL CARTOGRAPHY / ONE OBJECT, ONE ROUTE", 28, 53, 11, TEAL);
     DrawText(TextFormat("DAY %04d", sim->current_day), 790, 25, 16, CC_GOLD);
     DrawText(TextFormat("CROWNS %03" PRId64, sim->player.coins), 900, 25, 16, CC_GOLD);
-    DrawText(TextFormat("CARGO %02d/%02d", CcPlayerCargoUsed(&sim->player),
-                        sim->player.cargo_capacity), 1060, 25, 16, TEAL);
+    DrawText(TextFormat("MAPS %02d/%02d", CcPlayerMapCount(sim),
+                        sim->player.map_capacity), 1060, 25, 16, TEAL);
     DrawText(TextFormat("WORLD %08X  STATE %08" PRIx64 "  REP %d  LIVE %d",
                         sim->world_seed, CcSimHash(sim) & UINT64_C(0xffffffff),
                         sim->player.reputation, CcSimActiveSituationCount(sim)),
@@ -953,10 +1158,10 @@ static void DrawEventRibbon(const CcSim *sim)
                  38, 680, 11, event->kind == CC_EVENT_MONSTER_PRESSURE ? CC_VIOLET : TEAL);
         DrawText(event->text, 38, 704, 14, INK);
     }
-    DrawText("CLICK destination   ENTER commit   R repair   . day   K week",
-             760, 679, 10, MUTED);
-    DrawText("M return to town   Q situations   TAB ledger   F5 save   F9 load   N world",
-             735, 704, 10, MUTED);
+    DrawText("LEFT/RIGHT leaf charts   B buy   S sell   ENTER follow",
+             735, 679, 10, MUTED);
+    DrawText("M close case   Q situations   TAB ledger   F5 save   F9 load",
+             765, 704, 10, MUTED);
 }
 
 static void DrawLedger(const CcSim *sim)
@@ -1087,8 +1292,13 @@ static void HandleInput(CcSim *sim, int32_t *selected, ClientView *view,
     if (IsKeyPressed(KEY_M)) {
         if (*view == VIEW_MAP) {
             *view = VIEW_LOCAL;
-        } else {
+        } else if (*view == VIEW_LOCAL && !local->market_interior &&
+                   GridDistance(LocalPosition(local), LOCAL_CARRIAGE) < 1.35f) {
+            *selected = FirstVisibleMapIndex(sim);
             *view = VIEW_MAP;
+        } else {
+            (void)snprintf(message, message_capacity,
+                           "The map case is a physical carriage fitting; approach it first.");
         }
         return;
     }
@@ -1108,14 +1318,14 @@ static void HandleInput(CcSim *sim, int32_t *selected, ClientView *view,
         (void)snprintf(message, message_capacity, "%s",
                        loaded ? "Campaign restored with matching state hash." : error);
         if (loaded) {
-            *selected = SettlementIndex(sim, sim->player.location_id);
+            *selected = FirstVisibleMapIndex(sim);
             ResetLocalState(local);
             *view = VIEW_LOCAL;
         }
     }
     if (IsKeyPressed(KEY_N)) {
         CcSimInit(sim, sim->world_seed + UINT32_C(0x9e3779b9));
-        *selected = SettlementIndex(sim, sim->player.location_id);
+        *selected = FirstVisibleMapIndex(sim);
         ResetLocalState(local);
         *view = VIEW_LOCAL;
         (void)snprintf(message, message_capacity, "A new deterministic region is founded.");
@@ -1130,6 +1340,25 @@ static void HandleInput(CcSim *sim, int32_t *selected, ClientView *view,
     }
 
     if (*view == VIEW_LOCAL) {
+        if (IsKeyPressed(KEY_X) &&
+            local->agent.morphology == CC_MORPHOLOGY_BIPED) {
+            bool guarded = local->agent.humanoid.action !=
+                           CC_HUMANOID_ACTION_GUARD;
+            CcHumanoidGaitSetGuarded(&local->agent.humanoid, guarded);
+            (void)snprintf(
+                message, message_capacity, "%s",
+                guarded ? "You settle behind your hands and hips; X releases the guard." :
+                          "You release the guarded stance.");
+        }
+        if (IsKeyPressed(KEY_SPACE) &&
+            local->agent.morphology == CC_MORPHOLOGY_BIPED) {
+            bool struck = CcHumanoidGaitBeginStrike(
+                &local->agent.humanoid, 1);
+            (void)snprintf(
+                message, message_capacity, "%s",
+                struck ? "The thrust travels from feet through hip, spine, shoulder, and hand." :
+                         "No strike: the body is already committed to another action.");
+        }
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
             CcLocalAgentPickTarget(&local->agent, GetMousePosition(), local_target,
                                    local_bounds, local->market_interior)) {
@@ -1170,9 +1399,10 @@ static void HandleInput(CcSim *sim, int32_t *selected, ClientView *view,
                                "You enter a market whose shelves are filled by the real simulation.");
             } else if (!local->market_interior &&
                        GridDistance(position, LOCAL_CARRIAGE) < 1.35f) {
+                *selected = FirstVisibleMapIndex(sim);
                 *view = VIEW_MAP;
                 (void)snprintf(message, message_capacity,
-                               "The route chart opens only because you approached the carriage.");
+                               "You unlatch the carriage map case; each sheet depicts one route.");
             } else if (!local->market_interior &&
                        GridDistance(position, LOCAL_NOTICE) < 1.15f) {
                 *return_view = VIEW_LOCAL;
@@ -1202,30 +1432,53 @@ static void HandleInput(CcSim *sim, int32_t *selected, ClientView *view,
         return;
     }
 
+    if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_DOWN)) {
+        *selected = StepVisibleMapIndex(sim, *selected, 1);
+    }
+    if (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_UP)) {
+        *selected = StepVisibleMapIndex(sim, *selected, -1);
+    }
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         Vector2 mouse = GetMousePosition();
-        for (int32_t i = 0; i < sim->settlement_count; ++i) {
-            Vector2 point = SettlementPoint(&sim->settlements[i]);
-            float dx = mouse.x - point.x;
-            float dy = mouse.y - point.y;
-            if (dx * dx + dy * dy <= 32.0f * 32.0f) *selected = i;
+        int32_t row = 0;
+        for (int32_t i = 0; i < sim->map_count; ++i) {
+            if (!MapVisibleAtCarriage(sim, &sim->maps[i])) continue;
+            Rectangle item = {37.0f, (float)(154 + row * 51), 226.0f, 43.0f};
+            if (CheckCollisionPointRec(mouse, item)) *selected = i;
+            row += 1;
         }
     }
 
-    if (IsKeyPressed(KEY_ENTER) && *selected >= 0 && *selected < sim->settlement_count) {
+    const CcMap *map = SelectedVisibleMap(sim, *selected);
+    if (map == NULL) return;
+    CcId map_id = map->id;
+    if (IsKeyPressed(KEY_B) && map->owner_id == sim->player.location_id) {
+        CcCommand buy = {.kind = CC_COMMAND_BUY_MAP, .target_id = map_id};
+        (void)ApplyCommand(sim, buy, message, message_capacity);
+        return;
+    }
+    if (IsKeyPressed(KEY_S) && map->owner_id == sim->player.id) {
+        CcCommand sell = {.kind = CC_COMMAND_SELL_MAP, .target_id = map_id};
+        (void)ApplyCommand(sim, sell, message, message_capacity);
+        return;
+    }
+
+    const CcRoute *route = CcSimRoute(sim, map->route_id);
+    CcId destination_id = RouteOtherEnd(route, sim->player.location_id);
+    if (IsKeyPressed(KEY_ENTER) && map->owner_id == sim->player.id &&
+        destination_id != 0U) {
         CcCommand travel = {
             .kind = CC_COMMAND_TRAVEL,
-            .target_id = sim->settlements[*selected].id
+            .target_id = destination_id
         };
         if (ApplyCommand(sim, travel, message, message_capacity)) {
-            *selected = SettlementIndex(sim, sim->player.location_id);
+            *selected = FirstVisibleMapIndex(sim);
             ResetLocalState(local);
             *view = VIEW_LOCAL;
         }
     }
-    if (IsKeyPressed(KEY_R) && *selected >= 0 && *selected < sim->settlement_count) {
-        const CcRoute *route = CcSimRouteBetween(sim, sim->player.location_id,
-                                                 sim->settlements[*selected].id);
+    if (IsKeyPressed(KEY_R) && map->owner_id == sim->player.id &&
+        destination_id != 0U) {
         CcCommand repair = {
             .kind = CC_COMMAND_REPAIR_ROUTE,
             .target_id = route != NULL ? route->id : 0U
@@ -1258,11 +1511,14 @@ int main(int argc, char **argv)
     bool capture_limbs = argc >= 2 && strcmp(argv[1], "--capture-limbs") == 0;
     bool capture_walk_cycle = argc >= 2 &&
                               strcmp(argv[1], "--capture-walk-cycle") == 0;
+    bool capture_map_case = argc >= 2 &&
+                            strcmp(argv[1], "--capture-map-case") == 0;
+    bool capture_dojo = argc >= 2 && strcmp(argv[1], "--capture-dojo") == 0;
     bool capture = argc >= 2 &&
                    (strcmp(argv[1], "--capture") == 0 || capture_board ||
                     capture_interior || capture_navigation || capture_limbs ||
                     capture_walk_cycle || capture_defense ||
-                    capture_downclimb);
+                    capture_downclimb || capture_map_case || capture_dojo);
     const char *capture_path = argc >= 3 ? argv[2] : "architecture-proof.png";
     char save_path[640];
     CampaignSavePath(save_path, sizeof(save_path));
@@ -1284,9 +1540,10 @@ int main(int argc, char **argv)
     CcSim sim;
     CcSimInit(&sim, UINT32_C(0xc0a71a9e));
     if (capture || render_benchmark) CcSimAdvanceDays(&sim, 28);
-    int32_t selected = capture || render_benchmark ?
-                       3 : SettlementIndex(&sim, sim.player.location_id);
-    ClientView view = capture_board ? VIEW_SITUATIONS : VIEW_LOCAL;
+    if (capture_map_case) sim.player.location_id = sim.settlements[1].id;
+    int32_t selected = FirstVisibleMapIndex(&sim);
+    ClientView view = capture_board ? VIEW_SITUATIONS :
+                      capture_map_case ? VIEW_MAP : VIEW_LOCAL;
     ClientView return_view = VIEW_LOCAL;
     LocalState local;
     CcLocalAgent walk_cycle_frames[8] = {0};
@@ -1324,6 +1581,19 @@ int main(int argc, char **argv)
                      local.course.raiders_retreating,
                      local.course.raider_resolve,
                      local.course.defenses_completed, fighting_frames);
+    }
+    if (capture_dojo) {
+        local.course.alarm_countdown = 1000.0f;
+        CcLocalCourseRunner *swimmer = &local.course.runners[0];
+        CcLocalAgentInit(&swimmer->agent, (Vector2){13.90f, 9.78f}, false);
+        swimmer->agent.crowned = false;
+        swimmer->agent.tunic_color = swimmer->marker_color;
+        (void)CcLocalAgentSetExactTarget(
+            &swimmer->agent, (Vector3){9.40f, 0.0f, 9.72f}, false);
+        for (int32_t frame = 0; frame < 420; ++frame) {
+            CcLocalCourseUpdate(&local.course, &sim, 1.0f / 60.0f);
+            if (swimmer->agent.swimming && frame > 90) break;
+        }
     }
     if (capture_interior) {
         local.market_interior = true;

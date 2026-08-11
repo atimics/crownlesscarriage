@@ -46,10 +46,10 @@ No major state is surfaced without:
 The detailed ledger is optional evidence, never the primary storytelling
 interface.
 
-The default view is character-scale and local. The kingdom map is a secondary
-planning instrument reached through the carriage or a shortcut; it helps the
-player decide where to go, but it is not where ordinary play, trade, discovery,
-or consequences live.
+The default view is character-scale and local. Physical route maps are
+secondary planning instruments kept in the carriage. They help the player
+decide where to go without becoming a universal world screen; ordinary play,
+trade, discovery, and consequences remain local.
 
 ### 3. Every journey is a commitment
 
@@ -108,8 +108,8 @@ player cannot understand or influence create a busy world, not a living one.
 - The game opens and returns from journeys at character scale.
 - Local movement, people, buildings, interiors, and physical symptoms are the
   primary interface to the world.
-- The kingdom map answers where to travel, what a journey commits, and which
-  large-scale pressures are known; it does not replace exploration.
+- A carried route chart answers where that sheet can lead and what its maker
+  claimed at survey time; no interface answers for the entire world.
 - Strategic facts that matter to the player must project into at least one
   local sensory or social expression before requiring a statistics panel.
 - Choosing a destination is only the beginning of an adventure. Arrival,

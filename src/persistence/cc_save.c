@@ -97,7 +97,7 @@ static bool OpenDatabase(const char *path, sqlite3 **database,
         "PRAGMA journal_mode=DELETE;"
         "PRAGMA synchronous=FULL;"
         "PRAGMA application_id=1128481362;"
-        "PRAGMA user_version=2;",
+        "PRAGMA user_version=3;",
         error, error_capacity)) {
         sqlite3_close(*database);
         *database = NULL;
@@ -176,8 +176,16 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " deadline_day INTEGER NOT NULL);"
         "CREATE TABLE IF NOT EXISTS shipment_intent ("
         " slot INTEGER PRIMARY KEY, final_destination_id INTEGER NOT NULL);";
+    const char *map_schema =
+        "CREATE TABLE IF NOT EXISTS map_object ("
+        " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL UNIQUE, route_id INTEGER NOT NULL,"
+        " maker_settlement_id INTEGER NOT NULL, owner_id INTEGER NOT NULL, name TEXT NOT NULL,"
+        " surveyed_day INTEGER NOT NULL, accuracy INTEGER NOT NULL,"
+        " recorded_condition INTEGER NOT NULL, recorded_danger INTEGER NOT NULL,"
+        " ask_price INTEGER NOT NULL, contraband INTEGER NOT NULL);";
     return Execute(database, schema, error, error_capacity) &&
-           Execute(database, situation_schema, error, error_capacity);
+           Execute(database, situation_schema, error, error_capacity) &&
+           Execute(database, map_schema, error, error_capacity);
 }
 
 static bool SaveMeta(sqlite3 *database, const CcSim *sim,
@@ -274,6 +282,32 @@ static bool SaveRoutes(sqlite3 *database, const CcSim *sim,
         BindInt(statement, 5, r->travel_days); BindInt(statement, 6, r->capacity);
         BindInt(statement, 7, r->security); BindInt(statement, 8, r->condition);
         BindInt(statement, 9, r->closed ? 1 : 0); BindInt(statement, 10, r->smuggler_route ? 1 : 0);
+        if (!StepDone(database, statement, error, error_capacity) ||
+            !ResetStatement(database, statement, error, error_capacity)) {
+            sqlite3_finalize(statement); return false;
+        }
+    }
+    sqlite3_finalize(statement);
+    return true;
+}
+
+static bool SaveMaps(sqlite3 *database, const CcSim *sim,
+                     char *error, size_t error_capacity)
+{
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database, "INSERT INTO map_object VALUES(?,?,?,?,?,?,?,?,?,?,?,?);",
+                 &statement, error, error_capacity)) return false;
+    for (int32_t i = 0; i < sim->map_count; ++i) {
+        const CcMap *map = &sim->maps[i];
+        BindInt(statement, 1, i); BindId(statement, 2, map->id);
+        BindId(statement, 3, map->route_id);
+        BindId(statement, 4, map->maker_settlement_id);
+        BindId(statement, 5, map->owner_id); BindText(statement, 6, map->name);
+        BindInt(statement, 7, map->surveyed_day); BindInt(statement, 8, map->accuracy);
+        BindInt(statement, 9, map->recorded_condition);
+        BindInt(statement, 10, map->recorded_danger);
+        BindInt(statement, 11, map->ask_price);
+        BindInt(statement, 12, map->contraband ? 1 : 0);
         if (!StepDone(database, statement, error, error_capacity) ||
             !ResetStatement(database, statement, error, error_capacity)) {
             sqlite3_finalize(statement); return false;
@@ -479,7 +513,7 @@ bool CcSaveWrite(const char *path, const CcSim *sim,
         Execute(database, "BEGIN IMMEDIATE;", error, error_capacity) &&
         Execute(database,
             "DELETE FROM meta; DELETE FROM kingdom; DELETE FROM settlement;"
-            "DELETE FROM route; DELETE FROM faction; DELETE FROM shipment;"
+            "DELETE FROM route; DELETE FROM map_object; DELETE FROM faction; DELETE FROM shipment;"
             "DELETE FROM shipment_intent;"
             "DELETE FROM bandit_group; DELETE FROM monster_population;"
             "DELETE FROM dungeon; DELETE FROM situation; DELETE FROM causal_event;"
@@ -489,6 +523,7 @@ bool CcSaveWrite(const char *path, const CcSim *sim,
         SaveKingdoms(database, sim, error, error_capacity) &&
         SaveSettlements(database, sim, error, error_capacity) &&
         SaveRoutes(database, sim, error, error_capacity) &&
+        SaveMaps(database, sim, error, error_capacity) &&
         SaveFactions(database, sim, error, error_capacity) &&
         SaveShipments(database, sim, error, error_capacity) &&
         SaveThreats(database, sim, error, error_capacity) &&
@@ -619,6 +654,40 @@ static bool ReadRoutes(sqlite3 *database, CcSim *sim,
     }
     sqlite3_finalize(statement);
     if (rows != sim->route_count) { SetError(error, error_capacity, "Route rows are incomplete."); return false; }
+    return true;
+}
+
+static bool ReadMaps(sqlite3 *database, CcSim *sim,
+                     char *error, size_t error_capacity)
+{
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database, "SELECT * FROM map_object ORDER BY slot;",
+                 &statement, error, error_capacity)) return false;
+    int32_t rows = 0;
+    while (sqlite3_step(statement) == SQLITE_ROW) {
+        int32_t slot = sqlite3_column_int(statement, 0);
+        if (slot < 0 || slot >= CC_MAX_MAPS) {
+            SetError(error, error_capacity, "Map rows exceed save limits.");
+            sqlite3_finalize(statement);
+            return false;
+        }
+        CcMap *map = &sim->maps[slot];
+        map->id = (CcId)sqlite3_column_int64(statement, 1);
+        map->route_id = (CcId)sqlite3_column_int64(statement, 2);
+        map->maker_settlement_id = (CcId)sqlite3_column_int64(statement, 3);
+        map->owner_id = (CcId)sqlite3_column_int64(statement, 4);
+        (void)snprintf(map->name, sizeof(map->name), "%s",
+                       sqlite3_column_text(statement, 5));
+        map->surveyed_day = sqlite3_column_int(statement, 6);
+        map->accuracy = sqlite3_column_int(statement, 7);
+        map->recorded_condition = sqlite3_column_int(statement, 8);
+        map->recorded_danger = sqlite3_column_int(statement, 9);
+        map->ask_price = sqlite3_column_int(statement, 10);
+        map->contraband = sqlite3_column_int(statement, 11) != 0;
+        rows += 1;
+    }
+    sqlite3_finalize(statement);
+    sim->map_count = rows;
     return true;
 }
 
@@ -825,6 +894,7 @@ static bool ReadPlayer(sqlite3 *database, CcSim *sim,
     p->cargo[CC_GOOD_TOOLS] = sqlite3_column_int(statement, 5);
     p->cargo_capacity = sqlite3_column_int(statement, 6);
     p->passenger_capacity = sqlite3_column_int(statement, 7);
+    p->map_capacity = CC_MAP_CAPACITY;
     p->reputation = sqlite3_column_int(statement, 8);
     sqlite3_finalize(statement);
     return true;
@@ -846,6 +916,7 @@ bool CcSaveRead(const char *path, CcSim *sim,
               ReadKingdoms(database, sim, error, error_capacity) &&
               ReadSettlements(database, sim, error, error_capacity) &&
               ReadRoutes(database, sim, error, error_capacity) &&
+              ReadMaps(database, sim, error, error_capacity) &&
               ReadFactions(database, sim, error, error_capacity) &&
               ReadShipments(database, sim, error, error_capacity) &&
               ReadThreats(database, sim, error, error_capacity) &&

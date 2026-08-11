@@ -23,10 +23,17 @@ interventions must reproduce the uninterrupted run.
 Previously altered route and dungeon segments must retain authoritative
 mutations.
 
+Map identity, ownership, survey claims, legality, price, and carriage map-case
+capacity must also survive an exact state-hash round trip.
+
 ### 3. Referential integrity
 
 No active route, shipment, situation, character memory, or causal event may
 reference a missing or generation-mismatched entity.
+
+Every physical map must reference an existing route and maker, have exactly one
+valid owner, and be refused for travel when it is not carried or when the
+carriage is not at one of its route endpoints.
 
 ### 4. Economic invariants
 
@@ -84,8 +91,13 @@ enter, traverse, and leave its biomechanical climbing mode without changing
 bone lengths, exceeding anatomical arm reach, flipping an IK bend plane,
 instantaneously acquiring a contact, or exceeding the whole-pose per-frame
 continuity bound. A biped whose ragdoll remains active must be refused climb
-admission even when its navigation body is grounded. Local-world
-fixtures must climb the actual 1.65-unit tower and fall from at least three
+admission even when its navigation body is grounded. Fixtures must also enter
+water without invoking fall control, remove both terrestrial contacts, retain
+fixed arm and leg lengths, remain inside a bounded buoyancy height band, and
+reacquire contacts on exit. Guard-to-strike and guard-to-swim transitions have
+whole-pose continuity bounds, and one strike must expose exactly one consumable
+impact window. Local-world fixtures must climb the actual 1.65-unit tower and
+fall from at least three
 edges; after street impact, both center-of-mass and worst-particle upward speed
 must remain below the non-bouncing bound, and body contact may not disappear for
 more than four consecutive frames before recovery. Release-to-street time must

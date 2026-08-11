@@ -18,6 +18,7 @@ typedef enum CcTraversalMode {
     CC_TRAVERSAL_WALK,
     CC_TRAVERSAL_CLIMB,
     CC_TRAVERSAL_DESCEND,
+    CC_TRAVERSAL_SWIM,
     CC_TRAVERSAL_DROP,
     CC_TRAVERSAL_RAGDOLL,
     CC_TRAVERSAL_GET_UP
@@ -44,9 +45,11 @@ typedef struct CcLocalAgent {
     bool grounded;
     bool climbing;
     bool climbing_down;
+    bool swimming;
     bool allow_downclimb;
     bool exact_target_valid;
     float radius;
+    float immersion;
     CcMorphologyPreset morphology;
     CcLimbRig limb_rig;
     CcHumanoidGait humanoid;
@@ -68,6 +71,7 @@ typedef struct CcLocalCourseRunner {
     int32_t next_waypoint;
     int32_t response_stage;
     float pause_seconds;
+    float attack_cooldown;
     Color marker_color;
     CcGuardDuty duty;
     bool response_waypoint_active;
@@ -78,7 +82,7 @@ typedef struct CcLocalCourse {
     CcLocalAgent raiders[CC_LOCAL_RAIDER_COUNT];
     float alarm_countdown;
     float engagement_time;
-    float strike_timer;
+    float raider_attack_cooldown[CC_LOCAL_RAIDER_COUNT];
     int32_t raider_resolve;
     int32_t defenses_completed;
     bool alarm_active;

@@ -178,6 +178,8 @@ const char *CcEventKindName(CcEventKind kind)
         case CC_EVENT_SITUATION_RESOLVED: return "FULFILLED";
         case CC_EVENT_SITUATION_FAILED: return "FAILED";
         case CC_EVENT_PLAYER_AMBUSH: return "AMBUSH";
+        case CC_EVENT_MAP_BOUGHT: return "CHART";
+        case CC_EVENT_MAP_SOLD: return "CHART";
     }
     return "EVENT";
 }
@@ -228,6 +230,30 @@ const CcRoute *CcSimRouteBetween(const CcSim *sim, CcId a, CcId b)
         const CcRoute *route = &sim->routes[i];
         if ((route->from_id == a && route->to_id == b) ||
             (route->from_id == b && route->to_id == a)) return route;
+    }
+    return NULL;
+}
+
+const CcMap *CcSimMap(const CcSim *sim, CcId id)
+{
+    if (sim == NULL || CcIdKind(id) != CC_ENTITY_MAP) return NULL;
+    for (int32_t i = 0; i < sim->map_count; ++i) {
+        if (sim->maps[i].id == id) return &sim->maps[i];
+    }
+    return NULL;
+}
+
+static CcMap *MapMutable(CcSim *sim, CcId id)
+{
+    return (CcMap *)CcSimMap((const CcSim *)sim, id);
+}
+
+const CcMap *CcSimMapForRoute(const CcSim *sim, CcId route_id, CcId owner_id)
+{
+    if (sim == NULL) return NULL;
+    for (int32_t i = 0; i < sim->map_count; ++i) {
+        const CcMap *map = &sim->maps[i];
+        if (map->route_id == route_id && map->owner_id == owner_id) return map;
     }
     return NULL;
 }
@@ -339,6 +365,16 @@ int32_t CcPlayerCargoUsed(const CcPlayerCompany *player)
     return used;
 }
 
+int32_t CcPlayerMapCount(const CcSim *sim)
+{
+    if (sim == NULL) return 0;
+    int32_t count = 0;
+    for (int32_t i = 0; i < sim->map_count; ++i) {
+        if (sim->maps[i].owner_id == sim->player.id) count += 1;
+    }
+    return count;
+}
+
 static void InitKingdom(CcSim *sim, int32_t slot, const char *name,
                         uint8_t red, uint8_t green, uint8_t blue,
                         CcMoney treasury, int32_t legitimacy)
@@ -389,6 +425,37 @@ static void InitRoute(CcSim *sim, int32_t slot, int32_t from, int32_t to,
     route->condition = closed ? 38 : 76;
     route->closed = closed;
     route->smuggler_route = smuggler;
+}
+
+static void InitMaps(CcSim *sim)
+{
+    sim->map_count = sim->route_count;
+    for (int32_t i = 0; i < sim->route_count; ++i) {
+        const CcRoute *route = &sim->routes[i];
+        const CcSettlement *from = CcSimSettlement(sim, route->from_id);
+        const CcSettlement *to = CcSimSettlement(sim, route->to_id);
+        CcMap *map = &sim->maps[i];
+        map->id = NextId(sim, CC_ENTITY_MAP);
+        map->route_id = route->id;
+        map->maker_settlement_id = route->from_id;
+        map->owner_id = i == 0 ? sim->player.id : route->from_id;
+        map->surveyed_day = sim->current_day - (int32_t)(NextRandom(sim) % 46U);
+        map->accuracy = i == 0 ? 92 : 58 + (int32_t)(NextRandom(sim) % 36U);
+        map->recorded_condition = ClampI32(
+            route->condition + (int32_t)(NextRandom(sim) % 13U) - 6, 0, 100);
+        map->recorded_danger = ClampI32(
+            CcSimRouteDanger(sim, route->id) + (int32_t)(NextRandom(sim) % 19U) - 9,
+            0, 100);
+        map->ask_price = 8 + route->travel_days * 2 +
+                         (100 - map->accuracy) / 7 +
+                         (route->smuggler_route ? 5 : 0);
+        map->contraband = route->smuggler_route;
+        (void)snprintf(map->name, sizeof(map->name),
+                       route->smuggler_route ? "%.10s-%.10s night chart" :
+                                               "%.10s-%.10s road sheet",
+                       from != NULL ? from->name : "Unknown",
+                       to != NULL ? to->name : "Unknown");
+    }
 }
 
 static void InitFaction(CcSim *sim, int32_t slot, int32_t kingdom_slot,
@@ -604,7 +671,9 @@ void CcSimInit(CcSim *sim, uint32_t seed)
     sim->player.coins = 42;
     sim->player.cargo_capacity = CC_CARGO_CAPACITY;
     sim->player.passenger_capacity = 4;
+    sim->player.map_capacity = CC_MAP_CAPACITY;
     sim->player.reputation = 0;
+    InitMaps(sim);
 
     char text[CC_EVENT_TEXT_CAPACITY];
     int32_t drought = 55 + (int32_t)(NextRandom(sim) % 26U);
@@ -1608,6 +1677,57 @@ static bool ApplyTrade(CcSim *sim, const CcCommand *command,
     return true;
 }
 
+static bool ApplyBuyMap(CcSim *sim, const CcCommand *command,
+                        char *error, size_t error_capacity)
+{
+    CcMap *map = MapMutable(sim, command->target_id);
+    const CcSettlement *seller = CcSimSettlement(sim, sim->player.location_id);
+    if (map == NULL || seller == NULL || map->owner_id != seller->id) {
+        SetError(error, error_capacity, "That chart is not for sale here.");
+        return false;
+    }
+    if (CcPlayerMapCount(sim) >= sim->player.map_capacity) {
+        SetError(error, error_capacity, "The carriage map case is full.");
+        return false;
+    }
+    if (sim->player.coins < map->ask_price) {
+        SetError(error, error_capacity, "The company cannot afford that chart.");
+        return false;
+    }
+    sim->player.coins -= map->ask_price;
+    map->owner_id = sim->player.id;
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text),
+                   "The Crownless company buys %s at %s for %d crowns.",
+                   map->name, seller->name, map->ask_price);
+    (void)PushEvent(sim, CC_EVENT_MAP_BOUGHT, map->id, seller->id, 0U,
+                    map->ask_price, text);
+    SetError(error, error_capacity, "");
+    return true;
+}
+
+static bool ApplySellMap(CcSim *sim, const CcCommand *command,
+                         char *error, size_t error_capacity)
+{
+    CcMap *map = MapMutable(sim, command->target_id);
+    const CcSettlement *buyer = CcSimSettlement(sim, sim->player.location_id);
+    if (map == NULL || buyer == NULL || map->owner_id != sim->player.id) {
+        SetError(error, error_capacity, "The carriage does not carry that chart.");
+        return false;
+    }
+    int32_t payment = MaximumI32(1, map->ask_price * 2 / 3);
+    map->owner_id = buyer->id;
+    sim->player.coins += payment;
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text),
+                   "The Crownless company sells %s at %s for %d crowns.",
+                   map->name, buyer->name, payment);
+    (void)PushEvent(sim, CC_EVENT_MAP_SOLD, map->id, buyer->id, 0U,
+                    payment, text);
+    SetError(error, error_capacity, "");
+    return true;
+}
+
 static bool ApplyTravel(CcSim *sim, const CcCommand *command,
                         char *error, size_t error_capacity)
 {
@@ -1620,6 +1740,11 @@ static bool ApplyTravel(CcSim *sim, const CcCommand *command,
                                              destination->id);
     if (route == NULL) {
         SetError(error, error_capacity, "No direct carriage route connects those places.");
+        return false;
+    }
+    if (CcSimMapForRoute(sim, route->id, sim->player.id) == NULL) {
+        SetError(error, error_capacity,
+                 "No chart in the carriage map case depicts that route.");
         return false;
     }
     if (route->closed) {
@@ -1768,6 +1893,10 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
             return ApplyRepair(sim, command, error, error_capacity);
         case CC_COMMAND_CHANGE_DUNGEON:
             return ApplyDungeonChange(sim, command, error, error_capacity);
+        case CC_COMMAND_BUY_MAP:
+            return ApplyBuyMap(sim, command, error, error_capacity);
+        case CC_COMMAND_SELL_MAP:
+            return ApplySellMap(sim, command, error, error_capacity);
         case CC_COMMAND_NONE:
             break;
     }
@@ -1789,6 +1918,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
     if (sim->kingdom_count < 1 || sim->kingdom_count > CC_MAX_KINGDOMS ||
         sim->settlement_count < 1 || sim->settlement_count > CC_MAX_SETTLEMENTS ||
         sim->route_count < 0 || sim->route_count > CC_MAX_ROUTES ||
+        sim->map_count < 0 || sim->map_count > CC_MAX_MAPS ||
         sim->faction_count < 0 || sim->faction_count > CC_MAX_FACTIONS ||
         sim->shipment_count < 0 || sim->shipment_count > CC_MAX_SHIPMENTS ||
         sim->bandit_count < 0 || sim->bandit_count > CC_MAX_BANDITS ||
@@ -1819,6 +1949,21 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             CcSimSettlement(sim, route->to_id) == NULL ||
             route->travel_days < 1 || route->capacity < 1) {
             SetError(error, error_capacity, "Route data is invalid.");
+            return false;
+        }
+    }
+    for (int32_t i = 0; i < sim->map_count; ++i) {
+        const CcMap *map = &sim->maps[i];
+        bool valid_owner = map->owner_id == sim->player.id ||
+                           CcSimSettlement(sim, map->owner_id) != NULL;
+        if (CcIdKind(map->id) != CC_ENTITY_MAP ||
+            CcSimRoute(sim, map->route_id) == NULL ||
+            CcSimSettlement(sim, map->maker_settlement_id) == NULL ||
+            !valid_owner || map->accuracy < 0 || map->accuracy > 100 ||
+            map->recorded_condition < 0 || map->recorded_condition > 100 ||
+            map->recorded_danger < 0 || map->recorded_danger > 100 ||
+            map->ask_price < 1) {
+            SetError(error, error_capacity, "Physical map data is invalid.");
             return false;
         }
     }
@@ -1858,6 +2003,9 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
     }
     if (CcSimSettlement(sim, sim->player.location_id) == NULL ||
         CcPlayerCargoUsed(&sim->player) > sim->player.cargo_capacity ||
+        sim->player.map_capacity < 1 ||
+        sim->player.map_capacity > CC_MAX_MAPS ||
+        CcPlayerMapCount(sim) > sim->player.map_capacity ||
         sim->player.coins < 0) {
         SetError(error, error_capacity, "Player company state is invalid.");
         return false;
@@ -1900,6 +2048,7 @@ uint64_t CcSimHash(const CcSim *sim)
     HASH_VALUE(sim->kingdom_count);
     HASH_VALUE(sim->settlement_count);
     HASH_VALUE(sim->route_count);
+    HASH_VALUE(sim->map_count);
     HASH_VALUE(sim->faction_count);
     HASH_VALUE(sim->shipment_count);
     HASH_VALUE(sim->bandit_count);
@@ -1932,6 +2081,15 @@ uint64_t CcSimHash(const CcSim *sim)
         HASH_VALUE(item->id); HASH_VALUE(item->from_id); HASH_VALUE(item->to_id);
         HASH_VALUE(item->travel_days); HASH_VALUE(item->capacity); HASH_VALUE(item->security);
         HASH_VALUE(item->condition); HASH_VALUE(item->closed); HASH_VALUE(item->smuggler_route);
+    }
+    for (int32_t i = 0; i < sim->map_count; ++i) {
+        const CcMap *item = &sim->maps[i];
+        HASH_VALUE(item->id); HASH_VALUE(item->route_id);
+        HASH_VALUE(item->maker_settlement_id); HASH_VALUE(item->owner_id);
+        hash = HashString(hash, item->name);
+        HASH_VALUE(item->surveyed_day); HASH_VALUE(item->accuracy);
+        HASH_VALUE(item->recorded_condition); HASH_VALUE(item->recorded_danger);
+        HASH_VALUE(item->ask_price); HASH_VALUE(item->contraband);
     }
     for (int32_t i = 0; i < sim->faction_count; ++i) {
         const CcFaction *item = &sim->factions[i];
@@ -1972,7 +2130,8 @@ uint64_t CcSimHash(const CcSim *sim)
     }
     HASH_VALUE(sim->player.id); HASH_VALUE(sim->player.location_id);
     HASH_VALUE(sim->player.coins); HASH_VALUE(sim->player.cargo_capacity);
-    HASH_VALUE(sim->player.passenger_capacity); HASH_VALUE(sim->player.reputation);
+    HASH_VALUE(sim->player.passenger_capacity); HASH_VALUE(sim->player.map_capacity);
+    HASH_VALUE(sim->player.reputation);
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) HASH_VALUE(sim->player.cargo[good]);
     for (int32_t i = 0; i < CC_MAX_EVENTS; ++i) {
         const CcEvent *item = &sim->events[i];

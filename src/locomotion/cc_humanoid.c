@@ -4,6 +4,8 @@
 #include <stddef.h>
 
 #define CC_HUMANOID_PI 3.14159265358979323846f
+static const float CC_HUMANOID_STRIKE_DURATION = 1.20f;
+static const float CC_HUMANOID_STRIKE_IMPACT_TIME = 0.61f;
 
 typedef enum CcHumanoidRagdollNode {
     CC_RAGDOLL_PELVIS,
@@ -111,6 +113,34 @@ static float Smooth01(float amount)
 {
     amount = Clamp(amount, 0.0f, 1.0f);
     return amount * amount * (3.0f - 2.0f * amount);
+}
+
+static void SetAction(CcHumanoidGait *gait, CcHumanoidAction action)
+{
+    if (gait->action == action) return;
+    gait->previous_action = gait->action;
+    gait->action = action;
+    gait->action_time = 0.0f;
+    gait->action_blend = 0.0f;
+}
+
+static void AdvanceAction(CcHumanoidGait *gait, float delta_time)
+{
+    float previous_time = gait->action_time;
+    gait->action_time += delta_time;
+    gait->action_blend += (1.0f - gait->action_blend) *
+                          (1.0f - expf(-10.0f * delta_time));
+    if (gait->action == CC_HUMANOID_ACTION_STRIKE) {
+        const float impact_time = CC_HUMANOID_STRIKE_IMPACT_TIME;
+        if (!gait->strike_impact_emitted && previous_time < impact_time &&
+            gait->action_time >= impact_time) {
+            gait->strike_impact_pending = true;
+            gait->strike_impact_emitted = true;
+        }
+        if (gait->action_time >= CC_HUMANOID_STRIKE_DURATION) {
+            SetAction(gait, CC_HUMANOID_ACTION_GUARD);
+        }
+    }
 }
 
 static CcLimbVec3 Forward(float yaw)
@@ -288,6 +318,7 @@ static bool AddRagdollBone(CcHumanoidGait *gait,
 
 static bool ActivateRagdoll(CcHumanoidGait *gait)
 {
+    SetAction(gait, CC_HUMANOID_ACTION_FALL);
     CcBiomechRagdollInit(&gait->ragdoll);
     bool valid = true;
     valid = valid && AddRagdollPoseParticle(gait, CC_RAGDOLL_PELVIS,
@@ -774,6 +805,7 @@ static void BeginRagdollRecovery(CcHumanoidGait *gait,
                                  CcLimbTerrainProbe probe,
                                  void *probe_context)
 {
+    SetAction(gait, CC_HUMANOID_ACTION_RECOVER);
     CcHumanoidGait standing;
     CcHumanoidGaitInit(&standing, body_position, body_yaw,
                        probe, probe_context);
@@ -1216,6 +1248,7 @@ void CcHumanoidGaitBeginClimb(CcHumanoidGait *gait)
     gait->root_velocity = (CcLimbVec3){0};
     gait->climbing = true;
     gait->grounded = true;
+    SetAction(gait, CC_HUMANOID_ACTION_CLAMBER);
 }
 
 void CcHumanoidGaitAdvanceClimb(
@@ -1557,8 +1590,43 @@ void CcHumanoidGaitInit(CcHumanoidGait *gait, CcLimbVec3 body_position,
     gait->pelvis_sway.value = -0.035f;
     gait->planted_count = CC_HUMANOID_LEG_COUNT;
     gait->initialized = true;
+    gait->action = CC_HUMANOID_ACTION_LOCOMOTION;
+    gait->previous_action = CC_HUMANOID_ACTION_LOCOMOTION;
+    gait->action_blend = 1.0f;
     CcHumanoidGaitResolvePose(gait, body_position, body_yaw);
     gait->previous_pose = gait->pose;
+}
+
+void CcHumanoidGaitSetGuarded(CcHumanoidGait *gait, bool guarded)
+{
+    if (gait == NULL || !gait->initialized || gait->ragdoll.active ||
+        gait->climbing || gait->action == CC_HUMANOID_ACTION_SWIM) return;
+    if (guarded) {
+        if (gait->action == CC_HUMANOID_ACTION_LOCOMOTION) {
+            SetAction(gait, CC_HUMANOID_ACTION_GUARD);
+        }
+    } else if (gait->action == CC_HUMANOID_ACTION_GUARD) {
+        SetAction(gait, CC_HUMANOID_ACTION_LOCOMOTION);
+    }
+}
+
+bool CcHumanoidGaitBeginStrike(CcHumanoidGait *gait, int32_t striking_arm)
+{
+    if (gait == NULL || !gait->initialized || gait->ragdoll.active ||
+        gait->climbing || gait->action == CC_HUMANOID_ACTION_SWIM ||
+        gait->action == CC_HUMANOID_ACTION_STRIKE) return false;
+    gait->strike_side = striking_arm == 0 ? 0 : 1;
+    gait->strike_impact_pending = false;
+    gait->strike_impact_emitted = false;
+    SetAction(gait, CC_HUMANOID_ACTION_STRIKE);
+    return true;
+}
+
+bool CcHumanoidGaitConsumeStrikeImpact(CcHumanoidGait *gait)
+{
+    if (gait == NULL || !gait->strike_impact_pending) return false;
+    gait->strike_impact_pending = false;
+    return true;
 }
 
 void CcHumanoidGaitAdvance(CcHumanoidGait *gait, CcLimbVec3 body_position,
@@ -1579,6 +1647,7 @@ void CcHumanoidGaitAdvance(CcHumanoidGait *gait, CcLimbVec3 body_position,
         gait->grounded = grounded;
         return;
     }
+    AdvanceAction(gait, delta_time);
     gait->body.root.position.x = body_position.x;
     gait->body.root.position.z = body_position.z;
     float desired_speed = sqrtf(desired_velocity.x * desired_velocity.x +
@@ -1726,14 +1795,62 @@ void CcHumanoidGaitAdvance(CcHumanoidGait *gait, CcLimbVec3 body_position,
     SpringStep(&gait->pelvis_sway, sway_target, 10.0f, 0.80f, delta_time);
     SpringStep(&gait->pelvis_roll, pelvis_roll_target, 9.0f, 0.76f, delta_time);
     SpringStep(&gait->pelvis_yaw, pelvis_yaw_target, 8.0f, 0.74f, delta_time);
+    bool combat_pose = gait->action == CC_HUMANOID_ACTION_GUARD ||
+                       gait->action == CC_HUMANOID_ACTION_STRIKE;
+    if (combat_pose) gait_weight *= 1.0f - gait->action_blend;
     float left_arm = -cosf(stride) * 0.34f * gait_weight;
     float right_arm = -left_arm;
     float left_flex = 0.24f + fmaxf(0.0f, left_arm) * 0.34f;
     float right_flex = 0.24f + fmaxf(0.0f, right_arm) * 0.34f;
+    float action_spine_yaw = 0.0f;
+    float action_spine_pitch = 0.0f;
+    if (combat_pose) {
+        float guard_left_arm = 0.48f;
+        float guard_right_arm = 0.64f;
+        float guard_left_flex = 0.78f;
+        float guard_right_flex = 0.58f;
+        float target_left_arm = guard_left_arm;
+        float target_right_arm = guard_right_arm;
+        float target_left_flex = guard_left_flex;
+        float target_right_flex = guard_right_flex;
+        if (gait->action == CC_HUMANOID_ACTION_STRIKE) {
+            float phase = Clamp(gait->action_time /
+                                CC_HUMANOID_STRIKE_DURATION, 0.0f, 1.0f);
+            float chamber = Smooth01(phase / 0.24f);
+            float drive = Smooth01((phase - 0.24f) / 0.30f);
+            float recover = Smooth01((phase - 0.60f) / 0.40f);
+            int32_t arm = gait->strike_side == 0 ? 0 : 1;
+            float striking_arm = LerpScalar(guard_right_arm, 0.34f, chamber);
+            striking_arm = LerpScalar(striking_arm, 1.25f, drive);
+            striking_arm = LerpScalar(striking_arm, guard_right_arm, recover);
+            float striking_flex = LerpScalar(guard_right_flex, 1.02f, chamber);
+            striking_flex = LerpScalar(striking_flex, 0.04f, drive);
+            striking_flex = LerpScalar(striking_flex, guard_right_flex,
+                                       recover);
+            if (arm == 0) {
+                target_left_arm = striking_arm;
+                target_left_flex = striking_flex;
+            } else {
+                target_right_arm = striking_arm;
+                target_right_flex = striking_flex;
+            }
+            float torso_drive = sinf(Smooth01((phase - 0.12f) / 0.58f) *
+                                      CC_HUMANOID_PI);
+            action_spine_yaw = (arm == 0 ? -1.0f : 1.0f) *
+                               torso_drive * 0.16f;
+            action_spine_pitch = torso_drive * 0.075f;
+        }
+        float blend = gait->action_blend;
+        left_arm = LerpScalar(left_arm, target_left_arm, blend);
+        right_arm = LerpScalar(right_arm, target_right_arm, blend);
+        left_flex = LerpScalar(left_flex, target_left_flex, blend);
+        right_flex = LerpScalar(right_flex, target_right_flex, blend);
+    }
     CcBiomechRigDriveJoint(&gait->body, CC_HUMANOID_SPINE_ROLL,
                            -pelvis_roll_target * 0.55f, 0.58f);
     CcBiomechRigDriveJoint(&gait->body, CC_HUMANOID_SPINE_YAW,
-                           -pelvis_yaw_target * 0.68f, 0.56f);
+                           -pelvis_yaw_target * 0.68f + action_spine_yaw,
+                           combat_pose ? 0.74f : 0.56f);
     CcLimbVec3 motion_forward = Forward(body_yaw);
     float forward_acceleration = gait->body.root.acceleration.x *
                                      motion_forward.x +
@@ -1743,7 +1860,8 @@ void CcHumanoidGaitAdvance(CcHumanoidGait *gait, CcLimbVec3 body_position,
                                Clamp(forward_acceleration * 0.016f,
                                      -0.05f, 0.08f);
     CcBiomechRigDriveJoint(&gait->body, CC_HUMANOID_SPINE_PITCH,
-                           spine_pitch_target, 0.62f);
+                           spine_pitch_target + action_spine_pitch,
+                           combat_pose ? 0.72f : 0.62f);
     CcBiomechRigDriveJoint(&gait->body, CC_HUMANOID_LEFT_SHOULDER,
                            left_arm, 0.62f);
     CcBiomechRigDriveJoint(&gait->body, CC_HUMANOID_RIGHT_SHOULDER,
@@ -1795,6 +1913,136 @@ void CcHumanoidGaitAdvance(CcHumanoidGait *gait, CcLimbVec3 body_position,
     CcHumanoidGaitResolvePose(gait, body_position, body_yaw);
 }
 
+void CcHumanoidGaitAdvanceSwim(CcHumanoidGait *gait,
+                               CcLimbVec3 body_position, float body_yaw,
+                               CcLimbVec3 desired_velocity,
+                               float water_surface, float immersion,
+                               float delta_time)
+{
+    if (gait == NULL) return;
+    if (!gait->initialized) {
+        CcHumanoidGaitInit(gait, body_position, body_yaw, NULL, NULL);
+    }
+    if (!gait->initialized || gait->ragdoll.active || gait->climbing) return;
+    delta_time = Clamp(delta_time, 1.0f / 240.0f, 1.0f / 30.0f);
+    if (gait->action != CC_HUMANOID_ACTION_SWIM) {
+        gait->swim_entry_pose = gait->pose;
+        SetAction(gait, CC_HUMANOID_ACTION_SWIM);
+    }
+    AdvanceAction(gait, delta_time);
+    gait->last_delta_time = delta_time;
+    gait->immersion = Clamp(immersion, 0.0f, 1.0f);
+    gait->swim_phase = Wrap01(gait->swim_phase +
+                               delta_time * (0.72f +
+                               Length(desired_velocity) * 0.44f));
+    gait->travel_yaw = body_yaw;
+
+    gait->body.root.position.x = body_position.x;
+    gait->body.root.position.z = body_position.z;
+    float target_pelvis_height = water_surface - 0.07f;
+    CcLimbVec3 acceleration = {
+        (desired_velocity.x - gait->body.root.velocity.x) * 3.4f,
+        9.81f * gait->immersion +
+            (target_pelvis_height - gait->body.root.position.y) * 22.0f -
+            gait->body.root.velocity.y * 7.5f,
+        (desired_velocity.z - gait->body.root.velocity.z) * 3.4f
+    };
+    CcBiomechRigApplyBodyForce(
+        &gait->body, ToBiomech(Scale(acceleration, gait->body.total_mass)));
+    CcBiomechRigStepBody(&gait->body, delta_time);
+    gait->root_velocity = FromBiomech(gait->body.root.velocity);
+    gait->ground_reaction = (CcLimbVec3){0.0f,
+        gait->body.total_mass * 9.81f * gait->immersion, 0.0f};
+
+    CcLimbVec3 pelvis = FromBiomech(gait->body.root.position);
+    CcLimbVec3 forward = Forward(body_yaw);
+    CcLimbVec3 right = Right(body_yaw);
+    float stroke = gait->swim_phase * 2.0f * CC_HUMANOID_PI;
+    float contact_release = Smooth01(gait->action_time / 0.42f);
+    for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
+        float side = leg == 0 ? -1.0f : 1.0f;
+        float kick = sinf(stroke + (leg == 0 ? 0.0f : CC_HUMANOID_PI));
+        CcLimbVec3 foot = Add(pelvis, Scale(right, side * 0.15f));
+        foot = Add(foot, Scale(forward, -0.10f + kick * 0.11f));
+        foot.y -= 0.80f - fmaxf(0.0f, kick) * 0.10f;
+        CcLimbVec3 entry_foot = gait->swim_entry_pose.ankle[leg];
+        entry_foot.y -= 0.085f;
+        foot = Lerp(entry_foot, foot, contact_release);
+        gait->feet[leg].current_point = foot;
+        gait->feet[leg].planted_point = foot;
+        gait->feet[leg].normal = (CcLimbVec3){0.0f, 1.0f, 0.0f};
+        gait->feet[leg].contact = CC_HUMANOID_CONTACT_AIR;
+        gait->feet[leg].local_phase = Wrap01(
+            gait->swim_phase + (leg == 0 ? 0.0f : 0.5f));
+        gait->feet[leg].pitch.value = 0.12f + kick * 0.06f;
+    }
+    gait->planted_count = 0;
+    gait->grounded = false;
+    gait->speed.value = Length(gait->root_velocity);
+
+    float left_reach = 0.58f + sinf(stroke) * 0.52f;
+    float right_reach = 0.58f - sinf(stroke) * 0.52f;
+    float left_elbow = 0.46f + fmaxf(0.0f, -sinf(stroke)) * 0.48f;
+    float right_elbow = 0.46f + fmaxf(0.0f, sinf(stroke)) * 0.48f;
+    CcBiomechRigDriveJoint(&gait->body, CC_HUMANOID_SPINE_PITCH,
+                           0.14f, 0.66f);
+    CcBiomechRigDriveJoint(&gait->body, CC_HUMANOID_SPINE_ROLL,
+                           sinf(stroke) * 0.09f, 0.58f);
+    CcBiomechRigDriveJoint(&gait->body, CC_HUMANOID_SPINE_YAW,
+                           sinf(stroke) * 0.07f, 0.54f);
+    CcBiomechRigDriveJoint(&gait->body, CC_HUMANOID_LEFT_SHOULDER,
+                           left_reach, 0.72f);
+    CcBiomechRigDriveJoint(&gait->body, CC_HUMANOID_RIGHT_SHOULDER,
+                           right_reach, 0.72f);
+    CcBiomechRigDriveJoint(&gait->body, CC_HUMANOID_LEFT_ELBOW,
+                           left_elbow, 0.68f);
+    CcBiomechRigDriveJoint(&gait->body, CC_HUMANOID_RIGHT_ELBOW,
+                           right_elbow, 0.68f);
+    for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
+        float kick = sinf(stroke + (leg == 0 ? 0.0f : CC_HUMANOID_PI));
+        int32_t hip = leg == 0 ? CC_HUMANOID_LEFT_HIP :
+                                 CC_HUMANOID_RIGHT_HIP;
+        int32_t knee = leg == 0 ? CC_HUMANOID_LEFT_KNEE :
+                                  CC_HUMANOID_RIGHT_KNEE;
+        int32_t ankle = leg == 0 ? CC_HUMANOID_LEFT_ANKLE :
+                                   CC_HUMANOID_RIGHT_ANKLE;
+        CcBiomechRigDriveJoint(&gait->body, hip, kick * 0.22f, 0.62f);
+        CcBiomechRigDriveJoint(&gait->body, knee,
+                               0.22f + fmaxf(0.0f, kick) * 0.46f, 0.70f);
+        CcBiomechRigDriveJoint(&gait->body, ankle, 0.10f, 0.56f);
+    }
+    CcBiomechRigStep(&gait->body, delta_time);
+    gait->previous_pose = gait->pose;
+    CcHumanoidGaitResolvePose(gait, body_position, body_yaw);
+}
+
+void CcHumanoidGaitEndSwim(CcHumanoidGait *gait,
+                           CcLimbVec3 body_position, float body_yaw,
+                           CcLimbTerrainProbe probe, void *probe_context)
+{
+    if (gait == NULL || !gait->initialized ||
+        gait->action != CC_HUMANOID_ACTION_SWIM) return;
+    CcLimbVec3 right = Right(body_yaw);
+    CcLimbVec3 forward = Forward(body_yaw);
+    for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
+        float side = leg == 0 ? -1.0f : 1.0f;
+        CcLimbVec3 desired = Add(body_position, Scale(right, side * 0.135f));
+        desired = Add(desired, Scale(forward, leg == 0 ? 0.04f : -0.03f));
+        CcHumanoidFoot *foot = &gait->feet[leg];
+        foot->current_point = ProbeGround(desired, body_position, probe,
+                                          probe_context, &foot->normal);
+        foot->planted_point = foot->current_point;
+        foot->swing_start = foot->current_point;
+        foot->swing_target = foot->current_point;
+        foot->contact = CC_HUMANOID_CONTACT_FLAT;
+        foot->pitch.value = 0.0f;
+    }
+    gait->immersion = 0.0f;
+    gait->grounded = true;
+    gait->planted_count = CC_HUMANOID_LEG_COUNT;
+    SetAction(gait, CC_HUMANOID_ACTION_LOCOMOTION);
+}
+
 void CcHumanoidGaitConstrainMotion(CcHumanoidGait *gait,
                                   CcLimbVec3 actual_position,
                                   CcLimbVec3 actual_velocity, bool grounded)
@@ -1840,5 +2088,19 @@ const char *CcHumanoidContactName(CcHumanoidContact contact)
         case CC_HUMANOID_CONTACT_SWING: return "SWING";
         case CC_HUMANOID_CONTACT_AIR:
         default: return "AIR";
+    }
+}
+
+const char *CcHumanoidActionName(CcHumanoidAction action)
+{
+    switch (action) {
+        case CC_HUMANOID_ACTION_GUARD: return "GUARD";
+        case CC_HUMANOID_ACTION_STRIKE: return "STRIKE";
+        case CC_HUMANOID_ACTION_CLAMBER: return "CLAMBER";
+        case CC_HUMANOID_ACTION_SWIM: return "SWIM";
+        case CC_HUMANOID_ACTION_FALL: return "FALL";
+        case CC_HUMANOID_ACTION_RECOVER: return "RECOVER";
+        case CC_HUMANOID_ACTION_LOCOMOTION:
+        default: return "LOCOMOTION";
     }
 }

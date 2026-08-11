@@ -35,6 +35,16 @@ typedef enum CcHumanoidContact {
     CC_HUMANOID_CONTACT_SWING
 } CcHumanoidContact;
 
+typedef enum CcHumanoidAction {
+    CC_HUMANOID_ACTION_LOCOMOTION,
+    CC_HUMANOID_ACTION_GUARD,
+    CC_HUMANOID_ACTION_STRIKE,
+    CC_HUMANOID_ACTION_CLAMBER,
+    CC_HUMANOID_ACTION_SWIM,
+    CC_HUMANOID_ACTION_FALL,
+    CC_HUMANOID_ACTION_RECOVER
+} CcHumanoidAction;
+
 typedef struct CcHumanoidSpring {
     float value;
     float velocity;
@@ -83,6 +93,7 @@ typedef struct CcHumanoidGait {
     CcHumanoidPose recovery_start_pose;
     CcHumanoidPose recovery_target_pose;
     CcHumanoidPose climb_entry_pose;
+    CcHumanoidPose swim_entry_pose;
     CcLimbVec3 climb_entry_foot_normal[CC_HUMANOID_LEG_COUNT];
     CcBiomechRig body;
     CcBiomechRagdoll ragdoll;
@@ -103,9 +114,18 @@ typedef struct CcHumanoidGait {
     float recovery_error;
     float recovery_speed;
     float recovery_yaw;
+    float action_time;
+    float action_blend;
+    float swim_phase;
+    float immersion;
     CcLimbVec3 recovery_origin;
+    CcHumanoidAction action;
+    CcHumanoidAction previous_action;
     int32_t support_leg;
     int32_t planted_count;
+    int32_t strike_side;
+    bool strike_impact_pending;
+    bool strike_impact_emitted;
     bool grounded;
     bool recovering;
     bool climbing;
@@ -121,6 +141,17 @@ void CcHumanoidGaitAdvance(CcHumanoidGait *gait, CcLimbVec3 body_position,
                            CcLimbTerrainProbe probe, void *probe_context);
 void CcHumanoidGaitResolvePose(CcHumanoidGait *gait,
                                CcLimbVec3 body_position, float body_yaw);
+void CcHumanoidGaitSetGuarded(CcHumanoidGait *gait, bool guarded);
+bool CcHumanoidGaitBeginStrike(CcHumanoidGait *gait, int32_t striking_arm);
+bool CcHumanoidGaitConsumeStrikeImpact(CcHumanoidGait *gait);
+void CcHumanoidGaitAdvanceSwim(CcHumanoidGait *gait,
+                               CcLimbVec3 body_position, float body_yaw,
+                               CcLimbVec3 desired_velocity,
+                               float water_surface, float immersion,
+                               float delta_time);
+void CcHumanoidGaitEndSwim(CcHumanoidGait *gait,
+                           CcLimbVec3 body_position, float body_yaw,
+                           CcLimbTerrainProbe probe, void *probe_context);
 void CcHumanoidGaitBeginClimb(CcHumanoidGait *gait);
 void CcHumanoidGaitAdvanceClimb(
     CcHumanoidGait *gait, CcLimbVec3 body_position, float body_yaw,
@@ -141,5 +172,6 @@ void CcHumanoidGaitConstrainMotion(CcHumanoidGait *gait,
                                   CcLimbVec3 actual_position,
                                   CcLimbVec3 actual_velocity, bool grounded);
 const char *CcHumanoidContactName(CcHumanoidContact contact);
+const char *CcHumanoidActionName(CcHumanoidAction action);
 
 #endif

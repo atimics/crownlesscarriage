@@ -531,11 +531,100 @@ static void TestHumanoidController(void)
             "recovered humanoid did not finish upright");
 }
 
+static void TestContinuousHumanActions(void)
+{
+    const float delta_time = 1.0f / 60.0f;
+    CcLimbVec3 body = {0.0f, 0.0f, 0.0f};
+    CcHumanoidGait gait;
+    CcHumanoidGaitInit(&gait, body, 0.0f, PlaneProbe, NULL);
+    CcHumanoidGaitSetGuarded(&gait, true);
+    for (int32_t frame = 0; frame < 45; ++frame) {
+        CcHumanoidGaitAdvance(&gait, body, 0.0f, (CcLimbVec3){0}, true,
+                              delta_time, PlaneProbe, NULL);
+    }
+    Require(gait.action == CC_HUMANOID_ACTION_GUARD,
+            "supported human did not settle into a guarded stance");
+
+    Require(CcHumanoidGaitBeginStrike(&gait, 1),
+            "guarded human rejected a valid right-arm strike");
+    int32_t impact_count = 0;
+    float maximum_strike_step = 0.0f;
+    CcHumanoidPose previous = gait.pose;
+    for (int32_t frame = 0; frame < 90; ++frame) {
+        CcHumanoidGaitAdvance(&gait, body, 0.0f, (CcLimbVec3){0}, true,
+                              delta_time, PlaneProbe, NULL);
+        impact_count += CcHumanoidGaitConsumeStrikeImpact(&gait) ? 1 : 0;
+        maximum_strike_step = fmaxf(
+            maximum_strike_step,
+            MaximumPosePointStep(&previous, &gait.pose));
+        previous = gait.pose;
+        Require(fabsf(Distance(gait.pose.shoulder[1], gait.pose.elbow[1]) -
+                      0.34f) < 0.002f,
+                "strike stretched the upper arm");
+        Require(fabsf(Distance(gait.pose.elbow[1], gait.pose.hand[1]) -
+                      0.35f) < 0.002f,
+                "strike stretched the forearm");
+    }
+    Require(impact_count == 1,
+            "a strike did not emit exactly one physical impact window");
+    Require(gait.action == CC_HUMANOID_ACTION_GUARD,
+            "strike did not recover into guard");
+    if (maximum_strike_step >= 0.055f) {
+        (void)fprintf(stderr, "maximum strike landmark step %.4f\n",
+                      maximum_strike_step);
+    }
+    Require(maximum_strike_step < 0.055f,
+            "guard/strike/recovery transition snapped a body landmark");
+
+    float minimum_pelvis_height = 1000.0f;
+    float maximum_swim_step = 0.0f;
+    previous = gait.pose;
+    for (int32_t frame = 0; frame < 180; ++frame) {
+        CcHumanoidGaitAdvanceSwim(
+            &gait, body, 0.0f, (CcLimbVec3){0.0f, 0.0f, 0.55f},
+            0.82f, 1.0f, delta_time);
+        body.x += gait.root_velocity.x * delta_time;
+        body.z += gait.root_velocity.z * delta_time;
+        minimum_pelvis_height = fminf(minimum_pelvis_height,
+                                      gait.pose.pelvis.y);
+        maximum_swim_step = fmaxf(
+            maximum_swim_step,
+            MaximumPosePointStep(&previous, &gait.pose));
+        previous = gait.pose;
+        Require(gait.planted_count == 0 &&
+                gait.feet[0].contact == CC_HUMANOID_CONTACT_AIR &&
+                gait.feet[1].contact == CC_HUMANOID_CONTACT_AIR,
+                "swimmer invented ground contacts under water");
+        Require(fabsf(Distance(gait.pose.hip[0], gait.pose.knee[0]) -
+                      0.465f) < 0.006f,
+                "swim kick stretched the thigh");
+    }
+    Require(gait.action == CC_HUMANOID_ACTION_SWIM &&
+            minimum_pelvis_height > 0.62f,
+            "buoyancy failed to support the swimming body");
+    if (maximum_swim_step >= 0.075f) {
+        (void)fprintf(stderr, "maximum swim landmark step %.4f\n",
+                      maximum_swim_step);
+    }
+    Require(maximum_swim_step < 0.075f,
+            "guard-to-swim transition snapped a body landmark");
+
+    CcHumanoidGaitEndSwim(&gait, body, 0.0f, PlaneProbe, NULL);
+    for (int32_t frame = 0; frame < 60; ++frame) {
+        CcHumanoidGaitAdvance(&gait, body, 0.0f, (CcLimbVec3){0}, true,
+                              delta_time, PlaneProbe, NULL);
+    }
+    Require(gait.action == CC_HUMANOID_ACTION_LOCOMOTION &&
+            gait.planted_count > 0,
+            "swimmer did not reacquire terrestrial support");
+}
+
 int main(void)
 {
     TestGenericTissues();
     TestGenericRagdoll();
     TestBiomechanicalClimb();
     TestHumanoidController();
+    TestContinuousHumanActions();
     return 0;
 }

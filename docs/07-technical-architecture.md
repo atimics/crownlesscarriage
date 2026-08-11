@@ -74,7 +74,7 @@ stale ID cannot silently refer to a different entity.
 
 ## Presentation responsibilities
 
-- Kingdom-map visualization
+- Physical map-case visualization of carried or locally offered route charts
 - Active city or route segment
 - Local navigation, animation, and combat
 - Instantiating strategic entities near the player
@@ -188,6 +188,24 @@ the muscle/ligament dynamics, so they lag and settle as compliant tissue rather
 than following a sine value as a servo command. Below the locomotion threshold,
 the cyclic drive is removed and shoulder/elbow damping lets the arms return to a
 quiet resting pose.
+
+The humanoid owns one continuous action state above those joint and contact
+controllers: locomotion, guard, strike, clamber, swim, fall, and recovery. An
+action changes muscle targets and permitted support forces; it does not replace
+the skeleton or ask the renderer to synthesize motion. Guard suppresses cyclic
+arm swing. A strike chambers, drives through the spine/shoulder/elbow chain,
+emits exactly one impact window, and returns to guard while joint inertia and
+muscle activation bound landmark velocity. Village defense consumes those
+impact windows rather than an independent damage clock.
+
+Water is a support medium, not flat terrain with a blue material. Entering the
+course trench progressively releases both foot contacts, replaces ground
+reaction with immersion-scaled buoyancy and drag, and drives alternating arm
+and leg cycles through the same anatomical joints. The pelvis remains near the
+waterline while the feet are airborne. On exit, both feet probe and reacquire
+terrain before ordinary gait resumes. This first proof is upright/treading
+rather than a complete horizontal stroke and does not yet model breath,
+current, fatigue, or hydrodynamic limb shapes.
 
 Loss of support is a controller boundary, not another gait phase. The walking
 planner immediately releases its planted contacts and maps the current and
@@ -377,6 +395,7 @@ A save contains:
 - Route and dungeon mutations
 - Discovered information
 - Player company, carriage, crew, cargo, and reputation
+- Physical map objects, ownership, map-case capacity, survey claims, and prices
 - Deterministic stream states or counters
 
 Procedural decoration is regenerated. Meaningful mutation is stored.
@@ -384,7 +403,9 @@ Procedural decoration is regenerated. Meaningful mutation is stored.
 The architecture proof stores authoritative records in SQLite tables for world
 metadata, kingdoms, settlements, routes, factions, shipments, bandit groups,
 monster populations, dungeons, situations, causal events, and the player
-company. Shipment intent is stored separately from its current route leg. A
+company. Physical route charts are stored as stable map-object rows rather
+than reconstructed presentation state. Shipment intent is stored separately
+from its current route leg. A
 save is one atomic transaction. Loading validates its schema, references, and
 exact state hash before accepting it.
 
