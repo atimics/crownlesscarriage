@@ -17,6 +17,7 @@
 #define CC_MAX_SITUATIONS 12
 #define CC_MAX_EVENTS 256
 #define CC_NAME_CAPACITY 32
+#define CC_MAP_NAME_CAPACITY 48
 #define CC_EVENT_TEXT_CAPACITY 144
 #define CC_CARGO_CAPACITY 12
 #define CC_MAP_CAPACITY 3
@@ -154,7 +155,7 @@ typedef struct CcMap {
     CcId route_id;
     CcId maker_settlement_id;
     CcId owner_id;
-    char name[CC_NAME_CAPACITY];
+    char name[CC_MAP_NAME_CAPACITY];
     int32_t surveyed_day;
     int32_t accuracy;
     int32_t recorded_condition;
