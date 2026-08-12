@@ -301,6 +301,7 @@ const char *CcLocalTraversalName(CcTraversalMode mode)
 {
     switch (mode) {
         case CC_TRAVERSAL_WALK: return "WALK";
+        case CC_TRAVERSAL_JUMP: return "JUMP";
         case CC_TRAVERSAL_CLIMB: return "CLIMB";
         case CC_TRAVERSAL_DESCEND: return "DOWN-CLIMB";
         case CC_TRAVERSAL_SWIM: return "SWIM";
@@ -596,10 +597,26 @@ bool CcLocalCombatBeginStrike(CcLocalAgent *agent,
                               const CcLocalAgent *target)
 {
     if (agent == NULL || agent->combat.defeated ||
-        agent->combat.stagger_seconds > 0.0f) return false;
+        agent->combat.stagger_seconds > 0.0f || !agent->grounded) return false;
     if (target != NULL) CcLocalCombatSetFocus(agent, target);
     if (!CcHumanoidGaitBeginStrike(&agent->humanoid, 1)) return false;
     agent->combat.strike_resolved = false;
+    return true;
+}
+
+bool CcLocalAgentJump(CcLocalAgent *agent)
+{
+    if (agent == NULL || agent->morphology != CC_MORPHOLOGY_BIPED ||
+        !agent->grounded || agent->climbing || agent->swimming ||
+        agent->combat.defeated || agent->combat.stagger_seconds > 0.0f ||
+        !CcHumanoidGaitBeginJump(&agent->humanoid)) {
+        return false;
+    }
+    const float takeoff_speed = 4.35f;
+    agent->velocity.y = takeoff_speed;
+    agent->grounded = false;
+    agent->humanoid.body.root.velocity.y = takeoff_speed;
+    agent->humanoid.root_velocity.y = takeoff_speed;
     return true;
 }
 
@@ -731,6 +748,18 @@ void CcLocalCourseInit(CcLocalCourse *course)
     static const Color colors[CC_LOCAL_COURSE_RUNNER_COUNT] = {
         {50, 151, 160, 255}, {166, 91, 132, 255}, {176, 122, 54, 255}
     };
+    static const Vector2 traveller_entries[CC_LOCAL_TRAVELLER_COUNT] = {
+        {18.00f, 0.72f}, {31.00f, 71.28f},
+        {43.00f, 0.72f}, {64.00f, 71.28f}
+    };
+    static const Vector2 traveller_exits[CC_LOCAL_TRAVELLER_COUNT] = {
+        {18.00f, 71.28f}, {31.00f, 0.72f},
+        {43.00f, 71.28f}, {64.00f, 0.72f}
+    };
+    static const Color traveller_colors[CC_LOCAL_TRAVELLER_COUNT] = {
+        {118, 134, 145, 255}, {150, 105, 91, 255},
+        {73, 137, 121, 255}, {139, 102, 153, 255}
+    };
     const int32_t waypoint_count = (int32_t)(sizeof(COURSE_WAYPOINTS) /
                                               sizeof(COURSE_WAYPOINTS[0]));
     *course = (CcLocalCourse){0};
@@ -759,6 +788,22 @@ void CcLocalCourseInit(CcLocalCourse *course)
         course->raiders[i].crowned = false;
         course->raiders[i].tunic_color = (Color){126, 55, 61, 255};
         course->raider_entry[i] = course->raiders[i].position;
+    }
+    for (int32_t i = 0; i < CC_LOCAL_TRAVELLER_COUNT; ++i) {
+        CcLocalTraveller *traveller = &course->travellers[i];
+        traveller->entry = (Vector3){traveller_entries[i].x, 0.0f,
+                                     traveller_entries[i].y};
+        traveller->exit = (Vector3){traveller_exits[i].x, 0.0f,
+                                    traveller_exits[i].y};
+        CcLocalAgentInit(&traveller->agent, traveller_entries[i], false);
+        traveller->agent.crowned = false;
+        traveller->agent.tunic_color = traveller_colors[i];
+        traveller->active = i < 2;
+        traveller->respawn_delay = 1.8f + (float)i * 1.4f;
+        if (traveller->active) {
+            (void)CcLocalAgentSetExactTarget(&traveller->agent,
+                                             traveller->exit, false);
+        }
     }
     course->alarm_countdown = 8.0f;
     course->raider_attack_cooldown[0] = 0.52f;
@@ -942,6 +987,50 @@ static void UpdateCourseTraining(CcLocalCourse *course, float delta_time)
     }
 }
 
+static int32_t CourseTravellerDemand(const CcSim *sim)
+{
+    int32_t count = 2;
+    if (sim == NULL) return count;
+    for (int32_t i = 0; i < sim->shipment_count && count <
+         CC_LOCAL_TRAVELLER_COUNT; ++i) {
+        if (sim->shipments[i].status == CC_SHIPMENT_TRAVELLING) count += 1;
+    }
+    return count;
+}
+
+static void UpdateCourseTravellers(CcLocalCourse *course, const CcSim *sim,
+                                   float delta_time)
+{
+    int32_t demand = CourseTravellerDemand(sim);
+    for (int32_t i = 0; i < CC_LOCAL_TRAVELLER_COUNT; ++i) {
+        CcLocalTraveller *traveller = &course->travellers[i];
+        if (!traveller->active) {
+            if (i >= demand) continue;
+            traveller->respawn_delay -= delta_time;
+            if (traveller->respawn_delay > 0.0f) continue;
+            CcLocalAgentInit(&traveller->agent,
+                             (Vector2){traveller->entry.x,
+                                       traveller->entry.z}, false);
+            traveller->agent.crowned = false;
+            static const Color colors[CC_LOCAL_TRAVELLER_COUNT] = {
+                {118, 134, 145, 255}, {150, 105, 91, 255},
+                {73, 137, 121, 255}, {139, 102, 153, 255}
+            };
+            traveller->agent.tunic_color = colors[i];
+            traveller->active = CcLocalAgentSetExactTarget(
+                &traveller->agent, traveller->exit, false);
+            continue;
+        }
+        CcLocalAgentUpdate(&traveller->agent, delta_time, false);
+        if (traveller->agent.exact_target_valid) continue;
+        float exit_x = traveller->agent.position.x - traveller->exit.x;
+        float exit_z = traveller->agent.position.z - traveller->exit.z;
+        if (exit_x * exit_x + exit_z * exit_z > 0.20f * 0.20f) continue;
+        traveller->active = false;
+        traveller->respawn_delay = 5.5f + (float)i * 1.7f;
+    }
+}
+
 static int32_t CourseClosestRaider(const CcLocalCourse *course,
                                    const CcLocalAgent *agent,
                                    float maximum_distance,
@@ -1078,6 +1167,7 @@ void CcLocalCourseUpdate(CcLocalCourse *course, CcLocalAgent *player,
                          const CcSim *sim, float delta_time)
 {
     delta_time = fminf(delta_time, 1.0f / 30.0f);
+    UpdateCourseTravellers(course, sim, delta_time);
     course->combat_event_seconds = fmaxf(
         0.0f, course->combat_event_seconds - delta_time);
     if (player != NULL && player->combat.team == CC_COMBAT_NEUTRAL) {
@@ -2444,6 +2534,8 @@ static void CcLocalAgentPhysicsStep(CcLocalAgent *agent, float delta_time,
     } else if (biped && agent->humanoid.ragdoll.active) {
         agent->traversal = agent->humanoid.recovering ?
                            CC_TRAVERSAL_GET_UP : CC_TRAVERSAL_RAGDOLL;
+    } else if (biped && agent->humanoid.action == CC_HUMANOID_ACTION_JUMP) {
+        agent->traversal = CC_TRAVERSAL_JUMP;
     } else if (agent->grounded) {
         agent->traversal = horizontal_speed > 0.08f ? CC_TRAVERSAL_WALK :
                                                      CC_TRAVERSAL_IDLE;
@@ -2582,7 +2674,9 @@ void CcLocalAgentUpdate(CcLocalAgent *agent, float delta_time,
             (agent->traversal == CC_TRAVERSAL_WALK ||
              agent->traversal == CC_TRAVERSAL_IDLE)) {
             CcHumanoidPose prior_render_pose = agent->render_pose;
-            float response = 1.0f - expf(-55.0f * frame_time);
+            /* Let the torso and limbs retain a little inertial continuity
+               without filtering the contact points copied below. */
+            float response = 1.0f - expf(-38.0f * frame_time);
             BlendHumanoidPose(&agent->render_pose, &prior_render_pose,
                               &sampled_pose, response);
             for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
@@ -3940,6 +4034,10 @@ static void DrawObstacleCourse(void)
 static void DrawCourseRunners(const CcLocalCourse *course)
 {
     if (course == NULL) return;
+    for (int32_t i = 0; i < CC_LOCAL_TRAVELLER_COUNT; ++i) {
+        const CcLocalTraveller *traveller = &course->travellers[i];
+        if (traveller->active) DrawRobotShell(&traveller->agent);
+    }
     Vector3 threat = CourseThreatCenter(course);
     if (course->alarm_active) {
         for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {

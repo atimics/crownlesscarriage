@@ -12,6 +12,7 @@
 
 #define CC_LOCAL_COURSE_RUNNER_COUNT 3
 #define CC_LOCAL_RAIDER_COUNT 2
+#define CC_LOCAL_TRAVELLER_COUNT 4
 
 /* Exterior coordinates are metres. These landmarks are shared by input,
    collision, rendering, and tests so the continuous world cannot drift apart. */
@@ -39,7 +40,8 @@ typedef enum CcTraversalMode {
     CC_TRAVERSAL_SWIM,
     CC_TRAVERSAL_DROP,
     CC_TRAVERSAL_RAGDOLL,
-    CC_TRAVERSAL_GET_UP
+    CC_TRAVERSAL_GET_UP,
+    CC_TRAVERSAL_JUMP
 } CcTraversalMode;
 
 typedef enum CcCombatTeam {
@@ -139,8 +141,17 @@ typedef struct CcLocalCourseRunner {
     bool response_waypoint_active;
 } CcLocalCourseRunner;
 
+typedef struct CcLocalTraveller {
+    CcLocalAgent agent;
+    Vector3 entry;
+    Vector3 exit;
+    float respawn_delay;
+    bool active;
+} CcLocalTraveller;
+
 typedef struct CcLocalCourse {
     CcLocalCourseRunner runners[CC_LOCAL_COURSE_RUNNER_COUNT];
+    CcLocalTraveller travellers[CC_LOCAL_TRAVELLER_COUNT];
     Vector3 guard_entry[CC_LOCAL_COURSE_RUNNER_COUNT];
     CcLocalAgent raiders[CC_LOCAL_RAIDER_COUNT];
     Vector3 raider_entry[CC_LOCAL_RAIDER_COUNT];
@@ -181,6 +192,7 @@ void CcLocalCombatSetGuarded(CcLocalAgent *agent,
                              const CcLocalAgent *target, bool guarded);
 bool CcLocalCombatBeginStrike(CcLocalAgent *agent,
                               const CcLocalAgent *target);
+bool CcLocalAgentJump(CcLocalAgent *agent);
 CcCombatOutcome CcLocalCombatResolveStrike(CcLocalAgent *attacker,
                                            CcLocalAgent *defender);
 const char *CcLocalCombatOutcomeName(CcCombatOutcome outcome);
