@@ -25,6 +25,7 @@ armature = bpy.data.objects.get("ARM_CrownlessHero")
 if armature is None or armature.type != "ARMATURE":
     fail("canonical armature is missing")
 expected_bones = set(manifest["skeleton"]["bones"])
+expected_bones.update(manifest["skeleton"].get("cloth_bones", []))
 actual_bones = {bone.name for bone in armature.data.bones}
 if expected_bones != actual_bones:
     fail(f"bone mismatch: {sorted(expected_bones ^ actual_bones)}")
@@ -56,6 +57,11 @@ if cape is None or cape.vertex_groups.get("PIN_COLLAR") is None:
     fail("cape pin group is missing")
 if not any(modifier.type == "CLOTH" for modifier in cape.modifiers):
     fail("cape cloth modifier is missing")
+if not cape.get("cc_smooth_skin"):
+    fail("cape runtime skin metadata is missing")
+for bone_name in manifest["skeleton"].get("cloth_bones", []):
+    if cape.vertex_groups.get(bone_name) is None:
+        fail(f"cape weight group {bone_name} is missing")
 
 required_layers = {"CC_Hero_Assembled", "CC_Hero_Anatomy", "CC_Hero_Exploded"}
 actual_layers = {layer.name for layer in bpy.context.scene.view_layers}

@@ -33,21 +33,26 @@ collision, gravity, water buoyancy, damping, and velocity-driven air drag.
 The engine export is regenerated from the `.blend` source with:
 
 ```sh
-blender --background assets/blender/crownless_hero_actions.blend \
-  --python tools/blender/export_engine_hero.py
+make blender-hero-engine
 ```
+
+This rebuilds the modular component library first, authors the action source
+from those components, validates the rig contract, and then creates the engine
+GLB. The shipped hero is therefore no longer maintained as a separate mesh
+implementation.
 
 This produces:
 
 - `assets/exports/hero/crownless_hero_engine_rig_v01.glb`
 - `assets/exports/hero/crownless_hero_engine_rig_v01.json`
 
-The GLB has 70 modular meshes and contains no animation clips. Armor, boots,
-bracers, gloves, and equipment remain rigid-weighted. Five anatomical
-underlayer meshes use blended weights across the torso, elbows, and knees; the
-cape uses blended row weights across its four cloth bones. The client creates a
-one-frame runtime pose from the body and cloth simulation every draw, applies it
-through raylib skinning, and overlays both resolved rigs for inspection.
+The current GLB has 127 authored meshes across 17 equipped component IDs and
+contains no animation clips. Armor, boots, bracers, gloves, and equipment remain
+rigid-weighted. The four torso shells and cape retain blended weights; the cape
+blends its rows across four cloth bones. The client creates a one-frame runtime
+pose from the body and cloth simulation every draw and applies it through
+raylib skinning. The higher mesh count preserves component authoring detail for
+this visual pass; consolidation is a later render-optimization step.
 
 ## Verification
 

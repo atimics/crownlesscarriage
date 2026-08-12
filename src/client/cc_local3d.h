@@ -75,6 +75,13 @@ typedef enum CcCombatOutcome {
     CC_COMBAT_OUTCOME_DEFEATED
 } CcCombatOutcome;
 
+typedef enum CcCombatSkill {
+    CC_COMBAT_SKILL_CRUSHING_BLOW,
+    CC_COMBAT_SKILL_SUNDER,
+    CC_COMBAT_SKILL_SECOND_WIND,
+    CC_COMBAT_SKILL_COUNT
+} CcCombatSkill;
+
 typedef struct CcCombatState {
     Vector3 focus_point;
     Vector3 knockback_velocity;
@@ -87,7 +94,14 @@ typedef struct CcCombatState {
     float hitstop_seconds;
     float recovery_seconds;
     float impact_speed;
+    float auto_attack_cooldown;
+    float skill_cooldown[CC_COMBAT_SKILL_COUNT];
+    float strike_damage_scale;
+    float strike_posture_scale;
+    float strike_knockback_scale;
     int32_t target_index;
+    int32_t queued_skill;
+    int32_t active_skill;
     CcCombatTeam team;
     bool focus_valid;
     bool impact_valid;
@@ -240,8 +254,25 @@ bool CcLocalCourseBeginPlayerStrike(CcLocalCourse *course,
                                     CcLocalAgent *player);
 void CcLocalCourseSetPlayerGuarded(CcLocalCourse *course,
                                    CcLocalAgent *player, bool guarded);
+bool CcLocalCourseSelectPlayerTarget(CcLocalCourse *course,
+                                     CcLocalAgent *player,
+                                     int32_t target_index);
+int32_t CcLocalCoursePickPlayerTarget(CcLocalCourse *course,
+                                      CcLocalAgent *player,
+                                      Vector2 screen_point,
+                                      RenderTexture2D target,
+                                      Rectangle destination);
+void CcLocalCourseClearPlayerTarget(CcLocalAgent *player);
+bool CcLocalCourseUsePlayerSkill(CcLocalCourse *course,
+                                 CcLocalAgent *player,
+                                 CcCombatSkill skill);
+const char *CcLocalCombatSkillName(CcCombatSkill skill);
+float CcLocalCombatSkillCooldown(const CcLocalAgent *player,
+                                 CcCombatSkill skill);
+float CcLocalCombatSkillDuration(CcCombatSkill skill);
 
 void CcLocalRendererInit(void);
+void CcLocalRendererSetDiagnosticOverlay(bool enabled);
 void CcLocalRendererShutdown(void);
 void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                          const CcLocalCourse *course, float clock,

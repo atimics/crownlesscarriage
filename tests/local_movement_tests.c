@@ -379,6 +379,138 @@ static void TestSharedCombat(void)
     }
 }
 
+static void TestTargetDrivenCombat(void)
+{
+    CcSim sim;
+    CcSimInit(&sim, 91U);
+    CcLocalCourse course;
+    CcLocalCourseInit(&course);
+    CcLocalAgent player;
+    CcLocalAgentInit(&player,
+                     (Vector2){CC_LOCAL_START_X, CC_LOCAL_START_Z}, false);
+    CcLocalCombatSetTeam(&player, CC_COMBAT_PLAYER);
+    CcLocalCourseRaiseAlarmNear(&course, &player);
+    for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
+        course.runners[i].agent.combat.defeated = true;
+    }
+    CcLocalAgentInit(&course.raiders[0],
+                     (Vector2){CC_LOCAL_START_X + 3.0f,
+                               CC_LOCAL_START_Z}, false);
+    CcLocalCombatSetTeam(&course.raiders[0], CC_COMBAT_RAIDER);
+    CcLocalAgentInit(&course.raiders[1],
+                     (Vector2){CC_LOCAL_START_X + 7.0f,
+                               CC_LOCAL_START_Z + 3.0f}, false);
+    CcLocalCombatSetTeam(&course.raiders[1], CC_COMBAT_RAIDER);
+    for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
+        course.raider_response_stage[i] = 3;
+        course.raider_response_waypoint_active[i] = false;
+    }
+
+    if (CcLocalCourseSelectPlayerTarget(&course, &player, -1) ||
+        !CcLocalCourseSelectPlayerTarget(&course, &player, 0) ||
+        player.combat.target_index != 0 || !player.combat.focus_valid) {
+        (void)fprintf(stderr, "explicit hostile targeting failed\n");
+        exit(1);
+    }
+    if (!CcLocalCourseUsePlayerSkill(&course, &player,
+                                     CC_COMBAT_SKILL_SUNDER) ||
+        player.combat.queued_skill != (int32_t)CC_COMBAT_SKILL_SUNDER) {
+        (void)fprintf(stderr, "targeted combat skill did not queue\n");
+        exit(1);
+    }
+    player.combat.health = 42.0f;
+    player.combat.posture = 30.0f;
+    if (!CcLocalCourseUsePlayerSkill(&course, &player,
+                                     CC_COMBAT_SKILL_SECOND_WIND) ||
+        player.combat.health <= 42.0f || player.combat.posture <= 30.0f ||
+        CcLocalCombatSkillCooldown(&player,
+            CC_COMBAT_SKILL_SECOND_WIND) <= 0.0f) {
+        (void)fprintf(stderr, "Second Wind did not restore the combatant\n");
+        exit(1);
+    }
+
+    float initial_distance = VectorDistance3(player.position,
+                                              course.raiders[0].position);
+    float minimum_distance = initial_distance;
+    bool saw_sunder_style = false;
+    for (int32_t frame = 0; frame < 300; ++frame) {
+        CcLocalAgentUpdate(&player, 1.0f / 60.0f, false);
+        CcLocalCourseUpdate(&course, &player, &sim, 1.0f / 60.0f);
+        saw_sunder_style = saw_sunder_style ||
+            (player.humanoid.action == CC_HUMANOID_ACTION_STRIKE &&
+             player.combat.active_skill == CC_COMBAT_SKILL_SUNDER &&
+             player.humanoid.strike_style == CC_HUMANOID_STRIKE_SWEEP);
+        minimum_distance = fminf(
+            minimum_distance,
+            VectorDistance3(player.position, course.raiders[0].position));
+    }
+    if (minimum_distance < 1.08f || minimum_distance > 1.35f ||
+        !saw_sunder_style ||
+        (course.raiders[0].combat.health >= CC_LOCAL_COMBAT_MAX_HEALTH &&
+         course.raiders[0].combat.posture >= CC_LOCAL_COMBAT_MAX_POSTURE) ||
+        CcLocalCombatSkillCooldown(&player, CC_COMBAT_SKILL_SUNDER) <= 0.0f) {
+        (void)fprintf(stderr,
+                      "target combat did not hold weapon range and exchange styled attacks: distance %.2f style %d health %.1f posture %.1f cooldown %.1f\n",
+                      minimum_distance, saw_sunder_style,
+                      course.raiders[0].combat.health,
+                      course.raiders[0].combat.posture,
+                      CcLocalCombatSkillCooldown(
+                          &player, CC_COMBAT_SKILL_SUNDER));
+        exit(1);
+    }
+    CcLocalCourseClearPlayerTarget(&player);
+    if (player.combat.target_index != -1 || player.combat.focus_valid ||
+        player.combat.queued_skill != -1) {
+        (void)fprintf(stderr, "combat target did not disengage cleanly\n");
+        exit(1);
+    }
+}
+
+static void TestCombatStanceStability(void)
+{
+    CcLocalAgent guard;
+    CcLocalAgent target;
+    InitCombatant(&guard, (Vector2){4.0f, 3.0f}, 0.0f,
+                  CC_COMBAT_PLAYER);
+    InitCombatant(&target, (Vector2){4.0f, 4.3f}, PI,
+                  CC_COMBAT_RAIDER);
+    CcLocalCombatSetGuarded(&guard, &target, true);
+
+    float minimum_x = guard.position.x;
+    float maximum_x = guard.position.x;
+    float minimum_z = guard.position.z;
+    float maximum_z = guard.position.z;
+    float maximum_pose_step = 0.0f;
+    CcHumanoidPose previous_pose = guard.render_pose;
+    for (int32_t frame = 0; frame < 240; ++frame) {
+        CcLocalAgentUpdate(&guard, 1.0f / 60.0f, false);
+        if (frame < 90) {
+            previous_pose = guard.render_pose;
+            continue;
+        }
+        minimum_x = fminf(minimum_x, guard.position.x);
+        maximum_x = fmaxf(maximum_x, guard.position.x);
+        minimum_z = fminf(minimum_z, guard.position.z);
+        maximum_z = fmaxf(maximum_z, guard.position.z);
+        maximum_pose_step = fmaxf(
+            maximum_pose_step,
+            MaximumPoseStep(&previous_pose, &guard.render_pose));
+        previous_pose = guard.render_pose;
+    }
+    float horizontal_speed = sqrtf(
+        guard.velocity.x * guard.velocity.x +
+        guard.velocity.z * guard.velocity.z);
+    if (maximum_x - minimum_x > 0.025f ||
+        maximum_z - minimum_z > 0.025f ||
+        horizontal_speed > 0.025f || maximum_pose_step > 0.035f) {
+        (void)fprintf(stderr,
+                      "combat guard did not settle: span %.4f,%.4f speed %.4f pose %.4f\n",
+                      maximum_x - minimum_x, maximum_z - minimum_z,
+                      horizontal_speed, maximum_pose_step);
+        exit(1);
+    }
+}
+
 static void TestCapePhysics(void)
 {
     static const float EXPECTED_LENGTHS[] = {0.270f, 0.275f, 0.285f, 0.285f};
@@ -567,6 +699,8 @@ static void TestTravellerIngress(void)
 int main(void)
 {
     TestSharedCombat();
+    TestTargetDrivenCombat();
+    TestCombatStanceStability();
     TestCapePhysics();
     TestControlledJump();
     TestHeroicAthleticism();
@@ -1272,7 +1406,10 @@ int main(void)
     for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
         if (!guard_engaged[i] || !guard_returned[i]) {
             (void)fprintf(stderr,
-                          "guard %d failed to engage and return from defense\n", i);
+                          "guard %d defense lifecycle failed: engaged %d returned %d stage %d duty %d\n",
+                          i, guard_engaged[i], guard_returned[i],
+                          defense.runners[i].response_stage,
+                          defense.runners[i].duty);
             return 1;
         }
     }

@@ -1,7 +1,7 @@
 # Blender Hero Component System
 
 The hero library translates the modular character concept into a rebuildable
-Blender source file. Version 0.2 is a detailed low-poly production prototype:
+Blender source file. Version 0.3 is a gameplay-silhouette production prototype:
 it proves component boundaries, rig attachment, cloth authoring, export
 metadata, and code integration while establishing the hero's visual language.
 
@@ -26,15 +26,18 @@ metadata, and code integration while establishing the hero's visual language.
 | `60_ACCESSORIES` | Hair, gloves, boots, belt, strap, and satchel |
 
 The library contains 19 exportable components, an assembled GLB, 18 semantic
-bones, and 15 sockets. Left and right pauldrons, bracers, greaves, gloves, and
-boots remain separate so asymmetric equipment and damage do not require new
-meshes.
+body bones, four presentation-only cape bones, and 15 sockets. Left and right
+pauldrons, bracers, greaves, gloves, and boots remain separate so asymmetric
+equipment and damage do not require new meshes.
 
-The current art pass adds a shaped six-sided cuirass, segmented pauldrons,
-rivets and plate ridges, quilt seams, tunic placket and buttons, articulated
-glove fingers, layered boots, a flat stitched satchel strap, facial planes,
-layered hair, and a broad shoulder mantle. These details remain inside their
-original component collections and do not change runtime IDs.
+The current art pass gives the wayfarer a split tunic for readable leg motion,
+a tapered forked road-cape, an asymmetric shoulder mantle, layered breastplate
+and waist armor, quieter segmented pauldrons, and narrower travel boots. Small
+surface details now use only a few deliberate brass landmarks; repeated rivets,
+bands, buckles, glove fingers, and hair coils were removed or consolidated. A
+lighter face, darker hair, and recessed teal shoulder yoke establish a clearer
+head-to-torso value break at the gameplay camera. These changes remain inside
+the original component collections and do not change runtime IDs.
 
 ## Rig contract
 
@@ -63,6 +66,7 @@ make blender-hero-assets
 make blender-hero-assets-check
 make blender-hero-animation
 make blender-hero-actions
+make blender-hero-engine
 ```
 
 The first target rebuilds the `.blend`, exports each GLB, writes the manifest,
@@ -81,6 +85,12 @@ jump, climb, swim, and fight GIFs, and a combined action reel. Climbing uses a
 presentation-only wall and holds, swimming stows the cape and adds water guides,
 and fighting attaches presentation-only sword and shield props. These props and
 motions do not alter component exports or deterministic simulation state.
+
+The engine target rebuilds and validates the component source, authors a small
+set of motion-pose previews from that exact source, and exports the GLB loaded
+by the client. This is the authoritative bridge from component edits to the
+game; the older self-contained action-reel builder is retained only for legacy
+comparison.
 
 ## Runtime integration order
 

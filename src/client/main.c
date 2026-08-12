@@ -460,7 +460,7 @@ static const char *LocalPrompt(const CcSim *sim, const LocalState *local)
     }
     if (!local->market_interior && local->course.alarm_active &&
         local->agent.combat.focus_valid) {
-        return "COMBAT FOCUS   click to strafe   SPACE strike   X guard   J jump";
+        return "TARGET LOCKED   closing distance and auto-attacking   1-3 use skills";
     }
     if (local->market_interior) {
         if (GridDistance(position, INTERIOR_EXIT) < 1.25f) return "F  step back into the street";
@@ -484,11 +484,51 @@ static const char *LocalPrompt(const CcSim *sim, const LocalState *local)
     return "LEFT CLICK any point   the biped plants and swings its own feet";
 }
 
+static void DrawCombatSkillCard(const CcLocalAgent *agent,
+                                CcCombatSkill skill, int x, int key)
+{
+    float cooldown = CcLocalCombatSkillCooldown(agent, skill);
+    bool queued = agent->combat.queued_skill == (int32_t)skill;
+    Color border = queued ? CC_GOLD : cooldown > 0.0f ? MUTED : TEAL;
+    DrawRectangleRounded((Rectangle){(float)x, 701.0f, 192.0f, 27.0f},
+                         0.18f, 4, (Color){19, 32, 39, 255});
+    DrawRectangleRoundedLinesEx((Rectangle){(float)x, 701.0f, 192.0f, 27.0f},
+                                0.18f, 4, 1.0f, Fade(border, 0.72f));
+    DrawText(TextFormat("%d", key), x + 8, 708, 11, CC_GOLD);
+    DrawText(CcLocalCombatSkillName(skill), x + 27, 707, 9, INK);
+    DrawText(queued ? "QUEUED" : cooldown > 0.0f ?
+             TextFormat("%.1fs", cooldown) : "READY",
+             x + 145, 707, 9, border);
+}
+
 static void DrawLocalFooter(const CcSim *sim, const LocalState *local)
 {
     DrawPanel((Rectangle){20.0f, 664.0f, 1240.0f, 76.0f}, PANEL);
+    if (!local->market_interior && local->course.alarm_active) {
+        int32_t target = local->agent.combat.target_index;
+        if (target >= 0 && target < CC_LOCAL_RAIDER_COUNT &&
+            !local->course.raiders[target].combat.defeated) {
+            DrawText(TextFormat("TARGET  RAIDER %d   %d HP   /   AUTO ATTACK ENGAGED",
+                                target + 1,
+                                (int32_t)lroundf(
+                                    local->course.raiders[target].combat.health)),
+                     38, 679, 12, DANGER);
+        } else {
+            DrawText("CLICK A RAIDER TO TARGET AND ENGAGE",
+                     38, 679, 12, CC_GOLD);
+        }
+        DrawCombatSkillCard(&local->agent,
+                            CC_COMBAT_SKILL_CRUSHING_BLOW, 38, 1);
+        DrawCombatSkillCard(&local->agent,
+                            CC_COMBAT_SKILL_SUNDER, 240, 2);
+        DrawCombatSkillCard(&local->agent,
+                            CC_COMBAT_SKILL_SECOND_WIND, 442, 3);
+        DrawText("click ground disengages   SPACE manual strike   X guard",
+                 780, 709, 9, MUTED);
+        return;
+    }
     DrawText(LocalPrompt(sim, local), 38, 681, 13, CC_GOLD);
-    DrawText("J jump   SPACE strike   X guard   G alarm   Q situations   TAB ledger",
+    DrawText("J jump   G alarm   Q situations   TAB ledger",
              38, 708, 10, MUTED);
     DrawText("M map case at carriage   F5 save   F9 load   N new world",
              804, 693, 10, MUTED);
@@ -960,12 +1000,53 @@ static void HandleInput(CcSim *sim, int32_t *selected, ClientView *view,
                 struck ? "You strike into open space; only contact inside the impact window will land." :
                          "No strike: the body is already committed to another action.");
         }
-        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
-            CcLocalAgentPickTarget(&local->agent, GetMousePosition(), local_target,
-                                   local_bounds, local->market_interior)) {
-            (void)snprintf(message, message_capacity,
-                           "Target %.2f,%.2f; the biped is choosing foot contacts.",
-                           local->agent.target_point.x, local->agent.target_point.z);
+        if (!local->market_interior && local->course.alarm_active) {
+            for (int32_t skill = 0; skill < CC_COMBAT_SKILL_COUNT; ++skill) {
+                if (!IsKeyPressed(KEY_ONE + skill)) continue;
+                CcCombatSkill combat_skill = (CcCombatSkill)skill;
+                bool used = CcLocalCourseUsePlayerSkill(
+                    &local->course, &local->agent, combat_skill);
+                float cooldown = CcLocalCombatSkillCooldown(
+                    &local->agent, combat_skill);
+                (void)snprintf(
+                    message, message_capacity, "%s",
+                    used && combat_skill == CC_COMBAT_SKILL_SECOND_WIND ?
+                        "Second Wind restores health and posture." :
+                    used ? TextFormat("%s queued for your target.",
+                                      CcLocalCombatSkillName(combat_skill)) :
+                    cooldown > 0.0f ? TextFormat("%s is cooling down: %.1fs.",
+                                                 CcLocalCombatSkillName(combat_skill),
+                                                 cooldown) :
+                    combat_skill == CC_COMBAT_SKILL_SECOND_WIND ?
+                        "Second Wind is unnecessary at full health and posture." :
+                        "Select a living raider before using that skill.");
+            }
+        }
+        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+            Vector2 mouse = GetMousePosition();
+            int32_t combat_target = local->market_interior ? -1 :
+                CcLocalCoursePickPlayerTarget(
+                    &local->course, &local->agent, mouse, local_target,
+                    local_bounds);
+            if (combat_target >= 0) {
+                (void)snprintf(
+                    message, message_capacity,
+                    "Raider %d targeted; you close distance and fight automatically.",
+                    combat_target + 1);
+            } else {
+                if (!local->market_interior && local->course.alarm_active) {
+                    CcLocalCourseClearPlayerTarget(&local->agent);
+                }
+                if (CcLocalAgentPickTarget(&local->agent, mouse, local_target,
+                                           local_bounds,
+                                           local->market_interior)) {
+                    (void)snprintf(
+                        message, message_capacity,
+                        "Moving to %.2f,%.2f; combat target disengaged.",
+                        local->agent.target_point.x,
+                        local->agent.target_point.z);
+                }
+            }
         }
         float local_delta_time = GetFrameTime();
         CcLocalAgentUpdate(&local->agent, local_delta_time,
@@ -1146,6 +1227,7 @@ int main(int argc, char **argv)
     RenderTexture2D local_target = LoadRenderTexture(914, 570);
     SetTextureFilter(local_target.texture, TEXTURE_FILTER_BILINEAR);
     CcLocalRendererInit();
+    CcLocalRendererSetDiagnosticOverlay(capture_limbs);
 
     CcSim sim;
     CcSimInit(&sim, UINT32_C(0xc0a71a9e));
@@ -1198,20 +1280,33 @@ int main(int argc, char **argv)
     }
     if (capture_defense) {
         CcLocalCourseRaiseAlarmNear(&local.course, &local.agent);
+        (void)CcLocalCourseSelectPlayerTarget(&local.course,
+                                               &local.agent, 0);
+        (void)CcLocalCourseUsePlayerSkill(
+            &local.course, &local.agent, CC_COMBAT_SKILL_CRUSHING_BLOW);
         int32_t fighting_frames = 0;
-        for (int32_t frame = 0; frame < 9000 && fighting_frames < 20; ++frame) {
+        bool captured_skill_impact = false;
+        for (int32_t frame = 0; frame < 9000 && !captured_skill_impact;
+             ++frame) {
+            CcLocalAgentUpdate(&local.agent, 1.0f / 60.0f, false);
             CcLocalCourseUpdate(&local.course, &local.agent, &sim,
                                 1.0f / 60.0f);
             fighting_frames = local.course.alarm_active &&
                               !local.course.raiders_retreating &&
                               local.course.raider_resolve < 100 ?
                               fighting_frames + 1 : 0;
+            captured_skill_impact =
+                local.agent.humanoid.action == CC_HUMANOID_ACTION_STRIKE &&
+                local.agent.combat.active_skill ==
+                    CC_COMBAT_SKILL_CRUSHING_BLOW &&
+                local.agent.humanoid.action_time >= 0.54f;
         }
-        (void)printf("defense capture: alarm %d retreat %d resolve %d wins %d fight frames %d origin %.2f,%.2f guards %.2f,%.2f raiders %.2f,%.2f\n",
+        (void)printf("defense capture: alarm %d retreat %d resolve %d wins %d fight frames %d skill impact %d origin %.2f,%.2f guards %.2f,%.2f raiders %.2f,%.2f\n",
                      local.course.alarm_active,
                      local.course.raiders_retreating,
                      local.course.raider_resolve,
                      local.course.defenses_completed, fighting_frames,
+                     captured_skill_impact,
                      local.course.combat_origin.x,
                      local.course.combat_origin.z,
                      local.course.runners[0].agent.position.x,

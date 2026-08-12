@@ -12,8 +12,9 @@ import bpy
 ROOT = Path(__file__).resolve().parents[2]
 EXPORT_PATH = ROOT / "assets" / "exports" / "hero" / "crownless_hero_engine_rig_v01.glb"
 MANIFEST_PATH = EXPORT_PATH.with_suffix(".json")
+COMPONENT_MANIFEST_PATH = ROOT / "assets" / "hero_component_manifest.json"
 RIG_NAME = "ARM_CrownlessHero"
-EXCLUDED_COMPONENTS = {"action_prop", "presentation", "weapon"}
+EXCLUDED_COMPONENTS = {"action_prop", "presentation", "weapon", "guide"}
 
 
 def reset_rig(rig: bpy.types.Object) -> None:
@@ -79,20 +80,30 @@ def duplicate_component(source: bpy.types.Object, rig: bpy.types.Object,
 
 
 def export() -> None:
+    export_layer = bpy.context.scene.view_layers.get("CC_EngineExport")
+    if export_layer is None:
+        export_layer = bpy.context.scene.view_layers.new(name="CC_EngineExport")
+    bpy.context.window.view_layer = export_layer
     rig = bpy.data.objects.get(RIG_NAME)
     if rig is None or rig.type != "ARMATURE":
         raise RuntimeError(f"missing armature {RIG_NAME}")
     reset_rig(rig)
+    component_manifest = json.loads(COMPONENT_MANIFEST_PATH.read_text())
+    assembled_ids = set(
+        component_manifest["assemblies"]["wayfarer_prototype_v01"]["components"]
+    )
 
     export_collection = bpy.data.collections.new("CC_ENGINE_EXPORT")
     bpy.context.scene.collection.children.link(export_collection)
     components: list[bpy.types.Object] = []
     source_objects = tuple(bpy.context.scene.objects)
     for source in source_objects:
-        component = source.get("cc_component")
+        component = source.get("cc_component_id", source.get("cc_component"))
         if source.type != "MESH" or component is None:
             continue
-        if component in EXCLUDED_COMPONENTS or source.name.startswith("ACTION_"):
+        if (component in EXCLUDED_COMPONENTS or
+                component not in assembled_ids or
+                source.name.startswith(("ACTION_", "EXP_"))):
             continue
         components.append(duplicate_component(source, rig, export_collection))
 
@@ -128,7 +139,9 @@ def export() -> None:
         "components": [
             {
                 "name": component.name,
-                "component": component.get("cc_component"),
+                "component": component.get(
+                    "cc_component_id", component.get("cc_component")
+                ),
                 "bone": component.get("cc_engine_bone"),
             }
             for component in components
