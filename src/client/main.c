@@ -592,7 +592,7 @@ static const char *LocalPrompt(const CcSim *sim, const LocalState *local)
     }
     if (!local->market_interior && local->course.alarm_active &&
         local->agent.combat.focus_valid) {
-        return "COMBAT FOCUS   click to strafe   SPACE strike   X guard   J vault";
+        return "COMBAT FOCUS   click to strafe   SPACE strike   X guard   J jump";
     }
     if (local->market_interior) {
         if (GridDistance(position, INTERIOR_EXIT) < 1.25f) return "F  step back into the street";
