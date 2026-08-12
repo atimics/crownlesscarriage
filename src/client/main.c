@@ -33,10 +33,12 @@ typedef struct LocalState {
     bool market_interior;
 } LocalState;
 
-static const Vector2 LOCAL_MARKET = {7.15f, 3.35f};
-static const Vector2 LOCAL_CARRIAGE = {1.35f, 6.55f};
-static const Vector2 LOCAL_NOTICE = {3.05f, 2.75f};
-static const Vector2 LOCAL_DUNGEON = {8.35f, 7.20f};
+static const Vector2 LOCAL_MARKET = {CC_LOCAL_MARKET_X, CC_LOCAL_MARKET_Z};
+static const Vector2 LOCAL_CARRIAGE = {CC_LOCAL_CARRIAGE_X,
+                                      CC_LOCAL_CARRIAGE_Z};
+static const Vector2 LOCAL_NOTICE = {CC_LOCAL_NOTICE_X, CC_LOCAL_NOTICE_Z};
+static const Vector2 LOCAL_DUNGEON = {CC_LOCAL_DUNGEON_X,
+                                     CC_LOCAL_DUNGEON_Z};
 static const Vector2 INTERIOR_COUNTER = {6.65f, 2.50f};
 static const Vector2 INTERIOR_EXIT = {1.55f, 5.55f};
 
@@ -136,7 +138,9 @@ static float GridDistance(Vector2 a, Vector2 b)
 static void ResetLocalState(LocalState *local)
 {
     local->market_interior = false;
-    CcLocalAgentInit(&local->agent, (Vector2){4.75f, 5.85f}, false);
+    CcLocalAgentInit(&local->agent,
+                     (Vector2){CC_LOCAL_START_X, CC_LOCAL_START_Z}, false);
+    CcLocalCombatSetTeam(&local->agent, CC_COMBAT_PLAYER);
     CcLocalCourseInit(&local->course);
 }
 
@@ -583,6 +587,13 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
 static const char *LocalPrompt(const CcSim *sim, const LocalState *local)
 {
     Vector2 position = LocalPosition(local);
+    if (local->agent.combat.defeated) {
+        return "DOWNED   the crownless fighter rallies automatically";
+    }
+    if (!local->market_interior && local->course.alarm_active &&
+        local->agent.combat.focus_valid) {
+        return "COMBAT FOCUS   click to strafe   SPACE commit strike   X guard";
+    }
     if (local->market_interior) {
         if (GridDistance(position, INTERIOR_EXIT) < 1.25f) return "F  step back into the street";
         if (GridDistance(position, INTERIOR_COUNTER) < 2.25f) {
@@ -609,7 +620,7 @@ static void DrawLocalFooter(const CcSim *sim, const LocalState *local)
 {
     DrawPanel((Rectangle){20.0f, 664.0f, 1240.0f, 76.0f}, PANEL);
     DrawText(LocalPrompt(sim, local), 38, 681, 13, CC_GOLD);
-    DrawText("SPACE strike   X guard   G alarm   Q situations   TAB ledger",
+    DrawText("SPACE targeted strike   X guard   G alarm   Q situations   TAB ledger",
              38, 708, 10, MUTED);
     DrawText("M map case at carriage   F5 save   F9 load   N new world",
              804, 693, 10, MUTED);
@@ -1344,7 +1355,8 @@ static void HandleInput(CcSim *sim, int32_t *selected, ClientView *view,
             local->agent.morphology == CC_MORPHOLOGY_BIPED) {
             bool guarded = local->agent.humanoid.action !=
                            CC_HUMANOID_ACTION_GUARD;
-            CcHumanoidGaitSetGuarded(&local->agent.humanoid, guarded);
+            CcLocalCourseSetPlayerGuarded(&local->course, &local->agent,
+                                          guarded);
             (void)snprintf(
                 message, message_capacity, "%s",
                 guarded ? "You settle behind your hands and hips; X releases the guard." :
@@ -1352,11 +1364,13 @@ static void HandleInput(CcSim *sim, int32_t *selected, ClientView *view,
         }
         if (IsKeyPressed(KEY_SPACE) &&
             local->agent.morphology == CC_MORPHOLOGY_BIPED) {
-            bool struck = CcHumanoidGaitBeginStrike(
-                &local->agent.humanoid, 1);
+            bool struck = CcLocalCourseBeginPlayerStrike(
+                &local->course, &local->agent);
             (void)snprintf(
                 message, message_capacity, "%s",
-                struck ? "The thrust travels from feet through hip, spine, shoulder, and hand." :
+                struck && local->agent.combat.target_index >= 0 ?
+                         "You commit toward the nearest raider; range and guard decide the impact." :
+                struck ? "You strike into open space; only contact inside the impact window will land." :
                          "No strike: the body is already committed to another action.");
         }
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
@@ -1372,7 +1386,8 @@ static void HandleInput(CcSim *sim, int32_t *selected, ClientView *view,
         if (!local->market_interior) {
             if (IsKeyPressed(KEY_G)) {
                 if (!local->course.alarm_active) {
-                    CcLocalCourseRaiseAlarm(&local->course);
+                    CcLocalCourseRaiseAlarmNear(&local->course,
+                                                &local->agent);
                     (void)snprintf(message, message_capacity,
                                    "The village bell sounds; the trainees break course and form a defense line.");
                 } else {
@@ -1380,7 +1395,8 @@ static void HandleInput(CcSim *sim, int32_t *selected, ClientView *view,
                                    "The village alarm is already sounding.");
                 }
             }
-            CcLocalCourseUpdate(&local->course, sim, local_delta_time);
+            CcLocalCourseUpdate(&local->course, &local->agent, sim,
+                                local_delta_time);
         }
         Vector2 position = LocalPosition(local);
 
@@ -1388,13 +1404,17 @@ static void HandleInput(CcSim *sim, int32_t *selected, ClientView *view,
             if (local->market_interior &&
                 GridDistance(position, INTERIOR_EXIT) < 1.25f) {
                 local->market_interior = false;
-                CcLocalAgentInit(&local->agent, (Vector2){6.80f, 4.25f}, false);
+                CcLocalAgentInit(&local->agent,
+                                 (Vector2){CC_LOCAL_MARKET_X,
+                                           CC_LOCAL_MARKET_Z + 1.10f}, false);
+                CcLocalCombatSetTeam(&local->agent, CC_COMBAT_PLAYER);
                 (void)snprintf(message, message_capacity,
                                "The market door closes behind you; the street keeps moving.");
             } else if (!local->market_interior &&
                        GridDistance(position, LOCAL_MARKET) < 1.30f) {
                 local->market_interior = true;
                 CcLocalAgentInit(&local->agent, (Vector2){2.05f, 5.35f}, true);
+                CcLocalCombatSetTeam(&local->agent, CC_COMBAT_PLAYER);
                 (void)snprintf(message, message_capacity,
                                "You enter a market whose shelves are filled by the real simulation.");
             } else if (!local->market_interior &&
@@ -1568,20 +1588,27 @@ int main(int argc, char **argv)
         }
     }
     if (capture_defense) {
-        CcLocalCourseRaiseAlarm(&local.course);
+        CcLocalCourseRaiseAlarmNear(&local.course, &local.agent);
         int32_t fighting_frames = 0;
         for (int32_t frame = 0; frame < 2400 && fighting_frames < 20; ++frame) {
-            CcLocalCourseUpdate(&local.course, &sim, 1.0f / 60.0f);
+            CcLocalCourseUpdate(&local.course, &local.agent, &sim,
+                                1.0f / 60.0f);
             fighting_frames = local.course.alarm_active &&
                               !local.course.raiders_retreating &&
                               local.course.raider_resolve < 100 ?
                               fighting_frames + 1 : 0;
         }
-        (void)printf("defense capture: alarm %d retreat %d resolve %d wins %d fight frames %d\n",
+        (void)printf("defense capture: alarm %d retreat %d resolve %d wins %d fight frames %d origin %.2f,%.2f guards %.2f,%.2f raiders %.2f,%.2f\n",
                      local.course.alarm_active,
                      local.course.raiders_retreating,
                      local.course.raider_resolve,
-                     local.course.defenses_completed, fighting_frames);
+                     local.course.defenses_completed, fighting_frames,
+                     local.course.combat_origin.x,
+                     local.course.combat_origin.z,
+                     local.course.runners[0].agent.position.x,
+                     local.course.runners[0].agent.position.z,
+                     local.course.raiders[0].position.x,
+                     local.course.raiders[0].position.z);
     }
     if (capture_dojo) {
         local.course.alarm_countdown = 1000.0f;
@@ -1592,7 +1619,8 @@ int main(int argc, char **argv)
         (void)CcLocalAgentSetExactTarget(
             &swimmer->agent, (Vector3){9.40f, 0.0f, 9.72f}, false);
         for (int32_t frame = 0; frame < 420; ++frame) {
-            CcLocalCourseUpdate(&local.course, &sim, 1.0f / 60.0f);
+            CcLocalCourseUpdate(&local.course, &local.agent, &sim,
+                                1.0f / 60.0f);
             if (swimmer->agent.swimming && frame > 90) break;
         }
     }

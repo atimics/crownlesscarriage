@@ -285,10 +285,12 @@ finishing an animation timer. A downward departure still uses gravity and
 becomes a drop.
 
 Local geometry shares a human-scale convention. The visible biped is roughly
-1.9 world units tall, doors are 1.84 units, ordinary buildings are 3.2–4.2 units,
-and the current ruined-road climbing proof has a 1.65-unit lip. Render meshes,
-ray-picking occluders, collision footprints, reach tests, and surface heights all
-use those same values.
+1.9 metres tall, doors are 2.15 metres, ordinary buildings are 5.8–8.8 metres,
+castle structures rise to 12.5 metres, and the ruined-road climbing proof has a
+1.65-metre lip. The current exterior is a single 96 x 72 metre collision and
+render space joining its settlement, fields, training ground, dungeon approach,
+and gated castle. Render meshes, ray-picking occluders, collision footprints,
+reach tests, and surface heights all use those same values.
 
 Neither family is yet a full articulated rigid-body dynamics simulation. The
 robotic family uses explicit support feedback and damage-aware traction. The

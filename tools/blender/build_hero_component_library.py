@@ -1,0 +1,1590 @@
+#!/usr/bin/env python3
+"""Build the Crownless Carriage modular hero prototype in Blender.
+
+Run from the repository root:
+    blender --background --factory-startup \
+        --python tools/blender/build_hero_component_library.py
+
+The generated blockout follows the concept image while keeping every garment,
+cloth panel, armor piece, and accessory independently toggleable and exportable.
+"""
+
+from __future__ import annotations
+
+import json
+import math
+from pathlib import Path
+from typing import Iterable
+
+import bpy
+from mathutils import Matrix, Vector
+
+
+ROOT = Path(__file__).resolve().parents[2]
+BLEND_PATH = ROOT / "assets" / "blender" / "crownless_hero_components.blend"
+EXPORT_DIR = ROOT / "assets" / "exports" / "hero_glb"
+PREVIEW_DIR = ROOT / "assets" / "previews" / "hero"
+MANIFEST_PATH = ROOT / "assets" / "hero_component_manifest.json"
+LIBRARY_VERSION = "0.2.0"
+
+MATERIALS: dict[str, bpy.types.Material] = {}
+COMPONENTS: dict[str, bpy.types.Collection] = {}
+COMPONENT_RECORDS: list[dict[str, object]] = []
+SOCKET_RECORDS: list[dict[str, object]] = []
+
+
+PALETTE = {
+    "skin": (0.50, 0.23, 0.12, 1.0),
+    "skin_light": (0.68, 0.36, 0.20, 1.0),
+    "hair": (0.095, 0.038, 0.022, 1.0),
+    "body_neutral": (0.19, 0.23, 0.25, 1.0),
+    "muscle_blue": (0.08, 0.45, 0.65, 1.0),
+    "muscle_green": (0.12, 0.55, 0.31, 1.0),
+    "muscle_purple": (0.43, 0.20, 0.62, 1.0),
+    "muscle_gold": (0.74, 0.49, 0.10, 1.0),
+    "rig_cyan": (0.08, 0.82, 1.0, 1.0),
+    "teal": (0.025, 0.22, 0.26, 1.0),
+    "teal_light": (0.055, 0.34, 0.38, 1.0),
+    "teal_dark": (0.018, 0.12, 0.15, 1.0),
+    "padding": (0.73, 0.63, 0.45, 1.0),
+    "padding_dark": (0.39, 0.30, 0.20, 1.0),
+    "cape": (0.20, 0.075, 0.27, 1.0),
+    "cape_light": (0.40, 0.20, 0.50, 1.0),
+    "leather": (0.21, 0.085, 0.035, 1.0),
+    "leather_light": (0.39, 0.18, 0.07, 1.0),
+    "steel": (0.115, 0.145, 0.155, 1.0),
+    "steel_light": (0.28, 0.34, 0.35, 1.0),
+    "steel_dark": (0.055, 0.070, 0.075, 1.0),
+    "brass": (0.65, 0.39, 0.07, 1.0),
+    "eye": (0.015, 0.02, 0.022, 1.0),
+    "ghost": (0.22, 0.27, 0.29, 1.0),
+    "stage": (0.12, 0.14, 0.15, 1.0),
+}
+
+
+BONES = [
+    ("root", None, (0.0, 0.0, 0.0), (0.0, 0.0, 0.18)),
+    ("pelvis", "root", (0.0, 0.0, 0.90), (0.0, 0.0, 1.10)),
+    ("spine", "pelvis", (0.0, 0.0, 1.08), (0.0, 0.0, 1.38)),
+    ("chest", "spine", (0.0, 0.0, 1.36), (0.0, 0.0, 1.62)),
+    ("neck", "chest", (0.0, 0.0, 1.60), (0.0, 0.0, 1.76)),
+    ("head", "neck", (0.0, 0.0, 1.74), (0.0, 0.0, 2.08)),
+    ("upper_arm.L", "chest", (-0.29, 0.0, 1.58), (-0.46, 0.0, 1.26)),
+    ("forearm.L", "upper_arm.L", (-0.46, 0.0, 1.26), (-0.57, -0.015, 0.94)),
+    ("hand.L", "forearm.L", (-0.57, -0.015, 0.94), (-0.58, -0.045, 0.78)),
+    ("upper_arm.R", "chest", (0.29, 0.0, 1.58), (0.46, 0.0, 1.26)),
+    ("forearm.R", "upper_arm.R", (0.46, 0.0, 1.26), (0.57, -0.015, 0.94)),
+    ("hand.R", "forearm.R", (0.57, -0.015, 0.94), (0.58, -0.045, 0.78)),
+    ("thigh.L", "pelvis", (-0.14, 0.0, 1.00), (-0.15, 0.0, 0.56)),
+    ("shin.L", "thigh.L", (-0.15, 0.0, 0.56), (-0.15, 0.0, 0.13)),
+    ("foot.L", "shin.L", (-0.15, 0.0, 0.13), (-0.15, -0.27, 0.08)),
+    ("thigh.R", "pelvis", (0.14, 0.0, 1.00), (0.15, 0.0, 0.56)),
+    ("shin.R", "thigh.R", (0.15, 0.0, 0.56), (0.15, 0.0, 0.13)),
+    ("foot.R", "shin.R", (0.15, 0.0, 0.13), (0.15, -0.27, 0.08)),
+]
+
+
+ASSEMBLED_COMPONENTS = {
+    "CC_HERO_BODY_BASE",
+    "CC_HERO_HAIR",
+    "CC_HERO_PADDED_UNDERLAYER",
+    "CC_HERO_TUNIC",
+    "CC_HERO_CAPE",
+    "CC_HERO_CUIRASS",
+    "CC_HERO_PAULDRON_L",
+    "CC_HERO_PAULDRON_R",
+    "CC_HERO_BRACER_L",
+    "CC_HERO_BRACER_R",
+    "CC_HERO_GREAVE_L",
+    "CC_HERO_GREAVE_R",
+    "CC_HERO_GLOVE_L",
+    "CC_HERO_GLOVE_R",
+    "CC_HERO_BOOT_L",
+    "CC_HERO_BOOT_R",
+    "CC_HERO_BELT_SATCHEL",
+}
+
+
+def reset_scene() -> None:
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    scene = bpy.context.scene
+    scene.name = "CC_HERO_COMPONENT_LIBRARY"
+    scene.render.engine = "BLENDER_EEVEE"
+    scene.render.resolution_x = 900
+    scene.render.resolution_y = 900
+    scene.render.resolution_percentage = 100
+    scene.render.image_settings.file_format = "PNG"
+    scene.view_settings.look = "AgX - Medium High Contrast"
+    scene.unit_settings.system = "METRIC"
+    scene.unit_settings.length_unit = "METERS"
+    scene["cc_library_version"] = LIBRARY_VERSION
+    scene["cc_unit"] = "meter"
+    scene["cc_forward_axis"] = "-Y"
+    scene["cc_up_axis"] = "+Z"
+
+    world = bpy.data.worlds.new("CC_HeroWorld")
+    world.use_nodes = True
+    background = world.node_tree.nodes.get("Background")
+    background.inputs["Color"].default_value = (0.018, 0.022, 0.026, 1.0)
+    background.inputs["Strength"].default_value = 0.55
+    scene.world = world
+
+
+def make_material(
+    name: str,
+    color: tuple[float, float, float, float],
+    *,
+    metallic: float = 0.0,
+    roughness: float = 0.62,
+    emission: float = 0.0,
+) -> bpy.types.Material:
+    mat = bpy.data.materials.new(f"MAT_{name.upper()}")
+    mat.diffuse_color = color
+    mat.use_nodes = True
+    node = mat.node_tree.nodes.get("Principled BSDF")
+    node.inputs["Base Color"].default_value = color
+    node.inputs["Metallic"].default_value = metallic
+    node.inputs["Roughness"].default_value = roughness
+    if emission > 0.0:
+        node.inputs["Emission Color"].default_value = color
+        node.inputs["Emission Strength"].default_value = emission
+    MATERIALS[name] = mat
+    return mat
+
+
+def make_palette() -> None:
+    for name, color in PALETTE.items():
+        metallic = 0.78 if name in {"steel", "steel_light", "brass"} else 0.0
+        roughness = 0.28 if metallic else 0.65
+        emission = 1.2 if name == "rig_cyan" else 0.0
+        make_material(name, color, metallic=metallic, roughness=roughness, emission=emission)
+
+
+def new_group(name: str, parent: bpy.types.Collection) -> bpy.types.Collection:
+    collection = bpy.data.collections.new(name)
+    parent.children.link(collection)
+    return collection
+
+
+def new_component(
+    name: str,
+    parent: bpy.types.Collection,
+    *,
+    component_id: str,
+    kind: str,
+    slot: str,
+    layer: str,
+    anchor: str,
+    coverage: tuple[str, ...],
+) -> bpy.types.Collection:
+    collection = new_group(name, parent)
+    collection["cc_component_id"] = component_id
+    collection["cc_component_kind"] = kind
+    collection["cc_slot"] = slot
+    collection["cc_layer"] = layer
+    collection["cc_anchor_bone"] = anchor
+    collection["cc_coverage"] = ",".join(coverage)
+    collection["cc_library_version"] = LIBRARY_VERSION
+    COMPONENTS[name] = collection
+    COMPONENT_RECORDS.append(
+        {
+            "id": component_id,
+            "collection": name,
+            "kind": kind,
+            "slot": slot,
+            "layer": layer,
+            "anchor_bone": anchor,
+            "coverage": list(coverage),
+            "export": f"exports/hero_glb/{component_id}.glb",
+        }
+    )
+    return collection
+
+
+def move_to_collection(obj: bpy.types.Object, collection: bpy.types.Collection) -> None:
+    for current in tuple(obj.users_collection):
+        current.objects.unlink(obj)
+    collection.objects.link(obj)
+
+
+def tag_object(obj: bpy.types.Object, collection: bpy.types.Collection, role: str) -> None:
+    obj["cc_component_id"] = collection.get("cc_component_id", "guide")
+    obj["cc_role"] = role
+    obj["cc_layer"] = collection.get("cc_layer", "guide")
+    obj["cc_library_version"] = LIBRARY_VERSION
+
+
+def add_bevel(obj: bpy.types.Object, width: float, segments: int = 2) -> None:
+    modifier = obj.modifiers.new("CC_Bevel", "BEVEL")
+    modifier.width = width
+    modifier.segments = segments
+    modifier.limit_method = "ANGLE"
+
+
+def assign_material(obj: bpy.types.Object, mat: str) -> None:
+    obj.data.materials.append(MATERIALS[mat])
+
+
+def add_cube(
+    name: str,
+    location: tuple[float, float, float],
+    dimensions: tuple[float, float, float],
+    mat: str,
+    collection: bpy.types.Collection,
+    role: str,
+    *,
+    rotation: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    bevel_width: float = 0.025,
+) -> bpy.types.Object:
+    bpy.ops.mesh.primitive_cube_add(location=location, rotation=rotation)
+    obj = bpy.context.object
+    obj.name = name
+    obj.dimensions = dimensions
+    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+    if bevel_width:
+        add_bevel(obj, min(bevel_width, min(dimensions) * 0.24))
+    assign_material(obj, mat)
+    move_to_collection(obj, collection)
+    tag_object(obj, collection, role)
+    return obj
+
+
+def add_ico(
+    name: str,
+    location: tuple[float, float, float],
+    scale: tuple[float, float, float],
+    mat: str,
+    collection: bpy.types.Collection,
+    role: str,
+    *,
+    subdivisions: int = 2,
+) -> bpy.types.Object:
+    bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=subdivisions, radius=1.0, location=location)
+    obj = bpy.context.object
+    obj.name = name
+    obj.scale = scale
+    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+    assign_material(obj, mat)
+    move_to_collection(obj, collection)
+    tag_object(obj, collection, role)
+    return obj
+
+
+def add_cylinder_between(
+    name: str,
+    start: tuple[float, float, float],
+    end: tuple[float, float, float],
+    radius_start: float,
+    radius_end: float,
+    mat: str,
+    collection: bpy.types.Collection,
+    role: str,
+    *,
+    vertices: int = 8,
+    bevel_width: float = 0.012,
+) -> bpy.types.Object:
+    a = Vector(start)
+    b = Vector(end)
+    delta = b - a
+    bpy.ops.mesh.primitive_cone_add(
+        vertices=vertices,
+        radius1=radius_start,
+        radius2=radius_end,
+        depth=delta.length,
+        location=(a + b) * 0.5,
+    )
+    obj = bpy.context.object
+    obj.name = name
+    obj.rotation_mode = "QUATERNION"
+    obj.rotation_quaternion = delta.to_track_quat("Z", "Y")
+    if bevel_width:
+        add_bevel(obj, bevel_width)
+    assign_material(obj, mat)
+    move_to_collection(obj, collection)
+    tag_object(obj, collection, role)
+    return obj
+
+
+def add_box_between(
+    name: str,
+    start: tuple[float, float, float],
+    end: tuple[float, float, float],
+    width: float,
+    depth: float,
+    mat: str,
+    collection: bpy.types.Collection,
+    role: str,
+    *,
+    bevel_width: float = 0.008,
+) -> bpy.types.Object:
+    """Create a beveled rectangular strip aligned between two points."""
+    a = Vector(start)
+    b = Vector(end)
+    delta = b - a
+    rotation = delta.to_track_quat("Z", "Y").to_euler()
+    obj = add_cube(
+        name, tuple((a + b) * 0.5), (width, depth, delta.length),
+        mat, collection, role, rotation=tuple(rotation),
+        bevel_width=bevel_width,
+    )
+    return obj
+
+
+def add_torus(
+    name: str,
+    location: tuple[float, float, float],
+    major_radius: float,
+    minor_radius: float,
+    mat: str,
+    collection: bpy.types.Collection,
+    role: str,
+    *,
+    rotation: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    scale: tuple[float, float, float] = (1.0, 1.0, 1.0),
+) -> bpy.types.Object:
+    bpy.ops.mesh.primitive_torus_add(
+        major_segments=16,
+        minor_segments=6,
+        major_radius=major_radius,
+        minor_radius=minor_radius,
+        location=location,
+        rotation=rotation,
+    )
+    obj = bpy.context.object
+    obj.name = name
+    obj.scale = scale
+    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+    assign_material(obj, mat)
+    move_to_collection(obj, collection)
+    tag_object(obj, collection, role)
+    return obj
+
+
+def add_loft(
+    name: str,
+    rings: list[tuple[float, float, float]],
+    mat: str,
+    collection: bpy.types.Collection,
+    role: str,
+    *,
+    segments: int = 8,
+) -> bpy.types.Object:
+    vertices: list[tuple[float, float, float]] = []
+    for z, radius_x, radius_y in rings:
+        for segment in range(segments):
+            angle = math.tau * segment / segments
+            vertices.append((math.cos(angle) * radius_x,
+                             math.sin(angle) * radius_y, z))
+    faces: list[tuple[int, ...]] = []
+    for ring in range(len(rings) - 1):
+        for segment in range(segments):
+            next_segment = (segment + 1) % segments
+            a = ring * segments + segment
+            b = ring * segments + next_segment
+            c = (ring + 1) * segments + next_segment
+            d = (ring + 1) * segments + segment
+            faces.append((a, b, c, d))
+    faces.append(tuple(reversed(range(segments))))
+    top = (len(rings) - 1) * segments
+    faces.append(tuple(top + segment for segment in range(segments)))
+    mesh = bpy.data.meshes.new(f"MESH_{name}")
+    mesh.from_pydata(vertices, [], faces)
+    mesh.update()
+    obj = bpy.data.objects.new(name, mesh)
+    collection.objects.link(obj)
+    assign_material(obj, mat)
+    add_bevel(obj, 0.018)
+    tag_object(obj, collection, role)
+    return obj
+
+
+def add_panel(
+    name: str,
+    vertices: list[tuple[float, float, float]],
+    mat: str,
+    collection: bpy.types.Collection,
+    role: str,
+    *,
+    thickness: float = 0.018,
+) -> bpy.types.Object:
+    mesh = bpy.data.meshes.new(f"MESH_{name}")
+    mesh.from_pydata(vertices, [], [tuple(range(len(vertices)))])
+    mesh.update()
+    obj = bpy.data.objects.new(name, mesh)
+    collection.objects.link(obj)
+    assign_material(obj, mat)
+    solidify = obj.modifiers.new("CC_Solidify", "SOLIDIFY")
+    solidify.thickness = thickness
+    add_bevel(obj, 0.012)
+    tag_object(obj, collection, role)
+    return obj
+
+
+def parent_to_bone(obj: bpy.types.Object, armature: bpy.types.Object, bone_name: str) -> None:
+    world = obj.matrix_world.copy()
+    obj.parent = armature
+    obj.parent_type = "BONE"
+    obj.parent_bone = bone_name
+    obj.matrix_world = world
+    obj["cc_anchor_bone"] = bone_name
+
+
+def skin_to_armature(obj: bpy.types.Object, armature: bpy.types.Object) -> None:
+    obj.parent = armature
+    obj.matrix_parent_inverse = armature.matrix_world.inverted()
+    modifier = obj.modifiers.new("CC_Armature", "ARMATURE")
+    modifier.object = armature
+    pelvis = obj.vertex_groups.new(name="pelvis")
+    spine = obj.vertex_groups.new(name="spine")
+    chest = obj.vertex_groups.new(name="chest")
+    for vertex in obj.data.vertices:
+        z = vertex.co.z
+        if z <= 1.14:
+            pelvis.add([vertex.index], 1.0, "REPLACE")
+        elif z <= 1.39:
+            amount = (z - 1.14) / 0.25
+            pelvis.add([vertex.index], 1.0 - amount, "REPLACE")
+            spine.add([vertex.index], amount, "REPLACE")
+        elif z <= 1.52:
+            amount = (z - 1.39) / 0.13
+            spine.add([vertex.index], 1.0 - amount, "REPLACE")
+            chest.add([vertex.index], amount, "REPLACE")
+        else:
+            chest.add([vertex.index], 1.0, "REPLACE")
+
+
+def build_structure() -> dict[str, bpy.types.Collection]:
+    root = bpy.context.scene.collection
+    library = new_group("CC_HERO_LIBRARY", root)
+    groups = {
+        "library": library,
+        "guides": new_group("00_GUIDES", library),
+        "rig": new_group("10_RIG", library),
+        "anatomy": new_group("20_ANATOMY", library),
+        "garments": new_group("30_GARMENTS", library),
+        "cloth": new_group("40_CLOTH", library),
+        "armor": new_group("50_ARMOR", library),
+        "accessories": new_group("60_ACCESSORIES", library),
+        "presentation": new_group("90_PRESENTATION", root),
+    }
+    groups["rig_guides"] = new_group("CC_HERO_RIG_GUIDES", groups["guides"])
+    groups["cape_guides"] = new_group("CC_HERO_CAPE_CAGE_GUIDES", groups["guides"])
+    groups["exploded"] = new_group("CC_HERO_EXPLODED_DISPLAY", groups["presentation"])
+    return groups
+
+
+def build_armature(parent: bpy.types.Collection) -> bpy.types.Object:
+    collection = new_component(
+        "CC_HERO_SKELETON", parent,
+        component_id="hero_skeleton_v01", kind="skeleton", slot="skeleton",
+        layer="anatomy", anchor="root", coverage=("whole_body",),
+    )
+    armature_data = bpy.data.armatures.new("ARM_CrownlessHero")
+    armature = bpy.data.objects.new("ARM_CrownlessHero", armature_data)
+    collection.objects.link(armature)
+    armature.show_in_front = True
+    armature_data.display_type = "OCTAHEDRAL"
+    armature["cc_skeleton_id"] = "crownless_humanoid_v01"
+    armature["cc_forward_axis"] = "-Y"
+    bpy.context.view_layer.objects.active = armature
+    armature.select_set(True)
+    bpy.ops.object.mode_set(mode="EDIT")
+    created: dict[str, bpy.types.EditBone] = {}
+    for name, parent_name, head, tail in BONES:
+        bone = armature_data.edit_bones.new(name)
+        bone.head = head
+        bone.tail = tail
+        bone.roll = 0.0
+        if parent_name:
+            bone.parent = created[parent_name]
+        created[name] = bone
+    bpy.ops.object.mode_set(mode="OBJECT")
+    armature.select_set(False)
+    tag_object(armature, collection, "canonical_armature")
+    return armature
+
+
+def build_rig_guides(groups: dict[str, bpy.types.Collection]) -> None:
+    collection = groups["rig_guides"]
+    collection["cc_layer"] = "guide"
+    for name, _parent, head, tail in BONES:
+        if name == "root":
+            continue
+        add_cylinder_between(f"GUIDE_Bone_{name}", head, tail, 0.018, 0.018,
+                             "rig_cyan", collection, "bone_guide", vertices=6,
+                             bevel_width=0.0)
+        add_ico(f"GUIDE_Joint_{name}", head, (0.032, 0.032, 0.032),
+                "rig_cyan", collection, "joint_guide", subdivisions=1)
+
+
+def add_socket(
+    name: str,
+    location: tuple[float, float, float],
+    bone: str,
+    armature: bpy.types.Object,
+    collection: bpy.types.Collection,
+) -> bpy.types.Object:
+    obj = bpy.data.objects.new(name, None)
+    obj.empty_display_type = "SPHERE"
+    obj.empty_display_size = 0.065
+    obj.location = location
+    collection.objects.link(obj)
+    parent_to_bone(obj, armature, bone)
+    obj["cc_socket_type"] = name.removeprefix("SOCKET_").lower()
+    SOCKET_RECORDS.append(
+        {"name": name, "bone": bone, "position_m": list(location)}
+    )
+    return obj
+
+
+def build_sockets(armature: bpy.types.Object, skeleton: bpy.types.Collection) -> None:
+    sockets = (
+        ("SOCKET_HEAD", (0.0, 0.0, 2.04), "head"),
+        ("SOCKET_FACE", (0.0, -0.19, 1.90), "head"),
+        ("SOCKET_CHEST_FRONT", (0.0, -0.20, 1.47), "chest"),
+        ("SOCKET_BACK", (0.0, 0.20, 1.50), "chest"),
+        ("SOCKET_SHOULDER_L", (-0.32, 0.0, 1.58), "upper_arm.L"),
+        ("SOCKET_SHOULDER_R", (0.32, 0.0, 1.58), "upper_arm.R"),
+        ("SOCKET_FOREARM_L", (-0.52, 0.0, 1.08), "forearm.L"),
+        ("SOCKET_FOREARM_R", (0.52, 0.0, 1.08), "forearm.R"),
+        ("SOCKET_HAND_L", (-0.58, -0.03, 0.85), "hand.L"),
+        ("SOCKET_HAND_R", (0.58, -0.03, 0.85), "hand.R"),
+        ("SOCKET_BELT", (0.0, 0.0, 1.02), "pelvis"),
+        ("SOCKET_SHIN_L", (-0.15, -0.04, 0.35), "shin.L"),
+        ("SOCKET_SHIN_R", (0.15, -0.04, 0.35), "shin.R"),
+        ("SOCKET_FOOT_L", (-0.15, -0.14, 0.10), "foot.L"),
+        ("SOCKET_FOOT_R", (0.15, -0.14, 0.10), "foot.R"),
+    )
+    for name, location, bone in sockets:
+        add_socket(name, location, bone, armature, skeleton)
+
+
+def build_body(parent: bpy.types.Collection, armature: bpy.types.Object) -> bpy.types.Collection:
+    collection = new_component(
+        "CC_HERO_BODY_BASE", parent,
+        component_id="hero_body_base_v01", kind="body", slot="body",
+        layer="skin", anchor="root", coverage=("whole_body",),
+    )
+    torso = add_loft(
+        "GEO_BodyTorso",
+        [(1.02, 0.24, 0.15), (1.22, 0.27, 0.17),
+         (1.45, 0.35, 0.19), (1.60, 0.40, 0.205), (1.66, 0.14, 0.11)],
+        "body_neutral", collection, "torso",
+    )
+    skin_to_armature(torso, armature)
+    pelvis = add_ico("GEO_BodyPelvis", (0.0, 0.0, 1.00), (0.27, 0.19, 0.19),
+                     "body_neutral", collection, "pelvis")
+    parent_to_bone(pelvis, armature, "pelvis")
+
+    segments = [
+        ("UpperArmL", (-0.29, 0.0, 1.56), (-0.46, 0.0, 1.26), 0.090, 0.075, "upper_arm.L"),
+        ("ForearmL", (-0.46, 0.0, 1.26), (-0.57, -0.015, 0.94), 0.075, 0.058, "forearm.L"),
+        ("UpperArmR", (0.29, 0.0, 1.56), (0.46, 0.0, 1.26), 0.090, 0.075, "upper_arm.R"),
+        ("ForearmR", (0.46, 0.0, 1.26), (0.57, -0.015, 0.94), 0.075, 0.058, "forearm.R"),
+        ("ThighL", (-0.14, 0.0, 1.00), (-0.15, 0.0, 0.56), 0.125, 0.095, "thigh.L"),
+        ("ShinL", (-0.15, 0.0, 0.56), (-0.15, 0.0, 0.13), 0.092, 0.070, "shin.L"),
+        ("ThighR", (0.14, 0.0, 1.00), (0.15, 0.0, 0.56), 0.125, 0.095, "thigh.R"),
+        ("ShinR", (0.15, 0.0, 0.56), (0.15, 0.0, 0.13), 0.092, 0.070, "shin.R"),
+    ]
+    for name, start, end, r1, r2, bone in segments:
+        obj = add_cylinder_between(f"GEO_Body{name}", start, end, r1, r2,
+                                   "body_neutral", collection, "limb")
+        parent_to_bone(obj, armature, bone)
+
+    for side, x in (("L", -0.58), ("R", 0.58)):
+        hand = add_ico(f"GEO_BodyHand{side}", (x, -0.025, 0.85),
+                       (0.070, 0.055, 0.105), "skin", collection, "hand")
+        parent_to_bone(hand, armature, f"hand.{side}")
+        foot = add_cube(f"GEO_BodyFoot{side}", (x * 0.2586, -0.10, 0.105),
+                        (0.18, 0.32, 0.12), "body_neutral", collection, "foot",
+                        bevel_width=0.035)
+        parent_to_bone(foot, armature, f"foot.{side}")
+
+    neck = add_cylinder_between("GEO_BodyNeck", (0.0, 0.0, 1.61),
+                                (0.0, 0.0, 1.77), 0.085, 0.090,
+                                "skin", collection, "neck")
+    parent_to_bone(neck, armature, "neck")
+    head = add_ico("GEO_BodyHead", (0.0, 0.0, 1.92), (0.140, 0.122, 0.180),
+                   "skin", collection, "head")
+    parent_to_bone(head, armature, "head")
+    jaw = add_ico("GEO_BodyJaw", (0.0, -0.010, 1.845), (0.118, 0.108, 0.095),
+                  "skin", collection, "face", subdivisions=1)
+    parent_to_bone(jaw, armature, "head")
+    chin = add_ico("GEO_BodyChin", (0.0, -0.098, 1.810), (0.050, 0.028, 0.030),
+                   "skin_light", collection, "face", subdivisions=1)
+    parent_to_bone(chin, armature, "head")
+    nose = add_ico("GEO_BodyNose", (0.0, -0.128, 1.915), (0.025, 0.030, 0.040),
+                   "skin_light", collection, "face", subdivisions=1)
+    parent_to_bone(nose, armature, "head")
+    for side, x in (("L", -0.052), ("R", 0.052)):
+        eye = add_ico(f"GEO_BodyEye{side}", (x, -0.120, 1.948),
+                      (0.018, 0.010, 0.014), "eye", collection, "face", subdivisions=1)
+        parent_to_bone(eye, armature, "head")
+        brow = add_box_between(
+            f"GEO_BodyBrow{side}", (x - 0.028, -0.123, 1.978),
+            (x + 0.028, -0.126, 1.984), 0.012, 0.010,
+            "hair", collection, "face", bevel_width=0.004,
+        )
+        parent_to_bone(brow, armature, "head")
+        ear = add_ico(f"GEO_BodyEar{side}", ((-1 if side == "L" else 1) * 0.138,
+                      -0.005, 1.925), (0.022, 0.020, 0.040), "skin_light",
+                      collection, "face", subdivisions=1)
+        parent_to_bone(ear, armature, "head")
+    mouth = add_box_between("GEO_BodyMouth", (-0.037, -0.112, 1.855),
+                            (0.037, -0.112, 1.855), 0.010, 0.008,
+                            "hair", collection, "face", bevel_width=0.003)
+    parent_to_bone(mouth, armature, "head")
+    return collection
+
+
+def build_hair(parent: bpy.types.Collection, armature: bpy.types.Object) -> bpy.types.Collection:
+    collection = new_component(
+        "CC_HERO_HAIR", parent,
+        component_id="hero_hair_v01", kind="hair", slot="head",
+        layer="accessory", anchor="head", coverage=("head",),
+    )
+    cap = add_ico("GEO_HairCap", (0.0, 0.012, 2.025), (0.158, 0.137, 0.125),
+                  "hair", collection, "hair_cap")
+    parent_to_bone(cap, armature, "head")
+    bun = add_ico("GEO_HairBun", (0.0, 0.140, 1.955), (0.105, 0.085, 0.090),
+                  "hair", collection, "hair_bun", subdivisions=1)
+    parent_to_bone(bun, armature, "head")
+    for index, (x, top, bottom) in enumerate((
+        (-0.115, 2.075, 1.985), (-0.060, 2.120, 2.015),
+        (0.0, 2.125, 2.045), (0.060, 2.115, 2.010),
+        (0.115, 2.065, 1.975),
+    )):
+        lock = add_cylinder_between(
+            f"GEO_HairLock_{index:02d}", (x * 0.82, -0.105, top),
+            (x, -0.137, bottom), 0.030, 0.017, "hair", collection,
+            "hair_lock", vertices=6, bevel_width=0.008,
+        )
+        parent_to_bone(lock, armature, "head")
+    for suffix, sign in (("L", -1.0), ("R", 1.0)):
+        temple = add_cylinder_between(
+            f"GEO_HairTemple{suffix}", (sign * 0.135, -0.015, 2.025),
+            (sign * 0.145, -0.070, 1.900), 0.025, 0.014,
+            "hair", collection, "hair_lock", vertices=6, bevel_width=0.006,
+        )
+        parent_to_bone(temple, armature, "head")
+    for index, x in enumerate((-0.045, 0.045)):
+        coil = add_torus(f"GEO_HairBunCoil{index}", (x, 0.215, 1.965),
+                         0.043, 0.014, "hair", collection, "hair_bun_detail",
+                         rotation=(math.radians(90), 0.0, 0.0))
+        parent_to_bone(coil, armature, "head")
+    return collection
+
+
+def add_muscle(
+    collection: bpy.types.Collection,
+    armature: bpy.types.Object,
+    name: str,
+    start: tuple[float, float, float],
+    end: tuple[float, float, float],
+    radius: float,
+    mat: str,
+    bone: str,
+    joint: str,
+) -> None:
+    obj = add_cylinder_between(f"GEO_Muscle_{name}", start, end,
+                               radius, radius * 0.82, mat, collection,
+                               "muscle_volume", vertices=8, bevel_width=0.018)
+    obj["cc_muscle_name"] = name
+    obj["cc_driven_joint"] = joint
+    parent_to_bone(obj, armature, bone)
+
+
+def build_muscles(parent: bpy.types.Collection, armature: bpy.types.Object) -> bpy.types.Collection:
+    collection = new_component(
+        "CC_HERO_MUSCLE_GUIDES", parent,
+        component_id="hero_muscle_guides_v01", kind="anatomy_guide",
+        slot="muscles", layer="anatomy", anchor="root",
+        coverage=("torso", "arms", "legs"),
+    )
+    for side, x, suffix in ((-1.0, -0.12, "L"), (1.0, 0.12, "R")):
+        pec = add_ico(f"GEO_Muscle_Pectoral{suffix}", (x, -0.175, 1.50),
+                      (0.145, 0.050, 0.105), "muscle_blue", collection,
+                      "muscle_volume", subdivisions=1)
+        pec["cc_muscle_name"] = f"pectoral.{suffix}"
+        pec["cc_driven_joint"] = f"shoulder.{suffix}"
+        parent_to_bone(pec, armature, "chest")
+        add_muscle(collection, armature, f"Deltoid{suffix}",
+                   (side * 0.30, -0.035, 1.57), (side * 0.40, -0.035, 1.39),
+                   0.080, "muscle_purple", f"upper_arm.{suffix}", f"shoulder.{suffix}")
+        add_muscle(collection, armature, f"Biceps{suffix}",
+                   (side * 0.38, -0.075, 1.42), (side * 0.47, -0.060, 1.20),
+                   0.058, "muscle_purple", f"upper_arm.{suffix}", f"elbow.{suffix}")
+        add_muscle(collection, armature, f"Forearm{suffix}",
+                   (side * 0.48, -0.055, 1.19), (side * 0.56, -0.050, 0.98),
+                   0.050, "muscle_gold", f"forearm.{suffix}", f"wrist.{suffix}")
+        add_muscle(collection, armature, f"Quadriceps{suffix}",
+                   (side * 0.14, -0.090, 0.94), (side * 0.15, -0.075, 0.62),
+                   0.090, "muscle_purple", f"thigh.{suffix}", f"knee.{suffix}")
+        add_muscle(collection, armature, f"Calf{suffix}",
+                   (side * 0.15, 0.060, 0.51), (side * 0.15, 0.040, 0.19),
+                   0.070, "muscle_blue", f"shin.{suffix}", f"ankle.{suffix}")
+    for row, z in enumerate((1.38, 1.27, 1.16)):
+        for side, x in (("L", -0.065), ("R", 0.065)):
+            abdomen = add_ico(f"GEO_Muscle_Abdomen{side}_{row}",
+                              (x, -0.165, z), (0.062, 0.038, 0.075),
+                              "muscle_green", collection, "muscle_volume",
+                              subdivisions=1)
+            abdomen["cc_muscle_name"] = f"abdominal.{side}.{row}"
+            abdomen["cc_driven_joint"] = "spine_pitch"
+            parent_to_bone(abdomen, armature, "spine")
+    return collection
+
+
+def build_padding(parent: bpy.types.Collection, armature: bpy.types.Object) -> bpy.types.Collection:
+    collection = new_component(
+        "CC_HERO_PADDED_UNDERLAYER", parent,
+        component_id="hero_padded_underlayer_v01", kind="garment",
+        slot="underlayer", layer="padding", anchor="chest",
+        coverage=("torso", "upper_arms", "forearms"),
+    )
+    torso = add_loft(
+        "GEO_PaddedTorso",
+        [(1.01, 0.255, 0.165), (1.22, 0.288, 0.182),
+         (1.46, 0.355, 0.205), (1.62, 0.392, 0.215), (1.67, 0.145, 0.12)],
+        "padding", collection, "padded_torso",
+    )
+    skin_to_armature(torso, armature)
+    for suffix, sign in (("L", -1.0), ("R", 1.0)):
+        upper = add_cylinder_between(f"GEO_PaddedUpperSleeve{suffix}",
+                                     (sign * 0.29, 0.0, 1.57),
+                                     (sign * 0.46, 0.0, 1.26),
+                                     0.108, 0.090, "padding", collection,
+                                     "padded_sleeve")
+        parent_to_bone(upper, armature, f"upper_arm.{suffix}")
+        lower = add_cylinder_between(f"GEO_PaddedLowerSleeve{suffix}",
+                                     (sign * 0.46, 0.0, 1.26),
+                                     (sign * 0.56, -0.01, 0.96),
+                                     0.088, 0.070, "padding", collection,
+                                     "padded_sleeve")
+        parent_to_bone(lower, armature, f"forearm.{suffix}")
+        for amount in (0.25, 0.50, 0.75):
+            a = Vector((sign * 0.46, 0.0, 1.26)).lerp(
+                Vector((sign * 0.56, -0.01, 0.96)), amount)
+            ring = add_torus(f"GEO_PaddingStitch{suffix}", tuple(a), 0.072, 0.008,
+                             "padding_dark", collection, "quilt_stitch",
+                             rotation=(math.radians(72), 0.0, sign * math.radians(18)),
+                             scale=(1.0, 0.78, 1.0))
+            parent_to_bone(ring, armature, f"forearm.{suffix}")
+        for index, y_offset in enumerate((-0.068, 0.068)):
+            seam = add_box_between(
+                f"GEO_PaddingSeam{suffix}_{index}",
+                (sign * 0.475, y_offset, 1.205),
+                (sign * 0.545, -y_offset, 1.005),
+                0.010, 0.009, "padding_dark", collection, "quilt_stitch",
+                bevel_width=0.003,
+            )
+            parent_to_bone(seam, armature, f"forearm.{suffix}")
+    return collection
+
+
+def build_tunic(parent: bpy.types.Collection, armature: bpy.types.Object) -> bpy.types.Collection:
+    collection = new_component(
+        "CC_HERO_TUNIC", parent,
+        component_id="hero_tunic_v01", kind="garment", slot="torso_garment",
+        layer="garment", anchor="chest",
+        coverage=("torso", "upper_arms", "hips"),
+    )
+    torso = add_loft(
+        "GEO_TunicTorso",
+        [(1.04, 0.27, 0.177), (1.24, 0.30, 0.194),
+         (1.47, 0.365, 0.215), (1.63, 0.405, 0.225), (1.68, 0.15, 0.125)],
+        "teal", collection, "tunic_torso",
+    )
+    skin_to_armature(torso, armature)
+    for suffix, sign in (("L", -1.0), ("R", 1.0)):
+        sleeve = add_cylinder_between(f"GEO_TunicSleeve{suffix}",
+                                      (sign * 0.30, 0.0, 1.57),
+                                      (sign * 0.405, 0.0, 1.38),
+                                      0.135, 0.118, "teal_light", collection,
+                                      "short_sleeve")
+        parent_to_bone(sleeve, armature, f"upper_arm.{suffix}")
+    panels = [
+        ("Front", [(-0.24, -0.185, 1.08), (0.24, -0.185, 1.08),
+                   (0.20, -0.20, 0.70), (-0.20, -0.20, 0.70)]),
+        ("Back", [(0.24, 0.18, 1.08), (-0.24, 0.18, 1.08),
+                  (-0.20, 0.20, 0.72), (0.20, 0.20, 0.72)]),
+        ("Left", [(-0.27, 0.14, 1.08), (-0.27, -0.14, 1.08),
+                  (-0.24, -0.15, 0.74), (-0.24, 0.15, 0.74)]),
+        ("Right", [(0.27, -0.14, 1.08), (0.27, 0.14, 1.08),
+                   (0.24, 0.15, 0.74), (0.24, -0.15, 0.74)]),
+    ]
+    for name, vertices in panels:
+        panel = add_panel(f"GEO_TunicPanel{name}", vertices, "teal", collection,
+                          "tunic_skirt_panel")
+        parent_to_bone(panel, armature, "pelvis")
+    neckline = add_torus("GEO_TunicNeckline", (0.0, -0.015, 1.655),
+                         0.128, 0.014, "teal_dark", collection,
+                         "tunic_neckline", scale=(1.0, 0.78, 1.0))
+    parent_to_bone(neckline, armature, "chest")
+    placket = add_panel(
+        "GEO_TunicPlacket",
+        [(-0.030, -0.232, 1.62), (0.030, -0.232, 1.62),
+         (0.030, -0.222, 1.39), (-0.030, -0.222, 1.39)],
+        "padding", collection, "tunic_placket", thickness=0.012,
+    )
+    parent_to_bone(placket, armature, "chest")
+    for index, z in enumerate((1.565, 1.495, 1.425)):
+        button = add_ico(f"GEO_TunicButton_{index}", (0.0, -0.246, z),
+                         (0.014, 0.008, 0.014), "brass", collection,
+                         "tunic_button", subdivisions=1)
+        parent_to_bone(button, armature, "chest")
+    front_trim = add_box_between(
+        "GEO_TunicHemTrim", (-0.195, -0.214, 0.735),
+        (0.195, -0.214, 0.735), 0.025, 0.018,
+        "teal_dark", collection, "tunic_trim", bevel_width=0.006,
+    )
+    parent_to_bone(front_trim, armature, "pelvis")
+    return collection
+
+
+def create_cape_mesh(
+    collection: bpy.types.Collection,
+    armature: bpy.types.Object,
+    cage_collection: bpy.types.Collection,
+) -> bpy.types.Object:
+    columns = 6
+    rows = 7
+    vertices: list[tuple[float, float, float]] = []
+    for row in range(rows):
+        v = row / (rows - 1)
+        half_width = 0.37 + v * 0.28
+        z = 1.64 - v * 1.10
+        for column in range(columns):
+            u = column / (columns - 1)
+            x = (u * 2.0 - 1.0) * half_width
+            scallop = 0.030 * math.sin((u * 2.0 - 1.0) * math.pi * 2.0) * v
+            y = 0.205 + v * 0.16 + math.sin(u * math.pi) * v * 0.060 + scallop
+            vertices.append((x, y, z))
+    faces: list[tuple[int, int, int, int]] = []
+    for row in range(rows - 1):
+        for column in range(columns - 1):
+            a = row * columns + column
+            b = a + 1
+            c = (row + 1) * columns + column + 1
+            d = (row + 1) * columns + column
+            faces.append((a, b, c, d))
+    mesh = bpy.data.meshes.new("MESH_HeroCape")
+    mesh.from_pydata(vertices, [], faces)
+    mesh.update()
+    cape = bpy.data.objects.new("GEO_HeroCape", mesh)
+    collection.objects.link(cape)
+    assign_material(cape, "cape")
+    tag_object(cape, collection, "cloth_panel")
+    pin = cape.vertex_groups.new(name="PIN_COLLAR")
+    pin.add(list(range(columns)), 1.0, "REPLACE")
+    cape["cc_cloth_solver"] = "coarse_pinned_cage"
+    cape["cc_pin_group"] = "PIN_COLLAR"
+    cape["cc_control_columns"] = columns
+    cape["cc_control_rows"] = rows
+    cloth = cape.modifiers.new("CC_Cloth", "CLOTH")
+    cloth.settings.vertex_group_mass = "PIN_COLLAR"
+    cloth.settings.quality = 5
+    cloth.settings.tension_stiffness = 18.0
+    cloth.settings.compression_stiffness = 12.0
+    cloth.settings.shear_stiffness = 8.0
+    cloth.settings.bending_stiffness = 0.45
+    solidify = cape.modifiers.new("CC_Solidify", "SOLIDIFY")
+    solidify.thickness = 0.025
+    add_bevel(cape, 0.012)
+    parent_to_bone(cape, armature, "chest")
+
+    cage_collection["cc_layer"] = "cloth_guide"
+    for index, vertex in enumerate(vertices):
+        node = add_ico(f"GUIDE_CapeNode_{index:02d}", vertex,
+                       (0.022, 0.022, 0.022), "cape_light", cage_collection,
+                       "cloth_control_node", subdivisions=1)
+        node["cc_cloth_pin"] = index < columns
+        parent_to_bone(node, armature, "chest")
+    edges: set[tuple[int, int]] = set()
+    for face in faces:
+        for a, b in zip(face, face[1:] + face[:1]):
+            edges.add(tuple(sorted((a, b))))
+    for index, (a, b) in enumerate(sorted(edges)):
+        edge = add_cylinder_between(f"GUIDE_CapeEdge_{index:02d}", vertices[a],
+                                    vertices[b], 0.006, 0.006, "cape_light",
+                                    cage_collection, "cloth_constraint",
+                                    vertices=5, bevel_width=0.0)
+        parent_to_bone(edge, armature, "chest")
+    return cape
+
+
+def build_cape(parent: bpy.types.Collection, armature: bpy.types.Object,
+               cage_collection: bpy.types.Collection) -> bpy.types.Collection:
+    collection = new_component(
+        "CC_HERO_CAPE", parent,
+        component_id="hero_cape_v01", kind="cloth", slot="back_cloth",
+        layer="cloth", anchor="chest",
+        coverage=("back", "shoulders"),
+    )
+    create_cape_mesh(collection, armature, cage_collection)
+    collar = add_torus("GEO_CapeCollar", (0.0, 0.015, 1.635), 0.255, 0.032,
+                       "cape", collection, "cape_collar",
+                       scale=(1.28, 0.86, 1.0))
+    parent_to_bone(collar, armature, "chest")
+    for suffix, sign in (("L", -1.0), ("R", 1.0)):
+        mantle = add_panel(
+            f"GEO_CapeMantle{suffix}",
+            [(sign * 0.03, -0.175, 1.645), (sign * 0.34, -0.145, 1.610),
+             (sign * 0.39, 0.040, 1.545), (sign * 0.12, 0.080, 1.570)],
+            "cape_light", collection, "cape_mantle", thickness=0.028,
+        )
+        parent_to_bone(mantle, armature, "chest")
+    for suffix, x in (("L", -0.29), ("R", 0.29)):
+        pin = add_torus(f"GEO_CapePin{suffix}", (x, -0.175, 1.58),
+                        0.050, 0.016, "brass", collection, "cape_pin",
+                        rotation=(math.radians(90), 0.0, 0.0))
+        parent_to_bone(pin, armature, "chest")
+    return collection
+
+
+def build_cuirass(parent: bpy.types.Collection, armature: bpy.types.Object) -> bpy.types.Collection:
+    collection = new_component(
+        "CC_HERO_CUIRASS", parent,
+        component_id="hero_cuirass_v01", kind="rigid_armor", slot="torso_armor",
+        layer="rigid_armor", anchor="chest",
+        coverage=("chest", "abdomen", "back"),
+    )
+    shell = add_loft(
+        "GEO_CuirassShell",
+        [(1.12, 0.285, 0.192), (1.30, 0.322, 0.210),
+         (1.50, 0.382, 0.232), (1.62, 0.407, 0.238), (1.67, 0.16, 0.13)],
+        "steel", collection, "cuirass_shell",
+    )
+    skin_to_armature(shell, armature)
+    chest_plate = add_panel(
+        "GEO_CuirassFrontPlate",
+        [(-0.245, -0.244, 1.600), (0.245, -0.244, 1.600),
+         (0.230, -0.248, 1.365), (0.150, -0.238, 1.220),
+         (-0.150, -0.238, 1.220), (-0.230, -0.248, 1.365)],
+        "steel_light", collection, "cuirass_plate", thickness=0.040,
+    )
+    parent_to_bone(chest_plate, armature, "chest")
+    upper_trim = add_box_between("GEO_CuirassUpperTrim",
+                                 (-0.235, -0.273, 1.595),
+                                 (0.235, -0.273, 1.595), 0.030, 0.022,
+                                 "brass", collection, "armor_trim",
+                                 bevel_width=0.008)
+    parent_to_bone(upper_trim, armature, "chest")
+    lower_trim = add_box_between("GEO_CuirassLowerTrim",
+                                 (-0.145, -0.260, 1.225),
+                                 (0.145, -0.260, 1.225), 0.026, 0.020,
+                                 "brass", collection, "armor_trim",
+                                 bevel_width=0.007)
+    parent_to_bone(lower_trim, armature, "chest")
+    center_ridge = add_box_between("GEO_CuirassCenterRidge",
+                                   (0.0, -0.278, 1.275),
+                                   (0.0, -0.278, 1.545), 0.022, 0.018,
+                                   "steel_dark", collection, "armor_ridge",
+                                   bevel_width=0.005)
+    parent_to_bone(center_ridge, armature, "chest")
+    for suffix, sign in (("L", -1.0), ("R", 1.0)):
+        clavicle = add_panel(
+            f"GEO_CuirassClavicle{suffix}",
+            [(sign * 0.025, -0.276, 1.565), (sign * 0.220, -0.268, 1.565),
+             (sign * 0.205, -0.273, 1.485), (sign * 0.055, -0.281, 1.505)],
+            "steel", collection, "cuirass_clavicle", thickness=0.022,
+        )
+        parent_to_bone(clavicle, armature, "chest")
+        for index, z in enumerate((1.555, 1.285)):
+            rivet = add_ico(f"GEO_CuirassRivet{suffix}_{index}",
+                            (sign * 0.205, -0.292, z),
+                            (0.014, 0.008, 0.014), "brass", collection,
+                            "armor_rivet", subdivisions=1)
+            parent_to_bone(rivet, armature, "chest")
+    emblem = add_ico("GEO_CuirassEmblem", (0.0, -0.300, 1.425),
+                     (0.045, 0.014, 0.064), "brass", collection,
+                     "armor_emblem", subdivisions=1)
+    parent_to_bone(emblem, armature, "chest")
+    return collection
+
+
+def build_pauldron(parent: bpy.types.Collection, armature: bpy.types.Object,
+                    suffix: str, sign: float) -> bpy.types.Collection:
+    collection = new_component(
+        f"CC_HERO_PAULDRON_{suffix}", parent,
+        component_id=f"hero_pauldron_{suffix.lower()}_v01",
+        kind="rigid_armor", slot=f"shoulder_{suffix.lower()}",
+        layer="rigid_armor", anchor=f"upper_arm.{suffix}",
+        coverage=(f"shoulder_{suffix.lower()}",),
+    )
+    plate = add_ico(f"GEO_Pauldron{suffix}", (sign * 0.345, 0.0, 1.57),
+                    (0.205, 0.175, 0.125), "steel", collection,
+                    "pauldron_shell", subdivisions=1)
+    plate.rotation_euler[1] = sign * math.radians(12)
+    parent_to_bone(plate, armature, f"upper_arm.{suffix}")
+    lower_plate = add_ico(f"GEO_PauldronLower{suffix}",
+                          (sign * 0.380, -0.005, 1.505),
+                          (0.185, 0.155, 0.075), "steel_light", collection,
+                          "pauldron_lame", subdivisions=1)
+    lower_plate.rotation_euler[1] = sign * math.radians(15)
+    parent_to_bone(lower_plate, armature, f"upper_arm.{suffix}")
+    ridge = add_ico(f"GEO_PauldronRidge{suffix}", (sign * 0.355, -0.020, 1.62),
+                    (0.185, 0.155, 0.045), "brass", collection,
+                    "pauldron_trim", subdivisions=1)
+    ridge.rotation_euler[1] = sign * math.radians(12)
+    parent_to_bone(ridge, armature, f"upper_arm.{suffix}")
+    rivet = add_ico(f"GEO_PauldronRivet{suffix}",
+                    (sign * 0.355, -0.162, 1.590),
+                    (0.020, 0.012, 0.020), "brass", collection,
+                    "armor_rivet", subdivisions=1)
+    parent_to_bone(rivet, armature, f"upper_arm.{suffix}")
+    return collection
+
+
+def build_bracer(parent: bpy.types.Collection, armature: bpy.types.Object,
+                  suffix: str, sign: float) -> bpy.types.Collection:
+    collection = new_component(
+        f"CC_HERO_BRACER_{suffix}", parent,
+        component_id=f"hero_bracer_{suffix.lower()}_v01",
+        kind="rigid_armor", slot=f"forearm_{suffix.lower()}",
+        layer="rigid_armor", anchor=f"forearm.{suffix}",
+        coverage=(f"forearm_{suffix.lower()}",),
+    )
+    start = (sign * 0.49, -0.012, 1.19)
+    end = (sign * 0.56, -0.020, 0.98)
+    bracer = add_cylinder_between(f"GEO_Bracer{suffix}", start, end,
+                                  0.094, 0.076, "leather", collection,
+                                  "bracer_shell", vertices=8)
+    parent_to_bone(bracer, armature, f"forearm.{suffix}")
+    splint = add_box_between(f"GEO_BracerSplint{suffix}",
+                             (sign * 0.495, -0.088, 1.175),
+                             (sign * 0.558, -0.082, 0.995),
+                             0.040, 0.026, "steel_light", collection,
+                             "bracer_splint", bevel_width=0.007)
+    parent_to_bone(splint, armature, f"forearm.{suffix}")
+    for amount in (0.18, 0.48, 0.78):
+        center = Vector(start).lerp(Vector(end), amount)
+        band = add_torus(f"GEO_BracerBand{suffix}", tuple(center), 0.078, 0.010,
+                         "brass", collection, "bracer_band",
+                         rotation=(math.radians(72), 0.0, sign * math.radians(18)),
+                         scale=(1.0, 0.82, 1.0))
+        parent_to_bone(band, armature, f"forearm.{suffix}")
+    return collection
+
+
+def build_greave(parent: bpy.types.Collection, armature: bpy.types.Object,
+                  suffix: str, sign: float) -> bpy.types.Collection:
+    collection = new_component(
+        f"CC_HERO_GREAVE_{suffix}", parent,
+        component_id=f"hero_greave_{suffix.lower()}_v01",
+        kind="rigid_armor", slot=f"shin_{suffix.lower()}",
+        layer="rigid_armor", anchor=f"shin.{suffix}",
+        coverage=(f"shin_{suffix.lower()}", "knee"),
+    )
+    greave = add_cylinder_between(f"GEO_Greave{suffix}",
+                                  (sign * 0.15, 0.0, 0.53),
+                                  (sign * 0.15, -0.01, 0.20),
+                                  0.105, 0.080, "steel", collection,
+                                  "greave_shell", vertices=8)
+    parent_to_bone(greave, armature, f"shin.{suffix}")
+    knee = add_ico(f"GEO_KneePlate{suffix}", (sign * 0.15, -0.075, 0.56),
+                   (0.115, 0.060, 0.105), "steel_light", collection,
+                   "knee_plate", subdivisions=1)
+    parent_to_bone(knee, armature, f"shin.{suffix}")
+    trim = add_cube(f"GEO_GreaveTrim{suffix}", (sign * 0.15, -0.088, 0.37),
+                    (0.145, 0.025, 0.035), "brass", collection,
+                    "greave_trim", bevel_width=0.010)
+    parent_to_bone(trim, armature, f"shin.{suffix}")
+    ridge = add_box_between(f"GEO_GreaveRidge{suffix}",
+                            (sign * 0.15, -0.105, 0.215),
+                            (sign * 0.15, -0.108, 0.500),
+                            0.035, 0.024, "steel_light", collection,
+                            "greave_ridge", bevel_width=0.007)
+    parent_to_bone(ridge, armature, f"shin.{suffix}")
+    ankle_band = add_torus(f"GEO_GreaveAnkleBand{suffix}",
+                           (sign * 0.15, -0.005, 0.215), 0.080, 0.010,
+                           "brass", collection, "greave_trim",
+                           scale=(1.0, 0.86, 1.0))
+    parent_to_bone(ankle_band, armature, f"shin.{suffix}")
+    return collection
+
+
+def build_glove(parent: bpy.types.Collection, armature: bpy.types.Object,
+                 suffix: str, sign: float) -> bpy.types.Collection:
+    collection = new_component(
+        f"CC_HERO_GLOVE_{suffix}", parent,
+        component_id=f"hero_glove_{suffix.lower()}_v01",
+        kind="accessory", slot=f"hand_{suffix.lower()}", layer="accessory",
+        anchor=f"hand.{suffix}", coverage=(f"hand_{suffix.lower()}",),
+    )
+    glove = add_ico(f"GEO_Glove{suffix}", (sign * 0.58, -0.025, 0.85),
+                    (0.080, 0.065, 0.115), "leather", collection,
+                    "glove", subdivisions=1)
+    parent_to_bone(glove, armature, f"hand.{suffix}")
+    cuff = add_torus(f"GEO_GloveCuff{suffix}", (sign * 0.565, -0.015, 0.94),
+                     0.072, 0.012, "leather_light", collection, "glove_cuff",
+                     rotation=(math.radians(72), 0.0, sign * math.radians(18)),
+                     scale=(1.0, 0.82, 1.0))
+    parent_to_bone(cuff, armature, f"hand.{suffix}")
+    for index, offset in enumerate((-0.042, -0.014, 0.014, 0.042)):
+        finger = add_cylinder_between(
+            f"GEO_GloveFinger{suffix}_{index}",
+            (sign * 0.585 + offset, -0.045, 0.855),
+            (sign * 0.588 + offset, -0.052, 0.785),
+            0.016, 0.012, "leather_light", collection, "glove_finger",
+            vertices=6, bevel_width=0.005,
+        )
+        parent_to_bone(finger, armature, f"hand.{suffix}")
+    knuckle = add_cube(f"GEO_GloveKnuckle{suffix}",
+                       (sign * 0.585, -0.082, 0.875),
+                       (0.115, 0.025, 0.045), "steel_light", collection,
+                       "glove_knuckle", bevel_width=0.010)
+    parent_to_bone(knuckle, armature, f"hand.{suffix}")
+    return collection
+
+
+def build_boot(parent: bpy.types.Collection, armature: bpy.types.Object,
+                suffix: str, sign: float) -> bpy.types.Collection:
+    collection = new_component(
+        f"CC_HERO_BOOT_{suffix}", parent,
+        component_id=f"hero_boot_{suffix.lower()}_v01",
+        kind="accessory", slot=f"foot_{suffix.lower()}", layer="accessory",
+        anchor=f"foot.{suffix}", coverage=(f"foot_{suffix.lower()}", "ankle"),
+    )
+    boot = add_cube(f"GEO_Boot{suffix}", (sign * 0.15, -0.105, 0.115),
+                    (0.225, 0.365, 0.19), "leather", collection, "boot",
+                    bevel_width=0.048)
+    parent_to_bone(boot, armature, f"foot.{suffix}")
+    cuff = add_cylinder_between(f"GEO_BootCuff{suffix}",
+                                (sign * 0.15, 0.0, 0.28),
+                                (sign * 0.15, 0.0, 0.16),
+                                0.110, 0.100, "leather_light", collection,
+                                "boot_cuff", vertices=8)
+    parent_to_bone(cuff, armature, f"foot.{suffix}")
+    sole = add_cube(f"GEO_BootSole{suffix}", (sign * 0.15, -0.12, 0.045),
+                    (0.235, 0.38, 0.055), "padding_dark", collection,
+                    "boot_sole", bevel_width=0.018)
+    parent_to_bone(sole, armature, f"foot.{suffix}")
+    instep = add_cube(f"GEO_BootInstep{suffix}",
+                      (sign * 0.15, -0.105, 0.195),
+                      (0.195, 0.245, 0.100), "leather_light", collection,
+                      "boot_instep", rotation=(math.radians(-8), 0.0, 0.0),
+                      bevel_width=0.030)
+    parent_to_bone(instep, armature, f"foot.{suffix}")
+    strap = add_cube(f"GEO_BootStrap{suffix}",
+                     (sign * 0.15, -0.125, 0.220),
+                     (0.215, 0.040, 0.040), "brass", collection,
+                     "boot_strap", bevel_width=0.009)
+    parent_to_bone(strap, armature, f"foot.{suffix}")
+    return collection
+
+
+def build_belt_satchel(parent: bpy.types.Collection,
+                       armature: bpy.types.Object) -> bpy.types.Collection:
+    collection = new_component(
+        "CC_HERO_BELT_SATCHEL", parent,
+        component_id="hero_belt_satchel_v01", kind="accessory",
+        slot="belt", layer="accessory", anchor="pelvis",
+        coverage=("waist", "right_hip", "chest_strap"),
+    )
+    for name, location, dimensions in (
+        ("Front", (0.0, -0.185, 1.02), (0.50, 0.055, 0.075)),
+        ("Back", (0.0, 0.185, 1.02), (0.50, 0.055, 0.075)),
+        ("Left", (-0.265, 0.0, 1.02), (0.055, 0.34, 0.075)),
+        ("Right", (0.265, 0.0, 1.02), (0.055, 0.34, 0.075)),
+    ):
+        piece = add_cube(f"GEO_Belt{name}", location, dimensions, "leather",
+                         collection, "belt", bevel_width=0.018)
+        parent_to_bone(piece, armature, "pelvis")
+    buckle = add_torus("GEO_BeltBuckle", (0.0, -0.225, 1.02), 0.055, 0.012,
+                       "brass", collection, "buckle",
+                       rotation=(math.radians(90), 0.0, 0.0),
+                       scale=(1.25, 1.0, 0.85))
+    parent_to_bone(buckle, armature, "pelvis")
+    strap = add_panel(
+        "GEO_SatchelStrap",
+        [(-0.315, -0.270, 1.590), (-0.245, -0.270, 1.610),
+         (0.370, -0.270, 0.930), (0.300, -0.270, 0.880)],
+        "leather_light", collection, "satchel_strap", thickness=0.024,
+    )
+    parent_to_bone(strap, armature, "chest")
+    strap_edge = add_box_between("GEO_SatchelStrapEdge",
+                                 (-0.268, -0.286, 1.575),
+                                 (0.335, -0.286, 0.910),
+                                 0.012, 0.014, "brass", collection,
+                                 "satchel_stitch", bevel_width=0.003)
+    parent_to_bone(strap_edge, armature, "chest")
+    satchel = add_cube("GEO_Satchel", (0.38, -0.18, 0.84),
+                       (0.30, 0.13, 0.34), "leather_light", collection,
+                       "satchel", bevel_width=0.045)
+    parent_to_bone(satchel, armature, "pelvis")
+    flap = add_cube("GEO_SatchelFlap", (0.38, -0.255, 0.90),
+                    (0.28, 0.035, 0.17), "padding", collection,
+                    "satchel_flap", bevel_width=0.025)
+    parent_to_bone(flap, armature, "pelvis")
+    seal = add_ico("GEO_SatchelSeal", (0.38, -0.283, 0.86),
+                   (0.032, 0.014, 0.032), "brass", collection,
+                   "satchel_seal", subdivisions=1)
+    parent_to_bone(seal, armature, "pelvis")
+    satchel_buckle = add_torus("GEO_SatchelBuckle", (0.38, -0.282, 0.965),
+                               0.032, 0.008, "brass", collection,
+                               "satchel_buckle",
+                               rotation=(math.radians(90), 0.0, 0.0),
+                               scale=(1.1, 1.0, 0.85))
+    parent_to_bone(satchel_buckle, armature, "pelvis")
+    return collection
+
+
+def add_presentation(groups: dict[str, bpy.types.Collection]) -> None:
+    collection = groups["presentation"]
+    camera_data = bpy.data.cameras.new("CAM_HeroIsometric")
+    camera = bpy.data.objects.new("CAM_HeroIsometric", camera_data)
+    collection.objects.link(camera)
+    camera.data.type = "ORTHO"
+    bpy.context.scene.camera = camera
+
+    key_data = bpy.data.lights.new("KEY_Hero", "AREA")
+    key_data.energy = 900
+    key_data.shape = "DISK"
+    key_data.size = 4.5
+    key = bpy.data.objects.new("KEY_Hero", key_data)
+    key.location = (-3.5, -4.5, 6.0)
+    collection.objects.link(key)
+    point_at(key, Vector((0.0, 0.0, 1.1)))
+
+    rim_data = bpy.data.lights.new("RIM_Hero", "AREA")
+    rim_data.energy = 700
+    rim_data.size = 3.5
+    rim = bpy.data.objects.new("RIM_Hero", rim_data)
+    rim.location = (4.0, 3.0, 4.5)
+    collection.objects.link(rim)
+    point_at(rim, Vector((0.0, 0.0, 1.2)))
+
+    stage = add_cube("STAGE_HeroGround", (0.0, 0.0, -0.08),
+                     (6.0, 5.0, 0.14), "stage", collection, "presentation_ground",
+                     bevel_width=0.10)
+    stage["cc_export"] = False
+
+
+def point_at(obj: bpy.types.Object, target: Vector) -> None:
+    obj.rotation_euler = (target - obj.location).to_track_quat("-Z", "Y").to_euler()
+
+
+def collection_bounds(collection: bpy.types.Collection) -> tuple[Vector, Vector]:
+    bpy.context.view_layer.update()
+    points: list[Vector] = []
+    for obj in collection.all_objects:
+        if obj.type != "MESH":
+            continue
+        points.extend(obj.matrix_world @ Vector(corner) for corner in obj.bound_box)
+    if not points:
+        return Vector((-0.1, -0.1, -0.1)), Vector((0.1, 0.1, 0.1))
+    return (
+        Vector((min(p.x for p in points), min(p.y for p in points), min(p.z for p in points))),
+        Vector((max(p.x for p in points), max(p.y for p in points), max(p.z for p in points))),
+    )
+
+
+def duplicate_component_to(
+    source: bpy.types.Collection,
+    destination: bpy.types.Collection,
+    target_center: tuple[float, float, float],
+    *,
+    material_override: str | None = None,
+) -> None:
+    minimum, maximum = collection_bounds(source)
+    center = (minimum + maximum) * 0.5
+    offset = Vector(target_center) - center
+    for obj in source.all_objects:
+        if obj.type != "MESH":
+            continue
+        duplicate = obj.copy()
+        duplicate.data = obj.data.copy()
+        world = obj.matrix_world.copy()
+        duplicate.parent = None
+        duplicate.parent_type = "OBJECT"
+        duplicate.matrix_world = world
+        duplicate.matrix_world.translation += offset
+        duplicate.name = f"EXP_{source.name}_{obj.name}"
+        destination.objects.link(duplicate)
+        for modifier in tuple(duplicate.modifiers):
+            if modifier.type in {"ARMATURE", "CLOTH"}:
+                duplicate.modifiers.remove(modifier)
+        if material_override:
+            duplicate.data.materials.clear()
+            duplicate.data.materials.append(MATERIALS[material_override])
+        duplicate["cc_presentation_only"] = True
+
+
+def build_exploded_display(groups: dict[str, bpy.types.Collection]) -> None:
+    destination = groups["exploded"]
+    duplicate_component_to(COMPONENTS["CC_HERO_BODY_BASE"], destination,
+                           (0.0, 0.0, 1.10), material_override="ghost")
+    targets = {
+        "CC_HERO_HAIR": (0.0, 0.0, 2.55),
+        "CC_HERO_CAPE": (-1.75, 0.0, 1.75),
+        "CC_HERO_TUNIC": (-1.75, 0.0, 1.05),
+        "CC_HERO_PADDED_UNDERLAYER": (-1.75, 0.0, 0.35),
+        "CC_HERO_CUIRASS": (1.65, 0.0, 1.48),
+        "CC_HERO_PAULDRON_L": (0.95, 0.0, 2.15),
+        "CC_HERO_PAULDRON_R": (2.35, 0.0, 2.15),
+        "CC_HERO_BRACER_L": (0.95, 0.0, 1.22),
+        "CC_HERO_BRACER_R": (2.35, 0.0, 1.22),
+        "CC_HERO_GLOVE_L": (0.95, 0.0, 0.75),
+        "CC_HERO_GLOVE_R": (2.35, 0.0, 0.75),
+        "CC_HERO_BELT_SATCHEL": (0.0, 0.0, 0.50),
+        "CC_HERO_GREAVE_L": (1.15, 0.0, 0.18),
+        "CC_HERO_GREAVE_R": (2.15, 0.0, 0.18),
+        "CC_HERO_BOOT_L": (1.15, 0.0, -0.28),
+        "CC_HERO_BOOT_R": (2.15, 0.0, -0.28),
+    }
+    for name, target in targets.items():
+        duplicate_component_to(COMPONENTS[name], destination, target)
+
+    cape_min, cape_max = collection_bounds(COMPONENTS["CC_HERO_CAPE"])
+    cape_center = (cape_min + cape_max) * 0.5
+    cage_min, cage_max = collection_bounds(groups["cape_guides"])
+    cage_center = (cage_min + cage_max) * 0.5
+    cage_target = Vector(targets["CC_HERO_CAPE"]) + (cage_center - cape_center)
+    duplicate_component_to(groups["cape_guides"], destination, tuple(cage_target))
+
+    for name, location in (
+        ("EXP_SOCKET_HEAD", (0.0, -0.10, 2.15)),
+        ("EXP_SOCKET_SHOULDER_L", (-0.35, -0.10, 1.62)),
+        ("EXP_SOCKET_SHOULDER_R", (0.35, -0.10, 1.62)),
+        ("EXP_SOCKET_BELT", (0.0, -0.10, 1.03)),
+        ("EXP_SOCKET_SHIN_L", (-0.15, -0.10, 0.35)),
+        ("EXP_SOCKET_SHIN_R", (0.15, -0.10, 0.35)),
+    ):
+        add_ico(name, location, (0.040, 0.040, 0.040), "rig_cyan",
+                destination, "socket_marker", subdivisions=1)
+
+
+def set_render_visibility(
+    visible_components: set[str],
+    groups: dict[str, bpy.types.Collection],
+    *,
+    show_rig: bool = False,
+    show_cape_cage: bool = False,
+    show_exploded: bool = False,
+) -> None:
+    for name, collection in COMPONENTS.items():
+        collection.hide_render = name not in visible_components
+    groups["rig_guides"].hide_render = not show_rig
+    groups["cape_guides"].hide_render = not show_cape_cage
+    groups["exploded"].hide_render = not show_exploded
+
+
+def render_preview(
+    filename: str,
+    visible_components: set[str],
+    groups: dict[str, bpy.types.Collection],
+    *,
+    show_rig: bool = False,
+    show_cape_cage: bool = False,
+    show_exploded: bool = False,
+    camera_location: tuple[float, float, float] = (3.4, -5.3, 3.0),
+    target: tuple[float, float, float] = (0.0, 0.0, 1.05),
+    ortho_scale: float = 2.65,
+    resolution: tuple[int, int] = (900, 900),
+) -> None:
+    set_render_visibility(visible_components, groups, show_rig=show_rig,
+                          show_cape_cage=show_cape_cage,
+                          show_exploded=show_exploded)
+    scene = bpy.context.scene
+    scene.render.resolution_x, scene.render.resolution_y = resolution
+    camera = bpy.data.objects["CAM_HeroIsometric"]
+    camera.location = camera_location
+    camera.data.ortho_scale = ortho_scale
+    point_at(camera, Vector(target))
+    stage = bpy.data.objects["STAGE_HeroGround"]
+    if show_exploded:
+        stage.dimensions = (7.4, 5.2, 0.14)
+        stage.location = (0.20, 0.0, -0.58)
+    else:
+        stage.dimensions = (6.0, 5.0, 0.14)
+        stage.location = (0.0, 0.0, -0.08)
+    scene.render.filepath = str(PREVIEW_DIR / filename)
+    bpy.ops.render.render(write_still=True)
+
+
+def export_objects(objects: Iterable[bpy.types.Object], filepath: Path) -> None:
+    bpy.ops.object.select_all(action="DESELECT")
+    selected = [obj for obj in objects if obj.type in {"MESH", "EMPTY", "ARMATURE"}]
+    for obj in selected:
+        obj.hide_set(False)
+        obj.select_set(True)
+    if selected:
+        bpy.context.view_layer.objects.active = selected[0]
+    bpy.ops.export_scene.gltf(
+        filepath=str(filepath), export_format="GLB", use_selection=True,
+        export_apply=True, export_extras=True, export_yup=True,
+        export_materials="EXPORT",
+    )
+
+
+def export_components(armature: bpy.types.Object) -> None:
+    for record in COMPONENT_RECORDS:
+        collection = COMPONENTS[str(record["collection"])]
+        objects = list(collection.all_objects)
+        if armature not in objects:
+            objects.append(armature)
+        export_objects(objects, EXPORT_DIR / f"{record['id']}.glb")
+    assembled: list[bpy.types.Object] = [armature]
+    for name in ASSEMBLED_COMPONENTS:
+        assembled.extend(COMPONENTS[name].all_objects)
+    export_objects(dict.fromkeys(assembled), EXPORT_DIR / "hero_wayfarer_assembled_v01.glb")
+
+
+def write_manifest() -> None:
+    manifest = {
+        "schema_version": 1,
+        "library_version": LIBRARY_VERSION,
+        "source": "blender/crownless_hero_components.blend",
+        "coordinate_system": {"unit": "meter", "forward": "-Y", "up": "+Z"},
+        "skeleton": {
+            "id": "crownless_humanoid_v01",
+            "bones": [name for name, _parent, _head, _tail in BONES],
+        },
+        "sockets": SOCKET_RECORDS,
+        "components": sorted(COMPONENT_RECORDS, key=lambda item: str(item["id"])),
+        "assemblies": {
+            "wayfarer_prototype_v01": {
+                "components": sorted(
+                    COMPONENTS[name]["cc_component_id"] for name in ASSEMBLED_COMPONENTS
+                ),
+                "export": "exports/hero_glb/hero_wayfarer_assembled_v01.glb",
+            }
+        },
+        "cloth": {
+            "hero_cape_v01": {
+                "pin_group": "PIN_COLLAR",
+                "control_grid": [6, 7],
+                "simulation_authority": "presentation_only",
+            }
+        },
+    }
+    MANIFEST_PATH.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+
+
+def find_layer_collection(layer_collection: bpy.types.LayerCollection,
+                          name: str) -> bpy.types.LayerCollection | None:
+    if layer_collection.name == name:
+        return layer_collection
+    for child in layer_collection.children:
+        found = find_layer_collection(child, name)
+        if found:
+            return found
+    return None
+
+
+def create_view_layers(groups: dict[str, bpy.types.Collection]) -> None:
+    scene = bpy.context.scene
+    default = scene.view_layers[0]
+    default.name = "CC_Hero_Assembled"
+    presets = {
+        "CC_Hero_Assembled": ASSEMBLED_COMPONENTS,
+        "CC_Hero_Anatomy": {"CC_HERO_BODY_BASE", "CC_HERO_MUSCLE_GUIDES"},
+        "CC_Hero_Exploded": set(),
+    }
+    for name in presets:
+        if name != default.name:
+            scene.view_layers.new(name=name)
+    for name, included in presets.items():
+        layer = scene.view_layers[name]
+        for component_name in COMPONENTS:
+            layer_collection = find_layer_collection(layer.layer_collection,
+                                                     component_name)
+            if layer_collection:
+                layer_collection.exclude = component_name not in included
+        rig = find_layer_collection(layer.layer_collection, groups["rig_guides"].name)
+        cage = find_layer_collection(layer.layer_collection, groups["cape_guides"].name)
+        exploded = find_layer_collection(layer.layer_collection, groups["exploded"].name)
+        if rig:
+            rig.exclude = name != "CC_Hero_Anatomy"
+        if cage:
+            cage.exclude = name != "CC_Hero_Exploded"
+        if exploded:
+            exploded.exclude = name != "CC_Hero_Exploded"
+
+
+def validate(armature: bpy.types.Object) -> None:
+    expected_bones = {name for name, _parent, _head, _tail in BONES}
+    actual_bones = {bone.name for bone in armature.data.bones}
+    if expected_bones != actual_bones:
+        raise RuntimeError(f"Skeleton mismatch: {sorted(expected_bones ^ actual_bones)}")
+    if len(COMPONENTS) != 19:
+        raise RuntimeError(f"Expected 19 components, found {len(COMPONENTS)}")
+    ids = [str(record["id"]) for record in COMPONENT_RECORDS]
+    if len(ids) != len(set(ids)):
+        raise RuntimeError("Duplicate component IDs")
+    for name, collection in COMPONENTS.items():
+        renderables = [obj for obj in collection.all_objects
+                       if obj.type in {"MESH", "ARMATURE"}]
+        if not renderables:
+            raise RuntimeError(f"{name} has no renderable/exportable objects")
+    cape = bpy.data.objects.get("GEO_HeroCape")
+    if cape is None or cape.vertex_groups.get("PIN_COLLAR") is None:
+        raise RuntimeError("Cape pin group is missing")
+    if not any(modifier.type == "CLOTH" for modifier in cape.modifiers):
+        raise RuntimeError("Cape cloth modifier is missing")
+
+
+def main() -> None:
+    BLEND_PATH.parent.mkdir(parents=True, exist_ok=True)
+    EXPORT_DIR.mkdir(parents=True, exist_ok=True)
+    PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
+    reset_scene()
+    make_palette()
+    groups = build_structure()
+    armature = build_armature(groups["rig"])
+    build_sockets(armature, COMPONENTS["CC_HERO_SKELETON"])
+    build_rig_guides(groups)
+    build_body(groups["anatomy"], armature)
+    build_muscles(groups["anatomy"], armature)
+    build_hair(groups["accessories"], armature)
+    build_padding(groups["garments"], armature)
+    build_tunic(groups["garments"], armature)
+    build_cape(groups["cloth"], armature, groups["cape_guides"])
+    build_cuirass(groups["armor"], armature)
+    build_pauldron(groups["armor"], armature, "L", -1.0)
+    build_pauldron(groups["armor"], armature, "R", 1.0)
+    build_bracer(groups["armor"], armature, "L", -1.0)
+    build_bracer(groups["armor"], armature, "R", 1.0)
+    build_greave(groups["armor"], armature, "L", -1.0)
+    build_greave(groups["armor"], armature, "R", 1.0)
+    build_glove(groups["accessories"], armature, "L", -1.0)
+    build_glove(groups["accessories"], armature, "R", 1.0)
+    build_boot(groups["accessories"], armature, "L", -1.0)
+    build_boot(groups["accessories"], armature, "R", 1.0)
+    build_belt_satchel(groups["accessories"], armature)
+    add_presentation(groups)
+    bpy.context.view_layer.update()
+    build_exploded_display(groups)
+    validate(armature)
+    export_components(armature)
+    write_manifest()
+
+    render_preview(
+        "hero_assembled.png", ASSEMBLED_COMPONENTS, groups,
+        camera_location=(3.3, -5.3, 2.85), target=(0.0, 0.0, 1.05),
+        ortho_scale=2.55,
+    )
+    render_preview(
+        "hero_anatomy.png", {"CC_HERO_BODY_BASE", "CC_HERO_MUSCLE_GUIDES"},
+        groups, show_rig=True,
+        camera_location=(3.3, -5.3, 2.85), target=(0.0, 0.0, 1.05),
+        ortho_scale=2.55,
+    )
+    render_preview(
+        "hero_exploded.png", set(), groups, show_exploded=True,
+        camera_location=(5.2, -12.0, 4.8), target=(0.15, 0.0, 1.02),
+        ortho_scale=5.00, resolution=(1400, 900),
+    )
+
+    create_view_layers(groups)
+    set_render_visibility(ASSEMBLED_COMPONENTS, groups)
+    bpy.data.objects["STAGE_HeroGround"].location = (0.0, 0.0, -0.08)
+    bpy.data.objects["STAGE_HeroGround"].dimensions = (6.0, 5.0, 0.14)
+    bpy.context.scene.render.filepath = "//../previews/hero/hero_assembled.png"
+    bpy.ops.wm.save_as_mainfile(filepath=str(BLEND_PATH), compress=True)
+    print(f"Built {len(COMPONENTS)} hero components at {BLEND_PATH}")
+
+
+if __name__ == "__main__":
+    main()

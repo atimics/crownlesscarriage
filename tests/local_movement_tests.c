@@ -32,6 +32,14 @@ static float Distance3(CcLimbVec3 a, CcLimbVec3 b)
     return sqrtf(x * x + y * y + z * z);
 }
 
+static float VectorDistance3(Vector3 a, Vector3 b)
+{
+    float x = b.x - a.x;
+    float y = b.y - a.y;
+    float z = b.z - a.z;
+    return sqrtf(x * x + y * y + z * z);
+}
+
 static float MaximumPoseStep(const CcHumanoidPose *before,
                              const CcHumanoidPose *after)
 {
@@ -212,34 +220,248 @@ static void RunTowerFallScenario(const char *name, Vector2 start,
     }
 }
 
+static void InitCombatant(CcLocalAgent *agent, Vector2 position,
+                          float facing, CcCombatTeam team)
+{
+    CcLocalAgentInit(agent, position, true);
+    agent->facing_yaw = facing;
+    CcLocalAgentSetMorphology(agent, CC_MORPHOLOGY_BIPED, true);
+    CcLocalCombatSetTeam(agent, team);
+}
+
+static CcCombatOutcome RunCombatStrike(CcLocalAgent *attacker,
+                                       CcLocalAgent *defender)
+{
+    if (!CcLocalCombatBeginStrike(attacker, defender)) {
+        (void)fprintf(stderr, "combat test rejected a valid strike\n");
+        exit(1);
+    }
+    for (int32_t frame = 0; frame < 120; ++frame) {
+        CcLocalAgentUpdate(attacker, 1.0f / 60.0f, true);
+        CcLocalAgentUpdate(defender, 1.0f / 60.0f, true);
+        if (CcHumanoidGaitConsumeStrikeImpact(&attacker->humanoid)) {
+            return CcLocalCombatResolveStrike(attacker, defender);
+        }
+    }
+    (void)fprintf(stderr, "combat test strike emitted no impact window\n");
+    exit(1);
+}
+
+static void TestSharedCombat(void)
+{
+    CcLocalAgent attacker;
+    CcLocalAgent defender;
+    InitCombatant(&attacker, (Vector2){4.0f, 3.0f}, 0.0f,
+                  CC_COMBAT_PLAYER);
+    InitCombatant(&defender, (Vector2){4.0f, 3.82f}, PI,
+                  CC_COMBAT_RAIDER);
+    CcCombatOutcome outcome = RunCombatStrike(&attacker, &defender);
+    if (outcome != CC_COMBAT_OUTCOME_HIT || defender.combat.health >=
+        CC_LOCAL_COMBAT_MAX_HEALTH) {
+        (void)fprintf(stderr,
+                      "in-range frontal strike failed: outcome %d health %.1f\n",
+                      outcome, defender.combat.health);
+        exit(1);
+    }
+    if (CcLocalCombatResolveStrike(&attacker, &defender) !=
+        CC_COMBAT_OUTCOME_NONE) {
+        (void)fprintf(stderr, "one swing damaged the same target twice\n");
+        exit(1);
+    }
+
+    InitCombatant(&attacker, (Vector2){4.0f, 3.0f}, 0.0f,
+                  CC_COMBAT_GUARD);
+    InitCombatant(&defender, (Vector2){4.0f, 3.82f}, PI,
+                  CC_COMBAT_PLAYER);
+    outcome = RunCombatStrike(&attacker, &defender);
+    if (outcome != CC_COMBAT_OUTCOME_MISS || defender.combat.health !=
+        CC_LOCAL_COMBAT_MAX_HEALTH) {
+        (void)fprintf(stderr,
+                      "allied strike caused damage: outcome %d health %.1f\n",
+                      outcome, defender.combat.health);
+        exit(1);
+    }
+
+    InitCombatant(&attacker, (Vector2){4.0f, 2.0f}, 0.0f,
+                  CC_COMBAT_PLAYER);
+    InitCombatant(&defender, (Vector2){4.0f, 4.20f}, PI,
+                  CC_COMBAT_RAIDER);
+    outcome = RunCombatStrike(&attacker, &defender);
+    if (outcome != CC_COMBAT_OUTCOME_MISS || defender.combat.health !=
+        CC_LOCAL_COMBAT_MAX_HEALTH) {
+        (void)fprintf(stderr,
+                      "out-of-range strike did not whiff: outcome %d health %.1f\n",
+                      outcome, defender.combat.health);
+        exit(1);
+    }
+
+    InitCombatant(&attacker, (Vector2){4.0f, 3.0f}, 0.0f,
+                  CC_COMBAT_PLAYER);
+    InitCombatant(&defender, (Vector2){4.0f, 3.82f}, PI,
+                  CC_COMBAT_RAIDER);
+    CcLocalCombatSetGuarded(&defender, &attacker, true);
+    outcome = RunCombatStrike(&attacker, &defender);
+    if (outcome != CC_COMBAT_OUTCOME_BLOCKED || defender.combat.health !=
+        CC_LOCAL_COMBAT_MAX_HEALTH || defender.combat.posture >=
+        CC_LOCAL_COMBAT_MAX_POSTURE) {
+        (void)fprintf(stderr,
+                      "frontal guard failed: outcome %d health %.1f posture %.1f\n",
+                      outcome, defender.combat.health,
+                      defender.combat.posture);
+        exit(1);
+    }
+
+    InitCombatant(&attacker, (Vector2){4.0f, 3.0f}, 0.0f,
+                  CC_COMBAT_PLAYER);
+    InitCombatant(&defender, (Vector2){4.0f, 3.82f}, 0.0f,
+                  CC_COMBAT_RAIDER);
+    CcHumanoidGaitSetGuarded(&defender.humanoid, true);
+    outcome = RunCombatStrike(&attacker, &defender);
+    if (outcome != CC_COMBAT_OUTCOME_HIT || defender.combat.health >=
+        CC_LOCAL_COMBAT_MAX_HEALTH) {
+        (void)fprintf(stderr,
+                      "rear strike was incorrectly blocked: outcome %d health %.1f\n",
+                      outcome, defender.combat.health);
+        exit(1);
+    }
+
+    InitCombatant(&attacker, (Vector2){4.0f, 3.0f}, 0.0f,
+                  CC_COMBAT_PLAYER);
+    InitCombatant(&defender, (Vector2){4.0f, 3.90f}, PI,
+                  CC_COMBAT_RAIDER);
+    if (!CcLocalAgentSetExactTarget(
+            &attacker, (Vector3){7.0f, 0.0f, 3.0f}, true) ||
+        !CcLocalCombatBeginStrike(&attacker, &defender)) {
+        (void)fprintf(stderr, "combat movement setup failed\n");
+        exit(1);
+    }
+    for (int32_t frame = 0; frame < 18; ++frame) {
+        CcLocalAgentUpdate(&attacker, 1.0f / 60.0f, true);
+    }
+    float focus_x = defender.position.x - attacker.position.x;
+    float focus_z = defender.position.z - attacker.position.z;
+    float focus_length = sqrtf(focus_x * focus_x + focus_z * focus_z);
+    float facing_dot = focus_length > 0.0001f ?
+        (sinf(attacker.facing_yaw) * focus_x +
+         cosf(attacker.facing_yaw) * focus_z) / focus_length : 1.0f;
+    if (facing_dot < 0.92f || fabsf(attacker.position.x - 4.0f) > 0.12f) {
+        (void)fprintf(stderr,
+                      "strike did not own facing and movement: dot %.2f x %.2f\n",
+                      facing_dot, attacker.position.x);
+        exit(1);
+    }
+}
+
+static void TestCapePhysics(void)
+{
+    static const float EXPECTED_LENGTHS[] = {0.270f, 0.275f, 0.285f, 0.285f};
+    CcLocalAgent first;
+    CcLocalAgent second;
+    CcLocalAgentInit(&first, (Vector2){4.0f, 5.5f}, true);
+    CcLocalAgentInit(&second, (Vector2){4.0f, 5.5f}, true);
+    if (!first.cape.initialized || !second.cape.initialized) {
+        (void)fprintf(stderr, "hero cape did not initialize with the body rig\n");
+        exit(1);
+    }
+    Vector3 initial_tip = first.cape.point[CC_LOCAL_CAPE_POINT_COUNT - 1];
+    if (!CcLocalAgentSetExactTarget(&first, (Vector3){8.0f, 0.0f, 5.5f}, true) ||
+        !CcLocalAgentSetExactTarget(&second, (Vector3){8.0f, 0.0f, 5.5f}, true)) {
+        (void)fprintf(stderr, "cape test walk target was rejected\n");
+        exit(1);
+    }
+    float maximum_length_error = 0.0f;
+    for (int32_t frame = 0; frame < 360; ++frame) {
+        CcLocalAgentUpdate(&first, 1.0f / 60.0f, true);
+        CcLocalAgentUpdate(&second, 1.0f / 60.0f, true);
+        for (int32_t point = 1; point < CC_LOCAL_CAPE_POINT_COUNT; ++point) {
+            float length = VectorDistance3(first.cape.point[point - 1],
+                                           first.cape.point[point]);
+            maximum_length_error = fmaxf(
+                maximum_length_error,
+                fabsf(length - EXPECTED_LENGTHS[point - 1]));
+            if (!isfinite(first.cape.point[point].x) ||
+                !isfinite(first.cape.point[point].y) ||
+                !isfinite(first.cape.point[point].z)) {
+                (void)fprintf(stderr, "cape solver emitted a non-finite point\n");
+                exit(1);
+            }
+            if (VectorDistance3(first.cape.point[point],
+                                second.cape.point[point]) > 0.000001f) {
+                (void)fprintf(stderr, "cape solver was not deterministic\n");
+                exit(1);
+            }
+        }
+        if (VectorDistance3(first.cape.point[0], first.cape.anchor) >
+            0.000001f) {
+            (void)fprintf(stderr, "cape root detached from its back socket\n");
+            exit(1);
+        }
+    }
+    if (maximum_length_error > 0.004f) {
+        (void)fprintf(stderr, "cape constraint stretched by %.5f metres\n",
+                      maximum_length_error);
+        exit(1);
+    }
+    if (VectorDistance3(initial_tip,
+                        first.cape.point[CC_LOCAL_CAPE_POINT_COUNT - 1]) <
+        0.12f) {
+        (void)fprintf(stderr, "cape did not react to the moving body\n");
+        exit(1);
+    }
+}
+
 int main(void)
 {
+    TestSharedCombat();
+    TestCapePhysics();
     RequirePosition("market wall blocks entry",
-                    CcLocalMove((Vector2){7.20f, 3.50f},
-                                (Vector2){0.00f, -0.60f}, false),
-                    (Vector2){7.20f, 3.50f});
+                    CcLocalMove((Vector2){50.00f, 26.65f},
+                                (Vector2){0.00f, -1.00f}, false),
+                    (Vector2){50.00f, 26.65f});
     RequirePosition("collision slides along facade",
-                    CcLocalMove((Vector2){6.20f, 3.50f},
-                                (Vector2){1.00f, -0.60f}, false),
-                    (Vector2){7.20f, 3.50f});
+                    CcLocalMove((Vector2){42.50f, 26.65f},
+                                (Vector2){2.00f, -1.00f}, false),
+                    (Vector2){44.50f, 26.65f});
     RequirePosition("carriage blocks movement",
-                    CcLocalMove((Vector2){2.60f, 6.55f},
-                                (Vector2){-0.60f, 0.00f}, false),
-                    (Vector2){2.60f, 6.55f});
+                    CcLocalMove((Vector2){39.10f, 31.70f},
+                                (Vector2){-1.00f, 0.00f}, false),
+                    (Vector2){39.10f, 31.70f});
+    RequirePosition("castle wall blocks movement",
+                    CcLocalMove((Vector2){65.30f, 20.00f},
+                                (Vector2){1.00f, 0.00f}, false),
+                    (Vector2){65.30f, 20.00f});
     RequirePosition("market counter blocks movement",
                     CcLocalMove((Vector2){7.10f, 3.00f},
                                 (Vector2){0.00f, -1.00f}, true),
                     (Vector2){7.10f, 3.00f});
     RequirePosition("open street permits movement",
-                    CcLocalMove((Vector2){4.75f, 5.85f},
+                    CcLocalMove((Vector2){CC_LOCAL_START_X, CC_LOCAL_START_Z},
                                 (Vector2){0.10f, -0.10f}, false),
-                    (Vector2){4.85f, 5.75f});
+                    (Vector2){CC_LOCAL_START_X + 0.10f,
+                              CC_LOCAL_START_Z - 0.10f});
+    RequirePosition("far countryside is part of the same walkable world",
+                    CcLocalMove((Vector2){80.00f, 60.00f},
+                                (Vector2){0.50f, -0.50f}, false),
+                    (Vector2){80.50f, 59.50f});
+    RequirePosition("continuous world retains a physical outer boundary",
+                    CcLocalMove((Vector2){95.40f, 60.00f},
+                                (Vector2){1.00f, 0.00f}, false),
+                    (Vector2){95.40f, 60.00f});
 
     CcLocalAgent agent;
     CcLocalAgentInit(&agent, (Vector2){4.75f, 5.85f}, false);
     if (agent.morphology != CC_MORPHOLOGY_BIPED) {
         (void)fprintf(stderr,
                       "the playable local agent should default to the tuned biped\n");
+        return 1;
+    }
+    CcLocalAgent countryside_agent;
+    CcLocalAgentInit(&countryside_agent,
+                     (Vector2){CC_LOCAL_START_X, CC_LOCAL_START_Z}, false);
+    if (!CcLocalAgentSetExactTarget(
+            &countryside_agent, (Vector3){80.0f, 0.0f, 60.0f}, false)) {
+        (void)fprintf(stderr,
+                      "a distant target in the continuous world was rejected\n");
         return 1;
     }
     CcLocalAgent fallen_edge_agent;
@@ -317,29 +539,75 @@ int main(void)
         return 1;
     }
 
+    CcLocalAgent steady_walk;
+    CcLocalAgent uneven_walk;
+    CcLocalAgentInit(&steady_walk, (Vector2){2.00f, 4.40f}, true);
+    CcLocalAgentInit(&uneven_walk, (Vector2){2.00f, 4.40f}, true);
+    Vector3 pacing_target = {7.40f, 0.0f, 4.40f};
+    if (!CcLocalAgentSetExactTarget(&steady_walk, pacing_target, true) ||
+        !CcLocalAgentSetExactTarget(&uneven_walk, pacing_target, true)) {
+        (void)fprintf(stderr, "frame-pacing gait target was rejected\n");
+        return 1;
+    }
+    CcHumanoidPose previous_physical = uneven_walk.humanoid.pose;
+    CcHumanoidPose previous_render = uneven_walk.render_pose;
+    float maximum_physical_step = 0.0f;
+    float maximum_render_step = 0.0f;
+    for (int32_t pair = 0; pair < 180; ++pair) {
+        CcLocalAgentUpdate(&steady_walk, 1.0f / 60.0f, true);
+        CcLocalAgentUpdate(&steady_walk, 1.0f / 60.0f, true);
+        const float uneven_frame_time[2] = {1.0f / 120.0f, 1.0f / 40.0f};
+        for (int32_t sample = 0; sample < 2; ++sample) {
+            CcLocalAgentUpdate(&uneven_walk, uneven_frame_time[sample], true);
+            maximum_physical_step = fmaxf(
+                maximum_physical_step,
+                MaximumPoseStep(&previous_physical,
+                                &uneven_walk.humanoid.pose));
+            maximum_render_step = fmaxf(
+                maximum_render_step,
+                MaximumPoseStep(&previous_render, &uneven_walk.render_pose));
+            previous_physical = uneven_walk.humanoid.pose;
+            previous_render = uneven_walk.render_pose;
+        }
+    }
+    if (!uneven_walk.render_pose_valid ||
+        VectorDistance3(steady_walk.position, uneven_walk.position) > 0.002f ||
+        fabsf(steady_walk.humanoid.phase - uneven_walk.humanoid.phase) >
+            0.0002f) {
+        (void)fprintf(stderr,
+                      "uneven frame pacing changed the physical walk result\n");
+        return 1;
+    }
+    if (maximum_render_step >= maximum_physical_step) {
+        (void)fprintf(stderr,
+                      "render gait was not smoother: visual %.4f physical %.4f\n",
+                      maximum_render_step, maximum_physical_step);
+        return 1;
+    }
+
     CcLocalAgent crowd_agent;
-    CcLocalAgentInit(&crowd_agent, (Vector2){5.55f, 5.30f}, false);
+    CcLocalAgentInit(&crowd_agent, (Vector2){42.00f, 29.95f}, false);
     if (CcLocalAgentSetExactTarget(&crowd_agent,
-                                   (Vector3){5.55f, 0.0f, 6.15f}, false)) {
+                                   (Vector3){42.00f, 0.0f, 30.80f}, false)) {
         (void)fprintf(stderr, "a visible townsperson should occupy physical space\n");
         return 1;
     }
     if (!CcLocalAgentSetExactTarget(&crowd_agent,
-                                    (Vector3){5.55f, 0.0f, 6.90f}, false)) {
+                                    (Vector3){42.00f, 0.0f, 31.70f}, false)) {
         (void)fprintf(stderr, "a target beyond a townsperson should remain valid\n");
         return 1;
     }
     float closest_person_distance = 1000.0f;
     for (int32_t frame = 0; frame < 900; ++frame) {
         CcLocalAgentUpdate(&crowd_agent, 1.0f / 60.0f, false);
-        float dx = crowd_agent.position.x - 5.55f;
-        float dz = crowd_agent.position.z - 6.15f;
+        float dx = crowd_agent.position.x - 42.00f;
+        float dz = crowd_agent.position.z - 30.80f;
         closest_person_distance = fminf(closest_person_distance,
                                         sqrtf(dx * dx + dz * dz));
     }
     RequireNearPosition("agent sidesteps a townsperson",
                         CcLocalAgentPosition(&crowd_agent),
-                        (Vector2){5.55f, 6.90f}, 0.12f);
+                        (Vector2){42.00f, 31.70f}, 0.12f);
     if (closest_person_distance < 0.565f) {
         (void)fprintf(stderr, "agent clipped through a townsperson\n");
         return 1;
@@ -680,7 +948,7 @@ int main(void)
             before[i] = CcLocalAgentPosition(&course.runners[i].agent);
             before_waypoint[i] = course.runners[i].next_waypoint;
         }
-        CcLocalCourseUpdate(&course, NULL, 1.0f / 60.0f);
+        CcLocalCourseUpdate(&course, NULL, NULL, 1.0f / 60.0f);
         for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
             const CcLocalAgent *runner = &course.runners[i].agent;
             Vector2 after = CcLocalAgentPosition(runner);
@@ -754,7 +1022,7 @@ int main(void)
     CcLocalCourseInit(&defense);
     defense.alarm_countdown = 1000.0f;
     for (int32_t frame = 0; frame < 720; ++frame) {
-        CcLocalCourseUpdate(&defense, &defense_sim, 1.0f / 60.0f);
+        CcLocalCourseUpdate(&defense, NULL, &defense_sim, 1.0f / 60.0f);
     }
     CcLocalCourseRaiseAlarm(&defense);
     bool guard_engaged[CC_LOCAL_COURSE_RUNNER_COUNT] = {false};
@@ -762,7 +1030,7 @@ int main(void)
     float minimum_raider_x = 1000.0f;
     for (int32_t frame = 0; frame < 2400 &&
                             defense.defenses_completed == 0; ++frame) {
-        CcLocalCourseUpdate(&defense, &defense_sim, 1.0f / 60.0f);
+        CcLocalCourseUpdate(&defense, NULL, &defense_sim, 1.0f / 60.0f);
         for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
             guard_engaged[i] = guard_engaged[i] ||
                                defense.runners[i].duty == CC_GUARD_ENGAGED;
@@ -777,15 +1045,36 @@ int main(void)
     if (defense.defenses_completed != 1 || defense.alarm_active ||
         minimum_raider_x > 15.00f || defense.raider_resolve > 0) {
         (void)fprintf(stderr,
-                      "village defense did not intercept and repel the raid: wins %d alarm %d min x %.2f resolve %d guards %.2f,%.2f %.2f,%.2f %.2f,%.2f seen %d%d%d\n",
+                      "village defense did not intercept and repel the raid: wins %d alarm %d min x %.2f resolve %d guards %.2f,%.2f/%.0f/%.0f/%d %.2f,%.2f/%.0f/%.0f/%d %.2f,%.2f/%.0f/%.0f/%d raiders %.2f,%.2f/%.0f/%.0f/%d/%d %.2f,%.2f/%.0f/%.0f/%d/%d seen %d%d%d\n",
                       defense.defenses_completed, defense.alarm_active,
                       minimum_raider_x, defense.raider_resolve,
                       defense.runners[0].agent.position.x,
                       defense.runners[0].agent.position.z,
+                      defense.runners[0].agent.combat.health,
+                      defense.runners[0].agent.combat.posture,
+                      defense.runners[0].agent.humanoid.action,
                       defense.runners[1].agent.position.x,
                       defense.runners[1].agent.position.z,
+                      defense.runners[1].agent.combat.health,
+                      defense.runners[1].agent.combat.posture,
+                      defense.runners[1].agent.humanoid.action,
                       defense.runners[2].agent.position.x,
                       defense.runners[2].agent.position.z,
+                      defense.runners[2].agent.combat.health,
+                      defense.runners[2].agent.combat.posture,
+                      defense.runners[2].agent.humanoid.action,
+                      defense.raiders[0].position.x,
+                      defense.raiders[0].position.z,
+                      defense.raiders[0].combat.health,
+                      defense.raiders[0].combat.posture,
+                      defense.raiders[0].humanoid.action,
+                      defense.raiders[0].combat.defeated,
+                      defense.raiders[1].position.x,
+                      defense.raiders[1].position.z,
+                      defense.raiders[1].combat.health,
+                      defense.raiders[1].combat.posture,
+                      defense.raiders[1].humanoid.action,
+                      defense.raiders[1].combat.defeated,
                       guard_engaged[0], guard_engaged[1], guard_engaged[2]);
         return 1;
     }

@@ -31,6 +31,9 @@ build\\Debug\\crownless_carriage.exe     # Windows multi-config build
 Controls:
 
 - Left-click any visible ground or platform point to move the biped there.
+  The body can cross one 96 x 72 metre exterior linking farms, town streets,
+  the carriage yard, dungeon approach, Wayfarer Trials, and Greyward Keep
+  without changing local scenes. The isometric camera follows that journey.
   Motion is continuous rather than locked to the displayed paving: the body
   steers at arbitrary angles, collides with solid geometry, climbs reachable
   tagged ledges using fixed hand, wall-foot, and top-foot contacts, turns back
@@ -41,12 +44,15 @@ Controls:
   The Wayfarer Trials beside town are a physical obstacle course; three
   autonomous biomechanical guards continually climb, cross, descend, and
   choose their next marked contact route there. Press `G` to sound the village
-  alarm: training is interrupted, guards take obstacle-aware rally routes,
-  form an interception line, repel incoming scouts, and return to duty. Alarm
+  alarm: training is interrupted and a nearby raid encounter forms around the
+  player. Guards and scouts use the same targeting, strike collision, health,
+  posture, frontal guard, stagger, knockback, and defeat rules as the player,
+  then survivors return to duty. Alarm
   frequency also responds to the simulated region's bandit influence. The
   route crosses a buoyancy trench where the same skeleton releases its ground
   contacts, swims under buoyancy and drag, and reacquires land. Press `Space`
-  to strike with the player body and `X` to enter or leave guard.
+  to commit a strike toward a nearby raider and `X` to enter or leave guard;
+  left-click movement becomes slower combat-facing strafing while focused.
   `F`
   uses a nearby door, notice board, or carriage.
 - The humanoid biped is the playable, tuned body plan. Quadruped, hexapod, and
@@ -121,6 +127,8 @@ All three meet on the road through the player's carriage company.
 - [Creative constitution](docs/01-creative-constitution.md)
 - [Vertical slice](docs/08-vertical-slice.md)
 - [Production roadmap](docs/10-roadmap.md)
+- [Blender asset system](docs/production/blender-asset-system.md)
+- [Blender hero component system](docs/production/blender-hero-component-system.md)
 - [Decision log](docs/decisions/README.md)
 - [Current technical architecture](docs/07-technical-architecture.md)
 
@@ -174,7 +182,10 @@ The current executable proves:
   with human-length reach tests, transported knee/elbow planes, progressive
   hand and foot contacts, a supported top-out, and no handoff to the robot shell
 - A shared human action layer for locomotion, guard, muscle-driven strike,
-  clamber, swim, fall, and recovery. Strikes expose one physical impact window;
+  clamber, swim, fall, and recovery. Strikes expose one physical impact window
+  that sweeps the hand or held weapon against hostile body capsules; hits,
+  blocks, guard breaks, health, posture, hitstop, stagger, and knockback are
+  resolved identically for player and NPC combatants;
   swimming removes ground support and applies buoyancy and drag without
   invoking ragdoll
 - Force-driven whole-body motion with aggregate bone mass, gravity, damping,
@@ -203,8 +214,12 @@ The current executable proves:
   construction swaps or an authored eight-frame body overlay
 - Character-width collision against buildings, props, and visible townspeople,
   with local sidestepping when a direct path meets an occupied space
-- A human-scale local-world convention: the player is about 1.9 world units
-  tall, doors are 1.84 units, and buildings are 3.2–4.2 units; traversal geometry
+- A continuous 96 x 72 metre exterior whose roads physically connect fields,
+  a full settlement, the carriage yard, dungeon approach, training ground, and
+  a gated 25 x 23 metre castle bailey
+- A human-scale local-world convention: one world unit is one metre, the player
+  is about 1.9 metres tall, doors are 2.15 metres, ordinary buildings are
+  5.8–8.8 metres, and castle structures rise to 12.5 metres; traversal geometry
   uses the same units and collision volumes as its rendering
 - A carriage-gated physical cartography system: maps are capacity-limited,
   tradeable, persistent objects with one depicted route, provenance, age,
@@ -229,7 +244,8 @@ Everything else remains revisable as evidence arrives.
 
 - A miniature clone of a grand-strategy game
 - Individual simulation of every household or citizen
-- A seamless, permanently loaded continent
+- A seamless, permanently loaded continent (the current continuous exterior is
+  one regional place, while route travel still preserves physical cartography)
 - Fully dynamic borders, dynasties, religion, or culture
 - Random encounters whose only purpose is to interrupt travel
 - Runtime-generated prose

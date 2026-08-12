@@ -33,6 +33,7 @@ endfunction()
 add_library(crownless_locomotion
     src/locomotion/cc_biomech.c
     src/locomotion/cc_humanoid.c
+    src/locomotion/cc_humanoid_skin.c
     src/locomotion/cc_limb.c
 )
 target_include_directories(crownless_locomotion PUBLIC src)
@@ -101,6 +102,27 @@ if(CC_BUILD_CLIENT)
     target_link_libraries(crownless_carriage PRIVATE
         crownless_persistence crownless_locomotion raylib
     )
+    if(APPLE)
+        set(CC_HERO_ENGINE_ASSET
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/hero/crownless_hero_engine_rig_v01.glb"
+        )
+        set(CC_HERO_ENGINE_MANIFEST
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/hero/crownless_hero_engine_rig_v01.json"
+        )
+        add_custom_target(crownless_hero_assets ALL
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/hero"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CC_HERO_ENGINE_ASSET}"
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/hero/crownless_hero_engine_rig_v01.glb"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CC_HERO_ENGINE_MANIFEST}"
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/hero/crownless_hero_engine_rig_v01.json"
+            DEPENDS "${CC_HERO_ENGINE_ASSET}" "${CC_HERO_ENGINE_MANIFEST}"
+            VERBATIM
+        )
+        add_dependencies(crownless_carriage crownless_hero_assets)
+    endif()
     cc_strict_warnings(crownless_carriage)
 endif()
 
@@ -135,6 +157,11 @@ if(BUILD_TESTING)
     target_link_libraries(biomech_system_tests PRIVATE crownless_locomotion)
     cc_strict_warnings(biomech_system_tests)
     add_test(NAME generalized_biomechanical_system COMMAND biomech_system_tests)
+
+    add_executable(humanoid_skin_tests tests/humanoid_skin_tests.c)
+    target_link_libraries(humanoid_skin_tests PRIVATE crownless_locomotion)
+    cc_strict_warnings(humanoid_skin_tests)
+    add_test(NAME blender_humanoid_skin_contract COMMAND humanoid_skin_tests)
 
     if(CC_BUILD_CLIENT)
         add_executable(local_movement_tests
