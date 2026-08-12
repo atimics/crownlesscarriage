@@ -21,8 +21,9 @@
 #define CC_EVENT_TEXT_CAPACITY 144
 #define CC_CARGO_CAPACITY 12
 #define CC_MAP_CAPACITY 3
+#define CC_ATHLETIC_MAX_LEVEL 5
 
-#define CC_SIM_SCHEMA_VERSION 3
+#define CC_SIM_SCHEMA_VERSION 4
 #define CC_GENERATOR_VERSION 3
 
 typedef uint64_t CcId;
@@ -50,6 +51,19 @@ typedef enum CcGood {
     CC_GOOD_TOOLS,
     CC_GOOD_COUNT
 } CcGood;
+
+typedef enum CcAthleticDiscipline {
+    CC_ATHLETIC_MOBILITY,
+    CC_ATHLETIC_GRIP,
+    CC_ATHLETIC_POWER,
+    CC_ATHLETIC_DISCIPLINE_COUNT
+} CcAthleticDiscipline;
+
+typedef struct CcAthleticProfile {
+    float experience[CC_ATHLETIC_DISCIPLINE_COUNT];
+    float travel_training_distance;
+    int32_t level[CC_ATHLETIC_DISCIPLINE_COUNT];
+} CcAthleticProfile;
 
 typedef enum CcSettlementFunction {
     CC_SETTLEMENT_FARMING,
@@ -268,6 +282,7 @@ typedef struct CcPlayerCompany {
     int32_t passenger_capacity;
     int32_t map_capacity;
     int32_t reputation;
+    CcAthleticProfile athletics;
 } CcPlayerCompany;
 
 typedef struct CcCommand {

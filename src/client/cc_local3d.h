@@ -13,7 +13,6 @@
 #define CC_LOCAL_COURSE_RUNNER_COUNT 3
 #define CC_LOCAL_RAIDER_COUNT 2
 #define CC_LOCAL_TRAVELLER_COUNT 4
-#define CC_ATHLETIC_MAX_LEVEL 5
 
 /* Exterior coordinates are metres. These landmarks are shared by input,
    collision, rendering, and tests so the continuous world cannot drift apart. */
@@ -45,19 +44,6 @@ typedef enum CcTraversalMode {
     CC_TRAVERSAL_JUMP,
     CC_TRAVERSAL_VAULT
 } CcTraversalMode;
-
-typedef enum CcAthleticDiscipline {
-    CC_ATHLETIC_MOBILITY,
-    CC_ATHLETIC_GRIP,
-    CC_ATHLETIC_POWER,
-    CC_ATHLETIC_DISCIPLINE_COUNT
-} CcAthleticDiscipline;
-
-typedef struct CcAthleticProfile {
-    float experience[CC_ATHLETIC_DISCIPLINE_COUNT];
-    float travel_training_distance;
-    int32_t level[CC_ATHLETIC_DISCIPLINE_COUNT];
-} CcAthleticProfile;
 
 typedef enum CcCombatTeam {
     CC_COMBAT_NEUTRAL,

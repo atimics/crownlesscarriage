@@ -27,6 +27,14 @@ int main(void)
     CcSimInit(&first, UINT32_C(0x12345678));
     CcSimInit(&second, UINT32_C(0x12345678));
     CC_CHECK(CcSimHash(&first) == CcSimHash(&second));
+    for (int32_t discipline = 0;
+         discipline < CC_ATHLETIC_DISCIPLINE_COUNT; ++discipline) {
+        CC_CHECK(first.player.athletics.level[discipline] == 1);
+        CC_CHECK(first.player.athletics.experience[discipline] == 0.0f);
+    }
+    CcSim developed = first;
+    developed.player.athletics.experience[CC_ATHLETIC_MOBILITY] = 1.0f;
+    CC_CHECK(CcSimHash(&first) != CcSimHash(&developed));
     ApplySequence(&first);
     ApplySequence(&second);
     CC_CHECK(CcSimHash(&first) == CcSimHash(&second));
@@ -56,6 +64,12 @@ int main(void)
              first.player.location_id);
 
     CC_CHECK(CcSimValidate(&first, error, sizeof(error)));
+    CcSim invalid_profile = first;
+    invalid_profile.player.athletics.level[CC_ATHLETIC_GRIP] = 0;
+    CC_CHECK(!CcSimValidate(&invalid_profile, error, sizeof(error)));
+    invalid_profile = first;
+    invalid_profile.player.athletics.experience[CC_ATHLETIC_POWER] = -1.0f;
+    CC_CHECK(!CcSimValidate(&invalid_profile, error, sizeof(error)));
     CcSim different;
     CcSimInit(&different, UINT32_C(0x87654321));
     CC_CHECK(CcSimHash(&first) != CcSimHash(&different));

@@ -39,7 +39,8 @@ static bool Prepare(sqlite3 *database, const char *sql, sqlite3_stmt **statement
                     char *error, size_t error_capacity)
 {
     if (sqlite3_prepare_v2(database, sql, -1, statement, NULL) == SQLITE_OK) return true;
-    SetSqlError(error, error_capacity, database, "Could not prepare save query");
+    SetSqlError(error, error_capacity, database,
+                "Could not prepare campaign query");
     return false;
 }
 
@@ -77,30 +78,92 @@ static void BindMoney(sqlite3_stmt *statement, int column, CcMoney value)
     (void)sqlite3_bind_int64(statement, column, (sqlite3_int64)value);
 }
 
+static void BindFloat(sqlite3_stmt *statement, int column, float value)
+{
+    (void)sqlite3_bind_double(statement, column, (double)value);
+}
+
 static void BindText(sqlite3_stmt *statement, int column, const char *value)
 {
     (void)sqlite3_bind_text(statement, column, value, -1, SQLITE_TRANSIENT);
 }
 
-static bool OpenDatabase(const char *path, sqlite3 **database,
+static bool OpenDatabase(const char *path, int flags, sqlite3 **database,
                          char *error, size_t error_capacity)
 {
-    if (sqlite3_open_v2(path, database,
-                        SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL) != SQLITE_OK) {
-        SetSqlError(error, error_capacity, *database, "Could not open campaign database");
+    *database = NULL;
+    if (sqlite3_open_v2(path, database, flags, NULL) != SQLITE_OK) {
+        SetSqlError(error, error_capacity, *database,
+                    "Could not open campaign database");
         if (*database != NULL) sqlite3_close(*database);
         *database = NULL;
         return false;
     }
-    if (!Execute(*database,
-        "PRAGMA foreign_keys=ON;"
-        "PRAGMA journal_mode=DELETE;"
-        "PRAGMA synchronous=FULL;"
-        "PRAGMA application_id=1128481362;"
-        "PRAGMA user_version=3;",
-        error, error_capacity)) {
+    if (sqlite3_busy_timeout(*database, 2500) != SQLITE_OK) {
+        SetSqlError(error, error_capacity, *database,
+                    "Could not configure campaign database");
         sqlite3_close(*database);
         *database = NULL;
+        return false;
+    }
+    return true;
+}
+
+static bool ConfigureSaveDatabase(sqlite3 *database,
+                                  char *error, size_t error_capacity)
+{
+    return Execute(database,
+        "PRAGMA foreign_keys=ON;"
+        "PRAGMA journal_mode=DELETE;"
+        "PRAGMA synchronous=FULL;",
+        error, error_capacity);
+}
+
+static bool WriteDatabaseHeader(sqlite3 *database,
+                                char *error, size_t error_capacity)
+{
+    char sql[96];
+    (void)snprintf(sql, sizeof(sql),
+                   "PRAGMA application_id=%d;PRAGMA user_version=%d;",
+                   CC_SQLITE_APPLICATION_ID, CC_SIM_SCHEMA_VERSION);
+    return Execute(database, sql, error, error_capacity);
+}
+
+static bool ReadPragma(sqlite3 *database, const char *sql, int32_t *value,
+                       char *error, size_t error_capacity)
+{
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database, sql, &statement, error, error_capacity)) return false;
+    if (sqlite3_step(statement) != SQLITE_ROW) {
+        SetSqlError(error, error_capacity, database,
+                    "Could not inspect campaign database");
+        sqlite3_finalize(statement);
+        return false;
+    }
+    *value = sqlite3_column_int(statement, 0);
+    sqlite3_finalize(statement);
+    return true;
+}
+
+static bool ValidateDatabaseHeader(sqlite3 *database,
+                                   char *error, size_t error_capacity)
+{
+    int32_t application_id = 0;
+    int32_t schema_version = 0;
+    if (!ReadPragma(database, "PRAGMA application_id;", &application_id,
+                    error, error_capacity) ||
+        !ReadPragma(database, "PRAGMA user_version;", &schema_version,
+                    error, error_capacity)) {
+        return false;
+    }
+    if (application_id != CC_SQLITE_APPLICATION_ID) {
+        SetError(error, error_capacity,
+                 "File is not a Crownless Carriage campaign.");
+        return false;
+    }
+    if (schema_version != CC_SIM_SCHEMA_VERSION) {
+        SetError(error, error_capacity,
+                 "Campaign database version is unsupported.");
         return false;
     }
     return true;
@@ -161,12 +224,16 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         "CREATE TABLE IF NOT EXISTS causal_event ("
         " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL UNIQUE, day INTEGER NOT NULL,"
         " kind INTEGER NOT NULL, subject_id INTEGER NOT NULL, location_id INTEGER NOT NULL,"
-        " parent_id INTEGER NOT NULL, magnitude INTEGER NOT NULL, text TEXT NOT NULL);"
+        " parent_id INTEGER NOT NULL, magnitude INTEGER NOT NULL, text TEXT NOT NULL);";
+    const char *player_schema =
         "CREATE TABLE IF NOT EXISTS player_company ("
         " id INTEGER PRIMARY KEY, location_id INTEGER NOT NULL, coins INTEGER NOT NULL,"
         " food_cargo INTEGER NOT NULL, material_cargo INTEGER NOT NULL, tools_cargo INTEGER NOT NULL,"
         " cargo_capacity INTEGER NOT NULL, passenger_capacity INTEGER NOT NULL,"
-        " reputation INTEGER NOT NULL);";
+        " reputation INTEGER NOT NULL, mobility_level INTEGER NOT NULL,"
+        " mobility_experience REAL NOT NULL, grip_level INTEGER NOT NULL,"
+        " grip_experience REAL NOT NULL, power_level INTEGER NOT NULL,"
+        " power_experience REAL NOT NULL, travel_training_distance REAL NOT NULL);";
     const char *situation_schema =
         "CREATE TABLE IF NOT EXISTS situation ("
         " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL UNIQUE, kind INTEGER NOT NULL,"
@@ -184,6 +251,7 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " recorded_condition INTEGER NOT NULL, recorded_danger INTEGER NOT NULL,"
         " ask_price INTEGER NOT NULL, contraband INTEGER NOT NULL);";
     return Execute(database, schema, error, error_capacity) &&
+           Execute(database, player_schema, error, error_capacity) &&
            Execute(database, situation_schema, error, error_capacity) &&
            Execute(database, map_schema, error, error_capacity);
 }
@@ -484,14 +552,26 @@ static bool SavePlayer(sqlite3 *database, const CcSim *sim,
                        char *error, size_t error_capacity)
 {
     sqlite3_stmt *statement = NULL;
-    if (!Prepare(database, "INSERT INTO player_company VALUES(?,?,?,?,?,?,?,?,?);",
+    if (!Prepare(database,
+                 "INSERT INTO player_company VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
                  &statement, error, error_capacity)) return false;
     const CcPlayerCompany *p = &sim->player;
-    BindId(statement, 1, p->id); BindId(statement, 2, p->location_id);
-    BindMoney(statement, 3, p->coins); BindInt(statement, 4, p->cargo[CC_GOOD_FOOD]);
-    BindInt(statement, 5, p->cargo[CC_GOOD_MATERIAL]); BindInt(statement, 6, p->cargo[CC_GOOD_TOOLS]);
-    BindInt(statement, 7, p->cargo_capacity); BindInt(statement, 8, p->passenger_capacity);
-    BindInt(statement, 9, p->reputation);
+    int column = 1;
+    BindId(statement, column++, p->id);
+    BindId(statement, column++, p->location_id);
+    BindMoney(statement, column++, p->coins);
+    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        BindInt(statement, column++, p->cargo[good]);
+    }
+    BindInt(statement, column++, p->cargo_capacity);
+    BindInt(statement, column++, p->passenger_capacity);
+    BindInt(statement, column++, p->reputation);
+    for (int32_t discipline = 0;
+         discipline < CC_ATHLETIC_DISCIPLINE_COUNT; ++discipline) {
+        BindInt(statement, column++, p->athletics.level[discipline]);
+        BindFloat(statement, column++, p->athletics.experience[discipline]);
+    }
+    BindFloat(statement, column++, p->athletics.travel_training_distance);
     bool result = StepDone(database, statement, error, error_capacity);
     sqlite3_finalize(statement);
     return result;
@@ -508,9 +588,21 @@ bool CcSaveWrite(const char *path, const CcSim *sim,
         return false;
     }
     sqlite3 *database = NULL;
-    if (!OpenDatabase(path, &database, error, error_capacity)) return false;
-    bool ok = CreateSchema(database, error, error_capacity) &&
-        Execute(database, "BEGIN IMMEDIATE;", error, error_capacity) &&
+    if (!OpenDatabase(path, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE,
+                      &database, error, error_capacity)) {
+        return false;
+    }
+    if (!ConfigureSaveDatabase(database, error, error_capacity)) {
+        sqlite3_close(database);
+        return false;
+    }
+    bool transaction_started = Execute(
+        database, "BEGIN IMMEDIATE;", error, error_capacity);
+    bool ok = transaction_started &&
+        WriteDatabaseHeader(database, error, error_capacity) &&
+        Execute(database, "DROP TABLE IF EXISTS player_company;",
+                error, error_capacity) &&
+        CreateSchema(database, error, error_capacity) &&
         Execute(database,
             "DELETE FROM meta; DELETE FROM kingdom; DELETE FROM settlement;"
             "DELETE FROM route; DELETE FROM map_object; DELETE FROM faction; DELETE FROM shipment;"
@@ -531,12 +623,15 @@ bool CcSaveWrite(const char *path, const CcSim *sim,
         SaveSituations(database, sim, error, error_capacity) &&
         SaveEvents(database, sim, error, error_capacity) &&
         SavePlayer(database, sim, error, error_capacity);
-    if (ok) ok = Execute(database, "COMMIT;", error, error_capacity);
-    else (void)Execute(database, "ROLLBACK;", NULL, 0U);
+    if (transaction_started) {
+        if (ok) ok = Execute(database, "COMMIT;", error, error_capacity);
+        else (void)Execute(database, "ROLLBACK;", NULL, 0U);
+    }
     if (sqlite3_close(database) != SQLITE_OK && ok) {
         SetError(error, error_capacity, "Could not close campaign database.");
         return false;
     }
+    if (ok) SetError(error, error_capacity, "");
     return ok;
 }
 
@@ -886,16 +981,26 @@ static bool ReadPlayer(sqlite3 *database, CcSim *sim,
         SetError(error, error_capacity, "Player company row is missing."); sqlite3_finalize(statement); return false;
     }
     CcPlayerCompany *p = &sim->player;
-    p->id = (CcId)sqlite3_column_int64(statement, 0);
-    p->location_id = (CcId)sqlite3_column_int64(statement, 1);
-    p->coins = (CcMoney)sqlite3_column_int64(statement, 2);
-    p->cargo[CC_GOOD_FOOD] = sqlite3_column_int(statement, 3);
-    p->cargo[CC_GOOD_MATERIAL] = sqlite3_column_int(statement, 4);
-    p->cargo[CC_GOOD_TOOLS] = sqlite3_column_int(statement, 5);
-    p->cargo_capacity = sqlite3_column_int(statement, 6);
-    p->passenger_capacity = sqlite3_column_int(statement, 7);
+    int column = 0;
+    p->id = (CcId)sqlite3_column_int64(statement, column++);
+    p->location_id = (CcId)sqlite3_column_int64(statement, column++);
+    p->coins = (CcMoney)sqlite3_column_int64(statement, column++);
+    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        p->cargo[good] = sqlite3_column_int(statement, column++);
+    }
+    p->cargo_capacity = sqlite3_column_int(statement, column++);
+    p->passenger_capacity = sqlite3_column_int(statement, column++);
     p->map_capacity = CC_MAP_CAPACITY;
-    p->reputation = sqlite3_column_int(statement, 8);
+    p->reputation = sqlite3_column_int(statement, column++);
+    for (int32_t discipline = 0;
+         discipline < CC_ATHLETIC_DISCIPLINE_COUNT; ++discipline) {
+        p->athletics.level[discipline] =
+            sqlite3_column_int(statement, column++);
+        p->athletics.experience[discipline] =
+            (float)sqlite3_column_double(statement, column++);
+    }
+    p->athletics.travel_training_distance =
+        (float)sqlite3_column_double(statement, column++);
     sqlite3_finalize(statement);
     return true;
 }
@@ -908,33 +1013,38 @@ bool CcSaveRead(const char *path, CcSim *sim,
         return false;
     }
     sqlite3 *database = NULL;
-    if (!OpenDatabase(path, &database, error, error_capacity)) return false;
-    *sim = (CcSim){0};
+    if (!OpenDatabase(path, SQLITE_OPEN_READONLY, &database,
+                      error, error_capacity)) {
+        return false;
+    }
+    CcSim loaded = {0};
     uint64_t expected_hash = 0U;
-    bool ok = CreateSchema(database, error, error_capacity) &&
-              ReadMeta(database, sim, &expected_hash, error, error_capacity) &&
-              ReadKingdoms(database, sim, error, error_capacity) &&
-              ReadSettlements(database, sim, error, error_capacity) &&
-              ReadRoutes(database, sim, error, error_capacity) &&
-              ReadMaps(database, sim, error, error_capacity) &&
-              ReadFactions(database, sim, error, error_capacity) &&
-              ReadShipments(database, sim, error, error_capacity) &&
-              ReadThreats(database, sim, error, error_capacity) &&
-              ReadDungeons(database, sim, error, error_capacity) &&
-              ReadSituations(database, sim, error, error_capacity) &&
-              ReadEvents(database, sim, error, error_capacity) &&
-              ReadPlayer(database, sim, error, error_capacity);
+    bool ok = ValidateDatabaseHeader(database, error, error_capacity) &&
+              ReadMeta(database, &loaded, &expected_hash,
+                       error, error_capacity) &&
+              ReadKingdoms(database, &loaded, error, error_capacity) &&
+              ReadSettlements(database, &loaded, error, error_capacity) &&
+              ReadRoutes(database, &loaded, error, error_capacity) &&
+              ReadMaps(database, &loaded, error, error_capacity) &&
+              ReadFactions(database, &loaded, error, error_capacity) &&
+              ReadShipments(database, &loaded, error, error_capacity) &&
+              ReadThreats(database, &loaded, error, error_capacity) &&
+              ReadDungeons(database, &loaded, error, error_capacity) &&
+              ReadSituations(database, &loaded, error, error_capacity) &&
+              ReadEvents(database, &loaded, error, error_capacity) &&
+              ReadPlayer(database, &loaded, error, error_capacity);
     sqlite3_close(database);
     if (!ok) return false;
     char validation[160];
-    if (!CcSimValidate(sim, validation, sizeof(validation))) {
+    if (!CcSimValidate(&loaded, validation, sizeof(validation))) {
         SetError(error, error_capacity, validation);
         return false;
     }
-    if (CcSimHash(sim) != expected_hash) {
+    if (CcSimHash(&loaded) != expected_hash) {
         SetError(error, error_capacity, "Campaign state hash does not match stored data.");
         return false;
     }
+    *sim = loaded;
     SetError(error, error_capacity, "");
     return true;
 }

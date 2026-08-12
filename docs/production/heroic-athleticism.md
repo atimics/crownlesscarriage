@@ -53,8 +53,10 @@ The player agent now carries three disciplines, each with five levels:
 | Power | Blocks, guard breaks, landed hits, and defeats | Strike damage and contact impulse |
 
 Experience thresholds rise with level. The HUD presents both the three levels
-and their averaged heroic tier. The profile survives local exterior/interior
-transitions; save persistence and final tuning are deliberately deferred.
+and their averaged heroic tier, with a progress bar for every discipline. The
+profile is authoritative campaign state: it survives local transitions, is
+included in deterministic state hashes, and round-trips through SQLite saves.
+Final tuning is deliberately deferred.
 
 ### Traversal contacts
 
@@ -105,17 +107,17 @@ collision.
 
 ## Production sequence
 
-1. Persist the athletic profile and expose experience progress in the character
-   sheet.
-2. Add trajectory history plus explicit start, stop, and pivot intentions;
+The campaign-persistence and character-progress pass is complete. Next:
+
+1. Add trajectory history plus explicit start, stop, and pivot intentions;
    distance-match step phase while preserving planted contacts.
-3. Add a traversal scanner that emits ordered contact plans and clearance
+2. Add a traversal scanner that emits ordered contact plans and clearance
    constraints for vault, mantle, cat leap, ladder, and wall-run candidates.
-4. Replace the single strike envelope with weapon data, per-limb contact shapes,
+3. Replace the single strike envelope with weapon data, per-limb contact shapes,
    foot-support contribution, parries, and guarded recovery variants.
-5. Add stamina and fatigue as temporary reductions in control authority, not
+4. Add stamina and fatigue as temporary reductions in control authority, not
    hard animation locks.
-6. Build authored motion-prior tests for heroic style, then compare them against
+5. Build authored motion-prior tests for heroic style, then compare them against
    contact error, responsiveness, recovery time, and player readability.
 
 ## Primary references

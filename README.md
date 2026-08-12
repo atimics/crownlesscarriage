@@ -56,10 +56,11 @@ Controls:
   to commit a strike toward a nearby raider and `X` to enter or leave guard;
   left-click movement becomes slower combat-facing strafing while focused.
   Movement, successful jumps, supported climbing, blocks, and landed strikes
-  now train three session-level athletic disciplines: Mobility, Grip, and
+  now train three campaign-persistent athletic disciplines: Mobility, Grip, and
   Power. Their levels change physical acceleration, jump impulse, reach,
   traversal timing, impact force, and recovery rather than merely speeding up
-  an animation. Low obstacles become fast vaults once Mobility is developed.
+  an animation. The character panel shows progress toward each next level, and
+  low obstacles become fast vaults once Mobility is developed.
   `F`
   uses a nearby door, notice board, or carriage.
 - The humanoid biped is the playable, tuned body plan. Quadruped, hexapod, and
@@ -208,8 +209,9 @@ The current executable proves:
   Mobility grows through travel and jumping, Grip through supported traversal,
   and Power through meaningful combat contacts. Levels expand achievable
   impulse, reach, acceleration, traversal control, and strike effect, while the
-  HUD exposes the current heroic tier. Persistence and balance remain a later
-  production pass.
+  HUD exposes the current heroic tier and progress toward each level. The full
+  profile is part of deterministic campaign state and SQLite save/load hashes;
+  balance remains a later production pass.
 - Force-driven whole-body motion with aggregate bone mass, gravity, damping,
   ground-reaction support, friction-limited propulsion and braking, lateral
   balance, and collision impulses; navigation supplies intent rather than

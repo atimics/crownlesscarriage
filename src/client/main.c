@@ -143,11 +143,12 @@ static float GridDistance(Vector2 a, Vector2 b)
     return sqrtf(x * x + y * y);
 }
 
-static void ResetLocalState(LocalState *local)
+static void ResetLocalState(LocalState *local, const CcSim *sim)
 {
     local->market_interior = false;
     CcLocalAgentInit(&local->agent,
                      (Vector2){CC_LOCAL_START_X, CC_LOCAL_START_Z}, false);
+    if (sim != NULL) local->agent.athletics = sim->player.athletics;
     CcLocalCombatSetTeam(&local->agent, CC_COMBAT_PLAYER);
     CcLocalCourseInit(&local->course);
 }
@@ -342,11 +343,25 @@ static void DrawLocalHeader(const CcSim *sim, const LocalState *local)
     DrawText("M  MAP CASE", 1121, 52, 10, MUTED);
 }
 
+static void DrawAthleticProgress(const CcLocalAgent *agent,
+                                 CcAthleticDiscipline discipline, int y)
+{
+    float progress = CcLocalAgentAthleticProgress(agent, discipline);
+    int32_t level = agent->athletics.level[discipline];
+    DrawText(TextFormat("%-8s L%d", CcAthleticDisciplineName(discipline), level),
+             966, y, 8, MUTED);
+    DrawRectangle(1047, y + 1, 143, 6, (Color){34, 45, 48, 255});
+    DrawRectangle(1047, y + 1, (int)(143.0f * progress), 6, CC_GOLD);
+    DrawText(level >= CC_ATHLETIC_MAX_LEVEL ? "MAX" :
+             TextFormat("%d%%", (int)(progress * 100.0f)),
+             1198, y, 8, level >= CC_ATHLETIC_MAX_LEVEL ? CC_GOLD : INK);
+}
+
 static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
 {
     const CcSettlement *place = CcSimSettlement(sim, sim->player.location_id);
     if (place == NULL) return;
-    DrawPanel((Rectangle){946.0f, 82.0f, 314.0f, 568.0f}, PANEL);
+    DrawPanel((Rectangle){946.0f, 82.0f, 314.0f, 576.0f}, PANEL);
     const CcKingdom *kingdom = KingdomById(sim, place->kingdom_id);
     DrawText(kingdom != NULL ? kingdom->name : "UNCLAIMED", 966, 102, 11,
              KingdomColor(sim, place->kingdom_id));
@@ -417,19 +432,12 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
                             CcBiomechRigMeanActivation(
                                 &local->agent.humanoid.body) * 100.0f),
                  966, 605, 9, CC_VIOLET);
-        DrawText(TextFormat("L %s / R %s / GRF %.0fN",
-                            CcHumanoidContactName(
-                                local->agent.humanoid.feet[0].contact),
-                            CcHumanoidContactName(
-                                local->agent.humanoid.feet[1].contact),
-                            local->agent.humanoid.ground_reaction.y),
-                 966, 621, 9, CC_VIOLET);
-        DrawText(TextFormat("HERO T%d / MOB %d  GRIP %d  POWER %d",
-                            CcLocalAgentHeroicTier(&local->agent),
-                            local->agent.athletics.level[CC_ATHLETIC_MOBILITY],
-                            local->agent.athletics.level[CC_ATHLETIC_GRIP],
-                            local->agent.athletics.level[CC_ATHLETIC_POWER]),
-                 966, 637, 9, CC_GOLD);
+        DrawText(TextFormat("HEROIC TIER %d / PHYSICAL DEVELOPMENT",
+                            CcLocalAgentHeroicTier(&local->agent)),
+                 966, 619, 8, CC_GOLD);
+        DrawAthleticProgress(&local->agent, CC_ATHLETIC_MOBILITY, 629);
+        DrawAthleticProgress(&local->agent, CC_ATHLETIC_GRIP, 639);
+        DrawAthleticProgress(&local->agent, CC_ATHLETIC_POWER, 649);
     } else if (local->agent.limb_rig.planted_count > 0 &&
                isfinite(local->agent.limb_rig.support_margin)) {
         DrawText(TextFormat("ROBOTIC %s / %s / traction %.0f%%",
@@ -861,6 +869,7 @@ static void HandleInput(CcSim *sim, int32_t *selected, ClientView *view,
                         RenderTexture2D local_target, Rectangle local_bounds,
                         const char *save_path, char *message, size_t message_capacity)
 {
+    sim->player.athletics = local->agent.athletics;
     if (IsKeyPressed(KEY_TAB)) {
         if (*view == VIEW_LEDGER) {
             *view = *return_view;
@@ -909,14 +918,14 @@ static void HandleInput(CcSim *sim, int32_t *selected, ClientView *view,
                        loaded ? "Campaign restored with matching state hash." : error);
         if (loaded) {
             *selected = FirstVisibleMapIndex(sim);
-            ResetLocalState(local);
+            ResetLocalState(local, sim);
             *view = VIEW_LOCAL;
         }
     }
     if (IsKeyPressed(KEY_N)) {
         CcSimInit(sim, sim->world_seed + UINT32_C(0x9e3779b9));
         *selected = FirstVisibleMapIndex(sim);
-        ResetLocalState(local);
+        ResetLocalState(local, sim);
         *view = VIEW_LOCAL;
         (void)snprintf(message, message_capacity, "A new deterministic region is founded.");
     }
@@ -985,6 +994,7 @@ static void HandleInput(CcSim *sim, int32_t *selected, ClientView *view,
             CcLocalCourseUpdate(&local->course, &local->agent, sim,
                                 local_delta_time);
         }
+        sim->player.athletics = local->agent.athletics;
         Vector2 position = LocalPosition(local);
 
         if (IsKeyPressed(KEY_F)) {
@@ -1078,7 +1088,7 @@ static void HandleInput(CcSim *sim, int32_t *selected, ClientView *view,
         };
         if (ApplyCommand(sim, travel, message, message_capacity)) {
             *selected = FirstVisibleMapIndex(sim);
-            ResetLocalState(local);
+            ResetLocalState(local, sim);
             *view = VIEW_LOCAL;
         }
     }
@@ -1159,7 +1169,7 @@ int main(int argc, char **argv)
     CcLocalAgent walk_cycle_frames[8] = {0};
     uint32_t walk_cycle_mask = 0;
     ActionReelState action_reel = {0};
-    ResetLocalState(&local);
+    ResetLocalState(&local, &sim);
     if (capture && !capture_interior && !capture_walk_cycle &&
         !capture_jump && !capture_defense && !capture_downclimb &&
         !capture_navigation && !capture_limbs && !capture_dojo &&

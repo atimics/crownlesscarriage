@@ -2,6 +2,7 @@
 
 #include <inttypes.h>
 #include <limits.h>
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -673,6 +674,10 @@ void CcSimInit(CcSim *sim, uint32_t seed)
     sim->player.passenger_capacity = 4;
     sim->player.map_capacity = CC_MAP_CAPACITY;
     sim->player.reputation = 0;
+    for (int32_t discipline = 0;
+         discipline < CC_ATHLETIC_DISCIPLINE_COUNT; ++discipline) {
+        sim->player.athletics.level[discipline] = 1;
+    }
     InitMaps(sim);
 
     char text[CC_EVENT_TEXT_CAPACITY];
@@ -2001,6 +2006,27 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             return false;
         }
     }
+    for (int32_t discipline = 0;
+         discipline < CC_ATHLETIC_DISCIPLINE_COUNT; ++discipline) {
+        int32_t level = sim->player.athletics.level[discipline];
+        float experience = sim->player.athletics.experience[discipline];
+        float threshold = 30.0f + (float)level * 20.0f;
+        if (level < 1 || level > CC_ATHLETIC_MAX_LEVEL ||
+            !isfinite(experience) || experience < 0.0f ||
+            (level == CC_ATHLETIC_MAX_LEVEL ? experience != 0.0f :
+             experience >= threshold)) {
+            SetError(error, error_capacity,
+                     "Player athletic profile is invalid.");
+            return false;
+        }
+    }
+    if (!isfinite(sim->player.athletics.travel_training_distance) ||
+        sim->player.athletics.travel_training_distance < 0.0f ||
+        sim->player.athletics.travel_training_distance >= 12.0f) {
+        SetError(error, error_capacity,
+                 "Player athletic travel progress is invalid.");
+        return false;
+    }
     if (CcSimSettlement(sim, sim->player.location_id) == NULL ||
         CcPlayerCargoUsed(&sim->player) > sim->player.cargo_capacity ||
         sim->player.map_capacity < 1 ||
@@ -2032,6 +2058,13 @@ static uint64_t HashString(uint64_t hash, const char *text)
         text += 1;
     }
     return HashU64(hash, 0U);
+}
+
+static uint64_t HashFloat(uint64_t hash, float value)
+{
+    uint32_t bits = 0U;
+    memcpy(&bits, &value, sizeof(bits));
+    return HashU64(hash, bits);
 }
 
 uint64_t CcSimHash(const CcSim *sim)
@@ -2133,6 +2166,12 @@ uint64_t CcSimHash(const CcSim *sim)
     HASH_VALUE(sim->player.passenger_capacity); HASH_VALUE(sim->player.map_capacity);
     HASH_VALUE(sim->player.reputation);
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) HASH_VALUE(sim->player.cargo[good]);
+    for (int32_t discipline = 0;
+         discipline < CC_ATHLETIC_DISCIPLINE_COUNT; ++discipline) {
+        HASH_VALUE(sim->player.athletics.level[discipline]);
+        hash = HashFloat(hash, sim->player.athletics.experience[discipline]);
+    }
+    hash = HashFloat(hash, sim->player.athletics.travel_training_distance);
     for (int32_t i = 0; i < CC_MAX_EVENTS; ++i) {
         const CcEvent *item = &sim->events[i];
         HASH_VALUE(item->id); HASH_VALUE(item->day); HASH_VALUE(item->kind);

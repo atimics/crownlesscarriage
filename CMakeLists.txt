@@ -46,6 +46,9 @@ add_library(crownless_sim
     src/sim/cc_sim.c
 )
 target_include_directories(crownless_sim PUBLIC src)
+if(NOT MSVC)
+    target_link_libraries(crownless_sim PUBLIC m)
+endif()
 cc_strict_warnings(crownless_sim)
 
 find_package(SQLite3 REQUIRED)
