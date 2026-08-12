@@ -13,6 +13,7 @@
 #define CC_LOCAL_COURSE_RUNNER_COUNT 3
 #define CC_LOCAL_RAIDER_COUNT 2
 #define CC_LOCAL_TRAVELLER_COUNT 4
+#define CC_ATHLETIC_MAX_LEVEL 5
 
 /* Exterior coordinates are metres. These landmarks are shared by input,
    collision, rendering, and tests so the continuous world cannot drift apart. */
@@ -41,8 +42,22 @@ typedef enum CcTraversalMode {
     CC_TRAVERSAL_DROP,
     CC_TRAVERSAL_RAGDOLL,
     CC_TRAVERSAL_GET_UP,
-    CC_TRAVERSAL_JUMP
+    CC_TRAVERSAL_JUMP,
+    CC_TRAVERSAL_VAULT
 } CcTraversalMode;
+
+typedef enum CcAthleticDiscipline {
+    CC_ATHLETIC_MOBILITY,
+    CC_ATHLETIC_GRIP,
+    CC_ATHLETIC_POWER,
+    CC_ATHLETIC_DISCIPLINE_COUNT
+} CcAthleticDiscipline;
+
+typedef struct CcAthleticProfile {
+    float experience[CC_ATHLETIC_DISCIPLINE_COUNT];
+    float travel_training_distance;
+    int32_t level[CC_ATHLETIC_DISCIPLINE_COUNT];
+} CcAthleticProfile;
 
 typedef enum CcCombatTeam {
     CC_COMBAT_NEUTRAL,
@@ -63,15 +78,19 @@ typedef enum CcCombatOutcome {
 typedef struct CcCombatState {
     Vector3 focus_point;
     Vector3 knockback_velocity;
+    Vector3 impact_point;
+    Vector3 impact_direction;
     float health;
     float posture;
     float stagger_seconds;
     float hit_flash_seconds;
     float hitstop_seconds;
     float recovery_seconds;
+    float impact_speed;
     int32_t target_index;
     CcCombatTeam team;
     bool focus_valid;
+    bool impact_valid;
     bool strike_resolved;
     bool defeated;
 } CcCombatState;
@@ -104,6 +123,7 @@ typedef struct CcLocalAgent {
     bool grounded;
     bool climbing;
     bool climbing_down;
+    bool vaulting;
     bool swimming;
     bool allow_downclimb;
     bool exact_target_valid;
@@ -119,7 +139,10 @@ typedef struct CcLocalAgent {
     bool humanoid_needs_reset;
     bool target_valid;
     bool crowned;
+    bool jump_training_pending;
+    bool climb_training_pending;
     Color tunic_color;
+    CcAthleticProfile athletics;
     CcCombatState combat;
 } CcLocalAgent;
 
@@ -193,6 +216,16 @@ void CcLocalCombatSetGuarded(CcLocalAgent *agent,
 bool CcLocalCombatBeginStrike(CcLocalAgent *agent,
                               const CcLocalAgent *target);
 bool CcLocalAgentJump(CcLocalAgent *agent);
+void CcLocalAgentTrainAthleticism(CcLocalAgent *agent,
+                                  CcAthleticDiscipline discipline,
+                                  float experience);
+void CcLocalAgentSetAthleticLevel(CcLocalAgent *agent,
+                                  CcAthleticDiscipline discipline,
+                                  int32_t level);
+int32_t CcLocalAgentHeroicTier(const CcLocalAgent *agent);
+float CcLocalAgentAthleticProgress(const CcLocalAgent *agent,
+                                   CcAthleticDiscipline discipline);
+const char *CcAthleticDisciplineName(CcAthleticDiscipline discipline);
 CcCombatOutcome CcLocalCombatResolveStrike(CcLocalAgent *attacker,
                                            CcLocalAgent *defender);
 const char *CcLocalCombatOutcomeName(CcCombatOutcome outcome);

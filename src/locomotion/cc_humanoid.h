@@ -100,6 +100,7 @@ typedef struct CcHumanoidGait {
     CcBiomechRagdoll ragdoll;
     CcLimbVec3 root_velocity;
     CcLimbVec3 ground_reaction;
+    CcLimbVec3 impact_direction;
     CcHumanoidSpring speed;
     CcHumanoidSpring pelvis_height;
     CcHumanoidSpring pelvis_sway;
@@ -119,6 +120,7 @@ typedef struct CcHumanoidGait {
     float action_blend;
     float swim_phase;
     float immersion;
+    float impact_response;
     CcLimbVec3 recovery_origin;
     CcHumanoidAction action;
     CcHumanoidAction previous_action;
@@ -146,6 +148,9 @@ void CcHumanoidGaitResolvePose(CcHumanoidGait *gait,
 void CcHumanoidGaitSetGuarded(CcHumanoidGait *gait, bool guarded);
 bool CcHumanoidGaitBeginStrike(CcHumanoidGait *gait, int32_t striking_arm);
 bool CcHumanoidGaitBeginJump(CcHumanoidGait *gait);
+void CcHumanoidGaitApplyImpact(CcHumanoidGait *gait,
+                               CcLimbVec3 direction, float strength);
+bool CcHumanoidGaitKnockDown(CcHumanoidGait *gait);
 bool CcHumanoidGaitConsumeStrikeImpact(CcHumanoidGait *gait);
 void CcHumanoidGaitAdvanceSwim(CcHumanoidGait *gait,
                                CcLimbVec3 body_position, float body_yaw,

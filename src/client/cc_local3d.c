@@ -302,6 +302,7 @@ const char *CcLocalTraversalName(CcTraversalMode mode)
     switch (mode) {
         case CC_TRAVERSAL_WALK: return "WALK";
         case CC_TRAVERSAL_JUMP: return "JUMP";
+        case CC_TRAVERSAL_VAULT: return "VAULT";
         case CC_TRAVERSAL_CLIMB: return "CLIMB";
         case CC_TRAVERSAL_DESCEND: return "DOWN-CLIMB";
         case CC_TRAVERSAL_SWIM: return "SWIM";
@@ -310,6 +311,94 @@ const char *CcLocalTraversalName(CcTraversalMode mode)
         case CC_TRAVERSAL_GET_UP: return "GET UP";
         case CC_TRAVERSAL_IDLE:
         default: return "IDLE";
+    }
+}
+
+static float AthleticThreshold(int32_t level)
+{
+    return 30.0f + (float)level * 20.0f;
+}
+
+static bool AthleticDisciplineValid(CcAthleticDiscipline discipline)
+{
+    return discipline >= 0 && discipline < CC_ATHLETIC_DISCIPLINE_COUNT;
+}
+
+static int32_t AthleticLevel(const CcLocalAgent *agent,
+                             CcAthleticDiscipline discipline)
+{
+    if (agent == NULL || !AthleticDisciplineValid(discipline)) return 1;
+    int32_t level = agent->athletics.level[discipline];
+    if (level < 1) return 1;
+    return level > CC_ATHLETIC_MAX_LEVEL ? CC_ATHLETIC_MAX_LEVEL : level;
+}
+
+static float AthleticBonus(const CcLocalAgent *agent,
+                           CcAthleticDiscipline discipline, float per_level)
+{
+    return 1.0f + (float)(AthleticLevel(agent, discipline) - 1) * per_level;
+}
+
+void CcLocalAgentTrainAthleticism(CcLocalAgent *agent,
+                                  CcAthleticDiscipline discipline,
+                                  float experience)
+{
+    if (agent == NULL || !AthleticDisciplineValid(discipline) ||
+        !isfinite(experience) || experience <= 0.0f) {
+        return;
+    }
+    int32_t *level = &agent->athletics.level[discipline];
+    if (*level < 1) *level = 1;
+    if (*level >= CC_ATHLETIC_MAX_LEVEL) return;
+    float *stored = &agent->athletics.experience[discipline];
+    *stored += experience;
+    while (*level < CC_ATHLETIC_MAX_LEVEL &&
+           *stored >= AthleticThreshold(*level)) {
+        *stored -= AthleticThreshold(*level);
+        *level += 1;
+    }
+    if (*level >= CC_ATHLETIC_MAX_LEVEL) *stored = 0.0f;
+}
+
+void CcLocalAgentSetAthleticLevel(CcLocalAgent *agent,
+                                  CcAthleticDiscipline discipline,
+                                  int32_t level)
+{
+    if (agent == NULL || !AthleticDisciplineValid(discipline)) return;
+    agent->athletics.level[discipline] =
+        level < 1 ? 1 : level > CC_ATHLETIC_MAX_LEVEL ?
+        CC_ATHLETIC_MAX_LEVEL : level;
+    agent->athletics.experience[discipline] = 0.0f;
+}
+
+int32_t CcLocalAgentHeroicTier(const CcLocalAgent *agent)
+{
+    if (agent == NULL) return 1;
+    int32_t total = 0;
+    for (int32_t discipline = 0;
+         discipline < CC_ATHLETIC_DISCIPLINE_COUNT; ++discipline) {
+        total += AthleticLevel(agent, (CcAthleticDiscipline)discipline);
+    }
+    return total / CC_ATHLETIC_DISCIPLINE_COUNT;
+}
+
+float CcLocalAgentAthleticProgress(const CcLocalAgent *agent,
+                                   CcAthleticDiscipline discipline)
+{
+    if (agent == NULL || !AthleticDisciplineValid(discipline)) return 0.0f;
+    int32_t level = AthleticLevel(agent, discipline);
+    if (level >= CC_ATHLETIC_MAX_LEVEL) return 1.0f;
+    return fmaxf(0.0f, fminf(agent->athletics.experience[discipline] /
+                             AthleticThreshold(level), 1.0f));
+}
+
+const char *CcAthleticDisciplineName(CcAthleticDiscipline discipline)
+{
+    switch (discipline) {
+        case CC_ATHLETIC_MOBILITY: return "MOBILITY";
+        case CC_ATHLETIC_GRIP: return "GRIP";
+        case CC_ATHLETIC_POWER: return "POWER";
+        default: return "ATHLETIC";
     }
 }
 
@@ -336,6 +425,10 @@ void CcLocalAgentInit(CcLocalAgent *agent, Vector2 position, bool market_interio
     agent->combat.health = CC_LOCAL_COMBAT_MAX_HEALTH;
     agent->combat.posture = CC_LOCAL_COMBAT_MAX_POSTURE;
     agent->combat.target_index = -1;
+    for (int32_t discipline = 0;
+         discipline < CC_ATHLETIC_DISCIPLINE_COUNT; ++discipline) {
+        agent->athletics.level[discipline] = 1;
+    }
     CcLocalAgentSetMorphology(agent, CC_MORPHOLOGY_BIPED, market_interior);
 }
 
@@ -486,6 +579,18 @@ static float CombatSegmentDistanceSquared(Vector3 first_start,
     return CombatLengthSquared(CombatSubtract(first_closest, second_closest));
 }
 
+static Vector3 CombatClosestPointOnSegment(Vector3 start, Vector3 end,
+                                           Vector3 point)
+{
+    Vector3 segment = CombatSubtract(end, start);
+    float length_squared = CombatLengthSquared(segment);
+    if (length_squared <= 0.000001f) return start;
+    float amount = CombatClamp(
+        CombatDot(CombatSubtract(point, start), segment) / length_squared,
+        0.0f, 1.0f);
+    return CombatAdd(start, CombatScale(segment, amount));
+}
+
 static float CombatWeaponExtension(CcCombatTeam team)
 {
     if (team == CC_COMBAT_GUARD) return 0.66f;
@@ -500,11 +605,14 @@ static float CombatStrikeReach(CcCombatTeam team)
     return 1.04f;
 }
 
-static float CombatStrikeDamage(CcCombatTeam team)
+static float CombatStrikeDamage(const CcLocalAgent *attacker)
 {
-    if (team == CC_COMBAT_GUARD) return 21.0f;
-    if (team == CC_COMBAT_RAIDER) return 19.0f;
-    return 24.0f;
+    CcCombatTeam team = attacker != NULL ? attacker->combat.team :
+                                           CC_COMBAT_NEUTRAL;
+    float base = 24.0f;
+    if (team == CC_COMBAT_GUARD) base = 21.0f;
+    if (team == CC_COMBAT_RAIDER) base = 19.0f;
+    return base * AthleticBonus(attacker, CC_ATHLETIC_POWER, 0.08f);
 }
 
 static bool CombatTeamsHostile(CcCombatTeam first, CcCombatTeam second)
@@ -518,15 +626,21 @@ static bool CombatTeamsHostile(CcCombatTeam first, CcCombatTeam second)
 }
 
 static void CombatApplyKnockback(CcLocalAgent *attacker,
-                                CcLocalAgent *defender, float speed)
+                                 CcLocalAgent *defender,
+                                 Vector3 direction, float speed)
 {
-    float x = defender->position.x - attacker->position.x;
-    float z = defender->position.z - attacker->position.z;
+    float x = direction.x;
+    float z = direction.z;
     float length = sqrtf(x * x + z * z);
     if (length <= 0.0001f) {
-        x = sinf(attacker->facing_yaw);
-        z = cosf(attacker->facing_yaw);
-        length = 1.0f;
+        x = defender->position.x - attacker->position.x;
+        z = defender->position.z - attacker->position.z;
+        length = sqrtf(x * x + z * z);
+        if (length <= 0.0001f) {
+            x = sinf(attacker->facing_yaw);
+            z = cosf(attacker->facing_yaw);
+            length = 1.0f;
+        }
     }
     defender->combat.knockback_velocity.x = x / length * speed;
     defender->combat.knockback_velocity.z = z / length * speed;
@@ -552,6 +666,7 @@ static void CombatDefeat(CcLocalAgent *agent)
     agent->combat.recovery_seconds = agent->combat.team == CC_COMBAT_PLAYER ?
                                      2.75f : 0.0f;
     CcHumanoidGaitSetGuarded(&agent->humanoid, false);
+    (void)CcHumanoidGaitKnockDown(&agent->humanoid);
 }
 
 void CcLocalCombatSetTeam(CcLocalAgent *agent, CcCombatTeam team)
@@ -612,9 +727,11 @@ bool CcLocalAgentJump(CcLocalAgent *agent)
         !CcHumanoidGaitBeginJump(&agent->humanoid)) {
         return false;
     }
-    const float takeoff_speed = 4.35f;
+    float takeoff_speed = 4.35f +
+        (float)(AthleticLevel(agent, CC_ATHLETIC_MOBILITY) - 1) * 0.16f;
     agent->velocity.y = takeoff_speed;
     agent->grounded = false;
+    agent->jump_training_pending = true;
     agent->humanoid.body.root.velocity.y = takeoff_speed;
     agent->humanoid.root_velocity.y = takeoff_speed;
     return true;
@@ -672,9 +789,43 @@ CcCombatOutcome CcLocalCombatResolveStrike(CcLocalAgent *attacker,
         return CC_COMBAT_OUTCOME_MISS;
     }
 
+    Vector3 tip_motion = CombatSubtract(current_tip, previous_tip);
+    float tip_travel = sqrtf(CombatLengthSquared(tip_motion));
+    Vector3 impact_direction = tip_travel > 0.001f ?
+        CombatScale(tip_motion, 1.0f / tip_travel) : forward;
+    float impact_speed = tip_travel /
+        fmaxf(attacker->humanoid.last_delta_time, 1.0f / 240.0f);
+    impact_speed = CombatClamp(impact_speed, 2.4f, 9.0f);
+    float impact_scale = CombatClamp(0.66f + impact_speed * 0.09f,
+                                     0.82f, 1.36f);
+    impact_scale *= AthleticBonus(attacker, CC_ATHLETIC_POWER, 0.055f);
+
+    Vector3 impact_sample = current_tip;
+    Vector3 impact_point = CombatClosestPointOnSegment(
+        body_bottom, body_top, impact_sample);
+    Vector3 guard_left = FromLimbVector(defender->humanoid.pose.hand[0]);
+    Vector3 guard_right = FromLimbVector(defender->humanoid.pose.hand[1]);
+    float guard_distance = CombatSegmentDistanceSquared(
+        current_hand, current_tip, guard_left, guard_right);
+    guard_distance = fminf(guard_distance, CombatSegmentDistanceSquared(
+        previous_hand, previous_tip, guard_left, guard_right));
+    guard_distance = fminf(guard_distance, CombatSegmentDistanceSquared(
+        previous_tip, current_tip, guard_left, guard_right));
     bool guarded = defender->humanoid.action == CC_HUMANOID_ACTION_GUARD &&
                    defender->combat.posture > 0.0f &&
-                   CombatFacingDot(defender, attacker->position) >= 0.28f;
+                   CombatFacingDot(defender, attacker->position) >= 0.28f &&
+                   guard_distance <= 0.58f * 0.58f;
+    if (guarded) {
+        impact_point = CombatClosestPointOnSegment(
+            guard_left, guard_right, impact_sample);
+    }
+    defender->combat.impact_point = impact_point;
+    defender->combat.impact_direction = impact_direction;
+    defender->combat.impact_speed = impact_speed;
+    defender->combat.impact_valid = true;
+    CcHumanoidGaitApplyImpact(
+        &defender->humanoid, ToLimbVector(impact_direction),
+        guarded ? 0.24f : CombatClamp(impact_scale * 0.72f, 0.0f, 1.0f));
     attacker->combat.hitstop_seconds = fmaxf(
         attacker->combat.hitstop_seconds, guarded ? 0.040f : 0.055f);
     defender->combat.hitstop_seconds = fmaxf(
@@ -686,20 +837,30 @@ CcCombatOutcome CcLocalCombatResolveStrike(CcLocalAgent *attacker,
                                42.0f :
                                attacker->combat.team == CC_COMBAT_RAIDER ?
                                24.0f : 32.0f;
+        posture_damage *= impact_scale;
         defender->combat.posture = fmaxf(0.0f,
                                          defender->combat.posture -
                                          posture_damage);
-        CombatApplyKnockback(attacker, defender, 0.34f);
+        CombatApplyKnockback(attacker, defender, impact_direction,
+                             0.34f * impact_scale);
+        CcHumanoidGaitApplyImpact(
+            &attacker->humanoid, ToLimbVector(CombatScale(
+                impact_direction, -1.0f)), 0.22f);
+        CcLocalAgentTrainAthleticism(attacker, CC_ATHLETIC_POWER, 6.0f);
+        CcLocalAgentTrainAthleticism(defender, CC_ATHLETIC_POWER, 7.0f);
         if (defender->combat.posture > 0.0f) {
             return CC_COMBAT_OUTCOME_BLOCKED;
         }
         CcHumanoidGaitSetGuarded(&defender->humanoid, false);
         defender->combat.health = fmaxf(
-            0.0f, defender->combat.health - CombatStrikeDamage(
-                attacker->combat.team) * 0.65f);
+            0.0f, defender->combat.health -
+            CombatStrikeDamage(attacker) * impact_scale * 0.65f);
         defender->combat.stagger_seconds = 0.78f;
-        CombatApplyKnockback(attacker, defender, 1.22f);
+        CombatApplyKnockback(attacker, defender, impact_direction,
+                             1.22f * impact_scale);
+        CcLocalAgentTrainAthleticism(attacker, CC_ATHLETIC_POWER, 12.0f);
         if (defender->combat.health <= 0.0f) {
+            CcLocalAgentTrainAthleticism(attacker, CC_ATHLETIC_POWER, 12.0f);
             CombatDefeat(defender);
             return CC_COMBAT_OUTCOME_DEFEATED;
         }
@@ -707,11 +868,16 @@ CcCombatOutcome CcLocalCombatResolveStrike(CcLocalAgent *attacker,
     }
 
     defender->combat.health = fmaxf(
-        0.0f, defender->combat.health - CombatStrikeDamage(attacker->combat.team));
-    defender->combat.posture = fmaxf(0.0f, defender->combat.posture - 12.0f);
+        0.0f, defender->combat.health -
+        CombatStrikeDamage(attacker) * impact_scale);
+    defender->combat.posture = fmaxf(
+        0.0f, defender->combat.posture - 12.0f * impact_scale);
     defender->combat.stagger_seconds = 0.34f;
-    CombatApplyKnockback(attacker, defender, 1.06f);
+    CombatApplyKnockback(attacker, defender, impact_direction,
+                         1.06f * impact_scale);
+    CcLocalAgentTrainAthleticism(attacker, CC_ATHLETIC_POWER, 12.0f);
     if (defender->combat.health <= 0.0f) {
+        CcLocalAgentTrainAthleticism(attacker, CC_ATHLETIC_POWER, 12.0f);
         CombatDefeat(defender);
         return CC_COMBAT_OUTCOME_DEFEATED;
     }
@@ -1726,7 +1892,8 @@ static bool BeginClimb(CcLocalAgent *agent, const NavPlatform *platform)
                                    PhysicsScale(frame_right, 0.16f));
     hand_left.y += 0.035f;
     hand_right.y += 0.035f;
-    const float arm_reach = 0.69f;
+    float arm_reach = 0.69f +
+        (float)(AthleticLevel(agent, CC_ATHLETIC_GRIP) - 1) * 0.025f;
     if (PhysicsLength(PhysicsSubtract(hand_left, shoulder_left)) > arm_reach ||
         PhysicsLength(PhysicsSubtract(hand_right, shoulder_right)) > arm_reach) {
         return false;
@@ -1744,14 +1911,23 @@ static bool BeginClimb(CcLocalAgent *agent, const NavPlatform *platform)
     agent->climb_hand_right = hand_right;
     agent->facing_yaw = facing;
     float rise = agent->climb_end.y - agent->climb_start.y;
-    agent->climb_duration = 1.28f + rise * 0.16f;
+    agent->vaulting = rise <= 1.08f &&
+        AthleticLevel(agent, CC_ATHLETIC_MOBILITY) >= 2;
+    float base_duration = agent->vaulting ? 0.76f + rise * 0.10f :
+                                            1.28f + rise * 0.16f;
+    float athletic_rate =
+        AthleticBonus(agent, CC_ATHLETIC_GRIP, 0.07f) *
+        AthleticBonus(agent, CC_ATHLETIC_MOBILITY, 0.035f);
+    agent->climb_duration = fmaxf(0.56f, base_duration / athletic_rate);
     agent->climb_progress = 0.0f;
     agent->climb_settle = 0.0f;
     agent->climbing = true;
     agent->climbing_down = false;
+    agent->climb_training_pending = true;
     agent->grounded = true;
     agent->velocity = (Vector3){0};
-    agent->traversal = CC_TRAVERSAL_CLIMB;
+    agent->traversal = agent->vaulting ? CC_TRAVERSAL_VAULT :
+                                         CC_TRAVERSAL_CLIMB;
     if (agent->morphology == CC_MORPHOLOGY_BIPED) {
         CcHumanoidGaitBeginClimb(&agent->humanoid);
         agent->humanoid_needs_reset = false;
@@ -1811,10 +1987,13 @@ static bool BeginDownClimb(CcLocalAgent *agent,
     agent->climb_end_yaw = facing;
     agent->climb_duration = 1.42f +
         (platform->height - descent_end.y) * 0.18f;
+    agent->climb_duration /= AthleticBonus(agent, CC_ATHLETIC_GRIP, 0.06f);
     agent->climb_progress = 0.0f;
     agent->climb_settle = 0.0f;
     agent->climbing = true;
     agent->climbing_down = true;
+    agent->vaulting = false;
+    agent->climb_training_pending = true;
     agent->grounded = true;
     agent->velocity = (Vector3){0};
     agent->traversal = CC_TRAVERSAL_DESCEND;
@@ -1966,8 +2145,13 @@ static void UpdateDownClimb(CcLocalAgent *agent, float delta_time,
         CcHumanoidGaitClimbReady(
             &agent->humanoid, ToLimbVector(agent->position),
             agent->facing_yaw, ProbeLocalSurface, &context, 0.025f)) {
+        if (agent->climb_training_pending) {
+            CcLocalAgentTrainAthleticism(agent, CC_ATHLETIC_GRIP, 14.0f);
+            agent->climb_training_pending = false;
+        }
         agent->climbing = false;
         agent->climbing_down = false;
+        agent->vaulting = false;
         agent->grounded = true;
         agent->traversal = CC_TRAVERSAL_IDLE;
         CcHumanoidGaitFinishClimb(
@@ -2060,7 +2244,8 @@ static void UpdateClimb(CcLocalAgent *agent, float delta_time,
         agent->position.y = agent->climb_end.y;
         if (agent->velocity.y > 0.0f) agent->velocity.y = 0.0f;
     }
-    agent->traversal = CC_TRAVERSAL_CLIMB;
+    agent->traversal = agent->vaulting ? CC_TRAVERSAL_VAULT :
+                                         CC_TRAVERSAL_CLIMB;
     float end_distance = PhysicsLength(
         PhysicsSubtract(agent->position, agent->climb_end));
     if (amount >= 1.0f && end_distance < 0.020f) {
@@ -2129,11 +2314,18 @@ static void UpdateClimb(CcLocalAgent *agent, float delta_time,
             CcHumanoidGaitClimbReady(
                 &agent->humanoid, ToLimbVector(agent->position),
                 agent->facing_yaw, ProbeLocalSurface, &context, 0.025f)) {
+            if (agent->climb_training_pending) {
+                CcLocalAgentTrainAthleticism(
+                    agent, CC_ATHLETIC_GRIP,
+                    agent->vaulting ? 12.0f : 22.0f);
+                agent->climb_training_pending = false;
+            }
             agent->climbing = false;
             agent->grounded = true;
             agent->traversal = CC_TRAVERSAL_IDLE;
         }
         if (!agent->climbing) {
+            agent->vaulting = false;
             CcHumanoidGaitFinishClimb(
                 &agent->humanoid, ToLimbVector(agent->position),
                 agent->facing_yaw, ProbeLocalSurface, &context);
@@ -2141,7 +2333,14 @@ static void UpdateClimb(CcLocalAgent *agent, float delta_time,
         return;
     }
     if (agent->climb_settle >= 1.0f) {
+        if (agent->climb_training_pending) {
+            CcLocalAgentTrainAthleticism(
+                agent, CC_ATHLETIC_GRIP,
+                agent->vaulting ? 12.0f : 22.0f);
+            agent->climb_training_pending = false;
+        }
         agent->climbing = false;
+        agent->vaulting = false;
         agent->grounded = true;
         agent->traversal = CC_TRAVERSAL_IDLE;
     }
@@ -2328,6 +2527,9 @@ static void CcLocalAgentPhysicsStep(CcLocalAgent *agent, float delta_time,
                                 delta_time * 2.8f);
     float traction = agent->limb_rig.initialized ? agent->limb_rig.traction : 1.0f;
     float base_speed = in_water ? 0.76f : biped ? 1.45f : 2.35f;
+    if (biped) {
+        base_speed *= AthleticBonus(agent, CC_ATHLETIC_MOBILITY, 0.045f);
+    }
     float maximum_speed = biped ? base_speed :
                           base_speed * (0.68f + traction * 0.32f);
     if (biped && agent->humanoid.action == CC_HUMANOID_ACTION_GUARD) {
@@ -2339,7 +2541,8 @@ static void CcLocalAgentPhysicsStep(CcLocalAgent *agent, float delta_time,
     if (agent->combat.defeated || agent->combat.stagger_seconds > 0.0f) {
         maximum_speed = 0.0f;
     }
-    float acceleration = 10.5f * traction;
+    float acceleration = 10.5f * traction *
+        AthleticBonus(agent, CC_ATHLETIC_MOBILITY, 0.035f);
     Vector3 direction = {0};
     float target_distance = 0.0f;
     if (agent->exact_target_valid) {
@@ -2401,9 +2604,12 @@ static void CcLocalAgentPhysicsStep(CcLocalAgent *agent, float delta_time,
         if (should_face) {
             float target_yaw = atan2f(face_x, face_z);
             float difference = WrapAngle(target_yaw - agent->facing_yaw);
+            float turn_response = 7.55f +
+                (float)(AthleticLevel(agent, CC_ATHLETIC_MOBILITY) - 1) *
+                    0.55f;
             agent->facing_yaw = WrapAngle(
                 agent->facing_yaw +
-                difference * fminf(1.0f, delta_time * 12.0f));
+                difference * fminf(1.0f, delta_time * turn_response));
         }
     }
     if (biped && in_water) {
@@ -2471,6 +2677,18 @@ static void CcLocalAgentPhysicsStep(CcLocalAgent *agent, float delta_time,
     }
     agent->velocity.x = (agent->position.x - previous_position.x) / delta_time;
     agent->velocity.z = (agent->position.z - previous_position.z) / delta_time;
+    float training_step = sqrtf(
+        (agent->position.x - previous_position.x) *
+            (agent->position.x - previous_position.x) +
+        (agent->position.z - previous_position.z) *
+            (agent->position.z - previous_position.z));
+    if (agent->grounded && !agent->climbing && training_step < 0.20f) {
+        agent->athletics.travel_training_distance += training_step;
+        while (agent->athletics.travel_training_distance >= 12.0f) {
+            agent->athletics.travel_training_distance -= 12.0f;
+            CcLocalAgentTrainAthleticism(agent, CC_ATHLETIC_MOBILITY, 5.0f);
+        }
+    }
     float knockback_decay = expf(-7.5f * delta_time);
     agent->combat.knockback_velocity.x *= knockback_decay;
     agent->combat.knockback_velocity.z *= knockback_decay;
@@ -2545,6 +2763,11 @@ static void CcLocalAgentPhysicsStep(CcLocalAgent *agent, float delta_time,
     if (landed && horizontal_speed < 0.08f &&
         !(biped && agent->humanoid.ragdoll.active)) {
         agent->traversal = CC_TRAVERSAL_IDLE;
+    }
+    if (landed && agent->jump_training_pending &&
+        !(biped && agent->humanoid.ragdoll.active)) {
+        CcLocalAgentTrainAthleticism(agent, CC_ATHLETIC_MOBILITY, 12.0f);
+        agent->jump_training_pending = false;
     }
     if (biped) {
         CcHumanoidGaitResolvePose(&agent->humanoid,
@@ -2725,7 +2948,7 @@ static Camera3D LocalCamera(bool interior, Vector3 focus)
                                     (interior ? camera_distance : 30.0f),
                                 camera.target.z + camera_distance};
     camera.up = (Vector3){0.0f, 1.0f, 0.0f};
-    camera.fovy = interior ? 10.5f : 17.0f;
+    camera.fovy = interior ? 10.5f : 13.5f;
     camera.projection = CAMERA_ORTHOGRAPHIC;
     return camera;
 }
@@ -3341,8 +3564,7 @@ static void DrawHeroSkinRigOverlay(const CcHumanoidGait *gait,
         else if (bone >= CC_HUMANOID_SKIN_THIGH_LEFT &&
                  bone <= CC_HUMANOID_SKIN_FOOT_LEFT) {
             color = Fade(HumanoidContactColor(gait->feet[0].contact), 0.82f);
-        } else if (bone >= CC_HUMANOID_SKIN_THIGH_RIGHT &&
-                   bone <= CC_HUMANOID_SKIN_FOOT_RIGHT) {
+        } else if (bone >= CC_HUMANOID_SKIN_THIGH_RIGHT) {
             color = Fade(HumanoidContactColor(gait->feet[1].contact), 0.82f);
         }
         Vector3 head = Add3(FromLimbVector(skin->bones[bone].head), offset);
@@ -3958,9 +4180,16 @@ static void DrawCombatImpact(const CcLocalAgent *agent)
 {
     if (agent->combat.hit_flash_seconds <= 0.0f) return;
     float pulse = 0.42f + agent->combat.hit_flash_seconds * 0.85f;
-    DrawSphereWires((Vector3){agent->position.x, agent->position.y + 1.02f,
-                              agent->position.z},
-                    pulse, 8, 8, WORLD_INK);
+    Vector3 point = agent->combat.impact_valid ? agent->combat.impact_point :
+        (Vector3){agent->position.x, agent->position.y + 1.02f,
+                  agent->position.z};
+    DrawSphereWires(point, pulse, 8, 8, WORLD_INK);
+    if (agent->combat.impact_valid) {
+        Vector3 trace = PhysicsAdd(
+            point, PhysicsScale(agent->combat.impact_direction,
+                                0.18f + agent->combat.impact_speed * 0.018f));
+        DrawLine3D(point, trace, WORLD_GOLD);
+    }
 }
 
 static void PresentTarget(RenderTexture2D target, Rectangle destination)

@@ -33,6 +33,14 @@ typedef struct LocalState {
     bool market_interior;
 } LocalState;
 
+typedef struct ActionReelState {
+    int32_t stage;
+    int32_t stage_frame;
+    int32_t captured_frames;
+    bool jump_started;
+    bool complete;
+} ActionReelState;
+
 static const Vector2 LOCAL_MARKET = {CC_LOCAL_MARKET_X, CC_LOCAL_MARKET_Z};
 static const Vector2 LOCAL_CARRIAGE = {CC_LOCAL_CARRIAGE_X,
                                       CC_LOCAL_CARRIAGE_Z};
@@ -144,6 +152,169 @@ static void ResetLocalState(LocalState *local)
     CcLocalCourseInit(&local->course);
 }
 
+static void RepositionHero(LocalState *local, Vector2 position,
+                           bool market_interior)
+{
+    CcAthleticProfile athletics = local->agent.athletics;
+    CcLocalAgentInit(&local->agent, position, market_interior);
+    local->agent.athletics = athletics;
+    CcLocalCombatSetTeam(&local->agent, CC_COMBAT_PLAYER);
+}
+
+static void ActionReelSetStage(ActionReelState *reel, int32_t stage)
+{
+    reel->stage = stage;
+    reel->stage_frame = 0;
+}
+
+static void PrepareActionReel(LocalState *local, ActionReelState *reel)
+{
+    *reel = (ActionReelState){0};
+    local->market_interior = false;
+    CcLocalAgentInit(&local->agent, (Vector2){1.82f, 7.50f}, false);
+    CcLocalCombatSetTeam(&local->agent, CC_COMBAT_PLAYER);
+    for (int32_t discipline = 0;
+         discipline < CC_ATHLETIC_DISCIPLINE_COUNT; ++discipline) {
+        CcLocalAgentSetAthleticLevel(
+            &local->agent, (CcAthleticDiscipline)discipline,
+            CC_ATHLETIC_MAX_LEVEL);
+    }
+    local->agent.facing_yaw = 0.5f * PI;
+    (void)CcLocalAgentSetExactTarget(
+        &local->agent, (Vector3){3.50f, 0.0f, 7.50f}, false);
+
+    local->course.alarm_active = true;
+    local->course.alarm_countdown = 1000.0f;
+    local->course.combat_origin = (Vector3){15.40f, 0.0f, 9.65f};
+    for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
+        CcLocalAgentInit(&local->course.runners[i].agent,
+                         (Vector2){88.0f + (float)i, 66.0f}, false);
+        local->course.runners[i].agent.crowned = false;
+        CcLocalCombatSetTeam(&local->course.runners[i].agent,
+                             CC_COMBAT_GUARD);
+    }
+    CcLocalAgent *opponent = &local->course.raiders[0];
+    CcLocalAgentInit(opponent, (Vector2){18.20f, 9.65f}, false);
+    opponent->crowned = false;
+    opponent->tunic_color = (Color){126, 55, 61, 255};
+    opponent->facing_yaw = -0.5f * PI;
+    CcLocalCombatSetTeam(opponent, CC_COMBAT_RAIDER);
+    CcLocalAgentSetAthleticLevel(opponent, CC_ATHLETIC_MOBILITY, 3);
+    CcLocalAgentSetAthleticLevel(opponent, CC_ATHLETIC_POWER, 3);
+    (void)CcLocalAgentSetExactTarget(
+        opponent, (Vector3){15.40f, 0.0f, 9.65f}, false);
+    CcLocalAgentInit(&local->course.raiders[1],
+                     (Vector2){91.0f, 65.0f}, false);
+    local->course.raiders[1].crowned = false;
+    CcLocalCombatSetTeam(&local->course.raiders[1], CC_COMBAT_RAIDER);
+}
+
+static void RecordActionReelImpact(CcLocalCourse *course,
+                                   CcLocalAgent *attacker,
+                                   CcLocalAgent *defender)
+{
+    if (!CcHumanoidGaitConsumeStrikeImpact(&attacker->humanoid)) return;
+    course->last_outcome = CcLocalCombatResolveStrike(attacker, defender);
+    course->last_attacker_team = attacker->combat.team;
+    course->combat_event_seconds = 0.72f;
+}
+
+static void UpdateActionReel(LocalState *local, ActionReelState *reel,
+                             char *message, size_t message_capacity)
+{
+    const float delta_time = 1.0f / 60.0f;
+    CcLocalAgent *hero = &local->agent;
+    CcLocalAgent *opponent = &local->course.raiders[0];
+    reel->stage_frame += 1;
+    if (reel->stage < 4) CcLocalAgentUpdate(opponent, delta_time, false);
+
+    switch (reel->stage) {
+        case 0:
+            (void)snprintf(message, message_capacity,
+                           "HEROIC CONTACT REEL / approach, hand plant, pull and top-out");
+            CcLocalAgentUpdate(hero, delta_time, false);
+            if ((!hero->climbing && !hero->exact_target_valid &&
+                 hero->position.y > 1.50f) || reel->stage_frame > 300) {
+                (void)CcLocalAgentSetExactTarget(
+                    hero, (Vector3){1.82f, 0.0f, 7.50f}, false);
+                ActionReelSetStage(reel, 1);
+            }
+            break;
+        case 1:
+            (void)snprintf(message, message_capacity,
+                           "HEROIC CONTACT REEL / controlled edge turn and down-climb");
+            CcLocalAgentUpdate(hero, delta_time, false);
+            if ((!hero->climbing && !hero->exact_target_valid &&
+                 hero->position.y < 0.08f) || reel->stage_frame > 330) {
+                (void)CcLocalAgentSetExactTarget(
+                    hero, (Vector3){9.40f, 0.0f, 9.65f}, false);
+                ActionReelSetStage(reel, 2);
+            }
+            break;
+        case 2:
+            (void)snprintf(message, message_capacity,
+                           "HEROIC CONTACT REEL / accelerated run-up and live physics jump");
+            if (!reel->jump_started && reel->stage_frame >= 62) {
+                reel->jump_started = CcLocalAgentJump(hero);
+            }
+            CcLocalAgentUpdate(hero, delta_time, false);
+            if ((!hero->exact_target_valid && hero->grounded &&
+                 reel->stage_frame > 90) || reel->stage_frame > 330) {
+                (void)CcLocalAgentSetExactTarget(
+                    hero, (Vector3){14.45f, 0.0f, 9.65f}, false);
+                ActionReelSetStage(reel, 3);
+            }
+            break;
+        case 3:
+            (void)snprintf(message, message_capacity,
+                           "HEROIC CONTACT REEL / terrain read, buoyancy and recovery to stride");
+            CcLocalAgentUpdate(hero, delta_time, false);
+            if ((!hero->exact_target_valid && !hero->swimming &&
+                 hero->grounded && reel->stage_frame > 120) ||
+                reel->stage_frame > 420) {
+                hero->exact_target_valid = false;
+                CcLocalCombatSetFocus(hero, opponent);
+                CcLocalCombatSetFocus(opponent, hero);
+                CcLocalCombatSetGuarded(hero, opponent, true);
+                CcLocalCombatSetGuarded(opponent, hero, true);
+                ActionReelSetStage(reel, 4);
+            }
+            break;
+        case 4:
+            (void)snprintf(message, message_capacity,
+                           "HEROIC CONTACT REEL / guard contact, recoil, strike and knockdown");
+            CcLocalCombatSetFocus(hero, opponent);
+            CcLocalCombatSetFocus(opponent, hero);
+            if (reel->stage_frame == 34) {
+                CcLocalCombatSetGuarded(hero, opponent, false);
+                (void)CcLocalCombatBeginStrike(hero, opponent);
+            }
+            if (reel->stage_frame == 112) {
+                CcLocalCombatSetGuarded(opponent, hero, false);
+                (void)CcLocalCombatBeginStrike(hero, opponent);
+            }
+            if (reel->stage_frame == 190) {
+                CcLocalCombatSetGuarded(hero, opponent, true);
+                (void)CcLocalCombatBeginStrike(opponent, hero);
+            }
+            if (reel->stage_frame == 274) {
+                CcLocalCombatSetGuarded(hero, opponent, false);
+                CcLocalCombatSetGuarded(opponent, hero, false);
+                opponent->combat.health = fminf(opponent->combat.health, 24.0f);
+                (void)CcLocalCombatBeginStrike(hero, opponent);
+            }
+            CcLocalAgentUpdate(hero, delta_time, false);
+            CcLocalAgentUpdate(opponent, delta_time, false);
+            RecordActionReelImpact(&local->course, hero, opponent);
+            RecordActionReelImpact(&local->course, opponent, hero);
+            if (reel->stage_frame > 390) reel->complete = true;
+            break;
+        default:
+            reel->complete = true;
+            break;
+    }
+}
+
 static Vector2 LocalPosition(const LocalState *local)
 {
     return CcLocalAgentPosition(&local->agent);
@@ -157,315 +328,6 @@ static const CcDungeon *DungeonAtSettlement(const CcSim *sim, CcId settlement_id
     return NULL;
 }
 
-#if 0
-/* Retained temporarily as a visual reference while the 3D local renderer settles. */
-static Vector2 IsoPoint(Vector2 grid, Vector2 origin, float half_width, float half_height)
-{
-    return (Vector2){origin.x + (grid.x - grid.y) * half_width,
-                     origin.y + (grid.x + grid.y) * half_height};
-}
-
-static Vector2 StreetPoint(Vector2 grid)
-{
-    return IsoPoint(grid, (Vector2){474.0f, 112.0f}, 43.0f, 21.0f);
-}
-
-static Vector2 InteriorPoint(Vector2 grid)
-{
-    return IsoPoint(grid, (Vector2){465.0f, 144.0f}, 48.0f, 24.0f);
-}
-
-static void DrawTriangle2D(Vector2 a, Vector2 b, Vector2 c, Color color)
-{
-    float cross = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
-    if (cross < 0.0f) DrawTriangle(a, b, c, color);
-    else DrawTriangle(a, c, b, color);
-}
-
-static void DrawQuad(Vector2 a, Vector2 b, Vector2 c, Vector2 d, Color color)
-{
-    DrawTriangle2D(a, b, c, color);
-    DrawTriangle2D(a, c, d, color);
-}
-
-static void DrawIsoTile(Vector2 point, float half_width, float half_height,
-                        Color near_color, Color far_color)
-{
-    Vector2 top = {point.x, point.y - half_height};
-    Vector2 right = {point.x + half_width, point.y};
-    Vector2 bottom = {point.x, point.y + half_height};
-    Vector2 left = {point.x - half_width, point.y};
-    DrawTriangle2D(left, top, right, far_color);
-    DrawTriangle2D(left, right, bottom, near_color);
-}
-
-static void DrawIsoBlock(Vector2 grid, float width, float depth, float height,
-                         Color front, Color side, Color roof, bool interior)
-{
-    Vector2 origin = interior ? (Vector2){465.0f, 144.0f} : (Vector2){474.0f, 112.0f};
-    float half_width = interior ? 48.0f : 43.0f;
-    float half_height = interior ? 24.0f : 21.0f;
-    Vector2 a = IsoPoint(grid, origin, half_width, half_height);
-    Vector2 b = IsoPoint((Vector2){grid.x + width, grid.y}, origin, half_width, half_height);
-    Vector2 c = IsoPoint((Vector2){grid.x + width, grid.y + depth}, origin,
-                         half_width, half_height);
-    Vector2 d = IsoPoint((Vector2){grid.x, grid.y + depth}, origin, half_width, half_height);
-    Vector2 at = {a.x, a.y - height};
-    Vector2 bt = {b.x, b.y - height};
-    Vector2 ct = {c.x, c.y - height};
-    Vector2 dt = {d.x, d.y - height};
-    DrawQuad(d, c, ct, dt, front);
-    DrawQuad(b, c, ct, bt, side);
-    DrawQuad(at, bt, ct, dt, roof);
-    DrawLineEx(dt, ct, 1.5f, Fade(INK, 0.20f));
-    DrawLineEx(bt, ct, 1.5f, Fade(INK, 0.12f));
-}
-
-static void DrawPuppet(Vector2 ground, float scale, Color tunic, Color rig,
-                       const char *label, float phase, bool player)
-{
-    float stride = sinf(phase) * 4.0f * scale;
-    float bob = fabsf(sinf(phase)) * 1.8f * scale;
-    Vector2 hip = {ground.x, ground.y - 28.0f * scale - bob};
-    Vector2 chest = {ground.x, hip.y - 22.0f * scale};
-    Vector2 neck = {ground.x, chest.y - 9.0f * scale};
-    Vector2 shoulder_l = {chest.x - 11.0f * scale, chest.y + 2.0f * scale};
-    Vector2 shoulder_r = {chest.x + 11.0f * scale, chest.y + 2.0f * scale};
-    Vector2 elbow_l = {shoulder_l.x - 5.0f * scale, shoulder_l.y + 15.0f * scale + stride};
-    Vector2 elbow_r = {shoulder_r.x + 5.0f * scale, shoulder_r.y + 15.0f * scale - stride};
-    Vector2 hand_l = {elbow_l.x + 1.0f * scale, elbow_l.y + 12.0f * scale};
-    Vector2 hand_r = {elbow_r.x - 1.0f * scale, elbow_r.y + 12.0f * scale};
-    Vector2 knee_l = {hip.x - 7.0f * scale, hip.y + 16.0f * scale + stride};
-    Vector2 knee_r = {hip.x + 7.0f * scale, hip.y + 16.0f * scale - stride};
-    Vector2 foot_l = {knee_l.x - 4.0f * scale, ground.y - 2.0f * scale};
-    Vector2 foot_r = {knee_r.x + 4.0f * scale, ground.y - 2.0f * scale};
-
-    DrawEllipse((int)ground.x, (int)ground.y, 17.0f * scale, 6.0f * scale,
-                (Color){2, 7, 10, 115});
-    DrawLineEx(knee_l, foot_l, 7.0f * scale, (Color){42, 48, 52, 255});
-    DrawLineEx(knee_r, foot_r, 7.0f * scale, (Color){42, 48, 52, 255});
-    DrawTriangle2D((Vector2){hip.x, hip.y - 8.0f * scale},
-                   (Vector2){hip.x - 15.0f * scale, hip.y + 17.0f * scale},
-                   (Vector2){hip.x + 15.0f * scale, hip.y + 17.0f * scale}, tunic);
-    DrawLineEx(shoulder_l, hand_l, 8.0f * scale, Fade(tunic, 0.95f));
-    DrawLineEx(shoulder_r, hand_r, 8.0f * scale, Fade(tunic, 0.95f));
-    DrawCircleV((Vector2){neck.x, neck.y - 9.0f * scale}, 11.0f * scale,
-                (Color){222, 174, 139, 255});
-    DrawCircleV((Vector2){neck.x - 3.4f * scale, neck.y - 11.0f * scale},
-                1.3f * scale, BACKGROUND);
-    DrawCircleV((Vector2){neck.x + 3.4f * scale, neck.y - 11.0f * scale},
-                1.3f * scale, BACKGROUND);
-
-    DrawLineEx(hip, chest, 2.0f * scale, rig);
-    DrawLineEx(shoulder_l, shoulder_r, 2.0f * scale, rig);
-    DrawLineEx(shoulder_l, elbow_l, 2.0f * scale, rig);
-    DrawLineEx(elbow_l, hand_l, 2.0f * scale, rig);
-    DrawLineEx(shoulder_r, elbow_r, 2.0f * scale, rig);
-    DrawLineEx(elbow_r, hand_r, 2.0f * scale, rig);
-    DrawLineEx(hip, knee_l, 2.0f * scale, rig);
-    DrawLineEx(knee_l, foot_l, 2.0f * scale, rig);
-    DrawLineEx(hip, knee_r, 2.0f * scale, rig);
-    DrawLineEx(knee_r, foot_r, 2.0f * scale, rig);
-    DrawLineEx(neck, (Vector2){neck.x, neck.y - 9.0f * scale}, 2.0f * scale, rig);
-    Vector2 joints[] = {hip, chest, neck, shoulder_l, shoulder_r, elbow_l, elbow_r,
-                        knee_l, knee_r};
-    for (int32_t i = 0; i < (int32_t)(sizeof(joints) / sizeof(joints[0])); ++i) {
-        DrawCircleV(joints[i], 2.5f * scale, rig);
-    }
-    if (player) {
-        DrawPoly((Vector2){ground.x, neck.y - 29.0f * scale}, 4, 4.0f * scale,
-                 45.0f, CC_GOLD);
-    }
-    if (label != NULL) {
-        int width = MeasureText(label, 9);
-        DrawRectangleRounded((Rectangle){ground.x - (float)width * 0.5f - 4.0f,
-                                         ground.y + 7.0f,
-                                         (float)width + 8.0f, 14.0f},
-                             0.35f, 4, (Color){4, 10, 14, 205});
-        DrawText(label, (int)ground.x - width / 2, (int)ground.y + 9, 9,
-                 player ? CC_GOLD : INK);
-    }
-}
-
-static void DrawLocalCarriage(Vector2 ground)
-{
-    DrawEllipse((int)ground.x, (int)ground.y + 7, 48.0f, 12.0f,
-                (Color){2, 7, 10, 130});
-    DrawIsoBlock((Vector2){1.05f, 5.55f}, 1.35f, 1.0f, 39.0f,
-                 (Color){118, 62, 49, 255}, (Color){86, 44, 46, 255},
-                 (Color){226, 174, 85, 255}, false);
-    DrawCircle((int)ground.x - 25, (int)ground.y + 5, 13.0f,
-               (Color){34, 28, 28, 255});
-    DrawCircle((int)ground.x + 25, (int)ground.y + 5, 13.0f,
-               (Color){34, 28, 28, 255});
-    DrawCircleLines((int)ground.x - 25, (int)ground.y + 5, 10.0f, CC_GOLD);
-    DrawCircleLines((int)ground.x + 25, (int)ground.y + 5, 10.0f, CC_GOLD);
-    DrawText("THE CROWNLESS CARRIAGE", (int)ground.x - 74, (int)ground.y + 24,
-             9, CC_GOLD);
-}
-
-static void DrawNoticeBoard(Vector2 ground, const CcSim *sim)
-{
-    DrawLineEx((Vector2){ground.x - 15.0f, ground.y - 27.0f},
-               (Vector2){ground.x - 15.0f, ground.y}, 5.0f,
-               (Color){82, 52, 39, 255});
-    DrawLineEx((Vector2){ground.x + 15.0f, ground.y - 27.0f},
-               (Vector2){ground.x + 15.0f, ground.y}, 5.0f,
-               (Color){82, 52, 39, 255});
-    DrawRectangleRounded((Rectangle){ground.x - 27.0f, ground.y - 54.0f,
-                                     54.0f, 32.0f}, 0.12f, 4,
-                         (Color){142, 91, 55, 255});
-    int32_t live = CcSimActiveSituationCount(sim);
-    for (int32_t i = 0; i < live && i < 4; ++i) {
-        DrawRectangle((int)ground.x - 20 + i * 10, (int)ground.y - 47 + (i % 2) * 4,
-                      8, 12, i == 3 ? Fade(DANGER, 0.8f) : (Color){229, 218, 177, 255});
-    }
-}
-
-static bool SettlementHasSmugglerRoad(const CcSim *sim, CcId settlement_id)
-{
-    for (int32_t i = 0; i < sim->route_count; ++i) {
-        const CcRoute *route = &sim->routes[i];
-        if (!route->smuggler_route) continue;
-        if (route->from_id == settlement_id || route->to_id == settlement_id) return true;
-    }
-    return false;
-}
-
-static void DrawStreetScene(const CcSim *sim, const LocalState *local, float clock)
-{
-    const CcSettlement *place = CcSimSettlement(sim, sim->player.location_id);
-    if (place == NULL) return;
-    DrawRectangleGradientV(17, 81, 914, 570, (Color){22, 52, 59, 255}, BACKGROUND);
-    BeginScissorMode(18, 82, 912, 568);
-
-    for (int32_t sum = 0; sum <= 17; ++sum) {
-        for (int32_t x = 0; x < 10; ++x) {
-            int32_t y = sum - x;
-            if (y < 0 || y >= 9) continue;
-            Color near_color = ((x + y) & 1) ? (Color){39, 66, 59, 255} :
-                                                (Color){42, 72, 63, 255};
-            if (x >= 4 && x <= 6) near_color = (Color){86, 85, 72, 255};
-            DrawIsoTile(StreetPoint((Vector2){(float)x, (float)y}), 43.0f, 21.0f,
-                        near_color, Fade(near_color, 0.86f));
-        }
-    }
-
-    Color kingdom = KingdomColor(sim, place->kingdom_id);
-    DrawIsoBlock((Vector2){0.65f, 1.10f}, 2.05f, 1.75f, 72.0f,
-                 (Color){86, 94, 91, 255}, (Color){61, 72, 73, 255}, kingdom, false);
-    DrawIsoBlock((Vector2){3.85f, 0.50f}, 2.15f, 1.55f,
-                 place->function == CC_SETTLEMENT_CAPITAL ? 119.0f : 91.0f,
-                 (Color){99, 92, 83, 255}, (Color){69, 70, 72, 255},
-                 Fade(kingdom, 0.92f), false);
-    DrawIsoBlock((Vector2){6.60f, 1.00f}, 2.35f, 2.00f, 67.0f,
-                 (Color){118, 79, 63, 255}, (Color){82, 58, 58, 255},
-                 (Color){216, 158, 68, 255}, false);
-    DrawText("MARKET", (int)StreetPoint((Vector2){7.35f, 2.55f}).x - 23,
-             (int)StreetPoint((Vector2){7.35f, 2.55f}).y - 52, 10, CC_GOLD);
-    DrawIsoBlock((Vector2){7.05f, 5.15f}, 2.10f, 1.85f, 73.0f,
-                 (Color){72, 87, 94, 255}, (Color){55, 63, 72, 255},
-                 (Color){123, 79, 126, 255}, false);
-
-    int32_t market_crates = place->stock[CC_GOOD_FOOD] / 12;
-    if (market_crates > 4) market_crates = 4;
-    for (int32_t i = 0; i < market_crates; ++i) {
-        Vector2 crate_grid = {6.25f + (float)(i % 2) * 0.43f,
-                              3.35f + (float)(i / 2) * 0.48f};
-        DrawIsoBlock(crate_grid, 0.36f, 0.36f, 18.0f,
-                     (Color){142, 91, 53, 255}, (Color){101, 64, 48, 255},
-                     (Color){196, 142, 69, 255}, false);
-    }
-
-    DrawNoticeBoard(StreetPoint(LOCAL_NOTICE), sim);
-    DrawLocalCarriage(StreetPoint(LOCAL_CARRIAGE));
-
-    const CcDungeon *dungeon = DungeonAtSettlement(sim, place->id);
-    if (dungeon != NULL) {
-        Vector2 entrance = StreetPoint(LOCAL_DUNGEON);
-        DrawEllipse((int)entrance.x, (int)entrance.y, 39.0f, 20.0f,
-                    (Color){8, 5, 14, 255});
-        DrawPoly((Vector2){entrance.x, entrance.y - 3.0f}, 5, 24.0f, 0.0f,
-                 Fade(CC_VIOLET, 0.45f));
-        DrawText(TextFormat("%s / %d", CcDungeonStateName(dungeon->state),
-                            dungeon->regional_pressure),
-                 (int)entrance.x - 52, (int)entrance.y + 24, 9, CC_VIOLET);
-    }
-
-    DrawPuppet(StreetPoint((Vector2){6.30f, 3.95f}), 0.84f,
-               (Color){223, 151, 68, 255}, TEAL, "merchant", clock * 1.4f, false);
-    DrawPuppet(StreetPoint((Vector2){4.10f, 3.85f}), 0.86f, kingdom,
-               CC_GOLD, "guard", clock * 1.1f + 1.0f, false);
-    DrawPuppet(StreetPoint((Vector2){5.55f, 6.15f}), 0.80f,
-               (Color){97, 154, 137, 255}, TEAL, "carter", clock * 1.2f + 2.0f, false);
-    DrawPuppet(StreetPoint((Vector2){2.15f, 4.35f}), 0.78f,
-               (Color){168, 112, 128, 255}, TEAL, "local", clock * 1.0f + 3.0f, false);
-    if (place->hunger >= 30) {
-        DrawPuppet(StreetPoint((Vector2){6.00f, 4.75f}), 0.72f,
-                   (Color){91, 102, 104, 255}, DANGER, "food queue",
-                   clock * 0.7f, false);
-    }
-    if (SettlementHasSmugglerRoad(sim, place->id) || place->security < 50) {
-        DrawPuppet(StreetPoint((Vector2){8.05f, 5.00f}), 0.78f,
-                   (Color){74, 60, 91, 255}, CC_VIOLET, "broker?",
-                   clock * 0.8f + 4.0f, false);
-    }
-    DrawPuppet(StreetPoint(local->player), 0.92f, (Color){42, 128, 136, 255},
-               CC_GOLD, "you", clock * 4.0f, true);
-    EndScissorMode();
-}
-
-static void DrawMarketInterior(const CcSim *sim, const LocalState *local, float clock)
-{
-    const CcSettlement *place = CcSimSettlement(sim, sim->player.location_id);
-    if (place == NULL) return;
-    DrawRectangleGradientV(17, 81, 914, 570, (Color){52, 34, 31, 255}, BACKGROUND);
-    BeginScissorMode(18, 82, 912, 568);
-    for (int32_t sum = 0; sum <= 14; ++sum) {
-        for (int32_t x = 0; x < 9; ++x) {
-            int32_t y = sum - x;
-            if (y < 0 || y >= 7) continue;
-            Color tile = ((x + y) & 1) ? (Color){108, 83, 64, 255} :
-                                            (Color){119, 91, 68, 255};
-            DrawIsoTile(InteriorPoint((Vector2){(float)x, (float)y}), 48.0f, 24.0f,
-                        tile, Fade(tile, 0.84f));
-        }
-    }
-    DrawIsoBlock((Vector2){0.20f, 0.15f}, 8.55f, 0.45f, 112.0f,
-                 (Color){87, 57, 48, 255}, (Color){64, 43, 43, 255},
-                 (Color){111, 73, 57, 255}, true);
-    DrawIsoBlock((Vector2){6.05f, 1.85f}, 2.10f, 0.72f, 32.0f,
-                 (Color){129, 80, 48, 255}, (Color){86, 57, 44, 255},
-                 (Color){190, 128, 58, 255}, true);
-    DrawIsoBlock((Vector2){1.10f, 1.15f}, 0.72f, 3.45f, 48.0f,
-                 (Color){102, 68, 49, 255}, (Color){74, 50, 45, 255},
-                 (Color){146, 99, 55, 255}, true);
-
-    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
-        int32_t count = place->stock[good] / 18;
-        if (count > 3) count = 3;
-        for (int32_t i = 0; i < count; ++i) {
-            Color top = good == CC_GOOD_FOOD ? CC_GOLD :
-                        good == CC_GOOD_MATERIAL ? (Color){170, 139, 112, 255} : TEAL;
-            DrawIsoBlock((Vector2){2.35f + (float)good * 1.00f,
-                                   1.10f + (float)i * 0.55f},
-                         0.52f, 0.52f, 22.0f,
-                         Fade(top, 0.72f), Fade(top, 0.52f), top, true);
-        }
-    }
-    DrawPuppet(InteriorPoint((Vector2){6.55f, 1.60f}), 0.92f,
-               (Color){218, 148, 61, 255}, TEAL, "Mara / factor",
-               clock * 1.1f, false);
-    DrawPuppet(InteriorPoint(local->player), 0.94f, (Color){42, 128, 136, 255},
-               CC_GOLD, "you", clock * 4.0f, true);
-
-    Vector2 exit = InteriorPoint(INTERIOR_EXIT);
-    DrawRectangleRounded((Rectangle){exit.x - 31.0f, exit.y - 66.0f, 62.0f, 66.0f},
-                         0.08f, 4, (Color){31, 22, 23, 255});
-    DrawText("STREET", (int)exit.x - 20, (int)exit.y - 39, 9, MUTED);
-    EndScissorMode();
-}
-#endif
 
 static void DrawLocalHeader(const CcSim *sim, const LocalState *local)
 {
@@ -477,7 +339,7 @@ static void DrawLocalHeader(const CcSim *sim, const LocalState *local)
     DrawText(TextFormat("CROWNS %03" PRId64, sim->player.coins), 895, 24, 15, CC_GOLD);
     DrawText(TextFormat("CARGO %02d/%02d", CcPlayerCargoUsed(&sim->player),
                         sim->player.cargo_capacity), 1062, 24, 15, TEAL);
-    DrawText("M  KINGDOM MAP", 1091, 52, 10, MUTED);
+    DrawText("M  MAP CASE", 1121, 52, 10, MUTED);
 }
 
 static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
@@ -562,6 +424,12 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
                                 local->agent.humanoid.feet[1].contact),
                             local->agent.humanoid.ground_reaction.y),
                  966, 621, 9, CC_VIOLET);
+        DrawText(TextFormat("HERO T%d / MOB %d  GRIP %d  POWER %d",
+                            CcLocalAgentHeroicTier(&local->agent),
+                            local->agent.athletics.level[CC_ATHLETIC_MOBILITY],
+                            local->agent.athletics.level[CC_ATHLETIC_GRIP],
+                            local->agent.athletics.level[CC_ATHLETIC_POWER]),
+                 966, 637, 9, CC_GOLD);
     } else if (local->agent.limb_rig.planted_count > 0 &&
                isfinite(local->agent.limb_rig.support_margin)) {
         DrawText(TextFormat("ROBOTIC %s / %s / traction %.0f%%",
@@ -626,295 +494,6 @@ static void DrawLocalFooter(const CcSim *sim, const LocalState *local)
              804, 693, 10, MUTED);
 }
 
-#if 0
-/* The former omniscient kingdom map is intentionally retired. Physical route
-   charts below are the only travel-planning projection. */
-static void DrawTerritories(const CcSim *sim)
-{
-    for (int32_t kingdom = 0; kingdom < sim->kingdom_count; ++kingdom) {
-        Color color = Fade(KingdomColor(sim, sim->kingdoms[kingdom].id), 0.09f);
-        for (int32_t settlement = 0; settlement < sim->settlement_count; ++settlement) {
-            const CcSettlement *place = &sim->settlements[settlement];
-            if (place->kingdom_id != sim->kingdoms[kingdom].id) continue;
-            DrawCircleV(SettlementPoint(place), 132.0f, color);
-            DrawCircleLinesV(SettlementPoint(place), 132.0f,
-                             Fade(KingdomColor(sim, place->kingdom_id), 0.12f));
-        }
-    }
-}
-
-static void DrawRiver(void)
-{
-    Vector2 points[26];
-    for (int32_t i = 0; i < 26; ++i) {
-        float amount = (float)i / 25.0f;
-        points[i] = (Vector2){83.0f + amount * 790.0f,
-                              180.0f + amount * 360.0f + sinf(amount * 11.0f) * 32.0f};
-    }
-    DrawLineStrip(points, 26, (Color){34, 93, 112, 190});
-    for (int32_t i = 0; i < 25; ++i) {
-        DrawLineEx(points[i], points[i + 1], 9.0f, (Color){34, 93, 112, 130});
-    }
-}
-
-static void DrawRoutes(const CcSim *sim)
-{
-    for (int32_t i = 0; i < sim->route_count; ++i) {
-        const CcRoute *route = &sim->routes[i];
-        const CcSettlement *from = CcSimSettlement(sim, route->from_id);
-        const CcSettlement *to = CcSimSettlement(sim, route->to_id);
-        if (from == NULL || to == NULL) continue;
-        Vector2 a = SettlementPoint(from);
-        Vector2 b = SettlementPoint(to);
-        Color color = route->closed ? DANGER :
-                      route->smuggler_route ? CC_VIOLET : (Color){156, 139, 100, 220};
-        int32_t danger = CcSimRouteDanger(sim, route->id);
-        if (!route->closed && danger >= 55) {
-            DrawDashedLine(a, b, 6.0f, Fade(DANGER, 0.15f), route->smuggler_route);
-        }
-        DrawDashedLine(a, b, route->closed ? 5.0f : 3.0f,
-                       Fade((Color){2, 8, 12, 255}, 0.75f), route->smuggler_route);
-        DrawDashedLine(a, b, route->closed ? 2.6f : 1.6f,
-                       color, route->smuggler_route);
-        if (route->closed) {
-            Vector2 center = {(a.x + b.x) * 0.5f, (a.y + b.y) * 0.5f};
-            DrawLineEx((Vector2){center.x - 8.0f, center.y - 8.0f},
-                       (Vector2){center.x + 8.0f, center.y + 8.0f}, 3.0f, DANGER);
-            DrawLineEx((Vector2){center.x + 8.0f, center.y - 8.0f},
-                       (Vector2){center.x - 8.0f, center.y + 8.0f}, 3.0f, DANGER);
-        }
-    }
-}
-
-static void DrawShipments(const CcSim *sim, float clock)
-{
-    for (int32_t i = 0; i < sim->shipment_count; ++i) {
-        const CcShipment *shipment = &sim->shipments[i];
-        if (shipment->status != CC_SHIPMENT_TRAVELLING) continue;
-        const CcSettlement *from = CcSimSettlement(sim, shipment->origin_id);
-        const CcSettlement *to = CcSimSettlement(sim, shipment->destination_id);
-        if (from == NULL || to == NULL) continue;
-        int32_t duration = shipment->arrival_day - shipment->departure_day;
-        float progress = duration > 0 ?
-            (float)(sim->current_day - shipment->departure_day) / (float)duration : 1.0f;
-        progress = fmaxf(0.08f, fminf(0.92f, progress + sinf(clock * 1.4f) * 0.018f));
-        Vector2 a = SettlementPoint(from);
-        Vector2 b = SettlementPoint(to);
-        Vector2 point = {a.x + (b.x - a.x) * progress,
-                         a.y + (b.y - a.y) * progress};
-        Color cargo = shipment->good == CC_GOOD_FOOD ? GOLD :
-                      shipment->good == CC_GOOD_MATERIAL ? (Color){181, 151, 119, 255} : TEAL;
-        DrawRectangleRounded((Rectangle){point.x - 8.0f, point.y - 5.0f, 16.0f, 10.0f},
-                             0.25f, 4, cargo);
-        DrawCircle((int)point.x - 5, (int)point.y + 6, 3.0f, (Color){32, 28, 27, 255});
-        DrawCircle((int)point.x + 5, (int)point.y + 6, 3.0f, (Color){32, 28, 27, 255});
-    }
-}
-
-static void DrawThreats(const CcSim *sim, float clock)
-{
-    for (int32_t i = 0; i < sim->bandit_count; ++i) {
-        const CcRoute *route = CcSimRoute(sim, sim->bandits[i].route_id);
-        if (route == NULL) continue;
-        const CcSettlement *from = CcSimSettlement(sim, route->from_id);
-        const CcSettlement *to = CcSimSettlement(sim, route->to_id);
-        if (from == NULL || to == NULL) continue;
-        Vector2 a = SettlementPoint(from);
-        Vector2 b = SettlementPoint(to);
-        Vector2 point = {(a.x + b.x) * 0.5f + 18.0f,
-                         (a.y + b.y) * 0.5f - 15.0f};
-        float pulse = 7.0f + sinf(clock * 3.0f) * 1.5f;
-        DrawCircleV(point, pulse + 4.0f, Fade(DANGER, 0.22f));
-        DrawCircleV(point, pulse, DANGER);
-        DrawText("B", (int)point.x - 4, (int)point.y - 6, 12, INK);
-    }
-    for (int32_t i = 0; i < sim->dungeon_count; ++i) {
-        const CcDungeon *dungeon = &sim->dungeons[i];
-        const CcSettlement *place = CcSimSettlement(sim, dungeon->settlement_id);
-        if (place == NULL) continue;
-        Vector2 point = SettlementPoint(place);
-        point.x += 48.0f;
-        point.y -= 35.0f;
-        DrawPoly(point, 4, 11.0f + sinf(clock * 2.0f), 45.0f, CC_VIOLET);
-        DrawPolyLines(point, 4, 15.0f, 45.0f, Fade(CC_VIOLET, 0.45f));
-    }
-}
-
-static void DrawCarriage(Vector2 position)
-{
-    DrawRectangleRounded((Rectangle){position.x - 15.0f, position.y - 12.0f,
-                                     30.0f, 19.0f}, 0.20f, 5,
-                         (Color){234, 200, 120, 255});
-    DrawRectangleRec((Rectangle){position.x - 11.0f, position.y - 8.0f,
-                                 22.0f, 4.0f},
-                     (Color){34, 105, 110, 255});
-    DrawCircle((int)position.x - 10, (int)position.y + 9, 5.0f,
-               (Color){40, 31, 32, 255});
-    DrawCircle((int)position.x + 10, (int)position.y + 9, 5.0f,
-               (Color){40, 31, 32, 255});
-    DrawCircleLines((int)position.x - 10, (int)position.y + 9, 5.0f, CC_GOLD);
-    DrawCircleLines((int)position.x + 10, (int)position.y + 9, 5.0f, CC_GOLD);
-}
-
-static void DrawSettlements(const CcSim *sim, int32_t selected, float clock)
-{
-    for (int32_t i = 0; i < sim->settlement_count; ++i) {
-        const CcSettlement *place = &sim->settlements[i];
-        Vector2 point = SettlementPoint(place);
-        Color color = KingdomColor(sim, place->kingdom_id);
-        if (i == selected) {
-            DrawCircleLinesV(point, 28.0f + sinf(clock * 3.0f) * 2.0f, CC_GOLD);
-        }
-        DrawCircleV(point, 19.0f, Fade((Color){2, 7, 11, 255}, 0.88f));
-        DrawPoly(point, place->function == CC_SETTLEMENT_CAPITAL ? 6 : 5,
-                 place->function == CC_SETTLEMENT_CAPITAL ? 14.0f : 11.0f,
-                 0.0f, color);
-        if (place->hunger >= 40) {
-            DrawCircleV((Vector2){point.x + 17.0f, point.y - 17.0f}, 6.0f, DANGER);
-            DrawText("!", (int)point.x + 15, (int)point.y - 22, 10, INK);
-        }
-        const CcSituation *situation = CcSimSituationForSettlement(sim, place->id);
-        if (situation != NULL) {
-            Vector2 marker = {point.x - 18.0f, point.y - 18.0f};
-            DrawPoly(marker, 4, 7.0f, 45.0f, CC_GOLD);
-            DrawPolyLines(marker, 4, 10.0f, 45.0f, Fade(CC_GOLD, 0.42f));
-        }
-        int width = MeasureText(place->name, 13);
-        DrawRectangleRounded((Rectangle){point.x - (float)width * 0.5f - 7.0f,
-                                         point.y + 23.0f,
-                                         (float)width + 14.0f, 20.0f},
-                             0.30f, 5, (Color){7, 15, 21, 215});
-        DrawText(place->name, (int)point.x - width / 2, (int)point.y + 27, 13, INK);
-    }
-    const CcSettlement *current = CcSimSettlement(sim, sim->player.location_id);
-    if (current != NULL) {
-        Vector2 point = SettlementPoint(current);
-        point.y -= 34.0f;
-        DrawCarriage(point);
-    }
-}
-
-static void DrawMap(const CcSim *sim, int32_t selected, float clock)
-{
-    DrawPanel((Rectangle){20.0f, 82.0f, 900.0f, 568.0f},
-              (Color){11, 25, 31, 246});
-    BeginScissorMode(21, 83, 898, 566);
-    DrawTerritories(sim);
-    DrawRiver();
-    DrawRoutes(sim);
-    DrawShipments(sim, clock);
-    DrawThreats(sim, clock);
-    DrawSettlements(sim, selected, clock);
-    EndScissorMode();
-
-    DrawText("KNOWN KINGDOMS", 38, 98, 11, MUTED);
-    for (int32_t i = 0; i < sim->kingdom_count; ++i) {
-        int x = 38 + i * 185;
-        DrawCircle(x + 5, 127, 5.0f, KingdomColor(sim, sim->kingdoms[i].id));
-        DrawText(sim->kingdoms[i].name, x + 17, 120, 13, INK);
-        DrawText(TextFormat("L%02d", sim->kingdoms[i].legitimacy), x + 17, 136, 9, MUTED);
-    }
-}
-
-static void DrawSettlementPanel(const CcSim *sim, int32_t selected)
-{
-    Rectangle panel = {938.0f, 82.0f, 322.0f, 568.0f};
-    DrawPanel(panel, PANEL);
-    const CcSettlement *place = selected >= 0 && selected < sim->settlement_count ?
-                                &sim->settlements[selected] : NULL;
-    if (place == NULL) return;
-    const CcKingdom *kingdom = KingdomById(sim, place->kingdom_id);
-    DrawText(kingdom != NULL ? kingdom->name : "UNCLAIMED", 958, 102, 12,
-             KingdomColor(sim, place->kingdom_id));
-    if (kingdom != NULL) {
-        DrawText(TextFormat("TREASURY %" PRId64 "   LEGITIMACY %d", kingdom->treasury,
-                            kingdom->legitimacy), 958, 119, 9, MUTED);
-    }
-    DrawText(place->name, 958, 137, 24, INK);
-    DrawText(CcSettlementFunctionName(place->function), 958, 168, 12, MUTED);
-    DrawText(TextFormat("POPULATION  %d", place->population), 958, 188, 11, INK);
-
-    DrawBar(958, 214, 132, "HUNGER", place->hunger, DANGER);
-    DrawBar(958, 235, 132, "SECURITY", place->security, TEAL);
-    DrawBar(958, 256, 132, "PROSPERITY", place->prosperity, CC_GOLD);
-
-    DrawText("LOCAL MARKET", 958, 291, 12, TEAL);
-    DrawText("KEY GOOD      PRICE STOCK  IN CARGO", 958, 313, 9, MUTED);
-    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
-        int y = 335 + good * 27;
-        DrawText(TextFormat("%d", good + 1), 961, y, 13, INK);
-        DrawText(CcGoodName((CcGood)good), 982, y, 12, INK);
-        DrawText(TextFormat("%2d", place->price[good]), 1071, y, 12, CC_GOLD);
-        DrawText(TextFormat("%3d", place->stock[good]), 1117, y, 12, INK);
-        DrawText(TextFormat("%2d", CcSimIncomingGood(sim, place->id, (CcGood)good)),
-                 1170, y, 12, MUTED);
-        DrawText(TextFormat("%2d", sim->player.cargo[good]), 1212, y, 12, TEAL);
-    }
-
-    int32_t primary = 0;
-    for (int32_t good = 1; good < CC_GOOD_COUNT; ++good) {
-        if (place->production[good] > place->production[primary]) primary = good;
-    }
-    DrawText(TextFormat("MAKES %s +%d/w   USES FOOD %d/w",
-                        CcGoodName((CcGood)primary), place->production[primary],
-                        place->consumption[CC_GOOD_FOOD]), 958, 417, 10, MUTED);
-
-    const CcRoute *route = CcSimRouteBetween(sim, sim->player.location_id, place->id);
-    DrawText("JOURNEY", 958, 445, 12, TEAL);
-    if (place->id == sim->player.location_id) {
-        DrawText("The carriage is here.", 958, 466, 13, INK);
-    } else if (route == NULL) {
-        DrawText("No direct route.", 958, 466, 13, MUTED);
-    } else {
-        DrawText(TextFormat("%d days  condition %d  danger %d%%", route->travel_days,
-                            route->condition, CcSimRouteDanger(sim, route->id)),
-                 958, 466, 12, INK);
-        DrawText(route->closed ? "CLOSED BY CURRENT EVENTS" :
-                 route->smuggler_route ? "UNLICENSED OLD ROAD" : "OPEN",
-                 958, 486, 12,
-                 route->closed ? DANGER : route->smuggler_route ? CC_VIOLET : TEAL);
-        if (route->closed) DrawText("R  repair: 3 tools / 18 crowns", 958, 505, 11, CC_GOLD);
-        else DrawText("ENTER  commit to journey", 958, 505, 11, CC_GOLD);
-    }
-
-    const CcSituation *situation = CcSimSituationForSettlement(sim, place->id);
-    if (situation != NULL) {
-        const CcFaction *issuer = FactionById(sim, situation->issuer_faction_id);
-        DrawText("LIVE SITUATION", 958, 536, 11, CC_GOLD);
-        DrawText(CcSituationKindName(situation->kind), 958, 555, 14, INK);
-        if (situation->quantity > 0) {
-            DrawText(TextFormat("Progress %d/%d   due %d   +%" PRId64,
-                                situation->progress, situation->quantity,
-                                situation->deadline_day, situation->reward),
-                     958, 578, 11, TEAL);
-        } else {
-            DrawText(TextFormat("Due day %d   reward +%" PRId64,
-                                situation->deadline_day, situation->reward),
-                     958, 578, 11, TEAL);
-        }
-        DrawText(issuer != NULL ? issuer->name : "Anonymous sponsors", 958, 598, 10, MUTED);
-        const char *instruction = situation->kind == CC_SITUATION_ROUTE_REPAIR ?
-                                  "R repair from either endpoint" :
-                                  situation->kind == CC_SITUATION_MONSTER_EXPEDITION ?
-                                  "E mount an expedition here" :
-                                  situation->kind == CC_SITUATION_RELIEF_DELIVERY ?
-                                  "Sell food here to fulfill" : "Sell tools here quietly";
-        DrawText(instruction, 958, 619, 11, CC_GOLD);
-    } else {
-        for (int32_t i = 0; i < sim->dungeon_count; ++i) {
-            const CcDungeon *dungeon = &sim->dungeons[i];
-            if (dungeon->settlement_id != place->id) continue;
-            DrawText("REGIONAL DUNGEON", 958, 536, 11, CC_VIOLET);
-            DrawText(dungeon->name, 958, 557, 13, INK);
-            DrawText(TextFormat("%s  pressure %d", CcDungeonStateName(dungeon->state),
-                                dungeon->regional_pressure), 958, 580, 11, MUTED);
-            if (place->id == sim->player.location_id) {
-                DrawText("E  mount a 3-day expedition", 958, 605, 11, CC_GOLD);
-            }
-        }
-    }
-}
-#endif
 
 static bool MapVisibleAtCarriage(const CcSim *sim, const CcMap *map)
 {
@@ -1412,17 +991,15 @@ static void HandleInput(CcSim *sim, int32_t *selected, ClientView *view,
             if (local->market_interior &&
                 GridDistance(position, INTERIOR_EXIT) < 1.25f) {
                 local->market_interior = false;
-                CcLocalAgentInit(&local->agent,
-                                 (Vector2){CC_LOCAL_MARKET_X,
-                                           CC_LOCAL_MARKET_Z + 1.10f}, false);
-                CcLocalCombatSetTeam(&local->agent, CC_COMBAT_PLAYER);
+                RepositionHero(local,
+                               (Vector2){CC_LOCAL_MARKET_X,
+                                         CC_LOCAL_MARKET_Z + 1.10f}, false);
                 (void)snprintf(message, message_capacity,
                                "The market door closes behind you; the street keeps moving.");
             } else if (!local->market_interior &&
                        GridDistance(position, LOCAL_MARKET) < 1.30f) {
                 local->market_interior = true;
-                CcLocalAgentInit(&local->agent, (Vector2){2.05f, 5.35f}, true);
-                CcLocalCombatSetTeam(&local->agent, CC_COMBAT_PLAYER);
+                RepositionHero(local, (Vector2){2.05f, 5.35f}, true);
                 (void)snprintf(message, message_capacity,
                                "You enter a market whose shelves are filled by the real simulation.");
             } else if (!local->market_interior &&
@@ -1543,12 +1120,14 @@ int main(int argc, char **argv)
                             strcmp(argv[1], "--capture-map-case") == 0;
     bool capture_dojo = argc >= 2 && strcmp(argv[1], "--capture-dojo") == 0;
     bool capture_jump = argc >= 2 && strcmp(argv[1], "--capture-jump") == 0;
+    bool capture_action_reel = argc >= 2 &&
+        strcmp(argv[1], "--capture-action-reel") == 0;
     bool capture = argc >= 2 &&
                    (strcmp(argv[1], "--capture") == 0 || capture_board ||
                     capture_interior || capture_navigation || capture_limbs ||
                     capture_walk_cycle || capture_defense ||
                     capture_downclimb || capture_map_case || capture_dojo ||
-                    capture_jump);
+                    capture_jump || capture_action_reel);
     const char *capture_path = argc >= 3 ? argv[2] : "architecture-proof.png";
     char save_path[640];
     CampaignSavePath(save_path, sizeof(save_path));
@@ -1563,7 +1142,7 @@ int main(int argc, char **argv)
         return 1;
     }
     SetWindowMinSize(1080, 680);
-    SetTargetFPS(render_benchmark ? 0 : 60);
+    SetTargetFPS(render_benchmark || capture_action_reel ? 0 : 60);
     RenderTexture2D local_target = LoadRenderTexture(914, 570);
     SetTextureFilter(local_target.texture, TEXTURE_FILTER_BILINEAR);
     CcLocalRendererInit();
@@ -1579,10 +1158,12 @@ int main(int argc, char **argv)
     LocalState local;
     CcLocalAgent walk_cycle_frames[8] = {0};
     uint32_t walk_cycle_mask = 0;
+    ActionReelState action_reel = {0};
     ResetLocalState(&local);
     if (capture && !capture_interior && !capture_walk_cycle &&
         !capture_jump && !capture_defense && !capture_downclimb &&
-        !capture_navigation && !capture_limbs && !capture_dojo) {
+        !capture_navigation && !capture_limbs && !capture_dojo &&
+        !capture_action_reel) {
         local.course.alarm_countdown = 1000.0f;
         for (int32_t frame = 0; frame < 1500; ++frame) {
             CcLocalCourseUpdate(&local.course, &local.agent, &sim,
@@ -1597,6 +1178,7 @@ int main(int argc, char **argv)
             CcLocalAgentUpdate(&local.agent, 1.0f / 60.0f, false);
         }
     }
+    if (capture_action_reel) PrepareActionReel(&local, &action_reel);
     if (capture_downclimb) {
         CcLocalAgentInit(&local.agent, (Vector2){3.50f, 6.20f}, false);
         (void)CcLocalAgentSetExactTarget(
@@ -1714,6 +1296,11 @@ int main(int argc, char **argv)
     while (!WindowShouldClose()) {
         if (capture_walk_cycle) {
             local.agent = walk_cycle_frames[walk_frame_count];
+        } else if (capture_action_reel) {
+            for (int32_t step = 0; step < 4 && !action_reel.complete; ++step) {
+                UpdateActionReel(&local, &action_reel, message,
+                                 sizeof(message));
+            }
         } else {
             HandleInput(&sim, &selected, &view, &return_view, &local,
                         local_target, local_bounds,
@@ -1758,6 +1345,15 @@ int main(int argc, char **argv)
         if (render_benchmark) {
             render_benchmark_count += 1;
             if (render_benchmark_count >= render_benchmark_frames) break;
+        } else if (capture_action_reel) {
+            capture_frames += 1;
+            if (capture_frames <= 2) continue;
+            char frame_path[768];
+            (void)snprintf(frame_path, sizeof(frame_path), "%s-%03d.png",
+                           capture_path, action_reel.captured_frames);
+            TakeScreenshot(frame_path);
+            action_reel.captured_frames += 1;
+            if (action_reel.complete) break;
         } else if (capture_walk_cycle) {
             capture_frames += 1;
             if (capture_frames <= 2) continue;
@@ -1791,6 +1387,9 @@ int main(int argc, char **argv)
     } else if (capture_walk_cycle) {
         (void)printf("captured %d walk-cycle frames with prefix %s\n",
                      walk_frame_count, capture_path);
+    } else if (capture_action_reel) {
+        (void)printf("captured %d heroic action-reel frames with prefix %s\n",
+                     action_reel.captured_frames, capture_path);
     } else if (capture) {
         (void)printf("captured %s\n", capture_path);
     }

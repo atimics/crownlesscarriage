@@ -128,6 +128,8 @@ static void AdvanceAction(CcHumanoidGait *gait, float delta_time)
 {
     float previous_time = gait->action_time;
     gait->action_time += delta_time;
+    gait->impact_response *= expf(-6.5f * delta_time);
+    if (gait->impact_response < 0.001f) gait->impact_response = 0.0f;
     gait->action_blend += (1.0f - gait->action_blend) *
                           (1.0f - expf(-10.0f * delta_time));
     if (gait->action == CC_HUMANOID_ACTION_STRIKE) {
@@ -1636,6 +1638,21 @@ bool CcHumanoidGaitBeginJump(CcHumanoidGait *gait)
     return true;
 }
 
+void CcHumanoidGaitApplyImpact(CcHumanoidGait *gait,
+                               CcLimbVec3 direction, float strength)
+{
+    if (gait == NULL || !gait->initialized || gait->ragdoll.active) return;
+    gait->impact_direction = NormalizeOr(
+        direction, (CcLimbVec3){0.0f, 0.0f, 1.0f});
+    gait->impact_response = fmaxf(gait->impact_response,
+                                  Clamp(strength, 0.0f, 1.0f));
+}
+
+bool CcHumanoidGaitKnockDown(CcHumanoidGait *gait)
+{
+    return gait != NULL && gait->initialized && ActivateRagdoll(gait);
+}
+
 bool CcHumanoidGaitConsumeStrikeImpact(CcHumanoidGait *gait)
 {
     if (gait == NULL || !gait->strike_impact_pending) return false;
@@ -1897,8 +1914,20 @@ void CcHumanoidGaitAdvance(CcHumanoidGait *gait, CcLimbVec3 body_position,
         right_flex = LerpScalar(right_flex, target_flex, blend);
         action_spine_pitch = LerpScalar(-0.045f, 0.085f, landing);
     }
+    CcLimbVec3 impact_forward_axis = Forward(body_yaw);
+    CcLimbVec3 impact_right_axis = Right(body_yaw);
+    float impact_forward = Dot(gait->impact_direction, impact_forward_axis);
+    float impact_side = Dot(gait->impact_direction, impact_right_axis);
+    float impact = gait->impact_response;
+    action_spine_yaw += impact_side * impact * 0.18f;
+    action_spine_pitch += impact_forward * impact * 0.10f;
+    left_arm += impact * (0.12f - impact_side * 0.09f);
+    right_arm += impact * (0.12f + impact_side * 0.09f);
+    left_flex += impact * 0.16f;
+    right_flex += impact * 0.16f;
     CcBiomechRigDriveJoint(&gait->body, CC_HUMANOID_SPINE_ROLL,
-                           -pelvis_roll_target * 0.55f, 0.58f);
+                           -pelvis_roll_target * 0.55f +
+                           impact_side * impact * 0.12f, 0.58f);
     CcBiomechRigDriveJoint(&gait->body, CC_HUMANOID_SPINE_YAW,
                            -pelvis_yaw_target * 0.68f + action_spine_yaw,
                            combat_pose || jump_pose ? 0.74f : 0.56f);
