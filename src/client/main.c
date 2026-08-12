@@ -1590,7 +1590,7 @@ int main(int argc, char **argv)
     if (capture_defense) {
         CcLocalCourseRaiseAlarmNear(&local.course, &local.agent);
         int32_t fighting_frames = 0;
-        for (int32_t frame = 0; frame < 2400 && fighting_frames < 20; ++frame) {
+        for (int32_t frame = 0; frame < 9000 && fighting_frames < 20; ++frame) {
             CcLocalCourseUpdate(&local.course, &local.agent, &sim,
                                 1.0f / 60.0f);
             fighting_frames = local.course.alarm_active &&

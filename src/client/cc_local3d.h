@@ -141,11 +141,14 @@ typedef struct CcLocalCourseRunner {
 
 typedef struct CcLocalCourse {
     CcLocalCourseRunner runners[CC_LOCAL_COURSE_RUNNER_COUNT];
+    Vector3 guard_entry[CC_LOCAL_COURSE_RUNNER_COUNT];
     CcLocalAgent raiders[CC_LOCAL_RAIDER_COUNT];
+    Vector3 raider_entry[CC_LOCAL_RAIDER_COUNT];
     Vector3 combat_origin;
     float alarm_countdown;
     float engagement_time;
     float raider_attack_cooldown[CC_LOCAL_RAIDER_COUNT];
+    int32_t raider_response_stage[CC_LOCAL_RAIDER_COUNT];
     int32_t raider_resolve;
     int32_t defenses_completed;
     CcCombatOutcome last_outcome;
@@ -154,6 +157,7 @@ typedef struct CcLocalCourse {
     bool alarm_active;
     bool raiders_retreating;
     bool combat_origin_valid;
+    bool raider_response_waypoint_active[CC_LOCAL_RAIDER_COUNT];
 } CcLocalCourse;
 
 void CcLocalAgentInit(CcLocalAgent *agent, Vector2 position, bool market_interior);

@@ -20,6 +20,8 @@ static const Color WORLD_DANGER = {218, 75, 86, 255};
 static const Color WORLD_VIOLET = {195, 105, 221, 255};
 static const float PLAYER_COLLISION_RADIUS = 0.30f;
 static const float PERSON_COLLISION_RADIUS = 0.27f;
+static const float COURSE_GUARD_SPACING = 1.18f;
+static const float COURSE_RAIDER_SPACING = 1.48f;
 
 typedef struct WorldLabel {
     Vector3 point;
@@ -751,10 +753,12 @@ void CcLocalCourseInit(CcLocalCourse *course)
     }
     for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
         CcLocalAgentInit(&course->raiders[i],
-                         (Vector2){15.05f, 4.55f + (float)i * 0.48f}, false);
+                         (Vector2){CC_LOCAL_WORLD_WIDTH - 0.80f,
+                                   38.60f + (float)i * 2.80f}, false);
         CcLocalCombatSetTeam(&course->raiders[i], CC_COMBAT_RAIDER);
         course->raiders[i].crowned = false;
         course->raiders[i].tunic_color = (Color){126, 55, 61, 255};
+        course->raider_entry[i] = course->raiders[i].position;
     }
     course->alarm_countdown = 8.0f;
     course->raider_attack_cooldown[0] = 0.52f;
@@ -764,17 +768,30 @@ void CcLocalCourseInit(CcLocalCourse *course)
 static bool CourseCombatOriginOpen(Vector3 origin)
 {
     for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
-        float z = origin.z + ((float)i - 1.0f) * 0.68f;
+        float z = origin.z + ((float)i - 1.0f) * COURSE_GUARD_SPACING;
         if (StaticBodyBlocked(false, origin.x - 2.05f, z,
                               PLAYER_COLLISION_RADIUS)) return false;
     }
     for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
-        float z = origin.z + ((float)i - 0.5f) * 0.72f;
+        float z = origin.z + ((float)i - 0.5f) * COURSE_RAIDER_SPACING;
         if (StaticBodyBlocked(false, origin.x + 1.85f, z,
                               PLAYER_COLLISION_RADIUS)) return false;
     }
     return !StaticBodyBlocked(false, origin.x, origin.z,
                               PLAYER_COLLISION_RADIUS);
+}
+
+static void CoursePrepareCombatant(CcLocalAgent *agent, CcCombatTeam team)
+{
+    agent->combat = (CcCombatState){
+        .health = CC_LOCAL_COMBAT_MAX_HEALTH,
+        .posture = CC_LOCAL_COMBAT_MAX_POSTURE,
+        .target_index = -1,
+        .team = team,
+    };
+    agent->exact_target_valid = false;
+    agent->target_valid = false;
+    CcHumanoidGaitSetGuarded(&agent->humanoid, false);
 }
 
 void CcLocalCourseRaiseAlarmNear(CcLocalCourse *course,
@@ -784,13 +801,14 @@ void CcLocalCourseRaiseAlarmNear(CcLocalCourse *course,
     Vector3 origin = player != NULL ?
         (Vector3){player->position.x + 4.65f, 0.0f,
                   player->position.z + 0.60f} :
-        (Vector3){14.05f, 0.0f, 4.80f};
+        (Vector3){CC_LOCAL_START_X + 4.65f, 0.0f,
+                  CC_LOCAL_START_Z + 0.60f};
     if (!CourseCombatOriginOpen(origin)) {
         origin = (Vector3){CC_LOCAL_START_X + 4.65f, 0.0f,
                            CC_LOCAL_START_Z + 0.60f};
     }
     if (!CourseCombatOriginOpen(origin)) {
-        origin = (Vector3){14.05f, 0.0f, 4.80f};
+        origin = (Vector3){44.80f, 0.0f, 40.20f};
     }
     course->combat_origin = origin;
     course->combat_origin_valid = true;
@@ -803,37 +821,24 @@ void CcLocalCourseRaiseAlarmNear(CcLocalCourse *course,
     course->combat_event_seconds = 0.0f;
     for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
         CcLocalCourseRunner *runner = &course->runners[i];
-        CcLocalAgentInit(&runner->agent,
-                         (Vector2){origin.x - 2.05f,
-                                   origin.z + ((float)i - 1.0f) * 0.68f},
-                         false);
+        course->guard_entry[i] = runner->agent.position;
+        CoursePrepareCombatant(&runner->agent, CC_COMBAT_GUARD);
         runner->agent.crowned = false;
         runner->agent.tunic_color = runner->marker_color;
         runner->duty = CC_GUARD_RESPONDING;
-        runner->response_stage = 99;
+        runner->response_stage = 0;
         runner->response_waypoint_active = false;
-        runner->agent.exact_target_valid = false;
-        runner->agent.combat.health = CC_LOCAL_COMBAT_MAX_HEALTH;
-        runner->agent.combat.posture = CC_LOCAL_COMBAT_MAX_POSTURE;
-        runner->agent.combat.defeated = false;
-        runner->agent.combat.stagger_seconds = 0.0f;
-        runner->agent.combat.hitstop_seconds = 0.0f;
-        CcLocalCombatSetTeam(&runner->agent, CC_COMBAT_GUARD);
         runner->attack_cooldown = 0.22f + (float)i * 0.20f;
     }
     for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
         CcLocalAgent *raider = &course->raiders[i];
-        CcLocalAgentInit(raider,
-                         (Vector2){origin.x + 1.85f,
-                                   origin.z + ((float)i - 0.5f) * 0.72f},
-                         false);
-        CcLocalCombatSetTeam(raider, CC_COMBAT_RAIDER);
+        course->raider_entry[i] = raider->position;
+        CoursePrepareCombatant(raider, CC_COMBAT_RAIDER);
         raider->crowned = false;
         raider->tunic_color = (Color){126, 55, 61, 255};
+        course->raider_response_stage[i] = 0;
+        course->raider_response_waypoint_active[i] = false;
         course->raider_attack_cooldown[i] = 0.46f + (float)i * 0.24f;
-        (void)CcLocalAgentSetExactTarget(
-            raider, (Vector3){origin.x + 0.36f, 0.0f,
-                              origin.z + ((float)i - 0.5f) * 0.58f}, false);
     }
 }
 
@@ -875,27 +880,42 @@ static float CourseAlarmInterval(const CcSim *sim)
     return fmaxf(9.0f, 22.0f - (float)influence * 0.16f);
 }
 
-static bool CourseResponseWaypoint(int32_t guard, int32_t stage,
-                                   Vector3 *waypoint)
+static bool CourseRaiderResponseWaypoint(int32_t raider, int32_t stage,
+                                         Vector3 *waypoint)
 {
-    static const Vector3 west_route[] = {
-        {9.25f, 0.0f, 4.72f}
+    static const Vector3 routes[CC_LOCAL_RAIDER_COUNT][3] = {
+        {{72.00f, 0.0f, 38.60f}, {64.20f, 0.0f, 38.60f},
+         {53.20f, 0.0f, 38.60f}},
+        {{72.00f, 0.0f, 40.40f}, {64.20f, 0.0f, 40.40f},
+         {53.20f, 0.0f, 40.40f}},
     };
-    static const Vector3 south_route[] = {
-        {13.10f, 0.0f, 6.95f}, {14.35f, 0.0f, 6.95f},
-        {14.45f, 0.0f, 5.18f}
-    };
-    const Vector3 *route = NULL;
-    int32_t count = 0;
-    if (guard == 0) {
-        route = west_route;
-        count = (int32_t)(sizeof(west_route) / sizeof(west_route[0]));
-    } else if (guard == 2) {
-        route = south_route;
-        count = (int32_t)(sizeof(south_route) / sizeof(south_route[0]));
+    if (raider < 0 || raider >= CC_LOCAL_RAIDER_COUNT ||
+        stage < 0 || stage >= 3) return false;
+    *waypoint = routes[raider][stage];
+    return true;
+}
+
+static bool CourseGuardIngressWaypoint(const CcLocalCourse *course,
+                                       int32_t guard, int32_t stage,
+                                       Vector3 *waypoint)
+{
+    if (course == NULL || waypoint == NULL || guard < 0 ||
+        guard >= CC_LOCAL_COURSE_RUNNER_COUNT || stage < 0 || stage >= 4) {
+        return false;
     }
-    if (stage < 0 || stage >= count) return false;
-    *waypoint = route[stage];
+    Vector3 entry = course->guard_entry[guard];
+    float exit_x = entry.x < 11.80f ? 8.35f : 15.90f;
+    float lane_z = 26.50f + (float)guard * 0.35f;
+    if (stage == 0) {
+        *waypoint = (Vector3){exit_x, 0.0f, entry.z};
+    } else if (stage == 1) {
+        *waypoint = (Vector3){exit_x, 0.0f, 12.80f};
+    } else if (stage == 2) {
+        *waypoint = (Vector3){16.20f + (float)guard * 0.50f, 0.0f,
+                              lane_z};
+    } else {
+        *waypoint = (Vector3){42.80f, 0.0f, lane_z};
+    }
     return true;
 }
 
@@ -994,12 +1014,15 @@ static void CourseRefreshRaiderResolve(CcLocalCourse *course)
         average, 0.0f, CC_LOCAL_COMBAT_MAX_HEALTH));
 }
 
-static bool CourseRaidersDefeated(const CcLocalCourse *course)
+static bool CourseRaidersBroken(const CcLocalCourse *course)
 {
+    float total_health = 0.0f;
+    int32_t standing = 0;
     for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
-        if (!course->raiders[i].combat.defeated) return false;
+        total_health += course->raiders[i].combat.health;
+        standing += course->raiders[i].combat.defeated ? 0 : 1;
     }
-    return true;
+    return standing == 0 || total_health <= 60.0f;
 }
 
 static void CourseBeginRetreat(CcLocalCourse *course, CcLocalAgent *player)
@@ -1019,6 +1042,8 @@ static void CourseBeginRetreat(CcLocalCourse *course, CcLocalAgent *player)
         raider->combat.health = fmaxf(1.0f, raider->combat.health);
         CcLocalCombatSetGuarded(raider, NULL, false);
         CcLocalCombatClearFocus(raider);
+        course->raider_response_stage[i] = 2;
+        course->raider_response_waypoint_active[i] = false;
     }
     if (player != NULL) CcLocalCombatClearFocus(player);
 }
@@ -1089,18 +1114,34 @@ void CcLocalCourseUpdate(CcLocalCourse *course, CcLocalAgent *player,
                 &runner->agent,
                 (Vector3){course->combat_origin.x - 1.30f, 0.0f,
                           course->combat_origin.z +
-                          ((float)i - 1.0f) * 0.48f}, false);
+                          ((float)i - 1.0f) * COURSE_GUARD_SPACING}, false);
             CcLocalAgentUpdate(&runner->agent, delta_time, false);
         }
         bool raiders_clear = true;
         for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
             CcLocalAgent *raider = &course->raiders[i];
-            (void)CcLocalAgentSetExactTarget(
-                raider, (Vector3){course->combat_origin.x + 3.10f, 0.0f,
-                                  course->combat_origin.z +
-                                  ((float)i - 0.5f) * 0.72f}, false);
+            Vector3 retreat_waypoint;
+            bool has_retreat_waypoint = CourseRaiderResponseWaypoint(
+                i, course->raider_response_stage[i], &retreat_waypoint);
+            if (has_retreat_waypoint &&
+                !course->raider_response_waypoint_active[i]) {
+                if (CcLocalAgentSetExactTarget(raider, retreat_waypoint,
+                                               false)) {
+                    course->raider_response_waypoint_active[i] = true;
+                }
+            } else if (has_retreat_waypoint &&
+                       course->raider_response_waypoint_active[i] &&
+                       !raider->exact_target_valid) {
+                course->raider_response_stage[i] -= 1;
+                course->raider_response_waypoint_active[i] = false;
+            } else if (!has_retreat_waypoint) {
+                (void)CcLocalAgentSetExactTarget(
+                    raider, course->raider_entry[i], false);
+            }
             CcLocalAgentUpdate(raider, delta_time, false);
-            if (raider->position.x < course->combat_origin.x + 2.75f) {
+            float entry_x = raider->position.x - course->raider_entry[i].x;
+            float entry_z = raider->position.z - course->raider_entry[i].z;
+            if (entry_x * entry_x + entry_z * entry_z > 0.18f * 0.18f) {
                 raiders_clear = false;
             }
         }
@@ -1118,7 +1159,6 @@ void CcLocalCourseUpdate(CcLocalCourse *course, CcLocalAgent *player,
         return;
     }
 
-    Vector3 threat = CourseThreatCenter(course);
     int32_t engaged_guards = 0;
     for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
         CcLocalCourseRunner *runner = &course->runners[i];
@@ -1131,10 +1171,12 @@ void CcLocalCourseUpdate(CcLocalCourse *course, CcLocalAgent *player,
 
         if (!guard->combat.defeated && !CourseAgentBusy(guard)) {
             Vector3 response_waypoint;
-            bool has_response_waypoint = CourseResponseWaypoint(
-                i, runner->response_stage, &response_waypoint);
-            if (has_response_waypoint && !runner->response_waypoint_active) {
-                if (CcLocalAgentSetExactTarget(guard, response_waypoint, false)) {
+            bool has_response_waypoint = CourseGuardIngressWaypoint(
+                course, i, runner->response_stage, &response_waypoint);
+            if (has_response_waypoint &&
+                !runner->response_waypoint_active) {
+                if (CcLocalAgentSetExactTarget(guard, response_waypoint,
+                                               false)) {
                     runner->response_waypoint_active = true;
                 }
             } else if (has_response_waypoint &&
@@ -1143,11 +1185,15 @@ void CcLocalCourseUpdate(CcLocalCourse *course, CcLocalAgent *player,
                 runner->response_stage += 1;
                 runner->response_waypoint_active = false;
             } else if (!has_response_waypoint && !engaged) {
+                Vector3 anchor = target != NULL ? target->position :
+                                 course->combat_origin;
                 Vector3 guard_target = {
-                    threat.x - 0.72f, 0.0f,
-                    threat.z + ((float)i - 1.0f) * 0.52f
+                    anchor.x - 0.68f, 0.0f,
+                    anchor.z +
+                    ((float)i - 1.0f) * COURSE_GUARD_SPACING
                 };
-                (void)CcLocalAgentSetExactTarget(guard, guard_target, false);
+                (void)CcLocalAgentSetExactTarget(guard, guard_target,
+                                                 false);
             }
         }
         if (engaged && !guard->combat.defeated) {
@@ -1184,11 +1230,29 @@ void CcLocalCourseUpdate(CcLocalCourse *course, CcLocalAgent *player,
         bool engaged = target != NULL &&
             CombatHorizontalDistanceSquared(raider, target) < 1.30f * 1.30f;
         if (!CourseAgentBusy(raider)) {
-            Vector3 target_point = engaged ? raider->position :
-                (Vector3){course->combat_origin.x + 0.36f, 0.0f,
-                          course->combat_origin.z +
-                          ((float)i - 0.5f) * 0.58f};
-            (void)CcLocalAgentSetExactTarget(raider, target_point, false);
+            Vector3 response_waypoint;
+            bool has_response_waypoint = CourseRaiderResponseWaypoint(
+                i, course->raider_response_stage[i], &response_waypoint);
+            if (has_response_waypoint &&
+                !course->raider_response_waypoint_active[i]) {
+                if (CcLocalAgentSetExactTarget(raider, response_waypoint,
+                                               false)) {
+                    course->raider_response_waypoint_active[i] = true;
+                }
+            } else if (has_response_waypoint &&
+                       course->raider_response_waypoint_active[i] &&
+                       !raider->exact_target_valid) {
+                course->raider_response_stage[i] += 1;
+                course->raider_response_waypoint_active[i] = false;
+            } else if (!has_response_waypoint) {
+                Vector3 anchor = target != NULL ? target->position :
+                                 course->combat_origin;
+                Vector3 target_point = engaged ? raider->position :
+                    (Vector3){anchor.x + 0.68f, 0.0f,
+                              anchor.z + ((float)i - 0.5f) *
+                              COURSE_RAIDER_SPACING};
+                (void)CcLocalAgentSetExactTarget(raider, target_point, false);
+            }
         }
         if (engaged) {
             raider->exact_target_valid = false;
@@ -1217,7 +1281,7 @@ void CcLocalCourseUpdate(CcLocalCourse *course, CcLocalAgent *player,
         CourseResolveImpact(course, player, target);
     }
     CourseRefreshRaiderResolve(course);
-    if (CourseRaidersDefeated(course)) {
+    if (CourseRaidersBroken(course)) {
         CourseBeginRetreat(course, player);
     }
 }

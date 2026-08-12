@@ -1024,11 +1024,40 @@ int main(void)
     for (int32_t frame = 0; frame < 720; ++frame) {
         CcLocalCourseUpdate(&defense, NULL, &defense_sim, 1.0f / 60.0f);
     }
+    Vector3 guard_before_alarm[CC_LOCAL_COURSE_RUNNER_COUNT];
+    Vector3 raider_before_alarm[CC_LOCAL_RAIDER_COUNT];
+    for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
+        guard_before_alarm[i] = defense.runners[i].agent.position;
+    }
+    for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
+        raider_before_alarm[i] = defense.raiders[i].position;
+    }
     CcLocalCourseRaiseAlarm(&defense);
+    for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
+        if (VectorDistance3(guard_before_alarm[i],
+                            defense.runners[i].agent.position) > 0.0001f) {
+            (void)fprintf(stderr, "guard %d warped when the alarm began\n", i);
+            return 1;
+        }
+    }
+    for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
+        if (VectorDistance3(raider_before_alarm[i],
+                            defense.raiders[i].position) > 0.0001f) {
+            (void)fprintf(stderr, "raider %d warped when the alarm began\n", i);
+            return 1;
+        }
+    }
+    if (VectorDistance3(defense.raiders[0].position,
+                        defense.raiders[1].position) < 1.50f ||
+        VectorDistance3(defense.raiders[0].target_point,
+                        defense.raiders[1].target_point) < 1.35f) {
+        (void)fprintf(stderr, "raider arrivals were bunched together\n");
+        return 1;
+    }
     bool guard_engaged[CC_LOCAL_COURSE_RUNNER_COUNT] = {false};
     bool guard_returned[CC_LOCAL_COURSE_RUNNER_COUNT] = {false};
-    float minimum_raider_x = 1000.0f;
-    for (int32_t frame = 0; frame < 2400 &&
+    float minimum_raider_distance = 1000.0f;
+    for (int32_t frame = 0; frame < 12000 &&
                             defense.defenses_completed == 0; ++frame) {
         CcLocalCourseUpdate(&defense, NULL, &defense_sim, 1.0f / 60.0f);
         for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
@@ -1038,16 +1067,21 @@ int main(void)
                                 defense.runners[i].duty == CC_GUARD_RETURNING;
         }
         for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
-            minimum_raider_x = fminf(minimum_raider_x,
-                                     defense.raiders[i].position.x);
+            float distance_x = defense.raiders[i].position.x -
+                               defense.combat_origin.x;
+            float distance_z = defense.raiders[i].position.z -
+                               defense.combat_origin.z;
+            minimum_raider_distance = fminf(
+                minimum_raider_distance,
+                sqrtf(distance_x * distance_x + distance_z * distance_z));
         }
     }
     if (defense.defenses_completed != 1 || defense.alarm_active ||
-        minimum_raider_x > 15.00f || defense.raider_resolve > 0) {
+        minimum_raider_distance > 3.00f || defense.raider_resolve > 0) {
         (void)fprintf(stderr,
-                      "village defense did not intercept and repel the raid: wins %d alarm %d min x %.2f resolve %d guards %.2f,%.2f/%.0f/%.0f/%d %.2f,%.2f/%.0f/%.0f/%d %.2f,%.2f/%.0f/%.0f/%d raiders %.2f,%.2f/%.0f/%.0f/%d/%d %.2f,%.2f/%.0f/%.0f/%d/%d seen %d%d%d\n",
+                      "village defense did not intercept and repel the raid: wins %d alarm %d min distance %.2f resolve %d guards %.2f,%.2f/%.0f/%.0f/%d %.2f,%.2f/%.0f/%.0f/%d %.2f,%.2f/%.0f/%.0f/%d raiders %.2f,%.2f/%.0f/%.0f/%d/%d %.2f,%.2f/%.0f/%.0f/%d/%d seen %d%d%d\n",
                       defense.defenses_completed, defense.alarm_active,
-                      minimum_raider_x, defense.raider_resolve,
+                      minimum_raider_distance, defense.raider_resolve,
                       defense.runners[0].agent.position.x,
                       defense.runners[0].agent.position.z,
                       defense.runners[0].agent.combat.health,
