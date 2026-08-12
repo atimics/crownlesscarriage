@@ -25,7 +25,7 @@ BLEND_PATH = ROOT / "assets" / "blender" / "crownless_hero_components.blend"
 EXPORT_DIR = ROOT / "assets" / "exports" / "hero_glb"
 PREVIEW_DIR = ROOT / "assets" / "previews" / "hero"
 MANIFEST_PATH = ROOT / "assets" / "hero_component_manifest.json"
-LIBRARY_VERSION = "0.2.0"
+LIBRARY_VERSION = "0.3.1"
 
 MATERIALS: dict[str, bpy.types.Material] = {}
 COMPONENTS: dict[str, bpy.types.Collection] = {}
@@ -34,9 +34,9 @@ SOCKET_RECORDS: list[dict[str, object]] = []
 
 
 PALETTE = {
-    "skin": (0.50, 0.23, 0.12, 1.0),
-    "skin_light": (0.68, 0.36, 0.20, 1.0),
-    "hair": (0.095, 0.038, 0.022, 1.0),
+    "skin": (0.60, 0.31, 0.17, 1.0),
+    "skin_light": (0.78, 0.45, 0.26, 1.0),
+    "hair": (0.052, 0.018, 0.012, 1.0),
     "body_neutral": (0.19, 0.23, 0.25, 1.0),
     "muscle_blue": (0.08, 0.45, 0.65, 1.0),
     "muscle_green": (0.12, 0.55, 0.31, 1.0),
@@ -48,12 +48,12 @@ PALETTE = {
     "teal_dark": (0.018, 0.12, 0.15, 1.0),
     "padding": (0.73, 0.63, 0.45, 1.0),
     "padding_dark": (0.39, 0.30, 0.20, 1.0),
-    "cape": (0.20, 0.075, 0.27, 1.0),
-    "cape_light": (0.40, 0.20, 0.50, 1.0),
+    "cape": (0.135, 0.042, 0.185, 1.0),
+    "cape_light": (0.30, 0.115, 0.36, 1.0),
     "leather": (0.21, 0.085, 0.035, 1.0),
     "leather_light": (0.39, 0.18, 0.07, 1.0),
-    "steel": (0.115, 0.145, 0.155, 1.0),
-    "steel_light": (0.28, 0.34, 0.35, 1.0),
+    "steel": (0.16, 0.19, 0.20, 1.0),
+    "steel_light": (0.34, 0.39, 0.40, 1.0),
     "steel_dark": (0.055, 0.070, 0.075, 1.0),
     "brass": (0.65, 0.39, 0.07, 1.0),
     "eye": (0.015, 0.02, 0.022, 1.0),
@@ -81,6 +81,13 @@ BONES = [
     ("thigh.R", "pelvis", (0.14, 0.0, 1.00), (0.15, 0.0, 0.56)),
     ("shin.R", "thigh.R", (0.15, 0.0, 0.56), (0.15, 0.0, 0.13)),
     ("foot.R", "shin.R", (0.15, 0.0, 0.13), (0.15, -0.27, 0.08)),
+]
+
+CAPE_BONES = [
+    ("cape.0", "chest", (0.0, 0.205, 1.64), (0.0, 0.245, 1.37)),
+    ("cape.1", "cape.0", (0.0, 0.245, 1.37), (0.0, 0.290, 1.10)),
+    ("cape.2", "cape.1", (0.0, 0.290, 1.10), (0.0, 0.340, 0.82)),
+    ("cape.3", "cape.2", (0.0, 0.340, 0.82), (0.0, 0.390, 0.54)),
 ]
 
 
@@ -451,6 +458,32 @@ def skin_to_armature(obj: bpy.types.Object, armature: bpy.types.Object) -> None:
             chest.add([vertex.index], amount, "REPLACE")
         else:
             chest.add([vertex.index], 1.0, "REPLACE")
+    obj["cc_smooth_skin"] = True
+
+
+def skin_cape_to_armature(
+    cape: bpy.types.Object,
+    armature: bpy.types.Object,
+    columns: int,
+    rows: int,
+) -> None:
+    """Blend the authored cloth rows across the four runtime cape bones."""
+    cape.parent = armature
+    cape.matrix_parent_inverse = armature.matrix_world.inverted()
+    modifier = cape.modifiers.new("CC_Armature", "ARMATURE")
+    modifier.object = armature
+    groups = [cape.vertex_groups.new(name=f"cape.{index}") for index in range(4)]
+    for row in range(rows):
+        chain = row / (rows - 1) * 3.0
+        first = min(3, int(math.floor(chain)))
+        second = min(3, first + 1)
+        blend = chain - first
+        indices = [row * columns + column for column in range(columns)]
+        groups[first].add(indices, 1.0 - blend, "REPLACE")
+        if second != first:
+            groups[second].add(indices, blend, "REPLACE")
+    cape["cc_smooth_skin"] = True
+    cape["cc_runtime_bones"] = ",".join(f"cape.{index}" for index in range(4))
 
 
 def build_structure() -> dict[str, bpy.types.Collection]:
@@ -490,7 +523,7 @@ def build_armature(parent: bpy.types.Collection) -> bpy.types.Object:
     armature.select_set(True)
     bpy.ops.object.mode_set(mode="EDIT")
     created: dict[str, bpy.types.EditBone] = {}
-    for name, parent_name, head, tail in BONES:
+    for name, parent_name, head, tail in BONES + CAPE_BONES:
         bone = armature_data.edit_bones.new(name)
         bone.head = head
         bone.tail = tail
@@ -650,9 +683,9 @@ def build_hair(parent: bpy.types.Collection, armature: bpy.types.Object) -> bpy.
                   "hair", collection, "hair_bun", subdivisions=1)
     parent_to_bone(bun, armature, "head")
     for index, (x, top, bottom) in enumerate((
-        (-0.115, 2.075, 1.985), (-0.060, 2.120, 2.015),
-        (0.0, 2.125, 2.045), (0.060, 2.115, 2.010),
-        (0.115, 2.065, 1.975),
+        (-0.105, 2.080, 1.990),
+        (0.0, 2.125, 2.035),
+        (0.105, 2.075, 1.985),
     )):
         lock = add_cylinder_between(
             f"GEO_HairLock_{index:02d}", (x * 0.82, -0.105, top),
@@ -667,11 +700,6 @@ def build_hair(parent: bpy.types.Collection, armature: bpy.types.Object) -> bpy.
             "hair", collection, "hair_lock", vertices=6, bevel_width=0.006,
         )
         parent_to_bone(temple, armature, "head")
-    for index, x in enumerate((-0.045, 0.045)):
-        coil = add_torus(f"GEO_HairBunCoil{index}", (x, 0.215, 1.965),
-                         0.043, 0.014, "hair", collection, "hair_bun_detail",
-                         rotation=(math.radians(90), 0.0, 0.0))
-        parent_to_bone(coil, armature, "head")
     return collection
 
 
@@ -793,19 +821,21 @@ def build_tunic(parent: bpy.types.Collection, armature: bpy.types.Object) -> bpy
         "GEO_TunicTorso",
         [(1.04, 0.27, 0.177), (1.24, 0.30, 0.194),
          (1.47, 0.365, 0.215), (1.63, 0.405, 0.225), (1.68, 0.15, 0.125)],
-        "teal", collection, "tunic_torso",
+        "teal_dark", collection, "tunic_torso",
     )
     skin_to_armature(torso, armature)
     for suffix, sign in (("L", -1.0), ("R", 1.0)):
         sleeve = add_cylinder_between(f"GEO_TunicSleeve{suffix}",
                                       (sign * 0.30, 0.0, 1.57),
                                       (sign * 0.405, 0.0, 1.38),
-                                      0.135, 0.118, "teal_light", collection,
+                                      0.135, 0.118, "teal", collection,
                                       "short_sleeve")
         parent_to_bone(sleeve, armature, f"upper_arm.{suffix}")
     panels = [
-        ("Front", [(-0.24, -0.185, 1.08), (0.24, -0.185, 1.08),
-                   (0.20, -0.20, 0.70), (-0.20, -0.20, 0.70)]),
+        ("FrontL", [(-0.24, -0.185, 1.08), (-0.035, -0.185, 1.08),
+                    (-0.045, -0.20, 0.73), (-0.20, -0.20, 0.70)]),
+        ("FrontR", [(0.035, -0.185, 1.08), (0.24, -0.185, 1.08),
+                    (0.20, -0.20, 0.70), (0.045, -0.20, 0.73)]),
         ("Back", [(0.24, 0.18, 1.08), (-0.24, 0.18, 1.08),
                   (-0.20, 0.20, 0.72), (0.20, 0.20, 0.72)]),
         ("Left", [(-0.27, 0.14, 1.08), (-0.27, -0.14, 1.08),
@@ -828,17 +858,27 @@ def build_tunic(parent: bpy.types.Collection, armature: bpy.types.Object) -> bpy
         "padding", collection, "tunic_placket", thickness=0.012,
     )
     parent_to_bone(placket, armature, "chest")
-    for index, z in enumerate((1.565, 1.495, 1.425)):
-        button = add_ico(f"GEO_TunicButton_{index}", (0.0, -0.246, z),
-                         (0.014, 0.008, 0.014), "brass", collection,
-                         "tunic_button", subdivisions=1)
-        parent_to_bone(button, armature, "chest")
-    front_trim = add_box_between(
-        "GEO_TunicHemTrim", (-0.195, -0.214, 0.735),
-        (0.195, -0.214, 0.735), 0.025, 0.018,
-        "teal_dark", collection, "tunic_trim", bevel_width=0.006,
-    )
-    parent_to_bone(front_trim, armature, "pelvis")
+    clasp = add_ico("GEO_TunicClasp", (0.0, -0.246, 1.505),
+                    (0.018, 0.009, 0.018), "brass", collection,
+                    "tunic_clasp", subdivisions=1)
+    parent_to_bone(clasp, armature, "chest")
+    for suffix, start, end in (
+        ("L", (-0.20, -0.214, 0.735), (-0.050, -0.214, 0.758)),
+        ("R", (0.050, -0.214, 0.758), (0.20, -0.214, 0.735)),
+    ):
+        hem = add_box_between(
+            f"GEO_TunicHemTrim{suffix}", start, end, 0.025, 0.018,
+            "teal_dark", collection, "tunic_trim", bevel_width=0.006,
+        )
+        parent_to_bone(hem, armature, "pelvis")
+        slit_edge = add_box_between(
+            f"GEO_TunicSlitEdge{suffix}",
+            (start[0] if suffix == "R" else end[0], -0.214, 1.055),
+            (start[0] if suffix == "R" else end[0], -0.214, 0.765),
+            0.018, 0.016, "teal_dark", collection, "tunic_trim",
+            bevel_width=0.004,
+        )
+        parent_to_bone(slit_edge, armature, "pelvis")
     return collection
 
 
@@ -852,13 +892,16 @@ def create_cape_mesh(
     vertices: list[tuple[float, float, float]] = []
     for row in range(rows):
         v = row / (rows - 1)
-        half_width = 0.37 + v * 0.28
-        z = 1.64 - v * 1.10
+        half_width = 0.37 + math.sin(v * math.pi) * 0.10 + v * 0.05
         for column in range(columns):
             u = column / (columns - 1)
             x = (u * 2.0 - 1.0) * half_width
-            scallop = 0.030 * math.sin((u * 2.0 - 1.0) * math.pi * 2.0) * v
-            y = 0.205 + v * 0.16 + math.sin(u * math.pi) * v * 0.060 + scallop
+            center = abs(u - 0.5) / 0.5
+            forked_hem = (1.0 - center) ** 2 * (v ** 6) * 0.17
+            asymmetric_wear = (u - 0.5) * (v ** 5) * 0.035
+            z = 1.64 - v * 1.12 + forked_hem + asymmetric_wear
+            fold = math.sin(u * math.pi * 3.0) * math.sin(v * math.pi) * 0.026
+            y = 0.205 + v * 0.13 + math.sin(u * math.pi) * v * 0.040 + fold
             vertices.append((x, y, z))
     faces: list[tuple[int, int, int, int]] = []
     for row in range(rows - 1):
@@ -891,7 +934,7 @@ def create_cape_mesh(
     solidify = cape.modifiers.new("CC_Solidify", "SOLIDIFY")
     solidify.thickness = 0.025
     add_bevel(cape, 0.012)
-    parent_to_bone(cape, armature, "chest")
+    skin_cape_to_armature(cape, armature, columns, rows)
 
     cage_collection["cc_layer"] = "cloth_guide"
     for index, vertex in enumerate(vertices):
@@ -922,21 +965,34 @@ def build_cape(parent: bpy.types.Collection, armature: bpy.types.Object,
         coverage=("back", "shoulders"),
     )
     create_cape_mesh(collection, armature, cage_collection)
-    collar = add_torus("GEO_CapeCollar", (0.0, 0.015, 1.635), 0.255, 0.032,
+    collar = add_torus("GEO_CapeCollar", (0.0, 0.020, 1.635), 0.225, 0.024,
                        "cape", collection, "cape_collar",
-                       scale=(1.28, 0.86, 1.0))
+                       scale=(1.22, 0.76, 1.0))
     parent_to_bone(collar, armature, "chest")
     for suffix, sign in (("L", -1.0), ("R", 1.0)):
+        outer = 0.355 if suffix == "L" else 0.300
+        inner = 0.105 if suffix == "L" else 0.085
         mantle = add_panel(
             f"GEO_CapeMantle{suffix}",
-            [(sign * 0.03, -0.175, 1.645), (sign * 0.34, -0.145, 1.610),
-             (sign * 0.39, 0.040, 1.545), (sign * 0.12, 0.080, 1.570)],
-            "cape_light", collection, "cape_mantle", thickness=0.028,
+            [(sign * 0.025, -0.175, 1.642), (sign * outer, -0.142, 1.602),
+             (sign * (outer + 0.025), 0.035, 1.552),
+             (sign * inner, 0.070, 1.578)],
+            "cape", collection, "cape_mantle", thickness=0.025,
         )
         parent_to_bone(mantle, armature, "chest")
-    for suffix, x in (("L", -0.29), ("R", 0.29)):
+        mantle_trim = add_box_between(
+            f"GEO_CapeMantleTrim{suffix}",
+            (sign * 0.050, -0.190, 1.635),
+            (sign * (outer - 0.018), -0.158, 1.600),
+            0.024, 0.016, "cape_light", collection, "cape_mantle_trim",
+            bevel_width=0.005,
+        )
+        parent_to_bone(mantle_trim, armature, "chest")
+    for suffix, x, radius in (("L", -0.275, 0.046), ("R", 0.235, 0.030)):
         pin = add_torus(f"GEO_CapePin{suffix}", (x, -0.175, 1.58),
-                        0.050, 0.016, "brass", collection, "cape_pin",
+                        radius, 0.012,
+                        "brass" if suffix == "L" else "steel_dark",
+                        collection, "cape_pin",
                         rotation=(math.radians(90), 0.0, 0.0))
         parent_to_bone(pin, armature, "chest")
     return collection
@@ -957,28 +1013,43 @@ def build_cuirass(parent: bpy.types.Collection, armature: bpy.types.Object) -> b
     )
     skin_to_armature(shell, armature)
     chest_plate = add_panel(
-        "GEO_CuirassFrontPlate",
+        "GEO_CuirassBreastplate",
         [(-0.245, -0.244, 1.600), (0.245, -0.244, 1.600),
-         (0.230, -0.248, 1.365), (0.150, -0.238, 1.220),
-         (-0.150, -0.238, 1.220), (-0.230, -0.248, 1.365)],
-        "steel_light", collection, "cuirass_plate", thickness=0.040,
+         (0.218, -0.252, 1.405), (0.145, -0.260, 1.355),
+         (-0.145, -0.260, 1.355), (-0.218, -0.252, 1.405)],
+        "steel_light", collection, "cuirass_breastplate", thickness=0.038,
     )
     parent_to_bone(chest_plate, armature, "chest")
-    upper_trim = add_box_between("GEO_CuirassUpperTrim",
-                                 (-0.235, -0.273, 1.595),
-                                 (0.235, -0.273, 1.595), 0.030, 0.022,
-                                 "brass", collection, "armor_trim",
-                                 bevel_width=0.008)
-    parent_to_bone(upper_trim, armature, "chest")
+    for index, (top_z, bottom_z, top_width, bottom_width, y) in enumerate((
+        (1.390, 1.315, 0.205, 0.188, -0.267),
+        (1.315, 1.245, 0.188, 0.158, -0.270),
+    )):
+        fauld = add_panel(
+            f"GEO_CuirassFauld_{index}",
+            [(-top_width, y, top_z), (top_width, y, top_z),
+             (bottom_width, y - 0.003, bottom_z),
+             (-bottom_width, y - 0.003, bottom_z)],
+            "steel" if index == 0 else "steel_light", collection,
+            "cuirass_fauld", thickness=0.032,
+        )
+        parent_to_bone(fauld, armature, "chest")
+    for suffix, sign in (("L", -1.0), ("R", 1.0)):
+        upper_trim = add_box_between(
+            f"GEO_CuirassUpperTrim{suffix}",
+            (0.0, -0.277, 1.555), (sign * 0.235, -0.273, 1.595),
+            0.026, 0.020, "steel_dark", collection, "armor_trim",
+            bevel_width=0.007,
+        )
+        parent_to_bone(upper_trim, armature, "chest")
     lower_trim = add_box_between("GEO_CuirassLowerTrim",
-                                 (-0.145, -0.260, 1.225),
-                                 (0.145, -0.260, 1.225), 0.026, 0.020,
-                                 "brass", collection, "armor_trim",
+                                 (-0.155, -0.292, 1.245),
+                                 (0.155, -0.292, 1.245), 0.024, 0.018,
+                                 "steel_dark", collection, "armor_trim",
                                  bevel_width=0.007)
     parent_to_bone(lower_trim, armature, "chest")
     center_ridge = add_box_between("GEO_CuirassCenterRidge",
-                                   (0.0, -0.278, 1.275),
-                                   (0.0, -0.278, 1.545), 0.022, 0.018,
+                                   (0.0, -0.286, 1.375),
+                                   (0.0, -0.286, 1.535), 0.020, 0.016,
                                    "steel_dark", collection, "armor_ridge",
                                    bevel_width=0.005)
     parent_to_bone(center_ridge, armature, "chest")
@@ -990,16 +1061,15 @@ def build_cuirass(parent: bpy.types.Collection, armature: bpy.types.Object) -> b
             "steel", collection, "cuirass_clavicle", thickness=0.022,
         )
         parent_to_bone(clavicle, armature, "chest")
-        for index, z in enumerate((1.555, 1.285)):
-            rivet = add_ico(f"GEO_CuirassRivet{suffix}_{index}",
-                            (sign * 0.205, -0.292, z),
-                            (0.014, 0.008, 0.014), "brass", collection,
-                            "armor_rivet", subdivisions=1)
-            parent_to_bone(rivet, armature, "chest")
-    emblem = add_ico("GEO_CuirassEmblem", (0.0, -0.300, 1.425),
-                     (0.045, 0.014, 0.064), "brass", collection,
-                     "armor_emblem", subdivisions=1)
-    parent_to_bone(emblem, armature, "chest")
+    for suffix, sign in (("L", -1.0), ("R", 1.0)):
+        emblem = add_box_between(
+            f"GEO_CuirassBrokenMark{suffix}",
+            (sign * 0.014, -0.306, 1.455),
+            (sign * 0.057, -0.306, 1.410),
+            0.018, 0.014, "brass", collection, "armor_emblem",
+            bevel_width=0.004,
+        )
+        parent_to_bone(emblem, armature, "chest")
     return collection
 
 
@@ -1012,27 +1082,22 @@ def build_pauldron(parent: bpy.types.Collection, armature: bpy.types.Object,
         layer="rigid_armor", anchor=f"upper_arm.{suffix}",
         coverage=(f"shoulder_{suffix.lower()}",),
     )
-    plate = add_ico(f"GEO_Pauldron{suffix}", (sign * 0.345, 0.0, 1.57),
-                    (0.205, 0.175, 0.125), "steel", collection,
+    plate = add_ico(f"GEO_Pauldron{suffix}", (sign * 0.338, 0.0, 1.565),
+                    (0.180, 0.150, 0.105), "steel", collection,
                     "pauldron_shell", subdivisions=1)
     plate.rotation_euler[1] = sign * math.radians(12)
     parent_to_bone(plate, armature, f"upper_arm.{suffix}")
     lower_plate = add_ico(f"GEO_PauldronLower{suffix}",
-                          (sign * 0.380, -0.005, 1.505),
-                          (0.185, 0.155, 0.075), "steel_light", collection,
+                          (sign * 0.375, -0.005, 1.500),
+                          (0.165, 0.138, 0.060), "steel_light", collection,
                           "pauldron_lame", subdivisions=1)
     lower_plate.rotation_euler[1] = sign * math.radians(15)
     parent_to_bone(lower_plate, armature, f"upper_arm.{suffix}")
-    ridge = add_ico(f"GEO_PauldronRidge{suffix}", (sign * 0.355, -0.020, 1.62),
-                    (0.185, 0.155, 0.045), "brass", collection,
+    ridge = add_ico(f"GEO_PauldronRidge{suffix}", (sign * 0.350, -0.020, 1.610),
+                    (0.125, 0.110, 0.030), "steel_dark", collection,
                     "pauldron_trim", subdivisions=1)
     ridge.rotation_euler[1] = sign * math.radians(12)
     parent_to_bone(ridge, armature, f"upper_arm.{suffix}")
-    rivet = add_ico(f"GEO_PauldronRivet{suffix}",
-                    (sign * 0.355, -0.162, 1.590),
-                    (0.020, 0.012, 0.020), "brass", collection,
-                    "armor_rivet", subdivisions=1)
-    parent_to_bone(rivet, armature, f"upper_arm.{suffix}")
     return collection
 
 
@@ -1057,10 +1122,10 @@ def build_bracer(parent: bpy.types.Collection, armature: bpy.types.Object,
                              0.040, 0.026, "steel_light", collection,
                              "bracer_splint", bevel_width=0.007)
     parent_to_bone(splint, armature, f"forearm.{suffix}")
-    for amount in (0.18, 0.48, 0.78):
+    for amount in (0.50,):
         center = Vector(start).lerp(Vector(end), amount)
-        band = add_torus(f"GEO_BracerBand{suffix}", tuple(center), 0.078, 0.010,
-                         "brass", collection, "bracer_band",
+        band = add_torus(f"GEO_BracerBand{suffix}", tuple(center), 0.078, 0.012,
+                         "leather_light", collection, "bracer_band",
                          rotation=(math.radians(72), 0.0, sign * math.radians(18)),
                          scale=(1.0, 0.82, 1.0))
         parent_to_bone(band, armature, f"forearm.{suffix}")
@@ -1087,7 +1152,7 @@ def build_greave(parent: bpy.types.Collection, armature: bpy.types.Object,
                    "knee_plate", subdivisions=1)
     parent_to_bone(knee, armature, f"shin.{suffix}")
     trim = add_cube(f"GEO_GreaveTrim{suffix}", (sign * 0.15, -0.088, 0.37),
-                    (0.145, 0.025, 0.035), "brass", collection,
+                    (0.145, 0.025, 0.035), "steel_dark", collection,
                     "greave_trim", bevel_width=0.010)
     parent_to_bone(trim, armature, f"shin.{suffix}")
     ridge = add_box_between(f"GEO_GreaveRidge{suffix}",
@@ -1096,11 +1161,6 @@ def build_greave(parent: bpy.types.Collection, armature: bpy.types.Object,
                             0.035, 0.024, "steel_light", collection,
                             "greave_ridge", bevel_width=0.007)
     parent_to_bone(ridge, armature, f"shin.{suffix}")
-    ankle_band = add_torus(f"GEO_GreaveAnkleBand{suffix}",
-                           (sign * 0.15, -0.005, 0.215), 0.080, 0.010,
-                           "brass", collection, "greave_trim",
-                           scale=(1.0, 0.86, 1.0))
-    parent_to_bone(ankle_band, armature, f"shin.{suffix}")
     return collection
 
 
@@ -1121,15 +1181,6 @@ def build_glove(parent: bpy.types.Collection, armature: bpy.types.Object,
                      rotation=(math.radians(72), 0.0, sign * math.radians(18)),
                      scale=(1.0, 0.82, 1.0))
     parent_to_bone(cuff, armature, f"hand.{suffix}")
-    for index, offset in enumerate((-0.042, -0.014, 0.014, 0.042)):
-        finger = add_cylinder_between(
-            f"GEO_GloveFinger{suffix}_{index}",
-            (sign * 0.585 + offset, -0.045, 0.855),
-            (sign * 0.588 + offset, -0.052, 0.785),
-            0.016, 0.012, "leather_light", collection, "glove_finger",
-            vertices=6, bevel_width=0.005,
-        )
-        parent_to_bone(finger, armature, f"hand.{suffix}")
     knuckle = add_cube(f"GEO_GloveKnuckle{suffix}",
                        (sign * 0.585, -0.082, 0.875),
                        (0.115, 0.025, 0.045), "steel_light", collection,
@@ -1146,9 +1197,9 @@ def build_boot(parent: bpy.types.Collection, armature: bpy.types.Object,
         kind="accessory", slot=f"foot_{suffix.lower()}", layer="accessory",
         anchor=f"foot.{suffix}", coverage=(f"foot_{suffix.lower()}", "ankle"),
     )
-    boot = add_cube(f"GEO_Boot{suffix}", (sign * 0.15, -0.105, 0.115),
-                    (0.225, 0.365, 0.19), "leather", collection, "boot",
-                    bevel_width=0.048)
+    boot = add_cube(f"GEO_Boot{suffix}", (sign * 0.15, -0.090, 0.110),
+                    (0.195, 0.310, 0.17), "leather", collection, "boot",
+                    bevel_width=0.040)
     parent_to_bone(boot, armature, f"foot.{suffix}")
     cuff = add_cylinder_between(f"GEO_BootCuff{suffix}",
                                 (sign * 0.15, 0.0, 0.28),
@@ -1156,21 +1207,16 @@ def build_boot(parent: bpy.types.Collection, armature: bpy.types.Object,
                                 0.110, 0.100, "leather_light", collection,
                                 "boot_cuff", vertices=8)
     parent_to_bone(cuff, armature, f"foot.{suffix}")
-    sole = add_cube(f"GEO_BootSole{suffix}", (sign * 0.15, -0.12, 0.045),
-                    (0.235, 0.38, 0.055), "padding_dark", collection,
+    sole = add_cube(f"GEO_BootSole{suffix}", (sign * 0.15, -0.100, 0.045),
+                    (0.205, 0.325, 0.050), "padding_dark", collection,
                     "boot_sole", bevel_width=0.018)
     parent_to_bone(sole, armature, f"foot.{suffix}")
     instep = add_cube(f"GEO_BootInstep{suffix}",
-                      (sign * 0.15, -0.105, 0.195),
-                      (0.195, 0.245, 0.100), "leather_light", collection,
+                      (sign * 0.15, -0.090, 0.185),
+                      (0.175, 0.215, 0.085), "leather_light", collection,
                       "boot_instep", rotation=(math.radians(-8), 0.0, 0.0),
                       bevel_width=0.030)
     parent_to_bone(instep, armature, f"foot.{suffix}")
-    strap = add_cube(f"GEO_BootStrap{suffix}",
-                     (sign * 0.15, -0.125, 0.220),
-                     (0.215, 0.040, 0.040), "brass", collection,
-                     "boot_strap", bevel_width=0.009)
-    parent_to_bone(strap, armature, f"foot.{suffix}")
     return collection
 
 
@@ -1206,7 +1252,7 @@ def build_belt_satchel(parent: bpy.types.Collection,
     strap_edge = add_box_between("GEO_SatchelStrapEdge",
                                  (-0.268, -0.286, 1.575),
                                  (0.335, -0.286, 0.910),
-                                 0.012, 0.014, "brass", collection,
+                                 0.012, 0.014, "leather", collection,
                                  "satchel_stitch", bevel_width=0.003)
     parent_to_bone(strap_edge, armature, "chest")
     satchel = add_cube("GEO_Satchel", (0.38, -0.18, 0.84),
@@ -1221,12 +1267,6 @@ def build_belt_satchel(parent: bpy.types.Collection,
                    (0.032, 0.014, 0.032), "brass", collection,
                    "satchel_seal", subdivisions=1)
     parent_to_bone(seal, armature, "pelvis")
-    satchel_buckle = add_torus("GEO_SatchelBuckle", (0.38, -0.282, 0.965),
-                               0.032, 0.008, "brass", collection,
-                               "satchel_buckle",
-                               rotation=(math.radians(90), 0.0, 0.0),
-                               scale=(1.1, 1.0, 0.85))
-    parent_to_bone(satchel_buckle, armature, "pelvis")
     return collection
 
 
@@ -1440,6 +1480,7 @@ def write_manifest() -> None:
         "skeleton": {
             "id": "crownless_humanoid_v01",
             "bones": [name for name, _parent, _head, _tail in BONES],
+            "cloth_bones": [name for name, _parent, _head, _tail in CAPE_BONES],
         },
         "sockets": SOCKET_RECORDS,
         "components": sorted(COMPONENT_RECORDS, key=lambda item: str(item["id"])),
@@ -1504,7 +1545,9 @@ def create_view_layers(groups: dict[str, bpy.types.Collection]) -> None:
 
 
 def validate(armature: bpy.types.Object) -> None:
-    expected_bones = {name for name, _parent, _head, _tail in BONES}
+    expected_bones = {
+        name for name, _parent, _head, _tail in BONES + CAPE_BONES
+    }
     actual_bones = {bone.name for bone in armature.data.bones}
     if expected_bones != actual_bones:
         raise RuntimeError(f"Skeleton mismatch: {sorted(expected_bones ^ actual_bones)}")

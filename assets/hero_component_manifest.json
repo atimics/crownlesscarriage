@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "library_version": "0.2.0",
+  "library_version": "0.3.1",
   "source": "blender/crownless_hero_components.blend",
   "coordinate_system": {
     "unit": "meter",
@@ -28,6 +28,12 @@
       "thigh.R",
       "shin.R",
       "foot.R"
+    ],
+    "cloth_bones": [
+      "cape.0",
+      "cape.1",
+      "cape.2",
+      "cape.3"
     ]
   },
   "sockets": [

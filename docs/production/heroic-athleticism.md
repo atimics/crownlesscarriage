@@ -82,6 +82,27 @@ The measured contact drives additive whole-body recoil, posture loss,
 knockback, and localized impact presentation. Defeat transfers the live pose
 and momentum into the generalized ragdoll.
 
+Player combat is target-driven rather than animation-command-driven. Clicking
+a living raider establishes a persistent target, drives a physical approach,
+and starts a bounded auto-attack cadence once contact range is reached. The
+target remains visually marked until the player clicks the ground, the target
+falls, or the raid breaks. A compact skill bar adds queued Crushing Blow and
+Sunder contacts plus a cooldown-gated Second Wind recovery. These abilities
+modify damage, posture pressure, or recovery while still resolving through the
+same swept contacts, guards, support, collision, and momentum rules.
+
+Combatants now approach to a weapon-length standoff rather than sharing a body
+position. Player and raider blades are bound to the striking hand, with a
+visible chamber, cut trail, recovery, and high guard so the attack state reads
+from the play camera.
+
+The visible blade direction is also the direction sampled by contact
+resolution. Crushing Blow uses a committed two-arm overhead drive and gold
+telegraph, while Sunder uses a broader torso-led sweep and violet telegraph.
+Non-selected raiders and allied guards prefer other matchups and keep a wider
+clearance from the player, preserving the selected duel's silhouette even in a
+larger defense.
+
 The current strike is still a broad single attack family. Production combat
 needs weapon-specific contact shapes, anticipation, active/parry windows,
 push-off from the rear foot, hit-location response, and anti-stunlock recovery

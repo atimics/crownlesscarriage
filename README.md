@@ -52,9 +52,17 @@ Controls:
   route crosses a buoyancy trench where the same skeleton releases its ground
   contacts, swims under buoyancy and drag, and reacquires land. Press `J` for
   a controlled physics jump with a live takeoff arc and planted landing; an
-  unsupported fall still becomes a ragdoll rather than a canned jump. Press `Space`
-  to commit a strike toward a nearby raider and `X` to enter or leave guard;
-  left-click movement becomes slower combat-facing strafing while focused.
+  unsupported fall still becomes a ragdoll rather than a canned jump. During a
+  raid, click a raider to target them: the hero closes distance, holds
+  a sword-length standoff, maintains facing, and exchanges physical attacks
+  automatically with an equipped blade and readable guard/cut/recovery poses.
+  `1` queues Crushing Blow, `2` queues the posture-breaking Sunder, and `3`
+  uses Second Wind; Crushing Blow has a committed two-arm overhead motion,
+  while Sunder uses a wide, violet-traced sweep. Nearby defenders peel toward
+  other raiders so the selected fight remains readable. Second Wind can
+  recover health and posture; the combat bar shows every cooldown. `Space`
+  remains a manual basic strike, `X` enters or leaves guard, and clicking the
+  ground disengages the target and resumes direct movement.
   Movement, successful jumps, supported climbing, blocks, and landed strikes
   now train three session-level athletic disciplines: Mobility, Grip, and
   Power. Their levels change physical acceleration, jump impulse, reach,
