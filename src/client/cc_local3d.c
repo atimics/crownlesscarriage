@@ -3695,12 +3695,13 @@ static float DrawPitchedRoof(float x, float z, float width, float depth,
         float slope = sqrtf(run * run + rise * rise);
         float pitch = atanf(rise / run) * RAD2DEG;
         for (int32_t side = -1; side <= 1; side += 2) {
+            float side_sign = (float)side;
             DrawTiltedBox(
                 (Vector3){x + width * 0.5f,
                           wall_height + rise * 0.5f,
-                          z + depth * 0.5f + side * run * 0.5f},
+                          z + depth * 0.5f + side_sign * run * 0.5f},
                 (Vector3){width + overhang * 2.0f, 0.16f, slope},
-                (Vector3){1.0f, 0.0f, 0.0f}, side * pitch,
+                (Vector3){1.0f, 0.0f, 0.0f}, side_sign * pitch,
                 side > 0 ? roof : shadow);
         }
         DrawBox((Vector3){x + width * 0.5f, wall_height + rise + 0.03f,
@@ -3711,12 +3712,13 @@ static float DrawPitchedRoof(float x, float z, float width, float depth,
         float slope = sqrtf(run * run + rise * rise);
         float pitch = atanf(rise / run) * RAD2DEG;
         for (int32_t side = -1; side <= 1; side += 2) {
+            float side_sign = (float)side;
             DrawTiltedBox(
-                (Vector3){x + width * 0.5f + side * run * 0.5f,
+                (Vector3){x + width * 0.5f + side_sign * run * 0.5f,
                           wall_height + rise * 0.5f,
                           z + depth * 0.5f},
                 (Vector3){slope, 0.16f, depth + overhang * 2.0f},
-                (Vector3){0.0f, 0.0f, 1.0f}, -side * pitch,
+                (Vector3){0.0f, 0.0f, 1.0f}, -side_sign * pitch,
                 side > 0 ? roof : shadow);
         }
         DrawBox((Vector3){x + width * 0.5f, wall_height + rise + 0.03f,
@@ -3805,7 +3807,8 @@ static void DrawBuilding(float x, float z, float width, float depth, float heigh
     }
     if (style == 2) {
         for (int32_t side = -1; side <= 1; side += 2) {
-            DrawBox((Vector3){center.x + side * width * 0.27f,
+            float side_sign = (float)side;
+            DrawBox((Vector3){center.x + side_sign * width * 0.27f,
                               height * 0.72f, z + depth + 0.12f},
                     (Vector3){0.72f, 1.75f, 0.06f},
                     side < 0 ? WORLD_GOLD : WORLD_TEAL);
