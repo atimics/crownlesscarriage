@@ -410,10 +410,79 @@ static void TestCapePhysics(void)
     }
 }
 
+static void TestControlledJump(void)
+{
+    CcLocalAgent jumper;
+    CcLocalAgentInit(&jumper, (Vector2){4.0f, 5.5f}, true);
+    if (!CcLocalAgentJump(&jumper)) {
+        (void)fprintf(stderr, "grounded biped rejected a controlled jump\n");
+        exit(1);
+    }
+    if (CcLocalAgentJump(&jumper)) {
+        (void)fprintf(stderr, "airborne biped accepted a second jump\n");
+        exit(1);
+    }
+    if (CcLocalCombatBeginStrike(&jumper, NULL)) {
+        (void)fprintf(stderr, "airborne biped interrupted jump with strike\n");
+        exit(1);
+    }
+    float maximum_height = jumper.position.y;
+    bool saw_ascent = false;
+    bool saw_descent = false;
+    bool saw_jump_pose = false;
+    for (int32_t frame = 0; frame < 180; ++frame) {
+        CcLocalAgentUpdate(&jumper, 1.0f / 60.0f, true);
+        maximum_height = fmaxf(maximum_height, jumper.position.y);
+        saw_ascent = saw_ascent || jumper.velocity.y > 0.20f;
+        saw_descent = saw_descent || jumper.velocity.y < -0.20f;
+        saw_jump_pose = saw_jump_pose ||
+            jumper.humanoid.action == CC_HUMANOID_ACTION_JUMP;
+        if (frame > 45 && jumper.grounded &&
+            jumper.humanoid.action == CC_HUMANOID_ACTION_LOCOMOTION) break;
+    }
+    if (!saw_ascent || !saw_descent || !saw_jump_pose ||
+        !jumper.grounded || jumper.humanoid.ragdoll.active ||
+        maximum_height < 0.72f || maximum_height > 1.10f) {
+        (void)fprintf(stderr,
+                      "controlled jump failed: max %.2f up %d down %d pose %d grounded %d ragdoll %d\n",
+                      maximum_height, saw_ascent, saw_descent, saw_jump_pose,
+                      jumper.grounded, jumper.humanoid.ragdoll.active);
+        exit(1);
+    }
+}
+
+static void TestTravellerIngress(void)
+{
+    CcLocalCourse course;
+    CcLocalCourseInit(&course);
+    Vector3 start[2] = {course.travellers[0].agent.position,
+                        course.travellers[1].agent.position};
+    for (int32_t frame = 0; frame < 180; ++frame) {
+        CcLocalCourseUpdate(&course, NULL, NULL, 1.0f / 60.0f);
+    }
+    for (int32_t i = 0; i < 2; ++i) {
+        if (!course.travellers[i].active ||
+            VectorDistance3(start[i], course.travellers[i].agent.position) <
+                0.55f) {
+            (void)fprintf(stderr,
+                          "traveller %d did not physically enter from the world edge\n",
+                          i);
+            exit(1);
+        }
+    }
+    if (VectorDistance3(course.travellers[0].agent.position,
+                        course.travellers[1].agent.position) < 4.0f) {
+        (void)fprintf(stderr, "travellers entered in a visible bunch\n");
+        exit(1);
+    }
+}
+
 int main(void)
 {
     TestSharedCombat();
     TestCapePhysics();
+    TestControlledJump();
+    TestTravellerIngress();
     RequirePosition("market wall blocks entry",
                     CcLocalMove((Vector2){50.00f, 26.65f},
                                 (Vector2){0.00f, -1.00f}, false),

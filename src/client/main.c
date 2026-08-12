@@ -592,7 +592,7 @@ static const char *LocalPrompt(const CcSim *sim, const LocalState *local)
     }
     if (!local->market_interior && local->course.alarm_active &&
         local->agent.combat.focus_valid) {
-        return "COMBAT FOCUS   click to strafe   SPACE commit strike   X guard";
+        return "COMBAT FOCUS   click to strafe   SPACE strike   X guard   J vault";
     }
     if (local->market_interior) {
         if (GridDistance(position, INTERIOR_EXIT) < 1.25f) return "F  step back into the street";
@@ -620,7 +620,7 @@ static void DrawLocalFooter(const CcSim *sim, const LocalState *local)
 {
     DrawPanel((Rectangle){20.0f, 664.0f, 1240.0f, 76.0f}, PANEL);
     DrawText(LocalPrompt(sim, local), 38, 681, 13, CC_GOLD);
-    DrawText("SPACE targeted strike   X guard   G alarm   Q situations   TAB ledger",
+    DrawText("J jump   SPACE strike   X guard   G alarm   Q situations   TAB ledger",
              38, 708, 10, MUTED);
     DrawText("M map case at carriage   F5 save   F9 load   N new world",
              804, 693, 10, MUTED);
@@ -1351,6 +1351,14 @@ static void HandleInput(CcSim *sim, int32_t *selected, ClientView *view,
     }
 
     if (*view == VIEW_LOCAL) {
+        if (IsKeyPressed(KEY_J) &&
+            local->agent.morphology == CC_MORPHOLOGY_BIPED) {
+            bool jumped = CcLocalAgentJump(&local->agent);
+            (void)snprintf(
+                message, message_capacity, "%s",
+                jumped ? "You drive through both feet into a physical jump; momentum owns the landing." :
+                          "No jump: the body needs grounded, unbroken support.");
+        }
         if (IsKeyPressed(KEY_X) &&
             local->agent.morphology == CC_MORPHOLOGY_BIPED) {
             bool guarded = local->agent.humanoid.action !=
@@ -1534,11 +1542,13 @@ int main(int argc, char **argv)
     bool capture_map_case = argc >= 2 &&
                             strcmp(argv[1], "--capture-map-case") == 0;
     bool capture_dojo = argc >= 2 && strcmp(argv[1], "--capture-dojo") == 0;
+    bool capture_jump = argc >= 2 && strcmp(argv[1], "--capture-jump") == 0;
     bool capture = argc >= 2 &&
                    (strcmp(argv[1], "--capture") == 0 || capture_board ||
                     capture_interior || capture_navigation || capture_limbs ||
                     capture_walk_cycle || capture_defense ||
-                    capture_downclimb || capture_map_case || capture_dojo);
+                    capture_downclimb || capture_map_case || capture_dojo ||
+                    capture_jump);
     const char *capture_path = argc >= 3 ? argv[2] : "architecture-proof.png";
     char save_path[640];
     CampaignSavePath(save_path, sizeof(save_path));
@@ -1570,6 +1580,23 @@ int main(int argc, char **argv)
     CcLocalAgent walk_cycle_frames[8] = {0};
     uint32_t walk_cycle_mask = 0;
     ResetLocalState(&local);
+    if (capture && !capture_interior && !capture_walk_cycle &&
+        !capture_jump && !capture_defense && !capture_downclimb &&
+        !capture_navigation && !capture_limbs && !capture_dojo) {
+        local.course.alarm_countdown = 1000.0f;
+        for (int32_t frame = 0; frame < 1500; ++frame) {
+            CcLocalCourseUpdate(&local.course, &local.agent, &sim,
+                                1.0f / 60.0f);
+        }
+    }
+    if (capture_jump) {
+        local.course.alarm_countdown = 1000.0f;
+        local.agent.facing_yaw = 0.25f * PI;
+        (void)CcLocalAgentJump(&local.agent);
+        for (int32_t frame = 0; frame < 27; ++frame) {
+            CcLocalAgentUpdate(&local.agent, 1.0f / 60.0f, false);
+        }
+    }
     if (capture_downclimb) {
         CcLocalAgentInit(&local.agent, (Vector2){3.50f, 6.20f}, false);
         (void)CcLocalAgentSetExactTarget(

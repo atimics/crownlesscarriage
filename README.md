@@ -50,7 +50,9 @@ Controls:
   then survivors return to duty. Alarm
   frequency also responds to the simulated region's bandit influence. The
   route crosses a buoyancy trench where the same skeleton releases its ground
-  contacts, swims under buoyancy and drag, and reacquires land. Press `Space`
+  contacts, swims under buoyancy and drag, and reacquires land. Press `J` for
+  a controlled physics jump with a live takeoff arc and planted landing; an
+  unsupported fall still becomes a ragdoll rather than a canned jump. Press `Space`
   to commit a strike toward a nearby raider and `X` to enter or leave guard;
   left-click movement becomes slower combat-facing strafing while focused.
   `F`
@@ -182,7 +184,7 @@ The current executable proves:
   with human-length reach tests, transported knee/elbow planes, progressive
   hand and foot contacts, a supported top-out, and no handoff to the robot shell
 - A shared human action layer for locomotion, guard, muscle-driven strike,
-  clamber, swim, fall, and recovery. Strikes expose one physical impact window
+  controlled jump, clamber, swim, fall, and recovery. Strikes expose one physical impact window
   that sweeps the hand or held weapon against hostile body capsules; hits,
   blocks, guard breaks, health, posture, hitstop, stagger, and knockback are
   resolved identically for player and NPC combatants;
@@ -214,6 +216,9 @@ The current executable proves:
   construction swaps or an authored eight-frame body overlay
 - Character-width collision against buildings, props, and visible townspeople,
   with local sidestepping when a direct path meets an occupied space
+- Edge-spawned biomechanical travellers whose number follows live shipment
+  traffic; they walk completely across town on staggered routes and leave at
+  the opposite boundary instead of appearing in place
 - A continuous 96 x 72 metre exterior whose roads physically connect fields,
   a full settlement, the carriage yard, dungeon approach, training ground, and
   a gated 25 x 23 metre castle bailey
