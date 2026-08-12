@@ -263,6 +263,16 @@ static void TestSharedCombat(void)
                       outcome, defender.combat.health);
         exit(1);
     }
+    float baseline_damage = CC_LOCAL_COMBAT_MAX_HEALTH -
+                            defender.combat.health;
+    if (!defender.combat.impact_valid || defender.combat.impact_speed < 2.0f ||
+        defender.combat.impact_point.y < defender.position.y + 0.25f ||
+        defender.combat.impact_point.y > defender.position.y + 1.70f ||
+        defender.humanoid.impact_response <= 0.0f) {
+        (void)fprintf(stderr,
+                      "strike did not produce a localized physical contact\n");
+        exit(1);
+    }
     if (CcLocalCombatResolveStrike(&attacker, &defender) !=
         CC_COMBAT_OUTCOME_NONE) {
         (void)fprintf(stderr, "one swing damaged the same target twice\n");
@@ -348,6 +358,23 @@ static void TestSharedCombat(void)
         (void)fprintf(stderr,
                       "strike did not own facing and movement: dot %.2f x %.2f\n",
                       facing_dot, attacker.position.x);
+        exit(1);
+    }
+
+    InitCombatant(&attacker, (Vector2){4.0f, 3.0f}, 0.0f,
+                  CC_COMBAT_PLAYER);
+    InitCombatant(&defender, (Vector2){4.0f, 3.82f}, PI,
+                  CC_COMBAT_RAIDER);
+    CcLocalAgentSetAthleticLevel(&attacker, CC_ATHLETIC_POWER,
+                                 CC_ATHLETIC_MAX_LEVEL);
+    outcome = RunCombatStrike(&attacker, &defender);
+    float heroic_damage = CC_LOCAL_COMBAT_MAX_HEALTH -
+                          defender.combat.health;
+    if (outcome != CC_COMBAT_OUTCOME_HIT ||
+        heroic_damage <= baseline_damage + 3.0f) {
+        (void)fprintf(stderr,
+                      "power training did not increase contact impulse: %.1f vs %.1f\n",
+                      heroic_damage, baseline_damage);
         exit(1);
     }
 }
@@ -451,6 +478,66 @@ static void TestControlledJump(void)
     }
 }
 
+static void TestHeroicAthleticism(void)
+{
+    CcLocalAgent novice;
+    CcLocalAgent hero;
+    CcLocalAgentInit(&novice, (Vector2){6.0f, 4.0f}, true);
+    CcLocalAgentInit(&hero, (Vector2){6.0f, 4.0f}, true);
+    CcLocalAgentSetAthleticLevel(&hero, CC_ATHLETIC_MOBILITY,
+                                 CC_ATHLETIC_MAX_LEVEL);
+    if (!CcLocalAgentJump(&novice) || !CcLocalAgentJump(&hero) ||
+        hero.velocity.y <= novice.velocity.y + 0.50f) {
+        (void)fprintf(stderr,
+                      "mobility training did not strengthen takeoff %.2f vs %.2f\n",
+                      hero.velocity.y, novice.velocity.y);
+        exit(1);
+    }
+
+    CcLocalAgent trainee;
+    CcLocalAgentInit(&trainee, (Vector2){9.45f, 1.20f}, false);
+    CcLocalAgentTrainAthleticism(&trainee, CC_ATHLETIC_GRIP, 55.0f);
+    if (trainee.athletics.level[CC_ATHLETIC_GRIP] != 2 ||
+        CcLocalAgentAthleticProgress(&trainee, CC_ATHLETIC_GRIP) <= 0.0f) {
+        (void)fprintf(stderr, "grip experience did not level predictably\n");
+        exit(1);
+    }
+    float grip_progress = CcLocalAgentAthleticProgress(
+        &trainee, CC_ATHLETIC_GRIP);
+    CcLocalAgentTrainAthleticism(&trainee, CC_ATHLETIC_GRIP, NAN);
+    if (CcLocalAgentAthleticProgress(
+            &trainee, (CcAthleticDiscipline)-1) != 0.0f ||
+        CcLocalAgentAthleticProgress(NULL, CC_ATHLETIC_GRIP) != 0.0f ||
+        CcLocalAgentAthleticProgress(&trainee, CC_ATHLETIC_GRIP) !=
+            grip_progress) {
+        (void)fprintf(stderr,
+                      "athletic profile accepted an invalid public input\n");
+        exit(1);
+    }
+    CcLocalAgentSetAthleticLevel(&trainee, CC_ATHLETIC_MOBILITY, 3);
+    if (!CcLocalAgentSetExactTarget(
+            &trainee, (Vector3){10.50f, 0.0f, 1.20f}, false)) {
+        (void)fprintf(stderr, "heroic vault route was rejected\n");
+        exit(1);
+    }
+    bool saw_vault = false;
+    for (int32_t frame = 0; frame < 240; ++frame) {
+        CcLocalAgentUpdate(&trainee, 1.0f / 60.0f, false);
+        saw_vault = saw_vault || trainee.traversal == CC_TRAVERSAL_VAULT;
+        if (saw_vault && !trainee.climbing) break;
+    }
+    if (!saw_vault) {
+        (void)fprintf(stderr,
+                      "trained mobility did not select the low-obstacle vault: pos %.2f %.2f %.2f traversal %d climbing %d target %d levels %d/%d\n",
+                      trainee.position.x, trainee.position.y,
+                      trainee.position.z, trainee.traversal,
+                      trainee.climbing, trainee.exact_target_valid,
+                      trainee.athletics.level[CC_ATHLETIC_MOBILITY],
+                      trainee.athletics.level[CC_ATHLETIC_GRIP]);
+        exit(1);
+    }
+}
+
 static void TestTravellerIngress(void)
 {
     CcLocalCourse course;
@@ -482,6 +569,7 @@ int main(void)
     TestSharedCombat();
     TestCapePhysics();
     TestControlledJump();
+    TestHeroicAthleticism();
     TestTravellerIngress();
     RequirePosition("market wall blocks entry",
                     CcLocalMove((Vector2){50.00f, 26.65f},

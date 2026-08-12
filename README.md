@@ -55,6 +55,11 @@ Controls:
   unsupported fall still becomes a ragdoll rather than a canned jump. Press `Space`
   to commit a strike toward a nearby raider and `X` to enter or leave guard;
   left-click movement becomes slower combat-facing strafing while focused.
+  Movement, successful jumps, supported climbing, blocks, and landed strikes
+  now train three session-level athletic disciplines: Mobility, Grip, and
+  Power. Their levels change physical acceleration, jump impulse, reach,
+  traversal timing, impact force, and recovery rather than merely speeding up
+  an animation. Low obstacles become fast vaults once Mobility is developed.
   `F`
   uses a nearby door, notice board, or carriage.
 - The humanoid biped is the playable, tuned body plan. Quadruped, hexapod, and
@@ -97,6 +102,12 @@ silently removing work.
 The client executable also accepts `--benchmark-render 600` to time a fixed
 number of frames. Its benchmark window intentionally remains visible because
 desktop operating systems may throttle hidden windows.
+
+Use `--capture-action-reel <frame-prefix>` to run the deterministic heroic
+demonstration: approach and top-out, down-climb, run and physics jump, buoyant
+swim, guarded weapon contacts, clean impacts, and a final physical knockdown.
+The checked-in preview is
+[`hero_runtime_action_reel_v03.gif`](assets/previews/hero/actions/hero_runtime_action_reel_v03.gif).
 
 This is still an architecture proof rather than the finished RPG. It now
 includes one reusable local settlement grammar, an enterable economy-backed
@@ -185,11 +196,20 @@ The current executable proves:
   hand and foot contacts, a supported top-out, and no handoff to the robot shell
 - A shared human action layer for locomotion, guard, muscle-driven strike,
   controlled jump, clamber, swim, fall, and recovery. Strikes expose one physical impact window
-  that sweeps the hand or held weapon against hostile body capsules; hits,
-  blocks, guard breaks, health, posture, hitstop, stagger, and knockback are
-  resolved identically for player and NPC combatants;
+  that sweeps the hand or held weapon against hostile body capsules and records
+  the actual contact point, direction, and relative speed. Blocks additionally
+  require the sweep to reach the defender's live hand-to-hand guard segment;
+  localized recoil, hits, guard breaks, health, posture, hitstop, stagger,
+  knockback, and defeat ragdolls are resolved identically for player and NPC
+  combatants;
   swimming removes ground support and applies buoyancy and drag without
   invoking ragdoll
+- A five-level physical athletic profile shared by the player controller:
+  Mobility grows through travel and jumping, Grip through supported traversal,
+  and Power through meaningful combat contacts. Levels expand achievable
+  impulse, reach, acceleration, traversal control, and strike effect, while the
+  HUD exposes the current heroic tier. Persistence and balance remain a later
+  production pass.
 - Force-driven whole-body motion with aggregate bone mass, gravity, damping,
   ground-reaction support, friction-limited propulsion and braking, lateral
   balance, and collision impulses; navigation supplies intent rather than
