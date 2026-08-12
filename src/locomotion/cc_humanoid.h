@@ -42,7 +42,8 @@ typedef enum CcHumanoidAction {
     CC_HUMANOID_ACTION_CLAMBER,
     CC_HUMANOID_ACTION_SWIM,
     CC_HUMANOID_ACTION_FALL,
-    CC_HUMANOID_ACTION_RECOVER
+    CC_HUMANOID_ACTION_RECOVER,
+    CC_HUMANOID_ACTION_JUMP
 } CcHumanoidAction;
 
 typedef struct CcHumanoidSpring {
@@ -129,6 +130,7 @@ typedef struct CcHumanoidGait {
     bool grounded;
     bool recovering;
     bool climbing;
+    bool jump_airborne;
     bool initialized;
 } CcHumanoidGait;
 
@@ -143,6 +145,7 @@ void CcHumanoidGaitResolvePose(CcHumanoidGait *gait,
                                CcLimbVec3 body_position, float body_yaw);
 void CcHumanoidGaitSetGuarded(CcHumanoidGait *gait, bool guarded);
 bool CcHumanoidGaitBeginStrike(CcHumanoidGait *gait, int32_t striking_arm);
+bool CcHumanoidGaitBeginJump(CcHumanoidGait *gait);
 bool CcHumanoidGaitConsumeStrikeImpact(CcHumanoidGait *gait);
 void CcHumanoidGaitAdvanceSwim(CcHumanoidGait *gait,
                                CcLimbVec3 body_position, float body_yaw,

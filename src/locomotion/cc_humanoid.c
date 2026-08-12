@@ -1614,11 +1614,25 @@ bool CcHumanoidGaitBeginStrike(CcHumanoidGait *gait, int32_t striking_arm)
 {
     if (gait == NULL || !gait->initialized || gait->ragdoll.active ||
         gait->climbing || gait->action == CC_HUMANOID_ACTION_SWIM ||
+        gait->action == CC_HUMANOID_ACTION_JUMP ||
         gait->action == CC_HUMANOID_ACTION_STRIKE) return false;
     gait->strike_side = striking_arm == 0 ? 0 : 1;
     gait->strike_impact_pending = false;
     gait->strike_impact_emitted = false;
     SetAction(gait, CC_HUMANOID_ACTION_STRIKE);
+    return true;
+}
+
+bool CcHumanoidGaitBeginJump(CcHumanoidGait *gait)
+{
+    if (gait == NULL || !gait->initialized || gait->ragdoll.active ||
+        gait->climbing || gait->action == CC_HUMANOID_ACTION_SWIM ||
+        gait->action == CC_HUMANOID_ACTION_STRIKE ||
+        gait->action == CC_HUMANOID_ACTION_JUMP || !gait->grounded) {
+        return false;
+    }
+    gait->jump_airborne = false;
+    SetAction(gait, CC_HUMANOID_ACTION_JUMP);
     return true;
 }
 
@@ -1640,7 +1654,10 @@ void CcHumanoidGaitAdvance(CcHumanoidGait *gait, CcLimbVec3 body_position,
     }
     delta_time = Clamp(delta_time, 0.0f, 1.0f / 30.0f);
     gait->last_delta_time = fmaxf(delta_time, 1.0f / 240.0f);
-    if (!grounded && !gait->ragdoll.active) (void)ActivateRagdoll(gait);
+    bool controlled_jump = gait->action == CC_HUMANOID_ACTION_JUMP;
+    if (!grounded && !gait->ragdoll.active && !controlled_jump) {
+        (void)ActivateRagdoll(gait);
+    }
     if (gait->ragdoll.active) {
         (void)StepRagdoll(gait, body_position, body_yaw, grounded, delta_time,
                           probe, probe_context);
@@ -1648,6 +1665,7 @@ void CcHumanoidGaitAdvance(CcHumanoidGait *gait, CcLimbVec3 body_position,
         return;
     }
     AdvanceAction(gait, delta_time);
+    if (controlled_jump && !grounded) gait->jump_airborne = true;
     gait->body.root.position.x = body_position.x;
     gait->body.root.position.z = body_position.z;
     float desired_speed = sqrtf(desired_velocity.x * desired_velocity.x +
@@ -1785,6 +1803,24 @@ void CcHumanoidGaitAdvance(CcHumanoidGait *gait, CcLimbVec3 body_position,
     }
 
     float stride = gait->phase * 2.0f * CC_HUMANOID_PI;
+    if (controlled_jump) {
+        CcLimbVec3 pelvis = FromBiomech(gait->body.root.position);
+        CcLimbVec3 forward = Forward(body_yaw);
+        CcLimbVec3 right = Right(body_yaw);
+        float jump_time = Clamp(gait->action_time / 0.95f, 0.0f, 1.0f);
+        float tuck = sinf(jump_time * CC_HUMANOID_PI);
+        for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
+            float side = leg == 0 ? -1.0f : 1.0f;
+            CcLimbVec3 foot = Add(pelvis, Scale(right, side * 0.15f));
+            foot = Add(foot, Scale(forward, 0.05f + tuck * 0.14f));
+            foot.y -= 0.80f - tuck * (leg == 0 ? 0.20f : 0.13f);
+            gait->feet[leg].current_point = foot;
+            gait->feet[leg].planted_point = foot;
+            gait->feet[leg].contact = CC_HUMANOID_CONTACT_AIR;
+            gait->feet[leg].pitch.value = 0.08f + tuck * 0.08f;
+        }
+        gait->planted_count = 0;
+    }
     float gait_weight = grounded && gait->speed.value > 0.08f ?
                         Smooth01(gait->speed.value / 0.30f) : 0.0f;
     float height_target = -cosf(stride * 2.0f) * 0.026f * gait_weight;
@@ -1797,7 +1833,8 @@ void CcHumanoidGaitAdvance(CcHumanoidGait *gait, CcLimbVec3 body_position,
     SpringStep(&gait->pelvis_yaw, pelvis_yaw_target, 8.0f, 0.74f, delta_time);
     bool combat_pose = gait->action == CC_HUMANOID_ACTION_GUARD ||
                        gait->action == CC_HUMANOID_ACTION_STRIKE;
-    if (combat_pose) gait_weight *= 1.0f - gait->action_blend;
+    bool jump_pose = gait->action == CC_HUMANOID_ACTION_JUMP;
+    if (combat_pose || jump_pose) gait_weight *= 1.0f - gait->action_blend;
     float left_arm = -cosf(stride) * 0.34f * gait_weight;
     float right_arm = -left_arm;
     float left_flex = 0.24f + fmaxf(0.0f, left_arm) * 0.34f;
@@ -1845,12 +1882,26 @@ void CcHumanoidGaitAdvance(CcHumanoidGait *gait, CcLimbVec3 body_position,
         right_arm = LerpScalar(right_arm, target_right_arm, blend);
         left_flex = LerpScalar(left_flex, target_left_flex, blend);
         right_flex = LerpScalar(right_flex, target_right_flex, blend);
+    } else if (jump_pose) {
+        float jump_time = Clamp(gait->action_time / 0.95f, 0.0f, 1.0f);
+        float rising = 1.0f - Smooth01(jump_time / 0.55f);
+        float landing = Smooth01((jump_time - 0.52f) / 0.48f);
+        float target_arm = LerpScalar(0.42f, 0.92f, rising);
+        target_arm = LerpScalar(target_arm, 0.24f, landing);
+        float target_flex = LerpScalar(0.62f, 0.26f, rising);
+        target_flex = LerpScalar(target_flex, 0.74f, landing);
+        float blend = gait->action_blend;
+        left_arm = LerpScalar(left_arm, target_arm, blend);
+        right_arm = LerpScalar(right_arm, target_arm, blend);
+        left_flex = LerpScalar(left_flex, target_flex, blend);
+        right_flex = LerpScalar(right_flex, target_flex, blend);
+        action_spine_pitch = LerpScalar(-0.045f, 0.085f, landing);
     }
     CcBiomechRigDriveJoint(&gait->body, CC_HUMANOID_SPINE_ROLL,
                            -pelvis_roll_target * 0.55f, 0.58f);
     CcBiomechRigDriveJoint(&gait->body, CC_HUMANOID_SPINE_YAW,
                            -pelvis_yaw_target * 0.68f + action_spine_yaw,
-                           combat_pose ? 0.74f : 0.56f);
+                           combat_pose || jump_pose ? 0.74f : 0.56f);
     CcLimbVec3 motion_forward = Forward(body_yaw);
     float forward_acceleration = gait->body.root.acceleration.x *
                                      motion_forward.x +
@@ -1861,7 +1912,7 @@ void CcHumanoidGaitAdvance(CcHumanoidGait *gait, CcLimbVec3 body_position,
                                      -0.05f, 0.08f);
     CcBiomechRigDriveJoint(&gait->body, CC_HUMANOID_SPINE_PITCH,
                            spine_pitch_target + action_spine_pitch,
-                           combat_pose ? 0.72f : 0.62f);
+                           combat_pose || jump_pose ? 0.72f : 0.62f);
     CcBiomechRigDriveJoint(&gait->body, CC_HUMANOID_LEFT_SHOULDER,
                            left_arm, 0.62f);
     CcBiomechRigDriveJoint(&gait->body, CC_HUMANOID_RIGHT_SHOULDER,
@@ -2048,7 +2099,8 @@ void CcHumanoidGaitConstrainMotion(CcHumanoidGait *gait,
                                   CcLimbVec3 actual_velocity, bool grounded)
 {
     if (gait == NULL || !gait->initialized) return;
-    if (!grounded && !gait->ragdoll.active) {
+    bool controlled_jump = gait->action == CC_HUMANOID_ACTION_JUMP;
+    if (!grounded && !gait->ragdoll.active && !controlled_jump) {
         (void)ActivateRagdoll(gait);
     }
     if (gait->ragdoll.active) {
@@ -2056,6 +2108,13 @@ void CcHumanoidGaitConstrainMotion(CcHumanoidGait *gait,
         return;
     }
     bool landed = grounded && !gait->grounded;
+    if (controlled_jump && !grounded) gait->jump_airborne = true;
+    if (controlled_jump && grounded && gait->jump_airborne) {
+        gait->jump_airborne = false;
+        gait->pelvis_height.velocity = fminf(gait->pelvis_height.velocity,
+                                             -0.28f);
+        SetAction(gait, CC_HUMANOID_ACTION_LOCOMOTION);
+    }
     CcBiomechVec3 position = gait->body.root.position;
     CcBiomechVec3 velocity = gait->body.root.velocity;
     position.x = actual_position.x;
@@ -2094,6 +2153,7 @@ const char *CcHumanoidContactName(CcHumanoidContact contact)
 const char *CcHumanoidActionName(CcHumanoidAction action)
 {
     switch (action) {
+        case CC_HUMANOID_ACTION_JUMP: return "JUMP";
         case CC_HUMANOID_ACTION_GUARD: return "GUARD";
         case CC_HUMANOID_ACTION_STRIKE: return "STRIKE";
         case CC_HUMANOID_ACTION_CLAMBER: return "CLAMBER";
