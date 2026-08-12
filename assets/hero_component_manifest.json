@@ -1,0 +1,449 @@
+{
+  "schema_version": 1,
+  "library_version": "0.2.0",
+  "source": "blender/crownless_hero_components.blend",
+  "coordinate_system": {
+    "unit": "meter",
+    "forward": "-Y",
+    "up": "+Z"
+  },
+  "skeleton": {
+    "id": "crownless_humanoid_v01",
+    "bones": [
+      "root",
+      "pelvis",
+      "spine",
+      "chest",
+      "neck",
+      "head",
+      "upper_arm.L",
+      "forearm.L",
+      "hand.L",
+      "upper_arm.R",
+      "forearm.R",
+      "hand.R",
+      "thigh.L",
+      "shin.L",
+      "foot.L",
+      "thigh.R",
+      "shin.R",
+      "foot.R"
+    ]
+  },
+  "sockets": [
+    {
+      "name": "SOCKET_HEAD",
+      "bone": "head",
+      "position_m": [
+        0.0,
+        0.0,
+        2.04
+      ]
+    },
+    {
+      "name": "SOCKET_FACE",
+      "bone": "head",
+      "position_m": [
+        0.0,
+        -0.19,
+        1.9
+      ]
+    },
+    {
+      "name": "SOCKET_CHEST_FRONT",
+      "bone": "chest",
+      "position_m": [
+        0.0,
+        -0.2,
+        1.47
+      ]
+    },
+    {
+      "name": "SOCKET_BACK",
+      "bone": "chest",
+      "position_m": [
+        0.0,
+        0.2,
+        1.5
+      ]
+    },
+    {
+      "name": "SOCKET_SHOULDER_L",
+      "bone": "upper_arm.L",
+      "position_m": [
+        -0.32,
+        0.0,
+        1.58
+      ]
+    },
+    {
+      "name": "SOCKET_SHOULDER_R",
+      "bone": "upper_arm.R",
+      "position_m": [
+        0.32,
+        0.0,
+        1.58
+      ]
+    },
+    {
+      "name": "SOCKET_FOREARM_L",
+      "bone": "forearm.L",
+      "position_m": [
+        -0.52,
+        0.0,
+        1.08
+      ]
+    },
+    {
+      "name": "SOCKET_FOREARM_R",
+      "bone": "forearm.R",
+      "position_m": [
+        0.52,
+        0.0,
+        1.08
+      ]
+    },
+    {
+      "name": "SOCKET_HAND_L",
+      "bone": "hand.L",
+      "position_m": [
+        -0.58,
+        -0.03,
+        0.85
+      ]
+    },
+    {
+      "name": "SOCKET_HAND_R",
+      "bone": "hand.R",
+      "position_m": [
+        0.58,
+        -0.03,
+        0.85
+      ]
+    },
+    {
+      "name": "SOCKET_BELT",
+      "bone": "pelvis",
+      "position_m": [
+        0.0,
+        0.0,
+        1.02
+      ]
+    },
+    {
+      "name": "SOCKET_SHIN_L",
+      "bone": "shin.L",
+      "position_m": [
+        -0.15,
+        -0.04,
+        0.35
+      ]
+    },
+    {
+      "name": "SOCKET_SHIN_R",
+      "bone": "shin.R",
+      "position_m": [
+        0.15,
+        -0.04,
+        0.35
+      ]
+    },
+    {
+      "name": "SOCKET_FOOT_L",
+      "bone": "foot.L",
+      "position_m": [
+        -0.15,
+        -0.14,
+        0.1
+      ]
+    },
+    {
+      "name": "SOCKET_FOOT_R",
+      "bone": "foot.R",
+      "position_m": [
+        0.15,
+        -0.14,
+        0.1
+      ]
+    }
+  ],
+  "components": [
+    {
+      "id": "hero_belt_satchel_v01",
+      "collection": "CC_HERO_BELT_SATCHEL",
+      "kind": "accessory",
+      "slot": "belt",
+      "layer": "accessory",
+      "anchor_bone": "pelvis",
+      "coverage": [
+        "waist",
+        "right_hip",
+        "chest_strap"
+      ],
+      "export": "exports/hero_glb/hero_belt_satchel_v01.glb"
+    },
+    {
+      "id": "hero_body_base_v01",
+      "collection": "CC_HERO_BODY_BASE",
+      "kind": "body",
+      "slot": "body",
+      "layer": "skin",
+      "anchor_bone": "root",
+      "coverage": [
+        "whole_body"
+      ],
+      "export": "exports/hero_glb/hero_body_base_v01.glb"
+    },
+    {
+      "id": "hero_boot_l_v01",
+      "collection": "CC_HERO_BOOT_L",
+      "kind": "accessory",
+      "slot": "foot_l",
+      "layer": "accessory",
+      "anchor_bone": "foot.L",
+      "coverage": [
+        "foot_l",
+        "ankle"
+      ],
+      "export": "exports/hero_glb/hero_boot_l_v01.glb"
+    },
+    {
+      "id": "hero_boot_r_v01",
+      "collection": "CC_HERO_BOOT_R",
+      "kind": "accessory",
+      "slot": "foot_r",
+      "layer": "accessory",
+      "anchor_bone": "foot.R",
+      "coverage": [
+        "foot_r",
+        "ankle"
+      ],
+      "export": "exports/hero_glb/hero_boot_r_v01.glb"
+    },
+    {
+      "id": "hero_bracer_l_v01",
+      "collection": "CC_HERO_BRACER_L",
+      "kind": "rigid_armor",
+      "slot": "forearm_l",
+      "layer": "rigid_armor",
+      "anchor_bone": "forearm.L",
+      "coverage": [
+        "forearm_l"
+      ],
+      "export": "exports/hero_glb/hero_bracer_l_v01.glb"
+    },
+    {
+      "id": "hero_bracer_r_v01",
+      "collection": "CC_HERO_BRACER_R",
+      "kind": "rigid_armor",
+      "slot": "forearm_r",
+      "layer": "rigid_armor",
+      "anchor_bone": "forearm.R",
+      "coverage": [
+        "forearm_r"
+      ],
+      "export": "exports/hero_glb/hero_bracer_r_v01.glb"
+    },
+    {
+      "id": "hero_cape_v01",
+      "collection": "CC_HERO_CAPE",
+      "kind": "cloth",
+      "slot": "back_cloth",
+      "layer": "cloth",
+      "anchor_bone": "chest",
+      "coverage": [
+        "back",
+        "shoulders"
+      ],
+      "export": "exports/hero_glb/hero_cape_v01.glb"
+    },
+    {
+      "id": "hero_cuirass_v01",
+      "collection": "CC_HERO_CUIRASS",
+      "kind": "rigid_armor",
+      "slot": "torso_armor",
+      "layer": "rigid_armor",
+      "anchor_bone": "chest",
+      "coverage": [
+        "chest",
+        "abdomen",
+        "back"
+      ],
+      "export": "exports/hero_glb/hero_cuirass_v01.glb"
+    },
+    {
+      "id": "hero_glove_l_v01",
+      "collection": "CC_HERO_GLOVE_L",
+      "kind": "accessory",
+      "slot": "hand_l",
+      "layer": "accessory",
+      "anchor_bone": "hand.L",
+      "coverage": [
+        "hand_l"
+      ],
+      "export": "exports/hero_glb/hero_glove_l_v01.glb"
+    },
+    {
+      "id": "hero_glove_r_v01",
+      "collection": "CC_HERO_GLOVE_R",
+      "kind": "accessory",
+      "slot": "hand_r",
+      "layer": "accessory",
+      "anchor_bone": "hand.R",
+      "coverage": [
+        "hand_r"
+      ],
+      "export": "exports/hero_glb/hero_glove_r_v01.glb"
+    },
+    {
+      "id": "hero_greave_l_v01",
+      "collection": "CC_HERO_GREAVE_L",
+      "kind": "rigid_armor",
+      "slot": "shin_l",
+      "layer": "rigid_armor",
+      "anchor_bone": "shin.L",
+      "coverage": [
+        "shin_l",
+        "knee"
+      ],
+      "export": "exports/hero_glb/hero_greave_l_v01.glb"
+    },
+    {
+      "id": "hero_greave_r_v01",
+      "collection": "CC_HERO_GREAVE_R",
+      "kind": "rigid_armor",
+      "slot": "shin_r",
+      "layer": "rigid_armor",
+      "anchor_bone": "shin.R",
+      "coverage": [
+        "shin_r",
+        "knee"
+      ],
+      "export": "exports/hero_glb/hero_greave_r_v01.glb"
+    },
+    {
+      "id": "hero_hair_v01",
+      "collection": "CC_HERO_HAIR",
+      "kind": "hair",
+      "slot": "head",
+      "layer": "accessory",
+      "anchor_bone": "head",
+      "coverage": [
+        "head"
+      ],
+      "export": "exports/hero_glb/hero_hair_v01.glb"
+    },
+    {
+      "id": "hero_muscle_guides_v01",
+      "collection": "CC_HERO_MUSCLE_GUIDES",
+      "kind": "anatomy_guide",
+      "slot": "muscles",
+      "layer": "anatomy",
+      "anchor_bone": "root",
+      "coverage": [
+        "torso",
+        "arms",
+        "legs"
+      ],
+      "export": "exports/hero_glb/hero_muscle_guides_v01.glb"
+    },
+    {
+      "id": "hero_padded_underlayer_v01",
+      "collection": "CC_HERO_PADDED_UNDERLAYER",
+      "kind": "garment",
+      "slot": "underlayer",
+      "layer": "padding",
+      "anchor_bone": "chest",
+      "coverage": [
+        "torso",
+        "upper_arms",
+        "forearms"
+      ],
+      "export": "exports/hero_glb/hero_padded_underlayer_v01.glb"
+    },
+    {
+      "id": "hero_pauldron_l_v01",
+      "collection": "CC_HERO_PAULDRON_L",
+      "kind": "rigid_armor",
+      "slot": "shoulder_l",
+      "layer": "rigid_armor",
+      "anchor_bone": "upper_arm.L",
+      "coverage": [
+        "shoulder_l"
+      ],
+      "export": "exports/hero_glb/hero_pauldron_l_v01.glb"
+    },
+    {
+      "id": "hero_pauldron_r_v01",
+      "collection": "CC_HERO_PAULDRON_R",
+      "kind": "rigid_armor",
+      "slot": "shoulder_r",
+      "layer": "rigid_armor",
+      "anchor_bone": "upper_arm.R",
+      "coverage": [
+        "shoulder_r"
+      ],
+      "export": "exports/hero_glb/hero_pauldron_r_v01.glb"
+    },
+    {
+      "id": "hero_skeleton_v01",
+      "collection": "CC_HERO_SKELETON",
+      "kind": "skeleton",
+      "slot": "skeleton",
+      "layer": "anatomy",
+      "anchor_bone": "root",
+      "coverage": [
+        "whole_body"
+      ],
+      "export": "exports/hero_glb/hero_skeleton_v01.glb"
+    },
+    {
+      "id": "hero_tunic_v01",
+      "collection": "CC_HERO_TUNIC",
+      "kind": "garment",
+      "slot": "torso_garment",
+      "layer": "garment",
+      "anchor_bone": "chest",
+      "coverage": [
+        "torso",
+        "upper_arms",
+        "hips"
+      ],
+      "export": "exports/hero_glb/hero_tunic_v01.glb"
+    }
+  ],
+  "assemblies": {
+    "wayfarer_prototype_v01": {
+      "components": [
+        "hero_belt_satchel_v01",
+        "hero_body_base_v01",
+        "hero_boot_l_v01",
+        "hero_boot_r_v01",
+        "hero_bracer_l_v01",
+        "hero_bracer_r_v01",
+        "hero_cape_v01",
+        "hero_cuirass_v01",
+        "hero_glove_l_v01",
+        "hero_glove_r_v01",
+        "hero_greave_l_v01",
+        "hero_greave_r_v01",
+        "hero_hair_v01",
+        "hero_padded_underlayer_v01",
+        "hero_pauldron_l_v01",
+        "hero_pauldron_r_v01",
+        "hero_tunic_v01"
+      ],
+      "export": "exports/hero_glb/hero_wayfarer_assembled_v01.glb"
+    }
+  },
+  "cloth": {
+    "hero_cape_v01": {
+      "pin_group": "PIN_COLLAR",
+      "control_grid": [
+        6,
+        7
+      ],
+      "simulation_authority": "presentation_only"
+    }
+  }
+}

@@ -1,0 +1,382 @@
+{
+  "asset": "assets/exports/hero/crownless_hero_engine_rig_v01.glb",
+  "armature": "ARM_CrownlessHero",
+  "coordinate_system": "glTF +Y up, +Z forward",
+  "motion_source": "CcHumanoidSkinPoseResolve (runtime only)",
+  "bones": [
+    "root",
+    "pelvis",
+    "spine",
+    "chest",
+    "neck",
+    "head",
+    "upper_arm.L",
+    "forearm.L",
+    "hand.L",
+    "upper_arm.R",
+    "forearm.R",
+    "hand.R",
+    "cape.0",
+    "cape.1",
+    "cape.2",
+    "cape.3",
+    "thigh.L",
+    "shin.L",
+    "foot.L",
+    "thigh.R",
+    "shin.R",
+    "foot.R"
+  ],
+  "components": [
+    {
+      "name": "SKIN_GEO_MuscleTorso",
+      "component": "muscle_underlayer",
+      "bone": "smooth"
+    },
+    {
+      "name": "SKIN_GEO_TunicTorso",
+      "component": "tunic",
+      "bone": "chest"
+    },
+    {
+      "name": "SKIN_GEO_Cuirass",
+      "component": "cuirass",
+      "bone": "chest"
+    },
+    {
+      "name": "SKIN_GEO_CuirassPlate",
+      "component": "cuirass",
+      "bone": "chest"
+    },
+    {
+      "name": "SKIN_GEO_CuirassTrimUpper",
+      "component": "cuirass",
+      "bone": "chest"
+    },
+    {
+      "name": "SKIN_GEO_CuirassTrimLower",
+      "component": "cuirass",
+      "bone": "chest"
+    },
+    {
+      "name": "SKIN_GEO_Emblem",
+      "component": "cuirass",
+      "bone": "chest"
+    },
+    {
+      "name": "SKIN_GEO_Neck",
+      "component": "body",
+      "bone": "neck"
+    },
+    {
+      "name": "SKIN_GEO_Head",
+      "component": "body",
+      "bone": "head"
+    },
+    {
+      "name": "SKIN_GEO_Jaw",
+      "component": "body",
+      "bone": "head"
+    },
+    {
+      "name": "SKIN_GEO_Nose",
+      "component": "body",
+      "bone": "head"
+    },
+    {
+      "name": "SKIN_GEO_EyeL",
+      "component": "body",
+      "bone": "head"
+    },
+    {
+      "name": "SKIN_GEO_EyeR",
+      "component": "body",
+      "bone": "head"
+    },
+    {
+      "name": "SKIN_GEO_HairCap",
+      "component": "hair",
+      "bone": "head"
+    },
+    {
+      "name": "SKIN_GEO_HairBun",
+      "component": "hair",
+      "bone": "head"
+    },
+    {
+      "name": "SKIN_GEO_HairLock0",
+      "component": "hair",
+      "bone": "head"
+    },
+    {
+      "name": "SKIN_GEO_HairLock1",
+      "component": "hair",
+      "bone": "head"
+    },
+    {
+      "name": "SKIN_GEO_HairLock2",
+      "component": "hair",
+      "bone": "head"
+    },
+    {
+      "name": "SKIN_GEO_HairLock3",
+      "component": "hair",
+      "bone": "head"
+    },
+    {
+      "name": "SKIN_GEO_HairLock4",
+      "component": "hair",
+      "bone": "head"
+    },
+    {
+      "name": "SKIN_GEO_MuscleArmL",
+      "component": "muscle_underlayer",
+      "bone": "smooth"
+    },
+    {
+      "name": "SKIN_GEO_MuscleLegL",
+      "component": "muscle_underlayer",
+      "bone": "smooth"
+    },
+    {
+      "name": "SKIN_GEO_UpperArmL",
+      "component": "padding",
+      "bone": "upper_arm.L"
+    },
+    {
+      "name": "SKIN_GEO_SleeveL",
+      "component": "tunic",
+      "bone": "upper_arm.L"
+    },
+    {
+      "name": "SKIN_GEO_ForearmL",
+      "component": "padding",
+      "bone": "forearm.L"
+    },
+    {
+      "name": "SKIN_GEO_BracerL",
+      "component": "bracer",
+      "bone": "forearm.L"
+    },
+    {
+      "name": "SKIN_GEO_BracerSplintL",
+      "component": "bracer",
+      "bone": "forearm.L"
+    },
+    {
+      "name": "SKIN_GEO_GloveL",
+      "component": "glove",
+      "bone": "hand.L"
+    },
+    {
+      "name": "SKIN_GEO_GloveCuffL",
+      "component": "glove",
+      "bone": "hand.L"
+    },
+    {
+      "name": "SKIN_GEO_PauldronL",
+      "component": "pauldron",
+      "bone": "upper_arm.L"
+    },
+    {
+      "name": "SKIN_GEO_PauldronRidgeL",
+      "component": "pauldron",
+      "bone": "upper_arm.L"
+    },
+    {
+      "name": "SKIN_GEO_ThighL",
+      "component": "body",
+      "bone": "thigh.L"
+    },
+    {
+      "name": "SKIN_GEO_ShinL",
+      "component": "greave",
+      "bone": "shin.L"
+    },
+    {
+      "name": "SKIN_GEO_KneeL",
+      "component": "greave",
+      "bone": "shin.L"
+    },
+    {
+      "name": "SKIN_GEO_BootL",
+      "component": "boot",
+      "bone": "foot.L"
+    },
+    {
+      "name": "SKIN_GEO_SoleL",
+      "component": "boot",
+      "bone": "foot.L"
+    },
+    {
+      "name": "SKIN_GEO_MuscleArmR",
+      "component": "muscle_underlayer",
+      "bone": "smooth"
+    },
+    {
+      "name": "SKIN_GEO_MuscleLegR",
+      "component": "muscle_underlayer",
+      "bone": "smooth"
+    },
+    {
+      "name": "SKIN_GEO_UpperArmR",
+      "component": "padding",
+      "bone": "upper_arm.R"
+    },
+    {
+      "name": "SKIN_GEO_SleeveR",
+      "component": "tunic",
+      "bone": "upper_arm.R"
+    },
+    {
+      "name": "SKIN_GEO_ForearmR",
+      "component": "padding",
+      "bone": "forearm.R"
+    },
+    {
+      "name": "SKIN_GEO_BracerR",
+      "component": "bracer",
+      "bone": "forearm.R"
+    },
+    {
+      "name": "SKIN_GEO_BracerSplintR",
+      "component": "bracer",
+      "bone": "forearm.R"
+    },
+    {
+      "name": "SKIN_GEO_GloveR",
+      "component": "glove",
+      "bone": "hand.R"
+    },
+    {
+      "name": "SKIN_GEO_GloveCuffR",
+      "component": "glove",
+      "bone": "hand.R"
+    },
+    {
+      "name": "SKIN_GEO_PauldronR",
+      "component": "pauldron",
+      "bone": "upper_arm.R"
+    },
+    {
+      "name": "SKIN_GEO_PauldronRidgeR",
+      "component": "pauldron",
+      "bone": "upper_arm.R"
+    },
+    {
+      "name": "SKIN_GEO_ThighR",
+      "component": "body",
+      "bone": "thigh.R"
+    },
+    {
+      "name": "SKIN_GEO_ShinR",
+      "component": "greave",
+      "bone": "shin.R"
+    },
+    {
+      "name": "SKIN_GEO_KneeR",
+      "component": "greave",
+      "bone": "shin.R"
+    },
+    {
+      "name": "SKIN_GEO_BootR",
+      "component": "boot",
+      "bone": "foot.R"
+    },
+    {
+      "name": "SKIN_GEO_SoleR",
+      "component": "boot",
+      "bone": "foot.R"
+    },
+    {
+      "name": "SKIN_GEO_TunicFront",
+      "component": "tunic",
+      "bone": "pelvis"
+    },
+    {
+      "name": "SKIN_GEO_TunicBack",
+      "component": "tunic",
+      "bone": "pelvis"
+    },
+    {
+      "name": "SKIN_GEO_TunicLeft",
+      "component": "tunic",
+      "bone": "pelvis"
+    },
+    {
+      "name": "SKIN_GEO_TunicRight",
+      "component": "tunic",
+      "bone": "pelvis"
+    },
+    {
+      "name": "SKIN_GEO_BeltFront",
+      "component": "belt",
+      "bone": "pelvis"
+    },
+    {
+      "name": "SKIN_GEO_BeltBack",
+      "component": "belt",
+      "bone": "pelvis"
+    },
+    {
+      "name": "SKIN_GEO_BeltLeft",
+      "component": "belt",
+      "bone": "pelvis"
+    },
+    {
+      "name": "SKIN_GEO_BeltRight",
+      "component": "belt",
+      "bone": "pelvis"
+    },
+    {
+      "name": "SKIN_GEO_Buckle",
+      "component": "belt",
+      "bone": "pelvis"
+    },
+    {
+      "name": "SKIN_GEO_Satchel",
+      "component": "satchel",
+      "bone": "pelvis"
+    },
+    {
+      "name": "SKIN_GEO_SatchelFlap",
+      "component": "satchel",
+      "bone": "pelvis"
+    },
+    {
+      "name": "SKIN_GEO_SatchelStrap",
+      "component": "satchel",
+      "bone": "chest"
+    },
+    {
+      "name": "SKIN_GEO_Cape",
+      "component": "cape_cloth",
+      "bone": "smooth"
+    },
+    {
+      "name": "SKIN_GEO_CapeCollar",
+      "component": "cape",
+      "bone": "chest"
+    },
+    {
+      "name": "SKIN_GEO_CapeMantleL",
+      "component": "cape",
+      "bone": "chest"
+    },
+    {
+      "name": "SKIN_GEO_CapePinL",
+      "component": "cape",
+      "bone": "chest"
+    },
+    {
+      "name": "SKIN_GEO_CapeMantleR",
+      "component": "cape",
+      "bone": "chest"
+    },
+    {
+      "name": "SKIN_GEO_CapePinR",
+      "component": "cape",
+      "bone": "chest"
+    }
+  ]
+}

@@ -1,0 +1,267 @@
+{
+  "schema_version": 1,
+  "library_version": "0.1.0",
+  "coordinate_system": {
+    "unit": "meter",
+    "forward": "+X",
+    "up": "+Z"
+  },
+  "source": "blender/crownless_asset_library.blend",
+  "assets": [
+    {
+      "id": "carriage_base_v01",
+      "collection": "CC_CARRIAGE_BASE",
+      "kind": "vehicle_core",
+      "layer_group": "carriage_core",
+      "compatible_sockets": [
+        "roof",
+        "rear",
+        "side_left",
+        "side_right",
+        "underbody",
+        "interior"
+      ],
+      "export": "exports/glb/carriage_base_v01.glb"
+    },
+    {
+      "id": "environment_bridge_checkpoint_v01",
+      "collection": "CC_ENV_BRIDGE_CHECKPOINT",
+      "kind": "environment_kit",
+      "layer_group": "environment_base",
+      "compatible_sockets": [],
+      "export": "exports/glb/environment_bridge_checkpoint_v01.glb"
+    },
+    {
+      "id": "environment_market_granary_v01",
+      "collection": "CC_ENV_MARKET_GRANARY",
+      "kind": "environment_kit",
+      "layer_group": "environment_base",
+      "compatible_sockets": [],
+      "export": "exports/glb/environment_market_granary_v01.glb"
+    },
+    {
+      "id": "environment_mine_entrance_v01",
+      "collection": "CC_ENV_MINE_ENTRANCE",
+      "kind": "environment_kit",
+      "layer_group": "environment_base",
+      "compatible_sockets": [],
+      "export": "exports/glb/environment_mine_entrance_v01.glb"
+    },
+    {
+      "id": "environment_road_straight_v01",
+      "collection": "CC_ENV_ROAD_STRAIGHT",
+      "kind": "environment_kit",
+      "layer_group": "environment_base",
+      "compatible_sockets": [],
+      "export": "exports/glb/environment_road_straight_v01.glb"
+    },
+    {
+      "id": "module_armoured_body_v01",
+      "collection": "CC_MOD_ARMOURED_BODY",
+      "kind": "carriage_module",
+      "layer_group": "carriage_module",
+      "compatible_sockets": [
+        "side_left",
+        "side_right"
+      ],
+      "export": "exports/glb/module_armoured_body_v01.glb"
+    },
+    {
+      "id": "module_cargo_rack_v01",
+      "collection": "CC_MOD_CARGO_RACK",
+      "kind": "carriage_module",
+      "layer_group": "carriage_module",
+      "compatible_sockets": [
+        "roof"
+      ],
+      "export": "exports/glb/module_cargo_rack_v01.glb"
+    },
+    {
+      "id": "module_document_safe_v01",
+      "collection": "CC_MOD_DOCUMENT_SAFE",
+      "kind": "carriage_module",
+      "layer_group": "carriage_module",
+      "compatible_sockets": [
+        "side_right",
+        "interior"
+      ],
+      "export": "exports/glb/module_document_safe_v01.glb"
+    },
+    {
+      "id": "module_hidden_compartment_v01",
+      "collection": "CC_MOD_HIDDEN_COMPARTMENT",
+      "kind": "carriage_module",
+      "layer_group": "carriage_module",
+      "compatible_sockets": [
+        "underbody"
+      ],
+      "export": "exports/glb/module_hidden_compartment_v01.glb"
+    },
+    {
+      "id": "module_medical_bunk_v01",
+      "collection": "CC_MOD_MEDICAL_BUNK",
+      "kind": "carriage_module",
+      "layer_group": "carriage_module",
+      "compatible_sockets": [
+        "interior",
+        "rear"
+      ],
+      "export": "exports/glb/module_medical_bunk_v01.glb"
+    },
+    {
+      "id": "module_monster_cage_v01",
+      "collection": "CC_MOD_MONSTER_CAGE",
+      "kind": "carriage_module",
+      "layer_group": "carriage_module",
+      "compatible_sockets": [
+        "rear"
+      ],
+      "export": "exports/glb/module_monster_cage_v01.glb"
+    },
+    {
+      "id": "module_passenger_bench_v01",
+      "collection": "CC_MOD_PASSENGER_BENCH",
+      "kind": "carriage_module",
+      "layer_group": "carriage_module",
+      "compatible_sockets": [
+        "interior"
+      ],
+      "export": "exports/glb/module_passenger_bench_v01.glb"
+    },
+    {
+      "id": "module_relic_containment_v01",
+      "collection": "CC_MOD_RELIC_CONTAINMENT",
+      "kind": "carriage_module",
+      "layer_group": "carriage_module",
+      "compatible_sockets": [
+        "rear",
+        "interior"
+      ],
+      "export": "exports/glb/module_relic_containment_v01.glb"
+    },
+    {
+      "id": "module_scout_perch_v01",
+      "collection": "CC_MOD_SCOUT_PERCH",
+      "kind": "carriage_module",
+      "layer_group": "carriage_module",
+      "compatible_sockets": [
+        "roof"
+      ],
+      "export": "exports/glb/module_scout_perch_v01.glb"
+    },
+    {
+      "id": "state_food_shortage_v01",
+      "collection": "CC_STATE_FOOD_SHORTAGE",
+      "kind": "state_dressing",
+      "layer_group": "state_layer",
+      "compatible_sockets": [],
+      "export": "exports/glb/state_food_shortage_v01.glb"
+    },
+    {
+      "id": "state_harsh_enforcement_v01",
+      "collection": "CC_STATE_HARSH_ENFORCEMENT",
+      "kind": "state_dressing",
+      "layer_group": "state_layer",
+      "compatible_sockets": [],
+      "export": "exports/glb/state_harsh_enforcement_v01.glb"
+    },
+    {
+      "id": "state_market_recovery_v01",
+      "collection": "CC_STATE_MARKET_RECOVERY",
+      "kind": "state_dressing",
+      "layer_group": "state_layer",
+      "compatible_sockets": [],
+      "export": "exports/glb/state_market_recovery_v01.glb"
+    }
+  ],
+  "sockets": {
+    "SOCKET_Interior": {
+      "type": "interior",
+      "position_m": [
+        -0.3,
+        0.0,
+        1.52
+      ],
+      "forward": "+X",
+      "up": "+Z"
+    },
+    "SOCKET_Rear": {
+      "type": "rear",
+      "position_m": [
+        -1.82,
+        0.0,
+        1.28
+      ],
+      "forward": "+X",
+      "up": "+Z"
+    },
+    "SOCKET_Roof": {
+      "type": "roof",
+      "position_m": [
+        -0.3,
+        0.0,
+        2.34
+      ],
+      "forward": "+X",
+      "up": "+Z"
+    },
+    "SOCKET_SideLeft": {
+      "type": "side_left",
+      "position_m": [
+        -0.3,
+        -0.97,
+        1.42
+      ],
+      "forward": "+X",
+      "up": "+Z"
+    },
+    "SOCKET_SideRight": {
+      "type": "side_right",
+      "position_m": [
+        -0.3,
+        0.97,
+        1.42
+      ],
+      "forward": "+X",
+      "up": "+Z"
+    },
+    "SOCKET_Underbody": {
+      "type": "underbody",
+      "position_m": [
+        -0.15,
+        0.0,
+        0.74
+      ],
+      "forward": "+X",
+      "up": "+Z"
+    }
+  },
+  "state_composition": {
+    "market_shortage": [
+      "environment_market_granary_v01",
+      "state_food_shortage_v01"
+    ],
+    "market_enforced": [
+      "environment_market_granary_v01",
+      "state_harsh_enforcement_v01"
+    ],
+    "market_recovery": [
+      "environment_market_granary_v01",
+      "state_market_recovery_v01"
+    ]
+  },
+  "carriage_examples": {
+    "cargo": [
+      "carriage_base_v01",
+      "module_cargo_rack_v01"
+    ],
+    "armoured": [
+      "carriage_base_v01",
+      "module_armoured_body_v01"
+    ],
+    "medical": [
+      "carriage_base_v01",
+      "module_medical_bunk_v01"
+    ]
+  }
+}

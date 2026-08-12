@@ -1,7 +1,9 @@
 .DS_Store
 build/
-build-*/
 out/
 *.tmp
-*.ccsave
-architecture-proof.png
+
+# Blender recovery and cache files
+*.blend1
+*.blend2
+__pycache__/
