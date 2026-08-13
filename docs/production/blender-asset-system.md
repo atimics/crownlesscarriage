@@ -14,6 +14,7 @@ are intentionally broad and readable.
 - Complete review catalog: `assets/previews/catalog/`
 - Rebuild script: `tools/blender/build_asset_library.py`
 - Validation script: `tools/blender/validate_asset_library.py`
+- Blender-free export validator: `tools/blender/inspect_glb.py`
 
 The `.blend` file is generated rather than edited as an opaque source of truth.
 Change the builder, rebuild, and commit the builder plus regenerated outputs.
@@ -53,6 +54,9 @@ All runtime assets follow these rules:
 7. State dressing is additive. It must not duplicate or alter the neutral base
    kit, so strategic state can swap without replacing the whole location.
 8. GLB names come from stable asset IDs rather than Blender display names.
+9. Exports are byte-reproducible. Mesh datablocks take their object's name so
+   mesh names stay stable when unrelated assets change, and UVs are omitted
+   because the flat `MAT_*` palette carries no texture data.
 
 ## Carriage sockets
 
@@ -75,6 +79,17 @@ Environment kits are neutral structural shells:
 - Mine entrance
 - Market and guarded granary
 
+The road, mine, and market kits now carry the first environment readability
+pass. The road gains wheel ruts at the carriage gauge, grass shoulders, verge
+growth, a milestone, and a two-way signpost. The mine gains a layered cliff
+with strata and talus, a braced timber portal with a hood, a working lantern,
+a warning sign, a railed cart with axles and an ore load, a buffer stop, and a
+spoil heap. The market gains plaza paving, a plinth-and-frame granary with a
+gabled roof, door hardware, a grain hoist with a hanging sack, dressed stall
+counters with striped awnings, a canopied well with crank and bucket, and
+neutral storage. Granary, stall, and well anchor positions are unchanged so
+state dressing still composes onto the neutral kit.
+
 State layers project simulation conditions without rebuilding those shells:
 
 - Food shortage: empty baskets, ration control, and a barred granary
@@ -92,12 +107,19 @@ From the repository root:
 make blender-assets
 make blender-assets-catalog
 make blender-assets-check
+make blender-exports-check
 ```
 
 The build starts from Blender factory settings, regenerates every collection,
 exports every asset, writes the manifest, renders the previews, and saves the
 compressed `.blend` file. Validation reopens that file and checks stable IDs,
-sockets, exports, and view-layer presets.
+sockets, per-object roles, module socket declarations, stale exports, and
+view-layer presets. `blender-exports-check` runs `inspect_glb.py`, which needs
+only Python: it validates the GLB containers, recomputes geometry statistics
+and world bounds, enforces the metadata and naming contract on the shipped
+bytes, cross-checks the manifest against the exports on disk, and structurally
+inspects the hero exports. Because exports are byte-reproducible, any GLB diff
+that appears without a builder change indicates pipeline drift.
 
 ## Adding an asset
 

@@ -39,6 +39,32 @@ for asset in manifest["assets"]:
     mesh_count = sum(obj.type == "MESH" for obj in collection.all_objects)
     if mesh_count == 0:
         fail(f"collection {collection.name} has no meshes")
+    for obj in collection.all_objects:
+        if obj.type == "MESH":
+            if not obj.get("cc_role"):
+                fail(f"{obj.name} in {collection.name} has no cc_role")
+            if obj.get("cc_asset_id") != asset_id:
+                fail(f"{obj.name} in {collection.name} carries a foreign cc_asset_id")
+        elif obj.type != "EMPTY":
+            fail(f"unexpected {obj.type} object {obj.name} in exportable {collection.name}")
+
+# Carriage modules must advertise sockets that the base actually exports.
+socket_types = {socket["type"] for socket in manifest["sockets"].values()}
+for asset in manifest["assets"]:
+    if asset["kind"] != "carriage_module":
+        continue
+    declared = set(asset.get("compatible_sockets") or [])
+    if not declared:
+        fail(f"module {asset['id']} declares no compatible sockets")
+    unknown = declared - socket_types
+    if unknown:
+        fail(f"module {asset['id']} declares unknown sockets {sorted(unknown)}")
+
+# Every GLB in the export directory must be referenced by the manifest, so
+# renamed or removed assets cannot linger as stale runtime content.
+for glb in sorted(EXPORT_DIR.glob("*.glb")):
+    if glb.stem not in asset_ids:
+        fail(f"stale export {glb.name} is not referenced by the manifest")
 
 for socket_name, socket in manifest["sockets"].items():
     obj = bpy.data.objects.get(socket_name)
