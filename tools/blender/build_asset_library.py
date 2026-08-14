@@ -398,17 +398,71 @@ def build_carriage_base(parent: bpy.types.Collection) -> bpy.types.Collection:
         sockets=("roof", "rear", "side_left", "side_right", "underbody", "interior"),
     )
 
-    add_cube("GEO_Chassis", (0.0, 0.0, 0.88), (3.9, 1.45, 0.18), "iron", col, asset_id, "chassis")
+    # Chassis is a proper timber frame with iron cross members; the hidden
+    # compartment module still tucks between the members at the same envelope.
+    for y in (-0.63, 0.63):
+        add_cube("GEO_ChassisBeam", (0.0, y, 0.88), (3.9, 0.14, 0.16), "wood_dark", col, asset_id, "chassis", bevel_width=0.03)
+    for x in (-1.60, -0.50, 0.60, 1.50):
+        add_cube("GEO_ChassisCross", (x, 0.0, 0.88), (0.14, 1.40, 0.14), "iron", col, asset_id, "chassis", bevel_width=0.02)
+
+    # Carriage stance: large driven rear wheels, smaller steering front wheels.
+    # The front axle hangs below the frame on drop links and leaf-spring
+    # stacks; the rear axle bolts to the frame through bolster blocks.
+    add_cube("GEO_RearAxle", (-1.22, 0.0, 0.80), (0.16, 2.05, 0.16), "iron", col, asset_id, "axle")
+    add_cube("GEO_FrontAxle", (1.05, 0.0, 0.62), (0.16, 2.05, 0.16), "iron", col, asset_id, "axle")
+    for y in (-0.55, 0.55):
+        add_cube("GEO_RearBolster", (-1.22, y, 0.84), (0.30, 0.30, 0.10), "wood_dark", col, asset_id, "suspension", bevel_width=0.02)
+        add_cube("GEO_FrontDropLink", (1.05, y, 0.71), (0.10, 0.10, 0.22), "iron", col, asset_id, "suspension", bevel_width=0.015)
+    for y in (-0.78, 0.78):
+        for plate, (z, length) in enumerate(((0.705, 0.62), (0.735, 0.50), (0.765, 0.38))):
+            add_cube(f"GEO_SpringLeaf_{'L' if y < 0 else 'R'}_{plate}", (1.05, y, z), (length, 0.14, 0.03), "steel", col, asset_id, "suspension", bevel_width=0.008)
+
+    for x, radius in ((-1.22, 0.80), (1.05, 0.62)):
+        for y in (-0.94, 0.94):
+            add_wheel(f"Wheel_{x:+.0f}_{y:+.0f}", x, y, radius, col, asset_id, radius=radius)
+            # Three-segment mudguard arc over each wheel.
+            fender_radius = radius + 0.12
+            for degrees in (-40, 0, 40):
+                angle = math.radians(degrees)
+                add_cube(
+                    f"GEO_Fender_{x:+.0f}_{y:+.0f}_{degrees:+d}",
+                    (x + fender_radius * math.sin(angle), y, radius + fender_radius * math.cos(angle)),
+                    (0.55, 0.11, 0.05),
+                    "wood_dark",
+                    col,
+                    asset_id,
+                    "fender",
+                    rotation=(0.0, angle, 0.0),
+                    bevel_width=0.015,
+                )
+
     add_cube("GEO_Deck", (-0.15, 0.0, 1.06), (3.35, 1.72, 0.18), "wood_dark", col, asset_id, "deck")
+    for y in (-0.85, 0.85):
+        add_cube("GEO_DeckRubRail", (-0.15, y, 1.02), (3.35, 0.06, 0.10), "wood_light", col, asset_id, "deck_trim", bevel_width=0.02)
+    # Side lockers fill the between-wheel void and read as travel storage.
+    for y in (-0.80, 0.80):
+        add_cube("GEO_SideLocker", (-0.10, y, 0.72), (1.10, 0.10, 0.34), "wood", col, asset_id, "side_locker", bevel_width=0.03)
+        add_cube("GEO_SideLockerLid", (-0.10, y, 0.88), (1.12, 0.11, 0.04), "wood_dark", col, asset_id, "side_locker", bevel_width=0.01)
+
+    # Cabin shell keeps the exact envelope the side, rear, and interior
+    # modules mount on; framing, rails, and glazing add the readability.
     add_cube("GEO_Cabin", (-0.3, 0.0, 1.55), (2.75, 1.68, 0.95), "wood", col, asset_id, "body", bevel_width=0.12)
-    add_cube("GEO_Roof", (-0.3, 0.0, 2.16), (2.98, 1.92, 0.25), "canvas", col, asset_id, "roof", bevel_width=0.12)
-    add_cube("GEO_DriverDeck", (1.55, 0.0, 1.12), (0.85, 1.62, 0.18), "wood_dark", col, asset_id, "driver_deck")
-    add_cube("GEO_DriverSeat", (1.45, 0.0, 1.45), (0.34, 1.3, 0.28), "leather", col, asset_id, "driver_seat", bevel_width=0.08)
-    add_cube("GEO_DriverBack", (1.20, 0.0, 1.72), (0.15, 1.3, 0.65), "leather", col, asset_id, "driver_seat")
+    for x in (-1.62, 1.02):
+        for y in (-0.80, 0.80):
+            add_cube("GEO_CornerPost", (x, y, 1.55), (0.14, 0.14, 0.99), "wood_dark", col, asset_id, "body_frame", bevel_width=0.025)
+    for y in (-0.845, 0.845):
+        add_cube("GEO_WaistRail", (-0.3, y, 1.28), (2.60, 0.04, 0.10), "wood_dark", col, asset_id, "body_frame", bevel_width=0.015)
+
+    # Barrel canvas roof: flat crown plus two sloped eaves. Crown top stays at
+    # the original roof height so roof-socket modules keep their fit.
+    add_cube("GEO_Roof", (-0.3, 0.0, 2.26), (2.98, 0.95, 0.16), "canvas", col, asset_id, "roof", bevel_width=0.10)
+    for y, pitch in ((-0.72, math.radians(-22)), (0.72, math.radians(22))):
+        add_cube("GEO_RoofEave", (-0.3, y, 2.16), (2.98, 0.72, 0.14), "canvas", col, asset_id, "roof", rotation=(pitch, 0.0, 0.0), bevel_width=0.08)
 
     for y in (-0.855, 0.855):
+        side = "L" if y < 0 else "R"
         add_cube(
-            f"GEO_Window_{'L' if y < 0 else 'R'}",
+            f"GEO_Window_{side}",
             (-0.35, y, 1.69),
             (1.25, 0.035, 0.43),
             "glass",
@@ -418,7 +472,7 @@ def build_carriage_base(parent: bpy.types.Collection) -> bpy.types.Collection:
             bevel_width=0.035,
         )
         add_cube(
-            f"GEO_WindowFrame_{'L' if y < 0 else 'R'}",
+            f"GEO_WindowFrame_{side}",
             (-0.35, y * 1.008, 1.69),
             (1.40, 0.05, 0.06),
             "brass",
@@ -426,21 +480,54 @@ def build_carriage_base(parent: bpy.types.Collection) -> bpy.types.Collection:
             asset_id,
             "window_frame",
         )
+        add_cube(f"GEO_WindowSill_{side}", (-0.35, y * 0.99, 1.44), (1.40, 0.05, 0.06), "wood_dark", col, asset_id, "window_frame", bevel_width=0.01)
+        add_cube(f"GEO_WindowHeader_{side}", (-0.35, y * 0.99, 1.94), (1.40, 0.05, 0.06), "wood_dark", col, asset_id, "window_frame", bevel_width=0.01)
 
-    for x in (-1.22, 1.05):
-        for y in (-0.94, 0.94):
-            add_wheel(f"Wheel_{x:+.0f}_{y:+.0f}", x, y, 0.72, col, asset_id)
+    # Front cab window sits above the armour module's front plate zone.
+    add_cube("GEO_FrontWindow", (1.085, 0.0, 1.86), (0.04, 0.85, 0.34), "glass", col, asset_id, "window", bevel_width=0.02)
+    for z in (1.70, 2.04):
+        add_cube("GEO_FrontWindowFrame", (1.09, 0.0, z), (0.05, 0.95, 0.05), "brass", col, asset_id, "window_frame", bevel_width=0.01)
 
-    add_cube("GEO_FrontAxle", (1.05, 0.0, 0.75), (0.16, 2.05, 0.16), "iron", col, asset_id, "axle")
-    add_cube("GEO_RearAxle", (-1.22, 0.0, 0.75), (0.16, 2.05, 0.16), "iron", col, asset_id, "axle")
+    # Rear door: frame plus a leaf with strap hinges and a pull ring. The
+    # relic and medical modules overlay this face exactly as before.
+    for y in (-0.66, 0.66):
+        add_cube("GEO_RearDoorPost", (-1.70, y, 1.55), (0.10, 0.12, 0.95), "wood_dark", col, asset_id, "rear_door", bevel_width=0.02)
+    add_cube("GEO_RearDoorLintel", (-1.70, 0.0, 2.00), (0.10, 1.44, 0.12), "wood_dark", col, asset_id, "rear_door", bevel_width=0.02)
+    add_cube("GEO_RearDoor", (-1.685, 0.0, 1.56), (0.05, 1.10, 0.86), "wood_dark", col, asset_id, "rear_door", bevel_width=0.02)
+    for z in (1.30, 1.80):
+        add_cube("GEO_RearDoorHinge", (-1.715, -0.42, z), (0.04, 0.26, 0.06), "iron", col, asset_id, "rear_door", bevel_width=0.01)
+    add_torus("GEO_RearDoorRing", (-1.72, 0.32, 1.55), 0.06, 0.014, "brass", col, asset_id, "rear_door", rotation=(0.0, math.radians(90), 0.0))
+
+    # Driver station: footboard on brackets, dashboard, footrest, cushioned
+    # bench, and a hand brake within reach.
+    add_cube("GEO_DriverDeck", (1.55, 0.0, 1.12), (0.85, 1.62, 0.18), "wood_dark", col, asset_id, "driver_deck")
+    for y in (-0.62, 0.62):
+        add_beam_between("GEO_DriverDeckBrace", (1.30, y, 0.95), (1.85, y, 1.06), 0.08, "wood_dark", col, asset_id, "driver_deck")
+    add_cube("GEO_Dashboard", (1.92, 0.0, 1.50), (0.08, 1.50, 0.42), "wood", col, asset_id, "dashboard", bevel_width=0.03)
+    add_cube("GEO_DashboardRail", (1.92, 0.0, 1.74), (0.10, 1.56, 0.08), "wood_dark", col, asset_id, "dashboard", bevel_width=0.02)
+    add_cube("GEO_Footrest", (1.80, 0.0, 1.28), (0.08, 1.20, 0.08), "iron", col, asset_id, "footrest", bevel_width=0.015)
+    for y in (-0.45, 0.45):
+        add_cube("GEO_FootrestBracket", (1.86, y, 1.20), (0.14, 0.06, 0.06), "iron", col, asset_id, "footrest", bevel_width=0.01)
+    add_cube("GEO_DriverSeat", (1.45, 0.0, 1.45), (0.34, 1.3, 0.28), "leather", col, asset_id, "driver_seat", bevel_width=0.08)
+    add_cube("GEO_DriverCushion", (1.45, 0.0, 1.62), (0.34, 1.26, 0.10), "canvas", col, asset_id, "driver_seat", bevel_width=0.04)
+    add_cube("GEO_DriverBack", (1.20, 0.0, 1.72), (0.15, 1.3, 0.65), "leather", col, asset_id, "driver_seat")
+    add_beam_between("GEO_BrakeLever", (1.15, -0.70, 1.30), (1.02, -0.70, 1.72), 0.05, "iron", col, asset_id, "brake")
+    add_uv_sphere("GEO_BrakeKnob", (1.02, -0.70, 1.72), (0.05, 0.05, 0.05), "brass", col, asset_id, "brake")
+
+    # Rear step for cabin access; sits clear of the monster-cage envelope.
+    add_cube("GEO_RearStep", (-1.90, 0.0, 0.96), (0.24, 1.20, 0.08), "wood_dark", col, asset_id, "rear_step", bevel_width=0.02)
+    for y in (-0.45, 0.45):
+        add_beam_between("GEO_RearStepBrace", (-1.75, y, 0.80), (-1.95, y, 0.94), 0.06, "iron", col, asset_id, "rear_step")
+
     add_beam_between("GEO_HitchLeft", (1.65, -0.43, 0.95), (3.35, -0.28, 0.72), 0.10, "wood_dark", col, asset_id, "hitch")
     add_beam_between("GEO_HitchRight", (1.65, 0.43, 0.95), (3.35, 0.28, 0.72), 0.10, "wood_dark", col, asset_id, "hitch")
     add_cube("GEO_HitchBar", (3.36, 0.0, 0.72), (0.14, 0.72, 0.14), "iron", col, asset_id, "hitch")
+    add_torus("GEO_HitchRing", (3.46, 0.0, 0.72), 0.09, 0.02, "iron", col, asset_id, "hitch", rotation=(0.0, math.radians(90), 0.0))
 
     for y in (-0.77, 0.77):
         add_cube("GEO_LanternBracket", (1.58, y, 1.72), (0.10, 0.10, 0.42), "iron", col, asset_id, "lantern")
         add_cube("GEO_Lantern", (1.58, y, 1.95), (0.18, 0.18, 0.28), "brass", col, asset_id, "lantern", bevel_width=0.04)
-        add_cube("GEO_LanternGlass", (1.58, y, 1.96), (0.12, 0.12, 0.15), "cream", col, asset_id, "lantern_glass", bevel_width=0.025)
+        add_cube("GEO_LanternGlass", (1.58, y, 1.96), (0.12, 0.12, 0.15), "ember", col, asset_id, "lantern_glass", bevel_width=0.025)
 
     sockets = {
         "SOCKET_Roof": ((-0.3, 0.0, 2.34), "roof"),

@@ -70,6 +70,17 @@ bench, hidden compartment, scout perch, monster cage, relic containment, and a
 diplomatic document safe. The geometry is deliberately low-poly blockout art;
 the collection and metadata contract is suitable for later production meshes.
 
+The carriage core has its first readability pass: a timber frame with cross
+members replaces the plain chassis slab, large driven rear wheels and smaller
+steering front wheels sit under three-segment fenders with leaf-spring stacks
+and drop links, and the flat roof slab is now a canvas barrel roof whose crown
+keeps the original roof-socket height. The cabin envelope, socket positions,
+and module mounting faces are unchanged, so every existing module composes
+onto the new core without edits. The driver station gains a braced footboard,
+dashboard, footrest, cushion, and hand brake; lanterns use the shared
+emissive `ember` material; and a rear door, rear step, side lockers, and
+plated running gear complete the silhouette.
+
 ## Environment and state composition
 
 Environment kits are neutral structural shells:
