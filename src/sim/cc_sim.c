@@ -186,6 +186,7 @@ const char *CcEventKindName(CcEventKind kind)
         case CC_EVENT_ENCOUNTER_COMBAT: return "ROAD DEFENDED";
         case CC_EVENT_ENCOUNTER_NEGOTIATED: return "ROAD BARGAIN";
         case CC_EVENT_DELAYED_ECHO: return "RETURN ECHO";
+        case CC_EVENT_JOURNEY_DEPARTED: return "DEPARTURE";
     }
     return "EVENT";
 }
@@ -709,6 +710,13 @@ void CcSimInit(CcSim *sim, uint32_t seed)
     sim->player.passenger_capacity = 4;
     sim->player.map_capacity = CC_MAP_CAPACITY;
     sim->player.reputation = 0;
+    sim->clock.game_minutes_per_second =
+        CC_IDLE_GAME_MINUTES_PER_SECOND;
+    sim->carriage = (CcCarriageState){
+        .mode = CC_CARRIAGE_PARKED,
+        .location_id = sim->player.location_id,
+        .condition = 100
+    };
     InitMaps(sim);
 
     char text[CC_EVENT_TEXT_CAPACITY];
@@ -1978,75 +1986,111 @@ static void CreateJourneyTraffic(CcSim *sim,
                     origin->id, parent_event_id, quantity, text);
 }
 
-static bool CompleteTravel(CcSim *sim, CcId destination_id, CcId route_id,
-                           bool allow_ambush, CcId parent_event_id,
-                           char *error, size_t error_capacity)
+static void ResolveJourneyAmbush(CcSim *sim)
 {
-    const CcSettlement *destination = CcSimSettlement(sim, destination_id);
-    const CcRoute *route = CcSimRoute(sim, route_id);
-    if (destination == NULL || route == NULL) {
-        SetError(error, error_capacity, "The prepared journey is no longer valid.");
-        return false;
-    }
-    CcId origin = sim->player.location_id;
-    int32_t days = route->travel_days;
-    int32_t fare = days + (route->smuggler_route ? 3 : 0);
-    if (sim->player.coins < fare) {
-        SetError(error, error_capacity, "The company cannot provision that journey.");
-        return false;
-    }
-    int32_t danger = CcSimRouteDanger(sim, route->id);
-    bool ambushed = allow_ambush &&
-                    (int32_t)(NextRandom(sim) % 100U) < danger / 2;
-    CcSimAdvanceDays(sim, days);
-    sim->player.location_id = destination->id;
-    sim->player.coins -= fare;
-    CcEvent *ambush_event = NULL;
-    if (ambushed) {
-        int32_t stolen = 0;
-        CcGood stolen_good = CC_GOOD_COUNT;
-        for (int32_t good = CC_GOOD_COUNT - 1; good >= 0; --good) {
-            if (sim->player.cargo[good] <= stolen) continue;
-            stolen = sim->player.cargo[good];
-            stolen_good = (CcGood)good;
-        }
-        char ambush_text[CC_EVENT_TEXT_CAPACITY];
-        if (stolen_good != CC_GOOD_COUNT && stolen > 0) {
-            int32_t quantity = MinimumI32(2, stolen);
-            sim->player.cargo[stolen_good] -= quantity;
-            CcBanditGroup *bandits = BanditsOnRoute(sim, route->id);
-            if (bandits != NULL) {
-                bandits->supplies = ClampI32(bandits->supplies + quantity,
-                                             0, 100);
-            }
-            (void)snprintf(ambush_text, sizeof(ambush_text),
-                           "Roadside attackers take %d %s before disappearing into the route traffic.",
-                           quantity, CcGoodName(stolen_good));
-            stolen = quantity;
-        } else {
-            stolen = MinimumI32(6, (int32_t)sim->player.coins);
-            sim->player.coins -= stolen;
-            (void)snprintf(ambush_text, sizeof(ambush_text),
-                           "Roadside attackers take %d crowns before disappearing into the route traffic.",
-                           stolen);
-        }
-        ambush_event = PushEvent(sim, CC_EVENT_PLAYER_AMBUSH, sim->player.id,
-                                 route->id, parent_event_id, stolen,
-                                 ambush_text);
+    if (sim == NULL || !sim->journey.active ||
+        !sim->journey.ambush_pending) return;
+    int32_t stolen = 0;
+    CcGood stolen_good = CC_GOOD_COUNT;
+    for (int32_t good = CC_GOOD_COUNT - 1; good >= 0; --good) {
+        if (sim->player.cargo[good] <= stolen) continue;
+        stolen = sim->player.cargo[good];
+        stolen_good = (CcGood)good;
     }
     char text[CC_EVENT_TEXT_CAPACITY];
-    const CcSettlement *from = CcSimSettlement(sim, origin);
+    if (stolen_good != CC_GOOD_COUNT && stolen > 0) {
+        int32_t quantity = MinimumI32(2, stolen);
+        sim->player.cargo[stolen_good] -= quantity;
+        CcBanditGroup *bandits = BanditsOnRoute(sim, sim->journey.route_id);
+        if (bandits != NULL) {
+            bandits->supplies = ClampI32(bandits->supplies + quantity,
+                                         0, 100);
+        }
+        (void)snprintf(text, sizeof(text),
+                       "Roadside attackers take %d %s before disappearing into the route traffic.",
+                       quantity, CcGoodName(stolen_good));
+        stolen = quantity;
+    } else {
+        stolen = MinimumI32(6, (int32_t)sim->player.coins);
+        sim->player.coins -= stolen;
+        (void)snprintf(text, sizeof(text),
+                       "Roadside attackers take %d crowns before disappearing into the route traffic.",
+                       stolen);
+    }
+    CcEvent *event = PushEvent(
+        sim, CC_EVENT_PLAYER_AMBUSH, sim->player.id,
+        sim->journey.route_id, sim->journey.parent_event_id, stolen, text);
+    if (event != NULL) sim->journey.parent_event_id = event->id;
+    sim->journey.ambush_pending = false;
+    sim->journey.ambush_resolved = true;
+}
+
+static void FinishJourneyArrival(CcSim *sim)
+{
+    if (sim == NULL || !sim->journey.active) return;
+    const CcSettlement *destination = CcSimSettlement(
+        sim, sim->journey.destination_id);
+    const CcSettlement *origin = CcSimSettlement(
+        sim, sim->journey.origin_id);
+    const CcRoute *route = CcSimRoute(sim, sim->journey.route_id);
+    if (destination == NULL || route == NULL) return;
+    sim->player.location_id = destination->id;
+    sim->journey.elapsed_subticks = sim->journey.total_subticks;
+    sim->journey.active = false;
+    sim->journey.phase = CC_JOURNEY_PHASE_NONE;
+    sim->clock.game_minutes_per_second =
+        CC_IDLE_GAME_MINUTES_PER_SECOND;
+    sim->carriage = (CcCarriageState){
+        .mode = CC_CARRIAGE_PARKED,
+        .location_id = destination->id,
+        .condition = sim->carriage.condition
+    };
+    char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(text, sizeof(text),
                    "The Crownless carriage reaches %s from %s after %d days (%d%% danger).",
-                   destination->name, from != NULL ? from->name : "the road",
-                   days, danger);
-    CcEvent *travel = PushEvent(
-        sim, CC_EVENT_PLAYER_TRAVEL, sim->player.id, destination->id,
-        ambush_event != NULL ? ambush_event->id : parent_event_id, days, text);
-    (void)travel;
+                   destination->name,
+                   origin != NULL ? origin->name : "the road",
+                   route->travel_days, sim->journey.danger);
+    (void)PushEvent(sim, CC_EVENT_PLAYER_TRAVEL, sim->player.id,
+                    destination->id, sim->journey.parent_event_id,
+                    route->travel_days, text);
     DeliverDelayedEchoIfReady(sim);
-    SetError(error, error_capacity, "");
-    return true;
+}
+
+static void InterruptJourney(CcSim *sim)
+{
+    const CcSettlement *destination = CcSimSettlement(
+        sim, sim->journey.destination_id);
+    const CcSituation *situation = CcSimSituation(
+        sim, sim->journey.situation_id);
+    const CcBanditGroup *bandits = BanditsOnRoute(
+        sim, sim->journey.route_id);
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text),
+                   "%s blocks the road to %s while %s waits on the Crownless promise: break the cordon or buy passage.",
+                   bandits != NULL ? bandits->name : "Armed road collectors",
+                   destination != NULL ? destination->name : "the far gate",
+                   situation != NULL && situation->affected_name[0] != '\0' ?
+                       situation->affected_name : "a local household");
+    CcEvent *event = PushEvent(
+        sim, CC_EVENT_JOURNEY_ENCOUNTER, sim->journey.situation_id,
+        sim->journey.route_id, sim->journey.parent_event_id,
+        sim->journey.danger, text);
+    if (event != NULL) sim->journey.parent_event_id = event->id;
+    sim->journey.encounter_triggered = true;
+    sim->journey.phase = CC_JOURNEY_PHASE_BLOCKED;
+    sim->clock.game_minutes_per_second = 0;
+    sim->carriage.mode = CC_CARRIAGE_STOPPED;
+    sim->carriage.speed_milli_per_second = 0;
+}
+
+static int32_t JourneyCarriageSpeed(int32_t total_subticks)
+{
+    if (total_subticks <= 0) return 0;
+    const int32_t represented_route_millimetres = 52000;
+    return (int32_t)(((int64_t)represented_route_millimetres *
+                      CC_TRAVEL_GAME_MINUTES_PER_SECOND *
+                      CC_WORLD_TICKS_PER_SECOND) / total_subticks);
 }
 
 static bool ApplyTravel(CcSim *sim, const CcCommand *command,
@@ -2084,40 +2128,62 @@ static bool ApplyTravel(CcSim *sim, const CcCommand *command,
         return false;
     }
     const CcSituation *accepted = CcSimAcceptedSituation(sim);
-    if (accepted != NULL &&
-        sim->resolved_journey_situation_id != accepted->id) {
-        int32_t danger = CcSimRouteDanger(sim, route->id);
-        sim->journey = (CcJourneyEncounter){
-            .active = true,
-            .situation_id = accepted->id,
-            .origin_id = sim->player.location_id,
-            .destination_id = destination->id,
-            .route_id = route->id,
-            .danger = danger,
-            .bargain_cost = ClampI32(4 + danger / 7, 5, 18)
-        };
-        const CcBanditGroup *bandits = BanditsOnRoute(sim, route->id);
-        char text[CC_EVENT_TEXT_CAPACITY];
-        (void)snprintf(text, sizeof(text),
-                       "%s blocks the road to %s while %s waits on the Crownless promise: break the cordon or buy passage.",
-                       bandits != NULL ? bandits->name : "Armed road collectors",
-                       destination->name,
-                       accepted->affected_name[0] != '\0' ?
-                           accepted->affected_name : "a local household");
-        (void)PushEvent(sim, CC_EVENT_JOURNEY_ENCOUNTER, accepted->id,
-                        route->id, accepted->cause_event_id, danger, text);
-        SetError(error, error_capacity, "");
-        return true;
-    }
-    return CompleteTravel(sim, destination->id, route->id, true,
-                          LatestLocalCause(sim, destination->id),
-                          error, error_capacity);
+    bool encounter_planned = accepted != NULL &&
+        sim->resolved_journey_situation_id != accepted->id;
+    int32_t danger = CcSimRouteDanger(sim, route->id);
+    int32_t total_subticks = days * CC_WORLD_DAY_SUBTICKS;
+    CcId parent_event_id = LatestLocalCause(sim, destination->id);
+    bool ambush_pending = !encounter_planned &&
+        (int32_t)(NextRandom(sim) % 100U) < danger / 2;
+    sim->player.coins -= fare;
+    sim->journey = (CcJourneyEncounter){
+        .active = true,
+        .phase = CC_JOURNEY_PHASE_TRAVELLING,
+        .situation_id = encounter_planned ? accepted->id : 0U,
+        .origin_id = sim->player.location_id,
+        .destination_id = destination->id,
+        .route_id = route->id,
+        .danger = danger,
+        .bargain_cost = ClampI32(4 + danger / 7, 5, 18),
+        .departure_day = sim->current_day,
+        .total_subticks = total_subticks,
+        .encounter_subticks = encounter_planned ?
+            total_subticks * 35 / 100 : 0,
+        .fare_reserved = fare,
+        .ambush_pending = ambush_pending,
+        .parent_event_id = parent_event_id
+    };
+    sim->clock.game_minutes_per_second =
+        CC_TRAVEL_GAME_MINUTES_PER_SECOND;
+    sim->carriage = (CcCarriageState){
+        .mode = CC_CARRIAGE_MOVING,
+        .route_id = route->id,
+        .origin_id = sim->player.location_id,
+        .destination_id = destination->id,
+        .speed_milli_per_second =
+            JourneyCarriageSpeed(total_subticks),
+        .condition = sim->carriage.condition
+    };
+    char text[CC_EVENT_TEXT_CAPACITY];
+    const CcSettlement *origin = CcSimSettlement(
+        sim, sim->journey.origin_id);
+    (void)snprintf(text, sizeof(text),
+                   "The Crownless carriage leaves %s for %s with %d days of provisions reserved.",
+                   origin != NULL ? origin->name : "the waystation",
+                   destination->name, days);
+    CcEvent *departure = PushEvent(
+        sim, CC_EVENT_JOURNEY_DEPARTED, sim->player.id, route->id,
+        parent_event_id, days, text);
+    if (departure != NULL) sim->journey.parent_event_id = departure->id;
+    SetError(error, error_capacity, "");
+    return true;
 }
 
 static bool ApplyResolveEncounter(CcSim *sim, CcJourneyOutcome outcome,
                                   char *error, size_t error_capacity)
 {
     if (!sim->journey.active ||
+        sim->journey.phase != CC_JOURNEY_PHASE_BLOCKED ||
         (outcome != CC_JOURNEY_OUTCOME_COMBAT &&
          outcome != CC_JOURNEY_OUTCOME_NEGOTIATED)) {
         SetError(error, error_capacity, "There is no unresolved road encounter.");
@@ -2134,11 +2200,10 @@ static bool ApplyResolveEncounter(CcSim *sim, CcJourneyOutcome outcome,
                  "The road encounter no longer matches the prepared journey.");
         return false;
     }
-    int32_t fare = route->travel_days + (route->smuggler_route ? 3 : 0);
-    if (sim->player.coins < fare +
-        (outcome == CC_JOURNEY_OUTCOME_NEGOTIATED ? journey.bargain_cost : 0)) {
+    if (outcome == CC_JOURNEY_OUTCOME_NEGOTIATED &&
+        sim->player.coins < journey.bargain_cost) {
         SetError(error, error_capacity,
-                 "The company cannot cover passage and journey provisions.");
+                 "The company cannot cover the negotiated passage.");
         return false;
     }
     char text[CC_EVENT_TEXT_CAPACITY];
@@ -2180,24 +2245,62 @@ static bool ApplyResolveEncounter(CcSim *sim, CcJourneyOutcome outcome,
         event_kind = CC_EVENT_ENCOUNTER_NEGOTIATED;
         magnitude = journey.bargain_cost;
     }
-    const CcEvent *encounter = CcSimRecentEvent(sim, 0);
     CcEvent *outcome_event = PushEvent(
         sim, event_kind, journey.situation_id, journey.route_id,
-        encounter != NULL && encounter->kind == CC_EVENT_JOURNEY_ENCOUNTER ?
-            encounter->id : 0U,
-        magnitude, text);
-    sim->journey.active = false;
+        journey.parent_event_id, magnitude, text);
+    sim->journey.phase = CC_JOURNEY_PHASE_TRAVELLING;
+    sim->journey.parent_event_id = outcome_event != NULL ?
+        outcome_event->id : journey.parent_event_id;
     sim->resolved_journey_situation_id = journey.situation_id;
     sim->resolved_journey_outcome = outcome;
-    if (!CompleteTravel(sim, journey.destination_id, journey.route_id, false,
-                        outcome_event != NULL ? outcome_event->id : 0U,
-                        error, error_capacity)) {
-        return false;
-    }
+    sim->clock.game_minutes_per_second =
+        CC_TRAVEL_GAME_MINUTES_PER_SECOND;
+    sim->carriage.mode = CC_CARRIAGE_MOVING;
+    sim->carriage.speed_milli_per_second =
+        JourneyCarriageSpeed(sim->journey.total_subticks);
     CreateJourneyTraffic(sim, &journey,
                          outcome_event != NULL ? outcome_event->id : 0U);
     SetError(error, error_capacity, "");
     return true;
+}
+
+void CcSimAdvanceRuntimeTicks(CcSim *sim, int32_t ticks)
+{
+    if (sim == NULL || ticks <= 0 || !sim->journey.active ||
+        sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING) return;
+    for (int32_t tick = 0; tick < ticks; ++tick) {
+        if (!sim->journey.active ||
+            sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING) break;
+        sim->clock.tick += 1U;
+        int32_t rate = CC_TRAVEL_GAME_MINUTES_PER_SECOND;
+        sim->clock.game_minutes_per_second = rate;
+        sim->clock.minute_subticks += rate;
+        while (sim->clock.minute_subticks >= CC_WORLD_DAY_SUBTICKS) {
+            sim->clock.minute_subticks -= CC_WORLD_DAY_SUBTICKS;
+            CcSimAdvanceDays(sim, 1);
+        }
+        sim->journey.elapsed_subticks = MinimumI32(
+            sim->journey.total_subticks,
+            sim->journey.elapsed_subticks + rate);
+        sim->carriage.progress_milli = sim->journey.total_subticks > 0 ?
+            (int32_t)(((int64_t)sim->journey.elapsed_subticks * 1000) /
+                      sim->journey.total_subticks) : 0;
+        if (sim->journey.ambush_pending &&
+            sim->journey.elapsed_subticks >=
+                sim->journey.total_subticks * 60 / 100) {
+            ResolveJourneyAmbush(sim);
+        }
+        if (!sim->journey.encounter_triggered &&
+            sim->journey.situation_id != 0U &&
+            sim->journey.elapsed_subticks >=
+                sim->journey.encounter_subticks) {
+            InterruptJourney(sim);
+            continue;
+        }
+        if (sim->journey.elapsed_subticks >= sim->journey.total_subticks) {
+            FinishJourneyArrival(sim);
+        }
+    }
 }
 
 static bool ApplyRepair(CcSim *sim, const CcCommand *command,
@@ -2315,7 +2418,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         SetError(error, error_capacity, "Simulation is missing.");
         return false;
     }
-    if (sim->schema_version != CC_SIM_SCHEMA_VERSION ||
+    if ((sim->schema_version != 3U &&
+         sim->schema_version != CC_SIM_SCHEMA_VERSION) ||
         sim->generator_version != CC_GENERATOR_VERSION) {
         SetError(error, error_capacity, "Simulation version is unsupported.");
         return false;
@@ -2352,7 +2456,9 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         if (CcIdKind(route->id) != CC_ENTITY_ROUTE ||
             CcSimSettlement(sim, route->from_id) == NULL ||
             CcSimSettlement(sim, route->to_id) == NULL ||
-            route->travel_days < 1 || route->capacity < 1) {
+            route->travel_days < 1 ||
+            route->travel_days > INT32_MAX / CC_WORLD_DAY_SUBTICKS ||
+            route->capacity < 1) {
             SetError(error, error_capacity, "Route data is invalid.");
             return false;
         }
@@ -2417,16 +2523,101 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         SetError(error, error_capacity, "Player company state is invalid.");
         return false;
     }
-    if (sim->journey.active &&
-        (CcSimSituation(sim, sim->journey.situation_id) == NULL ||
-         CcSimSettlement(sim, sim->journey.origin_id) == NULL ||
-         CcSimSettlement(sim, sim->journey.destination_id) == NULL ||
-         CcSimRoute(sim, sim->journey.route_id) == NULL ||
-         sim->journey.origin_id != sim->player.location_id ||
-         sim->journey.danger < 0 || sim->journey.danger > 100 ||
-         sim->journey.bargain_cost < 1)) {
-        SetError(error, error_capacity, "Prepared journey encounter is invalid.");
-        return false;
+    if (sim->schema_version == 3U) {
+        if (sim->journey.active &&
+            (CcSimSituation(sim, sim->journey.situation_id) == NULL ||
+             CcSimSettlement(sim, sim->journey.origin_id) == NULL ||
+             CcSimSettlement(sim, sim->journey.destination_id) == NULL ||
+             CcSimRoute(sim, sim->journey.route_id) == NULL ||
+             sim->journey.origin_id != sim->player.location_id ||
+             sim->journey.danger < 0 || sim->journey.danger > 100 ||
+             sim->journey.bargain_cost < 1)) {
+            SetError(error, error_capacity,
+                     "Prepared journey encounter is invalid.");
+            return false;
+        }
+    } else {
+        bool valid_rate = sim->clock.game_minutes_per_second ==
+                CC_IDLE_GAME_MINUTES_PER_SECOND ||
+            sim->clock.game_minutes_per_second ==
+                CC_TRAVEL_GAME_MINUTES_PER_SECOND;
+        if (sim->clock.minute_subticks < 0 ||
+            sim->clock.minute_subticks >= CC_WORLD_DAY_SUBTICKS ||
+            !valid_rate) {
+            SetError(error, error_capacity, "World clock state is invalid.");
+            return false;
+        }
+        if (sim->journey.active) {
+            bool situation_valid = sim->journey.situation_id == 0U ||
+                CcSimSituation(sim, sim->journey.situation_id) != NULL;
+            bool phase_valid =
+                sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING ||
+                sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED;
+            bool encounter_valid =
+                sim->journey.phase != CC_JOURNEY_PHASE_BLOCKED ||
+                (sim->journey.situation_id != 0U &&
+                 sim->journey.encounter_triggered);
+            int32_t expected_rate =
+                sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING ?
+                    CC_TRAVEL_GAME_MINUTES_PER_SECOND :
+                    CC_IDLE_GAME_MINUTES_PER_SECOND;
+            if (!situation_valid || !phase_valid || !encounter_valid ||
+                CcSimSettlement(sim, sim->journey.origin_id) == NULL ||
+                CcSimSettlement(sim, sim->journey.destination_id) == NULL ||
+                CcSimRoute(sim, sim->journey.route_id) == NULL ||
+                sim->journey.origin_id != sim->player.location_id ||
+                sim->journey.danger < 0 || sim->journey.danger > 100 ||
+                sim->journey.bargain_cost < 1 ||
+                sim->journey.departure_day < 1 ||
+                sim->journey.departure_day > sim->current_day ||
+                sim->journey.elapsed_subticks < 0 ||
+                sim->journey.total_subticks < CC_WORLD_DAY_SUBTICKS ||
+                sim->journey.elapsed_subticks >
+                    sim->journey.total_subticks ||
+                sim->journey.encounter_subticks < 0 ||
+                sim->journey.encounter_subticks >
+                    sim->journey.total_subticks ||
+                sim->journey.fare_reserved < 1 ||
+                sim->clock.game_minutes_per_second != expected_rate) {
+                SetError(error, error_capacity,
+                         "Persistent journey state is invalid.");
+                return false;
+            }
+            CcCarriageMode expected_mode =
+                sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED ?
+                    CC_CARRIAGE_STOPPED : CC_CARRIAGE_MOVING;
+            int32_t expected_progress = (int32_t)(
+                ((int64_t)sim->journey.elapsed_subticks * 1000) /
+                sim->journey.total_subticks);
+            if (sim->carriage.mode != expected_mode ||
+                sim->carriage.route_id != sim->journey.route_id ||
+                sim->carriage.origin_id != sim->journey.origin_id ||
+                sim->carriage.destination_id !=
+                    sim->journey.destination_id ||
+                sim->carriage.progress_milli < 0 ||
+                sim->carriage.progress_milli > 1000 ||
+                sim->carriage.progress_milli != expected_progress ||
+                (sim->carriage.mode == CC_CARRIAGE_MOVING &&
+                 sim->carriage.speed_milli_per_second !=
+                    JourneyCarriageSpeed(sim->journey.total_subticks)) ||
+                (sim->carriage.mode == CC_CARRIAGE_STOPPED &&
+                 sim->carriage.speed_milli_per_second != 0) ||
+                sim->carriage.condition < 0 ||
+                sim->carriage.condition > 100) {
+                SetError(error, error_capacity,
+                         "Carriage journey state is invalid.");
+                return false;
+            }
+        } else if (sim->journey.phase != CC_JOURNEY_PHASE_NONE ||
+                   sim->carriage.mode != CC_CARRIAGE_PARKED ||
+                   sim->carriage.location_id != sim->player.location_id ||
+                   sim->clock.game_minutes_per_second !=
+                       CC_IDLE_GAME_MINUTES_PER_SECOND ||
+                   sim->carriage.condition < 0 ||
+                   sim->carriage.condition > 100) {
+            SetError(error, error_capacity, "Parked carriage state is invalid.");
+            return false;
+        }
     }
     if (sim->resolved_journey_outcome < CC_JOURNEY_OUTCOME_NONE ||
         sim->resolved_journey_outcome > CC_JOURNEY_OUTCOME_NEGOTIATED ||
@@ -2578,24 +2769,64 @@ uint64_t CcSimHash(const CcSim *sim)
     if (sim->player.accepted_situation_id != 0U) {
         HASH_VALUE(sim->player.accepted_situation_id);
     }
-    /* These additions are likewise sparse so schema-v3 saves written before
-       journey encounters retain their historic hash. */
-    if (sim->journey.active) {
+    if (sim->schema_version == 3U) {
+        /* Sparse schema-v3 fields preserve the hashes written before journey
+           encounters and explicit charter commitments existed. */
+        if (sim->journey.active) {
+            HASH_VALUE(sim->journey.active);
+            HASH_VALUE(sim->journey.situation_id);
+            HASH_VALUE(sim->journey.origin_id);
+            HASH_VALUE(sim->journey.destination_id);
+            HASH_VALUE(sim->journey.route_id);
+            HASH_VALUE(sim->journey.danger);
+            HASH_VALUE(sim->journey.bargain_cost);
+        }
+        if (sim->resolved_journey_situation_id != 0U) {
+            HASH_VALUE(sim->resolved_journey_situation_id);
+            HASH_VALUE(sim->resolved_journey_outcome);
+            HASH_VALUE(sim->journey.destination_id);
+            HASH_VALUE(sim->journey.route_id);
+        }
+        if (sim->delayed_echo.active) {
+            HASH_VALUE(sim->delayed_echo.active);
+            HASH_VALUE(sim->delayed_echo.situation_id);
+            HASH_VALUE(sim->delayed_echo.settlement_id);
+            HASH_VALUE(sim->delayed_echo.parent_event_id);
+            HASH_VALUE(sim->delayed_echo.outcome);
+            HASH_VALUE(sim->delayed_echo.due_day);
+            hash = HashString(hash, sim->delayed_echo.character_name);
+        }
+    } else {
+        HASH_VALUE(sim->clock.tick);
+        HASH_VALUE(sim->clock.minute_subticks);
+        HASH_VALUE(sim->clock.game_minutes_per_second);
         HASH_VALUE(sim->journey.active);
+        HASH_VALUE(sim->journey.phase);
         HASH_VALUE(sim->journey.situation_id);
         HASH_VALUE(sim->journey.origin_id);
         HASH_VALUE(sim->journey.destination_id);
         HASH_VALUE(sim->journey.route_id);
         HASH_VALUE(sim->journey.danger);
         HASH_VALUE(sim->journey.bargain_cost);
-    }
-    if (sim->resolved_journey_situation_id != 0U) {
+        HASH_VALUE(sim->journey.departure_day);
+        HASH_VALUE(sim->journey.elapsed_subticks);
+        HASH_VALUE(sim->journey.total_subticks);
+        HASH_VALUE(sim->journey.encounter_subticks);
+        HASH_VALUE(sim->journey.fare_reserved);
+        HASH_VALUE(sim->journey.encounter_triggered);
+        HASH_VALUE(sim->journey.ambush_pending);
+        HASH_VALUE(sim->journey.ambush_resolved);
+        HASH_VALUE(sim->journey.parent_event_id);
+        HASH_VALUE(sim->carriage.mode);
+        HASH_VALUE(sim->carriage.location_id);
+        HASH_VALUE(sim->carriage.route_id);
+        HASH_VALUE(sim->carriage.origin_id);
+        HASH_VALUE(sim->carriage.destination_id);
+        HASH_VALUE(sim->carriage.progress_milli);
+        HASH_VALUE(sim->carriage.speed_milli_per_second);
+        HASH_VALUE(sim->carriage.condition);
         HASH_VALUE(sim->resolved_journey_situation_id);
         HASH_VALUE(sim->resolved_journey_outcome);
-        HASH_VALUE(sim->journey.destination_id);
-        HASH_VALUE(sim->journey.route_id);
-    }
-    if (sim->delayed_echo.active) {
         HASH_VALUE(sim->delayed_echo.active);
         HASH_VALUE(sim->delayed_echo.situation_id);
         HASH_VALUE(sim->delayed_echo.settlement_id);

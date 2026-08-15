@@ -85,12 +85,17 @@ Controls:
   screen. Use the arrow keys or click a sheet, B to buy a locally offered
   chart, S to sell one, and Enter to follow an owned chart from the correct
   endpoint. The case carries three maps. The first journey made under an
-  accepted charter can now be interrupted by a route-owned crisis: `1`
+  accepted charter now departs into a real-time carriage-following road view.
+  Travel advances the deterministic world clock at thirty game-minutes per
+  real second; every midnight runs the normal living-world update. A
+  route-owned crisis interrupts that same journey in progress: `1`
   dismounts into a dedicated road scene and only clears the route after its
   attackers are defeated; `2` enters an unarmed parley in the same physical
   space. Walk to the toll collector and press `F` to buy passage, moving
-  traffic immediately while strengthening the collectors who control it.
-- `.` advances one day; `K` advances one week.
+  traffic immediately while strengthening the collectors who control it. The
+  carriage then resumes from its saved route progress and arrives only when
+  the full duration has elapsed.
+- `.` advances one day; `K` advances one week while the carriage is parked.
 - R repairs a selected contested route from its chart.
 - `E` launches an expedition when standing beside the local dungeon entrance.
 - `F3` toggles the live frame, skin-upload, and character-LOD diagnostic overlay.
@@ -141,6 +146,10 @@ Use `--capture-golden <frame.png>` for the fixed street-level art-direction
 review: the authored carriage and market, action-figure hero, role-shaped
 population, simulation dressing, shared palette, and final color treatment are
 framed together under deterministic world conditions.
+
+Use `--capture-travel <frame.png>` for the deterministic real-time travel
+proof at twenty percent route progress. The capture frames the moving carriage
+with its authoritative clock, progress, speed, condition, and time scale.
 
 This is still an architecture proof rather than the finished RPG. It now
 includes one reusable local settlement grammar, an enterable economy-backed

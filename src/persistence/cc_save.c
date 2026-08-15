@@ -97,7 +97,7 @@ static bool OpenDatabase(const char *path, sqlite3 **database,
         "PRAGMA journal_mode=DELETE;"
         "PRAGMA synchronous=FULL;"
         "PRAGMA application_id=1128481362;"
-        "PRAGMA user_version=3;",
+        "PRAGMA user_version=4;",
         error, error_capacity)) {
         sqlite3_close(*database);
         *database = NULL;
@@ -195,6 +195,18 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " destination_id INTEGER NOT NULL, route_id INTEGER NOT NULL,"
         " danger INTEGER NOT NULL, bargain_cost INTEGER NOT NULL,"
         " resolved_situation_id INTEGER NOT NULL, resolved_outcome INTEGER NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS runtime_state ("
+        " id INTEGER PRIMARY KEY CHECK(id=1), clock_tick INTEGER NOT NULL,"
+        " minute_subticks INTEGER NOT NULL, game_minutes_per_second INTEGER NOT NULL,"
+        " journey_phase INTEGER NOT NULL, departure_day INTEGER NOT NULL,"
+        " elapsed_subticks INTEGER NOT NULL, total_subticks INTEGER NOT NULL,"
+        " encounter_subticks INTEGER NOT NULL, fare_reserved INTEGER NOT NULL,"
+        " encounter_triggered INTEGER NOT NULL, ambush_pending INTEGER NOT NULL,"
+        " ambush_resolved INTEGER NOT NULL, parent_event_id INTEGER NOT NULL,"
+        " carriage_mode INTEGER NOT NULL, carriage_location_id INTEGER NOT NULL,"
+        " carriage_route_id INTEGER NOT NULL, carriage_origin_id INTEGER NOT NULL,"
+        " carriage_destination_id INTEGER NOT NULL, carriage_progress_milli INTEGER NOT NULL,"
+        " carriage_speed_milli_per_second INTEGER NOT NULL, carriage_condition INTEGER NOT NULL);"
         "CREATE TABLE IF NOT EXISTS delayed_echo ("
         " id INTEGER PRIMARY KEY CHECK(id=1), active INTEGER NOT NULL,"
         " situation_id INTEGER NOT NULL, settlement_id INTEGER NOT NULL,"
@@ -572,6 +584,36 @@ static bool SaveJourneyState(sqlite3 *database, const CcSim *sim,
     if (!result) return false;
 
     if (!Prepare(database,
+                 "INSERT INTO runtime_state VALUES(1,?,?,?,?,?,?,?,?,?,?,"
+                 "?,?,?,?,?,?,?,?,?,?,?);",
+                 &statement, error, error_capacity)) return false;
+    int column = 1;
+    BindId(statement, column++, sim->clock.tick);
+    BindInt(statement, column++, sim->clock.minute_subticks);
+    BindInt(statement, column++, sim->clock.game_minutes_per_second);
+    BindInt(statement, column++, (int32_t)sim->journey.phase);
+    BindInt(statement, column++, sim->journey.departure_day);
+    BindInt(statement, column++, sim->journey.elapsed_subticks);
+    BindInt(statement, column++, sim->journey.total_subticks);
+    BindInt(statement, column++, sim->journey.encounter_subticks);
+    BindInt(statement, column++, sim->journey.fare_reserved);
+    BindInt(statement, column++, sim->journey.encounter_triggered ? 1 : 0);
+    BindInt(statement, column++, sim->journey.ambush_pending ? 1 : 0);
+    BindInt(statement, column++, sim->journey.ambush_resolved ? 1 : 0);
+    BindId(statement, column++, sim->journey.parent_event_id);
+    BindInt(statement, column++, (int32_t)sim->carriage.mode);
+    BindId(statement, column++, sim->carriage.location_id);
+    BindId(statement, column++, sim->carriage.route_id);
+    BindId(statement, column++, sim->carriage.origin_id);
+    BindId(statement, column++, sim->carriage.destination_id);
+    BindInt(statement, column++, sim->carriage.progress_milli);
+    BindInt(statement, column++, sim->carriage.speed_milli_per_second);
+    BindInt(statement, column++, sim->carriage.condition);
+    result = StepDone(database, statement, error, error_capacity);
+    sqlite3_finalize(statement);
+    if (!result) return false;
+
+    if (!Prepare(database,
                  "INSERT INTO delayed_echo VALUES(1,?,?,?,?,?,?,?);",
                  &statement, error, error_capacity)) return false;
     BindInt(statement, 1, sim->delayed_echo.active ? 1 : 0);
@@ -608,7 +650,8 @@ bool CcSaveWrite(const char *path, const CcSim *sim,
             "DELETE FROM dungeon; DELETE FROM situation; DELETE FROM situation_cast;"
             "DELETE FROM causal_event;"
             "DELETE FROM player_company; DELETE FROM player_commitment;"
-            "DELETE FROM player_journey; DELETE FROM delayed_echo;",
+            "DELETE FROM player_journey; DELETE FROM runtime_state;"
+            "DELETE FROM delayed_echo;",
             error, error_capacity) &&
         SaveMeta(database, sim, error, error_capacity) &&
         SaveKingdoms(database, sim, error, error_capacity) &&
@@ -1080,6 +1123,62 @@ static bool ReadJourneyState(sqlite3 *database, CcSim *sim,
     sqlite3_finalize(statement);
 
     if (!Prepare(database,
+                 "SELECT clock_tick,minute_subticks,game_minutes_per_second,"
+                 "journey_phase,departure_day,elapsed_subticks,total_subticks,"
+                 "encounter_subticks,fare_reserved,encounter_triggered,"
+                 "ambush_pending,ambush_resolved,parent_event_id,carriage_mode,"
+                 "carriage_location_id,carriage_route_id,carriage_origin_id,"
+                 "carriage_destination_id,carriage_progress_milli,"
+                 "carriage_speed_milli_per_second,carriage_condition "
+                 "FROM runtime_state WHERE id=1;",
+                 &statement, error, error_capacity)) return false;
+    result = sqlite3_step(statement);
+    if (result == SQLITE_ROW) {
+        int column = 0;
+        sim->clock.tick = (uint64_t)sqlite3_column_int64(statement, column++);
+        sim->clock.minute_subticks = sqlite3_column_int(statement, column++);
+        sim->clock.game_minutes_per_second =
+            sqlite3_column_int(statement, column++);
+        sim->journey.phase =
+            (CcJourneyPhase)sqlite3_column_int(statement, column++);
+        sim->journey.departure_day = sqlite3_column_int(statement, column++);
+        sim->journey.elapsed_subticks = sqlite3_column_int(statement, column++);
+        sim->journey.total_subticks = sqlite3_column_int(statement, column++);
+        sim->journey.encounter_subticks =
+            sqlite3_column_int(statement, column++);
+        sim->journey.fare_reserved = sqlite3_column_int(statement, column++);
+        sim->journey.encounter_triggered =
+            sqlite3_column_int(statement, column++) != 0;
+        sim->journey.ambush_pending =
+            sqlite3_column_int(statement, column++) != 0;
+        sim->journey.ambush_resolved =
+            sqlite3_column_int(statement, column++) != 0;
+        sim->journey.parent_event_id =
+            (CcId)sqlite3_column_int64(statement, column++);
+        sim->carriage.mode =
+            (CcCarriageMode)sqlite3_column_int(statement, column++);
+        sim->carriage.location_id =
+            (CcId)sqlite3_column_int64(statement, column++);
+        sim->carriage.route_id =
+            (CcId)sqlite3_column_int64(statement, column++);
+        sim->carriage.origin_id =
+            (CcId)sqlite3_column_int64(statement, column++);
+        sim->carriage.destination_id =
+            (CcId)sqlite3_column_int64(statement, column++);
+        sim->carriage.progress_milli =
+            sqlite3_column_int(statement, column++);
+        sim->carriage.speed_milli_per_second =
+            sqlite3_column_int(statement, column++);
+        sim->carriage.condition = sqlite3_column_int(statement, column++);
+    } else if (result != SQLITE_DONE) {
+        SetSqlError(error, error_capacity, database,
+                    "Could not read world runtime state");
+        sqlite3_finalize(statement);
+        return false;
+    }
+    sqlite3_finalize(statement);
+
+    if (!Prepare(database,
                  "SELECT active,situation_id,settlement_id,parent_event_id,"
                  "outcome,due_day,character_name FROM delayed_echo WHERE id=1;",
                  &statement, error, error_capacity)) return false;
@@ -1106,6 +1205,50 @@ static bool ReadJourneyState(sqlite3 *database, CcSim *sim,
         return false;
     }
     sqlite3_finalize(statement);
+    return true;
+}
+
+static bool UpgradeLegacyRuntime(CcSim *sim,
+                                 char *error, size_t error_capacity)
+{
+    if (sim->schema_version != 3U) return true;
+    sim->schema_version = CC_SIM_SCHEMA_VERSION;
+    sim->clock = (CcWorldClock){
+        .game_minutes_per_second = CC_IDLE_GAME_MINUTES_PER_SECOND
+    };
+    sim->carriage = (CcCarriageState){
+        .mode = CC_CARRIAGE_PARKED,
+        .location_id = sim->player.location_id,
+        .condition = 100
+    };
+    if (!sim->journey.active) return true;
+    const CcRoute *route = CcSimRoute(sim, sim->journey.route_id);
+    if (route == NULL) {
+        SetError(error, error_capacity,
+                 "Legacy journey route is no longer valid.");
+        return false;
+    }
+    int32_t fare = route->travel_days +
+        (route->smuggler_route ? 3 : 0);
+    if (sim->player.coins >= fare) sim->player.coins -= fare;
+    int32_t total_subticks = route->travel_days * CC_WORLD_DAY_SUBTICKS;
+    sim->journey.phase = CC_JOURNEY_PHASE_BLOCKED;
+    sim->journey.departure_day = sim->current_day;
+    sim->journey.total_subticks = total_subticks;
+    sim->journey.encounter_subticks = 0;
+    sim->journey.elapsed_subticks = 0;
+    sim->journey.fare_reserved = fare;
+    sim->journey.encounter_triggered = true;
+    const CcEvent *recent = CcSimRecentEvent(sim, 0);
+    sim->journey.parent_event_id = recent != NULL ? recent->id : 0U;
+    sim->clock.game_minutes_per_second = 0;
+    sim->carriage = (CcCarriageState){
+        .mode = CC_CARRIAGE_STOPPED,
+        .route_id = sim->journey.route_id,
+        .origin_id = sim->journey.origin_id,
+        .destination_id = sim->journey.destination_id,
+        .condition = 100
+    };
     return true;
 }
 
@@ -1145,6 +1288,11 @@ bool CcSaveRead(const char *path, CcSim *sim,
     }
     if (CcSimHash(sim) != expected_hash) {
         SetError(error, error_capacity, "Campaign state hash does not match stored data.");
+        return false;
+    }
+    if (!UpgradeLegacyRuntime(sim, error, error_capacity)) return false;
+    if (!CcSimValidate(sim, validation, sizeof(validation))) {
+        SetError(error, error_capacity, validation);
         return false;
     }
     SetError(error, error_capacity, "");

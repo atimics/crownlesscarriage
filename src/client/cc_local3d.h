@@ -302,9 +302,9 @@ const char *CcLocalCombatTeamName(CcCombatTeam team);
 void CcLocalCourseInit(CcLocalCourse *course);
 void CcLocalCourseUpdate(CcLocalCourse *course, CcLocalAgent *player,
                          const CcSim *sim, float delta_time);
-void CcLocalWorldUpdate(CcLocalCourse *course, CcLocalAgent *player,
-                        const CcSim *sim, float delta_time,
-                        bool market_interior, bool advance_course);
+int32_t CcLocalWorldUpdate(CcLocalCourse *course, CcLocalAgent *player,
+                           const CcSim *sim, float delta_time,
+                           bool market_interior, bool advance_course);
 void CcLocalCourseRaiseAlarm(CcLocalCourse *course);
 void CcLocalCourseRaiseAlarmNear(CcLocalCourse *course,
                                  const CcLocalAgent *player);
@@ -341,7 +341,8 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                          const CcLocalCourse *course, float clock,
                          RenderTexture2D target, Rectangle destination);
 void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
-                       const CcLocalCourse *course, bool parley,
+                       const CcLocalCourse *course, bool travelling,
+                       bool parley,
                        float clock, RenderTexture2D target,
                        Rectangle destination);
 void CcLocalDrawMarket3D(const CcSim *sim, const CcLocalAgent *agent, float clock,

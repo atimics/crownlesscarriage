@@ -20,6 +20,11 @@ Target: exact agreement across every validated test platform.
 Saving and loading at arbitrary days, during travel, and before or after local
 interventions must reproduce the uninterrupted run.
 
+The persisted hash includes world tick, sub-day time, journey phase and
+progress, encounter/ambush decisions, reserved fare, and carriage state. A
+schema-3 save verifies its historical hash before being migrated to this
+runtime state.
+
 Previously altered route and dungeon segments must retain authoritative
 mutations.
 

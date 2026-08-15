@@ -16,6 +16,14 @@ static CcId ActiveSituationId(const CcSim *sim, CcSituationKind kind,
     return 0U;
 }
 
+static void FinishJourney(CcSim *sim)
+{
+    while (sim->journey.active) {
+        CC_CHECK(sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING);
+        CcSimAdvanceRuntimeTicks(sim, CC_WORLD_TICKS_PER_SECOND);
+    }
+}
+
 int main(void)
 {
     CcSim sim;
@@ -40,6 +48,7 @@ int main(void)
         .target_id = sim.settlements[1].id
     };
     CC_CHECK(CcSimApply(&sim, &to_market, error, sizeof(error)));
+    FinishJourney(&sim);
 
     const CcMap *bridge_map = CcSimMapForRoute(
         &sim, sim.routes[1].id, sim.player.location_id);
@@ -68,6 +77,7 @@ int main(void)
         .target_id = sim.settlements[2].id
     };
     CC_CHECK(CcSimApply(&sim, &to_fortress, error, sizeof(error)));
+    FinishJourney(&sim);
 
     const CcMap *mine_map = CcSimMapForRoute(
         &sim, sim.routes[2].id, sim.player.location_id);
@@ -82,6 +92,7 @@ int main(void)
         .target_id = sim.settlements[3].id
     };
     CC_CHECK(CcSimApply(&sim, &to_mine, error, sizeof(error)));
+    FinishJourney(&sim);
     int32_t food_before = sim.settlements[3].stock[CC_GOOD_FOOD];
 
     CcCommand accept_relief = {

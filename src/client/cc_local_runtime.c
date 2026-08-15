@@ -34,15 +34,15 @@ void CcLocalCourseUpdate(CcLocalCourse *course, CcLocalAgent *player,
         course->world_simulation_accumulator / fixed_step));
 }
 
-void CcLocalWorldUpdate(CcLocalCourse *course, CcLocalAgent *player,
-                        const CcSim *sim, float delta_time,
-                        bool market_interior, bool advance_course)
+int32_t CcLocalWorldUpdate(CcLocalCourse *course, CcLocalAgent *player,
+                           const CcSim *sim, float delta_time,
+                           bool market_interior, bool advance_course)
 {
     if (course == NULL) {
         if (player != NULL) {
             CcLocalAgentUpdate(player, delta_time, market_interior);
         }
-        return;
+        return 0;
     }
     const double fixed_step = 1.0 / 60.0;
     int32_t steps = AccumulateLocalWorldTime(
@@ -64,6 +64,7 @@ void CcLocalWorldUpdate(CcLocalCourse *course, CcLocalAgent *player,
     float amount = (float)(course->world_simulation_accumulator / fixed_step);
     if (player != NULL) CcLocalAgentInterpolateInternal(player, amount);
     if (advance_course) CcLocalCourseInterpolateInternal(course, amount);
+    return steps;
 }
 
 void CcLocalAgentUpdate(CcLocalAgent *agent, float delta_time,

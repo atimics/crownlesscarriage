@@ -6591,7 +6591,8 @@ static bool DrawBridgeCheckpoint(void)
 }
 
 void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
-                       const CcLocalCourse *course, bool parley,
+                       const CcLocalCourse *course, bool travelling,
+                       bool parley,
                        float clock, RenderTexture2D target,
                        Rectangle destination)
 {
@@ -6608,7 +6609,15 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
             break;
         }
     }
-    Camera3D camera = LocalCamera(false, agent->position);
+    float route_progress = (float)sim->carriage.progress_milli / 1000.0f;
+    float carriage_x = travelling ? 24.0f + route_progress * 52.0f : 38.35f;
+    Vector3 carriage_base = {
+        carriage_x,
+        travelling ? 0.025f + sinf(clock * 5.0f) * 0.018f : 0.0f,
+        40.0f
+    };
+    Vector3 camera_focus = travelling ? carriage_base : agent->position;
+    Camera3D camera = LocalCamera(false, camera_focus);
     /* Frame the whole convoy rather than centering only the dismounted hero. */
     camera.target.x -= 0.90f;
     camera.position.x -= 0.90f;
@@ -6616,33 +6625,34 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     BeginTextureMode(target);
     ClearBackground((Color){9, 20, 25, 255});
     BeginMode3D(camera);
-    bool authored_checkpoint = runtime_assets[RUNTIME_ASSET_BRIDGE].ready;
+    bool authored_checkpoint = !travelling &&
+        runtime_assets[RUNTIME_ASSET_BRIDGE].ready;
     DrawRoadTerrain(route, sim->journey.danger, authored_checkpoint);
-    if (!DrawBridgeCheckpoint()) DrawRoadBarricade(route);
-    DrawAgentPath(agent, false);
+    if (!travelling && !DrawBridgeCheckpoint()) DrawRoadBarricade(route);
+    if (!travelling) DrawAgentPath(agent, false);
     int32_t road_cargo = CcPlayerCargoUsed(&sim->player);
-    DrawRoadCarriage((Vector3){38.35f, 0.0f, 40.00f}, road_cargo);
+    DrawRoadCarriage(carriage_base, road_cargo);
 
-    DrawNpcFigure3D((Vector3){35.10f, 0.0f, 37.95f}, 0.90f, 1.35f,
+    DrawNpcFigure3D((Vector3){carriage_x - 3.25f, 0.0f, 37.95f}, 0.90f, 1.35f,
                     UINT32_C(0x726f6101), CC_NPC_ROLE_TRAVELLER,
                     (Color){151, 103, 78, 255}, clock * 0.42f,
                     CC_TRAVERSAL_IDLE);
-    DrawNpcFigure3D((Vector3){34.35f, 0.0f, 39.40f}, 0.84f, 1.10f,
+    DrawNpcFigure3D((Vector3){carriage_x - 4.00f, 0.0f, 39.40f}, 0.84f, 1.10f,
                     UINT32_C(0x726f6102), CC_NPC_ROLE_HEALER,
                     WORLD_TEAL, clock * 0.36f + 1.4f,
                     CC_TRAVERSAL_IDLE);
-    DrawNpcFigure3D((Vector3){35.00f, 0.0f, 41.55f}, 0.80f, 1.55f,
+    DrawNpcFigure3D((Vector3){carriage_x - 3.35f, 0.0f, 41.55f}, 0.80f, 1.55f,
                     UINT32_C(0x726f6103), CC_NPC_ROLE_REFUGEE,
                     WORLD_VIOLET, clock * 0.31f + 2.1f,
                     CC_TRAVERSAL_IDLE);
-    DrawBox((Vector3){34.10f, 0.34f, 42.45f},
+    DrawBox((Vector3){carriage_x - 4.25f, 0.34f, 42.45f},
             (Vector3){0.72f, 0.68f, 0.72f},
             (Color){137, 91, 55, 255});
-    DrawBox((Vector3){35.02f, 0.25f, 42.42f},
+    DrawBox((Vector3){carriage_x - 3.33f, 0.25f, 42.42f},
             (Vector3){0.82f, 0.50f, 0.64f},
             (Color){112, 76, 53, 255});
 
-    DrawCourseRunners(course);
+    if (!travelling) DrawCourseRunners(course);
     if (parley && !course->alarm_active) {
         for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
             DrawRobotShell(&course->raiders[i]);
@@ -6652,10 +6662,12 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
         agent->combat.target_index < CC_LOCAL_RAIDER_COUNT) {
         DrawSelectedTarget(&course->raiders[agent->combat.target_index]);
     }
-    DrawRobotShell(agent);
-    DrawCombatSword(agent);
-    DrawCombatSkillTell(agent);
-    DrawCombatImpact(agent);
+    if (!travelling) {
+        DrawRobotShell(agent);
+        DrawCombatSword(agent);
+        DrawCombatSkillTell(agent);
+        DrawCombatImpact(agent);
+    }
     EndMode3D();
 
     char route_label[96];
@@ -6668,14 +6680,17 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
                    bandits != NULL ? bandits->name : "ROAD COLLECTORS");
     WorldLabel labels[6];
     int32_t count = 0;
-    labels[count++] = (WorldLabel){{agent->position.x,
-                                    agent->position.y + 2.30f,
-                                    agent->position.z}, "YOU", WORLD_TEAL};
-    if (!parley) {
+    if (!travelling) {
+        labels[count++] = (WorldLabel){{agent->position.x,
+                                        agent->position.y + 2.30f,
+                                        agent->position.z}, "YOU", WORLD_TEAL};
+    }
+    if (!travelling && !parley) {
         labels[count++] = (WorldLabel){{ROAD_BARRICADE_X, 2.58f, 40.00f},
                                        blockade_label, WORLD_DANGER};
     }
-    labels[count++] = (WorldLabel){{57.0f, 1.18f, 40.0f},
+    labels[count++] = (WorldLabel){{travelling ? carriage_x + 8.0f : 57.0f,
+                                    1.18f, 40.0f},
                                    route_label, WORLD_GOLD};
     if (parley) {
         labels[count++] = (WorldLabel){
@@ -6689,7 +6704,7 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     }
     DrawLabels(labels, count, camera, target.texture.width,
                target.texture.height);
-    if (course->alarm_active) {
+    if (!travelling && course->alarm_active) {
         DrawCombatBar(agent, camera, target.texture.width,
                       target.texture.height, WORLD_TEAL);
         for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
@@ -6713,7 +6728,10 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
                         route != NULL ? route->condition : 0,
                         route != NULL ? route->security : 0),
              18, 18, 10, parley ? WORLD_TEAL : WORLD_DANGER);
-    DrawText(parley ?
+    DrawText(travelling ?
+             TextFormat("CARRIAGE MOVING / %d%% COMPLETE / %d GAME MIN / REAL SEC",
+                        sim->carriage.progress_milli / 10,
+                        CC_TRAVEL_GAME_MINUTES_PER_SECOND) : parley ?
              "PARLEY / approach the collector and press F to exchange crowns for passage" :
              TextFormat("BREAK THE CORDON / YOU %d HP / RAIDERS %d%% RESOLVE",
                         (int32_t)lroundf(agent->combat.health),
