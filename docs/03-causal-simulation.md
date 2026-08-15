@@ -12,8 +12,17 @@ institution the player can meaningfully affect.
 
 ## Authoritative calendar
 
-The simulation uses integer calendar days. Local rendering frame rate never
-changes strategic outcomes.
+The strategic systems still resolve on integer calendar days, but committed
+travel owns a deterministic sub-day clock. The client converts wall time into
+60 Hz runtime ticks; the simulation consumes only those integer ticks. At the
+current travel scale, each real second represents thirty game-minutes. Crossing
+midnight releases exactly one normal daily update, so rendering frame rate
+never changes strategic outcomes.
+
+Town exploration, menus, dialogue, and road decisions do not advance this
+clock. A persistent journey advances it only while its carriage phase is
+`TRAVELLING`; an interruption changes that phase to `BLOCKED` and pauses both
+route progress and strategic time until the player resolves it.
 
 Suggested daily pipeline:
 

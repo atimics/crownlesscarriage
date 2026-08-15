@@ -22,8 +22,13 @@
 #define CC_CARGO_CAPACITY 12
 #define CC_MAP_CAPACITY 3
 
-#define CC_SIM_SCHEMA_VERSION 3
+#define CC_SIM_SCHEMA_VERSION 4
 #define CC_GENERATOR_VERSION 3
+#define CC_WORLD_TICKS_PER_SECOND 60
+#define CC_WORLD_MINUTE_SUBTICKS 60
+#define CC_WORLD_DAY_SUBTICKS (24 * 60 * CC_WORLD_MINUTE_SUBTICKS)
+#define CC_IDLE_GAME_MINUTES_PER_SECOND 0
+#define CC_TRAVEL_GAME_MINUTES_PER_SECOND 30
 
 typedef uint64_t CcId;
 typedef int64_t CcMoney;
@@ -103,7 +108,8 @@ typedef enum CcEventKind {
     CC_EVENT_JOURNEY_ENCOUNTER,
     CC_EVENT_ENCOUNTER_COMBAT,
     CC_EVENT_ENCOUNTER_NEGOTIATED,
-    CC_EVENT_DELAYED_ECHO
+    CC_EVENT_DELAYED_ECHO,
+    CC_EVENT_JOURNEY_DEPARTED
 } CcEventKind;
 
 typedef enum CcCommandKind {
@@ -266,15 +272,54 @@ typedef enum CcJourneyOutcome {
     CC_JOURNEY_OUTCOME_NEGOTIATED
 } CcJourneyOutcome;
 
+typedef enum CcJourneyPhase {
+    CC_JOURNEY_PHASE_NONE,
+    CC_JOURNEY_PHASE_TRAVELLING,
+    CC_JOURNEY_PHASE_BLOCKED
+} CcJourneyPhase;
+
+typedef enum CcCarriageMode {
+    CC_CARRIAGE_PARKED,
+    CC_CARRIAGE_MOVING,
+    CC_CARRIAGE_STOPPED
+} CcCarriageMode;
+
+typedef struct CcWorldClock {
+    uint64_t tick;
+    int32_t minute_subticks;
+    int32_t game_minutes_per_second;
+} CcWorldClock;
+
 typedef struct CcJourneyEncounter {
     bool active;
+    CcJourneyPhase phase;
     CcId situation_id;
     CcId origin_id;
     CcId destination_id;
     CcId route_id;
     int32_t danger;
     int32_t bargain_cost;
+    int32_t departure_day;
+    int32_t elapsed_subticks;
+    int32_t total_subticks;
+    int32_t encounter_subticks;
+    int32_t fare_reserved;
+    bool encounter_triggered;
+    bool ambush_pending;
+    bool ambush_resolved;
+    CcId parent_event_id;
 } CcJourneyEncounter;
+
+typedef struct CcCarriageState {
+    CcCarriageMode mode;
+    CcId location_id;
+    CcId route_id;
+    CcId origin_id;
+    CcId destination_id;
+    int32_t progress_milli;
+    int32_t speed_milli_per_second;
+    int32_t condition;
+} CcCarriageState;
 
 typedef struct CcDelayedEcho {
     bool active;
@@ -336,7 +381,9 @@ typedef struct CcSim {
     CcSituation situations[CC_MAX_SITUATIONS];
     CcEvent events[CC_MAX_EVENTS];
     CcPlayerCompany player;
+    CcWorldClock clock;
     CcJourneyEncounter journey;
+    CcCarriageState carriage;
     CcDelayedEcho delayed_echo;
     CcId resolved_journey_situation_id;
     CcJourneyOutcome resolved_journey_outcome;
@@ -359,6 +406,8 @@ typedef struct CcSim {
 
 void CcSimInit(CcSim *sim, uint32_t seed);
 void CcSimAdvanceDays(CcSim *sim, int32_t days);
+/* Consumes exact 60 Hz ticks only while a committed journey is travelling. */
+void CcSimAdvanceRuntimeTicks(CcSim *sim, int32_t ticks);
 bool CcSimApply(CcSim *sim, const CcCommand *command,
                 char *error, size_t error_capacity);
 bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity);

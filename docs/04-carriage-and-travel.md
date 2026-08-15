@@ -105,8 +105,14 @@ modules, but cannot restore a universal strategic screen.
 
 ## Travel commitment
 
-A departure advances an exact number of calendar days. Before confirmation the
-game presents:
+A departure creates a persistent journey whose exact duration is measured by
+the authoritative world clock. The company remains at the origin for command
+validation while the carriage records its route, endpoints, progress, speed,
+condition, and reserved fare. Every 60 Hz travel tick moves that state forward;
+calendar boundaries run the same daily world update used by headless play.
+Arrival changes the company location only after the full duration has elapsed.
+
+Before confirmation the game presents:
 
 - Expected travel time
 - Known route costs
@@ -122,8 +128,9 @@ rules.
 
 ## Routine versus meaningful travel
 
-Travel on a stable, recently traversed route can resolve quickly. The game
-instantiates a local wilderness segment only when:
+Travel on a stable, recently traversed route runs in a carriage-following road
+view and may later support acceleration. The game turns that journey into an
+interactive local interruption only when:
 
 - A current crisis changes the route
 - The player deliberately explores

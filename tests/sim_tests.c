@@ -3,6 +3,14 @@
 #include "test_support.h"
 #include <stdio.h>
 
+static void AdvanceTravellingJourney(CcSim *sim)
+{
+    while (sim->journey.active &&
+           sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
+        CcSimAdvanceRuntimeTicks(sim, CC_WORLD_TICKS_PER_SECOND);
+    }
+}
+
 static void ApplySequence(CcSim *sim)
 {
     char error[160];
@@ -17,6 +25,8 @@ static void ApplySequence(CcSim *sim)
         .target_id = sim->settlements[1].id
     };
     CC_CHECK(CcSimApply(sim, &travel, error, sizeof(error)));
+    AdvanceTravellingJourney(sim);
+    CC_CHECK(!sim->journey.active);
     CcSimAdvanceDays(sim, 17);
 }
 
@@ -57,6 +67,9 @@ static CcSituation *PreparePromisedJourney(CcSim *sim, char *error,
     };
     CC_CHECK(CcSimApply(sim, &travel, error, error_capacity));
     CC_CHECK(sim->journey.active);
+    CC_CHECK(sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING);
+    AdvanceTravellingJourney(sim);
+    CC_CHECK(sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED);
     return situation;
 }
 
@@ -68,6 +81,57 @@ int main(void)
     CcSimInit(&first, UINT32_C(0x12345678));
     CcSimInit(&second, UINT32_C(0x12345678));
     CC_CHECK(CcSimHash(&first) == CcSimHash(&second));
+
+    CcSim realtime;
+    CcSimInit(&realtime, UINT32_C(0x71ae71e));
+    CcId realtime_origin = realtime.player.location_id;
+    CcId realtime_destination = realtime.settlements[1].id;
+    int32_t realtime_departure_day = realtime.current_day;
+    CcMoney realtime_coins = realtime.player.coins;
+    CcCommand realtime_travel = {
+        .kind = CC_COMMAND_TRAVEL,
+        .target_id = realtime_destination
+    };
+    CC_CHECK(CcSimApply(&realtime, &realtime_travel,
+                        error, sizeof(error)));
+    CC_CHECK(realtime.player.location_id == realtime_origin);
+    CC_CHECK(realtime.current_day == realtime_departure_day);
+    CC_CHECK(realtime.player.coins ==
+             realtime_coins - realtime.journey.fare_reserved);
+    CC_CHECK(realtime.carriage.mode == CC_CARRIAGE_MOVING);
+    CcSimAdvanceRuntimeTicks(&realtime, 12);
+    CC_CHECK(realtime.clock.tick == 12U);
+    CC_CHECK(realtime.clock.minute_subticks ==
+             CC_TRAVEL_GAME_MINUTES_PER_SECOND * 12);
+    CC_CHECK(realtime.carriage.progress_milli > 0);
+    int32_t realtime_days = realtime.routes[0].travel_days;
+    AdvanceTravellingJourney(&realtime);
+    CC_CHECK(!realtime.journey.active);
+    CC_CHECK(realtime.player.location_id == realtime_destination);
+    CC_CHECK(realtime.current_day == realtime_departure_day + realtime_days);
+    CC_CHECK(realtime.carriage.mode == CC_CARRIAGE_PARKED);
+
+    CcSim fine_ticks;
+    CcSim batched_ticks;
+    CcSimInit(&fine_ticks, UINT32_C(0xf17ed));
+    CcSimInit(&batched_ticks, UINT32_C(0xf17ed));
+    CcCommand batching_travel = {
+        .kind = CC_COMMAND_TRAVEL,
+        .target_id = fine_ticks.settlements[1].id
+    };
+    CC_CHECK(CcSimApply(&fine_ticks, &batching_travel,
+                        error, sizeof(error)));
+    batching_travel.target_id = batched_ticks.settlements[1].id;
+    CC_CHECK(CcSimApply(&batched_ticks, &batching_travel,
+                        error, sizeof(error)));
+    for (int32_t tick = 0; tick < 1200; ++tick) {
+        CcSimAdvanceRuntimeTicks(&fine_ticks, 1);
+    }
+    for (int32_t batch = 0; batch < 20; ++batch) {
+        CcSimAdvanceRuntimeTicks(&batched_ticks,
+                                 CC_WORLD_TICKS_PER_SECOND);
+    }
+    CC_CHECK(CcSimHash(&fine_ticks) == CcSimHash(&batched_ticks));
     ApplySequence(&first);
     ApplySequence(&second);
     CC_CHECK(CcSimHash(&first) == CcSimHash(&second));
@@ -162,10 +226,19 @@ int main(void)
     CC_CHECK(journey_origin != journey_destination);
     CC_CHECK(CcSimRecentEvent(&defended_road, 0)->kind ==
              CC_EVENT_JOURNEY_ENCOUNTER);
+    int32_t blocked_day = defended_road.current_day;
+    int32_t blocked_time = defended_road.clock.minute_subticks;
+    int32_t blocked_progress = defended_road.carriage.progress_milli;
+    CcSimAdvanceRuntimeTicks(&defended_road,
+                             CC_WORLD_TICKS_PER_SECOND * 10);
+    CC_CHECK(defended_road.current_day == blocked_day);
+    CC_CHECK(defended_road.clock.minute_subticks == blocked_time);
+    CC_CHECK(defended_road.carriage.progress_milli == blocked_progress);
     CcCommand defend = {.kind = CC_COMMAND_RESOLVE_ENCOUNTER_COMBAT};
     CC_CHECK(CcSimApply(&defended_road, &defend, error, sizeof(error)));
-    CC_CHECK(!defended_road.journey.active);
-    CC_CHECK(defended_road.player.location_id == journey_destination);
+    CC_CHECK(defended_road.journey.active);
+    CC_CHECK(defended_road.journey.phase == CC_JOURNEY_PHASE_TRAVELLING);
+    CC_CHECK(defended_road.player.location_id == journey_origin);
     CC_CHECK(defended_road.routes[0].security > route_security);
     CC_CHECK(defended_road.settlements[1].population >
              destination_population);
@@ -173,6 +246,9 @@ int main(void)
     CC_CHECK(defended_road.shipment_count >= shipment_count + 1);
     CC_CHECK(defended_road.shipments[defended_road.shipment_count - 1].status ==
              CC_SHIPMENT_TRAVELLING);
+    AdvanceTravellingJourney(&defended_road);
+    CC_CHECK(!defended_road.journey.active);
+    CC_CHECK(defended_road.player.location_id == journey_destination);
 
     defended_road.player.cargo[CC_GOOD_FOOD] = 1;
     CcCommand fulfill = {
@@ -188,6 +264,7 @@ int main(void)
         .target_id = journey_origin
     };
     CC_CHECK(CcSimApply(&defended_road, &leave, error, sizeof(error)));
+    AdvanceTravellingJourney(&defended_road);
     CcSimAdvanceDays(&defended_road, 7);
     CcCommand return_later = {
         .kind = CC_COMMAND_TRAVEL,
@@ -195,6 +272,7 @@ int main(void)
     };
     CC_CHECK(CcSimApply(&defended_road, &return_later,
                         error, sizeof(error)));
+    AdvanceTravellingJourney(&defended_road);
     CC_CHECK(!defended_road.delayed_echo.active);
     CC_CHECK(CcSimRecentEvent(&defended_road, 0)->kind ==
              CC_EVENT_DELAYED_ECHO);
@@ -213,6 +291,7 @@ int main(void)
     };
     CC_CHECK(CcSimApply(&bargained_road, &bargain,
                         error, sizeof(error)));
+    CC_CHECK(bargained_road.journey.active);
     CC_CHECK(bargained_road.routes[0].security < route_security);
     CC_CHECK(bargained_road.bandits[0].influence > bandit_influence);
     CC_CHECK(bargained_road.player.coins <=
