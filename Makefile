@@ -1,5 +1,5 @@
 .PHONY: blender-assets blender-assets-catalog blender-assets-check \
-	blender-hero-assets blender-hero-assets-check blender-hero-animation \
+	blender-exports-check blender-hero-assets blender-hero-assets-check blender-hero-animation \
 	blender-hero-actions blender-hero-engine blender-hero-procedural-preview \
 	blender-hero-procedural-check configure-play build-play test-play \
 	configure-release build-release test-release
@@ -33,6 +33,10 @@ blender-assets-catalog:
 
 blender-assets-check:
 	$(BLENDER) --background assets/blender/crownless_asset_library.blend --python tools/blender/validate_asset_library.py
+
+blender-exports-check:
+	python3 tools/blender/inspect_glb.py --profile library --manifest assets/asset_manifest.json --export-dir assets/exports/glb assets/exports/glb/*.glb
+	python3 tools/blender/inspect_glb.py assets/exports/hero_glb/*.glb assets/exports/hero/*.glb
 
 blender-hero-assets:
 	$(BLENDER) --background --python-exit-code 1 --factory-startup --python tools/blender/build_hero_component_library.py

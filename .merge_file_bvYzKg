@@ -5,13 +5,6 @@ composable assets instead of one-off scenes. Its first priority is legibility at
 an isometric camera distance, so silhouettes, state changes, and module choices
 are intentionally broad and readable.
 
-> **Runtime status:** the raylib client now has a shared registry for the
-> carriage, cargo rack, bridge checkpoint, market/granary, mine entrance, and
-> shortage/enforcement/recovery state layers. They are cached, mesh-budgeted,
-> copied into the application bundle, attached to authoritative semantic
-> footprints, and retain procedural fallbacks. The engine hero export remains
-> connected through its separate skinned-model path.
-
 ## Generated library
 
 - Source library: `assets/blender/crownless_asset_library.blend`
@@ -21,7 +14,6 @@ are intentionally broad and readable.
 - Complete review catalog: `assets/previews/catalog/`
 - Rebuild script: `tools/blender/build_asset_library.py`
 - Validation script: `tools/blender/validate_asset_library.py`
-- Blender-free export validator: `tools/blender/inspect_glb.py`
 
 The `.blend` file is generated rather than edited as an opaque source of truth.
 Change the builder, rebuild, and commit the builder plus regenerated outputs.
@@ -61,9 +53,6 @@ All runtime assets follow these rules:
 7. State dressing is additive. It must not duplicate or alter the neutral base
    kit, so strategic state can swap without replacing the whole location.
 8. GLB names come from stable asset IDs rather than Blender display names.
-9. Exports are byte-reproducible. Mesh datablocks take their object's name so
-   mesh names stay stable when unrelated assets change, and UVs are omitted
-   because the flat `MAT_*` palette carries no texture data.
 
 ## Carriage sockets
 
@@ -77,17 +66,6 @@ bench, hidden compartment, scout perch, monster cage, relic containment, and a
 diplomatic document safe. The geometry is deliberately low-poly blockout art;
 the collection and metadata contract is suitable for later production meshes.
 
-The carriage core has its first readability pass: a timber frame with cross
-members replaces the plain chassis slab, large driven rear wheels and smaller
-steering front wheels sit under three-segment fenders with leaf-spring stacks
-and drop links, and the flat roof slab is now a canvas barrel roof whose crown
-keeps the original roof-socket height. The cabin envelope, socket positions,
-and module mounting faces are unchanged, so every existing module composes
-onto the new core without edits. The driver station gains a braced footboard,
-dashboard, footrest, cushion, and hand brake; lanterns use the shared
-emissive `ember` material; and a rear door, rear step, side lockers, and
-plated running gear complete the silhouette.
-
 ## Environment and state composition
 
 Environment kits are neutral structural shells:
@@ -96,25 +74,6 @@ Environment kits are neutral structural shells:
 - Bridge checkpoint
 - Mine entrance
 - Market and guarded granary
-
-All four kits now carry their first environment readability pass. The bridge
-checkpoint uses a visible river and raised banks to establish the crossing,
-while dressed masonry, a raised
-toll house, striped gate, inspection furniture, and checkpoint signage make
-its controlled-route role legible from the isometric camera. It replaces the
-primitive cordon in road encounters when its GLB passes the runtime mesh-budget
-check; if the export is unavailable, the prior cordon remains as a safe
-fallback. The renderer leaves an opening in the procedural road under the
-asset's river, while navigation uses matching toll-house, furniture, post, and
-parapet footprints. The road gains wheel ruts at the carriage gauge, grass shoulders, verge
-growth, a milestone, and a two-way signpost. The mine gains a layered cliff
-with strata and talus, a braced timber portal with a hood, a working lantern,
-a warning sign, a railed cart with axles and an ore load, a buffer stop, and a
-spoil heap. The market gains plaza paving, a plinth-and-frame granary with a
-gabled roof, door hardware, a grain hoist with a hanging sack, dressed stall
-counters with striped awnings, a canopied well with crank and bucket, and
-neutral storage. Granary, stall, and well anchor positions are unchanged so
-state dressing still composes onto the neutral kit.
 
 State layers project simulation conditions without rebuilding those shells:
 
@@ -133,19 +92,12 @@ From the repository root:
 make blender-assets
 make blender-assets-catalog
 make blender-assets-check
-make blender-exports-check
 ```
 
 The build starts from Blender factory settings, regenerates every collection,
 exports every asset, writes the manifest, renders the previews, and saves the
 compressed `.blend` file. Validation reopens that file and checks stable IDs,
-sockets, per-object roles, module socket declarations, stale exports, and
-view-layer presets. `blender-exports-check` runs `inspect_glb.py`, which needs
-only Python: it validates the GLB containers, recomputes geometry statistics
-and world bounds, enforces the metadata and naming contract on the shipped
-bytes, cross-checks the manifest against the exports on disk, and structurally
-inspects the hero exports. Because exports are byte-reproducible, any GLB diff
-that appears without a builder change indicates pipeline drift.
+sockets, exports, and view-layer presets.
 
 ## Adding an asset
 
