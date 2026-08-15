@@ -75,6 +75,30 @@ props do not constitute a city grammar.
   hunger affects both land maintenance and market/crowd presentation, while
   prosperity affects paving quality and visible stock or repair.
 
+## Production visual style
+
+The shared target is **grounded dark-fantasy action figures in a handcrafted
+world**. Characters use adult heroic proportions, visible garment layers,
+profession-readable equipment, restrained pigments, and broad details that
+survive the play camera. Environments use the same bevel scale, material
+families, warm-light/cool-shadow balance, and semantic state dressing. The
+runtime grade applies one final contrast, saturation, warmth, vignette, and
+subtle grain treatment to code-drawn geometry and glTF assets alike.
+
+The runtime visual loading layer currently owns the hero, carriage, cargo rack,
+bridge checkpoint, market/granary, mine entrance, three market state layers,
+and the shared grade shader. Assets resolve from the source tree, build tree,
+or application bundle, enforce mesh budgets, cache once, and preserve a
+procedural fallback. Visual replacement never changes the collision footprint.
+
+Local people use deterministic appearance recipes. A seed and semantic role
+derive stature, mass, muscularity, shoulder proportion, head shape, age, skin
+tone, hair, facial hair, garment layers, leather and metal palettes, and
+equipment. Guards, raiders, merchants, laborers, travellers, refugees, scouts,
+and healers therefore read differently without paying for a unique skinned GLB
+per background person. Recurring simulated agents retain their seed when a
+scene is reset.
+
 ## Current first pass
 
 The runtime now provides:
@@ -85,6 +109,10 @@ The runtime now provides:
 - Facade structure with foundations, frames, windows, doors, and canopies
 - A collision-aligned civic plaza rather than one undifferentiated road patch
 - Ground color response to settlement hunger and prosperity
+- Authored carriage, cargo, market, mine, and bridge models in the client
+- Simulation-driven shortage, enforcement, and recovery dressing
+- Deterministic role-based background and animated NPC appearances
+- Shared full-scene color treatment across procedural and authored art
 
 ## Next passes
 
@@ -95,5 +123,5 @@ The runtime now provides:
 3. Add hero-occlusion-aware roof and upper-wall cutaways.
 4. Define route, mine, farm, and keep grammars from their work and defensive
    needs.
-5. Add the runtime registry required before any new Blender environment asset
-   is treated as production content.
+5. Expand the shared style contract with material roughness, trim scale, and
+   silhouette budgets before adding more environment families.

@@ -42,12 +42,15 @@ int main(int argc, char **argv)
     int32_t sim_years = 10;
     int32_t agent_count = 24;
     int32_t locomotion_frames = 3600;
+    bool assert_budget = false;
     for (int32_t argument = 1; argument < argc; ++argument) {
         if (strcmp(argv[argument], "--quick") == 0) {
             sim_seeds = 8;
             sim_years = 2;
             agent_count = 6;
             locomotion_frames = 600;
+        } else if (strcmp(argv[argument], "--assert-budget") == 0) {
+            assert_budget = true;
         } else if (argument + 1 < argc &&
                    strcmp(argv[argument], "--sim-seeds") == 0) {
             if (!ParsePositive(argv[++argument], &sim_seeds)) return EXIT_FAILURE;
@@ -133,5 +136,12 @@ int main(int argc, char **argv)
                  agent_count, locomotion_frames, agent_steps,
                  locomotion_seconds, nanoseconds_per_step);
     (void)printf("checksum=%016" PRIx64 "\n", checksum);
+    if (assert_budget &&
+        (nanoseconds_per_day > 20000.0 || nanoseconds_per_step > 8000.0)) {
+        (void)fprintf(stderr,
+                      "performance budget exceeded: simulation %.1f/20000 ns, locomotion %.1f/8000 ns\n",
+                      nanoseconds_per_day, nanoseconds_per_step);
+        return EXIT_FAILURE;
+    }
     return EXIT_SUCCESS;
 }

@@ -46,13 +46,21 @@ This produces:
 - `assets/exports/hero/crownless_hero_engine_rig_v01.glb`
 - `assets/exports/hero/crownless_hero_engine_rig_v01.json`
 
-The current GLB has 127 authored meshes across 17 equipped component IDs and
-contains no animation clips. Armor, boots, bracers, gloves, and equipment remain
-rigid-weighted. The four torso shells and cape retain blended weights; the cape
-blends its rows across four cloth bones. The client creates a one-frame runtime
-pose from the body and cloth simulation every draw and applies it through
-raylib skinning. The higher mesh count preserves component authoring detail for
-this visual pass; consolidation is a later render-optimization step.
+The export keeps every authored object and its component provenance in the JSON
+manifest, then joins those objects into one runtime skin before writing the GLB.
+Materials remain separate primitives inside that skin, while vertex groups and
+armature weights survive the join. Armor, boots, bracers, gloves, and equipment
+remain rigid-weighted. The four torso shells and cape retain blended weights;
+the cape blends its rows across four cloth bones. The client creates a one-frame
+runtime pose from the body and cloth simulation every draw and applies it
+through raylib skinning. This preserves modular authoring without paying one
+animated vertex-buffer update per authored object.
+
+The client enforces a 32-primitive runtime budget. The release render benchmark
+also requires exactly one high-detail player skin update, at least one
+low-detail NPC, and no more than 32 animated mesh uploads. An accidentally
+unconsolidated export therefore fails the production gate instead of quietly
+shipping a large CPU-skinning regression.
 
 ## Verification
 

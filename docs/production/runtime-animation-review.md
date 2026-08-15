@@ -2,13 +2,16 @@
 
 ## Verdict
 
-The runtime rig is a strong prototype, but it is not yet final-character
+The runtime rig is a strong hybrid foundation, but it is not yet final-character
 animation. It already has the difficult foundations: fixed-step simulation,
 force-driven root motion, heel/flat/toe/swing contacts, terrain probing,
 two-bone solves, supported climbing, buoyancy, combat hit windows, cape
 constraints, and ragdoll recovery. The remaining gap is presentation fidelity,
 especially starts, stops, sharp turns, action anticipation, and character-scale
 readability at the current camera distance.
+
+The current implementation contract and asset-backed roadmap live in
+[`runtime-animation-system.md`](runtime-animation-system.md).
 
 ## Research applied
 
@@ -30,8 +33,21 @@ readability at the current camera distance.
 
 - Added a controlled, physics-driven jump action. It preserves the live rig in
   flight and on landing; accidental unsupported falls still use the ragdoll.
-- Reduced visible upper-body stepping with inertial pose smoothing while
-  copying planted heel, ball, and toe contacts directly from simulation.
+- Replaced the extra render smoothing loop with interpolation between two
+  authoritative finalized simulation snapshots.
+- Added stable-idle hysteresis, persistent foot anchors, explicit pose
+  ownership, deterministic motion timelines and gameplay markers.
+- Added local-space authored clip sampling, orientation-specific recovery
+  selection, and a compact 64-tick animation trace.
+- Replaced the parallel, straight-ahead guard arms with asymmetric chest-space
+  hand targets, bounded two-bone IK, and elbow-pole transport through strikes.
+- Made guard an explicit held intent. Target disengagement now survives a
+  finishing strike instead of snapping the hero back into guard.
+- Added stalled player-target cancellation so blocked navigation cannot keep a
+  stationary character in a walk/contact cycle indefinitely.
+- Kept combat reach authoritative when presentation IK moves the wrist, and
+  added regression coverage for silhouette, limb length, pose continuity,
+  disengagement, and the full automated village defense.
 - Added biomechanical travellers driven by world shipment activity. They enter
   at map boundaries, use distinct cross-town lanes, and leave at another edge.
 - Added automated jump-arc, no-ragdoll, traveller-ingress, separation, and
@@ -39,15 +55,19 @@ readability at the current camera distance.
 
 ## Next animation milestones
 
-1. Add locomotion trajectory history and explicit start/stop/pivot states.
-2. Drive phase from measured travel distance without violating the current
+1. Export authored idle, start, stop, pivot, combat and get-up transforms into
+   the runtime clip format.
+2. Drive locomotion phase from measured travel distance without violating the current
    heel-toe contact timing.
-3. Add upper/lower-body inertial transition offsets for combat and traversal.
+3. Add upper/lower-body inertial transition offsets when mixing authored and
+   procedural motion.
 4. Give the hero clearer anticipation and recovery in strike, jump, and climb.
 5. Add head gaze, hand prop targets, asymmetric idle variation, and crowd
    avoidance before increasing the ambient population.
-6. Capture a small authored motion set for pose-search comparison; do not
-   replace the physical contact solver with raw clips.
+6. Add a paired interaction owner and cross-character contact plan for
+   wrestling and manhandling.
+7. Build a small authored pose-search database; do not replace the physical
+   contact solver with raw clips.
 
 ## Primary references
 

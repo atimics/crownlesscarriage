@@ -40,6 +40,35 @@ static float VectorDistance3(Vector3 a, Vector3 b)
     return sqrtf(x * x + y * y + z * z);
 }
 
+static CcLimbVec3 ExpectedTopOutHand(const CcLocalAgent *agent, int32_t arm)
+{
+    CcMotionMantleSample motion;
+    (void)CcMotionClipSampleMantle(agent->climb_progress, &motion);
+    float side = arm == 0 ? -1.0f : 1.0f;
+    Vector3 right = {cosf(agent->facing_yaw), 0.0f,
+                     -sinf(agent->facing_yaw)};
+    Vector3 edge = {
+        agent->climb_face.x + right.x * side * 0.19f +
+            agent->climb_normal.x * 0.025f,
+        agent->climb_face.y + 0.040f,
+        agent->climb_face.z + right.z * side * 0.19f +
+            agent->climb_normal.z * 0.025f
+    };
+    Vector3 top = {
+        agent->climb_face.x + right.x * side * 0.18f -
+            agent->climb_normal.x * 0.19f,
+        agent->climb_face.y + 0.045f,
+        agent->climb_face.z + right.z * side * 0.18f -
+            agent->climb_normal.z * 0.19f
+    };
+    float amount = motion.hand_press[arm];
+    return (CcLimbVec3){
+        edge.x + (top.x - edge.x) * amount,
+        edge.y + (top.y - edge.y) * amount,
+        edge.z + (top.z - edge.z) * amount
+    };
+}
+
 static float MaximumPoseStep(const CcHumanoidPose *before,
                              const CcHumanoidPose *after)
 {
@@ -86,6 +115,26 @@ static float RagdollCenterVelocityY(const CcBiomechRagdoll *ragdoll,
     return total_mass > 0.0f ? momentum / total_mass : 0.0f;
 }
 
+static Vector3 RagdollCenterVelocity(const CcBiomechRagdoll *ragdoll,
+                                     float delta_time)
+{
+    Vector3 momentum = {0};
+    float total_mass = 0.0f;
+    for (int32_t particle = 0; particle < ragdoll->particle_count; ++particle) {
+        if (ragdoll->particles[particle].inverse_mass <= 0.0f) continue;
+        float mass = 1.0f / ragdoll->particles[particle].inverse_mass;
+        CcBiomechVec3 velocity = CcBiomechRagdollParticleVelocity(
+            ragdoll, particle, delta_time);
+        momentum.x += velocity.x * mass;
+        momentum.y += velocity.y * mass;
+        momentum.z += velocity.z * mass;
+        total_mass += mass;
+    }
+    return total_mass > 0.0f ?
+        (Vector3){momentum.x / total_mass, momentum.y / total_mass,
+                  momentum.z / total_mass} : (Vector3){0};
+}
+
 static bool RagdollTouchesStreet(const CcBiomechRagdoll *ragdoll)
 {
     for (int32_t particle = 0; particle < ragdoll->particle_count; ++particle) {
@@ -95,6 +144,64 @@ static bool RagdollTouchesStreet(const CcBiomechRagdoll *ragdoll)
         }
     }
     return false;
+}
+
+static void AdvanceRoadWorld(CcLocalCourse *course, CcLocalAgent *player,
+                             const CcSim *sim, float duration,
+                             const float *frame_times, int32_t frame_count)
+{
+    double elapsed = 0.0;
+    int32_t frame = 0;
+    while (elapsed < (double)duration - 0.00000001) {
+        float delta_time = frame_times[frame % frame_count];
+        double remaining = (double)duration - elapsed;
+        if ((double)delta_time > remaining) delta_time = (float)remaining;
+        CcLocalWorldUpdate(course, player, sim, delta_time, false, true);
+        elapsed += (double)delta_time;
+        frame += 1;
+    }
+}
+
+static bool RoadWorldMatches(const CcLocalCourse *expected_course,
+                             const CcLocalAgent *expected_player,
+                             const CcLocalCourse *actual_course,
+                             const CcLocalAgent *actual_player,
+                             float tolerance)
+{
+    if (VectorDistance3(expected_player->position,
+                        actual_player->position) > tolerance ||
+        expected_course->alarm_active != actual_course->alarm_active ||
+        expected_course->raiders_retreating !=
+            actual_course->raiders_retreating ||
+        expected_course->defenses_completed !=
+            actual_course->defenses_completed ||
+        expected_course->raider_resolve != actual_course->raider_resolve) {
+        return false;
+    }
+    for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
+        const CcLocalAgent *expected =
+            &expected_course->runners[i].agent;
+        const CcLocalAgent *actual = &actual_course->runners[i].agent;
+        if (VectorDistance3(expected->position, actual->position) > tolerance ||
+            fabsf(expected->combat.health - actual->combat.health) > 0.001f ||
+            fabsf(expected->combat.posture - actual->combat.posture) > 0.001f ||
+            expected->combat.life_state != actual->combat.life_state) {
+            return false;
+        }
+    }
+    for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
+        const CcLocalAgent *expected = &expected_course->raiders[i];
+        const CcLocalAgent *actual = &actual_course->raiders[i];
+        if (VectorDistance3(expected->position, actual->position) > tolerance ||
+            fabsf(expected->combat.health - actual->combat.health) > 0.001f ||
+            fabsf(expected->combat.posture - actual->combat.posture) > 0.001f ||
+            expected->combat.life_state != actual->combat.life_state ||
+            expected_course->raider_response_stage[i] !=
+                actual_course->raider_response_stage[i]) {
+            return false;
+        }
+    }
+    return true;
 }
 
 static void RunTowerFallScenario(const char *name, Vector2 start,
@@ -379,6 +486,138 @@ static void TestSharedCombat(void)
     }
 }
 
+static void TestDeathLifecycle(void)
+{
+    CcLocalAgent attacker;
+    CcLocalAgent corpse;
+    InitCombatant(&attacker, (Vector2){4.0f, 3.0f}, 0.0f,
+                  CC_COMBAT_PLAYER);
+    InitCombatant(&corpse, (Vector2){4.0f, 3.82f}, PI,
+                  CC_COMBAT_RAIDER);
+    corpse.combat.health = 1.0f;
+    if (RunCombatStrike(&attacker, &corpse) != CC_COMBAT_OUTCOME_DEFEATED ||
+        corpse.combat.life_state != CC_LIFE_DEAD ||
+        !corpse.humanoid.ragdoll.active || corpse.humanoid.recovering ||
+        corpse.humanoid.ragdoll_recovery_allowed ||
+        corpse.combat.weapon_mode != CC_WEAPON_RAGDOLL_ATTACHED) {
+        (void)fprintf(stderr,
+                      "lethal strike did not enter an authoritative dead ragdoll state\n");
+        exit(1);
+    }
+    Vector3 impact_velocity = RagdollCenterVelocity(
+        &corpse.humanoid.ragdoll, 1.0f / 60.0f);
+    Vector3 impact_direction = corpse.combat.impact_direction;
+    float impact_length = sqrtf(impact_direction.x * impact_direction.x +
+                                impact_direction.y * impact_direction.y +
+                                impact_direction.z * impact_direction.z);
+    float inherited_impact = impact_length > 0.0001f ?
+        (impact_velocity.x * impact_direction.x +
+         impact_velocity.y * impact_direction.y +
+         impact_velocity.z * impact_direction.z) / impact_length : 0.0f;
+    if (inherited_impact < 0.20f) {
+        (void)fprintf(stderr,
+                      "lethal impulse did not transfer to ragdoll particles: %.3f\n",
+                      inherited_impact);
+        exit(1);
+    }
+    if (CcLocalAgentSetExactTarget(
+            &corpse, (Vector3){5.0f, 0.0f, 5.0f}, true)) {
+        (void)fprintf(stderr, "dead agent accepted a movement target\n");
+        exit(1);
+    }
+
+    bool saw_physics_step = false;
+    for (int32_t frame = 0; frame < 720; ++frame) {
+        CcHumanoidPose prior_pose = corpse.humanoid.pose;
+        float prior_time = corpse.humanoid.ragdoll_time;
+        CcLocalAgentUpdate(&corpse, 1.0f / 60.0f, true);
+        if (corpse.humanoid.ragdoll_time > prior_time) {
+            saw_physics_step = true;
+            if (MaximumPoseStep(&prior_pose,
+                                &corpse.humanoid.previous_pose) > 0.0001f) {
+                (void)fprintf(stderr,
+                              "ragdoll previous pose did not follow physics history\n");
+                exit(1);
+            }
+        }
+    }
+    if (!saw_physics_step || corpse.combat.life_state != CC_LIFE_DEAD ||
+        corpse.combat.health != 0.0f || !corpse.humanoid.ragdoll.active ||
+        corpse.humanoid.recovering) {
+        (void)fprintf(stderr,
+                      "defeated enemy recovered or left its corpse state\n");
+        exit(1);
+    }
+
+    CcLocalAgent player;
+    InitCombatant(&attacker, (Vector2){4.0f, 3.0f}, 0.0f,
+                  CC_COMBAT_RAIDER);
+    InitCombatant(&player, (Vector2){4.0f, 3.82f}, PI,
+                  CC_COMBAT_PLAYER);
+    player.combat.health = 1.0f;
+    if (RunCombatStrike(&attacker, &player) != CC_COMBAT_OUTCOME_DEFEATED) {
+        (void)fprintf(stderr, "player death fixture did not land lethally\n");
+        exit(1);
+    }
+    bool saw_respawning = false;
+    bool saw_get_up = false;
+    bool resumed_inside_ragdoll = false;
+    for (int32_t frame = 0; frame < 900; ++frame) {
+        CcLocalAgentUpdate(&player, 1.0f / 60.0f, true);
+        saw_respawning = saw_respawning ||
+            player.combat.life_state == CC_LIFE_RESPAWNING;
+        saw_get_up = saw_get_up || player.humanoid.recovering;
+        resumed_inside_ragdoll = resumed_inside_ragdoll ||
+            (player.combat.life_state == CC_LIFE_ALIVE &&
+             player.humanoid.ragdoll.active);
+        if (player.combat.life_state == CC_LIFE_ALIVE) break;
+    }
+    if (!saw_respawning || !saw_get_up || resumed_inside_ragdoll ||
+        player.combat.life_state != CC_LIFE_ALIVE ||
+        player.humanoid.ragdoll.active || player.humanoid.recovering ||
+        player.combat.health != 45.0f ||
+        player.combat.weapon_mode != CC_WEAPON_HELD) {
+        (void)fprintf(stderr,
+                      "player respawn was not synchronized with physical get-up\n");
+        exit(1);
+    }
+
+    CcSim sim;
+    CcSimInit(&sim, 917U);
+    CcLocalCourse course;
+    CcLocalCourseInit(&course);
+    CcLocalAgent course_player;
+    CcLocalAgentInit(&course_player,
+                     (Vector2){CC_LOCAL_START_X, CC_LOCAL_START_Z}, false);
+    CcLocalCombatSetTeam(&course_player, CC_COMBAT_PLAYER);
+    CcLocalCourseRaiseAlarmNear(&course, &course_player);
+    CcLocalAgent *dead_raider = &course.raiders[0];
+    dead_raider->combat.health = 0.0f;
+    dead_raider->combat.life_state = CC_LIFE_DEAD;
+    dead_raider->combat.weapon_mode = CC_WEAPON_RAGDOLL_ATTACHED;
+    (void)CcHumanoidGaitDie(
+        &dead_raider->humanoid, (CcLimbVec3){1.0f, 0.0f, 0.0f},
+        dead_raider->humanoid.pose.chest, 1.0f);
+    course.raiders[1].combat.health = 50.0f;
+    bool saw_retreat = false;
+    for (int32_t frame = 0; frame < 180; ++frame) {
+        CcLocalCourseUpdate(&course, &course_player, &sim, 1.0f / 60.0f);
+        saw_retreat = saw_retreat || course.raiders_retreating;
+    }
+    if (!saw_retreat ||
+        dead_raider->combat.life_state != CC_LIFE_DEAD ||
+        dead_raider->combat.health != 0.0f ||
+        dead_raider->humanoid.recovering) {
+        (void)fprintf(stderr,
+                      "morale retreat revived or mobilized a defeated raider: retreat %d state %d health %.1f recovering %d\n",
+                      saw_retreat,
+                      dead_raider->combat.life_state,
+                      dead_raider->combat.health,
+                      dead_raider->humanoid.recovering);
+        exit(1);
+    }
+}
+
 static void TestTargetDrivenCombat(void)
 {
     CcSim sim;
@@ -391,7 +630,8 @@ static void TestTargetDrivenCombat(void)
     CcLocalCombatSetTeam(&player, CC_COMBAT_PLAYER);
     CcLocalCourseRaiseAlarmNear(&course, &player);
     for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
-        course.runners[i].agent.combat.defeated = true;
+        course.runners[i].agent.combat.life_state = CC_LIFE_DEAD;
+        course.runners[i].agent.combat.health = 0.0f;
     }
     CcLocalAgentInit(&course.raiders[0],
                      (Vector2){CC_LOCAL_START_X + 3.0f,
@@ -460,8 +700,16 @@ static void TestTargetDrivenCombat(void)
     }
     CcLocalCourseClearPlayerTarget(&player);
     if (player.combat.target_index != -1 || player.combat.focus_valid ||
-        player.combat.queued_skill != -1) {
+        player.combat.queued_skill != -1 || player.humanoid.guard_requested) {
         (void)fprintf(stderr, "combat target did not disengage cleanly\n");
+        exit(1);
+    }
+    for (int32_t frame = 0; frame < 90; ++frame) {
+        CcLocalAgentUpdate(&player, 1.0f / 60.0f, false);
+    }
+    if (player.humanoid.action == CC_HUMANOID_ACTION_GUARD) {
+        (void)fprintf(stderr,
+                      "disengaged combat target left a stale forward guard pose\n");
         exit(1);
     }
 }
@@ -507,6 +755,111 @@ static void TestCombatStanceStability(void)
                       "combat guard did not settle: span %.4f,%.4f speed %.4f pose %.4f\n",
                       maximum_x - minimum_x, maximum_z - minimum_z,
                       horizontal_speed, maximum_pose_step);
+        exit(1);
+    }
+}
+
+static void TestCombatCrowdSpacing(void)
+{
+    CcSim sim;
+    CcSimInit(&sim, 144U);
+    CcLocalCourse course;
+    CcLocalCourseInit(&course);
+    CcLocalCourseRaiseAlarm(&course);
+    for (int32_t i = 1; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
+        course.runners[i].agent.combat.life_state = CC_LIFE_DEAD;
+        course.runners[i].agent.combat.health = 0.0f;
+    }
+    course.raiders[1].combat.life_state = CC_LIFE_DEAD;
+    course.raiders[1].combat.health = 0.0f;
+
+    CcLocalAgentInit(&course.runners[0].agent,
+                     (Vector2){45.0f, 30.0f}, false);
+    CcLocalCombatSetTeam(&course.runners[0].agent, CC_COMBAT_GUARD);
+    course.runners[0].agent.crowned = false;
+    course.runners[0].response_stage = 4;
+    course.runners[0].response_waypoint_active = false;
+    course.runners[0].attack_cooldown = 0.0f;
+    CcLocalAgentInit(&course.raiders[0],
+                     (Vector2){45.0f, 30.0f}, false);
+    CcLocalCombatSetTeam(&course.raiders[0], CC_COMBAT_RAIDER);
+    course.raiders[0].crowned = false;
+    course.raider_response_stage[0] = 3;
+    course.raider_response_waypoint_active[0] = false;
+    course.raider_attack_cooldown[0] = 0.0f;
+
+    float maximum_distance = 0.0f;
+    float first_strike_distance = -1.0f;
+    for (int32_t frame = 0; frame < 240; ++frame) {
+        CcLocalCourseUpdate(&course, NULL, &sim, 1.0f / 60.0f);
+        CcLocalAgent *guard = &course.runners[0].agent;
+        CcLocalAgent *raider = &course.raiders[0];
+        float distance = VectorDistance3(guard->position, raider->position);
+        maximum_distance = fmaxf(maximum_distance, distance);
+        if (first_strike_distance < 0.0f &&
+            (guard->humanoid.action == CC_HUMANOID_ACTION_STRIKE ||
+             raider->humanoid.action == CC_HUMANOID_ACTION_STRIKE)) {
+            first_strike_distance = distance;
+        }
+    }
+    if (maximum_distance < 1.10f || first_strike_distance < 1.00f) {
+        (void)fprintf(stderr,
+                      "combatants attacked before restoring body spacing: max %.2f first strike %.2f\n",
+                      maximum_distance, first_strike_distance);
+        exit(1);
+    }
+
+    CcLocalCourse formation;
+    CcLocalCourseInit(&formation);
+    CcLocalCourseRaiseAlarm(&formation);
+    for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
+        CcLocalAgentInit(&formation.runners[i].agent,
+                         (Vector2){45.0f, 30.0f}, false);
+        CcLocalCombatSetTeam(&formation.runners[i].agent, CC_COMBAT_GUARD);
+        formation.runners[i].response_stage = 4;
+        formation.runners[i].attack_cooldown = 100.0f;
+    }
+    for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
+        CcLocalAgentInit(&formation.raiders[i],
+                         (Vector2){45.0f, 30.0f}, false);
+        CcLocalCombatSetTeam(&formation.raiders[i], CC_COMBAT_RAIDER);
+        formation.raider_response_stage[i] = 3;
+        formation.raider_attack_cooldown[i] = 100.0f;
+    }
+    CcLocalAgentInit(&formation.travellers[0].agent,
+                     (Vector2){45.0f, 30.0f}, false);
+    formation.travellers[0].active = true;
+    for (int32_t frame = 0; frame < 180; ++frame) {
+        CcLocalCourseUpdate(&formation, NULL, &sim, 1.0f / 60.0f);
+    }
+    float closest_allies = 1000.0f;
+    float closest_hostiles = 1000.0f;
+    float closest_bystander = 1000.0f;
+    CcLocalAgent *actors[] = {
+        &formation.runners[0].agent, &formation.runners[1].agent,
+        &formation.runners[2].agent, &formation.raiders[0],
+        &formation.raiders[1]
+    };
+    for (int32_t first = 0; first < 5; ++first) {
+        for (int32_t second = first + 1; second < 5; ++second) {
+            float distance = VectorDistance3(actors[first]->position,
+                                             actors[second]->position);
+            bool hostile = actors[first]->combat.team !=
+                           actors[second]->combat.team;
+            if (hostile) closest_hostiles = fminf(closest_hostiles, distance);
+            else closest_allies = fminf(closest_allies, distance);
+        }
+        closest_bystander = fminf(
+            closest_bystander,
+            VectorDistance3(actors[first]->position,
+                            formation.travellers[0].agent.position));
+    }
+    if (closest_hostiles < 1.10f || closest_allies < 0.82f ||
+        closest_bystander < 1.00f) {
+        (void)fprintf(stderr,
+                      "melee formation collapsed: hostile %.2f ally %.2f bystander %.2f\n",
+                      closest_hostiles, closest_allies,
+                      closest_bystander);
         exit(1);
     }
 }
@@ -670,8 +1023,75 @@ static void TestHeroicAthleticism(void)
     }
 }
 
+static void TestIntentionalParkourEntry(void)
+{
+    CcLocalAgent knocked;
+    CcLocalAgentInit(&knocked, (Vector2){3.50f, 6.35f}, false);
+    knocked.combat.stagger_seconds = 0.75f;
+    knocked.combat.knockback_velocity.z = 2.8f;
+    for (int32_t frame = 0; frame < 60; ++frame) {
+        CcLocalAgentUpdate(&knocked, 1.0f / 60.0f, false);
+        if (knocked.climbing || knocked.vaulting) {
+            (void)fprintf(stderr,
+                          "passive knockback incorrectly triggered parkour\n");
+            exit(1);
+        }
+    }
+    if (knocked.exact_target_valid) {
+        (void)fprintf(stderr,
+                      "uncommanded parkour fixture acquired a destination\n");
+        exit(1);
+    }
+}
+
 static void TestTravellerIngress(void)
 {
+    CcLocalCourse opening;
+    CcLocalCourseInit(&opening);
+    if (opening.alarm_countdown < 20.0f) {
+        (void)fprintf(stderr,
+                      "opening raid did not leave enough discovery time: %.1f\n",
+                      opening.alarm_countdown);
+        exit(1);
+    }
+    for (int32_t frame = 0; frame < 600; ++frame) {
+        CcLocalCourseUpdate(&opening, NULL, NULL, 1.0f / 60.0f);
+    }
+    if (opening.alarm_active) {
+        (void)fprintf(stderr,
+                      "opening raid interrupted the first ten seconds\n");
+        exit(1);
+    }
+
+    CcLocalAgent plaza_player;
+    CcLocalAgentInit(&plaza_player, (Vector2){45.0f, 30.0f}, false);
+    CcLocalCombatSetTeam(&plaza_player, CC_COMBAT_PLAYER);
+    CcLocalAgentInit(&opening.runners[0].agent,
+                     (Vector2){45.0f, 30.0f}, false);
+    CcLocalCombatSetTeam(&opening.runners[0].agent, CC_COMBAT_GUARD);
+    opening.runners[0].pause_seconds = 100.0f;
+    CcLocalAgentInit(&opening.travellers[0].agent,
+                     (Vector2){45.0f, 30.0f}, false);
+    opening.travellers[0].active = true;
+    for (int32_t frame = 0; frame < 120; ++frame) {
+        CcLocalAgentUpdate(&plaza_player, 1.0f / 60.0f, false);
+        CcLocalCourseUpdate(&opening, &plaza_player, NULL, 1.0f / 60.0f);
+    }
+    float guard_space = VectorDistance3(
+        plaza_player.position, opening.runners[0].agent.position);
+    float traveller_space = VectorDistance3(
+        plaza_player.position, opening.travellers[0].agent.position);
+    float crowd_space = VectorDistance3(
+        opening.runners[0].agent.position,
+        opening.travellers[0].agent.position);
+    if (guard_space < 0.82f || traveller_space < 1.0f ||
+        crowd_space < 1.0f) {
+        (void)fprintf(stderr,
+                      "calm street crowd overlapped: guard %.2f traveller %.2f pair %.2f\n",
+                      guard_space, traveller_space, crowd_space);
+        exit(1);
+    }
+
     CcLocalCourse course;
     CcLocalCourseInit(&course);
     Vector3 start[2] = {course.travellers[0].agent.position,
@@ -699,11 +1119,14 @@ static void TestTravellerIngress(void)
 int main(void)
 {
     TestSharedCombat();
+    TestDeathLifecycle();
     TestTargetDrivenCombat();
     TestCombatStanceStability();
+    TestCombatCrowdSpacing();
     TestCapePhysics();
     TestControlledJump();
     TestHeroicAthleticism();
+    TestIntentionalParkourEntry();
     TestTravellerIngress();
     RequirePosition("market wall blocks entry",
                     CcLocalMove((Vector2){50.00f, 26.65f},
@@ -876,6 +1299,90 @@ int main(void)
         return 1;
     }
 
+    CcSim cadence_sim;
+    CcSimInit(&cadence_sim, UINT32_C(0xcade60));
+    CcLocalAgent cadence_player;
+    CcLocalCourse cadence_course;
+    CcLocalAgentInit(&cadence_player,
+                     (Vector2){CC_LOCAL_ROAD_START_X,
+                               CC_LOCAL_ROAD_START_Z}, false);
+    CcLocalCombatSetTeam(&cadence_player, CC_COMBAT_PLAYER);
+    CcLocalCourseInit(&cadence_course);
+    CcLocalCourseStageRoadEncounter(&cadence_course, &cadence_player, true);
+    CcLocalAgent player_60 = cadence_player;
+    CcLocalAgent player_30 = cadence_player;
+    CcLocalAgent player_144 = cadence_player;
+    CcLocalAgent player_hitch = cadence_player;
+    CcLocalCourse course_60 = cadence_course;
+    CcLocalCourse course_30 = cadence_course;
+    CcLocalCourse course_144 = cadence_course;
+    CcLocalCourse course_hitch = cadence_course;
+    const float cadence_60[] = {1.0f / 60.0f};
+    const float cadence_30[] = {1.0f / 30.0f};
+    const float cadence_144[] = {1.0f / 144.0f};
+    const float cadence_hitch[] = {
+        1.0f / 120.0f, 1.0f / 40.0f, 1.0f / 60.0f, 1.0f / 30.0f,
+        1.0f / 90.0f, 0.075f
+    };
+    AdvanceRoadWorld(&course_60, &player_60, &cadence_sim, 6.0f,
+                     cadence_60, 1);
+    AdvanceRoadWorld(&course_30, &player_30, &cadence_sim, 6.0f,
+                     cadence_30, 1);
+    AdvanceRoadWorld(&course_144, &player_144, &cadence_sim, 6.0f,
+                     cadence_144, 1);
+    AdvanceRoadWorld(&course_hitch, &player_hitch, &cadence_sim, 6.0f,
+                     cadence_hitch,
+                     (int32_t)(sizeof(cadence_hitch) /
+                               sizeof(cadence_hitch[0])));
+    if (!RoadWorldMatches(&course_60, &player_60,
+                          &course_30, &player_30, 0.002f) ||
+        !RoadWorldMatches(&course_60, &player_60,
+                          &course_144, &player_144, 0.002f) ||
+        !RoadWorldMatches(&course_60, &player_60,
+                          &course_hitch, &player_hitch, 0.002f)) {
+        (void)fprintf(stderr,
+                      "local world changed across 30/60/144 Hz or hitch pacing: player %.3f/%.3f/%.3f/%.3f raider %.3f/%.3f/%.3f/%.3f resolve %d/%d/%d/%d\n",
+                      player_60.position.x, player_30.position.x,
+                      player_144.position.x, player_hitch.position.x,
+                      course_60.raiders[0].position.x,
+                      course_30.raiders[0].position.x,
+                      course_144.raiders[0].position.x,
+                      course_hitch.raiders[0].position.x,
+                      course_60.raider_resolve, course_30.raider_resolve,
+                      course_144.raider_resolve,
+                      course_hitch.raider_resolve);
+        (void)fprintf(stderr,
+                      "guard0 hp %.3f/%.3f/%.3f/%.3f posture %.3f/%.3f/%.3f/%.3f posz %.4f/%.4f/%.4f/%.4f; raider0 hp %.3f/%.3f/%.3f/%.3f posture %.3f/%.3f/%.3f/%.3f stage %d/%d/%d/%d accum %.6f/%.6f/%.6f/%.6f\n",
+                      course_60.runners[0].agent.combat.health,
+                      course_30.runners[0].agent.combat.health,
+                      course_144.runners[0].agent.combat.health,
+                      course_hitch.runners[0].agent.combat.health,
+                      course_60.runners[0].agent.combat.posture,
+                      course_30.runners[0].agent.combat.posture,
+                      course_144.runners[0].agent.combat.posture,
+                      course_hitch.runners[0].agent.combat.posture,
+                      course_60.runners[0].agent.position.z,
+                      course_30.runners[0].agent.position.z,
+                      course_144.runners[0].agent.position.z,
+                      course_hitch.runners[0].agent.position.z,
+                      course_60.raiders[0].combat.health,
+                      course_30.raiders[0].combat.health,
+                      course_144.raiders[0].combat.health,
+                      course_hitch.raiders[0].combat.health,
+                      course_60.raiders[0].combat.posture,
+                      course_30.raiders[0].combat.posture,
+                      course_144.raiders[0].combat.posture,
+                      course_hitch.raiders[0].combat.posture,
+                      course_60.raider_response_stage[0],
+                      course_30.raider_response_stage[0],
+                      course_144.raider_response_stage[0],
+                      course_hitch.raider_response_stage[0],
+                      course_60.world_simulation_accumulator,
+                      course_30.world_simulation_accumulator,
+                      course_144.world_simulation_accumulator,
+                      course_hitch.world_simulation_accumulator);
+        return 1;
+    }
     CcLocalAgent crowd_agent;
     CcLocalAgentInit(&crowd_agent, (Vector2){42.00f, 29.95f}, false);
     if (CcLocalAgentSetExactTarget(&crowd_agent,
@@ -931,10 +1438,27 @@ int main(void)
     bool saw_climb = false;
     bool saw_wall_foot = false;
     bool saw_top_foot = false;
+    bool saw_left_isolated_scramble = false;
+    bool saw_right_isolated_scramble = false;
+    bool saw_airborne_swing[CC_HUMANOID_LEG_COUNT] = {false, false};
+    bool saw_diagonal_swing[CC_HUMANOID_LEG_COUNT] = {false, false};
+    bool saw_opposite_leg_support[CC_HUMANOID_LEG_COUNT] = {false, false};
+    bool saw_sole_down_takeoff[CC_HUMANOID_LEG_COUNT] = {false, false};
+    bool saw_wall_contact[CC_HUMANOID_LEG_COUNT] = {false, false};
+    bool saw_preparation_crouch = false;
+    bool saw_chest_lead = false;
+    bool saw_trailing_tuck = false;
+    uint32_t mantle_markers = 0;
+    float maximum_airborne_knee_flexion[CC_HUMANOID_LEG_COUNT] = {0.0f, 0.0f};
+    float first_top_foot_phase[CC_HUMANOID_LEG_COUNT] = {-1.0f, -1.0f};
+    float deepest_top_foot_plant[CC_HUMANOID_LEG_COUNT] = {0.0f, 0.0f};
+    float first_root_inside_phase = -1.0f;
     int32_t climb_frames = 0;
     bool saw_biomechanical_climb = false;
     float maximum_hand_reach = 0.0f;
     float maximum_hand_contact_error = 0.0f;
+    float maximum_hand_error_phase = 0.0f;
+    int32_t maximum_hand_error_limb = -1;
     float maximum_foot_contact_error = 0.0f;
     float maximum_foot_error_phase = 0.0f;
     int32_t maximum_foot_error_limb = -1;
@@ -947,6 +1471,7 @@ int main(void)
     CcHumanoidPose maximum_step_before = prior_climb_pose;
     CcHumanoidPose maximum_step_after = prior_climb_pose;
     for (int32_t frame = 0; frame < 1200; ++frame) {
+        CcHumanoidPose climb_pose_before = prior_climb_pose;
         bool climb_was_active = agent.traversal == CC_TRAVERSAL_CLIMB ||
                                 agent.humanoid.climbing;
         CcLocalAgentUpdate(&agent, 1.0f / 60.0f, false);
@@ -962,15 +1487,80 @@ int main(void)
         }
         prior_climb_pose = agent.humanoid.pose;
         if (agent.traversal == CC_TRAVERSAL_CLIMB) {
+            mantle_markers |= CcHumanoidGaitConsumeMotionMarkers(
+                &agent.humanoid);
             saw_climb = true;
             climb_frames += 1;
             saw_biomechanical_climb = saw_biomechanical_climb ||
                 (agent.humanoid.climbing && !agent.humanoid_needs_reset);
+            float left_ankle_step = Distance3(
+                climb_pose_before.ankle[0], agent.humanoid.pose.ankle[0]);
+            float right_ankle_step = Distance3(
+                climb_pose_before.ankle[1], agent.humanoid.pose.ankle[1]);
+            saw_left_isolated_scramble = saw_left_isolated_scramble ||
+                (left_ankle_step > 0.012f &&
+                 right_ankle_step < left_ankle_step * 0.35f);
+            saw_right_isolated_scramble = saw_right_isolated_scramble ||
+                (right_ankle_step > 0.012f &&
+                 left_ankle_step < right_ankle_step * 0.35f);
+            float root_outside =
+                (agent.position.x - agent.climb_face.x) *
+                    agent.climb_normal.x +
+                (agent.position.z - agent.climb_face.z) *
+                    agent.climb_normal.z;
+            if (root_outside < -0.02f && first_root_inside_phase < 0.0f) {
+                first_root_inside_phase = agent.climb_progress;
+            }
+            saw_preparation_crouch = saw_preparation_crouch ||
+                (agent.climb_progress >= 0.07f &&
+                 agent.climb_progress <= 0.15f &&
+                 agent.humanoid.pose.pelvis.y < agent.climb_start.y + 0.86f);
+            float chest_outside =
+                (agent.humanoid.pose.chest.x - agent.climb_face.x) *
+                    agent.climb_normal.x +
+                (agent.humanoid.pose.chest.z - agent.climb_face.z) *
+                    agent.climb_normal.z;
+            saw_chest_lead = saw_chest_lead ||
+                (agent.climb_progress >= 0.64f &&
+                 agent.climb_progress <= 0.82f && root_outside > 0.15f &&
+                 chest_outside < root_outside - 0.15f);
             for (int32_t limb = 0; limb < 2; ++limb) {
                 const CcHumanoidPose *pose = &agent.humanoid.pose;
                 const CcHumanoidFoot *foot = &agent.humanoid.feet[limb];
+                if (foot->contact == CC_HUMANOID_CONTACT_AIR) {
+                    saw_airborne_swing[limb] = true;
+                    if (agent.climb_progress < 0.48f &&
+                        foot->normal.y > 0.80f) {
+                        saw_sole_down_takeoff[limb] = true;
+                    }
+                    saw_opposite_leg_support[limb] =
+                        saw_opposite_leg_support[limb] ||
+                        agent.humanoid.feet[1 - limb].contact ==
+                            CC_HUMANOID_CONTACT_FLAT;
+                    float ankle_dx = pose->ankle[limb].x -
+                                     climb_pose_before.ankle[limb].x;
+                    float ankle_dy = pose->ankle[limb].y -
+                                     climb_pose_before.ankle[limb].y;
+                    float ankle_dz = pose->ankle[limb].z -
+                                     climb_pose_before.ankle[limb].z;
+                    float planar_step = sqrtf(ankle_dx * ankle_dx +
+                                              ankle_dz * ankle_dz);
+                    saw_diagonal_swing[limb] = saw_diagonal_swing[limb] ||
+                        (fabsf(ankle_dy) > 0.002f && planar_step > 0.002f);
+                    maximum_airborne_knee_flexion[limb] = fmaxf(
+                        maximum_airborne_knee_flexion[limb],
+                        pose->knee_flexion[limb]);
+                    if (limb == 1 && agent.climb_progress >= 0.45f &&
+                        agent.climb_progress <= 0.82f &&
+                        foot->normal.y > 0.90f &&
+                        pose->ankle[limb].y > agent.climb_start.y + 0.28f &&
+                        pose->knee_flexion[limb] > 0.80f) {
+                        saw_trailing_tuck = true;
+                    }
+                }
                 if (fabsf(foot->normal.y) < 0.5f) {
                     saw_wall_foot = true;
+                    saw_wall_contact[limb] = true;
                     CcLimbVec3 knee = pose->knee[limb];
                     float knee_clearance =
                         (knee.x - agent.climb_face.x) * agent.climb_normal.x +
@@ -983,8 +1573,19 @@ int main(void)
                 if (foot->normal.y > 0.9f &&
                     foot->planted_point.y > 1.60f) {
                     saw_top_foot = true;
+                    if (first_top_foot_phase[limb] < 0.0f) {
+                        first_top_foot_phase[limb] = agent.climb_progress;
+                    }
+                    float plant_depth = -(
+                        (foot->planted_point.x - agent.climb_face.x) *
+                            agent.climb_normal.x +
+                        (foot->planted_point.z - agent.climb_face.z) *
+                            agent.climb_normal.z);
+                    deepest_top_foot_plant[limb] = fmaxf(
+                        deepest_top_foot_plant[limb], plant_depth);
                 }
-                if (agent.climb_progress >= 0.18f) {
+                if (agent.climb_progress >= 0.18f &&
+                    foot->contact == CC_HUMANOID_CONTACT_FLAT) {
                     CcLimbVec3 solved_contact = {
                         pose->ankle[limb].x - foot->normal.x * 0.085f,
                         pose->ankle[limb].y - foot->normal.y * 0.085f,
@@ -1024,16 +1625,15 @@ int main(void)
                     fmaxf(Distance3(pose->shoulder[0],
                                     pose->hand[0]),
                           Distance3(pose->shoulder[1], pose->hand[1])));
-                maximum_hand_contact_error = fmaxf(
-                    maximum_hand_contact_error,
-                    fmaxf(Distance3(pose->hand[0],
-                                   (CcLimbVec3){agent.climb_hand_left.x,
-                                                agent.climb_hand_left.y,
-                                                agent.climb_hand_left.z}),
-                          Distance3(pose->hand[1],
-                                   (CcLimbVec3){agent.climb_hand_right.x,
-                                                agent.climb_hand_right.y,
-                                                agent.climb_hand_right.z})));
+                for (int32_t arm = 0; arm < CC_HUMANOID_ARM_COUNT; ++arm) {
+                    float hand_error = Distance3(
+                        pose->hand[arm], ExpectedTopOutHand(&agent, arm));
+                    if (hand_error > maximum_hand_contact_error) {
+                        maximum_hand_contact_error = hand_error;
+                        maximum_hand_error_phase = agent.climb_progress;
+                        maximum_hand_error_limb = arm;
+                    }
+                }
                 float clearance =
                     (agent.position.x - agent.climb_face.x) *
                         agent.climb_normal.x +
@@ -1058,11 +1658,47 @@ int main(void)
                         CcLocalAgentPosition(&agent), (Vector2){3.50f, 7.50f}, 0.12f);
     if (fabsf(agent.position.y - 1.65f) >= 0.01f || !agent.grounded ||
         maximum_height > 1.66f || !saw_climb || climb_frames < 30 ||
-        !saw_wall_foot || !saw_top_foot || !saw_biomechanical_climb) {
+        !saw_wall_foot || !saw_top_foot || !saw_biomechanical_climb ||
+        !saw_left_isolated_scramble || !saw_right_isolated_scramble ||
+        !saw_airborne_swing[0] || !saw_airborne_swing[1] ||
+        !saw_diagonal_swing[0] || !saw_diagonal_swing[1] ||
+        !saw_opposite_leg_support[0] || !saw_opposite_leg_support[1] ||
+        !saw_sole_down_takeoff[0] || !saw_sole_down_takeoff[1] ||
+        !saw_wall_contact[0] || saw_wall_contact[1] ||
+        !saw_preparation_crouch || !saw_chest_lead || !saw_trailing_tuck ||
+        (mantle_markers & CC_MOTION_MARKER_LEFT_HAND_CONTACT) == 0U ||
+        (mantle_markers & CC_MOTION_MARKER_RIGHT_HAND_CONTACT) == 0U ||
+        (mantle_markers & CC_MOTION_MARKER_WEIGHT_TRANSFER) == 0U ||
+        (mantle_markers & CC_MOTION_MARKER_LEFT_CONTACT) == 0U ||
+        (mantle_markers & CC_MOTION_MARKER_RIGHT_CONTACT) == 0U ||
+        (mantle_markers & CC_MOTION_MARKER_RECOVERY) == 0U ||
+        maximum_airborne_knee_flexion[0] < 0.35f ||
+        maximum_airborne_knee_flexion[1] < 0.35f ||
+        first_root_inside_phase < 0.0f ||
+        first_top_foot_phase[0] < 0.0f || first_top_foot_phase[1] < 0.0f ||
+        first_top_foot_phase[0] + 0.05f >= first_top_foot_phase[1] ||
+        first_root_inside_phase + 0.02f < first_top_foot_phase[0] ||
+        deepest_top_foot_plant[0] < 0.27f ||
+        deepest_top_foot_plant[1] < 0.23f) {
         (void)fprintf(stderr,
-                      "climb traversal incomplete: y %.2f max %.2f climb %d frames %d wall %d top %d biotech %d\n",
+                      "climb traversal incomplete: y %.2f max %.2f climb %d frames %d wall %d top %d biotech %d scramble %d/%d air %d/%d diagonal %d/%d support %d/%d sole %d/%d wall-leg %d/%d prep/chest/tuck %d/%d/%d markers 0x%x knee %.3f/%.3f contacts %.3f/%.3f root %.3f depth %.3f/%.3f\n",
                       agent.position.y, maximum_height, saw_climb, climb_frames,
-                      saw_wall_foot, saw_top_foot, saw_biomechanical_climb);
+                      saw_wall_foot, saw_top_foot, saw_biomechanical_climb,
+                      saw_left_isolated_scramble,
+                      saw_right_isolated_scramble,
+                      saw_airborne_swing[0], saw_airborne_swing[1],
+                      saw_diagonal_swing[0], saw_diagonal_swing[1],
+                      saw_opposite_leg_support[0],
+                      saw_opposite_leg_support[1],
+                      saw_sole_down_takeoff[0], saw_sole_down_takeoff[1],
+                      saw_wall_contact[0], saw_wall_contact[1],
+                      saw_preparation_crouch, saw_chest_lead,
+                      saw_trailing_tuck, mantle_markers,
+                      maximum_airborne_knee_flexion[0],
+                      maximum_airborne_knee_flexion[1],
+                      first_top_foot_phase[0], first_top_foot_phase[1],
+                      first_root_inside_phase, deepest_top_foot_plant[0],
+                      deepest_top_foot_plant[1]);
         return 1;
     }
     if (maximum_hand_reach > 0.69f || maximum_hand_contact_error > 0.025f ||
@@ -1070,8 +1706,10 @@ int main(void)
         maximum_climb_pose_step > 0.085f || minimum_wall_clearance < 0.25f ||
         minimum_knee_wall_clearance < -0.001f) {
         (void)fprintf(stderr,
-                      "climb contacts broke biotech constraints: reach %.3f hand %.3f feet %.3f at %.3f limb %d step %.3f at %.3f wall %.3f knee %.3f at %.3f\n",
+                      "climb contacts broke biotech constraints: duration %.3f reach %.3f hand %.3f at %.3f limb %d feet %.3f at %.3f limb %d step %.3f at %.3f wall %.3f knee %.3f at %.3f\n",
+                      agent.climb_duration,
                       maximum_hand_reach, maximum_hand_contact_error,
+                      maximum_hand_error_phase, maximum_hand_error_limb,
                       maximum_foot_contact_error,
                       maximum_foot_error_phase, maximum_foot_error_limb,
                       maximum_climb_pose_step, maximum_climb_pose_step_phase,
@@ -1161,9 +1799,16 @@ int main(void)
     float drop_error_z = agent.position.z - 6.50f;
     if (sqrtf(drop_error_x * drop_error_x + drop_error_z * drop_error_z) > 0.12f) {
         (void)fprintf(stderr,
-                      "down-climb target debug: active %d target %d settled %.3f time %.3f speed %.3f pos %.3f %.3f\n",
+                      "down-climb target debug: active %d target %d climb %d/%d traversal %d ready-null %d settled %.3f time %.3f speed %.3f pos %.3f %.3f\n",
                       agent.humanoid.ragdoll.active,
                       agent.exact_target_valid,
+                      agent.climbing, agent.humanoid.climbing,
+                      agent.traversal,
+                      CcHumanoidGaitClimbReady(
+                          &agent.humanoid,
+                          (CcLimbVec3){agent.position.x, agent.position.y,
+                                       agent.position.z},
+                          agent.facing_yaw, NULL, NULL, 0.025f),
                       agent.humanoid.ragdoll_settled_time,
                       agent.humanoid.ragdoll_time,
                       agent.humanoid.speed.value,
@@ -1307,6 +1952,143 @@ int main(void)
         return 1;
     }
 
+    CcSim witness_sim;
+    CcSimInit(&witness_sim, UINT32_C(0x717e55));
+    const CcSituation *visible_situation = NULL;
+    CcId witness_settlement = 0U;
+    for (int32_t situation = 0;
+         situation < witness_sim.situation_count && visible_situation == NULL;
+         ++situation) {
+        if (witness_sim.situations[situation].status !=
+            CC_SITUATION_ACTIVE) continue;
+        for (int32_t settlement = 0;
+             settlement < witness_sim.settlement_count; ++settlement) {
+            if (CcSimSituationTouchesSettlement(
+                    &witness_sim, &witness_sim.situations[situation],
+                    witness_sim.settlements[settlement].id)) {
+                visible_situation = &witness_sim.situations[situation];
+                witness_settlement = witness_sim.settlements[settlement].id;
+                break;
+            }
+        }
+    }
+    if (visible_situation == NULL ||
+        visible_situation->affected_name[0] == '\0') {
+        (void)fprintf(stderr, "generated situation has no visible local cast\n");
+        return 1;
+    }
+    witness_sim.player.location_id = witness_settlement;
+    CcLocalCourse witness_course;
+    CcLocalCourseInit(&witness_course);
+    CcLocalCourseUpdate(&witness_course, NULL, &witness_sim,
+                        1.0f / 60.0f);
+    const CcSituation *staged_situation = CcSimSituation(
+        &witness_sim, witness_course.situation_witness_id);
+    if (!witness_course.situation_witness_active ||
+        staged_situation == NULL || staged_situation->affected_name[0] == '\0' ||
+        VectorDistance3(witness_course.situation_witness.position,
+                        (Vector3){CC_LOCAL_NOTICE_X + 0.92f, 0.0f,
+                                  CC_LOCAL_NOTICE_Z + 0.72f}) > 0.65f) {
+        (void)fprintf(stderr,
+                      "named situation witness was not staged at the local board: active %d id %llu/%llu pos %.2f %.2f %.2f\n",
+                      witness_course.situation_witness_active,
+                      (unsigned long long)witness_course.situation_witness_id,
+                      (unsigned long long)(staged_situation != NULL ?
+                                           staged_situation->id : 0U),
+                      witness_course.situation_witness.position.x,
+                      witness_course.situation_witness.position.y,
+                      witness_course.situation_witness.position.z);
+        return 1;
+    }
+    for (int32_t i = 0; i < witness_sim.situation_count; ++i) {
+        witness_sim.situations[i].status = CC_SITUATION_RESOLVED;
+    }
+    CcLocalCourseUpdate(&witness_course, NULL, &witness_sim,
+                        1.0f / 60.0f);
+    if (witness_course.situation_witness_active) {
+        (void)fprintf(stderr,
+                      "situation witness remained after every local need closed\n");
+        return 1;
+    }
+
+    CcLocalAgent road_player;
+    CcLocalAgentInit(&road_player,
+                     (Vector2){CC_LOCAL_ROAD_START_X,
+                               CC_LOCAL_ROAD_START_Z}, false);
+    CcLocalCombatSetTeam(&road_player, CC_COMBAT_PLAYER);
+    CcLocalCourse road_course;
+    CcLocalCourseInit(&road_course);
+    CcLocalCourseStageRoadEncounter(&road_course, &road_player, true);
+    if (!road_course.road_encounter || !road_course.alarm_active ||
+        fabsf(road_player.position.x - CC_LOCAL_ROAD_START_X) > 0.01f ||
+        road_course.raiders[0].position.x < road_player.position.x + 8.0f) {
+        (void)fprintf(stderr,
+                      "hostile road encounter was not staged around the carriage\n");
+        return 1;
+    }
+    bool road_attackers_advanced = false;
+    bool road_hands_advanced = false;
+    for (int32_t frame = 0; frame < 900; ++frame) {
+        CcLocalAgentUpdate(&road_player, 1.0f / 60.0f, false);
+        CcLocalCourseUpdate(&road_course, &road_player, &witness_sim,
+                            1.0f / 60.0f);
+        road_attackers_advanced = road_attackers_advanced ||
+            road_course.raider_response_stage[0] > 0;
+        road_hands_advanced = road_hands_advanced ||
+            road_course.runners[0].response_stage > 0;
+    }
+    if (!road_attackers_advanced || !road_hands_advanced) {
+        (void)fprintf(stderr,
+                      "road encounter actors did not enter along their route lanes: raider stage %d at %.2f %.2f guard stage %d at %.2f %.2f\n",
+                      road_course.raider_response_stage[0],
+                      road_course.raiders[0].position.x,
+                      road_course.raiders[0].position.z,
+                      road_course.runners[0].response_stage,
+                      road_course.runners[0].agent.position.x,
+                      road_course.runners[0].agent.position.z);
+        return 1;
+    }
+
+    CcLocalCourse parley_course;
+    CcLocalAgentInit(&road_player,
+                     (Vector2){CC_LOCAL_ROAD_START_X,
+                               CC_LOCAL_ROAD_START_Z}, false);
+    CcLocalCombatSetTeam(&road_player, CC_COMBAT_PLAYER);
+    CcLocalCourseInit(&parley_course);
+    CcLocalCourseStageRoadEncounter(&parley_course, &road_player, false);
+    if (CcLocalAgentSetExactTarget(
+            &road_player, (Vector3){50.20f, 0.0f, 38.55f}, false) ||
+        CcLocalAgentSetExactTarget(
+            &road_player, (Vector3){50.20f, 0.0f, 37.80f}, false)) {
+        (void)fprintf(stderr,
+                      "authored bridge parapet or toll house accepted a walk target\n");
+        return 1;
+    }
+    if (!parley_course.road_encounter || parley_course.alarm_active ||
+        parley_course.raiders[0].combat.weapon_mode != CC_WEAPON_NONE ||
+        VectorDistance3(
+            parley_course.raiders[0].position,
+            (Vector3){CC_LOCAL_ROAD_PARLEY_X, 0.0f,
+                      CC_LOCAL_ROAD_PARLEY_Z}) > 1.55f ||
+        !CcLocalAgentSetExactTarget(
+            &road_player,
+            (Vector3){CC_LOCAL_ROAD_PARLEY_X, 0.0f,
+                      CC_LOCAL_ROAD_PARLEY_Z}, false)) {
+        (void)fprintf(stderr,
+                      "road parley did not expose a reachable unarmed collector\n");
+        return 1;
+    }
+    for (int32_t frame = 0; frame < 900 &&
+                            road_player.exact_target_valid; ++frame) {
+        CcLocalAgentUpdate(&road_player, 1.0f / 60.0f, false);
+    }
+    if (fabsf(road_player.position.x - CC_LOCAL_ROAD_PARLEY_X) > 0.35f ||
+        fabsf(road_player.position.z - CC_LOCAL_ROAD_PARLEY_Z) > 0.35f) {
+        (void)fprintf(stderr,
+                      "player could not physically reach the road collector\n");
+        return 1;
+    }
+
     CcSim defense_sim;
     CcSimInit(&defense_sim, 42U);
     CcLocalCourse defense;
@@ -1393,13 +2175,13 @@ int main(void)
                       defense.raiders[0].combat.health,
                       defense.raiders[0].combat.posture,
                       defense.raiders[0].humanoid.action,
-                      defense.raiders[0].combat.defeated,
+                      defense.raiders[0].combat.life_state == CC_LIFE_DEAD,
                       defense.raiders[1].position.x,
                       defense.raiders[1].position.z,
                       defense.raiders[1].combat.health,
                       defense.raiders[1].combat.posture,
                       defense.raiders[1].humanoid.action,
-                      defense.raiders[1].combat.defeated,
+                      defense.raiders[1].combat.life_state == CC_LIFE_DEAD,
                       guard_engaged[0], guard_engaged[1], guard_engaged[2]);
         return 1;
     }

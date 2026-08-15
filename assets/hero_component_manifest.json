@@ -1,11 +1,93 @@
 {
   "schema_version": 1,
-  "library_version": "0.3.1",
+  "library_version": "0.7.0",
+  "art_direction": "procedural_action_figure_wayfarer",
   "source": "blender/crownless_hero_components.blend",
   "coordinate_system": {
     "unit": "meter",
     "forward": "-Y",
     "up": "+Z"
+  },
+  "procedural_generation": {
+    "schema_version": 1,
+    "body": {
+      "name": "action_figure_wayfarer",
+      "muscularity": 0.68,
+      "body_fat": 0.18,
+      "shoulder_scale": 1.0,
+      "chest_scale": 1.0,
+      "waist_scale": 1.0,
+      "hip_scale": 1.0,
+      "arm_scale": 1.0,
+      "leg_scale": 1.0,
+      "neck_scale": 1.0,
+      "hand_scale": 1.0,
+      "foot_scale": 1.0
+    },
+    "garments": [
+      {
+        "name": "padded_underlayer",
+        "kind": "padded_cloth",
+        "clearance_width": 0.012,
+        "clearance_depth": 0.012,
+        "thickness": 0.012,
+        "ease": 0.008,
+        "compression": 0.0,
+        "width_scale": 1.0,
+        "depth_scale": 1.0,
+        "center_depth_bias": 0.0
+      },
+      {
+        "name": "fitted_tunic",
+        "kind": "woven_cloth",
+        "clearance_width": 0.024,
+        "clearance_depth": 0.022,
+        "thickness": 0.01,
+        "ease": 0.01,
+        "compression": 0.0,
+        "width_scale": 1.0,
+        "depth_scale": 1.0,
+        "center_depth_bias": 0.0
+      }
+    ],
+    "equipment": [
+      {
+        "name": "cuirass_shell",
+        "kind": "rigid_armor",
+        "clearance_width": 0.02,
+        "clearance_depth": 0.026,
+        "thickness": 0.024,
+        "ease": 0.004,
+        "compression": 0.14,
+        "width_scale": 1.0,
+        "depth_scale": 1.06,
+        "center_depth_bias": -0.008
+      },
+      {
+        "name": "fitted_bracer",
+        "kind": "rigid_armor",
+        "clearance_width": 0.012,
+        "clearance_depth": 0.012,
+        "thickness": 0.014,
+        "ease": 0.002,
+        "compression": 0.04,
+        "width_scale": 0.98,
+        "depth_scale": 1.0,
+        "center_depth_bias": 0.0
+      },
+      {
+        "name": "fitted_greave",
+        "kind": "rigid_armor",
+        "clearance_width": 0.004,
+        "clearance_depth": 0.005,
+        "thickness": 0.016,
+        "ease": 0.002,
+        "compression": 0.08,
+        "width_scale": 1.0,
+        "depth_scale": 1.03,
+        "center_depth_bias": 0.0
+      }
+    ]
   },
   "skeleton": {
     "id": "crownless_humanoid_v01",
@@ -441,6 +523,11 @@
       ],
       "export": "exports/hero_glb/hero_wayfarer_assembled_v01.glb"
     }
+  },
+  "review_previews": {
+    "assembled": "previews/hero/hero_assembled.png",
+    "gameplay_read": "previews/hero/hero_gameplay_read.png",
+    "component_triptych": "previews/hero/hero_component_triptych.png"
   },
   "cloth": {
     "hero_cape_v01": {

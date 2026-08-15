@@ -3,6 +3,19 @@
 #include "test_support.h"
 #include <stdio.h>
 
+static CcId ActiveSituationId(const CcSim *sim, CcSituationKind kind,
+                              CcId target)
+{
+    for (int32_t i = 0; i < sim->situation_count; ++i) {
+        const CcSituation *situation = &sim->situations[i];
+        if (situation->status == CC_SITUATION_ACTIVE &&
+            situation->kind == kind && situation->target_id == target) {
+            return situation->id;
+        }
+    }
+    return 0U;
+}
+
 int main(void)
 {
     CcSim sim;
@@ -41,6 +54,12 @@ int main(void)
         .kind = CC_COMMAND_REPAIR_ROUTE,
         .target_id = sim.routes[1].id
     };
+    CcCommand accept_repair = {
+        .kind = CC_COMMAND_ACCEPT_SITUATION,
+        .target_id = ActiveSituationId(
+            &sim, CC_SITUATION_ROUTE_REPAIR, sim.routes[1].id)
+    };
+    CC_CHECK(CcSimApply(&sim, &accept_repair, error, sizeof(error)));
     CC_CHECK(CcSimApply(&sim, &repair, error, sizeof(error)));
     CC_CHECK(!sim.routes[1].closed);
 
@@ -64,6 +83,13 @@ int main(void)
     };
     CC_CHECK(CcSimApply(&sim, &to_mine, error, sizeof(error)));
     int32_t food_before = sim.settlements[3].stock[CC_GOOD_FOOD];
+
+    CcCommand accept_relief = {
+        .kind = CC_COMMAND_ACCEPT_SITUATION,
+        .target_id = ActiveSituationId(
+            &sim, CC_SITUATION_RELIEF_DELIVERY, sim.settlements[3].id)
+    };
+    CC_CHECK(CcSimApply(&sim, &accept_relief, error, sizeof(error)));
 
     CcCommand deliver = {
         .kind = CC_COMMAND_TRADE,

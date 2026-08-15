@@ -60,6 +60,48 @@ static float MaximumPosePointStep(const CcHumanoidPose *before,
     return maximum;
 }
 
+static const char *MaximumPosePointName(const CcHumanoidPose *before,
+                                        const CcHumanoidPose *after)
+{
+    const char *name = "pelvis";
+    float maximum = Distance(before->pelvis, after->pelvis);
+#define CHECK_NAMED_POINT(point) do {                                      \
+    float step = Distance(before->point, after->point);                    \
+    if (step > maximum) { maximum = step; name = #point; }                 \
+} while (0)
+    CHECK_NAMED_POINT(spine);
+    CHECK_NAMED_POINT(chest);
+    CHECK_NAMED_POINT(neck);
+    CHECK_NAMED_POINT(head);
+    for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
+        float steps[] = {
+            Distance(before->hip[leg], after->hip[leg]),
+            Distance(before->knee[leg], after->knee[leg]),
+            Distance(before->ankle[leg], after->ankle[leg]),
+            Distance(before->heel[leg], after->heel[leg]),
+            Distance(before->ball[leg], after->ball[leg]),
+            Distance(before->toe[leg], after->toe[leg])
+        };
+        const char *names[] = {"hip", "knee", "ankle", "heel", "ball", "toe"};
+        for (int32_t point = 0; point < 6; ++point) {
+            if (steps[point] > maximum) {
+                maximum = steps[point];
+                name = names[point];
+            }
+        }
+    }
+    for (int32_t arm = 0; arm < CC_HUMANOID_ARM_COUNT; ++arm) {
+        float shoulder = Distance(before->shoulder[arm], after->shoulder[arm]);
+        float elbow = Distance(before->elbow[arm], after->elbow[arm]);
+        float hand = Distance(before->hand[arm], after->hand[arm]);
+        if (shoulder > maximum) { maximum = shoulder; name = "shoulder"; }
+        if (elbow > maximum) { maximum = elbow; name = "elbow"; }
+        if (hand > maximum) { maximum = hand; name = "hand"; }
+    }
+#undef CHECK_NAMED_POINT
+    return name;
+}
+
 static float BiomechDistance(CcBiomechVec3 a, CcBiomechVec3 b)
 {
     float x = b.x - a.x;
@@ -267,6 +309,7 @@ static void TestBiomechanicalClimb(void)
             {-0.13f, 1.0f, 0.50f}, {0.13f, 1.0f, 0.50f}
         };
         CcLimbVec3 normals[2];
+        const float support[2] = {1.0f, 1.0f};
         for (int32_t leg = 0; leg < 2; ++leg) {
             feet[leg] = (CcLimbVec3){
                 feet[leg].x + (top_feet[leg].x - feet[leg].x) * transfer,
@@ -280,7 +323,7 @@ static void TestBiomechanicalClimb(void)
                                         normal.z / normal_length};
         }
         CcHumanoidGaitAdvanceClimb(
-            &gait, body, 0.0f, hands, feet, normals,
+            &gait, body, 0.0f, hands, feet, normals, support,
             progress, delta_time, NULL, NULL);
         maximum_pose_step = fmaxf(
             maximum_pose_step,
@@ -314,8 +357,9 @@ static void TestBiomechanicalClimb(void)
         CcLimbVec3 normals[2] = {
             {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 0.0f}
         };
+        const float support[2] = {1.0f, 1.0f};
         CcHumanoidGaitAdvanceClimb(
-            &gait, finish, 0.0f, hands, feet, normals,
+            &gait, finish, 0.0f, hands, feet, normals, support,
             progress, delta_time, NULL, NULL);
         maximum_pose_step = fmaxf(
             maximum_pose_step,
@@ -544,19 +588,33 @@ static void TestContinuousHumanActions(void)
     }
     Require(gait.action == CC_HUMANOID_ACTION_GUARD,
             "supported human did not settle into a guarded stance");
+    Require(gait.guard_requested &&
+            gait.pose.hand[0].x < gait.pose.chest.x - 0.07f &&
+            gait.pose.hand[1].x > gait.pose.chest.x + 0.06f &&
+            gait.pose.hand[0].z > gait.pose.chest.z + 0.16f &&
+            gait.pose.hand[1].z > gait.pose.chest.z + 0.18f &&
+            Distance(gait.pose.shoulder[0], gait.pose.hand[0]) < 0.52f &&
+            Distance(gait.pose.shoulder[1], gait.pose.hand[1]) < 0.55f,
+            "guard arms remained parallel, straight, or detached from the torso");
 
     Require(CcHumanoidGaitBeginStrike(&gait, 1),
             "guarded human rejected a valid right-arm strike");
     int32_t impact_count = 0;
     float maximum_strike_step = 0.0f;
+    int32_t maximum_strike_step_frame = -1;
+    const char *maximum_strike_step_point = "none";
     CcHumanoidPose previous = gait.pose;
     for (int32_t frame = 0; frame < 90; ++frame) {
         CcHumanoidGaitAdvance(&gait, body, 0.0f, (CcLimbVec3){0}, true,
                               delta_time, PlaneProbe, NULL);
         impact_count += CcHumanoidGaitConsumeStrikeImpact(&gait) ? 1 : 0;
-        maximum_strike_step = fmaxf(
-            maximum_strike_step,
-            MaximumPosePointStep(&previous, &gait.pose));
+        float pose_step = MaximumPosePointStep(&previous, &gait.pose);
+        if (pose_step > maximum_strike_step) {
+            maximum_strike_step = pose_step;
+            maximum_strike_step_frame = frame;
+            maximum_strike_step_point = MaximumPosePointName(
+                &previous, &gait.pose);
+        }
         previous = gait.pose;
         Require(fabsf(Distance(gait.pose.shoulder[1], gait.pose.elbow[1]) -
                       0.34f) < 0.002f,
@@ -570,11 +628,28 @@ static void TestContinuousHumanActions(void)
     Require(gait.action == CC_HUMANOID_ACTION_GUARD,
             "strike did not recover into guard");
     if (maximum_strike_step >= 0.055f) {
-        (void)fprintf(stderr, "maximum strike landmark step %.4f\n",
-                      maximum_strike_step);
+        (void)fprintf(stderr,
+                      "maximum strike landmark step %.4f at frame %d (%s)\n",
+                      maximum_strike_step, maximum_strike_step_frame,
+                      maximum_strike_step_point);
     }
     Require(maximum_strike_step < 0.055f,
             "guard/strike/recovery transition snapped a body landmark");
+
+    CcHumanoidGait released_gait;
+    CcHumanoidGaitInit(&released_gait, body, 0.0f, PlaneProbe, NULL);
+    CcHumanoidGaitSetGuarded(&released_gait, true);
+    Require(CcHumanoidGaitBeginStrike(&released_gait, 1),
+            "unguarded strike fixture was rejected");
+    CcHumanoidGaitSetGuarded(&released_gait, false);
+    for (int32_t frame = 0; frame < 90; ++frame) {
+        CcHumanoidGaitAdvance(&released_gait, body, 0.0f,
+                              (CcLimbVec3){0}, true,
+                              delta_time, PlaneProbe, NULL);
+    }
+    Require(!released_gait.guard_requested &&
+            released_gait.action == CC_HUMANOID_ACTION_LOCOMOTION,
+            "completed strike resurrected a guard request that was released");
 
     float minimum_pelvis_height = 1000.0f;
     float maximum_swim_step = 0.0f;

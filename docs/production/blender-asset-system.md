@@ -5,6 +5,13 @@ composable assets instead of one-off scenes. Its first priority is legibility at
 an isometric camera distance, so silhouettes, state changes, and module choices
 are intentionally broad and readable.
 
+> **Runtime status:** the raylib client now has a shared registry for the
+> carriage, cargo rack, bridge checkpoint, market/granary, mine entrance, and
+> shortage/enforcement/recovery state layers. They are cached, mesh-budgeted,
+> copied into the application bundle, attached to authoritative semantic
+> footprints, and retain procedural fallbacks. The engine hero export remains
+> connected through its separate skinned-model path.
+
 ## Generated library
 
 - Source library: `assets/blender/crownless_asset_library.blend`
@@ -74,6 +81,17 @@ Environment kits are neutral structural shells:
 - Bridge checkpoint
 - Mine entrance
 - Market and guarded granary
+
+The bridge checkpoint has the first environment readability pass: a visible
+river and raised banks establish the crossing, while dressed masonry, a raised
+toll house, striped gate, inspection furniture, and checkpoint signage make
+its controlled-route role legible from the isometric camera. It replaces the
+primitive cordon in road encounters when its GLB passes the runtime mesh-budget
+check; if the export is unavailable, the prior cordon remains as a safe
+fallback. The renderer leaves an opening in the procedural road under the
+asset's river, while navigation uses matching toll-house, furniture, post, and
+parapet footprints. The other three kits remain at the earlier blockout depth
+and are the next environment art-pass candidates.
 
 State layers project simulation conditions without rebuilding those shells:
 

@@ -1,0 +1,74 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 24,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "development",
+      "displayName": "Development diagnostics",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/out/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "BUILD_TESTING": "ON",
+        "CC_BUILD_CLIENT": "ON",
+        "CC_BUILD_BENCHMARKS": "ON",
+        "CC_ENABLE_STRICT_WARNINGS": "ON",
+        "CC_WARNINGS_AS_ERRORS": "ON"
+      }
+    },
+    {
+      "name": "play",
+      "displayName": "Everyday playtesting",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/out/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "BUILD_TESTING": "ON",
+        "CC_BUILD_CLIENT": "ON",
+        "CC_BUILD_BENCHMARKS": "ON",
+        "CC_ENABLE_STRICT_WARNINGS": "ON",
+        "CC_WARNINGS_AS_ERRORS": "ON"
+      }
+    },
+    {
+      "name": "release",
+      "displayName": "Optimized release verification",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/out/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_TESTING": "ON",
+        "CC_BUILD_CLIENT": "ON",
+        "CC_BUILD_BENCHMARKS": "ON",
+        "CC_ENABLE_STRICT_WARNINGS": "ON",
+        "CC_WARNINGS_AS_ERRORS": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "development", "configurePreset": "development", "jobs": 4 },
+    { "name": "play", "configurePreset": "play", "jobs": 4 },
+    { "name": "release", "configurePreset": "release", "jobs": 4 }
+  ],
+  "testPresets": [
+    {
+      "name": "development",
+      "configurePreset": "development",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "play",
+      "configurePreset": "play",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "release",
+      "configurePreset": "release",
+      "output": { "outputOnFailure": true }
+    }
+  ]
+}

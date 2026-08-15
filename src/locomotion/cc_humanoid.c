@@ -4,8 +4,9 @@
 #include <stddef.h>
 
 #define CC_HUMANOID_PI 3.14159265358979323846f
-static const float CC_HUMANOID_STRIKE_DURATION = 1.20f;
-static const float CC_HUMANOID_STRIKE_IMPACT_TIME = 0.61f;
+static const float CC_HUMANOID_IDLE_ENTER_SPEED = 0.035f;
+static const float CC_HUMANOID_IDLE_EXIT_SPEED = 0.060f;
+static const float CC_HUMANOID_IDLE_SETTLE_TIME = 0.22f;
 
 typedef enum CcHumanoidRagdollNode {
     CC_RAGDOLL_PELVIS,
@@ -115,6 +116,116 @@ static float Smooth01(float amount)
     return amount * amount * (3.0f - 2.0f * amount);
 }
 
+static CcMotionClipId MotionClipForAction(const CcHumanoidGait *gait,
+                                           CcHumanoidAction action)
+{
+    switch (action) {
+        case CC_HUMANOID_ACTION_GUARD:
+            return CC_MOTION_CLIP_GUARD;
+        case CC_HUMANOID_ACTION_STRIKE:
+            if (gait->strike_style == CC_HUMANOID_STRIKE_HEAVY) {
+                return CC_MOTION_CLIP_STRIKE_HEAVY;
+            }
+            if (gait->strike_style == CC_HUMANOID_STRIKE_SWEEP) {
+                return CC_MOTION_CLIP_STRIKE_SWEEP;
+            }
+            return CC_MOTION_CLIP_STRIKE_CUT;
+        case CC_HUMANOID_ACTION_CLAMBER:
+            return CC_MOTION_CLIP_CLIMB;
+        case CC_HUMANOID_ACTION_SWIM:
+            return CC_MOTION_CLIP_SWIM;
+        case CC_HUMANOID_ACTION_FALL:
+            return CC_MOTION_CLIP_FALL;
+        case CC_HUMANOID_ACTION_JUMP:
+            return CC_MOTION_CLIP_JUMP;
+        case CC_HUMANOID_ACTION_RECOVER:
+            return CC_MOTION_CLIP_GET_UP_SUPINE;
+        case CC_HUMANOID_ACTION_LOCOMOTION:
+        default:
+            return gait->idle.stable ? CC_MOTION_CLIP_IDLE :
+                                       CC_MOTION_CLIP_WALK;
+    }
+}
+
+static void SetPoseOwner(CcHumanoidGait *gait, CcHumanoidPoseOwner owner)
+{
+    if (gait == NULL) return;
+    gait->pose_owner = owner;
+}
+
+static void RecordAnimationTrace(CcHumanoidGait *gait)
+{
+    CcHumanoidAnimationTrace *trace = &gait->trace;
+    CcHumanoidAnimationTraceRecord *record = &trace->records[trace->next];
+    *record = (CcHumanoidAnimationTraceRecord){
+        .sequence = gait->snapshot.sequence,
+        .root_position = gait->pose.pelvis,
+        .root_velocity = gait->root_velocity,
+        .motion_time = gait->motion.time,
+        .speed = gait->speed.value,
+        .phase = gait->phase,
+        .owner = gait->pose_owner,
+        .action = gait->action,
+        .clip = gait->motion.clip != NULL ? gait->motion.clip->id :
+                                            CC_MOTION_CLIP_NONE,
+        .contact = {gait->feet[0].contact, gait->feet[1].contact},
+        .markers = gait->motion_markers,
+        .idle_stable = gait->idle.stable,
+        .idle_locked = gait->idle.pose_locked
+    };
+    trace->next = (trace->next + 1) % CC_HUMANOID_TRACE_CAPACITY;
+    if (trace->count < CC_HUMANOID_TRACE_CAPACITY) trace->count += 1;
+}
+
+static void CommitPoseSnapshot(CcHumanoidGait *gait, float delta_time)
+{
+    if (gait == NULL || !gait->initialized) return;
+    CcHumanoidPoseSnapshot old = gait->snapshot;
+    if (!old.valid) {
+        old.pose = gait->previous_pose;
+        old.owner = gait->pose_owner;
+        old.valid = true;
+    }
+    gait->previous_snapshot = old;
+    gait->previous_snapshot.pose = gait->previous_pose;
+    float inverse_time = delta_time > 0.000001f ? 1.0f / delta_time : 0.0f;
+    gait->snapshot = (CcHumanoidPoseSnapshot){
+        .pose = gait->pose,
+        .root_linear_velocity = gait->root_velocity,
+        .root_angular_velocity = {
+            0.0f,
+            WrapAngle(gait->pose.pelvis_yaw -
+                      gait->previous_pose.pelvis_yaw) * inverse_time,
+            0.0f
+        },
+        .owner = gait->pose_owner,
+        .sequence = old.sequence + 1,
+        .valid = true
+    };
+    RecordAnimationTrace(gait);
+}
+
+static void InitializePoseSnapshots(CcHumanoidGait *gait)
+{
+    if (gait == NULL || !gait->initialized) return;
+    gait->snapshot = (CcHumanoidPoseSnapshot){
+        .pose = gait->pose,
+        .root_linear_velocity = gait->root_velocity,
+        .owner = gait->pose_owner,
+        .valid = true
+    };
+    gait->previous_snapshot = gait->snapshot;
+    RecordAnimationTrace(gait);
+}
+
+static void RefreshCurrentPoseSnapshot(CcHumanoidGait *gait)
+{
+    if (gait == NULL || !gait->snapshot.valid) return;
+    gait->snapshot.pose = gait->pose;
+    gait->snapshot.root_linear_velocity = gait->root_velocity;
+    gait->snapshot.owner = gait->pose_owner;
+}
+
 static void SetAction(CcHumanoidGait *gait, CcHumanoidAction action)
 {
     if (gait->action == action) return;
@@ -122,28 +233,34 @@ static void SetAction(CcHumanoidGait *gait, CcHumanoidAction action)
     gait->action = action;
     gait->action_time = 0.0f;
     gait->action_blend = 0.0f;
+    CcMotionPlayerPlay(&gait->motion, MotionClipForAction(gait, action), true);
 }
 
 static void AdvanceAction(CcHumanoidGait *gait, float delta_time)
 {
-    float previous_time = gait->action_time;
     gait->action_time += delta_time;
+    CcMotionPlayerAdvance(&gait->motion, delta_time);
+    uint32_t markers = CcMotionPlayerConsumeMarkers(&gait->motion);
+    gait->motion_markers |= markers;
     gait->impact_response *= expf(-6.5f * delta_time);
     if (gait->impact_response < 0.001f) gait->impact_response = 0.0f;
     gait->action_blend += (1.0f - gait->action_blend) *
                           (1.0f - expf(-10.0f * delta_time));
     if (gait->action == CC_HUMANOID_ACTION_STRIKE) {
-        const float impact_time = CC_HUMANOID_STRIKE_IMPACT_TIME;
-        if (!gait->strike_impact_emitted && previous_time < impact_time &&
-            gait->action_time >= impact_time) {
+        if (!gait->strike_impact_emitted &&
+            (markers & CC_MOTION_MARKER_WEAPON_IMPACT) != 0) {
             gait->strike_impact_pending = true;
             gait->strike_impact_emitted = true;
         }
-        if (gait->action_time >= CC_HUMANOID_STRIKE_DURATION) {
-            SetAction(gait, CC_HUMANOID_ACTION_GUARD);
-            /* The authored cut already ends in the guard pose. Preserve the
-               blend instead of briefly blending back through neutral. */
-            gait->action_blend = 1.0f;
+        if (gait->motion.finished) {
+            SetAction(gait, gait->guard_requested ?
+                       CC_HUMANOID_ACTION_GUARD :
+                       CC_HUMANOID_ACTION_LOCOMOTION);
+            if (gait->guard_requested) {
+                /* The cut ends in the guard pose, so no neutral frame is
+                   introduced when the player still requests guard. */
+                gait->action_blend = 1.0f;
+            }
         }
     }
 }
@@ -321,7 +438,8 @@ static bool AddRagdollBone(CcHumanoidGait *gait,
                                          (int32_t)b, compliance) >= 0;
 }
 
-static bool ActivateRagdoll(CcHumanoidGait *gait)
+static bool ActivateRagdoll(CcHumanoidGait *gait,
+                            bool recovery_allowed)
 {
     SetAction(gait, CC_HUMANOID_ACTION_FALL);
     CcBiomechRagdollInit(&gait->ragdoll);
@@ -433,7 +551,10 @@ static bool ActivateRagdoll(CcHumanoidGait *gait)
     gait->recovery_error = 0.0f;
     gait->recovery_speed = 0.0f;
     gait->recovering = false;
+    gait->ragdoll_recovery_allowed = recovery_allowed;
     gait->ground_reaction = (CcLimbVec3){0};
+    gait->idle = (CcHumanoidIdleState){0};
+    SetPoseOwner(gait, CC_HUMANOID_POSE_OWNER_RAGDOLL);
     return true;
 }
 
@@ -805,12 +926,49 @@ static float RagdollRecoveryError(const CcHumanoidGait *gait)
     return maximum_error;
 }
 
+static CcHumanoidRecoveryOrientation ClassifyRecoveryOrientation(
+    const CcHumanoidPose *pose)
+{
+    CcLimbVec3 torso = NormalizeOr(Subtract(pose->neck, pose->pelvis),
+                                    (CcLimbVec3){0.0f, 1.0f, 0.0f});
+    CcLimbVec3 right = NormalizeOr(Subtract(pose->shoulder[1],
+                                             pose->shoulder[0]),
+                                    (CcLimbVec3){1.0f, 0.0f, 0.0f});
+    CcLimbVec3 anatomical_forward = NormalizeOr(
+        Cross(right, torso), (CcLimbVec3){0.0f, 0.0f, 1.0f});
+    float facing_up = anatomical_forward.y;
+    if (facing_up > 0.45f) return CC_HUMANOID_RECOVERY_SUPINE;
+    if (facing_up < -0.45f) return CC_HUMANOID_RECOVERY_PRONE;
+    return right.y > 0.0f ? CC_HUMANOID_RECOVERY_LEFT :
+                            CC_HUMANOID_RECOVERY_RIGHT;
+}
+
+static CcMotionClipId RecoveryClip(
+    CcHumanoidRecoveryOrientation orientation)
+{
+    switch (orientation) {
+        case CC_HUMANOID_RECOVERY_PRONE:
+            return CC_MOTION_CLIP_GET_UP_PRONE;
+        case CC_HUMANOID_RECOVERY_LEFT:
+            return CC_MOTION_CLIP_GET_UP_LEFT;
+        case CC_HUMANOID_RECOVERY_RIGHT:
+            return CC_MOTION_CLIP_GET_UP_RIGHT;
+        case CC_HUMANOID_RECOVERY_SUPINE:
+        default:
+            return CC_MOTION_CLIP_GET_UP_SUPINE;
+    }
+}
+
 static void BeginRagdollRecovery(CcHumanoidGait *gait,
                                  CcLimbVec3 body_position, float body_yaw,
                                  CcLimbTerrainProbe probe,
                                  void *probe_context)
 {
+    gait->recovery_orientation = ClassifyRecoveryOrientation(&gait->pose);
     SetAction(gait, CC_HUMANOID_ACTION_RECOVER);
+    CcMotionPlayerPlay(&gait->motion,
+                       RecoveryClip(gait->recovery_orientation), true);
+    SetPoseOwner(gait, CC_HUMANOID_POSE_OWNER_RECOVERY);
     CcHumanoidGait standing;
     CcHumanoidGaitInit(&standing, body_position, body_yaw,
                        probe, probe_context);
@@ -836,7 +994,12 @@ static bool StepRagdoll(CcHumanoidGait *gait, CcLimbVec3 body_position,
         .fallback_ground = body_position.y,
         .grounded = grounded
     };
-    if (gait->recovering) DriveRagdollRecovery(gait, delta_time);
+    gait->previous_pose = gait->pose;
+    if (gait->recovering) {
+        CcMotionPlayerAdvance(&gait->motion, delta_time);
+        gait->motion_markers |= CcMotionPlayerConsumeMarkers(&gait->motion);
+        DriveRagdollRecovery(gait, delta_time);
+    }
     CcBiomechRagdollStep(&gait->ragdoll, delta_time, 12,
                          ProbeRagdollCollision, &collision);
     gait->ragdoll_time += delta_time;
@@ -851,6 +1014,7 @@ static bool StepRagdoll(CcHumanoidGait *gait, CcLimbVec3 body_position,
                                probe, probe_context);
             return false;
         }
+        CommitPoseSnapshot(gait, delta_time);
         return true;
     }
     int32_t contact_count = RagdollContactCount(gait, body_position.y);
@@ -860,12 +1024,14 @@ static bool StepRagdoll(CcHumanoidGait *gait, CcLimbVec3 body_position,
     } else {
         gait->ragdoll_settled_time = 0.0f;
     }
-    if (grounded && gait->ragdoll_time > 1.20f &&
+    if (gait->ragdoll_recovery_allowed && grounded &&
+        gait->ragdoll_time > 1.20f &&
         ((contact_count >= 3 && gait->ragdoll_settled_time > 0.42f) ||
          (contact_count >= 3 && gait->ragdoll_time > 3.0f))) {
         BeginRagdollRecovery(gait, body_position, body_yaw,
                              probe, probe_context);
     }
+    CommitPoseSnapshot(gait, delta_time);
     return true;
 }
 
@@ -876,6 +1042,120 @@ static void SpringStep(CcHumanoidSpring *spring, float target,
                          spring->velocity * 2.0f * damping * frequency;
     spring->velocity += acceleration * delta_time;
     spring->value += spring->velocity * delta_time;
+}
+
+static void ReleaseStableIdle(CcHumanoidGait *gait)
+{
+    gait->idle.stable = false;
+    gait->idle.pose_locked = false;
+    gait->idle.still_time = 0.0f;
+    if (gait->action == CC_HUMANOID_ACTION_LOCOMOTION) {
+        CcMotionPlayerPlay(&gait->motion, CC_MOTION_CLIP_WALK, false);
+    }
+}
+
+static bool AnyFootSwinging(const CcHumanoidGait *gait)
+{
+    for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
+        if (gait->feet[leg].contact == CC_HUMANOID_CONTACT_SWING) return true;
+    }
+    return false;
+}
+
+static void CaptureStableIdle(CcHumanoidGait *gait)
+{
+    gait->idle.stable = true;
+    gait->idle.pose_locked = false;
+    gait->idle.locked_phase = gait->phase;
+    for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
+        CcHumanoidFoot *foot = &gait->feet[leg];
+        gait->idle.foot_anchor[leg] = foot->current_point;
+        gait->idle.foot_normal[leg] = foot->normal;
+        foot->planted_point = foot->current_point;
+        foot->contact = CC_HUMANOID_CONTACT_FLAT;
+        foot->pitch.value = 0.0f;
+        foot->pitch.velocity = 0.0f;
+    }
+    if (gait->action == CC_HUMANOID_ACTION_LOCOMOTION) {
+        CcMotionPlayerPlay(&gait->motion, CC_MOTION_CLIP_IDLE, false);
+    }
+}
+
+static void UpdateStableIdle(CcHumanoidGait *gait, float desired_speed,
+                             float actual_speed, bool grounded,
+                             float delta_time)
+{
+    bool controllable_action =
+        gait->action != CC_HUMANOID_ACTION_JUMP &&
+        gait->action != CC_HUMANOID_ACTION_SWIM &&
+        gait->action != CC_HUMANOID_ACTION_CLAMBER;
+    if (gait->idle.stable &&
+        (!grounded || desired_speed > CC_HUMANOID_IDLE_EXIT_SPEED ||
+         !controllable_action)) {
+        ReleaseStableIdle(gait);
+    }
+    bool may_enter = grounded && controllable_action &&
+        desired_speed < CC_HUMANOID_IDLE_ENTER_SPEED &&
+        actual_speed < CC_HUMANOID_IDLE_ENTER_SPEED &&
+        !AnyFootSwinging(gait);
+    if (!gait->idle.stable) {
+        gait->idle.still_time = may_enter ? gait->idle.still_time + delta_time :
+                                           0.0f;
+        if (gait->idle.still_time >= CC_HUMANOID_IDLE_SETTLE_TIME) {
+            CaptureStableIdle(gait);
+        }
+    } else {
+        gait->idle.still_time += delta_time;
+    }
+    if (!gait->idle.stable) return;
+    gait->phase = gait->idle.locked_phase;
+    for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
+        CcHumanoidFoot *foot = &gait->feet[leg];
+        foot->planted_point = gait->idle.foot_anchor[leg];
+        foot->current_point = gait->idle.foot_anchor[leg];
+        foot->normal = gait->idle.foot_normal[leg];
+        foot->contact = CC_HUMANOID_CONTACT_FLAT;
+        foot->pitch.value = 0.0f;
+        foot->pitch.velocity = 0.0f;
+    }
+}
+
+static bool IdlePoseMayLock(const CcHumanoidGait *gait)
+{
+    return gait->idle.stable && gait->idle.still_time > 0.38f &&
+        gait->action != CC_HUMANOID_ACTION_STRIKE &&
+        gait->action != CC_HUMANOID_ACTION_JUMP &&
+        gait->impact_response <= 0.001f;
+}
+
+static void LockIdleDrivenPose(CcHumanoidGait *gait)
+{
+    if (!IdlePoseMayLock(gait)) {
+        gait->idle.pose_locked = false;
+        return;
+    }
+    for (int32_t joint = 0; joint < gait->body.morphology.joint_count; ++joint) {
+        CcBiomechJointRuntime *runtime = &gait->body.joints[joint];
+        runtime->angle = runtime->target_angle;
+        runtime->angular_velocity = 0.0f;
+        runtime->external_torque = 0.0f;
+        runtime->contact_reaction_torque = 0.0f;
+    }
+    float ground_height = 0.0f;
+    for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
+        ground_height += gait->idle.foot_anchor[leg].y;
+    }
+    ground_height /= (float)CC_HUMANOID_LEG_COUNT;
+    gait->body.root.position.y = ground_height + 0.90f;
+    gait->body.root.velocity = (CcBiomechVec3){0};
+    gait->body.root.acceleration = (CcBiomechVec3){0};
+    gait->root_velocity = (CcLimbVec3){0};
+    gait->speed = (CcHumanoidSpring){0};
+    gait->pelvis_height = (CcHumanoidSpring){0};
+    gait->pelvis_sway = (CcHumanoidSpring){0};
+    gait->pelvis_roll = (CcHumanoidSpring){0};
+    gait->pelvis_yaw = (CcHumanoidSpring){0};
+    gait->idle.pose_locked = true;
 }
 
 static CcLimbVec3 ProbeGround(CcLimbVec3 desired, CcLimbVec3 body_position,
@@ -1033,6 +1313,124 @@ static CcLimbVec3 SolveKnee(CcLimbVec3 hip, CcLimbVec3 ankle,
     return Add(Add(hip, Scale(direction, along)), Scale(pole, height));
 }
 
+static CcLimbVec3 PoseLocalPoint(CcLimbVec3 origin, CcLimbVec3 right,
+                                 CcLimbVec3 up, CcLimbVec3 forward,
+                                 float local_right, float local_up,
+                                 float local_forward)
+{
+    CcLimbVec3 result = Add(origin, Scale(right, local_right));
+    result = Add(result, Scale(up, local_up));
+    return Add(result, Scale(forward, local_forward));
+}
+
+static CcLimbVec3 TransportClimbPole(
+    CcLimbVec3 root, CcLimbVec3 target, CcLimbVec3 previous_joint,
+    CcLimbVec3 desired_pole, float maximum_angle);
+
+static float CombatPresentationWeight(const CcHumanoidGait *gait)
+{
+    bool current = gait->action == CC_HUMANOID_ACTION_GUARD ||
+                   gait->action == CC_HUMANOID_ACTION_STRIKE;
+    bool previous = gait->previous_action == CC_HUMANOID_ACTION_GUARD ||
+                    gait->previous_action == CC_HUMANOID_ACTION_STRIKE;
+    if (current) return gait->action_blend;
+    return previous ? 1.0f - gait->action_blend : 0.0f;
+}
+
+static CcLimbVec3 CombatHandTarget(const CcHumanoidGait *gait, int32_t arm,
+                                   CcLimbVec3 chest, CcLimbVec3 right,
+                                   CcLimbVec3 up, CcLimbVec3 forward)
+{
+    float side = arm == 0 ? -1.0f : 1.0f;
+    float target_right = side * (arm == 0 ? 0.17f : 0.14f);
+    float target_up = arm == 0 ? 0.01f : 0.11f;
+    float target_forward = arm == 0 ? 0.27f : 0.30f;
+    if (gait->action != CC_HUMANOID_ACTION_STRIKE ||
+        arm != gait->strike_side) {
+        return PoseLocalPoint(chest, right, up, forward, target_right,
+                              target_up, target_forward);
+    }
+
+    float phase = CcMotionPlayerNormalizedTime(&gait->motion);
+    float chamber = Smooth01(phase / 0.22f);
+    float drive = Smooth01((phase - 0.20f) / 0.40f);
+    float recover = Smooth01((phase - 0.58f) / 0.42f);
+    float chamber_right = side * 0.28f;
+    float chamber_up = 0.34f;
+    float chamber_forward = -0.06f;
+    float drive_right = -side * 0.07f;
+    float drive_up = -0.03f;
+    float drive_forward = 0.55f;
+    if (gait->strike_style == CC_HUMANOID_STRIKE_HEAVY) {
+        chamber_right = side * 0.15f;
+        chamber_up = 0.42f;
+        chamber_forward = -0.11f;
+        drive_right = 0.0f;
+        drive_up = -0.12f;
+        drive_forward = 0.55f;
+    } else if (gait->strike_style == CC_HUMANOID_STRIKE_SWEEP) {
+        chamber_right = side * 0.32f;
+        chamber_up = 0.13f;
+        chamber_forward = -0.12f;
+        drive_right = -side * 0.24f;
+        drive_up = 0.01f;
+        drive_forward = 0.52f;
+    }
+    target_right = LerpScalar(target_right, chamber_right, chamber);
+    target_up = LerpScalar(target_up, chamber_up, chamber);
+    target_forward = LerpScalar(target_forward, chamber_forward, chamber);
+    target_right = LerpScalar(target_right, drive_right, drive);
+    target_up = LerpScalar(target_up, drive_up, drive);
+    target_forward = LerpScalar(target_forward, drive_forward, drive);
+    float guard_right = side * (arm == 0 ? 0.17f : 0.14f);
+    float guard_up = arm == 0 ? 0.01f : 0.11f;
+    float guard_forward = arm == 0 ? 0.27f : 0.30f;
+    target_right = LerpScalar(target_right, guard_right, recover);
+    target_up = LerpScalar(target_up, guard_up, recover);
+    target_forward = LerpScalar(target_forward, guard_forward, recover);
+    return PoseLocalPoint(chest, right, up, forward, target_right,
+                          target_up, target_forward);
+}
+
+static void ResolveCombatArmPresentation(CcHumanoidGait *gait,
+                                         CcLimbVec3 right, CcLimbVec3 up,
+                                         CcLimbVec3 forward)
+{
+    float weight = CombatPresentationWeight(gait);
+    if (weight <= 0.0001f) return;
+    for (int32_t arm = 0; arm < CC_HUMANOID_ARM_COUNT; ++arm) {
+        float side = arm == 0 ? -1.0f : 1.0f;
+        CcLimbVec3 base_hand = gait->pose.hand[arm];
+        CcLimbVec3 base_pole = Subtract(gait->pose.elbow[arm],
+                                        gait->pose.shoulder[arm]);
+        CcLimbVec3 target = CombatHandTarget(
+            gait, arm, gait->pose.chest, right, up, forward);
+        gait->pose.hand[arm] = Lerp(base_hand, target, weight);
+        CcLimbVec3 hand_step = Subtract(
+            gait->pose.hand[arm], gait->previous_pose.hand[arm]);
+        float hand_step_length = Length(hand_step);
+        float maximum_hand_step = 3.0f * gait->last_delta_time;
+        if (hand_step_length > maximum_hand_step) {
+            gait->pose.hand[arm] = Add(
+                gait->previous_pose.hand[arm],
+                Scale(hand_step, maximum_hand_step / hand_step_length));
+        }
+        CcLimbVec3 desired_pole = Add(Scale(right, side * 0.72f),
+                                      Scale(up, -0.58f));
+        desired_pole = Add(desired_pole, Scale(forward, -0.24f));
+        CcLimbVec3 transported_pole = TransportClimbPole(
+            gait->pose.shoulder[arm], gait->pose.hand[arm],
+            gait->previous_pose.elbow[arm], desired_pole,
+            6.0f * gait->last_delta_time);
+        CcLimbVec3 pole = NormalizeOr(
+            Lerp(base_pole, transported_pole, weight), transported_pole);
+        float elbow_flexion = 0.0f;
+        gait->pose.elbow[arm] = SolveKnee(
+            gait->pose.shoulder[arm], gait->pose.hand[arm], pole,
+            0.34f, 0.35f, &elbow_flexion);
+    }
+}
+
 static void ResolveFootGeometry(CcHumanoidGait *gait, int32_t leg,
                                 CcLimbVec3 forward)
 {
@@ -1063,6 +1461,7 @@ void CcHumanoidGaitResolvePose(CcHumanoidGait *gait,
     if (gait == NULL || !gait->initialized) return;
     if (gait->ragdoll.active) {
         ResolveRagdollPose(gait, body_yaw);
+        RefreshCurrentPoseSnapshot(gait);
         return;
     }
     (void)body_position;
@@ -1198,6 +1597,8 @@ void CcHumanoidGaitResolvePose(CcHumanoidGait *gait,
         gait->pose.hand[arm] = Add(gait->pose.elbow[arm],
                                    Scale(lower_direction, 0.35f));
     }
+    ResolveCombatArmPresentation(gait, chest_right, up, chest_forward);
+    RefreshCurrentPoseSnapshot(gait);
 }
 
 static CcLimbVec3 ClampClimbTarget(CcLimbVec3 root, CcLimbVec3 target,
@@ -1207,6 +1608,18 @@ static CcLimbVec3 ClampClimbTarget(CcLimbVec3 root, CcLimbVec3 target,
     float distance = Length(delta);
     if (distance <= maximum_reach || distance <= 0.0001f) return target;
     return Add(root, Scale(delta, maximum_reach / distance));
+}
+
+static CcLimbVec3 LimitClimbPointSpeed(CcLimbVec3 previous,
+                                       CcLimbVec3 desired,
+                                       float maximum_speed,
+                                       float delta_time)
+{
+    CcLimbVec3 delta = Subtract(desired, previous);
+    float distance = Length(delta);
+    float maximum_step = maximum_speed * delta_time;
+    if (distance <= maximum_step || distance <= 0.0001f) return desired;
+    return Add(previous, Scale(delta, maximum_step / distance));
 }
 
 static CcLimbVec3 TransportClimbPole(
@@ -1251,9 +1664,358 @@ void CcHumanoidGaitBeginClimb(CcHumanoidGait *gait)
     }
     gait->previous_pose = gait->pose;
     gait->root_velocity = (CcLimbVec3){0};
+    gait->idle = (CcHumanoidIdleState){0};
     gait->climbing = true;
     gait->grounded = true;
+    SetPoseOwner(gait, CC_HUMANOID_POSE_OWNER_TRAVERSAL);
     SetAction(gait, CC_HUMANOID_ACTION_CLAMBER);
+}
+
+static CcLimbVec3 MantleFramePoint(CcLimbVec3 ledge, CcLimbVec3 right,
+                                   CcLimbVec3 up, CcLimbVec3 outward,
+                                   float local_right, float local_up,
+                                   float local_outward)
+{
+    CcLimbVec3 result = Add(ledge, Scale(right, local_right));
+    result = Add(result, Scale(up, local_up));
+    return Add(result, Scale(outward, local_outward));
+}
+
+static CcLimbVec3 MantleQuadraticArc(CcLimbVec3 start, CcLimbVec3 target,
+                                     CcLimbVec3 outward, CcLimbVec3 right,
+                                     float side, float amount,
+                                     float clearance, float lift)
+{
+    amount = Smooth01(amount);
+    CcLimbVec3 control = Lerp(start, target, 0.50f);
+    control = Add(control, Scale(outward, clearance));
+    control = Add(control, Scale(right, side * 0.025f));
+    control.y += lift;
+    float inverse = 1.0f - amount;
+    return Add(Add(Scale(start, inverse * inverse),
+                   Scale(control, 2.0f * inverse * amount)),
+               Scale(target, amount * amount));
+}
+
+static CcLimbVec3 MantleLipArc(CcLimbVec3 start, CcLimbVec3 target,
+                               CcLimbVec3 outward, float amount)
+{
+    amount = Clamp(amount, 0.0f, 1.0f);
+    CcLimbVec3 clearance = Lerp(start, target, 0.48f);
+    clearance.y = target.y + 0.15f;
+    clearance = Add(clearance, Scale(outward, 0.115f));
+    if (amount < 0.52f) {
+        return Lerp(start, clearance, Smooth01(amount / 0.52f));
+    }
+    return Lerp(clearance, target,
+                Smooth01((amount - 0.52f) / 0.48f));
+}
+
+static float MantleSwingSupport(float amount)
+{
+    if (amount <= 0.0f || amount >= 1.0f) return 1.0f;
+    return 1.0f - sinf(amount * CC_HUMANOID_PI);
+}
+
+void CcHumanoidGaitAdvanceMantle(
+    CcHumanoidGait *gait, CcLimbVec3 body_position, float body_yaw,
+    CcLimbVec3 ledge, CcLimbVec3 wall_normal,
+    const CcLimbVec3 takeoff_feet[CC_HUMANOID_LEG_COUNT],
+    float mantle_progress, float delta_time,
+    CcLimbTerrainProbe probe, void *probe_context)
+{
+    if (gait == NULL || !gait->initialized || gait->ragdoll.active ||
+        takeoff_feet == NULL) {
+        return;
+    }
+    if (!gait->climbing) CcHumanoidGaitBeginClimb(gait);
+    if (!gait->climbing) return;
+
+    CcMotionMantleSample motion;
+    if (!CcMotionClipSampleMantle(mantle_progress, &motion)) return;
+    delta_time = Clamp(delta_time, 1.0f / 240.0f, 1.0f / 30.0f);
+    mantle_progress = Clamp(mantle_progress, 0.0f, 1.0f);
+    SetPoseOwner(gait, CC_HUMANOID_POSE_OWNER_TRAVERSAL);
+    CcMotionPlayerSetNormalizedTime(&gait->motion, mantle_progress);
+    gait->motion_markers |= CcMotionPlayerConsumeMarkers(&gait->motion);
+
+    CcHumanoidGait standing;
+    /* During the ledge crossing the traversal root is between two walkable
+       surfaces. Probing a normal standing pose here makes its feet snap from
+       the lower floor to the upper floor as soon as the root clears the lip,
+       and that discontinuity leaks through the exit blend. The authored root
+       is already warped to the correct surface, so derive the exit pose from
+       that root and only resume terrain probing after the mantle completes. */
+    CcLimbTerrainProbe exit_probe = mantle_progress >= 0.90f ? probe : NULL;
+    void *exit_context = exit_probe != NULL ? probe_context : NULL;
+    CcHumanoidGaitInit(&standing, body_position, body_yaw,
+                       exit_probe, exit_context);
+    if (!standing.initialized) return;
+
+    gait->previous_pose = gait->pose;
+    CcHumanoidPose pose = gait->pose;
+    CcLimbVec3 up = {0.0f, 1.0f, 0.0f};
+    CcLimbVec3 right = Right(body_yaw);
+    CcLimbVec3 forward = Forward(body_yaw);
+    CcLimbVec3 outward = NormalizeOr(wall_normal, Scale(forward, -1.0f));
+    float acquisition = Smooth01(mantle_progress / 0.18f);
+    float exit_weight = Clamp(motion.exit_weight, 0.0f, 1.0f);
+
+    CcLimbVec3 authored_pelvis = Add(
+        Add(body_position, Scale(up, motion.pelvis_height)),
+        Add(Scale(outward, motion.pelvis_outward),
+            Scale(right, motion.pelvis_lateral)));
+    CcLimbVec3 authored_spine = Add(
+        Add(authored_pelvis, Scale(up, 0.10f)),
+        Scale(forward, motion.chest_inward * 0.18f));
+    CcLimbVec3 authored_chest = Add(
+        Add(authored_pelvis, Scale(up, 0.48f - motion.chest_drop)),
+        Add(Scale(forward, motion.chest_inward),
+            Scale(right, motion.chest_lateral)));
+    CcLimbVec3 authored_neck = Add(
+        Add(authored_chest, Scale(up, 0.25f)),
+        Scale(forward, motion.chest_inward * 0.12f));
+    CcLimbVec3 authored_head = Add(
+        Add(authored_neck, Scale(up, 0.18f)),
+        Scale(forward, motion.chest_inward * 0.06f));
+
+    pose.pelvis = ClimbBlendPoint(gait->climb_entry_pose.pelvis,
+                                  authored_pelvis, standing.pose.pelvis,
+                                  acquisition, exit_weight);
+    pose.spine = ClimbBlendPoint(gait->climb_entry_pose.spine,
+                                 authored_spine, standing.pose.spine,
+                                 acquisition, exit_weight);
+    pose.chest = ClimbBlendPoint(gait->climb_entry_pose.chest,
+                                 authored_chest, standing.pose.chest,
+                                 acquisition, exit_weight);
+    pose.neck = ClimbBlendPoint(gait->climb_entry_pose.neck,
+                                authored_neck, standing.pose.neck,
+                                acquisition, exit_weight);
+    pose.head = ClimbBlendPoint(gait->climb_entry_pose.head,
+                                authored_head, standing.pose.head,
+                                acquisition, exit_weight);
+    pose.pelvis_yaw = LerpScalar(motion.pelvis_yaw,
+                                 standing.pose.pelvis_yaw, exit_weight);
+    pose.pelvis_roll = LerpScalar(motion.pelvis_roll,
+                                  standing.pose.pelvis_roll, exit_weight);
+    pose.pelvis_pitch = LerpScalar(
+        motion.chest_inward * 0.42f, standing.pose.pelvis_pitch, exit_weight);
+    pose.chest_yaw = LerpScalar(motion.chest_yaw,
+                                standing.pose.chest_yaw, exit_weight);
+    pose.chest_roll = LerpScalar(motion.chest_roll,
+                                 standing.pose.chest_roll, exit_weight);
+    pose.chest_pitch = LerpScalar(
+        motion.chest_inward * 0.72f, standing.pose.chest_pitch, exit_weight);
+
+    CcLimbVec3 wall_left = MantleFramePoint(
+        ledge, right, up, outward, -0.18f, -0.62f, 0.018f);
+    CcLimbVec3 top_left = MantleFramePoint(
+        ledge, right, up, outward, -0.16f, 0.035f, -0.28f);
+    CcLimbVec3 tuck_right = MantleFramePoint(
+        ledge, right, up, outward, 0.17f, -0.73f, 0.24f);
+    CcLimbVec3 top_right = MantleFramePoint(
+        ledge, right, up, outward, 0.15f, 0.035f, -0.24f);
+    CcLimbVec3 lead_wall = MantleQuadraticArc(
+        takeoff_feet[0], wall_left, outward, right, -1.0f,
+        motion.lead_wall_step, 0.10f, 0.15f);
+    CcLimbVec3 lead_contact = motion.lead_top_step > 0.0f ?
+        MantleLipArc(wall_left, top_left, outward,
+                     motion.lead_top_step) : lead_wall;
+    CcLimbVec3 trail_tuck = MantleQuadraticArc(
+        takeoff_feet[1], tuck_right, outward, right, 1.0f,
+        motion.trail_tuck, 0.16f, 0.18f);
+    CcLimbVec3 trail_contact = motion.trail_top_step > 0.0f ?
+        MantleLipArc(tuck_right, top_right, outward,
+                     motion.trail_top_step) : trail_tuck;
+    CcLimbVec3 contacts[CC_HUMANOID_LEG_COUNT] = {
+        lead_contact, trail_contact
+    };
+    float lead_to_wall = Smooth01(
+        (motion.lead_wall_step - 0.55f) / 0.45f);
+    float lead_to_top = Smooth01(
+        (motion.lead_top_step - 0.48f) / 0.52f);
+    CcLimbVec3 normals[CC_HUMANOID_LEG_COUNT] = {
+        NormalizeOr(Lerp(Lerp(up, outward, lead_to_wall), up, lead_to_top), up),
+        up
+    };
+    float support[CC_HUMANOID_LEG_COUNT] = {
+        fminf(Clamp(motion.foot_support[0], 0.0f, 1.0f),
+              fminf(MantleSwingSupport(motion.lead_wall_step),
+                    MantleSwingSupport(motion.lead_top_step))),
+        fminf(Clamp(motion.foot_support[1], 0.0f, 1.0f),
+              MantleSwingSupport(motion.trail_top_step))
+    };
+
+    for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
+        float side = leg == 0 ? -1.0f : 1.0f;
+        CcLimbVec3 authored_hip = Add(authored_pelvis,
+                                      Scale(right, side * 0.155f));
+        if (leg == 0) authored_hip.y += (1.0f - support[leg]) * 0.025f;
+        pose.hip[leg] = ClimbBlendPoint(
+            gait->climb_entry_pose.hip[leg], authored_hip,
+            standing.pose.hip[leg], acquisition, exit_weight);
+
+        CcLimbVec3 normal = NormalizeOr(normals[leg], up);
+        float wall_weight = 1.0f - Clamp(normal.y, 0.0f, 1.0f);
+        CcLimbVec3 foot_axis = NormalizeOr(
+            Add(Scale(forward, 1.0f - wall_weight),
+                Scale(up, wall_weight)), forward);
+        CcLimbVec3 authored_ankle = Add(contacts[leg], Scale(normal, 0.085f));
+        CcLimbVec3 authored_heel = Add(contacts[leg], Scale(foot_axis, -0.11f));
+        CcLimbVec3 authored_ball = Add(contacts[leg], Scale(foot_axis, 0.13f));
+        CcLimbVec3 authored_toe = Add(contacts[leg], Scale(foot_axis, 0.20f));
+        CcLimbVec3 requested_ankle = Lerp(authored_ankle,
+                                          standing.pose.ankle[leg],
+                                          exit_weight);
+        pose.ankle[leg] = ClampClimbTarget(pose.hip[leg], requested_ankle,
+                                           0.935f);
+        pose.ankle[leg] = LimitClimbPointSpeed(
+            gait->previous_pose.ankle[leg], pose.ankle[leg],
+            2.65f, delta_time);
+        pose.ankle[leg] = ClampClimbTarget(pose.hip[leg], pose.ankle[leg],
+                                           0.935f);
+        CcLimbVec3 correction = Subtract(pose.ankle[leg], requested_ankle);
+        pose.heel[leg] = Add(Lerp(authored_heel, standing.pose.heel[leg],
+                                  exit_weight), correction);
+        pose.ball[leg] = Add(Lerp(authored_ball, standing.pose.ball[leg],
+                                  exit_weight), correction);
+        pose.toe[leg] = Add(Lerp(authored_toe, standing.pose.toe[leg],
+                                 exit_weight), correction);
+        pose.heel[leg] = LimitClimbPointSpeed(
+            gait->previous_pose.heel[leg], pose.heel[leg], 3.10f, delta_time);
+        pose.ball[leg] = LimitClimbPointSpeed(
+            gait->previous_pose.ball[leg], pose.ball[leg], 3.10f, delta_time);
+        pose.toe[leg] = LimitClimbPointSpeed(
+            gait->previous_pose.toe[leg], pose.toe[leg], 3.10f, delta_time);
+
+        CcLimbVec3 authored_pole = Add(
+            Add(Scale(outward, leg == 0 ? 1.0f : 0.82f),
+                Scale(right, side * (leg == 0 ? 0.18f : 0.30f))),
+            Scale(up, leg == 0 ? 0.08f : 0.18f));
+        CcLimbVec3 standing_pole = Subtract(standing.pose.knee[leg],
+                                            standing.pose.hip[leg]);
+        CcLimbVec3 desired_pole = Lerp(authored_pole, standing_pole,
+                                       exit_weight);
+        CcLimbVec3 knee_pole = TransportClimbPole(
+            pose.hip[leg], pose.ankle[leg], gait->previous_pose.knee[leg],
+            desired_pole, 7.5f * delta_time);
+        pose.knee[leg] = SolveKnee(
+            pose.hip[leg], pose.ankle[leg], knee_pole,
+            0.465f, 0.475f, &pose.knee_flexion[leg]);
+        CcLimbVec3 foot_direction = Subtract(pose.toe[leg], pose.heel[leg]);
+        float horizontal = sqrtf(foot_direction.x * foot_direction.x +
+                                 foot_direction.z * foot_direction.z);
+        pose.foot_pitch[leg] = atan2f(foot_direction.y,
+                                      fmaxf(0.0001f, horizontal));
+
+        CcLimbVec3 solved_contact = Subtract(pose.ankle[leg],
+                                              Scale(normal, 0.085f));
+        gait->feet[leg].current_point = solved_contact;
+        gait->feet[leg].normal = normal;
+        gait->feet[leg].contact = support[leg] < 0.58f ?
+            CC_HUMANOID_CONTACT_AIR : CC_HUMANOID_CONTACT_FLAT;
+        if (gait->feet[leg].contact == CC_HUMANOID_CONTACT_FLAT) {
+            gait->feet[leg].planted_point = solved_contact;
+        }
+        gait->feet[leg].pitch.value = pose.foot_pitch[leg];
+    }
+
+    for (int32_t arm = 0; arm < CC_HUMANOID_ARM_COUNT; ++arm) {
+        float side = arm == 0 ? -1.0f : 1.0f;
+        CcLimbVec3 authored_shoulder = Add(
+            Add(authored_chest, Scale(right, side * 0.285f)),
+            Scale(up, 0.06f - side * motion.chest_roll * 0.18f));
+        pose.shoulder[arm] = ClimbBlendPoint(
+            gait->climb_entry_pose.shoulder[arm], authored_shoulder,
+            standing.pose.shoulder[arm], acquisition, exit_weight);
+        CcLimbVec3 grip = MantleFramePoint(
+            ledge, right, up, outward, side * 0.19f, 0.040f, 0.025f);
+        CcLimbVec3 press = MantleFramePoint(
+            ledge, right, up, outward, side * 0.18f, 0.045f, -0.19f);
+        CcLimbVec3 authored_hand = Lerp(
+            grip, press, Clamp(motion.hand_press[arm], 0.0f, 1.0f));
+        pose.hand[arm] = Lerp(gait->climb_entry_pose.hand[arm],
+                              authored_hand,
+                              Clamp(motion.hand_grip[arm], 0.0f, 1.0f));
+        pose.hand[arm] = Lerp(pose.hand[arm], standing.pose.hand[arm],
+                              exit_weight);
+        pose.hand[arm] = LimitClimbPointSpeed(
+            gait->previous_pose.hand[arm], pose.hand[arm],
+            3.00f, delta_time);
+        pose.hand[arm] = ClampClimbTarget(pose.shoulder[arm], pose.hand[arm],
+                                          0.685f);
+        CcLimbVec3 authored_pole = Add(
+            Add(Scale(right, side), Scale(outward, 0.42f)),
+            Scale(up, motion.hand_press[arm] * -0.18f));
+        CcLimbVec3 standing_pole = Subtract(standing.pose.elbow[arm],
+                                            standing.pose.shoulder[arm]);
+        CcLimbVec3 elbow_pole = TransportClimbPole(
+            pose.shoulder[arm], pose.hand[arm],
+            gait->previous_pose.elbow[arm],
+            Lerp(authored_pole, standing_pole, exit_weight),
+            7.5f * delta_time);
+        float elbow_flexion = 0.0f;
+        pose.elbow[arm] = SolveKnee(
+            pose.shoulder[arm], pose.hand[arm], elbow_pole,
+            0.34f, 0.35f, &elbow_flexion);
+
+        CcLimbVec3 upper = Subtract(pose.elbow[arm], pose.shoulder[arm]);
+        float shoulder_angle = atan2f(Dot(upper, forward), -upper.y);
+        int32_t shoulder_joint = arm == 0 ? CC_HUMANOID_LEFT_SHOULDER :
+                                            CC_HUMANOID_RIGHT_SHOULDER;
+        int32_t elbow_joint = arm == 0 ? CC_HUMANOID_LEFT_ELBOW :
+                                         CC_HUMANOID_RIGHT_ELBOW;
+        CcBiomechRigDriveJoint(&gait->body, shoulder_joint,
+                               shoulder_angle, 0.78f);
+        CcBiomechRigDriveJoint(&gait->body, elbow_joint,
+                               elbow_flexion, 0.84f);
+    }
+
+    CcBiomechRigDriveJoint(&gait->body, CC_HUMANOID_SPINE_PITCH,
+                           pose.chest_pitch, 0.80f);
+    CcBiomechRigDriveJoint(&gait->body, CC_HUMANOID_SPINE_ROLL,
+                           pose.chest_roll, 0.76f);
+    CcBiomechRigDriveJoint(&gait->body, CC_HUMANOID_SPINE_YAW,
+                           pose.chest_yaw, 0.76f);
+    for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
+        CcLimbVec3 upper = Subtract(pose.knee[leg], pose.hip[leg]);
+        CcLimbVec3 lower = Subtract(pose.ankle[leg], pose.knee[leg]);
+        float hip_angle = atan2f(Dot(upper, forward), -upper.y);
+        float shin_angle = atan2f(Dot(lower, forward), -lower.y);
+        int32_t hip_joint = leg == 0 ? CC_HUMANOID_LEFT_HIP :
+                                       CC_HUMANOID_RIGHT_HIP;
+        int32_t knee_joint = leg == 0 ? CC_HUMANOID_LEFT_KNEE :
+                                        CC_HUMANOID_RIGHT_KNEE;
+        int32_t ankle_joint = leg == 0 ? CC_HUMANOID_LEFT_ANKLE :
+                                         CC_HUMANOID_RIGHT_ANKLE;
+        CcBiomechRigDriveJoint(&gait->body, hip_joint, hip_angle, 0.84f);
+        CcBiomechRigDriveJoint(&gait->body, knee_joint,
+                               pose.knee_flexion[leg], 0.90f);
+        CcBiomechRigDriveJoint(&gait->body, ankle_joint,
+                               pose.foot_pitch[leg] - shin_angle, 0.78f);
+    }
+    CcBiomechRigStep(&gait->body, delta_time);
+
+    CcBiomechVec3 root_position = ToBiomech(pose.pelvis);
+    CcLimbVec3 pelvis_delta = Subtract(pose.pelvis,
+                                       gait->previous_pose.pelvis);
+    CcBiomechVec3 root_velocity = ToBiomech(
+        Scale(pelvis_delta, 1.0f / delta_time));
+    CcBiomechRigConstrainBody(&gait->body, root_position, root_velocity);
+    gait->root_velocity = FromBiomech(root_velocity);
+    gait->ground_reaction = (CcLimbVec3){0.0f,
+        gait->body.total_mass * 9.81f, 0.0f};
+    gait->speed.value = 0.0f;
+    gait->speed.velocity = 0.0f;
+    gait->planted_count = 0;
+    for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
+        gait->planted_count += gait->feet[leg].contact ==
+                               CC_HUMANOID_CONTACT_FLAT ? 1 : 0;
+    }
+    gait->grounded = mantle_progress < 0.10f || exit_weight >= 0.99f;
+    gait->pose = pose;
+    gait->last_delta_time = delta_time;
+    CommitPoseSnapshot(gait, delta_time);
 }
 
 void CcHumanoidGaitAdvanceClimb(
@@ -1261,11 +2023,13 @@ void CcHumanoidGaitAdvanceClimb(
     const CcLimbVec3 hand_targets[CC_HUMANOID_ARM_COUNT],
     const CcLimbVec3 foot_targets[CC_HUMANOID_LEG_COUNT],
     const CcLimbVec3 foot_normals[CC_HUMANOID_LEG_COUNT],
+    const float foot_support[CC_HUMANOID_LEG_COUNT],
     float climb_progress, float delta_time,
     CcLimbTerrainProbe probe, void *probe_context)
 {
     if (gait == NULL || !gait->initialized || gait->ragdoll.active ||
-        hand_targets == NULL || foot_targets == NULL || foot_normals == NULL) {
+        hand_targets == NULL || foot_targets == NULL || foot_normals == NULL ||
+        foot_support == NULL) {
         return;
     }
     if (!gait->climbing) CcHumanoidGaitBeginClimb(gait);
@@ -1273,10 +2037,15 @@ void CcHumanoidGaitAdvanceClimb(
 
     delta_time = Clamp(delta_time, 1.0f / 240.0f, 1.0f / 30.0f);
     climb_progress = Clamp(climb_progress, 0.0f, 1.0f);
+    SetPoseOwner(gait, CC_HUMANOID_POSE_OWNER_TRAVERSAL);
+    CcMotionPlayerSetNormalizedTime(&gait->motion, climb_progress);
     float acquisition = Smooth01(climb_progress / 0.24f);
     float exit_weight = Smooth01((climb_progress - 0.78f) / 0.22f);
-    float lean = sinf(climb_progress * CC_HUMANOID_PI) * 0.095f *
-                 (1.0f - exit_weight);
+    float top_out_drive =
+        Smooth01((climb_progress - 0.42f) / 0.18f) *
+        (1.0f - Smooth01((climb_progress - 0.84f) / 0.14f));
+    float lean = (sinf(climb_progress * CC_HUMANOID_PI) * 0.095f +
+                  top_out_drive * 0.105f) * (1.0f - exit_weight);
     CcLimbVec3 forward = Forward(body_yaw);
     CcLimbVec3 right = Right(body_yaw);
     CcLimbVec3 up = {0.0f, 1.0f, 0.0f};
@@ -1288,15 +2057,23 @@ void CcHumanoidGaitAdvanceClimb(
 
     gait->previous_pose = gait->pose;
     CcHumanoidPose pose = gait->pose;
+    float left_support = Clamp(foot_support[0], 0.0f, 1.0f);
+    float right_support = Clamp(foot_support[1], 0.0f, 1.0f);
+    float scramble_balance = (right_support - left_support) * 0.055f *
+                             (1.0f - exit_weight);
     CcLimbVec3 climbing_pelvis = {
         body_position.x + forward.x * lean * 0.24f,
         body_position.y + 0.935f,
         body_position.z + forward.z * lean * 0.24f
     };
+    climbing_pelvis = Add(climbing_pelvis,
+                          Scale(right, scramble_balance));
     CcLimbVec3 climbing_spine = Add(climbing_pelvis, Scale(up, 0.10f));
     climbing_spine = Add(climbing_spine, Scale(forward, lean * 0.32f));
     CcLimbVec3 climbing_chest = Add(climbing_pelvis, Scale(up, 0.48f));
     climbing_chest = Add(climbing_chest, Scale(forward, lean));
+    climbing_chest = Add(climbing_chest,
+                         Scale(right, -scramble_balance * 0.28f));
     CcLimbVec3 climbing_neck = Add(climbing_chest, Scale(up, 0.25f));
     climbing_neck = Add(climbing_neck, Scale(forward, lean * 0.18f));
     CcLimbVec3 climbing_head = Add(climbing_neck, Scale(up, 0.18f));
@@ -1321,25 +2098,28 @@ void CcHumanoidGaitAdvanceClimb(
         LerpScalar(gait->climb_entry_pose.pelvis_yaw, 0.0f, acquisition),
         standing.pose.pelvis_yaw, exit_weight);
     pose.pelvis_roll = LerpScalar(
-        LerpScalar(gait->climb_entry_pose.pelvis_roll, 0.0f, acquisition),
+        LerpScalar(gait->climb_entry_pose.pelvis_roll,
+                   -scramble_balance * 0.90f, acquisition),
         standing.pose.pelvis_roll, exit_weight);
     pose.pelvis_pitch = LerpScalar(
         LerpScalar(gait->climb_entry_pose.pelvis_pitch,
-                   lean * 0.42f, acquisition),
+                   lean * 0.58f, acquisition),
         standing.pose.pelvis_pitch, exit_weight);
     pose.chest_yaw = LerpScalar(
         LerpScalar(gait->climb_entry_pose.chest_yaw, 0.0f, acquisition),
         standing.pose.chest_yaw, exit_weight);
     pose.chest_roll = LerpScalar(
-        LerpScalar(gait->climb_entry_pose.chest_roll, 0.0f, acquisition),
+        LerpScalar(gait->climb_entry_pose.chest_roll,
+                   scramble_balance * 0.55f, acquisition),
         standing.pose.chest_roll, exit_weight);
     pose.chest_pitch = LerpScalar(
         LerpScalar(gait->climb_entry_pose.chest_pitch,
-                   lean * 0.64f, acquisition),
+                   lean * 0.85f, acquisition),
         standing.pose.chest_pitch, exit_weight);
 
     for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
         float side = leg == 0 ? -1.0f : 1.0f;
+        float leg_acquisition = acquisition;
         CcLimbVec3 climbing_hip = Add(climbing_pelvis,
                                       Scale(right, side * 0.155f));
         pose.hip[leg] = ClimbBlendPoint(gait->climb_entry_pose.hip[leg],
@@ -1349,7 +2129,7 @@ void CcHumanoidGaitAdvanceClimb(
 
         CcLimbVec3 normal = NormalizeOr(Lerp(
             Lerp(gait->climb_entry_foot_normal[leg], foot_normals[leg],
-                 acquisition),
+                 leg_acquisition),
             standing.feet[leg].normal, exit_weight), up);
         float wall_weight = 1.0f - Clamp(normal.y, 0.0f, 1.0f);
         CcLimbVec3 foot_axis = NormalizeOr(
@@ -1365,27 +2145,43 @@ void CcHumanoidGaitAdvanceClimb(
                                       Scale(foot_axis, 0.20f));
         pose.ankle[leg] = ClimbBlendPoint(
             gait->climb_entry_pose.ankle[leg], climbing_ankle,
-            standing.pose.ankle[leg], acquisition, exit_weight);
+            standing.pose.ankle[leg], leg_acquisition, exit_weight);
         pose.heel[leg] = ClimbBlendPoint(
             gait->climb_entry_pose.heel[leg], climbing_heel,
-            standing.pose.heel[leg], acquisition, exit_weight);
+            standing.pose.heel[leg], leg_acquisition, exit_weight);
         pose.ball[leg] = ClimbBlendPoint(
             gait->climb_entry_pose.ball[leg], climbing_ball,
-            standing.pose.ball[leg], acquisition, exit_weight);
+            standing.pose.ball[leg], leg_acquisition, exit_weight);
         pose.toe[leg] = ClimbBlendPoint(
             gait->climb_entry_pose.toe[leg], climbing_toe,
-            standing.pose.toe[leg], acquisition, exit_weight);
+            standing.pose.toe[leg], leg_acquisition, exit_weight);
         CcLimbVec3 requested_ankle = pose.ankle[leg];
         pose.ankle[leg] = ClampClimbTarget(pose.hip[leg], requested_ankle,
                                            0.935f);
+        pose.ankle[leg] = LimitClimbPointSpeed(
+            gait->previous_pose.ankle[leg], pose.ankle[leg],
+            1.40f, delta_time);
         CcLimbVec3 ankle_correction = Subtract(pose.ankle[leg],
                                                requested_ankle);
         pose.heel[leg] = Add(pose.heel[leg], ankle_correction);
         pose.ball[leg] = Add(pose.ball[leg], ankle_correction);
         pose.toe[leg] = Add(pose.toe[leg], ankle_correction);
+        pose.heel[leg] = LimitClimbPointSpeed(
+            gait->previous_pose.heel[leg], pose.heel[leg],
+            1.80f, delta_time);
+        pose.ball[leg] = LimitClimbPointSpeed(
+            gait->previous_pose.ball[leg], pose.ball[leg],
+            1.80f, delta_time);
+        pose.toe[leg] = LimitClimbPointSpeed(
+            gait->previous_pose.toe[leg], pose.toe[leg],
+            1.80f, delta_time);
 
+        /* Keep the knee folding away from the wall throughout takeoff. The
+           sole normal deliberately remains upward for the first half of a
+           swing, so using it as the pole direction made the knee rise nearly
+           straight above the hip before the boot turned onto the wall. */
         CcLimbVec3 climbing_pole = Add(
-            Add(Scale(normal, 0.88f), Scale(right, side * 0.16f)),
+            Add(Scale(forward, -0.98f), Scale(right, side * 0.16f)),
             Scale(up, 0.08f));
         CcLimbVec3 standing_pole = Subtract(standing.pose.knee[leg],
                                             standing.pose.hip[leg]);
@@ -1409,7 +2205,8 @@ void CcHumanoidGaitAdvanceClimb(
         gait->feet[leg].current_point = solved_contact;
         gait->feet[leg].planted_point = solved_contact;
         gait->feet[leg].normal = normal;
-        gait->feet[leg].contact = CC_HUMANOID_CONTACT_FLAT;
+        gait->feet[leg].contact = foot_support[leg] < 0.58f ?
+            CC_HUMANOID_CONTACT_AIR : CC_HUMANOID_CONTACT_FLAT;
         gait->feet[leg].pitch.value = pose.foot_pitch[leg];
     }
 
@@ -1489,10 +2286,15 @@ void CcHumanoidGaitAdvanceClimb(
         gait->body.total_mass * 9.81f, 0.0f};
     gait->speed.value = 0.0f;
     gait->speed.velocity = 0.0f;
-    gait->planted_count = CC_HUMANOID_LEG_COUNT;
+    gait->planted_count = 0;
+    for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
+        gait->planted_count += gait->feet[leg].contact ==
+                               CC_HUMANOID_CONTACT_FLAT ? 1 : 0;
+    }
     gait->grounded = true;
     gait->pose = pose;
     gait->last_delta_time = delta_time;
+    CommitPoseSnapshot(gait, delta_time);
 }
 
 void CcHumanoidGaitFinishClimb(CcHumanoidGait *gait,
@@ -1582,8 +2384,10 @@ void CcHumanoidGaitInit(CcHumanoidGait *gait, CcLimbVec3 body_position,
         foot->swing_target = foot->planted_point;
         foot->current_point = foot->planted_point;
         foot->local_phase = Wrap01(gait->phase + (leg == 0 ? 0.0f : 0.5f));
-        foot->contact = ContactForPhase(foot->local_phase);
-        foot->pitch.value = ContactPitch(foot->contact, foot->local_phase);
+        foot->contact = CC_HUMANOID_CONTACT_FLAT;
+        foot->pitch.value = 0.0f;
+        gait->idle.foot_anchor[leg] = foot->current_point;
+        gait->idle.foot_normal[leg] = foot->normal;
         contact_height += foot->current_point.y;
     }
     contact_height /= (float)CC_HUMANOID_LEG_COUNT;
@@ -1592,20 +2396,28 @@ void CcHumanoidGaitInit(CcHumanoidGait *gait, CcLimbVec3 body_position,
                         body_position.z},
         (CcBiomechVec3){0});
     gait->pelvis_height.value = 0.0f;
-    gait->pelvis_sway.value = -0.035f;
+    gait->pelvis_sway.value = 0.0f;
     gait->planted_count = CC_HUMANOID_LEG_COUNT;
+    gait->idle.stable = true;
+    gait->idle.pose_locked = true;
+    gait->idle.still_time = CC_HUMANOID_IDLE_SETTLE_TIME;
+    gait->idle.locked_phase = gait->phase;
     gait->initialized = true;
+    SetPoseOwner(gait, CC_HUMANOID_POSE_OWNER_PROCEDURAL);
     gait->action = CC_HUMANOID_ACTION_LOCOMOTION;
     gait->previous_action = CC_HUMANOID_ACTION_LOCOMOTION;
     gait->action_blend = 1.0f;
+    CcMotionPlayerInit(&gait->motion, CC_MOTION_CLIP_IDLE);
     CcHumanoidGaitResolvePose(gait, body_position, body_yaw);
     gait->previous_pose = gait->pose;
+    InitializePoseSnapshots(gait);
 }
 
 void CcHumanoidGaitSetGuarded(CcHumanoidGait *gait, bool guarded)
 {
     if (gait == NULL || !gait->initialized || gait->ragdoll.active ||
         gait->climbing || gait->action == CC_HUMANOID_ACTION_SWIM) return;
+    gait->guard_requested = guarded;
     if (guarded) {
         if (gait->action == CC_HUMANOID_ACTION_LOCOMOTION) {
             SetAction(gait, CC_HUMANOID_ACTION_GUARD);
@@ -1640,6 +2452,8 @@ void CcHumanoidGaitSetStrikeStyle(CcHumanoidGait *gait,
         style = CC_HUMANOID_STRIKE_CUT;
     }
     gait->strike_style = style;
+    CcMotionPlayerPlay(&gait->motion, MotionClipForAction(gait, gait->action),
+                       false);
 }
 
 bool CcHumanoidGaitBeginJump(CcHumanoidGait *gait)
@@ -1667,7 +2481,43 @@ void CcHumanoidGaitApplyImpact(CcHumanoidGait *gait,
 
 bool CcHumanoidGaitKnockDown(CcHumanoidGait *gait)
 {
-    return gait != NULL && gait->initialized && ActivateRagdoll(gait);
+    return gait != NULL && gait->initialized && ActivateRagdoll(gait, true);
+}
+
+bool CcHumanoidGaitDie(CcHumanoidGait *gait, CcLimbVec3 impact_direction,
+                       CcLimbVec3 impact_point, float impact_speed)
+{
+    if (gait == NULL || !gait->initialized ||
+        !ActivateRagdoll(gait, false)) {
+        return false;
+    }
+    CcLimbVec3 direction = NormalizeOr(
+        impact_direction, (CcLimbVec3){0.0f, 0.0f, 1.0f});
+    float speed = Clamp(impact_speed, 0.0f, 8.0f);
+    float delta_time = fmaxf(gait->last_delta_time, 1.0f / 240.0f);
+    for (int32_t node = 0; node < gait->ragdoll.particle_count; ++node) {
+        CcBiomechRagdollParticle *particle = &gait->ragdoll.particles[node];
+        CcLimbVec3 offset = Subtract(FromBiomech(particle->position),
+                                     impact_point);
+        float proximity = 1.0f - Clamp(Length(offset) / 1.35f, 0.0f, 1.0f);
+        float transferred_speed = speed * (0.32f + proximity * 0.68f);
+        particle->previous_position.x -=
+            direction.x * transferred_speed * delta_time;
+        particle->previous_position.y -=
+            direction.y * transferred_speed * delta_time;
+        particle->previous_position.z -=
+            direction.z * transferred_speed * delta_time;
+    }
+    return true;
+}
+
+void CcHumanoidGaitBeginResurrection(CcHumanoidGait *gait)
+{
+    if (gait == NULL || !gait->initialized || !gait->ragdoll.active ||
+        gait->recovering) {
+        return;
+    }
+    gait->ragdoll_recovery_allowed = true;
 }
 
 bool CcHumanoidGaitConsumeStrikeImpact(CcHumanoidGait *gait)
@@ -1675,6 +2525,14 @@ bool CcHumanoidGaitConsumeStrikeImpact(CcHumanoidGait *gait)
     if (gait == NULL || !gait->strike_impact_pending) return false;
     gait->strike_impact_pending = false;
     return true;
+}
+
+uint32_t CcHumanoidGaitConsumeMotionMarkers(CcHumanoidGait *gait)
+{
+    if (gait == NULL) return 0;
+    uint32_t result = gait->motion_markers;
+    gait->motion_markers = 0;
+    return result;
 }
 
 void CcHumanoidGaitAdvance(CcHumanoidGait *gait, CcLimbVec3 body_position,
@@ -1690,20 +2548,27 @@ void CcHumanoidGaitAdvance(CcHumanoidGait *gait, CcLimbVec3 body_position,
     gait->last_delta_time = fmaxf(delta_time, 1.0f / 240.0f);
     bool controlled_jump = gait->action == CC_HUMANOID_ACTION_JUMP;
     if (!grounded && !gait->ragdoll.active && !controlled_jump) {
-        (void)ActivateRagdoll(gait);
+        (void)ActivateRagdoll(gait, true);
     }
     if (gait->ragdoll.active) {
+        SetPoseOwner(gait, gait->recovering ?
+                     CC_HUMANOID_POSE_OWNER_RECOVERY :
+                     CC_HUMANOID_POSE_OWNER_RAGDOLL);
         (void)StepRagdoll(gait, body_position, body_yaw, grounded, delta_time,
                           probe, probe_context);
         gait->grounded = grounded;
         return;
     }
+    SetPoseOwner(gait, CC_HUMANOID_POSE_OWNER_PROCEDURAL);
     AdvanceAction(gait, delta_time);
     if (controlled_jump && !grounded) gait->jump_airborne = true;
     gait->body.root.position.x = body_position.x;
     gait->body.root.position.z = body_position.z;
     float desired_speed = sqrtf(desired_velocity.x * desired_velocity.x +
                                 desired_velocity.z * desired_velocity.z);
+    if (gait->idle.stable && desired_speed > CC_HUMANOID_IDLE_EXIT_SPEED) {
+        ReleaseStableIdle(gait);
+    }
     if (desired_speed > 0.025f) {
         float target_yaw = atan2f(desired_velocity.x, desired_velocity.z);
         float difference = WrapAngle(target_yaw - gait->travel_yaw);
@@ -1803,6 +2668,12 @@ void CcHumanoidGaitAdvance(CcHumanoidGait *gait, CcLimbVec3 body_position,
         }
     }
     CcBiomechRigStepBody(&gait->body, delta_time);
+    if (gait->idle.stable && grounded) {
+        gait->body.root.position.x = body_position.x;
+        gait->body.root.position.z = body_position.z;
+        gait->body.root.velocity.x = 0.0f;
+        gait->body.root.velocity.z = 0.0f;
+    }
     bool stationary_combat = grounded && desired_speed < 0.04f &&
         (gait->action == CC_HUMANOID_ACTION_GUARD ||
          gait->action == CC_HUMANOID_ACTION_STRIKE);
@@ -1819,6 +2690,8 @@ void CcHumanoidGaitAdvance(CcHumanoidGait *gait, CcLimbVec3 body_position,
     gait->speed.value = Clamp(gait->speed.value, 0.0f, 1.60f);
     gait->cadence = 0.82f + gait->speed.value * 0.34f;
 
+    UpdateStableIdle(gait, desired_speed, actual_speed, grounded, delta_time);
+
     float old_phase = gait->phase;
     bool swing_in_progress = false;
     for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
@@ -1828,15 +2701,26 @@ void CcHumanoidGaitAdvance(CcHumanoidGait *gait, CcLimbVec3 body_position,
     }
     float motion = Smooth01(gait->speed.value / 0.24f);
     if (swing_in_progress) motion = fmaxf(motion, 0.38f);
-    if (grounded) gait->phase = Wrap01(gait->phase + gait->cadence * motion *
-                                       delta_time);
+    if (grounded && !gait->idle.stable) {
+        gait->phase = Wrap01(gait->phase + gait->cadence * motion *
+                             delta_time);
+    }
 
     CcLimbVec3 foot_base = body_position;
     foot_base.x = gait->body.root.position.x;
     foot_base.z = gait->body.root.position.z;
     for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
-        UpdateFoot(gait, leg, old_phase, gait->phase, foot_base, grounded,
-                   delta_time, probe, probe_context);
+        if (gait->idle.stable) {
+            CcHumanoidFoot *foot = &gait->feet[leg];
+            foot->current_point = gait->idle.foot_anchor[leg];
+            foot->planted_point = gait->idle.foot_anchor[leg];
+            foot->normal = gait->idle.foot_normal[leg];
+            foot->contact = CC_HUMANOID_CONTACT_FLAT;
+            foot->pitch = (CcHumanoidSpring){0};
+        } else {
+            UpdateFoot(gait, leg, old_phase, gait->phase, foot_base, grounded,
+                       delta_time, probe, probe_context);
+        }
     }
 
     gait->grounded = grounded;
@@ -1854,7 +2738,7 @@ void CcHumanoidGaitAdvance(CcHumanoidGait *gait, CcLimbVec3 body_position,
         CcLimbVec3 pelvis = FromBiomech(gait->body.root.position);
         CcLimbVec3 forward = Forward(body_yaw);
         CcLimbVec3 right = Right(body_yaw);
-        float jump_time = Clamp(gait->action_time / 0.95f, 0.0f, 1.0f);
+        float jump_time = CcMotionPlayerNormalizedTime(&gait->motion);
         float tuck = sinf(jump_time * CC_HUMANOID_PI);
         for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
             float side = leg == 0 ? -1.0f : 1.0f;
@@ -1898,8 +2782,7 @@ void CcHumanoidGaitAdvance(CcHumanoidGait *gait, CcLimbVec3 body_position,
         float target_left_flex = guard_left_flex;
         float target_right_flex = guard_right_flex;
         if (gait->action == CC_HUMANOID_ACTION_STRIKE) {
-            float phase = Clamp(gait->action_time /
-                                CC_HUMANOID_STRIKE_DURATION, 0.0f, 1.0f);
+            float phase = CcMotionPlayerNormalizedTime(&gait->motion);
             float chamber = Smooth01(phase / 0.22f);
             float drive = Smooth01((phase - 0.20f) / 0.40f);
             float recover = Smooth01((phase - 0.58f) / 0.42f);
@@ -1963,7 +2846,7 @@ void CcHumanoidGaitAdvance(CcHumanoidGait *gait, CcLimbVec3 body_position,
         left_flex = LerpScalar(left_flex, target_left_flex, blend);
         right_flex = LerpScalar(right_flex, target_right_flex, blend);
     } else if (jump_pose) {
-        float jump_time = Clamp(gait->action_time / 0.95f, 0.0f, 1.0f);
+        float jump_time = CcMotionPlayerNormalizedTime(&gait->motion);
         float rising = 1.0f - Smooth01(jump_time / 0.55f);
         float landing = Smooth01((jump_time - 0.52f) / 0.48f);
         float target_arm = LerpScalar(0.42f, 0.92f, rising);
@@ -2051,9 +2934,11 @@ void CcHumanoidGaitAdvance(CcHumanoidGait *gait, CcLimbVec3 body_position,
                                foot->pitch.value, 0.72f);
     }
     CcBiomechRigStep(&gait->body, delta_time);
+    LockIdleDrivenPose(gait);
 
     gait->previous_pose = gait->pose;
     CcHumanoidGaitResolvePose(gait, body_position, body_yaw);
+    CommitPoseSnapshot(gait, delta_time);
 }
 
 void CcHumanoidGaitAdvanceSwim(CcHumanoidGait *gait,
@@ -2070,8 +2955,10 @@ void CcHumanoidGaitAdvanceSwim(CcHumanoidGait *gait,
     delta_time = Clamp(delta_time, 1.0f / 240.0f, 1.0f / 30.0f);
     if (gait->action != CC_HUMANOID_ACTION_SWIM) {
         gait->swim_entry_pose = gait->pose;
+        gait->idle = (CcHumanoidIdleState){0};
         SetAction(gait, CC_HUMANOID_ACTION_SWIM);
     }
+    SetPoseOwner(gait, CC_HUMANOID_POSE_OWNER_PROCEDURAL);
     AdvanceAction(gait, delta_time);
     gait->last_delta_time = delta_time;
     gait->immersion = Clamp(immersion, 0.0f, 1.0f);
@@ -2157,6 +3044,7 @@ void CcHumanoidGaitAdvanceSwim(CcHumanoidGait *gait,
     CcBiomechRigStep(&gait->body, delta_time);
     gait->previous_pose = gait->pose;
     CcHumanoidGaitResolvePose(gait, body_position, body_yaw);
+    CommitPoseSnapshot(gait, delta_time);
 }
 
 void CcHumanoidGaitEndSwim(CcHumanoidGait *gait,
@@ -2179,10 +3067,17 @@ void CcHumanoidGaitEndSwim(CcHumanoidGait *gait,
         foot->swing_target = foot->current_point;
         foot->contact = CC_HUMANOID_CONTACT_FLAT;
         foot->pitch.value = 0.0f;
+        gait->idle.foot_anchor[leg] = foot->current_point;
+        gait->idle.foot_normal[leg] = foot->normal;
     }
     gait->immersion = 0.0f;
     gait->grounded = true;
     gait->planted_count = CC_HUMANOID_LEG_COUNT;
+    gait->idle.stable = true;
+    gait->idle.pose_locked = false;
+    gait->idle.still_time = 0.0f;
+    gait->idle.locked_phase = gait->phase;
+    SetPoseOwner(gait, CC_HUMANOID_POSE_OWNER_PROCEDURAL);
     SetAction(gait, CC_HUMANOID_ACTION_LOCOMOTION);
 }
 
@@ -2193,7 +3088,7 @@ void CcHumanoidGaitConstrainMotion(CcHumanoidGait *gait,
     if (gait == NULL || !gait->initialized) return;
     bool controlled_jump = gait->action == CC_HUMANOID_ACTION_JUMP;
     if (!grounded && !gait->ragdoll.active && !controlled_jump) {
-        (void)ActivateRagdoll(gait);
+        (void)ActivateRagdoll(gait, true);
     }
     if (gait->ragdoll.active) {
         gait->grounded = grounded;
@@ -2255,4 +3150,51 @@ const char *CcHumanoidActionName(CcHumanoidAction action)
         case CC_HUMANOID_ACTION_LOCOMOTION:
         default: return "LOCOMOTION";
     }
+}
+
+const char *CcHumanoidPoseOwnerName(CcHumanoidPoseOwner owner)
+{
+    switch (owner) {
+        case CC_HUMANOID_POSE_OWNER_PROCEDURAL: return "PROCEDURAL";
+        case CC_HUMANOID_POSE_OWNER_TRAVERSAL: return "TRAVERSAL";
+        case CC_HUMANOID_POSE_OWNER_RAGDOLL: return "RAGDOLL";
+        case CC_HUMANOID_POSE_OWNER_RECOVERY: return "RECOVERY";
+        case CC_HUMANOID_POSE_OWNER_PAIRED_INTERACTION: return "PAIRED";
+        case CC_HUMANOID_POSE_OWNER_NONE:
+        default: return "NONE";
+    }
+}
+
+const char *CcHumanoidRecoveryOrientationName(
+    CcHumanoidRecoveryOrientation orientation)
+{
+    switch (orientation) {
+        case CC_HUMANOID_RECOVERY_PRONE: return "PRONE";
+        case CC_HUMANOID_RECOVERY_LEFT: return "LEFT";
+        case CC_HUMANOID_RECOVERY_RIGHT: return "RIGHT";
+        case CC_HUMANOID_RECOVERY_SUPINE:
+        default: return "SUPINE";
+    }
+}
+
+const CcHumanoidPoseSnapshot *CcHumanoidGaitCurrentSnapshot(
+    const CcHumanoidGait *gait)
+{
+    return gait != NULL && gait->snapshot.valid ? &gait->snapshot : NULL;
+}
+
+const CcHumanoidPoseSnapshot *CcHumanoidGaitPreviousSnapshot(
+    const CcHumanoidGait *gait)
+{
+    return gait != NULL && gait->previous_snapshot.valid ?
+           &gait->previous_snapshot : NULL;
+}
+
+const CcHumanoidAnimationTraceRecord *CcHumanoidGaitTraceLatest(
+    const CcHumanoidGait *gait)
+{
+    if (gait == NULL || gait->trace.count <= 0) return NULL;
+    int32_t latest = gait->trace.next - 1;
+    if (latest < 0) latest += CC_HUMANOID_TRACE_CAPACITY;
+    return &gait->trace.records[latest];
 }

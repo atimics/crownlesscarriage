@@ -52,12 +52,7 @@ typedef enum CcHumanoidSkinSocket {
     CC_HUMANOID_SOCKET_COUNT
 } CcHumanoidSkinSocket;
 
-typedef struct CcHumanoidSkinQuaternion {
-    float x;
-    float y;
-    float z;
-    float w;
-} CcHumanoidSkinQuaternion;
+typedef CcMotionQuaternion CcHumanoidSkinQuaternion;
 
 typedef struct CcHumanoidSkinBonePose {
     CcLimbVec3 head;
@@ -77,6 +72,7 @@ typedef struct CcHumanoidSkinSocketPose {
 
 typedef struct CcHumanoidSkinPose {
     CcHumanoidSkinBonePose bones[CC_HUMANOID_SKIN_BONE_COUNT];
+    CcMotionTransform local_bones[CC_HUMANOID_SKIN_BONE_COUNT];
     CcHumanoidSkinSocketPose sockets[CC_HUMANOID_SOCKET_COUNT];
     CcLimbVec3 body_right;
     CcLimbVec3 body_up;

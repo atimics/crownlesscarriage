@@ -128,6 +128,64 @@ static CcHumanoidSkinQuaternion QuaternionFromBasis(CcLimbVec3 right,
     return result;
 }
 
+static CcHumanoidSkinQuaternion QuaternionConjugate(
+    CcHumanoidSkinQuaternion value)
+{
+    return (CcHumanoidSkinQuaternion){
+        -value.x, -value.y, -value.z, value.w
+    };
+}
+
+static CcHumanoidSkinQuaternion QuaternionMultiply(
+    CcHumanoidSkinQuaternion a, CcHumanoidSkinQuaternion b)
+{
+    CcHumanoidSkinQuaternion result = {
+        a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
+        a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
+        a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w,
+        a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z
+    };
+    float length = sqrtf(result.x * result.x + result.y * result.y +
+                         result.z * result.z + result.w * result.w);
+    if (length > 0.00001f) {
+        result.x /= length;
+        result.y /= length;
+        result.z /= length;
+        result.w /= length;
+    }
+    return result;
+}
+
+static CcLimbVec3 QuaternionRotate(CcHumanoidSkinQuaternion rotation,
+                                   CcLimbVec3 point)
+{
+    CcLimbVec3 axis = {rotation.x, rotation.y, rotation.z};
+    CcLimbVec3 twice_cross = Scale(Cross(axis, point), 2.0f);
+    return Add(point, Add(Scale(twice_cross, rotation.w),
+                          Cross(axis, twice_cross)));
+}
+
+static void ResolveLocalTransforms(CcHumanoidSkinPose *pose)
+{
+    for (int32_t bone = 0; bone < CC_HUMANOID_SKIN_BONE_COUNT; ++bone) {
+        const CcHumanoidSkinBonePose *world = &pose->bones[bone];
+        CcMotionTransform *local = &pose->local_bones[bone];
+        local->scale = (CcLimbVec3){1.0f, 1.0f, 1.0f};
+        if (world->parent < 0) {
+            local->translation = world->head;
+            local->rotation = world->world_rotation;
+            continue;
+        }
+        const CcHumanoidSkinBonePose *parent = &pose->bones[world->parent];
+        CcHumanoidSkinQuaternion inverse_parent = QuaternionConjugate(
+            parent->world_rotation);
+        local->translation = QuaternionRotate(
+            inverse_parent, Subtract(world->head, parent->head));
+        local->rotation = QuaternionMultiply(inverse_parent,
+                                              world->world_rotation);
+    }
+}
+
 static void ResolveBone(CcHumanoidSkinPose *pose, CcHumanoidSkinBone bone,
                         CcLimbVec3 head, CcLimbVec3 tail,
                         CcLimbVec3 reference, bool foot_frame)
@@ -277,6 +335,8 @@ void CcHumanoidSkinPoseResolve(const CcHumanoidPose *source,
         ResolveBone(result, foot_bones[leg], source->ankle[leg],
                     source->toe[leg], result->body_up, true);
     }
+
+    ResolveLocalTransforms(result);
 
     ResolveSocket(result, CC_HUMANOID_SOCKET_HEAD,
                   CC_HUMANOID_SKIN_HEAD, source->head);

@@ -97,7 +97,13 @@ typedef enum CcEventKind {
     CC_EVENT_SITUATION_FAILED,
     CC_EVENT_PLAYER_AMBUSH,
     CC_EVENT_MAP_BOUGHT,
-    CC_EVENT_MAP_SOLD
+    CC_EVENT_MAP_SOLD,
+    CC_EVENT_CHARTER_ACCEPTED,
+    CC_EVENT_CHARTER_ABANDONED,
+    CC_EVENT_JOURNEY_ENCOUNTER,
+    CC_EVENT_ENCOUNTER_COMBAT,
+    CC_EVENT_ENCOUNTER_NEGOTIATED,
+    CC_EVENT_DELAYED_ECHO
 } CcEventKind;
 
 typedef enum CcCommandKind {
@@ -107,7 +113,11 @@ typedef enum CcCommandKind {
     CC_COMMAND_REPAIR_ROUTE,
     CC_COMMAND_CHANGE_DUNGEON,
     CC_COMMAND_BUY_MAP,
-    CC_COMMAND_SELL_MAP
+    CC_COMMAND_SELL_MAP,
+    CC_COMMAND_ACCEPT_SITUATION,
+    CC_COMMAND_ABANDON_SITUATION,
+    CC_COMMAND_RESOLVE_ENCOUNTER_COMBAT,
+    CC_COMMAND_RESOLVE_ENCOUNTER_NEGOTIATE
 } CcCommandKind;
 
 typedef struct CcKingdom {
@@ -246,7 +256,35 @@ typedef struct CcSituation {
     CcMoney reward;
     int32_t created_day;
     int32_t deadline_day;
+    char sponsor_name[CC_NAME_CAPACITY];
+    char affected_name[CC_NAME_CAPACITY];
 } CcSituation;
+
+typedef enum CcJourneyOutcome {
+    CC_JOURNEY_OUTCOME_NONE,
+    CC_JOURNEY_OUTCOME_COMBAT,
+    CC_JOURNEY_OUTCOME_NEGOTIATED
+} CcJourneyOutcome;
+
+typedef struct CcJourneyEncounter {
+    bool active;
+    CcId situation_id;
+    CcId origin_id;
+    CcId destination_id;
+    CcId route_id;
+    int32_t danger;
+    int32_t bargain_cost;
+} CcJourneyEncounter;
+
+typedef struct CcDelayedEcho {
+    bool active;
+    CcId situation_id;
+    CcId settlement_id;
+    CcId parent_event_id;
+    CcJourneyOutcome outcome;
+    int32_t due_day;
+    char character_name[CC_NAME_CAPACITY];
+} CcDelayedEcho;
 
 typedef struct CcEvent {
     CcId id;
@@ -268,6 +306,7 @@ typedef struct CcPlayerCompany {
     int32_t passenger_capacity;
     int32_t map_capacity;
     int32_t reputation;
+    CcId accepted_situation_id;
 } CcPlayerCompany;
 
 typedef struct CcCommand {
@@ -297,6 +336,10 @@ typedef struct CcSim {
     CcSituation situations[CC_MAX_SITUATIONS];
     CcEvent events[CC_MAX_EVENTS];
     CcPlayerCompany player;
+    CcJourneyEncounter journey;
+    CcDelayedEcho delayed_echo;
+    CcId resolved_journey_situation_id;
+    CcJourneyOutcome resolved_journey_outcome;
     int32_t kingdom_count;
     int32_t settlement_count;
     int32_t route_count;
@@ -336,6 +379,12 @@ const CcRoute *CcSimRouteBetween(const CcSim *sim, CcId a, CcId b);
 const CcMap *CcSimMap(const CcSim *sim, CcId id);
 const CcMap *CcSimMapForRoute(const CcSim *sim, CcId route_id, CcId owner_id);
 const CcEvent *CcSimRecentEvent(const CcSim *sim, int32_t offset);
+const CcEvent *CcSimEvent(const CcSim *sim, CcId id);
+const CcSituation *CcSimSituation(const CcSim *sim, CcId id);
+const CcSituation *CcSimAcceptedSituation(const CcSim *sim);
+bool CcSimSituationTouchesSettlement(const CcSim *sim,
+                                     const CcSituation *situation,
+                                     CcId settlement_id);
 const CcSituation *CcSimSituationForSettlement(const CcSim *sim, CcId settlement_id);
 int32_t CcSimActiveSituationCount(const CcSim *sim);
 int32_t CcSimIncomingGood(const CcSim *sim, CcId settlement_id, CcGood good);

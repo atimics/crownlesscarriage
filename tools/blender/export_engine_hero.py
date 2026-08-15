@@ -79,6 +79,32 @@ def duplicate_component(source: bpy.types.Object, rig: bpy.types.Object,
     return duplicate
 
 
+def consolidate_components(components: list[bpy.types.Object],
+                           rig: bpy.types.Object) -> bpy.types.Object:
+    """Join authored pieces into one runtime skin without losing weights."""
+    bpy.ops.object.select_all(action="DESELECT")
+    for component in components:
+        component.hide_set(False)
+        component.hide_viewport = False
+        component.select_set(True)
+    combined = components[0]
+    bpy.context.view_layer.objects.active = combined
+    bpy.ops.object.join()
+    combined.name = "SKIN_CrownlessHero_Runtime"
+    combined["cc_authored_component_count"] = len(components)
+    armatures = [modifier for modifier in combined.modifiers
+                 if modifier.type == "ARMATURE"]
+    if not armatures:
+        armature = combined.modifiers.new("CC_EngineSkin", "ARMATURE")
+        armature.object = rig
+    else:
+        armatures[0].object = rig
+        for redundant in armatures[1:]:
+            combined.modifiers.remove(redundant)
+    combined.parent = rig
+    return combined
+
+
 def export() -> None:
     export_layer = bpy.context.scene.view_layers.get("CC_EngineExport")
     if export_layer is None:
@@ -110,13 +136,24 @@ def export() -> None:
     if not components:
         raise RuntimeError("no modular hero components were found")
 
+    component_entries = [
+        {
+            "name": component.name,
+            "component": component.get(
+                "cc_component_id", component.get("cc_component")
+            ),
+            "bone": component.get("cc_engine_bone"),
+        }
+        for component in components
+    ]
+    combined = consolidate_components(components, rig)
+
     EXPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
     bpy.ops.object.select_all(action="DESELECT")
     rig.hide_set(False)
     rig.hide_viewport = False
     rig.select_set(True)
-    for component in components:
-        component.select_set(True)
+    combined.select_set(True)
     bpy.context.view_layer.objects.active = rig
     bpy.ops.export_scene.gltf(
         filepath=str(EXPORT_PATH),
@@ -133,22 +170,21 @@ def export() -> None:
     manifest = {
         "asset": str(EXPORT_PATH.relative_to(ROOT)),
         "armature": RIG_NAME,
+        "source_library_version": component_manifest["library_version"],
+        "art_direction": component_manifest.get("art_direction"),
         "coordinate_system": "glTF +Y up, +Z forward",
         "motion_source": "CcHumanoidSkinPoseResolve (runtime only)",
+        "runtime_layout": {
+            "authored_objects": len(component_entries),
+            "skinned_objects": 1,
+            "strategy": "joined skin with material primitives",
+        },
         "bones": [bone.name for bone in rig.data.bones],
-        "components": [
-            {
-                "name": component.name,
-                "component": component.get(
-                    "cc_component_id", component.get("cc_component")
-                ),
-                "bone": component.get("cc_engine_bone"),
-            }
-            for component in components
-        ],
+        "components": component_entries,
     }
     MANIFEST_PATH.write_text(json.dumps(manifest, indent=2) + "\n")
-    print(f"exported {len(components)} modular meshes to {EXPORT_PATH}")
+    print(f"consolidated {len(component_entries)} authored objects into "
+          f"one runtime skin at {EXPORT_PATH}")
 
 
 if __name__ == "__main__":

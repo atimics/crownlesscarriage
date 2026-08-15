@@ -35,6 +35,7 @@ add_library(crownless_locomotion
     src/locomotion/cc_humanoid.c
     src/locomotion/cc_humanoid_skin.c
     src/locomotion/cc_limb.c
+    src/locomotion/cc_motion.c
 )
 target_include_directories(crownless_locomotion PUBLIC src)
 if(NOT MSVC)
@@ -88,7 +89,10 @@ if(CC_BUILD_CLIENT)
 
     add_executable(crownless_carriage
         src/client/main.c
+        src/client/cc_npc_appearance.c
         src/client/cc_local3d.c
+        src/client/cc_local_runtime.c
+        src/client/cc_local_renderer_stats.c
     )
     if(APPLE)
         set_target_properties(crownless_carriage PROPERTIES
@@ -102,6 +106,9 @@ if(CC_BUILD_CLIENT)
     target_link_libraries(crownless_carriage PRIVATE
         crownless_persistence crownless_locomotion raylib
     )
+    target_compile_definitions(crownless_carriage PRIVATE
+        CC_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}"
+    )
     if(APPLE)
         set(CC_HERO_ENGINE_ASSET
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/hero/crownless_hero_engine_rig_v01.glb"
@@ -109,25 +116,98 @@ if(CC_BUILD_CLIENT)
         set(CC_HERO_ENGINE_MANIFEST
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/hero/crownless_hero_engine_rig_v01.json"
         )
+        set(CC_BRIDGE_CHECKPOINT_ASSET
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/glb/environment_bridge_checkpoint_v01.glb"
+        )
+        set(CC_CARRIAGE_ASSET
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/glb/carriage_base_v01.glb"
+        )
+        set(CC_CARGO_RACK_ASSET
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/glb/module_cargo_rack_v01.glb"
+        )
+        set(CC_MARKET_ASSET
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/glb/environment_market_granary_v01.glb"
+        )
+        set(CC_MINE_ASSET
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/glb/environment_mine_entrance_v01.glb"
+        )
+        set(CC_SHORTAGE_ASSET
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/glb/state_food_shortage_v01.glb"
+        )
+        set(CC_ENFORCEMENT_ASSET
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/glb/state_harsh_enforcement_v01.glb"
+        )
+        set(CC_RECOVERY_ASSET
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/glb/state_market_recovery_v01.glb"
+        )
+        set(CC_STYLE_GRADE_SHADER
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/style_grade.fs"
+        )
         add_custom_target(crownless_hero_assets ALL
             COMMAND ${CMAKE_COMMAND} -E make_directory
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/hero"
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/glb"
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/shaders"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${CC_HERO_ENGINE_ASSET}"
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/hero/crownless_hero_engine_rig_v01.glb"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${CC_HERO_ENGINE_MANIFEST}"
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/hero/crownless_hero_engine_rig_v01.json"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CC_BRIDGE_CHECKPOINT_ASSET}"
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/glb/environment_bridge_checkpoint_v01.glb"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CC_CARRIAGE_ASSET}"
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/glb/carriage_base_v01.glb"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CC_CARGO_RACK_ASSET}"
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/glb/module_cargo_rack_v01.glb"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CC_MARKET_ASSET}"
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/glb/environment_market_granary_v01.glb"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CC_MINE_ASSET}"
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/glb/environment_mine_entrance_v01.glb"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CC_SHORTAGE_ASSET}"
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/glb/state_food_shortage_v01.glb"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CC_ENFORCEMENT_ASSET}"
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/glb/state_harsh_enforcement_v01.glb"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CC_RECOVERY_ASSET}"
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/glb/state_market_recovery_v01.glb"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CC_STYLE_GRADE_SHADER}"
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/shaders/style_grade.fs"
             DEPENDS "${CC_HERO_ENGINE_ASSET}" "${CC_HERO_ENGINE_MANIFEST}"
+                    "${CC_BRIDGE_CHECKPOINT_ASSET}" "${CC_CARRIAGE_ASSET}"
+                    "${CC_CARGO_RACK_ASSET}" "${CC_MARKET_ASSET}"
+                    "${CC_MINE_ASSET}" "${CC_SHORTAGE_ASSET}"
+                    "${CC_ENFORCEMENT_ASSET}" "${CC_RECOVERY_ASSET}"
+                    "${CC_STYLE_GRADE_SHADER}"
             VERBATIM
         )
         add_dependencies(crownless_carriage crownless_hero_assets)
     endif()
     cc_strict_warnings(crownless_carriage)
+    add_custom_target(run_render_benchmark
+        COMMAND $<TARGET_FILE:crownless_carriage>
+                --benchmark-render 600 90
+        DEPENDS crownless_carriage
+        USES_TERMINAL
+    )
 endif()
 
 include(CTest)
 if(BUILD_TESTING)
+    if(CC_BUILD_BENCHMARKS)
+        add_test(NAME headless_performance_budget
+                 COMMAND crownless_benchmark --quick --assert-budget)
+    endif()
     add_executable(sim_tests tests/sim_tests.c)
     target_link_libraries(sim_tests PRIVATE crownless_sim)
     cc_strict_warnings(sim_tests)
@@ -163,13 +243,33 @@ if(BUILD_TESTING)
     cc_strict_warnings(humanoid_skin_tests)
     add_test(NAME blender_humanoid_skin_contract COMMAND humanoid_skin_tests)
 
+    add_executable(motion_system_tests tests/motion_system_tests.c)
+    target_link_libraries(motion_system_tests PRIVATE crownless_locomotion)
+    cc_strict_warnings(motion_system_tests)
+    add_test(NAME layered_motion_contract COMMAND motion_system_tests)
+
     if(CC_BUILD_CLIENT)
+        add_executable(npc_appearance_tests
+            tests/npc_appearance_tests.c
+            src/client/cc_npc_appearance.c
+        )
+        target_link_libraries(npc_appearance_tests PRIVATE raylib)
+        target_include_directories(npc_appearance_tests PRIVATE src)
+        cc_strict_warnings(npc_appearance_tests)
+        add_test(NAME deterministic_npc_population COMMAND npc_appearance_tests)
+
         add_executable(local_movement_tests
             tests/local_movement_tests.c
+            src/client/cc_npc_appearance.c
             src/client/cc_local3d.c
+            src/client/cc_local_runtime.c
+            src/client/cc_local_renderer_stats.c
         )
         target_link_libraries(local_movement_tests PRIVATE
             crownless_sim crownless_locomotion raylib
+        )
+        target_compile_definitions(local_movement_tests PRIVATE
+            CC_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}"
         )
         cc_strict_warnings(local_movement_tests)
         add_test(NAME local_collision_space COMMAND local_movement_tests)

@@ -20,6 +20,19 @@ def fail(message: str) -> None:
 manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
 if manifest["library_version"] != bpy.context.scene.get("cc_library_version"):
     fail("manifest and blend versions differ")
+if manifest.get("art_direction") != bpy.context.scene.get("cc_art_direction"):
+    fail("manifest and blend art direction differ")
+procedural = manifest.get("procedural_generation", {})
+if procedural.get("schema_version") != bpy.context.scene.get("cc_procedural_schema_version"):
+    fail("procedural recipe schema differs")
+if procedural.get("body", {}).get("name") != bpy.context.scene.get("cc_body_preset"):
+    fail("procedural body preset differs")
+if {item.get("name") for item in procedural.get("garments", [])} != {
+        "padded_underlayer", "fitted_tunic"}:
+    fail("procedural garment recipes differ")
+if {item.get("name") for item in procedural.get("equipment", [])} != {
+        "cuirass_shell", "fitted_bracer", "fitted_greave"}:
+    fail("procedural equipment recipes differ")
 
 armature = bpy.data.objects.get("ARM_CrownlessHero")
 if armature is None or armature.type != "ARMATURE":
@@ -62,6 +75,24 @@ if not cape.get("cc_smooth_skin"):
 for bone_name in manifest["skeleton"].get("cloth_bones", []):
     if cape.vertex_groups.get(bone_name) is None:
         fail(f"cape weight group {bone_name} is missing")
+
+for landmark in ("GEO_CuirassBrokenMarkL", "GEO_CuirassBrokenMarkR",
+                 "GEO_CuirassRivet_0_0", "GEO_PauldronWaymarkL",
+                 "GEO_CapeTravelCowl", "GEO_SatchelWaymark"):
+    if bpy.data.objects.get(landmark) is None:
+        fail(f"missing visual identity landmark {landmark}")
+
+for landmark in ("GEO_Muscle_LatissimusL", "GEO_Muscle_ObliqueL",
+                 "GEO_Muscle_TrapeziusL", "GEO_Muscle_RectusAbdominisL",
+                 "GEO_GloveThumbL",
+                 "GEO_GloveKnuckleL_0", "GEO_BootInstepStrapL"):
+    if bpy.data.objects.get(landmark) is None:
+        fail(f"missing action-figure form landmark {landmark}")
+
+for preview in manifest.get("review_previews", {}).values():
+    preview_path = ROOT / "assets" / preview
+    if not preview_path.exists() or preview_path.stat().st_size < 1024:
+        fail(f"missing review preview {preview_path.name}")
 
 required_layers = {"CC_Hero_Assembled", "CC_Hero_Anatomy", "CC_Hero_Exploded"}
 actual_layers = {layer.name for layer in bpy.context.scene.view_layers}

@@ -49,6 +49,22 @@ static void RequirePoseValid(const CcHumanoidSkinPose *pose)
         Require(isfinite(quaternion_length) &&
                 fabsf(quaternion_length - 1.0f) < 0.001f,
                 "skin bone emitted a non-finite or unnormalized rotation");
+        const CcMotionTransform *local = &pose->local_bones[bone];
+        float local_quaternion_length = sqrtf(
+            local->rotation.x * local->rotation.x +
+            local->rotation.y * local->rotation.y +
+            local->rotation.z * local->rotation.z +
+            local->rotation.w * local->rotation.w);
+        Require(isfinite(local->translation.x) &&
+                isfinite(local->translation.y) &&
+                isfinite(local->translation.z) &&
+                isfinite(local_quaternion_length) &&
+                fabsf(local_quaternion_length - 1.0f) < 0.001f,
+                "skin adapter did not emit a valid local-space bone transform");
+        Require(fabsf(local->scale.x - 1.0f) < 0.0001f &&
+                fabsf(local->scale.y - 1.0f) < 0.0001f &&
+                fabsf(local->scale.z - 1.0f) < 0.0001f,
+                "runtime local bone transform changed authored scale");
         Require(fabsf(Dot(item->right, item->up)) < 0.001f &&
                 fabsf(Dot(item->right, item->forward)) < 0.001f &&
                 fabsf(Dot(item->up, item->forward)) < 0.001f,

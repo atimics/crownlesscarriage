@@ -1,6 +1,7 @@
 #ifndef CROWNLESS_LOCAL3D_H
 #define CROWNLESS_LOCAL3D_H
 
+#include "client/cc_npc_appearance.h"
 #include "locomotion/cc_limb.h"
 #include "locomotion/cc_humanoid.h"
 #include "sim/cc_sim.h"
@@ -29,6 +30,10 @@
 #define CC_LOCAL_NOTICE_Z 27.80f
 #define CC_LOCAL_DUNGEON_X 29.0f
 #define CC_LOCAL_DUNGEON_Z 51.80f
+#define CC_LOCAL_ROAD_START_X 46.20f
+#define CC_LOCAL_ROAD_START_Z 40.00f
+#define CC_LOCAL_ROAD_PARLEY_X 49.70f
+#define CC_LOCAL_ROAD_PARLEY_Z 40.00f
 #define CC_LOCAL_COMBAT_MAX_HEALTH 100.0f
 #define CC_LOCAL_COMBAT_MAX_POSTURE 100.0f
 #define CC_LOCAL_CAPE_POINT_COUNT 5
@@ -45,6 +50,12 @@ typedef enum CcTraversalMode {
     CC_TRAVERSAL_JUMP,
     CC_TRAVERSAL_VAULT
 } CcTraversalMode;
+
+typedef enum CcLocalSceneKind {
+    CC_LOCAL_SCENE_STREET = 0,
+    CC_LOCAL_SCENE_MARKET,
+    CC_LOCAL_SCENE_ROAD
+} CcLocalSceneKind;
 
 typedef enum CcAthleticDiscipline {
     CC_ATHLETIC_MOBILITY,
@@ -82,6 +93,19 @@ typedef enum CcCombatSkill {
     CC_COMBAT_SKILL_COUNT
 } CcCombatSkill;
 
+typedef enum CcLifeState {
+    CC_LIFE_ALIVE,
+    CC_LIFE_KNOCKED_DOWN,
+    CC_LIFE_DEAD,
+    CC_LIFE_RESPAWNING
+} CcLifeState;
+
+typedef enum CcWeaponMode {
+    CC_WEAPON_NONE,
+    CC_WEAPON_HELD,
+    CC_WEAPON_RAGDOLL_ATTACHED
+} CcWeaponMode;
+
 typedef struct CcCombatState {
     Vector3 focus_point;
     Vector3 knockback_velocity;
@@ -92,7 +116,7 @@ typedef struct CcCombatState {
     float stagger_seconds;
     float hit_flash_seconds;
     float hitstop_seconds;
-    float recovery_seconds;
+    float respawn_seconds;
     float impact_speed;
     float auto_attack_cooldown;
     float skill_cooldown[CC_COMBAT_SKILL_COUNT];
@@ -103,10 +127,11 @@ typedef struct CcCombatState {
     int32_t queued_skill;
     int32_t active_skill;
     CcCombatTeam team;
+    CcLifeState life_state;
+    CcWeaponMode weapon_mode;
     bool focus_valid;
     bool impact_valid;
     bool strike_resolved;
-    bool defeated;
 } CcCombatState;
 
 typedef struct CcLocalCapeState {
@@ -119,6 +144,7 @@ typedef struct CcLocalCapeState {
 typedef struct CcLocalAgent {
     Vector3 position;
     Vector3 velocity;
+    Vector3 separation_velocity;
     Vector3 target_point;
     Vector3 climb_start;
     Vector3 climb_end;
@@ -126,6 +152,8 @@ typedef struct CcLocalAgent {
     Vector3 climb_normal;
     Vector3 climb_hand_left;
     Vector3 climb_hand_right;
+    Vector3 climb_foot_left;
+    Vector3 climb_foot_right;
     float facing_yaw;
     float ragdoll_visual_blend;
     float climb_progress;
@@ -134,6 +162,7 @@ typedef struct CcLocalAgent {
     float climb_start_yaw;
     float climb_end_yaw;
     CcTraversalMode traversal;
+    CcLocalSceneKind scene;
     bool grounded;
     bool climbing;
     bool climbing_down;
@@ -149,6 +178,7 @@ typedef struct CcLocalAgent {
     CcHumanoidPose render_pose;
     CcLocalCapeState cape;
     float simulation_accumulator;
+    float movement_stall_seconds;
     bool render_pose_valid;
     bool humanoid_needs_reset;
     bool target_valid;
@@ -156,6 +186,7 @@ typedef struct CcLocalAgent {
     bool jump_training_pending;
     bool climb_training_pending;
     Color tunic_color;
+    CcNpcAppearance appearance;
     CcAthleticProfile athletics;
     CcCombatState combat;
 } CcLocalAgent;
@@ -191,6 +222,8 @@ typedef struct CcLocalCourse {
     CcLocalTraveller travellers[CC_LOCAL_TRAVELLER_COUNT];
     Vector3 guard_entry[CC_LOCAL_COURSE_RUNNER_COUNT];
     CcLocalAgent raiders[CC_LOCAL_RAIDER_COUNT];
+    CcLocalAgent situation_witness;
+    CcId situation_witness_id;
     Vector3 raider_entry[CC_LOCAL_RAIDER_COUNT];
     Vector3 combat_origin;
     float alarm_countdown;
@@ -202,13 +235,35 @@ typedef struct CcLocalCourse {
     CcCombatOutcome last_outcome;
     CcCombatTeam last_attacker_team;
     float combat_event_seconds;
+    double world_simulation_accumulator;
     bool alarm_active;
     bool raiders_retreating;
     bool combat_origin_valid;
     bool raider_response_waypoint_active[CC_LOCAL_RAIDER_COUNT];
+    bool situation_witness_active;
+    bool road_encounter;
+    CcLocalSceneKind scene;
 } CcLocalCourse;
 
+typedef struct CcLocalRendererStats {
+    float frame_milliseconds;
+    float smoothed_frame_milliseconds;
+    int32_t biomechanical_characters;
+    int32_t high_detail_characters;
+    int32_t low_detail_characters;
+    int32_t skin_updates;
+    int32_t skinned_meshes;
+} CcLocalRendererStats;
+
+/* Keep the player skin comfortably below raylib's CPU skinning/upload cliff.
+   The authored Blender asset may contain many editable pieces, but the runtime
+   export must consolidate them into no more than this many material
+   primitives. */
+#define CC_LOCAL_HERO_RUNTIME_MESH_BUDGET 32
+
 void CcLocalAgentInit(CcLocalAgent *agent, Vector2 position, bool market_interior);
+void CcLocalAgentSetNpcAppearance(CcLocalAgent *agent, uint32_t seed,
+                                  CcNpcRole role, Color accent);
 void CcLocalAgentUpdate(CcLocalAgent *agent, float delta_time, bool market_interior);
 bool CcLocalAgentSetExactTarget(CcLocalAgent *agent, Vector3 target,
                                 bool market_interior);
@@ -247,9 +302,15 @@ const char *CcLocalCombatTeamName(CcCombatTeam team);
 void CcLocalCourseInit(CcLocalCourse *course);
 void CcLocalCourseUpdate(CcLocalCourse *course, CcLocalAgent *player,
                          const CcSim *sim, float delta_time);
+void CcLocalWorldUpdate(CcLocalCourse *course, CcLocalAgent *player,
+                        const CcSim *sim, float delta_time,
+                        bool market_interior, bool advance_course);
 void CcLocalCourseRaiseAlarm(CcLocalCourse *course);
 void CcLocalCourseRaiseAlarmNear(CcLocalCourse *course,
                                  const CcLocalAgent *player);
+void CcLocalCourseStageRoadEncounter(CcLocalCourse *course,
+                                     CcLocalAgent *player,
+                                     bool hostile);
 bool CcLocalCourseBeginPlayerStrike(CcLocalCourse *course,
                                     CcLocalAgent *player);
 void CcLocalCourseSetPlayerGuarded(CcLocalCourse *course,
@@ -272,11 +333,17 @@ float CcLocalCombatSkillCooldown(const CcLocalAgent *player,
 float CcLocalCombatSkillDuration(CcCombatSkill skill);
 
 void CcLocalRendererInit(void);
+void CcLocalRendererBeginFrame(float delta_time);
+CcLocalRendererStats CcLocalRendererGetStats(void);
 void CcLocalRendererSetDiagnosticOverlay(bool enabled);
 void CcLocalRendererShutdown(void);
 void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                          const CcLocalCourse *course, float clock,
                          RenderTexture2D target, Rectangle destination);
+void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
+                       const CcLocalCourse *course, bool parley,
+                       float clock, RenderTexture2D target,
+                       Rectangle destination);
 void CcLocalDrawMarket3D(const CcSim *sim, const CcLocalAgent *agent, float clock,
                          RenderTexture2D target, Rectangle destination);
 Vector2 CcLocalMove(Vector2 current, Vector2 delta, bool market_interior);

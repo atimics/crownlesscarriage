@@ -183,9 +183,27 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " surveyed_day INTEGER NOT NULL, accuracy INTEGER NOT NULL,"
         " recorded_condition INTEGER NOT NULL, recorded_danger INTEGER NOT NULL,"
         " ask_price INTEGER NOT NULL, contraband INTEGER NOT NULL);";
+    const char *commitment_schema =
+        "CREATE TABLE IF NOT EXISTS player_commitment ("
+        " id INTEGER PRIMARY KEY CHECK(id=1), situation_id INTEGER NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS situation_cast ("
+        " slot INTEGER PRIMARY KEY, situation_id INTEGER NOT NULL UNIQUE,"
+        " sponsor_name TEXT NOT NULL, affected_name TEXT NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS player_journey ("
+        " id INTEGER PRIMARY KEY CHECK(id=1), active INTEGER NOT NULL,"
+        " situation_id INTEGER NOT NULL, origin_id INTEGER NOT NULL,"
+        " destination_id INTEGER NOT NULL, route_id INTEGER NOT NULL,"
+        " danger INTEGER NOT NULL, bargain_cost INTEGER NOT NULL,"
+        " resolved_situation_id INTEGER NOT NULL, resolved_outcome INTEGER NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS delayed_echo ("
+        " id INTEGER PRIMARY KEY CHECK(id=1), active INTEGER NOT NULL,"
+        " situation_id INTEGER NOT NULL, settlement_id INTEGER NOT NULL,"
+        " parent_event_id INTEGER NOT NULL, outcome INTEGER NOT NULL,"
+        " due_day INTEGER NOT NULL, character_name TEXT NOT NULL);";
     return Execute(database, schema, error, error_capacity) &&
            Execute(database, situation_schema, error, error_capacity) &&
-           Execute(database, map_schema, error, error_capacity);
+           Execute(database, map_schema, error, error_capacity) &&
+           Execute(database, commitment_schema, error, error_capacity);
 }
 
 static bool SaveMeta(sqlite3 *database, const CcSim *sim,
@@ -480,6 +498,29 @@ static bool SaveSituations(sqlite3 *database, const CcSim *sim,
     return true;
 }
 
+static bool SaveSituationCasts(sqlite3 *database, const CcSim *sim,
+                               char *error, size_t error_capacity)
+{
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database,
+                 "INSERT INTO situation_cast VALUES(?,?,?,?);",
+                 &statement, error, error_capacity)) return false;
+    for (int32_t i = 0; i < sim->situation_count; ++i) {
+        const CcSituation *situation = &sim->situations[i];
+        BindInt(statement, 1, i);
+        BindId(statement, 2, situation->id);
+        BindText(statement, 3, situation->sponsor_name);
+        BindText(statement, 4, situation->affected_name);
+        if (!StepDone(database, statement, error, error_capacity) ||
+            !ResetStatement(database, statement, error, error_capacity)) {
+            sqlite3_finalize(statement);
+            return false;
+        }
+    }
+    sqlite3_finalize(statement);
+    return true;
+}
+
 static bool SavePlayer(sqlite3 *database, const CcSim *sim,
                        char *error, size_t error_capacity)
 {
@@ -493,6 +534,54 @@ static bool SavePlayer(sqlite3 *database, const CcSim *sim,
     BindInt(statement, 7, p->cargo_capacity); BindInt(statement, 8, p->passenger_capacity);
     BindInt(statement, 9, p->reputation);
     bool result = StepDone(database, statement, error, error_capacity);
+    sqlite3_finalize(statement);
+    return result;
+}
+
+static bool SavePlayerCommitment(sqlite3 *database, const CcSim *sim,
+                                 char *error, size_t error_capacity)
+{
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database,
+                 "INSERT INTO player_commitment VALUES(1,?);",
+                 &statement, error, error_capacity)) return false;
+    BindId(statement, 1, sim->player.accepted_situation_id);
+    bool result = StepDone(database, statement, error, error_capacity);
+    sqlite3_finalize(statement);
+    return result;
+}
+
+static bool SaveJourneyState(sqlite3 *database, const CcSim *sim,
+                             char *error, size_t error_capacity)
+{
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database,
+                 "INSERT INTO player_journey VALUES(1,?,?,?,?,?,?,?,?,?);",
+                 &statement, error, error_capacity)) return false;
+    BindInt(statement, 1, sim->journey.active ? 1 : 0);
+    BindId(statement, 2, sim->journey.situation_id);
+    BindId(statement, 3, sim->journey.origin_id);
+    BindId(statement, 4, sim->journey.destination_id);
+    BindId(statement, 5, sim->journey.route_id);
+    BindInt(statement, 6, sim->journey.danger);
+    BindInt(statement, 7, sim->journey.bargain_cost);
+    BindId(statement, 8, sim->resolved_journey_situation_id);
+    BindInt(statement, 9, (int32_t)sim->resolved_journey_outcome);
+    bool result = StepDone(database, statement, error, error_capacity);
+    sqlite3_finalize(statement);
+    if (!result) return false;
+
+    if (!Prepare(database,
+                 "INSERT INTO delayed_echo VALUES(1,?,?,?,?,?,?,?);",
+                 &statement, error, error_capacity)) return false;
+    BindInt(statement, 1, sim->delayed_echo.active ? 1 : 0);
+    BindId(statement, 2, sim->delayed_echo.situation_id);
+    BindId(statement, 3, sim->delayed_echo.settlement_id);
+    BindId(statement, 4, sim->delayed_echo.parent_event_id);
+    BindInt(statement, 5, (int32_t)sim->delayed_echo.outcome);
+    BindInt(statement, 6, sim->delayed_echo.due_day);
+    BindText(statement, 7, sim->delayed_echo.character_name);
+    result = StepDone(database, statement, error, error_capacity);
     sqlite3_finalize(statement);
     return result;
 }
@@ -516,8 +605,10 @@ bool CcSaveWrite(const char *path, const CcSim *sim,
             "DELETE FROM route; DELETE FROM map_object; DELETE FROM faction; DELETE FROM shipment;"
             "DELETE FROM shipment_intent;"
             "DELETE FROM bandit_group; DELETE FROM monster_population;"
-            "DELETE FROM dungeon; DELETE FROM situation; DELETE FROM causal_event;"
-            "DELETE FROM player_company;",
+            "DELETE FROM dungeon; DELETE FROM situation; DELETE FROM situation_cast;"
+            "DELETE FROM causal_event;"
+            "DELETE FROM player_company; DELETE FROM player_commitment;"
+            "DELETE FROM player_journey; DELETE FROM delayed_echo;",
             error, error_capacity) &&
         SaveMeta(database, sim, error, error_capacity) &&
         SaveKingdoms(database, sim, error, error_capacity) &&
@@ -529,8 +620,11 @@ bool CcSaveWrite(const char *path, const CcSim *sim,
         SaveThreats(database, sim, error, error_capacity) &&
         SaveDungeons(database, sim, error, error_capacity) &&
         SaveSituations(database, sim, error, error_capacity) &&
+        SaveSituationCasts(database, sim, error, error_capacity) &&
         SaveEvents(database, sim, error, error_capacity) &&
-        SavePlayer(database, sim, error, error_capacity);
+        SavePlayer(database, sim, error, error_capacity) &&
+        SavePlayerCommitment(database, sim, error, error_capacity) &&
+        SaveJourneyState(database, sim, error, error_capacity);
     if (ok) ok = Execute(database, "COMMIT;", error, error_capacity);
     else (void)Execute(database, "ROLLBACK;", NULL, 0U);
     if (sqlite3_close(database) != SQLITE_OK && ok) {
@@ -877,6 +971,36 @@ static bool ReadSituations(sqlite3 *database, CcSim *sim,
     return true;
 }
 
+static bool ReadSituationCasts(sqlite3 *database, CcSim *sim,
+                               char *error, size_t error_capacity)
+{
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database,
+                 "SELECT slot,situation_id,sponsor_name,affected_name "
+                 "FROM situation_cast ORDER BY slot;",
+                 &statement, error, error_capacity)) return false;
+    while (sqlite3_step(statement) == SQLITE_ROW) {
+        int32_t slot = sqlite3_column_int(statement, 0);
+        CcId situation_id = (CcId)sqlite3_column_int64(statement, 1);
+        if (slot < 0 || slot >= sim->situation_count ||
+            sim->situations[slot].id != situation_id) {
+            SetError(error, error_capacity,
+                     "Situation cast does not match its saved charter.");
+            sqlite3_finalize(statement);
+            return false;
+        }
+        CcSituation *situation = &sim->situations[slot];
+        (void)snprintf(situation->sponsor_name,
+                       sizeof(situation->sponsor_name), "%s",
+                       sqlite3_column_text(statement, 2));
+        (void)snprintf(situation->affected_name,
+                       sizeof(situation->affected_name), "%s",
+                       sqlite3_column_text(statement, 3));
+    }
+    sqlite3_finalize(statement);
+    return true;
+}
+
 static bool ReadPlayer(sqlite3 *database, CcSim *sim,
                        char *error, size_t error_capacity)
 {
@@ -896,6 +1020,91 @@ static bool ReadPlayer(sqlite3 *database, CcSim *sim,
     p->passenger_capacity = sqlite3_column_int(statement, 7);
     p->map_capacity = CC_MAP_CAPACITY;
     p->reputation = sqlite3_column_int(statement, 8);
+    sqlite3_finalize(statement);
+    return true;
+}
+
+static bool ReadPlayerCommitment(sqlite3 *database, CcSim *sim,
+                                 char *error, size_t error_capacity)
+{
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database,
+                 "SELECT situation_id FROM player_commitment WHERE id=1;",
+                 &statement, error, error_capacity)) return false;
+    int result = sqlite3_step(statement);
+    if (result == SQLITE_ROW) {
+        sim->player.accepted_situation_id =
+            (CcId)sqlite3_column_int64(statement, 0);
+    } else if (result == SQLITE_DONE) {
+        /* Saves written before this optional schema-v3 extension had no
+           commitment row and therefore load with no accepted charter. */
+        sim->player.accepted_situation_id = 0U;
+    } else {
+        SetSqlError(error, error_capacity, database,
+                    "Could not read player commitment");
+        sqlite3_finalize(statement);
+        return false;
+    }
+    sqlite3_finalize(statement);
+    return true;
+}
+
+static bool ReadJourneyState(sqlite3 *database, CcSim *sim,
+                             char *error, size_t error_capacity)
+{
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database,
+                 "SELECT active,situation_id,origin_id,destination_id,route_id,"
+                 "danger,bargain_cost,resolved_situation_id,resolved_outcome "
+                 "FROM player_journey WHERE id=1;",
+                 &statement, error, error_capacity)) return false;
+    int result = sqlite3_step(statement);
+    if (result == SQLITE_ROW) {
+        sim->journey.active = sqlite3_column_int(statement, 0) != 0;
+        sim->journey.situation_id = (CcId)sqlite3_column_int64(statement, 1);
+        sim->journey.origin_id = (CcId)sqlite3_column_int64(statement, 2);
+        sim->journey.destination_id = (CcId)sqlite3_column_int64(statement, 3);
+        sim->journey.route_id = (CcId)sqlite3_column_int64(statement, 4);
+        sim->journey.danger = sqlite3_column_int(statement, 5);
+        sim->journey.bargain_cost = sqlite3_column_int(statement, 6);
+        sim->resolved_journey_situation_id =
+            (CcId)sqlite3_column_int64(statement, 7);
+        sim->resolved_journey_outcome =
+            (CcJourneyOutcome)sqlite3_column_int(statement, 8);
+    } else if (result != SQLITE_DONE) {
+        SetSqlError(error, error_capacity, database,
+                    "Could not read prepared journey");
+        sqlite3_finalize(statement);
+        return false;
+    }
+    sqlite3_finalize(statement);
+
+    if (!Prepare(database,
+                 "SELECT active,situation_id,settlement_id,parent_event_id,"
+                 "outcome,due_day,character_name FROM delayed_echo WHERE id=1;",
+                 &statement, error, error_capacity)) return false;
+    result = sqlite3_step(statement);
+    if (result == SQLITE_ROW) {
+        sim->delayed_echo.active = sqlite3_column_int(statement, 0) != 0;
+        sim->delayed_echo.situation_id =
+            (CcId)sqlite3_column_int64(statement, 1);
+        sim->delayed_echo.settlement_id =
+            (CcId)sqlite3_column_int64(statement, 2);
+        sim->delayed_echo.parent_event_id =
+            (CcId)sqlite3_column_int64(statement, 3);
+        sim->delayed_echo.outcome =
+            (CcJourneyOutcome)sqlite3_column_int(statement, 4);
+        sim->delayed_echo.due_day = sqlite3_column_int(statement, 5);
+        const unsigned char *name = sqlite3_column_text(statement, 6);
+        (void)snprintf(sim->delayed_echo.character_name,
+                       sizeof(sim->delayed_echo.character_name), "%s",
+                       name != NULL ? (const char *)name : "");
+    } else if (result != SQLITE_DONE) {
+        SetSqlError(error, error_capacity, database,
+                    "Could not read delayed echo");
+        sqlite3_finalize(statement);
+        return false;
+    }
     sqlite3_finalize(statement);
     return true;
 }
@@ -922,8 +1131,11 @@ bool CcSaveRead(const char *path, CcSim *sim,
               ReadThreats(database, sim, error, error_capacity) &&
               ReadDungeons(database, sim, error, error_capacity) &&
               ReadSituations(database, sim, error, error_capacity) &&
+              ReadSituationCasts(database, sim, error, error_capacity) &&
               ReadEvents(database, sim, error, error_capacity) &&
-              ReadPlayer(database, sim, error, error_capacity);
+              ReadPlayer(database, sim, error, error_capacity) &&
+              ReadPlayerCommitment(database, sim, error, error_capacity) &&
+              ReadJourneyState(database, sim, error, error_capacity);
     sqlite3_close(database);
     if (!ok) return false;
     char validation[160];

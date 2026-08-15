@@ -20,13 +20,18 @@ physical map case for a journey.
 Requirements: CMake 3.24+, a C17 compiler, Git, and SQLite 3 development
 headers. CMake downloads the pinned raylib 6.0 source on first configure.
 
+For ordinary playtesting, use the optimized build with debug symbols. This is
+the authoritative visual-review configuration:
+
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
-cmake --build build --parallel
-open build/crownless_carriage.app       # macOS
-./build/crownless_carriage              # Linux
-build\\Debug\\crownless_carriage.exe     # Windows multi-config build
+cmake --preset play
+cmake --build --preset play
+open out/build/play/crownless_carriage.app       # macOS
+./out/build/play/crownless_carriage              # Linux
 ```
+
+Use `cmake --preset development` only for assertion-heavy diagnostics. The
+unoptimized development client is not representative of gameplay frame time.
 
 Controls:
 
@@ -79,11 +84,21 @@ Controls:
   carried sheet depicts one route rather than revealing an omniscient kingdom
   screen. Use the arrow keys or click a sheet, B to buy a locally offered
   chart, S to sell one, and Enter to follow an owned chart from the correct
-  endpoint. The case carries three maps.
+  endpoint. The case carries three maps. The first journey made under an
+  accepted charter can now be interrupted by a route-owned crisis: `1`
+  dismounts into a dedicated road scene and only clears the route after its
+  attackers are defeated; `2` enters an unarmed parley in the same physical
+  space. Walk to the toll collector and press `F` to buy passage, moving
+  traffic immediately while strengthening the collectors who control it.
 - `.` advances one day; `K` advances one week.
 - R repairs a selected contested route from its chart.
 - `E` launches an expedition when standing beside the local dungeon entrance.
-- `Q` opens the live situation board; `Tab` opens the causal event ledger.
+- `F3` toggles the live frame, skin-upload, and character-LOD diagnostic overlay.
+- `Q` opens the live situation board. Use the arrow keys to inspect a dated
+  charter, `Enter` to accept one explicit company promise, and `Backspace` to
+  withdraw while the need remains. Only accepted work earns its sponsor's
+  reward, and only a promise the company actually made can damage reputation
+  when its deadline is missed. `Tab` opens the causal event ledger.
 - `F5` saves and `F9` loads SQLite (`Cmd/Ctrl+S` also saves).
 - `N` generates the same crisis with a new deterministic seed.
 
@@ -98,18 +113,23 @@ Build a Release configuration and run the repeatable headless performance
 workloads with:
 
 ```sh
-cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release -DCC_BUILD_CLIENT=OFF
-cmake --build build-release --parallel
-./build-release/crownless_benchmark
+cmake --preset release
+cmake --build --preset release
+./out/build/release/crownless_benchmark
+ctest --preset release
 ```
 
 The benchmark reports CPU time per simulated day and per biomechanical-agent
 step together with a checksum, so optimizations can be compared without
 silently removing work.
 
-The client executable also accepts `--benchmark-render 600` to time a fixed
-number of frames. Its benchmark window intentionally remains visible because
-desktop operating systems may throttle hidden windows.
+The client executable also accepts `--benchmark-render 600 90` to time a fixed
+number of frames and fail when the current 90 FPS production floor is missed.
+Its benchmark window intentionally remains visible because desktop operating
+systems may throttle hidden windows. `run_render_benchmark` exposes the same
+gate as a build target on machines with a desktop session. The gate also checks
+that the scene draws one consolidated high-detail player, uses low-detail NPCs,
+and stays within the 32-primitive animated-skin budget.
 
 Use `--capture-action-reel <frame-prefix>` to run the deterministic heroic
 demonstration: approach and top-out, down-climb, run and physics jump, buoyant
@@ -117,14 +137,21 @@ swim, guarded weapon contacts, clean impacts, and a final physical knockdown.
 The checked-in preview is
 [`hero_runtime_action_reel_v03.gif`](assets/previews/hero/actions/hero_runtime_action_reel_v03.gif).
 
+Use `--capture-golden <frame.png>` for the fixed street-level art-direction
+review: the authored carriage and market, action-figure hero, role-shaped
+population, simulation dressing, shared palette, and final color treatment are
+framed together under deterministic world conditions.
+
 This is still an architecture proof rather than the finished RPG. It now
 includes one reusable local settlement grammar, an enterable economy-backed
-market, visible animation rigs over the cute prototype characters, and a
+market, an authored action-figure hero, a role-shaped procedural population, and a
 physical three-slot map case whose tradeable, persistent charts each describe
-one route through an aged and fallible cartographer's projection. Route
-encounters, deeper interiors, consequential combat, and dungeon maps remain
-the next projection layers; each will submit
-validated outcomes to the same core rather than maintaining a second world.
+one route through an aged and fallible cartographer's projection. Accepted
+promises now cross a persistent road encounter that can be fought or bargained
+through, with both outcomes submitted to the simulation and projected into
+route security, bandit strength, settlement population and markets, and
+follow-on caravan traffic. Deeper interiors and dungeon maps remain future
+projection layers rather than separate world states.
 
 ## North star
 
@@ -177,14 +204,32 @@ The current executable proves:
 - Government relief, road maintenance, faction politics, bandit recruitment,
   deep hunts, and a crisis that continues without the player
 - Persistent world-generated situations with sponsors, causes, progress,
-  deadlines, invalidation, and rewards
+  deadlines, invalidation, and rewards, plus one authoritative player-accepted
+  charter that persists through save/load and exposes its next physical action.
+  Named sponsors recur on the board, while the named affected person appears
+  beside the local notice and follows the same crowd-spacing rules as other
+  inhabitants
+- Persistent route encounters with live-combat and negotiated resolutions;
+  their different effects alter markets, security, population, bandit power,
+  route capacity, and visible shipment traffic. Fulfilled promises schedule a
+  named delayed echo that is delivered only when the company later returns
+- A route-conditioned encounter space shared by direct movement and the combat
+  controller: the carriage and horses, stranded travelers, road ruts, trees,
+  damage, patrol markers, bridge conditions, crates, and blockade are projected
+  from authoritative route state. Road-specific collision removes invisible
+  town geometry and gives the carriage and obstacle props physical footprints
+- Physical destination aftermath: defended roads leave guard musters, reclaimed
+  barricade timber, returning residents, and protected traffic; paid passage
+  leaves collectors' colors and toll infrastructure in the street
 - Player trade, cargo capacity, direct-route travel, route repair, and dungeon
   intervention expressed as validated simulation commands
 - A default street-level isometric view that projects stock, hunger, security,
   prosperity, situations, smugglers, and dungeon pressure into a walkable town
 - A real orthographic 3D world with depth-tested buildings and characters,
   screen-relative movement, building/counter/carriage collisions, and an
-  enterable market whose shelves and prices use authoritative settlement state
+  enterable market whose shelves and prices use authoritative settlement state.
+  Roads, shoulders, curbs, plaza stones, fields, and crop rows occupy explicit
+  ordered terrain layers, avoiding coplanar depth flicker at intersections
 - Code-native cute 3D inhabitants plus a rig-visible humanoid player shell,
   rendered inside the same depth-tested world pass rather than overlaid afterward
 - A camera-independent continuous locomotion agent with exact world targets,
@@ -201,7 +246,8 @@ The current executable proves:
   heel–ball–toe rigging
 - Biomechanical biped climbing on the same skeleton and hero skin as walking,
   with human-length reach tests, transported knee/elbow planes, progressive
-  hand and foot contacts, a supported top-out, and no handoff to the robot shell
+  world-anchored and staggered hand/foot contacts, a supported top-out and
+  controlled descent, and no handoff to the robot shell
 - A shared human action layer for locomotion, guard, muscle-driven strike,
   controlled jump, clamber, swim, fall, and recovery. Strikes expose one physical impact window
   that sweeps the hand or held weapon against hostile body capsules and records

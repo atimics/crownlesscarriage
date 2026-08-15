@@ -30,7 +30,7 @@ cell_widths = [900, 900, 1400]
 canvas_width = sum(cell_widths)
 canvas = Image.new("RGB", (canvas_width, title_height + image_height + label_height), "#11161a")
 draw = ImageDraw.Draw(canvas)
-draw.text((28, 24), "CROWNLESS HERO — BLENDER MODULAR PROTOTYPE", fill="#f1eadc", font=font(34))
+draw.text((28, 24), "CROWNLESS HERO — ARTICULATED WAYFARER SET", fill="#f1eadc", font=font(34))
 
 x = 0
 for index, (filename, label) in enumerate(items):

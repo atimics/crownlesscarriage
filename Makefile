@@ -1,8 +1,28 @@
 .PHONY: blender-assets blender-assets-catalog blender-assets-check \
 	blender-hero-assets blender-hero-assets-check blender-hero-animation \
-	blender-hero-actions blender-hero-engine
+	blender-hero-actions blender-hero-engine blender-hero-procedural-preview \
+	blender-hero-procedural-check configure-play build-play test-play \
+	configure-release build-release test-release
 
 BLENDER ?= blender
+
+configure-play:
+	cmake --preset play
+
+build-play: configure-play
+	cmake --build --preset play
+
+test-play: build-play
+	ctest --preset play
+
+configure-release:
+	cmake --preset release
+
+build-release: configure-release
+	cmake --build --preset release
+
+test-release: build-release
+	ctest --preset release
 
 blender-assets:
 	$(BLENDER) --background --factory-startup --python tools/blender/build_asset_library.py
@@ -32,3 +52,9 @@ blender-hero-actions:
 blender-hero-engine: blender-hero-assets blender-hero-assets-check
 	$(BLENDER) --background --python-exit-code 1 assets/blender/crownless_hero_components.blend --python tools/blender/render_hero_actions.py -- --preview
 	$(BLENDER) --background --python-exit-code 1 assets/blender/crownless_hero_actions.blend --python tools/blender/export_engine_hero.py
+
+blender-hero-procedural-preview:
+	$(BLENDER) --background --python-exit-code 1 --factory-startup --python tools/blender/render_procedural_character_variants.py
+
+blender-hero-procedural-check:
+	python3 tools/blender/procedural_character.py

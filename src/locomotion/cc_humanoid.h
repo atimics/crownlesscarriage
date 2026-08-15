@@ -3,12 +3,14 @@
 
 #include "locomotion/cc_biomech.h"
 #include "locomotion/cc_limb.h"
+#include "locomotion/cc_motion.h"
 
 #include <stdbool.h>
 #include <stdint.h>
 
 #define CC_HUMANOID_LEG_COUNT 2
 #define CC_HUMANOID_ARM_COUNT 2
+#define CC_HUMANOID_TRACE_CAPACITY 64
 
 typedef enum CcHumanoidJoint {
     CC_HUMANOID_LEFT_HIP,
@@ -52,6 +54,25 @@ typedef enum CcHumanoidStrikeStyle {
     CC_HUMANOID_STRIKE_SWEEP
 } CcHumanoidStrikeStyle;
 
+/* One owner writes the base pose during a simulation tick. Layers such as
+   skinning, sockets, cloth and render interpolation only consume the finalized
+   snapshots and never become pose owners. */
+typedef enum CcHumanoidPoseOwner {
+    CC_HUMANOID_POSE_OWNER_NONE,
+    CC_HUMANOID_POSE_OWNER_PROCEDURAL,
+    CC_HUMANOID_POSE_OWNER_TRAVERSAL,
+    CC_HUMANOID_POSE_OWNER_RAGDOLL,
+    CC_HUMANOID_POSE_OWNER_RECOVERY,
+    CC_HUMANOID_POSE_OWNER_PAIRED_INTERACTION
+} CcHumanoidPoseOwner;
+
+typedef enum CcHumanoidRecoveryOrientation {
+    CC_HUMANOID_RECOVERY_SUPINE,
+    CC_HUMANOID_RECOVERY_PRONE,
+    CC_HUMANOID_RECOVERY_LEFT,
+    CC_HUMANOID_RECOVERY_RIGHT
+} CcHumanoidRecoveryOrientation;
+
 typedef struct CcHumanoidSpring {
     float value;
     float velocity;
@@ -93,10 +114,52 @@ typedef struct CcHumanoidPose {
     float knee_flexion[CC_HUMANOID_LEG_COUNT];
 } CcHumanoidPose;
 
+typedef struct CcHumanoidPoseSnapshot {
+    CcHumanoidPose pose;
+    CcLimbVec3 root_linear_velocity;
+    CcLimbVec3 root_angular_velocity;
+    CcHumanoidPoseOwner owner;
+    uint64_t sequence;
+    bool valid;
+} CcHumanoidPoseSnapshot;
+
+typedef struct CcHumanoidIdleState {
+    CcLimbVec3 foot_anchor[CC_HUMANOID_LEG_COUNT];
+    CcLimbVec3 foot_normal[CC_HUMANOID_LEG_COUNT];
+    float still_time;
+    float locked_phase;
+    bool stable;
+    bool pose_locked;
+} CcHumanoidIdleState;
+
+typedef struct CcHumanoidAnimationTraceRecord {
+    uint64_t sequence;
+    CcLimbVec3 root_position;
+    CcLimbVec3 root_velocity;
+    float motion_time;
+    float speed;
+    float phase;
+    CcHumanoidPoseOwner owner;
+    CcHumanoidAction action;
+    CcMotionClipId clip;
+    CcHumanoidContact contact[CC_HUMANOID_LEG_COUNT];
+    uint32_t markers;
+    bool idle_stable;
+    bool idle_locked;
+} CcHumanoidAnimationTraceRecord;
+
+typedef struct CcHumanoidAnimationTrace {
+    CcHumanoidAnimationTraceRecord records[CC_HUMANOID_TRACE_CAPACITY];
+    int32_t next;
+    int32_t count;
+} CcHumanoidAnimationTrace;
+
 typedef struct CcHumanoidGait {
     CcHumanoidFoot feet[CC_HUMANOID_LEG_COUNT];
     CcHumanoidPose pose;
     CcHumanoidPose previous_pose;
+    CcHumanoidPoseSnapshot snapshot;
+    CcHumanoidPoseSnapshot previous_snapshot;
     CcHumanoidPose recovery_start_pose;
     CcHumanoidPose recovery_target_pose;
     CcHumanoidPose climb_entry_pose;
@@ -112,6 +175,9 @@ typedef struct CcHumanoidGait {
     CcHumanoidSpring pelvis_sway;
     CcHumanoidSpring pelvis_roll;
     CcHumanoidSpring pelvis_yaw;
+    CcMotionPlayer motion;
+    CcHumanoidIdleState idle;
+    CcHumanoidAnimationTrace trace;
     float phase;
     float travel_yaw;
     float cadence;
@@ -130,14 +196,19 @@ typedef struct CcHumanoidGait {
     CcLimbVec3 recovery_origin;
     CcHumanoidAction action;
     CcHumanoidAction previous_action;
+    CcHumanoidPoseOwner pose_owner;
+    CcHumanoidRecoveryOrientation recovery_orientation;
+    uint32_t motion_markers;
     int32_t support_leg;
     int32_t planted_count;
     int32_t strike_side;
     CcHumanoidStrikeStyle strike_style;
     bool strike_impact_pending;
     bool strike_impact_emitted;
+    bool guard_requested;
     bool grounded;
     bool recovering;
+    bool ragdoll_recovery_allowed;
     bool climbing;
     bool jump_airborne;
     bool initialized;
@@ -160,7 +231,11 @@ bool CcHumanoidGaitBeginJump(CcHumanoidGait *gait);
 void CcHumanoidGaitApplyImpact(CcHumanoidGait *gait,
                                CcLimbVec3 direction, float strength);
 bool CcHumanoidGaitKnockDown(CcHumanoidGait *gait);
+bool CcHumanoidGaitDie(CcHumanoidGait *gait, CcLimbVec3 impact_direction,
+                       CcLimbVec3 impact_point, float impact_speed);
+void CcHumanoidGaitBeginResurrection(CcHumanoidGait *gait);
 bool CcHumanoidGaitConsumeStrikeImpact(CcHumanoidGait *gait);
+uint32_t CcHumanoidGaitConsumeMotionMarkers(CcHumanoidGait *gait);
 void CcHumanoidGaitAdvanceSwim(CcHumanoidGait *gait,
                                CcLimbVec3 body_position, float body_yaw,
                                CcLimbVec3 desired_velocity,
@@ -175,7 +250,14 @@ void CcHumanoidGaitAdvanceClimb(
     const CcLimbVec3 hand_targets[CC_HUMANOID_ARM_COUNT],
     const CcLimbVec3 foot_targets[CC_HUMANOID_LEG_COUNT],
     const CcLimbVec3 foot_normals[CC_HUMANOID_LEG_COUNT],
+    const float foot_support[CC_HUMANOID_LEG_COUNT],
     float climb_progress, float delta_time,
+    CcLimbTerrainProbe probe, void *probe_context);
+void CcHumanoidGaitAdvanceMantle(
+    CcHumanoidGait *gait, CcLimbVec3 body_position, float body_yaw,
+    CcLimbVec3 ledge, CcLimbVec3 wall_normal,
+    const CcLimbVec3 takeoff_feet[CC_HUMANOID_LEG_COUNT],
+    float mantle_progress, float delta_time,
     CcLimbTerrainProbe probe, void *probe_context);
 void CcHumanoidGaitFinishClimb(CcHumanoidGait *gait,
                                CcLimbVec3 body_position, float body_yaw,
@@ -190,5 +272,14 @@ void CcHumanoidGaitConstrainMotion(CcHumanoidGait *gait,
                                   CcLimbVec3 actual_velocity, bool grounded);
 const char *CcHumanoidContactName(CcHumanoidContact contact);
 const char *CcHumanoidActionName(CcHumanoidAction action);
+const char *CcHumanoidPoseOwnerName(CcHumanoidPoseOwner owner);
+const char *CcHumanoidRecoveryOrientationName(
+    CcHumanoidRecoveryOrientation orientation);
+const CcHumanoidPoseSnapshot *CcHumanoidGaitCurrentSnapshot(
+    const CcHumanoidGait *gait);
+const CcHumanoidPoseSnapshot *CcHumanoidGaitPreviousSnapshot(
+    const CcHumanoidGait *gait);
+const CcHumanoidAnimationTraceRecord *CcHumanoidGaitTraceLatest(
+    const CcHumanoidGait *gait);
 
 #endif

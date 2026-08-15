@@ -49,7 +49,11 @@ PALETTE = {
     "dry_grass": (0.40, 0.36, 0.17, 1.0),
     "road": (0.30, 0.25, 0.18, 1.0),
     "stone": (0.36, 0.37, 0.34, 1.0),
+    "stone_light": (0.52, 0.50, 0.43, 1.0),
     "stone_dark": (0.18, 0.20, 0.19, 1.0),
+    "moss": (0.16, 0.27, 0.10, 1.0),
+    "water": (0.025, 0.16, 0.20, 1.0),
+    "water_light": (0.08, 0.34, 0.38, 1.0),
     "cloth_white": (0.72, 0.73, 0.67, 1.0),
     "glass": (0.035, 0.12, 0.16, 1.0),
     "food": (0.55, 0.23, 0.055, 1.0),
@@ -113,6 +117,9 @@ def make_palette() -> None:
         if name == "glass":
             roughness = 0.22
             metallic = 0.1
+        elif name in {"water", "water_light"}:
+            roughness = 0.18
+            metallic = 0.08
         material(name, color, metallic=metallic, roughness=roughness)
 
 
@@ -552,18 +559,71 @@ def build_road_kit(parent: bpy.types.Collection) -> bpy.types.Collection:
 def build_bridge_checkpoint(parent: bpy.types.Collection) -> bpy.types.Collection:
     asset_id = "environment_bridge_checkpoint_v01"
     col = new_collection("CC_ENV_BRIDGE_CHECKPOINT", parent, asset_id=asset_id, kind="environment_kit", layer_group="environment_base")
-    add_cube("GEO_BridgeDeck", (0.0, 0.0, 0.30), (7.6, 2.55, 0.52), "stone", col, asset_id, "bridge_deck", bevel_width=0.12)
+
+    # Establish the crossing before adding checkpoint furniture. The water and
+    # raised banks make the bridge legible from an isometric gameplay camera
+    # instead of reading as an isolated stone tray.
+    add_cube("GEO_River", (0.0, 0.0, -0.15), (8.8, 6.6, 0.10), "water", col, asset_id, "water", bevel_width=0.04)
+    for index, (x, y, length, angle) in enumerate(((-2.45, -2.42, 1.35, 4), (1.48, -2.68, 1.75, -3), (-1.25, 2.62, 1.25, -5), (2.62, 2.30, 1.48, 3))):
+        add_cube(f"GEO_WaterRipple_{index:02d}", (x, y, -0.092), (length, 0.045, 0.018), "water_light", col, asset_id, "water_ripple", rotation=(0.0, 0.0, math.radians(angle)), bevel_width=0.012)
+    for x in (-4.22, 4.22):
+        add_cube("GEO_RiverBank", (x, 0.0, -0.17), (0.92, 6.6, 0.24), "grass", col, asset_id, "terrain", bevel_width=0.12)
+        add_cube("GEO_Causeway", (x, 0.0, 0.00), (0.96, 2.38, 0.20), "road", col, asset_id, "road", bevel_width=0.09)
+
+    add_cube("GEO_BridgeDeck", (0.0, 0.0, 0.30), (7.6, 2.55, 0.52), "stone_light", col, asset_id, "bridge_deck", bevel_width=0.12)
+    for x in (-3.15, -2.10, -1.05, 0.0, 1.05, 2.10, 3.15):
+        add_cube("GEO_DeckJoint", (x, 0.0, 0.57), (0.035, 2.18, 0.022), "stone_dark", col, asset_id, "masonry_joint", bevel_width=0.0)
+
     for y in (-1.40, 1.40):
-        add_cube("GEO_BridgeParapet", (0.0, y, 0.72), (7.6, 0.30, 0.72), "stone_dark", col, asset_id, "parapet", bevel_width=0.09)
-    add_cube("GEO_CheckpointHut", (-1.45, 2.12, 0.88), (1.50, 1.18, 1.72), "wood", col, asset_id, "guard_hut", bevel_width=0.08)
-    add_cube("GEO_CheckpointRoof", (-1.45, 2.12, 1.80), (1.78, 1.42, 0.18), "red", col, asset_id, "guard_hut_roof", bevel_width=0.08)
-    add_cube("GEO_GatePostA", (0.65, -1.0, 1.04), (0.22, 0.22, 2.08), "stone_dark", col, asset_id, "gate")
-    add_cube("GEO_GatePostB", (0.65, 1.0, 1.04), (0.22, 0.22, 2.08), "stone_dark", col, asset_id, "gate")
-    add_cube("GEO_GateBeam", (0.65, 0.0, 1.88), (0.24, 2.18, 0.22), "iron", col, asset_id, "gate")
-    add_cube("GEO_Barrier", (0.25, 0.0, 1.12), (0.16, 2.12, 0.16), "red", col, asset_id, "barrier", rotation=(math.radians(10), 0.0, 0.0))
+        side = "L" if y < 0.0 else "R"
+        add_cube(f"GEO_BridgeParapet_{side}", (0.0, y, 0.74), (7.6, 0.30, 0.76), "stone", col, asset_id, "parapet", bevel_width=0.07)
+        add_cube(f"GEO_ParapetCap_{side}", (0.0, y, 1.15), (7.82, 0.38, 0.16), "stone_light", col, asset_id, "parapet_cap", bevel_width=0.055)
+        for x in (-3.15, -1.60, 0.0, 1.60, 3.15):
+            add_cube("GEO_ParapetButtress", (x, y * 1.075, 0.66), (0.24, 0.22, 0.84), "stone_dark", col, asset_id, "bridge_buttress", bevel_width=0.035)
+
+    # Bridge supports remain visible through the river from the presentation
+    # angle and give the span useful vertical rhythm.
+    for x in (-2.45, 0.0, 2.45):
+        for y in (-0.88, 0.88):
+            add_cylinder("GEO_BridgePier", (x, y, -0.02), 0.30, 0.72, "stone_dark", col, asset_id, "bridge_support", vertices=8, bevel_width=0.04)
+
+    # A compact timber toll house with a pitched roof, foundation, door, and
+    # glazed side window. It intentionally sits outside the travel lane.
+    add_cube("GEO_CheckpointFoundation", (-1.45, 2.12, 0.25), (1.72, 1.36, 0.50), "stone_dark", col, asset_id, "guard_hut_foundation", bevel_width=0.06)
+    add_cube("GEO_CheckpointHut", (-1.45, 2.12, 1.34), (1.50, 1.18, 1.72), "wood", col, asset_id, "guard_hut", bevel_width=0.08)
+    for x in (-2.13, -0.77):
+        add_cube("GEO_CheckpointCornerPost", (x, 2.12, 1.40), (0.13, 1.24, 1.84), "wood_dark", col, asset_id, "guard_hut_frame", bevel_width=0.025)
+    add_cube("GEO_CheckpointDoor", (-1.45, 1.515, 1.06), (0.62, 0.065, 1.16), "wood_dark", col, asset_id, "guard_hut_door", bevel_width=0.035)
+    add_torus("GEO_CheckpointDoorRing", (-1.22, 1.47, 1.09), 0.075, 0.014, "brass", col, asset_id, "door_hardware", rotation=(math.radians(90), 0.0, 0.0))
+    add_cube("GEO_CheckpointWindow", (-0.685, 2.12, 1.50), (0.045, 0.52, 0.48), "glass", col, asset_id, "guard_hut_window", bevel_width=0.018)
+    for y, pitch in ((1.79, math.radians(27)), (2.45, math.radians(-27))):
+        add_cube("GEO_CheckpointRoofSlope", (-1.45, y, 2.40), (1.90, 0.86, 0.16), "red", col, asset_id, "guard_hut_roof", rotation=(pitch, 0.0, 0.0), bevel_width=0.045)
+    add_cube("GEO_CheckpointChimney", (-1.88, 2.39, 2.65), (0.24, 0.24, 0.62), "stone_dark", col, asset_id, "guard_hut_chimney", bevel_width=0.035)
+    add_cube("GEO_CheckpointChimneyCap", (-1.88, 2.39, 2.97), (0.32, 0.32, 0.12), "stone_light", col, asset_id, "guard_hut_chimney", bevel_width=0.03)
+
+    # The gate is a high-contrast read from a distance. Alternating pale bands
+    # preserve the visual language of a controlled crossing without textures.
+    for y in (-1.0, 1.0):
+        add_cube("GEO_GatePost", (0.65, y, 1.14), (0.28, 0.28, 2.28), "iron", col, asset_id, "gate", bevel_width=0.035)
+        add_cube("GEO_GatePostCap", (0.65, y, 2.32), (0.40, 0.40, 0.18), "brass", col, asset_id, "gate", bevel_width=0.045)
+    add_cube("GEO_GateBeam", (0.65, 0.0, 2.12), (0.26, 2.18, 0.24), "iron", col, asset_id, "gate", bevel_width=0.035)
+    add_cube("GEO_Barrier", (0.24, 0.0, 1.18), (0.18, 2.12, 0.18), "red", col, asset_id, "barrier", rotation=(math.radians(10), 0.0, 0.0), bevel_width=0.025)
+    for y in (-0.68, 0.0, 0.68):
+        add_cube("GEO_BarrierStripe", (0.24, y, 1.18 + math.sin(math.radians(10)) * y), (0.195, 0.28, 0.195), "cream", col, asset_id, "barrier_stripe", rotation=(math.radians(10), 0.0, 0.0), bevel_width=0.018)
+    add_cube("GEO_GatePlacard", (0.48, 0.0, 2.13), (0.18, 0.72, 0.44), "blue", col, asset_id, "checkpoint_sign", bevel_width=0.045)
+    add_cube("GEO_GatePlacardMark", (0.375, 0.0, 2.13), (0.025, 0.38, 0.10), "brass", col, asset_id, "checkpoint_sign", bevel_width=0.008)
+
+    # Inspection furniture and road-side detail support the simulation role of
+    # this asset: cargo is stopped, checked, documented, and sometimes seized.
     add_cube("GEO_InspectionTable", (-0.55, -0.72, 0.78), (1.05, 0.55, 0.12), "wood_light", col, asset_id, "inspection_table")
-    for x, y in ((-3.0, -1.0), (2.8, 0.95)):
-        add_cylinder("GEO_BridgePier", (x, y, -0.12), 0.30, 0.65, "stone_dark", col, asset_id, "bridge_support", vertices=8, bevel_width=0.04)
+    for x in (-0.98, -0.12):
+        for y in (-0.94, -0.50):
+            add_cube("GEO_InspectionTableLeg", (x, y, 0.43), (0.09, 0.09, 0.66), "wood_dark", col, asset_id, "inspection_table", bevel_width=0.018)
+    add_cube("GEO_InspectionLedger", (-0.58, -0.72, 0.86), (0.34, 0.24, 0.045), "cream", col, asset_id, "inspection_ledger", rotation=(0.0, 0.0, math.radians(8)), bevel_width=0.012)
+    add_cube("GEO_InspectionCrate", (-1.13, -0.30, 0.40), (0.56, 0.52, 0.68), "wood", col, asset_id, "inspection_cargo", bevel_width=0.055)
+
+    for index, (x, y, height) in enumerate(((-4.02, -2.25, 0.48), (-4.12, -1.95, 0.62), (4.08, 2.12, 0.55), (4.18, 2.43, 0.42))):
+        add_cube(f"GEO_Reed_{index:02d}", (x, y, 0.02), (0.055, 0.055, height), "moss", col, asset_id, "river_growth", rotation=(math.radians(5), math.radians(index * 3 - 4), 0.0), bevel_width=0.01)
     return col
 
 
