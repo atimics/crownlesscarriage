@@ -1928,12 +1928,12 @@ static void DeliverDelayedEchoIfReady(CcSim *sim)
     char text[CC_EVENT_TEXT_CAPACITY];
     if (sim->delayed_echo.outcome == CC_JOURNEY_OUTCOME_COMBAT) {
         (void)snprintf(text, sizeof(text),
-                       "%s finds the company on its return to %s: families have come back and guarded caravans use the road again.",
+                       "%.24s returns to %.24s: families are back and guarded caravans use the road again.",
                        sim->delayed_echo.character_name,
                        place != NULL ? place->name : "the settlement");
     } else {
         (void)snprintf(text, sizeof(text),
-                       "%s finds the company on its return to %s: stalls have reopened, but the road collectors now wear bandit colors.",
+                       "%.24s returns to %.24s: stalls reopened, but the road collectors now wear bandit colors.",
                        sim->delayed_echo.character_name,
                        place != NULL ? place->name : "the settlement");
     }
@@ -1980,7 +1980,7 @@ static void CreateJourneyTraffic(CcSim *sim,
     };
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(text, sizeof(text),
-                   "%s sends a follow-on caravan of %d %s toward %s after the Crownless intervention.",
+                   "%.24s sends %d %.16s toward %.24s after the Crownless intervention.",
                    origin->name, quantity, CcGoodName(good), destination->name);
     (void)PushEvent(sim, CC_EVENT_SHIPMENT_DEPARTED, shipment->id,
                     origin->id, parent_event_id, quantity, text);
@@ -2067,7 +2067,7 @@ static void InterruptJourney(CcSim *sim)
         sim, sim->journey.route_id);
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(text, sizeof(text),
-                   "%s blocks the road to %s while %s waits on the Crownless promise: break the cordon or buy passage.",
+                   "%.24s blocks the road to %.24s; %.24s awaits a Crownless choice.",
                    bandits != NULL ? bandits->name : "Armed road collectors",
                    destination != NULL ? destination->name : "the far gate",
                    situation != NULL && situation->affected_name[0] != '\0' ?
