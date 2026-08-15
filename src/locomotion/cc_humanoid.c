@@ -6,6 +6,7 @@
 #define CC_HUMANOID_PI 3.14159265358979323846f
 static const float CC_HUMANOID_STRIKE_DURATION = 1.20f;
 static const float CC_HUMANOID_STRIKE_IMPACT_TIME = 0.61f;
+static const float CC_HUMANOID_STRIKE_RECOVERY_DURATION = 0.32f;
 
 typedef enum CcHumanoidRagdollNode {
     CC_RAGDOLL_PELVIS,
@@ -115,6 +116,22 @@ static float Smooth01(float amount)
     return amount * amount * (3.0f - 2.0f * amount);
 }
 
+static float StrikePoseCurve(float guard, float chamber, float cut,
+                             float phase, float chamber_end, float cut_end)
+{
+    if (phase < chamber_end) {
+        return LerpScalar(guard, chamber,
+                          Smooth01(phase / chamber_end));
+    }
+    if (phase < cut_end) {
+        return LerpScalar(chamber, cut,
+                          Smooth01((phase - chamber_end) /
+                                   (cut_end - chamber_end)));
+    }
+    return LerpScalar(cut, guard,
+                      Smooth01((phase - cut_end) / (1.0f - cut_end)));
+}
+
 static void SetAction(CcHumanoidGait *gait, CcHumanoidAction action)
 {
     if (gait->action == action) return;
@@ -128,6 +145,8 @@ static void AdvanceAction(CcHumanoidGait *gait, float delta_time)
 {
     float previous_time = gait->action_time;
     gait->action_time += delta_time;
+    gait->strike_recovery_seconds = fmaxf(
+        0.0f, gait->strike_recovery_seconds - delta_time);
     gait->impact_response *= expf(-6.5f * delta_time);
     if (gait->impact_response < 0.001f) gait->impact_response = 0.0f;
     gait->action_blend += (1.0f - gait->action_blend) *
@@ -140,7 +159,16 @@ static void AdvanceAction(CcHumanoidGait *gait, float delta_time)
             gait->strike_impact_emitted = true;
         }
         if (gait->action_time >= CC_HUMANOID_STRIKE_DURATION) {
-            SetAction(gait, CC_HUMANOID_ACTION_GUARD);
+            bool return_to_guard = gait->guard_requested;
+            SetAction(gait, return_to_guard ? CC_HUMANOID_ACTION_GUARD :
+                                             CC_HUMANOID_ACTION_LOCOMOTION);
+            gait->strike_recovery_seconds =
+                CC_HUMANOID_STRIKE_RECOVERY_DURATION;
+            if (return_to_guard) {
+                /* The authored cut already ends in the guard pose. Preserve
+                   the blend when guard is still explicitly requested. */
+                gait->action_blend = 1.0f;
+            }
         }
     }
 }
@@ -1603,6 +1631,7 @@ void CcHumanoidGaitSetGuarded(CcHumanoidGait *gait, bool guarded)
 {
     if (gait == NULL || !gait->initialized || gait->ragdoll.active ||
         gait->climbing || gait->action == CC_HUMANOID_ACTION_SWIM) return;
+    gait->guard_requested = guarded;
     if (guarded) {
         if (gait->action == CC_HUMANOID_ACTION_LOCOMOTION) {
             SetAction(gait, CC_HUMANOID_ACTION_GUARD);
@@ -1617,12 +1646,60 @@ bool CcHumanoidGaitBeginStrike(CcHumanoidGait *gait, int32_t striking_arm)
     if (gait == NULL || !gait->initialized || gait->ragdoll.active ||
         gait->climbing || gait->action == CC_HUMANOID_ACTION_SWIM ||
         gait->action == CC_HUMANOID_ACTION_JUMP ||
-        gait->action == CC_HUMANOID_ACTION_STRIKE) return false;
+        gait->action == CC_HUMANOID_ACTION_STRIKE ||
+        CcHumanoidGaitStrikeRecovering(gait)) return false;
+    bool from_guard = gait->action == CC_HUMANOID_ACTION_GUARD;
     gait->strike_side = striking_arm == 0 ? 0 : 1;
+    gait->strike_style = CC_HUMANOID_STRIKE_CUT;
     gait->strike_impact_pending = false;
     gait->strike_impact_emitted = false;
+    gait->strike_recovery_seconds = 0.0f;
     SetAction(gait, CC_HUMANOID_ACTION_STRIKE);
+    if (from_guard) gait->action_blend = 1.0f;
     return true;
+}
+
+void CcHumanoidGaitSetStrikeStyle(CcHumanoidGait *gait,
+                                  CcHumanoidStrikeStyle style)
+{
+    if (gait == NULL || gait->action != CC_HUMANOID_ACTION_STRIKE) return;
+    if (style < CC_HUMANOID_STRIKE_CUT ||
+        style > CC_HUMANOID_STRIKE_SWEEP) {
+        style = CC_HUMANOID_STRIKE_CUT;
+    }
+    gait->strike_style = style;
+}
+
+float CcHumanoidStrikeDuration(void)
+{
+    return CC_HUMANOID_STRIKE_DURATION;
+}
+
+bool CcHumanoidGaitStrikeRecovering(const CcHumanoidGait *gait)
+{
+    return gait != NULL && gait->strike_recovery_seconds > 0.0f;
+}
+
+static void StabilizeStrikeRecovery(CcHumanoidGait *gait, float delta_time)
+{
+    if (!CcHumanoidGaitStrikeRecovering(gait)) return;
+    static const int32_t RECOVERY_JOINTS[] = {
+        CC_HUMANOID_SPINE_PITCH,
+        CC_HUMANOID_SPINE_ROLL,
+        CC_HUMANOID_SPINE_YAW,
+        CC_HUMANOID_LEFT_SHOULDER,
+        CC_HUMANOID_LEFT_ELBOW,
+        CC_HUMANOID_RIGHT_SHOULDER,
+        CC_HUMANOID_RIGHT_ELBOW,
+    };
+    float weight = Clamp(gait->strike_recovery_seconds /
+                         CC_HUMANOID_STRIKE_RECOVERY_DURATION, 0.0f, 1.0f);
+    float damping = expf(-(8.0f + weight * 10.0f) * delta_time);
+    for (size_t index = 0;
+         index < sizeof(RECOVERY_JOINTS) / sizeof(RECOVERY_JOINTS[0]);
+         ++index) {
+        gait->body.joints[RECOVERY_JOINTS[index]].angular_velocity *= damping;
+    }
 }
 
 bool CcHumanoidGaitBeginJump(CcHumanoidGait *gait)
@@ -1730,7 +1807,11 @@ void CcHumanoidGaitAdvance(CcHumanoidGait *gait, CcLimbVec3 body_position,
         float support_force = Clamp(support_acceleration * gait->body.total_mass,
                                     0.0f, gait->body.total_mass * 27.0f);
 
-        float drive_gain = desired_speed < 0.04f ? 7.0f : 4.8f;
+        bool stationary_combat = desired_speed < 0.04f &&
+            (gait->action == CC_HUMANOID_ACTION_GUARD ||
+             gait->action == CC_HUMANOID_ACTION_STRIKE);
+        float drive_gain = stationary_combat ? 12.0f :
+                           desired_speed < 0.04f ? 7.0f : 4.8f;
         CcLimbVec3 desired_acceleration = {
             (desired_velocity.x - gait->body.root.velocity.x) * drive_gain,
             0.0f,
@@ -1742,8 +1823,9 @@ void CcHumanoidGaitAdvance(CcHumanoidGait *gait, CcLimbVec3 body_position,
         float lateral_error = Dot(support_offset, balance_right);
         float lateral_velocity = gait->body.root.velocity.x * balance_right.x +
                                  gait->body.root.velocity.z * balance_right.z;
+        float balance_damping = stationary_combat ? 6.4f : 3.8f;
         float balance_acceleration = Clamp(lateral_error * 12.0f -
-                                           lateral_velocity * 3.8f,
+                                           lateral_velocity * balance_damping,
                                            -0.85f, 0.85f);
         desired_acceleration = Add(desired_acceleration,
                                    Scale(balance_right,
@@ -1781,6 +1863,14 @@ void CcHumanoidGaitAdvance(CcHumanoidGait *gait, CcLimbVec3 body_position,
         }
     }
     CcBiomechRigStepBody(&gait->body, delta_time);
+    bool stationary_combat = grounded && desired_speed < 0.04f &&
+        (gait->action == CC_HUMANOID_ACTION_GUARD ||
+         gait->action == CC_HUMANOID_ACTION_STRIKE);
+    if (stationary_combat) {
+        float horizontal_damping = expf(-12.0f * delta_time);
+        gait->body.root.velocity.x *= horizontal_damping;
+        gait->body.root.velocity.z *= horizontal_damping;
+    }
     gait->root_velocity = FromBiomech(gait->body.root.velocity);
     float actual_speed = sqrtf(gait->root_velocity.x * gait->root_velocity.x +
                                gait->root_velocity.z * gait->root_velocity.z);
@@ -1850,37 +1940,51 @@ void CcHumanoidGaitAdvance(CcHumanoidGait *gait, CcLimbVec3 body_position,
     SpringStep(&gait->pelvis_yaw, pelvis_yaw_target, 8.0f, 0.74f, delta_time);
     bool combat_pose = gait->action == CC_HUMANOID_ACTION_GUARD ||
                        gait->action == CC_HUMANOID_ACTION_STRIKE;
+    bool previous_combat_pose =
+        gait->previous_action == CC_HUMANOID_ACTION_GUARD ||
+        gait->previous_action == CC_HUMANOID_ACTION_STRIKE;
+    bool leaving_combat_pose = !combat_pose && previous_combat_pose &&
+                               gait->action_blend < 0.999f;
     bool jump_pose = gait->action == CC_HUMANOID_ACTION_JUMP;
     if (combat_pose || jump_pose) gait_weight *= 1.0f - gait->action_blend;
+    if (leaving_combat_pose) gait_weight *= gait->action_blend;
     float left_arm = -cosf(stride) * 0.34f * gait_weight;
     float right_arm = -left_arm;
     float left_flex = 0.24f + fmaxf(0.0f, left_arm) * 0.34f;
     float right_flex = 0.24f + fmaxf(0.0f, right_arm) * 0.34f;
     float action_spine_yaw = 0.0f;
     float action_spine_pitch = 0.0f;
-    if (combat_pose) {
-        float guard_left_arm = 0.48f;
-        float guard_right_arm = 0.64f;
-        float guard_left_flex = 0.78f;
-        float guard_right_flex = 0.58f;
+    if (combat_pose || leaving_combat_pose) {
+        float guard_left_arm = 0.62f;
+        float guard_right_arm = 0.76f;
+        float guard_left_flex = 0.92f;
+        float guard_right_flex = 0.66f;
         float target_left_arm = guard_left_arm;
         float target_right_arm = guard_right_arm;
         float target_left_flex = guard_left_flex;
         float target_right_flex = guard_right_flex;
-        if (gait->action == CC_HUMANOID_ACTION_STRIKE) {
+        if (combat_pose && gait->action == CC_HUMANOID_ACTION_STRIKE) {
             float phase = Clamp(gait->action_time /
                                 CC_HUMANOID_STRIKE_DURATION, 0.0f, 1.0f);
-            float chamber = Smooth01(phase / 0.24f);
-            float drive = Smooth01((phase - 0.24f) / 0.30f);
-            float recover = Smooth01((phase - 0.60f) / 0.40f);
+            const float chamber_end = 0.28f;
+            const float cut_end = 0.62f;
             int32_t arm = gait->strike_side == 0 ? 0 : 1;
-            float striking_arm = LerpScalar(guard_right_arm, 0.34f, chamber);
-            striking_arm = LerpScalar(striking_arm, 1.25f, drive);
-            striking_arm = LerpScalar(striking_arm, guard_right_arm, recover);
-            float striking_flex = LerpScalar(guard_right_flex, 1.02f, chamber);
-            striking_flex = LerpScalar(striking_flex, 0.04f, drive);
-            striking_flex = LerpScalar(striking_flex, guard_right_flex,
-                                       recover);
+            float chamber_arm = gait->strike_style ==
+                                CC_HUMANOID_STRIKE_HEAVY ? -0.28f : 0.18f;
+            float driven_arm = gait->strike_style ==
+                               CC_HUMANOID_STRIKE_HEAVY ? 1.56f :
+                               gait->strike_style == CC_HUMANOID_STRIKE_SWEEP ?
+                               1.46f : 1.36f;
+            float chamber_flex = gait->strike_style ==
+                                 CC_HUMANOID_STRIKE_HEAVY ? 1.34f : 1.12f;
+            float driven_flex = gait->strike_style ==
+                                CC_HUMANOID_STRIKE_HEAVY ? 0.22f : 0.10f;
+            float striking_arm = StrikePoseCurve(
+                guard_right_arm, chamber_arm, driven_arm, phase,
+                chamber_end, cut_end);
+            float striking_flex = StrikePoseCurve(
+                guard_right_flex, chamber_flex, driven_flex, phase,
+                chamber_end, cut_end);
             if (arm == 0) {
                 target_left_arm = striking_arm;
                 target_left_flex = striking_flex;
@@ -1888,13 +1992,34 @@ void CcHumanoidGaitAdvance(CcHumanoidGait *gait, CcLimbVec3 body_position,
                 target_right_arm = striking_arm;
                 target_right_flex = striking_flex;
             }
-            float torso_drive = sinf(Smooth01((phase - 0.12f) / 0.58f) *
-                                      CC_HUMANOID_PI);
+            if (gait->strike_style == CC_HUMANOID_STRIKE_HEAVY) {
+                float support_arm = StrikePoseCurve(
+                    guard_left_arm, 0.28f, 1.18f, phase,
+                    chamber_end, cut_end);
+                float support_flex = StrikePoseCurve(
+                    guard_left_flex, 1.18f, 0.36f, phase,
+                    chamber_end, cut_end);
+                if (arm == 0) {
+                    target_right_arm = support_arm;
+                    target_right_flex = support_flex;
+                } else {
+                    target_left_arm = support_arm;
+                    target_left_flex = support_flex;
+                }
+            }
+            float yaw_scale = gait->strike_style == CC_HUMANOID_STRIKE_SWEEP ?
+                              0.38f : 0.26f;
+            float pitch_scale = gait->strike_style ==
+                                CC_HUMANOID_STRIKE_HEAVY ? 0.17f : 0.10f;
             action_spine_yaw = (arm == 0 ? -1.0f : 1.0f) *
-                               torso_drive * 0.16f;
-            action_spine_pitch = torso_drive * 0.075f;
+                StrikePoseCurve(0.0f, -yaw_scale * 0.38f, yaw_scale,
+                                phase, chamber_end, cut_end);
+            action_spine_pitch = StrikePoseCurve(
+                0.0f, -pitch_scale * 0.28f, pitch_scale, phase,
+                chamber_end, cut_end);
         }
-        float blend = gait->action_blend;
+        float blend = combat_pose ? gait->action_blend :
+                                    1.0f - gait->action_blend;
         left_arm = LerpScalar(left_arm, target_left_arm, blend);
         right_arm = LerpScalar(right_arm, target_right_arm, blend);
         left_flex = LerpScalar(left_flex, target_left_flex, blend);
@@ -1987,6 +2112,7 @@ void CcHumanoidGaitAdvance(CcHumanoidGait *gait, CcLimbVec3 body_position,
         CcBiomechRigDriveJoint(&gait->body, ankle_joint,
                                foot->pitch.value, 0.72f);
     }
+    StabilizeStrikeRecovery(gait, delta_time);
     CcBiomechRigStep(&gait->body, delta_time);
 
     gait->previous_pose = gait->pose;

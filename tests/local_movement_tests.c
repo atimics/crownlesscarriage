@@ -40,6 +40,19 @@ static float VectorDistance3(Vector3 a, Vector3 b)
     return sqrtf(x * x + y * y + z * z);
 }
 
+static float DirectionAngle(Vector3 first, Vector3 second)
+{
+    float first_length = sqrtf(first.x * first.x + first.y * first.y +
+                               first.z * first.z);
+    float second_length = sqrtf(second.x * second.x + second.y * second.y +
+                                second.z * second.z);
+    if (first_length <= 0.000001f || second_length <= 0.000001f) return 0.0f;
+    float cosine = (first.x * second.x + first.y * second.y +
+                    first.z * second.z) / (first_length * second_length);
+    cosine = fmaxf(-1.0f, fminf(cosine, 1.0f));
+    return acosf(cosine);
+}
+
 static float MaximumPoseStep(const CcHumanoidPose *before,
                              const CcHumanoidPose *after)
 {
@@ -379,6 +392,497 @@ static void TestSharedCombat(void)
     }
 }
 
+static void TestTargetDrivenCombat(void)
+{
+    CcSim sim;
+    CcSimInit(&sim, 91U);
+    CcLocalCourse course;
+    CcLocalCourseInit(&course);
+    CcLocalAgent player;
+    CcLocalAgentInit(&player,
+                     (Vector2){CC_LOCAL_START_X, CC_LOCAL_START_Z}, false);
+    CcLocalCombatSetTeam(&player, CC_COMBAT_PLAYER);
+    CcLocalCourseRaiseAlarmNear(&course, &player);
+    for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
+        course.runners[i].agent.combat.defeated = true;
+    }
+    CcLocalAgentInit(&course.raiders[0],
+                     (Vector2){CC_LOCAL_START_X + 3.0f,
+                               CC_LOCAL_START_Z}, false);
+    CcLocalCombatSetTeam(&course.raiders[0], CC_COMBAT_RAIDER);
+    CcLocalAgentInit(&course.raiders[1],
+                     (Vector2){CC_LOCAL_START_X + 7.0f,
+                               CC_LOCAL_START_Z + 3.0f}, false);
+    CcLocalCombatSetTeam(&course.raiders[1], CC_COMBAT_RAIDER);
+    for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
+        course.raider_response_stage[i] = 3;
+        course.raider_response_waypoint_active[i] = false;
+    }
+
+    if (CcLocalCourseSelectPlayerTarget(&course, &player, -1) ||
+        !CcLocalCourseSelectPlayerTarget(&course, &player, 0) ||
+        player.combat.target_index != 0 || !player.combat.focus_valid) {
+        (void)fprintf(stderr, "explicit hostile targeting failed\n");
+        exit(1);
+    }
+    if (!CcLocalCourseUsePlayerSkill(&course, &player,
+                                     CC_COMBAT_SKILL_SUNDER) ||
+        player.combat.queued_skill != (int32_t)CC_COMBAT_SKILL_SUNDER) {
+        (void)fprintf(stderr, "targeted combat skill did not queue\n");
+        exit(1);
+    }
+    player.combat.health = 42.0f;
+    player.combat.posture = 30.0f;
+    if (!CcLocalCourseUsePlayerSkill(&course, &player,
+                                     CC_COMBAT_SKILL_SECOND_WIND) ||
+        player.combat.health <= 42.0f || player.combat.posture <= 30.0f ||
+        CcLocalCombatSkillCooldown(&player,
+            CC_COMBAT_SKILL_SECOND_WIND) <= 0.0f) {
+        (void)fprintf(stderr, "Second Wind did not restore the combatant\n");
+        exit(1);
+    }
+
+    float initial_distance = VectorDistance3(player.position,
+                                              course.raiders[0].position);
+    float minimum_distance = initial_distance;
+    bool saw_sunder_style = false;
+    for (int32_t frame = 0; frame < 300; ++frame) {
+        CcLocalCourseUpdate(&course, &player, &sim, 1.0f / 60.0f);
+        saw_sunder_style = saw_sunder_style ||
+            (player.humanoid.action == CC_HUMANOID_ACTION_STRIKE &&
+             player.combat.active_skill == CC_COMBAT_SKILL_SUNDER &&
+             player.humanoid.strike_style == CC_HUMANOID_STRIKE_SWEEP);
+        minimum_distance = fminf(
+            minimum_distance,
+            VectorDistance3(player.position, course.raiders[0].position));
+    }
+    if (minimum_distance < 1.30f || minimum_distance > 1.58f ||
+        !course.player_pair.active || course.player_pair.target_index != 0 ||
+        !saw_sunder_style ||
+        (course.raiders[0].combat.health >= CC_LOCAL_COMBAT_MAX_HEALTH &&
+         course.raiders[0].combat.posture >= CC_LOCAL_COMBAT_MAX_POSTURE) ||
+        CcLocalCombatSkillCooldown(&player, CC_COMBAT_SKILL_SUNDER) <= 0.0f) {
+        (void)fprintf(stderr,
+                      "target combat did not hold weapon range and exchange styled attacks: distance %.2f style %d health %.1f posture %.1f cooldown %.1f\n",
+                      minimum_distance, saw_sunder_style,
+                      course.raiders[0].combat.health,
+                      course.raiders[0].combat.posture,
+                      CcLocalCombatSkillCooldown(
+                          &player, CC_COMBAT_SKILL_SUNDER));
+        exit(1);
+    }
+    CcLocalCourseClearPlayerTarget(&player);
+    if (player.combat.target_index != -1 || player.combat.focus_valid ||
+        player.combat.queued_skill != -1) {
+        (void)fprintf(stderr, "combat target did not disengage cleanly\n");
+        exit(1);
+    }
+}
+
+static void TestCombatStanceStability(void)
+{
+    CcLocalAgent guard;
+    CcLocalAgent target;
+    InitCombatant(&guard, (Vector2){4.0f, 3.0f}, 0.0f,
+                  CC_COMBAT_PLAYER);
+    InitCombatant(&target, (Vector2){4.0f, 4.3f}, PI,
+                  CC_COMBAT_RAIDER);
+    CcLocalCombatSetGuarded(&guard, &target, true);
+
+    float minimum_x = guard.position.x;
+    float maximum_x = guard.position.x;
+    float minimum_z = guard.position.z;
+    float maximum_z = guard.position.z;
+    float maximum_pose_step = 0.0f;
+    CcHumanoidPose previous_pose = guard.render_pose;
+    for (int32_t frame = 0; frame < 240; ++frame) {
+        CcLocalAgentUpdate(&guard, 1.0f / 60.0f, false);
+        if (frame < 90) {
+            previous_pose = guard.render_pose;
+            continue;
+        }
+        minimum_x = fminf(minimum_x, guard.position.x);
+        maximum_x = fmaxf(maximum_x, guard.position.x);
+        minimum_z = fminf(minimum_z, guard.position.z);
+        maximum_z = fmaxf(maximum_z, guard.position.z);
+        maximum_pose_step = fmaxf(
+            maximum_pose_step,
+            MaximumPoseStep(&previous_pose, &guard.render_pose));
+        previous_pose = guard.render_pose;
+    }
+    float horizontal_speed = sqrtf(
+        guard.velocity.x * guard.velocity.x +
+        guard.velocity.z * guard.velocity.z);
+    if (maximum_x - minimum_x > 0.025f ||
+        maximum_z - minimum_z > 0.025f ||
+        horizontal_speed > 0.025f || maximum_pose_step > 0.035f) {
+        (void)fprintf(stderr,
+                      "combat guard did not settle: span %.4f,%.4f speed %.4f pose %.4f\n",
+                      maximum_x - minimum_x, maximum_z - minimum_z,
+                      horizontal_speed, maximum_pose_step);
+        exit(1);
+    }
+
+    CcHumanoidPose guarded_pose = guard.render_pose;
+    CcLocalCombatSetGuarded(&guard, NULL, false);
+    CcLocalAgentUpdate(&guard, 1.0f / 60.0f, false);
+    float exit_pose_step = MaximumPoseStep(&guarded_pose,
+                                           &guard.render_pose);
+    if (exit_pose_step > 0.055f) {
+        (void)fprintf(stderr,
+                      "combat guard exit snapped by %.4f metres\n",
+                      exit_pose_step);
+        exit(1);
+    }
+}
+
+static void TestSlashRecoveryStability(void)
+{
+    CcLocalAgent attacker;
+    CcLocalAgent defender;
+    InitCombatant(&attacker, (Vector2){4.0f, 3.0f}, 0.0f,
+                  CC_COMBAT_PLAYER);
+    InitCombatant(&defender, (Vector2){4.0f, 4.46f}, PI,
+                  CC_COMBAT_RAIDER);
+    CcLocalCombatSetGuarded(&attacker, &defender, true);
+    if (!CcLocalCombatBeginStrike(&attacker, &defender)) {
+        (void)fprintf(stderr, "slash recovery setup rejected its strike\n");
+        exit(1);
+    }
+
+    bool impact_resolved = false;
+    int32_t recovery_frame = -1;
+    int32_t shoulder_reversals = 0;
+    float previous_shoulder_velocity = 0.0f;
+    float late_angular_speed = 0.0f;
+    float maximum_pose_step = 0.0f;
+    float minimum_z = attacker.position.z;
+    float maximum_z = attacker.position.z;
+    CcHumanoidPose previous_pose = attacker.render_pose;
+    for (int32_t frame = 0; frame < 180; ++frame) {
+        CcLocalAgentUpdate(&attacker, 1.0f / 60.0f, true);
+        CcLocalAgentUpdate(&defender, 1.0f / 60.0f, true);
+        if (!impact_resolved &&
+            CcHumanoidGaitConsumeStrikeImpact(&attacker.humanoid)) {
+            (void)CcLocalCombatResolveStrike(&attacker, &defender);
+            impact_resolved = true;
+        }
+        if (recovery_frame < 0 &&
+            attacker.humanoid.action == CC_HUMANOID_ACTION_GUARD &&
+            frame > 30) {
+            recovery_frame = frame;
+            previous_pose = attacker.render_pose;
+        }
+        if (recovery_frame < 0) continue;
+
+        int32_t elapsed = frame - recovery_frame;
+        float shoulder_velocity = attacker.humanoid.body.joints[
+            CC_HUMANOID_RIGHT_SHOULDER].angular_velocity;
+        if (elapsed > 2 && fabsf(shoulder_velocity) > 0.05f &&
+            fabsf(previous_shoulder_velocity) > 0.05f &&
+            shoulder_velocity * previous_shoulder_velocity < 0.0f) {
+            shoulder_reversals += 1;
+        }
+        if (fabsf(shoulder_velocity) > 0.05f) {
+            previous_shoulder_velocity = shoulder_velocity;
+        }
+        if (elapsed >= 24) {
+            late_angular_speed = fmaxf(late_angular_speed,
+                                       fabsf(shoulder_velocity));
+        }
+        maximum_pose_step = fmaxf(
+            maximum_pose_step,
+            MaximumPoseStep(&previous_pose, &attacker.render_pose));
+        previous_pose = attacker.render_pose;
+        minimum_z = fminf(minimum_z, attacker.position.z);
+        maximum_z = fmaxf(maximum_z, attacker.position.z);
+    }
+
+    if (!impact_resolved || recovery_frame < 0 ||
+        shoulder_reversals > 2 || late_angular_speed > 0.35f ||
+        maximum_z - minimum_z > 0.025f || maximum_pose_step > 0.060f) {
+        (void)fprintf(stderr,
+                      "slash recovery wobbled: impact %d frame %d reversals %d late angular %.3f root span %.4f pose step %.4f\n",
+                      impact_resolved, recovery_frame, shoulder_reversals,
+                      late_angular_speed, maximum_z - minimum_z,
+                      maximum_pose_step);
+        exit(1);
+    }
+}
+
+static void TestSwordMotionContinuity(void)
+{
+    CcLocalAgent attacker;
+    CcLocalAgent defender;
+    InitCombatant(&attacker, (Vector2){4.0f, 3.0f}, 0.0f,
+                  CC_COMBAT_PLAYER);
+    InitCombatant(&defender, (Vector2){4.0f, 4.46f}, PI,
+                  CC_COMBAT_RAIDER);
+    CcLocalCombatSetGuarded(&defender, &attacker, true);
+    defender.combat.posture = 5.0f;
+    for (int32_t frame = 0; frame < 60; ++frame) {
+        CcLocalAgentUpdate(&attacker, 1.0f / 60.0f, true);
+        CcLocalAgentUpdate(&defender, 1.0f / 60.0f, true);
+    }
+    if (!CcLocalCombatBeginStrike(&attacker, &defender)) {
+        (void)fprintf(stderr, "sword continuity setup rejected its strike\n");
+        exit(1);
+    }
+
+    Vector3 previous_attacker = CcLocalCombatWeaponDirection(&attacker);
+    Vector3 previous_defender = CcLocalCombatWeaponDirection(&defender);
+    float maximum_attacker_step = 0.0f;
+    float maximum_defender_step = 0.0f;
+    float maximum_post_impact_step = 0.0f;
+    CcCombatOutcome outcome = CC_COMBAT_OUTCOME_NONE;
+    int32_t impact_frame = -1;
+    for (int32_t frame = 0; frame < 180; ++frame) {
+        CcLocalAgentUpdate(&attacker, 1.0f / 60.0f, true);
+        CcLocalAgentUpdate(&defender, 1.0f / 60.0f, true);
+        if (impact_frame < 0 &&
+            CcHumanoidGaitConsumeStrikeImpact(&attacker.humanoid)) {
+            outcome = CcLocalCombatResolveStrike(&attacker, &defender);
+            impact_frame = frame;
+        }
+        Vector3 attacker_direction =
+            CcLocalCombatWeaponDirection(&attacker);
+        Vector3 defender_direction =
+            CcLocalCombatWeaponDirection(&defender);
+        float attacker_step = DirectionAngle(previous_attacker,
+                                              attacker_direction);
+        float defender_step = DirectionAngle(previous_defender,
+                                              defender_direction);
+        maximum_attacker_step = fmaxf(maximum_attacker_step, attacker_step);
+        maximum_defender_step = fmaxf(maximum_defender_step, defender_step);
+        if (impact_frame >= 0 && frame - impact_frame <= 30) {
+            maximum_post_impact_step = fmaxf(maximum_post_impact_step,
+                                              defender_step);
+        }
+        previous_attacker = attacker_direction;
+        previous_defender = defender_direction;
+    }
+
+    if (outcome != CC_COMBAT_OUTCOME_GUARD_BROKEN || impact_frame < 0 ||
+        maximum_attacker_step > 0.32f || maximum_defender_step > 0.24f ||
+        maximum_post_impact_step > 0.18f ||
+        !attacker.combat.weapon_direction_valid ||
+        !defender.combat.weapon_direction_valid) {
+        (void)fprintf(stderr,
+                      "sword motion snapped: outcome %d frame %d attacker %.3f defender %.3f impact %.3f valid %d/%d\n",
+                      outcome, impact_frame, maximum_attacker_step,
+                      maximum_defender_step, maximum_post_impact_step,
+                      attacker.combat.weapon_direction_valid,
+                      defender.combat.weapon_direction_valid);
+        exit(1);
+    }
+}
+
+static void TestHeavySwordContactAtDuelRange(void)
+{
+    CcLocalAgent attacker;
+    CcLocalAgent defender;
+    InitCombatant(&attacker, (Vector2){4.0f, 3.0f}, 0.0f,
+                  CC_COMBAT_PLAYER);
+    InitCombatant(&defender, (Vector2){4.0f, 4.46f}, PI,
+                  CC_COMBAT_RAIDER);
+    defender.combat.health = 22.0f;
+    for (int32_t frame = 0; frame < 60; ++frame) {
+        CcLocalAgentUpdate(&attacker, 1.0f / 60.0f, true);
+        CcLocalAgentUpdate(&defender, 1.0f / 60.0f, true);
+    }
+    if (!CcLocalCombatBeginStrike(&attacker, &defender)) {
+        (void)fprintf(stderr, "heavy contact setup rejected its strike\n");
+        exit(1);
+    }
+    attacker.combat.active_skill = CC_COMBAT_SKILL_CRUSHING_BLOW;
+    attacker.combat.strike_damage_scale = 1.75f;
+    attacker.combat.strike_posture_scale = 1.15f;
+    attacker.combat.strike_knockback_scale = 1.45f;
+    CcHumanoidGaitSetStrikeStyle(&attacker.humanoid,
+                                 CC_HUMANOID_STRIKE_HEAVY);
+
+    CcCombatOutcome outcome = CC_COMBAT_OUTCOME_NONE;
+    for (int32_t frame = 0; frame < 120; ++frame) {
+        CcLocalAgentUpdate(&attacker, 1.0f / 60.0f, true);
+        CcLocalAgentUpdate(&defender, 1.0f / 60.0f, true);
+        if (CcHumanoidGaitConsumeStrikeImpact(&attacker.humanoid)) {
+            outcome = CcLocalCombatResolveStrike(&attacker, &defender);
+            break;
+        }
+    }
+    if (outcome != CC_COMBAT_OUTCOME_DEFEATED ||
+        !defender.combat.defeated) {
+        (void)fprintf(stderr,
+                      "heavy sword missed at duel range: outcome %d health %.1f\n",
+                      outcome, defender.combat.health);
+        exit(1);
+    }
+}
+
+static void InitCoordinatedDuel(CcLocalCourse *course, CcLocalAgent *player)
+{
+    CcLocalCourseInit(course);
+    CcLocalAgentInit(player,
+                     (Vector2){CC_LOCAL_START_X, CC_LOCAL_START_Z}, false);
+    CcLocalCombatSetTeam(player, CC_COMBAT_PLAYER);
+    CcLocalCourseRaiseAlarmNear(course, player);
+    for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
+        course->runners[i].agent.combat.defeated = true;
+    }
+    CcLocalAgentInit(&course->raiders[0],
+                     (Vector2){CC_LOCAL_START_X + 3.00f,
+                               CC_LOCAL_START_Z}, false);
+    CcLocalCombatSetTeam(&course->raiders[0], CC_COMBAT_RAIDER);
+    course->raiders[1].combat.defeated = true;
+    course->raiders[1].combat.health = 0.0f;
+    course->raider_response_stage[0] = 3;
+    course->raider_response_waypoint_active[0] = false;
+    course->raider_attack_cooldown[0] = 100.0f;
+    player->combat.auto_attack_cooldown = 100.0f;
+    if (!CcLocalCourseSelectPlayerTarget(course, player, 0)) {
+        (void)fprintf(stderr, "coordinated duel setup rejected its target\n");
+        exit(1);
+    }
+}
+
+static void TestCombatPairCoordinator(void)
+{
+    CcLocalCourse steady_course;
+    CcLocalCourse uneven_course;
+    CcLocalAgent steady_player;
+    CcLocalAgent uneven_player;
+    InitCoordinatedDuel(&steady_course, &steady_player);
+    InitCoordinatedDuel(&uneven_course, &uneven_player);
+
+    float minimum_distance = 1000.0f;
+    float maximum_distance = 0.0f;
+    float previous_radial_velocity = 0.0f;
+    int32_t radial_reversals = 0;
+    for (int32_t frame = 0; frame < 480; ++frame) {
+        CcLocalCourseUpdate(&steady_course, &steady_player, NULL,
+                            1.0f / 60.0f);
+        float uneven_delta = (frame & 1) == 0 ? 1.0f / 120.0f :
+                                                1.0f / 40.0f;
+        CcLocalCourseUpdate(&uneven_course, &uneven_player, NULL,
+                            uneven_delta);
+        if (frame == 0 &&
+            (steady_course.player_pair.active ||
+             !steady_player.exact_target_valid ||
+             steady_course.raiders[0].combat.control_velocity_valid)) {
+            (void)fprintf(stderr,
+                          "combat pair took control before navigation handoff\n");
+            exit(1);
+        }
+        if (frame < 180) continue;
+        float distance = VectorDistance3(
+            steady_player.position, steady_course.raiders[0].position);
+        minimum_distance = fminf(minimum_distance, distance);
+        maximum_distance = fmaxf(maximum_distance, distance);
+        float radial_velocity = steady_course.player_pair.radial_velocity;
+        if (fabsf(radial_velocity) > 0.01f &&
+            fabsf(previous_radial_velocity) > 0.01f &&
+            radial_velocity * previous_radial_velocity < 0.0f) {
+            radial_reversals += 1;
+        }
+        if (fabsf(radial_velocity) > 0.01f) {
+            previous_radial_velocity = radial_velocity;
+        }
+    }
+
+    float pacing_error = VectorDistance3(
+        steady_player.position, uneven_player.position) +
+        VectorDistance3(steady_course.raiders[0].position,
+                        uneven_course.raiders[0].position);
+    if (!steady_course.player_pair.active ||
+        steady_course.player_pair.target_index != 0 ||
+        minimum_distance < 1.36f || maximum_distance > 1.56f ||
+        maximum_distance - minimum_distance > 0.08f ||
+        radial_reversals > 4 || pacing_error > 0.002f) {
+        (void)fprintf(stderr,
+                      "combat pair did not converge cleanly: range %.3f..%.3f reversals %d pacing %.5f active %d target %d\n",
+                      minimum_distance, maximum_distance, radial_reversals,
+                      pacing_error, steady_course.player_pair.active,
+                      steady_course.player_pair.target_index);
+        exit(1);
+    }
+}
+
+static void TestPairedSlashRecovery(void)
+{
+    CcLocalCourse course;
+    CcLocalAgent player;
+    InitCoordinatedDuel(&course, &player);
+    int32_t settled_frames = 0;
+    for (int32_t frame = 0; frame < 420 && settled_frames < 30; ++frame) {
+        CcLocalCourseUpdate(&course, &player, NULL, 1.0f / 60.0f);
+        if (course.player_pair.active &&
+            course.player_pair.range_error == 0.0f &&
+            fabsf(course.player_pair.radial_velocity) < 0.02f) {
+            settled_frames += 1;
+        } else {
+            settled_frames = 0;
+        }
+    }
+    if (settled_frames < 30 ||
+        !CcLocalCombatBeginStrike(&player, &course.raiders[0])) {
+        (void)fprintf(stderr,
+                      "paired slash did not reach a settled strike setup\n");
+        exit(1);
+    }
+
+    float health_before = course.raiders[0].combat.health;
+    float posture_before = course.raiders[0].combat.posture;
+    float recovery_origin_x = player.position.x;
+    float recovery_anchor_drift = 0.0f;
+    float previous_motion = 0.0f;
+    int32_t motion_reversals = 0;
+    int32_t recovery_frame = -1;
+    CcHumanoidAction previous_action = player.humanoid.action;
+    for (int32_t frame = 0; frame < 240; ++frame) {
+        float previous_x = player.position.x;
+        CcLocalCourseUpdate(&course, &player, NULL, 1.0f / 60.0f);
+        if (recovery_frame < 0 &&
+            previous_action == CC_HUMANOID_ACTION_STRIKE &&
+            player.humanoid.action != CC_HUMANOID_ACTION_STRIKE) {
+            recovery_frame = frame;
+            recovery_origin_x = player.position.x;
+        }
+        previous_action = player.humanoid.action;
+        if (recovery_frame < 0) continue;
+        int32_t elapsed = frame - recovery_frame;
+        if (elapsed <= 18) {
+            recovery_anchor_drift = fmaxf(
+                recovery_anchor_drift,
+                fabsf(player.position.x - recovery_origin_x));
+        }
+        float motion = player.position.x - previous_x;
+        if (elapsed > 18 && fabsf(motion) > 0.0002f &&
+            fabsf(previous_motion) > 0.0002f && motion * previous_motion < 0.0f) {
+            motion_reversals += 1;
+        }
+        if (fabsf(motion) > 0.0002f) previous_motion = motion;
+    }
+
+    bool made_contact = course.raiders[0].combat.health < health_before ||
+                        course.raiders[0].combat.posture < posture_before;
+    if (!made_contact ||
+        recovery_frame < 0 || recovery_anchor_drift > 0.018f ||
+        motion_reversals > 1 || !course.player_pair.active ||
+        player.humanoid.action != CC_HUMANOID_ACTION_LOCOMOTION ||
+        player.humanoid.guard_requested ||
+        CcHumanoidGaitStrikeRecovering(&player.humanoid) ||
+        course.player_pair.distance < 1.36f ||
+        course.player_pair.distance > 1.56f) {
+        (void)fprintf(stderr,
+                      "paired slash recovery hunted: health %.1f->%.1f posture %.1f->%.1f frame %d anchor %.4f reversals %d range %.3f active %d\n",
+                      health_before, course.raiders[0].combat.health,
+                      posture_before, course.raiders[0].combat.posture,
+                      recovery_frame, recovery_anchor_drift, motion_reversals,
+                      course.player_pair.distance, course.player_pair.active);
+        exit(1);
+    }
+}
+
 static void TestCapePhysics(void)
 {
     static const float EXPECTED_LENGTHS[] = {0.270f, 0.275f, 0.285f, 0.285f};
@@ -567,6 +1071,13 @@ static void TestTravellerIngress(void)
 int main(void)
 {
     TestSharedCombat();
+    TestTargetDrivenCombat();
+    TestCombatStanceStability();
+    TestSlashRecoveryStability();
+    TestSwordMotionContinuity();
+    TestHeavySwordContactAtDuelRange();
+    TestCombatPairCoordinator();
+    TestPairedSlashRecovery();
     TestCapePhysics();
     TestControlledJump();
     TestHeroicAthleticism();
@@ -1272,7 +1783,10 @@ int main(void)
     for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
         if (!guard_engaged[i] || !guard_returned[i]) {
             (void)fprintf(stderr,
-                          "guard %d failed to engage and return from defense\n", i);
+                          "guard %d defense lifecycle failed: engaged %d returned %d stage %d duty %d\n",
+                          i, guard_engaged[i], guard_returned[i],
+                          defense.runners[i].response_stage,
+                          defense.runners[i].duty);
             return 1;
         }
     }

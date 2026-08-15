@@ -46,6 +46,12 @@ typedef enum CcHumanoidAction {
     CC_HUMANOID_ACTION_JUMP
 } CcHumanoidAction;
 
+typedef enum CcHumanoidStrikeStyle {
+    CC_HUMANOID_STRIKE_CUT,
+    CC_HUMANOID_STRIKE_HEAVY,
+    CC_HUMANOID_STRIKE_SWEEP
+} CcHumanoidStrikeStyle;
+
 typedef struct CcHumanoidSpring {
     float value;
     float velocity;
@@ -118,6 +124,7 @@ typedef struct CcHumanoidGait {
     float recovery_yaw;
     float action_time;
     float action_blend;
+    float strike_recovery_seconds;
     float swim_phase;
     float immersion;
     float impact_response;
@@ -127,9 +134,11 @@ typedef struct CcHumanoidGait {
     int32_t support_leg;
     int32_t planted_count;
     int32_t strike_side;
+    CcHumanoidStrikeStyle strike_style;
     bool strike_impact_pending;
     bool strike_impact_emitted;
     bool grounded;
+    bool guard_requested;
     bool recovering;
     bool climbing;
     bool jump_airborne;
@@ -147,6 +156,10 @@ void CcHumanoidGaitResolvePose(CcHumanoidGait *gait,
                                CcLimbVec3 body_position, float body_yaw);
 void CcHumanoidGaitSetGuarded(CcHumanoidGait *gait, bool guarded);
 bool CcHumanoidGaitBeginStrike(CcHumanoidGait *gait, int32_t striking_arm);
+void CcHumanoidGaitSetStrikeStyle(CcHumanoidGait *gait,
+                                  CcHumanoidStrikeStyle style);
+float CcHumanoidStrikeDuration(void);
+bool CcHumanoidGaitStrikeRecovering(const CcHumanoidGait *gait);
 bool CcHumanoidGaitBeginJump(CcHumanoidGait *gait);
 void CcHumanoidGaitApplyImpact(CcHumanoidGait *gait,
                                CcLimbVec3 direction, float strength);

@@ -41,6 +41,16 @@ typedef struct ActionReelState {
     bool complete;
 } ActionReelState;
 
+typedef struct CombatReelState {
+    int32_t stage;
+    int32_t stage_frame;
+    int32_t captured_frames;
+    int32_t settled_frames;
+    bool action_started;
+    bool complete;
+    bool failed;
+} CombatReelState;
+
 static const Vector2 LOCAL_MARKET = {CC_LOCAL_MARKET_X, CC_LOCAL_MARKET_Z};
 static const Vector2 LOCAL_CARRIAGE = {CC_LOCAL_CARRIAGE_X,
                                       CC_LOCAL_CARRIAGE_Z};
@@ -218,6 +228,198 @@ static void RecordActionReelImpact(CcLocalCourse *course,
     course->last_outcome = CcLocalCombatResolveStrike(attacker, defender);
     course->last_attacker_team = attacker->combat.team;
     course->combat_event_seconds = 0.72f;
+}
+
+static void CombatReelSetStage(CombatReelState *reel, int32_t stage)
+{
+    reel->stage = stage;
+    reel->stage_frame = 0;
+    reel->settled_frames = 0;
+    reel->action_started = false;
+}
+
+static void PrepareCombatReel(LocalState *local, CombatReelState *reel)
+{
+    *reel = (CombatReelState){0};
+    local->market_interior = false;
+    CcLocalCourseInit(&local->course);
+    Vector3 center = {45.15f, 0.0f, 30.60f};
+    local->course.alarm_active = true;
+    local->course.alarm_countdown = 1000.0f;
+    local->course.combat_origin = center;
+
+    CcLocalAgentInit(&local->agent,
+                     (Vector2){center.x - 1.45f, center.z}, false);
+    CcLocalCombatSetTeam(&local->agent, CC_COMBAT_PLAYER);
+    for (int32_t discipline = 0;
+         discipline < CC_ATHLETIC_DISCIPLINE_COUNT; ++discipline) {
+        CcLocalAgentSetAthleticLevel(
+            &local->agent, (CcAthleticDiscipline)discipline,
+            CC_ATHLETIC_MAX_LEVEL);
+    }
+    local->agent.facing_yaw = 0.5f * PI;
+    local->agent.combat.auto_attack_cooldown = 100.0f;
+
+    for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
+        CcLocalAgentInit(&local->course.runners[i].agent,
+                         (Vector2){88.0f + (float)i, 66.0f}, false);
+        local->course.runners[i].agent.combat.defeated = true;
+        local->course.runners[i].agent.combat.health = 0.0f;
+    }
+
+    CcLocalAgent *opponent = &local->course.raiders[0];
+    CcLocalAgentInit(opponent,
+                     (Vector2){center.x + 0.73f, center.z}, false);
+    opponent->crowned = false;
+    opponent->tunic_color = (Color){126, 55, 61, 255};
+    opponent->facing_yaw = -0.5f * PI;
+    CcLocalCombatSetTeam(opponent, CC_COMBAT_RAIDER);
+    CcLocalAgentSetAthleticLevel(opponent, CC_ATHLETIC_MOBILITY, 3);
+    CcLocalAgentSetAthleticLevel(opponent, CC_ATHLETIC_POWER, 3);
+    local->course.raider_response_stage[0] = 3;
+    local->course.raider_response_waypoint_active[0] = false;
+    local->course.raider_attack_cooldown[0] = 100.0f;
+
+    CcLocalAgent *reserve = &local->course.raiders[1];
+    CcLocalAgentInit(reserve, (Vector2){94.0f, 65.0f}, false);
+    reserve->crowned = false;
+    CcLocalCombatSetTeam(reserve, CC_COMBAT_RAIDER);
+    local->course.raider_attack_cooldown[1] = 100.0f;
+    (void)CcLocalCourseSelectPlayerTarget(&local->course, &local->agent, 0);
+}
+
+static void UpdateCombatReel(LocalState *local, CombatReelState *reel,
+                             char *message, size_t message_capacity)
+{
+    const float delta_time = 1.0f / 60.0f;
+    CcLocalAgent *hero = &local->agent;
+    CcLocalAgent *opponent = &local->course.raiders[0];
+    reel->stage_frame += 1;
+    hero->combat.auto_attack_cooldown = fmaxf(
+        hero->combat.auto_attack_cooldown, 90.0f);
+    local->course.raider_attack_cooldown[0] = 100.0f;
+    local->course.raider_attack_cooldown[1] = 100.0f;
+
+    switch (reel->stage) {
+        case 0:
+            (void)snprintf(message, message_capacity,
+                           "COMBAT REEL / click target, navigate, then hand off to paired weapon spacing");
+            CcLocalCourseUpdate(&local->course, hero, NULL, delta_time);
+            if (local->course.player_pair.active &&
+                local->course.player_pair.range_error == 0.0f &&
+                fabsf(local->course.player_pair.radial_velocity) < 0.03f) {
+                reel->settled_frames += 1;
+            } else {
+                reel->settled_frames = 0;
+            }
+            if (reel->settled_frames >= 24) {
+                CombatReelSetStage(reel, 1);
+            } else if (reel->stage_frame > 300) {
+                (void)fprintf(stderr,
+                              "combat reel failed to acquire its target pair\n");
+                reel->failed = true;
+                reel->complete = true;
+            }
+            break;
+        case 1:
+            (void)snprintf(message, message_capacity,
+                           "COMBAT REEL / stable guard, planted feet, no positional hunting");
+            CcLocalCourseSetPlayerGuarded(&local->course, hero, true);
+            CcLocalCourseUpdate(&local->course, hero, NULL, delta_time);
+            if (reel->stage_frame >= 72) {
+                CcLocalCourseSetPlayerGuarded(&local->course, hero, false);
+                CombatReelSetStage(reel, 2);
+            }
+            break;
+        case 2:
+            (void)snprintf(message, message_capacity,
+                           "COMBAT REEL / basic cut, contact, velocity-aware recovery to neutral");
+            if (reel->stage_frame == 1) {
+                reel->action_started = CcLocalCourseBeginPlayerStrike(
+                    &local->course, hero);
+            }
+            CcLocalCourseUpdate(&local->course, hero, NULL, delta_time);
+            if (reel->action_started && reel->stage_frame > 78 &&
+                hero->humanoid.action != CC_HUMANOID_ACTION_STRIKE &&
+                !CcHumanoidGaitStrikeRecovering(&hero->humanoid)) {
+                CombatReelSetStage(reel, 3);
+            } else if (!reel->action_started && reel->stage_frame > 180) {
+                (void)fprintf(stderr,
+                              "combat reel failed to start its basic cut\n");
+                reel->failed = true;
+                reel->complete = true;
+            }
+            break;
+        case 3:
+            (void)snprintf(message, message_capacity,
+                           "COMBAT REEL / SUNDER sweep, posture pressure, clean follow-through");
+            if (reel->stage_frame == 1) {
+                hero->combat.auto_attack_cooldown = 0.0f;
+                hero->combat.skill_cooldown[CC_COMBAT_SKILL_SUNDER] = 0.0f;
+                (void)CcLocalCourseUsePlayerSkill(
+                    &local->course, hero, CC_COMBAT_SKILL_SUNDER);
+            }
+            if (!reel->action_started) {
+                hero->combat.auto_attack_cooldown = 0.0f;
+            }
+            CcLocalCourseUpdate(&local->course, hero, NULL, delta_time);
+            reel->action_started = reel->action_started ||
+                (hero->humanoid.action == CC_HUMANOID_ACTION_STRIKE &&
+                 hero->combat.active_skill == CC_COMBAT_SKILL_SUNDER);
+            if (reel->action_started) hero->combat.auto_attack_cooldown = 90.0f;
+            if (reel->stage_frame > 240 && !reel->action_started) {
+                (void)fprintf(stderr,
+                              "combat reel failed to start SUNDER\n");
+                reel->failed = true;
+                reel->complete = true;
+            }
+            if (reel->action_started && reel->stage_frame > 78 &&
+                hero->humanoid.action != CC_HUMANOID_ACTION_STRIKE &&
+                !CcHumanoidGaitStrikeRecovering(&hero->humanoid)) {
+                CombatReelSetStage(reel, 4);
+            }
+            break;
+        case 4:
+            (void)snprintf(message, message_capacity,
+                           "COMBAT REEL / CRUSHING BLOW, guard break and physical knockdown");
+            if (reel->stage_frame == 1) {
+                opponent->combat.health = fminf(opponent->combat.health, 22.0f);
+                opponent->combat.posture = fminf(opponent->combat.posture, 8.0f);
+                hero->combat.auto_attack_cooldown = 0.0f;
+                hero->combat.skill_cooldown[CC_COMBAT_SKILL_CRUSHING_BLOW] =
+                    0.0f;
+                (void)CcLocalCourseUsePlayerSkill(
+                    &local->course, hero, CC_COMBAT_SKILL_CRUSHING_BLOW);
+            }
+            if (!reel->action_started) {
+                hero->combat.auto_attack_cooldown = 0.0f;
+            }
+            CcLocalCourseUpdate(&local->course, hero, NULL, delta_time);
+            reel->action_started = reel->action_started ||
+                (hero->humanoid.action == CC_HUMANOID_ACTION_STRIKE &&
+                 hero->combat.active_skill == CC_COMBAT_SKILL_CRUSHING_BLOW);
+            if (reel->action_started) hero->combat.auto_attack_cooldown = 90.0f;
+            if (opponent->combat.defeated && reel->stage_frame > 72) {
+                CcLocalCourseClearPlayerTarget(hero);
+                CombatReelSetStage(reel, 5);
+            } else if (reel->stage_frame > 180) {
+                (void)fprintf(stderr,
+                              "combat reel failed to finish CRUSHING BLOW\n");
+                reel->failed = true;
+                reel->complete = true;
+            }
+            break;
+        case 5:
+            (void)snprintf(message, message_capacity,
+                           "COMBAT REEL / disengage, settle, and return cleanly to neutral");
+            CcLocalCourseClearPlayerTarget(hero);
+            CcLocalCourseUpdate(&local->course, hero, NULL, delta_time);
+            if (reel->stage_frame >= 108) reel->complete = true;
+            break;
+        default:
+            reel->complete = true;
+            break;
+    }
 }
 
 static void UpdateActionReel(LocalState *local, ActionReelState *reel,
@@ -468,7 +670,7 @@ static const char *LocalPrompt(const CcSim *sim, const LocalState *local)
     }
     if (!local->market_interior && local->course.alarm_active &&
         local->agent.combat.focus_valid) {
-        return "COMBAT FOCUS   click to strafe   SPACE strike   X guard   J jump";
+        return "TARGET LOCKED   closing distance and auto-attacking   1-3 use skills";
     }
     if (local->market_interior) {
         if (GridDistance(position, INTERIOR_EXIT) < 1.25f) return "F  step back into the street";
@@ -492,11 +694,51 @@ static const char *LocalPrompt(const CcSim *sim, const LocalState *local)
     return "LEFT CLICK any point   the biped plants and swings its own feet";
 }
 
+static void DrawCombatSkillCard(const CcLocalAgent *agent,
+                                CcCombatSkill skill, int x, int key)
+{
+    float cooldown = CcLocalCombatSkillCooldown(agent, skill);
+    bool queued = agent->combat.queued_skill == (int32_t)skill;
+    Color border = queued ? CC_GOLD : cooldown > 0.0f ? MUTED : TEAL;
+    DrawRectangleRounded((Rectangle){(float)x, 701.0f, 192.0f, 27.0f},
+                         0.18f, 4, (Color){19, 32, 39, 255});
+    DrawRectangleRoundedLinesEx((Rectangle){(float)x, 701.0f, 192.0f, 27.0f},
+                                0.18f, 4, 1.0f, Fade(border, 0.72f));
+    DrawText(TextFormat("%d", key), x + 8, 708, 11, CC_GOLD);
+    DrawText(CcLocalCombatSkillName(skill), x + 27, 707, 9, INK);
+    DrawText(queued ? "QUEUED" : cooldown > 0.0f ?
+             TextFormat("%.1fs", cooldown) : "READY",
+             x + 145, 707, 9, border);
+}
+
 static void DrawLocalFooter(const CcSim *sim, const LocalState *local)
 {
     DrawPanel((Rectangle){20.0f, 664.0f, 1240.0f, 76.0f}, PANEL);
+    if (!local->market_interior && local->course.alarm_active) {
+        int32_t target = local->agent.combat.target_index;
+        if (target >= 0 && target < CC_LOCAL_RAIDER_COUNT &&
+            !local->course.raiders[target].combat.defeated) {
+            DrawText(TextFormat("TARGET  RAIDER %d   %d HP   /   AUTO ATTACK ENGAGED",
+                                target + 1,
+                                (int32_t)lroundf(
+                                    local->course.raiders[target].combat.health)),
+                     38, 679, 12, DANGER);
+        } else {
+            DrawText("CLICK A RAIDER TO TARGET AND ENGAGE",
+                     38, 679, 12, CC_GOLD);
+        }
+        DrawCombatSkillCard(&local->agent,
+                            CC_COMBAT_SKILL_CRUSHING_BLOW, 38, 1);
+        DrawCombatSkillCard(&local->agent,
+                            CC_COMBAT_SKILL_SUNDER, 240, 2);
+        DrawCombatSkillCard(&local->agent,
+                            CC_COMBAT_SKILL_SECOND_WIND, 442, 3);
+        DrawText("click ground disengages   SPACE manual strike   X guard",
+                 780, 709, 9, MUTED);
+        return;
+    }
     DrawText(LocalPrompt(sim, local), 38, 681, 13, CC_GOLD);
-    DrawText("J jump   SPACE strike   X guard   G alarm   Q situations   TAB ledger",
+    DrawText("J jump   G alarm   Q situations   TAB ledger",
              38, 708, 10, MUTED);
     DrawText("M map case at carriage   F5 save   F9 load   N new world",
              804, 693, 10, MUTED);
@@ -969,17 +1211,58 @@ static void HandleInput(CcSim *sim, int32_t *selected, ClientView *view,
                 struck ? "You strike into open space; only contact inside the impact window will land." :
                          "No strike: the body is already committed to another action.");
         }
-        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
-            CcLocalAgentPickTarget(&local->agent, GetMousePosition(), local_target,
-                                   local_bounds, local->market_interior)) {
-            (void)snprintf(message, message_capacity,
-                           "Target %.2f,%.2f; the biped is choosing foot contacts.",
-                           local->agent.target_point.x, local->agent.target_point.z);
+        if (!local->market_interior && local->course.alarm_active) {
+            for (int32_t skill = 0; skill < CC_COMBAT_SKILL_COUNT; ++skill) {
+                if (!IsKeyPressed(KEY_ONE + skill)) continue;
+                CcCombatSkill combat_skill = (CcCombatSkill)skill;
+                bool used = CcLocalCourseUsePlayerSkill(
+                    &local->course, &local->agent, combat_skill);
+                float cooldown = CcLocalCombatSkillCooldown(
+                    &local->agent, combat_skill);
+                (void)snprintf(
+                    message, message_capacity, "%s",
+                    used && combat_skill == CC_COMBAT_SKILL_SECOND_WIND ?
+                        "Second Wind restores health and posture." :
+                    used ? TextFormat("%s queued for your target.",
+                                      CcLocalCombatSkillName(combat_skill)) :
+                    cooldown > 0.0f ? TextFormat("%s is cooling down: %.1fs.",
+                                                 CcLocalCombatSkillName(combat_skill),
+                                                 cooldown) :
+                    combat_skill == CC_COMBAT_SKILL_SECOND_WIND ?
+                        "Second Wind is unnecessary at full health and posture." :
+                        "Select a living raider before using that skill.");
+            }
+        }
+        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+            Vector2 mouse = GetMousePosition();
+            int32_t combat_target = local->market_interior ? -1 :
+                CcLocalCoursePickPlayerTarget(
+                    &local->course, &local->agent, mouse, local_target,
+                    local_bounds);
+            if (combat_target >= 0) {
+                (void)snprintf(
+                    message, message_capacity,
+                    "Raider %d targeted; you close distance and fight automatically.",
+                    combat_target + 1);
+            } else {
+                if (!local->market_interior && local->course.alarm_active) {
+                    CcLocalCourseClearPlayerTarget(&local->agent);
+                }
+                if (CcLocalAgentPickTarget(&local->agent, mouse, local_target,
+                                           local_bounds,
+                                           local->market_interior)) {
+                    (void)snprintf(
+                        message, message_capacity,
+                        "Moving to %.2f,%.2f; combat target disengaged.",
+                        local->agent.target_point.x,
+                        local->agent.target_point.z);
+                }
+            }
         }
         float local_delta_time = GetFrameTime();
-        CcLocalAgentUpdate(&local->agent, local_delta_time,
-                           local->market_interior);
-        if (!local->market_interior) {
+        if (local->market_interior) {
+            CcLocalAgentUpdate(&local->agent, local_delta_time, true);
+        } else {
             if (IsKeyPressed(KEY_G)) {
                 if (!local->course.alarm_active) {
                     CcLocalCourseRaiseAlarmNear(&local->course,
@@ -1132,17 +1415,22 @@ int main(int argc, char **argv)
     bool capture_jump = argc >= 2 && strcmp(argv[1], "--capture-jump") == 0;
     bool capture_action_reel = argc >= 2 &&
         strcmp(argv[1], "--capture-action-reel") == 0;
+    bool capture_combat_reel = argc >= 2 &&
+        strcmp(argv[1], "--capture-combat-reel") == 0;
     bool capture = argc >= 2 &&
                    (strcmp(argv[1], "--capture") == 0 || capture_board ||
                     capture_interior || capture_navigation || capture_limbs ||
                     capture_walk_cycle || capture_defense ||
                     capture_downclimb || capture_map_case || capture_dojo ||
-                    capture_jump || capture_action_reel);
+                    capture_jump || capture_action_reel ||
+                    capture_combat_reel);
     const char *capture_path = argc >= 3 ? argv[2] : "architecture-proof.png";
     char save_path[640];
     CampaignSavePath(save_path, sizeof(save_path));
 
-    if (render_benchmark) SetTraceLogLevel(LOG_WARNING);
+    if (render_benchmark || capture_action_reel || capture_combat_reel) {
+        SetTraceLogLevel(LOG_WARNING);
+    }
     SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_WINDOW_RESIZABLE |
                    (capture ? FLAG_WINDOW_HIDDEN : 0U));
     InitWindow(1280, 760, "Crownless Carriage — living world spine");
@@ -1152,10 +1440,12 @@ int main(int argc, char **argv)
         return 1;
     }
     SetWindowMinSize(1080, 680);
-    SetTargetFPS(render_benchmark || capture_action_reel ? 0 : 60);
+    SetTargetFPS(render_benchmark || capture_action_reel ||
+                 capture_combat_reel ? 0 : 60);
     RenderTexture2D local_target = LoadRenderTexture(914, 570);
     SetTextureFilter(local_target.texture, TEXTURE_FILTER_BILINEAR);
     CcLocalRendererInit();
+    CcLocalRendererSetDiagnosticOverlay(capture_limbs);
 
     CcSim sim;
     CcSimInit(&sim, UINT32_C(0xc0a71a9e));
@@ -1169,11 +1459,12 @@ int main(int argc, char **argv)
     CcLocalAgent walk_cycle_frames[8] = {0};
     uint32_t walk_cycle_mask = 0;
     ActionReelState action_reel = {0};
+    CombatReelState combat_reel = {0};
     ResetLocalState(&local, &sim);
     if (capture && !capture_interior && !capture_walk_cycle &&
         !capture_jump && !capture_defense && !capture_downclimb &&
         !capture_navigation && !capture_limbs && !capture_dojo &&
-        !capture_action_reel) {
+        !capture_action_reel && !capture_combat_reel) {
         local.course.alarm_countdown = 1000.0f;
         for (int32_t frame = 0; frame < 1500; ++frame) {
             CcLocalCourseUpdate(&local.course, &local.agent, &sim,
@@ -1189,6 +1480,7 @@ int main(int argc, char **argv)
         }
     }
     if (capture_action_reel) PrepareActionReel(&local, &action_reel);
+    if (capture_combat_reel) PrepareCombatReel(&local, &combat_reel);
     if (capture_downclimb) {
         CcLocalAgentInit(&local.agent, (Vector2){3.50f, 6.20f}, false);
         (void)CcLocalAgentSetExactTarget(
@@ -1208,24 +1500,54 @@ int main(int argc, char **argv)
     }
     if (capture_defense) {
         CcLocalCourseRaiseAlarmNear(&local.course, &local.agent);
+        Vector3 duel_center = local.course.combat_origin;
+        CcLocalAgentInit(&local.agent,
+                         (Vector2){duel_center.x - 0.73f, duel_center.z},
+                         false);
+        CcLocalCombatSetTeam(&local.agent, CC_COMBAT_PLAYER);
+        for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
+            local.course.runners[i].agent.combat.defeated = true;
+            local.course.runners[i].agent.combat.health = 0.0f;
+        }
+        CcLocalAgentInit(&local.course.raiders[0],
+                         (Vector2){duel_center.x + 0.73f, duel_center.z},
+                         false);
+        CcLocalCombatSetTeam(&local.course.raiders[0], CC_COMBAT_RAIDER);
+        local.course.raider_response_stage[0] = 3;
+        local.course.raider_response_waypoint_active[0] = false;
+        local.course.raiders[1].combat.defeated = true;
+        local.course.raiders[1].combat.health = 0.0f;
+        (void)CcLocalCourseSelectPlayerTarget(&local.course,
+                                               &local.agent, 0);
+        (void)CcLocalCourseUsePlayerSkill(
+            &local.course, &local.agent, CC_COMBAT_SKILL_CRUSHING_BLOW);
         int32_t fighting_frames = 0;
-        for (int32_t frame = 0; frame < 9000 && fighting_frames < 20; ++frame) {
+        bool captured_skill_impact = false;
+        for (int32_t frame = 0; frame < 180 && !captured_skill_impact;
+             ++frame) {
             CcLocalCourseUpdate(&local.course, &local.agent, &sim,
                                 1.0f / 60.0f);
             fighting_frames = local.course.alarm_active &&
                               !local.course.raiders_retreating &&
                               local.course.raider_resolve < 100 ?
                               fighting_frames + 1 : 0;
+            captured_skill_impact =
+                local.agent.humanoid.action == CC_HUMANOID_ACTION_STRIKE &&
+                local.agent.combat.active_skill ==
+                    CC_COMBAT_SKILL_CRUSHING_BLOW &&
+                local.agent.humanoid.action_time >= 0.54f;
         }
-        (void)printf("defense capture: alarm %d retreat %d resolve %d wins %d fight frames %d origin %.2f,%.2f guards %.2f,%.2f raiders %.2f,%.2f\n",
+        (void)printf("defense capture: alarm %d retreat %d resolve %d wins %d fight frames %d skill impact %d pair %d range %.3f origin %.2f,%.2f player %.2f,%.2f raider %.2f,%.2f\n",
                      local.course.alarm_active,
                      local.course.raiders_retreating,
                      local.course.raider_resolve,
                      local.course.defenses_completed, fighting_frames,
+                     captured_skill_impact, local.course.player_pair.active,
+                     local.course.player_pair.distance,
                      local.course.combat_origin.x,
                      local.course.combat_origin.z,
-                     local.course.runners[0].agent.position.x,
-                     local.course.runners[0].agent.position.z,
+                     local.agent.position.x,
+                     local.agent.position.z,
                      local.course.raiders[0].position.x,
                      local.course.raiders[0].position.z);
     }
@@ -1306,6 +1628,11 @@ int main(int argc, char **argv)
     while (!WindowShouldClose()) {
         if (capture_walk_cycle) {
             local.agent = walk_cycle_frames[walk_frame_count];
+        } else if (capture_combat_reel) {
+            for (int32_t step = 0; step < 2 && !combat_reel.complete; ++step) {
+                UpdateCombatReel(&local, &combat_reel, message,
+                                 sizeof(message));
+            }
         } else if (capture_action_reel) {
             for (int32_t step = 0; step < 4 && !action_reel.complete; ++step) {
                 UpdateActionReel(&local, &action_reel, message,
@@ -1355,6 +1682,15 @@ int main(int argc, char **argv)
         if (render_benchmark) {
             render_benchmark_count += 1;
             if (render_benchmark_count >= render_benchmark_frames) break;
+        } else if (capture_combat_reel) {
+            capture_frames += 1;
+            if (capture_frames <= 2) continue;
+            char frame_path[768];
+            (void)snprintf(frame_path, sizeof(frame_path), "%s-%03d.png",
+                           capture_path, combat_reel.captured_frames);
+            TakeScreenshot(frame_path);
+            combat_reel.captured_frames += 1;
+            if (combat_reel.complete) break;
         } else if (capture_action_reel) {
             capture_frames += 1;
             if (capture_frames <= 2) continue;
@@ -1397,11 +1733,15 @@ int main(int argc, char **argv)
     } else if (capture_walk_cycle) {
         (void)printf("captured %d walk-cycle frames with prefix %s\n",
                      walk_frame_count, capture_path);
+    } else if (capture_combat_reel) {
+        (void)printf("captured %d combat-reel frames with prefix %s\n",
+                     combat_reel.captured_frames, capture_path);
     } else if (capture_action_reel) {
         (void)printf("captured %d heroic action-reel frames with prefix %s\n",
                      action_reel.captured_frames, capture_path);
     } else if (capture) {
         (void)printf("captured %s\n", capture_path);
     }
+    if (capture_combat_reel && combat_reel.failed) return 1;
     return 0;
 }

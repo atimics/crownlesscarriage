@@ -61,11 +61,23 @@ typedef enum CcCombatOutcome {
     CC_COMBAT_OUTCOME_DEFEATED
 } CcCombatOutcome;
 
+typedef enum CcCombatSkill {
+    CC_COMBAT_SKILL_CRUSHING_BLOW,
+    CC_COMBAT_SKILL_SUNDER,
+    CC_COMBAT_SKILL_SECOND_WIND,
+    CC_COMBAT_SKILL_COUNT
+} CcCombatSkill;
+
 typedef struct CcCombatState {
     Vector3 focus_point;
+    Vector3 control_velocity;
     Vector3 knockback_velocity;
+    Vector3 pending_root_impulse;
     Vector3 impact_point;
     Vector3 impact_direction;
+    Vector3 weapon_direction;
+    Vector3 previous_weapon_direction;
+    Vector3 weapon_direction_velocity;
     float health;
     float posture;
     float stagger_seconds;
@@ -73,13 +85,34 @@ typedef struct CcCombatState {
     float hitstop_seconds;
     float recovery_seconds;
     float impact_speed;
+    float auto_attack_cooldown;
+    float skill_cooldown[CC_COMBAT_SKILL_COUNT];
+    float strike_damage_scale;
+    float strike_posture_scale;
+    float strike_knockback_scale;
     int32_t target_index;
+    int32_t queued_skill;
+    int32_t active_skill;
     CcCombatTeam team;
     bool focus_valid;
+    bool control_velocity_valid;
     bool impact_valid;
+    bool weapon_direction_valid;
     bool strike_resolved;
     bool defeated;
 } CcCombatState;
+
+typedef struct CcCombatPairState {
+    Vector3 midpoint;
+    Vector3 axis;
+    float distance;
+    float radial_velocity;
+    float range_error;
+    float radial_command;
+    int32_t target_index;
+    bool active;
+    bool initialized;
+} CcCombatPairState;
 
 typedef struct CcLocalCapeState {
     Vector3 point[CC_LOCAL_CAPE_POINT_COUNT];
@@ -165,7 +198,9 @@ typedef struct CcLocalCourse {
     CcLocalAgent raiders[CC_LOCAL_RAIDER_COUNT];
     Vector3 raider_entry[CC_LOCAL_RAIDER_COUNT];
     Vector3 combat_origin;
+    CcCombatPairState player_pair;
     float alarm_countdown;
+    float simulation_accumulator;
     float engagement_time;
     float raider_attack_cooldown[CC_LOCAL_RAIDER_COUNT];
     int32_t raider_response_stage[CC_LOCAL_RAIDER_COUNT];
@@ -214,6 +249,7 @@ float CcLocalAgentAthleticProgress(const CcLocalAgent *agent,
 const char *CcAthleticDisciplineName(CcAthleticDiscipline discipline);
 CcCombatOutcome CcLocalCombatResolveStrike(CcLocalAgent *attacker,
                                            CcLocalAgent *defender);
+Vector3 CcLocalCombatWeaponDirection(const CcLocalAgent *agent);
 const char *CcLocalCombatOutcomeName(CcCombatOutcome outcome);
 const char *CcLocalCombatTeamName(CcCombatTeam team);
 void CcLocalCourseInit(CcLocalCourse *course);
@@ -226,8 +262,25 @@ bool CcLocalCourseBeginPlayerStrike(CcLocalCourse *course,
                                     CcLocalAgent *player);
 void CcLocalCourseSetPlayerGuarded(CcLocalCourse *course,
                                    CcLocalAgent *player, bool guarded);
+bool CcLocalCourseSelectPlayerTarget(CcLocalCourse *course,
+                                     CcLocalAgent *player,
+                                     int32_t target_index);
+int32_t CcLocalCoursePickPlayerTarget(CcLocalCourse *course,
+                                      CcLocalAgent *player,
+                                      Vector2 screen_point,
+                                      RenderTexture2D target,
+                                      Rectangle destination);
+void CcLocalCourseClearPlayerTarget(CcLocalAgent *player);
+bool CcLocalCourseUsePlayerSkill(CcLocalCourse *course,
+                                 CcLocalAgent *player,
+                                 CcCombatSkill skill);
+const char *CcLocalCombatSkillName(CcCombatSkill skill);
+float CcLocalCombatSkillCooldown(const CcLocalAgent *player,
+                                 CcCombatSkill skill);
+float CcLocalCombatSkillDuration(CcCombatSkill skill);
 
 void CcLocalRendererInit(void);
+void CcLocalRendererSetDiagnosticOverlay(bool enabled);
 void CcLocalRendererShutdown(void);
 void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                          const CcLocalCourse *course, float clock,

@@ -22,6 +22,68 @@ static const float PLAYER_COLLISION_RADIUS = 0.30f;
 static const float PERSON_COLLISION_RADIUS = 0.27f;
 static const float COURSE_GUARD_SPACING = 1.18f;
 static const float COURSE_RAIDER_SPACING = 1.48f;
+static const float COMBAT_PERSONAL_SPACE = 1.08f;
+static const float COMBAT_NPC_STANDOFF = 1.30f;
+static const float COMBAT_PAIR_MIN_RANGE = 1.38f;
+static const float COMBAT_PAIR_IDEAL_RANGE = 1.46f;
+static const float COMBAT_PAIR_MAX_RANGE = 1.52f;
+static const float COMBAT_PAIR_ACQUIRE_RANGE = 2.30f;
+static const float COMBAT_PAIR_RELEASE_RANGE = 2.65f;
+static bool draw_hero_rig_debug = false;
+
+typedef struct CcCombatMoveDefinition {
+    const char *name;
+    float skill_cooldown;
+    float attack_cooldown;
+    float damage_scale;
+    float posture_scale;
+    float knockback_scale;
+    float health_restore;
+    float posture_restore;
+    CcHumanoidStrikeStyle strike_style;
+    bool restorative;
+} CcCombatMoveDefinition;
+
+static const CcCombatMoveDefinition COMBAT_BASIC_ATTACK = {
+    .name = "BASIC CUT",
+    .attack_cooldown = 0.92f,
+    .damage_scale = 1.0f,
+    .posture_scale = 1.0f,
+    .knockback_scale = 1.0f,
+    .strike_style = CC_HUMANOID_STRIKE_CUT,
+};
+
+static const CcCombatMoveDefinition COMBAT_SKILL_DEFINITIONS[] = {
+    [CC_COMBAT_SKILL_CRUSHING_BLOW] = {
+        .name = "CRUSHING BLOW",
+        .skill_cooldown = 6.0f,
+        .attack_cooldown = 1.12f,
+        .damage_scale = 1.75f,
+        .posture_scale = 1.15f,
+        .knockback_scale = 1.45f,
+        .strike_style = CC_HUMANOID_STRIKE_HEAVY,
+    },
+    [CC_COMBAT_SKILL_SUNDER] = {
+        .name = "SUNDER",
+        .skill_cooldown = 8.0f,
+        .attack_cooldown = 1.12f,
+        .damage_scale = 0.80f,
+        .posture_scale = 2.65f,
+        .knockback_scale = 0.82f,
+        .strike_style = CC_HUMANOID_STRIKE_SWEEP,
+    },
+    [CC_COMBAT_SKILL_SECOND_WIND] = {
+        .name = "SECOND WIND",
+        .skill_cooldown = 14.0f,
+        .health_restore = 34.0f,
+        .posture_restore = 52.0f,
+        .restorative = true,
+    },
+};
+
+_Static_assert(sizeof(COMBAT_SKILL_DEFINITIONS) /
+               sizeof(COMBAT_SKILL_DEFINITIONS[0]) == CC_COMBAT_SKILL_COUNT,
+               "every combat skill needs a move definition");
 
 typedef struct WorldLabel {
     Vector3 point;
@@ -120,6 +182,7 @@ static const Vector3 COURSE_WAYPOINTS[] = {
 
 static Camera3D LocalCamera(bool interior, Vector3 focus);
 static float WrapAngle(float angle);
+static float SmoothStep01(float amount);
 static void UpdateHeroCape(CcLocalAgent *agent, float delta_time);
 
 static bool CourseWaterContains(float x, float z)
@@ -425,6 +488,8 @@ void CcLocalAgentInit(CcLocalAgent *agent, Vector2 position, bool market_interio
     agent->combat.health = CC_LOCAL_COMBAT_MAX_HEALTH;
     agent->combat.posture = CC_LOCAL_COMBAT_MAX_POSTURE;
     agent->combat.target_index = -1;
+    agent->combat.queued_skill = -1;
+    agent->combat.active_skill = -1;
     for (int32_t discipline = 0;
          discipline < CC_ATHLETIC_DISCIPLINE_COUNT; ++discipline) {
         agent->athletics.level[discipline] = 1;
@@ -439,6 +504,8 @@ void CcLocalAgentSetMorphology(CcLocalAgent *agent, CcMorphologyPreset preset,
     if (!CcLimbMorphologyFromPreset(&morphology, preset)) return;
     agent->morphology = preset;
     agent->ragdoll_visual_blend = 0.0f;
+    agent->combat.weapon_direction_valid = false;
+    agent->combat.weapon_direction_velocity = (Vector3){0};
     LocalProbeContext context = {.market_interior = market_interior};
     Vector3 body = {agent->position.x,
                     agent->position.y + morphology.body_height,
@@ -496,6 +563,12 @@ static Vector3 CombatScale(Vector3 value, float scale)
     return (Vector3){value.x * scale, value.y * scale, value.z * scale};
 }
 
+static Vector3 CombatLerp(Vector3 first, Vector3 second, float amount)
+{
+    return CombatAdd(CombatScale(first, 1.0f - amount),
+                     CombatScale(second, amount));
+}
+
 static float CombatDot(Vector3 a, Vector3 b)
 {
     return a.x * b.x + a.y * b.y + a.z * b.z;
@@ -504,6 +577,153 @@ static float CombatDot(Vector3 a, Vector3 b)
 static float CombatLengthSquared(Vector3 value)
 {
     return CombatDot(value, value);
+}
+
+static Vector3 CombatNormalizeOr(Vector3 value, Vector3 fallback)
+{
+    float length_squared = CombatLengthSquared(value);
+    if (length_squared <= 0.000001f) return fallback;
+    return CombatScale(value, 1.0f / sqrtf(length_squared));
+}
+
+static Vector3 CombatDirectionBlend(Vector3 first, Vector3 second,
+                                    float amount, Vector3 fallback)
+{
+    amount = CombatClamp(amount, 0.0f, 1.0f);
+    return CombatNormalizeOr(
+        CombatAdd(CombatScale(first, 1.0f - amount),
+                  CombatScale(second, amount)), fallback);
+}
+
+static Vector3 CombatWeaponDirectionAt(const CcLocalAgent *agent,
+                                       float action_time)
+{
+    Vector3 forward = {sinf(agent->facing_yaw), 0.0f,
+                       cosf(agent->facing_yaw)};
+    Vector3 right = {cosf(agent->facing_yaw), 0.0f,
+                     -sinf(agent->facing_yaw)};
+    const Vector3 up = {0.0f, 1.0f, 0.0f};
+    Vector3 guard = CombatNormalizeOr(
+        CombatAdd(CombatScale(forward, 0.66f),
+                  CombatAdd(CombatScale(right, 0.24f),
+                            CombatScale(up, 0.62f))), forward);
+    if (agent->humanoid.action != CC_HUMANOID_ACTION_STRIKE) {
+        if (agent->humanoid.action == CC_HUMANOID_ACTION_GUARD) {
+            return guard;
+        }
+        return CombatNormalizeOr(
+            CombatAdd(CombatScale(up, -0.90f),
+                      CombatAdd(CombatScale(right, 0.22f),
+                                CombatScale(forward, 0.18f))), forward);
+    }
+
+    float phase = CombatClamp(
+        action_time / CcHumanoidStrikeDuration(), 0.0f, 1.0f);
+    Vector3 chamber;
+    Vector3 cut;
+    float chamber_end = 0.22f;
+    float cut_end = 0.58f;
+    if (agent->combat.active_skill == CC_COMBAT_SKILL_CRUSHING_BLOW) {
+        chamber = CombatNormalizeOr(
+            CombatAdd(CombatScale(up, 0.96f),
+                      CombatAdd(CombatScale(right, 0.14f),
+                                CombatScale(forward, -0.20f))), guard);
+        cut = CombatNormalizeOr(
+            CombatAdd(CombatScale(forward, 0.90f),
+                      CombatAdd(CombatScale(up, -0.42f),
+                                CombatScale(right, -0.08f))), forward);
+        chamber_end = 0.32f;
+        cut_end = 0.64f;
+    } else if (agent->combat.active_skill == CC_COMBAT_SKILL_SUNDER) {
+        chamber = CombatNormalizeOr(
+            CombatAdd(CombatScale(right, 0.94f),
+                      CombatAdd(CombatScale(forward, -0.22f),
+                                CombatScale(up, 0.24f))), guard);
+        cut = CombatNormalizeOr(
+            CombatAdd(CombatScale(right, -0.82f),
+                      CombatAdd(CombatScale(forward, 0.56f),
+                                CombatScale(up, 0.08f))), forward);
+        chamber_end = 0.26f;
+        cut_end = 0.60f;
+    } else {
+        chamber = CombatNormalizeOr(
+            CombatAdd(CombatScale(right, 0.72f),
+                      CombatAdd(CombatScale(up, 0.66f),
+                                CombatScale(forward, -0.20f))), guard);
+        cut = CombatNormalizeOr(
+            CombatAdd(CombatScale(right, -0.58f),
+                      CombatAdd(CombatScale(forward, 0.78f),
+                                CombatScale(up, 0.18f))), forward);
+    }
+    if (phase < chamber_end) {
+        return CombatDirectionBlend(guard, chamber,
+            SmoothStep01(phase / chamber_end), guard);
+    }
+    if (phase < cut_end) {
+        return CombatDirectionBlend(chamber, cut,
+            SmoothStep01((phase - chamber_end) /
+                         (cut_end - chamber_end)), cut);
+    }
+    return CombatDirectionBlend(cut, guard,
+        SmoothStep01((phase - cut_end) / (1.0f - cut_end)), guard);
+}
+
+Vector3 CcLocalCombatWeaponDirection(const CcLocalAgent *agent)
+{
+    if (agent == NULL) return (Vector3){0.0f, -1.0f, 0.0f};
+    return agent->combat.weapon_direction_valid ?
+        agent->combat.weapon_direction :
+        CombatWeaponDirectionAt(agent, agent->humanoid.action_time);
+}
+
+static void CombatUpdateWeaponMotion(CcLocalAgent *agent, float delta_time)
+{
+    if (agent == NULL || agent->morphology != CC_MORPHOLOGY_BIPED ||
+        !agent->humanoid.initialized) {
+        return;
+    }
+    CcCombatState *combat = &agent->combat;
+    Vector3 desired = CombatWeaponDirectionAt(
+        agent, agent->humanoid.action_time);
+    if (!combat->weapon_direction_valid) {
+        combat->weapon_direction = desired;
+        combat->previous_weapon_direction = desired;
+        combat->weapon_direction_velocity = (Vector3){0};
+        combat->weapon_direction_valid = true;
+        return;
+    }
+
+    combat->previous_weapon_direction = combat->weapon_direction;
+    float response = agent->combat.stagger_seconds > 0.0f ||
+                     agent->humanoid.ragdoll.active ? 10.0f : 14.0f;
+    if (agent->humanoid.action == CC_HUMANOID_ACTION_STRIKE) {
+        float phase = CombatClamp(
+            agent->humanoid.action_time / CcHumanoidStrikeDuration(),
+            0.0f, 1.0f);
+        float commitment = SmoothStep01((phase - 0.12f) / 0.18f);
+        response = 32.0f + 20.0f * commitment;
+    }
+    Vector3 displacement = CombatSubtract(combat->weapon_direction, desired);
+    Vector3 junction = CombatAdd(
+        combat->weapon_direction_velocity,
+        CombatScale(displacement, response));
+    float decay = expf(-response * delta_time);
+    Vector3 next = CombatAdd(
+        desired,
+        CombatScale(CombatAdd(displacement,
+                              CombatScale(junction, delta_time)), decay));
+    Vector3 velocity = CombatScale(
+        CombatSubtract(combat->weapon_direction_velocity,
+                       CombatScale(junction, response * delta_time)), decay);
+    next = CombatNormalizeOr(next, desired);
+    velocity = CombatSubtract(
+        velocity, CombatScale(next, CombatDot(velocity, next)));
+    float speed_squared = CombatLengthSquared(velocity);
+    if (speed_squared > 144.0f) {
+        velocity = CombatScale(velocity, 12.0f / sqrtf(speed_squared));
+    }
+    combat->weapon_direction = next;
+    combat->weapon_direction_velocity = velocity;
 }
 
 static float CombatHorizontalDistanceSquared(const CcLocalAgent *a,
@@ -593,16 +813,16 @@ static Vector3 CombatClosestPointOnSegment(Vector3 start, Vector3 end,
 
 static float CombatWeaponExtension(CcCombatTeam team)
 {
-    if (team == CC_COMBAT_GUARD) return 0.66f;
-    if (team == CC_COMBAT_RAIDER) return 0.42f;
-    return 0.10f;
+    if (team == CC_COMBAT_GUARD) return 0.78f;
+    if (team == CC_COMBAT_RAIDER) return 0.86f;
+    return 1.02f;
 }
 
 static float CombatStrikeReach(CcCombatTeam team)
 {
-    if (team == CC_COMBAT_GUARD) return 1.38f;
-    if (team == CC_COMBAT_RAIDER) return 1.18f;
-    return 1.04f;
+    if (team == CC_COMBAT_GUARD) return 1.62f;
+    if (team == CC_COMBAT_RAIDER) return 1.56f;
+    return 1.56f;
 }
 
 static float CombatStrikeDamage(const CcLocalAgent *attacker)
@@ -625,7 +845,7 @@ static bool CombatTeamsHostile(CcCombatTeam first, CcCombatTeam second)
     return first_raider != second_raider;
 }
 
-static void CombatApplyKnockback(CcLocalAgent *attacker,
+static void CombatQueueKnockback(CcLocalAgent *attacker,
                                  CcLocalAgent *defender,
                                  Vector3 direction, float speed)
 {
@@ -642,17 +862,15 @@ static void CombatApplyKnockback(CcLocalAgent *attacker,
             length = 1.0f;
         }
     }
-    defender->combat.knockback_velocity.x = x / length * speed;
-    defender->combat.knockback_velocity.z = z / length * speed;
-    if (defender->humanoid.initialized &&
-        !defender->humanoid.ragdoll.active) {
-        defender->humanoid.body.root.velocity.x += x / length * speed * 0.46f;
-        defender->humanoid.body.root.velocity.z += z / length * speed * 0.46f;
-        defender->humanoid.root_velocity.x =
-            defender->humanoid.body.root.velocity.x;
-        defender->humanoid.root_velocity.z =
-            defender->humanoid.body.root.velocity.z;
-    }
+    float normal_x = x / length;
+    float normal_z = z / length;
+    defender->combat.knockback_velocity.x = normal_x * speed;
+    defender->combat.knockback_velocity.z = normal_z * speed;
+    /* Queue the instantaneous part for the next fixed physics step. Combat
+       resolution no longer mutates the gait body behind the movement
+       controller's back. */
+    defender->combat.pending_root_impulse.x += normal_x * speed * 0.46f;
+    defender->combat.pending_root_impulse.z += normal_z * speed * 0.46f;
 }
 
 static void CombatDefeat(CcLocalAgent *agent)
@@ -661,6 +879,8 @@ static void CombatDefeat(CcLocalAgent *agent)
     agent->combat.defeated = true;
     agent->combat.focus_valid = false;
     agent->combat.target_index = -1;
+    agent->combat.queued_skill = -1;
+    agent->combat.active_skill = -1;
     agent->exact_target_valid = false;
     agent->combat.stagger_seconds = 1.10f;
     agent->combat.recovery_seconds = agent->combat.team == CC_COMBAT_PLAYER ?
@@ -716,6 +936,7 @@ bool CcLocalCombatBeginStrike(CcLocalAgent *agent,
     if (target != NULL) CcLocalCombatSetFocus(agent, target);
     if (!CcHumanoidGaitBeginStrike(&agent->humanoid, 1)) return false;
     agent->combat.strike_resolved = false;
+    agent->combat.active_skill = -1;
     return true;
 }
 
@@ -744,6 +965,15 @@ CcCombatOutcome CcLocalCombatResolveStrike(CcLocalAgent *attacker,
         return CC_COMBAT_OUTCOME_NONE;
     }
     attacker->combat.strike_resolved = true;
+    float damage_scale = attacker->combat.strike_damage_scale > 0.0f ?
+                         attacker->combat.strike_damage_scale : 1.0f;
+    float posture_scale = attacker->combat.strike_posture_scale > 0.0f ?
+                          attacker->combat.strike_posture_scale : 1.0f;
+    float knockback_scale = attacker->combat.strike_knockback_scale > 0.0f ?
+                            attacker->combat.strike_knockback_scale : 1.0f;
+    attacker->combat.strike_damage_scale = 0.0f;
+    attacker->combat.strike_posture_scale = 0.0f;
+    attacker->combat.strike_knockback_scale = 0.0f;
     if (defender == NULL || attacker == defender || attacker->combat.defeated ||
         defender->combat.defeated ||
         !CombatTeamsHostile(attacker->combat.team, defender->combat.team) ||
@@ -763,13 +993,17 @@ CcCombatOutcome CcLocalCombatResolveStrike(CcLocalAgent *attacker,
     Vector3 previous_hand = FromLimbVector(
         attacker->humanoid.previous_pose.hand[arm]);
     Vector3 current_hand = FromLimbVector(attacker->humanoid.pose.hand[arm]);
-    Vector3 forward = {sinf(attacker->facing_yaw), 0.0f,
-                       cosf(attacker->facing_yaw)};
     float extension = CombatWeaponExtension(attacker->combat.team);
+    Vector3 current_direction = CcLocalCombatWeaponDirection(attacker);
+    Vector3 previous_direction =
+        attacker->combat.weapon_direction_valid ?
+        attacker->combat.previous_weapon_direction : current_direction;
     Vector3 previous_tip = CombatAdd(previous_hand,
-                                     CombatScale(forward, extension));
+                                     CombatScale(previous_direction,
+                                                 extension));
     Vector3 current_tip = CombatAdd(current_hand,
-                                    CombatScale(forward, extension));
+                                    CombatScale(current_direction,
+                                                extension));
     Vector3 body_bottom = {defender->position.x,
                            defender->position.y + 0.38f,
                            defender->position.z};
@@ -784,7 +1018,7 @@ CcCombatOutcome CcLocalCombatResolveStrike(CcLocalAgent *attacker,
     collision_distance = fminf(collision_distance,
         CombatSegmentDistanceSquared(previous_tip, current_tip,
                                      body_bottom, body_top));
-    const float combined_radius = 0.41f;
+    const float combined_radius = 0.52f;
     if (collision_distance > combined_radius * combined_radius) {
         return CC_COMBAT_OUTCOME_MISS;
     }
@@ -792,7 +1026,7 @@ CcCombatOutcome CcLocalCombatResolveStrike(CcLocalAgent *attacker,
     Vector3 tip_motion = CombatSubtract(current_tip, previous_tip);
     float tip_travel = sqrtf(CombatLengthSquared(tip_motion));
     Vector3 impact_direction = tip_travel > 0.001f ?
-        CombatScale(tip_motion, 1.0f / tip_travel) : forward;
+        CombatScale(tip_motion, 1.0f / tip_travel) : current_direction;
     float impact_speed = tip_travel /
         fmaxf(attacker->humanoid.last_delta_time, 1.0f / 240.0f);
     impact_speed = CombatClamp(impact_speed, 2.4f, 9.0f);
@@ -837,12 +1071,12 @@ CcCombatOutcome CcLocalCombatResolveStrike(CcLocalAgent *attacker,
                                42.0f :
                                attacker->combat.team == CC_COMBAT_RAIDER ?
                                24.0f : 32.0f;
-        posture_damage *= impact_scale;
+        posture_damage *= impact_scale * posture_scale;
         defender->combat.posture = fmaxf(0.0f,
                                          defender->combat.posture -
                                          posture_damage);
-        CombatApplyKnockback(attacker, defender, impact_direction,
-                             0.34f * impact_scale);
+        CombatQueueKnockback(attacker, defender, impact_direction,
+                             0.34f * impact_scale * knockback_scale);
         CcHumanoidGaitApplyImpact(
             &attacker->humanoid, ToLimbVector(CombatScale(
                 impact_direction, -1.0f)), 0.22f);
@@ -854,10 +1088,11 @@ CcCombatOutcome CcLocalCombatResolveStrike(CcLocalAgent *attacker,
         CcHumanoidGaitSetGuarded(&defender->humanoid, false);
         defender->combat.health = fmaxf(
             0.0f, defender->combat.health -
-            CombatStrikeDamage(attacker) * impact_scale * 0.65f);
+            CombatStrikeDamage(attacker) * impact_scale * 0.65f *
+            damage_scale);
         defender->combat.stagger_seconds = 0.78f;
-        CombatApplyKnockback(attacker, defender, impact_direction,
-                             1.22f * impact_scale);
+        CombatQueueKnockback(attacker, defender, impact_direction,
+                             1.22f * impact_scale * knockback_scale);
         CcLocalAgentTrainAthleticism(attacker, CC_ATHLETIC_POWER, 12.0f);
         if (defender->combat.health <= 0.0f) {
             CcLocalAgentTrainAthleticism(attacker, CC_ATHLETIC_POWER, 12.0f);
@@ -869,12 +1104,13 @@ CcCombatOutcome CcLocalCombatResolveStrike(CcLocalAgent *attacker,
 
     defender->combat.health = fmaxf(
         0.0f, defender->combat.health -
-        CombatStrikeDamage(attacker) * impact_scale);
+        CombatStrikeDamage(attacker) * impact_scale * damage_scale);
     defender->combat.posture = fmaxf(
-        0.0f, defender->combat.posture - 12.0f * impact_scale);
+        0.0f, defender->combat.posture -
+        12.0f * impact_scale * posture_scale);
     defender->combat.stagger_seconds = 0.34f;
-    CombatApplyKnockback(attacker, defender, impact_direction,
-                         1.06f * impact_scale);
+    CombatQueueKnockback(attacker, defender, impact_direction,
+                         1.06f * impact_scale * knockback_scale);
     CcLocalAgentTrainAthleticism(attacker, CC_ATHLETIC_POWER, 12.0f);
     if (defender->combat.health <= 0.0f) {
         CcLocalAgentTrainAthleticism(attacker, CC_ATHLETIC_POWER, 12.0f);
@@ -906,6 +1142,36 @@ const char *CcLocalCombatTeamName(CcCombatTeam team)
         case CC_COMBAT_NEUTRAL:
         default: return "";
     }
+}
+
+static bool CombatSkillValid(CcCombatSkill skill)
+{
+    return skill >= 0 && skill < CC_COMBAT_SKILL_COUNT;
+}
+
+static const CcCombatMoveDefinition *CombatMoveForSkill(CcCombatSkill skill)
+{
+    return CombatSkillValid(skill) ? &COMBAT_SKILL_DEFINITIONS[skill] :
+                                     &COMBAT_BASIC_ATTACK;
+}
+
+const char *CcLocalCombatSkillName(CcCombatSkill skill)
+{
+    return CombatSkillValid(skill) ? CombatMoveForSkill(skill)->name :
+                                     "SKILL";
+}
+
+float CcLocalCombatSkillDuration(CcCombatSkill skill)
+{
+    return CombatSkillValid(skill) ?
+        CombatMoveForSkill(skill)->skill_cooldown : 0.0f;
+}
+
+float CcLocalCombatSkillCooldown(const CcLocalAgent *player,
+                                 CcCombatSkill skill)
+{
+    if (player == NULL || !CombatSkillValid(skill)) return 0.0f;
+    return fmaxf(0.0f, player->combat.skill_cooldown[skill]);
 }
 
 void CcLocalCourseInit(CcLocalCourse *course)
@@ -998,6 +1264,8 @@ static void CoursePrepareCombatant(CcLocalAgent *agent, CcCombatTeam team)
         .health = CC_LOCAL_COMBAT_MAX_HEALTH,
         .posture = CC_LOCAL_COMBAT_MAX_POSTURE,
         .target_index = -1,
+        .queued_skill = -1,
+        .active_skill = -1,
         .team = team,
     };
     agent->exact_target_valid = false;
@@ -1200,11 +1468,13 @@ static void UpdateCourseTravellers(CcLocalCourse *course, const CcSim *sim,
 static int32_t CourseClosestRaider(const CcLocalCourse *course,
                                    const CcLocalAgent *agent,
                                    float maximum_distance,
-                                   bool require_forward)
+                                   bool require_forward,
+                                   int32_t excluded_index)
 {
     int32_t closest = -1;
     float closest_distance = maximum_distance * maximum_distance;
     for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
+        if (i == excluded_index) continue;
         const CcLocalAgent *raider = &course->raiders[i];
         if (raider->combat.defeated) continue;
         float distance = CombatHorizontalDistanceSquared(agent, raider);
@@ -1222,7 +1492,7 @@ static CcLocalAgent *CourseClosestDefender(CcLocalCourse *course,
                                            const CcLocalAgent *raider)
 {
     CcLocalAgent *closest = NULL;
-    float closest_distance = 2.35f * 2.35f;
+    float closest_distance = 3.20f * 3.20f;
     for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
         CcLocalAgent *guard = &course->runners[i].agent;
         if (guard->combat.defeated || CourseAgentBusy(guard)) continue;
@@ -1303,17 +1573,344 @@ static void CourseBeginRetreat(CcLocalCourse *course, CcLocalAgent *player)
     if (player != NULL) CcLocalCombatClearFocus(player);
 }
 
+static CcLocalAgent *CoursePlayerTarget(CcLocalCourse *course,
+                                        const CcLocalAgent *player)
+{
+    if (course == NULL || player == NULL ||
+        player->combat.target_index < 0 ||
+        player->combat.target_index >= CC_LOCAL_RAIDER_COUNT) {
+        return NULL;
+    }
+    CcLocalAgent *target = &course->raiders[player->combat.target_index];
+    return target->combat.defeated ? NULL : target;
+}
+
+static Vector3 CourseCombatApproachPoint(const CcLocalAgent *mover,
+                                         const CcLocalAgent *target,
+                                         float standoff)
+{
+    float x = mover->position.x - target->position.x;
+    float z = mover->position.z - target->position.z;
+    float distance = sqrtf(x * x + z * z);
+    if (distance <= 0.0001f) {
+        x = -sinf(mover->facing_yaw);
+        z = -cosf(mover->facing_yaw);
+        distance = 1.0f;
+    }
+    return (Vector3){target->position.x + x / distance * standoff,
+                     target->position.y,
+                     target->position.z + z / distance * standoff};
+}
+
+static void CourseClearCombatControl(CcLocalAgent *agent)
+{
+    if (agent == NULL) return;
+    agent->combat.control_velocity = (Vector3){0};
+    agent->combat.control_velocity_valid = false;
+}
+
+static void CourseClearCombatControls(CcLocalCourse *course,
+                                      CcLocalAgent *player)
+{
+    CourseClearCombatControl(player);
+    for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
+        CourseClearCombatControl(&course->runners[i].agent);
+    }
+    for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
+        CourseClearCombatControl(&course->raiders[i]);
+    }
+}
+
+static void CourseCoordinatePlayerPair(CcLocalCourse *course,
+                                       CcLocalAgent *player,
+                                       float delta_time)
+{
+    CcCombatPairState *pair = &course->player_pair;
+    CcLocalAgent *target = CoursePlayerTarget(course, player);
+    if (target == NULL || player == NULL || player->combat.defeated ||
+        course->raiders_retreating) {
+        pair->active = false;
+        pair->initialized = false;
+        pair->target_index = -1;
+        return;
+    }
+
+    float x = target->position.x - player->position.x;
+    float z = target->position.z - player->position.z;
+    float distance = sqrtf(x * x + z * z);
+    bool same_active_pair = pair->active &&
+        pair->target_index == player->combat.target_index;
+    float control_range = same_active_pair ? COMBAT_PAIR_RELEASE_RANGE :
+                                             COMBAT_PAIR_ACQUIRE_RANGE;
+    if (distance > control_range) {
+        pair->active = false;
+        pair->initialized = false;
+        pair->target_index = -1;
+        return;
+    }
+    Vector3 raw_axis = distance > 0.0001f ?
+        (Vector3){x / distance, 0.0f, z / distance} :
+        (Vector3){sinf(player->facing_yaw), 0.0f,
+                  cosf(player->facing_yaw)};
+    Vector3 raw_midpoint = {
+        (player->position.x + target->position.x) * 0.5f,
+        (player->position.y + target->position.y) * 0.5f,
+        (player->position.z + target->position.z) * 0.5f
+    };
+    bool new_pair = !pair->initialized ||
+                    pair->target_index != player->combat.target_index;
+    if (new_pair) {
+        pair->axis = raw_axis;
+        pair->midpoint = raw_midpoint;
+        pair->radial_command = 0.0f;
+        pair->initialized = true;
+    } else {
+        float axis_response = 1.0f - expf(-14.0f * delta_time);
+        pair->axis = CombatNormalizeOr(
+            CombatLerp(pair->axis, raw_axis, axis_response), raw_axis);
+        pair->midpoint = CombatLerp(
+            pair->midpoint, raw_midpoint,
+            1.0f - expf(-8.0f * delta_time));
+    }
+    pair->active = true;
+    pair->target_index = player->combat.target_index;
+    pair->distance = distance;
+    pair->radial_velocity =
+        (target->velocity.x - player->velocity.x) * pair->axis.x +
+        (target->velocity.z - player->velocity.z) * pair->axis.z;
+    pair->range_error = distance > COMBAT_PAIR_MAX_RANGE ||
+                        distance < COMBAT_PAIR_MIN_RANGE ?
+                        distance - COMBAT_PAIR_IDEAL_RANGE : 0.0f;
+
+    float desired_radial_velocity = CombatClamp(
+        -pair->range_error * 2.8f, -1.35f, 1.35f);
+    float requested_command = CombatClamp(
+        (pair->radial_velocity - desired_radial_velocity) * 0.5f,
+        -0.82f, 0.82f);
+    if (pair->range_error == 0.0f &&
+        fabsf(pair->radial_velocity) < 0.035f) {
+        requested_command = 0.0f;
+    }
+    bool recovery_locked =
+        player->humanoid.action == CC_HUMANOID_ACTION_STRIKE ||
+        target->humanoid.action == CC_HUMANOID_ACTION_STRIKE ||
+        CcHumanoidGaitStrikeRecovering(&player->humanoid) ||
+        CcHumanoidGaitStrikeRecovering(&target->humanoid) ||
+        player->combat.stagger_seconds > 0.0f ||
+        target->combat.stagger_seconds > 0.0f ||
+        player->combat.hitstop_seconds > 0.0f ||
+        target->combat.hitstop_seconds > 0.0f;
+    if (recovery_locked) requested_command = 0.0f;
+    bool braking = requested_command * pair->radial_command <= 0.0f ||
+                   fabsf(requested_command) < fabsf(pair->radial_command);
+    float response_rate = recovery_locked ? 24.0f : braking ? 20.0f : 9.0f;
+    float command_response = 1.0f - expf(-response_rate * delta_time);
+    pair->radial_command +=
+        (requested_command - pair->radial_command) * command_response;
+    if (recovery_locked && fabsf(pair->radial_command) < 0.01f) {
+        pair->radial_command = 0.0f;
+    }
+    float closing_command = pair->radial_command;
+    float target_share = 0.5f;
+    float player_share = 1.0f - target_share;
+    player->combat.control_velocity = CombatScale(
+        pair->axis, closing_command * player_share);
+    target->combat.control_velocity = CombatScale(
+        pair->axis, -closing_command * target_share);
+    player->combat.control_velocity_valid = true;
+    target->combat.control_velocity_valid = true;
+    player->exact_target_valid = false;
+    player->target_valid = false;
+    if (target_share > 0.0f) target->exact_target_valid = false;
+    CcLocalCombatSetFocus(player, target);
+}
+
+void CcLocalCourseClearPlayerTarget(CcLocalAgent *player)
+{
+    if (player == NULL) return;
+    player->combat.queued_skill = -1;
+    CcHumanoidGaitSetGuarded(&player->humanoid, false);
+    CcLocalCombatClearFocus(player);
+}
+
+bool CcLocalCourseSelectPlayerTarget(CcLocalCourse *course,
+                                     CcLocalAgent *player,
+                                     int32_t target_index)
+{
+    if (course == NULL || player == NULL || !course->alarm_active ||
+        course->raiders_retreating || target_index < 0 ||
+        target_index >= CC_LOCAL_RAIDER_COUNT ||
+        course->raiders[target_index].combat.defeated) {
+        return false;
+    }
+    CcLocalCombatSetTeam(player, CC_COMBAT_PLAYER);
+    player->combat.target_index = target_index;
+    player->combat.queued_skill = -1;
+    player->exact_target_valid = false;
+    player->target_valid = false;
+    CcLocalCombatSetFocus(player, &course->raiders[target_index]);
+    return true;
+}
+
+int32_t CcLocalCoursePickPlayerTarget(CcLocalCourse *course,
+                                      CcLocalAgent *player,
+                                      Vector2 screen_point,
+                                      RenderTexture2D target,
+                                      Rectangle destination)
+{
+    if (course == NULL || player == NULL || !course->alarm_active ||
+        course->raiders_retreating ||
+        !CheckCollisionPointRec(screen_point, destination)) {
+        return -1;
+    }
+    Vector2 local = {
+        (screen_point.x - destination.x) / destination.width *
+            (float)target.texture.width,
+        (screen_point.y - destination.y) / destination.height *
+            (float)target.texture.height
+    };
+    Camera3D camera = LocalCamera(false, player->position);
+    Ray ray = GetScreenToWorldRayEx(local, camera, target.texture.width,
+                                    target.texture.height);
+    int32_t picked = -1;
+    float nearest = FLT_MAX;
+    for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
+        const CcLocalAgent *raider = &course->raiders[i];
+        if (raider->combat.defeated) continue;
+        BoundingBox body = {
+            .min = {raider->position.x - 0.48f, raider->position.y,
+                    raider->position.z - 0.48f},
+            .max = {raider->position.x + 0.48f,
+                    raider->position.y + 2.15f,
+                    raider->position.z + 0.48f}
+        };
+        RayCollision collision = GetRayCollisionBox(ray, body);
+        if (!collision.hit || collision.distance >= nearest) continue;
+        picked = i;
+        nearest = collision.distance;
+    }
+    return CcLocalCourseSelectPlayerTarget(course, player, picked) ?
+           picked : -1;
+}
+
+bool CcLocalCourseUsePlayerSkill(CcLocalCourse *course,
+                                 CcLocalAgent *player,
+                                 CcCombatSkill skill)
+{
+    if (course == NULL || player == NULL || !CombatSkillValid(skill) ||
+        player->combat.defeated ||
+        player->combat.skill_cooldown[skill] > 0.0f) {
+        return false;
+    }
+    const CcCombatMoveDefinition *move = CombatMoveForSkill(skill);
+    if (move->restorative) {
+        if (player->combat.health >= CC_LOCAL_COMBAT_MAX_HEALTH &&
+            player->combat.posture >= CC_LOCAL_COMBAT_MAX_POSTURE) {
+            return false;
+        }
+        player->combat.health = fminf(CC_LOCAL_COMBAT_MAX_HEALTH,
+            player->combat.health + move->health_restore);
+        player->combat.posture = fminf(CC_LOCAL_COMBAT_MAX_POSTURE,
+            player->combat.posture + move->posture_restore);
+        player->combat.skill_cooldown[skill] = move->skill_cooldown;
+        return true;
+    }
+    if (!course->alarm_active || course->raiders_retreating ||
+        CoursePlayerTarget(course, player) == NULL) {
+        return false;
+    }
+    player->combat.queued_skill = (int32_t)skill;
+    return true;
+}
+
+static bool CourseBeginPlayerAttack(CcLocalAgent *player,
+                                    CcLocalAgent *target,
+                                    CcCombatSkill skill)
+{
+    if (!CcLocalCombatBeginStrike(player, target)) return false;
+    const CcCombatMoveDefinition *move = CombatMoveForSkill(skill);
+    player->combat.active_skill = CombatSkillValid(skill) ?
+                                  (int32_t)skill : -1;
+    CcHumanoidGaitSetStrikeStyle(&player->humanoid, move->strike_style);
+    player->combat.strike_damage_scale = move->damage_scale;
+    player->combat.strike_posture_scale = move->posture_scale;
+    player->combat.strike_knockback_scale = move->knockback_scale;
+    return true;
+}
+
+static void CourseUpdatePlayerCombat(CcLocalCourse *course,
+                                     CcLocalAgent *player,
+                                     float delta_time)
+{
+    if (player == NULL) return;
+    player->combat.auto_attack_cooldown = fmaxf(
+        0.0f, player->combat.auto_attack_cooldown - delta_time);
+    for (int32_t skill = 0; skill < CC_COMBAT_SKILL_COUNT; ++skill) {
+        player->combat.skill_cooldown[skill] = fmaxf(
+            0.0f, player->combat.skill_cooldown[skill] - delta_time);
+    }
+    if (!course->alarm_active) {
+        CcLocalCourseClearPlayerTarget(player);
+        return;
+    }
+    CcLocalAgent *target = CoursePlayerTarget(course, player);
+    if (target == NULL || player->combat.defeated ||
+        course->raiders_retreating) {
+        CcLocalCourseClearPlayerTarget(player);
+        return;
+    }
+
+    CcLocalCombatSetFocus(player, target);
+    float x = player->position.x - target->position.x;
+    float z = player->position.z - target->position.z;
+    float distance = sqrtf(x * x + z * z);
+    if (distance > COMBAT_PAIR_ACQUIRE_RANGE &&
+        !course->player_pair.active && !CourseAgentBusy(player) &&
+        player->humanoid.action != CC_HUMANOID_ACTION_STRIKE) {
+        Vector3 approach = CourseCombatApproachPoint(
+            player, target, COMBAT_PAIR_IDEAL_RANGE);
+        (void)CcLocalAgentSetExactTarget(player, approach, false);
+        return;
+    }
+    if (distance > 1.56f || player->combat.auto_attack_cooldown > 0.0f) {
+        return;
+    }
+
+    CcCombatSkill queued = (CcCombatSkill)player->combat.queued_skill;
+    if (CombatSkillValid(queued)) {
+        if (player->combat.skill_cooldown[queued] > 0.0f) {
+            player->combat.queued_skill = -1;
+            return;
+        }
+        if (CourseBeginPlayerAttack(player, target, queued)) {
+            const CcCombatMoveDefinition *move = CombatMoveForSkill(queued);
+            player->combat.skill_cooldown[queued] = move->skill_cooldown;
+            player->combat.auto_attack_cooldown = move->attack_cooldown;
+            player->combat.queued_skill = -1;
+        }
+        return;
+    }
+    if (CourseBeginPlayerAttack(player, target, CC_COMBAT_SKILL_COUNT)) {
+        player->combat.auto_attack_cooldown =
+            COMBAT_BASIC_ATTACK.attack_cooldown;
+    }
+}
+
 bool CcLocalCourseBeginPlayerStrike(CcLocalCourse *course,
                                     CcLocalAgent *player)
 {
     if (course == NULL || player == NULL) return false;
     CcLocalCombatSetTeam(player, CC_COMBAT_PLAYER);
-    int32_t target = course->alarm_active && !course->raiders_retreating ?
-        CourseClosestRaider(course, player, 2.75f, true) : -1;
+    int32_t target = CoursePlayerTarget(course, player) != NULL ?
+        player->combat.target_index :
+        course->alarm_active && !course->raiders_retreating ?
+        CourseClosestRaider(course, player, 2.75f, true, -1) : -1;
     player->combat.target_index = target;
     if (target < 0) CcLocalCombatClearFocus(player);
-    return CcLocalCombatBeginStrike(
-        player, target >= 0 ? &course->raiders[target] : NULL);
+    player->combat.queued_skill = -1;
+    return CourseBeginPlayerAttack(
+        player, target >= 0 ? &course->raiders[target] : NULL,
+        CC_COMBAT_SKILL_COUNT);
 }
 
 void CcLocalCourseSetPlayerGuarded(CcLocalCourse *course,
@@ -1321,24 +1918,32 @@ void CcLocalCourseSetPlayerGuarded(CcLocalCourse *course,
 {
     if (course == NULL || player == NULL) return;
     CcLocalCombatSetTeam(player, CC_COMBAT_PLAYER);
-    int32_t target = guarded && course->alarm_active &&
-                     !course->raiders_retreating ?
-        CourseClosestRaider(course, player, 3.10f, false) : -1;
+    int32_t target = CoursePlayerTarget(course, player) != NULL ?
+        player->combat.target_index :
+        guarded && course->alarm_active && !course->raiders_retreating ?
+        CourseClosestRaider(course, player, 3.10f, false, -1) : -1;
     player->combat.target_index = target;
     CcLocalCombatSetGuarded(
         player, target >= 0 ? &course->raiders[target] : NULL, guarded);
+    if (!guarded && target >= 0) {
+        player->combat.target_index = target;
+        CcLocalCombatSetFocus(player, &course->raiders[target]);
+    }
 }
 
-void CcLocalCourseUpdate(CcLocalCourse *course, CcLocalAgent *player,
-                         const CcSim *sim, float delta_time)
+static void CourseFixedStep(CcLocalCourse *course, CcLocalAgent *player,
+                            const CcSim *sim, float delta_time)
 {
-    delta_time = fminf(delta_time, 1.0f / 30.0f);
+    CourseClearCombatControls(course, player);
     UpdateCourseTravellers(course, sim, delta_time);
     course->combat_event_seconds = fmaxf(
         0.0f, course->combat_event_seconds - delta_time);
     if (player != NULL && player->combat.team == CC_COMBAT_NEUTRAL) {
         CcLocalCombatSetTeam(player, CC_COMBAT_PLAYER);
     }
+    CourseUpdatePlayerCombat(course, player, delta_time);
+    CourseCoordinatePlayerPair(course, player, delta_time);
+    if (player != NULL) CcLocalAgentUpdate(player, delta_time, false);
     if (!course->alarm_active) {
         if (player != NULL) CourseResolveImpact(course, player, NULL);
         course->alarm_countdown -= delta_time;
@@ -1349,7 +1954,6 @@ void CcLocalCourseUpdate(CcLocalCourse *course, CcLocalAgent *player,
             return;
         }
     }
-
     if (player != NULL && player->combat.target_index >= 0 &&
         player->combat.target_index < CC_LOCAL_RAIDER_COUNT &&
         !course->raiders[player->combat.target_index].combat.defeated) {
@@ -1419,11 +2023,25 @@ void CcLocalCourseUpdate(CcLocalCourse *course, CcLocalAgent *player,
     for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
         CcLocalCourseRunner *runner = &course->runners[i];
         CcLocalAgent *guard = &runner->agent;
-        int32_t target_index = CourseClosestRaider(course, guard, 2.40f, false);
+        int32_t reserved_target = -1;
+        if (player != NULL && CoursePlayerTarget(course, player) != NULL) {
+            int32_t selected = player->combat.target_index;
+            for (int32_t raider = 0; raider < CC_LOCAL_RAIDER_COUNT; ++raider) {
+                if (raider != selected &&
+                    !course->raiders[raider].combat.defeated) {
+                    reserved_target = selected;
+                    break;
+                }
+            }
+        }
+        int32_t target_index = CourseClosestRaider(
+            course, guard, 3.20f, false, reserved_target);
         CcLocalAgent *target = target_index >= 0 ?
                                &course->raiders[target_index] : NULL;
         bool engaged = target != NULL &&
-            CombatHorizontalDistanceSquared(guard, target) < 1.42f * 1.42f;
+            CombatHorizontalDistanceSquared(guard, target) < 3.20f * 3.20f;
+        bool in_attack_range = target != NULL &&
+            CombatHorizontalDistanceSquared(guard, target) < 1.62f * 1.62f;
 
         if (!guard->combat.defeated && !CourseAgentBusy(guard)) {
             Vector3 response_waypoint;
@@ -1440,19 +2058,18 @@ void CcLocalCourseUpdate(CcLocalCourse *course, CcLocalAgent *player,
                        !guard->exact_target_valid) {
                 runner->response_stage += 1;
                 runner->response_waypoint_active = false;
-            } else if (!has_response_waypoint && !engaged) {
-                Vector3 anchor = target != NULL ? target->position :
-                                 course->combat_origin;
-                Vector3 guard_target = {
-                    anchor.x - 0.68f, 0.0f,
-                    anchor.z +
-                    ((float)i - 1.0f) * COURSE_GUARD_SPACING
-                };
+            } else if (!has_response_waypoint && !in_attack_range) {
+                Vector3 guard_target = target != NULL ?
+                    CourseCombatApproachPoint(guard, target,
+                                              COMBAT_NPC_STANDOFF) :
+                    (Vector3){course->combat_origin.x - 1.30f, 0.0f,
+                              course->combat_origin.z +
+                              ((float)i - 1.0f) * COURSE_GUARD_SPACING};
                 (void)CcLocalAgentSetExactTarget(guard, guard_target,
                                                  false);
             }
         }
-        if (engaged && !guard->combat.defeated) {
+        if (in_attack_range && !guard->combat.defeated) {
             runner->duty = CC_GUARD_ENGAGED;
             guard->exact_target_valid = false;
             guard->combat.target_index = target_index;
@@ -1465,7 +2082,8 @@ void CcLocalCourseUpdate(CcLocalCourse *course, CcLocalAgent *player,
             }
             engaged_guards += 1;
         } else if (!guard->combat.defeated) {
-            runner->duty = CC_GUARD_RESPONDING;
+            runner->duty = engaged || runner->response_stage >= 4 ?
+                           CC_GUARD_ENGAGED : CC_GUARD_RESPONDING;
             CcLocalCombatSetGuarded(guard, target, false);
         }
         CcLocalAgentUpdate(guard, delta_time, false);
@@ -1482,9 +2100,13 @@ void CcLocalCourseUpdate(CcLocalCourse *course, CcLocalAgent *player,
             CcLocalAgentUpdate(raider, delta_time, false);
             continue;
         }
-        CcLocalAgent *target = CourseClosestDefender(course, player, raider);
+        CcLocalAgent *eligible_player = player != NULL &&
+            (player->combat.target_index < 0 ||
+             player->combat.target_index == i) ? player : NULL;
+        CcLocalAgent *target = CourseClosestDefender(
+            course, eligible_player, raider);
         bool engaged = target != NULL &&
-            CombatHorizontalDistanceSquared(raider, target) < 1.30f * 1.30f;
+            CombatHorizontalDistanceSquared(raider, target) < 1.52f * 1.52f;
         if (!CourseAgentBusy(raider)) {
             Vector3 response_waypoint;
             bool has_response_waypoint = CourseRaiderResponseWaypoint(
@@ -1501,12 +2123,12 @@ void CcLocalCourseUpdate(CcLocalCourse *course, CcLocalAgent *player,
                 course->raider_response_stage[i] += 1;
                 course->raider_response_waypoint_active[i] = false;
             } else if (!has_response_waypoint) {
-                Vector3 anchor = target != NULL ? target->position :
-                                 course->combat_origin;
                 Vector3 target_point = engaged ? raider->position :
-                    (Vector3){anchor.x + 0.68f, 0.0f,
-                              anchor.z + ((float)i - 0.5f) *
-                              COURSE_RAIDER_SPACING};
+                    target != NULL ? CourseCombatApproachPoint(
+                        raider, target, COMBAT_NPC_STANDOFF) :
+                    (Vector3){course->combat_origin.x + 1.30f, 0.0f,
+                              course->combat_origin.z +
+                              ((float)i - 0.5f) * COURSE_RAIDER_SPACING};
                 (void)CcLocalAgentSetExactTarget(raider, target_point, false);
             }
         }
@@ -1539,6 +2161,28 @@ void CcLocalCourseUpdate(CcLocalCourse *course, CcLocalAgent *player,
     CourseRefreshRaiderResolve(course);
     if (CourseRaidersBroken(course)) {
         CourseBeginRetreat(course, player);
+    }
+}
+
+void CcLocalCourseUpdate(CcLocalCourse *course, CcLocalAgent *player,
+                         const CcSim *sim, float delta_time)
+{
+    if (course == NULL) return;
+    const float fixed_step = 1.0f / 60.0f;
+    const int32_t maximum_steps = 6;
+    float frame_time = fmaxf(0.0f, fminf(delta_time, 0.10f));
+    course->simulation_accumulator = fminf(
+        course->simulation_accumulator + frame_time,
+        fixed_step * (float)maximum_steps);
+    int32_t steps = 0;
+    while (course->simulation_accumulator + 0.0000001f >= fixed_step &&
+           steps < maximum_steps) {
+        CourseFixedStep(course, player, sim, fixed_step);
+        course->simulation_accumulator -= fixed_step;
+        if (course->simulation_accumulator < 0.0f) {
+            course->simulation_accumulator = 0.0f;
+        }
+        steps += 1;
     }
 }
 
@@ -2509,6 +3153,24 @@ static void CcLocalAgentPhysicsStep(CcLocalAgent *agent, float delta_time,
                             agent->facing_yaw, ProbeLocalSurface, &context);
         agent->humanoid_needs_reset = false;
     }
+    if (fabsf(agent->combat.pending_root_impulse.x) > 0.000001f ||
+        fabsf(agent->combat.pending_root_impulse.z) > 0.000001f) {
+        if (biped && agent->humanoid.initialized &&
+            !agent->humanoid.ragdoll.active) {
+            agent->humanoid.body.root.velocity.x +=
+                agent->combat.pending_root_impulse.x;
+            agent->humanoid.body.root.velocity.z +=
+                agent->combat.pending_root_impulse.z;
+            agent->humanoid.root_velocity.x =
+                agent->humanoid.body.root.velocity.x;
+            agent->humanoid.root_velocity.z =
+                agent->humanoid.body.root.velocity.z;
+        } else {
+            agent->velocity.x += agent->combat.pending_root_impulse.x;
+            agent->velocity.z += agent->combat.pending_root_impulse.z;
+        }
+        agent->combat.pending_root_impulse = (Vector3){0};
+    }
     bool was_swimming = agent->swimming;
     bool in_water = biped && !market_interior &&
                     CourseWaterContains(agent->position.x, agent->position.z);
@@ -2568,18 +3230,28 @@ static void CcLocalAgentPhysicsStep(CcLocalAgent *agent, float delta_time,
         desired_x = direction.x / target_distance * desired_speed;
         desired_z = direction.z / target_distance * desired_speed;
     }
+    if (agent->combat.control_velocity_valid) {
+        desired_x = agent->combat.control_velocity.x;
+        desired_z = agent->combat.control_velocity.z;
+    }
     if (biped && agent->humanoid.action == CC_HUMANOID_ACTION_STRIKE) {
+        /* Weapon reach owns the strike distance. Root-motion lunges from both
+           combatants used to collapse the silhouettes into one another. */
         desired_x = 0.0f;
         desired_z = 0.0f;
-        if (agent->combat.focus_valid && agent->humanoid.action_time >= 0.14f &&
-            agent->humanoid.action_time <= 0.57f) {
-            float focus_x = agent->combat.focus_point.x - agent->position.x;
-            float focus_z = agent->combat.focus_point.z - agent->position.z;
-            float focus_distance = sqrtf(focus_x * focus_x + focus_z * focus_z);
-            if (focus_distance > 0.62f) {
-                desired_x = focus_x / focus_distance * 0.68f;
-                desired_z = focus_z / focus_distance * 0.68f;
-            }
+    } else if (biped && !agent->combat.control_velocity_valid &&
+               agent->combat.focus_valid &&
+               !agent->humanoid.ragdoll.active) {
+        float away_x = agent->position.x - agent->combat.focus_point.x;
+        float away_z = agent->position.z - agent->combat.focus_point.z;
+        float focus_distance = sqrtf(away_x * away_x + away_z * away_z);
+        if (focus_distance > 0.0001f &&
+            focus_distance < COMBAT_PERSONAL_SPACE) {
+            float retreat_speed = fminf(
+                maximum_speed,
+                0.34f + (COMBAT_PERSONAL_SPACE - focus_distance) * 2.4f);
+            desired_x = away_x / focus_distance * retreat_speed;
+            desired_z = away_z / focus_distance * retreat_speed;
         }
     }
     if (agent->combat.defeated) {
@@ -2773,6 +3445,7 @@ static void CcLocalAgentPhysicsStep(CcLocalAgent *agent, float delta_time,
         CcHumanoidGaitResolvePose(&agent->humanoid,
                                   ToLimbVector(agent->position),
                                   agent->facing_yaw);
+        CombatUpdateWeaponMotion(agent, delta_time);
         float ragdoll_target = agent->humanoid.ragdoll.active ? 1.0f : 0.0f;
         agent->ragdoll_visual_blend = Approach(
             agent->ragdoll_visual_blend, ragdoll_target,
@@ -2899,7 +3572,11 @@ void CcLocalAgentUpdate(CcLocalAgent *agent, float delta_time,
             CcHumanoidPose prior_render_pose = agent->render_pose;
             /* Let the torso and limbs retain a little inertial continuity
                without filtering the contact points copied below. */
-            float response = 1.0f - expf(-38.0f * frame_time);
+            bool settling_guard =
+                agent->humanoid.action == CC_HUMANOID_ACTION_GUARD &&
+                agent->humanoid.speed.value < 0.08f;
+            float pose_response = settling_guard ? 24.0f : 38.0f;
+            float response = 1.0f - expf(-pose_response * frame_time);
             BlendHumanoidPose(&agent->render_pose, &prior_render_pose,
                               &sampled_pose, response);
             for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
@@ -2942,13 +3619,19 @@ static Camera3D LocalCamera(bool interior, Vector3 focus)
                                CC_LOCAL_WORLD_DEPTH - 7.0f))
         };
     }
-    float camera_distance = interior ? 10.0f : 18.0f;
-    camera.position = (Vector3){camera.target.x + camera_distance,
-                                camera.target.y +
-                                    (interior ? camera_distance : 30.0f),
-                                camera.target.z + camera_distance};
+    if (interior) {
+        camera.position = (Vector3){camera.target.x + 10.0f,
+                                    camera.target.y + 10.0f,
+                                    camera.target.z + 10.0f};
+    } else {
+        /* An asymmetric three-quarter view keeps facades readable and avoids
+           reducing the traversable town to a generic 45-degree tile map. */
+        camera.position = (Vector3){camera.target.x + 16.5f,
+                                    camera.target.y + 20.0f,
+                                    camera.target.z + 13.0f};
+    }
     camera.up = (Vector3){0.0f, 1.0f, 0.0f};
-    camera.fovy = interior ? 10.5f : 13.5f;
+    camera.fovy = interior ? 10.5f : 12.25f;
     camera.projection = CAMERA_ORTHOGRAPHIC;
     return camera;
 }
@@ -3127,7 +3810,7 @@ static void LoadHeroSkin(void)
 }
 
 static bool DrawHeroSkin(const CcHumanoidSkinPose *skin,
-                         const CcLocalCapeState *cape)
+                         const CcLocalCapeState *cape, Color tint)
 {
     if (!hero_skin.ready || skin == NULL || !skin->valid || cape == NULL ||
         !cape->initialized) return false;
@@ -3162,7 +3845,7 @@ static bool DrawHeroSkin(const CcHumanoidSkinPose *skin,
             hero_skin.model.skeleton.bindPose[bone].scale;
     }
     UpdateModelAnimation(hero_skin.model, hero_skin.animation, 0.0f);
-    DrawModel(hero_skin.model, (Vector3){0.0f, 0.0f, 0.0f}, 1.0f, WHITE);
+    DrawModel(hero_skin.model, (Vector3){0.0f, 0.0f, 0.0f}, 1.0f, tint);
     return true;
 }
 
@@ -3174,6 +3857,11 @@ void CcLocalRendererInit(void)
     sphere_models.scenery = LoadModelFromMesh(GenMeshSphere(1.0f, 10, 12));
     sphere_models.ready = true;
     LoadHeroSkin();
+}
+
+void CcLocalRendererSetDiagnosticOverlay(bool enabled)
+{
+    draw_hero_rig_debug = enabled;
 }
 
 void CcLocalRendererShutdown(void)
@@ -3215,25 +3903,188 @@ static void DrawBox(Vector3 center, Vector3 size, Color color)
     DrawCubeWiresV(center, size, Fade(WORLD_INK, 0.18f));
 }
 
+static Color ShadeColor(Color color, float scale)
+{
+    return (Color){
+        (unsigned char)fmaxf(0.0f, fminf(255.0f, color.r * scale)),
+        (unsigned char)fmaxf(0.0f, fminf(255.0f, color.g * scale)),
+        (unsigned char)fmaxf(0.0f, fminf(255.0f, color.b * scale)),
+        color.a
+    };
+}
+
+static Color BlendColor(Color from, Color to, float amount)
+{
+    amount = fmaxf(0.0f, fminf(1.0f, amount));
+    return (Color){
+        (unsigned char)lroundf(from.r + (to.r - from.r) * amount),
+        (unsigned char)lroundf(from.g + (to.g - from.g) * amount),
+        (unsigned char)lroundf(from.b + (to.b - from.b) * amount),
+        (unsigned char)lroundf(from.a + (to.a - from.a) * amount)
+    };
+}
+
+static void DrawTiltedBox(Vector3 center, Vector3 size, Vector3 axis,
+                          float degrees, Color color)
+{
+    rlPushMatrix();
+    rlTranslatef(center.x, center.y, center.z);
+    rlRotatef(degrees, axis.x, axis.y, axis.z);
+    DrawBox((Vector3){0.0f, 0.0f, 0.0f}, size, color);
+    rlPopMatrix();
+}
+
+static float DrawPitchedRoof(float x, float z, float width, float depth,
+                             float wall_height, Color wall, Color roof)
+{
+    const float overhang = 0.34f;
+    const float rise = 0.82f + fminf(width, depth) * 0.055f;
+    bool ridge_along_x = width >= depth;
+    Color shadow = ShadeColor(roof, 0.72f);
+
+    rlDisableBackfaceCulling();
+    if (ridge_along_x) {
+        for (int32_t end = 0; end < 2; ++end) {
+            float gable_x = end == 0 ? x - 0.015f : x + width + 0.015f;
+            DrawTriangle3D(
+                (Vector3){gable_x, wall_height, z},
+                (Vector3){gable_x, wall_height, z + depth},
+                (Vector3){gable_x, wall_height + rise, z + depth * 0.5f},
+                wall);
+        }
+    } else {
+        for (int32_t end = 0; end < 2; ++end) {
+            float gable_z = end == 0 ? z - 0.015f : z + depth + 0.015f;
+            DrawTriangle3D(
+                (Vector3){x, wall_height, gable_z},
+                (Vector3){x + width, wall_height, gable_z},
+                (Vector3){x + width * 0.5f, wall_height + rise, gable_z},
+                wall);
+        }
+    }
+    rlEnableBackfaceCulling();
+
+    if (ridge_along_x) {
+        float run = depth * 0.5f + overhang;
+        float slope = sqrtf(run * run + rise * rise);
+        float pitch = atanf(rise / run) * RAD2DEG;
+        for (int32_t side = -1; side <= 1; side += 2) {
+            DrawTiltedBox(
+                (Vector3){x + width * 0.5f,
+                          wall_height + rise * 0.5f,
+                          z + depth * 0.5f + side * run * 0.5f},
+                (Vector3){width + overhang * 2.0f, 0.16f, slope},
+                (Vector3){1.0f, 0.0f, 0.0f}, side * pitch,
+                side > 0 ? roof : shadow);
+        }
+        DrawBox((Vector3){x + width * 0.5f, wall_height + rise + 0.03f,
+                          z + depth * 0.5f},
+                (Vector3){width + overhang * 2.1f, 0.13f, 0.16f}, shadow);
+    } else {
+        float run = width * 0.5f + overhang;
+        float slope = sqrtf(run * run + rise * rise);
+        float pitch = atanf(rise / run) * RAD2DEG;
+        for (int32_t side = -1; side <= 1; side += 2) {
+            DrawTiltedBox(
+                (Vector3){x + width * 0.5f + side * run * 0.5f,
+                          wall_height + rise * 0.5f,
+                          z + depth * 0.5f},
+                (Vector3){slope, 0.16f, depth + overhang * 2.0f},
+                (Vector3){0.0f, 0.0f, 1.0f}, -side * pitch,
+                side > 0 ? roof : shadow);
+        }
+        DrawBox((Vector3){x + width * 0.5f, wall_height + rise + 0.03f,
+                          z + depth * 0.5f},
+                (Vector3){0.16f, 0.13f, depth + overhang * 2.1f}, shadow);
+    }
+    return rise;
+}
+
+static void DrawFacadeWindow(Vector3 center, bool side_facing, Color trim,
+                             Color glass)
+{
+    Vector3 recess = side_facing ? (Vector3){0.075f, 1.34f, 1.02f} :
+                                   (Vector3){1.02f, 1.34f, 0.075f};
+    Vector3 pane = side_facing ? (Vector3){0.035f, 1.02f, 0.72f} :
+                                 (Vector3){0.72f, 1.02f, 0.035f};
+    DrawBox(center, recess, ShadeColor(trim, 0.62f));
+    DrawBox(center, pane, glass);
+    Vector3 vertical = side_facing ? (Vector3){0.022f, 1.06f, 0.055f} :
+                                     (Vector3){0.055f, 1.06f, 0.022f};
+    Vector3 horizontal = side_facing ? (Vector3){0.022f, 0.055f, 0.76f} :
+                                       (Vector3){0.76f, 0.055f, 0.022f};
+    DrawBox(center, vertical, trim);
+    DrawBox(center, horizontal, trim);
+}
+
 static void DrawBuilding(float x, float z, float width, float depth, float height,
-                         Color wall, Color roof, bool door)
+                         Color wall, Color roof, bool door, int32_t style)
 {
     Vector3 center = {x + width * 0.5f, height * 0.5f, z + depth * 0.5f};
+    Color trim = style == 2 ? WORLD_GOLD : ShadeColor(wall, 0.60f);
+    Color glass = style == 3 ? Fade(WORLD_VIOLET, 0.84f) :
+                               Fade(WORLD_TEAL, 0.78f);
+    DrawBox((Vector3){center.x, 0.17f, center.z},
+            (Vector3){width + 0.12f, 0.34f, depth + 0.12f},
+            ShadeColor(wall, 0.58f));
     DrawBox(center, (Vector3){width, height, depth}, wall);
-    DrawBox((Vector3){center.x, height + 0.07f, center.z},
-            (Vector3){width + 0.20f, 0.14f, depth + 0.20f}, roof);
-    if (door) {
-        DrawBox((Vector3){center.x, 1.075f, z + depth + 0.025f},
-                (Vector3){1.05f, 2.15f, 0.05f}, (Color){43, 34, 37, 255});
-        DrawSmallSphere((Vector3){center.x + 0.39f, 1.075f,
-                                  z + depth + 0.06f},
-                        0.035f, WORLD_GOLD);
+
+    /* The positive Z and X facades face the runtime camera. Depth here is not
+       decoration pasted onto a diorama: it follows the same authoritative
+       footprint used by collision. */
+    for (int32_t corner = 0; corner < 2; ++corner) {
+        float post_x = corner == 0 ? x + 0.18f : x + width - 0.18f;
+        DrawBox((Vector3){post_x, height * 0.50f, z + depth + 0.045f},
+                (Vector3){0.18f, height - 0.18f, 0.09f}, trim);
     }
-    DrawBox((Vector3){x + 1.35f, height * 0.56f, z + depth + 0.03f},
-            (Vector3){0.90f, 1.10f, 0.04f}, Fade(WORLD_TEAL, 0.78f));
-    DrawBox((Vector3){x + width - 1.35f, height * 0.56f,
-                      z + depth + 0.03f},
-            (Vector3){0.90f, 1.10f, 0.04f}, Fade(WORLD_TEAL, 0.78f));
+    DrawBox((Vector3){center.x, height - 0.24f, z + depth + 0.045f},
+            (Vector3){width - 0.18f, 0.18f, 0.09f}, trim);
+    DrawBox((Vector3){x + width + 0.045f, height - 0.24f, center.z},
+            (Vector3){0.09f, 0.18f, depth - 0.18f}, trim);
+
+    int32_t bays = width >= 10.0f ? 3 : 2;
+    for (int32_t bay = 0; bay < bays; ++bay) {
+        float window_x = x + width * (float)(bay + 1) / (float)(bays + 1);
+        if (door && fabsf(window_x - center.x) < 0.82f) continue;
+        DrawFacadeWindow((Vector3){window_x, height * 0.57f,
+                                   z + depth + 0.075f}, false, trim, glass);
+    }
+    DrawFacadeWindow((Vector3){x + width + 0.075f, height * 0.57f,
+                               center.z + depth * 0.12f}, true, trim, glass);
+
+    if (door) {
+        DrawBox((Vector3){center.x, 1.12f, z + depth + 0.055f},
+                (Vector3){1.30f, 2.24f, 0.12f}, trim);
+        DrawBox((Vector3){center.x, 1.10f, z + depth + 0.125f},
+                (Vector3){1.02f, 2.10f, 0.055f},
+                (Color){43, 34, 37, 255});
+        DrawSmallSphere((Vector3){center.x + 0.39f, 1.075f,
+                                  z + depth + 0.18f},
+                        0.035f, WORLD_GOLD);
+        DrawBox((Vector3){center.x, 2.34f, z + depth + 0.34f},
+                (Vector3){1.55f, 0.13f, 0.70f}, roof);
+    }
+
+    float roof_rise = DrawPitchedRoof(x, z, width, depth, height, wall, roof);
+    if (style == 0 || style == 2) {
+        DrawBox((Vector3){x + width * 0.24f,
+                          height + roof_rise * 0.74f,
+                          z + depth * 0.36f},
+                (Vector3){0.48f, 1.28f, 0.48f},
+                ShadeColor(wall, 0.52f));
+        DrawBox((Vector3){x + width * 0.24f,
+                          height + roof_rise * 0.74f + 0.67f,
+                          z + depth * 0.36f},
+                (Vector3){0.62f, 0.14f, 0.62f}, trim);
+    }
+    if (style == 2) {
+        for (int32_t side = -1; side <= 1; side += 2) {
+            DrawBox((Vector3){center.x + side * width * 0.27f,
+                              height * 0.72f, z + depth + 0.12f},
+                    (Vector3){0.72f, 1.75f, 0.06f},
+                    side < 0 ? WORLD_GOLD : WORLD_TEAL);
+        }
+    }
 }
 
 static void DrawGroundTile(float x, float z, Color color)
@@ -3249,24 +4100,56 @@ static void DrawTerrainPatch(float x, float z, float width, float depth,
               (Vector3){width, 0.07f, depth}, color);
 }
 
-static void DrawExteriorTerrain(void)
+static void DrawSettlementPlaza(Color stone)
 {
+    for (int32_t row = 0; row < 8; ++row) {
+        for (int32_t column = 0; column < 7; ++column) {
+            float variation = ((row + column) & 1) != 0 ? 0.94f : 1.04f;
+            DrawGroundTile(38.0f + (float)column,
+                           26.0f + (float)row,
+                           ShadeColor(stone, variation));
+        }
+    }
+    Color curb = ShadeColor(stone, 0.68f);
+    DrawTerrainPatch(37.82f, 25.82f, 0.16f, 8.36f, curb);
+    DrawTerrainPatch(45.0f, 25.82f, 0.16f, 8.36f, curb);
+    DrawTerrainPatch(37.82f, 25.82f, 7.34f, 0.16f, curb);
+    DrawTerrainPatch(37.82f, 34.02f, 7.34f, 0.16f, curb);
+}
+
+static void DrawExteriorTerrain(const CcSettlement *place)
+{
+    float hunger = place != NULL ? (float)place->hunger / 100.0f : 0.0f;
+    float prosperity = place != NULL ?
+                       (float)place->prosperity / 100.0f : 0.5f;
+    Color grass = BlendColor((Color){35, 67, 53, 255},
+                             (Color){75, 66, 42, 255}, hunger * 0.72f);
+    Color road = BlendColor((Color){88, 82, 69, 255},
+                            (Color){116, 101, 76, 255}, prosperity * 0.32f);
+    Color road_edge = ShadeColor(road, 0.62f);
+    Color plaza = BlendColor((Color){101, 94, 81, 255},
+                             (Color){133, 119, 93, 255}, prosperity * 0.36f);
+
     DrawPlane((Vector3){CC_LOCAL_WORLD_WIDTH * 0.5f, -0.09f,
                         CC_LOCAL_WORLD_DEPTH * 0.5f},
               (Vector2){CC_LOCAL_WORLD_WIDTH + 8.0f,
                         CC_LOCAL_WORLD_DEPTH + 8.0f},
-              (Color){35, 67, 53, 255});
+              grass);
 
     DrawTerrainPatch(1.0f, 1.0f, 16.0f, 11.0f,
                      (Color){43, 67, 61, 255});
-    DrawTerrainPatch(15.0f, 27.1f, 77.0f, 4.6f,
-                     (Color){101, 94, 76, 255});
-    DrawTerrainPatch(39.7f, 8.0f, 4.6f, 50.0f,
-                     (Color){96, 91, 75, 255});
+    DrawTerrainPatch(15.0f, 27.1f, 77.0f, 4.6f, road);
+    DrawTerrainPatch(39.7f, 8.0f, 4.6f, 50.0f, road);
     DrawTerrainPatch(7.2f, 10.0f, 34.8f, 3.8f,
-                     (Color){88, 86, 73, 255});
+                     ShadeColor(road, 0.92f));
     DrawTerrainPatch(76.0f, 27.0f, 5.0f, 7.0f,
-                     (Color){112, 102, 81, 255});
+                     ShadeColor(road, 1.08f));
+
+    DrawTerrainPatch(15.0f, 27.02f, 77.0f, 0.13f, road_edge);
+    DrawTerrainPatch(15.0f, 31.70f, 77.0f, 0.13f, road_edge);
+    DrawTerrainPatch(39.62f, 8.0f, 0.13f, 50.0f, road_edge);
+    DrawTerrainPatch(44.30f, 8.0f, 0.13f, 50.0f, road_edge);
+    DrawSettlementPlaza(plaza);
 
     DrawTerrainPatch(3.0f, 17.0f, 13.0f, 9.0f,
                      (Color){86, 91, 56, 255});
@@ -3282,7 +4165,8 @@ static void DrawExteriorTerrain(void)
     for (int32_t row = 0; row < 4; ++row) {
         float z = 18.3f + (float)row * 2.0f;
         DrawTerrainPatch(4.0f, z, 11.0f, 0.24f,
-                         Fade(WORLD_GOLD, 0.34f));
+                         BlendColor(Fade(WORLD_GOLD, 0.34f),
+                                    (Color){102, 81, 48, 255}, hunger));
         DrawTerrainPatch(60.0f, 44.3f + (float)row * 2.0f, 12.0f, 0.24f,
                          Fade(WORLD_GOLD, 0.28f));
     }
@@ -3317,7 +4201,7 @@ static void DrawWorldBuildings(Color kingdom)
                      building->footprint.width, building->footprint.height,
                      building->height, BuildingWallColor(building->style),
                      BuildingRoofColor(building->style, kingdom),
-                     building->door);
+                     building->door, building->style);
     }
 }
 
@@ -3467,39 +4351,41 @@ static void DrawPuppet3D(Vector3 position, float scale, float yaw, Color tunic,
                                1.64f * scale + bob, 0.175f * scale, yaw),
                     0.024f * scale, WORLD_VOID);
 
-    Vector3 offset = LocalPoint((Vector3){0.0f, 0.0f, 0.0f},
-                                0.025f, 0.012f, 0.050f, yaw);
-    hip = Add3(hip, offset);
-    chest = Add3(chest, offset);
-    neck = Add3(neck, offset);
-    shoulder_l = Add3(shoulder_l, offset);
-    shoulder_r = Add3(shoulder_r, offset);
-    elbow_l = Add3(elbow_l, offset);
-    elbow_r = Add3(elbow_r, offset);
-    hand_l = Add3(hand_l, offset);
-    hand_r = Add3(hand_r, offset);
-    knee_l = Add3(knee_l, offset);
-    knee_r = Add3(knee_r, offset);
-    foot_l = Add3(foot_l, offset);
-    foot_r = Add3(foot_r, offset);
-    DrawBoneSegment(hip, chest, rig);
-    DrawBoneSegment(chest, neck, rig);
-    DrawBoneSegment(shoulder_l, shoulder_r, rig);
-    DrawBoneSegment(shoulder_l, elbow_l, rig);
-    DrawBoneSegment(elbow_l, hand_l, rig);
-    DrawBoneSegment(shoulder_r, elbow_r, rig);
-    DrawBoneSegment(elbow_r, hand_r, rig);
-    DrawBoneSegment(hip, knee_l, rig);
-    DrawBoneSegment(knee_l, foot_l, rig);
-    DrawBoneSegment(hip, knee_r, rig);
-    DrawBoneSegment(knee_r, foot_r, rig);
-    const Vector3 joints[] = {
-        hip, chest, neck, shoulder_l, shoulder_r, elbow_l, elbow_r,
-        hand_l, hand_r, knee_l, knee_r, foot_l, foot_r
-    };
-    for (int32_t joint = 0;
-         joint < (int32_t)(sizeof(joints) / sizeof(joints[0])); ++joint) {
-        DrawBoneJoint(joints[joint], rig);
+    if (draw_hero_rig_debug) {
+        Vector3 offset = LocalPoint((Vector3){0.0f, 0.0f, 0.0f},
+                                    0.025f, 0.012f, 0.050f, yaw);
+        hip = Add3(hip, offset);
+        chest = Add3(chest, offset);
+        neck = Add3(neck, offset);
+        shoulder_l = Add3(shoulder_l, offset);
+        shoulder_r = Add3(shoulder_r, offset);
+        elbow_l = Add3(elbow_l, offset);
+        elbow_r = Add3(elbow_r, offset);
+        hand_l = Add3(hand_l, offset);
+        hand_r = Add3(hand_r, offset);
+        knee_l = Add3(knee_l, offset);
+        knee_r = Add3(knee_r, offset);
+        foot_l = Add3(foot_l, offset);
+        foot_r = Add3(foot_r, offset);
+        DrawBoneSegment(hip, chest, rig);
+        DrawBoneSegment(chest, neck, rig);
+        DrawBoneSegment(shoulder_l, shoulder_r, rig);
+        DrawBoneSegment(shoulder_l, elbow_l, rig);
+        DrawBoneSegment(elbow_l, hand_l, rig);
+        DrawBoneSegment(shoulder_r, elbow_r, rig);
+        DrawBoneSegment(elbow_r, hand_r, rig);
+        DrawBoneSegment(hip, knee_l, rig);
+        DrawBoneSegment(knee_l, foot_l, rig);
+        DrawBoneSegment(hip, knee_r, rig);
+        DrawBoneSegment(knee_r, foot_r, rig);
+        const Vector3 joints[] = {
+            hip, chest, neck, shoulder_l, shoulder_r, elbow_l, elbow_r,
+            hand_l, hand_r, knee_l, knee_r, foot_l, foot_r
+        };
+        for (int32_t joint = 0;
+             joint < (int32_t)(sizeof(joints) / sizeof(joints[0])); ++joint) {
+            DrawBoneJoint(joints[joint], rig);
+        }
     }
     if (player) {
         DrawSmallSphere(
@@ -3592,8 +4478,22 @@ static void DrawBiomechanicalBiped(const CcLocalAgent *agent)
     if (!skin.valid) return;
     bool modular_hero = agent->crowned ||
                         agent->combat.team == CC_COMBAT_GUARD;
-    if (modular_hero && DrawHeroSkin(&skin, &agent->cape)) {
-        DrawHeroSkinRigOverlay(gait, &skin, &agent->cape);
+    if (agent->crowned) {
+        DrawCylinder((Vector3){agent->position.x,
+                               agent->position.y + 0.008f,
+                               agent->position.z},
+                     0.35f, 0.35f, 0.014f, 24,
+                     (Color){3, 10, 14, 118});
+        DrawCylinderWires((Vector3){agent->position.x,
+                                    agent->position.y + 0.010f,
+                                    agent->position.z},
+                          0.39f, 0.39f, 0.018f, 24,
+                          Fade(WORLD_TEAL, 0.82f));
+    }
+    if (modular_hero && DrawHeroSkin(&skin, &agent->cape, WHITE)) {
+        if (draw_hero_rig_debug) {
+            DrawHeroSkinRigOverlay(gait, &skin, &agent->cape);
+        }
         if (agent->crowned) {
             Vector3 crown = FromLimbVector(
                 skin.bones[CC_HUMANOID_SKIN_HEAD].tail);
@@ -3750,70 +4650,75 @@ static void DrawBiomechanicalBiped(const CcLocalAgent *agent)
                         0.060f, WORLD_GOLD);
     }
 
-    Vector3 rig_offset = LocalPoint((Vector3){0}, 0.022f, 0.010f, 0.040f,
-                                    upper_yaw);
-    Vector3 physical_root = {gait->body.root.position.x,
-                             gait->body.root.position.y,
-                             gait->body.root.position.z};
-    Vector3 reaction_end = physical_root;
-    if (gait->body.total_mass > 0.0f) {
-        reaction_end.x += gait->ground_reaction.x / gait->body.total_mass * 0.012f;
-        reaction_end.y += gait->ground_reaction.y / gait->body.total_mass * 0.012f;
-        reaction_end.z += gait->ground_reaction.z / gait->body.total_mass * 0.012f;
-    }
-    if (upright_weight > 0.01f) {
-        DrawSmallSphere(Add3(physical_root, rig_offset), 0.052f,
-                        Fade(WORLD_TEAL, upright_weight));
-        DrawCylinderEx(Add3(physical_root, rig_offset),
-                       Add3(reaction_end, rig_offset), 0.014f, 0.008f, 6,
-                       Fade(WORLD_TEAL, 0.82f * upright_weight));
-    }
-    Vector3 rig_pelvis = Add3(pelvis, rig_offset);
-    Vector3 rig_spine = Add3(spine, rig_offset);
-    Vector3 rig_chest = Add3(chest, rig_offset);
-    Vector3 rig_neck = Add3(neck, rig_offset);
-    DrawBoneSegment(rig_pelvis, rig_spine, WORLD_GOLD);
-    DrawBoneSegment(rig_spine, rig_chest, WORLD_GOLD);
-    DrawBoneSegment(rig_chest, rig_neck, WORLD_GOLD);
-    DrawBoneJoint(rig_pelvis, WORLD_GOLD);
-    DrawBoneJoint(rig_spine, WORLD_GOLD);
-    DrawBoneJoint(rig_chest, WORLD_GOLD);
-    DrawBoneJoint(rig_neck, WORLD_GOLD);
-    for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
-        Color bone = HumanoidContactColor(gait->feet[leg].contact);
-        Vector3 hip = Add3(FromLimbVector(
-            skin.bones[thigh_bones[leg]].head), rig_offset);
-        Vector3 knee = Add3(FromLimbVector(
-            skin.bones[thigh_bones[leg]].tail), rig_offset);
-        Vector3 ankle = Add3(FromLimbVector(
-            skin.bones[shin_bones[leg]].tail), rig_offset);
-        Vector3 heel = Add3(FromLimbVector(pose->heel[leg]), rig_offset);
-        Vector3 ball = Add3(FromLimbVector(pose->ball[leg]), rig_offset);
-        Vector3 toe = Add3(FromLimbVector(pose->toe[leg]), rig_offset);
-        DrawBoneSegment(hip, knee, bone);
-        DrawBoneSegment(knee, ankle, bone);
-        DrawBoneSegment(ankle, heel, bone);
-        DrawBoneSegment(heel, ball, bone);
-        DrawBoneSegment(ball, toe, bone);
-        DrawBoneJoint(hip, bone);
-        DrawBoneJoint(knee, bone);
-        DrawBoneJoint(ankle, bone);
-        DrawBoneJoint(heel, bone);
-        DrawBoneJoint(ball, bone);
-        DrawBoneJoint(toe, bone);
-    }
-    for (int32_t arm = 0; arm < CC_HUMANOID_ARM_COUNT; ++arm) {
-        Vector3 shoulder = Add3(FromLimbVector(
-            skin.bones[upper_arm_bones[arm]].head), rig_offset);
-        Vector3 elbow = Add3(FromLimbVector(
-            skin.bones[upper_arm_bones[arm]].tail), rig_offset);
-        Vector3 hand = Add3(FromLimbVector(
-            skin.bones[forearm_bones[arm]].tail), rig_offset);
-        DrawBoneSegment(shoulder, elbow, WORLD_GOLD);
-        DrawBoneSegment(elbow, hand, WORLD_GOLD);
-        DrawBoneJoint(shoulder, WORLD_GOLD);
-        DrawBoneJoint(elbow, WORLD_GOLD);
-        DrawBoneJoint(hand, WORLD_GOLD);
+    if (draw_hero_rig_debug) {
+        Vector3 rig_offset = LocalPoint((Vector3){0}, 0.022f, 0.010f, 0.040f,
+                                        upper_yaw);
+        Vector3 physical_root = {gait->body.root.position.x,
+                                 gait->body.root.position.y,
+                                 gait->body.root.position.z};
+        Vector3 reaction_end = physical_root;
+        if (gait->body.total_mass > 0.0f) {
+            reaction_end.x += gait->ground_reaction.x /
+                              gait->body.total_mass * 0.012f;
+            reaction_end.y += gait->ground_reaction.y /
+                              gait->body.total_mass * 0.012f;
+            reaction_end.z += gait->ground_reaction.z /
+                              gait->body.total_mass * 0.012f;
+        }
+        if (upright_weight > 0.01f) {
+            DrawSmallSphere(Add3(physical_root, rig_offset), 0.052f,
+                            Fade(WORLD_TEAL, upright_weight));
+            DrawCylinderEx(Add3(physical_root, rig_offset),
+                           Add3(reaction_end, rig_offset), 0.014f, 0.008f, 6,
+                           Fade(WORLD_TEAL, 0.82f * upright_weight));
+        }
+        Vector3 rig_pelvis = Add3(pelvis, rig_offset);
+        Vector3 rig_spine = Add3(spine, rig_offset);
+        Vector3 rig_chest = Add3(chest, rig_offset);
+        Vector3 rig_neck = Add3(neck, rig_offset);
+        DrawBoneSegment(rig_pelvis, rig_spine, WORLD_GOLD);
+        DrawBoneSegment(rig_spine, rig_chest, WORLD_GOLD);
+        DrawBoneSegment(rig_chest, rig_neck, WORLD_GOLD);
+        DrawBoneJoint(rig_pelvis, WORLD_GOLD);
+        DrawBoneJoint(rig_spine, WORLD_GOLD);
+        DrawBoneJoint(rig_chest, WORLD_GOLD);
+        DrawBoneJoint(rig_neck, WORLD_GOLD);
+        for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
+            Color bone = HumanoidContactColor(gait->feet[leg].contact);
+            Vector3 hip = Add3(FromLimbVector(
+                skin.bones[thigh_bones[leg]].head), rig_offset);
+            Vector3 knee = Add3(FromLimbVector(
+                skin.bones[thigh_bones[leg]].tail), rig_offset);
+            Vector3 ankle = Add3(FromLimbVector(
+                skin.bones[shin_bones[leg]].tail), rig_offset);
+            Vector3 heel = Add3(FromLimbVector(pose->heel[leg]), rig_offset);
+            Vector3 ball = Add3(FromLimbVector(pose->ball[leg]), rig_offset);
+            Vector3 toe = Add3(FromLimbVector(pose->toe[leg]), rig_offset);
+            DrawBoneSegment(hip, knee, bone);
+            DrawBoneSegment(knee, ankle, bone);
+            DrawBoneSegment(ankle, heel, bone);
+            DrawBoneSegment(heel, ball, bone);
+            DrawBoneSegment(ball, toe, bone);
+            DrawBoneJoint(hip, bone);
+            DrawBoneJoint(knee, bone);
+            DrawBoneJoint(ankle, bone);
+            DrawBoneJoint(heel, bone);
+            DrawBoneJoint(ball, bone);
+            DrawBoneJoint(toe, bone);
+        }
+        for (int32_t arm = 0; arm < CC_HUMANOID_ARM_COUNT; ++arm) {
+            Vector3 shoulder = Add3(FromLimbVector(
+                skin.bones[upper_arm_bones[arm]].head), rig_offset);
+            Vector3 elbow = Add3(FromLimbVector(
+                skin.bones[upper_arm_bones[arm]].tail), rig_offset);
+            Vector3 hand = Add3(FromLimbVector(
+                skin.bones[forearm_bones[arm]].tail), rig_offset);
+            DrawBoneSegment(shoulder, elbow, WORLD_GOLD);
+            DrawBoneSegment(elbow, hand, WORLD_GOLD);
+            DrawBoneJoint(shoulder, WORLD_GOLD);
+            DrawBoneJoint(elbow, WORLD_GOLD);
+            DrawBoneJoint(hand, WORLD_GOLD);
+        }
     }
 }
 
@@ -4179,17 +5084,130 @@ static void DrawCombatBar(const CcLocalAgent *agent, Camera3D camera,
 static void DrawCombatImpact(const CcLocalAgent *agent)
 {
     if (agent->combat.hit_flash_seconds <= 0.0f) return;
-    float pulse = 0.42f + agent->combat.hit_flash_seconds * 0.85f;
+    float pulse = 0.13f + agent->combat.hit_flash_seconds * 1.05f;
     Vector3 point = agent->combat.impact_valid ? agent->combat.impact_point :
         (Vector3){agent->position.x, agent->position.y + 1.02f,
                   agent->position.z};
-    DrawSphereWires(point, pulse, 8, 8, WORLD_INK);
+    DrawSphereWires(point, pulse, 7, 7, WORLD_GOLD);
     if (agent->combat.impact_valid) {
+        Vector3 direction = PhysicsNormalizeOr(
+            agent->combat.impact_direction,
+            (Vector3){0.0f, 0.0f, 1.0f});
+        Vector3 side = PhysicsNormalizeOr(
+            PhysicsCross(direction, (Vector3){0.0f, 1.0f, 0.0f}),
+            (Vector3){1.0f, 0.0f, 0.0f});
+        float spark = pulse * 1.65f;
+        DrawLine3D(PhysicsAdd(point, PhysicsScale(side, -spark)),
+                   PhysicsAdd(point, PhysicsScale(side, spark)), WORLD_INK);
+        DrawLine3D(PhysicsAdd(point, (Vector3){0.0f, -spark * 0.72f, 0.0f}),
+                   PhysicsAdd(point, (Vector3){0.0f, spark * 0.72f, 0.0f}),
+                   WHITE);
         Vector3 trace = PhysicsAdd(
-            point, PhysicsScale(agent->combat.impact_direction,
+            point, PhysicsScale(direction,
                                 0.18f + agent->combat.impact_speed * 0.018f));
         DrawLine3D(point, trace, WORLD_GOLD);
     }
+}
+
+static void DrawCombatSkillTell(const CcLocalAgent *agent)
+{
+    if (agent == NULL ||
+        agent->humanoid.action != CC_HUMANOID_ACTION_STRIKE ||
+        (agent->combat.active_skill != CC_COMBAT_SKILL_CRUSHING_BLOW &&
+         agent->combat.active_skill != CC_COMBAT_SKILL_SUNDER)) {
+        return;
+    }
+    float phase = CombatClamp(
+        agent->humanoid.action_time / CcHumanoidStrikeDuration(),
+        0.0f, 1.0f);
+    Color color = agent->combat.active_skill ==
+                  CC_COMBAT_SKILL_CRUSHING_BLOW ? WORLD_GOLD : WORLD_VIOLET;
+    float radius = 0.40f + sinf(phase * PI) * 0.22f;
+    Vector3 ground = {agent->position.x, agent->position.y + 0.025f,
+                      agent->position.z};
+    DrawCylinderWires(ground, radius, radius, 0.035f, 24,
+                      Fade(color, 0.72f));
+    DrawCylinderWires(ground, radius * 0.72f, radius * 0.72f, 0.040f, 20,
+                      Fade(color, 0.42f));
+}
+
+static void DrawCombatSword(const CcLocalAgent *agent)
+{
+    if (agent == NULL ||
+        (agent->combat.team != CC_COMBAT_PLAYER &&
+         agent->combat.team != CC_COMBAT_RAIDER) ||
+        agent->swimming || agent->climbing) {
+        return;
+    }
+    const CcHumanoidPose *pose = AgentRenderPose(agent);
+    Vector3 hand = FromLimbVector(pose->hand[1]);
+    Vector3 direction = CcLocalCombatWeaponDirection(agent);
+    Vector3 body_right = {cosf(agent->facing_yaw), 0.0f,
+                          -sinf(agent->facing_yaw)};
+    Vector3 right = PhysicsNormalizeOr(
+        PhysicsCross(direction, (Vector3){0.0f, 1.0f, 0.0f}), body_right);
+    float blade_length = agent->combat.team == CC_COMBAT_PLAYER ? 0.86f :
+                                                                    0.70f;
+    Vector3 guard_center = PhysicsAdd(hand, PhysicsScale(direction, 0.13f));
+    Vector3 blade_start = PhysicsAdd(guard_center,
+                                     PhysicsScale(direction, 0.035f));
+    Vector3 blade_tip = PhysicsAdd(blade_start,
+                                   PhysicsScale(direction, blade_length));
+    Vector3 pommel = PhysicsAdd(hand, PhysicsScale(direction, -0.17f));
+    Color grip = agent->combat.team == CC_COMBAT_PLAYER ?
+        (Color){66, 45, 43, 255} : (Color){47, 39, 42, 255};
+    Color guard_color = agent->combat.team == CC_COMBAT_PLAYER ?
+        WORLD_GOLD : (Color){164, 116, 65, 255};
+    Color steel = agent->combat.defeated ? (Color){95, 101, 101, 255} :
+                                           (Color){196, 211, 212, 255};
+
+    DrawCylinderEx(pommel, guard_center, 0.032f, 0.032f, 7, grip);
+    DrawSmallSphere(pommel, 0.045f, guard_color);
+    DrawCylinderEx(PhysicsAdd(guard_center, PhysicsScale(right, -0.14f)),
+                   PhysicsAdd(guard_center, PhysicsScale(right, 0.14f)),
+                   0.032f, 0.026f, 7, guard_color);
+    DrawCylinderEx(blade_start, blade_tip, 0.052f, 0.012f, 5, steel);
+    DrawLine3D(blade_start, blade_tip,
+               agent->combat.team == CC_COMBAT_PLAYER ? WHITE : WORLD_INK);
+
+    if (agent->humanoid.action == CC_HUMANOID_ACTION_STRIKE &&
+        agent->humanoid.action_time > 0.18f &&
+        agent->humanoid.action_time < 0.84f) {
+        Vector3 previous_direction =
+            agent->combat.weapon_direction_valid ?
+            agent->combat.previous_weapon_direction : direction;
+        Vector3 previous_tip = PhysicsAdd(
+            hand, PhysicsScale(previous_direction, blade_length + 0.16f));
+        Color trail = agent->combat.team == CC_COMBAT_RAIDER ?
+            Fade(WORLD_DANGER, 0.54f) :
+            agent->combat.active_skill == CC_COMBAT_SKILL_CRUSHING_BLOW ?
+                Fade(WORLD_GOLD, 0.72f) :
+            agent->combat.active_skill == CC_COMBAT_SKILL_SUNDER ?
+                Fade(WORLD_VIOLET, 0.68f) : Fade(WORLD_TEAL, 0.58f);
+        DrawCylinderEx(previous_tip, blade_tip, 0.018f, 0.006f, 5, trail);
+        DrawLine3D(previous_tip, blade_tip, trail);
+        DrawLine3D(PhysicsLerp(previous_tip, hand, 0.34f),
+                   PhysicsLerp(blade_tip, hand, 0.34f), Fade(trail, 0.56f));
+    }
+}
+
+static void DrawSelectedTarget(const CcLocalAgent *target)
+{
+    if (target == NULL || target->combat.defeated) return;
+    float surface = target->position.y + 0.035f;
+    DrawCylinderWires((Vector3){target->position.x, surface,
+                                target->position.z},
+                      0.58f, 0.58f, 0.06f, 28, WORLD_GOLD);
+    DrawCylinderWires((Vector3){target->position.x, surface + 0.015f,
+                                target->position.z},
+                      0.48f, 0.48f, 0.06f, 28, WORLD_DANGER);
+    DrawLine3D((Vector3){target->position.x, surface + 1.95f,
+                         target->position.z},
+               (Vector3){target->position.x, surface + 2.25f,
+                         target->position.z}, WORLD_GOLD);
+    DrawSphereWires((Vector3){target->position.x, surface + 2.28f,
+                              target->position.z},
+                    0.10f, 7, 7, WORLD_GOLD);
 }
 
 static void PresentTarget(RenderTexture2D target, Rectangle destination)
@@ -4272,18 +5290,9 @@ static void DrawCourseRunners(const CcLocalCourse *course)
         for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
             const CcLocalAgent *raider = &course->raiders[i];
             DrawRobotShell(raider);
+            DrawCombatSword(raider);
+            DrawCombatSkillTell(raider);
             DrawCombatImpact(raider);
-            const CcHumanoidPose *pose = AgentRenderPose(raider);
-            Vector3 hand = FromLimbVector(pose->hand[1]);
-            Vector3 elbow = FromLimbVector(pose->elbow[1]);
-            Vector3 club_direction = PhysicsNormalizeOr(
-                PhysicsSubtract(hand, elbow),
-                (Vector3){sinf(raider->facing_yaw), 0.0f,
-                          cosf(raider->facing_yaw)});
-            Vector3 club_end = PhysicsAdd(
-                hand, PhysicsScale(club_direction, 0.48f));
-            DrawCylinderEx(hand, club_end, 0.035f, 0.052f, 7,
-                           (Color){82, 58, 45, 255});
             DrawSphereWires((Vector3){raider->position.x,
                                       raider->position.y + 2.05f,
                                       raider->position.z},
@@ -4351,7 +5360,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     ClearBackground((Color){10, 24, 30, 255});
     BeginMode3D(camera);
 
-    DrawExteriorTerrain();
+    DrawExteriorTerrain(place);
     for (int32_t i = 0; i < (int32_t)(sizeof(STREET_PLATFORMS) /
                                       sizeof(STREET_PLATFORMS[0])); ++i) {
         const NavPlatform *platform = &STREET_PLATFORMS[i];
@@ -4418,7 +5427,14 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                  underworld_present ? WORLD_VIOLET : WORLD_GOLD, clock * 0.7f,
                  CC_TRAVERSAL_WALK, false);
     DrawCourseRunners(course);
+    if (course != NULL && agent->combat.target_index >= 0 &&
+        agent->combat.target_index < CC_LOCAL_RAIDER_COUNT) {
+        DrawSelectedTarget(
+            &course->raiders[agent->combat.target_index]);
+    }
     DrawRobotShell(agent);
+    DrawCombatSword(agent);
+    DrawCombatSkillTell(agent);
     DrawCombatImpact(agent);
     EndMode3D();
 
@@ -4456,16 +5472,19 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         }
         for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
             DrawCombatBar(&course->raiders[i], camera, target.texture.width,
-                          target.texture.height, WORLD_DANGER);
+                          target.texture.height,
+                          i == agent->combat.target_index ? WORLD_GOLD :
+                          WORLD_DANGER);
         }
     }
-    if (agent->morphology == CC_MORPHOLOGY_BIPED) {
+    if (draw_hero_rig_debug &&
+        agent->morphology == CC_MORPHOLOGY_BIPED) {
         DrawText(TextFormat("BIOMECHANICAL BIPED / %d JOINTS / %s / %s / MUSCLES + LIGAMENTS",
                             agent->humanoid.body.morphology.joint_count,
                             CcLocalTraversalName(agent->traversal),
                             CcHumanoidActionName(agent->humanoid.action)),
                  18, 18, 10, WORLD_TEAL);
-    } else {
+    } else if (draw_hero_rig_debug) {
         DrawText(TextFormat("ROBOTIC %s / %d LEGS / %s / CONTACT IK",
                             CcLocalAgentMorphologyName(agent),
                             agent->limb_rig.morphology.limb_count,
@@ -4554,20 +5573,23 @@ void CcLocalDrawMarket3D(const CcSim *sim, const CcLocalAgent *agent, float cloc
                  (Color){218, 148, 61, 255}, WORLD_TEAL, clock,
                  CC_TRAVERSAL_WALK, false);
     DrawRobotShell(agent);
+    DrawCombatSword(agent);
+    DrawCombatSkillTell(agent);
     EndMode3D();
     WorldLabel labels[] = {
         {{6.55f, 2.05f, 1.60f}, "MARA / FACTOR", WORLD_GOLD},
         {{1.55f, 2.25f, 6.54f}, "STREET", WORLD_MUTED}
     };
     DrawLabels(labels, 2, camera, target.texture.width, target.texture.height);
-    if (agent->morphology == CC_MORPHOLOGY_BIPED) {
+    if (draw_hero_rig_debug &&
+        agent->morphology == CC_MORPHOLOGY_BIPED) {
         DrawText(TextFormat("BIO BIPED / %s + %s / %.0f%% MUSCLE ACTIVATION",
                             CcHumanoidContactName(agent->humanoid.feet[0].contact),
                             CcHumanoidContactName(agent->humanoid.feet[1].contact),
                             CcBiomechRigMeanActivation(&agent->humanoid.body) *
                                 100.0f),
                  18, 18, 10, WORLD_TEAL);
-    } else {
+    } else if (draw_hero_rig_debug) {
         DrawText(TextFormat("ROBOTIC %s / %d LEGS / PLANTED CONTACTS",
                             CcLocalAgentMorphologyName(agent),
                             agent->limb_rig.morphology.limb_count),
