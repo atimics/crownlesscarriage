@@ -402,14 +402,28 @@ A save contains:
 
 Procedural decoration is regenerated. Meaningful mutation is stored.
 
-The architecture proof stores authoritative records in SQLite tables for world
-metadata, kingdoms, settlements, routes, factions, shipments, bandit groups,
-monster populations, dungeons, situations, causal events, and the player
-company. Physical route charts are stored as stable map-object rows rather
-than reconstructed presentation state. Shipment intent is stored separately
-from its current route leg. A
-save is one atomic transaction. Loading validates its schema, references, and
-exact state hash before accepting it.
+The architecture proof stores checkpoints in normalized SQLite tables for
+world metadata, kingdoms, settlements, routes, factions, shipments, bandit
+groups, monster populations, dungeons, situations, causal events, and the
+player company. Physical route charts are stored as stable map-object rows
+rather than reconstructed presentation state. Shipment intent is stored
+separately from its current route leg.
+
+The durable source of truth after a journal starts is a versioned sequence of
+simulation inputs: commands, explicit day advances, and integer runtime-tick
+advances. Every row records its generation and ordinal, input version, and the
+state hash before and after application. SQLite runs in WAL mode with full
+synchronous commits. Update and delete triggers enforce append-only access for
+journal epochs and operation rows.
+
+A checkpoint is a disposable replay accelerator. It records the journal
+generation and ordinal represented by its exact state hash, while later rows
+remain untouched. Loading first validates that checkpoint against the hash at
+its cursor, then replays a contiguous suffix and verifies every pre-state and
+post-state hash before accepting the result. Real-time travel ticks are grouped
+into at most six ticks per commit (100 ms at 60 Hz); phase transitions,
+commands, checkpoints, and shutdown flush immediately. If a grouped commit
+fails, the in-memory simulation returns to its last durable prefix.
 
 ## Networking boundary
 

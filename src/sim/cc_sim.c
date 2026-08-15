@@ -2418,7 +2418,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         SetError(error, error_capacity, "Simulation is missing.");
         return false;
     }
-    if ((sim->schema_version != 3U &&
+    if ((sim->schema_version != 3U && sim->schema_version != 4U &&
          sim->schema_version != CC_SIM_SCHEMA_VERSION) ||
         sim->generator_version != CC_GENERATOR_VERSION) {
         SetError(error, error_capacity, "Simulation version is unsupported.");

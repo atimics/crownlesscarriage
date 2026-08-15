@@ -160,6 +160,13 @@ The ledger supports three audiences:
    and notifications.
 3. Developers use it to debug why a world state exists.
 
+The causal event ledger is an in-world projection, not the durability source
+of truth. It may remain bounded or be compacted according to retention rules.
+The persistence layer separately records validated simulation inputs in an
+append-only action journal. Loading verifies a snapshot at its journal cursor,
+then deterministically replays the committed suffix. This keeps player-facing
+history useful without asking it to double as a database recovery log.
+
 ## Situation contract
 
 A world condition becomes a playable situation only if it contains:

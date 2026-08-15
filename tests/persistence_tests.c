@@ -15,6 +15,175 @@ static void RequireSqlite(int result, sqlite3 *database, const char *context)
     exit(EXIT_FAILURE);
 }
 
+static void RemoveDatabase(const char *path)
+{
+    char sidecar[384];
+    (void)remove(path);
+    (void)snprintf(sidecar, sizeof(sidecar), "%s-wal", path);
+    (void)remove(sidecar);
+    (void)snprintf(sidecar, sizeof(sidecar), "%s-shm", path);
+    (void)remove(sidecar);
+}
+
+static int64_t ReadSqliteInteger(const char *path, const char *sql)
+{
+    sqlite3 *database = NULL;
+    RequireSqlite(sqlite3_open_v2(path, &database, SQLITE_OPEN_READONLY, NULL),
+                  database, "could not open journal fixture");
+    sqlite3_stmt *statement = NULL;
+    RequireSqlite(sqlite3_prepare_v2(database, sql, -1, &statement, NULL),
+                  database, "could not prepare journal query");
+    CC_CHECK(sqlite3_step(statement) == SQLITE_ROW);
+    int64_t value = sqlite3_column_int64(statement, 0);
+    sqlite3_finalize(statement);
+    sqlite3_close(database);
+    return value;
+}
+
+static void CheckSchema4Compatibility(char *error, size_t error_capacity)
+{
+    const char *path = "persistence-legacy-v4-test.ccsave";
+    RemoveDatabase(path);
+    CcSim legacy;
+    CcSimInit(&legacy, UINT32_C(0x1e9ac5));
+    CcSimAdvanceDays(&legacy, 5);
+    legacy.schema_version = 4U;
+    CcSim migrated = legacy;
+    migrated.schema_version = CC_SIM_SCHEMA_VERSION;
+
+    CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(CcSimHash(&restored) == CcSimHash(&migrated));
+    RemoveDatabase(path);
+}
+
+static void CheckJournalRecovery(char *error, size_t error_capacity)
+{
+    const char *path = "persistence-journal-recovery-test.ccsave";
+    RemoveDatabase(path);
+    CcSim sim;
+    CcSimInit(&sim, UINT32_C(0x10a7b00c));
+    CcJournal *journal = CcJournalStart(path, &sim, error, error_capacity);
+    CC_CHECK(journal != NULL);
+    CC_CHECK(CcJournalAdvanceDays(journal, &sim, 2,
+                                  error, error_capacity));
+    CcCommand travel = {
+        .kind = CC_COMMAND_TRAVEL,
+        .target_id = sim.settlements[1].id
+    };
+    CC_CHECK(CcJournalApply(journal, &sim, &travel,
+                            error, error_capacity));
+    CC_CHECK(CcJournalAdvanceRuntimeTicks(journal, &sim, 4,
+                                          error, error_capacity));
+    CC_CHECK(CcJournalAdvanceRuntimeTicks(journal, &sim, 4,
+                                          error, error_capacity));
+    CC_CHECK(CcJournalAdvanceRuntimeTicks(journal, &sim, 2,
+                                          error, error_capacity));
+    uint64_t expected_hash = CcSimHash(&sim);
+    CC_CHECK(CcJournalClose(&journal, &sim, error, error_capacity));
+    CC_CHECK(journal == NULL);
+
+    /* The snapshot is still the epoch base; recovery must replay the suffix. */
+    CC_CHECK(ReadSqliteInteger(
+                 path, "SELECT journal_cursor FROM meta WHERE id=1;") == 0);
+    CC_CHECK(ReadSqliteInteger(
+                 path, "SELECT COUNT(*) FROM action_journal;") == 4);
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(CcSimHash(&restored) == expected_hash);
+    CC_CHECK(restored.journey.active);
+    CC_CHECK(restored.clock.tick == sim.clock.tick);
+
+    CcJournal *resumed = CcJournalResume(path, &restored,
+                                         error, error_capacity);
+    CC_CHECK(resumed != NULL);
+    CC_CHECK(CcSimHash(&restored) == expected_hash);
+    CC_CHECK(CcJournalAdvanceRuntimeTicks(resumed, &restored, 3,
+                                          error, error_capacity));
+    expected_hash = CcSimHash(&restored);
+    CC_CHECK(CcJournalClose(&resumed, &restored,
+                            error, error_capacity));
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(CcSimHash(&restored) == expected_hash);
+    CC_CHECK(ReadSqliteInteger(
+                 path, "SELECT COUNT(*) FROM action_journal;") == 5);
+
+    /* SQL clients cannot revise or remove committed input records. */
+    sqlite3 *database = NULL;
+    RequireSqlite(sqlite3_open_v2(path, &database,
+                                  SQLITE_OPEN_READWRITE, NULL),
+                  database, "could not open immutable journal");
+    char *sqlite_error = NULL;
+    int result = sqlite3_exec(database,
+                              "UPDATE action_journal SET step_count=99;",
+                              NULL, NULL, &sqlite_error);
+    CC_CHECK(result == SQLITE_CONSTRAINT);
+    CC_CHECK(sqlite_error != NULL &&
+             strstr(sqlite_error, "append-only") != NULL);
+    sqlite3_free(sqlite_error);
+    sqlite_error = NULL;
+    result = sqlite3_exec(database, "DELETE FROM action_journal;",
+                          NULL, NULL, &sqlite_error);
+    CC_CHECK(result == SQLITE_CONSTRAINT);
+    CC_CHECK(sqlite_error != NULL &&
+             strstr(sqlite_error, "append-only") != NULL);
+    sqlite3_free(sqlite_error);
+    sqlite3_close(database);
+    RemoveDatabase(path);
+}
+
+static void CheckJournalCheckpointAndTamper(char *error,
+                                            size_t error_capacity)
+{
+    const char *path = "persistence-journal-checkpoint-test.ccsave";
+    RemoveDatabase(path);
+    CcSim sim;
+    CcSimInit(&sim, UINT32_C(0x10a7c0de));
+    CcJournal *journal = CcJournalStart(path, &sim, error, error_capacity);
+    CC_CHECK(journal != NULL);
+    CC_CHECK(CcJournalAdvanceDays(journal, &sim, 1,
+                                  error, error_capacity));
+    CC_CHECK(CcJournalCheckpoint(journal, &sim, error, error_capacity));
+    CC_CHECK(CcJournalAdvanceDays(journal, &sim, 3,
+                                  error, error_capacity));
+    uint64_t expected_hash = CcSimHash(&sim);
+    CC_CHECK(CcJournalClose(&journal, &sim, error, error_capacity));
+    CC_CHECK(ReadSqliteInteger(
+                 path, "SELECT journal_cursor FROM meta WHERE id=1;") == 1);
+    CC_CHECK(ReadSqliteInteger(
+                 path, "SELECT MAX(ordinal) FROM action_journal;") == 2);
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(CcSimHash(&restored) == expected_hash);
+
+    /* Simulate privileged corruption: replay must reject the broken hash chain. */
+    sqlite3 *database = NULL;
+    RequireSqlite(sqlite3_open_v2(path, &database,
+                                  SQLITE_OPEN_READWRITE, NULL),
+                  database, "could not open tamper fixture");
+    char *sqlite_error = NULL;
+    int result = sqlite3_exec(
+        database,
+        "DROP TRIGGER action_journal_no_update;"
+        "UPDATE action_journal SET post_state_hash='0000000000000000' "
+        "WHERE ordinal=(SELECT MAX(ordinal) FROM action_journal);",
+        NULL, NULL, &sqlite_error);
+    if (result != SQLITE_OK) {
+        (void)fprintf(stderr, "could not tamper with journal fixture: %s\n",
+                      sqlite_error != NULL ? sqlite_error :
+                      sqlite3_errmsg(database));
+        sqlite3_free(sqlite_error);
+        sqlite3_close(database);
+        exit(EXIT_FAILURE);
+    }
+    sqlite3_close(database);
+    CC_CHECK(!CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(strstr(error, "diverged") != NULL);
+    RemoveDatabase(path);
+}
+
 static void ConvertToPreJourneySchema3(const char *path)
 {
     sqlite3 *database = NULL;
@@ -68,7 +237,7 @@ static void CheckPreJourneySchema3Compatibility(char *error,
                                                  size_t error_capacity)
 {
     const char *path = "persistence-legacy-v3-test.ccsave";
-    (void)remove(path);
+    RemoveDatabase(path);
     CcSim legacy;
     CcSimInit(&legacy, UINT32_C(0x1e9ac3));
     CcSimAdvanceDays(&legacy, 11);
@@ -110,10 +279,10 @@ static void CheckPreJourneySchema3Compatibility(char *error,
     CcSim rewritten;
     CC_CHECK(CcSaveRead(path, &rewritten, error, error_capacity));
     CC_CHECK(CcSimHash(&rewritten) == migrated_hash);
-    (void)remove(path);
+    RemoveDatabase(path);
 
     const char *journey_path = "persistence-legacy-journey-v3-test.ccsave";
-    (void)remove(journey_path);
+    RemoveDatabase(journey_path);
     CcSim legacy_journey;
     CcSimInit(&legacy_journey, UINT32_C(0x1e9ac4));
     const CcSituation *situation = NULL;
@@ -155,19 +324,22 @@ static void CheckPreJourneySchema3Compatibility(char *error,
     CC_CHECK(resumed.player.coins == legacy_coins - reserved_fare);
     CC_CHECK(resumed.carriage.mode == CC_CARRIAGE_STOPPED);
     CC_CHECK(CcSimValidate(&resumed, error, error_capacity));
-    (void)remove(journey_path);
+    RemoveDatabase(journey_path);
 }
 
 int main(void)
 {
     const char *path = "persistence-test.ccsave";
-    (void)remove(path);
+    RemoveDatabase(path);
 
     CcSim original;
     CcSimInit(&original, UINT32_C(0xa11ce5ed));
     CcSimAdvanceDays(&original, 23);
     char error[256];
     CheckPreJourneySchema3Compatibility(error, sizeof(error));
+    CheckSchema4Compatibility(error, sizeof(error));
+    CheckJournalRecovery(error, sizeof(error));
+    CheckJournalCheckpointAndTamper(error, sizeof(error));
     CcCommand command = {
         .kind = CC_COMMAND_TRAVEL,
         .target_id = original.settlements[1].id
@@ -243,7 +415,7 @@ int main(void)
              original.maps[0].recorded_danger);
     CC_CHECK(restored.event_count == original.event_count);
 
-    (void)remove(path);
+    RemoveDatabase(path);
     puts("SQLite persistence tests passed");
     return 0;
 }
