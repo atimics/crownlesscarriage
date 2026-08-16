@@ -1,4 +1,5 @@
 #include "client/cc_local3d.h"
+#include "locomotion/cc_humanoid_skin.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -1296,6 +1297,60 @@ int main(void)
         (void)fprintf(stderr,
                       "render gait was not smoother: visual %.4f physical %.4f\n",
                       maximum_render_step, maximum_physical_step);
+        return 1;
+    }
+    CcHumanoidSkinPose render_skin;
+    CcHumanoidSkinPoseResolve(&uneven_walk.render_pose, &render_skin);
+    Vector3 expected_cape_anchor = {
+        render_skin.sockets[CC_HUMANOID_SOCKET_BACK].position.x +
+            render_skin.body_up.x * 0.14f,
+        render_skin.sockets[CC_HUMANOID_SOCKET_BACK].position.y +
+            render_skin.body_up.y * 0.14f,
+        render_skin.sockets[CC_HUMANOID_SOCKET_BACK].position.z +
+            render_skin.body_up.z * 0.14f,
+    };
+    if (!render_skin.valid || !uneven_walk.render_cape.initialized ||
+        VectorDistance3(uneven_walk.render_cape.point[0],
+                        expected_cape_anchor) > 0.00001f) {
+        (void)fprintf(stderr,
+                      "render cape did not share the interpolated skeleton clock\n");
+        return 1;
+    }
+
+    CcLocalAgent scout_walk;
+    CcLocalAgent refugee_walk;
+    CcLocalAgentInit(&scout_walk, (Vector2){2.00f, 3.40f}, true);
+    CcLocalAgentInit(&refugee_walk, (Vector2){2.00f, 4.40f}, true);
+    scout_walk.crowned = false;
+    refugee_walk.crowned = false;
+    CcLocalAgentSetNpcAppearance(
+        &scout_walk, UINT32_C(0x4d4f5645), CC_NPC_ROLE_SCOUT,
+        (Color){96, 111, 117, 255});
+    CcLocalAgentSetNpcAppearance(
+        &refugee_walk, UINT32_C(0x4d4f5645), CC_NPC_ROLE_REFUGEE,
+        (Color){96, 111, 117, 255});
+    float expected_scout_cadence = 1.0f +
+        (scout_walk.appearance.gait_cadence_scale - 1.0f) * 0.40f;
+    float expected_refugee_cadence = 1.0f +
+        (refugee_walk.appearance.gait_cadence_scale - 1.0f) * 0.40f;
+    float expected_scout_stride = 1.0f +
+        (scout_walk.appearance.stride_scale - 1.0f) * 0.40f;
+    float expected_refugee_stride = 1.0f +
+        (refugee_walk.appearance.stride_scale - 1.0f) * 0.40f;
+    if (fabsf(scout_walk.humanoid.walk_cadence_scale -
+              expected_scout_cadence) > 0.00001f ||
+        fabsf(refugee_walk.humanoid.walk_cadence_scale -
+              expected_refugee_cadence) > 0.00001f ||
+        fabsf(scout_walk.humanoid.walk_stride_scale -
+              expected_scout_stride) > 0.00001f ||
+        fabsf(refugee_walk.humanoid.walk_stride_scale -
+              expected_refugee_stride) > 0.00001f ||
+        scout_walk.humanoid.walk_cadence_scale <=
+            refugee_walk.humanoid.walk_cadence_scale ||
+        scout_walk.humanoid.walk_stride_scale <=
+            refugee_walk.humanoid.walk_stride_scale) {
+        (void)fprintf(stderr,
+                      "NPC movement signature did not reach the live gait\n");
         return 1;
     }
 

@@ -481,6 +481,18 @@ static CcLocalSceneKind AgentSceneForCall(const CcLocalAgent *agent,
            CC_LOCAL_SCENE_ROAD : CC_LOCAL_SCENE_STREET;
 }
 
+static void ApplyAgentWalkingProfile(CcLocalAgent *agent)
+{
+    if (agent == NULL || agent->morphology != CC_MORPHOLOGY_BIPED ||
+        !agent->humanoid.initialized) return;
+    const float signature_weight = agent->crowned ? 0.0f : 0.40f;
+    float cadence = 1.0f +
+        (agent->appearance.gait_cadence_scale - 1.0f) * signature_weight;
+    float stride = 1.0f +
+        (agent->appearance.stride_scale - 1.0f) * signature_weight;
+    CcHumanoidGaitSetWalkingProfile(&agent->humanoid, cadence, stride);
+}
+
 void CcLocalAgentInit(CcLocalAgent *agent, Vector2 position, bool market_interior)
 {
     *agent = (CcLocalAgent){0};
@@ -520,6 +532,7 @@ void CcLocalAgentSetNpcAppearance(CcLocalAgent *agent, uint32_t seed,
     if (agent == NULL) return;
     agent->appearance = CcNpcAppearanceGenerate(seed, role, accent);
     agent->tunic_color = agent->appearance.outer;
+    ApplyAgentWalkingProfile(agent);
 }
 
 void CcLocalAgentSetMorphology(CcLocalAgent *agent, CcMorphologyPreset preset,
@@ -540,17 +553,22 @@ void CcLocalAgentSetMorphology(CcLocalAgent *agent, CcMorphologyPreset preset,
     if (preset == CC_MORPHOLOGY_BIPED) {
         CcHumanoidGaitInit(&agent->humanoid, ToLimbVector(agent->position),
                             agent->facing_yaw, ProbeLocalSurface, &context);
+        ApplyAgentWalkingProfile(agent);
         agent->render_pose = agent->humanoid.pose;
         agent->render_pose_valid = true;
         agent->simulation_accumulator = 0.0f;
         agent->cape = (CcLocalCapeState){0};
         UpdateHeroCape(agent, 1.0f / 60.0f);
+        agent->previous_cape = agent->cape;
+        agent->render_cape = agent->cape;
     } else {
         agent->humanoid = (CcHumanoidGait){0};
         agent->render_pose = (CcHumanoidPose){0};
         agent->render_pose_valid = false;
         agent->simulation_accumulator = 0.0f;
         agent->cape = (CcLocalCapeState){0};
+        agent->previous_cape = (CcLocalCapeState){0};
+        agent->render_cape = (CcLocalCapeState){0};
     }
 }
 
@@ -3615,6 +3633,7 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
 {
     const float gravity = 9.81f;
     delta_time = fminf(delta_time, 1.0f / 30.0f);
+    agent->previous_cape = agent->cape;
     if (UpdateCombatClock(agent, delta_time)) {
         UpdateHeroCape(agent, delta_time);
         return;
@@ -3631,6 +3650,7 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
     if (biped && agent->humanoid_needs_reset) {
         CcHumanoidGaitInit(&agent->humanoid, ToLimbVector(agent->position),
                             agent->facing_yaw, ProbeLocalSurface, &context);
+        ApplyAgentWalkingProfile(agent);
         agent->humanoid_needs_reset = false;
     }
     bool was_swimming = agent->swimming;
@@ -3945,6 +3965,8 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
                         agent->facing_yaw, ToLimbVector(agent->velocity),
                         agent->grounded, delta_time, ProbeLocalSurface, &context);
         agent->cape = (CcLocalCapeState){0};
+        agent->previous_cape = (CcLocalCapeState){0};
+        agent->render_cape = (CcLocalCapeState){0};
     }
 }
 
@@ -4017,6 +4039,45 @@ static void BlendHumanoidPose(CcHumanoidPose *result,
                                          after->chest_pitch, amount);
 }
 
+static void UpdateRenderCape(CcLocalAgent *agent, float amount)
+{
+    if (!agent->cape.initialized) {
+        agent->render_cape = (CcLocalCapeState){0};
+        return;
+    }
+    if (!agent->previous_cape.initialized) {
+        agent->render_cape = agent->cape;
+    } else {
+        agent->render_cape = (CcLocalCapeState){.initialized = true};
+        for (int32_t point = 0; point < CC_LOCAL_CAPE_POINT_COUNT; ++point) {
+            agent->render_cape.point[point] = PhysicsLerp(
+                agent->previous_cape.point[point], agent->cape.point[point],
+                amount);
+            agent->render_cape.previous[point] = PhysicsLerp(
+                agent->previous_cape.previous[point],
+                agent->cape.previous[point], amount);
+        }
+        agent->render_cape.anchor = PhysicsLerp(
+            agent->previous_cape.anchor, agent->cape.anchor, amount);
+    }
+
+    CcHumanoidSkinPose skin;
+    CcHumanoidSkinPoseResolve(&agent->render_pose, &skin);
+    if (!skin.valid) return;
+    Vector3 render_anchor = PhysicsAdd(
+        FromLimbVector(skin.sockets[CC_HUMANOID_SOCKET_BACK].position),
+        PhysicsScale(FromLimbVector(skin.body_up), 0.14f));
+    Vector3 correction = PhysicsSubtract(render_anchor,
+                                          agent->render_cape.anchor);
+    for (int32_t point = 0; point < CC_LOCAL_CAPE_POINT_COUNT; ++point) {
+        agent->render_cape.point[point] = PhysicsAdd(
+            agent->render_cape.point[point], correction);
+        agent->render_cape.previous[point] = PhysicsAdd(
+            agent->render_cape.previous[point], correction);
+    }
+    agent->render_cape.anchor = render_anchor;
+}
+
 void CcLocalAgentInterpolateInternal(CcLocalAgent *agent, float amount)
 {
     if (agent == NULL) return;
@@ -4033,8 +4094,10 @@ void CcLocalAgentInterpolateInternal(CcLocalAgent *agent, float amount)
             &agent->humanoid.pose;
         BlendHumanoidPose(&agent->render_pose, before_pose, after_pose, amount);
         agent->render_pose_valid = true;
+        UpdateRenderCape(agent, amount);
     } else {
         agent->render_pose_valid = false;
+        agent->render_cape = (CcLocalCapeState){0};
     }
 }
 
@@ -5172,23 +5235,42 @@ static void DrawNpcFigure3D(Vector3 position, float size_hint, float yaw,
     float mass = appearance.body_mass;
     float muscle = appearance.muscularity;
     float active = mode == CC_TRAVERSAL_IDLE ? 0.0f : 1.0f;
-    float stride = sinf(phase) * 0.13f * scale * active;
-    float bob = mode == CC_TRAVERSAL_WALK ? fabsf(sinf(phase)) * 0.035f * scale : 0.0f;
-    Vector3 hip = LocalPoint(position, 0.0f, 0.73f * scale + bob, 0.0f, yaw);
-    Vector3 chest = LocalPoint(position, 0.0f, 1.15f * scale + bob, 0.0f, yaw);
-    Vector3 neck = LocalPoint(position, 0.0f, 1.43f * scale + bob, 0.0f, yaw);
-    Vector3 shoulder_l = LocalPoint(position, -0.20f * scale,
-                                    1.29f * scale + bob, 0.0f, yaw);
-    Vector3 shoulder_r = LocalPoint(position, 0.20f * scale,
-                                    1.29f * scale + bob, 0.0f, yaw);
-    Vector3 elbow_l = LocalPoint(position, -0.29f * scale,
-                                 1.01f * scale + bob, stride, yaw);
-    Vector3 elbow_r = LocalPoint(position, 0.29f * scale,
-                                 1.01f * scale + bob, -stride, yaw);
-    Vector3 hand_l = LocalPoint(position, -0.25f * scale,
-                                0.78f * scale + bob, stride, yaw);
-    Vector3 hand_r = LocalPoint(position, 0.25f * scale,
-                                0.78f * scale + bob, -stride, yaw);
+    float walk_phase = phase * appearance.gait_cadence_scale * 2.0f * PI;
+    float walk_wave = sinf(walk_phase);
+    float idle_wave = sinf(phase * 0.55f +
+                           (float)(seed & UINT32_C(255)) * 0.011f);
+    float stride = walk_wave * 0.13f * scale * active *
+                   appearance.stride_scale;
+    float arm_stride = stride * appearance.arm_swing_scale;
+    float bob = mode == CC_TRAVERSAL_WALK ?
+                fabsf(walk_wave) * 0.035f * scale * appearance.bob_scale :
+                idle_wave * 0.010f * scale;
+    float sway = mode == CC_TRAVERSAL_IDLE ? idle_wave * 0.014f * scale :
+                                             cosf(walk_phase) * 0.018f * scale;
+    float lean = appearance.idle_lean * scale;
+    Vector3 hip = LocalPoint(position, sway * 0.30f,
+                             0.73f * scale + bob * 0.35f,
+                             lean * 0.20f, yaw);
+    Vector3 chest = LocalPoint(position, sway, 1.15f * scale + bob,
+                               lean, yaw);
+    Vector3 neck = LocalPoint(position, sway * 1.08f,
+                              1.43f * scale + bob, lean * 1.24f, yaw);
+    Vector3 shoulder_l = LocalPoint(position, -0.20f * scale + sway,
+                                    1.29f * scale + bob, lean, yaw);
+    Vector3 shoulder_r = LocalPoint(position, 0.20f * scale + sway,
+                                    1.29f * scale + bob, lean, yaw);
+    Vector3 elbow_l = LocalPoint(position, -0.29f * scale + sway,
+                                 1.01f * scale + bob,
+                                 lean + arm_stride, yaw);
+    Vector3 elbow_r = LocalPoint(position, 0.29f * scale + sway,
+                                 1.01f * scale + bob,
+                                 lean - arm_stride, yaw);
+    Vector3 hand_l = LocalPoint(position, -0.25f * scale + sway,
+                                0.78f * scale + bob,
+                                lean + arm_stride, yaw);
+    Vector3 hand_r = LocalPoint(position, 0.25f * scale + sway,
+                                0.78f * scale + bob,
+                                lean - arm_stride, yaw);
     Vector3 knee_l = LocalPoint(position, -0.12f * scale, 0.40f * scale,
                                 stride, yaw);
     Vector3 knee_r = LocalPoint(position, 0.12f * scale, 0.40f * scale,
@@ -5402,10 +5484,10 @@ static void DrawBiomechanicalBiped(const CcLocalAgent *agent)
                           0.39f, 0.39f, 0.018f, 24,
                           Fade(WORLD_TEAL, 0.82f));
     }
-    if (modular_hero && DrawHeroSkin(&skin, &agent->cape, WHITE)) {
+    if (modular_hero && DrawHeroSkin(&skin, &agent->render_cape, WHITE)) {
         CcLocalRendererRecordBiped(true);
         if (draw_hero_rig_debug) {
-            DrawHeroSkinRigOverlay(gait, &skin, &agent->cape);
+            DrawHeroSkinRigOverlay(gait, &skin, &agent->render_cape);
         }
         if (agent->crowned) {
             Vector3 crown = FromLimbVector(
@@ -6849,27 +6931,27 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     DrawNpcFigure3D(
         (Vector3){STREET_PEOPLE[0].x, 0.0f, STREET_PEOPLE[0].y},
         0.96f, -0.55f, UINT32_C(0x73747201), CC_NPC_ROLE_MERCHANT,
-        (Color){223, 151, 68, 255}, clock * 1.2f, CC_TRAVERSAL_WALK);
+        (Color){223, 151, 68, 255}, clock * 1.2f, CC_TRAVERSAL_IDLE);
     DrawNpcFigure3D(
         (Vector3){STREET_PEOPLE[1].x, 0.0f, STREET_PEOPLE[1].y},
         1.02f, 1.70f, UINT32_C(0x73747202), CC_NPC_ROLE_GUARD,
-        kingdom, clock + 1.0f, CC_TRAVERSAL_WALK);
+        kingdom, clock + 1.0f, CC_TRAVERSAL_IDLE);
     DrawNpcFigure3D(
         (Vector3){STREET_PEOPLE[2].x, 0.0f, STREET_PEOPLE[2].y},
         0.92f, 0.35f, UINT32_C(0x73747203), CC_NPC_ROLE_LABORER,
-        (Color){97, 154, 137, 255}, clock + 2.0f, CC_TRAVERSAL_WALK);
+        (Color){97, 154, 137, 255}, clock + 2.0f, CC_TRAVERSAL_IDLE);
     DrawNpcFigure3D(
         (Vector3){STREET_PEOPLE[3].x, 0.0f, STREET_PEOPLE[3].y},
         0.88f, 2.40f, UINT32_C(0x73747204), CC_NPC_ROLE_HEALER,
         (Color){168, 112, 128, 255}, clock * 0.8f + 3.0f,
-        CC_TRAVERSAL_WALK);
+        CC_TRAVERSAL_IDLE);
     bool hungry_crowd = place->hunger >= 30;
     DrawNpcFigure3D(
         (Vector3){STREET_PEOPLE[4].x, 0.0f, STREET_PEOPLE[4].y},
         0.82f, -0.40f, UINT32_C(0x73747205),
         hungry_crowd ? CC_NPC_ROLE_REFUGEE : CC_NPC_ROLE_TRAVELLER,
         hungry_crowd ? WORLD_DANGER : kingdom, clock * 0.6f,
-        CC_TRAVERSAL_WALK);
+        CC_TRAVERSAL_IDLE);
     bool underworld_present = HasSmugglerRoad(sim, place->id) ||
                               place->security < 50;
     DrawNpcFigure3D(
@@ -6877,18 +6959,18 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         0.88f, 2.75f, UINT32_C(0x73747206),
         underworld_present ? CC_NPC_ROLE_SCOUT : CC_NPC_ROLE_TRAVELLER,
         underworld_present ? WORLD_VIOLET : kingdom, clock * 0.7f,
-        CC_TRAVERSAL_WALK);
+        CC_TRAVERSAL_IDLE);
     if (sim->resolved_journey_outcome != CC_JOURNEY_OUTCOME_NONE &&
         sim->journey.destination_id == place->id) {
         DrawNpcFigure3D((Vector3){46.80f, 0.0f, 31.15f}, 0.86f, -1.10f,
                         UINT32_C(0x61667401), CC_NPC_ROLE_GUARD,
                         WORLD_TEAL, clock * 0.64f + 1.4f,
-                        CC_TRAVERSAL_WALK);
+                        CC_TRAVERSAL_IDLE);
         if (sim->resolved_journey_outcome == CC_JOURNEY_OUTCOME_COMBAT) {
             DrawNpcFigure3D((Vector3){47.65f, 0.0f, 30.55f}, 0.82f,
                             -0.85f, UINT32_C(0x61667402),
                             CC_NPC_ROLE_HEALER, WORLD_GOLD,
-                            clock * 0.58f + 2.1f, CC_TRAVERSAL_WALK);
+                            clock * 0.58f + 2.1f, CC_TRAVERSAL_IDLE);
         }
     }
     DrawCourseRunners(course);
@@ -7059,7 +7141,7 @@ void CcLocalDrawMarket3D(const CcSim *sim, const CcLocalAgent *agent, float cloc
     DrawNpcFigure3D(
         (Vector3){MARKET_PEOPLE[0].x, 0.0f, MARKET_PEOPLE[0].y},
         1.02f, 2.75f, UINT32_C(0x4d415241), CC_NPC_ROLE_MERCHANT,
-        (Color){218, 148, 61, 255}, clock, CC_TRAVERSAL_WALK);
+        (Color){218, 148, 61, 255}, clock, CC_TRAVERSAL_IDLE);
     DrawRobotShell(agent);
     DrawCombatSword(agent);
     DrawCombatSkillTell(agent);

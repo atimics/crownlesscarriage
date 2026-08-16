@@ -575,6 +575,97 @@ static void TestHumanoidController(void)
             "recovered humanoid did not finish upright");
 }
 
+static void TestWalkingProfilesAndContactMarkers(void)
+{
+    const float delta_time = 1.0f / 60.0f;
+    CcHumanoidGait slow;
+    CcHumanoidGait fast;
+    CcLimbVec3 slow_body = {0.0f, 0.0f, 0.0f};
+    CcLimbVec3 fast_body = {2.0f, 0.0f, 0.0f};
+    CcHumanoidGaitInit(&slow, slow_body, 0.0f, PlaneProbe, NULL);
+    CcHumanoidGaitInit(&fast, fast_body, 0.0f, PlaneProbe, NULL);
+    CcHumanoidGaitSetWalkingProfile(&slow, 0.78f, 1.0f);
+    CcHumanoidGaitSetWalkingProfile(&fast, 1.22f, 1.0f);
+
+    int32_t slow_contacts = 0;
+    int32_t fast_contacts = 0;
+    for (int32_t frame = 0; frame < 360; ++frame) {
+        CcHumanoidGait *gaits[] = {&slow, &fast};
+        CcLimbVec3 *bodies[] = {&slow_body, &fast_body};
+        int32_t *contact_counts[] = {&slow_contacts, &fast_contacts};
+        for (int32_t sample = 0; sample < 2; ++sample) {
+            CcHumanoidGaitAdvance(
+                gaits[sample], *bodies[sample], 0.0f,
+                (CcLimbVec3){0.0f, 0.0f, 1.0f}, true, delta_time,
+                PlaneProbe, NULL);
+            bodies[sample]->x += gaits[sample]->root_velocity.x * delta_time;
+            bodies[sample]->z += gaits[sample]->root_velocity.z * delta_time;
+            uint32_t markers = CcHumanoidGaitConsumeMotionMarkers(
+                gaits[sample]);
+            if ((markers & CC_MOTION_MARKER_LEFT_CONTACT) != 0U) {
+                Require(gaits[sample]->feet[0].contact ==
+                        CC_HUMANOID_CONTACT_HEEL,
+                        "left walk marker did not match the physical heel strike");
+                *contact_counts[sample] += 1;
+            }
+            if ((markers & CC_MOTION_MARKER_RIGHT_CONTACT) != 0U) {
+                Require(gaits[sample]->feet[1].contact ==
+                        CC_HUMANOID_CONTACT_HEEL,
+                        "right walk marker did not match the physical heel strike");
+                *contact_counts[sample] += 1;
+            }
+        }
+    }
+    Require(fast_contacts >= slow_contacts + 3,
+            "walking cadence profile did not change physical step frequency");
+    Require(fast.cadence > slow.cadence + 0.30f,
+            "walking cadence profile was not applied to the gait clock");
+
+    CcHumanoidGait short_stride;
+    CcHumanoidGait long_stride;
+    CcLimbVec3 short_body = {4.0f, 0.0f, 0.0f};
+    CcLimbVec3 long_body = {6.0f, 0.0f, 0.0f};
+    CcHumanoidGaitInit(&short_stride, short_body, 0.0f, PlaneProbe, NULL);
+    CcHumanoidGaitInit(&long_stride, long_body, 0.0f, PlaneProbe, NULL);
+    CcHumanoidGaitSetWalkingProfile(&short_stride, 1.0f, 0.75f);
+    CcHumanoidGaitSetWalkingProfile(&long_stride, 1.0f, 1.25f);
+    float short_lead = -1.0f;
+    float long_lead = -1.0f;
+    CcHumanoidContact short_contact[CC_HUMANOID_LEG_COUNT] = {
+        short_stride.feet[0].contact, short_stride.feet[1].contact};
+    CcHumanoidContact long_contact[CC_HUMANOID_LEG_COUNT] = {
+        long_stride.feet[0].contact, long_stride.feet[1].contact};
+    for (int32_t frame = 0; frame < 240 &&
+         (short_lead < 0.0f || long_lead < 0.0f); ++frame) {
+        CcHumanoidGait *gaits[] = {&short_stride, &long_stride};
+        CcLimbVec3 *bodies[] = {&short_body, &long_body};
+        CcHumanoidContact *prior[] = {short_contact, long_contact};
+        float *lead[] = {&short_lead, &long_lead};
+        for (int32_t sample = 0; sample < 2; ++sample) {
+            CcHumanoidGaitAdvance(
+                gaits[sample], *bodies[sample], 0.0f,
+                (CcLimbVec3){0.0f, 0.0f, 1.0f}, true, delta_time,
+                PlaneProbe, NULL);
+            bodies[sample]->x += gaits[sample]->root_velocity.x * delta_time;
+            bodies[sample]->z += gaits[sample]->root_velocity.z * delta_time;
+            for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
+                if (*lead[sample] < 0.0f &&
+                    gaits[sample]->speed.value > 0.60f &&
+                    prior[sample][leg] != CC_HUMANOID_CONTACT_SWING &&
+                    gaits[sample]->feet[leg].contact ==
+                        CC_HUMANOID_CONTACT_SWING) {
+                    *lead[sample] = gaits[sample]->feet[leg].swing_target.z -
+                                    gaits[sample]->body.root.position.z;
+                }
+                prior[sample][leg] = gaits[sample]->feet[leg].contact;
+            }
+            (void)CcHumanoidGaitConsumeMotionMarkers(gaits[sample]);
+        }
+    }
+    Require(short_lead > 0.0f && long_lead > short_lead + 0.08f,
+            "walking stride profile did not change physical foot placement");
+}
+
 static void TestContinuousHumanActions(void)
 {
     const float delta_time = 1.0f / 60.0f;
@@ -700,6 +791,7 @@ int main(void)
     TestGenericRagdoll();
     TestBiomechanicalClimb();
     TestHumanoidController();
+    TestWalkingProfilesAndContactMarkers();
     TestContinuousHumanActions();
     return 0;
 }
