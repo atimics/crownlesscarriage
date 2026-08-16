@@ -1568,13 +1568,19 @@ void CcHumanoidGaitResolvePose(CcHumanoidGait *gait,
                                    gait->last_delta_time);
     }
 
+    float locomotion_lean = gait->grounded &&
+                            gait->action == CC_HUMANOID_ACTION_LOCOMOTION ?
+        0.050f * Smooth01(gait->speed.value / 0.90f) : 0.0f;
     gait->pose.spine = Add(gait->pose.pelvis, Scale(up, 0.10f));
+    gait->pose.spine = Add(gait->pose.spine,
+                           Scale(forward, locomotion_lean * 0.18f));
     gait->pose.chest = Add(gait->pose.pelvis, Scale(up, 0.48f));
     gait->pose.chest = Add(gait->pose.chest,
                            Scale(forward,
                                  (CcBiomechRigJointAngle(&gait->body,
                                       CC_HUMANOID_SPINE_PITCH) +
-                                  gait->pose.pelvis_pitch) * 0.14f));
+                                  gait->pose.pelvis_pitch) * 0.14f +
+                                 locomotion_lean));
     gait->pose.neck = Add(gait->pose.chest, Scale(up, 0.25f));
     gait->pose.head = Add(gait->pose.neck, Scale(up, 0.18f));
     gait->pose.chest_yaw = CcBiomechRigJointAngle(
