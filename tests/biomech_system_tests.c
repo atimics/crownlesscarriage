@@ -620,6 +620,10 @@ static void TestWalkingProfilesAndContactMarkers(void)
             "walking cadence profile did not change physical step frequency");
     Require(fast.cadence > slow.cadence + 0.30f,
             "walking cadence profile was not applied to the gait clock");
+    float torso_lean = fast.pose.neck.z - fast.pose.pelvis.z;
+    Require(torso_lean > 0.040f && torso_lean < 0.095f &&
+            fast.pose.spine.z > fast.pose.pelvis.z + 0.004f,
+            "walking posture was backward, bolt upright, or over-leaned");
 
     CcHumanoidGait short_stride;
     CcHumanoidGait long_stride;
