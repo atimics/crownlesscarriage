@@ -241,6 +241,13 @@ static void AdvanceAction(CcHumanoidGait *gait, float delta_time)
     gait->action_time += delta_time;
     CcMotionPlayerAdvance(&gait->motion, delta_time);
     uint32_t markers = CcMotionPlayerConsumeMarkers(&gait->motion);
+    if (gait->motion.clip != NULL &&
+        gait->motion.clip->id == CC_MOTION_CLIP_WALK) {
+        /* Procedural feet run on a speed-dependent gait clock. Walk contacts
+           are emitted from heel strikes instead of this fixed clip. */
+        markers &= ~(uint32_t)(CC_MOTION_MARKER_LEFT_CONTACT |
+                               CC_MOTION_MARKER_RIGHT_CONTACT);
+    }
     gait->motion_markers |= markers;
     gait->impact_response *= expf(-6.5f * delta_time);
     if (gait->impact_response < 0.001f) gait->impact_response = 0.0f;
@@ -1010,8 +1017,12 @@ static bool StepRagdoll(CcHumanoidGait *gait, CcLimbVec3 body_position,
         gait->recovery_speed = MeanRagdollSpeed(gait);
         if (gait->recovery_time > 2.85f && gait->recovery_error < 0.035f &&
             gait->recovery_speed < 0.22f) {
+            float cadence_scale = gait->walk_cadence_scale;
+            float stride_scale = gait->walk_stride_scale;
             CcHumanoidGaitInit(gait, body_position, body_yaw,
                                probe, probe_context);
+            CcHumanoidGaitSetWalkingProfile(gait, cadence_scale,
+                                             stride_scale);
             return false;
         }
         CommitPoseSnapshot(gait, delta_time);
@@ -1216,7 +1227,8 @@ static CcLimbVec3 PlanFootTarget(const CcHumanoidGait *gait, int32_t leg,
     float side = leg == 0 ? -1.0f : 1.0f;
     float preview_seconds = (0.38f + 0.31f) /
                             fmaxf(0.70f, gait->cadence);
-    float lead = Clamp(gait->speed.value * preview_seconds, 0.16f, 0.88f);
+    float lead = Clamp(gait->speed.value * preview_seconds *
+                       gait->walk_stride_scale, 0.12f, 0.96f);
     CcLimbVec3 desired = Add(body_position, Scale(forward, lead));
     desired = Add(desired, Scale(right, side * 0.135f));
     return ProbeGround(desired, body_position, probe, probe_context, normal);
@@ -2367,6 +2379,8 @@ void CcHumanoidGaitInit(CcHumanoidGait *gait, CcLimbVec3 body_position,
     gait->phase = 0.02f;
     gait->travel_yaw = body_yaw;
     gait->cadence = 0.82f;
+    gait->walk_cadence_scale = 1.0f;
+    gait->walk_stride_scale = 1.0f;
     gait->grounded = true;
     gait->support_leg = 0;
     gait->last_delta_time = 1.0f / 60.0f;
@@ -2411,6 +2425,17 @@ void CcHumanoidGaitInit(CcHumanoidGait *gait, CcLimbVec3 body_position,
     CcHumanoidGaitResolvePose(gait, body_position, body_yaw);
     gait->previous_pose = gait->pose;
     InitializePoseSnapshots(gait);
+}
+
+void CcHumanoidGaitSetWalkingProfile(CcHumanoidGait *gait,
+                                     float cadence_scale,
+                                     float stride_scale)
+{
+    if (gait == NULL) return;
+    gait->walk_cadence_scale = Clamp(cadence_scale, 0.50f, 1.50f);
+    gait->walk_stride_scale = Clamp(stride_scale, 0.50f, 1.50f);
+    gait->cadence = (0.82f + gait->speed.value * 0.34f) *
+                    gait->walk_cadence_scale;
 }
 
 void CcHumanoidGaitSetGuarded(CcHumanoidGait *gait, bool guarded)
@@ -2688,7 +2713,8 @@ void CcHumanoidGaitAdvance(CcHumanoidGait *gait, CcLimbVec3 body_position,
     SpringStep(&gait->speed, actual_speed, actual_speed < gait->speed.value ?
                11.0f : 8.0f, 0.92f, delta_time);
     gait->speed.value = Clamp(gait->speed.value, 0.0f, 1.60f);
-    gait->cadence = 0.82f + gait->speed.value * 0.34f;
+    gait->cadence = (0.82f + gait->speed.value * 0.34f) *
+                    gait->walk_cadence_scale;
 
     UpdateStableIdle(gait, desired_speed, actual_speed, grounded, delta_time);
 
@@ -2720,6 +2746,17 @@ void CcHumanoidGaitAdvance(CcHumanoidGait *gait, CcLimbVec3 body_position,
         } else {
             UpdateFoot(gait, leg, old_phase, gait->phase, foot_base, grounded,
                        delta_time, probe, probe_context);
+        }
+    }
+    if (grounded && !gait->idle.stable && gait->phase != old_phase) {
+        for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
+            float offset = leg == 0 ? 0.0f : 0.5f;
+            float old_local = Wrap01(old_phase + offset);
+            float local = Wrap01(gait->phase + offset);
+            if (local >= old_local) continue;
+            gait->motion_markers |= leg == 0 ?
+                CC_MOTION_MARKER_LEFT_CONTACT :
+                CC_MOTION_MARKER_RIGHT_CONTACT;
         }
     }
 

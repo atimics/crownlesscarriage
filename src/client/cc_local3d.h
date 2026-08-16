@@ -177,6 +177,8 @@ typedef struct CcLocalAgent {
     CcHumanoidGait humanoid;
     CcHumanoidPose render_pose;
     CcLocalCapeState cape;
+    CcLocalCapeState previous_cape;
+    CcLocalCapeState render_cape;
     float simulation_accumulator;
     float movement_stall_seconds;
     bool render_pose_valid;
