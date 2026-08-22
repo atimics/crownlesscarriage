@@ -20,6 +20,7 @@
    collision, rendering, and tests so the continuous world cannot drift apart. */
 #define CC_LOCAL_WORLD_WIDTH 96.0f
 #define CC_LOCAL_WORLD_DEPTH 72.0f
+#define CC_LOCAL_NAVIGATION_POINT_CAPACITY 16
 #define CC_LOCAL_START_X 40.5f
 #define CC_LOCAL_START_Z 30.0f
 #define CC_LOCAL_MARKET_X 50.0f
@@ -141,11 +142,19 @@ typedef struct CcLocalCapeState {
     bool initialized;
 } CcLocalCapeState;
 
+typedef struct CcSteppedPoseState {
+    CcHumanoidPose from_local;
+    CcHumanoidPose target_local;
+    int32_t locomotion_bin;
+    bool initialized;
+} CcSteppedPoseState;
+
 typedef struct CcLocalAgent {
     Vector3 position;
     Vector3 velocity;
     Vector3 separation_velocity;
     Vector3 target_point;
+    Vector3 navigation_point[CC_LOCAL_NAVIGATION_POINT_CAPACITY];
     Vector3 climb_start;
     Vector3 climb_end;
     Vector3 climb_face;
@@ -176,17 +185,24 @@ typedef struct CcLocalAgent {
     CcLimbRig limb_rig;
     CcHumanoidGait humanoid;
     CcHumanoidPose render_pose;
+    CcSteppedPoseState stepped_pose;
     CcLocalCapeState cape;
     CcLocalCapeState previous_cape;
     CcLocalCapeState render_cape;
     float simulation_accumulator;
     float movement_stall_seconds;
+    int32_t navigation_point_count;
+    int32_t navigation_point_index;
+    int32_t navigation_destination_room;
     bool render_pose_valid;
     bool humanoid_needs_reset;
     bool target_valid;
     bool crowned;
     bool jump_training_pending;
     bool climb_training_pending;
+    bool navigation_active;
+    bool navigation_world_exit;
+    bool world_exit_requested;
     Color tunic_color;
     CcNpcAppearance appearance;
     CcAthleticProfile athletics;
@@ -272,6 +288,13 @@ bool CcLocalAgentSetExactTarget(CcLocalAgent *agent, Vector3 target,
 bool CcLocalAgentPickTarget(CcLocalAgent *agent, Vector2 screen_point,
                             RenderTexture2D target, Rectangle destination,
                             bool market_interior);
+int32_t CcLocalAgentStreetPortalCount(const CcLocalAgent *agent);
+const char *CcLocalAgentStreetPortalName(const CcLocalAgent *agent,
+                                         int32_t portal_index);
+bool CcLocalAgentFollowStreetPortal(CcLocalAgent *agent,
+                                    int32_t portal_index);
+const char *CcLocalAgentNavigationName(const CcLocalAgent *agent);
+bool CcLocalAgentConsumeWorldExit(CcLocalAgent *agent);
 Vector2 CcLocalAgentPosition(const CcLocalAgent *agent);
 const char *CcLocalTraversalName(CcTraversalMode mode);
 void CcLocalAgentSetMorphology(CcLocalAgent *agent, CcMorphologyPreset preset,

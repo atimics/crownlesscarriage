@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "library_version": "0.7.0",
-  "art_direction": "procedural_action_figure_wayfarer",
+  "library_version": "0.9.0",
+  "art_direction": "silhouette_first_pixel_wayfarer",
   "source": "blender/crownless_hero_components.blend",
   "coordinate_system": {
     "unit": "meter",
@@ -11,18 +11,18 @@
   "procedural_generation": {
     "schema_version": 1,
     "body": {
-      "name": "action_figure_wayfarer",
+      "name": "screen_readable_action_figure",
       "muscularity": 0.68,
-      "body_fat": 0.18,
-      "shoulder_scale": 1.0,
-      "chest_scale": 1.0,
-      "waist_scale": 1.0,
-      "hip_scale": 1.0,
-      "arm_scale": 1.0,
+      "body_fat": 0.13,
+      "shoulder_scale": 1.05,
+      "chest_scale": 0.98,
+      "waist_scale": 0.84,
+      "hip_scale": 0.92,
+      "arm_scale": 1.02,
       "leg_scale": 1.0,
-      "neck_scale": 1.0,
-      "hand_scale": 1.0,
-      "foot_scale": 1.0
+      "neck_scale": 0.92,
+      "hand_scale": 1.08,
+      "foot_scale": 1.1
     },
     "garments": [
       {

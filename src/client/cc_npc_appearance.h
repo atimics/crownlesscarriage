@@ -52,6 +52,9 @@ typedef struct CcNpcAppearance {
     uint8_t skin_tone;
     uint8_t hair_style;
     uint8_t beard_style;
+    uint8_t nose_style;
+    uint8_t scar_style;
+    uint8_t headwear_style;
     uint8_t garment_style;
     Color skin;
     Color hair;

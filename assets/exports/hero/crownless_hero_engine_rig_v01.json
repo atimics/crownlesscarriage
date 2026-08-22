@@ -1,12 +1,12 @@
 {
   "asset": "assets/exports/hero/crownless_hero_engine_rig_v01.glb",
   "armature": "ARM_CrownlessHero",
-  "source_library_version": "0.7.0",
-  "art_direction": "procedural_action_figure_wayfarer",
+  "source_library_version": "0.9.0",
+  "art_direction": "silhouette_first_pixel_wayfarer",
   "coordinate_system": "glTF +Y up, +Z forward",
   "motion_source": "CcHumanoidSkinPoseResolve (runtime only)",
   "runtime_layout": {
-    "authored_objects": 142,
+    "authored_objects": 112,
     "skinned_objects": 1,
     "strategy": "joined skin with material primitives"
   },
@@ -371,42 +371,7 @@
       "bone": "chest"
     },
     {
-      "name": "SKIN_GEO_CuirassRivet_0_0",
-      "component": "hero_cuirass_v01",
-      "bone": "chest"
-    },
-    {
-      "name": "SKIN_GEO_CuirassRivet_0_1",
-      "component": "hero_cuirass_v01",
-      "bone": "chest"
-    },
-    {
-      "name": "SKIN_GEO_CuirassRivet_0_2",
-      "component": "hero_cuirass_v01",
-      "bone": "chest"
-    },
-    {
-      "name": "SKIN_GEO_CuirassRivet_1_0",
-      "component": "hero_cuirass_v01",
-      "bone": "chest"
-    },
-    {
-      "name": "SKIN_GEO_CuirassRivet_1_1",
-      "component": "hero_cuirass_v01",
-      "bone": "chest"
-    },
-    {
-      "name": "SKIN_GEO_CuirassRivet_1_2",
-      "component": "hero_cuirass_v01",
-      "bone": "chest"
-    },
-    {
-      "name": "SKIN_GEO_CuirassFauld_0",
-      "component": "hero_cuirass_v01",
-      "bone": "chest"
-    },
-    {
-      "name": "SKIN_GEO_CuirassFauld_1",
+      "name": "SKIN_GEO_CuirassFauld",
       "component": "hero_cuirass_v01",
       "bone": "chest"
     },
@@ -426,42 +391,12 @@
       "bone": "chest"
     },
     {
-      "name": "SKIN_GEO_CuirassCenterRidge",
-      "component": "hero_cuirass_v01",
-      "bone": "chest"
-    },
-    {
-      "name": "SKIN_GEO_CuirassClavicleL",
-      "component": "hero_cuirass_v01",
-      "bone": "chest"
-    },
-    {
-      "name": "SKIN_GEO_CuirassClavicleR",
-      "component": "hero_cuirass_v01",
-      "bone": "chest"
-    },
-    {
       "name": "SKIN_GEO_CuirassBrokenMarkL",
       "component": "hero_cuirass_v01",
       "bone": "chest"
     },
     {
-      "name": "SKIN_GEO_CuirassBrokenMarkR",
-      "component": "hero_cuirass_v01",
-      "bone": "chest"
-    },
-    {
       "name": "SKIN_GEO_PauldronL",
-      "component": "hero_pauldron_l_v01",
-      "bone": "upper_arm.L"
-    },
-    {
-      "name": "SKIN_GEO_PauldronLowerL",
-      "component": "hero_pauldron_l_v01",
-      "bone": "upper_arm.L"
-    },
-    {
-      "name": "SKIN_GEO_PauldronRidgeL",
       "component": "hero_pauldron_l_v01",
       "bone": "upper_arm.L"
     },
@@ -472,16 +407,6 @@
     },
     {
       "name": "SKIN_GEO_PauldronR",
-      "component": "hero_pauldron_r_v01",
-      "bone": "upper_arm.R"
-    },
-    {
-      "name": "SKIN_GEO_PauldronLowerR",
-      "component": "hero_pauldron_r_v01",
-      "bone": "upper_arm.R"
-    },
-    {
-      "name": "SKIN_GEO_PauldronRidgeR",
       "component": "hero_pauldron_r_v01",
       "bone": "upper_arm.R"
     },
@@ -526,32 +451,12 @@
       "bone": "shin.L"
     },
     {
-      "name": "SKIN_GEO_GreaveTrimL",
-      "component": "hero_greave_l_v01",
-      "bone": "shin.L"
-    },
-    {
-      "name": "SKIN_GEO_GreaveRidgeL",
-      "component": "hero_greave_l_v01",
-      "bone": "shin.L"
-    },
-    {
       "name": "SKIN_GEO_GreaveR",
       "component": "hero_greave_r_v01",
       "bone": "shin.R"
     },
     {
       "name": "SKIN_GEO_KneePlateR",
-      "component": "hero_greave_r_v01",
-      "bone": "shin.R"
-    },
-    {
-      "name": "SKIN_GEO_GreaveTrimR",
-      "component": "hero_greave_r_v01",
-      "bone": "shin.R"
-    },
-    {
-      "name": "SKIN_GEO_GreaveRidgeR",
       "component": "hero_greave_r_v01",
       "bone": "shin.R"
     },
@@ -596,26 +501,6 @@
       "bone": "hand.L"
     },
     {
-      "name": "SKIN_GEO_GloveKnuckleL_0",
-      "component": "hero_glove_l_v01",
-      "bone": "hand.L"
-    },
-    {
-      "name": "SKIN_GEO_GloveKnuckleL_1",
-      "component": "hero_glove_l_v01",
-      "bone": "hand.L"
-    },
-    {
-      "name": "SKIN_GEO_GloveKnuckleL_2",
-      "component": "hero_glove_l_v01",
-      "bone": "hand.L"
-    },
-    {
-      "name": "SKIN_GEO_GloveKnuckleL_3",
-      "component": "hero_glove_l_v01",
-      "bone": "hand.L"
-    },
-    {
       "name": "SKIN_GEO_GloveCuffL",
       "component": "hero_glove_l_v01",
       "bone": "hand.L"
@@ -627,26 +512,6 @@
     },
     {
       "name": "SKIN_GEO_GloveThumbR",
-      "component": "hero_glove_r_v01",
-      "bone": "hand.R"
-    },
-    {
-      "name": "SKIN_GEO_GloveKnuckleR_0",
-      "component": "hero_glove_r_v01",
-      "bone": "hand.R"
-    },
-    {
-      "name": "SKIN_GEO_GloveKnuckleR_1",
-      "component": "hero_glove_r_v01",
-      "bone": "hand.R"
-    },
-    {
-      "name": "SKIN_GEO_GloveKnuckleR_2",
-      "component": "hero_glove_r_v01",
-      "bone": "hand.R"
-    },
-    {
-      "name": "SKIN_GEO_GloveKnuckleR_3",
       "component": "hero_glove_r_v01",
       "bone": "hand.R"
     },
@@ -671,11 +536,6 @@
       "bone": "foot.L"
     },
     {
-      "name": "SKIN_GEO_BootInstepStrapL",
-      "component": "hero_boot_l_v01",
-      "bone": "foot.L"
-    },
-    {
       "name": "SKIN_GEO_BootR",
       "component": "hero_boot_r_v01",
       "bone": "foot.R"
@@ -687,11 +547,6 @@
     },
     {
       "name": "SKIN_GEO_BootSoleR",
-      "component": "hero_boot_r_v01",
-      "bone": "foot.R"
-    },
-    {
-      "name": "SKIN_GEO_BootInstepStrapR",
       "component": "hero_boot_r_v01",
       "bone": "foot.R"
     },
@@ -722,11 +577,6 @@
     },
     {
       "name": "SKIN_GEO_SatchelStrap",
-      "component": "hero_belt_satchel_v01",
-      "bone": "chest"
-    },
-    {
-      "name": "SKIN_GEO_SatchelStrapEdge",
       "component": "hero_belt_satchel_v01",
       "bone": "chest"
     },

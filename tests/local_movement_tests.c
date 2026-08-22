@@ -4,6 +4,18 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+
+static int32_t StreetPortalIndex(const CcLocalAgent *agent,
+                                 const char *name)
+{
+    int32_t count = CcLocalAgentStreetPortalCount(agent);
+    for (int32_t portal = 0; portal < count; ++portal) {
+        const char *candidate = CcLocalAgentStreetPortalName(agent, portal);
+        if (candidate != NULL && strcmp(candidate, name) == 0) return portal;
+    }
+    return -1;
+}
 
 static void RequirePosition(const char *name, Vector2 actual, Vector2 expected)
 {
@@ -97,6 +109,48 @@ static float MaximumPoseStep(const CcHumanoidPose *before,
                         Distance3(before->hand[arm], after->hand[arm]));
     }
 #undef INCLUDE_POSE_POINT
+    return maximum;
+}
+
+static float RelativePointStep(CcLimbVec3 before, CcLimbVec3 before_root,
+                               CcLimbVec3 after, CcLimbVec3 after_root)
+{
+    CcLimbVec3 before_relative = {
+        before.x - before_root.x,
+        before.y - before_root.y,
+        before.z - before_root.z,
+    };
+    CcLimbVec3 after_relative = {
+        after.x - after_root.x,
+        after.y - after_root.y,
+        after.z - after_root.z,
+    };
+    return Distance3(before_relative, after_relative);
+}
+
+static float MaximumRelativeUpperPoseStep(const CcHumanoidPose *before,
+                                          const CcHumanoidPose *after)
+{
+    float maximum = RelativePointStep(before->spine, before->pelvis,
+                                      after->spine, after->pelvis);
+#define INCLUDE_RELATIVE_UPPER_POINT(point) \
+    maximum = fmaxf(maximum, RelativePointStep( \
+        before->point, before->pelvis, after->point, after->pelvis))
+    INCLUDE_RELATIVE_UPPER_POINT(chest);
+    INCLUDE_RELATIVE_UPPER_POINT(neck);
+    INCLUDE_RELATIVE_UPPER_POINT(head);
+    for (int32_t arm = 0; arm < CC_HUMANOID_ARM_COUNT; ++arm) {
+        maximum = fmaxf(maximum, RelativePointStep(
+            before->shoulder[arm], before->pelvis,
+            after->shoulder[arm], after->pelvis));
+        maximum = fmaxf(maximum, RelativePointStep(
+            before->elbow[arm], before->pelvis,
+            after->elbow[arm], after->pelvis));
+        maximum = fmaxf(maximum, RelativePointStep(
+            before->hand[arm], before->pelvis,
+            after->hand[arm], after->pelvis));
+    }
+#undef INCLUDE_RELATIVE_UPPER_POINT
     return maximum;
 }
 
@@ -1119,6 +1173,120 @@ static void TestTravellerIngress(void)
 
 int main(void)
 {
+    CcLocalAgent room_traveller;
+    CcLocalAgentInit(&room_traveller, (Vector2){44.0f, 29.0f}, false);
+    int32_t market_portal = StreetPortalIndex(&room_traveller,
+                                               "MARKET STEPS");
+    if (market_portal < 0 ||
+        !CcLocalAgentFollowStreetPortal(&room_traveller, market_portal) ||
+        CcLocalAgentNavigationName(&room_traveller) == NULL) {
+        (void)fprintf(stderr,
+                      "camera-room traversal portal was not exposed\n");
+        return 1;
+    }
+    for (int32_t frame = 0;
+         frame < 2400 && room_traveller.navigation_active; ++frame) {
+        CcLocalAgentUpdate(&room_traveller, 1.0f / 60.0f, false);
+    }
+    if (room_traveller.navigation_active ||
+        fabsf(room_traveller.position.x - 50.0f) > 0.35f ||
+        fabsf(room_traveller.position.z - 27.25f) > 0.35f) {
+        (void)fprintf(stderr,
+                      "room traversal did not reach the adjoining camera: %.2f %.2f\n",
+                      room_traveller.position.x,
+                      room_traveller.position.z);
+        return 1;
+    }
+
+    CcLocalAgent boundary_traveller;
+    CcLocalAgentInit(&boundary_traveller, (Vector2){78.5f, 29.0f}, false);
+    int32_t boundary_portal = StreetPortalIndex(
+        &boundary_traveller, "EASTERN KING'S ROAD");
+    if (boundary_portal < 0 ||
+        !CcLocalAgentFollowStreetPortal(&boundary_traveller,
+                                        boundary_portal)) {
+        (void)fprintf(stderr,
+                      "settlement-boundary traversal portal was not exposed\n");
+        return 1;
+    }
+    for (int32_t frame = 0;
+         frame < 6000 && boundary_traveller.navigation_active; ++frame) {
+        CcLocalAgentUpdate(&boundary_traveller, 1.0f / 60.0f, false);
+    }
+    if (boundary_traveller.navigation_active ||
+        !CcLocalAgentConsumeWorldExit(&boundary_traveller) ||
+        CcLocalAgentConsumeWorldExit(&boundary_traveller)) {
+        (void)fprintf(stderr,
+                      "boundary traversal did not emit exactly one travel handoff\n");
+        return 1;
+    }
+
+    static const Vector2 street_rooms[] = {
+        {10.5f, 7.5f}, {11.0f, 28.5f}, {14.0f, 52.0f},
+        {33.0f, 25.0f}, {44.0f, 29.0f}, {42.0f, 52.0f},
+        {50.0f, 27.25f}, {58.0f, 50.0f}, {78.5f, 29.0f},
+        {78.0f, 50.0f},
+    };
+    for (int32_t room = 0;
+         room < (int32_t)(sizeof(street_rooms) / sizeof(street_rooms[0]));
+         ++room) {
+        CcLocalAgent portal_probe;
+        CcLocalAgentInit(&portal_probe, street_rooms[room], false);
+        int32_t portal_count = CcLocalAgentStreetPortalCount(&portal_probe);
+        if (portal_count <= 0) {
+            (void)fprintf(stderr, "street room %d has no traversal portal\n",
+                          room);
+            return 1;
+        }
+        for (int32_t portal = 0; portal < portal_count; ++portal) {
+            CcLocalAgentInit(&portal_probe, street_rooms[room], false);
+            const char *portal_name = CcLocalAgentStreetPortalName(
+                &portal_probe, portal);
+            if (portal_name == NULL ||
+                !CcLocalAgentFollowStreetPortal(&portal_probe, portal)) {
+                (void)fprintf(stderr,
+                              "street room %d portal %d could not start\n",
+                              room, portal);
+                return 1;
+            }
+            int32_t destination_room =
+                portal_probe.navigation_destination_room;
+            for (int32_t update = 0;
+                 update < 1200 && portal_probe.navigation_active; ++update) {
+                CcLocalAgentUpdate(&portal_probe, 0.10f, false);
+            }
+            if (portal_probe.navigation_active) {
+                (void)fprintf(stderr,
+                              "street room %d portal %s did not finish at %.2f %.2f waypoint %d/%d\n",
+                              room, portal_name, portal_probe.position.x,
+                              portal_probe.position.z,
+                              portal_probe.navigation_point_index,
+                              portal_probe.navigation_point_count);
+                return 1;
+            }
+            if (destination_room >= 0) {
+                float x = portal_probe.position.x -
+                          street_rooms[destination_room].x;
+                float z = portal_probe.position.z -
+                          street_rooms[destination_room].y;
+                if (x * x + z * z > 0.40f * 0.40f ||
+                    portal_probe.world_exit_requested) {
+                    (void)fprintf(stderr,
+                                  "street room %d portal %s ended at %.2f %.2f\n",
+                                  room, portal_name,
+                                  portal_probe.position.x,
+                                  portal_probe.position.z);
+                    return 1;
+                }
+            } else if (!CcLocalAgentConsumeWorldExit(&portal_probe)) {
+                (void)fprintf(stderr,
+                              "street room %d boundary %s lacked handoff\n",
+                              room, portal_name);
+                return 1;
+            }
+        }
+    }
+
     TestSharedCombat();
     TestDeathLifecycle();
     TestTargetDrivenCombat();
@@ -1212,6 +1380,10 @@ int main(void)
     }
     float maximum_gait_speed = 0.0f;
     uint32_t pose_mask = 0;
+    uint32_t stepped_pose_mask = 0;
+    int32_t held_upper_pose_frames = 0;
+    CcHumanoidPose previous_stepped_render = paced_agent.render_pose;
+    int32_t previous_stepped_bin = -1;
     for (int32_t frame = 0; frame < 600; ++frame) {
         CcLocalAgentUpdate(&paced_agent, 1.0f / 60.0f, true);
         float speed = sqrtf(paced_agent.velocity.x * paced_agent.velocity.x +
@@ -1221,6 +1393,41 @@ int main(void)
             int32_t pose_bin = (int32_t)floorf(
                 paced_agent.humanoid.phase * 8.0f) & 7;
             pose_mask |= UINT32_C(1) << pose_bin;
+        }
+        if (paced_agent.stepped_pose.initialized) {
+            int32_t stepped_bin = paced_agent.stepped_pose.locomotion_bin;
+            stepped_pose_mask |= UINT32_C(1) << stepped_bin;
+            float within = paced_agent.humanoid.phase * 8.0f;
+            within -= floorf(within);
+            if (stepped_bin == previous_stepped_bin && within > 0.32f &&
+                MaximumRelativeUpperPoseStep(
+                    &previous_stepped_render,
+                    &paced_agent.render_pose) < 0.00001f) {
+                held_upper_pose_frames += 1;
+            }
+            previous_stepped_bin = stepped_bin;
+        }
+        previous_stepped_render = paced_agent.render_pose;
+
+        const CcHumanoidPoseSnapshot *render_physical =
+            CcHumanoidGaitPreviousSnapshot(&paced_agent.humanoid);
+        if (render_physical != NULL && paced_agent.stepped_pose.initialized) {
+            for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
+                const CcHumanoidPose *physical = &render_physical->pose;
+                const CcHumanoidPose *visual = &paced_agent.render_pose;
+                if (Distance3(physical->ankle[leg], visual->ankle[leg]) >
+                        0.00001f ||
+                    Distance3(physical->heel[leg], visual->heel[leg]) >
+                        0.00001f ||
+                    Distance3(physical->ball[leg], visual->ball[leg]) >
+                        0.00001f ||
+                    Distance3(physical->toe[leg], visual->toe[leg]) >
+                        0.00001f) {
+                    (void)fprintf(stderr,
+                                  "stepped render pose broke foot contact\n");
+                    return 1;
+                }
+            }
         }
         for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
             const CcHumanoidFoot *foot = &paced_agent.humanoid.feet[leg];
@@ -1247,6 +1454,13 @@ int main(void)
     if (pose_mask != UINT32_C(0xff)) {
         (void)fprintf(stderr, "biped walk did not traverse every hero pose: 0x%02x\n",
                       pose_mask);
+        return 1;
+    }
+    if (stepped_pose_mask != UINT32_C(0xff) ||
+        held_upper_pose_frames < 4) {
+        (void)fprintf(stderr,
+                      "stepped gait vocabulary was incomplete: mask 0x%02x holds %d\n",
+                      stepped_pose_mask, held_upper_pose_frames);
         return 1;
     }
     if (CcBiomechRigMeanActivation(&paced_agent.humanoid.body) <= 0.01f) {
@@ -1295,7 +1509,7 @@ int main(void)
     }
     if (maximum_render_step >= maximum_physical_step) {
         (void)fprintf(stderr,
-                      "render gait was not smoother: visual %.4f physical %.4f\n",
+                      "stepped render transition exceeded physical gait bound: visual %.4f physical %.4f\n",
                       maximum_render_step, maximum_physical_step);
         return 1;
     }
@@ -1351,6 +1565,58 @@ int main(void)
             refugee_walk.humanoid.walk_stride_scale) {
         (void)fprintf(stderr,
                       "NPC movement signature did not reach the live gait\n");
+        return 1;
+    }
+
+    CcLocalAgent merchant_idle;
+    CcLocalAgent scout_idle;
+    CcLocalAgentInit(&merchant_idle, (Vector2){3.00f, 3.40f}, true);
+    CcLocalAgentInit(&scout_idle, (Vector2){4.00f, 3.40f}, true);
+    merchant_idle.crowned = false;
+    scout_idle.crowned = false;
+    CcLocalAgentSetNpcAppearance(
+        &merchant_idle, UINT32_C(0x1d1e600d), CC_NPC_ROLE_MERCHANT,
+        (Color){133, 93, 58, 255});
+    CcLocalAgentSetNpcAppearance(
+        &scout_idle, UINT32_C(0x1d1e600d), CC_NPC_ROLE_SCOUT,
+        (Color){80, 112, 102, 255});
+    float maximum_merchant_gesture = 0.0f;
+    float maximum_role_difference = 0.0f;
+    for (int32_t frame = 0; frame < 240; ++frame) {
+        CcLocalAgentUpdate(&merchant_idle, 1.0f / 60.0f, true);
+        CcLocalAgentUpdate(&scout_idle, 1.0f / 60.0f, true);
+        const CcHumanoidPoseSnapshot *merchant_physical =
+            CcHumanoidGaitPreviousSnapshot(&merchant_idle.humanoid);
+        if (merchant_physical != NULL) {
+            maximum_merchant_gesture = fmaxf(
+                maximum_merchant_gesture,
+                MaximumRelativeUpperPoseStep(
+                    &merchant_physical->pose, &merchant_idle.render_pose));
+            for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
+                if (Distance3(merchant_physical->pose.ankle[leg],
+                              merchant_idle.render_pose.ankle[leg]) >
+                        0.00001f ||
+                    Distance3(merchant_physical->pose.toe[leg],
+                              merchant_idle.render_pose.toe[leg]) >
+                        0.00001f) {
+                    (void)fprintf(stderr,
+                                  "role idle gesture moved a planted foot\n");
+                    return 1;
+                }
+            }
+        }
+        maximum_role_difference = fmaxf(
+            maximum_role_difference,
+            MaximumRelativeUpperPoseStep(&merchant_idle.render_pose,
+                                         &scout_idle.render_pose));
+    }
+    if (!merchant_idle.humanoid.idle.stable ||
+        !scout_idle.humanoid.idle.stable ||
+        maximum_merchant_gesture < 0.08f ||
+        maximum_role_difference < 0.12f) {
+        (void)fprintf(stderr,
+                      "role idle silhouettes were not distinct: gesture %.3f roles %.3f\n",
+                      maximum_merchant_gesture, maximum_role_difference);
         return 1;
     }
 

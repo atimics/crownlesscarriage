@@ -1,9 +1,9 @@
 # Blender Hero Component System
 
 The hero library translates the modular character concept into a rebuildable
-Blender source file. Version 0.7 is a gameplay-silhouette production prototype:
-it proves component boundaries, rig attachment, cloth authoring, export
-metadata, and code integration while establishing the hero's visual language.
+Blender source file. Version 0.9 is the silhouette-first gameplay pass: it
+retains the component, rig, cloth, and export contracts while tuning the body
+and costume against the final 35–50-art-pixel target instead of a turntable.
 
 ## Generated artifacts
 
@@ -36,24 +36,23 @@ equipment and damage do not require new meshes.
 The current art pass treats the hero as a brigandine-equipped crownless
 wayfarer rather than a miniature tournament knight. A deep petrol split tunic
 keeps the legs readable. The close-fitted, oxblood textile torso defense uses
-six oversized rivet landmarks to imply hidden plates and two overlapping lower
-lames to protect the abdomen. A short forked road-cape and compact travel cowl
-clear the knees during climbing, while the small, flat shoulder bag reads as
-travel gear without dominating the chest. The left pauldron remains the strong
-side; the right shoulder stays quiet. Two broad hair shapes open the face, and
-the palette becomes progressively darker below the waist so the head remains
-the focal point at the gameplay camera. These changes remain inside the
-original 19 component collections and do not change runtime IDs, sockets,
-export names, or skeleton topology.
+one broad facing, one lower plate, and one broken mark. A narrowed forked
+road-cape no longer exceeds the shoulder span, while the reduced belt and flat
+shoulder bag read as travel gear without widening the hips. The left pauldron
+remains the strong side; the right shoulder stays quiet. Two broad hair shapes
+open the face, and the palette becomes progressively darker below the waist so
+the head remains the focal point at the gameplay camera. These changes remain
+inside the original 19 component collections and do not change runtime IDs,
+sockets, export names, or skeleton topology.
 
 ## Procedural body and wearable grammar
 
-Version 0.7 makes the action-figure body a recipe instead of a one-off mesh.
+Version 0.9 makes the action-figure body a recipe instead of a one-off mesh.
 `BodyParameters` controls muscularity, body fat, shoulder, chest, waist, hip,
 arm, leg, neck, hand, and foot scale on the canonical skeleton. It generates
 ordered elliptical cross-sections for the torso, pelvis, neck, upper arms,
 forearms, thighs, and shins. The production hero uses the
-`action_figure_wayfarer` preset; `lean_scout` and `heavy_vanguard` exist as
+`screen_readable_action_figure` preset; `lean_scout` and `heavy_vanguard` exist as
 boundary examples and are rendered in the procedural variation sheet.
 
 `ShellRecipe` derives clothing or equipment from those anatomical sections.
@@ -65,7 +64,9 @@ covered anatomy explicitly. Validation checks the closest shell radius after
 front/back center offsets, so asymmetric shaping cannot hide an intersection.
 The current padded underlayer, fitted tunic, cuirass, bracers, and greaves all
 consume these derived profiles. Coverage, trims, seams, rivets, damage marks,
-and other authored design details remain separate. This division makes fit and
+and other authored design details can remain separate when they survive the
+gameplay grid. The production hero keeps only broad trims and one damage mark.
+This division makes fit and
 silhouette reusable without reducing every costume to the same surface detail.
 
 The recipe is dependency-free Python and validates without launching Blender.
@@ -75,18 +76,21 @@ their source parameters.
 
 ## Action-figure form language
 
-The 0.6–0.7 body passes replace the earlier capsule-and-block construction with an
+The 0.6–0.9 body passes replace the earlier capsule-and-block construction with an
 articulated action-figure anatomy. Twelve-sided lofts establish an adult
 head-to-body ratio, a V-tapered rib cage, a shaped pelvis, and distinct biceps,
 forearm, quadriceps, calf, knee, and ankle transitions around the unchanged
 rig. The anatomy guide adds pectoral, latissimus, trapezius, oblique, and
 abdominal masses as intentional sculpting landmarks. Garment sleeves, bracers,
 greaves, and cuffs follow those same changing profiles instead of reading as
-straight tubes. Smaller hands gain thumbs and individual knuckles, while the
-feet and boots taper through the ankle, instep, and toe rather than ending in
-rectangular blocks. These changes preserve the component, socket, and skeleton
-contracts while moving the silhouette from construction toy to collectible
-fantasy figure.
+straight tubes. Hands retain one readable thumb rather than sub-pixel knuckles;
+boots retain an ankle-to-toe taper without an oversized instep strap. The
+production preset uses a compact waist and hips with stronger shoulders,
+limbs, hands, and boots so joints, gesture, and planted contact survive the
+half-resolution game target. The cape and left pauldron exaggerate one side of
+the silhouette while the right side remains quiet.
+These changes preserve the component, socket, and skeleton contracts while
+moving the silhouette from construction toy to collectible fantasy figure.
 
 ## Research basis
 
@@ -101,7 +105,7 @@ is grounded in primary museum material and production guidance:
   and [Henry VIII's foot-combat armour](https://royalarmouries.org/objects-and-stories/stories/henry-viiis-foot-combat-armour).
 - The Metropolitan Museum's circa-1450 brigandine breastplate combines steel,
   copper alloy, and textile. The set abstracts that layered construction into a
-  dark textile facing, sparse brass rivets, and exposed lower lames:
+  dark textile facing, one identity mark, and a broad lower plate:
   [right breastplate from a brigandine](https://www.metmuseum.org/art/collection/search/23152).
 - Surviving and depicted pilgrim equipment repeatedly combines a travel cloak,
   shoulder bag or knapsack, hat, and a small identifying emblem. The hero keeps

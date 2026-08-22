@@ -62,6 +62,42 @@ low-detail NPC, and no more than 32 animated mesh uploads. An accidentally
 unconsolidated export therefore fails the production gate instead of quietly
 shipping a large CPU-skinning regression.
 
+## Gameplay-scale visual LOD
+
+The Blender skin is authored for turntables and close inspection: it contains
+roughly 21,000 triangles and 19 material primitives. At the fixed street camera
+the hero is only 35–50 pixels tall, so the runtime remaps those materials into
+three dominant value masses: warm skin, middle-value teal/oxblood costume, and
+dark limbs/hair. Gold remains a small crown and equipment accent.
+
+The version 0.9 source recipe keeps the waist and hips compact but strengthens
+the shoulder line, limbs, hands, and boots. Small rivets, knuckles, greave
+ridges, stacked torso lames, and the boot instep strap remain removed because
+they collapse into noise at the half-resolution target. The resulting runtime
+skin retains the crown, hair, deliberately asymmetric pauldron and cape, broken
+cuirass mark, and satchel as its identity anchors.
+
+Normal play keeps the articulated Blender silhouette and gives it a slight
+horizontal presentation gain so the arm, crown, and cape gaps stay open at
+isometric scale. A shared character shader gives the hero and procedural cast
+one shadow band, one light band, a sparse painted highlight, and stable colored
+inside-silhouette ink. The complete world renders into a 457 x 285 target
+and point-scales into the 914 x 570 viewport, so the hero, NPCs, authored props,
+procedural scenery, and shadows share one stable pixel grid. Labels and UI draw
+after the upscale at display resolution. Pixel character therefore comes from
+the camera rather than a hero-only effect.
+The hero's dark face marks and clean material values are kept free of internal
+dithering so the eyes, brows, and mouth hold together after that scene filter.
+Those landmarks are authored
+as deliberately broad graphic shapes with a mirrored brow line and asymmetric
+hair silhouette; they favor recognition over miniature realism. The
+procedural humanoid remains only as a graceful fallback if the authored skin
+cannot load; both representations use the same `CcHumanoidSkinPose`.
+
+The explicit character distance ladder, portraits, expression states, role
+movement signatures, and visual acceptance pass are documented in
+`docs/production/character-readability.md`.
+
 ## Verification
 
 ```sh

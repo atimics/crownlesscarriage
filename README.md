@@ -128,6 +128,21 @@ The benchmark reports CPU time per simulated day and per biomechanical-agent
 step together with a checksum, so optimizations can be compared without
 silently removing work.
 
+Regenerate and validate the complete role-shaped NPC library with:
+
+```sh
+make blender-npc-assets
+make blender-npc-assets-check
+```
+
+The generators bake nine curated ambient archetypes in idle plus contact,
+down, passing, and up poses on both sides, alongside a shared library of rigid
+body, limb, hair, headwear, garment, armor, pack, and tool modules. Runtime
+appearance data supplies deterministic indexed palettes, identity marks, and
+proportions. Physics-driven NPCs attach the rigid modules to their existing
+biomechanical skeleton, preserving contacts and ragdolls without crowd skinning
+uploads.
+
 The client executable also accepts `--benchmark-render 600 90` to time a fixed
 number of frames and fail when the current 90 FPS production floor is missed.
 Its benchmark window intentionally remains visible because desktop operating
@@ -146,6 +161,10 @@ Use `--capture-golden <frame.png>` for the fixed street-level art-direction
 review: the authored carriage and market, action-figure hero, role-shaped
 population, simulation dressing, shared palette, and final color treatment are
 framed together under deterministic world conditions.
+
+Use `--capture-room <x> <z> <frame.png>` to review any fixed-camera exterior
+room from a deterministic hero position. This is intended for checking route
+legibility and landmark composition across the complete settlement.
 
 Use `--capture-travel <frame.png>` for the deterministic real-time travel
 proof at twenty percent route progress. The capture frames the moving carriage
@@ -186,6 +205,7 @@ All three meet on the road through the player's carriage company.
 - [Production roadmap](docs/10-roadmap.md)
 - [Blender asset system](docs/production/blender-asset-system.md)
 - [Blender hero component system](docs/production/blender-hero-component-system.md)
+- [Procedural NPC archetype pipeline](docs/production/procedural-npc-pipeline.md)
 - [Decision log](docs/decisions/README.md)
 - [Current technical architecture](docs/07-technical-architecture.md)
 

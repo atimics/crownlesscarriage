@@ -92,12 +92,12 @@ CcNpcAppearance CcNpcAppearanceGenerate(uint32_t seed, CcNpcRole role,
     CcNpcAppearance result = {0};
     result.seed = seed;
     result.role = role;
-    result.stature = 0.91f + Unit(seed, 0U) * 0.18f;
-    result.body_mass = 0.84f + Unit(seed, 1U) * 0.34f;
-    result.muscularity = 0.30f + Unit(seed, 2U) * 0.64f;
-    result.shoulder_scale = 0.88f + Unit(seed, 3U) * 0.25f;
-    result.head_width = 0.91f + Unit(seed, 4U) * 0.17f;
-    result.head_depth = 0.92f + Unit(seed, 5U) * 0.17f;
+    result.stature = 0.94f + Unit(seed, 0U) * 0.14f;
+    result.body_mass = 0.91f + Unit(seed, 1U) * 0.24f;
+    result.muscularity = 0.34f + Unit(seed, 2U) * 0.58f;
+    result.shoulder_scale = 0.94f + Unit(seed, 3U) * 0.18f;
+    result.head_width = 0.96f + Unit(seed, 4U) * 0.12f;
+    result.head_depth = 0.95f + Unit(seed, 5U) * 0.12f;
     result.age = 0.12f + Unit(seed, 6U) * 0.83f;
     result.gait_cadence_scale = 0.90f + Unit(seed, 18U) * 0.22f;
     result.stride_scale = 0.88f + Unit(seed, 19U) * 0.24f;
@@ -106,8 +106,12 @@ CcNpcAppearance CcNpcAppearanceGenerate(uint32_t seed, CcNpcRole role,
     result.arm_swing_scale = 0.84f + Unit(seed, 22U) * 0.32f;
     result.skin_tone = (uint8_t)(Sample(seed, 7U) %
         (uint32_t)(sizeof(skin_palette) / sizeof(skin_palette[0])));
-    result.hair_style = (uint8_t)(Sample(seed, 8U) % 6U);
+    result.hair_style = (uint8_t)(Sample(seed, 8U) % 8U);
     result.beard_style = (uint8_t)(Sample(seed, 9U) % 4U);
+    result.nose_style = (uint8_t)(Sample(seed, 23U) % 4U);
+    uint32_t scar_sample = Sample(seed, 24U) % 8U;
+    result.scar_style = scar_sample < 3U ? (uint8_t)(scar_sample + 1U) : 0U;
+    result.headwear_style = (uint8_t)(Sample(seed, 25U) % 4U);
     result.garment_style = (uint8_t)(Sample(seed, 10U) % 5U);
     result.skin = skin_palette[result.skin_tone];
     result.hair = PaletteColor(
@@ -120,6 +124,7 @@ CcNpcAppearance CcNpcAppearanceGenerate(uint32_t seed, CcNpcRole role,
     result.outer = PaletteColor(
         cloth_palette, (int32_t)(sizeof(cloth_palette) /
                                  sizeof(cloth_palette[0])), seed, 12U);
+    result.outer = Shade(result.outer, 1.08f);
     result.underlayer = PaletteColor(
         under_palette, (int32_t)(sizeof(under_palette) /
                                  sizeof(under_palette[0])), seed, 13U);
@@ -147,12 +152,15 @@ CcNpcAppearance CcNpcAppearanceGenerate(uint32_t seed, CcNpcRole role,
                                CC_NPC_EQUIPMENT_HEADWEAR |
                                CC_NPC_EQUIPMENT_TOOL;
             result.muscularity = fmaxf(result.muscularity, 0.62f);
+            result.body_mass = fmaxf(result.body_mass, 1.02f);
+            result.shoulder_scale = fmaxf(result.shoulder_scale, 1.09f);
             result.outer = Shade(result.accent, 0.76f);
             result.gait_cadence_scale *= 0.94f;
             result.stride_scale *= 0.88f;
             result.bob_scale *= 0.64f;
             result.arm_swing_scale *= 0.72f;
             result.idle_lean = 0.010f;
+            result.headwear_style = 0U;
             break;
         case CC_NPC_ROLE_RAIDER:
             result.equipment = CC_NPC_EQUIPMENT_MANTLE |
@@ -161,6 +169,7 @@ CcNpcAppearance CcNpcAppearanceGenerate(uint32_t seed, CcNpcRole role,
             result.outer = Blend(result.outer, (Color){104, 46, 51, 255},
                                  0.68f);
             result.muscularity = fmaxf(result.muscularity, 0.56f);
+            result.shoulder_scale = fmaxf(result.shoulder_scale, 1.06f);
             result.gait_cadence_scale *= 1.06f;
             result.stride_scale *= 1.10f;
             result.arm_swing_scale *= 1.16f;
@@ -171,16 +180,25 @@ CcNpcAppearance CcNpcAppearanceGenerate(uint32_t seed, CcNpcRole role,
                                CC_NPC_EQUIPMENT_SATCHEL |
                                CC_NPC_EQUIPMENT_HEADWEAR;
             result.outer = Blend(result.outer, result.accent, 0.36f);
+            result.underlayer = Blend(result.underlayer,
+                                      (Color){132, 141, 126, 255}, 0.68f);
+            result.body_mass = fmaxf(result.body_mass, 1.04f);
+            result.head_width = fmaxf(result.head_width, 1.02f);
             result.gait_cadence_scale *= 0.92f;
             result.stride_scale *= 0.88f;
             result.arm_swing_scale *= 1.12f;
             result.idle_lean = -0.010f;
+            result.headwear_style = 1U +
+                (uint8_t)(Sample(seed, 25U) % 3U);
             break;
         case CC_NPC_ROLE_LABORER:
             result.equipment = CC_NPC_EQUIPMENT_APRON |
                                CC_NPC_EQUIPMENT_TOOL;
             result.muscularity = fmaxf(result.muscularity, 0.68f);
-            result.body_mass = fmaxf(result.body_mass, 0.96f);
+            result.body_mass = fmaxf(result.body_mass, 1.04f);
+            result.shoulder_scale = fmaxf(result.shoulder_scale, 1.04f);
+            result.underlayer = Blend(result.underlayer,
+                                      (Color){111, 112, 99, 255}, 0.58f);
             result.gait_cadence_scale *= 0.84f;
             result.bob_scale *= 0.68f;
             result.arm_swing_scale *= 0.80f;
@@ -189,15 +207,20 @@ CcNpcAppearance CcNpcAppearanceGenerate(uint32_t seed, CcNpcRole role,
         case CC_NPC_ROLE_TRAVELLER:
             result.equipment = CC_NPC_EQUIPMENT_MANTLE |
                                CC_NPC_EQUIPMENT_PACK |
-                                ((Sample(seed, 17U) & 1U) != 0U ?
-                                 CC_NPC_EQUIPMENT_HEADWEAR : 0U);
+                               ((Sample(seed, 17U) & 1U) != 0U ?
+                                CC_NPC_EQUIPMENT_HEADWEAR : 0U);
+            result.outer = Blend(result.outer, result.accent, 0.34f);
+            result.underlayer = Shade(result.underlayer, 1.08f);
             result.stride_scale *= 1.02f;
+            result.headwear_style = (Sample(seed, 25U) & 1U) != 0U ? 1U : 3U;
             break;
         case CC_NPC_ROLE_REFUGEE:
             result.equipment = CC_NPC_EQUIPMENT_MANTLE |
                                CC_NPC_EQUIPMENT_PACK;
             result.outer = Shade(result.outer, 0.76f);
             result.underlayer = Shade(result.underlayer, 0.84f);
+            result.body_mass *= 0.92f;
+            result.shoulder_scale *= 0.94f;
             result.gait_cadence_scale *= 0.82f;
             result.stride_scale *= 0.82f;
             result.bob_scale *= 0.62f;
@@ -211,10 +234,13 @@ CcNpcAppearance CcNpcAppearanceGenerate(uint32_t seed, CcNpcRole role,
                                CC_NPC_EQUIPMENT_TOOL;
             result.stature = fminf(result.stature, 1.02f);
             result.body_mass = fminf(result.body_mass, 1.00f);
+            result.shoulder_scale = fminf(result.shoulder_scale, 1.02f);
+            result.outer = Blend(result.outer, result.accent, 0.48f);
             result.gait_cadence_scale *= 1.15f;
             result.stride_scale *= 1.10f;
             result.bob_scale *= 1.08f;
             result.idle_lean = 0.045f;
+            result.headwear_style = 2U;
             break;
         case CC_NPC_ROLE_HEALER:
             result.equipment = CC_NPC_EQUIPMENT_APRON |
@@ -273,6 +299,9 @@ bool CcNpcAppearanceEqual(const CcNpcAppearance *first,
            first->skin_tone == second->skin_tone &&
            first->hair_style == second->hair_style &&
            first->beard_style == second->beard_style &&
+           first->nose_style == second->nose_style &&
+           first->scar_style == second->scar_style &&
+           first->headwear_style == second->headwear_style &&
            first->garment_style == second->garment_style &&
            ColorToInt(first->skin) == ColorToInt(second->skin) &&
            ColorToInt(first->hair) == ColorToInt(second->hair) &&

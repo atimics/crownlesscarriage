@@ -44,6 +44,9 @@ int main(void)
             UINT32_C(0x504f5000) + role, (CcNpcRole)role,
             (Color){96, 111, 117, 255});
         if (person.role != (CcNpcRole)role || person.skin_tone >= 10U ||
+            person.hair_style >= 8U ||
+            person.beard_style >= 4U || person.nose_style >= 4U ||
+            person.scar_style >= 4U || person.headwear_style >= 4U ||
             person.garment_style >= 5U ||
             person.stature < 0.90f || person.stature > 1.10f ||
             person.body_mass < 0.82f || person.body_mass > 1.18f ||
