@@ -1173,6 +1173,39 @@ static void TestTravellerIngress(void)
 
 int main(void)
 {
+    CcLocalAgent crown_gate_walker;
+    CcLocalAgentInit(&crown_gate_walker, (Vector2){50.0f, 27.25f}, false);
+    RenderTexture2D click_target = {0};
+    click_target.texture.width = 457;
+    click_target.texture.height = 285;
+    Rectangle click_viewport = {0.0f, 0.0f, 914.0f, 570.0f};
+    /* This is an ordinary ground click at the right-hand road mouth. It is
+       occluded by the foreground gatehouse in camera space, but its ground
+       point is walkable. The label itself must not activate navigation. */
+    if (!CcLocalAgentPickTarget(&crown_gate_walker,
+                                (Vector2){888.0f, 344.0f}, click_target,
+                                click_viewport, false) ||
+        CcLocalAgentNavigationName(&crown_gate_walker) != NULL) {
+        (void)fprintf(stderr,
+                      "Crown Gate road-mouth ground click was not accepted\n");
+        return 1;
+    }
+    bool proximity_started = false;
+    for (int32_t frame = 0; frame < 3600; ++frame) {
+        CcLocalAgentUpdate(&crown_gate_walker, 1.0f / 60.0f, false);
+        if (crown_gate_walker.navigation_active) proximity_started = true;
+        if (proximity_started && !crown_gate_walker.navigation_active) break;
+    }
+    if (!proximity_started || crown_gate_walker.navigation_active ||
+        fabsf(crown_gate_walker.position.x - 78.5f) > 0.40f ||
+        fabsf(crown_gate_walker.position.z - 29.0f) > 0.40f) {
+        (void)fprintf(stderr,
+                      "Crown Gate proximity traversal stopped at %.2f %.2f\n",
+                      crown_gate_walker.position.x,
+                      crown_gate_walker.position.z);
+        return 1;
+    }
+
     CcLocalAgent room_traveller;
     CcLocalAgentInit(&room_traveller, (Vector2){44.0f, 29.0f}, false);
     int32_t market_portal = StreetPortalIndex(&room_traveller,

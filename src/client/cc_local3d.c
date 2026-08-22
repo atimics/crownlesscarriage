@@ -298,6 +298,8 @@ static const Vector3 COURSE_WAYPOINTS[] = {
 };
 
 static Camera3D LocalCamera(bool interior, Vector3 focus);
+static Camera3D ExteriorCameraAt(Vector3 target, float fovy);
+static Camera3D SnapCameraToArtPixels(Camera3D camera, int32_t art_height);
 static Camera3D StreetCamera(Vector3 focus, float clock, bool advance,
                              int32_t art_height);
 static Camera3D RoadCamera(Vector3 focus, bool travelling, float clock,
@@ -2710,8 +2712,9 @@ static bool QueueStreetNavigationPoint(CcLocalAgent *agent, Vector2 point)
     return true;
 }
 
-bool CcLocalAgentFollowStreetPortal(CcLocalAgent *agent,
-                                    int32_t portal_index)
+static bool StartStreetPortalTraversal(CcLocalAgent *agent,
+                                       int32_t portal_index,
+                                       bool include_room_trigger)
 {
     ResolvedStreetPortal portal = {0};
     if (agent == NULL || !CombatCanAct(&agent->combat) ||
@@ -2725,7 +2728,8 @@ bool CcLocalAgentFollowStreetPortal(CcLocalAgent *agent,
     };
     float trigger_x = room_trigger.x - agent->position.x;
     float trigger_z = room_trigger.z - agent->position.z;
-    if (trigger_x * trigger_x + trigger_z * trigger_z > 1.0f) {
+    if (include_room_trigger &&
+        trigger_x * trigger_x + trigger_z * trigger_z > 1.0f) {
         if (!QueueStreetNavigationPoint(
                 agent, STREET_CAMERA_SHOTS[room].trigger)) {
             ClearAgentNavigation(agent);
@@ -2771,6 +2775,12 @@ bool CcLocalAgentFollowStreetPortal(CcLocalAgent *agent,
         return false;
     }
     return true;
+}
+
+bool CcLocalAgentFollowStreetPortal(CcLocalAgent *agent,
+                                    int32_t portal_index)
+{
+    return StartStreetPortalTraversal(agent, portal_index, true);
 }
 
 const char *CcLocalAgentNavigationName(const CcLocalAgent *agent)
@@ -2849,25 +2859,57 @@ static Vector2 StreetPortalEdgePoint(const ResolvedStreetPortal *portal,
                      center.y + direction.y * scale};
 }
 
-static bool TryPickStreetPortal(CcLocalAgent *agent, Vector2 local,
-                                Camera3D camera, int32_t width,
-                                int32_t height)
+static bool StreetPortalGroundApproach(const ResolvedStreetPortal *portal,
+                                       int32_t room, Vector2 *approach)
 {
+    enum { ART_WIDTH = 457, ART_HEIGHT = 285 };
+    if (portal == NULL || approach == NULL || room < 0 ||
+        room >= (int32_t)(sizeof(STREET_CAMERA_SHOTS) /
+                          sizeof(STREET_CAMERA_SHOTS[0]))) return false;
+    Camera3D camera = SnapCameraToArtPixels(
+        ExteriorCameraAt(STREET_CAMERA_SHOTS[room].target, 10.8f),
+        ART_HEIGHT);
+    Vector2 edge = StreetPortalEdgePoint(portal, camera, ART_WIDTH,
+                                         ART_HEIGHT);
+    Ray ray = GetScreenToWorldRayEx(edge, camera, ART_WIDTH, ART_HEIGHT);
+    if (fabsf(ray.direction.y) < 0.0001f) return false;
+    float distance = -ray.position.y / ray.direction.y;
+    if (distance <= 0.0f) return false;
+    Vector3 ground = Vector3Add(
+        ray.position, Vector3Scale(ray.direction, distance));
+    approach->x = ground.x;
+    approach->y = ground.z;
+    return true;
+}
+
+static void UpdateStreetPortalProximity(CcLocalAgent *agent)
+{
+    if (agent == NULL || !agent->crowned || agent->navigation_active ||
+        !agent->exact_target_valid || agent->scene != CC_LOCAL_SCENE_STREET) {
+        return;
+    }
+    int32_t room = StreetRoomForAgent(agent);
     int32_t count = CcLocalAgentStreetPortalCount(agent);
     int32_t nearest = -1;
-    float nearest_distance = 34.0f * 34.0f;
+    float nearest_distance = 1.05f * 1.05f;
     for (int32_t portal_index = 0; portal_index < count; ++portal_index) {
         ResolvedStreetPortal portal = {0};
         if (!ResolveStreetPortal(agent, portal_index, &portal)) continue;
-        Vector2 marker = StreetPortalEdgePoint(&portal, camera, width, height);
-        float x = local.x - marker.x;
-        float y = local.y - marker.y;
-        float distance = x * x + y * y;
+        Vector2 approach = {0};
+        if (!StreetPortalGroundApproach(&portal, room, &approach)) continue;
+        float x = agent->position.x - approach.x;
+        float z = agent->position.z - approach.y;
+        float distance = x * x + z * z;
         if (distance >= nearest_distance) continue;
         nearest = portal_index;
         nearest_distance = distance;
     }
-    return nearest >= 0 && CcLocalAgentFollowStreetPortal(agent, nearest);
+    if (nearest >= 0) {
+        /* The player reached the physical edge of this camera room. Continue
+           along the authored road without requiring a UI click or sending
+           them back through the room center. */
+        (void)StartStreetPortalTraversal(agent, nearest, false);
+    }
 }
 
 static float RayFootprintDistance(Ray ray, Rectangle footprint, float height)
@@ -2939,11 +2981,6 @@ bool CcLocalAgentPickTarget(CcLocalAgent *agent, Vector2 screen_point,
                        target.texture.height) :
             StreetCamera(agent->position, 0.0f, false,
                          target.texture.height);
-    if (scene == CC_LOCAL_SCENE_STREET &&
-        TryPickStreetPortal(agent, local, camera, target.texture.width,
-                            target.texture.height)) {
-        return true;
-    }
     Ray ray = GetScreenToWorldRayEx(local, camera, target.texture.width,
                                     target.texture.height);
     float nearest = FLT_MAX;
@@ -3025,7 +3062,11 @@ bool CcLocalAgentPickTarget(CcLocalAgent *agent, Vector2 screen_point,
                 RayFootprintDistance(ray, RoadObstacleAt(i), 2.20f));
         }
     }
-    if (occluder < nearest) return false;
+    /* In the fixed street rooms, foreground architecture often lies between
+       the camera and a perfectly walkable road point. Rejecting that ray made
+       the last strip of visible ground impossible to click, so street input
+       is decided by ground walkability instead. */
+    if (scene != CC_LOCAL_SCENE_STREET && occluder < nearest) return false;
     return SetNearestClickTarget(agent, picked_point, market_interior);
 }
 
@@ -4145,6 +4186,7 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
     }
     CcLocalSceneKind scene = AgentSceneForCall(agent, market_interior);
     agent->scene = scene;
+    UpdateStreetPortalProximity(agent);
     bool biped = agent->morphology == CC_MORPHOLOGY_BIPED;
     LocalProbeContext context = {.scene = scene};
     if (biped && agent->humanoid_needs_reset) {

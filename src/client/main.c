@@ -1099,7 +1099,7 @@ static const char *LocalPrompt(const CcSim *sim, const LocalState *local)
         GridDistance(position, LOCAL_DUNGEON) < 1.35f) return "E  mount a three-day expedition";
     const char *navigation = CcLocalAgentNavigationName(&local->agent);
     if (navigation != NULL) {
-        return TextFormat("FOLLOWING ROAD TO %s   click another exit or floor point to change course",
+        return TextFormat("FOLLOWING ROAD TO %s   click open ground to change course",
                           navigation);
     }
     if (local->agent.traversal != CC_TRAVERSAL_IDLE) {
