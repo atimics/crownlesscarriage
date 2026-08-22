@@ -1,7 +1,8 @@
 .PHONY: blender-assets blender-assets-catalog blender-assets-check \
 	blender-exports-check blender-hero-assets blender-hero-assets-check blender-hero-animation \
 	blender-hero-actions blender-hero-engine blender-hero-procedural-preview \
-	blender-hero-procedural-check configure-play build-play test-play \
+	blender-hero-procedural-check blender-npc-assets blender-npc-assets-check \
+	configure-play build-play test-play \
 	configure-release build-release test-release
 
 BLENDER ?= blender
@@ -62,3 +63,11 @@ blender-hero-procedural-preview:
 
 blender-hero-procedural-check:
 	python3 tools/blender/procedural_character.py
+
+blender-npc-assets:
+	$(BLENDER) --background --python-exit-code 1 --factory-startup --python tools/blender/build_npc_archetype_library.py
+	$(BLENDER) --background --python-exit-code 1 --factory-startup --python tools/blender/build_npc_dynamic_modules.py
+
+blender-npc-assets-check:
+	python3 tools/blender/validate_npc_archetype_library.py
+	python3 tools/blender/validate_npc_dynamic_modules.py

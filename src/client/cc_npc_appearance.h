@@ -44,9 +44,17 @@ typedef struct CcNpcAppearance {
     float head_width;
     float head_depth;
     float age;
+    float gait_cadence_scale;
+    float stride_scale;
+    float bob_scale;
+    float idle_lean;
+    float arm_swing_scale;
     uint8_t skin_tone;
     uint8_t hair_style;
     uint8_t beard_style;
+    uint8_t nose_style;
+    uint8_t scar_style;
+    uint8_t headwear_style;
     uint8_t garment_style;
     Color skin;
     Color hair;

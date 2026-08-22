@@ -25,15 +25,39 @@ int main(void)
         return 1;
     }
 
+    CcNpcAppearance scout = CcNpcAppearanceGenerate(
+        UINT32_C(0x4d4f5645), CC_NPC_ROLE_SCOUT,
+        (Color){96, 111, 117, 255});
+    CcNpcAppearance refugee = CcNpcAppearanceGenerate(
+        UINT32_C(0x4d4f5645), CC_NPC_ROLE_REFUGEE,
+        (Color){96, 111, 117, 255});
+    if (scout.gait_cadence_scale <= refugee.gait_cadence_scale ||
+        scout.stride_scale <= refugee.stride_scale ||
+        scout.idle_lean <= refugee.idle_lean) {
+        (void)fprintf(stderr,
+                      "NPC role movement-signature contract failed\n");
+        return 1;
+    }
+
     for (uint32_t role = 0U; role < (uint32_t)CC_NPC_ROLE_COUNT; ++role) {
         CcNpcAppearance person = CcNpcAppearanceGenerate(
             UINT32_C(0x504f5000) + role, (CcNpcRole)role,
             (Color){96, 111, 117, 255});
         if (person.role != (CcNpcRole)role || person.skin_tone >= 10U ||
+            person.hair_style >= 8U ||
+            person.beard_style >= 4U || person.nose_style >= 4U ||
+            person.scar_style >= 4U || person.headwear_style >= 4U ||
             person.garment_style >= 5U ||
             person.stature < 0.90f || person.stature > 1.10f ||
             person.body_mass < 0.82f || person.body_mass > 1.18f ||
-            person.muscularity < 0.0f || person.muscularity > 1.0f) {
+            person.muscularity < 0.0f || person.muscularity > 1.0f ||
+            person.gait_cadence_scale < 0.65f ||
+            person.gait_cadence_scale > 1.35f ||
+            person.stride_scale < 0.65f || person.stride_scale > 1.35f ||
+            person.bob_scale < 0.40f || person.bob_scale > 1.30f ||
+            person.idle_lean < -0.08f || person.idle_lean > 0.08f ||
+            person.arm_swing_scale < 0.55f ||
+            person.arm_swing_scale > 1.40f) {
             (void)fprintf(stderr,
                           "NPC role %u generated an invalid body recipe\n",
                           role);

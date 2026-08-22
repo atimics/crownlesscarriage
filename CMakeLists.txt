@@ -89,6 +89,7 @@ if(CC_BUILD_CLIENT)
 
     add_executable(crownless_carriage
         src/client/main.c
+        src/client/cc_overlay.c
         src/client/cc_npc_appearance.c
         src/client/cc_local3d.c
         src/client/cc_local_runtime.c
@@ -98,7 +99,7 @@ if(CC_BUILD_CLIENT)
         set_target_properties(crownless_carriage PROPERTIES
             MACOSX_BUNDLE TRUE
             MACOSX_BUNDLE_BUNDLE_NAME "Crownless Carriage"
-            MACOSX_BUNDLE_GUI_IDENTIFIER "com.atimics.crownlesscarriage"
+            MACOSX_BUNDLE_GUI_IDENTIFIER "com.atimics.crownless"
             MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
             MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
         )
@@ -115,6 +116,15 @@ if(CC_BUILD_CLIENT)
         )
         set(CC_HERO_ENGINE_MANIFEST
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/hero/crownless_hero_engine_rig_v01.json"
+        )
+        file(GLOB CC_NPC_ARCHETYPE_ASSETS CONFIGURE_DEPENDS
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/npc/*.glb"
+        )
+        set(CC_NPC_ARCHETYPE_MANIFEST
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/npc_archetype_manifest.json"
+        )
+        set(CC_NPC_DYNAMIC_MODULE_MANIFEST
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/npc_dynamic_module_manifest.json"
         )
         set(CC_BRIDGE_CHECKPOINT_ASSET
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/glb/environment_bridge_checkpoint_v01.glb"
@@ -143,9 +153,23 @@ if(CC_BUILD_CLIENT)
         set(CC_STYLE_GRADE_SHADER
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/style_grade.fs"
         )
+        set(CC_WORLD_LIGHT_VERTEX_SHADER
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/world_lit.vs"
+        )
+        set(CC_WORLD_LIGHT_FRAGMENT_SHADER
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/world_lit.fs"
+        )
+        set(CC_HERO_PIXEL_FRAGMENT_SHADER
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/hero_pixel.fs"
+        )
+        set(CC_NPC_INDEXED_FRAGMENT_SHADER
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/npc_indexed.fs"
+        )
         add_custom_target(crownless_hero_assets ALL
             COMMAND ${CMAKE_COMMAND} -E make_directory
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/hero"
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/npc"
             COMMAND ${CMAKE_COMMAND} -E make_directory
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/glb"
             COMMAND ${CMAKE_COMMAND} -E make_directory
@@ -156,6 +180,15 @@ if(CC_BUILD_CLIENT)
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${CC_HERO_ENGINE_MANIFEST}"
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/hero/crownless_hero_engine_rig_v01.json"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${CC_NPC_ARCHETYPE_ASSETS}
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/npc"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CC_NPC_ARCHETYPE_MANIFEST}"
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/npc_archetype_manifest.json"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CC_NPC_DYNAMIC_MODULE_MANIFEST}"
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/npc_dynamic_module_manifest.json"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${CC_BRIDGE_CHECKPOINT_ASSET}"
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/glb/environment_bridge_checkpoint_v01.glb"
@@ -183,12 +216,29 @@ if(CC_BUILD_CLIENT)
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${CC_STYLE_GRADE_SHADER}"
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/shaders/style_grade.fs"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CC_WORLD_LIGHT_VERTEX_SHADER}"
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/shaders/world_lit.vs"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CC_WORLD_LIGHT_FRAGMENT_SHADER}"
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/shaders/world_lit.fs"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CC_HERO_PIXEL_FRAGMENT_SHADER}"
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/shaders/hero_pixel.fs"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CC_NPC_INDEXED_FRAGMENT_SHADER}"
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/shaders/npc_indexed.fs"
             DEPENDS "${CC_HERO_ENGINE_ASSET}" "${CC_HERO_ENGINE_MANIFEST}"
+                    ${CC_NPC_ARCHETYPE_ASSETS} "${CC_NPC_ARCHETYPE_MANIFEST}"
+                    "${CC_NPC_DYNAMIC_MODULE_MANIFEST}"
                     "${CC_BRIDGE_CHECKPOINT_ASSET}" "${CC_CARRIAGE_ASSET}"
                     "${CC_CARGO_RACK_ASSET}" "${CC_MARKET_ASSET}"
                     "${CC_MINE_ASSET}" "${CC_SHORTAGE_ASSET}"
                     "${CC_ENFORCEMENT_ASSET}" "${CC_RECOVERY_ASSET}"
                     "${CC_STYLE_GRADE_SHADER}"
+                    "${CC_WORLD_LIGHT_VERTEX_SHADER}"
+                    "${CC_WORLD_LIGHT_FRAGMENT_SHADER}"
+                    "${CC_HERO_PIXEL_FRAGMENT_SHADER}"
             VERBATIM
         )
         add_dependencies(crownless_carriage crownless_hero_assets)
@@ -260,6 +310,7 @@ if(BUILD_TESTING)
 
         add_executable(local_movement_tests
             tests/local_movement_tests.c
+            src/client/cc_overlay.c
             src/client/cc_npc_appearance.c
             src/client/cc_local3d.c
             src/client/cc_local_runtime.c

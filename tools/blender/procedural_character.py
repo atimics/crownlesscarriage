@@ -115,9 +115,18 @@ REFERENCE_BODY_FAT = 0.18
 
 
 ACTION_FIGURE_WAYFARER = BodyParameters(
-    name="action_figure_wayfarer",
-    muscularity=REFERENCE_MUSCULARITY,
-    body_fat=REFERENCE_BODY_FAT,
+    name="screen_readable_action_figure",
+    muscularity=0.68,
+    body_fat=0.13,
+    shoulder_scale=1.05,
+    chest_scale=0.98,
+    waist_scale=0.84,
+    hip_scale=0.92,
+    arm_scale=1.02,
+    leg_scale=1.00,
+    neck_scale=0.92,
+    hand_scale=1.08,
+    foot_scale=1.10,
 )
 
 LEAN_SCOUT = BodyParameters(

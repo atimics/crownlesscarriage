@@ -1,4 +1,5 @@
 #include "client/cc_local3d.h"
+#include "client/cc_overlay.h"
 #include "client/cc_visual_style.h"
 #include "persistence/cc_save.h"
 #include "sim/cc_sim.h"
@@ -251,6 +252,239 @@ static void DrawPanel(Rectangle bounds, Color color)
              (Color){207, 157, 67, 128});
 }
 
+typedef enum PortraitExpression {
+    PORTRAIT_NEUTRAL,
+    PORTRAIT_FOCUSED,
+    PORTRAIT_HURT,
+    PORTRAIT_TALKING
+} PortraitExpression;
+
+static Color PortraitShade(Color color, float amount)
+{
+    return (Color){
+        (unsigned char)fminf(255.0f, fmaxf(0.0f,
+            (float)color.r * amount)),
+        (unsigned char)fminf(255.0f, fmaxf(0.0f,
+            (float)color.g * amount)),
+        (unsigned char)fminf(255.0f, fmaxf(0.0f,
+            (float)color.b * amount)),
+        color.a
+    };
+}
+
+static void DrawPortraitBlock(int x, int y, int pixel, int grid_x,
+                              int grid_y, int grid_width, int grid_height,
+                              Color color)
+{
+    DrawRectangle(x + grid_x * pixel, y + grid_y * pixel,
+                  grid_width * pixel, grid_height * pixel, color);
+}
+
+/* A close-read identity card made from the same coarse decisions the world
+   render must preserve: head shape, hair silhouette, costume color and a held
+   facial expression. There are deliberately no sub-pixel curves here. */
+static void DrawPixelPortrait(const CcNpcAppearance *appearance,
+                              Rectangle bounds,
+                              PortraitExpression expression, bool crowned)
+{
+    if (appearance == NULL) return;
+    int pixel = bounds.width >= 60.0f && bounds.height >= 70.0f ? 3 : 2;
+    int width = pixel * 20;
+    int height = pixel * 24;
+    int x = (int)bounds.x + ((int)bounds.width - width) / 2;
+    int y = (int)bounds.y + ((int)bounds.height - height) / 2;
+    Color background = (Color){17, 28, 32, 255};
+    Color shadow = PortraitShade(appearance->skin, 0.70f);
+    Color ink = PortraitShade(appearance->hair, 0.48f);
+
+    DrawRectangle((int)bounds.x, (int)bounds.y, (int)bounds.width,
+                  (int)bounds.height, (Color){8, 16, 21, 255});
+    DrawRectangleLines((int)bounds.x, (int)bounds.y, (int)bounds.width,
+                       (int)bounds.height, PortraitShade(appearance->accent,
+                                                        0.88f));
+    DrawRectangle(x, y, width, height, background);
+
+    DrawPortraitBlock(x, y, pixel, 2, 18, 16, 6, appearance->outer);
+    DrawPortraitBlock(x, y, pixel, 0, 21, 20, 3,
+                      PortraitShade(appearance->outer, 0.68f));
+    DrawPortraitBlock(x, y, pixel, 5, 19, 10, 2,
+                      appearance->underlayer);
+    DrawPortraitBlock(x, y, pixel, 8, 14, 4, 6, shadow);
+
+    int face_left = appearance->head_width < 1.0f ? 6 :
+                    appearance->head_width > 1.045f ? 4 : 5;
+    int face_width = 20 - face_left * 2;
+    DrawPortraitBlock(x, y, pixel, face_left - 1, 7, 1, 5, shadow);
+    DrawPortraitBlock(x, y, pixel, face_left + face_width, 7, 1, 5, shadow);
+    DrawPortraitBlock(x, y, pixel, face_left, 4, face_width, 10,
+                      appearance->skin);
+    DrawPortraitBlock(x, y, pixel, face_left + 1, 14, face_width - 2, 2,
+                      appearance->skin);
+    DrawPortraitBlock(x, y, pixel, 7, 16, 6, 1, shadow);
+
+    DrawPortraitBlock(x, y, pixel, 5, 2, 10, 3, appearance->hair);
+    switch (appearance->hair_style % 8U) {
+        case 0:
+            DrawPortraitBlock(x, y, pixel, 5, 4, 2, 5, appearance->hair);
+            DrawPortraitBlock(x, y, pixel, 13, 4, 2, 3, appearance->hair);
+            break;
+        case 1:
+            DrawPortraitBlock(x, y, pixel, 4, 4, 2, 10, appearance->hair);
+            DrawPortraitBlock(x, y, pixel, 14, 4, 2, 10, appearance->hair);
+            break;
+        case 2:
+            DrawPortraitBlock(x, y, pixel, 8, 0, 4, 3, appearance->hair);
+            DrawPortraitBlock(x, y, pixel, 5, 4, 2, 5, appearance->hair);
+            break;
+        case 3:
+            DrawPortraitBlock(x, y, pixel, 4, 4, 7, 2, appearance->hair);
+            DrawPortraitBlock(x, y, pixel, 4, 5, 3, 4, appearance->hair);
+            DrawPortraitBlock(x, y, pixel, 12, 3, 4, 2, appearance->hair);
+            break;
+        case 4:
+            DrawPortraitBlock(x, y, pixel, 3, 4, 2, 11, appearance->hair);
+            DrawPortraitBlock(x, y, pixel, 15, 4, 2, 11, appearance->hair);
+            break;
+        case 5:
+            DrawPortraitBlock(x, y, pixel, 5, 4, 7, 2, appearance->hair);
+            DrawPortraitBlock(x, y, pixel, 12, 4, 3, 4, appearance->hair);
+            break;
+        case 6:
+            DrawPortraitBlock(x, y, pixel, 9, 0, 2, 4, appearance->hair);
+            DrawPortraitBlock(x, y, pixel, 5, 4, 2, 4, appearance->hair);
+            break;
+        case 7:
+        default:
+            DrawPortraitBlock(x, y, pixel, 3, 4, 3, 8, appearance->hair);
+            DrawPortraitBlock(x, y, pixel, 14, 4, 3, 8, appearance->hair);
+            break;
+    }
+    switch (appearance->beard_style % 4U) {
+        case 1:
+            DrawPortraitBlock(x, y, pixel, 7, 12, 6, 1,
+                              appearance->hair);
+            break;
+        case 2:
+            DrawPortraitBlock(x, y, pixel, 7, 13, 6, 2,
+                              appearance->hair);
+            DrawPortraitBlock(x, y, pixel, 9, 15, 2, 2,
+                              appearance->hair);
+            break;
+        case 3:
+            DrawPortraitBlock(x, y, pixel, 6, 12, 8, 3,
+                              appearance->hair);
+            DrawPortraitBlock(x, y, pixel, 7, 15, 6, 2,
+                              appearance->hair);
+            break;
+        default:
+            break;
+    }
+
+    int brow_y = expression == PORTRAIT_FOCUSED ? 7 : 6;
+    DrawPortraitBlock(x, y, pixel, 6, brow_y, 3, 1, ink);
+    DrawPortraitBlock(x, y, pixel, 11, brow_y, 3, 1, ink);
+    if (expression == PORTRAIT_HURT) {
+        DrawPortraitBlock(x, y, pixel, 7, 8, 1, 1, ink);
+        DrawPortraitBlock(x, y, pixel, 12, 9, 1, 1, ink);
+    } else {
+        DrawPortraitBlock(x, y, pixel, 7, 8, 1, 1, ink);
+        DrawPortraitBlock(x, y, pixel, 12, 8, 1, 1, ink);
+    }
+    switch (appearance->nose_style % 4U) {
+        case 0: DrawPortraitBlock(x, y, pixel, 9, 10, 2, 1, shadow); break;
+        case 1: DrawPortraitBlock(x, y, pixel, 9, 10, 2, 2, shadow); break;
+        case 2: DrawPortraitBlock(x, y, pixel, 8, 11, 4, 1, shadow); break;
+        case 3: DrawPortraitBlock(x, y, pixel, 9, 9, 2, 3, shadow); break;
+    }
+    if (appearance->scar_style == 1U) {
+        DrawPortraitBlock(x, y, pixel, 13, 8, 1, 4,
+                          PortraitShade(appearance->skin, 0.52f));
+    } else if (appearance->scar_style == 2U) {
+        DrawPortraitBlock(x, y, pixel, 6, 8, 1, 4,
+                          PortraitShade(appearance->skin, 0.52f));
+    } else if (appearance->scar_style == 3U) {
+        DrawPortraitBlock(x, y, pixel, 12, 11, 3, 1,
+                          PortraitShade(appearance->skin, 0.52f));
+    }
+    if (appearance->age > 0.68f) {
+        DrawPortraitBlock(x, y, pixel, 5, 11, 2, 1, shadow);
+        DrawPortraitBlock(x, y, pixel, 13, 11, 2, 1, shadow);
+    }
+    if (expression == PORTRAIT_TALKING) {
+        DrawPortraitBlock(x, y, pixel, 8, 13, 4, 2, ink);
+        DrawPortraitBlock(x, y, pixel, 9, 13, 2, 1,
+                          PortraitShade(appearance->skin, 1.18f));
+    } else if (expression == PORTRAIT_HURT) {
+        DrawPortraitBlock(x, y, pixel, 8, 14, 4, 1, ink);
+        DrawPortraitBlock(x, y, pixel, 8, 13, 1, 1, ink);
+    } else {
+        DrawPortraitBlock(x, y, pixel, 8, 13, 4, 1, ink);
+    }
+
+    if ((appearance->equipment & CC_NPC_EQUIPMENT_HEADWEAR) != 0U) {
+        Color headwear = appearance->headwear_style == 0U ?
+                         appearance->metal : appearance->outer;
+        switch (appearance->headwear_style % 4U) {
+            case 0:
+                DrawPortraitBlock(x, y, pixel, 4, 1, 12, 4, headwear);
+                DrawPortraitBlock(x, y, pixel, 3, 4, 14, 1,
+                                  PortraitShade(headwear, 0.70f));
+                break;
+            case 1:
+                DrawPortraitBlock(x, y, pixel, 7, 0, 7, 4, headwear);
+                DrawPortraitBlock(x, y, pixel, 2, 3, 16, 1,
+                                  PortraitShade(headwear, 0.76f));
+                break;
+            case 2:
+                DrawPortraitBlock(x, y, pixel, 4, 1, 12, 3, headwear);
+                DrawPortraitBlock(x, y, pixel, 3, 3, 3, 10, headwear);
+                DrawPortraitBlock(x, y, pixel, 14, 3, 3, 10, headwear);
+                break;
+            case 3:
+            default:
+                DrawPortraitBlock(x, y, pixel, 4, 1, 12, 3, headwear);
+                DrawPortraitBlock(x, y, pixel, 4, 4, 12, 2,
+                                  PortraitShade(headwear, 0.78f));
+                break;
+        }
+    }
+
+    if (crowned) {
+        Color gold = (Color){207, 157, 67, 255};
+        DrawPortraitBlock(x, y, pixel, 7, 0, 6, 1, gold);
+        DrawPortraitBlock(x, y, pixel, 7, 0, 1, 2, gold);
+        DrawPortraitBlock(x, y, pixel, 9, 0, 1, 2, gold);
+        DrawPortraitBlock(x, y, pixel, 12, 0, 1, 2, gold);
+    }
+}
+
+static PortraitExpression HeroPortraitExpression(const CcLocalAgent *agent)
+{
+    if (agent->combat.hit_flash_seconds > 0.0f ||
+        agent->combat.life_state == CC_LIFE_KNOCKED_DOWN) {
+        return PORTRAIT_HURT;
+    }
+    if (agent->combat.focus_valid ||
+        agent->humanoid.action == CC_HUMANOID_ACTION_GUARD ||
+        agent->humanoid.action == CC_HUMANOID_ACTION_STRIKE) {
+        return PORTRAIT_FOCUSED;
+    }
+    return PORTRAIT_NEUTRAL;
+}
+
+static CcNpcAppearance HeroPortraitAppearance(const CcLocalAgent *agent)
+{
+    CcNpcAppearance appearance = agent->appearance;
+    appearance.skin = (Color){177, 131, 93, 255};
+    appearance.hair = (Color){43, 32, 29, 255};
+    appearance.underlayer = (Color){47, 108, 106, 255};
+    appearance.outer = (Color){111, 48, 55, 255};
+    appearance.accent = (Color){181, 135, 49, 255};
+    appearance.hair_style = 3U;
+    appearance.beard_style = 0U;
+    return appearance;
+}
+
 static void DrawPerformanceOverlay(void)
 {
     CcLocalRendererStats stats = CcLocalRendererGetStats();
@@ -259,15 +493,15 @@ static void DrawPerformanceOverlay(void)
     Rectangle bounds = {(float)GetScreenWidth() - 294.0f, 18.0f,
                         276.0f, 92.0f};
     DrawPanel(bounds, (Color){5, 11, 17, 238});
-    DrawText("LOCAL PERFORMANCE", (int)bounds.x + 14,
+    CcOverlayDrawText("LOCAL PERFORMANCE", (int)bounds.x + 14,
              (int)bounds.y + 11, 12, TEAL);
-    DrawText(TextFormat("frame %5.2f ms  %5.1f fps",
+    CcOverlayDrawText(TextFormat("frame %5.2f ms  %5.1f fps",
                         stats.smoothed_frame_milliseconds, fps),
              (int)bounds.x + 14, (int)bounds.y + 32, 11, INK);
-    DrawText(TextFormat("skin %d update  %d mesh uploads",
+    CcOverlayDrawText(TextFormat("skin %d update  %d mesh uploads",
                         stats.skin_updates, stats.skinned_meshes),
              (int)bounds.x + 14, (int)bounds.y + 50, 11, INK);
-    DrawText(TextFormat("bipeds %d  hero %d  lod %d",
+    CcOverlayDrawText(TextFormat("bipeds %d  hero %d  lod %d",
                         stats.biomechanical_characters,
                         stats.high_detail_characters,
                         stats.low_detail_characters),
@@ -282,21 +516,21 @@ static void DrawTwoLineText(const char *text, int x, int y,
     size_t split = length > line_capacity ? line_capacity : length;
     while (split > 0U && split < length && text[split] != ' ') split -= 1U;
     if (split == 0U) split = length > line_capacity ? line_capacity : length;
-    DrawText(TextFormat("%.*s", (int)split, text), x, y, font_size, color);
+    CcOverlayDrawText(TextFormat("%.*s", (int)split, text), x, y, font_size, color);
     if (split < length) {
         size_t next = text[split] == ' ' ? split + 1U : split;
-        DrawText(text + next, x, y + font_size + 5, font_size, color);
+        CcOverlayDrawText(text + next, x, y + font_size + 5, font_size, color);
     }
 }
 
 static void DrawBar(int x, int y, int width, const char *label,
                     int32_t value, Color color)
 {
-    DrawText(label, x, y, 11, MUTED);
+    CcOverlayDrawText(label, x, y, 11, MUTED);
     DrawRectangle(x + 76, y + 1, width, 10, (Color){34, 45, 48, 255});
     int fill = (int)((float)width * (float)value / 100.0f);
     DrawRectangle(x + 76, y + 1, fill, 10, color);
-    DrawText(TextFormat("%d", value), x + 81 + width, y - 2, 12, INK);
+    CcOverlayDrawText(TextFormat("%d", value), x + 81 + width, y - 2, 12, INK);
 }
 
 static Color SituationColor(CcSituationKind kind);
@@ -535,9 +769,9 @@ static void DrawLocalHeader(const CcSim *sim, const LocalState *local)
         CcSimSettlement(sim, sim->journey.origin_id) : NULL;
     const CcSettlement *destination = road ?
         CcSimSettlement(sim, sim->journey.destination_id) : NULL;
-    DrawText(road ? "THE ROAD BETWEEN" :
+    CcOverlayDrawText(road ? "THE ROAD BETWEEN" :
              place != NULL ? place->name : "THE ROAD", 26, 18, 27, INK);
-    DrawText(road ?
+    CcOverlayDrawText(road ?
              TextFormat("%s  ->  %s / %s",
                         origin != NULL ? origin->name : "Origin",
                         destination != NULL ? destination->name :
@@ -550,13 +784,13 @@ static void DrawLocalHeader(const CcSim *sim, const LocalState *local)
              28, 51, 11, TEAL);
     int32_t game_minutes =
         sim->clock.minute_subticks / CC_WORLD_MINUTE_SUBTICKS;
-    DrawText(TextFormat("DAY %04d  %02d:%02d", sim->current_day,
+    CcOverlayDrawText(TextFormat("DAY %04d  %02d:%02d", sim->current_day,
                         game_minutes / 60, game_minutes % 60),
              760, 24, 15, CC_GOLD);
-    DrawText(TextFormat("CROWNS %03" PRId64, sim->player.coins), 895, 24, 15, CC_GOLD);
-    DrawText(TextFormat("CARGO %02d/%02d", CcPlayerCargoUsed(&sim->player),
+    CcOverlayDrawText(TextFormat("CROWNS %03" PRId64, sim->player.coins), 895, 24, 15, CC_GOLD);
+    CcOverlayDrawText(TextFormat("CARGO %02d/%02d", CcPlayerCargoUsed(&sim->player),
                         sim->player.cargo_capacity), 1062, 24, 15, TEAL);
-    DrawText(road ? "ROUTE IN PROGRESS" : "M  MAP CASE",
+    CcOverlayDrawText(road ? "ROUTE IN PROGRESS" : "M  MAP CASE",
              road ? 1081 : 1121, 52, 10, MUTED);
 }
 
@@ -579,43 +813,43 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
             int32_t remaining = sim->journey.total_subticks -
                                 sim->journey.elapsed_subticks;
             int32_t hours = (remaining + 3599) / 3600;
-            DrawText("JOURNEY UNDER WAY", 966, 102, 11, TEAL);
-            DrawText(destination != NULL ? destination->name : "THE FAR GATE",
+            CcOverlayDrawText("JOURNEY UNDER WAY", 966, 102, 11, TEAL);
+            CcOverlayDrawText(destination != NULL ? destination->name : "THE FAR GATE",
                      966, 125, 18, INK);
-            DrawText(TextFormat("%d%% complete   about %d game-hours remain",
+            CcOverlayDrawText(TextFormat("%d%% complete   about %d game-hours remain",
                                 progress, hours), 966, 153, 10, CC_GOLD);
             DrawBar(966, 181, 124, "PROGRESS", progress, TEAL);
             DrawBar(966, 202, 124, "DANGER", sim->journey.danger, DANGER);
             DrawBar(966, 223, 124, "ROAD",
                     route != NULL ? route->condition : 0, CC_GOLD);
-            DrawText("THE WORLD KEEPS TURNING", 966, 264, 11, TEAL);
+            CcOverlayDrawText("THE WORLD KEEPS TURNING", 966, 264, 11, TEAL);
             DrawTwoLineText(
                 "Shipments move each day; markets, hunger, threats, and promises update at calendar boundaries.",
                 966, 289, 40U, 10, INK);
-            DrawText("AUTHORITATIVE CARRIAGE", 966, 367, 11, TEAL);
-            DrawText(TextFormat("route progress  %d / 1000",
+            CcOverlayDrawText("AUTHORITATIVE CARRIAGE", 966, 367, 11, TEAL);
+            CcOverlayDrawText(TextFormat("route progress  %d / 1000",
                                 sim->carriage.progress_milli),
                      966, 392, 11, INK);
-            DrawText(TextFormat("speed  %.2f m/s   condition  %d%%",
+            CcOverlayDrawText(TextFormat("speed  %.2f m/s   condition  %d%%",
                                 (float)sim->carriage.speed_milli_per_second /
                                     1000.0f,
                                 sim->carriage.condition),
                      966, 416, 10, MUTED);
-            DrawText("REAL-TIME CONTRACT", 966, 465, 11, TEAL);
+            CcOverlayDrawText("REAL-TIME CONTRACT", 966, 465, 11, TEAL);
             DrawTwoLineText(
                 "Every 60 Hz runtime step advances this journey. Opening a map or decision pauses it.",
                 966, 489, 40U, 10, INK);
-            DrawText(TextFormat("TIME SCALE  %d GAME MIN / REAL SEC",
+            CcOverlayDrawText(TextFormat("TIME SCALE  %d GAME MIN / REAL SEC",
                                 sim->clock.game_minutes_per_second),
                      966, 568, 9, CC_VIOLET);
-            DrawText("F5 saves the carriage exactly where it is.",
+            CcOverlayDrawText("F5 saves the carriage exactly where it is.",
                      966, 606, 9, CC_GOLD);
             return;
         }
-        DrawText("JOURNEY IN PROGRESS", 966, 102, 11, TEAL);
-        DrawText(destination != NULL ? destination->name : "THE FAR GATE",
+        CcOverlayDrawText("JOURNEY IN PROGRESS", 966, 102, 11, TEAL);
+        CcOverlayDrawText(destination != NULL ? destination->name : "THE FAR GATE",
                  966, 125, 18, INK);
-        DrawText(TextFormat("%s controls this interruption",
+        CcOverlayDrawText(TextFormat("%s controls this interruption",
                             bandits != NULL ? bandits->name :
                                               "Road collectors"),
                  966, 151, 9, DANGER);
@@ -625,14 +859,28 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
         DrawBar(966, 223, 124, "ROAD",
                 route != NULL ? route->condition : 0, CC_GOLD);
 
-        DrawText("WHO IS CAUGHT HERE", 966, 264, 11, TEAL);
-        DrawText("Crownless carriage and horses", 966, 288, 10, INK);
-        DrawText("Three stranded road travellers", 966, 307, 10, INK);
-        DrawText("Follow-on merchants behind the cordon", 966, 326, 10,
-                 MUTED);
+        CcOverlayDrawText(local->journey_parley_active ? "THE COLLECTOR" :
+                                               "THE ATTACKER",
+                 966, 264, 11, TEAL);
+        PortraitExpression raider_expression =
+            local->course.raiders[0].combat.hit_flash_seconds > 0.0f ?
+                PORTRAIT_HURT : PORTRAIT_FOCUSED;
+        DrawPixelPortrait(&local->course.raiders[0].appearance,
+                          (Rectangle){966.0f, 282.0f, 60.0f, 72.0f},
+                          raider_expression, false);
+        CcOverlayDrawText(local->journey_parley_active ? "ROAD COLLECTOR" :
+                                               "CORDON RAIDER",
+                 1036, 286, 11, local->journey_parley_active ? CC_GOLD :
+                                                               DANGER);
+        CcOverlayDrawText(CcNpcRoleName(local->course.raiders[0].appearance.role),
+                 1036, 307, 9, MUTED);
+        DrawTwoLineText(local->journey_parley_active ?
+                        "Watching your hands; waiting for an offer." :
+                        "Committed to the line; reading your guard.",
+                        1036, 326, 27U, 9, INK);
 
-        DrawText("THE PROMISE BEYOND", 966, 367, 11, TEAL);
-        DrawText(situation != NULL && situation->affected_name[0] != '\0' ?
+        CcOverlayDrawText("THE PROMISE BEYOND", 966, 367, 11, TEAL);
+        CcOverlayDrawText(situation != NULL && situation->affected_name[0] != '\0' ?
                  situation->affected_name : "A local household",
                  966, 391, 13, CC_GOLD);
         DrawTwoLineText(situation != NULL ?
@@ -641,25 +889,25 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
                         "waits for the carriage to arrive.",
                         966, 414, 40U, 10, INK);
 
-        DrawText("CURRENT OBJECTIVE", 966, 465, 11, TEAL);
+        CcOverlayDrawText("CURRENT OBJECTIVE", 966, 465, 11, TEAL);
         if (local->journey_parley_active) {
             DrawTwoLineText(TextFormat(
                                 "Reach the collector and press F to offer %d crowns.",
                                 sim->journey.bargain_cost),
                             966, 489, 40U, 10, INK);
-            DrawText("Traffic moves; bandit influence rises.",
+            CcOverlayDrawText("Traffic moves; bandit influence rises.",
                      966, 532, 9, DANGER);
         } else {
             DrawTwoLineText("Fight beside the carriage until the cordon breaks or both attackers fall.",
                             966, 489, 40U, 10, INK);
-            DrawText("Security and protected traffic will rise.",
+            CcOverlayDrawText("Security and protected traffic will rise.",
                      966, 532, 9, TEAL);
         }
-        DrawText(TextFormat("ROUTE CAPACITY %d   PROVISIONS RESERVED %d",
+        CcOverlayDrawText(TextFormat("ROUTE CAPACITY %d   PROVISIONS RESERVED %d",
                             route != NULL ? route->capacity : 0,
                             sim->journey.fare_reserved),
                  966, 568, 9, MUTED);
-        DrawText(local->journey_parley_active ?
+        CcOverlayDrawText(local->journey_parley_active ?
                  "No attack: movement and proximity own this choice." :
                  "Live bodies, weapon contacts, and defeat own this choice.",
                  966, 606, 9, CC_VIOLET);
@@ -669,27 +917,27 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
     if (place == NULL) return;
     DrawPanel((Rectangle){946.0f, 82.0f, 314.0f, 568.0f}, PANEL);
     const CcKingdom *kingdom = KingdomById(sim, place->kingdom_id);
-    DrawText(kingdom != NULL ? kingdom->name : "UNCLAIMED", 966, 102, 11,
+    CcOverlayDrawText(kingdom != NULL ? kingdom->name : "UNCLAIMED", 966, 102, 11,
              KingdomColor(sim, place->kingdom_id));
-    DrawText(CcSettlementFunctionName(place->function), 966, 123, 18, INK);
-    DrawText(TextFormat("%d people live with these conditions", place->population),
+    CcOverlayDrawText(CcSettlementFunctionName(place->function), 966, 123, 18, INK);
+    CcOverlayDrawText(TextFormat("%d people live with these conditions", place->population),
              966, 149, 10, MUTED);
     DrawBar(966, 176, 124, "HUNGER", place->hunger, DANGER);
     DrawBar(966, 197, 124, "SECURITY", place->security, TEAL);
     DrawBar(966, 218, 124, "PROSPERITY", place->prosperity, CC_GOLD);
 
-    DrawText("WHAT THE MARKET KNOWS", 966, 254, 11, TEAL);
+    CcOverlayDrawText("WHAT THE MARKET KNOWS", 966, 254, 11, TEAL);
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
         int y = 278 + good * 30;
-        DrawText(TextFormat("%d  %-9s", good + 1, CcGoodName((CcGood)good)),
+        CcOverlayDrawText(TextFormat("%d  %-9s", good + 1, CcGoodName((CcGood)good)),
                  966, y, 12, INK);
-        DrawText(TextFormat("%2d cr", place->price[good]), 1086, y, 12, CC_GOLD);
-        DrawText(TextFormat("%3d here", place->stock[good]), 1152, y, 11,
+        CcOverlayDrawText(TextFormat("%2d cr", place->price[good]), 1086, y, 12, CC_GOLD);
+        CcOverlayDrawText(TextFormat("%3d here", place->stock[good]), 1152, y, 11,
                  place->stock[good] < place->reserve_target[good] ? DANGER : MUTED);
     }
     bool can_trade = local->market_interior &&
                      GridDistance(LocalPosition(local), INTERIOR_COUNTER) < 2.25f;
-    DrawText(can_trade ? "1-3 BUY  /  SHIFT+1-3 SELL" :
+    CcOverlayDrawText(can_trade ? "1-3 BUY  /  SHIFT+1-3 SELL" :
              local->market_interior ? "Walk to the factor to trade." :
              "Enter the market house to trade.",
              966, 374, 10, can_trade ? CC_GOLD : MUTED);
@@ -697,43 +945,67 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
     const CcSituation *accepted = CcSimAcceptedSituation(sim);
     const CcSituation *situation = accepted != NULL ? accepted :
         CcSimSituationForSettlement(sim, place->id);
-    DrawText(accepted != NULL ? "YOUR CHARTER" : "TOWN TALK",
-             966, 411, 11, TEAL);
-    if (situation != NULL) {
-        DrawText(CcSituationKindName(situation->kind), 966, 435, 13,
-                 SituationColor(situation->kind));
-        if (accepted != NULL) {
-            char next[192];
-            SituationNextAction(sim, situation, next, sizeof(next));
-            DrawText(situation->affected_name[0] != '\0' ?
-                     situation->affected_name : "Someone is waiting",
-                     966, 456, 9, MUTED);
-            DrawTwoLineText(next, 966, 473, 42U, 9, INK);
-            DrawText(situation->quantity > 0 ?
-                     TextFormat("%d/%d   due %d", situation->progress,
-                                situation->quantity,
-                                situation->deadline_day) :
-                     TextFormat("due day %d", situation->deadline_day),
-                     966, 507, 9, CC_GOLD);
+    if (local->market_interior) {
+        CcNpcAppearance mara = CcNpcAppearanceGenerate(
+            UINT32_C(0x4d415241), CC_NPC_ROLE_MERCHANT,
+            (Color){218, 148, 61, 255});
+        CcOverlayDrawText("MARA / FACTOR", 966, 411, 11, TEAL);
+        DrawPixelPortrait(&mara, (Rectangle){966.0f, 432.0f, 64.0f, 75.0f},
+                          can_trade ? PORTRAIT_TALKING : PORTRAIT_NEUTRAL,
+                          false);
+        CcOverlayDrawText("MARKET FACTOR", 1040, 436, 11, CC_GOLD);
+        CcOverlayDrawText(can_trade ? "READY TO TRADE" : "AT THE COUNTER",
+                 1040, 457, 9, can_trade ? TEAL : MUTED);
+        if (situation != NULL) {
+            CcOverlayDrawText(accepted != NULL ? "YOUR CHARTER" :
+                                       CcSituationKindName(situation->kind),
+                     1040, 480, 8, SituationColor(situation->kind));
+            CcOverlayDrawText(accepted != NULL ?
+                     TextFormat("DUE DAY %d", situation->deadline_day) :
+                     TextFormat("Q INSPECT  +%" PRId64, situation->reward),
+                     1040, 496, 8, INK);
         } else {
-            const CcFaction *issuer = FactionById(
-                sim, situation->issuer_faction_id);
-            DrawText(situation->sponsor_name[0] != '\0' ?
-                     situation->sponsor_name :
-                     issuer != NULL ? issuer->name : "Quiet sponsors",
-                     966, 456, 10, MUTED);
-            DrawText(TextFormat("Q to inspect   due %d   +%" PRId64,
-                                situation->deadline_day,
-                                situation->reward),
-                     966, 477, 10, INK);
+            CcOverlayDrawText("NO CHARTER TODAY", 1040, 480, 8, MUTED);
         }
     } else {
-        DrawText("No charter here today.", 966, 435, 12, MUTED);
+        CcOverlayDrawText(accepted != NULL ? "YOUR CHARTER" : "TOWN TALK",
+                 966, 411, 11, TEAL);
+        if (situation != NULL) {
+            CcOverlayDrawText(CcSituationKindName(situation->kind), 966, 435, 13,
+                     SituationColor(situation->kind));
+            if (accepted != NULL) {
+                char next[192];
+                SituationNextAction(sim, situation, next, sizeof(next));
+                CcOverlayDrawText(situation->affected_name[0] != '\0' ?
+                         situation->affected_name : "Someone is waiting",
+                         966, 456, 9, MUTED);
+                DrawTwoLineText(next, 966, 473, 42U, 9, INK);
+                CcOverlayDrawText(situation->quantity > 0 ?
+                         TextFormat("%d/%d   due %d", situation->progress,
+                                    situation->quantity,
+                                    situation->deadline_day) :
+                         TextFormat("due day %d", situation->deadline_day),
+                         966, 507, 9, CC_GOLD);
+            } else {
+                const CcFaction *issuer = FactionById(
+                    sim, situation->issuer_faction_id);
+                CcOverlayDrawText(situation->sponsor_name[0] != '\0' ?
+                         situation->sponsor_name :
+                         issuer != NULL ? issuer->name : "Quiet sponsors",
+                         966, 456, 10, MUTED);
+                CcOverlayDrawText(TextFormat("Q to inspect   due %d   +%" PRId64,
+                                    situation->deadline_day,
+                                    situation->reward),
+                         966, 477, 10, INK);
+            }
+        } else {
+            CcOverlayDrawText("No charter here today.", 966, 435, 12, MUTED);
+        }
     }
     const CcEvent *event = CcSimRecentEvent(sim, 0);
-    DrawText("LAST CONSEQUENCE", 966, 522, 11, TEAL);
+    CcOverlayDrawText("LAST CONSEQUENCE", 966, 522, 11, TEAL);
     if (event != NULL) {
-        DrawText(TextFormat("DAY %d / %s", event->day, CcEventKindName(event->kind)),
+        CcOverlayDrawText(TextFormat("DAY %d / %s", event->day, CcEventKindName(event->kind)),
                  966, 545, 9, MUTED);
         const char *text = event->text;
         char first[44] = {0};
@@ -744,53 +1016,43 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
         if (split == 0U) split = length > 39U ? 39U : length;
         (void)snprintf(first, sizeof(first), "%.*s", (int)split, text);
         if (split < length) (void)snprintf(second, sizeof(second), "%s", text + split + 1U);
-        DrawText(first, 966, 566, 10, INK);
-        if (second[0] != '\0') DrawText(second, 966, 582, 10, INK);
+        CcOverlayDrawText(first, 966, 566, 10, INK);
+        if (second[0] != '\0') CcOverlayDrawText(second, 966, 582, 10, INK);
     }
     if (local->agent.morphology == CC_MORPHOLOGY_BIPED) {
-        DrawText(TextFormat("%s / %s / owner %s",
+        CcNpcAppearance hero = HeroPortraitAppearance(&local->agent);
+        DrawPixelPortrait(&hero, (Rectangle){966.0f, 596.0f, 44.0f, 48.0f},
+                          HeroPortraitExpression(&local->agent), true);
+        CcOverlayDrawText("CROWNLESS WAYFARER", 1018, 598, 10, TEAL);
+        CcOverlayDrawText(TextFormat("%s / %s",
                             CcLocalTraversalName(local->agent.traversal),
-                            CcHumanoidActionName(local->agent.humanoid.action),
-                            CcHumanoidPoseOwnerName(
-                                local->agent.humanoid.pose_owner)),
-                 966, 605, 9, CC_VIOLET);
-        DrawText(TextFormat("%s / L %s R %s / %s",
-                            CcMotionClipName(
-                                local->agent.humanoid.motion.clip != NULL ?
-                                local->agent.humanoid.motion.clip->id :
-                                CC_MOTION_CLIP_NONE),
-                            CcHumanoidContactName(
-                                local->agent.humanoid.feet[0].contact),
-                            CcHumanoidContactName(
-                                local->agent.humanoid.feet[1].contact),
-                            local->agent.humanoid.idle.pose_locked ?
-                                "LOCKED" : "TRACKING"),
-                 966, 621, 9, CC_VIOLET);
-        DrawText(TextFormat("HERO T%d / MOB %d  GRIP %d  POWER %d",
+                            CcHumanoidActionName(local->agent.humanoid.action)),
+                 1018, 618, 8, CC_VIOLET);
+        CcOverlayDrawText(TextFormat("T%d  MOB %d  GRIP %d  POWER %d",
                             CcLocalAgentHeroicTier(&local->agent),
                             local->agent.athletics.level[CC_ATHLETIC_MOBILITY],
                             local->agent.athletics.level[CC_ATHLETIC_GRIP],
                             local->agent.athletics.level[CC_ATHLETIC_POWER]),
-                 966, 637, 9, CC_GOLD);
+                 1018, 635, 8, CC_GOLD);
     } else if (local->agent.limb_rig.planted_count > 0 &&
                isfinite(local->agent.limb_rig.support_margin)) {
-        DrawText(TextFormat("ROBOTIC %s / %s / traction %.0f%%",
+        CcOverlayDrawText(TextFormat("ROBOTIC %s / %s / traction %.0f%%",
                             CcLocalAgentMorphologyName(&local->agent),
                             CcLocalTraversalName(local->agent.traversal),
                             local->agent.limb_rig.traction * 100.0f),
                  966, 605, 9, CC_VIOLET);
-        DrawText(TextFormat("support %d/%d / margin %+.2f / gait %.0f%%",
+        CcOverlayDrawText(TextFormat("support %d/%d / margin %+.2f / gait %.0f%%",
                             local->agent.limb_rig.planted_count,
                             local->agent.limb_rig.morphology.limb_count,
                             local->agent.limb_rig.support_margin,
                             local->agent.limb_rig.drive_scale * 100.0f),
                  966, 621, 9, CC_VIOLET);
     } else {
-        DrawText(TextFormat("ROBOTIC %s / %s",
+        CcOverlayDrawText(TextFormat("ROBOTIC %s / %s",
                             CcLocalAgentMorphologyName(&local->agent),
                             CcLocalTraversalName(local->agent.traversal)),
                  966, 605, 9, CC_VIOLET);
-        DrawText("support airborne / feet searching", 966, 621, 9, CC_VIOLET);
+        CcOverlayDrawText("support airborne / feet searching", 966, 621, 9, CC_VIOLET);
     }
 }
 
@@ -835,6 +1097,11 @@ static const char *LocalPrompt(const CcSim *sim, const LocalState *local)
     if (GridDistance(position, LOCAL_NOTICE) < 1.15f) return "F  read the live situation board";
     if (DungeonAtSettlement(sim, sim->player.location_id) != NULL &&
         GridDistance(position, LOCAL_DUNGEON) < 1.35f) return "E  mount a three-day expedition";
+    const char *navigation = CcLocalAgentNavigationName(&local->agent);
+    if (navigation != NULL) {
+        return TextFormat("FOLLOWING ROAD TO %s   click another exit or floor point to change course",
+                          navigation);
+    }
     if (local->agent.traversal != CC_TRAVERSAL_IDLE) {
         return TextFormat("%s toward %.2f,%.2f   feet choose contacts continuously",
                           CcLocalTraversalName(local->agent.traversal),
@@ -853,9 +1120,9 @@ static void DrawCombatSkillCard(const CcLocalAgent *agent,
                          0.18f, 4, (Color){19, 32, 39, 255});
     DrawRectangleRoundedLinesEx((Rectangle){(float)x, 701.0f, 192.0f, 27.0f},
                                 0.18f, 4, 1.0f, Fade(border, 0.72f));
-    DrawText(TextFormat("%d", key), x + 8, 708, 11, CC_GOLD);
-    DrawText(CcLocalCombatSkillName(skill), x + 27, 707, 9, INK);
-    DrawText(queued ? "QUEUED" : cooldown > 0.0f ?
+    CcOverlayDrawText(TextFormat("%d", key), x + 8, 708, 11, CC_GOLD);
+    CcOverlayDrawText(CcLocalCombatSkillName(skill), x + 27, 707, 9, INK);
+    CcOverlayDrawText(queued ? "QUEUED" : cooldown > 0.0f ?
              TextFormat("%.1fs", cooldown) : "READY",
              x + 145, 707, 9, border);
 }
@@ -864,8 +1131,8 @@ static void DrawLocalFooter(const CcSim *sim, const LocalState *local)
 {
     DrawPanel((Rectangle){20.0f, 664.0f, 1240.0f, 76.0f}, PANEL);
     if (local->journey_travel_active) {
-        DrawText(LocalPrompt(sim, local), 38, 681, 13, CC_GOLD);
-        DrawText(TextFormat("DAY %04d   /   PROGRESS %d%%   /   %d GAME MINUTES PER REAL SECOND",
+        CcOverlayDrawText(LocalPrompt(sim, local), 38, 681, 13, CC_GOLD);
+        CcOverlayDrawText(TextFormat("DAY %04d   /   PROGRESS %d%%   /   %d GAME MINUTES PER REAL SECOND",
                             sim->current_day,
                             sim->carriage.progress_milli / 10,
                             sim->clock.game_minutes_per_second),
@@ -873,24 +1140,24 @@ static void DrawLocalFooter(const CcSim *sim, const LocalState *local)
         return;
     }
     if (local->journey_parley_active) {
-        DrawText(LocalPrompt(sim, local), 38, 681, 13, CC_GOLD);
-        DrawText(TextFormat("PASSAGE %d CROWNS   /   avoids bloodshed   /   strengthens the collectors",
+        CcOverlayDrawText(LocalPrompt(sim, local), 38, 681, 13, CC_GOLD);
+        CcOverlayDrawText(TextFormat("PASSAGE %d CROWNS   /   avoids bloodshed   /   strengthens the collectors",
                             sim->journey.bargain_cost),
                  38, 708, 10, DANGER);
-        DrawText("BACKSPACE reconsider   F5 save", 1002, 708, 9, MUTED);
+        CcOverlayDrawText("BACKSPACE reconsider   F5 save", 1002, 708, 9, MUTED);
         return;
     }
     if (!local->market_interior && local->course.alarm_active) {
         int32_t target = local->agent.combat.target_index;
         if (target >= 0 && target < CC_LOCAL_RAIDER_COUNT &&
             local->course.raiders[target].combat.life_state == CC_LIFE_ALIVE) {
-            DrawText(TextFormat("TARGET  RAIDER %d   %d HP   /   AUTO ATTACK ENGAGED",
+            CcOverlayDrawText(TextFormat("TARGET  RAIDER %d   %d HP   /   AUTO ATTACK ENGAGED",
                                 target + 1,
                                 (int32_t)lroundf(
                                     local->course.raiders[target].combat.health)),
                      38, 679, 12, DANGER);
         } else {
-            DrawText("CLICK A RAIDER TO TARGET AND ENGAGE",
+            CcOverlayDrawText("CLICK A RAIDER TO TARGET AND ENGAGE",
                      38, 679, 12, CC_GOLD);
         }
         DrawCombatSkillCard(&local->agent,
@@ -899,14 +1166,14 @@ static void DrawLocalFooter(const CcSim *sim, const LocalState *local)
                             CC_COMBAT_SKILL_SUNDER, 240, 2);
         DrawCombatSkillCard(&local->agent,
                             CC_COMBAT_SKILL_SECOND_WIND, 442, 3);
-        DrawText("click ground disengages   SPACE manual strike   X guard",
+        CcOverlayDrawText("click ground disengages   SPACE manual strike   X guard",
                  780, 709, 9, MUTED);
         return;
     }
-    DrawText(LocalPrompt(sim, local), 38, 681, 13, CC_GOLD);
-    DrawText("J jump   G alarm   Q situations   TAB ledger",
+    CcOverlayDrawText(LocalPrompt(sim, local), 38, 681, 13, CC_GOLD);
+    CcOverlayDrawText("J jump   G alarm   Q situations   TAB ledger",
              38, 708, 10, MUTED);
-    DrawText("M map case at carriage   F5 save   F9 load   N new world",
+    CcOverlayDrawText("M map case at carriage   F5 save   F9 load   N new world",
              804, 693, 10, MUTED);
 }
 
@@ -1011,9 +1278,9 @@ static void DrawChartTown(Vector2 point, const CcSettlement *place, bool current
     DrawPoly(point, place != NULL && place->function == CC_SETTLEMENT_FORTRESS ? 4 : 6,
              current ? 12.0f : 9.0f, 0.0f, ink);
     const char *name = place != NULL ? place->name : "Unknown terminus";
-    int width = MeasureText(name, 15);
-    DrawText(name, (int)point.x - width / 2, (int)point.y + 24, 15, ink);
-    if (current) DrawText("CARRIAGE", (int)point.x - 34, (int)point.y - 38, 10, DANGER);
+    int width = CcOverlayMeasureText(name, 15);
+    CcOverlayDrawText(name, (int)point.x - width / 2, (int)point.y + 24, 15, ink);
+    if (current) CcOverlayDrawText("CARRIAGE", (int)point.x - 34, (int)point.y - 38, 10, DANGER);
 }
 
 static void DrawMap(const CcSim *sim, int32_t selected, float clock)
@@ -1021,8 +1288,8 @@ static void DrawMap(const CcSim *sim, int32_t selected, float clock)
     (void)clock;
     DrawPanel((Rectangle){20.0f, 82.0f, 900.0f, 568.0f},
               (Color){11, 20, 24, 248});
-    DrawText("CARRIAGE MAP CASE", 38, 101, 18, CC_GOLD);
-    DrawText(TextFormat("%d / %d PHYSICAL CHARTS", CcPlayerMapCount(sim),
+    CcOverlayDrawText("CARRIAGE MAP CASE", 38, 101, 18, CC_GOLD);
+    CcOverlayDrawText(TextFormat("%d / %d PHYSICAL CHARTS", CcPlayerMapCount(sim),
                         sim->player.map_capacity), 38, 126, 10, MUTED);
 
     int32_t row = 0;
@@ -1039,13 +1306,13 @@ static void DrawMap(const CcSim *sim, int32_t selected, float clock)
         }
         DrawRectangleRounded((Rectangle){37.0f, (float)y, 226.0f, 43.0f},
                              0.16f, 5, paper_color);
-        DrawText(map->name, 48, y + 7, 11, INK);
-        DrawText(owned ? "IN THE CASE" : TextFormat("FOR SALE  %d C", map->ask_price),
+        CcOverlayDrawText(map->name, 48, y + 7, 11, INK);
+        CcOverlayDrawText(owned ? "IN THE CASE" : TextFormat("FOR SALE  %d C", map->ask_price),
                  48, y + 25, 9, owned ? TEAL : CC_GOLD);
-        if (map->contraband) DrawText("ILLICIT", 205, y + 25, 8, CC_VIOLET);
+        if (map->contraband) CcOverlayDrawText("ILLICIT", 205, y + 25, 8, CC_VIOLET);
         row += 1;
     }
-    if (row == 0) DrawText("No charts are present at this stop.", 42, 172, 11, MUTED);
+    if (row == 0) CcOverlayDrawText("No charts are present at this stop.", 42, 172, 11, MUTED);
 
     const CcMap *map = SelectedVisibleMap(sim, selected);
     Rectangle paper = {282.0f, 105.0f, 620.0f, 525.0f};
@@ -1055,7 +1322,7 @@ static void DrawMap(const CcSim *sim, int32_t selected, float clock)
     DrawRectangleRoundedLinesEx(paper, 0.025f, 4, 2.0f,
                                 (Color){91, 69, 46, 220});
     if (map == NULL) {
-        DrawText("THE CASE IS EMPTY", 452, 335, 22, (Color){83, 65, 46, 255});
+        CcOverlayDrawText("THE CASE IS EMPTY", 452, 335, 22, (Color){83, 65, 46, 255});
         return;
     }
     const CcRoute *route = CcSimRoute(sim, map->route_id);
@@ -1063,8 +1330,8 @@ static void DrawMap(const CcSim *sim, int32_t selected, float clock)
     const CcSettlement *to = route != NULL ? CcSimSettlement(sim, route->to_id) : NULL;
     Color chart_ink = map->contraband ? (Color){86, 31, 72, 255} :
                                        (Color){66, 57, 43, 255};
-    DrawText(map->name, 307, 125, 20, chart_ink);
-    DrawText(TextFormat("surveyed day %d  /  hand %02d", map->surveyed_day,
+    CcOverlayDrawText(map->name, 307, 125, 20, chart_ink);
+    CcOverlayDrawText(TextFormat("surveyed day %d  /  hand %02d", map->surveyed_day,
                         map->accuracy), 309, 151, 10, Fade(chart_ink, 0.75f));
     DrawChartRoute(map, chart_ink);
     DrawChartTown(ChartEndpoint(map, false), from,
@@ -1077,8 +1344,8 @@ static void DrawMap(const CcSim *sim, int32_t selected, float clock)
     float tilt = ((float)((map->id >> 12U) % 31U) - 15.0f) * 0.012f;
     DrawLineEx(compass, (Vector2){compass.x + sinf(tilt) * 21.0f,
                                   compass.y - cosf(tilt) * 21.0f}, 2.0f, chart_ink);
-    DrawText("N?", 838, 202, 10, chart_ink);
-    DrawText(map->contraband ? "Copied under shuttered lanterns" :
+    CcOverlayDrawText("N?", 838, 202, 10, chart_ink);
+    CcOverlayDrawText(map->contraband ? "Copied under shuttered lanterns" :
                               "Distances are the cartographer's argument",
              309, 596, 10, Fade(chart_ink, 0.74f));
 }
@@ -1089,67 +1356,67 @@ static void DrawSettlementPanel(const CcSim *sim, int32_t selected)
     DrawPanel(panel, PANEL);
     const CcMap *map = SelectedVisibleMap(sim, selected);
     const CcSettlement *here = CcSimSettlement(sim, sim->player.location_id);
-    DrawText("CARTOGRAPHER'S CASE", 958, 102, 12, TEAL);
-    DrawText(here != NULL ? here->name : "Unknown stop", 958, 125, 22, INK);
-    DrawText(TextFormat("CROWNS %" PRId64 "   CASE %d/%d", sim->player.coins,
+    CcOverlayDrawText("CARTOGRAPHER'S CASE", 958, 102, 12, TEAL);
+    CcOverlayDrawText(here != NULL ? here->name : "Unknown stop", 958, 125, 22, INK);
+    CcOverlayDrawText(TextFormat("CROWNS %" PRId64 "   CASE %d/%d", sim->player.coins,
                         CcPlayerMapCount(sim), sim->player.map_capacity),
              958, 154, 10, MUTED);
     if (map == NULL) {
-        DrawText("No carried or locally offered", 958, 204, 12, MUTED);
-        DrawText("route maps are available.", 958, 223, 12, MUTED);
+        CcOverlayDrawText("No carried or locally offered", 958, 204, 12, MUTED);
+        CcOverlayDrawText("route maps are available.", 958, 223, 12, MUTED);
         return;
     }
     const CcRoute *route = CcSimRoute(sim, map->route_id);
     const CcSettlement *from = route != NULL ? CcSimSettlement(sim, route->from_id) : NULL;
     const CcSettlement *to = route != NULL ? CcSimSettlement(sim, route->to_id) : NULL;
     const CcSettlement *maker = CcSimSettlement(sim, map->maker_settlement_id);
-    DrawText("THIS OBJECT DEPICTS", 958, 193, 10, MUTED);
-    DrawText(from != NULL ? from->name : "Unknown", 958, 214, 16, INK);
-    DrawText("TO", 958, 235, 9, MUTED);
-    DrawText(to != NULL ? to->name : "Unknown", 958, 252, 16, INK);
-    DrawText(TextFormat("MAKER  %s", maker != NULL ? maker->name : "unknown"),
+    CcOverlayDrawText("THIS OBJECT DEPICTS", 958, 193, 10, MUTED);
+    CcOverlayDrawText(from != NULL ? from->name : "Unknown", 958, 214, 16, INK);
+    CcOverlayDrawText("TO", 958, 235, 9, MUTED);
+    CcOverlayDrawText(to != NULL ? to->name : "Unknown", 958, 252, 16, INK);
+    CcOverlayDrawText(TextFormat("MAKER  %s", maker != NULL ? maker->name : "unknown"),
              958, 289, 10, MUTED);
-    DrawText(TextFormat("AGE    %d days", sim->current_day - map->surveyed_day),
+    CcOverlayDrawText(TextFormat("AGE    %d days", sim->current_day - map->surveyed_day),
              958, 308, 10, MUTED);
     DrawBar(958, 337, 124, "ACCURACY", map->accuracy, TEAL);
     DrawBar(958, 361, 124, "ROAD INK", map->recorded_condition, CC_GOLD);
     DrawBar(958, 385, 124, "DANGER", map->recorded_danger, DANGER);
-    DrawText("These are recorded claims,", 958, 421, 10, MUTED);
-    DrawText("not live world-state telemetry.", 958, 437, 10, MUTED);
+    CcOverlayDrawText("These are recorded claims,", 958, 421, 10, MUTED);
+    CcOverlayDrawText("not live world-state telemetry.", 958, 437, 10, MUTED);
 
     bool owned = map->owner_id == sim->player.id;
     CcId destination_id = route != NULL ? RouteOtherEnd(route, sim->player.location_id) : 0U;
     const CcSettlement *destination = CcSimSettlement(sim, destination_id);
     if (!owned) {
-        DrawText(TextFormat("B  BUY FOR %d CROWNS", map->ask_price),
+        CcOverlayDrawText(TextFormat("B  BUY FOR %d CROWNS", map->ask_price),
                  958, 486, 13, CC_GOLD);
     } else {
-        DrawText(TextFormat("S  SELL FOR %d CROWNS", map->ask_price * 2 / 3),
+        CcOverlayDrawText(TextFormat("S  SELL FOR %d CROWNS", map->ask_price * 2 / 3),
                  958, 486, 11, MUTED);
-        DrawText(destination != NULL ?
+        CcOverlayDrawText(destination != NULL ?
                  TextFormat("ENTER  FOLLOW TO %s", destination->name) :
                  "This sheet begins elsewhere.",
                  958, 511, destination != NULL ? 12 : 11,
                  destination != NULL ? CC_GOLD : MUTED);
         if (route != NULL && route->closed && destination != NULL) {
-            DrawText("R  attempt work at the route", 958, 535, 10, TEAL);
+            CcOverlayDrawText("R  attempt work at the route", 958, 535, 10, TEAL);
         }
     }
-    DrawText("LEFT/RIGHT  leaf through objects", 958, 584, 9, MUTED);
-    DrawText("M  close case   Q situations", 958, 604, 9, MUTED);
-    DrawText("No chart reveals the whole world.", 958, 624, 9,
+    CcOverlayDrawText("LEFT/RIGHT  leaf through objects", 958, 584, 9, MUTED);
+    CcOverlayDrawText("M  close case   Q situations", 958, 604, 9, MUTED);
+    CcOverlayDrawText("No chart reveals the whole world.", 958, 624, 9,
              map->contraband ? CC_VIOLET : MUTED);
 }
 
 static void DrawHeader(const CcSim *sim)
 {
-    DrawText("CROWNLESS CARRIAGE", 26, 20, 27, INK);
-    DrawText("PHYSICAL CARTOGRAPHY / ONE OBJECT, ONE ROUTE", 28, 53, 11, TEAL);
-    DrawText(TextFormat("DAY %04d", sim->current_day), 790, 25, 16, CC_GOLD);
-    DrawText(TextFormat("CROWNS %03" PRId64, sim->player.coins), 900, 25, 16, CC_GOLD);
-    DrawText(TextFormat("MAPS %02d/%02d", CcPlayerMapCount(sim),
+    CcOverlayDrawText("CROWNLESS CARRIAGE", 26, 20, 27, INK);
+    CcOverlayDrawText("PHYSICAL CARTOGRAPHY / ONE OBJECT, ONE ROUTE", 28, 53, 11, TEAL);
+    CcOverlayDrawText(TextFormat("DAY %04d", sim->current_day), 790, 25, 16, CC_GOLD);
+    CcOverlayDrawText(TextFormat("CROWNS %03" PRId64, sim->player.coins), 900, 25, 16, CC_GOLD);
+    CcOverlayDrawText(TextFormat("MAPS %02d/%02d", CcPlayerMapCount(sim),
                         sim->player.map_capacity), 1060, 25, 16, TEAL);
-    DrawText(TextFormat("WORLD %08X  STATE %08" PRIx64 "  REP %d  LIVE %d",
+    CcOverlayDrawText(TextFormat("WORLD %08X  STATE %08" PRIx64 "  REP %d  LIVE %d",
                         sim->world_seed, CcSimHash(sim) & UINT64_C(0xffffffff),
                         sim->player.reputation, CcSimActiveSituationCount(sim)),
              790, 53, 10, MUTED);
@@ -1160,13 +1427,13 @@ static void DrawEventRibbon(const CcSim *sim)
     DrawPanel((Rectangle){20.0f, 664.0f, 1240.0f, 76.0f}, PANEL);
     const CcEvent *event = CcSimRecentEvent(sim, 0);
     if (event != NULL) {
-        DrawText(TextFormat("DAY %d  %s", event->day, CcEventKindName(event->kind)),
+        CcOverlayDrawText(TextFormat("DAY %d  %s", event->day, CcEventKindName(event->kind)),
                  38, 680, 11, event->kind == CC_EVENT_MONSTER_PRESSURE ? CC_VIOLET : TEAL);
-        DrawText(event->text, 38, 704, 14, INK);
+        CcOverlayDrawText(event->text, 38, 704, 14, INK);
     }
-    DrawText("LEFT/RIGHT leaf charts   B buy   S sell   ENTER follow",
+    CcOverlayDrawText("LEFT/RIGHT leaf charts   B buy   S sell   ENTER follow",
              735, 679, 10, MUTED);
-    DrawText("M close case   Q situations   TAB ledger   F5 save   F9 load",
+    CcOverlayDrawText("M close case   Q situations   TAB ledger   F5 save   F9 load",
              765, 704, 10, MUTED);
 }
 
@@ -1175,24 +1442,24 @@ static void DrawLedger(const CcSim *sim)
     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), (Color){3, 7, 11, 210});
     Rectangle bounds = {130.0f, 70.0f, 1020.0f, 620.0f};
     DrawPanel(bounds, (Color){8, 17, 24, 250});
-    DrawText("CAUSAL EVENT LEDGER", 160, 100, 26, INK);
-    DrawText("The player sees symptoms; this inspector retains auditable provenance.",
+    CcOverlayDrawText("CAUSAL EVENT LEDGER", 160, 100, 26, INK);
+    CcOverlayDrawText("The player sees symptoms; this inspector retains auditable provenance.",
              160, 136, 13, MUTED);
-    DrawText("DAY   TYPE        MAG   PARENT       EVENT", 160, 174, 11, TEAL);
+    CcOverlayDrawText("DAY   TYPE        MAG   PARENT       EVENT", 160, 174, 11, TEAL);
     int32_t shown = sim->event_count < 15 ? sim->event_count : 15;
     for (int32_t i = 0; i < shown; ++i) {
         const CcEvent *event = CcSimRecentEvent(sim, i);
         if (event == NULL) continue;
         int y = 202 + i * 29;
-        DrawText(TextFormat("%4d", event->day), 160, y, 11, CC_GOLD);
-        DrawText(CcEventKindName(event->kind), 211, y, 11,
+        CcOverlayDrawText(TextFormat("%4d", event->day), 160, y, 11, CC_GOLD);
+        CcOverlayDrawText(CcEventKindName(event->kind), 211, y, 11,
                  event->kind == CC_EVENT_MONSTER_PRESSURE ? CC_VIOLET : TEAL);
-        DrawText(TextFormat("%3d", event->magnitude), 303, y, 11, INK);
-        DrawText(TextFormat("%08" PRIx64, event->parent_id & UINT64_C(0xffffffff)),
+        CcOverlayDrawText(TextFormat("%3d", event->magnitude), 303, y, 11, INK);
+        CcOverlayDrawText(TextFormat("%08" PRIx64, event->parent_id & UINT64_C(0xffffffff)),
                  348, y, 11, MUTED);
-        DrawText(event->text, 435, y, 11, INK);
+        CcOverlayDrawText(event->text, 435, y, 11, INK);
     }
-    DrawText("TAB  return to where you were", 160, 657, 12, CC_GOLD);
+    CcOverlayDrawText("TAB  return to where you were", 160, 657, 12, CC_GOLD);
 }
 
 static Color SituationColor(CcSituationKind kind)
@@ -1208,12 +1475,12 @@ static void DrawSituationBoard(const CcSim *sim, int32_t selected)
     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), (Color){3, 7, 11, 218});
     Rectangle bounds = {110.0f, 60.0f, 1060.0f, 640.0f};
     DrawPanel(bounds, (Color){8, 17, 24, 252});
-    DrawText("THE ROAD IS ASKING", 142, 91, 26, INK);
-    DrawText("Choose one promise. The world continues whether you take it or not.",
+    CcOverlayDrawText("THE ROAD IS ASKING", 142, 91, 26, INK);
+    CcOverlayDrawText("Choose one promise. The world continues whether you take it or not.",
              142, 128, 13, MUTED);
-    DrawText(TextFormat("%d LIVE SITUATIONS", CcSimActiveSituationCount(sim)),
+    CcOverlayDrawText(TextFormat("%d LIVE SITUATIONS", CcSimActiveSituationCount(sim)),
              930, 101, 12, CC_GOLD);
-    DrawText("AVAILABLE CHARTERS", 142, 166, 11, TEAL);
+    CcOverlayDrawText("AVAILABLE CHARTERS", 142, 166, 11, TEAL);
     int32_t shown = 0;
     for (int32_t i = 0; i < sim->situation_count && shown < 7; ++i) {
         const CcSituation *situation = &sim->situations[i];
@@ -1231,16 +1498,16 @@ static void DrawSituationBoard(const CcSim *sim, int32_t selected)
         }
         char target[96];
         SituationTargetLabel(sim, situation, target, sizeof(target));
-        DrawText(CcSituationKindName(situation->kind), 142, y, 13,
+        CcOverlayDrawText(CcSituationKindName(situation->kind), 142, y, 13,
                  SituationColor(situation->kind));
-        DrawText(target, 360, y, 11, INK);
-        DrawText(TextFormat("DUE %d", situation->deadline_day), 652, y, 10,
+        CcOverlayDrawText(target, 360, y, 11, INK);
+        CcOverlayDrawText(TextFormat("DUE %d", situation->deadline_day), 652, y, 10,
                  CC_GOLD);
-        DrawText(accepted ? "YOUR PROMISE" :
+        CcOverlayDrawText(accepted ? "YOUR PROMISE" :
                  situation->sponsor_name[0] != '\0' ?
                  situation->sponsor_name : "Unrecorded sponsor",
                  142, y + 21, 9, accepted ? TEAL : MUTED);
-        DrawText(situation->quantity > 0 ?
+        CcOverlayDrawText(situation->quantity > 0 ?
                  TextFormat("%d/%d   +%" PRId64 " C",
                             situation->progress, situation->quantity,
                             situation->reward) :
@@ -1249,45 +1516,45 @@ static void DrawSituationBoard(const CcSim *sim, int32_t selected)
         shown += 1;
     }
     if (shown == 0) {
-        DrawText("No power has posted a live charter. Advance the world and conditions will change.",
+        CcOverlayDrawText("No power has posted a live charter. Advance the world and conditions will change.",
                  142, 220, 14, MUTED);
     }
 
     DrawPanel((Rectangle){776.0f, 166.0f, 364.0f, 454.0f},
               (Color){6, 14, 20, 250});
     const CcSituation *detail = SelectedActiveSituation(sim, selected);
-    DrawText("SELECTED PROMISE", 798, 188, 11, TEAL);
+    CcOverlayDrawText("SELECTED PROMISE", 798, 188, 11, TEAL);
     if (detail != NULL) {
         char target[96];
         SituationTargetLabel(sim, detail, target, sizeof(target));
-        DrawText(CcSituationKindName(detail->kind), 798, 215, 18,
+        CcOverlayDrawText(CcSituationKindName(detail->kind), 798, 215, 18,
                  SituationColor(detail->kind));
         DrawTwoLineText(target, 798, 243, 38U, 11, INK);
         const CcFaction *issuer = FactionById(sim, detail->issuer_faction_id);
-        DrawText("SPONSOR", 798, 286, 9, MUTED);
-        DrawText(detail->sponsor_name[0] != '\0' ?
+        CcOverlayDrawText("SPONSOR", 798, 286, 9, MUTED);
+        CcOverlayDrawText(detail->sponsor_name[0] != '\0' ?
                  detail->sponsor_name : "Unrecorded sponsor",
                  798, 303, 11, INK);
-        DrawText(issuer != NULL ? issuer->name : "Independent petition",
+        CcOverlayDrawText(issuer != NULL ? issuer->name : "Independent petition",
                  798, 321, 9, MUTED);
-        DrawText("WHO IS WAITING", 798, 347, 9, MUTED);
-        DrawText(detail->affected_name[0] != '\0' ?
+        CcOverlayDrawText("WHO IS WAITING", 798, 347, 9, MUTED);
+        CcOverlayDrawText(detail->affected_name[0] != '\0' ?
                  detail->affected_name : "An unnamed household",
                  798, 364, 11, INK);
         const CcEvent *cause = CcSimEvent(sim, detail->cause_event_id);
-        DrawText("WHY NOW", 798, 394, 9, MUTED);
+        CcOverlayDrawText("WHY NOW", 798, 394, 9, MUTED);
         DrawTwoLineText(cause != NULL ? cause->text :
                         "Local conditions created this need.",
                         798, 411, 43U, 10, INK);
         char next[192];
         SituationNextAction(sim, detail, next, sizeof(next));
-        DrawText("NEXT PHYSICAL STEP", 798, 456, 9, MUTED);
+        CcOverlayDrawText("NEXT PHYSICAL STEP", 798, 456, 9, MUTED);
         DrawTwoLineText(next, 798, 473, 43U, 10, CC_GOLD);
-        DrawText(TextFormat("DAY %d / %d DAYS LEFT",
+        CcOverlayDrawText(TextFormat("DAY %d / %d DAYS LEFT",
                             detail->deadline_day,
                             detail->deadline_day - sim->current_day),
                  798, 519, 10, MUTED);
-        DrawText(detail->quantity > 0 ?
+        CcOverlayDrawText(detail->quantity > 0 ?
                  TextFormat("PROGRESS %d/%d   REWARD +%" PRId64,
                             detail->progress, detail->quantity,
                             detail->reward) :
@@ -1295,20 +1562,20 @@ static void DrawSituationBoard(const CcSim *sim, int32_t selected)
                             detail->reward),
                  798, 541, 10, TEAL);
         bool accepted = detail->id == sim->player.accepted_situation_id;
-        DrawText(accepted ? "ACCEPTED: this failure can affect reputation." :
+        CcOverlayDrawText(accepted ? "ACCEPTED: this failure can affect reputation." :
                  CcSimAcceptedSituation(sim) != NULL ?
                  "Finish or withdraw from your current promise first." :
                  "ENTER  accept this charter",
                  798, 574, 10, accepted ? DANGER : CC_GOLD);
         if (accepted) {
-            DrawText("BACKSPACE  withdraw; the need remains",
+            CcOverlayDrawText("BACKSPACE  withdraw; the need remains",
                      798, 598, 9, MUTED);
         }
     } else {
-        DrawText("No live charter is selected.", 798, 224, 12, MUTED);
+        CcOverlayDrawText("No live charter is selected.", 798, 224, 12, MUTED);
     }
-    DrawText("UP/DOWN  select", 142, 665, 12, CC_GOLD);
-    DrawText("Q  return to where you were", 798, 665, 12, CC_GOLD);
+    CcOverlayDrawText("UP/DOWN  select", 142, 665, 12, CC_GOLD);
+    CcOverlayDrawText("Q  return to where you were", 798, 665, 12, CC_GOLD);
 }
 
 static void DrawJourneyEncounter(const CcSim *sim)
@@ -1326,23 +1593,23 @@ static void DrawJourneyEncounter(const CcSim *sim)
                   (Color){3, 7, 11, 224});
     DrawPanel((Rectangle){175.0f, 95.0f, 930.0f, 555.0f},
               (Color){8, 17, 24, 253});
-    DrawText("THE ROAD CLOSES AROUND YOU", 215, 132, 27, INK);
-    DrawText(TextFormat("%s  ->  %s", from != NULL ? from->name : "Origin",
+    CcOverlayDrawText("THE ROAD CLOSES AROUND YOU", 215, 132, 27, INK);
+    CcOverlayDrawText(TextFormat("%s  ->  %s", from != NULL ? from->name : "Origin",
                         to != NULL ? to->name : "Destination"),
              215, 174, 14, CC_GOLD);
-    DrawText(TextFormat("ROUTE DANGER %d%%   SECURITY %d   CAPACITY %d",
+    CcOverlayDrawText(TextFormat("ROUTE DANGER %d%%   SECURITY %d   CAPACITY %d",
                         sim->journey.danger,
                         route != NULL ? route->security : 0,
                         route != NULL ? route->capacity : 0),
              215, 201, 11, MUTED);
     DrawPanel((Rectangle){215.0f, 238.0f, 650.0f, 120.0f},
               (Color){13, 27, 34, 248});
-    DrawText(bandits != NULL ? bandits->name : "ARMED ROAD COLLECTORS",
+    CcOverlayDrawText(bandits != NULL ? bandits->name : "ARMED ROAD COLLECTORS",
              238, 259, 16, DANGER);
     DrawTwoLineText("A cordon stops the carriage. Merchants and displaced families wait behind it; this is the first physical test of your promise.",
                     238, 289, 72U, 12, INK);
     if (situation != NULL) {
-        DrawText(TextFormat("%s is waiting on your word.",
+        CcOverlayDrawText(TextFormat("%s is waiting on your word.",
                             situation->affected_name[0] != '\0' ?
                                 situation->affected_name : "A local household"),
                  238, 331, 11, CC_GOLD);
@@ -1350,29 +1617,29 @@ static void DrawJourneyEncounter(const CcSim *sim)
 
     DrawPanel((Rectangle){215.0f, 386.0f, 400.0f, 180.0f},
               (Color){25, 20, 24, 248});
-    DrawText("1  BREAK THE CORDON", 239, 411, 18, DANGER);
-    DrawText("Enter the live melee and defeat the attackers.",
+    CcOverlayDrawText("1  BREAK THE CORDON", 239, 411, 18, DANGER);
+    CcOverlayDrawText("Enter the live melee and defeat the attackers.",
              239, 446, 11, INK);
-    DrawText("Projects into: stronger security, returning people,",
+    CcOverlayDrawText("Projects into: stronger security, returning people,",
              239, 474, 10, MUTED);
-    DrawText("weaker bandits, and guarded follow-on traffic.",
+    CcOverlayDrawText("weaker bandits, and guarded follow-on traffic.",
              239, 494, 10, MUTED);
-    DrawText("The same journey resumes after the fight is won.",
+    CcOverlayDrawText("The same journey resumes after the fight is won.",
              239, 529, 10, CC_GOLD);
 
     DrawPanel((Rectangle){645.0f, 386.0f, 400.0f, 180.0f},
               (Color){18, 25, 28, 248});
-    DrawText("2  BUY PASSAGE", 669, 411, 18, TEAL);
-    DrawText(TextFormat("Approach and offer %d crowns beyond provisions.",
+    CcOverlayDrawText("2  BUY PASSAGE", 669, 411, 18, TEAL);
+    CcOverlayDrawText(TextFormat("Approach and offer %d crowns beyond provisions.",
                         sim->journey.bargain_cost),
              669, 446, 11, INK);
-    DrawText("Projects into: immediate goods and traffic,",
+    CcOverlayDrawText("Projects into: immediate goods and traffic,",
              669, 474, 10, MUTED);
-    DrawText("but weaker security and more bandit influence.",
+    CcOverlayDrawText("but weaker security and more bandit influence.",
              669, 494, 10, MUTED);
-    DrawText("Walk the road and make the exchange face to face.",
+    CcOverlayDrawText("Walk the road and make the exchange face to face.",
              669, 529, 10, CC_GOLD);
-    DrawText("Choose an intervention. The game will remember the method.",
+    CcOverlayDrawText("Choose an intervention. The game will remember the method.",
              215, 601, 12, INK);
 }
 
@@ -1654,11 +1921,20 @@ static void HandleInput(CcSim *sim, int32_t *selected,
                 if (CcLocalAgentPickTarget(&local->agent, mouse, local_target,
                                            local_bounds,
                                            local->market_interior)) {
-                    (void)snprintf(
-                        message, message_capacity,
-                        "Moving to %.2f,%.2f; combat target disengaged.",
-                        local->agent.target_point.x,
-                        local->agent.target_point.z);
+                    const char *navigation =
+                        CcLocalAgentNavigationName(&local->agent);
+                    if (navigation != NULL) {
+                        (void)snprintf(
+                            message, message_capacity,
+                            "Following the road toward %s; click elsewhere to change course.",
+                            navigation);
+                    } else {
+                        (void)snprintf(
+                            message, message_capacity,
+                            "Moving to %.2f,%.2f; combat target disengaged.",
+                            local->agent.target_point.x,
+                            local->agent.target_point.z);
+                    }
                 }
             }
         }
@@ -1667,6 +1943,15 @@ static void HandleInput(CcSim *sim, int32_t *selected,
         (void)CcLocalWorldUpdate(
             &local->course, &local->agent, sim, delta_time,
             local->market_interior, advance_course);
+        if (!local->market_interior &&
+            CcLocalAgentConsumeWorldExit(&local->agent)) {
+            *selected = FirstVisibleMapIndex(sim);
+            *view = VIEW_MAP;
+            (void)snprintf(
+                message, message_capacity,
+                "The road reaches the settlement boundary; choose a charted destination for the carriage.");
+            return;
+        }
         if (local->journey_parley_active) {
             Vector2 collector = {CC_LOCAL_ROAD_PARLEY_X,
                                  CC_LOCAL_ROAD_PARLEY_Z};
@@ -1883,6 +2168,30 @@ int main(int argc, char **argv)
         strcmp(argv[1], "--capture-aftermath") == 0;
     bool capture_golden = argc >= 2 &&
         strcmp(argv[1], "--capture-golden") == 0;
+    bool capture_room = argc >= 2 &&
+        strcmp(argv[1], "--capture-room") == 0;
+    float capture_room_x = 0.0f;
+    float capture_room_z = 0.0f;
+    if (capture_room) {
+        if (argc < 5) {
+            (void)fprintf(stderr,
+                          "capture room requires X, Z, and a frame path.\n");
+            return 1;
+        }
+        char *x_end = NULL;
+        char *z_end = NULL;
+        capture_room_x = strtof(argv[2], &x_end);
+        capture_room_z = strtof(argv[3], &z_end);
+        if (x_end == argv[2] || *x_end != '\0' ||
+            z_end == argv[3] || *z_end != '\0' ||
+            capture_room_x < 0.5f ||
+            capture_room_x > CC_LOCAL_WORLD_WIDTH - 0.5f ||
+            capture_room_z < 0.5f ||
+            capture_room_z > CC_LOCAL_WORLD_DEPTH - 0.5f) {
+            (void)fprintf(stderr, "capture room coordinates are invalid.\n");
+            return 1;
+        }
+    }
     bool capture = argc >= 2 &&
                    (strcmp(argv[1], "--capture") == 0 || capture_board ||
                     capture_interior || capture_navigation || capture_limbs ||
@@ -1891,13 +2200,19 @@ int main(int argc, char **argv)
                     capture_jump || capture_action_reel || capture_encounter ||
                     capture_witness || capture_travel || capture_road ||
                     capture_parley ||
-                    capture_aftermath || capture_golden);
-    const char *capture_path = argc >= 3 ? argv[2] : "architecture-proof.png";
+                    capture_aftermath || capture_golden || capture_room);
+    const char *capture_path = capture_room ? argv[4] :
+                               argc >= 3 ? argv[2] :
+                               "architecture-proof.png";
     char save_path[640];
     CampaignSavePath(save_path, sizeof(save_path));
 
     if (render_benchmark) SetTraceLogLevel(LOG_WARNING);
-    SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_WINDOW_RESIZABLE |
+    /* The world is deliberately rasterized at its final art-pixel
+       resolution. Multisample coverage before that raster step makes thin
+       edges change blend weights as actors move and reads as temporal
+       flicker after nearest-neighbor enlargement. */
+    SetConfigFlags(FLAG_WINDOW_RESIZABLE |
                    (capture ? FLAG_WINDOW_HIDDEN : 0U));
     InitWindow(1280, 760, "Crownless Carriage — living world spine");
     if (!IsWindowReady()) {
@@ -1907,8 +2222,11 @@ int main(int argc, char **argv)
     }
     SetWindowMinSize(1080, 680);
     SetTargetFPS(render_benchmark || capture_action_reel ? 0 : 60);
-    RenderTexture2D local_target = LoadRenderTexture(914, 570);
-    SetTextureFilter(local_target.texture, TEXTURE_FILTER_BILINEAR);
+    /* The playable world is authored against a fixed 2x art-pixel grid.
+       Render it at half the presentation size, then enlarge with point
+       sampling. Screen-space labels and HUD are drawn after presentation. */
+    RenderTexture2D local_target = LoadRenderTexture(457, 285);
+    SetTextureFilter(local_target.texture, TEXTURE_FILTER_POINT);
     CcLocalRendererInit();
     CcLocalRendererSetDiagnosticOverlay(capture_limbs);
 
@@ -1994,6 +2312,12 @@ int main(int argc, char **argv)
         local.agent.facing_yaw = -0.35f;
         local.course.alarm_countdown = 1000.0f;
     }
+    if (capture_room) {
+        RepositionHero(&local,
+                       (Vector2){capture_room_x, capture_room_z}, false);
+        local.agent.facing_yaw = -0.18f;
+        local.course.alarm_countdown = 1000.0f;
+    }
     if (capture_road || capture_parley) {
         BeginRoadLocalState(&local, capture_road);
     }
@@ -2003,7 +2327,7 @@ int main(int argc, char **argv)
         !capture_navigation && !capture_limbs && !capture_dojo &&
         !capture_action_reel && !capture_encounter && !capture_travel &&
         !capture_road &&
-        !capture_parley && !capture_golden) {
+        !capture_parley && !capture_golden && !capture_room) {
         local.course.alarm_countdown = 1000.0f;
         for (int32_t frame = 0; frame < 1500; ++frame) {
             CcLocalCourseUpdate(&local.course, &local.agent, &sim,
@@ -2143,6 +2467,9 @@ int main(int argc, char **argv)
     if (capture_golden) {
         (void)snprintf(message, sizeof(message),
                        "A living waystation: people, work, scarcity, and the Crownless carriage in one place.");
+    } else if (capture_room) {
+        (void)snprintf(message, sizeof(message),
+                       "Each fixed room reveals a landmark, a route, and the state of the living settlement.");
     }
     if (capture_road) {
         (void)snprintf(message, sizeof(message),
@@ -2189,6 +2516,7 @@ int main(int argc, char **argv)
 
         BeginDrawing();
         ClearBackground(BACKGROUND);
+        CcOverlayBegin(1.0f);
         bool map_underlay = view == VIEW_MAP || view == VIEW_ENCOUNTER ||
                             ((view == VIEW_LEDGER || view == VIEW_SITUATIONS) &&
                              return_view == VIEW_MAP);
@@ -2198,7 +2526,6 @@ int main(int argc, char **argv)
             DrawSettlementPanel(&sim, selected);
             DrawEventRibbon(&sim);
         } else {
-            DrawLocalHeader(&sim, &local);
             if (local.journey_travel_active ||
                 local.journey_combat_active ||
                 local.journey_parley_active) {
@@ -2213,23 +2540,35 @@ int main(int argc, char **argv)
                 CcLocalDrawStreet3D(&sim, &local.agent, &local.course, clock,
                                     local_target, local_bounds);
             }
+            DrawLocalHeader(&sim, &local);
             DrawLocalPanel(&sim, &local);
             DrawLocalFooter(&sim, &local);
         }
         if (message[0] != '\0') {
-            int width = MeasureText(message, 12) + 24;
+            int width = CcOverlayMeasureText(message, 12) + 24;
             int maximum = GetScreenWidth() - 80;
             if (width > maximum) width = maximum;
             DrawRectangleRounded((Rectangle){40.0f, 625.0f, (float)width, 27.0f},
                                  0.25f, 5, (Color){6, 12, 18, 230});
-            DrawText(message, 52, 632, 12, INK);
+            CcOverlayDrawText(message, 52, 632, 12, INK);
         }
-        if (view == VIEW_LEDGER) DrawLedger(&sim);
+        if (view == VIEW_LEDGER) {
+            CcOverlayFlush();
+            DrawLedger(&sim);
+        }
         if (view == VIEW_SITUATIONS) {
+            CcOverlayFlush();
             DrawSituationBoard(&sim, selected_situation);
         }
-        if (view == VIEW_ENCOUNTER) DrawJourneyEncounter(&sim);
-        if (performance_overlay) DrawPerformanceOverlay();
+        if (view == VIEW_ENCOUNTER) {
+            CcOverlayFlush();
+            DrawJourneyEncounter(&sim);
+        }
+        if (performance_overlay) {
+            CcOverlayFlush();
+            DrawPerformanceOverlay();
+        }
+        CcOverlayEnd();
         EndDrawing();
 
         if (render_benchmark) {

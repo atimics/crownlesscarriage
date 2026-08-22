@@ -181,6 +181,8 @@ typedef struct CcHumanoidGait {
     float phase;
     float travel_yaw;
     float cadence;
+    float walk_cadence_scale;
+    float walk_stride_scale;
     float last_delta_time;
     float ragdoll_time;
     float ragdoll_settled_time;
@@ -217,6 +219,9 @@ typedef struct CcHumanoidGait {
 void CcHumanoidGaitInit(CcHumanoidGait *gait, CcLimbVec3 body_position,
                         float body_yaw, CcLimbTerrainProbe probe,
                         void *probe_context);
+void CcHumanoidGaitSetWalkingProfile(CcHumanoidGait *gait,
+                                     float cadence_scale,
+                                     float stride_scale);
 void CcHumanoidGaitAdvance(CcHumanoidGait *gait, CcLimbVec3 body_position,
                            float body_yaw, CcLimbVec3 desired_velocity,
                            bool grounded, float delta_time,

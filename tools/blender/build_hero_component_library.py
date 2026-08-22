@@ -44,8 +44,8 @@ BLEND_PATH = ROOT / "assets" / "blender" / "crownless_hero_components.blend"
 EXPORT_DIR = ROOT / "assets" / "exports" / "hero_glb"
 PREVIEW_DIR = ROOT / "assets" / "previews" / "hero"
 MANIFEST_PATH = ROOT / "assets" / "hero_component_manifest.json"
-LIBRARY_VERSION = "0.7.0"
-ART_DIRECTION = "procedural_action_figure_wayfarer"
+LIBRARY_VERSION = "0.9.0"
+ART_DIRECTION = "silhouette_first_pixel_wayfarer"
 
 HERO_BODY_PROFILES = body_profiles(WAYFARER_RECIPE.body)
 
@@ -546,6 +546,7 @@ def add_boot_sole(
     mat: str,
     collection: bpy.types.Collection,
     role: str,
+    scale: float = 1.0,
 ) -> bpy.types.Object:
     """Create a close-cut outsole that follows the boot, not a toy-like slab."""
     outline = (
@@ -556,7 +557,7 @@ def add_boot_sole(
     bottom_z = 0.035
     top_z = 0.066
     vertices = [
-        (center_x + x, y, z)
+        (center_x + x * scale, y * scale, z)
         for z in (bottom_z, top_z)
         for y, x in outline
     ]
@@ -823,7 +824,9 @@ def build_body(parent: bpy.types.Collection, armature: bpy.types.Object) -> bpy.
                          sweep_rows(HERO_BODY_PROFILES["neck"]),
                          "skin", collection, "neck", segments=12)
     parent_to_bone(neck, armature, "neck")
-    head = add_ico("GEO_BodyHead", (0.0, 0.0, 1.92), (0.126, 0.110, 0.165),
+    # The head stays action-figure proportioned, but the facial landmarks are
+    # designed as graphic shapes that survive a 35-50 px gameplay render.
+    head = add_ico("GEO_BodyHead", (0.0, 0.0, 1.92), (0.132, 0.116, 0.172),
                    "skin", collection, "head")
     parent_to_bone(head, armature, "head")
     jaw = add_ico("GEO_BodyJaw", (0.0, -0.010, 1.850), (0.106, 0.096, 0.084),
@@ -832,16 +835,20 @@ def build_body(parent: bpy.types.Collection, armature: bpy.types.Object) -> bpy.
     chin = add_ico("GEO_BodyChin", (0.0, -0.098, 1.810), (0.050, 0.028, 0.030),
                    "skin_light", collection, "face", subdivisions=1)
     parent_to_bone(chin, armature, "head")
-    nose = add_ico("GEO_BodyNose", (0.0, -0.128, 1.915), (0.025, 0.030, 0.040),
+    nose = add_ico("GEO_BodyNose", (0.0, -0.128, 1.915), (0.022, 0.027, 0.037),
                    "skin_light", collection, "face", subdivisions=1)
     parent_to_bone(nose, armature, "head")
-    for side, x in (("L", -0.052), ("R", 0.052)):
-        eye = add_ico(f"GEO_BodyEye{side}", (x, -0.120, 1.948),
-                      (0.018, 0.010, 0.014), "eye", collection, "face", subdivisions=1)
+    for side, x in (("L", -0.048), ("R", 0.048)):
+        # Broad, slightly tall eye marks borrow anime's economy: two strong
+        # shapes carry gaze at distance, instead of miniature realistic eyes.
+        eye = add_ico(f"GEO_BodyEye{side}", (x, -0.122, 1.950),
+                      (0.024, 0.011, 0.017), "eye", collection, "face", subdivisions=1)
         parent_to_bone(eye, armature, "head")
+        outer_x = x - 0.030 if side == "L" else x + 0.030
+        inner_x = x + 0.030 if side == "L" else x - 0.030
         brow = add_box_between(
-            f"GEO_BodyBrow{side}", (x - 0.028, -0.123, 1.978),
-            (x + 0.028, -0.126, 1.984), 0.012, 0.010,
+            f"GEO_BodyBrow{side}", (outer_x, -0.124, 1.986),
+            (inner_x, -0.128, 1.979), 0.014, 0.011,
             "hair", collection, "face", bevel_width=0.004,
         )
         parent_to_bone(brow, armature, "head")
@@ -849,8 +856,8 @@ def build_body(parent: bpy.types.Collection, armature: bpy.types.Object) -> bpy.
                       -0.005, 1.925), (0.018, 0.017, 0.034), "skin_light",
                       collection, "face", subdivisions=1)
         parent_to_bone(ear, armature, "head")
-    mouth = add_box_between("GEO_BodyMouth", (-0.037, -0.112, 1.855),
-                            (0.037, -0.112, 1.855), 0.010, 0.008,
+    mouth = add_box_between("GEO_BodyMouth", (-0.042, -0.113, 1.858),
+                            (0.042, -0.113, 1.858), 0.012, 0.009,
                             "hair", collection, "face", bevel_width=0.003)
     parent_to_bone(mouth, armature, "head")
     return collection
@@ -1139,14 +1146,18 @@ def create_cape_mesh(
     vertices: list[tuple[float, float, float]] = []
     for row in range(rows):
         v = row / (rows - 1)
-        half_width = 0.32 + math.sin(v * math.pi) * 0.080 + v * 0.030
+        # The cape is a strong asymmetric hero anchor: the left edge carries
+        # the silhouette while the right edge stays close to the body.
+        half_width = 0.25 + math.sin(v * math.pi) * 0.060 + v * 0.020
         for column in range(columns):
             u = column / (columns - 1)
-            x = (u * 2.0 - 1.0) * half_width
+            signed = u * 2.0 - 1.0
+            side_scale = 1.20 if signed < 0.0 else 0.76
+            x = signed * half_width * side_scale
             center = abs(u - 0.5) / 0.5
             forked_hem = (1.0 - center) ** 2 * (v ** 6) * 0.17
             asymmetric_wear = (u - 0.5) * (v ** 5) * 0.050
-            z = 1.64 - v * 0.90 + forked_hem + asymmetric_wear
+            z = 1.64 - v * 0.86 + forked_hem + asymmetric_wear
             fold = math.sin(u * math.pi * 3.0) * math.sin(v * math.pi) * 0.032
             y = 0.205 + v * 0.13 + math.sin(u * math.pi) * v * 0.038 + fold
             vertices.append((x, y, z))
@@ -1213,16 +1224,16 @@ def build_cape(parent: bpy.types.Collection, armature: bpy.types.Object,
     )
     create_cape_mesh(collection, armature, cage_collection)
     cowl = add_ico("GEO_CapeTravelCowl", (0.0, 0.145, 1.665),
-                   (0.205, 0.090, 0.105), "cape", collection,
+                   (0.175, 0.078, 0.092), "cape", collection,
                    "travel_cowl", subdivisions=2)
     parent_to_bone(cowl, armature, "chest")
-    collar = add_torus("GEO_CapeCollar", (0.0, 0.020, 1.635), 0.205, 0.020,
+    collar = add_torus("GEO_CapeCollar", (0.0, 0.020, 1.635), 0.180, 0.018,
                        "cape", collection, "cape_collar",
                        scale=(1.22, 0.76, 1.0))
     parent_to_bone(collar, armature, "chest")
     for suffix, sign in (("L", -1.0), ("R", 1.0)):
-        outer = 0.340 if suffix == "L" else 0.225
-        inner = 0.105 if suffix == "L" else 0.065
+        outer = 0.320 if suffix == "L" else 0.175
+        inner = 0.090 if suffix == "L" else 0.055
         mantle = add_panel(
             f"GEO_CapeMantle{suffix}",
             [(sign * 0.025, -0.175, 1.642), (sign * outer, -0.142, 1.602),
@@ -1267,34 +1278,21 @@ def build_cuirass(parent: bpy.types.Collection, armature: bpy.types.Object) -> b
     skin_to_armature(shell, armature)
     chest_plate = add_panel(
         "GEO_CuirassBrigandineFront",
-        [(-0.210, -0.220, 1.565), (0.210, -0.220, 1.565),
-         (0.188, -0.230, 1.405), (0.118, -0.238, 1.350),
-         (-0.118, -0.238, 1.350), (-0.188, -0.230, 1.405)],
+        [(-0.190, -0.220, 1.565), (0.190, -0.220, 1.565),
+         (0.170, -0.230, 1.405), (0.108, -0.238, 1.350),
+         (-0.108, -0.238, 1.350), (-0.170, -0.230, 1.405)],
         "brigandine_edge", collection, "brigandine_facing", thickness=0.026,
     )
     parent_to_bone(chest_plate, armature, "chest")
-    # A few enlarged rivet heads communicate the textile-backed plate
-    # construction without turning into noise at the gameplay camera.
-    for row, (z, half_width) in enumerate(((1.505, 0.135), (1.425, 0.115))):
-        for column, x in enumerate((-half_width, 0.0, half_width)):
-            rivet = add_ico(f"GEO_CuirassRivet_{row}_{column}",
-                            (x, -0.261, z), (0.012, 0.006, 0.012),
-                            "brass", collection, "brigandine_rivet",
-                            subdivisions=1)
-            parent_to_bone(rivet, armature, "chest")
-    for index, (top_z, bottom_z, top_width, bottom_width, y) in enumerate((
-        (1.380, 1.310, 0.185, 0.170, -0.257),
-        (1.310, 1.245, 0.170, 0.142, -0.260),
-    )):
-        fauld = add_panel(
-            f"GEO_CuirassFauld_{index}",
-            [(-top_width, y, top_z), (top_width, y, top_z),
-             (bottom_width, y - 0.003, bottom_z),
-             (-bottom_width, y - 0.003, bottom_z)],
-            "steel_dark" if index == 0 else "steel", collection,
-            "plackart_lame", thickness=0.030,
-        )
-        parent_to_bone(fauld, armature, "chest")
+    # One broad lower plate survives the pixel grid; stacked lames and rivets
+    # only turned the torso into confetti at play scale.
+    fauld = add_panel(
+        "GEO_CuirassFauld",
+        [(-0.170, -0.257, 1.380), (0.170, -0.257, 1.380),
+         (0.140, -0.260, 1.255), (-0.140, -0.260, 1.255)],
+        "steel_dark", collection, "plackart_lame", thickness=0.030,
+    )
+    parent_to_bone(fauld, armature, "chest")
     for suffix, sign in (("L", -1.0), ("R", 1.0)):
         upper_trim = add_box_between(
             f"GEO_CuirassUpperTrim{suffix}",
@@ -1309,29 +1307,12 @@ def build_cuirass(parent: bpy.types.Collection, armature: bpy.types.Object) -> b
                                  "steel", collection, "armor_trim",
                                  bevel_width=0.007)
     parent_to_bone(lower_trim, armature, "chest")
-    center_ridge = add_box_between("GEO_CuirassCenterRidge",
-                                   (0.0, -0.274, 1.370),
-                                   (0.0, -0.274, 1.515), 0.018, 0.014,
-                                   "steel", collection, "armor_ridge",
-                                   bevel_width=0.005)
-    parent_to_bone(center_ridge, armature, "chest")
-    for suffix, sign in (("L", -1.0), ("R", 1.0)):
-        clavicle = add_panel(
-            f"GEO_CuirassClavicle{suffix}",
-            [(sign * 0.025, -0.268, 1.545), (sign * 0.200, -0.260, 1.550),
-             (sign * 0.182, -0.266, 1.475), (sign * 0.055, -0.274, 1.495)],
-            "steel_dark", collection, "cuirass_clavicle", thickness=0.018,
-        )
-        parent_to_bone(clavicle, armature, "chest")
-    for suffix, sign in (("L", -1.0), ("R", 1.0)):
-        emblem = add_box_between(
-            f"GEO_CuirassBrokenMark{suffix}",
-            (sign * 0.014, -0.306, 1.455),
-            (sign * 0.057, -0.306, 1.410),
-            0.018, 0.014, "brass", collection, "armor_emblem",
-            bevel_width=0.004,
-        )
-        parent_to_bone(emblem, armature, "chest")
+    emblem = add_box_between(
+        "GEO_CuirassBrokenMarkL", (-0.018, -0.306, 1.475),
+        (-0.070, -0.306, 1.405), 0.024, 0.016, "brass", collection,
+        "armor_emblem", bevel_width=0.004,
+    )
+    parent_to_bone(emblem, armature, "chest")
     return collection
 
 
@@ -1344,25 +1325,12 @@ def build_pauldron(parent: bpy.types.Collection, armature: bpy.types.Object,
         layer="rigid_armor", anchor=f"upper_arm.{suffix}",
         coverage=(f"shoulder_{suffix.lower()}",),
     )
-    scale = 1.08 if suffix == "L" else 0.88
+    scale = 1.05 if suffix == "L" else 0.70
     plate = add_ico(f"GEO_Pauldron{suffix}", (sign * 0.330, 0.0, 1.565),
                     (0.150 * scale, 0.128 * scale, 0.085 * scale), "steel", collection,
                     "pauldron_shell", subdivisions=1)
     plate.rotation_euler[1] = sign * math.radians(12)
     parent_to_bone(plate, armature, f"upper_arm.{suffix}")
-    lower_plate = add_ico(f"GEO_PauldronLower{suffix}",
-                          (sign * 0.360, -0.005, 1.505),
-                          (0.140 * scale, 0.116 * scale, 0.048 * scale),
-                          "steel_dark", collection,
-                          "pauldron_lame", subdivisions=1)
-    lower_plate.rotation_euler[1] = sign * math.radians(15)
-    parent_to_bone(lower_plate, armature, f"upper_arm.{suffix}")
-    ridge = add_ico(f"GEO_PauldronRidge{suffix}", (sign * 0.340, -0.020, 1.605),
-                    (0.105 * scale, 0.092 * scale, 0.024 * scale),
-                    "steel_light", collection,
-                    "pauldron_trim", subdivisions=1)
-    ridge.rotation_euler[1] = sign * math.radians(12)
-    parent_to_bone(ridge, armature, f"upper_arm.{suffix}")
     if suffix == "L":
         waymark = add_box_between(
             "GEO_PauldronWaymarkL", (-0.285, -0.126, 1.590),
@@ -1431,19 +1399,9 @@ def build_greave(parent: bpy.types.Collection, armature: bpy.types.Object,
     )
     parent_to_bone(greave, armature, f"shin.{suffix}")
     knee = add_ico(f"GEO_KneePlate{suffix}", (sign * 0.15, -0.075, 0.56),
-                   (0.092, 0.044, 0.078), "steel", collection,
+                   (0.078, 0.040, 0.066), "steel", collection,
                    "knee_plate", subdivisions=2)
     parent_to_bone(knee, armature, f"shin.{suffix}")
-    trim = add_cube(f"GEO_GreaveTrim{suffix}", (sign * 0.15, -0.088, 0.37),
-                    (0.145, 0.025, 0.035), "steel_dark", collection,
-                    "greave_trim", bevel_width=0.010)
-    parent_to_bone(trim, armature, f"shin.{suffix}")
-    ridge = add_box_between(f"GEO_GreaveRidge{suffix}",
-                            (sign * 0.15, -0.105, 0.215),
-                            (sign * 0.15, -0.108, 0.500),
-                            0.035, 0.024, "steel_light", collection,
-                            "greave_ridge", bevel_width=0.007)
-    parent_to_bone(ridge, armature, f"shin.{suffix}")
     return collection
 
 
@@ -1463,17 +1421,13 @@ def build_glove(parent: bpy.types.Collection, armature: bpy.types.Object,
     parent_to_bone(glove, armature, f"hand.{suffix}")
     thumb = add_ico(f"GEO_GloveThumb{suffix}",
                     (sign * 0.545, -0.070, 0.830),
-                    (0.025, 0.029, 0.042), "leather_light", collection,
+                    (0.025 * hand_scale, 0.029 * hand_scale,
+                     0.042 * hand_scale), "leather_light", collection,
                     "fist_thumb", subdivisions=2)
     parent_to_bone(thumb, armature, f"hand.{suffix}")
-    for index, offset in enumerate((-0.042, -0.014, 0.014, 0.042)):
-        knuckle = add_ico(f"GEO_GloveKnuckle{suffix}_{index}",
-                          (sign * 0.58 + offset, -0.082, 0.882),
-                          (0.010, 0.008, 0.011), "leather", collection,
-                          "fist_knuckle", subdivisions=1)
-        parent_to_bone(knuckle, armature, f"hand.{suffix}")
     cuff = add_torus(f"GEO_GloveCuff{suffix}", (sign * 0.565, -0.015, 0.94),
-                     0.072, 0.012, "leather_light", collection, "glove_cuff",
+                     0.062 * hand_scale, 0.010, "leather_light", collection,
+                     "glove_cuff",
                      rotation=(math.radians(72), 0.0, sign * math.radians(18)),
                      scale=(1.0, 0.82, 1.0))
     parent_to_bone(cuff, armature, f"hand.{suffix}")
@@ -1488,28 +1442,24 @@ def build_boot(parent: bpy.types.Collection, armature: bpy.types.Object,
         kind="accessory", slot=f"foot_{suffix.lower()}", layer="accessory",
         anchor=f"foot.{suffix}", coverage=(f"foot_{suffix.lower()}", "ankle"),
     )
+    foot_scale = WAYFARER_RECIPE.body.foot_scale
     boot = add_boot_loft(f"GEO_Boot{suffix}", sign * 0.15,
                          "leather", collection, "tapered_boot_shell",
-                         scale=WAYFARER_RECIPE.body.foot_scale)
+                         scale=foot_scale)
     parent_to_bone(boot, armature, f"foot.{suffix}")
     cuff = add_limb_loft(
         f"GEO_BootCuff{suffix}", (sign * 0.15, 0.0, 0.30),
         (sign * 0.15, 0.0, 0.15),
-        [(0.0, 0.092, 0.082), (0.55, 0.102, 0.088),
-         (1.0, 0.095, 0.082)],
+        [(0.0, 0.092 * foot_scale, 0.082 * foot_scale),
+         (0.55, 0.102 * foot_scale, 0.088 * foot_scale),
+         (1.0, 0.095 * foot_scale, 0.082 * foot_scale)],
         "leather", collection, "fitted_boot_cuff", segments=12,
     )
     parent_to_bone(cuff, armature, f"foot.{suffix}")
     sole = add_boot_sole(f"GEO_BootSole{suffix}", sign * 0.15,
-                         "padding_dark", collection, "fitted_boot_sole")
+                         "padding_dark", collection, "fitted_boot_sole",
+                         scale=foot_scale)
     parent_to_bone(sole, armature, f"foot.{suffix}")
-    instep_strap = add_cube(f"GEO_BootInstepStrap{suffix}",
-                            (sign * 0.15, -0.115, 0.180),
-                            (0.190, 0.032, 0.025), "leather_light", collection,
-                            "boot_instep_strap",
-                            rotation=(math.radians(-8), 0.0, 0.0),
-                            bevel_width=0.008)
-    parent_to_bone(instep_strap, armature, f"foot.{suffix}")
     return collection
 
 
@@ -1522,15 +1472,15 @@ def build_belt_satchel(parent: bpy.types.Collection,
         coverage=("waist", "right_hip", "chest_strap"),
     )
     for name, location, dimensions in (
-        ("Front", (0.0, -0.185, 1.02), (0.50, 0.055, 0.075)),
-        ("Back", (0.0, 0.185, 1.02), (0.50, 0.055, 0.075)),
-        ("Left", (-0.265, 0.0, 1.02), (0.055, 0.34, 0.075)),
-        ("Right", (0.265, 0.0, 1.02), (0.055, 0.34, 0.075)),
+        ("Front", (0.0, -0.165, 1.02), (0.43, 0.050, 0.065)),
+        ("Back", (0.0, 0.165, 1.02), (0.43, 0.050, 0.065)),
+        ("Left", (-0.230, 0.0, 1.02), (0.050, 0.29, 0.065)),
+        ("Right", (0.230, 0.0, 1.02), (0.050, 0.29, 0.065)),
     ):
         piece = add_cube(f"GEO_Belt{name}", location, dimensions, "leather",
                          collection, "belt", bevel_width=0.018)
         parent_to_bone(piece, armature, "pelvis")
-    buckle = add_torus("GEO_BeltBuckle", (0.0, -0.225, 1.02), 0.055, 0.012,
+    buckle = add_torus("GEO_BeltBuckle", (0.0, -0.205, 1.02), 0.045, 0.010,
                        "brass", collection, "buckle",
                        rotation=(math.radians(90), 0.0, 0.0),
                        scale=(1.25, 1.0, 0.85))
@@ -1542,24 +1492,18 @@ def build_belt_satchel(parent: bpy.types.Collection,
         "leather", collection, "satchel_strap", thickness=0.020,
     )
     parent_to_bone(strap, armature, "chest")
-    strap_edge = add_box_between("GEO_SatchelStrapEdge",
-                                 (-0.273, -0.286, 1.575),
-                                 (0.327, -0.286, 0.925),
-                                 0.010, 0.012, "leather_light", collection,
-                                 "satchel_stitch", bevel_width=0.003)
-    parent_to_bone(strap_edge, armature, "chest")
-    satchel = add_cube("GEO_Satchel", (0.345, -0.16, 0.865),
-                       (0.235, 0.095, 0.240), "leather", collection,
+    satchel = add_cube("GEO_Satchel", (0.315, -0.15, 0.885),
+                       (0.180, 0.082, 0.185), "leather", collection,
                        "satchel", bevel_width=0.032)
     parent_to_bone(satchel, armature, "pelvis")
     flap = add_panel(
         "GEO_SatchelFlap",
-        [(0.242, -0.220, 0.955), (0.448, -0.220, 0.955),
-         (0.432, -0.222, 0.875), (0.258, -0.222, 0.875)],
+        [(0.232, -0.205, 0.955), (0.398, -0.205, 0.955),
+         (0.386, -0.207, 0.895), (0.244, -0.207, 0.895)],
         "leather_light", collection, "satchel_flap", thickness=0.026,
     )
     parent_to_bone(flap, armature, "pelvis")
-    waymark = add_torus("GEO_SatchelWaymark", (0.345, -0.250, 0.895),
+    waymark = add_torus("GEO_SatchelWaymark", (0.315, -0.228, 0.910),
                         0.022, 0.006, "brass", collection, "travel_token",
                         rotation=(math.radians(90), 0.0, 0.0),
                         scale=(1.0, 1.0, 0.82))

@@ -1,5 +1,6 @@
 #include "client/cc_local3d.h"
 #include "client/cc_local3d_internal.h"
+#include "client/cc_overlay.h"
 #include "client/cc_visual_style.h"
 
 #include "locomotion/cc_humanoid_skin.h"
@@ -53,6 +54,30 @@ typedef struct WorldLabel {
     Color color;
 } WorldLabel;
 
+typedef enum FaceGlyphExpression {
+    FACE_GLYPH_NEUTRAL,
+    FACE_GLYPH_FOCUSED,
+    FACE_GLYPH_HURT
+} FaceGlyphExpression;
+
+typedef struct FaceGlyph {
+    Vector3 eye_point;
+    Vector3 body_base;
+    Vector3 forward;
+    Color ink;
+    Color skin_shadow;
+    FaceGlyphExpression expression;
+    float face_width;
+    float age;
+    uint8_t beard_style;
+    uint8_t nose_style;
+    uint8_t scar_style;
+} FaceGlyph;
+
+#define CC_FACE_GLYPH_MAX_COUNT 40
+static FaceGlyph face_glyphs[CC_FACE_GLYPH_MAX_COUNT];
+static int32_t face_glyph_count = 0;
+
 typedef struct WorldBuilding {
     Rectangle footprint;
     float height;
@@ -97,6 +122,19 @@ static const WorldStructure CASTLE_STRUCTURES[] = {
 };
 static const Rectangle CARRIAGE_FOOTPRINT = {35.20f, 29.00f, 3.20f, 5.40f};
 static const Rectangle DUNGEON_FOOTPRINT = {27.40f, 49.70f, 3.20f, 1.60f};
+/* Set-dressing with a grounded footprint participates in the same collision
+   contract as authored buildings. Route markers remain at the edges of the
+   walkable composition instead of becoming ghost geometry. */
+static const Rectangle ROOM_ART_OBSTACLES[] = {
+    {8.48f, 10.38f, 0.36f, 0.36f},
+    {14.16f, 10.38f, 0.36f, 0.36f},
+    {7.78f, 24.68f, 0.62f, 0.62f},
+    {17.58f, 54.36f, 0.84f, 0.72f},
+    {30.72f, 24.08f, 0.46f, 0.46f},
+    {35.08f, 55.10f, 3.34f, 0.50f},
+    {63.18f, 50.06f, 1.92f, 1.92f},
+    {80.22f, 45.82f, 2.36f, 2.36f},
+};
 static const Rectangle COURSE_POOL = {10.00f, 9.05f, 2.55f, 1.38f};
 static const float COURSE_WATER_SURFACE = 0.82f;
 static const Rectangle MARKET_COUNTER_FOOTPRINT = {6.05f, 1.84f, 2.10f, 0.72f};
@@ -131,6 +169,98 @@ static const Vector2 STREET_PEOPLE[] = {
     {29.00f, 28.00f}, {52.00f, 31.00f}, {58.00f, 26.50f}
 };
 static const Vector2 MARKET_PEOPLE[] = {{6.55f, 1.60f}};
+
+/* Outdoor play is staged as a sequence of composed rooms. Trigger points live
+   on reachable paths; camera targets may instead favor a landmark such as the
+   market hall or keep. Keeping those roles separate prevents a composition
+   point inside architecture from becoming an unreachable shot transition. */
+typedef struct StreetCameraShot {
+    Vector2 trigger;
+    Vector3 target;
+    const char *name;
+    Rectangle route;
+    int32_t route_palette;
+} StreetCameraShot;
+
+static const StreetCameraShot STREET_CAMERA_SHOTS[] = {
+    {{10.5f, 7.5f}, {10.5f, 1.05f, 7.5f}, "WAYFARER YARD",
+     {8.6f, 10.2f, 6.0f, 3.0f}, 2},
+    {{11.0f, 28.5f}, {11.0f, 1.05f, 28.5f}, "WEST CROFTS",
+     {12.3f, 26.3f, 4.8f, 5.8f}, 0},
+    {{14.0f, 52.0f}, {14.0f, 1.05f, 52.0f}, "OLD MINE ROAD",
+     {14.0f, 54.2f, 28.0f, 2.7f}, 3},
+    {{33.0f, 25.0f}, {33.0f, 1.05f, 25.0f}, "ARTISAN ROW",
+     {29.0f, 23.3f, 13.0f, 2.6f}, 1},
+    {{44.0f, 29.0f}, {44.0f, 1.05f, 29.0f}, "MERCERCALL COMMONS",
+     {0.0f, 0.0f, 0.0f, 0.0f}, 1},
+    {{42.0f, 52.0f}, {40.0f, 1.05f, 52.0f}, "COACH YARD",
+     {39.5f, 53.8f, 4.9f, 4.2f}, 0},
+    {{50.0f, 27.25f}, {50.0f, 1.05f, 24.0f}, "MARKET STEPS",
+     {47.0f, 25.25f, 6.0f, 1.38f}, 1},
+    {{58.0f, 50.0f}, {58.0f, 1.05f, 50.0f}, "MILLER'S ROW",
+     {54.2f, 50.1f, 18.7f, 2.9f}, 0},
+    {{78.5f, 29.0f}, {78.0f, 1.05f, 20.0f}, "CROWN GATE",
+     {75.4f, 27.0f, 6.2f, 5.2f}, 2},
+    {{78.0f, 50.0f}, {78.0f, 1.05f, 50.0f}, "EAST FIELDS",
+     {76.4f, 31.3f, 3.7f, 22.7f}, 0},
+};
+
+#define STREET_TRAVERSAL_VIA_CAPACITY 4
+
+typedef struct StreetTraversalLink {
+    int32_t room_a;
+    int32_t room_b;
+    Vector2 via[STREET_TRAVERSAL_VIA_CAPACITY];
+    int32_t via_count;
+} StreetTraversalLink;
+
+typedef struct StreetBoundaryExit {
+    int32_t room;
+    Vector2 endpoint;
+    Vector2 via[STREET_TRAVERSAL_VIA_CAPACITY];
+    int32_t via_count;
+    const char *name;
+} StreetBoundaryExit;
+
+/* Camera rooms are connected by physical corridors. Via points keep travel
+   on authored roads and through the keep gate instead of asking the local
+   collision solver to invent a route around whole buildings. */
+static const StreetTraversalLink STREET_TRAVERSAL_LINKS[] = {
+    {0, 3, {{9.2f, 7.5f}, {9.2f, 11.6f},
+            {42.0f, 11.6f}, {42.0f, 25.0f}}, 4},
+    {1, 3, {{15.8f, 29.0f}, {29.0f, 29.0f}}, 2},
+    {2, 5, {{20.0f, 56.2f}, {34.3f, 56.2f}, {39.2f, 56.2f}}, 3},
+    {3, 4, {{33.0f, 27.5f}, {40.5f, 27.5f}, {42.5f, 28.5f}}, 3},
+    {4, 5, {{42.0f, 36.0f}, {42.0f, 46.0f}}, 2},
+    {4, 6, {{47.0f, 28.2f}}, 1},
+    {5, 7, {{42.0f, 54.0f}, {54.5f, 54.0f}, {54.5f, 50.0f}}, 3},
+    {6, 8, {{63.8f, 27.5f}, {63.8f, 34.0f}, {78.5f, 34.0f}}, 3},
+    {7, 9, {{68.0f, 51.5f}, {76.0f, 51.5f}}, 2},
+    {8, 9, {{78.5f, 38.0f}, {78.5f, 45.0f}}, 2},
+};
+
+static const StreetBoundaryExit STREET_BOUNDARY_EXITS[] = {
+    {1, {1.0f, 29.0f}, {{7.0f, 29.0f}}, 1, "WESTERN ROAD"},
+    {2, {1.0f, 55.4f}, {{8.0f, 55.4f}}, 1, "OLD MINE TRACK"},
+    {8, {94.8f, 29.0f},
+     {{78.5f, 34.0f}, {93.0f, 34.0f}, {94.8f, 33.0f}}, 3,
+     "EASTERN KING'S ROAD"},
+    {9, {78.0f, 70.8f}, {{78.0f, 61.0f}}, 1, "NORTH FIELD ROAD"},
+};
+
+typedef struct FixedCameraRig {
+    Vector3 displayed_target;
+    Vector3 transition_from;
+    Vector3 destination;
+    float transition_elapsed;
+    float transition_duration;
+    float last_clock;
+    int32_t shot;
+    bool initialized;
+} FixedCameraRig;
+
+static FixedCameraRig street_camera_rig = {0};
+static FixedCameraRig road_camera_rig = {0};
 
 typedef struct NavPlatform {
     float x;
@@ -168,11 +298,19 @@ static const Vector3 COURSE_WAYPOINTS[] = {
 };
 
 static Camera3D LocalCamera(bool interior, Vector3 focus);
+static Camera3D StreetCamera(Vector3 focus, float clock, bool advance,
+                             int32_t art_height);
+static Camera3D RoadCamera(Vector3 focus, bool travelling, float clock,
+                           bool advance, int32_t art_height);
+static int32_t StreetCameraShotFor(Vector3 focus, int32_t current_shot);
 static float WrapAngle(float angle);
 static float SmoothStep01(float amount);
+static Color ShadeColor(Color color, float scale);
 static void UpdateHeroCape(CcLocalAgent *agent, float delta_time);
 static int32_t RoadObstacleCount(void);
 static Rectangle RoadObstacleAt(int32_t index);
+static bool RoomDetailPointVisible(float x, float z, Vector3 focus);
+static uint32_t StreetForegroundBuildingMask(void);
 
 static bool CourseWaterContains(CcLocalSceneKind scene, float x, float z)
 {
@@ -275,6 +413,12 @@ static bool StaticBodyBlocked(CcLocalSceneKind scene, float x, float z,
     }
     if (CircleTouchesFootprint(x, z, radius, CARRIAGE_FOOTPRINT) ||
         CircleTouchesFootprint(x, z, radius, DUNGEON_FOOTPRINT)) return true;
+    for (int32_t i = 0; i < (int32_t)(sizeof(ROOM_ART_OBSTACLES) /
+                                      sizeof(ROOM_ART_OBSTACLES[0])); ++i) {
+        if (CircleTouchesFootprint(x, z, radius, ROOM_ART_OBSTACLES[i])) {
+            return true;
+        }
+    }
     for (int32_t i = 0; i < (int32_t)(sizeof(STREET_PEOPLE) /
                                       sizeof(STREET_PEOPLE[0])); ++i) {
         float dx = x - STREET_PEOPLE[i].x;
@@ -481,6 +625,19 @@ static CcLocalSceneKind AgentSceneForCall(const CcLocalAgent *agent,
            CC_LOCAL_SCENE_ROAD : CC_LOCAL_SCENE_STREET;
 }
 
+static void ApplyAgentWalkingProfile(CcLocalAgent *agent)
+{
+    if (agent == NULL || agent->morphology != CC_MORPHOLOGY_BIPED ||
+        !agent->humanoid.initialized) return;
+    float signature_weight = agent->crowned ? 0.0f : 0.40f;
+    float cadence_scale = 1.0f +
+        (agent->appearance.gait_cadence_scale - 1.0f) * signature_weight;
+    float stride_scale = 1.0f +
+        (agent->appearance.stride_scale - 1.0f) * signature_weight;
+    CcHumanoidGaitSetWalkingProfile(
+        &agent->humanoid, cadence_scale, stride_scale);
+}
+
 void CcLocalAgentInit(CcLocalAgent *agent, Vector2 position, bool market_interior)
 {
     *agent = (CcLocalAgent){0};
@@ -500,6 +657,8 @@ void CcLocalAgentInit(CcLocalAgent *agent, Vector2 position, bool market_interio
     agent->appearance = CcNpcAppearanceGenerate(
         UINT32_C(0xc04e1e55), CC_NPC_ROLE_WAYFARER,
         (Color){42, 128, 136, 255});
+    agent->appearance.hair_style = 3U;
+    agent->appearance.beard_style = 0U;
     agent->target_point = agent->position;
     agent->combat.health = CC_LOCAL_COMBAT_MAX_HEALTH;
     agent->combat.posture = CC_LOCAL_COMBAT_MAX_POSTURE;
@@ -520,6 +679,7 @@ void CcLocalAgentSetNpcAppearance(CcLocalAgent *agent, uint32_t seed,
     if (agent == NULL) return;
     agent->appearance = CcNpcAppearanceGenerate(seed, role, accent);
     agent->tunic_color = agent->appearance.outer;
+    ApplyAgentWalkingProfile(agent);
 }
 
 void CcLocalAgentSetMorphology(CcLocalAgent *agent, CcMorphologyPreset preset,
@@ -540,17 +700,24 @@ void CcLocalAgentSetMorphology(CcLocalAgent *agent, CcMorphologyPreset preset,
     if (preset == CC_MORPHOLOGY_BIPED) {
         CcHumanoidGaitInit(&agent->humanoid, ToLimbVector(agent->position),
                             agent->facing_yaw, ProbeLocalSurface, &context);
+        ApplyAgentWalkingProfile(agent);
         agent->render_pose = agent->humanoid.pose;
+        agent->stepped_pose = (CcSteppedPoseState){0};
         agent->render_pose_valid = true;
         agent->simulation_accumulator = 0.0f;
         agent->cape = (CcLocalCapeState){0};
         UpdateHeroCape(agent, 1.0f / 60.0f);
+        agent->previous_cape = agent->cape;
+        agent->render_cape = agent->cape;
     } else {
         agent->humanoid = (CcHumanoidGait){0};
         agent->render_pose = (CcHumanoidPose){0};
+        agent->stepped_pose = (CcSteppedPoseState){0};
         agent->render_pose_valid = false;
         agent->simulation_accumulator = 0.0f;
         agent->cape = (CcLocalCapeState){0};
+        agent->previous_cape = (CcLocalCapeState){0};
+        agent->render_cape = (CcLocalCapeState){0};
     }
 }
 
@@ -1930,7 +2097,11 @@ int32_t CcLocalCoursePickPlayerTarget(CcLocalCourse *course,
         (screen_point.y - destination.y) / destination.height *
             (float)target.texture.height
     };
-    Camera3D camera = LocalCamera(false, player->position);
+    Camera3D camera = course->scene == CC_LOCAL_SCENE_ROAD ?
+        RoadCamera(player->position, false, 0.0f, false,
+                   target.texture.height) :
+        StreetCamera(player->position, 0.0f, false,
+                     target.texture.height);
     Ray ray = GetScreenToWorldRayEx(local, camera, target.texture.width,
                                     target.texture.height);
     int32_t picked = -1;
@@ -2399,7 +2570,100 @@ void CcLocalCourseInterpolateInternal(CcLocalCourse *course, float amount)
     }
 }
 
-bool CcLocalAgentSetExactTarget(CcLocalAgent *agent, Vector3 target,
+typedef struct ResolvedStreetPortal {
+    const StreetTraversalLink *link;
+    const StreetBoundaryExit *exit;
+    int32_t destination_room;
+    int32_t exit_index;
+    bool reverse;
+} ResolvedStreetPortal;
+
+static int32_t StreetRoomForAgent(const CcLocalAgent *agent)
+{
+    if (agent == NULL || agent->scene != CC_LOCAL_SCENE_STREET) return -1;
+    return StreetCameraShotFor(agent->position, -1);
+}
+
+static bool ResolveStreetPortal(const CcLocalAgent *agent,
+                                int32_t portal_index,
+                                ResolvedStreetPortal *resolved)
+{
+    int32_t room = StreetRoomForAgent(agent);
+    if (room < 0 || portal_index < 0 || resolved == NULL) return false;
+    int32_t ordinal = 0;
+    for (int32_t i = 0;
+         i < (int32_t)(sizeof(STREET_TRAVERSAL_LINKS) /
+                       sizeof(STREET_TRAVERSAL_LINKS[0])); ++i) {
+        const StreetTraversalLink *link = &STREET_TRAVERSAL_LINKS[i];
+        if (link->room_a != room && link->room_b != room) continue;
+        if (ordinal++ != portal_index) continue;
+        *resolved = (ResolvedStreetPortal){
+            .link = link,
+            .destination_room = link->room_a == room ? link->room_b :
+                                                        link->room_a,
+            .exit_index = -1,
+            .reverse = link->room_b == room,
+        };
+        return true;
+    }
+    for (int32_t i = 0;
+         i < (int32_t)(sizeof(STREET_BOUNDARY_EXITS) /
+                       sizeof(STREET_BOUNDARY_EXITS[0])); ++i) {
+        const StreetBoundaryExit *exit = &STREET_BOUNDARY_EXITS[i];
+        if (exit->room != room) continue;
+        if (ordinal++ != portal_index) continue;
+        *resolved = (ResolvedStreetPortal){
+            .exit = exit,
+            .destination_room = -1,
+            .exit_index = i,
+        };
+        return true;
+    }
+    return false;
+}
+
+int32_t CcLocalAgentStreetPortalCount(const CcLocalAgent *agent)
+{
+    int32_t room = StreetRoomForAgent(agent);
+    if (room < 0) return 0;
+    int32_t count = 0;
+    for (int32_t i = 0;
+         i < (int32_t)(sizeof(STREET_TRAVERSAL_LINKS) /
+                       sizeof(STREET_TRAVERSAL_LINKS[0])); ++i) {
+        if (STREET_TRAVERSAL_LINKS[i].room_a == room ||
+            STREET_TRAVERSAL_LINKS[i].room_b == room) count += 1;
+    }
+    for (int32_t i = 0;
+         i < (int32_t)(sizeof(STREET_BOUNDARY_EXITS) /
+                       sizeof(STREET_BOUNDARY_EXITS[0])); ++i) {
+        if (STREET_BOUNDARY_EXITS[i].room == room) count += 1;
+    }
+    return count;
+}
+
+const char *CcLocalAgentStreetPortalName(const CcLocalAgent *agent,
+                                         int32_t portal_index)
+{
+    ResolvedStreetPortal portal = {0};
+    if (!ResolveStreetPortal(agent, portal_index, &portal)) return NULL;
+    if (portal.destination_room >= 0) {
+        return STREET_CAMERA_SHOTS[portal.destination_room].name;
+    }
+    return portal.exit != NULL ? portal.exit->name : NULL;
+}
+
+static void ClearAgentNavigation(CcLocalAgent *agent)
+{
+    if (agent == NULL) return;
+    agent->navigation_point_count = 0;
+    agent->navigation_point_index = 0;
+    agent->navigation_destination_room = -1;
+    agent->navigation_active = false;
+    agent->navigation_world_exit = false;
+    agent->world_exit_requested = false;
+}
+
+static bool SetAgentExactTarget(CcLocalAgent *agent, Vector3 target,
                                 bool market_interior)
 {
     CcLocalSceneKind scene = AgentSceneForCall(agent, market_interior);
@@ -2416,6 +2680,196 @@ bool CcLocalAgentSetExactTarget(CcLocalAgent *agent, Vector3 target,
     return true;
 }
 
+bool CcLocalAgentSetExactTarget(CcLocalAgent *agent, Vector3 target,
+                                bool market_interior)
+{
+    ClearAgentNavigation(agent);
+    return SetAgentExactTarget(agent, target, market_interior);
+}
+
+static bool QueueStreetNavigationPoint(CcLocalAgent *agent, Vector2 point)
+{
+    if (agent->navigation_point_count >=
+        CC_LOCAL_NAVIGATION_POINT_CAPACITY ||
+        StaticBodyBlocked(CC_LOCAL_SCENE_STREET, point.x, point.y,
+                          agent->radius)) {
+        return false;
+    }
+    Vector3 world = {
+        point.x,
+        SurfaceHeightAt(CC_LOCAL_SCENE_STREET, point.x, point.y),
+        point.y,
+    };
+    Vector3 previous = agent->navigation_point_count > 0 ?
+        agent->navigation_point[agent->navigation_point_count - 1] :
+        agent->position;
+    float x = world.x - previous.x;
+    float z = world.z - previous.z;
+    if (x * x + z * z < 0.12f * 0.12f) return true;
+    agent->navigation_point[agent->navigation_point_count++] = world;
+    return true;
+}
+
+bool CcLocalAgentFollowStreetPortal(CcLocalAgent *agent,
+                                    int32_t portal_index)
+{
+    ResolvedStreetPortal portal = {0};
+    if (agent == NULL || !CombatCanAct(&agent->combat) ||
+        !ResolveStreetPortal(agent, portal_index, &portal)) return false;
+
+    int32_t room = StreetRoomForAgent(agent);
+    ClearAgentNavigation(agent);
+    Vector3 room_trigger = {
+        STREET_CAMERA_SHOTS[room].trigger.x, 0.0f,
+        STREET_CAMERA_SHOTS[room].trigger.y,
+    };
+    float trigger_x = room_trigger.x - agent->position.x;
+    float trigger_z = room_trigger.z - agent->position.z;
+    if (trigger_x * trigger_x + trigger_z * trigger_z > 1.0f) {
+        if (!QueueStreetNavigationPoint(
+                agent, STREET_CAMERA_SHOTS[room].trigger)) {
+            ClearAgentNavigation(agent);
+            return false;
+        }
+    }
+
+    bool queued = true;
+    if (portal.link != NULL) {
+        if (!portal.reverse) {
+            for (int32_t i = 0; i < portal.link->via_count; ++i) {
+                queued = queued && QueueStreetNavigationPoint(
+                    agent, portal.link->via[i]);
+            }
+        } else {
+            for (int32_t i = portal.link->via_count - 1; i >= 0; --i) {
+                queued = queued && QueueStreetNavigationPoint(
+                    agent, portal.link->via[i]);
+            }
+        }
+        queued = queued && QueueStreetNavigationPoint(
+            agent, STREET_CAMERA_SHOTS[portal.destination_room].trigger);
+    } else if (portal.exit != NULL) {
+        for (int32_t i = 0; i < portal.exit->via_count; ++i) {
+            queued = queued && QueueStreetNavigationPoint(
+                agent, portal.exit->via[i]);
+        }
+        queued = queued && QueueStreetNavigationPoint(
+            agent, portal.exit->endpoint);
+    }
+    if (!queued || agent->navigation_point_count <= 0) {
+        ClearAgentNavigation(agent);
+        return false;
+    }
+
+    agent->navigation_point_index = 0;
+    agent->navigation_destination_room = portal.destination_room >= 0 ?
+        portal.destination_room : -1 - portal.exit_index;
+    agent->navigation_active = true;
+    agent->navigation_world_exit = portal.exit != NULL;
+    if (!SetAgentExactTarget(agent, agent->navigation_point[0], false)) {
+        ClearAgentNavigation(agent);
+        return false;
+    }
+    return true;
+}
+
+const char *CcLocalAgentNavigationName(const CcLocalAgent *agent)
+{
+    if (agent == NULL || !agent->navigation_active) return NULL;
+    if (agent->navigation_destination_room >= 0) {
+        return STREET_CAMERA_SHOTS[agent->navigation_destination_room].name;
+    }
+    int32_t exit_index = -1 - agent->navigation_destination_room;
+    if (exit_index < 0 ||
+        exit_index >= (int32_t)(sizeof(STREET_BOUNDARY_EXITS) /
+                                sizeof(STREET_BOUNDARY_EXITS[0]))) return NULL;
+    return STREET_BOUNDARY_EXITS[exit_index].name;
+}
+
+bool CcLocalAgentConsumeWorldExit(CcLocalAgent *agent)
+{
+    if (agent == NULL || !agent->world_exit_requested) return false;
+    agent->world_exit_requested = false;
+    return true;
+}
+
+static bool AdvanceAgentNavigation(CcLocalAgent *agent)
+{
+    if (agent == NULL || !agent->navigation_active) return false;
+    agent->navigation_point_index += 1;
+    if (agent->navigation_point_index < agent->navigation_point_count) {
+        bool targeted = SetAgentExactTarget(
+            agent, agent->navigation_point[agent->navigation_point_index],
+            false);
+        if (!targeted) {
+            ClearAgentNavigation(agent);
+            agent->exact_target_valid = false;
+            agent->target_valid = false;
+        }
+        return targeted;
+    }
+
+    bool world_exit = agent->navigation_world_exit;
+    agent->navigation_active = false;
+    agent->navigation_world_exit = false;
+    agent->navigation_point_count = 0;
+    agent->navigation_point_index = 0;
+    agent->exact_target_valid = false;
+    agent->target_valid = false;
+    agent->world_exit_requested = world_exit;
+    return false;
+}
+
+static Vector3 StreetPortalWorldPoint(const ResolvedStreetPortal *portal)
+{
+    Vector2 point = portal->destination_room >= 0 ?
+        STREET_CAMERA_SHOTS[portal->destination_room].trigger :
+        portal->exit->endpoint;
+    return (Vector3){point.x, 0.42f, point.y};
+}
+
+static Vector2 StreetPortalEdgePoint(const ResolvedStreetPortal *portal,
+                                     Camera3D camera, int32_t width,
+                                     int32_t height)
+{
+    Vector2 projected = GetWorldToScreenEx(
+        StreetPortalWorldPoint(portal), camera, width, height);
+    Vector2 center = {(float)width * 0.5f, (float)height * 0.5f};
+    Vector2 direction = {projected.x - center.x,
+                         projected.y - center.y};
+    if (fabsf(direction.x) + fabsf(direction.y) < 0.001f) {
+        direction = (Vector2){1.0f, 0.0f};
+    }
+    float horizontal = ((float)width * 0.5f - 13.0f) /
+                       fmaxf(0.001f, fabsf(direction.x));
+    float vertical = ((float)height * 0.5f - 13.0f) /
+                     fmaxf(0.001f, fabsf(direction.y));
+    float scale = fminf(horizontal, vertical);
+    return (Vector2){center.x + direction.x * scale,
+                     center.y + direction.y * scale};
+}
+
+static bool TryPickStreetPortal(CcLocalAgent *agent, Vector2 local,
+                                Camera3D camera, int32_t width,
+                                int32_t height)
+{
+    int32_t count = CcLocalAgentStreetPortalCount(agent);
+    int32_t nearest = -1;
+    float nearest_distance = 34.0f * 34.0f;
+    for (int32_t portal_index = 0; portal_index < count; ++portal_index) {
+        ResolvedStreetPortal portal = {0};
+        if (!ResolveStreetPortal(agent, portal_index, &portal)) continue;
+        Vector2 marker = StreetPortalEdgePoint(&portal, camera, width, height);
+        float x = local.x - marker.x;
+        float y = local.y - marker.y;
+        float distance = x * x + y * y;
+        if (distance >= nearest_distance) continue;
+        nearest = portal_index;
+        nearest_distance = distance;
+    }
+    return nearest >= 0 && CcLocalAgentFollowStreetPortal(agent, nearest);
+}
+
 static float RayFootprintDistance(Ray ray, Rectangle footprint, float height)
 {
     BoundingBox box = {
@@ -2425,6 +2879,46 @@ static float RayFootprintDistance(Ray ray, Rectangle footprint, float height)
     };
     RayCollision collision = GetRayCollisionBox(ray, box);
     return collision.hit ? collision.distance : FLT_MAX;
+}
+
+static bool SetNearestClickTarget(CcLocalAgent *agent, Vector3 picked_point,
+                                  bool market_interior)
+{
+    if (CcLocalAgentSetExactTarget(agent, picked_point, market_interior)) {
+        return true;
+    }
+
+    /* A ground click beside a person, prop, or collision boundary should
+       still produce useful movement. Search the near half-circle facing back
+       toward the hero so the fallback remains on the approachable side. */
+    float toward_x = agent->position.x - picked_point.x;
+    float toward_z = agent->position.z - picked_point.z;
+    float toward_length = sqrtf(toward_x * toward_x + toward_z * toward_z);
+    if (toward_length > 0.0001f) {
+        toward_x /= toward_length;
+        toward_z /= toward_length;
+    } else {
+        toward_x = sinf(agent->facing_yaw + PI);
+        toward_z = cosf(agent->facing_yaw + PI);
+    }
+    static const int32_t angle_steps[] = {0, 1, -1, 2, -2, 3, -3};
+    for (int32_t ring = 1; ring <= 3; ++ring) {
+        float radius = (float)ring * 0.24f;
+        for (int32_t i = 0; i < (int32_t)(sizeof(angle_steps) /
+                                          sizeof(angle_steps[0])); ++i) {
+            float angle = (float)angle_steps[i] * PI / 6.0f;
+            float cosine = cosf(angle);
+            float sine = sinf(angle);
+            Vector3 candidate = picked_point;
+            candidate.x += (toward_x * cosine - toward_z * sine) * radius;
+            candidate.z += (toward_x * sine + toward_z * cosine) * radius;
+            if (CcLocalAgentSetExactTarget(agent, candidate,
+                                           market_interior)) {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 bool CcLocalAgentPickTarget(CcLocalAgent *agent, Vector2 screen_point,
@@ -2439,7 +2933,17 @@ bool CcLocalAgentPickTarget(CcLocalAgent *agent, Vector2 screen_point,
         (screen_point.x - destination.x) / destination.width * (float)target.texture.width,
         (screen_point.y - destination.y) / destination.height * (float)target.texture.height
     };
-    Camera3D camera = LocalCamera(interior, agent->position);
+    Camera3D camera = interior ? LocalCamera(true, agent->position) :
+        scene == CC_LOCAL_SCENE_ROAD ?
+            RoadCamera(agent->position, false, 0.0f, false,
+                       target.texture.height) :
+            StreetCamera(agent->position, 0.0f, false,
+                         target.texture.height);
+    if (scene == CC_LOCAL_SCENE_STREET &&
+        TryPickStreetPortal(agent, local, camera, target.texture.width,
+                            target.texture.height)) {
+        return true;
+    }
     Ray ray = GetScreenToWorldRayEx(local, camera, target.texture.width,
                                     target.texture.height);
     float nearest = FLT_MAX;
@@ -2482,8 +2986,10 @@ bool CcLocalAgentPickTarget(CcLocalAgent *agent, Vector2 screen_point,
         occluder = fminf(occluder, RayFootprintDistance(
             ray, (Rectangle){0.0f, 0.0f, 0.50f, 7.0f}, 2.60f));
     } else if (scene == CC_LOCAL_SCENE_STREET) {
+        uint32_t foreground_mask = StreetForegroundBuildingMask();
         for (int32_t i = 0; i < (int32_t)(sizeof(WORLD_BUILDINGS) /
                                           sizeof(WORLD_BUILDINGS[0])); ++i) {
+            if ((foreground_mask & (UINT32_C(1) << i)) != 0) continue;
             occluder = fminf(occluder,
                              RayFootprintDistance(
                                  ray, WORLD_BUILDINGS[i].footprint,
@@ -2500,6 +3006,18 @@ bool CcLocalAgentPickTarget(CcLocalAgent *agent, Vector2 screen_point,
                          RayFootprintDistance(ray, CARRIAGE_FOOTPRINT, 1.92f));
         occluder = fminf(occluder,
                          RayFootprintDistance(ray, DUNGEON_FOOTPRINT, 2.45f));
+        for (int32_t i = 0; i < (int32_t)(sizeof(ROOM_ART_OBSTACLES) /
+                                          sizeof(ROOM_ART_OBSTACLES[0])); ++i) {
+            Rectangle footprint = ROOM_ART_OBSTACLES[i];
+            float center_x = footprint.x + footprint.width * 0.5f;
+            float center_z = footprint.y + footprint.height * 0.5f;
+            if (!RoomDetailPointVisible(center_x, center_z, camera.target)) {
+                continue;
+            }
+            occluder = fminf(
+                occluder,
+                RayFootprintDistance(ray, footprint, 4.90f));
+        }
     } else {
         for (int32_t i = 0; i < RoadObstacleCount(); ++i) {
             occluder = fminf(
@@ -2508,7 +3026,7 @@ bool CcLocalAgentPickTarget(CcLocalAgent *agent, Vector2 screen_point,
         }
     }
     if (occluder < nearest) return false;
-    return CcLocalAgentSetExactTarget(agent, picked_point, market_interior);
+    return SetNearestClickTarget(agent, picked_point, market_interior);
 }
 
 static float WrapAngle(float angle)
@@ -3615,6 +4133,7 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
 {
     const float gravity = 9.81f;
     delta_time = fminf(delta_time, 1.0f / 30.0f);
+    agent->previous_cape = agent->cape;
     if (UpdateCombatClock(agent, delta_time)) {
         UpdateHeroCape(agent, delta_time);
         return;
@@ -3631,6 +4150,7 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
     if (biped && agent->humanoid_needs_reset) {
         CcHumanoidGaitInit(&agent->humanoid, ToLimbVector(agent->position),
                             agent->facing_yaw, ProbeLocalSurface, &context);
+        ApplyAgentWalkingProfile(agent);
         agent->humanoid_needs_reset = false;
     }
     bool was_swimming = agent->swimming;
@@ -3675,6 +4195,19 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
         direction.x = agent->target_point.x - agent->position.x;
         direction.z = agent->target_point.z - agent->position.z;
         target_distance = sqrtf(direction.x * direction.x + direction.z * direction.z);
+        if (agent->navigation_active && target_distance < 0.22f &&
+            !agent->climbing && !agent->swimming) {
+            (void)AdvanceAgentNavigation(agent);
+            if (agent->exact_target_valid) {
+                direction.x = agent->target_point.x - agent->position.x;
+                direction.z = agent->target_point.z - agent->position.z;
+                target_distance = sqrtf(direction.x * direction.x +
+                                        direction.z * direction.z);
+            } else {
+                direction = (Vector3){0};
+                target_distance = 0.0f;
+            }
+        }
         float physical_speed = sqrtf(agent->velocity.x * agent->velocity.x +
                                      agent->velocity.z * agent->velocity.z);
         bool gait_settled = !biped ||
@@ -3834,6 +4367,7 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
            playing a walk cycle forever against the obstacle. */
         agent->exact_target_valid = false;
         agent->target_valid = false;
+        ClearAgentNavigation(agent);
         agent->movement_stall_seconds = 0.0f;
         agent->velocity.x = 0.0f;
         agent->velocity.z = 0.0f;
@@ -3945,6 +4479,8 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
                         agent->facing_yaw, ToLimbVector(agent->velocity),
                         agent->grounded, delta_time, ProbeLocalSurface, &context);
         agent->cape = (CcLocalCapeState){0};
+        agent->previous_cape = (CcLocalCapeState){0};
+        agent->render_cape = (CcLocalCapeState){0};
     }
 }
 
@@ -4017,6 +4553,398 @@ static void BlendHumanoidPose(CcHumanoidPose *result,
                                          after->chest_pitch, amount);
 }
 
+static CcLimbVec3 PosePointToLocal(CcLimbVec3 point, CcLimbVec3 origin,
+                                   CcLimbVec3 right, CcLimbVec3 up,
+                                   CcLimbVec3 forward)
+{
+    CcLimbVec3 offset = {
+        point.x - origin.x,
+        point.y - origin.y,
+        point.z - origin.z,
+    };
+    return (CcLimbVec3){
+        offset.x * right.x + offset.y * right.y + offset.z * right.z,
+        offset.x * up.x + offset.y * up.y + offset.z * up.z,
+        offset.x * forward.x + offset.y * forward.y + offset.z * forward.z,
+    };
+}
+
+static CcLimbVec3 PosePointToWorld(CcLimbVec3 point, CcLimbVec3 origin,
+                                   CcLimbVec3 right, CcLimbVec3 up,
+                                   CcLimbVec3 forward)
+{
+    return (CcLimbVec3){
+        origin.x + right.x * point.x + up.x * point.y + forward.x * point.z,
+        origin.y + right.y * point.x + up.y * point.y + forward.y * point.z,
+        origin.z + right.z * point.x + up.z * point.y + forward.z * point.z,
+    };
+}
+
+static void HumanoidPoseToLocal(CcHumanoidPose *result,
+                                const CcHumanoidPose *world,
+                                CcLimbVec3 origin, float yaw)
+{
+    CcLimbVec3 right = {cosf(yaw), 0.0f, -sinf(yaw)};
+    CcLimbVec3 up = {0.0f, 1.0f, 0.0f};
+    CcLimbVec3 forward = {sinf(yaw), 0.0f, cosf(yaw)};
+    *result = *world;
+#define LOCALIZE_POSE_POINT(point) \
+    result->point = PosePointToLocal(world->point, origin, right, up, forward)
+    LOCALIZE_POSE_POINT(pelvis);
+    LOCALIZE_POSE_POINT(spine);
+    LOCALIZE_POSE_POINT(chest);
+    LOCALIZE_POSE_POINT(neck);
+    LOCALIZE_POSE_POINT(head);
+    for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
+        result->hip[leg] = PosePointToLocal(
+            world->hip[leg], origin, right, up, forward);
+        result->knee[leg] = PosePointToLocal(
+            world->knee[leg], origin, right, up, forward);
+        result->ankle[leg] = PosePointToLocal(
+            world->ankle[leg], origin, right, up, forward);
+        result->heel[leg] = PosePointToLocal(
+            world->heel[leg], origin, right, up, forward);
+        result->ball[leg] = PosePointToLocal(
+            world->ball[leg], origin, right, up, forward);
+        result->toe[leg] = PosePointToLocal(
+            world->toe[leg], origin, right, up, forward);
+    }
+    for (int32_t arm = 0; arm < CC_HUMANOID_ARM_COUNT; ++arm) {
+        result->shoulder[arm] = PosePointToLocal(
+            world->shoulder[arm], origin, right, up, forward);
+        result->elbow[arm] = PosePointToLocal(
+            world->elbow[arm], origin, right, up, forward);
+        result->hand[arm] = PosePointToLocal(
+            world->hand[arm], origin, right, up, forward);
+    }
+#undef LOCALIZE_POSE_POINT
+}
+
+static void HumanoidPoseToWorld(CcHumanoidPose *result,
+                                const CcHumanoidPose *local,
+                                CcLimbVec3 origin, float yaw)
+{
+    CcLimbVec3 right = {cosf(yaw), 0.0f, -sinf(yaw)};
+    CcLimbVec3 up = {0.0f, 1.0f, 0.0f};
+    CcLimbVec3 forward = {sinf(yaw), 0.0f, cosf(yaw)};
+    *result = *local;
+#define WORLDIZE_POSE_POINT(point) \
+    result->point = PosePointToWorld(local->point, origin, right, up, forward)
+    WORLDIZE_POSE_POINT(pelvis);
+    WORLDIZE_POSE_POINT(spine);
+    WORLDIZE_POSE_POINT(chest);
+    WORLDIZE_POSE_POINT(neck);
+    WORLDIZE_POSE_POINT(head);
+    for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
+        result->hip[leg] = PosePointToWorld(
+            local->hip[leg], origin, right, up, forward);
+        result->knee[leg] = PosePointToWorld(
+            local->knee[leg], origin, right, up, forward);
+        result->ankle[leg] = PosePointToWorld(
+            local->ankle[leg], origin, right, up, forward);
+        result->heel[leg] = PosePointToWorld(
+            local->heel[leg], origin, right, up, forward);
+        result->ball[leg] = PosePointToWorld(
+            local->ball[leg], origin, right, up, forward);
+        result->toe[leg] = PosePointToWorld(
+            local->toe[leg], origin, right, up, forward);
+    }
+    for (int32_t arm = 0; arm < CC_HUMANOID_ARM_COUNT; ++arm) {
+        result->shoulder[arm] = PosePointToWorld(
+            local->shoulder[arm], origin, right, up, forward);
+        result->elbow[arm] = PosePointToWorld(
+            local->elbow[arm], origin, right, up, forward);
+        result->hand[arm] = PosePointToWorld(
+            local->hand[arm], origin, right, up, forward);
+    }
+#undef WORLDIZE_POSE_POINT
+}
+
+static void PreserveSteppedFootContacts(CcHumanoidPose *stepped,
+                                        const CcHumanoidPose *physical)
+{
+    for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
+        CcLimbVec3 correction = {
+            physical->ankle[leg].x - stepped->ankle[leg].x,
+            physical->ankle[leg].y - stepped->ankle[leg].y,
+            physical->ankle[leg].z - stepped->ankle[leg].z,
+        };
+        stepped->knee[leg].x += correction.x * 0.46f;
+        stepped->knee[leg].y += correction.y * 0.46f;
+        stepped->knee[leg].z += correction.z * 0.46f;
+        stepped->ankle[leg] = physical->ankle[leg];
+        stepped->heel[leg] = physical->heel[leg];
+        stepped->ball[leg] = physical->ball[leg];
+        stepped->toe[leg] = physical->toe[leg];
+        stepped->foot_pitch[leg] = physical->foot_pitch[leg];
+    }
+}
+
+static bool ApplySteppedLocomotionPose(CcLocalAgent *agent,
+                                       const CcHumanoidPose *physical,
+                                       CcHumanoidPose *result)
+{
+    const int32_t pose_count = 8;
+    const float transition_fraction = 0.24f;
+    bool active = agent->humanoid.action == CC_HUMANOID_ACTION_LOCOMOTION &&
+                  agent->grounded && !agent->climbing && !agent->swimming &&
+                  !agent->humanoid.ragdoll.active &&
+                  agent->humanoid.speed.value > 0.10f;
+    if (!active) {
+        agent->stepped_pose.initialized = false;
+        return false;
+    }
+
+    float phase = agent->humanoid.phase - floorf(agent->humanoid.phase);
+    float stepped_phase = phase * (float)pose_count;
+    int32_t bin = (int32_t)floorf(stepped_phase);
+    if (bin < 0) bin = 0;
+    if (bin >= pose_count) bin = pose_count - 1;
+    CcHumanoidPose local;
+    HumanoidPoseToLocal(&local, physical, physical->pelvis,
+                        agent->facing_yaw);
+    CcSteppedPoseState *state = &agent->stepped_pose;
+    if (!state->initialized) {
+        state->from_local = local;
+        state->target_local = local;
+        state->locomotion_bin = bin;
+        state->initialized = true;
+    } else if (state->locomotion_bin != bin) {
+        state->from_local = state->target_local;
+        state->target_local = local;
+        state->locomotion_bin = bin;
+    }
+
+    float within = stepped_phase - floorf(stepped_phase);
+    float transition = SmoothStep01(within / transition_fraction);
+    CcHumanoidPose local_result;
+    BlendHumanoidPose(&local_result, &state->from_local,
+                      &state->target_local, transition);
+    HumanoidPoseToWorld(result, &local_result, physical->pelvis,
+                        agent->facing_yaw);
+    PreserveSteppedFootContacts(result, physical);
+    return true;
+}
+
+static CcLimbVec3 OffsetPosePoint(CcLimbVec3 point, CcLimbVec3 right,
+                                  CcLimbVec3 up, CcLimbVec3 forward,
+                                  float side, float rise, float depth)
+{
+    point.x += right.x * side + up.x * rise + forward.x * depth;
+    point.y += right.y * side + up.y * rise + forward.y * depth;
+    point.z += right.z * side + up.z * rise + forward.z * depth;
+    return point;
+}
+
+static bool ApplyLocomotionPostureCorrection(const CcLocalAgent *agent,
+                                              CcHumanoidPose *pose)
+{
+    bool active = agent->humanoid.action == CC_HUMANOID_ACTION_LOCOMOTION &&
+                  agent->grounded && !agent->climbing && !agent->swimming &&
+                  !agent->humanoid.ragdoll.active &&
+                  agent->humanoid.speed.value > 0.08f;
+    if (!active) return false;
+
+    CcLimbVec3 right = {cosf(agent->facing_yaw), 0.0f,
+                        -sinf(agent->facing_yaw)};
+    CcLimbVec3 up = {0.0f, 1.0f, 0.0f};
+    CcLimbVec3 forward = {sinf(agent->facing_yaw), 0.0f,
+                          cosf(agent->facing_yaw)};
+    float weight = SmoothStep01((agent->humanoid.speed.value - 0.08f) /
+                                0.32f);
+    float depth = 0.058f * weight;
+
+    /* Keep the planted legs untouched while bringing the torso back over the
+       hips. Progressive offsets remove the slight backward read without
+       flattening the authored gait or changing physical contacts. */
+    pose->spine = OffsetPosePoint(pose->spine, right, up, forward,
+                                  0.0f, 0.0f, depth * 0.24f);
+    pose->chest = OffsetPosePoint(pose->chest, right, up, forward,
+                                  0.0f, 0.0f, depth * 0.70f);
+    pose->neck = OffsetPosePoint(pose->neck, right, up, forward,
+                                 0.0f, 0.0f, depth * 0.88f);
+    pose->head = OffsetPosePoint(pose->head, right, up, forward,
+                                 0.0f, 0.0f, depth);
+    for (int32_t arm = 0; arm < CC_HUMANOID_ARM_COUNT; ++arm) {
+        pose->shoulder[arm] = OffsetPosePoint(
+            pose->shoulder[arm], right, up, forward,
+            0.0f, 0.0f, depth * 0.70f);
+        pose->elbow[arm] = OffsetPosePoint(
+            pose->elbow[arm], right, up, forward,
+            0.0f, 0.0f, depth * 0.38f);
+        pose->hand[arm] = OffsetPosePoint(
+            pose->hand[arm], right, up, forward,
+            0.0f, 0.0f, depth * 0.16f);
+    }
+    return true;
+}
+
+static float HeldGestureWeight(const CcLocalAgent *agent)
+{
+    float enter = SmoothStep01((agent->humanoid.idle.still_time - 0.24f) /
+                               0.24f);
+    float seed_offset = (float)(agent->appearance.seed & UINT32_C(0xff)) /
+                        255.0f * 3.2f;
+    float cycle = fmodf(agent->humanoid.idle.still_time + seed_offset, 3.2f);
+    float held = 0.0f;
+    if (cycle < 0.18f) {
+        held = SmoothStep01(cycle / 0.18f);
+    } else if (cycle < 2.34f) {
+        held = 1.0f;
+    } else if (cycle < 2.56f) {
+        held = 1.0f - SmoothStep01((cycle - 2.34f) / 0.22f);
+    }
+    return enter * held;
+}
+
+static bool ApplyRoleIdleGesture(const CcLocalAgent *agent,
+                                 CcHumanoidPose *pose)
+{
+    bool active = !agent->crowned && agent->grounded &&
+                  agent->humanoid.idle.stable && !agent->climbing &&
+                  !agent->swimming && !agent->humanoid.ragdoll.active &&
+                  agent->humanoid.action == CC_HUMANOID_ACTION_LOCOMOTION &&
+                  agent->humanoid.speed.value < 0.10f;
+    if (!active) return false;
+
+    CcLimbVec3 right = {cosf(agent->facing_yaw), 0.0f,
+                        -sinf(agent->facing_yaw)};
+    CcLimbVec3 up = {0.0f, 1.0f, 0.0f};
+    CcLimbVec3 forward = {sinf(agent->facing_yaw), 0.0f,
+                          cosf(agent->facing_yaw)};
+    float enter = SmoothStep01((agent->humanoid.idle.still_time - 0.18f) /
+                               0.30f);
+    float gesture = HeldGestureWeight(agent);
+    float lean = agent->appearance.idle_lean * enter;
+    pose->spine = OffsetPosePoint(pose->spine, right, up, forward,
+                                  0.0f, 0.0f, lean * 0.36f);
+    pose->chest = OffsetPosePoint(pose->chest, right, up, forward,
+                                  0.0f, 0.0f, lean * 0.74f);
+    pose->neck = OffsetPosePoint(pose->neck, right, up, forward,
+                                 0.0f, 0.0f, lean * 0.94f);
+    pose->head = OffsetPosePoint(pose->head, right, up, forward,
+                                 0.0f, 0.0f, lean);
+    for (int32_t arm = 0; arm < CC_HUMANOID_ARM_COUNT; ++arm) {
+        pose->shoulder[arm] = OffsetPosePoint(
+            pose->shoulder[arm], right, up, forward,
+            0.0f, 0.0f, lean * 0.72f);
+    }
+
+    CcLimbVec3 elbow_target[CC_HUMANOID_ARM_COUNT];
+    CcLimbVec3 hand_target[CC_HUMANOID_ARM_COUNT];
+    for (int32_t arm = 0; arm < CC_HUMANOID_ARM_COUNT; ++arm) {
+        elbow_target[arm] = pose->elbow[arm];
+        hand_target[arm] = pose->hand[arm];
+    }
+#define ROLE_TARGET(side, rise, depth) \
+    OffsetPosePoint(pose->chest, right, up, forward, side, rise, depth)
+    switch (agent->appearance.role) {
+        case CC_NPC_ROLE_GUARD:
+            elbow_target[0] = ROLE_TARGET(-0.34f, -0.12f, 0.05f);
+            hand_target[0] = ROLE_TARGET(-0.24f, -0.22f, 0.25f);
+            elbow_target[1] = ROLE_TARGET(0.30f, -0.20f, 0.02f);
+            hand_target[1] = ROLE_TARGET(0.17f, -0.38f, 0.12f);
+            pose->chest_yaw += 0.08f * gesture;
+            break;
+        case CC_NPC_ROLE_RAIDER:
+            elbow_target[0] = ROLE_TARGET(-0.34f, -0.08f, -0.01f);
+            hand_target[0] = ROLE_TARGET(-0.22f, -0.34f, 0.08f);
+            elbow_target[1] = ROLE_TARGET(0.34f, -0.02f, 0.10f);
+            hand_target[1] = ROLE_TARGET(0.21f, 0.04f, 0.22f);
+            pose->chest_yaw -= 0.10f * gesture;
+            break;
+        case CC_NPC_ROLE_MERCHANT:
+            elbow_target[0] = ROLE_TARGET(-0.34f, -0.10f, 0.08f);
+            hand_target[0] = ROLE_TARGET(-0.42f, -0.17f, 0.25f);
+            elbow_target[1] = ROLE_TARGET(0.34f, -0.10f, 0.08f);
+            hand_target[1] = ROLE_TARGET(0.42f, -0.17f, 0.25f);
+            break;
+        case CC_NPC_ROLE_LABORER:
+            elbow_target[0] = ROLE_TARGET(-0.28f, -0.26f, 0.02f);
+            hand_target[0] = ROLE_TARGET(-0.09f, -0.45f, 0.18f);
+            elbow_target[1] = ROLE_TARGET(0.28f, -0.26f, 0.02f);
+            hand_target[1] = ROLE_TARGET(0.09f, -0.45f, 0.18f);
+            break;
+        case CC_NPC_ROLE_SCOUT:
+            elbow_target[0] = ROLE_TARGET(-0.34f, -0.10f, 0.04f);
+            hand_target[0] = ROLE_TARGET(-0.20f, -0.36f, 0.09f);
+            elbow_target[1] = ROLE_TARGET(0.37f, 0.02f, 0.13f);
+            hand_target[1] = OffsetPosePoint(
+                pose->head, right, up, forward, 0.16f, 0.02f, 0.23f);
+            break;
+        case CC_NPC_ROLE_HEALER:
+            elbow_target[0] = ROLE_TARGET(-0.30f, -0.08f, 0.05f);
+            hand_target[0] = ROLE_TARGET(-0.10f, -0.12f, 0.23f);
+            elbow_target[1] = ROLE_TARGET(0.30f, -0.08f, 0.05f);
+            hand_target[1] = ROLE_TARGET(0.10f, -0.12f, 0.23f);
+            break;
+        case CC_NPC_ROLE_REFUGEE:
+            elbow_target[0] = ROLE_TARGET(-0.31f, -0.16f, 0.00f);
+            hand_target[0] = ROLE_TARGET(-0.18f, -0.31f, 0.06f);
+            elbow_target[1] = ROLE_TARGET(0.27f, -0.02f, 0.05f);
+            hand_target[1] = ROLE_TARGET(0.10f, -0.08f, 0.16f);
+            break;
+        case CC_NPC_ROLE_TRAVELLER:
+        case CC_NPC_ROLE_WAYFARER:
+        default:
+            elbow_target[0] = ROLE_TARGET(-0.32f, -0.16f, 0.01f);
+            hand_target[0] = ROLE_TARGET(-0.20f, -0.36f, 0.07f);
+            elbow_target[1] = ROLE_TARGET(0.29f, -0.06f, 0.04f);
+            hand_target[1] = ROLE_TARGET(0.13f, -0.18f, 0.18f);
+            break;
+    }
+#undef ROLE_TARGET
+
+    float arm_weight = gesture * 0.82f;
+    for (int32_t arm = 0; arm < CC_HUMANOID_ARM_COUNT; ++arm) {
+        pose->elbow[arm] = BlendLimbPoint(
+            pose->elbow[arm], elbow_target[arm], arm_weight);
+        pose->hand[arm] = BlendLimbPoint(
+            pose->hand[arm], hand_target[arm], arm_weight);
+    }
+    return true;
+}
+
+static void UpdateRenderCape(CcLocalAgent *agent, float amount)
+{
+    if (!agent->cape.initialized) {
+        agent->render_cape = (CcLocalCapeState){0};
+        return;
+    }
+    if (!agent->previous_cape.initialized) {
+        agent->render_cape = agent->cape;
+    } else {
+        CcLocalCapeState blended = {.initialized = true};
+        for (int32_t point = 0; point < CC_LOCAL_CAPE_POINT_COUNT; ++point) {
+            blended.point[point] = PhysicsLerp(
+                agent->previous_cape.point[point], agent->cape.point[point],
+                amount);
+            blended.previous[point] = PhysicsLerp(
+                agent->previous_cape.previous[point],
+                agent->cape.previous[point], amount);
+        }
+        blended.anchor = PhysicsLerp(agent->previous_cape.anchor,
+                                     agent->cape.anchor, amount);
+        agent->render_cape = blended;
+    }
+
+    CcHumanoidSkinPose skin;
+    CcHumanoidSkinPoseResolve(&agent->render_pose, &skin);
+    if (!skin.valid) return;
+    Vector3 render_anchor = PhysicsAdd(
+        FromLimbVector(skin.sockets[CC_HUMANOID_SOCKET_BACK].position),
+        PhysicsScale(FromLimbVector(skin.body_up), 0.14f));
+    Vector3 correction = PhysicsSubtract(render_anchor,
+                                          agent->render_cape.anchor);
+    for (int32_t point = 0; point < CC_LOCAL_CAPE_POINT_COUNT; ++point) {
+        agent->render_cape.point[point] = PhysicsAdd(
+            agent->render_cape.point[point], correction);
+        agent->render_cape.previous[point] = PhysicsAdd(
+            agent->render_cape.previous[point], correction);
+    }
+    agent->render_cape.anchor = render_anchor;
+}
+
 void CcLocalAgentInterpolateInternal(CcLocalAgent *agent, float amount)
 {
     if (agent == NULL) return;
@@ -4031,10 +4959,18 @@ void CcLocalAgentInterpolateInternal(CcLocalAgent *agent, float amount)
             &agent->humanoid.previous_pose;
         const CcHumanoidPose *after_pose = after != NULL ? &after->pose :
             &agent->humanoid.pose;
-        BlendHumanoidPose(&agent->render_pose, before_pose, after_pose, amount);
+        CcHumanoidPose physical_pose;
+        BlendHumanoidPose(&physical_pose, before_pose, after_pose, amount);
+        agent->render_pose = physical_pose;
+        (void)ApplySteppedLocomotionPose(
+            agent, &physical_pose, &agent->render_pose);
+        (void)ApplyLocomotionPostureCorrection(agent, &agent->render_pose);
+        (void)ApplyRoleIdleGesture(agent, &agent->render_pose);
         agent->render_pose_valid = true;
+        UpdateRenderCape(agent, amount);
     } else {
         agent->render_pose_valid = false;
+        agent->render_cape = (CcLocalCapeState){0};
     }
 }
 
@@ -4044,33 +4980,181 @@ static const CcHumanoidPose *AgentRenderPose(const CcLocalAgent *agent)
                                       &agent->humanoid.pose;
 }
 
-static Camera3D LocalCamera(bool interior, Vector3 focus)
+static Camera3D ExteriorCameraAt(Vector3 target, float fovy)
 {
     Camera3D camera = {0};
-    if (interior) {
-        camera.target = (Vector3){4.55f, 0.72f, 3.40f};
-    } else {
-        camera.target = (Vector3){
-            fmaxf(8.0f, fminf(focus.x,
-                               CC_LOCAL_WORLD_WIDTH - 8.0f)),
-            focus.y + 0.95f,
-            fmaxf(7.0f, fminf(focus.z,
-                               CC_LOCAL_WORLD_DEPTH - 7.0f))
-        };
-    }
-    if (interior) {
-        camera.position = (Vector3){camera.target.x + 10.0f,
-                                    camera.target.y + 10.0f,
-                                    camera.target.z + 10.0f};
-    } else {
-        /* An asymmetric three-quarter view keeps facades readable and avoids
-           reducing the traversable town to a generic 45-degree tile map. */
-        camera.position = (Vector3){camera.target.x + 16.5f,
-                                    camera.target.y + 20.0f,
-                                    camera.target.z + 13.0f};
-    }
+    camera.target = target;
+    /* A low, mostly frontal lens treats each location as an adventure-game
+       stage. The small X offset preserves useful facade depth without
+       returning to an isometric roof-first view. */
+    camera.position = (Vector3){target.x + 3.0f, target.y + 4.4f,
+                                target.z + 14.5f};
     camera.up = (Vector3){0.0f, 1.0f, 0.0f};
-    camera.fovy = interior ? 10.5f : 12.25f;
+    camera.fovy = fovy;
+    camera.projection = CAMERA_ORTHOGRAPHIC;
+    return camera;
+}
+
+static Camera3D SnapCameraToArtPixels(Camera3D camera, int32_t art_height)
+{
+    if (art_height <= 0 || camera.projection != CAMERA_ORTHOGRAPHIC ||
+        camera.fovy <= 0.0f) return camera;
+    Vector3 forward = Vector3Normalize(
+        Vector3Subtract(camera.target, camera.position));
+    Vector3 right = Vector3Normalize(Vector3CrossProduct(forward, camera.up));
+    Vector3 screen_up = Vector3Normalize(
+        Vector3CrossProduct(right, forward));
+    float pixel_world = camera.fovy / (float)art_height;
+    float right_coordinate = Vector3DotProduct(camera.target, right);
+    float up_coordinate = Vector3DotProduct(camera.target, screen_up);
+    float snapped_right = roundf(right_coordinate / pixel_world) * pixel_world;
+    float snapped_up = roundf(up_coordinate / pixel_world) * pixel_world;
+    Vector3 adjustment = Vector3Add(
+        Vector3Scale(right, snapped_right - right_coordinate),
+        Vector3Scale(screen_up, snapped_up - up_coordinate));
+    camera.target = Vector3Add(camera.target, adjustment);
+    camera.position = Vector3Add(camera.position, adjustment);
+    return camera;
+}
+
+static int32_t StreetCameraShotFor(Vector3 focus, int32_t current_shot)
+{
+    int32_t count = (int32_t)(sizeof(STREET_CAMERA_SHOTS) /
+                              sizeof(STREET_CAMERA_SHOTS[0]));
+    int32_t nearest = 0;
+    float nearest_distance = FLT_MAX;
+    for (int32_t shot = 0; shot < count; ++shot) {
+        float x = focus.x - STREET_CAMERA_SHOTS[shot].trigger.x;
+        float z = focus.z - STREET_CAMERA_SHOTS[shot].trigger.y;
+        float distance = x * x + z * z;
+        if (distance >= nearest_distance) continue;
+        nearest = shot;
+        nearest_distance = distance;
+    }
+    if (current_shot >= 0 && current_shot < count &&
+        current_shot != nearest) {
+        float current_x = focus.x -
+                          STREET_CAMERA_SHOTS[current_shot].trigger.x;
+        float current_z = focus.z -
+                          STREET_CAMERA_SHOTS[current_shot].trigger.y;
+        float current_distance = sqrtf(current_x * current_x +
+                                       current_z * current_z);
+        float candidate_distance = sqrtf(nearest_distance);
+        if (candidate_distance + 1.25f >= current_distance) {
+            return current_shot;
+        }
+    }
+    return nearest;
+}
+
+static void FixedCameraRigAim(FixedCameraRig *rig, int32_t shot,
+                              Vector3 destination, float clock, bool advance)
+{
+    if (!rig->initialized) {
+        rig->displayed_target = destination;
+        rig->transition_from = destination;
+        rig->destination = destination;
+        rig->transition_duration = 0.0f;
+        rig->transition_elapsed = 0.0f;
+        rig->last_clock = clock;
+        rig->shot = shot;
+        rig->initialized = true;
+        return;
+    }
+    if (!advance) return;
+    float delta_time = clock - rig->last_clock;
+    rig->last_clock = clock;
+    delta_time = fmaxf(0.0f, fminf(delta_time, 0.05f));
+    if (shot != rig->shot) {
+        float distance = Vector3Distance(rig->displayed_target, destination);
+        rig->transition_from = rig->displayed_target;
+        rig->destination = destination;
+        rig->transition_elapsed = 0.0f;
+        rig->transition_duration = fmaxf(0.55f, fminf(1.15f,
+                                                     0.42f + distance * 0.025f));
+        rig->shot = shot;
+    }
+    if (rig->transition_elapsed >= rig->transition_duration ||
+        rig->transition_duration <= 0.0f) {
+        rig->displayed_target = rig->destination;
+        return;
+    }
+    rig->transition_elapsed = fminf(rig->transition_duration,
+                                    rig->transition_elapsed + delta_time);
+    float amount = SmoothStep01(rig->transition_elapsed /
+                                rig->transition_duration);
+    rig->displayed_target = Vector3Lerp(rig->transition_from,
+                                        rig->destination, amount);
+}
+
+static Camera3D StreetCamera(Vector3 focus, float clock, bool advance,
+                             int32_t art_height)
+{
+    int32_t shot = StreetCameraShotFor(focus, street_camera_rig.shot);
+    Vector3 destination = STREET_CAMERA_SHOTS[shot].target;
+    FixedCameraRigAim(&street_camera_rig, shot, destination, clock, advance);
+    return SnapCameraToArtPixels(
+        ExteriorCameraAt(street_camera_rig.displayed_target, 10.8f),
+        art_height);
+}
+
+static int32_t RoadCameraShotFor(float x, int32_t current_shot)
+{
+    static const float centers[] = {
+        25.0f, 35.0f, 45.0f, 55.0f, 65.0f, 75.0f
+    };
+    int32_t count = (int32_t)(sizeof(centers) / sizeof(centers[0]));
+    if (current_shot >= 0 && current_shot < count &&
+        fabsf(x - centers[current_shot]) <= 6.2f) return current_shot;
+    int32_t nearest = 0;
+    float nearest_distance = FLT_MAX;
+    for (int32_t shot = 0; shot < count; ++shot) {
+        float distance = fabsf(x - centers[shot]);
+        if (distance >= nearest_distance) continue;
+        nearest = shot;
+        nearest_distance = distance;
+    }
+    return nearest;
+}
+
+static Camera3D RoadCamera(Vector3 focus, bool travelling, float clock,
+                           bool advance, int32_t art_height)
+{
+    static const float centers[] = {
+        25.0f, 35.0f, 45.0f, 55.0f, 65.0f, 75.0f
+    };
+    int32_t shot = travelling ?
+        RoadCameraShotFor(focus.x, road_camera_rig.shot) : 4;
+    Vector3 destination = travelling ?
+        (Vector3){centers[shot] - 0.90f, 0.95f, 40.0f} :
+        (Vector3){48.60f, 0.95f, 40.0f};
+    FixedCameraRigAim(&road_camera_rig, shot, destination, clock, advance);
+    return SnapCameraToArtPixels(
+        ExteriorCameraAt(road_camera_rig.displayed_target, 10.8f),
+        art_height);
+}
+
+static Camera3D LocalCamera(bool interior, Vector3 focus)
+{
+    if (!interior) {
+        Vector3 target = {
+            fmaxf(8.0f, fminf(focus.x, CC_LOCAL_WORLD_WIDTH - 8.0f)),
+            0.95f,
+            fmaxf(7.0f, fminf(focus.z, CC_LOCAL_WORLD_DEPTH - 7.0f))
+        };
+        return ExteriorCameraAt(target, 10.8f);
+    }
+    Camera3D camera = {0};
+    (void)focus;
+    /* The counter, actors, and street door form back/middle/foreground layers.
+       The tighter frame gives the compact room the same visual weight as an
+       exterior stage and keeps faces readable on the art-pixel grid. */
+    camera.target = (Vector3){4.70f, 0.90f, 3.30f};
+    camera.position = (Vector3){camera.target.x + 1.5f,
+                                camera.target.y + 3.7f,
+                                camera.target.z + 13.0f};
+    camera.up = (Vector3){0.0f, 1.0f, 0.0f};
+    camera.fovy = 7.6f;
     camera.projection = CAMERA_ORTHOGRAPHIC;
     return camera;
 }
@@ -4120,6 +5204,14 @@ static SphereModelCache sphere_models = {0};
     "assets/exports/glb/environment_bridge_checkpoint_v01.glb"
 #define CC_BRIDGE_CHECKPOINT_MESH_BUDGET 96
 #define CC_STYLE_GRADE_SHADER "assets/shaders/style_grade.fs"
+#define CC_WORLD_LIGHT_VERTEX_SHADER "assets/shaders/world_lit.vs"
+#define CC_WORLD_LIGHT_FRAGMENT_SHADER "assets/shaders/world_lit.fs"
+#define CC_HERO_PIXEL_FRAGMENT_SHADER "assets/shaders/hero_pixel.fs"
+#define CC_NPC_INDEXED_FRAGMENT_SHADER "assets/shaders/npc_indexed.fs"
+#define CC_NPC_ARCHETYPE_MATERIAL_COUNT 9
+#define CC_NPC_ARCHETYPE_LOCOMOTION_POSE_COUNT 8
+#define CC_NPC_ARCHETYPE_POSE_COUNT 9
+#define CC_NPC_DYNAMIC_HAIR_COUNT 8
 
 typedef enum RuntimeAssetId {
     RUNTIME_ASSET_BRIDGE,
@@ -4145,13 +5237,13 @@ static RuntimeAsset runtime_assets[RUNTIME_ASSET_COUNT] = {
     [RUNTIME_ASSET_BRIDGE] = {
         CC_BRIDGE_CHECKPOINT_ASSET, "bridge checkpoint", 96, {0}, false},
     [RUNTIME_ASSET_CARRIAGE] = {
-        "assets/exports/glb/carriage_base_v01.glb", "carriage", 96, {0}, false},
+        "assets/exports/glb/carriage_base_v01.glb", "carriage", 144, {0}, false},
     [RUNTIME_ASSET_CARGO_RACK] = {
         "assets/exports/glb/module_cargo_rack_v01.glb", "cargo rack", 48,
         {0}, false},
     [RUNTIME_ASSET_MARKET] = {
         "assets/exports/glb/environment_market_granary_v01.glb",
-        "market and granary", 64, {0}, false},
+        "market and granary", 80, {0}, false},
     [RUNTIME_ASSET_MINE] = {
         "assets/exports/glb/environment_mine_entrance_v01.glb",
         "mine entrance", 64, {0}, false},
@@ -4178,13 +5270,212 @@ typedef struct HeroSkinCache {
 
 static HeroSkinCache hero_skin = {0};
 
+typedef struct NpcArchetypeCache {
+    Model model;
+    bool ready;
+} NpcArchetypeCache;
+
+static const char *NPC_ARCHETYPE_ROLE_PATH_NAMES[CC_NPC_ROLE_COUNT] = {
+    [CC_NPC_ROLE_WAYFARER] = "wayfarer",
+    [CC_NPC_ROLE_GUARD] = "guard",
+    [CC_NPC_ROLE_RAIDER] = "raider",
+    [CC_NPC_ROLE_MERCHANT] = "merchant",
+    [CC_NPC_ROLE_LABORER] = "laborer",
+    [CC_NPC_ROLE_TRAVELLER] = "traveller",
+    [CC_NPC_ROLE_REFUGEE] = "refugee",
+    [CC_NPC_ROLE_SCOUT] = "scout",
+    [CC_NPC_ROLE_HEALER] = "healer",
+};
+
+static const char *NPC_ARCHETYPE_POSE_PATH_SUFFIXES
+    [CC_NPC_ARCHETYPE_POSE_COUNT] = {
+    "", "_contact_l", "_down_l", "_passing_l", "_up_l",
+    "_contact_r", "_down_r", "_passing_r", "_up_r",
+};
+
+static NpcArchetypeCache npc_archetypes
+    [CC_NPC_ROLE_COUNT][CC_NPC_ARCHETYPE_POSE_COUNT] = {0};
+
+/* Physics-driven people use unskinned, offline-generated rigid modules.  Each
+   model is instanced against a resolved bone frame, so contact IK and ragdoll
+   poses remain authoritative without a per-character vertex upload. */
+typedef enum NpcDynamicModuleId {
+    NPC_DYNAMIC_TORSO,
+    NPC_DYNAMIC_PELVIS,
+    NPC_DYNAMIC_UPPER_ARM,
+    NPC_DYNAMIC_FOREARM,
+    NPC_DYNAMIC_THIGH,
+    NPC_DYNAMIC_SHIN,
+    NPC_DYNAMIC_HAND,
+    NPC_DYNAMIC_FOOT,
+    NPC_DYNAMIC_HEAD,
+    NPC_DYNAMIC_MANTLE,
+    NPC_DYNAMIC_COAT_TAIL,
+    NPC_DYNAMIC_CHEST_PLATE,
+    NPC_DYNAMIC_PAULDRON,
+    NPC_DYNAMIC_APRON,
+    NPC_DYNAMIC_PACK,
+    NPC_DYNAMIC_SATCHEL,
+    NPC_DYNAMIC_HELMET,
+    NPC_DYNAMIC_HAT,
+    NPC_DYNAMIC_HOOD,
+    NPC_DYNAMIC_HEADWRAP,
+    NPC_DYNAMIC_TOOL_SHAFT,
+    NPC_DYNAMIC_TOOL_HEAD,
+    NPC_DYNAMIC_HAIR_0,
+    NPC_DYNAMIC_HAIR_1,
+    NPC_DYNAMIC_HAIR_2,
+    NPC_DYNAMIC_HAIR_3,
+    NPC_DYNAMIC_HAIR_4,
+    NPC_DYNAMIC_HAIR_5,
+    NPC_DYNAMIC_HAIR_6,
+    NPC_DYNAMIC_HAIR_7,
+    NPC_DYNAMIC_MODULE_COUNT
+} NpcDynamicModuleId;
+
+typedef struct NpcDynamicModuleCache {
+    const char *path;
+    const char *label;
+    Model model;
+    bool ready;
+} NpcDynamicModuleCache;
+
+static NpcDynamicModuleCache npc_dynamic_modules[NPC_DYNAMIC_MODULE_COUNT] = {
+    [NPC_DYNAMIC_TORSO] = {
+        "assets/exports/npc/npc_module_torso_v01.glb", "torso", {0}, false},
+    [NPC_DYNAMIC_PELVIS] = {
+        "assets/exports/npc/npc_module_pelvis_v01.glb", "pelvis", {0}, false},
+    [NPC_DYNAMIC_UPPER_ARM] = {
+        "assets/exports/npc/npc_module_upper_arm_v01.glb", "upper arm", {0}, false},
+    [NPC_DYNAMIC_FOREARM] = {
+        "assets/exports/npc/npc_module_forearm_v01.glb", "forearm", {0}, false},
+    [NPC_DYNAMIC_THIGH] = {
+        "assets/exports/npc/npc_module_thigh_v01.glb", "thigh", {0}, false},
+    [NPC_DYNAMIC_SHIN] = {
+        "assets/exports/npc/npc_module_shin_v01.glb", "shin", {0}, false},
+    [NPC_DYNAMIC_HAND] = {
+        "assets/exports/npc/npc_module_hand_v01.glb", "hand", {0}, false},
+    [NPC_DYNAMIC_FOOT] = {
+        "assets/exports/npc/npc_module_foot_v01.glb", "foot", {0}, false},
+    [NPC_DYNAMIC_HEAD] = {
+        "assets/exports/npc/npc_module_head_v01.glb", "head", {0}, false},
+    [NPC_DYNAMIC_MANTLE] = {
+        "assets/exports/npc/npc_module_mantle_v01.glb", "mantle", {0}, false},
+    [NPC_DYNAMIC_COAT_TAIL] = {
+        "assets/exports/npc/npc_module_coat_tail_v01.glb", "coat tail", {0}, false},
+    [NPC_DYNAMIC_CHEST_PLATE] = {
+        "assets/exports/npc/npc_module_chest_plate_v01.glb", "chest plate", {0}, false},
+    [NPC_DYNAMIC_PAULDRON] = {
+        "assets/exports/npc/npc_module_pauldron_v01.glb", "pauldron", {0}, false},
+    [NPC_DYNAMIC_APRON] = {
+        "assets/exports/npc/npc_module_apron_v01.glb", "apron", {0}, false},
+    [NPC_DYNAMIC_PACK] = {
+        "assets/exports/npc/npc_module_pack_v01.glb", "pack", {0}, false},
+    [NPC_DYNAMIC_SATCHEL] = {
+        "assets/exports/npc/npc_module_satchel_v01.glb", "satchel", {0}, false},
+    [NPC_DYNAMIC_HELMET] = {
+        "assets/exports/npc/npc_module_helmet_v01.glb", "helmet", {0}, false},
+    [NPC_DYNAMIC_HAT] = {
+        "assets/exports/npc/npc_module_hat_v01.glb", "hat", {0}, false},
+    [NPC_DYNAMIC_HOOD] = {
+        "assets/exports/npc/npc_module_hood_v01.glb", "hood", {0}, false},
+    [NPC_DYNAMIC_HEADWRAP] = {
+        "assets/exports/npc/npc_module_headwrap_v01.glb", "headwrap", {0}, false},
+    [NPC_DYNAMIC_TOOL_SHAFT] = {
+        "assets/exports/npc/npc_module_tool_shaft_v01.glb", "tool shaft", {0}, false},
+    [NPC_DYNAMIC_TOOL_HEAD] = {
+        "assets/exports/npc/npc_module_tool_head_v01.glb", "tool head", {0}, false},
+    [NPC_DYNAMIC_HAIR_0] = {
+        "assets/exports/npc/npc_module_hair_0_v01.glb", "hair 0", {0}, false},
+    [NPC_DYNAMIC_HAIR_1] = {
+        "assets/exports/npc/npc_module_hair_1_v01.glb", "hair 1", {0}, false},
+    [NPC_DYNAMIC_HAIR_2] = {
+        "assets/exports/npc/npc_module_hair_2_v01.glb", "hair 2", {0}, false},
+    [NPC_DYNAMIC_HAIR_3] = {
+        "assets/exports/npc/npc_module_hair_3_v01.glb", "hair 3", {0}, false},
+    [NPC_DYNAMIC_HAIR_4] = {
+        "assets/exports/npc/npc_module_hair_4_v01.glb", "hair 4", {0}, false},
+    [NPC_DYNAMIC_HAIR_5] = {
+        "assets/exports/npc/npc_module_hair_5_v01.glb", "hair 5", {0}, false},
+    [NPC_DYNAMIC_HAIR_6] = {
+        "assets/exports/npc/npc_module_hair_6_v01.glb", "hair 6", {0}, false},
+    [NPC_DYNAMIC_HAIR_7] = {
+        "assets/exports/npc/npc_module_hair_7_v01.glb", "hair 7", {0}, false},
+};
+
+static Matrix NpcModuleTransform(Vector3 origin, Vector3 right, Vector3 up,
+                                 Vector3 forward, Vector3 scale);
+static bool DrawNpcDynamicModule(NpcDynamicModuleId id, Matrix transform,
+                                 Color color);
+
+static NpcDynamicModuleId NpcHeadwearModule(uint8_t style)
+{
+    static const NpcDynamicModuleId modules[4] = {
+        NPC_DYNAMIC_HELMET, NPC_DYNAMIC_HAT,
+        NPC_DYNAMIC_HOOD, NPC_DYNAMIC_HEADWRAP,
+    };
+    return modules[style % 4U];
+}
+
 typedef struct VisualStyleCache {
     Shader grade;
     int32_t resolution_location;
     bool grade_ready;
+    Shader world;
+    int32_t light_direction_location;
+    int32_t light_color_location;
+    int32_t ambient_color_location;
+    int32_t camera_position_location;
+    int32_t fog_color_location;
+    int32_t fog_near_location;
+    int32_t fog_far_location;
+    bool world_ready;
+    Shader hero;
+    int32_t hero_light_direction_location;
+    int32_t hero_camera_position_location;
+    int32_t hero_fog_color_location;
+    int32_t hero_fog_near_location;
+    int32_t hero_fog_far_location;
+    int32_t hero_ink_strength_location;
+    bool hero_ready;
+    Shader npc;
+    int32_t npc_light_direction_location;
+    int32_t npc_camera_position_location;
+    int32_t npc_fog_color_location;
+    int32_t npc_fog_near_location;
+    int32_t npc_fog_far_location;
+    int32_t npc_ink_strength_location;
+    int32_t npc_palette_location;
+    int32_t npc_palette_ink_location;
+    bool npc_ready;
 } VisualStyleCache;
 
 static VisualStyleCache visual_style = {0};
+
+/* Material order is part of the consolidated engine-hero export contract.
+   Nineteen material slots collapse into three readable masses at play scale:
+   warm skin, a middle-value teal/oxblood costume, and dark limbs/hair. */
+static const Color HERO_RETRO_PALETTE[] = {
+    {42, 51, 50, 255},   /* body neutral */
+    {172, 124, 86, 255}, /* skin */
+    {178, 130, 90, 255}, /* skin light */
+    {25, 25, 24, 255},   /* eye */
+    {43, 32, 29, 255},   /* hair */
+    {61, 58, 49, 255},   /* padding */
+    {49, 48, 43, 255},   /* padding dark */
+    {27, 63, 64, 255},   /* teal dark */
+    {39, 104, 101, 255}, /* teal */
+    {190, 142, 53, 255}, /* brass */
+    {94, 44, 53, 255},   /* cape */
+    {119, 52, 60, 255},  /* cape light */
+    {39, 48, 49, 255},   /* steel dark */
+    {102, 46, 53, 255},  /* brigandine */
+    {124, 55, 62, 255},  /* brigandine edge */
+    {61, 68, 67, 255},   /* steel */
+    {52, 42, 34, 255},   /* leather */
+    {74, 80, 77, 255},   /* steel light */
+    {61, 46, 35, 255},   /* leather light */
+};
 
 static const Vector3 HERO_REST_DIRECTIONS[CC_HUMANOID_SKIN_BONE_COUNT] = {
     {0.0f, 1.0f, 0.0f},
@@ -4327,6 +5618,68 @@ static bool LoadRuntimeAsset(RuntimeAssetId id)
     return true;
 }
 
+static void LoadNpcArchetypes(void)
+{
+    for (int32_t role = 0; role < CC_NPC_ROLE_COUNT; ++role) {
+        for (int32_t pose = 0; pose < CC_NPC_ARCHETYPE_POSE_COUNT; ++pose) {
+            char path[256];
+            (void)snprintf(path, sizeof(path),
+                           "assets/exports/npc/npc_%s%s_v01.glb",
+                           NPC_ARCHETYPE_ROLE_PATH_NAMES[role],
+                           NPC_ARCHETYPE_POSE_PATH_SUFFIXES[pose]);
+            char resolved[1024];
+            if (!ResolveAssetPath(path, resolved, sizeof(resolved))) {
+                TraceLog(LOG_WARNING, "NPC: archetype %s pose %d was not found",
+                         CcNpcRoleName((CcNpcRole)role), pose);
+                continue;
+            }
+            Model model = LoadModel(resolved);
+            if (model.meshCount != 1 || model.materialCount < 1) {
+                TraceLog(LOG_WARNING,
+                         "NPC: invalid %s pose %d (%d meshes, %d materials)",
+                         CcNpcRoleName((CcNpcRole)role), pose,
+                         model.meshCount, model.materialCount);
+                if (model.meshCount > 0) UnloadModel(model);
+                continue;
+            }
+            npc_archetypes[role][pose].model = model;
+            npc_archetypes[role][pose].ready = true;
+        }
+        TraceLog(LOG_INFO, "NPC: loaded %s stepped archetype",
+                 CcNpcRoleName((CcNpcRole)role));
+    }
+}
+
+static void LoadNpcDynamicModules(void)
+{
+    int32_t loaded_count = 0;
+    for (int32_t id = 0; id < NPC_DYNAMIC_MODULE_COUNT; ++id) {
+        NpcDynamicModuleCache *module = &npc_dynamic_modules[id];
+        char resolved[1024];
+        if (!ResolveAssetPath(module->path, resolved, sizeof(resolved))) {
+            TraceLog(LOG_WARNING, "NPC MODULE: %s was not found",
+                     module->label);
+            continue;
+        }
+        Model model = LoadModel(resolved);
+        if (model.meshCount != 1 || model.materialCount < 1 ||
+            model.skeleton.boneCount != 0) {
+            TraceLog(LOG_WARNING,
+                     "NPC MODULE: invalid %s (%d meshes, %d materials, %d bones)",
+                     module->label, model.meshCount, model.materialCount,
+                     model.skeleton.boneCount);
+            if (model.meshCount > 0) UnloadModel(model);
+            continue;
+        }
+        module->model = model;
+        module->ready = true;
+        loaded_count += 1;
+    }
+    TraceLog(LOG_INFO,
+             "NPC MODULE: loaded %d/%d rigid biomechanical modules",
+             loaded_count, NPC_DYNAMIC_MODULE_COUNT);
+}
+
 static void LoadRuntimeAssets(void)
 {
     for (int32_t id = 0; id < RUNTIME_ASSET_COUNT; ++id) {
@@ -4338,22 +5691,239 @@ static void LoadRuntimeAssets(void)
     }
 }
 
+static void ApplyWorldShader(Model *model)
+{
+    if (!visual_style.world_ready || model == NULL || model->materials == NULL) {
+        return;
+    }
+    for (int32_t material = 0; material < model->materialCount; ++material) {
+        model->materials[material].shader = visual_style.world;
+    }
+}
+
+static void ApplyHeroStyle(Model *model)
+{
+    if (model == NULL || model->materials == NULL) return;
+    int32_t palette_count = (int32_t)(sizeof(HERO_RETRO_PALETTE) /
+                                      sizeof(HERO_RETRO_PALETTE[0]));
+    int32_t material_count = model->materialCount < palette_count ?
+                             model->materialCount : palette_count;
+    for (int32_t material = 0; material < material_count; ++material) {
+        model->materials[material].maps[MATERIAL_MAP_DIFFUSE].color =
+            HERO_RETRO_PALETTE[material];
+        model->materials[material].shader = visual_style.hero_ready ?
+                                             visual_style.hero :
+                                             visual_style.world;
+    }
+    for (int32_t material = material_count;
+         material < model->materialCount; ++material) {
+        model->materials[material].shader = visual_style.hero_ready ?
+                                             visual_style.hero :
+                                             visual_style.world;
+    }
+    if (model->materialCount < palette_count) {
+        TraceLog(LOG_WARNING,
+                 "HERO: retro palette expected %d materials, found %d",
+                 palette_count, model->materialCount);
+    }
+}
+
+static void ApplyNpcStyle(Model *model)
+{
+    if (model == NULL || model->materials == NULL) return;
+    for (int32_t material = 0; material < model->materialCount; ++material) {
+        model->materials[material].shader = visual_style.npc_ready ?
+                                             visual_style.npc :
+                                             visual_style.hero_ready ?
+                                                visual_style.hero :
+                                                visual_style.world;
+    }
+}
+
+static void SetNpcPalette(const CcNpcAppearance *appearance,
+                          float ink_strength)
+{
+    if (!visual_style.npc_ready || appearance == NULL) return;
+    const Color colors[CC_NPC_ARCHETYPE_MATERIAL_COUNT] = {
+        appearance->skin,
+        appearance->hair,
+        appearance->underlayer,
+        appearance->outer,
+        appearance->trousers,
+        appearance->leather,
+        appearance->metal,
+        appearance->accent,
+        ShadeColor(appearance->hair, 0.30f),
+    };
+    float palette[CC_NPC_ARCHETYPE_MATERIAL_COUNT * 4];
+    for (int32_t index = 0; index < CC_NPC_ARCHETYPE_MATERIAL_COUNT;
+         ++index) {
+        palette[index * 4 + 0] = (float)colors[index].r / 255.0f;
+        palette[index * 4 + 1] = (float)colors[index].g / 255.0f;
+        palette[index * 4 + 2] = (float)colors[index].b / 255.0f;
+        palette[index * 4 + 3] = (float)colors[index].a / 255.0f;
+    }
+    static const float material_ink[CC_NPC_ARCHETYPE_MATERIAL_COUNT] = {
+        0.52f, 0.88f, 0.62f, 0.58f, 0.68f,
+        0.76f, 0.46f, 0.60f, 0.96f,
+    };
+    SetShaderValueV(visual_style.npc, visual_style.npc_palette_location,
+                    palette, SHADER_UNIFORM_VEC4,
+                    CC_NPC_ARCHETYPE_MATERIAL_COUNT);
+    SetShaderValueV(visual_style.npc,
+                    visual_style.npc_palette_ink_location,
+                    material_ink, SHADER_UNIFORM_FLOAT,
+                    CC_NPC_ARCHETYPE_MATERIAL_COUNT);
+    SetShaderValue(visual_style.npc,
+                   visual_style.npc_ink_strength_location,
+                   &ink_strength, SHADER_UNIFORM_FLOAT);
+}
+
+/* Procedural people use the same graphic lighting contract as the authored
+   hero.  Their geometry is intentionally simple; a shared two-band treatment
+   is what makes those forms read as one cast at the final art resolution. */
+static void UseCharacterLighting(void)
+{
+    if (visual_style.hero_ready) BeginShaderMode(visual_style.hero);
+}
+
+static void RestoreWorldLighting(void)
+{
+    if (visual_style.hero_ready && visual_style.world_ready) {
+        BeginShaderMode(visual_style.world);
+    }
+}
+
 static void LoadVisualStyle(void)
 {
-    char resolved[1024];
-    if (!ResolveAssetPath(CC_STYLE_GRADE_SHADER, resolved, sizeof(resolved))) {
+    char grade_path[1024];
+    if (!ResolveAssetPath(CC_STYLE_GRADE_SHADER, grade_path,
+                          sizeof(grade_path))) {
         TraceLog(LOG_WARNING, "STYLE: grade shader was not found");
-        return;
+    } else {
+        visual_style.grade = LoadShader(NULL, grade_path);
     }
-    visual_style.grade = LoadShader(NULL, resolved);
-    if (!IsShaderValid(visual_style.grade)) {
-        visual_style = (VisualStyleCache){0};
+    if (IsShaderValid(visual_style.grade)) {
+        visual_style.resolution_location = GetShaderLocation(
+            visual_style.grade, "resolution");
+        visual_style.grade_ready = true;
+    } else {
+        visual_style.grade = (Shader){0};
         TraceLog(LOG_WARNING, "STYLE: grade shader could not be loaded");
+    }
+
+    char vertex_path[1024];
+    char fragment_path[1024];
+    if (!ResolveAssetPath(CC_WORLD_LIGHT_VERTEX_SHADER, vertex_path,
+                          sizeof(vertex_path)) ||
+        !ResolveAssetPath(CC_WORLD_LIGHT_FRAGMENT_SHADER, fragment_path,
+                          sizeof(fragment_path))) {
+        TraceLog(LOG_WARNING, "STYLE: world light shaders were not found");
         return;
     }
-    visual_style.resolution_location = GetShaderLocation(
-        visual_style.grade, "resolution");
-    visual_style.grade_ready = true;
+    visual_style.world = LoadShader(vertex_path, fragment_path);
+    if (!IsShaderValid(visual_style.world)) {
+        visual_style.world = (Shader){0};
+        TraceLog(LOG_WARNING, "STYLE: world light shader could not be loaded");
+        return;
+    }
+    visual_style.light_direction_location = GetShaderLocation(
+        visual_style.world, "lightDirection");
+    visual_style.light_color_location = GetShaderLocation(
+        visual_style.world, "lightColor");
+    visual_style.ambient_color_location = GetShaderLocation(
+        visual_style.world, "ambientColor");
+    visual_style.camera_position_location = GetShaderLocation(
+        visual_style.world, "cameraPosition");
+    visual_style.fog_color_location = GetShaderLocation(
+        visual_style.world, "fogColor");
+    visual_style.fog_near_location = GetShaderLocation(
+        visual_style.world, "fogNear");
+    visual_style.fog_far_location = GetShaderLocation(
+        visual_style.world, "fogFar");
+    visual_style.world_ready = true;
+
+    char hero_fragment_path[1024];
+    if (ResolveAssetPath(CC_HERO_PIXEL_FRAGMENT_SHADER, hero_fragment_path,
+                         sizeof(hero_fragment_path))) {
+        visual_style.hero = LoadShader(vertex_path, hero_fragment_path);
+        if (IsShaderValid(visual_style.hero)) {
+            visual_style.hero_light_direction_location = GetShaderLocation(
+                visual_style.hero, "lightDirection");
+            visual_style.hero_camera_position_location = GetShaderLocation(
+                visual_style.hero, "cameraPosition");
+            visual_style.hero_fog_color_location = GetShaderLocation(
+                visual_style.hero, "fogColor");
+            visual_style.hero_fog_near_location = GetShaderLocation(
+                visual_style.hero, "fogNear");
+            visual_style.hero_fog_far_location = GetShaderLocation(
+                visual_style.hero, "fogFar");
+            visual_style.hero_ink_strength_location = GetShaderLocation(
+                visual_style.hero, "inkStrength");
+            float ink_strength = 0.68f;
+            SetShaderValue(visual_style.hero,
+                           visual_style.hero_ink_strength_location,
+                           &ink_strength, SHADER_UNIFORM_FLOAT);
+            visual_style.hero_ready = true;
+        } else {
+            visual_style.hero = (Shader){0};
+            TraceLog(LOG_WARNING,
+                     "STYLE: retro hero shader could not be loaded");
+        }
+    } else {
+        TraceLog(LOG_WARNING, "STYLE: retro hero shader was not found");
+    }
+
+    char npc_fragment_path[1024];
+    if (ResolveAssetPath(CC_NPC_INDEXED_FRAGMENT_SHADER, npc_fragment_path,
+                         sizeof(npc_fragment_path))) {
+        visual_style.npc = LoadShader(vertex_path, npc_fragment_path);
+        if (IsShaderValid(visual_style.npc)) {
+            visual_style.npc_light_direction_location = GetShaderLocation(
+                visual_style.npc, "lightDirection");
+            visual_style.npc_camera_position_location = GetShaderLocation(
+                visual_style.npc, "cameraPosition");
+            visual_style.npc_fog_color_location = GetShaderLocation(
+                visual_style.npc, "fogColor");
+            visual_style.npc_fog_near_location = GetShaderLocation(
+                visual_style.npc, "fogNear");
+            visual_style.npc_fog_far_location = GetShaderLocation(
+                visual_style.npc, "fogFar");
+            visual_style.npc_ink_strength_location = GetShaderLocation(
+                visual_style.npc, "inkStrength");
+            visual_style.npc_palette_location = GetShaderLocation(
+                visual_style.npc, "characterPalette[0]");
+            visual_style.npc_palette_ink_location = GetShaderLocation(
+                visual_style.npc, "paletteInk[0]");
+            visual_style.npc_ready = true;
+        } else {
+            visual_style.npc = (Shader){0};
+            TraceLog(LOG_WARNING,
+                     "STYLE: indexed NPC shader could not be loaded");
+        }
+    } else {
+        TraceLog(LOG_WARNING, "STYLE: indexed NPC shader was not found");
+    }
+
+    ApplyWorldShader(&sphere_models.small);
+    ApplyWorldShader(&sphere_models.character);
+    ApplyWorldShader(&sphere_models.scenery);
+    if (hero_skin.ready) ApplyHeroStyle(&hero_skin.model);
+    for (int32_t role = 0; role < CC_NPC_ROLE_COUNT; ++role) {
+        for (int32_t pose = 0; pose < CC_NPC_ARCHETYPE_POSE_COUNT; ++pose) {
+            if (npc_archetypes[role][pose].ready) {
+                ApplyNpcStyle(&npc_archetypes[role][pose].model);
+            }
+        }
+    }
+    for (int32_t id = 0; id < NPC_DYNAMIC_MODULE_COUNT; ++id) {
+        if (npc_dynamic_modules[id].ready) {
+            ApplyNpcStyle(&npc_dynamic_modules[id].model);
+        }
+    }
+    for (int32_t id = 0; id < RUNTIME_ASSET_COUNT; ++id) {
+        if (runtime_assets[id].ready) ApplyWorldShader(&runtime_assets[id].model);
+    }
 }
 
 static void LoadHeroSkin(void)
@@ -4415,7 +5985,8 @@ static void LoadHeroSkin(void)
 }
 
 static bool DrawHeroSkin(const CcHumanoidSkinPose *skin,
-                         const CcLocalCapeState *cape, Color tint)
+                         const CcLocalCapeState *cape, Color tint,
+                         bool visible)
 {
     if (!hero_skin.ready || skin == NULL || !skin->valid || cape == NULL ||
         !cape->initialized) return false;
@@ -4448,21 +6019,41 @@ static bool DrawHeroSkin(const CcHumanoidSkinPose *skin,
             delta, hero_skin.model.skeleton.bindPose[bone].rotation);
         hero_skin.pose[bone].scale =
             hero_skin.model.skeleton.bindPose[bone].scale;
+        float gameplay_scale = skin_bone == CC_HUMANOID_SKIN_HEAD ? 1.06f :
+            (skin_bone == CC_HUMANOID_SKIN_HAND_LEFT ||
+             skin_bone == CC_HUMANOID_SKIN_HAND_RIGHT) ? 1.02f :
+            (skin_bone == CC_HUMANOID_SKIN_FOOT_LEFT ||
+             skin_bone == CC_HUMANOID_SKIN_FOOT_RIGHT) ? 1.02f : 1.0f;
+        hero_skin.pose[bone].scale = Vector3Scale(
+            hero_skin.pose[bone].scale, gameplay_scale);
     }
     CcLocalRendererRecordSkinUpdate(hero_skin.model.meshCount);
     UpdateModelAnimation(hero_skin.model, hero_skin.animation, 0.0f);
-    DrawModel(hero_skin.model, (Vector3){0.0f, 0.0f, 0.0f}, 1.0f, tint);
+    if (visible) {
+        const float horizontal_scale = 1.02f;
+        Vector3 anchor = FromLimbVector(
+            skin->bones[CC_HUMANOID_SKIN_ROOT].head);
+        Vector3 position = {anchor.x * (1.0f - horizontal_scale), 0.0f,
+                            anchor.z * (1.0f - horizontal_scale)};
+        DrawModelEx(hero_skin.model, position,
+                    (Vector3){0.0f, 1.0f, 0.0f}, 0.0f,
+                    (Vector3){horizontal_scale, 1.0f, horizontal_scale}, tint);
+    }
     return true;
 }
 
 void CcLocalRendererInit(void)
 {
     if (sphere_models.ready) return;
+    street_camera_rig = (FixedCameraRig){0};
+    road_camera_rig = (FixedCameraRig){0};
     sphere_models.small = LoadModelFromMesh(GenMeshSphere(1.0f, 6, 8));
     sphere_models.character = LoadModelFromMesh(GenMeshSphere(1.0f, 8, 8));
     sphere_models.scenery = LoadModelFromMesh(GenMeshSphere(1.0f, 10, 12));
     sphere_models.ready = true;
     LoadHeroSkin();
+    LoadNpcArchetypes();
+    LoadNpcDynamicModules();
     LoadRuntimeAssets();
     LoadVisualStyle();
 }
@@ -4479,15 +6070,35 @@ void CcLocalRendererShutdown(void)
     UnloadModel(sphere_models.character);
     UnloadModel(sphere_models.scenery);
     if (hero_skin.ready) UnloadModel(hero_skin.model);
+    for (int32_t role = 0; role < CC_NPC_ROLE_COUNT; ++role) {
+        for (int32_t pose = 0; pose < CC_NPC_ARCHETYPE_POSE_COUNT; ++pose) {
+            if (npc_archetypes[role][pose].ready) {
+                UnloadModel(npc_archetypes[role][pose].model);
+            }
+            npc_archetypes[role][pose] = (NpcArchetypeCache){0};
+        }
+    }
+    for (int32_t id = 0; id < NPC_DYNAMIC_MODULE_COUNT; ++id) {
+        if (npc_dynamic_modules[id].ready) {
+            UnloadModel(npc_dynamic_modules[id].model);
+        }
+        npc_dynamic_modules[id].model = (Model){0};
+        npc_dynamic_modules[id].ready = false;
+    }
     for (int32_t id = 0; id < RUNTIME_ASSET_COUNT; ++id) {
         if (runtime_assets[id].ready) UnloadModel(runtime_assets[id].model);
         runtime_assets[id].model = (Model){0};
         runtime_assets[id].ready = false;
     }
+    if (visual_style.npc_ready) UnloadShader(visual_style.npc);
+    if (visual_style.hero_ready) UnloadShader(visual_style.hero);
+    if (visual_style.world_ready) UnloadShader(visual_style.world);
     if (visual_style.grade_ready) UnloadShader(visual_style.grade);
     sphere_models = (SphereModelCache){0};
     hero_skin = (HeroSkinCache){0};
     visual_style = (VisualStyleCache){0};
+    street_camera_rig = (FixedCameraRig){0};
+    road_camera_rig = (FixedCameraRig){0};
     bridge_checkpoint_status = BRIDGE_CHECKPOINT_UNKNOWN;
 }
 
@@ -4635,16 +6246,52 @@ static void DrawFacadeWindow(Vector3 center, bool side_facing, Color trim,
     DrawBox(center, horizontal, trim);
 }
 
+static void DrawBuildingContactShadow(float x, float z, float width,
+                                      float depth, float height)
+{
+    float reach = 0.18f + fminf(height, 10.0f) * 0.045f;
+    DrawCubeV((Vector3){x + width * 0.5f + reach * 0.42f, -0.012f,
+                        z + depth * 0.5f + reach * 0.32f},
+              (Vector3){width + reach, 0.025f, depth + reach * 0.82f},
+              (Color){8, 13, 14, 78});
+}
+
 static void DrawBuilding(float x, float z, float width, float depth, float height,
-                         Color wall, Color roof, bool door, int32_t style)
+                         Color wall, Color roof, bool door, int32_t style,
+                         bool cutaway)
 {
     Vector3 center = {x + width * 0.5f, height * 0.5f, z + depth * 0.5f};
     Color trim = style == 2 ? WORLD_GOLD : ShadeColor(wall, 0.60f);
-    Color glass = style == 3 ? Fade(WORLD_VIOLET, 0.84f) :
+    Color glass = style == 1 ? (Color){148, 103, 55, 255} :
+                  style == 3 ? Fade(WORLD_VIOLET, 0.84f) :
                                Fade(WORLD_TEAL, 0.78f);
+    DrawBuildingContactShadow(x, z, width, depth, height);
     DrawBox((Vector3){center.x, 0.17f, center.z},
             (Vector3){width + 0.12f, 0.34f, depth + 0.12f},
             ShadeColor(wall, 0.58f));
+
+    if (cutaway) {
+        const float wall_height = 1.02f;
+        Color cut_wall = BlendColor(wall, (Color){62, 58, 53, 255}, 0.26f);
+        Color floor = ShadeColor(wall, 0.70f);
+        DrawCubeV((Vector3){center.x, 0.205f, center.z},
+                  (Vector3){width - 0.20f, 0.07f, depth - 0.20f}, floor);
+        /* The camera looks from +X/+Z. Keep the far walls as a dollhouse
+           silhouette while removing the two faces that hide the player. */
+        DrawBox((Vector3){center.x, wall_height * 0.5f, z + 0.10f},
+                (Vector3){width, wall_height, 0.20f}, cut_wall);
+        DrawBox((Vector3){x + 0.10f, wall_height * 0.5f, center.z},
+                (Vector3){0.20f, wall_height, depth}, cut_wall);
+        DrawBox((Vector3){center.x, wall_height + 0.02f, z + 0.10f},
+                (Vector3){width + 0.10f, 0.13f, 0.26f}, trim);
+        DrawBox((Vector3){x + 0.10f, wall_height + 0.02f, center.z},
+                (Vector3){0.26f, 0.13f, depth + 0.10f}, trim);
+        DrawCubeWiresV((Vector3){center.x, 0.22f, center.z},
+                       (Vector3){width + 0.14f, 0.12f, depth + 0.14f},
+                       Fade(WORLD_INK, 0.30f));
+        return;
+    }
+
     DrawBox(center, (Vector3){width, height, depth}, wall);
 
     /* The positive Z and X facades face the runtime camera. Depth here is not
@@ -4660,14 +6307,29 @@ static void DrawBuilding(float x, float z, float width, float depth, float heigh
     DrawBox((Vector3){x + width + 0.045f, height - 0.24f, center.z},
             (Vector3){0.09f, 0.18f, depth - 0.18f}, trim);
 
+    /* Strong horizontal courses keep the low camera from reading each house
+       as one unscaled slab. They also carry the trim language around the
+       visible corner, so the facade remains coherent from adjacent rooms. */
+    Color plinth = ShadeColor(wall, 0.50f);
+    float story_course = fminf(2.16f, height * 0.42f);
+    DrawBox((Vector3){center.x, 0.46f, z + depth + 0.052f},
+            (Vector3){width - 0.14f, 0.42f, 0.105f}, plinth);
+    DrawBox((Vector3){x + width + 0.052f, 0.46f, center.z},
+            (Vector3){0.105f, 0.42f, depth - 0.14f}, plinth);
+    DrawBox((Vector3){center.x, story_course, z + depth + 0.057f},
+            (Vector3){width - 0.16f, 0.13f, 0.115f}, trim);
+    DrawBox((Vector3){x + width + 0.057f, story_course, center.z},
+            (Vector3){0.115f, 0.13f, depth - 0.16f}, trim);
+
     int32_t bays = width >= 10.0f ? 3 : 2;
+    float window_y = fminf(height * 0.56f, 2.90f);
     for (int32_t bay = 0; bay < bays; ++bay) {
         float window_x = x + width * (float)(bay + 1) / (float)(bays + 1);
         if (door && fabsf(window_x - center.x) < 0.82f) continue;
-        DrawFacadeWindow((Vector3){window_x, height * 0.57f,
+        DrawFacadeWindow((Vector3){window_x, window_y,
                                    z + depth + 0.075f}, false, trim, glass);
     }
-    DrawFacadeWindow((Vector3){x + width + 0.075f, height * 0.57f,
+    DrawFacadeWindow((Vector3){x + width + 0.075f, window_y,
                                center.z + depth * 0.12f}, true, trim, glass);
 
     if (door) {
@@ -4681,6 +6343,13 @@ static void DrawBuilding(float x, float z, float width, float depth, float heigh
                         0.035f, WORLD_GOLD);
         DrawBox((Vector3){center.x, 2.34f, z + depth + 0.34f},
                 (Vector3){1.55f, 0.13f, 0.70f}, roof);
+        float lantern_x = center.x + 0.94f;
+        DrawBox((Vector3){lantern_x, 1.92f, z + depth + 0.12f},
+                (Vector3){0.08f, 0.48f, 0.08f}, trim);
+        DrawBox((Vector3){lantern_x, 2.15f, z + depth + 0.18f},
+                (Vector3){0.30f, 0.08f, 0.20f}, trim);
+        DrawSmallSphere((Vector3){lantern_x, 1.88f, z + depth + 0.22f},
+                        0.11f, WORLD_GOLD);
     }
 
     float roof_rise = DrawPitchedRoof(x, z, width, depth, height, wall, roof);
@@ -4726,9 +6395,9 @@ static void DrawGroundTile(float x, float z, Color color)
    hundreds of immediate-mode calls for distant scenery. Culling uses the
    clamped camera target rather than the player so it remains stable at the
    world boundary. */
-static bool SceneryFootprintVisible(Rectangle footprint, Vector3 focus)
+static bool SceneryFootprintVisibleWithin(Rectangle footprint, Vector3 focus,
+                                          float visibility_radius)
 {
-    const float visibility_radius = 30.0f;
     float nearest_x = fmaxf(footprint.x,
                             fminf(focus.x, footprint.x + footprint.width));
     float nearest_z = fmaxf(footprint.y,
@@ -4739,9 +6408,20 @@ static bool SceneryFootprintVisible(Rectangle footprint, Vector3 focus)
            visibility_radius * visibility_radius;
 }
 
+static bool SceneryFootprintVisible(Rectangle footprint, Vector3 focus)
+{
+    return SceneryFootprintVisibleWithin(footprint, focus, 30.0f);
+}
+
 static bool SceneryPointVisible(float x, float z, Vector3 focus)
 {
     return SceneryFootprintVisible((Rectangle){x, z, 0.0f, 0.0f}, focus);
+}
+
+static bool RoomDetailPointVisible(float x, float z, Vector3 focus)
+{
+    return SceneryFootprintVisibleWithin(
+        (Rectangle){x, z, 0.0f, 0.0f}, focus, 23.0f);
 }
 
 static void DrawSettlementPlaza(Color stone)
@@ -4761,7 +6441,306 @@ static void DrawSettlementPlaza(Color stone)
     DrawTerrainPatchAtTop(37.82f, 34.02f, 7.34f, 0.16f, 0.004f, curb);
 }
 
-static void DrawExteriorTerrain(const CcSettlement *place)
+static void DrawStreetPavingDetails(Color road, Vector3 focus)
+{
+    Color joint = ShadeColor(road, 0.74f);
+
+    /* Large, stable stone modules read after the whole scene is pixelated.
+       Detail is limited to the current room so distant streets stay quiet. */
+    for (float x = 16.0f; x <= 91.0f; x += 2.25f) {
+        if (fabsf(x - focus.x) > 18.0f) continue;
+        if (x >= 37.5f && x <= 45.4f) continue;
+        DrawTerrainPatchAtTop(x, 27.24f, 0.090f, 4.32f, -0.001f, joint);
+    }
+    float horizontal_start = fmaxf(15.2f, focus.x - 18.0f);
+    float horizontal_width = fminf(91.8f, focus.x + 18.0f) -
+                             horizontal_start;
+    if (horizontal_width > 0.0f) {
+        DrawTerrainPatchAtTop(horizontal_start, 29.36f, horizontal_width,
+                              0.085f, -0.001f, joint);
+    }
+
+    for (float z = 8.7f; z <= 57.0f; z += 2.25f) {
+        if (fabsf(z - focus.z) > 18.0f) continue;
+        if (z >= 25.5f && z <= 34.4f) continue;
+        DrawTerrainPatchAtTop(39.84f, z, 4.32f, 0.090f, 0.0f, joint);
+    }
+    float vertical_start = fmaxf(8.2f, focus.z - 18.0f);
+    float vertical_depth = fminf(57.8f, focus.z + 18.0f) - vertical_start;
+    if (vertical_depth > 0.0f) {
+        DrawTerrainPatchAtTop(41.96f, vertical_start, 0.085f,
+                              vertical_depth, 0.0f, joint);
+    }
+}
+
+static void DrawMarketThreshold(Color road)
+{
+    /* A warm, tiled threshold turns the market into a destination instead of
+       a cluster of props. It joins the plaza to the building's collision-safe
+       south entrance and remains traversable. */
+    Color threshold = BlendColor(ShadeColor(road, 1.08f),
+                                 (Color){158, 119, 67, 255}, 0.24f);
+    for (int32_t row = 0; row < 2; ++row) {
+        for (int32_t column = 0; column < 6; ++column) {
+            float variation = ((row + column) & 1) != 0 ? 0.96f : 1.04f;
+            DrawTerrainPatchAtTop(47.0f + (float)column,
+                                  25.25f + (float)row * 0.72f,
+                                  0.94f, 0.66f, 0.003f,
+                                  ShadeColor(threshold, variation));
+        }
+    }
+}
+
+static Color StreetRouteColor(Color road, int32_t palette)
+{
+    switch (palette) {
+        case 1:
+            return BlendColor(ShadeColor(road, 1.08f), WORLD_GOLD, 0.18f);
+        case 2:
+            return BlendColor(ShadeColor(road, 0.94f), WORLD_TEAL, 0.14f);
+        case 3:
+            return BlendColor(ShadeColor(road, 0.88f), WORLD_VIOLET, 0.12f);
+        default:
+            return BlendColor(ShadeColor(road, 1.02f),
+                              (Color){126, 104, 73, 255}, 0.18f);
+    }
+}
+
+static void DrawRoomRoute(Rectangle route, Color stone)
+{
+    if (route.width <= 0.0f || route.height <= 0.0f) return;
+    Color edge = ShadeColor(stone, 0.69f);
+    Color joint = ShadeColor(stone, 0.78f);
+    DrawTerrainPatchAtTop(route.x, route.y, route.width, route.height,
+                          0.001f, stone);
+    DrawTerrainPatchAtTop(route.x, route.y, route.width, 0.11f,
+                          0.007f, edge);
+    DrawTerrainPatchAtTop(route.x, route.y + route.height - 0.11f,
+                          route.width, 0.11f, 0.007f, edge);
+    DrawTerrainPatchAtTop(route.x, route.y, 0.11f, route.height,
+                          0.007f, edge);
+    DrawTerrainPatchAtTop(route.x + route.width - 0.11f, route.y,
+                          0.11f, route.height, 0.007f, edge);
+
+    bool runs_east_west = route.width >= route.height;
+    if (runs_east_west) {
+        for (float x = route.x + 1.35f;
+             x < route.x + route.width - 0.35f; x += 1.55f) {
+            DrawTerrainPatchAtTop(x, route.y + 0.12f, 0.075f,
+                                  route.height - 0.24f, 0.006f, joint);
+        }
+        DrawTerrainPatchAtTop(route.x + 0.12f,
+                              route.y + route.height * 0.5f,
+                              route.width - 0.24f, 0.075f, 0.006f, joint);
+    } else {
+        for (float z = route.y + 1.35f;
+             z < route.y + route.height - 0.35f; z += 1.55f) {
+            DrawTerrainPatchAtTop(route.x + 0.12f, z,
+                                  route.width - 0.24f, 0.075f,
+                                  0.006f, joint);
+        }
+        DrawTerrainPatchAtTop(route.x + route.width * 0.5f,
+                              route.y + 0.12f, 0.075f,
+                              route.height - 0.24f, 0.006f, joint);
+    }
+}
+
+static void DrawRoomRouteAccents(Color road, Vector3 focus)
+{
+    int32_t count = (int32_t)(sizeof(STREET_CAMERA_SHOTS) /
+                              sizeof(STREET_CAMERA_SHOTS[0]));
+    for (int32_t i = 0; i < count; ++i) {
+        const StreetCameraShot *room = &STREET_CAMERA_SHOTS[i];
+        if (room->route.width <= 0.0f || room->route.height <= 0.0f) continue;
+        if (!SceneryFootprintVisibleWithin(room->route, focus, 21.0f)) continue;
+        if (i == 6) {
+            DrawMarketThreshold(road);
+            continue;
+        }
+        DrawRoomRoute(room->route,
+                      StreetRouteColor(road, room->route_palette));
+    }
+}
+
+static void DrawStreetLantern(float x, float z)
+{
+    Color metal = (Color){43, 43, 39, 255};
+    DrawCylinder((Vector3){x, 0.05f, z}, 0.23f, 0.28f, 0.10f, 8,
+                 ShadeColor(metal, 0.72f));
+    DrawCylinder((Vector3){x, 1.12f, z}, 0.055f, 0.075f, 2.14f, 8, metal);
+    DrawBox((Vector3){x, 2.18f, z}, (Vector3){0.42f, 0.08f, 0.42f}, metal);
+    DrawSmallSphere((Vector3){x, 1.98f, z}, 0.18f, WORLD_GOLD);
+    DrawBox((Vector3){x, 1.96f, z}, (Vector3){0.27f, 0.30f, 0.27f},
+            Fade((Color){234, 181, 77, 255}, 0.82f));
+    DrawBox((Vector3){x, 1.76f, z}, (Vector3){0.34f, 0.07f, 0.34f}, metal);
+}
+
+static void DrawWayfarerGate(Color accent)
+{
+    Color wood = (Color){74, 51, 39, 255};
+    float left = 8.66f;
+    float right = 14.34f;
+    float z = 10.56f;
+    DrawBox((Vector3){left, 1.16f, z}, (Vector3){0.22f, 2.32f, 0.22f}, wood);
+    DrawBox((Vector3){right, 1.16f, z}, (Vector3){0.22f, 2.32f, 0.22f}, wood);
+    DrawBox((Vector3){11.50f, 2.24f, z},
+            (Vector3){5.90f, 0.22f, 0.24f}, wood);
+    for (int32_t i = 0; i < 3; ++i) {
+        float x = 10.05f + (float)i * 1.45f;
+        DrawBox((Vector3){x, 1.91f, z + 0.07f},
+                (Vector3){0.56f, 0.48f, 0.07f},
+                i == 1 ? WORLD_GOLD : accent);
+    }
+}
+
+static void DrawCroftScarecrow(float hunger)
+{
+    const float x = 8.10f;
+    const float z = 25.00f;
+    Color wood = (Color){89, 61, 39, 255};
+    Color cloth = BlendColor((Color){122, 83, 58, 255},
+                             (Color){83, 73, 55, 255}, hunger);
+    DrawBox((Vector3){x, 0.92f, z}, (Vector3){0.12f, 1.84f, 0.12f}, wood);
+    DrawBox((Vector3){x, 1.38f, z}, (Vector3){1.38f, 0.10f, 0.10f}, wood);
+    DrawBox((Vector3){x, 1.20f, z + 0.04f},
+            (Vector3){0.78f, 0.68f, 0.12f}, cloth);
+    DrawSmallSphere((Vector3){x, 1.80f, z}, 0.23f,
+                    (Color){166, 132, 77, 255});
+    DrawBox((Vector3){x, 2.03f, z}, (Vector3){0.72f, 0.08f, 0.44f}, wood);
+    DrawBox((Vector3){x, 2.17f, z}, (Vector3){0.38f, 0.30f, 0.34f}, wood);
+}
+
+static void DrawMineWaystone(void)
+{
+    const float x = 18.0f;
+    const float z = 54.72f;
+    Color stone = (Color){77, 75, 78, 255};
+    DrawBox((Vector3){x, 0.14f, z}, (Vector3){0.84f, 0.28f, 0.72f},
+            ShadeColor(stone, 0.70f));
+    DrawBox((Vector3){x, 0.82f, z}, (Vector3){0.56f, 1.38f, 0.46f}, stone);
+    DrawBox((Vector3){x, 1.56f, z}, (Vector3){0.70f, 0.16f, 0.56f},
+            ShadeColor(stone, 1.12f));
+    DrawSmallSphere((Vector3){x, 1.03f, z + 0.27f}, 0.10f, WORLD_VIOLET);
+
+    /* Two rails and broad sleepers turn the colored road into an explicit
+       visual sentence: this way leads to the mine beyond the next room. */
+    Color rail = (Color){65, 59, 56, 255};
+    Color sleeper = (Color){91, 62, 43, 255};
+    DrawBox((Vector3){22.65f, 0.055f, 54.92f},
+            (Vector3){8.20f, 0.075f, 0.09f}, rail);
+    DrawBox((Vector3){22.65f, 0.055f, 55.72f},
+            (Vector3){8.20f, 0.075f, 0.09f}, rail);
+    for (int32_t sleeper_index = 0; sleeper_index < 10; ++sleeper_index) {
+        DrawBox((Vector3){18.85f + (float)sleeper_index * 0.84f,
+                          0.035f, 55.32f},
+                (Vector3){0.14f, 0.055f, 1.18f}, sleeper);
+    }
+}
+
+static void DrawArtisanSign(Color kingdom)
+{
+    const float x = 30.95f;
+    const float z = 24.30f;
+    Color wood = (Color){69, 47, 39, 255};
+    DrawBox((Vector3){x, 1.16f, z}, (Vector3){0.14f, 2.32f, 0.14f}, wood);
+    DrawBox((Vector3){x + 0.48f, 2.12f, z},
+            (Vector3){1.08f, 0.12f, 0.14f}, wood);
+    DrawBox((Vector3){x + 0.86f, 1.72f, z + 0.04f},
+            (Vector3){0.72f, 0.66f, 0.12f},
+            BlendColor((Color){111, 73, 53, 255}, kingdom, 0.26f));
+    DrawSmallSphere((Vector3){x + 0.86f, 1.73f, z + 0.12f},
+                    0.11f, WORLD_GOLD);
+}
+
+static void DrawCoachHitch(const CcSettlement *place)
+{
+    Color wood = (Color){79, 53, 39, 255};
+    float z = 55.36f;
+    DrawBox((Vector3){35.30f, 0.62f, z}, (Vector3){0.18f, 1.24f, 0.18f}, wood);
+    DrawBox((Vector3){38.20f, 0.62f, z}, (Vector3){0.18f, 1.24f, 0.18f}, wood);
+    DrawBox((Vector3){36.75f, 0.92f, z}, (Vector3){3.08f, 0.16f, 0.18f}, wood);
+    DrawBox((Vector3){36.75f, 1.62f, z},
+            (Vector3){0.14f, 1.40f, 0.14f}, wood);
+    DrawBox((Vector3){36.75f, 2.18f, z + 0.05f},
+            (Vector3){1.30f, 0.68f, 0.12f},
+            (Color){111, 72, 52, 255});
+    DrawCylinder((Vector3){36.75f, 2.03f, z + 0.13f},
+                 0.19f, 0.19f, 0.08f, 10, WORLD_GOLD);
+    int32_t barrels = place != NULL ? place->stock[CC_GOOD_MATERIAL] / 24 : 1;
+    if (barrels < 1) barrels = 1;
+    if (barrels > 3) barrels = 3;
+    for (int32_t i = 0; i < barrels; ++i) {
+        DrawCylinder((Vector3){35.65f + (float)i * 0.58f, 0.05f, z + 0.42f},
+                     0.25f, 0.25f, 0.58f, 10,
+                     (Color){129, 77, 43, 255});
+    }
+}
+
+static void DrawMillersGranary(float hunger)
+{
+    const float x = 64.14f;
+    const float z = 51.02f;
+    Color timber = (Color){105, 70, 43, 255};
+    Color plaster = BlendColor((Color){142, 124, 91, 255},
+                               (Color){101, 92, 70, 255}, hunger * 0.60f);
+    DrawCylinder((Vector3){x, 0.08f, z}, 0.90f, 0.96f, 2.36f, 12, plaster);
+    DrawCylinder((Vector3){x, 2.43f, z}, 0.10f, 1.10f, 0.88f, 12, timber);
+    DrawBox((Vector3){x, 0.75f, z + 0.93f},
+            (Vector3){0.58f, 1.20f, 0.08f}, timber);
+    DrawBox((Vector3){x, 1.45f, z + 0.98f},
+            (Vector3){0.72f, 0.10f, 0.12f}, WORLD_GOLD);
+}
+
+static void DrawEastWindmill(Color kingdom, float hunger)
+{
+    const float x = 81.4f;
+    const float z = 47.0f;
+    Color tower = BlendColor((Color){128, 118, 96, 255},
+                             (Color){92, 86, 73, 255}, hunger * 0.50f);
+    Color timber = BlendColor((Color){78, 54, 40, 255}, kingdom, 0.16f);
+    DrawCylinder((Vector3){x, 0.05f, z}, 0.74f, 1.08f, 3.45f, 12, tower);
+    DrawCylinder((Vector3){x, 3.50f, z}, 0.08f, 0.92f, 0.82f, 12, timber);
+    DrawCylinderEx((Vector3){x, 3.28f, z + 0.36f},
+                   (Vector3){x, 3.28f, z + 0.92f},
+                   0.14f, 0.14f, 10, ShadeColor(timber, 0.72f));
+    for (int32_t blade = 0; blade < 4; ++blade) {
+        rlPushMatrix();
+        rlTranslatef(x, 3.28f, z + 0.96f);
+        rlRotatef(18.0f + (float)blade * 90.0f, 0.0f, 0.0f, 1.0f);
+        DrawBox((Vector3){0.0f, 1.02f, 0.0f},
+                (Vector3){0.18f, 2.04f, 0.10f}, timber);
+        DrawBox((Vector3){0.20f, 1.38f, 0.0f},
+                (Vector3){0.38f, 0.92f, 0.075f},
+                Fade((Color){181, 158, 111, 255}, 0.78f));
+        rlPopMatrix();
+    }
+    DrawSmallSphere((Vector3){x, 3.28f, z + 1.02f}, 0.20f, WORLD_GOLD);
+}
+
+static void DrawRoomLandmarks(const CcSettlement *place, Color kingdom,
+                              Vector3 focus)
+{
+    float hunger = place != NULL ? (float)place->hunger / 100.0f : 0.0f;
+    if (RoomDetailPointVisible(11.50f, 10.56f, focus)) {
+        DrawWayfarerGate(kingdom);
+    }
+    if (RoomDetailPointVisible(8.10f, 25.00f, focus)) {
+        DrawCroftScarecrow(hunger);
+    }
+    if (RoomDetailPointVisible(18.0f, 54.72f, focus)) DrawMineWaystone();
+    if (RoomDetailPointVisible(30.95f, 24.30f, focus)) {
+        DrawArtisanSign(kingdom);
+    }
+    if (RoomDetailPointVisible(36.75f, 55.36f, focus)) DrawCoachHitch(place);
+    if (RoomDetailPointVisible(64.14f, 51.02f, focus)) {
+        DrawMillersGranary(hunger);
+    }
+    if (RoomDetailPointVisible(81.4f, 47.0f, focus)) {
+        DrawEastWindmill(kingdom, hunger);
+    }
+}
+
+static void DrawExteriorTerrain(const CcSettlement *place, Vector3 focus)
 {
     float hunger = place != NULL ? (float)place->hunger / 100.0f : 0.0f;
     float prosperity = place != NULL ?
@@ -4805,7 +6784,15 @@ static void DrawExteriorTerrain(const CcSettlement *place)
                           road_edge);
     DrawTerrainPatchAtTop(44.30f, 8.0f, 0.13f, 50.0f, -0.003f,
                           road_edge);
+    DrawStreetPavingDetails(road, focus);
     DrawSettlementPlaza(plaza);
+
+    if (SceneryPointVisible(46.15f, 26.10f, focus)) {
+        DrawStreetLantern(46.15f, 26.10f);
+    }
+    if (SceneryPointVisible(53.85f, 26.10f, focus)) {
+        DrawStreetLantern(53.85f, 26.10f);
+    }
 
     DrawTerrainPatchAtTop(3.0f, 17.0f, 13.0f, 9.0f, -0.018f,
                           (Color){86, 91, 56, 255});
@@ -4828,6 +6815,7 @@ static void DrawExteriorTerrain(const CcSettlement *place)
                               12.0f, 0.24f, -0.005f,
                               Fade(WORLD_GOLD, 0.28f));
     }
+    DrawRoomRouteAccents(road, focus);
 }
 
 static Color BuildingWallColor(int32_t style)
@@ -4843,27 +6831,51 @@ static Color BuildingWallColor(int32_t style)
 static Color BuildingRoofColor(int32_t style, Color kingdom)
 {
     switch (style) {
-        case 1: return Fade(kingdom, 0.92f);
-        case 2: return (Color){216, 158, 68, 255};
-        case 3: return (Color){123, 79, 126, 255};
-        default: return kingdom;
+        case 1:
+            return BlendColor((Color){76, 69, 62, 255}, kingdom, 0.18f);
+        case 2: return (Color){126, 78, 56, 255};
+        case 3: return (Color){76, 72, 84, 255};
+        default:
+            return BlendColor((Color){66, 74, 71, 255}, kingdom, 0.16f);
+    }
+}
+
+static uint32_t StreetForegroundBuildingMask(void)
+{
+    /* These are authored stage wings, not player-dependent cutaways. A given
+       shot always presents the same architecture; only buildings between the
+       low camera and that shot's walkable route are omitted. */
+    switch (street_camera_rig.shot) {
+        case 1: return UINT32_C(1) << 3;
+        case 3:
+            return (UINT32_C(1) << 3) | (UINT32_C(1) << 4);
+        case 4:
+        case 6:
+            return (UINT32_C(1) << 4) | (UINT32_C(1) << 6);
+        case 5:
+            return (UINT32_C(1) << 8) | (UINT32_C(1) << 9);
+        default: return 0;
     }
 }
 
 static void DrawWorldBuildings(Color kingdom, Vector3 focus)
 {
+    uint32_t foreground_mask = StreetForegroundBuildingMask();
     for (int32_t i = 0; i < (int32_t)(sizeof(WORLD_BUILDINGS) /
                                       sizeof(WORLD_BUILDINGS[0])); ++i) {
         const WorldBuilding *building = &WORLD_BUILDINGS[i];
+        if ((foreground_mask & (UINT32_C(1) << i)) != 0) continue;
         /* The market footprint remains authoritative for collision, but its
-           visible shell comes from the shared Blender library when present. */
+           visible shell comes from the shared Blender library when present.
+           Buildings no longer appear or disappear based on the hero's exact
+           sightline: each fixed room keeps one coherent piece of scenery. */
         if (i == 2 && runtime_assets[RUNTIME_ASSET_MARKET].ready) continue;
         if (!SceneryFootprintVisible(building->footprint, focus)) continue;
         DrawBuilding(building->footprint.x, building->footprint.y,
                      building->footprint.width, building->footprint.height,
                      building->height, BuildingWallColor(building->style),
                      BuildingRoofColor(building->style, kingdom),
-                     building->door, building->style);
+                     building->door, building->style, false);
     }
 }
 
@@ -4873,6 +6885,10 @@ static bool DrawAuthoredMarket(const CcSettlement *place)
     if (!market->ready) return false;
     const Vector3 origin = {50.0f, 0.0f, 21.0f};
     const float scale = 1.70f;
+    const WorldBuilding *building = &WORLD_BUILDINGS[2];
+    DrawBuildingContactShadow(building->footprint.x, building->footprint.y,
+                              building->footprint.width,
+                              building->footprint.height, building->height);
     DrawModelEx(market->model, origin, (Vector3){0.0f, 1.0f, 0.0f},
                 0.0f, (Vector3){scale, scale, scale}, WHITE);
     RuntimeAssetId state = RUNTIME_ASSET_COUNT;
@@ -4921,6 +6937,27 @@ static void DrawCastle(Color kingdom, Vector3 focus)
                 (Vector3){0.78f, 2.30f, 0.06f}, kingdom);
         DrawBox((Vector3){80.70f, 7.65f, 30.84f},
                 (Vector3){0.78f, 2.30f, 0.06f}, kingdom);
+
+        /* The open southern gate is the room's navigational promise. A high
+           lintel and paired fire points frame the pass without putting an
+           invisible portcullis across the traversable opening. */
+        Color gate_stone = (Color){86, 88, 85, 255};
+        DrawBox((Vector3){78.50f, 7.15f, 30.84f},
+                (Vector3){2.30f, 1.08f, 0.72f}, gate_stone);
+        for (int32_t merlon = 0; merlon < 3; ++merlon) {
+            DrawBox((Vector3){77.62f + (float)merlon * 0.88f,
+                              8.02f, 30.84f},
+                    (Vector3){0.42f, 0.70f, 0.76f},
+                    ShadeColor(gate_stone, 0.92f));
+        }
+        for (int32_t side = -1; side <= 1; side += 2) {
+            float torch_x = 78.50f + (float)side * 1.32f;
+            DrawBox((Vector3){torch_x, 1.82f, 31.20f},
+                    (Vector3){0.10f, 0.86f, 0.10f},
+                    (Color){55, 43, 36, 255});
+            DrawSmallSphere((Vector3){torch_x, 2.32f, 31.20f},
+                            0.18f, WORLD_GOLD);
+        }
     }
 }
 
@@ -4964,23 +7001,216 @@ static void DrawCharacterEllipsoid(Vector3 center, Vector3 radius, Color color)
                 (Vector3){0.0f, 1.0f, 0.0f}, 0.0f, radius, color);
 }
 
+static void QueueFaceGlyph(Vector3 head_center, Vector3 body_base,
+                           Vector3 forward, float face_depth, Color ink,
+                           const CcNpcAppearance *appearance,
+                           FaceGlyphExpression expression)
+{
+    if (face_glyph_count >= CC_FACE_GLYPH_MAX_COUNT) return;
+    forward.y = 0.0f;
+    forward = PhysicsNormalizeOr(forward, (Vector3){0.0f, 0.0f, 1.0f});
+    FaceGlyph *glyph = &face_glyphs[face_glyph_count++];
+    glyph->eye_point = PhysicsAdd(
+        PhysicsAdd(head_center, (Vector3){0.0f, 0.045f, 0.0f}),
+        PhysicsScale(forward, face_depth));
+    glyph->body_base = body_base;
+    glyph->forward = forward;
+    glyph->ink = ink;
+    glyph->skin_shadow = appearance != NULL ?
+        ShadeColor(appearance->skin, 0.74f) : ink;
+    glyph->expression = expression;
+    glyph->face_width = appearance != NULL ? appearance->head_width : 1.0f;
+    glyph->age = appearance != NULL ? appearance->age : 0.0f;
+    glyph->beard_style = appearance != NULL ? appearance->beard_style : 0U;
+    glyph->nose_style = appearance != NULL ? appearance->nose_style : 0U;
+    glyph->scar_style = appearance != NULL ? appearance->scar_style : 0U;
+}
+
+static void DrawQueuedFaceGlyphs(Camera3D camera, int32_t width,
+                                 int32_t height)
+{
+    for (int32_t i = 0; i < face_glyph_count; ++i) {
+        const FaceGlyph *glyph = &face_glyphs[i];
+        Vector3 to_camera = PhysicsSubtract(camera.position,
+                                            glyph->eye_point);
+        to_camera.y = 0.0f;
+        to_camera = PhysicsNormalizeOr(to_camera,
+                                       (Vector3){0.0f, 0.0f, 1.0f});
+        float facing_camera = PhysicsDot(glyph->forward, to_camera);
+        if (facing_camera < -0.12f) continue;
+
+        Vector2 eye = GetWorldToScreenEx(glyph->eye_point, camera,
+                                         width, height);
+        Vector2 base = GetWorldToScreenEx(glyph->body_base, camera,
+                                          width, height);
+        Vector3 crown = PhysicsAdd(glyph->eye_point,
+                                   (Vector3){0.0f, 0.22f, 0.0f});
+        Vector2 top = GetWorldToScreenEx(crown, camera, width, height);
+        float character_height = fabsf(base.y - top.y);
+        if (character_height < 16.0f || eye.x < 1.0f ||
+            eye.x >= (float)width - 1.0f || eye.y < 2.0f ||
+            eye.y >= (float)height - 2.0f) continue;
+
+        Vector3 right = PhysicsNormalizeOr(
+            PhysicsCross((Vector3){0.0f, 1.0f, 0.0f}, glyph->forward),
+            (Vector3){1.0f, 0.0f, 0.0f});
+        Vector3 eye_size = {0.032f, 0.030f, 0.024f};
+        Vector3 face_center = PhysicsAdd(
+            glyph->eye_point, PhysicsScale(glyph->forward, 0.008f));
+        if (facing_camera < 0.34f) {
+            float side = PhysicsDot(
+                PhysicsCross(glyph->forward, to_camera),
+                (Vector3){0.0f, 1.0f, 0.0f}) < 0.0f ? -1.0f : 1.0f;
+            DrawCubeV(PhysicsAdd(face_center,
+                                 PhysicsScale(right, side * 0.034f)),
+                      eye_size, glyph->ink);
+            continue;
+        }
+
+        float eye_spacing = 0.039f * (0.92f + glyph->face_width * 0.08f);
+        Vector3 left_eye = PhysicsAdd(face_center,
+                                      PhysicsScale(right, -eye_spacing));
+        Vector3 right_eye = PhysicsAdd(face_center,
+                                       PhysicsScale(right, eye_spacing));
+        if (glyph->expression == FACE_GLYPH_HURT) {
+            left_eye.y += 0.012f;
+            right_eye.y -= 0.012f;
+        }
+        DrawCubeV(left_eye, eye_size, glyph->ink);
+        DrawCubeV(right_eye, eye_size, glyph->ink);
+        if (character_height >= 38.0f) {
+            float brow_height = glyph->expression == FACE_GLYPH_FOCUSED ?
+                                 0.036f : 0.050f;
+            Vector3 left_brow = PhysicsAdd(left_eye,
+                (Vector3){0.0f, brow_height, 0.0f});
+            Vector3 right_brow = PhysicsAdd(right_eye,
+                (Vector3){0.0f, brow_height, 0.0f});
+            Vector3 brow_size = {0.042f, 0.015f, 0.020f};
+            DrawCubeV(left_brow, brow_size, glyph->ink);
+            DrawCubeV(right_brow, brow_size, glyph->ink);
+            static const Vector3 nose_sizes[4] = {
+                {0.020f, 0.030f, 0.022f},
+                {0.027f, 0.035f, 0.026f},
+                {0.034f, 0.028f, 0.030f},
+                {0.024f, 0.043f, 0.026f},
+            };
+            Vector3 nose = PhysicsAdd(
+                face_center, (Vector3){0.0f, -0.026f, 0.006f});
+            DrawCubeV(nose, nose_sizes[glyph->nose_style % 4U],
+                      glyph->skin_shadow);
+            DrawCubeV(PhysicsAdd(face_center,
+                                 (Vector3){0.0f, -0.065f, 0.0f}),
+                      (Vector3){0.045f, 0.014f, 0.020f}, glyph->ink);
+            if (glyph->beard_style != 0U) {
+                float beard_height = 0.020f +
+                    (float)glyph->beard_style * 0.018f;
+                DrawCubeV(PhysicsAdd(face_center,
+                                     (Vector3){0.0f, -0.090f, -0.002f}),
+                          (Vector3){0.092f, beard_height, 0.024f},
+                          glyph->ink);
+            }
+            if (glyph->scar_style != 0U) {
+                float side = glyph->scar_style == 2U ? -1.0f : 1.0f;
+                Vector3 scar = PhysicsAdd(
+                    face_center,
+                    PhysicsAdd(PhysicsScale(right, side * 0.066f),
+                               (Vector3){0.0f, -0.010f, 0.010f}));
+                DrawCubeV(scar, (Vector3){0.012f, 0.052f, 0.014f},
+                          BlendColor(glyph->skin_shadow, glyph->ink, 0.52f));
+            }
+            if (glyph->age > 0.68f) {
+                for (int32_t side = -1; side <= 1; side += 2) {
+                    Vector3 age_mark = PhysicsAdd(
+                        face_center,
+                        PhysicsAdd(PhysicsScale(right, (float)side * 0.077f),
+                                   (Vector3){0.0f, -0.044f, 0.004f}));
+                    DrawCubeV(age_mark,
+                              (Vector3){0.022f, 0.009f, 0.012f},
+                              glyph->skin_shadow);
+                }
+            }
+        }
+    }
+}
+
 static void DrawNpcHead(const CcNpcAppearance *appearance, Vector3 head,
                         float yaw, float scale)
 {
-    float head_width = 0.165f * appearance->head_width * scale;
-    float head_depth = 0.150f * appearance->head_depth * scale;
+    float head_width = 0.175f * appearance->head_width * scale;
+    float head_depth = 0.158f * appearance->head_depth * scale;
     DrawCharacterEllipsoid(head,
-        (Vector3){head_width, 0.205f * scale, head_depth}, appearance->skin);
+        (Vector3){head_width, 0.195f * scale, head_depth}, appearance->skin);
     Vector3 forward = {sinf(yaw), 0.0f, cosf(yaw)};
     Vector3 right = {cosf(yaw), 0.0f, -sinf(yaw)};
-    Vector3 face = PhysicsAdd(head, PhysicsScale(forward, head_depth * 0.90f));
-    DrawSmallSphere(PhysicsAdd(face, (Vector3){0.0f, 0.015f * scale, 0.0f}),
-                    0.022f * scale, ShadeColor(appearance->skin, 0.82f));
+    Color facial_ink = BlendColor(appearance->hair,
+                                  (Color){24, 23, 22, 255}, 0.58f);
+    FaceGlyphExpression glyph_expression =
+        appearance->role == CC_NPC_ROLE_GUARD ||
+        appearance->role == CC_NPC_ROLE_RAIDER ? FACE_GLYPH_FOCUSED :
+                                                  FACE_GLYPH_NEUTRAL;
+    QueueFaceGlyph(head,
+                   PhysicsAdd(head, (Vector3){0.0f, -1.62f * scale, 0.0f}),
+                   forward, head_depth * 0.94f, facial_ink, appearance,
+                   glyph_expression);
+    Vector3 face = PhysicsAdd(head, PhysicsScale(forward, head_depth * 0.92f));
+    static const Vector3 nose_scale[4] = {
+        {0.018f, 0.026f, 0.020f}, {0.022f, 0.032f, 0.025f},
+        {0.029f, 0.023f, 0.027f}, {0.020f, 0.039f, 0.023f},
+    };
+    Vector3 nose_size = nose_scale[appearance->nose_style % 4U];
+    nose_size = PhysicsScale(nose_size, scale);
+    DrawCharacterEllipsoid(
+        PhysicsAdd(face, (Vector3){0.0f, 0.015f * scale, 0.0f}),
+        nose_size, ShadeColor(appearance->skin, 0.86f));
+    float eye_spacing = (0.047f +
+        (float)((appearance->seed >> 3U) & 3U) * 0.0025f) * scale;
+    float brow_tilt = (((appearance->seed >> 7U) & 1U) != 0U ?
+                       0.010f : -0.004f) * scale;
     for (int32_t side = -1; side <= 1; side += 2) {
         Vector3 eye = PhysicsAdd(face, PhysicsScale(right,
-            (float)side * 0.052f * scale));
+            (float)side * eye_spacing));
         eye.y += 0.045f * scale;
-        DrawSmallSphere(eye, 0.010f * scale, (Color){24, 23, 22, 255});
+        eye = PhysicsAdd(eye, PhysicsScale(forward, 0.010f * scale));
+        DrawSmallSphere(eye, 0.013f * scale, facial_ink);
+
+        Vector3 brow_outer = PhysicsAdd(face, PhysicsScale(
+            right, (float)side * (eye_spacing + 0.027f * scale)));
+        Vector3 brow_inner = PhysicsAdd(face, PhysicsScale(
+            right, (float)side * (eye_spacing - 0.025f * scale)));
+        brow_outer.y += 0.086f * scale + brow_tilt;
+        brow_inner.y += 0.078f * scale - brow_tilt;
+        brow_outer = PhysicsAdd(brow_outer,
+                                 PhysicsScale(forward, 0.014f * scale));
+        brow_inner = PhysicsAdd(brow_inner,
+                                 PhysicsScale(forward, 0.014f * scale));
+        DrawCylinderEx(brow_outer, brow_inner, 0.008f * scale,
+                       0.008f * scale, 5, facial_ink);
+    }
+    Vector3 mouth_left = PhysicsAdd(face,
+        PhysicsScale(right, -0.036f * scale));
+    Vector3 mouth_right = PhysicsAdd(face,
+        PhysicsScale(right, 0.036f * scale));
+    mouth_left.y -= 0.056f * scale;
+    mouth_right.y -= 0.056f * scale;
+    mouth_left = PhysicsAdd(mouth_left,
+                            PhysicsScale(forward, 0.011f * scale));
+    mouth_right = PhysicsAdd(mouth_right,
+                             PhysicsScale(forward, 0.011f * scale));
+    DrawCylinderEx(mouth_left, mouth_right, 0.006f * scale,
+                   0.006f * scale, 5, facial_ink);
+    if (appearance->scar_style != 0U) {
+        float side = appearance->scar_style == 2U ? -1.0f : 1.0f;
+        Vector3 scar_top = PhysicsAdd(
+            face, PhysicsScale(right, side * 0.070f * scale));
+        scar_top.y += 0.047f * scale;
+        scar_top = PhysicsAdd(scar_top,
+                              PhysicsScale(forward, 0.018f * scale));
+        Vector3 scar_bottom = PhysicsAdd(
+            scar_top, (Vector3){side * -0.012f * scale,
+                                -0.070f * scale, 0.0f});
+        DrawCylinderEx(scar_top, scar_bottom, 0.004f * scale,
+                       0.004f * scale, 4,
+                       ShadeColor(appearance->skin, 0.54f));
     }
 
     Vector3 crown = PhysicsAdd(head, (Vector3){0.0f, 0.115f * scale, 0.0f});
@@ -5163,32 +7393,166 @@ static void DrawNpcGarmentCut(const CcNpcAppearance *appearance,
     }
 }
 
+static bool DrawNpcArchetype3D(Vector3 position, float size_hint, float yaw,
+                               float phase, CcTraversalMode mode,
+                               const CcNpcAppearance *appearance)
+{
+    if (appearance == NULL || appearance->role < CC_NPC_ROLE_WAYFARER ||
+        appearance->role >= CC_NPC_ROLE_COUNT) {
+        return false;
+    }
+    float pulse = sinf(phase * appearance->gait_cadence_scale);
+    int32_t pose = 0;
+    if (mode != CC_TRAVERSAL_IDLE) {
+        float cycle = fmodf(phase * appearance->gait_cadence_scale /
+                                (2.0f * PI),
+                            1.0f);
+        if (cycle < 0.0f) cycle += 1.0f;
+        pose = 1 + (int32_t)floorf(
+            cycle * (float)CC_NPC_ARCHETYPE_LOCOMOTION_POSE_COUNT);
+        if (pose >= CC_NPC_ARCHETYPE_POSE_COUNT) {
+            pose = CC_NPC_ARCHETYPE_POSE_COUNT - 1;
+        }
+    }
+    NpcArchetypeCache *archetype = &npc_archetypes[appearance->role][pose];
+    if (!archetype->ready && pose != 0) {
+        archetype = &npc_archetypes[appearance->role][0];
+    }
+    if (!archetype->ready || archetype->model.meshCount != 1 ||
+        archetype->model.materialCount < 1) {
+        return false;
+    }
+
+    float scale = appearance->stature * (0.82f + size_hint * 0.08f);
+    float width = 0.96f + (appearance->body_mass - 1.0f) * 0.22f +
+                  (appearance->shoulder_scale - 1.0f) * 0.18f;
+    width = fmaxf(0.90f, fminf(width, 1.08f));
+    float movement = mode == CC_TRAVERSAL_IDLE ? 0.35f : 1.0f;
+    position.y += fabsf(pulse) * 0.010f * movement *
+                  appearance->bob_scale;
+    float presentation_yaw = WrapAngle(yaw + pulse * 0.012f * movement);
+    /* Ambient people are stage actors, not navigation arrows. Bias them toward
+       the fixed adventure-game camera so a broad face/torso read survives even
+       when their simulated travel heading would present a one-pixel profile. */
+    const float camera_read_yaw = 0.20f;
+    presentation_yaw = WrapAngle(
+        presentation_yaw +
+        WrapAngle(camera_read_yaw - presentation_yaw) * 0.68f);
+
+    const float silhouette_gain = 1.18f;
+    const float contact_grid = 0.125f;
+    Vector3 contact_shadow = {
+        roundf(position.x / contact_grid) * contact_grid,
+        0.006f,
+        roundf(position.z / contact_grid) * contact_grid,
+    };
+    DrawBox(contact_shadow,
+            (Vector3){0.62f * scale * width * silhouette_gain, 0.012f,
+                      0.43f * scale * width * silhouette_gain},
+            (Color){2, 7, 10, 98});
+    SetNpcPalette(appearance, 0.50f);
+    DrawModelEx(archetype->model, position,
+                (Vector3){0.0f, 1.0f, 0.0f},
+                presentation_yaw * RAD2DEG,
+                (Vector3){scale * width * silhouette_gain, scale,
+                          scale * width * silhouette_gain}, WHITE);
+
+    Vector3 head_right = {cosf(presentation_yaw), 0.0f,
+                          -sinf(presentation_yaw)};
+    Vector3 head_up = {0.0f, 1.0f, 0.0f};
+    Vector3 head_forward = {sinf(presentation_yaw), 0.0f,
+                            cosf(presentation_yaw)};
+    Vector3 head = LocalPoint(position, 0.0f, 1.84f * scale,
+                              0.01f * scale, presentation_yaw);
+    Matrix identity_head = NpcModuleTransform(
+        head, head_right, head_up, head_forward,
+        (Vector3){0.36f * appearance->head_width * scale * width *
+                      silhouette_gain,
+                  0.40f * scale,
+                  0.33f * appearance->head_depth * scale * width *
+                      silhouette_gain});
+    int32_t hair = (int32_t)appearance->hair_style %
+                   CC_NPC_DYNAMIC_HAIR_COUNT;
+    (void)DrawNpcDynamicModule(
+        (NpcDynamicModuleId)(NPC_DYNAMIC_HAIR_0 + hair), identity_head,
+        appearance->hair);
+    if ((appearance->equipment & CC_NPC_EQUIPMENT_HEADWEAR) != 0U) {
+        NpcDynamicModuleId headwear = NpcHeadwearModule(
+            appearance->headwear_style);
+        Color headwear_color = appearance->headwear_style == 0U ?
+            appearance->metal : appearance->outer;
+        (void)DrawNpcDynamicModule(headwear, identity_head, headwear_color);
+    }
+    FaceGlyphExpression expression =
+        appearance->role == CC_NPC_ROLE_GUARD ||
+        appearance->role == CC_NPC_ROLE_RAIDER ? FACE_GLYPH_FOCUSED :
+                                                 FACE_GLYPH_NEUTRAL;
+    Vector3 body_base = position;
+    body_base.y = 0.0f;
+    QueueFaceGlyph(
+        head, body_base, head_forward,
+        0.145f * appearance->head_depth * scale,
+        BlendColor(appearance->hair, (Color){24, 23, 22, 255}, 0.58f),
+        appearance, expression);
+    if (visual_style.hero_ready) {
+        float ink_strength = 0.68f;
+        SetShaderValue(visual_style.hero,
+                       visual_style.hero_ink_strength_location,
+                       &ink_strength, SHADER_UNIFORM_FLOAT);
+    }
+    return true;
+}
+
 static void DrawNpcFigure3D(Vector3 position, float size_hint, float yaw,
                             uint32_t seed, CcNpcRole role, Color accent,
                             float phase, CcTraversalMode mode)
 {
     CcNpcAppearance appearance = CcNpcAppearanceGenerate(seed, role, accent);
-    float scale = appearance.stature * (0.82f + size_hint * 0.18f);
+    if (!draw_hero_rig_debug && DrawNpcArchetype3D(
+            position, size_hint, yaw, phase, mode, &appearance)) {
+        return;
+    }
+    UseCharacterLighting();
+    float scale = appearance.stature * (0.90f + size_hint * 0.16f);
     float mass = appearance.body_mass;
     float muscle = appearance.muscularity;
     float active = mode == CC_TRAVERSAL_IDLE ? 0.0f : 1.0f;
-    float stride = sinf(phase) * 0.13f * scale * active;
-    float bob = mode == CC_TRAVERSAL_WALK ? fabsf(sinf(phase)) * 0.035f * scale : 0.0f;
-    Vector3 hip = LocalPoint(position, 0.0f, 0.73f * scale + bob, 0.0f, yaw);
-    Vector3 chest = LocalPoint(position, 0.0f, 1.15f * scale + bob, 0.0f, yaw);
-    Vector3 neck = LocalPoint(position, 0.0f, 1.43f * scale + bob, 0.0f, yaw);
-    Vector3 shoulder_l = LocalPoint(position, -0.20f * scale,
-                                    1.29f * scale + bob, 0.0f, yaw);
-    Vector3 shoulder_r = LocalPoint(position, 0.20f * scale,
-                                    1.29f * scale + bob, 0.0f, yaw);
-    Vector3 elbow_l = LocalPoint(position, -0.29f * scale,
-                                 1.01f * scale + bob, stride, yaw);
-    Vector3 elbow_r = LocalPoint(position, 0.29f * scale,
-                                 1.01f * scale + bob, -stride, yaw);
-    Vector3 hand_l = LocalPoint(position, -0.25f * scale,
-                                0.78f * scale + bob, stride, yaw);
-    Vector3 hand_r = LocalPoint(position, 0.25f * scale,
-                                0.78f * scale + bob, -stride, yaw);
+    float walk_phase = phase * appearance.gait_cadence_scale * 2.0f * PI;
+    float walk_wave = sinf(walk_phase);
+    float idle_wave = sinf(phase * 0.55f +
+                           (float)(seed & UINT32_C(255)) * 0.011f);
+    float stride = walk_wave * 0.13f * scale * active *
+                   appearance.stride_scale;
+    float arm_stride = stride * appearance.arm_swing_scale;
+    float bob = mode == CC_TRAVERSAL_WALK ?
+        fabsf(walk_wave) * 0.035f * scale * appearance.bob_scale :
+        idle_wave * 0.010f * scale;
+    float sway = mode == CC_TRAVERSAL_IDLE ? idle_wave * 0.014f * scale :
+                                             cosf(walk_phase) * 0.018f * scale;
+    float lean = appearance.idle_lean * scale;
+    Vector3 hip = LocalPoint(position, sway * 0.30f,
+                             0.73f * scale + bob * 0.35f,
+                             lean * 0.20f, yaw);
+    Vector3 chest = LocalPoint(position, sway, 1.15f * scale + bob,
+                               lean, yaw);
+    Vector3 neck = LocalPoint(position, sway * 1.08f,
+                              1.43f * scale + bob, lean * 1.24f, yaw);
+    Vector3 shoulder_l = LocalPoint(position, -0.225f * scale + sway,
+                                    1.29f * scale + bob, lean, yaw);
+    Vector3 shoulder_r = LocalPoint(position, 0.225f * scale + sway,
+                                    1.29f * scale + bob, lean, yaw);
+    Vector3 elbow_l = LocalPoint(position, -0.31f * scale + sway,
+                                 1.01f * scale + bob,
+                                 lean + arm_stride, yaw);
+    Vector3 elbow_r = LocalPoint(position, 0.31f * scale + sway,
+                                 1.01f * scale + bob,
+                                 lean - arm_stride, yaw);
+    Vector3 hand_l = LocalPoint(position, -0.275f * scale + sway,
+                                0.78f * scale + bob,
+                                lean + arm_stride, yaw);
+    Vector3 hand_r = LocalPoint(position, 0.275f * scale + sway,
+                                0.78f * scale + bob,
+                                lean - arm_stride, yaw);
     Vector3 knee_l = LocalPoint(position, -0.12f * scale, 0.40f * scale,
                                 stride, yaw);
     Vector3 knee_r = LocalPoint(position, 0.12f * scale, 0.40f * scale,
@@ -5224,9 +7588,9 @@ static void DrawNpcFigure3D(Vector3 position, float size_hint, float yaw,
     }
 
     DrawCylinder((Vector3){position.x, position.y + 0.005f, position.z},
-                 0.27f * scale, 0.27f * scale, 0.012f, 18,
+                 0.31f * scale, 0.31f * scale, 0.012f, 18,
                  (Color){2, 7, 10, 115});
-    float thigh = (0.078f + muscle * 0.022f) * mass * scale;
+    float thigh = (0.084f + muscle * 0.024f) * mass * scale;
     DrawCylinderEx(hip, knee_l, thigh, thigh * 0.82f, 9,
                    appearance.trousers);
     DrawCylinderEx(hip, knee_r, thigh, thigh * 0.82f, 9,
@@ -5236,35 +7600,37 @@ static void DrawNpcFigure3D(Vector3 position, float size_hint, float yaw,
     DrawCylinderEx(knee_r, foot_r, thigh * 0.82f, thigh * 0.62f, 9,
                    ShadeColor(appearance.trousers, 0.82f));
     DrawOrientedBox(foot_l, (Vector3){0.0f, 0.02f * scale, 0.07f * scale},
-                    (Vector3){0.17f * scale, 0.10f * scale, 0.29f * scale},
+                    (Vector3){0.19f * scale, 0.11f * scale, 0.32f * scale},
                     yaw, appearance.leather);
     DrawOrientedBox(foot_r, (Vector3){0.0f, 0.02f * scale, 0.07f * scale},
-                    (Vector3){0.17f * scale, 0.10f * scale, 0.29f * scale},
+                    (Vector3){0.19f * scale, 0.11f * scale, 0.32f * scale},
                     yaw, appearance.leather);
-    DrawCylinderEx(hip, chest, 0.17f * mass * scale,
-                   0.225f * appearance.shoulder_scale * mass * scale, 10,
+    DrawCylinderEx(hip, chest, 0.18f * mass * scale,
+                   0.24f * appearance.shoulder_scale * mass * scale, 10,
                    appearance.underlayer);
-    Vector3 waist = LocalPoint(position, 0.0f, 0.88f * scale + bob,
-                               0.0f, yaw);
-    Vector3 upper_chest = LocalPoint(position, 0.0f, 1.29f * scale + bob,
-                                     0.0f, yaw);
-    DrawCylinderEx(waist, upper_chest, 0.19f * mass * scale,
-                   0.235f * appearance.shoulder_scale * mass * scale, 10,
+    Vector3 waist = LocalPoint(position, sway * 0.48f,
+                               0.88f * scale + bob * 0.62f,
+                               lean * 0.46f, yaw);
+    Vector3 upper_chest = LocalPoint(position, sway,
+                                     1.29f * scale + bob, lean, yaw);
+    DrawCylinderEx(waist, upper_chest, 0.195f * mass * scale,
+                   0.25f * appearance.shoulder_scale * mass * scale, 10,
                    appearance.outer);
     DrawCylinder(waist, 0.205f * mass * scale, 0.205f * mass * scale,
                  0.065f * scale, 10, appearance.leather);
     DrawNpcGarmentCut(&appearance, hip, chest, shoulder_l, yaw, scale);
-    DrawCylinderEx(shoulder_l, elbow_l, 0.070f * mass * scale,
-                   0.058f * mass * scale, 8, appearance.outer);
-    DrawCylinderEx(elbow_l, hand_l, 0.058f * mass * scale,
-                   0.045f * mass * scale, 8, appearance.underlayer);
-    DrawCylinderEx(shoulder_r, elbow_r, 0.070f * mass * scale,
-                   0.058f * mass * scale, 8, appearance.outer);
-    DrawCylinderEx(elbow_r, hand_r, 0.058f * mass * scale,
-                   0.045f * mass * scale, 8, appearance.underlayer);
-    DrawSmallSphere(hand_l, 0.052f * scale, appearance.skin);
-    DrawSmallSphere(hand_r, 0.052f * scale, appearance.skin);
-    Vector3 head = LocalPoint(position, 0.0f, 1.62f * scale + bob, 0.0f, yaw);
+    DrawCylinderEx(shoulder_l, elbow_l, 0.077f * mass * scale,
+                   0.063f * mass * scale, 8, appearance.outer);
+    DrawCylinderEx(elbow_l, hand_l, 0.063f * mass * scale,
+                   0.050f * mass * scale, 8, appearance.underlayer);
+    DrawCylinderEx(shoulder_r, elbow_r, 0.077f * mass * scale,
+                   0.063f * mass * scale, 8, appearance.outer);
+    DrawCylinderEx(elbow_r, hand_r, 0.063f * mass * scale,
+                   0.050f * mass * scale, 8, appearance.underlayer);
+    DrawSmallSphere(hand_l, 0.060f * scale, appearance.skin);
+    DrawSmallSphere(hand_r, 0.060f * scale, appearance.skin);
+    Vector3 head = LocalPoint(position, sway * 1.12f,
+                              1.62f * scale + bob, lean * 1.34f, yaw);
     DrawNpcHead(&appearance, head, yaw, scale);
     DrawNpcEquipment(&appearance, position, hip, chest,
                      shoulder_l, shoulder_r, hand_l, yaw, scale);
@@ -5305,6 +7671,7 @@ static void DrawNpcFigure3D(Vector3 position, float size_hint, float yaw,
             DrawBoneJoint(joints[joint], appearance.accent);
         }
     }
+    RestoreWorldLighting();
 }
 
 static void DrawPitchedFoot(Vector3 heel, Vector3 toe, float yaw, Color color)
@@ -5328,7 +7695,7 @@ static void DrawPitchedFoot(Vector3 heel, Vector3 toe, float yaw, Color color)
     rlTranslatef(center.x, center.y, center.z);
     rlRotatef(solved_yaw * RAD2DEG, 0.0f, 1.0f, 0.0f);
     rlRotatef(-pitch * RAD2DEG, 1.0f, 0.0f, 0.0f);
-    DrawBox((Vector3){0.0f, 0.0f, 0.0f}, (Vector3){0.18f, 0.10f, 0.32f},
+    DrawBox((Vector3){0.0f, 0.0f, 0.0f}, (Vector3){0.20f, 0.11f, 0.34f},
             color);
     rlPopMatrix();
 }
@@ -5382,6 +7749,436 @@ static void DrawHeroSkinRigOverlay(const CcHumanoidGait *gait,
     }
 }
 
+static void DrawWayfarerCrown(const CcHumanoidSkinPose *skin)
+{
+    Vector3 up = FromLimbVector(skin->body_up);
+    Vector3 right = FromLimbVector(skin->body_right);
+    Vector3 forward = FromLimbVector(skin->body_forward);
+    Vector3 head_top = FromLimbVector(
+        skin->bones[CC_HUMANOID_SKIN_HEAD].tail);
+    Vector3 band = PhysicsAdd(
+        PhysicsAdd(head_top, PhysicsScale(up, 0.030f)),
+        PhysicsScale(forward, -0.004f));
+    Color dark_gold = (Color){124, 86, 34, 255};
+    Color crown_gold = (Color){204, 153, 57, 255};
+    DrawCylinderEx(PhysicsAdd(band, PhysicsScale(up, -0.024f)),
+                   PhysicsAdd(band, PhysicsScale(up, 0.018f)),
+                   0.095f, 0.087f, 7, dark_gold);
+    for (int32_t prong = -1; prong <= 1; ++prong) {
+        float height = prong == 0 ? 0.112f : 0.082f;
+        Vector3 root = PhysicsAdd(
+            band, PhysicsScale(right, (float)prong * 0.055f));
+        root = PhysicsAdd(root, PhysicsScale(forward, -0.010f));
+        Vector3 tip = PhysicsAdd(root, PhysicsScale(up, height));
+        DrawCylinderEx(root, tip, 0.027f, 0.005f, 5, crown_gold);
+    }
+}
+
+static Vector3 NpcModuleLocalPoint(Vector3 origin, Vector3 right, Vector3 up,
+                                   Vector3 forward, Vector3 local)
+{
+    Vector3 result = PhysicsAdd(origin, PhysicsScale(right, local.x));
+    result = PhysicsAdd(result, PhysicsScale(up, local.y));
+    return PhysicsAdd(result, PhysicsScale(forward, local.z));
+}
+
+static Matrix NpcModuleTransform(Vector3 origin, Vector3 right, Vector3 up,
+                                 Vector3 forward, Vector3 scale)
+{
+    return (Matrix){
+        .m0 = right.x * scale.x,
+        .m1 = right.y * scale.x,
+        .m2 = right.z * scale.x,
+        .m3 = 0.0f,
+        .m4 = up.x * scale.y,
+        .m5 = up.y * scale.y,
+        .m6 = up.z * scale.y,
+        .m7 = 0.0f,
+        .m8 = forward.x * scale.z,
+        .m9 = forward.y * scale.z,
+        .m10 = forward.z * scale.z,
+        .m11 = 0.0f,
+        .m12 = origin.x,
+        .m13 = origin.y,
+        .m14 = origin.z,
+        .m15 = 1.0f,
+    };
+}
+
+static bool DrawNpcDynamicModule(NpcDynamicModuleId id, Matrix transform,
+                                 Color color)
+{
+    (void)color;
+    if (id < 0 || id >= NPC_DYNAMIC_MODULE_COUNT) return false;
+    NpcDynamicModuleCache *module = &npc_dynamic_modules[id];
+    if (!module->ready || module->model.meshCount != 1 ||
+        module->model.materialCount < 1) return false;
+    /* COLOR_0 stores the semantic palette slot. Runtime variation belongs in
+       the indexed shader, so each generated module keeps one neutral material
+       instead of mutating raylib material state for every body part. */
+    module->model.materials[0].maps[MATERIAL_MAP_DIFFUSE].color = WHITE;
+    for (int32_t mesh = 0; mesh < module->model.meshCount; ++mesh) {
+        int32_t material = module->model.meshMaterial[mesh];
+        if (material < 0 || material >= module->model.materialCount) {
+            material = 0;
+        }
+        DrawMesh(module->model.meshes[mesh],
+                 module->model.materials[material], transform);
+    }
+    return true;
+}
+
+static bool DrawNpcDynamicBoneModule(NpcDynamicModuleId id,
+                                     const CcHumanoidSkinBonePose *bone,
+                                     float width, float depth, Color color)
+{
+    if (bone == NULL) return false;
+    Vector3 head = FromLimbVector(bone->head);
+    Vector3 tail = FromLimbVector(bone->tail);
+    float length = PhysicsLength(PhysicsSubtract(tail, head));
+    if (!isfinite(length) || length <= 0.001f) return false;
+    return DrawNpcDynamicModule(
+        id, NpcModuleTransform(head, FromLimbVector(bone->right),
+                               FromLimbVector(bone->up),
+                               FromLimbVector(bone->forward),
+                               (Vector3){width, length, depth}), color);
+}
+
+static bool NpcDynamicCoreReady(int32_t hair_style)
+{
+    static const NpcDynamicModuleId core[] = {
+        NPC_DYNAMIC_TORSO, NPC_DYNAMIC_PELVIS, NPC_DYNAMIC_UPPER_ARM,
+        NPC_DYNAMIC_FOREARM, NPC_DYNAMIC_THIGH, NPC_DYNAMIC_SHIN,
+        NPC_DYNAMIC_HAND, NPC_DYNAMIC_FOOT, NPC_DYNAMIC_HEAD,
+    };
+    for (int32_t i = 0;
+         i < (int32_t)(sizeof(core) / sizeof(core[0])); ++i) {
+        if (!npc_dynamic_modules[core[i]].ready) return false;
+    }
+    int32_t hair = hair_style % CC_NPC_DYNAMIC_HAIR_COUNT;
+    if (hair < 0) hair += CC_NPC_DYNAMIC_HAIR_COUNT;
+    return npc_dynamic_modules[NPC_DYNAMIC_HAIR_0 + hair].ready;
+}
+
+static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
+                                  const CcHumanoidSkinPose *skin,
+                                  const CcNpcAppearance *appearance)
+{
+    if (agent == NULL || skin == NULL || appearance == NULL || !skin->valid ||
+        !NpcDynamicCoreReady((int32_t)appearance->hair_style)) return false;
+
+    Vector3 body_right = FromLimbVector(skin->body_right);
+    Vector3 body_up = FromLimbVector(skin->body_up);
+    Vector3 body_forward = FromLimbVector(skin->body_forward);
+    float movement_weight = agent->humanoid.ragdoll.active ? 0.0f :
+        SmoothStep01(fabsf(agent->humanoid.speed.value) / 0.90f);
+    static const float stepped_wave[8] = {
+        0.0f, 0.70f, 1.0f, 0.70f, 0.0f, -0.70f, -1.0f, -0.70f,
+    };
+    float secondary_wave = 0.0f;
+    if (agent->stepped_pose.initialized &&
+        agent->stepped_pose.locomotion_bin >= 0 &&
+        agent->stepped_pose.locomotion_bin < 8) {
+        secondary_wave = stepped_wave[agent->stepped_pose.locomotion_bin];
+    }
+    Vector3 gear_up = PhysicsNormalizeOr(
+        PhysicsAdd(body_up,
+                   PhysicsAdd(PhysicsScale(body_right,
+                                           secondary_wave * 0.075f *
+                                               movement_weight),
+                              PhysicsScale(body_forward,
+                                           0.045f * movement_weight))),
+        body_up);
+    Vector3 gear_right = PhysicsNormalizeOr(
+        PhysicsCross(gear_up, body_forward), body_right);
+    Vector3 gear_forward = PhysicsNormalizeOr(
+        PhysicsCross(gear_right, gear_up), body_forward);
+    float mass = appearance->body_mass;
+    float muscle = appearance->muscularity;
+    Color outer = appearance->outer;
+    Color trousers = appearance->trousers;
+    if (CombatIsDefeated(&agent->combat)) {
+        outer = BlendColor(outer, (Color){50, 49, 52, 255}, 0.72f);
+        trousers = BlendColor(trousers, (Color){42, 42, 44, 255}, 0.72f);
+    } else if (agent->combat.hit_flash_seconds > 0.0f) {
+        outer = BlendColor(outer, WORLD_INK, 0.72f);
+    }
+    CcNpcAppearance palette_appearance = *appearance;
+    palette_appearance.outer = outer;
+    palette_appearance.trousers = trousers;
+    SetNpcPalette(&palette_appearance, 0.68f);
+
+    const CcHumanoidSkinBonePose *spine =
+        &skin->bones[CC_HUMANOID_SKIN_SPINE];
+    Vector3 torso_base = FromLimbVector(spine->head);
+    Vector3 torso_top = FromLimbVector(
+        skin->bones[CC_HUMANOID_SKIN_CHEST].tail);
+    float torso_length = PhysicsLength(
+        PhysicsSubtract(torso_top, torso_base));
+    bool drew = DrawNpcDynamicModule(
+        NPC_DYNAMIC_TORSO,
+        NpcModuleTransform(torso_base, body_right, body_up, body_forward,
+                           (Vector3){0.54f * mass * appearance->shoulder_scale,
+                                     torso_length, 0.34f * mass}),
+        outer);
+
+    const CcHumanoidSkinBonePose *pelvis =
+        &skin->bones[CC_HUMANOID_SKIN_PELVIS];
+    float pelvis_length = PhysicsLength(PhysicsSubtract(
+        FromLimbVector(pelvis->tail), FromLimbVector(pelvis->head)));
+    pelvis_length = fmaxf(pelvis_length, 0.16f);
+    drew = DrawNpcDynamicModule(
+        NPC_DYNAMIC_PELVIS,
+        NpcModuleTransform(FromLimbVector(pelvis->head),
+                           FromLimbVector(pelvis->right),
+                           FromLimbVector(pelvis->up),
+                           FromLimbVector(pelvis->forward),
+                           (Vector3){0.43f * mass, pelvis_length,
+                                     0.29f * mass}),
+        trousers) && drew;
+
+    static const CcHumanoidSkinBone upper_arms[] = {
+        CC_HUMANOID_SKIN_UPPER_ARM_LEFT,
+        CC_HUMANOID_SKIN_UPPER_ARM_RIGHT,
+    };
+    static const CcHumanoidSkinBone forearms[] = {
+        CC_HUMANOID_SKIN_FOREARM_LEFT,
+        CC_HUMANOID_SKIN_FOREARM_RIGHT,
+    };
+    static const CcHumanoidSkinBone hands[] = {
+        CC_HUMANOID_SKIN_HAND_LEFT,
+        CC_HUMANOID_SKIN_HAND_RIGHT,
+    };
+    static const CcHumanoidSkinBone thighs[] = {
+        CC_HUMANOID_SKIN_THIGH_LEFT,
+        CC_HUMANOID_SKIN_THIGH_RIGHT,
+    };
+    static const CcHumanoidSkinBone shins[] = {
+        CC_HUMANOID_SKIN_SHIN_LEFT,
+        CC_HUMANOID_SKIN_SHIN_RIGHT,
+    };
+    static const CcHumanoidSkinBone feet[] = {
+        CC_HUMANOID_SKIN_FOOT_LEFT,
+        CC_HUMANOID_SKIN_FOOT_RIGHT,
+    };
+    float arm_width = (0.135f + muscle * 0.020f) * mass;
+    float leg_width = (0.175f + muscle * 0.025f) * mass;
+    for (int32_t side = 0; side < 2; ++side) {
+        drew = DrawNpcDynamicBoneModule(
+            NPC_DYNAMIC_UPPER_ARM, &skin->bones[upper_arms[side]],
+            arm_width, arm_width * 0.92f, outer) && drew;
+        drew = DrawNpcDynamicBoneModule(
+            NPC_DYNAMIC_FOREARM, &skin->bones[forearms[side]],
+            arm_width * 0.86f, arm_width * 0.80f,
+            appearance->underlayer) && drew;
+        const CcHumanoidSkinBonePose *hand = &skin->bones[hands[side]];
+        drew = DrawNpcDynamicModule(
+            NPC_DYNAMIC_HAND,
+            NpcModuleTransform(FromLimbVector(hand->head),
+                               FromLimbVector(hand->right),
+                               FromLimbVector(hand->up),
+                               FromLimbVector(hand->forward),
+                               (Vector3){0.135f, 0.165f, 0.125f}),
+            appearance->skin) && drew;
+        drew = DrawNpcDynamicBoneModule(
+            NPC_DYNAMIC_THIGH, &skin->bones[thighs[side]],
+            leg_width, leg_width * 0.94f, trousers) && drew;
+        drew = DrawNpcDynamicBoneModule(
+            NPC_DYNAMIC_SHIN, &skin->bones[shins[side]],
+            leg_width * 0.86f, leg_width * 0.82f,
+            ShadeColor(trousers, 0.84f)) && drew;
+        const CcHumanoidSkinBonePose *foot = &skin->bones[feet[side]];
+        Vector3 foot_head = FromLimbVector(foot->head);
+        float foot_length = PhysicsLength(PhysicsSubtract(
+            FromLimbVector(foot->tail), foot_head));
+        drew = DrawNpcDynamicModule(
+            NPC_DYNAMIC_FOOT,
+            NpcModuleTransform(foot_head, FromLimbVector(foot->right),
+                               FromLimbVector(foot->up),
+                               FromLimbVector(foot->forward),
+                               (Vector3){0.23f * mass, foot_length,
+                                         0.20f * mass}),
+            appearance->leather) && drew;
+    }
+
+    const CcHumanoidSkinBonePose *head_bone =
+        &skin->bones[CC_HUMANOID_SKIN_HEAD];
+    Vector3 head = FromLimbVector(
+        skin->sockets[CC_HUMANOID_SOCKET_HEAD].position);
+    Vector3 head_scale = {0.36f * appearance->head_width,
+                          0.40f, 0.33f * appearance->head_depth};
+    Matrix head_transform = NpcModuleTransform(
+        head, FromLimbVector(head_bone->right),
+        FromLimbVector(head_bone->up), FromLimbVector(head_bone->forward),
+        head_scale);
+    drew = DrawNpcDynamicModule(NPC_DYNAMIC_HEAD, head_transform,
+                                appearance->skin) && drew;
+    int32_t hair = (int32_t)appearance->hair_style %
+                   CC_NPC_DYNAMIC_HAIR_COUNT;
+    drew = DrawNpcDynamicModule(
+        (NpcDynamicModuleId)(NPC_DYNAMIC_HAIR_0 + hair), head_transform,
+        appearance->hair) && drew;
+
+    Vector3 back = FromLimbVector(
+        skin->sockets[CC_HUMANOID_SOCKET_BACK].position);
+    Vector3 chest_front = FromLimbVector(
+        skin->sockets[CC_HUMANOID_SOCKET_CHEST_FRONT].position);
+    if ((appearance->equipment & CC_NPC_EQUIPMENT_MANTLE) != 0U &&
+        npc_dynamic_modules[NPC_DYNAMIC_MANTLE].ready) {
+        Vector3 mantle_root = NpcModuleLocalPoint(
+            back, body_right, body_up, body_forward,
+            (Vector3){-0.03f + secondary_wave * 0.020f * movement_weight,
+                      0.14f + fabsf(secondary_wave) * 0.010f *
+                                  movement_weight,
+                      -0.015f - 0.018f * movement_weight});
+        (void)DrawNpcDynamicModule(
+            NPC_DYNAMIC_MANTLE,
+            NpcModuleTransform(mantle_root, gear_right, gear_up,
+                               gear_forward,
+                               (Vector3){0.62f * mass, 0.64f, 0.50f}),
+            ShadeColor(appearance->outer, 0.68f));
+    }
+    if ((appearance->equipment & CC_NPC_EQUIPMENT_ARMOR) != 0U) {
+        (void)DrawNpcDynamicModule(
+            NPC_DYNAMIC_CHEST_PLATE,
+            NpcModuleTransform(chest_front, body_right, body_up,
+                               body_forward,
+                               (Vector3){0.43f * mass, 0.36f, 0.28f}),
+            appearance->metal);
+        for (int32_t side = 0; side < 2; ++side) {
+            const CcHumanoidSkinBonePose *shoulder =
+                &skin->bones[upper_arms[side]];
+            (void)DrawNpcDynamicModule(
+                NPC_DYNAMIC_PAULDRON,
+                NpcModuleTransform(FromLimbVector(shoulder->head),
+                                   FromLimbVector(shoulder->right),
+                                   FromLimbVector(shoulder->up),
+                                   FromLimbVector(shoulder->forward),
+                                   (Vector3){0.22f * mass, 0.20f,
+                                             0.21f * mass}),
+                appearance->metal);
+        }
+    }
+
+    Vector3 pelvis_center = FromLimbVector(
+        skin->sockets[CC_HUMANOID_SOCKET_BELT].position);
+    if (appearance->garment_style == 1U &&
+        npc_dynamic_modules[NPC_DYNAMIC_COAT_TAIL].ready) {
+        for (int32_t side = -1; side <= 1; side += 2) {
+            Vector3 tail = NpcModuleLocalPoint(
+                pelvis_center, body_right, body_up, body_forward,
+                (Vector3){(float)side * 0.11f, -0.08f, -0.09f});
+            (void)DrawNpcDynamicModule(
+                NPC_DYNAMIC_COAT_TAIL,
+                NpcModuleTransform(tail, body_right, body_up, body_forward,
+                                   (Vector3){0.22f * mass, 0.40f, 0.28f}),
+                ShadeColor(appearance->outer, 0.72f));
+        }
+    }
+    if ((appearance->equipment & CC_NPC_EQUIPMENT_APRON) != 0U &&
+        npc_dynamic_modules[NPC_DYNAMIC_APRON].ready) {
+        Vector3 apron = NpcModuleLocalPoint(
+            pelvis_center, body_right, body_up, body_forward,
+            (Vector3){0.0f, -0.04f, 0.18f});
+        (void)DrawNpcDynamicModule(
+            NPC_DYNAMIC_APRON,
+            NpcModuleTransform(apron, body_right, body_up, body_forward,
+                               (Vector3){0.42f * mass, 0.62f, 0.28f}),
+            appearance->underlayer);
+    }
+    if ((appearance->equipment & CC_NPC_EQUIPMENT_PACK) != 0U &&
+        npc_dynamic_modules[NPC_DYNAMIC_PACK].ready) {
+        Vector3 pack = NpcModuleLocalPoint(
+            back, body_right, body_up, body_forward,
+            (Vector3){secondary_wave * 0.016f * movement_weight,
+                      -0.16f + fabsf(secondary_wave) * 0.012f *
+                                   movement_weight,
+                      -0.13f - 0.012f * movement_weight});
+        (void)DrawNpcDynamicModule(
+            NPC_DYNAMIC_PACK,
+            NpcModuleTransform(pack, gear_right, gear_up, gear_forward,
+                               (Vector3){0.42f * mass, 0.48f, 0.30f}),
+            appearance->leather);
+    }
+    if ((appearance->equipment & CC_NPC_EQUIPMENT_SATCHEL) != 0U &&
+        npc_dynamic_modules[NPC_DYNAMIC_SATCHEL].ready) {
+        Vector3 satchel = NpcModuleLocalPoint(
+            pelvis_center, body_right, body_up, body_forward,
+            (Vector3){0.29f * mass + secondary_wave * 0.026f *
+                                         movement_weight,
+                      -0.13f - fabsf(secondary_wave) * 0.010f *
+                                   movement_weight,
+                      -0.08f});
+        (void)DrawNpcDynamicModule(
+            NPC_DYNAMIC_SATCHEL,
+            NpcModuleTransform(satchel, gear_right, gear_up, gear_forward,
+                               (Vector3){0.24f, 0.28f, 0.20f}),
+            appearance->leather);
+    }
+    if ((appearance->equipment & CC_NPC_EQUIPMENT_TOOL) != 0U &&
+        appearance->role != CC_NPC_ROLE_GUARD &&
+        appearance->role != CC_NPC_ROLE_RAIDER &&
+        npc_dynamic_modules[NPC_DYNAMIC_TOOL_SHAFT].ready &&
+        npc_dynamic_modules[NPC_DYNAMIC_TOOL_HEAD].ready) {
+        Vector3 tool_root = FromLimbVector(
+            skin->bones[CC_HUMANOID_SKIN_HAND_LEFT].tail);
+        Vector3 tool_axis = PhysicsNormalizeOr(
+            PhysicsAdd(body_up,
+                       PhysicsAdd(PhysicsScale(
+                                      body_right,
+                                      secondary_wave * 0.12f *
+                                          movement_weight),
+                                  PhysicsScale(body_forward, 0.12f))),
+            body_up);
+        Vector3 tool_right = PhysicsNormalizeOr(
+            PhysicsCross(tool_axis, body_forward), body_right);
+        Vector3 tool_forward = PhysicsNormalizeOr(
+            PhysicsCross(tool_right, tool_axis), body_forward);
+        const float tool_length = 0.68f;
+        (void)DrawNpcDynamicModule(
+            NPC_DYNAMIC_TOOL_SHAFT,
+            NpcModuleTransform(tool_root, tool_right, tool_axis,
+                               tool_forward,
+                               (Vector3){0.042f, tool_length, 0.042f}),
+            appearance->leather);
+        Vector3 tool_tip = PhysicsAdd(
+            tool_root, PhysicsScale(tool_axis, tool_length));
+        (void)DrawNpcDynamicModule(
+            NPC_DYNAMIC_TOOL_HEAD,
+            NpcModuleTransform(tool_tip, tool_right, tool_axis,
+                               tool_forward,
+                               (Vector3){0.28f, 0.14f, 0.15f}),
+            appearance->metal);
+    }
+    if ((appearance->equipment & CC_NPC_EQUIPMENT_HEADWEAR) != 0U) {
+        NpcDynamicModuleId headwear = NpcHeadwearModule(
+            appearance->headwear_style);
+        Color headwear_color = appearance->headwear_style == 0U ?
+            appearance->metal : appearance->outer;
+        (void)DrawNpcDynamicModule(
+            headwear, head_transform, headwear_color);
+    }
+
+    FaceGlyphExpression expression =
+        appearance->role == CC_NPC_ROLE_GUARD ||
+        appearance->role == CC_NPC_ROLE_RAIDER ? FACE_GLYPH_FOCUSED :
+                                                 FACE_GLYPH_NEUTRAL;
+    if (agent->combat.hit_flash_seconds > 0.0f) {
+        expression = FACE_GLYPH_HURT;
+    } else if (agent->combat.focus_valid ||
+               agent->humanoid.action == CC_HUMANOID_ACTION_GUARD ||
+               agent->humanoid.action == CC_HUMANOID_ACTION_STRIKE) {
+        expression = FACE_GLYPH_FOCUSED;
+    }
+    QueueFaceGlyph(head, agent->position, body_forward,
+                   0.165f * appearance->head_depth,
+                   BlendColor(appearance->hair, (Color){24, 23, 22, 255},
+                              0.58f),
+                   appearance,
+                   expression);
+    return drew;
+}
+
 static void DrawBiomechanicalBiped(const CcLocalAgent *agent)
 {
     const CcHumanoidGait *gait = &agent->humanoid;
@@ -5402,21 +8199,39 @@ static void DrawBiomechanicalBiped(const CcLocalAgent *agent)
                           0.39f, 0.39f, 0.018f, 24,
                           Fade(WORLD_TEAL, 0.82f));
     }
-    if (modular_hero && DrawHeroSkin(&skin, &agent->cape, WHITE)) {
+    bool hero_skin_updated = modular_hero &&
+        DrawHeroSkin(&skin, &agent->render_cape, WHITE, true);
+    if (hero_skin_updated) {
         CcLocalRendererRecordBiped(true);
         if (draw_hero_rig_debug) {
-            DrawHeroSkinRigOverlay(gait, &skin, &agent->cape);
+            DrawHeroSkinRigOverlay(gait, &skin, &agent->render_cape);
         }
-        if (agent->crowned) {
-            Vector3 crown = FromLimbVector(
-                skin.bones[CC_HUMANOID_SKIN_HEAD].tail);
-            crown = PhysicsAdd(crown, PhysicsScale(
-                FromLimbVector(skin.body_up), 0.10f));
-            DrawSmallSphere(crown, 0.060f, WORLD_GOLD);
+        UseCharacterLighting();
+        DrawWayfarerCrown(&skin);
+        RestoreWorldLighting();
+        FaceGlyphExpression expression = FACE_GLYPH_NEUTRAL;
+        if (agent->combat.hit_flash_seconds > 0.0f) {
+            expression = FACE_GLYPH_HURT;
+        } else if (agent->combat.focus_valid ||
+                   agent->humanoid.action == CC_HUMANOID_ACTION_GUARD ||
+                   agent->humanoid.action == CC_HUMANOID_ACTION_STRIKE) {
+            expression = FACE_GLYPH_FOCUSED;
         }
+        QueueFaceGlyph(
+            FromLimbVector(
+                skin.sockets[CC_HUMANOID_SOCKET_HEAD].position),
+            agent->position, FromLimbVector(skin.body_forward), 0.12f,
+            (Color){24, 22, 23, 255}, &agent->appearance, expression);
+        return;
+    } else {
+        CcLocalRendererRecordBiped(false);
+    }
+    UseCharacterLighting();
+    if (!agent->crowned &&
+        DrawDynamicNpcModules(agent, &skin, &agent->appearance)) {
+        RestoreWorldLighting();
         return;
     }
-    CcLocalRendererRecordBiped(false);
     Vector3 pelvis = FromLimbVector(
         skin.bones[CC_HUMANOID_SKIN_PELVIS].head);
     Vector3 spine = FromLimbVector(
@@ -5445,7 +8260,48 @@ static void DrawBiomechanicalBiped(const CcLocalAgent *agent)
     Vector3 cape_center = PhysicsAdd(
         FromLimbVector(skin.sockets[CC_HUMANOID_SOCKET_BACK].position),
         PhysicsScale(body_up, -0.24f));
-    const CcNpcAppearance *appearance = &agent->appearance;
+    CcNpcAppearance gameplay_appearance = agent->appearance;
+    if (agent->crowned) {
+        gameplay_appearance.role = CC_NPC_ROLE_WAYFARER;
+        gameplay_appearance.equipment |=
+            (uint32_t)(CC_NPC_EQUIPMENT_MANTLE |
+                       CC_NPC_EQUIPMENT_ARMOR |
+                       CC_NPC_EQUIPMENT_SATCHEL);
+        gameplay_appearance.body_mass = 0.92f;
+        gameplay_appearance.shoulder_scale = 1.02f;
+        gameplay_appearance.head_width = 1.04f;
+        gameplay_appearance.head_depth = 1.02f;
+        gameplay_appearance.garment_style = 1;
+        gameplay_appearance.skin = (Color){174, 126, 88, 255};
+        gameplay_appearance.hair = (Color){45, 32, 29, 255};
+        gameplay_appearance.underlayer = (Color){108, 91, 69, 255};
+        gameplay_appearance.outer = (Color){48, 105, 103, 255};
+        gameplay_appearance.trousers = (Color){49, 62, 63, 255};
+        gameplay_appearance.leather = (Color){82, 50, 35, 255};
+        gameplay_appearance.metal = (Color){119, 48, 55, 255};
+        gameplay_appearance.accent = WORLD_GOLD;
+    }
+    const CcNpcAppearance *appearance = &gameplay_appearance;
+    float movement_weight = SmoothStep01(fabsf(gait->speed.value) / 0.90f);
+    float movement_wave = sinf(gait->phase * 2.0f * PI);
+    float signature_lean = appearance->idle_lean *
+        (1.0f - movement_weight * 0.35f);
+    float signature_sway = cosf(gait->phase * 2.0f * PI) * 0.018f *
+        (1.0f - movement_weight) * appearance->bob_scale;
+    float signature_bob = fabsf(movement_wave) * 0.014f * movement_weight *
+        (appearance->bob_scale - 0.70f);
+    Vector3 signature_forward = {sinf(upper_yaw), 0.0f, cosf(upper_yaw)};
+    Vector3 signature_right = {cosf(upper_yaw), 0.0f, -sinf(upper_yaw)};
+    Vector3 posture_offset = PhysicsAdd(
+        PhysicsScale(signature_forward, signature_lean),
+        PhysicsScale(signature_right, signature_sway));
+    posture_offset.y += signature_bob;
+    chest = PhysicsAdd(chest, posture_offset);
+    shoulder_left = PhysicsAdd(shoulder_left, posture_offset);
+    shoulder_right = PhysicsAdd(shoulder_right, posture_offset);
+    neck = PhysicsAdd(neck, PhysicsScale(posture_offset, 1.18f));
+    head = PhysicsAdd(head, PhysicsScale(posture_offset, 1.32f));
+    cape_center = PhysicsAdd(cape_center, posture_offset);
     Color tunic = appearance->outer;
     if (CombatIsDefeated(&agent->combat)) tunic = (Color){61, 57, 62, 255};
     else if (agent->combat.hit_flash_seconds > 0.0f) tunic = WORLD_INK;
@@ -5475,17 +8331,18 @@ static void DrawBiomechanicalBiped(const CcLocalAgent *agent)
     }
     if (upright_weight > 0.01f) {
         if ((appearance->equipment & CC_NPC_EQUIPMENT_MANTLE) != 0U) {
+            Color mantle = agent->crowned ? (Color){91, 46, 54, 255} :
+                ShadeColor(appearance->outer, 0.68f);
             DrawOrientedBox(cape_center, (Vector3){0.0f, 0.04f, 0.0f},
                             (Vector3){0.46f * mass, 0.62f, 0.045f}, upper_yaw,
-                            Fade(ShadeColor(appearance->outer, 0.68f),
-                                 upright_weight));
+                            Fade(mantle, upright_weight));
         }
         DrawOrientedBox(pelvis, (Vector3){0.0f, 0.02f, 0.0f},
                         (Vector3){0.40f * mass, 0.18f, 0.27f * mass},
                         pelvis_yaw,
                         Fade(trousers, upright_weight));
         DrawCylinderEx(spine, chest,
-                       0.25f * mass, 0.29f * appearance->shoulder_scale,
+                       0.27f * mass, 0.31f * appearance->shoulder_scale,
                        10,
                        Fade(tunic, upright_weight));
         DrawNpcGarmentCut(appearance, pelvis, chest, shoulder_left,
@@ -5517,7 +8374,7 @@ static void DrawBiomechanicalBiped(const CcLocalAgent *agent)
         Vector3 ankle = FromLimbVector(skin.bones[shin_bones[leg]].tail);
         Vector3 heel = FromLimbVector(pose->heel[leg]);
         Vector3 toe = FromLimbVector(skin.bones[foot_bones[leg]].tail);
-        float thigh_radius = (0.076f + muscle * 0.016f) * mass;
+        float thigh_radius = (0.084f + muscle * 0.018f) * mass;
         DrawCylinderEx(hip, knee, thigh_radius, thigh_radius * 0.80f, 9,
                        trousers);
         DrawCylinderEx(knee, ankle, thigh_radius * 0.78f,
@@ -5540,15 +8397,24 @@ static void DrawBiomechanicalBiped(const CcLocalAgent *agent)
             skin.bones[upper_arm_bones[arm]].tail);
         Vector3 hand = FromLimbVector(
             skin.bones[forearm_bones[arm]].tail);
-        DrawCylinderEx(shoulder, elbow, 0.066f * mass, 0.055f * mass, 8,
+        float arm_direction = arm == 0 ? -1.0f : 1.0f;
+        float signature_swing = movement_wave * 0.045f * movement_weight *
+            appearance->arm_swing_scale * arm_direction;
+        Vector3 arm_offset = PhysicsAdd(
+            posture_offset, PhysicsScale(signature_forward,
+                                          signature_swing));
+        shoulder = PhysicsAdd(shoulder, posture_offset);
+        elbow = PhysicsAdd(elbow, PhysicsScale(arm_offset, 0.72f));
+        hand = PhysicsAdd(hand, arm_offset);
+        DrawCylinderEx(shoulder, elbow, 0.074f * mass, 0.061f * mass, 8,
                        tunic);
-        DrawCylinderEx(elbow, hand, 0.055f * mass, 0.044f * mass, 8,
+        DrawCylinderEx(elbow, hand, 0.061f * mass, 0.050f * mass, 8,
                        appearance->underlayer);
         if ((appearance->equipment & CC_NPC_EQUIPMENT_ARMOR) != 0U) {
             DrawCharacterSphere(shoulder, 0.092f * mass,
                                 appearance->metal);
         }
-        DrawSmallSphere(hand, 0.055f, appearance->skin);
+        DrawSmallSphere(hand, 0.062f, appearance->skin);
     }
 
     Vector3 head_up = PhysicsNormalizeOr(PhysicsSubtract(head, neck),
@@ -5572,8 +8438,7 @@ static void DrawBiomechanicalBiped(const CcLocalAgent *agent)
                      FromLimbVector(skin.bones[CC_HUMANOID_SKIN_FOREARM_LEFT].tail),
                      upper_yaw, 1.0f);
     if (agent->crowned) {
-        DrawSmallSphere(PhysicsAdd(head, PhysicsScale(head_up, 0.30f)),
-                        0.060f, WORLD_GOLD);
+        DrawWayfarerCrown(&skin);
     }
 
     if (draw_hero_rig_debug) {
@@ -5646,6 +8511,7 @@ static void DrawBiomechanicalBiped(const CcLocalAgent *agent)
             DrawBoneJoint(hand, WORLD_GOLD);
         }
     }
+    RestoreWorldLighting();
 }
 
 static Vector3 SolveVisualTwoBone(Vector3 root, Vector3 target,
@@ -5674,8 +8540,92 @@ static Vector3 SolveVisualTwoBone(Vector3 root, Vector3 target,
                       PhysicsScale(pole, height));
 }
 
+static float SnapContactCoordinate(float value)
+{
+    const float contact_grid = 0.125f;
+    return roundf(value / contact_grid) * contact_grid;
+}
+
+static void DrawCharacterContactEffects(const CcLocalAgent *agent)
+{
+    if (agent == NULL) return;
+    bool fallen = agent->humanoid.ragdoll.active ||
+                  agent->ragdoll_visual_blend > 0.42f;
+    float surface = SurfaceHeightAt(agent->scene, agent->position.x,
+                                    agent->position.z);
+    Vector3 shadow = {
+        SnapContactCoordinate(agent->position.x),
+        fmaxf(0.006f, surface + 0.008f),
+        SnapContactCoordinate(agent->position.z),
+    };
+    Vector3 shadow_size = fallen ? (Vector3){1.20f, 0.014f, 0.56f} :
+                                   (Vector3){0.70f, 0.014f, 0.46f};
+    DrawBox(shadow, shadow_size, (Color){3, 8, 10, fallen ? 102 : 82});
+    DrawCubeWiresV((Vector3){shadow.x, shadow.y + 0.003f, shadow.z},
+                   (Vector3){shadow_size.x + 0.03f, 0.016f,
+                             shadow_size.z + 0.03f},
+                   (Color){21, 35, 37, 72});
+
+    if (agent->swimming || agent->immersion > 0.08f) {
+        float phase = agent->humanoid.swim_phase -
+                      floorf(agent->humanoid.swim_phase);
+        float pulse = 0.34f + phase * 0.30f;
+        Vector3 water = {shadow.x, COURSE_WATER_SURFACE + 0.022f, shadow.z};
+        DrawCylinderWires(water, pulse, pulse, 0.018f, 16,
+                          Fade((Color){126, 220, 222, 255},
+                               0.62f * (1.0f - phase)));
+        DrawCylinderWires((Vector3){water.x, water.y + 0.006f, water.z},
+                          pulse * 0.62f, pulse * 0.62f, 0.018f, 12,
+                          Fade(WORLD_TEAL, 0.48f));
+        return;
+    }
+
+    bool stepping = agent->morphology == CC_MORPHOLOGY_BIPED &&
+                    agent->grounded && !agent->climbing &&
+                    !agent->humanoid.ragdoll.active &&
+                    agent->humanoid.speed.value > 0.16f &&
+                    agent->stepped_pose.initialized;
+    if (!stepping) return;
+    int32_t bin = agent->stepped_pose.locomotion_bin;
+    if (bin != 0 && bin != 4) return;
+    int32_t leg = bin == 0 ? 0 : 1;
+    const CcHumanoidPose *pose = AgentRenderPose(agent);
+    Vector3 heel = FromLimbVector(pose->heel[leg]);
+    Vector3 toe = FromLimbVector(pose->toe[leg]);
+    heel.x = SnapContactCoordinate(heel.x);
+    heel.z = SnapContactCoordinate(heel.z);
+    toe.x = SnapContactCoordinate(toe.x);
+    toe.z = SnapContactCoordinate(toe.z);
+    heel.y = fmaxf(0.016f, agent->position.y + 0.014f);
+    toe.y = heel.y;
+    Color print = (Color){67, 59, 48, 116};
+    DrawLine3D(heel, toe, print);
+    DrawBox(heel, (Vector3){0.16f, 0.014f, 0.11f}, print);
+
+    float within = agent->humanoid.phase * 8.0f;
+    within -= floorf(within);
+    float dust = 1.0f - SmoothStep01(within / 0.72f);
+    Vector3 side = {cosf(agent->facing_yaw), 0.0f,
+                    -sinf(agent->facing_yaw)};
+    Vector3 back = {-sinf(agent->facing_yaw), 0.0f,
+                    -cosf(agent->facing_yaw)};
+    for (int32_t mote = 0; mote < 3; ++mote) {
+        float lateral = ((float)mote - 1.0f) * 0.12f;
+        Vector3 center = PhysicsAdd(
+            heel, PhysicsAdd(PhysicsScale(side, lateral),
+                             PhysicsScale(back, 0.05f + (float)mote * 0.04f)));
+        center.x = SnapContactCoordinate(center.x);
+        center.z = SnapContactCoordinate(center.z);
+        center.y += 0.035f + (float)mote * 0.022f;
+        float size = (0.07f + (float)mote * 0.018f) * dust;
+        DrawBox(center, (Vector3){size, size, size},
+                Fade((Color){150, 125, 86, 255}, dust * 0.54f));
+    }
+}
+
 static void DrawRobotShell(const CcLocalAgent *agent)
 {
+    DrawCharacterContactEffects(agent);
     Vector3 body = ShellPodCenter(agent);
     const CcLimbRig *rig = &agent->limb_rig;
     bool biped = rig->morphology.preset == CC_MORPHOLOGY_BIPED;
@@ -5898,11 +8848,15 @@ static void DrawCarriage3D(const CcSettlement *place)
     DrawBox((Vector3){x, 1.06f, z},
             (Vector3){CARRIAGE_FOOTPRINT.width, 1.62f,
                       CARRIAGE_FOOTPRINT.height},
-            (Color){125, 66, 50, 255});
+            (Color){111, 65, 54, 255});
     DrawBox((Vector3){x, 1.94f, z},
             (Vector3){CARRIAGE_FOOTPRINT.width + 0.22f, 0.18f,
                       CARRIAGE_FOOTPRINT.height + 0.18f},
-            (Color){228, 174, 77, 255});
+            (Color){143, 124, 86, 255});
+    DrawCubeWiresV((Vector3){x, 1.94f, z},
+                   (Vector3){CARRIAGE_FOOTPRINT.width + 0.24f, 0.20f,
+                             CARRIAGE_FOOTPRINT.height + 0.20f},
+                   Fade(WORLD_GOLD, 0.58f));
     DrawBox((Vector3){CARRIAGE_FOOTPRINT.x + CARRIAGE_FOOTPRINT.width + 0.03f,
                        1.20f, z}, (Vector3){0.04f, 0.70f, 1.20f},
             (Color){35, 102, 108, 255});
@@ -5917,7 +8871,8 @@ static void DrawCarriage3D(const CcSettlement *place)
     };
     for (int32_t i = 0; i < 4; ++i) {
         DrawScenerySphere(wheels[i], 0.54f, (Color){38, 31, 31, 255});
-        DrawSphereWires(wheels[i], 0.55f, 7, 7, WORLD_GOLD);
+        DrawSphereWires(wheels[i], 0.55f, 7, 7,
+                        Fade(WORLD_GOLD, 0.62f));
     }
 }
 
@@ -6001,29 +8956,105 @@ static void DrawWorldTrees(Vector3 focus)
     }
 }
 
-static void DrawLabels(const WorldLabel *labels, int32_t count, Camera3D camera,
-                       int32_t width, int32_t height)
+static Rectangle ViewportRectangle(Rectangle viewport, float x, float y,
+                                   float width, float height)
 {
+    return (Rectangle){viewport.x + x, viewport.y + y, width, height};
+}
+
+static void DrawViewportText(const char *text, Rectangle viewport,
+                             int32_t x, int32_t y, int32_t font_size,
+                             Color color)
+{
+    CcOverlayDrawText(text, (int32_t)lroundf(viewport.x) + x,
+             (int32_t)lroundf(viewport.y) + y, font_size, color);
+}
+
+static void DrawStreetTraversalPortals(const CcLocalAgent *agent,
+                                       Camera3D camera, Rectangle viewport,
+                                       int32_t art_width,
+                                       int32_t art_height)
+{
+    int32_t count = CcLocalAgentStreetPortalCount(agent);
+    for (int32_t portal_index = 0; portal_index < count; ++portal_index) {
+        ResolvedStreetPortal portal = {0};
+        if (!ResolveStreetPortal(agent, portal_index, &portal)) continue;
+        Vector2 art_point = StreetPortalEdgePoint(
+            &portal, camera, art_width, art_height);
+        Vector2 point = {
+            viewport.x + art_point.x / (float)art_width * viewport.width,
+            viewport.y + art_point.y / (float)art_height * viewport.height,
+        };
+        const char *name = CcLocalAgentStreetPortalName(agent, portal_index);
+        if (name == NULL) continue;
+        char label[96];
+        (void)snprintf(label, sizeof(label), "%s  %s",
+                       portal.exit != NULL ? "LEAVE" : "TO", name);
+        int32_t text_width = CcOverlayMeasureText(label, 9);
+        float bubble_width = (float)text_width + 16.0f;
+        float bubble_x = point.x < viewport.x + viewport.width * 0.5f ?
+            point.x + 10.0f : point.x - bubble_width - 10.0f;
+        float bubble_y = point.y - 10.0f;
+        bubble_x = fmaxf(viewport.x + 5.0f,
+                         fminf(bubble_x, viewport.x + viewport.width -
+                                             bubble_width - 5.0f));
+        bubble_y = fmaxf(viewport.y + 5.0f,
+                         fminf(bubble_y, viewport.y + viewport.height -
+                                             23.0f));
+        Color accent = portal.exit != NULL ? WORLD_GOLD : WORLD_TEAL;
+        DrawRectangleRounded(
+            (Rectangle){bubble_x, bubble_y, bubble_width, 20.0f},
+            0.28f, 4, (Color){4, 10, 14, 224});
+        DrawRectangleLinesEx(
+            (Rectangle){bubble_x, bubble_y, bubble_width, 20.0f},
+            1.0f, Fade(accent, 0.62f));
+        DrawCircleV(point, 5.0f, accent);
+        DrawCircleLines((int32_t)lroundf(point.x),
+                        (int32_t)lroundf(point.y), 7.0f,
+                        Fade(WORLD_INK, 0.82f));
+        CcOverlayDrawText(label, (int32_t)lroundf(bubble_x) + 8,
+                         (int32_t)lroundf(bubble_y) + 6, 9, accent);
+    }
+}
+
+static void DrawLabels(const WorldLabel *labels, int32_t count, Camera3D camera,
+                       Rectangle viewport)
+{
+    int32_t width = (int32_t)lroundf(viewport.width);
+    int32_t height = (int32_t)lroundf(viewport.height);
     for (int32_t i = 0; i < count; ++i) {
         Vector2 screen = GetWorldToScreenEx(labels[i].point, camera, width, height);
-        if (screen.x < -120.0f || screen.x > (float)width + 120.0f ||
-            screen.y < -40.0f || screen.y > (float)height + 40.0f) continue;
-        int text_width = MeasureText(labels[i].text, 10);
-        DrawRectangleRounded((Rectangle){screen.x - (float)text_width * 0.5f - 5.0f,
-                                         screen.y - 5.0f,
-                                         (float)text_width + 10.0f, 16.0f},
+        if (screen.x < -120.0f || screen.x > viewport.width + 120.0f ||
+            screen.y < -40.0f || screen.y > viewport.height + 40.0f) continue;
+        int text_width = CcOverlayMeasureText(labels[i].text, 10);
+        float bubble_width = (float)text_width + 10.0f;
+        float bubble_x = viewport.x + screen.x - bubble_width * 0.5f;
+        float bubble_y = viewport.y + screen.y - 5.0f;
+        bubble_x = fmaxf(viewport.x + 4.0f,
+                         fminf(bubble_x,
+                               viewport.x + viewport.width - bubble_width -
+                                   4.0f));
+        bubble_y = fmaxf(viewport.y + 4.0f,
+                         fminf(bubble_y,
+                               viewport.y + viewport.height - 20.0f));
+        DrawRectangleRounded((Rectangle){bubble_x, bubble_y,
+                                         bubble_width, 16.0f},
                              0.30f, 4, (Color){4, 10, 14, 210});
-        DrawText(labels[i].text, (int)screen.x - text_width / 2,
-                 (int)screen.y - 2, 10, labels[i].color);
+        CcOverlayDrawText(labels[i].text, (int)lroundf(bubble_x) + 5,
+                 (int)lroundf(bubble_y) + 3, 10, labels[i].color);
     }
 }
 
 static void DrawCombatBar(const CcLocalAgent *agent, Camera3D camera,
-                          int32_t width, int32_t height, Color accent)
+                          Rectangle viewport, Color accent)
 {
     Vector3 anchor = {agent->position.x, agent->position.y + 2.18f,
                       agent->position.z};
-    Vector2 screen = GetWorldToScreenEx(anchor, camera, width, height);
+    Vector2 screen = GetWorldToScreenEx(
+        anchor, camera, (int32_t)lroundf(viewport.width),
+        (int32_t)lroundf(viewport.height));
+    screen.x += viewport.x;
+    screen.y += viewport.y;
     const float bar_width = 44.0f;
     float health = CombatClamp(agent->combat.health /
                                CC_LOCAL_COMBAT_MAX_HEALTH, 0.0f, 1.0f);
@@ -6037,8 +9068,8 @@ static void DrawCombatBar(const CcLocalAgent *agent, Camera3D camera,
     DrawRectangle((int)(screen.x - bar_width * 0.5f), (int)screen.y + 4,
                   (int)(bar_width * posture), 2, WORLD_GOLD);
     if (CombatIsDefeated(&agent->combat)) {
-        int label_width = MeasureText("DEAD", 8);
-        DrawText("DEAD", (int)screen.x - label_width / 2,
+        int label_width = CcOverlayMeasureText("DEAD", 8);
+        CcOverlayDrawText("DEAD", (int)screen.x - label_width / 2,
                  (int)screen.y - 9, 8, WORLD_DANGER);
     }
 }
@@ -6209,6 +9240,80 @@ static void PresentTarget(RenderTexture2D target, Rectangle destination)
     DrawTexturePro(target.texture, source, destination, (Vector2){0.0f, 0.0f},
                    0.0f, WHITE);
     if (visual_style.grade_ready) EndShaderMode();
+}
+
+static void BeginWorldLighting(Camera3D camera, Color environment)
+{
+    if (!visual_style.world_ready) return;
+    Vector3 light_direction = Vector3Normalize(
+        (Vector3){-0.34f, 0.87f, 0.36f});
+    float direction[3] = {light_direction.x, light_direction.y,
+                          light_direction.z};
+    const float light_color[3] = {1.10f, 0.91f, 0.72f};
+    const float ambient_color[3] = {0.61f, 0.64f, 0.68f};
+    float camera_position[3] = {camera.position.x, camera.position.y,
+                                camera.position.z};
+    float fog_color[3] = {(float)environment.r / 255.0f,
+                          (float)environment.g / 255.0f,
+                          (float)environment.b / 255.0f};
+    const float fog_near = 28.0f;
+    const float fog_far = 54.0f;
+    SetShaderValue(visual_style.world,
+                   visual_style.light_direction_location, direction,
+                   SHADER_UNIFORM_VEC3);
+    SetShaderValue(visual_style.world, visual_style.light_color_location,
+                   light_color, SHADER_UNIFORM_VEC3);
+    SetShaderValue(visual_style.world, visual_style.ambient_color_location,
+                   ambient_color, SHADER_UNIFORM_VEC3);
+    SetShaderValue(visual_style.world,
+                   visual_style.camera_position_location, camera_position,
+                   SHADER_UNIFORM_VEC3);
+    SetShaderValue(visual_style.world, visual_style.fog_color_location,
+                   fog_color, SHADER_UNIFORM_VEC3);
+    SetShaderValue(visual_style.world, visual_style.fog_near_location,
+                   &fog_near, SHADER_UNIFORM_FLOAT);
+    SetShaderValue(visual_style.world, visual_style.fog_far_location,
+                   &fog_far, SHADER_UNIFORM_FLOAT);
+    if (visual_style.hero_ready) {
+        SetShaderValue(visual_style.hero,
+                       visual_style.hero_light_direction_location, direction,
+                       SHADER_UNIFORM_VEC3);
+        SetShaderValue(visual_style.hero,
+                       visual_style.hero_camera_position_location,
+                       camera_position, SHADER_UNIFORM_VEC3);
+        SetShaderValue(visual_style.hero,
+                       visual_style.hero_fog_color_location, fog_color,
+                       SHADER_UNIFORM_VEC3);
+        SetShaderValue(visual_style.hero,
+                       visual_style.hero_fog_near_location, &fog_near,
+                       SHADER_UNIFORM_FLOAT);
+        SetShaderValue(visual_style.hero,
+                       visual_style.hero_fog_far_location, &fog_far,
+                       SHADER_UNIFORM_FLOAT);
+    }
+    if (visual_style.npc_ready) {
+        SetShaderValue(visual_style.npc,
+                       visual_style.npc_light_direction_location, direction,
+                       SHADER_UNIFORM_VEC3);
+        SetShaderValue(visual_style.npc,
+                       visual_style.npc_camera_position_location,
+                       camera_position, SHADER_UNIFORM_VEC3);
+        SetShaderValue(visual_style.npc,
+                       visual_style.npc_fog_color_location, fog_color,
+                       SHADER_UNIFORM_VEC3);
+        SetShaderValue(visual_style.npc,
+                       visual_style.npc_fog_near_location, &fog_near,
+                       SHADER_UNIFORM_FLOAT);
+        SetShaderValue(visual_style.npc,
+                       visual_style.npc_fog_far_location, &fog_far,
+                       SHADER_UNIFORM_FLOAT);
+    }
+    BeginShaderMode(visual_style.world);
+}
+
+static void EndWorldLighting(void)
+{
+    if (visual_style.world_ready) EndShaderMode();
 }
 
 static void DrawAgentPath(const CcLocalAgent *agent, bool market_interior)
@@ -6597,6 +9702,7 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
                        Rectangle destination)
 {
     if (sim == NULL || agent == NULL || course == NULL) return;
+    face_glyph_count = 0;
     const CcRoute *route = CcSimRoute(sim, sim->journey.route_id);
     const CcSettlement *origin = CcSimSettlement(
         sim, sim->journey.origin_id);
@@ -6617,14 +9723,12 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
         40.0f
     };
     Vector3 camera_focus = travelling ? carriage_base : agent->position;
-    Camera3D camera = LocalCamera(false, camera_focus);
-    /* Frame the whole convoy rather than centering only the dismounted hero. */
-    camera.target.x -= 0.90f;
-    camera.position.x -= 0.90f;
-    camera.fovy = 13.40f;
+    Camera3D camera = RoadCamera(camera_focus, travelling, clock, true,
+                                 target.texture.height);
     BeginTextureMode(target);
     ClearBackground((Color){9, 20, 25, 255});
     BeginMode3D(camera);
+    BeginWorldLighting(camera, (Color){9, 20, 25, 255});
     bool authored_checkpoint = !travelling &&
         runtime_assets[RUNTIME_ASSET_BRIDGE].ready;
     DrawRoadTerrain(route, sim->journey.danger, authored_checkpoint);
@@ -6668,7 +9772,12 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
         DrawCombatSkillTell(agent);
         DrawCombatImpact(agent);
     }
+    DrawQueuedFaceGlyphs(camera, target.texture.width,
+                         target.texture.height);
+    EndWorldLighting();
     EndMode3D();
+    EndTextureMode();
+    PresentTarget(target, destination);
 
     char route_label[96];
     char blockade_label[96];
@@ -6682,7 +9791,7 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     int32_t count = 0;
     if (!travelling) {
         labels[count++] = (WorldLabel){{agent->position.x,
-                                        agent->position.y + 2.30f,
+                                        agent->position.y + 2.50f,
                                         agent->position.z}, "YOU", WORLD_TEAL};
     }
     if (!travelling && !parley) {
@@ -6702,44 +9811,40 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
                                         CC_LOCAL_ROAD_PARLEY_Z},
                                        "F  OFFER PAYMENT", WORLD_TEAL};
     }
-    DrawLabels(labels, count, camera, target.texture.width,
-               target.texture.height);
+    DrawLabels(labels, count, camera, destination);
     if (!travelling && course->alarm_active) {
-        DrawCombatBar(agent, camera, target.texture.width,
-                      target.texture.height, WORLD_TEAL);
+        DrawCombatBar(agent, camera, destination, WORLD_TEAL);
         for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
             DrawCombatBar(&course->runners[i].agent, camera,
-                          target.texture.width, target.texture.height,
-                          course->runners[i].marker_color);
+                          destination, course->runners[i].marker_color);
         }
         for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
             DrawCombatBar(&course->raiders[i], camera,
-                          target.texture.width, target.texture.height,
-                          i == agent->combat.target_index ? WORLD_GOLD :
+                          destination, i == agent->combat.target_index ? WORLD_GOLD :
                           WORLD_DANGER);
         }
     }
-    DrawRectangleRounded((Rectangle){10.0f, 9.0f, 610.0f, 46.0f},
+    Rectangle road_status = ViewportRectangle(
+        destination, 10.0f, 9.0f, 610.0f, 46.0f);
+    DrawRectangleRounded(road_status,
                          0.08f, 4, Fade(WORLD_VOID, 0.90f));
-    DrawRectangleLinesEx((Rectangle){10.0f, 9.0f, 610.0f, 46.0f},
-                         1.0f, Fade(WORLD_GOLD, 0.28f));
-    DrawText(TextFormat("%s  /  DANGER %d%%  /  ROAD %d%%  /  SECURITY %d%%",
-                        RoadArchetypeName(route), sim->journey.danger,
-                        route != NULL ? route->condition : 0,
-                        route != NULL ? route->security : 0),
-             18, 18, 10, parley ? WORLD_TEAL : WORLD_DANGER);
-    DrawText(travelling ?
-             TextFormat("CARRIAGE MOVING / %d%% COMPLETE / %d GAME MIN / REAL SEC",
-                        sim->carriage.progress_milli / 10,
-                        CC_TRAVEL_GAME_MINUTES_PER_SECOND) : parley ?
-             "PARLEY / approach the collector and press F to exchange crowns for passage" :
-             TextFormat("BREAK THE CORDON / YOU %d HP / RAIDERS %d%% RESOLVE",
-                        (int32_t)lroundf(agent->combat.health),
-                        course->raider_resolve > 0 ?
-                        course->raider_resolve : 0),
-             18, 35, 10, WORLD_INK);
-    EndTextureMode();
-    PresentTarget(target, destination);
+    DrawRectangleLinesEx(road_status, 1.0f, Fade(WORLD_GOLD, 0.28f));
+    DrawViewportText(
+        TextFormat("%s  /  DANGER %d%%  /  ROAD %d%%  /  SECURITY %d%%",
+                   RoadArchetypeName(route), sim->journey.danger,
+                   route != NULL ? route->condition : 0,
+                   route != NULL ? route->security : 0),
+        destination, 18, 18, 10, parley ? WORLD_TEAL : WORLD_DANGER);
+    DrawViewportText(
+        travelling ?
+        TextFormat("CARRIAGE MOVING / %d%% COMPLETE / %d GAME MIN / REAL SEC",
+                   sim->carriage.progress_milli / 10,
+                   CC_TRAVEL_GAME_MINUTES_PER_SECOND) : parley ?
+        "PARLEY / approach the collector and press F to exchange crowns for passage" :
+        TextFormat("BREAK THE CORDON / YOU %d HP / RAIDERS %d%% RESOLVE",
+                   (int32_t)lroundf(agent->combat.health),
+                   course->raider_resolve > 0 ? course->raider_resolve : 0),
+        destination, 18, 35, 10, WORLD_INK);
 }
 
 static void DrawJourneyAftermath3D(const CcSim *sim,
@@ -6780,14 +9885,17 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
 {
     const CcSettlement *place = CcSimSettlement(sim, sim->player.location_id);
     if (place == NULL) return;
-    Camera3D camera = LocalCamera(false, agent->position);
+    face_glyph_count = 0;
+    Camera3D camera = StreetCamera(agent->position, clock, true,
+                                   target.texture.height);
     Vector3 scenery_focus = camera.target;
     Color kingdom = KingdomColor3D(sim, place->kingdom_id);
     BeginTextureMode(target);
     ClearBackground((Color){10, 24, 30, 255});
     BeginMode3D(camera);
+    BeginWorldLighting(camera, (Color){10, 24, 30, 255});
 
-    DrawExteriorTerrain(place);
+    DrawExteriorTerrain(place, scenery_focus);
     for (int32_t i = 0; i < (int32_t)(sizeof(STREET_PLATFORMS) /
                                       sizeof(STREET_PLATFORMS[0])); ++i) {
         const NavPlatform *platform = &STREET_PLATFORMS[i];
@@ -6828,6 +9936,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         DrawNotice3D(sim);
     }
     DrawWorldTrees(scenery_focus);
+    DrawRoomLandmarks(place, kingdom, scenery_focus);
     if (SceneryPointVisible(47.35f, 31.05f, scenery_focus)) {
         DrawJourneyAftermath3D(sim, place);
     }
@@ -6849,27 +9958,27 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     DrawNpcFigure3D(
         (Vector3){STREET_PEOPLE[0].x, 0.0f, STREET_PEOPLE[0].y},
         0.96f, -0.55f, UINT32_C(0x73747201), CC_NPC_ROLE_MERCHANT,
-        (Color){223, 151, 68, 255}, clock * 1.2f, CC_TRAVERSAL_WALK);
+        (Color){223, 151, 68, 255}, clock * 1.2f, CC_TRAVERSAL_IDLE);
     DrawNpcFigure3D(
         (Vector3){STREET_PEOPLE[1].x, 0.0f, STREET_PEOPLE[1].y},
         1.02f, 1.70f, UINT32_C(0x73747202), CC_NPC_ROLE_GUARD,
-        kingdom, clock + 1.0f, CC_TRAVERSAL_WALK);
+        kingdom, clock + 1.0f, CC_TRAVERSAL_IDLE);
     DrawNpcFigure3D(
         (Vector3){STREET_PEOPLE[2].x, 0.0f, STREET_PEOPLE[2].y},
         0.92f, 0.35f, UINT32_C(0x73747203), CC_NPC_ROLE_LABORER,
-        (Color){97, 154, 137, 255}, clock + 2.0f, CC_TRAVERSAL_WALK);
+        (Color){97, 154, 137, 255}, clock + 2.0f, CC_TRAVERSAL_IDLE);
     DrawNpcFigure3D(
         (Vector3){STREET_PEOPLE[3].x, 0.0f, STREET_PEOPLE[3].y},
         0.88f, 2.40f, UINT32_C(0x73747204), CC_NPC_ROLE_HEALER,
         (Color){168, 112, 128, 255}, clock * 0.8f + 3.0f,
-        CC_TRAVERSAL_WALK);
+        CC_TRAVERSAL_IDLE);
     bool hungry_crowd = place->hunger >= 30;
     DrawNpcFigure3D(
         (Vector3){STREET_PEOPLE[4].x, 0.0f, STREET_PEOPLE[4].y},
         0.82f, -0.40f, UINT32_C(0x73747205),
         hungry_crowd ? CC_NPC_ROLE_REFUGEE : CC_NPC_ROLE_TRAVELLER,
         hungry_crowd ? WORLD_DANGER : kingdom, clock * 0.6f,
-        CC_TRAVERSAL_WALK);
+        CC_TRAVERSAL_IDLE);
     bool underworld_present = HasSmugglerRoad(sim, place->id) ||
                               place->security < 50;
     DrawNpcFigure3D(
@@ -6877,18 +9986,18 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         0.88f, 2.75f, UINT32_C(0x73747206),
         underworld_present ? CC_NPC_ROLE_SCOUT : CC_NPC_ROLE_TRAVELLER,
         underworld_present ? WORLD_VIOLET : kingdom, clock * 0.7f,
-        CC_TRAVERSAL_WALK);
+        CC_TRAVERSAL_IDLE);
     if (sim->resolved_journey_outcome != CC_JOURNEY_OUTCOME_NONE &&
         sim->journey.destination_id == place->id) {
         DrawNpcFigure3D((Vector3){46.80f, 0.0f, 31.15f}, 0.86f, -1.10f,
                         UINT32_C(0x61667401), CC_NPC_ROLE_GUARD,
                         WORLD_TEAL, clock * 0.64f + 1.4f,
-                        CC_TRAVERSAL_WALK);
+                        CC_TRAVERSAL_IDLE);
         if (sim->resolved_journey_outcome == CC_JOURNEY_OUTCOME_COMBAT) {
             DrawNpcFigure3D((Vector3){47.65f, 0.0f, 30.55f}, 0.82f,
                             -0.85f, UINT32_C(0x61667402),
                             CC_NPC_ROLE_HEALER, WORLD_GOLD,
-                            clock * 0.58f + 2.1f, CC_TRAVERSAL_WALK);
+                            clock * 0.58f + 2.1f, CC_TRAVERSAL_IDLE);
         }
     }
     DrawCourseRunners(course);
@@ -6901,12 +10010,32 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     DrawCombatSword(agent);
     DrawCombatSkillTell(agent);
     DrawCombatImpact(agent);
+    DrawQueuedFaceGlyphs(camera, target.texture.width,
+                         target.texture.height);
+    EndWorldLighting();
     EndMode3D();
+    EndTextureMode();
+    PresentTarget(target, destination);
 
-    WorldLabel labels[12];
+    int32_t room_index = street_camera_rig.shot;
+    int32_t room_count = (int32_t)(sizeof(STREET_CAMERA_SHOTS) /
+                                   sizeof(STREET_CAMERA_SHOTS[0]));
+    if (room_index >= 0 && room_index < room_count) {
+        const char *room_name = STREET_CAMERA_SHOTS[room_index].name;
+        int32_t title_width = CcOverlayMeasureText(room_name, 10);
+        DrawRectangleRounded(
+            ViewportRectangle(destination, 11.0f, 10.0f,
+                              (float)title_width + 16.0f, 18.0f),
+            0.24f, 4, (Color){4, 10, 14, 202});
+        DrawViewportText(room_name, destination, 19, 14, 10, WORLD_GOLD);
+    }
+    DrawStreetTraversalPortals(agent, camera, destination,
+                               target.texture.width, target.texture.height);
+
+    WorldLabel labels[20];
     int32_t count = 0;
     labels[count++] = (WorldLabel){{agent->position.x,
-                                    agent->position.y + 2.30f,
+                                    agent->position.y + 2.50f,
                                     agent->position.z}, "YOU", WORLD_TEAL};
     labels[count++] = (WorldLabel){{50.0f, 4.75f, 21.0f},
                                    "MARKET HALL", WORLD_GOLD};
@@ -6949,35 +10078,34 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                                         CC_LOCAL_DUNGEON_Z - 0.70f},
                                        CcDungeonStateName(dungeon->state), WORLD_VIOLET};
     }
-    DrawLabels(labels, count, camera, target.texture.width, target.texture.height);
+    DrawLabels(labels, count, camera, destination);
     if (course != NULL && course->alarm_active) {
-        DrawCombatBar(agent, camera, target.texture.width,
-                      target.texture.height, WORLD_TEAL);
+        DrawCombatBar(agent, camera, destination, WORLD_TEAL);
         for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
             DrawCombatBar(&course->runners[i].agent, camera,
-                          target.texture.width, target.texture.height,
-                          course->runners[i].marker_color);
+                          destination, course->runners[i].marker_color);
         }
         for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
-            DrawCombatBar(&course->raiders[i], camera, target.texture.width,
-                          target.texture.height,
+            DrawCombatBar(&course->raiders[i], camera, destination,
                           i == agent->combat.target_index ? WORLD_GOLD :
                           WORLD_DANGER);
         }
     }
     if (draw_hero_rig_debug &&
         agent->morphology == CC_MORPHOLOGY_BIPED) {
-        DrawText(TextFormat("BIOMECHANICAL BIPED / %d JOINTS / %s / %s / MUSCLES + LIGAMENTS",
-                            agent->humanoid.body.morphology.joint_count,
-                            CcLocalTraversalName(agent->traversal),
-                            CcHumanoidActionName(agent->humanoid.action)),
-                 18, 18, 10, WORLD_TEAL);
+        DrawViewportText(
+            TextFormat("BIOMECHANICAL BIPED / %d JOINTS / %s / %s / MUSCLES + LIGAMENTS",
+                       agent->humanoid.body.morphology.joint_count,
+                       CcLocalTraversalName(agent->traversal),
+                       CcHumanoidActionName(agent->humanoid.action)),
+            destination, 18, 18, 10, WORLD_TEAL);
     } else if (draw_hero_rig_debug) {
-        DrawText(TextFormat("ROBOTIC %s / %d LEGS / %s / CONTACT IK",
-                            CcLocalAgentMorphologyName(agent),
-                            agent->limb_rig.morphology.limb_count,
-                            CcLocalTraversalName(agent->traversal)),
-                 18, 18, 10, WORLD_TEAL);
+        DrawViewportText(
+            TextFormat("ROBOTIC %s / %d LEGS / %s / CONTACT IK",
+                       CcLocalAgentMorphologyName(agent),
+                       agent->limb_rig.morphology.limb_count,
+                       CcLocalTraversalName(agent->traversal)),
+            destination, 18, 18, 10, WORLD_TEAL);
     }
     if (course != NULL && course->alarm_active) {
         bool line_engaged = false;
@@ -6985,26 +10113,25 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
             line_engaged = line_engaged ||
                            course->runners[i].duty == CC_GUARD_ENGAGED;
         }
-        DrawText(TextFormat("VILLAGE ALARM / YOU %d HP / %d POSTURE / GUARDS %s / RAIDERS %d%%",
-                            (int32_t)lroundf(agent->combat.health),
-                            (int32_t)lroundf(agent->combat.posture),
-                            course->raiders_retreating ? "DRIVING THEM OUT" :
-                            line_engaged ? "ENGAGED" : "FORMING LINE",
-                            course->raider_resolve > 0 ?
-                            course->raider_resolve : 0),
-                 18, 33, 10, WORLD_DANGER);
+        DrawViewportText(
+            TextFormat("VILLAGE ALARM / YOU %d HP / %d POSTURE / GUARDS %s / RAIDERS %d%%",
+                       (int32_t)lroundf(agent->combat.health),
+                       (int32_t)lroundf(agent->combat.posture),
+                       course->raiders_retreating ? "DRIVING THEM OUT" :
+                       line_engaged ? "ENGAGED" : "FORMING LINE",
+                       course->raider_resolve > 0 ?
+                       course->raider_resolve : 0),
+            destination, 18, 33, 10, WORLD_DANGER);
         if (course->combat_event_seconds > 0.0f) {
-            DrawText(TextFormat("%s / %s",
-                                CcLocalCombatTeamName(
-                                    course->last_attacker_team),
-                                CcLocalCombatOutcomeName(course->last_outcome)),
-                     18, 48, 12,
-                     course->last_outcome == CC_COMBAT_OUTCOME_BLOCKED ?
-                     WORLD_GOLD : WORLD_INK);
+            DrawViewportText(
+                TextFormat("%s / %s",
+                           CcLocalCombatTeamName(course->last_attacker_team),
+                           CcLocalCombatOutcomeName(course->last_outcome)),
+                destination, 18, 48, 12,
+                course->last_outcome == CC_COMBAT_OUTCOME_BLOCKED ?
+                WORLD_GOLD : WORLD_INK);
         }
     }
-    EndTextureMode();
-    PresentTarget(target, destination);
 }
 
 void CcLocalDrawMarket3D(const CcSim *sim, const CcLocalAgent *agent, float clock,
@@ -7012,15 +10139,26 @@ void CcLocalDrawMarket3D(const CcSim *sim, const CcLocalAgent *agent, float cloc
 {
     const CcSettlement *place = CcSimSettlement(sim, sim->player.location_id);
     if (place == NULL) return;
+    face_glyph_count = 0;
     Camera3D camera = LocalCamera(true, agent->position);
     BeginTextureMode(target);
     ClearBackground((Color){31, 23, 25, 255});
     BeginMode3D(camera);
-    for (int32_t z = 0; z < 7; ++z) {
-        for (int32_t x = 0; x < 9; ++x) {
-            Color tile = ((x + z) & 1) ? (Color){116, 87, 64, 255} :
-                                            (Color){100, 76, 61, 255};
-            DrawGroundTile((float)x, (float)z, tile);
+    BeginWorldLighting(camera, (Color){31, 23, 25, 255});
+    /* Six broad floor flags replace the old 63-box checkerboard. Their quiet
+       value rhythm leaves the actor silhouettes and goods as the room detail. */
+    const Color floor_dark = {88, 67, 57, 255};
+    const Color floor_light = {108, 82, 64, 255};
+    DrawBox((Vector3){4.50f, -0.055f, 3.50f}, (Vector3){9.0f, 0.11f, 7.0f},
+            floor_dark);
+    for (int32_t row = 0; row < 2; ++row) {
+        for (int32_t column = 0; column < 3; ++column) {
+            DrawBox((Vector3){1.50f + (float)column * 3.0f, 0.006f,
+                              1.75f + (float)row * 3.5f},
+                    (Vector3){2.86f, 0.022f, 3.36f},
+                    ((row + column) & 1) != 0 ? floor_light :
+                                                        ShadeColor(floor_light,
+                                                                   0.91f));
         }
     }
     DrawAgentPath(agent, true);
@@ -7028,6 +10166,14 @@ void CcLocalDrawMarket3D(const CcSim *sim, const CcLocalAgent *agent, float cloc
             (Color){80, 53, 48, 255});
     DrawBox((Vector3){0.25f, 1.30f, 3.50f}, (Vector3){0.50f, 2.60f, 7.0f},
             (Color){67, 48, 47, 255});
+    DrawBox((Vector3){4.50f, 0.54f, 0.515f},
+            (Vector3){8.86f, 0.10f, 0.045f},
+            (Color){48, 37, 39, 255});
+    DrawBox((Vector3){6.55f, 1.42f, 0.525f},
+            (Vector3){2.05f, 1.56f, 0.055f},
+            (Color){47, 70, 69, 255});
+    DrawBox((Vector3){6.55f, 2.21f, 0.535f},
+            (Vector3){2.24f, 0.10f, 0.065f}, WORLD_GOLD);
     DrawBox((Vector3){MARKET_COUNTER_FOOTPRINT.x +
                       MARKET_COUNTER_FOOTPRINT.width * 0.5f,
                       0.46f,
@@ -7036,61 +10182,82 @@ void CcLocalDrawMarket3D(const CcSim *sim, const CcLocalAgent *agent, float cloc
             (Vector3){MARKET_COUNTER_FOOTPRINT.width, 0.92f,
                       MARKET_COUNTER_FOOTPRINT.height},
             (Color){139, 85, 49, 255});
+    DrawBox((Vector3){MARKET_COUNTER_FOOTPRINT.x +
+                      MARKET_COUNTER_FOOTPRINT.width * 0.5f,
+                      0.94f,
+                      MARKET_COUNTER_FOOTPRINT.y +
+                      MARKET_COUNTER_FOOTPRINT.height * 0.5f},
+            (Vector3){MARKET_COUNTER_FOOTPRINT.width + 0.12f, 0.10f,
+                      MARKET_COUNTER_FOOTPRINT.height + 0.12f},
+            (Color){181, 119, 62, 255});
     DrawBox((Vector3){MARKET_SHELF_FOOTPRINT.x + MARKET_SHELF_FOOTPRINT.width * 0.5f,
                       0.95f,
                       MARKET_SHELF_FOOTPRINT.y + MARKET_SHELF_FOOTPRINT.height * 0.5f},
             (Vector3){MARKET_SHELF_FOOTPRINT.width, 1.90f,
                       MARKET_SHELF_FOOTPRINT.height},
             (Color){103, 68, 49, 255});
+    DrawBox((Vector3){MARKET_SHELF_FOOTPRINT.x +
+                      MARKET_SHELF_FOOTPRINT.width * 0.5f,
+                      1.92f,
+                      MARKET_SHELF_FOOTPRINT.y +
+                      MARKET_SHELF_FOOTPRINT.height * 0.5f},
+            (Vector3){MARKET_SHELF_FOOTPRINT.width + 0.10f, 0.09f,
+                      MARKET_SHELF_FOOTPRINT.height + 0.10f},
+            (Color){62, 43, 40, 255});
     DrawBox((Vector3){1.55f, 1.05f, 6.54f}, (Vector3){0.82f, 2.10f, 0.08f},
             (Color){37, 28, 30, 255});
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
-        int32_t count = place->stock[good] / 18;
-        if (count > 3) count = 3;
-        for (int32_t i = 0; i < count; ++i) {
-            Color color = good == CC_GOOD_FOOD ? WORLD_GOLD :
-                          good == CC_GOOD_MATERIAL ? (Color){170, 139, 112, 255} :
-                          WORLD_TEAL;
-            DrawBox((Vector3){2.55f + (float)good * 1.02f, 0.25f,
-                              1.18f + (float)i * 0.55f},
-                    (Vector3){0.48f, 0.50f, 0.48f}, color);
-        }
+        float stock = fminf((float)place->stock[good] / 54.0f, 1.0f);
+        if (stock <= 0.01f) continue;
+        Color color = good == CC_GOOD_FOOD ? WORLD_GOLD :
+                      good == CC_GOOD_MATERIAL ?
+                        (Color){170, 139, 112, 255} : WORLD_TEAL;
+        float height = 0.22f + stock * 0.52f;
+        DrawBox((Vector3){2.55f + (float)good * 1.08f, height * 0.5f,
+                          1.18f},
+                (Vector3){0.72f, height, 0.72f}, color);
+        DrawBox((Vector3){2.55f + (float)good * 1.08f, height + 0.035f,
+                          1.18f},
+                (Vector3){0.78f, 0.07f, 0.78f}, ShadeColor(color, 0.72f));
     }
     DrawNpcFigure3D(
         (Vector3){MARKET_PEOPLE[0].x, 0.0f, MARKET_PEOPLE[0].y},
         1.02f, 2.75f, UINT32_C(0x4d415241), CC_NPC_ROLE_MERCHANT,
-        (Color){218, 148, 61, 255}, clock, CC_TRAVERSAL_WALK);
+        (Color){218, 148, 61, 255}, clock, CC_TRAVERSAL_IDLE);
     DrawRobotShell(agent);
     DrawCombatSword(agent);
     DrawCombatSkillTell(agent);
+    DrawQueuedFaceGlyphs(camera, target.texture.width,
+                         target.texture.height);
+    EndWorldLighting();
     EndMode3D();
+    EndTextureMode();
+    PresentTarget(target, destination);
     WorldLabel labels[] = {
         {{6.55f, 2.05f, 1.60f}, "MARA / FACTOR", WORLD_GOLD},
         {{1.55f, 2.25f, 6.54f}, "STREET", WORLD_MUTED}
     };
-    DrawLabels(labels, 2, camera, target.texture.width, target.texture.height);
+    DrawLabels(labels, 2, camera, destination);
     if (draw_hero_rig_debug &&
         agent->morphology == CC_MORPHOLOGY_BIPED) {
-        DrawText(TextFormat("BIO %s / %s / %s + %s / %.0f%% MUSCLE",
-                            CcHumanoidPoseOwnerName(
-                                agent->humanoid.pose_owner),
-                            CcMotionClipName(
-                                agent->humanoid.motion.clip != NULL ?
-                                agent->humanoid.motion.clip->id :
-                                CC_MOTION_CLIP_NONE),
-                            CcHumanoidContactName(agent->humanoid.feet[0].contact),
-                            CcHumanoidContactName(agent->humanoid.feet[1].contact),
-                            CcBiomechRigMeanActivation(&agent->humanoid.body) *
-                                100.0f),
-                 18, 18, 10, WORLD_TEAL);
+        DrawViewportText(
+            TextFormat("BIO %s / %s / %s + %s / %.0f%% MUSCLE",
+                       CcHumanoidPoseOwnerName(agent->humanoid.pose_owner),
+                       CcMotionClipName(
+                           agent->humanoid.motion.clip != NULL ?
+                           agent->humanoid.motion.clip->id :
+                           CC_MOTION_CLIP_NONE),
+                       CcHumanoidContactName(agent->humanoid.feet[0].contact),
+                       CcHumanoidContactName(agent->humanoid.feet[1].contact),
+                       CcBiomechRigMeanActivation(&agent->humanoid.body) * 100.0f),
+            destination, 18, 18, 10, WORLD_TEAL);
     } else if (draw_hero_rig_debug) {
-        DrawText(TextFormat("ROBOTIC %s / %d LEGS / PLANTED CONTACTS",
-                            CcLocalAgentMorphologyName(agent),
-                            agent->limb_rig.morphology.limb_count),
-                 18, 18, 10, WORLD_TEAL);
+        DrawViewportText(
+            TextFormat("ROBOTIC %s / %d LEGS / PLANTED CONTACTS",
+                       CcLocalAgentMorphologyName(agent),
+                       agent->limb_rig.morphology.limb_count),
+            destination, 18, 18, 10, WORLD_TEAL);
     }
-    EndTextureMode();
-    PresentTarget(target, destination);
 }
 
 static bool InsideExpanded(Vector2 point, Rectangle footprint, float radius)
@@ -7122,6 +10289,10 @@ static bool StreetCanOccupy(Vector2 point)
     }
     if (InsideExpanded(point, CARRIAGE_FOOTPRINT, radius) ||
         InsideExpanded(point, DUNGEON_FOOTPRINT, radius)) return false;
+    for (int32_t i = 0; i < (int32_t)(sizeof(ROOM_ART_OBSTACLES) /
+                                      sizeof(ROOM_ART_OBSTACLES[0])); ++i) {
+        if (InsideExpanded(point, ROOM_ART_OBSTACLES[i], radius)) return false;
+    }
     return true;
 }
 

@@ -76,16 +76,14 @@ for bone_name in manifest["skeleton"].get("cloth_bones", []):
     if cape.vertex_groups.get(bone_name) is None:
         fail(f"cape weight group {bone_name} is missing")
 
-for landmark in ("GEO_CuirassBrokenMarkL", "GEO_CuirassBrokenMarkR",
-                 "GEO_CuirassRivet_0_0", "GEO_PauldronWaymarkL",
+for landmark in ("GEO_CuirassBrokenMarkL", "GEO_PauldronWaymarkL",
                  "GEO_CapeTravelCowl", "GEO_SatchelWaymark"):
     if bpy.data.objects.get(landmark) is None:
         fail(f"missing visual identity landmark {landmark}")
 
 for landmark in ("GEO_Muscle_LatissimusL", "GEO_Muscle_ObliqueL",
                  "GEO_Muscle_TrapeziusL", "GEO_Muscle_RectusAbdominisL",
-                 "GEO_GloveThumbL",
-                 "GEO_GloveKnuckleL_0", "GEO_BootInstepStrapL"):
+                 "GEO_GloveThumbL", "GEO_BootSoleL"):
     if bpy.data.objects.get(landmark) is None:
         fail(f"missing action-figure form landmark {landmark}")
 
