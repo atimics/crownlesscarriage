@@ -308,71 +308,126 @@ def add_hair_highlight(material: bpy.types.Material) -> bpy.types.Object:
     return obj
 
 
+def add_faceted_head(material: bpy.types.Material) -> bpy.types.Object:
+    """Build a rounded low-poly skull with a narrower jaw and chin."""
+    # Each ring is (z, half width, front depth, rear depth).  The uneven
+    # front/rear depths keep the face readable while rounding the back of the
+    # skull.  Eight sides are enough to survive the 60-pixel engine view
+    # without returning to a square box silhouette.
+    rings = (
+        (1.735, 0.065, 0.105, 0.105),
+        (1.790, 0.135, 0.155, 0.145),
+        (1.900, 0.190, 0.205, 0.195),
+        (2.025, 0.205, 0.210, 0.205),
+        (2.115, 0.165, 0.180, 0.190),
+        (2.150, 0.085, 0.115, 0.130),
+    )
+    # Start at the front, then travel clockwise around the head.  These are
+    # an octagon's x/y factors, written out to keep this mesh deterministic.
+    ring_factors = (
+        (0.0, -1.0), (0.7071, -0.7071), (1.0, 0.0),
+        (0.7071, 0.7071), (0.0, 1.0), (-0.7071, 0.7071),
+        (-1.0, 0.0), (-0.7071, -0.7071),
+    )
+    center_y = -0.005
+    vertices: list[tuple[float, float, float]] = []
+    for z, half_width, front_depth, rear_depth in rings:
+        for x_factor, y_factor in ring_factors:
+            depth = front_depth if y_factor < 0.0 else rear_depth
+            vertices.append((
+                x_factor * half_width,
+                center_y + y_factor * depth,
+                z,
+            ))
+
+    sides = len(ring_factors)
+    faces: list[tuple[int, ...]] = [tuple(reversed(range(sides)))]
+    for ring in range(len(rings) - 1):
+        first = ring * sides
+        following = (ring + 1) * sides
+        for side in range(sides):
+            next_side = (side + 1) % sides
+            faces.append((
+                first + side,
+                first + next_side,
+                following + next_side,
+                following + side,
+            ))
+    top = (len(rings) - 1) * sides
+    faces.append(tuple(top + side for side in range(sides)))
+
+    mesh = bpy.data.meshes.new(f"MESH_{PREFIX}Head")
+    mesh.from_pydata(vertices, [], faces)
+    mesh.update()
+    obj = bpy.data.objects.new(f"{PREFIX}Head", mesh)
+    bpy.context.scene.collection.objects.link(obj)
+    obj.data.materials.append(material)
+    obj["cc_head_form"] = "faceted_oval_tapered_jaw"
+    return obj
+
+
 def build_hair(materials: dict[str, bpy.types.Material]) -> None:
     """Build the V08 silhouette from six broad, separated hair clumps."""
     add_scalp_core(materials["hair"])
     add_hair_clump(
         f"{PREFIX}HairBang_L",
-        ((-0.12, -0.18, 2.18), (-0.15, -0.225, 2.105),
+        ((-0.085, -0.165, 2.205), (-0.15, -0.225, 2.105),
          (-0.115, -0.248, 2.015), (-0.045, -0.252, 1.94)),
-        (0.18, 0.16, 0.105, 0.025),
-        (0.13, 0.115, 0.075, 0.018),
+        (0.155, 0.16, 0.105, 0.025),
+        (0.115, 0.115, 0.075, 0.018),
         materials["hair"],
     )
     add_hair_clump(
         f"{PREFIX}HairBang_R",
-        ((0.075, -0.175, 2.18), (0.135, -0.218, 2.12),
+        ((0.055, -0.170, 2.185), (0.135, -0.218, 2.12),
          (0.12, -0.242, 2.055), (0.075, -0.248, 1.995)),
-        (0.17, 0.145, 0.085, 0.022),
-        (0.125, 0.105, 0.060, 0.016),
+        (0.145, 0.145, 0.085, 0.022),
+        (0.110, 0.105, 0.060, 0.016),
         materials["hair_mid"],
     )
     add_hair_clump(
         f"{PREFIX}HairLongLock",
-        ((-0.16, -0.035, 2.18), (-0.235, -0.095, 2.105),
+        ((-0.135, -0.030, 2.175), (-0.225, -0.095, 2.105),
          (-0.265, -0.12, 2.00), (-0.265, -0.085, 1.865),
          (-0.215, -0.035, 1.75)),
-        (0.19, 0.18, 0.145, 0.090, 0.022),
-        (0.19, 0.17, 0.135, 0.085, 0.020),
+        (0.165, 0.175, 0.145, 0.090, 0.022),
+        (0.165, 0.16, 0.135, 0.085, 0.020),
         materials["hair"],
         "hair.long",
     )
     add_hair_clump(
         f"{PREFIX}HairShortLock",
-        ((0.15, -0.02, 2.175), (0.215, -0.075, 2.11),
+        ((0.125, -0.015, 2.160), (0.205, -0.075, 2.11),
          (0.245, -0.10, 2.025), (0.215, -0.055, 1.925)),
-        (0.17, 0.155, 0.100, 0.022),
-        (0.17, 0.145, 0.085, 0.018),
+        (0.145, 0.150, 0.100, 0.022),
+        (0.150, 0.140, 0.085, 0.018),
         materials["hair_mid"],
     )
     add_hair_clump(
         f"{PREFIX}HairRearWedge_L",
-        ((-0.10, 0.055, 2.18), (-0.175, 0.12, 2.11),
-         (-0.215, 0.17, 2.01), (-0.205, 0.175, 1.90),
-         (-0.115, 0.15, 1.80)),
-        (0.22, 0.215, 0.17, 0.105, 0.026),
-        (0.20, 0.19, 0.155, 0.10, 0.022),
+        ((-0.060, 0.055, 2.175), (-0.130, 0.115, 2.125),
+         (-0.185, 0.165, 2.045), (-0.205, 0.180, 1.945),
+         (-0.135, 0.150, 1.835)),
+        (0.120, 0.155, 0.125, 0.075, 0.014),
+        (0.135, 0.145, 0.115, 0.070, 0.014),
         materials["hair"],
         "hair.rear",
     )
     add_hair_clump(
         f"{PREFIX}HairRearWedge_R",
-        ((0.09, 0.055, 2.18), (0.17, 0.12, 2.11),
-         (0.215, 0.17, 2.02), (0.205, 0.175, 1.925),
-         (0.13, 0.15, 1.835)),
-        (0.21, 0.205, 0.16, 0.095, 0.024),
-        (0.20, 0.185, 0.145, 0.09, 0.020),
-        materials["hair"],
+        ((0.060, 0.060, 2.160), (0.130, 0.120, 2.115),
+         (0.180, 0.170, 2.050), (0.195, 0.180, 1.970),
+         (0.145, 0.155, 1.890)),
+        (0.115, 0.150, 0.120, 0.070, 0.014),
+        (0.130, 0.140, 0.110, 0.065, 0.014),
+        materials["hair_mid"],
         "hair.rear",
     )
     add_hair_highlight(materials["hair_highlight"])
 
 
 def build_head(materials: dict[str, bpy.types.Material]) -> None:
-    character.add_beveled_box(
-        f"{PREFIX}Head", (0.0, -0.015, 1.94), (0.42, 0.40, 0.40),
-        materials["skin_light"], 0.045,
-    )
+    add_faceted_head(materials["skin_light"])
     build_hair(materials)
     for side in (-1.0, 1.0):
         character.add_beveled_box(
@@ -385,8 +440,8 @@ def build_head(materials: dict[str, bpy.types.Material]) -> None:
         (0.060, 0.014, 0.020), materials["skin"],
     )
     character.add_beveled_box(
-        f"{PREFIX}HeadEar_R", (0.213, -0.005, 1.95),
-        (0.055, 0.17, 0.10), materials["skin"], 0.014,
+        f"{PREFIX}HeadEar_R", (0.203, -0.002, 1.955),
+        (0.045, 0.145, 0.090), materials["skin"], 0.014,
     )
     crown_x = 0.085
     character.add_box(
