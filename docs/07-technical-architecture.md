@@ -94,7 +94,8 @@ cell, projected diamond, or pre-authored isometric arc participates in motion.
 After target selection, the locomotion agent owns:
 
 - Continuous world-space position, velocity, acceleration, and facing
-- Static solid footprints shared with rendered geometry
+- Swept three-dimensional collision volumes shared by the walking capsule and
+  fallen body, using the same terrain, platforms, buildings, and grounded props
 - Character-width capsules for the player and visible local inhabitants, with
   deterministic sidestepping around occupied space
 - Surface heights, ledge contacts, staged climbing, gravity, and landing
@@ -105,6 +106,15 @@ The orthographic camera is therefore replaceable. Rotating it, changing its
 projection, or presenting the same local state through another renderer must
 not alter locomotion results. The renderer reads agent state; it does not infer
 movement from projected screen coordinates.
+
+This is a local character-physics boundary, not a general physics simulation of
+the strategic world. The strategic library remains frame-time independent. In
+an active local scene, support is classified as stable, marginal, hands,
+controlled airborne, or uncontrolled fall. Stable walking owns an aggregate
+force-integrated root. Continued support loss makes the constrained body's
+center of mass authoritative for both position and velocity until physical
+recovery completes. See the
+[character physics foundation](production/character-physics-foundation.md).
 
 ## Two generalized locomotion families
 
@@ -189,6 +199,13 @@ than following a sine value as a servo command. Below the locomotion threshold,
 the cyclic drive is removed and shoulder/elbow damping lets the arms return to a
 quiet resting pose.
 
+On sloped support, the controller subtracts the ground reaction's horizontal
+component from active drive before applying the friction limit. This prevents a
+walkable foundation grade from pushing a commanded body downhill. Contact
+normals also provide a bounded frame for foot, ankle, hip, and torso placement,
+so the body follows the ground without stretching its legs beneath a world-up
+chest.
+
 The humanoid owns one continuous action state above those joint and contact
 controllers: locomotion, guard, strike, clamber, swim, fall, and recovery. An
 action changes muscle targets and permitted support forces; it does not replace
@@ -212,7 +229,10 @@ planner immediately releases its planted contacts and maps the current and
 previous visible poses into a generalized Verlet particle graph. Each anatomical
 landmark has mass and collision radius; fixed-distance constraints join pelvis,
 spine, chest, head, arms, and legs, while cross-braces keep shoulder and hip
-widths coherent. The inherited two-frame displacement carries real approach
+widths coherent. Spine bounds, shoulder and hip cones, knee and elbow hinges,
+selected self-separation constraints, and capsule collision along the torso and
+limbs prevent folding and let a wall contact the space between joint landmarks.
+The inherited two-frame displacement carries real approach
 momentum into the fall. Gravity then moves every landmark, terrain projections
 resolve body contacts, and iterative constraints prevent the legs or arms from
 lengthening toward a distant surface. Navigation intent cannot schedule a step
@@ -224,9 +244,9 @@ a conspicuous whole-body bounce on the next frame. Elevated top surfaces use a
 swept contact test: a particle may land on or remain supported by a top only if
 its previous lower extent was at that elevation or above it. A hand or ankle
 that approaches the same footprint from beside or below cannot be projected to
-the roof. Recovery contact counts are also filtered to the agent's actual
-landing elevation, so limbs left draped on a higher ledge cannot prematurely
-start the get-up sequence. Once the agent's physical base has committed below
+the roof. Recovery contacts are grouped onto one low support plane and must
+have enough horizontal spread, so limbs left draped on a higher ledge cannot
+prematurely start the get-up sequence. Once the agent's physical base has committed below
 an elevated ledge, stale contacts above it are released; a trailing foot can no
 longer suspend or slow the whole falling graph.
 
@@ -257,9 +277,10 @@ slow motion.
 Terrain contacts are hard constraints. After the analytic two-bone contact
 solve, its actual hip, knee, and ankle angles are observed back into the
 biomechanical state and produce a bounded reaction torque. This is a deliberate
-hybrid: it keeps exact non-sliding feet and fixed bone lengths while making the
-pose controller tissue-aware. A later rigid-body layer can use the same muscle,
-joint-limit, mass, and reaction state without changing the morphology format.
+hybrid: supported movement uses an aggregate dynamic root, while an unsupported
+or recovering body uses the authoritative constrained particle graph. It keeps
+exact non-sliding feet and fixed bone lengths while making the pose controller
+tissue-aware.
 The player skin retains the cape-and-pauldron silhouette, while the diagnostic
 overlay now exposes heel, ball, toe, joint, and contact state.
 

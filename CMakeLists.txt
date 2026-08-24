@@ -117,6 +117,12 @@ if(CC_BUILD_CLIENT)
         set(CC_HERO_ENGINE_MANIFEST
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/hero/crownless_hero_engine_rig_v01.json"
         )
+        set(CC_SCREEN_FIRST_HERO_ENGINE_ASSET
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/hero/crownless_screen_first_engine_rig_v08.glb"
+        )
+        set(CC_SCREEN_FIRST_HERO_ENGINE_MANIFEST
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/hero/crownless_screen_first_engine_rig_v08.json"
+        )
         file(GLOB CC_NPC_ARCHETYPE_ASSETS CONFIGURE_DEPENDS
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/npc/*.glb"
         )
@@ -159,6 +165,12 @@ if(CC_BUILD_CLIENT)
         set(CC_WORLD_LIGHT_FRAGMENT_SHADER
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/world_lit.fs"
         )
+        set(CC_PAINTED_ENVIRONMENT_FRAGMENT_SHADER
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/painted_environment.fs"
+        )
+        set(CC_TREE_FOLIAGE_FRAGMENT_SHADER
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/tree_foliage.fs"
+        )
         set(CC_HERO_PIXEL_FRAGMENT_SHADER
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/hero_pixel.fs"
         )
@@ -180,6 +192,12 @@ if(CC_BUILD_CLIENT)
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${CC_HERO_ENGINE_MANIFEST}"
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/hero/crownless_hero_engine_rig_v01.json"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CC_SCREEN_FIRST_HERO_ENGINE_ASSET}"
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/hero/crownless_screen_first_engine_rig_v08.glb"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CC_SCREEN_FIRST_HERO_ENGINE_MANIFEST}"
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/hero/crownless_screen_first_engine_rig_v08.json"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 ${CC_NPC_ARCHETYPE_ASSETS}
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/npc"
@@ -223,6 +241,12 @@ if(CC_BUILD_CLIENT)
                 "${CC_WORLD_LIGHT_FRAGMENT_SHADER}"
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/shaders/world_lit.fs"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CC_PAINTED_ENVIRONMENT_FRAGMENT_SHADER}"
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/shaders/painted_environment.fs"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CC_TREE_FOLIAGE_FRAGMENT_SHADER}"
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/shaders/tree_foliage.fs"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${CC_HERO_PIXEL_FRAGMENT_SHADER}"
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/shaders/hero_pixel.fs"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -238,6 +262,7 @@ if(CC_BUILD_CLIENT)
                     "${CC_STYLE_GRADE_SHADER}"
                     "${CC_WORLD_LIGHT_VERTEX_SHADER}"
                     "${CC_WORLD_LIGHT_FRAGMENT_SHADER}"
+                    "${CC_TREE_FOLIAGE_FRAGMENT_SHADER}"
                     "${CC_HERO_PIXEL_FRAGMENT_SHADER}"
             VERBATIM
         )
@@ -324,5 +349,23 @@ if(BUILD_TESTING)
         )
         cc_strict_warnings(local_movement_tests)
         add_test(NAME local_collision_space COMMAND local_movement_tests)
+
+        add_executable(terrain_tests
+            tests/terrain_tests.c
+            src/client/cc_overlay.c
+            src/client/cc_npc_appearance.c
+            src/client/cc_local3d.c
+            src/client/cc_local_runtime.c
+            src/client/cc_local_renderer_stats.c
+        )
+        target_link_libraries(terrain_tests PRIVATE
+            crownless_sim crownless_locomotion raylib
+        )
+        target_compile_definitions(terrain_tests PRIVATE
+            CC_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}"
+        )
+        cc_strict_warnings(terrain_tests)
+        add_test(NAME seeded_hilly_terrain COMMAND terrain_tests)
+
     endif()
 endif()

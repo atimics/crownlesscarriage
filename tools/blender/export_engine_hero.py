@@ -5,8 +5,15 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import sys
 
 import bpy
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+import paint_channels
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -92,6 +99,12 @@ def consolidate_components(components: list[bpy.types.Object],
     bpy.ops.object.join()
     combined.name = "SKIN_CrownlessHero_Runtime"
     combined["cc_authored_component_count"] = len(components)
+    material_names = [material.name if material is not None else "neutral"
+                      for material in combined.data.materials]
+    polygon_materials = [polygon.material_index
+                         for polygon in combined.data.polygons]
+    paint_channels.add_indexed_paint_channels(
+        combined, polygon_materials, material_names)
     armatures = [modifier for modifier in combined.modifiers
                  if modifier.type == "ARMATURE"]
     if not armatures:
@@ -165,6 +178,7 @@ def export() -> None:
         export_morph=False,
         export_extras=True,
         export_materials="EXPORT",
+        export_vertex_color="ACTIVE",
     )
 
     manifest = {
@@ -179,6 +193,7 @@ def export() -> None:
             "skinned_objects": 1,
             "strategy": "joined skin with material primitives",
         },
+        "paint_contract": "COLOR_0 stores material index, authored value, and fold strength",
         "bones": [bone.name for bone in rig.data.bones],
         "components": component_entries,
     }

@@ -30,6 +30,13 @@ typedef enum CcNpcEquipment {
     CC_NPC_EQUIPMENT_TOOL = 1 << 6
 } CcNpcEquipment;
 
+typedef enum CcNpcPortraitExpression {
+    CC_NPC_PORTRAIT_NEUTRAL,
+    CC_NPC_PORTRAIT_FOCUSED,
+    CC_NPC_PORTRAIT_HURT,
+    CC_NPC_PORTRAIT_TALKING
+} CcNpcPortraitExpression;
+
 /* A stable, inexpensive visual identity for background and simulated people.
    Values are deliberately bounded around the shared humanoid skeleton so
    animation, hit volumes, and crowd navigation remain authoritative. */
@@ -66,10 +73,39 @@ typedef struct CcNpcAppearance {
     Color accent;
 } CcNpcAppearance;
 
+/* The single identity source used by both the close portrait and the small
+   world head. Renderers may simplify it for distance, but may not invent a
+   second set of facial traits. */
+typedef struct CcFaceRecipe {
+    uint32_t seed;
+    float width;
+    float depth;
+    float age;
+    uint8_t hair_style;
+    uint8_t beard_style;
+    uint8_t nose_style;
+    uint8_t scar_style;
+    uint8_t headwear_style;
+    bool headwear;
+    Color skin;
+    Color skin_shadow;
+    Color hair;
+    Color ink;
+    Color headwear_color;
+    Color accent;
+} CcFaceRecipe;
+
 CcNpcAppearance CcNpcAppearanceGenerate(uint32_t seed, CcNpcRole role,
                                         Color accent);
 const char *CcNpcRoleName(CcNpcRole role);
 bool CcNpcAppearanceEqual(const CcNpcAppearance *first,
                           const CcNpcAppearance *second);
+CcFaceRecipe CcNpcFaceRecipe(const CcNpcAppearance *appearance);
+void CcNpcDrawPixelPortrait(const CcNpcAppearance *appearance,
+                            Rectangle bounds,
+                            CcNpcPortraitExpression expression,
+                            bool crowned);
+CcNpcAppearance CcNpcHeroPortraitAppearance(
+    const CcNpcAppearance *appearance);
 
 #endif

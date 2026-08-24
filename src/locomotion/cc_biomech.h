@@ -9,6 +9,10 @@
 #define CC_BIOMECH_MAX_MUSCLES 64
 #define CC_BIOMECH_MAX_RAGDOLL_PARTICLES 32
 #define CC_BIOMECH_MAX_RAGDOLL_CONSTRAINTS 64
+#define CC_BIOMECH_MAX_RAGDOLL_ANGLE_CONSTRAINTS 32
+#define CC_BIOMECH_MAX_RAGDOLL_HINGE_CONSTRAINTS 8
+#define CC_BIOMECH_MAX_RAGDOLL_COLLISION_SEGMENTS 32
+#define CC_BIOMECH_MAX_RAGDOLL_EXCLUSIONS 48
 #define CC_BIOMECH_NAME_LENGTH 24
 
 typedef struct CcBiomechVec3 {
@@ -104,6 +108,41 @@ typedef struct CcBiomechRagdollConstraint {
     float compliance;
 } CcBiomechRagdollConstraint;
 
+typedef struct CcBiomechRagdollAngleConstraint {
+    int32_t particle_a;
+    int32_t joint_particle;
+    int32_t particle_b;
+    float minimum_angle;
+    float maximum_angle;
+    float compliance;
+} CcBiomechRagdollAngleConstraint;
+
+typedef struct CcBiomechRagdollHingeConstraint {
+    int32_t particle_a;
+    int32_t joint_particle;
+    int32_t particle_b;
+    int32_t axis_particle_a;
+    int32_t axis_particle_b;
+    float minimum_angle;
+    float maximum_angle;
+    float rest_lateral_offset;
+    float maximum_splay_angle;
+    float passive_splay_angle;
+    float compliance;
+} CcBiomechRagdollHingeConstraint;
+
+typedef struct CcBiomechRagdollCollisionSegment {
+    int32_t particle_a;
+    int32_t particle_b;
+    float radius;
+} CcBiomechRagdollCollisionSegment;
+
+typedef struct CcBiomechRagdollExclusion {
+    int32_t particle_a;
+    int32_t particle_b;
+    float minimum_distance;
+} CcBiomechRagdollExclusion;
+
 typedef bool (*CcBiomechRagdollCollisionProbe)(
     void *context, CcBiomechVec3 previous_position,
     CcBiomechVec3 position, float radius,
@@ -112,6 +151,13 @@ typedef bool (*CcBiomechRagdollCollisionProbe)(
 typedef struct CcBiomechRagdoll {
     CcBiomechRagdollParticle particles[CC_BIOMECH_MAX_RAGDOLL_PARTICLES];
     CcBiomechRagdollConstraint constraints[CC_BIOMECH_MAX_RAGDOLL_CONSTRAINTS];
+    CcBiomechRagdollAngleConstraint
+        angle_constraints[CC_BIOMECH_MAX_RAGDOLL_ANGLE_CONSTRAINTS];
+    CcBiomechRagdollHingeConstraint
+        hinge_constraints[CC_BIOMECH_MAX_RAGDOLL_HINGE_CONSTRAINTS];
+    CcBiomechRagdollCollisionSegment
+        collision_segments[CC_BIOMECH_MAX_RAGDOLL_COLLISION_SEGMENTS];
+    CcBiomechRagdollExclusion exclusions[CC_BIOMECH_MAX_RAGDOLL_EXCLUSIONS];
     CcBiomechVec3 gravity;
     float damping;
     float restitution;
@@ -120,6 +166,10 @@ typedef struct CcBiomechRagdoll {
     float resting_contact_damping;
     int32_t particle_count;
     int32_t constraint_count;
+    int32_t angle_constraint_count;
+    int32_t hinge_constraint_count;
+    int32_t collision_segment_count;
+    int32_t exclusion_count;
     bool driven;
     bool active;
 } CcBiomechRagdoll;
@@ -173,6 +223,22 @@ int32_t CcBiomechRagdollAddParticle(CcBiomechRagdoll *ragdoll,
 int32_t CcBiomechRagdollAddConstraint(CcBiomechRagdoll *ragdoll,
                                       int32_t particle_a,
                                       int32_t particle_b, float compliance);
+int32_t CcBiomechRagdollAddAngleConstraint(
+    CcBiomechRagdoll *ragdoll, int32_t particle_a, int32_t joint_particle,
+    int32_t particle_b, float minimum_angle, float maximum_angle,
+    float compliance);
+int32_t CcBiomechRagdollAddHingeConstraint(
+    CcBiomechRagdoll *ragdoll, int32_t particle_a, int32_t joint_particle,
+    int32_t particle_b, int32_t axis_particle_a, int32_t axis_particle_b,
+    float minimum_angle, float maximum_angle, float maximum_splay_angle,
+    float compliance);
+int32_t CcBiomechRagdollAddCollisionSegment(
+    CcBiomechRagdoll *ragdoll, int32_t particle_a, int32_t particle_b,
+    float radius);
+int32_t CcBiomechRagdollAddExclusion(CcBiomechRagdoll *ragdoll,
+                                     int32_t particle_a,
+                                     int32_t particle_b,
+                                     float minimum_distance);
 void CcBiomechRagdollSetVelocity(CcBiomechRagdoll *ragdoll,
                                  CcBiomechVec3 velocity, float delta_time);
 void CcBiomechRagdollStep(CcBiomechRagdoll *ragdoll, float delta_time,
@@ -181,5 +247,9 @@ void CcBiomechRagdollStep(CcBiomechRagdoll *ragdoll, float delta_time,
                           void *collision_context);
 CcBiomechVec3 CcBiomechRagdollParticleVelocity(
     const CcBiomechRagdoll *ragdoll, int32_t particle, float delta_time);
+CcBiomechVec3 CcBiomechRagdollCenterOfMass(
+    const CcBiomechRagdoll *ragdoll);
+CcBiomechVec3 CcBiomechRagdollCenterVelocity(
+    const CcBiomechRagdoll *ragdoll, float delta_time);
 
 #endif

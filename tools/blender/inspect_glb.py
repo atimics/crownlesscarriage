@@ -230,10 +230,31 @@ def collect_stats(path: Path, document: dict) -> GlbStats:
     return stats
 
 
-def check_library_contract(stats: GlbStats, document: dict, max_triangles: int) -> None:
+def accessor_first_values(document: dict, binary: bytes,
+                          accessor_index: int) -> tuple[float, ...]:
+    accessor = document["accessors"][accessor_index]
+    view = document["bufferViews"][accessor["bufferView"]]
+    component_type = accessor["componentType"]
+    component_formats = {5121: "B", 5123: "H", 5126: "f"}
+    component_counts = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4}
+    if component_type not in component_formats or accessor["type"] not in component_counts:
+        return ()
+    count = component_counts[accessor["type"]]
+    fmt = "<" + component_formats[component_type] * count
+    offset = view.get("byteOffset", 0) + accessor.get("byteOffset", 0)
+    values = struct.unpack_from(fmt, binary, offset)
+    if accessor.get("normalized"):
+        divisor = 255.0 if component_type == 5121 else 65535.0
+        values = tuple(value / divisor for value in values)
+    return tuple(float(value) for value in values)
+
+
+def check_library_contract(stats: GlbStats, document: dict, binary: bytes,
+                           max_triangles: int) -> None:
     """Enforce the crownless_asset_library export contract on one GLB."""
     stem = stats.path.stem
     nodes = document.get("nodes", [])
+    meshes = document.get("meshes", [])
     mesh_nodes = [n for n in nodes if "mesh" in n]
     if not mesh_nodes:
         stats.failures.append("no mesh nodes")
@@ -249,6 +270,24 @@ def check_library_contract(stats: GlbStats, document: dict, max_triangles: int) 
             stats.failures.append(f"node {name!r} has no cc_role")
         if not extras.get("cc_library_version"):
             stats.failures.append(f"node {name!r} has no cc_library_version")
+        if stem == "environment_market_granary_v01":
+            if not extras.get("cc_paint_material"):
+                stats.failures.append(
+                    f"painted market node {name!r} has no material class")
+            mesh = meshes[node["mesh"]]
+            for primitive in mesh.get("primitives", []):
+                attributes = primitive.get("attributes", {})
+                if "COLOR_0" not in attributes:
+                    stats.failures.append(
+                        f"painted market node {name!r} has no COLOR_0")
+                    continue
+                paint_sample = accessor_first_values(
+                    document, binary, attributes["COLOR_0"])
+                if len(paint_sample) < 3 or all(
+                    component > 0.98 for component in paint_sample[:3]
+                ):
+                    stats.failures.append(
+                        f"painted market node {name!r} has a blank COLOR_0")
     for material in stats.materials:
         if not material.startswith("MAT_"):
             stats.failures.append(f"material {material!r} is not named MAT_*")
@@ -309,10 +348,11 @@ def main(argv: list[str] | None = None) -> int:
     for path in sorted(args.files):
         stats = GlbStats(path=path)
         try:
-            document, _binary = parse_glb(path)
+            document, binary = parse_glb(path)
             stats = collect_stats(path, document)
             if args.profile == "library":
-                check_library_contract(stats, document, args.max_tris)
+                check_library_contract(stats, document, binary,
+                                       args.max_tris)
         except GlbError as exc:
             stats.failures.append(str(exc))
         results.append(stats)

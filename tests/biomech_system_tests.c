@@ -22,6 +22,21 @@ static bool PlaneProbe(void *context, CcLimbVec3 origin, float maximum_drop,
     return true;
 }
 
+static bool SlopeProbe(void *context, CcLimbVec3 origin, float maximum_drop,
+                       CcLimbVec3 *point, CcLimbVec3 *normal)
+{
+    const float slope = *(const float *)context;
+    float height = origin.z * slope;
+    if (origin.y < height - 0.05f || origin.y - height > maximum_drop) {
+        return false;
+    }
+    float inverse_length = 1.0f / sqrtf(1.0f + slope * slope);
+    *point = (CcLimbVec3){origin.x, height, origin.z};
+    *normal = (CcLimbVec3){0.0f, inverse_length,
+                           -slope * inverse_length};
+    return true;
+}
+
 static float Distance(CcLimbVec3 a, CcLimbVec3 b)
 {
     float x = b.x - a.x;
@@ -137,6 +152,37 @@ static bool RagdollPlane(void *context, CcBiomechVec3 previous_position,
     *corrected_position = position;
     corrected_position->y = radius;
     *surface_normal = (CcBiomechVec3){0.0f, 1.0f, 0.0f};
+    return true;
+}
+
+static float RagdollAngle(CcBiomechVec3 a, CcBiomechVec3 joint,
+                          CcBiomechVec3 b)
+{
+    CcBiomechVec3 first = {a.x - joint.x, a.y - joint.y, a.z - joint.z};
+    CcBiomechVec3 second = {b.x - joint.x, b.y - joint.y, b.z - joint.z};
+    float first_length = BiomechDistance(a, joint);
+    float second_length = BiomechDistance(b, joint);
+    if (first_length <= 0.00001f || second_length <= 0.00001f) return 0.0f;
+    float cosine = (first.x * second.x + first.y * second.y +
+                    first.z * second.z) /
+                   (first_length * second_length);
+    cosine = fmaxf(-1.0f, fminf(cosine, 1.0f));
+    return acosf(cosine);
+}
+
+static bool CapsuleBarrier(void *context,
+                           CcBiomechVec3 previous_position,
+                           CcBiomechVec3 position, float radius,
+                           CcBiomechVec3 *corrected_position,
+                           CcBiomechVec3 *surface_normal)
+{
+    (void)context;
+    (void)previous_position;
+    if (radius < 0.10f || fabsf(position.x) >= radius) return false;
+    *corrected_position = position;
+    corrected_position->x = position.x <= 0.0f ? -radius : radius;
+    *surface_normal = (CcBiomechVec3){position.x <= 0.0f ? -1.0f : 1.0f,
+                                      0.0f, 0.0f};
     return true;
 }
 
@@ -273,6 +319,150 @@ static void TestGenericRagdoll(void)
     }
 }
 
+static void TestRagdollAnatomyAndVolume(void)
+{
+    CcBiomechRagdoll ragdoll;
+    CcBiomechRagdollInit(&ragdoll);
+    ragdoll.gravity = (CcBiomechVec3){0};
+    int32_t a = CcBiomechRagdollAddParticle(
+        &ragdoll, (CcBiomechVec3){0.0f, 0.0f, 0.0f}, 0.20f, 0.02f);
+    int32_t joint = CcBiomechRagdollAddParticle(
+        &ragdoll, (CcBiomechVec3){1.0f, 0.0f, 0.0f}, 0.20f, 0.02f);
+    int32_t b = CcBiomechRagdollAddParticle(
+        &ragdoll, (CcBiomechVec3){0.02f, 0.04f, 0.0f}, 0.20f, 0.02f);
+    Require(a == 0 && joint == 1 && b == 2,
+            "anatomical ragdoll fixture rejected particles");
+    Require(CcBiomechRagdollAddConstraint(&ragdoll, a, joint, 0.0f) >= 0 &&
+            CcBiomechRagdollAddConstraint(&ragdoll, joint, b, 0.0f) >= 0 &&
+            CcBiomechRagdollAddAngleConstraint(
+                &ragdoll, a, joint, b, 0.62f, 3.12f, 0.000001f) >= 0,
+            "anatomical ragdoll rejected a joint cone");
+    Require(CcBiomechRagdollAddExclusion(&ragdoll, a, b, 0.24f) >= 0,
+            "anatomical ragdoll rejected selected self-collision");
+    ragdoll.active = true;
+    for (int32_t frame = 0; frame < 30; ++frame) {
+        CcBiomechRagdollStep(&ragdoll, 1.0f / 60.0f, 16, NULL, NULL);
+    }
+    float angle = RagdollAngle(ragdoll.particles[a].position,
+                               ragdoll.particles[joint].position,
+                               ragdoll.particles[b].position);
+    Require(angle >= 0.60f,
+            "ragdoll joint folded through its anatomical angle limit");
+    Require(BiomechDistance(ragdoll.particles[a].position,
+                            ragdoll.particles[b].position) >= 0.235f,
+            "selected ragdoll body parts passed through one another");
+
+    CcBiomechRagdoll hinge;
+    CcBiomechRagdollInit(&hinge);
+    hinge.gravity = (CcBiomechVec3){0};
+    int32_t axis_left = CcBiomechRagdollAddParticle(
+        &hinge, (CcBiomechVec3){-0.50f, 0.0f, 0.0f}, 0.20f, 0.02f);
+    int32_t axis_right = CcBiomechRagdollAddParticle(
+        &hinge, (CcBiomechVec3){0.50f, 0.0f, 0.0f}, 0.20f, 0.02f);
+    int32_t parent = CcBiomechRagdollAddParticle(
+        &hinge, (CcBiomechVec3){0.0f, 1.0f, 0.0f}, 0.20f, 0.02f);
+    int32_t hinge_joint = CcBiomechRagdollAddParticle(
+        &hinge, (CcBiomechVec3){0.0f, 0.0f, 0.0f}, 0.20f, 0.02f);
+    int32_t child = CcBiomechRagdollAddParticle(
+        &hinge, (CcBiomechVec3){0.0f, -0.75f, 0.25f}, 0.20f, 0.02f);
+    Require(axis_left == 0 && axis_right == 1 && parent == 2 &&
+                hinge_joint == 3 && child == 4 &&
+                CcBiomechRagdollAddConstraint(
+                    &hinge, parent, hinge_joint, 0.0f) >= 0 &&
+                CcBiomechRagdollAddConstraint(
+                    &hinge, hinge_joint, child, 0.0f) >= 0 &&
+                CcBiomechRagdollAddHingeConstraint(
+                    &hinge, parent, hinge_joint, child,
+                    axis_left, axis_right, 0.45f, 3.10f, 0.10f,
+                    0.000001f) >= 0,
+            "ragdoll rejected an anatomical hinge");
+    hinge.particles[child].position.x = 0.65f;
+    hinge.particles[child].previous_position = hinge.particles[child].position;
+    hinge.active = true;
+    for (int32_t frame = 0; frame < 45; ++frame) {
+        CcBiomechRagdollStep(&hinge, 1.0f / 60.0f, 16, NULL, NULL);
+    }
+    CcBiomechVec3 hinge_arm = {
+        hinge.particles[child].position.x -
+            hinge.particles[hinge_joint].position.x,
+        hinge.particles[child].position.y -
+            hinge.particles[hinge_joint].position.y,
+        hinge.particles[child].position.z -
+            hinge.particles[hinge_joint].position.z,
+    };
+    float hinge_length = BiomechDistance(
+        hinge.particles[hinge_joint].position,
+        hinge.particles[child].position);
+    Require(fabsf(hinge_arm.x) / hinge_length < sinf(0.10f) + 0.012f,
+            "ragdoll hinge allowed sideways knee or elbow folding");
+    float hinge_angle = RagdollAngle(
+        hinge.particles[parent].position,
+        hinge.particles[hinge_joint].position,
+        hinge.particles[child].position);
+    Require(hinge_angle >= 0.44f && hinge_angle <= 3.11f,
+            "ragdoll hinge exceeded its bend limits");
+
+    CcBiomechRagdoll capsule;
+    CcBiomechRagdollInit(&capsule);
+    capsule.gravity = (CcBiomechVec3){0};
+    int32_t left = CcBiomechRagdollAddParticle(
+        &capsule, (CcBiomechVec3){-0.42f, 0.0f, 0.0f}, 0.20f, 0.02f);
+    int32_t right = CcBiomechRagdollAddParticle(
+        &capsule, (CcBiomechVec3){0.42f, 0.0f, 0.0f}, 0.20f, 0.02f);
+    Require(CcBiomechRagdollAddConstraint(
+                &capsule, left, right, 0.0f) >= 0 &&
+            CcBiomechRagdollAddCollisionSegment(
+                &capsule, left, right, 0.12f) >= 0,
+            "ragdoll rejected a collidable limb capsule");
+    capsule.active = true;
+    CcBiomechRagdollStep(&capsule, 1.0f / 60.0f, 16,
+                         CapsuleBarrier, NULL);
+    Require(capsule.particles[left].collided ||
+            capsule.particles[right].collided,
+            "limb capsule crossed geometry between its endpoint particles");
+}
+
+static void SetRagdollSupportContact(CcBiomechRagdollParticle *particle,
+                                     float x, float support_height, float z)
+{
+    particle->position = (CcBiomechVec3){
+        x, support_height + particle->radius, z};
+    particle->collided = true;
+    particle->contact_normal = (CcBiomechVec3){0.0f, 1.0f, 0.0f};
+}
+
+static void TestRagdollSupportPlane(void)
+{
+    CcHumanoidGait gait;
+    CcHumanoidGaitInit(&gait, (CcLimbVec3){0}, 0.0f, PlaneProbe, NULL);
+    Require(CcHumanoidGaitKnockDown(&gait),
+            "support-plane fixture did not create a humanoid ragdoll");
+    Require(gait.ragdoll.hinge_constraint_count == 4 &&
+                gait.ragdoll.angle_constraint_count >= 7,
+            "humanoid ragdoll lacks hinge, cone, or spine limits");
+    for (int32_t particle = 0;
+         particle < gait.ragdoll.particle_count; ++particle) {
+        gait.ragdoll.particles[particle].collided = false;
+    }
+    SetRagdollSupportContact(&gait.ragdoll.particles[0], -0.20f, 0.65f, 0.0f);
+    SetRagdollSupportContact(&gait.ragdoll.particles[1], 0.20f, 0.65f, 0.0f);
+    SetRagdollSupportContact(&gait.ragdoll.particles[2], 0.0f, 0.65f, 0.20f);
+    SetRagdollSupportContact(&gait.ragdoll.particles[3], 0.0f, 0.0f, 0.0f);
+    Require(CcHumanoidGaitRagdollSupportContactCount(&gait) == 1,
+            "contacts on a high ledge created false stable support");
+
+    SetRagdollSupportContact(&gait.ragdoll.particles[4], -0.22f, 0.0f, 0.0f);
+    SetRagdollSupportContact(&gait.ragdoll.particles[5], 0.22f, 0.0f, 0.18f);
+    Require(CcHumanoidGaitRagdollSupportContactCount(&gait) >= 3,
+            "broad contacts on one plane did not create stable support");
+
+    SetRagdollSupportContact(&gait.ragdoll.particles[3], 0.00f, 0.0f, 0.0f);
+    SetRagdollSupportContact(&gait.ragdoll.particles[4], 0.03f, 0.0f, 0.0f);
+    SetRagdollSupportContact(&gait.ragdoll.particles[5], 0.05f, 0.0f, 0.02f);
+    Require(CcHumanoidGaitRagdollSupportContactCount(&gait) < 3,
+            "clustered contacts created false broad support");
+}
+
 static void TestBiomechanicalClimb(void)
 {
     const float delta_time = 1.0f / 60.0f;
@@ -309,6 +499,7 @@ static void TestBiomechanicalClimb(void)
             {-0.13f, 1.0f, 0.50f}, {0.13f, 1.0f, 0.50f}
         };
         CcLimbVec3 normals[2];
+        const float hand_support[2] = {1.0f, 1.0f};
         const float support[2] = {1.0f, 1.0f};
         for (int32_t leg = 0; leg < 2; ++leg) {
             feet[leg] = (CcLimbVec3){
@@ -323,7 +514,8 @@ static void TestBiomechanicalClimb(void)
                                         normal.z / normal_length};
         }
         CcHumanoidGaitAdvanceClimb(
-            &gait, body, 0.0f, hands, feet, normals, support,
+            &gait, body, 0.0f, hands, hand_support,
+            feet, normals, support,
             progress, delta_time, NULL, NULL);
         maximum_pose_step = fmaxf(
             maximum_pose_step,
@@ -357,9 +549,11 @@ static void TestBiomechanicalClimb(void)
         CcLimbVec3 normals[2] = {
             {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 0.0f}
         };
+        const float hand_support[2] = {1.0f, 1.0f};
         const float support[2] = {1.0f, 1.0f};
         CcHumanoidGaitAdvanceClimb(
-            &gait, finish, 0.0f, hands, feet, normals, support,
+            &gait, finish, 0.0f, hands, hand_support,
+            feet, normals, support,
             progress, delta_time, NULL, NULL);
         maximum_pose_step = fmaxf(
             maximum_pose_step,
@@ -381,6 +575,102 @@ static void TestBiomechanicalClimb(void)
             "biomechanical climb snapped when standing control resumed");
     Require(!gait.climbing && !gait.ragdoll.active,
             "biomechanical climb did not return supported control");
+}
+
+static void TestClimbSupportLoss(void)
+{
+    const float delta_time = 1.0f / 60.0f;
+    const CcLimbVec3 body = {0.0f, 0.0f, 0.0f};
+    const CcLimbVec3 hands[CC_HUMANOID_ARM_COUNT] = {
+        {-0.18f, 1.20f, 0.16f}, {0.18f, 1.20f, 0.16f}
+    };
+    const CcLimbVec3 feet[CC_HUMANOID_LEG_COUNT] = {
+        {-0.13f, 0.35f, 0.12f}, {0.13f, 0.42f, 0.12f}
+    };
+    const CcLimbVec3 normals[CC_HUMANOID_LEG_COUNT] = {
+        {0.0f, 0.0f, -1.0f}, {0.0f, 0.0f, -1.0f}
+    };
+    const float full_hands[CC_HUMANOID_ARM_COUNT] = {1.0f, 1.0f};
+    const float one_hand[CC_HUMANOID_ARM_COUNT] = {0.0f, 1.0f};
+    const float full_feet[CC_HUMANOID_LEG_COUNT] = {1.0f, 1.0f};
+    const float no_feet[CC_HUMANOID_LEG_COUNT] = {0.0f, 0.0f};
+
+    CcHumanoidGait gait;
+    CcHumanoidGaitInit(&gait, body, 0.0f, NULL, NULL);
+    CcHumanoidGaitBeginClimb(&gait);
+    for (int32_t frame = 0; frame < 30; ++frame) {
+        CcHumanoidGaitAdvanceClimb(
+            &gait, body, 0.0f, hands, full_hands, feet, normals, full_feet,
+            0.45f, delta_time, NULL, NULL);
+    }
+    Require(gait.climbing && !gait.ragdoll.active &&
+                gait.support_state == CC_HUMANOID_SUPPORT_HANDS &&
+                gait.control_authority > 0.89f,
+            "four climbing contacts did not produce full supported control");
+
+    CcHumanoidPose previous = gait.pose;
+    float maximum_release_step = 0.0f;
+    for (int32_t frame = 0; frame < 12; ++frame) {
+        CcHumanoidGaitAdvanceClimb(
+            &gait, body, 0.0f, hands, one_hand, feet, normals, full_feet,
+            0.45f, delta_time, NULL, NULL);
+        maximum_release_step = fmaxf(
+            maximum_release_step,
+            MaximumPosePointStep(&previous, &gait.pose));
+        previous = gait.pose;
+    }
+    Require(gait.climbing && !gait.ragdoll.active &&
+                gait.support_state == CC_HUMANOID_SUPPORT_HANDS &&
+                gait.control_authority > 0.70f &&
+                gait.control_authority < 0.85f,
+            "loss of one climbing contact caused an uncontrolled fall");
+    Require(Distance(gait.pose.hand[0], hands[0]) > 0.08f,
+            "released climbing hand remained pinned to a lost contact");
+    Require(maximum_release_step < 0.045f,
+            "loss of one climbing contact snapped the pose");
+
+    for (int32_t frame = 0; frame < 10; ++frame) {
+        CcHumanoidGaitAdvanceClimb(
+            &gait, body, 0.0f, hands, one_hand, feet, normals, no_feet,
+            0.45f, delta_time, NULL, NULL);
+    }
+    Require(gait.climbing && !gait.ragdoll.active &&
+                gait.support_state == CC_HUMANOID_SUPPORT_MARGINAL &&
+                fabsf(gait.control_authority - 0.30f) < 0.001f,
+            "one remaining climb contact skipped the marginal grace state");
+
+    CcHumanoidPose fall_entry_pose = gait.pose;
+    CcLimbVec3 falling_body = body;
+    for (int32_t frame = 0; frame < 10 && !gait.ragdoll.active; ++frame) {
+        fall_entry_pose = gait.pose;
+        falling_body.x += 0.010f;
+        falling_body.y -= 0.005f;
+        CcHumanoidGaitAdvanceClimb(
+            &gait, falling_body, 0.0f, hands, one_hand, feet, normals, no_feet,
+            0.45f, delta_time, NULL, NULL);
+    }
+    Require(gait.ragdoll.active && !gait.climbing &&
+                gait.support_state == CC_HUMANOID_SUPPORT_UNCONTROLLED_FALL &&
+                gait.control_authority == 0.0f,
+            "sustained loss of climb support did not become passive physics");
+    Require(MaximumPosePointStep(&fall_entry_pose, &gait.pose) < 0.035f,
+            "climb support handoff snapped a body landmark");
+    CcBiomechVec3 center = CcBiomechRagdollCenterOfMass(&gait.ragdoll);
+    CcBiomechVec3 center_velocity = CcBiomechRagdollCenterVelocity(
+        &gait.ragdoll, delta_time);
+    CcLimbVec3 mapped_root = {
+        center.x + gait.ragdoll_body_offset.x,
+        center.y + gait.ragdoll_body_offset.y,
+        center.z + gait.ragdoll_body_offset.z,
+    };
+    CcLimbVec3 mapped_velocity = {
+        center_velocity.x, center_velocity.y, center_velocity.z,
+    };
+    Require(gait.ragdoll_body_offset_valid &&
+                Distance(mapped_root, gait.authoritative_position) < 0.001f &&
+                Distance(mapped_root, falling_body) < 0.001f &&
+                Distance(mapped_velocity, gait.root_velocity) < 0.001f,
+            "climb support handoff split navigation and body authority");
 }
 
 static void TestHumanoidController(void)
@@ -488,17 +778,27 @@ static void TestHumanoidController(void)
     float standing_head_height = gait.pose.head.y;
     float thigh_length = Distance(gait.pose.hip[0], gait.pose.knee[0]);
     float upper_arm_length = Distance(gait.pose.shoulder[0], gait.pose.elbow[0]);
-    CcHumanoidPose supported_pose = gait.pose;
     CcHumanoidGaitAdvance(&gait, body, 0.0f, (CcLimbVec3){0}, false,
                           1.0f / 60.0f, PlaneProbe, NULL);
-    Require(gait.ragdoll.active && gait.ragdoll.particle_count == 21,
-            "unsupported humanoid did not hand control to its ragdoll");
+    Require(!gait.ragdoll.active &&
+            gait.support_state == CC_HUMANOID_SUPPORT_CONTROLLED_AIRBORNE &&
+            gait.control_authority > 0.0f,
+            "support loss skipped the controlled airborne state");
     Require(gait.feet[0].contact == CC_HUMANOID_CONTACT_AIR &&
             gait.feet[1].contact == CC_HUMANOID_CONTACT_AIR,
             "airborne body retained fictional ground contacts");
     Require(gait.body.root.velocity.y < airborne_velocity,
             "airborne center of mass did not accelerate under gravity");
-    Require(MaximumPosePointStep(&supported_pose, &gait.pose) < 0.035f,
+    CcHumanoidPose pre_ragdoll_pose = gait.pose;
+    for (int32_t frame = 0; frame < 12 && !gait.ragdoll.active; ++frame) {
+        pre_ragdoll_pose = gait.pose;
+        CcHumanoidGaitAdvance(&gait, body, 0.0f, (CcLimbVec3){0}, false,
+                              1.0f / 60.0f, PlaneProbe, NULL);
+    }
+    Require(gait.ragdoll.active && gait.ragdoll.particle_count == 21 &&
+            gait.support_state == CC_HUMANOID_SUPPORT_UNCONTROLLED_FALL,
+            "unrecovered support loss did not hand control to its ragdoll");
+    Require(MaximumPosePointStep(&pre_ragdoll_pose, &gait.pose) < 0.035f,
             "ragdoll activation snapped a body landmark");
     float minimum_head_height = gait.pose.head.y;
     bool touched_ground = false;
@@ -573,6 +873,47 @@ static void TestHumanoidController(void)
             "humanoid snapped between ragdoll and standing poses");
     Require(gait.pose.head.y > gait.pose.pelvis.y + 0.75f,
             "recovered humanoid did not finish upright");
+}
+
+static void TestSlopeBalanceAndPose(void)
+{
+    const float slope = 0.60f;
+    CcHumanoidGait gait;
+    CcLimbVec3 body = {0};
+    CcHumanoidGaitInit(&gait, body, 0.0f, SlopeProbe, (void *)&slope);
+    for (int32_t frame = 0; frame < 300; ++frame) {
+        CcHumanoidGaitAdvance(
+            &gait, body, 0.0f, (CcLimbVec3){0.0f, 0.0f, 0.90f}, true,
+            1.0f / 60.0f, SlopeProbe, (void *)&slope);
+        body.x += gait.root_velocity.x / 60.0f;
+        body.z += gait.root_velocity.z / 60.0f;
+        body.y = body.z * slope;
+        CcHumanoidGaitConstrainMotion(
+            &gait, body,
+            (CcLimbVec3){gait.root_velocity.x, 0.0f,
+                         gait.root_velocity.z},
+            true);
+    }
+    Require(body.z > 2.40f && gait.root_velocity.z > 0.45f,
+            "slope support force overpowered uphill walking control");
+    Require(gait.support_normal.y > 0.80f && gait.support_normal.z < -0.35f,
+            "walking body did not retain its sloped support frame");
+    for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
+        if (gait.feet[leg].contact == CC_HUMANOID_CONTACT_SWING ||
+            gait.feet[leg].contact == CC_HUMANOID_CONTACT_AIR) {
+            continue;
+        }
+        CcLimbVec3 ankle_offset = {
+            gait.pose.ankle[leg].x - gait.feet[leg].current_point.x,
+            gait.pose.ankle[leg].y - gait.feet[leg].current_point.y,
+            gait.pose.ankle[leg].z - gait.feet[leg].current_point.z,
+        };
+        float along_normal = ankle_offset.x * gait.feet[leg].normal.x +
+                             ankle_offset.y * gait.feet[leg].normal.y +
+                             ankle_offset.z * gait.feet[leg].normal.z;
+        Require(fabsf(along_normal - 0.085f) < 0.002f,
+                "foot ankle did not follow its contact normal");
+    }
 }
 
 static void TestWalkingProfilesAndContactMarkers(void)
@@ -793,8 +1134,12 @@ int main(void)
 {
     TestGenericTissues();
     TestGenericRagdoll();
+    TestRagdollAnatomyAndVolume();
+    TestRagdollSupportPlane();
     TestBiomechanicalClimb();
+    TestClimbSupportLoss();
     TestHumanoidController();
+    TestSlopeBalanceAndPose();
     TestWalkingProfilesAndContactMarkers();
     TestContinuousHumanActions();
     return 0;

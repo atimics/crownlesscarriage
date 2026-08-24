@@ -1,0 +1,187 @@
+{
+  "asset": "assets/exports/hero/crownless_screen_first_engine_rig_v08.glb",
+  "armature": "ARM_CrownlessHero",
+  "art_direction": "screen_first_tapered_hair_clumps_v08",
+  "motion_source": "CcHumanoidSkinPoseResolve plus cape-delayed hair tips (runtime only)",
+  "runtime_layout": {
+    "authored_objects": 34,
+    "skinned_objects": 1,
+    "strategy": "joined skin with rigid body weights and quadratic hair tip blends"
+  },
+  "paint_contract": "COLOR_0 stores material index, authored value, and fold strength",
+  "hair_contract": {
+    "scalp_cores": 1,
+    "opaque_clumps": 6,
+    "cross_sections": "3-5 per clump",
+    "highlight_planes": 1,
+    "secondary_bones": [
+      "hair.long",
+      "hair.rear"
+    ],
+    "root_weights": "rigid head roots with quadratic tip blend"
+  },
+  "bones": [
+    "root",
+    "pelvis",
+    "spine",
+    "chest",
+    "neck",
+    "head",
+    "hair.long",
+    "hair.rear",
+    "upper_arm.L",
+    "forearm.L",
+    "hand.L",
+    "upper_arm.R",
+    "forearm.R",
+    "hand.R",
+    "cape.0",
+    "cape.1",
+    "cape.2",
+    "cape.3",
+    "thigh.L",
+    "shin.L",
+    "foot.L",
+    "thigh.R",
+    "shin.R",
+    "foot.R"
+  ],
+  "components": [
+    {
+      "name": "SCREEN_FIRST_TunicMass",
+      "bone": "spine"
+    },
+    {
+      "name": "SCREEN_FIRST_ScarfShoulderWrap",
+      "bone": "chest"
+    },
+    {
+      "name": "SCREEN_FIRST_ScarfFrontFold",
+      "bone": "chest"
+    },
+    {
+      "name": "SCREEN_FIRST_Sleeve_L",
+      "bone": "upper_arm.L"
+    },
+    {
+      "name": "SCREEN_FIRST_Forearm_L",
+      "bone": "forearm.L"
+    },
+    {
+      "name": "SCREEN_FIRST_Hand_L",
+      "bone": "hand.L"
+    },
+    {
+      "name": "SCREEN_FIRST_Thigh_L",
+      "bone": "thigh.L"
+    },
+    {
+      "name": "SCREEN_FIRST_Shin_L",
+      "bone": "shin.L"
+    },
+    {
+      "name": "SCREEN_FIRST_BootCuff_L",
+      "bone": "shin.L"
+    },
+    {
+      "name": "SCREEN_FIRST_BootFoot_L",
+      "bone": "foot.L"
+    },
+    {
+      "name": "SCREEN_FIRST_Sleeve_R",
+      "bone": "upper_arm.R"
+    },
+    {
+      "name": "SCREEN_FIRST_Forearm_R",
+      "bone": "forearm.R"
+    },
+    {
+      "name": "SCREEN_FIRST_Hand_R",
+      "bone": "hand.R"
+    },
+    {
+      "name": "SCREEN_FIRST_Thigh_R",
+      "bone": "thigh.R"
+    },
+    {
+      "name": "SCREEN_FIRST_Shin_R",
+      "bone": "shin.R"
+    },
+    {
+      "name": "SCREEN_FIRST_BootCuff_R",
+      "bone": "shin.R"
+    },
+    {
+      "name": "SCREEN_FIRST_BootFoot_R",
+      "bone": "foot.R"
+    },
+    {
+      "name": "SCREEN_FIRST_Head",
+      "bone": "head"
+    },
+    {
+      "name": "SCREEN_FIRST_HairScalpCore",
+      "bone": "head"
+    },
+    {
+      "name": "SCREEN_FIRST_HairBang_L",
+      "bone": "head"
+    },
+    {
+      "name": "SCREEN_FIRST_HairBang_R",
+      "bone": "head"
+    },
+    {
+      "name": "SCREEN_FIRST_HairLongLock",
+      "bone": "head->hair.long"
+    },
+    {
+      "name": "SCREEN_FIRST_HairShortLock",
+      "bone": "head"
+    },
+    {
+      "name": "SCREEN_FIRST_HairRearWedge_L",
+      "bone": "head->hair.rear"
+    },
+    {
+      "name": "SCREEN_FIRST_HairRearWedge_R",
+      "bone": "head->hair.rear"
+    },
+    {
+      "name": "SCREEN_FIRST_HairHighlightPlane",
+      "bone": "head"
+    },
+    {
+      "name": "SCREEN_FIRST_Eye_L",
+      "bone": "head"
+    },
+    {
+      "name": "SCREEN_FIRST_Eye_R",
+      "bone": "head"
+    },
+    {
+      "name": "SCREEN_FIRST_Mouth",
+      "bone": "head"
+    },
+    {
+      "name": "SCREEN_FIRST_HeadEar_R",
+      "bone": "head"
+    },
+    {
+      "name": "SCREEN_FIRST_CrownBand",
+      "bone": "head"
+    },
+    {
+      "name": "SCREEN_FIRST_CrownProng_0",
+      "bone": "head"
+    },
+    {
+      "name": "SCREEN_FIRST_CrownProng_1",
+      "bone": "head"
+    },
+    {
+      "name": "SCREEN_FIRST_CrownProng_2",
+      "bone": "head"
+    }
+  ]
+}

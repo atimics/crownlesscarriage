@@ -1,4 +1,5 @@
 #include "client/cc_local3d.h"
+#include "client/cc_local3d_internal.h"
 #include "locomotion/cc_humanoid_skin.h"
 
 #include <math.h>
@@ -201,6 +202,84 @@ static bool RagdollTouchesStreet(const CcBiomechRagdoll *ragdoll)
     return false;
 }
 
+static void RequireSolidStreetHouse(const char *name, float wall_x,
+                                    float center_x, float center_z)
+{
+    const float radius = 0.16f;
+    float body_y = CcLocalTerrainHeightAt(center_x, center_z) + 1.0f;
+    Vector3 previous = {wall_x - 0.80f, body_y, center_z};
+    Vector3 proposed = {wall_x + 0.80f, body_y, center_z};
+    Vector3 corrected = proposed;
+    Vector3 normal = {0};
+    if (!CcLocalProbePhysicsSphereInternal(
+            CC_LOCAL_SCENE_STREET, previous, proposed, radius,
+            &corrected, &normal) ||
+        corrected.x > wall_x - radius + 0.006f || normal.x > -0.90f) {
+        (void)fprintf(stderr,
+                      "%s was not solid: %.3f %.3f %.3f normal %.3f %.3f %.3f\n",
+                      name, corrected.x, corrected.y, corrected.z,
+                      normal.x, normal.y, normal.z);
+        exit(1);
+    }
+}
+
+static void TestSharedCharacterCollisionWorld(void)
+{
+    Vector3 corrected = {0};
+    Vector3 normal = {0};
+    if (!CcLocalProbePhysicsSphereInternal(
+            CC_LOCAL_SCENE_STREET,
+            (Vector3){3.50f, 0.82f, 6.45f},
+            (Vector3){3.50f, 0.82f, 7.35f}, 0.16f,
+            &corrected, &normal) ||
+        corrected.z > 6.845f || normal.z > -0.90f) {
+        (void)fprintf(stderr,
+                      "shared collision world missed a platform wall: %.3f %.3f %.3f normal %.3f %.3f %.3f\n",
+                      corrected.x, corrected.y, corrected.z,
+                      normal.x, normal.y, normal.z);
+        exit(1);
+    }
+
+    if (!CcLocalProbePhysicsSphereInternal(
+            CC_LOCAL_SCENE_STREET,
+            (Vector3){3.50f, 2.30f, 7.50f},
+            (Vector3){3.50f, 1.55f, 7.50f}, 0.16f,
+            &corrected, &normal) ||
+        corrected.y < 1.809f || normal.y < 0.90f) {
+        (void)fprintf(stderr,
+                      "shared collision world missed a platform top: %.3f normal %.3f %.3f %.3f\n",
+                      corrected.y, normal.x, normal.y, normal.z);
+        exit(1);
+    }
+
+    if (!CcLocalProbePhysicsSphereInternal(
+            CC_LOCAL_SCENE_STREET,
+            (Vector3){2.60f, 0.82f, 6.60f},
+            (Vector3){3.10f, 0.82f, 7.10f}, 0.16f,
+            &corrected, &normal)) {
+        (void)fprintf(stderr, "shared collision world missed a corner sweep\n");
+        exit(1);
+    }
+    float closest_x = fmaxf(3.0f, fminf(corrected.x, 4.0f));
+    float closest_z = fmaxf(7.0f, fminf(corrected.z, 8.0f));
+    float separation_x = corrected.x - closest_x;
+    float separation_z = corrected.z - closest_z;
+    if (separation_x * separation_x + separation_z * separation_z <
+        0.159f * 0.159f) {
+        (void)fprintf(stderr,
+                      "shared collision corner retained sphere penetration: %.3f %.3f\n",
+                      corrected.x, corrected.z);
+        exit(1);
+    }
+
+    /* These houses are faded by several low camera shots. The reveal must
+       never remove their physical walls for the player, NPCs, or ragdoll. */
+    RequireSolidStreetHouse("west crofts house", 20.0f, 25.0f, 37.0f);
+    RequireSolidStreetHouse("artisan row house", 34.0f, 37.5f, 39.0f);
+    RequireSolidStreetHouse("market road house", 55.0f, 58.25f, 33.25f);
+    RequireSolidStreetHouse("coach yard house", 32.0f, 36.0f, 50.5f);
+}
+
 static void AdvanceRoadWorld(CcLocalCourse *course, CcLocalAgent *player,
                              const CcSim *sim, float duration,
                              const float *frame_times, int32_t frame_count)
@@ -303,6 +382,8 @@ static void RunTowerFallScenario(const char *name, Vector2 start,
     int32_t maximum_contact_gap = 0;
     float previous_visual_blend = agent.ragdoll_visual_blend;
     float maximum_visual_blend_step = 0.0f;
+    float maximum_authoritative_position_error = 0.0f;
+    float maximum_authoritative_velocity_error = 0.0f;
     bool saw_visual_transition = false;
     for (int32_t frame = 0; frame < 900; ++frame) {
         CcLocalAgentUpdate(&agent, 1.0f / 60.0f, false);
@@ -314,6 +395,27 @@ static void RunTowerFallScenario(const char *name, Vector2 start,
             (agent.ragdoll_visual_blend > 0.01f &&
              agent.ragdoll_visual_blend < 0.99f);
         previous_visual_blend = agent.ragdoll_visual_blend;
+        if (agent.humanoid.ragdoll.active &&
+            agent.humanoid.ragdoll_body_offset_valid) {
+            CcBiomechVec3 center = CcBiomechRagdollCenterOfMass(
+                &agent.humanoid.ragdoll);
+            CcBiomechVec3 center_velocity = CcBiomechRagdollCenterVelocity(
+                &agent.humanoid.ragdoll, 1.0f / 60.0f);
+            Vector3 authoritative_position = {
+                center.x + agent.humanoid.ragdoll_body_offset.x,
+                center.y + agent.humanoid.ragdoll_body_offset.y,
+                center.z + agent.humanoid.ragdoll_body_offset.z,
+            };
+            Vector3 authoritative_velocity = {
+                center_velocity.x, center_velocity.y, center_velocity.z,
+            };
+            maximum_authoritative_position_error = fmaxf(
+                maximum_authoritative_position_error,
+                VectorDistance3(agent.position, authoritative_position));
+            maximum_authoritative_velocity_error = fmaxf(
+                maximum_authoritative_velocity_error,
+                VectorDistance3(agent.velocity, authoritative_velocity));
+        }
         if (agent.humanoid.ragdoll.active && !agent.humanoid.recovering) {
             saw_ragdoll = true;
             if (ragdoll_start_frame < 0) ragdoll_start_frame = frame;
@@ -361,11 +463,13 @@ static void RunTowerFallScenario(const char *name, Vector2 start,
         maximum_contact_gap > 4 || fall_duration < 0.35f ||
         fall_duration > 0.85f ||
         !saw_visual_transition || maximum_visual_blend_step > 0.076f ||
+        maximum_authoritative_position_error > 0.002f ||
+        maximum_authoritative_velocity_error > 0.002f ||
         agent.ragdoll_visual_blend > 0.001f ||
         agent.humanoid.ragdoll.active || !agent.grounded ||
         fabsf(agent.position.y) > 0.01f || street_error > 0.18f) {
         (void)fprintf(stderr,
-                      "%s: fall failed ragdoll %d recovery %d impact %d fall %.3fs frames %d-%d rebound %.3f particle %.3f frame %d node %d at %.3f %.3f %.3f gap %d blend %d/%.3f/%.3f active %d grounded %d pos %.3f %.3f %.3f error %.3f\n",
+                      "%s: fall failed ragdoll %d recovery %d impact %d fall %.3fs frames %d-%d rebound %.3f particle %.3f frame %d node %d at %.3f %.3f %.3f gap %d blend %d/%.3f/%.3f authority %.4f/%.4f active %d grounded %d support %s control %.2f target %d pos %.3f %.3f %.3f error %.3f\n",
                       name, saw_ragdoll, saw_recovery, street_impact,
                       fall_duration, ragdoll_start_frame, street_impact_frame,
                       maximum_rebound_speed, maximum_particle_rebound,
@@ -375,9 +479,498 @@ static void RunTowerFallScenario(const char *name, Vector2 start,
                       maximum_particle_position.z, maximum_contact_gap,
                       saw_visual_transition, maximum_visual_blend_step,
                       agent.ragdoll_visual_blend,
+                      maximum_authoritative_position_error,
+                      maximum_authoritative_velocity_error,
                       agent.humanoid.ragdoll.active, agent.grounded,
+                      CcHumanoidSupportStateName(agent.support_state),
+                      agent.humanoid.control_authority,
+                      agent.exact_target_valid,
                       agent.position.x, agent.position.y, agent.position.z,
                       street_error);
+        exit(1);
+    }
+}
+
+static float FallenBodyConstraintError(const CcBiomechRagdoll *ragdoll)
+{
+    float maximum = 0.0f;
+    for (int32_t index = 0; index < ragdoll->constraint_count; ++index) {
+        const CcBiomechRagdollConstraint *constraint =
+            &ragdoll->constraints[index];
+        const CcBiomechVec3 a =
+            ragdoll->particles[constraint->particle_a].position;
+        const CcBiomechVec3 b =
+            ragdoll->particles[constraint->particle_b].position;
+        float x = b.x - a.x;
+        float y = b.y - a.y;
+        float z = b.z - a.z;
+        maximum = fmaxf(maximum,
+                        fabsf(sqrtf(x * x + y * y + z * z) -
+                              constraint->rest_length));
+    }
+    return maximum;
+}
+
+static float FallenBodyAngleViolation(const CcBiomechRagdoll *ragdoll)
+{
+    float maximum = 0.0f;
+    for (int32_t index = 0; index < ragdoll->angle_constraint_count; ++index) {
+        const CcBiomechRagdollAngleConstraint *constraint =
+            &ragdoll->angle_constraints[index];
+        const CcBiomechVec3 a =
+            ragdoll->particles[constraint->particle_a].position;
+        const CcBiomechVec3 joint =
+            ragdoll->particles[constraint->joint_particle].position;
+        const CcBiomechVec3 b =
+            ragdoll->particles[constraint->particle_b].position;
+        float ax = a.x - joint.x;
+        float ay = a.y - joint.y;
+        float az = a.z - joint.z;
+        float bx = b.x - joint.x;
+        float by = b.y - joint.y;
+        float bz = b.z - joint.z;
+        float denominator = sqrtf((ax * ax + ay * ay + az * az) *
+                                  (bx * bx + by * by + bz * bz));
+        if (denominator <= 0.000001f) continue;
+        float cosine = (ax * bx + ay * by + az * bz) / denominator;
+        cosine = fmaxf(-1.0f, fminf(1.0f, cosine));
+        float angle = acosf(cosine);
+        maximum = fmaxf(maximum,
+                        fmaxf(constraint->minimum_angle - angle,
+                              angle - constraint->maximum_angle));
+    }
+    for (int32_t index = 0; index < ragdoll->hinge_constraint_count; ++index) {
+        const CcBiomechRagdollHingeConstraint *constraint =
+            &ragdoll->hinge_constraints[index];
+        const CcBiomechVec3 a =
+            ragdoll->particles[constraint->particle_a].position;
+        const CcBiomechVec3 joint =
+            ragdoll->particles[constraint->joint_particle].position;
+        const CcBiomechVec3 b =
+            ragdoll->particles[constraint->particle_b].position;
+        const CcBiomechVec3 axis_a =
+            ragdoll->particles[constraint->axis_particle_a].position;
+        const CcBiomechVec3 axis_b =
+            ragdoll->particles[constraint->axis_particle_b].position;
+        float ax = a.x - joint.x;
+        float ay = a.y - joint.y;
+        float az = a.z - joint.z;
+        float bx = b.x - joint.x;
+        float by = b.y - joint.y;
+        float bz = b.z - joint.z;
+        float denominator = sqrtf((ax * ax + ay * ay + az * az) *
+                                  (bx * bx + by * by + bz * bz));
+        if (denominator > 0.000001f) {
+            float cosine = (ax * bx + ay * by + az * bz) / denominator;
+            cosine = fmaxf(-1.0f, fminf(1.0f, cosine));
+            float angle = acosf(cosine);
+            maximum = fmaxf(maximum,
+                            fmaxf(constraint->minimum_angle - angle,
+                                  angle - constraint->maximum_angle));
+        }
+        float axis_x = axis_b.x - axis_a.x;
+        float axis_y = axis_b.y - axis_a.y;
+        float axis_z = axis_b.z - axis_a.z;
+        float axis_length = sqrtf(axis_x * axis_x + axis_y * axis_y +
+                                  axis_z * axis_z);
+        float child_length = sqrtf(bx * bx + by * by + bz * bz);
+        if (axis_length > 0.000001f && child_length > 0.000001f) {
+            float lateral = (bx * axis_x + by * axis_y + bz * axis_z) /
+                            axis_length;
+            float splay = asinf(fminf(
+                1.0f,
+                fabsf(lateral - constraint->rest_lateral_offset) /
+                    child_length));
+            maximum = fmaxf(
+                maximum, splay - constraint->maximum_splay_angle);
+        }
+    }
+    return fmaxf(0.0f, maximum);
+}
+
+static float FallenBodyBoxPenetration(const CcBiomechRagdoll *ragdoll,
+                                      Vector3 minimum, Vector3 maximum)
+{
+    float deepest = 0.0f;
+    for (int32_t index = 0; index < ragdoll->particle_count; ++index) {
+        const CcBiomechRagdollParticle *particle = &ragdoll->particles[index];
+        float closest_x = fmaxf(minimum.x,
+                                fminf(particle->position.x, maximum.x));
+        float closest_y = fmaxf(minimum.y,
+                                fminf(particle->position.y, maximum.y));
+        float closest_z = fmaxf(minimum.z,
+                                fminf(particle->position.z, maximum.z));
+        float x = particle->position.x - closest_x;
+        float y = particle->position.y - closest_y;
+        float z = particle->position.z - closest_z;
+        float distance = sqrtf(x * x + y * y + z * z);
+        deepest = fmaxf(deepest, particle->radius - distance);
+    }
+    return deepest;
+}
+
+static float FallenBodyLowestPoint(const CcBiomechRagdoll *ragdoll)
+{
+    float lowest = 1000.0f;
+    for (int32_t particle = 0; particle < ragdoll->particle_count; ++particle) {
+        lowest = fminf(lowest,
+                       ragdoll->particles[particle].position.y -
+                           ragdoll->particles[particle].radius);
+    }
+    static const float samples[] = {0.25f, 0.50f, 0.75f};
+    for (int32_t segment_index = 0;
+         segment_index < ragdoll->collision_segment_count; ++segment_index) {
+        const CcBiomechRagdollCollisionSegment *segment =
+            &ragdoll->collision_segments[segment_index];
+        const CcBiomechVec3 a =
+            ragdoll->particles[segment->particle_a].position;
+        const CcBiomechVec3 b =
+            ragdoll->particles[segment->particle_b].position;
+        for (int32_t sample = 0;
+             sample < (int32_t)(sizeof(samples) / sizeof(samples[0]));
+             ++sample) {
+            float y = a.y + (b.y - a.y) * samples[sample];
+            lowest = fminf(lowest, y - segment->radius);
+        }
+    }
+    return lowest;
+}
+
+static float FallenBodyShoulderFirstRoll(const CcBiomechRagdoll *ragdoll,
+                                         int32_t shoulder_particle)
+{
+    CcBiomechVec3 center = CcBiomechRagdollCenterOfMass(ragdoll);
+    float best_roll = 0.0f;
+    float best_margin = -1000.0f;
+    static const float samples[] = {0.25f, 0.50f, 0.75f};
+    for (int32_t step = 0; step < 720; ++step) {
+        float roll = (float)step / 720.0f * 6.28318530718f;
+        float sine = sinf(roll);
+        float cosine = cosf(roll);
+        const CcBiomechRagdollParticle *shoulder =
+            &ragdoll->particles[shoulder_particle];
+        float shoulder_y = center.y +
+            (shoulder->position.x - center.x) * sine +
+            (shoulder->position.y - center.y) * cosine;
+        float shoulder_bottom = shoulder_y - shoulder->radius;
+        float lowest = 1000.0f;
+        for (int32_t particle = 0;
+             particle < ragdoll->particle_count; ++particle) {
+            const CcBiomechRagdollParticle *body =
+                &ragdoll->particles[particle];
+            float y = center.y + (body->position.x - center.x) * sine +
+                      (body->position.y - center.y) * cosine;
+            lowest = fminf(lowest, y - body->radius);
+        }
+        for (int32_t segment_index = 0;
+             segment_index < ragdoll->collision_segment_count;
+             ++segment_index) {
+            const CcBiomechRagdollCollisionSegment *segment =
+                &ragdoll->collision_segments[segment_index];
+            const CcBiomechVec3 a =
+                ragdoll->particles[segment->particle_a].position;
+            const CcBiomechVec3 b =
+                ragdoll->particles[segment->particle_b].position;
+            for (int32_t sample = 0;
+                 sample < (int32_t)(sizeof(samples) / sizeof(samples[0]));
+                 ++sample) {
+                float amount = samples[sample];
+                float x = a.x + (b.x - a.x) * amount;
+                float y = a.y + (b.y - a.y) * amount;
+                float rotated_y = center.y + (x - center.x) * sine +
+                                  (y - center.y) * cosine;
+                lowest = fminf(lowest, rotated_y - segment->radius);
+            }
+        }
+        float margin = lowest - shoulder_bottom;
+        if (margin > best_margin) {
+            best_margin = margin;
+            best_roll = roll;
+        }
+    }
+    return best_roll;
+}
+
+static void PlaceFallenBody(CcLocalAgent *agent, float roll,
+                            Vector3 translation, Vector3 velocity)
+{
+    if (!agent->humanoid.ragdoll.active &&
+        !CcHumanoidGaitKnockDown(&agent->humanoid)) {
+        (void)fprintf(stderr, "fallen-body fixture could not start physics\n");
+        exit(1);
+    }
+    CcBiomechRagdoll *ragdoll = &agent->humanoid.ragdoll;
+    CcBiomechVec3 center = CcBiomechRagdollCenterOfMass(ragdoll);
+    float cosine = cosf(roll);
+    float sine = sinf(roll);
+    for (int32_t index = 0; index < ragdoll->particle_count; ++index) {
+        CcBiomechRagdollParticle *particle = &ragdoll->particles[index];
+        float x = particle->position.x - center.x;
+        float y = particle->position.y - center.y;
+        particle->position.x = center.x + x * cosine - y * sine +
+                               translation.x;
+        particle->position.y = center.y + x * sine + y * cosine +
+                               translation.y;
+        particle->position.z += translation.z;
+        particle->previous_position = particle->position;
+    }
+    agent->position.x += translation.x;
+    agent->position.y += translation.y;
+    agent->position.z += translation.z;
+    agent->grounded = false;
+    agent->exact_target_valid = false;
+    CcBiomechRagdollSetVelocity(
+        ragdoll, (CcBiomechVec3){velocity.x, velocity.y, velocity.z},
+        1.0f / 60.0f);
+}
+
+static void TestWallScrapeAndCornerImpact(void)
+{
+    const Vector3 tower_minimum = {3.0f, 0.0f, 7.0f};
+    const Vector3 tower_maximum = {4.0f, 1.65f, 8.0f};
+    const float half_pi = 1.57079632679f;
+
+    CcLocalAgent scrape;
+    CcLocalAgentInit(&scrape, (Vector2){3.50f, 6.46f}, false);
+    PlaceFallenBody(&scrape, half_pi, (Vector3){0.0f, 0.48f, 0.0f},
+                    (Vector3){0.0f, -0.55f, 1.45f});
+    int32_t side_contact_frames = 0;
+    float first_side_center_y = 0.0f;
+    float lowest_side_center_y = 1000.0f;
+    float maximum_constraint_error = 0.0f;
+    float maximum_angle_violation = 0.0f;
+    float maximum_penetration = 0.0f;
+    float maximum_position_step = 0.0f;
+    Vector3 previous_position = scrape.position;
+    bool recovered = false;
+    for (int32_t frame = 0; frame < 900; ++frame) {
+        CcLocalAgentUpdate(&scrape, 1.0f / 60.0f, false);
+        maximum_position_step = fmaxf(
+            maximum_position_step,
+            VectorDistance3(previous_position, scrape.position));
+        previous_position = scrape.position;
+        if (scrape.humanoid.ragdoll.active) {
+            CcBiomechRagdoll *ragdoll = &scrape.humanoid.ragdoll;
+            CcBiomechVec3 center = CcBiomechRagdollCenterOfMass(ragdoll);
+            bool side_contact = false;
+            for (int32_t particle = 0;
+                 particle < ragdoll->particle_count; ++particle) {
+                const CcBiomechRagdollParticle *body =
+                    &ragdoll->particles[particle];
+                side_contact = side_contact ||
+                    (body->collided && body->contact_normal.z < -0.70f);
+            }
+            if (side_contact) {
+                if (side_contact_frames == 0) first_side_center_y = center.y;
+                side_contact_frames += 1;
+                lowest_side_center_y = fminf(lowest_side_center_y, center.y);
+            }
+            maximum_constraint_error = fmaxf(
+                maximum_constraint_error,
+                FallenBodyConstraintError(ragdoll));
+            maximum_angle_violation = fmaxf(
+                maximum_angle_violation,
+                FallenBodyAngleViolation(ragdoll));
+            maximum_penetration = fmaxf(
+                maximum_penetration,
+                FallenBodyBoxPenetration(
+                    ragdoll, tower_minimum, tower_maximum));
+        }
+        recovered = recovered || scrape.humanoid.recovering;
+    }
+    if (side_contact_frames < 4 ||
+        first_side_center_y - lowest_side_center_y < 0.06f ||
+        maximum_constraint_error > 0.012f ||
+        maximum_angle_violation > 0.09f || maximum_penetration > 0.018f ||
+        maximum_position_step > 0.12f ||
+        !recovered || scrape.humanoid.ragdoll.active || !scrape.grounded) {
+        (void)fprintf(stderr,
+                      "wall scrape failed contacts %d drop %.3f bone %.3f angle %.3f penetration %.3f step %.3f recovery %d/%d time %.2f error %.3f speed %.3f support %d active %d grounded %d\n",
+                      side_contact_frames,
+                      first_side_center_y - lowest_side_center_y,
+                      maximum_constraint_error, maximum_angle_violation,
+                      maximum_penetration, maximum_position_step, recovered,
+                      scrape.humanoid.recovering,
+                      scrape.humanoid.recovery_time,
+                      scrape.humanoid.recovery_error,
+                      scrape.humanoid.recovery_speed,
+                      CcHumanoidGaitRagdollSupportContactCount(
+                          &scrape.humanoid),
+                      scrape.humanoid.ragdoll.active, scrape.grounded);
+        exit(1);
+    }
+
+    CcLocalAgent corner;
+    CcLocalAgentInit(&corner, (Vector2){2.48f, 6.48f}, false);
+    PlaceFallenBody(&corner, half_pi, (Vector3){0.0f, 0.48f, 0.0f},
+                    (Vector3){1.35f, -0.45f, 1.35f});
+    bool saw_x_contact = false;
+    bool saw_z_contact = false;
+    maximum_constraint_error = 0.0f;
+    maximum_angle_violation = 0.0f;
+    maximum_penetration = 0.0f;
+    maximum_position_step = 0.0f;
+    previous_position = corner.position;
+    recovered = false;
+    for (int32_t frame = 0; frame < 900; ++frame) {
+        CcLocalAgentUpdate(&corner, 1.0f / 60.0f, false);
+        maximum_position_step = fmaxf(
+            maximum_position_step,
+            VectorDistance3(previous_position, corner.position));
+        previous_position = corner.position;
+        if (corner.humanoid.ragdoll.active) {
+            CcBiomechRagdoll *ragdoll = &corner.humanoid.ragdoll;
+            for (int32_t particle = 0;
+                 particle < ragdoll->particle_count; ++particle) {
+                const CcBiomechRagdollParticle *body =
+                    &ragdoll->particles[particle];
+                saw_x_contact = saw_x_contact ||
+                    (body->collided && body->contact_normal.x < -0.55f);
+                saw_z_contact = saw_z_contact ||
+                    (body->collided && body->contact_normal.z < -0.55f);
+            }
+            maximum_constraint_error = fmaxf(
+                maximum_constraint_error,
+                FallenBodyConstraintError(ragdoll));
+            maximum_angle_violation = fmaxf(
+                maximum_angle_violation,
+                FallenBodyAngleViolation(ragdoll));
+            maximum_penetration = fmaxf(
+                maximum_penetration,
+                FallenBodyBoxPenetration(
+                    ragdoll, tower_minimum, tower_maximum));
+        }
+        recovered = recovered || corner.humanoid.recovering;
+    }
+    if (!saw_x_contact || !saw_z_contact ||
+        maximum_constraint_error > 0.012f ||
+        maximum_angle_violation > 0.09f || maximum_penetration > 0.018f ||
+        maximum_position_step > 0.12f ||
+        !recovered || corner.humanoid.ragdoll.active || !corner.grounded) {
+        (void)fprintf(stderr,
+                      "corner impact failed contacts %d/%d bone %.3f angle %.3f penetration %.3f step %.3f recovery %d/%d time %.2f error %.3f speed %.3f support %d active %d grounded %d\n",
+                      saw_x_contact, saw_z_contact,
+                      maximum_constraint_error, maximum_angle_violation,
+                      maximum_penetration, maximum_position_step, recovered,
+                      corner.humanoid.recovering,
+                      corner.humanoid.recovery_time,
+                      corner.humanoid.recovery_error,
+                      corner.humanoid.recovery_speed,
+                      CcHumanoidGaitRagdollSupportContactCount(
+                          &corner.humanoid),
+                      corner.humanoid.ragdoll.active, corner.grounded);
+        exit(1);
+    }
+}
+
+static void TestShoulderLanding(void)
+{
+    const int32_t left_shoulder_particle = 11;
+    CcLocalAgent agent;
+    CcLocalAgentInit(&agent, (Vector2){4.25f, 5.50f}, true);
+    CcLimbVec3 shoulder_pose = agent.humanoid.pose.shoulder[0];
+    agent.humanoid.pose.elbow[0] = (CcLimbVec3){
+        shoulder_pose.x, shoulder_pose.y, shoulder_pose.z + 0.34f};
+    agent.humanoid.pose.hand[0] = (CcLimbVec3){
+        shoulder_pose.x, shoulder_pose.y + 0.08f,
+        shoulder_pose.z + 0.34f + 0.34075f};
+    agent.humanoid.previous_pose = agent.humanoid.pose;
+    if (!CcHumanoidGaitKnockDown(&agent.humanoid)) {
+        (void)fprintf(stderr,
+                      "shoulder landing could not start fallen-body physics\n");
+        exit(1);
+    }
+    float shoulder_first_roll = FallenBodyShoulderFirstRoll(
+        &agent.humanoid.ragdoll, left_shoulder_particle);
+    PlaceFallenBody(&agent, shoulder_first_roll,
+                    (Vector3){0.0f, 2.0f, 0.0f},
+                    (Vector3){0.0f, -1.40f, 0.0f});
+    /* Tuck the lower arm across the body so this is a shoulder landing,
+       instead of turning into a hand-first brace before impact. */
+    CcBiomechRagdoll *placed = &agent.humanoid.ragdoll;
+    float vertical_adjustment = 0.12f - FallenBodyLowestPoint(placed);
+    for (int32_t particle = 0;
+         particle < placed->particle_count; ++particle) {
+        placed->particles[particle].position.y += vertical_adjustment;
+        placed->particles[particle].previous_position =
+            placed->particles[particle].position;
+    }
+    agent.position.y += vertical_adjustment;
+    float initial_lowest_body = FallenBodyLowestPoint(placed);
+    CcBiomechRagdollSetVelocity(
+        placed, (CcBiomechVec3){0.0f, -1.40f, 0.0f}, 1.0f / 60.0f);
+    int32_t first_impact_frame = -1;
+    int32_t shoulder_impact_frame = -1;
+    float maximum_constraint_error = 0.0f;
+    float maximum_angle_violation = 0.0f;
+    float deepest_ground_penetration = 0.0f;
+    float maximum_position_step = 0.0f;
+    Vector3 previous_position = agent.position;
+    float minimum_shoulder_clearance = 1000.0f;
+    uint32_t impact_mask = 0;
+    bool recovered = false;
+    for (int32_t frame = 0; frame < 900; ++frame) {
+        CcLocalAgentUpdate(&agent, 1.0f / 60.0f, true);
+        maximum_position_step = fmaxf(
+            maximum_position_step,
+            VectorDistance3(previous_position, agent.position));
+        previous_position = agent.position;
+        if (agent.humanoid.ragdoll.active) {
+            CcBiomechRagdoll *ragdoll = &agent.humanoid.ragdoll;
+            for (int32_t particle = 0;
+                 particle < ragdoll->particle_count; ++particle) {
+                const CcBiomechRagdollParticle *body =
+                    &ragdoll->particles[particle];
+                bool ground_contact = body->collided &&
+                                      body->contact_normal.y > 0.70f;
+                if (ground_contact && first_impact_frame < 0) {
+                    first_impact_frame = frame;
+                }
+                if (ground_contact) impact_mask |= UINT32_C(1) << particle;
+                deepest_ground_penetration = fmaxf(
+                    deepest_ground_penetration,
+                    body->radius - body->position.y);
+            }
+            const CcBiomechRagdollParticle *shoulder =
+                &ragdoll->particles[left_shoulder_particle];
+            minimum_shoulder_clearance = fminf(
+                minimum_shoulder_clearance,
+                shoulder->position.y - shoulder->radius);
+            if (shoulder->collided && shoulder->contact_normal.y > 0.70f &&
+                shoulder_impact_frame < 0) {
+                shoulder_impact_frame = frame;
+            }
+            maximum_constraint_error = fmaxf(
+                maximum_constraint_error,
+                FallenBodyConstraintError(ragdoll));
+            maximum_angle_violation = fmaxf(
+                maximum_angle_violation,
+                FallenBodyAngleViolation(ragdoll));
+        }
+        recovered = recovered || agent.humanoid.recovering;
+    }
+    if (first_impact_frame < 0 || shoulder_impact_frame < 0 ||
+        shoulder_impact_frame - first_impact_frame > 30 ||
+        maximum_constraint_error > 0.012f ||
+        maximum_angle_violation > 0.09f ||
+        deepest_ground_penetration > 0.018f ||
+        maximum_position_step > 0.12f || !recovered ||
+        agent.humanoid.ragdoll.active || !agent.grounded) {
+        (void)fprintf(stderr,
+                      "shoulder landing failed frames %d/%d mask %08x initial %.3f clearance %.3f bone %.3f angle %.3f penetration %.3f step %.3f recovery %d/%d time %.2f error %.3f speed %.3f support %d active %d grounded %d\n",
+                      first_impact_frame, shoulder_impact_frame,
+                      impact_mask, initial_lowest_body,
+                      minimum_shoulder_clearance,
+                      maximum_constraint_error, maximum_angle_violation,
+                      deepest_ground_penetration, maximum_position_step,
+                      recovered,
+                      agent.humanoid.recovering,
+                      agent.humanoid.recovery_time,
+                      agent.humanoid.recovery_error,
+                      agent.humanoid.recovery_speed,
+                      CcHumanoidGaitRagdollSupportContactCount(
+                          &agent.humanoid),
+                      agent.humanoid.ragdoll.active, agent.grounded);
         exit(1);
     }
 }
@@ -464,6 +1057,21 @@ static void TestSharedCombat(void)
         (void)fprintf(stderr,
                       "out-of-range strike did not whiff: outcome %d health %.1f\n",
                       outcome, defender.combat.health);
+        exit(1);
+    }
+
+    InitCombatant(&attacker, (Vector2){0.75f, 3.00f}, 0.5f * PI,
+                  CC_COMBAT_PLAYER);
+    InitCombatant(&defender, (Vector2){2.17f, 3.00f}, -0.5f * PI,
+                  CC_COMBAT_RAIDER);
+    outcome = RunCombatStrike(&attacker, &defender);
+    if (outcome != CC_COMBAT_OUTCOME_MISS || defender.combat.health !=
+            CC_LOCAL_COMBAT_MAX_HEALTH ||
+        !attacker.combat.impact_valid) {
+        (void)fprintf(stderr,
+                      "shared world collision let a strike pass through the market shelf: outcome %d health %.1f impact %d\n",
+                      outcome, defender.combat.health,
+                      attacker.combat.impact_valid);
         exit(1);
     }
 
@@ -1171,38 +1779,323 @@ static void TestTravellerIngress(void)
     }
 }
 
+static void TestFaceAngleAndLodContract(void)
+{
+    if (CcLocalFaceViewForFrontAmountInternal(1.0f) !=
+            CC_LOCAL_FACE_VIEW_FRONT ||
+        CcLocalFaceViewForFrontAmountInternal(0.81f) !=
+            CC_LOCAL_FACE_VIEW_THREE_QUARTER ||
+        CcLocalFaceViewForFrontAmountInternal(0.27f) !=
+            CC_LOCAL_FACE_VIEW_PROFILE) {
+        (void)fprintf(stderr, "head-local face view thresholds changed\n");
+        exit(1);
+    }
+    if (CcLocalFaceLodForProjectedHeightInternal(6.99f) !=
+            CC_LOCAL_FACE_LOD_SILHOUETTE ||
+        CcLocalFaceLodForProjectedHeightInternal(7.0f) !=
+            CC_LOCAL_FACE_LOD_READABLE ||
+        CcLocalFaceLodForProjectedHeightInternal(12.99f) !=
+            CC_LOCAL_FACE_LOD_READABLE ||
+        CcLocalFaceLodForProjectedHeightInternal(13.0f) !=
+            CC_LOCAL_FACE_LOD_CLOSE) {
+        (void)fprintf(stderr, "projected-size face LOD thresholds changed\n");
+        exit(1);
+    }
+}
+
 int main(void)
 {
-    CcLocalAgent crown_gate_walker;
-    CcLocalAgentInit(&crown_gate_walker, (Vector2){50.0f, 27.25f}, false);
+    TestFaceAngleAndLodContract();
+    TestSharedCharacterCollisionWorld();
     RenderTexture2D click_target = {0};
     click_target.texture.width = 457;
     click_target.texture.height = 285;
     Rectangle click_viewport = {0.0f, 0.0f, 914.0f, 570.0f};
-    /* This is an ordinary ground click at the right-hand road mouth. It is
-       occluded by the foreground gatehouse in camera space, but its ground
-       point is walkable. The label itself must not activate navigation. */
-    if (!CcLocalAgentPickTarget(&crown_gate_walker,
-                                (Vector2){888.0f, 344.0f}, click_target,
-                                click_viewport, false) ||
-        CcLocalAgentNavigationName(&crown_gate_walker) != NULL) {
+    static const Vector3 crown_gate_road_targets[] = {
+        {58.0f, 0.0f, 27.30f},
+        {58.4f, 0.0f, 27.80f},
+        {58.8f, 0.0f, 27.20f},
+    };
+    static const Vector2 camera_review_points[] = {
+        {10.5f, 7.5f}, {11.0f, 28.5f}, {14.0f, 52.0f},
+        {33.0f, 25.0f}, {44.0f, 29.0f}, {42.0f, 52.0f},
+        {50.0f, 27.25f}, {60.0f, 27.5f}, {64.0f, 27.5f},
+        {68.0f, 28.0f}, {72.0f, 30.0f}, {63.8f, 34.0f},
+        {70.0f, 34.0f}, {78.5f, 34.0f}, {78.5f, 29.0f},
+        {58.0f, 50.0f}, {78.0f, 50.0f}, {50.0f, 27.25f},
+    };
+
+    /* Every authored room and the complete Market Steps-to-Crown Gate road
+       must retain the hero while the target, yaw, and lens interpolate. */
+    CcLocalAgent framing_agent;
+    CcLocalAgentInit(&framing_agent, camera_review_points[0], false);
+    float camera_clock = 0.0f;
+    for (int32_t point = 0;
+         point < (int32_t)(sizeof(camera_review_points) /
+                           sizeof(camera_review_points[0])); ++point) {
+        framing_agent.position.x = camera_review_points[point].x;
+        framing_agent.position.z = camera_review_points[point].y;
+        framing_agent.position.y = CcLocalTerrainHeightAt(
+            framing_agent.position.x, framing_agent.position.z);
+        for (int32_t frame = 0; frame < 75; ++frame) {
+            camera_clock += 1.0f / 60.0f;
+            Camera3D review_camera = CcLocalStreetCameraInternal(
+                &framing_agent, camera_clock, true,
+                click_target.texture.height);
+            Vector2 hero_screen = GetWorldToScreenEx(
+                (Vector3){framing_agent.position.x,
+                          framing_agent.position.y + 1.05f,
+                          framing_agent.position.z},
+                review_camera, click_target.texture.width,
+                click_target.texture.height);
+            if (hero_screen.x < 88.0f || hero_screen.x > 369.0f ||
+                hero_screen.y < 54.0f || hero_screen.y > 231.0f) {
+                (void)fprintf(
+                    stderr,
+                    "camera review point %d frame %d lost hero at %.2f %.2f\n",
+                    point, frame, hero_screen.x, hero_screen.y);
+                return 1;
+            }
+        }
+    }
+
+    /* Two close facades should narrow the composition around the hero. This
+       is the visibility solution for alleys; architecture must not be culled
+       to make the broad room lens fit. */
+    CcLocalAgent alley_camera_agent;
+    CcLocalAgentInit(&alley_camera_agent, (Vector2){32.0f, 38.0f}, false);
+    Camera3D alley_camera = {0};
+    for (int32_t frame = 0; frame < 120; ++frame) {
+        camera_clock += 1.0f / 60.0f;
+        alley_camera = CcLocalStreetCameraInternal(
+            &alley_camera_agent, camera_clock, true,
+            click_target.texture.height);
+    }
+    Vector2 alley_hero_screen = GetWorldToScreenEx(
+        (Vector3){alley_camera_agent.position.x,
+                  alley_camera_agent.position.y + 1.05f,
+                  alley_camera_agent.position.z},
+        alley_camera, click_target.texture.width,
+        click_target.texture.height);
+    if (alley_camera.fovy > 10.40f ||
+        alley_hero_screen.x < 88.0f || alley_hero_screen.x > 369.0f ||
+        alley_hero_screen.y < 54.0f || alley_hero_screen.y > 231.0f) {
         (void)fprintf(stderr,
-                      "Crown Gate road-mouth ground click was not accepted\n");
+                      "alley camera did not tighten around hero: fovy %.2f screen %.2f %.2f\n",
+                      alley_camera.fovy, alley_hero_screen.x,
+                      alley_hero_screen.y);
         return 1;
     }
-    bool proximity_started = false;
-    for (int32_t frame = 0; frame < 3600; ++frame) {
-        CcLocalAgentUpdate(&crown_gate_walker, 1.0f / 60.0f, false);
-        if (crown_gate_walker.navigation_active) proximity_started = true;
-        if (proximity_started && !crown_gate_walker.navigation_active) break;
+
+    /* Regression from an off-center road-edge position that reproduced the
+       reported failure. Proximity starts the traversal here; the first
+       authored portal waypoint must route around the gatehouse. */
+    CcLocalAgent edge_walker;
+    CcLocalAgentInit(&edge_walker, (Vector2){57.0f, 27.0f}, false);
+    if (!CcLocalAgentSetExactTarget(
+            &edge_walker, (Vector3){58.2f, 0.0f, 28.0f}, false)) {
+        (void)fprintf(stderr, "road-edge regression target was rejected\n");
+        return 1;
     }
-    if (!proximity_started || crown_gate_walker.navigation_active ||
-        fabsf(crown_gate_walker.position.x - 78.5f) > 0.40f ||
-        fabsf(crown_gate_walker.position.z - 29.0f) > 0.40f) {
+    CcLocalAgentUpdate(&edge_walker, 1.0f / 60.0f, false);
+    const char *edge_destination = CcLocalAgentNavigationName(&edge_walker);
+    if (edge_destination == NULL ||
+        strcmp(edge_destination, "CROWN GATE") != 0) {
         (void)fprintf(stderr,
-                      "Crown Gate proximity traversal stopped at %.2f %.2f\n",
-                      crown_gate_walker.position.x,
-                      crown_gate_walker.position.z);
+                      "road-edge proximity did not start Crown Gate traversal\n");
+        return 1;
+    }
+    for (int32_t frame = 0;
+         frame < 4800 && edge_walker.navigation_active; ++frame) {
+        Camera3D travel_camera = CcLocalStreetCameraInternal(
+            &edge_walker, (float)frame / 60.0f, true, 285);
+        Vector2 hero_screen = GetWorldToScreenEx(
+            (Vector3){edge_walker.position.x,
+                      edge_walker.position.y + 1.0f,
+                      edge_walker.position.z},
+            travel_camera, 457, 285);
+        if (hero_screen.x < 88.0f || hero_screen.x > 369.0f ||
+            hero_screen.y < 54.0f || hero_screen.y > 231.0f) {
+            (void)fprintf(stderr,
+                          "road traversal camera lost hero at screen %.2f %.2f\n",
+                          hero_screen.x, hero_screen.y);
+            return 1;
+        }
+        CcLocalAgentUpdate(&edge_walker, 1.0f / 60.0f, false);
+    }
+    if (edge_walker.navigation_active ||
+        fabsf(edge_walker.position.x - 78.5f) > 0.40f ||
+        fabsf(edge_walker.position.z - 29.0f) > 0.40f) {
+        (void)fprintf(stderr,
+                      "road-edge traversal stopped at %.2f %.2f y %.2f waypoint %d/%d target %.2f %.2f %.2f exact %d traversal %d\n",
+                      edge_walker.position.x, edge_walker.position.z,
+                      edge_walker.position.y,
+                      edge_walker.navigation_point_index,
+                      edge_walker.navigation_point_count,
+                      edge_walker.target_point.x,
+                      edge_walker.target_point.y,
+                      edge_walker.target_point.z,
+                      edge_walker.exact_target_valid,
+                      edge_walker.traversal);
+        return 1;
+    }
+
+    /* Proximity must not hijack a click that turns back into the room. The
+       old edge-only trigger sent this westward command east to Crown Gate. */
+    CcLocalAgent edge_turnaround;
+    CcLocalAgentInit(&edge_turnaround, (Vector2){57.0f, 27.0f}, false);
+    if (!CcLocalAgentSetExactTarget(
+            &edge_turnaround, (Vector3){52.0f, 0.0f, 27.0f}, false)) {
+        (void)fprintf(stderr, "edge turnaround target was rejected\n");
+        return 1;
+    }
+    for (int32_t frame = 0; frame < 30; ++frame) {
+        CcLocalAgentUpdate(&edge_turnaround, 1.0f / 60.0f, false);
+        if (CcLocalAgentNavigationName(&edge_turnaround) != NULL) {
+            (void)fprintf(stderr,
+                          "edge turnaround was hijacked by portal traversal\n");
+            return 1;
+        }
+    }
+    if (edge_turnaround.position.x >= 56.8f) {
+        (void)fprintf(stderr,
+                      "edge turnaround did not move back into the room: %.2f %.2f\n",
+                      edge_turnaround.position.x,
+                      edge_turnaround.position.z);
+        return 1;
+    }
+
+    for (int32_t click = 0;
+         click < (int32_t)(sizeof(crown_gate_road_targets) /
+                           sizeof(crown_gate_road_targets[0])); ++click) {
+        CcLocalAgent crown_gate_walker;
+        CcLocalAgentInit(&crown_gate_walker,
+                         (Vector2){50.0f, 27.25f}, false);
+        Camera3D intended_camera = CcLocalStreetCameraInternal(
+            &crown_gate_walker, 0.0f, false,
+            click_target.texture.height);
+        Vector3 intended_world = crown_gate_road_targets[click];
+        intended_world.y = CcLocalTerrainHeightAt(intended_world.x,
+                                                   intended_world.z);
+        Vector2 intended_art = GetWorldToScreenEx(
+            intended_world, intended_camera,
+            click_target.texture.width, click_target.texture.height);
+        Vector2 road_click = {
+            intended_art.x * click_viewport.width /
+                (float)click_target.texture.width,
+            intended_art.y * click_viewport.height /
+                (float)click_target.texture.height,
+        };
+        /* These are ordinary ground clicks across the right-hand road mouth,
+           well below and inward from the label. Foreground architecture can
+           occlude the ray, but no label may activate navigation directly. */
+        if (!CcLocalAgentPickTarget(&crown_gate_walker,
+                                    road_click,
+                                    click_target, click_viewport, false) ||
+            CcLocalAgentNavigationName(&crown_gate_walker) != NULL) {
+            Camera3D rejected_camera = CcLocalStreetCameraInternal(
+                &crown_gate_walker, 0.0f, false,
+                click_target.texture.height);
+            Vector2 rejected_local = {
+                road_click.x *
+                    (float)click_target.texture.width /
+                    click_viewport.width,
+                road_click.y *
+                    (float)click_target.texture.height /
+                    click_viewport.height,
+            };
+            Ray rejected_ray = GetScreenToWorldRayEx(
+                rejected_local, rejected_camera,
+                click_target.texture.width, click_target.texture.height);
+            float plane_distance = -rejected_ray.position.y /
+                                   rejected_ray.direction.y;
+            Vector3 rejected_ground = {
+                rejected_ray.position.x +
+                    rejected_ray.direction.x * plane_distance,
+                0.0f,
+                rejected_ray.position.z +
+                    rejected_ray.direction.z * plane_distance,
+            };
+            (void)fprintf(stderr,
+                          "Crown Gate road click %d was not accepted; ground %.2f %.2f\n",
+                          click, rejected_ground.x, rejected_ground.z);
+            return 1;
+        }
+        Camera3D click_camera = CcLocalStreetCameraInternal(
+            &crown_gate_walker, 0.0f, false,
+            click_target.texture.height);
+        Vector2 command_art = GetWorldToScreenEx(
+            crown_gate_walker.command_point, click_camera,
+            click_target.texture.width, click_target.texture.height);
+        Vector2 command_screen = {
+            command_art.x * click_viewport.width /
+                (float)click_target.texture.width,
+            command_art.y * click_viewport.height /
+                (float)click_target.texture.height,
+        };
+        float command_error_x = command_screen.x - road_click.x;
+        float command_error_y = command_screen.y - road_click.y;
+        if (!crown_gate_walker.command_point_valid ||
+            command_error_x * command_error_x +
+                    command_error_y * command_error_y >
+                3.0f * 3.0f) {
+            (void)fprintf(
+                stderr,
+                "Crown Gate road click %d was redirected by %.2f pixels\n",
+                click,
+                sqrtf(command_error_x * command_error_x +
+                      command_error_y * command_error_y));
+            return 1;
+        }
+        bool proximity_started = false;
+        Vector3 last_target = crown_gate_walker.target_point;
+        int32_t last_waypoint = -1;
+        int32_t last_waypoint_count = 0;
+        for (int32_t frame = 0; frame < 3600; ++frame) {
+            if (crown_gate_walker.navigation_active) {
+                last_target = crown_gate_walker.target_point;
+                last_waypoint = crown_gate_walker.navigation_point_index;
+                last_waypoint_count =
+                    crown_gate_walker.navigation_point_count;
+            }
+            CcLocalAgentUpdate(&crown_gate_walker, 1.0f / 60.0f, false);
+            if (CcLocalAgentNavigationName(&crown_gate_walker) != NULL) {
+                proximity_started = true;
+            }
+            if (proximity_started && !crown_gate_walker.navigation_active) {
+                break;
+            }
+        }
+        if (!proximity_started || crown_gate_walker.navigation_active ||
+            fabsf(crown_gate_walker.position.x - 78.5f) > 0.40f ||
+            fabsf(crown_gate_walker.position.z - 29.0f) > 0.40f) {
+            (void)fprintf(stderr,
+                          "Crown Gate road click %d stopped at %.2f %.2f targeting %.2f %.2f waypoint %d/%d\n",
+                          click, crown_gate_walker.position.x,
+                          crown_gate_walker.position.z, last_target.x,
+                          last_target.z, last_waypoint,
+                          last_waypoint_count);
+            return 1;
+        }
+    }
+
+    /* A rejected replacement click must cancel the old command. Otherwise
+       the hero keeps walking toward a stale marker after the new click gives
+       no movement feedback—the exact failure reported from the market road. */
+    CcLocalAgent rejected_click_walker;
+    CcLocalAgentInit(&rejected_click_walker,
+                     (Vector2){50.0f, 27.25f}, false);
+    if (!CcLocalAgentSetExactTarget(
+            &rejected_click_walker,
+            (Vector3){53.0f, 0.0f, 27.25f}, false) ||
+        CcLocalAgentSetExactTarget(
+            &rejected_click_walker,
+            (Vector3){66.5f, 0.0f, 20.0f}, false) ||
+        rejected_click_walker.exact_target_valid ||
+        rejected_click_walker.navigation_active ||
+        rejected_click_walker.command_point_valid) {
+        (void)fprintf(stderr,
+                      "rejected replacement target left stale movement active\n");
         return 1;
     }
 
@@ -1228,6 +2121,48 @@ int main(void)
                       "room traversal did not reach the adjoining camera: %.2f %.2f\n",
                       room_traveller.position.x,
                       room_traveller.position.z);
+        return 1;
+    }
+
+    /* A new ground command must be able to cancel a named traversal without
+       proximity immediately restarting the route from the same edge. */
+    CcLocalAgent cancelled_traversal;
+    CcLocalAgentInit(&cancelled_traversal,
+                     (Vector2){50.0f, 27.25f}, false);
+    int32_t cancelled_portal = StreetPortalIndex(
+        &cancelled_traversal, "CROWN GATE");
+    if (cancelled_portal < 0 ||
+        !CcLocalAgentFollowStreetPortal(
+            &cancelled_traversal, cancelled_portal)) {
+        (void)fprintf(stderr,
+                      "cancellable traversal could not start\n");
+        return 1;
+    }
+    for (int32_t frame = 0; frame < 90; ++frame) {
+        CcLocalAgentUpdate(&cancelled_traversal, 1.0f / 60.0f, false);
+    }
+    Vector3 cancellation_point = cancelled_traversal.position;
+    if (!cancelled_traversal.navigation_active ||
+        !CcLocalAgentSetExactTarget(
+            &cancelled_traversal, cancellation_point, false)) {
+        (void)fprintf(stderr,
+                      "new ground command did not cancel traversal\n");
+        return 1;
+    }
+    for (int32_t frame = 0; frame < 90; ++frame) {
+        CcLocalAgentUpdate(&cancelled_traversal, 1.0f / 60.0f, false);
+        if (CcLocalAgentNavigationName(&cancelled_traversal) != NULL) {
+            (void)fprintf(stderr,
+                          "cancelled traversal restarted at the edge\n");
+            return 1;
+        }
+    }
+    if (VectorDistance3(cancelled_traversal.position,
+                        cancellation_point) > 0.18f) {
+        (void)fprintf(stderr,
+                      "cancelled traversal continued moving: %.2f %.2f\n",
+                      cancelled_traversal.position.x,
+                      cancelled_traversal.position.z);
         return 1;
     }
 
@@ -1290,11 +2225,16 @@ int main(void)
             }
             if (portal_probe.navigation_active) {
                 (void)fprintf(stderr,
-                              "street room %d portal %s did not finish at %.2f %.2f waypoint %d/%d\n",
+                              "street room %d portal %s did not finish at %.2f %.2f waypoint %d/%d target %.2f %.2f y %.2f exact %d traversal %d\n",
                               room, portal_name, portal_probe.position.x,
                               portal_probe.position.z,
                               portal_probe.navigation_point_index,
-                              portal_probe.navigation_point_count);
+                              portal_probe.navigation_point_count,
+                              portal_probe.target_point.x,
+                              portal_probe.target_point.z,
+                              portal_probe.position.y,
+                              portal_probe.exact_target_valid,
+                              portal_probe.traversal);
                 return 1;
             }
             if (destination_room >= 0) {
@@ -1305,10 +2245,14 @@ int main(void)
                 if (x * x + z * z > 0.40f * 0.40f ||
                     portal_probe.world_exit_requested) {
                     (void)fprintf(stderr,
-                                  "street room %d portal %s ended at %.2f %.2f\n",
+                                  "street room %d portal %s ended at %.2f %.2f target %.2f %.2f exact %d traversal %d\n",
                                   room, portal_name,
                                   portal_probe.position.x,
-                                  portal_probe.position.z);
+                                  portal_probe.position.z,
+                                  portal_probe.target_point.x,
+                                  portal_probe.target_point.z,
+                                  portal_probe.exact_target_valid,
+                                  portal_probe.traversal);
                     return 1;
                 }
             } else if (!CcLocalAgentConsumeWorldExit(&portal_probe)) {
@@ -1318,6 +2262,148 @@ int main(void)
                 return 1;
             }
         }
+    }
+
+    /* Authored centers are the easy case. Exercise every connection again
+       from walkable offsets around each room so no route can assume the hero
+       begins on the designer's centerline. */
+    static const Vector2 room_start_offsets[] = {
+        {1.5f, 0.0f}, {-1.5f, 0.0f}, {0.0f, 1.5f}, {0.0f, -1.5f},
+        {1.0f, 1.0f}, {-1.0f, -1.0f},
+    };
+    for (int32_t room = 0;
+         room < (int32_t)(sizeof(street_rooms) / sizeof(street_rooms[0]));
+         ++room) {
+        for (int32_t offset = 0;
+             offset < (int32_t)(sizeof(room_start_offsets) /
+                                sizeof(room_start_offsets[0])); ++offset) {
+            Vector2 start = {
+                street_rooms[room].x + room_start_offsets[offset].x,
+                street_rooms[room].y + room_start_offsets[offset].y,
+            };
+            CcLocalAgent offset_probe;
+            CcLocalAgentInit(&offset_probe, start, false);
+            if (offset_probe.position.y > 0.24f ||
+                !CcLocalAgentSetExactTarget(
+                    &offset_probe,
+                    (Vector3){start.x, 0.0f, start.y}, false)) {
+                continue;
+            }
+            int32_t portal_count =
+                CcLocalAgentStreetPortalCount(&offset_probe);
+            for (int32_t portal = 0; portal < portal_count; ++portal) {
+                CcLocalAgentInit(&offset_probe, start, false);
+                const char *portal_name = CcLocalAgentStreetPortalName(
+                    &offset_probe, portal);
+                if (portal_name == NULL ||
+                    !CcLocalAgentFollowStreetPortal(&offset_probe, portal)) {
+                    (void)fprintf(stderr,
+                                  "offset room %d start %.2f %.2f portal %d could not start\n",
+                                  room, start.x, start.y, portal);
+                    return 1;
+                }
+                int32_t destination_room =
+                    offset_probe.navigation_destination_room;
+                for (int32_t update = 0;
+                     update < 1800 && offset_probe.navigation_active;
+                     ++update) {
+                    CcLocalAgentUpdate(&offset_probe, 0.10f, false);
+                }
+                if (offset_probe.navigation_active) {
+                    (void)fprintf(stderr,
+                                  "offset room %d start %.2f %.2f portal %s stalled at %.2f %.2f targeting %.2f %.2f waypoint %d/%d\n",
+                                  room, start.x, start.y, portal_name,
+                                  offset_probe.position.x,
+                                  offset_probe.position.z,
+                                  offset_probe.target_point.x,
+                                  offset_probe.target_point.z,
+                                  offset_probe.navigation_point_index,
+                                  offset_probe.navigation_point_count);
+                    return 1;
+                }
+                if (destination_room >= 0) {
+                    float x = offset_probe.position.x -
+                              street_rooms[destination_room].x;
+                    float z = offset_probe.position.z -
+                              street_rooms[destination_room].y;
+                    if (x * x + z * z > 0.40f * 0.40f ||
+                        offset_probe.world_exit_requested) {
+                        (void)fprintf(stderr,
+                                      "offset room %d portal %s ended at %.2f %.2f\n",
+                                      room, portal_name,
+                                      offset_probe.position.x,
+                                      offset_probe.position.z);
+                        return 1;
+                    }
+                } else if (!CcLocalAgentConsumeWorldExit(&offset_probe)) {
+                    (void)fprintf(stderr,
+                                  "offset room %d boundary %s lacked handoff\n",
+                                  room, portal_name);
+                    return 1;
+                }
+            }
+        }
+    }
+
+    CcLocalSetStreetMarketCratesInternal(1);
+    CcLocalAgent crate_climber;
+    CcLocalAgentInit(&crate_climber, (Vector2){43.35f, 26.75f}, false);
+    Camera3D crate_camera = CcLocalStreetCameraInternal(
+        &crate_climber, 0.0f, false, click_target.texture.height);
+    float crate_base = CcLocalTerrainHeightAt(44.40f, 26.75f);
+    Vector2 crate_art_point = GetWorldToScreenEx(
+        (Vector3){44.40f, crate_base + 0.61f, 26.75f}, crate_camera,
+        click_target.texture.width, click_target.texture.height);
+    Vector2 crate_screen_point = {
+        crate_art_point.x * click_viewport.width /
+            (float)click_target.texture.width,
+        crate_art_point.y * click_viewport.height /
+            (float)click_target.texture.height,
+    };
+    if (!CcLocalAgentPickTarget(
+            &crate_climber, crate_screen_point, click_target,
+            click_viewport, false)) {
+        (void)fprintf(stderr, "market crate top could not be targeted\n");
+        return 1;
+    }
+    bool climbed_market_crate = false;
+    for (int32_t frame = 0; frame < 1200; ++frame) {
+        CcLocalAgentUpdate(&crate_climber, 1.0f / 60.0f, false);
+        bool inside_crate = crate_climber.position.x > 44.09f &&
+                            crate_climber.position.x < 44.71f &&
+                            crate_climber.position.z > 26.44f &&
+                            crate_climber.position.z < 27.06f;
+        if (inside_crate && crate_climber.position.y < crate_base + 0.45f &&
+            !crate_climber.climbing) {
+            (void)fprintf(stderr,
+                          "hero phased into market crate at %.2f %.2f %.2f\n",
+                          crate_climber.position.x,
+                          crate_climber.position.y,
+                          crate_climber.position.z);
+            return 1;
+        }
+        if (crate_climber.position.y > crate_base + 0.50f && inside_crate) {
+            climbed_market_crate = true;
+        }
+        if (climbed_market_crate && !crate_climber.exact_target_valid &&
+            !crate_climber.climbing) break;
+    }
+    CcLocalSetStreetMarketCratesInternal(0);
+    if (!climbed_market_crate) {
+        (void)fprintf(stderr,
+                      "hero did not climb onto the market crate: %.2f %.2f %.2f target %.2f %.2f %.2f command %.2f %.2f %.2f exact %d nav %d climb %d\n",
+                      crate_climber.position.x, crate_climber.position.y,
+                      crate_climber.position.z,
+                      crate_climber.target_point.x,
+                      crate_climber.target_point.y,
+                      crate_climber.target_point.z,
+                      crate_climber.command_point.x,
+                      crate_climber.command_point.y,
+                      crate_climber.command_point.z,
+                      crate_climber.exact_target_valid,
+                      crate_climber.navigation_active,
+                      crate_climber.climbing);
+        return 1;
     }
 
     TestSharedCombat();
@@ -1382,14 +2468,8 @@ int main(void)
     }
     CcLocalAgent fallen_edge_agent;
     CcLocalAgentInit(&fallen_edge_agent, (Vector2){3.50f, 6.70f}, false);
-    CcHumanoidGaitAdvance(
-        &fallen_edge_agent.humanoid,
-        (CcLimbVec3){fallen_edge_agent.position.x,
-                     fallen_edge_agent.position.y,
-                     fallen_edge_agent.position.z},
-        fallen_edge_agent.facing_yaw, (CcLimbVec3){0}, false,
-        1.0f / 60.0f, NULL, NULL);
-    if (!fallen_edge_agent.humanoid.ragdoll.active ||
+    if (!CcHumanoidGaitKnockDown(&fallen_edge_agent.humanoid) ||
+        !fallen_edge_agent.humanoid.ragdoll.active ||
         !CcLocalAgentSetExactTarget(
             &fallen_edge_agent, (Vector3){3.50f, 0.0f, 7.50f}, false)) {
         (void)fprintf(stderr,
@@ -2211,6 +3291,11 @@ int main(void)
     RunTowerFallScenario("east tower fall", (Vector2){4.65f, 7.50f},
                          (Vector3){3.50f, 0.0f, 7.50f},
                          (Vector3){4.65f, 0.0f, 7.50f});
+    RunTowerFallScenario("north tower fall", (Vector2){3.50f, 8.80f},
+                         (Vector3){3.50f, 0.0f, 7.50f},
+                         (Vector3){3.50f, 0.0f, 8.80f});
+    TestWallScrapeAndCornerImpact();
+    TestShoulderLanding();
 
     CcLocalCourse course;
     CcLocalCourseInit(&course);
@@ -2338,11 +3423,14 @@ int main(void)
                         1.0f / 60.0f);
     const CcSituation *staged_situation = CcSimSituation(
         &witness_sim, witness_course.situation_witness_id);
+    Vector3 witness_board = {CC_LOCAL_NOTICE_X + 0.92f, 0.0f,
+                             CC_LOCAL_NOTICE_Z + 0.72f};
+    witness_board.y = CcLocalTerrainHeightAt(witness_board.x,
+                                              witness_board.z);
     if (!witness_course.situation_witness_active ||
         staged_situation == NULL || staged_situation->affected_name[0] == '\0' ||
         VectorDistance3(witness_course.situation_witness.position,
-                        (Vector3){CC_LOCAL_NOTICE_X + 0.92f, 0.0f,
-                                  CC_LOCAL_NOTICE_Z + 0.72f}) > 0.65f) {
+                        witness_board) > 0.65f) {
         (void)fprintf(stderr,
                       "named situation witness was not staged at the local board: active %d id %llu/%llu pos %.2f %.2f %.2f\n",
                       witness_course.situation_witness_active,
@@ -2506,7 +3594,7 @@ int main(void)
     if (defense.defenses_completed != 1 || defense.alarm_active ||
         minimum_raider_distance > 3.00f || defense.raider_resolve > 0) {
         (void)fprintf(stderr,
-                      "village defense did not intercept and repel the raid: wins %d alarm %d min distance %.2f resolve %d guards %.2f,%.2f/%.0f/%.0f/%d %.2f,%.2f/%.0f/%.0f/%d %.2f,%.2f/%.0f/%.0f/%d raiders %.2f,%.2f/%.0f/%.0f/%d/%d %.2f,%.2f/%.0f/%.0f/%d/%d seen %d%d%d\n",
+                      "village defense did not intercept and repel the raid: wins %d alarm %d min distance %.2f resolve %d guards %.2f,%.2f/%.0f/%.0f/%d %.2f,%.2f/%.0f/%.0f/%d %.2f,%.2f/%.0f/%.0f/%d raiders %.2f,%.2f,%.2f/%.0f/%.0f/%d/l%d/s%d/a%d/%s/v%.2f,%.2f/t%d@%.2f,%.2f/nav%d:%d/%d %.2f,%.2f,%.2f/%.0f/%.0f/%d/l%d/s%d/a%d/%s/v%.2f,%.2f/t%d@%.2f,%.2f/nav%d:%d/%d seen %d%d%d\n",
                       defense.defenses_completed, defense.alarm_active,
                       minimum_raider_distance, defense.raider_resolve,
                       defense.runners[0].agent.position.x,
@@ -2526,16 +3614,42 @@ int main(void)
                       defense.runners[2].agent.humanoid.action,
                       defense.raiders[0].position.x,
                       defense.raiders[0].position.z,
+                      defense.raiders[0].position.y,
                       defense.raiders[0].combat.health,
                       defense.raiders[0].combat.posture,
                       defense.raiders[0].humanoid.action,
-                      defense.raiders[0].combat.life_state == CC_LIFE_DEAD,
+                      defense.raiders[0].combat.life_state,
+                      defense.raider_response_stage[0],
+                      defense.raider_response_waypoint_active[0],
+                      CcHumanoidSupportStateName(
+                          defense.raiders[0].support_state),
+                      defense.raiders[0].velocity.x,
+                      defense.raiders[0].velocity.z,
+                      defense.raiders[0].exact_target_valid,
+                      defense.raiders[0].target_point.x,
+                      defense.raiders[0].target_point.z,
+                      defense.raiders[0].navigation_active,
+                      defense.raiders[0].navigation_point_index,
+                      defense.raiders[0].navigation_point_count,
                       defense.raiders[1].position.x,
                       defense.raiders[1].position.z,
+                      defense.raiders[1].position.y,
                       defense.raiders[1].combat.health,
                       defense.raiders[1].combat.posture,
                       defense.raiders[1].humanoid.action,
-                      defense.raiders[1].combat.life_state == CC_LIFE_DEAD,
+                      defense.raiders[1].combat.life_state,
+                      defense.raider_response_stage[1],
+                      defense.raider_response_waypoint_active[1],
+                      CcHumanoidSupportStateName(
+                          defense.raiders[1].support_state),
+                      defense.raiders[1].velocity.x,
+                      defense.raiders[1].velocity.z,
+                      defense.raiders[1].exact_target_valid,
+                      defense.raiders[1].target_point.x,
+                      defense.raiders[1].target_point.z,
+                      defense.raiders[1].navigation_active,
+                      defense.raiders[1].navigation_point_index,
+                      defense.raiders[1].navigation_point_count,
                       guard_engaged[0], guard_engaged[1], guard_engaged[2]);
         return 1;
     }

@@ -48,6 +48,249 @@ static Color Blend(Color first, Color second, float amount)
     };
 }
 
+CcFaceRecipe CcNpcFaceRecipe(const CcNpcAppearance *appearance)
+{
+    if (appearance == NULL) return (CcFaceRecipe){0};
+    Color headwear = appearance->headwear_style == 0U ?
+                     appearance->metal : appearance->outer;
+    return (CcFaceRecipe){
+        .seed = appearance->seed,
+        .width = appearance->head_width,
+        .depth = appearance->head_depth,
+        .age = appearance->age,
+        .hair_style = appearance->hair_style,
+        .beard_style = appearance->beard_style,
+        .nose_style = appearance->nose_style,
+        .scar_style = appearance->scar_style,
+        .headwear_style = appearance->headwear_style,
+        .headwear = (appearance->equipment &
+                     CC_NPC_EQUIPMENT_HEADWEAR) != 0U,
+        .skin = appearance->skin,
+        .skin_shadow = Shade(appearance->skin, 0.70f),
+        .hair = appearance->hair,
+        .ink = Shade(appearance->hair, 0.48f),
+        .headwear_color = headwear,
+        .accent = appearance->accent,
+    };
+}
+
+typedef void (*PortraitBlockPainter)(void *context, int32_t grid_x,
+                                     int32_t grid_y, int32_t grid_width,
+                                     int32_t grid_height, Color color);
+
+typedef struct ScreenPortraitCanvas {
+    int32_t x;
+    int32_t y;
+    int32_t pixel;
+} ScreenPortraitCanvas;
+
+static void PaintScreenBlock(void *context, int32_t grid_x, int32_t grid_y,
+                             int32_t grid_width, int32_t grid_height,
+                             Color color)
+{
+    const ScreenPortraitCanvas *canvas = context;
+    DrawRectangle(canvas->x + grid_x * canvas->pixel,
+                  canvas->y + grid_y * canvas->pixel,
+                  grid_width * canvas->pixel,
+                  grid_height * canvas->pixel, color);
+}
+
+static void PaintPortraitFeatures(const CcFaceRecipe *face,
+                                  CcNpcPortraitExpression expression,
+                                  void *context,
+                                  PortraitBlockPainter paint)
+{
+    Color shadow = face->skin_shadow;
+    Color ink = face->ink;
+    int32_t brow_y = expression == CC_NPC_PORTRAIT_FOCUSED ? 7 : 6;
+    paint(context, 6, brow_y, 3, 1, ink);
+    paint(context, 11, brow_y, 3, 1, ink);
+    if (expression == CC_NPC_PORTRAIT_HURT) {
+        paint(context, 7, 8, 1, 1, ink);
+        paint(context, 12, 9, 1, 1, ink);
+    } else {
+        paint(context, 7, 8, 1, 1, ink);
+        paint(context, 12, 8, 1, 1, ink);
+    }
+    switch (face->nose_style % 4U) {
+        case 0: paint(context, 9, 10, 2, 1, shadow); break;
+        case 1: paint(context, 9, 10, 2, 2, shadow); break;
+        case 2: paint(context, 8, 11, 4, 1, shadow); break;
+        case 3: paint(context, 9, 9, 2, 3, shadow); break;
+    }
+    if (face->scar_style == 1U) {
+        paint(context, 13, 8, 1, 4, Shade(face->skin, 0.52f));
+    } else if (face->scar_style == 2U) {
+        paint(context, 6, 8, 1, 4, Shade(face->skin, 0.52f));
+    } else if (face->scar_style == 3U) {
+        paint(context, 12, 11, 3, 1, Shade(face->skin, 0.52f));
+    }
+    if (face->age > 0.68f) {
+        paint(context, 5, 11, 2, 1, shadow);
+        paint(context, 13, 11, 2, 1, shadow);
+    }
+    if (expression == CC_NPC_PORTRAIT_TALKING) {
+        paint(context, 8, 13, 4, 2, ink);
+        paint(context, 9, 13, 2, 1, Shade(face->skin, 1.18f));
+    } else if (expression == CC_NPC_PORTRAIT_HURT) {
+        paint(context, 8, 14, 4, 1, ink);
+        paint(context, 8, 13, 1, 1, ink);
+    } else {
+        paint(context, 8, 13, 4, 1, ink);
+    }
+}
+
+static void PaintPortraitFace(const CcFaceRecipe *face,
+                              CcNpcPortraitExpression expression,
+                              bool crowned, void *context,
+                              PortraitBlockPainter paint)
+{
+    Color shadow = face->skin_shadow;
+    int32_t face_left = face->width < 1.0f ? 6 :
+                        face->width > 1.045f ? 4 : 5;
+    int32_t face_width = 20 - face_left * 2;
+    paint(context, face_left - 1, 7, 1, 5, shadow);
+    paint(context, face_left + face_width, 7, 1, 5, shadow);
+    paint(context, face_left, 4, face_width, 10, face->skin);
+    paint(context, face_left + 1, 14, face_width - 2, 2,
+          face->skin);
+    paint(context, 7, 16, 6, 1, shadow);
+
+    paint(context, 5, 2, 10, 3, face->hair);
+    switch (face->hair_style % 8U) {
+        case 0:
+            paint(context, 5, 4, 2, 5, face->hair);
+            paint(context, 13, 4, 2, 3, face->hair);
+            break;
+        case 1:
+            paint(context, 4, 4, 2, 10, face->hair);
+            paint(context, 14, 4, 2, 10, face->hair);
+            break;
+        case 2:
+            paint(context, 8, 0, 4, 3, face->hair);
+            paint(context, 5, 4, 2, 5, face->hair);
+            break;
+        case 3:
+            paint(context, 4, 4, 7, 2, face->hair);
+            paint(context, 4, 5, 3, 4, face->hair);
+            paint(context, 12, 3, 4, 2, face->hair);
+            break;
+        case 4:
+            paint(context, 3, 4, 2, 11, face->hair);
+            paint(context, 15, 4, 2, 11, face->hair);
+            break;
+        case 5:
+            paint(context, 5, 4, 7, 2, face->hair);
+            paint(context, 12, 4, 3, 4, face->hair);
+            break;
+        case 6:
+            paint(context, 9, 0, 2, 4, face->hair);
+            paint(context, 5, 4, 2, 4, face->hair);
+            break;
+        case 7:
+        default:
+            paint(context, 3, 4, 3, 8, face->hair);
+            paint(context, 14, 4, 3, 8, face->hair);
+            break;
+    }
+    switch (face->beard_style % 4U) {
+        case 1:
+            paint(context, 7, 12, 6, 1, face->hair);
+            break;
+        case 2:
+            paint(context, 7, 13, 6, 2, face->hair);
+            paint(context, 9, 15, 2, 2, face->hair);
+            break;
+        case 3:
+            paint(context, 6, 12, 8, 3, face->hair);
+            paint(context, 7, 15, 6, 2, face->hair);
+            break;
+        default:
+            break;
+    }
+
+    PaintPortraitFeatures(face, expression, context, paint);
+
+    if (face->headwear) {
+        Color headwear = face->headwear_color;
+        switch (face->headwear_style % 4U) {
+            case 0:
+                paint(context, 4, 1, 12, 4, headwear);
+                paint(context, 3, 4, 14, 1, Shade(headwear, 0.70f));
+                break;
+            case 1:
+                paint(context, 7, 0, 7, 4, headwear);
+                paint(context, 2, 3, 16, 1, Shade(headwear, 0.76f));
+                break;
+            case 2:
+                paint(context, 4, 1, 12, 3, headwear);
+                paint(context, 3, 3, 3, 10, headwear);
+                paint(context, 14, 3, 3, 10, headwear);
+                break;
+            case 3:
+            default:
+                paint(context, 4, 1, 12, 3, headwear);
+                paint(context, 4, 4, 12, 2, Shade(headwear, 0.78f));
+                break;
+        }
+    }
+
+    if (crowned) {
+        Color gold = (Color){224, 177, 78, 255};
+        paint(context, 7, 0, 6, 1, gold);
+        paint(context, 7, 0, 1, 2, gold);
+        paint(context, 9, 0, 1, 2, gold);
+        paint(context, 12, 0, 1, 2, gold);
+    }
+}
+
+void CcNpcDrawPixelPortrait(const CcNpcAppearance *appearance,
+                            Rectangle bounds,
+                            CcNpcPortraitExpression expression,
+                            bool crowned)
+{
+    if (appearance == NULL) return;
+    int32_t pixel = bounds.width >= 60.0f && bounds.height >= 70.0f ? 3 : 2;
+    int32_t width = pixel * 20;
+    int32_t height = pixel * 24;
+    int32_t x = (int32_t)bounds.x + ((int32_t)bounds.width - width) / 2;
+    int32_t y = (int32_t)bounds.y + ((int32_t)bounds.height - height) / 2;
+    ScreenPortraitCanvas canvas = {x, y, pixel};
+    DrawRectangle((int32_t)bounds.x, (int32_t)bounds.y,
+                  (int32_t)bounds.width, (int32_t)bounds.height,
+                  (Color){8, 16, 21, 255});
+    DrawRectangleLines((int32_t)bounds.x, (int32_t)bounds.y,
+                       (int32_t)bounds.width, (int32_t)bounds.height,
+                       Shade(appearance->accent, 0.88f));
+    DrawRectangle(x, y, width, height, (Color){17, 28, 32, 255});
+    PaintScreenBlock(&canvas, 2, 18, 16, 6, appearance->outer);
+    PaintScreenBlock(&canvas, 0, 21, 20, 3,
+                     Shade(appearance->outer, 0.68f));
+    PaintScreenBlock(&canvas, 5, 19, 10, 2, appearance->underlayer);
+    PaintScreenBlock(&canvas, 8, 14, 4, 6,
+                     Shade(appearance->skin, 0.70f));
+    CcFaceRecipe face = CcNpcFaceRecipe(appearance);
+    PaintPortraitFace(&face, expression, crowned, &canvas,
+                      PaintScreenBlock);
+}
+
+CcNpcAppearance CcNpcHeroPortraitAppearance(
+    const CcNpcAppearance *appearance)
+{
+    CcNpcAppearance result = appearance != NULL ? *appearance :
+        CcNpcAppearanceGenerate(UINT32_C(0xc0a71a9e),
+                                CC_NPC_ROLE_WAYFARER,
+                                (Color){181, 135, 49, 255});
+    result.skin = (Color){177, 131, 93, 255};
+    result.hair = (Color){27, 31, 32, 255};
+    result.underlayer = (Color){47, 108, 106, 255};
+    result.outer = (Color){111, 48, 55, 255};
+    result.accent = (Color){181, 135, 49, 255};
+    result.hair_style = 3U;
+    result.beard_style = 0U;
+    return result;
+}
+
 static Color PaletteColor(const Color *palette, int32_t count,
                           uint32_t seed, uint32_t stream)
 {

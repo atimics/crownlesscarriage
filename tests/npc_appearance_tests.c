@@ -39,6 +39,22 @@ int main(void)
         return 1;
     }
 
+    CcNpcAppearance hero = CcNpcHeroPortraitAppearance(&traveller);
+    CcFaceRecipe hero_face = CcNpcFaceRecipe(&hero);
+    CcFaceRecipe guard_face = CcNpcFaceRecipe(&guard_a);
+    if (hero_face.seed != hero.seed || hero_face.skin.r != 177U ||
+        hero_face.hair.r != 27U || hero_face.hair_style != 3U ||
+        hero_face.width != hero.head_width ||
+        hero_face.depth != hero.head_depth ||
+        guard_face.headwear !=
+            ((guard_a.equipment & CC_NPC_EQUIPMENT_HEADWEAR) != 0U) ||
+        guard_face.nose_style != guard_a.nose_style ||
+        guard_face.scar_style != guard_a.scar_style) {
+        (void)fprintf(stderr,
+                      "shared face recipe contract failed\n");
+        return 1;
+    }
+
     for (uint32_t role = 0U; role < (uint32_t)CC_NPC_ROLE_COUNT; ++role) {
         CcNpcAppearance person = CcNpcAppearanceGenerate(
             UINT32_C(0x504f5000) + role, (CcNpcRole)role,

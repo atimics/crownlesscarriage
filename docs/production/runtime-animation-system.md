@@ -21,6 +21,20 @@ presentation:
 This preserves the deterministic biomechanical prototype while preventing
 physics, animation, and rendering from silently chasing different poses.
 
+## Physical authority
+
+Animation does not keep an invisible upright root alive during a fall. Stable
+and marginal support use the biomechanical root and contact controller. A brief
+support-loss grace remains controlled airborne; continued loss transfers the
+live pose and velocity to the ragdoll. While that graph is active, its center of
+mass owns the character position and velocity. Recovery drives the same graph,
+then hands control back only after supported convergence.
+
+The shared local collision query serves the walking capsule, landmark spheres,
+and torso/limb capsule segments. Support is an explicit stable, marginal,
+hands, controlled-airborne, or uncontrolled-fall state rather than a renderer
+guess from `grounded`.
+
 ## Stable idle
 
 Grounded idle uses speed hysteresis and a settle interval. Once stable, both
@@ -74,7 +88,20 @@ combat event timing or the player API.
 Ragdoll and recovery have distinct pose owners. A settled body is classified as
 supine, prone, left-side, or right-side and selects the matching recovery
 timeline. Death disables recovery; knockdown and explicit resurrection enable
-it. The physical pose remains authoritative until recovery completes.
+it. Angle limits, self-separation, and limb collision volume remain active in
+both fall and recovery. The physical pose remains authoritative until recovery
+completes.
+
+## Gameplay-scale hero presentation
+
+The engine skin keeps the detailed modular GLB, but its final presentation is
+tuned for the low-resolution play camera. The head is enlarged, the hands are
+reduced, and the whole figure is made slightly taller and narrower so the face,
+torso, and legs remain separate shapes. The runtime material table follows the
+exported leather and steel slot order. The model owns the broken crown, while a
+bone-driven chest clasp and broken-gold mark reinforce identity without adding
+a second crown. The hero shader uses lighter shadow paint and a finer inner ink
+edge so garment layers do not collapse into one dark block.
 
 ## Diagnostics and regression contract
 

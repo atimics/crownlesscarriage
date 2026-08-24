@@ -11,6 +11,7 @@ uniform vec4 characterPalette[9];
 uniform float paletteInk[9];
 uniform vec3 lightDirection;
 uniform vec3 cameraPosition;
+uniform vec3 shadowColor;
 uniform vec3 fogColor;
 uniform float fogNear;
 uniform float fogFar;
@@ -32,12 +33,26 @@ void main()
     bool isSkin = paletteIndex == 0;
     float darkValue = isSkin ? 0.72 : 0.63;
     float lightValue = isSkin ? 1.04 : 1.01;
+    float authoredValue = fragColor.g < 0.375 ? (isSkin ? 0.73 : 0.64) :
+                          fragColor.g < 0.625 ? (isSkin ? 0.88 : 0.82) :
+                                                     (isSkin ? 1.05 : 1.03);
     vec3 shadowTemperature = isSkin ? vec3(1.04, 0.84, 0.77) :
                                       vec3(0.83, 0.91, 1.02);
+    shadowTemperature *= shadowColor;
     vec3 lightTemperature = vec3(1.035, 1.01, 0.95);
     vec3 temperature = mix(shadowTemperature, lightTemperature, lightBand);
-    vec3 color = paint.rgb * mix(darkValue, lightValue, lightBand) *
+    float normalValue = mix(darkValue, lightValue, lightBand);
+    vec3 color = paint.rgb * mix(normalValue, authoredValue, 0.78) *
                  temperature;
+    float foldShadow = (1.0 - smoothstep(-0.18, 0.48, facing)) *
+                       fragColor.b;
+    color *= 1.0 - foldShadow * 0.11;
+
+    /* Match the hero's restrained cool fill so background figures retain
+       role-defining headwear, tools, and garment layers in dark streets. */
+    float skyExposure = smoothstep(-0.30, 0.82, normal.y);
+    color += paint.rgb * vec3(0.74, 0.91, 1.04) * skyExposure *
+             (1.0 - lightBand) * 0.052;
 
     float viewFacing = abs(dot(normal, toCamera));
     float edgeInk = 1.0 - step(0.14, viewFacing);
@@ -45,8 +60,9 @@ void main()
                           paint.rgb * 0.24, 0.38);
     color = mix(color, coloredInk,
                 edgeInk * inkStrength * paletteInk[paletteIndex]);
+    float litEdge = edgeInk * smoothstep(0.08, 0.68, facing) * lightBand;
+    color += vec3(0.18, 0.27, 0.28) * litEdge * 0.050;
 
-    color = floor(clamp(color, 0.0, 1.0) * 20.0 + 0.5) / 20.0;
     float distanceToCamera = length(cameraPosition - fragPosition);
     float fog = smoothstep(fogNear, fogFar, distanceToCamera) * 0.24;
     color = mix(color, fogColor, fog);

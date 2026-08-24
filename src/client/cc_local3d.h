@@ -20,7 +20,7 @@
    collision, rendering, and tests so the continuous world cannot drift apart. */
 #define CC_LOCAL_WORLD_WIDTH 96.0f
 #define CC_LOCAL_WORLD_DEPTH 72.0f
-#define CC_LOCAL_NAVIGATION_POINT_CAPACITY 16
+#define CC_LOCAL_NAVIGATION_POINT_CAPACITY 48
 #define CC_LOCAL_START_X 40.5f
 #define CC_LOCAL_START_Z 30.0f
 #define CC_LOCAL_MARKET_X 50.0f
@@ -154,6 +154,8 @@ typedef struct CcLocalAgent {
     Vector3 velocity;
     Vector3 separation_velocity;
     Vector3 target_point;
+    Vector3 command_point;
+    Vector3 command_origin;
     Vector3 navigation_point[CC_LOCAL_NAVIGATION_POINT_CAPACITY];
     Vector3 climb_start;
     Vector3 climb_end;
@@ -171,6 +173,7 @@ typedef struct CcLocalAgent {
     float climb_start_yaw;
     float climb_end_yaw;
     CcTraversalMode traversal;
+    CcHumanoidSupportState support_state;
     CcLocalSceneKind scene;
     bool grounded;
     bool climbing;
@@ -197,6 +200,7 @@ typedef struct CcLocalAgent {
     bool render_pose_valid;
     bool humanoid_needs_reset;
     bool target_valid;
+    bool command_point_valid;
     bool crowned;
     bool jump_training_pending;
     bool climb_training_pending;
@@ -279,6 +283,12 @@ typedef struct CcLocalRendererStats {
    primitives. */
 #define CC_LOCAL_HERO_RUNTIME_MESH_BUDGET 32
 
+/* The exterior land is deterministic for a world seed. Rendering, movement,
+   picking, roads, and building foundations all use these same samples. */
+void CcLocalTerrainSetSeed(uint32_t seed);
+float CcLocalTerrainHeightAt(float x, float z);
+Vector3 CcLocalTerrainNormalAt(float x, float z);
+
 void CcLocalAgentInit(CcLocalAgent *agent, Vector2 position, bool market_interior);
 void CcLocalAgentSetNpcAppearance(CcLocalAgent *agent, uint32_t seed,
                                   CcNpcRole role, Color accent);
@@ -358,6 +368,7 @@ float CcLocalCombatSkillCooldown(const CcLocalAgent *player,
 float CcLocalCombatSkillDuration(CcCombatSkill skill);
 
 void CcLocalRendererInit(void);
+void CcLocalRendererSetScreenFirstHero(bool enabled);
 void CcLocalRendererBeginFrame(float delta_time);
 CcLocalRendererStats CcLocalRendererGetStats(void);
 void CcLocalRendererSetDiagnosticOverlay(bool enabled);

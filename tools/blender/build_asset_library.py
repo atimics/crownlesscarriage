@@ -29,6 +29,15 @@ MATERIALS: dict[str, bpy.types.Material] = {}
 LEAF_COLLECTIONS: dict[str, bpy.types.Collection] = {}
 ASSET_RECORDS: list[dict[str, object]] = []
 
+PAINTED_ENVIRONMENT_ASSETS = {"environment_market_granary_v01"}
+PAINT_MATERIAL_CLASSES = {
+    "cloth": 0.10,
+    "wood": 0.30,
+    "stone": 0.50,
+    "metal": 0.70,
+    "water": 0.90,
+}
+
 
 PALETTE = {
     "wood_dark": (0.17, 0.075, 0.035, 1.0),
@@ -173,6 +182,65 @@ def move_to_collection(obj: bpy.types.Object, collection: bpy.types.Collection) 
     collection.objects.link(obj)
 
 
+def painted_material_class(material_name: str) -> tuple[str, float]:
+    name = material_name.removeprefix("MAT_").lower()
+    if name in {"canvas", "cream", "cloth_white", "red", "blue", "teal",
+                "purple", "green", "food"}:
+        key = "cloth"
+    elif name in {"iron", "steel", "brass"}:
+        key = "metal"
+    elif name.startswith("stone") or name in {"road", "earth_dark"}:
+        key = "stone"
+    elif name.startswith("water") or name == "glass":
+        key = "water"
+    else:
+        key = "wood"
+    return key, PAINT_MATERIAL_CLASSES[key]
+
+
+def add_painted_environment_channels(obj: bpy.types.Object, role: str) -> None:
+    """Author broad value, material, and accent channels on one pilot mesh."""
+    mesh = obj.data
+    if not mesh.materials:
+        raise RuntimeError(f"{obj.name} has no material for its paint mask")
+    material_key, material_value = painted_material_class(
+        mesh.materials[0].name)
+    role_base = 0.50
+    if any(token in role for token in ("foundation", "frame", "door")):
+        role_base = 0.34
+    elif "roof" in role:
+        role_base = 0.58
+    elif any(token in role for token in ("stall", "awning", "stock")):
+        role_base = 0.55
+    elif any(token in role for token in ("ground", "paving")):
+        role_base = 0.46
+    elif "security" in role:
+        role_base = 0.38
+
+    accent = 0.78 if any(token in role for token in (
+        "granary_door", "granary_vent", "hoist", "market_stall", "well")) else 0.0
+    attribute = mesh.color_attributes.new(
+        name="COLOR_0", type="FLOAT_COLOR", domain="CORNER")
+    for polygon in mesh.polygons:
+        normal = polygon.normal
+        face_shift = 0.0
+        if normal.z > 0.55:
+            face_shift = 0.18
+        elif normal.z < -0.55:
+            face_shift = -0.16
+        elif normal.y < -0.45:
+            face_shift = 0.07
+        elif normal.x > 0.45:
+            face_shift = -0.06
+        shade = max(0.08, min(0.92, role_base + face_shift))
+        for loop_index in polygon.loop_indices:
+            attribute.data[loop_index].color = (
+                shade, material_value, accent, 1.0)
+    mesh.color_attributes.active_color = attribute
+    obj["cc_paint_contract"] = "COLOR_0:shade,material_class,accent"
+    obj["cc_paint_material"] = material_key
+
+
 def tag_object(
     obj: bpy.types.Object,
     *,
@@ -184,6 +252,8 @@ def tag_object(
     obj["cc_role"] = role
     obj["cc_layer_group"] = layer_group
     obj["cc_library_version"] = LIBRARY_VERSION
+    if asset_id in PAINTED_ENVIRONMENT_ASSETS and obj.type == "MESH":
+        add_painted_environment_channels(obj, role)
 
 
 def bevel(obj: bpy.types.Object, width: float = 0.05, segments: int = 2) -> None:
@@ -355,6 +425,20 @@ def add_wheel(
     asset_id: str,
     radius: float = 0.72,
 ) -> None:
+    # A narrow forged tire gives the wheel a crisp outer value and makes the
+    # driven/steering wheel silhouette survive the gameplay camera. Keep the
+    # timber rim beneath it so damage still reads as a repairable wooden wheel.
+    add_torus(
+        f"GEO_{prefix}_Tyre",
+        (x, y, z),
+        radius - 0.018,
+        0.026,
+        "iron",
+        collection,
+        asset_id,
+        "wheel_tyre",
+        rotation=(math.radians(90), 0.0, 0.0),
+    )
     add_torus(
         f"GEO_{prefix}_Rim",
         (x, y, z),
@@ -465,6 +549,8 @@ def build_carriage_base(parent: bpy.types.Collection) -> bpy.types.Collection:
     add_cube("GEO_Roof", (-0.3, 0.0, 2.26), (2.98, 0.95, 0.16), "canvas", col, asset_id, "roof", bevel_width=0.10)
     for y, pitch in ((-0.72, math.radians(-22)), (0.72, math.radians(22))):
         add_cube("GEO_RoofEave", (-0.3, y, 2.16), (2.98, 0.72, 0.14), "canvas", col, asset_id, "roof", rotation=(pitch, 0.0, 0.0), bevel_width=0.08)
+    for x in (-1.12, -0.30, 0.52):
+        add_cube("GEO_RoofBinding", (x, 0.0, 2.355), (0.055, 0.98, 0.045), "leather", col, asset_id, "roof_binding", bevel_width=0.012)
 
     for y in (-0.855, 0.855):
         side = "L" if y < 0 else "R"
@@ -489,6 +575,7 @@ def build_carriage_base(parent: bpy.types.Collection) -> bpy.types.Collection:
         )
         add_cube(f"GEO_WindowSill_{side}", (-0.35, y * 0.99, 1.44), (1.40, 0.05, 0.06), "wood_dark", col, asset_id, "window_frame", bevel_width=0.01)
         add_cube(f"GEO_WindowHeader_{side}", (-0.35, y * 0.99, 1.94), (1.40, 0.05, 0.06), "wood_dark", col, asset_id, "window_frame", bevel_width=0.01)
+        add_cube(f"GEO_WindowMullion_{side}", (-0.35, y * 1.012, 1.69), (0.055, 0.045, 0.48), "brass", col, asset_id, "window_frame", bevel_width=0.01)
 
     # Front cab window sits above the armour module's front plate zone.
     add_cube("GEO_FrontWindow", (1.085, 0.0, 1.86), (0.04, 0.85, 0.34), "glass", col, asset_id, "window", bevel_width=0.02)
@@ -503,6 +590,8 @@ def build_carriage_base(parent: bpy.types.Collection) -> bpy.types.Collection:
     add_cube("GEO_RearDoor", (-1.685, 0.0, 1.56), (0.05, 1.10, 0.86), "wood_dark", col, asset_id, "rear_door", bevel_width=0.02)
     for z in (1.30, 1.80):
         add_cube("GEO_RearDoorHinge", (-1.715, -0.42, z), (0.04, 0.26, 0.06), "iron", col, asset_id, "rear_door", bevel_width=0.01)
+    add_beam_between("GEO_RearDoorBrace_A", (-1.72, -0.48, 1.25), (-1.72, 0.48, 1.84), 0.055, "wood_light", col, asset_id, "rear_door")
+    add_beam_between("GEO_RearDoorBrace_B", (-1.72, 0.48, 1.25), (-1.72, -0.48, 1.84), 0.055, "wood_light", col, asset_id, "rear_door")
     add_torus("GEO_RearDoorRing", (-1.72, 0.32, 1.55), 0.06, 0.014, "brass", col, asset_id, "rear_door", rotation=(0.0, math.radians(90), 0.0))
 
     # Driver station: footboard on brackets, dashboard, footrest, cushioned
@@ -699,6 +788,8 @@ def build_bridge_checkpoint(parent: bpy.types.Collection) -> bpy.types.Collectio
         side = "L" if y < 0.0 else "R"
         add_cube(f"GEO_BridgeParapet_{side}", (0.0, y, 0.74), (7.6, 0.30, 0.76), "stone", col, asset_id, "parapet", bevel_width=0.07)
         add_cube(f"GEO_ParapetCap_{side}", (0.0, y, 1.15), (7.82, 0.38, 0.16), "stone_light", col, asset_id, "parapet_cap", bevel_width=0.055)
+        for x in (-2.35, -0.78, 0.78, 2.35):
+            add_cube("GEO_ParapetJoint", (x, y * 1.008, 0.74), (0.045, 0.315, 0.54), "stone_dark", col, asset_id, "masonry_joint", bevel_width=0.0)
         for x in (-3.15, -1.60, 0.0, 1.60, 3.15):
             add_cube("GEO_ParapetButtress", (x, y * 1.075, 0.66), (0.24, 0.22, 0.84), "stone_dark", col, asset_id, "bridge_buttress", bevel_width=0.035)
 
@@ -707,6 +798,8 @@ def build_bridge_checkpoint(parent: bpy.types.Collection) -> bpy.types.Collectio
     for x in (-2.45, 0.0, 2.45):
         for y in (-0.88, 0.88):
             add_cylinder("GEO_BridgePier", (x, y, -0.02), 0.30, 0.72, "stone_dark", col, asset_id, "bridge_support", vertices=8, bevel_width=0.04)
+        for y in (-1.10, 1.10):
+            add_cube("GEO_PierCutwater", (x, y, 0.04), (0.44, 0.52, 0.64), "stone", col, asset_id, "bridge_cutwater", rotation=(0.0, 0.0, math.radians(45)), bevel_width=0.045)
 
     # A compact timber toll house with a pitched roof, foundation, door, and
     # glazed side window. It intentionally sits outside the travel lane.
@@ -717,8 +810,13 @@ def build_bridge_checkpoint(parent: bpy.types.Collection) -> bpy.types.Collectio
     add_cube("GEO_CheckpointDoor", (-1.45, 1.515, 1.06), (0.62, 0.065, 1.16), "wood_dark", col, asset_id, "guard_hut_door", bevel_width=0.035)
     add_torus("GEO_CheckpointDoorRing", (-1.22, 1.47, 1.09), 0.075, 0.014, "brass", col, asset_id, "door_hardware", rotation=(math.radians(90), 0.0, 0.0))
     add_cube("GEO_CheckpointWindow", (-0.685, 2.12, 1.50), (0.045, 0.52, 0.48), "glass", col, asset_id, "guard_hut_window", bevel_width=0.018)
+    add_cube("GEO_CheckpointWindowMullion", (-0.655, 2.12, 1.50), (0.035, 0.55, 0.055), "brass", col, asset_id, "guard_hut_window", bevel_width=0.008)
+    add_cube("GEO_CheckpointWindowStile", (-0.655, 2.12, 1.50), (0.035, 0.055, 0.50), "brass", col, asset_id, "guard_hut_window", bevel_width=0.008)
     for y, pitch in ((1.79, math.radians(27)), (2.45, math.radians(-27))):
         add_cube("GEO_CheckpointRoofSlope", (-1.45, y, 2.40), (1.90, 0.86, 0.16), "red", col, asset_id, "guard_hut_roof", rotation=(pitch, 0.0, 0.0), bevel_width=0.045)
+    add_cube("GEO_CheckpointRoofRidge", (-1.45, 2.12, 2.61), (1.98, 0.12, 0.12), "wood_dark", col, asset_id, "guard_hut_roof", bevel_width=0.025)
+    add_beam_between("GEO_CheckpointBrace_A", (-0.68, 1.62, 0.72), (-0.68, 2.53, 1.98), 0.075, "wood_dark", col, asset_id, "guard_hut_frame")
+    add_beam_between("GEO_CheckpointBrace_B", (-0.68, 2.53, 0.72), (-0.68, 1.62, 1.98), 0.075, "wood_dark", col, asset_id, "guard_hut_frame")
     add_cube("GEO_CheckpointChimney", (-1.88, 2.39, 2.65), (0.24, 0.24, 0.62), "stone_dark", col, asset_id, "guard_hut_chimney", bevel_width=0.035)
     add_cube("GEO_CheckpointChimneyCap", (-1.88, 2.39, 2.97), (0.32, 0.32, 0.12), "stone_light", col, asset_id, "guard_hut_chimney", bevel_width=0.03)
 
@@ -733,6 +831,8 @@ def build_bridge_checkpoint(parent: bpy.types.Collection) -> bpy.types.Collectio
         add_cube("GEO_BarrierStripe", (0.24, y, 1.18 + math.sin(math.radians(10)) * y), (0.195, 0.28, 0.195), "cream", col, asset_id, "barrier_stripe", rotation=(math.radians(10), 0.0, 0.0), bevel_width=0.018)
     add_cube("GEO_GatePlacard", (0.48, 0.0, 2.13), (0.18, 0.72, 0.44), "blue", col, asset_id, "checkpoint_sign", bevel_width=0.045)
     add_cube("GEO_GatePlacardMark", (0.375, 0.0, 2.13), (0.025, 0.38, 0.10), "brass", col, asset_id, "checkpoint_sign", bevel_width=0.008)
+    add_cube("GEO_GateChain", (0.65, 0.82, 1.56), (0.045, 0.045, 0.78), "steel", col, asset_id, "gate_mechanism", bevel_width=0.008)
+    add_cube("GEO_GateCounterweight", (0.65, 0.82, 1.12), (0.18, 0.18, 0.30), "iron", col, asset_id, "gate_mechanism", bevel_width=0.035)
 
     # Inspection furniture and road-side detail support the simulation role of
     # this asset: cargo is stopped, checked, documented, and sometimes seized.
@@ -781,7 +881,6 @@ def build_mine_entrance(parent: bpy.types.Collection) -> bpy.types.Collection:
         add_cube("GEO_CliffStrata", (0.0, 1.02, z), (5.9, 0.05, 0.10), "stone_dark", col, asset_id, "cliff_strata", bevel_width=0.02)
     for x, y, sx, sy, sz in ((-2.55, 0.80, 0.42, 0.34, 0.26), (2.45, 0.72, 0.50, 0.40, 0.32), (2.95, 0.35, 0.30, 0.26, 0.20)):
         add_uv_sphere("GEO_TalusRock", (x, y, sz * 0.55), (sx, sy, sz), "stone_dark", col, asset_id, "talus")
-
     # Timber portal set: posts and lintel gain a sill, diagonal braces, and a
     # sloped hood so the entrance reads as engineered, not a hole in a wall.
     add_cube("GEO_MineVoid", (0.0, 1.00, 1.00), (1.75, 0.24, 1.90), "black", col, asset_id, "entrance_void", bevel_width=0.18)
@@ -792,6 +891,11 @@ def build_mine_entrance(parent: bpy.types.Collection) -> bpy.types.Collection:
     add_beam_between("GEO_MineBrace_L", (-0.98, 0.78, 1.48), (-0.44, 0.78, 1.90), 0.10, "wood_dark", col, asset_id, "timber_support")
     add_beam_between("GEO_MineBrace_R", (0.98, 0.78, 1.48), (0.44, 0.78, 1.90), 0.10, "wood_dark", col, asset_id, "timber_support")
     add_cube("GEO_MineHood", (0.0, 0.60, 2.14), (2.55, 0.64, 0.10), "wood", col, asset_id, "entrance_hood", rotation=(math.radians(-14), 0.0, 0.0), bevel_width=0.03)
+    for x in (-0.74, 0.74):
+        add_cube("GEO_HoodStrap", (x, 0.60, 2.15), (0.075, 0.66, 0.045), "iron", col, asset_id, "entrance_hood", rotation=(math.radians(-14), 0.0, 0.0), bevel_width=0.010)
+    for x in (-1.02, 1.02):
+        for z in (0.52, 1.48):
+            add_cylinder("GEO_PortalBolt", (x, 0.625, z), 0.047, 0.045, "iron", col, asset_id, "timber_hardware", rotation=(math.radians(90), 0.0, 0.0), vertices=8, bevel_width=0.008)
 
     # A lantern and warning sign mark the portal as an active working site.
     add_cube("GEO_LanternHook", (0.62, 0.64, 1.80), (0.03, 0.03, 0.16), "iron", col, asset_id, "lantern")
@@ -814,6 +918,8 @@ def build_mine_entrance(parent: bpy.types.Collection) -> bpy.types.Collection:
     add_cube("GEO_TrackStopBeam", (-2.42, 0.0, 0.52), (0.16, 0.72, 0.14), "wood_dark", col, asset_id, "track_stop", bevel_width=0.02)
     add_cube("GEO_MineCart", (-1.15, 0.0, 0.55), (0.92, 0.60, 0.55), "iron", col, asset_id, "mine_cart", bevel_width=0.06)
     add_cube("GEO_CartLip", (-1.15, 0.0, 0.85), (1.00, 0.68, 0.08), "wood_dark", col, asset_id, "mine_cart", bevel_width=0.02)
+    for x in (-1.43, -0.87):
+        add_cylinder("GEO_CartRivet", (x, -0.315, 0.56), 0.040, 0.035, "brass", col, asset_id, "mine_cart_hardware", rotation=(math.radians(90), 0.0, 0.0), vertices=8, bevel_width=0.006)
     for x in (-1.45, -0.85):
         add_cylinder("GEO_CartAxle", (x, 0.0, 0.285), 0.045, 0.64, "iron", col, asset_id, "mine_cart", rotation=(math.radians(90), 0.0, 0.0), vertices=10, bevel_width=0.01)
         for y in (-0.33, 0.33):
@@ -856,11 +962,19 @@ def build_market(parent: bpy.types.Collection) -> bpy.types.Collection:
         add_cube("GEO_DoorHinge", (1.28, 0.685, z), (0.30, 0.04, 0.07), "iron", col, asset_id, "granary_door", bevel_width=0.01)
     add_torus("GEO_DoorRing", (1.82, 0.68, 0.95), 0.06, 0.014, "brass", col, asset_id, "granary_door", rotation=(math.radians(90), 0.0, 0.0))
     add_cube("GEO_GranaryVent", (2.62, 0.74, 1.90), (0.42, 0.07, 0.30), "wood_dark", col, asset_id, "granary_vent", bevel_width=0.02)
+    for z in (1.83, 1.97):
+        add_cube("GEO_GranaryVentLouvre", (2.62, 0.695, z), (0.34, 0.035, 0.035), "brass", col, asset_id, "granary_vent", bevel_width=0.008)
+    add_beam_between("GEO_GranaryBrace_L", (0.12, 0.70, 0.35), (0.76, 0.70, 1.86), 0.075, "wood_dark", col, asset_id, "granary_frame")
+    add_beam_between("GEO_GranaryBrace_R", (2.98, 0.70, 0.35), (2.10, 0.70, 1.86), 0.075, "wood_dark", col, asset_id, "granary_frame")
+    add_cube("GEO_GranaryDoorBrace", (1.55, 0.682, 0.90), (0.76, 0.035, 0.075), "wood_light", col, asset_id, "granary_door", rotation=(0.0, math.radians(8), 0.0), bevel_width=0.012)
 
     add_cube("GEO_GranaryRoof", (1.55, 1.63, 2.40), (3.45, 2.04, 0.25), "red", col, asset_id, "granary_roof", bevel_width=0.10)
     add_cube("GEO_RoofSlopeFront", (1.55, 1.12, 2.72), (3.55, 1.14, 0.10), "red", col, asset_id, "granary_roof", rotation=(math.radians(22), 0.0, 0.0), bevel_width=0.04)
     add_cube("GEO_RoofSlopeBack", (1.55, 2.14, 2.72), (3.55, 1.14, 0.10), "red", col, asset_id, "granary_roof", rotation=(math.radians(-22), 0.0, 0.0), bevel_width=0.04)
     add_cube("GEO_RoofRidge", (1.55, 1.63, 2.94), (3.55, 0.16, 0.16), "wood_dark", col, asset_id, "granary_roof", bevel_width=0.03)
+    for x in (0.66, 1.55, 2.44):
+        add_cube("GEO_RoofSeamFront", (x, 1.12, 2.735), (0.065, 1.16, 0.045), "wood_dark", col, asset_id, "granary_roof", rotation=(math.radians(22), 0.0, 0.0), bevel_width=0.010)
+        add_cube("GEO_RoofSeamBack", (x, 2.14, 2.735), (0.065, 1.16, 0.045), "wood_dark", col, asset_id, "granary_roof", rotation=(math.radians(-22), 0.0, 0.0), bevel_width=0.010)
     for x in (-0.15, 3.25):
         add_cube("GEO_RoofGable", (x, 1.63, 2.70), (0.12, 1.30, 0.40), "wood", col, asset_id, "granary_roof", bevel_width=0.03)
 
@@ -881,6 +995,7 @@ def build_market(parent: bpy.types.Collection) -> bpy.types.Collection:
         for dx in (-0.52, 0.52):
             add_cube("GEO_StallPost", (x + dx, -0.35, 1.38), (0.10, 0.10, 1.40), "wood_dark", col, asset_id, "market_stall")
         add_cube("GEO_StallAwning", (x, -0.35, 2.04), (1.46, 0.98, 0.14), "canvas", col, asset_id, "market_stall", rotation=(0.0, math.radians(-4), 0.0), bevel_width=0.07)
+        add_cube("GEO_AwningValance", (x, -0.84, 1.96), (1.44, 0.07, 0.18), "red", col, asset_id, "market_stall", bevel_width=0.025)
         for dx in (-0.38, 0.38):
             add_cube("GEO_AwningStripe", (x + dx, -0.35, 2.04), (0.32, 0.99, 0.15), "red", col, asset_id, "market_stall", rotation=(0.0, math.radians(-4), 0.0), bevel_width=0.07)
 
@@ -1106,6 +1221,7 @@ def export_collection(collection: bpy.types.Collection, filepath: Path) -> None:
         # processes, so dropping them keeps exports byte-reproducible.
         export_texcoords=False,
         export_materials="EXPORT",
+        export_vertex_color="ACTIVE",
     )
 
 

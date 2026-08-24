@@ -37,6 +37,27 @@ A bandit group tracks:
 Bandits raid shipments because they need cargo, seek leverage, serve a patron,
 or want control—not because an encounter meter filled.
 
+### No-man's-land camps and expeditions
+
+Bandit groups live on contested cross-border roads. Their home grows from a
+hideout into a camp, war camp, and eventually an outlaw town. Each tier has its
+own small service budget, starting with things such as a black market, stable, smithy,
+or healer rather than copying a lawful settlement.
+
+A raid is persistent travel, not an instant dice roll:
+
+1. The camp scores the real settlements at the ends of its road.
+2. Scouts choose a target and the good with the best available stock.
+3. The group musters and travels for the route's real travel time.
+4. On arrival it removes goods from the target's actual stock and damages local
+   security and prosperity.
+5. The expedition travels home with the loot.
+6. Returned supplies support recruitment, influence, camp growth, and later
+   services.
+
+Meeting and weakening that bandit group on the same road changes the force able
+to complete the expedition.
+
 ### Bandit resolutions
 
 The player may:

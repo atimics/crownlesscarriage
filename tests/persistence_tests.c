@@ -167,6 +167,13 @@ int main(void)
     CcSimInit(&original, UINT32_C(0xa11ce5ed));
     CcSimAdvanceDays(&original, 23);
     char error[256];
+    CcSettlement *capital = &original.settlements[4];
+    capital->stock[CC_GOOD_MATERIAL] += 20;
+    capital->stock[CC_GOOD_TOOLS] += 10;
+    original.kingdoms[2].treasury += 100;
+    CC_CHECK(CcSimStartServiceProject(&original, capital->id,
+                                      CC_SERVICE_GRANARY,
+                                      error, sizeof(error)));
     CheckPreJourneySchema3Compatibility(error, sizeof(error));
     CcCommand command = {
         .kind = CC_COMMAND_TRAVEL,
@@ -221,6 +228,18 @@ int main(void)
     CC_CHECK(restored.player.map_capacity == original.player.map_capacity);
     CC_CHECK(restored.player.accepted_situation_id ==
              original.player.accepted_situation_id);
+    CC_CHECK(restored.settlements[4].service_mask ==
+             original.settlements[4].service_mask);
+    CC_CHECK(restored.settlements[4].service_project ==
+             original.settlements[4].service_project);
+    CC_CHECK(restored.settlements[4].service_project_days ==
+             original.settlements[4].service_project_days);
+    CC_CHECK(restored.bandits[0].camp_size == original.bandits[0].camp_size);
+    CC_CHECK(restored.bandits[0].raid_phase == original.bandits[0].raid_phase);
+    CC_CHECK(restored.bandits[0].raid_target_id ==
+             original.bandits[0].raid_target_id);
+    CC_CHECK(restored.bandits[0].raids_completed ==
+             original.bandits[0].raids_completed);
     CC_CHECK(CcSimAcceptedSituation(&restored) != NULL);
     CC_CHECK(restored.journey.active);
     CC_CHECK(restored.journey.phase == original.journey.phase);

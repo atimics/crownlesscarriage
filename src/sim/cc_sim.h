@@ -22,8 +22,8 @@
 #define CC_CARGO_CAPACITY 12
 #define CC_MAP_CAPACITY 3
 
-#define CC_SIM_SCHEMA_VERSION 4
-#define CC_GENERATOR_VERSION 3
+#define CC_SIM_SCHEMA_VERSION 5
+#define CC_GENERATOR_VERSION 4
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
 #define CC_WORLD_DAY_SUBTICKS (24 * 60 * CC_WORLD_MINUTE_SUBTICKS)
@@ -64,6 +64,33 @@ typedef enum CcSettlementFunction {
     CC_SETTLEMENT_CAPITAL,
     CC_SETTLEMENT_DUNGEON_TOWN
 } CcSettlementFunction;
+
+typedef enum CcSettlementSize {
+    CC_SETTLEMENT_HAMLET,
+    CC_SETTLEMENT_VILLAGE,
+    CC_SETTLEMENT_TOWN,
+    CC_SETTLEMENT_CITY,
+    CC_SETTLEMENT_CAPITAL_SIZE
+} CcSettlementSize;
+
+typedef enum CcServiceKind {
+    CC_SERVICE_NONE = -1,
+    CC_SERVICE_MARKET,
+    CC_SERVICE_INN,
+    CC_SERVICE_GRANARY,
+    CC_SERVICE_SMITHY,
+    CC_SERVICE_HEALER,
+    CC_SERVICE_STABLE,
+    CC_SERVICE_SHRINE,
+    CC_SERVICE_BARRACKS,
+    CC_SERVICE_CARTOGRAPHER,
+    CC_SERVICE_GUILDHALL,
+    CC_SERVICE_MINE,
+    CC_SERVICE_FARM,
+    CC_SERVICE_BLACK_MARKET,
+    CC_SERVICE_DUNGEON_WARD,
+    CC_SERVICE_COUNT
+} CcServiceKind;
 
 typedef enum CcFactionKind {
     CC_FACTION_CROWN,
@@ -109,7 +136,11 @@ typedef enum CcEventKind {
     CC_EVENT_ENCOUNTER_COMBAT,
     CC_EVENT_ENCOUNTER_NEGOTIATED,
     CC_EVENT_DELAYED_ECHO,
-    CC_EVENT_JOURNEY_DEPARTED
+    CC_EVENT_JOURNEY_DEPARTED,
+    CC_EVENT_SERVICE_OPENED,
+    CC_EVENT_BANDIT_RAID_DEPARTED,
+    CC_EVENT_SETTLEMENT_RAIDED,
+    CC_EVENT_BANDIT_RAID_RETURNED
 } CcEventKind;
 
 typedef enum CcCommandKind {
@@ -147,6 +178,10 @@ typedef struct CcSettlement {
     int32_t security;
     int32_t prosperity;
     int32_t hunger;
+    CcSettlementSize size;
+    uint32_t service_mask;
+    CcServiceKind service_project;
+    int32_t service_project_days;
     int32_t stock[CC_GOOD_COUNT];
     int32_t reserve_target[CC_GOOD_COUNT];
     int32_t production[CC_GOOD_COUNT];
@@ -209,6 +244,21 @@ typedef struct CcShipment {
     CcShipmentStatus status;
 } CcShipment;
 
+typedef enum CcBanditCampSize {
+    CC_BANDIT_HIDEOUT,
+    CC_BANDIT_CAMP,
+    CC_BANDIT_WAR_CAMP,
+    CC_BANDIT_OUTLAW_TOWN
+} CcBanditCampSize;
+
+typedef enum CcBanditRaidPhase {
+    CC_BANDIT_RAID_IDLE,
+    CC_BANDIT_RAID_SCOUTING,
+    CC_BANDIT_RAID_MUSTERING,
+    CC_BANDIT_RAID_OUTBOUND,
+    CC_BANDIT_RAID_RETURNING
+} CcBanditRaidPhase;
+
 typedef struct CcBanditGroup {
     CcId id;
     CcId route_id;
@@ -216,6 +266,14 @@ typedef struct CcBanditGroup {
     int32_t members;
     int32_t supplies;
     int32_t influence;
+    CcBanditCampSize camp_size;
+    uint32_t service_mask;
+    CcBanditRaidPhase raid_phase;
+    CcId raid_target_id;
+    CcGood raid_good;
+    int32_t raid_quantity;
+    int32_t raid_days_remaining;
+    int32_t raids_completed;
 } CcBanditGroup;
 
 typedef struct CcMonsterPopulation {
@@ -417,6 +475,10 @@ CcId CcMakeId(CcEntityKind kind, uint64_t serial);
 CcEntityKind CcIdKind(CcId id);
 const char *CcGoodName(CcGood good);
 const char *CcSettlementFunctionName(CcSettlementFunction function);
+const char *CcSettlementSizeName(CcSettlementSize size);
+const char *CcServiceName(CcServiceKind service);
+const char *CcBanditCampSizeName(CcBanditCampSize size);
+const char *CcBanditRaidPhaseName(CcBanditRaidPhase phase);
 const char *CcDungeonStateName(CcDungeonState state);
 const char *CcEventKindName(CcEventKind kind);
 const char *CcSituationKindName(CcSituationKind kind);
@@ -438,6 +500,18 @@ const CcSituation *CcSimSituationForSettlement(const CcSim *sim, CcId settlement
 int32_t CcSimActiveSituationCount(const CcSim *sim);
 int32_t CcSimIncomingGood(const CcSim *sim, CcId settlement_id, CcGood good);
 int32_t CcSimRouteDanger(const CcSim *sim, CcId route_id);
+int32_t CcSettlementServiceCapacity(CcSettlementSize size);
+int32_t CcSettlementServiceCount(const CcSettlement *settlement);
+bool CcSettlementHasService(const CcSettlement *settlement,
+                            CcServiceKind service);
+bool CcSimStartServiceProject(CcSim *sim, CcId settlement_id,
+                              CcServiceKind service,
+                              char *error, size_t error_capacity);
+bool CcSimKingdomsAtWar(const CcSim *sim, CcId first, CcId second);
+bool CcSimRouteCrossesWarBorder(const CcSim *sim, CcId route_id);
+int32_t CcBanditCampServiceCapacity(CcBanditCampSize size);
+bool CcSimLaunchBanditRaid(CcSim *sim, CcId bandit_id,
+                           char *error, size_t error_capacity);
 int32_t CcPlayerCargoUsed(const CcPlayerCompany *player);
 int32_t CcPlayerMapCount(const CcSim *sim);
 

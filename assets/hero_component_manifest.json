@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "library_version": "0.9.0",
+  "library_version": "0.11.0",
   "art_direction": "silhouette_first_pixel_wayfarer",
   "source": "blender/crownless_hero_components.blend",
   "coordinate_system": {

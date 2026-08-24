@@ -8,6 +8,10 @@
 
 #define CC_SQLITE_APPLICATION_ID 1128481362
 
+static bool Prepare(sqlite3 *database, const char *sql,
+                    sqlite3_stmt **statement,
+                    char *error, size_t error_capacity);
+
 static void SetError(char *error, size_t capacity, const char *message)
 {
     if (error == NULL || capacity == 0U) return;
@@ -33,6 +37,77 @@ static bool Execute(sqlite3 *database, const char *sql,
     }
     sqlite3_free(sqlite_error);
     return false;
+}
+
+static bool ColumnExists(sqlite3 *database, const char *table,
+                         const char *column, bool *exists,
+                         char *error, size_t error_capacity)
+{
+    char sql[96];
+    (void)snprintf(sql, sizeof(sql), "PRAGMA table_info(%s);", table);
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database, sql, &statement, error, error_capacity)) return false;
+    *exists = false;
+    while (sqlite3_step(statement) == SQLITE_ROW) {
+        const unsigned char *name = sqlite3_column_text(statement, 1);
+        if (name != NULL && strcmp((const char *)name, column) == 0) {
+            *exists = true;
+            break;
+        }
+    }
+    sqlite3_finalize(statement);
+    return true;
+}
+
+static bool EnsureColumn(sqlite3 *database, const char *table,
+                         const char *column, const char *alter_sql,
+                         char *error, size_t error_capacity)
+{
+    bool exists = false;
+    return ColumnExists(database, table, column, &exists,
+                        error, error_capacity) &&
+        (exists || Execute(database, alter_sql, error, error_capacity));
+}
+
+static bool EnsureRealmColumns(sqlite3 *database,
+                               char *error, size_t error_capacity)
+{
+    return EnsureColumn(database, "settlement", "size",
+            "ALTER TABLE settlement ADD COLUMN size INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "settlement", "service_mask",
+            "ALTER TABLE settlement ADD COLUMN service_mask INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "settlement", "service_project",
+            "ALTER TABLE settlement ADD COLUMN service_project INTEGER NOT NULL DEFAULT -1;",
+            error, error_capacity) &&
+        EnsureColumn(database, "settlement", "service_project_days",
+            "ALTER TABLE settlement ADD COLUMN service_project_days INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "bandit_group", "camp_size",
+            "ALTER TABLE bandit_group ADD COLUMN camp_size INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "bandit_group", "service_mask",
+            "ALTER TABLE bandit_group ADD COLUMN service_mask INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "bandit_group", "raid_phase",
+            "ALTER TABLE bandit_group ADD COLUMN raid_phase INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "bandit_group", "raid_target_id",
+            "ALTER TABLE bandit_group ADD COLUMN raid_target_id INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "bandit_group", "raid_good",
+            "ALTER TABLE bandit_group ADD COLUMN raid_good INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "bandit_group", "raid_quantity",
+            "ALTER TABLE bandit_group ADD COLUMN raid_quantity INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "bandit_group", "raid_days_remaining",
+            "ALTER TABLE bandit_group ADD COLUMN raid_days_remaining INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "bandit_group", "raids_completed",
+            "ALTER TABLE bandit_group ADD COLUMN raids_completed INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity);
 }
 
 static bool Prepare(sqlite3 *database, const char *sql, sqlite3_stmt **statement,
@@ -97,7 +172,7 @@ static bool OpenDatabase(const char *path, sqlite3 **database,
         "PRAGMA journal_mode=DELETE;"
         "PRAGMA synchronous=FULL;"
         "PRAGMA application_id=1128481362;"
-        "PRAGMA user_version=4;",
+        "PRAGMA user_version=5;",
         error, error_capacity)) {
         sqlite3_close(*database);
         *database = NULL;
@@ -123,16 +198,6 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL UNIQUE, name TEXT NOT NULL,"
         " color_r INTEGER NOT NULL, color_g INTEGER NOT NULL, color_b INTEGER NOT NULL,"
         " treasury INTEGER NOT NULL, legitimacy INTEGER NOT NULL);"
-        "CREATE TABLE IF NOT EXISTS settlement ("
-        " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL UNIQUE, kingdom_id INTEGER NOT NULL,"
-        " name TEXT NOT NULL, function INTEGER NOT NULL, map_x INTEGER NOT NULL,"
-        " map_y INTEGER NOT NULL, population INTEGER NOT NULL, security INTEGER NOT NULL,"
-        " prosperity INTEGER NOT NULL, hunger INTEGER NOT NULL, last_shortage INTEGER NOT NULL,"
-        " food_stock INTEGER NOT NULL, material_stock INTEGER NOT NULL, tools_stock INTEGER NOT NULL,"
-        " food_target INTEGER NOT NULL, material_target INTEGER NOT NULL, tools_target INTEGER NOT NULL,"
-        " food_production INTEGER NOT NULL, material_production INTEGER NOT NULL, tools_production INTEGER NOT NULL,"
-        " food_consumption INTEGER NOT NULL, material_consumption INTEGER NOT NULL, tools_consumption INTEGER NOT NULL,"
-        " food_price INTEGER NOT NULL, material_price INTEGER NOT NULL, tools_price INTEGER NOT NULL);"
         "CREATE TABLE IF NOT EXISTS route ("
         " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL UNIQUE, from_id INTEGER NOT NULL,"
         " to_id INTEGER NOT NULL, travel_days INTEGER NOT NULL, capacity INTEGER NOT NULL,"
@@ -146,10 +211,6 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " destination_id INTEGER NOT NULL, route_id INTEGER NOT NULL, good INTEGER NOT NULL,"
         " quantity INTEGER NOT NULL, departure_day INTEGER NOT NULL, arrival_day INTEGER NOT NULL,"
         " status INTEGER NOT NULL);"
-        "CREATE TABLE IF NOT EXISTS bandit_group ("
-        " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL UNIQUE, route_id INTEGER NOT NULL,"
-        " name TEXT NOT NULL, members INTEGER NOT NULL, supplies INTEGER NOT NULL,"
-        " influence INTEGER NOT NULL, last_level INTEGER NOT NULL);"
         "CREATE TABLE IF NOT EXISTS monster_population ("
         " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL UNIQUE, dungeon_id INTEGER NOT NULL,"
         " name TEXT NOT NULL, population INTEGER NOT NULL, pressure INTEGER NOT NULL,"
@@ -167,6 +228,27 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " food_cargo INTEGER NOT NULL, material_cargo INTEGER NOT NULL, tools_cargo INTEGER NOT NULL,"
         " cargo_capacity INTEGER NOT NULL, passenger_capacity INTEGER NOT NULL,"
         " reputation INTEGER NOT NULL);";
+    const char *realm_schema =
+        "CREATE TABLE IF NOT EXISTS settlement ("
+        " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL UNIQUE, kingdom_id INTEGER NOT NULL,"
+        " name TEXT NOT NULL, function INTEGER NOT NULL, map_x INTEGER NOT NULL,"
+        " map_y INTEGER NOT NULL, population INTEGER NOT NULL, security INTEGER NOT NULL,"
+        " prosperity INTEGER NOT NULL, hunger INTEGER NOT NULL, last_shortage INTEGER NOT NULL,"
+        " food_stock INTEGER NOT NULL, material_stock INTEGER NOT NULL, tools_stock INTEGER NOT NULL,"
+        " food_target INTEGER NOT NULL, material_target INTEGER NOT NULL, tools_target INTEGER NOT NULL,"
+        " food_production INTEGER NOT NULL, material_production INTEGER NOT NULL, tools_production INTEGER NOT NULL,"
+        " food_consumption INTEGER NOT NULL, material_consumption INTEGER NOT NULL, tools_consumption INTEGER NOT NULL,"
+        " food_price INTEGER NOT NULL, material_price INTEGER NOT NULL, tools_price INTEGER NOT NULL,"
+        " size INTEGER NOT NULL, service_mask INTEGER NOT NULL,"
+        " service_project INTEGER NOT NULL, service_project_days INTEGER NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS bandit_group ("
+        " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL UNIQUE, route_id INTEGER NOT NULL,"
+        " name TEXT NOT NULL, members INTEGER NOT NULL, supplies INTEGER NOT NULL,"
+        " influence INTEGER NOT NULL, last_level INTEGER NOT NULL,"
+        " camp_size INTEGER NOT NULL, service_mask INTEGER NOT NULL,"
+        " raid_phase INTEGER NOT NULL, raid_target_id INTEGER NOT NULL,"
+        " raid_good INTEGER NOT NULL, raid_quantity INTEGER NOT NULL,"
+        " raid_days_remaining INTEGER NOT NULL, raids_completed INTEGER NOT NULL);";
     const char *situation_schema =
         "CREATE TABLE IF NOT EXISTS situation ("
         " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL UNIQUE, kind INTEGER NOT NULL,"
@@ -213,6 +295,7 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " parent_event_id INTEGER NOT NULL, outcome INTEGER NOT NULL,"
         " due_day INTEGER NOT NULL, character_name TEXT NOT NULL);";
     return Execute(database, schema, error, error_capacity) &&
+           Execute(database, realm_schema, error, error_capacity) &&
            Execute(database, situation_schema, error, error_capacity) &&
            Execute(database, map_schema, error, error_capacity) &&
            Execute(database, commitment_schema, error, error_capacity);
@@ -274,7 +357,7 @@ static bool SaveSettlements(sqlite3 *database, const CcSim *sim,
                             char *error, size_t error_capacity)
 {
     sqlite3_stmt *statement = NULL;
-    const char *sql = "INSERT INTO settlement VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);";
+    const char *sql = "INSERT INTO settlement VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);";
     if (!Prepare(database, sql, &statement, error, error_capacity)) return false;
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         const CcSettlement *s = &sim->settlements[i];
@@ -290,6 +373,10 @@ static bool SaveSettlements(sqlite3 *database, const CcSim *sim,
         for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) BindInt(statement, column++, s->production[good]);
         for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) BindInt(statement, column++, s->consumption[good]);
         for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) BindInt(statement, column++, s->price[good]);
+        BindInt(statement, column++, (int32_t)s->size);
+        BindInt(statement, column++, (int32_t)s->service_mask);
+        BindInt(statement, column++, (int32_t)s->service_project);
+        BindInt(statement, column++, s->service_project_days);
         if (!StepDone(database, statement, error, error_capacity) ||
             !ResetStatement(database, statement, error, error_capacity)) {
             sqlite3_finalize(statement); return false;
@@ -405,7 +492,7 @@ static bool SaveThreats(sqlite3 *database, const CcSim *sim,
                         char *error, size_t error_capacity)
 {
     sqlite3_stmt *statement = NULL;
-    if (!Prepare(database, "INSERT INTO bandit_group VALUES(?,?,?,?,?,?,?,?);",
+    if (!Prepare(database, "INSERT INTO bandit_group VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
                  &statement, error, error_capacity)) return false;
     for (int32_t i = 0; i < sim->bandit_count; ++i) {
         const CcBanditGroup *b = &sim->bandits[i];
@@ -413,6 +500,14 @@ static bool SaveThreats(sqlite3 *database, const CcSim *sim,
         BindText(statement, 4, b->name); BindInt(statement, 5, b->members);
         BindInt(statement, 6, b->supplies); BindInt(statement, 7, b->influence);
         BindInt(statement, 8, sim->last_bandit_level[i]);
+        BindInt(statement, 9, (int32_t)b->camp_size);
+        BindInt(statement, 10, (int32_t)b->service_mask);
+        BindInt(statement, 11, (int32_t)b->raid_phase);
+        BindId(statement, 12, b->raid_target_id);
+        BindInt(statement, 13, (int32_t)b->raid_good);
+        BindInt(statement, 14, b->raid_quantity);
+        BindInt(statement, 15, b->raid_days_remaining);
+        BindInt(statement, 16, b->raids_completed);
         if (!StepDone(database, statement, error, error_capacity) ||
             !ResetStatement(database, statement, error, error_capacity)) {
             sqlite3_finalize(statement); return false;
@@ -641,6 +736,7 @@ bool CcSaveWrite(const char *path, const CcSim *sim,
     sqlite3 *database = NULL;
     if (!OpenDatabase(path, &database, error, error_capacity)) return false;
     bool ok = CreateSchema(database, error, error_capacity) &&
+        EnsureRealmColumns(database, error, error_capacity) &&
         Execute(database, "BEGIN IMMEDIATE;", error, error_capacity) &&
         Execute(database,
             "DELETE FROM meta; DELETE FROM kingdom; DELETE FROM settlement;"
@@ -763,6 +859,10 @@ static bool ReadSettlements(sqlite3 *database, CcSim *sim,
         for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) s->production[good] = sqlite3_column_int(statement, column++);
         for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) s->consumption[good] = sqlite3_column_int(statement, column++);
         for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) s->price[good] = sqlite3_column_int(statement, column++);
+        s->size = (CcSettlementSize)sqlite3_column_int(statement, column++);
+        s->service_mask = (uint32_t)sqlite3_column_int64(statement, column++);
+        s->service_project = (CcServiceKind)sqlite3_column_int(statement, column++);
+        s->service_project_days = sqlite3_column_int(statement, column++);
         rows += 1;
     }
     sqlite3_finalize(statement);
@@ -910,6 +1010,14 @@ static bool ReadThreats(sqlite3 *database, CcSim *sim,
         (void)snprintf(b->name, sizeof(b->name), "%s", sqlite3_column_text(statement, 3));
         b->members = sqlite3_column_int(statement, 4); b->supplies = sqlite3_column_int(statement, 5);
         b->influence = sqlite3_column_int(statement, 6); sim->last_bandit_level[slot] = sqlite3_column_int(statement, 7);
+        b->camp_size = (CcBanditCampSize)sqlite3_column_int(statement, 8);
+        b->service_mask = (uint32_t)sqlite3_column_int64(statement, 9);
+        b->raid_phase = (CcBanditRaidPhase)sqlite3_column_int(statement, 10);
+        b->raid_target_id = (CcId)sqlite3_column_int64(statement, 11);
+        b->raid_good = (CcGood)sqlite3_column_int(statement, 12);
+        b->raid_quantity = sqlite3_column_int(statement, 13);
+        b->raid_days_remaining = sqlite3_column_int(statement, 14);
+        b->raids_completed = sqlite3_column_int(statement, 15);
         rows += 1;
     }
     sqlite3_finalize(statement);
@@ -1211,44 +1319,120 @@ static bool ReadJourneyState(sqlite3 *database, CcSim *sim,
 static bool UpgradeLegacyRuntime(CcSim *sim,
                                  char *error, size_t error_capacity)
 {
-    if (sim->schema_version != 3U) return true;
-    sim->schema_version = CC_SIM_SCHEMA_VERSION;
-    sim->clock = (CcWorldClock){
-        .game_minutes_per_second = CC_IDLE_GAME_MINUTES_PER_SECOND
-    };
-    sim->carriage = (CcCarriageState){
-        .mode = CC_CARRIAGE_PARKED,
-        .location_id = sim->player.location_id,
-        .condition = 100
-    };
-    if (!sim->journey.active) return true;
-    const CcRoute *route = CcSimRoute(sim, sim->journey.route_id);
-    if (route == NULL) {
-        SetError(error, error_capacity,
-                 "Legacy journey route is no longer valid.");
-        return false;
+    uint32_t legacy_version = sim->schema_version;
+    if (legacy_version != 3U && legacy_version != 4U) return true;
+    if (legacy_version == 3U) {
+        sim->clock = (CcWorldClock){
+            .game_minutes_per_second = CC_IDLE_GAME_MINUTES_PER_SECOND
+        };
+        sim->carriage = (CcCarriageState){
+            .mode = CC_CARRIAGE_PARKED,
+            .location_id = sim->player.location_id,
+            .condition = 100
+        };
+        if (sim->journey.active) {
+            const CcRoute *route = CcSimRoute(sim, sim->journey.route_id);
+            if (route == NULL) {
+                SetError(error, error_capacity,
+                         "Legacy journey route is no longer valid.");
+                return false;
+            }
+            int32_t fare = route->travel_days +
+                (route->smuggler_route ? 3 : 0);
+            if (sim->player.coins >= fare) sim->player.coins -= fare;
+            int32_t total_subticks = route->travel_days * CC_WORLD_DAY_SUBTICKS;
+            sim->journey.phase = CC_JOURNEY_PHASE_BLOCKED;
+            sim->journey.departure_day = sim->current_day;
+            sim->journey.total_subticks = total_subticks;
+            sim->journey.encounter_subticks = 0;
+            sim->journey.elapsed_subticks = 0;
+            sim->journey.fare_reserved = fare;
+            sim->journey.encounter_triggered = true;
+            const CcEvent *recent = CcSimRecentEvent(sim, 0);
+            sim->journey.parent_event_id = recent != NULL ? recent->id : 0U;
+            sim->clock.game_minutes_per_second = 0;
+            sim->carriage = (CcCarriageState){
+                .mode = CC_CARRIAGE_STOPPED,
+                .route_id = sim->journey.route_id,
+                .origin_id = sim->journey.origin_id,
+                .destination_id = sim->journey.destination_id,
+                .condition = 100
+            };
+        }
     }
-    int32_t fare = route->travel_days +
-        (route->smuggler_route ? 3 : 0);
-    if (sim->player.coins >= fare) sim->player.coins -= fare;
-    int32_t total_subticks = route->travel_days * CC_WORLD_DAY_SUBTICKS;
-    sim->journey.phase = CC_JOURNEY_PHASE_BLOCKED;
-    sim->journey.departure_day = sim->current_day;
-    sim->journey.total_subticks = total_subticks;
-    sim->journey.encounter_subticks = 0;
-    sim->journey.elapsed_subticks = 0;
-    sim->journey.fare_reserved = fare;
-    sim->journey.encounter_triggered = true;
-    const CcEvent *recent = CcSimRecentEvent(sim, 0);
-    sim->journey.parent_event_id = recent != NULL ? recent->id : 0U;
-    sim->clock.game_minutes_per_second = 0;
-    sim->carriage = (CcCarriageState){
-        .mode = CC_CARRIAGE_STOPPED,
-        .route_id = sim->journey.route_id,
-        .origin_id = sim->journey.origin_id,
-        .destination_id = sim->journey.destination_id,
-        .condition = 100
-    };
+
+#define LEGACY_SERVICE(service) (UINT32_C(1) << (uint32_t)(service))
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        CcSettlement *settlement = &sim->settlements[i];
+        if (settlement->service_mask != 0U) continue;
+        settlement->service_project = CC_SERVICE_NONE;
+        settlement->service_project_days = 0;
+        settlement->size = settlement->function == CC_SETTLEMENT_CAPITAL ?
+            CC_SETTLEMENT_CAPITAL_SIZE :
+            (settlement->function == CC_SETTLEMENT_MARKET ||
+             settlement->function == CC_SETTLEMENT_FORTRESS ||
+             settlement->function == CC_SETTLEMENT_MINING) ?
+                CC_SETTLEMENT_TOWN : CC_SETTLEMENT_VILLAGE;
+        settlement->service_mask = LEGACY_SERVICE(CC_SERVICE_INN);
+        switch (settlement->function) {
+            case CC_SETTLEMENT_FARMING:
+                settlement->service_mask |= LEGACY_SERVICE(CC_SERVICE_FARM) |
+                    LEGACY_SERVICE(CC_SERVICE_GRANARY) |
+                    LEGACY_SERVICE(CC_SERVICE_STABLE);
+                break;
+            case CC_SETTLEMENT_MINING:
+                settlement->service_mask |= LEGACY_SERVICE(CC_SERVICE_MINE) |
+                    LEGACY_SERVICE(CC_SERVICE_SMITHY) |
+                    LEGACY_SERVICE(CC_SERVICE_MARKET) |
+                    LEGACY_SERVICE(CC_SERVICE_SHRINE);
+                break;
+            case CC_SETTLEMENT_MARKET:
+                settlement->service_mask |= LEGACY_SERVICE(CC_SERVICE_MARKET) |
+                    LEGACY_SERVICE(CC_SERVICE_SMITHY) |
+                    LEGACY_SERVICE(CC_SERVICE_STABLE) |
+                    LEGACY_SERVICE(CC_SERVICE_CARTOGRAPHER);
+                break;
+            case CC_SETTLEMENT_FORTRESS:
+                settlement->service_mask |= LEGACY_SERVICE(CC_SERVICE_BARRACKS) |
+                    LEGACY_SERVICE(CC_SERVICE_SMITHY) |
+                    LEGACY_SERVICE(CC_SERVICE_HEALER) |
+                    LEGACY_SERVICE(CC_SERVICE_GRANARY);
+                break;
+            case CC_SETTLEMENT_CAPITAL:
+                settlement->service_mask |= LEGACY_SERVICE(CC_SERVICE_MARKET) |
+                    LEGACY_SERVICE(CC_SERVICE_SMITHY) |
+                    LEGACY_SERVICE(CC_SERVICE_HEALER) |
+                    LEGACY_SERVICE(CC_SERVICE_STABLE) |
+                    LEGACY_SERVICE(CC_SERVICE_SHRINE) |
+                    LEGACY_SERVICE(CC_SERVICE_BARRACKS) |
+                    LEGACY_SERVICE(CC_SERVICE_CARTOGRAPHER) |
+                    LEGACY_SERVICE(CC_SERVICE_GUILDHALL);
+                break;
+            case CC_SETTLEMENT_DUNGEON_TOWN:
+                settlement->service_mask |= LEGACY_SERVICE(CC_SERVICE_HEALER) |
+                    LEGACY_SERVICE(CC_SERVICE_BLACK_MARKET) |
+                    LEGACY_SERVICE(CC_SERVICE_DUNGEON_WARD);
+                break;
+        }
+    }
+    for (int32_t i = 0; i < sim->bandit_count; ++i) {
+        CcBanditGroup *bandits = &sim->bandits[i];
+        if (bandits->service_mask == 0U) {
+            bandits->camp_size = bandits->influence >= 60 ?
+                CC_BANDIT_WAR_CAMP : bandits->influence >= 35 ?
+                CC_BANDIT_CAMP : CC_BANDIT_HIDEOUT;
+            bandits->service_mask = LEGACY_SERVICE(CC_SERVICE_BLACK_MARKET) |
+                                    LEGACY_SERVICE(CC_SERVICE_STABLE);
+        }
+        bandits->raid_phase = CC_BANDIT_RAID_IDLE;
+        bandits->raid_target_id = 0U;
+        bandits->raid_good = CC_GOOD_FOOD;
+        bandits->raid_quantity = 0;
+        bandits->raid_days_remaining = 0;
+    }
+#undef LEGACY_SERVICE
+    sim->schema_version = CC_SIM_SCHEMA_VERSION;
+    sim->generator_version = CC_GENERATOR_VERSION;
     return true;
 }
 
@@ -1264,6 +1448,7 @@ bool CcSaveRead(const char *path, CcSim *sim,
     *sim = (CcSim){0};
     uint64_t expected_hash = 0U;
     bool ok = CreateSchema(database, error, error_capacity) &&
+              EnsureRealmColumns(database, error, error_capacity) &&
               ReadMeta(database, sim, &expected_hash, error, error_capacity) &&
               ReadKingdoms(database, sim, error, error_capacity) &&
               ReadSettlements(database, sim, error, error_capacity) &&

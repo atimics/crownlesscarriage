@@ -15,9 +15,24 @@ static CcBiomechVec3 AddVec3(CcBiomechVec3 a, CcBiomechVec3 b)
     return (CcBiomechVec3){a.x + b.x, a.y + b.y, a.z + b.z};
 }
 
+static CcBiomechVec3 SubtractVec3(CcBiomechVec3 a, CcBiomechVec3 b)
+{
+    return (CcBiomechVec3){a.x - b.x, a.y - b.y, a.z - b.z};
+}
+
 static CcBiomechVec3 ScaleVec3(CcBiomechVec3 value, float scale)
 {
     return (CcBiomechVec3){value.x * scale, value.y * scale, value.z * scale};
+}
+
+static float DotVec3(CcBiomechVec3 a, CcBiomechVec3 b)
+{
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
+static float LengthVec3(CcBiomechVec3 value)
+{
+    return sqrtf(DotVec3(value, value));
 }
 
 static void CopyName(char destination[CC_BIOMECH_NAME_LENGTH], const char *name)
@@ -317,7 +332,7 @@ void CcBiomechRagdollInit(CcBiomechRagdoll *ragdoll)
     ragdoll->damping = 0.004f;
     ragdoll->restitution = 0.015f;
     ragdoll->collision_friction = 0.30f;
-    ragdoll->contact_damping = 0.42f;
+    ragdoll->contact_damping = 0.48f;
     ragdoll->resting_contact_damping = 0.040f;
 }
 
@@ -367,6 +382,122 @@ int32_t CcBiomechRagdollAddConstraint(CcBiomechRagdoll *ragdoll,
     return index;
 }
 
+int32_t CcBiomechRagdollAddAngleConstraint(
+    CcBiomechRagdoll *ragdoll, int32_t particle_a, int32_t joint_particle,
+    int32_t particle_b, float minimum_angle, float maximum_angle,
+    float compliance)
+{
+    if (ragdoll == NULL ||
+        ragdoll->angle_constraint_count >=
+            CC_BIOMECH_MAX_RAGDOLL_ANGLE_CONSTRAINTS ||
+        particle_a < 0 || particle_a >= ragdoll->particle_count ||
+        joint_particle < 0 || joint_particle >= ragdoll->particle_count ||
+        particle_b < 0 || particle_b >= ragdoll->particle_count ||
+        particle_a == joint_particle || joint_particle == particle_b ||
+        particle_a == particle_b || minimum_angle < 0.0f ||
+        maximum_angle > 3.14159265358979323846f ||
+        minimum_angle >= maximum_angle || compliance < 0.0f) {
+        return -1;
+    }
+    int32_t index = ragdoll->angle_constraint_count++;
+    CcBiomechRagdollAngleConstraint *constraint =
+        &ragdoll->angle_constraints[index];
+    *constraint = (CcBiomechRagdollAngleConstraint){
+        .particle_a = particle_a,
+        .joint_particle = joint_particle,
+        .particle_b = particle_b,
+        .minimum_angle = minimum_angle,
+        .maximum_angle = maximum_angle,
+        .compliance = compliance,
+    };
+    return index;
+}
+
+int32_t CcBiomechRagdollAddHingeConstraint(
+    CcBiomechRagdoll *ragdoll, int32_t particle_a, int32_t joint_particle,
+    int32_t particle_b, int32_t axis_particle_a, int32_t axis_particle_b,
+    float minimum_angle, float maximum_angle, float maximum_splay_angle,
+    float compliance)
+{
+    if (ragdoll == NULL ||
+        ragdoll->hinge_constraint_count >=
+            CC_BIOMECH_MAX_RAGDOLL_HINGE_CONSTRAINTS ||
+        particle_a < 0 || particle_a >= ragdoll->particle_count ||
+        joint_particle < 0 || joint_particle >= ragdoll->particle_count ||
+        particle_b < 0 || particle_b >= ragdoll->particle_count ||
+        axis_particle_a < 0 || axis_particle_a >= ragdoll->particle_count ||
+        axis_particle_b < 0 || axis_particle_b >= ragdoll->particle_count ||
+        particle_a == joint_particle || joint_particle == particle_b ||
+        particle_a == particle_b || axis_particle_a == axis_particle_b ||
+        minimum_angle < 0.0f ||
+        maximum_angle > 3.14159265358979323846f ||
+        minimum_angle >= maximum_angle || maximum_splay_angle <= 0.0f ||
+        maximum_splay_angle >= 1.57079632679489661923f ||
+        compliance < 0.0f) {
+        return -1;
+    }
+    CcBiomechVec3 axis = SubtractVec3(
+        ragdoll->particles[axis_particle_b].position,
+        ragdoll->particles[axis_particle_a].position);
+    float axis_length = LengthVec3(axis);
+    if (axis_length <= 0.00001f) return -1;
+    axis = ScaleVec3(axis, 1.0f / axis_length);
+    CcBiomechVec3 child = SubtractVec3(
+        ragdoll->particles[particle_b].position,
+        ragdoll->particles[joint_particle].position);
+    int32_t index = ragdoll->hinge_constraint_count++;
+    ragdoll->hinge_constraints[index] = (CcBiomechRagdollHingeConstraint){
+        .particle_a = particle_a,
+        .joint_particle = joint_particle,
+        .particle_b = particle_b,
+        .axis_particle_a = axis_particle_a,
+        .axis_particle_b = axis_particle_b,
+        .minimum_angle = minimum_angle,
+        .maximum_angle = maximum_angle,
+        .rest_lateral_offset = DotVec3(child, axis),
+        .maximum_splay_angle = maximum_splay_angle,
+        .passive_splay_angle = maximum_splay_angle,
+        .compliance = compliance,
+    };
+    return index;
+}
+
+int32_t CcBiomechRagdollAddCollisionSegment(
+    CcBiomechRagdoll *ragdoll, int32_t particle_a, int32_t particle_b,
+    float radius)
+{
+    if (ragdoll == NULL ||
+        ragdoll->collision_segment_count >=
+            CC_BIOMECH_MAX_RAGDOLL_COLLISION_SEGMENTS ||
+        particle_a < 0 || particle_a >= ragdoll->particle_count ||
+        particle_b < 0 || particle_b >= ragdoll->particle_count ||
+        particle_a == particle_b || radius <= 0.0f) {
+        return -1;
+    }
+    int32_t index = ragdoll->collision_segment_count++;
+    ragdoll->collision_segments[index] =
+        (CcBiomechRagdollCollisionSegment){particle_a, particle_b, radius};
+    return index;
+}
+
+int32_t CcBiomechRagdollAddExclusion(CcBiomechRagdoll *ragdoll,
+                                     int32_t particle_a,
+                                     int32_t particle_b,
+                                     float minimum_distance)
+{
+    if (ragdoll == NULL ||
+        ragdoll->exclusion_count >= CC_BIOMECH_MAX_RAGDOLL_EXCLUSIONS ||
+        particle_a < 0 || particle_a >= ragdoll->particle_count ||
+        particle_b < 0 || particle_b >= ragdoll->particle_count ||
+        particle_a == particle_b || minimum_distance <= 0.0f) {
+        return -1;
+    }
+    int32_t index = ragdoll->exclusion_count++;
+    ragdoll->exclusions[index] =
+        (CcBiomechRagdollExclusion){particle_a, particle_b, minimum_distance};
+    return index;
+}
+
 void CcBiomechRagdollSetVelocity(CcBiomechRagdoll *ragdoll,
                                  CcBiomechVec3 velocity, float delta_time)
 {
@@ -408,6 +539,133 @@ static void SolveRagdollConstraint(CcBiomechRagdoll *ragdoll,
                           ScaleVec3(correction, -b->inverse_mass));
 }
 
+static void SolveRagdollAngleConstraint(
+    CcBiomechRagdoll *ragdoll,
+    const CcBiomechRagdollAngleConstraint *constraint, float delta_time)
+{
+    CcBiomechRagdollParticle *a =
+        &ragdoll->particles[constraint->particle_a];
+    CcBiomechRagdollParticle *joint =
+        &ragdoll->particles[constraint->joint_particle];
+    CcBiomechRagdollParticle *b =
+        &ragdoll->particles[constraint->particle_b];
+    CcBiomechVec3 arm_a = SubtractVec3(a->position, joint->position);
+    CcBiomechVec3 arm_b = SubtractVec3(b->position, joint->position);
+    float length_a = LengthVec3(arm_a);
+    float length_b = LengthVec3(arm_b);
+    if (length_a <= 0.00001f || length_b <= 0.00001f) return;
+    CcBiomechVec3 normal_a = ScaleVec3(arm_a, 1.0f / length_a);
+    CcBiomechVec3 normal_b = ScaleVec3(arm_b, 1.0f / length_b);
+    float cosine = Clamp(DotVec3(normal_a, normal_b), -1.0f, 1.0f);
+    float angle = acosf(cosine);
+    float target = Clamp(angle, constraint->minimum_angle,
+                         constraint->maximum_angle);
+    float error = angle - target;
+    if (fabsf(error) <= 0.00001f) return;
+    float sine = sqrtf(fmaxf(1.0f - cosine * cosine, 0.0f));
+    if (sine <= 0.0001f) return;
+
+    CcBiomechVec3 gradient_a = ScaleVec3(
+        SubtractVec3(ScaleVec3(normal_a, cosine), normal_b),
+        1.0f / (length_a * sine));
+    CcBiomechVec3 gradient_b = ScaleVec3(
+        SubtractVec3(ScaleVec3(normal_b, cosine), normal_a),
+        1.0f / (length_b * sine));
+    CcBiomechVec3 gradient_joint =
+        ScaleVec3(AddVec3(gradient_a, gradient_b), -1.0f);
+    float weighted_gradient =
+        a->inverse_mass * DotVec3(gradient_a, gradient_a) +
+        joint->inverse_mass * DotVec3(gradient_joint, gradient_joint) +
+        b->inverse_mass * DotVec3(gradient_b, gradient_b);
+    float softness = constraint->compliance /
+        fmaxf(delta_time * delta_time, 0.000001f);
+    if (weighted_gradient + softness <= 0.000001f) return;
+    float lambda = -error / (weighted_gradient + softness);
+    a->position = AddVec3(
+        a->position, ScaleVec3(gradient_a, lambda * a->inverse_mass));
+    joint->position = AddVec3(
+        joint->position,
+        ScaleVec3(gradient_joint, lambda * joint->inverse_mass));
+    b->position = AddVec3(
+        b->position, ScaleVec3(gradient_b, lambda * b->inverse_mass));
+}
+
+static void SolveRagdollHingeConstraint(
+    CcBiomechRagdoll *ragdoll,
+    const CcBiomechRagdollHingeConstraint *constraint, float delta_time)
+{
+    CcBiomechRagdollAngleConstraint bend = {
+        .particle_a = constraint->particle_a,
+        .joint_particle = constraint->joint_particle,
+        .particle_b = constraint->particle_b,
+        .minimum_angle = constraint->minimum_angle,
+        .maximum_angle = constraint->maximum_angle,
+        .compliance = constraint->compliance,
+    };
+    SolveRagdollAngleConstraint(ragdoll, &bend, delta_time);
+
+    CcBiomechRagdollParticle *joint =
+        &ragdoll->particles[constraint->joint_particle];
+    CcBiomechRagdollParticle *child =
+        &ragdoll->particles[constraint->particle_b];
+    CcBiomechVec3 axis = SubtractVec3(
+        ragdoll->particles[constraint->axis_particle_b].position,
+        ragdoll->particles[constraint->axis_particle_a].position);
+    float axis_length = LengthVec3(axis);
+    CcBiomechVec3 child_arm = SubtractVec3(child->position, joint->position);
+    float child_length = LengthVec3(child_arm);
+    float weight = joint->inverse_mass + child->inverse_mass;
+    if (axis_length <= 0.00001f || child_length <= 0.00001f ||
+        weight <= 0.0f) {
+        return;
+    }
+    axis = ScaleVec3(axis, 1.0f / axis_length);
+    float lateral = DotVec3(child_arm, axis);
+    float allowed = child_length * sinf(constraint->maximum_splay_angle);
+    float target = Clamp(
+        lateral,
+        constraint->rest_lateral_offset - allowed,
+        constraint->rest_lateral_offset + allowed);
+    float error = lateral - target;
+    if (fabsf(error) <= 0.00001f) return;
+    float softness = constraint->compliance /
+        fmaxf(delta_time * delta_time, 0.000001f);
+    float lambda = -error / (weight + softness);
+    CcBiomechVec3 child_correction =
+        ScaleVec3(axis, lambda * child->inverse_mass);
+    CcBiomechVec3 joint_correction =
+        ScaleVec3(axis, -lambda * joint->inverse_mass);
+    child->position = AddVec3(child->position, child_correction);
+    joint->position = AddVec3(joint->position, joint_correction);
+}
+
+static void SolveRagdollExclusions(CcBiomechRagdoll *ragdoll)
+{
+    for (int32_t exclusion_index = 0;
+         exclusion_index < ragdoll->exclusion_count; ++exclusion_index) {
+        const CcBiomechRagdollExclusion *exclusion =
+            &ragdoll->exclusions[exclusion_index];
+        CcBiomechRagdollParticle *a =
+            &ragdoll->particles[exclusion->particle_a];
+        CcBiomechRagdollParticle *b =
+            &ragdoll->particles[exclusion->particle_b];
+        CcBiomechVec3 delta = SubtractVec3(b->position, a->position);
+        float distance = LengthVec3(delta);
+        float total_weight = a->inverse_mass + b->inverse_mass;
+        if (distance >= exclusion->minimum_distance ||
+            distance <= 0.00001f || total_weight <= 0.0f) {
+            continue;
+        }
+        CcBiomechVec3 correction = ScaleVec3(
+            delta, (exclusion->minimum_distance - distance) /
+                       (distance * total_weight));
+        a->position = AddVec3(
+            a->position, ScaleVec3(correction, -a->inverse_mass));
+        b->position = AddVec3(
+            b->position, ScaleVec3(correction, b->inverse_mass));
+    }
+}
+
 static void CollideRagdollParticles(CcBiomechRagdoll *ragdoll,
                                     CcBiomechRagdollCollisionProbe probe,
                                     void *context)
@@ -431,11 +689,64 @@ static void CollideRagdollParticles(CcBiomechRagdoll *ragdoll,
     }
 }
 
-static void DampRagdollImpact(CcBiomechRagdoll *ragdoll)
+static void CollideRagdollSegments(CcBiomechRagdoll *ragdoll,
+                                   CcBiomechRagdollCollisionProbe probe,
+                                   void *context)
+{
+    if (probe == NULL) return;
+    static const float samples[] = {0.25f, 0.50f, 0.75f};
+    for (int32_t segment_index = 0;
+         segment_index < ragdoll->collision_segment_count; ++segment_index) {
+        const CcBiomechRagdollCollisionSegment *segment =
+            &ragdoll->collision_segments[segment_index];
+        CcBiomechRagdollParticle *a =
+            &ragdoll->particles[segment->particle_a];
+        CcBiomechRagdollParticle *b =
+            &ragdoll->particles[segment->particle_b];
+        for (int32_t sample_index = 0;
+             sample_index < (int32_t)(sizeof(samples) / sizeof(samples[0]));
+             ++sample_index) {
+            float amount = samples[sample_index];
+            CcBiomechVec3 position = AddVec3(
+                ScaleVec3(a->position, 1.0f - amount),
+                ScaleVec3(b->position, amount));
+            CcBiomechVec3 previous = AddVec3(
+                ScaleVec3(a->previous_position, 1.0f - amount),
+                ScaleVec3(b->previous_position, amount));
+            CcBiomechVec3 corrected = position;
+            CcBiomechVec3 normal = {0.0f, 1.0f, 0.0f};
+            if (!probe(context, previous, position, segment->radius,
+                       &corrected, &normal)) {
+                continue;
+            }
+            CcBiomechVec3 correction = SubtractVec3(corrected, position);
+            float weight_a = a->inverse_mass * (1.0f - amount);
+            float weight_b = b->inverse_mass * amount;
+            float total_weight = weight_a * (1.0f - amount) +
+                                 weight_b * amount;
+            if (total_weight <= 0.00001f) continue;
+            a->position = AddVec3(
+                a->position,
+                ScaleVec3(correction,
+                          weight_a * (1.0f - amount) / total_weight));
+            b->position = AddVec3(
+                b->position,
+                ScaleVec3(correction, weight_b * amount / total_weight));
+            a->collided = true;
+            b->collided = true;
+            a->contact_normal = normal;
+            b->contact_normal = normal;
+        }
+    }
+}
+
+static void DampRagdollImpact(CcBiomechRagdoll *ragdoll, float delta_time)
 {
     int32_t contact_count = 0;
     int32_t new_contact_count = 0;
+    int32_t support_contact_count = 0;
     CcBiomechVec3 contact_normal = {0};
+    CcBiomechVec3 support_normal = {0};
     CcBiomechVec3 center_velocity = {0};
     float total_mass = 0.0f;
     for (int32_t particle = 0; particle < ragdoll->particle_count; ++particle) {
@@ -444,6 +755,11 @@ static void DampRagdollImpact(CcBiomechRagdoll *ragdoll)
             contact_count += 1;
             if (!runtime->previously_collided) new_contact_count += 1;
             contact_normal = AddVec3(contact_normal, runtime->contact_normal);
+            if (runtime->contact_normal.y > 0.35f) {
+                support_contact_count += 1;
+                support_normal = AddVec3(
+                    support_normal, runtime->contact_normal);
+            }
         }
         if (runtime->inverse_mass <= 0.0f) continue;
         float mass = 1.0f / runtime->inverse_mass;
@@ -465,6 +781,10 @@ static void DampRagdollImpact(CcBiomechRagdoll *ragdoll)
         contact_normal = ScaleVec3(contact_normal, 1.0f / normal_length);
     }
     center_velocity = ScaleVec3(center_velocity, 1.0f / total_mass);
+    float support_normal_length = LengthVec3(support_normal);
+    support_normal = support_normal_length > 0.00001f ?
+        ScaleVec3(support_normal, 1.0f / support_normal_length) :
+        (CcBiomechVec3){0.0f, 1.0f, 0.0f};
     float outward_center = center_velocity.x * contact_normal.x +
                            center_velocity.y * contact_normal.y +
                            center_velocity.z * contact_normal.z;
@@ -476,8 +796,11 @@ static void DampRagdollImpact(CcBiomechRagdoll *ragdoll)
     }
     float impact_damping = ragdoll->contact_damping *
         fminf((float)new_contact_count / 2.0f, 1.0f);
+    float support_alignment = Clamp(
+        (support_normal.y - 0.65f) / 0.25f, 0.0f, 1.0f);
     float resting_damping = ragdoll->resting_contact_damping *
-        fminf((float)contact_count / 3.0f, 1.0f);
+        fminf((float)support_contact_count / 3.0f, 1.0f) *
+        support_alignment;
     float body_retention = 1.0f - Clamp(impact_damping + resting_damping,
                                         0.0f, 0.85f);
     float tangent_retention = 1.0f - Clamp(ragdoll->collision_friction,
@@ -494,6 +817,20 @@ static void DampRagdollImpact(CcBiomechRagdoll *ragdoll)
                 rebound_removal.z
         };
         velocity = ScaleVec3(velocity, body_retention);
+        if (support_alignment > 0.70f && support_contact_count >= 1) {
+            float outward_speed = DotVec3(velocity, support_normal);
+            float support_center_speed =
+                DotVec3(center_velocity, support_normal);
+            float maximum_outward =
+                fmaxf(0.0f, support_center_speed * body_retention) +
+                0.20f * delta_time;
+            if (outward_speed > maximum_outward) {
+                velocity = AddVec3(
+                    velocity,
+                    ScaleVec3(support_normal,
+                              maximum_outward - outward_speed));
+            }
+        }
         if (runtime->collided) {
             CcBiomechVec3 normal = runtime->contact_normal;
             float normal_speed = velocity.x * normal.x +
@@ -560,9 +897,45 @@ void CcBiomechRagdollStep(CcBiomechRagdoll *ragdoll, float delta_time,
             SolveRagdollConstraint(ragdoll, &ragdoll->constraints[constraint],
                                    delta_time);
         }
+        for (int32_t constraint = 0;
+             constraint < ragdoll->angle_constraint_count; ++constraint) {
+            SolveRagdollAngleConstraint(
+                ragdoll, &ragdoll->angle_constraints[constraint], delta_time);
+        }
+        if (iteration == constraint_iterations - 1 &&
+            ragdoll->hinge_constraint_count > 0) {
+            for (int32_t constraint = 0;
+                 constraint < ragdoll->hinge_constraint_count; ++constraint) {
+                SolveRagdollHingeConstraint(
+                    ragdoll, &ragdoll->hinge_constraints[constraint],
+                    delta_time);
+            }
+            for (int32_t cleanup = 0; cleanup < 5; ++cleanup) {
+                for (int32_t constraint = 0;
+                     constraint < ragdoll->constraint_count; ++constraint) {
+                    SolveRagdollConstraint(
+                        ragdoll, &ragdoll->constraints[constraint],
+                        delta_time);
+                }
+                for (int32_t constraint = 0;
+                     constraint < ragdoll->angle_constraint_count;
+                     ++constraint) {
+                    SolveRagdollAngleConstraint(
+                        ragdoll, &ragdoll->angle_constraints[constraint],
+                        delta_time);
+                }
+                SolveRagdollExclusions(ragdoll);
+                CollideRagdollParticles(
+                    ragdoll, collision_probe, collision_context);
+                CollideRagdollSegments(
+                    ragdoll, collision_probe, collision_context);
+            }
+        }
+        SolveRagdollExclusions(ragdoll);
         CollideRagdollParticles(ragdoll, collision_probe, collision_context);
+        CollideRagdollSegments(ragdoll, collision_probe, collision_context);
     }
-    DampRagdollImpact(ragdoll);
+    DampRagdollImpact(ragdoll, delta_time);
 }
 
 CcBiomechVec3 CcBiomechRagdollParticleVelocity(
@@ -578,4 +951,40 @@ CcBiomechVec3 CcBiomechRagdollParticleVelocity(
         (runtime->position.y - runtime->previous_position.y) / delta_time,
         (runtime->position.z - runtime->previous_position.z) / delta_time
     };
+}
+
+CcBiomechVec3 CcBiomechRagdollCenterOfMass(
+    const CcBiomechRagdoll *ragdoll)
+{
+    if (ragdoll == NULL) return (CcBiomechVec3){0};
+    CcBiomechVec3 weighted = {0};
+    float total_mass = 0.0f;
+    for (int32_t particle = 0; particle < ragdoll->particle_count; ++particle) {
+        const CcBiomechRagdollParticle *body = &ragdoll->particles[particle];
+        if (body->inverse_mass <= 0.0f) continue;
+        float mass = 1.0f / body->inverse_mass;
+        weighted = AddVec3(weighted, ScaleVec3(body->position, mass));
+        total_mass += mass;
+    }
+    return total_mass > 0.0f ? ScaleVec3(weighted, 1.0f / total_mass) :
+                               (CcBiomechVec3){0};
+}
+
+CcBiomechVec3 CcBiomechRagdollCenterVelocity(
+    const CcBiomechRagdoll *ragdoll, float delta_time)
+{
+    if (ragdoll == NULL || delta_time <= 0.0f) return (CcBiomechVec3){0};
+    CcBiomechVec3 momentum = {0};
+    float total_mass = 0.0f;
+    for (int32_t particle = 0; particle < ragdoll->particle_count; ++particle) {
+        const CcBiomechRagdollParticle *body = &ragdoll->particles[particle];
+        if (body->inverse_mass <= 0.0f) continue;
+        float mass = 1.0f / body->inverse_mass;
+        CcBiomechVec3 velocity = CcBiomechRagdollParticleVelocity(
+            ragdoll, particle, delta_time);
+        momentum = AddVec3(momentum, ScaleVec3(velocity, mass));
+        total_mass += mass;
+    }
+    return total_mass > 0.0f ? ScaleVec3(momentum, 1.0f / total_mass) :
+                               (CcBiomechVec3){0};
 }

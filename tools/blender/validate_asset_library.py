@@ -45,6 +45,14 @@ for asset in manifest["assets"]:
                 fail(f"{obj.name} in {collection.name} has no cc_role")
             if obj.get("cc_asset_id") != asset_id:
                 fail(f"{obj.name} in {collection.name} carries a foreign cc_asset_id")
+            if asset_id == "environment_market_granary_v01":
+                paint = obj.data.color_attributes.get("COLOR_0")
+                if paint is None or paint.domain != "CORNER":
+                    fail(f"{obj.name} has no corner-domain COLOR_0 paint mask")
+                if len(paint.data) != len(obj.data.loops):
+                    fail(f"{obj.name} has incomplete COLOR_0 paint data")
+                if not obj.get("cc_paint_material"):
+                    fail(f"{obj.name} has no painted material class")
         elif obj.type != "EMPTY":
             fail(f"unexpected {obj.type} object {obj.name} in exportable {collection.name}")
 

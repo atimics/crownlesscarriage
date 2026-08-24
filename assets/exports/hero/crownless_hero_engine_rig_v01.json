@@ -1,15 +1,16 @@
 {
   "asset": "assets/exports/hero/crownless_hero_engine_rig_v01.glb",
   "armature": "ARM_CrownlessHero",
-  "source_library_version": "0.9.0",
+  "source_library_version": "0.11.0",
   "art_direction": "silhouette_first_pixel_wayfarer",
   "coordinate_system": "glTF +Y up, +Z forward",
   "motion_source": "CcHumanoidSkinPoseResolve (runtime only)",
   "runtime_layout": {
-    "authored_objects": 112,
+    "authored_objects": 114,
     "skinned_objects": 1,
     "strategy": "joined skin with material primitives"
   },
+  "paint_contract": "COLOR_0 stores material index, authored value, and fold strength",
   "bones": [
     "root",
     "pelvis",
@@ -112,16 +113,6 @@
     },
     {
       "name": "SKIN_GEO_BodyHead",
-      "component": "hero_body_base_v01",
-      "bone": "head"
-    },
-    {
-      "name": "SKIN_GEO_BodyJaw",
-      "component": "hero_body_base_v01",
-      "bone": "head"
-    },
-    {
-      "name": "SKIN_GEO_BodyChin",
       "component": "hero_body_base_v01",
       "bone": "head"
     },
@@ -487,6 +478,26 @@
     },
     {
       "name": "SKIN_GEO_HairTempleR",
+      "component": "hero_hair_v01",
+      "bone": "head"
+    },
+    {
+      "name": "SKIN_GEO_BrokenCrownCirclet",
+      "component": "hero_hair_v01",
+      "bone": "head"
+    },
+    {
+      "name": "SKIN_GEO_BrokenCrownTineL",
+      "component": "hero_hair_v01",
+      "bone": "head"
+    },
+    {
+      "name": "SKIN_GEO_BrokenCrownTineC",
+      "component": "hero_hair_v01",
+      "bone": "head"
+    },
+    {
+      "name": "SKIN_GEO_BrokenCrownTineR",
       "component": "hero_hair_v01",
       "bone": "head"
     },

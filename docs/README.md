@@ -86,6 +86,7 @@ respond to a player decision.
 ### Part VIII — Production proof
 
 - Failed-harvest vertical slice
+- [Character physics foundation](production/character-physics-foundation.md)
 - [Runtime environment design](production/runtime-environment-design.md)
 - Automated simulation validation
 - Player-legibility tests

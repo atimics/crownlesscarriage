@@ -12,16 +12,23 @@ from dataclasses import asdict, dataclass
 import json
 import math
 from pathlib import Path
+import sys
 
 import bpy
 from mathutils import Vector
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+import paint_channels
 
 
 ROOT = Path(__file__).resolve().parents[2]
 BLEND_PATH = ROOT / "assets" / "blender" / "crownless_npc_dynamic_modules.blend"
 EXPORT_DIR = ROOT / "assets" / "exports" / "npc"
 MANIFEST_PATH = ROOT / "assets" / "npc_dynamic_module_manifest.json"
-LIBRARY_VERSION = "0.1.0"
+LIBRARY_VERSION = "0.2.0"
 MATERIAL_NAME = "MAT_NPC_INDEXED"
 PALETTE_INDEX = {
     "skin": 0,
@@ -36,6 +43,10 @@ PALETTE_INDEX = {
     "accent": 7,
     "eye": 8,
 }
+PAINT_SEMANTICS = (
+    "skin", "hair", "underlayer", "outer", "trousers",
+    "leather", "metal", "accent", "eye",
+)
 
 
 @dataclass(frozen=True)
@@ -231,8 +242,10 @@ def build_geometry(slot: str, collection: bpy.types.Collection,
         add_box("GEO_ModuleFootSole", (0.0, -0.22, 0.53),
                 (0.84, 0.23, 1.15), collection, material, width=0.05)
     elif slot == "head":
-        add_ico("GEO_ModuleHead", (0.0, 0.0, 0.0),
-                (0.50, 0.46, 0.50), collection, material)
+        add_ico("GEO_ModuleCranium", (0.0, 0.0, 0.06),
+                (0.50, 0.46, 0.44), collection, material)
+        add_ico("GEO_ModuleJaw", (0.0, -0.055, -0.30),
+                (0.41, 0.40, 0.24), collection, material, subdivisions=1)
     elif slot == "mantle":
         add_panel("GEO_ModuleMantle", (
             (-0.50, 0.0, 0.05), (0.42, 0.0, 0.02),
@@ -274,11 +287,21 @@ def build_geometry(slot: str, collection: bpy.types.Collection,
                 (0.57, 0.54, 0.44), collection, material, subdivisions=1)
         add_box("GEO_ModuleHelmetBrow", (0.0, -0.48, -0.02),
                 (1.08, 0.18, 0.18), collection, material, width=0.04)
+        add_box("GEO_ModuleHelmetRidge", (0.0, 0.02, 0.50),
+                (0.16, 0.50, 0.36), collection, material, width=0.04)
+        for side in (-1.0, 1.0):
+            add_box(f"GEO_ModuleHelmetCheek{side:+.0f}",
+                    (side * 0.48, -0.12, -0.22), (0.16, 0.24, 0.40),
+                    collection, material, width=0.04,
+                    rotation=(0.0, side * 0.08, 0.0))
     elif slot == "hat":
         add_cylinder("GEO_ModuleHatBrim", (0.0, 0.0, 0.48),
                      0.72, 0.10, collection, material, vertices=12)
         add_cylinder("GEO_ModuleHatCrown", (0.0, 0.04, 0.72),
                      0.43, 0.48, collection, material, vertices=9)
+        add_box("GEO_ModuleHatTuck", (0.43, 0.06, 0.93),
+                (0.12, 0.12, 0.42), collection, material, width=0.04,
+                rotation=(0.0, -0.20, -0.18))
     elif slot == "hood":
         add_ico("GEO_ModuleHoodCrown", (0.0, 0.07, 0.24),
                 (0.62, 0.57, 0.67), collection, material, subdivisions=1)
@@ -286,12 +309,20 @@ def build_geometry(slot: str, collection: bpy.types.Collection,
             add_box(f"GEO_ModuleHoodSide{side:+.0f}",
                     (side * 0.48, 0.08, -0.12), (0.26, 0.52, 0.72),
                     collection, material, width=0.08)
+        add_box("GEO_ModuleHoodBrow", (0.0, -0.49, 0.16),
+                (1.02, 0.16, 0.16), collection, material, width=0.05)
     elif slot == "headwrap":
         add_ico("GEO_ModuleHeadwrapCap", (0.0, 0.02, 0.30),
                 (0.55, 0.52, 0.40), collection, material, subdivisions=1)
         add_box("GEO_ModuleHeadwrapBand", (0.0, -0.44, 0.20),
                 (1.05, 0.18, 0.24), collection, material, width=0.06,
                 rotation=(0.0, 0.0, 0.05))
+        add_ico("GEO_ModuleHeadwrapKnot", (0.46, 0.26, 0.15),
+                (0.16, 0.15, 0.17), collection, material, subdivisions=1)
+        add_panel("GEO_ModuleHeadwrapTail", (
+            (0.40, 0.25, 0.12), (0.53, 0.25, 0.08),
+            (0.46, 0.29, -0.54), (0.31, 0.29, -0.40),
+        ), collection, material, thickness=0.05)
     elif slot == "tool_shaft":
         add_loft("GEO_ModuleToolShaft", (
             (0.00, 0.48, 0.48), (0.08, 0.56, 0.56),
@@ -308,6 +339,11 @@ def build_geometry(slot: str, collection: bpy.types.Collection,
         add_ico("GEO_ModuleHairCap", (0.0, 0.04, 0.30),
                 (0.54, 0.50, 0.30 if style in {0, 5} else 0.38),
                 collection, material, subdivisions=1)
+        if style in {1, 2, 4, 6, 7}:
+            part_side = -1.0 if style in {1, 6} else 1.0
+            add_box("GEO_ModuleHairPart", (part_side * 0.15, -0.42, 0.25),
+                    (0.60, 0.16, 0.28), collection, material, width=0.07,
+                    rotation=(0.0, part_side * 0.10, part_side * 0.08))
         if style == 1:
             add_box("GEO_ModuleHairBack", (0.0, 0.38, -0.12),
                     (0.82, 0.28, 0.76), collection, material, width=0.10)
@@ -365,20 +401,17 @@ def consolidate(collection: bpy.types.Collection, asset_id: str,
     joined.data.name = joined.name
     joined.data.materials.clear()
     joined.data.materials.append(material)
-    encoded = (float(PALETTE_INDEX[palette_slot]) + 0.5) / 9.0
-    palette_index = joined.data.color_attributes.new(
-        name="COLOR_0", type="FLOAT_COLOR", domain="CORNER")
+    semantic_index = PALETTE_INDEX[palette_slot]
+    paint_channels.add_indexed_paint_channels(
+        joined, [semantic_index] * len(joined.data.polygons),
+        PAINT_SEMANTICS)
     for polygon in joined.data.polygons:
         polygon.material_index = 0
-        for loop_index in polygon.loop_indices:
-            palette_index.data[loop_index].color = (
-                encoded, encoded, encoded, 1.0)
-    joined.data.color_attributes.active_color = palette_index
     bpy.context.scene.cursor.location = (0.0, 0.0, 0.0)
     bpy.ops.object.origin_set(type="ORIGIN_CURSOR")
     joined["cc_asset_id"] = asset_id
     joined["cc_rigid_module"] = True
-    joined["cc_material_contract"] = "vertex_color_palette_index_0_8"
+    joined["cc_material_contract"] = "COLOR_0:palette,value,fold"
     return joined
 
 
@@ -441,7 +474,7 @@ def build() -> None:
         "generation": "offline procedural rigid character modules",
         "runtime_strategy": "bone-frame instancing without skins or animations",
         "coordinate_system": "glTF +Y up, +Z forward",
-        "material_contract": "single indexed material; COLOR_0 selects a nine-color palette",
+        "material_contract": "single indexed material; COLOR_0 stores palette, value, and fold",
         "modules": [asdict(record) for record in records],
     }
     MANIFEST_PATH.write_text(json.dumps(manifest, indent=2) + "\n",

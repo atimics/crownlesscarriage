@@ -33,10 +33,13 @@ typedef enum ClientView {
 typedef struct LocalState {
     CcLocalAgent agent;
     CcLocalCourse course;
+    Vector2 movement_reticle;
+    float movement_reticle_age;
     bool market_interior;
     bool journey_travel_active;
     bool journey_combat_active;
     bool journey_parley_active;
+    bool movement_reticle_valid;
 } LocalState;
 
 typedef struct ActionReelState {
@@ -252,237 +255,24 @@ static void DrawPanel(Rectangle bounds, Color color)
              (Color){207, 157, 67, 128});
 }
 
-typedef enum PortraitExpression {
-    PORTRAIT_NEUTRAL,
-    PORTRAIT_FOCUSED,
-    PORTRAIT_HURT,
-    PORTRAIT_TALKING
-} PortraitExpression;
-
-static Color PortraitShade(Color color, float amount)
-{
-    return (Color){
-        (unsigned char)fminf(255.0f, fmaxf(0.0f,
-            (float)color.r * amount)),
-        (unsigned char)fminf(255.0f, fmaxf(0.0f,
-            (float)color.g * amount)),
-        (unsigned char)fminf(255.0f, fmaxf(0.0f,
-            (float)color.b * amount)),
-        color.a
-    };
-}
-
-static void DrawPortraitBlock(int x, int y, int pixel, int grid_x,
-                              int grid_y, int grid_width, int grid_height,
-                              Color color)
-{
-    DrawRectangle(x + grid_x * pixel, y + grid_y * pixel,
-                  grid_width * pixel, grid_height * pixel, color);
-}
-
-/* A close-read identity card made from the same coarse decisions the world
-   render must preserve: head shape, hair silhouette, costume color and a held
-   facial expression. There are deliberately no sub-pixel curves here. */
-static void DrawPixelPortrait(const CcNpcAppearance *appearance,
-                              Rectangle bounds,
-                              PortraitExpression expression, bool crowned)
-{
-    if (appearance == NULL) return;
-    int pixel = bounds.width >= 60.0f && bounds.height >= 70.0f ? 3 : 2;
-    int width = pixel * 20;
-    int height = pixel * 24;
-    int x = (int)bounds.x + ((int)bounds.width - width) / 2;
-    int y = (int)bounds.y + ((int)bounds.height - height) / 2;
-    Color background = (Color){17, 28, 32, 255};
-    Color shadow = PortraitShade(appearance->skin, 0.70f);
-    Color ink = PortraitShade(appearance->hair, 0.48f);
-
-    DrawRectangle((int)bounds.x, (int)bounds.y, (int)bounds.width,
-                  (int)bounds.height, (Color){8, 16, 21, 255});
-    DrawRectangleLines((int)bounds.x, (int)bounds.y, (int)bounds.width,
-                       (int)bounds.height, PortraitShade(appearance->accent,
-                                                        0.88f));
-    DrawRectangle(x, y, width, height, background);
-
-    DrawPortraitBlock(x, y, pixel, 2, 18, 16, 6, appearance->outer);
-    DrawPortraitBlock(x, y, pixel, 0, 21, 20, 3,
-                      PortraitShade(appearance->outer, 0.68f));
-    DrawPortraitBlock(x, y, pixel, 5, 19, 10, 2,
-                      appearance->underlayer);
-    DrawPortraitBlock(x, y, pixel, 8, 14, 4, 6, shadow);
-
-    int face_left = appearance->head_width < 1.0f ? 6 :
-                    appearance->head_width > 1.045f ? 4 : 5;
-    int face_width = 20 - face_left * 2;
-    DrawPortraitBlock(x, y, pixel, face_left - 1, 7, 1, 5, shadow);
-    DrawPortraitBlock(x, y, pixel, face_left + face_width, 7, 1, 5, shadow);
-    DrawPortraitBlock(x, y, pixel, face_left, 4, face_width, 10,
-                      appearance->skin);
-    DrawPortraitBlock(x, y, pixel, face_left + 1, 14, face_width - 2, 2,
-                      appearance->skin);
-    DrawPortraitBlock(x, y, pixel, 7, 16, 6, 1, shadow);
-
-    DrawPortraitBlock(x, y, pixel, 5, 2, 10, 3, appearance->hair);
-    switch (appearance->hair_style % 8U) {
-        case 0:
-            DrawPortraitBlock(x, y, pixel, 5, 4, 2, 5, appearance->hair);
-            DrawPortraitBlock(x, y, pixel, 13, 4, 2, 3, appearance->hair);
-            break;
-        case 1:
-            DrawPortraitBlock(x, y, pixel, 4, 4, 2, 10, appearance->hair);
-            DrawPortraitBlock(x, y, pixel, 14, 4, 2, 10, appearance->hair);
-            break;
-        case 2:
-            DrawPortraitBlock(x, y, pixel, 8, 0, 4, 3, appearance->hair);
-            DrawPortraitBlock(x, y, pixel, 5, 4, 2, 5, appearance->hair);
-            break;
-        case 3:
-            DrawPortraitBlock(x, y, pixel, 4, 4, 7, 2, appearance->hair);
-            DrawPortraitBlock(x, y, pixel, 4, 5, 3, 4, appearance->hair);
-            DrawPortraitBlock(x, y, pixel, 12, 3, 4, 2, appearance->hair);
-            break;
-        case 4:
-            DrawPortraitBlock(x, y, pixel, 3, 4, 2, 11, appearance->hair);
-            DrawPortraitBlock(x, y, pixel, 15, 4, 2, 11, appearance->hair);
-            break;
-        case 5:
-            DrawPortraitBlock(x, y, pixel, 5, 4, 7, 2, appearance->hair);
-            DrawPortraitBlock(x, y, pixel, 12, 4, 3, 4, appearance->hair);
-            break;
-        case 6:
-            DrawPortraitBlock(x, y, pixel, 9, 0, 2, 4, appearance->hair);
-            DrawPortraitBlock(x, y, pixel, 5, 4, 2, 4, appearance->hair);
-            break;
-        case 7:
-        default:
-            DrawPortraitBlock(x, y, pixel, 3, 4, 3, 8, appearance->hair);
-            DrawPortraitBlock(x, y, pixel, 14, 4, 3, 8, appearance->hair);
-            break;
-    }
-    switch (appearance->beard_style % 4U) {
-        case 1:
-            DrawPortraitBlock(x, y, pixel, 7, 12, 6, 1,
-                              appearance->hair);
-            break;
-        case 2:
-            DrawPortraitBlock(x, y, pixel, 7, 13, 6, 2,
-                              appearance->hair);
-            DrawPortraitBlock(x, y, pixel, 9, 15, 2, 2,
-                              appearance->hair);
-            break;
-        case 3:
-            DrawPortraitBlock(x, y, pixel, 6, 12, 8, 3,
-                              appearance->hair);
-            DrawPortraitBlock(x, y, pixel, 7, 15, 6, 2,
-                              appearance->hair);
-            break;
-        default:
-            break;
-    }
-
-    int brow_y = expression == PORTRAIT_FOCUSED ? 7 : 6;
-    DrawPortraitBlock(x, y, pixel, 6, brow_y, 3, 1, ink);
-    DrawPortraitBlock(x, y, pixel, 11, brow_y, 3, 1, ink);
-    if (expression == PORTRAIT_HURT) {
-        DrawPortraitBlock(x, y, pixel, 7, 8, 1, 1, ink);
-        DrawPortraitBlock(x, y, pixel, 12, 9, 1, 1, ink);
-    } else {
-        DrawPortraitBlock(x, y, pixel, 7, 8, 1, 1, ink);
-        DrawPortraitBlock(x, y, pixel, 12, 8, 1, 1, ink);
-    }
-    switch (appearance->nose_style % 4U) {
-        case 0: DrawPortraitBlock(x, y, pixel, 9, 10, 2, 1, shadow); break;
-        case 1: DrawPortraitBlock(x, y, pixel, 9, 10, 2, 2, shadow); break;
-        case 2: DrawPortraitBlock(x, y, pixel, 8, 11, 4, 1, shadow); break;
-        case 3: DrawPortraitBlock(x, y, pixel, 9, 9, 2, 3, shadow); break;
-    }
-    if (appearance->scar_style == 1U) {
-        DrawPortraitBlock(x, y, pixel, 13, 8, 1, 4,
-                          PortraitShade(appearance->skin, 0.52f));
-    } else if (appearance->scar_style == 2U) {
-        DrawPortraitBlock(x, y, pixel, 6, 8, 1, 4,
-                          PortraitShade(appearance->skin, 0.52f));
-    } else if (appearance->scar_style == 3U) {
-        DrawPortraitBlock(x, y, pixel, 12, 11, 3, 1,
-                          PortraitShade(appearance->skin, 0.52f));
-    }
-    if (appearance->age > 0.68f) {
-        DrawPortraitBlock(x, y, pixel, 5, 11, 2, 1, shadow);
-        DrawPortraitBlock(x, y, pixel, 13, 11, 2, 1, shadow);
-    }
-    if (expression == PORTRAIT_TALKING) {
-        DrawPortraitBlock(x, y, pixel, 8, 13, 4, 2, ink);
-        DrawPortraitBlock(x, y, pixel, 9, 13, 2, 1,
-                          PortraitShade(appearance->skin, 1.18f));
-    } else if (expression == PORTRAIT_HURT) {
-        DrawPortraitBlock(x, y, pixel, 8, 14, 4, 1, ink);
-        DrawPortraitBlock(x, y, pixel, 8, 13, 1, 1, ink);
-    } else {
-        DrawPortraitBlock(x, y, pixel, 8, 13, 4, 1, ink);
-    }
-
-    if ((appearance->equipment & CC_NPC_EQUIPMENT_HEADWEAR) != 0U) {
-        Color headwear = appearance->headwear_style == 0U ?
-                         appearance->metal : appearance->outer;
-        switch (appearance->headwear_style % 4U) {
-            case 0:
-                DrawPortraitBlock(x, y, pixel, 4, 1, 12, 4, headwear);
-                DrawPortraitBlock(x, y, pixel, 3, 4, 14, 1,
-                                  PortraitShade(headwear, 0.70f));
-                break;
-            case 1:
-                DrawPortraitBlock(x, y, pixel, 7, 0, 7, 4, headwear);
-                DrawPortraitBlock(x, y, pixel, 2, 3, 16, 1,
-                                  PortraitShade(headwear, 0.76f));
-                break;
-            case 2:
-                DrawPortraitBlock(x, y, pixel, 4, 1, 12, 3, headwear);
-                DrawPortraitBlock(x, y, pixel, 3, 3, 3, 10, headwear);
-                DrawPortraitBlock(x, y, pixel, 14, 3, 3, 10, headwear);
-                break;
-            case 3:
-            default:
-                DrawPortraitBlock(x, y, pixel, 4, 1, 12, 3, headwear);
-                DrawPortraitBlock(x, y, pixel, 4, 4, 12, 2,
-                                  PortraitShade(headwear, 0.78f));
-                break;
-        }
-    }
-
-    if (crowned) {
-        Color gold = (Color){207, 157, 67, 255};
-        DrawPortraitBlock(x, y, pixel, 7, 0, 6, 1, gold);
-        DrawPortraitBlock(x, y, pixel, 7, 0, 1, 2, gold);
-        DrawPortraitBlock(x, y, pixel, 9, 0, 1, 2, gold);
-        DrawPortraitBlock(x, y, pixel, 12, 0, 1, 2, gold);
-    }
-}
-
-static PortraitExpression HeroPortraitExpression(const CcLocalAgent *agent)
+static CcNpcPortraitExpression HeroPortraitExpression(
+    const CcLocalAgent *agent)
 {
     if (agent->combat.hit_flash_seconds > 0.0f ||
         agent->combat.life_state == CC_LIFE_KNOCKED_DOWN) {
-        return PORTRAIT_HURT;
+        return CC_NPC_PORTRAIT_HURT;
     }
     if (agent->combat.focus_valid ||
         agent->humanoid.action == CC_HUMANOID_ACTION_GUARD ||
         agent->humanoid.action == CC_HUMANOID_ACTION_STRIKE) {
-        return PORTRAIT_FOCUSED;
+        return CC_NPC_PORTRAIT_FOCUSED;
     }
-    return PORTRAIT_NEUTRAL;
+    return CC_NPC_PORTRAIT_NEUTRAL;
 }
 
 static CcNpcAppearance HeroPortraitAppearance(const CcLocalAgent *agent)
 {
-    CcNpcAppearance appearance = agent->appearance;
-    appearance.skin = (Color){177, 131, 93, 255};
-    appearance.hair = (Color){43, 32, 29, 255};
-    appearance.underlayer = (Color){47, 108, 106, 255};
-    appearance.outer = (Color){111, 48, 55, 255};
-    appearance.accent = (Color){181, 135, 49, 255};
-    appearance.hair_style = 3U;
-    appearance.beard_style = 0U;
-    return appearance;
+    return CcNpcHeroPortraitAppearance(&agent->appearance);
 }
 
 static void DrawPerformanceOverlay(void)
@@ -544,6 +334,9 @@ static float GridDistance(Vector2 a, Vector2 b)
 
 static void ResetLocalState(LocalState *local)
 {
+    local->movement_reticle = (Vector2){0};
+    local->movement_reticle_age = 0.0f;
+    local->movement_reticle_valid = false;
     local->market_interior = false;
     local->journey_travel_active = false;
     local->journey_combat_active = false;
@@ -835,6 +628,12 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
                                     1000.0f,
                                 sim->carriage.condition),
                      966, 416, 10, MUTED);
+            if (bandits != NULL) {
+                CcOverlayDrawText(TextFormat("%s / %s",
+                                    CcBanditCampSizeName(bandits->camp_size),
+                                    CcBanditRaidPhaseName(bandits->raid_phase)),
+                         966, 441, 9, DANGER);
+            }
             CcOverlayDrawText("REAL-TIME CONTRACT", 966, 465, 11, TEAL);
             DrawTwoLineText(
                 "Every 60 Hz runtime step advances this journey. Opening a map or decision pauses it.",
@@ -842,7 +641,10 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
             CcOverlayDrawText(TextFormat("TIME SCALE  %d GAME MIN / REAL SEC",
                                 sim->clock.game_minutes_per_second),
                      966, 568, 9, CC_VIOLET);
-            CcOverlayDrawText("F5 saves the carriage exactly where it is.",
+            CcOverlayDrawText(route != NULL &&
+                     CcSimRouteCrossesWarBorder(sim, route->id) ?
+                     "WAR BORDER / ONLY THIS CARRIAGE MAY PASS" :
+                     "F5 saves the carriage exactly where it is.",
                      966, 606, 9, CC_GOLD);
             return;
         }
@@ -862,12 +664,12 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
         CcOverlayDrawText(local->journey_parley_active ? "THE COLLECTOR" :
                                                "THE ATTACKER",
                  966, 264, 11, TEAL);
-        PortraitExpression raider_expression =
+        CcNpcPortraitExpression raider_expression =
             local->course.raiders[0].combat.hit_flash_seconds > 0.0f ?
-                PORTRAIT_HURT : PORTRAIT_FOCUSED;
-        DrawPixelPortrait(&local->course.raiders[0].appearance,
-                          (Rectangle){966.0f, 282.0f, 60.0f, 72.0f},
-                          raider_expression, false);
+                CC_NPC_PORTRAIT_HURT : CC_NPC_PORTRAIT_FOCUSED;
+        CcNpcDrawPixelPortrait(&local->course.raiders[0].appearance,
+                               (Rectangle){966.0f, 282.0f, 60.0f, 72.0f},
+                               raider_expression, false);
         CcOverlayDrawText(local->journey_parley_active ? "ROAD COLLECTOR" :
                                                "CORDON RAIDER",
                  1036, 286, 11, local->journey_parley_active ? CC_GOLD :
@@ -919,8 +721,12 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
     const CcKingdom *kingdom = KingdomById(sim, place->kingdom_id);
     CcOverlayDrawText(kingdom != NULL ? kingdom->name : "UNCLAIMED", 966, 102, 11,
              KingdomColor(sim, place->kingdom_id));
-    CcOverlayDrawText(CcSettlementFunctionName(place->function), 966, 123, 18, INK);
-    CcOverlayDrawText(TextFormat("%d people live with these conditions", place->population),
+    CcOverlayDrawText(TextFormat("%s / %s", CcSettlementSizeName(place->size),
+                        CcSettlementFunctionName(place->function)),
+             966, 123, 18, INK);
+    CcOverlayDrawText(TextFormat("%d people / services %d of %d", place->population,
+                        CcSettlementServiceCount(place),
+                        CcSettlementServiceCapacity(place->size)),
              966, 149, 10, MUTED);
     DrawBar(966, 176, 124, "HUNGER", place->hunger, DANGER);
     DrawBar(966, 197, 124, "SECURITY", place->security, TEAL);
@@ -950,9 +756,11 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
             UINT32_C(0x4d415241), CC_NPC_ROLE_MERCHANT,
             (Color){218, 148, 61, 255});
         CcOverlayDrawText("MARA / FACTOR", 966, 411, 11, TEAL);
-        DrawPixelPortrait(&mara, (Rectangle){966.0f, 432.0f, 64.0f, 75.0f},
-                          can_trade ? PORTRAIT_TALKING : PORTRAIT_NEUTRAL,
-                          false);
+        CcNpcDrawPixelPortrait(
+            &mara, (Rectangle){966.0f, 432.0f, 64.0f, 75.0f},
+            can_trade ? CC_NPC_PORTRAIT_TALKING :
+                        CC_NPC_PORTRAIT_NEUTRAL,
+            false);
         CcOverlayDrawText("MARKET FACTOR", 1040, 436, 11, CC_GOLD);
         CcOverlayDrawText(can_trade ? "READY TO TRADE" : "AT THE COUNTER",
                  1040, 457, 9, can_trade ? TEAL : MUTED);
@@ -1021,8 +829,9 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
     }
     if (local->agent.morphology == CC_MORPHOLOGY_BIPED) {
         CcNpcAppearance hero = HeroPortraitAppearance(&local->agent);
-        DrawPixelPortrait(&hero, (Rectangle){966.0f, 596.0f, 44.0f, 48.0f},
-                          HeroPortraitExpression(&local->agent), true);
+        CcNpcDrawPixelPortrait(
+            &hero, (Rectangle){966.0f, 596.0f, 44.0f, 48.0f},
+            HeroPortraitExpression(&local->agent), true);
         CcOverlayDrawText("CROWNLESS WAYFARER", 1018, 598, 10, TEAL);
         CcOverlayDrawText(TextFormat("%s / %s",
                             CcLocalTraversalName(local->agent.traversal),
@@ -1175,6 +984,22 @@ static void DrawLocalFooter(const CcSim *sim, const LocalState *local)
              38, 708, 10, MUTED);
     CcOverlayDrawText("M map case at carriage   F5 save   F9 load   N new world",
              804, 693, 10, MUTED);
+}
+
+static void DrawLocalMovementReticle(const LocalState *local,
+                                     Rectangle local_bounds)
+{
+    if (local == NULL || !local->movement_reticle_valid ||
+        !CheckCollisionPointRec(local->movement_reticle, local_bounds)) {
+        return;
+    }
+    Vector2 point = local->movement_reticle;
+    float pulse = 1.0f + 0.12f * sinf(local->movement_reticle_age * 12.0f);
+    float arm = 7.0f * pulse;
+    DrawLineEx((Vector2){point.x - arm, point.y - arm},
+               (Vector2){point.x + arm, point.y + arm}, 2.0f, DANGER);
+    DrawLineEx((Vector2){point.x + arm, point.y - arm},
+               (Vector2){point.x - arm, point.y + arm}, 2.0f, DANGER);
 }
 
 
@@ -1799,6 +1624,7 @@ static void HandleInput(CcSim *sim, int32_t *selected,
         if (loaded) {
             *selected = FirstVisibleMapIndex(sim);
             *selected_situation = FirstActiveSituationIndex(sim);
+            CcLocalTerrainSetSeed(sim->world_seed);
             ResetLocalState(local);
             if (sim->journey.active &&
                 sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED) {
@@ -1813,6 +1639,7 @@ static void HandleInput(CcSim *sim, int32_t *selected,
         CcSimInit(sim, sim->world_seed + UINT32_C(0x9e3779b9));
         *selected = FirstVisibleMapIndex(sim);
         *selected_situation = FirstActiveSituationIndex(sim);
+        CcLocalTerrainSetSeed(sim->world_seed);
         ResetLocalState(local);
         *view = VIEW_LOCAL;
         (void)snprintf(message, message_capacity, "A new deterministic region is founded.");
@@ -1918,9 +1745,18 @@ static void HandleInput(CcSim *sim, int32_t *selected,
                 if (!local->market_interior && local->course.alarm_active) {
                     CcLocalCourseClearPlayerTarget(&local->agent);
                 }
-                if (CcLocalAgentPickTarget(&local->agent, mouse, local_target,
-                                           local_bounds,
-                                           local->market_interior)) {
+                bool movement_accepted = CcLocalAgentPickTarget(
+                    &local->agent, mouse, local_target, local_bounds,
+                    local->market_interior);
+                if (!movement_accepted &&
+                    CheckCollisionPointRec(mouse, local_bounds)) {
+                    local->movement_reticle = mouse;
+                    local->movement_reticle_age = 0.0f;
+                    local->movement_reticle_valid = true;
+                } else if (movement_accepted) {
+                    local->movement_reticle_valid = false;
+                }
+                if (movement_accepted) {
                     const char *navigation =
                         CcLocalAgentNavigationName(&local->agent);
                     if (navigation != NULL) {
@@ -1931,10 +1767,12 @@ static void HandleInput(CcSim *sim, int32_t *selected,
                     } else {
                         (void)snprintf(
                             message, message_capacity,
-                            "Moving to %.2f,%.2f; combat target disengaged.",
-                            local->agent.target_point.x,
-                            local->agent.target_point.z);
+                            "Moving toward the selected ground; combat target disengaged.");
                     }
+                } else if (CheckCollisionPointRec(mouse, local_bounds)) {
+                    (void)snprintf(
+                        message, message_capacity,
+                        "That point is blocked; choose another visible patch of ground.");
                 }
             }
         }
@@ -1943,6 +1781,12 @@ static void HandleInput(CcSim *sim, int32_t *selected,
         (void)CcLocalWorldUpdate(
             &local->course, &local->agent, sim, delta_time,
             local->market_interior, advance_course);
+        if (local->movement_reticle_valid) {
+            local->movement_reticle_age += delta_time;
+            if (local->movement_reticle_age > 0.75f) {
+                local->movement_reticle_valid = false;
+            }
+        }
         if (!local->market_interior &&
             CcLocalAgentConsumeWorldExit(&local->agent)) {
             *selected = FirstVisibleMapIndex(sim);
@@ -2115,6 +1959,12 @@ static void HandleInput(CcSim *sim, int32_t *selected,
 
 int main(int argc, char **argv)
 {
+    bool screen_first_hero = false;
+    for (int32_t argument = 1; argument < argc; ++argument) {
+        if (strcmp(argv[argument], "--screen-first-hero") == 0) {
+            screen_first_hero = true;
+        }
+    }
     bool render_benchmark = argc >= 2 &&
                             strcmp(argv[1], "--benchmark-render") == 0;
     int32_t render_benchmark_frames = 600;
@@ -2168,6 +2018,28 @@ int main(int argc, char **argv)
         strcmp(argv[1], "--capture-aftermath") == 0;
     bool capture_golden = argc >= 2 &&
         strcmp(argv[1], "--capture-golden") == 0;
+    bool capture_face = argc >= 2 &&
+        strcmp(argv[1], "--capture-face") == 0;
+    int32_t capture_face_view = -1;
+    if (capture_face) {
+        if (argc < 4) {
+            (void)fprintf(stderr,
+                          "capture face requires an angle and a frame path.\n");
+            return 1;
+        }
+        if (strcmp(argv[2], "front") == 0) capture_face_view = 0;
+        else if (strcmp(argv[2], "three-quarter") == 0) {
+            capture_face_view = 1;
+        } else if (strcmp(argv[2], "profile") == 0) {
+            capture_face_view = 2;
+        } else if (strcmp(argv[2], "distant") == 0) {
+            capture_face_view = 3;
+        } else {
+            (void)fprintf(stderr,
+                          "capture face angle must be front, three-quarter, profile, or distant.\n");
+            return 1;
+        }
+    }
     bool capture_room = argc >= 2 &&
         strcmp(argv[1], "--capture-room") == 0;
     float capture_room_x = 0.0f;
@@ -2200,8 +2072,10 @@ int main(int argc, char **argv)
                     capture_jump || capture_action_reel || capture_encounter ||
                     capture_witness || capture_travel || capture_road ||
                     capture_parley ||
-                    capture_aftermath || capture_golden || capture_room);
+                    capture_aftermath || capture_golden || capture_face ||
+                    capture_room);
     const char *capture_path = capture_room ? argv[4] :
+                               capture_face ? argv[3] :
                                argc >= 3 ? argv[2] :
                                "architecture-proof.png";
     char save_path[640];
@@ -2227,11 +2101,13 @@ int main(int argc, char **argv)
        sampling. Screen-space labels and HUD are drawn after presentation. */
     RenderTexture2D local_target = LoadRenderTexture(457, 285);
     SetTextureFilter(local_target.texture, TEXTURE_FILTER_POINT);
+    CcLocalRendererSetScreenFirstHero(screen_first_hero);
     CcLocalRendererInit();
     CcLocalRendererSetDiagnosticOverlay(capture_limbs);
 
     CcSim sim;
     CcSimInit(&sim, UINT32_C(0xc0a71a9e));
+    CcLocalTerrainSetSeed(sim.world_seed);
     if (capture || render_benchmark) CcSimAdvanceDays(&sim, 28);
     if (capture_map_case) sim.player.location_id = sim.settlements[1].id;
     if (capture_witness) {
@@ -2312,6 +2188,22 @@ int main(int argc, char **argv)
         local.agent.facing_yaw = -0.35f;
         local.course.alarm_countdown = 1000.0f;
     }
+    if (capture_face) {
+        if (capture_face_view == 3) {
+            RepositionHero(&local, (Vector2){64.0f, 31.0f}, false);
+            local.agent.facing_yaw = -0.32f;
+        } else {
+            local.market_interior = true;
+            CcLocalAgentInit(&local.agent, (Vector2){4.60f, 5.10f}, true);
+            CcLocalCombatSetTeam(&local.agent, CC_COMBAT_PLAYER);
+            local.agent.facing_yaw = 0.14f +
+                (capture_face_view == 1 ? 0.72f :
+                 capture_face_view == 2 ? 1.42f : 0.0f);
+        }
+        CcLocalAgentSetMorphology(&local.agent, CC_MORPHOLOGY_BIPED,
+                                  local.market_interior);
+        local.course.alarm_countdown = 1000.0f;
+    }
     if (capture_room) {
         RepositionHero(&local,
                        (Vector2){capture_room_x, capture_room_z}, false);
@@ -2327,7 +2219,7 @@ int main(int argc, char **argv)
         !capture_navigation && !capture_limbs && !capture_dojo &&
         !capture_action_reel && !capture_encounter && !capture_travel &&
         !capture_road &&
-        !capture_parley && !capture_golden && !capture_room) {
+        !capture_parley && !capture_golden && !capture_face && !capture_room) {
         local.course.alarm_countdown = 1000.0f;
         for (int32_t frame = 0; frame < 1500; ++frame) {
             CcLocalCourseUpdate(&local.course, &local.agent, &sim,
@@ -2467,6 +2359,9 @@ int main(int argc, char **argv)
     if (capture_golden) {
         (void)snprintf(message, sizeof(message),
                        "A living waystation: people, work, scarcity, and the Crownless carriage in one place.");
+    } else if (capture_face) {
+        (void)snprintf(message, sizeof(message),
+                       "Face review: head-local features share one identity recipe with the portrait.");
     } else if (capture_room) {
         (void)snprintf(message, sizeof(message),
                        "Each fixed room reveals a landmark, a route, and the state of the living settlement.");
@@ -2540,6 +2435,7 @@ int main(int argc, char **argv)
                 CcLocalDrawStreet3D(&sim, &local.agent, &local.course, clock,
                                     local_target, local_bounds);
             }
+            DrawLocalMovementReticle(&local, local_bounds);
             DrawLocalHeader(&sim, &local);
             DrawLocalPanel(&sim, &local);
             DrawLocalFooter(&sim, &local);
@@ -2594,7 +2490,8 @@ int main(int argc, char **argv)
             if (walk_frame_count >= 8) break;
         } else if (capture) {
             capture_frames += 1;
-            if (capture_frames >= 3) {
+            int32_t settled_frames = capture_road ? 45 : 3;
+            if (capture_frames >= settled_frames) {
                 TakeScreenshot(capture_path);
                 break;
             }

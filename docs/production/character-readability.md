@@ -28,8 +28,10 @@ contract, not as surface decoration on a high-detail model.
 - The world color and depth target is exactly half the displayed viewport in
   each dimension.
 - The render texture must use nearest-neighbor sampling.
-- World grading may adjust color and grain, but must not resample or introduce a
-  second spatial pixel grid.
+- World grading may adjust contrast, saturation, warmth, and vignette, but must
+  not resample, add random grain, or introduce a second spatial pixel grid.
+- Fog and grading happen before the final shared-palette lookup. Nothing may
+  blend new world colors after that lookup.
 - The hero costume should resolve as three dominant value families: warm skin,
   a middle-value teal/oxblood costume, and dark hair/limbs. Gold is a small
   recognition accent, not a fourth large mass.

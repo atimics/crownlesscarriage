@@ -12,6 +12,7 @@
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define WORLD_VOID CC_STYLE_BACKGROUND
@@ -54,29 +55,14 @@ typedef struct WorldLabel {
     Color color;
 } WorldLabel;
 
-typedef enum FaceGlyphExpression {
-    FACE_GLYPH_NEUTRAL,
-    FACE_GLYPH_FOCUSED,
-    FACE_GLYPH_HURT
-} FaceGlyphExpression;
+typedef struct FaceRenderContext {
+    Camera3D camera;
+    int32_t width;
+    int32_t height;
+    bool valid;
+} FaceRenderContext;
 
-typedef struct FaceGlyph {
-    Vector3 eye_point;
-    Vector3 body_base;
-    Vector3 forward;
-    Color ink;
-    Color skin_shadow;
-    FaceGlyphExpression expression;
-    float face_width;
-    float age;
-    uint8_t beard_style;
-    uint8_t nose_style;
-    uint8_t scar_style;
-} FaceGlyph;
-
-#define CC_FACE_GLYPH_MAX_COUNT 40
-static FaceGlyph face_glyphs[CC_FACE_GLYPH_MAX_COUNT];
-static int32_t face_glyph_count = 0;
+static FaceRenderContext face_render_context = {0};
 
 typedef struct WorldBuilding {
     Rectangle footprint;
@@ -174,35 +160,196 @@ static const Vector2 MARKET_PEOPLE[] = {{6.55f, 1.60f}};
    on reachable paths; camera targets may instead favor a landmark such as the
    market hall or keep. Keeping those roles separate prevents a composition
    point inside architecture from becoming an unreachable shot transition. */
+typedef enum ArtLightProfileId {
+    ART_LIGHT_CLEAR_MARKET = 0,
+    ART_LIGHT_SHORTAGE_OVERCAST,
+    ART_LIGHT_RECOVERY_WARM,
+    ART_LIGHT_ROAD_DUSK,
+    ART_LIGHT_INTERIOR_EMBER,
+    ART_LIGHT_PROFILE_COUNT
+} ArtLightProfileId;
+
+typedef struct ArtComposition {
+    Vector3 focal_point;
+    Vector2 story_axis;
+    Vector3 foreground_anchor;
+    Rectangle quiet_area;
+    Vector3 depth_splits;
+    ArtLightProfileId light_profile;
+} ArtComposition;
+
+typedef struct ArtLightProfileDefinition {
+    Vector3 light_direction;
+    Vector3 light_color;
+    Vector3 ambient_color;
+    Vector3 shadow_color;
+    Color fog_color;
+    float fog_near;
+    float fog_far;
+    float depth_strength;
+    float focal_contrast;
+} ArtLightProfileDefinition;
+
+static const ArtLightProfileDefinition ART_LIGHT_PROFILES[] = {
+    [ART_LIGHT_CLEAR_MARKET] = {
+        {-0.42f, 0.84f, 0.34f}, {1.12f, 0.96f, 0.78f},
+        {0.62f, 0.66f, 0.69f}, {0.82f, 0.91f, 1.04f},
+        {18, 34, 39, 255}, 26.0f, 55.0f, 0.70f, 0.12f,
+    },
+    [ART_LIGHT_SHORTAGE_OVERCAST] = {
+        {-0.20f, 0.92f, 0.33f}, {0.90f, 0.96f, 1.04f},
+        {0.60f, 0.66f, 0.73f}, {0.73f, 0.84f, 1.06f},
+        {24, 38, 47, 255}, 23.0f, 50.0f, 0.90f, 0.08f,
+    },
+    [ART_LIGHT_RECOVERY_WARM] = {
+        {-0.56f, 0.72f, 0.40f}, {1.20f, 0.91f, 0.65f},
+        {0.65f, 0.63f, 0.62f}, {0.84f, 0.91f, 1.01f},
+        {22, 37, 38, 255}, 27.0f, 56.0f, 0.64f, 0.15f,
+    },
+    [ART_LIGHT_ROAD_DUSK] = {
+        {-0.63f, 0.55f, 0.31f}, {1.26f, 0.76f, 0.50f},
+        {0.48f, 0.55f, 0.65f}, {0.70f, 0.79f, 1.08f},
+        {9, 20, 25, 255}, 16.0f, 34.0f, 0.92f, 0.18f,
+    },
+    [ART_LIGHT_INTERIOR_EMBER] = {
+        {-0.38f, 0.52f, 0.76f}, {1.24f, 0.74f, 0.44f},
+        {0.55f, 0.46f, 0.48f}, {0.88f, 0.75f, 0.82f},
+        {31, 23, 25, 255}, 10.0f, 21.0f, 0.52f, 0.17f,
+    },
+};
+
 typedef struct StreetCameraShot {
     Vector2 trigger;
     Vector3 target;
     const char *name;
     Rectangle route;
     int32_t route_palette;
+    Vector3 camera_offset;
+    float fovy;
+    ArtComposition art;
 } StreetCameraShot;
 
 static const StreetCameraShot STREET_CAMERA_SHOTS[] = {
-    {{10.5f, 7.5f}, {10.5f, 1.05f, 7.5f}, "WAYFARER YARD",
-     {8.6f, 10.2f, 6.0f, 3.0f}, 2},
-    {{11.0f, 28.5f}, {11.0f, 1.05f, 28.5f}, "WEST CROFTS",
-     {12.3f, 26.3f, 4.8f, 5.8f}, 0},
-    {{14.0f, 52.0f}, {14.0f, 1.05f, 52.0f}, "OLD MINE ROAD",
-     {14.0f, 54.2f, 28.0f, 2.7f}, 3},
-    {{33.0f, 25.0f}, {33.0f, 1.05f, 25.0f}, "ARTISAN ROW",
-     {29.0f, 23.3f, 13.0f, 2.6f}, 1},
-    {{44.0f, 29.0f}, {44.0f, 1.05f, 29.0f}, "MERCERCALL COMMONS",
-     {0.0f, 0.0f, 0.0f, 0.0f}, 1},
-    {{42.0f, 52.0f}, {40.0f, 1.05f, 52.0f}, "COACH YARD",
-     {39.5f, 53.8f, 4.9f, 4.2f}, 0},
-    {{50.0f, 27.25f}, {50.0f, 1.05f, 24.0f}, "MARKET STEPS",
-     {47.0f, 25.25f, 6.0f, 1.38f}, 1},
-    {{58.0f, 50.0f}, {58.0f, 1.05f, 50.0f}, "MILLER'S ROW",
-     {54.2f, 50.1f, 18.7f, 2.9f}, 0},
-    {{78.5f, 29.0f}, {78.0f, 1.05f, 20.0f}, "CROWN GATE",
-     {75.4f, 27.0f, 6.2f, 5.2f}, 2},
-    {{78.0f, 50.0f}, {78.0f, 1.05f, 50.0f}, "EAST FIELDS",
-     {76.4f, 31.3f, 3.7f, 22.7f}, 0},
+    {
+        .trigger = {10.5f, 7.5f}, .target = {10.5f, 1.05f, 7.5f},
+        .name = "WAYFARER YARD", .route = {8.6f, 10.2f, 6.0f, 3.0f},
+        .route_palette = 2, .camera_offset = {6.0f, 7.0f, 22.0f},
+        .fovy = 10.6f,
+        .art = {{10.5f, 1.05f, 7.5f}, {0.0f, 1.0f},
+                {5.8f, 0.0f, 14.5f}, {0.20f, 0.18f, 0.60f, 0.64f},
+                {15.0f, 23.0f, 38.0f}, ART_LIGHT_CLEAR_MARKET},
+    },
+    {
+        .trigger = {11.0f, 28.5f}, .target = {12.5f, 1.05f, 28.5f},
+        .name = "WEST CROFTS", .route = {12.3f, 26.3f, 4.8f, 5.8f},
+        .route_palette = 0, .camera_offset = {-5.0f, 8.0f, 23.0f},
+        .fovy = 11.8f,
+        .art = {{12.5f, 1.05f, 28.5f}, {0.0f, 1.0f},
+                {7.2f, 0.0f, 36.0f}, {0.22f, 0.18f, 0.58f, 0.64f},
+                {16.0f, 25.0f, 41.0f}, ART_LIGHT_CLEAR_MARKET},
+    },
+    {
+        .trigger = {14.0f, 52.0f}, .target = {22.0f, 1.38f, 52.0f},
+        .name = "OLD MINE ROAD", .route = {14.0f, 54.2f, 28.0f, 2.7f},
+        .route_palette = 3, .camera_offset = {-10.0f, 8.0f, 23.0f},
+        .fovy = 13.8f,
+        .art = {{22.0f, 1.38f, 52.0f}, {1.0f, 0.0f},
+                {9.0f, 0.0f, 58.0f}, {0.18f, 0.17f, 0.62f, 0.66f},
+                {16.0f, 27.0f, 44.0f}, ART_LIGHT_SHORTAGE_OVERCAST},
+    },
+    {
+        .trigger = {33.0f, 25.0f}, .target = {33.0f, 1.05f, 25.0f},
+        .name = "ARTISAN ROW", .route = {29.0f, 23.3f, 13.0f, 2.6f},
+        .route_palette = 1, .camera_offset = {10.0f, 7.6f, 22.0f},
+        .fovy = 12.5f,
+        .art = {{33.0f, 1.05f, 25.0f}, {1.0f, 0.0f},
+                {43.0f, 0.0f, 31.0f}, {0.20f, 0.18f, 0.60f, 0.64f},
+                {15.0f, 25.0f, 41.0f}, ART_LIGHT_CLEAR_MARKET},
+    },
+    {
+        .trigger = {44.0f, 29.0f}, .target = {44.5f, 1.05f, 29.5f},
+        .name = "MERCERCALL COMMONS", .route = {0.0f, 0.0f, 0.0f, 0.0f},
+        .route_palette = 1, .camera_offset = {-3.5f, 9.0f, 27.0f},
+        .fovy = 14.0f,
+        .art = {{44.5f, 1.05f, 29.5f}, {0.98f, 0.20f},
+                {39.0f, 0.0f, 39.0f}, {0.19f, 0.18f, 0.61f, 0.64f},
+                {18.0f, 29.0f, 47.0f}, ART_LIGHT_CLEAR_MARKET},
+    },
+    {
+        .trigger = {42.0f, 52.0f}, .target = {41.5f, 1.05f, 52.0f},
+        .name = "COACH YARD", .route = {39.5f, 53.8f, 4.9f, 4.2f},
+        .route_palette = 0, .camera_offset = {8.0f, 9.5f, 27.0f},
+        .fovy = 15.2f,
+        .art = {{41.5f, 1.05f, 52.0f}, {0.0f, 1.0f},
+                {51.0f, 0.0f, 59.0f}, {0.20f, 0.18f, 0.60f, 0.64f},
+                {18.0f, 29.0f, 47.0f}, ART_LIGHT_CLEAR_MARKET},
+    },
+    {
+        .trigger = {50.0f, 27.25f}, .target = {57.5f, 2.00f, 28.0f},
+        .name = "MARKET STEPS", .route = {47.0f, 25.25f, 6.0f, 1.38f},
+        .route_palette = 1, .camera_offset = {-12.5f, 7.2f, 31.0f},
+        .fovy = 18.0f,
+        .art = {{50.0f, 3.10f, 21.0f}, {0.0f, -1.0f},
+                {42.0f, 0.0f, 37.0f}, {0.17f, 0.17f, 0.63f, 0.66f},
+                {22.0f, 35.0f, 54.0f}, ART_LIGHT_CLEAR_MARKET},
+    },
+    {
+        .trigger = {58.0f, 50.0f}, .target = {59.5f, 1.05f, 50.5f},
+        .name = "MILLER'S ROW", .route = {54.2f, 50.1f, 18.7f, 2.9f},
+        .route_palette = 0, .camera_offset = {6.0f, 9.0f, 27.0f},
+        .fovy = 14.2f,
+        .art = {{59.5f, 1.05f, 50.5f}, {1.0f, 0.0f},
+                {68.0f, 0.0f, 58.0f}, {0.20f, 0.18f, 0.60f, 0.64f},
+                {18.0f, 29.0f, 47.0f}, ART_LIGHT_RECOVERY_WARM},
+    },
+    {
+        .trigger = {78.5f, 29.0f}, .target = {78.5f, 2.00f, 30.2f},
+        .name = "CROWN GATE", .route = {75.4f, 27.0f, 6.2f, 5.2f},
+        .route_palette = 2, .camera_offset = {-11.5f, 13.5f, 30.0f},
+        .fovy = 16.8f,
+        .art = {{78.5f, 4.40f, 23.0f}, {0.0f, -1.0f},
+                {66.0f, 0.0f, 38.0f}, {0.18f, 0.17f, 0.62f, 0.66f},
+                {23.0f, 37.0f, 57.0f}, ART_LIGHT_CLEAR_MARKET},
+    },
+    {
+        .trigger = {78.0f, 50.0f}, .target = {78.0f, 1.05f, 50.0f},
+        .name = "EAST FIELDS", .route = {76.4f, 31.3f, 3.7f, 22.7f},
+        .route_palette = 0, .camera_offset = {8.0f, 9.0f, 24.0f},
+        .fovy = 13.0f,
+        .art = {{78.0f, 1.05f, 50.0f}, {0.0f, 1.0f},
+                {87.0f, 0.0f, 58.0f}, {0.20f, 0.18f, 0.60f, 0.64f},
+                {16.0f, 27.0f, 44.0f}, ART_LIGHT_RECOVERY_WARM},
+    },
+};
+
+/* The long road between Market Steps and Crown Gate needs its own establishing
+   view. It is deliberately higher and wider than either room, holding both
+   the departing house line and the gate approach without slicing through a
+   foreground facade. It is a camera composition only, never a logical room. */
+static const StreetCameraShot MARKET_GATE_ROAD_CAMERA = {
+    .trigger = {64.0f, 31.0f}, .target = {66.0f, 2.0f, 31.0f},
+    .name = "MARKET-GATE ROAD", .route = {0.0f, 0.0f, 0.0f, 0.0f},
+    .route_palette = 2, .camera_offset = {-13.0f, 11.0f, 33.0f},
+    .fovy = 21.0f,
+    .art = {{77.5f, 4.20f, 23.5f}, {1.0f, 0.0f},
+            {54.0f, 0.0f, 39.0f}, {0.16f, 0.16f, 0.64f, 0.68f},
+            {24.0f, 39.0f, 60.0f}, ART_LIGHT_ROAD_DUSK},
+};
+
+#define MARKET_GATE_ROAD_CAMERA_SHOT \
+    ((int32_t)(sizeof(STREET_CAMERA_SHOTS) / \
+               sizeof(STREET_CAMERA_SHOTS[0])))
+
+static const ArtComposition ROAD_ART_COMPOSITION = {
+    {49.0f, 1.10f, 40.0f}, {1.0f, 0.0f}, {36.0f, 0.0f, 44.0f},
+    {0.17f, 0.17f, 0.64f, 0.66f}, {8.0f, 16.0f, 29.0f},
+    ART_LIGHT_ROAD_DUSK,
+};
+
+static const ArtComposition INTERIOR_ART_COMPOSITION = {
+    {4.48f, 1.05f, 2.36f}, {0.0f, -1.0f}, {1.55f, 1.05f, 6.54f},
+    {0.18f, 0.16f, 0.64f, 0.68f}, {7.5f, 13.0f, 19.0f},
+    ART_LIGHT_INTERIOR_EMBER,
 };
 
 #define STREET_TRAVERSAL_VIA_CAPACITY 4
@@ -233,8 +380,9 @@ static const StreetTraversalLink STREET_TRAVERSAL_LINKS[] = {
     {3, 4, {{33.0f, 27.5f}, {40.5f, 27.5f}, {42.5f, 28.5f}}, 3},
     {4, 5, {{42.0f, 36.0f}, {42.0f, 46.0f}}, 2},
     {4, 6, {{47.0f, 28.2f}}, 1},
-    {5, 7, {{42.0f, 54.0f}, {54.5f, 54.0f}, {54.5f, 50.0f}}, 3},
-    {6, 8, {{63.8f, 27.5f}, {63.8f, 34.0f}, {78.5f, 34.0f}}, 3},
+    {5, 7, {{42.0f, 55.0f}, {54.8f, 55.0f}, {54.8f, 50.0f}}, 3},
+    {6, 8, {{63.8f, 27.5f}, {64.4f, 38.0f},
+            {78.5f, 38.0f}, {78.5f, 34.0f}}, 4},
     {7, 9, {{68.0f, 51.5f}, {76.0f, 51.5f}}, 2},
     {8, 9, {{78.5f, 38.0f}, {78.5f, 45.0f}}, 2},
 };
@@ -252,6 +400,12 @@ typedef struct FixedCameraRig {
     Vector3 displayed_target;
     Vector3 transition_from;
     Vector3 destination;
+    Vector3 displayed_offset;
+    Vector3 offset_transition_from;
+    Vector3 offset_destination;
+    float displayed_fovy;
+    float fovy_transition_from;
+    float fovy_destination;
     float transition_elapsed;
     float transition_duration;
     float last_clock;
@@ -259,8 +413,20 @@ typedef struct FixedCameraRig {
     bool initialized;
 } FixedCameraRig;
 
+typedef struct CombatCameraRig {
+    Vector3 displayed_target;
+    Vector3 displayed_offset;
+    float displayed_fovy;
+    float combat_weight;
+    float last_clock;
+    CcLocalSceneKind scene;
+    bool initialized;
+    bool scene_valid;
+} CombatCameraRig;
+
 static FixedCameraRig street_camera_rig = {0};
 static FixedCameraRig road_camera_rig = {0};
+static CombatCameraRig combat_camera_rig = {0};
 
 typedef struct NavPlatform {
     float x;
@@ -284,6 +450,470 @@ static const NavPlatform STREET_PLATFORMS[] = {
     {13.10f, 8.65f, 0.95f, 0.95f, 1.60f, 3}
 };
 
+/* Market stock is rendered as 0.62 m crates. Give the same boxes real top
+   surfaces so a click climbs onto them instead of allowing the body to phase
+   through purely visual inventory. */
+static const NavPlatform STREET_CRATE_PLATFORMS[] = {
+    {44.09f, 26.44f, 0.62f, 0.62f, 0.60f, 1},
+    {44.81f, 26.44f, 0.62f, 0.62f, 0.60f, 1},
+    {44.09f, 27.16f, 0.62f, 0.62f, 0.60f, 1},
+    {44.81f, 27.16f, 0.62f, 0.62f, 0.60f, 1},
+};
+static int32_t street_crate_platform_count = 0;
+
+void CcLocalSetStreetMarketCratesInternal(int32_t count)
+{
+    street_crate_platform_count = count < 0 ? 0 : count > 4 ? 4 : count;
+}
+
+static int32_t StreetPhysicsPlatformCount(void)
+{
+    return (int32_t)(sizeof(STREET_PLATFORMS) /
+                     sizeof(STREET_PLATFORMS[0])) +
+           street_crate_platform_count;
+}
+
+static const NavPlatform *StreetPhysicsPlatformAt(int32_t index)
+{
+    int32_t static_count = (int32_t)(sizeof(STREET_PLATFORMS) /
+                                     sizeof(STREET_PLATFORMS[0]));
+    if (index < 0) return NULL;
+    if (index < static_count) return &STREET_PLATFORMS[index];
+    index -= static_count;
+    if (index >= street_crate_platform_count) return NULL;
+    return &STREET_CRATE_PLATFORMS[index];
+}
+
+/* The exterior is one deterministic continuous land surface. Society only
+   grades narrow roads and local foundations into it; it does not replace the
+   country with a settlement-sized plane. Half-metre samples keep collision,
+   foot placement, picking, and rendering on the exact same height field. */
+#define CC_TERRAIN_CELL_SIZE 0.50f
+#define CC_TERRAIN_COLUMNS 193
+#define CC_TERRAIN_ROWS 145
+#define CC_TERRAIN_SAMPLE_COUNT (CC_TERRAIN_COLUMNS * CC_TERRAIN_ROWS)
+
+typedef struct TerrainRoad {
+    Rectangle footprint;
+    bool runs_east_west;
+} TerrainRoad;
+
+static const TerrainRoad TERRAIN_ROADS[] = {
+    {{14.70f, 26.80f, 77.60f, 5.20f}, true},
+    {{39.40f, 7.70f, 5.20f, 50.60f}, false},
+    {{7.20f, 10.00f, 34.80f, 3.80f}, true},
+    {{76.00f, 27.00f, 5.00f, 27.00f}, false},
+    {{14.00f, 54.20f, 28.00f, 2.70f}, true},
+    {{12.30f, 26.30f, 4.80f, 5.80f}, false},
+    {{29.00f, 23.30f, 13.00f, 4.50f}, true},
+    {{39.50f, 53.80f, 4.90f, 4.20f}, false},
+    {{47.00f, 25.25f, 6.00f, 1.38f}, true},
+    {{54.20f, 50.10f, 18.70f, 2.90f}, true},
+    {{75.40f, 27.00f, 6.20f, 5.20f}, false},
+    {{62.80f, 27.00f, 2.60f, 11.50f}, false},
+    {{63.80f, 32.40f, 17.50f, 3.20f}, true},
+    {{39.50f, 53.50f, 16.20f, 3.00f}, true},
+    /* A broad but unpaved ingress keeps the eastern raid route traversable.
+       TerrainPointOnRoad deliberately leaves this final record grass-colored
+       so it reads as open rolling land instead of another civic plaza. */
+    {{51.00f, 37.00f, 45.00f, 5.60f}, true},
+};
+
+static uint32_t street_terrain_seed = UINT32_C(0xc0a71a9e);
+static bool street_terrain_ready = false;
+static float street_terrain_natural[CC_TERRAIN_SAMPLE_COUNT];
+static float street_terrain_height[CC_TERRAIN_SAMPLE_COUNT];
+
+typedef struct TerrainRenderCache {
+    Model model;
+    uint32_t seed;
+    int32_t hunger_band;
+    int32_t prosperity_band;
+    int32_t vertex_count;
+    bool ready;
+} TerrainRenderCache;
+
+static TerrainRenderCache terrain_render_cache = {0};
+static void TerrainRenderCacheClear(void);
+
+static float TerrainClamp(float value, float minimum, float maximum)
+{
+    return fmaxf(minimum, fminf(maximum, value));
+}
+
+static float TerrainSmooth01(float amount)
+{
+    amount = TerrainClamp(amount, 0.0f, 1.0f);
+    return amount * amount * (3.0f - 2.0f * amount);
+}
+
+static uint32_t TerrainMix(uint32_t value)
+{
+    value ^= value >> 16U;
+    value *= UINT32_C(0x7feb352d);
+    value ^= value >> 15U;
+    value *= UINT32_C(0x846ca68b);
+    return value ^ (value >> 16U);
+}
+
+static float TerrainLatticeValue(int32_t x, int32_t z, uint32_t stream)
+{
+    uint32_t sample = TerrainMix(
+        street_terrain_seed ^ ((uint32_t)x * UINT32_C(0x9e3779b9)) ^
+        ((uint32_t)z * UINT32_C(0x85ebca6b)) ^
+        (stream * UINT32_C(0xc2b2ae35)));
+    return (float)(sample & UINT32_C(0x00ffffff)) /
+               (float)UINT32_C(0x00ffffff) *
+               2.0f -
+           1.0f;
+}
+
+static float TerrainValueNoise(float x, float z, float wavelength,
+                               uint32_t stream)
+{
+    float sample_x = x / wavelength;
+    float sample_z = z / wavelength;
+    int32_t x0 = (int32_t)floorf(sample_x);
+    int32_t z0 = (int32_t)floorf(sample_z);
+    float tx = TerrainSmooth01(sample_x - (float)x0);
+    float tz = TerrainSmooth01(sample_z - (float)z0);
+    float bottom = TerrainLatticeValue(x0, z0, stream) +
+        (TerrainLatticeValue(x0 + 1, z0, stream) -
+         TerrainLatticeValue(x0, z0, stream)) *
+            tx;
+    float top = TerrainLatticeValue(x0, z0 + 1, stream) +
+        (TerrainLatticeValue(x0 + 1, z0 + 1, stream) -
+         TerrainLatticeValue(x0, z0 + 1, stream)) *
+            tx;
+    return bottom + (top - bottom) * tz;
+}
+
+static float TerrainNaturalHeight(float x, float z)
+{
+    float large = TerrainValueNoise(x, z, 38.0f, 1U) * 2.45f;
+    float hills = TerrainValueNoise(x + 19.0f, z - 11.0f, 20.0f, 2U) * 1.35f;
+    float detail = TerrainValueNoise(x - 7.0f, z + 23.0f, 8.0f, 3U) * 0.34f;
+    float eastern_rise = TerrainSmooth01((x - 48.0f) / 44.0f) * 3.10f;
+    float northern_rise = TerrainSmooth01((z - 30.0f) / 40.0f) * 1.20f;
+
+    float valley_center = 30.0f + sinf(x * 0.075f + 0.45f) * 4.4f;
+    float valley_distance = (z - valley_center) / 7.2f;
+    float valley = -2.15f * expf(-valley_distance * valley_distance);
+
+    float mine_x = (x - 25.0f) / 15.0f;
+    float mine_z = (z - 51.0f) / 8.0f;
+    float mine_ridge = 2.05f * expf(-(mine_x * mine_x + mine_z * mine_z));
+
+    float keep_x = (x - 79.0f) / 17.0f;
+    float keep_z = (z - 20.0f) / 15.0f;
+    float keep_ridge = 1.85f * expf(-(keep_x * keep_x + keep_z * keep_z));
+    return 1.65f + large + hills + detail + eastern_rise + northern_rise +
+           valley + mine_ridge + keep_ridge;
+}
+
+static int32_t TerrainIndex(int32_t column, int32_t row)
+{
+    return row * CC_TERRAIN_COLUMNS + column;
+}
+
+static float TerrainSampleGrid(const float *samples, float x, float z)
+{
+    x = TerrainClamp(x, 0.0f, CC_LOCAL_WORLD_WIDTH);
+    z = TerrainClamp(z, 0.0f, CC_LOCAL_WORLD_DEPTH);
+    float grid_x = x / CC_TERRAIN_CELL_SIZE;
+    float grid_z = z / CC_TERRAIN_CELL_SIZE;
+    int32_t column = (int32_t)floorf(grid_x);
+    int32_t row = (int32_t)floorf(grid_z);
+    if (column >= CC_TERRAIN_COLUMNS - 1) column = CC_TERRAIN_COLUMNS - 2;
+    if (row >= CC_TERRAIN_ROWS - 1) row = CC_TERRAIN_ROWS - 2;
+    float tx = grid_x - (float)column;
+    float tz = grid_z - (float)row;
+    float h00 = samples[TerrainIndex(column, row)];
+    float h10 = samples[TerrainIndex(column + 1, row)];
+    float h01 = samples[TerrainIndex(column, row + 1)];
+    float h11 = samples[TerrainIndex(column + 1, row + 1)];
+    float bottom = h00 + (h10 - h00) * tx;
+    float top = h01 + (h11 - h01) * tx;
+    return bottom + (top - bottom) * tz;
+}
+
+static float TerrainDistanceToRectangle(float x, float z,
+                                        Rectangle footprint)
+{
+    float closest_x = TerrainClamp(x, footprint.x,
+                                   footprint.x + footprint.width);
+    float closest_z = TerrainClamp(z, footprint.y,
+                                   footprint.y + footprint.height);
+    float dx = x - closest_x;
+    float dz = z - closest_z;
+    return sqrtf(dx * dx + dz * dz);
+}
+
+static float TerrainRoadProfile(const TerrainRoad *road, float x, float z)
+{
+    float total = 0.0f;
+    for (int32_t offset = -2; offset <= 2; ++offset) {
+        float sample_x = road->runs_east_west ?
+            TerrainClamp(x + (float)offset, road->footprint.x,
+                         road->footprint.x + road->footprint.width) :
+            road->footprint.x + road->footprint.width * 0.5f;
+        float sample_z = road->runs_east_west ?
+            road->footprint.y + road->footprint.height * 0.5f :
+            TerrainClamp(z + (float)offset, road->footprint.y,
+                         road->footprint.y + road->footprint.height);
+        total += TerrainSampleGrid(street_terrain_natural,
+                                   sample_x, sample_z);
+    }
+    return total / 5.0f;
+}
+
+static bool TerrainPointInsideMajorFoundation(float x, float z)
+{
+    for (int32_t i = 0; i < (int32_t)(sizeof(WORLD_BUILDINGS) /
+                                      sizeof(WORLD_BUILDINGS[0])); ++i) {
+        Rectangle footprint = WORLD_BUILDINGS[i].footprint;
+        if (x >= footprint.x && x <= footprint.x + footprint.width &&
+            z >= footprint.y && z <= footprint.y + footprint.height) {
+            return true;
+        }
+    }
+    Rectangle keep = {65.20f, 8.20f, 26.50f, 24.40f};
+    if (x >= keep.x && x <= keep.x + keep.width &&
+        z >= keep.y && z <= keep.y + keep.height) return true;
+    static const Rectangle local_pads[] = {
+        {35.20f, 29.00f, 3.20f, 5.40f},
+        {27.40f, 49.70f, 3.20f, 1.60f},
+        {1.00f, 0.00f, 14.60f, 11.10f},
+    };
+    for (int32_t i = 0; i < (int32_t)(sizeof(local_pads) /
+                                      sizeof(local_pads[0])); ++i) {
+        Rectangle pad = local_pads[i];
+        if (x >= pad.x && x <= pad.x + pad.width &&
+            z >= pad.y && z <= pad.y + pad.height) return true;
+    }
+    return false;
+}
+
+static void TerrainGradeRoad(const TerrainRoad *road)
+{
+    const float shoulder = 1.25f;
+    for (int32_t row = 0; row < CC_TERRAIN_ROWS; ++row) {
+        float z = (float)row * CC_TERRAIN_CELL_SIZE;
+        for (int32_t column = 0; column < CC_TERRAIN_COLUMNS; ++column) {
+            float x = (float)column * CC_TERRAIN_CELL_SIZE;
+            if (TerrainPointInsideMajorFoundation(x, z)) continue;
+            float distance = TerrainDistanceToRectangle(
+                x, z, road->footprint);
+            if (distance >= shoulder) continue;
+            bool inside = x >= road->footprint.x &&
+                x <= road->footprint.x + road->footprint.width &&
+                z >= road->footprint.y &&
+                z <= road->footprint.y + road->footprint.height;
+            float weight = inside ? 0.88f :
+                0.88f * TerrainSmooth01(1.0f - distance / shoulder);
+            int32_t index = TerrainIndex(column, row);
+            float profile = TerrainRoadProfile(road, x, z);
+            street_terrain_height[index] +=
+                (profile - street_terrain_height[index]) * weight;
+        }
+    }
+}
+
+static float TerrainRectangleAverage(Rectangle footprint)
+{
+    static const Vector2 samples[] = {
+        {0.50f, 0.50f}, {0.12f, 0.12f}, {0.88f, 0.12f},
+        {0.12f, 0.88f}, {0.88f, 0.88f},
+    };
+    float total = 0.0f;
+    for (int32_t i = 0; i < (int32_t)(sizeof(samples) /
+                                      sizeof(samples[0])); ++i) {
+        total += TerrainSampleGrid(
+            street_terrain_height,
+            footprint.x + footprint.width * samples[i].x,
+            footprint.y + footprint.height * samples[i].y);
+    }
+    return total / (float)(sizeof(samples) / sizeof(samples[0]));
+}
+
+static void TerrainGradePad(Rectangle footprint, float elevation,
+                            float blend_distance)
+{
+    for (int32_t row = 0; row < CC_TERRAIN_ROWS; ++row) {
+        float z = (float)row * CC_TERRAIN_CELL_SIZE;
+        for (int32_t column = 0; column < CC_TERRAIN_COLUMNS; ++column) {
+            float x = (float)column * CC_TERRAIN_CELL_SIZE;
+            float distance = TerrainDistanceToRectangle(x, z, footprint);
+            if (distance >= blend_distance) continue;
+            bool inside = x >= footprint.x &&
+                x <= footprint.x + footprint.width &&
+                z >= footprint.y &&
+                z <= footprint.y + footprint.height;
+            float weight = inside ? 1.0f :
+                TerrainSmooth01(1.0f - distance / blend_distance);
+            int32_t index = TerrainIndex(column, row);
+            street_terrain_height[index] +=
+                (elevation - street_terrain_height[index]) * weight;
+        }
+    }
+}
+
+static void TerrainGradeNorthSouthRamp(Rectangle footprint,
+                                       float south_height,
+                                       float north_height)
+{
+    const float shoulder = 0.85f;
+    for (int32_t row = 0; row < CC_TERRAIN_ROWS; ++row) {
+        float z = (float)row * CC_TERRAIN_CELL_SIZE;
+        if (z < footprint.y || z > footprint.y + footprint.height) continue;
+        float progress = TerrainSmooth01((z - footprint.y) /
+                                         footprint.height);
+        float elevation = south_height +
+                          (north_height - south_height) * progress;
+        for (int32_t column = 0; column < CC_TERRAIN_COLUMNS; ++column) {
+            float x = (float)column * CC_TERRAIN_CELL_SIZE;
+            float side_distance = x < footprint.x ? footprint.x - x :
+                x > footprint.x + footprint.width ?
+                    x - (footprint.x + footprint.width) : 0.0f;
+            if (side_distance >= shoulder) continue;
+            float weight = side_distance <= 0.0f ? 1.0f :
+                TerrainSmooth01(1.0f - side_distance / shoulder);
+            int32_t index = TerrainIndex(column, row);
+            street_terrain_height[index] +=
+                (elevation - street_terrain_height[index]) * weight;
+        }
+    }
+}
+
+static void TerrainGenerate(void)
+{
+    for (int32_t row = 0; row < CC_TERRAIN_ROWS; ++row) {
+        float z = (float)row * CC_TERRAIN_CELL_SIZE;
+        for (int32_t column = 0; column < CC_TERRAIN_COLUMNS; ++column) {
+            float x = (float)column * CC_TERRAIN_CELL_SIZE;
+            int32_t index = TerrainIndex(column, row);
+            street_terrain_natural[index] = TerrainNaturalHeight(x, z);
+            street_terrain_height[index] = street_terrain_natural[index];
+        }
+    }
+    for (int32_t road = 0;
+         road < (int32_t)(sizeof(TERRAIN_ROADS) /
+                          sizeof(TERRAIN_ROADS[0])); ++road) {
+        TerrainGradeRoad(&TERRAIN_ROADS[road]);
+    }
+
+    /* Foundations are small human changes to the generated land. Each pad
+       takes its elevation from the land and nearby road before construction. */
+    for (int32_t i = 0; i < (int32_t)(sizeof(WORLD_BUILDINGS) /
+                                      sizeof(WORLD_BUILDINGS[0])); ++i) {
+        Rectangle footprint = WORLD_BUILDINGS[i].footprint;
+        TerrainGradePad(footprint, TerrainRectangleAverage(footprint), 1.45f);
+    }
+    Rectangle keep_pad = {65.20f, 8.20f, 26.50f, 24.40f};
+    float keep_elevation = TerrainRectangleAverage(keep_pad) + 0.45f;
+    TerrainGradePad(keep_pad, keep_elevation, 2.80f);
+
+    Rectangle plaza_pad = {37.60f, 25.60f, 18.80f, 8.80f};
+    float plaza_elevation = TerrainRectangleAverage(plaza_pad);
+    TerrainGradePad(plaza_pad, plaza_elevation, 1.80f);
+    TerrainGradePad(CARRIAGE_FOOTPRINT,
+                    TerrainRectangleAverage(CARRIAGE_FOOTPRINT), 1.20f);
+    TerrainGradePad(DUNGEON_FOOTPRINT,
+                    TerrainRectangleAverage(DUNGEON_FOOTPRINT), 1.35f);
+
+    /* The Wayfarer yard is deliberately engineered level ground. Keeping
+       this one training pad flat also preserves its fixed waterline. */
+    TerrainGradePad((Rectangle){1.00f, 0.00f, 14.60f, 11.10f},
+                    0.0f, 2.20f);
+
+    /* Re-establish the public ways after all foundation banks are cut. Pads
+       stay level inside actual structures, while streets and open squares
+       retain a continuous walking grade around them. */
+    for (int32_t road = 0;
+         road < (int32_t)(sizeof(TERRAIN_ROADS) /
+                          sizeof(TERRAIN_ROADS[0])); ++road) {
+        TerrainGradeRoad(&TERRAIN_ROADS[road]);
+    }
+    float artisan_south_height = TerrainSampleGrid(street_terrain_height,
+                                                    33.0f, 25.0f);
+    float artisan_north_height = TerrainSampleGrid(street_terrain_height,
+                                                    33.0f, 30.0f);
+    TerrainGradeNorthSouthRamp((Rectangle){29.00f, 25.00f, 13.00f, 5.00f},
+                               artisan_south_height,
+                               artisan_north_height);
+    float commons_south_height = TerrainSampleGrid(street_terrain_height,
+                                                    41.5f, 11.6f);
+    float commons_north_height = TerrainSampleGrid(street_terrain_height,
+                                                    41.5f, 25.0f);
+    TerrainGradeNorthSouthRamp((Rectangle){39.40f, 11.60f, 4.20f, 13.40f},
+                               commons_south_height,
+                               commons_north_height);
+    float crown_road_height = TerrainSampleGrid(street_terrain_height,
+                                                 78.5f, 38.0f);
+    TerrainGradeNorthSouthRamp((Rectangle){75.40f, 30.60f, 6.20f, 7.40f},
+                               keep_elevation, crown_road_height);
+    TerrainGradePad((Rectangle){39.00f, 27.00f, 15.00f, 6.00f},
+                    plaza_elevation, 2.50f);
+    street_terrain_ready = true;
+}
+
+static void TerrainEnsureReady(void)
+{
+    if (!street_terrain_ready) TerrainGenerate();
+}
+
+void CcLocalTerrainSetSeed(uint32_t seed)
+{
+    seed = seed == 0U ? UINT32_C(0xc0a71a9e) : seed;
+    if (street_terrain_ready && seed == street_terrain_seed) return;
+    street_terrain_seed = seed;
+    street_terrain_ready = false;
+}
+
+float CcLocalTerrainHeightAt(float x, float z)
+{
+    TerrainEnsureReady();
+    return TerrainSampleGrid(street_terrain_height, x, z);
+}
+
+Vector3 CcLocalTerrainNormalAt(float x, float z)
+{
+    const float offset = CC_TERRAIN_CELL_SIZE;
+    float left = CcLocalTerrainHeightAt(x - offset, z);
+    float right = CcLocalTerrainHeightAt(x + offset, z);
+    float near_height = CcLocalTerrainHeightAt(x, z - offset);
+    float far_height = CcLocalTerrainHeightAt(x, z + offset);
+    Vector3 normal = {left - right, offset * 2.0f,
+                      near_height - far_height};
+    float length = sqrtf(normal.x * normal.x + normal.y * normal.y +
+                         normal.z * normal.z);
+    return length > 0.0001f ?
+        (Vector3){normal.x / length, normal.y / length, normal.z / length} :
+        (Vector3){0.0f, 1.0f, 0.0f};
+}
+
+static float PlatformBaseHeight(const NavPlatform *platform)
+{
+    return CcLocalTerrainHeightAt(platform->x + platform->width * 0.5f,
+                                  platform->z + platform->depth * 0.5f);
+}
+
+static float PlatformTopHeight(const NavPlatform *platform)
+{
+    return PlatformBaseHeight(platform) + platform->height;
+}
+
+static float TerrainFootprintHeight(Rectangle footprint)
+{
+    return CcLocalTerrainHeightAt(footprint.x + footprint.width * 0.5f,
+                                  footprint.y + footprint.height * 0.5f);
+}
+
+static Vector3 TerrainWorldPoint(float x, float z)
+{
+    return (Vector3){x, CcLocalTerrainHeightAt(x, z), z};
+}
+
 static const Vector3 COURSE_WAYPOINTS[] = {
     {9.45f, 0.0f, 1.20f}, {10.50f, 0.0f, 1.20f},
     {11.22f, 0.0f, 2.95f}, {12.27f, 0.0f, 1.97f},
@@ -299,11 +929,16 @@ static const Vector3 COURSE_WAYPOINTS[] = {
 
 static Camera3D LocalCamera(bool interior, Vector3 focus);
 static Camera3D ExteriorCameraAt(Vector3 target, float fovy);
+static Camera3D ExteriorCameraComposed(Vector3 target, Vector3 offset,
+                                       float fovy);
 static Camera3D SnapCameraToArtPixels(Camera3D camera, int32_t art_height);
-static Camera3D StreetCamera(Vector3 focus, float clock, bool advance,
-                             int32_t art_height);
+Camera3D CcLocalStreetCameraInternal(const CcLocalAgent *agent, float clock,
+                                     bool advance, int32_t art_height);
 static Camera3D RoadCamera(Vector3 focus, bool travelling, float clock,
                            bool advance, int32_t art_height);
+static Camera3D CombatCamera(Camera3D base, const CcLocalAgent *player,
+                             const CcLocalCourse *course, float clock,
+                             bool advance, int32_t art_height);
 static int32_t StreetCameraShotFor(Vector3 focus, int32_t current_shot);
 static float WrapAngle(float angle);
 static float SmoothStep01(float amount);
@@ -313,6 +948,7 @@ static int32_t RoadObstacleCount(void);
 static Rectangle RoadObstacleAt(int32_t index);
 static bool RoomDetailPointVisible(float x, float z, Vector3 focus);
 static uint32_t StreetForegroundBuildingMask(void);
+static uint32_t StreetForegroundBuildingMaskForShot(int32_t shot);
 
 static bool CourseWaterContains(CcLocalSceneKind scene, float x, float z)
 {
@@ -323,15 +959,16 @@ static bool CourseWaterContains(CcLocalSceneKind scene, float x, float z)
 
 static float SurfaceHeightAt(CcLocalSceneKind scene, float x, float z)
 {
-    float height = 0.0f;
-    if (scene != CC_LOCAL_SCENE_STREET) return height;
-    for (int32_t i = 0; i < (int32_t)(sizeof(STREET_PLATFORMS) /
-                                      sizeof(STREET_PLATFORMS[0])); ++i) {
-        const NavPlatform *platform = &STREET_PLATFORMS[i];
+    if (scene != CC_LOCAL_SCENE_STREET) return 0.0f;
+    float height = CcLocalTerrainHeightAt(x, z);
+    for (int32_t i = 0; i < StreetPhysicsPlatformCount(); ++i) {
+        const NavPlatform *platform = StreetPhysicsPlatformAt(i);
+        if (platform == NULL) continue;
+        float top = PlatformTopHeight(platform);
         if (x >= platform->x && x <= platform->x + platform->width &&
             z >= platform->z && z <= platform->z + platform->depth &&
-            platform->height > height) {
-            height = platform->height;
+            top > height) {
+            height = top;
         }
     }
     return height;
@@ -339,21 +976,32 @@ static float SurfaceHeightAt(CcLocalSceneKind scene, float x, float z)
 
 static float BodySurfaceHeightAt(CcLocalSceneKind scene, float x, float z)
 {
-    float height = 0.0f;
-    if (scene != CC_LOCAL_SCENE_STREET) return height;
-    for (int32_t i = 0; i < (int32_t)(sizeof(STREET_PLATFORMS) /
-                                      sizeof(STREET_PLATFORMS[0])); ++i) {
-        const NavPlatform *platform = &STREET_PLATFORMS[i];
+    if (scene != CC_LOCAL_SCENE_STREET) return 0.0f;
+    float height = CcLocalTerrainHeightAt(x, z);
+    for (int32_t i = 0; i < StreetPhysicsPlatformCount(); ++i) {
+        const NavPlatform *platform = StreetPhysicsPlatformAt(i);
+        if (platform == NULL) continue;
+        float top = PlatformTopHeight(platform);
         float edge_release = platform->style == 0 ? 0.0f : 0.10f;
         if (x >= platform->x + edge_release &&
             x <= platform->x + platform->width - edge_release &&
             z >= platform->z + edge_release &&
             z <= platform->z + platform->depth - edge_release &&
-            platform->height > height) {
-            height = platform->height;
+            top > height) {
+            height = top;
         }
     }
     return height;
+}
+
+static Vector3 SurfaceNormalAt(CcLocalSceneKind scene, float x, float z)
+{
+    if (scene != CC_LOCAL_SCENE_STREET) return (Vector3){0.0f, 1.0f, 0.0f};
+    float terrain = CcLocalTerrainHeightAt(x, z);
+    if (SurfaceHeightAt(scene, x, z) > terrain + 0.08f) {
+        return (Vector3){0.0f, 1.0f, 0.0f};
+    }
+    return CcLocalTerrainNormalAt(x, z);
 }
 
 static float FootprintDistanceSquared(float x, float z, Rectangle footprint)
@@ -405,6 +1053,9 @@ static bool StaticBodyBlocked(CcLocalSceneKind scene, float x, float z,
     }
     for (int32_t i = 0; i < (int32_t)(sizeof(WORLD_BUILDINGS) /
                                       sizeof(WORLD_BUILDINGS[0])); ++i) {
+        /* Foreground reveal is only a drawing rule. A house remains solid in
+           every camera shot, including while its roof and facade are faded
+           so the player can see the character behind it. */
         if (CircleTouchesFootprint(x, z, radius,
                                    WORLD_BUILDINGS[i].footprint)) return true;
     }
@@ -431,9 +1082,754 @@ static bool StaticBodyBlocked(CcLocalSceneKind scene, float x, float z,
     return false;
 }
 
+#define STREET_PATH_CELL_SIZE 0.50f
+#define STREET_PATH_COLUMNS 192
+#define STREET_PATH_ROWS 144
+#define STREET_PATH_NODE_COUNT (STREET_PATH_COLUMNS * STREET_PATH_ROWS)
+
+typedef struct StreetPathSearch {
+    float distance[STREET_PATH_NODE_COUNT];
+    int32_t parent[STREET_PATH_NODE_COUNT];
+    int32_t heap[STREET_PATH_NODE_COUNT];
+    int32_t heap_position[STREET_PATH_NODE_COUNT];
+    uint8_t closed[STREET_PATH_NODE_COUNT];
+    int32_t heap_count;
+} StreetPathSearch;
+
+static StreetPathSearch street_path_search;
+
+static bool StreetPathBodyBlocked(float x, float z, float radius)
+{
+    if (StaticBodyBlocked(CC_LOCAL_SCENE_STREET, x, z, radius)) return true;
+    for (int32_t index = 0; index < StreetPhysicsPlatformCount(); ++index) {
+        const NavPlatform *platform = StreetPhysicsPlatformAt(index);
+        if (platform == NULL) continue;
+        Rectangle footprint = {platform->x, platform->z,
+                               platform->width, platform->depth};
+        /* Movement allows exact tangency at a platform edge. The path
+           sampler passes a small general safety margin, so remove it here
+           to avoid declaring authored edge triggers unreachable. */
+        float platform_radius = fmaxf(0.0f, radius - 0.026f);
+        if (CircleTouchesFootprint(x, z, platform_radius, footprint)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static Vector2 StreetPathNodePoint(int32_t node)
+{
+    int32_t column = node % STREET_PATH_COLUMNS;
+    int32_t row = node / STREET_PATH_COLUMNS;
+    return (Vector2){((float)column + 0.5f) * STREET_PATH_CELL_SIZE,
+                     ((float)row + 0.5f) * STREET_PATH_CELL_SIZE};
+}
+
+static bool StreetSegmentClear(Vector2 from, Vector2 to, float radius)
+{
+    float x = to.x - from.x;
+    float z = to.y - from.y;
+    float length = sqrtf(x * x + z * z);
+    int32_t steps = (int32_t)ceilf(length / 0.12f);
+    if (steps < 1) steps = 1;
+    Vector2 previous = from;
+    float previous_height = CcLocalTerrainHeightAt(from.x, from.y);
+    for (int32_t step = 1; step <= steps; ++step) {
+        float amount = (float)step / (float)steps;
+        float sample_x = from.x + x * amount;
+        float sample_z = from.y + z * amount;
+        if (StreetPathBodyBlocked(sample_x, sample_z,
+                                  radius + 0.025f)) return false;
+        float sample_height = CcLocalTerrainHeightAt(sample_x, sample_z);
+        Vector3 sample_normal = CcLocalTerrainNormalAt(sample_x, sample_z);
+        float step_x = sample_x - previous.x;
+        float step_z = sample_z - previous.y;
+        float step_length = sqrtf(step_x * step_x + step_z * step_z);
+        float height_change = sample_height - previous_height;
+        /* The path graph must obey the same grade that the physical body can
+           actually walk. Otherwise A* returns a straight line across a steep
+           foundation skirt and the character correctly stalls at its foot. */
+        if (height_change > step_length * 1.25f + 0.025f ||
+            height_change < -step_length * 1.65f - 0.060f ||
+            sample_normal.y < 0.60f) {
+            return false;
+        }
+        previous = (Vector2){sample_x, sample_z};
+        previous_height = sample_height;
+    }
+    return true;
+}
+
+static int32_t StreetPathNearestNode(Vector2 point, float radius)
+{
+    int32_t center_column = (int32_t)floorf(point.x / STREET_PATH_CELL_SIZE);
+    int32_t center_row = (int32_t)floorf(point.y / STREET_PATH_CELL_SIZE);
+    for (int32_t ring = 0; ring <= 8; ++ring) {
+        for (int32_t row = center_row - ring; row <= center_row + ring;
+             ++row) {
+            if (row < 0 || row >= STREET_PATH_ROWS) continue;
+            for (int32_t column = center_column - ring;
+                 column <= center_column + ring; ++column) {
+                if (column < 0 || column >= STREET_PATH_COLUMNS) continue;
+                if (ring > 0 && abs(column - center_column) != ring &&
+                    abs(row - center_row) != ring) continue;
+                int32_t node = row * STREET_PATH_COLUMNS + column;
+                Vector2 candidate = StreetPathNodePoint(node);
+                if (StreetPathBodyBlocked(candidate.x, candidate.y,
+                                          radius + 0.025f) ||
+                    !StreetSegmentClear(point, candidate, radius)) {
+                    continue;
+                }
+                return node;
+            }
+        }
+    }
+    return -1;
+}
+
+static float StreetPathHeuristic(int32_t node, int32_t goal)
+{
+    Vector2 point = StreetPathNodePoint(node);
+    Vector2 target = StreetPathNodePoint(goal);
+    float x = target.x - point.x;
+    float z = target.y - point.y;
+    return sqrtf(x * x + z * z);
+}
+
+static bool StreetPathHeapLess(const StreetPathSearch *search,
+                               int32_t left, int32_t right, int32_t goal)
+{
+    float left_score = search->distance[left] +
+                       StreetPathHeuristic(left, goal);
+    float right_score = search->distance[right] +
+                        StreetPathHeuristic(right, goal);
+    if (fabsf(left_score - right_score) > 0.0001f) {
+        return left_score < right_score;
+    }
+    return search->distance[left] < search->distance[right];
+}
+
+static void StreetPathHeapSwap(StreetPathSearch *search,
+                               int32_t left, int32_t right)
+{
+    int32_t node = search->heap[left];
+    search->heap[left] = search->heap[right];
+    search->heap[right] = node;
+    search->heap_position[search->heap[left]] = left;
+    search->heap_position[search->heap[right]] = right;
+}
+
+static void StreetPathHeapSiftUp(StreetPathSearch *search,
+                                 int32_t position, int32_t goal)
+{
+    while (position > 0) {
+        int32_t parent = (position - 1) / 2;
+        if (!StreetPathHeapLess(search, search->heap[position],
+                                search->heap[parent], goal)) break;
+        StreetPathHeapSwap(search, position, parent);
+        position = parent;
+    }
+}
+
+static void StreetPathHeapPushOrDecrease(StreetPathSearch *search,
+                                         int32_t node, int32_t goal)
+{
+    int32_t position = search->heap_position[node];
+    if (position >= 0) {
+        StreetPathHeapSiftUp(search, position, goal);
+        return;
+    }
+    position = search->heap_count++;
+    search->heap[position] = node;
+    search->heap_position[node] = position;
+    StreetPathHeapSiftUp(search, position, goal);
+}
+
+static int32_t StreetPathHeapPop(StreetPathSearch *search, int32_t goal)
+{
+    if (search->heap_count <= 0) return -1;
+    int32_t result = search->heap[0];
+    search->heap_position[result] = -1;
+    search->heap_count -= 1;
+    if (search->heap_count <= 0) return result;
+    search->heap[0] = search->heap[search->heap_count];
+    search->heap_position[search->heap[0]] = 0;
+    int32_t position = 0;
+    for (;;) {
+        int32_t left = position * 2 + 1;
+        if (left >= search->heap_count) break;
+        int32_t right = left + 1;
+        int32_t smallest = left;
+        if (right < search->heap_count &&
+            StreetPathHeapLess(search, search->heap[right],
+                               search->heap[left], goal)) {
+            smallest = right;
+        }
+        if (!StreetPathHeapLess(search, search->heap[smallest],
+                                search->heap[position], goal)) break;
+        StreetPathHeapSwap(search, position, smallest);
+        position = smallest;
+    }
+    return result;
+}
+
+static int32_t FindStreetPath(Vector2 from, Vector2 to, float radius,
+                              Vector2 *points, int32_t capacity)
+{
+    if (points == NULL || capacity <= 0 ||
+        StreetPathBodyBlocked(to.x, to.y, radius)) {
+        return 0;
+    }
+    if (StreetSegmentClear(from, to, radius)) {
+        points[0] = to;
+        return 1;
+    }
+
+    int32_t start = StreetPathNearestNode(from, radius);
+    int32_t goal = StreetPathNearestNode(to, radius);
+    if (start < 0 || goal < 0) return 0;
+    StreetPathSearch *search = &street_path_search;
+    search->heap_count = 0;
+    for (int32_t node = 0; node < STREET_PATH_NODE_COUNT; ++node) {
+        search->distance[node] = FLT_MAX;
+        search->parent[node] = -1;
+        search->heap_position[node] = -1;
+        search->closed[node] = 0;
+    }
+    search->distance[start] = 0.0f;
+    StreetPathHeapPushOrDecrease(search, start, goal);
+
+    static const int32_t neighbor_column[] = {-1, 0, 1, -1, 1, -1, 0, 1};
+    static const int32_t neighbor_row[] = {-1, -1, -1, 0, 0, 1, 1, 1};
+    while (search->heap_count > 0) {
+        int32_t current = StreetPathHeapPop(search, goal);
+        if (current < 0) break;
+        if (search->closed[current]) continue;
+        search->closed[current] = 1;
+        if (current == goal) break;
+        int32_t current_column = current % STREET_PATH_COLUMNS;
+        int32_t current_row = current / STREET_PATH_COLUMNS;
+        for (int32_t neighbor = 0; neighbor < 8; ++neighbor) {
+            int32_t column = current_column + neighbor_column[neighbor];
+            int32_t row = current_row + neighbor_row[neighbor];
+            if (column < 0 || column >= STREET_PATH_COLUMNS ||
+                row < 0 || row >= STREET_PATH_ROWS) continue;
+            int32_t next = row * STREET_PATH_COLUMNS + column;
+            if (search->closed[next]) continue;
+            Vector2 current_point = StreetPathNodePoint(current);
+            Vector2 next_point = StreetPathNodePoint(next);
+            if (StreetPathBodyBlocked(next_point.x, next_point.y,
+                                      radius + 0.025f) ||
+                !StreetSegmentClear(current_point, next_point, radius)) {
+                continue;
+            }
+            bool diagonal = neighbor_column[neighbor] != 0 &&
+                            neighbor_row[neighbor] != 0;
+            if (diagonal) {
+                int32_t horizontal = current_row * STREET_PATH_COLUMNS + column;
+                int32_t vertical = row * STREET_PATH_COLUMNS + current_column;
+                Vector2 horizontal_point = StreetPathNodePoint(horizontal);
+                Vector2 vertical_point = StreetPathNodePoint(vertical);
+                if (StreetPathBodyBlocked(horizontal_point.x,
+                                          horizontal_point.y,
+                                          radius + 0.025f) ||
+                    StreetPathBodyBlocked(vertical_point.x,
+                                          vertical_point.y,
+                                          radius + 0.025f)) continue;
+            }
+            float step = diagonal ? STREET_PATH_CELL_SIZE * 1.41421356f :
+                                    STREET_PATH_CELL_SIZE;
+            float distance = search->distance[current] + step;
+            if (distance + 0.0001f >= search->distance[next]) continue;
+            search->distance[next] = distance;
+            search->parent[next] = current;
+            StreetPathHeapPushOrDecrease(search, next, goal);
+        }
+    }
+    if (start != goal && search->parent[goal] < 0) return 0;
+
+    int32_t ordered_count = 0;
+    for (int32_t node = goal; node >= 0 && ordered_count < STREET_PATH_NODE_COUNT;
+         node = search->parent[node]) {
+        search->heap[ordered_count++] = node;
+        if (node == start) break;
+    }
+    if (ordered_count <= 0 || search->heap[ordered_count - 1] != start) {
+        return 0;
+    }
+    for (int32_t left = 0, right = ordered_count - 1; left < right;
+         ++left, --right) {
+        int32_t node = search->heap[left];
+        search->heap[left] = search->heap[right];
+        search->heap[right] = node;
+    }
+
+    int32_t point_count = 0;
+    Vector2 current_point = from;
+    int32_t cursor = 0;
+    Vector2 start_point = StreetPathNodePoint(search->heap[0]);
+    float start_x = start_point.x - current_point.x;
+    float start_z = start_point.y - current_point.y;
+    if (start_x * start_x + start_z * start_z > 0.08f * 0.08f) {
+        if (point_count >= capacity) return 0;
+        points[point_count++] = start_point;
+        current_point = start_point;
+    }
+    while (cursor < ordered_count - 1) {
+        if (StreetSegmentClear(current_point, to, radius)) {
+            if (point_count >= capacity) return 0;
+            points[point_count++] = to;
+            return point_count;
+        }
+        int32_t chosen = cursor + 1;
+        for (int32_t candidate = ordered_count - 1; candidate > cursor;
+             --candidate) {
+            Vector2 candidate_point = StreetPathNodePoint(
+                search->heap[candidate]);
+            if (!StreetSegmentClear(current_point, candidate_point, radius)) {
+                continue;
+            }
+            chosen = candidate;
+            break;
+        }
+        Vector2 chosen_point = StreetPathNodePoint(search->heap[chosen]);
+        if (point_count >= capacity) return 0;
+        points[point_count++] = chosen_point;
+        current_point = chosen_point;
+        cursor = chosen;
+    }
+    if (!StreetSegmentClear(current_point, to, radius) ||
+        point_count >= capacity) return 0;
+    points[point_count++] = to;
+    return point_count;
+}
+
 typedef struct LocalProbeContext {
     CcLocalSceneKind scene;
+    float root_base_y;
+    bool root_capsule;
 } LocalProbeContext;
+
+typedef struct LocalCollisionBox {
+    Vector3 minimum;
+    Vector3 maximum;
+} LocalCollisionBox;
+
+#define CC_LOCAL_COLLISION_BOX_CAPACITY 72
+
+static void AddLocalCollisionBox(LocalCollisionBox *boxes, int32_t *count,
+                                 Rectangle footprint, float base,
+                                 float height)
+{
+    if (*count >= CC_LOCAL_COLLISION_BOX_CAPACITY || height <= 0.0f) return;
+    boxes[*count] = (LocalCollisionBox){
+        .minimum = {footprint.x, base, footprint.y},
+        .maximum = {footprint.x + footprint.width, base + height,
+                    footprint.y + footprint.height},
+    };
+    *count += 1;
+}
+
+static int32_t GatherLocalCollisionBoxes(const LocalProbeContext *context,
+                                         Vector3 point,
+                                         LocalCollisionBox *boxes)
+{
+    (void)point;
+    CcLocalSceneKind scene = context != NULL ? context->scene :
+                                               CC_LOCAL_SCENE_STREET;
+    int32_t count = 0;
+    if (scene == CC_LOCAL_SCENE_MARKET) {
+        AddLocalCollisionBox(boxes, &count, MARKET_COUNTER_FOOTPRINT,
+                             0.0f, 1.12f);
+        AddLocalCollisionBox(boxes, &count, MARKET_SHELF_FOOTPRINT,
+                             0.0f, 2.15f);
+        return count;
+    }
+    if (scene == CC_LOCAL_SCENE_ROAD) {
+        for (int32_t obstacle = 0; obstacle < RoadObstacleCount(); ++obstacle) {
+            AddLocalCollisionBox(boxes, &count, RoadObstacleAt(obstacle),
+                                 0.0f, 2.35f);
+        }
+        return count;
+    }
+
+    for (int32_t platform_index = 0;
+         platform_index < StreetPhysicsPlatformCount(); ++platform_index) {
+        const NavPlatform *platform = StreetPhysicsPlatformAt(platform_index);
+        if (platform == NULL) continue;
+        Rectangle footprint = {platform->x, platform->z,
+                               platform->width, platform->depth};
+        AddLocalCollisionBox(boxes, &count, footprint,
+                             PlatformBaseHeight(platform), platform->height);
+    }
+
+    for (int32_t building = 0;
+         building < (int32_t)(sizeof(WORLD_BUILDINGS) /
+                              sizeof(WORLD_BUILDINGS[0])); ++building) {
+        const WorldBuilding *world = &WORLD_BUILDINGS[building];
+        AddLocalCollisionBox(boxes, &count, world->footprint,
+                             TerrainFootprintHeight(world->footprint),
+                             world->height);
+    }
+    for (int32_t structure = 0;
+         structure < (int32_t)(sizeof(CASTLE_STRUCTURES) /
+                               sizeof(CASTLE_STRUCTURES[0])); ++structure) {
+        const WorldStructure *world = &CASTLE_STRUCTURES[structure];
+        AddLocalCollisionBox(boxes, &count, world->footprint,
+                             TerrainFootprintHeight(world->footprint),
+                             world->height);
+    }
+    AddLocalCollisionBox(boxes, &count, CARRIAGE_FOOTPRINT,
+                         TerrainFootprintHeight(CARRIAGE_FOOTPRINT), 2.65f);
+    AddLocalCollisionBox(boxes, &count, DUNGEON_FOOTPRINT,
+                         TerrainFootprintHeight(DUNGEON_FOOTPRINT), 3.10f);
+    for (int32_t obstacle = 0;
+         obstacle < (int32_t)(sizeof(ROOM_ART_OBSTACLES) /
+                              sizeof(ROOM_ART_OBSTACLES[0])); ++obstacle) {
+        Rectangle footprint = ROOM_ART_OBSTACLES[obstacle];
+        AddLocalCollisionBox(boxes, &count, footprint,
+                             TerrainFootprintHeight(footprint), 1.35f);
+    }
+    return count;
+}
+
+static bool SweptPointAgainstBox(Vector3 previous, Vector3 position,
+                                 const LocalCollisionBox *box, float radius,
+                                 float *hit_time, Vector3 *hit_normal)
+{
+    Vector3 minimum = {box->minimum.x - radius,
+                       box->minimum.y - radius,
+                       box->minimum.z - radius};
+    Vector3 maximum = {box->maximum.x + radius,
+                       box->maximum.y + radius,
+                       box->maximum.z + radius};
+    Vector3 movement = Vector3Subtract(position, previous);
+    float enter = 0.0f;
+    float leave = 1.0f;
+    Vector3 normal = {0};
+    const float starts[3] = {previous.x, previous.y, previous.z};
+    const float moves[3] = {movement.x, movement.y, movement.z};
+    const float lows[3] = {minimum.x, minimum.y, minimum.z};
+    const float highs[3] = {maximum.x, maximum.y, maximum.z};
+    for (int32_t axis = 0; axis < 3; ++axis) {
+        if (fabsf(moves[axis]) <= 0.000001f) {
+            if (starts[axis] < lows[axis] || starts[axis] > highs[axis]) {
+                return false;
+            }
+            continue;
+        }
+        float inverse = 1.0f / moves[axis];
+        float near_time = (lows[axis] - starts[axis]) * inverse;
+        float far_time = (highs[axis] - starts[axis]) * inverse;
+        float near_sign = -1.0f;
+        if (near_time > far_time) {
+            float swap = near_time;
+            near_time = far_time;
+            far_time = swap;
+            near_sign = 1.0f;
+        }
+        if (near_time > enter) {
+            enter = near_time;
+            normal = (Vector3){0};
+            if (axis == 0) normal.x = near_sign;
+            else if (axis == 1) normal.y = near_sign;
+            else normal.z = near_sign;
+        }
+        leave = fminf(leave, far_time);
+        if (enter > leave) return false;
+    }
+    if (enter < 0.0f || enter > 1.0f ||
+        (fabsf(normal.x) + fabsf(normal.y) + fabsf(normal.z)) < 0.5f) {
+        return false;
+    }
+    *hit_time = enter;
+    *hit_normal = normal;
+    return true;
+}
+
+static bool PushSphereOutOfBox(Vector3 *position,
+                               const LocalCollisionBox *box, float radius,
+                               Vector3 *normal)
+{
+    Vector3 closest = {
+        fmaxf(box->minimum.x, fminf(position->x, box->maximum.x)),
+        fmaxf(box->minimum.y, fminf(position->y, box->maximum.y)),
+        fmaxf(box->minimum.z, fminf(position->z, box->maximum.z)),
+    };
+    Vector3 delta = Vector3Subtract(*position, closest);
+    float distance = Vector3Length(delta);
+    if (distance >= radius) return false;
+    if (distance > 0.00001f) {
+        *normal = Vector3Scale(delta, 1.0f / distance);
+        *position = Vector3Add(*position,
+                               Vector3Scale(*normal, radius - distance));
+        return true;
+    }
+
+    float distances[6] = {
+        position->x - box->minimum.x,
+        box->maximum.x - position->x,
+        position->y - box->minimum.y,
+        box->maximum.y - position->y,
+        position->z - box->minimum.z,
+        box->maximum.z - position->z,
+    };
+    int32_t face = 0;
+    for (int32_t candidate = 1; candidate < 6; ++candidate) {
+        if (distances[candidate] < distances[face]) face = candidate;
+    }
+    *normal = (Vector3){0};
+    if (face == 0) { normal->x = -1.0f; position->x = box->minimum.x - radius; }
+    else if (face == 1) { normal->x = 1.0f; position->x = box->maximum.x + radius; }
+    else if (face == 2) { normal->y = -1.0f; position->y = box->minimum.y - radius; }
+    else if (face == 3) { normal->y = 1.0f; position->y = box->maximum.y + radius; }
+    else if (face == 4) { normal->z = -1.0f; position->z = box->minimum.z - radius; }
+    else { normal->z = 1.0f; position->z = box->maximum.z + radius; }
+    return true;
+}
+
+static bool ProbeLocalCollision(void *raw_context,
+                                CcBiomechVec3 previous_position,
+                                CcBiomechVec3 proposed_position, float radius,
+                                CcBiomechVec3 *corrected_position,
+                                CcBiomechVec3 *surface_normal)
+{
+    const LocalProbeContext *context = raw_context;
+    CcLocalSceneKind scene = context != NULL ? context->scene :
+                                               CC_LOCAL_SCENE_STREET;
+    Vector3 previous = {previous_position.x, previous_position.y,
+                        previous_position.z};
+    Vector3 proposed = {proposed_position.x, proposed_position.y,
+                        proposed_position.z};
+    LocalCollisionBox boxes[CC_LOCAL_COLLISION_BOX_CAPACITY];
+    int32_t box_count = GatherLocalCollisionBoxes(context, proposed, boxes);
+    if (context != NULL && context->root_capsule) {
+        int32_t retained = 0;
+        for (int32_t box = 0; box < box_count; ++box) {
+            if (context->root_base_y >= boxes[box].maximum.y - 0.055f) {
+                continue;
+            }
+            boxes[retained++] = boxes[box];
+        }
+        box_count = retained;
+    }
+    bool collided = false;
+    Vector3 normal = {0.0f, 1.0f, 0.0f};
+
+    float earliest = 1.0f;
+    Vector3 swept_normal = {0};
+    for (int32_t box = 0; box < box_count; ++box) {
+        float hit_time = 1.0f;
+        Vector3 hit_normal = {0};
+        if (SweptPointAgainstBox(previous, proposed, &boxes[box], radius,
+                                 &hit_time, &hit_normal) &&
+            hit_time < earliest) {
+            earliest = hit_time;
+            swept_normal = hit_normal;
+        }
+    }
+    if (earliest < 1.0f) {
+        Vector3 movement = Vector3Subtract(proposed, previous);
+        proposed = Vector3Add(previous, Vector3Scale(movement,
+            fmaxf(0.0f, earliest - 0.0005f)));
+        normal = swept_normal;
+        collided = true;
+    }
+
+    for (int32_t iteration = 0; iteration < 3; ++iteration) {
+        bool corrected = false;
+        for (int32_t box = 0; box < box_count; ++box) {
+            Vector3 box_normal = {0};
+            if (!PushSphereOutOfBox(&proposed, &boxes[box], radius,
+                                    &box_normal)) {
+                continue;
+            }
+            normal = box_normal;
+            corrected = true;
+            collided = true;
+        }
+        if (!corrected) break;
+    }
+
+    float ground = scene == CC_LOCAL_SCENE_STREET ?
+        CcLocalTerrainHeightAt(proposed.x, proposed.z) : 0.0f;
+    if (proposed.y - radius < ground) {
+        proposed.y = ground + radius;
+        normal = scene == CC_LOCAL_SCENE_STREET ?
+            CcLocalTerrainNormalAt(proposed.x, proposed.z) :
+            (Vector3){0.0f, 1.0f, 0.0f};
+        collided = true;
+    }
+    if (!collided) return false;
+    *corrected_position = (CcBiomechVec3){proposed.x, proposed.y, proposed.z};
+    *surface_normal = (CcBiomechVec3){normal.x, normal.y, normal.z};
+    return true;
+}
+
+bool CcLocalProbePhysicsSphereInternal(
+    CcLocalSceneKind scene, Vector3 previous, Vector3 proposed, float radius,
+    Vector3 *corrected, Vector3 *normal)
+{
+    if (corrected == NULL || normal == NULL || radius <= 0.0f) return false;
+    LocalProbeContext context = {.scene = scene};
+    CcBiomechVec3 resolved = {proposed.x, proposed.y, proposed.z};
+    CcBiomechVec3 contact_normal = {0};
+    bool collided = ProbeLocalCollision(
+        &context,
+        (CcBiomechVec3){previous.x, previous.y, previous.z},
+        (CcBiomechVec3){proposed.x, proposed.y, proposed.z}, radius,
+        &resolved, &contact_normal);
+    *corrected = (Vector3){resolved.x, resolved.y, resolved.z};
+    *normal = (Vector3){contact_normal.x, contact_normal.y,
+                        contact_normal.z};
+    return collided;
+}
+
+static bool LocalAgentCapsuleBlocked(CcLocalSceneKind scene,
+                                     Vector3 previous, Vector3 proposed,
+                                     float radius)
+{
+    LocalProbeContext context = {
+        .scene = scene,
+        .root_base_y = previous.y,
+        .root_capsule = true,
+    };
+    const float heights[] = {radius, 0.92f, 1.54f};
+    for (int32_t sample = 0;
+         sample < (int32_t)(sizeof(heights) / sizeof(heights[0])); ++sample) {
+        CcBiomechVec3 before = {previous.x, previous.y + heights[sample],
+                                previous.z};
+        CcBiomechVec3 after = {proposed.x, proposed.y + heights[sample],
+                               proposed.z};
+        CcBiomechVec3 corrected = after;
+        CcBiomechVec3 normal = {0};
+        if (!ProbeLocalCollision(&context, before, after, radius,
+                                 &corrected, &normal)) {
+            continue;
+        }
+        float proposed_x = corrected.x - after.x;
+        float proposed_z = corrected.z - after.z;
+        float proposed_correction = proposed_x * proposed_x +
+                                    proposed_z * proposed_z;
+        if (proposed_correction > 0.0001f * 0.0001f) {
+            CcBiomechVec3 corrected_before = before;
+            CcBiomechVec3 before_normal = {0};
+            (void)ProbeLocalCollision(&context, before, before, radius,
+                                      &corrected_before, &before_normal);
+            float before_x = corrected_before.x - before.x;
+            float before_z = corrected_before.z - before.z;
+            float before_correction = before_x * before_x +
+                                      before_z * before_z;
+            if (before_correction > proposed_correction + 0.000001f) {
+                continue;
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool ResolveLocalAgentCapsuleMove(CcLocalSceneKind scene,
+                                         Vector3 previous, Vector3 proposed,
+                                         float radius,
+                                         float passable_support_height,
+                                         Vector3 *resolved,
+                                         Vector3 *contact_normal)
+{
+    if (resolved == NULL || contact_normal == NULL) return false;
+    Vector3 result = proposed;
+    Vector3 normal = {0.0f, 1.0f, 0.0f};
+    bool collided = false;
+    const float heights[] = {radius, 0.92f, 1.54f};
+    for (int32_t iteration = 0; iteration < 2; ++iteration) {
+        bool iteration_collision = false;
+        for (int32_t sample = 0;
+             sample < (int32_t)(sizeof(heights) / sizeof(heights[0]));
+             ++sample) {
+            LocalProbeContext context = {
+                .scene = scene,
+                .root_base_y = fmaxf(result.y, passable_support_height),
+                .root_capsule = true,
+            };
+            CcBiomechVec3 before = {
+                previous.x, previous.y + heights[sample], previous.z};
+            CcBiomechVec3 after = {
+                result.x, result.y + heights[sample], result.z};
+            CcBiomechVec3 corrected = after;
+            CcBiomechVec3 sample_normal = {0};
+            if (!ProbeLocalCollision(&context, before, after, radius,
+                                     &corrected, &sample_normal)) {
+                continue;
+            }
+            Vector3 candidate = {
+                corrected.x,
+                corrected.y - heights[sample],
+                corrected.z,
+            };
+            Vector3 correction = Vector3Subtract(candidate, result);
+            if (Vector3Length(correction) <= 0.00001f) continue;
+            result = candidate;
+            normal = (Vector3){sample_normal.x, sample_normal.y,
+                               sample_normal.z};
+            collided = true;
+            iteration_collision = true;
+        }
+        if (!iteration_collision) break;
+    }
+    *resolved = result;
+    *contact_normal = normal;
+    return collided;
+}
+
+static bool LocalWorldSphereSweep(CcLocalSceneKind scene, Vector3 previous,
+                                  Vector3 proposed, float radius,
+                                  Vector3 *resolved, Vector3 *normal)
+{
+    LocalProbeContext context = {.scene = scene};
+    CcBiomechVec3 corrected = {proposed.x, proposed.y, proposed.z};
+    CcBiomechVec3 contact = {0};
+    bool collided = ProbeLocalCollision(
+        &context, (CcBiomechVec3){previous.x, previous.y, previous.z},
+        (CcBiomechVec3){proposed.x, proposed.y, proposed.z}, radius,
+        &corrected, &contact);
+    if (resolved != NULL) {
+        *resolved = (Vector3){corrected.x, corrected.y, corrected.z};
+    }
+    if (normal != NULL) {
+        *normal = (Vector3){contact.x, contact.y, contact.z};
+    }
+    return collided;
+}
+
+static float LocalClimbContactSupport(CcLocalSceneKind scene, Vector3 point,
+                                      Vector3 expected_normal,
+                                      float requested_support)
+{
+    requested_support = fmaxf(0.0f, fminf(1.0f, requested_support));
+    if (requested_support < 0.58f) return requested_support;
+    float normal_length = sqrtf(expected_normal.x * expected_normal.x +
+                                expected_normal.y * expected_normal.y +
+                                expected_normal.z * expected_normal.z);
+    if (normal_length <= 0.00001f) {
+        expected_normal = (Vector3){0.0f, 1.0f, 0.0f};
+    } else {
+        expected_normal.x /= normal_length;
+        expected_normal.y /= normal_length;
+        expected_normal.z /= normal_length;
+    }
+    Vector3 outside = {
+        point.x + expected_normal.x * 0.10f,
+        point.y + expected_normal.y * 0.10f,
+        point.z + expected_normal.z * 0.10f,
+    };
+    Vector3 inside = {
+        point.x - expected_normal.x * 0.08f,
+        point.y - expected_normal.y * 0.08f,
+        point.z - expected_normal.z * 0.08f,
+    };
+    return LocalWorldSphereSweep(scene, outside, inside, 0.045f,
+                                 NULL, NULL) ? requested_support : 0.0f;
+}
 
 static CcLimbVec3 ToLimbVector(Vector3 value)
 {
@@ -456,7 +1852,9 @@ static bool ProbeLocalSurface(void *raw_context, CcLimbVec3 origin,
     float height = SurfaceHeightAt(scene, origin.x, origin.z) + 0.035f;
     if (height > origin.y + 0.05f || origin.y - height > maximum_drop) return false;
     *point = (CcLimbVec3){origin.x, height, origin.z};
-    *normal = (CcLimbVec3){0.0f, 1.0f, 0.0f};
+    Vector3 surface_normal = SurfaceNormalAt(scene, origin.x, origin.z);
+    *normal = (CcLimbVec3){surface_normal.x, surface_normal.y,
+                           surface_normal.z};
     return true;
 }
 
@@ -480,14 +1878,15 @@ static const NavPlatform *ClimbPlatformAt(CcLocalSceneKind scene,
 {
     if (scene != CC_LOCAL_SCENE_STREET) return NULL;
     const NavPlatform *highest = NULL;
-    for (int32_t i = 0; i < (int32_t)(sizeof(STREET_PLATFORMS) /
-                                      sizeof(STREET_PLATFORMS[0])); ++i) {
-        const NavPlatform *platform = &STREET_PLATFORMS[i];
+    for (int32_t i = 0; i < StreetPhysicsPlatformCount(); ++i) {
+        const NavPlatform *platform = StreetPhysicsPlatformAt(i);
+        if (platform == NULL) continue;
+        float top = PlatformTopHeight(platform);
         Rectangle footprint = {platform->x, platform->z,
                                platform->width, platform->depth};
-        if (platform->height > feet_height + 0.24f &&
+        if (top > feet_height + 0.24f &&
             CircleTouchesFootprint(x, z, radius, footprint) &&
-            (highest == NULL || platform->height > highest->height)) {
+            (highest == NULL || top > PlatformTopHeight(highest))) {
             highest = platform;
         }
     }
@@ -497,10 +1896,10 @@ static const NavPlatform *ClimbPlatformAt(CcLocalSceneKind scene,
 static const NavPlatform *SupportingPlatformAt(float x, float z,
                                                float feet_height)
 {
-    for (int32_t i = 0; i < (int32_t)(sizeof(STREET_PLATFORMS) /
-                                      sizeof(STREET_PLATFORMS[0])); ++i) {
-        const NavPlatform *platform = &STREET_PLATFORMS[i];
-        if (fabsf(platform->height - feet_height) > 0.08f) continue;
+    for (int32_t i = 0; i < StreetPhysicsPlatformCount(); ++i) {
+        const NavPlatform *platform = StreetPhysicsPlatformAt(i);
+        if (platform == NULL) continue;
+        if (fabsf(PlatformTopHeight(platform) - feet_height) > 0.08f) continue;
         if (x >= platform->x && x <= platform->x + platform->width &&
             z >= platform->z && z <= platform->z + platform->depth) {
             return platform;
@@ -651,6 +2050,7 @@ void CcLocalAgentInit(CcLocalAgent *agent, Vector2 position, bool market_interio
                                 position.y};
     agent->facing_yaw = 0.75f * PI;
     agent->traversal = CC_TRAVERSAL_IDLE;
+    agent->support_state = CC_HUMANOID_SUPPORT_STABLE;
     agent->radius = PLAYER_COLLISION_RADIUS;
     agent->grounded = true;
     agent->allow_downclimb = true;
@@ -703,6 +2103,7 @@ void CcLocalAgentSetMorphology(CcLocalAgent *agent, CcMorphologyPreset preset,
         CcHumanoidGaitInit(&agent->humanoid, ToLimbVector(agent->position),
                             agent->facing_yaw, ProbeLocalSurface, &context);
         ApplyAgentWalkingProfile(agent);
+        agent->support_state = agent->humanoid.support_state;
         agent->render_pose = agent->humanoid.pose;
         agent->stepped_pose = (CcSteppedPoseState){0};
         agent->render_pose_valid = true;
@@ -1143,6 +2544,23 @@ CcCombatOutcome CcLocalCombatResolveStrike(CcLocalAgent *attacker,
         return CC_COMBAT_OUTCOME_MISS;
     }
 
+    Vector3 world_contact = {0};
+    Vector3 world_normal = {0};
+    Vector3 attack_center = {
+        attacker->position.x, attacker->position.y + 0.94f,
+        attacker->position.z};
+    Vector3 defense_center = {
+        defender->position.x, defender->position.y + 0.94f,
+        defender->position.z};
+    if (LocalWorldSphereSweep(attacker->scene, attack_center, defense_center,
+                              0.045f, &world_contact, &world_normal)) {
+        attacker->combat.impact_point = world_contact;
+        attacker->combat.impact_direction = world_normal;
+        attacker->combat.impact_speed = 0.0f;
+        attacker->combat.impact_valid = true;
+        return CC_COMBAT_OUTCOME_MISS;
+    }
+
     int32_t arm = attacker->humanoid.strike_side == 0 ? 0 : 1;
     Vector3 previous_hand = FromLimbVector(
         attacker->humanoid.previous_pose.hand[arm]);
@@ -1159,6 +2577,19 @@ CcCombatOutcome CcLocalCombatResolveStrike(CcLocalAgent *attacker,
     Vector3 current_tip = CombatAdd(current_hand,
                                     CombatScale(current_direction,
                                                 extension));
+    const float weapon_radius = 0.045f;
+    if (LocalWorldSphereSweep(attacker->scene, previous_hand, previous_tip,
+                              weapon_radius, &world_contact, &world_normal) ||
+        LocalWorldSphereSweep(attacker->scene, previous_tip, current_tip,
+                              weapon_radius, &world_contact, &world_normal) ||
+        LocalWorldSphereSweep(attacker->scene, current_hand, current_tip,
+                              weapon_radius, &world_contact, &world_normal)) {
+        attacker->combat.impact_point = world_contact;
+        attacker->combat.impact_direction = world_normal;
+        attacker->combat.impact_speed = 0.0f;
+        attacker->combat.impact_valid = true;
+        return CC_COMBAT_OUTCOME_MISS;
+    }
     Vector3 body_bottom = {defender->position.x,
                            defender->position.y + 0.38f,
                            defender->position.z};
@@ -1754,6 +3185,8 @@ static float CourseAlarmInterval(const CcSim *sim)
     return fmaxf(9.0f, 22.0f - (float)influence * 0.16f);
 }
 
+static bool SetStreetClickTarget(CcLocalAgent *agent, Vector3 target);
+
 static bool CourseRaiderResponseWaypoint(const CcLocalCourse *course,
                                          int32_t raider, int32_t stage,
                                          Vector3 *waypoint)
@@ -2099,11 +3532,13 @@ int32_t CcLocalCoursePickPlayerTarget(CcLocalCourse *course,
         (screen_point.y - destination.y) / destination.height *
             (float)target.texture.height
     };
-    Camera3D camera = course->scene == CC_LOCAL_SCENE_ROAD ?
+    Camera3D base_camera = course->scene == CC_LOCAL_SCENE_ROAD ?
         RoadCamera(player->position, false, 0.0f, false,
                    target.texture.height) :
-        StreetCamera(player->position, 0.0f, false,
-                     target.texture.height);
+        CcLocalStreetCameraInternal(player, 0.0f, false,
+                                    target.texture.height);
+    Camera3D camera = CombatCamera(base_camera, player, course, 0.0f,
+                                   false, target.texture.height);
     Ray ray = GetScreenToWorldRayEx(local, camera, target.texture.width,
                                     target.texture.height);
     int32_t picked = -1;
@@ -2353,8 +3788,7 @@ void CcLocalCourseFixedStepInternal(CcLocalCourse *course,
                 &retreat_waypoint);
             if (has_retreat_waypoint &&
                 !course->raider_response_waypoint_active[i]) {
-                if (CcLocalAgentSetExactTarget(raider, retreat_waypoint,
-                                               false)) {
+                if (SetStreetClickTarget(raider, retreat_waypoint)) {
                     course->raider_response_waypoint_active[i] = true;
                 }
             } else if (has_retreat_waypoint &&
@@ -2580,6 +4014,8 @@ typedef struct ResolvedStreetPortal {
     bool reverse;
 } ResolvedStreetPortal;
 
+#define STREET_CLICK_NAVIGATION_DESTINATION INT32_MIN
+
 static int32_t StreetRoomForAgent(const CcLocalAgent *agent)
 {
     if (agent == NULL || agent->scene != CC_LOCAL_SCENE_STREET) return -1;
@@ -2686,10 +4122,18 @@ bool CcLocalAgentSetExactTarget(CcLocalAgent *agent, Vector3 target,
                                 bool market_interior)
 {
     ClearAgentNavigation(agent);
-    return SetAgentExactTarget(agent, target, market_interior);
+    if (agent == NULL) return false;
+    agent->exact_target_valid = false;
+    agent->target_valid = false;
+    agent->command_point_valid = false;
+    if (!SetAgentExactTarget(agent, target, market_interior)) return false;
+    agent->command_origin = agent->position;
+    agent->command_point = agent->target_point;
+    agent->command_point_valid = true;
+    return true;
 }
 
-static bool QueueStreetNavigationPoint(CcLocalAgent *agent, Vector2 point)
+static bool AppendStreetNavigationPoint(CcLocalAgent *agent, Vector2 point)
 {
     if (agent->navigation_point_count >=
         CC_LOCAL_NAVIGATION_POINT_CAPACITY ||
@@ -2712,6 +4156,65 @@ static bool QueueStreetNavigationPoint(CcLocalAgent *agent, Vector2 point)
     return true;
 }
 
+static bool QueueStreetNavigationPoint(CcLocalAgent *agent, Vector2 point)
+{
+    if (agent == NULL) return false;
+    Vector3 previous = agent->navigation_point_count > 0 ?
+        agent->navigation_point[agent->navigation_point_count - 1] :
+        agent->position;
+    Vector2 from = {previous.x, previous.z};
+    Vector2 path[CC_LOCAL_NAVIGATION_POINT_CAPACITY];
+    int32_t remaining = CC_LOCAL_NAVIGATION_POINT_CAPACITY -
+                        agent->navigation_point_count;
+    int32_t path_count = FindStreetPath(from, point, agent->radius,
+                                        path, remaining);
+    if (path_count <= 0) return false;
+    for (int32_t index = 0; index < path_count; ++index) {
+        if (!AppendStreetNavigationPoint(agent, path[index])) return false;
+    }
+    return true;
+}
+
+static bool SetStreetClickTarget(CcLocalAgent *agent, Vector3 target)
+{
+    if (agent == NULL || !CombatCanAct(&agent->combat)) return false;
+    ClearAgentNavigation(agent);
+    agent->exact_target_valid = false;
+    agent->target_valid = false;
+    agent->command_point_valid = false;
+    float target_land = CcLocalTerrainHeightAt(target.x, target.z);
+    float agent_land = CcLocalTerrainHeightAt(agent->position.x,
+                                               agent->position.z);
+    bool target_on_platform = target.y > target_land + 0.24f;
+    bool agent_on_platform = agent->position.y > agent_land + 0.24f;
+    if (target_on_platform || agent_on_platform) {
+        if (!SetAgentExactTarget(agent, target, false)) return false;
+        agent->command_origin = agent->position;
+        agent->command_point = agent->target_point;
+        agent->command_point_valid = true;
+        return true;
+    }
+    agent->scene = CC_LOCAL_SCENE_STREET;
+    if (!QueueStreetNavigationPoint(
+            agent, (Vector2){target.x, target.z}) ||
+        agent->navigation_point_count <= 0) {
+        ClearAgentNavigation(agent);
+        return false;
+    }
+    agent->navigation_destination_room =
+        STREET_CLICK_NAVIGATION_DESTINATION;
+    agent->navigation_active = true;
+    if (!SetAgentExactTarget(agent, agent->navigation_point[0], false)) {
+        ClearAgentNavigation(agent);
+        return false;
+    }
+    target.y = SurfaceHeightAt(CC_LOCAL_SCENE_STREET, target.x, target.z);
+    agent->command_origin = agent->position;
+    agent->command_point = target;
+    agent->command_point_valid = true;
+    return true;
+}
+
 static bool StartStreetPortalTraversal(CcLocalAgent *agent,
                                        int32_t portal_index,
                                        bool include_room_trigger)
@@ -2721,6 +4224,7 @@ static bool StartStreetPortalTraversal(CcLocalAgent *agent,
         !ResolveStreetPortal(agent, portal_index, &portal)) return false;
 
     int32_t room = StreetRoomForAgent(agent);
+    agent->command_point_valid = false;
     ClearAgentNavigation(agent);
     Vector3 room_trigger = {
         STREET_CAMERA_SHOTS[room].trigger.x, 0.0f,
@@ -2786,6 +4290,8 @@ bool CcLocalAgentFollowStreetPortal(CcLocalAgent *agent,
 const char *CcLocalAgentNavigationName(const CcLocalAgent *agent)
 {
     if (agent == NULL || !agent->navigation_active) return NULL;
+    if (agent->navigation_destination_room ==
+        STREET_CLICK_NAVIGATION_DESTINATION) return NULL;
     if (agent->navigation_destination_room >= 0) {
         return STREET_CAMERA_SHOTS[agent->navigation_destination_room].name;
     }
@@ -2826,6 +4332,7 @@ static bool AdvanceAgentNavigation(CcLocalAgent *agent)
     agent->navigation_point_index = 0;
     agent->exact_target_valid = false;
     agent->target_valid = false;
+    agent->command_point_valid = false;
     agent->world_exit_requested = world_exit;
     return false;
 }
@@ -2835,7 +4342,28 @@ static Vector3 StreetPortalWorldPoint(const ResolvedStreetPortal *portal)
     Vector2 point = portal->destination_room >= 0 ?
         STREET_CAMERA_SHOTS[portal->destination_room].trigger :
         portal->exit->endpoint;
-    return (Vector3){point.x, 0.42f, point.y};
+    return (Vector3){point.x,
+                     CcLocalTerrainHeightAt(point.x, point.y) + 0.42f,
+                     point.y};
+}
+
+static Vector3 StreetPortalApproachWorldPoint(
+    const ResolvedStreetPortal *portal)
+{
+    if (portal->link != NULL && portal->link->via_count > 0) {
+        int32_t index = portal->reverse ? portal->link->via_count - 1 : 0;
+        Vector2 point = portal->link->via[index];
+        return (Vector3){point.x,
+                         CcLocalTerrainHeightAt(point.x, point.y) + 0.42f,
+                         point.y};
+    }
+    if (portal->exit != NULL && portal->exit->via_count > 0) {
+        Vector2 point = portal->exit->via[0];
+        return (Vector3){point.x,
+                         CcLocalTerrainHeightAt(point.x, point.y) + 0.42f,
+                         point.y};
+    }
+    return StreetPortalWorldPoint(portal);
 }
 
 static Vector2 StreetPortalEdgePoint(const ResolvedStreetPortal *portal,
@@ -2859,50 +4387,139 @@ static Vector2 StreetPortalEdgePoint(const ResolvedStreetPortal *portal,
                      center.y + direction.y * scale};
 }
 
-static bool StreetPortalGroundApproach(const ResolvedStreetPortal *portal,
-                                       int32_t room, Vector2 *approach)
+static float StreetEdgeStripScore(Vector2 point, Vector2 marker,
+                                  int32_t width, int32_t height,
+                                  float maximum_inward, float maximum_cross)
+{
+    float left = marker.x;
+    float right = (float)width - marker.x;
+    float top = marker.y;
+    float bottom = (float)height - marker.y;
+    float inward = 0.0f;
+    float cross = 0.0f;
+    if (left <= right && left <= top && left <= bottom) {
+        inward = point.x - marker.x;
+        cross = fabsf(point.y - marker.y);
+    } else if (right <= top && right <= bottom) {
+        inward = marker.x - point.x;
+        cross = fabsf(point.y - marker.y);
+    } else if (top <= bottom) {
+        inward = point.y - marker.y;
+        cross = fabsf(point.x - marker.x);
+    } else {
+        inward = marker.y - point.y;
+        cross = fabsf(point.x - marker.x);
+    }
+    if (inward < -6.0f || inward > maximum_inward ||
+        cross > maximum_cross) return FLT_MAX;
+    return inward / maximum_inward + cross / maximum_cross;
+}
+
+static float StreetPortalProximityScore(const CcLocalAgent *agent,
+                                        const ResolvedStreetPortal *portal,
+                                        int32_t room)
 {
     enum { ART_WIDTH = 457, ART_HEIGHT = 285 };
-    if (portal == NULL || approach == NULL || room < 0 ||
+    if (agent == NULL || portal == NULL || room < 0 ||
         room >= (int32_t)(sizeof(STREET_CAMERA_SHOTS) /
-                          sizeof(STREET_CAMERA_SHOTS[0]))) return false;
+                          sizeof(STREET_CAMERA_SHOTS[0]))) return FLT_MAX;
+    const StreetCameraShot *composition = &STREET_CAMERA_SHOTS[room];
+    Vector3 camera_target = composition->target;
+    camera_target.y += CcLocalTerrainHeightAt(camera_target.x,
+                                               camera_target.z);
     Camera3D camera = SnapCameraToArtPixels(
-        ExteriorCameraAt(STREET_CAMERA_SHOTS[room].target, 10.8f),
+        ExteriorCameraComposed(camera_target,
+                               composition->camera_offset,
+                               composition->fovy),
         ART_HEIGHT);
-    Vector2 edge = StreetPortalEdgePoint(portal, camera, ART_WIDTH,
-                                         ART_HEIGHT);
-    Ray ray = GetScreenToWorldRayEx(edge, camera, ART_WIDTH, ART_HEIGHT);
-    if (fabsf(ray.direction.y) < 0.0001f) return false;
-    float distance = -ray.position.y / ray.direction.y;
-    if (distance <= 0.0f) return false;
-    Vector3 ground = Vector3Add(
-        ray.position, Vector3Scale(ray.direction, distance));
-    approach->x = ground.x;
-    approach->y = ground.z;
-    return true;
+    Vector2 projected = GetWorldToScreenEx(
+        StreetPortalApproachWorldPoint(portal), camera, ART_WIDTH,
+        ART_HEIGHT);
+    Vector2 center = {(float)ART_WIDTH * 0.5f,
+                      (float)ART_HEIGHT * 0.5f};
+    Vector2 direction = {projected.x - center.x,
+                         projected.y - center.y};
+    if (fabsf(direction.x) + fabsf(direction.y) < 0.001f) {
+        direction = (Vector2){1.0f, 0.0f};
+    }
+    float horizontal = ((float)ART_WIDTH * 0.5f - 13.0f) /
+                       fmaxf(0.001f, fabsf(direction.x));
+    float vertical = ((float)ART_HEIGHT * 0.5f - 13.0f) /
+                     fmaxf(0.001f, fabsf(direction.y));
+    float marker_scale = fminf(horizontal, vertical);
+    Vector2 marker = {center.x + direction.x * marker_scale,
+                      center.y + direction.y * marker_scale};
+    Vector2 player = GetWorldToScreenEx(
+        (Vector3){agent->position.x,
+                  CcLocalTerrainHeightAt(agent->position.x,
+                                         agent->position.z) + 0.42f,
+                  agent->position.z}, camera,
+        ART_WIDTH, ART_HEIGHT);
+
+    /* A room exit is both a screen-edge strip and the mouth of a physical
+       road. Wider compositions can keep that mouth away from the screen edge,
+       so accept an aligned approach within a lens-scaled world radius too. */
+    float edge_score = StreetEdgeStripScore(
+        player, marker, ART_WIDTH, ART_HEIGHT, 82.0f, 64.0f);
+    Vector3 approach = StreetPortalApproachWorldPoint(portal);
+    float approach_x = agent->position.x - approach.x;
+    float approach_z = agent->position.z - approach.z;
+    float approach_distance = sqrtf(approach_x * approach_x +
+                                    approach_z * approach_z);
+    float corridor_x = composition->trigger.x - approach.x;
+    float corridor_z = composition->trigger.y - approach.z;
+    float corridor_length = sqrtf(corridor_x * corridor_x +
+                                  corridor_z * corridor_z);
+    float physical_radius = corridor_length >= 8.0f ?
+        fminf(7.2f, corridor_length * 0.55f) : 0.0f;
+    float physical_score = physical_radius > 0.0f &&
+                           approach_distance <= physical_radius ?
+        0.15f + approach_distance / physical_radius : FLT_MAX;
+    return fminf(edge_score, physical_score);
+}
+
+static float StreetPortalCommandAlignment(
+    const CcLocalAgent *agent, const ResolvedStreetPortal *portal)
+{
+    if (agent == NULL || portal == NULL || !agent->command_point_valid) {
+        return -1.0f;
+    }
+    Vector3 portal_point = StreetPortalWorldPoint(portal);
+    float intent_x = agent->command_point.x - agent->command_origin.x;
+    float intent_z = agent->command_point.z - agent->command_origin.z;
+    float portal_x = portal_point.x - agent->command_origin.x;
+    float portal_z = portal_point.z - agent->command_origin.z;
+    float intent_length = sqrtf(intent_x * intent_x + intent_z * intent_z);
+    float portal_length = sqrtf(portal_x * portal_x + portal_z * portal_z);
+    if (intent_length < 0.08f || portal_length < 0.08f) return -1.0f;
+    return (intent_x * portal_x + intent_z * portal_z) /
+           (intent_length * portal_length);
 }
 
 static void UpdateStreetPortalProximity(CcLocalAgent *agent)
 {
-    if (agent == NULL || !agent->crowned || agent->navigation_active ||
+    bool following_click_path = agent != NULL && agent->navigation_active &&
+        agent->navigation_destination_room ==
+            STREET_CLICK_NAVIGATION_DESTINATION;
+    if (agent == NULL || !agent->crowned ||
+        (agent->navigation_active && !following_click_path) ||
         !agent->exact_target_valid || agent->scene != CC_LOCAL_SCENE_STREET) {
         return;
     }
     int32_t room = StreetRoomForAgent(agent);
     int32_t count = CcLocalAgentStreetPortalCount(agent);
     int32_t nearest = -1;
-    float nearest_distance = 1.05f * 1.05f;
+    float nearest_score = FLT_MAX;
     for (int32_t portal_index = 0; portal_index < count; ++portal_index) {
         ResolvedStreetPortal portal = {0};
         if (!ResolveStreetPortal(agent, portal_index, &portal)) continue;
-        Vector2 approach = {0};
-        if (!StreetPortalGroundApproach(&portal, room, &approach)) continue;
-        float x = agent->position.x - approach.x;
-        float z = agent->position.z - approach.y;
-        float distance = x * x + z * z;
-        if (distance >= nearest_distance) continue;
+        float alignment = StreetPortalCommandAlignment(agent, &portal);
+        if (alignment < 0.35f) continue;
+        float score = StreetPortalProximityScore(agent, &portal, room);
+        if (score < FLT_MAX) score += (1.0f - alignment) * 0.50f;
+        if (score >= nearest_score) continue;
         nearest = portal_index;
-        nearest_distance = distance;
+        nearest_score = score;
     }
     if (nearest >= 0) {
         /* The player reached the physical edge of this camera room. Continue
@@ -2926,7 +4543,11 @@ static float RayFootprintDistance(Ray ray, Rectangle footprint, float height)
 static bool SetNearestClickTarget(CcLocalAgent *agent, Vector3 picked_point,
                                   bool market_interior)
 {
-    if (CcLocalAgentSetExactTarget(agent, picked_point, market_interior)) {
+    CcLocalSceneKind scene = AgentSceneForCall(agent, market_interior);
+    bool targeted = scene == CC_LOCAL_SCENE_STREET ?
+        SetStreetClickTarget(agent, picked_point) :
+        CcLocalAgentSetExactTarget(agent, picked_point, market_interior);
+    if (targeted) {
         return true;
     }
 
@@ -2954,13 +4575,39 @@ static bool SetNearestClickTarget(CcLocalAgent *agent, Vector3 picked_point,
             Vector3 candidate = picked_point;
             candidate.x += (toward_x * cosine - toward_z * sine) * radius;
             candidate.z += (toward_x * sine + toward_z * cosine) * radius;
-            if (CcLocalAgentSetExactTarget(agent, candidate,
-                                           market_interior)) {
+            targeted = scene == CC_LOCAL_SCENE_STREET ?
+                SetStreetClickTarget(agent, candidate) :
+                CcLocalAgentSetExactTarget(agent, candidate,
+                                           market_interior);
+            if (targeted) {
                 return true;
             }
         }
     }
     return false;
+}
+
+static RayCollision RayTerrainCollision(Ray ray)
+{
+    RayCollision nearest = {0};
+    nearest.distance = FLT_MAX;
+    const float step = 1.0f;
+    for (float z = 0.0f; z < CC_LOCAL_WORLD_DEPTH; z += step) {
+        float far_z = fminf(z + step, CC_LOCAL_WORLD_DEPTH);
+        for (float x = 0.0f; x < CC_LOCAL_WORLD_WIDTH; x += step) {
+            float far_x = fminf(x + step, CC_LOCAL_WORLD_WIDTH);
+            Vector3 p00 = {x, CcLocalTerrainHeightAt(x, z), z};
+            Vector3 p10 = {far_x, CcLocalTerrainHeightAt(far_x, z), z};
+            Vector3 p01 = {x, CcLocalTerrainHeightAt(x, far_z), far_z};
+            Vector3 p11 = {far_x,
+                           CcLocalTerrainHeightAt(far_x, far_z), far_z};
+            RayCollision hit = GetRayCollisionTriangle(ray, p00, p11, p10);
+            if (hit.hit && hit.distance < nearest.distance) nearest = hit;
+            hit = GetRayCollisionTriangle(ray, p00, p01, p11);
+            if (hit.hit && hit.distance < nearest.distance) nearest = hit;
+        }
+    }
+    return nearest;
 }
 
 bool CcLocalAgentPickTarget(CcLocalAgent *agent, Vector2 screen_point,
@@ -2979,39 +4626,70 @@ bool CcLocalAgentPickTarget(CcLocalAgent *agent, Vector2 screen_point,
         scene == CC_LOCAL_SCENE_ROAD ?
             RoadCamera(agent->position, false, 0.0f, false,
                        target.texture.height) :
-            StreetCamera(agent->position, 0.0f, false,
-                         target.texture.height);
+            CcLocalStreetCameraInternal(agent, 0.0f, false,
+                                        target.texture.height);
     Ray ray = GetScreenToWorldRayEx(local, camera, target.texture.width,
                                     target.texture.height);
     float nearest = FLT_MAX;
     Vector3 picked_point = {0};
-    BoundingBox ground = {
-        .min = {0.0f, -0.08f, 0.0f},
-        .max = {interior ? 9.0f : CC_LOCAL_WORLD_WIDTH, 0.01f,
-                interior ? 7.0f : CC_LOCAL_WORLD_DEPTH}
-    };
-    RayCollision collision = GetRayCollisionBox(ray, ground);
+    const NavPlatform *picked_platform = NULL;
+    RayCollision collision = {0};
+    if (scene == CC_LOCAL_SCENE_STREET) {
+        collision = RayTerrainCollision(ray);
+    } else {
+        BoundingBox ground = {
+            .min = {0.0f, -0.08f, 0.0f},
+            .max = {interior ? 9.0f : CC_LOCAL_WORLD_WIDTH, 0.01f,
+                    interior ? 7.0f : CC_LOCAL_WORLD_DEPTH}
+        };
+        collision = GetRayCollisionBox(ray, ground);
+    }
     if (collision.hit) {
         nearest = collision.distance;
         picked_point = collision.point;
     }
     if (scene == CC_LOCAL_SCENE_STREET) {
-        for (int32_t i = 0; i < (int32_t)(sizeof(STREET_PLATFORMS) /
-                                          sizeof(STREET_PLATFORMS[0])); ++i) {
-            const NavPlatform *platform = &STREET_PLATFORMS[i];
+        for (int32_t i = 0; i < StreetPhysicsPlatformCount(); ++i) {
+            const NavPlatform *platform = StreetPhysicsPlatformAt(i);
+            if (platform == NULL) continue;
+            float base = PlatformBaseHeight(platform);
+            float top = PlatformTopHeight(platform);
             BoundingBox box = {
-                .min = {platform->x, -0.02f, platform->z},
+                .min = {platform->x, base - 0.02f, platform->z},
                 .max = {platform->x + platform->width,
-                        platform->height + 0.02f,
+                        top + 0.02f,
                         platform->z + platform->depth}
             };
             collision = GetRayCollisionBox(ray, box);
             if (!collision.hit || collision.distance >= nearest) continue;
             nearest = collision.distance;
             picked_point = collision.point;
+            picked_platform = platform;
         }
     }
     if (nearest == FLT_MAX) return false;
+    if (picked_platform != NULL) {
+        /* Physical surfaces win over the broad road-mouth intent zone. This
+           keeps a crate, stair, or training obstacle clickable even when it
+           is composed near the edge of a room. A camera ray commonly reaches
+           the leading vertical face before the top plane; snap that hit into
+           the usable top so it cannot turn into a ground-level walk command
+           that stalls against the same obstacle. */
+        float half_extent = fminf(picked_platform->width,
+                                  picked_platform->depth) * 0.5f;
+        float inset = fminf(agent->radius + 0.035f,
+                            fmaxf(0.02f, half_extent - 0.02f));
+        picked_point.x = fmaxf(
+            picked_platform->x + inset,
+            fminf(picked_point.x,
+                  picked_platform->x + picked_platform->width - inset));
+        picked_point.z = fmaxf(
+            picked_platform->z + inset,
+            fminf(picked_point.z,
+                  picked_platform->z + picked_platform->depth - inset));
+        picked_point.y = PlatformTopHeight(picked_platform);
+        return SetStreetClickTarget(agent, picked_point);
+    }
     float occluder = FLT_MAX;
     if (interior) {
         occluder = fminf(occluder,
@@ -3272,6 +4950,7 @@ static bool BeginClimb(CcLocalAgent *agent, const NavPlatform *platform)
          agent->humanoid.recovering || agent->humanoid.climbing)) {
         return false;
     }
+    float platform_top = PlatformTopHeight(platform);
     float left = fabsf(agent->position.x - platform->x);
     float right_edge = fabsf(agent->position.x -
                              (platform->x + platform->width));
@@ -3280,22 +4959,22 @@ static bool BeginClimb(CcLocalAgent *agent, const NavPlatform *platform)
                            (platform->z + platform->depth));
     float nearest = left;
     Vector3 normal = {-1.0f, 0.0f, 0.0f};
-    Vector3 face = {platform->x, platform->height, agent->position.z};
+    Vector3 face = {platform->x, platform_top, agent->position.z};
     if (right_edge < nearest) {
         nearest = right_edge;
         normal = (Vector3){1.0f, 0.0f, 0.0f};
-        face = (Vector3){platform->x + platform->width, platform->height,
+        face = (Vector3){platform->x + platform->width, platform_top,
                          agent->position.z};
     }
     if (near_edge < nearest) {
         nearest = near_edge;
         normal = (Vector3){0.0f, 0.0f, -1.0f};
-        face = (Vector3){agent->position.x, platform->height,
+        face = (Vector3){agent->position.x, platform_top,
                          platform->z};
     }
     if (far_edge < nearest) {
         normal = (Vector3){0.0f, 0.0f, 1.0f};
-        face = (Vector3){agent->position.x, platform->height,
+        face = (Vector3){agent->position.x, platform_top,
                          platform->z + platform->depth};
     }
     if (normal.x != 0.0f) {
@@ -3323,15 +5002,18 @@ static bool BeginClimb(CcLocalAgent *agent, const NavPlatform *platform)
     hand_right.y += 0.035f;
     float arm_reach = 0.69f +
         (float)(AthleticLevel(agent, CC_ATHLETIC_GRIP) - 1) * 0.025f;
-    if (PhysicsLength(PhysicsSubtract(hand_left, shoulder_left)) > arm_reach ||
-        PhysicsLength(PhysicsSubtract(hand_right, shoulder_right)) > arm_reach) {
+    float ledge_rise = platform_top - agent->position.y;
+    bool low_ledge = ledge_rise <= 0.72f;
+    if (!low_ledge &&
+        (PhysicsLength(PhysicsSubtract(hand_left, shoulder_left)) > arm_reach ||
+         PhysicsLength(PhysicsSubtract(hand_right, shoulder_right)) > arm_reach)) {
         return false;
     }
 
     agent->climb_start = agent->position;
     agent->climb_end = PhysicsAdd(face,
                                   PhysicsScale(normal, -(agent->radius + 0.18f)));
-    agent->climb_end.y = platform->height;
+    agent->climb_end.y = platform_top;
     if (StaticBodyBlocked(agent->scene, agent->climb_end.x,
                           agent->climb_end.z,
                           agent->radius)) return false;
@@ -3375,6 +5057,7 @@ static bool BeginClimb(CcLocalAgent *agent, const NavPlatform *platform)
     agent->velocity = (Vector3){0};
     agent->traversal = agent->vaulting ? CC_TRAVERSAL_VAULT :
                                          CC_TRAVERSAL_CLIMB;
+    agent->support_state = CC_HUMANOID_SUPPORT_HANDS;
     if (agent->morphology == CC_MORPHOLOGY_BIPED) {
         CcHumanoidGaitBeginClimb(&agent->humanoid);
         agent->humanoid_needs_reset = false;
@@ -3392,8 +5075,9 @@ static bool BeginDownClimb(CcLocalAgent *agent,
         agent->humanoid.recovering || agent->humanoid.climbing) {
         return false;
     }
+    float platform_top = PlatformTopHeight(platform);
     Vector3 normal = {0.0f, 0.0f, 0.0f};
-    Vector3 face = {agent->position.x, platform->height, agent->position.z};
+    Vector3 face = {agent->position.x, platform_top, agent->position.z};
     if (move_x) {
         normal.x = amount < 0.0f ? -1.0f : 1.0f;
         face.x = amount < 0.0f ? platform->x :
@@ -3413,7 +5097,7 @@ static bool BeginDownClimb(CcLocalAgent *agent,
         face, PhysicsScale(normal, agent->radius + 0.42f));
     descent_end.y = BodySurfaceHeightAt(agent->scene, descent_end.x,
                                         descent_end.z);
-    if (descent_end.y >= platform->height - 0.24f ||
+    if (descent_end.y >= platform_top - 0.24f ||
         StaticBodyBlocked(agent->scene, descent_end.x, descent_end.z,
                           agent->radius)) {
         return false;
@@ -3421,7 +5105,7 @@ static bool BeginDownClimb(CcLocalAgent *agent,
     float facing = atan2f(-normal.x, -normal.z);
     Vector3 frame_right = {cosf(facing), 0.0f, -sinf(facing)};
     Vector3 hand_center = PhysicsAdd(face, PhysicsScale(normal, 0.018f));
-    hand_center.y = platform->height + 0.035f;
+    hand_center.y = platform_top + 0.035f;
 
     agent->climb_start = agent->position;
     agent->climb_end = descent_end;
@@ -3434,7 +5118,7 @@ static bool BeginDownClimb(CcLocalAgent *agent,
     agent->climb_start_yaw = agent->facing_yaw;
     agent->climb_end_yaw = facing;
     agent->climb_duration = 1.42f +
-        (platform->height - descent_end.y) * 0.18f;
+        (platform_top - descent_end.y) * 0.18f;
     agent->climb_duration /= AthleticBonus(agent, CC_ATHLETIC_GRIP, 0.06f);
     agent->climb_progress = 0.0f;
     agent->climb_settle = 0.0f;
@@ -3445,14 +5129,33 @@ static bool BeginDownClimb(CcLocalAgent *agent,
     agent->grounded = true;
     agent->velocity = (Vector3){0};
     agent->traversal = CC_TRAVERSAL_DESCEND;
+    agent->support_state = CC_HUMANOID_SUPPORT_HANDS;
     CcHumanoidGaitBeginClimb(&agent->humanoid);
     agent->humanoid_needs_reset = false;
+    return true;
+}
+
+static bool ReleaseClimbToPhysicalFall(CcLocalAgent *agent)
+{
+    if (agent == NULL || !agent->humanoid.ragdoll.active) return false;
+    agent->position = FromLimbVector(CcHumanoidGaitAuthoritativePosition(
+        &agent->humanoid, ToLimbVector(agent->position)));
+    agent->velocity = FromLimbVector(CcHumanoidGaitAuthoritativeVelocity(
+        &agent->humanoid, ToLimbVector(agent->velocity)));
+    agent->climbing = false;
+    agent->climbing_down = false;
+    agent->vaulting = false;
+    agent->climb_training_pending = false;
+    agent->grounded = false;
+    agent->support_state = CC_HUMANOID_SUPPORT_UNCONTROLLED_FALL;
+    agent->traversal = CC_TRAVERSAL_RAGDOLL;
     return true;
 }
 
 static void UpdateDownClimb(CcLocalAgent *agent, float delta_time,
                             bool market_interior)
 {
+    Vector3 previous_position = agent->position;
     agent->climb_progress = fminf(1.0f, agent->climb_progress +
                                   delta_time / agent->climb_duration);
     float amount = agent->climb_progress;
@@ -3509,6 +5212,21 @@ static void UpdateDownClimb(CcLocalAgent *agent, float delta_time,
     if (agent->position.y < agent->climb_end.y) {
         agent->position.y = agent->climb_end.y;
         if (agent->velocity.y < 0.0f) agent->velocity.y = 0.0f;
+    }
+
+    Vector3 resolved_position = agent->position;
+    Vector3 collision_normal = {0};
+    if (ResolveLocalAgentCapsuleMove(
+            AgentSceneForCall(agent, market_interior), previous_position,
+            agent->position, agent->radius, -FLT_MAX, &resolved_position,
+            &collision_normal)) {
+        agent->position = resolved_position;
+        float into_surface = PhysicsDot(agent->velocity, collision_normal);
+        if (into_surface < 0.0f) {
+            agent->velocity = PhysicsSubtract(
+                agent->velocity,
+                PhysicsScale(collision_normal, into_surface));
+        }
     }
 
     float end_distance = PhysicsLength(
@@ -3588,14 +5306,27 @@ static void UpdateDownClimb(CcLocalAgent *agent, float delta_time,
     CcLimbVec3 normals[CC_HUMANOID_LEG_COUNT] = {
         ToLimbVector(foot_normals[0]), ToLimbVector(foot_normals[1])
     };
-    const float support[CC_HUMANOID_LEG_COUNT] = {1.0f, 1.0f};
+    CcLocalSceneKind climb_scene = AgentSceneForCall(agent, market_interior);
+    const float hand_support[CC_HUMANOID_ARM_COUNT] = {
+        LocalClimbContactSupport(climb_scene, agent->climb_hand_left, up,
+                                 1.0f),
+        LocalClimbContactSupport(climb_scene, agent->climb_hand_right, up,
+                                 1.0f),
+    };
+    const float support[CC_HUMANOID_LEG_COUNT] = {
+        LocalClimbContactSupport(climb_scene, foot_targets[0],
+                                 foot_normals[0], 1.0f),
+        LocalClimbContactSupport(climb_scene, foot_targets[1],
+                                 foot_normals[1], 1.0f),
+    };
     float standing_convergence = SmoothStep01(agent->climb_settle);
     float biomech_progress = amount < 0.78f ? amount :
         0.78f + 0.22f * standing_convergence;
     CcHumanoidGaitAdvanceClimb(
         &agent->humanoid, ToLimbVector(agent->position),
-        agent->facing_yaw, hands, feet, normals, support, biomech_progress,
-        delta_time, ProbeLocalSurface, &context);
+        agent->facing_yaw, hands, hand_support, feet, normals, support,
+        biomech_progress, delta_time, ProbeLocalSurface, &context);
+    if (ReleaseClimbToPhysicalFall(agent)) return;
 
     agent->traversal = CC_TRAVERSAL_DESCEND;
     if (agent->climb_settle >= 1.0f &&
@@ -3702,6 +5433,13 @@ static void UpdateHighMantle(CcLocalAgent *agent, float delta_time,
         }
     }
     if (amount >= 1.0f) target = agent->climb_end;
+    Vector3 resolved_target = target;
+    Vector3 collision_normal = {0};
+    (void)ResolveLocalAgentCapsuleMove(
+        AgentSceneForCall(agent, market_interior), previous, target,
+        agent->radius, amount >= 0.78f ? agent->climb_face.y : -FLT_MAX,
+        &resolved_target, &collision_normal);
+    target = resolved_target;
     agent->position = target;
     agent->velocity = delta_time > 0.00001f ?
         PhysicsScale(PhysicsSubtract(target, previous), 1.0f / delta_time) :
@@ -3761,6 +5499,7 @@ static void UpdateClimb(CcLocalAgent *agent, float delta_time,
         UpdateHighMantle(agent, delta_time, market_interior);
         return;
     }
+    Vector3 previous_position = agent->position;
     agent->climb_progress = fminf(1.0f, agent->climb_progress +
                                   delta_time / agent->climb_duration);
     float amount = agent->climb_progress;
@@ -3842,6 +5581,22 @@ static void UpdateClimb(CcLocalAgent *agent, float delta_time,
     if (agent->position.y > agent->climb_end.y) {
         agent->position.y = agent->climb_end.y;
         if (agent->velocity.y > 0.0f) agent->velocity.y = 0.0f;
+    }
+    Vector3 resolved_position = agent->position;
+    Vector3 collision_normal = {0};
+    if (ResolveLocalAgentCapsuleMove(
+            AgentSceneForCall(agent, market_interior), previous_position,
+            agent->position, agent->radius,
+            amount >= 0.82f ? agent->climb_face.y : -FLT_MAX,
+            &resolved_position,
+            &collision_normal)) {
+        agent->position = resolved_position;
+        float into_surface = PhysicsDot(agent->velocity, collision_normal);
+        if (into_surface < 0.0f) {
+            agent->velocity = PhysicsSubtract(
+                agent->velocity,
+                PhysicsScale(collision_normal, into_surface));
+        }
     }
     agent->traversal = agent->vaulting ? CC_TRAVERSAL_VAULT :
                                          CC_TRAVERSAL_CLIMB;
@@ -3936,11 +5691,26 @@ static void UpdateClimb(CcLocalAgent *agent, float delta_time,
         top_hand_right.y = agent->climb_face.y + 0.040f;
         float left_hand_press = SmoothStep01((amount - 0.48f) / 0.20f);
         float right_hand_press = SmoothStep01((amount - 0.60f) / 0.18f);
+        Vector3 hand_points[CC_HUMANOID_ARM_COUNT] = {
+            PhysicsLerp(agent->climb_hand_left,
+                        top_hand_left, left_hand_press),
+            PhysicsLerp(agent->climb_hand_right,
+                        top_hand_right, right_hand_press),
+        };
         CcLimbVec3 hand_targets[CC_HUMANOID_ARM_COUNT] = {
-            ToLimbVector(PhysicsLerp(agent->climb_hand_left,
-                                     top_hand_left, left_hand_press)),
-            ToLimbVector(PhysicsLerp(agent->climb_hand_right,
-                                     top_hand_right, right_hand_press))
+            ToLimbVector(hand_points[0]), ToLimbVector(hand_points[1])
+        };
+        const float hand_support[CC_HUMANOID_ARM_COUNT] = {
+            LocalClimbContactSupport(
+                context.scene, hand_points[0],
+                PhysicsNormalizeOr(
+                    PhysicsLerp(agent->climb_normal, up, left_hand_press),
+                    up), 1.0f),
+            LocalClimbContactSupport(
+                context.scene, hand_points[1],
+                PhysicsNormalizeOr(
+                    PhysicsLerp(agent->climb_normal, up, right_hand_press),
+                    up), 1.0f),
         };
         CcLimbVec3 feet[CC_HUMANOID_LEG_COUNT] = {
             ToLimbVector(foot_targets[0]), ToLimbVector(foot_targets[1])
@@ -3949,18 +5719,24 @@ static void UpdateClimb(CcLocalAgent *agent, float delta_time,
             ToLimbVector(foot_normals[0]), ToLimbVector(foot_normals[1])
         };
         float support[CC_HUMANOID_LEG_COUNT] = {
-            fminf(ClimbSwingSupport(left_wall_step),
-                  ClimbSwingSupport(left_top_step)),
-            fminf(ClimbSwingSupport(right_wall_step),
-                  ClimbSwingSupport(right_top_step))
+            LocalClimbContactSupport(
+                context.scene, foot_targets[0], foot_normals[0],
+                fminf(ClimbSwingSupport(left_wall_step),
+                      ClimbSwingSupport(left_top_step))),
+            LocalClimbContactSupport(
+                context.scene, foot_targets[1], foot_normals[1],
+                fminf(ClimbSwingSupport(right_wall_step),
+                      ClimbSwingSupport(right_top_step)))
         };
         float standing_convergence = SmoothStep01(agent->climb_settle);
         float biomech_progress = amount < 0.78f ? amount :
             0.78f + 0.22f * standing_convergence;
         CcHumanoidGaitAdvanceClimb(
             &agent->humanoid, ToLimbVector(agent->position),
-            agent->facing_yaw, hand_targets, feet, normals, support,
+            agent->facing_yaw, hand_targets, hand_support,
+            feet, normals, support,
             biomech_progress, delta_time, ProbeLocalSurface, &context);
+        if (ReleaseClimbToPhysicalFall(agent)) return;
         if (agent->climb_settle >= 1.0f &&
             CcHumanoidGaitClimbReady(
                 &agent->humanoid, ToLimbVector(agent->position),
@@ -4060,14 +5836,21 @@ static bool TryHorizontalAxis(CcLocalAgent *agent, bool market_interior,
     float candidate_x = agent->position.x + (move_x ? amount : 0.0f);
     float candidate_z = agent->position.z + (move_x ? 0.0f : amount);
     CcLocalSceneKind scene = AgentSceneForCall(agent, market_interior);
-    if (StaticBodyBlocked(scene, candidate_x, candidate_z, agent->radius)) {
-        return false;
-    }
     if (scene == CC_LOCAL_SCENE_STREET) {
         const NavPlatform *support = SupportingPlatformAt(
             agent->position.x, agent->position.z, agent->position.y);
         float candidate_surface = BodySurfaceHeightAt(
             scene, candidate_x, candidate_z);
+        float current_surface = BodySurfaceHeightAt(
+            scene, agent->position.x, agent->position.z);
+        float horizontal = fabsf(amount);
+        Vector3 candidate_normal = SurfaceNormalAt(
+            scene, candidate_x, candidate_z);
+        if (agent->grounded && horizontal > 0.0001f &&
+            candidate_surface > current_surface + 0.002f &&
+            candidate_normal.y < 0.60f) {
+            return false;
+        }
         bool moving_toward_target = agent->exact_target_valid &&
             amount * ((move_x ? agent->target_point.x : agent->target_point.z) -
                       (move_x ? agent->position.x : agent->position.z)) > 0.0f;
@@ -4085,7 +5868,7 @@ static bool TryHorizontalAxis(CcLocalAgent *agent, bool market_interior,
                                                       agent->position.y);
         if (platform != NULL) {
             bool target_requests_climb = agent->exact_target_valid &&
-                agent->target_point.y >= platform->height - 0.10f;
+                agent->target_point.y >= PlatformTopHeight(platform) - 0.10f;
             if (agent->grounded && target_requests_climb) {
                 if (BeginClimb(agent, platform)) return false;
             }
@@ -4101,6 +5884,14 @@ static bool TryHorizontalAxis(CcLocalAgent *agent, bool market_interior,
                 }
             }
         }
+    }
+    Vector3 candidate = agent->position;
+    candidate.x = candidate_x;
+    candidate.z = candidate_z;
+    if (StaticBodyBlocked(scene, candidate_x, candidate_z, agent->radius) ||
+        LocalAgentCapsuleBlocked(scene, agent->position, candidate,
+                                 agent->radius)) {
+        return false;
     }
     if (move_x) agent->position.x = candidate_x;
     else agent->position.z = candidate_z;
@@ -4237,8 +6028,8 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
         direction.x = agent->target_point.x - agent->position.x;
         direction.z = agent->target_point.z - agent->position.z;
         target_distance = sqrtf(direction.x * direction.x + direction.z * direction.z);
-        if (agent->navigation_active && target_distance < 0.22f &&
-            !agent->climbing && !agent->swimming) {
+        if (agent->navigation_active && target_distance < 0.35f &&
+            !agent->climbing && !agent->humanoid.ragdoll.active) {
             (void)AdvanceAgentNavigation(agent);
             if (agent->exact_target_valid) {
                 direction.x = agent->target_point.x - agent->position.x;
@@ -4259,6 +6050,7 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
         if (target_distance < 0.025f && gait_settled &&
             fabsf(agent->position.y - agent->target_point.y) < 0.12f) {
             agent->exact_target_valid = false;
+            agent->command_point_valid = false;
             target_distance = 0.0f;
         }
     }
@@ -4326,6 +6118,7 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
                 difference * fminf(1.0f, delta_time * turn_response));
         }
     }
+    bool ragdoll_was_active = biped && agent->humanoid.ragdoll.active;
     if (biped && in_water) {
         CcHumanoidGaitAdvanceSwim(
             &agent->humanoid, ToLimbVector(agent->position),
@@ -4335,11 +6128,12 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
         agent->velocity.x = agent->humanoid.root_velocity.x;
         agent->velocity.z = agent->humanoid.root_velocity.z;
     } else if (biped) {
-        CcHumanoidGaitAdvance(&agent->humanoid, ToLimbVector(agent->position),
-                              agent->facing_yaw,
-                              (CcLimbVec3){desired_x, 0.0f, desired_z},
-                              agent->grounded, delta_time, ProbeLocalSurface,
-                              &context);
+        CcHumanoidGaitAdvancePhysical(
+            &agent->humanoid, ToLimbVector(agent->position),
+            agent->facing_yaw,
+            (CcLimbVec3){desired_x, 0.0f, desired_z},
+            agent->grounded, delta_time, ProbeLocalSurface,
+            ProbeLocalCollision, &context);
         agent->velocity.x = agent->humanoid.root_velocity.x;
         agent->velocity.z = agent->humanoid.root_velocity.z;
     } else {
@@ -4354,6 +6148,24 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
                              support_weight;
     }
 
+    bool landed = false;
+    if (biped && (ragdoll_was_active || agent->humanoid.ragdoll.active)) {
+        CcLimbVec3 physical_position = CcHumanoidGaitAuthoritativePosition(
+            &agent->humanoid, ToLimbVector(agent->position));
+        CcLimbVec3 physical_velocity = CcHumanoidGaitAuthoritativeVelocity(
+            &agent->humanoid, ToLimbVector(agent->velocity));
+        agent->position = FromLimbVector(physical_position);
+        agent->velocity = FromLimbVector(physical_velocity);
+        agent->grounded = !agent->humanoid.ragdoll.active ||
+                          agent->humanoid.support_state ==
+                              CC_HUMANOID_SUPPORT_STABLE;
+        agent->swimming = false;
+        float knockback_decay = expf(-7.5f * delta_time);
+        agent->combat.knockback_velocity.x *= knockback_decay;
+        agent->combat.knockback_velocity.z *= knockback_decay;
+        goto local_body_resolved;
+    }
+
     Vector3 previous_position = agent->position;
     bool moved_x = TryHorizontalAxis(agent, market_interior, true,
                                      agent->velocity.x * delta_time);
@@ -4366,7 +6178,17 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
         UpdateHeroCape(agent, delta_time);
         return;
     }
-    if (target_distance > 0.001f && (!moved_x || !moved_z)) {
+    float main_progress = 0.0f;
+    if (target_distance > 0.001f) {
+        main_progress =
+            ((agent->position.x - previous_position.x) * direction.x +
+             (agent->position.z - previous_position.z) * direction.z) /
+            target_distance;
+    }
+    bool forward_stalled = main_progress <
+        fmaxf(0.0010f, maximum_speed * delta_time * 0.12f);
+    if (target_distance > 0.001f && forward_stalled &&
+        (!moved_x || !moved_z)) {
         Vector3 forward = {direction.x / target_distance, 0.0f,
                            direction.z / target_distance};
         Vector3 side = {-forward.z, 0.0f, forward.x};
@@ -4409,6 +6231,7 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
            playing a walk cycle forever against the obstacle. */
         agent->exact_target_valid = false;
         agent->target_valid = false;
+        agent->command_point_valid = false;
         ClearAgentNavigation(agent);
         agent->movement_stall_seconds = 0.0f;
         agent->velocity.x = 0.0f;
@@ -4430,7 +6253,6 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
     agent->combat.knockback_velocity.x *= knockback_decay;
     agent->combat.knockback_velocity.z *= knockback_decay;
 
-    bool landed = false;
     bool occupies_water = biped &&
                           CourseWaterContains(scene, agent->position.x,
                                               agent->position.z);
@@ -4461,6 +6283,7 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
                                   agent->facing_yaw, ProbeLocalSurface,
                                   &context);
         }
+        bool followed_ground = agent->grounded;
         agent->velocity.y -= gravity * delta_time;
         agent->position.y += agent->velocity.y * delta_time;
         float surface = BodySurfaceHeightAt(scene,
@@ -4471,16 +6294,31 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
             agent->position.y = surface;
             agent->velocity.y = 0.0f;
             agent->grounded = true;
+        } else if (followed_ground && agent->velocity.y <= 0.0f &&
+                   agent->position.y - surface <= 0.12f) {
+            /* A walking root follows ordinary downhill grade. Treat only a
+               real ledge as airborne; otherwise the ragdoll system sees each
+               centimetre of descending terrain as a fall. */
+            agent->position.y = surface;
+            agent->velocity.y = 0.0f;
+            agent->grounded = true;
         } else {
             agent->grounded = false;
         }
     }
+local_body_resolved:
     if (biped && !agent->swimming) {
         CcHumanoidGaitConstrainMotion(&agent->humanoid,
                                       ToLimbVector(agent->position),
                                       ToLimbVector(agent->velocity),
                                       agent->grounded);
+        agent->support_state = agent->humanoid.support_state;
+        agent->grounded = agent->support_state == CC_HUMANOID_SUPPORT_STABLE ||
+                          agent->support_state == CC_HUMANOID_SUPPORT_MARGINAL ||
+                          agent->support_state == CC_HUMANOID_SUPPORT_HANDS;
         SyncPhysicalLifeState(agent);
+    } else if (agent->swimming) {
+        agent->support_state = CC_HUMANOID_SUPPORT_MARGINAL;
     }
 
     float horizontal_speed = sqrtf(agent->velocity.x * agent->velocity.x +
@@ -5024,16 +6862,85 @@ static const CcHumanoidPose *AgentRenderPose(const CcLocalAgent *agent)
 
 static Camera3D ExteriorCameraAt(Vector3 target, float fovy)
 {
+    return ExteriorCameraComposed(
+        target, (Vector3){3.0f, 4.4f, 14.5f}, fovy);
+}
+
+static Camera3D ExteriorCameraComposed(Vector3 target, Vector3 offset,
+                                       float fovy)
+{
     Camera3D camera = {0};
     camera.target = target;
-    /* A low, mostly frontal lens treats each location as an adventure-game
-       stage. The small X offset preserves useful facade depth without
-       returning to an isometric roof-first view. */
-    camera.position = (Vector3){target.x + 3.0f, target.y + 4.4f,
-                                target.z + 14.5f};
+    /* Shot-specific offsets act as a restrained stage rotation. Keeping the
+       camera well outside the room geometry prevents near-plane slices even
+       when a house is retained as a foreground wing. */
+    camera.position = Vector3Add(target, offset);
     camera.up = (Vector3){0.0f, 1.0f, 0.0f};
     camera.fovy = fovy;
     camera.projection = CAMERA_ORTHOGRAPHIC;
+    return camera;
+}
+
+static Camera3D KeepHeroInsideStreetFrame(Camera3D camera, Vector3 hero,
+                                          int32_t art_height,
+                                          Rectangle quiet_area)
+{
+    if (art_height <= 0 || camera.projection != CAMERA_ORTHOGRAPHIC) {
+        return camera;
+    }
+    int32_t art_width = (int32_t)lroundf(
+        (float)art_height * 457.0f / 285.0f);
+    /* The authored quiet area may be wider than the long-standing play-safe
+       frame. Intersect both contracts so labels get their room without ever
+       losing the hero during a camera transition. */
+    float safe_left = fmaxf((float)art_width * 0.195f,
+                            (float)art_width * quiet_area.x);
+    float safe_right = fminf((float)art_width * 0.805f,
+                             (float)art_width *
+                                 (quiet_area.x + quiet_area.width));
+    float safe_top = fmaxf((float)art_height * 0.195f,
+                           (float)art_height * quiet_area.y);
+    float safe_bottom = fminf((float)art_height * 0.805f,
+                              (float)art_height *
+                                  (quiet_area.y + quiet_area.height));
+    Vector3 forward = Vector3Normalize(
+        Vector3Subtract(camera.target, camera.position));
+    Vector3 right = Vector3Normalize(Vector3CrossProduct(forward, camera.up));
+    Vector3 screen_up = Vector3Normalize(
+        Vector3CrossProduct(right, forward));
+
+    /* Preserve the authored landmark target where a moderate pull-back can
+       hold both it and the hero. Very long corridors then hand off to a
+       dead-zone pan instead of allowing the actor to leave the shot. */
+    Vector3 from_target = Vector3Subtract(hero, camera.target);
+    float horizontal_world = fabsf(Vector3DotProduct(from_target, right));
+    float vertical_world = fabsf(Vector3DotProduct(from_target, screen_up));
+    float horizontal_pixels = fminf((float)art_width * 0.5f - safe_left,
+                                    safe_right - (float)art_width * 0.5f);
+    float vertical_pixels = fminf((float)art_height * 0.5f - safe_top,
+                                  safe_bottom - (float)art_height * 0.5f);
+    float required_fovy = camera.fovy;
+    if (horizontal_pixels > 1.0f) {
+        required_fovy = fmaxf(
+            required_fovy,
+            horizontal_world * (float)art_height / horizontal_pixels * 1.06f);
+    }
+    if (vertical_pixels > 1.0f) {
+        required_fovy = fmaxf(
+            required_fovy,
+            vertical_world * (float)art_height / vertical_pixels * 1.06f);
+    }
+    camera.fovy = fminf(required_fovy, 18.5f);
+
+    Vector2 screen = GetWorldToScreenEx(hero, camera, art_width, art_height);
+    float clamped_x = fmaxf(safe_left, fminf(screen.x, safe_right));
+    float clamped_y = fmaxf(safe_top, fminf(screen.y, safe_bottom));
+    float pixel_world = camera.fovy / (float)art_height;
+    Vector3 adjustment = Vector3Add(
+        Vector3Scale(right, (screen.x - clamped_x) * pixel_world),
+        Vector3Scale(screen_up, (clamped_y - screen.y) * pixel_world));
+    camera.target = Vector3Add(camera.target, adjustment);
+    camera.position = Vector3Add(camera.position, adjustment);
     return camera;
 }
 
@@ -5089,13 +6996,51 @@ static int32_t StreetCameraShotFor(Vector3 focus, int32_t current_shot)
     return nearest;
 }
 
+static int32_t StreetCameraCompositionFor(Vector3 focus,
+                                          int32_t current_shot)
+{
+    /* Turn toward Crown Gate as soon as the market road clears its last
+       house. The room lenses share a viewing side, so this becomes a gentle
+       reveal of the gate instead of lingering behind the foreground wing. A
+       wider reverse threshold supplies hysteresis on the walk back. Keep
+       this visual handoff separate from logical room ownership. */
+    bool crown_gate_corridor = focus.z >= 26.2f && focus.z <= 35.2f;
+    if (crown_gate_corridor) {
+        if (current_shot == MARKET_GATE_ROAD_CAMERA_SHOT &&
+            focus.x >= 57.6f && focus.x <= 68.6f) {
+            return MARKET_GATE_ROAD_CAMERA_SHOT;
+        }
+        if (focus.x >= 68.0f && focus.x <= 79.5f) return 8;
+        if (focus.x >= 58.8f) return MARKET_GATE_ROAD_CAMERA_SHOT;
+    }
+    return StreetCameraShotFor(focus, current_shot);
+}
+
+static const StreetCameraShot *StreetCameraShotAt(int32_t shot)
+{
+    int32_t count = (int32_t)(sizeof(STREET_CAMERA_SHOTS) /
+                              sizeof(STREET_CAMERA_SHOTS[0]));
+    if (shot == MARKET_GATE_ROAD_CAMERA_SHOT) {
+        return &MARKET_GATE_ROAD_CAMERA;
+    }
+    if (shot < 0 || shot >= count) return &STREET_CAMERA_SHOTS[0];
+    return &STREET_CAMERA_SHOTS[shot];
+}
+
 static void FixedCameraRigAim(FixedCameraRig *rig, int32_t shot,
-                              Vector3 destination, float clock, bool advance)
+                              Vector3 destination, Vector3 offset,
+                              float fovy, float clock, bool advance)
 {
     if (!rig->initialized) {
         rig->displayed_target = destination;
         rig->transition_from = destination;
         rig->destination = destination;
+        rig->displayed_offset = offset;
+        rig->offset_transition_from = offset;
+        rig->offset_destination = offset;
+        rig->displayed_fovy = fovy;
+        rig->fovy_transition_from = fovy;
+        rig->fovy_destination = fovy;
         rig->transition_duration = 0.0f;
         rig->transition_elapsed = 0.0f;
         rig->last_clock = clock;
@@ -5111,6 +7056,10 @@ static void FixedCameraRigAim(FixedCameraRig *rig, int32_t shot,
         float distance = Vector3Distance(rig->displayed_target, destination);
         rig->transition_from = rig->displayed_target;
         rig->destination = destination;
+        rig->offset_transition_from = rig->displayed_offset;
+        rig->offset_destination = offset;
+        rig->fovy_transition_from = rig->displayed_fovy;
+        rig->fovy_destination = fovy;
         rig->transition_elapsed = 0.0f;
         rig->transition_duration = fmaxf(0.55f, fminf(1.15f,
                                                      0.42f + distance * 0.025f));
@@ -5119,6 +7068,8 @@ static void FixedCameraRigAim(FixedCameraRig *rig, int32_t shot,
     if (rig->transition_elapsed >= rig->transition_duration ||
         rig->transition_duration <= 0.0f) {
         rig->displayed_target = rig->destination;
+        rig->displayed_offset = rig->offset_destination;
+        rig->displayed_fovy = rig->fovy_destination;
         return;
     }
     rig->transition_elapsed = fminf(rig->transition_duration,
@@ -5127,17 +7078,70 @@ static void FixedCameraRigAim(FixedCameraRig *rig, int32_t shot,
                                 rig->transition_duration);
     rig->displayed_target = Vector3Lerp(rig->transition_from,
                                         rig->destination, amount);
+    rig->displayed_offset = Vector3Lerp(rig->offset_transition_from,
+                                        rig->offset_destination, amount);
+    rig->displayed_fovy = rig->fovy_transition_from +
+                          (rig->fovy_destination -
+                           rig->fovy_transition_from) * amount;
 }
 
-static Camera3D StreetCamera(Vector3 focus, float clock, bool advance,
-                             int32_t art_height)
+static float StreetAlleyWeight(Vector3 focus)
 {
-    int32_t shot = StreetCameraShotFor(focus, street_camera_rig.shot);
-    Vector3 destination = STREET_CAMERA_SHOTS[shot].target;
-    FixedCameraRigAim(&street_camera_rig, shot, destination, clock, advance);
-    return SnapCameraToArtPixels(
-        ExteriorCameraAt(street_camera_rig.displayed_target, 10.8f),
-        art_height);
+    float nearest = FLT_MAX;
+    float second_nearest = FLT_MAX;
+    for (int32_t building = 0;
+         building < (int32_t)(sizeof(WORLD_BUILDINGS) /
+                              sizeof(WORLD_BUILDINGS[0])); ++building) {
+        float distance = sqrtf(FootprintDistanceSquared(
+            focus.x, focus.z, WORLD_BUILDINGS[building].footprint));
+        if (distance < nearest) {
+            second_nearest = nearest;
+            nearest = distance;
+        } else if (distance < second_nearest) {
+            second_nearest = distance;
+        }
+    }
+    return SmoothStep01((6.8f - second_nearest) / 3.8f);
+}
+
+Camera3D CcLocalStreetCameraInternal(const CcLocalAgent *agent, float clock,
+                                     bool advance, int32_t art_height)
+{
+    Vector3 focus = agent != NULL ? agent->position : (Vector3){0};
+    int32_t shot = StreetCameraCompositionFor(
+        focus, street_camera_rig.shot);
+    const StreetCameraShot *composition = StreetCameraShotAt(shot);
+    Vector3 destination = composition->target;
+    destination.y += CcLocalTerrainHeightAt(destination.x, destination.z);
+    FixedCameraRigAim(&street_camera_rig, shot, destination,
+                      composition->camera_offset, composition->fovy,
+                      clock, advance);
+    Camera3D camera = ExteriorCameraComposed(
+        street_camera_rig.displayed_target,
+        street_camera_rig.displayed_offset,
+        street_camera_rig.displayed_fovy);
+    if (agent != NULL) {
+        /* Two nearby facades define an alley. Ease toward a hero-led close
+           shot there instead of pulling the lens wider or deleting a house
+           to preserve the authored landmark composition. */
+        float alley_weight = StreetAlleyWeight(focus);
+        if (alley_weight > 0.0001f) {
+            Vector3 hero_target = {focus.x, focus.y + 1.00f, focus.z};
+            Vector3 close_target = Vector3Lerp(
+                camera.target, hero_target, alley_weight * 0.78f);
+            Vector3 target_adjustment = Vector3Subtract(close_target,
+                                                         camera.target);
+            camera.target = close_target;
+            camera.position = Vector3Add(camera.position,
+                                         target_adjustment);
+            float alley_fovy = fminf(camera.fovy, 9.8f);
+            camera.fovy += (alley_fovy - camera.fovy) * alley_weight;
+        }
+        camera = KeepHeroInsideStreetFrame(
+            camera, (Vector3){focus.x, focus.y + 1.05f, focus.z},
+            art_height, composition->art.quiet_area);
+    }
+    return SnapCameraToArtPixels(camera, art_height);
 }
 
 static int32_t RoadCameraShotFor(float x, int32_t current_shot)
@@ -5170,10 +7174,143 @@ static Camera3D RoadCamera(Vector3 focus, bool travelling, float clock,
     Vector3 destination = travelling ?
         (Vector3){centers[shot] - 0.90f, 0.95f, 40.0f} :
         (Vector3){48.60f, 0.95f, 40.0f};
-    FixedCameraRigAim(&road_camera_rig, shot, destination, clock, advance);
+    const Vector3 road_offset = {3.0f, 4.4f, 14.5f};
+    FixedCameraRigAim(&road_camera_rig, shot, destination, road_offset,
+                      10.8f, clock, advance);
     return SnapCameraToArtPixels(
-        ExteriorCameraAt(road_camera_rig.displayed_target, 10.8f),
+        ExteriorCameraComposed(road_camera_rig.displayed_target,
+                               road_camera_rig.displayed_offset,
+                               road_camera_rig.displayed_fovy),
         art_height);
+}
+
+static const CcLocalAgent *CombatCameraOpponent(
+    const CcLocalCourse *course, const CcLocalAgent *player)
+{
+    if (course == NULL || player == NULL) return NULL;
+    int32_t selected = player->combat.target_index;
+    if (selected >= 0 && selected < CC_LOCAL_RAIDER_COUNT &&
+        CombatCanAct(&course->raiders[selected].combat)) {
+        return &course->raiders[selected];
+    }
+    const CcLocalAgent *nearest = NULL;
+    float nearest_distance = FLT_MAX;
+    for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
+        const CcLocalAgent *raider = &course->raiders[i];
+        if (!CombatCanAct(&raider->combat)) continue;
+        float distance = CombatHorizontalDistanceSquared(player, raider);
+        if (distance >= nearest_distance) continue;
+        nearest = raider;
+        nearest_distance = distance;
+    }
+    return nearest;
+}
+
+/* Combat uses a closer three-quarter view of the active duel. The base room
+   camera still chooses the clear side of scenery; this rig bends that view
+   toward the fight and eases back to the authored shot when the alarm ends. */
+static Camera3D CombatCamera(Camera3D base, const CcLocalAgent *player,
+                             const CcLocalCourse *course, float clock,
+                             bool advance, int32_t art_height)
+{
+    bool active = player != NULL && course != NULL && course->alarm_active &&
+                  !course->raiders_retreating;
+    Vector3 base_offset = Vector3Subtract(base.position, base.target);
+    bool scene_changed = course != NULL &&
+        (!combat_camera_rig.scene_valid ||
+         combat_camera_rig.scene != course->scene);
+    if (!combat_camera_rig.initialized || scene_changed) {
+        combat_camera_rig.displayed_target = base.target;
+        combat_camera_rig.displayed_offset = base_offset;
+        combat_camera_rig.displayed_fovy = base.fovy;
+        combat_camera_rig.combat_weight = 0.0f;
+        combat_camera_rig.last_clock = clock;
+        combat_camera_rig.initialized = true;
+        if (course != NULL) {
+            combat_camera_rig.scene = course->scene;
+            combat_camera_rig.scene_valid = true;
+        }
+    }
+
+    if (advance) {
+        float delta_time = clock - combat_camera_rig.last_clock;
+        if (delta_time < 0.0f || delta_time > 0.12f) delta_time = 0.0f;
+        delta_time = fminf(delta_time, 0.050f);
+        combat_camera_rig.last_clock = clock;
+        float direction = active ? 4.2f : -3.0f;
+        combat_camera_rig.combat_weight = CombatClamp(
+            combat_camera_rig.combat_weight + delta_time * direction,
+            0.0f, 1.0f);
+
+        Vector3 combat_target = base.target;
+        Vector3 combat_offset = base_offset;
+        float combat_fovy = base.fovy;
+        const CcLocalAgent *opponent = CombatCameraOpponent(course, player);
+        if (active) {
+            Vector3 opponent_position = opponent != NULL ? opponent->position :
+                course->combat_origin;
+            combat_target = Vector3Lerp(player->position,
+                                        opponent_position, 0.48f);
+            combat_target.y = (player->position.y + opponent_position.y) *
+                              0.5f + 0.98f;
+
+            Vector3 fight_line = Vector3Subtract(opponent_position,
+                                                  player->position);
+            fight_line.y = 0.0f;
+            float span = fmaxf(1.0f, Vector3Length(fight_line));
+            fight_line = PhysicsNormalizeOr(
+                fight_line, (Vector3){1.0f, 0.0f, 0.0f});
+            Vector3 fight_side = {-fight_line.z, 0.0f, fight_line.x};
+            Vector3 base_view = base_offset;
+            base_view.y = 0.0f;
+            base_view = PhysicsNormalizeOr(base_view,
+                                            (Vector3){0.0f, 0.0f, 1.0f});
+            if (Vector3DotProduct(fight_side, base_view) < 0.0f) {
+                fight_side = Vector3Negate(fight_side);
+            }
+            Vector3 view = PhysicsNormalizeOr(
+                Vector3Add(Vector3Scale(base_view, 0.66f),
+                           Vector3Scale(fight_side, 0.34f)), base_view);
+            float horizontal_distance = 11.2f + fminf(span, 6.0f) * 0.42f;
+            combat_offset = Vector3Scale(view, horizontal_distance);
+            combat_offset.y = 5.7f + fminf(span, 5.0f) * 0.15f;
+            combat_fovy = CombatClamp(7.2f + span * 0.62f, 7.8f, 10.4f);
+        }
+
+        float weight = SmoothStep01(combat_camera_rig.combat_weight);
+        Vector3 desired_target = Vector3Lerp(base.target, combat_target,
+                                             weight);
+        Vector3 desired_offset = Vector3Lerp(base_offset, combat_offset,
+                                             weight);
+        float desired_fovy = base.fovy + (combat_fovy - base.fovy) * weight;
+        float ease = 1.0f - expf(-delta_time * 8.0f);
+        combat_camera_rig.displayed_target = Vector3Lerp(
+            combat_camera_rig.displayed_target, desired_target, ease);
+        combat_camera_rig.displayed_offset = Vector3Lerp(
+            combat_camera_rig.displayed_offset, desired_offset, ease);
+        combat_camera_rig.displayed_fovy +=
+            (desired_fovy - combat_camera_rig.displayed_fovy) * ease;
+        if (!active && combat_camera_rig.combat_weight <= 0.0001f) {
+            combat_camera_rig.displayed_target = base.target;
+            combat_camera_rig.displayed_offset = base_offset;
+            combat_camera_rig.displayed_fovy = base.fovy;
+        }
+    }
+
+    Camera3D camera = base;
+    camera.target = combat_camera_rig.displayed_target;
+    camera.position = Vector3Add(camera.target,
+                                 combat_camera_rig.displayed_offset);
+    camera.fovy = combat_camera_rig.displayed_fovy;
+    if (active && player->combat.hit_flash_seconds > 0.0f) {
+        float pulse = player->combat.hit_flash_seconds * 8.0f;
+        float shake = fminf(0.055f, pulse * 0.055f);
+        camera.target.x += sinf(clock * 71.0f) * shake;
+        camera.target.y += cosf(clock * 59.0f) * shake * 0.45f;
+        camera.position.x += sinf(clock * 71.0f) * shake;
+        camera.position.y += cosf(clock * 59.0f) * shake * 0.45f;
+    }
+    return SnapCameraToArtPixels(camera, art_height);
 }
 
 static Camera3D LocalCamera(bool interior, Vector3 focus)
@@ -5238,17 +7375,39 @@ typedef struct SphereModelCache {
 
 static SphereModelCache sphere_models = {0};
 
+typedef enum TreeCrownShape {
+    TREE_CROWN_ALDER = 0,
+    TREE_CROWN_OAK,
+    TREE_CROWN_POLLARD
+} TreeCrownShape;
+
+typedef struct TreeCrownModelCache {
+    Model alder;
+    Model oak;
+    Model pollard;
+    bool ready;
+} TreeCrownModelCache;
+
+static TreeCrownModelCache tree_crown_models = {0};
+
 #define CC_HERO_SKIN_MAX_BONES 64
 #define CC_HERO_CAPE_BONE_COUNT 4
+#define CC_HERO_HAIR_BONE_COUNT 2
 #define CC_HERO_SKIN_ASSET \
     "assets/exports/hero/crownless_hero_engine_rig_v01.glb"
+#define CC_SCREEN_FIRST_HERO_SKIN_ASSET \
+    "assets/exports/hero/crownless_screen_first_engine_rig_v08.glb"
 #define CC_BRIDGE_CHECKPOINT_ASSET \
     "assets/exports/glb/environment_bridge_checkpoint_v01.glb"
 #define CC_BRIDGE_CHECKPOINT_MESH_BUDGET 96
 #define CC_STYLE_GRADE_SHADER "assets/shaders/style_grade.fs"
 #define CC_WORLD_LIGHT_VERTEX_SHADER "assets/shaders/world_lit.vs"
 #define CC_WORLD_LIGHT_FRAGMENT_SHADER "assets/shaders/world_lit.fs"
+#define CC_PAINTED_ENVIRONMENT_FRAGMENT_SHADER \
+    "assets/shaders/painted_environment.fs"
+#define CC_TREE_FOLIAGE_FRAGMENT_SHADER "assets/shaders/tree_foliage.fs"
 #define CC_HERO_PIXEL_FRAGMENT_SHADER "assets/shaders/hero_pixel.fs"
+#define CC_HERO_INK_STRENGTH 0.52f
 #define CC_NPC_INDEXED_FRAGMENT_SHADER "assets/shaders/npc_indexed.fs"
 #define CC_NPC_ARCHETYPE_MATERIAL_COUNT 9
 #define CC_NPC_ARCHETYPE_LOCOMOTION_POSE_COUNT 8
@@ -5307,10 +7466,13 @@ typedef struct HeroSkinCache {
     Transform *frames[1];
     int32_t skin_bone[CC_HERO_SKIN_MAX_BONES];
     int32_t cape_bone[CC_HERO_SKIN_MAX_BONES];
+    int32_t hair_bone[CC_HERO_SKIN_MAX_BONES];
     bool ready;
 } HeroSkinCache;
 
 static HeroSkinCache hero_skin = {0};
+static bool screen_first_hero_requested = false;
+static bool screen_first_hero_active = false;
 
 typedef struct NpcArchetypeCache {
     Model model;
@@ -5459,22 +7621,71 @@ static NpcDynamicModuleId NpcHeadwearModule(uint8_t style)
     return modules[style % 4U];
 }
 
+typedef struct PaintedEnvironmentStyle {
+    Shader shader;
+    int32_t light_direction_location;
+    int32_t light_color_location;
+    int32_t ambient_color_location;
+    int32_t camera_position_location;
+    int32_t camera_forward_location;
+    int32_t shadow_color_location;
+    int32_t fog_color_location;
+    int32_t fog_near_location;
+    int32_t fog_far_location;
+    int32_t focal_point_location;
+    int32_t story_axis_location;
+    int32_t foreground_anchor_location;
+    int32_t depth_splits_location;
+    int32_t depth_strength_location;
+    int32_t focal_contrast_location;
+    int32_t reveal_cut_height_location;
+    int32_t foreground_reveal_location;
+    bool ready;
+} PaintedEnvironmentStyle;
+
 typedef struct VisualStyleCache {
     Shader grade;
-    int32_t resolution_location;
+    Texture2D palette_lut;
+    int32_t palette_lut_location;
     bool grade_ready;
     Shader world;
     int32_t light_direction_location;
     int32_t light_color_location;
     int32_t ambient_color_location;
     int32_t camera_position_location;
+    int32_t camera_forward_location;
+    int32_t shadow_color_location;
     int32_t fog_color_location;
     int32_t fog_near_location;
     int32_t fog_far_location;
+    int32_t focal_point_location;
+    int32_t story_axis_location;
+    int32_t foreground_anchor_location;
+    int32_t depth_splits_location;
+    int32_t depth_strength_location;
+    int32_t focal_contrast_location;
+    int32_t reveal_cut_height_location;
+    int32_t foreground_reveal_location;
+    int32_t terrain_surface_location;
     bool world_ready;
+    PaintedEnvironmentStyle painted_environment;
+    Shader foliage;
+    int32_t foliage_light_direction_location;
+    int32_t foliage_light_color_location;
+    int32_t foliage_ambient_color_location;
+    int32_t foliage_camera_position_location;
+    int32_t foliage_camera_forward_location;
+    int32_t foliage_shadow_color_location;
+    int32_t foliage_fog_color_location;
+    int32_t foliage_fog_near_location;
+    int32_t foliage_fog_far_location;
+    int32_t foliage_depth_splits_location;
+    int32_t foliage_depth_strength_location;
+    bool foliage_ready;
     Shader hero;
     int32_t hero_light_direction_location;
     int32_t hero_camera_position_location;
+    int32_t hero_shadow_color_location;
     int32_t hero_fog_color_location;
     int32_t hero_fog_near_location;
     int32_t hero_fog_far_location;
@@ -5483,6 +7694,7 @@ typedef struct VisualStyleCache {
     Shader npc;
     int32_t npc_light_direction_location;
     int32_t npc_camera_position_location;
+    int32_t npc_shadow_color_location;
     int32_t npc_fog_color_location;
     int32_t npc_fog_near_location;
     int32_t npc_fog_far_location;
@@ -5494,29 +7706,59 @@ typedef struct VisualStyleCache {
 
 static VisualStyleCache visual_style = {0};
 
+#define CC_SHARED_PALETTE_LUT_SIZE 64
+#define CC_SHARED_PALETTE_LUT_TILES 8
+
+static const Color SHARED_WORLD_PALETTE[] = {
+    /* Ink, slate, stone, parchment. */
+    {15, 16, 18, 255}, {27, 31, 32, 255}, {43, 51, 50, 255},
+    {66, 74, 71, 255}, {102, 108, 99, 255}, {145, 137, 122, 255},
+    {194, 184, 164, 255}, {226, 216, 193, 255},
+    /* Grass and field layers. */
+    {26, 49, 40, 255}, {35, 67, 53, 255}, {61, 84, 56, 255},
+    {96, 105, 61, 255}, {133, 125, 70, 255},
+    /* Timber, soil, and leather. */
+    {43, 32, 29, 255}, {69, 47, 39, 255}, {94, 62, 43, 255},
+    {129, 86, 55, 255}, {166, 126, 83, 255},
+    /* Skin. */
+    {79, 53, 43, 255}, {126, 84, 60, 255}, {172, 124, 86, 255},
+    {205, 157, 111, 255},
+    /* Teal. */
+    {27, 63, 64, 255}, {39, 104, 101, 255}, {57, 133, 125, 255},
+    {87, 165, 153, 255},
+    /* Oxblood and danger. */
+    {66, 36, 43, 255}, {94, 44, 53, 255}, {124, 55, 62, 255},
+    {174, 68, 61, 255},
+    /* Gold. */
+    {93, 69, 32, 255}, {142, 102, 38, 255}, {190, 142, 53, 255},
+    {224, 177, 78, 255},
+    /* Violet. */
+    {53, 42, 61, 255}, {88, 61, 91, 255}, {139, 96, 137, 255},
+};
+
 /* Material order is part of the consolidated engine-hero export contract.
    Nineteen material slots collapse into three readable masses at play scale:
    warm skin, a middle-value teal/oxblood costume, and dark limbs/hair. */
 static const Color HERO_RETRO_PALETTE[] = {
     {42, 51, 50, 255},   /* body neutral */
     {172, 124, 86, 255}, /* skin */
-    {178, 130, 90, 255}, /* skin light */
-    {25, 25, 24, 255},   /* eye */
-    {43, 32, 29, 255},   /* hair */
-    {61, 58, 49, 255},   /* padding */
-    {49, 48, 43, 255},   /* padding dark */
+    {205, 157, 111, 255}, /* skin light */
+    {15, 16, 18, 255},   /* eye */
+    {27, 31, 32, 255},   /* hair */
+    {66, 74, 71, 255},   /* padding */
+    {43, 51, 50, 255},   /* padding dark */
     {27, 63, 64, 255},   /* teal dark */
-    {39, 104, 101, 255}, /* teal */
-    {190, 142, 53, 255}, /* brass */
+    {57, 133, 125, 255}, /* teal chest */
+    {224, 177, 78, 255}, /* rare brass highlight */
     {94, 44, 53, 255},   /* cape */
-    {119, 52, 60, 255},  /* cape light */
-    {39, 48, 49, 255},   /* steel dark */
-    {102, 46, 53, 255},  /* brigandine */
-    {124, 55, 62, 255},  /* brigandine edge */
-    {61, 68, 67, 255},   /* steel */
-    {52, 42, 34, 255},   /* leather */
-    {74, 80, 77, 255},   /* steel light */
-    {61, 46, 35, 255},   /* leather light */
+    {124, 55, 62, 255},  /* cape light */
+    {43, 51, 50, 255},   /* steel dark */
+    {124, 55, 62, 255},  /* brigandine chest */
+    {174, 68, 61, 255},  /* brigandine edge */
+    {43, 32, 29, 255},   /* dark boots and leather */
+    {66, 74, 71, 255},   /* steel */
+    {102, 108, 99, 255}, /* steel light */
+    {69, 47, 39, 255},   /* leather light */
 };
 
 static const Vector3 HERO_REST_DIRECTIONS[CC_HUMANOID_SKIN_BONE_COUNT] = {
@@ -5551,10 +7793,38 @@ static const Vector3 HERO_CAPE_REST_DIRECTIONS[CC_HERO_CAPE_BONE_COUNT] = {
     {0.0f, -0.984f, -0.176f},
 };
 
+static const char *HERO_HAIR_BONE_NAMES[CC_HERO_HAIR_BONE_COUNT] = {
+    "hair.long", "hair.rear",
+};
+
+/* Blender exports +Y as engine -Z. These offsets start at the head bone and
+   place each control at the broad root of its clump. */
+static const Vector3 HERO_HAIR_ROOT_OFFSETS[CC_HERO_HAIR_BONE_COUNT] = {
+    {-0.18f, 0.39f, 0.08f},
+    {0.00f, 0.38f, -0.12f},
+};
+
+static const Vector3 HERO_HAIR_REST_DIRECTIONS[CC_HERO_HAIR_BONE_COUNT] = {
+    {-0.133f, -0.986f, -0.106f},
+    {0.000f, -0.979f, -0.202f},
+};
+
+static const float HERO_HAIR_TIP_DELAY[CC_HERO_HAIR_BONE_COUNT] = {
+    0.12f, 0.18f,
+};
+
 static int32_t HeroCapeBoneFind(const char *name)
 {
     for (int32_t bone = 0; bone < CC_HERO_CAPE_BONE_COUNT; ++bone) {
         if (strcmp(name, HERO_CAPE_BONE_NAMES[bone]) == 0) return bone;
+    }
+    return -1;
+}
+
+static int32_t HeroHairBoneFind(const char *name)
+{
+    for (int32_t bone = 0; bone < CC_HERO_HAIR_BONE_COUNT; ++bone) {
+        if (strcmp(name, HERO_HAIR_BONE_NAMES[bone]) == 0) return bone;
     }
     return -1;
 }
@@ -5574,11 +7844,17 @@ static Quaternion HeroRotationBetween(Vector3 from, Vector3 to)
 
 static const char *HeroSkinAssetPath(void)
 {
-    if (FileExists(CC_HERO_SKIN_ASSET)) return CC_HERO_SKIN_ASSET;
+    const char *experiment = getenv("CC_SCREEN_FIRST_HERO");
+    screen_first_hero_active = screen_first_hero_requested ||
+        (experiment != NULL && experiment[0] != '\0' &&
+         strcmp(experiment, "0") != 0);
+    const char *relative_path = screen_first_hero_active ?
+        CC_SCREEN_FIRST_HERO_SKIN_ASSET : CC_HERO_SKIN_ASSET;
+    if (FileExists(relative_path)) return relative_path;
     static char bundled_path[1024];
     (void)snprintf(bundled_path, sizeof(bundled_path),
                    "%s/../Resources/%s", GetApplicationDirectory(),
-                   CC_HERO_SKIN_ASSET);
+                   relative_path);
     return FileExists(bundled_path) ? bundled_path : NULL;
 }
 
@@ -5743,9 +8019,38 @@ static void ApplyWorldShader(Model *model)
     }
 }
 
+static void ApplyPaintedEnvironmentShader(Model *model)
+{
+    if (model == NULL || model->materials == NULL) return;
+    Shader shader = visual_style.painted_environment.ready ?
+        visual_style.painted_environment.shader : visual_style.world;
+    for (int32_t material = 0; material < model->materialCount; ++material) {
+        model->materials[material].shader = shader;
+    }
+}
+
+static void ApplyTreeFoliageShader(Model *model)
+{
+    if (model == NULL || model->materials == NULL) return;
+    Shader shader = visual_style.foliage_ready ? visual_style.foliage :
+                                                visual_style.world;
+    for (int32_t material = 0; material < model->materialCount; ++material) {
+        model->materials[material].shader = shader;
+    }
+}
+
 static void ApplyHeroStyle(Model *model)
 {
     if (model == NULL || model->materials == NULL) return;
+    if (screen_first_hero_active) {
+        for (int32_t material = 0; material < model->materialCount;
+             ++material) {
+            model->materials[material].shader = visual_style.hero_ready ?
+                                                 visual_style.hero :
+                                                 visual_style.world;
+        }
+        return;
+    }
     int32_t palette_count = (int32_t)(sizeof(HERO_RETRO_PALETTE) /
                                       sizeof(HERO_RETRO_PALETTE[0]));
     int32_t material_count = model->materialCount < palette_count ?
@@ -5836,6 +8141,117 @@ static void RestoreWorldLighting(void)
     }
 }
 
+static void SetWorldForegroundReveal(float amount, float cut_height)
+{
+    if (!visual_style.world_ready) return;
+    /* Uniform changes do not split raylib's active geometry batch. Flush at
+       the reveal boundary so houses are submitted with the state that was
+       active when they were authored, rather than the state of a later draw. */
+    rlDrawRenderBatchActive();
+    float active = fmaxf(0.0f, fminf(amount, 1.0f));
+    SetShaderValue(visual_style.world,
+                   visual_style.foreground_reveal_location,
+                   &active, SHADER_UNIFORM_FLOAT);
+    SetShaderValue(visual_style.world,
+                   visual_style.reveal_cut_height_location,
+                   &cut_height, SHADER_UNIFORM_FLOAT);
+    if (visual_style.painted_environment.ready) {
+        PaintedEnvironmentStyle *painted =
+            &visual_style.painted_environment;
+        SetShaderValue(painted->shader,
+                       painted->foreground_reveal_location,
+                       &active, SHADER_UNIFORM_FLOAT);
+        SetShaderValue(painted->shader,
+                       painted->reveal_cut_height_location,
+                       &cut_height, SHADER_UNIFORM_FLOAT);
+    }
+}
+
+static void SetWorldTerrainSurface(bool enabled)
+{
+    if (!visual_style.world_ready) return;
+    /* Terrain and buildings share the world shader. Flush at the boundary so
+       the broad land gets its hard-edged material layers while structures
+       retain their own painted edges. */
+    rlDrawRenderBatchActive();
+    float active = enabled ? 1.0f : 0.0f;
+    SetShaderValue(visual_style.world,
+                   visual_style.terrain_surface_location,
+                   &active, SHADER_UNIFORM_FLOAT);
+}
+
+static float SharedPaletteDistance(Color source, Color candidate)
+{
+    float red = (float)source.r - (float)candidate.r;
+    float green = (float)source.g - (float)candidate.g;
+    float blue = (float)source.b - (float)candidate.b;
+    float luminance = red * 0.2126f + green * 0.7152f + blue * 0.0722f;
+    return red * red * 0.30f + green * green * 0.59f +
+           blue * blue * 0.11f + luminance * luminance * 0.55f;
+}
+
+static bool LoadSharedPaletteLookup(void)
+{
+    const int32_t size = CC_SHARED_PALETTE_LUT_SIZE;
+    const int32_t tiles = CC_SHARED_PALETTE_LUT_TILES;
+    const int32_t width = size * tiles;
+    const int32_t height = size * (size / tiles);
+    const int32_t palette_count = (int32_t)(
+        sizeof(SHARED_WORLD_PALETTE) / sizeof(SHARED_WORLD_PALETTE[0]));
+    size_t pixel_count = (size_t)width * (size_t)height;
+    Color *pixels = MemAlloc(
+        (unsigned int)(pixel_count * sizeof(Color)));
+    if (pixels == NULL) return false;
+
+    for (int32_t blue = 0; blue < size; ++blue) {
+        for (int32_t green = 0; green < size; ++green) {
+            for (int32_t red = 0; red < size; ++red) {
+                Color source = {
+                    (unsigned char)((red * 255 + (size - 1) / 2) /
+                                    (size - 1)),
+                    (unsigned char)((green * 255 + (size - 1) / 2) /
+                                    (size - 1)),
+                    (unsigned char)((blue * 255 + (size - 1) / 2) /
+                                    (size - 1)),
+                    255,
+                };
+                Color best = SHARED_WORLD_PALETTE[0];
+                float best_distance = SharedPaletteDistance(source, best);
+                for (int32_t index = 1; index < palette_count; ++index) {
+                    float distance = SharedPaletteDistance(
+                        source, SHARED_WORLD_PALETTE[index]);
+                    if (distance >= best_distance) continue;
+                    best_distance = distance;
+                    best = SHARED_WORLD_PALETTE[index];
+                }
+                int32_t pixel_x = red + (blue % tiles) * size;
+                int32_t pixel_y = green + (blue / tiles) * size;
+                size_t pixel = (size_t)pixel_y * (size_t)width +
+                               (size_t)pixel_x;
+                pixels[pixel] = best;
+            }
+        }
+    }
+
+    Image image = {
+        pixels, width, height, 1, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8,
+    };
+    visual_style.palette_lut = LoadTextureFromImage(image);
+    UnloadImage(image);
+    if (!IsTextureValid(visual_style.palette_lut)) return false;
+    SetTextureFilter(visual_style.palette_lut, TEXTURE_FILTER_POINT);
+    visual_style.palette_lut_location = GetShaderLocation(
+        visual_style.grade, "paletteLut");
+    if (visual_style.palette_lut_location < 0) {
+        UnloadTexture(visual_style.palette_lut);
+        visual_style.palette_lut = (Texture2D){0};
+        return false;
+    }
+    TraceLog(LOG_INFO, "STYLE: loaded %d-color final palette lookup",
+             palette_count);
+    return true;
+}
+
 static void LoadVisualStyle(void)
 {
     char grade_path[1024];
@@ -5845,13 +8261,15 @@ static void LoadVisualStyle(void)
     } else {
         visual_style.grade = LoadShader(NULL, grade_path);
     }
-    if (IsShaderValid(visual_style.grade)) {
-        visual_style.resolution_location = GetShaderLocation(
-            visual_style.grade, "resolution");
+    if (IsShaderValid(visual_style.grade) && LoadSharedPaletteLookup()) {
         visual_style.grade_ready = true;
     } else {
+        if (IsShaderValid(visual_style.grade)) {
+            UnloadShader(visual_style.grade);
+        }
         visual_style.grade = (Shader){0};
-        TraceLog(LOG_WARNING, "STYLE: grade shader could not be loaded");
+        TraceLog(LOG_WARNING,
+                 "STYLE: grade shader or palette lookup could not be loaded");
     }
 
     char vertex_path[1024];
@@ -5877,13 +8295,127 @@ static void LoadVisualStyle(void)
         visual_style.world, "ambientColor");
     visual_style.camera_position_location = GetShaderLocation(
         visual_style.world, "cameraPosition");
+    visual_style.camera_forward_location = GetShaderLocation(
+        visual_style.world, "cameraForward");
+    visual_style.shadow_color_location = GetShaderLocation(
+        visual_style.world, "shadowColor");
     visual_style.fog_color_location = GetShaderLocation(
         visual_style.world, "fogColor");
     visual_style.fog_near_location = GetShaderLocation(
         visual_style.world, "fogNear");
     visual_style.fog_far_location = GetShaderLocation(
         visual_style.world, "fogFar");
+    visual_style.focal_point_location = GetShaderLocation(
+        visual_style.world, "focalPoint");
+    visual_style.story_axis_location = GetShaderLocation(
+        visual_style.world, "storyAxis");
+    visual_style.foreground_anchor_location = GetShaderLocation(
+        visual_style.world, "foregroundAnchor");
+    visual_style.depth_splits_location = GetShaderLocation(
+        visual_style.world, "depthSplits");
+    visual_style.depth_strength_location = GetShaderLocation(
+        visual_style.world, "depthStrength");
+    visual_style.focal_contrast_location = GetShaderLocation(
+        visual_style.world, "focalContrast");
+    visual_style.reveal_cut_height_location = GetShaderLocation(
+        visual_style.world, "revealCutHeight");
+    visual_style.foreground_reveal_location = GetShaderLocation(
+        visual_style.world, "foregroundReveal");
+    visual_style.terrain_surface_location = GetShaderLocation(
+        visual_style.world, "terrainSurface");
     visual_style.world_ready = true;
+
+    char painted_fragment_path[1024];
+    if (ResolveAssetPath(CC_PAINTED_ENVIRONMENT_FRAGMENT_SHADER,
+                         painted_fragment_path,
+                         sizeof(painted_fragment_path))) {
+        PaintedEnvironmentStyle *painted =
+            &visual_style.painted_environment;
+        painted->shader = LoadShader(vertex_path, painted_fragment_path);
+        if (IsShaderValid(painted->shader)) {
+            painted->light_direction_location = GetShaderLocation(
+                painted->shader, "lightDirection");
+            painted->light_color_location = GetShaderLocation(
+                painted->shader, "lightColor");
+            painted->ambient_color_location = GetShaderLocation(
+                painted->shader, "ambientColor");
+            painted->camera_position_location = GetShaderLocation(
+                painted->shader, "cameraPosition");
+            painted->camera_forward_location = GetShaderLocation(
+                painted->shader, "cameraForward");
+            painted->shadow_color_location = GetShaderLocation(
+                painted->shader, "shadowColor");
+            painted->fog_color_location = GetShaderLocation(
+                painted->shader, "fogColor");
+            painted->fog_near_location = GetShaderLocation(
+                painted->shader, "fogNear");
+            painted->fog_far_location = GetShaderLocation(
+                painted->shader, "fogFar");
+            painted->focal_point_location = GetShaderLocation(
+                painted->shader, "focalPoint");
+            painted->story_axis_location = GetShaderLocation(
+                painted->shader, "storyAxis");
+            painted->foreground_anchor_location = GetShaderLocation(
+                painted->shader, "foregroundAnchor");
+            painted->depth_splits_location = GetShaderLocation(
+                painted->shader, "depthSplits");
+            painted->depth_strength_location = GetShaderLocation(
+                painted->shader, "depthStrength");
+            painted->focal_contrast_location = GetShaderLocation(
+                painted->shader, "focalContrast");
+            painted->reveal_cut_height_location = GetShaderLocation(
+                painted->shader, "revealCutHeight");
+            painted->foreground_reveal_location = GetShaderLocation(
+                painted->shader, "foregroundReveal");
+            painted->ready = true;
+        } else {
+            painted->shader = (Shader){0};
+            TraceLog(LOG_WARNING,
+                     "STYLE: painted environment shader could not be loaded");
+        }
+    } else {
+        TraceLog(LOG_WARNING,
+                 "STYLE: painted environment shader was not found");
+    }
+
+    char foliage_fragment_path[1024];
+    if (ResolveAssetPath(CC_TREE_FOLIAGE_FRAGMENT_SHADER,
+                         foliage_fragment_path,
+                         sizeof(foliage_fragment_path))) {
+        visual_style.foliage = LoadShader(vertex_path,
+                                          foliage_fragment_path);
+        if (IsShaderValid(visual_style.foliage)) {
+            visual_style.foliage_light_direction_location =
+                GetShaderLocation(visual_style.foliage, "lightDirection");
+            visual_style.foliage_light_color_location =
+                GetShaderLocation(visual_style.foliage, "lightColor");
+            visual_style.foliage_ambient_color_location =
+                GetShaderLocation(visual_style.foliage, "ambientColor");
+            visual_style.foliage_camera_position_location =
+                GetShaderLocation(visual_style.foliage, "cameraPosition");
+            visual_style.foliage_camera_forward_location =
+                GetShaderLocation(visual_style.foliage, "cameraForward");
+            visual_style.foliage_shadow_color_location =
+                GetShaderLocation(visual_style.foliage, "shadowColor");
+            visual_style.foliage_fog_color_location =
+                GetShaderLocation(visual_style.foliage, "fogColor");
+            visual_style.foliage_fog_near_location =
+                GetShaderLocation(visual_style.foliage, "fogNear");
+            visual_style.foliage_fog_far_location =
+                GetShaderLocation(visual_style.foliage, "fogFar");
+            visual_style.foliage_depth_splits_location =
+                GetShaderLocation(visual_style.foliage, "depthSplits");
+            visual_style.foliage_depth_strength_location =
+                GetShaderLocation(visual_style.foliage, "depthStrength");
+            visual_style.foliage_ready = true;
+        } else {
+            visual_style.foliage = (Shader){0};
+            TraceLog(LOG_WARNING,
+                     "STYLE: tree foliage shader could not be loaded");
+        }
+    } else {
+        TraceLog(LOG_WARNING, "STYLE: tree foliage shader was not found");
+    }
 
     char hero_fragment_path[1024];
     if (ResolveAssetPath(CC_HERO_PIXEL_FRAGMENT_SHADER, hero_fragment_path,
@@ -5894,6 +8426,8 @@ static void LoadVisualStyle(void)
                 visual_style.hero, "lightDirection");
             visual_style.hero_camera_position_location = GetShaderLocation(
                 visual_style.hero, "cameraPosition");
+            visual_style.hero_shadow_color_location = GetShaderLocation(
+                visual_style.hero, "shadowColor");
             visual_style.hero_fog_color_location = GetShaderLocation(
                 visual_style.hero, "fogColor");
             visual_style.hero_fog_near_location = GetShaderLocation(
@@ -5902,7 +8436,7 @@ static void LoadVisualStyle(void)
                 visual_style.hero, "fogFar");
             visual_style.hero_ink_strength_location = GetShaderLocation(
                 visual_style.hero, "inkStrength");
-            float ink_strength = 0.68f;
+            float ink_strength = CC_HERO_INK_STRENGTH;
             SetShaderValue(visual_style.hero,
                            visual_style.hero_ink_strength_location,
                            &ink_strength, SHADER_UNIFORM_FLOAT);
@@ -5925,6 +8459,8 @@ static void LoadVisualStyle(void)
                 visual_style.npc, "lightDirection");
             visual_style.npc_camera_position_location = GetShaderLocation(
                 visual_style.npc, "cameraPosition");
+            visual_style.npc_shadow_color_location = GetShaderLocation(
+                visual_style.npc, "shadowColor");
             visual_style.npc_fog_color_location = GetShaderLocation(
                 visual_style.npc, "fogColor");
             visual_style.npc_fog_near_location = GetShaderLocation(
@@ -5950,6 +8486,11 @@ static void LoadVisualStyle(void)
     ApplyWorldShader(&sphere_models.small);
     ApplyWorldShader(&sphere_models.character);
     ApplyWorldShader(&sphere_models.scenery);
+    if (tree_crown_models.ready) {
+        ApplyTreeFoliageShader(&tree_crown_models.alder);
+        ApplyTreeFoliageShader(&tree_crown_models.oak);
+        ApplyTreeFoliageShader(&tree_crown_models.pollard);
+    }
     if (hero_skin.ready) ApplyHeroStyle(&hero_skin.model);
     for (int32_t role = 0; role < CC_NPC_ROLE_COUNT; ++role) {
         for (int32_t pose = 0; pose < CC_NPC_ARCHETYPE_POSE_COUNT; ++pose) {
@@ -5964,7 +8505,12 @@ static void LoadVisualStyle(void)
         }
     }
     for (int32_t id = 0; id < RUNTIME_ASSET_COUNT; ++id) {
-        if (runtime_assets[id].ready) ApplyWorldShader(&runtime_assets[id].model);
+        if (!runtime_assets[id].ready) continue;
+        if (id == RUNTIME_ASSET_MARKET) {
+            ApplyPaintedEnvironmentShader(&runtime_assets[id].model);
+        } else {
+            ApplyWorldShader(&runtime_assets[id].model);
+        }
     }
 }
 
@@ -5989,15 +8535,20 @@ static void LoadHeroSkin(void)
     }
     bool found[CC_HUMANOID_SKIN_BONE_COUNT] = {false};
     bool found_cape[CC_HERO_CAPE_BONE_COUNT] = {false};
+    bool found_hair[CC_HERO_HAIR_BONE_COUNT] = {false};
     for (int32_t bone = 0; bone < bone_count; ++bone) {
         int32_t skin_bone = CcHumanoidSkinBoneFind(
             hero_skin.model.skeleton.bones[bone].name);
         int32_t cape_bone = HeroCapeBoneFind(
             hero_skin.model.skeleton.bones[bone].name);
+        int32_t hair_bone = HeroHairBoneFind(
+            hero_skin.model.skeleton.bones[bone].name);
         hero_skin.skin_bone[bone] = skin_bone;
         hero_skin.cape_bone[bone] = cape_bone;
+        hero_skin.hair_bone[bone] = hair_bone;
         if (skin_bone >= 0) found[skin_bone] = true;
         if (cape_bone >= 0) found_cape[cape_bone] = true;
+        if (hair_bone >= 0) found_hair[hair_bone] = true;
     }
     for (int32_t bone = 0; bone < CC_HUMANOID_SKIN_BONE_COUNT; ++bone) {
         if (found[bone]) continue;
@@ -6015,6 +8566,16 @@ static void LoadHeroSkin(void)
         hero_skin = (HeroSkinCache){0};
         return;
     }
+    if (screen_first_hero_active) {
+        for (int32_t bone = 0; bone < CC_HERO_HAIR_BONE_COUNT; ++bone) {
+            if (found_hair[bone]) continue;
+            TraceLog(LOG_WARNING, "HERO: screen-first skin is missing hair bone %s",
+                     HERO_HAIR_BONE_NAMES[bone]);
+            UnloadModel(hero_skin.model);
+            hero_skin = (HeroSkinCache){0};
+            return;
+        }
+    }
     hero_skin.frames[0] = hero_skin.pose;
     hero_skin.animation.boneCount = bone_count;
     hero_skin.animation.keyframeCount = 1;
@@ -6022,7 +8583,10 @@ static void LoadHeroSkin(void)
     (void)snprintf(hero_skin.animation.name, sizeof(hero_skin.animation.name),
                    "engine-physics");
     hero_skin.ready = true;
-    TraceLog(LOG_INFO, "HERO: loaded %d modular meshes on %d physics bones",
+    TraceLog(LOG_INFO,
+             "HERO: loaded %s skin with %d meshes on %d physics bones",
+             screen_first_hero_active ? "screen-first experiment" :
+                                        "production",
              hero_skin.model.meshCount, bone_count);
 }
 
@@ -6035,6 +8599,7 @@ static bool DrawHeroSkin(const CcHumanoidSkinPose *skin,
     for (int32_t bone = 0; bone < hero_skin.model.skeleton.boneCount; ++bone) {
         int32_t skin_bone = hero_skin.skin_bone[bone];
         int32_t cape_bone = hero_skin.cape_bone[bone];
+        int32_t hair_bone = hero_skin.hair_bone[bone];
         Vector3 target_head = {0};
         Vector3 target_direction = {0};
         Vector3 rest_direction = {0};
@@ -6050,38 +8615,244 @@ static bool DrawHeroSkin(const CcHumanoidSkinPose *skin,
                                 cape->point[cape_bone]),
                 (Vector3){0.0f, -1.0f, 0.0f});
             rest_direction = HERO_CAPE_REST_DIRECTIONS[cape_bone];
+        } else if (hair_bone >= 0 &&
+                   hair_bone < CC_HERO_HAIR_BONE_COUNT) {
+            const CcHumanoidSkinBonePose *head =
+                &skin->bones[CC_HUMANOID_SKIN_HEAD];
+            Quaternion head_rotation = {
+                head->world_rotation.x,
+                head->world_rotation.y,
+                head->world_rotation.z,
+                head->world_rotation.w,
+            };
+            Vector3 head_position = FromLimbVector(head->head);
+            Vector3 root_offset = Vector3Scale(
+                HERO_HAIR_ROOT_OFFSETS[hair_bone], 1.32f);
+            target_head = Vector3Add(
+                head_position,
+                Vector3RotateByQuaternion(root_offset, head_rotation));
+            Vector3 head_direction = Vector3RotateByQuaternion(
+                HERO_HAIR_REST_DIRECTIONS[hair_bone], head_rotation);
+            Vector3 cape_direction = PhysicsNormalizeOr(
+                PhysicsSubtract(cape->point[1], cape->point[0]),
+                head_direction);
+            target_direction = PhysicsNormalizeOr(
+                Vector3Lerp(head_direction, cape_direction,
+                            HERO_HAIR_TIP_DELAY[hair_bone]),
+                head_direction);
+            rest_direction = HERO_HAIR_REST_DIRECTIONS[hair_bone];
         } else {
             hero_skin.pose[bone] = hero_skin.model.skeleton.bindPose[bone];
             continue;
         }
         Quaternion delta = HeroRotationBetween(
             rest_direction, target_direction);
+        if (skin_bone == CC_HUMANOID_SKIN_HEAD) {
+            /* Aligning only the head bone's long axis loses yaw because that
+               axis is almost vertical. Use its complete biomechanical frame
+               so the authored face really turns front, three-quarter, and
+               profile with the actor. */
+            const CcHumanoidSkinBonePose *head =
+                &skin->bones[CC_HUMANOID_SKIN_HEAD];
+            delta = (Quaternion){head->world_rotation.x,
+                                 head->world_rotation.y,
+                                 head->world_rotation.z,
+                                 head->world_rotation.w};
+        }
         hero_skin.pose[bone].translation = target_head;
         hero_skin.pose[bone].rotation = QuaternionMultiply(
             delta, hero_skin.model.skeleton.bindPose[bone].rotation);
         hero_skin.pose[bone].scale =
             hero_skin.model.skeleton.bindPose[bone].scale;
-        float gameplay_scale = skin_bone == CC_HUMANOID_SKIN_HEAD ? 1.06f :
+        float gameplay_scale =
+            (skin_bone == CC_HUMANOID_SKIN_HEAD || hair_bone >= 0) ? 1.32f :
             (skin_bone == CC_HUMANOID_SKIN_HAND_LEFT ||
-             skin_bone == CC_HUMANOID_SKIN_HAND_RIGHT) ? 1.02f :
+             skin_bone == CC_HUMANOID_SKIN_HAND_RIGHT) ? 0.90f :
             (skin_bone == CC_HUMANOID_SKIN_FOOT_LEFT ||
-             skin_bone == CC_HUMANOID_SKIN_FOOT_RIGHT) ? 1.02f : 1.0f;
+             skin_bone == CC_HUMANOID_SKIN_FOOT_RIGHT) ? 1.00f : 1.0f;
         hero_skin.pose[bone].scale = Vector3Scale(
             hero_skin.pose[bone].scale, gameplay_scale);
     }
     CcLocalRendererRecordSkinUpdate(hero_skin.model.meshCount);
     UpdateModelAnimation(hero_skin.model, hero_skin.animation, 0.0f);
     if (visible) {
-        const float horizontal_scale = 1.02f;
+        const float horizontal_scale = 0.98f;
+        const float vertical_scale = 1.07f;
         Vector3 anchor = FromLimbVector(
             skin->bones[CC_HUMANOID_SKIN_ROOT].head);
-        Vector3 position = {anchor.x * (1.0f - horizontal_scale), 0.0f,
+        Vector3 position = {anchor.x * (1.0f - horizontal_scale),
+                            anchor.y * (1.0f - vertical_scale),
                             anchor.z * (1.0f - horizontal_scale)};
         DrawModelEx(hero_skin.model, position,
                     (Vector3){0.0f, 1.0f, 0.0f}, 0.0f,
-                    (Vector3){horizontal_scale, 1.0f, horizontal_scale}, tint);
+                    (Vector3){horizontal_scale, vertical_scale,
+                              horizontal_scale}, tint);
     }
     return true;
+}
+
+#define CC_TREE_CROWN_RING_VERTICES 6
+#define CC_TREE_CROWN_TRIANGLES (CC_TREE_CROWN_RING_VERTICES * 4)
+
+typedef struct TreeCrownProfile {
+    float top_y;
+    float upper_y;
+    float lower_y;
+    float bottom_y;
+    Vector2 top_offset;
+    Vector2 upper_offset;
+    Vector2 lower_offset;
+    Vector2 bottom_offset;
+    float upper_angle;
+    float lower_angle;
+    float upper_depth;
+    float lower_depth;
+    float upper_radius[CC_TREE_CROWN_RING_VERTICES];
+    float lower_radius[CC_TREE_CROWN_RING_VERTICES];
+} TreeCrownProfile;
+
+static const TreeCrownProfile TREE_CROWN_PROFILES[] = {
+    /* Alder: a tall shard with a broken, conifer-like outline. */
+    {
+        1.12f, 0.28f, -0.34f, -0.88f,
+        {0.18f, -0.08f}, {-0.05f, 0.04f},
+        {0.06f, -0.04f}, {-0.14f, 0.10f},
+        0.08f, 0.42f, 0.76f, 0.82f,
+        {0.82f, 0.98f, 0.76f, 0.92f, 0.72f, 0.88f},
+        {0.92f, 0.74f, 0.96f, 0.78f, 0.88f, 0.70f}
+    },
+    /* Oak: shallow caps make overlapping masses read as broad leaf plates. */
+    {
+        0.58f, 0.22f, -0.30f, -0.54f,
+        {-0.12f, 0.08f}, {0.02f, -0.03f},
+        {-0.06f, 0.05f}, {0.16f, -0.10f},
+        -0.05f, 0.31f, 0.92f, 0.96f,
+        {0.94f, 0.78f, 1.00f, 0.84f, 0.96f, 0.74f},
+        {0.82f, 1.00f, 0.80f, 0.94f, 0.72f, 0.90f}
+    },
+    /* Pollard: a short top and long lower taper suggest hanging regrowth. */
+    {
+        0.72f, 0.30f, -0.20f, -1.12f,
+        {0.12f, 0.02f}, {-0.06f, -0.04f},
+        {0.04f, 0.06f}, {-0.10f, -0.06f},
+        0.14f, 0.47f, 0.72f, 0.76f,
+        {0.72f, 0.90f, 0.68f, 0.84f, 0.74f, 0.88f},
+        {0.86f, 0.66f, 0.90f, 0.72f, 0.82f, 0.68f}
+    }
+};
+
+static Vector3 TreeCrownRingPoint(const TreeCrownProfile *profile,
+                                  bool upper, int32_t index)
+{
+    float angle = (upper ? profile->upper_angle : profile->lower_angle) +
+                  (float)index * PI * 2.0f /
+                  (float)CC_TREE_CROWN_RING_VERTICES;
+    float radius = upper ? profile->upper_radius[index] :
+                           profile->lower_radius[index];
+    float depth = upper ? profile->upper_depth : profile->lower_depth;
+    Vector2 offset = upper ? profile->upper_offset : profile->lower_offset;
+    return (Vector3){offset.x + cosf(angle) * radius,
+                     upper ? profile->upper_y : profile->lower_y,
+                     offset.y + sinf(angle) * radius * depth};
+}
+
+static void TreeCrownMeshWriteTriangle(Mesh *mesh, int32_t *cursor,
+                                      Vector3 a, Vector3 b, Vector3 c)
+{
+    Vector3 normal = Vector3CrossProduct(Vector3Subtract(b, a),
+                                         Vector3Subtract(c, a));
+    Vector3 center = Vector3Scale(Vector3Add(Vector3Add(a, b), c), 1.0f / 3.0f);
+    if (Vector3DotProduct(normal, center) < 0.0f) {
+        Vector3 swap = b;
+        b = c;
+        c = swap;
+        normal = Vector3Negate(normal);
+    }
+    normal = Vector3Normalize(normal);
+    const Vector3 points[] = {a, b, c};
+    for (int32_t point = 0; point < 3; ++point) {
+        int32_t vertex = *cursor;
+        mesh->vertices[vertex * 3 + 0] = points[point].x;
+        mesh->vertices[vertex * 3 + 1] = points[point].y;
+        mesh->vertices[vertex * 3 + 2] = points[point].z;
+        mesh->normals[vertex * 3 + 0] = normal.x;
+        mesh->normals[vertex * 3 + 1] = normal.y;
+        mesh->normals[vertex * 3 + 2] = normal.z;
+        mesh->colors[vertex * 4 + 0] = 255;
+        mesh->colors[vertex * 4 + 1] = 255;
+        mesh->colors[vertex * 4 + 2] = 255;
+        mesh->colors[vertex * 4 + 3] = 255;
+        *cursor += 1;
+    }
+}
+
+static Model BuildTreeCrownModel(TreeCrownShape shape)
+{
+    const int32_t vertex_count = CC_TREE_CROWN_TRIANGLES * 3;
+    Mesh mesh = {0};
+    mesh.vertexCount = vertex_count;
+    mesh.triangleCount = CC_TREE_CROWN_TRIANGLES;
+    mesh.vertices = MemAlloc(
+        (unsigned int)((size_t)vertex_count * 3U * sizeof(float)));
+    mesh.normals = MemAlloc(
+        (unsigned int)((size_t)vertex_count * 3U * sizeof(float)));
+    mesh.colors = MemAlloc(
+        (unsigned int)((size_t)vertex_count * 4U * sizeof(unsigned char)));
+    if (mesh.vertices == NULL || mesh.normals == NULL || mesh.colors == NULL) {
+        if (mesh.vertices != NULL) MemFree(mesh.vertices);
+        if (mesh.normals != NULL) MemFree(mesh.normals);
+        if (mesh.colors != NULL) MemFree(mesh.colors);
+        TraceLog(LOG_WARNING, "TREE: could not allocate crystalline crown mesh");
+        return (Model){0};
+    }
+
+    const TreeCrownProfile *profile = &TREE_CROWN_PROFILES[shape];
+    Vector3 top = {profile->top_offset.x, profile->top_y,
+                   profile->top_offset.y};
+    Vector3 bottom = {profile->bottom_offset.x, profile->bottom_y,
+                      profile->bottom_offset.y};
+    int32_t cursor = 0;
+    for (int32_t side = 0; side < CC_TREE_CROWN_RING_VERTICES; ++side) {
+        int32_t next = (side + 1) % CC_TREE_CROWN_RING_VERTICES;
+        Vector3 upper = TreeCrownRingPoint(profile, true, side);
+        Vector3 upper_next = TreeCrownRingPoint(profile, true, next);
+        Vector3 lower = TreeCrownRingPoint(profile, false, side);
+        Vector3 lower_next = TreeCrownRingPoint(profile, false, next);
+        TreeCrownMeshWriteTriangle(&mesh, &cursor, top, upper, upper_next);
+        TreeCrownMeshWriteTriangle(&mesh, &cursor, upper, lower, upper_next);
+        TreeCrownMeshWriteTriangle(&mesh, &cursor, upper_next, lower,
+                                   lower_next);
+        TreeCrownMeshWriteTriangle(&mesh, &cursor, bottom, lower_next, lower);
+    }
+    if (cursor != vertex_count) {
+        TraceLog(LOG_WARNING, "TREE: crystalline crown mesh count mismatch");
+        UnloadMesh(mesh);
+        return (Model){0};
+    }
+    UploadMesh(&mesh, false);
+    return LoadModelFromMesh(mesh);
+}
+
+static void LoadTreeCrownModels(void)
+{
+    tree_crown_models.alder = BuildTreeCrownModel(TREE_CROWN_ALDER);
+    tree_crown_models.oak = BuildTreeCrownModel(TREE_CROWN_OAK);
+    tree_crown_models.pollard = BuildTreeCrownModel(TREE_CROWN_POLLARD);
+    tree_crown_models.ready = IsModelValid(tree_crown_models.alder) &&
+                              IsModelValid(tree_crown_models.oak) &&
+                              IsModelValid(tree_crown_models.pollard);
+    if (tree_crown_models.ready) return;
+    if (IsModelValid(tree_crown_models.alder)) {
+        UnloadModel(tree_crown_models.alder);
+    }
+    if (IsModelValid(tree_crown_models.oak)) {
+        UnloadModel(tree_crown_models.oak);
+    }
+    if (IsModelValid(tree_crown_models.pollard)) {
+        UnloadModel(tree_crown_models.pollard);
+    }
+    tree_crown_models = (TreeCrownModelCache){0};
+    TraceLog(LOG_WARNING, "TREE: falling back to rounded foliage masses");
 }
 
 void CcLocalRendererInit(void)
@@ -6089,15 +8860,24 @@ void CcLocalRendererInit(void)
     if (sphere_models.ready) return;
     street_camera_rig = (FixedCameraRig){0};
     road_camera_rig = (FixedCameraRig){0};
+    combat_camera_rig = (CombatCameraRig){0};
+    face_render_context = (FaceRenderContext){0};
     sphere_models.small = LoadModelFromMesh(GenMeshSphere(1.0f, 6, 8));
     sphere_models.character = LoadModelFromMesh(GenMeshSphere(1.0f, 8, 8));
     sphere_models.scenery = LoadModelFromMesh(GenMeshSphere(1.0f, 10, 12));
     sphere_models.ready = true;
+    LoadTreeCrownModels();
     LoadHeroSkin();
     LoadNpcArchetypes();
     LoadNpcDynamicModules();
     LoadRuntimeAssets();
     LoadVisualStyle();
+}
+
+void CcLocalRendererSetScreenFirstHero(bool enabled)
+{
+    if (sphere_models.ready) return;
+    screen_first_hero_requested = enabled;
 }
 
 void CcLocalRendererSetDiagnosticOverlay(bool enabled)
@@ -6108,9 +8888,15 @@ void CcLocalRendererSetDiagnosticOverlay(bool enabled)
 void CcLocalRendererShutdown(void)
 {
     if (!sphere_models.ready) return;
+    TerrainRenderCacheClear();
     UnloadModel(sphere_models.small);
     UnloadModel(sphere_models.character);
     UnloadModel(sphere_models.scenery);
+    if (tree_crown_models.ready) {
+        UnloadModel(tree_crown_models.alder);
+        UnloadModel(tree_crown_models.oak);
+        UnloadModel(tree_crown_models.pollard);
+    }
     if (hero_skin.ready) UnloadModel(hero_skin.model);
     for (int32_t role = 0; role < CC_NPC_ROLE_COUNT; ++role) {
         for (int32_t pose = 0; pose < CC_NPC_ARCHETYPE_POSE_COUNT; ++pose) {
@@ -6134,13 +8920,23 @@ void CcLocalRendererShutdown(void)
     }
     if (visual_style.npc_ready) UnloadShader(visual_style.npc);
     if (visual_style.hero_ready) UnloadShader(visual_style.hero);
+    if (visual_style.foliage_ready) UnloadShader(visual_style.foliage);
+    if (visual_style.painted_environment.ready) {
+        UnloadShader(visual_style.painted_environment.shader);
+    }
     if (visual_style.world_ready) UnloadShader(visual_style.world);
+    if (IsTextureValid(visual_style.palette_lut)) {
+        UnloadTexture(visual_style.palette_lut);
+    }
     if (visual_style.grade_ready) UnloadShader(visual_style.grade);
     sphere_models = (SphereModelCache){0};
+    tree_crown_models = (TreeCrownModelCache){0};
     hero_skin = (HeroSkinCache){0};
     visual_style = (VisualStyleCache){0};
     street_camera_rig = (FixedCameraRig){0};
     road_camera_rig = (FixedCameraRig){0};
+    combat_camera_rig = (CombatCameraRig){0};
+    face_render_context = (FaceRenderContext){0};
     bridge_checkpoint_status = BRIDGE_CHECKPOINT_UNKNOWN;
 }
 
@@ -6246,6 +9042,16 @@ static float DrawPitchedRoof(float x, float z, float width, float depth,
                 (Vector3){width + overhang * 2.0f, 0.16f, slope},
                 (Vector3){1.0f, 0.0f, 0.0f}, side_sign * pitch,
                 side > 0 ? roof : shadow);
+            for (int32_t course = 1; course <= 2; ++course) {
+                float along = (float)course / 3.0f;
+                DrawTiltedBox(
+                    (Vector3){x + width * 0.5f,
+                              wall_height + rise * (1.0f - along) + 0.035f,
+                              z + depth * 0.5f + side_sign * run * along},
+                    (Vector3){width + overhang * 2.04f, 0.045f, 0.12f},
+                    (Vector3){1.0f, 0.0f, 0.0f}, side_sign * pitch,
+                    ShadeColor(roof, side > 0 ? 0.82f : 0.68f));
+            }
         }
         DrawBox((Vector3){x + width * 0.5f, wall_height + rise + 0.03f,
                           z + depth * 0.5f},
@@ -6263,12 +9069,156 @@ static float DrawPitchedRoof(float x, float z, float width, float depth,
                 (Vector3){slope, 0.16f, depth + overhang * 2.0f},
                 (Vector3){0.0f, 0.0f, 1.0f}, -side_sign * pitch,
                 side > 0 ? roof : shadow);
+            for (int32_t course = 1; course <= 2; ++course) {
+                float along = (float)course / 3.0f;
+                DrawTiltedBox(
+                    (Vector3){x + width * 0.5f + side_sign * run * along,
+                              wall_height + rise * (1.0f - along) + 0.035f,
+                              z + depth * 0.5f},
+                    (Vector3){0.12f, 0.045f, depth + overhang * 2.04f},
+                    (Vector3){0.0f, 0.0f, 1.0f}, -side_sign * pitch,
+                    ShadeColor(roof, side > 0 ? 0.82f : 0.68f));
+            }
         }
         DrawBox((Vector3){x + width * 0.5f, wall_height + rise + 0.03f,
                           z + depth * 0.5f},
                 (Vector3){0.16f, 0.13f, depth + overhang * 2.1f}, shadow);
     }
     return rise;
+}
+
+static void DrawRoofDormer(float x, float z, float width, float depth,
+                           float wall_height, float roof_rise,
+                           Color wall, Color roof, Color trim)
+{
+    bool ridge_along_x = width >= depth;
+    Color dormer_wall = BlendColor(wall, (Color){128, 116, 96, 255}, 0.16f);
+    Color dormer_roof = ShadeColor(roof, 0.88f);
+    Color glass = BlendColor((Color){31, 53, 57, 255}, WORLD_TEAL, 0.26f);
+    if (ridge_along_x) {
+        float center_x = x + width * 0.67f;
+        float center_z = z + depth * 0.78f;
+        float roof_surface = wall_height + roof_rise * 0.43f;
+        DrawBox((Vector3){center_x, roof_surface + 0.37f, center_z},
+                (Vector3){1.34f, 0.82f, 0.58f}, dormer_wall);
+        DrawBox((Vector3){center_x, roof_surface + 0.40f,
+                          center_z + 0.31f},
+                (Vector3){0.52f, 0.46f, 0.045f}, glass);
+        DrawBox((Vector3){center_x, roof_surface + 0.14f,
+                          center_z + 0.34f},
+                (Vector3){0.74f, 0.09f, 0.10f}, trim);
+        for (int32_t side = -1; side <= 1; side += 2) {
+            DrawTiltedBox(
+                (Vector3){center_x, roof_surface + 0.90f,
+                          center_z + (float)side * 0.18f},
+                (Vector3){1.62f, 0.10f, 0.50f},
+                (Vector3){1.0f, 0.0f, 0.0f}, (float)side * 31.0f,
+                side > 0 ? dormer_roof : ShadeColor(dormer_roof, 0.76f));
+        }
+    } else {
+        float center_x = x + width * 0.78f;
+        float center_z = z + depth * 0.67f;
+        float roof_surface = wall_height + roof_rise * 0.43f;
+        DrawBox((Vector3){center_x, roof_surface + 0.37f, center_z},
+                (Vector3){0.58f, 0.82f, 1.34f}, dormer_wall);
+        DrawBox((Vector3){center_x + 0.31f, roof_surface + 0.40f,
+                          center_z},
+                (Vector3){0.045f, 0.46f, 0.52f}, glass);
+        DrawBox((Vector3){center_x + 0.34f, roof_surface + 0.14f,
+                          center_z},
+                (Vector3){0.10f, 0.09f, 0.74f}, trim);
+        for (int32_t side = -1; side <= 1; side += 2) {
+            DrawTiltedBox(
+                (Vector3){center_x + (float)side * 0.18f,
+                          roof_surface + 0.90f, center_z},
+                (Vector3){0.50f, 0.10f, 1.62f},
+                (Vector3){0.0f, 0.0f, 1.0f}, (float)-side * 31.0f,
+                side > 0 ? dormer_roof : ShadeColor(dormer_roof, 0.76f));
+        }
+    }
+}
+
+static void DrawFacadeBrace(Vector3 center, bool side_facing,
+                            float length, float degrees, Color color)
+{
+    Vector3 size = side_facing ? (Vector3){0.11f, length, 0.16f} :
+                                 (Vector3){0.16f, length, 0.11f};
+    DrawTiltedBox(center, size,
+                  side_facing ? (Vector3){1.0f, 0.0f, 0.0f} :
+                                (Vector3){0.0f, 0.0f, 1.0f},
+                  degrees, color);
+}
+
+static void DrawBuildingArchetypeDetails(float x, float z, float width,
+                                         float depth, float height,
+                                         Color wall, Color trim,
+                                         int32_t style)
+{
+    float front_z = z + depth + 0.105f;
+    float side_x = x + width + 0.105f;
+    if (style == 1) {
+        /* Workshops and storehouses use broad stone corner blocks. Their
+           alternating rhythm reads as masonry at the final art-pixel size. */
+        Color stone = ShadeColor(wall, 1.16f);
+        for (int32_t course = 0; course < 5; ++course) {
+            float y = 0.47f + (float)course * (height - 0.56f) / 4.0f;
+            float inset = (course & 1) != 0 ? 0.08f : 0.0f;
+            DrawBox((Vector3){x + width - 0.16f - inset, y, front_z},
+                    (Vector3){0.48f, 0.52f, 0.15f}, stone);
+            DrawBox((Vector3){side_x, y, z + depth - 0.16f - inset},
+                    (Vector3){0.15f, 0.52f, 0.48f},
+                    ShadeColor(stone, 0.90f));
+        }
+        DrawBox((Vector3){x + width * 0.50f, height * 0.70f, front_z},
+                (Vector3){width * 0.50f, 0.16f, 0.15f}, trim);
+        return;
+    }
+
+    if (style == 2) {
+        /* Civic halls carry a stronger two-storey order than the cottages:
+           tall pilasters, a balcony course, and a bright authority line. */
+        Color pilaster = BlendColor(ShadeColor(wall, 0.62f), trim, 0.18f);
+        for (int32_t bay = 0; bay < 3; ++bay) {
+            float post_x = x + width * (0.18f + (float)bay * 0.32f);
+            DrawBox((Vector3){post_x, height * 0.53f, front_z},
+                    (Vector3){0.22f, height * 0.76f, 0.15f}, pilaster);
+        }
+        DrawBox((Vector3){x + width * 0.50f, height * 0.69f, front_z + 0.04f},
+                (Vector3){width * 0.76f, 0.22f, 0.24f},
+                ShadeColor(pilaster, 1.10f));
+        DrawBox((Vector3){side_x, height * 0.69f, z + depth * 0.50f},
+                (Vector3){0.24f, 0.22f, depth * 0.76f}, pilaster);
+        DrawBox((Vector3){x + width * 0.50f, height * 0.69f + 0.13f,
+                          front_z + 0.17f},
+                (Vector3){width * 0.46f, 0.055f, 0.055f}, trim);
+        return;
+    }
+
+    /* Cottages and mine-row houses expose their timber skeleton. The mine
+       family is darker and denser; the domestic family keeps wider bays. */
+    Color timber = style == 3 ? ShadeColor(trim, 0.76f) : trim;
+    int32_t bay_count = style == 3 ? 3 : 2;
+    for (int32_t bay = 1; bay <= bay_count; ++bay) {
+        float amount = (float)bay / (float)(bay_count + 1);
+        DrawBox((Vector3){x + width * amount, height * 0.51f, front_z},
+                (Vector3){0.16f, height * 0.82f, 0.14f}, timber);
+    }
+    DrawBox((Vector3){side_x, height * 0.51f, z + depth * 0.44f},
+            (Vector3){0.14f, height * 0.82f, 0.16f},
+            ShadeColor(timber, 0.91f));
+    float brace_y = fminf(height * 0.68f, 3.65f);
+    float front_brace = fminf(width * 0.22f, 2.30f);
+    DrawFacadeBrace((Vector3){x + width * 0.18f, brace_y, front_z + 0.01f},
+                    false, front_brace, -42.0f, timber);
+    DrawFacadeBrace((Vector3){x + width * 0.82f, brace_y, front_z + 0.01f},
+                    false, front_brace, 42.0f, timber);
+    if (style == 3) {
+        float side_brace = fminf(depth * 0.24f, 2.15f);
+        DrawFacadeBrace((Vector3){side_x + 0.01f, brace_y,
+                                  z + depth * 0.76f},
+                        true, side_brace, -40.0f,
+                        ShadeColor(timber, 0.88f));
+    }
 }
 
 static void DrawFacadeWindow(Vector3 center, bool side_facing, Color trim,
@@ -6286,6 +9236,21 @@ static void DrawFacadeWindow(Vector3 center, bool side_facing, Color trim,
                                        (Vector3){0.76f, 0.055f, 0.022f};
     DrawBox(center, vertical, trim);
     DrawBox(center, horizontal, trim);
+    Vector3 sill_center = {center.x, center.y - 0.70f, center.z};
+    Vector3 lintel_center = {center.x, center.y + 0.70f, center.z};
+    if (side_facing) {
+        sill_center.x += 0.025f;
+        lintel_center.x += 0.025f;
+    } else {
+        sill_center.z += 0.025f;
+        lintel_center.z += 0.025f;
+    }
+    Vector3 sill = side_facing ? (Vector3){0.10f, 0.11f, 1.12f} :
+                                 (Vector3){1.12f, 0.11f, 0.10f};
+    Vector3 lintel = side_facing ? (Vector3){0.08f, 0.15f, 1.04f} :
+                                   (Vector3){1.04f, 0.15f, 0.08f};
+    DrawBox(sill_center, sill, ShadeColor(trim, 1.08f));
+    DrawBox(lintel_center, lintel, ShadeColor(trim, 0.82f));
 }
 
 static void DrawBuildingContactShadow(float x, float z, float width,
@@ -6298,42 +9263,32 @@ static void DrawBuildingContactShadow(float x, float z, float width,
               (Color){8, 13, 14, 78});
 }
 
-static void DrawBuilding(float x, float z, float width, float depth, float height,
-                         Color wall, Color roof, bool door, int32_t style,
-                         bool cutaway)
+static void DrawBuildingFoundation(float x, float z, float width,
+                                   float depth, float height, Color wall)
+{
+    DrawBuildingContactShadow(x, z, width, depth, height);
+    Color footing = ShadeColor(wall, 0.48f);
+    Color cap = ShadeColor(wall, 0.63f);
+    /* Sink the footing slightly into the terrain, then carry a wider cap
+       around the wall. This layer is drawn without foreground reveal, so a
+       cutaway can never turn a solid house into a patch of bare ground. */
+    DrawBox((Vector3){x + width * 0.5f, 0.18f,
+                      z + depth * 0.5f},
+            (Vector3){width + 0.20f, 0.52f, depth + 0.20f}, footing);
+    DrawBox((Vector3){x + width * 0.5f, 0.47f,
+                      z + depth * 0.5f},
+            (Vector3){width + 0.30f, 0.12f, depth + 0.30f}, cap);
+}
+
+static void DrawBuilding(float x, float z, float width, float depth,
+                         float height, Color wall, Color roof, bool door,
+                         int32_t style)
 {
     Vector3 center = {x + width * 0.5f, height * 0.5f, z + depth * 0.5f};
     Color trim = style == 2 ? WORLD_GOLD : ShadeColor(wall, 0.60f);
     Color glass = style == 1 ? (Color){148, 103, 55, 255} :
                   style == 3 ? Fade(WORLD_VIOLET, 0.84f) :
                                Fade(WORLD_TEAL, 0.78f);
-    DrawBuildingContactShadow(x, z, width, depth, height);
-    DrawBox((Vector3){center.x, 0.17f, center.z},
-            (Vector3){width + 0.12f, 0.34f, depth + 0.12f},
-            ShadeColor(wall, 0.58f));
-
-    if (cutaway) {
-        const float wall_height = 1.02f;
-        Color cut_wall = BlendColor(wall, (Color){62, 58, 53, 255}, 0.26f);
-        Color floor = ShadeColor(wall, 0.70f);
-        DrawCubeV((Vector3){center.x, 0.205f, center.z},
-                  (Vector3){width - 0.20f, 0.07f, depth - 0.20f}, floor);
-        /* The camera looks from +X/+Z. Keep the far walls as a dollhouse
-           silhouette while removing the two faces that hide the player. */
-        DrawBox((Vector3){center.x, wall_height * 0.5f, z + 0.10f},
-                (Vector3){width, wall_height, 0.20f}, cut_wall);
-        DrawBox((Vector3){x + 0.10f, wall_height * 0.5f, center.z},
-                (Vector3){0.20f, wall_height, depth}, cut_wall);
-        DrawBox((Vector3){center.x, wall_height + 0.02f, z + 0.10f},
-                (Vector3){width + 0.10f, 0.13f, 0.26f}, trim);
-        DrawBox((Vector3){x + 0.10f, wall_height + 0.02f, center.z},
-                (Vector3){0.26f, 0.13f, depth + 0.10f}, trim);
-        DrawCubeWiresV((Vector3){center.x, 0.22f, center.z},
-                       (Vector3){width + 0.14f, 0.12f, depth + 0.14f},
-                       Fade(WORLD_INK, 0.30f));
-        return;
-    }
-
     DrawBox(center, (Vector3){width, height, depth}, wall);
 
     /* The positive Z and X facades face the runtime camera. Depth here is not
@@ -6375,6 +9330,12 @@ static void DrawBuilding(float x, float z, float width, float depth, float heigh
                                center.z + depth * 0.12f}, true, trim, glass);
 
     if (door) {
+        DrawBox((Vector3){center.x, 0.10f, z + depth + 0.42f},
+                (Vector3){1.58f, 0.20f, 0.76f},
+                ShadeColor(wall, 0.54f));
+        DrawBox((Vector3){center.x, 0.045f, z + depth + 0.84f},
+                (Vector3){1.34f, 0.09f, 0.38f},
+                ShadeColor(wall, 0.66f));
         DrawBox((Vector3){center.x, 1.12f, z + depth + 0.055f},
                 (Vector3){1.30f, 2.24f, 0.12f}, trim);
         DrawBox((Vector3){center.x, 1.10f, z + depth + 0.125f},
@@ -6394,7 +9355,14 @@ static void DrawBuilding(float x, float z, float width, float depth, float heigh
                         0.11f, WORLD_GOLD);
     }
 
+    DrawBuildingArchetypeDetails(x, z, width, depth, height, wall, trim,
+                                 style);
+
     float roof_rise = DrawPitchedRoof(x, z, width, depth, height, wall, roof);
+    if (style != 1 && width >= 7.5f && depth >= 6.5f) {
+        DrawRoofDormer(x, z, width, depth, height, roof_rise,
+                       wall, roof, trim);
+    }
     if (style == 0 || style == 2) {
         DrawBox((Vector3){x + width * 0.24f,
                           height + roof_rise * 0.74f,
@@ -6424,12 +9392,6 @@ static void DrawTerrainPatchAtTop(float x, float z, float width, float depth,
     DrawCubeV((Vector3){x + width * 0.5f, top - thickness * 0.5f,
                         z + depth * 0.5f},
               (Vector3){width, thickness, depth}, color);
-}
-
-static void DrawGroundTile(float x, float z, Color color)
-{
-    DrawTerrainPatchAtTop(x + 0.01f, z + 0.01f, 0.98f, 0.98f,
-                          -0.002f, color);
 }
 
 /* The orthographic street camera shows roughly 22 metres across. This larger
@@ -6464,144 +9426,6 @@ static bool RoomDetailPointVisible(float x, float z, Vector3 focus)
 {
     return SceneryFootprintVisibleWithin(
         (Rectangle){x, z, 0.0f, 0.0f}, focus, 23.0f);
-}
-
-static void DrawSettlementPlaza(Color stone)
-{
-    for (int32_t row = 0; row < 8; ++row) {
-        for (int32_t column = 0; column < 7; ++column) {
-            float variation = ((row + column) & 1) != 0 ? 0.94f : 1.04f;
-            DrawGroundTile(38.0f + (float)column,
-                           26.0f + (float)row,
-                           ShadeColor(stone, variation));
-        }
-    }
-    Color curb = ShadeColor(stone, 0.68f);
-    DrawTerrainPatchAtTop(37.82f, 25.82f, 0.16f, 8.36f, 0.004f, curb);
-    DrawTerrainPatchAtTop(45.0f, 25.82f, 0.16f, 8.36f, 0.004f, curb);
-    DrawTerrainPatchAtTop(37.82f, 25.82f, 7.34f, 0.16f, 0.004f, curb);
-    DrawTerrainPatchAtTop(37.82f, 34.02f, 7.34f, 0.16f, 0.004f, curb);
-}
-
-static void DrawStreetPavingDetails(Color road, Vector3 focus)
-{
-    Color joint = ShadeColor(road, 0.74f);
-
-    /* Large, stable stone modules read after the whole scene is pixelated.
-       Detail is limited to the current room so distant streets stay quiet. */
-    for (float x = 16.0f; x <= 91.0f; x += 2.25f) {
-        if (fabsf(x - focus.x) > 18.0f) continue;
-        if (x >= 37.5f && x <= 45.4f) continue;
-        DrawTerrainPatchAtTop(x, 27.24f, 0.090f, 4.32f, -0.001f, joint);
-    }
-    float horizontal_start = fmaxf(15.2f, focus.x - 18.0f);
-    float horizontal_width = fminf(91.8f, focus.x + 18.0f) -
-                             horizontal_start;
-    if (horizontal_width > 0.0f) {
-        DrawTerrainPatchAtTop(horizontal_start, 29.36f, horizontal_width,
-                              0.085f, -0.001f, joint);
-    }
-
-    for (float z = 8.7f; z <= 57.0f; z += 2.25f) {
-        if (fabsf(z - focus.z) > 18.0f) continue;
-        if (z >= 25.5f && z <= 34.4f) continue;
-        DrawTerrainPatchAtTop(39.84f, z, 4.32f, 0.090f, 0.0f, joint);
-    }
-    float vertical_start = fmaxf(8.2f, focus.z - 18.0f);
-    float vertical_depth = fminf(57.8f, focus.z + 18.0f) - vertical_start;
-    if (vertical_depth > 0.0f) {
-        DrawTerrainPatchAtTop(41.96f, vertical_start, 0.085f,
-                              vertical_depth, 0.0f, joint);
-    }
-}
-
-static void DrawMarketThreshold(Color road)
-{
-    /* A warm, tiled threshold turns the market into a destination instead of
-       a cluster of props. It joins the plaza to the building's collision-safe
-       south entrance and remains traversable. */
-    Color threshold = BlendColor(ShadeColor(road, 1.08f),
-                                 (Color){158, 119, 67, 255}, 0.24f);
-    for (int32_t row = 0; row < 2; ++row) {
-        for (int32_t column = 0; column < 6; ++column) {
-            float variation = ((row + column) & 1) != 0 ? 0.96f : 1.04f;
-            DrawTerrainPatchAtTop(47.0f + (float)column,
-                                  25.25f + (float)row * 0.72f,
-                                  0.94f, 0.66f, 0.003f,
-                                  ShadeColor(threshold, variation));
-        }
-    }
-}
-
-static Color StreetRouteColor(Color road, int32_t palette)
-{
-    switch (palette) {
-        case 1:
-            return BlendColor(ShadeColor(road, 1.08f), WORLD_GOLD, 0.18f);
-        case 2:
-            return BlendColor(ShadeColor(road, 0.94f), WORLD_TEAL, 0.14f);
-        case 3:
-            return BlendColor(ShadeColor(road, 0.88f), WORLD_VIOLET, 0.12f);
-        default:
-            return BlendColor(ShadeColor(road, 1.02f),
-                              (Color){126, 104, 73, 255}, 0.18f);
-    }
-}
-
-static void DrawRoomRoute(Rectangle route, Color stone)
-{
-    if (route.width <= 0.0f || route.height <= 0.0f) return;
-    Color edge = ShadeColor(stone, 0.69f);
-    Color joint = ShadeColor(stone, 0.78f);
-    DrawTerrainPatchAtTop(route.x, route.y, route.width, route.height,
-                          0.001f, stone);
-    DrawTerrainPatchAtTop(route.x, route.y, route.width, 0.11f,
-                          0.007f, edge);
-    DrawTerrainPatchAtTop(route.x, route.y + route.height - 0.11f,
-                          route.width, 0.11f, 0.007f, edge);
-    DrawTerrainPatchAtTop(route.x, route.y, 0.11f, route.height,
-                          0.007f, edge);
-    DrawTerrainPatchAtTop(route.x + route.width - 0.11f, route.y,
-                          0.11f, route.height, 0.007f, edge);
-
-    bool runs_east_west = route.width >= route.height;
-    if (runs_east_west) {
-        for (float x = route.x + 1.35f;
-             x < route.x + route.width - 0.35f; x += 1.55f) {
-            DrawTerrainPatchAtTop(x, route.y + 0.12f, 0.075f,
-                                  route.height - 0.24f, 0.006f, joint);
-        }
-        DrawTerrainPatchAtTop(route.x + 0.12f,
-                              route.y + route.height * 0.5f,
-                              route.width - 0.24f, 0.075f, 0.006f, joint);
-    } else {
-        for (float z = route.y + 1.35f;
-             z < route.y + route.height - 0.35f; z += 1.55f) {
-            DrawTerrainPatchAtTop(route.x + 0.12f, z,
-                                  route.width - 0.24f, 0.075f,
-                                  0.006f, joint);
-        }
-        DrawTerrainPatchAtTop(route.x + route.width * 0.5f,
-                              route.y + 0.12f, 0.075f,
-                              route.height - 0.24f, 0.006f, joint);
-    }
-}
-
-static void DrawRoomRouteAccents(Color road, Vector3 focus)
-{
-    int32_t count = (int32_t)(sizeof(STREET_CAMERA_SHOTS) /
-                              sizeof(STREET_CAMERA_SHOTS[0]));
-    for (int32_t i = 0; i < count; ++i) {
-        const StreetCameraShot *room = &STREET_CAMERA_SHOTS[i];
-        if (room->route.width <= 0.0f || room->route.height <= 0.0f) continue;
-        if (!SceneryFootprintVisibleWithin(room->route, focus, 21.0f)) continue;
-        if (i == 6) {
-            DrawMarketThreshold(road);
-            continue;
-        }
-        DrawRoomRoute(room->route,
-                      StreetRouteColor(road, room->route_palette));
-    }
 }
 
 static void DrawStreetLantern(float x, float z)
@@ -6764,100 +9588,696 @@ static void DrawRoomLandmarks(const CcSettlement *place, Color kingdom,
 {
     float hunger = place != NULL ? (float)place->hunger / 100.0f : 0.0f;
     if (RoomDetailPointVisible(11.50f, 10.56f, focus)) {
+        rlPushMatrix();
+        rlTranslatef(0.0f, CcLocalTerrainHeightAt(11.50f, 10.56f), 0.0f);
         DrawWayfarerGate(kingdom);
+        rlPopMatrix();
     }
     if (RoomDetailPointVisible(8.10f, 25.00f, focus)) {
+        rlPushMatrix();
+        rlTranslatef(0.0f, CcLocalTerrainHeightAt(8.10f, 25.00f), 0.0f);
         DrawCroftScarecrow(hunger);
+        rlPopMatrix();
     }
-    if (RoomDetailPointVisible(18.0f, 54.72f, focus)) DrawMineWaystone();
+    if (RoomDetailPointVisible(18.0f, 54.72f, focus)) {
+        rlPushMatrix();
+        rlTranslatef(0.0f, CcLocalTerrainHeightAt(18.0f, 54.72f), 0.0f);
+        DrawMineWaystone();
+        rlPopMatrix();
+    }
     if (RoomDetailPointVisible(30.95f, 24.30f, focus)) {
+        rlPushMatrix();
+        rlTranslatef(0.0f, CcLocalTerrainHeightAt(30.95f, 24.30f), 0.0f);
         DrawArtisanSign(kingdom);
+        rlPopMatrix();
     }
-    if (RoomDetailPointVisible(36.75f, 55.36f, focus)) DrawCoachHitch(place);
+    if (RoomDetailPointVisible(36.75f, 55.36f, focus)) {
+        rlPushMatrix();
+        rlTranslatef(0.0f, CcLocalTerrainHeightAt(36.75f, 55.36f), 0.0f);
+        DrawCoachHitch(place);
+        rlPopMatrix();
+    }
     if (RoomDetailPointVisible(64.14f, 51.02f, focus)) {
+        rlPushMatrix();
+        rlTranslatef(0.0f, CcLocalTerrainHeightAt(64.14f, 51.02f), 0.0f);
         DrawMillersGranary(hunger);
+        rlPopMatrix();
     }
     if (RoomDetailPointVisible(81.4f, 47.0f, focus)) {
+        rlPushMatrix();
+        rlTranslatef(0.0f, CcLocalTerrainHeightAt(81.4f, 47.0f), 0.0f);
         DrawEastWindmill(kingdom, hunger);
+        rlPopMatrix();
     }
 }
 
-static void DrawExteriorTerrain(const CcSettlement *place, Vector3 focus)
+static bool TerrainPointInRectangle(float x, float z, Rectangle rectangle)
+{
+    return x >= rectangle.x && x <= rectangle.x + rectangle.width &&
+           z >= rectangle.y && z <= rectangle.y + rectangle.height;
+}
+
+static const Rectangle TERRAIN_FIELDS[] = {
+    {3.0f, 17.0f, 13.0f, 9.0f}, {3.0f, 29.0f, 13.0f, 9.0f},
+    {3.0f, 41.0f, 13.0f, 9.0f}, {59.0f, 43.0f, 14.0f, 10.0f},
+    {76.0f, 43.0f, 15.0f, 10.0f},
+};
+
+static float TerrainRectangleInset(float x, float z, Rectangle rectangle)
+{
+    if (!TerrainPointInRectangle(x, z, rectangle)) return 0.0f;
+    return fminf(fminf(x - rectangle.x,
+                       rectangle.x + rectangle.width - x),
+                 fminf(z - rectangle.y,
+                       rectangle.y + rectangle.height - z));
+}
+
+static int32_t TerrainVisibleRoadCount(void)
+{
+    /* The final terrain road is an unpaved raid ingress. */
+    return (int32_t)(sizeof(TERRAIN_ROADS) / sizeof(TERRAIN_ROADS[0])) - 1;
+}
+
+static float TerrainRoadAmount(float x, float z)
+{
+    float amount = 0.0f;
+    for (int32_t i = 0; i < TerrainVisibleRoadCount(); ++i) {
+        float inset = TerrainRectangleInset(
+            x, z, TERRAIN_ROADS[i].footprint);
+        if (inset <= 0.0f) continue;
+        float edge_breakup = TerrainValueNoise(
+            x + (float)i * 3.7f, z - (float)i * 2.9f, 4.5f, 17U) * 0.14f;
+        amount = fmaxf(amount,
+                       TerrainSmooth01(inset / 0.68f + edge_breakup));
+    }
+    return amount;
+}
+
+static float TerrainFieldAmount(float x, float z)
+{
+    float amount = 0.0f;
+    for (int32_t i = 0; i < (int32_t)(sizeof(TERRAIN_FIELDS) /
+                                      sizeof(TERRAIN_FIELDS[0])); ++i) {
+        float inset = TerrainRectangleInset(x, z, TERRAIN_FIELDS[i]);
+        if (inset <= 0.0f) continue;
+        amount = fmaxf(amount, TerrainSmooth01(inset / 0.80f));
+    }
+    return amount;
+}
+
+static bool TerrainPointInPlayableWorld(float x, float z)
+{
+    return x >= 0.0f && x <= CC_LOCAL_WORLD_WIDTH &&
+           z >= 0.0f && z <= CC_LOCAL_WORLD_DEPTH;
+}
+
+/* The collision world has a hard gameplay boundary, but the rendered country
+   continues beyond it. Matching the generated height at the boundary keeps
+   the extension seamless while a small natural delta prevents a flat skirt. */
+static float TerrainVisualHeightAt(float x, float z)
+{
+    if (TerrainPointInPlayableWorld(x, z)) {
+        return CcLocalTerrainHeightAt(x, z);
+    }
+    float edge_x = TerrainClamp(x, 0.0f, CC_LOCAL_WORLD_WIDTH);
+    float edge_z = TerrainClamp(z, 0.0f, CC_LOCAL_WORLD_DEPTH);
+    float dx = x - edge_x;
+    float dz = z - edge_z;
+    float distance = sqrtf(dx * dx + dz * dz);
+    float edge_height = CcLocalTerrainHeightAt(edge_x, edge_z);
+    float natural_delta = TerrainNaturalHeight(x, z) -
+                          TerrainNaturalHeight(edge_x, edge_z);
+    float natural_weight = TerrainSmooth01(distance / 5.0f);
+    return edge_height + natural_delta * natural_weight - distance * 0.035f;
+}
+
+static Vector3 TerrainVisualNormalAt(float x, float z)
+{
+    const float offset = CC_TERRAIN_CELL_SIZE;
+    float left = TerrainVisualHeightAt(x - offset, z);
+    float right = TerrainVisualHeightAt(x + offset, z);
+    float near_height = TerrainVisualHeightAt(x, z - offset);
+    float far_height = TerrainVisualHeightAt(x, z + offset);
+    Vector3 normal = {left - right, offset * 2.0f,
+                      near_height - far_height};
+    return Vector3Normalize(normal);
+}
+
+static Color TerrainSurfaceColor(const CcSettlement *place,
+                                 float x, float z, Vector3 normal)
 {
     float hunger = place != NULL ? (float)place->hunger / 100.0f : 0.0f;
     float prosperity = place != NULL ?
                        (float)place->prosperity / 100.0f : 0.5f;
     Color grass = BlendColor((Color){35, 67, 53, 255},
                              (Color){75, 66, 42, 255}, hunger * 0.72f);
-    Color road = BlendColor((Color){88, 82, 69, 255},
-                            (Color){116, 101, 76, 255}, prosperity * 0.32f);
-    Color road_edge = ShadeColor(road, 0.62f);
-    Color plaza = BlendColor((Color){101, 94, 81, 255},
-                             (Color){133, 119, 93, 255}, prosperity * 0.36f);
+    float height = TerrainVisualHeightAt(x, z);
+    float lowland = TerrainSmooth01((1.35f - height) / 2.40f);
+    float highland = TerrainSmooth01((height - 4.20f) / 3.20f);
+    grass = BlendColor(grass, (Color){27, 65, 58, 255}, lowland * 0.34f);
+    grass = BlendColor(grass, (Color){74, 82, 53, 255}, highland * 0.30f);
+    Color color = grass;
+    float field_amount = TerrainFieldAmount(x, z);
+    Color field = BlendColor((Color){103, 102, 57, 255},
+                             (Color){128, 111, 63, 255}, prosperity * 0.26f);
+    field = BlendColor(field, grass, hunger * 0.28f);
+    color = BlendColor(color, field, field_amount * 0.84f);
 
-    DrawPlane((Vector3){CC_LOCAL_WORLD_WIDTH * 0.5f, -0.09f,
-                        CC_LOCAL_WORLD_DEPTH * 0.5f},
-              (Vector2){CC_LOCAL_WORLD_WIDTH + 8.0f,
-                        CC_LOCAL_WORLD_DEPTH + 8.0f},
-              grass);
+    float road_amount = TerrainRoadAmount(x, z);
+    Color road = BlendColor((Color){82, 77, 66, 255},
+                            (Color){121, 102, 75, 255}, prosperity * 0.34f);
+    color = BlendColor(color, road, road_amount);
 
-    DrawTerrainPatchAtTop(1.0f, 1.0f, 16.0f, 11.0f, -0.018f,
-                          (Color){43, 67, 61, 255});
+    Rectangle plaza = {37.6f, 25.6f, 18.8f, 8.8f};
+    float plaza_amount = TerrainSmooth01(
+        TerrainRectangleInset(x, z, plaza) / 0.55f);
+    Color plaza_color = BlendColor((Color){101, 94, 81, 255},
+                                   (Color){133, 119, 93, 255},
+                                   prosperity * 0.36f);
+    color = BlendColor(color, plaza_color, plaza_amount);
 
-    /* A recessed shoulder, raised road bed, inset lanes, and proud curbs give
-       every material a unique depth. Besides reading more like constructed
-       terrain, this prevents the coplanar road intersections that used to
-       shimmer as the camera moved. */
-    Color shoulder = ShadeColor(road, 0.70f);
-    DrawTerrainPatchAtTop(14.7f, 26.80f, 77.6f, 5.20f, -0.024f, shoulder);
-    DrawTerrainPatchAtTop(39.40f, 7.70f, 5.20f, 50.6f, -0.023f, shoulder);
-    DrawTerrainPatchAtTop(15.0f, 27.1f, 77.0f, 4.6f, -0.014f, road);
-    DrawTerrainPatchAtTop(39.7f, 8.0f, 4.6f, 50.0f, -0.012f, road);
-    DrawTerrainPatchAtTop(7.2f, 10.0f, 34.8f, 3.8f, -0.010f,
-                          ShadeColor(road, 0.92f));
-    DrawTerrainPatchAtTop(76.0f, 27.0f, 5.0f, 7.0f, -0.008f,
-                          ShadeColor(road, 1.08f));
+    Rectangle wayfarer_yard = {1.0f, 0.0f, 14.6f, 11.1f};
+    float yard_amount = TerrainSmooth01(
+        TerrainRectangleInset(x, z, wayfarer_yard) / 0.52f);
+    color = BlendColor(color, (Color){43, 67, 61, 255}, yard_amount);
 
-    DrawTerrainPatchAtTop(15.0f, 27.02f, 77.0f, 0.13f, -0.004f,
-                          road_edge);
-    DrawTerrainPatchAtTop(15.0f, 31.70f, 77.0f, 0.13f, -0.004f,
-                          road_edge);
-    DrawTerrainPatchAtTop(39.62f, 8.0f, 0.13f, 50.0f, -0.003f,
-                          road_edge);
-    DrawTerrainPatchAtTop(44.30f, 8.0f, 0.13f, 50.0f, -0.003f,
-                          road_edge);
-    DrawStreetPavingDetails(road, focus);
-    DrawSettlementPlaza(plaza);
+    float rock_amount = TerrainSmooth01((0.82f - normal.y) / 0.22f);
+    Color stone = BlendColor((Color){70, 75, 72, 255},
+                             (Color){91, 82, 70, 255}, highland * 0.36f);
+    color = BlendColor(color, stone, rock_amount * 0.78f);
 
+    float broad = TerrainValueNoise(x, z, 11.0f, 21U);
+    float detail = TerrainValueNoise(x + 5.0f, z - 9.0f, 3.4f, 22U);
+    return ShadeColor(color, 1.0f + broad * 0.035f + detail * 0.014f);
+}
+
+typedef struct TerrainMeshWriter {
+    Mesh mesh;
+    int32_t cursor;
+} TerrainMeshWriter;
+
+static void TerrainRenderCacheClear(void)
+{
+    if (terrain_render_cache.ready) {
+        UnloadModel(terrain_render_cache.model);
+    }
+    terrain_render_cache = (TerrainRenderCache){0};
+}
+
+static bool TerrainMeshWriterAllocate(TerrainMeshWriter *writer,
+                                      int32_t vertex_count)
+{
+    if (writer == NULL || vertex_count <= 0) return false;
+    *writer = (TerrainMeshWriter){0};
+    writer->mesh.vertexCount = vertex_count;
+    writer->mesh.triangleCount = vertex_count / 3;
+    writer->mesh.vertices = MemAlloc(
+        (unsigned int)((size_t)vertex_count * 3U * sizeof(float)));
+    writer->mesh.normals = MemAlloc(
+        (unsigned int)((size_t)vertex_count * 3U * sizeof(float)));
+    writer->mesh.colors = MemAlloc(
+        (unsigned int)((size_t)vertex_count * 4U * sizeof(unsigned char)));
+    if (writer->mesh.vertices != NULL && writer->mesh.normals != NULL &&
+        writer->mesh.colors != NULL) {
+        return true;
+    }
+    if (writer->mesh.vertices != NULL) MemFree(writer->mesh.vertices);
+    if (writer->mesh.normals != NULL) MemFree(writer->mesh.normals);
+    if (writer->mesh.colors != NULL) MemFree(writer->mesh.colors);
+    *writer = (TerrainMeshWriter){0};
+    return false;
+}
+
+static void TerrainMeshWriteVertex(TerrainMeshWriter *writer,
+                                   Vector3 point, Color color)
+{
+    int32_t vertex = writer->cursor;
+    Vector3 normal = TerrainVisualNormalAt(point.x, point.z);
+    normal.y = fmaxf(normal.y, 0.62f);
+    normal = Vector3Normalize(normal);
+    writer->mesh.vertices[vertex * 3 + 0] = point.x;
+    writer->mesh.vertices[vertex * 3 + 1] = point.y;
+    writer->mesh.vertices[vertex * 3 + 2] = point.z;
+    writer->mesh.normals[vertex * 3 + 0] = normal.x;
+    writer->mesh.normals[vertex * 3 + 1] = normal.y;
+    writer->mesh.normals[vertex * 3 + 2] = normal.z;
+    writer->mesh.colors[vertex * 4 + 0] = color.r;
+    writer->mesh.colors[vertex * 4 + 1] = color.g;
+    writer->mesh.colors[vertex * 4 + 2] = color.b;
+    writer->mesh.colors[vertex * 4 + 3] = color.a;
+    writer->cursor += 1;
+}
+
+static void TerrainMeshWriteCell(TerrainMeshWriter *writer,
+                                 const CcSettlement *place,
+                                 Vector3 p00, Vector3 p10,
+                                 Vector3 p01, Vector3 p11)
+{
+    Color c00 = TerrainSurfaceColor(
+        place, p00.x, p00.z, TerrainVisualNormalAt(p00.x, p00.z));
+    Color c10 = TerrainSurfaceColor(
+        place, p10.x, p10.z, TerrainVisualNormalAt(p10.x, p10.z));
+    Color c01 = TerrainSurfaceColor(
+        place, p01.x, p01.z, TerrainVisualNormalAt(p01.x, p01.z));
+    Color c11 = TerrainSurfaceColor(
+        place, p11.x, p11.z, TerrainVisualNormalAt(p11.x, p11.z));
+    TerrainMeshWriteVertex(writer, p00, c00);
+    TerrainMeshWriteVertex(writer, p11, c11);
+    TerrainMeshWriteVertex(writer, p10, c10);
+    TerrainMeshWriteVertex(writer, p00, c00);
+    TerrainMeshWriteVertex(writer, p01, c01);
+    TerrainMeshWriteVertex(writer, p11, c11);
+}
+
+static int32_t TerrainMeshVertexCount(void)
+{
+    const float margin = 14.0f;
+    int32_t cells = 0;
+    for (float z = -margin; z < CC_LOCAL_WORLD_DEPTH + margin; z += 1.0f) {
+        for (float x = -margin; x < CC_LOCAL_WORLD_WIDTH + margin;
+             x += 1.0f) {
+            if (x >= 0.0f && x + 1.0f <= CC_LOCAL_WORLD_WIDTH &&
+                z >= 0.0f && z + 1.0f <= CC_LOCAL_WORLD_DEPTH) {
+                continue;
+            }
+            cells += 1;
+        }
+    }
+    cells += (int32_t)(CC_LOCAL_WORLD_WIDTH / 0.50f) *
+             (int32_t)(CC_LOCAL_WORLD_DEPTH / 0.50f);
+    return cells * 6;
+}
+
+static bool TerrainRenderCacheBuild(const CcSettlement *place)
+{
+    TerrainRenderCacheClear();
+    TerrainEnsureReady();
+    int32_t vertex_count = TerrainMeshVertexCount();
+    TerrainMeshWriter writer;
+    if (!TerrainMeshWriterAllocate(&writer, vertex_count)) {
+        TraceLog(LOG_WARNING,
+                 "TERRAIN: could not allocate cached mesh (%d vertices)",
+                 vertex_count);
+        return false;
+    }
+
+    const float margin = 14.0f;
+    for (float z = -margin; z < CC_LOCAL_WORLD_DEPTH + margin; z += 1.0f) {
+        float far_z = z + 1.0f;
+        for (float x = -margin; x < CC_LOCAL_WORLD_WIDTH + margin;
+             x += 1.0f) {
+            float far_x = x + 1.0f;
+            if (x >= 0.0f && far_x <= CC_LOCAL_WORLD_WIDTH &&
+                z >= 0.0f && far_z <= CC_LOCAL_WORLD_DEPTH) {
+                continue;
+            }
+            TerrainMeshWriteCell(
+                &writer, place,
+                (Vector3){x, TerrainVisualHeightAt(x, z), z},
+                (Vector3){far_x, TerrainVisualHeightAt(far_x, z), z},
+                (Vector3){x, TerrainVisualHeightAt(x, far_z), far_z},
+                (Vector3){far_x, TerrainVisualHeightAt(far_x, far_z), far_z});
+        }
+    }
+    const float step = 0.50f;
+    for (float z = 0.0f; z < CC_LOCAL_WORLD_DEPTH; z += step) {
+        float far_z = fminf(z + step, CC_LOCAL_WORLD_DEPTH);
+        for (float x = 0.0f; x < CC_LOCAL_WORLD_WIDTH; x += step) {
+            float far_x = fminf(x + step, CC_LOCAL_WORLD_WIDTH);
+            TerrainMeshWriteCell(
+                &writer, place,
+                (Vector3){x, CcLocalTerrainHeightAt(x, z), z},
+                (Vector3){far_x, CcLocalTerrainHeightAt(far_x, z), z},
+                (Vector3){x, CcLocalTerrainHeightAt(x, far_z), far_z},
+                (Vector3){far_x, CcLocalTerrainHeightAt(far_x, far_z), far_z});
+        }
+    }
+    if (writer.cursor != vertex_count) {
+        TraceLog(LOG_WARNING,
+                 "TERRAIN: cached mesh count mismatch (%d/%d)",
+                 writer.cursor, vertex_count);
+        UnloadMesh(writer.mesh);
+        return false;
+    }
+    UploadMesh(&writer.mesh, false);
+    terrain_render_cache.model = LoadModelFromMesh(writer.mesh);
+    ApplyWorldShader(&terrain_render_cache.model);
+    terrain_render_cache.seed = street_terrain_seed;
+    terrain_render_cache.hunger_band = place != NULL ? place->hunger / 5 : 0;
+    terrain_render_cache.prosperity_band =
+        place != NULL ? place->prosperity / 5 : 10;
+    terrain_render_cache.vertex_count = vertex_count;
+    terrain_render_cache.ready = true;
+    TraceLog(LOG_INFO, "TERRAIN: cached %d vertices on the GPU", vertex_count);
+    return true;
+}
+
+static void DrawCachedTerrain(const CcSettlement *place)
+{
+    int32_t hunger_band = place != NULL ? place->hunger / 5 : 0;
+    int32_t prosperity_band = place != NULL ? place->prosperity / 5 : 10;
+    bool stale = !terrain_render_cache.ready ||
+                 terrain_render_cache.seed != street_terrain_seed ||
+                 terrain_render_cache.hunger_band != hunger_band ||
+                 terrain_render_cache.prosperity_band != prosperity_band;
+    if (stale && !TerrainRenderCacheBuild(place)) return;
+    DrawModel(terrain_render_cache.model, (Vector3){0.0f, 0.0f, 0.0f},
+              1.0f, WHITE);
+}
+
+static void TerrainDetailVertex(Vector3 point, Color color)
+{
+    Vector3 normal = CcLocalTerrainNormalAt(point.x, point.z);
+    normal.y = fmaxf(normal.y, 0.62f);
+    normal = Vector3Normalize(normal);
+    rlColor4ub(color.r, color.g, color.b, color.a);
+    rlNormal3f(normal.x, normal.y, normal.z);
+    rlVertex3f(point.x, point.y, point.z);
+}
+
+static void TerrainRibbonSegment(Vector2 start, Vector2 end,
+                                 float half_width, float lift, Color color)
+{
+    float dx = end.x - start.x;
+    float dz = end.y - start.y;
+    float length = sqrtf(dx * dx + dz * dz);
+    if (length < 0.001f) return;
+    float side_x = -dz / length * half_width;
+    float side_z = dx / length * half_width;
+    Vector3 right_start = {
+        start.x - side_x, 0.0f, start.y - side_z,
+    };
+    Vector3 left_start = {
+        start.x + side_x, 0.0f, start.y + side_z,
+    };
+    Vector3 right_end = {end.x - side_x, 0.0f, end.y - side_z};
+    Vector3 left_end = {end.x + side_x, 0.0f, end.y + side_z};
+    right_start.y = CcLocalTerrainHeightAt(right_start.x, right_start.z) +
+                    lift;
+    left_start.y = CcLocalTerrainHeightAt(left_start.x, left_start.z) + lift;
+    right_end.y = CcLocalTerrainHeightAt(right_end.x, right_end.z) + lift;
+    left_end.y = CcLocalTerrainHeightAt(left_end.x, left_end.z) + lift;
+    TerrainDetailVertex(right_start, color);
+    TerrainDetailVertex(left_end, color);
+    TerrainDetailVertex(right_end, color);
+    TerrainDetailVertex(right_start, color);
+    TerrainDetailVertex(left_start, color);
+    TerrainDetailVertex(left_end, color);
+}
+
+static void DrawTerrainRoadRuts(const CcSettlement *place, Vector3 focus)
+{
+    float prosperity = place != NULL ?
+                       (float)place->prosperity / 100.0f : 0.5f;
+    Color paved_rut = BlendColor((Color){84, 77, 64, 255},
+                                 (Color){101, 84, 61, 255},
+                                 prosperity * 0.28f);
+    Color field_track = (Color){56, 72, 55, 255};
+    Rectangle plaza = {37.6f, 25.6f, 18.8f, 8.8f};
+    int32_t road_count =
+        (int32_t)(sizeof(TERRAIN_ROADS) / sizeof(TERRAIN_ROADS[0]));
+    rlBegin(RL_TRIANGLES);
+    for (int32_t i = 0; i < road_count; ++i) {
+        bool rural_track = i == 0 || i == 1 || i == 3 || i == 4 ||
+                           i == 9 || i == 12 || i == 13 || i == 14;
+        if (!rural_track) continue;
+        const TerrainRoad *road = &TERRAIN_ROADS[i];
+        Rectangle footprint = road->footprint;
+        Color color = i < TerrainVisibleRoadCount() ? paved_rut : field_track;
+        float cross_center = road->runs_east_west ?
+            footprint.y + footprint.height * 0.5f :
+            footprint.x + footprint.width * 0.5f;
+        float lane_offset = (road->runs_east_west ? footprint.height :
+                                                       footprint.width) *
+                            0.17f;
+        for (int32_t lane = -1; lane <= 1; lane += 2) {
+            float cross = cross_center + (float)lane * lane_offset;
+            float start = road->runs_east_west ? footprint.x : footprint.y;
+            float finish = start + (road->runs_east_west ? footprint.width :
+                                                             footprint.height);
+            for (float along = start + 0.35f; along < finish - 0.35f;
+                 along += 0.72f) {
+                float next = fminf(along + 0.74f, finish - 0.35f);
+                Vector2 a = road->runs_east_west ?
+                    (Vector2){along, cross} : (Vector2){cross, along};
+                Vector2 b = road->runs_east_west ?
+                    (Vector2){next, cross} : (Vector2){cross, next};
+                Vector2 middle = {(a.x + b.x) * 0.5f,
+                                  (a.y + b.y) * 0.5f};
+                float focus_x = middle.x - focus.x;
+                float focus_z = middle.y - focus.z;
+                if (focus_x * focus_x + focus_z * focus_z > 24.0f * 24.0f) {
+                    continue;
+                }
+                if (TerrainPointInRectangle(middle.x, middle.y, plaza)) {
+                    continue;
+                }
+                TerrainRibbonSegment(a, b, 0.055f, 0.055f, color);
+            }
+        }
+    }
+    rlEnd();
+}
+
+static void DrawTerrainFieldRows(const CcSettlement *place, Vector3 focus)
+{
+    float hunger = place != NULL ? (float)place->hunger / 100.0f : 0.0f;
+    float prosperity = place != NULL ?
+                       (float)place->prosperity / 100.0f : 0.5f;
+    Color crop = BlendColor((Color){104, 103, 49, 255},
+                            (Color){145, 119, 56, 255}, prosperity * 0.44f);
+    crop = BlendColor(crop, (Color){78, 76, 49, 255}, hunger * 0.42f);
+    Color furrow = BlendColor((Color){51, 61, 42, 255},
+                              (Color){75, 63, 40, 255}, hunger * 0.30f);
+    rlBegin(RL_TRIANGLES);
+    for (int32_t i = 0; i < (int32_t)(sizeof(TERRAIN_FIELDS) /
+                                      sizeof(TERRAIN_FIELDS[0])); ++i) {
+        Rectangle field = TERRAIN_FIELDS[i];
+        if (!SceneryFootprintVisible(field, focus)) continue;
+        int32_t row = 0;
+        for (float z = field.y + 0.78f;
+             z < field.y + field.height - 0.45f; z += 1.32f, ++row) {
+            Color color = BlendColor(crop, furrow,
+                                     (row & 1) == 0 ? 0.12f : 0.28f);
+            for (float x = field.x + 0.45f;
+                 x < field.x + field.width - 0.45f; x += 0.72f) {
+                float next = fminf(x + 0.74f,
+                                   field.x + field.width - 0.45f);
+                TerrainRibbonSegment((Vector2){x, z}, (Vector2){next, z},
+                                     0.080f, 0.055f, color);
+            }
+        }
+    }
+    rlEnd();
+}
+
+static float TerrainScatter01(int32_t column, int32_t row, uint32_t stream)
+{
+    uint32_t value = street_terrain_seed ^
+        ((uint32_t)column * UINT32_C(0x9e3779b9)) ^
+        ((uint32_t)row * UINT32_C(0x85ebca6b)) ^
+        (stream * UINT32_C(0xc2b2ae35));
+    return (float)(TerrainMix(value) & UINT32_C(0x00ffffff)) /
+           (float)UINT32_C(0x00ffffff);
+}
+
+static void TerrainCoverVertex(Vector3 point, Color color)
+{
+    rlColor4ub(color.r, color.g, color.b, color.a);
+    rlNormal3f(0.18f, 0.96f, 0.14f);
+    rlVertex3f(point.x, point.y, point.z);
+}
+
+static void TerrainTuft(float x, float z, float height, float width,
+                        float angle, Color bottom, Color top)
+{
+    float ground = CcLocalTerrainHeightAt(x, z) + 0.025f;
+    for (int32_t blade = 0; blade < 2; ++blade) {
+        float direction = angle + (float)blade * PI * 0.5f;
+        float side_x = cosf(direction) * width;
+        float side_z = sinf(direction) * width;
+        Vector3 left = {x - side_x, ground, z - side_z};
+        Vector3 right = {x + side_x, ground, z + side_z};
+        Vector3 peak = {x + sinf(direction) * width * 0.20f,
+                        ground + height,
+                        z - cosf(direction) * width * 0.20f};
+        TerrainCoverVertex(left, bottom);
+        TerrainCoverVertex(right, bottom);
+        TerrainCoverVertex(peak, top);
+        /* The crossed blades are deliberately two-sided. */
+        TerrainCoverVertex(peak, top);
+        TerrainCoverVertex(right, bottom);
+        TerrainCoverVertex(left, bottom);
+    }
+}
+
+static void DrawTerrainPlantCover(const CcSettlement *place, Vector3 focus)
+{
+    float hunger = place != NULL ? (float)place->hunger / 100.0f : 0.0f;
+    Color grass_bottom = BlendColor((Color){26, 62, 45, 255},
+                                    (Color){72, 59, 38, 255},
+                                    hunger * 0.62f);
+    Color grass_top = BlendColor((Color){61, 99, 61, 255},
+                                 (Color){106, 84, 46, 255},
+                                 hunger * 0.58f);
+    const float spacing = 1.65f;
+    int32_t first_column = (int32_t)floorf(
+        fmaxf(0.0f, focus.x - 24.0f) / spacing);
+    int32_t last_column = (int32_t)ceilf(
+        fminf(CC_LOCAL_WORLD_WIDTH, focus.x + 24.0f) / spacing);
+    int32_t first_row = (int32_t)floorf(
+        fmaxf(0.0f, focus.z - 24.0f) / spacing);
+    int32_t last_row = (int32_t)ceilf(
+        fminf(CC_LOCAL_WORLD_DEPTH, focus.z + 24.0f) / spacing);
+
+    rlBegin(RL_TRIANGLES);
+    for (int32_t row = first_row; row <= last_row; ++row) {
+        for (int32_t column = first_column; column <= last_column; ++column) {
+            float chance = TerrainScatter01(column, row, 31U);
+            float cluster = TerrainValueNoise(
+                (float)column * spacing, (float)row * spacing, 8.5f, 61U);
+            float threshold = 0.50f - cluster * 0.20f;
+            if (chance < threshold) continue;
+            float x = ((float)column + 0.16f +
+                       TerrainScatter01(column, row, 32U) * 0.68f) * spacing;
+            float z = ((float)row + 0.16f +
+                       TerrainScatter01(column, row, 33U) * 0.68f) * spacing;
+            if (!TerrainPointInPlayableWorld(x, z) ||
+                TerrainRoadAmount(x, z) > 0.06f ||
+                TerrainFieldAmount(x, z) > 0.05f ||
+                TerrainPointInsideMajorFoundation(x, z)) {
+                continue;
+            }
+            Vector3 normal = CcLocalTerrainNormalAt(x, z);
+            if (normal.y < 0.70f) continue;
+            float scale = 0.78f +
+                          TerrainScatter01(column, row, 34U) * 0.52f;
+            float angle = TerrainScatter01(column, row, 35U) * PI * 2.0f;
+            TerrainTuft(x, z, 0.24f * scale, 0.085f * scale, angle,
+                         grass_bottom, grass_top);
+        }
+    }
+
+    float prosperity = place != NULL ?
+                       (float)place->prosperity / 100.0f : 0.5f;
+    Color crop_bottom = BlendColor((Color){73, 79, 40, 255},
+                                   (Color){112, 88, 39, 255}, hunger * 0.38f);
+    Color crop_top = BlendColor((Color){133, 125, 55, 255},
+                                (Color){171, 136, 54, 255},
+                                prosperity * 0.42f);
+    for (int32_t field_index = 0;
+         field_index < (int32_t)(sizeof(TERRAIN_FIELDS) /
+                                  sizeof(TERRAIN_FIELDS[0])); ++field_index) {
+        Rectangle field = TERRAIN_FIELDS[field_index];
+        if (!SceneryFootprintVisible(field, focus)) continue;
+        int32_t row_index = 0;
+        for (float z = field.y + 0.78f;
+             z < field.y + field.height - 0.55f;
+             z += 1.32f, ++row_index) {
+            int32_t column_index = 0;
+            for (float x = field.x + 0.72f;
+                 x < field.x + field.width - 0.55f;
+                 x += 1.05f, ++column_index) {
+                float jitter = TerrainScatter01(
+                    field_index * 31 + column_index,
+                    row_index, 41U) - 0.5f;
+                float scale = 0.82f + TerrainScatter01(
+                    field_index * 37 + column_index,
+                    row_index, 42U) * 0.38f;
+                TerrainTuft(x + jitter * 0.22f, z,
+                             0.31f * scale, 0.070f * scale,
+                             jitter * 0.55f, crop_bottom, crop_top);
+            }
+        }
+    }
+    rlEnd();
+}
+
+static void DrawTerrainRocks(Vector3 focus)
+{
+    const float spacing = 4.80f;
+    int32_t first_column = (int32_t)floorf(
+        fmaxf(0.0f, focus.x - 24.0f) / spacing);
+    int32_t last_column = (int32_t)ceilf(
+        fminf(CC_LOCAL_WORLD_WIDTH, focus.x + 24.0f) / spacing);
+    int32_t first_row = (int32_t)floorf(
+        fmaxf(0.0f, focus.z - 24.0f) / spacing);
+    int32_t last_row = (int32_t)ceilf(
+        fminf(CC_LOCAL_WORLD_DEPTH, focus.z + 24.0f) / spacing);
+    for (int32_t row = first_row; row <= last_row; ++row) {
+        for (int32_t column = first_column; column <= last_column; ++column) {
+            float chance = TerrainScatter01(column, row, 51U);
+            if (chance < 0.74f) continue;
+            float x = ((float)column + 0.18f +
+                       TerrainScatter01(column, row, 52U) * 0.64f) * spacing;
+            float z = ((float)row + 0.18f +
+                       TerrainScatter01(column, row, 53U) * 0.64f) * spacing;
+            if (!TerrainPointInPlayableWorld(x, z) ||
+                TerrainRoadAmount(x, z) > 0.04f ||
+                TerrainFieldAmount(x, z) > 0.04f ||
+                TerrainPointInsideMajorFoundation(x, z)) {
+                continue;
+            }
+            Vector3 normal = CcLocalTerrainNormalAt(x, z);
+            if (normal.y > 0.94f &&
+                TerrainScatter01(column, row, 54U) < 0.82f) {
+                continue;
+            }
+            float radius = 0.16f +
+                           TerrainScatter01(column, row, 55U) * 0.20f;
+            float height = CcLocalTerrainHeightAt(x, z);
+            Color rock = height > 4.0f ? (Color){94, 91, 79, 255} :
+                                         (Color){76, 84, 80, 255};
+            DrawTiltedBox((Vector3){x, height + radius * 0.34f, z},
+                          (Vector3){radius * 1.55f, radius * 0.72f,
+                                    radius * 1.18f},
+                          (Vector3){0.0f, 1.0f, 0.0f},
+                          TerrainScatter01(column, row, 56U) * 42.0f,
+                          rock);
+            if (radius > 0.27f) {
+                DrawTiltedBox(
+                    (Vector3){x + radius * 0.32f,
+                              height + radius * 0.62f,
+                              z - radius * 0.14f},
+                    (Vector3){radius * 0.82f, radius * 0.58f,
+                              radius * 0.72f},
+                    (Vector3){0.0f, 1.0f, 0.0f},
+                    TerrainScatter01(column, row, 57U) * 55.0f,
+                    ShadeColor(rock, 1.08f));
+            }
+        }
+    }
+}
+
+static void DrawTerrainSurfaceDetails(const CcSettlement *place,
+                                      Vector3 focus)
+{
+    DrawTerrainRoadRuts(place, focus);
+    DrawTerrainFieldRows(place, focus);
+    DrawTerrainPlantCover(place, focus);
+    DrawTerrainRocks(focus);
+}
+
+static void DrawTerrainPlacedLantern(float x, float z)
+{
+    rlPushMatrix();
+    rlTranslatef(0.0f, CcLocalTerrainHeightAt(x, z), 0.0f);
+    DrawStreetLantern(x, z);
+    rlPopMatrix();
+}
+
+static void DrawExteriorTerrain(const CcSettlement *place, Vector3 focus)
+{
+    SetWorldTerrainSurface(true);
+    DrawCachedTerrain(place);
+    DrawTerrainSurfaceDetails(place, focus);
+    SetWorldTerrainSurface(false);
     if (SceneryPointVisible(46.15f, 26.10f, focus)) {
-        DrawStreetLantern(46.15f, 26.10f);
+        DrawTerrainPlacedLantern(46.15f, 26.10f);
     }
     if (SceneryPointVisible(53.85f, 26.10f, focus)) {
-        DrawStreetLantern(53.85f, 26.10f);
+        DrawTerrainPlacedLantern(53.85f, 26.10f);
     }
-
-    DrawTerrainPatchAtTop(3.0f, 17.0f, 13.0f, 9.0f, -0.018f,
-                          (Color){86, 91, 56, 255});
-    DrawTerrainPatchAtTop(3.0f, 29.0f, 13.0f, 9.0f, -0.018f,
-                          (Color){93, 86, 52, 255});
-    DrawTerrainPatchAtTop(3.0f, 41.0f, 13.0f, 9.0f, -0.018f,
-                          (Color){79, 87, 51, 255});
-    DrawTerrainPatchAtTop(59.0f, 43.0f, 14.0f, 10.0f, -0.018f,
-                          (Color){89, 91, 54, 255});
-    DrawTerrainPatchAtTop(76.0f, 43.0f, 15.0f, 10.0f, -0.018f,
-                          (Color){82, 89, 52, 255});
-
-    for (int32_t row = 0; row < 4; ++row) {
-        float z = 18.3f + (float)row * 2.0f;
-        DrawTerrainPatchAtTop(
-            4.0f, z, 11.0f, 0.24f, -0.005f,
-            BlendColor(Fade(WORLD_GOLD, 0.34f),
-                       (Color){102, 81, 48, 255}, hunger));
-        DrawTerrainPatchAtTop(60.0f, 44.3f + (float)row * 2.0f,
-                              12.0f, 0.24f, -0.005f,
-                              Fade(WORLD_GOLD, 0.28f));
-    }
-    DrawRoomRouteAccents(road, focus);
 }
 
 static Color BuildingWallColor(int32_t style)
@@ -6882,12 +10302,12 @@ static Color BuildingRoofColor(int32_t style, Color kingdom)
     }
 }
 
-static uint32_t StreetForegroundBuildingMask(void)
+static uint32_t StreetForegroundBuildingMaskForShot(int32_t shot)
 {
-    /* These are authored stage wings, not player-dependent cutaways. A given
-       shot always presents the same architecture; only buildings between the
-       low camera and that shot's walkable route are omitted. */
-    switch (street_camera_rig.shot) {
+    /* These are authored stage wings, not player-dependent pop-in. A given
+       shot always presents the same architecture; buildings between the low
+       camera and its route receive the hero-centered ink reveal. */
+    switch (shot) {
         case 1: return UINT32_C(1) << 3;
         case 3:
             return (UINT32_C(1) << 3) | (UINT32_C(1) << 4);
@@ -6900,25 +10320,159 @@ static uint32_t StreetForegroundBuildingMask(void)
     }
 }
 
-static void DrawWorldBuildings(Color kingdom, Vector3 focus)
+static uint32_t StreetForegroundBuildingMask(void)
 {
-    uint32_t foreground_mask = StreetForegroundBuildingMask();
+    return StreetForegroundBuildingMaskForShot(street_camera_rig.shot);
+}
+
+static bool WorldBuildingObscuresReveal(const WorldBuilding *building,
+                                        Camera3D camera,
+                                        Vector3 reveal_world,
+                                        Vector2 reveal_center,
+                                        int32_t render_width,
+                                        int32_t render_height)
+{
+    if (building == NULL || render_width <= 0 || render_height <= 0) {
+        return false;
+    }
+    Vector3 camera_forward = Vector3Normalize(
+        Vector3Subtract(camera.target, camera.position));
+    float hero_depth = Vector3DotProduct(
+        Vector3Subtract(reveal_world, camera.position), camera_forward);
+    float base = TerrainFootprintHeight(building->footprint);
+    BoundingBox visible_walls = {
+        .min = {building->footprint.x, base, building->footprint.y},
+        .max = {building->footprint.x + building->footprint.width,
+                base + building->height,
+                building->footprint.y + building->footprint.height},
+    };
+    /* A side wall or roof bound must not erase a neighboring house. Test the
+       center of the hero against the solid wall volume that is actually
+       drawn. Whole buildings remain submitted, so this precise trigger does
+       not bring back the old distance-culling blink. */
+    Ray ray = GetScreenToWorldRayEx(reveal_center, camera,
+                                    render_width, render_height);
+    RayCollision collision = GetRayCollisionBox(ray, visible_walls);
+    if (!collision.hit) return false;
+    float collision_depth = Vector3DotProduct(
+        Vector3Subtract(collision.point, camera.position), camera_forward);
+    return collision_depth + 0.30f < hero_depth;
+}
+
+typedef struct WorldBuildingRevealState {
+    float amount;
+    float occluded_seconds;
+    float clear_seconds;
+} WorldBuildingRevealState;
+
+static WorldBuildingRevealState world_building_reveals[
+    sizeof(WORLD_BUILDINGS) / sizeof(WORLD_BUILDINGS[0])];
+static float world_building_reveal_clock = 0.0f;
+static bool world_building_reveals_initialized = false;
+
+static void UpdateWorldBuildingReveals(Camera3D camera,
+                                       Vector3 reveal_world,
+                                       Vector2 reveal_center,
+                                       int32_t render_width,
+                                       int32_t render_height,
+                                       float clock)
+{
+    bool reset = !world_building_reveals_initialized ||
+                 clock < world_building_reveal_clock;
+    float delta_time = reset ? 0.0f :
+        fmaxf(0.0f, fminf(clock - world_building_reveal_clock, 0.05f));
+    world_building_reveal_clock = clock;
+    world_building_reveals_initialized = true;
+
+    for (int32_t i = 0; i < (int32_t)(sizeof(WORLD_BUILDINGS) /
+                                      sizeof(WORLD_BUILDINGS[0])); ++i) {
+        WorldBuildingRevealState *state = &world_building_reveals[i];
+        bool occluded = WorldBuildingObscuresReveal(
+            &WORLD_BUILDINGS[i], camera, reveal_world, reveal_center,
+            render_width, render_height);
+        if (reset) {
+            state->amount = occluded ? 1.0f : 0.0f;
+            state->occluded_seconds = occluded ? 0.06f : 0.0f;
+            state->clear_seconds = occluded ? 0.0f : 0.14f;
+            continue;
+        }
+        if (occluded) {
+            state->occluded_seconds = fminf(
+                0.30f, state->occluded_seconds + delta_time);
+            state->clear_seconds = 0.0f;
+        } else {
+            state->clear_seconds = fminf(
+                0.30f, state->clear_seconds + delta_time);
+            state->occluded_seconds = 0.0f;
+        }
+        /* Brief edge crossings do nothing. Once a reveal is established,
+           keep it through a short clear interval and ease both directions.
+           This avoids one-frame cutaway changes at wall corners. */
+        bool held_reveal = occluded ? state->occluded_seconds >= 0.06f :
+                           state->clear_seconds < 0.14f &&
+                           state->amount > 0.002f;
+        float destination = held_reveal ? 1.0f : 0.0f;
+        float response = destination > state->amount ? 8.0f : 5.0f;
+        float blend = 1.0f - expf(-response * delta_time);
+        state->amount += (destination - state->amount) * blend;
+        if (fabsf(destination - state->amount) < 0.002f) {
+            state->amount = destination;
+        }
+    }
+}
+
+static void DrawWorldBuildings(Color kingdom, Vector3 focus,
+                               Camera3D camera, Vector3 reveal_world,
+                               Vector2 reveal_center,
+                               int32_t render_width, int32_t render_height,
+                               float clock)
+{
+    (void)focus;
+    float reveal_cut_height = reveal_world.y - 0.30f;
+    UpdateWorldBuildingReveals(camera, reveal_world, reveal_center,
+                               render_width, render_height, clock);
+
+    /* Every structure gets an opaque footing pass before any upper-wall
+       reveal. This includes the authored market replacement. */
+    SetWorldForegroundReveal(0.0f, reveal_cut_height);
     for (int32_t i = 0; i < (int32_t)(sizeof(WORLD_BUILDINGS) /
                                       sizeof(WORLD_BUILDINGS[0])); ++i) {
         const WorldBuilding *building = &WORLD_BUILDINGS[i];
-        if ((foreground_mask & (UINT32_C(1) << i)) != 0) continue;
+        Color wall = BuildingWallColor(building->style);
+        rlPushMatrix();
+        rlTranslatef(0.0f, TerrainFootprintHeight(building->footprint), 0.0f);
+        DrawBuildingFoundation(
+            building->footprint.x, building->footprint.y,
+            building->footprint.width, building->footprint.height,
+            building->height, wall);
+        rlPopMatrix();
+    }
+
+    float reveal_active = -1.0f;
+    for (int32_t i = 0; i < (int32_t)(sizeof(WORLD_BUILDINGS) /
+                                      sizeof(WORLD_BUILDINGS[0])); ++i) {
+        const WorldBuilding *building = &WORLD_BUILDINGS[i];
         /* The market footprint remains authoritative for collision, but its
            visible shell comes from the shared Blender library when present.
-           Buildings no longer appear or disappear based on the hero's exact
-           sightline: each fixed room keeps one coherent piece of scenery. */
+           A camera-to-hero sightline classifies the complete house at its
+           current position. Rear wall, roof, and trim therefore share one
+           reveal, while a house behind the hero remains entirely solid. */
         if (i == 2 && runtime_assets[RUNTIME_ASSET_MARKET].ready) continue;
-        if (!SceneryFootprintVisible(building->footprint, focus)) continue;
+        float reveal = world_building_reveals[i].amount;
+        if (fabsf(reveal - reveal_active) > 0.001f) {
+            SetWorldForegroundReveal(reveal, reveal_cut_height);
+            reveal_active = reveal;
+        }
+        rlPushMatrix();
+        rlTranslatef(0.0f, TerrainFootprintHeight(building->footprint), 0.0f);
         DrawBuilding(building->footprint.x, building->footprint.y,
                      building->footprint.width, building->footprint.height,
                      building->height, BuildingWallColor(building->style),
                      BuildingRoofColor(building->style, kingdom),
-                     building->door, building->style, false);
+                     building->door, building->style);
+        rlPopMatrix();
     }
+    SetWorldForegroundReveal(0.0f, reveal_cut_height);
 }
 
 static bool DrawAuthoredMarket(const CcSettlement *place)
@@ -6928,6 +10482,8 @@ static bool DrawAuthoredMarket(const CcSettlement *place)
     const Vector3 origin = {50.0f, 0.0f, 21.0f};
     const float scale = 1.70f;
     const WorldBuilding *building = &WORLD_BUILDINGS[2];
+    rlPushMatrix();
+    rlTranslatef(0.0f, TerrainFootprintHeight(building->footprint), 0.0f);
     DrawBuildingContactShadow(building->footprint.x, building->footprint.y,
                               building->footprint.width,
                               building->footprint.height, building->height);
@@ -6946,18 +10502,25 @@ static bool DrawAuthoredMarket(const CcSettlement *place)
                     (Vector3){0.0f, 1.0f, 0.0f}, 0.0f,
                     (Vector3){scale, scale, scale}, WHITE);
     }
+    rlPopMatrix();
     return true;
 }
 
 static void DrawCastle(Color kingdom, Vector3 focus)
 {
+    (void)focus;
+    Rectangle keep_pad = {65.20f, 8.20f, 26.50f, 24.40f};
+    rlPushMatrix();
+    rlTranslatef(0.0f, TerrainFootprintHeight(keep_pad), 0.0f);
     for (int32_t i = 0; i < (int32_t)(sizeof(CASTLE_STRUCTURES) /
                                       sizeof(CASTLE_STRUCTURES[0])); ++i) {
         const WorldStructure *structure = &CASTLE_STRUCTURES[i];
         Rectangle footprint = structure->footprint;
-        if (!SceneryFootprintVisible(footprint, focus)) continue;
         Color stone = i == 5 ? (Color){82, 80, 78, 255} :
                                (Color){100, 103, 98, 255};
+        DrawBuildingFoundation(
+            footprint.x, footprint.y, footprint.width, footprint.height,
+            structure->height, stone);
         DrawBox((Vector3){footprint.x + footprint.width * 0.5f,
                           structure->height * 0.5f,
                           footprint.y + footprint.height * 0.5f},
@@ -6970,8 +10533,7 @@ static void DrawCastle(Color kingdom, Vector3 focus)
                           footprint.height + 0.18f},
                 i >= 8 ? kingdom : (Color){74, 77, 75, 255});
     }
-    if (SceneryFootprintVisible((Rectangle){64.8f, 7.8f, 27.6f, 25.4f},
-                                 focus)) {
+    {
         DrawBox((Vector3){78.5f, 1.20f, 22.03f},
                 (Vector3){1.35f, 2.40f, 0.06f},
                 (Color){43, 34, 37, 255});
@@ -7001,6 +10563,7 @@ static void DrawCastle(Color kingdom, Vector3 focus)
                             0.18f, WORLD_GOLD);
         }
     }
+    rlPopMatrix();
 }
 
 static Vector3 Add3(Vector3 a, Vector3 b)
@@ -7043,135 +10606,178 @@ static void DrawCharacterEllipsoid(Vector3 center, Vector3 radius, Color color)
                 (Vector3){0.0f, 1.0f, 0.0f}, 0.0f, radius, color);
 }
 
-static void QueueFaceGlyph(Vector3 head_center, Vector3 body_base,
-                           Vector3 forward, float face_depth, Color ink,
-                           const CcNpcAppearance *appearance,
-                           FaceGlyphExpression expression)
-{
-    if (face_glyph_count >= CC_FACE_GLYPH_MAX_COUNT) return;
-    forward.y = 0.0f;
-    forward = PhysicsNormalizeOr(forward, (Vector3){0.0f, 0.0f, 1.0f});
-    FaceGlyph *glyph = &face_glyphs[face_glyph_count++];
-    glyph->eye_point = PhysicsAdd(
-        PhysicsAdd(head_center, (Vector3){0.0f, 0.045f, 0.0f}),
-        PhysicsScale(forward, face_depth));
-    glyph->body_base = body_base;
-    glyph->forward = forward;
-    glyph->ink = ink;
-    glyph->skin_shadow = appearance != NULL ?
-        ShadeColor(appearance->skin, 0.74f) : ink;
-    glyph->expression = expression;
-    glyph->face_width = appearance != NULL ? appearance->head_width : 1.0f;
-    glyph->age = appearance != NULL ? appearance->age : 0.0f;
-    glyph->beard_style = appearance != NULL ? appearance->beard_style : 0U;
-    glyph->nose_style = appearance != NULL ? appearance->nose_style : 0U;
-    glyph->scar_style = appearance != NULL ? appearance->scar_style : 0U;
-}
-
-static void DrawQueuedFaceGlyphs(Camera3D camera, int32_t width,
+static void SetFaceRenderContext(Camera3D camera, int32_t width,
                                  int32_t height)
 {
-    for (int32_t i = 0; i < face_glyph_count; ++i) {
-        const FaceGlyph *glyph = &face_glyphs[i];
-        Vector3 to_camera = PhysicsSubtract(camera.position,
-                                            glyph->eye_point);
-        to_camera.y = 0.0f;
-        to_camera = PhysicsNormalizeOr(to_camera,
-                                       (Vector3){0.0f, 0.0f, 1.0f});
-        float facing_camera = PhysicsDot(glyph->forward, to_camera);
-        if (facing_camera < -0.12f) continue;
+    face_render_context.camera = camera;
+    face_render_context.width = width;
+    face_render_context.height = height;
+    face_render_context.valid = width > 0 && height > 0;
+}
 
-        Vector2 eye = GetWorldToScreenEx(glyph->eye_point, camera,
-                                         width, height);
-        Vector2 base = GetWorldToScreenEx(glyph->body_base, camera,
-                                          width, height);
-        Vector3 crown = PhysicsAdd(glyph->eye_point,
-                                   (Vector3){0.0f, 0.22f, 0.0f});
-        Vector2 top = GetWorldToScreenEx(crown, camera, width, height);
-        float character_height = fabsf(base.y - top.y);
-        if (character_height < 16.0f || eye.x < 1.0f ||
-            eye.x >= (float)width - 1.0f || eye.y < 2.0f ||
-            eye.y >= (float)height - 2.0f) continue;
+static float FaceProjectedHeight(Vector3 eye_center, Vector3 up,
+                                 float half_height)
+{
+    if (!face_render_context.valid) return 0.0f;
+    Vector2 top = GetWorldToScreenEx(
+        Vector3Add(eye_center, Vector3Scale(up, half_height)),
+        face_render_context.camera, face_render_context.width,
+        face_render_context.height);
+    Vector2 bottom = GetWorldToScreenEx(
+        Vector3Subtract(eye_center, Vector3Scale(up, half_height)),
+        face_render_context.camera, face_render_context.width,
+        face_render_context.height);
+    return Vector2Distance(top, bottom);
+}
 
-        Vector3 right = PhysicsNormalizeOr(
-            PhysicsCross((Vector3){0.0f, 1.0f, 0.0f}, glyph->forward),
-            (Vector3){1.0f, 0.0f, 0.0f});
-        Vector3 eye_size = {0.032f, 0.030f, 0.024f};
-        Vector3 face_center = PhysicsAdd(
-            glyph->eye_point, PhysicsScale(glyph->forward, 0.008f));
-        if (facing_camera < 0.34f) {
-            float side = PhysicsDot(
-                PhysicsCross(glyph->forward, to_camera),
-                (Vector3){0.0f, 1.0f, 0.0f}) < 0.0f ? -1.0f : 1.0f;
-            DrawCubeV(PhysicsAdd(face_center,
-                                 PhysicsScale(right, side * 0.034f)),
-                      eye_size, glyph->ink);
-            continue;
-        }
+CcLocalFaceLodInternal CcLocalFaceLodForProjectedHeightInternal(
+    float projected_height)
+{
+    if (projected_height < 7.0f) return CC_LOCAL_FACE_LOD_SILHOUETTE;
+    if (projected_height < 13.0f) return CC_LOCAL_FACE_LOD_READABLE;
+    return CC_LOCAL_FACE_LOD_CLOSE;
+}
 
-        float eye_spacing = 0.039f * (0.92f + glyph->face_width * 0.08f);
-        Vector3 left_eye = PhysicsAdd(face_center,
-                                      PhysicsScale(right, -eye_spacing));
-        Vector3 right_eye = PhysicsAdd(face_center,
-                                       PhysicsScale(right, eye_spacing));
-        if (glyph->expression == FACE_GLYPH_HURT) {
-            left_eye.y += 0.012f;
-            right_eye.y -= 0.012f;
-        }
-        DrawCubeV(left_eye, eye_size, glyph->ink);
-        DrawCubeV(right_eye, eye_size, glyph->ink);
-        if (character_height >= 38.0f) {
-            float brow_height = glyph->expression == FACE_GLYPH_FOCUSED ?
-                                 0.036f : 0.050f;
-            Vector3 left_brow = PhysicsAdd(left_eye,
-                (Vector3){0.0f, brow_height, 0.0f});
-            Vector3 right_brow = PhysicsAdd(right_eye,
-                (Vector3){0.0f, brow_height, 0.0f});
-            Vector3 brow_size = {0.042f, 0.015f, 0.020f};
-            DrawCubeV(left_brow, brow_size, glyph->ink);
-            DrawCubeV(right_brow, brow_size, glyph->ink);
-            static const Vector3 nose_sizes[4] = {
-                {0.020f, 0.030f, 0.022f},
-                {0.027f, 0.035f, 0.026f},
-                {0.034f, 0.028f, 0.030f},
-                {0.024f, 0.043f, 0.026f},
-            };
-            Vector3 nose = PhysicsAdd(
-                face_center, (Vector3){0.0f, -0.026f, 0.006f});
-            DrawCubeV(nose, nose_sizes[glyph->nose_style % 4U],
-                      glyph->skin_shadow);
-            DrawCubeV(PhysicsAdd(face_center,
-                                 (Vector3){0.0f, -0.065f, 0.0f}),
-                      (Vector3){0.045f, 0.014f, 0.020f}, glyph->ink);
-            if (glyph->beard_style != 0U) {
-                float beard_height = 0.020f +
-                    (float)glyph->beard_style * 0.018f;
-                DrawCubeV(PhysicsAdd(face_center,
-                                     (Vector3){0.0f, -0.090f, -0.002f}),
-                          (Vector3){0.092f, beard_height, 0.024f},
-                          glyph->ink);
-            }
-            if (glyph->scar_style != 0U) {
-                float side = glyph->scar_style == 2U ? -1.0f : 1.0f;
-                Vector3 scar = PhysicsAdd(
-                    face_center,
-                    PhysicsAdd(PhysicsScale(right, side * 0.066f),
-                               (Vector3){0.0f, -0.010f, 0.010f}));
-                DrawCubeV(scar, (Vector3){0.012f, 0.052f, 0.014f},
-                          BlendColor(glyph->skin_shadow, glyph->ink, 0.52f));
-            }
-            if (glyph->age > 0.68f) {
-                for (int32_t side = -1; side <= 1; side += 2) {
-                    Vector3 age_mark = PhysicsAdd(
-                        face_center,
-                        PhysicsAdd(PhysicsScale(right, (float)side * 0.077f),
-                                   (Vector3){0.0f, -0.044f, 0.004f}));
-                    DrawCubeV(age_mark,
-                              (Vector3){0.022f, 0.009f, 0.012f},
-                              glyph->skin_shadow);
-                }
-            }
-        }
+CcLocalFaceViewInternal CcLocalFaceViewForFrontAmountInternal(
+    float front_amount)
+{
+    if (front_amount >= 0.82f) return CC_LOCAL_FACE_VIEW_FRONT;
+    if (front_amount >= 0.28f) return CC_LOCAL_FACE_VIEW_THREE_QUARTER;
+    return CC_LOCAL_FACE_VIEW_PROFILE;
+}
+
+static void DrawFaceQuad(Vector3 origin, Vector3 right, Vector3 up,
+                         Vector3 normal, float x, float y, float width,
+                         float height, float lift, Color color)
+{
+    Vector3 center = Vector3Add(
+        origin, Vector3Add(Vector3Scale(right, x), Vector3Scale(up, y)));
+    center = Vector3Add(center, Vector3Scale(normal, lift));
+    Vector3 across = Vector3Scale(right, width * 0.5f);
+    Vector3 rise = Vector3Scale(up, height * 0.5f);
+    Vector3 lower_left = Vector3Subtract(Vector3Subtract(center, across), rise);
+    Vector3 lower_right = Vector3Add(Vector3Subtract(center, rise), across);
+    Vector3 upper_right = Vector3Add(Vector3Add(center, across), rise);
+    Vector3 upper_left = Vector3Add(Vector3Subtract(center, across), rise);
+    DrawTriangle3D(lower_left, lower_right, upper_right, color);
+    DrawTriangle3D(lower_left, upper_right, upper_left, color);
+}
+
+static void DrawWorldFace(Vector3 eye_center, Vector3 head_right,
+                          Vector3 head_up, Vector3 head_forward,
+                          float half_width, float half_height,
+                          float half_depth, const CcFaceRecipe *face,
+                          CcNpcPortraitExpression expression)
+{
+    if (!face_render_context.valid || face == NULL) return;
+    head_right = PhysicsNormalizeOr(head_right,
+                                    (Vector3){1.0f, 0.0f, 0.0f});
+    head_up = PhysicsNormalizeOr(head_up,
+                                 (Vector3){0.0f, 1.0f, 0.0f});
+    head_forward = PhysicsNormalizeOr(head_forward,
+                                      (Vector3){0.0f, 0.0f, 1.0f});
+    Vector3 to_camera = Vector3Subtract(face_render_context.camera.position,
+                                        eye_center);
+    to_camera = Vector3Subtract(
+        to_camera, Vector3Scale(head_up,
+                               Vector3DotProduct(to_camera, head_up)));
+    to_camera = PhysicsNormalizeOr(to_camera, head_forward);
+    float front_amount = Vector3DotProduct(head_forward, to_camera);
+    float side_amount = Vector3DotProduct(head_right, to_camera);
+    if (front_amount < -0.12f) return;
+
+    CcLocalFaceViewInternal view =
+        CcLocalFaceViewForFrontAmountInternal(front_amount);
+    float side = side_amount < 0.0f ? -1.0f : 1.0f;
+    float turn = view == CC_LOCAL_FACE_VIEW_FRONT ? 0.0f :
+                 view == CC_LOCAL_FACE_VIEW_THREE_QUARTER ? 0.52f : 1.22f;
+    Vector3 normal = PhysicsNormalizeOr(
+        Vector3Add(Vector3Scale(head_forward, cosf(turn)),
+                   Vector3Scale(head_right, side * sinf(turn))),
+        head_forward);
+    Vector3 feature_right = PhysicsNormalizeOr(
+        Vector3Subtract(Vector3Scale(head_right, cosf(turn)),
+                        Vector3Scale(head_forward, side * sinf(turn))),
+        head_right);
+    float surface_radius = half_depth * cosf(turn) +
+                           half_width * sinf(turn);
+    Vector3 surface = Vector3Add(
+        eye_center, Vector3Scale(normal, surface_radius * 0.94f));
+
+    CcLocalFaceLodInternal lod = CcLocalFaceLodForProjectedHeightInternal(
+        FaceProjectedHeight(eye_center, head_up, half_height));
+    float feature_scale = fmaxf(0.78f, half_width / 0.175f);
+    float eye_spacing = 0.050f * feature_scale;
+    float eye_width = (lod == CC_LOCAL_FACE_LOD_CLOSE ? 0.028f : 0.034f) *
+                      feature_scale;
+    float eye_height = (lod == CC_LOCAL_FACE_LOD_CLOSE ? 0.026f : 0.024f) *
+                       feature_scale;
+    float far_eye_scale = view == CC_LOCAL_FACE_VIEW_THREE_QUARTER ?
+                          0.70f : 1.0f;
+
+    /* At fewer than seven art pixels, hair, headwear, and head shape carry
+       identity. A lone facial pixel reads as a pasted symbol, so do not draw
+       one. */
+    if (lod == CC_LOCAL_FACE_LOD_SILHOUETTE) return;
+
+    if (view == CC_LOCAL_FACE_VIEW_PROFILE) {
+        DrawFaceQuad(surface, feature_right, head_up, normal,
+                     0.012f * side,
+                     0.0f, eye_width, eye_height, 0.010f, face->ink);
+    } else {
+        float near_x = side * eye_spacing;
+        float far_x = -side * eye_spacing;
+        float hurt_offset = expression == CC_NPC_PORTRAIT_HURT ?
+                            -0.010f : 0.0f;
+        DrawFaceQuad(surface, feature_right, head_up, normal,
+                     near_x, hurt_offset, eye_width, eye_height,
+                     0.010f, face->ink);
+        DrawFaceQuad(surface, feature_right, head_up, normal,
+                     far_x * far_eye_scale, -hurt_offset,
+                     eye_width * far_eye_scale, eye_height,
+                     0.010f, face->ink);
+    }
+
+    float mouth_width = (view == CC_LOCAL_FACE_VIEW_PROFILE ? 0.030f :
+                                                               0.070f) *
+                        feature_scale;
+    float mouth_y = expression == CC_NPC_PORTRAIT_HURT ? -0.090f : -0.075f;
+    DrawFaceQuad(surface, feature_right, head_up, normal,
+                 view == CC_LOCAL_FACE_VIEW_PROFILE ? 0.018f * side : 0.0f,
+                 mouth_y * feature_scale, mouth_width,
+                 0.013f * feature_scale, 0.012f, face->ink);
+    if (lod != CC_LOCAL_FACE_LOD_CLOSE) return;
+
+    float brow_y = expression == CC_NPC_PORTRAIT_FOCUSED ? 0.036f : 0.052f;
+    if (view == CC_LOCAL_FACE_VIEW_PROFILE) {
+        DrawFaceQuad(surface, feature_right, head_up, normal,
+                     0.010f * side, brow_y * feature_scale,
+                     0.050f * feature_scale, 0.012f * feature_scale,
+                     0.013f, face->ink);
+    } else {
+        DrawFaceQuad(surface, feature_right, head_up, normal,
+                     side * eye_spacing, brow_y * feature_scale,
+                     0.045f * feature_scale, 0.012f * feature_scale,
+                     0.013f, face->ink);
+        DrawFaceQuad(surface, feature_right, head_up, normal,
+                     -side * eye_spacing * far_eye_scale,
+                     brow_y * feature_scale,
+                     0.045f * feature_scale * far_eye_scale,
+                     0.012f * feature_scale, 0.013f, face->ink);
+    }
+    DrawFaceQuad(surface, feature_right, head_up, normal,
+                 view == CC_LOCAL_FACE_VIEW_PROFILE ? 0.032f * side : 0.0f,
+                 -0.038f * feature_scale,
+                 (face->nose_style == 2U ? 0.038f : 0.022f) * feature_scale,
+                 (face->nose_style == 3U ? 0.052f : 0.032f) * feature_scale,
+                 0.014f, face->skin_shadow);
+    if (face->scar_style != 0U && view != CC_LOCAL_FACE_VIEW_PROFILE) {
+        float scar_side = face->scar_style == 2U ? -1.0f : 1.0f;
+        DrawFaceQuad(surface, feature_right, head_up, normal,
+                     scar_side * 0.070f * feature_scale,
+                     -0.022f * feature_scale,
+                     0.012f * feature_scale, 0.070f * feature_scale,
+                     0.015f, ShadeColor(face->skin, 0.54f));
     }
 }
 
@@ -7184,76 +10790,14 @@ static void DrawNpcHead(const CcNpcAppearance *appearance, Vector3 head,
         (Vector3){head_width, 0.195f * scale, head_depth}, appearance->skin);
     Vector3 forward = {sinf(yaw), 0.0f, cosf(yaw)};
     Vector3 right = {cosf(yaw), 0.0f, -sinf(yaw)};
-    Color facial_ink = BlendColor(appearance->hair,
-                                  (Color){24, 23, 22, 255}, 0.58f);
-    FaceGlyphExpression glyph_expression =
+    CcNpcPortraitExpression expression =
         appearance->role == CC_NPC_ROLE_GUARD ||
-        appearance->role == CC_NPC_ROLE_RAIDER ? FACE_GLYPH_FOCUSED :
-                                                  FACE_GLYPH_NEUTRAL;
-    QueueFaceGlyph(head,
-                   PhysicsAdd(head, (Vector3){0.0f, -1.62f * scale, 0.0f}),
-                   forward, head_depth * 0.94f, facial_ink, appearance,
-                   glyph_expression);
-    Vector3 face = PhysicsAdd(head, PhysicsScale(forward, head_depth * 0.92f));
-    static const Vector3 nose_scale[4] = {
-        {0.018f, 0.026f, 0.020f}, {0.022f, 0.032f, 0.025f},
-        {0.029f, 0.023f, 0.027f}, {0.020f, 0.039f, 0.023f},
-    };
-    Vector3 nose_size = nose_scale[appearance->nose_style % 4U];
-    nose_size = PhysicsScale(nose_size, scale);
-    DrawCharacterEllipsoid(
-        PhysicsAdd(face, (Vector3){0.0f, 0.015f * scale, 0.0f}),
-        nose_size, ShadeColor(appearance->skin, 0.86f));
-    float eye_spacing = (0.047f +
-        (float)((appearance->seed >> 3U) & 3U) * 0.0025f) * scale;
-    float brow_tilt = (((appearance->seed >> 7U) & 1U) != 0U ?
-                       0.010f : -0.004f) * scale;
-    for (int32_t side = -1; side <= 1; side += 2) {
-        Vector3 eye = PhysicsAdd(face, PhysicsScale(right,
-            (float)side * eye_spacing));
-        eye.y += 0.045f * scale;
-        eye = PhysicsAdd(eye, PhysicsScale(forward, 0.010f * scale));
-        DrawSmallSphere(eye, 0.013f * scale, facial_ink);
-
-        Vector3 brow_outer = PhysicsAdd(face, PhysicsScale(
-            right, (float)side * (eye_spacing + 0.027f * scale)));
-        Vector3 brow_inner = PhysicsAdd(face, PhysicsScale(
-            right, (float)side * (eye_spacing - 0.025f * scale)));
-        brow_outer.y += 0.086f * scale + brow_tilt;
-        brow_inner.y += 0.078f * scale - brow_tilt;
-        brow_outer = PhysicsAdd(brow_outer,
-                                 PhysicsScale(forward, 0.014f * scale));
-        brow_inner = PhysicsAdd(brow_inner,
-                                 PhysicsScale(forward, 0.014f * scale));
-        DrawCylinderEx(brow_outer, brow_inner, 0.008f * scale,
-                       0.008f * scale, 5, facial_ink);
-    }
-    Vector3 mouth_left = PhysicsAdd(face,
-        PhysicsScale(right, -0.036f * scale));
-    Vector3 mouth_right = PhysicsAdd(face,
-        PhysicsScale(right, 0.036f * scale));
-    mouth_left.y -= 0.056f * scale;
-    mouth_right.y -= 0.056f * scale;
-    mouth_left = PhysicsAdd(mouth_left,
-                            PhysicsScale(forward, 0.011f * scale));
-    mouth_right = PhysicsAdd(mouth_right,
-                             PhysicsScale(forward, 0.011f * scale));
-    DrawCylinderEx(mouth_left, mouth_right, 0.006f * scale,
-                   0.006f * scale, 5, facial_ink);
-    if (appearance->scar_style != 0U) {
-        float side = appearance->scar_style == 2U ? -1.0f : 1.0f;
-        Vector3 scar_top = PhysicsAdd(
-            face, PhysicsScale(right, side * 0.070f * scale));
-        scar_top.y += 0.047f * scale;
-        scar_top = PhysicsAdd(scar_top,
-                              PhysicsScale(forward, 0.018f * scale));
-        Vector3 scar_bottom = PhysicsAdd(
-            scar_top, (Vector3){side * -0.012f * scale,
-                                -0.070f * scale, 0.0f});
-        DrawCylinderEx(scar_top, scar_bottom, 0.004f * scale,
-                       0.004f * scale, 4,
-                       ShadeColor(appearance->skin, 0.54f));
-    }
+        appearance->role == CC_NPC_ROLE_RAIDER ? CC_NPC_PORTRAIT_FOCUSED :
+                                                 CC_NPC_PORTRAIT_NEUTRAL;
+    CcFaceRecipe face = CcNpcFaceRecipe(appearance);
+    DrawWorldFace(PhysicsAdd(head, (Vector3){0.0f, 0.045f * scale, 0.0f}),
+                  right, (Vector3){0.0f, 1.0f, 0.0f}, forward,
+                  head_width, 0.195f * scale, head_depth, &face, expression);
 
     Vector3 crown = PhysicsAdd(head, (Vector3){0.0f, 0.115f * scale, 0.0f});
     switch (appearance->hair_style) {
@@ -7525,19 +11069,21 @@ static bool DrawNpcArchetype3D(Vector3 position, float size_hint, float yaw,
             appearance->metal : appearance->outer;
         (void)DrawNpcDynamicModule(headwear, identity_head, headwear_color);
     }
-    FaceGlyphExpression expression =
+    CcNpcPortraitExpression expression =
         appearance->role == CC_NPC_ROLE_GUARD ||
-        appearance->role == CC_NPC_ROLE_RAIDER ? FACE_GLYPH_FOCUSED :
-                                                 FACE_GLYPH_NEUTRAL;
-    Vector3 body_base = position;
-    body_base.y = 0.0f;
-    QueueFaceGlyph(
-        head, body_base, head_forward,
-        0.145f * appearance->head_depth * scale,
-        BlendColor(appearance->hair, (Color){24, 23, 22, 255}, 0.58f),
-        appearance, expression);
+        appearance->role == CC_NPC_ROLE_RAIDER ? CC_NPC_PORTRAIT_FOCUSED :
+                                                CC_NPC_PORTRAIT_NEUTRAL;
+    CcFaceRecipe face = CcNpcFaceRecipe(appearance);
+    DrawWorldFace(PhysicsAdd(head, Vector3Scale(head_up, 0.025f * scale)),
+                  head_right, head_up, head_forward,
+                  0.18f * appearance->head_width * scale * width *
+                      silhouette_gain,
+                  0.20f * scale,
+                  0.165f * appearance->head_depth * scale * width *
+                      silhouette_gain,
+                  &face, expression);
     if (visual_style.hero_ready) {
-        float ink_strength = 0.68f;
+        float ink_strength = CC_HERO_INK_STRENGTH;
         SetShaderValue(visual_style.hero,
                        visual_style.hero_ink_strength_location,
                        &ink_strength, SHADER_UNIFORM_FLOAT);
@@ -7845,6 +11391,42 @@ static Matrix NpcModuleTransform(Vector3 origin, Vector3 right, Vector3 up,
         .m14 = origin.z,
         .m15 = 1.0f,
     };
+}
+
+/* Large, bone-driven marks survive the final art-pixel grid better than the
+   small decorative pieces in the source mesh.  The dark clasp separates cape
+   from armor, while the broken gold chevron gives the hero a unique chest
+   read even when the face is only a few pixels tall. */
+static void DrawWayfarerHeroDetails(const CcHumanoidSkinPose *skin)
+{
+    if (skin == NULL || !skin->valid) return;
+    Vector3 up = PhysicsNormalizeOr(FromLimbVector(skin->body_up),
+                                    (Vector3){0.0f, 1.0f, 0.0f});
+    Vector3 right = PhysicsNormalizeOr(FromLimbVector(skin->body_right),
+                                       (Vector3){1.0f, 0.0f, 0.0f});
+    Vector3 forward = PhysicsNormalizeOr(FromLimbVector(skin->body_forward),
+                                         (Vector3){0.0f, 0.0f, 1.0f});
+    Vector3 chest = FromLimbVector(
+        skin->sockets[CC_HUMANOID_SOCKET_CHEST_FRONT].position);
+    chest = PhysicsAdd(chest, PhysicsScale(forward, 0.032f));
+
+    Color clasp_shadow = (Color){45, 37, 35, 255};
+    Color broken_gold = (Color){224, 169, 59, 255};
+    Vector3 clasp_back = PhysicsAdd(chest, PhysicsScale(forward, -0.020f));
+    Vector3 clasp_front = PhysicsAdd(chest, PhysicsScale(forward, 0.014f));
+    DrawCylinderEx(clasp_back, clasp_front, 0.086f, 0.078f, 7,
+                   clasp_shadow);
+
+    Vector3 left_top = NpcModuleLocalPoint(
+        chest, right, up, forward, (Vector3){-0.092f, 0.078f, 0.020f});
+    Vector3 left_low = NpcModuleLocalPoint(
+        chest, right, up, forward, (Vector3){-0.014f, -0.016f, 0.020f});
+    Vector3 right_low = NpcModuleLocalPoint(
+        chest, right, up, forward, (Vector3){0.024f, 0.002f, 0.020f});
+    Vector3 right_top = NpcModuleLocalPoint(
+        chest, right, up, forward, (Vector3){0.098f, 0.068f, 0.020f});
+    DrawCylinderEx(left_top, left_low, 0.022f, 0.018f, 5, broken_gold);
+    DrawCylinderEx(right_low, right_top, 0.018f, 0.022f, 5, broken_gold);
 }
 
 static bool DrawNpcDynamicModule(NpcDynamicModuleId id, Matrix transform,
@@ -8201,25 +11783,29 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
             headwear, head_transform, headwear_color);
     }
 
-    FaceGlyphExpression expression =
+    CcNpcPortraitExpression expression =
         appearance->role == CC_NPC_ROLE_GUARD ||
-        appearance->role == CC_NPC_ROLE_RAIDER ? FACE_GLYPH_FOCUSED :
-                                                 FACE_GLYPH_NEUTRAL;
+        appearance->role == CC_NPC_ROLE_RAIDER ? CC_NPC_PORTRAIT_FOCUSED :
+                                                CC_NPC_PORTRAIT_NEUTRAL;
     if (agent->combat.hit_flash_seconds > 0.0f) {
-        expression = FACE_GLYPH_HURT;
+        expression = CC_NPC_PORTRAIT_HURT;
     } else if (agent->combat.focus_valid ||
                agent->humanoid.action == CC_HUMANOID_ACTION_GUARD ||
                agent->humanoid.action == CC_HUMANOID_ACTION_STRIKE) {
-        expression = FACE_GLYPH_FOCUSED;
+        expression = CC_NPC_PORTRAIT_FOCUSED;
     }
-    QueueFaceGlyph(head, agent->position, body_forward,
-                   0.165f * appearance->head_depth,
-                   BlendColor(appearance->hair, (Color){24, 23, 22, 255},
-                              0.58f),
-                   appearance,
-                   expression);
+    CcFaceRecipe face = CcNpcFaceRecipe(appearance);
+    DrawWorldFace(PhysicsAdd(head, Vector3Scale(body_up, 0.025f)),
+                  FromLimbVector(head_bone->right),
+                  FromLimbVector(head_bone->up),
+                  FromLimbVector(head_bone->forward),
+                  0.18f * appearance->head_width, 0.20f,
+                  0.165f * appearance->head_depth, &face, expression);
     return drew;
 }
+
+static void DrawGroundBrushStroke(Vector3 center, Vector3 along,
+                                  float length, float width, Color color);
 
 static void DrawBiomechanicalBiped(const CcLocalAgent *agent)
 {
@@ -8235,11 +11821,12 @@ static void DrawBiomechanicalBiped(const CcLocalAgent *agent)
                                agent->position.z},
                      0.35f, 0.35f, 0.014f, 24,
                      (Color){3, 10, 14, 118});
-        DrawCylinderWires((Vector3){agent->position.x,
-                                    agent->position.y + 0.010f,
-                                    agent->position.z},
-                          0.39f, 0.39f, 0.018f, 24,
-                          Fade(WORLD_TEAL, 0.82f));
+        DrawGroundBrushStroke(
+            (Vector3){agent->position.x, agent->position.y + 0.020f,
+                      agent->position.z},
+            (Vector3){sinf(agent->facing_yaw), 0.0f,
+                      cosf(agent->facing_yaw)},
+            0.72f, 0.085f, Fade(WORLD_TEAL, 0.82f));
     }
     bool hero_skin_updated = modular_hero &&
         DrawHeroSkin(&skin, &agent->render_cape, WHITE, true);
@@ -8249,21 +11836,11 @@ static void DrawBiomechanicalBiped(const CcLocalAgent *agent)
             DrawHeroSkinRigOverlay(gait, &skin, &agent->render_cape);
         }
         UseCharacterLighting();
-        DrawWayfarerCrown(&skin);
+        DrawWayfarerHeroDetails(&skin);
         RestoreWorldLighting();
-        FaceGlyphExpression expression = FACE_GLYPH_NEUTRAL;
-        if (agent->combat.hit_flash_seconds > 0.0f) {
-            expression = FACE_GLYPH_HURT;
-        } else if (agent->combat.focus_valid ||
-                   agent->humanoid.action == CC_HUMANOID_ACTION_GUARD ||
-                   agent->humanoid.action == CC_HUMANOID_ACTION_STRIKE) {
-            expression = FACE_GLYPH_FOCUSED;
-        }
-        QueueFaceGlyph(
-            FromLimbVector(
-                skin.sockets[CC_HUMANOID_SOCKET_HEAD].position),
-            agent->position, FromLimbVector(skin.body_forward), 0.12f,
-            (Color){24, 22, 23, 255}, &agent->appearance, expression);
+        /* The high-detail hero asset already owns its eyes, brows, nose,
+           mouth, hair, and broken crown as head-weighted 3D geometry. Never
+           layer procedural marks or a second crown over that authored face. */
         return;
     } else {
         CcLocalRendererRecordBiped(false);
@@ -8680,7 +12257,7 @@ static void DrawRobotShell(const CcLocalAgent *agent)
         DrawOrientedBox(body, (Vector3){0.0f, 0.0f, 0.0f},
                         (Vector3){0.54f, 0.38f, body_length}, agent->facing_yaw,
                         (Color){42, 128, 136, 255});
-        DrawSphereWires(body, 0.32f, 10, 10, WORLD_GOLD);
+        DrawSmallSphere(body, 0.085f, WORLD_GOLD);
         DrawOrientedBox(body, (Vector3){0.0f, 0.02f, 0.22f},
                         (Vector3){0.24f, 0.18f, 0.28f}, agent->facing_yaw,
                         (Color){225, 177, 68, 255});
@@ -8865,6 +12442,8 @@ static void DrawCarriage3D(const CcSettlement *place)
 {
     float x = CARRIAGE_FOOTPRINT.x + CARRIAGE_FOOTPRINT.width * 0.5f;
     float z = CARRIAGE_FOOTPRINT.y + CARRIAGE_FOOTPRINT.height * 0.5f;
+    rlPushMatrix();
+    rlTranslatef(0.0f, TerrainFootprintHeight(CARRIAGE_FOOTPRINT), 0.0f);
     RuntimeAsset *carriage = &runtime_assets[RUNTIME_ASSET_CARRIAGE];
     if (carriage->ready) {
         Vector3 origin = {x, 0.0f, z};
@@ -8885,6 +12464,7 @@ static void DrawCarriage3D(const CcSettlement *place)
                                   CARRIAGE_ASSET_SCALE,
                                   CARRIAGE_ASSET_SCALE}, WHITE);
         }
+        rlPopMatrix();
         return;
     }
     DrawBox((Vector3){x, 1.06f, z},
@@ -8916,12 +12496,15 @@ static void DrawCarriage3D(const CcSettlement *place)
         DrawSphereWires(wheels[i], 0.55f, 7, 7,
                         Fade(WORLD_GOLD, 0.62f));
     }
+    rlPopMatrix();
 }
 
 static void DrawNotice3D(const CcSim *sim)
 {
     float x = CC_LOCAL_NOTICE_X;
     float z = CC_LOCAL_NOTICE_Z;
+    rlPushMatrix();
+    rlTranslatef(0.0f, CcLocalTerrainHeightAt(x, z), 0.0f);
     DrawBox((Vector3){x - 0.38f, 0.72f, z}, (Vector3){0.10f, 1.44f, 0.10f},
             (Color){89, 58, 42, 255});
     DrawBox((Vector3){x + 0.38f, 0.72f, z}, (Vector3){0.10f, 1.44f, 0.10f},
@@ -8935,12 +12518,15 @@ static void DrawNotice3D(const CcSim *sim)
                 (Vector3){0.16f, 0.30f, 0.025f},
                 i == 3 ? WORLD_DANGER : WORLD_INK);
     }
+    rlPopMatrix();
 }
 
 static void DrawDungeon3D(const CcDungeon *dungeon)
 {
     float x = CC_LOCAL_DUNGEON_X;
     float z = DUNGEON_FOOTPRINT.y + DUNGEON_FOOTPRINT.height * 0.5f;
+    rlPushMatrix();
+    rlTranslatef(0.0f, TerrainFootprintHeight(DUNGEON_FOOTPRINT), 0.0f);
     RuntimeAsset *mine = &runtime_assets[RUNTIME_ASSET_MINE];
     if (mine->ready) {
         const float scale = 0.58f;
@@ -8952,6 +12538,7 @@ static void DrawDungeon3D(const CcDungeon *dungeon)
                                     DUNGEON_FOOTPRINT.y +
                                     DUNGEON_FOOTPRINT.height + 0.08f},
                           pulse, Fade(WORLD_VIOLET, 0.82f));
+        rlPopMatrix();
         return;
     }
     DrawBox((Vector3){x - 1.15f, 1.40f, z}, (Vector3){0.62f, 2.80f, 0.82f},
@@ -8968,33 +12555,352 @@ static void DrawDungeon3D(const CcDungeon *dungeon)
     DrawScenerySphere((Vector3){x, 1.32f, DUNGEON_FOOTPRINT.y +
                                             DUNGEON_FOOTPRINT.height + 0.08f}, pulse,
                       Fade(WORLD_VIOLET, 0.82f));
+    rlPopMatrix();
 }
 
-static void DrawTree(float x, float z, Color leaves)
-{
-    DrawCylinder((Vector3){x, 0.0f, z}, 0.13f, 0.10f, 1.30f, 7,
-                 (Color){80, 57, 43, 255});
-    DrawScenerySphere((Vector3){x, 1.68f, z}, 0.58f, leaves);
-    DrawSphereWires((Vector3){x, 1.68f, z}, 0.59f, 7, 7, Fade(WORLD_INK, 0.12f));
-}
+typedef enum TreeFamily {
+    TREE_FAMILY_ALDER = 0,
+    TREE_FAMILY_OAK,
+    TREE_FAMILY_POLLARD
+} TreeFamily;
 
-static void DrawWorldTrees(Vector3 focus)
+typedef enum TreeRegion {
+    TREE_REGION_VERDANT = 0,
+    TREE_REGION_EMBER,
+    TREE_REGION_BLUE
+} TreeRegion;
+
+typedef struct TreeRegionalStyle {
+    TreeRegion region;
+    Vector3 proportions;
+    Color foliage_bias;
+    float foliage_mix;
+    float cluster_pull;
+    float turn_steps;
+    float shape_shift;
+} TreeRegionalStyle;
+
+typedef struct WorldTreePlacement {
+    Vector2 position;
+    TreeFamily family;
+} WorldTreePlacement;
+
+static TreeRegionalStyle TreeStyleForKingdom(Color kingdom)
 {
-    static const Vector2 trees[] = {
-        {2.5f, 58.0f}, {6.0f, 62.0f}, {10.0f, 56.0f}, {14.0f, 65.0f},
-        {18.0f, 58.0f}, {22.0f, 64.0f}, {27.0f, 60.0f}, {33.0f, 66.0f},
-        {48.0f, 63.0f}, {54.0f, 59.0f}, {59.0f, 65.0f}, {66.0f, 59.0f},
-        {73.0f, 64.0f}, {81.0f, 59.0f}, {88.0f, 64.0f}, {93.0f, 56.0f},
-        {18.0f, 5.0f}, {24.0f, 8.0f}, {31.0f, 5.5f}, {49.0f, 6.0f},
-        {57.0f, 5.0f}, {62.0f, 3.5f}, {4.0f, 14.0f}, {16.0f, 14.5f},
-        {17.0f, 45.0f}, {20.0f, 52.0f}, {57.5f, 41.0f}, {74.0f, 39.0f},
-        {86.0f, 40.0f}, {93.0f, 36.0f}
+    if (kingdom.r > kingdom.g && kingdom.r > kingdom.b) {
+        return (TreeRegionalStyle){
+            TREE_REGION_EMBER, {1.14f, 0.94f, 1.10f},
+            {112, 99, 58, 255}, 0.24f, 0.34f, 5.0f, 0.08f
+        };
+    }
+    if (kingdom.b > kingdom.r && kingdom.b > kingdom.g) {
+        return (TreeRegionalStyle){
+            TREE_REGION_BLUE, {0.98f, 1.06f, 0.88f},
+            {65, 89, 109, 255}, 0.22f, 0.22f, 6.0f, -0.04f
+        };
+    }
+    return (TreeRegionalStyle){
+        TREE_REGION_VERDANT, {0.90f, 1.14f, 0.94f},
+        {43, 107, 88, 255}, 0.20f, 0.28f, 4.0f, 0.02f
     };
+}
+
+static TreeFamily RegionalTreeFamily(TreeFamily family, int32_t tree_index,
+                                     TreeRegionalStyle style)
+{
+    if (style.region == TREE_REGION_EMBER &&
+        family == TREE_FAMILY_ALDER && tree_index % 4 == 0) {
+        return TREE_FAMILY_OAK;
+    }
+    if (style.region == TREE_REGION_BLUE &&
+        family == TREE_FAMILY_ALDER && tree_index % 5 == 1) {
+        return TREE_FAMILY_POLLARD;
+    }
+    return family;
+}
+
+static Model TreeCrownModel(TreeCrownShape shape)
+{
+    switch (shape) {
+        case TREE_CROWN_OAK: return tree_crown_models.oak;
+        case TREE_CROWN_POLLARD: return tree_crown_models.pollard;
+        case TREE_CROWN_ALDER:
+        default: return tree_crown_models.alder;
+    }
+}
+
+static void DrawTreeFoliageMass(TreeCrownShape shape, Vector3 center,
+                                Vector3 radius, float turn, Color color)
+{
+    Model model = tree_crown_models.ready ? TreeCrownModel(shape) :
+                                           sphere_models.small;
+    DrawModelEx(model, center, (Vector3){0.0f, 1.0f, 0.0f},
+                turn * RAD2DEG, radius, color);
+}
+
+static void DrawTreeShadow(Vector3 root, float turn, float width, float depth)
+{
+    Vector3 broad = LocalPoint(root, width * 0.24f, 0.018f,
+                               -depth * 0.20f, turn);
+    Vector3 branch = LocalPoint(root, width * 0.54f, 0.020f,
+                                -depth * 0.42f, turn);
+    DrawModelEx(sphere_models.small, broad, (Vector3){0.0f, 1.0f, 0.0f},
+                turn * RAD2DEG, (Vector3){width, 0.018f, depth},
+                Fade(WORLD_VOID, 0.26f));
+    DrawModelEx(sphere_models.small, branch, (Vector3){0.0f, 1.0f, 0.0f},
+                (turn - 0.38f) * RAD2DEG,
+                (Vector3){width * 0.62f, 0.020f, depth * 0.45f},
+                Fade(WORLD_VOID, 0.20f));
+}
+
+static void DrawTreeRootFlare(Vector3 root, float turn, float radius,
+                              Color bark)
+{
+    for (int32_t root_index = 0; root_index < 4; ++root_index) {
+        float angle = turn + (float)root_index * PI * 0.5f +
+                      (root_index & 1 ? 0.18f : -0.12f);
+        Vector3 start = {root.x, root.y + radius * 0.72f, root.z};
+        Vector3 end = {
+            root.x + cosf(angle) * radius * 2.35f,
+            root.y + 0.025f,
+            root.z + sinf(angle) * radius * 2.35f
+        };
+        DrawCylinderEx(start, end, radius * 0.56f, 0.025f, 6,
+                       ShadeColor(bark, root_index & 1 ? 0.76f : 0.88f));
+    }
+}
+
+static void DrawAlderTree(Vector3 root, float turn, float shape, Color leaves)
+{
+    float scale = 0.90f + shape * 0.18f;
+    float height = (4.65f + shape * 0.55f) * scale;
+    float lean = (shape - 0.5f) * 0.34f;
+    Color bark = BlendColor((Color){57, 47, 41, 255},
+                            (Color){94, 62, 43, 255}, shape * 0.44f);
+    Color deep = ShadeColor(leaves, 0.78f);
+    Color middle = ShadeColor(leaves, 0.94f + shape * 0.04f);
+    Color light = ShadeColor(leaves, 1.08f);
+    Vector3 fork = LocalPoint(root, lean, height * 0.48f, 0.0f, turn);
+    Vector3 left = LocalPoint(root, -0.72f * scale, height * 0.68f,
+                              0.08f * scale, turn);
+    Vector3 right = LocalPoint(root, 0.68f * scale, height * 0.72f,
+                               -0.10f * scale, turn);
+    Vector3 crown = LocalPoint(root, lean * 1.35f, height * 0.80f,
+                               0.04f * scale, turn);
+    Vector3 top = LocalPoint(root, lean * 1.70f, height * 0.93f,
+                             -0.02f * scale, turn);
+
+    DrawTreeShadow(root, turn, 1.18f * scale, 0.90f * scale);
+    DrawTreeRootFlare(root, turn, 0.25f * scale, bark);
+    DrawCylinderEx(root, fork, 0.27f * scale, 0.15f * scale, 7, bark);
+    DrawCylinderEx(fork, left, 0.14f * scale, 0.055f * scale, 6,
+                   ShadeColor(bark, 0.88f));
+    DrawCylinderEx(fork, right, 0.13f * scale, 0.050f * scale, 6,
+                   ShadeColor(bark, 0.94f));
+    DrawCylinderEx(fork, top, 0.15f * scale, 0.040f * scale, 6, bark);
+
+    DrawTreeFoliageMass(TREE_CROWN_ALDER, left,
+                        (Vector3){0.86f, 0.68f, 0.72f}, turn + 0.18f, deep);
+    DrawTreeFoliageMass(TREE_CROWN_ALDER, right,
+                        (Vector3){0.84f, 0.70f, 0.70f}, turn - 0.21f, middle);
+    DrawTreeFoliageMass(TREE_CROWN_ALDER, crown,
+                        (Vector3){0.90f, 0.76f, 0.76f}, turn + 0.08f, middle);
+    DrawTreeFoliageMass(TREE_CROWN_ALDER,
+                        LocalPoint(root, -0.38f * scale, height * 0.81f,
+                                   -0.36f * scale, turn),
+                        (Vector3){0.68f, 0.62f, 0.62f}, turn - 0.32f, deep);
+    DrawTreeFoliageMass(TREE_CROWN_ALDER,
+                        LocalPoint(root, 0.40f * scale, height * 0.85f,
+                                   0.28f * scale, turn),
+                        (Vector3){0.66f, 0.66f, 0.60f}, turn + 0.36f, middle);
+    DrawTreeFoliageMass(TREE_CROWN_ALDER, top,
+                        (Vector3){0.68f, 0.74f, 0.62f}, turn, light);
+}
+
+static void DrawOakTree(Vector3 root, float turn, float shape, Color leaves)
+{
+    float scale = 0.92f + shape * 0.16f;
+    float height = (5.15f + shape * 0.55f) * scale;
+    float lean = (shape - 0.38f) * 0.72f;
+    Color bark = BlendColor((Color){60, 43, 37, 255},
+                            (Color){105, 67, 43, 255}, shape * 0.34f);
+    Color deep = ShadeColor(leaves, 0.72f);
+    Color middle = ShadeColor(leaves, 0.88f);
+    Color light = ShadeColor(leaves, 1.02f);
+    Vector3 fork = LocalPoint(root, lean * 0.52f, height * 0.38f,
+                              0.0f, turn);
+    Vector3 left = LocalPoint(root, -1.58f * scale, height * 0.68f,
+                              0.12f * scale, turn);
+    Vector3 right = LocalPoint(root, 1.64f * scale, height * 0.70f,
+                               -0.18f * scale, turn);
+    Vector3 upper = LocalPoint(root, lean + 0.18f * scale,
+                               height * 0.90f, 0.05f * scale, turn);
+    Vector3 dead_tip = LocalPoint(root, 1.52f * scale, height * 0.91f,
+                                  -0.12f * scale, turn);
+
+    DrawTreeShadow(root, turn, 2.10f * scale, 1.42f * scale);
+    DrawTreeRootFlare(root, turn, 0.38f * scale, bark);
+    DrawCylinderEx(root, fork, 0.43f * scale, 0.28f * scale, 7, bark);
+    DrawCylinderEx(fork, left, 0.27f * scale, 0.075f * scale, 7,
+                   ShadeColor(bark, 0.86f));
+    DrawCylinderEx(fork, right, 0.25f * scale, 0.070f * scale, 7, bark);
+    DrawCylinderEx(fork, upper, 0.24f * scale, 0.060f * scale, 7,
+                   ShadeColor(bark, 0.94f));
+    DrawCylinderEx(right, dead_tip, 0.065f * scale, 0.025f * scale, 5,
+                   ShadeColor(bark, 1.08f));
+
+    DrawTreeFoliageMass(TREE_CROWN_OAK, left,
+                        (Vector3){1.20f, 0.68f, 0.94f}, turn + 0.18f, deep);
+    DrawTreeFoliageMass(TREE_CROWN_OAK, right,
+                        (Vector3){1.18f, 0.70f, 0.92f}, turn - 0.14f, middle);
+    DrawTreeFoliageMass(TREE_CROWN_OAK,
+                        LocalPoint(root, -0.72f * scale, height * 0.81f,
+                                   -0.54f * scale, turn),
+                        (Vector3){1.06f, 0.72f, 0.90f}, turn - 0.28f, middle);
+    DrawTreeFoliageMass(TREE_CROWN_OAK,
+                        LocalPoint(root, 0.54f * scale, height * 0.78f,
+                                   0.58f * scale, turn),
+                        (Vector3){1.10f, 0.70f, 0.86f}, turn + 0.30f, deep);
+    DrawTreeFoliageMass(TREE_CROWN_OAK, upper,
+                        (Vector3){1.15f, 0.76f, 0.94f}, turn + 0.04f, light);
+    DrawTreeFoliageMass(TREE_CROWN_OAK,
+                        LocalPoint(root, -1.78f * scale, height * 0.60f,
+                                   -0.38f * scale, turn),
+                        (Vector3){0.82f, 0.54f, 0.68f}, turn - 0.18f, deep);
+    DrawTreeFoliageMass(TREE_CROWN_OAK,
+                        LocalPoint(root, 1.82f * scale, height * 0.59f,
+                                   0.22f * scale, turn),
+                        (Vector3){0.84f, 0.56f, 0.70f}, turn + 0.23f, middle);
+}
+
+static void DrawPollardTree(Vector3 root, float turn, float shape,
+                            Color leaves)
+{
+    float scale = 0.90f + shape * 0.16f;
+    float height = (3.85f + shape * 0.45f) * scale;
+    float head_height = height * 0.49f;
+    Color bark = BlendColor((Color){62, 48, 40, 255},
+                            (Color){111, 72, 45, 255}, shape * 0.30f);
+    Color deep = ShadeColor(leaves, 0.78f);
+    Color middle = ShadeColor(leaves, 0.94f);
+    Color light = ShadeColor(leaves, 1.08f);
+    Vector3 head = LocalPoint(root, (shape - 0.5f) * 0.18f,
+                              head_height, 0.0f, turn);
+    static const float stem_x[] = {-0.78f, -0.36f, 0.02f, 0.42f, 0.80f};
+    static const float stem_z[] = {0.18f, -0.22f, 0.20f, -0.16f, 0.12f};
+    static const float stem_height[] = {0.78f, 0.93f, 1.00f, 0.88f, 0.72f};
+
+    DrawTreeShadow(root, turn, 1.34f * scale, 1.00f * scale);
+    DrawTreeRootFlare(root, turn, 0.31f * scale, bark);
+    DrawCylinderEx(root, head, 0.34f * scale, 0.27f * scale, 7, bark);
+    DrawTreeFoliageMass(TREE_CROWN_POLLARD, head,
+                        (Vector3){0.40f, 0.32f, 0.38f}, turn,
+                        ShadeColor(bark, 0.82f));
+
+    for (int32_t stem = 0; stem < 5; ++stem) {
+        Vector3 tip = LocalPoint(root, stem_x[stem] * scale,
+                                 height * stem_height[stem],
+                                 stem_z[stem] * scale, turn);
+        DrawCylinderEx(head, tip, 0.090f * scale, 0.030f * scale, 6,
+                       ShadeColor(bark, 0.86f + (float)stem * 0.025f));
+        Color stem_leaves = stem == 2 ? light :
+                            (stem & 1) != 0 ? middle : deep;
+        DrawTreeFoliageMass(TREE_CROWN_POLLARD, tip,
+                            (Vector3){0.50f, 0.72f, 0.46f},
+                            turn + stem_x[stem] * 0.32f, stem_leaves);
+    }
+}
+
+static void DrawTree(float x, float z, TreeFamily family, Color leaves,
+                     TreeRegionalStyle regional_style)
+{
+    float base = CcLocalTerrainHeightAt(x, z);
+    int32_t column = (int32_t)lroundf(x * 10.0f);
+    int32_t row = (int32_t)lroundf(z * 10.0f);
+    float shape = CombatClamp(TerrainScatter01(column, row, 71U) +
+                              regional_style.shape_shift, 0.0f, 1.0f);
+    float turn = TerrainScatter01(column, row, 72U) * PI * 2.0f;
+    float turn_step = PI * 2.0f / regional_style.turn_steps;
+    turn = floorf(turn / turn_step + 0.5f) * turn_step +
+           (shape - 0.5f) * 0.16f;
+    Vector3 root = {x, base + 0.018f, z};
+    leaves = BlendColor(leaves, regional_style.foliage_bias,
+                        regional_style.foliage_mix);
+
+    /* Scale around the root, so regional calligraphy never changes terrain,
+       collision, or authored placement contracts. */
+    rlPushMatrix();
+    rlTranslatef(root.x, root.y, root.z);
+    rlScalef(regional_style.proportions.x,
+             regional_style.proportions.y,
+             regional_style.proportions.z);
+    rlTranslatef(-root.x, -root.y, -root.z);
+
+    switch (family) {
+        case TREE_FAMILY_OAK:
+            DrawOakTree(root, turn, shape, leaves);
+            break;
+        case TREE_FAMILY_POLLARD:
+            DrawPollardTree(root, turn, shape, leaves);
+            break;
+        case TREE_FAMILY_ALDER:
+        default:
+            DrawAlderTree(root, turn, shape, leaves);
+            break;
+    }
+    rlPopMatrix();
+}
+
+static void DrawWorldTrees(Vector3 focus, Color kingdom)
+{
+    static const WorldTreePlacement trees[] = {
+        {{2.5f, 58.0f}, TREE_FAMILY_ALDER},
+        {{6.0f, 62.0f}, TREE_FAMILY_ALDER},
+        {{10.0f, 56.0f}, TREE_FAMILY_POLLARD},
+        {{14.0f, 65.0f}, TREE_FAMILY_OAK},
+        {{18.0f, 58.0f}, TREE_FAMILY_ALDER},
+        {{22.0f, 64.0f}, TREE_FAMILY_ALDER},
+        {{27.0f, 60.0f}, TREE_FAMILY_ALDER},
+        {{33.0f, 66.0f}, TREE_FAMILY_OAK},
+        {{48.0f, 63.0f}, TREE_FAMILY_ALDER},
+        {{54.0f, 59.0f}, TREE_FAMILY_ALDER},
+        {{59.0f, 65.0f}, TREE_FAMILY_POLLARD},
+        {{66.0f, 59.0f}, TREE_FAMILY_OAK},
+        {{73.0f, 64.0f}, TREE_FAMILY_ALDER},
+        {{84.0f, 59.5f}, TREE_FAMILY_ALDER},
+        {{88.0f, 64.0f}, TREE_FAMILY_OAK},
+        {{93.0f, 56.0f}, TREE_FAMILY_ALDER},
+        {{18.0f, 5.0f}, TREE_FAMILY_ALDER},
+        {{24.0f, 8.0f}, TREE_FAMILY_POLLARD},
+        {{31.0f, 5.5f}, TREE_FAMILY_OAK},
+        {{49.0f, 6.0f}, TREE_FAMILY_ALDER},
+        {{57.0f, 5.0f}, TREE_FAMILY_POLLARD},
+        {{62.0f, 3.5f}, TREE_FAMILY_ALDER},
+        {{4.0f, 14.0f}, TREE_FAMILY_POLLARD},
+        {{16.0f, 14.5f}, TREE_FAMILY_ALDER},
+        {{17.0f, 45.0f}, TREE_FAMILY_POLLARD},
+        {{20.0f, 52.0f}, TREE_FAMILY_ALDER},
+        {{57.5f, 41.0f}, TREE_FAMILY_OAK},
+        {{70.5f, 39.5f}, TREE_FAMILY_POLLARD},
+        {{86.0f, 40.0f}, TREE_FAMILY_ALDER},
+        {{93.0f, 36.0f}, TREE_FAMILY_OAK}
+    };
+    TreeRegionalStyle regional_style = TreeStyleForKingdom(kingdom);
     for (int32_t i = 0; i < (int32_t)(sizeof(trees) / sizeof(trees[0])); ++i) {
-        if (!SceneryPointVisible(trees[i].x, trees[i].y, focus)) continue;
+        Vector2 position = trees[i].position;
+        position.x += (i & 1) != 0 ? -regional_style.cluster_pull :
+                                     regional_style.cluster_pull;
+        if (!SceneryPointVisible(position.x, position.y, focus)) continue;
+        TreeFamily family = RegionalTreeFamily(trees[i].family, i,
+                                               regional_style);
         Color leaves = (i & 1) != 0 ? (Color){54, 105, 85, 255} :
                                       (Color){58, 119, 91, 255};
-        DrawTree(trees[i].x, trees[i].y, leaves);
+        if (family == TREE_FAMILY_OAK) {
+            leaves = ShadeColor(leaves, 0.86f);
+        } else if (family == TREE_FAMILY_POLLARD) {
+            leaves = BlendColor(leaves, (Color){96, 105, 61, 255}, 0.18f);
+        }
+        DrawTree(position.x, position.y, family, leaves, regional_style);
     }
 }
 
@@ -9062,16 +12968,22 @@ static void DrawStreetTraversalPortals(const CcLocalAgent *agent,
 static void DrawLabels(const WorldLabel *labels, int32_t count, Camera3D camera,
                        Rectangle viewport)
 {
+    const float bubble_height = 16.0f;
+    const float head_clearance = 8.0f;
     int32_t width = (int32_t)lroundf(viewport.width);
     int32_t height = (int32_t)lroundf(viewport.height);
     for (int32_t i = 0; i < count; ++i) {
         Vector2 screen = GetWorldToScreenEx(labels[i].point, camera, width, height);
         if (screen.x < -120.0f || screen.x > viewport.width + 120.0f ||
-            screen.y < -40.0f || screen.y > viewport.height + 40.0f) continue;
+            screen.y < bubble_height + head_clearance + 4.0f ||
+            screen.y > viewport.height + 40.0f) continue;
         int text_width = CcOverlayMeasureText(labels[i].text, 10);
         float bubble_width = (float)text_width + 10.0f;
         float bubble_x = viewport.x + screen.x - bubble_width * 0.5f;
-        float bubble_y = viewport.y + screen.y - 5.0f;
+        /* The projected point is the top of the subject. Keep the complete
+           nameplate above it so the plate never paints across a face. */
+        float bubble_y = viewport.y + screen.y - bubble_height -
+                         head_clearance;
         bubble_x = fmaxf(viewport.x + 4.0f,
                          fminf(bubble_x,
                                viewport.x + viewport.width - bubble_width -
@@ -9080,7 +12992,7 @@ static void DrawLabels(const WorldLabel *labels, int32_t count, Camera3D camera,
                          fminf(bubble_y,
                                viewport.y + viewport.height - 20.0f));
         DrawRectangleRounded((Rectangle){bubble_x, bubble_y,
-                                         bubble_width, 16.0f},
+                                         bubble_width, bubble_height},
                              0.30f, 4, (Color){4, 10, 14, 210});
         CcOverlayDrawText(labels[i].text, (int)lroundf(bubble_x) + 5,
                  (int)lroundf(bubble_y) + 3, 10, labels[i].color);
@@ -9090,7 +13002,8 @@ static void DrawLabels(const WorldLabel *labels, int32_t count, Camera3D camera,
 static void DrawCombatBar(const CcLocalAgent *agent, Camera3D camera,
                           Rectangle viewport, Color accent)
 {
-    Vector3 anchor = {agent->position.x, agent->position.y + 2.18f,
+    /* Keep combat state in the clear air above the portrait billboard. */
+    Vector3 anchor = {agent->position.x, agent->position.y + 2.82f,
                       agent->position.z};
     Vector2 screen = GetWorldToScreenEx(
         anchor, camera, (int32_t)lroundf(viewport.width),
@@ -9116,6 +13029,41 @@ static void DrawCombatBar(const CcLocalAgent *agent, Camera3D camera,
     }
 }
 
+static void DrawPaintedTriangle(Vector3 a, Vector3 b, Vector3 c, Color color)
+{
+    DrawTriangle3D(a, b, c, color);
+    DrawTriangle3D(c, b, a, color);
+}
+
+static void DrawGroundBrushStroke(Vector3 center, Vector3 along,
+                                  float length, float width, Color color)
+{
+    along.y = 0.0f;
+    along = PhysicsNormalizeOr(along, (Vector3){0.0f, 0.0f, 1.0f});
+    Vector3 side = PhysicsNormalizeOr(
+        PhysicsCross((Vector3){0.0f, 1.0f, 0.0f}, along),
+        (Vector3){1.0f, 0.0f, 0.0f});
+    Vector3 start = PhysicsAdd(center, PhysicsScale(along, -length * 0.52f));
+    Vector3 end = PhysicsAdd(center, PhysicsScale(along, length * 0.48f));
+    Vector3 a = PhysicsAdd(start, PhysicsScale(side, -width * 0.45f));
+    Vector3 b = PhysicsAdd(start, PhysicsScale(side, width * 0.32f));
+    Vector3 c = PhysicsAdd(end, PhysicsScale(side, width * 0.16f));
+    Vector3 d = PhysicsAdd(end, PhysicsScale(side, -width * 0.23f));
+    DrawPaintedTriangle(a, b, c, color);
+    DrawPaintedTriangle(a, c, d, color);
+}
+
+static void DrawPaintedOverheadDiamond(Vector3 center, float radius,
+                                       Color color)
+{
+    Vector3 top = {center.x, center.y + radius, center.z};
+    Vector3 right = {center.x + radius * 0.72f, center.y, center.z};
+    Vector3 bottom = {center.x, center.y - radius, center.z};
+    Vector3 left = {center.x - radius * 0.72f, center.y, center.z};
+    DrawPaintedTriangle(top, right, bottom, color);
+    DrawPaintedTriangle(top, bottom, left, ShadeColor(color, 0.78f));
+}
+
 static void DrawCombatImpact(const CcLocalAgent *agent)
 {
     if (agent->combat.hit_flash_seconds <= 0.0f) return;
@@ -9123,7 +13071,6 @@ static void DrawCombatImpact(const CcLocalAgent *agent)
     Vector3 point = agent->combat.impact_valid ? agent->combat.impact_point :
         (Vector3){agent->position.x, agent->position.y + 1.02f,
                   agent->position.z};
-    DrawSphereWires(point, pulse, 7, 7, WORLD_GOLD);
     if (agent->combat.impact_valid) {
         Vector3 direction = PhysicsNormalizeOr(
             agent->combat.impact_direction,
@@ -9132,15 +13079,49 @@ static void DrawCombatImpact(const CcLocalAgent *agent)
             PhysicsCross(direction, (Vector3){0.0f, 1.0f, 0.0f}),
             (Vector3){1.0f, 0.0f, 0.0f});
         float spark = pulse * 1.65f;
-        DrawLine3D(PhysicsAdd(point, PhysicsScale(side, -spark)),
-                   PhysicsAdd(point, PhysicsScale(side, spark)), WORLD_INK);
-        DrawLine3D(PhysicsAdd(point, (Vector3){0.0f, -spark * 0.72f, 0.0f}),
-                   PhysicsAdd(point, (Vector3){0.0f, spark * 0.72f, 0.0f}),
-                   WHITE);
-        Vector3 trace = PhysicsAdd(
-            point, PhysicsScale(direction,
-                                0.18f + agent->combat.impact_speed * 0.018f));
-        DrawLine3D(point, trace, WORLD_GOLD);
+        Vector3 wedge_base = PhysicsAdd(
+            point, PhysicsScale(direction, -pulse * 0.58f));
+        Vector3 wedge_left = PhysicsAdd(
+            PhysicsAdd(wedge_base, PhysicsScale(side, -pulse * 0.62f)),
+            (Vector3){0.0f, -pulse * 0.26f, 0.0f});
+        Vector3 wedge_right = PhysicsAdd(
+            PhysicsAdd(wedge_base, PhysicsScale(side, pulse * 0.62f)),
+            (Vector3){0.0f, pulse * 0.16f, 0.0f});
+        Vector3 wedge_tip = PhysicsAdd(
+            PhysicsAdd(point, PhysicsScale(direction, pulse * 1.52f)),
+            (Vector3){0.0f, pulse * 0.28f, 0.0f});
+        DrawPaintedTriangle(wedge_left, wedge_right, wedge_tip,
+                            Fade(WORLD_GOLD, 0.84f));
+
+        Vector3 slash_start = PhysicsAdd(
+            PhysicsAdd(point, PhysicsScale(side, -spark)),
+            (Vector3){0.0f, -pulse * 0.22f, 0.0f});
+        Vector3 slash_end = PhysicsAdd(
+            PhysicsAdd(point, PhysicsScale(side, spark * 0.86f)),
+            (Vector3){0.0f, pulse * 0.48f, 0.0f});
+        DrawCylinderEx(slash_start, slash_end, pulse * 0.12f,
+                       pulse * 0.025f, 5, Fade(WORLD_INK, 0.78f));
+
+        static const Vector3 spark_directions[] = {
+            {-0.72f, 0.86f, 0.18f},
+            {0.34f, 1.00f, -0.28f},
+            {0.78f, 0.62f, 0.34f}
+        };
+        for (int32_t i = 0; i < 3; ++i) {
+            Vector3 spark_end = PhysicsAdd(
+                point, PhysicsScale(spark_directions[i], pulse * 1.22f));
+            DrawCylinderEx(point, spark_end, pulse * 0.050f,
+                           pulse * 0.012f, 5,
+                           i == 1 ? WHITE : WORLD_GOLD);
+        }
+
+        Vector3 ground = {point.x, agent->position.y + 0.022f, point.z};
+        DrawGroundBrushStroke(ground, direction, pulse * 2.8f,
+                              pulse * 0.62f,
+                              Fade((Color){69, 53, 43, 255}, 0.52f));
+        DrawSmallSphere(point, pulse * 0.22f, WHITE);
+    } else {
+        DrawSmallSphere(point, pulse * 0.34f, WORLD_GOLD);
     }
 }
 
@@ -9159,10 +13140,20 @@ static void DrawCombatSkillTell(const CcLocalAgent *agent)
     float radius = 0.40f + sinf(phase * PI) * 0.22f;
     Vector3 ground = {agent->position.x, agent->position.y + 0.025f,
                       agent->position.z};
-    DrawCylinderWires(ground, radius, radius, 0.035f, 24,
-                      Fade(color, 0.72f));
-    DrawCylinderWires(ground, radius * 0.72f, radius * 0.72f, 0.040f, 20,
-                      Fade(color, 0.42f));
+    Vector3 facing = {sinf(agent->facing_yaw), 0.0f,
+                      cosf(agent->facing_yaw)};
+    Vector3 side = {facing.z, 0.0f, -facing.x};
+    Vector3 tip = PhysicsAdd(ground, PhysicsScale(facing, radius * 1.65f));
+    Vector3 left = PhysicsAdd(
+        PhysicsAdd(ground, PhysicsScale(facing, radius * 0.18f)),
+        PhysicsScale(side, -radius * 0.54f));
+    Vector3 right = PhysicsAdd(
+        PhysicsAdd(ground, PhysicsScale(facing, radius * 0.18f)),
+        PhysicsScale(side, radius * 0.54f));
+    DrawPaintedTriangle(left, right, tip, Fade(color, 0.34f));
+    DrawGroundBrushStroke(PhysicsAdd(ground, PhysicsScale(facing, radius)),
+                          facing, radius * 1.28f, radius * 0.14f,
+                          Fade(color, 0.74f));
 }
 
 static void DrawCombatFootprint(const CcLocalAgent *agent, Color color)
@@ -9173,8 +13164,10 @@ static void DrawCombatFootprint(const CcLocalAgent *agent, Color color)
                       agent->position.z};
     DrawCylinder(ground, 0.31f, 0.31f, 0.012f, 20,
                  Fade(WORLD_VOID, 0.38f));
-    DrawCylinderWires((Vector3){ground.x, ground.y + 0.004f, ground.z},
-                      0.34f, 0.34f, 0.018f, 20, Fade(color, 0.58f));
+    Vector3 facing = {sinf(agent->facing_yaw), 0.0f,
+                      cosf(agent->facing_yaw)};
+    DrawGroundBrushStroke((Vector3){ground.x, ground.y + 0.006f, ground.z},
+                          facing, 0.62f, 0.11f, Fade(color, 0.58f));
 }
 
 static void DrawCombatSword(const CcLocalAgent *agent)
@@ -9226,7 +13219,8 @@ static void DrawCombatSword(const CcLocalAgent *agent)
                    0.032f, 0.026f, 7, guard_color);
     DrawCylinderEx(blade_start, blade_tip, 0.052f, 0.012f, 5, steel);
     DrawLine3D(blade_start, blade_tip,
-               agent->combat.team == CC_COMBAT_PLAYER ? WHITE : WORLD_INK);
+               agent->combat.team == CC_COMBAT_PLAYER ? WORLD_GOLD :
+                                                        WORLD_INK);
 
     if (agent->combat.weapon_mode == CC_WEAPON_HELD &&
         agent->humanoid.action == CC_HUMANOID_ACTION_STRIKE &&
@@ -9253,19 +13247,23 @@ static void DrawSelectedTarget(const CcLocalAgent *target)
 {
     if (target == NULL || !CombatCanAct(&target->combat)) return;
     float surface = target->position.y + 0.035f;
-    DrawCylinderWires((Vector3){target->position.x, surface,
-                                target->position.z},
-                      0.58f, 0.58f, 0.06f, 28, WORLD_GOLD);
-    DrawCylinderWires((Vector3){target->position.x, surface + 0.015f,
-                                target->position.z},
-                      0.48f, 0.48f, 0.06f, 28, WORLD_DANGER);
-    DrawLine3D((Vector3){target->position.x, surface + 1.95f,
-                         target->position.z},
-               (Vector3){target->position.x, surface + 2.25f,
-                         target->position.z}, WORLD_GOLD);
-    DrawSphereWires((Vector3){target->position.x, surface + 2.28f,
-                              target->position.z},
-                    0.10f, 7, 7, WORLD_GOLD);
+    Vector3 center = {target->position.x, surface, target->position.z};
+    DrawGroundBrushStroke(
+        PhysicsAdd(center, (Vector3){0.0f, 0.0f, -0.48f}),
+        (Vector3){1.0f, 0.0f, 0.0f}, 0.34f, 0.085f, WORLD_GOLD);
+    DrawGroundBrushStroke(
+        PhysicsAdd(center, (Vector3){0.0f, 0.0f, 0.48f}),
+        (Vector3){-1.0f, 0.0f, 0.0f}, 0.34f, 0.085f, WORLD_DANGER);
+    DrawGroundBrushStroke(
+        PhysicsAdd(center, (Vector3){-0.48f, 0.0f, 0.0f}),
+        (Vector3){0.0f, 0.0f, 1.0f}, 0.34f, 0.085f, WORLD_GOLD);
+    DrawGroundBrushStroke(
+        PhysicsAdd(center, (Vector3){0.48f, 0.0f, 0.0f}),
+        (Vector3){0.0f, 0.0f, -1.0f}, 0.34f, 0.085f, WORLD_DANGER);
+    DrawPaintedOverheadDiamond(
+        (Vector3){target->position.x, surface + 2.22f,
+                  target->position.z},
+        0.13f, WORLD_GOLD);
 }
 
 static void PresentTarget(RenderTexture2D target, Rectangle destination)
@@ -9273,33 +13271,79 @@ static void PresentTarget(RenderTexture2D target, Rectangle destination)
     Rectangle source = {0.0f, 0.0f, (float)target.texture.width,
                         -(float)target.texture.height};
     if (visual_style.grade_ready) {
-        float resolution[2] = {(float)target.texture.width,
-                               (float)target.texture.height};
-        SetShaderValue(visual_style.grade, visual_style.resolution_location,
-                       resolution, SHADER_UNIFORM_VEC2);
         BeginShaderMode(visual_style.grade);
+        SetShaderValueTexture(visual_style.grade,
+                              visual_style.palette_lut_location,
+                              visual_style.palette_lut);
     }
     DrawTexturePro(target.texture, source, destination, (Vector2){0.0f, 0.0f},
                    0.0f, WHITE);
     if (visual_style.grade_ready) EndShaderMode();
 }
 
-static void BeginWorldLighting(Camera3D camera, Color environment)
+static Color ArtLightBackground(ArtLightProfileId profile_id)
 {
-    if (!visual_style.world_ready) return;
+    if (profile_id < 0 || profile_id >= ART_LIGHT_PROFILE_COUNT) {
+        profile_id = ART_LIGHT_CLEAR_MARKET;
+    }
+    return ART_LIGHT_PROFILES[profile_id].fog_color;
+}
+
+static ArtLightProfileId StreetLightProfile(
+    const CcSettlement *place, ArtLightProfileId authored)
+{
+    if (place != NULL && place->hunger >= 30) {
+        return ART_LIGHT_SHORTAGE_OVERCAST;
+    }
+    if (place != NULL && place->prosperity >= 60) {
+        return ART_LIGHT_RECOVERY_WARM;
+    }
+    return authored;
+}
+
+static void BeginWorldLighting(Camera3D camera,
+                               const ArtComposition *composition)
+{
+    if (!visual_style.world_ready || composition == NULL) return;
+    ArtLightProfileId profile_id = composition->light_profile;
+    if (profile_id < 0 || profile_id >= ART_LIGHT_PROFILE_COUNT) {
+        profile_id = ART_LIGHT_CLEAR_MARKET;
+    }
+    const ArtLightProfileDefinition *profile =
+        &ART_LIGHT_PROFILES[profile_id];
     Vector3 light_direction = Vector3Normalize(
-        (Vector3){-0.34f, 0.87f, 0.36f});
+        profile->light_direction);
+    Vector3 camera_forward_vector = Vector3Normalize(
+        Vector3Subtract(camera.target, camera.position));
     float direction[3] = {light_direction.x, light_direction.y,
                           light_direction.z};
-    const float light_color[3] = {1.10f, 0.91f, 0.72f};
-    const float ambient_color[3] = {0.61f, 0.64f, 0.68f};
+    float light_color[3] = {profile->light_color.x, profile->light_color.y,
+                            profile->light_color.z};
+    float ambient_color[3] = {profile->ambient_color.x,
+                              profile->ambient_color.y,
+                              profile->ambient_color.z};
+    float shadow_color[3] = {profile->shadow_color.x,
+                             profile->shadow_color.y,
+                             profile->shadow_color.z};
     float camera_position[3] = {camera.position.x, camera.position.y,
                                 camera.position.z};
-    float fog_color[3] = {(float)environment.r / 255.0f,
-                          (float)environment.g / 255.0f,
-                          (float)environment.b / 255.0f};
-    const float fog_near = 28.0f;
-    const float fog_far = 54.0f;
+    float camera_forward[3] = {camera_forward_vector.x,
+                               camera_forward_vector.y,
+                               camera_forward_vector.z};
+    float fog_color[3] = {(float)profile->fog_color.r / 255.0f,
+                          (float)profile->fog_color.g / 255.0f,
+                          (float)profile->fog_color.b / 255.0f};
+    float focal_point[3] = {composition->focal_point.x,
+                            composition->focal_point.y,
+                            composition->focal_point.z};
+    float story_axis[2] = {composition->story_axis.x,
+                           composition->story_axis.y};
+    float foreground_anchor[3] = {composition->foreground_anchor.x,
+                                  composition->foreground_anchor.y,
+                                  composition->foreground_anchor.z};
+    float depth_splits[3] = {composition->depth_splits.x,
+                             composition->depth_splits.y,
+                             composition->depth_splits.z};
     SetShaderValue(visual_style.world,
                    visual_style.light_direction_location, direction,
                    SHADER_UNIFORM_VEC3);
@@ -9310,12 +13354,113 @@ static void BeginWorldLighting(Camera3D camera, Color environment)
     SetShaderValue(visual_style.world,
                    visual_style.camera_position_location, camera_position,
                    SHADER_UNIFORM_VEC3);
+    SetShaderValue(visual_style.world,
+                   visual_style.camera_forward_location, camera_forward,
+                   SHADER_UNIFORM_VEC3);
+    SetShaderValue(visual_style.world, visual_style.shadow_color_location,
+                   shadow_color, SHADER_UNIFORM_VEC3);
     SetShaderValue(visual_style.world, visual_style.fog_color_location,
                    fog_color, SHADER_UNIFORM_VEC3);
     SetShaderValue(visual_style.world, visual_style.fog_near_location,
-                   &fog_near, SHADER_UNIFORM_FLOAT);
+                   &profile->fog_near, SHADER_UNIFORM_FLOAT);
     SetShaderValue(visual_style.world, visual_style.fog_far_location,
-                   &fog_far, SHADER_UNIFORM_FLOAT);
+                   &profile->fog_far, SHADER_UNIFORM_FLOAT);
+    SetShaderValue(visual_style.world, visual_style.focal_point_location,
+                   focal_point, SHADER_UNIFORM_VEC3);
+    SetShaderValue(visual_style.world, visual_style.story_axis_location,
+                   story_axis, SHADER_UNIFORM_VEC2);
+    SetShaderValue(visual_style.world,
+                   visual_style.foreground_anchor_location,
+                   foreground_anchor, SHADER_UNIFORM_VEC3);
+    SetShaderValue(visual_style.world, visual_style.depth_splits_location,
+                   depth_splits, SHADER_UNIFORM_VEC3);
+    SetShaderValue(visual_style.world, visual_style.depth_strength_location,
+                   &profile->depth_strength, SHADER_UNIFORM_FLOAT);
+    SetShaderValue(visual_style.world, visual_style.focal_contrast_location,
+                   &profile->focal_contrast, SHADER_UNIFORM_FLOAT);
+    if (visual_style.painted_environment.ready) {
+        PaintedEnvironmentStyle *painted =
+            &visual_style.painted_environment;
+        SetShaderValue(painted->shader, painted->light_direction_location,
+                       direction, SHADER_UNIFORM_VEC3);
+        SetShaderValue(painted->shader, painted->light_color_location,
+                       light_color, SHADER_UNIFORM_VEC3);
+        SetShaderValue(painted->shader, painted->ambient_color_location,
+                       ambient_color, SHADER_UNIFORM_VEC3);
+        SetShaderValue(painted->shader, painted->camera_position_location,
+                       camera_position, SHADER_UNIFORM_VEC3);
+        SetShaderValue(painted->shader, painted->camera_forward_location,
+                       camera_forward, SHADER_UNIFORM_VEC3);
+        SetShaderValue(painted->shader, painted->shadow_color_location,
+                       shadow_color, SHADER_UNIFORM_VEC3);
+        SetShaderValue(painted->shader, painted->fog_color_location,
+                       fog_color, SHADER_UNIFORM_VEC3);
+        SetShaderValue(painted->shader, painted->fog_near_location,
+                       &profile->fog_near, SHADER_UNIFORM_FLOAT);
+        SetShaderValue(painted->shader, painted->fog_far_location,
+                       &profile->fog_far, SHADER_UNIFORM_FLOAT);
+        SetShaderValue(painted->shader, painted->focal_point_location,
+                       focal_point, SHADER_UNIFORM_VEC3);
+        SetShaderValue(painted->shader, painted->story_axis_location,
+                       story_axis, SHADER_UNIFORM_VEC2);
+        SetShaderValue(painted->shader, painted->foreground_anchor_location,
+                       foreground_anchor, SHADER_UNIFORM_VEC3);
+        SetShaderValue(painted->shader, painted->depth_splits_location,
+                       depth_splits, SHADER_UNIFORM_VEC3);
+        SetShaderValue(painted->shader, painted->depth_strength_location,
+                       &profile->depth_strength, SHADER_UNIFORM_FLOAT);
+        SetShaderValue(painted->shader, painted->focal_contrast_location,
+                       &profile->focal_contrast, SHADER_UNIFORM_FLOAT);
+    }
+    const float foreground_reveal = 0.0f;
+    SetShaderValue(visual_style.world,
+                   visual_style.foreground_reveal_location,
+                   &foreground_reveal, SHADER_UNIFORM_FLOAT);
+    if (visual_style.painted_environment.ready) {
+        SetShaderValue(
+            visual_style.painted_environment.shader,
+            visual_style.painted_environment.foreground_reveal_location,
+            &foreground_reveal, SHADER_UNIFORM_FLOAT);
+    }
+    const float terrain_surface = 0.0f;
+    SetShaderValue(visual_style.world,
+                   visual_style.terrain_surface_location,
+                   &terrain_surface, SHADER_UNIFORM_FLOAT);
+    if (visual_style.foliage_ready) {
+        SetShaderValue(visual_style.foliage,
+                       visual_style.foliage_light_direction_location,
+                       direction, SHADER_UNIFORM_VEC3);
+        SetShaderValue(visual_style.foliage,
+                       visual_style.foliage_light_color_location,
+                       light_color, SHADER_UNIFORM_VEC3);
+        SetShaderValue(visual_style.foliage,
+                       visual_style.foliage_ambient_color_location,
+                       ambient_color, SHADER_UNIFORM_VEC3);
+        SetShaderValue(visual_style.foliage,
+                       visual_style.foliage_camera_position_location,
+                       camera_position, SHADER_UNIFORM_VEC3);
+        SetShaderValue(visual_style.foliage,
+                       visual_style.foliage_camera_forward_location,
+                       camera_forward, SHADER_UNIFORM_VEC3);
+        SetShaderValue(visual_style.foliage,
+                       visual_style.foliage_shadow_color_location,
+                       shadow_color, SHADER_UNIFORM_VEC3);
+        SetShaderValue(visual_style.foliage,
+                       visual_style.foliage_fog_color_location,
+                       fog_color, SHADER_UNIFORM_VEC3);
+        SetShaderValue(visual_style.foliage,
+                       visual_style.foliage_fog_near_location,
+                       &profile->fog_near, SHADER_UNIFORM_FLOAT);
+        SetShaderValue(visual_style.foliage,
+                       visual_style.foliage_fog_far_location,
+                       &profile->fog_far, SHADER_UNIFORM_FLOAT);
+        SetShaderValue(visual_style.foliage,
+                       visual_style.foliage_depth_splits_location,
+                       depth_splits, SHADER_UNIFORM_VEC3);
+        SetShaderValue(visual_style.foliage,
+                       visual_style.foliage_depth_strength_location,
+                       &profile->depth_strength, SHADER_UNIFORM_FLOAT);
+    }
     if (visual_style.hero_ready) {
         SetShaderValue(visual_style.hero,
                        visual_style.hero_light_direction_location, direction,
@@ -9324,13 +13469,18 @@ static void BeginWorldLighting(Camera3D camera, Color environment)
                        visual_style.hero_camera_position_location,
                        camera_position, SHADER_UNIFORM_VEC3);
         SetShaderValue(visual_style.hero,
+                       visual_style.hero_shadow_color_location,
+                       shadow_color, SHADER_UNIFORM_VEC3);
+        SetShaderValue(visual_style.hero,
                        visual_style.hero_fog_color_location, fog_color,
                        SHADER_UNIFORM_VEC3);
         SetShaderValue(visual_style.hero,
-                       visual_style.hero_fog_near_location, &fog_near,
+                       visual_style.hero_fog_near_location,
+                       &profile->fog_near,
                        SHADER_UNIFORM_FLOAT);
         SetShaderValue(visual_style.hero,
-                       visual_style.hero_fog_far_location, &fog_far,
+                       visual_style.hero_fog_far_location,
+                       &profile->fog_far,
                        SHADER_UNIFORM_FLOAT);
     }
     if (visual_style.npc_ready) {
@@ -9341,13 +13491,18 @@ static void BeginWorldLighting(Camera3D camera, Color environment)
                        visual_style.npc_camera_position_location,
                        camera_position, SHADER_UNIFORM_VEC3);
         SetShaderValue(visual_style.npc,
+                       visual_style.npc_shadow_color_location,
+                       shadow_color, SHADER_UNIFORM_VEC3);
+        SetShaderValue(visual_style.npc,
                        visual_style.npc_fog_color_location, fog_color,
                        SHADER_UNIFORM_VEC3);
         SetShaderValue(visual_style.npc,
-                       visual_style.npc_fog_near_location, &fog_near,
+                       visual_style.npc_fog_near_location,
+                       &profile->fog_near,
                        SHADER_UNIFORM_FLOAT);
         SetShaderValue(visual_style.npc,
-                       visual_style.npc_fog_far_location, &fog_far,
+                       visual_style.npc_fog_far_location,
+                       &profile->fog_far,
                        SHADER_UNIFORM_FLOAT);
     }
     BeginShaderMode(visual_style.world);
@@ -9361,16 +13516,15 @@ static void EndWorldLighting(void)
 static void DrawAgentPath(const CcLocalAgent *agent, bool market_interior)
 {
     (void)market_interior;
-    if (!agent->exact_target_valid && !agent->target_valid) return;
-    Vector3 target = agent->target_point;
+    if (!agent->command_point_valid ||
+        (!agent->exact_target_valid && !agent->navigation_active)) return;
+    Vector3 target = agent->command_point;
     DrawCylinder((Vector3){target.x, target.y + 0.018f, target.z},
                  0.24f, 0.24f, 0.036f, 24, Fade(WORLD_GOLD, 0.42f));
-    DrawCylinderWires((Vector3){target.x, target.y + 0.020f, target.z},
-                      0.26f, 0.26f, 0.040f, 24, WORLD_GOLD);
-    DrawLine3D((Vector3){agent->position.x, agent->position.y + 0.04f,
-                         agent->position.z},
-               (Vector3){target.x, target.y + 0.04f, target.z},
-               Fade(WORLD_GOLD, 0.30f));
+    Vector3 facing = PhysicsSubtract(target, agent->position);
+    DrawGroundBrushStroke(
+        (Vector3){target.x, target.y + 0.040f, target.z}, facing,
+        0.52f, 0.085f, WORLD_GOLD);
 }
 
 static Color CoursePlatformColor(int32_t style)
@@ -9438,10 +13592,11 @@ static void DrawCourseRunners(const CcLocalCourse *course)
             DrawCombatSword(raider);
             DrawCombatSkillTell(raider);
             DrawCombatImpact(raider);
-            DrawSphereWires((Vector3){raider->position.x,
-                                      raider->position.y + 2.05f,
-                                      raider->position.z},
-                            0.075f, 6, 6, WORLD_DANGER);
+            DrawPaintedOverheadDiamond(
+                (Vector3){raider->position.x,
+                          raider->position.y + 2.05f,
+                          raider->position.z},
+                0.085f, WORLD_DANGER);
         }
     }
     for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
@@ -9451,9 +13606,10 @@ static void DrawCourseRunners(const CcLocalCourse *course)
         }
         if (runner->agent.exact_target_valid) {
             Vector3 target = runner->agent.target_point;
-            DrawCylinderWires((Vector3){target.x, target.y + 0.025f, target.z},
-                              0.13f, 0.13f, 0.035f, 14,
-                              Fade(runner->marker_color, 0.58f));
+            DrawGroundBrushStroke(
+                (Vector3){target.x, target.y + 0.025f, target.z},
+                (Vector3){1.0f, 0.0f, 0.45f}, 0.32f, 0.075f,
+                Fade(runner->marker_color, 0.58f));
         }
         DrawRobotShell(&runner->agent);
         DrawCombatImpact(&runner->agent);
@@ -9486,13 +13642,13 @@ static void DrawCourseRunners(const CcLocalCourse *course)
             Vector3 shield_hand = FromLimbVector(pose->hand[0]);
             DrawCharacterSphere(shield_hand, 0.105f,
                                 (Color){55, 74, 78, 255});
-            DrawSphereWires(shield_hand, 0.108f, 6, 6,
-                            runner->marker_color);
+            DrawSmallSphere(shield_hand, 0.055f, runner->marker_color);
         }
-        DrawSphereWires((Vector3){runner->agent.position.x,
-                                  runner->agent.position.y + 2.05f,
-                                  runner->agent.position.z},
-                        0.075f, 6, 6, runner->marker_color);
+        DrawPaintedOverheadDiamond(
+            (Vector3){runner->agent.position.x,
+                      runner->agent.position.y + 2.05f,
+                      runner->agent.position.z},
+            0.085f, runner->marker_color);
     }
 }
 
@@ -9661,7 +13817,7 @@ static void DrawRoadSurface(float x, float width, Color road)
 }
 
 static void DrawRoadTerrain(const CcRoute *route, int32_t danger,
-                            bool bridge_checkpoint)
+                            bool bridge_checkpoint, Color kingdom)
 {
     float decay = route != NULL ?
         1.0f - (float)route->condition / 100.0f : 0.5f;
@@ -9695,11 +13851,26 @@ static void DrawRoadTerrain(const CcRoute *route, int32_t danger,
     }
     Color leaves = route != NULL && route->smuggler_route ?
         (Color){35, 87, 65, 255} : (Color){57, 109, 78, 255};
+    TreeRegionalStyle regional_style = TreeStyleForKingdom(kingdom);
     for (int32_t tree = 0; tree < 13; ++tree) {
         float x = 20.0f + (float)tree * 4.75f;
+        x += (tree & 1) != 0 ? -regional_style.cluster_pull :
+                               regional_style.cluster_pull;
         float z = (tree & 1) != 0 ? 46.0f + (float)(tree % 3) * 1.2f :
                                     33.8f - (float)(tree % 3) * 1.1f;
-        DrawTree(x, z, (tree % 3) == 0 ? ShadeColor(leaves, 0.82f) : leaves);
+        TreeFamily family = tree == 4 || tree == 10 ? TREE_FAMILY_OAK :
+                            tree == 1 || tree == 7 ? TREE_FAMILY_POLLARD :
+                                                    TREE_FAMILY_ALDER;
+        family = RegionalTreeFamily(family, tree, regional_style);
+        Color tree_leaves = (tree % 3) == 0 ?
+                            ShadeColor(leaves, 0.82f) : leaves;
+        if (family == TREE_FAMILY_OAK) {
+            tree_leaves = ShadeColor(tree_leaves, 0.86f);
+        } else if (family == TREE_FAMILY_POLLARD) {
+            tree_leaves = BlendColor(tree_leaves,
+                                     (Color){96, 105, 61, 255}, 0.16f);
+        }
+        DrawTree(x, z, family, tree_leaves, regional_style);
     }
     if (route != NULL && (route->closed || route->condition < 42)) {
         DrawTerrainPatchAtTop(68.0f, 32.0f, 4.0f, 16.0f, -0.002f,
@@ -9741,10 +13912,9 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
                        const CcLocalCourse *course, bool travelling,
                        bool parley,
                        float clock, RenderTexture2D target,
-                       Rectangle destination)
+    Rectangle destination)
 {
     if (sim == NULL || agent == NULL || course == NULL) return;
-    face_glyph_count = 0;
     const CcRoute *route = CcSimRoute(sim, sim->journey.route_id);
     const CcSettlement *origin = CcSimSettlement(
         sim, sim->journey.origin_id);
@@ -9765,15 +13935,26 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
         40.0f
     };
     Vector3 camera_focus = travelling ? carriage_base : agent->position;
-    Camera3D camera = RoadCamera(camera_focus, travelling, clock, true,
-                                 target.texture.height);
+    Camera3D base_camera = RoadCamera(camera_focus, travelling, clock, true,
+                                      target.texture.height);
+    Camera3D camera = CombatCamera(base_camera, agent, course, clock, true,
+                                   target.texture.height);
+    ArtComposition road_art = ROAD_ART_COMPOSITION;
+    road_art.focal_point = camera.target;
+    road_art.foreground_anchor = carriage_base;
+    Color background = ArtLightBackground(road_art.light_profile);
+    SetFaceRenderContext(camera, target.texture.width, target.texture.height);
     BeginTextureMode(target);
-    ClearBackground((Color){9, 20, 25, 255});
+    ClearBackground(background);
     BeginMode3D(camera);
-    BeginWorldLighting(camera, (Color){9, 20, 25, 255});
+    BeginWorldLighting(camera, &road_art);
     bool authored_checkpoint = !travelling &&
         runtime_assets[RUNTIME_ASSET_BRIDGE].ready;
-    DrawRoadTerrain(route, sim->journey.danger, authored_checkpoint);
+    CcId road_kingdom_id = origin != NULL ? origin->kingdom_id :
+        destination_place != NULL ? destination_place->kingdom_id : 0;
+    Color road_kingdom = KingdomColor3D(sim, road_kingdom_id);
+    DrawRoadTerrain(route, sim->journey.danger, authored_checkpoint,
+                    road_kingdom);
     if (!travelling && !DrawBridgeCheckpoint()) DrawRoadBarricade(route);
     if (!travelling) DrawAgentPath(agent, false);
     int32_t road_cargo = CcPlayerCargoUsed(&sim->player);
@@ -9814,8 +13995,6 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
         DrawCombatSkillTell(agent);
         DrawCombatImpact(agent);
     }
-    DrawQueuedFaceGlyphs(camera, target.texture.width,
-                         target.texture.height);
     EndWorldLighting();
     EndMode3D();
     EndTextureMode();
@@ -9897,6 +14076,8 @@ static void DrawJourneyAftermath3D(const CcSim *sim,
         sim->journey.destination_id != place->id) return;
     const float x = 47.35f;
     const float z = 31.05f;
+    rlPushMatrix();
+    rlTranslatef(0.0f, CcLocalTerrainHeightAt(x, z), 0.0f);
     if (sim->resolved_journey_outcome == CC_JOURNEY_OUTCOME_COMBAT) {
         DrawBox((Vector3){x, 0.88f, z}, (Vector3){0.14f, 1.76f, 0.14f},
                 (Color){82, 61, 46, 255});
@@ -9919,55 +14100,74 @@ static void DrawJourneyAftermath3D(const CcSim *sim,
         DrawSmallSphere((Vector3){x + 0.58f, 0.68f, z + 0.44f},
                         0.12f, WORLD_GOLD);
     }
+    rlPopMatrix();
 }
 
 void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                          const CcLocalCourse *course, float clock,
                          RenderTexture2D target, Rectangle destination)
 {
+    CcLocalTerrainSetSeed(sim->world_seed);
     const CcSettlement *place = CcSimSettlement(sim, sim->player.location_id);
     if (place == NULL) return;
-    face_glyph_count = 0;
-    Camera3D camera = StreetCamera(agent->position, clock, true,
+    Camera3D base_camera = CcLocalStreetCameraInternal(
+        agent, clock, true, target.texture.height);
+    Camera3D camera = CombatCamera(base_camera, agent, course, clock, true,
                                    target.texture.height);
+    const StreetCameraShot *camera_shot = StreetCameraShotAt(
+        street_camera_rig.shot);
+    ArtComposition street_art = camera_shot->art;
+    street_art.light_profile = StreetLightProfile(
+        place, street_art.light_profile);
+    street_art.focal_point.y += CcLocalTerrainHeightAt(
+        street_art.focal_point.x, street_art.focal_point.z);
+    Color background = ArtLightBackground(street_art.light_profile);
+    SetFaceRenderContext(camera, target.texture.width, target.texture.height);
     Vector3 scenery_focus = camera.target;
     Color kingdom = KingdomColor3D(sim, place->kingdom_id);
     BeginTextureMode(target);
-    ClearBackground((Color){10, 24, 30, 255});
+    ClearBackground(background);
     BeginMode3D(camera);
-    BeginWorldLighting(camera, (Color){10, 24, 30, 255});
+    BeginWorldLighting(camera, &street_art);
 
     DrawExteriorTerrain(place, scenery_focus);
     for (int32_t i = 0; i < (int32_t)(sizeof(STREET_PLATFORMS) /
                                       sizeof(STREET_PLATFORMS[0])); ++i) {
         const NavPlatform *platform = &STREET_PLATFORMS[i];
-        Rectangle footprint = {platform->x, platform->z,
-                               platform->width, platform->depth};
-        if (!SceneryFootprintVisible(footprint, scenery_focus)) continue;
         Color color = CoursePlatformColor(platform->style);
+        float base = PlatformBaseHeight(platform);
+        float top = PlatformTopHeight(platform);
         DrawBox((Vector3){platform->x + platform->width * 0.5f,
-                          platform->height * 0.5f,
+                          base + platform->height * 0.5f,
                           platform->z + platform->depth * 0.5f},
                 (Vector3){fmaxf(0.10f, platform->width - 0.10f),
                           platform->height,
                           fmaxf(0.10f, platform->depth - 0.10f)}, color);
         DrawBox((Vector3){platform->x + platform->width * 0.5f,
-                          platform->height + 0.025f,
+                          top + 0.025f,
                           platform->z + platform->depth * 0.5f},
                 (Vector3){fmaxf(0.10f, platform->width - 0.04f), 0.05f,
                           fmaxf(0.10f, platform->depth - 0.04f)},
                 i == 0 ? (Color){124, 145, 131, 255} :
                          Fade(WORLD_GOLD, 0.70f));
     }
-    if (SceneryFootprintVisible((Rectangle){8.8f, 0.7f, 6.2f, 10.2f},
-                                 scenery_focus)) {
-        DrawObstacleCourse();
-    }
+    DrawObstacleCourse();
     DrawAgentPath(agent, false);
-    DrawWorldBuildings(kingdom, scenery_focus);
-    if (SceneryFootprintVisible(WORLD_BUILDINGS[2].footprint,
-                                 scenery_focus)) {
+    Vector3 foreground_reveal_world = {
+        agent->position.x, agent->position.y + 1.05f, agent->position.z,
+    };
+    Vector2 foreground_reveal_center = GetWorldToScreenEx(
+        foreground_reveal_world,
+        camera, target.texture.width, target.texture.height);
+    DrawWorldBuildings(kingdom, scenery_focus, camera,
+                       foreground_reveal_world, foreground_reveal_center,
+                       target.texture.width, target.texture.height, clock);
+    {
+        float reveal_cut_height = foreground_reveal_world.y - 0.30f;
+        SetWorldForegroundReveal(world_building_reveals[2].amount,
+                                 reveal_cut_height);
         (void)DrawAuthoredMarket(place);
+        SetWorldForegroundReveal(0.0f, reveal_cut_height);
     }
     DrawCastle(kingdom, scenery_focus);
     if (SceneryFootprintVisible(CARRIAGE_FOOTPRINT, scenery_focus)) {
@@ -9977,7 +14177,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                             scenery_focus)) {
         DrawNotice3D(sim);
     }
-    DrawWorldTrees(scenery_focus);
+    DrawWorldTrees(scenery_focus, kingdom);
     DrawRoomLandmarks(place, kingdom, scenery_focus);
     if (SceneryPointVisible(47.35f, 31.05f, scenery_focus)) {
         DrawJourneyAftermath3D(sim, place);
@@ -9986,8 +14186,10 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     int32_t crates = place->stock[CC_GOOD_FOOD] / 12;
     if (crates > 4) crates = 4;
     for (int32_t i = 0; i < crates; ++i) {
-        DrawBox((Vector3){44.40f + (float)(i % 2) * 0.72f, 0.30f,
-                          26.75f + (float)(i / 2) * 0.72f},
+        const NavPlatform *crate = &STREET_CRATE_PLATFORMS[i];
+        DrawBox((Vector3){crate->x + crate->width * 0.5f,
+                          PlatformBaseHeight(crate) + crate->height * 0.5f,
+                          crate->z + crate->depth * 0.5f},
                 (Vector3){0.62f, 0.60f, 0.62f},
                 (Color){177, 116, 55, 255});
     }
@@ -9998,25 +14200,25 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     }
 
     DrawNpcFigure3D(
-        (Vector3){STREET_PEOPLE[0].x, 0.0f, STREET_PEOPLE[0].y},
+        TerrainWorldPoint(STREET_PEOPLE[0].x, STREET_PEOPLE[0].y),
         0.96f, -0.55f, UINT32_C(0x73747201), CC_NPC_ROLE_MERCHANT,
         (Color){223, 151, 68, 255}, clock * 1.2f, CC_TRAVERSAL_IDLE);
     DrawNpcFigure3D(
-        (Vector3){STREET_PEOPLE[1].x, 0.0f, STREET_PEOPLE[1].y},
+        TerrainWorldPoint(STREET_PEOPLE[1].x, STREET_PEOPLE[1].y),
         1.02f, 1.70f, UINT32_C(0x73747202), CC_NPC_ROLE_GUARD,
         kingdom, clock + 1.0f, CC_TRAVERSAL_IDLE);
     DrawNpcFigure3D(
-        (Vector3){STREET_PEOPLE[2].x, 0.0f, STREET_PEOPLE[2].y},
+        TerrainWorldPoint(STREET_PEOPLE[2].x, STREET_PEOPLE[2].y),
         0.92f, 0.35f, UINT32_C(0x73747203), CC_NPC_ROLE_LABORER,
         (Color){97, 154, 137, 255}, clock + 2.0f, CC_TRAVERSAL_IDLE);
     DrawNpcFigure3D(
-        (Vector3){STREET_PEOPLE[3].x, 0.0f, STREET_PEOPLE[3].y},
+        TerrainWorldPoint(STREET_PEOPLE[3].x, STREET_PEOPLE[3].y),
         0.88f, 2.40f, UINT32_C(0x73747204), CC_NPC_ROLE_HEALER,
         (Color){168, 112, 128, 255}, clock * 0.8f + 3.0f,
         CC_TRAVERSAL_IDLE);
     bool hungry_crowd = place->hunger >= 30;
     DrawNpcFigure3D(
-        (Vector3){STREET_PEOPLE[4].x, 0.0f, STREET_PEOPLE[4].y},
+        TerrainWorldPoint(STREET_PEOPLE[4].x, STREET_PEOPLE[4].y),
         0.82f, -0.40f, UINT32_C(0x73747205),
         hungry_crowd ? CC_NPC_ROLE_REFUGEE : CC_NPC_ROLE_TRAVELLER,
         hungry_crowd ? WORLD_DANGER : kingdom, clock * 0.6f,
@@ -10024,19 +14226,19 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     bool underworld_present = HasSmugglerRoad(sim, place->id) ||
                               place->security < 50;
     DrawNpcFigure3D(
-        (Vector3){STREET_PEOPLE[5].x, 0.0f, STREET_PEOPLE[5].y},
+        TerrainWorldPoint(STREET_PEOPLE[5].x, STREET_PEOPLE[5].y),
         0.88f, 2.75f, UINT32_C(0x73747206),
         underworld_present ? CC_NPC_ROLE_SCOUT : CC_NPC_ROLE_TRAVELLER,
         underworld_present ? WORLD_VIOLET : kingdom, clock * 0.7f,
         CC_TRAVERSAL_IDLE);
     if (sim->resolved_journey_outcome != CC_JOURNEY_OUTCOME_NONE &&
         sim->journey.destination_id == place->id) {
-        DrawNpcFigure3D((Vector3){46.80f, 0.0f, 31.15f}, 0.86f, -1.10f,
+        DrawNpcFigure3D(TerrainWorldPoint(46.80f, 31.15f), 0.86f, -1.10f,
                         UINT32_C(0x61667401), CC_NPC_ROLE_GUARD,
                         WORLD_TEAL, clock * 0.64f + 1.4f,
                         CC_TRAVERSAL_IDLE);
         if (sim->resolved_journey_outcome == CC_JOURNEY_OUTCOME_COMBAT) {
-            DrawNpcFigure3D((Vector3){47.65f, 0.0f, 30.55f}, 0.82f,
+            DrawNpcFigure3D(TerrainWorldPoint(47.65f, 30.55f), 0.82f,
                             -0.85f, UINT32_C(0x61667402),
                             CC_NPC_ROLE_HEALER, WORLD_GOLD,
                             clock * 0.58f + 2.1f, CC_TRAVERSAL_IDLE);
@@ -10052,8 +14254,6 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     DrawCombatSword(agent);
     DrawCombatSkillTell(agent);
     DrawCombatImpact(agent);
-    DrawQueuedFaceGlyphs(camera, target.texture.width,
-                         target.texture.height);
     EndWorldLighting();
     EndMode3D();
     EndTextureMode();
@@ -10079,23 +14279,42 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     labels[count++] = (WorldLabel){{agent->position.x,
                                     agent->position.y + 2.50f,
                                     agent->position.z}, "YOU", WORLD_TEAL};
-    labels[count++] = (WorldLabel){{50.0f, 4.75f, 21.0f},
+    labels[count++] = (WorldLabel){{50.0f,
+                                    TerrainFootprintHeight(
+                                        WORLD_BUILDINGS[2].footprint) + 4.75f,
+                                    21.0f},
                                    "MARKET HALL", WORLD_GOLD};
-    labels[count++] = (WorldLabel){{36.80f, 2.28f, 31.70f},
+    labels[count++] = (WorldLabel){{36.80f,
+                                    TerrainFootprintHeight(
+                                        CARRIAGE_FOOTPRINT) + 2.28f,
+                                    31.70f},
                                    "CROWNLESS CARRIAGE", WORLD_GOLD};
-    labels[count++] = (WorldLabel){{CC_LOCAL_NOTICE_X, 1.82f,
+    labels[count++] = (WorldLabel){{CC_LOCAL_NOTICE_X,
+                                    CcLocalTerrainHeightAt(
+                                        CC_LOCAL_NOTICE_X,
+                                        CC_LOCAL_NOTICE_Z) + 1.82f,
                                     CC_LOCAL_NOTICE_Z},
                                    "SITUATIONS", WORLD_INK};
-    labels[count++] = (WorldLabel){{11.80f, 2.05f, 0.82f},
+    labels[count++] = (WorldLabel){{11.80f,
+                                    CcLocalTerrainHeightAt(11.80f, 0.82f) +
+                                        2.05f,
+                                    0.82f},
                                    "WAYFARER TRIALS", WORLD_GOLD};
-    labels[count++] = (WorldLabel){{11.28f, 1.12f, 9.72f},
+    labels[count++] = (WorldLabel){{11.28f,
+                                    CcLocalTerrainHeightAt(11.28f, 9.72f) +
+                                        1.12f,
+                                    9.72f},
                                    "BUOYANCY TRENCH", WORLD_TEAL};
-    labels[count++] = (WorldLabel){{78.50f, 12.10f, 17.50f},
+    labels[count++] = (WorldLabel){{78.50f,
+                                    CcLocalTerrainHeightAt(78.50f, 17.50f) +
+                                        12.10f,
+                                    17.50f},
                                    "GREYWARD KEEP", kingdom};
     if (sim->resolved_journey_outcome != CC_JOURNEY_OUTCOME_NONE &&
         sim->journey.destination_id == place->id) {
         labels[count++] = (WorldLabel){
-            {47.35f, 2.05f, 31.05f},
+            {47.35f, CcLocalTerrainHeightAt(47.35f, 31.05f) + 2.05f,
+             31.05f},
             sim->resolved_journey_outcome == CC_JOURNEY_OUTCOME_COMBAT ?
                 "ROAD GUARD MUSTER" : "COLLECTORS' TOLL MARK",
             sim->resolved_journey_outcome == CC_JOURNEY_OUTCOME_COMBAT ?
@@ -10116,7 +14335,9 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         }
     }
     if (dungeon != NULL) {
-        labels[count++] = (WorldLabel){{CC_LOCAL_DUNGEON_X, 3.38f,
+        labels[count++] = (WorldLabel){{CC_LOCAL_DUNGEON_X,
+                                        TerrainFootprintHeight(
+                                            DUNGEON_FOOTPRINT) + 3.38f,
                                         CC_LOCAL_DUNGEON_Z - 0.70f},
                                        CcDungeonStateName(dungeon->state), WORLD_VIOLET};
     }
@@ -10181,12 +14402,14 @@ void CcLocalDrawMarket3D(const CcSim *sim, const CcLocalAgent *agent, float cloc
 {
     const CcSettlement *place = CcSimSettlement(sim, sim->player.location_id);
     if (place == NULL) return;
-    face_glyph_count = 0;
     Camera3D camera = LocalCamera(true, agent->position);
+    Color background = ArtLightBackground(
+        INTERIOR_ART_COMPOSITION.light_profile);
+    SetFaceRenderContext(camera, target.texture.width, target.texture.height);
     BeginTextureMode(target);
-    ClearBackground((Color){31, 23, 25, 255});
+    ClearBackground(background);
     BeginMode3D(camera);
-    BeginWorldLighting(camera, (Color){31, 23, 25, 255});
+    BeginWorldLighting(camera, &INTERIOR_ART_COMPOSITION);
     /* Six broad floor flags replace the old 63-box checkerboard. Their quiet
        value rhythm leaves the actor silhouettes and goods as the room detail. */
     const Color floor_dark = {88, 67, 57, 255};
@@ -10208,9 +14431,25 @@ void CcLocalDrawMarket3D(const CcSim *sim, const CcLocalAgent *agent, float cloc
             (Color){80, 53, 48, 255});
     DrawBox((Vector3){0.25f, 1.30f, 3.50f}, (Vector3){0.50f, 2.60f, 7.0f},
             (Color){67, 48, 47, 255});
+    Color interior_timber = (Color){55, 38, 37, 255};
+    Color interior_trim = (Color){116, 76, 48, 255};
     DrawBox((Vector3){4.50f, 0.54f, 0.515f},
             (Vector3){8.86f, 0.10f, 0.045f},
-            (Color){48, 37, 39, 255});
+            interior_timber);
+    DrawBox((Vector3){4.50f, 2.39f, 0.525f},
+            (Vector3){8.86f, 0.13f, 0.065f}, interior_timber);
+    for (int32_t bay = 0; bay < 5; ++bay) {
+        float post_x = 0.82f + (float)bay * 1.92f;
+        DrawBox((Vector3){post_x, 1.44f, 0.525f},
+                (Vector3){0.14f, 1.82f, 0.07f}, interior_timber);
+    }
+    DrawBox((Vector3){0.515f, 2.39f, 3.50f},
+            (Vector3){0.065f, 0.13f, 6.86f}, interior_timber);
+    for (int32_t bay = 0; bay < 3; ++bay) {
+        float post_z = 1.02f + (float)bay * 2.30f;
+        DrawBox((Vector3){0.525f, 1.44f, post_z},
+                (Vector3){0.07f, 1.82f, 0.14f}, interior_timber);
+    }
     DrawBox((Vector3){6.55f, 1.42f, 0.525f},
             (Vector3){2.05f, 1.56f, 0.055f},
             (Color){47, 70, 69, 255});
@@ -10224,6 +14463,25 @@ void CcLocalDrawMarket3D(const CcSim *sim, const CcLocalAgent *agent, float cloc
             (Vector3){MARKET_COUNTER_FOOTPRINT.width, 0.92f,
                       MARKET_COUNTER_FOOTPRINT.height},
             (Color){139, 85, 49, 255});
+    for (int32_t panel = 0; panel < 3; ++panel) {
+        float panel_x = MARKET_COUNTER_FOOTPRINT.x + 0.38f +
+                        (float)panel * 0.66f;
+        DrawBox((Vector3){panel_x, 0.47f,
+                          MARKET_COUNTER_FOOTPRINT.y +
+                              MARKET_COUNTER_FOOTPRINT.height + 0.035f},
+                (Vector3){0.50f, 0.55f, 0.055f},
+                panel == 1 ? (Color){85, 53, 43, 255} :
+                             (Color){100, 62, 44, 255});
+    }
+    for (int32_t end = 0; end < 2; ++end) {
+        float post_x = MARKET_COUNTER_FOOTPRINT.x +
+                       (end == 0 ? 0.10f :
+                                   MARKET_COUNTER_FOOTPRINT.width - 0.10f);
+        DrawBox((Vector3){post_x, 0.48f,
+                          MARKET_COUNTER_FOOTPRINT.y +
+                              MARKET_COUNTER_FOOTPRINT.height + 0.065f},
+                (Vector3){0.16f, 0.78f, 0.12f}, interior_timber);
+    }
     DrawBox((Vector3){MARKET_COUNTER_FOOTPRINT.x +
                       MARKET_COUNTER_FOOTPRINT.width * 0.5f,
                       0.94f,
@@ -10232,35 +14490,107 @@ void CcLocalDrawMarket3D(const CcSim *sim, const CcLocalAgent *agent, float cloc
             (Vector3){MARKET_COUNTER_FOOTPRINT.width + 0.12f, 0.10f,
                       MARKET_COUNTER_FOOTPRINT.height + 0.12f},
             (Color){181, 119, 62, 255});
-    DrawBox((Vector3){MARKET_SHELF_FOOTPRINT.x + MARKET_SHELF_FOOTPRINT.width * 0.5f,
-                      0.95f,
-                      MARKET_SHELF_FOOTPRINT.y + MARKET_SHELF_FOOTPRINT.height * 0.5f},
-            (Vector3){MARKET_SHELF_FOOTPRINT.width, 1.90f,
-                      MARKET_SHELF_FOOTPRINT.height},
-            (Color){103, 68, 49, 255});
-    DrawBox((Vector3){MARKET_SHELF_FOOTPRINT.x +
-                      MARKET_SHELF_FOOTPRINT.width * 0.5f,
-                      1.92f,
-                      MARKET_SHELF_FOOTPRINT.y +
-                      MARKET_SHELF_FOOTPRINT.height * 0.5f},
-            (Vector3){MARKET_SHELF_FOOTPRINT.width + 0.10f, 0.09f,
-                      MARKET_SHELF_FOOTPRINT.height + 0.10f},
-            (Color){62, 43, 40, 255});
+    /* A real open shelf replaces the former solid obstacle block. The same
+       collision footprint remains authoritative, but the visible model now
+       has legs, boards, gaps, and stock silhouettes. */
+    float shelf_x = MARKET_SHELF_FOOTPRINT.x +
+                    MARKET_SHELF_FOOTPRINT.width * 0.5f;
+    float shelf_z = MARKET_SHELF_FOOTPRINT.y +
+                    MARKET_SHELF_FOOTPRINT.height * 0.5f;
+    for (int32_t end = 0; end < 2; ++end) {
+        float post_z = MARKET_SHELF_FOOTPRINT.y +
+                       (end == 0 ? 0.11f :
+                                   MARKET_SHELF_FOOTPRINT.height - 0.11f);
+        for (int32_t side = -1; side <= 1; side += 2) {
+            DrawBox((Vector3){shelf_x + (float)side * 0.25f, 0.96f, post_z},
+                    (Vector3){0.13f, 1.92f, 0.13f}, interior_timber);
+        }
+    }
+    for (int32_t shelf = 0; shelf < 4; ++shelf) {
+        float shelf_y = 0.18f + (float)shelf * 0.55f;
+        DrawBox((Vector3){shelf_x, shelf_y, shelf_z},
+                (Vector3){MARKET_SHELF_FOOTPRINT.width + 0.08f, 0.10f,
+                          MARKET_SHELF_FOOTPRINT.height + 0.06f},
+                shelf == 3 ? interior_trim : (Color){102, 67, 47, 255});
+    }
     DrawBox((Vector3){1.55f, 1.05f, 6.54f}, (Vector3){0.82f, 2.10f, 0.08f},
             (Color){37, 28, 30, 255});
+
+    /* Warm wall lamps shape the room into foreground, trade counter, and
+       stock-wall zones without adding a second lighting system. */
+    const float lamp_x[] = {3.05f, 8.10f};
+    for (int32_t lamp = 0; lamp < 2; ++lamp) {
+        DrawBox((Vector3){lamp_x[lamp], 1.76f, 0.62f},
+                (Vector3){0.08f, 0.58f, 0.08f}, interior_timber);
+        DrawBox((Vector3){lamp_x[lamp], 2.04f, 0.73f},
+                (Vector3){0.34f, 0.08f, 0.28f}, interior_trim);
+        DrawSmallSphere((Vector3){lamp_x[lamp], 1.78f, 0.76f},
+                        0.14f, (Color){224, 160, 67, 255});
+    }
+    DrawBox((Vector3){4.48f, 0.032f, 3.88f},
+            (Vector3){1.64f, 0.035f, 3.20f},
+            (Color){48, 72, 68, 255});
+    DrawBox((Vector3){4.48f, 0.050f, 2.36f},
+            (Vector3){1.84f, 0.045f, 0.11f}, WORLD_GOLD);
+
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
         float stock = fminf((float)place->stock[good] / 54.0f, 1.0f);
         if (stock <= 0.01f) continue;
-        Color color = good == CC_GOOD_FOOD ? WORLD_GOLD :
+        Color color = good == CC_GOOD_FOOD ? (Color){158, 116, 62, 255} :
                       good == CC_GOOD_MATERIAL ?
                         (Color){170, 139, 112, 255} : WORLD_TEAL;
-        float height = 0.22f + stock * 0.52f;
-        DrawBox((Vector3){2.55f + (float)good * 1.08f, height * 0.5f,
-                          1.18f},
-                (Vector3){0.72f, height, 0.72f}, color);
-        DrawBox((Vector3){2.55f + (float)good * 1.08f, height + 0.035f,
-                          1.18f},
-                (Vector3){0.78f, 0.07f, 0.78f}, ShadeColor(color, 0.72f));
+        float display_x = 2.55f + (float)good * 1.08f;
+        if (good == CC_GOOD_FOOD) {
+            int32_t sacks = stock > 0.66f ? 3 : stock > 0.30f ? 2 : 1;
+            for (int32_t sack = 0; sack < sacks; ++sack) {
+                float side = (float)sack - (float)(sacks - 1) * 0.5f;
+                DrawCharacterEllipsoid(
+                    (Vector3){display_x + side * 0.25f,
+                              0.22f + (sack == 2 ? 0.14f : 0.0f), 1.18f},
+                    (Vector3){0.18f, 0.29f, 0.17f}, color);
+            }
+            DrawBox((Vector3){display_x, 0.55f, 1.18f},
+                    (Vector3){0.48f, 0.07f, 0.28f},
+                    ShadeColor(color, 0.76f));
+        } else if (good == CC_GOOD_MATERIAL) {
+            int32_t planks = stock > 0.60f ? 4 : stock > 0.28f ? 3 : 2;
+            for (int32_t plank = 0; plank < planks; ++plank) {
+                DrawBox((Vector3){display_x,
+                                  0.10f + (float)plank * 0.15f,
+                                  1.18f + (float)(plank & 1) * 0.06f},
+                        (Vector3){0.82f, 0.11f, 0.24f},
+                        ShadeColor(color,
+                                   0.88f + (float)plank * 0.04f));
+            }
+        } else {
+            int32_t tools = stock > 0.55f ? 3 : stock > 0.20f ? 2 : 1;
+            DrawBox((Vector3){display_x, 0.28f, 1.18f},
+                    (Vector3){0.76f, 0.56f, 0.16f},
+                    ShadeColor(interior_timber, 0.86f));
+            for (int32_t tool = 0; tool < tools; ++tool) {
+                float tool_x = display_x - 0.24f + (float)tool * 0.24f;
+                DrawCylinder((Vector3){tool_x, 0.18f, 1.08f},
+                             0.045f, 0.045f, 0.72f, 7,
+                             (Color){99, 67, 45, 255});
+                DrawBox((Vector3){tool_x, 0.88f, 1.08f},
+                        (Vector3){0.24f, 0.12f, 0.13f}, color);
+            }
+        }
+    }
+    for (int32_t shelf_good = 0; shelf_good < 5; ++shelf_good) {
+        float y = 0.42f + (float)(shelf_good % 3) * 0.55f;
+        float z = MARKET_SHELF_FOOTPRINT.y + 0.48f +
+                  (float)shelf_good * 0.58f;
+        Color stock_color = shelf_good % 3 == 0 ? WORLD_GOLD :
+                            shelf_good % 3 == 1 ?
+                                (Color){136, 100, 67, 255} : WORLD_TEAL;
+        DrawBox((Vector3){MARKET_SHELF_FOOTPRINT.x +
+                              MARKET_SHELF_FOOTPRINT.width + 0.05f,
+                          y, z},
+                (Vector3){0.42f,
+                          0.25f + (float)(shelf_good & 1) * 0.12f,
+                          0.30f},
+                ShadeColor(stock_color, 0.82f));
     }
     DrawNpcFigure3D(
         (Vector3){MARKET_PEOPLE[0].x, 0.0f, MARKET_PEOPLE[0].y},
@@ -10269,8 +14599,6 @@ void CcLocalDrawMarket3D(const CcSim *sim, const CcLocalAgent *agent, float cloc
     DrawRobotShell(agent);
     DrawCombatSword(agent);
     DrawCombatSkillTell(agent);
-    DrawQueuedFaceGlyphs(camera, target.texture.width,
-                         target.texture.height);
     EndWorldLighting();
     EndMode3D();
     EndTextureMode();

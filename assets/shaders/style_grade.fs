@@ -4,16 +4,19 @@ in vec2 fragTexCoord;
 in vec4 fragColor;
 
 uniform sampler2D texture0;
+uniform sampler2D paletteLut;
 uniform vec4 colDiffuse;
-uniform vec2 resolution;
 
 out vec4 finalColor;
 
-float hash21(vec2 point)
+vec3 nearestPaletteColor(vec3 color)
 {
-    point = fract(point * vec2(123.34, 456.21));
-    point += dot(point, point + 45.32);
-    return fract(point.x * point.y);
+    const float lookupMaximum = 63.0;
+    ivec3 cell = ivec3(floor(clamp(color, 0.0, 1.0) *
+                             lookupMaximum + 0.5));
+    ivec2 address = ivec2(cell.r + (cell.b % 8) * 64,
+                          cell.g + (cell.b / 8) * 64);
+    return texelFetch(paletteLut, address, 0).rgb;
 }
 
 void main()
@@ -21,29 +24,35 @@ void main()
     /* Spatial pixelation is structural: the world is rendered into a true
        half-resolution target and enlarged with nearest-neighbor sampling.
        This pass only grades those already-stable art pixels. */
-    vec2 artPixel = floor(fragTexCoord * resolution);
     vec4 source = texture(texture0, fragTexCoord) * fragColor * colDiffuse;
     vec3 color = source.rgb;
     float luminance = dot(color, vec3(0.2126, 0.7152, 0.0722));
 
-    /* Restrained pigments, warmer light, and cool shadows make code-drawn
-       geometry and authored glTF materials belong to one handcrafted world. */
-    color = mix(vec3(luminance), color, 0.92);
-    color *= vec3(1.025, 1.005, 0.980);
-    color = (color - 0.5) * 1.035 + 0.5;
-    color *= 0.99;
+    /* Keep shadows restrained while letting mid-value costume and faction
+       pigments carry the frame. A gentle contrast curve adds depth without
+       crushing the inked silhouettes. */
+    float pigment = mix(0.86, 0.98, smoothstep(0.14, 0.62, luminance));
+    color = mix(vec3(luminance), color, pigment);
+    color = (color - 0.46) * 1.055 + 0.46;
+    color = max(color, vec3(0.0));
 
-    /* A restrained cool lift keeps low-value grass, slate, and timber
-       distinct without washing out the warm key light. */
-    float shadowWeight = 1.0 - smoothstep(0.16, 0.52, luminance);
-    color += vec3(0.010, 0.017, 0.020) * shadowWeight;
+    /* Split-toning binds procedural shapes and authored glTF assets: cool
+       air opens low values and warm light gives the brightest planes a
+       parchment-gold shoulder instead of clipping toward white. */
+    float shadowWeight = 1.0 - smoothstep(0.12, 0.50, luminance);
+    float highlightWeight = smoothstep(0.48, 0.88, luminance);
+    color += vec3(0.006, 0.015, 0.020) * shadowWeight;
+    color *= mix(vec3(1.0), vec3(1.035, 1.012, 0.958), highlightWeight);
+    color = color / (vec3(0.965) + color * 0.055);
 
     vec2 centered = fragTexCoord * 2.0 - 1.0;
     float vignette = 1.0 - smoothstep(0.38, 1.28,
                                      dot(centered, centered));
-    color *= mix(0.93, 1.015, vignette);
+    color *= mix(0.915, 1.018, vignette);
 
-    float grain = hash21(artPixel) - 0.5;
-    color += grain * 0.007;
-    finalColor = vec4(clamp(color, 0.0, 1.0), source.a);
+    /* Fog has already been applied by the material shaders. Grading and the
+       vignette happen above; this shared lookup is the final color operation
+       so no blend or random grain can create off-palette pixels afterward. */
+    color = nearestPaletteColor(clamp(color, 0.0, 1.0));
+    finalColor = vec4(color, source.a);
 }

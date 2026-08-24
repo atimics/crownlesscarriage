@@ -16,9 +16,16 @@ from dataclasses import asdict, dataclass, replace
 import json
 import math
 from pathlib import Path
+import sys
 
 import bpy
 from mathutils import Vector
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+import paint_channels
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -26,7 +33,7 @@ BLEND_PATH = ROOT / "assets" / "blender" / "crownless_npc_archetypes.blend"
 EXPORT_DIR = ROOT / "assets" / "exports" / "npc"
 PREVIEW_PATH = ROOT / "assets" / "previews" / "npc" / "npc_archetype_sheet.png"
 MANIFEST_PATH = ROOT / "assets" / "npc_archetype_manifest.json"
-LIBRARY_VERSION = "0.3.0"
+LIBRARY_VERSION = "0.4.0"
 MOTION_POSES = (
     "idle",
     "contact_l", "down_l", "passing_l", "up_l",
@@ -424,6 +431,13 @@ def build_head(spec: Archetype, collection: bpy.types.Collection) -> None:
                 "skin", collection, spec, "neck")
     add_ellipsoid(f"GEO_{spec.role}_head", tuple(center),
                   (width, depth, height), "skin", collection, spec, "head")
+    # A narrower, slightly forward jaw breaks the toy-ball head silhouette
+    # without baking facial identity into the role mesh.  Eyes, scars, age,
+    # and expression remain exclusively owned by the shared face recipe.
+    add_ellipsoid(f"GEO_{spec.role}_jaw",
+                  (0.0, -0.034, center.z - height * 0.52),
+                  (width * 0.80, depth * 0.90, height * 0.48), "skin",
+                  collection, spec, "jaw", subdivisions=1)
     # Eyes, brows, nose, mouth, beard, age marks, and scars are drawn from the
     # shared runtime face recipe so the UI portrait cannot drift from the
     # gameplay head.
@@ -610,15 +624,8 @@ def consolidate(collection: bpy.types.Collection,
                  for index, name in enumerate(MATERIAL_ORDER)}
     polygon_materials = [canonical[old_names[polygon.material_index]]
                          for polygon in joined.data.polygons]
-    palette_index = joined.data.color_attributes.new(
-        name="COLOR_0", type="FLOAT_COLOR", domain="CORNER")
-    for polygon, material_index in zip(joined.data.polygons,
-                                       polygon_materials):
-        encoded = (float(material_index) + 0.5) / float(len(MATERIAL_ORDER))
-        for loop_index in polygon.loop_indices:
-            palette_index.data[loop_index].color = (
-                encoded, encoded, encoded, 1.0)
-    joined.data.color_attributes.active_color = palette_index
+    paint_channels.add_indexed_paint_channels(
+        joined, polygon_materials, MATERIAL_ORDER)
     joined.data.materials.clear()
     if INDEXED_MATERIAL is None:
         raise RuntimeError("indexed NPC material was not initialized")
@@ -628,7 +635,7 @@ def consolidate(collection: bpy.types.Collection,
     joined.name = f"GEO_{spec.asset_id}"
     joined.data.name = joined.name
     tag(joined, spec, "assembled_archetype")
-    joined["cc_material_contract"] = "vertex_color_palette_index_0_8"
+    joined["cc_material_contract"] = "COLOR_0:palette,value,fold"
     return joined
 
 
@@ -761,7 +768,7 @@ def build() -> None:
         "generation": "offline_curated_procedural_geometry",
         "runtime_strategy": "stepped static pose GLBs + deterministic indexed palette and scale",
         "coordinate_system": "glTF +Y up, +Z forward",
-        "material_contract": "single indexed material; COLOR_0 selects a nine-color palette",
+        "material_contract": "single indexed material; COLOR_0 stores palette, value, and fold",
         "material_order": list(MATERIAL_ORDER),
         "archetypes": manifest_entries,
     }

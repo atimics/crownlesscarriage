@@ -3,6 +3,18 @@
 
 #include "client/cc_local3d.h"
 
+typedef enum CcLocalFaceLodInternal {
+    CC_LOCAL_FACE_LOD_SILHOUETTE,
+    CC_LOCAL_FACE_LOD_READABLE,
+    CC_LOCAL_FACE_LOD_CLOSE
+} CcLocalFaceLodInternal;
+
+typedef enum CcLocalFaceViewInternal {
+    CC_LOCAL_FACE_VIEW_FRONT,
+    CC_LOCAL_FACE_VIEW_THREE_QUARTER,
+    CC_LOCAL_FACE_VIEW_PROFILE
+} CcLocalFaceViewInternal;
+
 void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
                                    bool market_interior);
 void CcLocalCourseFixedStepInternal(CcLocalCourse *course,
@@ -10,6 +22,18 @@ void CcLocalCourseFixedStepInternal(CcLocalCourse *course,
                                     const CcSim *sim, float delta_time);
 void CcLocalAgentInterpolateInternal(CcLocalAgent *agent, float amount);
 void CcLocalCourseInterpolateInternal(CcLocalCourse *course, float amount);
+void CcLocalSetStreetMarketCratesInternal(int32_t count);
+bool CcLocalProbePhysicsSphereInternal(
+    CcLocalSceneKind scene, Vector3 previous, Vector3 proposed, float radius,
+    Vector3 *corrected, Vector3 *normal);
+
+Camera3D CcLocalStreetCameraInternal(const CcLocalAgent *agent, float clock,
+                                     bool advance, int32_t art_height);
+
+CcLocalFaceLodInternal CcLocalFaceLodForProjectedHeightInternal(
+    float projected_height);
+CcLocalFaceViewInternal CcLocalFaceViewForFrontAmountInternal(
+    float front_amount);
 
 void CcLocalRendererRecordBiped(bool high_detail);
 void CcLocalRendererRecordSkinUpdate(int32_t mesh_count);

@@ -15,10 +15,22 @@ static int32_t AccumulateLocalWorldTime(double *accumulator,
     return steps > maximum_steps ? maximum_steps : steps;
 }
 
+static void RefreshStreetMarketCrates(const CcSim *sim)
+{
+    int32_t crates = 0;
+    if (sim != NULL) {
+        const CcSettlement *place = CcSimSettlement(
+            sim, sim->player.location_id);
+        if (place != NULL) crates = place->stock[CC_GOOD_FOOD] / 12;
+    }
+    CcLocalSetStreetMarketCratesInternal(crates);
+}
+
 void CcLocalCourseUpdate(CcLocalCourse *course, CcLocalAgent *player,
                          const CcSim *sim, float delta_time)
 {
     if (course == NULL) return;
+    RefreshStreetMarketCrates(sim);
     const double fixed_step = 1.0 / 60.0;
     int32_t steps = AccumulateLocalWorldTime(
         &course->world_simulation_accumulator, delta_time);
@@ -38,6 +50,7 @@ int32_t CcLocalWorldUpdate(CcLocalCourse *course, CcLocalAgent *player,
                            const CcSim *sim, float delta_time,
                            bool market_interior, bool advance_course)
 {
+    RefreshStreetMarketCrates(sim);
     if (course == NULL) {
         if (player != NULL) {
             CcLocalAgentUpdate(player, delta_time, market_interior);

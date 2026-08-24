@@ -1,9 +1,9 @@
 {
-  "library_version": "0.1.0",
+  "library_version": "0.2.0",
   "generation": "offline procedural rigid character modules",
   "runtime_strategy": "bone-frame instancing without skins or animations",
   "coordinate_system": "glTF +Y up, +Z forward",
-  "material_contract": "single indexed material; COLOR_0 selects a nine-color palette",
+  "material_contract": "single indexed material; COLOR_0 stores palette, value, and fold",
   "modules": [
     {
       "id": "npc_module_torso_v01",

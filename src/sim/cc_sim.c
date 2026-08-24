@@ -69,6 +69,12 @@ static void CopyName(char destination[CC_NAME_CAPACITY], const char *name)
     (void)snprintf(destination, CC_NAME_CAPACITY, "%s", name);
 }
 
+static uint32_t ServiceBit(CcServiceKind service)
+{
+    if (service < 0 || service >= CC_SERVICE_COUNT) return 0U;
+    return UINT32_C(1) << (uint32_t)service;
+}
+
 static void GeneratePlaceName(CcSim *sim, char destination[CC_NAME_CAPACITY],
                               CcSettlementFunction function)
 {
@@ -142,6 +148,106 @@ const char *CcSettlementFunctionName(CcSettlementFunction function)
     return "Settlement";
 }
 
+const char *CcSettlementSizeName(CcSettlementSize size)
+{
+    switch (size) {
+        case CC_SETTLEMENT_HAMLET: return "Hamlet";
+        case CC_SETTLEMENT_VILLAGE: return "Village";
+        case CC_SETTLEMENT_TOWN: return "Town";
+        case CC_SETTLEMENT_CITY: return "City";
+        case CC_SETTLEMENT_CAPITAL_SIZE: return "Capital";
+    }
+    return "Settlement";
+}
+
+const char *CcServiceName(CcServiceKind service)
+{
+    switch (service) {
+        case CC_SERVICE_MARKET: return "Market";
+        case CC_SERVICE_INN: return "Inn";
+        case CC_SERVICE_GRANARY: return "Granary";
+        case CC_SERVICE_SMITHY: return "Smithy";
+        case CC_SERVICE_HEALER: return "Healer";
+        case CC_SERVICE_STABLE: return "Stable";
+        case CC_SERVICE_SHRINE: return "Shrine";
+        case CC_SERVICE_BARRACKS: return "Barracks";
+        case CC_SERVICE_CARTOGRAPHER: return "Cartographer";
+        case CC_SERVICE_GUILDHALL: return "Guildhall";
+        case CC_SERVICE_MINE: return "Mine";
+        case CC_SERVICE_FARM: return "Farm";
+        case CC_SERVICE_BLACK_MARKET: return "Black market";
+        case CC_SERVICE_DUNGEON_WARD: return "Dungeon ward";
+        case CC_SERVICE_NONE:
+        case CC_SERVICE_COUNT: break;
+    }
+    return "No service";
+}
+
+const char *CcBanditCampSizeName(CcBanditCampSize size)
+{
+    switch (size) {
+        case CC_BANDIT_HIDEOUT: return "Hideout";
+        case CC_BANDIT_CAMP: return "Camp";
+        case CC_BANDIT_WAR_CAMP: return "War camp";
+        case CC_BANDIT_OUTLAW_TOWN: return "Outlaw town";
+    }
+    return "Hideout";
+}
+
+const char *CcBanditRaidPhaseName(CcBanditRaidPhase phase)
+{
+    switch (phase) {
+        case CC_BANDIT_RAID_IDLE: return "At camp";
+        case CC_BANDIT_RAID_SCOUTING: return "Scouting";
+        case CC_BANDIT_RAID_MUSTERING: return "Mustering";
+        case CC_BANDIT_RAID_OUTBOUND: return "Raiding";
+        case CC_BANDIT_RAID_RETURNING: return "Returning";
+    }
+    return "At camp";
+}
+
+int32_t CcSettlementServiceCapacity(CcSettlementSize size)
+{
+    switch (size) {
+        case CC_SETTLEMENT_HAMLET: return 2;
+        case CC_SETTLEMENT_VILLAGE: return 4;
+        case CC_SETTLEMENT_TOWN: return 6;
+        case CC_SETTLEMENT_CITY: return 9;
+        case CC_SETTLEMENT_CAPITAL_SIZE: return 12;
+    }
+    return 0;
+}
+
+int32_t CcSettlementServiceCount(const CcSettlement *settlement)
+{
+    if (settlement == NULL) return 0;
+    int32_t count = 0;
+    for (int32_t service = 0; service < CC_SERVICE_COUNT; ++service) {
+        if ((settlement->service_mask & (UINT32_C(1) << (uint32_t)service)) != 0U) {
+            count += 1;
+        }
+    }
+    return count;
+}
+
+bool CcSettlementHasService(const CcSettlement *settlement,
+                            CcServiceKind service)
+{
+    return settlement != NULL && service >= 0 && service < CC_SERVICE_COUNT &&
+        (settlement->service_mask & (UINT32_C(1) << (uint32_t)service)) != 0U;
+}
+
+int32_t CcBanditCampServiceCapacity(CcBanditCampSize size)
+{
+    switch (size) {
+        case CC_BANDIT_HIDEOUT: return 2;
+        case CC_BANDIT_CAMP: return 4;
+        case CC_BANDIT_WAR_CAMP: return 6;
+        case CC_BANDIT_OUTLAW_TOWN: return 8;
+    }
+    return 0;
+}
+
 const char *CcDungeonStateName(CcDungeonState state)
 {
     switch (state) {
@@ -187,6 +293,10 @@ const char *CcEventKindName(CcEventKind kind)
         case CC_EVENT_ENCOUNTER_NEGOTIATED: return "ROAD BARGAIN";
         case CC_EVENT_DELAYED_ECHO: return "RETURN ECHO";
         case CC_EVENT_JOURNEY_DEPARTED: return "DEPARTURE";
+        case CC_EVENT_SERVICE_OPENED: return "NEW SERVICE";
+        case CC_EVENT_BANDIT_RAID_DEPARTED: return "RAIDERS";
+        case CC_EVENT_SETTLEMENT_RAIDED: return "RAID";
+        case CC_EVENT_BANDIT_RAID_RETURNED: return "RAIDERS RETURN";
     }
     return "EVENT";
 }
@@ -239,6 +349,82 @@ const CcRoute *CcSimRouteBetween(const CcSim *sim, CcId a, CcId b)
             (route->from_id == b && route->to_id == a)) return route;
     }
     return NULL;
+}
+
+static bool KingdomExists(const CcSim *sim, CcId id)
+{
+    if (sim == NULL || CcIdKind(id) != CC_ENTITY_KINGDOM) return false;
+    for (int32_t i = 0; i < sim->kingdom_count; ++i) {
+        if (sim->kingdoms[i].id == id) return true;
+    }
+    return false;
+}
+
+bool CcSimKingdomsAtWar(const CcSim *sim, CcId first, CcId second)
+{
+    return first != second && KingdomExists(sim, first) && KingdomExists(sim, second);
+}
+
+bool CcSimRouteCrossesWarBorder(const CcSim *sim, CcId route_id)
+{
+    const CcRoute *route = CcSimRoute(sim, route_id);
+    const CcSettlement *from = route != NULL ?
+        CcSimSettlement(sim, route->from_id) : NULL;
+    const CcSettlement *to = route != NULL ?
+        CcSimSettlement(sim, route->to_id) : NULL;
+    return from != NULL && to != NULL &&
+        CcSimKingdomsAtWar(sim, from->kingdom_id, to->kingdom_id);
+}
+
+static CcKingdom *KingdomMutable(CcSim *sim, CcId id)
+{
+    if (sim == NULL) return NULL;
+    for (int32_t i = 0; i < sim->kingdom_count; ++i) {
+        if (sim->kingdoms[i].id == id) return &sim->kingdoms[i];
+    }
+    return NULL;
+}
+
+bool CcSimStartServiceProject(CcSim *sim, CcId settlement_id,
+                              CcServiceKind service,
+                              char *error, size_t error_capacity)
+{
+    CcSettlement *settlement = CcSimSettlementMutable(sim, settlement_id);
+    if (settlement == NULL || service < 0 || service >= CC_SERVICE_COUNT) {
+        SetError(error, error_capacity, "Settlement service project is invalid.");
+        return false;
+    }
+    if (settlement->service_project != CC_SERVICE_NONE) {
+        SetError(error, error_capacity, "This settlement is already building a service.");
+        return false;
+    }
+    if (CcSettlementHasService(settlement, service)) {
+        SetError(error, error_capacity, "This service is already open.");
+        return false;
+    }
+    if (CcSettlementServiceCount(settlement) >=
+        CcSettlementServiceCapacity(settlement->size)) {
+        SetError(error, error_capacity, "This settlement has no free service slots.");
+        return false;
+    }
+    CcKingdom *kingdom = KingdomMutable(sim, settlement->kingdom_id);
+    const int32_t material_cost = 12;
+    const int32_t tool_cost = 5;
+    const CcMoney money_cost = 80;
+    if (kingdom == NULL || settlement->stock[CC_GOOD_MATERIAL] < material_cost ||
+        settlement->stock[CC_GOOD_TOOLS] < tool_cost ||
+        kingdom->treasury < money_cost) {
+        SetError(error, error_capacity,
+                 "The town needs 12 material, 5 tools, and 80 crowns.");
+        return false;
+    }
+    settlement->stock[CC_GOOD_MATERIAL] -= material_cost;
+    settlement->stock[CC_GOOD_TOOLS] -= tool_cost;
+    kingdom->treasury -= money_cost;
+    settlement->service_project = service;
+    settlement->service_project_days = 7;
+    SetError(error, error_capacity, "");
+    return true;
 }
 
 const CcMap *CcSimMap(const CcSim *sim, CcId id)
@@ -428,6 +614,7 @@ static void InitKingdom(CcSim *sim, int32_t slot, const char *name,
 
 static void InitSettlement(CcSim *sim, int32_t slot, int32_t kingdom_slot,
                            const char *name, CcSettlementFunction function,
+                           CcSettlementSize size,
                            int32_t x, int32_t y, int32_t population,
                            int32_t security, int32_t prosperity)
 {
@@ -436,6 +623,8 @@ static void InitSettlement(CcSim *sim, int32_t slot, int32_t kingdom_slot,
     settlement->kingdom_id = sim->kingdoms[kingdom_slot].id;
     CopyName(settlement->name, name);
     settlement->function = function;
+    settlement->size = size;
+    settlement->service_project = CC_SERVICE_NONE;
     settlement->map_x = x;
     settlement->map_y = y;
     settlement->population = population;
@@ -446,6 +635,53 @@ static void InitSettlement(CcSim *sim, int32_t slot, int32_t kingdom_slot,
         settlement->price[good] = good == CC_GOOD_FOOD ? 4 :
                                   good == CC_GOOD_MATERIAL ? 8 : 14;
     }
+}
+
+static void SeedSettlementServices(CcSettlement *settlement)
+{
+    if (settlement == NULL) return;
+    uint32_t mask = ServiceBit(CC_SERVICE_INN);
+    switch (settlement->function) {
+        case CC_SETTLEMENT_FARMING:
+            mask |= ServiceBit(CC_SERVICE_FARM) |
+                    ServiceBit(CC_SERVICE_GRANARY) |
+                    ServiceBit(CC_SERVICE_STABLE);
+            break;
+        case CC_SETTLEMENT_MARKET:
+            mask |= ServiceBit(CC_SERVICE_MARKET) |
+                    ServiceBit(CC_SERVICE_SMITHY) |
+                    ServiceBit(CC_SERVICE_STABLE) |
+                    ServiceBit(CC_SERVICE_CARTOGRAPHER);
+            break;
+        case CC_SETTLEMENT_FORTRESS:
+            mask |= ServiceBit(CC_SERVICE_BARRACKS) |
+                    ServiceBit(CC_SERVICE_SMITHY) |
+                    ServiceBit(CC_SERVICE_HEALER) |
+                    ServiceBit(CC_SERVICE_GRANARY);
+            break;
+        case CC_SETTLEMENT_MINING:
+            mask |= ServiceBit(CC_SERVICE_MINE) |
+                    ServiceBit(CC_SERVICE_SMITHY) |
+                    ServiceBit(CC_SERVICE_MARKET) |
+                    ServiceBit(CC_SERVICE_SHRINE);
+            break;
+        case CC_SETTLEMENT_CAPITAL:
+            mask |= ServiceBit(CC_SERVICE_MARKET) |
+                    ServiceBit(CC_SERVICE_SMITHY) |
+                    ServiceBit(CC_SERVICE_HEALER) |
+                    ServiceBit(CC_SERVICE_STABLE) |
+                    ServiceBit(CC_SERVICE_SHRINE) |
+                    ServiceBit(CC_SERVICE_BARRACKS) |
+                    ServiceBit(CC_SERVICE_CARTOGRAPHER) |
+                    ServiceBit(CC_SERVICE_GUILDHALL);
+            break;
+        case CC_SETTLEMENT_DUNGEON_TOWN:
+            mask |= ServiceBit(CC_SERVICE_HEALER) |
+                    ServiceBit(CC_SERVICE_BLACK_MARKET) |
+                    ServiceBit(CC_SERVICE_DUNGEON_WARD);
+            break;
+    }
+    settlement->service_mask = mask;
 }
 
 static void InitRoute(CcSim *sim, int32_t slot, int32_t from, int32_t to,
@@ -540,6 +776,7 @@ static void ConfigureSettlementEconomies(CcSim *sim)
     fortress->reserve_target[CC_GOOD_FOOD] = 70;
     fortress->reserve_target[CC_GOOD_MATERIAL] = 28;
     fortress->reserve_target[CC_GOOD_TOOLS] = 24;
+    fortress->production[CC_GOOD_FOOD] = 14;
     fortress->consumption[CC_GOOD_FOOD] = 6;
     fortress->consumption[CC_GOOD_TOOLS] = 1;
 
@@ -627,19 +864,28 @@ void CcSimInit(CcSim *sim, uint32_t seed)
         GeneratePlaceName(sim, place_names[i], (CcSettlementFunction)i);
     }
     InitSettlement(sim, 0, 0, place_names[0], CC_SETTLEMENT_FARMING,
+                   CC_SETTLEMENT_VILLAGE,
                    Jitter(sim, 125, 22), Jitter(sim, 500, 20), 1460, 58, 54);
     InitSettlement(sim, 1, 0, place_names[2], CC_SETTLEMENT_MARKET,
+                   CC_SETTLEMENT_TOWN,
                    Jitter(sim, 355, 22), Jitter(sim, 445, 20), 2180, 62, 67);
     InitSettlement(sim, 2, 1, place_names[3], CC_SETTLEMENT_FORTRESS,
+                   CC_SETTLEMENT_TOWN,
                    Jitter(sim, 535, 18), Jitter(sim, 325, 18), 1720, 82, 49);
     InitSettlement(sim, 3, 1, place_names[1], CC_SETTLEMENT_MINING,
+                   CC_SETTLEMENT_TOWN,
                    Jitter(sim, 755, 22), Jitter(sim, 455, 20), 2350, 43, 61);
     InitSettlement(sim, 4, 2, place_names[4], CC_SETTLEMENT_CAPITAL,
+                   CC_SETTLEMENT_CAPITAL_SIZE,
                    Jitter(sim, 770, 18), Jitter(sim, 145, 18), 3180, 71, 72);
     InitSettlement(sim, 5, 2, place_names[5], CC_SETTLEMENT_DUNGEON_TOWN,
+                   CC_SETTLEMENT_VILLAGE,
                    Jitter(sim, 335, 22), Jitter(sim, 155, 20), 1280, 46, 45);
     sim->settlement_count = CC_MAX_SETTLEMENTS;
     ConfigureSettlementEconomies(sim);
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        SeedSettlementServices(&sim->settlements[i]);
+    }
 
     InitRoute(sim, 0, 0, 1, 2, 40, 64, false, false);
     InitRoute(sim, 1, 1, 2, 2, 34, 78, true, false);
@@ -677,6 +923,12 @@ void CcSimInit(CcSim *sim, uint32_t seed)
     sim->bandits[0].members = 28 + (int32_t)(NextRandom(sim) % 15U);
     sim->bandits[0].supplies = 20 + (int32_t)(NextRandom(sim) % 15U);
     sim->bandits[0].influence = 48 + (int32_t)(NextRandom(sim) % 16U);
+    sim->bandits[0].camp_size = CC_BANDIT_CAMP;
+    sim->bandits[0].service_mask = ServiceBit(CC_SERVICE_BLACK_MARKET) |
+                                   ServiceBit(CC_SERVICE_STABLE) |
+                                   ServiceBit(CC_SERVICE_SMITHY);
+    sim->bandits[0].raid_phase = CC_BANDIT_RAID_IDLE;
+    sim->bandits[0].raid_good = CC_GOOD_FOOD;
     sim->bandit_count = 1;
 
     sim->dungeons[0].id = NextId(sim, CC_ENTITY_DUNGEON);
@@ -816,6 +1068,27 @@ static int32_t EffectiveProduction(CcSim *sim, CcSettlement *settlement,
     return MaximumI32(0, production);
 }
 
+static void AdvanceServiceProjects(CcSim *sim)
+{
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        CcSettlement *settlement = &sim->settlements[i];
+        if (settlement->service_project == CC_SERVICE_NONE) continue;
+        settlement->service_project_days =
+            MaximumI32(0, settlement->service_project_days - 1);
+        if (settlement->service_project_days > 0) continue;
+        CcServiceKind service = settlement->service_project;
+        settlement->service_mask |= ServiceBit(service);
+        settlement->service_project = CC_SERVICE_NONE;
+        settlement->prosperity = ClampI32(settlement->prosperity + 2, 0, 100);
+        char text[CC_EVENT_TEXT_CAPACITY];
+        (void)snprintf(text, sizeof(text), "%s opens a new %s.",
+                       settlement->name, CcServiceName(service));
+        (void)PushEvent(sim, CC_EVENT_SERVICE_OPENED, settlement->id,
+                        settlement->id, LatestLocalCause(sim, settlement->id),
+                        (int32_t)service, text);
+    }
+}
+
 static void UpdateSettlement(CcSim *sim, int32_t index)
 {
     CcSettlement *settlement = &sim->settlements[index];
@@ -835,6 +1108,20 @@ static void UpdateSettlement(CcSim *sim, int32_t index)
         settlement->stock[good] = MinimumI32(settlement->stock[good],
                                              target * 4 + 40);
     }
+    if (CcSettlementHasService(settlement, CC_SERVICE_FARM)) {
+        settlement->stock[CC_GOOD_FOOD] += 2;
+    }
+    if (CcSettlementHasService(settlement, CC_SERVICE_GRANARY)) {
+        settlement->stock[CC_GOOD_FOOD] += 1;
+    }
+    if (CcSettlementHasService(settlement, CC_SERVICE_MINE)) {
+        settlement->stock[CC_GOOD_MATERIAL] += 1;
+    }
+    if (CcSettlementHasService(settlement, CC_SERVICE_SMITHY) &&
+        settlement->stock[CC_GOOD_MATERIAL] > 0) {
+        settlement->stock[CC_GOOD_MATERIAL] -= 1;
+        settlement->stock[CC_GOOD_TOOLS] += 1;
+    }
 
     int32_t food_use = MaximumI32(1, settlement->consumption[CC_GOOD_FOOD]);
     int32_t coverage = settlement->stock[CC_GOOD_FOOD] / food_use;
@@ -842,13 +1129,22 @@ static void UpdateSettlement(CcSim *sim, int32_t index)
                            coverage >= 8 ? -4 :
                            coverage >= 5 ? -2 : -1;
     settlement->hunger = ClampI32(settlement->hunger + hunger_delta, 0, 100);
+    if (CcSettlementHasService(settlement, CC_SERVICE_HEALER)) {
+        settlement->hunger = ClampI32(settlement->hunger - 1, 0, 100);
+    }
     settlement->prosperity = ClampI32(settlement->prosperity +
         (settlement->hunger > 55 ? -2 : settlement->hunger > 30 ? -1 :
          coverage >= 8 ? 1 : 0), 0, 100);
+    if (CcSettlementHasService(settlement, CC_SERVICE_MARKET)) {
+        settlement->prosperity = ClampI32(settlement->prosperity + 1, 0, 100);
+    }
     int32_t local_threat = MonsterPressureAtSettlement(sim, settlement->id);
     settlement->security = ClampI32(settlement->security +
         (settlement->hunger > 50 || local_threat > 60 ? -1 :
          settlement->prosperity > 70 && settlement->hunger < 15 ? 1 : 0), 0, 100);
+    if (CcSettlementHasService(settlement, CC_SERVICE_BARRACKS)) {
+        settlement->security = ClampI32(settlement->security + 1, 0, 100);
+    }
     if (sim->current_day % 28 == 0) {
         int32_t population_delta = settlement->hunger > 65 ? -MaximumI32(1, settlement->population / 250) :
                                    settlement->prosperity > 70 && settlement->hunger < 15 ?
@@ -877,6 +1173,191 @@ static CcBanditGroup *BanditsOnRoute(CcSim *sim, CcId route_id)
         if (sim->bandits[i].route_id == route_id) return &sim->bandits[i];
     }
     return NULL;
+}
+
+static CcBanditGroup *BanditMutable(CcSim *sim, CcId id)
+{
+    if (sim == NULL || CcIdKind(id) != CC_ENTITY_BANDIT_GROUP) return NULL;
+    for (int32_t i = 0; i < sim->bandit_count; ++i) {
+        if (sim->bandits[i].id == id) return &sim->bandits[i];
+    }
+    return NULL;
+}
+
+static int32_t ServiceMaskCount(uint32_t mask)
+{
+    int32_t count = 0;
+    for (int32_t service = 0; service < CC_SERVICE_COUNT; ++service) {
+        if ((mask & ServiceBit((CcServiceKind)service)) != 0U) count += 1;
+    }
+    return count;
+}
+
+static void GrowBanditCamp(CcBanditGroup *bandits)
+{
+    CcBanditCampSize desired = bandits->influence >= 80 ||
+            bandits->raids_completed >= 6 ? CC_BANDIT_OUTLAW_TOWN :
+        bandits->influence >= 60 || bandits->raids_completed >= 3 ?
+            CC_BANDIT_WAR_CAMP :
+        bandits->influence >= 35 ? CC_BANDIT_CAMP : CC_BANDIT_HIDEOUT;
+    if (desired > bandits->camp_size) bandits->camp_size = desired;
+    static const CcServiceKind order[] = {
+        CC_SERVICE_BLACK_MARKET, CC_SERVICE_STABLE, CC_SERVICE_SMITHY,
+        CC_SERVICE_HEALER, CC_SERVICE_BARRACKS, CC_SERVICE_MARKET,
+        CC_SERVICE_GRANARY, CC_SERVICE_GUILDHALL
+    };
+    int32_t capacity = CcBanditCampServiceCapacity(bandits->camp_size);
+    for (size_t i = 0; i < sizeof(order) / sizeof(order[0]) &&
+                       ServiceMaskCount(bandits->service_mask) < capacity; ++i) {
+        bandits->service_mask |= ServiceBit(order[i]);
+    }
+}
+
+bool CcSimLaunchBanditRaid(CcSim *sim, CcId bandit_id,
+                           char *error, size_t error_capacity)
+{
+    CcBanditGroup *bandits = BanditMutable(sim, bandit_id);
+    const CcRoute *route = bandits != NULL ? CcSimRoute(sim, bandits->route_id) : NULL;
+    if (bandits == NULL || route == NULL) {
+        SetError(error, error_capacity, "Bandit camp is invalid.");
+        return false;
+    }
+    if (bandits->raid_phase != CC_BANDIT_RAID_IDLE) {
+        SetError(error, error_capacity, "This bandit expedition is already away.");
+        return false;
+    }
+    if (bandits->members < 12) {
+        SetError(error, error_capacity, "The camp cannot muster enough raiders.");
+        return false;
+    }
+    CcSettlement *candidates[2] = {
+        CcSimSettlementMutable(sim, route->from_id),
+        CcSimSettlementMutable(sim, route->to_id)
+    };
+    CcSettlement *target = NULL;
+    int32_t best_score = INT_MIN;
+    for (int32_t i = 0; i < 2; ++i) {
+        CcSettlement *candidate = candidates[i];
+        if (candidate == NULL) continue;
+        int32_t score = -candidate->security * 2;
+        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+            score += candidate->stock[good];
+        }
+        if (target == NULL || score > best_score) {
+            target = candidate;
+            best_score = score;
+        }
+    }
+    if (target == NULL) {
+        SetError(error, error_capacity, "The camp has no reachable raid target.");
+        return false;
+    }
+    CcGood good = CC_GOOD_FOOD;
+    for (int32_t candidate = 1; candidate < CC_GOOD_COUNT; ++candidate) {
+        if (target->stock[candidate] > target->stock[good]) {
+            good = (CcGood)candidate;
+        }
+    }
+    bandits->raid_phase = CC_BANDIT_RAID_SCOUTING;
+    bandits->raid_target_id = target->id;
+    bandits->raid_good = good;
+    bandits->raid_quantity = 0;
+    bandits->raid_days_remaining = 2;
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text),
+                   "%s scouts %s for a %s raid from the no-man's-land camp.",
+                   bandits->name, target->name, CcGoodName(good));
+    (void)PushEvent(sim, CC_EVENT_BANDIT_RAID_DEPARTED, bandits->id,
+                    bandits->route_id, LatestLocalCause(sim, target->id),
+                    bandits->members, text);
+    SetError(error, error_capacity, "");
+    return true;
+}
+
+static void AdvanceBanditRaids(CcSim *sim)
+{
+    for (int32_t i = 0; i < sim->bandit_count; ++i) {
+        CcBanditGroup *bandits = &sim->bandits[i];
+        if (bandits->raid_phase == CC_BANDIT_RAID_IDLE) continue;
+        const CcRoute *route = CcSimRoute(sim, bandits->route_id);
+        CcSettlement *target = CcSimSettlementMutable(sim, bandits->raid_target_id);
+        if (route == NULL || target == NULL) {
+            bandits->raid_phase = CC_BANDIT_RAID_IDLE;
+            bandits->raid_target_id = 0U;
+            bandits->raid_days_remaining = 0;
+            continue;
+        }
+        bandits->raid_days_remaining =
+            MaximumI32(0, bandits->raid_days_remaining - 1);
+        if (bandits->raid_days_remaining > 0) continue;
+        switch (bandits->raid_phase) {
+            case CC_BANDIT_RAID_SCOUTING:
+                bandits->raid_phase = CC_BANDIT_RAID_MUSTERING;
+                bandits->raid_days_remaining = 2;
+                break;
+            case CC_BANDIT_RAID_MUSTERING:
+                bandits->raid_phase = CC_BANDIT_RAID_OUTBOUND;
+                bandits->raid_days_remaining = route->travel_days;
+                break;
+            case CC_BANDIT_RAID_OUTBOUND: {
+                int32_t wanted = ClampI32(bandits->members / 3, 4, 28);
+                int32_t stolen = MinimumI32(target->stock[bandits->raid_good], wanted);
+                target->stock[bandits->raid_good] -= stolen;
+                target->security = ClampI32(target->security - 4, 0, 100);
+                target->prosperity = ClampI32(target->prosperity - 3, 0, 100);
+                if (bandits->raid_good == CC_GOOD_FOOD) {
+                    target->hunger = ClampI32(target->hunger +
+                        MaximumI32(1, stolen / 4), 0, 100);
+                }
+                bandits->raid_quantity = stolen;
+                bandits->raid_phase = CC_BANDIT_RAID_RETURNING;
+                bandits->raid_days_remaining = route->travel_days;
+                char text[CC_EVENT_TEXT_CAPACITY];
+                (void)snprintf(text, sizeof(text),
+                               "%s raids %s and takes %d %s.",
+                               bandits->name, target->name, stolen,
+                               CcGoodName(bandits->raid_good));
+                const CcEvent *departure = LatestEvent(
+                    sim, CC_EVENT_BANDIT_RAID_DEPARTED, bandits->id,
+                    bandits->route_id);
+                (void)PushEvent(sim, CC_EVENT_SETTLEMENT_RAIDED, bandits->id,
+                                target->id,
+                                departure != NULL ? departure->id : 0U,
+                                stolen, text);
+                break;
+            }
+            case CC_BANDIT_RAID_RETURNING: {
+                int32_t loot = bandits->raid_quantity;
+                bandits->supplies = ClampI32(bandits->supplies + loot, 0, 100);
+                bandits->members = ClampI32(bandits->members +
+                    (loot > 0 ? MaximumI32(1, loot / 12) : 0), 4, 120);
+                bandits->raids_completed += 1;
+                bandits->influence = ClampI32(
+                    (bandits->members + bandits->supplies) / 2 +
+                    bandits->raids_completed * 2, 0, 100);
+                GrowBanditCamp(bandits);
+                char text[CC_EVENT_TEXT_CAPACITY];
+                (void)snprintf(text, sizeof(text),
+                               "%s returns with %d %s; the %s now supports %d services.",
+                               bandits->name, loot, CcGoodName(bandits->raid_good),
+                               CcBanditCampSizeName(bandits->camp_size),
+                               ServiceMaskCount(bandits->service_mask));
+                const CcEvent *raid = LatestEvent(
+                    sim, CC_EVENT_SETTLEMENT_RAIDED, bandits->id,
+                    bandits->raid_target_id);
+                (void)PushEvent(sim, CC_EVENT_BANDIT_RAID_RETURNED, bandits->id,
+                                bandits->route_id,
+                                raid != NULL ? raid->id : 0U, loot, text);
+                bandits->raid_phase = CC_BANDIT_RAID_IDLE;
+                bandits->raid_target_id = 0U;
+                bandits->raid_quantity = 0;
+                bandits->raid_days_remaining = 0;
+                break;
+            }
+            case CC_BANDIT_RAID_IDLE:
+                break;
+        }
+    }
 }
 
 int32_t CcSimRouteDanger(const CcSim *sim, CcId route_id)
@@ -933,7 +1414,7 @@ static bool FindTradePath(const CcSim *sim, CcId from_id, CcId to_id,
         CcId current_id = sim->settlements[current].id;
         for (int32_t route_slot = 0; route_slot < sim->route_count; ++route_slot) {
             const CcRoute *route = &sim->routes[route_slot];
-            if (route->closed) continue;
+            if (route->closed || CcSimRouteCrossesWarBorder(sim, route->id)) continue;
             int32_t effective_capacity = MaximumI32(3, route->capacity *
                                                     MaximumI32(25, route->condition) / 100);
             if (route_used != NULL && route_used[route_slot] >= effective_capacity) continue;
@@ -1478,8 +1959,10 @@ static void UpdateThreats(CcSim *sim)
         int32_t hunger = (a != NULL ? a->hunger : 0) + (b != NULL ? b->hunger : 0);
         bandits->members = ClampI32(bandits->members + hunger / 45 - 1, 4, 120);
         bandits->supplies = ClampI32(bandits->supplies - 2, 0, 100);
-        bandits->influence = ClampI32((bandits->members + bandits->supplies) / 2,
-                                      0, 100);
+        bandits->influence = ClampI32(
+            (bandits->members + bandits->supplies) / 2 +
+            bandits->raids_completed * 2, 0, 100);
+        GrowBanditCamp(bandits);
         CcRoute *mutable_route = RouteMutable(sim, bandits->route_id);
         if (mutable_route != NULL) {
             mutable_route->security = ClampI32(mutable_route->security -
@@ -1501,6 +1984,11 @@ static void UpdateThreats(CcSim *sim)
                             bandits->influence, text);
         }
         sim->last_bandit_level[i] = level;
+        if (bandits->raid_phase == CC_BANDIT_RAID_IDLE &&
+            bandits->members >= 12 &&
+            (bandits->supplies <= 45 || bandits->influence >= 40)) {
+            (void)CcSimLaunchBanditRaid(sim, bandits->id, NULL, 0U);
+        }
     }
 
     for (int32_t i = 0; i < sim->monster_count; ++i) {
@@ -1743,6 +2231,8 @@ void CcSimAdvanceDays(CcSim *sim, int32_t days)
     for (int32_t day = 0; day < days; ++day) {
         sim->current_day += 1;
         UpdateShipments(sim);
+        AdvanceServiceProjects(sim);
+        AdvanceBanditRaids(sim);
         if (sim->current_day % 7 == 0) {
             for (int32_t settlement = 0; settlement < sim->settlement_count; ++settlement) {
                 UpdateSettlement(sim, settlement);
@@ -1954,7 +2444,8 @@ static void CreateJourneyTraffic(CcSim *sim,
     const CcSettlement *destination = CcSimSettlement(
         sim, journey->destination_id);
     const CcRoute *route = CcSimRoute(sim, journey->route_id);
-    if (origin == NULL || destination == NULL || route == NULL) return;
+    if (origin == NULL || destination == NULL || route == NULL ||
+        CcSimRouteCrossesWarBorder(sim, route->id)) return;
     CcGood good = CC_GOOD_FOOD;
     for (int32_t candidate = 1; candidate < CC_GOOD_COUNT; ++candidate) {
         if (origin->stock[candidate] > origin->stock[good]) {
@@ -2418,9 +2909,12 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         SetError(error, error_capacity, "Simulation is missing.");
         return false;
     }
-    if ((sim->schema_version != 3U &&
-         sim->schema_version != CC_SIM_SCHEMA_VERSION) ||
-        sim->generator_version != CC_GENERATOR_VERSION) {
+    bool legacy_schema = sim->schema_version == 3U ||
+                         sim->schema_version == 4U;
+    bool supported_generator = sim->generator_version == CC_GENERATOR_VERSION ||
+        (legacy_schema && sim->generator_version == 3U);
+    if ((!legacy_schema && sim->schema_version != CC_SIM_SCHEMA_VERSION) ||
+        !supported_generator) {
         SetError(error, error_capacity, "Simulation version is unsupported.");
         return false;
     }
@@ -2447,6 +2941,27 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
             if (settlement->stock[good] < 0 || settlement->price[good] < 1) {
                 SetError(error, error_capacity, "Market accounting is invalid.");
+                return false;
+            }
+        }
+        if (sim->schema_version == CC_SIM_SCHEMA_VERSION) {
+            uint32_t known_services = (UINT32_C(1) << CC_SERVICE_COUNT) - 1U;
+            bool valid_project = settlement->service_project == CC_SERVICE_NONE ?
+                settlement->service_project_days == 0 :
+                settlement->service_project >= 0 &&
+                settlement->service_project < CC_SERVICE_COUNT &&
+                settlement->service_project_days > 0 &&
+                settlement->service_project_days <= 7 &&
+                !CcSettlementHasService(settlement,
+                                        settlement->service_project);
+            if (settlement->size < CC_SETTLEMENT_HAMLET ||
+                settlement->size > CC_SETTLEMENT_CAPITAL_SIZE ||
+                (settlement->service_mask & ~known_services) != 0U ||
+                CcSettlementServiceCount(settlement) >
+                    CcSettlementServiceCapacity(settlement->size) ||
+                !valid_project) {
+                SetError(error, error_capacity,
+                         "Settlement service state is invalid.");
                 return false;
             }
         }
@@ -2490,6 +3005,40 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             shipment->status > CC_SHIPMENT_LOST) {
             SetError(error, error_capacity, "Shipment data is invalid.");
             return false;
+        }
+    }
+    for (int32_t i = 0; i < sim->bandit_count; ++i) {
+        const CcBanditGroup *bandits = &sim->bandits[i];
+        if (CcIdKind(bandits->id) != CC_ENTITY_BANDIT_GROUP ||
+            CcSimRoute(sim, bandits->route_id) == NULL ||
+            bandits->members < 0 || bandits->members > 120 ||
+            bandits->supplies < 0 || bandits->supplies > 100 ||
+            bandits->influence < 0 || bandits->influence > 100) {
+            SetError(error, error_capacity, "Bandit camp state is invalid.");
+            return false;
+        }
+        if (sim->schema_version == CC_SIM_SCHEMA_VERSION) {
+            uint32_t known_services = (UINT32_C(1) << CC_SERVICE_COUNT) - 1U;
+            bool idle = bandits->raid_phase == CC_BANDIT_RAID_IDLE;
+            bool valid_raid = idle ?
+                bandits->raid_target_id == 0U &&
+                bandits->raid_quantity == 0 &&
+                bandits->raid_days_remaining == 0 :
+                CcSimSettlement(sim, bandits->raid_target_id) != NULL &&
+                bandits->raid_good >= 0 && bandits->raid_good < CC_GOOD_COUNT &&
+                bandits->raid_quantity >= 0 &&
+                bandits->raid_days_remaining > 0;
+            if (bandits->camp_size < CC_BANDIT_HIDEOUT ||
+                bandits->camp_size > CC_BANDIT_OUTLAW_TOWN ||
+                (bandits->service_mask & ~known_services) != 0U ||
+                ServiceMaskCount(bandits->service_mask) >
+                    CcBanditCampServiceCapacity(bandits->camp_size) ||
+                bandits->raid_phase < CC_BANDIT_RAID_IDLE ||
+                bandits->raid_phase > CC_BANDIT_RAID_RETURNING ||
+                bandits->raids_completed < 0 || !valid_raid) {
+                SetError(error, error_capacity, "Bandit expedition state is invalid.");
+                return false;
+            }
         }
     }
     for (int32_t i = 0; i < sim->situation_count; ++i) {
@@ -2697,6 +3246,11 @@ uint64_t CcSimHash(const CcSim *sim)
         hash = HashString(hash, item->name); HASH_VALUE(item->function);
         HASH_VALUE(item->map_x); HASH_VALUE(item->map_y); HASH_VALUE(item->population);
         HASH_VALUE(item->security); HASH_VALUE(item->prosperity); HASH_VALUE(item->hunger);
+        if (sim->schema_version >= 5U) {
+            HASH_VALUE(item->size); HASH_VALUE(item->service_mask);
+            HASH_VALUE(item->service_project);
+            HASH_VALUE(item->service_project_days);
+        }
         for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
             HASH_VALUE(item->stock[good]); HASH_VALUE(item->reserve_target[good]);
             HASH_VALUE(item->production[good]); HASH_VALUE(item->consumption[good]);
@@ -2735,6 +3289,13 @@ uint64_t CcSimHash(const CcSim *sim)
         const CcBanditGroup *item = &sim->bandits[i];
         HASH_VALUE(item->id); HASH_VALUE(item->route_id); hash = HashString(hash, item->name);
         HASH_VALUE(item->members); HASH_VALUE(item->supplies); HASH_VALUE(item->influence);
+        if (sim->schema_version >= 5U) {
+            HASH_VALUE(item->camp_size); HASH_VALUE(item->service_mask);
+            HASH_VALUE(item->raid_phase); HASH_VALUE(item->raid_target_id);
+            HASH_VALUE(item->raid_good); HASH_VALUE(item->raid_quantity);
+            HASH_VALUE(item->raid_days_remaining);
+            HASH_VALUE(item->raids_completed);
+        }
         HASH_VALUE(sim->last_bandit_level[i]);
     }
     for (int32_t i = 0; i < sim->monster_count; ++i) {

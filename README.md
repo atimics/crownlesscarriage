@@ -46,9 +46,16 @@ Controls:
   support is actually lost, and lands on physical surfaces. Losing support disengages the gait
   controller and physically collapses the hero before recovery; legs do not
   invent distant footholds beneath a fall. Solid buildings are not climbable.
+  The exterior is generated as one continuous, seeded landscape of broad
+  hills, shallow valleys, ridges, and smaller natural variation. Roads bend
+  across that land, while plazas and building foundations grade only the
+  ground they need instead of placing scenery on a flat world. The generated
+  land is cached as one GPU mesh, while nearby grass, crops, stones, tracks,
+  and varied tree crowns are distance-limited for stable frame rate.
   The Wayfarer Trials beside town are a physical obstacle course; three
   autonomous biomechanical guards continually climb, cross, descend, and
-  choose their next marked contact route there. Press `G` to sound the village
+  choose their next marked contact route there.
+  Press `G` to sound the village
   alarm: training is interrupted and a nearby raid encounter forms around the
   player. Guards and scouts use the same targeting, strike collision, health,
   posture, frontal guard, stagger, knockback, and defeat rules as the player,
@@ -162,9 +169,21 @@ review: the authored carriage and market, action-figure hero, role-shaped
 population, simulation dressing, shared palette, and final color treatment are
 framed together under deterministic world conditions.
 
+Use `--capture-face <front|three-quarter|profile|distant> <frame.png>` for the
+deterministic face review. The first three views use the close market-interior
+camera; `distant` checks that small heads fall back to silhouette instead of a
+floating facial mark. `--capture-road <frame.png>` waits for the combat camera
+to settle and completes the five-shot face review.
+
 Use `--capture-room <x> <z> <frame.png>` to review any fixed-camera exterior
 room from a deterministic hero position. This is intended for checking route
 legibility and landmark composition across the complete settlement.
+
+Run `make art-check` from a desktop session for the full painterly review. It
+captures all ten rooms plus street, road, interior, and parley; creates color,
+grayscale, silhouette, and three-value studies; checks palette and subject
+coverage; compares the hero at 35, 48, and 60 art pixels; and reports repeat-
+frame flicker, edge density, and local contrast in `out/art-check/`.
 
 Use `--capture-travel <frame.png>` for the deterministic real-time travel
 proof at twenty percent route progress. The capture frames the moving carriage
@@ -295,13 +314,14 @@ The current executable proves:
   production pass.
 - Force-driven whole-body motion with aggregate bone mass, gravity, damping,
   ground-reaction support, friction-limited propulsion and braking, lateral
-  balance, and collision impulses; navigation supplies intent rather than
-  assigning velocity
+  balance, slope-force compensation, contact-normal body alignment, and
+  collision impulses; navigation supplies intent rather than assigning velocity
 - A generalized particle-and-constraint ragdoll layer that inherits the live
   pose, heel/toe orientation, and momentum when support is lost, preserves bone
-  lengths through terrain impact, dissipates impact energy instead of bouncing,
-  and keeps the skinned hero live through a brace, kneel, and stand recovery
-  before walking control returns
+  lengths and joint-angle limits through terrain impact, gives torso and limbs
+  capsule volume, applies selected self-separation, dissipates impact energy
+  instead of bouncing, and keeps the skinned hero live through a brace, kneel,
+  and stand recovery before walking control returns
 - Swept ledge-top contacts that distinguish landing on a roof from swinging a
   limb beside or beneath it, preventing a tower edge from projecting that limb
   upward; automated falls cover three approach/departure directions on the
@@ -317,8 +337,10 @@ The current executable proves:
   rig, with compliant lateral weight transfer, torso counter-rotation, and
   continuous fall/recovery skin and head orientation rather than one-frame
   construction swaps or an authored eight-frame body overlay
-- Character-width collision against buildings, props, and visible townspeople,
-  with local sidestepping when a direct path meets an occupied space
+- One swept local collision contract for the walking capsule and falling body,
+  covering terrain, platform tops and sides, buildings, and props. Walking also
+  maintains townspeople spacing, with route-aware slopes and local sidestepping
+  only when forward progress is actually blocked
 - Edge-spawned biomechanical travellers whose number follows live shipment
   traffic; they walk completely across town on staggered routes and leave at
   the opposite boundary instead of appearing in place

@@ -91,23 +91,35 @@ across every rendered landmark, including heel, ball, and toe; limit the
 visible skin blend change at fall and recovery handoffs;
 accelerate rather than teleport to requested speed;
 generate a ground reaction near body weight; brake within a bounded distance;
+walk uphill on a slope inside the friction budget without its support reaction
+pushing it downhill; align the ankle and body frame to the contact normal;
 keep its aggregate body root inside the anatomical support-height band; and
 enter, traverse, and leave its biomechanical climbing mode without changing
 bone lengths, exceeding anatomical arm reach, flipping an IK bend plane,
 instantaneously acquiring a contact, or exceeding the whole-pose per-frame
-continuity bound. A biped whose ragdoll remains active must be refused climb
+continuity bound. Losing one climb contact must release that limb, lower control
+authority, and remain controlled; sustained loss down to one contact must pass
+through marginal support before passive physics. A biped whose ragdoll remains active must be refused climb
 admission even when its navigation body is grounded. Fixtures must also enter
 water without invoking fall control, remove both terrestrial contacts, retain
 fixed arm and leg lengths, remain inside a bounded buoyancy height band, and
 reacquire contacts on exit. Guard-to-strike and guard-to-swim transitions have
 whole-pose continuity bounds, and one strike must expose exactly one consumable
 impact window. Local-world fixtures must climb the actual 1.65-unit tower and
-fall from at least three
+fall from all four
 edges; after street impact, both center-of-mass and worst-particle upward speed
 must remain below the non-bouncing bound, and body contact may not disappear for
 more than four consecutive frames before recovery. Release-to-street time must
 remain within the authored gravity band for every tested edge, and the generic
 ragdoll fixture must reach its plane within a bounded free-fall frame window.
+The agent position and velocity must match the authoritative fallen-body center
+of mass throughout the fall. Ragdoll fixtures must enforce spine and cone
+limits, knee and elbow hinges, and selected self-separation, detect a barrier
+between capsule endpoints, and reject false stable support from contacts split
+across different elevations. Walking, climbing, weapon sweeps, and falling body
+segments must agree on shared geometry. Direct fixtures must scrape a fallen
+body down a wall, hit both faces of a corner, land on a shoulder, and recover
+from nearby geometry without penetration or a position snap.
 
 ### 6. Causal provenance
 
@@ -120,6 +132,32 @@ content.
 Every strategic condition included in the vertical slice must activate at least
 two local projection channels. Major situation outcomes must change at least
 four.
+
+### 8. Painterly art stack
+
+Run the complete visual gate from an active desktop session:
+
+```sh
+make art-check
+```
+
+This command first runs the C test suite, then checks the V05 animation frames,
+hero and NPC paint channels, and NPC asset contracts. It then captures all ten
+exterior camera rooms plus street, road, interior, and parley. The report is written to
+`out/art-check/report.md`.
+
+Each capture is cropped to the 457 by 285 world target. The gate fails on a
+missing or blank subject, strong drift from the shared palette, weak value
+separation, or an empty story center. It also records edge density and local
+contrast for manual review. Each view gets color, grayscale, silhouette, and
+three-value versions. Contact sheets show the ten rooms, the four scene types,
+and the street value study.
+
+The same run creates 35, 48, and 60 art-pixel hero comparisons from the checked
+V05 source frame. Three repeat captures of one stationary room must stay inside
+the small pixel-change budget. Use `python3 tools/art/run_art_check.py
+--reuse-captures` to rebuild the report from existing captures without opening
+the client.
 
 ## Player-experience gates
 

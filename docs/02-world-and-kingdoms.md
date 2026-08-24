@@ -16,6 +16,41 @@ The first serious prototype contains:
 This is large enough to produce interdependence and small enough for players to
 recognize places and recurring people.
 
+## Current realm rules
+
+The playable slice treats the three kingdoms as the three top-level powers.
+Every pair is at war. A road between different kingdoms is therefore a war
+border: ordinary freight will not cross it, but the neutral Crownless Carriage
+can. This makes the carriage useful even before a contract is attached to a
+journey.
+
+Each kingdom starts with two settlements that cover different parts of its
+economy. A kingdom must be viable inside its own borders, but no single town is
+self-sufficient.
+
+## Tiny town builder
+
+Settlements have a size and a strict service budget:
+
+| Size | Service slots |
+| --- | ---: |
+| Hamlet | 2 |
+| Village | 4 |
+| Town | 6 |
+| City | 9 |
+| Capital | 12 |
+
+Services are concrete parts of the economy and local presentation: farms,
+granaries, markets, inns, smithies, healers, stables, shrines, barracks,
+cartographers, guildhalls, mines, black markets, and dungeon wards. The starting
+set comes from a settlement's size and reason for existing, so towns do not
+receive one shared checklist.
+
+A settlement can build one service at a time. Construction occupies a future
+slot, spends local material and tools plus kingdom treasury, and completes over
+world days. Open services then affect production, hunger, prosperity, or
+security.
+
 ## Generation order
 
 The world is constructed from material constraints rather than placing towns

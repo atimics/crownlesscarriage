@@ -37,6 +37,14 @@ typedef enum CcHumanoidContact {
     CC_HUMANOID_CONTACT_SWING
 } CcHumanoidContact;
 
+typedef enum CcHumanoidSupportState {
+    CC_HUMANOID_SUPPORT_STABLE,
+    CC_HUMANOID_SUPPORT_MARGINAL,
+    CC_HUMANOID_SUPPORT_HANDS,
+    CC_HUMANOID_SUPPORT_CONTROLLED_AIRBORNE,
+    CC_HUMANOID_SUPPORT_UNCONTROLLED_FALL
+} CcHumanoidSupportState;
+
 typedef enum CcHumanoidAction {
     CC_HUMANOID_ACTION_LOCOMOTION,
     CC_HUMANOID_ACTION_GUARD,
@@ -195,11 +203,17 @@ typedef struct CcHumanoidGait {
     float swim_phase;
     float immersion;
     float impact_response;
+    float unsupported_seconds;
+    float control_authority;
     CcLimbVec3 recovery_origin;
+    CcLimbVec3 support_normal;
+    CcLimbVec3 authoritative_position;
+    CcLimbVec3 ragdoll_body_offset;
     CcHumanoidAction action;
     CcHumanoidAction previous_action;
     CcHumanoidPoseOwner pose_owner;
     CcHumanoidRecoveryOrientation recovery_orientation;
+    CcHumanoidSupportState support_state;
     uint32_t motion_markers;
     int32_t support_leg;
     int32_t planted_count;
@@ -213,6 +227,7 @@ typedef struct CcHumanoidGait {
     bool ragdoll_recovery_allowed;
     bool climbing;
     bool jump_airborne;
+    bool ragdoll_body_offset_valid;
     bool initialized;
 } CcHumanoidGait;
 
@@ -226,6 +241,11 @@ void CcHumanoidGaitAdvance(CcHumanoidGait *gait, CcLimbVec3 body_position,
                            float body_yaw, CcLimbVec3 desired_velocity,
                            bool grounded, float delta_time,
                            CcLimbTerrainProbe probe, void *probe_context);
+void CcHumanoidGaitAdvancePhysical(
+    CcHumanoidGait *gait, CcLimbVec3 body_position, float body_yaw,
+    CcLimbVec3 desired_velocity, bool grounded, float delta_time,
+    CcLimbTerrainProbe terrain_probe,
+    CcBiomechRagdollCollisionProbe collision_probe, void *probe_context);
 void CcHumanoidGaitResolvePose(CcHumanoidGait *gait,
                                CcLimbVec3 body_position, float body_yaw);
 void CcHumanoidGaitSetGuarded(CcHumanoidGait *gait, bool guarded);
@@ -253,6 +273,7 @@ void CcHumanoidGaitBeginClimb(CcHumanoidGait *gait);
 void CcHumanoidGaitAdvanceClimb(
     CcHumanoidGait *gait, CcLimbVec3 body_position, float body_yaw,
     const CcLimbVec3 hand_targets[CC_HUMANOID_ARM_COUNT],
+    const float hand_support[CC_HUMANOID_ARM_COUNT],
     const CcLimbVec3 foot_targets[CC_HUMANOID_LEG_COUNT],
     const CcLimbVec3 foot_normals[CC_HUMANOID_LEG_COUNT],
     const float foot_support[CC_HUMANOID_LEG_COUNT],
@@ -278,6 +299,9 @@ void CcHumanoidGaitConstrainMotion(CcHumanoidGait *gait,
 const char *CcHumanoidContactName(CcHumanoidContact contact);
 const char *CcHumanoidActionName(CcHumanoidAction action);
 const char *CcHumanoidPoseOwnerName(CcHumanoidPoseOwner owner);
+const char *CcHumanoidSupportStateName(CcHumanoidSupportState support);
+int32_t CcHumanoidGaitRagdollSupportContactCount(
+    const CcHumanoidGait *gait);
 const char *CcHumanoidRecoveryOrientationName(
     CcHumanoidRecoveryOrientation orientation);
 const CcHumanoidPoseSnapshot *CcHumanoidGaitCurrentSnapshot(
@@ -286,5 +310,9 @@ const CcHumanoidPoseSnapshot *CcHumanoidGaitPreviousSnapshot(
     const CcHumanoidGait *gait);
 const CcHumanoidAnimationTraceRecord *CcHumanoidGaitTraceLatest(
     const CcHumanoidGait *gait);
+CcLimbVec3 CcHumanoidGaitAuthoritativePosition(
+    const CcHumanoidGait *gait, CcLimbVec3 fallback);
+CcLimbVec3 CcHumanoidGaitAuthoritativeVelocity(
+    const CcHumanoidGait *gait, CcLimbVec3 fallback);
 
 #endif
