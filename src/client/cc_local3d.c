@@ -340,6 +340,27 @@ static const StreetCameraShot MARKET_GATE_ROAD_CAMERA = {
     ((int32_t)(sizeof(STREET_CAMERA_SHOTS) / \
                sizeof(STREET_CAMERA_SHOTS[0])))
 
+#define STREET_ALLEY_CAMERA_SHOT_BASE \
+    (MARKET_GATE_ROAD_CAMERA_SHOT + 1)
+
+static bool StreetCameraShotIsAlley(int32_t shot)
+{
+    return shot >= STREET_ALLEY_CAMERA_SHOT_BASE &&
+           shot <= STREET_ALLEY_CAMERA_SHOT_BASE +
+                   MARKET_GATE_ROAD_CAMERA_SHOT;
+}
+
+static int32_t StreetCameraBaseShot(int32_t shot)
+{
+    return StreetCameraShotIsAlley(shot) ?
+        shot - STREET_ALLEY_CAMERA_SHOT_BASE : shot;
+}
+
+static int32_t StreetCameraAlleyShot(int32_t shot)
+{
+    return STREET_ALLEY_CAMERA_SHOT_BASE + StreetCameraBaseShot(shot);
+}
+
 static const ArtComposition ROAD_ART_COMPOSITION = {
     {49.0f, 1.10f, 40.0f}, {1.0f, 0.0f}, {36.0f, 0.0f, 44.0f},
     {0.17f, 0.17f, 0.64f, 0.66f}, {8.0f, 16.0f, 29.0f},
@@ -408,6 +429,12 @@ typedef struct FixedCameraRig {
     float fovy_destination;
     float transition_elapsed;
     float transition_duration;
+    Vector3 framing_offset;
+    Vector3 framing_from;
+    Vector3 framing_destination;
+    float framing_elapsed;
+    float framing_duration;
+    float delta_time;
     float last_clock;
     int32_t shot;
     bool initialized;
@@ -417,12 +444,66 @@ typedef struct CombatCameraRig {
     Vector3 displayed_target;
     Vector3 displayed_offset;
     float displayed_fovy;
+    Vector3 locked_target;
+    Vector3 locked_offset;
+    float locked_fovy;
     float combat_weight;
+    float tree_clear_angle;
+    float reframe_cooldown;
     float last_clock;
+    int32_t opponent_index;
     CcLocalSceneKind scene;
+    bool composition_locked;
     bool initialized;
     bool scene_valid;
 } CombatCameraRig;
+
+typedef enum TreeFamily {
+    TREE_FAMILY_ALDER = 0,
+    TREE_FAMILY_OAK,
+    TREE_FAMILY_POLLARD
+} TreeFamily;
+
+typedef struct WorldTreePlacement {
+    Vector2 position;
+    TreeFamily family;
+} WorldTreePlacement;
+
+/* Camera visibility and scenery drawing share this one authored tree list.
+   Keeping the roots in one place prevents a clear shot from drifting out of
+   sync with what the renderer actually puts in front of the cast. */
+static const WorldTreePlacement WORLD_TREES[] = {
+    {{2.5f, 58.0f}, TREE_FAMILY_ALDER},
+    {{6.0f, 62.0f}, TREE_FAMILY_ALDER},
+    {{10.0f, 56.0f}, TREE_FAMILY_POLLARD},
+    {{14.0f, 65.0f}, TREE_FAMILY_OAK},
+    {{18.0f, 58.0f}, TREE_FAMILY_ALDER},
+    {{22.0f, 64.0f}, TREE_FAMILY_ALDER},
+    {{27.0f, 60.0f}, TREE_FAMILY_ALDER},
+    {{33.0f, 66.0f}, TREE_FAMILY_OAK},
+    {{48.0f, 63.0f}, TREE_FAMILY_ALDER},
+    {{54.0f, 59.0f}, TREE_FAMILY_ALDER},
+    {{59.0f, 65.0f}, TREE_FAMILY_POLLARD},
+    {{66.0f, 59.0f}, TREE_FAMILY_OAK},
+    {{73.0f, 64.0f}, TREE_FAMILY_ALDER},
+    {{84.0f, 59.5f}, TREE_FAMILY_ALDER},
+    {{88.0f, 64.0f}, TREE_FAMILY_OAK},
+    {{93.0f, 56.0f}, TREE_FAMILY_ALDER},
+    {{18.0f, 5.0f}, TREE_FAMILY_ALDER},
+    {{24.0f, 8.0f}, TREE_FAMILY_POLLARD},
+    {{31.0f, 5.5f}, TREE_FAMILY_OAK},
+    {{49.0f, 6.0f}, TREE_FAMILY_ALDER},
+    {{57.0f, 5.0f}, TREE_FAMILY_POLLARD},
+    {{62.0f, 3.5f}, TREE_FAMILY_ALDER},
+    {{4.0f, 14.0f}, TREE_FAMILY_POLLARD},
+    {{16.0f, 14.5f}, TREE_FAMILY_ALDER},
+    {{17.0f, 45.0f}, TREE_FAMILY_POLLARD},
+    {{20.0f, 52.0f}, TREE_FAMILY_ALDER},
+    {{57.5f, 41.0f}, TREE_FAMILY_OAK},
+    {{70.5f, 39.5f}, TREE_FAMILY_POLLARD},
+    {{86.0f, 40.0f}, TREE_FAMILY_ALDER},
+    {{93.0f, 36.0f}, TREE_FAMILY_OAK}
+};
 
 static FixedCameraRig street_camera_rig = {0};
 static FixedCameraRig road_camera_rig = {0};
@@ -6981,30 +7062,10 @@ static Camera3D KeepHeroInsideStreetFrame(Camera3D camera, Vector3 hero,
     Vector3 right = Vector3Normalize(Vector3CrossProduct(forward, camera.up));
     Vector3 screen_up = Vector3Normalize(
         Vector3CrossProduct(right, forward));
-
-    /* Preserve the authored landmark target where a moderate pull-back can
-       hold both it and the hero. Very long corridors then hand off to a
-       dead-zone pan instead of allowing the actor to leave the shot. */
-    Vector3 from_target = Vector3Subtract(hero, camera.target);
-    float horizontal_world = fabsf(Vector3DotProduct(from_target, right));
-    float vertical_world = fabsf(Vector3DotProduct(from_target, screen_up));
-    float horizontal_pixels = fminf((float)art_width * 0.5f - safe_left,
-                                    safe_right - (float)art_width * 0.5f);
-    float vertical_pixels = fminf((float)art_height * 0.5f - safe_top,
-                                  safe_bottom - (float)art_height * 0.5f);
-    float required_fovy = camera.fovy;
-    if (horizontal_pixels > 1.0f) {
-        required_fovy = fmaxf(
-            required_fovy,
-            horizontal_world * (float)art_height / horizontal_pixels * 1.06f);
-    }
-    if (vertical_pixels > 1.0f) {
-        required_fovy = fmaxf(
-            required_fovy,
-            vertical_world * (float)art_height / vertical_pixels * 1.06f);
-    }
-    camera.fovy = fminf(required_fovy, 18.5f);
-
+    /* This is only the last safety net during a transition. It may translate
+       the finished image enough to keep the actor visible, but it never
+       changes the authored lens. Normal framing is handled in discrete
+       steps by the rig below. */
     Vector2 screen = GetWorldToScreenEx(hero, camera, art_width, art_height);
     float clamped_x = fmaxf(safe_left, fminf(screen.x, safe_right));
     float clamped_y = fmaxf(safe_top, fminf(screen.y, safe_bottom));
@@ -7037,6 +7098,291 @@ static Camera3D SnapCameraToArtPixels(Camera3D camera, int32_t art_height)
     camera.target = Vector3Add(camera.target, adjustment);
     camera.position = Vector3Add(camera.position, adjustment);
     return camera;
+}
+
+typedef struct CameraProjectedVolume {
+    float x;
+    float y;
+    float half_width;
+    float half_height;
+    float depth;
+} CameraProjectedVolume;
+
+static CameraProjectedVolume CameraProjectVolume(Camera3D camera,
+                                                  Vector3 center,
+                                                  float radius,
+                                                  float half_height)
+{
+    Vector3 forward = PhysicsNormalizeOr(
+        Vector3Subtract(camera.target, camera.position),
+        (Vector3){0.0f, -0.3f, -1.0f});
+    Vector3 right = PhysicsNormalizeOr(
+        Vector3CrossProduct(forward, camera.up),
+        (Vector3){1.0f, 0.0f, 0.0f});
+    Vector3 screen_up = PhysicsNormalizeOr(
+        Vector3CrossProduct(right, forward), camera.up);
+    Vector3 from_target = Vector3Subtract(center, camera.target);
+    float right_horizontal = sqrtf(right.x * right.x +
+                                   right.z * right.z);
+    float up_horizontal = sqrtf(screen_up.x * screen_up.x +
+                                screen_up.z * screen_up.z);
+    return (CameraProjectedVolume){
+        .x = Vector3DotProduct(from_target, right),
+        .y = Vector3DotProduct(from_target, screen_up),
+        .half_width = radius * right_horizontal +
+                      half_height * fabsf(right.y),
+        .half_height = radius * up_horizontal +
+                       half_height * fabsf(screen_up.y),
+        .depth = Vector3DotProduct(
+            Vector3Subtract(center, camera.position), forward),
+    };
+}
+
+static float CameraVolumeOverlap(CameraProjectedVolume subject,
+                                 CameraProjectedVolume occluder)
+{
+    /* Depth grows away from the camera. Only scenery in front of the actor
+       can take away a sightline. */
+    if (occluder.depth >= subject.depth - 0.18f) return 0.0f;
+    float left = fmaxf(subject.x - subject.half_width,
+                       occluder.x - occluder.half_width);
+    float right = fminf(subject.x + subject.half_width,
+                        occluder.x + occluder.half_width);
+    float top = fmaxf(subject.y - subject.half_height,
+                      occluder.y - occluder.half_height);
+    float bottom = fminf(subject.y + subject.half_height,
+                         occluder.y + occluder.half_height);
+    if (right <= left || bottom <= top) return 0.0f;
+    return (right - left) * (bottom - top);
+}
+
+static float CameraVolumeScreenOverlap(CameraProjectedVolume subject,
+                                       CameraProjectedVolume scenery)
+{
+    float left = fmaxf(subject.x - subject.half_width,
+                       scenery.x - scenery.half_width);
+    float right = fminf(subject.x + subject.half_width,
+                        scenery.x + scenery.half_width);
+    float top = fmaxf(subject.y - subject.half_height,
+                      scenery.y - scenery.half_height);
+    float bottom = fminf(subject.y + subject.half_height,
+                         scenery.y + scenery.half_height);
+    if (right <= left || bottom <= top) return 0.0f;
+    return (right - left) * (bottom - top);
+}
+
+static CameraProjectedVolume CameraProjectBox(Camera3D camera,
+                                               Vector3 center,
+                                               Vector3 half_size)
+{
+    Vector3 forward = PhysicsNormalizeOr(
+        Vector3Subtract(camera.target, camera.position),
+        (Vector3){0.0f, -0.3f, -1.0f});
+    Vector3 right = PhysicsNormalizeOr(
+        Vector3CrossProduct(forward, camera.up),
+        (Vector3){1.0f, 0.0f, 0.0f});
+    Vector3 screen_up = PhysicsNormalizeOr(
+        Vector3CrossProduct(right, forward), camera.up);
+    Vector3 from_target = Vector3Subtract(center, camera.target);
+    return (CameraProjectedVolume){
+        .x = Vector3DotProduct(from_target, right),
+        .y = Vector3DotProduct(from_target, screen_up),
+        .half_width = fabsf(right.x) * half_size.x +
+                      fabsf(right.y) * half_size.y +
+                      fabsf(right.z) * half_size.z,
+        .half_height = fabsf(screen_up.x) * half_size.x +
+                       fabsf(screen_up.y) * half_size.y +
+                       fabsf(screen_up.z) * half_size.z,
+        .depth = Vector3DotProduct(
+            Vector3Subtract(center, camera.position), forward),
+    };
+}
+
+static float CameraStreetCourseClutterScore(Camera3D camera,
+                                             Vector3 first_subject,
+                                             Vector3 second_subject)
+{
+    /* A fighter can disappear against a wall or post even when that piece is
+       technically behind them. Reserve a clean screen-space silhouette, not
+       merely an unobstructed ray. */
+    CameraProjectedVolume subjects[] = {
+        CameraProjectVolume(camera, first_subject, 0.52f, 1.05f),
+        CameraProjectVolume(camera, second_subject, 0.52f, 1.05f),
+    };
+    float score = 0.0f;
+    for (int32_t platform = 0;
+         platform < (int32_t)(sizeof(STREET_PLATFORMS) /
+                              sizeof(STREET_PLATFORMS[0])); ++platform) {
+        const NavPlatform *block = &STREET_PLATFORMS[platform];
+        Vector3 half_size = {block->width * 0.5f,
+                             block->height * 0.5f,
+                             block->depth * 0.5f};
+        Vector3 center = {
+            block->x + half_size.x,
+            PlatformBaseHeight(block) + half_size.y,
+            block->z + half_size.z,
+        };
+        CameraProjectedVolume scenery = CameraProjectBox(
+            camera, center, half_size);
+        for (int32_t subject = 0; subject < 2; ++subject) {
+            score += CameraVolumeScreenOverlap(subjects[subject], scenery);
+        }
+    }
+    return score;
+}
+
+static float CameraStreetPlatformSubjectOverlap(
+    Camera3D camera, const NavPlatform *block,
+    Vector3 first_subject, Vector3 second_subject)
+{
+    if (block == NULL) return 0.0f;
+    CameraProjectedVolume subjects[] = {
+        CameraProjectVolume(camera, first_subject, 0.48f, 1.00f),
+        CameraProjectVolume(camera, second_subject, 0.48f, 1.00f),
+    };
+    Vector3 half_size = {block->width * 0.5f,
+                         block->height * 0.5f,
+                         block->depth * 0.5f};
+    Vector3 center = {
+        block->x + half_size.x,
+        PlatformBaseHeight(block) + half_size.y,
+        block->z + half_size.z,
+    };
+    CameraProjectedVolume scenery = CameraProjectBox(
+        camera, center, half_size);
+    return CameraVolumeScreenOverlap(subjects[0], scenery) +
+           CameraVolumeScreenOverlap(subjects[1], scenery);
+}
+
+static void WorldTreeVisibilityShape(TreeFamily family, float *trunk_top,
+                                     float *crown_bottom, float *crown_top,
+                                     float *trunk_radius,
+                                     float *crown_radius)
+{
+    switch (family) {
+        case TREE_FAMILY_OAK:
+            *trunk_top = 3.10f;
+            *crown_bottom = 2.45f;
+            *crown_top = 6.35f;
+            *trunk_radius = 0.72f;
+            *crown_radius = 2.65f;
+            return;
+        case TREE_FAMILY_POLLARD:
+            *trunk_top = 2.45f;
+            *crown_bottom = 2.05f;
+            *crown_top = 4.75f;
+            *trunk_radius = 0.66f;
+            *crown_radius = 1.48f;
+            return;
+        case TREE_FAMILY_ALDER:
+        default:
+            *trunk_top = 3.10f;
+            *crown_bottom = 2.35f;
+            *crown_top = 5.75f;
+            *trunk_radius = 0.66f;
+            *crown_radius = 1.56f;
+            return;
+    }
+}
+
+float CcLocalCameraTreeOcclusionScoreInternal(Camera3D camera,
+                                               Vector3 first_subject,
+                                               Vector3 second_subject)
+{
+    CameraProjectedVolume subjects[] = {
+        CameraProjectVolume(camera, first_subject, 0.43f, 0.98f),
+        CameraProjectVolume(camera, second_subject, 0.43f, 0.98f),
+    };
+    float score = 0.0f;
+    for (int32_t tree = 0;
+         tree < (int32_t)(sizeof(WORLD_TREES) / sizeof(WORLD_TREES[0]));
+         ++tree) {
+        Vector2 position = WORLD_TREES[tree].position;
+        if (Vector2Distance(position,
+                            (Vector2){camera.target.x, camera.target.z}) >
+            18.0f) continue;
+        float trunk_top = 0.0f;
+        float crown_bottom = 0.0f;
+        float crown_top = 0.0f;
+        float trunk_radius = 0.0f;
+        float crown_radius = 0.0f;
+        WorldTreeVisibilityShape(WORLD_TREES[tree].family, &trunk_top,
+                                 &crown_bottom, &crown_top, &trunk_radius,
+                                 &crown_radius);
+        float root_y = CcLocalTerrainHeightAt(position.x, position.y);
+        CameraProjectedVolume trunk = CameraProjectVolume(
+            camera,
+            (Vector3){position.x, root_y + trunk_top * 0.5f, position.y},
+            trunk_radius, trunk_top * 0.5f);
+        CameraProjectedVolume crown = CameraProjectVolume(
+            camera,
+            (Vector3){position.x,
+                      root_y + (crown_bottom + crown_top) * 0.5f,
+                      position.y},
+            crown_radius, (crown_top - crown_bottom) * 0.5f);
+        for (int32_t subject = 0; subject < 2; ++subject) {
+            score += CameraVolumeOverlap(subjects[subject], trunk) * 1.35f;
+            score += CameraVolumeOverlap(subjects[subject], crown);
+        }
+    }
+    return score;
+}
+
+Camera3D CcLocalCameraClearSightlinesInternal(Camera3D camera,
+                                              Vector3 first_subject,
+                                              Vector3 second_subject,
+                                              float preferred_angle,
+                                              float *chosen_angle)
+{
+    static const float angles[] = {
+        0.0f, 8.0f * DEG2RAD, -8.0f * DEG2RAD,
+        14.0f * DEG2RAD, -14.0f * DEG2RAD,
+        22.0f * DEG2RAD, -22.0f * DEG2RAD,
+        30.0f * DEG2RAD, -30.0f * DEG2RAD,
+        44.0f * DEG2RAD, -44.0f * DEG2RAD,
+        60.0f * DEG2RAD, -60.0f * DEG2RAD,
+        75.0f * DEG2RAD, -75.0f * DEG2RAD,
+        90.0f * DEG2RAD, -90.0f * DEG2RAD,
+        105.0f * DEG2RAD, -105.0f * DEG2RAD,
+        120.0f * DEG2RAD, -120.0f * DEG2RAD,
+        135.0f * DEG2RAD, -135.0f * DEG2RAD,
+        150.0f * DEG2RAD, -150.0f * DEG2RAD,
+        165.0f * DEG2RAD, -165.0f * DEG2RAD,
+        180.0f * DEG2RAD,
+    };
+    Vector3 offset = Vector3Subtract(camera.position, camera.target);
+    Camera3D best = camera;
+    float best_angle = 0.0f;
+    float best_cost = FLT_MAX;
+    for (int32_t candidate = 0;
+         candidate < (int32_t)(sizeof(angles) / sizeof(angles[0]));
+         ++candidate) {
+        float angle = angles[candidate];
+        float cosine = cosf(angle);
+        float sine = sinf(angle);
+        Vector3 rotated = {
+            offset.x * cosine + offset.z * sine,
+            offset.y,
+            -offset.x * sine + offset.z * cosine,
+        };
+        Camera3D option = camera;
+        option.position = Vector3Add(option.target, rotated);
+        float tree_occlusion = CcLocalCameraTreeOcclusionScoreInternal(
+            option, first_subject, second_subject);
+        float course_clutter = CameraStreetCourseClutterScore(
+            option, first_subject, second_subject);
+        /* Prefer the authored angle, then the angle already in use. This
+           makes a clear choice stable while the fighters move. */
+        float cost = tree_occlusion * 12.0f + course_clutter * 1.80f +
+                     fabsf(angle) * 0.20f +
+                     fabsf(WrapAngle(angle - preferred_angle)) * 0.08f;
+        if (cost >= best_cost) continue;
+        best = option;
+        best_angle = angle;
+        best_cost = cost;
+    }
+    if (chosen_angle != NULL) *chosen_angle = best_angle;
+    return best;
 }
 
 static int32_t StreetCameraShotFor(Vector3 focus, int32_t current_shot)
@@ -7072,6 +7418,7 @@ static int32_t StreetCameraShotFor(Vector3 focus, int32_t current_shot)
 static int32_t StreetCameraCompositionFor(Vector3 focus,
                                           int32_t current_shot)
 {
+    current_shot = StreetCameraBaseShot(current_shot);
     /* Turn toward Crown Gate as soon as the market road clears its last
        house. The room lenses share a viewing side, so this becomes a gentle
        reveal of the gate instead of lingering behind the foreground wing. A
@@ -7091,6 +7438,7 @@ static int32_t StreetCameraCompositionFor(Vector3 focus,
 
 static const StreetCameraShot *StreetCameraShotAt(int32_t shot)
 {
+    shot = StreetCameraBaseShot(shot);
     int32_t count = (int32_t)(sizeof(STREET_CAMERA_SHOTS) /
                               sizeof(STREET_CAMERA_SHOTS[0]));
     if (shot == MARKET_GATE_ROAD_CAMERA_SHOT) {
@@ -7116,15 +7464,25 @@ static void FixedCameraRigAim(FixedCameraRig *rig, int32_t shot,
         rig->fovy_destination = fovy;
         rig->transition_duration = 0.0f;
         rig->transition_elapsed = 0.0f;
+        rig->framing_offset = (Vector3){0};
+        rig->framing_from = (Vector3){0};
+        rig->framing_destination = (Vector3){0};
+        rig->framing_elapsed = 0.0f;
+        rig->framing_duration = 0.0f;
+        rig->delta_time = 0.0f;
         rig->last_clock = clock;
         rig->shot = shot;
         rig->initialized = true;
         return;
     }
-    if (!advance) return;
+    if (!advance) {
+        rig->delta_time = 0.0f;
+        return;
+    }
     float delta_time = clock - rig->last_clock;
     rig->last_clock = clock;
     delta_time = fmaxf(0.0f, fminf(delta_time, 0.05f));
+    rig->delta_time = delta_time;
     if (shot != rig->shot) {
         float distance = Vector3Distance(rig->displayed_target, destination);
         rig->transition_from = rig->displayed_target;
@@ -7136,6 +7494,13 @@ static void FixedCameraRigAim(FixedCameraRig *rig, int32_t shot,
         rig->transition_elapsed = 0.0f;
         rig->transition_duration = fmaxf(0.55f, fminf(1.15f,
                                                      0.42f + distance * 0.025f));
+        /* A new authored shot owns its own framing. The hard visibility
+           clamp covers the short transition before the new shot settles. */
+        rig->framing_offset = (Vector3){0};
+        rig->framing_from = (Vector3){0};
+        rig->framing_destination = (Vector3){0};
+        rig->framing_elapsed = 0.0f;
+        rig->framing_duration = 0.0f;
         rig->shot = shot;
     }
     if (rig->transition_elapsed >= rig->transition_duration ||
@@ -7156,6 +7521,82 @@ static void FixedCameraRigAim(FixedCameraRig *rig, int32_t shot,
     rig->displayed_fovy = rig->fovy_transition_from +
                           (rig->fovy_destination -
                            rig->fovy_transition_from) * amount;
+}
+
+static Camera3D FixedCameraRigFrameHero(FixedCameraRig *rig,
+                                         Camera3D camera, Vector3 hero,
+                                         int32_t art_height,
+                                         Rectangle quiet_area,
+                                         bool advance)
+{
+    if (rig == NULL || art_height <= 0 ||
+        camera.projection != CAMERA_ORTHOGRAPHIC) return camera;
+    int32_t art_width = (int32_t)lroundf(
+        (float)art_height * 457.0f / 285.0f);
+
+    if (advance && rig->framing_duration > 0.0f) {
+        rig->framing_elapsed = fminf(
+            rig->framing_duration,
+            rig->framing_elapsed + rig->delta_time);
+        float amount = SmoothStep01(rig->framing_elapsed /
+                                    rig->framing_duration);
+        rig->framing_offset = Vector3Lerp(
+            rig->framing_from, rig->framing_destination, amount);
+        if (rig->framing_elapsed >= rig->framing_duration) {
+            rig->framing_duration = 0.0f;
+        }
+    }
+
+    camera.target = Vector3Add(camera.target, rig->framing_offset);
+    camera.position = Vector3Add(camera.position, rig->framing_offset);
+    bool authored_transition_done =
+        rig->transition_duration <= 0.0f ||
+        rig->transition_elapsed >= rig->transition_duration;
+    if (!advance || !authored_transition_done ||
+        rig->framing_duration > 0.0f) return camera;
+
+    float quiet_left = quiet_area.x * (float)art_width;
+    float quiet_right = (quiet_area.x + quiet_area.width) *
+                        (float)art_width;
+    float quiet_top = quiet_area.y * (float)art_height;
+    float quiet_bottom = (quiet_area.y + quiet_area.height) *
+                         (float)art_height;
+    float trigger_left = fmaxf(quiet_left, (float)art_width * 0.24f);
+    float trigger_right = fminf(quiet_right, (float)art_width * 0.76f);
+    float trigger_top = fmaxf(quiet_top, (float)art_height * 0.24f);
+    float trigger_bottom = fminf(quiet_bottom,
+                                 (float)art_height * 0.76f);
+    Vector2 screen = GetWorldToScreenEx(
+        hero, camera, art_width, art_height);
+    float target_x = screen.x;
+    float target_y = screen.y;
+    if (screen.x < trigger_left) {
+        target_x = fmaxf(quiet_left, (float)art_width * 0.36f);
+    } else if (screen.x > trigger_right) {
+        target_x = fminf(quiet_right, (float)art_width * 0.64f);
+    }
+    if (screen.y < trigger_top) {
+        target_y = fmaxf(quiet_top, (float)art_height * 0.34f);
+    } else if (screen.y > trigger_bottom) {
+        target_y = fminf(quiet_bottom, (float)art_height * 0.66f);
+    }
+    if (fabsf(target_x - screen.x) < 0.5f &&
+        fabsf(target_y - screen.y) < 0.5f) return camera;
+
+    Vector3 forward = Vector3Normalize(
+        Vector3Subtract(camera.target, camera.position));
+    Vector3 right = Vector3Normalize(Vector3CrossProduct(forward, camera.up));
+    Vector3 screen_up = Vector3Normalize(
+        Vector3CrossProduct(right, forward));
+    float pixel_world = camera.fovy / (float)art_height;
+    Vector3 adjustment = Vector3Add(
+        Vector3Scale(right, (screen.x - target_x) * pixel_world),
+        Vector3Scale(screen_up, (target_y - screen.y) * pixel_world));
+    rig->framing_from = rig->framing_offset;
+    rig->framing_destination = Vector3Add(rig->framing_offset, adjustment);
+    rig->framing_elapsed = 0.0f;
+    rig->framing_duration = 0.42f;
+    return camera;
 }
 
 static float StreetAlleyWeight(Vector3 focus)
@@ -7181,38 +7622,40 @@ Camera3D CcLocalStreetCameraInternal(const CcLocalAgent *agent, float clock,
                                      bool advance, int32_t art_height)
 {
     Vector3 focus = agent != NULL ? agent->position : (Vector3){0};
-    int32_t shot = StreetCameraCompositionFor(
+    int32_t base_shot = StreetCameraCompositionFor(
         focus, street_camera_rig.shot);
-    const StreetCameraShot *composition = StreetCameraShotAt(shot);
+    const StreetCameraShot *composition = StreetCameraShotAt(base_shot);
+    int32_t shot = base_shot;
     Vector3 destination = composition->target;
     destination.y += CcLocalTerrainHeightAt(destination.x, destination.z);
+    float fovy = composition->fovy;
+    if (agent != NULL) {
+        float alley_weight = StreetAlleyWeight(focus);
+        bool hold_alley = StreetCameraShotIsAlley(street_camera_rig.shot) &&
+                          StreetCameraBaseShot(street_camera_rig.shot) ==
+                              base_shot;
+        if (alley_weight >= (hold_alley ? 0.34f : 0.58f)) {
+            /* Like an adventure-game close-up: choose the composition once
+               on entering the alley, animate to it, then hold it. */
+            shot = StreetCameraAlleyShot(base_shot);
+            destination = (Vector3){focus.x, focus.y + 1.00f, focus.z};
+            fovy = fminf(fovy, 9.8f);
+        }
+    }
     FixedCameraRigAim(&street_camera_rig, shot, destination,
-                      composition->camera_offset, composition->fovy,
+                      composition->camera_offset, fovy,
                       clock, advance);
     Camera3D camera = ExteriorCameraComposed(
         street_camera_rig.displayed_target,
         street_camera_rig.displayed_offset,
         street_camera_rig.displayed_fovy);
     if (agent != NULL) {
-        /* Two nearby facades define an alley. Ease toward a hero-led close
-           shot there instead of pulling the lens wider or deleting a house
-           to preserve the authored landmark composition. */
-        float alley_weight = StreetAlleyWeight(focus);
-        if (alley_weight > 0.0001f) {
-            Vector3 hero_target = {focus.x, focus.y + 1.00f, focus.z};
-            Vector3 close_target = Vector3Lerp(
-                camera.target, hero_target, alley_weight * 0.78f);
-            Vector3 target_adjustment = Vector3Subtract(close_target,
-                                                         camera.target);
-            camera.target = close_target;
-            camera.position = Vector3Add(camera.position,
-                                         target_adjustment);
-            float alley_fovy = fminf(camera.fovy, 9.8f);
-            camera.fovy += (alley_fovy - camera.fovy) * alley_weight;
-        }
+        Vector3 hero = {focus.x, focus.y + 1.05f, focus.z};
+        camera = FixedCameraRigFrameHero(
+            &street_camera_rig, camera, hero, art_height,
+            composition->art.quiet_area, advance);
         camera = KeepHeroInsideStreetFrame(
-            camera, (Vector3){focus.x, focus.y + 1.05f, focus.z},
-            art_height, composition->art.quiet_area);
+            camera, hero, art_height, composition->art.quiet_area);
     }
     return SnapCameraToArtPixels(camera, art_height);
 }
@@ -7268,20 +7711,153 @@ static const CcLocalAgent *CombatCameraOpponent(
     }
     const CcLocalAgent *nearest = NULL;
     float nearest_distance = FLT_MAX;
+    const CcLocalAgent *recently_defeated = NULL;
+    float defeated_distance = FLT_MAX;
     for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
         const CcLocalAgent *raider = &course->raiders[i];
-        if (!CombatCanAct(&raider->combat)) continue;
         float distance = CombatHorizontalDistanceSquared(player, raider);
+        if (!CombatCanAct(&raider->combat)) {
+            if (course->combat_event_seconds > 0.0f &&
+                distance < defeated_distance) {
+                recently_defeated = raider;
+                defeated_distance = distance;
+            }
+            continue;
+        }
         if (distance >= nearest_distance) continue;
         nearest = raider;
         nearest_distance = distance;
     }
+    /* Hold the nearby knockdown for the impact beat. Otherwise the next live
+       raider can pull the camera across the whole settlement before the
+       fallen body has even landed. */
+    if (recently_defeated != NULL && defeated_distance <= 6.0f * 6.0f &&
+        (nearest == NULL || nearest_distance > defeated_distance * 2.25f)) {
+        return recently_defeated;
+    }
     return nearest;
 }
 
-/* Combat uses a closer three-quarter view of the active duel. The base room
-   camera still chooses the clear side of scenery; this rig bends that view
-   toward the fight and eases back to the authored shot when the alarm ends. */
+static int32_t CombatCameraOpponentIndex(const CcLocalCourse *course,
+                                         const CcLocalAgent *opponent)
+{
+    if (course == NULL || opponent == NULL) return -1;
+    for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
+        if (opponent == &course->raiders[i]) return i;
+    }
+    return -1;
+}
+
+static void CombatCameraLockComposition(Camera3D base,
+                                         const CcLocalAgent *player,
+                                         const CcLocalAgent *opponent,
+                                         const CcLocalCourse *course)
+{
+    Vector3 opponent_position = opponent != NULL ? opponent->position :
+        course->combat_origin;
+    Vector3 target = Vector3Lerp(player->position, opponent_position, 0.48f);
+    target.y = (player->position.y + opponent_position.y) * 0.5f + 0.98f;
+
+    Vector3 fight_line = Vector3Subtract(opponent_position,
+                                          player->position);
+    fight_line.y = 0.0f;
+    float span = fmaxf(1.0f, Vector3Length(fight_line));
+    fight_line = PhysicsNormalizeOr(
+        fight_line, (Vector3){1.0f, 0.0f, 0.0f});
+    Vector3 fight_side = {-fight_line.z, 0.0f, fight_line.x};
+    Vector3 base_view = Vector3Subtract(base.position, base.target);
+    base_view.y = 0.0f;
+    base_view = PhysicsNormalizeOr(base_view,
+                                    (Vector3){0.0f, 0.0f, 1.0f});
+    if (Vector3DotProduct(fight_side, base_view) < 0.0f) {
+        fight_side = Vector3Negate(fight_side);
+    }
+    Vector3 view = PhysicsNormalizeOr(
+        Vector3Add(Vector3Scale(base_view, 0.66f),
+                   Vector3Scale(fight_side, 0.34f)), base_view);
+    float horizontal_distance = 11.2f + fminf(span, 6.0f) * 0.42f;
+    Vector3 offset = Vector3Scale(view, horizontal_distance);
+    offset.y = 5.7f + fminf(span, 5.0f) * 0.15f;
+    float fovy = CombatClamp(7.2f + span * 0.62f, 7.8f, 10.4f);
+
+    if (course->scene == CC_LOCAL_SCENE_STREET) {
+        Camera3D sightline_camera = ExteriorCameraComposed(
+            target, offset, fovy);
+        Vector3 player_center = Vector3Add(
+            player->position, (Vector3){0.0f, 1.02f, 0.0f});
+        Vector3 opponent_center = Vector3Add(
+            opponent_position, (Vector3){0.0f, 1.02f, 0.0f});
+        sightline_camera = CcLocalCameraClearSightlinesInternal(
+            sightline_camera, player_center, opponent_center,
+            combat_camera_rig.tree_clear_angle,
+            &combat_camera_rig.tree_clear_angle);
+        TraceLog(LOG_INFO,
+                 "CAMLOCK angle=%.0f player=(%.2f,%.2f) opponent=(%.2f,%.2f)",
+                 combat_camera_rig.tree_clear_angle * RAD2DEG,
+                 player->position.x, player->position.z,
+                 opponent_position.x, opponent_position.z);
+        offset = Vector3Subtract(sightline_camera.position,
+                                 sightline_camera.target);
+    } else {
+        combat_camera_rig.tree_clear_angle = 0.0f;
+    }
+    combat_camera_rig.locked_target = target;
+    combat_camera_rig.locked_offset = offset;
+    combat_camera_rig.locked_fovy = fovy;
+    combat_camera_rig.opponent_index = CombatCameraOpponentIndex(
+        course, opponent);
+    combat_camera_rig.composition_locked = true;
+    combat_camera_rig.reframe_cooldown = 0.45f;
+}
+
+static bool CombatCameraSubjectsNeedReframe(const CcLocalAgent *player,
+                                             const CcLocalAgent *opponent,
+                                             const CcLocalCourse *course,
+                                             int32_t art_height)
+{
+    if (!combat_camera_rig.composition_locked || art_height <= 0) {
+        return true;
+    }
+    int32_t art_width = (int32_t)lroundf(
+        (float)art_height * 457.0f / 285.0f);
+    Camera3D camera = ExteriorCameraComposed(
+        combat_camera_rig.locked_target,
+        combat_camera_rig.locked_offset,
+        combat_camera_rig.locked_fovy);
+    Vector3 opponent_position = opponent != NULL ? opponent->position :
+        course->combat_origin;
+    Vector3 midpoint = Vector3Lerp(player->position, opponent_position, 0.48f);
+    float midpoint_x = midpoint.x - combat_camera_rig.locked_target.x;
+    float midpoint_z = midpoint.z - combat_camera_rig.locked_target.z;
+    if (midpoint_x * midpoint_x + midpoint_z * midpoint_z > 1.35f * 1.35f) {
+        return true;
+    }
+    float live_span = Vector2Distance(
+        (Vector2){player->position.x, player->position.z},
+        (Vector2){opponent_position.x, opponent_position.z});
+    float live_fovy = CombatClamp(7.2f + fmaxf(1.0f, live_span) * 0.62f,
+                                  7.8f, 10.4f);
+    if (fabsf(live_fovy - combat_camera_rig.locked_fovy) > 0.55f) {
+        return true;
+    }
+    Vector3 subjects[] = {
+        Vector3Add(player->position, (Vector3){0.0f, 1.02f, 0.0f}),
+        Vector3Add(opponent_position, (Vector3){0.0f, 1.02f, 0.0f}),
+    };
+    for (int32_t subject = 0; subject < 2; ++subject) {
+        Vector2 screen = GetWorldToScreenEx(
+            subjects[subject], camera, art_width, art_height);
+        if (screen.x < (float)art_width * 0.18f ||
+            screen.x > (float)art_width * 0.82f ||
+            screen.y < (float)art_height * 0.16f ||
+            screen.y > (float)art_height * 0.84f) return true;
+    }
+    return false;
+}
+
+/* Combat uses a closer three-quarter view of the active duel. The duel
+   composition is chosen once and held like a stage shot; it is recomposed
+   only when a fighter crosses the safe frame or the opponent changes. */
 static Camera3D CombatCamera(Camera3D base, const CcLocalAgent *player,
                              const CcLocalCourse *course, float clock,
                              bool advance, int32_t art_height)
@@ -7296,8 +7872,15 @@ static Camera3D CombatCamera(Camera3D base, const CcLocalAgent *player,
         combat_camera_rig.displayed_target = base.target;
         combat_camera_rig.displayed_offset = base_offset;
         combat_camera_rig.displayed_fovy = base.fovy;
+        combat_camera_rig.locked_target = base.target;
+        combat_camera_rig.locked_offset = base_offset;
+        combat_camera_rig.locked_fovy = base.fovy;
         combat_camera_rig.combat_weight = 0.0f;
+        combat_camera_rig.tree_clear_angle = 0.0f;
+        combat_camera_rig.reframe_cooldown = 0.0f;
         combat_camera_rig.last_clock = clock;
+        combat_camera_rig.opponent_index = -1;
+        combat_camera_rig.composition_locked = false;
         combat_camera_rig.initialized = true;
         if (course != NULL) {
             combat_camera_rig.scene = course->scene;
@@ -7315,47 +7898,31 @@ static Camera3D CombatCamera(Camera3D base, const CcLocalAgent *player,
             combat_camera_rig.combat_weight + delta_time * direction,
             0.0f, 1.0f);
 
-        Vector3 combat_target = base.target;
-        Vector3 combat_offset = base_offset;
-        float combat_fovy = base.fovy;
         const CcLocalAgent *opponent = CombatCameraOpponent(course, player);
         if (active) {
-            Vector3 opponent_position = opponent != NULL ? opponent->position :
-                course->combat_origin;
-            combat_target = Vector3Lerp(player->position,
-                                        opponent_position, 0.48f);
-            combat_target.y = (player->position.y + opponent_position.y) *
-                              0.5f + 0.98f;
-
-            Vector3 fight_line = Vector3Subtract(opponent_position,
-                                                  player->position);
-            fight_line.y = 0.0f;
-            float span = fmaxf(1.0f, Vector3Length(fight_line));
-            fight_line = PhysicsNormalizeOr(
-                fight_line, (Vector3){1.0f, 0.0f, 0.0f});
-            Vector3 fight_side = {-fight_line.z, 0.0f, fight_line.x};
-            Vector3 base_view = base_offset;
-            base_view.y = 0.0f;
-            base_view = PhysicsNormalizeOr(base_view,
-                                            (Vector3){0.0f, 0.0f, 1.0f});
-            if (Vector3DotProduct(fight_side, base_view) < 0.0f) {
-                fight_side = Vector3Negate(fight_side);
+            combat_camera_rig.reframe_cooldown = fmaxf(
+                0.0f, combat_camera_rig.reframe_cooldown - delta_time);
+            int32_t opponent_index = CombatCameraOpponentIndex(
+                course, opponent);
+            bool opponent_changed = combat_camera_rig.composition_locked &&
+                opponent_index != combat_camera_rig.opponent_index;
+            bool left_safe_frame =
+                combat_camera_rig.reframe_cooldown <= 0.0f &&
+                CombatCameraSubjectsNeedReframe(
+                    player, opponent, course, art_height);
+            if (!combat_camera_rig.composition_locked || opponent_changed ||
+                left_safe_frame) {
+                CombatCameraLockComposition(base, player, opponent, course);
             }
-            Vector3 view = PhysicsNormalizeOr(
-                Vector3Add(Vector3Scale(base_view, 0.66f),
-                           Vector3Scale(fight_side, 0.34f)), base_view);
-            float horizontal_distance = 11.2f + fminf(span, 6.0f) * 0.42f;
-            combat_offset = Vector3Scale(view, horizontal_distance);
-            combat_offset.y = 5.7f + fminf(span, 5.0f) * 0.15f;
-            combat_fovy = CombatClamp(7.2f + span * 0.62f, 7.8f, 10.4f);
         }
 
         float weight = SmoothStep01(combat_camera_rig.combat_weight);
-        Vector3 desired_target = Vector3Lerp(base.target, combat_target,
-                                             weight);
-        Vector3 desired_offset = Vector3Lerp(base_offset, combat_offset,
-                                             weight);
-        float desired_fovy = base.fovy + (combat_fovy - base.fovy) * weight;
+        Vector3 desired_target = Vector3Lerp(
+            base.target, combat_camera_rig.locked_target, weight);
+        Vector3 desired_offset = Vector3Lerp(
+            base_offset, combat_camera_rig.locked_offset, weight);
+        float desired_fovy = base.fovy +
+            (combat_camera_rig.locked_fovy - base.fovy) * weight;
         float ease = 1.0f - expf(-delta_time * 8.0f);
         combat_camera_rig.displayed_target = Vector3Lerp(
             combat_camera_rig.displayed_target, desired_target, ease);
@@ -7367,6 +7934,10 @@ static Camera3D CombatCamera(Camera3D base, const CcLocalAgent *player,
             combat_camera_rig.displayed_target = base.target;
             combat_camera_rig.displayed_offset = base_offset;
             combat_camera_rig.displayed_fovy = base.fovy;
+            combat_camera_rig.tree_clear_angle = 0.0f;
+            combat_camera_rig.reframe_cooldown = 0.0f;
+            combat_camera_rig.opponent_index = -1;
+            combat_camera_rig.composition_locked = false;
         }
     }
 
@@ -10767,6 +11338,7 @@ static Color BuildingRoofColor(int32_t style, Color kingdom)
 
 static uint32_t StreetForegroundBuildingMaskForShot(int32_t shot)
 {
+    shot = StreetCameraBaseShot(shot);
     /* These are authored stage wings, not player-dependent pop-in. A given
        shot always presents the same architecture; buildings between the low
        camera and its route receive the hero-centered ink reveal. */
@@ -13178,12 +13750,6 @@ static void DrawDungeon3D(const CcDungeon *dungeon)
     rlPopMatrix();
 }
 
-typedef enum TreeFamily {
-    TREE_FAMILY_ALDER = 0,
-    TREE_FAMILY_OAK,
-    TREE_FAMILY_POLLARD
-} TreeFamily;
-
 typedef enum TreeRegion {
     TREE_REGION_VERDANT = 0,
     TREE_REGION_EMBER,
@@ -13199,11 +13765,6 @@ typedef struct TreeRegionalStyle {
     float turn_steps;
     float shape_shift;
 } TreeRegionalStyle;
-
-typedef struct WorldTreePlacement {
-    Vector2 position;
-    TreeFamily family;
-} WorldTreePlacement;
 
 static TreeRegionalStyle TreeStyleForKingdom(Color kingdom)
 {
@@ -13473,45 +14034,14 @@ static void DrawTree(float x, float z, TreeFamily family, Color leaves,
 
 static void DrawWorldTrees(Vector3 focus, Color kingdom)
 {
-    static const WorldTreePlacement trees[] = {
-        {{2.5f, 58.0f}, TREE_FAMILY_ALDER},
-        {{6.0f, 62.0f}, TREE_FAMILY_ALDER},
-        {{10.0f, 56.0f}, TREE_FAMILY_POLLARD},
-        {{14.0f, 65.0f}, TREE_FAMILY_OAK},
-        {{18.0f, 58.0f}, TREE_FAMILY_ALDER},
-        {{22.0f, 64.0f}, TREE_FAMILY_ALDER},
-        {{27.0f, 60.0f}, TREE_FAMILY_ALDER},
-        {{33.0f, 66.0f}, TREE_FAMILY_OAK},
-        {{48.0f, 63.0f}, TREE_FAMILY_ALDER},
-        {{54.0f, 59.0f}, TREE_FAMILY_ALDER},
-        {{59.0f, 65.0f}, TREE_FAMILY_POLLARD},
-        {{66.0f, 59.0f}, TREE_FAMILY_OAK},
-        {{73.0f, 64.0f}, TREE_FAMILY_ALDER},
-        {{84.0f, 59.5f}, TREE_FAMILY_ALDER},
-        {{88.0f, 64.0f}, TREE_FAMILY_OAK},
-        {{93.0f, 56.0f}, TREE_FAMILY_ALDER},
-        {{18.0f, 5.0f}, TREE_FAMILY_ALDER},
-        {{24.0f, 8.0f}, TREE_FAMILY_POLLARD},
-        {{31.0f, 5.5f}, TREE_FAMILY_OAK},
-        {{49.0f, 6.0f}, TREE_FAMILY_ALDER},
-        {{57.0f, 5.0f}, TREE_FAMILY_POLLARD},
-        {{62.0f, 3.5f}, TREE_FAMILY_ALDER},
-        {{4.0f, 14.0f}, TREE_FAMILY_POLLARD},
-        {{16.0f, 14.5f}, TREE_FAMILY_ALDER},
-        {{17.0f, 45.0f}, TREE_FAMILY_POLLARD},
-        {{20.0f, 52.0f}, TREE_FAMILY_ALDER},
-        {{57.5f, 41.0f}, TREE_FAMILY_OAK},
-        {{70.5f, 39.5f}, TREE_FAMILY_POLLARD},
-        {{86.0f, 40.0f}, TREE_FAMILY_ALDER},
-        {{93.0f, 36.0f}, TREE_FAMILY_OAK}
-    };
     TreeRegionalStyle regional_style = TreeStyleForKingdom(kingdom);
-    for (int32_t i = 0; i < (int32_t)(sizeof(trees) / sizeof(trees[0])); ++i) {
-        Vector2 position = trees[i].position;
+    for (int32_t i = 0;
+         i < (int32_t)(sizeof(WORLD_TREES) / sizeof(WORLD_TREES[0])); ++i) {
+        Vector2 position = WORLD_TREES[i].position;
         position.x += (i & 1) != 0 ? -regional_style.cluster_pull :
                                      regional_style.cluster_pull;
         if (!SceneryPointVisible(position.x, position.y, focus)) continue;
-        TreeFamily family = RegionalTreeFamily(trees[i].family, i,
+        TreeFamily family = RegionalTreeFamily(WORLD_TREES[i].family, i,
                                                regional_style);
         Color leaves = (i & 1) != 0 ? (Color){54, 105, 85, 255} :
                                       (Color){58, 119, 91, 255};
@@ -14926,9 +15456,34 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     BeginWorldLighting(camera, &street_art);
 
     DrawExteriorTerrain(place, scenery_focus);
+    const CcLocalAgent *sightline_opponent =
+        CombatCameraOpponent(course, agent);
+    bool close_combat_sightline = course != NULL && agent != NULL &&
+        sightline_opponent != NULL && course->alarm_active &&
+        CombatHorizontalDistanceSquared(agent, sightline_opponent) <=
+            7.0f * 7.0f;
+    Vector3 player_sightline = agent != NULL ?
+        Vector3Add(agent->position, (Vector3){0.0f, 1.02f, 0.0f}) :
+        (Vector3){0};
+    Vector3 opponent_sightline = sightline_opponent != NULL ?
+        Vector3Add(sightline_opponent->position,
+                   (Vector3){0.0f, 1.02f, 0.0f}) :
+        player_sightline;
+    float course_reveal_cut = fminf(player_sightline.y,
+                                    opponent_sightline.y) - 0.94f;
     for (int32_t i = 0; i < (int32_t)(sizeof(STREET_PLATFORMS) /
                                       sizeof(STREET_PLATFORMS[0])); ++i) {
         const NavPlatform *platform = &STREET_PLATFORMS[i];
+        float overlap = close_combat_sightline ?
+            CameraStreetPlatformSubjectOverlap(
+                camera, platform, player_sightline, opponent_sightline) :
+            0.0f;
+        /* The camera chooses the clearest available angle first. When a
+           fighter is standing directly against a course block and no angle
+           can create clean negative space, cut only that block down to a low
+           ground marker for the duration of the overlap. */
+        SetWorldForegroundReveal(overlap > 0.001f ? 1.0f : 0.0f,
+                                 course_reveal_cut);
         Color color = CoursePlatformColor(platform->style);
         float base = PlatformBaseHeight(platform);
         float top = PlatformTopHeight(platform);
@@ -14946,6 +15501,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                 i == 0 ? (Color){124, 145, 131, 255} :
                          Fade(WORLD_GOLD, 0.70f));
     }
+    SetWorldForegroundReveal(0.0f, course_reveal_cut);
     DrawObstacleCourse();
     DrawAgentPath(agent, false);
     Vector3 foreground_reveal_world = {
@@ -15054,7 +15610,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     EndTextureMode();
     PresentTarget(target, destination);
 
-    int32_t room_index = street_camera_rig.shot;
+    int32_t room_index = StreetCameraBaseShot(street_camera_rig.shot);
     int32_t room_count = (int32_t)(sizeof(STREET_CAMERA_SHOTS) /
                                    sizeof(STREET_CAMERA_SHOTS[0]));
     if (room_index >= 0 && room_index < room_count) {

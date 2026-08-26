@@ -1887,6 +1887,66 @@ int main(void)
         return 1;
     }
 
+    /* Once a shot has settled, ordinary movement inside its safe area must
+       move the actor across the stage instead of dragging the camera along.
+       This is the core King's Quest-style framing contract. */
+    Vector3 held_alley_target = alley_camera.target;
+    float held_alley_fovy = alley_camera.fovy;
+    alley_camera_agent.position.x += 0.55f;
+    for (int32_t frame = 0; frame < 90; ++frame) {
+        camera_clock += 1.0f / 60.0f;
+        alley_camera = CcLocalStreetCameraInternal(
+            &alley_camera_agent, camera_clock, true,
+            click_target.texture.height);
+    }
+    Vector2 moved_alley_hero_screen = GetWorldToScreenEx(
+        (Vector3){alley_camera_agent.position.x,
+                  alley_camera_agent.position.y + 1.05f,
+                  alley_camera_agent.position.z},
+        alley_camera, click_target.texture.width,
+        click_target.texture.height);
+    if (VectorDistance3(held_alley_target, alley_camera.target) > 0.03f ||
+        fabsf(held_alley_fovy - alley_camera.fovy) > 0.01f ||
+        fabsf(moved_alley_hero_screen.x - alley_hero_screen.x) < 2.0f) {
+        (void)fprintf(
+            stderr,
+            "settled street shot followed hero: target drift %.3f fovy drift %.3f actor shift %.2f\n",
+            VectorDistance3(held_alley_target, alley_camera.target),
+            fabsf(held_alley_fovy - alley_camera.fovy),
+            fabsf(moved_alley_hero_screen.x - alley_hero_screen.x));
+        return 1;
+    }
+
+    /* The Wayfarer Yard tree used to sit across both fighters in the combat
+       reel. The visibility pass must find a nearby angle that clears both
+       bodies without moving or hiding the tree. */
+    Vector3 sightline_target = {16.74f, 0.98f, 9.65f};
+    Camera3D blocked_combat_camera = {
+        .position = {18.91f, 7.10f, 21.84f},
+        .target = sightline_target,
+        .up = {0.0f, 1.0f, 0.0f},
+        .fovy = 8.95f,
+        .projection = CAMERA_ORTHOGRAPHIC,
+    };
+    Vector3 sightline_player = {15.40f, 1.05f, 9.65f};
+    Vector3 sightline_raider = {18.20f, 1.05f, 9.65f};
+    float blocked_tree_score = CcLocalCameraTreeOcclusionScoreInternal(
+        blocked_combat_camera, sightline_player, sightline_raider);
+    float clear_angle = 0.0f;
+    Camera3D clear_combat_camera = CcLocalCameraClearSightlinesInternal(
+        blocked_combat_camera, sightline_player, sightline_raider, 0.0f,
+        &clear_angle);
+    float clear_tree_score = CcLocalCameraTreeOcclusionScoreInternal(
+        clear_combat_camera, sightline_player, sightline_raider);
+    if (blocked_tree_score < 0.50f || clear_tree_score > 0.08f ||
+        fabsf(clear_angle) < 0.10f) {
+        (void)fprintf(stderr,
+                      "tree sightline camera failed: blocked %.3f clear %.3f angle %.2f\n",
+                      blocked_tree_score, clear_tree_score,
+                      clear_angle * RAD2DEG);
+        return 1;
+    }
+
     /* Regression from an off-center road-edge position that reproduced the
        reported failure. Proximity starts the traversal here; the first
        authored portal waypoint must route around the gatehouse. */
