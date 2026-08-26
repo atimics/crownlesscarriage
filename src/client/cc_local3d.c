@@ -2894,7 +2894,7 @@ void CcLocalCourseStageRoadEncounter(CcLocalCourse *course,
 {
     if (course == NULL || player == NULL) return;
     static const Vector2 guard_positions[CC_LOCAL_COURSE_RUNNER_COUNT] = {
-        {44.75f, 38.45f}, {44.85f, 40.00f}, {44.75f, 41.55f}
+        {44.75f, 38.35f}, {44.75f, 40.95f}, {44.75f, 42.10f}
     };
     course->road_encounter = true;
     course->scene = CC_LOCAL_SCENE_ROAD;
@@ -3226,11 +3226,16 @@ static bool CourseGuardIngressWaypoint(const CcLocalCourse *course,
     }
     Vector3 entry = course->guard_entry[guard];
     if (course->road_encounter) {
-        float lane_z = 38.70f + (float)guard * 1.30f;
+        static const float road_guard_lanes[CC_LOCAL_COURSE_RUNNER_COUNT] = {
+            38.35f, 40.95f, 42.10f
+        };
+        float lane_z = road_guard_lanes[guard];
         if (stage == 0) {
             *waypoint = (Vector3){44.75f, 0.0f, lane_z};
         } else if (stage == 1) {
-            *waypoint = (Vector3){46.20f, 0.0f, lane_z};
+            /* Leave the player a clean center lane instead of routing the
+               middle guard through the hero's exact starting point. */
+            *waypoint = (Vector3){45.35f, 0.0f, lane_z};
         } else if (stage == 2) {
             *waypoint = (Vector3){47.70f, 0.0f, lane_z};
         } else {
@@ -11280,6 +11285,12 @@ static void DrawWorldFace(Vector3 eye_center, Vector3 head_right,
         .always_paint = false,
         .layer = 0,
     };
+    if (priority_face) {
+        /* The 3D cap owns the head silhouette; this flat fringe supplies the
+           same bold asymmetric shape as the hero PFP at gameplay scale. */
+        canvas.always_paint = true;
+        CcNpcPaintFaceFringe(face, &canvas, PaintWorldFaceBlock);
+    }
     if (lod == CC_LOCAL_FACE_LOD_CLOSE || priority_face) {
         canvas.always_paint = true;
         CcNpcPaintFaceBeard(face, &canvas, PaintWorldFaceBlock);
@@ -11858,20 +11869,28 @@ static void DrawWayfarerCrown(const CcHumanoidSkinPose *skin)
     Vector3 head_top = FromLimbVector(
         skin->bones[CC_HUMANOID_SKIN_HEAD].tail);
     Vector3 band = PhysicsAdd(
-        PhysicsAdd(head_top, PhysicsScale(up, 0.030f)),
+        PhysicsAdd(head_top, PhysicsScale(up, 0.034f)),
         PhysicsScale(forward, -0.004f));
-    Color dark_gold = (Color){124, 86, 34, 255};
-    Color crown_gold = (Color){204, 153, 57, 255};
-    DrawCylinderEx(PhysicsAdd(band, PhysicsScale(up, -0.024f)),
-                   PhysicsAdd(band, PhysicsScale(up, 0.018f)),
-                   0.095f, 0.087f, 7, dark_gold);
+    Color crown_ink = (Color){43, 32, 29, 255};
+    Color dark_gold = (Color){142, 102, 38, 255};
+    Color crown_gold = (Color){224, 177, 78, 255};
+    /* A dark backing and broad band keep the crown from collapsing into one
+       stray gold pixel after the world is rasterized to the art grid. */
+    DrawCylinderEx(PhysicsAdd(band, PhysicsScale(up, -0.034f)),
+                   PhysicsAdd(band, PhysicsScale(up, 0.026f)),
+                   0.132f, 0.122f, 7, crown_ink);
+    DrawCylinderEx(PhysicsAdd(band, PhysicsScale(up, -0.025f)),
+                   PhysicsAdd(band, PhysicsScale(up, 0.022f)),
+                   0.118f, 0.108f, 7, dark_gold);
     for (int32_t prong = -1; prong <= 1; ++prong) {
-        float height = prong == 0 ? 0.112f : 0.082f;
+        float height = prong == 0 ? 0.150f : 0.112f;
         Vector3 root = PhysicsAdd(
-            band, PhysicsScale(right, (float)prong * 0.055f));
+            band, PhysicsScale(right, (float)prong * 0.073f));
         root = PhysicsAdd(root, PhysicsScale(forward, -0.010f));
         Vector3 tip = PhysicsAdd(root, PhysicsScale(up, height));
-        DrawCylinderEx(root, tip, 0.027f, 0.005f, 5, crown_gold);
+        tip = PhysicsAdd(tip, PhysicsScale(right,
+            prong == 0 ? -0.012f : (float)prong * 0.009f));
+        DrawCylinderEx(root, tip, 0.036f, 0.008f, 5, crown_gold);
     }
 }
 
@@ -11923,23 +11942,43 @@ static void DrawWayfarerHeroDetails(const CcHumanoidSkinPose *skin)
         skin->sockets[CC_HUMANOID_SOCKET_CHEST_FRONT].position);
     chest = PhysicsAdd(chest, PhysicsScale(forward, 0.032f));
 
-    Color clasp_shadow = (Color){45, 37, 35, 255};
+    Color panel_ink = (Color){43, 32, 29, 255};
+    Color portrait_burgundy = (Color){111, 48, 55, 255};
     Color broken_gold = (Color){224, 169, 59, 255};
-    Vector3 clasp_back = PhysicsAdd(chest, PhysicsScale(forward, -0.020f));
-    Vector3 clasp_front = PhysicsAdd(chest, PhysicsScale(forward, 0.014f));
-    DrawCylinderEx(clasp_back, clasp_front, 0.058f, 0.052f, 7,
-                   clasp_shadow);
+    Vector3 panel = PhysicsAdd(chest, PhysicsScale(up, -0.018f));
+    /* Match the portrait's large oxblood shoulder-and-chest mass. The broad
+       shape survives at distance; the gold emblem is the second read. */
+    DrawFaceQuad(panel, right, up, forward, 0.0f, 0.0f,
+                 0.350f, 0.270f, 0.006f, panel_ink);
+    DrawFaceQuad(panel, right, up, forward, 0.0f, 0.0f,
+                 0.306f, 0.226f, 0.011f, portrait_burgundy);
+
+    static const CcHumanoidSkinBone shoulder_bones[] = {
+        CC_HUMANOID_SKIN_UPPER_ARM_LEFT,
+        CC_HUMANOID_SKIN_UPPER_ARM_RIGHT,
+    };
+    for (int32_t side = 0; side < 2; ++side) {
+        Vector3 shoulder = FromLimbVector(
+            skin->bones[shoulder_bones[side]].head);
+        Vector3 upper_arm = FromLimbVector(
+            skin->bones[shoulder_bones[side]].tail);
+        Vector3 tab_end = Vector3Lerp(shoulder, upper_arm, 0.24f);
+        shoulder = PhysicsAdd(shoulder, PhysicsScale(forward, 0.014f));
+        tab_end = PhysicsAdd(tab_end, PhysicsScale(forward, 0.014f));
+        DrawCylinderEx(shoulder, tab_end, 0.108f, 0.084f, 6,
+                       portrait_burgundy);
+    }
 
     Vector3 left_top = NpcModuleLocalPoint(
-        chest, right, up, forward, (Vector3){-0.092f, 0.078f, 0.020f});
+        panel, right, up, forward, (Vector3){-0.112f, 0.076f, 0.022f});
     Vector3 left_low = NpcModuleLocalPoint(
-        chest, right, up, forward, (Vector3){-0.014f, -0.016f, 0.020f});
+        panel, right, up, forward, (Vector3){-0.020f, -0.030f, 0.022f});
     Vector3 right_low = NpcModuleLocalPoint(
-        chest, right, up, forward, (Vector3){0.024f, 0.002f, 0.020f});
+        panel, right, up, forward, (Vector3){0.026f, -0.014f, 0.022f});
     Vector3 right_top = NpcModuleLocalPoint(
-        chest, right, up, forward, (Vector3){0.098f, 0.068f, 0.020f});
-    DrawCylinderEx(left_top, left_low, 0.014f, 0.011f, 5, broken_gold);
-    DrawCylinderEx(right_low, right_top, 0.011f, 0.014f, 5, broken_gold);
+        panel, right, up, forward, (Vector3){0.116f, 0.064f, 0.022f});
+    DrawCylinderEx(left_top, left_low, 0.020f, 0.016f, 5, broken_gold);
+    DrawCylinderEx(right_low, right_top, 0.016f, 0.020f, 5, broken_gold);
 }
 
 static bool DrawNpcDynamicModule(NpcDynamicModuleId id, Matrix transform,
@@ -12391,7 +12430,10 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
        pre-graded world skin through the regular character material. */
     CcNpcAppearance face_appearance = featured_hero ?
         CcNpcHeroPortraitAppearance(appearance) : *appearance;
-    face_appearance.hair_style = appearance->hair_style;
+    /* Geometry uses a short cap, while the face card keeps the exact PFP
+       fringe recipe. This avoids the unrelated long module assigned to style
+       3 without losing the portrait's most recognizable hair shape. */
+    face_appearance.hair_style = featured_hero ? 3U : appearance->hair_style;
     CcFaceRecipe face = CcNpcFaceRecipe(&face_appearance);
     float face_half_width = featured_hero ?
         0.138f * appearance->head_width :
@@ -14252,13 +14294,17 @@ void CcLocalDrawAgentPortrait3D(const CcLocalAgent *agent,
         (Vector3){sinf(agent->facing_yaw), 0.0f,
                   cosf(agent->facing_yaw)});
     Camera3D camera = {0};
-    camera.target = Vector3Add(head, Vector3Scale(head_up, -0.16f));
+    float portrait_drop = agent->crowned ? -0.10f : -0.16f;
+    camera.target = Vector3Add(head, Vector3Scale(head_up, portrait_drop));
     camera.position = Vector3Add(
         camera.target,
         Vector3Add(Vector3Scale(head_forward, 4.0f),
                    (Vector3){0.0f, 0.11f, 0.0f}));
     camera.up = (Vector3){0.0f, 1.0f, 0.0f};
-    camera.fovy = 0.98f;
+    /* The hero PFP is an identity card, so favor the face and shoulder marks
+       over empty torso space. The larger face also keeps one-cell eyes and
+       mouth intact when the portrait target is reduced into the HUD. */
+    camera.fovy = agent->crowned ? 0.84f : 0.98f;
     camera.projection = CAMERA_ORTHOGRAPHIC;
 
     FaceRenderContext previous_face_context = face_render_context;
