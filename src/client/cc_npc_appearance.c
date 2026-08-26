@@ -53,11 +53,25 @@ CcFaceRecipe CcNpcFaceRecipe(const CcNpcAppearance *appearance)
     if (appearance == NULL) return (CcFaceRecipe){0};
     Color headwear = appearance->headwear_style == 0U ?
                      appearance->metal : appearance->outer;
+    uint8_t face_shape = 0U;
+    if (appearance->age >= 0.70f) {
+        face_shape = 3U;
+    } else if (appearance->head_width < 0.99f ||
+               appearance->head_depth < 0.985f) {
+        face_shape = 1U;
+    } else if (appearance->head_width > 1.045f ||
+               appearance->body_mass > 1.075f) {
+        face_shape = 2U;
+    }
     return (CcFaceRecipe){
         .seed = appearance->seed,
         .width = appearance->head_width,
         .depth = appearance->head_depth,
         .age = appearance->age,
+        .face_shape = face_shape,
+        .eye_spacing = (uint8_t)(Sample(appearance->seed, 26U) % 3U),
+        .brow_style = (uint8_t)(Sample(appearance->seed, 27U) % 4U),
+        .mouth_style = (uint8_t)(Sample(appearance->seed, 28U) % 4U),
         .hair_style = appearance->hair_style,
         .beard_style = appearance->beard_style,
         .nose_style = appearance->nose_style,
@@ -73,10 +87,6 @@ CcFaceRecipe CcNpcFaceRecipe(const CcNpcAppearance *appearance)
         .accent = appearance->accent,
     };
 }
-
-typedef void (*PortraitBlockPainter)(void *context, int32_t grid_x,
-                                     int32_t grid_y, int32_t grid_width,
-                                     int32_t grid_height, Color color);
 
 typedef struct ScreenPortraitCanvas {
     int32_t x;
@@ -95,28 +105,54 @@ static void PaintScreenBlock(void *context, int32_t grid_x, int32_t grid_y,
                   grid_height * canvas->pixel, color);
 }
 
-static void PaintPortraitFeatures(const CcFaceRecipe *face,
-                                  CcNpcPortraitExpression expression,
-                                  void *context,
-                                  PortraitBlockPainter paint)
+void CcNpcPaintFaceFeatures(const CcFaceRecipe *face,
+                            CcNpcPortraitExpression expression,
+                            void *context, CcNpcFaceBlockPainter paint)
 {
+    if (face == NULL || paint == NULL) return;
     Color shadow = face->skin_shadow;
     Color ink = face->ink;
-    int32_t brow_y = expression == CC_NPC_PORTRAIT_FOCUSED ? 7 : 6;
-    paint(context, 6, brow_y, 3, 1, ink);
-    paint(context, 11, brow_y, 3, 1, ink);
-    if (expression == CC_NPC_PORTRAIT_HURT) {
-        paint(context, 7, 8, 1, 1, ink);
-        paint(context, 12, 9, 1, 1, ink);
+    int32_t eye_left = face->eye_spacing % 3U == 0U ? 8 :
+                       face->eye_spacing % 3U == 2U ? 6 : 7;
+    int32_t eye_right = face->eye_spacing % 3U == 0U ? 11 :
+                        face->eye_spacing % 3U == 2U ? 13 : 12;
+    int32_t eye_y = 8;
+    int32_t brow_y = 6;
+    uint8_t brow_style = face->brow_style % 4U;
+    if (expression == CC_NPC_PORTRAIT_FOCUSED) {
+        /* Downward inner ends create intent without changing the identity. */
+        paint(context, eye_left - 1, brow_y, 2, 1, ink);
+        paint(context, eye_left + 1, brow_y + 1, 1, 1, ink);
+        paint(context, eye_right - 1, brow_y + 1, 1, 1, ink);
+        paint(context, eye_right, brow_y, 2, 1, ink);
+    } else if (expression == CC_NPC_PORTRAIT_HURT || brow_style == 3U) {
+        paint(context, eye_left - 1, brow_y, 3, 1, ink);
+        paint(context, eye_right - 1, brow_y + 1, 3, 1, ink);
+    } else if (brow_style == 1U) {
+        paint(context, eye_left - 1, brow_y, 2, 1, ink);
+        paint(context, eye_right, brow_y, 2, 1, ink);
+    } else if (brow_style == 2U) {
+        paint(context, eye_left - 1, brow_y + 1, 1, 1, ink);
+        paint(context, eye_left, brow_y, 2, 1, ink);
+        paint(context, eye_right - 1, brow_y, 2, 1, ink);
+        paint(context, eye_right + 1, brow_y + 1, 1, 1, ink);
     } else {
-        paint(context, 7, 8, 1, 1, ink);
-        paint(context, 12, 8, 1, 1, ink);
+        paint(context, eye_left - 1, brow_y, 3, 1, ink);
+        paint(context, eye_right - 1, brow_y, 3, 1, ink);
     }
+    if (expression == CC_NPC_PORTRAIT_HURT) {
+        paint(context, eye_left, eye_y, 1, 1, ink);
+        paint(context, eye_right, eye_y + 1, 1, 1, ink);
+    } else {
+        paint(context, eye_left, eye_y, 1, 1, ink);
+        paint(context, eye_right, eye_y, 1, 1, ink);
+    }
+    int32_t face_drop = face->face_shape % 4U == 1U ? 1 : 0;
     switch (face->nose_style % 4U) {
-        case 0: paint(context, 9, 10, 2, 1, shadow); break;
-        case 1: paint(context, 9, 10, 2, 2, shadow); break;
-        case 2: paint(context, 8, 11, 4, 1, shadow); break;
-        case 3: paint(context, 9, 9, 2, 3, shadow); break;
+        case 0: paint(context, 9, 10 + face_drop, 2, 1, shadow); break;
+        case 1: paint(context, 9, 10 + face_drop, 2, 2, shadow); break;
+        case 2: paint(context, 8, 11 + face_drop, 4, 1, shadow); break;
+        case 3: paint(context, 9, 9 + face_drop, 2, 3, shadow); break;
     }
     if (face->scar_style == 1U) {
         paint(context, 13, 8, 1, 4, Shade(face->skin, 0.52f));
@@ -129,34 +165,52 @@ static void PaintPortraitFeatures(const CcFaceRecipe *face,
         paint(context, 5, 11, 2, 1, shadow);
         paint(context, 13, 11, 2, 1, shadow);
     }
+    int32_t mouth_y = 13 + face_drop;
+    int32_t mouth_width = 3 + (int32_t)(face->mouth_style % 3U);
+    int32_t mouth_x = 10 - mouth_width / 2;
     if (expression == CC_NPC_PORTRAIT_TALKING) {
-        paint(context, 8, 13, 4, 2, ink);
-        paint(context, 9, 13, 2, 1, Shade(face->skin, 1.18f));
+        int32_t highlight_width = mouth_width > 2 ? mouth_width - 2 : 1;
+        paint(context, mouth_x, mouth_y, mouth_width, 2, ink);
+        paint(context, mouth_x + 1, mouth_y, highlight_width, 1,
+              Shade(face->skin, 1.18f));
     } else if (expression == CC_NPC_PORTRAIT_HURT) {
-        paint(context, 8, 14, 4, 1, ink);
-        paint(context, 8, 13, 1, 1, ink);
+        paint(context, mouth_x, mouth_y + 1, mouth_width, 1, ink);
+        paint(context, mouth_x, mouth_y, 1, 1, ink);
     } else {
-        paint(context, 8, 13, 4, 1, ink);
+        paint(context, mouth_x, mouth_y, mouth_width, 1, ink);
     }
 }
 
-static void PaintPortraitFace(const CcFaceRecipe *face,
-                              CcNpcPortraitExpression expression,
-                              bool crowned, void *context,
-                              PortraitBlockPainter paint)
+void CcNpcPaintFaceBase(const CcFaceRecipe *face, void *context,
+                        CcNpcFaceBlockPainter paint)
 {
-    Color shadow = face->skin_shadow;
-    int32_t face_left = face->width < 1.0f ? 6 :
-                        face->width > 1.045f ? 4 : 5;
+    if (face == NULL || paint == NULL) return;
+    int32_t face_shape = face->face_shape % 4U;
+    int32_t face_left = face_shape == 1 ? 6 :
+                        face_shape == 2 ? 4 : 5;
     int32_t face_width = 20 - face_left * 2;
-    paint(context, face_left - 1, 7, 1, 5, shadow);
-    paint(context, face_left + face_width, 7, 1, 5, shadow);
+    paint(context, face_left - 1, 7, 1, 5, face->skin_shadow);
+    paint(context, face_left + face_width, 7, 1, 5,
+          face->skin_shadow);
     paint(context, face_left, 4, face_width, 10, face->skin);
     paint(context, face_left + 1, 14, face_width - 2, 2,
           face->skin);
-    paint(context, 7, 16, 6, 1, shadow);
+    paint(context, 7, 16, 6, 1, face->skin_shadow);
+}
 
+void CcNpcPaintFaceHairAndBeard(const CcFaceRecipe *face, void *context,
+                                CcNpcFaceBlockPainter paint)
+{
+    if (face == NULL || paint == NULL) return;
     paint(context, 5, 2, 10, 3, face->hair);
+    CcNpcPaintFaceFringe(face, context, paint);
+    CcNpcPaintFaceBeard(face, context, paint);
+}
+
+void CcNpcPaintFaceFringe(const CcFaceRecipe *face, void *context,
+                          CcNpcFaceBlockPainter paint)
+{
+    if (face == NULL || paint == NULL) return;
     switch (face->hair_style % 8U) {
         case 0:
             paint(context, 5, 4, 2, 5, face->hair);
@@ -193,6 +247,12 @@ static void PaintPortraitFace(const CcFaceRecipe *face,
             paint(context, 14, 4, 3, 8, face->hair);
             break;
     }
+}
+
+void CcNpcPaintFaceBeard(const CcFaceRecipe *face, void *context,
+                         CcNpcFaceBlockPainter paint)
+{
+    if (face == NULL || paint == NULL) return;
     switch (face->beard_style % 4U) {
         case 1:
             paint(context, 7, 12, 6, 1, face->hair);
@@ -208,8 +268,17 @@ static void PaintPortraitFace(const CcFaceRecipe *face,
         default:
             break;
     }
+}
 
-    PaintPortraitFeatures(face, expression, context, paint);
+static void PaintPortraitFace(const CcFaceRecipe *face,
+                              CcNpcPortraitExpression expression,
+                              bool crowned, void *context,
+                              CcNpcFaceBlockPainter paint)
+{
+    CcNpcPaintFaceBase(face, context, paint);
+    CcNpcPaintFaceHairAndBeard(face, context, paint);
+
+    CcNpcPaintFaceFeatures(face, expression, context, paint);
 
     if (face->headwear) {
         Color headwear = face->headwear_color;

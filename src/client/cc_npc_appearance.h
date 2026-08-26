@@ -81,6 +81,12 @@ typedef struct CcFaceRecipe {
     float width;
     float depth;
     float age;
+    /* A small measured proportion sheet, shared by the 3D head and every
+       portrait. These are identity traits, not expression state. */
+    uint8_t face_shape;
+    uint8_t eye_spacing;
+    uint8_t brow_style;
+    uint8_t mouth_style;
     uint8_t hair_style;
     uint8_t beard_style;
     uint8_t nose_style;
@@ -95,12 +101,29 @@ typedef struct CcFaceRecipe {
     Color accent;
 } CcFaceRecipe;
 
+/* Facial graphics are authored once on the portrait's 20 x 24 grid. Screen
+   portraits and world heads project these same blocks onto their own canvas. */
+typedef void (*CcNpcFaceBlockPainter)(void *context, int32_t grid_x,
+                                      int32_t grid_y, int32_t grid_width,
+                                      int32_t grid_height, Color color);
+
 CcNpcAppearance CcNpcAppearanceGenerate(uint32_t seed, CcNpcRole role,
                                         Color accent);
 const char *CcNpcRoleName(CcNpcRole role);
 bool CcNpcAppearanceEqual(const CcNpcAppearance *first,
                           const CcNpcAppearance *second);
 CcFaceRecipe CcNpcFaceRecipe(const CcNpcAppearance *appearance);
+void CcNpcPaintFaceBase(const CcFaceRecipe *face, void *context,
+                        CcNpcFaceBlockPainter paint);
+void CcNpcPaintFaceHairAndBeard(const CcFaceRecipe *face, void *context,
+                                CcNpcFaceBlockPainter paint);
+void CcNpcPaintFaceFringe(const CcFaceRecipe *face, void *context,
+                          CcNpcFaceBlockPainter paint);
+void CcNpcPaintFaceBeard(const CcFaceRecipe *face, void *context,
+                         CcNpcFaceBlockPainter paint);
+void CcNpcPaintFaceFeatures(const CcFaceRecipe *face,
+                            CcNpcPortraitExpression expression,
+                            void *context, CcNpcFaceBlockPainter paint);
 void CcNpcDrawPixelPortrait(const CcNpcAppearance *appearance,
                             Rectangle bounds,
                             CcNpcPortraitExpression expression,

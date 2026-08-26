@@ -373,6 +373,11 @@ void CcLocalRendererBeginFrame(float delta_time);
 CcLocalRendererStats CcLocalRendererGetStats(void);
 void CcLocalRendererSetDiagnosticOverlay(bool enabled);
 void CcLocalRendererShutdown(void);
+void CcLocalDrawNpcPortrait3D(const CcNpcAppearance *appearance,
+                              Rectangle bounds,
+                              CcNpcPortraitExpression expression);
+void CcLocalDrawAgentPortrait3D(const CcLocalAgent *agent,
+                                Rectangle bounds);
 void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                          const CcLocalCourse *course, float clock,
                          RenderTexture2D target, Rectangle destination);

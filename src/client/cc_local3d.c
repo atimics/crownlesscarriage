@@ -7374,6 +7374,7 @@ typedef struct SphereModelCache {
 } SphereModelCache;
 
 static SphereModelCache sphere_models = {0};
+static RenderTexture2D npc_portrait_target = {0};
 
 typedef enum TreeCrownShape {
     TREE_CROWN_ALDER = 0,
@@ -8829,7 +8830,7 @@ static void LoadHeroSkin(void)
 
 static bool DrawHeroSkin(const CcHumanoidSkinPose *skin,
                          const CcLocalCapeState *cape, Color tint,
-                         bool visible)
+                         bool visible, bool record_statistics)
 {
     if (!hero_skin.ready || skin == NULL || !skin->valid || cape == NULL ||
         !cape->initialized) return false;
@@ -8910,7 +8911,9 @@ static bool DrawHeroSkin(const CcHumanoidSkinPose *skin,
         hero_skin.pose[bone].scale = Vector3Scale(
             hero_skin.pose[bone].scale, gameplay_scale);
     }
-    CcLocalRendererRecordSkinUpdate(hero_skin.model.meshCount);
+    if (record_statistics) {
+        CcLocalRendererRecordSkinUpdate(hero_skin.model.meshCount);
+    }
     UpdateModelAnimation(hero_skin.model, hero_skin.animation, 0.0f);
     if (visible) {
         const float horizontal_scale = 0.98f;
@@ -9184,6 +9187,10 @@ void CcLocalRendererInit(void)
     LoadNpcHeadFamilies();
     LoadRuntimeAssets();
     LoadVisualStyle();
+    npc_portrait_target = LoadRenderTexture(72, 88);
+    if (IsRenderTextureValid(npc_portrait_target)) {
+        SetTextureFilter(npc_portrait_target.texture, TEXTURE_FILTER_POINT);
+    }
 }
 
 void CcLocalRendererSetScreenFirstHero(bool enabled)
@@ -9260,8 +9267,12 @@ void CcLocalRendererShutdown(void)
     if (IsTextureValid(visual_style.palette_lut)) {
         UnloadTexture(visual_style.palette_lut);
     }
+    if (IsRenderTextureValid(npc_portrait_target)) {
+        UnloadRenderTexture(npc_portrait_target);
+    }
     if (visual_style.grade_ready) UnloadShader(visual_style.grade);
     sphere_models = (SphereModelCache){0};
+    npc_portrait_target = (RenderTexture2D){0};
     tree_crown_models = (TreeCrownModelCache){0};
     hero_skin = (HeroSkinCache){0};
     visual_style = (VisualStyleCache){0};
@@ -10962,16 +10973,31 @@ static float FaceProjectedHeight(Vector3 eye_center, Vector3 up,
     return Vector2Distance(top, bottom);
 }
 
+static float FaceProjectedSpan(Vector3 center, Vector3 axis,
+                               float half_span)
+{
+    if (!face_render_context.valid || half_span <= 0.0f) return 0.0f;
+    Vector2 first = GetWorldToScreenEx(
+        Vector3Subtract(center, Vector3Scale(axis, half_span)),
+        face_render_context.camera, face_render_context.width,
+        face_render_context.height);
+    Vector2 second = GetWorldToScreenEx(
+        Vector3Add(center, Vector3Scale(axis, half_span)),
+        face_render_context.camera, face_render_context.width,
+        face_render_context.height);
+    return Vector2Distance(first, second);
+}
+
 CcLocalFaceLodInternal CcLocalFaceLodForProjectedHeightInternal(
     float projected_face_height)
 {
-    /* A face is about 13.7 percent of a Crownless adult's delivered height.
-       These limits therefore implement the 16/38 art-pixel character ladder
-       without asking a two-pixel face to carry a complete expression. */
-    if (projected_face_height < 2.2f) {
+    /* The sculpted head and molded hair own the silhouette. At medium range
+       keep only marks that survive as separate pixels; close views add the
+       beard without laying a second flat skin or hair shell over the model. */
+    if (projected_face_height < 4.0f) {
         return CC_LOCAL_FACE_LOD_SILHOUETTE;
     }
-    if (projected_face_height < 5.2f) return CC_LOCAL_FACE_LOD_READABLE;
+    if (projected_face_height < 12.0f) return CC_LOCAL_FACE_LOD_READABLE;
     return CC_LOCAL_FACE_LOD_CLOSE;
 }
 
@@ -11004,6 +11030,65 @@ static void DrawFaceQuad(Vector3 origin, Vector3 right, Vector3 up,
     DrawTriangle3D(lower_left, upper_left, upper_right, color);
 }
 
+typedef struct WorldFaceCanvas {
+    Vector3 origin;
+    Vector3 right;
+    Vector3 up;
+    Vector3 normal;
+    float cell_width;
+    float cell_height;
+    float horizontal_scale;
+    CcLocalFaceLodInternal lod;
+    bool always_paint;
+    int32_t layer;
+} WorldFaceCanvas;
+
+static bool IsPortraitEyeBlock(int32_t grid_x, int32_t grid_y,
+                               int32_t grid_width, int32_t grid_height)
+{
+    return grid_width == 1 && grid_height == 1 &&
+           grid_x >= 6 && grid_x <= 13 &&
+           (grid_y == 8 || grid_y == 9);
+}
+
+static bool IsPortraitMouthBlock(int32_t grid_x, int32_t grid_y,
+                                 int32_t grid_width,
+                                 int32_t grid_height)
+{
+    (void)grid_width;
+    (void)grid_height;
+    return grid_x >= 7 && grid_x <= 10 &&
+           (grid_y >= 13 && grid_y <= 15);
+}
+
+static void PaintWorldFaceBlock(void *context, int32_t grid_x,
+                                int32_t grid_y, int32_t grid_width,
+                                int32_t grid_height, Color color)
+{
+    WorldFaceCanvas *canvas = context;
+    if (!canvas->always_paint &&
+        canvas->lod == CC_LOCAL_FACE_LOD_READABLE &&
+        !IsPortraitEyeBlock(grid_x, grid_y, grid_width, grid_height) &&
+        !IsPortraitMouthBlock(grid_x, grid_y, grid_width, grid_height)) {
+        return;
+    }
+
+    float grid_center_x = (float)grid_x + (float)grid_width * 0.5f;
+    float grid_center_y = (float)grid_y + (float)grid_height * 0.5f;
+    /* The world canvas right vector is camera-right, so portrait x can map
+       directly without mirroring the fringe or scars. */
+    float x = (grid_center_x - 10.0f) * canvas->cell_width;
+    float width = (float)grid_width * canvas->cell_width;
+    x *= canvas->horizontal_scale;
+    width *= canvas->horizontal_scale;
+    float y = (8.5f - grid_center_y) * canvas->cell_height;
+    float height = (float)grid_height * canvas->cell_height;
+    float lift = 0.0030f + (float)canvas->layer * 0.00045f;
+    DrawFaceQuad(canvas->origin, canvas->right, canvas->up, canvas->normal,
+                 x, y, width, height, lift, color);
+    canvas->layer += 1;
+}
+
 static void DrawWorldFace(Vector3 eye_center, Vector3 head_right,
                           Vector3 head_up, Vector3 head_forward,
                           float half_width, float half_height,
@@ -11024,112 +11109,63 @@ static void DrawWorldFace(Vector3 eye_center, Vector3 head_right,
                                Vector3DotProduct(to_camera, head_up)));
     to_camera = PhysicsNormalizeOr(to_camera, head_forward);
     float front_amount = Vector3DotProduct(head_forward, to_camera);
-    float side_amount = Vector3DotProduct(head_right, to_camera);
     if (front_amount < -0.12f) return;
 
-    CcLocalFaceViewInternal view =
-        CcLocalFaceViewForFrontAmountInternal(front_amount);
-    float side = side_amount < 0.0f ? -1.0f : 1.0f;
-    float turn = view == CC_LOCAL_FACE_VIEW_FRONT ? 0.0f :
-                 view == CC_LOCAL_FACE_VIEW_THREE_QUARTER ? 0.52f : 1.22f;
-    Vector3 normal = PhysicsNormalizeOr(
-        Vector3Add(Vector3Scale(head_forward, cosf(turn)),
-                   Vector3Scale(head_right, side * sinf(turn))),
-        head_forward);
+    /* Keep the graphic on the visible head surface but face its tiny pixel
+       grid toward the camera. The 3D skull, hair, and hat still carry turn. */
+    Vector3 normal = to_camera;
     Vector3 feature_right = PhysicsNormalizeOr(
-        Vector3Subtract(Vector3Scale(head_right, cosf(turn)),
-                        Vector3Scale(head_forward, side * sinf(turn))),
-        head_right);
-    float surface_cosine = cosf(turn);
-    float surface_sine = sinf(turn);
+        PhysicsCross(head_up, normal), head_right);
+    float surface_cosine = Vector3DotProduct(normal, head_forward);
+    float surface_sine = Vector3DotProduct(normal, head_right);
     float surface_radius = 1.0f / sqrtf(
         (surface_cosine * surface_cosine) / (half_depth * half_depth) +
         (surface_sine * surface_sine) / (half_width * half_width));
     Vector3 surface = Vector3Add(
-        eye_center, Vector3Scale(normal, surface_radius * 1.20f));
+        eye_center, Vector3Scale(normal, surface_radius * 1.03f));
 
+    float projected_face_height = FaceProjectedHeight(
+        eye_center, head_up, half_height);
     CcLocalFaceLodInternal lod = CcLocalFaceLodForProjectedHeightInternal(
-        FaceProjectedHeight(eye_center, head_up, half_height));
-    float feature_scale = fmaxf(0.78f, half_width / 0.175f);
-    float eye_spacing = 0.050f * feature_scale;
-    float eye_width = (lod == CC_LOCAL_FACE_LOD_CLOSE ? 0.036f : 0.034f) *
-                      feature_scale;
-    float eye_height = (lod == CC_LOCAL_FACE_LOD_CLOSE ? 0.028f : 0.024f) *
-                       feature_scale;
-    float far_eye_scale = view == CC_LOCAL_FACE_VIEW_THREE_QUARTER ?
-                          0.70f : 1.0f;
-
-    /* At medium range the face gets eyes only. Mouth, brows, nose, and scars
-       wait for the close tier so they cannot collapse into one pasted mark. */
+        projected_face_height);
     if (lod == CC_LOCAL_FACE_LOD_SILHOUETTE) return;
 
     /* Indexed character shaders use vertex color as material metadata. Face
        cards need their literal ink colors, so draw this tiny graphic layer
        with raylib's color shader and let the caller restore scene lighting. */
     EndShaderMode();
-
-    if (view == CC_LOCAL_FACE_VIEW_PROFILE) {
-        DrawFaceQuad(surface, feature_right, head_up, normal,
-                     0.012f * side,
-                     0.0f, eye_width, eye_height, 0.050f, face->ink);
-    } else {
-        float near_x = side * eye_spacing;
-        float far_x = -side * eye_spacing;
-        float hurt_offset = expression == CC_NPC_PORTRAIT_HURT ?
-                            -0.010f : 0.0f;
-        DrawFaceQuad(surface, feature_right, head_up, normal,
-                     near_x, hurt_offset, eye_width, eye_height,
-                     0.050f, face->ink);
-        DrawFaceQuad(surface, feature_right, head_up, normal,
-                     far_x * far_eye_scale, -hurt_offset,
-                     eye_width * far_eye_scale, eye_height,
-                     0.050f, face->ink);
+    float projected_face_width = FaceProjectedSpan(
+        eye_center, feature_right, half_width);
+    float horizontal_pixels_per_unit = projected_face_width /
+                                       fmaxf(half_width * 2.0f, 0.0001f);
+    float vertical_pixels_per_unit = projected_face_height /
+                                     fmaxf(half_height * 2.0f, 0.0001f);
+    /* The portrait is built from square art pixels. Fit one square cell inside
+       both head spans instead of stretching x and y independently. */
+    float cell_pixels = fminf(projected_face_width / 10.0f,
+                              projected_face_height / 15.0f);
+    WorldFaceCanvas canvas = {
+        .origin = surface,
+        .right = feature_right,
+        .up = head_up,
+        .normal = normal,
+        /* The portrait face is ten cells wide; hair-to-chin is fifteen. */
+        .cell_width = cell_pixels /
+                      fmaxf(horizontal_pixels_per_unit, 0.0001f),
+        .cell_height = cell_pixels /
+                       fmaxf(vertical_pixels_per_unit, 0.0001f),
+        .horizontal_scale = 1.0f,
+        .lod = lod,
+        .always_paint = false,
+        .layer = 0,
+    };
+    if (lod == CC_LOCAL_FACE_LOD_CLOSE) {
+        canvas.always_paint = true;
+        CcNpcPaintFaceBeard(face, &canvas, PaintWorldFaceBlock);
+        canvas.always_paint = false;
     }
-
-    if (lod != CC_LOCAL_FACE_LOD_CLOSE) {
-        EndShaderMode();
-        return;
-    }
-
-    float mouth_width = (view == CC_LOCAL_FACE_VIEW_PROFILE ? 0.030f :
-                                                               0.070f) *
-                        feature_scale;
-    float mouth_y = expression == CC_NPC_PORTRAIT_HURT ? -0.090f : -0.075f;
-    DrawFaceQuad(surface, feature_right, head_up, normal,
-                 view == CC_LOCAL_FACE_VIEW_PROFILE ? 0.018f * side : 0.0f,
-                 mouth_y * feature_scale, mouth_width,
-                 0.013f * feature_scale, 0.014f, face->ink);
-    float brow_y = expression == CC_NPC_PORTRAIT_FOCUSED ? 0.036f : 0.052f;
-    if (view == CC_LOCAL_FACE_VIEW_PROFILE) {
-        DrawFaceQuad(surface, feature_right, head_up, normal,
-                     0.010f * side, brow_y * feature_scale,
-                     0.050f * feature_scale, 0.012f * feature_scale,
-                     0.052f, face->ink);
-    } else {
-        DrawFaceQuad(surface, feature_right, head_up, normal,
-                     side * eye_spacing, brow_y * feature_scale,
-                     0.045f * feature_scale, 0.012f * feature_scale,
-                     0.052f, face->ink);
-        DrawFaceQuad(surface, feature_right, head_up, normal,
-                     -side * eye_spacing * far_eye_scale,
-                     brow_y * feature_scale,
-                     0.045f * feature_scale * far_eye_scale,
-                     0.012f * feature_scale, 0.052f, face->ink);
-    }
-    DrawFaceQuad(surface, feature_right, head_up, normal,
-                 view == CC_LOCAL_FACE_VIEW_PROFILE ? 0.032f * side : 0.0f,
-                 -0.038f * feature_scale,
-                 (face->nose_style == 2U ? 0.038f : 0.022f) * feature_scale,
-                 (face->nose_style == 3U ? 0.052f : 0.032f) * feature_scale,
-                 0.016f, face->skin_shadow);
-    if (face->scar_style != 0U && view != CC_LOCAL_FACE_VIEW_PROFILE) {
-        float scar_side = face->scar_style == 2U ? -1.0f : 1.0f;
-        DrawFaceQuad(surface, feature_right, head_up, normal,
-                     scar_side * 0.064f * feature_scale,
-                     -0.022f * feature_scale,
-                     0.009f * feature_scale, 0.040f * feature_scale,
-                     0.017f, ShadeColor(face->skin, 0.54f));
-    }
+    CcNpcPaintFaceFeatures(face, expression, &canvas,
+                           PaintWorldFaceBlock);
     EndShaderMode();
 }
 
@@ -11334,6 +11370,7 @@ static void DrawNpcGarmentCut(const CcNpcAppearance *appearance,
 
 static bool DrawNpcArchetype3D(Vector3 position, float size_hint, float yaw,
                                float phase, CcTraversalMode mode,
+                               CcNpcPortraitExpression expression,
                                const CcNpcAppearance *appearance)
 {
     if (appearance == NULL || appearance->role < CC_NPC_ROLE_WAYFARER ||
@@ -11422,10 +11459,6 @@ static bool DrawNpcArchetype3D(Vector3 position, float size_hint, float yaw,
             appearance->metal : appearance->outer;
         (void)DrawNpcDynamicModule(headwear, identity_head, headwear_color);
     }
-    CcNpcPortraitExpression expression =
-        appearance->role == CC_NPC_ROLE_GUARD ||
-        appearance->role == CC_NPC_ROLE_RAIDER ? CC_NPC_PORTRAIT_FOCUSED :
-                                                CC_NPC_PORTRAIT_NEUTRAL;
     CcFaceRecipe face = CcNpcFaceRecipe(appearance);
     DrawWorldFace(PhysicsAdd(head, Vector3Scale(head_up, 0.025f * scale)),
                   head_right, head_up, head_forward,
@@ -11450,8 +11483,12 @@ static void DrawNpcFigure3D(Vector3 position, float size_hint, float yaw,
                             float phase, CcTraversalMode mode)
 {
     CcNpcAppearance appearance = CcNpcAppearanceGenerate(seed, role, accent);
+    CcNpcPortraitExpression expression =
+        appearance.role == CC_NPC_ROLE_GUARD ||
+        appearance.role == CC_NPC_ROLE_RAIDER ? CC_NPC_PORTRAIT_FOCUSED :
+                                               CC_NPC_PORTRAIT_NEUTRAL;
     if (!draw_hero_rig_debug && DrawNpcArchetype3D(
-            position, size_hint, yaw, phase, mode, &appearance)) {
+            position, size_hint, yaw, phase, mode, expression, &appearance)) {
         return;
     }
     UseCharacterLighting();
@@ -12031,15 +12068,15 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
         &skin->bones[CC_HUMANOID_SKIN_HEAD];
     Vector3 head = FromLimbVector(
         skin->sockets[CC_HUMANOID_SOCKET_HEAD].position);
+    Vector3 head_right = FromLimbVector(head_bone->right);
+    Vector3 head_up = FromLimbVector(head_bone->up);
+    Vector3 head_forward = FromLimbVector(head_bone->forward);
     Vector3 head_scale = {appearance->head_width, 1.0f,
                           appearance->head_depth};
     Matrix head_transform = NpcModuleTransform(
-        head, FromLimbVector(head_bone->right),
-        FromLimbVector(head_bone->up), FromLimbVector(head_bone->forward),
-        head_scale);
+        head, head_right, head_up, head_forward, head_scale);
     Matrix fallback_head_transform = NpcModuleTransform(
-        head, FromLimbVector(head_bone->right),
-        FromLimbVector(head_bone->up), FromLimbVector(head_bone->forward),
+        head, head_right, head_up, head_forward,
         (Vector3){0.30f * appearance->head_width, 0.34f,
                   0.28f * appearance->head_depth});
     drew = DrawNpcHeadFamily(appearance, head_transform,
@@ -12047,8 +12084,7 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
     int32_t hair = (int32_t)appearance->hair_style %
                    CC_NPC_DYNAMIC_HAIR_COUNT;
     Matrix hair_transform = NpcModuleTransform(
-        head, FromLimbVector(head_bone->right),
-        FromLimbVector(head_bone->up), FromLimbVector(head_bone->forward),
+        head, head_right, head_up, head_forward,
         (Vector3){0.25f * appearance->head_width, 0.29f,
                   0.33f * appearance->head_depth});
     drew = DrawNpcDynamicModule(
@@ -12201,9 +12237,7 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
         Color headwear_color = appearance->headwear_style == 0U ?
             appearance->metal : appearance->outer;
         Matrix headwear_transform = NpcModuleTransform(
-            head, FromLimbVector(head_bone->right),
-            FromLimbVector(head_bone->up),
-            FromLimbVector(head_bone->forward),
+            head, head_right, head_up, head_forward,
             (Vector3){0.26f * appearance->head_width, 0.30f,
                       0.25f * appearance->head_depth});
         (void)DrawNpcDynamicModule(
@@ -12221,7 +12255,9 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
                agent->humanoid.action == CC_HUMANOID_ACTION_STRIKE) {
         expression = CC_NPC_PORTRAIT_FOCUSED;
     }
-    CcFaceRecipe face = CcNpcFaceRecipe(appearance);
+    CcNpcAppearance face_appearance = featured_hero ?
+        CcNpcHeroPortraitAppearance(appearance) : *appearance;
+    CcFaceRecipe face = CcNpcFaceRecipe(&face_appearance);
     float face_half_width = featured_hero ?
         0.122f * appearance->head_width :
         0.105f * appearance->head_width;
@@ -12229,10 +12265,8 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
     float face_half_depth = featured_hero ?
         0.128f * appearance->head_depth :
         0.125f * appearance->head_depth;
-    DrawWorldFace(PhysicsAdd(head, Vector3Scale(body_up, 0.025f)),
-                  FromLimbVector(head_bone->right),
-                  FromLimbVector(head_bone->up),
-                  FromLimbVector(head_bone->forward),
+    DrawWorldFace(PhysicsAdd(head, Vector3Scale(head_up, 0.025f)),
+                  head_right, head_up, head_forward,
                   face_half_width, face_half_height, face_half_depth,
                   &face, expression);
     return drew;
@@ -12240,21 +12274,18 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
 
 static CcNpcAppearance ProceduralHeroAppearance(const CcLocalAgent *agent)
 {
-    CcNpcAppearance appearance = agent->appearance;
+    CcNpcAppearance appearance =
+        CcNpcHeroPortraitAppearance(&agent->appearance);
     appearance.role = CC_NPC_ROLE_WAYFARER;
     appearance.equipment = (uint32_t)CC_NPC_EQUIPMENT_ARMOR;
     appearance.body_mass = 0.94f;
     appearance.muscularity = 0.58f;
     appearance.shoulder_scale = 0.92f;
-    appearance.head_width = 0.985f;
-    appearance.head_depth = 0.99f;
-    appearance.age = 0.38f;
-    appearance.hair_style = 3U;
     appearance.garment_style = 0;
-    /* Cool the source skin slightly so the warm interior light still lands on
-       the shared skin ramp. Hair stays dark and leaves oxblood to the mantle. */
+    /* The world grade is strongly amber. Pre-grade the base material so the
+       lit world head lands on the authored tan; the portrait path neutralizes
+       this one color below while keeping the same geometry and face recipe. */
     appearance.skin = (Color){172, 108, 105, 255};
-    appearance.hair = (Color){43, 32, 29, 255};
     appearance.underlayer = (Color){108, 91, 69, 255};
     appearance.outer = (Color){48, 105, 103, 255};
     appearance.trousers = (Color){49, 62, 63, 255};
@@ -12304,7 +12335,7 @@ static void DrawBiomechanicalBiped(const CcLocalAgent *agent)
         }
     }
     bool hero_skin_updated = modular_hero &&
-        DrawHeroSkin(&skin, &agent->render_cape, WHITE, true);
+        DrawHeroSkin(&skin, &agent->render_cape, WHITE, true, true);
     if (hero_skin_updated) {
         CcLocalRendererRecordBiped(true);
         if (draw_hero_rig_debug) {
@@ -13987,6 +14018,150 @@ static void BeginWorldLighting(Camera3D camera,
 static void EndWorldLighting(void)
 {
     if (visual_style.world_ready) EndShaderMode();
+}
+
+static void PresentCharacterPortrait(Rectangle bounds, Color accent)
+{
+    DrawRectangle((int32_t)bounds.x, (int32_t)bounds.y,
+                  (int32_t)bounds.width, (int32_t)bounds.height,
+                  (Color){8, 16, 21, 255});
+    Rectangle source = {0.0f, 0.0f,
+                        (float)npc_portrait_target.texture.width,
+                        -(float)npc_portrait_target.texture.height};
+    float available_width = fmaxf(1.0f, bounds.width - 4.0f);
+    float available_height = fmaxf(1.0f, bounds.height - 4.0f);
+    float source_aspect = (float)npc_portrait_target.texture.width /
+                          (float)npc_portrait_target.texture.height;
+    float draw_width = fminf(available_width,
+                             available_height * source_aspect);
+    float draw_height = fminf(available_height,
+                              available_width / source_aspect);
+    Rectangle inset = {
+        bounds.x + (bounds.width - draw_width) * 0.5f,
+        bounds.y + (bounds.height - draw_height) * 0.5f,
+        draw_width, draw_height,
+    };
+    DrawTexturePro(npc_portrait_target.texture, source, inset,
+                   (Vector2){0.0f, 0.0f}, 0.0f, WHITE);
+    DrawRectangleLines((int32_t)bounds.x, (int32_t)bounds.y,
+                       (int32_t)bounds.width, (int32_t)bounds.height,
+                       ShadeColor(accent, 0.88f));
+}
+
+void CcLocalDrawNpcPortrait3D(const CcNpcAppearance *appearance,
+                              Rectangle bounds,
+                              CcNpcPortraitExpression expression)
+{
+    if (appearance == NULL || bounds.width < 4.0f || bounds.height < 4.0f ||
+        !IsRenderTextureValid(npc_portrait_target)) {
+        CcNpcDrawPixelPortrait(appearance, bounds, expression, false);
+        return;
+    }
+
+    FaceRenderContext previous_face_context = face_render_context;
+    Camera3D camera = {0};
+    camera.target = (Vector3){0.0f, 1.66f, 0.0f};
+    camera.position = (Vector3){0.0f, 1.77f, 4.0f};
+    camera.up = (Vector3){0.0f, 1.0f, 0.0f};
+    camera.fovy = 0.98f;
+    camera.projection = CAMERA_ORTHOGRAPHIC;
+
+    rlDrawRenderBatchActive();
+    BeginTextureMode(npc_portrait_target);
+    ClearBackground((Color){17, 28, 32, 255});
+    SetFaceRenderContext(camera, npc_portrait_target.texture.width,
+                         npc_portrait_target.texture.height);
+    BeginMode3D(camera);
+    BeginWorldLighting(camera, &INTERIOR_ART_COMPOSITION);
+    (void)DrawNpcArchetype3D((Vector3){0.0f, 0.0f, 0.0f}, 1.0f,
+                             0.0f, 0.0f, CC_TRAVERSAL_IDLE,
+                             expression, appearance);
+    EndWorldLighting();
+    EndMode3D();
+    EndTextureMode();
+    face_render_context = previous_face_context;
+
+    PresentCharacterPortrait(bounds, appearance->accent);
+}
+
+void CcLocalDrawAgentPortrait3D(const CcLocalAgent *agent,
+                                Rectangle bounds)
+{
+    if (agent == NULL || bounds.width < 4.0f || bounds.height < 4.0f ||
+        !IsRenderTextureValid(npc_portrait_target)) return;
+    const CcHumanoidPose *pose = AgentRenderPose(agent);
+    CcHumanoidSkinPose skin;
+    CcHumanoidSkinPoseResolve(pose, &skin);
+    if (!skin.valid) return;
+
+    const CcHumanoidSkinBonePose *head_bone =
+        &skin.bones[CC_HUMANOID_SKIN_HEAD];
+    Vector3 head = FromLimbVector(
+        skin.sockets[CC_HUMANOID_SOCKET_HEAD].position);
+    Vector3 head_up = PhysicsNormalizeOr(FromLimbVector(head_bone->up),
+                                         (Vector3){0.0f, 1.0f, 0.0f});
+    Vector3 head_forward = PhysicsNormalizeOr(
+        FromLimbVector(head_bone->forward),
+        (Vector3){sinf(agent->facing_yaw), 0.0f,
+                  cosf(agent->facing_yaw)});
+    Camera3D camera = {0};
+    camera.target = Vector3Add(head, Vector3Scale(head_up, -0.16f));
+    camera.position = Vector3Add(
+        camera.target,
+        Vector3Add(Vector3Scale(head_forward, 4.0f),
+                   (Vector3){0.0f, 0.11f, 0.0f}));
+    camera.up = (Vector3){0.0f, 1.0f, 0.0f};
+    camera.fovy = 0.98f;
+    camera.projection = CAMERA_ORTHOGRAPHIC;
+
+    FaceRenderContext previous_face_context = face_render_context;
+    rlDrawRenderBatchActive();
+    BeginTextureMode(npc_portrait_target);
+    ClearBackground((Color){17, 28, 32, 255});
+    SetFaceRenderContext(camera, npc_portrait_target.texture.width,
+                         npc_portrait_target.texture.height);
+    BeginMode3D(camera);
+    BeginWorldLighting(camera, &INTERIOR_ART_COMPOSITION);
+
+    bool drew = false;
+    CcNpcAppearance portrait_appearance = agent->crowned ?
+        ProceduralHeroAppearance(agent) : agent->appearance;
+    if (agent->crowned) {
+        CcNpcAppearance neutral_face =
+            CcNpcHeroPortraitAppearance(&agent->appearance);
+        portrait_appearance.skin = neutral_face.skin;
+    }
+    if (agent->crowned && screen_first_hero_active) {
+        UseCharacterLighting();
+        drew = DrawDynamicNpcModules(agent, &skin, &portrait_appearance);
+        if (drew) {
+            DrawWayfarerHeroDetails(&skin);
+            DrawWayfarerCrown(&skin);
+        }
+        RestoreWorldLighting();
+    } else if (agent->crowned) {
+        drew = DrawHeroSkin(&skin, &agent->render_cape, WHITE, true, false);
+        if (drew) {
+            UseCharacterLighting();
+            DrawWayfarerHeroDetails(&skin);
+            RestoreWorldLighting();
+        }
+    } else {
+        UseCharacterLighting();
+        drew = DrawDynamicNpcModules(agent, &skin, &portrait_appearance);
+        RestoreWorldLighting();
+    }
+    EndWorldLighting();
+    EndMode3D();
+    EndTextureMode();
+    face_render_context = previous_face_context;
+
+    if (drew) {
+        PresentCharacterPortrait(bounds, portrait_appearance.accent);
+    } else {
+        CcNpcDrawPixelPortrait(&portrait_appearance, bounds,
+                               CC_NPC_PORTRAIT_NEUTRAL, agent->crowned);
+    }
 }
 
 static void DrawAgentPath(const CcLocalAgent *agent, bool market_interior)

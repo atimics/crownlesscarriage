@@ -1790,13 +1790,13 @@ static void TestFaceAngleAndLodContract(void)
         (void)fprintf(stderr, "head-local face view thresholds changed\n");
         exit(1);
     }
-    if (CcLocalFaceLodForProjectedHeightInternal(2.19f) !=
+    if (CcLocalFaceLodForProjectedHeightInternal(3.99f) !=
             CC_LOCAL_FACE_LOD_SILHOUETTE ||
-        CcLocalFaceLodForProjectedHeightInternal(2.20f) !=
+        CcLocalFaceLodForProjectedHeightInternal(4.00f) !=
             CC_LOCAL_FACE_LOD_READABLE ||
-        CcLocalFaceLodForProjectedHeightInternal(5.19f) !=
+        CcLocalFaceLodForProjectedHeightInternal(11.99f) !=
             CC_LOCAL_FACE_LOD_READABLE ||
-        CcLocalFaceLodForProjectedHeightInternal(5.20f) !=
+        CcLocalFaceLodForProjectedHeightInternal(12.00f) !=
             CC_LOCAL_FACE_LOD_CLOSE) {
         (void)fprintf(stderr, "projected-size face LOD thresholds changed\n");
         exit(1);

@@ -255,26 +255,6 @@ static void DrawPanel(Rectangle bounds, Color color)
              (Color){207, 157, 67, 128});
 }
 
-static CcNpcPortraitExpression HeroPortraitExpression(
-    const CcLocalAgent *agent)
-{
-    if (agent->combat.hit_flash_seconds > 0.0f ||
-        agent->combat.life_state == CC_LIFE_KNOCKED_DOWN) {
-        return CC_NPC_PORTRAIT_HURT;
-    }
-    if (agent->combat.focus_valid ||
-        agent->humanoid.action == CC_HUMANOID_ACTION_GUARD ||
-        agent->humanoid.action == CC_HUMANOID_ACTION_STRIKE) {
-        return CC_NPC_PORTRAIT_FOCUSED;
-    }
-    return CC_NPC_PORTRAIT_NEUTRAL;
-}
-
-static CcNpcAppearance HeroPortraitAppearance(const CcLocalAgent *agent)
-{
-    return CcNpcHeroPortraitAppearance(&agent->appearance);
-}
-
 static void DrawPerformanceOverlay(void)
 {
     CcLocalRendererStats stats = CcLocalRendererGetStats();
@@ -664,12 +644,9 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
         CcOverlayDrawText(local->journey_parley_active ? "THE COLLECTOR" :
                                                "THE ATTACKER",
                  966, 264, 11, TEAL);
-        CcNpcPortraitExpression raider_expression =
-            local->course.raiders[0].combat.hit_flash_seconds > 0.0f ?
-                CC_NPC_PORTRAIT_HURT : CC_NPC_PORTRAIT_FOCUSED;
-        CcNpcDrawPixelPortrait(&local->course.raiders[0].appearance,
-                               (Rectangle){966.0f, 282.0f, 60.0f, 72.0f},
-                               raider_expression, false);
+        CcLocalDrawAgentPortrait3D(
+            &local->course.raiders[0],
+            (Rectangle){966.0f, 282.0f, 60.0f, 72.0f});
         CcOverlayDrawText(local->journey_parley_active ? "ROAD COLLECTOR" :
                                                "CORDON RAIDER",
                  1036, 286, 11, local->journey_parley_active ? CC_GOLD :
@@ -756,11 +733,10 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
             UINT32_C(0x4d415241), CC_NPC_ROLE_MERCHANT,
             (Color){218, 148, 61, 255});
         CcOverlayDrawText("MARA / FACTOR", 966, 411, 11, TEAL);
-        CcNpcDrawPixelPortrait(
+        CcLocalDrawNpcPortrait3D(
             &mara, (Rectangle){966.0f, 432.0f, 64.0f, 75.0f},
             can_trade ? CC_NPC_PORTRAIT_TALKING :
-                        CC_NPC_PORTRAIT_NEUTRAL,
-            false);
+                        CC_NPC_PORTRAIT_NEUTRAL);
         CcOverlayDrawText("MARKET FACTOR", 1040, 436, 11, CC_GOLD);
         CcOverlayDrawText(can_trade ? "READY TO TRADE" : "AT THE COUNTER",
                  1040, 457, 9, can_trade ? TEAL : MUTED);
@@ -828,10 +804,8 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
         if (second[0] != '\0') CcOverlayDrawText(second, 966, 582, 10, INK);
     }
     if (local->agent.morphology == CC_MORPHOLOGY_BIPED) {
-        CcNpcAppearance hero = HeroPortraitAppearance(&local->agent);
-        CcNpcDrawPixelPortrait(
-            &hero, (Rectangle){966.0f, 596.0f, 44.0f, 48.0f},
-            HeroPortraitExpression(&local->agent), true);
+        CcLocalDrawAgentPortrait3D(
+            &local->agent, (Rectangle){966.0f, 596.0f, 44.0f, 48.0f});
         CcOverlayDrawText("CROWNLESS WAYFARER", 1018, 598, 10, TEAL);
         CcOverlayDrawText(TextFormat("%s / %s",
                             CcLocalTraversalName(local->agent.traversal),
@@ -2415,7 +2389,7 @@ int main(int argc, char **argv)
                        "A living waystation: people, work, scarcity, and the Crownless carriage in one place.");
     } else if (capture_face) {
         (void)snprintf(message, sizeof(message),
-                       "Face review: head-local features share one identity recipe with the portrait.");
+                       "Face review: the world actor and portrait now use the same model.");
     } else if (capture_room) {
         (void)snprintf(message, sizeof(message),
                        "Each fixed room reveals a landmark, a route, and the state of the living settlement.");
