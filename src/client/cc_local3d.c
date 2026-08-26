@@ -7228,6 +7228,24 @@ static float CameraStreetCourseClutterScore(Camera3D camera,
             score += CameraVolumeScreenOverlap(subjects[subject], scenery);
         }
     }
+    for (int32_t building = 0;
+         building < (int32_t)(sizeof(WORLD_BUILDINGS) /
+                              sizeof(WORLD_BUILDINGS[0])); ++building) {
+        const WorldBuilding *house = &WORLD_BUILDINGS[building];
+        Vector3 half_size = {house->footprint.width * 0.5f,
+                             house->height * 0.5f,
+                             house->footprint.height * 0.5f};
+        Vector3 center = {
+            house->footprint.x + half_size.x,
+            TerrainFootprintHeight(house->footprint) + half_size.y,
+            house->footprint.y + half_size.z,
+        };
+        CameraProjectedVolume scenery = CameraProjectBox(
+            camera, center, half_size);
+        for (int32_t subject = 0; subject < 2; ++subject) {
+            score += CameraVolumeScreenOverlap(subjects[subject], scenery);
+        }
+    }
     return score;
 }
 
@@ -7342,13 +7360,6 @@ Camera3D CcLocalCameraClearSightlinesInternal(Camera3D camera,
         44.0f * DEG2RAD, -44.0f * DEG2RAD,
         60.0f * DEG2RAD, -60.0f * DEG2RAD,
         75.0f * DEG2RAD, -75.0f * DEG2RAD,
-        90.0f * DEG2RAD, -90.0f * DEG2RAD,
-        105.0f * DEG2RAD, -105.0f * DEG2RAD,
-        120.0f * DEG2RAD, -120.0f * DEG2RAD,
-        135.0f * DEG2RAD, -135.0f * DEG2RAD,
-        150.0f * DEG2RAD, -150.0f * DEG2RAD,
-        165.0f * DEG2RAD, -165.0f * DEG2RAD,
-        180.0f * DEG2RAD,
     };
     Vector3 offset = Vector3Subtract(camera.position, camera.target);
     Camera3D best = camera;
@@ -7791,11 +7802,6 @@ static void CombatCameraLockComposition(Camera3D base,
             sightline_camera, player_center, opponent_center,
             combat_camera_rig.tree_clear_angle,
             &combat_camera_rig.tree_clear_angle);
-        TraceLog(LOG_INFO,
-                 "CAMLOCK angle=%.0f player=(%.2f,%.2f) opponent=(%.2f,%.2f)",
-                 combat_camera_rig.tree_clear_angle * RAD2DEG,
-                 player->position.x, player->position.z,
-                 opponent_position.x, opponent_position.z);
         offset = Vector3Subtract(sightline_camera.position,
                                  sightline_camera.target);
     } else {
@@ -15469,8 +15475,6 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         Vector3Add(sightline_opponent->position,
                    (Vector3){0.0f, 1.02f, 0.0f}) :
         player_sightline;
-    float course_reveal_cut = fminf(player_sightline.y,
-                                    opponent_sightline.y) - 0.94f;
     for (int32_t i = 0; i < (int32_t)(sizeof(STREET_PLATFORMS) /
                                       sizeof(STREET_PLATFORMS[0])); ++i) {
         const NavPlatform *platform = &STREET_PLATFORMS[i];
@@ -15480,18 +15484,20 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
             0.0f;
         /* The camera chooses the clearest available angle first. When a
            fighter is standing directly against a course block and no angle
-           can create clean negative space, cut only that block down to a low
-           ground marker for the duration of the overlap. */
-        SetWorldForegroundReveal(overlap > 0.001f ? 1.0f : 0.0f,
-                                 course_reveal_cut);
+           can create clean negative space, render only a low ground marker.
+           Using the geometry itself means rails and caps cannot remain over
+           the fighter's silhouette. */
+        bool sightline_cut = overlap > 0.001f;
         Color color = CoursePlatformColor(platform->style);
         float base = PlatformBaseHeight(platform);
-        float top = PlatformTopHeight(platform);
+        float render_height = sightline_cut ?
+            fminf(platform->height, 0.12f) : platform->height;
+        float top = base + render_height;
         DrawBox((Vector3){platform->x + platform->width * 0.5f,
-                          base + platform->height * 0.5f,
+                          base + render_height * 0.5f,
                           platform->z + platform->depth * 0.5f},
                 (Vector3){fmaxf(0.10f, platform->width - 0.10f),
-                          platform->height,
+                          render_height,
                           fmaxf(0.10f, platform->depth - 0.10f)}, color);
         DrawBox((Vector3){platform->x + platform->width * 0.5f,
                           top + 0.025f,
@@ -15501,7 +15507,6 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                 i == 0 ? (Color){124, 145, 131, 255} :
                          Fade(WORLD_GOLD, 0.70f));
     }
-    SetWorldForegroundReveal(0.0f, course_reveal_cut);
     DrawObstacleCourse();
     DrawAgentPath(agent, false);
     Vector3 foreground_reveal_world = {
