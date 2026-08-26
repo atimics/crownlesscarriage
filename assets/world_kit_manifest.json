@@ -1,0 +1,6950 @@
+{
+  "library_version": "0.5.1",
+  "art_direction": "80s action figure construction and playset logic",
+  "generation": "offline procedural compatible world modules",
+  "coordinate_system": "Blender +Z up; glTF +Y up",
+  "geometry_contract": {
+    "front_face_winding": "counter_clockwise",
+    "normals": "outward",
+    "transforms": "components export in local anchor space",
+    "assembly_policy": "reference stable components; do not copy geometry",
+    "connectivity": "assets/world_kit_connections.json",
+    "runtime_delivery": "glTF 2.0 with application metadata in extras",
+    "instancing_candidate": "EXT_mesh_gpu_instancing"
+  },
+  "part_hierarchy": {
+    "primitive": "shared generator shape helper",
+    "subpart": "repeated molded shape inside a component",
+    "component": "terminal published module",
+    "assembly": "references components and transforms",
+    "state_layer": "strong additive override on an assembly"
+  },
+  "figure_layer_order": [
+    "skeleton",
+    "muscle",
+    "soft_tissue",
+    "skin_surface",
+    "garment",
+    "armor",
+    "identity",
+    "equipment"
+  ],
+  "body_generation_contract": {
+    "skeleton": "owns bone length, joints, posture, and sockets",
+    "muscle": "bone-local modules inflate cross-section only",
+    "soft_tissue": "adds mixable regional padding in metres",
+    "skin_surface": "one continuous neck-down wrap derived from the combined muscle and soft-tissue envelope",
+    "runtime_bake": "36 safe frame, muscle, and soft-tissue recipe skins",
+    "runtime_skinning": "18 stable bones, four weights per vertex, GPU matrix palette",
+    "modular_boundary": "garments, armor, head, hair, and equipment stay separate",
+    "head_delivery": "four indexed modular head families selected from appearance",
+    "garment": "refits to the body envelope with cloth clearance",
+    "armor": "refits above garments and preserves hard sockets",
+    "forbidden": [
+      "clothing changes body mass",
+      "muscle changes bone length",
+      "soft tissue moves joints or sockets",
+      "whole-model scale fixes fit"
+    ]
+  },
+  "scale_contract": {
+    "unit": "meter",
+    "adult_body_height": 1.9,
+    "normal_adult_body_range": [
+      1.75,
+      2.02
+    ],
+    "hair_headgear_allowance": 0.12,
+    "door_clear_opening": [
+      1.02,
+      2.1
+    ],
+    "door_outer_frame": [
+      1.3,
+      2.24
+    ],
+    "counter_height": 0.92,
+    "seat_height": 0.46,
+    "rail_height": 1.05,
+    "floor_to_floor_range": [
+      2.8,
+      3.2
+    ],
+    "public_lane_minimum": 2.5,
+    "runtime_whole_model_scale": 1.0
+  },
+  "figure_standard": {
+    "height": 1.9,
+    "head_count_range": [
+      5.75,
+      6.25
+    ],
+    "skeleton_families": [
+      "lean",
+      "standard",
+      "heavy"
+    ],
+    "muscle_profiles": {
+      "slight": {
+        "chest": 0.88,
+        "waist": 0.92,
+        "pelvis": 0.92,
+        "shoulder": 0.88,
+        "upper_arm": 0.86,
+        "forearm": 0.88,
+        "thigh": 0.9,
+        "calf": 0.9
+      },
+      "athletic": {
+        "chest": 1.0,
+        "waist": 1.0,
+        "pelvis": 1.0,
+        "shoulder": 1.0,
+        "upper_arm": 1.0,
+        "forearm": 1.0,
+        "thigh": 1.0,
+        "calf": 1.0
+      },
+      "power": {
+        "chest": 1.12,
+        "waist": 1.08,
+        "pelvis": 1.1,
+        "shoulder": 1.14,
+        "upper_arm": 1.17,
+        "forearm": 1.13,
+        "thigh": 1.16,
+        "calf": 1.14
+      }
+    },
+    "soft_tissue_profiles": {
+      "low": {
+        "chest": 0.0,
+        "abdomen": 0.0,
+        "waist": 0.0,
+        "hip": 0.0,
+        "upper_arm": 0.0,
+        "forearm": 0.0,
+        "thigh": 0.0,
+        "calf": 0.0
+      },
+      "balanced": {
+        "chest": 0.012,
+        "abdomen": 0.014,
+        "waist": 0.01,
+        "hip": 0.014,
+        "upper_arm": 0.006,
+        "forearm": 0.004,
+        "thigh": 0.01,
+        "calf": 0.004
+      },
+      "central": {
+        "chest": 0.02,
+        "abdomen": 0.055,
+        "waist": 0.042,
+        "hip": 0.026,
+        "upper_arm": 0.01,
+        "forearm": 0.006,
+        "thigh": 0.014,
+        "calf": 0.006
+      },
+      "lower_body": {
+        "chest": 0.01,
+        "abdomen": 0.025,
+        "waist": 0.024,
+        "hip": 0.05,
+        "upper_arm": 0.008,
+        "forearm": 0.004,
+        "thigh": 0.038,
+        "calf": 0.014
+      }
+    },
+    "soft_tissue_mix_policy": {
+      "regions_are_independent": true,
+      "unit": "meter",
+      "maximum_padding_per_region": 0.06,
+      "profiles_are_safe_presets_not_locked_types": true
+    },
+    "head_families": [
+      "square",
+      "long",
+      "broad",
+      "veteran"
+    ],
+    "sockets": {
+      "hand_left": [
+        -0.35,
+        -0.03,
+        0.92
+      ],
+      "hand_right": [
+        0.35,
+        -0.03,
+        0.92
+      ],
+      "forearm_left": [
+        -0.37,
+        0.0,
+        1.08
+      ],
+      "forearm_right": [
+        0.37,
+        0.0,
+        1.08
+      ],
+      "shoulder_left": [
+        -0.325,
+        0.0,
+        1.5
+      ],
+      "shoulder_right": [
+        0.325,
+        0.0,
+        1.5
+      ],
+      "chest_front": [
+        0.0,
+        -0.19,
+        1.38
+      ],
+      "upper_back": [
+        0.0,
+        0.18,
+        1.44
+      ],
+      "lower_back": [
+        0.0,
+        0.16,
+        1.1
+      ],
+      "belt_left": [
+        -0.19,
+        0.0,
+        1.02
+      ],
+      "belt_right": [
+        0.19,
+        0.0,
+        1.02
+      ],
+      "head_top": [
+        0.0,
+        0.0,
+        1.9
+      ],
+      "face_front": [
+        0.0,
+        -0.105,
+        1.75
+      ],
+      "foot_left": [
+        -0.15,
+        -0.08,
+        0.0
+      ],
+      "foot_right": [
+        0.15,
+        -0.08,
+        0.0
+      ]
+    }
+  },
+  "recipe_grammar": [
+    "skeleton_frame",
+    "muscle_recipe",
+    "soft_tissue_recipe",
+    "derived_skin",
+    "garment_layers",
+    "armor_loadout",
+    "head_family",
+    "silhouette_part",
+    "palette",
+    "wear"
+  ],
+  "reference_recipes": [
+    {
+      "id": "crownless",
+      "skeleton": "standard",
+      "muscle_profile": "athletic",
+      "soft_tissue_profile": "low",
+      "head": "long",
+      "hair": "swept",
+      "shells": [
+        "tunic",
+        "trousers",
+        "boots",
+        "belt",
+        "mantle_left",
+        "pauldron_left",
+        "bracers",
+        "greaves",
+        "crown"
+      ],
+      "prop": "sword"
+    },
+    {
+      "id": "guard",
+      "skeleton": "heavy",
+      "muscle_profile": "athletic",
+      "soft_tissue_profile": "balanced",
+      "head": "veteran",
+      "hair": "cropped",
+      "shells": [
+        "tunic",
+        "trousers",
+        "boots",
+        "cuirass",
+        "belt",
+        "pauldron_pair",
+        "greaves"
+      ],
+      "prop": "spear"
+    },
+    {
+      "id": "merchant",
+      "skeleton": "heavy",
+      "muscle_profile": "slight",
+      "soft_tissue_profile": "central",
+      "head": "broad",
+      "hair": "bob",
+      "shells": [
+        "tunic",
+        "trousers",
+        "boots",
+        "belt",
+        "apron"
+      ]
+    },
+    {
+      "id": "laborer",
+      "skeleton": "heavy",
+      "muscle_profile": "power",
+      "soft_tissue_profile": "lower_body",
+      "head": "square",
+      "hair": "crest",
+      "shells": [
+        "tunic",
+        "trousers",
+        "boots",
+        "belt",
+        "apron",
+        "bracers"
+      ],
+      "prop": "hammer"
+    },
+    {
+      "id": "traveller",
+      "skeleton": "lean",
+      "muscle_profile": "slight",
+      "soft_tissue_profile": "low",
+      "head": "long",
+      "hair": "braided",
+      "shells": [
+        "tunic",
+        "trousers",
+        "boots",
+        "belt",
+        "mantle_left",
+        "pack"
+      ],
+      "prop": "staff"
+    }
+  ],
+  "modules": [
+    {
+      "id": "wk_buck_heavy_foot_v01",
+      "kind": "body_surface",
+      "model_kind": "component",
+      "layer": "skin_surface",
+      "category": "body_surface",
+      "keywords": [
+        "foot",
+        "heavy",
+        "planted"
+      ],
+      "slot": "foot",
+      "anchor": "ankle_to_toe",
+      "compatible_families": [
+        "heavy"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "heavy",
+        "planted"
+      ],
+      "export": "assets/exports/world_kit/wk_buck_heavy_foot_v01.glb",
+      "surface_contract": {
+        "inputs": [
+          "skeleton_frame.foot",
+          "muscle_fit_envelope.foot",
+          "soft_tissue_fit_envelope.foot"
+        ],
+        "operation": "derive_skin_wrap",
+        "preserves": [
+          "bone_length",
+          "joint_center",
+          "socket_transform"
+        ],
+        "output": "body_fit_envelope.foot"
+      },
+      "bounds": {
+        "min": [
+          -0.0634,
+          -0.1605,
+          -0.0725
+        ],
+        "max": [
+          0.0634,
+          0.1157,
+          0.0725
+        ],
+        "size": [
+          0.1269,
+          0.2762,
+          0.145
+        ]
+      },
+      "material_roles": [
+        "skin"
+      ],
+      "mesh_objects": 1,
+      "bytes": 1956
+    },
+    {
+      "id": "wk_buck_heavy_forearm_v01",
+      "kind": "body_surface",
+      "model_kind": "component",
+      "layer": "skin_surface",
+      "category": "body_surface",
+      "keywords": [
+        "forearm",
+        "heavy",
+        "tapered"
+      ],
+      "slot": "forearm",
+      "anchor": "bone_segment",
+      "compatible_families": [
+        "heavy"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "heavy",
+        "tapered",
+        "forearm"
+      ],
+      "export": "assets/exports/world_kit/wk_buck_heavy_forearm_v01.glb",
+      "surface_contract": {
+        "inputs": [
+          "skeleton_frame.forearm",
+          "muscle_fit_envelope.forearm",
+          "soft_tissue_fit_envelope.forearm"
+        ],
+        "operation": "derive_skin_wrap",
+        "preserves": [
+          "bone_length",
+          "joint_center",
+          "socket_transform"
+        ],
+        "output": "body_fit_envelope.forearm"
+      },
+      "bounds": {
+        "min": [
+          -0.0826,
+          -0.0826,
+          0.0
+        ],
+        "max": [
+          0.0826,
+          0.0826,
+          1.0
+        ],
+        "size": [
+          0.1652,
+          0.1652,
+          1.0
+        ]
+      },
+      "material_roles": [
+        "skin"
+      ],
+      "mesh_objects": 1,
+      "bytes": 3268
+    },
+    {
+      "id": "wk_buck_heavy_hand_v01",
+      "kind": "body_surface",
+      "model_kind": "component",
+      "layer": "skin_surface",
+      "category": "body_surface",
+      "keywords": [
+        "hand",
+        "heavy",
+        "grip"
+      ],
+      "slot": "hand",
+      "anchor": "hand_center",
+      "compatible_families": [
+        "heavy"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "heavy",
+        "grip"
+      ],
+      "export": "assets/exports/world_kit/wk_buck_heavy_hand_v01.glb",
+      "surface_contract": {
+        "inputs": [
+          "skeleton_frame.hand",
+          "muscle_fit_envelope.hand",
+          "soft_tissue_fit_envelope.hand"
+        ],
+        "operation": "derive_skin_wrap",
+        "preserves": [
+          "bone_length",
+          "joint_center",
+          "socket_transform"
+        ],
+        "output": "body_fit_envelope.hand"
+      },
+      "bounds": {
+        "min": [
+          -0.0532,
+          -0.0368,
+          -0.0825
+        ],
+        "max": [
+          0.0532,
+          0.0368,
+          0.0825
+        ],
+        "size": [
+          0.1065,
+          0.0735,
+          0.165
+        ]
+      },
+      "material_roles": [
+        "skin"
+      ],
+      "mesh_objects": 1,
+      "bytes": 1956
+    },
+    {
+      "id": "wk_buck_heavy_pelvis_v01",
+      "kind": "body_surface",
+      "model_kind": "component",
+      "layer": "skin_surface",
+      "category": "body_surface",
+      "keywords": [
+        "pelvis",
+        "heavy"
+      ],
+      "slot": "pelvis",
+      "anchor": "pelvis_to_spine",
+      "compatible_families": [
+        "heavy"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "heavy",
+        "pelvis"
+      ],
+      "export": "assets/exports/world_kit/wk_buck_heavy_pelvis_v01.glb",
+      "surface_contract": {
+        "inputs": [
+          "skeleton_frame.pelvis",
+          "muscle_fit_envelope.pelvis",
+          "soft_tissue_fit_envelope.pelvis"
+        ],
+        "operation": "derive_skin_wrap",
+        "preserves": [
+          "bone_length",
+          "joint_center",
+          "socket_transform"
+        ],
+        "output": "body_fit_envelope.pelvis"
+      },
+      "bounds": {
+        "min": [
+          -0.245,
+          -0.1569,
+          0.0
+        ],
+        "max": [
+          0.245,
+          0.1569,
+          1.0
+        ],
+        "size": [
+          0.49,
+          0.3138,
+          1.0
+        ]
+      },
+      "material_roles": [
+        "skin"
+      ],
+      "mesh_objects": 1,
+      "bytes": 4020
+    },
+    {
+      "id": "wk_buck_heavy_shin_v01",
+      "kind": "body_surface",
+      "model_kind": "component",
+      "layer": "skin_surface",
+      "category": "body_surface",
+      "keywords": [
+        "shin",
+        "heavy",
+        "tapered"
+      ],
+      "slot": "shin",
+      "anchor": "bone_segment",
+      "compatible_families": [
+        "heavy"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "heavy",
+        "tapered",
+        "shin"
+      ],
+      "export": "assets/exports/world_kit/wk_buck_heavy_shin_v01.glb",
+      "surface_contract": {
+        "inputs": [
+          "skeleton_frame.shin",
+          "muscle_fit_envelope.shin",
+          "soft_tissue_fit_envelope.shin"
+        ],
+        "operation": "derive_skin_wrap",
+        "preserves": [
+          "bone_length",
+          "joint_center",
+          "socket_transform"
+        ],
+        "output": "body_fit_envelope.shin"
+      },
+      "bounds": {
+        "min": [
+          -0.0935,
+          -0.0935,
+          0.0
+        ],
+        "max": [
+          0.0935,
+          0.0935,
+          1.0
+        ],
+        "size": [
+          0.187,
+          0.187,
+          1.0
+        ]
+      },
+      "material_roles": [
+        "skin"
+      ],
+      "mesh_objects": 1,
+      "bytes": 3256
+    },
+    {
+      "id": "wk_buck_heavy_thigh_v01",
+      "kind": "body_surface",
+      "model_kind": "component",
+      "layer": "skin_surface",
+      "category": "body_surface",
+      "keywords": [
+        "thigh",
+        "heavy",
+        "tapered"
+      ],
+      "slot": "thigh",
+      "anchor": "bone_segment",
+      "compatible_families": [
+        "heavy"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "heavy",
+        "tapered",
+        "thigh"
+      ],
+      "export": "assets/exports/world_kit/wk_buck_heavy_thigh_v01.glb",
+      "surface_contract": {
+        "inputs": [
+          "skeleton_frame.thigh",
+          "muscle_fit_envelope.thigh",
+          "soft_tissue_fit_envelope.thigh"
+        ],
+        "operation": "derive_skin_wrap",
+        "preserves": [
+          "bone_length",
+          "joint_center",
+          "socket_transform"
+        ],
+        "output": "body_fit_envelope.thigh"
+      },
+      "bounds": {
+        "min": [
+          -0.1322,
+          -0.1322,
+          0.0
+        ],
+        "max": [
+          0.1322,
+          0.1322,
+          1.0
+        ],
+        "size": [
+          0.2643,
+          0.2643,
+          1.0
+        ]
+      },
+      "material_roles": [
+        "skin"
+      ],
+      "mesh_objects": 1,
+      "bytes": 3256
+    },
+    {
+      "id": "wk_buck_heavy_torso_v01",
+      "kind": "body_surface",
+      "model_kind": "component",
+      "layer": "skin_surface",
+      "category": "body_surface",
+      "keywords": [
+        "torso",
+        "heavy",
+        "tapered"
+      ],
+      "slot": "torso",
+      "anchor": "spine_to_neck",
+      "compatible_families": [
+        "heavy"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "heavy",
+        "tapered"
+      ],
+      "export": "assets/exports/world_kit/wk_buck_heavy_torso_v01.glb",
+      "surface_contract": {
+        "inputs": [
+          "skeleton_frame.torso",
+          "muscle_fit_envelope.torso",
+          "soft_tissue_fit_envelope.torso"
+        ],
+        "operation": "derive_skin_wrap",
+        "preserves": [
+          "bone_length",
+          "joint_center",
+          "socket_transform"
+        ],
+        "output": "body_fit_envelope.torso"
+      },
+      "bounds": {
+        "min": [
+          -0.3478,
+          -0.1712,
+          0.0
+        ],
+        "max": [
+          0.3478,
+          0.1712,
+          1.0
+        ],
+        "size": [
+          0.6956,
+          0.3424,
+          1.0
+        ]
+      },
+      "material_roles": [
+        "skin"
+      ],
+      "mesh_objects": 1,
+      "bytes": 5100
+    },
+    {
+      "id": "wk_buck_heavy_upper_arm_v01",
+      "kind": "body_surface",
+      "model_kind": "component",
+      "layer": "skin_surface",
+      "category": "body_surface",
+      "keywords": [
+        "upper_arm",
+        "heavy",
+        "tapered"
+      ],
+      "slot": "upper_arm",
+      "anchor": "bone_segment",
+      "compatible_families": [
+        "heavy"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "heavy",
+        "tapered",
+        "upper_arm"
+      ],
+      "export": "assets/exports/world_kit/wk_buck_heavy_upper_arm_v01.glb",
+      "surface_contract": {
+        "inputs": [
+          "skeleton_frame.upper_arm",
+          "muscle_fit_envelope.upper_arm",
+          "soft_tissue_fit_envelope.upper_arm"
+        ],
+        "operation": "derive_skin_wrap",
+        "preserves": [
+          "bone_length",
+          "joint_center",
+          "socket_transform"
+        ],
+        "output": "body_fit_envelope.upper_arm"
+      },
+      "bounds": {
+        "min": [
+          -0.0946,
+          -0.0946,
+          0.0
+        ],
+        "max": [
+          0.0946,
+          0.0946,
+          1.0
+        ],
+        "size": [
+          0.1892,
+          0.1892,
+          1.0
+        ]
+      },
+      "material_roles": [
+        "skin"
+      ],
+      "mesh_objects": 1,
+      "bytes": 3276
+    },
+    {
+      "id": "wk_buck_lean_foot_v01",
+      "kind": "body_surface",
+      "model_kind": "component",
+      "layer": "skin_surface",
+      "category": "body_surface",
+      "keywords": [
+        "foot",
+        "lean",
+        "planted"
+      ],
+      "slot": "foot",
+      "anchor": "ankle_to_toe",
+      "compatible_families": [
+        "lean"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "lean",
+        "planted"
+      ],
+      "export": "assets/exports/world_kit/wk_buck_lean_foot_v01.glb",
+      "surface_contract": {
+        "inputs": [
+          "skeleton_frame.foot",
+          "muscle_fit_envelope.foot",
+          "soft_tissue_fit_envelope.foot"
+        ],
+        "operation": "derive_skin_wrap",
+        "preserves": [
+          "bone_length",
+          "joint_center",
+          "socket_transform"
+        ],
+        "output": "body_fit_envelope.foot"
+      },
+      "bounds": {
+        "min": [
+          -0.052,
+          -0.1404,
+          -0.0625
+        ],
+        "max": [
+          0.052,
+          0.1012,
+          0.0625
+        ],
+        "size": [
+          0.1041,
+          0.2417,
+          0.125
+        ]
+      },
+      "material_roles": [
+        "skin"
+      ],
+      "mesh_objects": 1,
+      "bytes": 1920
+    },
+    {
+      "id": "wk_buck_lean_forearm_v01",
+      "kind": "body_surface",
+      "model_kind": "component",
+      "layer": "skin_surface",
+      "category": "body_surface",
+      "keywords": [
+        "forearm",
+        "lean",
+        "tapered"
+      ],
+      "slot": "forearm",
+      "anchor": "bone_segment",
+      "compatible_families": [
+        "lean"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "lean",
+        "tapered",
+        "forearm"
+      ],
+      "export": "assets/exports/world_kit/wk_buck_lean_forearm_v01.glb",
+      "surface_contract": {
+        "inputs": [
+          "skeleton_frame.forearm",
+          "muscle_fit_envelope.forearm",
+          "soft_tissue_fit_envelope.forearm"
+        ],
+        "operation": "derive_skin_wrap",
+        "preserves": [
+          "bone_length",
+          "joint_center",
+          "socket_transform"
+        ],
+        "output": "body_fit_envelope.forearm"
+      },
+      "bounds": {
+        "min": [
+          -0.0566,
+          -0.0566,
+          0.0
+        ],
+        "max": [
+          0.0566,
+          0.0566,
+          1.0
+        ],
+        "size": [
+          0.1133,
+          0.1133,
+          1.0
+        ]
+      },
+      "material_roles": [
+        "skin"
+      ],
+      "mesh_objects": 1,
+      "bytes": 3260
+    },
+    {
+      "id": "wk_buck_lean_hand_v01",
+      "kind": "body_surface",
+      "model_kind": "component",
+      "layer": "skin_surface",
+      "category": "body_surface",
+      "keywords": [
+        "hand",
+        "lean",
+        "grip"
+      ],
+      "slot": "hand",
+      "anchor": "hand_center",
+      "compatible_families": [
+        "lean"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "lean",
+        "grip"
+      ],
+      "export": "assets/exports/world_kit/wk_buck_lean_hand_v01.glb",
+      "surface_contract": {
+        "inputs": [
+          "skeleton_frame.hand",
+          "muscle_fit_envelope.hand",
+          "soft_tissue_fit_envelope.hand"
+        ],
+        "operation": "derive_skin_wrap",
+        "preserves": [
+          "bone_length",
+          "joint_center",
+          "socket_transform"
+        ],
+        "output": "body_fit_envelope.hand"
+      },
+      "bounds": {
+        "min": [
+          -0.0419,
+          -0.029,
+          -0.0725
+        ],
+        "max": [
+          0.0419,
+          0.029,
+          0.0725
+        ],
+        "size": [
+          0.0838,
+          0.0579,
+          0.145
+        ]
+      },
+      "material_roles": [
+        "skin"
+      ],
+      "mesh_objects": 1,
+      "bytes": 1952
+    },
+    {
+      "id": "wk_buck_lean_pelvis_v01",
+      "kind": "body_surface",
+      "model_kind": "component",
+      "layer": "skin_surface",
+      "category": "body_surface",
+      "keywords": [
+        "pelvis",
+        "lean"
+      ],
+      "slot": "pelvis",
+      "anchor": "pelvis_to_spine",
+      "compatible_families": [
+        "lean"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "lean",
+        "pelvis"
+      ],
+      "export": "assets/exports/world_kit/wk_buck_lean_pelvis_v01.glb",
+      "surface_contract": {
+        "inputs": [
+          "skeleton_frame.pelvis",
+          "muscle_fit_envelope.pelvis",
+          "soft_tissue_fit_envelope.pelvis"
+        ],
+        "operation": "derive_skin_wrap",
+        "preserves": [
+          "bone_length",
+          "joint_center",
+          "socket_transform"
+        ],
+        "output": "body_fit_envelope.pelvis"
+      },
+      "bounds": {
+        "min": [
+          -0.175,
+          -0.1569,
+          0.0
+        ],
+        "max": [
+          0.175,
+          0.1569,
+          1.0
+        ],
+        "size": [
+          0.35,
+          0.3138,
+          1.0
+        ]
+      },
+      "material_roles": [
+        "skin"
+      ],
+      "mesh_objects": 1,
+      "bytes": 4012
+    },
+    {
+      "id": "wk_buck_lean_shin_v01",
+      "kind": "body_surface",
+      "model_kind": "component",
+      "layer": "skin_surface",
+      "category": "body_surface",
+      "keywords": [
+        "shin",
+        "lean",
+        "tapered"
+      ],
+      "slot": "shin",
+      "anchor": "bone_segment",
+      "compatible_families": [
+        "lean"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "lean",
+        "tapered",
+        "shin"
+      ],
+      "export": "assets/exports/world_kit/wk_buck_lean_shin_v01.glb",
+      "surface_contract": {
+        "inputs": [
+          "skeleton_frame.shin",
+          "muscle_fit_envelope.shin",
+          "soft_tissue_fit_envelope.shin"
+        ],
+        "operation": "derive_skin_wrap",
+        "preserves": [
+          "bone_length",
+          "joint_center",
+          "socket_transform"
+        ],
+        "output": "body_fit_envelope.shin"
+      },
+      "bounds": {
+        "min": [
+          -0.0671,
+          -0.0671,
+          0.0
+        ],
+        "max": [
+          0.0671,
+          0.0671,
+          1.0
+        ],
+        "size": [
+          0.1342,
+          0.1342,
+          1.0
+        ]
+      },
+      "material_roles": [
+        "skin"
+      ],
+      "mesh_objects": 1,
+      "bytes": 3248
+    },
+    {
+      "id": "wk_buck_lean_thigh_v01",
+      "kind": "body_surface",
+      "model_kind": "component",
+      "layer": "skin_surface",
+      "category": "body_surface",
+      "keywords": [
+        "thigh",
+        "lean",
+        "tapered"
+      ],
+      "slot": "thigh",
+      "anchor": "bone_segment",
+      "compatible_families": [
+        "lean"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "lean",
+        "tapered",
+        "thigh"
+      ],
+      "export": "assets/exports/world_kit/wk_buck_lean_thigh_v01.glb",
+      "surface_contract": {
+        "inputs": [
+          "skeleton_frame.thigh",
+          "muscle_fit_envelope.thigh",
+          "soft_tissue_fit_envelope.thigh"
+        ],
+        "operation": "derive_skin_wrap",
+        "preserves": [
+          "bone_length",
+          "joint_center",
+          "socket_transform"
+        ],
+        "output": "body_fit_envelope.thigh"
+      },
+      "bounds": {
+        "min": [
+          -0.0918,
+          -0.0918,
+          0.0
+        ],
+        "max": [
+          0.0918,
+          0.0918,
+          1.0
+        ],
+        "size": [
+          0.1837,
+          0.1837,
+          1.0
+        ]
+      },
+      "material_roles": [
+        "skin"
+      ],
+      "mesh_objects": 1,
+      "bytes": 3244
+    },
+    {
+      "id": "wk_buck_lean_torso_v01",
+      "kind": "body_surface",
+      "model_kind": "component",
+      "layer": "skin_surface",
+      "category": "body_surface",
+      "keywords": [
+        "torso",
+        "lean",
+        "tapered"
+      ],
+      "slot": "torso",
+      "anchor": "spine_to_neck",
+      "compatible_families": [
+        "lean"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "lean",
+        "tapered"
+      ],
+      "export": "assets/exports/world_kit/wk_buck_lean_torso_v01.glb",
+      "surface_contract": {
+        "inputs": [
+          "skeleton_frame.torso",
+          "muscle_fit_envelope.torso",
+          "soft_tissue_fit_envelope.torso"
+        ],
+        "operation": "derive_skin_wrap",
+        "preserves": [
+          "bone_length",
+          "joint_center",
+          "socket_transform"
+        ],
+        "output": "body_fit_envelope.torso"
+      },
+      "bounds": {
+        "min": [
+          -0.2679,
+          -0.1712,
+          0.0
+        ],
+        "max": [
+          0.2679,
+          0.1712,
+          1.0
+        ],
+        "size": [
+          0.5358,
+          0.3424,
+          1.0
+        ]
+      },
+      "material_roles": [
+        "skin"
+      ],
+      "mesh_objects": 1,
+      "bytes": 5088
+    },
+    {
+      "id": "wk_buck_lean_upper_arm_v01",
+      "kind": "body_surface",
+      "model_kind": "component",
+      "layer": "skin_surface",
+      "category": "body_surface",
+      "keywords": [
+        "upper_arm",
+        "lean",
+        "tapered"
+      ],
+      "slot": "upper_arm",
+      "anchor": "bone_segment",
+      "compatible_families": [
+        "lean"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "lean",
+        "tapered",
+        "upper_arm"
+      ],
+      "export": "assets/exports/world_kit/wk_buck_lean_upper_arm_v01.glb",
+      "surface_contract": {
+        "inputs": [
+          "skeleton_frame.upper_arm",
+          "muscle_fit_envelope.upper_arm",
+          "soft_tissue_fit_envelope.upper_arm"
+        ],
+        "operation": "derive_skin_wrap",
+        "preserves": [
+          "bone_length",
+          "joint_center",
+          "socket_transform"
+        ],
+        "output": "body_fit_envelope.upper_arm"
+      },
+      "bounds": {
+        "min": [
+          -0.0638,
+          -0.0638,
+          0.0
+        ],
+        "max": [
+          0.0638,
+          0.0638,
+          1.0
+        ],
+        "size": [
+          0.1276,
+          0.1276,
+          1.0
+        ]
+      },
+      "material_roles": [
+        "skin"
+      ],
+      "mesh_objects": 1,
+      "bytes": 3268
+    },
+    {
+      "id": "wk_buck_standard_foot_v01",
+      "kind": "body_surface",
+      "model_kind": "component",
+      "layer": "skin_surface",
+      "category": "body_surface",
+      "keywords": [
+        "foot",
+        "standard",
+        "planted"
+      ],
+      "slot": "foot",
+      "anchor": "ankle_to_toe",
+      "compatible_families": [
+        "standard"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "standard",
+        "planted"
+      ],
+      "export": "assets/exports/world_kit/wk_buck_standard_foot_v01.glb",
+      "surface_contract": {
+        "inputs": [
+          "skeleton_frame.foot",
+          "muscle_fit_envelope.foot",
+          "soft_tissue_fit_envelope.foot"
+        ],
+        "operation": "derive_skin_wrap",
+        "preserves": [
+          "bone_length",
+          "joint_center",
+          "socket_transform"
+        ],
+        "output": "body_fit_envelope.foot"
+      },
+      "bounds": {
+        "min": [
+          -0.057,
+          -0.1519,
+          -0.0675
+        ],
+        "max": [
+          0.057,
+          0.1095,
+          0.0675
+        ],
+        "size": [
+          0.114,
+          0.2614,
+          0.135
+        ]
+      },
+      "material_roles": [
+        "skin"
+      ],
+      "mesh_objects": 1,
+      "bytes": 1956
+    },
+    {
+      "id": "wk_buck_standard_forearm_v01",
+      "kind": "body_surface",
+      "model_kind": "component",
+      "layer": "skin_surface",
+      "category": "body_surface",
+      "keywords": [
+        "forearm",
+        "standard",
+        "tapered"
+      ],
+      "slot": "forearm",
+      "anchor": "bone_segment",
+      "compatible_families": [
+        "standard"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "standard",
+        "tapered",
+        "forearm"
+      ],
+      "export": "assets/exports/world_kit/wk_buck_standard_forearm_v01.glb",
+      "surface_contract": {
+        "inputs": [
+          "skeleton_frame.forearm",
+          "muscle_fit_envelope.forearm",
+          "soft_tissue_fit_envelope.forearm"
+        ],
+        "operation": "derive_skin_wrap",
+        "preserves": [
+          "bone_length",
+          "joint_center",
+          "socket_transform"
+        ],
+        "output": "body_fit_envelope.forearm"
+      },
+      "bounds": {
+        "min": [
+          -0.0661,
+          -0.0661,
+          0.0
+        ],
+        "max": [
+          0.0661,
+          0.0661,
+          1.0
+        ],
+        "size": [
+          0.1322,
+          0.1322,
+          1.0
+        ]
+      },
+      "material_roles": [
+        "skin"
+      ],
+      "mesh_objects": 1,
+      "bytes": 3268
+    },
+    {
+      "id": "wk_buck_standard_hand_v01",
+      "kind": "body_surface",
+      "model_kind": "component",
+      "layer": "skin_surface",
+      "category": "body_surface",
+      "keywords": [
+        "hand",
+        "standard",
+        "grip"
+      ],
+      "slot": "hand",
+      "anchor": "hand_center",
+      "compatible_families": [
+        "standard"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "standard",
+        "grip"
+      ],
+      "export": "assets/exports/world_kit/wk_buck_standard_hand_v01.glb",
+      "surface_contract": {
+        "inputs": [
+          "skeleton_frame.hand",
+          "muscle_fit_envelope.hand",
+          "soft_tissue_fit_envelope.hand"
+        ],
+        "operation": "derive_skin_wrap",
+        "preserves": [
+          "bone_length",
+          "joint_center",
+          "socket_transform"
+        ],
+        "output": "body_fit_envelope.hand"
+      },
+      "bounds": {
+        "min": [
+          -0.0468,
+          -0.0323,
+          -0.0775
+        ],
+        "max": [
+          0.0468,
+          0.0323,
+          0.0775
+        ],
+        "size": [
+          0.0937,
+          0.0646,
+          0.155
+        ]
+      },
+      "material_roles": [
+        "skin"
+      ],
+      "mesh_objects": 1,
+      "bytes": 1956
+    },
+    {
+      "id": "wk_buck_standard_pelvis_v01",
+      "kind": "body_surface",
+      "model_kind": "component",
+      "layer": "skin_surface",
+      "category": "body_surface",
+      "keywords": [
+        "pelvis",
+        "standard"
+      ],
+      "slot": "pelvis",
+      "anchor": "pelvis_to_spine",
+      "compatible_families": [
+        "standard"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "standard",
+        "pelvis"
+      ],
+      "export": "assets/exports/world_kit/wk_buck_standard_pelvis_v01.glb",
+      "surface_contract": {
+        "inputs": [
+          "skeleton_frame.pelvis",
+          "muscle_fit_envelope.pelvis",
+          "soft_tissue_fit_envelope.pelvis"
+        ],
+        "operation": "derive_skin_wrap",
+        "preserves": [
+          "bone_length",
+          "joint_center",
+          "socket_transform"
+        ],
+        "output": "body_fit_envelope.pelvis"
+      },
+      "bounds": {
+        "min": [
+          -0.195,
+          -0.1569,
+          0.0
+        ],
+        "max": [
+          0.195,
+          0.1569,
+          1.0
+        ],
+        "size": [
+          0.39,
+          0.3138,
+          1.0
+        ]
+      },
+      "material_roles": [
+        "skin"
+      ],
+      "mesh_objects": 1,
+      "bytes": 4020
+    },
+    {
+      "id": "wk_buck_standard_shin_v01",
+      "kind": "body_surface",
+      "model_kind": "component",
+      "layer": "skin_surface",
+      "category": "body_surface",
+      "keywords": [
+        "shin",
+        "standard",
+        "tapered"
+      ],
+      "slot": "shin",
+      "anchor": "bone_segment",
+      "compatible_families": [
+        "standard"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "standard",
+        "tapered",
+        "shin"
+      ],
+      "export": "assets/exports/world_kit/wk_buck_standard_shin_v01.glb",
+      "surface_contract": {
+        "inputs": [
+          "skeleton_frame.shin",
+          "muscle_fit_envelope.shin",
+          "soft_tissue_fit_envelope.shin"
+        ],
+        "operation": "derive_skin_wrap",
+        "preserves": [
+          "bone_length",
+          "joint_center",
+          "socket_transform"
+        ],
+        "output": "body_fit_envelope.shin"
+      },
+      "bounds": {
+        "min": [
+          -0.077,
+          -0.077,
+          0.0
+        ],
+        "max": [
+          0.077,
+          0.077,
+          1.0
+        ],
+        "size": [
+          0.154,
+          0.154,
+          1.0
+        ]
+      },
+      "material_roles": [
+        "skin"
+      ],
+      "mesh_objects": 1,
+      "bytes": 3260
+    },
+    {
+      "id": "wk_buck_standard_thigh_v01",
+      "kind": "body_surface",
+      "model_kind": "component",
+      "layer": "skin_surface",
+      "category": "body_surface",
+      "keywords": [
+        "thigh",
+        "standard",
+        "tapered"
+      ],
+      "slot": "thigh",
+      "anchor": "bone_segment",
+      "compatible_families": [
+        "standard"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "standard",
+        "tapered",
+        "thigh"
+      ],
+      "export": "assets/exports/world_kit/wk_buck_standard_thigh_v01.glb",
+      "surface_contract": {
+        "inputs": [
+          "skeleton_frame.thigh",
+          "muscle_fit_envelope.thigh",
+          "soft_tissue_fit_envelope.thigh"
+        ],
+        "operation": "derive_skin_wrap",
+        "preserves": [
+          "bone_length",
+          "joint_center",
+          "socket_transform"
+        ],
+        "output": "body_fit_envelope.thigh"
+      },
+      "bounds": {
+        "min": [
+          -0.1098,
+          -0.1098,
+          0.0
+        ],
+        "max": [
+          0.1098,
+          0.1098,
+          1.0
+        ],
+        "size": [
+          0.2195,
+          0.2195,
+          1.0
+        ]
+      },
+      "material_roles": [
+        "skin"
+      ],
+      "mesh_objects": 1,
+      "bytes": 3264
+    },
+    {
+      "id": "wk_buck_standard_torso_v01",
+      "kind": "body_surface",
+      "model_kind": "component",
+      "layer": "skin_surface",
+      "category": "body_surface",
+      "keywords": [
+        "torso",
+        "standard",
+        "tapered"
+      ],
+      "slot": "torso",
+      "anchor": "spine_to_neck",
+      "compatible_families": [
+        "standard"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "standard",
+        "tapered"
+      ],
+      "export": "assets/exports/world_kit/wk_buck_standard_torso_v01.glb",
+      "surface_contract": {
+        "inputs": [
+          "skeleton_frame.torso",
+          "muscle_fit_envelope.torso",
+          "soft_tissue_fit_envelope.torso"
+        ],
+        "operation": "derive_skin_wrap",
+        "preserves": [
+          "bone_length",
+          "joint_center",
+          "socket_transform"
+        ],
+        "output": "body_fit_envelope.torso"
+      },
+      "bounds": {
+        "min": [
+          -0.3055,
+          -0.1712,
+          0.0
+        ],
+        "max": [
+          0.3055,
+          0.1712,
+          1.0
+        ],
+        "size": [
+          0.611,
+          0.3424,
+          1.0
+        ]
+      },
+      "material_roles": [
+        "skin"
+      ],
+      "mesh_objects": 1,
+      "bytes": 5100
+    },
+    {
+      "id": "wk_buck_standard_upper_arm_v01",
+      "kind": "body_surface",
+      "model_kind": "component",
+      "layer": "skin_surface",
+      "category": "body_surface",
+      "keywords": [
+        "upper_arm",
+        "standard",
+        "tapered"
+      ],
+      "slot": "upper_arm",
+      "anchor": "bone_segment",
+      "compatible_families": [
+        "standard"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "standard",
+        "tapered",
+        "upper_arm"
+      ],
+      "export": "assets/exports/world_kit/wk_buck_standard_upper_arm_v01.glb",
+      "surface_contract": {
+        "inputs": [
+          "skeleton_frame.upper_arm",
+          "muscle_fit_envelope.upper_arm",
+          "soft_tissue_fit_envelope.upper_arm"
+        ],
+        "operation": "derive_skin_wrap",
+        "preserves": [
+          "bone_length",
+          "joint_center",
+          "socket_transform"
+        ],
+        "output": "body_fit_envelope.upper_arm"
+      },
+      "bounds": {
+        "min": [
+          -0.077,
+          -0.077,
+          0.0
+        ],
+        "max": [
+          0.077,
+          0.077,
+          1.0
+        ],
+        "size": [
+          0.154,
+          0.154,
+          1.0
+        ]
+      },
+      "material_roles": [
+        "skin"
+      ],
+      "mesh_objects": 1,
+      "bytes": 3280
+    },
+    {
+      "id": "wk_facade_awning_v01",
+      "kind": "facade_part",
+      "model_kind": "component",
+      "layer": "structure",
+      "category": "facade_part",
+      "keywords": [
+        "awning",
+        "overhang",
+        "work"
+      ],
+      "slot": "awning",
+      "anchor": "facade_front",
+      "compatible_families": [
+        "building"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "overhang",
+        "work"
+      ],
+      "export": "assets/exports/world_kit/wk_facade_awning_v01.glb",
+      "bounds": {
+        "min": [
+          -0.7791,
+          -0.8118,
+          -0.2036
+        ],
+        "max": [
+          0.7791,
+          -0.0218,
+          0.1377
+        ],
+        "size": [
+          1.5583,
+          0.79,
+          0.3413
+        ]
+      },
+      "material_roles": [
+        "oxblood",
+        "wood_dark"
+      ],
+      "mesh_objects": 3,
+      "bytes": 6884
+    },
+    {
+      "id": "wk_facade_corner_v01",
+      "kind": "facade_part",
+      "model_kind": "component",
+      "layer": "structure",
+      "category": "facade_part",
+      "keywords": [
+        "corner",
+        "frame"
+      ],
+      "slot": "corner",
+      "anchor": "foundation_corner",
+      "compatible_families": [
+        "building"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "corner",
+        "frame"
+      ],
+      "export": "assets/exports/world_kit/wk_facade_corner_v01.glb",
+      "bounds": {
+        "min": [
+          -0.17,
+          -0.17,
+          0.0
+        ],
+        "max": [
+          0.17,
+          0.17,
+          2.8
+        ],
+        "size": [
+          0.34,
+          0.34,
+          2.8
+        ]
+      },
+      "material_roles": [
+        "stone_dark",
+        "wood_dark"
+      ],
+      "mesh_objects": 2,
+      "bytes": 4228
+    },
+    {
+      "id": "wk_facade_door_v01",
+      "kind": "facade_part",
+      "model_kind": "component",
+      "layer": "structure",
+      "category": "facade_part",
+      "keywords": [
+        "facade_bay",
+        "threshold",
+        "one_bay"
+      ],
+      "slot": "facade_bay",
+      "anchor": "foundation_bay",
+      "compatible_families": [
+        "building"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "threshold",
+        "one_bay"
+      ],
+      "export": "assets/exports/world_kit/wk_facade_door_v01.glb",
+      "bounds": {
+        "min": [
+          -0.75,
+          -0.225,
+          0.0
+        ],
+        "max": [
+          0.75,
+          0.11,
+          2.8
+        ],
+        "size": [
+          1.5,
+          0.335,
+          2.8
+        ]
+      },
+      "material_roles": [
+        "plaster",
+        "wood",
+        "wood_dark"
+      ],
+      "mesh_objects": 5,
+      "bytes": 9320
+    },
+    {
+      "id": "wk_facade_sign_v01",
+      "kind": "facade_part",
+      "model_kind": "component",
+      "layer": "structure",
+      "category": "facade_part",
+      "keywords": [
+        "sign",
+        "hanging",
+        "identity"
+      ],
+      "slot": "sign",
+      "anchor": "sign_mount",
+      "compatible_families": [
+        "building"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "hanging",
+        "identity"
+      ],
+      "export": "assets/exports/world_kit/wk_facade_sign_v01.glb",
+      "bounds": {
+        "min": [
+          0.0,
+          -0.035,
+          -0.23
+        ],
+        "max": [
+          0.58,
+          0.035,
+          0.275
+        ],
+        "size": [
+          0.58,
+          0.07,
+          0.505
+        ]
+      },
+      "material_roles": [
+        "metal",
+        "wood"
+      ],
+      "mesh_objects": 2,
+      "bytes": 5336
+    },
+    {
+      "id": "wk_facade_wall_v01",
+      "kind": "facade_part",
+      "model_kind": "component",
+      "layer": "structure",
+      "category": "facade_part",
+      "keywords": [
+        "facade_bay",
+        "solid",
+        "one_bay"
+      ],
+      "slot": "facade_bay",
+      "anchor": "foundation_bay",
+      "compatible_families": [
+        "building"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "solid",
+        "one_bay"
+      ],
+      "export": "assets/exports/world_kit/wk_facade_wall_v01.glb",
+      "bounds": {
+        "min": [
+          -0.75,
+          -0.21,
+          0.0
+        ],
+        "max": [
+          0.75,
+          0.11,
+          2.8
+        ],
+        "size": [
+          1.5,
+          0.32,
+          2.8
+        ]
+      },
+      "material_roles": [
+        "plaster",
+        "wood_dark"
+      ],
+      "mesh_objects": 3,
+      "bytes": 5864
+    },
+    {
+      "id": "wk_facade_window_v01",
+      "kind": "facade_part",
+      "model_kind": "component",
+      "layer": "structure",
+      "category": "facade_part",
+      "keywords": [
+        "facade_bay",
+        "window",
+        "one_bay"
+      ],
+      "slot": "facade_bay",
+      "anchor": "foundation_bay",
+      "compatible_families": [
+        "building"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "window",
+        "one_bay"
+      ],
+      "export": "assets/exports/world_kit/wk_facade_window_v01.glb",
+      "bounds": {
+        "min": [
+          -0.75,
+          -0.21,
+          0.0
+        ],
+        "max": [
+          0.75,
+          0.11,
+          2.8
+        ],
+        "size": [
+          1.5,
+          0.32,
+          2.8
+        ]
+      },
+      "material_roles": [
+        "glass",
+        "plaster",
+        "wood_dark"
+      ],
+      "mesh_objects": 7,
+      "bytes": 12572
+    },
+    {
+      "id": "wk_garment_trouser_shin_v01",
+      "kind": "garment_shell",
+      "model_kind": "component",
+      "layer": "garment",
+      "category": "garment_shell",
+      "keywords": [
+        "shin",
+        "trouser",
+        "limb_shell"
+      ],
+      "slot": "shin",
+      "anchor": "shin",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "trouser",
+        "limb_shell"
+      ],
+      "export": "assets/exports/world_kit/wk_garment_trouser_shin_v01.glb",
+      "fit_contract": {
+        "input": "body_fit_envelope.calf",
+        "clearance_m": 0.01,
+        "operation": "refit_cross_section",
+        "preserves": [
+          "hem",
+          "joint_gap"
+        ]
+      },
+      "bounds": {
+        "min": [
+          -0.09,
+          -0.09,
+          0.0
+        ],
+        "max": [
+          0.09,
+          0.09,
+          1.0
+        ],
+        "size": [
+          0.18,
+          0.18,
+          1.0
+        ]
+      },
+      "material_roles": [
+        "underlayer"
+      ],
+      "mesh_objects": 1,
+      "bytes": 3276
+    },
+    {
+      "id": "wk_garment_trouser_thigh_v01",
+      "kind": "garment_shell",
+      "model_kind": "component",
+      "layer": "garment",
+      "category": "garment_shell",
+      "keywords": [
+        "thigh",
+        "trouser",
+        "limb_shell"
+      ],
+      "slot": "thigh",
+      "anchor": "thigh",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "trouser",
+        "limb_shell"
+      ],
+      "export": "assets/exports/world_kit/wk_garment_trouser_thigh_v01.glb",
+      "fit_contract": {
+        "input": "body_fit_envelope.thigh",
+        "clearance_m": 0.01,
+        "operation": "refit_cross_section",
+        "preserves": [
+          "hem",
+          "joint_gap"
+        ]
+      },
+      "bounds": {
+        "min": [
+          -0.125,
+          -0.125,
+          0.0
+        ],
+        "max": [
+          0.125,
+          0.125,
+          1.0
+        ],
+        "size": [
+          0.25,
+          0.25,
+          1.0
+        ]
+      },
+      "material_roles": [
+        "underlayer"
+      ],
+      "mesh_objects": 1,
+      "bytes": 3224
+    },
+    {
+      "id": "wk_hair_bob_v01",
+      "kind": "molded_hair",
+      "model_kind": "component",
+      "layer": "identity",
+      "category": "molded_hair",
+      "keywords": [
+        "hair",
+        "bob",
+        "clumped",
+        "tapered"
+      ],
+      "slot": "hair",
+      "anchor": "head_center",
+      "compatible_families": [
+        "square",
+        "long",
+        "broad",
+        "veteran"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "bob",
+        "clumped",
+        "tapered"
+      ],
+      "export": "assets/exports/world_kit/wk_hair_bob_v01.glb",
+      "bounds": {
+        "min": [
+          -0.2033,
+          -0.1481,
+          -0.1929
+        ],
+        "max": [
+          0.2033,
+          0.064,
+          0.241
+        ],
+        "size": [
+          0.4065,
+          0.2121,
+          0.4339
+        ]
+      },
+      "material_roles": [
+        "hair"
+      ],
+      "mesh_objects": 6,
+      "bytes": 18032
+    },
+    {
+      "id": "wk_hair_braided_v01",
+      "kind": "molded_hair",
+      "model_kind": "component",
+      "layer": "identity",
+      "category": "molded_hair",
+      "keywords": [
+        "hair",
+        "braided",
+        "clumped",
+        "tapered"
+      ],
+      "slot": "hair",
+      "anchor": "head_center",
+      "compatible_families": [
+        "square",
+        "long",
+        "broad",
+        "veteran"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "braided",
+        "clumped",
+        "tapered"
+      ],
+      "export": "assets/exports/world_kit/wk_hair_braided_v01.glb",
+      "bounds": {
+        "min": [
+          -0.1804,
+          -0.1481,
+          -0.3617
+        ],
+        "max": [
+          0.1804,
+          0.1528,
+          0.241
+        ],
+        "size": [
+          0.3609,
+          0.3009,
+          0.6027
+        ]
+      },
+      "material_roles": [
+        "hair"
+      ],
+      "mesh_objects": 6,
+      "bytes": 18080
+    },
+    {
+      "id": "wk_hair_crest_v01",
+      "kind": "molded_hair",
+      "model_kind": "component",
+      "layer": "identity",
+      "category": "molded_hair",
+      "keywords": [
+        "hair",
+        "crest",
+        "clumped",
+        "tapered"
+      ],
+      "slot": "hair",
+      "anchor": "head_center",
+      "compatible_families": [
+        "square",
+        "long",
+        "broad",
+        "veteran"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "crest",
+        "clumped",
+        "tapered"
+      ],
+      "export": "assets/exports/world_kit/wk_hair_crest_v01.glb",
+      "bounds": {
+        "min": [
+          -0.1804,
+          -0.0947,
+          -0.1287
+        ],
+        "max": [
+          0.1804,
+          0.1528,
+          0.344
+        ],
+        "size": [
+          0.3609,
+          0.2476,
+          0.4727
+        ]
+      },
+      "material_roles": [
+        "hair"
+      ],
+      "mesh_objects": 5,
+      "bytes": 15136
+    },
+    {
+      "id": "wk_hair_cropped_v01",
+      "kind": "molded_hair",
+      "model_kind": "component",
+      "layer": "identity",
+      "category": "molded_hair",
+      "keywords": [
+        "hair",
+        "cropped",
+        "clumped",
+        "tapered"
+      ],
+      "slot": "hair",
+      "anchor": "head_center",
+      "compatible_families": [
+        "square",
+        "long",
+        "broad",
+        "veteran"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "cropped",
+        "clumped",
+        "tapered"
+      ],
+      "export": "assets/exports/world_kit/wk_hair_cropped_v01.glb",
+      "bounds": {
+        "min": [
+          -0.1804,
+          -0.0947,
+          -0.1287
+        ],
+        "max": [
+          0.1804,
+          0.1528,
+          0.241
+        ],
+        "size": [
+          0.3609,
+          0.2476,
+          0.3697
+        ]
+      },
+      "material_roles": [
+        "hair"
+      ],
+      "mesh_objects": 4,
+      "bytes": 12236
+    },
+    {
+      "id": "wk_hair_rear_lock_v01",
+      "kind": "molded_hair",
+      "model_kind": "component",
+      "layer": "identity",
+      "category": "molded_hair",
+      "keywords": [
+        "hair",
+        "rear_lock",
+        "clumped",
+        "tapered"
+      ],
+      "slot": "hair",
+      "anchor": "head_center",
+      "compatible_families": [
+        "square",
+        "long",
+        "broad",
+        "veteran"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "rear_lock",
+        "clumped",
+        "tapered"
+      ],
+      "export": "assets/exports/world_kit/wk_hair_rear_lock_v01.glb",
+      "bounds": {
+        "min": [
+          -0.1742,
+          -0.1481,
+          -0.3423
+        ],
+        "max": [
+          0.1742,
+          0.1885,
+          0.241
+        ],
+        "size": [
+          0.3485,
+          0.3366,
+          0.5833
+        ]
+      },
+      "material_roles": [
+        "hair"
+      ],
+      "mesh_objects": 5,
+      "bytes": 15176
+    },
+    {
+      "id": "wk_hair_swept_v01",
+      "kind": "molded_hair",
+      "model_kind": "component",
+      "layer": "identity",
+      "category": "molded_hair",
+      "keywords": [
+        "hair",
+        "swept",
+        "clumped",
+        "tapered"
+      ],
+      "slot": "hair",
+      "anchor": "head_center",
+      "compatible_families": [
+        "square",
+        "long",
+        "broad",
+        "veteran"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "swept",
+        "clumped",
+        "tapered"
+      ],
+      "export": "assets/exports/world_kit/wk_hair_swept_v01.glb",
+      "bounds": {
+        "min": [
+          -0.1889,
+          -0.1481,
+          -0.188
+        ],
+        "max": [
+          0.1804,
+          0.1528,
+          0.241
+        ],
+        "size": [
+          0.3693,
+          0.3009,
+          0.429
+        ]
+      },
+      "material_roles": [
+        "hair"
+      ],
+      "mesh_objects": 6,
+      "bytes": 18056
+    },
+    {
+      "id": "wk_head_broad_v01",
+      "kind": "head_family",
+      "model_kind": "component",
+      "layer": "skin_surface",
+      "category": "head_family",
+      "keywords": [
+        "head",
+        "broad",
+        "adult",
+        "rounded_back"
+      ],
+      "slot": "head",
+      "anchor": "head_center",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "broad",
+        "adult",
+        "rounded_back"
+      ],
+      "export": "assets/exports/world_kit/wk_head_broad_v01.glb",
+      "bounds": {
+        "min": [
+          -0.119,
+          -0.1246,
+          -0.1475
+        ],
+        "max": [
+          0.119,
+          0.1022,
+          0.1416
+        ],
+        "size": [
+          0.238,
+          0.2268,
+          0.2891
+        ]
+      },
+      "material_roles": [
+        "skin"
+      ],
+      "mesh_objects": 2,
+      "bytes": 9660
+    },
+    {
+      "id": "wk_head_long_v01",
+      "kind": "head_family",
+      "model_kind": "component",
+      "layer": "skin_surface",
+      "category": "head_family",
+      "keywords": [
+        "head",
+        "long",
+        "adult",
+        "rounded_back"
+      ],
+      "slot": "head",
+      "anchor": "head_center",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "long",
+        "adult",
+        "rounded_back"
+      ],
+      "export": "assets/exports/world_kit/wk_head_long_v01.glb",
+      "bounds": {
+        "min": [
+          -0.124,
+          -0.1262,
+          -0.125
+        ],
+        "max": [
+          0.124,
+          0.1037,
+          0.12
+        ],
+        "size": [
+          0.248,
+          0.2298,
+          0.245
+        ]
+      },
+      "material_roles": [
+        "skin"
+      ],
+      "mesh_objects": 2,
+      "bytes": 9644
+    },
+    {
+      "id": "wk_head_square_v01",
+      "kind": "head_family",
+      "model_kind": "component",
+      "layer": "skin_surface",
+      "category": "head_family",
+      "keywords": [
+        "head",
+        "square",
+        "adult",
+        "rounded_back"
+      ],
+      "slot": "head",
+      "anchor": "head_center",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "square",
+        "adult",
+        "rounded_back"
+      ],
+      "export": "assets/exports/world_kit/wk_head_square_v01.glb",
+      "bounds": {
+        "min": [
+          -0.1125,
+          -0.1194,
+          -0.1525
+        ],
+        "max": [
+          0.1125,
+          0.0975,
+          0.1464
+        ],
+        "size": [
+          0.225,
+          0.2169,
+          0.2989
+        ]
+      },
+      "material_roles": [
+        "skin"
+      ],
+      "mesh_objects": 2,
+      "bytes": 9664
+    },
+    {
+      "id": "wk_head_veteran_v01",
+      "kind": "head_family",
+      "model_kind": "component",
+      "layer": "skin_surface",
+      "category": "head_family",
+      "keywords": [
+        "head",
+        "veteran",
+        "adult",
+        "rounded_back"
+      ],
+      "slot": "head",
+      "anchor": "head_center",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "veteran",
+        "adult",
+        "rounded_back"
+      ],
+      "export": "assets/exports/world_kit/wk_head_veteran_v01.glb",
+      "bounds": {
+        "min": [
+          -0.11,
+          -0.1194,
+          -0.155
+        ],
+        "max": [
+          0.11,
+          0.0975,
+          0.1488
+        ],
+        "size": [
+          0.22,
+          0.2169,
+          0.3038
+        ]
+      },
+      "material_roles": [
+        "skin"
+      ],
+      "mesh_objects": 3,
+      "bytes": 11920
+    },
+    {
+      "id": "wk_muscle_abdomen_v01",
+      "kind": "muscle_module",
+      "model_kind": "component",
+      "layer": "muscle",
+      "category": "muscle_module",
+      "keywords": [
+        "abdomen",
+        "waist_taper",
+        "inflatable"
+      ],
+      "slot": "abdomen",
+      "anchor": "spine",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        1.0,
+        1.0
+      ],
+      "silhouette_tags": [
+        "waist_taper",
+        "inflatable"
+      ],
+      "export": "assets/exports/world_kit/wk_muscle_abdomen_v01.glb",
+      "morph_contract": {
+        "parameter": "muscle.waist",
+        "range": [
+          0.0,
+          1.0
+        ],
+        "operation": "inflate_cross_section",
+        "preserves": [
+          "bone_length",
+          "anchor",
+          "joint_axis"
+        ],
+        "output": "muscle_fit_envelope"
+      },
+      "bounds": {
+        "min": [
+          -0.2,
+          -0.12,
+          -0.22
+        ],
+        "max": [
+          0.2,
+          0.12,
+          0.22
+        ],
+        "size": [
+          0.4,
+          0.24,
+          0.44
+        ]
+      },
+      "material_roles": [
+        "oxblood"
+      ],
+      "mesh_objects": 1,
+      "bytes": 3508
+    },
+    {
+      "id": "wk_muscle_back_v01",
+      "kind": "muscle_module",
+      "model_kind": "component",
+      "layer": "muscle",
+      "category": "muscle_module",
+      "keywords": [
+        "back",
+        "rear_taper",
+        "inflatable"
+      ],
+      "slot": "back",
+      "anchor": "ribcage",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        1.0,
+        1.0
+      ],
+      "silhouette_tags": [
+        "rear_taper",
+        "inflatable"
+      ],
+      "export": "assets/exports/world_kit/wk_muscle_back_v01.glb",
+      "morph_contract": {
+        "parameter": "muscle.chest",
+        "range": [
+          0.0,
+          1.0
+        ],
+        "operation": "inflate_cross_section",
+        "preserves": [
+          "bone_length",
+          "anchor",
+          "joint_axis"
+        ],
+        "output": "muscle_fit_envelope"
+      },
+      "bounds": {
+        "min": [
+          -0.2478,
+          -0.0046,
+          -0.16
+        ],
+        "max": [
+          0.2478,
+          0.1246,
+          0.32
+        ],
+        "size": [
+          0.4956,
+          0.1293,
+          0.48
+        ]
+      },
+      "material_roles": [
+        "oxblood"
+      ],
+      "mesh_objects": 1,
+      "bytes": 1920
+    },
+    {
+      "id": "wk_muscle_calf_v01",
+      "kind": "muscle_module",
+      "model_kind": "component",
+      "layer": "muscle",
+      "category": "muscle_module",
+      "keywords": [
+        "calf",
+        "rear_bulge",
+        "inflatable"
+      ],
+      "slot": "calf",
+      "anchor": "shin",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        1.0,
+        1.0
+      ],
+      "silhouette_tags": [
+        "rear_bulge",
+        "inflatable"
+      ],
+      "export": "assets/exports/world_kit/wk_muscle_calf_v01.glb",
+      "morph_contract": {
+        "parameter": "muscle.calf",
+        "range": [
+          0.0,
+          1.0
+        ],
+        "operation": "inflate_cross_section",
+        "preserves": [
+          "bone_length",
+          "anchor",
+          "joint_axis"
+        ],
+        "output": "muscle_fit_envelope"
+      },
+      "bounds": {
+        "min": [
+          -0.095,
+          -0.095,
+          0.0
+        ],
+        "max": [
+          0.095,
+          0.095,
+          1.0
+        ],
+        "size": [
+          0.19,
+          0.19,
+          1.0
+        ]
+      },
+      "material_roles": [
+        "oxblood"
+      ],
+      "mesh_objects": 1,
+      "bytes": 3260
+    },
+    {
+      "id": "wk_muscle_chest_v01",
+      "kind": "muscle_module",
+      "model_kind": "component",
+      "layer": "muscle",
+      "category": "muscle_module",
+      "keywords": [
+        "chest",
+        "broad_front",
+        "inflatable"
+      ],
+      "slot": "chest",
+      "anchor": "ribcage",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        1.0,
+        1.0
+      ],
+      "silhouette_tags": [
+        "broad_front",
+        "inflatable"
+      ],
+      "export": "assets/exports/world_kit/wk_muscle_chest_v01.glb",
+      "morph_contract": {
+        "parameter": "muscle.chest",
+        "range": [
+          0.0,
+          1.0
+        ],
+        "operation": "inflate_cross_section",
+        "preserves": [
+          "bone_length",
+          "anchor",
+          "joint_axis"
+        ],
+        "output": "muscle_fit_envelope"
+      },
+      "bounds": {
+        "min": [
+          -0.2921,
+          -0.1401,
+          -0.1
+        ],
+        "max": [
+          0.2921,
+          0.0301,
+          0.3
+        ],
+        "size": [
+          0.5841,
+          0.1701,
+          0.4
+        ]
+      },
+      "material_roles": [
+        "oxblood"
+      ],
+      "mesh_objects": 2,
+      "bytes": 6464
+    },
+    {
+      "id": "wk_muscle_deltoid_v01",
+      "kind": "muscle_module",
+      "model_kind": "component",
+      "layer": "muscle",
+      "category": "muscle_module",
+      "keywords": [
+        "deltoid",
+        "shoulder_cap",
+        "inflatable"
+      ],
+      "slot": "deltoid",
+      "anchor": "shoulder",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        1.0,
+        1.0
+      ],
+      "silhouette_tags": [
+        "shoulder_cap",
+        "inflatable"
+      ],
+      "export": "assets/exports/world_kit/wk_muscle_deltoid_v01.glb",
+      "morph_contract": {
+        "parameter": "muscle.shoulder",
+        "range": [
+          0.0,
+          1.0
+        ],
+        "operation": "inflate_cross_section",
+        "preserves": [
+          "bone_length",
+          "anchor",
+          "joint_axis"
+        ],
+        "output": "muscle_fit_envelope"
+      },
+      "bounds": {
+        "min": [
+          -0.1029,
+          -0.0808,
+          -0.12
+        ],
+        "max": [
+          0.1029,
+          0.0808,
+          0.12
+        ],
+        "size": [
+          0.2057,
+          0.1616,
+          0.24
+        ]
+      },
+      "material_roles": [
+        "oxblood"
+      ],
+      "mesh_objects": 1,
+      "bytes": 3572
+    },
+    {
+      "id": "wk_muscle_forearm_v01",
+      "kind": "muscle_module",
+      "model_kind": "component",
+      "layer": "muscle",
+      "category": "muscle_module",
+      "keywords": [
+        "forearm",
+        "limb_taper",
+        "inflatable"
+      ],
+      "slot": "forearm",
+      "anchor": "forearm",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        1.0,
+        1.0
+      ],
+      "silhouette_tags": [
+        "limb_taper",
+        "inflatable"
+      ],
+      "export": "assets/exports/world_kit/wk_muscle_forearm_v01.glb",
+      "morph_contract": {
+        "parameter": "muscle.forearm",
+        "range": [
+          0.0,
+          1.0
+        ],
+        "operation": "inflate_cross_section",
+        "preserves": [
+          "bone_length",
+          "anchor",
+          "joint_axis"
+        ],
+        "output": "muscle_fit_envelope"
+      },
+      "bounds": {
+        "min": [
+          -0.075,
+          -0.075,
+          0.0
+        ],
+        "max": [
+          0.075,
+          0.075,
+          1.0
+        ],
+        "size": [
+          0.15,
+          0.15,
+          1.0
+        ]
+      },
+      "material_roles": [
+        "oxblood"
+      ],
+      "mesh_objects": 1,
+      "bytes": 3272
+    },
+    {
+      "id": "wk_muscle_glute_v01",
+      "kind": "muscle_module",
+      "model_kind": "component",
+      "layer": "muscle",
+      "category": "muscle_module",
+      "keywords": [
+        "glute",
+        "pelvis_mass",
+        "inflatable"
+      ],
+      "slot": "glute",
+      "anchor": "pelvis",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        1.0,
+        1.0
+      ],
+      "silhouette_tags": [
+        "pelvis_mass",
+        "inflatable"
+      ],
+      "export": "assets/exports/world_kit/wk_muscle_glute_v01.glb",
+      "morph_contract": {
+        "parameter": "muscle.pelvis",
+        "range": [
+          0.0,
+          1.0
+        ],
+        "operation": "inflate_cross_section",
+        "preserves": [
+          "bone_length",
+          "anchor",
+          "joint_axis"
+        ],
+        "output": "muscle_fit_envelope"
+      },
+      "bounds": {
+        "min": [
+          -0.2302,
+          -0.0571,
+          -0.16
+        ],
+        "max": [
+          0.2302,
+          0.1471,
+          0.16
+        ],
+        "size": [
+          0.4604,
+          0.2042,
+          0.32
+        ]
+      },
+      "material_roles": [
+        "oxblood"
+      ],
+      "mesh_objects": 2,
+      "bytes": 6424
+    },
+    {
+      "id": "wk_muscle_neck_v01",
+      "kind": "muscle_module",
+      "model_kind": "component",
+      "layer": "muscle",
+      "category": "muscle_module",
+      "keywords": [
+        "neck",
+        "neck_column",
+        "inflatable"
+      ],
+      "slot": "neck",
+      "anchor": "neck",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        1.0,
+        1.0
+      ],
+      "silhouette_tags": [
+        "neck_column",
+        "inflatable"
+      ],
+      "export": "assets/exports/world_kit/wk_muscle_neck_v01.glb",
+      "morph_contract": {
+        "parameter": "muscle.shoulder",
+        "range": [
+          0.0,
+          1.0
+        ],
+        "operation": "inflate_cross_section",
+        "preserves": [
+          "bone_length",
+          "anchor",
+          "joint_axis"
+        ],
+        "output": "muscle_fit_envelope"
+      },
+      "bounds": {
+        "min": [
+          -0.085,
+          -0.085,
+          0.0
+        ],
+        "max": [
+          0.085,
+          0.085,
+          1.0
+        ],
+        "size": [
+          0.17,
+          0.17,
+          1.0
+        ]
+      },
+      "material_roles": [
+        "oxblood"
+      ],
+      "mesh_objects": 1,
+      "bytes": 3264
+    },
+    {
+      "id": "wk_muscle_thigh_v01",
+      "kind": "muscle_module",
+      "model_kind": "component",
+      "layer": "muscle",
+      "category": "muscle_module",
+      "keywords": [
+        "thigh",
+        "limb_taper",
+        "inflatable"
+      ],
+      "slot": "thigh",
+      "anchor": "thigh",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        1.0,
+        1.0
+      ],
+      "silhouette_tags": [
+        "limb_taper",
+        "inflatable"
+      ],
+      "export": "assets/exports/world_kit/wk_muscle_thigh_v01.glb",
+      "morph_contract": {
+        "parameter": "muscle.thigh",
+        "range": [
+          0.0,
+          1.0
+        ],
+        "operation": "inflate_cross_section",
+        "preserves": [
+          "bone_length",
+          "anchor",
+          "joint_axis"
+        ],
+        "output": "muscle_fit_envelope"
+      },
+      "bounds": {
+        "min": [
+          -0.125,
+          -0.125,
+          0.0
+        ],
+        "max": [
+          0.125,
+          0.125,
+          1.0
+        ],
+        "size": [
+          0.25,
+          0.25,
+          1.0
+        ]
+      },
+      "material_roles": [
+        "oxblood"
+      ],
+      "mesh_objects": 1,
+      "bytes": 3208
+    },
+    {
+      "id": "wk_muscle_upper_arm_v01",
+      "kind": "muscle_module",
+      "model_kind": "component",
+      "layer": "muscle",
+      "category": "muscle_module",
+      "keywords": [
+        "upper_arm",
+        "limb_taper",
+        "inflatable"
+      ],
+      "slot": "upper_arm",
+      "anchor": "upper_arm",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        1.0,
+        1.0
+      ],
+      "silhouette_tags": [
+        "limb_taper",
+        "inflatable"
+      ],
+      "export": "assets/exports/world_kit/wk_muscle_upper_arm_v01.glb",
+      "morph_contract": {
+        "parameter": "muscle.upper_arm",
+        "range": [
+          0.0,
+          1.0
+        ],
+        "operation": "inflate_cross_section",
+        "preserves": [
+          "bone_length",
+          "anchor",
+          "joint_axis"
+        ],
+        "output": "muscle_fit_envelope"
+      },
+      "bounds": {
+        "min": [
+          -0.09,
+          -0.09,
+          0.0
+        ],
+        "max": [
+          0.09,
+          0.09,
+          1.0
+        ],
+        "size": [
+          0.18,
+          0.18,
+          1.0
+        ]
+      },
+      "material_roles": [
+        "oxblood"
+      ],
+      "mesh_objects": 1,
+      "bytes": 3276
+    },
+    {
+      "id": "wk_place_market_counter_v01",
+      "kind": "place_module",
+      "model_kind": "component",
+      "layer": "place",
+      "category": "place_module",
+      "keywords": [
+        "work_area",
+        "counter",
+        "horizontal"
+      ],
+      "slot": "work_area",
+      "anchor": "floor",
+      "compatible_families": [
+        "market",
+        "shop"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "counter",
+        "horizontal"
+      ],
+      "export": "assets/exports/world_kit/wk_place_market_counter_v01.glb",
+      "bounds": {
+        "min": [
+          -0.975,
+          -0.4,
+          0.0
+        ],
+        "max": [
+          0.975,
+          0.32,
+          0.95
+        ],
+        "size": [
+          1.95,
+          0.72,
+          0.95
+        ]
+      },
+      "material_roles": [
+        "wood",
+        "wood_dark"
+      ],
+      "mesh_objects": 2,
+      "bytes": 4248
+    },
+    {
+      "id": "wk_prop_axe_v01",
+      "kind": "prop",
+      "model_kind": "component",
+      "layer": "equipment",
+      "category": "prop",
+      "keywords": [
+        "two_hand",
+        "top_heavy"
+      ],
+      "slot": "two_hand",
+      "anchor": "hand_grip",
+      "compatible_families": [
+        "figure"
+      ],
+      "allowed_scale": [
+        0.95,
+        1.05
+      ],
+      "silhouette_tags": [
+        "top_heavy",
+        "two_hand"
+      ],
+      "export": "assets/exports/world_kit/wk_prop_axe_v01.glb",
+      "bounds": {
+        "min": [
+          -0.0722,
+          -0.0371,
+          -0.46
+        ],
+        "max": [
+          0.2322,
+          0.0371,
+          0.545
+        ],
+        "size": [
+          0.3044,
+          0.0743,
+          1.005
+        ]
+      },
+      "material_roles": [
+        "metal",
+        "wood"
+      ],
+      "mesh_objects": 2,
+      "bytes": 4840
+    },
+    {
+      "id": "wk_prop_crossbow_v01",
+      "kind": "prop",
+      "model_kind": "component",
+      "layer": "equipment",
+      "category": "prop",
+      "keywords": [
+        "two_hand",
+        "wide"
+      ],
+      "slot": "two_hand",
+      "anchor": "hand_grip",
+      "compatible_families": [
+        "figure"
+      ],
+      "allowed_scale": [
+        0.95,
+        1.05
+      ],
+      "silhouette_tags": [
+        "wide",
+        "two_hand"
+      ],
+      "export": "assets/exports/world_kit/wk_prop_crossbow_v01.glb",
+      "bounds": {
+        "min": [
+          -0.36,
+          -0.05,
+          -0.29
+        ],
+        "max": [
+          0.36,
+          0.05,
+          0.29
+        ],
+        "size": [
+          0.72,
+          0.1,
+          0.58
+        ]
+      },
+      "material_roles": [
+        "metal",
+        "wood"
+      ],
+      "mesh_objects": 2,
+      "bytes": 5284
+    },
+    {
+      "id": "wk_prop_hammer_v01",
+      "kind": "prop",
+      "model_kind": "component",
+      "layer": "equipment",
+      "category": "prop",
+      "keywords": [
+        "hand",
+        "work"
+      ],
+      "slot": "hand",
+      "anchor": "hand_grip",
+      "compatible_families": [
+        "figure"
+      ],
+      "allowed_scale": [
+        0.95,
+        1.05
+      ],
+      "silhouette_tags": [
+        "work",
+        "hand"
+      ],
+      "export": "assets/exports/world_kit/wk_prop_hammer_v01.glb",
+      "bounds": {
+        "min": [
+          -0.135,
+          -0.06,
+          -0.24
+        ],
+        "max": [
+          0.135,
+          0.06,
+          0.285
+        ],
+        "size": [
+          0.27,
+          0.12,
+          0.525
+        ]
+      },
+      "material_roles": [
+        "metal",
+        "wood"
+      ],
+      "mesh_objects": 2,
+      "bytes": 5296
+    },
+    {
+      "id": "wk_prop_lantern_v01",
+      "kind": "prop",
+      "model_kind": "component",
+      "layer": "equipment",
+      "category": "prop",
+      "keywords": [
+        "hand",
+        "hanging"
+      ],
+      "slot": "hand",
+      "anchor": "hand_grip",
+      "compatible_families": [
+        "figure"
+      ],
+      "allowed_scale": [
+        0.95,
+        1.05
+      ],
+      "silhouette_tags": [
+        "hanging",
+        "hand"
+      ],
+      "export": "assets/exports/world_kit/wk_prop_lantern_v01.glb",
+      "bounds": {
+        "min": [
+          -0.08,
+          -0.065,
+          -0.15
+        ],
+        "max": [
+          0.08,
+          0.065,
+          0.092
+        ],
+        "size": [
+          0.16,
+          0.13,
+          0.242
+        ]
+      },
+      "material_roles": [
+        "glass",
+        "gold",
+        "metal"
+      ],
+      "mesh_objects": 3,
+      "bytes": 6772
+    },
+    {
+      "id": "wk_prop_shovel_v01",
+      "kind": "prop",
+      "model_kind": "component",
+      "layer": "equipment",
+      "category": "prop",
+      "keywords": [
+        "two_hand",
+        "work"
+      ],
+      "slot": "two_hand",
+      "anchor": "hand_grip",
+      "compatible_families": [
+        "figure"
+      ],
+      "allowed_scale": [
+        0.95,
+        1.05
+      ],
+      "silhouette_tags": [
+        "work",
+        "two_hand"
+      ],
+      "export": "assets/exports/world_kit/wk_prop_shovel_v01.glb",
+      "bounds": {
+        "min": [
+          -0.0983,
+          -0.0346,
+          -0.625
+        ],
+        "max": [
+          0.0983,
+          0.0346,
+          0.875
+        ],
+        "size": [
+          0.1966,
+          0.0691,
+          1.5
+        ]
+      },
+      "material_roles": [
+        "metal",
+        "wood"
+      ],
+      "mesh_objects": 2,
+      "bytes": 4816
+    },
+    {
+      "id": "wk_prop_spear_v01",
+      "kind": "prop",
+      "model_kind": "component",
+      "layer": "equipment",
+      "category": "prop",
+      "keywords": [
+        "pole",
+        "long"
+      ],
+      "slot": "pole",
+      "anchor": "hand_grip",
+      "compatible_families": [
+        "figure"
+      ],
+      "allowed_scale": [
+        0.95,
+        1.05
+      ],
+      "silhouette_tags": [
+        "long",
+        "pole"
+      ],
+      "export": "assets/exports/world_kit/wk_prop_spear_v01.glb",
+      "bounds": {
+        "min": [
+          -0.0369,
+          -0.025,
+          -0.95
+        ],
+        "max": [
+          0.0369,
+          0.025,
+          1.165
+        ],
+        "size": [
+          0.0738,
+          0.05,
+          2.115
+        ]
+      },
+      "material_roles": [
+        "metal",
+        "wood"
+      ],
+      "mesh_objects": 2,
+      "bytes": 4844
+    },
+    {
+      "id": "wk_prop_staff_v01",
+      "kind": "prop",
+      "model_kind": "component",
+      "layer": "equipment",
+      "category": "prop",
+      "keywords": [
+        "pole",
+        "vertical"
+      ],
+      "slot": "pole",
+      "anchor": "hand_grip",
+      "compatible_families": [
+        "figure"
+      ],
+      "allowed_scale": [
+        0.95,
+        1.05
+      ],
+      "silhouette_tags": [
+        "vertical",
+        "pole"
+      ],
+      "export": "assets/exports/world_kit/wk_prop_staff_v01.glb",
+      "bounds": {
+        "min": [
+          -0.0492,
+          -0.0468,
+          -0.875
+        ],
+        "max": [
+          0.0492,
+          0.0468,
+          0.975
+        ],
+        "size": [
+          0.0984,
+          0.0936,
+          1.85
+        ]
+      },
+      "material_roles": [
+        "gold",
+        "wood"
+      ],
+      "mesh_objects": 2,
+      "bytes": 6452
+    },
+    {
+      "id": "wk_prop_sword_v01",
+      "kind": "prop",
+      "model_kind": "component",
+      "layer": "equipment",
+      "category": "prop",
+      "keywords": [
+        "two_hand",
+        "balanced"
+      ],
+      "slot": "two_hand",
+      "anchor": "hand_grip",
+      "compatible_families": [
+        "figure"
+      ],
+      "allowed_scale": [
+        0.95,
+        1.05
+      ],
+      "silhouette_tags": [
+        "balanced",
+        "two_hand"
+      ],
+      "export": "assets/exports/world_kit/wk_prop_sword_v01.glb",
+      "bounds": {
+        "min": [
+          -0.125,
+          -0.028,
+          -0.31
+        ],
+        "max": [
+          0.125,
+          0.028,
+          0.66
+        ],
+        "size": [
+          0.25,
+          0.056,
+          0.97
+        ]
+      },
+      "material_roles": [
+        "gold",
+        "leather",
+        "metal"
+      ],
+      "mesh_objects": 3,
+      "bytes": 7132
+    },
+    {
+      "id": "wk_roof_gable_span_v01",
+      "kind": "roof_part",
+      "model_kind": "component",
+      "layer": "structure",
+      "category": "roof_part",
+      "keywords": [
+        "roof_span",
+        "gable",
+        "wedge"
+      ],
+      "slot": "roof_span",
+      "anchor": "wall_top",
+      "compatible_families": [
+        "building"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "gable",
+        "wedge"
+      ],
+      "export": "assets/exports/world_kit/wk_roof_gable_span_v01.glb",
+      "bounds": {
+        "min": [
+          -0.8524,
+          -1.7,
+          -0.07
+        ],
+        "max": [
+          0.8524,
+          1.7,
+          0.775
+        ],
+        "size": [
+          1.7048,
+          3.4,
+          0.845
+        ]
+      },
+      "material_roles": [
+        "roof",
+        "wood_dark"
+      ],
+      "mesh_objects": 3,
+      "bytes": 4968
+    },
+    {
+      "id": "wk_shell_back_cape_v01",
+      "kind": "garment_shell",
+      "model_kind": "component",
+      "layer": "garment",
+      "category": "garment_shell",
+      "keywords": [
+        "back",
+        "rear_heavy",
+        "long_cloth"
+      ],
+      "slot": "back",
+      "anchor": "upper_back",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "rear_heavy",
+        "long_cloth"
+      ],
+      "export": "assets/exports/world_kit/wk_shell_back_cape_v01.glb",
+      "fit_contract": {
+        "input": "body_fit_envelope.upper_back_plus_garment",
+        "clearance_m": 0.016,
+        "operation": "refit_cross_section",
+        "forbidden": [
+          "change_bone_length",
+          "move_socket"
+        ]
+      },
+      "bounds": {
+        "min": [
+          -0.2597,
+          -0.0338,
+          -0.9175
+        ],
+        "max": [
+          0.2993,
+          0.1076,
+          0.1789
+        ],
+        "size": [
+          0.559,
+          0.1414,
+          1.0964
+        ]
+      },
+      "material_roles": [
+        "oxblood"
+      ],
+      "mesh_objects": 1,
+      "bytes": 1408
+    },
+    {
+      "id": "wk_shell_back_pack_v01",
+      "kind": "fitted_shell",
+      "model_kind": "component",
+      "layer": "equipment",
+      "category": "fitted_shell",
+      "keywords": [
+        "back",
+        "rear_heavy",
+        "travel"
+      ],
+      "slot": "back",
+      "anchor": "upper_back",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "rear_heavy",
+        "travel"
+      ],
+      "export": "assets/exports/world_kit/wk_shell_back_pack_v01.glb",
+      "bounds": {
+        "min": [
+          -0.22,
+          -0.095,
+          -0.24
+        ],
+        "max": [
+          0.22,
+          0.095,
+          0.395
+        ],
+        "size": [
+          0.44,
+          0.19,
+          0.635
+        ]
+      },
+      "material_roles": [
+        "cloth",
+        "leather"
+      ],
+      "mesh_objects": 2,
+      "bytes": 5240
+    },
+    {
+      "id": "wk_shell_chest_cuirass_v01",
+      "kind": "armor_shell",
+      "model_kind": "component",
+      "layer": "armor",
+      "category": "armor_shell",
+      "keywords": [
+        "chest",
+        "armored",
+        "broad"
+      ],
+      "slot": "chest",
+      "anchor": "chest_front",
+      "compatible_families": [
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "armored",
+        "broad"
+      ],
+      "export": "assets/exports/world_kit/wk_shell_chest_cuirass_v01.glb",
+      "fit_contract": {
+        "input": "body_fit_envelope.torso_plus_garment",
+        "clearance_m": 0.018,
+        "operation": "refit_cross_section",
+        "forbidden": [
+          "change_bone_length",
+          "move_socket"
+        ]
+      },
+      "bounds": {
+        "min": [
+          -0.2981,
+          -0.1143,
+          -0.26
+        ],
+        "max": [
+          0.2981,
+          0.0743,
+          0.26
+        ],
+        "size": [
+          0.5961,
+          0.1886,
+          0.52
+        ]
+      },
+      "material_roles": [
+        "gold",
+        "metal"
+      ],
+      "mesh_objects": 2,
+      "bytes": 4036
+    },
+    {
+      "id": "wk_shell_chest_tunic_v01",
+      "kind": "garment_shell",
+      "model_kind": "component",
+      "layer": "garment",
+      "category": "garment_shell",
+      "keywords": [
+        "chest",
+        "layered",
+        "tapered"
+      ],
+      "slot": "chest",
+      "anchor": "chest_front",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "layered",
+        "tapered"
+      ],
+      "export": "assets/exports/world_kit/wk_shell_chest_tunic_v01.glb",
+      "fit_contract": {
+        "input": "body_fit_envelope.torso",
+        "clearance_m": 0.012,
+        "operation": "refit_cross_section",
+        "forbidden": [
+          "change_bone_length",
+          "move_socket"
+        ]
+      },
+      "bounds": {
+        "min": [
+          -0.315,
+          -0.1855,
+          -0.24
+        ],
+        "max": [
+          0.315,
+          0.1855,
+          0.5
+        ],
+        "size": [
+          0.63,
+          0.3709,
+          0.74
+        ]
+      },
+      "material_roles": [
+        "teal"
+      ],
+      "mesh_objects": 1,
+      "bytes": 5100
+    },
+    {
+      "id": "wk_shell_foot_boot_v01",
+      "kind": "garment_shell",
+      "model_kind": "component",
+      "layer": "garment",
+      "category": "garment_shell",
+      "keywords": [
+        "foot",
+        "planted",
+        "directional"
+      ],
+      "slot": "foot",
+      "anchor": "ankle_to_toe",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "planted",
+        "directional"
+      ],
+      "export": "assets/exports/world_kit/wk_shell_foot_boot_v01.glb",
+      "fit_contract": {
+        "input": "body_fit_envelope.foot",
+        "clearance_m": 0.012,
+        "operation": "refit_cross_section",
+        "forbidden": [
+          "change_bone_length",
+          "move_socket"
+        ]
+      },
+      "bounds": {
+        "min": [
+          -0.0644,
+          -0.1578,
+          -0.075
+        ],
+        "max": [
+          0.0644,
+          0.1178,
+          0.075
+        ],
+        "size": [
+          0.1288,
+          0.2757,
+          0.15
+        ]
+      },
+      "material_roles": [
+        "leather"
+      ],
+      "mesh_objects": 1,
+      "bytes": 1940
+    },
+    {
+      "id": "wk_shell_forearm_bracer_v01",
+      "kind": "armor_shell",
+      "model_kind": "component",
+      "layer": "armor",
+      "category": "armor_shell",
+      "keywords": [
+        "forearm",
+        "hard_edge"
+      ],
+      "slot": "forearm",
+      "anchor": "forearm",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "hard_edge",
+        "forearm"
+      ],
+      "export": "assets/exports/world_kit/wk_shell_forearm_bracer_v01.glb",
+      "fit_contract": {
+        "input": "body_fit_envelope.forearm_plus_garment",
+        "clearance_m": 0.012,
+        "operation": "refit_cross_section",
+        "forbidden": [
+          "change_bone_length",
+          "move_socket"
+        ]
+      },
+      "bounds": {
+        "min": [
+          -0.08,
+          -0.08,
+          -0.18
+        ],
+        "max": [
+          0.08,
+          0.08,
+          0.18
+        ],
+        "size": [
+          0.16,
+          0.16,
+          0.36
+        ]
+      },
+      "material_roles": [
+        "leather"
+      ],
+      "mesh_objects": 1,
+      "bytes": 3260
+    },
+    {
+      "id": "wk_shell_hand_glove_v01",
+      "kind": "garment_shell",
+      "model_kind": "component",
+      "layer": "garment",
+      "category": "garment_shell",
+      "keywords": [
+        "hand",
+        "grip",
+        "cuff"
+      ],
+      "slot": "hand",
+      "anchor": "hand_center",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "grip",
+        "cuff"
+      ],
+      "export": "assets/exports/world_kit/wk_shell_hand_glove_v01.glb",
+      "fit_contract": {
+        "input": "body_fit_envelope.hand",
+        "clearance_m": 0.008,
+        "operation": "refit_cross_section",
+        "forbidden": [
+          "change_bone_length",
+          "move_socket"
+        ]
+      },
+      "bounds": {
+        "min": [
+          -0.0518,
+          -0.0332,
+          -0.09
+        ],
+        "max": [
+          0.0518,
+          0.0332,
+          0.09
+        ],
+        "size": [
+          0.1035,
+          0.0664,
+          0.18
+        ]
+      },
+      "material_roles": [
+        "leather"
+      ],
+      "mesh_objects": 1,
+      "bytes": 1944
+    },
+    {
+      "id": "wk_shell_head_crown_band_v01",
+      "kind": "identity_shell",
+      "model_kind": "component",
+      "layer": "identity",
+      "category": "identity_shell",
+      "keywords": [
+        "head_top",
+        "three_point",
+        "small_accent"
+      ],
+      "slot": "head_top",
+      "anchor": "head_top",
+      "compatible_families": [
+        "square",
+        "long",
+        "broad",
+        "veteran"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "three_point",
+        "small_accent"
+      ],
+      "export": "assets/exports/world_kit/wk_shell_head_crown_band_v01.glb",
+      "bounds": {
+        "min": [
+          -0.09,
+          -0.065,
+          -0.0525
+        ],
+        "max": [
+          0.09,
+          0.065,
+          0.095
+        ],
+        "size": [
+          0.18,
+          0.13,
+          0.1475
+        ]
+      },
+      "material_roles": [
+        "gold"
+      ],
+      "mesh_objects": 4,
+      "bytes": 6160
+    },
+    {
+      "id": "wk_shell_shin_greave_v01",
+      "kind": "armor_shell",
+      "model_kind": "component",
+      "layer": "armor",
+      "category": "armor_shell",
+      "keywords": [
+        "shin",
+        "armor"
+      ],
+      "slot": "shin",
+      "anchor": "shin",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "armor",
+        "shin"
+      ],
+      "export": "assets/exports/world_kit/wk_shell_shin_greave_v01.glb",
+      "fit_contract": {
+        "input": "body_fit_envelope.calf_plus_garment",
+        "clearance_m": 0.014,
+        "operation": "refit_cross_section",
+        "forbidden": [
+          "change_bone_length",
+          "move_socket"
+        ]
+      },
+      "bounds": {
+        "min": [
+          -0.095,
+          -0.095,
+          -0.2
+        ],
+        "max": [
+          0.095,
+          0.095,
+          0.2
+        ],
+        "size": [
+          0.19,
+          0.19,
+          0.4
+        ]
+      },
+      "material_roles": [
+        "metal"
+      ],
+      "mesh_objects": 1,
+      "bytes": 3268
+    },
+    {
+      "id": "wk_shell_shoulder_mantle_left_v01",
+      "kind": "garment_shell",
+      "model_kind": "component",
+      "layer": "garment",
+      "category": "garment_shell",
+      "keywords": [
+        "shoulder_left",
+        "left_heavy",
+        "cloth"
+      ],
+      "slot": "shoulder_left",
+      "anchor": "shoulder_left",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "left_heavy",
+        "cloth"
+      ],
+      "export": "assets/exports/world_kit/wk_shell_shoulder_mantle_left_v01.glb",
+      "fit_contract": {
+        "input": "body_fit_envelope.shoulder_plus_garment",
+        "clearance_m": 0.014,
+        "operation": "refit_cross_section",
+        "forbidden": [
+          "change_bone_length",
+          "move_socket"
+        ]
+      },
+      "bounds": {
+        "min": [
+          -0.359,
+          -0.0378,
+          -0.5572
+        ],
+        "max": [
+          0.1591,
+          0.0886,
+          0.1373
+        ],
+        "size": [
+          0.5181,
+          0.1264,
+          0.6945
+        ]
+      },
+      "material_roles": [
+        "oxblood"
+      ],
+      "mesh_objects": 1,
+      "bytes": 1432
+    },
+    {
+      "id": "wk_shell_shoulder_pauldron_v01",
+      "kind": "armor_shell",
+      "model_kind": "component",
+      "layer": "armor",
+      "category": "armor_shell",
+      "keywords": [
+        "shoulder",
+        "armor",
+        "hard_edge"
+      ],
+      "slot": "shoulder",
+      "anchor": "shoulder",
+      "compatible_families": [
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "armor",
+        "hard_edge"
+      ],
+      "export": "assets/exports/world_kit/wk_shell_shoulder_pauldron_v01.glb",
+      "fit_contract": {
+        "input": "body_fit_envelope.deltoid_plus_garment",
+        "clearance_m": 0.018,
+        "operation": "refit_cross_section",
+        "forbidden": [
+          "change_bone_length",
+          "move_socket"
+        ]
+      },
+      "bounds": {
+        "min": [
+          -0.1297,
+          -0.1021,
+          -0.115
+        ],
+        "max": [
+          0.1297,
+          0.1021,
+          0.115
+        ],
+        "size": [
+          0.2594,
+          0.2042,
+          0.23
+        ]
+      },
+      "material_roles": [
+        "gold",
+        "metal"
+      ],
+      "mesh_objects": 2,
+      "bytes": 5624
+    },
+    {
+      "id": "wk_shell_waist_apron_v01",
+      "kind": "garment_shell",
+      "model_kind": "component",
+      "layer": "garment",
+      "category": "garment_shell",
+      "keywords": [
+        "waist",
+        "work",
+        "front_weight"
+      ],
+      "slot": "waist",
+      "anchor": "belt",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "work",
+        "front_weight"
+      ],
+      "export": "assets/exports/world_kit/wk_shell_waist_apron_v01.glb",
+      "fit_contract": {
+        "input": "body_fit_envelope.waist_plus_garment",
+        "clearance_m": 0.014,
+        "operation": "refit_cross_section",
+        "forbidden": [
+          "change_bone_length",
+          "move_socket"
+        ]
+      },
+      "bounds": {
+        "min": [
+          -0.2095,
+          -0.0697,
+          -0.4797
+        ],
+        "max": [
+          0.2095,
+          -0.0203,
+          0.1805
+        ],
+        "size": [
+          0.4189,
+          0.0494,
+          0.6602
+        ]
+      },
+      "material_roles": [
+        "cloth"
+      ],
+      "mesh_objects": 1,
+      "bytes": 1392
+    },
+    {
+      "id": "wk_shell_waist_belt_v01",
+      "kind": "garment_shell",
+      "model_kind": "component",
+      "layer": "garment",
+      "category": "garment_shell",
+      "keywords": [
+        "waist",
+        "belt",
+        "compact"
+      ],
+      "slot": "waist",
+      "anchor": "belt",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "belt",
+        "compact"
+      ],
+      "export": "assets/exports/world_kit/wk_shell_waist_belt_v01.glb",
+      "fit_contract": {
+        "input": "body_fit_envelope.waist_plus_garment",
+        "clearance_m": 0.01,
+        "operation": "refit_cross_section",
+        "forbidden": [
+          "change_bone_length",
+          "move_socket"
+        ]
+      },
+      "bounds": {
+        "min": [
+          -0.215,
+          -0.1475,
+          -0.0475
+        ],
+        "max": [
+          0.215,
+          0.11,
+          0.0475
+        ],
+        "size": [
+          0.43,
+          0.2575,
+          0.095
+        ]
+      },
+      "material_roles": [
+        "gold",
+        "leather"
+      ],
+      "mesh_objects": 2,
+      "bytes": 4172
+    },
+    {
+      "id": "wk_skeleton_foot_v01",
+      "kind": "skeleton_part",
+      "model_kind": "component",
+      "layer": "skeleton",
+      "category": "skeleton_part",
+      "keywords": [
+        "foot",
+        "internal",
+        "contact_frame"
+      ],
+      "slot": "foot",
+      "anchor": "ankle_joint",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        1.0,
+        1.0
+      ],
+      "silhouette_tags": [
+        "internal",
+        "contact_frame"
+      ],
+      "export": "assets/exports/world_kit/wk_skeleton_foot_v01.glb",
+      "bounds": {
+        "min": [
+          -0.0394,
+          -0.0793,
+          -0.0375
+        ],
+        "max": [
+          0.0394,
+          0.0793,
+          0.0375
+        ],
+        "size": [
+          0.0789,
+          0.1586,
+          0.075
+        ]
+      },
+      "material_roles": [
+        "cream"
+      ],
+      "mesh_objects": 1,
+      "bytes": 1964
+    },
+    {
+      "id": "wk_skeleton_forearm_v01",
+      "kind": "skeleton_part",
+      "model_kind": "component",
+      "layer": "skeleton",
+      "category": "skeleton_part",
+      "keywords": [
+        "forearm",
+        "internal",
+        "bone_frame"
+      ],
+      "slot": "forearm",
+      "anchor": "elbow_joint",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        1.0,
+        1.0
+      ],
+      "silhouette_tags": [
+        "internal",
+        "bone_frame"
+      ],
+      "export": "assets/exports/world_kit/wk_skeleton_forearm_v01.glb",
+      "bounds": {
+        "min": [
+          -0.0435,
+          -0.0413,
+          -0.0486
+        ],
+        "max": [
+          0.0435,
+          0.0413,
+          1.0
+        ],
+        "size": [
+          0.0869,
+          0.0827,
+          1.0486
+        ]
+      },
+      "material_roles": [
+        "cream",
+        "gold"
+      ],
+      "mesh_objects": 2,
+      "bytes": 6504
+    },
+    {
+      "id": "wk_skeleton_hand_v01",
+      "kind": "skeleton_part",
+      "model_kind": "component",
+      "layer": "skeleton",
+      "category": "skeleton_part",
+      "keywords": [
+        "hand",
+        "internal",
+        "contact_frame"
+      ],
+      "slot": "hand",
+      "anchor": "wrist_joint",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        1.0,
+        1.0
+      ],
+      "silhouette_tags": [
+        "internal",
+        "contact_frame"
+      ],
+      "export": "assets/exports/world_kit/wk_skeleton_hand_v01.glb",
+      "bounds": {
+        "min": [
+          -0.0345,
+          -0.0173,
+          -0.0575
+        ],
+        "max": [
+          0.0345,
+          0.0173,
+          0.0575
+        ],
+        "size": [
+          0.069,
+          0.0347,
+          0.115
+        ]
+      },
+      "material_roles": [
+        "cream"
+      ],
+      "mesh_objects": 1,
+      "bytes": 1968
+    },
+    {
+      "id": "wk_skeleton_pelvis_v01",
+      "kind": "skeleton_part",
+      "model_kind": "component",
+      "layer": "skeleton",
+      "category": "skeleton_part",
+      "keywords": [
+        "pelvis",
+        "internal",
+        "bone_frame"
+      ],
+      "slot": "pelvis",
+      "anchor": "pelvis_frame",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        1.0,
+        1.0
+      ],
+      "silhouette_tags": [
+        "internal",
+        "bone_frame"
+      ],
+      "export": "assets/exports/world_kit/wk_skeleton_pelvis_v01.glb",
+      "bounds": {
+        "min": [
+          -0.0785,
+          -0.0746,
+          -0.0878
+        ],
+        "max": [
+          0.0785,
+          0.0746,
+          1.0
+        ],
+        "size": [
+          0.157,
+          0.1493,
+          1.0878
+        ]
+      },
+      "material_roles": [
+        "cream",
+        "gold"
+      ],
+      "mesh_objects": 2,
+      "bytes": 6492
+    },
+    {
+      "id": "wk_skeleton_shin_v01",
+      "kind": "skeleton_part",
+      "model_kind": "component",
+      "layer": "skeleton",
+      "category": "skeleton_part",
+      "keywords": [
+        "shin",
+        "internal",
+        "bone_frame"
+      ],
+      "slot": "shin",
+      "anchor": "knee_joint",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        1.0,
+        1.0
+      ],
+      "silhouette_tags": [
+        "internal",
+        "bone_frame"
+      ],
+      "export": "assets/exports/world_kit/wk_skeleton_shin_v01.glb",
+      "bounds": {
+        "min": [
+          -0.0507,
+          -0.0482,
+          -0.0567
+        ],
+        "max": [
+          0.0507,
+          0.0482,
+          1.0
+        ],
+        "size": [
+          0.1014,
+          0.0965,
+          1.0567
+        ]
+      },
+      "material_roles": [
+        "cream",
+        "gold"
+      ],
+      "mesh_objects": 2,
+      "bytes": 6488
+    },
+    {
+      "id": "wk_skeleton_spine_v01",
+      "kind": "skeleton_part",
+      "model_kind": "component",
+      "layer": "skeleton",
+      "category": "skeleton_part",
+      "keywords": [
+        "spine",
+        "internal",
+        "bone_frame"
+      ],
+      "slot": "spine",
+      "anchor": "pelvis_to_neck",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        1.0,
+        1.0
+      ],
+      "silhouette_tags": [
+        "internal",
+        "bone_frame"
+      ],
+      "export": "assets/exports/world_kit/wk_skeleton_spine_v01.glb",
+      "bounds": {
+        "min": [
+          -0.0543,
+          -0.0517,
+          -0.0608
+        ],
+        "max": [
+          0.0543,
+          0.0517,
+          1.0
+        ],
+        "size": [
+          0.1087,
+          0.1034,
+          1.0608
+        ]
+      },
+      "material_roles": [
+        "cream",
+        "gold"
+      ],
+      "mesh_objects": 2,
+      "bytes": 6492
+    },
+    {
+      "id": "wk_skeleton_thigh_v01",
+      "kind": "skeleton_part",
+      "model_kind": "component",
+      "layer": "skeleton",
+      "category": "skeleton_part",
+      "keywords": [
+        "thigh",
+        "internal",
+        "bone_frame"
+      ],
+      "slot": "thigh",
+      "anchor": "hip_joint",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        1.0,
+        1.0
+      ],
+      "silhouette_tags": [
+        "internal",
+        "bone_frame"
+      ],
+      "export": "assets/exports/world_kit/wk_skeleton_thigh_v01.glb",
+      "bounds": {
+        "min": [
+          -0.0604,
+          -0.0574,
+          -0.0675
+        ],
+        "max": [
+          0.0604,
+          0.0574,
+          1.0
+        ],
+        "size": [
+          0.1207,
+          0.1148,
+          1.0675
+        ]
+      },
+      "material_roles": [
+        "cream",
+        "gold"
+      ],
+      "mesh_objects": 2,
+      "bytes": 6488
+    },
+    {
+      "id": "wk_skeleton_upper_arm_v01",
+      "kind": "skeleton_part",
+      "model_kind": "component",
+      "layer": "skeleton",
+      "category": "skeleton_part",
+      "keywords": [
+        "upper_arm",
+        "internal",
+        "bone_frame"
+      ],
+      "slot": "upper_arm",
+      "anchor": "shoulder_joint",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        1.0,
+        1.0
+      ],
+      "silhouette_tags": [
+        "internal",
+        "bone_frame"
+      ],
+      "export": "assets/exports/world_kit/wk_skeleton_upper_arm_v01.glb",
+      "bounds": {
+        "min": [
+          -0.0507,
+          -0.0482,
+          -0.0567
+        ],
+        "max": [
+          0.0507,
+          0.0482,
+          1.0
+        ],
+        "size": [
+          0.1014,
+          0.0965,
+          1.0567
+        ]
+      },
+      "material_roles": [
+        "cream",
+        "gold"
+      ],
+      "mesh_objects": 2,
+      "bytes": 6516
+    },
+    {
+      "id": "wk_soft_tissue_abdomen_v01",
+      "kind": "soft_tissue_module",
+      "model_kind": "component",
+      "layer": "soft_tissue",
+      "category": "soft_tissue_module",
+      "keywords": [
+        "abdomen",
+        "front_abdomen_padding",
+        "additive_volume",
+        "mixable"
+      ],
+      "slot": "abdomen",
+      "anchor": "muscle_abdomen",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        1.0,
+        1.0
+      ],
+      "silhouette_tags": [
+        "front_abdomen_padding",
+        "additive_volume",
+        "mixable"
+      ],
+      "export": "assets/exports/world_kit/wk_soft_tissue_abdomen_v01.glb",
+      "volume_contract": {
+        "parameter": "soft_tissue.abdomen",
+        "unit": "meter",
+        "range": [
+          0.0,
+          0.06
+        ],
+        "operation": "add_soft_volume",
+        "preserves": [
+          "bone_length",
+          "joint_center",
+          "socket_transform",
+          "muscle_attachment"
+        ],
+        "output": "soft_tissue_fit_envelope"
+      },
+      "bounds": {
+        "min": [
+          -0.1699,
+          -0.1488,
+          -0.22
+        ],
+        "max": [
+          0.1699,
+          -0.0212,
+          0.22
+        ],
+        "size": [
+          0.3399,
+          0.1276,
+          0.44
+        ]
+      },
+      "material_roles": [
+        "soft_tissue"
+      ],
+      "mesh_objects": 1,
+      "bytes": 3632
+    },
+    {
+      "id": "wk_soft_tissue_calf_v01",
+      "kind": "soft_tissue_module",
+      "model_kind": "component",
+      "layer": "soft_tissue",
+      "category": "soft_tissue_module",
+      "keywords": [
+        "calf",
+        "limb_padding",
+        "additive_volume",
+        "mixable"
+      ],
+      "slot": "calf",
+      "anchor": "muscle_calf",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        1.0,
+        1.0
+      ],
+      "silhouette_tags": [
+        "limb_padding",
+        "additive_volume",
+        "mixable"
+      ],
+      "export": "assets/exports/world_kit/wk_soft_tissue_calf_v01.glb",
+      "volume_contract": {
+        "parameter": "soft_tissue.calf",
+        "unit": "meter",
+        "range": [
+          0.0,
+          0.06
+        ],
+        "operation": "add_soft_volume",
+        "preserves": [
+          "bone_length",
+          "joint_center",
+          "socket_transform",
+          "muscle_attachment"
+        ],
+        "output": "soft_tissue_fit_envelope"
+      },
+      "bounds": {
+        "min": [
+          -0.102,
+          -0.102,
+          0.0
+        ],
+        "max": [
+          0.102,
+          0.102,
+          1.0
+        ],
+        "size": [
+          0.204,
+          0.204,
+          1.0
+        ]
+      },
+      "material_roles": [
+        "soft_tissue"
+      ],
+      "mesh_objects": 1,
+      "bytes": 3288
+    },
+    {
+      "id": "wk_soft_tissue_chest_v01",
+      "kind": "soft_tissue_module",
+      "model_kind": "component",
+      "layer": "soft_tissue",
+      "category": "soft_tissue_module",
+      "keywords": [
+        "chest",
+        "upper_torso_padding",
+        "additive_volume",
+        "mixable"
+      ],
+      "slot": "chest",
+      "anchor": "muscle_chest",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        1.0,
+        1.0
+      ],
+      "silhouette_tags": [
+        "upper_torso_padding",
+        "additive_volume",
+        "mixable"
+      ],
+      "export": "assets/exports/world_kit/wk_soft_tissue_chest_v01.glb",
+      "volume_contract": {
+        "parameter": "soft_tissue.chest",
+        "unit": "meter",
+        "range": [
+          0.0,
+          0.06
+        ],
+        "operation": "add_soft_volume",
+        "preserves": [
+          "bone_length",
+          "joint_center",
+          "socket_transform",
+          "muscle_attachment"
+        ],
+        "output": "soft_tissue_fit_envelope"
+      },
+      "bounds": {
+        "min": [
+          -0.301,
+          -0.1418,
+          -0.1
+        ],
+        "max": [
+          0.301,
+          -0.0482,
+          0.26
+        ],
+        "size": [
+          0.602,
+          0.0936,
+          0.36
+        ]
+      },
+      "material_roles": [
+        "soft_tissue"
+      ],
+      "mesh_objects": 2,
+      "bytes": 6504
+    },
+    {
+      "id": "wk_soft_tissue_forearm_v01",
+      "kind": "soft_tissue_module",
+      "model_kind": "component",
+      "layer": "soft_tissue",
+      "category": "soft_tissue_module",
+      "keywords": [
+        "forearm",
+        "limb_padding",
+        "additive_volume",
+        "mixable"
+      ],
+      "slot": "forearm",
+      "anchor": "muscle_forearm",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        1.0,
+        1.0
+      ],
+      "silhouette_tags": [
+        "limb_padding",
+        "additive_volume",
+        "mixable"
+      ],
+      "export": "assets/exports/world_kit/wk_soft_tissue_forearm_v01.glb",
+      "volume_contract": {
+        "parameter": "soft_tissue.forearm",
+        "unit": "meter",
+        "range": [
+          0.0,
+          0.06
+        ],
+        "operation": "add_soft_volume",
+        "preserves": [
+          "bone_length",
+          "joint_center",
+          "socket_transform",
+          "muscle_attachment"
+        ],
+        "output": "soft_tissue_fit_envelope"
+      },
+      "bounds": {
+        "min": [
+          -0.08,
+          -0.08,
+          0.0
+        ],
+        "max": [
+          0.08,
+          0.08,
+          1.0
+        ],
+        "size": [
+          0.16,
+          0.16,
+          1.0
+        ]
+      },
+      "material_roles": [
+        "soft_tissue"
+      ],
+      "mesh_objects": 1,
+      "bytes": 3296
+    },
+    {
+      "id": "wk_soft_tissue_hip_v01",
+      "kind": "soft_tissue_module",
+      "model_kind": "component",
+      "layer": "soft_tissue",
+      "category": "soft_tissue_module",
+      "keywords": [
+        "hip",
+        "hip_padding",
+        "additive_volume",
+        "mixable"
+      ],
+      "slot": "hip",
+      "anchor": "muscle_glute",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        1.0,
+        1.0
+      ],
+      "silhouette_tags": [
+        "hip_padding",
+        "additive_volume",
+        "mixable"
+      ],
+      "export": "assets/exports/world_kit/wk_soft_tissue_hip_v01.glb",
+      "volume_contract": {
+        "parameter": "soft_tissue.hip",
+        "unit": "meter",
+        "range": [
+          0.0,
+          0.06
+        ],
+        "operation": "add_soft_volume",
+        "preserves": [
+          "bone_length",
+          "joint_center",
+          "socket_transform",
+          "muscle_attachment"
+        ],
+        "output": "soft_tissue_fit_envelope"
+      },
+      "bounds": {
+        "min": [
+          -0.2731,
+          -0.0828,
+          -0.17
+        ],
+        "max": [
+          0.2731,
+          0.1128,
+          0.17
+        ],
+        "size": [
+          0.5462,
+          0.1956,
+          0.34
+        ]
+      },
+      "material_roles": [
+        "soft_tissue"
+      ],
+      "mesh_objects": 2,
+      "bytes": 6460
+    },
+    {
+      "id": "wk_soft_tissue_thigh_v01",
+      "kind": "soft_tissue_module",
+      "model_kind": "component",
+      "layer": "soft_tissue",
+      "category": "soft_tissue_module",
+      "keywords": [
+        "thigh",
+        "limb_padding",
+        "additive_volume",
+        "mixable"
+      ],
+      "slot": "thigh",
+      "anchor": "muscle_thigh",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        1.0,
+        1.0
+      ],
+      "silhouette_tags": [
+        "limb_padding",
+        "additive_volume",
+        "mixable"
+      ],
+      "export": "assets/exports/world_kit/wk_soft_tissue_thigh_v01.glb",
+      "volume_contract": {
+        "parameter": "soft_tissue.thigh",
+        "unit": "meter",
+        "range": [
+          0.0,
+          0.06
+        ],
+        "operation": "add_soft_volume",
+        "preserves": [
+          "bone_length",
+          "joint_center",
+          "socket_transform",
+          "muscle_attachment"
+        ],
+        "output": "soft_tissue_fit_envelope"
+      },
+      "bounds": {
+        "min": [
+          -0.138,
+          -0.138,
+          0.0
+        ],
+        "max": [
+          0.138,
+          0.138,
+          1.0
+        ],
+        "size": [
+          0.276,
+          0.276,
+          1.0
+        ]
+      },
+      "material_roles": [
+        "soft_tissue"
+      ],
+      "mesh_objects": 1,
+      "bytes": 3284
+    },
+    {
+      "id": "wk_soft_tissue_upper_arm_v01",
+      "kind": "soft_tissue_module",
+      "model_kind": "component",
+      "layer": "soft_tissue",
+      "category": "soft_tissue_module",
+      "keywords": [
+        "upper_arm",
+        "limb_padding",
+        "additive_volume",
+        "mixable"
+      ],
+      "slot": "upper_arm",
+      "anchor": "muscle_upper_arm",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        1.0,
+        1.0
+      ],
+      "silhouette_tags": [
+        "limb_padding",
+        "additive_volume",
+        "mixable"
+      ],
+      "export": "assets/exports/world_kit/wk_soft_tissue_upper_arm_v01.glb",
+      "volume_contract": {
+        "parameter": "soft_tissue.upper_arm",
+        "unit": "meter",
+        "range": [
+          0.0,
+          0.06
+        ],
+        "operation": "add_soft_volume",
+        "preserves": [
+          "bone_length",
+          "joint_center",
+          "socket_transform",
+          "muscle_attachment"
+        ],
+        "output": "soft_tissue_fit_envelope"
+      },
+      "bounds": {
+        "min": [
+          -0.098,
+          -0.098,
+          0.0
+        ],
+        "max": [
+          0.098,
+          0.098,
+          1.0
+        ],
+        "size": [
+          0.196,
+          0.196,
+          1.0
+        ]
+      },
+      "material_roles": [
+        "soft_tissue"
+      ],
+      "mesh_objects": 1,
+      "bytes": 3300
+    },
+    {
+      "id": "wk_soft_tissue_waist_v01",
+      "kind": "soft_tissue_module",
+      "model_kind": "component",
+      "layer": "soft_tissue",
+      "category": "soft_tissue_module",
+      "keywords": [
+        "waist",
+        "waist_padding",
+        "additive_volume",
+        "mixable"
+      ],
+      "slot": "waist",
+      "anchor": "muscle_abdomen",
+      "compatible_families": [
+        "lean",
+        "standard",
+        "heavy"
+      ],
+      "allowed_scale": [
+        1.0,
+        1.0
+      ],
+      "silhouette_tags": [
+        "waist_padding",
+        "additive_volume",
+        "mixable"
+      ],
+      "export": "assets/exports/world_kit/wk_soft_tissue_waist_v01.glb",
+      "volume_contract": {
+        "parameter": "soft_tissue.waist",
+        "unit": "meter",
+        "range": [
+          0.0,
+          0.06
+        ],
+        "operation": "add_soft_volume",
+        "preserves": [
+          "bone_length",
+          "joint_center",
+          "socket_transform",
+          "muscle_attachment"
+        ],
+        "output": "soft_tissue_fit_envelope"
+      },
+      "bounds": {
+        "min": [
+          -0.21,
+          -0.115,
+          -0.16
+        ],
+        "max": [
+          0.21,
+          0.115,
+          0.16
+        ],
+        "size": [
+          0.42,
+          0.23,
+          0.32
+        ]
+      },
+      "material_roles": [
+        "soft_tissue"
+      ],
+      "mesh_objects": 1,
+      "bytes": 3524
+    },
+    {
+      "id": "wk_state_market_shortage_v01",
+      "kind": "state_module",
+      "model_kind": "component",
+      "layer": "state",
+      "category": "state_module",
+      "keywords": [
+        "counter_front",
+        "shortage",
+        "barrier"
+      ],
+      "slot": "counter_front",
+      "anchor": "counter_front",
+      "compatible_families": [
+        "market_counter"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "shortage",
+        "barrier"
+      ],
+      "export": "assets/exports/world_kit/wk_state_market_shortage_v01.glb",
+      "bounds": {
+        "min": [
+          -0.975,
+          -0.045,
+          -0.05
+        ],
+        "max": [
+          0.975,
+          0.045,
+          0.475
+        ],
+        "size": [
+          1.95,
+          0.09,
+          0.525
+        ]
+      },
+      "material_roles": [
+        "metal",
+        "oxblood"
+      ],
+      "mesh_objects": 3,
+      "bytes": 5920
+    },
+    {
+      "id": "wk_state_market_stocked_v01",
+      "kind": "state_module",
+      "model_kind": "component",
+      "layer": "state",
+      "category": "state_module",
+      "keywords": [
+        "counter_top",
+        "stocked",
+        "abundant"
+      ],
+      "slot": "counter_top",
+      "anchor": "counter_top",
+      "compatible_families": [
+        "market_counter"
+      ],
+      "allowed_scale": [
+        0.98,
+        1.02
+      ],
+      "silhouette_tags": [
+        "stocked",
+        "abundant"
+      ],
+      "export": "assets/exports/world_kit/wk_state_market_stocked_v01.glb",
+      "bounds": {
+        "min": [
+          -0.7289,
+          -0.1276,
+          -0.08
+        ],
+        "max": [
+          0.7289,
+          0.1276,
+          0.4
+        ],
+        "size": [
+          1.4578,
+          0.2552,
+          0.48
+        ]
+      },
+      "material_roles": [
+        "green",
+        "ochre"
+      ],
+      "mesh_objects": 3,
+      "bytes": 9392
+    }
+  ],
+  "baked_body_skins": [
+    {
+      "id": "wk_body_skin_heavy_athletic_balanced_v01",
+      "export": "assets/exports/world_kit/wk_body_skin_heavy_athletic_balanced_v01.glb",
+      "frame": "heavy",
+      "muscle_profile": "athletic",
+      "soft_tissue_profile": "balanced",
+      "topology": "one closed continuous neck-down skin",
+      "generation": "voxel-union construction masses, low-poly bake",
+      "triangles": 2800,
+      "vertices": 1402,
+      "bytes": 122156,
+      "bones": [
+        "root",
+        "pelvis",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R"
+      ],
+      "skin_weights": "four nearest bone-local influences",
+      "runtime": "GPU skinned; garments, armor, head, hair and props stay modular"
+    },
+    {
+      "id": "wk_body_skin_heavy_athletic_central_v01",
+      "export": "assets/exports/world_kit/wk_body_skin_heavy_athletic_central_v01.glb",
+      "frame": "heavy",
+      "muscle_profile": "athletic",
+      "soft_tissue_profile": "central",
+      "topology": "one closed continuous neck-down skin",
+      "generation": "voxel-union construction masses, low-poly bake",
+      "triangles": 2800,
+      "vertices": 1402,
+      "bytes": 121888,
+      "bones": [
+        "root",
+        "pelvis",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R"
+      ],
+      "skin_weights": "four nearest bone-local influences",
+      "runtime": "GPU skinned; garments, armor, head, hair and props stay modular"
+    },
+    {
+      "id": "wk_body_skin_heavy_athletic_low_v01",
+      "export": "assets/exports/world_kit/wk_body_skin_heavy_athletic_low_v01.glb",
+      "frame": "heavy",
+      "muscle_profile": "athletic",
+      "soft_tissue_profile": "low",
+      "topology": "one closed continuous neck-down skin",
+      "generation": "voxel-union construction masses, low-poly bake",
+      "triangles": 2800,
+      "vertices": 1402,
+      "bytes": 121088,
+      "bones": [
+        "root",
+        "pelvis",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R"
+      ],
+      "skin_weights": "four nearest bone-local influences",
+      "runtime": "GPU skinned; garments, armor, head, hair and props stay modular"
+    },
+    {
+      "id": "wk_body_skin_heavy_athletic_lower_body_v01",
+      "export": "assets/exports/world_kit/wk_body_skin_heavy_athletic_lower_body_v01.glb",
+      "frame": "heavy",
+      "muscle_profile": "athletic",
+      "soft_tissue_profile": "lower_body",
+      "topology": "one closed continuous neck-down skin",
+      "generation": "voxel-union construction masses, low-poly bake",
+      "triangles": 2800,
+      "vertices": 1402,
+      "bytes": 122112,
+      "bones": [
+        "root",
+        "pelvis",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R"
+      ],
+      "skin_weights": "four nearest bone-local influences",
+      "runtime": "GPU skinned; garments, armor, head, hair and props stay modular"
+    },
+    {
+      "id": "wk_body_skin_heavy_power_balanced_v01",
+      "export": "assets/exports/world_kit/wk_body_skin_heavy_power_balanced_v01.glb",
+      "frame": "heavy",
+      "muscle_profile": "power",
+      "soft_tissue_profile": "balanced",
+      "topology": "one closed continuous neck-down skin",
+      "generation": "voxel-union construction masses, low-poly bake",
+      "triangles": 2800,
+      "vertices": 1402,
+      "bytes": 120684,
+      "bones": [
+        "root",
+        "pelvis",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R"
+      ],
+      "skin_weights": "four nearest bone-local influences",
+      "runtime": "GPU skinned; garments, armor, head, hair and props stay modular"
+    },
+    {
+      "id": "wk_body_skin_heavy_power_central_v01",
+      "export": "assets/exports/world_kit/wk_body_skin_heavy_power_central_v01.glb",
+      "frame": "heavy",
+      "muscle_profile": "power",
+      "soft_tissue_profile": "central",
+      "topology": "one closed continuous neck-down skin",
+      "generation": "voxel-union construction masses, low-poly bake",
+      "triangles": 2800,
+      "vertices": 1402,
+      "bytes": 119532,
+      "bones": [
+        "root",
+        "pelvis",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R"
+      ],
+      "skin_weights": "four nearest bone-local influences",
+      "runtime": "GPU skinned; garments, armor, head, hair and props stay modular"
+    },
+    {
+      "id": "wk_body_skin_heavy_power_low_v01",
+      "export": "assets/exports/world_kit/wk_body_skin_heavy_power_low_v01.glb",
+      "frame": "heavy",
+      "muscle_profile": "power",
+      "soft_tissue_profile": "low",
+      "topology": "one closed continuous neck-down skin",
+      "generation": "voxel-union construction masses, low-poly bake",
+      "triangles": 2800,
+      "vertices": 1402,
+      "bytes": 121024,
+      "bones": [
+        "root",
+        "pelvis",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R"
+      ],
+      "skin_weights": "four nearest bone-local influences",
+      "runtime": "GPU skinned; garments, armor, head, hair and props stay modular"
+    },
+    {
+      "id": "wk_body_skin_heavy_power_lower_body_v01",
+      "export": "assets/exports/world_kit/wk_body_skin_heavy_power_lower_body_v01.glb",
+      "frame": "heavy",
+      "muscle_profile": "power",
+      "soft_tissue_profile": "lower_body",
+      "topology": "one closed continuous neck-down skin",
+      "generation": "voxel-union construction masses, low-poly bake",
+      "triangles": 2800,
+      "vertices": 1402,
+      "bytes": 120692,
+      "bones": [
+        "root",
+        "pelvis",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R"
+      ],
+      "skin_weights": "four nearest bone-local influences",
+      "runtime": "GPU skinned; garments, armor, head, hair and props stay modular"
+    },
+    {
+      "id": "wk_body_skin_heavy_slight_balanced_v01",
+      "export": "assets/exports/world_kit/wk_body_skin_heavy_slight_balanced_v01.glb",
+      "frame": "heavy",
+      "muscle_profile": "slight",
+      "soft_tissue_profile": "balanced",
+      "topology": "one closed continuous neck-down skin",
+      "generation": "voxel-union construction masses, low-poly bake",
+      "triangles": 2800,
+      "vertices": 1402,
+      "bytes": 123548,
+      "bones": [
+        "root",
+        "pelvis",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R"
+      ],
+      "skin_weights": "four nearest bone-local influences",
+      "runtime": "GPU skinned; garments, armor, head, hair and props stay modular"
+    },
+    {
+      "id": "wk_body_skin_heavy_slight_central_v01",
+      "export": "assets/exports/world_kit/wk_body_skin_heavy_slight_central_v01.glb",
+      "frame": "heavy",
+      "muscle_profile": "slight",
+      "soft_tissue_profile": "central",
+      "topology": "one closed continuous neck-down skin",
+      "generation": "voxel-union construction masses, low-poly bake",
+      "triangles": 2800,
+      "vertices": 1402,
+      "bytes": 123284,
+      "bones": [
+        "root",
+        "pelvis",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R"
+      ],
+      "skin_weights": "four nearest bone-local influences",
+      "runtime": "GPU skinned; garments, armor, head, hair and props stay modular"
+    },
+    {
+      "id": "wk_body_skin_heavy_slight_low_v01",
+      "export": "assets/exports/world_kit/wk_body_skin_heavy_slight_low_v01.glb",
+      "frame": "heavy",
+      "muscle_profile": "slight",
+      "soft_tissue_profile": "low",
+      "topology": "one closed continuous neck-down skin",
+      "generation": "voxel-union construction masses, low-poly bake",
+      "triangles": 2800,
+      "vertices": 1402,
+      "bytes": 125656,
+      "bones": [
+        "root",
+        "pelvis",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R"
+      ],
+      "skin_weights": "four nearest bone-local influences",
+      "runtime": "GPU skinned; garments, armor, head, hair and props stay modular"
+    },
+    {
+      "id": "wk_body_skin_heavy_slight_lower_body_v01",
+      "export": "assets/exports/world_kit/wk_body_skin_heavy_slight_lower_body_v01.glb",
+      "frame": "heavy",
+      "muscle_profile": "slight",
+      "soft_tissue_profile": "lower_body",
+      "topology": "one closed continuous neck-down skin",
+      "generation": "voxel-union construction masses, low-poly bake",
+      "triangles": 2800,
+      "vertices": 1402,
+      "bytes": 124284,
+      "bones": [
+        "root",
+        "pelvis",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R"
+      ],
+      "skin_weights": "four nearest bone-local influences",
+      "runtime": "GPU skinned; garments, armor, head, hair and props stay modular"
+    },
+    {
+      "id": "wk_body_skin_lean_athletic_balanced_v01",
+      "export": "assets/exports/world_kit/wk_body_skin_lean_athletic_balanced_v01.glb",
+      "frame": "lean",
+      "muscle_profile": "athletic",
+      "soft_tissue_profile": "balanced",
+      "topology": "one closed continuous neck-down skin",
+      "generation": "voxel-union construction masses, low-poly bake",
+      "triangles": 2800,
+      "vertices": 1402,
+      "bytes": 126880,
+      "bones": [
+        "root",
+        "pelvis",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R"
+      ],
+      "skin_weights": "four nearest bone-local influences",
+      "runtime": "GPU skinned; garments, armor, head, hair and props stay modular"
+    },
+    {
+      "id": "wk_body_skin_lean_athletic_central_v01",
+      "export": "assets/exports/world_kit/wk_body_skin_lean_athletic_central_v01.glb",
+      "frame": "lean",
+      "muscle_profile": "athletic",
+      "soft_tissue_profile": "central",
+      "topology": "one closed continuous neck-down skin",
+      "generation": "voxel-union construction masses, low-poly bake",
+      "triangles": 2800,
+      "vertices": 1402,
+      "bytes": 126148,
+      "bones": [
+        "root",
+        "pelvis",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R"
+      ],
+      "skin_weights": "four nearest bone-local influences",
+      "runtime": "GPU skinned; garments, armor, head, hair and props stay modular"
+    },
+    {
+      "id": "wk_body_skin_lean_athletic_low_v01",
+      "export": "assets/exports/world_kit/wk_body_skin_lean_athletic_low_v01.glb",
+      "frame": "lean",
+      "muscle_profile": "athletic",
+      "soft_tissue_profile": "low",
+      "topology": "one closed continuous neck-down skin",
+      "generation": "voxel-union construction masses, low-poly bake",
+      "triangles": 2800,
+      "vertices": 1402,
+      "bytes": 128884,
+      "bones": [
+        "root",
+        "pelvis",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R"
+      ],
+      "skin_weights": "four nearest bone-local influences",
+      "runtime": "GPU skinned; garments, armor, head, hair and props stay modular"
+    },
+    {
+      "id": "wk_body_skin_lean_athletic_lower_body_v01",
+      "export": "assets/exports/world_kit/wk_body_skin_lean_athletic_lower_body_v01.glb",
+      "frame": "lean",
+      "muscle_profile": "athletic",
+      "soft_tissue_profile": "lower_body",
+      "topology": "one closed continuous neck-down skin",
+      "generation": "voxel-union construction masses, low-poly bake",
+      "triangles": 2800,
+      "vertices": 1402,
+      "bytes": 128348,
+      "bones": [
+        "root",
+        "pelvis",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R"
+      ],
+      "skin_weights": "four nearest bone-local influences",
+      "runtime": "GPU skinned; garments, armor, head, hair and props stay modular"
+    },
+    {
+      "id": "wk_body_skin_lean_power_balanced_v01",
+      "export": "assets/exports/world_kit/wk_body_skin_lean_power_balanced_v01.glb",
+      "frame": "lean",
+      "muscle_profile": "power",
+      "soft_tissue_profile": "balanced",
+      "topology": "one closed continuous neck-down skin",
+      "generation": "voxel-union construction masses, low-poly bake",
+      "triangles": 2800,
+      "vertices": 1402,
+      "bytes": 126348,
+      "bones": [
+        "root",
+        "pelvis",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R"
+      ],
+      "skin_weights": "four nearest bone-local influences",
+      "runtime": "GPU skinned; garments, armor, head, hair and props stay modular"
+    },
+    {
+      "id": "wk_body_skin_lean_power_central_v01",
+      "export": "assets/exports/world_kit/wk_body_skin_lean_power_central_v01.glb",
+      "frame": "lean",
+      "muscle_profile": "power",
+      "soft_tissue_profile": "central",
+      "topology": "one closed continuous neck-down skin",
+      "generation": "voxel-union construction masses, low-poly bake",
+      "triangles": 2800,
+      "vertices": 1406,
+      "bytes": 125612,
+      "bones": [
+        "root",
+        "pelvis",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R"
+      ],
+      "skin_weights": "four nearest bone-local influences",
+      "runtime": "GPU skinned; garments, armor, head, hair and props stay modular"
+    },
+    {
+      "id": "wk_body_skin_lean_power_low_v01",
+      "export": "assets/exports/world_kit/wk_body_skin_lean_power_low_v01.glb",
+      "frame": "lean",
+      "muscle_profile": "power",
+      "soft_tissue_profile": "low",
+      "topology": "one closed continuous neck-down skin",
+      "generation": "voxel-union construction masses, low-poly bake",
+      "triangles": 2800,
+      "vertices": 1402,
+      "bytes": 125696,
+      "bones": [
+        "root",
+        "pelvis",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R"
+      ],
+      "skin_weights": "four nearest bone-local influences",
+      "runtime": "GPU skinned; garments, armor, head, hair and props stay modular"
+    },
+    {
+      "id": "wk_body_skin_lean_power_lower_body_v01",
+      "export": "assets/exports/world_kit/wk_body_skin_lean_power_lower_body_v01.glb",
+      "frame": "lean",
+      "muscle_profile": "power",
+      "soft_tissue_profile": "lower_body",
+      "topology": "one closed continuous neck-down skin",
+      "generation": "voxel-union construction masses, low-poly bake",
+      "triangles": 2800,
+      "vertices": 1402,
+      "bytes": 126772,
+      "bones": [
+        "root",
+        "pelvis",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R"
+      ],
+      "skin_weights": "four nearest bone-local influences",
+      "runtime": "GPU skinned; garments, armor, head, hair and props stay modular"
+    },
+    {
+      "id": "wk_body_skin_lean_slight_balanced_v01",
+      "export": "assets/exports/world_kit/wk_body_skin_lean_slight_balanced_v01.glb",
+      "frame": "lean",
+      "muscle_profile": "slight",
+      "soft_tissue_profile": "balanced",
+      "topology": "one closed continuous neck-down skin",
+      "generation": "voxel-union construction masses, low-poly bake",
+      "triangles": 2800,
+      "vertices": 1402,
+      "bytes": 129108,
+      "bones": [
+        "root",
+        "pelvis",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R"
+      ],
+      "skin_weights": "four nearest bone-local influences",
+      "runtime": "GPU skinned; garments, armor, head, hair and props stay modular"
+    },
+    {
+      "id": "wk_body_skin_lean_slight_central_v01",
+      "export": "assets/exports/world_kit/wk_body_skin_lean_slight_central_v01.glb",
+      "frame": "lean",
+      "muscle_profile": "slight",
+      "soft_tissue_profile": "central",
+      "topology": "one closed continuous neck-down skin",
+      "generation": "voxel-union construction masses, low-poly bake",
+      "triangles": 2800,
+      "vertices": 1402,
+      "bytes": 127388,
+      "bones": [
+        "root",
+        "pelvis",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R"
+      ],
+      "skin_weights": "four nearest bone-local influences",
+      "runtime": "GPU skinned; garments, armor, head, hair and props stay modular"
+    },
+    {
+      "id": "wk_body_skin_lean_slight_low_v01",
+      "export": "assets/exports/world_kit/wk_body_skin_lean_slight_low_v01.glb",
+      "frame": "lean",
+      "muscle_profile": "slight",
+      "soft_tissue_profile": "low",
+      "topology": "one closed continuous neck-down skin",
+      "generation": "voxel-union construction masses, low-poly bake",
+      "triangles": 2800,
+      "vertices": 1402,
+      "bytes": 128404,
+      "bones": [
+        "root",
+        "pelvis",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R"
+      ],
+      "skin_weights": "four nearest bone-local influences",
+      "runtime": "GPU skinned; garments, armor, head, hair and props stay modular"
+    },
+    {
+      "id": "wk_body_skin_lean_slight_lower_body_v01",
+      "export": "assets/exports/world_kit/wk_body_skin_lean_slight_lower_body_v01.glb",
+      "frame": "lean",
+      "muscle_profile": "slight",
+      "soft_tissue_profile": "lower_body",
+      "topology": "one closed continuous neck-down skin",
+      "generation": "voxel-union construction masses, low-poly bake",
+      "triangles": 2800,
+      "vertices": 1402,
+      "bytes": 127504,
+      "bones": [
+        "root",
+        "pelvis",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R"
+      ],
+      "skin_weights": "four nearest bone-local influences",
+      "runtime": "GPU skinned; garments, armor, head, hair and props stay modular"
+    },
+    {
+      "id": "wk_body_skin_standard_athletic_balanced_v01",
+      "export": "assets/exports/world_kit/wk_body_skin_standard_athletic_balanced_v01.glb",
+      "frame": "standard",
+      "muscle_profile": "athletic",
+      "soft_tissue_profile": "balanced",
+      "topology": "one closed continuous neck-down skin",
+      "generation": "voxel-union construction masses, low-poly bake",
+      "triangles": 2800,
+      "vertices": 1402,
+      "bytes": 124872,
+      "bones": [
+        "root",
+        "pelvis",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R"
+      ],
+      "skin_weights": "four nearest bone-local influences",
+      "runtime": "GPU skinned; garments, armor, head, hair and props stay modular"
+    },
+    {
+      "id": "wk_body_skin_standard_athletic_central_v01",
+      "export": "assets/exports/world_kit/wk_body_skin_standard_athletic_central_v01.glb",
+      "frame": "standard",
+      "muscle_profile": "athletic",
+      "soft_tissue_profile": "central",
+      "topology": "one closed continuous neck-down skin",
+      "generation": "voxel-union construction masses, low-poly bake",
+      "triangles": 2800,
+      "vertices": 1402,
+      "bytes": 123984,
+      "bones": [
+        "root",
+        "pelvis",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R"
+      ],
+      "skin_weights": "four nearest bone-local influences",
+      "runtime": "GPU skinned; garments, armor, head, hair and props stay modular"
+    },
+    {
+      "id": "wk_body_skin_standard_athletic_low_v01",
+      "export": "assets/exports/world_kit/wk_body_skin_standard_athletic_low_v01.glb",
+      "frame": "standard",
+      "muscle_profile": "athletic",
+      "soft_tissue_profile": "low",
+      "topology": "one closed continuous neck-down skin",
+      "generation": "voxel-union construction masses, low-poly bake",
+      "triangles": 2800,
+      "vertices": 1402,
+      "bytes": 125940,
+      "bones": [
+        "root",
+        "pelvis",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R"
+      ],
+      "skin_weights": "four nearest bone-local influences",
+      "runtime": "GPU skinned; garments, armor, head, hair and props stay modular"
+    },
+    {
+      "id": "wk_body_skin_standard_athletic_lower_body_v01",
+      "export": "assets/exports/world_kit/wk_body_skin_standard_athletic_lower_body_v01.glb",
+      "frame": "standard",
+      "muscle_profile": "athletic",
+      "soft_tissue_profile": "lower_body",
+      "topology": "one closed continuous neck-down skin",
+      "generation": "voxel-union construction masses, low-poly bake",
+      "triangles": 2800,
+      "vertices": 1402,
+      "bytes": 124988,
+      "bones": [
+        "root",
+        "pelvis",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R"
+      ],
+      "skin_weights": "four nearest bone-local influences",
+      "runtime": "GPU skinned; garments, armor, head, hair and props stay modular"
+    },
+    {
+      "id": "wk_body_skin_standard_power_balanced_v01",
+      "export": "assets/exports/world_kit/wk_body_skin_standard_power_balanced_v01.glb",
+      "frame": "standard",
+      "muscle_profile": "power",
+      "soft_tissue_profile": "balanced",
+      "topology": "one closed continuous neck-down skin",
+      "generation": "voxel-union construction masses, low-poly bake",
+      "triangles": 2800,
+      "vertices": 1402,
+      "bytes": 121896,
+      "bones": [
+        "root",
+        "pelvis",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R"
+      ],
+      "skin_weights": "four nearest bone-local influences",
+      "runtime": "GPU skinned; garments, armor, head, hair and props stay modular"
+    },
+    {
+      "id": "wk_body_skin_standard_power_central_v01",
+      "export": "assets/exports/world_kit/wk_body_skin_standard_power_central_v01.glb",
+      "frame": "standard",
+      "muscle_profile": "power",
+      "soft_tissue_profile": "central",
+      "topology": "one closed continuous neck-down skin",
+      "generation": "voxel-union construction masses, low-poly bake",
+      "triangles": 2800,
+      "vertices": 1402,
+      "bytes": 122200,
+      "bones": [
+        "root",
+        "pelvis",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R"
+      ],
+      "skin_weights": "four nearest bone-local influences",
+      "runtime": "GPU skinned; garments, armor, head, hair and props stay modular"
+    },
+    {
+      "id": "wk_body_skin_standard_power_low_v01",
+      "export": "assets/exports/world_kit/wk_body_skin_standard_power_low_v01.glb",
+      "frame": "standard",
+      "muscle_profile": "power",
+      "soft_tissue_profile": "low",
+      "topology": "one closed continuous neck-down skin",
+      "generation": "voxel-union construction masses, low-poly bake",
+      "triangles": 2800,
+      "vertices": 1402,
+      "bytes": 123640,
+      "bones": [
+        "root",
+        "pelvis",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R"
+      ],
+      "skin_weights": "four nearest bone-local influences",
+      "runtime": "GPU skinned; garments, armor, head, hair and props stay modular"
+    },
+    {
+      "id": "wk_body_skin_standard_power_lower_body_v01",
+      "export": "assets/exports/world_kit/wk_body_skin_standard_power_lower_body_v01.glb",
+      "frame": "standard",
+      "muscle_profile": "power",
+      "soft_tissue_profile": "lower_body",
+      "topology": "one closed continuous neck-down skin",
+      "generation": "voxel-union construction masses, low-poly bake",
+      "triangles": 2800,
+      "vertices": 1402,
+      "bytes": 122788,
+      "bones": [
+        "root",
+        "pelvis",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R"
+      ],
+      "skin_weights": "four nearest bone-local influences",
+      "runtime": "GPU skinned; garments, armor, head, hair and props stay modular"
+    },
+    {
+      "id": "wk_body_skin_standard_slight_balanced_v01",
+      "export": "assets/exports/world_kit/wk_body_skin_standard_slight_balanced_v01.glb",
+      "frame": "standard",
+      "muscle_profile": "slight",
+      "soft_tissue_profile": "balanced",
+      "topology": "one closed continuous neck-down skin",
+      "generation": "voxel-union construction masses, low-poly bake",
+      "triangles": 2800,
+      "vertices": 1402,
+      "bytes": 126424,
+      "bones": [
+        "root",
+        "pelvis",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R"
+      ],
+      "skin_weights": "four nearest bone-local influences",
+      "runtime": "GPU skinned; garments, armor, head, hair and props stay modular"
+    },
+    {
+      "id": "wk_body_skin_standard_slight_central_v01",
+      "export": "assets/exports/world_kit/wk_body_skin_standard_slight_central_v01.glb",
+      "frame": "standard",
+      "muscle_profile": "slight",
+      "soft_tissue_profile": "central",
+      "topology": "one closed continuous neck-down skin",
+      "generation": "voxel-union construction masses, low-poly bake",
+      "triangles": 2800,
+      "vertices": 1402,
+      "bytes": 124548,
+      "bones": [
+        "root",
+        "pelvis",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R"
+      ],
+      "skin_weights": "four nearest bone-local influences",
+      "runtime": "GPU skinned; garments, armor, head, hair and props stay modular"
+    },
+    {
+      "id": "wk_body_skin_standard_slight_low_v01",
+      "export": "assets/exports/world_kit/wk_body_skin_standard_slight_low_v01.glb",
+      "frame": "standard",
+      "muscle_profile": "slight",
+      "soft_tissue_profile": "low",
+      "topology": "one closed continuous neck-down skin",
+      "generation": "voxel-union construction masses, low-poly bake",
+      "triangles": 2800,
+      "vertices": 1402,
+      "bytes": 127024,
+      "bones": [
+        "root",
+        "pelvis",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R"
+      ],
+      "skin_weights": "four nearest bone-local influences",
+      "runtime": "GPU skinned; garments, armor, head, hair and props stay modular"
+    },
+    {
+      "id": "wk_body_skin_standard_slight_lower_body_v01",
+      "export": "assets/exports/world_kit/wk_body_skin_standard_slight_lower_body_v01.glb",
+      "frame": "standard",
+      "muscle_profile": "slight",
+      "soft_tissue_profile": "lower_body",
+      "topology": "one closed continuous neck-down skin",
+      "generation": "voxel-union construction masses, low-poly bake",
+      "triangles": 2800,
+      "vertices": 1402,
+      "bytes": 126072,
+      "bones": [
+        "root",
+        "pelvis",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R"
+      ],
+      "skin_weights": "four nearest bone-local influences",
+      "runtime": "GPU skinned; garments, armor, head, hair and props stay modular"
+    }
+  ],
+  "review_previews": {
+    "world_scale_lineup": "assets/previews/world_kit/world_scale_lineup.png",
+    "figure_parts_board": "assets/previews/world_kit/figure_parts_board.png",
+    "figure_layer_stack": "assets/previews/world_kit/figure_layer_stack.png",
+    "body_type_matrix": "assets/previews/world_kit/body_type_matrix.png",
+    "baked_body_recipe_matrix": "assets/previews/world_kit/baked_body_recipe_matrix.png",
+    "procedural_cast": "assets/previews/world_kit/procedural_cast.png",
+    "figure_turnaround": "assets/previews/world_kit/figure_turnaround.png",
+    "gameplay_silhouettes": "assets/previews/world_kit/gameplay_silhouettes.png",
+    "playset_combinations": "assets/previews/world_kit/playset_combinations.png"
+  }
+}

@@ -4,7 +4,7 @@
   "art_direction": "screen_first_tapered_hair_clumps_v08",
   "motion_source": "CcHumanoidSkinPoseResolve plus cape-delayed hair tips (runtime only)",
   "runtime_layout": {
-    "authored_objects": 34,
+    "authored_objects": 36,
     "skinned_objects": 1,
     "strategy": "joined skin with rigid body weights and quadratic hair tip blends"
   },
@@ -156,7 +156,15 @@
       "bone": "head"
     },
     {
+      "name": "SCREEN_FIRST_Brow_L",
+      "bone": "head"
+    },
+    {
       "name": "SCREEN_FIRST_Eye_R",
+      "bone": "head"
+    },
+    {
+      "name": "SCREEN_FIRST_Brow_R",
       "bone": "head"
     },
     {

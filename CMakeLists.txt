@@ -86,6 +86,12 @@ if(CC_BUILD_CLIENT)
         GIT_SHALLOW TRUE
     )
     FetchContent_MakeAvailable(raylib)
+    if(TARGET raylib)
+        get_target_property(CC_RAYLIB_IMPORTED raylib IMPORTED)
+        if(NOT CC_RAYLIB_IMPORTED)
+            target_compile_definitions(raylib PRIVATE SUPPORT_GPU_SKINNING=1)
+        endif()
+    endif()
 
     add_executable(crownless_carriage
         src/client/main.c
@@ -132,6 +138,15 @@ if(CC_BUILD_CLIENT)
         set(CC_NPC_DYNAMIC_MODULE_MANIFEST
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/npc_dynamic_module_manifest.json"
         )
+        file(GLOB CC_WORLD_KIT_ASSETS CONFIGURE_DEPENDS
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/world_kit/*.glb"
+        )
+        set(CC_WORLD_KIT_MANIFEST
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/world_kit_manifest.json"
+        )
+        set(CC_WORLD_KIT_CONNECTIONS
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/world_kit_connections.json"
+        )
         set(CC_BRIDGE_CHECKPOINT_ASSET
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/glb/environment_bridge_checkpoint_v01.glb"
         )
@@ -162,6 +177,9 @@ if(CC_BUILD_CLIENT)
         set(CC_WORLD_LIGHT_VERTEX_SHADER
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/world_lit.vs"
         )
+        set(CC_WORLD_LIGHT_SKINNED_VERTEX_SHADER
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/world_lit_skinned.vs"
+        )
         set(CC_WORLD_LIGHT_FRAGMENT_SHADER
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/world_lit.fs"
         )
@@ -185,6 +203,8 @@ if(CC_BUILD_CLIENT)
             COMMAND ${CMAKE_COMMAND} -E make_directory
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/glb"
             COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/world_kit"
+            COMMAND ${CMAKE_COMMAND} -E make_directory
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/shaders"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${CC_HERO_ENGINE_ASSET}"
@@ -207,6 +227,15 @@ if(CC_BUILD_CLIENT)
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${CC_NPC_DYNAMIC_MODULE_MANIFEST}"
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/npc_dynamic_module_manifest.json"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${CC_WORLD_KIT_ASSETS}
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/world_kit"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CC_WORLD_KIT_MANIFEST}"
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/world_kit_manifest.json"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CC_WORLD_KIT_CONNECTIONS}"
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/world_kit_connections.json"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${CC_BRIDGE_CHECKPOINT_ASSET}"
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/glb/environment_bridge_checkpoint_v01.glb"
@@ -238,6 +267,9 @@ if(CC_BUILD_CLIENT)
                 "${CC_WORLD_LIGHT_VERTEX_SHADER}"
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/shaders/world_lit.vs"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CC_WORLD_LIGHT_SKINNED_VERTEX_SHADER}"
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/shaders/world_lit_skinned.vs"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${CC_WORLD_LIGHT_FRAGMENT_SHADER}"
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/shaders/world_lit.fs"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -261,6 +293,7 @@ if(CC_BUILD_CLIENT)
                     "${CC_ENFORCEMENT_ASSET}" "${CC_RECOVERY_ASSET}"
                     "${CC_STYLE_GRADE_SHADER}"
                     "${CC_WORLD_LIGHT_VERTEX_SHADER}"
+                    "${CC_WORLD_LIGHT_SKINNED_VERTEX_SHADER}"
                     "${CC_WORLD_LIGHT_FRAGMENT_SHADER}"
                     "${CC_TREE_FOLIAGE_FRAGMENT_SHADER}"
                     "${CC_HERO_PIXEL_FRAGMENT_SHADER}"

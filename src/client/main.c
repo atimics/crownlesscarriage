@@ -1959,10 +1959,12 @@ static void HandleInput(CcSim *sim, int32_t *selected,
 
 int main(int argc, char **argv)
 {
-    bool screen_first_hero = false;
+    bool screen_first_hero = true;
     for (int32_t argument = 1; argument < argc; ++argument) {
         if (strcmp(argv[argument], "--screen-first-hero") == 0) {
             screen_first_hero = true;
+        } else if (strcmp(argv[argument], "--old-hero") == 0) {
+            screen_first_hero = false;
         }
     }
     bool render_benchmark = argc >= 2 &&
@@ -2034,9 +2036,11 @@ int main(int argc, char **argv)
             capture_face_view = 2;
         } else if (strcmp(argv[2], "distant") == 0) {
             capture_face_view = 3;
+        } else if (strcmp(argv[2], "back") == 0) {
+            capture_face_view = 4;
         } else {
             (void)fprintf(stderr,
-                          "capture face angle must be front, three-quarter, profile, or distant.\n");
+                          "capture face angle must be front, three-quarter, profile, back, or distant.\n");
             return 1;
         }
     }
@@ -2197,8 +2201,9 @@ int main(int argc, char **argv)
             CcLocalAgentInit(&local.agent, (Vector2){4.60f, 5.10f}, true);
             CcLocalCombatSetTeam(&local.agent, CC_COMBAT_PLAYER);
             local.agent.facing_yaw = 0.14f +
-                (capture_face_view == 1 ? 0.72f :
-                 capture_face_view == 2 ? 1.42f : 0.0f);
+                (capture_face_view == 1 ? -0.38f :
+                 capture_face_view == 2 ? 1.42f :
+                 capture_face_view == 4 ? PI : 0.0f);
         }
         CcLocalAgentSetMorphology(&local.agent, CC_MORPHOLOGY_BIPED,
                                   local.market_interior);

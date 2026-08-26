@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parents[2]
 BLEND_PATH = ROOT / "assets" / "blender" / "crownless_npc_dynamic_modules.blend"
 EXPORT_DIR = ROOT / "assets" / "exports" / "npc"
 MANIFEST_PATH = ROOT / "assets" / "npc_dynamic_module_manifest.json"
-LIBRARY_VERSION = "0.2.0"
+LIBRARY_VERSION = "0.4.1"
 MATERIAL_NAME = "MAT_NPC_INDEXED"
 PALETTE_INDEX = {
     "skin": 0,
@@ -200,37 +200,105 @@ def add_panel(name: str, points: tuple[tuple[float, float, float], ...],
     return obj
 
 
+def add_hair_clump(
+    name: str,
+    path: tuple[tuple[float, float, float], ...],
+    widths: tuple[float, ...],
+    depths: tuple[float, ...],
+    collection: bpy.types.Collection,
+    material: bpy.types.Material,
+) -> bpy.types.Object:
+    """Build one broad-root, narrow-tip module clump."""
+    if len(path) < 3 or len(path) > 5:
+        raise ValueError(f"{name}: hair clumps need 3 to 5 sections")
+    if len(path) != len(widths) or len(path) != len(depths):
+        raise ValueError(f"{name}: hair section counts do not match")
+    centers = [Vector(point) for point in path]
+    vertices: list[tuple[float, float, float]] = []
+    for index, center in enumerate(centers):
+        before = centers[max(0, index - 1)]
+        after = centers[min(len(centers) - 1, index + 1)]
+        tangent = (after - before).normalized()
+        side = Vector((0.0, 1.0, 0.0)).cross(tangent)
+        if side.length_squared < 1.0e-8:
+            side = Vector((1.0, 0.0, 0.0))
+        side.normalize()
+        thickness = tangent.cross(side).normalized()
+        half_width = widths[index] * 0.5
+        half_depth = depths[index] * 0.5
+        vertices.extend((
+            tuple(center - side * half_width),
+            tuple(center - thickness * half_depth),
+            tuple(center + side * half_width),
+            tuple(center + thickness * half_depth),
+        ))
+    faces: list[tuple[int, ...]] = [(3, 2, 1, 0)]
+    for section in range(len(path) - 1):
+        first = section * 4
+        following = (section + 1) * 4
+        for edge in range(4):
+            next_edge = (edge + 1) % 4
+            faces.append((
+                first + edge, first + next_edge,
+                following + next_edge, following + edge,
+            ))
+    final = (len(path) - 1) * 4
+    faces.append((final, final + 1, final + 2, final + 3))
+    mesh = bpy.data.meshes.new(name)
+    mesh.from_pydata(vertices, [], faces)
+    mesh.update()
+    obj = bpy.data.objects.new(name, mesh)
+    collection.objects.link(obj)
+    obj.data.materials.append(material)
+    return obj
+
+
 def build_geometry(slot: str, collection: bpy.types.Collection,
                    material: bpy.types.Material) -> None:
     if slot == "torso":
         add_loft("GEO_ModuleTorso", (
-            (0.00, 0.36, 0.30), (0.36, 0.43, 0.34),
-            (0.78, 0.53, 0.36), (1.00, 0.48, 0.32),
+            (-0.05, 0.34, 0.29), (0.18, 0.37, 0.31),
+            (0.52, 0.44, 0.34), (0.80, 0.50, 0.36),
+            (1.03, 0.43, 0.30),
         ), collection, material, sides=10)
+        yoke = add_box("GEO_ModuleTunicYoke", (0.0, -0.01, 0.82),
+                       (0.92, 0.62, 0.075), collection, material,
+                       width=0.025)
+        yoke["cc_palette_slot"] = "underlayer"
+        hem = add_box("GEO_ModuleTunicHem", (0.0, 0.0, 0.055),
+                      (0.70, 0.56, 0.075), collection, material,
+                      width=0.020)
+        hem["cc_palette_slot"] = "trousers"
     elif slot == "pelvis":
         add_loft("GEO_ModulePelvis", (
-            (0.00, 0.44, 0.34), (0.50, 0.50, 0.37),
-            (1.00, 0.43, 0.32),
+            (-0.08, 0.44, 0.34), (0.50, 0.50, 0.37),
+            (1.07, 0.43, 0.32),
         ), collection, material, sides=10)
+        add_box("GEO_ModuleWaistband", (0.0, 0.0, 0.91),
+                (0.92, 0.68, 0.13), collection, material, width=0.030)
     elif slot == "upper_arm":
         add_loft("GEO_ModuleUpperArm", (
-            (0.00, 0.54, 0.50), (0.28, 0.61, 0.57),
-            (0.72, 0.48, 0.46), (1.00, 0.38, 0.37),
+            (-0.08, 0.54, 0.50), (0.28, 0.61, 0.57),
+            (0.72, 0.48, 0.46), (1.06, 0.38, 0.37),
         ), collection, material)
+        add_cylinder("GEO_ModuleSleeveCuff", (0.0, 0.0, 0.92),
+                     0.41, 0.12, collection, material, vertices=8)
     elif slot == "forearm":
         add_loft("GEO_ModuleForearm", (
-            (0.00, 0.44, 0.42), (0.32, 0.56, 0.50),
-            (0.72, 0.43, 0.39), (1.00, 0.31, 0.29),
+            (-0.06, 0.44, 0.42), (0.32, 0.56, 0.50),
+            (0.72, 0.43, 0.39), (1.05, 0.31, 0.29),
         ), collection, material)
+        add_cylinder("GEO_ModuleUnderlayerCuff", (0.0, 0.0, 0.94),
+                     0.34, 0.10, collection, material, vertices=8)
     elif slot == "thigh":
         add_loft("GEO_ModuleThigh", (
-            (0.00, 0.55, 0.51), (0.28, 0.66, 0.58),
-            (0.70, 0.52, 0.47), (1.00, 0.39, 0.37),
+            (-0.10, 0.55, 0.51), (0.28, 0.66, 0.58),
+            (0.70, 0.52, 0.47), (1.08, 0.39, 0.37),
         ), collection, material, sides=9)
     elif slot == "shin":
         add_loft("GEO_ModuleShin", (
-            (0.00, 0.43, 0.40), (0.26, 0.53, 0.47),
-            (0.58, 0.47, 0.44), (1.00, 0.31, 0.29),
+            (-0.07, 0.43, 0.40), (0.26, 0.53, 0.47),
+            (0.58, 0.47, 0.44), (1.06, 0.31, 0.29),
         ), collection, material, sides=9)
     elif slot == "hand":
         add_ico("GEO_ModuleHand", (0.0, 0.0, 0.0),
@@ -257,10 +325,16 @@ def build_geometry(slot: str, collection: bpy.types.Collection,
                 (0.78, 0.20, 1.0), collection, material, width=0.08,
                 rotation=(0.05, 0.0, 0.0))
     elif slot == "chest_plate":
-        add_box("GEO_ModuleChestPlate", (0.0, 0.0, 0.0),
-                (1.0, 0.22, 1.0), collection, material, width=0.12)
-        add_box("GEO_ModuleChestRidge", (0.0, -0.16, 0.10),
-                (0.16, 0.10, 0.78), collection, material, width=0.035)
+        # A shaped breastplate leaves the tunic visible around it.  A full
+        # rectangular block turns into a shield at the final art-pixel size.
+        add_panel("GEO_ModuleChestPlate", (
+            (-0.38, -0.12, 0.45), (0.38, -0.12, 0.45),
+            (0.46, -0.11, 0.18), (0.31, -0.09, -0.43),
+            (0.0, -0.08, -0.51), (-0.31, -0.09, -0.43),
+            (-0.46, -0.11, 0.18),
+        ), collection, material, thickness=0.10)
+        add_box("GEO_ModuleChestRidge", (0.0, -0.18, 0.07),
+                (0.11, 0.07, 0.62), collection, material, width=0.025)
     elif slot == "pauldron":
         add_ico("GEO_ModulePauldron", (0.0, 0.0, 0.0),
                 (0.58, 0.48, 0.50), collection, material, subdivisions=1)
@@ -336,6 +410,57 @@ def build_geometry(slot: str, collection: bpy.types.Collection,
                 rotation=(0.0, -0.10, 0.0))
     elif slot.startswith("hair_"):
         style = int(slot.removeprefix("hair_"))
+        if style == 3:
+            # Six opaque clumps make the silhouette.  Their roots overlap only
+            # around a tiny hidden scalp core; unequal crowns and split rear
+            # wedges stop the back view becoming a flat helmet.
+            core = add_ico("GEO_ModuleHairCore", (0.0, 0.10, 0.16),
+                           (0.46, 0.36, 0.38), collection, material,
+                           subdivisions=1)
+            add_hair_clump(
+                "GEO_ModuleHairBangL",
+                ((-0.08, -0.16, 0.50), (-0.18, -0.34, 0.47),
+                 (-0.30, -0.42, 0.41), (-0.39, -0.39, 0.36)),
+                (0.18, 0.16, 0.10, 0.025),
+                (0.15, 0.13, 0.075, 0.020), collection, material)
+            add_hair_clump(
+                "GEO_ModuleHairBangR",
+                ((0.08, -0.16, 0.49), (0.18, -0.34, 0.46),
+                 (0.30, -0.41, 0.40), (0.39, -0.38, 0.35)),
+                (0.18, 0.16, 0.10, 0.025),
+                (0.15, 0.13, 0.075, 0.020), collection, material)
+            long_side = add_hair_clump(
+                "GEO_ModuleHairLongSide",
+                ((-0.20, 0.10, 0.49), (-0.34, 0.18, 0.30),
+                 (-0.40, 0.30, -0.12), (-0.31, 0.45, -0.82)),
+                (0.25, 0.23, 0.14, 0.020),
+                (0.21, 0.18, 0.10, 0.020), collection, material)
+            long_side["cc_palette_slot"] = "hair"
+            add_hair_clump(
+                "GEO_ModuleHairShortSide",
+                ((0.20, 0.10, 0.46), (0.34, 0.18, 0.30),
+                 (0.38, 0.29, 0.04), (0.29, 0.42, -0.48)),
+                (0.24, 0.22, 0.14, 0.020),
+                (0.20, 0.17, 0.10, 0.020), collection, material)
+            add_hair_clump(
+                "GEO_ModuleHairRearL",
+                ((-0.03, 0.34, 0.52), (-0.14, 0.44, 0.38),
+                 (-0.23, 0.60, -0.08), (-0.14, 0.72, -0.62)),
+                (0.32, 0.34, 0.22, 0.020),
+                (0.20, 0.19, 0.12, 0.020), collection, material)
+            add_hair_clump(
+                "GEO_ModuleHairRearR",
+                ((0.03, 0.33, 0.48), (0.14, 0.43, 0.33),
+                 (0.23, 0.59, -0.10), (0.14, 0.71, -0.65)),
+                (0.31, 0.33, 0.22, 0.020),
+                (0.20, 0.18, 0.12, 0.020), collection, material)
+            # A single broad highlight tells the eye which rear wedge sits in
+            # front without adding strand noise at the 60-pixel game size.
+            add_panel("GEO_ModuleHairRearHighlight", (
+                (-0.15, 0.665, 0.30), (-0.04, 0.662, 0.25),
+                (-0.06, 0.665, -0.18), (-0.13, 0.669, -0.03),
+            ), collection, material, thickness=0.012)
+            return
         add_ico("GEO_ModuleHairCap", (0.0, 0.04, 0.30),
                 (0.54, 0.50, 0.30 if style in {0, 5} else 0.38),
                 collection, material, subdivisions=1)
@@ -350,10 +475,6 @@ def build_geometry(slot: str, collection: bpy.types.Collection,
         elif style == 2:
             add_ico("GEO_ModuleHairBun", (0.0, 0.45, 0.28),
                     (0.28, 0.28, 0.30), collection, material, subdivisions=1)
-        elif style == 3:
-            add_box("GEO_ModuleHairSweep", (-0.18, -0.32, 0.28),
-                    (0.70, 0.28, 0.42), collection, material, width=0.10,
-                    rotation=(0.0, -0.18, -0.12))
         elif style == 4:
             for side in (-1.0, 1.0):
                 add_cylinder(f"GEO_ModuleBraid{side:+.0f}",
@@ -391,6 +512,10 @@ def consolidate(collection: bpy.types.Collection, asset_id: str,
         raise RuntimeError(f"{asset_id} generated no mesh")
     for obj in objects:
         apply_modifiers(obj)
+        object_palette_slot = str(obj.get("cc_palette_slot", palette_slot))
+        semantic_index = PALETTE_INDEX[object_palette_slot]
+        paint_channels.add_indexed_paint_channels(
+            obj, [semantic_index] * len(obj.data.polygons), PAINT_SEMANTICS)
     bpy.ops.object.select_all(action="DESELECT")
     for obj in objects:
         obj.select_set(True)
@@ -401,10 +526,6 @@ def consolidate(collection: bpy.types.Collection, asset_id: str,
     joined.data.name = joined.name
     joined.data.materials.clear()
     joined.data.materials.append(material)
-    semantic_index = PALETTE_INDEX[palette_slot]
-    paint_channels.add_indexed_paint_channels(
-        joined, [semantic_index] * len(joined.data.polygons),
-        PAINT_SEMANTICS)
     for polygon in joined.data.polygons:
         polygon.material_index = 0
     bpy.context.scene.cursor.location = (0.0, 0.0, 0.0)
@@ -444,7 +565,7 @@ def build() -> None:
         ("hand", "hand", "bone_head", "skin"),
         ("foot", "foot", "bone_segment", "leather"),
         ("head", "head", "head_center", "skin"),
-        ("mantle", "mantle", "back_socket", "outer_shadow"),
+        ("mantle", "mantle", "back_socket", "trousers"),
         ("coat_tail", "coat_tail", "pelvis", "outer_shadow"),
         ("chest_plate", "chest_plate", "chest_front_socket", "metal"),
         ("pauldron", "pauldron", "shoulder_socket", "metal"),

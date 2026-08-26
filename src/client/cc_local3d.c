@@ -7402,6 +7402,8 @@ static TreeCrownModelCache tree_crown_models = {0};
 #define CC_BRIDGE_CHECKPOINT_MESH_BUDGET 96
 #define CC_STYLE_GRADE_SHADER "assets/shaders/style_grade.fs"
 #define CC_WORLD_LIGHT_VERTEX_SHADER "assets/shaders/world_lit.vs"
+#define CC_WORLD_LIGHT_SKINNED_VERTEX_SHADER \
+    "assets/shaders/world_lit_skinned.vs"
 #define CC_WORLD_LIGHT_FRAGMENT_SHADER "assets/shaders/world_lit.fs"
 #define CC_PAINTED_ENVIRONMENT_FRAGMENT_SHADER \
     "assets/shaders/painted_environment.fs"
@@ -7473,6 +7475,45 @@ typedef struct HeroSkinCache {
 static HeroSkinCache hero_skin = {0};
 static bool screen_first_hero_requested = false;
 static bool screen_first_hero_active = false;
+
+#define CC_NPC_BODY_FRAME_COUNT 3
+#define CC_NPC_BODY_MUSCLE_COUNT 3
+#define CC_NPC_BODY_TISSUE_COUNT 4
+
+typedef struct NpcBodySkinCache {
+    Model model;
+    ModelAnimation animation;
+    Transform pose[CC_HERO_SKIN_MAX_BONES];
+    Transform *frames[1];
+    int32_t skin_bone[CC_HERO_SKIN_MAX_BONES];
+    bool ready;
+} NpcBodySkinCache;
+
+static const char *NPC_BODY_FRAME_NAMES[CC_NPC_BODY_FRAME_COUNT] = {
+    "lean", "standard", "heavy",
+};
+static const char *NPC_BODY_MUSCLE_NAMES[CC_NPC_BODY_MUSCLE_COUNT] = {
+    "slight", "athletic", "power",
+};
+static const char *NPC_BODY_TISSUE_NAMES[CC_NPC_BODY_TISSUE_COUNT] = {
+    "low", "balanced", "central", "lower_body",
+};
+static NpcBodySkinCache npc_body_skins
+    [CC_NPC_BODY_FRAME_COUNT]
+    [CC_NPC_BODY_MUSCLE_COUNT]
+    [CC_NPC_BODY_TISSUE_COUNT] = {0};
+
+#define CC_NPC_HEAD_FAMILY_COUNT 4
+
+typedef struct NpcHeadFamilyCache {
+    Model model;
+    bool ready;
+} NpcHeadFamilyCache;
+
+static const char *NPC_HEAD_FAMILY_NAMES[CC_NPC_HEAD_FAMILY_COUNT] = {
+    "square", "long", "broad", "veteran",
+};
+static NpcHeadFamilyCache npc_head_families[CC_NPC_HEAD_FAMILY_COUNT] = {0};
 
 typedef struct NpcArchetypeCache {
     Model model;
@@ -7702,6 +7743,17 @@ typedef struct VisualStyleCache {
     int32_t npc_palette_location;
     int32_t npc_palette_ink_location;
     bool npc_ready;
+    Shader npc_skinned;
+    int32_t npc_skinned_light_direction_location;
+    int32_t npc_skinned_camera_position_location;
+    int32_t npc_skinned_shadow_color_location;
+    int32_t npc_skinned_fog_color_location;
+    int32_t npc_skinned_fog_near_location;
+    int32_t npc_skinned_fog_far_location;
+    int32_t npc_skinned_ink_strength_location;
+    int32_t npc_skinned_palette_location;
+    int32_t npc_skinned_palette_ink_location;
+    bool npc_skinned_ready;
 } VisualStyleCache;
 
 static VisualStyleCache visual_style = {0};
@@ -7998,6 +8050,108 @@ static void LoadNpcDynamicModules(void)
              loaded_count, NPC_DYNAMIC_MODULE_COUNT);
 }
 
+static void LoadNpcBodySkins(void)
+{
+    int32_t loaded_count = 0;
+    for (int32_t frame = 0; frame < CC_NPC_BODY_FRAME_COUNT; ++frame) {
+        for (int32_t muscle = 0; muscle < CC_NPC_BODY_MUSCLE_COUNT; ++muscle) {
+            for (int32_t tissue = 0; tissue < CC_NPC_BODY_TISSUE_COUNT;
+                 ++tissue) {
+                NpcBodySkinCache *body =
+                    &npc_body_skins[frame][muscle][tissue];
+                char path[256];
+                (void)snprintf(
+                    path, sizeof(path),
+                    "assets/exports/world_kit/wk_body_skin_%s_%s_%s_v01.glb",
+                    NPC_BODY_FRAME_NAMES[frame],
+                    NPC_BODY_MUSCLE_NAMES[muscle],
+                    NPC_BODY_TISSUE_NAMES[tissue]);
+                char resolved[1024];
+                if (!ResolveAssetPath(path, resolved, sizeof(resolved))) {
+                    TraceLog(LOG_WARNING, "NPC BODY: %s was not found", path);
+                    continue;
+                }
+                body->model = LoadModel(resolved);
+                int32_t bone_count = body->model.skeleton.boneCount;
+                if (body->model.meshCount <= 0 ||
+                    body->model.meshCount > 2 ||
+                    body->model.materialCount < 1 ||
+                    bone_count <= 0 || bone_count > CC_HERO_SKIN_MAX_BONES) {
+                    TraceLog(LOG_WARNING,
+                             "NPC BODY: invalid %s (%d meshes, %d bones)",
+                             path, body->model.meshCount, bone_count);
+                    if (body->model.meshCount > 0) UnloadModel(body->model);
+                    *body = (NpcBodySkinCache){0};
+                    continue;
+                }
+                bool found[CC_HUMANOID_SKIN_BONE_COUNT] = {false};
+                for (int32_t bone = 0; bone < bone_count; ++bone) {
+                    int32_t skin_bone = CcHumanoidSkinBoneFind(
+                        body->model.skeleton.bones[bone].name);
+                    body->skin_bone[bone] = skin_bone;
+                    if (skin_bone >= 0) found[skin_bone] = true;
+                }
+                bool complete = true;
+                for (int32_t bone = 0;
+                     bone < CC_HUMANOID_SKIN_BONE_COUNT; ++bone) {
+                    if (found[bone]) continue;
+                    TraceLog(LOG_WARNING,
+                             "NPC BODY: %s is missing bone %s", path,
+                             CcHumanoidSkinBoneName(
+                                 (CcHumanoidSkinBone)bone));
+                    complete = false;
+                }
+                if (!complete) {
+                    UnloadModel(body->model);
+                    *body = (NpcBodySkinCache){0};
+                    continue;
+                }
+                body->frames[0] = body->pose;
+                body->animation.boneCount = bone_count;
+                body->animation.keyframeCount = 1;
+                body->animation.keyframePoses = body->frames;
+                (void)snprintf(body->animation.name,
+                               sizeof(body->animation.name),
+                               "physics-body");
+                body->ready = true;
+                loaded_count += 1;
+            }
+        }
+    }
+    TraceLog(LOG_INFO, "NPC BODY: loaded %d/36 continuous body recipes",
+             loaded_count);
+}
+
+static void LoadNpcHeadFamilies(void)
+{
+    int32_t loaded_count = 0;
+    for (int32_t family = 0; family < CC_NPC_HEAD_FAMILY_COUNT; ++family) {
+        char path[192];
+        (void)snprintf(path, sizeof(path),
+                       "assets/exports/world_kit/wk_head_%s_v01.glb",
+                       NPC_HEAD_FAMILY_NAMES[family]);
+        char resolved[1024];
+        if (!ResolveAssetPath(path, resolved, sizeof(resolved))) {
+            TraceLog(LOG_WARNING, "NPC HEAD: %s was not found", path);
+            continue;
+        }
+        Model model = LoadModel(resolved);
+        if (model.meshCount < 2 || model.meshCount > 7 ||
+            model.materialCount < 1 || model.skeleton.boneCount != 0) {
+            TraceLog(LOG_WARNING,
+                     "NPC HEAD: invalid %s (%d meshes, %d bones)",
+                     path, model.meshCount, model.skeleton.boneCount);
+            if (model.meshCount > 0) UnloadModel(model);
+            continue;
+        }
+        npc_head_families[family].model = model;
+        npc_head_families[family].ready = true;
+        loaded_count += 1;
+    }
+    TraceLog(LOG_INFO, "NPC HEAD: loaded %d/%d modular head families",
+             loaded_count, CC_NPC_HEAD_FAMILY_COUNT);
+}
+
 static void LoadRuntimeAssets(void)
 {
     for (int32_t id = 0; id < RUNTIME_ASSET_COUNT; ++id) {
@@ -8087,6 +8241,16 @@ static void ApplyNpcStyle(Model *model)
     }
 }
 
+static void ApplyNpcBodyStyle(Model *model)
+{
+    if (model == NULL || model->materials == NULL) return;
+    Shader shader = visual_style.npc_skinned_ready ?
+        visual_style.npc_skinned : visual_style.npc;
+    for (int32_t material = 0; material < model->materialCount; ++material) {
+        model->materials[material].shader = shader;
+    }
+}
+
 static void SetNpcPalette(const CcNpcAppearance *appearance,
                           float ink_strength)
 {
@@ -8100,7 +8264,7 @@ static void SetNpcPalette(const CcNpcAppearance *appearance,
         appearance->leather,
         appearance->metal,
         appearance->accent,
-        ShadeColor(appearance->hair, 0.30f),
+        ShadeColor(appearance->hair, 0.62f),
     };
     float palette[CC_NPC_ARCHETYPE_MATERIAL_COUNT * 4];
     for (int32_t index = 0; index < CC_NPC_ARCHETYPE_MATERIAL_COUNT;
@@ -8124,6 +8288,19 @@ static void SetNpcPalette(const CcNpcAppearance *appearance,
     SetShaderValue(visual_style.npc,
                    visual_style.npc_ink_strength_location,
                    &ink_strength, SHADER_UNIFORM_FLOAT);
+    if (visual_style.npc_skinned_ready) {
+        SetShaderValueV(visual_style.npc_skinned,
+                        visual_style.npc_skinned_palette_location,
+                        palette, SHADER_UNIFORM_VEC4,
+                        CC_NPC_ARCHETYPE_MATERIAL_COUNT);
+        SetShaderValueV(visual_style.npc_skinned,
+                        visual_style.npc_skinned_palette_ink_location,
+                        material_ink, SHADER_UNIFORM_FLOAT,
+                        CC_NPC_ARCHETYPE_MATERIAL_COUNT);
+        SetShaderValue(visual_style.npc_skinned,
+                       visual_style.npc_skinned_ink_strength_location,
+                       &ink_strength, SHADER_UNIFORM_FLOAT);
+    }
 }
 
 /* Procedural people use the same graphic lighting contract as the authored
@@ -8325,6 +8502,14 @@ static void LoadVisualStyle(void)
         visual_style.world, "terrainSurface");
     visual_style.world_ready = true;
 
+    char skinned_vertex_path[1024] = {0};
+    bool skinned_vertex_ready = ResolveAssetPath(
+        CC_WORLD_LIGHT_SKINNED_VERTEX_SHADER, skinned_vertex_path,
+        sizeof(skinned_vertex_path));
+    if (!skinned_vertex_ready) {
+        TraceLog(LOG_WARNING, "STYLE: skinned vertex shader was not found");
+    }
+
     char painted_fragment_path[1024];
     if (ResolveAssetPath(CC_PAINTED_ENVIRONMENT_FRAGMENT_SHADER,
                          painted_fragment_path,
@@ -8418,9 +8603,11 @@ static void LoadVisualStyle(void)
     }
 
     char hero_fragment_path[1024];
-    if (ResolveAssetPath(CC_HERO_PIXEL_FRAGMENT_SHADER, hero_fragment_path,
+    if (skinned_vertex_ready &&
+        ResolveAssetPath(CC_HERO_PIXEL_FRAGMENT_SHADER, hero_fragment_path,
                          sizeof(hero_fragment_path))) {
-        visual_style.hero = LoadShader(vertex_path, hero_fragment_path);
+        visual_style.hero = LoadShader(skinned_vertex_path,
+                                       hero_fragment_path);
         if (IsShaderValid(visual_style.hero)) {
             visual_style.hero_light_direction_location = GetShaderLocation(
                 visual_style.hero, "lightDirection");
@@ -8479,6 +8666,41 @@ static void LoadVisualStyle(void)
             TraceLog(LOG_WARNING,
                      "STYLE: indexed NPC shader could not be loaded");
         }
+        if (skinned_vertex_ready) {
+            visual_style.npc_skinned = LoadShader(
+                skinned_vertex_path, npc_fragment_path);
+            if (IsShaderValid(visual_style.npc_skinned)) {
+                visual_style.npc_skinned_light_direction_location =
+                    GetShaderLocation(visual_style.npc_skinned,
+                                      "lightDirection");
+                visual_style.npc_skinned_camera_position_location =
+                    GetShaderLocation(visual_style.npc_skinned,
+                                      "cameraPosition");
+                visual_style.npc_skinned_shadow_color_location =
+                    GetShaderLocation(visual_style.npc_skinned,
+                                      "shadowColor");
+                visual_style.npc_skinned_fog_color_location =
+                    GetShaderLocation(visual_style.npc_skinned, "fogColor");
+                visual_style.npc_skinned_fog_near_location =
+                    GetShaderLocation(visual_style.npc_skinned, "fogNear");
+                visual_style.npc_skinned_fog_far_location =
+                    GetShaderLocation(visual_style.npc_skinned, "fogFar");
+                visual_style.npc_skinned_ink_strength_location =
+                    GetShaderLocation(visual_style.npc_skinned,
+                                      "inkStrength");
+                visual_style.npc_skinned_palette_location =
+                    GetShaderLocation(visual_style.npc_skinned,
+                                      "characterPalette[0]");
+                visual_style.npc_skinned_palette_ink_location =
+                    GetShaderLocation(visual_style.npc_skinned,
+                                      "paletteInk[0]");
+                visual_style.npc_skinned_ready = true;
+            } else {
+                visual_style.npc_skinned = (Shader){0};
+                TraceLog(LOG_WARNING,
+                         "STYLE: skinned NPC shader could not be loaded");
+            }
+        }
     } else {
         TraceLog(LOG_WARNING, "STYLE: indexed NPC shader was not found");
     }
@@ -8502,6 +8724,21 @@ static void LoadVisualStyle(void)
     for (int32_t id = 0; id < NPC_DYNAMIC_MODULE_COUNT; ++id) {
         if (npc_dynamic_modules[id].ready) {
             ApplyNpcStyle(&npc_dynamic_modules[id].model);
+        }
+    }
+    for (int32_t frame = 0; frame < CC_NPC_BODY_FRAME_COUNT; ++frame) {
+        for (int32_t muscle = 0; muscle < CC_NPC_BODY_MUSCLE_COUNT; ++muscle) {
+            for (int32_t tissue = 0; tissue < CC_NPC_BODY_TISSUE_COUNT;
+                 ++tissue) {
+                NpcBodySkinCache *body =
+                    &npc_body_skins[frame][muscle][tissue];
+                if (body->ready) ApplyNpcBodyStyle(&body->model);
+            }
+        }
+    }
+    for (int32_t family = 0; family < CC_NPC_HEAD_FAMILY_COUNT; ++family) {
+        if (npc_head_families[family].ready) {
+            ApplyNpcStyle(&npc_head_families[family].model);
         }
     }
     for (int32_t id = 0; id < RUNTIME_ASSET_COUNT; ++id) {
@@ -8691,6 +8928,79 @@ static bool DrawHeroSkin(const CcHumanoidSkinPose *skin,
     return true;
 }
 
+static int32_t NpcBodyFrameForAppearance(const CcNpcAppearance *appearance)
+{
+    if (appearance->body_mass < 0.99f &&
+        appearance->shoulder_scale < 1.04f) return 0;
+    if (appearance->body_mass > 1.075f ||
+        appearance->shoulder_scale > 1.085f) return 2;
+    return 1;
+}
+
+static int32_t NpcBodyMuscleForAppearance(const CcNpcAppearance *appearance)
+{
+    if (appearance->muscularity < 0.50f) return 0;
+    if (appearance->muscularity < 0.74f) return 1;
+    return 2;
+}
+
+static int32_t NpcBodyTissueForAppearance(const CcNpcAppearance *appearance)
+{
+    if (appearance->body_mass < 0.99f) return 0;
+    if (appearance->body_mass < 1.055f) return 1;
+    return ((appearance->seed >> 7U) & 1U) == 0U ? 2 : 3;
+}
+
+static NpcBodySkinCache *NpcBodyForAppearance(
+    const CcNpcAppearance *appearance)
+{
+    if (appearance == NULL) return NULL;
+    int32_t frame = NpcBodyFrameForAppearance(appearance);
+    int32_t muscle = NpcBodyMuscleForAppearance(appearance);
+    int32_t tissue = NpcBodyTissueForAppearance(appearance);
+    return &npc_body_skins[frame][muscle][tissue];
+}
+
+static bool DrawNpcBodySkin(const CcHumanoidSkinPose *skin,
+                            const CcNpcAppearance *appearance)
+{
+    NpcBodySkinCache *body = NpcBodyForAppearance(appearance);
+    if (body == NULL || !body->ready || !visual_style.npc_skinned_ready ||
+        skin == NULL || !skin->valid) {
+        return false;
+    }
+    for (int32_t bone = 0; bone < body->model.skeleton.boneCount; ++bone) {
+        int32_t skin_bone = body->skin_bone[bone];
+        if (skin_bone < 0 || skin_bone >= CC_HUMANOID_SKIN_BONE_COUNT) {
+            body->pose[bone] = body->model.skeleton.bindPose[bone];
+            continue;
+        }
+        const CcHumanoidSkinBonePose *target = &skin->bones[skin_bone];
+        Quaternion delta = HeroRotationBetween(
+            HERO_REST_DIRECTIONS[skin_bone], FromLimbVector(target->up));
+        if (skin_bone == CC_HUMANOID_SKIN_HEAD) {
+            delta = (Quaternion){target->world_rotation.x,
+                                 target->world_rotation.y,
+                                 target->world_rotation.z,
+                                 target->world_rotation.w};
+        }
+        body->pose[bone].translation = FromLimbVector(target->head);
+        body->pose[bone].rotation = QuaternionMultiply(
+            delta, body->model.skeleton.bindPose[bone].rotation);
+        body->pose[bone].scale = body->model.skeleton.bindPose[bone].scale;
+    }
+    UpdateModelAnimation(body->model, body->animation, 0.0f);
+    for (int32_t material = 0; material < body->model.materialCount;
+         ++material) {
+        body->model.materials[material].maps[MATERIAL_MAP_DIFFUSE].color =
+            WHITE;
+    }
+    DrawModelEx(body->model, (Vector3){0.0f, 0.0f, 0.0f},
+                (Vector3){0.0f, 1.0f, 0.0f}, 0.0f,
+                (Vector3){1.0f, 1.0f, 1.0f}, WHITE);
+    return true;
+}
+
 #define CC_TREE_CROWN_RING_VERTICES 6
 #define CC_TREE_CROWN_TRIANGLES (CC_TREE_CROWN_RING_VERTICES * 4)
 
@@ -8870,6 +9180,8 @@ void CcLocalRendererInit(void)
     LoadHeroSkin();
     LoadNpcArchetypes();
     LoadNpcDynamicModules();
+    LoadNpcBodySkins();
+    LoadNpcHeadFamilies();
     LoadRuntimeAssets();
     LoadVisualStyle();
 }
@@ -8913,10 +9225,30 @@ void CcLocalRendererShutdown(void)
         npc_dynamic_modules[id].model = (Model){0};
         npc_dynamic_modules[id].ready = false;
     }
+    for (int32_t frame = 0; frame < CC_NPC_BODY_FRAME_COUNT; ++frame) {
+        for (int32_t muscle = 0; muscle < CC_NPC_BODY_MUSCLE_COUNT; ++muscle) {
+            for (int32_t tissue = 0; tissue < CC_NPC_BODY_TISSUE_COUNT;
+                 ++tissue) {
+                NpcBodySkinCache *body =
+                    &npc_body_skins[frame][muscle][tissue];
+                if (body->ready) UnloadModel(body->model);
+                *body = (NpcBodySkinCache){0};
+            }
+        }
+    }
+    for (int32_t family = 0; family < CC_NPC_HEAD_FAMILY_COUNT; ++family) {
+        if (npc_head_families[family].ready) {
+            UnloadModel(npc_head_families[family].model);
+        }
+        npc_head_families[family] = (NpcHeadFamilyCache){0};
+    }
     for (int32_t id = 0; id < RUNTIME_ASSET_COUNT; ++id) {
         if (runtime_assets[id].ready) UnloadModel(runtime_assets[id].model);
         runtime_assets[id].model = (Model){0};
         runtime_assets[id].ready = false;
+    }
+    if (visual_style.npc_skinned_ready) {
+        UnloadShader(visual_style.npc_skinned);
     }
     if (visual_style.npc_ready) UnloadShader(visual_style.npc);
     if (visual_style.hero_ready) UnloadShader(visual_style.hero);
@@ -10631,10 +10963,15 @@ static float FaceProjectedHeight(Vector3 eye_center, Vector3 up,
 }
 
 CcLocalFaceLodInternal CcLocalFaceLodForProjectedHeightInternal(
-    float projected_height)
+    float projected_face_height)
 {
-    if (projected_height < 7.0f) return CC_LOCAL_FACE_LOD_SILHOUETTE;
-    if (projected_height < 13.0f) return CC_LOCAL_FACE_LOD_READABLE;
+    /* A face is about 13.7 percent of a Crownless adult's delivered height.
+       These limits therefore implement the 16/38 art-pixel character ladder
+       without asking a two-pixel face to carry a complete expression. */
+    if (projected_face_height < 2.2f) {
+        return CC_LOCAL_FACE_LOD_SILHOUETTE;
+    }
+    if (projected_face_height < 5.2f) return CC_LOCAL_FACE_LOD_READABLE;
     return CC_LOCAL_FACE_LOD_CLOSE;
 }
 
@@ -10661,6 +10998,10 @@ static void DrawFaceQuad(Vector3 origin, Vector3 right, Vector3 up,
     Vector3 upper_left = Vector3Add(Vector3Subtract(center, across), rise);
     DrawTriangle3D(lower_left, lower_right, upper_right, color);
     DrawTriangle3D(lower_left, upper_right, upper_left, color);
+    /* Character-local right appears screen-left in a front view, so the tiny
+       plane can reverse its apparent winding. Draw the back winding too. */
+    DrawTriangle3D(lower_left, upper_right, lower_right, color);
+    DrawTriangle3D(lower_left, upper_left, upper_right, color);
 }
 
 static void DrawWorldFace(Vector3 eye_center, Vector3 head_right,
@@ -10699,31 +11040,38 @@ static void DrawWorldFace(Vector3 eye_center, Vector3 head_right,
         Vector3Subtract(Vector3Scale(head_right, cosf(turn)),
                         Vector3Scale(head_forward, side * sinf(turn))),
         head_right);
-    float surface_radius = half_depth * cosf(turn) +
-                           half_width * sinf(turn);
+    float surface_cosine = cosf(turn);
+    float surface_sine = sinf(turn);
+    float surface_radius = 1.0f / sqrtf(
+        (surface_cosine * surface_cosine) / (half_depth * half_depth) +
+        (surface_sine * surface_sine) / (half_width * half_width));
     Vector3 surface = Vector3Add(
-        eye_center, Vector3Scale(normal, surface_radius * 0.94f));
+        eye_center, Vector3Scale(normal, surface_radius * 1.20f));
 
     CcLocalFaceLodInternal lod = CcLocalFaceLodForProjectedHeightInternal(
         FaceProjectedHeight(eye_center, head_up, half_height));
     float feature_scale = fmaxf(0.78f, half_width / 0.175f);
     float eye_spacing = 0.050f * feature_scale;
-    float eye_width = (lod == CC_LOCAL_FACE_LOD_CLOSE ? 0.028f : 0.034f) *
+    float eye_width = (lod == CC_LOCAL_FACE_LOD_CLOSE ? 0.036f : 0.034f) *
                       feature_scale;
-    float eye_height = (lod == CC_LOCAL_FACE_LOD_CLOSE ? 0.026f : 0.024f) *
+    float eye_height = (lod == CC_LOCAL_FACE_LOD_CLOSE ? 0.028f : 0.024f) *
                        feature_scale;
     float far_eye_scale = view == CC_LOCAL_FACE_VIEW_THREE_QUARTER ?
                           0.70f : 1.0f;
 
-    /* At fewer than seven art pixels, hair, headwear, and head shape carry
-       identity. A lone facial pixel reads as a pasted symbol, so do not draw
-       one. */
+    /* At medium range the face gets eyes only. Mouth, brows, nose, and scars
+       wait for the close tier so they cannot collapse into one pasted mark. */
     if (lod == CC_LOCAL_FACE_LOD_SILHOUETTE) return;
+
+    /* Indexed character shaders use vertex color as material metadata. Face
+       cards need their literal ink colors, so draw this tiny graphic layer
+       with raylib's color shader and let the caller restore scene lighting. */
+    EndShaderMode();
 
     if (view == CC_LOCAL_FACE_VIEW_PROFILE) {
         DrawFaceQuad(surface, feature_right, head_up, normal,
                      0.012f * side,
-                     0.0f, eye_width, eye_height, 0.010f, face->ink);
+                     0.0f, eye_width, eye_height, 0.050f, face->ink);
     } else {
         float near_x = side * eye_spacing;
         float far_x = -side * eye_spacing;
@@ -10731,11 +11079,16 @@ static void DrawWorldFace(Vector3 eye_center, Vector3 head_right,
                             -0.010f : 0.0f;
         DrawFaceQuad(surface, feature_right, head_up, normal,
                      near_x, hurt_offset, eye_width, eye_height,
-                     0.010f, face->ink);
+                     0.050f, face->ink);
         DrawFaceQuad(surface, feature_right, head_up, normal,
                      far_x * far_eye_scale, -hurt_offset,
                      eye_width * far_eye_scale, eye_height,
-                     0.010f, face->ink);
+                     0.050f, face->ink);
+    }
+
+    if (lod != CC_LOCAL_FACE_LOD_CLOSE) {
+        EndShaderMode();
+        return;
     }
 
     float mouth_width = (view == CC_LOCAL_FACE_VIEW_PROFILE ? 0.030f :
@@ -10745,40 +11098,39 @@ static void DrawWorldFace(Vector3 eye_center, Vector3 head_right,
     DrawFaceQuad(surface, feature_right, head_up, normal,
                  view == CC_LOCAL_FACE_VIEW_PROFILE ? 0.018f * side : 0.0f,
                  mouth_y * feature_scale, mouth_width,
-                 0.013f * feature_scale, 0.012f, face->ink);
-    if (lod != CC_LOCAL_FACE_LOD_CLOSE) return;
-
+                 0.013f * feature_scale, 0.014f, face->ink);
     float brow_y = expression == CC_NPC_PORTRAIT_FOCUSED ? 0.036f : 0.052f;
     if (view == CC_LOCAL_FACE_VIEW_PROFILE) {
         DrawFaceQuad(surface, feature_right, head_up, normal,
                      0.010f * side, brow_y * feature_scale,
                      0.050f * feature_scale, 0.012f * feature_scale,
-                     0.013f, face->ink);
+                     0.052f, face->ink);
     } else {
         DrawFaceQuad(surface, feature_right, head_up, normal,
                      side * eye_spacing, brow_y * feature_scale,
                      0.045f * feature_scale, 0.012f * feature_scale,
-                     0.013f, face->ink);
+                     0.052f, face->ink);
         DrawFaceQuad(surface, feature_right, head_up, normal,
                      -side * eye_spacing * far_eye_scale,
                      brow_y * feature_scale,
                      0.045f * feature_scale * far_eye_scale,
-                     0.012f * feature_scale, 0.013f, face->ink);
+                     0.012f * feature_scale, 0.052f, face->ink);
     }
     DrawFaceQuad(surface, feature_right, head_up, normal,
                  view == CC_LOCAL_FACE_VIEW_PROFILE ? 0.032f * side : 0.0f,
                  -0.038f * feature_scale,
                  (face->nose_style == 2U ? 0.038f : 0.022f) * feature_scale,
                  (face->nose_style == 3U ? 0.052f : 0.032f) * feature_scale,
-                 0.014f, face->skin_shadow);
+                 0.016f, face->skin_shadow);
     if (face->scar_style != 0U && view != CC_LOCAL_FACE_VIEW_PROFILE) {
         float scar_side = face->scar_style == 2U ? -1.0f : 1.0f;
         DrawFaceQuad(surface, feature_right, head_up, normal,
-                     scar_side * 0.070f * feature_scale,
+                     scar_side * 0.064f * feature_scale,
                      -0.022f * feature_scale,
-                     0.012f * feature_scale, 0.070f * feature_scale,
-                     0.015f, ShadeColor(face->skin, 0.54f));
+                     0.009f * feature_scale, 0.040f * feature_scale,
+                     0.017f, ShadeColor(face->skin, 0.54f));
     }
+    EndShaderMode();
 }
 
 static void DrawNpcHead(const CcNpcAppearance *appearance, Vector3 head,
@@ -10798,6 +11150,7 @@ static void DrawNpcHead(const CcNpcAppearance *appearance, Vector3 head,
     DrawWorldFace(PhysicsAdd(head, (Vector3){0.0f, 0.045f * scale, 0.0f}),
                   right, (Vector3){0.0f, 1.0f, 0.0f}, forward,
                   head_width, 0.195f * scale, head_depth, &face, expression);
+    UseCharacterLighting();
 
     Vector3 crown = PhysicsAdd(head, (Vector3){0.0f, 0.115f * scale, 0.0f});
     switch (appearance->hair_style) {
@@ -11082,6 +11435,7 @@ static bool DrawNpcArchetype3D(Vector3 position, float size_hint, float yaw,
                   0.165f * appearance->head_depth * scale * width *
                       silhouette_gain,
                   &face, expression);
+    RestoreWorldLighting();
     if (visual_style.hero_ready) {
         float ink_strength = CC_HERO_INK_STRENGTH;
         SetShaderValue(visual_style.hero,
@@ -11414,7 +11768,7 @@ static void DrawWayfarerHeroDetails(const CcHumanoidSkinPose *skin)
     Color broken_gold = (Color){224, 169, 59, 255};
     Vector3 clasp_back = PhysicsAdd(chest, PhysicsScale(forward, -0.020f));
     Vector3 clasp_front = PhysicsAdd(chest, PhysicsScale(forward, 0.014f));
-    DrawCylinderEx(clasp_back, clasp_front, 0.086f, 0.078f, 7,
+    DrawCylinderEx(clasp_back, clasp_front, 0.058f, 0.052f, 7,
                    clasp_shadow);
 
     Vector3 left_top = NpcModuleLocalPoint(
@@ -11425,8 +11779,8 @@ static void DrawWayfarerHeroDetails(const CcHumanoidSkinPose *skin)
         chest, right, up, forward, (Vector3){0.024f, 0.002f, 0.020f});
     Vector3 right_top = NpcModuleLocalPoint(
         chest, right, up, forward, (Vector3){0.098f, 0.068f, 0.020f});
-    DrawCylinderEx(left_top, left_low, 0.022f, 0.018f, 5, broken_gold);
-    DrawCylinderEx(right_low, right_top, 0.018f, 0.022f, 5, broken_gold);
+    DrawCylinderEx(left_top, left_low, 0.014f, 0.011f, 5, broken_gold);
+    DrawCylinderEx(right_low, right_top, 0.011f, 0.014f, 5, broken_gold);
 }
 
 static bool DrawNpcDynamicModule(NpcDynamicModuleId id, Matrix transform,
@@ -11452,6 +11806,44 @@ static bool DrawNpcDynamicModule(NpcDynamicModuleId id, Matrix transform,
     return true;
 }
 
+static int32_t NpcHeadFamilyForAppearance(
+    const CcNpcAppearance *appearance)
+{
+    if (appearance == NULL) return 0;
+    if (appearance->age >= 0.70f) return 3;
+    if (appearance->head_width < 0.99f ||
+        appearance->head_depth < 0.985f) return 1;
+    if (appearance->head_width > 1.045f ||
+        appearance->body_mass > 1.075f) return 2;
+    return 0;
+}
+
+static bool DrawNpcHeadFamily(const CcNpcAppearance *appearance,
+                              Matrix transform, Matrix fallback_transform)
+{
+    int32_t family = NpcHeadFamilyForAppearance(appearance);
+    NpcHeadFamilyCache *head = &npc_head_families[family];
+    if (!head->ready || head->model.materialCount < 1) {
+        return DrawNpcDynamicModule(NPC_DYNAMIC_HEAD, fallback_transform,
+                                    appearance != NULL ? appearance->skin :
+                                                         WHITE);
+    }
+    for (int32_t material = 0; material < head->model.materialCount;
+         ++material) {
+        head->model.materials[material].maps[MATERIAL_MAP_DIFFUSE].color =
+            WHITE;
+    }
+    for (int32_t mesh = 0; mesh < head->model.meshCount; ++mesh) {
+        int32_t material = head->model.meshMaterial[mesh];
+        if (material < 0 || material >= head->model.materialCount) {
+            material = 0;
+        }
+        DrawMesh(head->model.meshes[mesh], head->model.materials[material],
+                 transform);
+    }
+    return true;
+}
+
 static bool DrawNpcDynamicBoneModule(NpcDynamicModuleId id,
                                      const CcHumanoidSkinBonePose *bone,
                                      float width, float depth, Color color)
@@ -11468,18 +11860,22 @@ static bool DrawNpcDynamicBoneModule(NpcDynamicModuleId id,
                                (Vector3){width, length, depth}), color);
 }
 
-static bool NpcDynamicCoreReady(int32_t hair_style)
+static bool NpcDynamicCoreReady(const CcNpcAppearance *appearance)
 {
     static const NpcDynamicModuleId core[] = {
         NPC_DYNAMIC_TORSO, NPC_DYNAMIC_PELVIS, NPC_DYNAMIC_UPPER_ARM,
         NPC_DYNAMIC_FOREARM, NPC_DYNAMIC_THIGH, NPC_DYNAMIC_SHIN,
-        NPC_DYNAMIC_HAND, NPC_DYNAMIC_FOOT, NPC_DYNAMIC_HEAD,
+        NPC_DYNAMIC_HAND, NPC_DYNAMIC_FOOT,
     };
     for (int32_t i = 0;
-         i < (int32_t)(sizeof(core) / sizeof(core[0])); ++i) {
+        i < (int32_t)(sizeof(core) / sizeof(core[0])); ++i) {
         if (!npc_dynamic_modules[core[i]].ready) return false;
     }
-    int32_t hair = hair_style % CC_NPC_DYNAMIC_HAIR_COUNT;
+    int32_t family = NpcHeadFamilyForAppearance(appearance);
+    if (!npc_head_families[family].ready &&
+        !npc_dynamic_modules[NPC_DYNAMIC_HEAD].ready) return false;
+    int32_t hair = (int32_t)appearance->hair_style %
+                   CC_NPC_DYNAMIC_HAIR_COUNT;
     if (hair < 0) hair += CC_NPC_DYNAMIC_HAIR_COUNT;
     return npc_dynamic_modules[NPC_DYNAMIC_HAIR_0 + hair].ready;
 }
@@ -11489,7 +11885,7 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
                                   const CcNpcAppearance *appearance)
 {
     if (agent == NULL || skin == NULL || appearance == NULL || !skin->valid ||
-        !NpcDynamicCoreReady((int32_t)appearance->hair_style)) return false;
+        !NpcDynamicCoreReady(appearance)) return false;
 
     Vector3 body_right = FromLimbVector(skin->body_right);
     Vector3 body_up = FromLimbVector(skin->body_up);
@@ -11519,6 +11915,7 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
         PhysicsCross(gear_right, gear_up), body_forward);
     float mass = appearance->body_mass;
     float muscle = appearance->muscularity;
+    bool featured_hero = agent->crowned;
     Color outer = appearance->outer;
     Color trousers = appearance->trousers;
     if (CombatIsDefeated(&agent->combat)) {
@@ -11532,6 +11929,12 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
     palette_appearance.trousers = trousers;
     SetNpcPalette(&palette_appearance, 0.68f);
 
+    /* The skeleton, muscle controls, and soft tissue are construction data.
+       The visible body is one baked skin; the rigid pieces below are fitted
+       clothing, boots, head identity, hair, armor, and equipment. */
+    bool drew = DrawNpcBodySkin(skin, appearance);
+    if (!drew) return false;
+
     const CcHumanoidSkinBonePose *spine =
         &skin->bones[CC_HUMANOID_SKIN_SPINE];
     Vector3 torso_base = FromLimbVector(spine->head);
@@ -11539,11 +11942,13 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
         skin->bones[CC_HUMANOID_SKIN_CHEST].tail);
     float torso_length = PhysicsLength(
         PhysicsSubtract(torso_top, torso_base));
-    bool drew = DrawNpcDynamicModule(
+    drew = DrawNpcDynamicModule(
         NPC_DYNAMIC_TORSO,
         NpcModuleTransform(torso_base, body_right, body_up, body_forward,
-                           (Vector3){0.54f * mass * appearance->shoulder_scale,
-                                     torso_length, 0.34f * mass}),
+                           (Vector3){(featured_hero ? 0.52f : 0.62f) * mass *
+                                         appearance->shoulder_scale,
+                                     torso_length,
+                                     (featured_hero ? 0.68f : 0.55f) * mass}),
         outer);
 
     const CcHumanoidSkinBonePose *pelvis =
@@ -11557,8 +11962,9 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
                            FromLimbVector(pelvis->right),
                            FromLimbVector(pelvis->up),
                            FromLimbVector(pelvis->forward),
-                           (Vector3){0.43f * mass, pelvis_length,
-                                     0.29f * mass}),
+                           (Vector3){(featured_hero ? 0.53f : 0.55f) * mass,
+                                     pelvis_length,
+                                     (featured_hero ? 0.51f : 0.54f) * mass}),
         trousers) && drew;
 
     static const CcHumanoidSkinBone upper_arms[] = {
@@ -11568,10 +11974,6 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
     static const CcHumanoidSkinBone forearms[] = {
         CC_HUMANOID_SKIN_FOREARM_LEFT,
         CC_HUMANOID_SKIN_FOREARM_RIGHT,
-    };
-    static const CcHumanoidSkinBone hands[] = {
-        CC_HUMANOID_SKIN_HAND_LEFT,
-        CC_HUMANOID_SKIN_HAND_RIGHT,
     };
     static const CcHumanoidSkinBone thighs[] = {
         CC_HUMANOID_SKIN_THIGH_LEFT,
@@ -11585,28 +11987,25 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
         CC_HUMANOID_SKIN_FOOT_LEFT,
         CC_HUMANOID_SKIN_FOOT_RIGHT,
     };
-    float arm_width = (0.135f + muscle * 0.020f) * mass;
-    float leg_width = (0.175f + muscle * 0.025f) * mass;
+    float arm_width = featured_hero ? 0.195f * mass :
+        (0.135f + muscle * 0.020f) * mass;
+    float leg_width = featured_hero ? 0.245f * mass :
+        (0.175f + muscle * 0.025f) * mass;
     for (int32_t side = 0; side < 2; ++side) {
         drew = DrawNpcDynamicBoneModule(
             NPC_DYNAMIC_UPPER_ARM, &skin->bones[upper_arms[side]],
-            arm_width, arm_width * 0.92f, outer) && drew;
+            featured_hero ? 0.180f * mass : arm_width,
+            featured_hero ? 0.205f * mass : arm_width * 0.92f,
+            outer) && drew;
         drew = DrawNpcDynamicBoneModule(
             NPC_DYNAMIC_FOREARM, &skin->bones[forearms[side]],
-            arm_width * 0.86f, arm_width * 0.80f,
+            featured_hero ? 0.180f * mass : arm_width * 0.86f,
+            featured_hero ? 0.200f * mass : arm_width * 0.80f,
             appearance->underlayer) && drew;
-        const CcHumanoidSkinBonePose *hand = &skin->bones[hands[side]];
-        drew = DrawNpcDynamicModule(
-            NPC_DYNAMIC_HAND,
-            NpcModuleTransform(FromLimbVector(hand->head),
-                               FromLimbVector(hand->right),
-                               FromLimbVector(hand->up),
-                               FromLimbVector(hand->forward),
-                               (Vector3){0.135f, 0.165f, 0.125f}),
-            appearance->skin) && drew;
         drew = DrawNpcDynamicBoneModule(
             NPC_DYNAMIC_THIGH, &skin->bones[thighs[side]],
-            leg_width, leg_width * 0.94f, trousers) && drew;
+            leg_width, leg_width * (featured_hero ? 1.00f : 0.94f),
+            trousers) && drew;
         drew = DrawNpcDynamicBoneModule(
             NPC_DYNAMIC_SHIN, &skin->bones[shins[side]],
             leg_width * 0.86f, leg_width * 0.82f,
@@ -11620,8 +12019,11 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
             NpcModuleTransform(foot_head, FromLimbVector(foot->right),
                                FromLimbVector(foot->up),
                                FromLimbVector(foot->forward),
-                               (Vector3){0.23f * mass, foot_length,
-                                         0.20f * mass}),
+                               (Vector3){(featured_hero ? 0.205f : 0.23f) *
+                                             mass,
+                                         foot_length,
+                                         (featured_hero ? 0.18f : 0.20f) *
+                                             mass}),
             appearance->leather) && drew;
     }
 
@@ -11629,18 +12031,28 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
         &skin->bones[CC_HUMANOID_SKIN_HEAD];
     Vector3 head = FromLimbVector(
         skin->sockets[CC_HUMANOID_SOCKET_HEAD].position);
-    Vector3 head_scale = {0.36f * appearance->head_width,
-                          0.40f, 0.33f * appearance->head_depth};
+    Vector3 head_scale = {appearance->head_width, 1.0f,
+                          appearance->head_depth};
     Matrix head_transform = NpcModuleTransform(
         head, FromLimbVector(head_bone->right),
         FromLimbVector(head_bone->up), FromLimbVector(head_bone->forward),
         head_scale);
-    drew = DrawNpcDynamicModule(NPC_DYNAMIC_HEAD, head_transform,
-                                appearance->skin) && drew;
+    Matrix fallback_head_transform = NpcModuleTransform(
+        head, FromLimbVector(head_bone->right),
+        FromLimbVector(head_bone->up), FromLimbVector(head_bone->forward),
+        (Vector3){0.30f * appearance->head_width, 0.34f,
+                  0.28f * appearance->head_depth});
+    drew = DrawNpcHeadFamily(appearance, head_transform,
+                             fallback_head_transform) && drew;
     int32_t hair = (int32_t)appearance->hair_style %
                    CC_NPC_DYNAMIC_HAIR_COUNT;
+    Matrix hair_transform = NpcModuleTransform(
+        head, FromLimbVector(head_bone->right),
+        FromLimbVector(head_bone->up), FromLimbVector(head_bone->forward),
+        (Vector3){0.25f * appearance->head_width, 0.29f,
+                  0.33f * appearance->head_depth});
     drew = DrawNpcDynamicModule(
-        (NpcDynamicModuleId)(NPC_DYNAMIC_HAIR_0 + hair), head_transform,
+        (NpcDynamicModuleId)(NPC_DYNAMIC_HAIR_0 + hair), hair_transform,
         appearance->hair) && drew;
 
     Vector3 back = FromLimbVector(
@@ -11659,7 +12071,10 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
             NPC_DYNAMIC_MANTLE,
             NpcModuleTransform(mantle_root, gear_right, gear_up,
                                gear_forward,
-                               (Vector3){0.62f * mass, 0.64f, 0.50f}),
+                               (Vector3){(featured_hero ? 0.47f : 0.62f) *
+                                             mass,
+                                         featured_hero ? 0.55f : 0.64f,
+                                         featured_hero ? 0.40f : 0.50f}),
             ShadeColor(appearance->outer, 0.68f));
     }
     if ((appearance->equipment & CC_NPC_EQUIPMENT_ARMOR) != 0U) {
@@ -11667,7 +12082,10 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
             NPC_DYNAMIC_CHEST_PLATE,
             NpcModuleTransform(chest_front, body_right, body_up,
                                body_forward,
-                               (Vector3){0.43f * mass, 0.36f, 0.28f}),
+                               (Vector3){(featured_hero ? 0.31f : 0.43f) *
+                                             mass,
+                                         featured_hero ? 0.25f : 0.36f,
+                                         featured_hero ? 0.20f : 0.28f}),
             appearance->metal);
         for (int32_t side = 0; side < 2; ++side) {
             const CcHumanoidSkinBonePose *shoulder =
@@ -11678,8 +12096,11 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
                                    FromLimbVector(shoulder->right),
                                    FromLimbVector(shoulder->up),
                                    FromLimbVector(shoulder->forward),
-                                   (Vector3){0.22f * mass, 0.20f,
-                                             0.21f * mass}),
+                                   (Vector3){(featured_hero ? 0.14f : 0.22f) *
+                                                 mass,
+                                             featured_hero ? 0.15f : 0.20f,
+                                             (featured_hero ? 0.14f : 0.21f) *
+                                                 mass}),
                 appearance->metal);
         }
     }
@@ -11779,8 +12200,14 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
             appearance->headwear_style);
         Color headwear_color = appearance->headwear_style == 0U ?
             appearance->metal : appearance->outer;
+        Matrix headwear_transform = NpcModuleTransform(
+            head, FromLimbVector(head_bone->right),
+            FromLimbVector(head_bone->up),
+            FromLimbVector(head_bone->forward),
+            (Vector3){0.26f * appearance->head_width, 0.30f,
+                      0.25f * appearance->head_depth});
         (void)DrawNpcDynamicModule(
-            headwear, head_transform, headwear_color);
+            headwear, headwear_transform, headwear_color);
     }
 
     CcNpcPortraitExpression expression =
@@ -11795,13 +12222,46 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
         expression = CC_NPC_PORTRAIT_FOCUSED;
     }
     CcFaceRecipe face = CcNpcFaceRecipe(appearance);
+    float face_half_width = featured_hero ?
+        0.122f * appearance->head_width :
+        0.105f * appearance->head_width;
+    float face_half_height = featured_hero ? 0.130f : 0.158f;
+    float face_half_depth = featured_hero ?
+        0.128f * appearance->head_depth :
+        0.125f * appearance->head_depth;
     DrawWorldFace(PhysicsAdd(head, Vector3Scale(body_up, 0.025f)),
                   FromLimbVector(head_bone->right),
                   FromLimbVector(head_bone->up),
                   FromLimbVector(head_bone->forward),
-                  0.18f * appearance->head_width, 0.20f,
-                  0.165f * appearance->head_depth, &face, expression);
+                  face_half_width, face_half_height, face_half_depth,
+                  &face, expression);
     return drew;
+}
+
+static CcNpcAppearance ProceduralHeroAppearance(const CcLocalAgent *agent)
+{
+    CcNpcAppearance appearance = agent->appearance;
+    appearance.role = CC_NPC_ROLE_WAYFARER;
+    appearance.equipment = (uint32_t)CC_NPC_EQUIPMENT_ARMOR;
+    appearance.body_mass = 0.94f;
+    appearance.muscularity = 0.58f;
+    appearance.shoulder_scale = 0.92f;
+    appearance.head_width = 0.985f;
+    appearance.head_depth = 0.99f;
+    appearance.age = 0.38f;
+    appearance.hair_style = 3U;
+    appearance.garment_style = 0;
+    /* Cool the source skin slightly so the warm interior light still lands on
+       the shared skin ramp. Hair stays dark and leaves oxblood to the mantle. */
+    appearance.skin = (Color){172, 108, 105, 255};
+    appearance.hair = (Color){43, 32, 29, 255};
+    appearance.underlayer = (Color){108, 91, 69, 255};
+    appearance.outer = (Color){48, 105, 103, 255};
+    appearance.trousers = (Color){49, 62, 63, 255};
+    appearance.leather = (Color){82, 50, 35, 255};
+    appearance.metal = (Color){139, 55, 62, 255};
+    appearance.accent = WORLD_GOLD;
+    return appearance;
 }
 
 static void DrawGroundBrushStroke(Vector3 center, Vector3 along,
@@ -11827,6 +12287,21 @@ static void DrawBiomechanicalBiped(const CcLocalAgent *agent)
             (Vector3){sinf(agent->facing_yaw), 0.0f,
                       cosf(agent->facing_yaw)},
             0.72f, 0.085f, Fade(WORLD_TEAL, 0.82f));
+    }
+    CcNpcAppearance procedural_hero = ProceduralHeroAppearance(agent);
+    if (modular_hero && screen_first_hero_active) {
+        UseCharacterLighting();
+        bool procedural_hero_updated = DrawDynamicNpcModules(
+            agent, &skin, &procedural_hero);
+        if (procedural_hero_updated) {
+            DrawWayfarerHeroDetails(&skin);
+            DrawWayfarerCrown(&skin);
+        }
+        RestoreWorldLighting();
+        if (procedural_hero_updated) {
+            CcLocalRendererRecordBiped(false);
+            return;
+        }
     }
     bool hero_skin_updated = modular_hero &&
         DrawHeroSkin(&skin, &agent->render_cape, WHITE, true);
@@ -11879,27 +12354,8 @@ static void DrawBiomechanicalBiped(const CcLocalAgent *agent)
     Vector3 cape_center = PhysicsAdd(
         FromLimbVector(skin.sockets[CC_HUMANOID_SOCKET_BACK].position),
         PhysicsScale(body_up, -0.24f));
-    CcNpcAppearance gameplay_appearance = agent->appearance;
-    if (agent->crowned) {
-        gameplay_appearance.role = CC_NPC_ROLE_WAYFARER;
-        gameplay_appearance.equipment |=
-            (uint32_t)(CC_NPC_EQUIPMENT_MANTLE |
-                       CC_NPC_EQUIPMENT_ARMOR |
-                       CC_NPC_EQUIPMENT_SATCHEL);
-        gameplay_appearance.body_mass = 0.92f;
-        gameplay_appearance.shoulder_scale = 1.02f;
-        gameplay_appearance.head_width = 1.04f;
-        gameplay_appearance.head_depth = 1.02f;
-        gameplay_appearance.garment_style = 1;
-        gameplay_appearance.skin = (Color){174, 126, 88, 255};
-        gameplay_appearance.hair = (Color){45, 32, 29, 255};
-        gameplay_appearance.underlayer = (Color){108, 91, 69, 255};
-        gameplay_appearance.outer = (Color){48, 105, 103, 255};
-        gameplay_appearance.trousers = (Color){49, 62, 63, 255};
-        gameplay_appearance.leather = (Color){82, 50, 35, 255};
-        gameplay_appearance.metal = (Color){119, 48, 55, 255};
-        gameplay_appearance.accent = WORLD_GOLD;
-    }
+    CcNpcAppearance gameplay_appearance = agent->crowned ?
+        procedural_hero : agent->appearance;
     const CcNpcAppearance *appearance = &gameplay_appearance;
     float movement_weight = SmoothStep01(fabsf(gait->speed.value) / 0.90f);
     float movement_wave = sinf(gait->phase * 2.0f * PI);
@@ -13504,6 +13960,26 @@ static void BeginWorldLighting(Camera3D camera,
                        visual_style.npc_fog_far_location,
                        &profile->fog_far,
                        SHADER_UNIFORM_FLOAT);
+    }
+    if (visual_style.npc_skinned_ready) {
+        SetShaderValue(visual_style.npc_skinned,
+                       visual_style.npc_skinned_light_direction_location,
+                       direction, SHADER_UNIFORM_VEC3);
+        SetShaderValue(visual_style.npc_skinned,
+                       visual_style.npc_skinned_camera_position_location,
+                       camera_position, SHADER_UNIFORM_VEC3);
+        SetShaderValue(visual_style.npc_skinned,
+                       visual_style.npc_skinned_shadow_color_location,
+                       shadow_color, SHADER_UNIFORM_VEC3);
+        SetShaderValue(visual_style.npc_skinned,
+                       visual_style.npc_skinned_fog_color_location,
+                       fog_color, SHADER_UNIFORM_VEC3);
+        SetShaderValue(visual_style.npc_skinned,
+                       visual_style.npc_skinned_fog_near_location,
+                       &profile->fog_near, SHADER_UNIFORM_FLOAT);
+        SetShaderValue(visual_style.npc_skinned,
+                       visual_style.npc_skinned_fog_far_location,
+                       &profile->fog_far, SHADER_UNIFORM_FLOAT);
     }
     BeginShaderMode(visual_style.world);
 }

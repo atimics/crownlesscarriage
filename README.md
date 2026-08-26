@@ -169,11 +169,11 @@ review: the authored carriage and market, action-figure hero, role-shaped
 population, simulation dressing, shared palette, and final color treatment are
 framed together under deterministic world conditions.
 
-Use `--capture-face <front|three-quarter|profile|distant> <frame.png>` for the
-deterministic face review. The first three views use the close market-interior
-camera; `distant` checks that small heads fall back to silhouette instead of a
-floating facial mark. `--capture-road <frame.png>` waits for the combat camera
-to settle and completes the five-shot face review.
+Use `--capture-face <front|three-quarter|profile|back|distant> <frame.png>` for
+the deterministic head review. The first four views use the close
+market-interior camera; `distant` checks that small heads fall back to
+silhouette instead of a floating facial mark. `--capture-road <frame.png>`
+waits for the combat camera to settle and completes the review.
 
 Use `--capture-room <x> <z> <frame.png>` to review any fixed-camera exterior
 room from a deterministic hero position. This is intended for checking route

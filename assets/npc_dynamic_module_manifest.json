@@ -1,5 +1,5 @@
 {
-  "library_version": "0.2.0",
+  "library_version": "0.4.1",
   "generation": "offline procedural rigid character modules",
   "runtime_strategy": "bone-frame instancing without skins or animations",
   "coordinate_system": "glTF +Y up, +Z forward",
@@ -72,7 +72,7 @@
       "id": "npc_module_mantle_v01",
       "slot": "mantle",
       "anchor": "back_socket",
-      "material": "outer_shadow",
+      "material": "trousers",
       "export": "assets/exports/npc/npc_module_mantle_v01.glb"
     },
     {

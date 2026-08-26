@@ -3,6 +3,7 @@
 	blender-hero-actions blender-hero-engine blender-hero-procedural-preview \
 	blender-hero-procedural-check blender-hero-paint-channels \
 	blender-npc-assets blender-npc-assets-check \
+	blender-world-kit blender-world-kit-check \
 	blender-character-experiments blender-character-animations blender-character-animations-check \
 	blender-character-hair-v08 \
 	blender-painted-market-pilot \
@@ -97,6 +98,8 @@ blender-character-engine:
 blender-character-hair-v08: blender-character-engine
 	$(BLENDER) --background --python-exit-code 1 assets/blender/crownless_hero_actions.blend --python tools/blender/render_screen_first_hair_v08.py
 	python3 tools/blender/compose_screen_first_hair_v08.py
+	$(BLENDER) --background --python-exit-code 1 assets/blender/crownless_hero_actions.blend --python tools/blender/render_screen_first_character_sheet_v08.py
+	python3 tools/blender/compose_screen_first_character_sheet_v08.py
 
 blender-npc-assets:
 	$(BLENDER) --background --python-exit-code 1 --factory-startup --python tools/blender/build_npc_archetype_library.py
@@ -106,6 +109,12 @@ blender-npc-assets-check:
 	python3 tools/blender/validate_npc_archetype_library.py
 	python3 tools/blender/validate_npc_dynamic_modules.py
 
-art-check: test-play blender-character-animations-check blender-npc-assets-check
+blender-world-kit:
+	$(BLENDER) --background --python-exit-code 1 --factory-startup --python tools/blender/build_world_kit.py
+
+blender-world-kit-check:
+	python3 tools/blender/validate_world_kit.py
+
+art-check: test-play blender-character-animations-check blender-npc-assets-check blender-world-kit-check
 	python3 tools/blender/validate_character_paint_channels.py
 	python3 tools/art/run_art_check.py

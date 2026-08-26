@@ -90,11 +90,9 @@ def build_materials() -> dict[str, bpy.types.Material]:
         # the nearby gold ramp after that full engine treatment.
         "skin": (126, 78, 75),
         "skin_light": (172, 108, 105),
-        "hair": (43, 32, 29),
-        # The interior hero light pushes low brown planes toward the violet
-        # ramp. These warmer sources land on the two brown palette steps.
-        "hair_mid": (142, 102, 38),
-        "hair_highlight": (190, 142, 53),
+        "hair": (24, 15, 14),
+        "hair_mid": (42, 24, 18),
+        "hair_highlight": (78, 42, 26),
         "eye": (15, 16, 18),
         "oxblood": (94, 44, 53),
         "oxblood_dark": (66, 36, 43),
@@ -114,6 +112,17 @@ def build_materials() -> dict[str, bpy.types.Material]:
         material = bpy.data.materials.get(f"MAT_screen_first_{name}")
         if material is None:
             material = character.make_material(f"screen_first_{name}", color)
+        else:
+            # The action source may already contain an older material with the
+            # same name.  Always refresh it so preview and engine exports use
+            # the palette authored above.
+            material.diffuse_color = color
+            material.use_nodes = True
+            principled = material.node_tree.nodes.get("Principled BSDF")
+            if principled is not None:
+                principled.inputs["Base Color"].default_value = color
+                principled.inputs["Roughness"].default_value = 0.94
+                principled.inputs["Specular IOR Level"].default_value = 0.12
         materials[name] = material
     return materials
 
@@ -159,9 +168,9 @@ def build_body(materials: dict[str, bpy.types.Material]) -> None:
     add_segmented_tunic(materials)
     character.add_prism(
         f"{PREFIX}ScarfShoulderWrap",
-        ((-0.44, 1.54), (-0.39, 1.69), (-0.19, 1.80), (0.0, 1.75),
-         (0.19, 1.80), (0.39, 1.69), (0.44, 1.54), (0.29, 1.43),
-         (0.0, 1.40), (-0.29, 1.43)),
+        ((-0.385, 1.55), (-0.35, 1.66), (-0.17, 1.745), (0.0, 1.71),
+         (0.17, 1.745), (0.35, 1.66), (0.385, 1.55), (0.27, 1.455),
+         (0.0, 1.43), (-0.27, 1.455)),
         0.0, 0.01, 0.50, materials["oxblood"],
     )
     character.add_prism(
@@ -280,10 +289,10 @@ def add_hair_clump(
 def add_scalp_core(material: bpy.types.Material) -> bpy.types.Object:
     """Make a small core that is covered by the six clump roots."""
     bpy.ops.mesh.primitive_ico_sphere_add(
-        subdivisions=1, radius=1.0, location=(0.0, 0.015, 2.105))
+        subdivisions=2, radius=1.0, location=(0.0, 0.080, 2.110))
     obj = bpy.context.object
     obj.name = f"{PREFIX}HairScalpCore"
-    obj.dimensions = (0.30, 0.27, 0.15)
+    obj.dimensions = (0.26, 0.24, 0.18)
     bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
     obj.data.materials.append(material)
     obj["cc_hair_form"] = "hidden_scalp_core"
@@ -293,10 +302,10 @@ def add_scalp_core(material: bpy.types.Material) -> bpy.types.Object:
 def add_hair_highlight(material: bpy.types.Material) -> bpy.types.Object:
     """Add one small opaque highlight on the long lock, away from its edge."""
     vertices = (
-        (-0.268, -0.158, 2.095),
-        (-0.225, -0.166, 2.125),
-        (-0.232, -0.178, 2.015),
-        (-0.258, -0.171, 1.985),
+        (-0.224, -0.132, 2.090),
+        (-0.190, -0.138, 2.115),
+        (-0.202, -0.151, 2.045),
+        (-0.222, -0.145, 2.025),
     )
     mesh = bpy.data.meshes.new(f"MESH_{PREFIX}HairHighlightPlane")
     mesh.from_pydata(vertices, [], ((0, 1, 2, 3),))
@@ -308,60 +317,55 @@ def add_hair_highlight(material: bpy.types.Material) -> bpy.types.Object:
     return obj
 
 
-def add_faceted_head(material: bpy.types.Material) -> bpy.types.Object:
-    """Build a rounded low-poly skull with a narrower jaw and chin."""
-    # Each ring is (z, half width, front depth, rear depth).  The uneven
-    # front/rear depths keep the face readable while rounding the back of the
-    # skull.  Eight sides are enough to survive the 60-pixel engine view
-    # without returning to a square box silhouette.
-    rings = (
-        (1.735, 0.065, 0.105, 0.105),
-        (1.790, 0.135, 0.155, 0.145),
-        (1.900, 0.190, 0.205, 0.195),
-        (2.025, 0.205, 0.210, 0.205),
-        (2.115, 0.165, 0.180, 0.190),
-        (2.150, 0.085, 0.115, 0.130),
+def add_faceted_head(skin_material: bpy.types.Material) -> bpy.types.Object:
+    """Build a clean anime face plane with a rounded rear skull."""
+    # The front is one broad plane, so toon lighting cannot break the face
+    # into mask-like wedges.  The middle and smaller rear profiles round the
+    # skull in depth while the x/z outline keeps a soft jaw and chin.
+    profile = (
+        (-0.095, 2.150), (-0.165, 2.115), (-0.195, 2.045),
+        (-0.198, 1.940), (-0.170, 1.840), (-0.115, 1.780),
+        (-0.065, 1.755), (0.065, 1.755), (0.115, 1.780),
+        (0.170, 1.840),
+        (0.198, 1.940), (0.195, 2.045), (0.165, 2.115),
+        (0.095, 2.150),
     )
-    # Start at the front, then travel clockwise around the head.  These are
-    # an octagon's x/y factors, written out to keep this mesh deterministic.
-    ring_factors = (
-        (0.0, -1.0), (0.7071, -0.7071), (1.0, 0.0),
-        (0.7071, 0.7071), (0.0, 1.0), (-0.7071, 0.7071),
-        (-1.0, 0.0), (-0.7071, -0.7071),
+    center_z = 1.950
+    layers = (
+        (-0.215, 1.00, 1.00),
+        (0.055, 1.03, 1.02),
+        (0.180, 0.88, 0.94),
     )
-    center_y = -0.005
     vertices: list[tuple[float, float, float]] = []
-    for z, half_width, front_depth, rear_depth in rings:
-        for x_factor, y_factor in ring_factors:
-            depth = front_depth if y_factor < 0.0 else rear_depth
-            vertices.append((
-                x_factor * half_width,
-                center_y + y_factor * depth,
-                z,
-            ))
+    for y, width_scale, height_scale in layers:
+        vertices.extend((
+            x * width_scale,
+            y,
+            center_z + (z - center_z) * height_scale,
+        ) for x, z in profile)
 
-    sides = len(ring_factors)
-    faces: list[tuple[int, ...]] = [tuple(reversed(range(sides)))]
-    for ring in range(len(rings) - 1):
-        first = ring * sides
-        following = (ring + 1) * sides
-        for side in range(sides):
-            next_side = (side + 1) % sides
+    count = len(profile)
+    faces: list[tuple[int, ...]] = [tuple(reversed(range(count)))]
+    for layer in range(len(layers) - 1):
+        first = layer * count
+        following = (layer + 1) * count
+        for side in range(count):
+            next_side = (side + 1) % count
             faces.append((
                 first + side,
                 first + next_side,
                 following + next_side,
                 following + side,
             ))
-    top = (len(rings) - 1) * sides
-    faces.append(tuple(top + side for side in range(sides)))
+    back = (len(layers) - 1) * count
+    faces.append(tuple(back + side for side in range(count)))
 
     mesh = bpy.data.meshes.new(f"MESH_{PREFIX}Head")
     mesh.from_pydata(vertices, [], faces)
     mesh.update()
     obj = bpy.data.objects.new(f"{PREFIX}Head", mesh)
     bpy.context.scene.collection.objects.link(obj)
-    obj.data.materials.append(material)
+    obj.data.materials.append(skin_material)
     obj["cc_head_form"] = "faceted_oval_tapered_jaw"
     return obj
 
@@ -371,55 +375,55 @@ def build_hair(materials: dict[str, bpy.types.Material]) -> None:
     add_scalp_core(materials["hair"])
     add_hair_clump(
         f"{PREFIX}HairBang_L",
-        ((-0.085, -0.165, 2.205), (-0.15, -0.225, 2.105),
-         (-0.115, -0.248, 2.015), (-0.045, -0.252, 1.94)),
-        (0.155, 0.16, 0.105, 0.025),
-        (0.115, 0.115, 0.075, 0.018),
+        ((-0.070, -0.080, 2.210), (-0.060, -0.180, 2.160),
+         (-0.040, -0.238, 2.075), (0.020, -0.248, 1.990)),
+        (0.220, 0.215, 0.175, 0.016),
+        (0.140, 0.120, 0.080, 0.014),
         materials["hair"],
     )
     add_hair_clump(
         f"{PREFIX}HairBang_R",
-        ((0.055, -0.170, 2.185), (0.135, -0.218, 2.12),
-         (0.12, -0.242, 2.055), (0.075, -0.248, 1.995)),
-        (0.145, 0.145, 0.085, 0.022),
-        (0.110, 0.105, 0.060, 0.016),
+        ((0.070, -0.075, 2.200), (0.090, -0.180, 2.145),
+         (0.090, -0.238, 2.070), (0.070, -0.248, 2.005)),
+        (0.210, 0.200, 0.155, 0.016),
+        (0.135, 0.115, 0.075, 0.014),
         materials["hair_mid"],
     )
     add_hair_clump(
         f"{PREFIX}HairLongLock",
-        ((-0.135, -0.030, 2.175), (-0.225, -0.095, 2.105),
-         (-0.265, -0.12, 2.00), (-0.265, -0.085, 1.865),
-         (-0.215, -0.035, 1.75)),
-        (0.165, 0.175, 0.145, 0.090, 0.022),
-        (0.165, 0.16, 0.135, 0.085, 0.020),
+        ((-0.145, -0.010, 2.185), (-0.205, -0.065, 2.115),
+         (-0.235, -0.090, 2.020), (-0.235, -0.060, 1.915),
+         (-0.185, -0.005, 1.815)),
+        (0.190, 0.175, 0.130, 0.075, 0.015),
+        (0.165, 0.145, 0.105, 0.065, 0.014),
         materials["hair"],
         "hair.long",
     )
     add_hair_clump(
         f"{PREFIX}HairShortLock",
-        ((0.125, -0.015, 2.160), (0.205, -0.075, 2.11),
-         (0.245, -0.10, 2.025), (0.215, -0.055, 1.925)),
-        (0.145, 0.150, 0.100, 0.022),
-        (0.150, 0.140, 0.085, 0.018),
+        ((0.145, -0.005, 2.180), (0.200, -0.055, 2.115),
+         (0.225, -0.080, 2.035), (0.190, -0.035, 1.955)),
+        (0.180, 0.160, 0.095, 0.014),
+        (0.155, 0.135, 0.075, 0.012),
         materials["hair_mid"],
     )
     add_hair_clump(
         f"{PREFIX}HairRearWedge_L",
-        ((-0.060, 0.055, 2.175), (-0.130, 0.115, 2.125),
-         (-0.185, 0.165, 2.045), (-0.205, 0.180, 1.945),
-         (-0.135, 0.150, 1.835)),
-        (0.120, 0.155, 0.125, 0.075, 0.014),
-        (0.135, 0.145, 0.115, 0.070, 0.014),
+        ((-0.055, 0.205, 2.165), (-0.100, 0.220, 2.085),
+         (-0.130, 0.230, 1.995), (-0.090, 0.230, 1.900),
+         (-0.045, 0.215, 1.810)),
+        (0.220, 0.250, 0.240, 0.180, 0.012),
+        (0.080, 0.075, 0.060, 0.040, 0.014),
         materials["hair"],
         "hair.rear",
     )
     add_hair_clump(
         f"{PREFIX}HairRearWedge_R",
-        ((0.060, 0.060, 2.160), (0.130, 0.120, 2.115),
-         (0.180, 0.170, 2.050), (0.195, 0.180, 1.970),
-         (0.145, 0.155, 1.890)),
-        (0.115, 0.150, 0.120, 0.070, 0.014),
-        (0.130, 0.140, 0.110, 0.065, 0.014),
+        ((0.055, 0.207, 2.160), (0.100, 0.222, 2.085),
+         (0.130, 0.232, 2.000), (0.090, 0.232, 1.910),
+         (0.045, 0.218, 1.825)),
+        (0.215, 0.245, 0.235, 0.175, 0.012),
+        (0.078, 0.072, 0.058, 0.038, 0.014),
         materials["hair_mid"],
         "hair.rear",
     )
@@ -435,6 +439,11 @@ def build_head(materials: dict[str, bpy.types.Material]) -> None:
             (side * 0.075, -0.222, 1.95),
             (0.035, 0.016, 0.052), materials["eye"], 0.006,
         )
+        character.add_box(
+            f"{PREFIX}Brow_{'L' if side < 0.0 else 'R'}",
+            (side * 0.075, -0.224, 1.995),
+            (0.058, 0.012, 0.012), materials["hair"],
+        )
     character.add_box(
         f"{PREFIX}Mouth", (0.0, -0.223, 1.855),
         (0.060, 0.014, 0.020), materials["skin"],
@@ -443,18 +452,18 @@ def build_head(materials: dict[str, bpy.types.Material]) -> None:
         f"{PREFIX}HeadEar_R", (0.203, -0.002, 1.955),
         (0.045, 0.145, 0.090), materials["skin"], 0.014,
     )
-    crown_x = 0.085
+    crown_x = 0.060
     character.add_box(
-        f"{PREFIX}CrownBand", (crown_x, 0.02, 2.205),
-        (0.18, 0.13, 0.035), materials["gold"],
+        f"{PREFIX}CrownBand", (crown_x, 0.035, 2.215),
+        (0.130, 0.090, 0.025), materials["gold"],
     )
     for index, (offset, height) in enumerate(
-        ((-0.058, 0.070), (0.0, 0.100), (0.058, 0.065))
+        ((-0.040, 0.050), (0.0, 0.075), (0.040, 0.045))
     ):
         character.add_box(
             f"{PREFIX}CrownProng_{index}",
-            (crown_x + offset, 0.02, 2.222 + height * 0.5),
-            (0.025, 0.13, height), materials["gold"],
+            (crown_x + offset, 0.035, 2.228 + height * 0.5),
+            (0.016, 0.090, height), materials["gold"],
         )
 
 
@@ -463,7 +472,8 @@ def bone_for_object(name: str) -> str:
         return "hair.long"
     if "HairRearWedge" in name:
         return "hair.rear"
-    if any(token in name for token in ("Head", "Hair", "Eye", "Mouth", "Crown")):
+    if any(token in name for token in
+           ("Head", "Hair", "Eye", "Brow", "Mouth", "Crown")):
         return "head"
     if "Scarf" in name:
         return "chest"
