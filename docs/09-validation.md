@@ -31,6 +31,14 @@ mutations.
 Map identity, ownership, survey claims, legality, price, and carriage map-case
 capacity must also survive an exact state-hash round trip.
 
+Journal recovery tests keep a checkpoint behind the committed head and require
+suffix replay to reconstruct the uninterrupted hash, including batched
+real-time travel ticks. Checkpoint cursors must match their committed row,
+ordinals must be contiguous, SQL update/delete attempts must be rejected, and
+a privileged hash-chain modification must make loading fail rather than accept
+divergent state. Schema-3 and schema-4 snapshots must verify their historical
+hashes before migration to the current schema.
+
 ### 3. Referential integrity
 
 No active route, shipment, situation, character memory, or causal event may

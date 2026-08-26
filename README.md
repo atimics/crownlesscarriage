@@ -111,7 +111,10 @@ Controls:
   withdraw while the need remains. Only accepted work earns its sponsor's
   reward, and only a promise the company actually made can damage reputation
   when its deadline is missed. `Tab` opens the causal event ledger.
-- `F5` saves and `F9` loads SQLite (`Cmd/Ctrl+S` also saves).
+- `F5` starts or checkpoints the durable SQLite action journal and `F9`
+  restores its last snapshot plus every verified operation committed after it
+  (`Cmd/Ctrl+S` also checkpoints). Once started, commands and real-time travel
+  ticks are journaled automatically.
 - `N` generates the same crisis with a new deterministic seed.
 
 Run the simulation without graphics or execute the verification suite with:
@@ -355,7 +358,8 @@ The current executable proves:
   tradeable, persistent objects with one depicted route, provenance, age,
   accuracy, legality, recorded conditions, and no omniscient world view
 - A bounded causal event ledger explaining what changed and why
-- Normalized, transactional SQLite persistence with exact state-hash round trips
+- A WAL-backed, append-only SQLite action journal with disposable checkpoints,
+  hash-chain replay, and exact state-hash recovery
 - Deterministic, persistence, and crisis-scenario automated tests
 
 ## Design status

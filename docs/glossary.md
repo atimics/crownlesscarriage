@@ -1,5 +1,11 @@
 # Glossary
 
+## Action journal
+
+The append-only, versioned sequence of validated simulation inputs used to
+recover authoritative state after a checkpoint. Each committed row records its
+ordinal and the state hash before and after deterministic application.
+
 ## Authoritative state
 
 Data owned by the strategic simulation and persisted in saves. Rendered objects
@@ -49,6 +55,12 @@ agreement accepted by the carriage company. Context should distinguish them.
 
 A later, player-facing consequence of an earlier decision, delivered through a
 changed place, recurring character, letter, passenger, route, or situation.
+
+## Durable checkpoint
+
+A normalized SQLite snapshot paired with the exact action-journal generation
+and ordinal it represents. It accelerates loading but does not replace the
+committed journal suffix as the source of truth.
 
 ## Dungeon state
 

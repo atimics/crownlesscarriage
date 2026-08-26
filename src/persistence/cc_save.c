@@ -3,10 +3,28 @@
 #include <sqlite3.h>
 
 #include <inttypes.h>
+#include <limits.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define CC_SQLITE_APPLICATION_ID 1128481362
+#define CC_JOURNAL_RECORD_VERSION 1
+#define CC_JOURNAL_RUNTIME_FLUSH_TICKS 6
+
+typedef enum CcJournalOperationKind {
+    CC_JOURNAL_OPERATION_COMMAND = 1,
+    CC_JOURNAL_OPERATION_ADVANCE_DAYS = 2,
+    CC_JOURNAL_OPERATION_ADVANCE_RUNTIME_TICKS = 3
+} CcJournalOperationKind;
+
+struct CcJournal {
+    sqlite3 *database;
+    uint64_t generation;
+    uint64_t last_ordinal;
+    int32_t pending_runtime_ticks;
+    CcSim pending_runtime_base;
+};
 
 static bool Prepare(sqlite3 *database, const char *sql,
                     sqlite3_stmt **statement,
@@ -23,6 +41,16 @@ static void SetSqlError(char *error, size_t capacity, sqlite3 *database,
     if (error == NULL || capacity == 0U) return;
     (void)snprintf(error, capacity, "%s: %s", context,
                    database != NULL ? sqlite3_errmsg(database) : "SQLite error");
+}
+
+static bool ParseStoredHash(const unsigned char *text, uint64_t *hash)
+{
+    if (text == NULL || hash == NULL) return false;
+    const char *value = (const char *)text;
+    int consumed = 0;
+    return strlen(value) == 16U &&
+           sscanf(value, "%16" SCNx64 "%n", hash, &consumed) == 1 &&
+           consumed == 16;
 }
 
 static bool Execute(sqlite3 *database, const char *sql,
@@ -169,8 +197,9 @@ static bool OpenDatabase(const char *path, sqlite3 **database,
     }
     if (!Execute(*database,
         "PRAGMA foreign_keys=ON;"
-        "PRAGMA journal_mode=DELETE;"
+        "PRAGMA journal_mode=WAL;"
         "PRAGMA synchronous=FULL;"
+        "PRAGMA wal_autocheckpoint=1000;"
         "PRAGMA application_id=1128481362;"
         "PRAGMA user_version=5;",
         error, error_capacity)) {
@@ -178,6 +207,54 @@ static bool OpenDatabase(const char *path, sqlite3 **database,
         *database = NULL;
         return false;
     }
+    return true;
+}
+
+static bool MetaColumnExists(sqlite3 *database, const char *column,
+                             bool *exists,
+                             char *error, size_t error_capacity)
+{
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database, "PRAGMA table_info(meta);", &statement,
+                 error, error_capacity)) return false;
+    *exists = false;
+    int result = SQLITE_ROW;
+    while ((result = sqlite3_step(statement)) == SQLITE_ROW) {
+        const unsigned char *name = sqlite3_column_text(statement, 1);
+        if (name != NULL && strcmp((const char *)name, column) == 0) {
+            *exists = true;
+            break;
+        }
+    }
+    if (result != SQLITE_ROW && result != SQLITE_DONE) {
+        SetSqlError(error, error_capacity, database,
+                    "Could not inspect campaign metadata");
+        sqlite3_finalize(statement);
+        return false;
+    }
+    sqlite3_finalize(statement);
+    return true;
+}
+
+static bool EnsureJournalMetaColumns(sqlite3 *database,
+                                     char *error, size_t error_capacity)
+{
+    bool generation_exists = false;
+    bool cursor_exists = false;
+    if (!MetaColumnExists(database, "journal_generation", &generation_exists,
+                          error, error_capacity) ||
+        !MetaColumnExists(database, "journal_cursor", &cursor_exists,
+                          error, error_capacity)) return false;
+    if (!generation_exists &&
+        !Execute(database,
+                 "ALTER TABLE meta ADD COLUMN journal_generation "
+                 "INTEGER NOT NULL DEFAULT 0;",
+                 error, error_capacity)) return false;
+    if (!cursor_exists &&
+        !Execute(database,
+                 "ALTER TABLE meta ADD COLUMN journal_cursor "
+                 "INTEGER NOT NULL DEFAULT 0;",
+                 error, error_capacity)) return false;
     return true;
 }
 
@@ -193,7 +270,9 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " faction_count INTEGER NOT NULL, shipment_count INTEGER NOT NULL,"
         " bandit_count INTEGER NOT NULL, monster_count INTEGER NOT NULL,"
         " dungeon_count INTEGER NOT NULL, event_count INTEGER NOT NULL,"
-        " event_write_index INTEGER NOT NULL, state_hash TEXT NOT NULL);"
+        " event_write_index INTEGER NOT NULL, state_hash TEXT NOT NULL,"
+        " journal_generation INTEGER NOT NULL DEFAULT 0,"
+        " journal_cursor INTEGER NOT NULL DEFAULT 0);"
         "CREATE TABLE IF NOT EXISTS kingdom ("
         " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL UNIQUE, name TEXT NOT NULL,"
         " color_r INTEGER NOT NULL, color_g INTEGER NOT NULL, color_b INTEGER NOT NULL,"
@@ -294,19 +373,58 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " situation_id INTEGER NOT NULL, settlement_id INTEGER NOT NULL,"
         " parent_event_id INTEGER NOT NULL, outcome INTEGER NOT NULL,"
         " due_day INTEGER NOT NULL, character_name TEXT NOT NULL);";
+    const char *journal_schema =
+        "CREATE TABLE IF NOT EXISTS journal_epoch ("
+        " generation INTEGER PRIMARY KEY AUTOINCREMENT,"
+        " record_version INTEGER NOT NULL, world_seed INTEGER NOT NULL,"
+        " initial_state_hash TEXT NOT NULL, created_tick INTEGER NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS action_journal ("
+        " sequence INTEGER PRIMARY KEY AUTOINCREMENT,"
+        " generation INTEGER NOT NULL, ordinal INTEGER NOT NULL,"
+        " record_version INTEGER NOT NULL, operation_kind INTEGER NOT NULL,"
+        " command_kind INTEGER NOT NULL, target_id INTEGER NOT NULL,"
+        " good INTEGER NOT NULL, amount INTEGER NOT NULL,"
+        " dungeon_state INTEGER NOT NULL, step_count INTEGER NOT NULL,"
+        " sim_schema_version INTEGER NOT NULL, generator_version INTEGER NOT NULL,"
+        " pre_state_hash TEXT NOT NULL, post_state_hash TEXT NOT NULL,"
+        " committed_tick INTEGER NOT NULL,"
+        " UNIQUE(generation, ordinal),"
+        " FOREIGN KEY(generation) REFERENCES journal_epoch(generation));"
+        "CREATE INDEX IF NOT EXISTS action_journal_generation_ordinal "
+        "ON action_journal(generation, ordinal);"
+        "CREATE TRIGGER IF NOT EXISTS action_journal_no_update "
+        "BEFORE UPDATE ON action_journal BEGIN "
+        "SELECT RAISE(ABORT, 'action journal is append-only'); END;"
+        "CREATE TRIGGER IF NOT EXISTS action_journal_no_delete "
+        "BEFORE DELETE ON action_journal BEGIN "
+        "SELECT RAISE(ABORT, 'action journal is append-only'); END;"
+        "CREATE TRIGGER IF NOT EXISTS journal_epoch_no_update "
+        "BEFORE UPDATE ON journal_epoch BEGIN "
+        "SELECT RAISE(ABORT, 'journal epoch is append-only'); END;"
+        "CREATE TRIGGER IF NOT EXISTS journal_epoch_no_delete "
+        "BEFORE DELETE ON journal_epoch BEGIN "
+        "SELECT RAISE(ABORT, 'journal epoch is append-only'); END;";
     return Execute(database, schema, error, error_capacity) &&
            Execute(database, realm_schema, error, error_capacity) &&
            Execute(database, situation_schema, error, error_capacity) &&
            Execute(database, map_schema, error, error_capacity) &&
-           Execute(database, commitment_schema, error, error_capacity);
+           Execute(database, commitment_schema, error, error_capacity) &&
+           Execute(database, journal_schema, error, error_capacity) &&
+           EnsureJournalMetaColumns(database, error, error_capacity);
 }
 
 static bool SaveMeta(sqlite3 *database, const CcSim *sim,
+                     uint64_t journal_generation, uint64_t journal_cursor,
                      char *error, size_t error_capacity)
 {
     sqlite3_stmt *statement = NULL;
     const char *sql =
-        "INSERT INTO meta VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);";
+        "INSERT INTO meta (id,schema_version,generator_version,world_seed,"
+        "random_state,current_day,next_entity_serial,kingdom_count,"
+        "settlement_count,route_count,faction_count,shipment_count,"
+        "bandit_count,monster_count,dungeon_count,event_count,"
+        "event_write_index,state_hash,journal_generation,journal_cursor) "
+        "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);";
     if (!Prepare(database, sql, &statement, error, error_capacity)) return false;
     char hash[24];
     (void)snprintf(hash, sizeof(hash), "%016" PRIx64, CcSimHash(sim));
@@ -327,6 +445,8 @@ static bool SaveMeta(sqlite3 *database, const CcSim *sim,
     BindInt(statement, 15, sim->event_count);
     BindInt(statement, 16, sim->event_write_index);
     BindText(statement, 17, hash);
+    BindId(statement, 18, journal_generation);
+    BindId(statement, 19, journal_cursor);
     bool result = StepDone(database, statement, error, error_capacity);
     sqlite3_finalize(statement);
     return result;
@@ -723,20 +843,19 @@ static bool SaveJourneyState(sqlite3 *database, const CcSim *sim,
     return result;
 }
 
-bool CcSaveWrite(const char *path, const CcSim *sim,
-                 char *error, size_t error_capacity)
+static bool SaveSnapshot(sqlite3 *database, const CcSim *sim,
+                         uint64_t journal_generation,
+                         uint64_t journal_cursor,
+                         char *error, size_t error_capacity)
 {
     char validation[160];
-    if (path == NULL || sim == NULL ||
+    if (database == NULL || sim == NULL ||
         !CcSimValidate(sim, validation, sizeof(validation))) {
-        SetError(error, error_capacity, sim == NULL || path == NULL ?
-                 "Save path or simulation is missing." : validation);
+        SetError(error, error_capacity, sim == NULL || database == NULL ?
+                 "Save database or simulation is missing." : validation);
         return false;
     }
-    sqlite3 *database = NULL;
-    if (!OpenDatabase(path, &database, error, error_capacity)) return false;
-    bool ok = CreateSchema(database, error, error_capacity) &&
-        EnsureRealmColumns(database, error, error_capacity) &&
+    bool ok = EnsureRealmColumns(database, error, error_capacity) &&
         Execute(database, "BEGIN IMMEDIATE;", error, error_capacity) &&
         Execute(database,
             "DELETE FROM meta; DELETE FROM kingdom; DELETE FROM settlement;"
@@ -749,7 +868,8 @@ bool CcSaveWrite(const char *path, const CcSim *sim,
             "DELETE FROM player_journey; DELETE FROM runtime_state;"
             "DELETE FROM delayed_echo;",
             error, error_capacity) &&
-        SaveMeta(database, sim, error, error_capacity) &&
+        SaveMeta(database, sim, journal_generation, journal_cursor,
+                 error, error_capacity) &&
         SaveKingdoms(database, sim, error, error_capacity) &&
         SaveSettlements(database, sim, error, error_capacity) &&
         SaveRoutes(database, sim, error, error_capacity) &&
@@ -766,6 +886,22 @@ bool CcSaveWrite(const char *path, const CcSim *sim,
         SaveJourneyState(database, sim, error, error_capacity);
     if (ok) ok = Execute(database, "COMMIT;", error, error_capacity);
     else (void)Execute(database, "ROLLBACK;", NULL, 0U);
+    return ok;
+}
+
+bool CcSaveWrite(const char *path, const CcSim *sim,
+                 char *error, size_t error_capacity)
+{
+    if (path == NULL || sim == NULL) {
+        SetError(error, error_capacity,
+                 "Save path or simulation is missing.");
+        return false;
+    }
+    sqlite3 *database = NULL;
+    if (!OpenDatabase(path, &database, error, error_capacity)) return false;
+    bool ok = CreateSchema(database, error, error_capacity) &&
+              SaveSnapshot(database, sim, 0U, 0U,
+                           error, error_capacity);
     if (sqlite3_close(database) != SQLITE_OK && ok) {
         SetError(error, error_capacity, "Could not close campaign database.");
         return false;
@@ -774,12 +910,15 @@ bool CcSaveWrite(const char *path, const CcSim *sim,
 }
 
 static bool ReadMeta(sqlite3 *database, CcSim *sim, uint64_t *expected_hash,
+                     uint64_t *journal_generation,
+                     uint64_t *journal_cursor,
                      char *error, size_t error_capacity)
 {
     sqlite3_stmt *statement = NULL;
     if (!Prepare(database, "SELECT schema_version,generator_version,world_seed,random_state,"
         "current_day,next_entity_serial,kingdom_count,settlement_count,route_count,faction_count,"
-        "shipment_count,bandit_count,monster_count,dungeon_count,event_count,event_write_index,state_hash "
+        "shipment_count,bandit_count,monster_count,dungeon_count,event_count,"
+        "event_write_index,state_hash,journal_generation,journal_cursor "
         "FROM meta WHERE id=1;", &statement, error, error_capacity)) return false;
     if (sqlite3_step(statement) != SQLITE_ROW) {
         SetError(error, error_capacity, "Campaign metadata is missing.");
@@ -802,10 +941,12 @@ static bool ReadMeta(sqlite3 *database, CcSim *sim, uint64_t *expected_hash,
     sim->event_count = sqlite3_column_int(statement, 14);
     sim->event_write_index = sqlite3_column_int(statement, 15);
     const unsigned char *hash_text = sqlite3_column_text(statement, 16);
-    if (hash_text == NULL || sscanf((const char *)hash_text, "%" SCNx64, expected_hash) != 1) {
+    if (!ParseStoredHash(hash_text, expected_hash)) {
         SetError(error, error_capacity, "Campaign hash is invalid.");
         sqlite3_finalize(statement); return false;
     }
+    *journal_generation = (uint64_t)sqlite3_column_int64(statement, 17);
+    *journal_cursor = (uint64_t)sqlite3_column_int64(statement, 18);
     sqlite3_finalize(statement);
     return true;
 }
@@ -1316,6 +1457,149 @@ static bool ReadJourneyState(sqlite3 *database, CcSim *sim,
     return true;
 }
 
+static bool ValidateJournalCheckpoint(sqlite3 *database, const CcSim *sim,
+                                      uint64_t generation, uint64_t cursor,
+                                      char *error, size_t error_capacity)
+{
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database,
+                 "SELECT record_version,world_seed,initial_state_hash "
+                 "FROM journal_epoch WHERE generation=?;",
+                 &statement, error, error_capacity)) return false;
+    (void)sqlite3_bind_int64(statement, 1, (sqlite3_int64)generation);
+    if (sqlite3_step(statement) != SQLITE_ROW) {
+        SetError(error, error_capacity,
+                 "Journal checkpoint references a missing epoch.");
+        sqlite3_finalize(statement);
+        return false;
+    }
+    int32_t record_version = sqlite3_column_int(statement, 0);
+    uint32_t world_seed = (uint32_t)sqlite3_column_int(statement, 1);
+    uint64_t checkpoint_hash = 0U;
+    bool parsed = ParseStoredHash(sqlite3_column_text(statement, 2),
+                                  &checkpoint_hash);
+    sqlite3_finalize(statement);
+    if (record_version != CC_JOURNAL_RECORD_VERSION ||
+        world_seed != sim->world_seed || !parsed) {
+        SetError(error, error_capacity,
+                 "Journal epoch does not match the campaign checkpoint.");
+        return false;
+    }
+    if (cursor > 0U) {
+        if (!Prepare(database,
+                     "SELECT post_state_hash FROM action_journal "
+                     "WHERE generation=? AND ordinal=?;",
+                     &statement, error, error_capacity)) return false;
+        (void)sqlite3_bind_int64(statement, 1, (sqlite3_int64)generation);
+        (void)sqlite3_bind_int64(statement, 2, (sqlite3_int64)cursor);
+        if (sqlite3_step(statement) != SQLITE_ROW ||
+            !ParseStoredHash(sqlite3_column_text(statement, 0),
+                             &checkpoint_hash)) {
+            SetError(error, error_capacity,
+                     "Journal checkpoint cursor is missing or corrupt.");
+            sqlite3_finalize(statement);
+            return false;
+        }
+        sqlite3_finalize(statement);
+    }
+    if (CcSimHash(sim) != checkpoint_hash) {
+        SetError(error, error_capacity,
+                 "Journal checkpoint hash does not match the snapshot.");
+        return false;
+    }
+    return true;
+}
+
+static bool ReplayJournal(sqlite3 *database, CcSim *sim,
+                          uint64_t generation, uint64_t cursor,
+                          uint64_t *replayed_through,
+                          char *error, size_t error_capacity)
+{
+    if (!ValidateJournalCheckpoint(database, sim, generation, cursor,
+                                   error, error_capacity)) return false;
+    sqlite3_stmt *statement = NULL;
+    const char *sql =
+        "SELECT ordinal,record_version,operation_kind,command_kind,target_id,"
+        "good,amount,dungeon_state,step_count,sim_schema_version,"
+        "generator_version,pre_state_hash,post_state_hash "
+        "FROM action_journal WHERE generation=? AND ordinal>? "
+        "ORDER BY ordinal ASC;";
+    if (!Prepare(database, sql, &statement, error, error_capacity)) return false;
+    (void)sqlite3_bind_int64(statement, 1, (sqlite3_int64)generation);
+    (void)sqlite3_bind_int64(statement, 2, (sqlite3_int64)cursor);
+    uint64_t expected_ordinal = cursor + 1U;
+    int result = SQLITE_ROW;
+    while ((result = sqlite3_step(statement)) == SQLITE_ROW) {
+        uint64_t ordinal = (uint64_t)sqlite3_column_int64(statement, 0);
+        int32_t version = sqlite3_column_int(statement, 1);
+        CcJournalOperationKind operation =
+            (CcJournalOperationKind)sqlite3_column_int(statement, 2);
+        CcCommand command = {
+            .kind = (CcCommandKind)sqlite3_column_int(statement, 3),
+            .target_id = (CcId)sqlite3_column_int64(statement, 4),
+            .good = (CcGood)sqlite3_column_int(statement, 5),
+            .amount = sqlite3_column_int(statement, 6),
+            .dungeon_state =
+                (CcDungeonState)sqlite3_column_int(statement, 7)
+        };
+        int32_t step_count = sqlite3_column_int(statement, 8);
+        uint32_t schema_version =
+            (uint32_t)sqlite3_column_int(statement, 9);
+        uint32_t generator_version =
+            (uint32_t)sqlite3_column_int(statement, 10);
+        uint64_t pre_hash = 0U;
+        uint64_t post_hash = 0U;
+        bool hashes_valid =
+            ParseStoredHash(sqlite3_column_text(statement, 11), &pre_hash) &&
+            ParseStoredHash(sqlite3_column_text(statement, 12), &post_hash);
+        if (ordinal != expected_ordinal ||
+            version != CC_JOURNAL_RECORD_VERSION ||
+            schema_version != CC_SIM_SCHEMA_VERSION ||
+            generator_version != CC_GENERATOR_VERSION ||
+            !hashes_valid || CcSimHash(sim) != pre_hash) {
+            SetError(error, error_capacity,
+                     "Action journal continuity check failed.");
+            sqlite3_finalize(statement);
+            return false;
+        }
+        char replay_error[192];
+        bool applied = true;
+        switch (operation) {
+            case CC_JOURNAL_OPERATION_COMMAND:
+                applied = CcSimApply(sim, &command, replay_error,
+                                     sizeof(replay_error));
+                break;
+            case CC_JOURNAL_OPERATION_ADVANCE_DAYS:
+                if (step_count <= 0) applied = false;
+                else CcSimAdvanceDays(sim, step_count);
+                break;
+            case CC_JOURNAL_OPERATION_ADVANCE_RUNTIME_TICKS:
+                if (step_count <= 0) applied = false;
+                else CcSimAdvanceRuntimeTicks(sim, step_count);
+                break;
+            default:
+                applied = false;
+                break;
+        }
+        if (!applied || CcSimHash(sim) != post_hash) {
+            SetError(error, error_capacity,
+                     "Action journal replay diverged from its committed hash.");
+            sqlite3_finalize(statement);
+            return false;
+        }
+        expected_ordinal += 1U;
+    }
+    if (result != SQLITE_DONE) {
+        SetSqlError(error, error_capacity, database,
+                    "Could not replay action journal");
+        sqlite3_finalize(statement);
+        return false;
+    }
+    sqlite3_finalize(statement);
+    *replayed_through = expected_ordinal - 1U;
+    return true;
+}
+
 static bool UpgradeLegacyRuntime(CcSim *sim,
                                  char *error, size_t error_capacity)
 {
@@ -1447,9 +1731,13 @@ bool CcSaveRead(const char *path, CcSim *sim,
     if (!OpenDatabase(path, &database, error, error_capacity)) return false;
     *sim = (CcSim){0};
     uint64_t expected_hash = 0U;
+    uint64_t journal_generation = 0U;
+    uint64_t journal_cursor = 0U;
     bool ok = CreateSchema(database, error, error_capacity) &&
               EnsureRealmColumns(database, error, error_capacity) &&
-              ReadMeta(database, sim, &expected_hash, error, error_capacity) &&
+              ReadMeta(database, sim, &expected_hash,
+                       &journal_generation, &journal_cursor,
+                       error, error_capacity) &&
               ReadKingdoms(database, sim, error, error_capacity) &&
               ReadSettlements(database, sim, error, error_capacity) &&
               ReadRoutes(database, sim, error, error_capacity) &&
@@ -1464,22 +1752,416 @@ bool CcSaveRead(const char *path, CcSim *sim,
               ReadPlayer(database, sim, error, error_capacity) &&
               ReadPlayerCommitment(database, sim, error, error_capacity) &&
               ReadJourneyState(database, sim, error, error_capacity);
-    sqlite3_close(database);
-    if (!ok) return false;
+    if (!ok) {
+        sqlite3_close(database);
+        return false;
+    }
     char validation[160];
     if (!CcSimValidate(sim, validation, sizeof(validation))) {
         SetError(error, error_capacity, validation);
+        sqlite3_close(database);
         return false;
     }
     if (CcSimHash(sim) != expected_hash) {
         SetError(error, error_capacity, "Campaign state hash does not match stored data.");
+        sqlite3_close(database);
         return false;
     }
-    if (!UpgradeLegacyRuntime(sim, error, error_capacity)) return false;
+    if (!UpgradeLegacyRuntime(sim, error, error_capacity)) {
+        sqlite3_close(database);
+        return false;
+    }
+    uint64_t replayed_through = journal_cursor;
+    if (journal_generation > 0U &&
+        !ReplayJournal(database, sim, journal_generation, journal_cursor,
+                       &replayed_through, error, error_capacity)) {
+        sqlite3_close(database);
+        return false;
+    }
     if (!CcSimValidate(sim, validation, sizeof(validation))) {
         SetError(error, error_capacity, validation);
+        sqlite3_close(database);
         return false;
     }
+    if (sqlite3_close(database) != SQLITE_OK) {
+        SetError(error, error_capacity, "Could not close campaign database.");
+        return false;
+    }
+    SetError(error, error_capacity, "");
+    return true;
+}
+
+static bool ReadSnapshotJournalCursor(sqlite3 *database,
+                                      uint64_t *generation,
+                                      uint64_t *cursor,
+                                      char *error, size_t error_capacity)
+{
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database,
+                 "SELECT journal_generation,journal_cursor "
+                 "FROM meta WHERE id=1;",
+                 &statement, error, error_capacity)) return false;
+    if (sqlite3_step(statement) != SQLITE_ROW) {
+        SetError(error, error_capacity,
+                 "Campaign journal checkpoint is missing.");
+        sqlite3_finalize(statement);
+        return false;
+    }
+    *generation = (uint64_t)sqlite3_column_int64(statement, 0);
+    *cursor = (uint64_t)sqlite3_column_int64(statement, 1);
+    sqlite3_finalize(statement);
+    return true;
+}
+
+static bool ReadJournalHead(sqlite3 *database, uint64_t generation,
+                            uint64_t *head,
+                            char *error, size_t error_capacity)
+{
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database,
+                 "SELECT COALESCE(MAX(ordinal),0) FROM action_journal "
+                 "WHERE generation=?;",
+                 &statement, error, error_capacity)) return false;
+    (void)sqlite3_bind_int64(statement, 1, (sqlite3_int64)generation);
+    if (sqlite3_step(statement) != SQLITE_ROW) {
+        SetSqlError(error, error_capacity, database,
+                    "Could not read action journal head");
+        sqlite3_finalize(statement);
+        return false;
+    }
+    *head = (uint64_t)sqlite3_column_int64(statement, 0);
+    sqlite3_finalize(statement);
+    return true;
+}
+
+static CcJournal *AllocateJournal(const char *path,
+                                  char *error, size_t error_capacity)
+{
+    CcJournal *journal = calloc(1U, sizeof(*journal));
+    if (journal == NULL) {
+        SetError(error, error_capacity,
+                 "Could not allocate action journal state.");
+        return NULL;
+    }
+    if (!OpenDatabase(path, &journal->database, error, error_capacity) ||
+        !CreateSchema(journal->database, error, error_capacity)) {
+        if (journal->database != NULL) sqlite3_close(journal->database);
+        free(journal);
+        return NULL;
+    }
+    return journal;
+}
+
+static bool CreateJournalEpoch(CcJournal *journal, const CcSim *sim,
+                               char *error, size_t error_capacity)
+{
+    if (!Execute(journal->database, "BEGIN IMMEDIATE;",
+                 error, error_capacity)) return false;
+    sqlite3_stmt *statement = NULL;
+    const char *sql =
+        "INSERT INTO journal_epoch "
+        "(record_version,world_seed,initial_state_hash,created_tick) "
+        "VALUES(?,?,?,?);";
+    bool ok = Prepare(journal->database, sql, &statement,
+                      error, error_capacity);
+    if (ok) {
+        char hash[24];
+        (void)snprintf(hash, sizeof(hash), "%016" PRIx64, CcSimHash(sim));
+        BindInt(statement, 1, CC_JOURNAL_RECORD_VERSION);
+        BindInt(statement, 2, (int32_t)sim->world_seed);
+        BindText(statement, 3, hash);
+        BindId(statement, 4, sim->clock.tick);
+        ok = StepDone(journal->database, statement,
+                      error, error_capacity);
+    }
+    sqlite3_finalize(statement);
+    if (ok) {
+        sqlite3_int64 generation = sqlite3_last_insert_rowid(journal->database);
+        if (generation <= 0) {
+            SetError(error, error_capacity,
+                     "Action journal epoch did not receive an identity.");
+            ok = false;
+        } else {
+            journal->generation = (uint64_t)generation;
+            journal->last_ordinal = 0U;
+        }
+    }
+    if (ok) ok = Execute(journal->database, "COMMIT;",
+                         error, error_capacity);
+    else (void)Execute(journal->database, "ROLLBACK;", NULL, 0U);
+    return ok;
+}
+
+static bool AppendJournalOperation(CcJournal *journal,
+                                   CcJournalOperationKind operation,
+                                   const CcCommand *command,
+                                   int32_t step_count,
+                                   const CcSim *before,
+                                   const CcSim *after,
+                                   char *error, size_t error_capacity)
+{
+    if (journal == NULL || before == NULL || after == NULL) {
+        SetError(error, error_capacity,
+                 "Action journal mutation is missing state.");
+        return false;
+    }
+    char validation[160];
+    if (before->schema_version != CC_SIM_SCHEMA_VERSION ||
+        after->schema_version != CC_SIM_SCHEMA_VERSION ||
+        !CcSimValidate(after, validation, sizeof(validation))) {
+        SetError(error, error_capacity,
+                 before->schema_version != CC_SIM_SCHEMA_VERSION ||
+                 after->schema_version != CC_SIM_SCHEMA_VERSION ?
+                     "Action journal requires the current simulation schema." :
+                     validation);
+        return false;
+    }
+    if (!Execute(journal->database, "BEGIN IMMEDIATE;",
+                 error, error_capacity)) return false;
+    uint64_t stored_head = 0U;
+    bool ok = ReadJournalHead(journal->database, journal->generation,
+                              &stored_head, error, error_capacity) &&
+              stored_head == journal->last_ordinal;
+    if (!ok && stored_head != journal->last_ordinal) {
+        SetError(error, error_capacity,
+                 "Action journal advanced from another writer.");
+    }
+    sqlite3_stmt *statement = NULL;
+    if (ok) {
+        const char *sql =
+            "INSERT INTO action_journal "
+            "(generation,ordinal,record_version,operation_kind,command_kind,"
+            "target_id,good,amount,dungeon_state,step_count,"
+            "sim_schema_version,generator_version,pre_state_hash,"
+            "post_state_hash,committed_tick) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);";
+        ok = Prepare(journal->database, sql, &statement,
+                     error, error_capacity);
+    }
+    uint64_t next_ordinal = journal->last_ordinal + 1U;
+    if (ok) {
+        CcCommand empty = {0};
+        const CcCommand *input = command != NULL ? command : &empty;
+        char pre_hash[24];
+        char post_hash[24];
+        (void)snprintf(pre_hash, sizeof(pre_hash), "%016" PRIx64,
+                       CcSimHash(before));
+        (void)snprintf(post_hash, sizeof(post_hash), "%016" PRIx64,
+                       CcSimHash(after));
+        BindId(statement, 1, journal->generation);
+        BindId(statement, 2, next_ordinal);
+        BindInt(statement, 3, CC_JOURNAL_RECORD_VERSION);
+        BindInt(statement, 4, (int32_t)operation);
+        BindInt(statement, 5, (int32_t)input->kind);
+        BindId(statement, 6, input->target_id);
+        BindInt(statement, 7, (int32_t)input->good);
+        BindInt(statement, 8, input->amount);
+        BindInt(statement, 9, (int32_t)input->dungeon_state);
+        BindInt(statement, 10, step_count);
+        BindInt(statement, 11, (int32_t)after->schema_version);
+        BindInt(statement, 12, (int32_t)after->generator_version);
+        BindText(statement, 13, pre_hash);
+        BindText(statement, 14, post_hash);
+        BindId(statement, 15, after->clock.tick);
+        ok = StepDone(journal->database, statement,
+                      error, error_capacity);
+    }
+    sqlite3_finalize(statement);
+    if (ok) ok = Execute(journal->database, "COMMIT;",
+                         error, error_capacity);
+    else (void)Execute(journal->database, "ROLLBACK;", NULL, 0U);
+    if (ok) journal->last_ordinal = next_ordinal;
+    return ok;
+}
+
+CcJournal *CcJournalStart(const char *path, const CcSim *sim,
+                          char *error, size_t error_capacity)
+{
+    if (path == NULL || sim == NULL ||
+        sim->schema_version != CC_SIM_SCHEMA_VERSION) {
+        SetError(error, error_capacity,
+                 "Journal path or current-schema simulation is missing.");
+        return NULL;
+    }
+    CcJournal *journal = AllocateJournal(path, error, error_capacity);
+    if (journal == NULL) return NULL;
+    if (!CreateJournalEpoch(journal, sim, error, error_capacity) ||
+        !SaveSnapshot(journal->database, sim, journal->generation, 0U,
+                      error, error_capacity)) {
+        sqlite3_close(journal->database);
+        free(journal);
+        return NULL;
+    }
+    SetError(error, error_capacity, "");
+    return journal;
+}
+
+CcJournal *CcJournalResume(const char *path, CcSim *sim,
+                           char *error, size_t error_capacity)
+{
+    if (path == NULL || sim == NULL) {
+        SetError(error, error_capacity,
+                 "Journal path or simulation is missing.");
+        return NULL;
+    }
+    CcSim recovered;
+    if (!CcSaveRead(path, &recovered, error, error_capacity)) return NULL;
+    CcJournal *journal = AllocateJournal(path, error, error_capacity);
+    if (journal == NULL) return NULL;
+    uint64_t checkpoint_cursor = 0U;
+    if (!ReadSnapshotJournalCursor(journal->database,
+                                   &journal->generation,
+                                   &checkpoint_cursor,
+                                   error, error_capacity)) {
+        sqlite3_close(journal->database);
+        free(journal);
+        return NULL;
+    }
+    if (journal->generation == 0U) {
+        sqlite3_close(journal->database);
+        free(journal);
+        journal = CcJournalStart(path, &recovered,
+                                 error, error_capacity);
+        if (journal == NULL) return NULL;
+    } else if (!ReadJournalHead(journal->database, journal->generation,
+                                &journal->last_ordinal,
+                                error, error_capacity) ||
+               journal->last_ordinal < checkpoint_cursor) {
+        if (journal->last_ordinal < checkpoint_cursor) {
+            SetError(error, error_capacity,
+                     "Action journal is behind its snapshot checkpoint.");
+        }
+        sqlite3_close(journal->database);
+        free(journal);
+        return NULL;
+    }
+    *sim = recovered;
+    SetError(error, error_capacity, "");
+    return journal;
+}
+
+bool CcJournalFlush(CcJournal *journal, CcSim *sim,
+                    char *error, size_t error_capacity)
+{
+    if (journal == NULL || sim == NULL) {
+        SetError(error, error_capacity,
+                 "Action journal or simulation is missing.");
+        return false;
+    }
+    if (journal->pending_runtime_ticks <= 0) {
+        SetError(error, error_capacity, "");
+        return true;
+    }
+    CcSim durable_base = journal->pending_runtime_base;
+    int32_t ticks = journal->pending_runtime_ticks;
+    journal->pending_runtime_ticks = 0;
+    if (!AppendJournalOperation(journal,
+                                CC_JOURNAL_OPERATION_ADVANCE_RUNTIME_TICKS,
+                                NULL, ticks, &durable_base, sim,
+                                error, error_capacity)) {
+        *sim = durable_base;
+        return false;
+    }
+    SetError(error, error_capacity, "");
+    return true;
+}
+
+bool CcJournalCheckpoint(CcJournal *journal, CcSim *sim,
+                         char *error, size_t error_capacity)
+{
+    if (!CcJournalFlush(journal, sim, error, error_capacity)) return false;
+    bool ok = SaveSnapshot(journal->database, sim, journal->generation,
+                           journal->last_ordinal, error, error_capacity);
+    if (ok) SetError(error, error_capacity, "");
+    return ok;
+}
+
+bool CcJournalApply(CcJournal *journal, CcSim *sim,
+                    const CcCommand *command,
+                    char *error, size_t error_capacity)
+{
+    if (journal == NULL || sim == NULL || command == NULL) {
+        SetError(error, error_capacity,
+                 "Journaled command is missing input state.");
+        return false;
+    }
+    if (!CcJournalFlush(journal, sim, error, error_capacity)) return false;
+    CcSim candidate = *sim;
+    if (!CcSimApply(&candidate, command, error, error_capacity)) return false;
+    if (!AppendJournalOperation(journal, CC_JOURNAL_OPERATION_COMMAND,
+                                command, 0, sim, &candidate,
+                                error, error_capacity)) return false;
+    *sim = candidate;
+    SetError(error, error_capacity, "");
+    return true;
+}
+
+bool CcJournalAdvanceDays(CcJournal *journal, CcSim *sim, int32_t days,
+                          char *error, size_t error_capacity)
+{
+    if (journal == NULL || sim == NULL || days <= 0) {
+        SetError(error, error_capacity,
+                 "Journaled day advance requires a positive duration.");
+        return false;
+    }
+    if (!CcJournalFlush(journal, sim, error, error_capacity)) return false;
+    CcSim candidate = *sim;
+    CcSimAdvanceDays(&candidate, days);
+    if (!AppendJournalOperation(journal, CC_JOURNAL_OPERATION_ADVANCE_DAYS,
+                                NULL, days, sim, &candidate,
+                                error, error_capacity)) return false;
+    *sim = candidate;
+    SetError(error, error_capacity, "");
+    return true;
+}
+
+bool CcJournalAdvanceRuntimeTicks(CcJournal *journal, CcSim *sim,
+                                  int32_t ticks,
+                                  char *error, size_t error_capacity)
+{
+    if (journal == NULL || sim == NULL || ticks < 0) {
+        SetError(error, error_capacity,
+                 "Journaled runtime advance has invalid input.");
+        return false;
+    }
+    if (ticks == 0) {
+        SetError(error, error_capacity, "");
+        return true;
+    }
+    if (journal->pending_runtime_ticks == 0) {
+        journal->pending_runtime_base = *sim;
+    }
+    if (journal->pending_runtime_ticks > INT32_MAX - ticks) {
+        if (!CcJournalFlush(journal, sim, error, error_capacity)) return false;
+        journal->pending_runtime_base = *sim;
+    }
+    CcSimAdvanceRuntimeTicks(sim, ticks);
+    journal->pending_runtime_ticks += ticks;
+    bool transition_finished = !sim->journey.active ||
+        sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING;
+    if (journal->pending_runtime_ticks >= CC_JOURNAL_RUNTIME_FLUSH_TICKS ||
+        transition_finished) {
+        return CcJournalFlush(journal, sim, error, error_capacity);
+    }
+    SetError(error, error_capacity, "");
+    return true;
+}
+
+bool CcJournalClose(CcJournal **journal, CcSim *sim,
+                    char *error, size_t error_capacity)
+{
+    if (journal == NULL || *journal == NULL) {
+        SetError(error, error_capacity, "");
+        return true;
+    }
+    if (!CcJournalFlush(*journal, sim, error, error_capacity)) return false;
+    if (sqlite3_close((*journal)->database) != SQLITE_OK) {
+        SetError(error, error_capacity,
+                 "Could not close the action journal.");
+        return false;
+    }
+    free(*journal);
+    *journal = NULL;
     SetError(error, error_capacity, "");
     return true;
 }

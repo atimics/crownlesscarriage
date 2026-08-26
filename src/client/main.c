@@ -1468,11 +1468,14 @@ static void DrawJourneyEncounter(const CcSim *sim)
              215, 601, 12, INK);
 }
 
-static bool ApplyCommand(CcSim *sim, CcCommand command,
+static bool ApplyCommand(CcJournal *journal, CcSim *sim, CcCommand command,
                          char *message, size_t message_capacity)
 {
     char error[192];
-    if (!CcSimApply(sim, &command, error, sizeof(error))) {
+    bool applied = journal != NULL ?
+        CcJournalApply(journal, sim, &command, error, sizeof(error)) :
+        CcSimApply(sim, &command, error, sizeof(error));
+    if (!applied) {
         (void)snprintf(message, message_capacity, "%s", error);
         return false;
     }
@@ -1482,7 +1485,8 @@ static bool ApplyCommand(CcSim *sim, CcCommand command,
     return true;
 }
 
-static void HandleExpedition(CcSim *sim, const CcDungeon *dungeon,
+static void HandleExpedition(CcJournal *journal, CcSim *sim,
+                             const CcDungeon *dungeon,
                              char *message, size_t message_capacity)
 {
     if (dungeon == NULL) return;
@@ -1495,10 +1499,10 @@ static void HandleExpedition(CcSim *sim, const CcDungeon *dungeon,
         .target_id = dungeon->id,
         .dungeon_state = next
     };
-    (void)ApplyCommand(sim, expedition, message, message_capacity);
+    (void)ApplyCommand(journal, sim, expedition, message, message_capacity);
 }
 
-static void HandleInput(CcSim *sim, int32_t *selected,
+static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                         int32_t *selected_situation, ClientView *view,
                         ClientView *return_view, LocalState *local,
                         RenderTexture2D local_target, Rectangle local_bounds,
@@ -1594,7 +1598,8 @@ static void HandleInput(CcSim *sim, int32_t *selected,
                 .kind = CC_COMMAND_ACCEPT_SITUATION,
                 .target_id = situation->id
             };
-            (void)ApplyCommand(sim, accept, message, message_capacity);
+            (void)ApplyCommand(*journal, sim, accept, message,
+                               message_capacity);
         }
         if (IsKeyPressed(KEY_BACKSPACE) &&
             CcSimAcceptedSituation(sim) != NULL) {
@@ -1602,7 +1607,8 @@ static void HandleInput(CcSim *sim, int32_t *selected,
                 .kind = CC_COMMAND_ABANDON_SITUATION,
                 .target_id = sim->player.accepted_situation_id
             };
-            (void)ApplyCommand(sim, abandon, message, message_capacity);
+            (void)ApplyCommand(*journal, sim, abandon, message,
+                               message_capacity);
         }
         return;
     }
@@ -1612,15 +1618,29 @@ static void HandleInput(CcSim *sim, int32_t *selected,
                    IsKeyDown(KEY_LEFT_SUPER) || IsKeyDown(KEY_RIGHT_SUPER);
     if (IsKeyPressed(KEY_F5) || (control && IsKeyPressed(KEY_S))) {
         char error[256];
-        bool saved = CcSaveWrite(save_path, sim, error, sizeof(error));
+        bool saved = false;
+        if (*journal == NULL) {
+            *journal = CcJournalStart(save_path, sim, error, sizeof(error));
+            saved = *journal != NULL;
+        } else {
+            saved = CcJournalCheckpoint(*journal, sim, error, sizeof(error));
+        }
         (void)snprintf(message, message_capacity, "%s",
-                       saved ? "Campaign committed atomically to SQLite." : error);
+                       saved ? "Durable journal checkpoint committed to SQLite." :
+                               error);
     }
     if (IsKeyPressed(KEY_F9)) {
         char error[256];
-        bool loaded = CcSaveRead(save_path, sim, error, sizeof(error));
+        if (!CcJournalClose(journal, sim, error, sizeof(error))) {
+            (void)snprintf(message, message_capacity, "%s", error);
+            return;
+        }
+        *journal = CcJournalResume(save_path, sim, error, sizeof(error));
+        bool loaded = *journal != NULL;
         (void)snprintf(message, message_capacity, "%s",
-                       loaded ? "Campaign restored with matching state hash." : error);
+                       loaded ?
+                           "Campaign restored by replaying its verified journal." :
+                           error);
         if (loaded) {
             *selected = FirstVisibleMapIndex(sim);
             *selected_situation = FirstActiveSituationIndex(sim);
@@ -1636,6 +1656,11 @@ static void HandleInput(CcSim *sim, int32_t *selected,
         }
     }
     if (IsKeyPressed(KEY_N)) {
+        char error[256];
+        if (!CcJournalClose(journal, sim, error, sizeof(error))) {
+            (void)snprintf(message, message_capacity, "%s", error);
+            return;
+        }
         CcSimInit(sim, sim->world_seed + UINT32_C(0x9e3779b9));
         *selected = FirstVisibleMapIndex(sim);
         *selected_situation = FirstActiveSituationIndex(sim);
@@ -1645,12 +1670,24 @@ static void HandleInput(CcSim *sim, int32_t *selected,
         (void)snprintf(message, message_capacity, "A new deterministic region is founded.");
     }
     if (IsKeyPressed(KEY_PERIOD) && !sim->journey.active) {
-        CcSimAdvanceDays(sim, 1);
-        (void)snprintf(message, message_capacity, "One day passes; local prices and pressures react.");
+        char error[256];
+        bool advanced = *journal != NULL ?
+            CcJournalAdvanceDays(*journal, sim, 1, error, sizeof(error)) :
+            (CcSimAdvanceDays(sim, 1), true);
+        (void)snprintf(message, message_capacity, "%s",
+                       advanced ?
+                           "One day passes; local prices and pressures react." :
+                           error);
     }
     if (IsKeyPressed(KEY_K) && !sim->journey.active) {
-        CcSimAdvanceDays(sim, 7);
-        (void)snprintf(message, message_capacity, "One strategic week passes beneath street life.");
+        char error[256];
+        bool advanced = *journal != NULL ?
+            CcJournalAdvanceDays(*journal, sim, 7, error, sizeof(error)) :
+            (CcSimAdvanceDays(sim, 7), true);
+        (void)snprintf(message, message_capacity, "%s",
+                       advanced ?
+                           "One strategic week passes beneath street life." :
+                           error);
     }
 
     if (*view == VIEW_LOCAL) {
@@ -1658,7 +1695,15 @@ static void HandleInput(CcSim *sim, int32_t *selected,
             int32_t ticks = CcLocalWorldUpdate(
                 &local->course, &local->agent, sim, delta_time,
                 false, false);
-            CcSimAdvanceRuntimeTicks(sim, ticks);
+            char error[256];
+            bool advanced = *journal != NULL ?
+                CcJournalAdvanceRuntimeTicks(*journal, sim, ticks,
+                                             error, sizeof(error)) :
+                (CcSimAdvanceRuntimeTicks(sim, ticks), true);
+            if (!advanced) {
+                (void)snprintf(message, message_capacity, "%s", error);
+                return;
+            }
             if (sim->journey.active &&
                 sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED) {
                 local->journey_travel_active = false;
@@ -1811,7 +1856,7 @@ static void HandleInput(CcSim *sim, int32_t *selected,
                 CcCommand negotiate = {
                     .kind = CC_COMMAND_RESOLVE_ENCOUNTER_NEGOTIATE
                 };
-                if (ApplyCommand(sim, negotiate, message,
+                if (ApplyCommand(*journal, sim, negotiate, message,
                                  message_capacity)) {
                     *selected = FirstVisibleMapIndex(sim);
                     BeginRoadTravelState(local);
@@ -1826,7 +1871,8 @@ static void HandleInput(CcSim *sim, int32_t *selected,
                 CcCommand victory = {
                     .kind = CC_COMMAND_RESOLVE_ENCOUNTER_COMBAT
                 };
-                if (ApplyCommand(sim, victory, message, message_capacity)) {
+                if (ApplyCommand(*journal, sim, victory, message,
+                                 message_capacity)) {
                     *selected = FirstVisibleMapIndex(sim);
                     BeginRoadTravelState(local);
                     *view = VIEW_LOCAL;
@@ -1891,13 +1937,15 @@ static void HandleInput(CcSim *sim, int32_t *selected,
                     .good = (CcGood)good,
                     .amount = shift ? -1 : 1
                 };
-                (void)ApplyCommand(sim, trade, message, message_capacity);
+                (void)ApplyCommand(*journal, sim, trade, message,
+                                   message_capacity);
             }
         }
         const CcDungeon *dungeon = DungeonAtSettlement(sim, sim->player.location_id);
         if (!local->market_interior && dungeon != NULL && IsKeyPressed(KEY_E) &&
             GridDistance(position, LOCAL_DUNGEON) < 1.35f) {
-            HandleExpedition(sim, dungeon, message, message_capacity);
+            HandleExpedition(*journal, sim, dungeon, message,
+                             message_capacity);
         }
         return;
     }
@@ -1924,12 +1972,12 @@ static void HandleInput(CcSim *sim, int32_t *selected,
     CcId map_id = map->id;
     if (IsKeyPressed(KEY_B) && map->owner_id == sim->player.location_id) {
         CcCommand buy = {.kind = CC_COMMAND_BUY_MAP, .target_id = map_id};
-        (void)ApplyCommand(sim, buy, message, message_capacity);
+        (void)ApplyCommand(*journal, sim, buy, message, message_capacity);
         return;
     }
     if (IsKeyPressed(KEY_S) && map->owner_id == sim->player.id) {
         CcCommand sell = {.kind = CC_COMMAND_SELL_MAP, .target_id = map_id};
-        (void)ApplyCommand(sim, sell, message, message_capacity);
+        (void)ApplyCommand(*journal, sim, sell, message, message_capacity);
         return;
     }
 
@@ -1941,7 +1989,7 @@ static void HandleInput(CcSim *sim, int32_t *selected,
             .kind = CC_COMMAND_TRAVEL,
             .target_id = destination_id
         };
-        if (ApplyCommand(sim, travel, message, message_capacity)) {
+        if (ApplyCommand(*journal, sim, travel, message, message_capacity)) {
             *selected = FirstVisibleMapIndex(sim);
             BeginRoadTravelState(local);
             *view = VIEW_LOCAL;
@@ -1953,7 +2001,7 @@ static void HandleInput(CcSim *sim, int32_t *selected,
             .kind = CC_COMMAND_REPAIR_ROUTE,
             .target_id = route != NULL ? route->id : 0U
         };
-        (void)ApplyCommand(sim, repair, message, message_capacity);
+        (void)ApplyCommand(*journal, sim, repair, message, message_capacity);
     }
 }
 
@@ -2112,6 +2160,7 @@ int main(int argc, char **argv)
     CcSim sim;
     CcSimInit(&sim, UINT32_C(0xc0a71a9e));
     CcLocalTerrainSetSeed(sim.world_seed);
+    CcJournal *journal = NULL;
     if (capture || render_benchmark) CcSimAdvanceDays(&sim, 28);
     if (capture_map_case) sim.player.location_id = sim.settlements[1].id;
     if (capture_witness) {
@@ -2406,7 +2455,7 @@ int main(int argc, char **argv)
                                  sizeof(message));
             }
         } else {
-            HandleInput(&sim, &selected, &selected_situation,
+            HandleInput(&journal, &sim, &selected, &selected_situation,
                         &view, &return_view, &local,
                         local_target, local_bounds,
                         frame_delta_time,
@@ -2503,6 +2552,13 @@ int main(int argc, char **argv)
         }
     }
 
+    char journal_error[256];
+    bool journal_close_failed = !CcJournalClose(
+        &journal, &sim, journal_error, sizeof(journal_error));
+    if (journal_close_failed) {
+        (void)fprintf(stderr, "Could not commit the action journal: %s\n",
+                      journal_error);
+    }
     double render_benchmark_elapsed = render_benchmark ?
         GetTime() - render_benchmark_started : 0.0;
     CcLocalRendererStats final_renderer_stats =
@@ -2553,5 +2609,5 @@ int main(int argc, char **argv)
     } else if (capture) {
         (void)printf("captured %s\n", capture_path);
     }
-    return 0;
+    return journal_close_failed ? 1 : 0;
 }

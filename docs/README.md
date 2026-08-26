@@ -80,7 +80,8 @@ respond to a player decision.
 - Stable entity identity
 - Fixed calendar pipeline
 - Commands, events, and projections
-- Versioned saves and generator versions
+- Append-only action journal, checkpoints, and versioned replay
+- Versioned schemas and generator versions
 - Determinism, replay, and debugging
 
 ### Part VIII — Production proof
