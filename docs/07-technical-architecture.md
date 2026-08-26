@@ -17,9 +17,9 @@ structs are not serialized as blobs and are not wire formats.
 ## Architecture principle
 
 The strategic simulation is a pure C library with no dependency on raylib,
-rendering frame time, input state, or active local maps. The existing isometric
-prototype can become a presentation and character-play client after the core
-contracts are established.
+rendering frame time, input state, or active local maps. The current fixed-pixel
+three-quarter client presents the strategic state at character scale without
+becoming authoritative.
 
 ```text
 Player input

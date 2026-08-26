@@ -6,7 +6,7 @@ set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 
-option(CC_BUILD_CLIENT "Build the raylib orthographic 3D isometric client" ON)
+option(CC_BUILD_CLIENT "Build the raylib fixed-pixel three-quarter 3D client" ON)
 option(CC_BUILD_BENCHMARKS "Build repeatable headless benchmarks" ON)
 option(CC_ENABLE_STRICT_WARNINGS "Enable strict compiler warnings" ON)
 option(CC_WARNINGS_AS_ERRORS "Treat project warnings as build errors" OFF)
