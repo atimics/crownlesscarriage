@@ -11285,12 +11285,6 @@ static void DrawWorldFace(Vector3 eye_center, Vector3 head_right,
         .always_paint = false,
         .layer = 0,
     };
-    if (priority_face) {
-        /* The 3D cap owns the head silhouette; this flat fringe supplies the
-           same bold asymmetric shape as the hero PFP at gameplay scale. */
-        canvas.always_paint = true;
-        CcNpcPaintFaceFringe(face, &canvas, PaintWorldFaceBlock);
-    }
     if (lod == CC_LOCAL_FACE_LOD_CLOSE || priority_face) {
         canvas.always_paint = true;
         CcNpcPaintFaceBeard(face, &canvas, PaintWorldFaceBlock);
@@ -11861,39 +11855,6 @@ static void DrawHeroSkinRigOverlay(const CcHumanoidGait *gait,
     }
 }
 
-static void DrawWayfarerCrown(const CcHumanoidSkinPose *skin)
-{
-    Vector3 up = FromLimbVector(skin->body_up);
-    Vector3 right = FromLimbVector(skin->body_right);
-    Vector3 forward = FromLimbVector(skin->body_forward);
-    Vector3 head_top = FromLimbVector(
-        skin->bones[CC_HUMANOID_SKIN_HEAD].tail);
-    Vector3 band = PhysicsAdd(
-        PhysicsAdd(head_top, PhysicsScale(up, 0.034f)),
-        PhysicsScale(forward, -0.004f));
-    Color crown_ink = (Color){43, 32, 29, 255};
-    Color dark_gold = (Color){142, 102, 38, 255};
-    Color crown_gold = (Color){224, 177, 78, 255};
-    /* A dark backing and broad band keep the crown from collapsing into one
-       stray gold pixel after the world is rasterized to the art grid. */
-    DrawCylinderEx(PhysicsAdd(band, PhysicsScale(up, -0.034f)),
-                   PhysicsAdd(band, PhysicsScale(up, 0.026f)),
-                   0.132f, 0.122f, 7, crown_ink);
-    DrawCylinderEx(PhysicsAdd(band, PhysicsScale(up, -0.025f)),
-                   PhysicsAdd(band, PhysicsScale(up, 0.022f)),
-                   0.118f, 0.108f, 7, dark_gold);
-    for (int32_t prong = -1; prong <= 1; ++prong) {
-        float height = prong == 0 ? 0.150f : 0.112f;
-        Vector3 root = PhysicsAdd(
-            band, PhysicsScale(right, (float)prong * 0.073f));
-        root = PhysicsAdd(root, PhysicsScale(forward, -0.010f));
-        Vector3 tip = PhysicsAdd(root, PhysicsScale(up, height));
-        tip = PhysicsAdd(tip, PhysicsScale(right,
-            prong == 0 ? -0.012f : (float)prong * 0.009f));
-        DrawCylinderEx(root, tip, 0.036f, 0.008f, 5, crown_gold);
-    }
-}
-
 static Vector3 NpcModuleLocalPoint(Vector3 origin, Vector3 right, Vector3 up,
                                    Vector3 forward, Vector3 local)
 {
@@ -12430,10 +12391,7 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
        pre-graded world skin through the regular character material. */
     CcNpcAppearance face_appearance = featured_hero ?
         CcNpcHeroPortraitAppearance(appearance) : *appearance;
-    /* Geometry uses a short cap, while the face card keeps the exact PFP
-       fringe recipe. This avoids the unrelated long module assigned to style
-       3 without losing the portrait's most recognizable hair shape. */
-    face_appearance.hair_style = featured_hero ? 3U : appearance->hair_style;
+    face_appearance.hair_style = appearance->hair_style;
     CcFaceRecipe face = CcNpcFaceRecipe(&face_appearance);
     float face_half_width = featured_hero ?
         0.138f * appearance->head_width :
@@ -12459,10 +12417,9 @@ static CcNpcAppearance ProceduralHeroAppearance(const CcLocalAgent *agent)
     appearance.muscularity = 0.58f;
     appearance.shoulder_scale = 0.92f;
     appearance.garment_style = 0;
-    /* Portrait style 3 is a compact cropped top. Dynamic module 3 is long,
-       asymmetric hair, so use the module that preserves the portrait's short
-       forehead and visible cheeks. */
-    appearance.hair_style = 0U;
+    /* Use one short asymmetric 3D cut in the world and PFP. It gives the hero
+       a clear side part without painting a second fringe across the eyes. */
+    appearance.hair_style = 5U;
     /* The world grade is strongly amber. Pre-grade the base material so the
        lit world head lands on the authored tan; the portrait path neutralizes
        this one color below while keeping the same geometry and face recipe. */
@@ -12507,7 +12464,6 @@ static void DrawBiomechanicalBiped(const CcLocalAgent *agent)
             agent, &skin, &procedural_hero);
         if (procedural_hero_updated) {
             DrawWayfarerHeroDetails(&skin);
-            DrawWayfarerCrown(&skin);
         }
         RestoreWorldLighting();
         if (procedural_hero_updated) {
@@ -12724,10 +12680,6 @@ static void DrawBiomechanicalBiped(const CcLocalAgent *agent)
                      shoulder_left, shoulder_right,
                      FromLimbVector(skin.bones[CC_HUMANOID_SKIN_FOREARM_LEFT].tail),
                      upper_yaw, 1.0f);
-    if (agent->crowned) {
-        DrawWayfarerCrown(&skin);
-    }
-
     if (draw_hero_rig_debug) {
         Vector3 rig_offset = LocalPoint((Vector3){0}, 0.022f, 0.010f, 0.040f,
                                         upper_yaw);
@@ -14329,7 +14281,6 @@ void CcLocalDrawAgentPortrait3D(const CcLocalAgent *agent,
         drew = DrawDynamicNpcModules(agent, &skin, &portrait_appearance);
         if (drew) {
             DrawWayfarerHeroDetails(&skin);
-            DrawWayfarerCrown(&skin);
         }
         RestoreWorldLighting();
     } else if (agent->crowned) {
@@ -14353,7 +14304,7 @@ void CcLocalDrawAgentPortrait3D(const CcLocalAgent *agent,
         PresentCharacterPortrait(bounds, portrait_appearance.accent);
     } else {
         CcNpcDrawPixelPortrait(&portrait_appearance, bounds,
-                               CC_NPC_PORTRAIT_NEUTRAL, agent->crowned);
+                               CC_NPC_PORTRAIT_NEUTRAL, false);
     }
 }
 
