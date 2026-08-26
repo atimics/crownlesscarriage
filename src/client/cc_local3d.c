@@ -7246,6 +7246,12 @@ static float CameraStreetCourseClutterScore(Camera3D camera,
             score += CameraVolumeScreenOverlap(subjects[subject], scenery);
         }
     }
+    CameraProjectedVolume wayfarer_gate = CameraProjectBox(
+        camera, (Vector3){11.50f, 1.16f, 10.56f},
+        (Vector3){3.06f, 1.16f, 0.16f});
+    for (int32_t subject = 0; subject < 2; ++subject) {
+        score += CameraVolumeScreenOverlap(subjects[subject], wayfarer_gate);
+    }
     return score;
 }
 
@@ -7270,6 +7276,20 @@ static float CameraStreetPlatformSubjectOverlap(
         camera, center, half_size);
     return CameraVolumeScreenOverlap(subjects[0], scenery) +
            CameraVolumeScreenOverlap(subjects[1], scenery);
+}
+
+static float CameraWayfarerGateSubjectOverlap(
+    Camera3D camera, Vector3 first_subject, Vector3 second_subject)
+{
+    CameraProjectedVolume subjects[] = {
+        CameraProjectVolume(camera, first_subject, 0.48f, 1.00f),
+        CameraProjectVolume(camera, second_subject, 0.48f, 1.00f),
+    };
+    CameraProjectedVolume gate = CameraProjectBox(
+        camera, (Vector3){11.50f, 1.16f, 10.56f},
+        (Vector3){3.06f, 1.16f, 0.16f});
+    return CameraVolumeScreenOverlap(subjects[0], gate) +
+           CameraVolumeScreenOverlap(subjects[1], gate);
 }
 
 static void WorldTreeVisibilityShape(TreeFamily family, float *trunk_top,
@@ -10481,12 +10501,19 @@ static void DrawStreetLantern(float x, float z)
     DrawBox((Vector3){x, 1.76f, z}, (Vector3){0.34f, 0.07f, 0.34f}, metal);
 }
 
-static void DrawWayfarerGate(Color accent)
+static void DrawWayfarerGate(Color accent, bool sightline_cut)
 {
     Color wood = (Color){74, 51, 39, 255};
     float left = 8.66f;
     float right = 14.34f;
     float z = 10.56f;
+    if (sightline_cut) {
+        DrawBox((Vector3){left, 0.06f, z},
+                (Vector3){0.22f, 0.12f, 0.22f}, wood);
+        DrawBox((Vector3){right, 0.06f, z},
+                (Vector3){0.22f, 0.12f, 0.22f}, wood);
+        return;
+    }
     DrawBox((Vector3){left, 1.16f, z}, (Vector3){0.22f, 2.32f, 0.22f}, wood);
     DrawBox((Vector3){right, 1.16f, z}, (Vector3){0.22f, 2.32f, 0.22f}, wood);
     DrawBox((Vector3){11.50f, 2.24f, z},
@@ -10624,13 +10651,13 @@ static void DrawEastWindmill(Color kingdom, float hunger)
 }
 
 static void DrawRoomLandmarks(const CcSettlement *place, Color kingdom,
-                              Vector3 focus)
+                              Vector3 focus, bool wayfarer_gate_sightline_cut)
 {
     float hunger = place != NULL ? (float)place->hunger / 100.0f : 0.0f;
     if (RoomDetailPointVisible(11.50f, 10.56f, focus)) {
         rlPushMatrix();
         rlTranslatef(0.0f, CcLocalTerrainHeightAt(11.50f, 10.56f), 0.0f);
-        DrawWayfarerGate(kingdom);
+        DrawWayfarerGate(kingdom, wayfarer_gate_sightline_cut);
         rlPopMatrix();
     }
     if (RoomDetailPointVisible(8.10f, 25.00f, focus)) {
@@ -15534,7 +15561,11 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         DrawNotice3D(sim);
     }
     DrawWorldTrees(scenery_focus, kingdom);
-    DrawRoomLandmarks(place, kingdom, scenery_focus);
+    bool wayfarer_gate_sightline_cut = close_combat_sightline &&
+        CameraWayfarerGateSubjectOverlap(
+            camera, player_sightline, opponent_sightline) > 0.001f;
+    DrawRoomLandmarks(place, kingdom, scenery_focus,
+                      wayfarer_gate_sightline_cut);
     if (SceneryPointVisible(47.35f, 31.05f, scenery_focus)) {
         DrawJourneyAftermath3D(sim, place);
     }
