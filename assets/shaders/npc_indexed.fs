@@ -16,6 +16,9 @@ uniform vec3 fogColor;
 uniform float fogNear;
 uniform float fogFar;
 uniform float inkStrength;
+uniform float heroEmphasis;
+uniform vec3 heroHeadPosition;
+uniform float bodySkinRemap;
 
 out vec4 finalColor;
 
@@ -23,12 +26,25 @@ void main()
 {
     int paletteIndex = clamp(int(floor(fragColor.r * 9.0)), 0, 8);
     vec4 paint = characterPalette[paletteIndex];
+    if (bodySkinRemap > 0.5 && paletteIndex == 0) {
+        /* The watertight animated body is a foundation under fitted rigid
+           head, hand, garment, and boot modules. Paint the foundation as
+           underclothes instead of exposing its all-skin export color. */
+        paletteIndex = fragPosition.y < heroHeadPosition.y - 0.82 ? 4 : 2;
+        paint = characterPalette[paletteIndex];
+    }
     vec3 normal = normalize(fragNormal);
     vec3 toLight = normalize(lightDirection);
     vec3 toCamera = normalize(cameraPosition - fragPosition);
+    vec3 headDelta = fragPosition - heroHeadPosition;
+    float headFocus = exp2(-dot(headDelta, headDelta) * 9.0) * heroEmphasis;
     float facing = dot(normal, toLight);
     float wrapped = clamp((facing + 0.32) / 1.32, 0.0, 1.0);
     float lightBand = step(0.48, wrapped);
+    /* Faces are authored for recognition, not for accidental full shadow.
+       Keep the crowned head in the key-light band, like a hand-adjusted face
+       normal in a cel-shaded character pipeline. */
+    lightBand = max(lightBand, step(0.30, headFocus));
 
     bool isSkin = paletteIndex == 0;
     float darkValue = isSkin ? 0.72 : 0.63;
@@ -42,7 +58,11 @@ void main()
     vec3 lightTemperature = vec3(1.035, 1.01, 0.95);
     vec3 temperature = mix(shadowTemperature, lightTemperature, lightBand);
     float normalValue = mix(darkValue, lightValue, lightBand);
-    vec3 color = paint.rgb * mix(normalValue, authoredValue, 0.78) *
+    /* Keep the cel boundary in charge of the large form. Authored vertex
+       values provide folds, but no longer overpower the light band on the
+       featured hero. */
+    float authoredWeight = mix(0.72, 0.46, heroEmphasis);
+    vec3 color = paint.rgb * mix(normalValue, authoredValue, authoredWeight) *
                  temperature;
     float foldShadow = (1.0 - smoothstep(-0.18, 0.48, facing)) *
                        fragColor.b;
@@ -55,13 +75,22 @@ void main()
              (1.0 - lightBand) * 0.052;
 
     float viewFacing = abs(dot(normal, toCamera));
-    float edgeInk = 1.0 - step(0.14, viewFacing);
+    float edgeInk = 1.0 - smoothstep(0.055, 0.205, viewFacing);
     vec3 coloredInk = mix(vec3(0.024, 0.030, 0.032),
                           paint.rgb * 0.24, 0.38);
     color = mix(color, coloredInk,
                 edgeInk * inkStrength * paletteInk[paletteIndex]);
     float litEdge = edgeInk * smoothstep(0.08, 0.68, facing) * lightBand;
     color += vec3(0.18, 0.27, 0.28) * litEdge * 0.050;
+
+    /* A narrow colored rim separates the hero from similarly dark combatants.
+       Its head bias protects identity at the tiny gameplay scale without
+       outlining every internal polygon. */
+    float silhouette = smoothstep(0.70, 0.94, 1.0 - viewFacing);
+    float heroRim = silhouette * heroEmphasis *
+                    (0.035 + headFocus * 0.080);
+    color += mix(vec3(0.12, 0.31, 0.30), paint.rgb, 0.34) * heroRim;
+    color *= 1.0 + headFocus * 0.075;
 
     float distanceToCamera = length(cameraPosition - fragPosition);
     float fog = smoothstep(fogNear, fogFar, distanceToCamera) * 0.24;

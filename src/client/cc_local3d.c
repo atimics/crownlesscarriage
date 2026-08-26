@@ -2213,9 +2213,9 @@ static Vector3 CombatWeaponDirectionAt(const CcLocalAgent *agent,
             return guard;
         }
         return CombatNormalizeOr(
-            CombatAdd(CombatScale(up, -0.90f),
-                      CombatAdd(CombatScale(right, 0.22f),
-                                CombatScale(forward, 0.18f))), forward);
+            CombatAdd(CombatScale(up, -0.80f),
+                      CombatAdd(CombatScale(right, 0.52f),
+                                CombatScale(forward, 0.12f))), forward);
     }
 
     float phase = CombatClamp(action_time / 1.20f, 0.0f, 1.0f);
@@ -6785,6 +6785,72 @@ static bool ApplyRoleIdleGesture(const CcLocalAgent *agent,
     return true;
 }
 
+/* A fully physical fall is useful to gameplay, but at the fixed combat camera
+   its overlapping joints can turn the crowned hero into one unreadable knot.
+   Keep the physical pelvis and ground height, then bias only the rendered pose
+   toward a clear, braced recovery silhouette. The simulation, contacts, and
+   hit logic continue to use the untouched ragdoll. */
+static bool ApplyHeroKnockdownPresentationPose(const CcLocalAgent *agent,
+                                               CcHumanoidPose *pose)
+{
+    if (agent == NULL || pose == NULL || !agent->crowned ||
+        !agent->humanoid.ragdoll.active) {
+        return false;
+    }
+
+    float weight = SmoothStep01(agent->ragdoll_visual_blend) * 0.68f;
+    if (weight <= 0.001f) return false;
+
+    float floor_y = fminf(pose->ankle[0].y, pose->ankle[1].y);
+    floor_y = fminf(floor_y, fminf(pose->hand[0].y, pose->hand[1].y));
+    CcLimbVec3 origin = pose->pelvis;
+    origin.y = fmaxf(origin.y, floor_y + 0.27f);
+
+    CcHumanoidPose local = {0};
+    local.pelvis = (CcLimbVec3){0.0f, 0.0f, 0.0f};
+    local.spine = (CcLimbVec3){0.0f, 0.10f, 0.01f};
+    local.chest = (CcLimbVec3){0.0f, 0.43f, 0.07f};
+    local.neck = (CcLimbVec3){0.0f, 0.66f, 0.10f};
+    local.head = (CcLimbVec3){0.0f, 0.84f, 0.13f};
+
+    local.hip[0] = (CcLimbVec3){-0.155f, -0.01f, 0.0f};
+    local.knee[0] = (CcLimbVec3){-0.37f, -0.12f, 0.28f};
+    local.ankle[0] = (CcLimbVec3){-0.62f, floor_y - origin.y + 0.08f,
+                                  0.45f};
+    local.heel[0] = (CcLimbVec3){-0.62f, floor_y - origin.y + 0.02f,
+                                 0.37f};
+    local.ball[0] = (CcLimbVec3){-0.62f, floor_y - origin.y + 0.02f,
+                                 0.53f};
+    local.toe[0] = (CcLimbVec3){-0.62f, floor_y - origin.y + 0.02f,
+                                0.59f};
+
+    local.hip[1] = (CcLimbVec3){0.155f, -0.01f, 0.0f};
+    local.knee[1] = (CcLimbVec3){0.34f, -0.14f, -0.18f};
+    local.ankle[1] = (CcLimbVec3){0.51f, floor_y - origin.y + 0.08f,
+                                  -0.38f};
+    local.heel[1] = (CcLimbVec3){0.51f, floor_y - origin.y + 0.02f,
+                                 -0.46f};
+    local.ball[1] = (CcLimbVec3){0.51f, floor_y - origin.y + 0.02f,
+                                 -0.30f};
+    local.toe[1] = (CcLimbVec3){0.51f, floor_y - origin.y + 0.02f,
+                                -0.24f};
+
+    local.shoulder[0] = (CcLimbVec3){-0.285f, 0.49f, 0.07f};
+    local.elbow[0] = (CcLimbVec3){-0.43f, 0.24f, 0.25f};
+    local.hand[0] = (CcLimbVec3){-0.49f, floor_y - origin.y + 0.07f,
+                                 0.39f};
+    local.shoulder[1] = (CcLimbVec3){0.285f, 0.49f, 0.07f};
+    local.elbow[1] = (CcLimbVec3){0.40f, 0.35f, 0.20f};
+    local.hand[1] = (CcLimbVec3){0.22f, 0.31f, 0.31f};
+
+    CcHumanoidPose target;
+    HumanoidPoseToWorld(&target, &local, origin, agent->facing_yaw);
+    CcHumanoidPose blended;
+    BlendHumanoidPose(&blended, pose, &target, weight);
+    *pose = blended;
+    return true;
+}
+
 static void UpdateRenderCape(CcLocalAgent *agent, float amount)
 {
     if (!agent->cape.initialized) {
@@ -6846,6 +6912,8 @@ void CcLocalAgentInterpolateInternal(CcLocalAgent *agent, float amount)
             agent, &physical_pose, &agent->render_pose);
         (void)ApplyLocomotionPostureCorrection(agent, &agent->render_pose);
         (void)ApplyRoleIdleGesture(agent, &agent->render_pose);
+        (void)ApplyHeroKnockdownPresentationPose(agent,
+                                                 &agent->render_pose);
         agent->render_pose_valid = true;
         UpdateRenderCape(agent, amount);
     } else {
@@ -7743,6 +7811,8 @@ typedef struct VisualStyleCache {
     int32_t npc_ink_strength_location;
     int32_t npc_palette_location;
     int32_t npc_palette_ink_location;
+    int32_t npc_hero_emphasis_location;
+    int32_t npc_hero_head_position_location;
     bool npc_ready;
     Shader npc_skinned;
     int32_t npc_skinned_light_direction_location;
@@ -7754,6 +7824,9 @@ typedef struct VisualStyleCache {
     int32_t npc_skinned_ink_strength_location;
     int32_t npc_skinned_palette_location;
     int32_t npc_skinned_palette_ink_location;
+    int32_t npc_skinned_hero_emphasis_location;
+    int32_t npc_skinned_hero_head_position_location;
+    int32_t npc_skinned_body_skin_remap_location;
     bool npc_skinned_ready;
 } VisualStyleCache;
 
@@ -8253,7 +8326,8 @@ static void ApplyNpcBodyStyle(Model *model)
 }
 
 static void SetNpcPalette(const CcNpcAppearance *appearance,
-                          float ink_strength)
+                          float ink_strength, bool hero_emphasis,
+                          Vector3 hero_head_position)
 {
     if (!visual_style.npc_ready || appearance == NULL) return;
     const Color colors[CC_NPC_ARCHETYPE_MATERIAL_COUNT] = {
@@ -8289,6 +8363,13 @@ static void SetNpcPalette(const CcNpcAppearance *appearance,
     SetShaderValue(visual_style.npc,
                    visual_style.npc_ink_strength_location,
                    &ink_strength, SHADER_UNIFORM_FLOAT);
+    float hero = hero_emphasis ? 1.0f : 0.0f;
+    SetShaderValue(visual_style.npc,
+                   visual_style.npc_hero_emphasis_location,
+                   &hero, SHADER_UNIFORM_FLOAT);
+    SetShaderValue(visual_style.npc,
+                   visual_style.npc_hero_head_position_location,
+                   &hero_head_position, SHADER_UNIFORM_VEC3);
     if (visual_style.npc_skinned_ready) {
         SetShaderValueV(visual_style.npc_skinned,
                         visual_style.npc_skinned_palette_location,
@@ -8301,6 +8382,12 @@ static void SetNpcPalette(const CcNpcAppearance *appearance,
         SetShaderValue(visual_style.npc_skinned,
                        visual_style.npc_skinned_ink_strength_location,
                        &ink_strength, SHADER_UNIFORM_FLOAT);
+        SetShaderValue(visual_style.npc_skinned,
+                       visual_style.npc_skinned_hero_emphasis_location,
+                       &hero, SHADER_UNIFORM_FLOAT);
+        SetShaderValue(visual_style.npc_skinned,
+                       visual_style.npc_skinned_hero_head_position_location,
+                       &hero_head_position, SHADER_UNIFORM_VEC3);
     }
 }
 
@@ -8661,6 +8748,10 @@ static void LoadVisualStyle(void)
                 visual_style.npc, "characterPalette[0]");
             visual_style.npc_palette_ink_location = GetShaderLocation(
                 visual_style.npc, "paletteInk[0]");
+            visual_style.npc_hero_emphasis_location = GetShaderLocation(
+                visual_style.npc, "heroEmphasis");
+            visual_style.npc_hero_head_position_location = GetShaderLocation(
+                visual_style.npc, "heroHeadPosition");
             visual_style.npc_ready = true;
         } else {
             visual_style.npc = (Shader){0};
@@ -8695,6 +8786,15 @@ static void LoadVisualStyle(void)
                 visual_style.npc_skinned_palette_ink_location =
                     GetShaderLocation(visual_style.npc_skinned,
                                       "paletteInk[0]");
+                visual_style.npc_skinned_hero_emphasis_location =
+                    GetShaderLocation(visual_style.npc_skinned,
+                                      "heroEmphasis");
+                visual_style.npc_skinned_hero_head_position_location =
+                    GetShaderLocation(visual_style.npc_skinned,
+                                      "heroHeadPosition");
+                visual_style.npc_skinned_body_skin_remap_location =
+                    GetShaderLocation(visual_style.npc_skinned,
+                                      "bodySkinRemap");
                 visual_style.npc_skinned_ready = true;
             } else {
                 visual_style.npc_skinned = (Shader){0};
@@ -8998,9 +9098,24 @@ static bool DrawNpcBodySkin(const CcHumanoidSkinPose *skin,
         body->model.materials[material].maps[MATERIAL_MAP_DIFFUSE].color =
             WHITE;
     }
+    /* The continuous skin asset closes joints under every fitted module. Its
+       source color is skin everywhere, so remap that hidden foundation to
+       underclothes here; the separate head and hand modules restore exposed
+       skin. Without this pass, flesh-colored torso and leg gaps dominate the
+       tiny combat silhouette. */
+    rlDrawRenderBatchActive();
+    float body_skin_remap = 1.0f;
+    SetShaderValue(visual_style.npc_skinned,
+                   visual_style.npc_skinned_body_skin_remap_location,
+                   &body_skin_remap, SHADER_UNIFORM_FLOAT);
     DrawModelEx(body->model, (Vector3){0.0f, 0.0f, 0.0f},
                 (Vector3){0.0f, 1.0f, 0.0f}, 0.0f,
                 (Vector3){1.0f, 1.0f, 1.0f}, WHITE);
+    rlDrawRenderBatchActive();
+    body_skin_remap = 0.0f;
+    SetShaderValue(visual_style.npc_skinned,
+                   visual_style.npc_skinned_body_skin_remap_location,
+                   &body_skin_remap, SHADER_UNIFORM_FLOAT);
     return true;
 }
 
@@ -11093,7 +11208,8 @@ static void DrawWorldFace(Vector3 eye_center, Vector3 head_right,
                           Vector3 head_up, Vector3 head_forward,
                           float half_width, float half_height,
                           float half_depth, const CcFaceRecipe *face,
-                          CcNpcPortraitExpression expression)
+                          CcNpcPortraitExpression expression,
+                          bool priority_face)
 {
     if (!face_render_context.valid || face == NULL) return;
     head_right = PhysicsNormalizeOr(head_right,
@@ -11109,7 +11225,11 @@ static void DrawWorldFace(Vector3 eye_center, Vector3 head_right,
                                Vector3DotProduct(to_camera, head_up)));
     to_camera = PhysicsNormalizeOr(to_camera, head_forward);
     float front_amount = Vector3DotProduct(head_forward, to_camera);
-    if (front_amount < -0.12f) return;
+    /* The fixed combat view often catches the hero just beyond profile while
+       they face a target. Let the priority face wrap onto that visible cheek;
+       ordinary actors still hide their features when genuinely turned away. */
+    float hidden_face_cutoff = priority_face ? -0.72f : -0.12f;
+    if (front_amount < hidden_face_cutoff) return;
 
     /* Keep the graphic on the visible head surface but face its tiny pixel
        grid toward the camera. The 3D skull, hair, and hat still carry turn. */
@@ -11122,7 +11242,8 @@ static void DrawWorldFace(Vector3 eye_center, Vector3 head_right,
         (surface_cosine * surface_cosine) / (half_depth * half_depth) +
         (surface_sine * surface_sine) / (half_width * half_width));
     Vector3 surface = Vector3Add(
-        eye_center, Vector3Scale(normal, surface_radius * 1.03f));
+        eye_center, Vector3Scale(
+            normal, surface_radius * (priority_face ? 1.15f : 1.03f)));
 
     float projected_face_height = FaceProjectedHeight(
         eye_center, head_up, half_height);
@@ -11159,11 +11280,11 @@ static void DrawWorldFace(Vector3 eye_center, Vector3 head_right,
         .always_paint = false,
         .layer = 0,
     };
-    if (lod == CC_LOCAL_FACE_LOD_CLOSE) {
+    if (lod == CC_LOCAL_FACE_LOD_CLOSE || priority_face) {
         canvas.always_paint = true;
         CcNpcPaintFaceBeard(face, &canvas, PaintWorldFaceBlock);
-        canvas.always_paint = false;
     }
+    canvas.always_paint = priority_face;
     CcNpcPaintFaceFeatures(face, expression, &canvas,
                            PaintWorldFaceBlock);
     EndShaderMode();
@@ -11185,7 +11306,8 @@ static void DrawNpcHead(const CcNpcAppearance *appearance, Vector3 head,
     CcFaceRecipe face = CcNpcFaceRecipe(appearance);
     DrawWorldFace(PhysicsAdd(head, (Vector3){0.0f, 0.045f * scale, 0.0f}),
                   right, (Vector3){0.0f, 1.0f, 0.0f}, forward,
-                  head_width, 0.195f * scale, head_depth, &face, expression);
+                  head_width, 0.195f * scale, head_depth, &face, expression,
+                  false);
     UseCharacterLighting();
 
     Vector3 crown = PhysicsAdd(head, (Vector3){0.0f, 0.115f * scale, 0.0f});
@@ -11426,7 +11548,7 @@ static bool DrawNpcArchetype3D(Vector3 position, float size_hint, float yaw,
             (Vector3){0.62f * scale * width * silhouette_gain, 0.012f,
                       0.43f * scale * width * silhouette_gain},
             (Color){2, 7, 10, 98});
-    SetNpcPalette(appearance, 0.50f);
+    SetNpcPalette(appearance, 0.50f, false, (Vector3){0});
     DrawModelEx(archetype->model, position,
                 (Vector3){0.0f, 1.0f, 0.0f},
                 presentation_yaw * RAD2DEG,
@@ -11467,7 +11589,7 @@ static bool DrawNpcArchetype3D(Vector3 position, float size_hint, float yaw,
                   0.20f * scale,
                   0.165f * appearance->head_depth * scale * width *
                       silhouette_gain,
-                  &face, expression);
+                  &face, expression, false);
     RestoreWorldLighting();
     if (visual_style.hero_ready) {
         float ink_strength = CC_HERO_INK_STRENGTH;
@@ -11956,15 +12078,20 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
     Color outer = appearance->outer;
     Color trousers = appearance->trousers;
     if (CombatIsDefeated(&agent->combat)) {
-        outer = BlendColor(outer, (Color){50, 49, 52, 255}, 0.72f);
-        trousers = BlendColor(trousers, (Color){42, 42, 44, 255}, 0.72f);
+        float defeat_drain = featured_hero ? 0.22f : 0.72f;
+        outer = BlendColor(outer, (Color){50, 49, 52, 255}, defeat_drain);
+        trousers = BlendColor(trousers, (Color){42, 42, 44, 255},
+                               defeat_drain);
     } else if (agent->combat.hit_flash_seconds > 0.0f) {
         outer = BlendColor(outer, WORLD_INK, 0.72f);
     }
     CcNpcAppearance palette_appearance = *appearance;
     palette_appearance.outer = outer;
     palette_appearance.trousers = trousers;
-    SetNpcPalette(&palette_appearance, 0.68f);
+    Vector3 presentation_head = FromLimbVector(
+        skin->sockets[CC_HUMANOID_SOCKET_HEAD].position);
+    SetNpcPalette(&palette_appearance, featured_hero ? 0.56f : 0.68f,
+                  featured_hero, presentation_head);
 
     /* The skeleton, muscle controls, and soft tissue are construction data.
        The visible body is one baked skin; the rigid pieces below are fitted
@@ -11985,7 +12112,7 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
                            (Vector3){(featured_hero ? 0.52f : 0.62f) * mass *
                                          appearance->shoulder_scale,
                                      torso_length,
-                                     (featured_hero ? 0.68f : 0.55f) * mass}),
+                                     (featured_hero ? 0.58f : 0.55f) * mass}),
         outer);
 
     const CcHumanoidSkinBonePose *pelvis =
@@ -11999,9 +12126,9 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
                            FromLimbVector(pelvis->right),
                            FromLimbVector(pelvis->up),
                            FromLimbVector(pelvis->forward),
-                           (Vector3){(featured_hero ? 0.53f : 0.55f) * mass,
+                           (Vector3){(featured_hero ? 0.48f : 0.55f) * mass,
                                      pelvis_length,
-                                     (featured_hero ? 0.51f : 0.54f) * mass}),
+                                     (featured_hero ? 0.44f : 0.54f) * mass}),
         trousers) && drew;
 
     static const CcHumanoidSkinBone upper_arms[] = {
@@ -12024,20 +12151,20 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
         CC_HUMANOID_SKIN_FOOT_LEFT,
         CC_HUMANOID_SKIN_FOOT_RIGHT,
     };
-    float arm_width = featured_hero ? 0.195f * mass :
+    float arm_width = featured_hero ? 0.165f * mass :
         (0.135f + muscle * 0.020f) * mass;
-    float leg_width = featured_hero ? 0.245f * mass :
+    float leg_width = featured_hero ? 0.215f * mass :
         (0.175f + muscle * 0.025f) * mass;
     for (int32_t side = 0; side < 2; ++side) {
         drew = DrawNpcDynamicBoneModule(
             NPC_DYNAMIC_UPPER_ARM, &skin->bones[upper_arms[side]],
-            featured_hero ? 0.180f * mass : arm_width,
-            featured_hero ? 0.205f * mass : arm_width * 0.92f,
+            featured_hero ? 0.158f * mass : arm_width,
+            featured_hero ? 0.170f * mass : arm_width * 0.92f,
             outer) && drew;
         drew = DrawNpcDynamicBoneModule(
             NPC_DYNAMIC_FOREARM, &skin->bones[forearms[side]],
-            featured_hero ? 0.180f * mass : arm_width * 0.86f,
-            featured_hero ? 0.200f * mass : arm_width * 0.80f,
+            featured_hero ? 0.152f * mass : arm_width * 0.86f,
+            featured_hero ? 0.165f * mass : arm_width * 0.80f,
             appearance->underlayer) && drew;
         drew = DrawNpcDynamicBoneModule(
             NPC_DYNAMIC_THIGH, &skin->bones[thighs[side]],
@@ -12056,10 +12183,10 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
             NpcModuleTransform(foot_head, FromLimbVector(foot->right),
                                FromLimbVector(foot->up),
                                FromLimbVector(foot->forward),
-                               (Vector3){(featured_hero ? 0.205f : 0.23f) *
+                               (Vector3){(featured_hero ? 0.180f : 0.23f) *
                                              mass,
                                          foot_length,
-                                         (featured_hero ? 0.18f : 0.20f) *
+                                         (featured_hero ? 0.16f : 0.20f) *
                                              mass}),
             appearance->leather) && drew;
     }
@@ -12071,22 +12198,26 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
     Vector3 head_right = FromLimbVector(head_bone->right);
     Vector3 head_up = FromLimbVector(head_bone->up);
     Vector3 head_forward = FromLimbVector(head_bone->forward);
-    Vector3 head_scale = {appearance->head_width, 1.0f,
-                          appearance->head_depth};
+    float hero_head_scale = featured_hero ? 1.07f : 1.0f;
+    Vector3 head_scale = {appearance->head_width * hero_head_scale,
+                          hero_head_scale,
+                          appearance->head_depth * hero_head_scale};
     Matrix head_transform = NpcModuleTransform(
         head, head_right, head_up, head_forward, head_scale);
     Matrix fallback_head_transform = NpcModuleTransform(
         head, head_right, head_up, head_forward,
-        (Vector3){0.30f * appearance->head_width, 0.34f,
-                  0.28f * appearance->head_depth});
+        (Vector3){0.30f * appearance->head_width * hero_head_scale,
+                  0.34f * hero_head_scale,
+                  0.28f * appearance->head_depth * hero_head_scale});
     drew = DrawNpcHeadFamily(appearance, head_transform,
                              fallback_head_transform) && drew;
     int32_t hair = (int32_t)appearance->hair_style %
                    CC_NPC_DYNAMIC_HAIR_COUNT;
     Matrix hair_transform = NpcModuleTransform(
         head, head_right, head_up, head_forward,
-        (Vector3){0.25f * appearance->head_width, 0.29f,
-                  0.33f * appearance->head_depth});
+        (Vector3){0.25f * appearance->head_width * hero_head_scale,
+                  0.29f * hero_head_scale,
+                  0.33f * appearance->head_depth * hero_head_scale});
     drew = DrawNpcDynamicModule(
         (NpcDynamicModuleId)(NPC_DYNAMIC_HAIR_0 + hair), hair_transform,
         appearance->hair) && drew;
@@ -12118,10 +12249,10 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
             NPC_DYNAMIC_CHEST_PLATE,
             NpcModuleTransform(chest_front, body_right, body_up,
                                body_forward,
-                               (Vector3){(featured_hero ? 0.31f : 0.43f) *
+                               (Vector3){(featured_hero ? 0.28f : 0.43f) *
                                              mass,
-                                         featured_hero ? 0.25f : 0.36f,
-                                         featured_hero ? 0.20f : 0.28f}),
+                                         featured_hero ? 0.23f : 0.36f,
+                                         featured_hero ? 0.17f : 0.28f}),
             appearance->metal);
         for (int32_t side = 0; side < 2; ++side) {
             const CcHumanoidSkinBonePose *shoulder =
@@ -12132,10 +12263,10 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
                                    FromLimbVector(shoulder->right),
                                    FromLimbVector(shoulder->up),
                                    FromLimbVector(shoulder->forward),
-                                   (Vector3){(featured_hero ? 0.14f : 0.22f) *
+                                   (Vector3){(featured_hero ? 0.12f : 0.22f) *
                                                  mass,
-                                             featured_hero ? 0.15f : 0.20f,
-                                             (featured_hero ? 0.14f : 0.21f) *
+                                             featured_hero ? 0.13f : 0.20f,
+                                             (featured_hero ? 0.12f : 0.21f) *
                                                  mass}),
                 appearance->metal);
         }
@@ -12255,20 +12386,24 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
                agent->humanoid.action == CC_HUMANOID_ACTION_STRIKE) {
         expression = CC_NPC_PORTRAIT_FOCUSED;
     }
+    /* Face cards bypass the indexed character shader, so their literal ink
+       colors use the neutral portrait recipe. The skull underneath keeps the
+       pre-graded world skin through the regular character material. */
     CcNpcAppearance face_appearance = featured_hero ?
         CcNpcHeroPortraitAppearance(appearance) : *appearance;
+    face_appearance.hair_style = appearance->hair_style;
     CcFaceRecipe face = CcNpcFaceRecipe(&face_appearance);
     float face_half_width = featured_hero ?
-        0.122f * appearance->head_width :
+        0.138f * appearance->head_width :
         0.105f * appearance->head_width;
-    float face_half_height = featured_hero ? 0.130f : 0.158f;
+    float face_half_height = featured_hero ? 0.145f : 0.158f;
     float face_half_depth = featured_hero ?
-        0.128f * appearance->head_depth :
+        0.142f * appearance->head_depth :
         0.125f * appearance->head_depth;
     DrawWorldFace(PhysicsAdd(head, Vector3Scale(head_up, 0.025f)),
                   head_right, head_up, head_forward,
                   face_half_width, face_half_height, face_half_depth,
-                  &face, expression);
+                  &face, expression, featured_hero);
     return drew;
 }
 
@@ -12278,17 +12413,21 @@ static CcNpcAppearance ProceduralHeroAppearance(const CcLocalAgent *agent)
         CcNpcHeroPortraitAppearance(&agent->appearance);
     appearance.role = CC_NPC_ROLE_WAYFARER;
     appearance.equipment = (uint32_t)CC_NPC_EQUIPMENT_ARMOR;
-    appearance.body_mass = 0.94f;
+    appearance.body_mass = 0.90f;
     appearance.muscularity = 0.58f;
     appearance.shoulder_scale = 0.92f;
     appearance.garment_style = 0;
+    /* Portrait style 3 is a compact cropped top. Dynamic module 3 is long,
+       asymmetric hair, so use the module that preserves the portrait's short
+       forehead and visible cheeks. */
+    appearance.hair_style = 0U;
     /* The world grade is strongly amber. Pre-grade the base material so the
        lit world head lands on the authored tan; the portrait path neutralizes
        this one color below while keeping the same geometry and face recipe. */
     appearance.skin = (Color){172, 108, 105, 255};
-    appearance.underlayer = (Color){108, 91, 69, 255};
-    appearance.outer = (Color){48, 105, 103, 255};
-    appearance.trousers = (Color){49, 62, 63, 255};
+    appearance.underlayer = (Color){38, 54, 55, 255};
+    appearance.outer = (Color){42, 116, 109, 255};
+    appearance.trousers = (Color){40, 48, 57, 255};
     appearance.leather = (Color){82, 50, 35, 255};
     appearance.metal = (Color){139, 55, 62, 255};
     appearance.accent = WORLD_GOLD;
@@ -13685,6 +13824,11 @@ static void DrawCombatSword(const CcLocalAgent *agent)
     }
     float blade_length = agent->combat.team == CC_COMBAT_PLAYER ? 0.86f :
                                                                     0.70f;
+    bool combat_ready = agent->combat.focus_valid ||
+        agent->humanoid.action == CC_HUMANOID_ACTION_GUARD ||
+        agent->humanoid.action == CC_HUMANOID_ACTION_STRIKE;
+    bool quiet_player_blade = agent->combat.team == CC_COMBAT_PLAYER &&
+                              !combat_ready;
     Vector3 guard_center = PhysicsAdd(hand, PhysicsScale(direction, 0.13f));
     Vector3 blade_start = PhysicsAdd(guard_center,
                                      PhysicsScale(direction, 0.035f));
@@ -13697,6 +13841,7 @@ static void DrawCombatSword(const CcLocalAgent *agent)
         WORLD_GOLD : (Color){164, 116, 65, 255};
     Color steel = CombatIsDefeated(&agent->combat) ?
                   (Color){95, 101, 101, 255} :
+                  quiet_player_blade ? (Color){118, 139, 139, 255} :
                   (Color){196, 211, 212, 255};
 
     DrawCylinderEx(pommel, guard_center, 0.032f, 0.032f, 7, grip);
@@ -13704,7 +13849,9 @@ static void DrawCombatSword(const CcLocalAgent *agent)
     DrawCylinderEx(PhysicsAdd(guard_center, PhysicsScale(right, -0.14f)),
                    PhysicsAdd(guard_center, PhysicsScale(right, 0.14f)),
                    0.032f, 0.026f, 7, guard_color);
-    DrawCylinderEx(blade_start, blade_tip, 0.052f, 0.012f, 5, steel);
+    DrawCylinderEx(blade_start, blade_tip,
+                   quiet_player_blade ? 0.034f : 0.052f,
+                   0.012f, 5, steel);
     DrawLine3D(blade_start, blade_tip,
                agent->combat.team == CC_COMBAT_PLAYER ? WORLD_GOLD :
                                                         WORLD_INK);
