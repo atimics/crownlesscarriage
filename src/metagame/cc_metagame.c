@@ -440,13 +440,17 @@ static void DescribeMaps(const CcMetagame *metagame,
                          char *output, size_t capacity)
 {
     const CcSim *sim = &metagame->sim;
-    Append(output, capacity, "Physical map case (%d/%d):\n",
-           CcPlayerMapCount(sim), sim->player.map_capacity);
+    Append(output, capacity,
+           "Physical map case (%d/%d); catalogue %d/%d:\n",
+           CcPlayerMapCount(sim), sim->player.map_capacity,
+           CcPlayerMapCollectionCount(sim), CC_MAP_COLLECTION_COUNT);
     for (int32_t i = 0; i < sim->map_count; ++i) {
         const CcMap *map = &sim->maps[i];
-        if (map->owner_id == sim->player.id) {
-            Append(output, capacity, "  %d. %s [carried]\n", i + 1,
-                   map->name);
+        if (map->owner_id == sim->player.id &&
+            CcSimMapIsCatalogued(sim, map)) {
+            Append(output, capacity, "  %d. %s [%s]\n", i + 1,
+                   map->name, CcSimMapIsArchived(sim, map) ?
+                   "Gloamgate archive" : "carried");
         } else if (map->owner_id == sim->player.location_id) {
             Append(output, capacity, "  %d. %s [for sale: %d crowns]%s\n",
                    i + 1, map->name, map->ask_price,
@@ -877,6 +881,7 @@ static void DescribeHelp(char *output, size_t capacity)
            "  buy food|iron|tools|weapons|gold|gems COUNT\n"
            "  sell food|iron|tools|weapons|gold|gems COUNT\n"
            "  buy-map NUMBER, sell-map NUMBER\n"
+           "  archive-map NUMBER, retrieve-map NUMBER (in Gloamgate)\n"
            "  buy-treasure NUMBER, sell-treasure NUMBER, travel NUMBER\n"
            "Act on the road and world:\n"
            "  road fight|bargain, repair NUMBER tools|cash\n"
@@ -1084,19 +1089,25 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
                amount > 0 ? "Loaded" : "Unloaded",
                amount > 0 ? amount : -amount, CcGoodName(good));
     } else if (strcmp(command, "buy-map") == 0 ||
-               strcmp(command, "sell-map") == 0) {
+               strcmp(command, "sell-map") == 0 ||
+               strcmp(command, "archive-map") == 0 ||
+               strcmp(command, "retrieve-map") == 0) {
         int32_t index;
         if (!ParseIndex(first, metagame->sim.map_count, &index)) {
             Append(output, output_capacity, "Choose a map number.\n");
             return false;
         }
+        CcCommandKind kind = strcmp(command, "buy-map") == 0 ?
+            CC_COMMAND_BUY_MAP : strcmp(command, "sell-map") == 0 ?
+            CC_COMMAND_SELL_MAP : strcmp(command, "archive-map") == 0 ?
+            CC_COMMAND_ARCHIVE_MAP : CC_COMMAND_RETRIEVE_MAP;
         CcCommand action = {
-            .kind = strcmp(command, "buy-map") == 0 ?
-                CC_COMMAND_BUY_MAP : CC_COMMAND_SELL_MAP,
+            .kind = kind,
             .target_id = metagame->sim.maps[index].id
         };
         if (!ApplyCommand(metagame, &action, output, output_capacity)) return false;
-        Append(output, output_capacity, "The physical map case changes hands.\n");
+        Append(output, output_capacity,
+               "The physical map collection is rearranged.\n");
     } else if (strcmp(command, "buy-treasure") == 0 ||
                strcmp(command, "sell-treasure") == 0) {
         int32_t index;
