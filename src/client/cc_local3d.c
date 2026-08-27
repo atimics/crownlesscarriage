@@ -7832,8 +7832,8 @@ static void FixedCameraRigAim(FixedCameraRig *rig, int32_t shot,
         rig->fovy_transition_from = rig->displayed_fovy;
         rig->fovy_destination = fovy;
         rig->transition_elapsed = 0.0f;
-        rig->transition_duration = fmaxf(0.55f, fminf(1.15f,
-                                                     0.42f + distance * 0.025f));
+        rig->transition_duration = fmaxf(0.90f, fminf(1.25f,
+                                                     0.78f + distance * 0.018f));
         /* A new authored shot owns its own framing. The hard visibility
            clamp covers the short transition before the new shot settles. */
         rig->framing_offset = (Vector3){0};
@@ -7853,15 +7853,28 @@ static void FixedCameraRigAim(FixedCameraRig *rig, int32_t shot,
     }
     rig->transition_elapsed = fminf(rig->transition_duration,
                                     rig->transition_elapsed + delta_time);
-    float amount = SmoothStep01(rig->transition_elapsed /
-                                rig->transition_duration);
-    rig->displayed_target = Vector3Lerp(rig->transition_from,
-                                        rig->destination, amount);
-    rig->displayed_offset = Vector3Lerp(rig->offset_transition_from,
-                                        rig->offset_destination, amount);
-    rig->displayed_fovy = rig->fovy_transition_from +
-                          (rig->fovy_destination -
-                           rig->fovy_transition_from) * amount;
+    /* Fixed adventure-game shots should not drift beside the actor. Hold the
+       old page while it fades down, switch at full darkness, then reveal the
+       new page. The fade hides the single-frame camera change. */
+    bool reveal_destination =
+        rig->transition_elapsed >= rig->transition_duration * 0.5f;
+    rig->displayed_target = reveal_destination ? rig->destination :
+                                                 rig->transition_from;
+    rig->displayed_offset = reveal_destination ? rig->offset_destination :
+                                                 rig->offset_transition_from;
+    rig->displayed_fovy = reveal_destination ? rig->fovy_destination :
+                                               rig->fovy_transition_from;
+}
+
+static void DrawFixedCameraFade(const FixedCameraRig *rig,
+                                Rectangle destination)
+{
+    if (rig == NULL || rig->transition_duration <= 0.0f ||
+        rig->transition_elapsed >= rig->transition_duration) return;
+    float progress = rig->transition_elapsed / rig->transition_duration;
+    float peak = 1.0f - fabsf(progress * 2.0f - 1.0f);
+    float opacity = SmoothStep01(peak);
+    DrawRectangleRec(destination, Fade(WORLD_VOID, opacity));
 }
 
 static Camera3D FixedCameraRigFrameHero(FixedCameraRig *rig,
@@ -7885,7 +7898,7 @@ static Camera3D FixedCameraRigFrameHero(FixedCameraRig *rig,
             rig->framing_from, rig->framing_destination, amount);
         if (rig->framing_elapsed >= rig->framing_duration) {
             rig->framing_duration = 0.0f;
-            rig->framing_hold_seconds = 0.65f;
+            rig->framing_hold_seconds = 1.00f;
         }
     }
     if (advance && rig->framing_duration <= 0.0f &&
@@ -7949,7 +7962,7 @@ static Camera3D FixedCameraRigFrameHero(FixedCameraRig *rig,
        could chain every few frames while the hero kept walking, which read
        as a nervous follow camera. Centering once creates the fixed-room
        adventure-game rhythm while still protecting long roads. */
-    rig->framing_duration = 0.55f;
+    rig->framing_duration = 1.05f;
     return camera;
 }
 
@@ -8299,7 +8312,7 @@ Camera3D CcLocalCombatCameraInternal(Camera3D base,
         if (delta_time < 0.0f || delta_time > 0.12f) delta_time = 0.0f;
         delta_time = fminf(delta_time, 0.050f);
         combat_camera_rig.last_clock = clock;
-        float direction = active ? 4.2f : -3.0f;
+        float direction = active ? 1.65f : -1.35f;
         combat_camera_rig.combat_weight = CombatClamp(
             combat_camera_rig.combat_weight + delta_time * direction,
             0.0f, 1.0f);
@@ -8329,7 +8342,7 @@ Camera3D CcLocalCombatCameraInternal(Camera3D base,
             base_offset, combat_camera_rig.locked_offset, weight);
         float desired_fovy = base_perspective_fovy +
             (combat_camera_rig.locked_fovy - base_perspective_fovy) * weight;
-        float ease = 1.0f - expf(-delta_time * 8.0f);
+        float ease = 1.0f - expf(-delta_time * 4.5f);
         combat_camera_rig.displayed_target = Vector3Lerp(
             combat_camera_rig.displayed_target, desired_target, ease);
         combat_camera_rig.displayed_offset = Vector3Lerp(
@@ -15870,6 +15883,7 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
             }
         }
     }
+    DrawFixedCameraFade(&road_camera_rig, destination);
 }
 
 static void DrawJourneyAftermath3D(const CcSim *sim,
@@ -16240,6 +16254,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                        CcLocalTraversalName(agent->traversal)),
             destination, 18, 18, 10, WORLD_TEAL);
     }
+    DrawFixedCameraFade(&street_camera_rig, destination);
 }
 
 void CcLocalDrawMarket3D(const CcSim *sim, const CcLocalAgent *agent, float clock,
