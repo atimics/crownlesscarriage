@@ -49,6 +49,15 @@ add_library(crownless_sim
 target_include_directories(crownless_sim PUBLIC src)
 cc_strict_warnings(crownless_sim)
 
+add_library(crownless_creature_catalog
+    src/client/cc_creature_catalog.c
+)
+target_include_directories(crownless_creature_catalog PUBLIC src)
+if(NOT MSVC)
+    target_link_libraries(crownless_creature_catalog PUBLIC m)
+endif()
+cc_strict_warnings(crownless_creature_catalog)
+
 find_package(SQLite3 REQUIRED)
 add_library(crownless_persistence
     src/persistence/cc_save.c
@@ -126,7 +135,8 @@ if(CC_BUILD_CLIENT)
         )
     endif()
     target_link_libraries(crownless_carriage PRIVATE
-        crownless_persistence crownless_locomotion raylib
+        crownless_persistence crownless_locomotion
+        crownless_creature_catalog raylib
     )
     target_compile_definitions(crownless_carriage PRIVATE
         CC_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}"
@@ -415,6 +425,13 @@ if(BUILD_TESTING)
     target_link_libraries(motion_system_tests PRIVATE crownless_locomotion)
     cc_strict_warnings(motion_system_tests)
     add_test(NAME layered_motion_contract COMMAND motion_system_tests)
+
+    add_executable(creature_catalog_tests tests/creature_catalog_tests.c)
+    target_link_libraries(creature_catalog_tests PRIVATE
+        crownless_creature_catalog
+    )
+    cc_strict_warnings(creature_catalog_tests)
+    add_test(NAME generated_creature_catalog COMMAND creature_catalog_tests)
 
     if(CC_BUILD_CLIENT)
         add_executable(npc_appearance_tests

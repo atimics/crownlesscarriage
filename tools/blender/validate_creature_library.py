@@ -12,6 +12,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from inspect_glb import accessor_first_values, collect_stats, parse_glb
+from generate_creature_catalog import OUTPUT_PATH, render_catalog
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -82,6 +83,11 @@ def validate() -> int:
         print(f"FAIL: missing {MANIFEST_PATH}")
         return 1
     manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    expected_catalog = render_catalog(manifest)
+    if not OUTPUT_PATH.exists():
+        failures.append(f"missing generated runtime catalog {OUTPUT_PATH}")
+    elif OUTPUT_PATH.read_text(encoding="utf-8") != expected_catalog:
+        failures.append("generated runtime creature catalog is stale")
     entries = manifest.get("archetypes", [])
     pairs = tuple((entry.get("variant"), entry.get("pose"))
                   for entry in entries)

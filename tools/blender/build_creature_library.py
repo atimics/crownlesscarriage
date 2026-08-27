@@ -970,6 +970,8 @@ def build() -> None:
     }
     MANIFEST_PATH.write_text(json.dumps(manifest, indent=2) + "\n",
                              encoding="utf-8")
+    from generate_creature_catalog import generate
+    generate(MANIFEST_PATH)
     add_preview_scene(preview_sources)
     BLEND_PATH.parent.mkdir(parents=True, exist_ok=True)
     bpy.ops.wm.save_as_mainfile(filepath=str(BLEND_PATH))
