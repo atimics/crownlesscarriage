@@ -19,14 +19,23 @@ recognize places and recurring people.
 ## Current realm rules
 
 The playable slice treats the three kingdoms as the three top-level powers.
-Every pair is at war. A road between different kingdoms is therefore a war
-border: ordinary freight will not cross it. The one hidden smuggler road can
-carry illicit cross-border shipments, and the neutral Crownless Carriage can
-cross openly at its own risk. This makes both routes materially important.
+One pair begins at war; the other courts begin at peace. Relations can later be
+peace, war, or an alliance against the dragon. A declaration does not change a
+matrix by magic. A named courier must carry its sealed message between royal
+seats over the actual road graph. The rider can be delayed, lost, or arrive
+with damaged wording. A corrupt mayor can suppress the message or report its
+opposite. The Crownless Carriage may accept the dispatch and carry it as a
+charter, improving its chance of arriving intact.
+
+On an active war border, ordinary freight crosses at sharply reduced capacity
+and pays a four-crown sanction. A hidden smuggler road substitutes a two-crown
+bribe, and the neutral Crownless Carriage can cross openly if it can pay the
+same real dues and accept the risk. This makes both lawful and hidden routes
+materially important.
 
 War burden is local rather than a single realm-wide number. It rises where a
 settlement touches contested roads, especially when those roads are unsafe or
-closed. Fortresses and capitals carry extra burden. That pressure also raises
+restricted. Fortresses and capitals carry extra burden. That pressure also raises
 the garrison's need for pay, wheat, tools, and weapons. If the material chain fails,
 shortages and unpaid soldiers make the cost of war fall unevenly and inequality
 rises through those real conditions.

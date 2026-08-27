@@ -38,7 +38,7 @@ int main(void)
     CC_CHECK(newest != NULL);
     newest->parent_id = CcMakeId(CC_ENTITY_EVENT, UINT64_C(0xffffff));
     CC_CHECK(!CcSimValidate(&broken, error, sizeof(error)));
-    CC_CHECK(strstr(error, "Causal event history") != NULL);
+    CC_CHECK(strstr(error, "lost parent") != NULL);
 
     const char *save_path = "/tmp/crownless-causal-history-tests.ccsave";
     (void)remove(save_path);

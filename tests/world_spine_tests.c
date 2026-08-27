@@ -22,12 +22,12 @@ int main(void)
     CcSimInit(&second, UINT32_C(0x50607080));
 
     CC_CHECK(first.kingdom_count == 3);
-    for (int32_t a = 0; a < first.kingdom_count; ++a) {
-        for (int32_t b = a + 1; b < first.kingdom_count; ++b) {
-            CC_CHECK(CcSimKingdomsAtWar(
-                &first, first.kingdoms[a].id, first.kingdoms[b].id));
-        }
-    }
+    CC_CHECK(CcSimKingdomsAtWar(
+        &first, first.kingdoms[0].id, first.kingdoms[1].id));
+    CC_CHECK(!CcSimKingdomsAtWar(
+        &first, first.kingdoms[0].id, first.kingdoms[2].id));
+    CC_CHECK(!CcSimKingdomsAtWar(
+        &first, first.kingdoms[1].id, first.kingdoms[2].id));
     for (int32_t i = 0; i < first.settlement_count; ++i) {
         const CcSettlement *settlement = &first.settlements[i];
         CC_CHECK(CcSettlementServiceCount(settlement) > 0);
@@ -109,13 +109,13 @@ int main(void)
     CcSimInit(&carriage, UINT32_C(0xca771a9e));
     carriage.player.location_id = carriage.settlements[1].id;
     carriage.carriage.location_id = carriage.player.location_id;
-    carriage.maps[5].owner_id = carriage.player.id;
+    carriage.maps[1].owner_id = carriage.player.id;
     CcCommand cross_border = {
         .kind = CC_COMMAND_TRAVEL,
-        .target_id = carriage.settlements[5].id
+        .target_id = carriage.settlements[2].id
     };
     CC_CHECK(CcSimRouteCrossesWarBorder(&carriage,
-                                        carriage.routes[5].id));
+                                        carriage.routes[1].id));
     CC_CHECK(CcSimApply(&carriage, &cross_border, error, sizeof(error)));
 
     CcSimAdvanceDays(&first, 55);
@@ -130,18 +130,10 @@ int main(void)
             &first, shipment->route_id);
         CC_CHECK(origin != NULL && destination != NULL && final != NULL);
         CC_CHECK(shipment_route != NULL);
-        CC_CHECK(origin->kingdom_id == destination->kingdom_id ||
-                 shipment_route->smuggler_route);
-        if (origin->kingdom_id != final->kingdom_id) {
-            bool smuggler_path_exists = false;
-            for (int32_t route_index = 0;
-                 route_index < first.route_count; ++route_index) {
-                if (first.routes[route_index].smuggler_route) {
-                    smuggler_path_exists = true;
-                }
-            }
-            CC_CHECK(smuggler_path_exists);
-        }
+        CC_CHECK(shipment_route->from_id == origin->id ||
+                 shipment_route->to_id == origin->id);
+        CC_CHECK(shipment_route->from_id == destination->id ||
+                 shipment_route->to_id == destination->id);
     }
 
     int32_t initial_support[CC_MAX_FACTIONS];

@@ -133,6 +133,63 @@ static void CheckSchema8Compatibility(char *error, size_t error_capacity)
     RemoveDatabase(path);
 }
 
+static void CheckDiplomacyPersistence(char *error, size_t error_capacity)
+{
+    const char *path = "persistence-diplomacy-test.ccsave";
+    RemoveDatabase(path);
+    CcSim sim;
+    CcSimInit(&sim, UINT32_C(0xc0a71e12));
+    for (int32_t i = 0; i < sim.kingdom_count; ++i) {
+        sim.dragon.hoard += sim.kingdoms[i].treasury;
+        sim.kingdoms[i].treasury = 0;
+    }
+    sim.dragon_campaign.attempts = 3;
+    sim.dragon_campaign.victories = 1;
+    sim.dragon_campaign.defeats = 2;
+    sim.dragon_campaign.cooldown_days = 123;
+    CcSimAdvanceDays(&sim, 27);
+    CC_CHECK(sim.courier_count > 0);
+    CC_CHECK(sim.couriers[0].status == CC_COURIER_WAITING);
+    CC_CHECK(CcSaveWrite(path, &sim, error, error_capacity));
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(CcSimHash(&restored) == CcSimHash(&sim));
+    CC_CHECK(restored.courier_count == sim.courier_count);
+    CC_CHECK(restored.couriers[0].id == sim.couriers[0].id);
+    CC_CHECK(restored.couriers[0].reliability ==
+             sim.couriers[0].reliability);
+    CC_CHECK(restored.diplomacy[0][1] == sim.diplomacy[0][1]);
+    CC_CHECK(restored.dragon_campaign.attempts == 3);
+    CC_CHECK(restored.dragon_campaign.victories == 1);
+    CC_CHECK(restored.dragon_campaign.defeats == 2);
+    RemoveDatabase(path);
+}
+
+static void CheckSchema10Compatibility(char *error, size_t error_capacity)
+{
+    const char *path = "persistence-legacy-v10-test.ccsave";
+    RemoveDatabase(path);
+    CcSim legacy;
+    CcSimInit(&legacy, UINT32_C(0x1e9ac10));
+    legacy.schema_version = 10U;
+    legacy.generator_version = 10U;
+    CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.generator_version == CC_GENERATOR_VERSION);
+    for (int32_t first = 0; first < restored.kingdom_count; ++first) {
+        for (int32_t second = first + 1;
+             second < restored.kingdom_count; ++second) {
+            CC_CHECK(CcSimKingdomsAtWar(
+                &restored, restored.kingdoms[first].id,
+                restored.kingdoms[second].id));
+        }
+    }
+    CC_CHECK(CcSimValidate(&restored, error, error_capacity));
+    RemoveDatabase(path);
+}
+
 static void CheckJournalRecovery(char *error, size_t error_capacity)
 {
     const char *path = "persistence-journal-recovery-test.ccsave";
@@ -410,6 +467,12 @@ int main(void)
 
     CcSim original;
     CcSimInit(&original, UINT32_C(0xa11ce5ed));
+    original.kingdoms[0].iron_ledger_debt = 37;
+    original.iron_ledger_reserve -= 37;
+    original.settlements[0].market_coins += 37;
+    original.goblins.hoard_defenses = 4;
+    original.hoard_raiders.social_raid_latched = true;
+    original.hoard_raiders.war_raid_latched = true;
     CcSimAdvanceDays(&original, 23);
     char error[256];
     CcSettlement *capital = &original.settlements[4];
@@ -430,6 +493,8 @@ int main(void)
     CheckSchema5Compatibility(error, sizeof(error));
     CheckSchema6Compatibility(error, sizeof(error));
     CheckSchema8Compatibility(error, sizeof(error));
+    CheckSchema10Compatibility(error, sizeof(error));
+    CheckDiplomacyPersistence(error, sizeof(error));
     CheckJournalRecovery(error, sizeof(error));
     CheckJournalCheckpointAndTamper(error, sizeof(error));
     CcCommand command = {
@@ -484,6 +549,13 @@ int main(void)
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     CC_CHECK(CcSimHash(&restored) == expected);
     CC_CHECK(restored.current_day == original.current_day);
+    CC_CHECK(restored.iron_ledger_reserve ==
+             original.iron_ledger_reserve);
+    CC_CHECK(restored.kingdoms[0].iron_ledger_debt ==
+             original.kingdoms[0].iron_ledger_debt);
+    CC_CHECK(restored.goblins.hoard_defenses == 4);
+    CC_CHECK(restored.hoard_raiders.social_raid_latched);
+    CC_CHECK(restored.hoard_raiders.war_raid_latched);
     CC_CHECK(restored.player.location_id == original.player.location_id);
     CC_CHECK(restored.player.map_capacity == original.player.map_capacity);
     CC_CHECK(restored.player.accepted_situation_id ==

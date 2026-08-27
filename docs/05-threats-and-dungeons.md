@@ -111,7 +111,7 @@ the debt remains unpaid, the dragon burns it. After the first burning, the
 wealthy government repays the dragon from its treasury. The rulers finally
 spend the guarded money, but only after commoners and homes have paid the cost.
 
-War creates a second motive. Unsafe and closed frontier roads raise local war
+War creates a second motive. Unsafe and restricted frontier roads raise local war
 burden. The crown must move treasury gold into a local war chest. That chest
 pays wages into the town market and buys wheat, tools, and weapons from named suppliers;
 the goods then travel in ordinary shipments. If a heavily exposed fortress or
@@ -156,6 +156,57 @@ would cost.
   attack, the responsible kingdom makes restitution from the war chest,
   treasury, and then existing household coin. Repayment never creates gold by
   converting destroyed food into money.
+- Goblins defend the cave against automatic hoard thieves. Their defence spends
+  real Weapons and members, which sends them back out to raid for replacement gear.
+- A continuing social or war crisis cannot launch the same raid every year. Its
+  pressure must ease before that motive can rise again.
+
+## Debt, sanctions, and night roads
+
+The Iron Ledger is a network of monasteries holding copied accounts and real
+deposited crowns. It lends those crowns for famine food and productive Tools.
+The borrowing kingdom records debt; treasury payments and market tithes return
+the same crowns to the monastery reserve. Solvent kingdoms can deposit surplus
+treasury coin, so wealth can circulate without creating money.
+
+A route marked restricted is not deleted. Its condition halves freight
+capacity, and an official war border halves it again. Ordinary border traffic
+pays sanctions, a damaged road charges tolls, and a night road takes bribes.
+These payments move into a real kingdom treasury.
+High hunger or a realm near its credit limit can open more night roads. Debt and
+hunger also recruit bandits, but an unfed bandit camp loses members and cannot
+raid a town whose stores are already empty.
+
+Goblin tribute raids can strip portable treasure and exposed coin. There is no
+artificial cash floor and no invisible limit on the hoard. If goblins and the
+dragon drain too much working coin, that is a real strategic crisis: kingdoms
+can answer it by forming an alliance and risking a physical expedition against
+the cave.
+
+## Couriers, alliances, and slaying the dragon
+
+Kings create diplomatic intentions, not instant facts. Declarations of war,
+peace offers, calls for an anti-dragon alliance, and muster orders travel as
+sealed courier messages. Couriers choose actual roads, take their travel time,
+and face route danger. A damaged message may be lost; a weak or corrupt court
+may suppress it or record the wrong meaning. The Crownless Carriage can accept
+one of these messages as its current charter and physically deliver it.
+
+When the dragon holds roughly a third of all tracked crowns, courts begin
+sending alliance calls. Delivered muster orders pledge real kingdoms. Two or
+more pledged realms may assemble a host only if their towns can supply 32 Food,
+8 Tools, and 12 Weapons. These goods leave the towns and travel with the host.
+The cave battle measures this supplied force against the dragon and its goblin
+worshippers. Defeat destroys the expedition's supplies and hurts its mustering
+town. Victory kills the dragon, breaks goblin devotion, and puts the dragon's
+actual crowns, cave goods, and named treasures into a returning train. Nothing
+is minted as a reward. The recovered crowns are divided between the allied
+treasuries when the host gets home; remaining goods and treasures are unloaded
+at its mustering town.
+
+The dragon's death does not delete the goblins. Without their god they cease
+tribute, but their lair still consumes Food and still needs Tools and Weapons.
+Shortages send the surviving goblins back onto the roads as ordinary raiders.
 
 ## Smuggling and black markets
 

@@ -12,7 +12,12 @@ static void PrintSummary(const CcSim *sim, bool detail)
     int32_t maximum_hunger = 0;
     int32_t travelling = 0;
     int32_t open_routes = 0;
+    int32_t smuggler_routes = 0;
     int32_t legitimacy = 0;
+    int32_t wars = 0;
+    int32_t alliances = 0;
+    int32_t active_couriers = 0;
+    CcMoney debt = 0;
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         total_hunger += sim->settlements[i].hunger;
         if (sim->settlements[i].hunger > maximum_hunger) {
@@ -24,19 +29,48 @@ static void PrintSummary(const CcSim *sim, bool detail)
     }
     for (int32_t i = 0; i < sim->route_count; ++i) {
         if (!sim->routes[i].closed) open_routes += 1;
+        if (sim->routes[i].smuggler_route) smuggler_routes += 1;
     }
-    for (int32_t i = 0; i < sim->kingdom_count; ++i) legitimacy += sim->kingdoms[i].legitimacy;
+    for (int32_t i = 0; i < sim->kingdom_count; ++i) {
+        legitimacy += sim->kingdoms[i].legitimacy;
+        debt += sim->kingdoms[i].iron_ledger_debt;
+        for (int32_t second = i + 1;
+             second < sim->kingdom_count; ++second) {
+            if (sim->diplomacy[i][second] == CC_DIPLOMACY_WAR) wars += 1;
+            if (sim->diplomacy[i][second] == CC_DIPLOMACY_ALLIANCE) {
+                alliances += 1;
+            }
+        }
+    }
+    for (int32_t i = 0; i < sim->courier_count; ++i) {
+        CcCourierStatus status = sim->couriers[i].status;
+        if (status == CC_COURIER_WAITING ||
+            status == CC_COURIER_TRAVELLING ||
+            status == CC_COURIER_WITH_PLAYER) active_couriers += 1;
+    }
     (void)printf("day=%d hash=%016" PRIx64
                  " average_hunger=%d maximum_hunger=%d shipments=%d events=%d"
                  " open_routes=%d/%d legitimacy=%d live_situations=%d"
-                 " bandit_influence=%d monster_pressure=%d\n",
+                 " bandit_influence=%d monster_pressure=%d"
+                 " night_roads=%d monastery_reserve=%" PRId64
+                 " monastery_debt=%" PRId64
+                 " hoard_raids=%d goblin_guards=%d"
+                 " wars=%d alliances=%d couriers=%d"
+                 " dragon_slain=%d dragon_campaign=%d/%d/%d\n",
                  sim->current_day, CcSimHash(sim),
                  total_hunger / sim->settlement_count, maximum_hunger,
                  travelling, sim->event_count,
                  open_routes, sim->route_count, legitimacy / sim->kingdom_count,
                  CcSimActiveSituationCount(sim),
                  sim->bandit_count > 0 ? sim->bandits[0].influence : 0,
-                 sim->monster_count > 0 ? sim->monsters[0].pressure : 0);
+                 sim->monster_count > 0 ? sim->monsters[0].pressure : 0,
+                 smuggler_routes, sim->iron_ledger_reserve, debt,
+                 sim->hoard_raiders.raids_completed,
+                 sim->goblins.hoard_defenses, wars, alliances,
+                 active_couriers, sim->dragon.slain ? 1 : 0,
+                 sim->dragon_campaign.attempts,
+                 sim->dragon_campaign.victories,
+                 sim->dragon_campaign.defeats);
     if (detail) {
         for (int32_t i = 0; i < sim->settlement_count; ++i) {
             const CcSettlement *place = &sim->settlements[i];

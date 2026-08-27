@@ -74,6 +74,25 @@ static const CcSettlement *CurrentPlace(const CcMetagame *metagame)
                            metagame->sim.player.location_id);
 }
 
+static const CcCourier *CourierById(const CcSim *sim, CcId id)
+{
+    for (int32_t i = 0; i < sim->courier_count; ++i) {
+        if (sim->couriers[i].id == id) return &sim->couriers[i];
+    }
+    return NULL;
+}
+
+static const char *CourierPurpose(CcCourierKind kind)
+{
+    switch (kind) {
+        case CC_COURIER_WAR_DECLARATION: return "a declaration of war";
+        case CC_COURIER_PEACE_OFFER: return "an offer of peace";
+        case CC_COURIER_DRAGON_ALLIANCE: return "a call for dragon alliance";
+        case CC_COURIER_DRAGON_MUSTER: return "orders to muster against the dragon";
+    }
+    return "sealed news";
+}
+
 static const char *SituationTarget(const CcSim *sim,
                                    const CcSituation *situation,
                                    char *buffer, size_t capacity)
@@ -99,6 +118,18 @@ static const char *SituationTarget(const CcSim *sim,
             if (sim->dungeons[i].id == situation->target_id) {
                 return sim->dungeons[i].name;
             }
+        }
+    }
+    if (situation->kind == CC_SITUATION_COURIER_DELIVERY) {
+        const CcCourier *courier = CourierById(sim, situation->target_id);
+        if (courier != NULL) {
+            const CcSettlement *destination = CcSimSettlement(
+                sim, courier->destination_settlement_id);
+            (void)snprintf(buffer, capacity, "%s to %s",
+                           CourierPurpose(courier->kind),
+                           destination != NULL ? destination->name :
+                           "an unknown court");
+            return buffer;
         }
     }
     return "an unknown target";
@@ -266,24 +297,43 @@ static void DescribeRumors(const CcMetagame *metagame,
     if (place != NULL && place->id == sim->settlements[1].id) {
         Append(output, capacity,
                "  A miller says the western farms still have grain.\n"
-               "  A clerk says sealed papers may pass the closed bridge.\n"
+               "  A clerk says the sanctioned bridge still passes carts for a toll.\n"
                "  A night driver says an older road reaches the mine without a gate.\n");
     } else if (place != NULL && place->id == sim->settlements[0].id) {
         Append(output, capacity,
                "  Carters say eastern workers are being turned away from empty stores.\n"
-               "  The fortress has closed the treaty bridge, but relief papers still carry weight.\n");
+               "  The fortress has sanctioned the treaty bridge; relief papers lower the trouble, not the toll.\n");
     } else if (place != NULL && place->id == sim->settlements[3].id) {
         Append(output, capacity,
                "  Miners blame the reopened deep works for the creatures below.\n"
                "  Officials, smugglers, and wardens each want a different future for the tunnel.\n");
     } else {
         Append(output, capacity,
-               "  Road talk points back toward the hungry market and the closed bridge.\n");
+               "  Road talk points back toward the hungry market and the tolled bridge.\n");
     }
     Append(output, capacity,
            "  Old folk agree: goblins feed the hoard; the dragon burns only when treasure is stolen from it.\n");
     Append(output, capacity,
            "  Hungry people who can see guarded wealth have begun asking why only goblins dare the cave.\n");
+    int32_t heard = 0;
+    for (int32_t i = 0; i < sim->event_count && heard < 4; ++i) {
+        const CcEvent *event = CcSimRecentEvent(sim, i);
+        if (event == NULL || place == NULL || event->location_id != place->id ||
+            sim->current_day - event->day > 112) continue;
+        bool courier_news = event->kind == CC_EVENT_COURIER_ARRIVED ||
+            event->kind == CC_EVENT_COURIER_LOST ||
+            event->kind == CC_EVENT_COURIER_DISTORTED ||
+            event->kind == CC_EVENT_WAR_DECLARED ||
+            event->kind == CC_EVENT_PEACE_DECLARED ||
+            event->kind == CC_EVENT_ALLIANCE_DECLARED ||
+            event->kind == CC_EVENT_DRAGON_MUSTERED ||
+            event->kind == CC_EVENT_DRAGON_BATTLE ||
+            event->kind == CC_EVENT_DRAGON_SLAIN ||
+            event->kind == CC_EVENT_DRAGON_HOARD_RECOVERED;
+        if (!courier_news) continue;
+        Append(output, capacity, "  Day %d: %s\n", event->day, event->text);
+        heard += 1;
+    }
 }
 
 static void DescribeCharters(const CcMetagame *metagame,
@@ -318,9 +368,12 @@ static void DescribeCharters(const CcMetagame *metagame,
         } else if (situation->kind == CC_SITUATION_ROUTE_REPAIR) {
             Append(output, capacity,
                    "     Reopen the road with 2 tools or 18 crowns. Tools are faster and last longer.\n");
-        } else {
+        } else if (situation->kind == CC_SITUATION_MONSTER_EXPEDITION) {
             Append(output, capacity,
                    "     Public costs 2 tools + 12 crowns; smuggler costs 1 tool + 6; seal costs 3 tools.\n");
+        } else {
+            Append(output, capacity,
+                   "     Carry the sealed dispatch in the carriage. Its news takes effect only when it reaches the named court.\n");
         }
     }
     if (shown == 0) Append(output, capacity, "  No open offer can be made here.\n");
@@ -365,7 +418,7 @@ static void DescribeRoutes(const CcMetagame *metagame,
             !sponsored_night_passage) continue;
         Append(output, capacity, "  %d. %s — %d days, %s",
                i + 1, destination != NULL ? destination->name : "unknown",
-               route->travel_days, route->closed ? "closed" : "open");
+               route->travel_days, route->closed ? "restricted and tolled" : "open");
         if (map != NULL) {
             Append(output, capacity,
                    ", %s chart says %s (%d days old)%s\n",
@@ -470,13 +523,22 @@ static void DescribeDragon(const CcMetagame *metagame,
     const CcSim *sim = &metagame->sim;
     const CcSettlement *lair = CcSimSettlement(
         sim, sim->dragon.lair_settlement_id);
-    Append(output, capacity,
-           "%s sleeps above %s. Its hoard holds %" PRId64
-           " crowns, %d Raw Gold, %d Gems, and %d named treasures.\n",
-           sim->dragon.name, lair != NULL ? lair->name : "an unknown cave",
-           sim->dragon.hoard, sim->dragon.hoard_goods[CC_GOOD_GOLD],
-           sim->dragon.hoard_goods[CC_GOOD_GEMS],
-           CcSimTreasureCountForOwner(sim, sim->dragon.id));
+    if (sim->dragon.slain) {
+        Append(output, capacity,
+               "%s was slain on day %d above %s. Its cave now holds %" PRId64
+               " crowns; the goblin cult has broken into hungry raiders.\n",
+               sim->dragon.name, sim->dragon.slain_day,
+               lair != NULL ? lair->name : "an unknown cave",
+               sim->dragon.hoard);
+    } else {
+        Append(output, capacity,
+               "%s sleeps above %s. Its hoard holds %" PRId64
+               " crowns, %d Raw Gold, %d Gems, and %d named treasures.\n",
+               sim->dragon.name, lair != NULL ? lair->name : "an unknown cave",
+               sim->dragon.hoard, sim->dragon.hoard_goods[CC_GOOD_GOLD],
+               sim->dragon.hoard_goods[CC_GOOD_GEMS],
+               CcSimTreasureCountForOwner(sim, sim->dragon.id));
+    }
     if (sim->goblins.tribute_phase == CC_GOBLIN_TRIBUTE_OUTBOUND) {
         const CcSettlement *target = CcSimSettlement(
             sim, sim->goblins.tribute_target_id);
@@ -504,12 +566,12 @@ static void DescribeDragon(const CcMetagame *metagame,
     } else {
         Append(output, capacity,
                "%s waits in its lair with %d Food, %d Tools, %d Weapons, and %" PRId64
-               " crowns. Its next raid follows its real needs.\n",
+               " crowns. It has defended the dragon's hoard %d times; its next raid follows its real needs.\n",
                sim->goblins.name,
                sim->goblins.lair_stock[CC_GOOD_FOOD],
                sim->goblins.lair_stock[CC_GOOD_TOOLS],
                sim->goblins.lair_stock[CC_GOOD_WEAPONS],
-               sim->goblins.lair_coins);
+               sim->goblins.lair_coins, sim->goblins.hoard_defenses);
     }
     if (sim->hoard_raiders.phase == CC_HOARD_RAIDERS_OUTBOUND) {
         const CcSettlement *origin = CcSimSettlement(
@@ -523,7 +585,7 @@ static void DescribeDragon(const CcMetagame *metagame,
                        CcSimWarSupplyCrisisAtSettlement(sim, origin->id) : 0);
         } else {
             Append(output, capacity,
-                   "%s is travelling from %s to rob the hoard after inequality reached %d.\n",
+                   "%s is travelling from %s to rob the hoard after inequality or monastery default reached %d.\n",
                    sim->hoard_raiders.name,
                    origin != NULL ? origin->name : "an unequal town",
                    origin != NULL ?
@@ -540,6 +602,23 @@ static void DescribeDragon(const CcMetagame *metagame,
                sim->hoard_raiders.motive == CC_HOARD_RAID_WAR_FINANCE ?
                    "the war chest" : "bread and debts");
     }
+    if (sim->dragon_campaign.phase == CC_DRAGON_CAMPAIGN_OUTBOUND) {
+        const CcSettlement *origin = CcSimSettlement(
+            sim, sim->dragon_campaign.origin_settlement_id);
+        Append(output, capacity,
+               "An allied host marches from %s with %d Food, %d Tools, and %d Weapons; battle is %d days away.\n",
+               origin != NULL ? origin->name : "a mustering ground",
+               sim->dragon_campaign.supplies[CC_GOOD_FOOD],
+               sim->dragon_campaign.supplies[CC_GOOD_TOOLS],
+               sim->dragon_campaign.supplies[CC_GOOD_WEAPONS],
+               sim->dragon_campaign.days_remaining);
+    } else if (sim->dragon_campaign.phase == CC_DRAGON_CAMPAIGN_RETURNING) {
+        Append(output, capacity,
+               "The dragon host is %d days from home with %" PRId64
+               " recovered crowns and the cave goods in its train.\n",
+               sim->dragon_campaign.days_remaining,
+               sim->dragon_campaign.recovered_coins);
+    }
     if (sim->dragon.stolen_outstanding > 0) {
         const CcSettlement *target = CcSimSettlement(
             sim, sim->dragon.retaliation_target_id);
@@ -548,11 +627,15 @@ static void DescribeDragon(const CcMetagame *metagame,
                sim->dragon.stolen_outstanding,
                target != NULL ? target->name : "the countryside",
                sim->dragon.omen_days_remaining);
-    } else {
+    } else if (!sim->dragon.slain) {
         Append(output, capacity,
                "The dragon is calm. Goblins raid for food, gear, and offerings; only theft from the delivered hoard brings dragon fire.\n");
+    } else {
+        Append(output, capacity,
+               "No dragon remains to retaliate. Goblins still raid when their lair runs short of food, tools, or weapons.\n");
     }
-    if (sim->player.location_id == sim->dragon.lair_settlement_id) {
+    if (!sim->dragon.slain &&
+        sim->player.location_id == sim->dragon.lair_settlement_id) {
         Append(output, capacity,
                "Here you may use 'dragon steal COUNT' or 'dragon return COUNT'.\n");
     }
@@ -583,7 +666,7 @@ static void DescribeInequality(const CcMetagame *metagame,
                CcSimWarBurdenAtSettlement(sim, place->id));
     }
     Append(output, capacity,
-           "At 75 or more, with real hunger, people may risk a raid on the dragon hoard.\n");
+           "At 75 or more, with real hunger, people may risk a raid on the dragon hoard. A realm near its monastery credit limit can also drive the Ash-Poor to the cave.\n");
 }
 
 static void DescribeEconomy(const CcMetagame *metagame,
@@ -615,6 +698,9 @@ static void DescribeEconomy(const CcMetagame *metagame,
     }
     Append(output, capacity,
            "A smith spends 2 Iron per Tools bundle and 3 Iron per Weapons bundle. A market or capital smith may spend 1 Raw Gold, 1 Gem, and 3 weeks of work on one named one-slot treasure.\n");
+    Append(output, capacity,
+           "The copied monastery ledger holds %" PRId64 " crowns. It lends real deposited coin for famine grain and productive Tools; realms repay from treasury and market tithes.\n",
+           sim->iron_ledger_reserve);
 }
 
 static void DescribeWar(const CcMetagame *metagame,
@@ -622,13 +708,48 @@ static void DescribeWar(const CcMetagame *metagame,
 {
     const CcSim *sim = &metagame->sim;
     Append(output, capacity,
-           "The three kingdoms contest every road that crosses their borders. War burden rises at exposed, unsafe, or closed frontiers.\n");
+           "Kings declare war, offer peace, and make dragon alliances by physical courier. Nothing changes until the message arrives; a lost or corrupted dispatch may delay or twist the result. Restricted roads still carry reduced freight under tolls and sanctions.\n");
     for (int32_t i = 0; i < sim->kingdom_count; ++i) {
         const CcKingdom *kingdom = &sim->kingdoms[i];
         Append(output, capacity,
-               "  %s: treasury %" PRId64 ", legitimacy %d\n",
-               kingdom->name, kingdom->treasury, kingdom->legitimacy);
+               "  %s: treasury %" PRId64 ", monastery debt %" PRId64
+               ", legitimacy %d\n",
+               kingdom->name, kingdom->treasury,
+               kingdom->iron_ledger_debt, kingdom->legitimacy);
     }
+    Append(output, capacity, "Confirmed relations:\n");
+    for (int32_t first = 0; first < sim->kingdom_count; ++first) {
+        for (int32_t second = first + 1;
+             second < sim->kingdom_count; ++second) {
+            Append(output, capacity, "  %s / %s: %s since day %d\n",
+                   sim->kingdoms[first].name,
+                   sim->kingdoms[second].name,
+                   CcDiplomaticStateName(sim->diplomacy[first][second]),
+                   sim->diplomacy_changed_day[first][second]);
+        }
+    }
+    Append(output, capacity, "Dispatches on the roads:\n");
+    int32_t dispatches = 0;
+    for (int32_t i = 0; i < sim->courier_count; ++i) {
+        const CcCourier *courier = &sim->couriers[i];
+        if (courier->status == CC_COURIER_DELIVERED ||
+            courier->status == CC_COURIER_LOST ||
+            courier->status == CC_COURIER_DISTORTED) continue;
+        const CcSettlement *from = CcSimSettlement(
+            sim, courier->current_settlement_id);
+        const CcSettlement *to = CcSimSettlement(
+            sim, courier->destination_settlement_id);
+        Append(output, capacity,
+               "  %s: %s to %s, reliability %d%%%s\n",
+               CourierPurpose(courier->kind),
+               from != NULL ? from->name : "the road",
+               to != NULL ? to->name : "an unknown court",
+               courier->reliability,
+               courier->status == CC_COURIER_WITH_PLAYER ?
+                   " [in your carriage]" : "");
+        dispatches += 1;
+    }
+    if (dispatches == 0) Append(output, capacity, "  None.\n");
     Append(output, capacity, "Frontier roads:\n");
     for (int32_t i = 0; i < sim->route_count; ++i) {
         const CcRoute *route = &sim->routes[i];
@@ -639,7 +760,7 @@ static void DescribeWar(const CcMetagame *metagame,
                "  %s to %s: %s, security %d; burdens %d/%d\n",
                from != NULL ? from->name : "unknown",
                to != NULL ? to->name : "unknown",
-               route->closed ? "closed" : "open", route->security,
+               route->closed ? "restricted/tolled" : "open", route->security,
                from != NULL ?
                    CcSimWarBurdenAtSettlement(sim, from->id) : 0,
                to != NULL ? CcSimWarBurdenAtSettlement(sim, to->id) : 0);

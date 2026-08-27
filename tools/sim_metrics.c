@@ -80,9 +80,39 @@ static void PrintYear(const CcSim *sim, int32_t seed_number, int32_t year)
     }
     int32_t legitimacy_total = 0;
     CcMoney treasury_total = 0;
+    CcMoney debt_total = 0;
+    int32_t smuggler_routes = 0;
+    int32_t wars = 0;
+    int32_t alliances = 0;
+    int32_t active_couriers = 0;
+    int32_t lost_couriers = 0;
+    int32_t distorted_couriers = 0;
     for (int32_t i = 0; i < sim->kingdom_count; ++i) {
         legitimacy_total += sim->kingdoms[i].legitimacy;
         treasury_total += sim->kingdoms[i].treasury;
+        debt_total += sim->kingdoms[i].iron_ledger_debt;
+    }
+    for (int32_t i = 0; i < sim->route_count; ++i) {
+        if (sim->routes[i].smuggler_route) smuggler_routes += 1;
+    }
+    for (int32_t first = 0; first < sim->kingdom_count; ++first) {
+        for (int32_t second = first + 1;
+             second < sim->kingdom_count; ++second) {
+            if (sim->diplomacy[first][second] == CC_DIPLOMACY_WAR) {
+                wars += 1;
+            } else if (sim->diplomacy[first][second] ==
+                       CC_DIPLOMACY_ALLIANCE) {
+                alliances += 1;
+            }
+        }
+    }
+    for (int32_t i = 0; i < sim->courier_count; ++i) {
+        CcCourierStatus status = sim->couriers[i].status;
+        if (status == CC_COURIER_WAITING ||
+            status == CC_COURIER_TRAVELLING ||
+            status == CC_COURIER_WITH_PLAYER) active_couriers += 1;
+        else if (status == CC_COURIER_LOST) lost_couriers += 1;
+        else if (status == CC_COURIER_DISTORTED) distorted_couriers += 1;
     }
     (void)printf(
         "%d,%u,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,"
@@ -103,7 +133,8 @@ static void PrintYear(const CcSim *sim, int32_t seed_number, int32_t year)
         sim->dragon.retaliations);
     (void)printf(
         "%d,%d,%d,%d,%d,%d,%d,%" PRId64 ",%" PRId64
-        ",%" PRId64 ",%d,%d,%d,%" PRId64 ",%d,%d,%d,%d,%d,%d,%d,%d\n",
+        ",%" PRId64 ",%d,%d,%d,%" PRId64 ",%d,%d,%d,%d,%d,%d,%d,%d,"
+        "%" PRId64 ",%" PRId64 ",%d,%d",
         inequality_total / sim->settlement_count, inequality_maximum,
         war_burden_total / sim->settlement_count, war_burden_maximum,
         sim->hoard_raiders.raids_completed,
@@ -119,7 +150,16 @@ static void PrintYear(const CcSim *sim, int32_t seed_number, int32_t year)
         sim->dragon.hoard_goods[CC_GOOD_GEMS],
         CcSimTrackedGood(sim, CC_GOOD_IRON),
         CcSimTrackedGood(sim, CC_GOOD_TOOLS),
-        CcSimTrackedGood(sim, CC_GOOD_WEAPONS));
+        CcSimTrackedGood(sim, CC_GOOD_WEAPONS),
+        sim->iron_ledger_reserve, debt_total, smuggler_routes,
+        sim->goblins.hoard_defenses);
+    (void)printf(
+        ",%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
+        wars, alliances, active_couriers, lost_couriers,
+        distorted_couriers, sim->dragon.slain ? 1 : 0,
+        sim->dragon_campaign.attempts,
+        sim->dragon_campaign.victories,
+        sim->dragon_campaign.defeats);
 }
 
 int main(int argc, char **argv)
@@ -153,7 +193,11 @@ int main(int argc, char **argv)
         "market_coins,war_chests,total_food_stock,average_war_supply_crisis,"
         "maximum_war_supply_crisis,total_kingdom_treasury,treasure_count,"
         "goblin_lair_food,goblin_lair_weapons,dragon_raw_gold,dragon_gems,"
-        "tracked_iron,tracked_tools,tracked_weapons");
+        "tracked_iron,tracked_tools,tracked_weapons,iron_ledger_reserve,"
+        "iron_ledger_debt,smuggler_routes,goblin_hoard_defenses,wars,"
+        "alliances,active_couriers,lost_couriers,distorted_couriers,"
+        "dragon_slain,dragon_campaign_attempts,dragon_campaign_victories,"
+        "dragon_campaign_defeats");
     char error[192];
     for (int32_t seed_number = 1; seed_number <= seeds; ++seed_number) {
         CcSim sim;

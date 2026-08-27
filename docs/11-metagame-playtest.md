@@ -46,7 +46,8 @@ Watch for:
 Do not give the player a solution list. The `rumors` command gives local clues:
 
 - The western farms have grain
-- Official papers may pass the closed bridge
+- Anyone may pay to pass the restricted bridge, but relief papers do not make
+  its guards friendly
 - An old night road reaches the mine
 
 Offers are local. A player must meet the sponsor to accept or refuse one. A
@@ -70,12 +71,18 @@ relief home. The resulting omens and fire must trace back through that journey
 to the inequality that caused it.
 
 Type `economy` to inspect fields, mountain deposits, rare-seam progress, all six
-goods, and named treasure ownership. Type `treasures` for each named object's
-materials, maker, location, holder, and appraisal. A treasure can be moved with
-`buy-treasure NUMBER` and `sell-treasure NUMBER`; it fills one carriage slot.
+goods, named treasure ownership, and the copied monastery reserve. The reserve
+contains real deposited crowns. It lends only for famine grain and productive
+Tools, while each kingdom records and repays its own debt. Type `treasures` for
+each named object's materials, maker, location, holder, and appraisal. A
+treasure can be moved with `buy-treasure NUMBER` and `sell-treasure NUMBER`; it
+fills one carriage slot.
 Type `war` to inspect border pressure,
 kingdom treasuries, local markets, war chests, garrison food, tools, and
-weapons, legitimacy, and the roads creating the burden.
+weapons, legitimacy, current peace/war/alliance relations, and sealed
+dispatches moving between courts. A dispatch offered locally can be accepted
+like any other charter. Carry it to the named court; the diplomatic change must
+not happen before arrival.
 The crown moves gold into a war chest; that chest pays wages and named suppliers,
 and the supplies travel. A broke and unpopular court with a real supply crisis
 may send the Crown Levy to rob the cave. The dragon still responds to the theft,
@@ -127,6 +134,23 @@ Before each round of human tests, verify these hostile cases:
 - Goblin loot leaves a real market, returns to the lair, and reaches the hoard
   only after a separate tribute journey.
 - Intercepted tribute that never reaches the cave does not belong to the dragon.
+- Goblins defending the cave lose real members and Weapons. Missing equipment
+  drives later goblin raids.
+- Goblins may drain exposed working coin. No artificial cash floor or hoard cap
+  rescues the economy.
+- When the dragon holds enough of the tracked currency, alliance and muster
+  messages travel over real roads. The host cannot leave without 32 Food,
+  8 Tools, and 12 Weapons.
+- A victory moves the real hoard into the returning host and then into allied
+  treasuries. A defeat consumes the supplied goods. After a victory, surviving
+  goblins stop tribute but still raid when their lair lacks food or gear.
+- A declaration, peace offer, alliance, or muster has no effect before its
+  courier arrives. Lost messages do nothing; corrupt or damaged messages may
+  be suppressed or read backward. The carriage can deliver a sealed dispatch.
+- Restricted roads still carry reduced freight. Tolls, sanctions, and bribes
+  move existing crowns instead of deleting them.
+- Hunger or exhausted monastery credit can open a night road and recruit
+  bandits. An empty camp loses members and cannot raid an empty town.
 - Farms need fields, mines need deposits, and smith output consumes real Iron.
 - Rare Gold and Gems advance through persistent mine work instead of weekly
   random rolls.
