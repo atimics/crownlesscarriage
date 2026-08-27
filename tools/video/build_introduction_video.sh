@@ -67,14 +67,14 @@ mkdir -p "$(dirname -- "$output_path")"
                   text_align=C:x=(w-text_w)/2:y=h-170:
                   box=1:boxcolor=090B0C@0.72:boxborderw=22:
                   borderw=1:bordercolor=000000@0.9:
-                  enable='between(t,6.05,8.0)',
+                  enable='between(t,6.05,14.05)',
               drawtext=$drawtext_font:
                   textfile='$asset_dir/sentence-2.txt':
                   fontcolor=F2E9D0:fontsize=46:line_spacing=10:
                   text_align=C:x=(w-text_w)/2:y=h-170:
                   box=1:boxcolor=090B0C@0.72:boxborderw=22:
                   borderw=1:bordercolor=000000@0.9:
-                  enable='between(t,14.05,16.8)',
+                  enable='between(t,14.05,18.4)',
               drawtext=$drawtext_font:
                   textfile='$asset_dir/sentence-3.txt':
                   fontcolor=F2E9D0:fontsize=64:line_spacing=10:

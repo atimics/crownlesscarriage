@@ -16,15 +16,16 @@ The introduction video must include this line exactly:
 > bigger than any of them would eat them if they didn't.
 
 Use it as the video's opening thesis. Do not put text ahead of the voice. Each
-text beat appears only after its matching phrase has been spoken. Give "would
-eat them if they didn't" a separate text-only slide. Then use black pauses to
-separate the title and dragon reveals.
+text beat appears only after its matching phrase has been spoken and stays on
+screen until the next text beat replaces it. Give "would eat them if they
+didn't" a separate text-only slide. Then use black pauses to separate the title
+and dragon reveals.
 
 ## Sequence
 
 1. Begin the voice over two divided groups.
-2. Show the delayed first text and hold it longer.
-3. Show the delayed second text and hold it longer.
+2. Show the delayed first text and keep it until the second text appears.
+3. Replace it with the delayed second text and keep that until the final line.
 4. Cut to a separate "would eat them if they didn't" slide.
 5. Cut to black.
 6. Show the `CROWNLESS` title card.
