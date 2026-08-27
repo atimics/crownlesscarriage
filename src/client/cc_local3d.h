@@ -296,6 +296,7 @@ void CcLocalAgentSetNpcAppearance(CcLocalAgent *agent, uint32_t seed,
 void CcLocalAgentUpdate(CcLocalAgent *agent, float delta_time, bool market_interior);
 bool CcLocalAgentSetExactTarget(CcLocalAgent *agent, Vector3 target,
                                 bool market_interior);
+bool CcLocalAgentSetStreetTarget(CcLocalAgent *agent, Vector3 target);
 bool CcLocalAgentPickTarget(CcLocalAgent *agent, Vector2 screen_point,
                             RenderTexture2D target, Rectangle destination,
                             bool market_interior);

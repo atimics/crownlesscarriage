@@ -245,7 +245,7 @@ typedef struct StreetCameraShot {
 static const StreetCameraShot STREET_CAMERA_SHOTS[] = {
     {
         .trigger = {10.5f, 7.5f}, .target = {10.5f, 1.05f, 7.5f},
-        .name = "WAYFARER YARD", .route = {8.6f, 10.2f, 6.0f, 3.0f},
+        .name = "TRAINING YARD", .route = {8.6f, 10.2f, 6.0f, 3.0f},
         .route_palette = 2, .camera_offset = {6.0f, 7.0f, 22.0f},
         .fovy = 10.6f,
         .art = {{10.5f, 1.05f, 7.5f}, {0.0f, 1.0f},
@@ -254,7 +254,7 @@ static const StreetCameraShot STREET_CAMERA_SHOTS[] = {
     },
     {
         .trigger = {11.0f, 28.5f}, .target = {12.5f, 1.05f, 28.5f},
-        .name = "WEST CROFTS", .route = {12.3f, 26.3f, 4.8f, 5.8f},
+        .name = "WEST FARMS", .route = {12.3f, 26.3f, 4.8f, 5.8f},
         .route_palette = 0, .camera_offset = {-5.0f, 8.0f, 23.0f},
         .fovy = 11.8f,
         .art = {{12.5f, 1.05f, 28.5f}, {0.0f, 1.0f},
@@ -272,7 +272,7 @@ static const StreetCameraShot STREET_CAMERA_SHOTS[] = {
     },
     {
         .trigger = {33.0f, 25.0f}, .target = {33.0f, 1.05f, 25.0f},
-        .name = "ARTISAN ROW", .route = {29.0f, 23.3f, 13.0f, 2.6f},
+        .name = "WORKSHOP STREET", .route = {29.0f, 23.3f, 13.0f, 2.6f},
         .route_palette = 1, .camera_offset = {10.0f, 7.6f, 22.0f},
         .fovy = 12.5f,
         .art = {{33.0f, 1.05f, 25.0f}, {1.0f, 0.0f},
@@ -281,7 +281,7 @@ static const StreetCameraShot STREET_CAMERA_SHOTS[] = {
     },
     {
         .trigger = {44.0f, 29.0f}, .target = {44.5f, 1.05f, 29.5f},
-        .name = "MERCERCALL COMMONS", .route = {0.0f, 0.0f, 0.0f, 0.0f},
+        .name = "TOWN SQUARE", .route = {0.0f, 0.0f, 0.0f, 0.0f},
         .route_palette = 1, .camera_offset = {-3.5f, 9.0f, 27.0f},
         .fovy = 14.0f,
         .art = {{44.5f, 1.05f, 29.5f}, {0.98f, 0.20f},
@@ -290,7 +290,7 @@ static const StreetCameraShot STREET_CAMERA_SHOTS[] = {
     },
     {
         .trigger = {42.0f, 52.0f}, .target = {41.5f, 1.05f, 52.0f},
-        .name = "COACH YARD", .route = {39.5f, 53.8f, 4.9f, 4.2f},
+        .name = "CARRIAGE YARD", .route = {39.5f, 53.8f, 4.9f, 4.2f},
         .route_palette = 0, .camera_offset = {8.0f, 9.5f, 27.0f},
         .fovy = 15.2f,
         .art = {{41.5f, 1.05f, 52.0f}, {0.0f, 1.0f},
@@ -308,7 +308,7 @@ static const StreetCameraShot STREET_CAMERA_SHOTS[] = {
     },
     {
         .trigger = {58.0f, 50.0f}, .target = {61.2f, 1.05f, 50.9f},
-        .name = "MILLER'S ROW", .route = {54.2f, 50.1f, 18.7f, 2.9f},
+        .name = "MILLER'S ROAD", .route = {54.2f, 50.1f, 18.7f, 2.9f},
         .route_palette = 0, .camera_offset = {6.0f, 9.0f, 27.0f},
         .fovy = 15.6f,
         .art = {{61.2f, 1.05f, 50.9f}, {1.0f, 0.0f},
@@ -341,7 +341,7 @@ static const StreetCameraShot STREET_CAMERA_SHOTS[] = {
    foreground facade. It is a camera composition only, never a logical room. */
 static const StreetCameraShot MARKET_GATE_ROAD_CAMERA = {
     .trigger = {64.0f, 31.0f}, .target = {66.0f, 2.0f, 31.0f},
-    .name = "MARKET-GATE ROAD", .route = {0.0f, 0.0f, 0.0f, 0.0f},
+    .name = "MARKET ROAD", .route = {0.0f, 0.0f, 0.0f, 0.0f},
     .route_palette = 2, .camera_offset = {-13.0f, 11.0f, 33.0f},
     .fovy = 21.0f,
     .art = {{77.5f, 4.20f, 23.5f}, {1.0f, 0.0f},
@@ -4490,6 +4490,11 @@ static bool SetStreetClickTarget(CcLocalAgent *agent, Vector3 target)
     agent->command_point = target;
     agent->command_point_valid = true;
     return true;
+}
+
+bool CcLocalAgentSetStreetTarget(CcLocalAgent *agent, Vector3 target)
+{
+    return SetStreetClickTarget(agent, target);
 }
 
 static bool StartStreetPortalTraversal(CcLocalAgent *agent,
@@ -14557,6 +14562,15 @@ static void DrawViewportText(const char *text, Rectangle viewport,
              (int32_t)lroundf(viewport.y) + y, font_size, color);
 }
 
+static bool AgentNearLabel(const CcLocalAgent *agent, float x, float z,
+                           float radius)
+{
+    if (agent == NULL) return false;
+    float dx = agent->position.x - x;
+    float dz = agent->position.z - z;
+    return dx * dx + dz * dz <= radius * radius;
+}
+
 static void DrawStreetTraversalPortals(const CcLocalAgent *agent,
                                        Camera3D camera, Rectangle viewport,
                                        int32_t art_width,
@@ -14566,6 +14580,8 @@ static void DrawStreetTraversalPortals(const CcLocalAgent *agent,
     for (int32_t portal_index = 0; portal_index < count; ++portal_index) {
         ResolvedStreetPortal portal = {0};
         if (!ResolveStreetPortal(agent, portal_index, &portal)) continue;
+        Vector3 approach = StreetPortalApproachWorldPoint(&portal);
+        if (!AgentNearLabel(agent, approach.x, approach.z, 7.0f)) continue;
         Vector2 art_point = StreetPortalEdgePoint(
             &portal, camera, art_width, art_height);
         Vector2 point = {
@@ -15472,16 +15488,6 @@ static void DrawCourseRunners(const CcLocalCourse *course)
     }
 }
 
-static const char *RoadArchetypeName(const CcRoute *route)
-{
-    if (route == NULL) return "UNKNOWN ROAD";
-    if (route->smuggler_route) return "HIDDEN WOODLAND TRACK";
-    if (route->closed) return "BROKEN CAUSEWAY";
-    if (route->condition < 48) return "RUTTED FRONTIER ROAD";
-    if (route->security >= 70) return "PATROLLED KING'S ROAD";
-    return "HEDGEROW TRADE ROAD";
-}
-
 static void DrawRoadHorseTeam(Vector3 base)
 {
     const float yaw = 0.5f * PI;
@@ -15740,13 +15746,6 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
         sim, sim->journey.origin_id);
     const CcSettlement *destination_place = CcSimSettlement(
         sim, sim->journey.destination_id);
-    const CcBanditGroup *bandits = NULL;
-    for (int32_t i = 0; i < sim->bandit_count; ++i) {
-        if (sim->bandits[i].route_id == sim->journey.route_id) {
-            bandits = &sim->bandits[i];
-            break;
-        }
-    }
     float route_progress = (float)sim->carriage.progress_milli / 1000.0f;
     float carriage_x = travelling ? 24.0f + route_progress * 52.0f : 38.35f;
     Vector3 carriage_base = {
@@ -15841,39 +15840,16 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     EndMode3D();
     EndTextureMode();
     PresentTarget(target, destination);
-    char route_label[96];
-    char blockade_label[96];
-    (void)snprintf(route_label, sizeof(route_label), "%s -> %s",
-                   origin != NULL ? origin->name : "ORIGIN",
-                   destination_place != NULL ? destination_place->name :
-                                               "DESTINATION");
-    (void)snprintf(blockade_label, sizeof(blockade_label), "%s",
-                   bandits != NULL ? bandits->name : "ROAD COLLECTORS");
     WorldLabel labels[6];
     int32_t count = 0;
-    if (!travelling && !combat_presentation) {
-        labels[count++] = (WorldLabel){{agent->position.x,
-                                        agent->position.y + 2.50f,
-                                        agent->position.z}, "YOU", WORLD_TEAL};
-    }
-    if (!travelling && !parley && !combat_presentation) {
-        labels[count++] = (WorldLabel){{ROAD_BARRICADE_X, 2.58f, 40.00f},
-                                       blockade_label, WORLD_DANGER};
-    }
-    if (!combat_presentation) {
-        labels[count++] = (WorldLabel){
-            {travelling ? carriage_x + 8.0f : 57.0f, 1.18f, 40.0f},
-            route_label, WORLD_GOLD};
-    }
-    if (parley && !combat_presentation) {
+    if (parley && !combat_presentation &&
+        AgentNearLabel(agent, course->raiders[0].position.x,
+                       course->raiders[0].position.z, 7.0f)) {
         labels[count++] = (WorldLabel){
             {course->raiders[0].position.x,
              course->raiders[0].position.y + 2.18f,
              course->raiders[0].position.z},
-            "TOLL COLLECTOR", WORLD_DANGER};
-        labels[count++] = (WorldLabel){{CC_LOCAL_ROAD_PARLEY_X, 0.42f,
-                                        CC_LOCAL_ROAD_PARLEY_Z},
-                                       "F  OFFER PAYMENT", WORLD_TEAL};
+            "Collector", WORLD_DANGER};
     }
     DrawLabels(labels, count, camera, destination);
     if (!travelling && course->alarm_active) {
@@ -15894,27 +15870,6 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
             }
         }
     }
-    Rectangle road_status = ViewportRectangle(
-        destination, 10.0f, 9.0f, 610.0f, 46.0f);
-    DrawRectangleRounded(road_status,
-                         0.08f, 4, Fade(WORLD_VOID, 0.90f));
-    DrawRectangleLinesEx(road_status, 1.0f, Fade(WORLD_GOLD, 0.28f));
-    DrawViewportText(
-        TextFormat("%s  /  DANGER %d%%  /  ROAD %d%%  /  SECURITY %d%%",
-                   RoadArchetypeName(route), sim->journey.danger,
-                   route != NULL ? route->condition : 0,
-                   route != NULL ? route->security : 0),
-        destination, 18, 18, 10, parley ? WORLD_TEAL : WORLD_DANGER);
-    DrawViewportText(
-        travelling ?
-        TextFormat("CARRIAGE MOVING / %d%% COMPLETE / %d GAME MIN / REAL SEC",
-                   sim->carriage.progress_milli / 10,
-                   CC_TRAVEL_GAME_MINUTES_PER_SECOND) : parley ?
-        "PARLEY / approach the collector and press F to exchange crowns for passage" :
-        TextFormat("BREAK THE CORDON / YOU %d HP / RAIDERS %d%% RESOLVE",
-                   (int32_t)lroundf(agent->combat.health),
-                   course->raider_resolve > 0 ? course->raider_resolve : 0),
-        destination, 18, 35, 10, WORLD_INK);
 }
 
 static void DrawJourneyAftermath3D(const CcSim *sim,
@@ -16170,54 +16125,66 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
 
     WorldLabel labels[20];
     int32_t count = 0;
-    labels[count++] = (WorldLabel){{agent->position.x,
-                                    agent->position.y + 2.50f,
-                                    agent->position.z}, "YOU", WORLD_TEAL};
-    labels[count++] = (WorldLabel){{50.0f,
-                                    TerrainFootprintHeight(
-                                        WORLD_BUILDINGS[2].footprint) + 4.75f,
-                                    21.0f},
-                                   "MARKET HALL", WORLD_GOLD};
-    labels[count++] = (WorldLabel){{36.80f,
-                                    TerrainFootprintHeight(
-                                        CARRIAGE_FOOTPRINT) + 2.28f,
-                                    31.70f},
-                                   "CROWNLESS CARRIAGE", WORLD_GOLD};
-    labels[count++] = (WorldLabel){{CC_LOCAL_NOTICE_X,
-                                    CcLocalTerrainHeightAt(
-                                        CC_LOCAL_NOTICE_X,
-                                        CC_LOCAL_NOTICE_Z) + 1.82f,
-                                    CC_LOCAL_NOTICE_Z},
-                                   "SITUATIONS", WORLD_INK};
-    labels[count++] = (WorldLabel){{11.80f,
-                                    CcLocalTerrainHeightAt(11.80f, 0.82f) +
-                                        2.05f,
-                                    0.82f},
-                                   "WAYFARER TRIALS", WORLD_GOLD};
-    labels[count++] = (WorldLabel){{11.28f,
-                                    CcLocalTerrainHeightAt(11.28f, 9.72f) +
-                                        1.12f,
-                                    9.72f},
-                                   "BUOYANCY TRENCH", WORLD_TEAL};
-    labels[count++] = (WorldLabel){{78.50f,
-                                    CcLocalTerrainHeightAt(78.50f, 17.50f) +
-                                        12.10f,
-                                    17.50f},
-                                   "GREYWARD KEEP", kingdom};
+    if (AgentNearLabel(agent, 50.0f, 21.0f, 8.0f)) {
+        labels[count++] = (WorldLabel){{50.0f,
+                                        TerrainFootprintHeight(
+                                            WORLD_BUILDINGS[2].footprint) + 4.75f,
+                                        21.0f},
+                                       "Market", WORLD_GOLD};
+    }
+    if (AgentNearLabel(agent, 36.80f, 31.70f, 7.0f)) {
+        labels[count++] = (WorldLabel){{36.80f,
+                                        TerrainFootprintHeight(
+                                            CARRIAGE_FOOTPRINT) + 2.28f,
+                                        31.70f},
+                                       "Carriage", WORLD_GOLD};
+    }
+    if (AgentNearLabel(agent, CC_LOCAL_NOTICE_X, CC_LOCAL_NOTICE_Z, 6.0f)) {
+        labels[count++] = (WorldLabel){{CC_LOCAL_NOTICE_X,
+                                        CcLocalTerrainHeightAt(
+                                            CC_LOCAL_NOTICE_X,
+                                            CC_LOCAL_NOTICE_Z) + 1.82f,
+                                        CC_LOCAL_NOTICE_Z},
+                                       "Quest board", WORLD_INK};
+    }
+    if (AgentNearLabel(agent, 11.80f, 0.82f, 7.0f)) {
+        labels[count++] = (WorldLabel){{11.80f,
+                                        CcLocalTerrainHeightAt(11.80f, 0.82f) +
+                                            2.05f,
+                                        0.82f},
+                                       "Training yard", WORLD_GOLD};
+    }
+    if (AgentNearLabel(agent, 11.28f, 9.72f, 7.0f)) {
+        labels[count++] = (WorldLabel){{11.28f,
+                                        CcLocalTerrainHeightAt(11.28f, 9.72f) +
+                                            1.12f,
+                                        9.72f},
+                                       "Swimming trench", WORLD_TEAL};
+    }
+    if (AgentNearLabel(agent, 78.50f, 17.50f, 10.0f)) {
+        labels[count++] = (WorldLabel){{78.50f,
+                                        CcLocalTerrainHeightAt(78.50f, 17.50f) +
+                                            12.10f,
+                                        17.50f},
+                                       "Greyward Castle", kingdom};
+    }
     if (sim->resolved_journey_outcome != CC_JOURNEY_OUTCOME_NONE &&
-        sim->journey.destination_id == place->id) {
+        sim->journey.destination_id == place->id &&
+        AgentNearLabel(agent, 47.35f, 31.05f, 7.0f)) {
         labels[count++] = (WorldLabel){
             {47.35f, CcLocalTerrainHeightAt(47.35f, 31.05f) + 2.05f,
              31.05f},
             sim->resolved_journey_outcome == CC_JOURNEY_OUTCOME_COMBAT ?
-                "ROAD GUARD MUSTER" : "COLLECTORS' TOLL MARK",
+                "Road guards" : "Toll marker",
             sim->resolved_journey_outcome == CC_JOURNEY_OUTCOME_COMBAT ?
                 WORLD_TEAL : WORLD_VIOLET};
     }
     if (course != NULL && course->situation_witness_active) {
         const CcSituation *situation = CcSimSituation(
             sim, course->situation_witness_id);
-        if (situation != NULL && situation->affected_name[0] != '\0') {
+        if (situation != NULL && situation->affected_name[0] != '\0' &&
+            AgentNearLabel(agent, course->situation_witness.position.x,
+                           course->situation_witness.position.z, 6.0f)) {
             labels[count++] = (WorldLabel){
                 {course->situation_witness.position.x,
                  course->situation_witness.position.y + 2.18f,
@@ -16228,12 +16195,14 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                     WORLD_GOLD : WORLD_DANGER};
         }
     }
-    if (dungeon != NULL) {
+    if (dungeon != NULL &&
+        AgentNearLabel(agent, CC_LOCAL_DUNGEON_X,
+                       CC_LOCAL_DUNGEON_Z, 8.0f)) {
         labels[count++] = (WorldLabel){{CC_LOCAL_DUNGEON_X,
                                         TerrainFootprintHeight(
                                             DUNGEON_FOOTPRINT) + 3.38f,
                                         CC_LOCAL_DUNGEON_Z - 0.70f},
-                                       CcDungeonStateName(dungeon->state), WORLD_VIOLET};
+                                       "Mine", WORLD_VIOLET};
     }
     if (!combat_presentation) {
         DrawLabels(labels, count, camera, destination);
@@ -16270,31 +16239,6 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                        agent->limb_rig.morphology.limb_count,
                        CcLocalTraversalName(agent->traversal)),
             destination, 18, 18, 10, WORLD_TEAL);
-    }
-    if (course != NULL && course->alarm_active) {
-        bool line_engaged = false;
-        for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
-            line_engaged = line_engaged ||
-                           course->runners[i].duty == CC_GUARD_ENGAGED;
-        }
-        DrawViewportText(
-            TextFormat("VILLAGE ALARM / YOU %d HP / %d POSTURE / GUARDS %s / RAIDERS %d%%",
-                       (int32_t)lroundf(agent->combat.health),
-                       (int32_t)lroundf(agent->combat.posture),
-                       course->raiders_retreating ? "DRIVING THEM OUT" :
-                       line_engaged ? "ENGAGED" : "FORMING LINE",
-                       course->raider_resolve > 0 ?
-                       course->raider_resolve : 0),
-            destination, 18, 33, 10, WORLD_DANGER);
-        if (course->combat_event_seconds > 0.0f) {
-            DrawViewportText(
-                TextFormat("%s / %s",
-                           CcLocalCombatTeamName(course->last_attacker_team),
-                           CcLocalCombatOutcomeName(course->last_outcome)),
-                destination, 18, 48, 12,
-                course->last_outcome == CC_COMBAT_OUTCOME_BLOCKED ?
-                WORLD_GOLD : WORLD_INK);
-        }
     }
 }
 
@@ -16506,11 +16450,18 @@ void CcLocalDrawMarket3D(const CcSim *sim, const CcLocalAgent *agent, float cloc
     EndMode3D();
     EndTextureMode();
     PresentTarget(target, destination);
-    WorldLabel labels[] = {
-        {{6.55f, 2.05f, 1.60f}, "MARA / FACTOR", WORLD_GOLD},
-        {{1.55f, 2.25f, 6.54f}, "STREET", WORLD_MUTED}
-    };
-    DrawLabels(labels, 2, camera, destination);
+    WorldLabel labels[2];
+    int32_t label_count = 0;
+    if (AgentNearLabel(agent, MARKET_PEOPLE[0].x,
+                       MARKET_PEOPLE[0].y, 5.0f)) {
+        labels[label_count++] = (WorldLabel){
+            {6.55f, 2.05f, 1.60f}, "Mara — Merchant", WORLD_GOLD};
+    }
+    if (AgentNearLabel(agent, 1.55f, 6.54f, 3.5f)) {
+        labels[label_count++] = (WorldLabel){
+            {1.55f, 2.25f, 6.54f}, "Exit", WORLD_MUTED};
+    }
+    DrawLabels(labels, label_count, camera, destination);
     if (draw_hero_rig_debug &&
         agent->morphology == CC_MORPHOLOGY_BIPED) {
         DrawViewportText(
