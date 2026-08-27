@@ -5,6 +5,7 @@
 #include "client/cc_visual_style.h"
 
 #include "locomotion/cc_humanoid_skin.h"
+#include "locomotion/cc_quadruped.h"
 #include "locomotion/cc_robotics.h"
 
 #include "raymath.h"
@@ -8810,6 +8811,10 @@ static NpcArchetypeCache npc_archetypes
 
 typedef struct CreatureModelCache {
     Model model;
+    ModelAnimation animation;
+    Transform pose[CC_QUADRUPED_BONE_COUNT];
+    Transform *frames[1];
+    int32_t quadruped_bone[CC_QUADRUPED_BONE_COUNT];
     bool ready;
 } CreatureModelCache;
 
@@ -9306,6 +9311,8 @@ static void LoadCreatureModels(void)
 {
     for (int32_t variant = 0; variant < CC_CREATURE_VARIANT_COUNT;
          ++variant) {
+        const CcCreatureDefinition *definition = CcCreatureDefinitionAt(
+            (CcCreatureVariant)variant);
         int32_t loaded_count = 0;
         for (int32_t pose = 0; pose < CC_CREATURE_POSE_COUNT; ++pose) {
             const char *path = CcCreatureAssetPath(
@@ -9317,8 +9324,10 @@ static void LoadCreatureModels(void)
                 continue;
             }
             Model model = LoadModel(resolved);
+            int32_t expected_bones = definition != NULL && definition->skinned ?
+                                     CC_QUADRUPED_BONE_COUNT : 0;
             if (model.meshCount != 1 || model.materialCount < 1 ||
-                model.skeleton.boneCount != 0) {
+                model.skeleton.boneCount != expected_bones) {
                 TraceLog(LOG_WARNING,
                          "CREATURE: invalid %s (%d meshes, %d materials, %d bones)",
                          path, model.meshCount, model.materialCount,
@@ -9328,11 +9337,42 @@ static void LoadCreatureModels(void)
             }
             CreatureModelCache *cached = &creature_models[variant][pose];
             cached->model = model;
+            if (expected_bones > 0) {
+                bool found[CC_QUADRUPED_BONE_COUNT] = {false};
+                bool valid_skin = true;
+                for (int32_t bone = 0; bone < expected_bones; ++bone) {
+                    int32_t quadruped_bone = CcQuadrupedBoneFind(
+                        model.skeleton.bones[bone].name);
+                    cached->quadruped_bone[bone] = quadruped_bone;
+                    if (quadruped_bone < 0) {
+                        valid_skin = false;
+                    } else {
+                        found[quadruped_bone] = true;
+                    }
+                }
+                for (int32_t bone = 0; bone < CC_QUADRUPED_BONE_COUNT;
+                     ++bone) {
+                    if (!found[bone]) valid_skin = false;
+                }
+                if (!valid_skin) {
+                    TraceLog(LOG_WARNING,
+                             "CREATURE: %s has the wrong quadruped bones",
+                             path);
+                    UnloadModel(cached->model);
+                    *cached = (CreatureModelCache){0};
+                    continue;
+                }
+                cached->frames[0] = cached->pose;
+                cached->animation.boneCount = expected_bones;
+                cached->animation.keyframeCount = 1;
+                cached->animation.keyframePoses = cached->frames;
+                (void)snprintf(cached->animation.name,
+                               sizeof(cached->animation.name),
+                               "quadruped-runtime");
+            }
             cached->ready = true;
             loaded_count += 1;
         }
-        const CcCreatureDefinition *definition = CcCreatureDefinitionAt(
-            (CcCreatureVariant)variant);
         TraceLog(LOG_INFO, "CREATURE: loaded %s (%d/%d poses)",
                  definition != NULL ? definition->name : "unknown",
                  loaded_count,
@@ -9736,9 +9776,52 @@ static void SetCreaturePalette(CcCreatureVariant variant, Color primary)
                       false, (Vector3){0});
 }
 
-static bool DrawCreature3D(CcCreatureVariant variant, CcCreaturePose pose,
-                           Vector3 position, float yaw, float scale,
-                           Color primary)
+static CcQuadrupedMorphology QuadrupedMorphologyForCreature(
+    CcCreatureVariant variant)
+{
+    if (variant == CC_CREATURE_HORSE) return CC_QUADRUPED_HORSE;
+    if (variant == CC_CREATURE_COW) return CC_QUADRUPED_COW;
+    return CC_QUADRUPED_MORPHOLOGY_COUNT;
+}
+
+static bool PoseQuadrupedCreature(CreatureModelCache *creature,
+                                  CcCreatureVariant variant, float phase,
+                                  bool moving)
+{
+    if (creature == NULL || !creature->ready) return false;
+    CcQuadrupedMorphology morphology = QuadrupedMorphologyForCreature(variant);
+    CcQuadrupedPose rest = {0};
+    CcQuadrupedPose target = {0};
+    CcQuadrupedPoseResolve(morphology, 0.0f, false, &rest);
+    CcQuadrupedPoseResolve(morphology, phase, moving, &target);
+    if (!rest.valid || !target.valid) return false;
+
+    for (int32_t bone = 0; bone < creature->model.skeleton.boneCount;
+         ++bone) {
+        int32_t quadruped_bone = creature->quadruped_bone[bone];
+        if (quadruped_bone < 0 ||
+            quadruped_bone >= CC_QUADRUPED_BONE_COUNT) return false;
+        const CcQuadrupedBonePose *rest_bone = &rest.bones[quadruped_bone];
+        const CcQuadrupedBonePose *target_bone =
+            &target.bones[quadruped_bone];
+        Quaternion delta = HeroRotationBetween(
+            FromLimbVector(rest_bone->up),
+            FromLimbVector(target_bone->up));
+        creature->pose[bone].translation = FromLimbVector(target_bone->head);
+        creature->pose[bone].rotation = QuaternionMultiply(
+            delta, creature->model.skeleton.bindPose[bone].rotation);
+        creature->pose[bone].scale =
+            creature->model.skeleton.bindPose[bone].scale;
+    }
+    UpdateModelAnimation(creature->model, creature->animation, 0.0f);
+    CcLocalRendererRecordSkinUpdate(creature->model.meshCount);
+    return true;
+}
+
+static bool DrawCreatureGait3D(CcCreatureVariant variant,
+                               CcCreaturePose pose, Vector3 position,
+                               float yaw, float scale, Color primary,
+                               float gait_phase, bool moving)
 {
     if (variant < 0 || variant >= CC_CREATURE_VARIANT_COUNT) return false;
     if (pose < 0 || pose >= CC_CREATURE_POSE_COUNT) {
@@ -9749,6 +9832,11 @@ static bool DrawCreature3D(CcCreatureVariant variant, CcCreaturePose pose,
         creature = &creature_models[variant][CC_CREATURE_POSE_IDLE];
     }
     if (!creature->ready || creature->model.meshCount != 1) return false;
+    const CcCreatureDefinition *definition = CcCreatureDefinitionAt(variant);
+    if (definition != NULL && definition->skinned &&
+        !PoseQuadrupedCreature(creature, variant, gait_phase, moving)) {
+        return false;
+    }
 
     Vector3 shadow_size = {1.00f, 0.012f, 1.50f};
     if (variant <= CC_CREATURE_GOBLIN_TRIBUTE_BEARER) {
@@ -9763,9 +9851,24 @@ static bool DrawCreature3D(CcCreatureVariant variant, CcCreaturePose pose,
     DrawBox((Vector3){position.x, position.y + 0.006f, position.z},
             shadow_size, (Color){2, 7, 10, 104});
     SetCreaturePalette(variant, primary);
+    if (definition != NULL && definition->skinned &&
+        visual_style.npc_skinned_ready) {
+        float body_skin_remap = 0.0f;
+        SetShaderValue(visual_style.npc_skinned,
+                       visual_style.npc_skinned_body_skin_remap_location,
+                       &body_skin_remap, SHADER_UNIFORM_FLOAT);
+    }
     DrawModelEx(creature->model, position, (Vector3){0.0f, 1.0f, 0.0f},
                 yaw * RAD2DEG, (Vector3){scale, scale, scale}, WHITE);
     return true;
+}
+
+static bool DrawCreature3D(CcCreatureVariant variant, CcCreaturePose pose,
+                           Vector3 position, float yaw, float scale,
+                           Color primary)
+{
+    return DrawCreatureGait3D(variant, pose, position, yaw, scale, primary,
+                              0.0f, false);
 }
 
 /* Procedural people use the same graphic lighting contract as the authored
@@ -10203,7 +10306,13 @@ static void LoadVisualStyle(void)
          ++variant) {
         for (int32_t pose = 0; pose < CC_CREATURE_POSE_COUNT; ++pose) {
             if (creature_models[variant][pose].ready) {
-                ApplyNpcStyle(&creature_models[variant][pose].model);
+                const CcCreatureDefinition *definition =
+                    CcCreatureDefinitionAt((CcCreatureVariant)variant);
+                if (definition != NULL && definition->skinned) {
+                    ApplyNpcBodyStyle(&creature_models[variant][pose].model);
+                } else {
+                    ApplyNpcStyle(&creature_models[variant][pose].model);
+                }
             }
         }
     }
@@ -16146,8 +16255,10 @@ static void DrawRoadHorseTeam(Vector3 base, float clock, bool moving)
             Vector3 horse_base = LocalPoint(
                 base, (float)horse * 1.05f, 0.0f, 4.60f, yaw);
             CcCreaturePose pose = horse < 0 ? left_pose : right_pose;
-            (void)DrawCreature3D(CC_CREATURE_HORSE, pose, horse_base,
-                                 yaw, 0.96f, coat);
+            float gait_phase = clock * 4.8f + (horse < 0 ? 0.0f : PI);
+            (void)DrawCreatureGait3D(
+                CC_CREATURE_HORSE, pose, horse_base,
+                yaw, 0.96f, coat, gait_phase, moving);
             Vector3 trace_start = LocalPoint(
                 base, (float)horse * 0.42f, 0.77f, 3.05f, yaw);
             Vector3 trace_end = LocalPoint(
@@ -16475,9 +16586,10 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
         Vector3 cow_position = {carriage_x + 3.8f, 0.0f, 33.40f};
         CcCreaturePose cow_pose = CcCreatureSteppedPose(
             CC_CREATURE_COW, clock * 1.55f, travelling);
-        (void)DrawCreature3D(CC_CREATURE_COW, cow_pose, cow_position,
-                             -0.72f * PI, 0.88f,
-                             (Color){184, 169, 139, 255});
+        (void)DrawCreatureGait3D(
+            CC_CREATURE_COW, cow_pose, cow_position,
+            -0.72f * PI, 0.88f, (Color){184, 169, 139, 255},
+            clock * 1.55f, travelling);
         if (roadside_food >= 40) {
             (void)DrawCreature3D(
                 CC_CREATURE_COW, CC_CREATURE_POSE_IDLE,
@@ -16683,10 +16795,10 @@ static void DrawSettlementCreatures(const CcSim *sim,
         SceneryPointVisible(63.0f, 38.3f, scenery_focus)) {
         CcCreaturePose cow_pose = CcCreatureSteppedPose(
             CC_CREATURE_COW, clock * 1.25f, true);
-        (void)DrawCreature3D(
+        (void)DrawCreatureGait3D(
             CC_CREATURE_COW, cow_pose,
             TerrainWorldPoint(63.0f, 38.3f), 0.72f * PI, 0.84f,
-            (Color){177, 162, 132, 255});
+            (Color){177, 162, 132, 255}, clock * 1.25f, true);
     }
 
     if (place->id == goblins->lair_settlement_id) {

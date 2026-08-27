@@ -36,6 +36,7 @@ typedef struct CcCreatureDefinition {
     const char *family;
     const char *gait;
     bool quadruped;
+    bool skinned;
 } CcCreatureDefinition;
 
 const CcCreatureDefinition *CcCreatureDefinitionAt(CcCreatureVariant variant);

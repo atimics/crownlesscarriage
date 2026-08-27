@@ -7,9 +7,9 @@ The library expands the human cast with three body-plan families:
 * horses and cows, sharing one quadruped locomotion contract;
 * a dragon, using a quadruped base with authored neck, tail, jaw, and wings.
 
-Every runtime file is one static mesh with one indexed material.  Motion is
-represented by held pose GLBs so background creatures keep the same deliberate
-pseudo-pixel cadence as the existing NPC cast.
+Every runtime file is one mesh with one indexed material. Goblins and the
+dragon keep held pose GLBs. Horses and cows use one rigid-weighted skin each,
+driven by the game's shared quadruped bone pose at runtime.
 """
 
 from __future__ import annotations
@@ -35,15 +35,36 @@ BLEND_PATH = ROOT / "assets" / "blender" / "crownless_creature_library.blend"
 EXPORT_DIR = ROOT / "assets" / "exports" / "creatures"
 PREVIEW_PATH = ROOT / "assets" / "previews" / "creatures" / "creature_family_sheet.png"
 MANIFEST_PATH = ROOT / "assets" / "creature_manifest.json"
-LIBRARY_VERSION = "0.1.0"
+LIBRARY_VERSION = "0.2.0"
 
 BIPED_POSES = (
     "idle",
     "contact_a", "down_a", "passing_a", "up_a",
     "contact_b", "down_b", "passing_b", "up_b",
 )
-QUADRUPED_POSES = BIPED_POSES
 DRAGON_POSES = ("idle", "stalk_a", "stalk_b", "threat", "rest")
+
+QUADRUPED_BONES = (
+    ("root", None),
+    ("body", "root"),
+    ("chest", "body"),
+    ("neck", "chest"),
+    ("head", "neck"),
+    ("upper_leg.FL", "chest"),
+    ("lower_leg.FL", "upper_leg.FL"),
+    ("hoof.FL", "lower_leg.FL"),
+    ("upper_leg.FR", "chest"),
+    ("lower_leg.FR", "upper_leg.FR"),
+    ("hoof.FR", "lower_leg.FR"),
+    ("upper_leg.HL", "body"),
+    ("lower_leg.HL", "upper_leg.HL"),
+    ("hoof.HL", "lower_leg.HL"),
+    ("upper_leg.HR", "body"),
+    ("lower_leg.HR", "upper_leg.HR"),
+    ("hoof.HR", "lower_leg.HR"),
+    ("tail.root", "body"),
+    ("tail", "tail.root"),
+)
 
 MATERIAL_ORDER = (
     "skin",
@@ -137,10 +158,10 @@ CREATURES = (
                  "biped", "npc_stepped", ("offering", "harness")),
     CreatureSpec("horse", "horse", 3,
                  "high shoulder, arched neck, open leg gaps",
-                 "quadruped", "quadruped_stepped", ("mane", "tail")),
+                 "quadruped", "quadruped_runtime_skin", ("mane", "tail")),
     CreatureSpec("cow", "cow", 4,
                  "deep barrel, low head, horned horizontal line",
-                 "quadruped", "quadruped_stepped", ("horns", "udder")),
+                 "quadruped", "quadruped_runtime_skin", ("horns", "udder")),
     CreatureSpec("dragon", "dragon", 5,
                  "long grounded predator with crown horns and folded wings",
                  "quadruped", "dragon_authored",
@@ -152,7 +173,7 @@ def poses_for(spec: CreatureSpec) -> tuple[str, ...]:
     if spec.family == "dragon":
         return DRAGON_POSES
     if spec.runtime_morphology == "quadruped":
-        return QUADRUPED_POSES
+        return ("idle",)
     return BIPED_POSES
 
 
@@ -764,18 +785,161 @@ def duplicate_preview_parts(collection: bpy.types.Collection,
     return result
 
 
+def quadruped_bone_points(
+    spec: CreatureSpec,
+) -> dict[str, tuple[Vector, Vector]]:
+    cow = spec.family == "cow"
+    body_z = 1.08 if cow else 1.24
+    half_width = 0.38 if cow else 0.31
+    points: dict[str, tuple[Vector, Vector]] = {
+        "root": (Vector((0.0, 0.0, 0.0)), Vector((0.0, 0.0, 0.20))),
+        "body": (
+            Vector((0.0, 0.42, body_z)),
+            Vector((0.0, -0.30, body_z)),
+        ),
+        "chest": (
+            Vector((0.0, -0.16, body_z + 0.06)),
+            Vector((0.0, -0.72, body_z + 0.06)),
+        ),
+    }
+    if cow:
+        points["neck"] = (
+            Vector((0.0, -0.50, body_z + 0.20)),
+            Vector((0.0, -0.91, 1.16)),
+        )
+        points["head"] = (
+            Vector((0.0, -1.15, 1.10)),
+            Vector((0.0, -1.46, 1.04)),
+        )
+        tail_drop = 0.62
+    else:
+        points["neck"] = (
+            Vector((0.0, -0.50, body_z + 0.20)),
+            Vector((0.0, -0.87, 1.74)),
+        )
+        points["head"] = (
+            Vector((0.0, -1.13, 1.74)),
+            Vector((0.0, -1.47, 1.66)),
+        )
+        tail_drop = 0.48
+
+    for name, x, longitudinal, front in (
+        ("FL", -half_width, -0.57, True),
+        ("FR", half_width, -0.57, True),
+        ("HL", -half_width, 0.57, False),
+        ("HR", half_width, 0.57, False),
+    ):
+        root = Vector((x, longitudinal,
+                       body_z - (0.08 if front else 0.10)))
+        hoof = Vector((x, longitudinal, 0.10))
+        knee = (root + hoof) * 0.5
+        knee += Vector((0.0, -0.10 if front else 0.10, 0.02))
+        hoof_tail = Vector((x, longitudinal - 0.20, 0.085))
+        points[f"upper_leg.{name}"] = (root, knee)
+        points[f"lower_leg.{name}"] = (knee, hoof)
+        points[f"hoof.{name}"] = (hoof, hoof_tail)
+
+    tail_base = Vector((0.0, 0.82, body_z + 0.08))
+    tail_mid = Vector((0.0, 1.10, body_z - 0.08))
+    tail_end = Vector((0.0, 1.28, body_z - tail_drop))
+    points["tail.root"] = (tail_base, tail_mid)
+    points["tail"] = (tail_mid, tail_end)
+    return points
+
+
+def quadruped_bone_for_part(part: str) -> str:
+    direct = {
+        "barrel": "body",
+        "udder": "body",
+        "teat": "body",
+        "hide_patch": "chest",
+        "chest": "chest",
+        "neck": "neck",
+        "mane": "neck",
+        "head": "head",
+        "muzzle": "head",
+        "ear_l": "head",
+        "ear_r": "head",
+        "eye_l": "head",
+        "eye_r": "head",
+        "horn_l": "head",
+        "horn_r": "head",
+        "tail_root": "tail.root",
+        "tail": "tail",
+    }
+    if part in direct:
+        return direct[part]
+    for prefix, bone_prefix in (
+        ("upper_leg_", "upper_leg."),
+        ("lower_leg_", "lower_leg."),
+        ("hoof_", "hoof."),
+    ):
+        if part.startswith(prefix):
+            return bone_prefix + part.removeprefix(prefix).upper()
+    raise RuntimeError(f"quadruped part {part!r} has no deform bone")
+
+
 def apply_modifiers(obj: bpy.types.Object) -> None:
     bpy.ops.object.select_all(action="DESELECT")
     obj.hide_set(False)
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
     for modifier in tuple(obj.modifiers):
+        if modifier.type == "ARMATURE":
+            continue
         bpy.ops.object.modifier_apply(modifier=modifier.name)
     obj.select_set(False)
 
 
+def skin_quadruped(collection: bpy.types.Collection,
+                    spec: CreatureSpec) -> bpy.types.Object:
+    armature_data = bpy.data.armatures.new(f"RIG_{spec.variant}")
+    rig = bpy.data.objects.new(f"RIG_{spec.variant}", armature_data)
+    collection.objects.link(rig)
+    rig.show_in_front = True
+    rig["cc_asset_id"] = spec.asset_id
+    rig["cc_rig_contract"] = "CcQuadrupedPose"
+    rig["cc_bone_count"] = len(QUADRUPED_BONES)
+
+    bpy.ops.object.select_all(action="DESELECT")
+    rig.select_set(True)
+    bpy.context.view_layer.objects.active = rig
+    bpy.ops.object.mode_set(mode="EDIT")
+    points = quadruped_bone_points(spec)
+    edit_bones: dict[str, bpy.types.EditBone] = {}
+    for name, _parent in QUADRUPED_BONES:
+        bone = armature_data.edit_bones.new(name)
+        bone.head, bone.tail = points[name]
+        bone.use_deform = True
+        edit_bones[name] = bone
+    for name, parent in QUADRUPED_BONES:
+        if parent is not None:
+            edit_bones[name].parent = edit_bones[parent]
+            edit_bones[name].use_connect = False
+    bpy.ops.object.mode_set(mode="OBJECT")
+    rig.select_set(False)
+
+    for obj in tuple(collection.objects):
+        if obj.type != "MESH":
+            continue
+        apply_modifiers(obj)
+        bone_name = quadruped_bone_for_part(str(obj["cc_part"]))
+        obj.vertex_groups.clear()
+        group = obj.vertex_groups.new(name=bone_name)
+        group.add(tuple(range(len(obj.data.vertices))), 1.0, "REPLACE")
+        modifier = obj.modifiers.new("CC_QuadrupedSkin", "ARMATURE")
+        modifier.object = rig
+        world = obj.matrix_world.copy()
+        obj.parent = rig
+        obj.matrix_parent_inverse = rig.matrix_world.inverted()
+        obj.matrix_world = world
+        obj["cc_deform_bone"] = bone_name
+    return rig
+
+
 def consolidate(collection: bpy.types.Collection,
-                spec: CreatureSpec) -> bpy.types.Object:
+                spec: CreatureSpec,
+                rig: bpy.types.Object | None = None) -> bpy.types.Object:
     objects = [obj for obj in collection.objects if obj.type == "MESH"]
     if not objects:
         raise RuntimeError(f"{spec.variant} generated no meshes")
@@ -807,28 +971,48 @@ def consolidate(collection: bpy.types.Collection,
     joined.data.name = joined.name
     tag(joined, spec, "assembled_creature")
     joined["cc_material_contract"] = "COLOR_0:palette,value,fold"
+    if rig is not None:
+        joined.parent = rig
+        armatures = [modifier for modifier in joined.modifiers
+                     if modifier.type == "ARMATURE"]
+        if not armatures:
+            armature = joined.modifiers.new("CC_QuadrupedSkin", "ARMATURE")
+            armature.object = rig
+        else:
+            armatures[0].object = rig
+            for redundant in armatures[1:]:
+                joined.modifiers.remove(redundant)
+        joined["cc_skin_contract"] = "CcQuadrupedPose"
     return joined
 
 
-def export_model(model: bpy.types.Object, spec: CreatureSpec) -> Path:
+def export_model(model: bpy.types.Object, spec: CreatureSpec,
+                 rig: bpy.types.Object | None = None) -> Path:
     path = EXPORT_DIR / f"{spec.asset_id}.glb"
     path.parent.mkdir(parents=True, exist_ok=True)
     bpy.ops.object.select_all(action="DESELECT")
     model.hide_set(False)
     model.select_set(True)
-    bpy.context.view_layer.objects.active = model
+    if rig is not None:
+        rig.hide_set(False)
+        rig.select_set(True)
+        bpy.context.view_layer.objects.active = rig
+    else:
+        bpy.context.view_layer.objects.active = model
     bpy.ops.export_scene.gltf(
         filepath=str(path),
         export_format="GLB",
         use_selection=True,
         export_yup=True,
         export_animations=False,
-        export_skins=False,
+        export_skins=rig is not None,
         export_morph=False,
         export_extras=True,
         export_materials="EXPORT",
     )
     model.select_set(False)
+    if rig is not None:
+        rig.select_set(False)
     return path
 
 
@@ -945,22 +1129,36 @@ def build() -> None:
             if pose == "idle":
                 preview_sources.append(
                     (spec, duplicate_preview_parts(collection, spec)))
-            model = consolidate(collection, spec)
-            path = export_model(model, spec)
+            rig = skin_quadruped(collection, spec) \
+                if spec.family in ("horse", "cow") else None
+            model = consolidate(collection, spec, rig)
+            path = export_model(model, spec, rig)
             model.hide_render = True
             model.hide_set(True)
-            manifest_entries.append({
+            entry: dict[str, object] = {
                 **asdict(spec),
                 "id": spec.asset_id,
                 "export": str(path.relative_to(ROOT)),
                 "material_order": list(MATERIAL_ORDER),
-            })
+            }
+            if rig is not None:
+                rig.hide_render = True
+                rig.hide_set(True)
+                entry["skinned"] = True
+                entry["armature"] = rig.name
+                entry["bones"] = [name for name, _parent in QUADRUPED_BONES]
+            manifest_entries.append(entry)
+
+    referenced = {ROOT / str(entry["export"]) for entry in manifest_entries}
+    for stale in EXPORT_DIR.glob("*.glb"):
+        if stale not in referenced:
+            stale.unlink()
 
     manifest = {
         "library_version": LIBRARY_VERSION,
         "art_direction": "silhouette_first_pseudo_pixel_creatures",
         "generation": "offline_curated_procedural_geometry",
-        "runtime_strategy": "stepped static pose GLBs with shared biped and quadruped contracts",
+        "runtime_strategy": "held poses for goblins and dragon; runtime skins for horse and cow",
         "coordinate_system": "glTF +Y up, +Z forward",
         "material_contract": "single indexed material; COLOR_0 stores palette, value, and fold",
         "material_order": list(MATERIAL_ORDER),
