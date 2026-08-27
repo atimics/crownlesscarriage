@@ -133,6 +133,8 @@ static const Rectangle ROOM_ART_OBSTACLES[] = {
     {35.08f, 55.10f, 3.34f, 0.50f},
     {63.18f, 50.06f, 1.92f, 1.92f},
     {80.22f, 45.82f, 2.36f, 2.36f},
+    /* Grounded base of the mine ore station drawn at (26.45, 54.35). */
+    {25.725f, 53.825f, 1.45f, 1.05f},
 };
 static const Rectangle COURSE_POOL = {10.00f, 9.05f, 2.55f, 1.38f};
 static const float COURSE_WATER_SURFACE = 0.82f;
@@ -1942,6 +1944,9 @@ static bool ResolveLocalAgentCapsuleMove(CcLocalSceneKind scene,
     Vector3 result = proposed;
     Vector3 normal = {0.0f, 1.0f, 0.0f};
     bool collided = false;
+    bool crossing_passable_support =
+        passable_support_height > -FLT_MAX &&
+        proposed.y < passable_support_height - 0.0001f;
     const float heights[] = {radius, 0.92f, 1.54f};
     for (int32_t iteration = 0; iteration < 2; ++iteration) {
         bool iteration_collision = false;
@@ -1969,6 +1974,15 @@ static bool ResolveLocalAgentCapsuleMove(CcLocalSceneKind scene,
                 corrected.z,
             };
             Vector3 correction = Vector3Subtract(candidate, result);
+            /* Traversal deliberately releases the platform's side wall while
+               the authored root crosses the lip. Do not turn the resulting
+               ground-height query into an early vertical teleport: the
+               authored root will reach the support height at montage end. */
+            if (crossing_passable_support && sample_normal.y > 0.50f &&
+                correction.y > 0.0f && fabsf(correction.x) <= 0.00001f &&
+                fabsf(correction.z) <= 0.00001f) {
+                continue;
+            }
             if (Vector3Length(correction) <= 0.00001f) continue;
             result = candidate;
             normal = (Vector3){sample_normal.x, sample_normal.y,
@@ -4827,6 +4841,26 @@ static float RayFootprintDistance(Ray ray, Rectangle footprint, float height)
     return collision.hit ? collision.distance : FLT_MAX;
 }
 
+static float RoomArtObstacleRayDistance(Ray ray, Vector3 focus)
+{
+    float nearest = FLT_MAX;
+    for (int32_t i = 0; i < (int32_t)(sizeof(ROOM_ART_OBSTACLES) /
+                                      sizeof(ROOM_ART_OBSTACLES[0])); ++i) {
+        Rectangle footprint = ROOM_ART_OBSTACLES[i];
+        float center_x = footprint.x + footprint.width * 0.5f;
+        float center_z = footprint.y + footprint.height * 0.5f;
+        if (!RoomDetailPointVisible(center_x, center_z, focus)) continue;
+        nearest = fminf(nearest,
+                        RayFootprintDistance(ray, footprint, 4.90f));
+    }
+    return nearest;
+}
+
+float CcLocalRoomArtRayDistanceInternal(Ray ray, Vector3 focus)
+{
+    return RoomArtObstacleRayDistance(ray, focus);
+}
+
 static bool SetNearestClickTarget(CcLocalAgent *agent, Vector3 picked_point,
                                   bool market_interior)
 {
@@ -5012,18 +5046,8 @@ bool CcLocalAgentPickTarget(CcLocalAgent *agent, Vector2 screen_point,
                          RayFootprintDistance(ray, CARRIAGE_FOOTPRINT, 1.92f));
         occluder = fminf(occluder,
                          RayFootprintDistance(ray, DUNGEON_FOOTPRINT, 2.45f));
-        for (int32_t i = 0; i < (int32_t)(sizeof(ROOM_ART_OBSTACLES) /
-                                          sizeof(ROOM_ART_OBSTACLES[0])); ++i) {
-            Rectangle footprint = ROOM_ART_OBSTACLES[i];
-            float center_x = footprint.x + footprint.width * 0.5f;
-            float center_z = footprint.y + footprint.height * 0.5f;
-            if (!RoomDetailPointVisible(center_x, center_z, camera.target)) {
-                continue;
-            }
-            occluder = fminf(
-                occluder,
-                RayFootprintDistance(ray, footprint, 4.90f));
-        }
+        occluder = fminf(occluder,
+                         RoomArtObstacleRayDistance(ray, camera.target));
     } else {
         for (int32_t i = 0; i < RoadObstacleCount(); ++i) {
             occluder = fminf(
@@ -6253,6 +6277,42 @@ static void SyncPhysicalLifeState(CcLocalAgent *agent)
     }
 }
 
+static void ApplyRagdollWaterResponse(CcHumanoidGait *gait,
+                                      float water_surface, float immersion,
+                                      float delta_time)
+{
+    if (gait == NULL || !gait->ragdoll.active ||
+        !isfinite(delta_time) || delta_time <= 0.0f) return;
+    float water_amount = fmaxf(0.0f, fminf(immersion, 1.0f));
+    for (int32_t index = 0; index < gait->ragdoll.particle_count; ++index) {
+        CcBiomechRagdollParticle *particle = &gait->ragdoll.particles[index];
+        if (particle->inverse_mass <= 0.0f) continue;
+        float diameter = fmaxf(particle->radius * 2.0f, 0.08f);
+        float submerged = fmaxf(0.0f, fminf(
+            (water_surface + particle->radius - particle->position.y) /
+                diameter,
+            1.0f)) * water_amount;
+        if (submerged <= 0.0f) continue;
+
+        /* A fully submerged particle receives twice gravity, so the whole
+           body settles near the surface instead of resting on the pool bed.
+           The clamped submersion and exponential damping keep both the force
+           and the retained Verlet velocity bounded. */
+        particle->acceleration.y += 19.62f * submerged;
+        float retained_velocity = expf(-4.8f * submerged * delta_time);
+        CcBiomechVec3 velocity = {
+            particle->position.x - particle->previous_position.x,
+            particle->position.y - particle->previous_position.y,
+            particle->position.z - particle->previous_position.z,
+        };
+        particle->previous_position = (CcBiomechVec3){
+            particle->position.x - velocity.x * retained_velocity,
+            particle->position.y - velocity.y * retained_velocity,
+            particle->position.z - velocity.z * retained_velocity,
+        };
+    }
+}
+
 void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
                                    bool market_interior)
 {
@@ -6412,7 +6472,7 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
         }
     }
     bool ragdoll_was_active = biped && agent->humanoid.ragdoll.active;
-    if (biped && in_water) {
+    if (biped && in_water && !agent->humanoid.ragdoll.active) {
         CcHumanoidGaitAdvanceSwim(
             &agent->humanoid, ToLimbVector(agent->position),
             agent->facing_yaw,
@@ -6421,6 +6481,11 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
         agent->velocity.x = agent->humanoid.root_velocity.x;
         agent->velocity.z = agent->humanoid.root_velocity.z;
     } else if (biped) {
+        if (in_water && agent->humanoid.ragdoll.active) {
+            ApplyRagdollWaterResponse(&agent->humanoid,
+                                      COURSE_WATER_SURFACE,
+                                      agent->immersion, delta_time);
+        }
         CcHumanoidGaitAdvancePhysical(
             &agent->humanoid, ToLimbVector(agent->position),
             agent->facing_yaw,
@@ -8393,7 +8458,10 @@ Camera3D CcLocalCombatCameraInternal(Camera3D base,
             base_offset, combat_camera_rig.locked_offset, weight);
         float desired_fovy = base_perspective_fovy +
             (combat_camera_rig.locked_fovy - base_perspective_fovy) * weight;
-        float ease = 1.0f - expf(-delta_time * 4.5f);
+        /* combat_weight already eases the transition. The display response
+           must not add a second long lag or the short bridge approach keeps
+           the camera beside the hero after the duel shot is active. */
+        float ease = 1.0f - expf(-delta_time * 7.0f);
         combat_camera_rig.displayed_target = Vector3Lerp(
             combat_camera_rig.displayed_target, desired_target, ease);
         combat_camera_rig.displayed_offset = Vector3Lerp(

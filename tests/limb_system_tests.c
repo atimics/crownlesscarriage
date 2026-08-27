@@ -55,6 +55,36 @@ static void VerifySegments(const CcLimbRig *rig)
 
 int main(void)
 {
+    CcLimbMorphology invalid;
+    (void)CcLimbMorphologyFromPreset(&invalid, CC_MORPHOLOGY_BIPED);
+    CcLimbRig invalid_rig;
+    invalid.limb_count = CC_LIMB_MAX_COUNT + 1;
+    CcLimbRigInit(&invalid_rig, &invalid, (CcLimbVec3){0}, 0.0f,
+                  PlaneProbe, NULL);
+    Require(!invalid_rig.initialized,
+            "limb rig accepted a morphology larger than its fixed storage");
+
+    (void)CcLimbMorphologyFromPreset(&invalid, CC_MORPHOLOGY_BIPED);
+    invalid.limb_count = 0;
+    CcLimbRigInit(&invalid_rig, &invalid, (CcLimbVec3){0}, 0.0f,
+                  PlaneProbe, NULL);
+    Require(!invalid_rig.initialized,
+            "limb rig accepted an empty morphology");
+
+    (void)CcLimbMorphologyFromPreset(&invalid, CC_MORPHOLOGY_BIPED);
+    invalid.limbs[0].segment_count = 0;
+    CcLimbRigInit(&invalid_rig, &invalid, (CcLimbVec3){0}, 0.0f,
+                  PlaneProbe, NULL);
+    Require(!invalid_rig.initialized,
+            "limb rig accepted a zero-segment chain");
+
+    (void)CcLimbMorphologyFromPreset(&invalid, CC_MORPHOLOGY_BIPED);
+    invalid.limbs[0].segment_count = CC_LIMB_MAX_SEGMENTS + 1;
+    CcLimbRigInit(&invalid_rig, &invalid, (CcLimbVec3){0}, 0.0f,
+                  PlaneProbe, NULL);
+    Require(!invalid_rig.initialized,
+            "limb rig accepted a chain larger than its joint storage");
+
     static const int32_t expected_counts[] = {2, 4, 6, 8};
     for (int32_t preset = 0; preset < CC_MORPHOLOGY_PRESET_COUNT; ++preset) {
         CcLimbMorphology morphology;

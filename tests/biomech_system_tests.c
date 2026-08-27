@@ -4,6 +4,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 static void Require(bool condition, const char *message)
 {
@@ -181,7 +182,7 @@ static bool CapsuleBarrier(void *context,
     if (radius < 0.10f || fabsf(position.x) >= radius) return false;
     *corrected_position = position;
     corrected_position->x = position.x <= 0.0f ? -radius : radius;
-    *surface_normal = (CcBiomechVec3){position.x <= 0.0f ? -1.0f : 1.0f,
+    *surface_normal = (CcBiomechVec3){position.x <= 0.0f ? -4.0f : 4.0f,
                                       0.0f, 0.0f};
     return true;
 }
@@ -420,6 +421,14 @@ static void TestRagdollAnatomyAndVolume(void)
     Require(capsule.particles[left].collided ||
             capsule.particles[right].collided,
             "limb capsule crossed geometry between its endpoint particles");
+    for (int32_t particle = 0; particle < capsule.particle_count; ++particle) {
+        if (!capsule.particles[particle].collided) continue;
+        CcBiomechVec3 normal = capsule.particles[particle].contact_normal;
+        float length = sqrtf(normal.x * normal.x + normal.y * normal.y +
+                             normal.z * normal.z);
+        Require(fabsf(length - 1.0f) < 0.0001f,
+                "limb capsule retained a non-unit collision normal");
+    }
 }
 
 static void SetRagdollSupportContact(CcBiomechRagdollParticle *particle,
@@ -470,6 +479,7 @@ static void TestBiomechanicalClimb(void)
     CcLimbVec3 start = {0.0f, 0.0f, 0.0f};
     CcLimbVec3 finish = {0.0f, 1.0f, 0.50f};
     CcHumanoidGaitInit(&gait, start, 0.0f, NULL, NULL);
+    CcHumanoidGaitSetWalkingProfile(&gait, 1.24f, 0.76f);
     CcHumanoidGaitBeginClimb(&gait);
     Require(gait.climbing && !gait.ragdoll.active,
             "supported biped did not enter biomechanical climbing");
@@ -575,6 +585,96 @@ static void TestBiomechanicalClimb(void)
             "biomechanical climb snapped when standing control resumed");
     Require(!gait.climbing && !gait.ragdoll.active,
             "biomechanical climb did not return supported control");
+    Require(fabsf(gait.walk_cadence_scale - 1.24f) < 0.0001f &&
+            fabsf(gait.walk_stride_scale - 0.76f) < 0.0001f,
+            "finishing a climb discarded the walking profile");
+}
+
+static void TestInputAndResolutionContracts(void)
+{
+    CcBiomechMorphology morphology;
+    CcBiomechMorphologyInit(&morphology);
+    int32_t root = CcBiomechAddBone(&morphology, "root", -1,
+                                    0.5f, 10.0f, 0.5f);
+    int32_t child = CcBiomechAddBone(&morphology, "child", root,
+                                     0.5f, 5.0f, 0.5f);
+    Require(CcBiomechAddJoint(&morphology, "joint", root, child,
+                              0.0f, -0.5f, 0.5f, 0.1f,
+                              1.0f, 1.0f, 1.0f) == 0,
+            "invalid-input fixture could not build a valid rig");
+    CcBiomechRig rig = {.initialized = true};
+    int32_t valid_bones = morphology.bone_count;
+    morphology.bone_count = CC_BIOMECH_MAX_BONES + 1;
+    Require(!CcBiomechRigInit(&rig, &morphology) && !rig.initialized,
+            "biomechanical rig accepted too many bones");
+    morphology.bone_count = valid_bones;
+    morphology.joint_count = CC_BIOMECH_MAX_JOINTS + 1;
+    rig.initialized = true;
+    Require(!CcBiomechRigInit(&rig, &morphology) && !rig.initialized,
+            "biomechanical rig accepted too many joints");
+    morphology.joint_count = 1;
+    morphology.muscle_count = CC_BIOMECH_MAX_MUSCLES + 1;
+    rig.initialized = true;
+    Require(!CcBiomechRigInit(&rig, &morphology) && !rig.initialized,
+            "biomechanical rig accepted too many muscles");
+    morphology.muscle_count = -1;
+    rig.initialized = true;
+    Require(!CcBiomechRigInit(&rig, &morphology) && !rig.initialized,
+            "biomechanical rig accepted a negative muscle count");
+
+    CcBiomechRagdoll ragdoll;
+    CcBiomechRagdollInit(&ragdoll);
+    Require(CcBiomechRagdollAddParticle(
+                &ragdoll, (CcBiomechVec3){1.0f, 2.0f, 3.0f},
+                1.0f, 0.1f) == 0,
+            "zero-time ragdoll fixture rejected its particle");
+    ragdoll.particles[0].previous_position =
+        (CcBiomechVec3){0.8f, 2.0f, 3.0f};
+    ragdoll.active = true;
+    CcBiomechRagdoll paused_ragdoll = ragdoll;
+    CcBiomechRagdollStep(&ragdoll, 0.0f, 4, NULL, NULL);
+    Require(memcmp(&ragdoll, &paused_ragdoll, sizeof(ragdoll)) == 0,
+            "zero elapsed time advanced a ragdoll");
+    CcBiomechRagdollStep(&ragdoll, NAN, 4, NULL, NULL);
+    Require(memcmp(&ragdoll, &paused_ragdoll, sizeof(ragdoll)) == 0,
+            "non-finite elapsed time advanced a ragdoll");
+
+    CcHumanoidGait gait;
+    CcLimbVec3 body = {0.0f, 0.0f, 0.0f};
+    CcHumanoidGaitInit(&gait, body, 0.0f, PlaneProbe, NULL);
+    gait.body.root.position.y += 0.60f;
+    gait.body.root.velocity.y = 1.0f;
+    CcBiomechBodyRuntime root_before = gait.body.root;
+    CcHumanoidGaitResolvePose(&gait, body, 0.0f);
+    CcHumanoidPose resolved = gait.pose;
+    Require(memcmp(&gait.body.root, &root_before, sizeof(root_before)) == 0,
+            "pose resolution changed physical root state");
+    CcHumanoidGaitResolvePose(&gait, body, 0.0f);
+    Require(memcmp(&gait.body.root, &root_before, sizeof(root_before)) == 0 &&
+            MaximumPosePointStep(&resolved, &gait.pose) < 0.000001f,
+            "repeated pose resolution was not idempotent");
+
+    CcHumanoidGait paused = gait;
+    CcHumanoidGaitAdvancePhysical(
+        &gait, body, 0.0f, (CcLimbVec3){0}, true, 0.0f,
+        PlaneProbe, NULL, NULL);
+    Require(memcmp(&gait, &paused, sizeof(gait)) == 0,
+            "zero elapsed time advanced the humanoid controller");
+
+    CcLimbVec3 takeoff[CC_HUMANOID_LEG_COUNT] = {
+        gait.feet[0].current_point, gait.feet[1].current_point};
+    CcHumanoidGaitAdvanceMantle(
+        &gait, body, 0.0f, (CcLimbVec3){0.0f, 1.0f, 0.0f},
+        (CcLimbVec3){0.0f, 0.0f, -1.0f}, takeoff,
+        0.5f, 0.0f, PlaneProbe, NULL);
+    Require(memcmp(&gait, &paused, sizeof(gait)) == 0,
+            "zero elapsed time entered or advanced mantle traversal");
+
+    CcHumanoidGaitAdvanceSwim(
+        &gait, body, 0.0f, (CcLimbVec3){0.0f, 0.0f, 1.0f},
+        1.0f, 1.0f, NAN);
+    Require(memcmp(&gait, &paused, sizeof(gait)) == 0,
+            "non-finite elapsed time advanced swimming");
 }
 
 static void TestClimbSupportLoss(void)
@@ -1132,6 +1232,7 @@ static void TestContinuousHumanActions(void)
 
 int main(void)
 {
+    TestInputAndResolutionContracts();
     TestGenericTissues();
     TestGenericRagdoll();
     TestRagdollAnatomyAndVolume();
