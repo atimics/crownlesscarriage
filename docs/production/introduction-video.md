@@ -1,6 +1,6 @@
 # Introduction Video
 
-The finished 23-second introduction is
+The finished 25-second introduction is
 [`crownless.mp4`](../../assets/video/introduction/crownless.mp4).
 English captions are available beside it as
 [`crownless.en.srt`](../../assets/video/introduction/crownless.en.srt).
@@ -16,19 +16,24 @@ The introduction video must include this line exactly:
 > bigger than any of them would eat them if they didn't.
 
 Use it as the video's opening thesis. Do not put text ahead of the voice. Each
-text beat appears only after its matching phrase has been spoken. Give "eat
-them if they didn't" a separate text-only slide, then reveal the dragon and cut
-to the title card.
+text beat appears only after its matching phrase has been spoken. Give "would
+eat them if they didn't" a separate text-only slide. Then use black pauses to
+separate the title and dragon reveals.
 
 ## Sequence
 
-1. Two groups hold apart while the first phrase is spoken.
-2. Show the first text beat after the phrase ends.
-3. The groups repair the crossing while the next phrases are spoken.
-4. Show the second text beat after "any of them."
-5. Cut to a separate "eat them if they didn't" slide after the voice ends.
-6. Show the dragon.
-7. Cut to the `CROWNLESS` title card.
+1. Begin the voice over two divided groups.
+2. Show the delayed first text and hold it longer.
+3. Show the delayed second text and hold it longer.
+4. Cut to a separate "would eat them if they didn't" slide.
+5. Cut to black.
+6. Show the `CROWNLESS` title card.
+7. Cut to black.
+8. Show the dragon.
+9. End on black.
+
+The supplied track plays in full. The short silence after it ends carries the
+dragon into the final black frame.
 
 Rebuild the video with `tools/video/build_introduction_video.sh`. Set
 `CROWNLESS_FFMPEG` if FFmpeg is installed at a different path.
