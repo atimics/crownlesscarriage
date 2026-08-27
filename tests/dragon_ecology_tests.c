@@ -163,6 +163,86 @@ int main(void)
     CcSimAdvanceDays(&restored, 1);
     CC_CHECK(restored.dragon.life_stage == CC_DRAGON_STAGE_WANDERER);
 
-    puts("Dragon crown, hunger, brood, aftermath, and succession tests passed");
+    CcSim cult;
+    CcSimInit(&cult, UINT32_C(0xc0175eed));
+    cult.dragon.slain = true;
+    cult.dragon.slain_day = 1;
+    cult.dragon.life_stage = CC_DRAGON_STAGE_AFTERDRAGON;
+    cult.dragon.activity = CC_DRAGON_ACTIVITY_AFTERMATH;
+    cult.dragon.body_condition = 0;
+    cult.dragon.crown_strength = 0;
+    cult.dragon.stolen_outstanding = 0;
+    cult.dragon.stolen_treasure_id = 0U;
+    cult.dragon.theft_actor_id = 0U;
+    cult.dragon.retaliation_target_id = 0U;
+    cult.dragon.omen_event_id = 0U;
+    cult.dragon.omen_days_remaining = 0;
+    cult.dragon.egg_count = 0;
+    cult.dragon.brood_days_remaining = 0;
+    cult.dragon.afterdeath_days = 364;
+    cult.goblins.members = 30;
+    cult.goblins.devotion = 50;
+    cult.goblins.lair_stock[CC_GOOD_FOOD] = 32;
+    cult.goblins.lair_stock[CC_GOOD_TOOLS] = 3;
+    cult.goblins.lair_stock[CC_GOOD_WEAPONS] = 4;
+    cult.goblins.tribute_cooldown_days = 1000;
+    int32_t cult_members = cult.goblins.members;
+    CcSimAdvanceDays(&cult, 1);
+    CC_CHECK(cult.goblins.members > cult_members);
+    CC_CHECK(cult.goblins.devotion > 50);
+    CC_CHECK(CountEvents(&cult, CC_EVENT_GOBLIN_CULT_RALLIED) == 1);
+
+    cult.current_day = 120 * 365;
+    cult.dragon.afterdeath_days = 120 * 365 - 1;
+    cult.goblins.members = 72;
+    cult.goblins.devotion = 90;
+    cult.goblins.lair_coins = 120;
+    cult.goblins.lair_stock[CC_GOOD_FOOD] = 64;
+    cult.goblins.lair_stock[CC_GOOD_TOOLS] = 4;
+    cult.goblins.lair_stock[CC_GOOD_WEAPONS] = 4;
+    cult.goblins.lair_stock[CC_GOOD_GOLD] = 1;
+    cult.goblins.lair_stock[CC_GOOD_GEMS] = 1;
+    cult.dragon.hoard = 0;
+    CcMoney cult_gold = CcSimTrackedGold(&cult);
+    int32_t cult_gold_goods = CcSimTrackedGood(&cult, CC_GOOD_GOLD);
+    int32_t cult_gems = CcSimTrackedGood(&cult, CC_GOOD_GEMS);
+    CcSimAdvanceDays(&cult, 1);
+    CC_CHECK(cult.dragon.egg_count == 2);
+    CC_CHECK(cult.dragon.brood_days_remaining >= 10 * 365 - 1);
+    CC_CHECK(cult.dragon.brood_days_remaining <= 15 * 365 - 1);
+    CC_CHECK(cult.dragon.hoard == 120);
+    CC_CHECK(CcSimTrackedGold(&cult) == cult_gold);
+    CC_CHECK(CcSimTrackedGood(&cult, CC_GOOD_GOLD) == cult_gold_goods);
+    CC_CHECK(CcSimTrackedGood(&cult, CC_GOOD_GEMS) == cult_gems);
+    CC_CHECK(CountEvents(&cult, CC_EVENT_GOBLIN_DRAGON_SEED) == 1);
+    CC_CHECK(CcSimValidate(&cult, error, sizeof(error)));
+
+    CcSim living_cult;
+    CcSimInit(&living_cult, UINT32_C(0xc0171a1e));
+    living_cult.current_day = 2 * 365 - 1;
+    living_cult.goblins.members = 24;
+    living_cult.goblins.devotion = 90;
+    living_cult.goblins.lair_stock[CC_GOOD_FOOD] = 32;
+    living_cult.goblins.lair_stock[CC_GOOD_TOOLS] = 3;
+    living_cult.goblins.lair_stock[CC_GOOD_WEAPONS] = 4;
+    living_cult.goblins.tribute_cooldown_days = 1000;
+    CcSimAdvanceDays(&living_cult, 1);
+    CC_CHECK(living_cult.goblins.members == 25);
+    CC_CHECK(CountEvents(
+        &living_cult, CC_EVENT_GOBLIN_CULT_RALLIED) == 1);
+
+    CcSim ash_poor_cult;
+    CcSimInit(&ash_poor_cult, UINT32_C(0xc017a500));
+    ash_poor_cult.current_day = 4 * 365 - 1;
+    ash_poor_cult.goblins.members = 12;
+    ash_poor_cult.goblins.devotion = 100;
+    ash_poor_cult.goblins.lair_stock[CC_GOOD_FOOD] = 16;
+    ash_poor_cult.goblins.lair_stock[CC_GOOD_TOOLS] = 0;
+    ash_poor_cult.goblins.lair_stock[CC_GOOD_WEAPONS] = 0;
+    ash_poor_cult.goblins.tribute_cooldown_days = 1000;
+    CcSimAdvanceDays(&ash_poor_cult, 1);
+    CC_CHECK(ash_poor_cult.goblins.members == 13);
+
+    puts("Dragon crown, cult recovery, brood, aftermath, and succession tests passed");
     return 0;
 }

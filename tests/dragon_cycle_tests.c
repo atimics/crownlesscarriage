@@ -403,6 +403,51 @@ int main(void)
              alliance_peace.diplomacy[1][0] == CC_DIPLOMACY_PEACE);
     CC_CHECK(CountEvents(&alliance_peace, CC_EVENT_PEACE_DECLARED) == 1);
 
+    CcSim dormant_alliance;
+    CcSimInit(&dormant_alliance, UINT32_C(0xa111d0a0));
+    dormant_alliance.current_day = 20 * 112 - 1;
+    dormant_alliance.dragon.hoard = 0;
+    dormant_alliance.diplomacy[0][1] = CC_DIPLOMACY_ALLIANCE;
+    dormant_alliance.diplomacy[1][0] = CC_DIPLOMACY_ALLIANCE;
+    dormant_alliance.diplomacy_changed_day[0][1] =
+        dormant_alliance.current_day - 4 * 364;
+    dormant_alliance.diplomacy_changed_day[1][0] =
+        dormant_alliance.diplomacy_changed_day[0][1];
+    dormant_alliance.courier_count = 0;
+    CcSimAdvanceDays(&dormant_alliance, 1);
+    bool peace_sent = false;
+    for (int32_t courier = 0;
+         courier < dormant_alliance.courier_count; ++courier) {
+        if (dormant_alliance.couriers[courier].kind ==
+            CC_COURIER_PEACE_OFFER) peace_sent = true;
+    }
+    CC_CHECK(peace_sent);
+    CcSimAdvanceDays(&dormant_alliance, 30);
+    CC_CHECK(dormant_alliance.diplomacy[0][1] ==
+             CC_DIPLOMACY_PEACE);
+
+    CcSim crisis_alliance;
+    CcSimInit(&crisis_alliance, UINT32_C(0xa111c215));
+    crisis_alliance.current_day = 30 * 112 - 1;
+    crisis_alliance.dragon.hoard =
+        CcSimTrackedGold(&crisis_alliance) * 2;
+    crisis_alliance.dragon_campaign.defeats = 1;
+    crisis_alliance.diplomacy[0][1] = CC_DIPLOMACY_ALLIANCE;
+    crisis_alliance.diplomacy[1][0] = CC_DIPLOMACY_ALLIANCE;
+    crisis_alliance.diplomacy_changed_day[0][1] =
+        crisis_alliance.current_day - 8 * 364;
+    crisis_alliance.diplomacy_changed_day[1][0] =
+        crisis_alliance.diplomacy_changed_day[0][1];
+    crisis_alliance.courier_count = 0;
+    CcSimAdvanceDays(&crisis_alliance, 1);
+    bool feud_sent = false;
+    for (int32_t courier = 0;
+         courier < crisis_alliance.courier_count; ++courier) {
+        if (crisis_alliance.couriers[courier].kind ==
+            CC_COURIER_WAR_DECLARATION) feud_sent = true;
+    }
+    CC_CHECK(feud_sent);
+
     puts("Goblin tribute, war finance, and dragon retaliation tests passed");
     return 0;
 }

@@ -54,7 +54,8 @@ static void PrintSummary(const CcSim *sim, bool detail)
                  " bandit_influence=%d monster_pressure=%d"
                  " night_roads=%d monastery_reserve=%" PRId64
                  " monastery_debt=%" PRId64
-                 " hoard_raids=%d goblin_guards=%d"
+                 " hoard_raids=%d goblin_guards=%d goblin_members=%d"
+                 " goblin_devotion=%d goblin_tithes=%d"
                  " wars=%d alliances=%d couriers=%d"
                  " dragon_slain=%d dragon_campaign=%d/%d/%d"
                  " dragon_stage=%s activity=%s age=%d crown=%d body=%d"
@@ -69,7 +70,9 @@ static void PrintSummary(const CcSim *sim, bool detail)
                  sim->monster_count > 0 ? sim->monsters[0].pressure : 0,
                  smuggler_routes, sim->iron_ledger_reserve, debt,
                  sim->hoard_raiders.raids_completed,
-                 sim->goblins.hoard_defenses, wars, alliances,
+                 sim->goblins.hoard_defenses, sim->goblins.members,
+                 sim->goblins.devotion, sim->goblins.tributes_delivered,
+                 wars, alliances,
                  active_couriers, sim->dragon.slain ? 1 : 0,
                  sim->dragon_campaign.attempts,
                  sim->dragon_campaign.victories,

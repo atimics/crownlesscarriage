@@ -520,6 +520,8 @@ const char *CcEventKindName(CcEventKind kind)
         case CC_EVENT_DRAGON_WHELP_DISPERSED: return "WHELPS DISPERSE";
         case CC_EVENT_DRAGON_AFTERSHOCK: return "AFTERDRAGON";
         case CC_EVENT_DRAGON_SUCCESSOR: return "DRAGON SUCCESSOR";
+        case CC_EVENT_GOBLIN_CULT_RALLIED: return "CULT RALLIES";
+        case CC_EVENT_GOBLIN_DRAGON_SEED: return "DRAGON SEED";
     }
     return "EVENT";
 }
@@ -2432,8 +2434,17 @@ static void PlanGoblinTribute(CcSim *sim)
                goblins->lair_stock[CC_GOOD_WEAPONS] < 3) {
         goblins->raid_motive = CC_GOBLIN_RAID_EQUIPMENT;
     } else if (sim->dragon.slain) {
-        goblins->tribute_cooldown_days = 7;
-        return;
+        int32_t relics = goblins->lair_stock[CC_GOOD_GOLD] +
+                         goblins->lair_stock[CC_GOOD_GEMS];
+        bool rebuilding = sim->dragon.egg_count == 0 &&
+                          goblins->members >= 24 &&
+                          goblins->devotion >= 40 &&
+                          (goblins->lair_coins < 120 || relics < 2);
+        if (!rebuilding) {
+            goblins->tribute_cooldown_days = 14;
+            return;
+        }
+        goblins->raid_motive = CC_GOBLIN_RAID_DRAGON_TRIBUTE;
     } else {
         goblins->raid_motive = CC_GOBLIN_RAID_DRAGON_TRIBUTE;
     }
@@ -2477,7 +2488,9 @@ static void PlanGoblinTribute(CcSim *sim)
                    goblins->name, target->name,
                    goblins->raid_motive == CC_GOBLIN_RAID_HUNGER ? "Food" :
                    goblins->raid_motive == CC_GOBLIN_RAID_EQUIPMENT ?
-                       "Tools and Weapons" : "dragon tribute");
+                       "Tools and Weapons" : sim->dragon.slain ?
+                       "coin and relics for the dead dragon" :
+                       "dragon tribute");
     CcEvent *event = PushEvent(
         sim, CC_EVENT_GOBLIN_RAID_DEPARTED, goblins->id,
         target->id, LatestLocalCause(sim, target->id),
@@ -2490,11 +2503,13 @@ static void AdvanceGoblinTribute(CcSim *sim)
     CcGoblinCult *goblins = &sim->goblins;
     if (goblins->tribute_phase == CC_GOBLIN_TRIBUTE_IDLE) {
         if (sim->current_day % 7 == 0) {
-            if (goblins->lair_stock[CC_GOOD_FOOD] > 0) {
-                goblins->lair_stock[CC_GOOD_FOOD] -= 1;
-            } else {
-                goblins->members = MaximumI32(12, goblins->members - 1);
-            }
+            int32_t food_needed = sim->dragon.slain ?
+                1 + (goblins->members - 1) / 24 : 1;
+            int32_t food_eaten = MinimumI32(
+                goblins->lair_stock[CC_GOOD_FOOD], food_needed);
+            goblins->lair_stock[CC_GOOD_FOOD] -= food_eaten;
+            goblins->members = MaximumI32(
+                12, goblins->members - (food_needed - food_eaten));
         }
         goblins->tribute_cooldown_days = MaximumI32(
             0, goblins->tribute_cooldown_days - 1);
@@ -2601,6 +2616,8 @@ static void AdvanceGoblinTribute(CcSim *sim)
                                       goblins->tribute_event_id;
 
         if (sim->dragon.slain) {
+            bool relic_raid = goblins->raid_motive ==
+                              CC_GOBLIN_RAID_DRAGON_TRIBUTE;
             if (goblins->carried_treasure_id != 0U) {
                 CcTreasure *treasure = (CcTreasure *)CcSimTreasure(
                     sim, goblins->carried_treasure_id);
@@ -2615,8 +2632,15 @@ static void AdvanceGoblinTribute(CcSim *sim)
             goblins->tribute_event_id = 0U;
             goblins->carried_treasure_id = 0U;
             goblins->tribute_days_remaining = 0;
-            goblins->tribute_cooldown_days = 21 +
-                (int32_t)(NextRandom(sim) % 15U);
+            if (relic_raid) {
+                goblins->devotion = ClampI32(
+                    goblins->devotion + 2, 0, 100);
+                goblins->tribute_cooldown_days = 120 +
+                    (int32_t)(NextRandom(sim) % 121U);
+            } else {
+                goblins->tribute_cooldown_days = 21 +
+                    (int32_t)(NextRandom(sim) % 15U);
+            }
             return;
         }
 
@@ -3185,6 +3209,119 @@ static void ChangeDragonStage(CcSim *sim, CcDragonLifeStage stage,
                                  dragon->lifecycle_event_id;
 }
 
+static void AdvanceAfterdragonCult(CcSim *sim)
+{
+    CcDragon *dragon = &sim->dragon;
+    CcGoblinCult *goblins = &sim->goblins;
+    if (dragon->afterdeath_days == 0 ||
+        dragon->afterdeath_days % 365 != 0 ||
+        goblins->tribute_phase != CC_GOBLIN_TRIBUTE_IDLE) return;
+
+    bool provisioned = goblins->lair_stock[CC_GOOD_FOOD] >= 8;
+    bool armed = goblins->lair_stock[CC_GOOD_TOOLS] >= 2 &&
+                 goblins->lair_stock[CC_GOOD_WEAPONS] >= 3;
+    int32_t cult_limit = armed ? 84 :
+        goblins->devotion >= 60 ? 48 : 24;
+    if (provisioned && goblins->members < cult_limit) {
+        int32_t recruits = armed ? 1 + goblins->devotion / 40 : 1;
+        recruits = MinimumI32(
+            recruits, cult_limit - goblins->members);
+        int32_t food_cost = 2 + recruits;
+        if (goblins->lair_stock[CC_GOOD_FOOD] >= food_cost) {
+            goblins->lair_stock[CC_GOOD_FOOD] -= food_cost;
+            goblins->members += recruits;
+            goblins->devotion = ClampI32(
+                goblins->devotion + 2, 0, 100);
+            char text[CC_EVENT_TEXT_CAPACITY];
+            (void)snprintf(
+                text, sizeof(text),
+                "%s feeds and binds %d new ash-sworn; the dead dragon's court reaches %d.",
+                goblins->name, recruits, goblins->members);
+            (void)PushEvent(
+                sim, CC_EVENT_GOBLIN_CULT_RALLIED, goblins->id,
+                goblins->lair_settlement_id, dragon->lifecycle_event_id,
+                recruits, text);
+        }
+    } else if (!provisioned) {
+        goblins->devotion = MaximumI32(20, goblins->devotion - 1);
+    } else {
+        goblins->devotion = ClampI32(goblins->devotion + 1, 0, 100);
+    }
+
+    int32_t relics = goblins->lair_stock[CC_GOOD_GOLD] +
+                     goblins->lair_stock[CC_GOOD_GEMS];
+    bool can_reveal_clutch = dragon->egg_count == 0 &&
+        dragon->afterdeath_days >= 120 * 365 &&
+        goblins->members >= 48 && goblins->devotion >= 75 &&
+        goblins->lair_coins >= 120 && relics >= 2 &&
+        goblins->lair_stock[CC_GOOD_FOOD] >= 12 &&
+        goblins->lair_stock[CC_GOOD_TOOLS] >= 2 &&
+        goblins->lair_stock[CC_GOOD_WEAPONS] >= 3;
+    if (!can_reveal_clutch) return;
+
+    CcMoney ritual_coins = 120;
+    goblins->lair_coins -= ritual_coins;
+    dragon->hoard += ritual_coins;
+    for (int32_t relic = 0; relic < 2; ++relic) {
+        CcGood good = goblins->lair_stock[CC_GOOD_GEMS] > 0 ?
+                      CC_GOOD_GEMS : CC_GOOD_GOLD;
+        goblins->lair_stock[good] -= 1;
+        dragon->hoard_goods[good] += 1;
+    }
+    goblins->lair_stock[CC_GOOD_FOOD] -= 12;
+    goblins->lair_stock[CC_GOOD_TOOLS] -= 1;
+    goblins->lair_stock[CC_GOOD_WEAPONS] -= 1;
+    dragon->egg_count = goblins->members >= 72 &&
+                        goblins->devotion >= 90 ? 2 : 1;
+    dragon->brood_days_remaining =
+        (10 + (int32_t)(NextRandom(sim) % 6U)) * 365;
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(
+        text, sizeof(text),
+        "%s opens a sealed ash-vault and reveals %d dragon egg%s, bought with stolen coin and years of sacrifice.",
+        goblins->name, dragon->egg_count,
+        dragon->egg_count == 1 ? "" : "s");
+    CcEvent *event = PushEvent(
+        sim, CC_EVENT_GOBLIN_DRAGON_SEED, goblins->id,
+        dragon->lair_settlement_id, dragon->lifecycle_event_id,
+        dragon->egg_count, text);
+    dragon->lifecycle_event_id = event != NULL ? event->id :
+                                  dragon->lifecycle_event_id;
+}
+
+static void AdvanceLivingDragonCult(CcSim *sim)
+{
+    CcDragon *dragon = &sim->dragon;
+    CcGoblinCult *goblins = &sim->goblins;
+    if (sim->current_day % (2 * 365) != 0 ||
+        goblins->tribute_phase != CC_GOBLIN_TRIBUTE_IDLE ||
+        goblins->members >= 48 ||
+        goblins->lair_stock[CC_GOOD_FOOD] < 6) return;
+
+    bool armed = goblins->lair_stock[CC_GOOD_TOOLS] >= 2 &&
+                 goblins->lair_stock[CC_GOOD_WEAPONS] >= 3;
+    int32_t cult_limit = armed ? 48 : 36;
+    bool ash_poor_muster = !armed && goblins->devotion >= 75 &&
+                           sim->current_day % (4 * 365) == 0;
+    if (goblins->members >= cult_limit || (!armed && !ash_poor_muster)) {
+        return;
+    }
+    int32_t recruits = 1;
+    int32_t food_cost = 3;
+    if (goblins->lair_stock[CC_GOOD_FOOD] < food_cost) return;
+    goblins->lair_stock[CC_GOOD_FOOD] -= food_cost;
+    goblins->members += recruits;
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(
+        text, sizeof(text),
+        "%s gathers %d new tithe-bearers; %s's court returns to %d.",
+        goblins->name, recruits, dragon->name, goblins->members);
+    (void)PushEvent(
+        sim, CC_EVENT_GOBLIN_CULT_RALLIED, goblins->id,
+        goblins->lair_settlement_id, dragon->lifecycle_event_id,
+        recruits, text);
+}
+
 static void AdvanceAfterdragon(CcSim *sim)
 {
     CcDragon *dragon = &sim->dragon;
@@ -3203,6 +3340,7 @@ static void AdvanceAfterdragon(CcSim *sim)
         dragon->territory_stability = MaximumI32(
             0, dragon->territory_stability - 1);
     }
+    AdvanceAfterdragonCult(sim);
     if (dragon->egg_count > 0) {
         if (sim->current_day % 14 == 0) {
             if (sim->goblins.lair_stock[CC_GOOD_FOOD] > 0) {
@@ -3240,6 +3378,7 @@ static void AdvanceDragonEcology(CcSim *sim)
         AdvanceAfterdragon(sim);
         return;
     }
+    AdvanceLivingDragonCult(sim);
     dragon->age_days += 1;
     dragon->hunt_cooldown_days = MaximumI32(
         0, dragon->hunt_cooldown_days - 1);
@@ -4521,7 +4660,7 @@ static void ApplyCourierMessage(CcSim *sim, CcCourier *courier,
         changed = true;
     } else if (courier->kind == CC_COURIER_PEACE_OFFER &&
                (state == CC_DIPLOMACY_WAR ||
-                (state == CC_DIPLOMACY_ALLIANCE && sim->dragon.slain))) {
+                state == CC_DIPLOMACY_ALLIANCE)) {
         state = CC_DIPLOMACY_PEACE;
         event_kind = CC_EVENT_PEACE_DECLARED;
         changed = true;
@@ -5008,8 +5147,11 @@ static void AdvanceDragonCampaign(CcSim *sim)
     sim->goblins.tribute_target_id = 0U;
     sim->goblins.tribute_event_id = 0U;
     sim->goblins.tribute_days_remaining = 0;
-    sim->goblins.devotion = 0;
-    sim->goblins.members = MaximumI32(12, sim->goblins.members * 2 / 3);
+    sim->goblins.devotion = ClampI32(MaximumI32(
+        25, sim->goblins.devotion * 2 / 3 +
+            sim->goblins.hoard_defenses * 2), 0, 100);
+    sim->goblins.members = MaximumI32(
+        12, sim->goblins.members * 3 / 4);
     (void)snprintf(
         text, sizeof(text),
         "The allied host slays %s: strength %d against %d; the real hoard begins its journey home.",
@@ -5032,12 +5174,39 @@ static void UpdateRoyalDiplomacy(CcSim *sim)
     CcMoney tracked_gold = CcSimTrackedGold(sim);
     bool dragon_crisis = !sim->dragon.slain && tracked_gold > 0 &&
                          sim->dragon.hoard * 3 >= tracked_gold;
-    if (dragon_crisis) {
+    if (sim->current_day % 112 == 0 &&
+        sim->dragon_campaign.cooldown_days == 0) {
         for (int32_t first = 0; first < sim->kingdom_count; ++first) {
             for (int32_t second = first + 1;
                  second < sim->kingdom_count; ++second) {
-                if (sim->diplomacy[first][second] ==
-                        CC_DIPLOMACY_ALLIANCE ||
+                if (sim->diplomacy[first][second] !=
+                    CC_DIPLOMACY_ALLIANCE) continue;
+                int32_t age = sim->current_day -
+                    sim->diplomacy_changed_day[first][second];
+                int32_t limit = dragon_crisis ? 8 * 364 :
+                                sim->dragon.slain ? 364 : 4 * 364;
+                if (age < limit) continue;
+                CcCourierKind message = dragon_crisis &&
+                    sim->dragon_campaign.defeats >
+                        sim->dragon_campaign.victories ?
+                    CC_COURIER_WAR_DECLARATION : CC_COURIER_PEACE_OFFER;
+                (void)LaunchCourier(sim, message,
+                                    first, second,
+                                    sim->dragon.hoard_event_id);
+                if (dragon_crisis) {
+                    sim->dragon_campaign.cooldown_days = 5 * 364;
+                }
+                return;
+            }
+        }
+    }
+    if (dragon_crisis) {
+        if (sim->dragon_campaign.cooldown_days > 365) return;
+        for (int32_t first = 0; first < sim->kingdom_count; ++first) {
+            for (int32_t second = first + 1;
+                 second < sim->kingdom_count; ++second) {
+                CcDiplomaticState state = sim->diplomacy[first][second];
+                if (state == CC_DIPLOMACY_ALLIANCE ||
                     CourierActiveBetween(
                         sim, CC_COURIER_DRAGON_ALLIANCE,
                         sim->kingdoms[first].id,
@@ -5078,13 +5247,6 @@ static void UpdateRoyalDiplomacy(CcSim *sim)
             CcDiplomaticState state = sim->diplomacy[first][second];
             int32_t age = sim->current_day -
                           sim->diplomacy_changed_day[first][second];
-            if (state == CC_DIPLOMACY_ALLIANCE && sim->dragon.slain &&
-                age >= 364) {
-                (void)LaunchCourier(sim, CC_COURIER_PEACE_OFFER,
-                                    first, second,
-                                    sim->dragon.hoard_event_id);
-                return;
-            }
             if (state == CC_DIPLOMACY_WAR && age >= 364 &&
                 (age >= 12 * 364 ||
                  KingdomAverageHunger(sim, first) > 35 ||
@@ -7298,7 +7460,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             if (event == NULL || CcIdKind(event->id) != CC_ENTITY_EVENT ||
                 event->day < 1 || event->day > sim->current_day ||
                 event->kind < CC_EVENT_HARVEST_FAILED ||
-                event->kind > CC_EVENT_DRAGON_SUCCESSOR ||
+                event->kind > CC_EVENT_GOBLIN_DRAGON_SEED ||
                 event->parent_id == event->id ||
                 (event->parent_id != 0U &&
                  CcSimEvent(sim, event->parent_id) == NULL)) {
