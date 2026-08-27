@@ -3020,7 +3020,7 @@ static void HatchDragonSuccessor(CcSim *sim)
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(
         text, sizeof(text),
-        "%s hatches from %s's visible clutch; %d sibling%s disperse with the goblin keepers.",
+        "%.20s hatches from %.20s's visible clutch; %d sibling%s leave with goblins.",
         dragon->name, former_name, MaximumI32(0, clutch - 1),
         clutch == 2 ? "" : "s");
     CcEvent *event = PushEvent(
