@@ -112,4 +112,10 @@ Runtime art checks can capture the state-driven settlement compositions:
 ./crownless_carriage --capture-creatures goblins goblins.png
 ./crownless_carriage --capture-creatures dragon dragon.png
 ./crownless_carriage --capture-creatures animals animals.png
+./crownless_carriage --capture-creature-reel goblins goblins/frame
+./crownless_carriage --capture-creature-reel dragon dragon/frame
+./crownless_carriage --capture-creature-reel animals animals/frame
 ```
+
+Each reel command records 45 deterministic gameplay frames at 15 frames per
+second, ready to assemble into a three-second clip.

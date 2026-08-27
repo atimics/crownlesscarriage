@@ -2476,14 +2476,17 @@ int main(int argc, char **argv)
         strcmp(argv[1], "--capture-face") == 0;
     bool capture_creatures = argc >= 2 &&
         strcmp(argv[1], "--capture-creatures") == 0;
+    bool capture_creature_reel = argc >= 2 &&
+        strcmp(argv[1], "--capture-creature-reel") == 0;
+    bool capture_creature_media = capture_creatures || capture_creature_reel;
     const char *capture_creature_family = NULL;
-    if (capture_creatures) {
+    if (capture_creature_media) {
         if (argc < 4 ||
             (strcmp(argv[2], "goblins") != 0 &&
              strcmp(argv[2], "dragon") != 0 &&
              strcmp(argv[2], "animals") != 0)) {
             (void)fprintf(stderr,
-                          "capture creatures requires goblins, dragon, or animals and a frame path.\n");
+                          "creature capture requires goblins, dragon, or animals and a frame path.\n");
             return 1;
         }
         capture_creature_family = argv[2];
@@ -2544,8 +2547,8 @@ int main(int argc, char **argv)
                     capture_witness || capture_travel || capture_road ||
                     capture_parley ||
                     capture_aftermath || capture_golden || capture_face ||
-                    capture_room || capture_creatures);
-    const char *capture_path = capture_creatures ? argv[3] :
+                    capture_room || capture_creature_media);
+    const char *capture_path = capture_creature_media ? argv[3] :
                                capture_room ? argv[4] :
                                capture_face ? argv[3] :
                                argc >= 3 ? argv[2] :
@@ -2568,7 +2571,7 @@ int main(int argc, char **argv)
     }
     SetWindowMinSize(1080, 680);
     SetTargetFPS(render_benchmark || capture_action_reel ||
-                 capture_gameplay_reel ? 0 : 60);
+                 capture_gameplay_reel || capture_creature_reel ? 0 : 60);
     /* The playable world is authored against a fixed 2x art-pixel grid.
        Render it at half the presentation size, then enlarge with point
        sampling. Screen-space labels and HUD are drawn after presentation. */
@@ -2583,15 +2586,15 @@ int main(int argc, char **argv)
     CcLocalTerrainSetSeed(sim.world_seed);
     CcJournal *journal = NULL;
     if (capture || render_benchmark) CcSimAdvanceDays(&sim, 28);
-    if (capture_creatures &&
+    if (capture_creature_media &&
         strcmp(capture_creature_family, "goblins") == 0) {
         sim.player.location_id = sim.goblins.lair_settlement_id;
-    } else if (capture_creatures &&
+    } else if (capture_creature_media &&
                strcmp(capture_creature_family, "dragon") == 0) {
         sim.player.location_id = sim.dragon.lair_settlement_id;
         sim.dragon.omen_days_remaining = 2;
         sim.goblins.tribute_phase = CC_GOBLIN_TRIBUTE_TO_DRAGON;
-    } else if (capture_creatures) {
+    } else if (capture_creature_media) {
         for (int32_t settlement = 0; settlement < sim.settlement_count;
              ++settlement) {
             if (sim.settlements[settlement].id != sim.player.location_id) {
@@ -2704,7 +2707,7 @@ int main(int argc, char **argv)
         local.agent.facing_yaw = -0.18f;
         local.course.alarm_countdown = 1000.0f;
     }
-    if (capture_creatures) {
+    if (capture_creature_media) {
         Vector2 creature_view =
             strcmp(capture_creature_family, "animals") == 0 ?
                 (Vector2){59.5f, 40.0f} : (Vector2){24.5f, 49.5f};
@@ -2723,7 +2726,7 @@ int main(int argc, char **argv)
         !capture_encounter && !capture_travel &&
         !capture_road &&
         !capture_parley && !capture_golden && !capture_face && !capture_room &&
-        !capture_creatures) {
+        !capture_creature_media) {
         local.course.alarm_countdown = 1000.0f;
         for (int32_t frame = 0; frame < 1500; ++frame) {
             CcLocalCourseUpdate(&local.course, &local.agent, &sim,
@@ -2873,7 +2876,7 @@ int main(int argc, char **argv)
     } else if (capture_room) {
         (void)snprintf(message, sizeof(message),
                        "Each fixed room reveals a landmark, a route, and the state of the living settlement.");
-    } else if (capture_creatures) {
+    } else if (capture_creature_media) {
         (void)snprintf(message, sizeof(message), "Creature settlement.");
     }
     if (capture_road) {
@@ -2927,6 +2930,7 @@ int main(int argc, char **argv)
         }
         float clock = capture_gameplay_reel ?
             (float)gameplay_reel.captured_frames / 15.0f :
+            capture_creature_reel ? (float)capture_frames / 15.0f :
             (float)GetTime();
 
         BeginDrawing();
@@ -3017,6 +3021,15 @@ int main(int argc, char **argv)
             TakeScreenshot(frame_path);
             walk_frame_count += 1;
             if (walk_frame_count >= 8) break;
+        } else if (capture_creature_reel) {
+            capture_frames += 1;
+            if (capture_frames <= 2) continue;
+            int32_t creature_frame = capture_frames - 3;
+            char frame_path[768];
+            (void)snprintf(frame_path, sizeof(frame_path), "%s-%03d.png",
+                           capture_path, creature_frame);
+            TakeScreenshot(frame_path);
+            if (creature_frame >= 44) break;
         } else if (capture) {
             capture_frames += 1;
             int32_t settled_frames = capture_road ? 45 : 3;
