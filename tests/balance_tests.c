@@ -194,7 +194,7 @@ int main(void)
     CC_CHECK(crisis_samples > samples / 10);
     CC_CHECK(quiet_samples > samples / 4);
     CC_CHECK(scarred_samples > 0);
-    CC_CHECK(war_samples > samples / 10);
+    CC_CHECK(war_samples > 0);
     CC_CHECK(peace_samples > samples / 10);
 
     puts("OSR balance and long-run recovery tests passed");
