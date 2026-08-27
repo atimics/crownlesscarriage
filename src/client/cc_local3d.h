@@ -310,6 +310,7 @@ Vector2 CcLocalAgentPosition(const CcLocalAgent *agent);
 const char *CcLocalTraversalName(CcTraversalMode mode);
 void CcLocalAgentSetMorphology(CcLocalAgent *agent, CcMorphologyPreset preset,
                                bool market_interior);
+void CcLocalAgentSetScene(CcLocalAgent *agent, CcLocalSceneKind scene);
 void CcLocalAgentCycleMorphology(CcLocalAgent *agent, bool market_interior);
 const char *CcLocalAgentMorphologyName(const CcLocalAgent *agent);
 void CcLocalCombatSetTeam(CcLocalAgent *agent, CcCombatTeam team);
