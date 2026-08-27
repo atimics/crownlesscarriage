@@ -640,6 +640,19 @@ typedef struct CcJourneyEncounter {
     CcId parent_event_id;
 } CcJourneyEncounter;
 
+typedef struct CcTravelPreview {
+    CcId route_id;
+    CcId destination_id;
+    CcMoney provision_cost;
+    int32_t travel_days;
+    int32_t claimed_condition;
+    int32_t claimed_danger;
+    int32_t chart_accuracy;
+    bool charted;
+    bool destination_known;
+    bool sponsored_guide;
+} CcTravelPreview;
+
 typedef struct CcCarriageState {
     CcCarriageMode mode;
     CcId location_id;
@@ -779,6 +792,9 @@ const CcRoute *CcSimRoute(const CcSim *sim, CcId id);
 const CcRoute *CcSimRouteBetween(const CcSim *sim, CcId a, CcId b);
 const CcMap *CcSimMap(const CcSim *sim, CcId id);
 const CcMap *CcSimMapForRoute(const CcSim *sim, CcId route_id, CcId owner_id);
+bool CcSimTravelPreview(const CcSim *sim, CcId destination_id,
+                        CcTravelPreview *preview, char *error,
+                        size_t error_capacity);
 const CcEvent *CcSimRecentEvent(const CcSim *sim, int32_t offset);
 const CcEvent *CcSimEvent(const CcSim *sim, CcId id);
 const CcSituation *CcSimSituation(const CcSim *sim, CcId id);

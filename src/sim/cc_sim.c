@@ -6744,23 +6744,24 @@ static int32_t JourneyCarriageSpeed(int32_t total_subticks)
                       CC_WORLD_TICKS_PER_SECOND) / total_subticks);
 }
 
-static bool ApplyTravel(CcSim *sim, const CcCommand *command,
-                        char *error, size_t error_capacity)
+bool CcSimTravelPreview(const CcSim *sim, CcId destination_id,
+                        CcTravelPreview *preview, char *error,
+                        size_t error_capacity)
 {
-    if (sim->journey.active) {
-        SetError(error, error_capacity,
-                 "Resolve the encounter already blocking the carriage.");
+    if (sim == NULL || preview == NULL) {
+        SetError(error, error_capacity, "Travel preview state is missing.");
         return false;
     }
-    const CcSettlement *destination = CcSimSettlement(sim, command->target_id);
+    const CcSettlement *destination = CcSimSettlement(sim, destination_id);
     if (destination == NULL) {
         SetError(error, error_capacity, "That destination does not exist.");
         return false;
     }
-    const CcRoute *route = CcSimRouteBetween(sim, sim->player.location_id,
-                                             destination->id);
+    const CcRoute *route = CcSimRouteBetween(
+        sim, sim->player.location_id, destination->id);
     if (route == NULL) {
-        SetError(error, error_capacity, "No direct carriage route connects those places.");
+        SetError(error, error_capacity,
+                 "No direct carriage route connects those places.");
         return false;
     }
     const CcMap *map = CcSimMapForRoute(sim, route->id, sim->player.id);
@@ -6769,11 +6770,41 @@ static bool ApplyTravel(CcSim *sim, const CcCommand *command,
         accepted != NULL &&
         accepted->kind == CC_SITUATION_BLACK_MARKET_DELIVERY &&
         route->to_id == accepted->target_id;
-    if (route->smuggler_route && map == NULL && !sponsored_night_passage) {
+    bool uncharted = map == NULL && !sponsored_night_passage;
+    int32_t days = route->travel_days + (uncharted ? 2 : 0);
+    int32_t base_fare = days + (route->smuggler_route ? 3 : 0);
+    *preview = (CcTravelPreview){
+        .route_id = route->id,
+        .destination_id = destination->id,
+        .provision_cost = base_fare + TradeRouteToll(sim, route),
+        .travel_days = days,
+        .claimed_condition = map != NULL ? map->recorded_condition : -1,
+        .claimed_danger = map != NULL ? map->recorded_danger : -1,
+        .chart_accuracy = map != NULL ? map->accuracy : 0,
+        .charted = map != NULL,
+        .destination_known = !route->smuggler_route || map != NULL ||
+                             sponsored_night_passage,
+        .sponsored_guide = sponsored_night_passage
+    };
+    return true;
+}
+
+static bool ApplyTravel(CcSim *sim, const CcCommand *command,
+                        char *error, size_t error_capacity)
+{
+    if (sim->journey.active) {
         SetError(error, error_capacity,
-                 "The hidden road cannot be found without its physical chart.");
+                 "Resolve the encounter already blocking the carriage.");
         return false;
     }
+    CcTravelPreview preview = {0};
+    if (!CcSimTravelPreview(sim, command->target_id, &preview,
+                            error, error_capacity)) return false;
+    const CcSettlement *destination = CcSimSettlement(
+        sim, preview.destination_id);
+    const CcRoute *route = CcSimRoute(sim, preview.route_id);
+    const CcSituation *accepted = CcSimAcceptedSituation(sim);
+    bool sponsored_night_passage = preview.sponsored_guide;
     bool delivery = accepted != NULL &&
         (accepted->kind == CC_SITUATION_RELIEF_DELIVERY ||
          accepted->kind == CC_SITUATION_BLACK_MARKET_DELIVERY);
@@ -6784,11 +6815,11 @@ static bool ApplyTravel(CcSim *sim, const CcCommand *command,
         accepted != NULL &&
         accepted->kind == CC_SITUATION_RELIEF_DELIVERY &&
         full_contract_load;
-    bool uncharted = map == NULL && !sponsored_night_passage;
-    int32_t days = route->travel_days + (uncharted ? 2 : 0);
+    bool uncharted = !preview.charted && !sponsored_night_passage;
+    int32_t days = preview.travel_days;
     int32_t base_fare = days + (route->smuggler_route ? 3 : 0);
     CcMoney toll = TradeRouteToll(sim, route);
-    int32_t fare = base_fare + (int32_t)toll;
+    CcMoney fare = preview.provision_cost;
     if (sim->player.coins < fare) {
         SetError(error, error_capacity, "The company cannot provision that journey.");
         return false;
@@ -6844,7 +6875,7 @@ static bool ApplyTravel(CcSim *sim, const CcCommand *command,
         .total_subticks = total_subticks,
         .encounter_subticks = encounter_planned ?
             total_subticks * 35 / 100 : 0,
-        .fare_reserved = fare,
+        .fare_reserved = (int32_t)fare,
         .ambush_pending = ambush_pending,
         .encounter_triggered = contract_journey && !encounter_planned,
         .parent_event_id = parent_event_id

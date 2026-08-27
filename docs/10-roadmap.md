@@ -52,7 +52,9 @@ grammar, an external dependency, and a recoverable vulnerability.
 ### Work
 
 - Build capacity-limited, tradeable route-map objects and the carriage map case.
-- Implement route planning and exact travel duration.
+- Present only the immediate roads leaving the current place; use maps as
+  advice, never as travel permission.
+- Implement exact travel duration and the deterministic uncharted penalty.
 - Add manifests, passengers, cargo, crew, and modules.
 - Instantiate shipments and important travellers visually.
 - Support routine travel resolution and contextual interruption.

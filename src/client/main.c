@@ -24,7 +24,7 @@
 
 typedef enum ClientView {
     VIEW_LOCAL,
-    VIEW_MAP,
+    VIEW_ROADS,
     VIEW_LEDGER,
     VIEW_SITUATIONS,
     VIEW_ENCOUNTER
@@ -83,7 +83,7 @@ typedef enum ContextActionKind {
     CONTEXT_ACTION_NONE = 0,
     CONTEXT_ACTION_ENTER_MARKET,
     CONTEXT_ACTION_LEAVE_MARKET,
-    CONTEXT_ACTION_OPEN_MAP,
+    CONTEXT_ACTION_CHOOSE_ROAD,
     CONTEXT_ACTION_OPEN_PROMISES,
     CONTEXT_ACTION_EXPEDITION,
     CONTEXT_ACTION_BUY_CARGO,
@@ -732,42 +732,55 @@ static bool MapVisibleAtCarriage(const CcSim *sim, const CcMap *map)
             map->owner_id == sim->player.location_id);
 }
 
-static int32_t FirstVisibleMapIndex(const CcSim *sim)
+static bool RouteLeavesCurrentPlace(const CcSim *sim, const CcRoute *route)
+{
+    return sim != NULL && route != NULL &&
+           (route->from_id == sim->player.location_id ||
+            route->to_id == sim->player.location_id);
+}
+
+static int32_t FirstOutgoingRouteIndex(const CcSim *sim)
 {
     if (sim == NULL) return -1;
-    for (int32_t i = 0; i < sim->map_count; ++i) {
-        const CcMap *map = &sim->maps[i];
-        const CcRoute *route = CcSimRoute(sim, map->route_id);
-        if (map->owner_id == sim->player.id && route != NULL &&
-            (route->from_id == sim->player.location_id ||
-             route->to_id == sim->player.location_id)) return i;
-    }
-    for (int32_t i = 0; i < sim->map_count; ++i) {
-        if (sim->maps[i].owner_id == sim->player.location_id) return i;
-    }
-    for (int32_t i = 0; i < sim->map_count; ++i) {
-        if (sim->maps[i].owner_id == sim->player.id) return i;
+    for (int32_t i = 0; i < sim->route_count; ++i) {
+        if (RouteLeavesCurrentPlace(sim, &sim->routes[i])) return i;
     }
     return -1;
 }
 
-static int32_t StepVisibleMapIndex(const CcSim *sim, int32_t selected,
-                                   int32_t direction)
+static int32_t StepOutgoingRouteIndex(const CcSim *sim, int32_t selected,
+                                      int32_t direction)
 {
-    if (sim == NULL || sim->map_count <= 0) return -1;
+    if (sim == NULL || sim->route_count <= 0) return -1;
     int32_t index = selected;
-    for (int32_t step = 0; step < sim->map_count; ++step) {
-        index = (index + direction + sim->map_count) % sim->map_count;
-        if (MapVisibleAtCarriage(sim, &sim->maps[index])) return index;
+    for (int32_t step = 0; step < sim->route_count; ++step) {
+        index = (index + direction + sim->route_count) % sim->route_count;
+        if (RouteLeavesCurrentPlace(sim, &sim->routes[index])) return index;
     }
     return selected;
 }
 
-static const CcMap *SelectedVisibleMap(const CcSim *sim, int32_t selected)
+static const CcRoute *SelectedOutgoingRoute(const CcSim *sim,
+                                            int32_t selected)
 {
-    if (sim == NULL || selected < 0 || selected >= sim->map_count ||
-        !MapVisibleAtCarriage(sim, &sim->maps[selected])) return NULL;
-    return &sim->maps[selected];
+    if (sim == NULL || selected < 0 || selected >= sim->route_count ||
+        !RouteLeavesCurrentPlace(sim, &sim->routes[selected])) return NULL;
+    return &sim->routes[selected];
+}
+
+static const CcMap *VisibleMapForRoute(const CcSim *sim, CcId route_id)
+{
+    if (sim == NULL) return NULL;
+    const CcMap *local_offer = NULL;
+    for (int32_t i = 0; i < sim->map_count; ++i) {
+        const CcMap *map = &sim->maps[i];
+        if (map->route_id != route_id || !MapVisibleAtCarriage(sim, map)) {
+            continue;
+        }
+        if (map->owner_id == sim->player.id) return map;
+        local_offer = map;
+    }
+    return local_offer;
 }
 
 static CcId RouteOtherEnd(const CcRoute *route, CcId here)
@@ -842,17 +855,24 @@ static ContextActionSet BuildContextActions(
         AddContextAction(&set, CONTEXT_ACTION_CLOSE_VIEW, "Close");
         return set;
     }
-    if (view == VIEW_MAP) {
-        const CcMap *map = SelectedVisibleMap(sim, selected);
+    if (view == VIEW_ROADS) {
+        const CcRoute *route = SelectedOutgoingRoute(sim, selected);
+        const CcMap *map = route != NULL ?
+            VisibleMapForRoute(sim, route->id) : NULL;
+        if (route != NULL) {
+            AddContextAction(&set, CONTEXT_ACTION_TRAVEL,
+                             route->smuggler_route ?
+                                 "Take unmarked fork" : "Take this road");
+        }
         if (map != NULL && map->owner_id == sim->player.location_id) {
             AddContextAction(&set, CONTEXT_ACTION_BUY_MAP,
-                             TextFormat("Buy map — %d crowns", map->ask_price));
-        } else if (map != NULL && map->owner_id == sim->player.id) {
-            AddContextAction(&set, CONTEXT_ACTION_TRAVEL, "Travel");
+                             TextFormat("Buy notes — %d crowns", map->ask_price));
+        } else if (route != NULL &&
+                   (route->closed || route->condition < 75)) {
             AddContextAction(&set, CONTEXT_ACTION_REPAIR_ROUTE,
                              "Repair road");
         }
-        AddContextAction(&set, CONTEXT_ACTION_CLOSE_VIEW, "Close map");
+        AddContextAction(&set, CONTEXT_ACTION_CLOSE_VIEW, "Return to town");
         return set;
     }
 
@@ -923,7 +943,7 @@ static ContextActionSet BuildContextActions(
                          "Enter market");
     }
     if (GridDistance(position, LOCAL_CARRIAGE) < 1.35f) {
-        AddContextAction(&set, CONTEXT_ACTION_OPEN_MAP, "Open map");
+        AddContextAction(&set, CONTEXT_ACTION_CHOOSE_ROAD, "Choose a road");
     }
     if (GridDistance(position, LOCAL_NOTICE) < 1.15f) {
         AddContextAction(&set, CONTEXT_ACTION_OPEN_PROMISES,
@@ -1007,173 +1027,204 @@ static ContextActionKind PressedContextAction(
     return CONTEXT_ACTION_NONE;
 }
 
-static Vector2 ChartEndpoint(const CcMap *map, bool far_end)
+static int32_t OutgoingRouteCount(const CcSim *sim)
 {
-    uint32_t mark = (uint32_t)(map->id & UINT64_C(0xffffffff));
-    float angle = ((float)(mark % 101U) / 100.0f - 0.5f) * 1.05f;
-    float half = 188.0f + (float)((mark >> 8U) % 29U);
-    float sign = far_end ? 1.0f : -1.0f;
-    return (Vector2){605.0f + cosf(angle) * half * sign,
-                     363.0f + sinf(angle) * half * sign};
+    int32_t count = 0;
+    if (sim == NULL) return count;
+    for (int32_t i = 0; i < sim->route_count; ++i) {
+        if (RouteLeavesCurrentPlace(sim, &sim->routes[i])) count += 1;
+    }
+    return count;
 }
 
-static void DrawChartRoute(const CcMap *map, Color ink)
+static void RoadChoiceLabel(const CcSim *sim, const CcRoute *route,
+                            char *label, size_t capacity)
 {
-    Vector2 a = ChartEndpoint(map, false);
-    Vector2 b = ChartEndpoint(map, true);
-    Vector2 delta = {b.x - a.x, b.y - a.y};
-    float length = sqrtf(delta.x * delta.x + delta.y * delta.y);
-    Vector2 normal = length > 0.01f ?
-        (Vector2){-delta.y / length, delta.x / length} : (Vector2){0.0f, 1.0f};
-    float error = (float)(100 - map->accuracy) / 100.0f;
-    float bend = ((map->id >> 20U) & 1U ? 1.0f : -1.0f) *
-                 (24.0f + error * 74.0f);
-    Vector2 previous = a;
-    for (int32_t step = 1; step <= 28; ++step) {
-        float t = (float)step / 28.0f;
-        float arch = 4.0f * t * (1.0f - t);
-        Vector2 point = {a.x + delta.x * t + normal.x * bend * arch,
-                         a.y + delta.y * t + normal.y * bend * arch};
-        if (!map->contraband || (step % 3) != 0) {
-            DrawLineEx(previous, point, 3.0f, ink);
+    CcId destination_id = RouteOtherEnd(route, sim->player.location_id);
+    const CcSettlement *destination = CcSimSettlement(sim, destination_id);
+    CcTravelPreview preview = {0};
+    bool available = CcSimTravelPreview(sim, destination_id, &preview,
+                                        NULL, 0U);
+    if (route != NULL && route->smuggler_route &&
+        (!available || !preview.destination_known)) {
+        (void)snprintf(label, capacity, "Unmarked track");
+        return;
+    }
+    (void)snprintf(label, capacity, "%s",
+                   destination != NULL ? destination->name : "Unknown road");
+}
+
+static void DrawRoadBranch(Vector2 start, Vector2 fork, Vector2 end,
+                           bool selected, bool hidden)
+{
+    Color road = hidden ? (Color){72, 57, 73, 255} :
+                          (Color){92, 81, 59, 255};
+    Color edge = (Color){32, 36, 34, 255};
+    DrawLineEx(start, fork, 18.0f, edge);
+    DrawLineEx(fork, end, 18.0f, edge);
+    DrawLineEx(start, fork, 11.0f, road);
+    DrawLineEx(fork, end, 11.0f, road);
+    if (hidden) {
+        for (int32_t mark = 1; mark <= 4; ++mark) {
+            float t = (float)mark / 5.0f;
+            Vector2 point = {fork.x + (end.x - fork.x) * t,
+                             fork.y + (end.y - fork.y) * t};
+            DrawCircleV(point, 2.5f, CC_VIOLET);
         }
-        previous = point;
     }
-    for (int32_t mark = 1; mark <= 3; ++mark) {
-        float t = (float)mark / 4.0f;
-        Vector2 point = {a.x + delta.x * t, a.y + delta.y * t};
-        DrawCircleV(point, 4.0f, Fade(ink, 0.72f));
-        DrawCircleLinesV(point, 7.0f, Fade(ink, 0.32f));
+    if (selected) {
+        DrawLineEx(start, fork, 3.0f, CC_GOLD);
+        DrawLineEx(fork, end, 3.0f, CC_GOLD);
+        DrawCircleV(end, 8.0f, CC_GOLD);
+    } else {
+        DrawCircleV(end, 6.0f, MUTED);
     }
 }
 
-static void DrawChartTown(Vector2 point, const CcSettlement *place, bool current,
-                          Color ink)
-{
-    DrawCircleV(point, current ? 19.0f : 15.0f, Fade(ink, 0.16f));
-    DrawPoly(point, place != NULL && place->function == CC_SETTLEMENT_FORTRESS ? 4 : 6,
-             current ? 12.0f : 9.0f, 0.0f, ink);
-    const char *name = place != NULL ? place->name : "Unknown terminus";
-    int width = CcOverlayMeasureText(name, 15);
-    CcOverlayDrawText(name, (int)point.x - width / 2, (int)point.y + 24, 15, ink);
-    if (current) CcOverlayDrawText("CARRIAGE", (int)point.x - 34, (int)point.y - 38, 10, DANGER);
-}
-
-static void MapRouteTitle(const CcSim *sim, const CcMap *map,
-                          char *label, size_t capacity)
-{
-    const CcRoute *route = map != NULL ? CcSimRoute(sim, map->route_id) : NULL;
-    const CcSettlement *from = route != NULL ?
-        CcSimSettlement(sim, route->from_id) : NULL;
-    const CcSettlement *to = route != NULL ?
-        CcSimSettlement(sim, route->to_id) : NULL;
-    (void)snprintf(label, capacity, "%s to %s",
-                   from != NULL ? from->name : "Unknown",
-                   to != NULL ? to->name : "Unknown");
-}
-
-static void DrawMap(const CcSim *sim, int32_t selected, float clock)
+static void DrawRoads(const CcSim *sim, int32_t selected, float clock)
 {
     (void)clock;
     DrawPanel((Rectangle){20.0f, 82.0f, 900.0f, 568.0f},
               (Color){11, 20, 24, 248});
-    CcOverlayDrawText("MAPS", 38, 101, 18, CC_GOLD);
-    CcOverlayDrawText(TextFormat("%d of %d owned", CcPlayerMapCount(sim),
-                        sim->player.map_capacity), 38, 126, 10, MUTED);
+    const CcSettlement *here = CcSimSettlement(sim, sim->player.location_id);
+    CcOverlayDrawText("ROADS LEAVING", 38, 101, 12, CC_GOLD);
+    CcOverlayDrawText(here != NULL ? here->name : "THIS PLACE",
+                      38, 122, 18, INK);
 
     int32_t row = 0;
-    for (int32_t i = 0; i < sim->map_count; ++i) {
-        const CcMap *map = &sim->maps[i];
-        if (!MapVisibleAtCarriage(sim, map)) continue;
-        bool owned = map->owner_id == sim->player.id;
-        int y = 154 + row * 51;
-        Color paper_color = map->contraband ? (Color){57, 34, 55, 255} :
-                                              (Color){52, 48, 37, 255};
-        if (i == selected) {
-            paper_color = map->contraband ? (Color){96, 49, 91, 255} :
-                                            (Color){91, 78, 49, 255};
+    int32_t selected_ordinal = 0;
+    for (int32_t i = 0; i < sim->route_count; ++i) {
+        const CcRoute *route = &sim->routes[i];
+        if (!RouteLeavesCurrentPlace(sim, route)) continue;
+        int y = 164 + row * 58;
+        bool active = i == selected;
+        if (active) selected_ordinal = row;
+        DrawRectangleRounded((Rectangle){37.0f, (float)y, 226.0f, 50.0f},
+                             0.16f, 5,
+                             active ? (Color){72, 64, 43, 255} :
+                                      (Color){28, 38, 40, 255});
+        char label[64];
+        RoadChoiceLabel(sim, route, label, sizeof(label));
+        CcOverlayDrawText(label, 48, y + 8, 12,
+                          active ? CC_GOLD : INK);
+        const CcMap *map = VisibleMapForRoute(sim, route->id);
+        const char *detail = route->smuggler_route ? "UNMARKED FORK" :
+            route->closed ? "RESTRICTED ROAD" : "OPEN ROAD";
+        CcOverlayDrawText(detail, 48, y + 29, 8,
+                          route->smuggler_route ? CC_VIOLET : MUTED);
+        if (map != NULL) {
+            CcOverlayDrawText(map->owner_id == sim->player.id ?
+                                  "NOTES CARRIED" : "NOTES FOR SALE",
+                              160, y + 29, 8,
+                              map->owner_id == sim->player.id ? TEAL : CC_GOLD);
         }
-        DrawRectangleRounded((Rectangle){37.0f, (float)y, 226.0f, 43.0f},
-                             0.16f, 5, paper_color);
-        char route_title[96];
-        MapRouteTitle(sim, map, route_title, sizeof(route_title));
-        CcOverlayDrawText(route_title, 48, y + 7, 11, INK);
-        CcOverlayDrawText(owned ? "OWNED" : TextFormat("%d crowns", map->ask_price),
-                 48, y + 25, 9, owned ? TEAL : CC_GOLD);
-        if (map->contraband) CcOverlayDrawText("UNLICENSED", 181, y + 25, 8, CC_VIOLET);
         row += 1;
     }
-    if (row == 0) CcOverlayDrawText("No maps here.", 42, 172, 11, MUTED);
-
-    const CcMap *map = SelectedVisibleMap(sim, selected);
-    Rectangle paper = {282.0f, 105.0f, 620.0f, 525.0f};
-    DrawRectangleRounded(paper, 0.025f, 4,
-                         map != NULL && map->contraband ?
-                         (Color){158, 132, 119, 255} : (Color){214, 197, 151, 255});
-    DrawRectangleRoundedLinesEx(paper, 0.025f, 4, 2.0f,
-                                (Color){91, 69, 46, 220});
-    if (map == NULL) {
-        CcOverlayDrawText("NO MAP SELECTED", 452, 335, 22, (Color){83, 65, 46, 255});
+    if (row == 0) {
+        CcOverlayDrawText("No carriage road leaves here.", 42, 180, 11, MUTED);
         return;
     }
-    const CcRoute *route = CcSimRoute(sim, map->route_id);
-    const CcSettlement *from = route != NULL ? CcSimSettlement(sim, route->from_id) : NULL;
-    const CcSettlement *to = route != NULL ? CcSimSettlement(sim, route->to_id) : NULL;
-    Color chart_ink = map->contraband ? (Color){86, 31, 72, 255} :
-                                       (Color){66, 57, 43, 255};
-    char route_title[96];
-    MapRouteTitle(sim, map, route_title, sizeof(route_title));
-    CcOverlayDrawText(route_title, 307, 125, 20, chart_ink);
-    CcOverlayDrawText(TextFormat("Updated day %d  /  Accuracy %d%%",
-                        map->surveyed_day, map->accuracy), 309, 151, 10,
-                        Fade(chart_ink, 0.75f));
-    DrawChartRoute(map, chart_ink);
-    DrawChartTown(ChartEndpoint(map, false), from,
-                  from != NULL && from->id == sim->player.location_id, chart_ink);
-    DrawChartTown(ChartEndpoint(map, true), to,
-                  to != NULL && to->id == sim->player.location_id, chart_ink);
 
-    Vector2 compass = {847.0f, 173.0f};
-    DrawCircleLinesV(compass, 24.0f, Fade(chart_ink, 0.45f));
-    float tilt = ((float)((map->id >> 12U) % 31U) - 15.0f) * 0.012f;
-    DrawLineEx(compass, (Vector2){compass.x + sinf(tilt) * 21.0f,
-                                  compass.y - cosf(tilt) * 21.0f}, 2.0f, chart_ink);
-    CcOverlayDrawText("N", 841, 202, 10, chart_ink);
-    if (map->contraband) {
-        CcOverlayDrawText("Unlicensed copy", 309, 596, 10,
-                          Fade(chart_ink, 0.74f));
+    Rectangle verge = {282.0f, 105.0f, 620.0f, 525.0f};
+    DrawRectangleRounded(verge, 0.025f, 4, (Color){25, 40, 36, 255});
+    DrawRectangleRoundedLinesEx(verge, 0.025f, 4, 2.0f,
+                                (Color){86, 78, 49, 220});
+    CcOverlayDrawText("THE NEXT FORK", 307, 125, 20, INK);
+    CcOverlayDrawText("A road is a commitment, not a line on a map.",
+                      309, 154, 10, MUTED);
+
+    Vector2 start = {592.0f, 584.0f};
+    int32_t count = OutgoingRouteCount(sim);
+    int32_t ordinal = 0;
+    for (int32_t i = 0; i < sim->route_count; ++i) {
+        const CcRoute *route = &sim->routes[i];
+        if (!RouteLeavesCurrentPlace(sim, route)) continue;
+        float span = count > 1 ? 500.0f / (float)(count - 1) : 0.0f;
+        float end_x = count > 1 ? 342.0f + span * (float)ordinal : 592.0f;
+        Vector2 fork = {592.0f + (end_x - 592.0f) * 0.28f,
+                        413.0f - 12.0f * (float)(ordinal % 2)};
+        Vector2 end = {end_x, 238.0f + 20.0f * (float)(ordinal % 2)};
+        bool active = ordinal == selected_ordinal;
+        DrawRoadBranch(start, fork, end, active, route->smuggler_route);
+        char label[64];
+        RoadChoiceLabel(sim, route, label, sizeof(label));
+        int width = CcOverlayMeasureText(label, active ? 12 : 10);
+        CcOverlayDrawText(label, (int)end.x - width / 2,
+                          (int)end.y - 31, active ? 12 : 10,
+                          active ? CC_GOLD : MUTED);
+        ordinal += 1;
     }
+    CcOverlayDrawText("YOU ARE HERE", 548, 601, 9, TEAL);
 }
 
-static void DrawSettlementPanel(const CcSim *sim, int32_t selected)
+static void DrawRoadPanel(const CcSim *sim, int32_t selected)
 {
-    Rectangle panel = {938.0f, 82.0f, 322.0f, 310.0f};
+    Rectangle panel = {938.0f, 82.0f, 322.0f, 568.0f};
     DrawPanel(panel, PANEL);
-    const CcMap *map = SelectedVisibleMap(sim, selected);
-    CcOverlayDrawText("SELECTED ROUTE", 958, 104, 10, TEAL);
-    if (map == NULL) {
-        CcOverlayDrawText("NO MAP", 958, 143, 15, MUTED);
+    const CcRoute *route = SelectedOutgoingRoute(sim, selected);
+    CcOverlayDrawText("SELECTED FORK", 958, 104, 10, TEAL);
+    if (route == NULL) {
+        CcOverlayDrawText("NO ROAD", 958, 143, 15, MUTED);
         return;
     }
-    const CcRoute *route = CcSimRoute(sim, map->route_id);
-    CcId destination_id = route != NULL ? RouteOtherEnd(route, sim->player.location_id) : 0U;
-    const CcSettlement *destination = CcSimSettlement(sim, destination_id);
-    CcOverlayDrawText(destination != NULL ? destination->name : "NOT FROM HERE",
-             958, 137, 19, destination != NULL ? INK : MUTED);
-    DrawBar(958, 187, 116, "ROAD", map->recorded_condition, CC_GOLD);
-    DrawBar(958, 218, 116, "DANGER", map->recorded_danger, DANGER);
-    DrawBar(958, 249, 116, "TRUST", map->accuracy, TEAL);
-    CcOverlayDrawText(map->contraband ? "UNLICENSED MAP" : "OWNED MAP",
-             958, 294, 9, map->contraband ? CC_VIOLET : MUTED);
+    CcId destination_id = RouteOtherEnd(route, sim->player.location_id);
+    CcTravelPreview preview = {0};
+    (void)CcSimTravelPreview(sim, destination_id, &preview, NULL, 0U);
+    char road_label[64];
+    RoadChoiceLabel(sim, route, road_label, sizeof(road_label));
+    CcOverlayDrawText(road_label, 958, 137, 19,
+                      preview.destination_known ? INK : CC_VIOLET);
+    CcOverlayDrawText(route->smuggler_route ? "FAINT WHEEL RUTS" :
+                      route->closed ? "GUARDED CROSSING" : "SIGNED ROAD",
+                      958, 164, 9, MUTED);
+
+    CcOverlayDrawText("COMMITMENT", 958, 204, 10, CC_GOLD);
+    CcOverlayDrawText(TextFormat("%d days", preview.travel_days),
+                      958, 229, 16, INK);
+    CcOverlayDrawText(TextFormat("%" PRId64 " crowns for road and tolls",
+                                 preview.provision_cost),
+                      958, 254, 9, MUTED);
+
+    const CcMap *map = VisibleMapForRoute(sim, route->id);
+    CcOverlayDrawText("TRAVELLER'S NOTES", 958, 303, 10, TEAL);
+    if (map != NULL && map->owner_id == sim->player.id) {
+        CcOverlayDrawText(TextFormat("Surveyed %d days ago",
+                                     sim->current_day - map->surveyed_day),
+                          958, 328, 10, INK);
+        DrawBar(958, 358, 116, "ROAD", map->recorded_condition, CC_GOLD);
+        DrawBar(958, 389, 116, "DANGER", map->recorded_danger, DANGER);
+        DrawBar(958, 420, 116, "TRUST", map->accuracy, TEAL);
+        CcOverlayDrawText(map->contraband ? "UNLICENSED NOTES" :
+                                             "NOTES IN THE MAP CASE",
+                          958, 462, 9,
+                          map->contraband ? CC_VIOLET : MUTED);
+    } else if (preview.sponsored_guide) {
+        CcOverlayDrawText("A local guide knows the turns.",
+                          958, 328, 10, INK);
+        CcOverlayDrawText("The road still decides what happens.",
+                          958, 348, 9, MUTED);
+    } else if (map != NULL) {
+        CcOverlayDrawText(TextFormat("For sale here: %d crowns",
+                                     map->ask_price),
+                          958, 328, 10, CC_GOLD);
+        CcOverlayDrawText("Notes can save time and warn of danger.",
+                          958, 348, 9, MUTED);
+    } else {
+        CcOverlayDrawText("No notes. You can still take the road.",
+                          958, 328, 10, INK);
+        CcOverlayDrawText("Expect delay and a harder journey.",
+                          958, 348, 9, DANGER);
+    }
+    CcOverlayDrawText("Maps advise. Roads carry.", 958, 540, 11, CC_GOLD);
 }
 
 static void DrawHeader(const CcSim *sim)
 {
-    CcOverlayDrawText("MAP", 26, 22, 22, INK);
-    CcOverlayDrawText(TextFormat("DAY %d     %" PRId64 " cr     MAPS %d/%d",
+    CcOverlayDrawText("THE ROAD", 26, 22, 22, INK);
+    CcOverlayDrawText(TextFormat("DAY %d     %" PRId64 " cr     NOTES %d/%d",
                         sim->current_day, sim->player.coins,
                         CcPlayerMapCount(sim), sim->player.map_capacity),
-             1000, 27, 9, CC_GOLD);
+                      995, 27, 9, CC_GOLD);
 }
 
 static void DrawLedger(const CcSim *sim)
@@ -1292,8 +1343,8 @@ static bool ApplyCommand(CcJournal *journal, CcSim *sim, CcCommand command,
         case CC_COMMAND_TRAVEL: confirmation = "Journey started."; break;
         case CC_COMMAND_REPAIR_ROUTE: confirmation = "Road repaired."; break;
         case CC_COMMAND_CHANGE_DUNGEON: confirmation = "Mine updated."; break;
-        case CC_COMMAND_BUY_MAP: confirmation = "Map bought."; break;
-        case CC_COMMAND_SELL_MAP: confirmation = "Map sold."; break;
+        case CC_COMMAND_BUY_MAP: confirmation = "Traveller's notes bought."; break;
+        case CC_COMMAND_SELL_MAP: confirmation = "Traveller's notes sold."; break;
         case CC_COMMAND_ACCEPT_SITUATION: confirmation = "Quest accepted."; break;
         case CC_COMMAND_ABANDON_SITUATION: confirmation = "Quest abandoned."; break;
         case CC_COMMAND_RESOLVE_ENCOUNTER_COMBAT:
@@ -1371,28 +1422,22 @@ static CcId GameplayReelDestination(const CcSim *sim, int32_t *selected)
         }
     }
     if (next_hop != 0U) {
-        for (int32_t i = 0; i < sim->map_count; ++i) {
-            const CcRoute *route = CcSimRoute(sim, sim->maps[i].route_id);
-            if (MapVisibleAtCarriage(sim, &sim->maps[i]) && route != NULL &&
-                RouteOtherEnd(route, sim->player.location_id) == next_hop) {
+        for (int32_t i = 0; i < sim->route_count; ++i) {
+            if (RouteOtherEnd(&sim->routes[i], sim->player.location_id) ==
+                next_hop) {
                 *selected = i;
                 break;
             }
         }
         return next_hop;
     }
-    for (int32_t i = 0; i < sim->map_count; ++i) {
-        const CcMap *map = &sim->maps[i];
-        const CcRoute *route = CcSimRoute(sim, map->route_id);
-        CcId destination = RouteOtherEnd(route, sim->player.location_id);
-        if (!MapVisibleAtCarriage(sim, map) || destination == 0U) continue;
-        *selected = i;
-        return destination;
-    }
     for (int32_t i = 0; i < sim->route_count; ++i) {
         CcId destination = RouteOtherEnd(&sim->routes[i],
                                          sim->player.location_id);
-        if (destination != 0U) return destination;
+        if (destination != 0U) {
+            *selected = i;
+            return destination;
+        }
     }
     return 0U;
 }
@@ -1405,7 +1450,7 @@ static void PrepareGameplayReel(CcSim *sim, LocalState *local,
 {
     *reel = (GameplayReelState){0};
     if (sim->player.coins < 120) sim->player.coins = 120;
-    *selected = FirstVisibleMapIndex(sim);
+    *selected = FirstOutgoingRouteIndex(sim);
     *selected_situation = FirstDeliverySituationIndex(sim);
     *view = VIEW_LOCAL;
     *return_view = VIEW_LOCAL;
@@ -1622,27 +1667,16 @@ static void UpdateGameplayReel(CcSim *sim, LocalState *local,
             if ((reel->stage_frame >= 60 &&
                  GridDistance(LocalPosition(local), LOCAL_CARRIAGE) < 1.35f) ||
                 reel->stage_frame >= 1200) {
-                *selected = FirstVisibleMapIndex(sim);
+                *selected = FirstOutgoingRouteIndex(sim);
                 reel->destination_id = GameplayReelDestination(sim, selected);
                 *return_view = VIEW_LOCAL;
-                *view = VIEW_MAP;
+                *view = VIEW_ROADS;
                 GameplayReelSetStage(reel, GAMEPLAY_REEL_CHOOSE_ROUTE);
             }
             break;
         case GAMEPLAY_REEL_CHOOSE_ROUTE:
             (void)snprintf(message, message_capacity,
                            "Choose the next road.");
-            if (reel->stage_frame == 90) {
-                const CcMap *map = SelectedVisibleMap(sim, *selected);
-                if (map != NULL && map->owner_id == sim->player.location_id) {
-                    CcCommand buy_map = {
-                        .kind = CC_COMMAND_BUY_MAP,
-                        .target_id = map->id
-                    };
-                    (void)ApplyCommand(NULL, sim, buy_map, message,
-                                       message_capacity);
-                }
-            }
             if (reel->stage_frame >= 150 && !reel->stage_started &&
                 reel->destination_id != 0U) {
                 CcCommand travel = {
@@ -1961,17 +1995,17 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
     if (IsKeyPressed(KEY_M) && road_local) {
         (void)snprintf(message, message_capacity,
                        local->journey_travel_active ?
-                           "The map is unavailable while travelling." :
+                           "The next fork is ahead, not in a menu." :
                            "Finish the fight first.");
         return;
     }
     if (IsKeyPressed(KEY_M)) {
-        if (*view == VIEW_MAP) {
+        if (*view == VIEW_ROADS) {
             *view = VIEW_LOCAL;
         } else if (*view == VIEW_LOCAL && !local->market_interior &&
                    GridDistance(LocalPosition(local), LOCAL_CARRIAGE) < 1.35f) {
-            *selected = FirstVisibleMapIndex(sim);
-            *view = VIEW_MAP;
+            *selected = FirstOutgoingRouteIndex(sim);
+            *view = VIEW_ROADS;
         } else {
             (void)snprintf(message, message_capacity,
                            "Walk closer to the carriage.");
@@ -2045,7 +2079,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                            "Game loaded." :
                            error);
         if (loaded) {
-            *selected = FirstVisibleMapIndex(sim);
+            *selected = FirstOutgoingRouteIndex(sim);
             *selected_situation = FirstActiveSituationIndex(sim);
             CcLocalTerrainSetSeed(sim->world_seed);
             ResetLocalState(local);
@@ -2065,7 +2099,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             return;
         }
         CcSimInit(sim, sim->world_seed + UINT32_C(0x9e3779b9));
-        *selected = FirstVisibleMapIndex(sim);
+        *selected = FirstOutgoingRouteIndex(sim);
         *selected_situation = FirstActiveSituationIndex(sim);
         CcLocalTerrainSetSeed(sim->world_seed);
         ResetLocalState(local);
@@ -2116,7 +2150,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                                event != NULL ? event->text :
                                "Bandits blocked the road.");
             } else if (!sim->journey.active) {
-                *selected = FirstVisibleMapIndex(sim);
+                *selected = FirstOutgoingRouteIndex(sim);
                 ResetLocalState(local);
                 const CcEvent *event = CcSimRecentEvent(sim, 0);
                 (void)snprintf(message, message_capacity, "%s",
@@ -2245,11 +2279,11 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         }
         if (!local->market_interior &&
             CcLocalAgentConsumeWorldExit(&local->agent)) {
-            *selected = FirstVisibleMapIndex(sim);
-            *view = VIEW_MAP;
+            *selected = FirstOutgoingRouteIndex(sim);
+            *view = VIEW_ROADS;
             (void)snprintf(
                 message, message_capacity,
-                "Choose a route.");
+                "The road divides ahead.");
             return;
         }
         if (local->journey_parley_active) {
@@ -2271,7 +2305,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 };
                 if (ApplyCommand(*journal, sim, negotiate, message,
                                  message_capacity)) {
-                    *selected = FirstVisibleMapIndex(sim);
+                    *selected = FirstOutgoingRouteIndex(sim);
                     BeginRoadTravelState(local);
                     *view = VIEW_LOCAL;
                 }
@@ -2286,7 +2320,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 };
                 if (ApplyCommand(*journal, sim, victory, message,
                                  message_capacity)) {
-                    *selected = FirstVisibleMapIndex(sim);
+                    *selected = FirstOutgoingRouteIndex(sim);
                     BeginRoadTravelState(local);
                     *view = VIEW_LOCAL;
                 }
@@ -2327,11 +2361,11 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 RepositionHero(local, (Vector2){2.05f, 5.35f}, true);
                 message[0] = '\0';
             } else if ((interact ||
-                        context_action == CONTEXT_ACTION_OPEN_MAP) &&
+                        context_action == CONTEXT_ACTION_CHOOSE_ROAD) &&
                        !local->market_interior &&
                        GridDistance(position, LOCAL_CARRIAGE) < 1.35f) {
-                *selected = FirstVisibleMapIndex(sim);
-                *view = VIEW_MAP;
+                *selected = FirstOutgoingRouteIndex(sim);
+                *view = VIEW_ROADS;
                 message[0] = '\0';
             } else if ((interact ||
                         context_action == CONTEXT_ACTION_OPEN_PROMISES) &&
@@ -2404,61 +2438,60 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         return;
     }
     if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_DOWN)) {
-        *selected = StepVisibleMapIndex(sim, *selected, 1);
+        *selected = StepOutgoingRouteIndex(sim, *selected, 1);
     }
     if (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_UP)) {
-        *selected = StepVisibleMapIndex(sim, *selected, -1);
+        *selected = StepOutgoingRouteIndex(sim, *selected, -1);
     }
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         Vector2 mouse = GetMousePosition();
         int32_t row = 0;
-        for (int32_t i = 0; i < sim->map_count; ++i) {
-            if (!MapVisibleAtCarriage(sim, &sim->maps[i])) continue;
-            Rectangle item = {37.0f, (float)(154 + row * 51), 226.0f, 43.0f};
+        for (int32_t i = 0; i < sim->route_count; ++i) {
+            if (!RouteLeavesCurrentPlace(sim, &sim->routes[i])) continue;
+            Rectangle item = {37.0f, (float)(164 + row * 58), 226.0f, 50.0f};
             if (CheckCollisionPointRec(mouse, item)) *selected = i;
             row += 1;
         }
     }
 
-    const CcMap *map = SelectedVisibleMap(sim, *selected);
-    if (map == NULL) return;
-    CcId map_id = map->id;
-    if ((IsKeyPressed(KEY_B) ||
+    const CcRoute *route = SelectedOutgoingRoute(sim, *selected);
+    if (route == NULL) return;
+    const CcMap *map = VisibleMapForRoute(sim, route->id);
+    if (map != NULL &&
+        (IsKeyPressed(KEY_B) ||
          context_action == CONTEXT_ACTION_BUY_MAP) &&
         map->owner_id == sim->player.location_id) {
-        CcCommand buy = {.kind = CC_COMMAND_BUY_MAP, .target_id = map_id};
+        CcCommand buy = {.kind = CC_COMMAND_BUY_MAP, .target_id = map->id};
         (void)ApplyCommand(*journal, sim, buy, message, message_capacity);
         return;
     }
-    if (IsKeyPressed(KEY_S) && map->owner_id == sim->player.id) {
-        CcCommand sell = {.kind = CC_COMMAND_SELL_MAP, .target_id = map_id};
+    if (map != NULL && IsKeyPressed(KEY_S) &&
+        map->owner_id == sim->player.id) {
+        CcCommand sell = {.kind = CC_COMMAND_SELL_MAP, .target_id = map->id};
         (void)ApplyCommand(*journal, sim, sell, message, message_capacity);
         return;
     }
 
-    const CcRoute *route = CcSimRoute(sim, map->route_id);
     CcId destination_id = RouteOtherEnd(route, sim->player.location_id);
     if ((IsKeyPressed(KEY_ENTER) ||
          context_action == CONTEXT_ACTION_TRAVEL) &&
-        map->owner_id == sim->player.id &&
         destination_id != 0U) {
         CcCommand travel = {
             .kind = CC_COMMAND_TRAVEL,
             .target_id = destination_id
         };
         if (ApplyCommand(*journal, sim, travel, message, message_capacity)) {
-            *selected = FirstVisibleMapIndex(sim);
+            *selected = FirstOutgoingRouteIndex(sim);
             BeginRoadTravelState(local);
             *view = VIEW_LOCAL;
         }
     }
     if ((IsKeyPressed(KEY_R) ||
          context_action == CONTEXT_ACTION_REPAIR_ROUTE) &&
-        map->owner_id == sim->player.id &&
         destination_id != 0U) {
         CcCommand repair = {
             .kind = CC_COMMAND_REPAIR_ROUTE,
-            .target_id = route != NULL ? route->id : 0U
+            .target_id = route->id
         };
         (void)ApplyCommand(*journal, sim, repair, message, message_capacity);
     }
@@ -2507,8 +2540,9 @@ int main(int argc, char **argv)
     bool capture_limbs = argc >= 2 && strcmp(argv[1], "--capture-limbs") == 0;
     bool capture_walk_cycle = argc >= 2 &&
                               strcmp(argv[1], "--capture-walk-cycle") == 0;
-    bool capture_map_case = argc >= 2 &&
-                            strcmp(argv[1], "--capture-map-case") == 0;
+    bool capture_road_fork = argc >= 2 &&
+        (strcmp(argv[1], "--capture-road-fork") == 0 ||
+         strcmp(argv[1], "--capture-map-case") == 0);
     bool capture_dojo = argc >= 2 && strcmp(argv[1], "--capture-dojo") == 0;
     bool capture_jump = argc >= 2 && strcmp(argv[1], "--capture-jump") == 0;
     bool capture_action_reel = argc >= 2 &&
@@ -2603,7 +2637,7 @@ int main(int argc, char **argv)
                    (strcmp(argv[1], "--capture") == 0 || capture_board ||
                     capture_interior || capture_navigation || capture_limbs ||
                     capture_walk_cycle || capture_defense ||
-                    capture_downclimb || capture_map_case || capture_dojo ||
+                    capture_downclimb || capture_road_fork || capture_dojo ||
                     capture_jump || capture_action_reel ||
                     capture_gameplay_reel || capture_encounter ||
                     capture_witness || capture_travel || capture_road ||
@@ -2666,7 +2700,7 @@ int main(int argc, char **argv)
             break;
         }
     }
-    if (capture_map_case) sim.player.location_id = sim.settlements[1].id;
+    if (capture_road_fork) sim.player.location_id = sim.settlements[1].id;
     if (capture_witness) {
         for (int32_t situation = 0; situation < sim.situation_count;
              ++situation) {
@@ -2729,11 +2763,11 @@ int main(int argc, char **argv)
             }
         }
     }
-    int32_t selected = FirstVisibleMapIndex(&sim);
+    int32_t selected = FirstOutgoingRouteIndex(&sim);
     int32_t selected_situation = FirstActiveSituationIndex(&sim);
     ClientView view = capture_board ? VIEW_SITUATIONS :
                       capture_encounter ? VIEW_ENCOUNTER :
-                      capture_map_case ? VIEW_MAP : VIEW_LOCAL;
+                      capture_road_fork ? VIEW_ROADS : VIEW_LOCAL;
     ClientView return_view = VIEW_LOCAL;
     LocalState local;
     CcLocalAgent walk_cycle_frames[8] = {0};
@@ -3009,13 +3043,13 @@ int main(int argc, char **argv)
         BeginDrawing();
         ClearBackground(BACKGROUND);
         CcOverlayBegin(1.0f);
-        bool map_underlay = view == VIEW_MAP ||
+        bool road_choice_underlay = view == VIEW_ROADS ||
                             ((view == VIEW_LEDGER || view == VIEW_SITUATIONS) &&
-                             return_view == VIEW_MAP);
-        if (map_underlay) {
+                             return_view == VIEW_ROADS);
+        if (road_choice_underlay) {
             DrawHeader(&sim);
-            DrawMap(&sim, selected, clock);
-            DrawSettlementPanel(&sim, selected);
+            DrawRoads(&sim, selected, clock);
+            DrawRoadPanel(&sim, selected);
         } else {
             if (view == VIEW_ENCOUNTER) {
                 CcLocalDrawRoad3D(&sim, &local.agent, &local.course,

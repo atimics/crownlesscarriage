@@ -81,11 +81,15 @@ detour. A restricted road remains passable, but sanctions, tolls, low freight
 capacity, poor condition, and encounters must make that choice materially
 different from an open road.
 
-## Physical cartography
+## Roads before maps
 
-**Contract:** there is no free, omniscient kingdom map. A map is an
-authoritative tradeable object carried in the carriage map case. Each sheet
-depicts one route and its two termini.
+**Contract:** there is no free, omniscient kingdom map, and travel never starts
+by selecting a line on a chart. At the edge of a place, the player chooses one
+of the roads that physically leaves it. The choice shows only the immediate
+fork, not the wider route graph.
+
+A map is a tradeable set of traveller's notes carried in the carriage map case.
+Each sheet describes one route and its two termini.
 
 A chart records:
 
@@ -96,19 +100,24 @@ A chart records:
 - Legal or contraband status
 - Current owner and market price
 
-The carriage carries only a small number of sheets. Buying a safer road map may
+The carriage carries only a small number of sheets. Buying better road notes may
 mean selling the illicit tunnel chart needed later. A settlement may sell maps
-made there, while smugglers trade suppressed routes. Following a route requires
-owning its chart and being at one of its endpoints.
+made there, while smugglers trade suppressed routes.
 
-Changing sheets morphs the presentation because every cartographer chooses a
-different orientation, scale, curvature, omissions, and annotation. These
-views are arguments about the world, not live telemetry. Closures, troop
-movements, or new dangers may therefore contradict the ink.
+Owning a chart can reveal the end of an unmarked track, reduce wayfinding delay,
+and provide old claims about danger and condition. It does not create or unlock
+the road. An uncharted fork can still be taken, but the player may not know its
+destination and the journey is slower and more dangerous. A local guide can
+provide the same immediate wayfinding help without transferring a map.
 
-The player selects a physical chart, manifest, companions, and legal posture
-before committing. Wider atlases or copying equipment may later be carriage
-modules, but cannot restore a universal strategic screen.
+Every cartographer chooses different names, omissions, and warnings. The notes
+are arguments about the road, not live telemetry. Closures, troop movements,
+or new dangers may therefore contradict the ink.
+
+The player selects a physical road, manifest, companions, and legal posture
+before committing. Maps remain supporting evidence. Wider atlases or copying
+equipment may later be carriage modules, but cannot restore a universal
+strategic screen.
 
 ## Travel commitment
 

@@ -10,8 +10,8 @@ changes who gets help, and can become a fight, a bargain, or an expedition.
 The result is written back into the same world that created the problem.
 
 The game begins at character scale. Settlements, people, markets, and roads are
-the main interface. Route maps are physical sheets kept in the carriage, not an
-all-knowing strategy screen.
+the main interface. Travel starts by taking one of the roads that leaves the
+current place. Maps are old, tradeable advice, not a travel screen.
 
 This project is in pre-production. The repository contains a living design
 manual and a playable architecture proof written in C17.
@@ -59,8 +59,8 @@ The architecture proof connects these parts in one running build:
 - A market interior whose stock and prices come from the regional simulation
 - Local situation boards with named sponsors, affected people, deadlines,
   rewards, accepted promises, and reputation consequences
-- A three-slot carriage map case with route-specific, tradeable charts that
-  record age, accuracy, legality, and old road conditions
+- An immediate road-fork choice that shows only the ways out of the current
+  place, plus a three-slot case of tradeable traveller's notes
 - Real-time carriage journeys, a dedicated road scene, and a route crisis that
   can be resolved through combat or payment
 - Immediate local aftermath and delayed consequences after a journey
@@ -159,7 +159,7 @@ Inputs are contextual.
 | --- | --- |
 | Left click | Move to a visible surface, or select a raider |
 | `F` | Use a nearby door, notice board, carriage, or toll collector |
-| `M` | Open or close the map case while beside the carriage |
+| `M` | Consider the roads leaving this place while beside the carriage |
 | `Q` | Open the situation board |
 | `Tab` | Open the causal event ledger |
 | `J` | Jump |
@@ -179,9 +179,10 @@ In the market, use `1` through `6` to buy Food, Iron, Tools, Weapons, Raw Gold,
 or Gems. Hold `Shift` with the same key to sell. Cargo slots hold eight Food,
 four Iron, two Tools, two Weapons, one Gold strongbox, or one Gem case.
 
-In the map case, use the arrow keys or click a sheet to select it. Press `B` to
-buy a local chart, `S` to sell one, `Enter` to follow it from the correct
-endpoint, or `R` to repair its contested route.
+At the road fork, use the arrow keys or click a road to select it. Press `Enter`
+to take that road. Press `B` to buy local notes, `S` to sell carried notes, or
+`R` to repair the selected road. A chart can save time and warn of danger, but
+it is never required to take a visible road.
 
 During combat, `1` uses Crushing Blow, `2` uses Sunder, and `3` uses Second
 Wind. Click the ground to disengage and return to direct movement.

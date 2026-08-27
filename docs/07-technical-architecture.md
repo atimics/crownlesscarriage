@@ -74,7 +74,8 @@ stale ID cannot silently refer to a different entity.
 
 ## Presentation responsibilities
 
-- Physical map-case visualization of carried or locally offered route charts
+- Immediate-fork visualization of roads leaving the current place, with carried
+  or locally offered route notes shown as supporting evidence
 - Active city or route segment
 - Local navigation, animation, and combat
 - Instantiating strategic entities near the player

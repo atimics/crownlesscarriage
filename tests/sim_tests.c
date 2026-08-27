@@ -179,11 +179,45 @@ int main(void)
     };
     CC_CHECK(CcSimMapForRoute(&uncharted, uncharted.routes[5].id,
                               uncharted.player.id) == NULL);
+    CcTravelPreview uncharted_preview = {0};
+    CC_CHECK(CcSimTravelPreview(&uncharted,
+                                uncharted_travel.target_id,
+                                &uncharted_preview,
+                                error, sizeof(error)));
+    CC_CHECK(!uncharted_preview.charted);
+    CC_CHECK(uncharted_preview.destination_known);
+    CC_CHECK(uncharted_preview.travel_days ==
+             uncharted.routes[5].travel_days + 2);
     CC_CHECK(CcSimApply(&uncharted, &uncharted_travel,
                         error, sizeof(error)));
     CC_CHECK(uncharted.journey.total_subticks ==
              (uncharted.routes[5].travel_days + 2) *
                  CC_WORLD_DAY_SUBTICKS);
+
+    CcSim hidden_fork;
+    CcSimInit(&hidden_fork, UINT32_C(0xf04c));
+    hidden_fork.player.location_id = hidden_fork.settlements[1].id;
+    hidden_fork.carriage.location_id = hidden_fork.player.location_id;
+    const CcRoute *night_road = &hidden_fork.routes[6];
+    CC_CHECK(night_road->smuggler_route);
+    CC_CHECK(CcSimMapForRoute(&hidden_fork, night_road->id,
+                              hidden_fork.player.id) == NULL);
+    CcId hidden_destination = night_road->from_id ==
+            hidden_fork.player.location_id ?
+        night_road->to_id : night_road->from_id;
+    CcTravelPreview hidden_preview = {0};
+    CC_CHECK(CcSimTravelPreview(&hidden_fork, hidden_destination,
+                                &hidden_preview, error, sizeof(error)));
+    CC_CHECK(!hidden_preview.charted);
+    CC_CHECK(!hidden_preview.destination_known);
+    CC_CHECK(hidden_preview.travel_days == night_road->travel_days + 2);
+    CcCommand take_hidden_fork = {
+        .kind = CC_COMMAND_TRAVEL,
+        .target_id = hidden_destination
+    };
+    CC_CHECK(CcSimApply(&hidden_fork, &take_hidden_fork,
+                        error, sizeof(error)));
+    CC_CHECK(hidden_fork.journey.route_id == night_road->id);
 
     CcSim commitment;
     CcSimInit(&commitment, UINT32_C(0xc011ab1e));
