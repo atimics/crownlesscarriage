@@ -61,21 +61,21 @@ mkdir -p "$(dirname -- "$output_path")"
                   text_align=C:x=(w-text_w)/2:y=h-170:
                   box=1:boxcolor=090B0C@0.72:boxborderw=22:
                   borderw=1:bordercolor=000000@0.9:
-                  enable='between(t,0.15,4.9)',
+                  enable='between(t,0.85,4.9)',
               drawtext=$drawtext_font:
                   textfile='$asset_dir/sentence-2.txt':
                   fontcolor=F2E9D0:fontsize=46:line_spacing=10:
                   text_align=C:x=(w-text_w)/2:y=h-170:
                   box=1:boxcolor=090B0C@0.72:boxborderw=22:
                   borderw=1:bordercolor=000000@0.9:
-                  enable='between(t,5.4,13.0)',
+                  enable='between(t,5.8,13.0)',
               drawtext=$drawtext_font:
                   textfile='$asset_dir/sentence-3.txt':
                   fontcolor=F2E9D0:fontsize=46:line_spacing=10:
                   text_align=C:x=(w-text_w)/2:y=h-170:
                   box=1:boxcolor=090B0C@0.72:boxborderw=22:
                   borderw=1:bordercolor=000000@0.9:
-                  enable='between(t,13.8,17.9)',
+                  enable='between(t,14.05,17.9)',
               drawtext=$drawtext_font:
                   textfile='$asset_dir/title.txt':
                   fontcolor=F2E9D0:fontsize=104:
