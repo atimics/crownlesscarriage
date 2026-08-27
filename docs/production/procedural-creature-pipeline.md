@@ -15,18 +15,22 @@ motion families:
   tail, crown horns, back spines, and wings. It is a unique world actor, not a
   scaled farm animal.
 
-All forms are generated from code rather than hand-edited exports. The shipped
-files are static GLBs in held motion poses, matching the deliberate stepped
-cadence used by the ambient human cast.
+All forms are generated from code rather than hand-edited exports. The GLBs
+remain the editable silhouette and palette prototypes. Runtime movement comes
+from the same skeletal and muscular foundation as the human cast: planted
+contacts, two-bone joint solves, flexor/extensor pairs, and activation-shaped
+muscle envelopes. The outer creature shapes are assembled around those live
+bones instead of swapping flattened pose meshes.
 
 ## Generated artifacts
 
 - Source library: `assets/blender/crownless_creature_library.blend`
-- Runtime exports: `assets/exports/creatures/creature_*_v01.glb`
+- Shape-reference exports: `assets/exports/creatures/creature_*_v01.glb`
 - Contract manifest: `assets/creature_manifest.json`
 - Family preview: `assets/previews/creatures/creature_family_sheet.png`
 - Generator: `tools/blender/build_creature_library.py`
 - Validator: `tools/blender/validate_creature_library.py`
+- Runtime rig: `src/locomotion/cc_creature.c`
 
 Generate and verify the library from the repository root:
 
@@ -35,8 +39,8 @@ make blender-creature-assets
 make blender-creature-assets-check
 ```
 
-The macOS application bundle copies the manifest and every creature GLB through
-the existing asset packaging target.
+The macOS application bundle keeps the manifest and GLBs as art references.
+The active game renderer resolves each visible creature through the runtime rig.
 
 ## Variant grammar
 
@@ -56,14 +60,15 @@ purpose.
 
 ## Runtime contract
 
-Every export contains one mesh, one `MAT_CREATURE_INDEXED` material, no skin,
-and no animation tracks. `COLOR_0` stores one of nine semantic palette indices
-plus broad value and fold channels:
+Every reference export contains one mesh, one `MAT_CREATURE_INDEXED` material,
+no skin, and no animation tracks. `COLOR_0` stores one of nine semantic palette
+indices plus broad value and fold channels:
 
 `skin`, `secondary`, `hide`, `cloth`, `leather`, `horn`, `metal`, `accent`,
 and `eye`.
 
-The manifest records one of three gait contracts:
+The manifest records one of three gait contracts. They now select a runtime
+skeletal profile rather than a baked mesh sequence:
 
 - `npc_stepped`: select the goblin pose with the current biped gait phase.
 - `quadruped_stepped`: select the horse or cow pose with the tested
@@ -71,10 +76,13 @@ The manifest records one of three gait contracts:
 - `dragon_authored`: select a named dramatic state rather than treating the
   dragon as ambient livestock.
 
-The generated C catalog keeps runtime paths in sync with this manifest. The
-road scene uses authored horses and food-linked cattle. Settlement scenes show
-goblins at their lair or raid target, the tribute bearer during delivery, and
-the dragon at its lair with a state-specific authored pose.
+`CcCreatureRigPoseResolve` derives each body from `CcLimbRig` and
+`CcBiomechRig`. Goblins use the biped contact layout. Horses, cows, and the
+dragon use separately proportioned quadruped layouts. Each joint has opposing
+flexor and extensor muscles; their activation changes the visible muscle
+envelope. The road scene uses rig-driven horses and food-linked cattle.
+Settlement scenes show rig-driven goblins at their lair or raid target, the
+tribute bearer during delivery, and the dragon at its lair.
 
 ## Gameplay-scale rules
 
@@ -103,4 +111,5 @@ Runtime art checks can capture the state-driven settlement compositions:
 ```sh
 ./crownless_carriage --capture-creatures goblins goblins.png
 ./crownless_carriage --capture-creatures dragon dragon.png
+./crownless_carriage --capture-creatures animals animals.png
 ```

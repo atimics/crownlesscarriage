@@ -2480,9 +2480,10 @@ int main(int argc, char **argv)
     if (capture_creatures) {
         if (argc < 4 ||
             (strcmp(argv[2], "goblins") != 0 &&
-             strcmp(argv[2], "dragon") != 0)) {
+             strcmp(argv[2], "dragon") != 0 &&
+             strcmp(argv[2], "animals") != 0)) {
             (void)fprintf(stderr,
-                          "capture creatures requires goblins or dragon and a frame path.\n");
+                          "capture creatures requires goblins, dragon, or animals and a frame path.\n");
             return 1;
         }
         capture_creature_family = argv[2];
@@ -2585,10 +2586,20 @@ int main(int argc, char **argv)
     if (capture_creatures &&
         strcmp(capture_creature_family, "goblins") == 0) {
         sim.player.location_id = sim.goblins.lair_settlement_id;
-    } else if (capture_creatures) {
+    } else if (capture_creatures &&
+               strcmp(capture_creature_family, "dragon") == 0) {
         sim.player.location_id = sim.dragon.lair_settlement_id;
         sim.dragon.omen_days_remaining = 2;
         sim.goblins.tribute_phase = CC_GOBLIN_TRIBUTE_TO_DRAGON;
+    } else if (capture_creatures) {
+        for (int32_t settlement = 0; settlement < sim.settlement_count;
+             ++settlement) {
+            if (sim.settlements[settlement].id != sim.player.location_id) {
+                continue;
+            }
+            sim.settlements[settlement].stock[CC_GOOD_FOOD] = 32;
+            break;
+        }
     }
     if (capture_map_case) sim.player.location_id = sim.settlements[1].id;
     if (capture_witness) {
@@ -2694,7 +2705,10 @@ int main(int argc, char **argv)
         local.course.alarm_countdown = 1000.0f;
     }
     if (capture_creatures) {
-        RepositionHero(&local, (Vector2){14.0f, 52.0f}, false);
+        Vector2 creature_view =
+            strcmp(capture_creature_family, "animals") == 0 ?
+                (Vector2){59.5f, 40.0f} : (Vector2){24.5f, 49.5f};
+        RepositionHero(&local, creature_view, false);
         local.agent.facing_yaw = -0.18f;
         local.course.alarm_countdown = 1000.0f;
     }
