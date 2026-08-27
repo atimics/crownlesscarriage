@@ -1,4 +1,5 @@
 #include "locomotion/cc_limb.h"
+#include "locomotion/cc_robotics.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -150,6 +151,54 @@ int main(void)
     }
     Require(swung[0] && swung[1], "biped did not alternate both feet");
 
+    CcRobotCollisionPoint point_space[CC_ROBOT_POINT_CAPACITY];
+    CcRobotCollisionPoint link_points[16];
+    int32_t link_point_count = CcRobotSampleLink(
+        (CcLimbVec3){0.0f, 0.0f, 0.0f},
+        (CcLimbVec3){1.0f, 0.0f, 0.0f}, 0.10f,
+        link_points, (int32_t)(sizeof(link_points) / sizeof(link_points[0])));
+    Require(link_point_count >= 6,
+            "a one-metre link did not receive enough sphere samples");
+    for (int32_t point = 1; point < link_point_count; ++point) {
+        Require(Distance(link_points[point - 1].center,
+                         link_points[point].center) <= 0.20f,
+                "point-space spheres left a gap along a link");
+    }
+    int32_t point_count = CcRobotLimbPointSpace(
+        &walking_biped, 0.09f, point_space, CC_ROBOT_POINT_CAPACITY);
+    Require(point_count >= 12,
+            "articulated links did not produce an overlapping point space");
+    for (int32_t point = 0; point < point_count; ++point) {
+        Require(fabsf(point_space[point].radius - 0.09f) < 0.0001f,
+                "point-space proxy lost its link radius");
+    }
+
+    CcLimbVec3 first_correction = {0};
+    CcLimbVec3 second_correction = {0};
+    Require(CcRobotPredictiveAvoidance(
+                (CcLimbVec3){-0.70f, 0.0f, 0.0f},
+                (CcLimbVec3){1.00f, 0.0f, 0.0f},
+                (CcLimbVec3){0.70f, 0.0f, 0.0f},
+                (CcLimbVec3){-1.00f, 0.0f, 0.0f},
+                0.80f, 1.00f, 0,
+                &first_correction, &second_correction),
+            "head-on robots did not predict their closest approach");
+    Require(fabsf(first_correction.z) > 0.01f &&
+            fabsf(first_correction.x + second_correction.x) < 0.0001f &&
+            fabsf(first_correction.z + second_correction.z) < 0.0001f,
+            "predictive avoidance was not stable and reciprocal");
+    Require(!CcRobotPredictiveAvoidance(
+                (CcLimbVec3){-0.70f, 0.0f, 0.0f},
+                (CcLimbVec3){-1.00f, 0.0f, 0.0f},
+                (CcLimbVec3){0.70f, 0.0f, 0.0f},
+                (CcLimbVec3){1.00f, 0.0f, 0.0f},
+                0.80f, 1.00f, 0,
+                &first_correction, &second_correction),
+            "separating robots received an unnecessary avoidance command");
+    Require(CcRobotTraversabilityCost(1.0f, 0.25f, 0.82f) >
+                CcRobotTraversabilityCost(1.0f, 0.01f, 0.99f),
+            "terrain cost did not prefer the more traversable edge");
+
     CcLimbVec3 wall_contact = {biped_body.x - 0.17f, biped_body.y - 0.71f,
                                biped_body.z + 0.30f};
     CcLimbRigPinContact(&walking_biped, 0, biped_body, 0.0f, wall_contact,
@@ -190,6 +239,14 @@ int main(void)
             "damaged octopod should retain its seven healthy supports");
     Require(damaged.traction < 1.0f,
             "limb loss should feed back into available traction");
+    CcLimbRig healthy_octopod;
+    CcLimbRigInit(&healthy_octopod, &octopod, body, 0.0f, PlaneProbe, NULL);
+    int32_t healthy_point_count = CcRobotLimbPointSpace(
+        &healthy_octopod, 0.09f, point_space, CC_ROBOT_POINT_CAPACITY);
+    int32_t damaged_point_count = CcRobotLimbPointSpace(
+        &damaged, 0.09f, point_space, CC_ROBOT_POINT_CAPACITY);
+    Require(damaged_point_count < healthy_point_count,
+            "destroyed limb remained in the collision point space");
 
     CcLimbMorphology quadruped;
     (void)CcLimbMorphologyFromPreset(&quadruped, CC_MORPHOLOGY_QUADRUPED);

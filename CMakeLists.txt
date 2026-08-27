@@ -36,6 +36,7 @@ add_library(crownless_locomotion
     src/locomotion/cc_humanoid_skin.c
     src/locomotion/cc_limb.c
     src/locomotion/cc_motion.c
+    src/locomotion/cc_robotics.c
 )
 target_include_directories(crownless_locomotion PUBLIC src)
 if(NOT MSVC)

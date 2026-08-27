@@ -285,6 +285,20 @@ static void TestSharedCharacterCollisionWorld(void)
     RequireSolidStreetHouse("artisan row house", 34.0f, 37.5f, 39.0f);
     RequireSolidStreetHouse("market road house", 55.0f, 58.25f, 33.25f);
     RequireSolidStreetHouse("coach yard house", 32.0f, 36.0f, 50.5f);
+
+    CcLocalAgent articulated;
+    CcLocalAgentInit(&articulated, (Vector2){2.10f, 7.50f}, false);
+    articulated.facing_yaw = 0.0f;
+    CcLocalAgentSetMorphology(
+        &articulated, CC_MORPHOLOGY_QUADRUPED, false);
+    Vector3 point_space_move = articulated.position;
+    point_space_move.x = 2.50f;
+    if (!CcLocalAgentPointSpaceBlockedInternal(
+            &articulated, point_space_move)) {
+        (void)fprintf(stderr,
+                      "articulated limb point space missed the course block\n");
+        exit(1);
+    }
 }
 
 static void AdvanceRoadWorld(CcLocalCourse *course, CcLocalAgent *player,
