@@ -568,6 +568,8 @@ static void DrawLocalHeader(const CcSim *sim, const LocalState *local)
                                               "Destination",
                         local->journey_travel_active ?
                             "CARRIAGE IN MOTION" : "CARRIAGE ENCOUNTER") :
+             !local->market_interior && local->course.alarm_active ?
+                 "STREET COMBAT / VILLAGE UNDER RAID" :
              local->market_interior ?
                  "MARKET HOUSE / GOODS, RUMOUR, AND PROMISES" :
                  "STREET LEVEL / CROWNLESS WAYSTATION",
@@ -582,6 +584,85 @@ static void DrawLocalHeader(const CcSim *sim, const LocalState *local)
                         sim->player.cargo_capacity), 1062, 24, 15, TEAL);
     CcOverlayDrawText(road ? "ROUTE IN PROGRESS" : "M  MAP CASE",
              road ? 1081 : 1121, 52, 10, MUTED);
+}
+
+static void DrawTownCombatPanel(const LocalState *local)
+{
+    int32_t guards_standing = 0;
+    int32_t guards_engaged = 0;
+    int32_t raiders_standing = 0;
+    for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
+        const CcLocalCourseRunner *guard = &local->course.runners[i];
+        if (guard->agent.combat.life_state == CC_LIFE_ALIVE) {
+            guards_standing += 1;
+            if (guard->duty == CC_GUARD_ENGAGED) guards_engaged += 1;
+        }
+    }
+    for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
+        if (local->course.raiders[i].combat.life_state == CC_LIFE_ALIVE) {
+            raiders_standing += 1;
+        }
+    }
+
+    DrawPanel((Rectangle){946.0f, 82.0f, 314.0f, 568.0f}, PANEL);
+    CcOverlayDrawText("VILLAGE UNDER RAID", 966, 102, 11, DANGER);
+    CcOverlayDrawText("HOLD THE WAYSTATION", 966, 125, 18, INK);
+    CcOverlayDrawText("The market is closed while steel is drawn.",
+             966, 153, 9, MUTED);
+    DrawBar(966, 181, 124, "YOU",
+            (int32_t)lroundf(local->agent.combat.health), TEAL);
+    DrawBar(966, 202, 124, "RAIDERS",
+            local->course.raider_resolve, DANGER);
+
+    int32_t target_index = local->agent.combat.target_index;
+    const CcLocalAgent *target =
+        target_index >= 0 && target_index < CC_LOCAL_RAIDER_COUNT &&
+        local->course.raiders[target_index].combat.life_state == CC_LIFE_ALIVE ?
+        &local->course.raiders[target_index] : NULL;
+    CcOverlayDrawText("LOCKED TARGET", 966, 254, 11, TEAL);
+    if (target != NULL) {
+        CcLocalDrawAgentPortrait3D(
+            target, (Rectangle){966.0f, 276.0f, 64.0f, 76.0f});
+        CcOverlayDrawText(TextFormat("RAIDER %d", target_index + 1),
+                 1040, 280, 12, CC_GOLD);
+        CcOverlayDrawText(TextFormat("%d HP  /  %d POSTURE",
+                            (int32_t)lroundf(target->combat.health),
+                            (int32_t)lroundf(target->combat.posture)),
+                 1040, 303, 9, INK);
+        DrawTwoLineText("Your attacks stay locked while both fighters remain in view.",
+                        1040, 326, 27U, 9, MUTED);
+    } else {
+        CcOverlayDrawText("NO TARGET", 966, 281, 13, CC_GOLD);
+        DrawTwoLineText("Click a standing raider to lock on and close the distance.",
+                        966, 306, 40U, 10, INK);
+    }
+
+    CcOverlayDrawText("THE LINE", 966, 377, 11, TEAL);
+    CcOverlayDrawText(TextFormat("GUARDS STANDING  %d / %d",
+                        guards_standing, CC_LOCAL_COURSE_RUNNER_COUNT),
+             966, 402, 10, INK);
+    CcOverlayDrawText(TextFormat("GUARDS ENGAGED   %d", guards_engaged),
+             966, 423, 10, guards_engaged > 0 ? TEAL : MUTED);
+    CcOverlayDrawText(TextFormat("RAIDERS STANDING %d / %d",
+                        raiders_standing, CC_LOCAL_RAIDER_COUNT),
+             966, 444, 10, raiders_standing > 0 ? DANGER : MUTED);
+
+    CcOverlayDrawText("CURRENT OBJECTIVE", 966, 480, 11, TEAL);
+    DrawTwoLineText(local->course.raiders_retreating ?
+                    "The raiders are breaking. Hold the street until they clear the gate." :
+                    "Break their resolve. Protect the guards and keep the market road open.",
+                    966, 504, 40U, 10, INK);
+    CcOverlayDrawText("LAST CLASH", 966, 565, 11, TEAL);
+    CcOverlayDrawText(local->course.last_outcome == CC_COMBAT_OUTCOME_NONE ?
+             "NO CLEAN CONTACT YET" :
+             TextFormat("%s  /  %s",
+                        CcLocalCombatTeamName(local->course.last_attacker_team),
+                        CcLocalCombatOutcomeName(local->course.last_outcome)),
+             966, 589, 10,
+             local->course.last_attacker_team == CC_COMBAT_PLAYER ?
+                 CC_GOLD : DANGER);
+    CcOverlayDrawText("1-3 skills   SPACE strike   X guard", 966, 621, 9,
+             CC_VIOLET);
 }
 
 static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
@@ -707,6 +788,10 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
                  "No attack: movement and proximity own this choice." :
                  "Live bodies, weapon contacts, and defeat own this choice.",
                  966, 606, 9, CC_VIOLET);
+        return;
+    }
+    if (!local->market_interior && local->course.alarm_active) {
+        DrawTownCombatPanel(local);
         return;
     }
     const CcSettlement *place = CcSimSettlement(sim, sim->player.location_id);
@@ -1621,6 +1706,28 @@ static void PrepareTownRaidReel(CcSim *sim, LocalState *local)
     }
 }
 
+static void PrepareRoadCombatReel(CcSim *sim, LocalState *local)
+{
+    BeginRoadLocalState(local, true);
+    (void)CcLocalCourseSelectPlayerTarget(
+        &local->course, &local->agent, 0);
+    /* Keep the real road fight, but skip most of the uneventful run-in. The
+       shown shot now starts just outside weapon range, before the first hit. */
+    for (int32_t frame = 0; frame < 900; ++frame) {
+        float x = local->course.raiders[0].position.x -
+                  local->agent.position.x;
+        float z = local->course.raiders[0].position.z -
+                  local->agent.position.z;
+        if (x * x + z * z <= 2.40f * 2.40f) break;
+        (void)CcLocalWorldUpdate(&local->course, &local->agent, sim,
+                                 1.0f / 60.0f, false, true);
+        if (local->agent.combat.target_index < 0) {
+            (void)CcLocalCourseSelectPlayerTarget(
+                &local->course, &local->agent, 0);
+        }
+    }
+}
+
 static void UpdateGameplayReel(CcSim *sim, LocalState *local,
                                GameplayReelState *reel,
                                int32_t *selected,
@@ -1767,10 +1874,8 @@ static void UpdateGameplayReel(CcSim *sim, LocalState *local,
             (void)snprintf(message, message_capacity,
                            "A road event pauses movement and asks for a lasting choice.");
             if (reel->stage_frame >= 120) {
-                BeginRoadLocalState(local, true);
+                PrepareRoadCombatReel(sim, local);
                 *view = VIEW_LOCAL;
-                (void)CcLocalCourseSelectPlayerTarget(
-                    &local->course, &local->agent, 0);
                 GameplayReelSetStage(reel, 6);
             }
             break;
