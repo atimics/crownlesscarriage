@@ -1,9 +1,12 @@
 # Introduction Video
 
-The finished 20-second introduction is
+The finished 23-second introduction is
 [`crownless-introduction.mp4`](../../assets/video/introduction/crownless-introduction.mp4).
 English captions are available beside it as
 [`crownless-introduction.en.srt`](../../assets/video/introduction/crownless-introduction.en.srt).
+It uses the supplied track
+[`the-predator-clause.mp3`](../../assets/video/introduction/the-predator-clause.mp3)
+for its complete audio mix.
 
 ## Required narration
 
@@ -21,8 +24,9 @@ title card.
 
 1. Two groups hold apart across a broken road.
 2. The groups repair the crossing and move supplies together.
-3. The narration pauses after "any of them."
-4. The sentence ends, then a dragon's shadow fills the sky.
+3. The delivery turns after "any of them."
+4. The sentence ends, then a dragon's shadow fills the sky as the track moves
+   into its outro.
 5. Cut to the title card.
 
 Rebuild the video with `tools/video/build_introduction_video.sh`. Set

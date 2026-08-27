@@ -27,14 +27,11 @@ fi
 mkdir -p "$(dirname -- "$output_path")"
 
 "$ffmpeg_bin" -hide_banner -y \
-    -loop 1 -framerate 24 -t 4.6 -i "$asset_dir/01-human-division.png" \
-    -loop 1 -framerate 24 -t 6.6 -i "$asset_dir/03-forced-cooperation.png" \
-    -loop 1 -framerate 24 -t 5.5 -i "$asset_dir/02-larger-threat.png" \
-    -f lavfi -t 4.5 -i "color=c=090B0C:s=1920x1080:r=24" \
-    -i "$asset_dir/narration.aiff" \
-    -f lavfi -t 20.0 -i "anoisesrc=color=brown:amplitude=0.08:sample_rate=48000:seed=17381" \
-    -f lavfi -t 20.0 -i "aevalsrc=0.035*sin(2*PI*48*t)+0.018*sin(2*PI*72*t):s=48000" \
-    -f lavfi -t 3.8 -i "sine=frequency=38:sample_rate=48000" \
+    -loop 1 -framerate 24 -t 5.2 -i "$asset_dir/01-human-division.png" \
+    -loop 1 -framerate 24 -t 13.6 -i "$asset_dir/03-forced-cooperation.png" \
+    -loop 1 -framerate 24 -t 3.2 -i "$asset_dir/02-larger-threat.png" \
+    -f lavfi -t 2.48 -i "color=c=090B0C:s=1920x1080:r=24" \
+    -i "$asset_dir/the-predator-clause.mp3" \
     -filter_complex "
         [0:v]scale=1920:1080:force_original_aspect_ratio=increase,
              crop=1920:1080,
@@ -55,57 +52,48 @@ mkdir -p "$(dirname -- "$output_path")"
                      d=1:s=1920x1080:fps=24,
              settb=AVTB,setpts=PTS-STARTPTS[v2];
         [3:v]format=yuv420p,settb=AVTB,setpts=PTS-STARTPTS[v3];
-        [v0][v1]xfade=transition=fade:duration=0.4:offset=4.2[v01];
-        [v01][v2]xfade=transition=fade:duration=0.4:offset=10.4[v012];
-        [v012][v3]xfade=transition=fade:duration=0.4:offset=15.5[vbase];
+        [v0][v1]xfade=transition=fade:duration=0.4:offset=4.8[v01];
+        [v01][v2]xfade=transition=fade:duration=0.4:offset=18.0[v012];
+        [v012][v3]xfade=transition=fade:duration=0.4:offset=20.8[vbase];
         [vbase]drawtext=$drawtext_font:
                   textfile='$asset_dir/sentence-1.txt':
                   fontcolor=F2E9D0:fontsize=46:line_spacing=10:
                   text_align=C:x=(w-text_w)/2:y=h-170:
                   box=1:boxcolor=090B0C@0.72:boxborderw=22:
                   borderw=1:bordercolor=000000@0.9:
-                  enable='between(t,1.0,3.6)',
+                  enable='between(t,0.15,5.0)',
               drawtext=$drawtext_font:
                   textfile='$asset_dir/sentence-2.txt':
                   fontcolor=F2E9D0:fontsize=46:line_spacing=10:
                   text_align=C:x=(w-text_w)/2:y=h-170:
                   box=1:boxcolor=090B0C@0.72:boxborderw=22:
                   borderw=1:bordercolor=000000@0.9:
-                  enable='between(t,4.2,7.3)',
+                  enable='between(t,5.0,13.25)',
               drawtext=$drawtext_font:
                   textfile='$asset_dir/sentence-3.txt':
                   fontcolor=F2E9D0:fontsize=46:line_spacing=10:
                   text_align=C:x=(w-text_w)/2:y=h-170:
                   box=1:boxcolor=090B0C@0.72:boxborderw=22:
                   borderw=1:bordercolor=000000@0.9:
-                  enable='between(t,8.6,10.1)',
+                  enable='between(t,13.25,18.0)',
               drawtext=$drawtext_font:
                   textfile='$asset_dir/title.txt':
                   fontcolor=F2E9D0:fontsize=104:
                   text_align=C:x=(w-text_w)/2:y=(h-text_h)/2:
                   borderw=3:bordercolor=080A0B@0.95:
                   shadowx=5:shadowy=6:shadowcolor=000000@0.7:
-                  alpha='if(lt(t,16.1),(t-15.5)/0.6,if(lt(t,19.3),1,(20.0-t)/0.7))':
-                  enable='between(t,15.5,20.0)',
+                  alpha='if(lt(t,21.4),(t-20.8)/0.6,if(lt(t,22.88),1,(23.28-t)/0.4))':
+                  enable='between(t,20.8,23.28)',
               format=yuv420p[vout];
-        [4:a]aresample=48000,adelay=1000:all=1,
-             highpass=f=75,lowpass=f=8500,
-             acompressor=threshold=0.16:ratio=2.5:attack=5:release=180,
-             volume=1.2[voice];
-        [5:a]highpass=f=35,lowpass=f=700,volume=0.16,
-             afade=t=in:st=0:d=2,afade=t=out:st=16.5:d=3[wind];
-        [6:a]volume=0.55,
-             afade=t=in:st=0:d=3,afade=t=out:st=16.5:d=3[drone];
-        [7:a]lowpass=f=90,volume=0.055,
-             afade=t=in:st=0:d=0.08,afade=t=out:st=0.15:d=3.65,
-             adelay=10400:all=1[threat];
-        [voice][wind][drone][threat]amix=inputs=4:duration=longest:normalize=0,
-             loudnorm=I=-18:LRA=8:TP=-1.5[aout]
+        [4:a:0]aresample=48000,atrim=duration=23.28,
+             asetpts=PTS-STARTPTS[aout]
     " \
     -map "[vout]" -map "[aout]" \
-    -t 20 -r 24 \
+    -t 23.28 -r 24 \
     -c:v libx264 -preset slow -crf 18 -pix_fmt yuv420p \
     -c:a aac -b:a 192k -ar 48000 \
     -movflags +faststart \
     -metadata title="Crownless Carriage Introduction" \
+    -metadata artist="ratimics" \
+    -metadata comment="Audio: The Predator Clause" \
     "$output_path"
