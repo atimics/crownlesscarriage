@@ -8379,7 +8379,14 @@ Camera3D CcLocalCombatCameraInternal(Camera3D base,
         if (delta_time < 0.0f || delta_time > 0.12f) delta_time = 0.0f;
         delta_time = fminf(delta_time, 0.050f);
         combat_camera_rig.last_clock = clock;
-        float direction = active ? 1.65f : -1.35f;
+        /* Road ambushes begin inside a narrow authored bridge shot. Enter
+           their shoulder camera promptly so the parapets do not hold the
+           player at the edge of the wide establishing frame. Settlement
+           fights keep the calmer transition used by the gameplay reel. */
+        bool quick_road_entry = active && course != NULL &&
+                                course->scene == CC_LOCAL_SCENE_ROAD;
+        float direction = active ? (quick_road_entry ? 4.2f : 1.65f) :
+                                   -1.35f;
         combat_camera_rig.combat_weight = CombatClamp(
             combat_camera_rig.combat_weight + delta_time * direction,
             0.0f, 1.0f);
@@ -8409,7 +8416,8 @@ Camera3D CcLocalCombatCameraInternal(Camera3D base,
             base_offset, combat_camera_rig.locked_offset, weight);
         float desired_fovy = base_perspective_fovy +
             (combat_camera_rig.locked_fovy - base_perspective_fovy) * weight;
-        float ease = 1.0f - expf(-delta_time * 4.5f);
+        float response = quick_road_entry ? 8.0f : 4.5f;
+        float ease = 1.0f - expf(-delta_time * response);
         combat_camera_rig.displayed_target = Vector3Lerp(
             combat_camera_rig.displayed_target, desired_target, ease);
         combat_camera_rig.displayed_offset = Vector3Lerp(
