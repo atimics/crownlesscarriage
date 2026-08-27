@@ -2541,13 +2541,18 @@ int main(int argc, char **argv)
         if (argc < 4 ||
             (strcmp(argv[2], "goblins") != 0 &&
              strcmp(argv[2], "dragon") != 0 &&
-             strcmp(argv[2], "animals") != 0)) {
+             strcmp(argv[2], "animals") != 0 &&
+             strcmp(argv[2], "horse") != 0 &&
+             strcmp(argv[2], "cow") != 0)) {
             (void)fprintf(stderr,
-                          "creature capture requires goblins, dragon, or animals and a frame path.\n");
+                          "creature capture requires goblins, dragon, horse, "
+                          "cow, or animals and a frame path.\n");
             return 1;
         }
         capture_creature_family = argv[2];
     }
+    bool capture_creature_horse = capture_creature_media &&
+        strcmp(capture_creature_family, "horse") == 0;
     int32_t capture_face_view = -1;
     if (capture_face) {
         if (argc < 4) {
@@ -2682,7 +2687,7 @@ int main(int argc, char **argv)
         }
     }
     if (capture_encounter || capture_travel || capture_road || capture_parley ||
-        capture_aftermath) {
+        capture_aftermath || capture_creature_horse) {
         int32_t charter_index = FirstActiveSituationIndex(&sim);
         if (charter_index >= 0) {
             char setup_error[192];
@@ -2698,7 +2703,7 @@ int main(int argc, char **argv)
             };
             (void)CcSimApply(&sim, &travel, setup_error,
                              sizeof(setup_error));
-            if (capture_travel) {
+            if (capture_travel || capture_creature_horse) {
                 while (sim.journey.active &&
                        sim.carriage.progress_milli < 200) {
                     CcSimAdvanceRuntimeTicks(
@@ -2765,12 +2770,18 @@ int main(int argc, char **argv)
         local.course.alarm_countdown = 1000.0f;
     }
     if (capture_creature_media) {
-        Vector2 creature_view =
-            strcmp(capture_creature_family, "animals") == 0 ?
+        if (capture_creature_horse) {
+            BeginRoadTravelState(&local);
+        } else {
+            bool animal_view =
+                strcmp(capture_creature_family, "animals") == 0 ||
+                strcmp(capture_creature_family, "cow") == 0;
+            Vector2 creature_view = animal_view ?
                 (Vector2){59.5f, 40.0f} : (Vector2){24.5f, 49.5f};
-        RepositionHero(&local, creature_view, false);
-        local.agent.facing_yaw = -0.18f;
-        local.course.alarm_countdown = 1000.0f;
+            RepositionHero(&local, creature_view, false);
+            local.agent.facing_yaw = -0.18f;
+            local.course.alarm_countdown = 1000.0f;
+        }
     }
     if (capture_road || capture_parley) {
         BeginRoadLocalState(&local, capture_road);

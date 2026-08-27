@@ -1,4 +1,5 @@
 #include "locomotion/cc_creature.h"
+#include "locomotion/cc_robotics.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -106,6 +107,8 @@ int main(void)
     static const CcCreatureRigProfile controller_profiles[] = {
         CC_CREATURE_RIG_GOBLIN,
         CC_CREATURE_RIG_HORSE,
+        CC_CREATURE_RIG_COW,
+        CC_CREATURE_RIG_DRAGON,
         CC_CREATURE_RIG_HEXAPOD,
         CC_CREATURE_RIG_OCTOPOD,
     };
@@ -117,6 +120,20 @@ int main(void)
         CcCreatureRigProfile profile = controller_profiles[profile_index];
         Require(CcCreatureRigControllerInit(&controller, profile, 0.13f, 1.0f),
                 "persistent creature controller initializes");
+        CcRobotCollisionPoint collision_points[CC_ROBOT_POINT_CAPACITY];
+        int32_t collision_point_count = CcRobotLimbPointSpace(
+            &controller.skeleton, 0.14f, collision_points,
+            CC_ROBOT_POINT_CAPACITY);
+        Require(collision_point_count >=
+                    controller.skeleton.morphology.limb_count * 4,
+                "creature bones produce a useful collision point space");
+        for (int32_t point = 0; point < collision_point_count; ++point) {
+            Require(isfinite(collision_points[point].center.x) &&
+                    isfinite(collision_points[point].center.y) &&
+                    isfinite(collision_points[point].center.z) &&
+                    fabsf(collision_points[point].radius - 0.14f) < 0.0001f,
+                    "creature collision point space remains finite");
+        }
         bool saw_swing = false;
         int32_t locked_stance_frames = 0;
         for (int32_t frame = 0; frame < 360; ++frame) {
