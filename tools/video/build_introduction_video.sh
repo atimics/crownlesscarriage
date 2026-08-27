@@ -31,9 +31,9 @@ mkdir -p "$(dirname -- "$output_path")"
     -loop 1 -framerate 24 -t 10.4 -i "$asset_dir/03-forced-cooperation.png" \
     -f lavfi -t 2.0 -i "color=c=090B0C:s=1920x1080:r=24" \
     -f lavfi -t 0.6 -i "color=c=090B0C:s=1920x1080:r=24" \
-    -f lavfi -t 1.5 -i "color=c=090B0C:s=1920x1080:r=24" \
-    -f lavfi -t 0.4 -i "color=c=090B0C:s=1920x1080:r=24" \
     -loop 1 -framerate 24 -t 1.4 -i "$asset_dir/02-larger-threat.png" \
+    -f lavfi -t 0.4 -i "color=c=090B0C:s=1920x1080:r=24" \
+    -f lavfi -t 1.5 -i "color=c=090B0C:s=1920x1080:r=24" \
     -f lavfi -t 0.7 -i "color=c=090B0C:s=1920x1080:r=24" \
     -i "$asset_dir/the-predator-clause.mp3" \
     -filter_complex "
@@ -51,14 +51,14 @@ mkdir -p "$(dirname -- "$output_path")"
              settb=AVTB,setpts=PTS-STARTPTS[v1];
         [2:v]format=yuv420p,settb=AVTB,setpts=PTS-STARTPTS[v2];
         [3:v]format=yuv420p,settb=AVTB,setpts=PTS-STARTPTS[v3];
-        [4:v]format=yuv420p,settb=AVTB,setpts=PTS-STARTPTS[v4];
-        [5:v]format=yuv420p,settb=AVTB,setpts=PTS-STARTPTS[v5];
-        [6:v]scale=1920:1080:force_original_aspect_ratio=increase,
+        [4:v]scale=1920:1080:force_original_aspect_ratio=increase,
              crop=1920:1080,
              zoompan=z='min(zoom+0.00018,1.04)':
                      x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':
                      d=1:s=1920x1080:fps=24,
-             settb=AVTB,setpts=PTS-STARTPTS[v6];
+             settb=AVTB,setpts=PTS-STARTPTS[v4];
+        [5:v]format=yuv420p,settb=AVTB,setpts=PTS-STARTPTS[v5];
+        [6:v]format=yuv420p,settb=AVTB,setpts=PTS-STARTPTS[v6];
         [7:v]format=yuv420p,settb=AVTB,setpts=PTS-STARTPTS[v7];
         [v0][v1][v2][v3][v4][v5][v6][v7]concat=n=8:v=1:a=0[vbase];
         [vbase]drawtext=$drawtext_font:
@@ -88,8 +88,8 @@ mkdir -p "$(dirname -- "$output_path")"
                   text_align=C:x=(w-text_w)/2:y=(h-text_h)/2:
                   borderw=3:bordercolor=080A0B@0.95:
                   shadowx=5:shadowy=6:shadowcolor=000000@0.7:
-                  alpha='if(lt(t,21.3),(t-21.0)/0.3,if(lt(t,22.2),1,(22.5-t)/0.3))':
-                  enable='between(t,21.0,22.5)',
+                  alpha='if(lt(t,23.1),(t-22.8)/0.3,if(lt(t,24.0),1,(24.3-t)/0.3))':
+                  enable='between(t,22.8,24.3)',
               format=yuv420p[vout];
         [8:a:0]aresample=48000,apad=pad_dur=1.72,atrim=duration=25,
              asetpts=PTS-STARTPTS[aout]
