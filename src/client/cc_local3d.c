@@ -447,6 +447,7 @@ typedef struct CombatCameraRig {
     float displayed_fovy;
     Vector3 locked_target;
     Vector3 locked_offset;
+    Vector3 locked_shoulder_side;
     float locked_fovy;
     float combat_weight;
     float tree_clear_angle;
@@ -455,6 +456,7 @@ typedef struct CombatCameraRig {
     int32_t opponent_index;
     CcLocalSceneKind scene;
     bool composition_locked;
+    bool shoulder_valid;
     bool initialized;
     bool scene_valid;
 } CombatCameraRig;
@@ -551,6 +553,13 @@ static bool PresentedCameraForInput(CcLocalSceneKind scene,
     }
     *camera = state->camera;
     return true;
+}
+
+static bool CameraPointInFront(Camera3D camera, Vector3 point)
+{
+    Vector3 forward = Vector3Subtract(camera.target, camera.position);
+    Vector3 toward = Vector3Subtract(point, camera.position);
+    return Vector3DotProduct(forward, toward) > 0.001f;
 }
 
 typedef struct NavPlatform {
@@ -3727,6 +3736,45 @@ int32_t CcLocalCoursePickPlayerTarget(CcLocalCourse *course,
         picked = i;
         nearest = collision.distance;
     }
+    /* The fixed room shots make a distant raider narrower than a comfortable
+       mouse target. Keep the physical ray test authoritative, then add a
+       small screen-space halo around the visible body. This is only a click
+       aid; it never changes combat range or movement. */
+    if (picked < 0) {
+        float best_score = FLT_MAX;
+        for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
+            const CcLocalAgent *raider = &course->raiders[i];
+            if (!CombatCanAct(&raider->combat)) continue;
+            Vector3 center = Vector3Add(
+                raider->position, (Vector3){0.0f, 1.10f, 0.0f});
+            if (!CameraPointInFront(camera, center)) continue;
+            Vector2 center_screen = GetWorldToScreenEx(
+                center, camera, target.texture.width, target.texture.height);
+            Vector2 head_screen = GetWorldToScreenEx(
+                Vector3Add(raider->position,
+                           (Vector3){0.0f, 2.12f, 0.0f}),
+                camera, target.texture.width, target.texture.height);
+            Vector2 feet_screen = GetWorldToScreenEx(
+                Vector3Add(raider->position,
+                           (Vector3){0.0f, 0.08f, 0.0f}),
+                camera, target.texture.width, target.texture.height);
+            if (center_screen.x < 0.0f ||
+                center_screen.x > (float)target.texture.width ||
+                center_screen.y < 0.0f ||
+                center_screen.y > (float)target.texture.height) continue;
+            float projected_height = fabsf(feet_screen.y - head_screen.y);
+            float radius_x = CombatClamp(projected_height * 0.34f,
+                                         18.0f, 24.0f);
+            float radius_y = CombatClamp(projected_height * 0.58f,
+                                         18.0f, 30.0f);
+            float dx = (local.x - center_screen.x) / radius_x;
+            float dy = (local.y - center_screen.y) / radius_y;
+            float score = dx * dx + dy * dy;
+            if (score > 1.0f || score >= best_score) continue;
+            best_score = score;
+            picked = i;
+        }
+    }
     return CcLocalCourseSelectPlayerTarget(course, player, picked) ?
            picked : -1;
 }
@@ -4921,7 +4969,9 @@ bool CcLocalAgentPickTarget(CcLocalAgent *agent, Vector2 screen_point,
        the camera and a perfectly walkable road point. Rejecting that ray made
        the last strip of visible ground impossible to click, so street input
        is decided by ground walkability instead. */
-    if (scene != CC_LOCAL_SCENE_STREET && occluder < nearest) return false;
+    bool street_fixed_room = scene == CC_LOCAL_SCENE_STREET &&
+                             camera.projection == CAMERA_ORTHOGRAPHIC;
+    if (!street_fixed_room && occluder < nearest) return false;
     return SetNearestClickTarget(agent, picked_point, market_interior);
 }
 
@@ -7950,36 +8000,23 @@ static const CcLocalAgent *CombatCameraOpponent(
     if (course == NULL || player == NULL) return NULL;
     int32_t selected = player->combat.target_index;
     if (selected >= 0 && selected < CC_LOCAL_RAIDER_COUNT &&
-        CombatCanAct(&course->raiders[selected].combat)) {
+        (CombatCanAct(&course->raiders[selected].combat) ||
+         course->combat_event_seconds > 0.0f)) {
         return &course->raiders[selected];
     }
-    const CcLocalAgent *nearest = NULL;
-    float nearest_distance = FLT_MAX;
-    const CcLocalAgent *recently_defeated = NULL;
-    float defeated_distance = FLT_MAX;
-    for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
-        const CcLocalAgent *raider = &course->raiders[i];
-        float distance = CombatHorizontalDistanceSquared(player, raider);
-        if (!CombatCanAct(&raider->combat)) {
-            if (course->combat_event_seconds > 0.0f &&
-                distance < defeated_distance) {
-                recently_defeated = raider;
-                defeated_distance = distance;
-            }
-            continue;
-        }
-        if (distance >= nearest_distance) continue;
-        nearest = raider;
-        nearest_distance = distance;
+    /* A resolved strike clears the actor focus. Keep only that same selected
+       opponent for the short impact beat; never replace it with a nearby
+       raider the player did not choose. */
+    int32_t held = combat_camera_rig.opponent_index;
+    if (combat_camera_rig.composition_locked &&
+        course->combat_event_seconds > 0.0f && held >= 0 &&
+        held < CC_LOCAL_RAIDER_COUNT &&
+        !CombatCanAct(&course->raiders[held].combat) &&
+        CombatHorizontalDistanceSquared(
+            player, &course->raiders[held]) <= 6.0f * 6.0f) {
+        return &course->raiders[held];
     }
-    /* Hold the nearby knockdown for the impact beat. Otherwise the next live
-       raider can pull the camera across the whole settlement before the
-       fallen body has even landed. */
-    if (recently_defeated != NULL && defeated_distance <= 6.0f * 6.0f &&
-        (nearest == NULL || nearest_distance > defeated_distance * 2.25f)) {
-        return recently_defeated;
-    }
-    return nearest;
+    return NULL;
 }
 
 static int32_t CombatCameraOpponentIndex(const CcLocalCourse *course,
@@ -8033,52 +8070,54 @@ static void CombatCameraLockComposition(Camera3D base,
     Vector3 opponent_center = Vector3Add(
         opponent_position, (Vector3){0.0f, 1.02f, 0.0f});
     Vector3 offset = {0};
+    Vector3 chosen_side = fight_side;
     float best_cost = FLT_MAX;
+    int32_t opponent_index = CombatCameraOpponentIndex(course, opponent);
+    bool preserve_shoulder = combat_camera_rig.shoulder_valid &&
+        combat_camera_rig.composition_locked &&
+        combat_camera_rig.opponent_index == opponent_index;
 
-    if (course->scene == CC_LOCAL_SCENE_STREET) {
-        /* Try both shoulders. The fixed room camera breaks ties, while tree,
-           course, building, and camera-position clutter choose the side
-           that actually reads cleanly at close range. */
-        for (int32_t shoulder = 0; shoulder < 2; ++shoulder) {
-            Vector3 candidate_side = shoulder == 0 ? fight_side :
-                                                    Vector3Negate(fight_side);
-            Vector3 camera_position = Vector3Add(
-                player->position,
-                Vector3Add(Vector3Scale(fight_line, -follow_distance),
-                           Vector3Scale(candidate_side,
-                                        shoulder_distance)));
-            camera_position.y = player->position.y + 3.15f;
-            Vector3 candidate_offset = Vector3Subtract(camera_position,
-                                                        target);
-            Camera3D candidate = PerspectiveCameraComposed(
-                target, candidate_offset, fovy);
-            float cost =
+    /* Try both shoulders. The current side receives a real hysteresis
+       advantage, so a small movement or equal clutter score cannot flip the
+       whole shot. A badly blocked side can still lose decisively. */
+    for (int32_t shoulder = 0; shoulder < 2; ++shoulder) {
+        Vector3 candidate_side = shoulder == 0 ? fight_side :
+                                                Vector3Negate(fight_side);
+        Vector3 camera_position = Vector3Add(
+            player->position,
+            Vector3Add(Vector3Scale(fight_line, -follow_distance),
+                       Vector3Scale(candidate_side, shoulder_distance)));
+        camera_position.y = player->position.y + 3.15f;
+        Vector3 candidate_offset = Vector3Subtract(camera_position, target);
+        Camera3D candidate = PerspectiveCameraComposed(
+            target, candidate_offset, fovy);
+        float cost = shoulder == 0 ? 0.0f : 0.12f;
+        if (course->scene == CC_LOCAL_SCENE_STREET) {
+            cost +=
                 CcLocalCameraTreeOcclusionScoreInternal(
                     candidate, player_center, opponent_center) * 14.0f +
                 CameraStreetCourseClutterScore(
                     candidate, player_center, opponent_center) * 2.2f +
-                CombatCameraPositionClutter(camera_position) * 8.0f +
-                (shoulder == 0 ? 0.0f : 0.12f);
-            if (cost >= best_cost) continue;
-            best_cost = cost;
-            offset = candidate_offset;
+                CombatCameraPositionClutter(camera_position) * 8.0f;
         }
-        combat_camera_rig.tree_clear_angle = 0.0f;
-    } else {
-        Vector3 camera_position = Vector3Add(
-            player->position,
-            Vector3Add(Vector3Scale(fight_line, -follow_distance),
-                       Vector3Scale(fight_side, shoulder_distance)));
-        camera_position.y = player->position.y + 3.15f;
-        offset = Vector3Subtract(camera_position, target);
-        combat_camera_rig.tree_clear_angle = 0.0f;
+        if (preserve_shoulder &&
+            Vector3DotProduct(candidate_side,
+                              combat_camera_rig.locked_shoulder_side) < 0.0f) {
+            cost += 0.90f;
+        }
+        if (cost >= best_cost) continue;
+        best_cost = cost;
+        offset = candidate_offset;
+        chosen_side = candidate_side;
     }
+    combat_camera_rig.tree_clear_angle = 0.0f;
     combat_camera_rig.locked_target = target;
     combat_camera_rig.locked_offset = offset;
+    combat_camera_rig.locked_shoulder_side = chosen_side;
     combat_camera_rig.locked_fovy = fovy;
-    combat_camera_rig.opponent_index = CombatCameraOpponentIndex(
-        course, opponent);
+    combat_camera_rig.opponent_index = opponent_index;
     combat_camera_rig.composition_locked = true;
+    combat_camera_rig.shoulder_valid = true;
     combat_camera_rig.reframe_cooldown = 0.45f;
 }
 
@@ -8098,31 +8137,43 @@ static bool CombatCameraSubjectsNeedReframe(const CcLocalAgent *player,
         combat_camera_rig.locked_fovy);
     Vector3 opponent_position = opponent != NULL ? opponent->position :
         course->combat_origin;
-    Vector3 midpoint = Vector3Lerp(player->position, opponent_position, 0.48f);
-    float midpoint_x = midpoint.x - combat_camera_rig.locked_target.x;
-    float midpoint_z = midpoint.z - combat_camera_rig.locked_target.z;
-    if (midpoint_x * midpoint_x + midpoint_z * midpoint_z > 1.35f * 1.35f) {
+    Vector3 fight_line = Vector3Subtract(opponent_position, player->position);
+    fight_line.y = 0.0f;
+    float live_span = fmaxf(1.0f, Vector3Length(fight_line));
+    fight_line = PhysicsNormalizeOr(
+        fight_line, (Vector3){1.0f, 0.0f, 0.0f});
+    Vector3 intended_target = Vector3Add(
+        player->position,
+        Vector3Scale(fight_line, fminf(live_span * 0.72f, 3.30f)));
+    intended_target.y = player->position.y + 1.32f;
+    float target_x = intended_target.x - combat_camera_rig.locked_target.x;
+    float target_z = intended_target.z - combat_camera_rig.locked_target.z;
+    if (target_x * target_x + target_z * target_z > 1.35f * 1.35f) {
         return true;
     }
-    float live_span = Vector2Distance(
-        (Vector2){player->position.x, player->position.z},
-        (Vector2){opponent_position.x, opponent_position.z});
-    float live_fovy = CombatClamp(44.0f + fmaxf(1.0f, live_span) * 0.75f,
+    float live_fovy = CombatClamp(44.0f + live_span * 0.75f,
                                   45.0f, 50.0f);
     if (fabsf(live_fovy - combat_camera_rig.locked_fovy) > 1.20f) {
         return true;
     }
     Vector3 subjects[] = {
-        Vector3Add(player->position, (Vector3){0.0f, 1.02f, 0.0f}),
-        Vector3Add(opponent_position, (Vector3){0.0f, 1.02f, 0.0f}),
+        Vector3Add(player->position, (Vector3){0.0f, 0.04f, 0.0f}),
+        Vector3Add(player->position, (Vector3){0.0f, 2.24f, 0.0f}),
+        Vector3Add(player->position, (Vector3){0.46f, 1.05f, 0.0f}),
+        Vector3Add(player->position, (Vector3){-0.46f, 1.05f, 0.0f}),
+        Vector3Add(opponent_position, (Vector3){0.0f, 0.04f, 0.0f}),
+        Vector3Add(opponent_position, (Vector3){0.0f, 2.24f, 0.0f}),
+        Vector3Add(opponent_position, (Vector3){0.46f, 1.05f, 0.0f}),
+        Vector3Add(opponent_position, (Vector3){-0.46f, 1.05f, 0.0f}),
     };
-    for (int32_t subject = 0; subject < 2; ++subject) {
+    for (int32_t subject = 0; subject < 8; ++subject) {
+        if (!CameraPointInFront(camera, subjects[subject])) return true;
         Vector2 screen = GetWorldToScreenEx(
             subjects[subject], camera, art_width, art_height);
-        if (screen.x < (float)art_width * 0.08f ||
-            screen.x > (float)art_width * 0.92f ||
-            screen.y < (float)art_height * 0.08f ||
-            screen.y > (float)art_height * 0.92f) return true;
+        if (screen.x < (float)art_width * 0.10f ||
+            screen.x > (float)art_width * 0.90f ||
+            screen.y < (float)art_height * 0.06f ||
+            screen.y > (float)art_height * 0.94f) return true;
     }
     return false;
 }
@@ -8163,6 +8214,7 @@ Camera3D CcLocalCombatCameraInternal(Camera3D base,
         combat_camera_rig.last_clock = clock;
         combat_camera_rig.opponent_index = -1;
         combat_camera_rig.composition_locked = false;
+        combat_camera_rig.shoulder_valid = false;
         combat_camera_rig.initialized = true;
         if (course != NULL) {
             combat_camera_rig.scene = course->scene;
@@ -8193,6 +8245,7 @@ Camera3D CcLocalCombatCameraInternal(Camera3D base,
                     player, opponent, course, art_height);
             if (!combat_camera_rig.composition_locked || opponent_changed ||
                 left_safe_frame) {
+                if (opponent_changed) combat_camera_rig.shoulder_valid = false;
                 CombatCameraLockComposition(base, player, opponent, course);
             }
         }
@@ -8219,6 +8272,7 @@ Camera3D CcLocalCombatCameraInternal(Camera3D base,
             combat_camera_rig.reframe_cooldown = 0.0f;
             combat_camera_rig.opponent_index = -1;
             combat_camera_rig.composition_locked = false;
+            combat_camera_rig.shoulder_valid = false;
         }
     }
 
@@ -13329,7 +13383,7 @@ static void DrawBiomechanicalBiped(const CcLocalAgent *agent)
         }
         RestoreWorldLighting();
         if (procedural_hero_updated) {
-            CcLocalRendererRecordBiped(false);
+            CcLocalRendererRecordBiped(true);
             return;
         }
     }
@@ -14413,6 +14467,7 @@ static void DrawLabels(const WorldLabel *labels, int32_t count, Camera3D camera,
     int32_t width = (int32_t)lroundf(viewport.width);
     int32_t height = (int32_t)lroundf(viewport.height);
     for (int32_t i = 0; i < count; ++i) {
+        if (!CameraPointInFront(camera, labels[i].point)) continue;
         Vector2 screen = GetWorldToScreenEx(labels[i].point, camera, width, height);
         if (screen.x < -120.0f || screen.x > viewport.width + 120.0f ||
             screen.y < bubble_height + head_clearance + 4.0f ||
@@ -14442,15 +14497,21 @@ static void DrawLabels(const WorldLabel *labels, int32_t count, Camera3D camera,
 static void DrawCombatBar(const CcLocalAgent *agent, Camera3D camera,
                           Rectangle viewport, Color accent)
 {
+    if (agent == NULL) return;
     /* Keep combat state in the clear air above the portrait billboard. */
     Vector3 anchor = {agent->position.x, agent->position.y + 2.82f,
                       agent->position.z};
+    if (!CameraPointInFront(camera, anchor)) return;
+    int32_t width = (int32_t)lroundf(viewport.width);
+    int32_t height = (int32_t)lroundf(viewport.height);
     Vector2 screen = GetWorldToScreenEx(
-        anchor, camera, (int32_t)lroundf(viewport.width),
-        (int32_t)lroundf(viewport.height));
+        anchor, camera, width, height);
+    const float bar_width = 44.0f;
+    if (screen.x < bar_width * 0.5f + 3.0f ||
+        screen.x > (float)width - bar_width * 0.5f - 3.0f ||
+        screen.y < 10.0f || screen.y > (float)height - 8.0f) return;
     screen.x += viewport.x;
     screen.y += viewport.y;
-    const float bar_width = 44.0f;
     float health = CombatClamp(agent->combat.health /
                                CC_LOCAL_COMBAT_MAX_HEALTH, 0.0f, 1.0f);
     float posture = CombatClamp(agent->combat.posture /
@@ -15624,6 +15685,8 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     EndMode3D();
     EndTextureMode();
     PresentTarget(target, destination);
+    bool combat_presentation = !travelling && course->alarm_active &&
+                               camera.projection == CAMERA_PERSPECTIVE;
 
     char route_label[96];
     char blockade_label[96];
@@ -15635,19 +15698,21 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
                    bandits != NULL ? bandits->name : "ROAD COLLECTORS");
     WorldLabel labels[6];
     int32_t count = 0;
-    if (!travelling) {
+    if (!travelling && !combat_presentation) {
         labels[count++] = (WorldLabel){{agent->position.x,
                                         agent->position.y + 2.50f,
                                         agent->position.z}, "YOU", WORLD_TEAL};
     }
-    if (!travelling && !parley) {
+    if (!travelling && !parley && !combat_presentation) {
         labels[count++] = (WorldLabel){{ROAD_BARRICADE_X, 2.58f, 40.00f},
                                        blockade_label, WORLD_DANGER};
     }
-    labels[count++] = (WorldLabel){{travelling ? carriage_x + 8.0f : 57.0f,
-                                    1.18f, 40.0f},
-                                   route_label, WORLD_GOLD};
-    if (parley) {
+    if (!combat_presentation) {
+        labels[count++] = (WorldLabel){
+            {travelling ? carriage_x + 8.0f : 57.0f, 1.18f, 40.0f},
+            route_label, WORLD_GOLD};
+    }
+    if (parley && !combat_presentation) {
         labels[count++] = (WorldLabel){
             {course->raiders[0].position.x,
              course->raiders[0].position.y + 2.18f,
@@ -15660,14 +15725,20 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     DrawLabels(labels, count, camera, destination);
     if (!travelling && course->alarm_active) {
         DrawCombatBar(agent, camera, destination, WORLD_TEAL);
-        for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
-            DrawCombatBar(&course->runners[i].agent, camera,
-                          destination, course->runners[i].marker_color);
-        }
-        for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
-            DrawCombatBar(&course->raiders[i], camera,
-                          destination, i == agent->combat.target_index ? WORLD_GOLD :
-                          WORLD_DANGER);
+        if (combat_presentation) {
+            DrawCombatBar(CombatCameraOpponent(course, agent), camera,
+                          destination, WORLD_GOLD);
+        } else {
+            for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
+                DrawCombatBar(&course->runners[i].agent, camera,
+                              destination, course->runners[i].marker_color);
+            }
+            for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
+                DrawCombatBar(&course->raiders[i], camera,
+                              destination,
+                              i == agent->combat.target_index ? WORLD_GOLD :
+                                                                WORLD_DANGER);
+            }
         }
     }
     Rectangle road_status = ViewportRectangle(
@@ -15923,11 +15994,13 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     EndMode3D();
     EndTextureMode();
     PresentTarget(target, destination);
+    bool combat_presentation = course != NULL && course->alarm_active &&
+                               camera.projection == CAMERA_PERSPECTIVE;
 
     int32_t room_index = StreetCameraBaseShot(street_camera_rig.shot);
     int32_t room_count = (int32_t)(sizeof(STREET_CAMERA_SHOTS) /
                                    sizeof(STREET_CAMERA_SHOTS[0]));
-    if (room_index >= 0 && room_index < room_count) {
+    if (!combat_presentation && room_index >= 0 && room_index < room_count) {
         const char *room_name = STREET_CAMERA_SHOTS[room_index].name;
         int32_t title_width = CcOverlayMeasureText(room_name, 10);
         DrawRectangleRounded(
@@ -15936,8 +16009,11 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
             0.24f, 4, (Color){4, 10, 14, 202});
         DrawViewportText(room_name, destination, 19, 14, 10, WORLD_GOLD);
     }
-    DrawStreetTraversalPortals(agent, camera, destination,
-                               target.texture.width, target.texture.height);
+    if (!combat_presentation) {
+        DrawStreetTraversalPortals(agent, camera, destination,
+                                   target.texture.width,
+                                   target.texture.height);
+    }
 
     WorldLabel labels[20];
     int32_t count = 0;
@@ -16006,17 +16082,24 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                                         CC_LOCAL_DUNGEON_Z - 0.70f},
                                        CcDungeonStateName(dungeon->state), WORLD_VIOLET};
     }
-    DrawLabels(labels, count, camera, destination);
+    if (!combat_presentation) {
+        DrawLabels(labels, count, camera, destination);
+    }
     if (course != NULL && course->alarm_active) {
         DrawCombatBar(agent, camera, destination, WORLD_TEAL);
-        for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
-            DrawCombatBar(&course->runners[i].agent, camera,
-                          destination, course->runners[i].marker_color);
-        }
-        for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
-            DrawCombatBar(&course->raiders[i], camera, destination,
-                          i == agent->combat.target_index ? WORLD_GOLD :
-                          WORLD_DANGER);
+        if (combat_presentation) {
+            DrawCombatBar(CombatCameraOpponent(course, agent), camera,
+                          destination, WORLD_GOLD);
+        } else {
+            for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
+                DrawCombatBar(&course->runners[i].agent, camera,
+                              destination, course->runners[i].marker_color);
+            }
+            for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
+                DrawCombatBar(&course->raiders[i], camera, destination,
+                              i == agent->combat.target_index ? WORLD_GOLD :
+                                                               WORLD_DANGER);
+            }
         }
     }
     if (draw_hero_rig_debug &&

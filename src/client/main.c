@@ -40,6 +40,7 @@ typedef struct LocalState {
     bool journey_combat_active;
     bool journey_parley_active;
     bool movement_reticle_valid;
+    bool movement_reticle_accepted;
 } LocalState;
 
 typedef struct ActionReelState {
@@ -317,6 +318,7 @@ static void ResetLocalState(LocalState *local)
     local->movement_reticle = (Vector2){0};
     local->movement_reticle_age = 0.0f;
     local->movement_reticle_valid = false;
+    local->movement_reticle_accepted = false;
     local->market_interior = false;
     local->journey_travel_active = false;
     local->journey_combat_active = false;
@@ -510,6 +512,11 @@ static void UpdateActionReel(LocalState *local, ActionReelState *reel,
             CcLocalAgentUpdate(opponent, delta_time, false);
             RecordActionReelImpact(&local->course, hero, opponent);
             RecordActionReelImpact(&local->course, opponent, hero);
+            /* The reel is scripted, but it should exercise the same explicit
+               target contract as live play. A focus point alone must never
+               be enough to move the camera. */
+            hero->combat.target_index =
+                opponent->combat.life_state == CC_LIFE_ALIVE ? 0 : -1;
             if (reel->stage_frame > 390) reel->complete = true;
             break;
         default:
@@ -970,6 +977,19 @@ static void DrawLocalMovementReticle(const LocalState *local,
     Vector2 point = local->movement_reticle;
     float pulse = 1.0f + 0.12f * sinf(local->movement_reticle_age * 12.0f);
     float arm = 7.0f * pulse;
+    if (local->movement_reticle_accepted) {
+        Color accepted = CC_GOLD;
+        DrawCircleLines((int)lroundf(point.x), (int)lroundf(point.y),
+                        arm, accepted);
+        DrawCircleV(point, 1.8f, TEAL);
+        DrawLineEx((Vector2){point.x - arm - 3.0f, point.y},
+                   (Vector2){point.x - arm + 1.0f, point.y},
+                   2.0f, accepted);
+        DrawLineEx((Vector2){point.x + arm - 1.0f, point.y},
+                   (Vector2){point.x + arm + 3.0f, point.y},
+                   2.0f, accepted);
+        return;
+    }
     DrawLineEx((Vector2){point.x - arm, point.y - arm},
                (Vector2){point.x + arm, point.y + arm}, 2.0f, DANGER);
     DrawLineEx((Vector2){point.x + arm, point.y - arm},
@@ -1756,26 +1776,31 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                     &local->course, &local->agent, mouse, local_target,
                     local_bounds);
             if (combat_target >= 0) {
+                local->movement_reticle = mouse;
+                local->movement_reticle_age = 0.0f;
+                local->movement_reticle_valid = true;
+                local->movement_reticle_accepted = true;
                 (void)snprintf(
                     message, message_capacity,
                     "Raider %d targeted; you close distance and fight automatically.",
                     combat_target + 1);
             } else {
-                if (!local->market_interior && local->course.alarm_active) {
-                    CcLocalCourseClearPlayerTarget(&local->agent);
-                }
                 bool movement_accepted = CcLocalAgentPickTarget(
                     &local->agent, mouse, local_target, local_bounds,
                     local->market_interior);
-                if (!movement_accepted &&
-                    CheckCollisionPointRec(mouse, local_bounds)) {
+                bool in_local_view = CheckCollisionPointRec(
+                    mouse, local_bounds);
+                if (in_local_view) {
                     local->movement_reticle = mouse;
                     local->movement_reticle_age = 0.0f;
                     local->movement_reticle_valid = true;
-                } else if (movement_accepted) {
-                    local->movement_reticle_valid = false;
+                    local->movement_reticle_accepted = movement_accepted;
                 }
                 if (movement_accepted) {
+                    if (!local->market_interior &&
+                        local->course.alarm_active) {
+                        CcLocalCourseClearPlayerTarget(&local->agent);
+                    }
                     const char *navigation =
                         CcLocalAgentNavigationName(&local->agent);
                     if (navigation != NULL) {
@@ -1788,7 +1813,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                             message, message_capacity,
                             "Moving toward the selected ground; combat target disengaged.");
                     }
-                } else if (CheckCollisionPointRec(mouse, local_bounds)) {
+                } else if (in_local_view) {
                     (void)snprintf(
                         message, message_capacity,
                         "That point is blocked; choose another visible patch of ground.");
@@ -1802,7 +1827,9 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             local->market_interior, advance_course);
         if (local->movement_reticle_valid) {
             local->movement_reticle_age += delta_time;
-            if (local->movement_reticle_age > 0.75f) {
+            float reticle_lifetime = local->movement_reticle_accepted ?
+                                     0.48f : 0.75f;
+            if (local->movement_reticle_age > reticle_lifetime) {
                 local->movement_reticle_valid = false;
             }
         }
@@ -2554,11 +2581,17 @@ int main(int argc, char **argv)
         bool performance_failed = render_benchmark_minimum_fps > 0.0 &&
                                   frames_per_second <
                                       render_benchmark_minimum_fps;
-        bool skin_layout_failed = final_renderer_stats.skin_updates != 1 ||
-            final_renderer_stats.skinned_meshes >
-                CC_LOCAL_HERO_RUNTIME_MESH_BUDGET ||
+        bool hero_layout_failed =
             final_renderer_stats.high_detail_characters != 1 ||
             final_renderer_stats.low_detail_characters <= 0;
+        bool skin_layout_failed = screen_first_hero ?
+            final_renderer_stats.skin_updates != 0 ||
+                final_renderer_stats.skinned_meshes != 0 ||
+                hero_layout_failed :
+            final_renderer_stats.skin_updates != 1 ||
+                final_renderer_stats.skinned_meshes >
+                    CC_LOCAL_HERO_RUNTIME_MESH_BUDGET ||
+                hero_layout_failed;
         if (performance_failed) {
             (void)fprintf(stderr,
                           "render performance budget failed: %.1f FPS < %.1f FPS\n",

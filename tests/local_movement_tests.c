@@ -2062,7 +2062,6 @@ int main(void)
     shoulder_course.raiders_retreating = false;
     shoulder_course.raiders[0].position = (Vector3){
         18.20f, CcLocalTerrainHeightAt(18.20f, 9.65f), 9.65f};
-    shoulder_player.combat.target_index = 0;
     Camera3D shoulder_base = {0};
     for (int32_t frame = 0; frame < 120; ++frame) {
         camera_clock += 1.0f / 60.0f;
@@ -2071,6 +2070,44 @@ int main(void)
             click_target.texture.height);
     }
     Camera3D shoulder_camera = shoulder_base;
+    for (int32_t frame = 0; frame < 90; ++frame) {
+        camera_clock += 1.0f / 60.0f;
+        shoulder_camera = CcLocalCombatCameraInternal(
+            shoulder_base, &shoulder_player, &shoulder_course,
+            camera_clock, true, click_target.texture.height);
+    }
+    if (shoulder_camera.projection != CAMERA_ORTHOGRAPHIC) {
+        (void)fprintf(
+            stderr,
+            "combat camera chose an unselected raider: projection %d\n",
+            shoulder_camera.projection);
+        return 1;
+    }
+
+    /* The portrait-sized physical box can become a thin target in a wide
+       room shot. A click just outside that box still selects the visible
+       body through the small screen-space target halo. */
+    Vector2 raider_center_art = GetWorldToScreenEx(
+        (Vector3){shoulder_course.raiders[0].position.x,
+                  shoulder_course.raiders[0].position.y + 1.10f,
+                  shoulder_course.raiders[0].position.z},
+        shoulder_base, click_target.texture.width,
+        click_target.texture.height);
+    Vector2 raider_near_screen = {
+        (raider_center_art.x + 17.0f) * click_viewport.width /
+            (float)click_target.texture.width,
+        raider_center_art.y * click_viewport.height /
+            (float)click_target.texture.height,
+    };
+    int32_t picked_raider = CcLocalCoursePickPlayerTarget(
+        &shoulder_course, &shoulder_player, raider_near_screen,
+        click_target, click_viewport);
+    if (picked_raider != 0 || shoulder_player.combat.target_index != 0) {
+        (void)fprintf(stderr,
+                      "near-body combat click missed raider: %d\n",
+                      picked_raider);
+        return 1;
+    }
     for (int32_t frame = 0; frame < 180; ++frame) {
         camera_clock += 1.0f / 60.0f;
         shoulder_camera = CcLocalCombatCameraInternal(
