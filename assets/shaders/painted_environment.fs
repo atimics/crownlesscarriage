@@ -119,14 +119,12 @@ void main()
     color += lightColor * accentEdge * 0.055 * detailPresence;
 
     if (foregroundReveal > 0.001) {
-        float coverage = smoothstep(revealCutHeight - 0.10,
-                                    revealCutHeight + 0.08,
-                                    fragPosition.y);
-        if (orderedDither4x4(gl_FragCoord.xy) <
-            coverage * foregroundReveal) discard;
-        float belowCut = step(fragPosition.y, revealCutHeight);
+        float activeCutHeight = mix(revealCutHeight + 8.0,
+                                    revealCutHeight, foregroundReveal);
+        if (fragPosition.y > activeCutHeight) discard;
+        float belowCut = step(fragPosition.y, activeCutHeight);
         float cutBand = (1.0 - smoothstep(0.02, 0.13,
-                                          revealCutHeight - fragPosition.y)) *
+                                          activeCutHeight - fragPosition.y)) *
                         belowCut;
         color = mix(color, coloredInk,
                     cutBand * 0.72 * foregroundReveal);

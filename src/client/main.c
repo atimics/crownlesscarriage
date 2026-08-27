@@ -51,8 +51,27 @@ typedef struct ActionReelState {
     bool complete;
 } ActionReelState;
 
+typedef enum GameplayReelStage {
+    GAMEPLAY_REEL_WALK_TO_NOTICE = 0,
+    GAMEPLAY_REEL_CHOOSE_PROMISE,
+    GAMEPLAY_REEL_WALK_TO_MARKET,
+    GAMEPLAY_REEL_BUY_CARGO,
+    GAMEPLAY_REEL_LEAVE_MARKET,
+    GAMEPLAY_REEL_WALK_TO_CARRIAGE,
+    GAMEPLAY_REEL_CHOOSE_ROUTE,
+    GAMEPLAY_REEL_TRAVEL,
+    GAMEPLAY_REEL_ROAD_CHOICE,
+    GAMEPLAY_REEL_ROAD_COMBAT,
+    GAMEPLAY_REEL_RESUME_TRAVEL,
+    GAMEPLAY_REEL_ARRIVE_AT_MARKET,
+    GAMEPLAY_REEL_DELIVER_CARGO,
+    GAMEPLAY_REEL_LEAVE_AFTER_DELIVERY,
+    GAMEPLAY_REEL_VILLAGE_ALARM,
+    GAMEPLAY_REEL_VILLAGE_COMBAT
+} GameplayReelStage;
+
 typedef struct GameplayReelState {
-    int32_t stage;
+    GameplayReelStage stage;
     int32_t stage_frame;
     int32_t captured_frames;
     int32_t journey_legs;
@@ -90,14 +109,6 @@ static const CcKingdom *KingdomById(const CcSim *sim, CcId id)
 {
     for (int32_t i = 0; i < sim->kingdom_count; ++i) {
         if (sim->kingdoms[i].id == id) return &sim->kingdoms[i];
-    }
-    return NULL;
-}
-
-static const CcFaction *FactionById(const CcSim *sim, CcId id)
-{
-    for (int32_t i = 0; i < sim->faction_count; ++i) {
-        if (sim->factions[i].id == id) return &sim->factions[i];
     }
     return NULL;
 }
@@ -146,6 +157,20 @@ static int32_t FirstActiveSituationIndex(const CcSim *sim)
         if (sim->situations[i].status == CC_SITUATION_ACTIVE) return i;
     }
     return -1;
+}
+
+static int32_t FirstDeliverySituationIndex(const CcSim *sim)
+{
+    if (sim == NULL) return -1;
+    for (int32_t i = 0; i < sim->situation_count; ++i) {
+        const CcSituation *situation = &sim->situations[i];
+        if (situation->status == CC_SITUATION_ACTIVE &&
+            (situation->kind == CC_SITUATION_RELIEF_DELIVERY ||
+             situation->kind == CC_SITUATION_BLACK_MARKET_DELIVERY)) {
+            return i;
+        }
+    }
+    return FirstActiveSituationIndex(sim);
 }
 
 static int32_t StepActiveSituationIndex(const CcSim *sim, int32_t selected,
@@ -604,14 +629,13 @@ static void DrawTownCombatPanel(const LocalState *local)
         }
     }
 
-    DrawPanel((Rectangle){946.0f, 82.0f, 314.0f, 568.0f}, PANEL);
-    CcOverlayDrawText("VILLAGE UNDER RAID", 966, 102, 11, DANGER);
-    CcOverlayDrawText("HOLD THE WAYSTATION", 966, 125, 18, INK);
-    CcOverlayDrawText("The market is closed while steel is drawn.",
-             966, 153, 9, MUTED);
-    DrawBar(966, 181, 124, "YOU",
+    DrawPanel((Rectangle){974.0f, 96.0f, 266.0f, 196.0f},
+              (Color){10, 17, 21, 236});
+    CcOverlayDrawText("VILLAGE RAID", 992, 114, 11, DANGER);
+    CcOverlayDrawText("HOLD THE STREET", 992, 137, 17, INK);
+    DrawBar(992, 169, 92, "YOU",
             (int32_t)lroundf(local->agent.combat.health), TEAL);
-    DrawBar(966, 202, 124, "RAIDERS",
+    DrawBar(992, 190, 92, "RAIDERS",
             local->course.raider_resolve, DANGER);
 
     int32_t target_index = local->agent.combat.target_index;
@@ -619,50 +643,19 @@ static void DrawTownCombatPanel(const LocalState *local)
         target_index >= 0 && target_index < CC_LOCAL_RAIDER_COUNT &&
         local->course.raiders[target_index].combat.life_state == CC_LIFE_ALIVE ?
         &local->course.raiders[target_index] : NULL;
-    CcOverlayDrawText("LOCKED TARGET", 966, 254, 11, TEAL);
     if (target != NULL) {
-        CcLocalDrawAgentPortrait3D(
-            target, (Rectangle){966.0f, 276.0f, 64.0f, 76.0f});
-        CcOverlayDrawText(TextFormat("RAIDER %d", target_index + 1),
-                 1040, 280, 12, CC_GOLD);
+        CcOverlayDrawText(TextFormat("TARGET  RAIDER %d", target_index + 1),
+                 992, 224, 10, CC_GOLD);
         CcOverlayDrawText(TextFormat("%d HP  /  %d POSTURE",
                             (int32_t)lroundf(target->combat.health),
                             (int32_t)lroundf(target->combat.posture)),
-                 1040, 303, 9, INK);
-        DrawTwoLineText("Your attacks stay locked while both fighters remain in view.",
-                        1040, 326, 27U, 9, MUTED);
+                 992, 246, 9, INK);
     } else {
-        CcOverlayDrawText("NO TARGET", 966, 281, 13, CC_GOLD);
-        DrawTwoLineText("Click a standing raider to lock on and close the distance.",
-                        966, 306, 40U, 10, INK);
+        CcOverlayDrawText("CLICK A RAIDER TO ENGAGE", 992, 232, 10, CC_GOLD);
     }
-
-    CcOverlayDrawText("THE LINE", 966, 377, 11, TEAL);
-    CcOverlayDrawText(TextFormat("GUARDS STANDING  %d / %d",
-                        guards_standing, CC_LOCAL_COURSE_RUNNER_COUNT),
-             966, 402, 10, INK);
-    CcOverlayDrawText(TextFormat("GUARDS ENGAGED   %d", guards_engaged),
-             966, 423, 10, guards_engaged > 0 ? TEAL : MUTED);
-    CcOverlayDrawText(TextFormat("RAIDERS STANDING %d / %d",
-                        raiders_standing, CC_LOCAL_RAIDER_COUNT),
-             966, 444, 10, raiders_standing > 0 ? DANGER : MUTED);
-
-    CcOverlayDrawText("CURRENT OBJECTIVE", 966, 480, 11, TEAL);
-    DrawTwoLineText(local->course.raiders_retreating ?
-                    "The raiders are breaking. Hold the street until they clear the gate." :
-                    "Break their resolve. Protect the guards and keep the market road open.",
-                    966, 504, 40U, 10, INK);
-    CcOverlayDrawText("LAST CLASH", 966, 565, 11, TEAL);
-    CcOverlayDrawText(local->course.last_outcome == CC_COMBAT_OUTCOME_NONE ?
-             "NO CLEAN CONTACT YET" :
-             TextFormat("%s  /  %s",
-                        CcLocalCombatTeamName(local->course.last_attacker_team),
-                        CcLocalCombatOutcomeName(local->course.last_outcome)),
-             966, 589, 10,
-             local->course.last_attacker_team == CC_COMBAT_PLAYER ?
-                 CC_GOLD : DANGER);
-    CcOverlayDrawText("1-3 skills   SPACE strike   X guard", 966, 621, 9,
-             CC_VIOLET);
+    CcOverlayDrawText(TextFormat("GUARDS %d  /  RAIDERS %d  /  ENGAGED %d",
+                        guards_standing, raiders_standing, guards_engaged),
+             992, 270, 8, MUTED);
 }
 
 static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
@@ -672,122 +665,52 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
                 local->journey_parley_active;
     if (road) {
         const CcRoute *route = CcSimRoute(sim, sim->journey.route_id);
-        const CcSituation *situation = CcSimSituation(
-            sim, sim->journey.situation_id);
         const CcSettlement *destination = CcSimSettlement(
             sim, sim->journey.destination_id);
         const CcBanditGroup *bandits = BanditsByRoute(
             sim, sim->journey.route_id);
-        DrawPanel((Rectangle){946.0f, 82.0f, 314.0f, 568.0f}, PANEL);
+        DrawPanel((Rectangle){974.0f, 96.0f, 266.0f, 210.0f},
+                  (Color){10, 17, 21, 236});
         if (local->journey_travel_active) {
             int32_t progress = sim->carriage.progress_milli / 10;
-            int32_t remaining = sim->journey.total_subticks -
-                                sim->journey.elapsed_subticks;
-            int32_t hours = (remaining + 3599) / 3600;
-            CcOverlayDrawText("JOURNEY UNDER WAY", 966, 102, 11, TEAL);
+            CcOverlayDrawText("ON THE ROAD", 992, 114, 11, TEAL);
             CcOverlayDrawText(destination != NULL ? destination->name : "THE FAR GATE",
-                     966, 125, 18, INK);
-            CcOverlayDrawText(TextFormat("%d%% complete   about %d game-hours remain",
-                                progress, hours), 966, 153, 10, CC_GOLD);
-            DrawBar(966, 181, 124, "PROGRESS", progress, TEAL);
-            DrawBar(966, 202, 124, "DANGER", sim->journey.danger, DANGER);
-            DrawBar(966, 223, 124, "ROAD",
+                     992, 137, 18, INK);
+            DrawBar(992, 174, 92, "PROGRESS", progress, TEAL);
+            DrawBar(992, 195, 92, "DANGER", sim->journey.danger, DANGER);
+            DrawBar(992, 216, 92, "ROAD",
                     route != NULL ? route->condition : 0, CC_GOLD);
-            CcOverlayDrawText("THE WORLD KEEPS TURNING", 966, 264, 11, TEAL);
-            DrawTwoLineText(
-                "Shipments move each day; markets, hunger, threats, and promises update at calendar boundaries.",
-                966, 289, 40U, 10, INK);
-            CcOverlayDrawText("AUTHORITATIVE CARRIAGE", 966, 367, 11, TEAL);
-            CcOverlayDrawText(TextFormat("route progress  %d / 1000",
-                                sim->carriage.progress_milli),
-                     966, 392, 11, INK);
-            CcOverlayDrawText(TextFormat("speed  %.2f m/s   condition  %d%%",
-                                (float)sim->carriage.speed_milli_per_second /
-                                    1000.0f,
-                                sim->carriage.condition),
-                     966, 416, 10, MUTED);
-            if (bandits != NULL) {
-                CcOverlayDrawText(TextFormat("%s / %s",
-                                    CcBanditCampSizeName(bandits->camp_size),
-                                    CcBanditRaidPhaseName(bandits->raid_phase)),
-                         966, 441, 9, DANGER);
-            }
-            CcOverlayDrawText("REAL-TIME CONTRACT", 966, 465, 11, TEAL);
-            DrawTwoLineText(
-                "Every 60 Hz runtime step advances this journey. Opening a map or decision pauses it.",
-                966, 489, 40U, 10, INK);
-            CcOverlayDrawText(TextFormat("TIME SCALE  %d GAME MIN / REAL SEC",
-                                sim->clock.game_minutes_per_second),
-                     966, 568, 9, CC_VIOLET);
-            CcOverlayDrawText(route != NULL &&
-                     CcSimRouteCrossesWarBorder(sim, route->id) ?
-                     "WAR BORDER / ONLY THIS CARRIAGE MAY PASS" :
-                     "F5 saves the carriage exactly where it is.",
-                     966, 606, 9, CC_GOLD);
+            CcOverlayDrawText("The carriage keeps moving.",
+                     992, 256, 9, MUTED);
+            CcOverlayDrawText("F5  SAVE JOURNEY", 992, 278, 9, CC_GOLD);
             return;
         }
-        CcOverlayDrawText("JOURNEY IN PROGRESS", 966, 102, 11, TEAL);
-        CcOverlayDrawText(destination != NULL ? destination->name : "THE FAR GATE",
-                 966, 125, 18, INK);
-        CcOverlayDrawText(TextFormat("%s controls this interruption",
-                            bandits != NULL ? bandits->name :
-                                              "Road collectors"),
-                 966, 151, 9, DANGER);
-        DrawBar(966, 181, 124, "DANGER", sim->journey.danger, DANGER);
-        DrawBar(966, 202, 124, "SECURITY",
-                route != NULL ? route->security : 0, TEAL);
-        DrawBar(966, 223, 124, "ROAD",
-                route != NULL ? route->condition : 0, CC_GOLD);
-
-        CcOverlayDrawText(local->journey_parley_active ? "THE COLLECTOR" :
-                                               "THE ATTACKER",
-                 966, 264, 11, TEAL);
+        CcOverlayDrawText(local->journey_parley_active ? "ROAD COLLECTOR" :
+                                               "ROAD COMBAT",
+                 992, 114, 11, local->journey_parley_active ? TEAL : DANGER);
+        CcOverlayDrawText(bandits != NULL ? bandits->name : "THE CORDON",
+                 992, 137, 17, INK);
         CcLocalDrawAgentPortrait3D(
             &local->course.raiders[0],
-            (Rectangle){966.0f, 282.0f, 60.0f, 72.0f});
+            (Rectangle){992.0f, 168.0f, 52.0f, 62.0f});
         CcOverlayDrawText(local->journey_parley_active ? "ROAD COLLECTOR" :
                                                "CORDON RAIDER",
-                 1036, 286, 11, local->journey_parley_active ? CC_GOLD :
+                 1054, 172, 10, local->journey_parley_active ? CC_GOLD :
                                                                DANGER);
-        CcOverlayDrawText(CcNpcRoleName(local->course.raiders[0].appearance.role),
-                 1036, 307, 9, MUTED);
-        DrawTwoLineText(local->journey_parley_active ?
-                        "Watching your hands; waiting for an offer." :
-                        "Committed to the line; reading your guard.",
-                        1036, 326, 27U, 9, INK);
-
-        CcOverlayDrawText("THE PROMISE BEYOND", 966, 367, 11, TEAL);
-        CcOverlayDrawText(situation != NULL && situation->affected_name[0] != '\0' ?
-                 situation->affected_name : "A local household",
-                 966, 391, 13, CC_GOLD);
-        DrawTwoLineText(situation != NULL ?
-                        TextFormat("waits for %s to reach the destination.",
-                                   CcSituationKindName(situation->kind)) :
-                        "waits for the carriage to arrive.",
-                        966, 414, 40U, 10, INK);
-
-        CcOverlayDrawText("CURRENT OBJECTIVE", 966, 465, 11, TEAL);
+        DrawBar(1054, 199, 56, "HP",
+                (int32_t)lroundf(local->course.raiders[0].combat.health),
+                DANGER);
         if (local->journey_parley_active) {
-            DrawTwoLineText(TextFormat(
-                                "Reach the collector and press F to offer %d crowns.",
+            CcOverlayDrawText(TextFormat("F  PAY %d CROWNS",
                                 sim->journey.bargain_cost),
-                            966, 489, 40U, 10, INK);
-            CcOverlayDrawText("Traffic moves; bandit influence rises.",
-                     966, 532, 9, DANGER);
+                     992, 256, 10, CC_GOLD);
         } else {
-            DrawTwoLineText("Fight beside the carriage until the cordon breaks or both attackers fall.",
-                            966, 489, 40U, 10, INK);
-            CcOverlayDrawText("Security and protected traffic will rise.",
-                     966, 532, 9, TEAL);
+            CcOverlayDrawText("1-3 SKILLS  /  SPACE STRIKE",
+                     992, 256, 9, CC_GOLD);
         }
-        CcOverlayDrawText(TextFormat("ROUTE CAPACITY %d   PROVISIONS RESERVED %d",
-                            route != NULL ? route->capacity : 0,
-                            sim->journey.fare_reserved),
-                 966, 568, 9, MUTED);
-        CcOverlayDrawText(local->journey_parley_active ?
-                 "No attack: movement and proximity own this choice." :
-                 "Live bodies, weapon contacts, and defeat own this choice.",
-                 966, 606, 9, CC_VIOLET);
+        CcOverlayDrawText(destination != NULL ?
+                 TextFormat("ROAD TO %s", destination->name) : "OPEN THE ROAD",
+                 992, 280, 8, MUTED);
         return;
     }
     if (!local->market_interior && local->course.alarm_active) {
@@ -796,146 +719,48 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
     }
     const CcSettlement *place = CcSimSettlement(sim, sim->player.location_id);
     if (place == NULL) return;
-    DrawPanel((Rectangle){946.0f, 82.0f, 314.0f, 568.0f}, PANEL);
+    DrawPanel((Rectangle){974.0f, 96.0f, 266.0f, 236.0f},
+              (Color){10, 17, 21, 236});
     const CcKingdom *kingdom = KingdomById(sim, place->kingdom_id);
-    CcOverlayDrawText(kingdom != NULL ? kingdom->name : "UNCLAIMED", 966, 102, 11,
+    CcOverlayDrawText(kingdom != NULL ? kingdom->name : "UNCLAIMED", 992, 114, 10,
              KingdomColor(sim, place->kingdom_id));
-    CcOverlayDrawText(TextFormat("%s / %s", CcSettlementSizeName(place->size),
-                        CcSettlementFunctionName(place->function)),
-             966, 123, 18, INK);
-    CcOverlayDrawText(TextFormat("%d people / services %d of %d", place->population,
-                        CcSettlementServiceCount(place),
-                        CcSettlementServiceCapacity(place->size)),
-             966, 149, 10, MUTED);
-    DrawBar(966, 176, 124, "HUNGER", place->hunger, DANGER);
-    DrawBar(966, 197, 124, "SECURITY", place->security, TEAL);
-    DrawBar(966, 218, 124, "PROSPERITY", place->prosperity, CC_GOLD);
-
-    CcOverlayDrawText("WHAT THE MARKET KNOWS", 966, 254, 11, TEAL);
-    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
-        int y = 274 + good * 18;
-        CcOverlayDrawText(TextFormat("%d  %-9s", good + 1, CcGoodName((CcGood)good)),
-                 966, y, 10, INK);
-        CcOverlayDrawText(TextFormat("%2d cr", place->price[good]), 1086, y, 10, CC_GOLD);
-        CcOverlayDrawText(TextFormat("%3d here", place->stock[good]), 1152, y, 9,
-                 place->stock[good] < place->reserve_target[good] ? DANGER : MUTED);
-    }
+    CcOverlayDrawText(place->name, 992, 136, 18, INK);
+    DrawBar(992, 170, 92, "HUNGER", place->hunger, DANGER);
+    DrawBar(992, 191, 92, "SECURITY", place->security, TEAL);
+    DrawBar(992, 212, 92, "PROSPERITY", place->prosperity, CC_GOLD);
     bool can_trade = local->market_interior &&
                      GridDistance(LocalPosition(local), INTERIOR_COUNTER) < 2.25f;
-    CcOverlayDrawText(can_trade ? "1-6 BUY  /  SHIFT+1-6 SELL" :
-             local->market_interior ? "Walk to the factor to trade." :
-             "Enter the market house to trade.",
-             966, 388, 10, can_trade ? CC_GOLD : MUTED);
-
     const CcSituation *accepted = CcSimAcceptedSituation(sim);
     const CcSituation *situation = accepted != NULL ? accepted :
         CcSimSituationForSettlement(sim, place->id);
-    if (local->market_interior) {
-        CcNpcAppearance mara = CcNpcMaraAppearance();
-        CcOverlayDrawText("MARA / FACTOR", 966, 411, 11, TEAL);
-        CcLocalDrawNpcPortrait3D(
-            &mara, (Rectangle){966.0f, 432.0f, 64.0f, 75.0f},
-            can_trade ? CC_NPC_PORTRAIT_TALKING :
-                        CC_NPC_PORTRAIT_NEUTRAL);
-        CcOverlayDrawText("MARKET FACTOR", 1040, 436, 11, CC_GOLD);
-        CcOverlayDrawText(can_trade ? "READY TO TRADE" : "AT THE COUNTER",
-                 1040, 457, 9, can_trade ? TEAL : MUTED);
-        if (situation != NULL) {
-            CcOverlayDrawText(accepted != NULL ? "YOUR CHARTER" :
-                                       CcSituationKindName(situation->kind),
-                     1040, 480, 8, SituationColor(situation->kind));
-            CcOverlayDrawText(accepted != NULL ?
-                     TextFormat("DUE DAY %d", situation->deadline_day) :
-                     TextFormat("Q INSPECT  +%" PRId64, situation->reward),
-                     1040, 496, 8, INK);
-        } else {
-            CcOverlayDrawText("NO CHARTER TODAY", 1040, 480, 8, MUTED);
-        }
+    CcOverlayDrawText(local->market_interior ? "MARKET" :
+                     accepted != NULL ? "YOUR PROMISE" : "NEXT STEP",
+             992, 248, 10, TEAL);
+    if (local->market_interior && situation != NULL &&
+        (situation->kind == CC_SITUATION_RELIEF_DELIVERY ||
+         situation->kind == CC_SITUATION_BLACK_MARKET_DELIVERY)) {
+        CcGood good = situation->good;
+        CcOverlayDrawText(TextFormat("%s  %d cr  /  %d here",
+                            CcGoodName(good), place->price[good],
+                            place->stock[good]),
+                 992, 271, 10, INK);
+        CcOverlayDrawText(can_trade ?
+                 TextFormat("%d BUY  /  SHIFT+%d SELL", good + 1, good + 1) :
+                 "Walk to Mara's counter.",
+                 992, 296, 9, can_trade ? CC_GOLD : MUTED);
+    } else if (situation != NULL) {
+        char next[192];
+        SituationNextAction(sim, situation, next, sizeof(next));
+        DrawTwoLineText(next, 992, 271, 35U, 9, INK);
+        CcOverlayDrawText(accepted != NULL ?
+                 TextFormat("DUE %d  /  REWARD +%" PRId64,
+                            situation->deadline_day, situation->reward) :
+                 "Q  VIEW PROMISES",
+                 992, 310, 8, accepted != NULL ? CC_GOLD : MUTED);
     } else {
-        CcOverlayDrawText(accepted != NULL ? "YOUR CHARTER" : "TOWN TALK",
-                 966, 411, 11, TEAL);
-        if (situation != NULL) {
-            CcOverlayDrawText(CcSituationKindName(situation->kind), 966, 435, 13,
-                     SituationColor(situation->kind));
-            if (accepted != NULL) {
-                char next[192];
-                SituationNextAction(sim, situation, next, sizeof(next));
-                CcOverlayDrawText(situation->affected_name[0] != '\0' ?
-                         situation->affected_name : "Someone is waiting",
-                         966, 456, 9, MUTED);
-                DrawTwoLineText(next, 966, 473, 42U, 9, INK);
-                CcOverlayDrawText(situation->quantity > 0 ?
-                         TextFormat("%d/%d   due %d", situation->progress,
-                                    situation->quantity,
-                                    situation->deadline_day) :
-                         TextFormat("due day %d", situation->deadline_day),
-                         966, 507, 9, CC_GOLD);
-            } else {
-                const CcFaction *issuer = FactionById(
-                    sim, situation->issuer_faction_id);
-                CcOverlayDrawText(situation->sponsor_name[0] != '\0' ?
-                         situation->sponsor_name :
-                         issuer != NULL ? issuer->name : "Quiet sponsors",
-                         966, 456, 10, MUTED);
-                CcOverlayDrawText(TextFormat("Q to inspect   due %d   +%" PRId64,
-                                    situation->deadline_day,
-                                    situation->reward),
-                         966, 477, 10, INK);
-            }
-        } else {
-            CcOverlayDrawText("No charter here today.", 966, 435, 12, MUTED);
-        }
-    }
-    const CcEvent *event = CcSimRecentEvent(sim, 0);
-    CcOverlayDrawText("LAST CONSEQUENCE", 966, 522, 11, TEAL);
-    if (event != NULL) {
-        CcOverlayDrawText(TextFormat("DAY %d / %s", event->day, CcEventKindName(event->kind)),
-                 966, 545, 9, MUTED);
-        const char *text = event->text;
-        char first[44] = {0};
-        char second[44] = {0};
-        size_t length = strlen(text);
-        size_t split = length > 39U ? 39U : length;
-        while (split > 0U && split < length && text[split] != ' ') split -= 1U;
-        if (split == 0U) split = length > 39U ? 39U : length;
-        (void)snprintf(first, sizeof(first), "%.*s", (int)split, text);
-        if (split < length) (void)snprintf(second, sizeof(second), "%s", text + split + 1U);
-        CcOverlayDrawText(first, 966, 566, 10, INK);
-        if (second[0] != '\0') CcOverlayDrawText(second, 966, 582, 10, INK);
-    }
-    if (local->agent.morphology == CC_MORPHOLOGY_BIPED) {
-        CcLocalDrawAgentPortrait3D(
-            &local->agent, (Rectangle){966.0f, 596.0f, 44.0f, 48.0f});
-        CcOverlayDrawText("CROWNLESS WAYFARER", 1018, 598, 10, TEAL);
-        CcOverlayDrawText(TextFormat("%s / %s",
-                            CcLocalTraversalName(local->agent.traversal),
-                            CcHumanoidActionName(local->agent.humanoid.action)),
-                 1018, 618, 8, CC_VIOLET);
-        CcOverlayDrawText(TextFormat("T%d  MOB %d  GRIP %d  POWER %d",
-                            CcLocalAgentHeroicTier(&local->agent),
-                            local->agent.athletics.level[CC_ATHLETIC_MOBILITY],
-                            local->agent.athletics.level[CC_ATHLETIC_GRIP],
-                            local->agent.athletics.level[CC_ATHLETIC_POWER]),
-                 1018, 635, 8, CC_GOLD);
-    } else if (local->agent.limb_rig.planted_count > 0 &&
-               isfinite(local->agent.limb_rig.support_margin)) {
-        CcOverlayDrawText(TextFormat("ROBOTIC %s / %s / traction %.0f%%",
-                            CcLocalAgentMorphologyName(&local->agent),
-                            CcLocalTraversalName(local->agent.traversal),
-                            local->agent.limb_rig.traction * 100.0f),
-                 966, 605, 9, CC_VIOLET);
-        CcOverlayDrawText(TextFormat("support %d/%d / margin %+.2f / gait %.0f%%",
-                            local->agent.limb_rig.planted_count,
-                            local->agent.limb_rig.morphology.limb_count,
-                            local->agent.limb_rig.support_margin,
-                            local->agent.limb_rig.drive_scale * 100.0f),
-                 966, 621, 9, CC_VIOLET);
-    } else {
-        CcOverlayDrawText(TextFormat("ROBOTIC %s / %s",
-                            CcLocalAgentMorphologyName(&local->agent),
-                            CcLocalTraversalName(local->agent.traversal)),
-                 966, 605, 9, CC_VIOLET);
-        CcOverlayDrawText("support airborne / feet searching", 966, 621, 9, CC_VIOLET);
+        CcOverlayDrawText(local->market_interior ?
+                 "Walk to Mara's counter." : "Explore the street.",
+                 992, 274, 10, MUTED);
     }
 }
 
@@ -1012,22 +837,17 @@ static void DrawCombatSkillCard(const CcLocalAgent *agent,
 
 static void DrawLocalFooter(const CcSim *sim, const LocalState *local)
 {
-    DrawPanel((Rectangle){20.0f, 664.0f, 1240.0f, 76.0f}, PANEL);
+    DrawPanel((Rectangle){20.0f, 674.0f, 1240.0f, 58.0f},
+              (Color){10, 17, 21, 242});
     if (local->journey_travel_active) {
-        CcOverlayDrawText(LocalPrompt(sim, local), 38, 681, 13, CC_GOLD);
-        CcOverlayDrawText(TextFormat("DAY %04d   /   PROGRESS %d%%   /   %d GAME MINUTES PER REAL SECOND",
-                            sim->current_day,
-                            sim->carriage.progress_milli / 10,
-                            sim->clock.game_minutes_per_second),
-                 38, 708, 10, TEAL);
+        CcOverlayDrawText(LocalPrompt(sim, local), 38, 692, 12, CC_GOLD);
+        CcOverlayDrawText(TextFormat("%d%%", sim->carriage.progress_milli / 10),
+                 1194, 692, 11, TEAL);
         return;
     }
     if (local->journey_parley_active) {
-        CcOverlayDrawText(LocalPrompt(sim, local), 38, 681, 13, CC_GOLD);
-        CcOverlayDrawText(TextFormat("PASSAGE %d CROWNS   /   avoids bloodshed   /   strengthens the collectors",
-                            sim->journey.bargain_cost),
-                 38, 708, 10, DANGER);
-        CcOverlayDrawText("BACKSPACE reconsider   F5 save", 1002, 708, 9, MUTED);
+        CcOverlayDrawText(LocalPrompt(sim, local), 38, 692, 12, CC_GOLD);
+        CcOverlayDrawText("BACKSPACE  LEAVE", 1094, 694, 9, MUTED);
         return;
     }
     if (!local->market_interior && local->course.alarm_active) {
@@ -1038,10 +858,10 @@ static void DrawLocalFooter(const CcSim *sim, const LocalState *local)
                                 target + 1,
                                 (int32_t)lroundf(
                                     local->course.raiders[target].combat.health)),
-                     38, 679, 12, DANGER);
+                     38, 687, 11, DANGER);
         } else {
             CcOverlayDrawText("CLICK A RAIDER TO TARGET AND ENGAGE",
-                     38, 679, 12, CC_GOLD);
+                     38, 687, 11, CC_GOLD);
         }
         DrawCombatSkillCard(&local->agent,
                             CC_COMBAT_SKILL_CRUSHING_BLOW, 38, 1);
@@ -1049,15 +869,13 @@ static void DrawLocalFooter(const CcSim *sim, const LocalState *local)
                             CC_COMBAT_SKILL_SUNDER, 240, 2);
         DrawCombatSkillCard(&local->agent,
                             CC_COMBAT_SKILL_SECOND_WIND, 442, 3);
-        CcOverlayDrawText("click ground disengages   SPACE manual strike   X guard",
-                 780, 709, 9, MUTED);
+        CcOverlayDrawText("SPACE STRIKE   X GUARD",
+                 1036, 708, 9, MUTED);
         return;
     }
-    CcOverlayDrawText(LocalPrompt(sim, local), 38, 681, 13, CC_GOLD);
-    CcOverlayDrawText("J jump   G alarm   Q situations   TAB ledger",
-             38, 708, 10, MUTED);
-    CcOverlayDrawText("M map case at carriage   F5 save   F9 load   N new world",
-             804, 693, 10, MUTED);
+    CcOverlayDrawText(LocalPrompt(sim, local), 38, 692, 12, CC_GOLD);
+    CcOverlayDrawText("Q PROMISES   TAB NEWS   M MAP   F5 SAVE",
+             924, 695, 8, MUTED);
 }
 
 static void DrawLocalMovementReticle(const LocalState *local,
@@ -1268,70 +1086,51 @@ static void DrawSettlementPanel(const CcSim *sim, int32_t selected)
     DrawPanel(panel, PANEL);
     const CcMap *map = SelectedVisibleMap(sim, selected);
     const CcSettlement *here = CcSimSettlement(sim, sim->player.location_id);
-    CcOverlayDrawText("CARTOGRAPHER'S CASE", 958, 102, 12, TEAL);
+    CcOverlayDrawText("CHOOSE A ROAD", 958, 102, 12, TEAL);
     CcOverlayDrawText(here != NULL ? here->name : "Unknown stop", 958, 125, 22, INK);
-    CcOverlayDrawText(TextFormat("CROWNS %" PRId64 "   CASE %d/%d", sim->player.coins,
-                        CcPlayerMapCount(sim), sim->player.map_capacity),
+    CcOverlayDrawText(TextFormat("%" PRId64 " crowns", sim->player.coins),
              958, 154, 10, MUTED);
     if (map == NULL) {
-        CcOverlayDrawText("No carried or locally offered", 958, 204, 12, MUTED);
-        CcOverlayDrawText("route maps are available.", 958, 223, 12, MUTED);
+        CcOverlayDrawText("NO ROUTE CHART", 958, 212, 15, MUTED);
+        CcOverlayDrawText("M  close the case", 958, 604, 10, CC_GOLD);
         return;
     }
     const CcRoute *route = CcSimRoute(sim, map->route_id);
-    const CcSettlement *from = route != NULL ? CcSimSettlement(sim, route->from_id) : NULL;
-    const CcSettlement *to = route != NULL ? CcSimSettlement(sim, route->to_id) : NULL;
-    const CcSettlement *maker = CcSimSettlement(sim, map->maker_settlement_id);
-    CcOverlayDrawText("THIS OBJECT DEPICTS", 958, 193, 10, MUTED);
-    CcOverlayDrawText(from != NULL ? from->name : "Unknown", 958, 214, 16, INK);
-    CcOverlayDrawText("TO", 958, 235, 9, MUTED);
-    CcOverlayDrawText(to != NULL ? to->name : "Unknown", 958, 252, 16, INK);
-    CcOverlayDrawText(TextFormat("MAKER  %s", maker != NULL ? maker->name : "unknown"),
-             958, 289, 10, MUTED);
-    CcOverlayDrawText(TextFormat("AGE    %d days", sim->current_day - map->surveyed_day),
-             958, 308, 10, MUTED);
-    DrawBar(958, 337, 124, "ACCURACY", map->accuracy, TEAL);
-    DrawBar(958, 361, 124, "ROAD INK", map->recorded_condition, CC_GOLD);
-    DrawBar(958, 385, 124, "DANGER", map->recorded_danger, DANGER);
-    CcOverlayDrawText("These are recorded claims,", 958, 421, 10, MUTED);
-    CcOverlayDrawText("not live world-state telemetry.", 958, 437, 10, MUTED);
-
     bool owned = map->owner_id == sim->player.id;
     CcId destination_id = route != NULL ? RouteOtherEnd(route, sim->player.location_id) : 0U;
     const CcSettlement *destination = CcSimSettlement(sim, destination_id);
+    CcOverlayDrawText("DESTINATION", 958, 202, 10, MUTED);
+    CcOverlayDrawText(destination != NULL ? destination->name : "ROAD BEGINS ELSEWHERE",
+             958, 225, 18, destination != NULL ? INK : MUTED);
+    DrawBar(958, 277, 124, "ROAD", map->recorded_condition, CC_GOLD);
+    DrawBar(958, 307, 124, "DANGER", map->recorded_danger, DANGER);
+    DrawBar(958, 337, 124, "TRUST", map->accuracy, TEAL);
+    CcOverlayDrawText(map->contraband ? "ILLICIT CHART" : "PHYSICAL CHART",
+             958, 385, 11, map->contraband ? CC_VIOLET : MUTED);
     if (!owned) {
-        CcOverlayDrawText(TextFormat("B  BUY FOR %d CROWNS", map->ask_price),
-                 958, 486, 13, CC_GOLD);
+        CcOverlayDrawText(TextFormat("B  BUY  /  %d CROWNS", map->ask_price),
+                 958, 457, 14, CC_GOLD);
     } else {
-        CcOverlayDrawText(TextFormat("S  SELL FOR %d CROWNS", map->ask_price * 2 / 3),
-                 958, 486, 11, MUTED);
         CcOverlayDrawText(destination != NULL ?
-                 TextFormat("ENTER  FOLLOW TO %s", destination->name) :
-                 "This sheet begins elsewhere.",
-                 958, 511, destination != NULL ? 12 : 11,
+                 "ENTER  START JOURNEY" : "THIS ROAD BEGINS ELSEWHERE",
+                 958, 457, destination != NULL ? 14 : 11,
                  destination != NULL ? CC_GOLD : MUTED);
         if (route != NULL && route->closed && destination != NULL) {
-            CcOverlayDrawText("R  attempt work at the route", 958, 535, 10, TEAL);
+            CcOverlayDrawText("R  WORK ON CLOSED ROAD", 958, 489, 10, TEAL);
         }
     }
-    CcOverlayDrawText("LEFT/RIGHT  leaf through objects", 958, 584, 9, MUTED);
-    CcOverlayDrawText("M  close case   Q situations", 958, 604, 9, MUTED);
-    CcOverlayDrawText("No chart reveals the whole world.", 958, 624, 9,
-             map->contraband ? CC_VIOLET : MUTED);
+    CcOverlayDrawText("LEFT / RIGHT  change road", 958, 574, 10, MUTED);
+    CcOverlayDrawText("M  CLOSE", 958, 604, 10, CC_GOLD);
 }
 
 static void DrawHeader(const CcSim *sim)
 {
     CcOverlayDrawText("CROWNLESS CARRIAGE", 26, 20, 27, INK);
-    CcOverlayDrawText("PHYSICAL CARTOGRAPHY / ONE OBJECT, ONE ROUTE", 28, 53, 11, TEAL);
+    CcOverlayDrawText("CHOOSE ONE ROAD", 28, 53, 11, TEAL);
     CcOverlayDrawText(TextFormat("DAY %04d", sim->current_day), 790, 25, 16, CC_GOLD);
     CcOverlayDrawText(TextFormat("CROWNS %03" PRId64, sim->player.coins), 900, 25, 16, CC_GOLD);
     CcOverlayDrawText(TextFormat("MAPS %02d/%02d", CcPlayerMapCount(sim),
                         sim->player.map_capacity), 1060, 25, 16, TEAL);
-    CcOverlayDrawText(TextFormat("WORLD %08X  STATE %08" PRIx64 "  REP %d  LIVE %d",
-                        sim->world_seed, CcSimHash(sim) & UINT64_C(0xffffffff),
-                        sim->player.reputation, CcSimActiveSituationCount(sim)),
-             790, 53, 10, MUTED);
 }
 
 static void DrawEventRibbon(const CcSim *sim)
@@ -1339,39 +1138,33 @@ static void DrawEventRibbon(const CcSim *sim)
     DrawPanel((Rectangle){20.0f, 664.0f, 1240.0f, 76.0f}, PANEL);
     const CcEvent *event = CcSimRecentEvent(sim, 0);
     if (event != NULL) {
-        CcOverlayDrawText(TextFormat("DAY %d  %s", event->day, CcEventKindName(event->kind)),
-                 38, 680, 11, event->kind == CC_EVENT_MONSTER_PRESSURE ? CC_VIOLET : TEAL);
-        CcOverlayDrawText(event->text, 38, 704, 14, INK);
+        CcOverlayDrawText("LATEST NEWS", 38, 680, 10, TEAL);
+        CcOverlayDrawText(event->text, 38, 704, 12, INK);
     }
-    CcOverlayDrawText("LEFT/RIGHT leaf charts   B buy   S sell   ENTER follow",
-             735, 679, 10, MUTED);
-    CcOverlayDrawText("M close case   Q situations   TAB ledger   F5 save   F9 load",
-             765, 704, 10, MUTED);
+    CcOverlayDrawText("LEFT / RIGHT  CHANGE ROAD", 930, 680, 9, MUTED);
+    CcOverlayDrawText("ENTER  GO     M  CLOSE", 970, 704, 10, CC_GOLD);
 }
 
 static void DrawLedger(const CcSim *sim)
 {
-    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), (Color){3, 7, 11, 210});
-    Rectangle bounds = {130.0f, 70.0f, 1020.0f, 620.0f};
-    DrawPanel(bounds, (Color){8, 17, 24, 250});
-    CcOverlayDrawText("CAUSAL EVENT LEDGER", 160, 100, 26, INK);
-    CcOverlayDrawText("The player sees symptoms; this inspector retains auditable provenance.",
-             160, 136, 13, MUTED);
-    CcOverlayDrawText("DAY   TYPE        MAG   PARENT       EVENT", 160, 174, 11, TEAL);
-    int32_t shown = sim->event_count < 15 ? sim->event_count : 15;
+    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
+                  (Color){3, 7, 11, 112});
+    Rectangle bounds = {260.0f, 165.0f, 760.0f, 420.0f};
+    DrawPanel(bounds, (Color){8, 17, 24, 248});
+    CcOverlayDrawText("RECENT NEWS", 294, 197, 22, INK);
+    int32_t shown = sim->event_count < 4 ? sim->event_count : 4;
     for (int32_t i = 0; i < shown; ++i) {
         const CcEvent *event = CcSimRecentEvent(sim, i);
         if (event == NULL) continue;
-        int y = 202 + i * 29;
-        CcOverlayDrawText(TextFormat("%4d", event->day), 160, y, 11, CC_GOLD);
-        CcOverlayDrawText(CcEventKindName(event->kind), 211, y, 11,
+        int y = 247 + i * 67;
+        CcOverlayDrawText(TextFormat("DAY %d", event->day), 294, y, 9,
+                 CC_GOLD);
+        CcOverlayDrawText(CcEventKindName(event->kind), 370, y, 9,
                  event->kind == CC_EVENT_MONSTER_PRESSURE ? CC_VIOLET : TEAL);
-        CcOverlayDrawText(TextFormat("%3d", event->magnitude), 303, y, 11, INK);
-        CcOverlayDrawText(TextFormat("%08" PRIx64, event->parent_id & UINT64_C(0xffffffff)),
-                 348, y, 11, MUTED);
-        CcOverlayDrawText(event->text, 435, y, 11, INK);
+        DrawTwoLineText(event->text, 294, y + 21, 74U, 10, INK);
     }
-    CcOverlayDrawText("TAB  return to where you were", 160, 657, 12, CC_GOLD);
+    if (shown == 0) CcOverlayDrawText("Nothing has changed yet.", 294, 252, 12, MUTED);
+    CcOverlayDrawText("TAB  CLOSE", 902, 547, 10, CC_GOLD);
 }
 
 static Color SituationColor(CcSituationKind kind)
@@ -1384,175 +1177,87 @@ static Color SituationColor(CcSituationKind kind)
 
 static void DrawSituationBoard(const CcSim *sim, int32_t selected)
 {
-    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), (Color){3, 7, 11, 218});
-    Rectangle bounds = {110.0f, 60.0f, 1060.0f, 640.0f};
-    DrawPanel(bounds, (Color){8, 17, 24, 252});
-    CcOverlayDrawText("THE ROAD IS ASKING", 142, 91, 26, INK);
-    CcOverlayDrawText("Choose one promise. The world continues whether you take it or not.",
-             142, 128, 13, MUTED);
-    CcOverlayDrawText(TextFormat("%d LIVE SITUATIONS", CcSimActiveSituationCount(sim)),
-             930, 101, 12, CC_GOLD);
-    CcOverlayDrawText("AVAILABLE CHARTERS", 142, 166, 11, TEAL);
-    int32_t shown = 0;
-    for (int32_t i = 0; i < sim->situation_count && shown < 7; ++i) {
-        const CcSituation *situation = &sim->situations[i];
-        if (situation->status != CC_SITUATION_ACTIVE) continue;
-        int y = 202 + shown * 57;
-        bool highlighted = i == selected;
-        bool accepted = situation->id == sim->player.accepted_situation_id;
-        if (highlighted) {
-            DrawRectangleRounded((Rectangle){132.0f, (float)(y - 10),
-                                             616.0f, 50.0f},
-                                 0.12f, 5, (Color){22, 42, 49, 248});
-            DrawRectangleRoundedLinesEx(
-                (Rectangle){132.0f, (float)(y - 10), 616.0f, 50.0f},
-                0.12f, 5, 1.0f, Fade(CC_GOLD, 0.72f));
-        }
-        char target[96];
-        SituationTargetLabel(sim, situation, target, sizeof(target));
-        CcOverlayDrawText(CcSituationKindName(situation->kind), 142, y, 13,
-                 SituationColor(situation->kind));
-        CcOverlayDrawText(target, 360, y, 11, INK);
-        CcOverlayDrawText(TextFormat("DUE %d", situation->deadline_day), 652, y, 10,
-                 CC_GOLD);
-        CcOverlayDrawText(accepted ? "YOUR PROMISE" :
-                 situation->sponsor_name[0] != '\0' ?
-                 situation->sponsor_name : "Unrecorded sponsor",
-                 142, y + 21, 9, accepted ? TEAL : MUTED);
-        CcOverlayDrawText(situation->quantity > 0 ?
-                 TextFormat("%d/%d   +%" PRId64 " C",
-                            situation->progress, situation->quantity,
-                            situation->reward) :
-                 TextFormat("INTERVENE   +%" PRId64 " C", situation->reward),
-                 520, y + 21, 9, MUTED);
-        shown += 1;
-    }
-    if (shown == 0) {
-        CcOverlayDrawText("No power has posted a live charter. Advance the world and conditions will change.",
-                 142, 220, 14, MUTED);
-    }
-
-    DrawPanel((Rectangle){776.0f, 166.0f, 364.0f, 454.0f},
-              (Color){6, 14, 20, 250});
+    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
+                  (Color){3, 7, 11, 104});
+    Rectangle bounds = {330.0f, 190.0f, 620.0f, 340.0f};
+    DrawPanel(bounds, (Color){8, 17, 24, 248});
     const CcSituation *detail = SelectedActiveSituation(sim, selected);
-    CcOverlayDrawText("SELECTED PROMISE", 798, 188, 11, TEAL);
+    int32_t active_count = 0;
+    int32_t active_ordinal = 0;
+    for (int32_t i = 0; i < sim->situation_count; ++i) {
+        if (sim->situations[i].status != CC_SITUATION_ACTIVE) continue;
+        if (i == selected) active_ordinal = active_count;
+        active_count += 1;
+    }
+    CcOverlayDrawText("ONE PROMISE", 360, 216, 10, TEAL);
+    CcOverlayDrawText(active_count > 0 ?
+             TextFormat("%d / %d", active_ordinal + 1, active_count) : "0 / 0",
+             874, 216, 10, CC_GOLD);
     if (detail != NULL) {
         char target[96];
         SituationTargetLabel(sim, detail, target, sizeof(target));
-        CcOverlayDrawText(CcSituationKindName(detail->kind), 798, 215, 18,
+        CcOverlayDrawText(CcSituationKindName(detail->kind), 360, 250, 21,
                  SituationColor(detail->kind));
-        DrawTwoLineText(target, 798, 243, 38U, 11, INK);
-        const CcFaction *issuer = FactionById(sim, detail->issuer_faction_id);
-        CcOverlayDrawText("SPONSOR", 798, 286, 9, MUTED);
-        CcOverlayDrawText(detail->sponsor_name[0] != '\0' ?
-                 detail->sponsor_name : "Unrecorded sponsor",
-                 798, 303, 11, INK);
-        CcOverlayDrawText(issuer != NULL ? issuer->name : "Independent petition",
-                 798, 321, 9, MUTED);
-        CcOverlayDrawText("WHO IS WAITING", 798, 347, 9, MUTED);
-        CcOverlayDrawText(detail->affected_name[0] != '\0' ?
-                 detail->affected_name : "An unnamed household",
-                 798, 364, 11, INK);
-        const CcEvent *cause = CcSimEvent(sim, detail->cause_event_id);
-        CcOverlayDrawText("WHY NOW", 798, 394, 9, MUTED);
-        DrawTwoLineText(cause != NULL ? cause->text :
-                        "Local conditions created this need.",
-                        798, 411, 43U, 10, INK);
+        CcOverlayDrawText(TextFormat("%s  /  %s", target,
+                            detail->affected_name[0] != '\0' ?
+                                detail->affected_name : "Someone waiting"),
+                 360, 284, 11, INK);
         char next[192];
         SituationNextAction(sim, detail, next, sizeof(next));
-        CcOverlayDrawText("NEXT PHYSICAL STEP", 798, 456, 9, MUTED);
-        DrawTwoLineText(next, 798, 473, 43U, 10, CC_GOLD);
-        CcOverlayDrawText(TextFormat("DAY %d / %d DAYS LEFT",
-                            detail->deadline_day,
-                            detail->deadline_day - sim->current_day),
-                 798, 519, 10, MUTED);
-        CcOverlayDrawText(detail->quantity > 0 ?
-                 TextFormat("PROGRESS %d/%d   REWARD +%" PRId64,
-                            detail->progress, detail->quantity,
-                            detail->reward) :
-                 TextFormat("INTERVENTION   REWARD +%" PRId64,
-                            detail->reward),
-                 798, 541, 10, TEAL);
+        CcOverlayDrawText("NEXT STEP", 360, 323, 9, MUTED);
+        DrawTwoLineText(next, 360, 346, 58U, 11, CC_GOLD);
+        CcOverlayDrawText(TextFormat("DUE DAY %d", detail->deadline_day),
+                 360, 408, 10, MUTED);
+        CcOverlayDrawText(TextFormat("REWARD  +%" PRId64 " CROWNS", detail->reward),
+                 714, 408, 10, TEAL);
         bool accepted = detail->id == sim->player.accepted_situation_id;
-        CcOverlayDrawText(accepted ? "ACCEPTED: this failure can affect reputation." :
+        CcOverlayDrawText(accepted ? "ACCEPTED" :
                  CcSimAcceptedSituation(sim) != NULL ?
-                 "Finish or withdraw from your current promise first." :
-                 "ENTER  accept this charter",
-                 798, 574, 10, accepted ? DANGER : CC_GOLD);
-        if (accepted) {
-            CcOverlayDrawText("BACKSPACE  withdraw; the need remains",
-                     798, 598, 9, MUTED);
-        }
+                 "FINISH YOUR CURRENT PROMISE FIRST" :
+                 "ENTER  ACCEPT",
+                 360, 454, 13, accepted ? TEAL : CC_GOLD);
     } else {
-        CcOverlayDrawText("No live charter is selected.", 798, 224, 12, MUTED);
+        CcOverlayDrawText("NO PROMISE IS WAITING", 360, 268, 17, MUTED);
     }
-    CcOverlayDrawText("UP/DOWN  select", 142, 665, 12, CC_GOLD);
-    CcOverlayDrawText("Q  return to where you were", 798, 665, 12, CC_GOLD);
+    CcOverlayDrawText("UP / DOWN  CHANGE", 360, 496, 9, MUTED);
+    CcOverlayDrawText("Q  CLOSE", 860, 496, 9, CC_GOLD);
 }
 
 static void DrawJourneyEncounter(const CcSim *sim)
 {
     if (sim == NULL || !sim->journey.active ||
         sim->journey.phase != CC_JOURNEY_PHASE_BLOCKED) return;
-    const CcRoute *route = CcSimRoute(sim, sim->journey.route_id);
     const CcSettlement *from = CcSimSettlement(sim, sim->journey.origin_id);
     const CcSettlement *to = CcSimSettlement(sim, sim->journey.destination_id);
-    const CcSituation *situation = CcSimSituation(
-        sim, sim->journey.situation_id);
     const CcBanditGroup *bandits = BanditsByRoute(
         sim, sim->journey.route_id);
     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
-                  (Color){3, 7, 11, 224});
-    DrawPanel((Rectangle){175.0f, 95.0f, 930.0f, 555.0f},
-              (Color){8, 17, 24, 253});
-    CcOverlayDrawText("THE ROAD CLOSES AROUND YOU", 215, 132, 27, INK);
+                  (Color){3, 7, 11, 142});
+    DrawPanel((Rectangle){210.0f, 150.0f, 860.0f, 430.0f},
+              (Color){8, 17, 24, 248});
+    CcOverlayDrawText("THE ROAD IS BLOCKED", 246, 184, 27, INK);
     CcOverlayDrawText(TextFormat("%s  ->  %s", from != NULL ? from->name : "Origin",
                         to != NULL ? to->name : "Destination"),
-             215, 174, 14, CC_GOLD);
-    CcOverlayDrawText(TextFormat("ROUTE DANGER %d%%   SECURITY %d   CAPACITY %d",
-                        sim->journey.danger,
-                        route != NULL ? route->security : 0,
-                        route != NULL ? route->capacity : 0),
-             215, 201, 11, MUTED);
-    DrawPanel((Rectangle){215.0f, 238.0f, 650.0f, 120.0f},
-              (Color){13, 27, 34, 248});
+             246, 222, 13, CC_GOLD);
     CcOverlayDrawText(bandits != NULL ? bandits->name : "ARMED ROAD COLLECTORS",
-             238, 259, 16, DANGER);
-    DrawTwoLineText("A cordon stops the carriage. Merchants and displaced families wait behind it; this is the first physical test of your promise.",
-                    238, 289, 72U, 12, INK);
-    if (situation != NULL) {
-        CcOverlayDrawText(TextFormat("%s is waiting on your word.",
-                            situation->affected_name[0] != '\0' ?
-                                situation->affected_name : "A local household"),
-                 238, 331, 11, CC_GOLD);
-    }
+             246, 254, 14, DANGER);
 
-    DrawPanel((Rectangle){215.0f, 386.0f, 400.0f, 180.0f},
+    DrawPanel((Rectangle){246.0f, 304.0f, 374.0f, 176.0f},
               (Color){25, 20, 24, 248});
-    CcOverlayDrawText("1  BREAK THE CORDON", 239, 411, 18, DANGER);
-    CcOverlayDrawText("Enter the live melee and defeat the attackers.",
-             239, 446, 11, INK);
-    CcOverlayDrawText("Projects into: stronger security, returning people,",
-             239, 474, 10, MUTED);
-    CcOverlayDrawText("weaker bandits, and guarded follow-on traffic.",
-             239, 494, 10, MUTED);
-    CcOverlayDrawText("The same journey resumes after the fight is won.",
-             239, 529, 10, CC_GOLD);
+    CcOverlayDrawText("1", 272, 331, 22, DANGER);
+    CcOverlayDrawText("FIGHT", 312, 333, 18, INK);
+    CcOverlayDrawText("Break the cordon.", 272, 375, 12, INK);
+    CcOverlayDrawText("Safer road. Weaker bandits.", 272, 413, 10, TEAL);
 
-    DrawPanel((Rectangle){645.0f, 386.0f, 400.0f, 180.0f},
+    DrawPanel((Rectangle){660.0f, 304.0f, 374.0f, 176.0f},
               (Color){18, 25, 28, 248});
-    CcOverlayDrawText("2  BUY PASSAGE", 669, 411, 18, TEAL);
-    CcOverlayDrawText(TextFormat("Approach and offer %d crowns beyond provisions.",
-                        sim->journey.bargain_cost),
-             669, 446, 11, INK);
-    CcOverlayDrawText("Projects into: immediate goods and traffic,",
-             669, 474, 10, MUTED);
-    CcOverlayDrawText("but weaker security and more bandit influence.",
-             669, 494, 10, MUTED);
-    CcOverlayDrawText("Walk the road and make the exchange face to face.",
-             669, 529, 10, CC_GOLD);
-    CcOverlayDrawText("Choose an intervention. The game will remember the method.",
-             215, 601, 12, INK);
+    CcOverlayDrawText("2", 686, 331, 22, TEAL);
+    CcOverlayDrawText("PAY", 726, 333, 18, INK);
+    CcOverlayDrawText(TextFormat("Offer %d crowns.", sim->journey.bargain_cost),
+             686, 375, 12, INK);
+    CcOverlayDrawText("Fast passage. Stronger collectors.",
+             686, 413, 10, DANGER);
+    CcOverlayDrawText("CHOOSE  1 OR 2", 246, 529, 12, CC_GOLD);
 }
 
 static bool ApplyCommand(CcJournal *journal, CcSim *sim, CcCommand command,
@@ -1572,7 +1277,8 @@ static bool ApplyCommand(CcJournal *journal, CcSim *sim, CcCommand command,
     return true;
 }
 
-static void GameplayReelSetStage(GameplayReelState *reel, int32_t stage)
+static void GameplayReelSetStage(GameplayReelState *reel,
+                                 GameplayReelStage stage)
 {
     reel->stage = stage;
     reel->stage_frame = 0;
@@ -1669,22 +1375,21 @@ static void PrepareGameplayReel(CcSim *sim, LocalState *local,
     *reel = (GameplayReelState){0};
     if (sim->player.coins < 120) sim->player.coins = 120;
     *selected = FirstVisibleMapIndex(sim);
-    *selected_situation = FirstActiveSituationIndex(sim);
+    *selected_situation = FirstDeliverySituationIndex(sim);
     *view = VIEW_LOCAL;
     *return_view = VIEW_LOCAL;
     ResetLocalState(local);
     RepositionHero(local, (Vector2){44.25f, 28.85f}, false);
-    local->agent.facing_yaw = -0.35f;
     local->course.alarm_countdown = 1000.0f;
     (void)CcLocalAgentSetExactTarget(
-        &local->agent, (Vector3){46.65f, 0.0f, 29.35f}, false);
+        &local->agent, (Vector3){41.90f, 0.0f, 28.45f}, false);
 }
 
 static void PrepareTownRaidReel(CcSim *sim, LocalState *local)
 {
-    ResetLocalState(local);
-    RepositionHero(local, (Vector2){44.25f, 28.85f}, false);
-    CcLocalCourseRaiseAlarmNear(&local->course, &local->agent);
+    if (!local->course.alarm_active) {
+        CcLocalCourseRaiseAlarmNear(&local->course, &local->agent);
+    }
     (void)CcLocalCourseSelectPlayerTarget(
         &local->course, &local->agent, 0);
     /* This is still the live raid simulation. Fast-forward only the long
@@ -1728,6 +1433,50 @@ static void PrepareRoadCombatReel(CcSim *sim, LocalState *local)
     }
 }
 
+static void GameplayReelEnterMarket(LocalState *local)
+{
+    local->market_interior = true;
+    RepositionHero(local, (Vector2){2.05f, 5.35f}, true);
+    (void)CcLocalAgentSetExactTarget(
+        &local->agent, (Vector3){5.70f, 0.0f, 3.15f}, true);
+}
+
+static void GameplayReelLeaveMarket(LocalState *local, Vector3 next_target)
+{
+    local->market_interior = false;
+    RepositionHero(local,
+                   (Vector2){CC_LOCAL_MARKET_X,
+                             CC_LOCAL_MARKET_Z + 1.10f}, false);
+    (void)CcLocalAgentSetExactTarget(&local->agent, next_target, false);
+}
+
+static void GameplayReelTrade(CcSim *sim, bool delivery,
+                              char *message, size_t message_capacity)
+{
+    const CcSituation *accepted = CcSimAcceptedSituation(sim);
+    CcGood good = CC_GOOD_FOOD;
+    int32_t amount = 1;
+    if (accepted != NULL &&
+        (accepted->kind == CC_SITUATION_RELIEF_DELIVERY ||
+         accepted->kind == CC_SITUATION_BLACK_MARKET_DELIVERY)) {
+        good = accepted->good;
+        amount = accepted->quantity - accepted->progress;
+        if (amount < 1) amount = 1;
+    }
+    if (delivery) {
+        if (accepted == NULL || accepted->target_id != sim->player.location_id) {
+            return;
+        }
+        amount = -amount;
+    }
+    CcCommand trade = {
+        .kind = CC_COMMAND_TRADE,
+        .good = good,
+        .amount = amount
+    };
+    (void)ApplyCommand(NULL, sim, trade, message, message_capacity);
+}
+
 static void UpdateGameplayReel(CcSim *sim, LocalState *local,
                                GameplayReelState *reel,
                                int32_t *selected,
@@ -1739,25 +1488,24 @@ static void UpdateGameplayReel(CcSim *sim, LocalState *local,
     reel->stage_frame += 1;
 
     switch (reel->stage) {
-        case 0:
+        case GAMEPLAY_REEL_WALK_TO_NOTICE:
             (void)snprintf(message, message_capacity,
-                           "Walk the living street and read the town before choosing a promise.");
+                           "Walk to the promise board.");
             (void)CcLocalWorldUpdate(&local->course, &local->agent, sim,
                                      delta_time, false, true);
-            if (reel->stage_frame >= 120) {
-                GameplayReelSetStage(reel, 1);
-            }
-            break;
-        case 1:
-            if (!reel->stage_started) {
-                reel->stage_started = true;
-                *selected_situation = FirstActiveSituationIndex(sim);
+            if ((reel->stage_frame >= 90 &&
+                 GridDistance(LocalPosition(local), LOCAL_NOTICE) < 1.15f) ||
+                reel->stage_frame >= 360) {
+                *selected_situation = FirstDeliverySituationIndex(sim);
                 *return_view = VIEW_LOCAL;
                 *view = VIEW_SITUATIONS;
+                GameplayReelSetStage(reel, GAMEPLAY_REEL_CHOOSE_PROMISE);
             }
+            break;
+        case GAMEPLAY_REEL_CHOOSE_PROMISE:
             (void)snprintf(message, message_capacity,
-                           "Open the notice board and accept a real charter from the simulation.");
-            if (reel->stage_frame == 62 && *selected_situation >= 0) {
+                           "Choose one promise.");
+            if (reel->stage_frame == 88 && *selected_situation >= 0) {
                 CcCommand accept = {
                     .kind = CC_COMMAND_ACCEPT_SITUATION,
                     .target_id = sim->situations[*selected_situation].id
@@ -1765,63 +1513,81 @@ static void UpdateGameplayReel(CcSim *sim, LocalState *local,
                 (void)ApplyCommand(NULL, sim, accept, message,
                                    message_capacity);
             }
-            if (reel->stage_frame >= 120) {
-                GameplayReelSetStage(reel, 2);
+            if (reel->stage_frame >= 180) {
+                *view = VIEW_LOCAL;
+                (void)CcLocalAgentSetExactTarget(
+                    &local->agent, (Vector3){49.20f, 0.0f, 27.15f}, false);
+                GameplayReelSetStage(reel, GAMEPLAY_REEL_WALK_TO_MARKET);
             }
             break;
-        case 2:
-            if (!reel->stage_started) {
-                reel->stage_started = true;
-                *view = VIEW_LOCAL;
-                ResetLocalState(local);
-                local->market_interior = true;
-                CcLocalAgentInit(&local->agent,
-                                 (Vector2){3.20f, 4.65f}, true);
-                CcLocalCombatSetTeam(&local->agent, CC_COMBAT_PLAYER);
-                (void)CcLocalAgentSetExactTarget(
-                    &local->agent, (Vector3){5.70f, 0.0f, 3.15f}, true);
-            }
+        case GAMEPLAY_REEL_WALK_TO_MARKET:
             (void)snprintf(message, message_capacity,
-                           "Enter Mara's market; stock, prices, cargo and crowns are live game state.");
+                           "Walk to Mara's market.");
+            (void)CcLocalWorldUpdate(&local->course, &local->agent, sim,
+                                     delta_time, false, true);
+            if ((reel->stage_frame >= 60 &&
+                 GridDistance(LocalPosition(local), LOCAL_MARKET) < 1.30f) ||
+                reel->stage_frame >= 600) {
+                GameplayReelEnterMarket(local);
+                GameplayReelSetStage(reel, GAMEPLAY_REEL_BUY_CARGO);
+            }
+            break;
+        case GAMEPLAY_REEL_BUY_CARGO:
+            (void)snprintf(message, message_capacity,
+                           reel->stage_started ?
+                               "Cargo loaded. Leave through the door." :
+                               "Walk to the counter and load the cargo.");
             (void)CcLocalWorldUpdate(&local->course, &local->agent, sim,
                                      delta_time, true, false);
-            if (reel->stage_frame == 82) {
-                const CcSituation *accepted = CcSimAcceptedSituation(sim);
-                CcGood good = CC_GOOD_FOOD;
-                int32_t amount = 1;
-                if (accepted != NULL &&
-                    (accepted->kind == CC_SITUATION_RELIEF_DELIVERY ||
-                     accepted->kind == CC_SITUATION_BLACK_MARKET_DELIVERY)) {
-                    good = accepted->good;
-                    amount = accepted->quantity - accepted->progress;
-                    if (amount < 1) amount = 1;
-                }
-                CcCommand trade = {
-                    .kind = CC_COMMAND_TRADE,
-                    .good = good,
-                    .amount = amount
-                };
-                (void)ApplyCommand(NULL, sim, trade, message,
-                                   message_capacity);
+            if (!reel->stage_started && reel->stage_frame >= 60 &&
+                (GridDistance(LocalPosition(local), INTERIOR_COUNTER) < 2.25f ||
+                 reel->stage_frame >= 150)) {
+                GameplayReelTrade(sim, false, message, message_capacity);
+                reel->stage_started = true;
             }
-            if (reel->stage_frame >= 150) {
-                GameplayReelSetStage(reel, 3);
+            if (reel->stage_started && reel->stage_frame >= 210) {
+                (void)CcLocalAgentSetExactTarget(
+                    &local->agent,
+                    (Vector3){INTERIOR_EXIT.x, 0.0f, INTERIOR_EXIT.y}, true);
+                GameplayReelSetStage(reel, GAMEPLAY_REEL_LEAVE_MARKET);
             }
             break;
-        case 3:
-            if (!reel->stage_started) {
-                reel->stage_started = true;
-                *view = VIEW_MAP;
-                *return_view = VIEW_LOCAL;
+        case GAMEPLAY_REEL_LEAVE_MARKET:
+            (void)snprintf(message, message_capacity,
+                           "Return to the street.");
+            (void)CcLocalWorldUpdate(&local->course, &local->agent, sim,
+                                     delta_time, true, false);
+            if ((reel->stage_frame >= 45 &&
+                 GridDistance(LocalPosition(local), INTERIOR_EXIT) < 1.25f) ||
+                reel->stage_frame >= 360) {
+                GameplayReelLeaveMarket(
+                    local, (Vector3){LOCAL_CARRIAGE.x, 0.0f,
+                                     LOCAL_CARRIAGE.y});
+                GameplayReelSetStage(reel,
+                                     GAMEPLAY_REEL_WALK_TO_CARRIAGE);
+            }
+            break;
+        case GAMEPLAY_REEL_WALK_TO_CARRIAGE:
+            (void)snprintf(message, message_capacity,
+                           "Bring the cargo to the carriage.");
+            (void)CcLocalWorldUpdate(&local->course, &local->agent, sim,
+                                     delta_time, false, true);
+            if ((reel->stage_frame >= 60 &&
+                 GridDistance(LocalPosition(local), LOCAL_CARRIAGE) < 1.35f) ||
+                reel->stage_frame >= 600) {
                 *selected = FirstVisibleMapIndex(sim);
                 reel->destination_id = GameplayReelDestination(sim, selected);
+                *return_view = VIEW_LOCAL;
+                *view = VIEW_MAP;
+                GameplayReelSetStage(reel, GAMEPLAY_REEL_CHOOSE_ROUTE);
             }
+            break;
+        case GAMEPLAY_REEL_CHOOSE_ROUTE:
             (void)snprintf(message, message_capacity,
-                           "Use the physical charts in the carriage map case, then commit to the road.");
-            if (reel->stage_frame == 62) {
+                           "Choose the next road.");
+            if (reel->stage_frame == 90) {
                 const CcMap *map = SelectedVisibleMap(sim, *selected);
-                if (map != NULL &&
-                    map->owner_id == sim->player.location_id) {
+                if (map != NULL && map->owner_id == sim->player.location_id) {
                     CcCommand buy_map = {
                         .kind = CC_COMMAND_BUY_MAP,
                         .target_id = map->id
@@ -1830,24 +1596,26 @@ static void UpdateGameplayReel(CcSim *sim, LocalState *local,
                                        message_capacity);
                 }
             }
-            if (reel->stage_frame == 106 && reel->destination_id != 0U) {
+            if (reel->stage_frame >= 150 && !reel->stage_started &&
+                reel->destination_id != 0U) {
                 CcCommand travel = {
                     .kind = CC_COMMAND_TRAVEL,
                     .target_id = reel->destination_id
                 };
+                reel->stage_started = true;
                 if (ApplyCommand(NULL, sim, travel, message,
                                  message_capacity)) {
                     reel->journey_legs += 1;
                     BeginRoadTravelState(local);
                     *view = VIEW_LOCAL;
-                    GameplayReelSetStage(reel, 4);
+                    GameplayReelSetStage(reel, GAMEPLAY_REEL_TRAVEL);
                 }
             }
-            if (reel->stage_frame >= 150) reel->complete = true;
+            if (reel->stage_frame >= 240) reel->complete = true;
             break;
-        case 4:
+        case GAMEPLAY_REEL_TRAVEL:
             (void)snprintf(message, message_capacity,
-                           "The real journey runs: carriage progress and the living world advance together.");
+                           "The carriage follows the chosen road.");
             (void)CcLocalWorldUpdate(&local->course, &local->agent, sim,
                                      delta_time, false, false);
             CcSimAdvanceRuntimeTicks(sim, 16);
@@ -1855,33 +1623,43 @@ static void UpdateGameplayReel(CcSim *sim, LocalState *local,
                 sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED) {
                 local->journey_travel_active = false;
                 *view = VIEW_ENCOUNTER;
-                GameplayReelSetStage(reel, 5);
+                GameplayReelSetStage(reel, GAMEPLAY_REEL_ROAD_CHOICE);
             } else if (!sim->journey.active) {
                 const CcSituation *accepted = CcSimAcceptedSituation(sim);
                 CcId target = SituationSettlementId(sim, accepted);
                 ResetLocalState(local);
+                local->course.alarm_countdown = 1000.0f;
                 if (target != 0U && target != sim->player.location_id &&
                     reel->journey_legs < sim->settlement_count) {
-                    GameplayReelSetStage(reel, 3);
+                    RepositionHero(local, (Vector2){37.40f, 32.15f}, false);
+                    (void)CcLocalAgentSetExactTarget(
+                        &local->agent,
+                        (Vector3){LOCAL_CARRIAGE.x, 0.0f,
+                                  LOCAL_CARRIAGE.y}, false);
+                    GameplayReelSetStage(
+                        reel, GAMEPLAY_REEL_WALK_TO_CARRIAGE);
                 } else {
-                    RepositionHero(local,
-                                   (Vector2){44.25f, 28.85f}, false);
-                    GameplayReelSetStage(reel, 8);
+                    RepositionHero(local, (Vector2){44.25f, 28.85f}, false);
+                    (void)CcLocalAgentSetExactTarget(
+                        &local->agent,
+                        (Vector3){49.20f, 0.0f, 27.15f}, false);
+                    GameplayReelSetStage(
+                        reel, GAMEPLAY_REEL_ARRIVE_AT_MARKET);
                 }
             }
             break;
-        case 5:
+        case GAMEPLAY_REEL_ROAD_CHOICE:
             (void)snprintf(message, message_capacity,
-                           "A road event pauses movement and asks for a lasting choice.");
-            if (reel->stage_frame >= 120) {
+                           "The road is blocked. Choose fight or pay.");
+            if (reel->stage_frame >= 180) {
                 PrepareRoadCombatReel(sim, local);
                 *view = VIEW_LOCAL;
-                GameplayReelSetStage(reel, 6);
+                GameplayReelSetStage(reel, GAMEPLAY_REEL_ROAD_COMBAT);
             }
             break;
-        case 6:
+        case GAMEPLAY_REEL_ROAD_COMBAT:
             (void)snprintf(message, message_capacity,
-                           "Break the cordon in live combat beside the carriage.");
+                           "Break the cordon beside the carriage.");
             if (reel->stage_frame == 12) {
                 (void)CcLocalCourseSelectPlayerTarget(
                     &local->course, &local->agent, 0);
@@ -1901,67 +1679,109 @@ static void UpdateGameplayReel(CcSim *sim, LocalState *local,
                 };
                 if (ApplyCommand(NULL, sim, victory, message,
                                  message_capacity)) {
-                    *selected = FirstVisibleMapIndex(sim);
                     BeginRoadTravelState(local);
-                    GameplayReelSetStage(reel, 7);
+                    GameplayReelSetStage(reel,
+                                         GAMEPLAY_REEL_RESUME_TRAVEL);
                 } else {
                     reel->complete = true;
                 }
             }
             break;
-        case 7:
+        case GAMEPLAY_REEL_RESUME_TRAVEL:
             (void)snprintf(message, message_capacity,
-                           "The same journey resumes after the fight; the outcome travels with you.");
+                           "The journey resumes after the fight.");
             (void)CcLocalWorldUpdate(&local->course, &local->agent, sim,
                                      delta_time, false, false);
             CcSimAdvanceRuntimeTicks(sim, 32);
             if (!sim->journey.active) {
-                ResetLocalState(local);
-                RepositionHero(local, (Vector2){44.25f, 28.85f}, false);
-                local->course.alarm_countdown = 1000.0f;
-                GameplayReelSetStage(reel, 8);
-            }
-            break;
-        case 8:
-            if (!reel->stage_started) {
-                reel->stage_started = true;
-                local->market_interior = true;
-                CcLocalAgentInit(&local->agent,
-                                 (Vector2){5.45f, 3.30f}, true);
-                CcLocalCombatSetTeam(&local->agent, CC_COMBAT_PLAYER);
-            }
-            (void)snprintf(message, message_capacity,
-                           "Deliver the charter cargo; arrival and consequence remain visible in the UX.");
-            (void)CcLocalWorldUpdate(&local->course, &local->agent, sim,
-                                     delta_time, true, false);
-            if (reel->stage_frame == 58) {
                 const CcSituation *accepted = CcSimAcceptedSituation(sim);
-                if (accepted != NULL &&
-                    (accepted->kind == CC_SITUATION_RELIEF_DELIVERY ||
-                     accepted->kind == CC_SITUATION_BLACK_MARKET_DELIVERY) &&
-                    accepted->target_id == sim->player.location_id) {
-                    int32_t amount = accepted->quantity - accepted->progress;
-                    CcCommand deliver = {
-                        .kind = CC_COMMAND_TRADE,
-                        .good = accepted->good,
-                        .amount = -amount
-                    };
-                    (void)ApplyCommand(NULL, sim, deliver, message,
-                                       message_capacity);
+                CcId target = SituationSettlementId(sim, accepted);
+                ResetLocalState(local);
+                local->course.alarm_countdown = 1000.0f;
+                if (target != 0U && target != sim->player.location_id &&
+                    reel->journey_legs < sim->settlement_count) {
+                    RepositionHero(local, (Vector2){37.40f, 32.15f}, false);
+                    (void)CcLocalAgentSetExactTarget(
+                        &local->agent,
+                        (Vector3){LOCAL_CARRIAGE.x, 0.0f,
+                                  LOCAL_CARRIAGE.y}, false);
+                    GameplayReelSetStage(
+                        reel, GAMEPLAY_REEL_WALK_TO_CARRIAGE);
+                } else {
+                    RepositionHero(local, (Vector2){44.25f, 28.85f}, false);
+                    (void)CcLocalAgentSetExactTarget(
+                        &local->agent,
+                        (Vector3){49.20f, 0.0f, 27.15f}, false);
+                    GameplayReelSetStage(
+                        reel, GAMEPLAY_REEL_ARRIVE_AT_MARKET);
                 }
             }
-            if (reel->stage_frame >= 120) {
-                GameplayReelSetStage(reel, 9);
+            break;
+        case GAMEPLAY_REEL_ARRIVE_AT_MARKET:
+            (void)snprintf(message, message_capacity,
+                           "The cargo has reached its town.");
+            (void)CcLocalWorldUpdate(&local->course, &local->agent, sim,
+                                     delta_time, false, true);
+            if ((reel->stage_frame >= 60 &&
+                 GridDistance(LocalPosition(local), LOCAL_MARKET) < 1.30f) ||
+                reel->stage_frame >= 600) {
+                GameplayReelEnterMarket(local);
+                GameplayReelSetStage(reel, GAMEPLAY_REEL_DELIVER_CARGO);
             }
             break;
-        case 9:
+        case GAMEPLAY_REEL_DELIVER_CARGO:
+            (void)snprintf(message, message_capacity,
+                           reel->stage_started ?
+                               "Promise kept. Payment received." :
+                               "Walk to the factor and deliver the cargo.");
+            (void)CcLocalWorldUpdate(&local->course, &local->agent, sim,
+                                     delta_time, true, false);
+            if (!reel->stage_started && reel->stage_frame >= 60 &&
+                (GridDistance(LocalPosition(local), INTERIOR_COUNTER) < 2.25f ||
+                 reel->stage_frame >= 150)) {
+                GameplayReelTrade(sim, true, message, message_capacity);
+                reel->stage_started = true;
+            }
+            if (reel->stage_started && reel->stage_frame >= 210) {
+                (void)CcLocalAgentSetExactTarget(
+                    &local->agent,
+                    (Vector3){INTERIOR_EXIT.x, 0.0f, INTERIOR_EXIT.y}, true);
+                GameplayReelSetStage(
+                    reel, GAMEPLAY_REEL_LEAVE_AFTER_DELIVERY);
+            }
+            break;
+        case GAMEPLAY_REEL_LEAVE_AFTER_DELIVERY:
+            (void)snprintf(message, message_capacity,
+                           "Return to the village street.");
+            (void)CcLocalWorldUpdate(&local->course, &local->agent, sim,
+                                     delta_time, true, false);
+            if ((reel->stage_frame >= 45 &&
+                 GridDistance(LocalPosition(local), INTERIOR_EXIT) < 1.25f) ||
+                reel->stage_frame >= 360) {
+                GameplayReelLeaveMarket(
+                    local, (Vector3){48.10f, 0.0f, 29.00f});
+                GameplayReelSetStage(reel, GAMEPLAY_REEL_VILLAGE_ALARM);
+            }
+            break;
+        case GAMEPLAY_REEL_VILLAGE_ALARM:
             if (!reel->stage_started) {
                 reel->stage_started = true;
                 *view = VIEW_LOCAL;
-                PrepareTownRaidReel(sim, local);
+                CcLocalCourseRaiseAlarmNear(&local->course, &local->agent);
             }
             (void)snprintf(message, message_capacity,
-                           "Defend the town in the same live lock-on combat, with guards and raiders still acting around you.");
+                           "The village bell sounds. Raiders are coming.");
+            (void)CcLocalWorldUpdate(&local->course, &local->agent, sim,
+                                     delta_time, false, true);
+            if (reel->stage_frame >= 180) {
+                PrepareTownRaidReel(sim, local);
+                GameplayReelSetStage(reel,
+                                     GAMEPLAY_REEL_VILLAGE_COMBAT);
+            }
+            break;
+        case GAMEPLAY_REEL_VILLAGE_COMBAT:
+            (void)snprintf(message, message_capacity,
+                           "Defend the same street with the town guard.");
             if (local->agent.combat.target_index < 0) {
                 (void)CcLocalCourseSelectPlayerTarget(
                     &local->course, &local->agent, 0);
@@ -1983,6 +1803,41 @@ static void UpdateGameplayReel(CcSim *sim, LocalState *local,
             reel->complete = true;
             break;
     }
+}
+
+static void DrawGameplayReelTransition(const GameplayReelState *reel)
+{
+    if (reel == NULL || reel->stage_frame > 40) return;
+    const char *title = NULL;
+    switch (reel->stage) {
+        case GAMEPLAY_REEL_BUY_CARGO:
+        case GAMEPLAY_REEL_DELIVER_CARGO:
+            title = "MARA'S MARKET";
+            break;
+        case GAMEPLAY_REEL_TRAVEL:
+        case GAMEPLAY_REEL_RESUME_TRAVEL:
+            title = "ON THE ROAD";
+            break;
+        case GAMEPLAY_REEL_ROAD_COMBAT:
+            title = "THE CORDON";
+            break;
+        case GAMEPLAY_REEL_ARRIVE_AT_MARKET:
+            title = "ARRIVAL";
+            break;
+        case GAMEPLAY_REEL_VILLAGE_COMBAT:
+            title = "THE VILLAGE BELL";
+            break;
+        default:
+            return;
+    }
+    float opacity = 1.0f - (float)reel->stage_frame / 40.0f;
+    if (opacity < 0.0f) opacity = 0.0f;
+    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
+                  Fade(BACKGROUND, opacity));
+    int width = CcOverlayMeasureText(title, 25);
+    CcOverlayDrawText(title, (GetScreenWidth() - width) / 2,
+                      GetScreenHeight() / 2 - 16, 25,
+                      Fade(INK, fminf(1.0f, opacity * 1.6f)));
 }
 
 static void HandleExpedition(CcJournal *journal, CcSim *sim,
@@ -2662,7 +2517,7 @@ int main(int argc, char **argv)
     /* The playable world is authored against a fixed 2x art-pixel grid.
        Render it at half the presentation size, then enlarge with point
        sampling. Screen-space labels and HUD are drawn after presentation. */
-    RenderTexture2D local_target = LoadRenderTexture(457, 285);
+    RenderTexture2D local_target = LoadRenderTexture(622, 285);
     SetTextureFilter(local_target.texture, TEXTURE_FILTER_POINT);
     CcLocalRendererSetScreenFirstHero(screen_first_hero);
     CcLocalRendererInit();
@@ -2953,7 +2808,7 @@ int main(int argc, char **argv)
     double render_benchmark_started = GetTime();
     bool performance_overlay = false;
 
-    Rectangle local_bounds = {17.0f, 81.0f, 914.0f, 570.0f};
+    Rectangle local_bounds = {17.0f, 81.0f, 1244.0f, 570.0f};
     while (!WindowShouldClose()) {
         float frame_delta_time = GetFrameTime();
         CcLocalRendererBeginFrame(frame_delta_time);
@@ -2993,7 +2848,7 @@ int main(int argc, char **argv)
         BeginDrawing();
         ClearBackground(BACKGROUND);
         CcOverlayBegin(1.0f);
-        bool map_underlay = view == VIEW_MAP || view == VIEW_ENCOUNTER ||
+        bool map_underlay = view == VIEW_MAP ||
                             ((view == VIEW_LEDGER || view == VIEW_SITUATIONS) &&
                              return_view == VIEW_MAP);
         if (map_underlay) {
@@ -3002,7 +2857,11 @@ int main(int argc, char **argv)
             DrawSettlementPanel(&sim, selected);
             DrawEventRibbon(&sim);
         } else {
-            if (local.journey_travel_active ||
+            if (view == VIEW_ENCOUNTER) {
+                CcLocalDrawRoad3D(&sim, &local.agent, &local.course,
+                                  false, false, clock,
+                                  local_target, local_bounds);
+            } else if (local.journey_travel_active ||
                 local.journey_combat_active ||
                 local.journey_parley_active) {
                 CcLocalDrawRoad3D(&sim, &local.agent, &local.course,
@@ -3016,12 +2875,16 @@ int main(int argc, char **argv)
                 CcLocalDrawStreet3D(&sim, &local.agent, &local.course, clock,
                                     local_target, local_bounds);
             }
-            DrawLocalMovementReticle(&local, local_bounds);
-            DrawLocalHeader(&sim, &local);
-            DrawLocalPanel(&sim, &local);
-            DrawLocalFooter(&sim, &local);
+            if (view != VIEW_ENCOUNTER) {
+                DrawLocalMovementReticle(&local, local_bounds);
+                DrawLocalHeader(&sim, &local);
+                DrawLocalPanel(&sim, &local);
+                DrawLocalFooter(&sim, &local);
+            }
         }
-        if (message[0] != '\0') {
+        if (message[0] != '\0' &&
+            view != VIEW_LEDGER && view != VIEW_SITUATIONS &&
+            view != VIEW_ENCOUNTER) {
             int width = CcOverlayMeasureText(message, 12) + 24;
             int maximum = GetScreenWidth() - 80;
             if (width > maximum) width = maximum;
@@ -3044,6 +2907,10 @@ int main(int argc, char **argv)
         if (performance_overlay) {
             CcOverlayFlush();
             DrawPerformanceOverlay();
+        }
+        if (capture_gameplay_reel) {
+            CcOverlayFlush();
+            DrawGameplayReelTransition(&gameplay_reel);
         }
         CcOverlayEnd();
         EndDrawing();
