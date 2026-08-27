@@ -27,6 +27,8 @@ bool CcLocalProbePhysicsSphereInternal(
     CcLocalSceneKind scene, Vector3 previous, Vector3 proposed, float radius,
     Vector3 *corrected, Vector3 *normal);
 float CcLocalRoomArtRayDistanceInternal(Ray ray, Vector3 focus);
+bool CcLocalAgentPointSpaceBlockedInternal(const CcLocalAgent *agent,
+                                            Vector3 proposed);
 
 Camera3D CcLocalStreetCameraInternal(const CcLocalAgent *agent, float clock,
                                      bool advance, int32_t art_height);

@@ -5,6 +5,7 @@
 #include "client/cc_visual_style.h"
 
 #include "locomotion/cc_humanoid_skin.h"
+#include "locomotion/cc_robotics.h"
 
 #include "raymath.h"
 #include "rlgl.h"
@@ -1525,7 +1526,15 @@ static int32_t FindStreetPath(Vector2 from, Vector2 to, float radius,
             }
             float step = diagonal ? STREET_PATH_CELL_SIZE * 1.41421356f :
                                     STREET_PATH_CELL_SIZE;
-            float distance = search->distance[current] + step;
+            float current_height = CcLocalTerrainHeightAt(
+                current_point.x, current_point.y);
+            float next_height = CcLocalTerrainHeightAt(
+                next_point.x, next_point.y);
+            Vector3 next_normal = CcLocalTerrainNormalAt(
+                next_point.x, next_point.y);
+            float traversal_cost = CcRobotTraversabilityCost(
+                step, next_height - current_height, next_normal.y);
+            float distance = search->distance[current] + traversal_cost;
             if (distance + 0.0001f >= search->distance[next]) continue;
             search->distance[next] = distance;
             search->parent[next] = current;
@@ -1934,6 +1943,62 @@ static bool LocalAgentCapsuleBlocked(CcLocalSceneKind scene,
     return false;
 }
 
+static int32_t LocalAgentPointSpace(const CcLocalAgent *agent,
+                                    CcRobotCollisionPoint *points)
+{
+    if (agent == NULL || points == NULL) return 0;
+    /* The humanoid already has a tuned standing capsule, swept ragdoll
+       particles, and separate weapon contacts. The point-space proxy belongs
+       to the generalized multi-leg rigs whose reach extends well beyond that
+       root capsule. */
+    if (agent->morphology == CC_MORPHOLOGY_BIPED) return 0;
+    return CcRobotLimbPointSpace(
+        &agent->limb_rig, 0.085f, points, CC_ROBOT_POINT_CAPACITY);
+}
+
+bool CcLocalAgentPointSpaceBlockedInternal(const CcLocalAgent *agent,
+                                            Vector3 proposed)
+{
+    if (agent == NULL) return false;
+    CcRobotCollisionPoint points[CC_ROBOT_POINT_CAPACITY];
+    int32_t point_count = LocalAgentPointSpace(agent, points);
+    Vector3 movement = Vector3Subtract(proposed, agent->position);
+    LocalProbeContext context = {.scene = agent->scene};
+    for (int32_t point = 0; point < point_count; ++point) {
+        Vector3 before = {points[point].center.x, points[point].center.y,
+                          points[point].center.z};
+        Vector3 after = Vector3Add(before, movement);
+        CcBiomechVec3 corrected = {after.x, after.y, after.z};
+        CcBiomechVec3 normal = {0};
+        if (!ProbeLocalCollision(
+                &context,
+                (CcBiomechVec3){before.x, before.y, before.z},
+                (CcBiomechVec3){after.x, after.y, after.z},
+                points[point].radius, &corrected, &normal)) {
+            continue;
+        }
+        float correction_x = corrected.x - after.x;
+        float correction_z = corrected.z - after.z;
+        float proposed_correction = correction_x * correction_x +
+                                    correction_z * correction_z;
+        if (proposed_correction <= 0.0001f * 0.0001f) continue;
+
+        CcBiomechVec3 corrected_before = {before.x, before.y, before.z};
+        CcBiomechVec3 before_normal = {0};
+        (void)ProbeLocalCollision(
+            &context,
+            (CcBiomechVec3){before.x, before.y, before.z},
+            (CcBiomechVec3){before.x, before.y, before.z},
+            points[point].radius, &corrected_before, &before_normal);
+        float before_x = corrected_before.x - before.x;
+        float before_z = corrected_before.z - before.z;
+        float before_correction = before_x * before_x + before_z * before_z;
+        if (before_correction > proposed_correction + 0.000001f) continue;
+        return true;
+    }
+    return false;
+}
+
 static bool ResolveLocalAgentCapsuleMove(CcLocalSceneKind scene,
                                          Vector3 previous, Vector3 proposed,
                                          float radius,
@@ -1945,7 +2010,7 @@ static bool ResolveLocalAgentCapsuleMove(CcLocalSceneKind scene,
     Vector3 result = proposed;
     Vector3 normal = {0.0f, 1.0f, 0.0f};
     bool collided = false;
-    bool crossing_passable_support =
+    bool below_passable_support =
         passable_support_height > -FLT_MAX &&
         proposed.y < passable_support_height - 0.0001f;
     const float heights[] = {radius, 0.92f, 1.54f};
@@ -1974,12 +2039,25 @@ static bool ResolveLocalAgentCapsuleMove(CcLocalSceneKind scene,
                 corrected.y - heights[sample],
                 corrected.z,
             };
+            bool crossing_passable_support =
+                passable_support_height > -FLT_MAX * 0.5f &&
+                result.y < passable_support_height - 0.001f &&
+                candidate.y >= passable_support_height - 0.001f &&
+                sample_normal.y > 0.90f;
+            if (crossing_passable_support) {
+                /* During a mantle the ledge box is passable once contacts
+                   support the body. Its top is still a valid floor query,
+                   but snapping the root to that floor would skip the swept
+                   arc. Let the authored root reach the support height before
+                   normal grounding resumes. */
+                candidate.y = result.y;
+            }
             Vector3 correction = Vector3Subtract(candidate, result);
             /* Traversal deliberately releases the platform's side wall while
                the authored root crosses the lip. Do not turn the resulting
                ground-height query into an early vertical teleport: the
                authored root will reach the support height at montage end. */
-            if (crossing_passable_support && sample_normal.y > 0.50f &&
+            if (below_passable_support && sample_normal.y > 0.50f &&
                 correction.y > 0.0f && fabsf(correction.x) <= 0.00001f &&
                 fabsf(correction.z) <= 0.00001f) {
                 continue;
@@ -3270,31 +3348,19 @@ static void CourseAddSeparationPair(CcLocalAgent *first,
                      second->combat.team == CC_COMBAT_NEUTRAL;
     float minimum = hostile ? COMBAT_PERSONAL_SPACE :
                     bystander ? COMBAT_BYSTANDER_SPACE : COMBAT_ALLY_SPACE;
-    float x = first->position.x - second->position.x;
-    float z = first->position.z - second->position.z;
-    float distance_squared = x * x + z * z;
-    if (distance_squared >= minimum * minimum) return;
-    float distance = sqrtf(distance_squared);
-    if (distance <= 0.0001f) {
-        /* Stable, deterministic fallback for coincident actors. */
-        static const Vector2 directions[4] = {
-            {1.0f, 0.0f}, {0.0f, 1.0f},
-            {-1.0f, 0.0f}, {0.0f, -1.0f}
-        };
-        Vector2 direction = directions[pair_index & 3];
-        x = direction.x;
-        z = direction.y;
-        distance = 1.0f;
+    CcLimbVec3 first_correction = {0};
+    CcLimbVec3 second_correction = {0};
+    if (!CcRobotPredictiveAvoidance(
+            ToLimbVector(first->position), ToLimbVector(first->velocity),
+            ToLimbVector(second->position), ToLimbVector(second->velocity),
+            minimum, 0.85f, pair_index,
+            &first_correction, &second_correction)) {
+        return;
     }
-    float relative_speed = fminf(
-        0.92f, 0.12f + (minimum - sqrtf(distance_squared)) * 3.2f);
-    float shared_speed = relative_speed * 0.5f;
-    x /= distance;
-    z /= distance;
-    first->separation_velocity.x += x * shared_speed;
-    first->separation_velocity.z += z * shared_speed;
-    second->separation_velocity.x -= x * shared_speed;
-    second->separation_velocity.z -= z * shared_speed;
+    first->separation_velocity.x += first_correction.x;
+    first->separation_velocity.z += first_correction.z;
+    second->separation_velocity.x += second_correction.x;
+    second->separation_velocity.z += second_correction.z;
 }
 
 static void CourseLimitSeparation(CcLocalAgent *agent)
@@ -6208,7 +6274,8 @@ static bool TryHorizontalAxis(CcLocalAgent *agent, bool market_interior,
     candidate.z = candidate_z;
     if (StaticBodyBlocked(scene, candidate_x, candidate_z, agent->radius) ||
         LocalAgentCapsuleBlocked(scene, agent->position, candidate,
-                                 agent->radius)) {
+                                 agent->radius) ||
+        CcLocalAgentPointSpaceBlockedInternal(agent, candidate)) {
         return false;
     }
     if (move_x) agent->position.x = candidate_x;
@@ -8429,7 +8496,14 @@ Camera3D CcLocalCombatCameraInternal(Camera3D base,
         if (delta_time < 0.0f || delta_time > 0.12f) delta_time = 0.0f;
         delta_time = fminf(delta_time, 0.050f);
         combat_camera_rig.last_clock = clock;
-        float direction = active ? 1.65f : -1.35f;
+        /* Road ambushes begin inside a narrow authored bridge shot. Enter
+           their shoulder camera promptly so the parapets do not hold the
+           player at the edge of the wide establishing frame. Settlement
+           fights keep the calmer transition used by the gameplay reel. */
+        bool quick_road_entry = active && course != NULL &&
+                                course->scene == CC_LOCAL_SCENE_ROAD;
+        float direction = active ? (quick_road_entry ? 4.2f : 1.65f) :
+                                   -1.35f;
         combat_camera_rig.combat_weight = CombatClamp(
             combat_camera_rig.combat_weight + delta_time * direction,
             0.0f, 1.0f);
@@ -8459,10 +8533,8 @@ Camera3D CcLocalCombatCameraInternal(Camera3D base,
             base_offset, combat_camera_rig.locked_offset, weight);
         float desired_fovy = base_perspective_fovy +
             (combat_camera_rig.locked_fovy - base_perspective_fovy) * weight;
-        /* combat_weight already eases the transition. The display response
-           must not add a second long lag or the short bridge approach keeps
-           the camera beside the hero after the duel shot is active. */
-        float ease = 1.0f - expf(-delta_time * 7.0f);
+        float response = quick_road_entry ? 8.0f : 4.5f;
+        float ease = 1.0f - expf(-delta_time * response);
         combat_camera_rig.displayed_target = Vector3Lerp(
             combat_camera_rig.displayed_target, desired_target, ease);
         combat_camera_rig.displayed_offset = Vector3Lerp(
