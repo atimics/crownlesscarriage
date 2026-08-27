@@ -281,10 +281,15 @@ int main(void)
         .target_id = sealed_mine.dungeons[0].id,
         .dungeon_state = CC_DUNGEON_RESEALED
     };
+    CcMoney public_gold = CcSimTrackedGold(&public_mine);
+    CcMoney mine_market_coins = public_mine.settlements[3].market_coins;
     CC_CHECK(CcSimApply(&public_mine, &public_route, error, sizeof(error)));
     CC_CHECK(CcSimApply(&hidden_mine, &hidden_route, error, sizeof(error)));
     CC_CHECK(CcSimApply(&sealed_mine, &lasting_seal, error, sizeof(error)));
     CC_CHECK(!public_mine.routes[6].smuggler_route);
+    CC_CHECK(CcSimTrackedGold(&public_mine) == public_gold);
+    CC_CHECK(public_mine.settlements[3].market_coins ==
+             mine_market_coins + 12);
     CC_CHECK(public_mine.settlements[3].production[CC_GOOD_MATERIAL] >
              base_material);
     CC_CHECK(hidden_mine.bandits[0].influence > base_bandit_influence);
@@ -293,6 +298,38 @@ int main(void)
              base_material);
     CC_CHECK(sealed_mine.monsters[0].pressure <
              public_mine.monsters[0].pressure);
+
+    int32_t public_day = public_mine.current_day;
+    int32_t public_tools = public_mine.player.cargo[CC_GOOD_TOOLS];
+    int32_t public_production =
+        public_mine.settlements[3].production[CC_GOOD_MATERIAL];
+    int32_t public_capacity = public_mine.routes[6].capacity;
+    CcMoney public_coins = public_mine.player.coins;
+    CC_CHECK(!CcSimApply(&public_mine, &public_route,
+                         error, sizeof(error)));
+    CC_CHECK(public_mine.current_day == public_day);
+    CC_CHECK(public_mine.player.cargo[CC_GOOD_TOOLS] == public_tools);
+    CC_CHECK(public_mine.player.coins == public_coins);
+    CC_CHECK(public_mine.settlements[3].production[CC_GOOD_MATERIAL] ==
+             public_production);
+    CC_CHECK(public_mine.routes[6].capacity == public_capacity);
+
+    CcId dungeon_road_id = public_mine.routes[6].id;
+    public_mine.player.cargo[CC_GOOD_TOOLS] += 5;
+    CC_CHECK(CcSimApply(&public_mine, &lasting_seal,
+                        error, sizeof(error)));
+    CC_CHECK(public_mine.routes[6].id == dungeon_road_id);
+    CC_CHECK(public_mine.routes[6].closed);
+    public_mine.player.cargo[CC_GOOD_TOOLS] += 2;
+    CC_CHECK(CcSimApply(&public_mine, &public_route,
+                        error, sizeof(error)));
+    CC_CHECK(public_mine.routes[6].id == dungeon_road_id);
+    CC_CHECK(!public_mine.routes[6].closed &&
+             !public_mine.routes[6].smuggler_route);
+    CC_CHECK(public_mine.settlements[3].production[CC_GOOD_MATERIAL] ==
+             public_production);
+    CC_CHECK(public_mine.routes[6].capacity == public_capacity);
+    CC_CHECK(CcSimTrackedGold(&public_mine) == public_gold);
 
     CC_CHECK(CcSimValidate(&official, error, sizeof(error)));
     CC_CHECK(CcSimValidate(&tolled_road, error, sizeof(error)));

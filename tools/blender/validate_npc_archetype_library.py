@@ -52,6 +52,16 @@ def validate() -> int:
         failures.append(f"role indices do not match pose families: {indices!r}")
     if tuple(manifest.get("material_order", ())) != EXPECTED_PALETTE:
         failures.append("manifest material order changed")
+    expected_exports = {Path(entry["export"]).name for entry in entries}
+    export_dir = ROOT / "assets" / "exports" / "npc"
+    shipped_exports = {
+        path.name for path in export_dir.glob("npc_*.glb")
+        if not path.name.startswith("npc_module_")
+    }
+    for name in sorted(shipped_exports - expected_exports):
+        failures.append(f"stale archetype export is not in the manifest: {name}")
+    for name in sorted(expected_exports - shipped_exports):
+        failures.append(f"manifest archetype export is missing: {name}")
 
     total_triangles = 0
     for entry in entries:

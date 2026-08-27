@@ -2913,8 +2913,7 @@ int main(int argc, char **argv)
         (void)snprintf(message, sizeof(message),
                        "Same character model.");
     } else if (capture_room) {
-        (void)snprintf(message, sizeof(message),
-                       "Each fixed room reveals a landmark, a route, and the state of the living settlement.");
+        (void)snprintf(message, sizeof(message), "Town view.");
     } else if (capture_creatures) {
         (void)snprintf(message, sizeof(message), "Creature settlement.");
     }
