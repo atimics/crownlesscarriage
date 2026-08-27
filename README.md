@@ -59,8 +59,8 @@ The architecture proof connects these parts in one running build:
 - A market interior whose stock and prices come from the regional simulation
 - Local situation boards with named sponsors, affected people, deadlines,
   rewards, accepted promises, and reputation consequences
-- A three-slot carriage map case with route-specific, tradeable charts,
-  including an illustrated Gloamgate-to-Alderwatch sheet sold in Gloamgate
+- A twelve-chart collectible map set with distinct physical artwork, a
+  three-slot carriage case, and a persistent storage archive in Gloamgate
 - Real-time carriage journeys, a dedicated road scene, and a route crisis that
   can be resolved through combat or payment
 - Immediate local aftermath and delayed consequences after a journey

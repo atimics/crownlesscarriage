@@ -23,6 +23,9 @@
 #define CC_VIOLET CC_STYLE_VIOLET
 #define CC_GLOAMGATE_ALDERWATCH_MAP_ASSET \
     "assets/maps/gloamgate_to_alderwatch.png"
+#define CC_COLLECTIBLE_MAP_ATLAS_ASSET \
+    "assets/maps/collectible_map_atlas.png"
+#define CC_MAP_LIST_ROWS 8
 
 typedef enum ClientView {
     VIEW_LOCAL,
@@ -1037,9 +1040,39 @@ static void DrawLocalMovementReticle(const LocalState *local,
 
 static bool MapVisibleAtCarriage(const CcSim *sim, const CcMap *map)
 {
-    return sim != NULL && map != NULL &&
-           (map->owner_id == sim->player.id ||
-            map->owner_id == sim->player.location_id);
+    if (sim == NULL || map == NULL) return false;
+    if (map->owner_id == sim->player.location_id) return true;
+    if (map->owner_id != sim->player.id ||
+        !CcSimMapIsCatalogued(sim, map)) return false;
+    return !CcSimMapIsArchived(sim, map) ||
+           sim->player.location_id == sim->settlements[1].id;
+}
+
+static int32_t VisibleMapCount(const CcSim *sim)
+{
+    if (sim == NULL) return 0;
+    int32_t count = 0;
+    for (int32_t i = 0; i < sim->map_count; ++i) {
+        if (MapVisibleAtCarriage(sim, &sim->maps[i])) count += 1;
+    }
+    return count;
+}
+
+static int32_t VisibleMapListStart(const CcSim *sim, int32_t selected)
+{
+    int32_t rank = 0;
+    int32_t selected_rank = 0;
+    for (int32_t i = 0; sim != NULL && i < sim->map_count; ++i) {
+        if (!MapVisibleAtCarriage(sim, &sim->maps[i])) continue;
+        if (i == selected) selected_rank = rank;
+        rank += 1;
+    }
+    int32_t start = selected_rank - CC_MAP_LIST_ROWS / 2;
+    int32_t maximum = rank - CC_MAP_LIST_ROWS;
+    if (start < 0) start = 0;
+    if (maximum < 0) maximum = 0;
+    if (start > maximum) start = maximum;
+    return start;
 }
 
 static int32_t FirstVisibleMapIndex(const CcSim *sim)
@@ -1140,21 +1173,65 @@ static void DrawChartTown(Vector2 point, const CcSettlement *place, bool current
     if (current) CcOverlayDrawText("CARRIAGE", (int)point.x - 34, (int)point.y - 38, 10, DANGER);
 }
 
+static bool DrawCollectibleMapArt(const CcSim *sim, const CcMap *map,
+                                  Texture2D illustrated_map,
+                                  Texture2D collectible_atlas)
+{
+    if (IsGloamgateAlderwatchMap(map) && illustrated_map.id != 0U) {
+        Rectangle source = {0.0f, 0.0f, (float)illustrated_map.width,
+                            (float)illustrated_map.height};
+        Rectangle destination = {294.0f, 163.0f, 596.0f, 397.33f};
+        DrawTexturePro(illustrated_map, source, destination,
+                       (Vector2){0.0f, 0.0f}, 0.0f, WHITE);
+        return true;
+    }
+    if (sim == NULL || map == NULL || collectible_atlas.id == 0U) {
+        return false;
+    }
+    static const int32_t art_cell[CC_MAP_COLLECTION_COUNT] = {
+        2, 0, 4, 5, 8, 9, 1, 3, 6, 7, 10, 11
+    };
+    int32_t slot = (int32_t)(map - sim->maps);
+    if (slot < 0 || slot >= CC_MAP_COLLECTION_COUNT) return false;
+    int32_t cell = art_cell[slot];
+    float cell_width = (float)collectible_atlas.width / 4.0f;
+    float cell_height = (float)collectible_atlas.height / 3.0f;
+    Rectangle source = {(float)(cell % 4) * cell_width,
+                        (float)(cell / 4) * cell_height,
+                        cell_width, cell_height};
+    Rectangle destination = {393.5f, 164.0f, 397.0f, 397.0f};
+    DrawTexturePro(collectible_atlas, source, destination,
+                   (Vector2){0.0f, 0.0f}, 0.0f, WHITE);
+    Color title_ink = (Color){66, 57, 43, 255};
+    int32_t title_width = CcOverlayMeasureText(map->name, 20);
+    CcOverlayDrawText(map->name, 592 - title_width / 2, 125, 20,
+                      title_ink);
+    return true;
+}
+
 static void DrawMap(const CcSim *sim, int32_t selected, float clock,
-                    Texture2D illustrated_map)
+                    Texture2D illustrated_map,
+                    Texture2D collectible_atlas)
 {
     (void)clock;
     DrawPanel((Rectangle){20.0f, 82.0f, 900.0f, 568.0f},
               (Color){11, 20, 24, 248});
     CcOverlayDrawText("CARRIAGE MAP CASE", 38, 101, 18, CC_GOLD);
-    CcOverlayDrawText(TextFormat("%d / %d PHYSICAL CHARTS", CcPlayerMapCount(sim),
-                        sim->player.map_capacity), 38, 126, 10, MUTED);
+    CcOverlayDrawText(TextFormat("CASE %d/%d   CATALOGUE %d/%d",
+                        CcPlayerMapCount(sim), sim->player.map_capacity,
+                        CcPlayerMapCollectionCount(sim),
+                        CC_MAP_COLLECTION_COUNT), 38, 126, 10, MUTED);
 
+    int32_t visible_start = VisibleMapListStart(sim, selected);
+    int32_t visible_rank = 0;
     int32_t row = 0;
     for (int32_t i = 0; i < sim->map_count; ++i) {
         const CcMap *map = &sim->maps[i];
         if (!MapVisibleAtCarriage(sim, map)) continue;
+        if (visible_rank++ < visible_start) continue;
+        if (row >= CC_MAP_LIST_ROWS) break;
         bool owned = map->owner_id == sim->player.id;
+        bool archived = CcSimMapIsArchived(sim, map);
         int y = 154 + row * 51;
         Color paper_color = map->contraband ? (Color){57, 34, 55, 255} :
                                               (Color){52, 48, 37, 255};
@@ -1165,10 +1242,17 @@ static void DrawMap(const CcSim *sim, int32_t selected, float clock,
         DrawRectangleRounded((Rectangle){37.0f, (float)y, 226.0f, 43.0f},
                              0.16f, 5, paper_color);
         CcOverlayDrawText(map->name, 48, y + 7, 11, INK);
-        CcOverlayDrawText(owned ? "IN THE CASE" : TextFormat("FOR SALE  %d C", map->ask_price),
+        CcOverlayDrawText(archived ? "IN GLOAMGATE ARCHIVE" :
+                 owned ? "IN THE CASE" :
+                 TextFormat("FOR SALE  %d C", map->ask_price),
                  48, y + 25, 9, owned ? TEAL : CC_GOLD);
         if (map->contraband) CcOverlayDrawText("ILLICIT", 205, y + 25, 8, CC_VIOLET);
         row += 1;
+    }
+    if (VisibleMapCount(sim) > CC_MAP_LIST_ROWS) {
+        CcOverlayDrawText(TextFormat("%d-%d OF %d", visible_start + 1,
+                            visible_start + row, VisibleMapCount(sim)),
+                 48, 570, 9, MUTED);
     }
     if (row == 0) CcOverlayDrawText("No charts are present at this stop.", 42, 172, 11, MUTED);
 
@@ -1183,14 +1267,8 @@ static void DrawMap(const CcSim *sim, int32_t selected, float clock,
         CcOverlayDrawText("THE CASE IS EMPTY", 452, 335, 22, (Color){83, 65, 46, 255});
         return;
     }
-    if (IsGloamgateAlderwatchMap(map) && illustrated_map.id != 0U) {
-        Rectangle source = {0.0f, 0.0f, (float)illustrated_map.width,
-                            (float)illustrated_map.height};
-        Rectangle destination = {294.0f, 163.0f, 596.0f, 397.33f};
-        DrawTexturePro(illustrated_map, source, destination,
-                       (Vector2){0.0f, 0.0f}, 0.0f, WHITE);
-        return;
-    }
+    if (DrawCollectibleMapArt(sim, map, illustrated_map,
+                              collectible_atlas)) return;
     const CcRoute *route = CcSimRoute(sim, map->route_id);
     const CcSettlement *from = route != NULL ? CcSimSettlement(sim, route->from_id) : NULL;
     const CcSettlement *to = route != NULL ? CcSimSettlement(sim, route->to_id) : NULL;
@@ -1227,6 +1305,10 @@ static void DrawSettlementPanel(const CcSim *sim, int32_t selected)
     CcOverlayDrawText(TextFormat("CROWNS %" PRId64 "   CASE %d/%d", sim->player.coins,
                         CcPlayerMapCount(sim), sim->player.map_capacity),
              958, 154, 10, MUTED);
+    CcOverlayDrawText(TextFormat("CATALOGUE %d/%d",
+                        CcPlayerMapCollectionCount(sim),
+                        CC_MAP_COLLECTION_COUNT),
+             958, 171, 10, MUTED);
     if (map == NULL) {
         CcOverlayDrawText("No carried or locally offered", 958, 204, 12, MUTED);
         CcOverlayDrawText("route maps are available.", 958, 223, 12, MUTED);
@@ -1251,11 +1333,18 @@ static void DrawSettlementPanel(const CcSim *sim, int32_t selected)
     CcOverlayDrawText("not live world-state telemetry.", 958, 437, 10, MUTED);
 
     bool owned = map->owner_id == sim->player.id;
+    bool archived = CcSimMapIsArchived(sim, map);
     CcId destination_id = route != NULL ? RouteOtherEnd(route, sim->player.location_id) : 0U;
     const CcSettlement *destination = CcSimSettlement(sim, destination_id);
     if (!owned) {
         CcOverlayDrawText(TextFormat("B  BUY FOR %d CROWNS", map->ask_price),
                  958, 486, 13, CC_GOLD);
+    } else if (archived) {
+        CcOverlayDrawText("A  RETRIEVE FROM ARCHIVE",
+                 958, 486, 12, TEAL);
+        CcOverlayDrawText(TextFormat("S  SELL FOR %d CROWNS",
+                            map->ask_price * 2 / 3),
+                 958, 511, 11, MUTED);
     } else {
         CcOverlayDrawText(TextFormat("S  SELL FOR %d CROWNS", map->ask_price * 2 / 3),
                  958, 486, 11, MUTED);
@@ -1266,6 +1355,11 @@ static void DrawSettlementPanel(const CcSim *sim, int32_t selected)
                  destination != NULL ? CC_GOLD : MUTED);
         if (route != NULL && route->closed && destination != NULL) {
             CcOverlayDrawText("R  attempt work at the route", 958, 535, 10, TEAL);
+        }
+        if (sim->player.location_id == sim->settlements[1].id) {
+            CcOverlayDrawText("A  STORE IN GLOAMGATE ARCHIVE",
+                     958, route != NULL && route->closed &&
+                     destination != NULL ? 555 : 535, 10, TEAL);
         }
     }
     CcOverlayDrawText("LEFT/RIGHT  leaf through objects", 958, 584, 9, MUTED);
@@ -2399,9 +2493,13 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
     }
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         Vector2 mouse = GetMousePosition();
+        int32_t visible_start = VisibleMapListStart(sim, *selected);
+        int32_t visible_rank = 0;
         int32_t row = 0;
         for (int32_t i = 0; i < sim->map_count; ++i) {
             if (!MapVisibleAtCarriage(sim, &sim->maps[i])) continue;
+            if (visible_rank++ < visible_start) continue;
+            if (row >= CC_MAP_LIST_ROWS) break;
             Rectangle item = {37.0f, (float)(154 + row * 51), 226.0f, 43.0f};
             if (CheckCollisionPointRec(mouse, item)) *selected = i;
             row += 1;
@@ -2421,10 +2519,21 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         (void)ApplyCommand(*journal, sim, sell, message, message_capacity);
         return;
     }
+    if (IsKeyPressed(KEY_A) && map->owner_id == sim->player.id) {
+        CcCommand archive = {
+            .kind = CcSimMapIsArchived(sim, map) ?
+                CC_COMMAND_RETRIEVE_MAP : CC_COMMAND_ARCHIVE_MAP,
+            .target_id = map_id
+        };
+        (void)ApplyCommand(*journal, sim, archive, message,
+                           message_capacity);
+        return;
+    }
 
     const CcRoute *route = CcSimRoute(sim, map->route_id);
     CcId destination_id = RouteOtherEnd(route, sim->player.location_id);
     if (IsKeyPressed(KEY_ENTER) && map->owner_id == sim->player.id &&
+        !CcSimMapIsArchived(sim, map) &&
         destination_id != 0U) {
         CcCommand travel = {
             .kind = CC_COMMAND_TRAVEL,
@@ -2594,12 +2703,20 @@ int main(int argc, char **argv)
     SetTargetFPS(render_benchmark || capture_action_reel ||
                  capture_gameplay_reel ? 0 : 60);
     Texture2D illustrated_map = {0};
+    Texture2D collectible_atlas = {0};
     char illustrated_map_path[1024];
     if (ResolveClientAssetPath(CC_GLOAMGATE_ALDERWATCH_MAP_ASSET,
                                illustrated_map_path,
                                sizeof(illustrated_map_path))) {
         illustrated_map = LoadTexture(illustrated_map_path);
         SetTextureFilter(illustrated_map, TEXTURE_FILTER_BILINEAR);
+    }
+    char collectible_atlas_path[1024];
+    if (ResolveClientAssetPath(CC_COLLECTIBLE_MAP_ATLAS_ASSET,
+                               collectible_atlas_path,
+                               sizeof(collectible_atlas_path))) {
+        collectible_atlas = LoadTexture(collectible_atlas_path);
+        SetTextureFilter(collectible_atlas, TEXTURE_FILTER_BILINEAR);
     }
     /* The playable world is authored against a fixed 2x art-pixel grid.
        Render it at half the presentation size, then enlarge with point
@@ -2680,12 +2797,7 @@ int main(int argc, char **argv)
     }
     int32_t selected = FirstVisibleMapIndex(&sim);
     if (capture_map_case) {
-        for (int32_t i = 0; i < sim.map_count; ++i) {
-            if (IsGloamgateAlderwatchMap(&sim.maps[i])) {
-                selected = i;
-                break;
-            }
-        }
+        selected = CC_MAP_GLOAMGATE_NIGHT_ROAD;
     }
     int32_t selected_situation = FirstActiveSituationIndex(&sim);
     ClientView view = capture_board ? VIEW_SITUATIONS :
@@ -2864,6 +2976,7 @@ int main(int argc, char **argv)
             CcLocalRendererShutdown();
             UnloadRenderTexture(local_target);
             if (illustrated_map.id != 0U) UnloadTexture(illustrated_map);
+            if (collectible_atlas.id != 0U) UnloadTexture(collectible_atlas);
             CloseWindow();
             return 1;
         }
@@ -2949,7 +3062,8 @@ int main(int argc, char **argv)
                              return_view == VIEW_MAP);
         if (map_underlay) {
             DrawHeader(&sim);
-            DrawMap(&sim, selected, clock, illustrated_map);
+            DrawMap(&sim, selected, clock, illustrated_map,
+                    collectible_atlas);
             DrawSettlementPanel(&sim, selected);
             DrawEventRibbon(&sim);
         } else {
@@ -3053,6 +3167,7 @@ int main(int argc, char **argv)
     CcLocalRendererShutdown();
     UnloadRenderTexture(local_target);
     if (illustrated_map.id != 0U) UnloadTexture(illustrated_map);
+    if (collectible_atlas.id != 0U) UnloadTexture(collectible_atlas);
     CloseWindow();
     if (render_benchmark) {
         double frames_per_second =

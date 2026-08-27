@@ -14,7 +14,7 @@
 #define CC_MAX_BANDITS 3
 #define CC_MAX_MONSTERS 3
 #define CC_MAX_DUNGEONS 3
-#define CC_MAX_MAPS CC_MAX_ROUTES
+#define CC_MAX_MAPS 12
 #define CC_MAX_TREASURES 24
 #define CC_MAX_SITUATIONS 12
 #define CC_MAX_EVENTS 256
@@ -23,10 +23,12 @@
 #define CC_EVENT_TEXT_CAPACITY 144
 #define CC_CARGO_CAPACITY 12
 #define CC_MAP_CAPACITY 3
+#define CC_MAP_COLLECTION_COUNT 12
 #define CC_GLOAMGATE_ALDERWATCH_MAP_NAME "Gloamgate to Alderwatch"
+#define CC_CROWNLESS_ATLAS_MAP_NAME "The Crownless Atlas"
 
-#define CC_SIM_SCHEMA_VERSION 11
-#define CC_GENERATOR_VERSION 11
+#define CC_SIM_SCHEMA_VERSION 12
+#define CC_GENERATOR_VERSION 12
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
 #define CC_WORLD_DAY_SUBTICKS (24 * 60 * CC_WORLD_MINUTE_SUBTICKS)
@@ -207,8 +209,25 @@ typedef enum CcCommandKind {
     CC_COMMAND_STEAL_DRAGON_HOARD,
     CC_COMMAND_RETURN_DRAGON_TREASURE,
     CC_COMMAND_BUY_TREASURE,
-    CC_COMMAND_SELL_TREASURE
+    CC_COMMAND_SELL_TREASURE,
+    CC_COMMAND_ARCHIVE_MAP,
+    CC_COMMAND_RETRIEVE_MAP
 } CcCommandKind;
+
+typedef enum CcCollectibleMapSlot {
+    CC_MAP_THORNFORD_FORDINGS,
+    CC_MAP_GLOAMGATE_ALDERWATCH,
+    CC_MAP_SILVERWICK_MINE_ROADS,
+    CC_MAP_ROSESPIRE_PILGRIM_WAY,
+    CC_MAP_TRIBUTE_ROADS,
+    CC_MAP_BROKEN_MARCH,
+    CC_MAP_GLOAMGATE_NIGHT_ROAD,
+    CC_MAP_ALDERWATCH_MUSTER,
+    CC_MAP_TREATY_BRIDGE_SURVEY,
+    CC_MAP_LOWER_SILVERWORKS,
+    CC_MAP_ASH_POOR_SKIN,
+    CC_MAP_CROWNLESS_ATLAS
+} CcCollectibleMapSlot;
 
 typedef struct CcKingdom {
     CcId id;
@@ -636,6 +655,8 @@ typedef struct CcPlayerCompany {
     int32_t passenger_capacity;
     int32_t map_capacity;
     int32_t reputation;
+    uint32_t map_catalogue_mask;
+    uint32_t map_archive_mask;
     CcId accepted_situation_id;
 } CcPlayerCompany;
 
@@ -767,5 +788,9 @@ bool CcSimLaunchBanditRaid(CcSim *sim, CcId bandit_id,
                            char *error, size_t error_capacity);
 int32_t CcPlayerCargoUsed(const CcPlayerCompany *player);
 int32_t CcPlayerMapCount(const CcSim *sim);
+int32_t CcPlayerMapCollectionCount(const CcSim *sim);
+bool CcSimMapIsCatalogued(const CcSim *sim, const CcMap *map);
+bool CcSimMapIsArchived(const CcSim *sim, const CcMap *map);
+void CcSimUpgradeMapCollection(CcSim *sim);
 
 #endif

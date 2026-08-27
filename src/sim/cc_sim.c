@@ -909,6 +909,35 @@ const CcMap *CcSimMap(const CcSim *sim, CcId id)
     return NULL;
 }
 
+static int32_t MapSlot(const CcSim *sim, const CcMap *map)
+{
+    if (sim == NULL || map == NULL) return -1;
+    for (int32_t i = 0; i < sim->map_count; ++i) {
+        if (&sim->maps[i] == map || sim->maps[i].id == map->id) return i;
+    }
+    return -1;
+}
+
+static uint32_t MapSlotBit(int32_t slot)
+{
+    return slot >= 0 && slot < CC_MAP_COLLECTION_COUNT ?
+        UINT32_C(1) << (uint32_t)slot : 0U;
+}
+
+bool CcSimMapIsCatalogued(const CcSim *sim, const CcMap *map)
+{
+    int32_t slot = MapSlot(sim, map);
+    return slot >= 0 &&
+           (sim->player.map_catalogue_mask & MapSlotBit(slot)) != 0U;
+}
+
+bool CcSimMapIsArchived(const CcSim *sim, const CcMap *map)
+{
+    int32_t slot = MapSlot(sim, map);
+    return slot >= 0 &&
+           (sim->player.map_archive_mask & MapSlotBit(slot)) != 0U;
+}
+
 static CcMap *MapMutable(CcSim *sim, CcId id)
 {
     return (CcMap *)CcSimMap((const CcSim *)sim, id);
@@ -928,7 +957,11 @@ const CcMap *CcSimMapForRoute(const CcSim *sim, CcId route_id, CcId owner_id)
     if (sim == NULL) return NULL;
     for (int32_t i = 0; i < sim->map_count; ++i) {
         const CcMap *map = &sim->maps[i];
-        if (map->route_id == route_id && map->owner_id == owner_id) return map;
+        if (map->route_id != route_id || map->owner_id != owner_id) continue;
+        if (owner_id == sim->player.id &&
+            (!CcSimMapIsCatalogued(sim, map) ||
+             CcSimMapIsArchived(sim, map))) continue;
+        return map;
     }
     return NULL;
 }
@@ -1159,7 +1192,21 @@ int32_t CcPlayerMapCount(const CcSim *sim)
     if (sim == NULL) return 0;
     int32_t count = 0;
     for (int32_t i = 0; i < sim->map_count; ++i) {
-        if (sim->maps[i].owner_id == sim->player.id) count += 1;
+        const CcMap *map = &sim->maps[i];
+        if (map->owner_id == sim->player.id &&
+            CcSimMapIsCatalogued(sim, map) &&
+            !CcSimMapIsArchived(sim, map)) count += 1;
+    }
+    return count;
+}
+
+int32_t CcPlayerMapCollectionCount(const CcSim *sim)
+{
+    if (sim == NULL) return 0;
+    uint32_t mask = sim->player.map_catalogue_mask;
+    int32_t count = 0;
+    for (int32_t i = 0; i < CC_MAP_COLLECTION_COUNT; ++i) {
+        if ((mask & MapSlotBit(i)) != 0U) count += 1;
     }
     return count;
 }
@@ -1270,44 +1317,80 @@ static void InitRoute(CcSim *sim, int32_t slot, int32_t from, int32_t to,
     route->smuggler_route = smuggler;
 }
 
-static void InitMaps(CcSim *sim)
+typedef struct CcCollectibleMapSeed {
+    const char *name;
+    int32_t route_slot;
+    int32_t maker_slot;
+    int32_t owner_slot;
+    int32_t age;
+    int32_t accuracy;
+    int32_t condition_offset;
+    int32_t danger_offset;
+    int32_t ask_price;
+    bool contraband;
+} CcCollectibleMapSeed;
+
+static const CcCollectibleMapSeed COLLECTIBLE_MAPS[CC_MAP_COLLECTION_COUNT] = {
+    {"Thornford Fordings", 0, 0, -1, 8, 78, -3, -8, 18, false},
+    {CC_GLOAMGATE_ALDERWATCH_MAP_NAME, 1, 1, 1, 0, 72, 0, 0, 24, false},
+    {"Silverwick Mine Roads", 2, 3, 2, 17, 83, -7, 5, 28, false},
+    {"The Rosespire Pilgrim Way", 3, 4, 4, 36, 68, -2, -12, 26, false},
+    {"Tribute Roads of Varkesh", 5, 5, 5, 60, 47, -15, 24, 44, true},
+    {"The Broken March", 4, 4, 4, 95, 41, -21, 17, 36, false},
+    {"The Gloamgate Night Road", 6, 1, 1, 4, 56, -9, 19, 31, true},
+    {"Alderwatch Muster Map", 7, 2, 2, 12, 90, 4, -3, 42, true},
+    {"Treaty Bridge Survey", 1, 2, 2, 1, 94, 8, -4, 38, false},
+    {"The Lower Silverworks", 2, 3, 3, 120, 63, -18, 28, 34, true},
+    {"The Ash-Poor's Skin Map", 6, 1, 1, 6, 38, -12, 31, 48, true},
+    {CC_CROWNLESS_ATLAS_MAP_NAME, 5, 1, -1, 0, 88, 0, 0, 90, false}
+};
+
+void CcSimUpgradeMapCollection(CcSim *sim)
 {
-    sim->map_count = sim->route_count;
-    for (int32_t i = 0; i < sim->route_count; ++i) {
-        const CcRoute *route = &sim->routes[i];
-        const CcSettlement *from = CcSimSettlement(sim, route->from_id);
-        const CcSettlement *to = CcSimSettlement(sim, route->to_id);
+    if (sim == NULL || sim->route_count < CC_MAX_ROUTES ||
+        sim->settlement_count < CC_MAX_SETTLEMENTS) return;
+    int32_t old_count = sim->map_count;
+    for (int32_t i = 0; i < CC_MAP_COLLECTION_COUNT; ++i) {
+        const CcCollectibleMapSeed *seed = &COLLECTIBLE_MAPS[i];
+        const CcRoute *route = &sim->routes[seed->route_slot];
         CcMap *map = &sim->maps[i];
-        map->id = NextId(sim, CC_ENTITY_MAP);
+        bool existing = i < old_count &&
+                        CcIdKind(map->id) == CC_ENTITY_MAP;
+        if (!existing) {
+            *map = (CcMap){0};
+            map->id = NextId(sim, CC_ENTITY_MAP);
+            map->owner_id = seed->owner_slot < 0 ? sim->player.id :
+                sim->settlements[seed->owner_slot].id;
+            map->surveyed_day = sim->current_day - seed->age;
+            map->accuracy = seed->accuracy;
+            map->recorded_condition = ClampI32(
+                route->condition + seed->condition_offset, 0, 100);
+            map->recorded_danger = ClampI32(
+                CcSimRouteDanger(sim, route->id) + seed->danger_offset,
+                0, 100);
+            map->ask_price = seed->ask_price;
+            map->contraband = seed->contraband;
+        }
         map->route_id = route->id;
-        map->maker_settlement_id = route->from_id;
-        map->owner_id = i == 0 ? sim->player.id : route->from_id;
-        map->surveyed_day = sim->current_day - (int32_t)(NextRandom(sim) % 46U);
-        map->accuracy = i == 0 ? 92 : 58 + (int32_t)(NextRandom(sim) % 36U);
-        map->recorded_condition = ClampI32(
-            route->condition + (int32_t)(NextRandom(sim) % 13U) - 6, 0, 100);
-        map->recorded_danger = ClampI32(
-            CcSimRouteDanger(sim, route->id) + (int32_t)(NextRandom(sim) % 19U) - 9,
-            0, 100);
-        map->ask_price = 8 + route->travel_days * 2 +
-                         (100 - map->accuracy) / 7 +
-                         (route->smuggler_route ? 5 : 0);
-        map->contraband = route->smuggler_route;
-        (void)snprintf(map->name, sizeof(map->name),
-                       route->smuggler_route ? "%.10s-%.10s night chart" :
-                                               "%.10s-%.10s road sheet",
-                       from != NULL ? from->name : "Unknown",
-                       to != NULL ? to->name : "Unknown");
-        if (i == 1) {
-            map->surveyed_day = sim->current_day;
-            map->accuracy = 72;
-            map->recorded_condition = route->condition;
-            map->recorded_danger = CcSimRouteDanger(sim, route->id);
-            map->ask_price = 24;
-            (void)snprintf(map->name, sizeof(map->name), "%s",
-                           CC_GLOAMGATE_ALDERWATCH_MAP_NAME);
+        map->maker_settlement_id = sim->settlements[seed->maker_slot].id;
+        (void)snprintf(map->name, sizeof(map->name), "%s", seed->name);
+    }
+    sim->map_count = CC_MAP_COLLECTION_COUNT;
+    if (sim->player.map_catalogue_mask == 0U) {
+        for (int32_t i = 0; i < sim->map_count; ++i) {
+            if (i != CC_MAP_CROWNLESS_ATLAS &&
+                sim->maps[i].owner_id == sim->player.id) {
+                sim->player.map_catalogue_mask |= MapSlotBit(i);
+            }
         }
     }
+    sim->player.map_archive_mask &= sim->player.map_catalogue_mask;
+}
+
+static void InitMaps(CcSim *sim)
+{
+    sim->map_count = 0;
+    CcSimUpgradeMapCollection(sim);
 }
 
 static void InitFaction(CcSim *sim, int32_t slot, int32_t kingdom_slot,
@@ -1493,7 +1576,7 @@ void CcSimInit(CcSim *sim, uint32_t seed)
     for (int32_t i = 0; i < CC_MAX_SETTLEMENTS; ++i) {
         GeneratePlaceName(sim, place_names[i], (CcSettlementFunction)i);
     }
-    InitSettlement(sim, 0, 0, place_names[0], CC_SETTLEMENT_FARMING,
+    InitSettlement(sim, 0, 0, "Thornford", CC_SETTLEMENT_FARMING,
                    CC_SETTLEMENT_VILLAGE,
                    Jitter(sim, 125, 22), Jitter(sim, 500, 20), 1460, 58, 54);
     InitSettlement(sim, 1, 0, "Gloamgate", CC_SETTLEMENT_MARKET,
@@ -1505,7 +1588,7 @@ void CcSimInit(CcSim *sim, uint32_t seed)
     InitSettlement(sim, 3, 1, "Silverwick", CC_SETTLEMENT_MINING,
                    CC_SETTLEMENT_TOWN,
                    Jitter(sim, 755, 22), Jitter(sim, 455, 20), 2350, 43, 61);
-    InitSettlement(sim, 4, 2, place_names[4], CC_SETTLEMENT_CAPITAL,
+    InitSettlement(sim, 4, 2, "Rosespire", CC_SETTLEMENT_CAPITAL,
                    CC_SETTLEMENT_CAPITAL_SIZE,
                    Jitter(sim, 770, 18), Jitter(sim, 145, 18), 3180, 71, 72);
     InitSettlement(sim, 5, 2, place_names[5], CC_SETTLEMENT_DUNGEON_TOWN,
@@ -5207,6 +5290,25 @@ static bool ApplyTrade(CcSim *sim, const CcCommand *command,
     return true;
 }
 
+static void UnlockCrownlessAtlas(CcSim *sim)
+{
+    uint32_t required = (UINT32_C(1) << CC_MAP_CROWNLESS_ATLAS) - 1U;
+    uint32_t atlas_bit = MapSlotBit(CC_MAP_CROWNLESS_ATLAS);
+    if ((sim->player.map_catalogue_mask & required) != required ||
+        (sim->player.map_catalogue_mask & atlas_bit) != 0U) return;
+    CcMap *atlas = &sim->maps[CC_MAP_CROWNLESS_ATLAS];
+    atlas->owner_id = sim->player.id;
+    sim->player.map_catalogue_mask |= atlas_bit;
+    sim->player.map_archive_mask |= atlas_bit;
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text),
+                   "The Gloamgate archive binds eleven collected charts into %s.",
+                   atlas->name);
+    (void)PushEvent(sim, CC_EVENT_MAP_BOUGHT, atlas->id,
+                    sim->settlements[1].id, 0U,
+                    CC_MAP_COLLECTION_COUNT, text);
+}
+
 static bool ApplyBuyMap(CcSim *sim, const CcCommand *command,
                         char *error, size_t error_capacity)
 {
@@ -5228,12 +5330,16 @@ static bool ApplyBuyMap(CcSim *sim, const CcCommand *command,
     sim->player.coins -= map->ask_price;
     seller->market_coins += map->ask_price;
     map->owner_id = sim->player.id;
+    int32_t slot = MapSlot(sim, map);
+    sim->player.map_catalogue_mask |= MapSlotBit(slot);
+    sim->player.map_archive_mask &= ~MapSlotBit(slot);
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(text, sizeof(text),
                    "The Crownless company buys %s at %s for %d crowns.",
                    map->name, seller->name, map->ask_price);
     (void)PushEvent(sim, CC_EVENT_MAP_BOUGHT, map->id, seller->id, 0U,
                     map->ask_price, text);
+    UnlockCrownlessAtlas(sim);
     SetError(error, error_capacity, "");
     return true;
 }
@@ -5248,6 +5354,12 @@ static bool ApplySellMap(CcSim *sim, const CcCommand *command,
         SetError(error, error_capacity, "The carriage does not carry that chart.");
         return false;
     }
+    if (CcSimMapIsArchived(sim, map) &&
+        sim->player.location_id != sim->settlements[1].id) {
+        SetError(error, error_capacity,
+                 "That chart is stored in the Gloamgate archive.");
+        return false;
+    }
     int32_t payment = MaximumI32(1, map->ask_price * 2 / 3);
     if (buyer->market_coins < payment) {
         SetError(error, error_capacity,
@@ -5255,6 +5367,7 @@ static bool ApplySellMap(CcSim *sim, const CcCommand *command,
         return false;
     }
     map->owner_id = buyer->id;
+    sim->player.map_archive_mask &= ~MapSlotBit(MapSlot(sim, map));
     buyer->market_coins -= payment;
     sim->player.coins += payment;
     char text[CC_EVENT_TEXT_CAPACITY];
@@ -5263,6 +5376,56 @@ static bool ApplySellMap(CcSim *sim, const CcCommand *command,
                    map->name, buyer->name, payment);
     (void)PushEvent(sim, CC_EVENT_MAP_SOLD, map->id, buyer->id, 0U,
                     payment, text);
+    SetError(error, error_capacity, "");
+    return true;
+}
+
+static bool ApplyArchiveMap(CcSim *sim, const CcCommand *command,
+                            char *error, size_t error_capacity)
+{
+    CcMap *map = MapMutable(sim, command->target_id);
+    if (map == NULL || map->owner_id != sim->player.id ||
+        !CcSimMapIsCatalogued(sim, map)) {
+        SetError(error, error_capacity,
+                 "The carriage does not own that chart.");
+        return false;
+    }
+    if (sim->journey.active ||
+        sim->player.location_id != sim->settlements[1].id) {
+        SetError(error, error_capacity,
+                 "Maps can only be stored at the Gloamgate archive.");
+        return false;
+    }
+    if (CcSimMapIsArchived(sim, map)) {
+        SetError(error, error_capacity, "That chart is already archived.");
+        return false;
+    }
+    sim->player.map_archive_mask |= MapSlotBit(MapSlot(sim, map));
+    SetError(error, error_capacity, "");
+    return true;
+}
+
+static bool ApplyRetrieveMap(CcSim *sim, const CcCommand *command,
+                             char *error, size_t error_capacity)
+{
+    CcMap *map = MapMutable(sim, command->target_id);
+    if (map == NULL || map->owner_id != sim->player.id ||
+        !CcSimMapIsArchived(sim, map)) {
+        SetError(error, error_capacity,
+                 "That chart is not in the archive.");
+        return false;
+    }
+    if (sim->journey.active ||
+        sim->player.location_id != sim->settlements[1].id) {
+        SetError(error, error_capacity,
+                 "The Gloamgate archive is not within reach.");
+        return false;
+    }
+    if (CcPlayerMapCount(sim) >= sim->player.map_capacity) {
+        SetError(error, error_capacity, "The carriage map case is full.");
+        return false;
+    }
+    sim->player.map_archive_mask &= ~MapSlotBit(MapSlot(sim, map));
     SetError(error, error_capacity, "");
     return true;
 }
@@ -6191,6 +6354,10 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
             return ApplyBuyTreasure(sim, command, error, error_capacity);
         case CC_COMMAND_SELL_TREASURE:
             return ApplySellTreasure(sim, command, error, error_capacity);
+        case CC_COMMAND_ARCHIVE_MAP:
+            return ApplyArchiveMap(sim, command, error, error_capacity);
+        case CC_COMMAND_RETRIEVE_MAP:
+            return ApplyRetrieveMap(sim, command, error, error_capacity);
         case CC_COMMAND_ACCEPT_SITUATION:
             return ApplyAcceptSituation(sim, command, error, error_capacity);
         case CC_COMMAND_ABANDON_SITUATION:
@@ -6317,7 +6484,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                          sim->schema_version == 7U ||
                          sim->schema_version == 8U ||
                          sim->schema_version == 9U ||
-                         sim->schema_version == 10U;
+                         sim->schema_version == 10U ||
+                         sim->schema_version == 11U;
     bool supported_generator = sim->generator_version == CC_GENERATOR_VERSION ||
         (legacy_schema && (sim->generator_version == 3U ||
                            sim->generator_version == 5U ||
@@ -6325,7 +6493,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                            sim->generator_version == 7U ||
                            sim->generator_version == 8U ||
                            sim->generator_version == 9U ||
-                           sim->generator_version == 10U));
+                           sim->generator_version == 10U ||
+                           sim->generator_version == 11U));
     if ((!legacy_schema && sim->schema_version != CC_SIM_SCHEMA_VERSION) ||
         !supported_generator) {
         SetError(error, error_capacity, "Simulation version is unsupported.");
@@ -6352,6 +6521,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         sim->settlement_count < 1 || sim->settlement_count > CC_MAX_SETTLEMENTS ||
         sim->route_count < 0 || sim->route_count > CC_MAX_ROUTES ||
         sim->map_count < 0 || sim->map_count > CC_MAX_MAPS ||
+        (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
+         sim->map_count != CC_MAP_COLLECTION_COUNT) ||
         sim->treasure_count < 0 || sim->treasure_count > CC_MAX_TREASURES ||
         sim->faction_count < 0 || sim->faction_count > CC_MAX_FACTIONS ||
         sim->shipment_count < 0 || sim->shipment_count > CC_MAX_SHIPMENTS ||
@@ -6486,6 +6657,25 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             map->ask_price < 1) {
             SetError(error, error_capacity, "Physical map data is invalid.");
             return false;
+        }
+    }
+    if (sim->schema_version == CC_SIM_SCHEMA_VERSION) {
+        uint32_t known_maps =
+            (UINT32_C(1) << CC_MAP_COLLECTION_COUNT) - 1U;
+        if ((sim->player.map_catalogue_mask & ~known_maps) != 0U ||
+            (sim->player.map_archive_mask &
+             ~sim->player.map_catalogue_mask) != 0U) {
+            SetError(error, error_capacity,
+                     "Map collection state is invalid.");
+            return false;
+        }
+        for (int32_t i = 0; i < sim->map_count; ++i) {
+            if ((sim->player.map_archive_mask & MapSlotBit(i)) != 0U &&
+                sim->maps[i].owner_id != sim->player.id) {
+                SetError(error, error_capacity,
+                         "An archived map has the wrong owner.");
+                return false;
+            }
         }
     }
     int32_t player_treasure_count = 0;
@@ -7176,6 +7366,10 @@ uint64_t CcSimHash(const CcSim *sim)
     HASH_VALUE(sim->player.passenger_capacity); HASH_VALUE(sim->player.map_capacity);
     HASH_VALUE(sim->player.reputation);
     if (sim->schema_version >= 9U) HASH_VALUE(sim->player.treasure_cargo_slots);
+    if (sim->schema_version >= 12U) {
+        HASH_VALUE(sim->player.map_catalogue_mask);
+        HASH_VALUE(sim->player.map_archive_mask);
+    }
     /* Optional schema-v3 extension: omitting zero preserves hashes written by
        saves created before explicit charter commitments existed. */
     if (sim->player.accepted_situation_id != 0U) {

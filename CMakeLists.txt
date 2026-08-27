@@ -213,6 +213,9 @@ if(CC_BUILD_CLIENT)
         set(CC_GLOAMGATE_ALDERWATCH_MAP_ASSET
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/maps/gloamgate_to_alderwatch.png"
         )
+        set(CC_COLLECTIBLE_MAP_ATLAS_ASSET
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/maps/collectible_map_atlas.png"
+        )
         add_custom_target(crownless_hero_assets ALL
             COMMAND ${CMAKE_COMMAND} -E make_directory
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/hero"
@@ -307,6 +310,9 @@ if(CC_BUILD_CLIENT)
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${CC_GLOAMGATE_ALDERWATCH_MAP_ASSET}"
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/maps/gloamgate_to_alderwatch.png"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CC_COLLECTIBLE_MAP_ATLAS_ASSET}"
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/maps/collectible_map_atlas.png"
             DEPENDS "${CC_HERO_ENGINE_ASSET}" "${CC_HERO_ENGINE_MANIFEST}"
                     ${CC_NPC_ARCHETYPE_ASSETS} "${CC_NPC_ARCHETYPE_MANIFEST}"
                     "${CC_NPC_DYNAMIC_MODULE_MANIFEST}"
@@ -321,6 +327,7 @@ if(CC_BUILD_CLIENT)
                     "${CC_TREE_FOLIAGE_FRAGMENT_SHADER}"
                     "${CC_HERO_PIXEL_FRAGMENT_SHADER}"
                     "${CC_GLOAMGATE_ALDERWATCH_MAP_ASSET}"
+                    "${CC_COLLECTIBLE_MAP_ATLAS_ASSET}"
             VERBATIM
         )
         add_dependencies(crownless_carriage crownless_hero_assets)

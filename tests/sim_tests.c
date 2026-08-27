@@ -138,8 +138,9 @@ int main(void)
     ApplySequence(&first);
     ApplySequence(&second);
     CC_CHECK(CcSimHash(&first) == CcSimHash(&second));
-    CC_CHECK(first.map_count == first.route_count);
+    CC_CHECK(first.map_count == CC_MAP_COLLECTION_COUNT);
     CC_CHECK(CcPlayerMapCount(&first) == 1);
+    CC_CHECK(CcPlayerMapCollectionCount(&first) == 1);
     CC_CHECK(CcSimMapForRoute(&first, first.routes[0].id,
                              first.player.id) != NULL);
     const CcMap *offered = CcSimMapForRoute(
@@ -150,10 +151,12 @@ int main(void)
     CcCommand buy_map = {.kind = CC_COMMAND_BUY_MAP, .target_id = offered_id};
     CC_CHECK(CcSimApply(&first, &buy_map, error, sizeof(error)));
     CC_CHECK(CcPlayerMapCount(&first) == 2);
+    CC_CHECK(CcPlayerMapCollectionCount(&first) == 2);
     CC_CHECK(CcSimMap(&first, offered_id)->owner_id == first.player.id);
     CcCommand sell_map = {.kind = CC_COMMAND_SELL_MAP, .target_id = offered_id};
     CC_CHECK(CcSimApply(&first, &sell_map, error, sizeof(error)));
     CC_CHECK(CcPlayerMapCount(&first) == 1);
+    CC_CHECK(CcPlayerMapCollectionCount(&first) == 2);
     CC_CHECK(CcSimMap(&first, offered_id)->owner_id ==
              first.player.location_id);
 
@@ -179,6 +182,65 @@ int main(void)
     CC_CHECK(CcSimApply(&first, &buy_illustrated, error, sizeof(error)));
     CC_CHECK(CcSimMap(&first, illustrated->id)->owner_id == first.player.id);
     CC_CHECK(CcPlayerMapCount(&first) == 2);
+    CcCommand archive_illustrated = {
+        .kind = CC_COMMAND_ARCHIVE_MAP,
+        .target_id = illustrated->id
+    };
+    CC_CHECK(CcSimApply(&first, &archive_illustrated,
+                        error, sizeof(error)));
+    CC_CHECK(CcSimMapIsArchived(&first, illustrated));
+    CC_CHECK(CcPlayerMapCount(&first) == 1);
+    CC_CHECK(CcSimMapForRoute(&first, first.routes[1].id,
+                             first.player.id) == NULL);
+    CcCommand retrieve_illustrated = {
+        .kind = CC_COMMAND_RETRIEVE_MAP,
+        .target_id = illustrated->id
+    };
+    CC_CHECK(CcSimApply(&first, &retrieve_illustrated,
+                        error, sizeof(error)));
+    CC_CHECK(!CcSimMapIsArchived(&first, illustrated));
+    CC_CHECK(CcPlayerMapCount(&first) == 2);
+
+    CcSim collector;
+    CcSimInit(&collector, UINT32_C(0xc011ec7));
+    collector.player.coins = 10000;
+    collector.player.location_id = collector.settlements[1].id;
+    CcCommand store_starting = {
+        .kind = CC_COMMAND_ARCHIVE_MAP,
+        .target_id = collector.maps[CC_MAP_THORNFORD_FORDINGS].id
+    };
+    CC_CHECK(CcSimApply(&collector, &store_starting,
+                        error, sizeof(error)));
+    for (int32_t i = 0; i < CC_MAP_CROWNLESS_ATLAS; ++i) {
+        CcMap *map = &collector.maps[i];
+        if (map->owner_id == collector.player.id) continue;
+        collector.player.location_id = map->owner_id;
+        CcCommand collect = {
+            .kind = CC_COMMAND_BUY_MAP,
+            .target_id = map->id
+        };
+        CC_CHECK(CcSimApply(&collector, &collect, error, sizeof(error)));
+        collector.player.location_id = collector.settlements[1].id;
+        CcCommand store = {
+            .kind = CC_COMMAND_ARCHIVE_MAP,
+            .target_id = map->id
+        };
+        CC_CHECK(CcSimApply(&collector, &store, error, sizeof(error)));
+    }
+    const CcMap *atlas = &collector.maps[CC_MAP_CROWNLESS_ATLAS];
+    CC_CHECK(CcPlayerMapCollectionCount(&collector) ==
+             CC_MAP_COLLECTION_COUNT);
+    CC_CHECK(CcSimMapIsCatalogued(&collector, atlas));
+    CC_CHECK(CcSimMapIsArchived(&collector, atlas));
+    CcCommand retrieve_atlas = {
+        .kind = CC_COMMAND_RETRIEVE_MAP,
+        .target_id = atlas->id
+    };
+    CC_CHECK(CcSimApply(&collector, &retrieve_atlas,
+                        error, sizeof(error)));
+    CC_CHECK(!CcSimMapIsArchived(&collector, atlas));
+    collector.carriage.location_id = collector.player.location_id;
+    CC_CHECK(CcSimValidate(&collector, error, sizeof(error)));
 
     CcSim uncharted;
     CcSimInit(&uncharted, UINT32_C(0x12345678));

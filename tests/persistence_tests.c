@@ -190,6 +190,31 @@ static void CheckSchema10Compatibility(char *error, size_t error_capacity)
     RemoveDatabase(path);
 }
 
+static void CheckSchema11MapCompatibility(char *error,
+                                          size_t error_capacity)
+{
+    const char *path = "persistence-legacy-v11-map-test.ccsave";
+    RemoveDatabase(path);
+    CcSim legacy;
+    CcSimInit(&legacy, UINT32_C(0x1e9ac11));
+    legacy.schema_version = 11U;
+    legacy.generator_version = 11U;
+    legacy.map_count = CC_MAX_ROUTES;
+    legacy.player.map_catalogue_mask = 0U;
+    legacy.player.map_archive_mask = 0U;
+    CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.generator_version == CC_GENERATOR_VERSION);
+    CC_CHECK(restored.map_count == CC_MAP_COLLECTION_COUNT);
+    CC_CHECK(CcPlayerMapCollectionCount(&restored) == 1);
+    CC_CHECK(strcmp(restored.maps[CC_MAP_CROWNLESS_ATLAS].name,
+                    CC_CROWNLESS_ATLAS_MAP_NAME) == 0);
+    CC_CHECK(CcSimValidate(&restored, error, error_capacity));
+    RemoveDatabase(path);
+}
+
 static void CheckJournalRecovery(char *error, size_t error_capacity)
 {
     const char *path = "persistence-journal-recovery-test.ccsave";
@@ -494,6 +519,7 @@ int main(void)
     CheckSchema6Compatibility(error, sizeof(error));
     CheckSchema8Compatibility(error, sizeof(error));
     CheckSchema10Compatibility(error, sizeof(error));
+    CheckSchema11MapCompatibility(error, sizeof(error));
     CheckDiplomacyPersistence(error, sizeof(error));
     CheckJournalRecovery(error, sizeof(error));
     CheckJournalCheckpointAndTamper(error, sizeof(error));
@@ -560,6 +586,10 @@ int main(void)
     CC_CHECK(restored.player.map_capacity == original.player.map_capacity);
     CC_CHECK(restored.player.accepted_situation_id ==
              original.player.accepted_situation_id);
+    CC_CHECK(restored.player.map_catalogue_mask ==
+             original.player.map_catalogue_mask);
+    CC_CHECK(restored.player.map_archive_mask ==
+             original.player.map_archive_mask);
     CC_CHECK(restored.settlements[4].service_mask ==
              original.settlements[4].service_mask);
     CC_CHECK(restored.settlements[4].service_project ==
