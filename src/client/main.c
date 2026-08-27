@@ -982,7 +982,8 @@ static void DrawContextActionTray(const CcSim *sim, const LocalState *local,
                                     Fade(accent, hover ? 0.96f : 0.62f));
         int width = CcOverlayMeasureText(actions.items[i].label, 11);
         CcOverlayDrawText(actions.items[i].label,
-                          (int)(bounds.x + (bounds.width - width) * 0.5f),
+                          (int)(bounds.x +
+                                (bounds.width - (float)width) * 0.5f),
                           (int)bounds.y + 17, 11, hover ? accent : INK);
     }
 }
