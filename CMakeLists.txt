@@ -452,7 +452,8 @@ if(BUILD_TESTING)
             src/client/cc_local_renderer_stats.c
         )
         target_link_libraries(local_movement_tests PRIVATE
-            crownless_sim crownless_locomotion raylib
+            crownless_sim crownless_locomotion
+            crownless_creature_catalog raylib
         )
         target_compile_definitions(local_movement_tests PRIVATE
             CC_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}"
@@ -469,7 +470,8 @@ if(BUILD_TESTING)
             src/client/cc_local_renderer_stats.c
         )
         target_link_libraries(terrain_tests PRIVATE
-            crownless_sim crownless_locomotion raylib
+            crownless_sim crownless_locomotion
+            crownless_creature_catalog raylib
         )
         target_compile_definitions(terrain_tests PRIVATE
             CC_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}"

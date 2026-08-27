@@ -71,9 +71,10 @@ The manifest records one of three gait contracts:
 - `dragon_authored`: select a named dramatic state rather than treating the
   dragon as ambient livestock.
 
-This first asset expansion intentionally stops at the packaged model contract.
-Scene spawning should consume these manifest fields instead of adding another
-hard-coded path table to `cc_local3d.c`.
+The generated C catalog keeps runtime paths in sync with this manifest. The
+road scene uses authored horses and food-linked cattle. Settlement scenes show
+goblins at their lair or raid target, the tribute bearer during delivery, and
+the dragon at its lair with a state-specific authored pose.
 
 ## Gameplay-scale rules
 
@@ -96,3 +97,10 @@ unexpected body-plan contracts, multiple material primitives, absent
 `COLOR_0`, skins, animation tracks, excessive triangle counts, and implausible
 bounds. The family preview remains the visual gate for silhouette, scale, and
 palette balance.
+
+Runtime art checks can capture the state-driven settlement compositions:
+
+```sh
+./crownless_carriage --capture-creatures goblins goblins.png
+./crownless_carriage --capture-creatures dragon dragon.png
+```

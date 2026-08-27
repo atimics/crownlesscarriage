@@ -1,5 +1,6 @@
 #include "client/cc_local3d.h"
 #include "client/cc_local3d_internal.h"
+#include "client/cc_creature_catalog.h"
 #include "client/cc_overlay.h"
 #include "client/cc_visual_style.h"
 
@@ -49,6 +50,8 @@ typedef enum BridgeCheckpointStatus {
 static BridgeCheckpointStatus bridge_checkpoint_status =
     BRIDGE_CHECKPOINT_UNKNOWN;
 
+static bool RoadUsesAuthoredCheckpoint(void);
+static void DrawBox(Vector3 center, Vector3 size, Color color);
 typedef struct WorldLabel {
     Vector3 point;
     const char *text;
@@ -8569,6 +8572,14 @@ static const char *NPC_ARCHETYPE_POSE_PATH_SUFFIXES
 static NpcArchetypeCache npc_archetypes
     [CC_NPC_ROLE_COUNT][CC_NPC_ARCHETYPE_POSE_COUNT] = {0};
 
+typedef struct CreatureModelCache {
+    Model model;
+    bool ready;
+} CreatureModelCache;
+
+static CreatureModelCache creature_models
+    [CC_CREATURE_VARIANT_COUNT][CC_CREATURE_POSE_COUNT] = {0};
+
 /* Physics-driven people use unskinned, offline-generated rigid modules.  Each
    model is instanced against a resolved bone frame, so contact IK and ragdoll
    poses remain authoritative without a per-character vertex upload. */
@@ -9055,6 +9066,44 @@ static void LoadNpcArchetypes(void)
     }
 }
 
+static void LoadCreatureModels(void)
+{
+    for (int32_t variant = 0; variant < CC_CREATURE_VARIANT_COUNT;
+         ++variant) {
+        int32_t loaded_count = 0;
+        for (int32_t pose = 0; pose < CC_CREATURE_POSE_COUNT; ++pose) {
+            const char *path = CcCreatureAssetPath(
+                (CcCreatureVariant)variant, (CcCreaturePose)pose);
+            if (path == NULL) continue;
+            char resolved[1024];
+            if (!ResolveAssetPath(path, resolved, sizeof(resolved))) {
+                TraceLog(LOG_WARNING, "CREATURE: %s was not found", path);
+                continue;
+            }
+            Model model = LoadModel(resolved);
+            if (model.meshCount != 1 || model.materialCount < 1 ||
+                model.skeleton.boneCount != 0) {
+                TraceLog(LOG_WARNING,
+                         "CREATURE: invalid %s (%d meshes, %d materials, %d bones)",
+                         path, model.meshCount, model.materialCount,
+                         model.skeleton.boneCount);
+                if (model.meshCount > 0) UnloadModel(model);
+                continue;
+            }
+            CreatureModelCache *cached = &creature_models[variant][pose];
+            cached->model = model;
+            cached->ready = true;
+            loaded_count += 1;
+        }
+        const CcCreatureDefinition *definition = CcCreatureDefinitionAt(
+            (CcCreatureVariant)variant);
+        TraceLog(LOG_INFO, "CREATURE: loaded %s (%d/%d poses)",
+                 definition != NULL ? definition->name : "unknown",
+                 loaded_count,
+                 CcCreaturePoseCount((CcCreatureVariant)variant));
+    }
+}
+
 static void LoadNpcDynamicModules(void)
 {
     int32_t loaded_count = 0;
@@ -9316,22 +9365,11 @@ static void ApplyNpcBodyStyle(Model *model)
     }
 }
 
-static void SetNpcPalette(const CcNpcAppearance *appearance,
-                          float ink_strength, bool hero_emphasis,
-                          Vector3 hero_head_position)
+static void SetIndexedPalette(
+    const Color colors[CC_NPC_ARCHETYPE_MATERIAL_COUNT],
+    float ink_strength, bool hero_emphasis, Vector3 hero_head_position)
 {
-    if (!visual_style.npc_ready || appearance == NULL) return;
-    const Color colors[CC_NPC_ARCHETYPE_MATERIAL_COUNT] = {
-        appearance->skin,
-        appearance->hair,
-        appearance->underlayer,
-        appearance->outer,
-        appearance->trousers,
-        appearance->leather,
-        appearance->metal,
-        appearance->accent,
-        ShadeColor(appearance->hair, 0.62f),
-    };
+    if (!visual_style.npc_ready || colors == NULL) return;
     float palette[CC_NPC_ARCHETYPE_MATERIAL_COUNT * 4];
     for (int32_t index = 0; index < CC_NPC_ARCHETYPE_MATERIAL_COUNT;
          ++index) {
@@ -9380,6 +9418,118 @@ static void SetNpcPalette(const CcNpcAppearance *appearance,
                        visual_style.npc_skinned_hero_head_position_location,
                        &hero_head_position, SHADER_UNIFORM_VEC3);
     }
+}
+
+static void SetNpcPalette(const CcNpcAppearance *appearance,
+                          float ink_strength, bool hero_emphasis,
+                          Vector3 hero_head_position)
+{
+    if (appearance == NULL) return;
+    const Color colors[CC_NPC_ARCHETYPE_MATERIAL_COUNT] = {
+        appearance->skin,
+        appearance->hair,
+        appearance->underlayer,
+        appearance->outer,
+        appearance->trousers,
+        appearance->leather,
+        appearance->metal,
+        appearance->accent,
+        ShadeColor(appearance->hair, 0.62f),
+    };
+    SetIndexedPalette(colors, ink_strength, hero_emphasis,
+                      hero_head_position);
+}
+
+static void SetCreaturePalette(CcCreatureVariant variant, Color primary)
+{
+    Color colors[CC_NPC_ARCHETYPE_MATERIAL_COUNT] = {
+        (Color){104, 130, 70, 255}, (Color){48, 58, 42, 255},
+        (Color){88, 66, 48, 255}, (Color){112, 71, 54, 255},
+        (Color){73, 51, 42, 255}, (Color){194, 174, 126, 255},
+        (Color){126, 132, 128, 255}, (Color){183, 128, 54, 255},
+        (Color){236, 196, 74, 255},
+    };
+    switch (variant) {
+        case CC_CREATURE_GOBLIN_RAIDER:
+            colors[0] = (Color){115, 135, 70, 255};
+            colors[3] = (Color){113, 52, 46, 255};
+            colors[6] = (Color){145, 142, 129, 255};
+            colors[7] = (Color){198, 75, 48, 255};
+            break;
+        case CC_CREATURE_GOBLIN_TRIBUTE_BEARER:
+            colors[0] = (Color){117, 141, 76, 255};
+            colors[3] = (Color){78, 83, 105, 255};
+            colors[7] = (Color){220, 158, 54, 255};
+            break;
+        case CC_CREATURE_HORSE: {
+            Color coat = primary.a > 0 ? primary :
+                                         (Color){104, 78, 59, 255};
+            colors[0] = coat;
+            colors[1] = ShadeColor(coat, 0.54f);
+            colors[2] = ShadeColor(coat, 0.82f);
+            colors[3] = (Color){72, 48, 38, 255};
+            colors[4] = (Color){50, 37, 32, 255};
+            colors[7] = (Color){128, 88, 52, 255};
+            break;
+        }
+        case CC_CREATURE_COW: {
+            Color hide = primary.a > 0 ? primary :
+                                         (Color){180, 166, 137, 255};
+            colors[0] = (Color){190, 154, 127, 255};
+            colors[1] = (Color){61, 49, 43, 255};
+            colors[2] = hide;
+            colors[3] = (Color){88, 70, 59, 255};
+            colors[5] = (Color){205, 186, 143, 255};
+            colors[7] = (Color){137, 85, 61, 255};
+            break;
+        }
+        case CC_CREATURE_DRAGON:
+            colors[0] = (Color){71, 100, 73, 255};
+            colors[1] = (Color){30, 48, 42, 255};
+            colors[2] = (Color){91, 117, 76, 255};
+            colors[3] = (Color){66, 54, 48, 255};
+            colors[5] = (Color){190, 154, 94, 255};
+            colors[7] = (Color){157, 57, 43, 255};
+            colors[8] = (Color){245, 190, 48, 255};
+            break;
+        case CC_CREATURE_GOBLIN_SCAVENGER:
+        default:
+            break;
+    }
+    SetIndexedPalette(colors, variant == CC_CREATURE_DRAGON ? 0.66f : 0.54f,
+                      false, (Vector3){0});
+}
+
+static bool DrawCreature3D(CcCreatureVariant variant, CcCreaturePose pose,
+                           Vector3 position, float yaw, float scale,
+                           Color primary)
+{
+    if (variant < 0 || variant >= CC_CREATURE_VARIANT_COUNT) return false;
+    if (pose < 0 || pose >= CC_CREATURE_POSE_COUNT) {
+        pose = CC_CREATURE_POSE_IDLE;
+    }
+    CreatureModelCache *creature = &creature_models[variant][pose];
+    if (!creature->ready && pose != CC_CREATURE_POSE_IDLE) {
+        creature = &creature_models[variant][CC_CREATURE_POSE_IDLE];
+    }
+    if (!creature->ready || creature->model.meshCount != 1) return false;
+
+    Vector3 shadow_size = {1.00f, 0.012f, 1.50f};
+    if (variant <= CC_CREATURE_GOBLIN_TRIBUTE_BEARER) {
+        shadow_size = (Vector3){0.58f, 0.012f, 0.46f};
+    } else if (variant == CC_CREATURE_COW) {
+        shadow_size = (Vector3){1.10f, 0.012f, 1.72f};
+    } else if (variant == CC_CREATURE_DRAGON) {
+        shadow_size = (Vector3){3.60f, 0.014f, 5.10f};
+    }
+    shadow_size.x *= scale;
+    shadow_size.z *= scale;
+    DrawBox((Vector3){position.x, position.y + 0.006f, position.z},
+            shadow_size, (Color){2, 7, 10, 104});
+    SetCreaturePalette(variant, primary);
+    DrawModelEx(creature->model, position, (Vector3){0.0f, 1.0f, 0.0f},
+                yaw * RAD2DEG, (Vector3){scale, scale, scale}, WHITE);
+    return true;
 }
 
 /* Procedural people use the same graphic lighting contract as the authored
@@ -9810,6 +9960,14 @@ static void LoadVisualStyle(void)
         for (int32_t pose = 0; pose < CC_NPC_ARCHETYPE_POSE_COUNT; ++pose) {
             if (npc_archetypes[role][pose].ready) {
                 ApplyNpcStyle(&npc_archetypes[role][pose].model);
+            }
+        }
+    }
+    for (int32_t variant = 0; variant < CC_CREATURE_VARIANT_COUNT;
+         ++variant) {
+        for (int32_t pose = 0; pose < CC_CREATURE_POSE_COUNT; ++pose) {
+            if (creature_models[variant][pose].ready) {
+                ApplyNpcStyle(&creature_models[variant][pose].model);
             }
         }
     }
@@ -10293,6 +10451,7 @@ void CcLocalRendererInit(void)
     LoadTreeCrownModels();
     LoadHeroSkin();
     LoadNpcArchetypes();
+    LoadCreatureModels();
     LoadNpcDynamicModules();
     LoadNpcBodySkins();
     LoadNpcHeadFamilies();
@@ -10335,6 +10494,14 @@ void CcLocalRendererShutdown(void)
                 UnloadModel(npc_archetypes[role][pose].model);
             }
             npc_archetypes[role][pose] = (NpcArchetypeCache){0};
+        }
+    }
+    for (int32_t variant = 0; variant < CC_CREATURE_VARIANT_COUNT;
+         ++variant) {
+        for (int32_t pose = 0; pose < CC_CREATURE_POSE_COUNT; ++pose) {
+            CreatureModelCache *creature = &creature_models[variant][pose];
+            if (creature->ready) UnloadModel(creature->model);
+            *creature = (CreatureModelCache){0};
         }
     }
     for (int32_t id = 0; id < NPC_DYNAMIC_MODULE_COUNT; ++id) {
@@ -15453,9 +15620,32 @@ static const char *RoadArchetypeName(const CcRoute *route)
     return "HEDGEROW TRADE ROAD";
 }
 
-static void DrawRoadHorseTeam(Vector3 base)
+static void DrawRoadHorseTeam(Vector3 base, float clock, bool moving)
 {
     const float yaw = 0.5f * PI;
+    CcCreaturePose left_pose = CcCreatureSteppedPose(
+        CC_CREATURE_HORSE, clock * 4.8f, moving);
+    CcCreaturePose right_pose = CcCreatureSteppedPose(
+        CC_CREATURE_HORSE, clock * 4.8f + PI, moving);
+    if (creature_models[CC_CREATURE_HORSE][left_pose].ready &&
+        creature_models[CC_CREATURE_HORSE][right_pose].ready) {
+        for (int32_t horse = -1; horse <= 1; horse += 2) {
+            Color coat = horse < 0 ? (Color){89, 68, 56, 255} :
+                                     (Color){112, 86, 63, 255};
+            Vector3 horse_base = LocalPoint(
+                base, (float)horse * 1.05f, 0.0f, 4.60f, yaw);
+            CcCreaturePose pose = horse < 0 ? left_pose : right_pose;
+            (void)DrawCreature3D(CC_CREATURE_HORSE, pose, horse_base,
+                                 yaw, 0.96f, coat);
+            Vector3 trace_start = LocalPoint(
+                base, (float)horse * 0.42f, 0.77f, 3.05f, yaw);
+            Vector3 trace_end = LocalPoint(
+                horse_base, 0.0f, 0.91f, -0.52f, yaw);
+            DrawCylinderEx(trace_start, trace_end, 0.020f, 0.016f, 6,
+                           (Color){57, 42, 34, 255});
+        }
+        return;
+    }
     for (int32_t horse = -1; horse <= 1; horse += 2) {
         Color coat = horse < 0 ? (Color){89, 68, 56, 255} :
                                  (Color){112, 86, 63, 255};
@@ -15511,7 +15701,8 @@ static void DrawRoadHorseTeam(Vector3 base)
     }
 }
 
-static void DrawRoadCarriage(Vector3 base, int32_t cargo_used)
+static void DrawRoadCarriage(Vector3 base, int32_t cargo_used, float clock,
+                             bool moving)
 {
     const float yaw = 0.5f * PI;
     RuntimeAsset *carriage = &runtime_assets[RUNTIME_ASSET_CARRIAGE];
@@ -15557,7 +15748,7 @@ static void DrawRoadCarriage(Vector3 base, int32_t cargo_used)
         DrawCylinderEx(pole_right, pole_right_end, 0.045f, 0.035f, 7,
                        (Color){91, 61, 43, 255});
     }
-    DrawRoadHorseTeam(base);
+    DrawRoadHorseTeam(base, clock, moving);
 }
 
 static void DrawRoadBarricade(const CcRoute *route)
@@ -15763,7 +15954,26 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     if (!travelling && !DrawBridgeCheckpoint()) DrawRoadBarricade(route);
     if (!travelling) DrawAgentPath(agent, false);
     int32_t road_cargo = CcPlayerCargoUsed(&sim->player);
-    DrawRoadCarriage(carriage_base, road_cargo);
+    DrawRoadCarriage(carriage_base, road_cargo, clock, travelling);
+    int32_t roadside_food = 0;
+    if (origin != NULL) roadside_food += origin->stock[CC_GOOD_FOOD];
+    if (destination_place != NULL) {
+        roadside_food += destination_place->stock[CC_GOOD_FOOD];
+    }
+    if (roadside_food > 0) {
+        Vector3 cow_position = {carriage_x + 7.4f, 0.0f, 34.25f};
+        CcCreaturePose cow_pose = CcCreatureSteppedPose(
+            CC_CREATURE_COW, clock * 1.55f, travelling);
+        (void)DrawCreature3D(CC_CREATURE_COW, cow_pose, cow_position,
+                             -0.72f * PI, 0.88f,
+                             (Color){184, 169, 139, 255});
+        if (roadside_food >= 40) {
+            (void)DrawCreature3D(
+                CC_CREATURE_COW, CC_CREATURE_POSE_IDLE,
+                (Vector3){carriage_x + 9.35f, 0.0f, 35.20f},
+                -0.56f * PI, 0.78f, (Color){118, 86, 66, 255});
+        }
+    }
 
     if (!combat_presentation) {
         DrawNpcFigure3D(
@@ -15923,6 +16133,89 @@ static void DrawJourneyAftermath3D(const CcSim *sim,
     rlPopMatrix();
 }
 
+static void DrawSettlementCreatures(const CcSim *sim,
+                                    const CcSettlement *place,
+                                    float clock, Vector3 scenery_focus)
+{
+    if (sim == NULL || place == NULL) return;
+    const CcGoblinCult *goblins = &sim->goblins;
+    const CcDragon *dragon = &sim->dragon;
+
+    if (place->stock[CC_GOOD_FOOD] >= 18 &&
+        SceneryPointVisible(63.0f, 38.3f, scenery_focus)) {
+        CcCreaturePose cow_pose = CcCreatureSteppedPose(
+            CC_CREATURE_COW, clock * 1.25f, true);
+        (void)DrawCreature3D(
+            CC_CREATURE_COW, cow_pose,
+            TerrainWorldPoint(63.0f, 38.3f), 0.72f * PI, 0.84f,
+            (Color){177, 162, 132, 255});
+    }
+
+    if (place->id == goblins->lair_settlement_id) {
+        CcCreaturePose scavenger_pose = CcCreatureSteppedPose(
+            CC_CREATURE_GOBLIN_SCAVENGER, clock * 3.2f, true);
+        CcCreaturePose raider_pose = CcCreatureSteppedPose(
+            CC_CREATURE_GOBLIN_RAIDER, clock * 3.8f + PI, true);
+        float patrol = sinf(clock * 0.42f) * 0.42f;
+        if (SceneryPointVisible(23.4f, 49.8f, scenery_focus)) {
+            (void)DrawCreature3D(
+                CC_CREATURE_GOBLIN_SCAVENGER, scavenger_pose,
+                TerrainWorldPoint(23.4f + patrol, 49.8f), 0.24f * PI, 1.12f,
+                (Color){0});
+        }
+        if (SceneryPointVisible(26.2f, 50.8f, scenery_focus)) {
+            (void)DrawCreature3D(
+                CC_CREATURE_GOBLIN_RAIDER, raider_pose,
+                TerrainWorldPoint(26.2f - patrol, 50.8f), -0.34f * PI, 1.18f,
+                (Color){0});
+        }
+    }
+
+    bool raid_at_place = goblins->tribute_target_id == place->id &&
+        (goblins->tribute_phase == CC_GOBLIN_TRIBUTE_OUTBOUND ||
+         goblins->tribute_phase == CC_GOBLIN_TRIBUTE_RETURNING);
+    if (raid_at_place && SceneryPointVisible(47.2f, 34.2f,
+                                             scenery_focus)) {
+        CcCreaturePose raid_pose = CcCreatureSteppedPose(
+            CC_CREATURE_GOBLIN_RAIDER, clock * 5.0f, true);
+        CcCreaturePose scout_pose = CcCreatureSteppedPose(
+            CC_CREATURE_GOBLIN_SCAVENGER, clock * 5.0f + PI, true);
+        (void)DrawCreature3D(
+            CC_CREATURE_GOBLIN_RAIDER, raid_pose,
+            TerrainWorldPoint(46.7f, 34.0f), 0.62f * PI, 1.02f,
+            (Color){0});
+        (void)DrawCreature3D(
+            CC_CREATURE_GOBLIN_SCAVENGER, scout_pose,
+            TerrainWorldPoint(48.0f, 34.7f), 0.62f * PI, 0.94f,
+            (Color){0});
+    }
+
+    if (place->id == dragon->lair_settlement_id && !dragon->slain &&
+        SceneryPointVisible(23.7f, 51.5f, scenery_focus)) {
+        CcCreaturePose dragon_pose = CC_CREATURE_POSE_REST;
+        if (dragon->stolen_outstanding > 0 ||
+            dragon->omen_days_remaining > 0) {
+            dragon_pose = CC_CREATURE_POSE_THREAT;
+        } else if (goblins->tribute_phase == CC_GOBLIN_TRIBUTE_TO_DRAGON) {
+            dragon_pose = CC_CREATURE_POSE_IDLE;
+        }
+        (void)DrawCreature3D(
+            CC_CREATURE_DRAGON, dragon_pose,
+            TerrainWorldPoint(23.7f, 51.5f), -0.48f * PI, 0.94f,
+            (Color){0});
+    }
+    if (place->id == dragon->lair_settlement_id &&
+        goblins->tribute_phase == CC_GOBLIN_TRIBUTE_TO_DRAGON &&
+        SceneryPointVisible(28.9f, 51.6f, scenery_focus)) {
+        CcCreaturePose bearer_pose = CcCreatureSteppedPose(
+            CC_CREATURE_GOBLIN_TRIBUTE_BEARER, clock * 3.4f, true);
+        (void)DrawCreature3D(
+            CC_CREATURE_GOBLIN_TRIBUTE_BEARER, bearer_pose,
+            TerrainWorldPoint(28.9f, 51.6f), -0.38f * PI, 1.12f,
+            (Color){0});
+    }
+}
+
 void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                          const CcLocalCourse *course, float clock,
                          RenderTexture2D target, Rectangle destination)
@@ -16058,6 +16351,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         SceneryFootprintVisible(DUNGEON_FOOTPRINT, scenery_focus)) {
         DrawDungeon3D(dungeon);
     }
+    DrawSettlementCreatures(sim, place, clock, scenery_focus);
 
     DrawNpcFigure3D(
         TerrainWorldPoint(STREET_PEOPLE[0].x, STREET_PEOPLE[0].y),
