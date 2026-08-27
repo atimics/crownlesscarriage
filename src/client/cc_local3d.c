@@ -1061,9 +1061,11 @@ Camera3D CcLocalStreetCameraInternal(const CcLocalAgent *agent, float clock,
                                      bool advance, int32_t art_height);
 static Camera3D RoadCamera(Vector3 focus, bool travelling, float clock,
                            bool advance, int32_t art_height);
-static Camera3D CombatCamera(Camera3D base, const CcLocalAgent *player,
-                             const CcLocalCourse *course, float clock,
-                             bool advance, int32_t art_height);
+Camera3D CcLocalCombatCameraInternal(Camera3D base,
+                                     const CcLocalAgent *player,
+                                     const CcLocalCourse *course,
+                                     float clock, bool advance,
+                                     int32_t art_height);
 static int32_t StreetCameraShotFor(Vector3 focus, int32_t current_shot);
 static float WrapAngle(float angle);
 static float SmoothStep01(float amount);
@@ -3702,8 +3704,9 @@ int32_t CcLocalCoursePickPlayerTarget(CcLocalCourse *course,
                        target.texture.height) :
             CcLocalStreetCameraInternal(player, 0.0f, false,
                                         target.texture.height);
-        camera = CombatCamera(base_camera, player, course, 0.0f,
-                              false, target.texture.height);
+        camera = CcLocalCombatCameraInternal(
+            base_camera, player, course, 0.0f, false,
+            target.texture.height);
     }
     Ray ray = GetScreenToWorldRayEx(local, camera, target.texture.width,
                                     target.texture.height);
@@ -7140,6 +7143,23 @@ static Camera3D ExteriorCameraComposed(Vector3 target, Vector3 offset,
     return camera;
 }
 
+static float PerspectiveFovyForOrthographic(Camera3D camera)
+{
+    if (camera.projection == CAMERA_PERSPECTIVE) return camera.fovy;
+    float distance = fmaxf(
+        0.25f, Vector3Distance(camera.position, camera.target));
+    float fovy = 2.0f * atanf(camera.fovy * 0.5f / distance) * RAD2DEG;
+    return CombatClamp(fovy, 24.0f, 48.0f);
+}
+
+static Camera3D PerspectiveCameraComposed(Vector3 target, Vector3 offset,
+                                          float fovy)
+{
+    Camera3D camera = ExteriorCameraComposed(target, offset, fovy);
+    camera.projection = CAMERA_PERSPECTIVE;
+    return camera;
+}
+
 static Camera3D KeepHeroInsideStreetFrame(Camera3D camera, Vector3 hero,
                                           int32_t art_height,
                                           Rectangle safe_area)
@@ -7226,20 +7246,34 @@ static CameraProjectedVolume CameraProjectVolume(Camera3D camera,
         (Vector3){1.0f, 0.0f, 0.0f});
     Vector3 screen_up = PhysicsNormalizeOr(
         Vector3CrossProduct(right, forward), camera.up);
+    Vector3 from_camera = Vector3Subtract(center, camera.position);
     Vector3 from_target = Vector3Subtract(center, camera.target);
     float right_horizontal = sqrtf(right.x * right.x +
                                    right.z * right.z);
     float up_horizontal = sqrtf(screen_up.x * screen_up.x +
                                 screen_up.z * screen_up.z);
+    float depth = Vector3DotProduct(from_camera, forward);
+    float x = Vector3DotProduct(from_target, right);
+    float y = Vector3DotProduct(from_target, screen_up);
+    float projected_half_width = radius * right_horizontal +
+                                 half_height * fabsf(right.y);
+    float projected_half_height = radius * up_horizontal +
+                                  half_height * fabsf(screen_up.y);
+    if (camera.projection == CAMERA_PERSPECTIVE && depth > 0.05f) {
+        float vertical_scale = 1.0f /
+            (depth * tanf(camera.fovy * DEG2RAD * 0.5f));
+        float horizontal_scale = vertical_scale / (457.0f / 285.0f);
+        x = Vector3DotProduct(from_camera, right) * horizontal_scale;
+        y = Vector3DotProduct(from_camera, screen_up) * vertical_scale;
+        projected_half_width *= horizontal_scale;
+        projected_half_height *= vertical_scale;
+    }
     return (CameraProjectedVolume){
-        .x = Vector3DotProduct(from_target, right),
-        .y = Vector3DotProduct(from_target, screen_up),
-        .half_width = radius * right_horizontal +
-                      half_height * fabsf(right.y),
-        .half_height = radius * up_horizontal +
-                       half_height * fabsf(screen_up.y),
-        .depth = Vector3DotProduct(
-            Vector3Subtract(center, camera.position), forward),
+        .x = x,
+        .y = y,
+        .half_width = projected_half_width,
+        .half_height = projected_half_height,
+        .depth = depth,
     };
 }
 
@@ -7288,18 +7322,32 @@ static CameraProjectedVolume CameraProjectBox(Camera3D camera,
         (Vector3){1.0f, 0.0f, 0.0f});
     Vector3 screen_up = PhysicsNormalizeOr(
         Vector3CrossProduct(right, forward), camera.up);
+    Vector3 from_camera = Vector3Subtract(center, camera.position);
     Vector3 from_target = Vector3Subtract(center, camera.target);
+    float depth = Vector3DotProduct(from_camera, forward);
+    float x = Vector3DotProduct(from_target, right);
+    float y = Vector3DotProduct(from_target, screen_up);
+    float projected_half_width = fabsf(right.x) * half_size.x +
+                                 fabsf(right.y) * half_size.y +
+                                 fabsf(right.z) * half_size.z;
+    float projected_half_height = fabsf(screen_up.x) * half_size.x +
+                                  fabsf(screen_up.y) * half_size.y +
+                                  fabsf(screen_up.z) * half_size.z;
+    if (camera.projection == CAMERA_PERSPECTIVE && depth > 0.05f) {
+        float vertical_scale = 1.0f /
+            (depth * tanf(camera.fovy * DEG2RAD * 0.5f));
+        float horizontal_scale = vertical_scale / (457.0f / 285.0f);
+        x = Vector3DotProduct(from_camera, right) * horizontal_scale;
+        y = Vector3DotProduct(from_camera, screen_up) * vertical_scale;
+        projected_half_width *= horizontal_scale;
+        projected_half_height *= vertical_scale;
+    }
     return (CameraProjectedVolume){
-        .x = Vector3DotProduct(from_target, right),
-        .y = Vector3DotProduct(from_target, screen_up),
-        .half_width = fabsf(right.x) * half_size.x +
-                      fabsf(right.y) * half_size.y +
-                      fabsf(right.z) * half_size.z,
-        .half_height = fabsf(screen_up.x) * half_size.x +
-                       fabsf(screen_up.y) * half_size.y +
-                       fabsf(screen_up.z) * half_size.z,
-        .depth = Vector3DotProduct(
-            Vector3Subtract(center, camera.position), forward),
+        .x = x,
+        .y = y,
+        .half_width = projected_half_width,
+        .half_height = projected_half_height,
+        .depth = depth,
     };
 }
 
@@ -7357,6 +7405,50 @@ static float CameraStreetCourseClutterScore(Camera3D camera,
     for (int32_t subject = 0; subject < 2; ++subject) {
         score += CameraVolumeScreenOverlap(subjects[subject], wayfarer_gate);
     }
+    return score;
+}
+
+static float CameraPositionRectangleClutter(Vector3 position,
+                                            Rectangle footprint,
+                                            float clearance)
+{
+    float distance = TerrainDistanceToRectangle(
+        position.x, position.z, footprint);
+    if (distance >= clearance) return 0.0f;
+    float proximity = 1.0f - distance / clearance;
+    return proximity * proximity;
+}
+
+static float CombatCameraPositionClutter(Vector3 position)
+{
+    float score = 0.0f;
+    for (int32_t building = 0;
+         building < (int32_t)(sizeof(WORLD_BUILDINGS) /
+                              sizeof(WORLD_BUILDINGS[0])); ++building) {
+        score += CameraPositionRectangleClutter(
+            position, WORLD_BUILDINGS[building].footprint, 1.80f) * 2.0f;
+    }
+    for (int32_t platform = 0;
+         platform < (int32_t)(sizeof(STREET_PLATFORMS) /
+                              sizeof(STREET_PLATFORMS[0])); ++platform) {
+        const NavPlatform *block = &STREET_PLATFORMS[platform];
+        score += CameraPositionRectangleClutter(
+            position,
+            (Rectangle){block->x, block->z, block->width, block->depth},
+            1.10f);
+    }
+    for (int32_t structure = 0;
+         structure < (int32_t)(sizeof(CASTLE_STRUCTURES) /
+                               sizeof(CASTLE_STRUCTURES[0])); ++structure) {
+        score += CameraPositionRectangleClutter(
+            position, CASTLE_STRUCTURES[structure].footprint, 1.80f) * 2.0f;
+    }
+    score += CameraPositionRectangleClutter(
+        position, COURSE_POOL, 1.25f) * 1.5f;
+    /* The Wayfarer gate is open to actors but its banner rail is a strong
+       foreground shape. Do not park the close camera beside that rail. */
+    score += CameraPositionRectangleClutter(
+        position, (Rectangle){8.44f, 10.40f, 6.12f, 0.32f}, 2.20f) * 4.0f;
     return score;
 }
 
@@ -7907,9 +7999,6 @@ static void CombatCameraLockComposition(Camera3D base,
 {
     Vector3 opponent_position = opponent != NULL ? opponent->position :
         course->combat_origin;
-    Vector3 target = Vector3Lerp(player->position, opponent_position, 0.48f);
-    target.y = (player->position.y + opponent_position.y) * 0.5f + 0.98f;
-
     Vector3 fight_line = Vector3Subtract(opponent_position,
                                           player->position);
     fight_line.y = 0.0f;
@@ -7924,28 +8013,64 @@ static void CombatCameraLockComposition(Camera3D base,
     if (Vector3DotProduct(fight_side, base_view) < 0.0f) {
         fight_side = Vector3Negate(fight_side);
     }
-    Vector3 view = PhysicsNormalizeOr(
-        Vector3Add(Vector3Scale(base_view, 0.66f),
-                   Vector3Scale(fight_side, 0.34f)), base_view);
-    float horizontal_distance = 11.2f + fminf(span, 6.0f) * 0.42f;
-    Vector3 offset = Vector3Scale(view, horizontal_distance);
-    offset.y = 5.7f + fminf(span, 5.0f) * 0.15f;
-    float fovy = CombatClamp(7.2f + span * 0.62f, 7.8f, 10.4f);
+
+    /* Third-person lock-on composition: put the lens behind the hero and
+       aim toward the opponent. A wider shoulder offset gives the two bodies
+       separate silhouettes instead of stacking them on the same line. */
+    float look_ahead = fminf(span * 0.72f, 3.30f);
+    Vector3 target = Vector3Add(
+        player->position, Vector3Scale(fight_line, look_ahead));
+    target.y = player->position.y + 1.32f;
+    float follow_distance = 5.40f + fminf(span, 7.0f) * 0.12f;
+    float fovy = CombatClamp(44.0f + span * 0.75f, 45.0f, 50.0f);
+    /* Close melee needs a stronger diagonal than a long lock-on. Without
+       this contact adjustment, the opponent disappears directly behind the
+       hero at the moment the attack lands. */
+    float contact_amount = CombatClamp(2.80f - span, 0.0f, 2.0f);
+    float shoulder_distance = 3.15f + contact_amount * 0.85f;
+    Vector3 player_center = Vector3Add(
+        player->position, (Vector3){0.0f, 1.02f, 0.0f});
+    Vector3 opponent_center = Vector3Add(
+        opponent_position, (Vector3){0.0f, 1.02f, 0.0f});
+    Vector3 offset = {0};
+    float best_cost = FLT_MAX;
 
     if (course->scene == CC_LOCAL_SCENE_STREET) {
-        Camera3D sightline_camera = ExteriorCameraComposed(
-            target, offset, fovy);
-        Vector3 player_center = Vector3Add(
-            player->position, (Vector3){0.0f, 1.02f, 0.0f});
-        Vector3 opponent_center = Vector3Add(
-            opponent_position, (Vector3){0.0f, 1.02f, 0.0f});
-        sightline_camera = CcLocalCameraClearSightlinesInternal(
-            sightline_camera, player_center, opponent_center,
-            combat_camera_rig.tree_clear_angle,
-            &combat_camera_rig.tree_clear_angle);
-        offset = Vector3Subtract(sightline_camera.position,
-                                 sightline_camera.target);
+        /* Try both shoulders. The fixed room camera breaks ties, while tree,
+           course, building, and camera-position clutter choose the side
+           that actually reads cleanly at close range. */
+        for (int32_t shoulder = 0; shoulder < 2; ++shoulder) {
+            Vector3 candidate_side = shoulder == 0 ? fight_side :
+                                                    Vector3Negate(fight_side);
+            Vector3 camera_position = Vector3Add(
+                player->position,
+                Vector3Add(Vector3Scale(fight_line, -follow_distance),
+                           Vector3Scale(candidate_side,
+                                        shoulder_distance)));
+            camera_position.y = player->position.y + 3.15f;
+            Vector3 candidate_offset = Vector3Subtract(camera_position,
+                                                        target);
+            Camera3D candidate = PerspectiveCameraComposed(
+                target, candidate_offset, fovy);
+            float cost =
+                CcLocalCameraTreeOcclusionScoreInternal(
+                    candidate, player_center, opponent_center) * 14.0f +
+                CameraStreetCourseClutterScore(
+                    candidate, player_center, opponent_center) * 2.2f +
+                CombatCameraPositionClutter(camera_position) * 8.0f +
+                (shoulder == 0 ? 0.0f : 0.12f);
+            if (cost >= best_cost) continue;
+            best_cost = cost;
+            offset = candidate_offset;
+        }
+        combat_camera_rig.tree_clear_angle = 0.0f;
     } else {
+        Vector3 camera_position = Vector3Add(
+            player->position,
+            Vector3Add(Vector3Scale(fight_line, -follow_distance),
+                       Vector3Scale(fight_side, shoulder_distance)));
+        camera_position.y = player->position.y + 3.15f;
+        offset = Vector3Subtract(camera_position, target);
         combat_camera_rig.tree_clear_angle = 0.0f;
     }
     combat_camera_rig.locked_target = target;
@@ -7967,7 +8092,7 @@ static bool CombatCameraSubjectsNeedReframe(const CcLocalAgent *player,
     }
     int32_t art_width = (int32_t)lroundf(
         (float)art_height * 457.0f / 285.0f);
-    Camera3D camera = ExteriorCameraComposed(
+    Camera3D camera = PerspectiveCameraComposed(
         combat_camera_rig.locked_target,
         combat_camera_rig.locked_offset,
         combat_camera_rig.locked_fovy);
@@ -7982,9 +8107,9 @@ static bool CombatCameraSubjectsNeedReframe(const CcLocalAgent *player,
     float live_span = Vector2Distance(
         (Vector2){player->position.x, player->position.z},
         (Vector2){opponent_position.x, opponent_position.z});
-    float live_fovy = CombatClamp(7.2f + fmaxf(1.0f, live_span) * 0.62f,
-                                  7.8f, 10.4f);
-    if (fabsf(live_fovy - combat_camera_rig.locked_fovy) > 0.55f) {
+    float live_fovy = CombatClamp(44.0f + fmaxf(1.0f, live_span) * 0.75f,
+                                  45.0f, 50.0f);
+    if (fabsf(live_fovy - combat_camera_rig.locked_fovy) > 1.20f) {
         return true;
     }
     Vector3 subjects[] = {
@@ -7994,20 +8119,22 @@ static bool CombatCameraSubjectsNeedReframe(const CcLocalAgent *player,
     for (int32_t subject = 0; subject < 2; ++subject) {
         Vector2 screen = GetWorldToScreenEx(
             subjects[subject], camera, art_width, art_height);
-        if (screen.x < (float)art_width * 0.18f ||
-            screen.x > (float)art_width * 0.82f ||
-            screen.y < (float)art_height * 0.16f ||
-            screen.y > (float)art_height * 0.84f) return true;
+        if (screen.x < (float)art_width * 0.08f ||
+            screen.x > (float)art_width * 0.92f ||
+            screen.y < (float)art_height * 0.08f ||
+            screen.y > (float)art_height * 0.92f) return true;
     }
     return false;
 }
 
-/* Combat uses a closer three-quarter view of the active duel. The duel
+/* Combat moves into a perspective over-the-shoulder lock-on view. The duel
    composition is chosen once and held like a stage shot; it is recomposed
    only when a fighter crosses the safe frame or the opponent changes. */
-static Camera3D CombatCamera(Camera3D base, const CcLocalAgent *player,
-                             const CcLocalCourse *course, float clock,
-                             bool advance, int32_t art_height)
+Camera3D CcLocalCombatCameraInternal(Camera3D base,
+                                     const CcLocalAgent *player,
+                                     const CcLocalCourse *course,
+                                     float clock, bool advance,
+                                     int32_t art_height)
 {
     const CcLocalAgent *opponent = CombatCameraOpponent(course, player);
     float opponent_distance_squared = opponent != NULL && player != NULL ?
@@ -8019,16 +8146,17 @@ static Camera3D CombatCamera(Camera3D base, const CcLocalAgent *player,
                   course->alarm_active && !course->raiders_retreating &&
                   opponent_distance_squared <= 9.0f * 9.0f;
     Vector3 base_offset = Vector3Subtract(base.position, base.target);
+    float base_perspective_fovy = PerspectiveFovyForOrthographic(base);
     bool scene_changed = course != NULL &&
         (!combat_camera_rig.scene_valid ||
          combat_camera_rig.scene != course->scene);
     if (!combat_camera_rig.initialized || scene_changed) {
         combat_camera_rig.displayed_target = base.target;
         combat_camera_rig.displayed_offset = base_offset;
-        combat_camera_rig.displayed_fovy = base.fovy;
+        combat_camera_rig.displayed_fovy = base_perspective_fovy;
         combat_camera_rig.locked_target = base.target;
         combat_camera_rig.locked_offset = base_offset;
-        combat_camera_rig.locked_fovy = base.fovy;
+        combat_camera_rig.locked_fovy = base_perspective_fovy;
         combat_camera_rig.combat_weight = 0.0f;
         combat_camera_rig.tree_clear_angle = 0.0f;
         combat_camera_rig.reframe_cooldown = 0.0f;
@@ -8074,8 +8202,8 @@ static Camera3D CombatCamera(Camera3D base, const CcLocalAgent *player,
             base.target, combat_camera_rig.locked_target, weight);
         Vector3 desired_offset = Vector3Lerp(
             base_offset, combat_camera_rig.locked_offset, weight);
-        float desired_fovy = base.fovy +
-            (combat_camera_rig.locked_fovy - base.fovy) * weight;
+        float desired_fovy = base_perspective_fovy +
+            (combat_camera_rig.locked_fovy - base_perspective_fovy) * weight;
         float ease = 1.0f - expf(-delta_time * 8.0f);
         combat_camera_rig.displayed_target = Vector3Lerp(
             combat_camera_rig.displayed_target, desired_target, ease);
@@ -8086,7 +8214,7 @@ static Camera3D CombatCamera(Camera3D base, const CcLocalAgent *player,
         if (!active && combat_camera_rig.combat_weight <= 0.0001f) {
             combat_camera_rig.displayed_target = base.target;
             combat_camera_rig.displayed_offset = base_offset;
-            combat_camera_rig.displayed_fovy = base.fovy;
+            combat_camera_rig.displayed_fovy = base_perspective_fovy;
             combat_camera_rig.tree_clear_angle = 0.0f;
             combat_camera_rig.reframe_cooldown = 0.0f;
             combat_camera_rig.opponent_index = -1;
@@ -8098,7 +8226,9 @@ static Camera3D CombatCamera(Camera3D base, const CcLocalAgent *player,
     camera.target = combat_camera_rig.displayed_target;
     camera.position = Vector3Add(camera.target,
                                  combat_camera_rig.displayed_offset);
-    camera.fovy = combat_camera_rig.displayed_fovy;
+    bool combat_view = active || combat_camera_rig.combat_weight > 0.0001f;
+    camera.fovy = combat_view ? combat_camera_rig.displayed_fovy : base.fovy;
+    camera.projection = combat_view ? CAMERA_PERSPECTIVE : base.projection;
     if (active && player->combat.hit_flash_seconds > 0.0f) {
         float pulse = player->combat.hit_flash_seconds * 8.0f;
         float shake = fminf(0.055f, pulse * 0.055f);
@@ -15422,8 +15552,8 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     Vector3 camera_focus = travelling ? carriage_base : agent->position;
     Camera3D base_camera = RoadCamera(camera_focus, travelling, clock, true,
                                       target.texture.height);
-    Camera3D camera = CombatCamera(base_camera, agent, course, clock, true,
-                                   target.texture.height);
+    Camera3D camera = CcLocalCombatCameraInternal(
+        base_camera, agent, course, clock, true, target.texture.height);
     if (!travelling) {
         camera = KeepHeroInsideStreetFrame(
             camera,
@@ -15607,8 +15737,8 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     if (place == NULL) return;
     Camera3D base_camera = CcLocalStreetCameraInternal(
         agent, clock, true, target.texture.height);
-    Camera3D camera = CombatCamera(base_camera, agent, course, clock, true,
-                                   target.texture.height);
+    Camera3D camera = CcLocalCombatCameraInternal(
+        base_camera, agent, course, clock, true, target.texture.height);
     if (agent != NULL) {
         camera = KeepHeroInsideStreetFrame(
             camera,
@@ -15709,8 +15839,9 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     }
     DrawWorldTrees(scenery_focus, kingdom);
     bool wayfarer_gate_sightline_cut = close_combat_sightline &&
-        CameraWayfarerGateSubjectOverlap(
-            camera, player_sightline, opponent_sightline) > 0.001f;
+        (camera.projection == CAMERA_PERSPECTIVE ||
+         CameraWayfarerGateSubjectOverlap(
+             camera, player_sightline, opponent_sightline) > 0.001f);
     DrawRoomLandmarks(place, kingdom, scenery_focus,
                       wayfarer_gate_sightline_cut);
     if (SceneryPointVisible(47.35f, 31.05f, scenery_focus)) {

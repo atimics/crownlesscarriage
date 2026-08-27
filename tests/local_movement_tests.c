@@ -2049,6 +2049,129 @@ int main(void)
         return 1;
     }
 
+    /* A nearby duel changes only the presentation: blend from the fixed
+       room into a perspective lock-on view behind one shoulder. Keep the
+       hero as the larger foreground anchor, retain both fighters, then
+       return to the exact fixed-camera projection after combat. */
+    CcLocalAgent shoulder_player;
+    CcLocalAgentInit(&shoulder_player, (Vector2){15.40f, 9.65f}, false);
+    CcLocalCourse shoulder_course;
+    CcLocalCourseInit(&shoulder_course);
+    shoulder_course.scene = CC_LOCAL_SCENE_STREET;
+    shoulder_course.alarm_active = true;
+    shoulder_course.raiders_retreating = false;
+    shoulder_course.raiders[0].position = (Vector3){
+        18.20f, CcLocalTerrainHeightAt(18.20f, 9.65f), 9.65f};
+    shoulder_player.combat.target_index = 0;
+    Camera3D shoulder_base = {0};
+    for (int32_t frame = 0; frame < 120; ++frame) {
+        camera_clock += 1.0f / 60.0f;
+        shoulder_base = CcLocalStreetCameraInternal(
+            &shoulder_player, camera_clock, true,
+            click_target.texture.height);
+    }
+    Camera3D shoulder_camera = shoulder_base;
+    for (int32_t frame = 0; frame < 180; ++frame) {
+        camera_clock += 1.0f / 60.0f;
+        shoulder_camera = CcLocalCombatCameraInternal(
+            shoulder_base, &shoulder_player, &shoulder_course,
+            camera_clock, true, click_target.texture.height);
+    }
+    Vector3 shoulder_fight = {
+        shoulder_course.raiders[0].position.x - shoulder_player.position.x,
+        0.0f,
+        shoulder_course.raiders[0].position.z - shoulder_player.position.z,
+    };
+    float shoulder_fight_length = sqrtf(
+        shoulder_fight.x * shoulder_fight.x +
+        shoulder_fight.z * shoulder_fight.z);
+    shoulder_fight.x /= shoulder_fight_length;
+    shoulder_fight.z /= shoulder_fight_length;
+    Vector3 shoulder_from_player = {
+        shoulder_camera.position.x - shoulder_player.position.x,
+        shoulder_camera.position.y - shoulder_player.position.y,
+        shoulder_camera.position.z - shoulder_player.position.z,
+    };
+    float behind_amount = shoulder_from_player.x * shoulder_fight.x +
+                          shoulder_from_player.z * shoulder_fight.z;
+    float side_amount = shoulder_from_player.x * -shoulder_fight.z +
+                        shoulder_from_player.z * shoulder_fight.x;
+    Vector3 shoulder_player_center = {
+        shoulder_player.position.x, shoulder_player.position.y + 1.02f,
+        shoulder_player.position.z};
+    Vector3 shoulder_raider_center = {
+        shoulder_course.raiders[0].position.x,
+        shoulder_course.raiders[0].position.y + 1.02f,
+        shoulder_course.raiders[0].position.z};
+    Vector2 shoulder_player_screen = GetWorldToScreenEx(
+        shoulder_player_center, shoulder_camera,
+        click_target.texture.width, click_target.texture.height);
+    Vector2 shoulder_raider_screen = GetWorldToScreenEx(
+        shoulder_raider_center, shoulder_camera,
+        click_target.texture.width, click_target.texture.height);
+    Vector2 shoulder_player_head = GetWorldToScreenEx(
+        (Vector3){shoulder_player.position.x,
+                  shoulder_player.position.y + 1.80f,
+                  shoulder_player.position.z},
+        shoulder_camera, click_target.texture.width,
+        click_target.texture.height);
+    Vector2 shoulder_player_foot = GetWorldToScreenEx(
+        shoulder_player.position, shoulder_camera,
+        click_target.texture.width, click_target.texture.height);
+    Vector2 shoulder_raider_head = GetWorldToScreenEx(
+        (Vector3){shoulder_course.raiders[0].position.x,
+                  shoulder_course.raiders[0].position.y + 1.80f,
+                  shoulder_course.raiders[0].position.z},
+        shoulder_camera, click_target.texture.width,
+        click_target.texture.height);
+    Vector2 shoulder_raider_foot = GetWorldToScreenEx(
+        shoulder_course.raiders[0].position, shoulder_camera,
+        click_target.texture.width, click_target.texture.height);
+    float shoulder_player_height = fabsf(
+        shoulder_player_foot.y - shoulder_player_head.y);
+    float shoulder_raider_height = fabsf(
+        shoulder_raider_foot.y - shoulder_raider_head.y);
+    bool shoulder_subjects_safe =
+        shoulder_player_screen.x > 22.0f &&
+        shoulder_player_screen.x < 435.0f &&
+        shoulder_player_screen.y > 14.0f &&
+        shoulder_player_screen.y < 271.0f &&
+        shoulder_raider_screen.x > 22.0f &&
+        shoulder_raider_screen.x < 435.0f &&
+        shoulder_raider_screen.y > 14.0f &&
+        shoulder_raider_screen.y < 271.0f;
+    if (shoulder_camera.projection != CAMERA_PERSPECTIVE ||
+        behind_amount > -3.50f || fabsf(side_amount) < 2.80f ||
+        !shoulder_subjects_safe ||
+        shoulder_player_height < shoulder_raider_height * 1.22f) {
+        (void)fprintf(
+            stderr,
+            "combat shoulder framing failed: projection %d behind %.2f side %.2f hero %.2f %.2f/%.2f raider %.2f %.2f/%.2f fovy %.2f\n",
+            shoulder_camera.projection, behind_amount, side_amount,
+            shoulder_player_screen.x, shoulder_player_screen.y,
+            shoulder_player_height, shoulder_raider_screen.x,
+            shoulder_raider_screen.y, shoulder_raider_height,
+            shoulder_camera.fovy);
+        return 1;
+    }
+    shoulder_course.alarm_active = false;
+    for (int32_t frame = 0; frame < 240; ++frame) {
+        camera_clock += 1.0f / 60.0f;
+        shoulder_camera = CcLocalCombatCameraInternal(
+            shoulder_base, &shoulder_player, &shoulder_course,
+            camera_clock, true, click_target.texture.height);
+    }
+    if (shoulder_camera.projection != shoulder_base.projection ||
+        VectorDistance3(shoulder_camera.position,
+                        shoulder_base.position) > 0.001f ||
+        VectorDistance3(shoulder_camera.target,
+                        shoulder_base.target) > 0.001f ||
+        fabsf(shoulder_camera.fovy - shoulder_base.fovy) > 0.001f) {
+        (void)fprintf(stderr,
+                      "combat camera did not return to fixed shot\n");
+        return 1;
+    }
+
     /* The Wayfarer Yard tree used to sit across both fighters in the combat
        reel. The visibility pass must find a nearby angle that clears both
        bodies without moving or hiding the tree. */
@@ -2084,6 +2207,13 @@ int main(void)
        authored portal waypoint must route around the gatehouse. */
     CcLocalAgent edge_walker;
     CcLocalAgentInit(&edge_walker, (Vector2){57.0f, 27.0f}, false);
+    /* Each camera fixture owns a settled opening shot. This also keeps the
+       test clock monotonic after the combat-camera transition above. */
+    for (int32_t frame = 0; frame < 120; ++frame) {
+        camera_clock += 1.0f / 60.0f;
+        (void)CcLocalStreetCameraInternal(
+            &edge_walker, camera_clock, true, 285);
+    }
     if (!CcLocalAgentSetExactTarget(
             &edge_walker, (Vector3){58.2f, 0.0f, 28.0f}, false)) {
         (void)fprintf(stderr, "road-edge regression target was rejected\n");
@@ -2099,8 +2229,9 @@ int main(void)
     }
     for (int32_t frame = 0;
          frame < 4800 && edge_walker.navigation_active; ++frame) {
+        camera_clock += 1.0f / 60.0f;
         Camera3D travel_camera = CcLocalStreetCameraInternal(
-            &edge_walker, (float)frame / 60.0f, true, 285);
+            &edge_walker, camera_clock, true, 285);
         Vector2 hero_screen = GetWorldToScreenEx(
             (Vector3){edge_walker.position.x,
                       edge_walker.position.y + 1.0f,
