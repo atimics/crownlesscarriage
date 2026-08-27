@@ -728,19 +728,19 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
 
     CcOverlayDrawText("WHAT THE MARKET KNOWS", 966, 254, 11, TEAL);
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
-        int y = 278 + good * 30;
+        int y = 274 + good * 18;
         CcOverlayDrawText(TextFormat("%d  %-9s", good + 1, CcGoodName((CcGood)good)),
-                 966, y, 12, INK);
-        CcOverlayDrawText(TextFormat("%2d cr", place->price[good]), 1086, y, 12, CC_GOLD);
-        CcOverlayDrawText(TextFormat("%3d here", place->stock[good]), 1152, y, 11,
+                 966, y, 10, INK);
+        CcOverlayDrawText(TextFormat("%2d cr", place->price[good]), 1086, y, 10, CC_GOLD);
+        CcOverlayDrawText(TextFormat("%3d here", place->stock[good]), 1152, y, 9,
                  place->stock[good] < place->reserve_target[good] ? DANGER : MUTED);
     }
     bool can_trade = local->market_interior &&
                      GridDistance(LocalPosition(local), INTERIOR_COUNTER) < 2.25f;
-    CcOverlayDrawText(can_trade ? "1-3 BUY  /  SHIFT+1-3 SELL" :
+    CcOverlayDrawText(can_trade ? "1-6 BUY  /  SHIFT+1-6 SELL" :
              local->market_interior ? "Walk to the factor to trade." :
              "Enter the market house to trade.",
-             966, 374, 10, can_trade ? CC_GOLD : MUTED);
+             966, 388, 10, can_trade ? CC_GOLD : MUTED);
 
     const CcSituation *accepted = CcSimAcceptedSituation(sim);
     const CcSituation *situation = accepted != NULL ? accepted :

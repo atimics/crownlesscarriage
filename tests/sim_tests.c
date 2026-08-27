@@ -53,11 +53,13 @@ static CcSituation *PreparePromisedJourney(CcSim *sim, char *error,
     situation->progress = 0;
     situation->reward = 20;
     situation->deadline_day = sim->current_day + 40;
+    sim->player.cargo[CC_GOOD_FOOD] = 1;
     CcCommand accept = {
         .kind = CC_COMMAND_ACCEPT_SITUATION,
         .target_id = situation->id
     };
     CC_CHECK(CcSimApply(sim, &accept, error, error_capacity));
+    sim->routes[0].closed = true;
     const CcMap *map = CcSimMapForRoute(sim, sim->routes[0].id,
                                         sim->player.id);
     CC_CHECK(map != NULL);
@@ -139,12 +141,6 @@ int main(void)
     CC_CHECK(CcPlayerMapCount(&first) == 1);
     CC_CHECK(CcSimMapForRoute(&first, first.routes[0].id,
                              first.player.id) != NULL);
-    CcCommand uncharted_travel = {
-        .kind = CC_COMMAND_TRAVEL,
-        .target_id = first.settlements[2].id
-    };
-    CC_CHECK(!CcSimApply(&first, &uncharted_travel, error, sizeof(error)));
-
     const CcMap *offered = CcSimMapForRoute(
         &first, first.routes[1].id, first.player.location_id);
     CC_CHECK(offered != NULL);
@@ -159,6 +155,22 @@ int main(void)
     CC_CHECK(CcPlayerMapCount(&first) == 1);
     CC_CHECK(CcSimMap(&first, offered_id)->owner_id ==
              first.player.location_id);
+
+    CcSim uncharted;
+    CcSimInit(&uncharted, UINT32_C(0x12345678));
+    uncharted.player.location_id = uncharted.settlements[1].id;
+    uncharted.carriage.location_id = uncharted.player.location_id;
+    CcCommand uncharted_travel = {
+        .kind = CC_COMMAND_TRAVEL,
+        .target_id = uncharted.settlements[5].id
+    };
+    CC_CHECK(CcSimMapForRoute(&uncharted, uncharted.routes[5].id,
+                              uncharted.player.id) == NULL);
+    CC_CHECK(CcSimApply(&uncharted, &uncharted_travel,
+                        error, sizeof(error)));
+    CC_CHECK(uncharted.journey.total_subticks ==
+             (uncharted.routes[5].travel_days + 2) *
+                 CC_WORLD_DAY_SUBTICKS);
 
     CcSim commitment;
     CcSimInit(&commitment, UINT32_C(0xc011ab1e));
@@ -185,6 +197,43 @@ int main(void)
     CC_CHECK(CcSimApply(&commitment, &abandon, error, sizeof(error)));
     CC_CHECK(CcSimAcceptedSituation(&commitment) == NULL &&
              first_charter->status == CC_SITUATION_ACTIVE);
+
+    CcSim laundering;
+    CcSimInit(&laundering, UINT32_C(0x1a0d3e));
+    CcSituation *delivery = NULL;
+    for (int32_t i = 0; i < laundering.situation_count; ++i) {
+        if (laundering.situations[i].kind == CC_SITUATION_RELIEF_DELIVERY) {
+            delivery = &laundering.situations[i];
+            break;
+        }
+    }
+    CC_CHECK(delivery != NULL);
+    CcCommand accept_delivery = {
+        .kind = CC_COMMAND_ACCEPT_SITUATION,
+        .target_id = delivery->id
+    };
+    CC_CHECK(CcSimApply(&laundering, &accept_delivery,
+                        error, sizeof(error)));
+    laundering.player.location_id = delivery->target_id;
+    laundering.carriage.location_id = delivery->target_id;
+    laundering.player.coins = 500;
+    CcCommand local_food = {
+        .kind = CC_COMMAND_TRADE,
+        .good = CC_GOOD_FOOD,
+        .amount = delivery->quantity
+    };
+    CC_CHECK(CcSimApply(&laundering, &local_food, error, sizeof(error)));
+    int32_t local_cargo = laundering.player.cargo[CC_GOOD_FOOD];
+    CcCommand fake_delivery = {
+        .kind = CC_COMMAND_TRADE,
+        .good = CC_GOOD_FOOD,
+        .amount = -delivery->quantity
+    };
+    CC_CHECK(!CcSimApply(&laundering, &fake_delivery,
+                         error, sizeof(error)));
+    CC_CHECK(laundering.player.cargo[CC_GOOD_FOOD] == local_cargo);
+    CC_CHECK(delivery->progress == 0 &&
+             delivery->status == CC_SITUATION_ACTIVE);
 
     CcSim unanswered;
     CcSimInit(&unanswered, UINT32_C(0xc011ab1e));
@@ -223,6 +272,8 @@ int main(void)
     int32_t destination_population = defended_road.settlements[1].population;
     int32_t bandit_members = defended_road.bandits[0].members;
     int32_t shipment_count = defended_road.shipment_count;
+    int32_t carriage_condition = defended_road.carriage.condition;
+    CcMoney combat_coins = defended_road.player.coins;
     CC_CHECK(journey_origin != journey_destination);
     CC_CHECK(CcSimRecentEvent(&defended_road, 0)->kind ==
              CC_EVENT_JOURNEY_ENCOUNTER);
@@ -240,8 +291,10 @@ int main(void)
     CC_CHECK(defended_road.journey.phase == CC_JOURNEY_PHASE_TRAVELLING);
     CC_CHECK(defended_road.player.location_id == journey_origin);
     CC_CHECK(defended_road.routes[0].security > route_security);
-    CC_CHECK(defended_road.settlements[1].population >
+    CC_CHECK(defended_road.settlements[1].population ==
              destination_population);
+    CC_CHECK(defended_road.carriage.condition < carriage_condition);
+    CC_CHECK(defended_road.player.coins < combat_coins);
     CC_CHECK(defended_road.bandits[0].members < bandit_members);
     CC_CHECK(defended_road.shipment_count >= shipment_count + 1);
     CC_CHECK(defended_road.shipments[defended_road.shipment_count - 1].status ==
@@ -259,20 +312,11 @@ int main(void)
     CC_CHECK(CcSimApply(&defended_road, &fulfill, error, sizeof(error)));
     CC_CHECK(journey_charter->status == CC_SITUATION_RESOLVED);
     CC_CHECK(defended_road.delayed_echo.active);
-    CcCommand leave = {
-        .kind = CC_COMMAND_TRAVEL,
-        .target_id = journey_origin
-    };
-    CC_CHECK(CcSimApply(&defended_road, &leave, error, sizeof(error)));
-    AdvanceTravellingJourney(&defended_road);
-    CcSimAdvanceDays(&defended_road, 7);
-    CcCommand return_later = {
-        .kind = CC_COMMAND_TRAVEL,
-        .target_id = journey_destination
-    };
-    CC_CHECK(CcSimApply(&defended_road, &return_later,
-                        error, sizeof(error)));
-    AdvanceTravellingJourney(&defended_road);
+    CcSimAdvanceDays(&defended_road, 30);
+    CC_CHECK(defended_road.delayed_echo.active);
+    CC_CHECK(CcSimRecentEvent(&defended_road, 0)->kind ==
+             CC_EVENT_DELAYED_ECHO);
+    CcSimAdvanceDays(&defended_road, 30);
     CC_CHECK(!defended_road.delayed_echo.active);
     CC_CHECK(CcSimRecentEvent(&defended_road, 0)->kind ==
              CC_EVENT_DELAYED_ECHO);
@@ -296,6 +340,13 @@ int main(void)
     CC_CHECK(bargained_road.bandits[0].influence > bandit_influence);
     CC_CHECK(bargained_road.player.coins <=
              coins_before_bargain - bargain_cost);
+
+    CcSim conserved;
+    CcSimInit(&conserved, UINT32_C(0xc01d1ed6));
+    CcMoney initial_gold = CcSimTrackedGold(&conserved);
+    CcSimAdvanceDays(&conserved, 3650);
+    CC_CHECK(CcSimTrackedGold(&conserved) == initial_gold);
+    CC_CHECK(CcSimValidate(&conserved, error, sizeof(error)));
 
     CC_CHECK(CcSimValidate(&first, error, sizeof(error)));
     CcSim different;

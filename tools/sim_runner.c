@@ -41,11 +41,18 @@ static void PrintSummary(const CcSim *sim, bool detail)
         for (int32_t i = 0; i < sim->settlement_count; ++i) {
             const CcSettlement *place = &sim->settlements[i];
             (void)printf("  %-16s hunger=%3d prosperity=%3d security=%3d"
-                         " stock=[%3d,%3d,%3d] price=[%2d,%2d,%2d]\n",
+                         " stock=[%3d,%3d,%3d,%3d,%3d,%3d]"
+                         " price=[%2d,%2d,%2d,%2d,%2d,%2d]\n",
                          place->name, place->hunger, place->prosperity, place->security,
                          place->stock[CC_GOOD_FOOD], place->stock[CC_GOOD_MATERIAL],
-                         place->stock[CC_GOOD_TOOLS], place->price[CC_GOOD_FOOD],
-                         place->price[CC_GOOD_MATERIAL], place->price[CC_GOOD_TOOLS]);
+                         place->stock[CC_GOOD_TOOLS],
+                         place->stock[CC_GOOD_WEAPONS],
+                         place->stock[CC_GOOD_GOLD], place->stock[CC_GOOD_GEMS],
+                         place->price[CC_GOOD_FOOD],
+                         place->price[CC_GOOD_MATERIAL],
+                         place->price[CC_GOOD_TOOLS],
+                         place->price[CC_GOOD_WEAPONS],
+                         place->price[CC_GOOD_GOLD], place->price[CC_GOOD_GEMS]);
         }
     }
 }

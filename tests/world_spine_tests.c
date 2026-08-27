@@ -126,9 +126,22 @@ int main(void)
             &first, shipment->destination_id);
         const CcSettlement *final = CcSimSettlement(
             &first, shipment->final_destination_id);
+        const CcRoute *shipment_route = CcSimRoute(
+            &first, shipment->route_id);
         CC_CHECK(origin != NULL && destination != NULL && final != NULL);
-        CC_CHECK(origin->kingdom_id == destination->kingdom_id);
-        CC_CHECK(origin->kingdom_id == final->kingdom_id);
+        CC_CHECK(shipment_route != NULL);
+        CC_CHECK(origin->kingdom_id == destination->kingdom_id ||
+                 shipment_route->smuggler_route);
+        if (origin->kingdom_id != final->kingdom_id) {
+            bool smuggler_path_exists = false;
+            for (int32_t route_index = 0;
+                 route_index < first.route_count; ++route_index) {
+                if (first.routes[route_index].smuggler_route) {
+                    smuggler_path_exists = true;
+                }
+            }
+            CC_CHECK(smuggler_path_exists);
+        }
     }
 
     int32_t initial_support[CC_MAX_FACTIONS];

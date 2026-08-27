@@ -48,14 +48,88 @@ static void CheckSchema4Compatibility(char *error, size_t error_capacity)
     CcSimInit(&legacy, UINT32_C(0x1e9ac5));
     CcSimAdvanceDays(&legacy, 5);
     legacy.schema_version = 4U;
-    CcSim migrated = legacy;
-    migrated.schema_version = CC_SIM_SCHEMA_VERSION;
 
     CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
     CcSim restored;
     CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
-    CC_CHECK(CcSimHash(&restored) == CcSimHash(&migrated));
+    CC_CHECK(restored.current_day == legacy.current_day);
+    CC_CHECK(CcIdKind(restored.goblins.id) == CC_ENTITY_GOBLIN_CULT);
+    CC_CHECK(CcIdKind(restored.dragon.id) == CC_ENTITY_DRAGON);
+    CC_CHECK(restored.dragon.hoard == 30);
+    CC_CHECK(CcSimValidate(&restored, error, error_capacity));
+    uint64_t migrated_hash = CcSimHash(&restored);
+    CC_CHECK(CcSaveWrite(path, &restored, error, error_capacity));
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(CcSimHash(&restored) == migrated_hash);
+    RemoveDatabase(path);
+}
+
+static void CheckSchema5Compatibility(char *error, size_t error_capacity)
+{
+    const char *path = "persistence-legacy-v5-test.ccsave";
+    RemoveDatabase(path);
+    CcSim legacy;
+    CcSimInit(&legacy, UINT32_C(0x1e9ac6));
+    CcSimAdvanceDays(&legacy, 19);
+    legacy.schema_version = 5U;
+    legacy.generator_version = 5U;
+    CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.generator_version == CC_GENERATOR_VERSION);
+    CC_CHECK(restored.current_day == legacy.current_day);
+    CC_CHECK(CcIdKind(restored.goblins.id) == CC_ENTITY_GOBLIN_CULT);
+    CC_CHECK(CcIdKind(restored.dragon.id) == CC_ENTITY_DRAGON);
+    CC_CHECK(CcSimValidate(&restored, error, error_capacity));
+    RemoveDatabase(path);
+}
+
+static void CheckSchema6Compatibility(char *error, size_t error_capacity)
+{
+    const char *path = "persistence-legacy-v6-test.ccsave";
+    RemoveDatabase(path);
+    CcSim legacy;
+    CcSimInit(&legacy, UINT32_C(0x1e9ac7));
+    CcSimAdvanceDays(&legacy, 17);
+    legacy.schema_version = 6U;
+    legacy.generator_version = 6U;
+    CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.generator_version == CC_GENERATOR_VERSION);
+    CC_CHECK(restored.current_day == legacy.current_day);
+    CC_CHECK(CcIdKind(restored.hoard_raiders.id) ==
+             CC_ENTITY_HOARD_RAIDERS);
+    CC_CHECK(CcSimValidate(&restored, error, error_capacity));
+    RemoveDatabase(path);
+}
+
+static void CheckSchema8Compatibility(char *error, size_t error_capacity)
+{
+    const char *path = "persistence-legacy-v8-test.ccsave";
+    RemoveDatabase(path);
+    CcSim legacy;
+    CcSimInit(&legacy, UINT32_C(0x1e9ac8));
+    legacy.goblins.tribute_phase = CC_GOBLIN_TRIBUTE_IDLE;
+    legacy.goblins.tribute_target_id = 0U;
+    legacy.goblins.tribute_event_id = 0U;
+    legacy.goblins.carried_tribute = 0;
+    legacy.goblins.tribute_days_remaining = 0;
+    legacy.schema_version = 8U;
+    legacy.generator_version = 8U;
+    CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.generator_version == CC_GENERATOR_VERSION);
+    CC_CHECK(restored.settlements[0].field_yield > 0);
+    CC_CHECK(restored.settlements[3].iron_deposit > 0);
+    CC_CHECK(restored.settlements[2].stock[CC_GOOD_WEAPONS] > 0);
+    CC_CHECK(restored.goblins.lair_stock[CC_GOOD_FOOD] > 0);
+    CC_CHECK(CcSimValidate(&restored, error, error_capacity));
     RemoveDatabase(path);
 }
 
@@ -293,12 +367,14 @@ static void CheckPreJourneySchema3Compatibility(char *error,
         }
     }
     CC_CHECK(situation != NULL);
+    legacy_journey.player.cargo[CC_GOOD_FOOD] = situation->quantity;
     CcCommand accept = {
         .kind = CC_COMMAND_ACCEPT_SITUATION,
         .target_id = situation->id
     };
     CC_CHECK(CcSimApply(&legacy_journey, &accept,
                         error, error_capacity));
+    legacy_journey.routes[0].closed = true;
     CcCommand travel = {
         .kind = CC_COMMAND_TRAVEL,
         .target_id = legacy_journey.settlements[1].id
@@ -337,6 +413,12 @@ int main(void)
     CcSimAdvanceDays(&original, 23);
     char error[256];
     CcSettlement *capital = &original.settlements[4];
+    original.goblins.tribute_cooldown_days = 1000;
+    original.hoard_raiders.cooldown_days = 1000;
+    capital->stock[CC_GOOD_GOLD] = 1;
+    capital->stock[CC_GOOD_GEMS] = 1;
+    CcSimAdvanceDays(&original, 21);
+    CC_CHECK(original.treasure_count >= 1);
     capital->stock[CC_GOOD_MATERIAL] += 20;
     capital->stock[CC_GOOD_TOOLS] += 10;
     original.kingdoms[2].treasury += 100;
@@ -345,6 +427,9 @@ int main(void)
                                       error, sizeof(error)));
     CheckPreJourneySchema3Compatibility(error, sizeof(error));
     CheckSchema4Compatibility(error, sizeof(error));
+    CheckSchema5Compatibility(error, sizeof(error));
+    CheckSchema6Compatibility(error, sizeof(error));
+    CheckSchema8Compatibility(error, sizeof(error));
     CheckJournalRecovery(error, sizeof(error));
     CheckJournalCheckpointAndTamper(error, sizeof(error));
     CcCommand command = {
@@ -357,7 +442,10 @@ int main(void)
     }
     const CcSituation *charter = NULL;
     for (int32_t i = 0; i < original.situation_count; ++i) {
-        if (original.situations[i].status == CC_SITUATION_ACTIVE) {
+        if (original.situations[i].status == CC_SITUATION_ACTIVE &&
+            CcSimSituationOfferSettlementId(
+                &original, &original.situations[i]) ==
+                original.player.location_id) {
             charter = &original.situations[i];
             break;
         }
@@ -429,6 +517,11 @@ int main(void)
     CC_CHECK(strcmp(restored.delayed_echo.character_name,
                     original.delayed_echo.character_name) == 0);
     CC_CHECK(restored.map_count == original.map_count);
+    CC_CHECK(restored.treasure_count == original.treasure_count);
+    CC_CHECK(strcmp(restored.treasures[0].name,
+                    original.treasures[0].name) == 0);
+    CC_CHECK(restored.treasures[0].owner_id ==
+             original.treasures[0].owner_id);
     CC_CHECK(restored.maps[0].owner_id == original.maps[0].owner_id);
     CC_CHECK(restored.maps[0].recorded_danger ==
              original.maps[0].recorded_danger);

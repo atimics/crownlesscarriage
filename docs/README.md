@@ -17,8 +17,9 @@ respond to a player decision.
 8. [Vertical slice](08-vertical-slice.md)
 9. [Validation](09-validation.md)
 10. [Production roadmap](10-roadmap.md)
-11. [Glossary](glossary.md)
-12. [Decision log](decisions/README.md)
+11. [Text-first metagame playtest](11-metagame-playtest.md)
+12. [Glossary](glossary.md)
+13. [Decision log](decisions/README.md)
 
 ## Full table of contents
 
@@ -59,6 +60,7 @@ respond to a player decision.
 ### Part V — Threats and adventure
 
 - Human bandit factions
+- Goblin tribute, war and social pressure, dragon hoards, theft, omens, and repayment
 - Smuggling networks and black markets
 - Monster habitats and migration
 - Monster pressure on human systems
@@ -91,6 +93,7 @@ respond to a player decision.
 - [Runtime environment design](production/runtime-environment-design.md)
 - Automated simulation validation
 - Player-legibility tests
+- [Text-first metagame playtest](11-metagame-playtest.md)
 - Go/no-go gates
 - Expansion roadmap
 

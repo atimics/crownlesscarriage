@@ -1,0 +1,153 @@
+# Text-First Metagame Playtest
+
+## Purpose
+
+This build tests the Empty Granary from the simulation side while the 3D scene
+is still changing. It is not a replacement for the final local presentation.
+It answers a narrower question:
+
+> Can a player understand the crisis, make a costly carriage choice, and
+> recognize what changed?
+
+The playtest uses the real simulation, situations, markets, roads, encounters,
+delayed echoes, and SQLite save format.
+
+## Start
+
+Build the normal play preset, then run:
+
+```sh
+cmake --preset play
+cmake --build --preset play
+./out/build/play/crownless_metagame_playtest
+```
+
+Use `--seed NUMBER` to repeat a specific world.
+
+The test begins at the hungry crossroads with 75 crowns. The player has enough
+to commit to one answer, but not enough to ignore price, time, and road costs.
+
+## Facilitation
+
+Give the player the keyboard. Do not explain the world or recommend a path.
+Only say that `help` lists commands.
+
+Watch for:
+
+- Whether the player uses `look`, `causes`, and `people` before choosing
+- Which promise they accept
+- Which cargo loses space to that promise
+- Whether maps feel like useful but old information
+- Whether the player sees a real cost in fighting, bargaining, and repair
+- Whether the chosen answer clearly closes rival offers
+- Whether both delayed outcomes make sense 30 and 60 days later
+- Where the player becomes bored, lost, or surprised for the wrong reason
+
+Do not give the player a solution list. The `rumors` command gives local clues:
+
+- The western farms have grain
+- Official papers may pass the closed bridge
+- An old night road reaches the mine
+
+Offers are local. A player must meet the sponsor to accept or refuse one. A
+delivery only counts if the full load first leaves town in the carriage. Maps
+are not keys to normal roads: an uncharted trip is slower and more dangerous.
+The hidden night road still needs its physical chart, unless its sponsor is
+guiding an accepted commission.
+
+The longer campaign also exposes the goblin and dragon cycle. Type `dragon` to
+see it. Goblins raid for whichever physical stock their lair lacks, return home,
+then carry portable offerings on a second journey to the cave. At the cave, `dragon steal COUNT`
+starts 14 days of omens; `dragon return COUNT` repays the exact debt. The dragon
+does not attack because a town is rich. It attacks only while stolen hoard
+treasure remains unpaid.
+
+Type `inequality` to inspect the social fault lines. The score is not a generic
+poverty meter. It rises when hunger and high prices exist beside prosperity,
+stored local coin, a large treasury, and weak commoner power. At 75 or more, with real hunger, the
+Ash-Poor Company may travel to the cave, steal from the hoard, and bring short
+relief home. The resulting omens and fire must trace back through that journey
+to the inequality that caused it.
+
+Type `economy` to inspect fields, mountain deposits, rare-seam progress, all six
+goods, and named treasure ownership. Type `treasures` for each named object's
+materials, maker, location, holder, and appraisal. A treasure can be moved with
+`buy-treasure NUMBER` and `sell-treasure NUMBER`; it fills one carriage slot.
+Type `war` to inspect border pressure,
+kingdom treasuries, local markets, war chests, garrison food, tools, and
+weapons, legitimacy, and the roads creating the burden.
+The crown moves gold into a war chest; that chest pays wages and named suppliers,
+and the supplies travel. A broke and unpopular court with a real supply crisis
+may send the Crown Levy to rob the cave. The dragon still responds to the theft,
+not to war.
+
+## End
+
+End after the first main intervention and its two delayed echoes. The echoes
+arrive 30 and 60 days after the intervention, while the player is in the place
+that changed. Use `wait 30` when a short test needs to reach them quickly.
+
+Ask the player to type `debrief`. They should answer the five open questions
+without opening `history`.
+
+Record the answers in the player's own words. A correct mechanical action does
+not count as understanding if the player cannot explain its cause or human
+cost.
+
+Do not count a test as a success because the player found a valid command. Move
+forward only when fresh players can explain the crisis without the ledger,
+different interventions produce recognizable outcomes, and the journey remains
+interesting when repeated.
+
+## Abuse checks
+
+Before each round of human tests, verify these hostile cases:
+
+- Buying and selling the same local food loses money and does not finish a charter.
+- A charter cannot be accepted from another settlement.
+- Relief cannot be unloaded until the full consignment has travelled.
+- An unrelated trip does not create a free charter encounter.
+- Fighting costs coins and carriage condition.
+- Repairing with cash never consumes tools carried in the wagon.
+- Finishing one main answer withdraws the other two.
+- Two delayed echoes survive save and load.
+- A rich town can be robbed by goblins without being burned by the dragon.
+- Prosperity without hunger and weak commoner power does not launch hoard thieves.
+- Severe inequality launches a physical expedition rather than instant theft.
+- Stolen hoard money returns as bread and debt relief before the fire.
+- After one social-theft burning, the wealthy government repays the dragon.
+- War by itself never starts omens or dragon fire.
+- War spending moves from treasury to war chest, wages, and supplier markets.
+- A paid supply convoy removes real wheat, tools, or weapons from its origin and travels.
+- Total tracked gold does not change while these transfers happen.
+- A Crown Levy requires burden, a material supply crisis, low liquid war funds,
+  and low legitimacy.
+- Crown Levy gold enters the real local war chest before restitution removes it.
+- Restitution uses existing war-chest, treasury, and household coin.
+- Goblin loot leaves a real market, returns to the lair, and reaches the hoard
+  only after a separate tribute journey.
+- Intercepted tribute that never reaches the cave does not belong to the dragon.
+- Farms need fields, mines need deposits, and smith output consumes real Iron.
+- Rare Gold and Gems advance through persistent mine work instead of weekly
+  random rolls.
+- A named treasure keeps its Gold, Gem, maker, owner, location, and one-slot
+  cargo identity through save and load.
+- Hoard theft brings 14 days of readable omens to a named town.
+- Full repayment prevents the attack; partial repayment does not reset time.
+- Fire never occurs without a retained theft and omen in its causal history.
+- Active dragon omens survive save and load with the same debt and target.
+
+## Simulation review
+
+Export yearly balance data with:
+
+```sh
+./out/build/play/crownless_sim_metrics --seeds 100 --years 10 \
+  > out/simulation-shape.csv
+```
+
+Review distributions, not only averages. In particular, watch for settlements
+staying at zero or one hundred, permanent route closure, repeated identical
+situations, bandit dominance, tribute frequency, hoard growth, dragon attacks
+without a retained theft, social and war-financed raid frequency, stuck dragon
+debts, and universal prosperity.
