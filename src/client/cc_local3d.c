@@ -11245,8 +11245,9 @@ static void DrawCoachHitch(const CcSettlement *place)
                      (Color){129, 77, 43, 255});
     }
     for (int32_t wheel = 0; wheel < 2; ++wheel) {
-        DrawCylinderEx((Vector3){38.50f, 0.62f, z - 0.28f + wheel * 0.58f},
-                       (Vector3){38.58f, 0.62f, z - 0.28f + wheel * 0.58f},
+        float wheel_z = z - 0.28f + (float)wheel * 0.58f;
+        DrawCylinderEx((Vector3){38.50f, 0.62f, wheel_z},
+                       (Vector3){38.58f, 0.62f, wheel_z},
                        0.48f, 0.48f, 12, ShadeColor(wood, 1.08f));
     }
 }
