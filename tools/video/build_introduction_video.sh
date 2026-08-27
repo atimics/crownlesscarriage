@@ -5,7 +5,7 @@ set -eu
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 project_root=$(CDPATH= cd -- "$script_dir/../.." && pwd)
 asset_dir="$project_root/assets/video/introduction"
-output_path=${1:-"$asset_dir/crownless-introduction.mp4"}
+output_path=${1:-"$asset_dir/crownless.mp4"}
 ffmpeg_bin=${CROWNLESS_FFMPEG:-/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg}
 video_font_file=${CROWNLESS_VIDEO_FONT:-/System/Library/Fonts/SFNSMono.ttf}
 
@@ -93,7 +93,7 @@ mkdir -p "$(dirname -- "$output_path")"
     -c:v libx264 -preset slow -crf 18 -pix_fmt yuv420p \
     -c:a aac -b:a 192k -ar 48000 \
     -movflags +faststart \
-    -metadata title="Crownless Carriage Introduction" \
+    -metadata title="Crownless" \
     -metadata artist="ratimics" \
     -metadata comment="Audio: The Predator Clause" \
     "$output_path"

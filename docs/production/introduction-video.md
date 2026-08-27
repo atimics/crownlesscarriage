@@ -1,9 +1,9 @@
 # Introduction Video
 
 The finished 23-second introduction is
-[`crownless-introduction.mp4`](../../assets/video/introduction/crownless-introduction.mp4).
+[`crownless.mp4`](../../assets/video/introduction/crownless.mp4).
 English captions are available beside it as
-[`crownless-introduction.en.srt`](../../assets/video/introduction/crownless-introduction.en.srt).
+[`crownless.en.srt`](../../assets/video/introduction/crownless.en.srt).
 It uses the supplied track
 [`the-predator-clause.mp3`](../../assets/video/introduction/the-predator-clause.mp3)
 for its complete audio mix.
