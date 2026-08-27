@@ -5086,7 +5086,8 @@ static void UpdateRoyalDiplomacy(CcSim *sim)
                 return;
             }
             if (state == CC_DIPLOMACY_WAR && age >= 364 &&
-                (KingdomAverageHunger(sim, first) > 35 ||
+                (age >= 12 * 364 ||
+                 KingdomAverageHunger(sim, first) > 35 ||
                  KingdomAverageHunger(sim, second) > 35 ||
                  (sim->kingdoms[first].legitimacy < 35 &&
                   sim->kingdoms[second].legitimacy < 35))) {

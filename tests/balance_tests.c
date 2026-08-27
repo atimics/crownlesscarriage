@@ -143,6 +143,8 @@ int main(void)
     int32_t crisis_samples = 0;
     int32_t quiet_samples = 0;
     int32_t scarred_samples = 0;
+    int32_t war_samples = 0;
+    int32_t peace_samples = 0;
     for (uint32_t seed_number = 1; seed_number <= 4; ++seed_number) {
         CcSim sim;
         CcSimInit(&sim, seed_number * UINT32_C(0x9e3779b9));
@@ -160,6 +162,17 @@ int main(void)
             if (average_hunger >= 60) collapse_samples += 1;
             if (maximum_hunger >= 40) crisis_samples += 1;
             if (maximum_hunger < 25) quiet_samples += 1;
+            bool at_war = false;
+            for (int32_t first = 0;
+                 first < sim.kingdom_count; ++first) {
+                for (int32_t second = first + 1;
+                     second < sim.kingdom_count; ++second) {
+                    if (sim.diplomacy[first][second] ==
+                        CC_DIPLOMACY_WAR) at_war = true;
+                }
+            }
+            if (at_war) war_samples += 1;
+            else peace_samples += 1;
             for (int32_t place = 0;
                  place < sim.settlement_count; ++place) {
                 if (sim.settlements[place].population <
@@ -181,6 +194,8 @@ int main(void)
     CC_CHECK(crisis_samples > samples / 10);
     CC_CHECK(quiet_samples > samples / 4);
     CC_CHECK(scarred_samples > 0);
+    CC_CHECK(war_samples > samples / 10);
+    CC_CHECK(peace_samples > samples / 10);
 
     puts("OSR balance and long-run recovery tests passed");
     return 0;
