@@ -2028,6 +2028,19 @@ static bool ResolveLocalAgentCapsuleMove(CcLocalSceneKind scene,
                 corrected.y - heights[sample],
                 corrected.z,
             };
+            bool crossing_passable_support =
+                passable_support_height > -FLT_MAX * 0.5f &&
+                result.y < passable_support_height - 0.001f &&
+                candidate.y >= passable_support_height - 0.001f &&
+                sample_normal.y > 0.90f;
+            if (crossing_passable_support) {
+                /* During a mantle the ledge box is passable once contacts
+                   support the body. Its top is still a valid floor query,
+                   but snapping the root to that floor would skip the swept
+                   arc. Let the authored root reach the support height before
+                   normal grounding resumes. */
+                candidate.y = result.y;
+            }
             Vector3 correction = Vector3Subtract(candidate, result);
             if (Vector3Length(correction) <= 0.00001f) continue;
             result = candidate;
