@@ -37,6 +37,24 @@ typedef enum CcNpcPortraitExpression {
     CC_NPC_PORTRAIT_TALKING
 } CcNpcPortraitExpression;
 
+typedef enum CcNpcHeadFamily {
+    CC_NPC_HEAD_FAMILY_SQUARE,
+    CC_NPC_HEAD_FAMILY_LONG,
+    CC_NPC_HEAD_FAMILY_BROAD,
+    CC_NPC_HEAD_FAMILY_VETERAN,
+    CC_NPC_HEAD_FAMILY_COUNT
+} CcNpcHeadFamily;
+
+typedef enum CcNpcHairFamily {
+    CC_NPC_HAIR_FAMILY_CROPPED,
+    CC_NPC_HAIR_FAMILY_SWEPT,
+    CC_NPC_HAIR_FAMILY_BOB,
+    CC_NPC_HAIR_FAMILY_CREST,
+    CC_NPC_HAIR_FAMILY_BRAIDED,
+    CC_NPC_HAIR_FAMILY_REAR_LOCK,
+    CC_NPC_HAIR_FAMILY_COUNT
+} CcNpcHairFamily;
+
 /* A stable, inexpensive visual identity for background and simulated people.
    Values are deliberately bounded around the shared humanoid skeleton so
    animation, hit volumes, and crowd navigation remain authoritative. */
@@ -57,6 +75,8 @@ typedef struct CcNpcAppearance {
     float idle_lean;
     float arm_swing_scale;
     uint8_t skin_tone;
+    uint8_t head_family;
+    uint8_t hair_family;
     uint8_t hair_style;
     uint8_t beard_style;
     uint8_t nose_style;
@@ -109,6 +129,10 @@ typedef void (*CcNpcFaceBlockPainter)(void *context, int32_t grid_x,
 
 CcNpcAppearance CcNpcAppearanceGenerate(uint32_t seed, CcNpcRole role,
                                         Color accent);
+/* Named people use fixed recipes. The same value must be sent to the world
+   renderer and the portrait renderer so identity cannot drift by context. */
+CcNpcAppearance CcNpcCrownlessAppearance(void);
+CcNpcAppearance CcNpcMaraAppearance(void);
 const char *CcNpcRoleName(CcNpcRole role);
 bool CcNpcAppearanceEqual(const CcNpcAppearance *first,
                           const CcNpcAppearance *second);
@@ -128,7 +152,5 @@ void CcNpcDrawPixelPortrait(const CcNpcAppearance *appearance,
                             Rectangle bounds,
                             CcNpcPortraitExpression expression,
                             bool crowned);
-CcNpcAppearance CcNpcHeroPortraitAppearance(
-    const CcNpcAppearance *appearance);
 
 #endif

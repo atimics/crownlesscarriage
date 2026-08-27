@@ -63,14 +63,24 @@ int main(void)
         return 1;
     }
 
-    CcNpcAppearance hero = CcNpcHeroPortraitAppearance(&traveller);
+    CcNpcAppearance hero = CcNpcCrownlessAppearance();
+    CcNpcAppearance mara = CcNpcMaraAppearance();
     CcFaceRecipe hero_face = CcNpcFaceRecipe(&hero);
+    CcFaceRecipe mara_face = CcNpcFaceRecipe(&mara);
     CcFaceRecipe guard_face = CcNpcFaceRecipe(&guard_a);
     if (hero_face.seed != hero.seed || hero_face.skin.r != 177U ||
-        hero_face.hair.r != 27U || hero_face.hair_style != 3U ||
+        hero_face.hair.r != 27U || hero_face.hair_style != 0U ||
         hero_face.width != hero.head_width ||
         hero_face.depth != hero.head_depth ||
-        hero_face.face_shape >= 4U || hero_face.eye_spacing >= 3U ||
+        hero_face.face_shape != CC_NPC_HEAD_FAMILY_SQUARE ||
+        hero.head_family != CC_NPC_HEAD_FAMILY_SQUARE ||
+        hero.hair_family != CC_NPC_HAIR_FAMILY_CROPPED ||
+        (hero.equipment & CC_NPC_EQUIPMENT_HEADWEAR) != 0U ||
+        mara.role != CC_NPC_ROLE_MERCHANT ||
+        mara_face.face_shape != CC_NPC_HEAD_FAMILY_BROAD ||
+        mara.hair_family != CC_NPC_HAIR_FAMILY_BOB ||
+        (mara.equipment & CC_NPC_EQUIPMENT_HEADWEAR) == 0U ||
+        hero_face.eye_spacing >= 3U ||
         hero_face.brow_style >= 4U || hero_face.mouth_style >= 4U ||
         guard_face.headwear !=
             ((guard_a.equipment & CC_NPC_EQUIPMENT_HEADWEAR) != 0U) ||
@@ -170,6 +180,8 @@ int main(void)
             UINT32_C(0x504f5000) + role, (CcNpcRole)role,
             (Color){96, 111, 117, 255});
         if (person.role != (CcNpcRole)role || person.skin_tone >= 10U ||
+            person.head_family >= CC_NPC_HEAD_FAMILY_COUNT ||
+            person.hair_family >= CC_NPC_HAIR_FAMILY_COUNT ||
             person.hair_style >= 8U ||
             person.beard_style >= 4U || person.nose_style >= 4U ||
             person.scar_style >= 4U || person.headwear_style >= 4U ||

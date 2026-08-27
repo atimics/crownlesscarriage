@@ -736,9 +736,7 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
     const CcSituation *situation = accepted != NULL ? accepted :
         CcSimSituationForSettlement(sim, place->id);
     if (local->market_interior) {
-        CcNpcAppearance mara = CcNpcAppearanceGenerate(
-            UINT32_C(0x4d415241), CC_NPC_ROLE_MERCHANT,
-            (Color){218, 148, 61, 255});
+        CcNpcAppearance mara = CcNpcMaraAppearance();
         CcOverlayDrawText("MARA / FACTOR", 966, 411, 11, TEAL);
         CcLocalDrawNpcPortrait3D(
             &mara, (Rectangle){966.0f, 432.0f, 64.0f, 75.0f},

@@ -53,16 +53,10 @@ CcFaceRecipe CcNpcFaceRecipe(const CcNpcAppearance *appearance)
     if (appearance == NULL) return (CcFaceRecipe){0};
     Color headwear = appearance->headwear_style == 0U ?
                      appearance->metal : appearance->outer;
-    uint8_t face_shape = 0U;
-    if (appearance->age >= 0.70f) {
-        face_shape = 3U;
-    } else if (appearance->head_width < 0.99f ||
-               appearance->head_depth < 0.985f) {
-        face_shape = 1U;
-    } else if (appearance->head_width > 1.045f ||
-               appearance->body_mass > 1.075f) {
-        face_shape = 2U;
-    }
+    uint8_t face_shape = appearance->head_family <
+                         CC_NPC_HEAD_FAMILY_COUNT ?
+                         appearance->head_family :
+                         CC_NPC_HEAD_FAMILY_SQUARE;
     return (CcFaceRecipe){
         .seed = appearance->seed,
         .width = appearance->head_width,
@@ -343,23 +337,6 @@ void CcNpcDrawPixelPortrait(const CcNpcAppearance *appearance,
                       PaintScreenBlock);
 }
 
-CcNpcAppearance CcNpcHeroPortraitAppearance(
-    const CcNpcAppearance *appearance)
-{
-    CcNpcAppearance result = appearance != NULL ? *appearance :
-        CcNpcAppearanceGenerate(UINT32_C(0xc0a71a9e),
-                                CC_NPC_ROLE_WAYFARER,
-                                (Color){181, 135, 49, 255});
-    result.skin = (Color){177, 131, 93, 255};
-    result.hair = (Color){27, 31, 32, 255};
-    result.underlayer = (Color){47, 108, 106, 255};
-    result.outer = (Color){111, 48, 55, 255};
-    result.accent = (Color){181, 135, 49, 255};
-    result.hair_style = 3U;
-    result.beard_style = 0U;
-    return result;
-}
-
 static Color PaletteColor(const Color *palette, int32_t count,
                           uint32_t seed, uint32_t stream)
 {
@@ -418,7 +395,18 @@ CcNpcAppearance CcNpcAppearanceGenerate(uint32_t seed, CcNpcRole role,
     result.arm_swing_scale = 0.84f + Unit(seed, 22U) * 0.32f;
     result.skin_tone = (uint8_t)(Sample(seed, 7U) %
         (uint32_t)(sizeof(skin_palette) / sizeof(skin_palette[0])));
+    if (result.age >= 0.70f) {
+        result.head_family = CC_NPC_HEAD_FAMILY_VETERAN;
+    } else if (result.head_width < 0.99f || result.head_depth < 0.985f) {
+        result.head_family = CC_NPC_HEAD_FAMILY_LONG;
+    } else if (result.head_width > 1.045f || result.body_mass > 1.075f) {
+        result.head_family = CC_NPC_HEAD_FAMILY_BROAD;
+    } else {
+        result.head_family = CC_NPC_HEAD_FAMILY_SQUARE;
+    }
     result.hair_style = (uint8_t)(Sample(seed, 8U) % 8U);
+    result.hair_family = (uint8_t)(result.hair_style %
+        (uint8_t)CC_NPC_HAIR_FAMILY_COUNT);
     result.beard_style = (uint8_t)(Sample(seed, 9U) % 4U);
     result.nose_style = (uint8_t)(Sample(seed, 23U) % 4U);
     uint32_t scar_sample = Sample(seed, 24U) % 8U;
@@ -573,6 +561,56 @@ CcNpcAppearance CcNpcAppearanceGenerate(uint32_t seed, CcNpcRole role,
     return result;
 }
 
+CcNpcAppearance CcNpcCrownlessAppearance(void)
+{
+    CcNpcAppearance result = CcNpcAppearanceGenerate(
+        UINT32_C(0xc04e1e55), CC_NPC_ROLE_WAYFARER,
+        (Color){224, 169, 59, 255});
+    result.equipment = CC_NPC_EQUIPMENT_MANTLE |
+                       CC_NPC_EQUIPMENT_ARMOR;
+    result.stature = 1.0f;
+    result.body_mass = 0.98f;
+    result.muscularity = 0.66f;
+    result.shoulder_scale = 1.02f;
+    result.head_width = 1.03f;
+    result.head_depth = 1.0f;
+    result.age = 0.30f;
+    result.head_family = CC_NPC_HEAD_FAMILY_SQUARE;
+    result.hair_family = CC_NPC_HAIR_FAMILY_CROPPED;
+    result.hair_style = 0U;
+    result.beard_style = 0U;
+    result.nose_style = 2U;
+    result.scar_style = 0U;
+    result.headwear_style = 0U;
+    result.garment_style = 0U;
+    result.skin = (Color){177, 131, 93, 255};
+    result.hair = (Color){27, 31, 32, 255};
+    result.underlayer = (Color){47, 108, 106, 255};
+    result.outer = (Color){111, 48, 55, 255};
+    result.trousers = (Color){40, 48, 57, 255};
+    result.leather = (Color){82, 50, 35, 255};
+    result.metal = (Color){139, 55, 62, 255};
+    result.accent = (Color){224, 169, 59, 255};
+    return result;
+}
+
+CcNpcAppearance CcNpcMaraAppearance(void)
+{
+    CcNpcAppearance result = CcNpcAppearanceGenerate(
+        UINT32_C(0x4d415241), CC_NPC_ROLE_MERCHANT,
+        (Color){218, 148, 61, 255});
+    result.body_mass = 1.09f;
+    result.head_width = 1.07f;
+    result.head_depth = 1.03f;
+    result.age = 0.58f;
+    result.head_family = CC_NPC_HEAD_FAMILY_BROAD;
+    result.hair_family = CC_NPC_HAIR_FAMILY_BOB;
+    result.hair_style = 1U;
+    result.beard_style = 2U;
+    result.headwear_style = 1U;
+    return result;
+}
+
 const char *CcNpcRoleName(CcNpcRole role)
 {
     switch (role) {
@@ -609,6 +647,8 @@ bool CcNpcAppearanceEqual(const CcNpcAppearance *first,
            first->idle_lean == second->idle_lean &&
            first->arm_swing_scale == second->arm_swing_scale &&
            first->skin_tone == second->skin_tone &&
+           first->head_family == second->head_family &&
+           first->hair_family == second->hair_family &&
            first->hair_style == second->hair_style &&
            first->beard_style == second->beard_style &&
            first->nose_style == second->nose_style &&

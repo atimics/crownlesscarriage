@@ -2222,12 +2222,8 @@ void CcLocalAgentInit(CcLocalAgent *agent, Vector2 position, bool market_interio
     agent->grounded = true;
     agent->allow_downclimb = true;
     agent->crowned = true;
-    agent->tunic_color = (Color){42, 128, 136, 255};
-    agent->appearance = CcNpcAppearanceGenerate(
-        UINT32_C(0xc04e1e55), CC_NPC_ROLE_WAYFARER,
-        (Color){42, 128, 136, 255});
-    agent->appearance.hair_style = 3U;
-    agent->appearance.beard_style = 0U;
+    agent->appearance = CcNpcCrownlessAppearance();
+    agent->tunic_color = agent->appearance.outer;
     agent->target_point = agent->position;
     agent->combat.health = CC_LOCAL_COMBAT_MAX_HEALTH;
     agent->combat.posture = CC_LOCAL_COMBAT_MAX_POSTURE;
@@ -8485,8 +8481,6 @@ static NpcBodySkinCache npc_body_skins
     [CC_NPC_BODY_MUSCLE_COUNT]
     [CC_NPC_BODY_TISSUE_COUNT] = {0};
 
-#define CC_NPC_HEAD_FAMILY_COUNT 4
-
 typedef struct NpcHeadFamilyCache {
     Model model;
     bool ready;
@@ -8496,6 +8490,16 @@ static const char *NPC_HEAD_FAMILY_NAMES[CC_NPC_HEAD_FAMILY_COUNT] = {
     "square", "long", "broad", "veteran",
 };
 static NpcHeadFamilyCache npc_head_families[CC_NPC_HEAD_FAMILY_COUNT] = {0};
+
+typedef struct NpcHairFamilyCache {
+    Model model;
+    bool ready;
+} NpcHairFamilyCache;
+
+static const char *NPC_HAIR_FAMILY_NAMES[CC_NPC_HAIR_FAMILY_COUNT] = {
+    "cropped", "swept", "bob", "crest", "braided", "rear_lock",
+};
+static NpcHairFamilyCache npc_hair_families[CC_NPC_HAIR_FAMILY_COUNT] = {0};
 
 typedef struct NpcArchetypeCache {
     Model model;
@@ -8634,6 +8638,8 @@ static Matrix NpcModuleTransform(Vector3 origin, Vector3 right, Vector3 up,
                                  Vector3 forward, Vector3 scale);
 static bool DrawNpcDynamicModule(NpcDynamicModuleId id, Matrix transform,
                                  Color color);
+static bool DrawNpcHairFamily(const CcNpcAppearance *appearance,
+                              Matrix transform, Matrix fallback_transform);
 
 static NpcDynamicModuleId NpcHeadwearModule(uint8_t style)
 {
@@ -9137,6 +9143,36 @@ static void LoadNpcHeadFamilies(void)
     }
     TraceLog(LOG_INFO, "NPC HEAD: loaded %d/%d modular head families",
              loaded_count, CC_NPC_HEAD_FAMILY_COUNT);
+}
+
+static void LoadNpcHairFamilies(void)
+{
+    int32_t loaded_count = 0;
+    for (int32_t family = 0; family < CC_NPC_HAIR_FAMILY_COUNT; ++family) {
+        char path[192];
+        (void)snprintf(path, sizeof(path),
+                       "assets/exports/world_kit/wk_hair_%s_v01.glb",
+                       NPC_HAIR_FAMILY_NAMES[family]);
+        char resolved[1024];
+        if (!ResolveAssetPath(path, resolved, sizeof(resolved))) {
+            TraceLog(LOG_WARNING, "NPC HAIR: %s was not found", path);
+            continue;
+        }
+        Model model = LoadModel(resolved);
+        if (model.meshCount < 4 || model.meshCount > 8 ||
+            model.materialCount < 1 || model.skeleton.boneCount != 0) {
+            TraceLog(LOG_WARNING,
+                     "NPC HAIR: invalid %s (%d meshes, %d bones)", path,
+                     model.meshCount, model.skeleton.boneCount);
+            if (model.meshCount > 0) UnloadModel(model);
+            continue;
+        }
+        npc_hair_families[family].model = model;
+        npc_hair_families[family].ready = true;
+        loaded_count += 1;
+    }
+    TraceLog(LOG_INFO, "NPC HAIR: loaded %d/%d molded hair families",
+             loaded_count, CC_NPC_HAIR_FAMILY_COUNT);
 }
 
 static void LoadRuntimeAssets(void)
@@ -9755,6 +9791,11 @@ static void LoadVisualStyle(void)
             ApplyNpcStyle(&npc_head_families[family].model);
         }
     }
+    for (int32_t family = 0; family < CC_NPC_HAIR_FAMILY_COUNT; ++family) {
+        if (npc_hair_families[family].ready) {
+            ApplyNpcStyle(&npc_hair_families[family].model);
+        }
+    }
     for (int32_t id = 0; id < RUNTIME_ASSET_COUNT; ++id) {
         if (!runtime_assets[id].ready) continue;
         if (id == RUNTIME_ASSET_MARKET) {
@@ -10213,6 +10254,7 @@ void CcLocalRendererInit(void)
     LoadNpcDynamicModules();
     LoadNpcBodySkins();
     LoadNpcHeadFamilies();
+    LoadNpcHairFamilies();
     LoadRuntimeAssets();
     LoadVisualStyle();
     npc_portrait_target = LoadRenderTexture(72, 88);
@@ -10276,6 +10318,12 @@ void CcLocalRendererShutdown(void)
             UnloadModel(npc_head_families[family].model);
         }
         npc_head_families[family] = (NpcHeadFamilyCache){0};
+    }
+    for (int32_t family = 0; family < CC_NPC_HAIR_FAMILY_COUNT; ++family) {
+        if (npc_hair_families[family].ready) {
+            UnloadModel(npc_hair_families[family].model);
+        }
+        npc_hair_families[family] = (NpcHairFamilyCache){0};
     }
     for (int32_t id = 0; id < RUNTIME_ASSET_COUNT; ++id) {
         if (runtime_assets[id].ready) UnloadModel(runtime_assets[id].model);
@@ -12490,11 +12538,12 @@ static bool DrawNpcArchetype3D(Vector3 position, float size_hint, float yaw,
                   0.40f * scale,
                   0.33f * appearance->head_depth * scale * width *
                       silhouette_gain});
-    int32_t hair = (int32_t)appearance->hair_style %
-                   CC_NPC_DYNAMIC_HAIR_COUNT;
-    (void)DrawNpcDynamicModule(
-        (NpcDynamicModuleId)(NPC_DYNAMIC_HAIR_0 + hair), identity_head,
-        appearance->hair);
+    Matrix molded_hair = NpcModuleTransform(
+        head, head_right, head_up, head_forward,
+        (Vector3){scale * width * silhouette_gain,
+                  scale,
+                  scale * width * silhouette_gain});
+    (void)DrawNpcHairFamily(appearance, molded_hair, identity_head);
     if ((appearance->equipment & CC_NPC_EQUIPMENT_HEADWEAR) != 0U) {
         NpcDynamicModuleId headwear = NpcHeadwearModule(
             appearance->headwear_style);
@@ -12521,11 +12570,13 @@ static bool DrawNpcArchetype3D(Vector3 position, float size_hint, float yaw,
     return true;
 }
 
-static void DrawNpcFigure3D(Vector3 position, float size_hint, float yaw,
-                            uint32_t seed, CcNpcRole role, Color accent,
-                            float phase, CcTraversalMode mode)
+static void DrawNpcAppearanceFigure3D(
+    Vector3 position, float size_hint, float yaw,
+    const CcNpcAppearance *identity, float phase, CcTraversalMode mode)
 {
-    CcNpcAppearance appearance = CcNpcAppearanceGenerate(seed, role, accent);
+    if (identity == NULL) return;
+    CcNpcAppearance appearance = *identity;
+    uint32_t seed = appearance.seed;
     CcNpcPortraitExpression expression =
         appearance.role == CC_NPC_ROLE_GUARD ||
         appearance.role == CC_NPC_ROLE_RAIDER ? CC_NPC_PORTRAIT_FOCUSED :
@@ -12694,6 +12745,15 @@ static void DrawNpcFigure3D(Vector3 position, float size_hint, float yaw,
         }
     }
     RestoreWorldLighting();
+}
+
+static void DrawNpcFigure3D(Vector3 position, float size_hint, float yaw,
+                            uint32_t seed, CcNpcRole role, Color accent,
+                            float phase, CcTraversalMode mode)
+{
+    CcNpcAppearance appearance = CcNpcAppearanceGenerate(seed, role, accent);
+    DrawNpcAppearanceFigure3D(position, size_hint, yaw, &appearance, phase,
+                              mode);
 }
 
 static void DrawPitchedFoot(Vector3 heel, Vector3 toe, float yaw, Color color)
@@ -12884,13 +12944,11 @@ static bool DrawNpcDynamicModule(NpcDynamicModuleId id, Matrix transform,
 static int32_t NpcHeadFamilyForAppearance(
     const CcNpcAppearance *appearance)
 {
-    if (appearance == NULL) return 0;
-    if (appearance->age >= 0.70f) return 3;
-    if (appearance->head_width < 0.99f ||
-        appearance->head_depth < 0.985f) return 1;
-    if (appearance->head_width > 1.045f ||
-        appearance->body_mass > 1.075f) return 2;
-    return 0;
+    if (appearance == NULL ||
+        appearance->head_family >= CC_NPC_HEAD_FAMILY_COUNT) {
+        return CC_NPC_HEAD_FAMILY_SQUARE;
+    }
+    return appearance->head_family;
 }
 
 static bool DrawNpcHeadFamily(const CcNpcAppearance *appearance,
@@ -12914,6 +12972,46 @@ static bool DrawNpcHeadFamily(const CcNpcAppearance *appearance,
             material = 0;
         }
         DrawMesh(head->model.meshes[mesh], head->model.materials[material],
+                 transform);
+    }
+    return true;
+}
+
+static int32_t NpcHairFamilyForAppearance(
+    const CcNpcAppearance *appearance)
+{
+    if (appearance == NULL ||
+        appearance->hair_family >= CC_NPC_HAIR_FAMILY_COUNT) {
+        return CC_NPC_HAIR_FAMILY_CROPPED;
+    }
+    return appearance->hair_family;
+}
+
+static bool DrawNpcHairFamily(const CcNpcAppearance *appearance,
+                              Matrix transform, Matrix fallback_transform)
+{
+    int32_t family = NpcHairFamilyForAppearance(appearance);
+    NpcHairFamilyCache *hair = &npc_hair_families[family];
+    if (!hair->ready || hair->model.materialCount < 1) {
+        int32_t fallback = appearance != NULL ?
+            (int32_t)appearance->hair_style % CC_NPC_DYNAMIC_HAIR_COUNT : 0;
+        if (fallback < 0) fallback += CC_NPC_DYNAMIC_HAIR_COUNT;
+        return DrawNpcDynamicModule(
+            (NpcDynamicModuleId)(NPC_DYNAMIC_HAIR_0 + fallback),
+            fallback_transform,
+            appearance != NULL ? appearance->hair : WHITE);
+    }
+    for (int32_t material = 0; material < hair->model.materialCount;
+         ++material) {
+        hair->model.materials[material].maps[MATERIAL_MAP_DIFFUSE].color =
+            WHITE;
+    }
+    for (int32_t mesh = 0; mesh < hair->model.meshCount; ++mesh) {
+        int32_t material = hair->model.meshMaterial[mesh];
+        if (material < 0 || material >= hair->model.materialCount) {
+            material = 0;
+        }
+        DrawMesh(hair->model.meshes[mesh], hair->model.materials[material],
                  transform);
     }
     return true;
@@ -12949,6 +13047,8 @@ static bool NpcDynamicCoreReady(const CcNpcAppearance *appearance)
     int32_t family = NpcHeadFamilyForAppearance(appearance);
     if (!npc_head_families[family].ready &&
         !npc_dynamic_modules[NPC_DYNAMIC_HEAD].ready) return false;
+    int32_t hair_family = NpcHairFamilyForAppearance(appearance);
+    if (npc_hair_families[hair_family].ready) return true;
     int32_t hair = (int32_t)appearance->hair_style %
                    CC_NPC_DYNAMIC_HAIR_COUNT;
     if (hair < 0) hair += CC_NPC_DYNAMIC_HAIR_COUNT;
@@ -13127,16 +13227,15 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
                   0.28f * appearance->head_depth * hero_head_scale});
     drew = DrawNpcHeadFamily(appearance, head_transform,
                              fallback_head_transform) && drew;
-    int32_t hair = (int32_t)appearance->hair_style %
-                   CC_NPC_DYNAMIC_HAIR_COUNT;
     Matrix hair_transform = NpcModuleTransform(
+        head, head_right, head_up, head_forward, head_scale);
+    Matrix fallback_hair_transform = NpcModuleTransform(
         head, head_right, head_up, head_forward,
         (Vector3){0.25f * appearance->head_width * hero_head_scale,
                   0.29f * hero_head_scale,
                   0.33f * appearance->head_depth * hero_head_scale});
-    drew = DrawNpcDynamicModule(
-        (NpcDynamicModuleId)(NPC_DYNAMIC_HAIR_0 + hair), hair_transform,
-        appearance->hair) && drew;
+    drew = DrawNpcHairFamily(appearance, hair_transform,
+                             fallback_hair_transform) && drew;
 
     Vector3 back = FromLimbVector(
         skin->sockets[CC_HUMANOID_SOCKET_BACK].position);
@@ -13302,13 +13401,9 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
                agent->humanoid.action == CC_HUMANOID_ACTION_STRIKE) {
         expression = CC_NPC_PORTRAIT_FOCUSED;
     }
-    /* Face cards bypass the indexed character shader, so their literal ink
-       colors use the neutral portrait recipe. The skull underneath keeps the
-       pre-graded world skin through the regular character material. */
-    CcNpcAppearance face_appearance = featured_hero ?
-        CcNpcHeroPortraitAppearance(appearance) : *appearance;
-    face_appearance.hair_style = appearance->hair_style;
-    CcFaceRecipe face = CcNpcFaceRecipe(&face_appearance);
+    /* The projected marks and molded head both read the same identity recipe.
+       Only held expression may change between the world and the portrait. */
+    CcFaceRecipe face = CcNpcFaceRecipe(appearance);
     float face_half_width = featured_hero ?
         0.138f * appearance->head_width :
         0.105f * appearance->head_width;
@@ -13325,28 +13420,7 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
 
 static CcNpcAppearance ProceduralHeroAppearance(const CcLocalAgent *agent)
 {
-    CcNpcAppearance appearance =
-        CcNpcHeroPortraitAppearance(&agent->appearance);
-    appearance.role = CC_NPC_ROLE_WAYFARER;
-    appearance.equipment = (uint32_t)CC_NPC_EQUIPMENT_ARMOR;
-    appearance.body_mass = 0.90f;
-    appearance.muscularity = 0.58f;
-    appearance.shoulder_scale = 0.92f;
-    appearance.garment_style = 0;
-    /* Use one short asymmetric 3D cut in the world and PFP. It gives the hero
-       a clear side part without painting a second fringe across the eyes. */
-    appearance.hair_style = 5U;
-    /* The world grade is strongly amber. Pre-grade the base material so the
-       lit world head lands on the authored tan; the portrait path neutralizes
-       this one color below while keeping the same geometry and face recipe. */
-    appearance.skin = (Color){172, 108, 105, 255};
-    appearance.underlayer = (Color){38, 54, 55, 255};
-    appearance.outer = (Color){42, 116, 109, 255};
-    appearance.trousers = (Color){40, 48, 57, 255};
-    appearance.leather = (Color){82, 50, 35, 255};
-    appearance.metal = (Color){139, 55, 62, 255};
-    appearance.accent = WORLD_GOLD;
-    return appearance;
+    return agent != NULL ? agent->appearance : CcNpcCrownlessAppearance();
 }
 
 static void DrawGroundBrushStroke(Vector3 center, Vector3 along,
@@ -15150,13 +15224,7 @@ void CcLocalDrawAgentPortrait3D(const CcLocalAgent *agent,
     BeginWorldLighting(camera, &INTERIOR_ART_COMPOSITION);
 
     bool drew = false;
-    CcNpcAppearance portrait_appearance = agent->crowned ?
-        ProceduralHeroAppearance(agent) : agent->appearance;
-    if (agent->crowned) {
-        CcNpcAppearance neutral_face =
-            CcNpcHeroPortraitAppearance(&agent->appearance);
-        portrait_appearance.skin = neutral_face.skin;
-    }
+    CcNpcAppearance portrait_appearance = agent->appearance;
     if (agent->crowned && screen_first_hero_active) {
         UseCharacterLighting();
         drew = DrawDynamicNpcModules(agent, &skin, &portrait_appearance);
@@ -16342,10 +16410,10 @@ void CcLocalDrawMarket3D(const CcSim *sim, const CcLocalAgent *agent, float cloc
                           0.30f},
                 ShadeColor(stock_color, 0.82f));
     }
-    DrawNpcFigure3D(
+    CcNpcAppearance mara = CcNpcMaraAppearance();
+    DrawNpcAppearanceFigure3D(
         (Vector3){MARKET_PEOPLE[0].x, 0.0f, MARKET_PEOPLE[0].y},
-        1.02f, 2.75f, UINT32_C(0x4d415241), CC_NPC_ROLE_MERCHANT,
-        (Color){218, 148, 61, 255}, clock, CC_TRAVERSAL_IDLE);
+        1.02f, 2.75f, &mara, clock, CC_TRAVERSAL_IDLE);
     DrawRobotShell(agent);
     DrawCombatSword(agent);
     DrawCombatSkillTell(agent);
