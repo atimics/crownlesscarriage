@@ -329,8 +329,15 @@ endif()
 include(CTest)
 if(BUILD_TESTING)
     if(CC_BUILD_BENCHMARKS)
+        set(CC_BENCHMARK_TEST_ARGUMENTS --quick)
+        # Debug builds keep the benchmark as a functional smoke test, but
+        # compiler instrumentation makes a release timing budget unreliable.
+        if(CMAKE_BUILD_TYPE MATCHES "^(Release|RelWithDebInfo|MinSizeRel)$")
+            list(APPEND CC_BENCHMARK_TEST_ARGUMENTS --assert-budget)
+        endif()
         add_test(NAME headless_performance_budget
-                 COMMAND crownless_benchmark --quick --assert-budget)
+                 COMMAND crownless_benchmark ${CC_BENCHMARK_TEST_ARGUMENTS})
+        unset(CC_BENCHMARK_TEST_ARGUMENTS)
     endif()
     add_executable(sim_tests tests/sim_tests.c)
     target_link_libraries(sim_tests PRIVATE crownless_sim)
