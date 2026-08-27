@@ -169,7 +169,7 @@ static uint32_t MarkersBetween(const CcMotionClip *clip, float start,
 void CcMotionPlayerAdvance(CcMotionPlayer *player, float delta_time)
 {
     if (player == NULL || player->clip == NULL || player->finished ||
-        delta_time <= 0.0f) {
+        !isfinite(delta_time) || delta_time <= 0.0f) {
         return;
     }
     const CcMotionClip *clip = player->clip;

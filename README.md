@@ -80,6 +80,10 @@ The architecture proof connects these parts in one running build:
   losses; inequality or debt
   can drive the Ash-Poor to steal, while war can finance a Crown Levy, followed
   by omens, repayment, and bounded retaliation
+- A persistent Crown Cycle: dragons age through whelp, wanderer, Crowned,
+  Deep Wyrm, Uncrowned, and Afterdragon states; physical hoards stabilize
+  memory, hunger takes livestock instead of burning towns, goblins tend rare
+  broods with real Food, and only a visible surviving egg can found a successor
 - Kings who send physical declarations, peace offers, dragon alliances, and
   muster orders through a delayed and fallible courier network. The carriage
   can carry a sealed dispatch. Allied hosts consume real Food, Tools, and

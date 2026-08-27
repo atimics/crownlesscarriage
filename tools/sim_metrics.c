@@ -154,12 +154,24 @@ static void PrintYear(const CcSim *sim, int32_t seed_number, int32_t year)
         sim->iron_ledger_reserve, debt_total, smuggler_routes,
         sim->goblins.hoard_defenses);
     (void)printf(
-        ",%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
+        ",%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
         wars, alliances, active_couriers, lost_couriers,
         distorted_couriers, sim->dragon.slain ? 1 : 0,
         sim->dragon_campaign.attempts,
         sim->dragon_campaign.victories,
-        sim->dragon_campaign.defeats);
+        sim->dragon_campaign.defeats,
+        (int32_t)sim->dragon.life_stage,
+        sim->dragon.age_days / 365,
+        sim->dragon.crown_strength,
+        sim->dragon.body_condition,
+        sim->dragon.memory_integrity,
+        sim->dragon.territory_stability,
+        sim->dragon.regional_influence,
+        sim->dragon.egg_count,
+        sim->dragon.hunts,
+        sim->dragon.broods_laid,
+        sim->dragon.whelps_dispersed,
+        sim->dragon.afterdeath_days);
 }
 
 int main(int argc, char **argv)
@@ -197,7 +209,11 @@ int main(int argc, char **argv)
         "iron_ledger_debt,smuggler_routes,goblin_hoard_defenses,wars,"
         "alliances,active_couriers,lost_couriers,distorted_couriers,"
         "dragon_slain,dragon_campaign_attempts,dragon_campaign_victories,"
-        "dragon_campaign_defeats");
+        "dragon_campaign_defeats,dragon_stage,dragon_age_years,"
+        "dragon_crown_strength,dragon_body_condition,dragon_memory_integrity,"
+        "dragon_territory_stability,dragon_regional_influence,dragon_eggs,"
+        "dragon_hunts,dragon_broods,dragon_whelps_dispersed,"
+        "dragon_afterdeath_days");
     char error[192];
     for (int32_t seed_number = 1; seed_number <= seeds; ++seed_number) {
         CcSim sim;

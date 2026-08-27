@@ -30,12 +30,35 @@ function(cc_strict_warnings target)
     endif()
 endfunction()
 
+function(cc_manifest_export_paths output manifest section)
+    file(READ "${manifest}" manifest_json)
+    string(JSON export_count LENGTH "${manifest_json}" "${section}")
+    set(export_paths)
+    if(export_count GREATER 0)
+        math(EXPR last_export "${export_count} - 1")
+        foreach(export_index RANGE 0 ${last_export})
+            string(JSON export_path GET "${manifest_json}"
+                   "${section}" ${export_index} "export")
+            set(source_path "${CMAKE_CURRENT_SOURCE_DIR}/${export_path}")
+            if(NOT EXISTS "${source_path}")
+                message(FATAL_ERROR
+                    "Manifest ${manifest} references missing ${export_path}")
+            endif()
+            list(APPEND export_paths "${source_path}")
+        endforeach()
+    endif()
+    set(${output} "${export_paths}" PARENT_SCOPE)
+endfunction()
+
 add_library(crownless_locomotion
     src/locomotion/cc_biomech.c
+    src/locomotion/cc_creature.c
     src/locomotion/cc_humanoid.c
     src/locomotion/cc_humanoid_skin.c
     src/locomotion/cc_limb.c
     src/locomotion/cc_motion.c
+    src/locomotion/cc_quadruped.c
+    src/locomotion/cc_robotics.c
 )
 target_include_directories(crownless_locomotion PUBLIC src)
 if(NOT MSVC)
@@ -48,6 +71,15 @@ add_library(crownless_sim
 )
 target_include_directories(crownless_sim PUBLIC src)
 cc_strict_warnings(crownless_sim)
+
+add_library(crownless_creature_catalog
+    src/client/cc_creature_catalog.c
+)
+target_include_directories(crownless_creature_catalog PUBLIC src)
+if(NOT MSVC)
+    target_link_libraries(crownless_creature_catalog PUBLIC m)
+endif()
+cc_strict_warnings(crownless_creature_catalog)
 
 find_package(SQLite3 REQUIRED)
 add_library(crownless_persistence
@@ -126,7 +158,8 @@ if(CC_BUILD_CLIENT)
         )
     endif()
     target_link_libraries(crownless_carriage PRIVATE
-        crownless_persistence crownless_locomotion raylib
+        crownless_persistence crownless_locomotion
+        crownless_creature_catalog raylib
     )
     target_compile_definitions(crownless_carriage PRIVATE
         CC_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}"
@@ -144,14 +177,23 @@ if(CC_BUILD_CLIENT)
         set(CC_SCREEN_FIRST_HERO_ENGINE_MANIFEST
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/hero/crownless_screen_first_engine_rig_v08.json"
         )
-        file(GLOB CC_NPC_ARCHETYPE_ASSETS CONFIGURE_DEPENDS
-            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/npc/*.glb"
-        )
         set(CC_NPC_ARCHETYPE_MANIFEST
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/npc_archetype_manifest.json"
         )
         set(CC_NPC_DYNAMIC_MODULE_MANIFEST
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/npc_dynamic_module_manifest.json"
+        )
+        cc_manifest_export_paths(CC_NPC_ARCHETYPE_ASSETS
+            "${CC_NPC_ARCHETYPE_MANIFEST}" "archetypes")
+        cc_manifest_export_paths(CC_NPC_DYNAMIC_MODULE_ASSETS
+            "${CC_NPC_DYNAMIC_MODULE_MANIFEST}" "modules")
+        list(APPEND CC_NPC_ARCHETYPE_ASSETS
+             ${CC_NPC_DYNAMIC_MODULE_ASSETS})
+        file(GLOB CC_CREATURE_ASSETS CONFIGURE_DEPENDS
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/creatures/*.glb"
+        )
+        set(CC_CREATURE_MANIFEST
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/creature_manifest.json"
         )
         file(GLOB CC_WORLD_KIT_ASSETS CONFIGURE_DEPENDS
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/world_kit/*.glb"
@@ -222,6 +264,8 @@ if(CC_BUILD_CLIENT)
             COMMAND ${CMAKE_COMMAND} -E make_directory
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/npc"
             COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/creatures"
+            COMMAND ${CMAKE_COMMAND} -E make_directory
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/glb"
             COMMAND ${CMAKE_COMMAND} -E make_directory
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/world_kit"
@@ -250,6 +294,12 @@ if(CC_BUILD_CLIENT)
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${CC_NPC_DYNAMIC_MODULE_MANIFEST}"
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/npc_dynamic_module_manifest.json"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${CC_CREATURE_ASSETS}
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/creatures"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CC_CREATURE_MANIFEST}"
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/creature_manifest.json"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 ${CC_WORLD_KIT_ASSETS}
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/world_kit"
@@ -316,6 +366,7 @@ if(CC_BUILD_CLIENT)
             DEPENDS "${CC_HERO_ENGINE_ASSET}" "${CC_HERO_ENGINE_MANIFEST}"
                     ${CC_NPC_ARCHETYPE_ASSETS} "${CC_NPC_ARCHETYPE_MANIFEST}"
                     "${CC_NPC_DYNAMIC_MODULE_MANIFEST}"
+                    ${CC_CREATURE_ASSETS} "${CC_CREATURE_MANIFEST}"
                     "${CC_BRIDGE_CHECKPOINT_ASSET}" "${CC_CARRIAGE_ASSET}"
                     "${CC_CARGO_RACK_ASSET}" "${CC_MARKET_ASSET}"
                     "${CC_MINE_ASSET}" "${CC_SHORTAGE_ASSET}"
@@ -344,13 +395,29 @@ endif()
 include(CTest)
 if(BUILD_TESTING)
     if(CC_BUILD_BENCHMARKS)
+        set(CC_BENCHMARK_TEST_ARGUMENTS --quick)
+        # Debug builds keep the benchmark as a functional smoke test, but
+        # compiler instrumentation makes a release timing budget unreliable.
+        if(CMAKE_BUILD_TYPE MATCHES "^(Release|RelWithDebInfo|MinSizeRel)$")
+            list(APPEND CC_BENCHMARK_TEST_ARGUMENTS --assert-budget)
+        endif()
         add_test(NAME headless_performance_budget
-                 COMMAND crownless_benchmark --quick --assert-budget)
+                 COMMAND crownless_benchmark ${CC_BENCHMARK_TEST_ARGUMENTS})
+        unset(CC_BENCHMARK_TEST_ARGUMENTS)
+        add_test(NAME benchmark_rejects_day_overflow
+                 COMMAND crownless_benchmark --sim-years 5883517)
+        set_tests_properties(benchmark_rejects_day_overflow
+                             PROPERTIES WILL_FAIL TRUE)
     endif()
     add_executable(sim_tests tests/sim_tests.c)
     target_link_libraries(sim_tests PRIVATE crownless_sim)
     cc_strict_warnings(sim_tests)
     add_test(NAME deterministic_simulation COMMAND sim_tests)
+
+    add_executable(balance_tests tests/balance_tests.c)
+    target_link_libraries(balance_tests PRIVATE crownless_sim)
+    cc_strict_warnings(balance_tests)
+    add_test(NAME osr_long_run_balance COMMAND balance_tests)
 
     add_executable(persistence_tests tests/persistence_tests.c)
     target_link_libraries(persistence_tests PRIVATE crownless_persistence)
@@ -377,6 +444,11 @@ if(BUILD_TESTING)
     cc_strict_warnings(dragon_cycle_tests)
     add_test(NAME goblin_dragon_causal_cycle COMMAND dragon_cycle_tests)
 
+    add_executable(dragon_ecology_tests tests/dragon_ecology_tests.c)
+    target_link_libraries(dragon_ecology_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(dragon_ecology_tests)
+    add_test(NAME dragon_crown_ecology COMMAND dragon_ecology_tests)
+
     add_executable(material_economy_tests tests/material_economy_tests.c)
     target_link_libraries(material_economy_tests PRIVATE crownless_sim)
     cc_strict_warnings(material_economy_tests)
@@ -402,15 +474,32 @@ if(BUILD_TESTING)
     cc_strict_warnings(biomech_system_tests)
     add_test(NAME generalized_biomechanical_system COMMAND biomech_system_tests)
 
+    add_executable(creature_rig_tests tests/creature_rig_tests.c)
+    target_link_libraries(creature_rig_tests PRIVATE crownless_locomotion)
+    cc_strict_warnings(creature_rig_tests)
+    add_test(NAME creature_skeletal_muscular_system COMMAND creature_rig_tests)
+
     add_executable(humanoid_skin_tests tests/humanoid_skin_tests.c)
     target_link_libraries(humanoid_skin_tests PRIVATE crownless_locomotion)
     cc_strict_warnings(humanoid_skin_tests)
     add_test(NAME blender_humanoid_skin_contract COMMAND humanoid_skin_tests)
 
+    add_executable(quadruped_skin_tests tests/quadruped_skin_tests.c)
+    target_link_libraries(quadruped_skin_tests PRIVATE crownless_locomotion)
+    cc_strict_warnings(quadruped_skin_tests)
+    add_test(NAME blender_quadruped_skin_contract COMMAND quadruped_skin_tests)
+
     add_executable(motion_system_tests tests/motion_system_tests.c)
     target_link_libraries(motion_system_tests PRIVATE crownless_locomotion)
     cc_strict_warnings(motion_system_tests)
     add_test(NAME layered_motion_contract COMMAND motion_system_tests)
+
+    add_executable(creature_catalog_tests tests/creature_catalog_tests.c)
+    target_link_libraries(creature_catalog_tests PRIVATE
+        crownless_creature_catalog
+    )
+    cc_strict_warnings(creature_catalog_tests)
+    add_test(NAME generated_creature_catalog COMMAND creature_catalog_tests)
 
     if(CC_BUILD_CLIENT)
         add_executable(npc_appearance_tests
@@ -431,7 +520,8 @@ if(BUILD_TESTING)
             src/client/cc_local_renderer_stats.c
         )
         target_link_libraries(local_movement_tests PRIVATE
-            crownless_sim crownless_locomotion raylib
+            crownless_sim crownless_locomotion
+            crownless_creature_catalog raylib
         )
         target_compile_definitions(local_movement_tests PRIVATE
             CC_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}"
@@ -448,7 +538,8 @@ if(BUILD_TESTING)
             src/client/cc_local_renderer_stats.c
         )
         target_link_libraries(terrain_tests PRIVATE
-            crownless_sim crownless_locomotion raylib
+            crownless_sim crownless_locomotion
+            crownless_creature_catalog raylib
         )
         target_compile_definitions(terrain_tests PRIVATE
             CC_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}"

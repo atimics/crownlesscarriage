@@ -96,6 +96,55 @@ recorded:
 7. The dragon remains calm unless someone later steals from the delivered
    hoard.
 
+### The Crown Cycle
+
+A dragon's hoard is an external organ, not food and not a second treasury.
+Worked Gold, Gems, named treasures, long possession, intact memory, and goblin
+devotion produce a derived **crown strength**. More crown strength supports
+long sleep, a stable territory, and rare broods. It does not add unlimited
+combat strength. Every crown point comes from physical objects that still have
+an owner and location.
+
+The regional lifecycle is:
+
+1. A **whelp** eats often and grows quickly.
+2. A **wanderer** seeks a cave, hoard, territory, and goblin court.
+3. A **Crowned dragon** can sleep for long periods because its hoard stabilizes
+   its memory.
+4. A centuries-old, continuously Crowned dragon may become a **Deep Wyrm**.
+5. Theft or destruction can make an adult **Uncrowned**: old, sleepless, and
+   poorly anchored, but still unable to burn a town without the existing theft
+   and omen chain.
+6. A slain dragon becomes an **Afterdragon**. Its regional shadow cools over
+   decades while goblins, ash fields, abandoned vents, and any visible eggs
+   remain.
+
+Age creates pressure, but possession changes the stage. Crown strength has
+diminishing returns. A large hoard increasingly tethers the dragon instead of
+making its attacks scale forever.
+
+Body condition is separate from crown strength. When condition falls, the
+dragon removes a small physical amount of Food from a farm or other stocked
+settlement. This represents livestock and stored fodder. The hunt raises local
+hunger slightly but does not burn roofs, destroy services, or start omens. A
+dragon hunting because it is hungry and a dragon retaliating for a hoard wound
+are different states.
+
+The goblin cult is a mutual society. Hoardkeepers remember objects, Ashkeepers
+tend eggs and cave heat, Tongues interpret dreams and omens, and Foragers bring
+food, gear, and offerings. Egg tending consumes real Food from the goblin
+lair. Goblins can go hungry, lose devotion, fail to maintain the territory, or
+survive their god.
+
+A well-fed Crowned dragon with a strong hoard, stable territory, old
+continuity, and devoted goblins can accept a distant heart-scale and lay one to
+three eggs. Broods take years to hatch and are rare. Most whelps disperse
+beyond the simulated region. If the parent is alive, all surviving whelps
+leave. If the parent has been slain, one visible egg may hatch as a successor
+under goblin care. This never creates a surprise replacement: the eggs, their
+remaining tending time, and their Food cost are public state before the dragon
+dies.
+
 ### Why anyone robs a dragon
 
 Social inequality creates the hoard thieves. The simulation compares hunger
@@ -127,6 +176,11 @@ repayment does not reset the omen clock. If the debt
 remains, the dragon burns the named town, its stores, one service, nearby roads,
 population, security, and prosperity. It then names another target and gives a
 new 28-day course of omens. This repeats until the debt is repaid.
+
+Named hoard objects can be taken with `dragon steal-treasure NUMBER`. They use
+one carriage slot and wound memory more deeply than anonymous coin. Replacement
+money is refused; `dragon return-treasure` must put the exact object back in its
+remembered place.
 
 This is an OSR bargain, not a level-scaled encounter. The cave offers real
 treasure before the player is ready to absorb the cost. The important question
@@ -204,9 +258,12 @@ is minted as a reward. The recovered crowns are divided between the allied
 treasuries when the host gets home; remaining goods and treasures are unloaded
 at its mustering town.
 
-The dragon's death does not delete the goblins. Without their god they cease
-tribute, but their lair still consumes Food and still needs Tools and Weapons.
-Shortages send the surviving goblins back onto the roads as ordinary raiders.
+The dragon's death does not delete the goblins or instantly erase the dragon's
+ecology. Without their god they cease tribute, but their lair still consumes
+Food and still needs Tools and Weapons. Shortages send the surviving goblins
+back onto the roads as ordinary raiders. The Afterdragon's regional influence
+decays slowly. A successor can appear only from an egg already recorded in the
+brood hoard; otherwise the dragon remains dead.
 
 ## Smuggling and black markets
 

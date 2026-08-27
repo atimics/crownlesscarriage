@@ -48,6 +48,24 @@ CHUNK_BIN = 0x004E4942
 MAX_WORLD_EXTENT_M = 100.0
 DEFAULT_MAX_TRIANGLES = 40000
 
+COMPONENT_SIZES = {
+    5120: 1,  # BYTE
+    5121: 1,  # UNSIGNED_BYTE
+    5122: 2,  # SHORT
+    5123: 2,  # UNSIGNED_SHORT
+    5125: 4,  # UNSIGNED_INT
+    5126: 4,  # FLOAT
+}
+ACCESSOR_SHAPES = {
+    "SCALAR": (1, 1),
+    "VEC2": (1, 2),
+    "VEC3": (1, 3),
+    "VEC4": (1, 4),
+    "MAT2": (2, 2),
+    "MAT3": (3, 3),
+    "MAT4": (4, 4),
+}
+
 
 class GlbError(Exception):
     """Structural or contract failure for one GLB file."""
@@ -69,6 +87,159 @@ class GlbStats:
     @property
     def ok(self) -> bool:
         return not self.failures
+
+
+def non_negative_integer(value: object, label: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise GlbError(f"{label} must be a non-negative integer")
+    return value
+
+
+def accessor_element_size(component_size: int,
+                          accessor_type: str) -> int:
+    columns, rows = ACCESSOR_SHAPES[accessor_type]
+    column_size = component_size * rows
+    if columns > 1 and component_size < 4:
+        column_size = (column_size + 3) & ~3
+    return columns * column_size
+
+
+def validate_binary_layout(document: dict, binary: bytes) -> None:
+    """Validate every buffer view and accessor against the shipped BIN bytes."""
+    buffers = document.get("buffers", [])
+    views = document.get("bufferViews", [])
+    accessors = document.get("accessors", [])
+    if not isinstance(buffers, list):
+        raise GlbError("document buffers are not a list")
+    if not isinstance(views, list):
+        raise GlbError("document bufferViews are not a list")
+    if not isinstance(accessors, list):
+        raise GlbError("document accessors are not a list")
+    if views and not buffers:
+        raise GlbError("bufferViews exist without a buffer")
+
+    buffer_lengths: list[int] = []
+    for index, buffer in enumerate(buffers):
+        if not isinstance(buffer, dict):
+            raise GlbError(f"buffer {index} is not an object")
+        length = non_negative_integer(
+            buffer.get("byteLength"), f"buffer {index} byteLength")
+        if index != 0 or "uri" in buffer:
+            raise GlbError(
+                f"buffer {index} is external; shipped GLBs must be self-contained")
+        if length > len(binary):
+            raise GlbError(
+                f"buffer {index} declares {length} bytes but BIN has {len(binary)}")
+        if len(binary) - length > 3:
+            raise GlbError(
+                f"BIN has {len(binary) - length} bytes beyond buffer {index}")
+        buffer_lengths.append(length)
+    if binary and not buffers:
+        raise GlbError("BIN chunk exists without a declared buffer")
+
+    view_layouts: list[tuple[int, int, int | None]] = []
+    for index, view in enumerate(views):
+        if not isinstance(view, dict):
+            raise GlbError(f"bufferView {index} is not an object")
+        buffer_index = non_negative_integer(
+            view.get("buffer"), f"bufferView {index} buffer")
+        if buffer_index >= len(buffer_lengths):
+            raise GlbError(
+                f"bufferView {index} references missing buffer {buffer_index}")
+        offset = non_negative_integer(
+            view.get("byteOffset", 0), f"bufferView {index} byteOffset")
+        length = non_negative_integer(
+            view.get("byteLength"), f"bufferView {index} byteLength")
+        if offset + length > buffer_lengths[buffer_index]:
+            raise GlbError(
+                f"bufferView {index} range {offset}:{offset + length} "
+                f"exceeds buffer {buffer_index} length {buffer_lengths[buffer_index]}")
+        stride_value = view.get("byteStride")
+        stride: int | None = None
+        if stride_value is not None:
+            stride = non_negative_integer(
+                stride_value, f"bufferView {index} byteStride")
+            if stride < 4 or stride > 252 or stride % 4:
+                raise GlbError(
+                    f"bufferView {index} byteStride must be a multiple of 4 "
+                    "between 4 and 252")
+        view_layouts.append((offset, length, stride))
+
+    def check_view_span(label: str, view_index: object, byte_offset: object,
+                        count: int, element_size: int,
+                        component_size: int,
+                        allow_stride: bool) -> None:
+        checked_view = non_negative_integer(view_index, f"{label} bufferView")
+        if checked_view >= len(view_layouts):
+            raise GlbError(
+                f"{label} references missing bufferView {checked_view}")
+        offset = non_negative_integer(byte_offset, f"{label} byteOffset")
+        view_offset, view_length, declared_stride = view_layouts[checked_view]
+        if (view_offset + offset) % component_size:
+            raise GlbError(f"{label} data is not component-aligned")
+        stride = declared_stride if allow_stride and declared_stride is not None \
+            else element_size
+        if stride < element_size:
+            raise GlbError(
+                f"{label} element size {element_size} exceeds stride {stride}")
+        required = offset if count == 0 else \
+            offset + (count - 1) * stride + element_size
+        if required > view_length:
+            raise GlbError(
+                f"{label} range ends at {required}, beyond bufferView "
+                f"{checked_view} length {view_length}")
+
+    for index, accessor in enumerate(accessors):
+        if not isinstance(accessor, dict):
+            raise GlbError(f"accessor {index} is not an object")
+        component_type = accessor.get("componentType")
+        if component_type not in COMPONENT_SIZES:
+            raise GlbError(
+                f"accessor {index} has invalid componentType {component_type!r}")
+        accessor_type = accessor.get("type")
+        if accessor_type not in ACCESSOR_SHAPES:
+            raise GlbError(
+                f"accessor {index} has invalid type {accessor_type!r}")
+        count = non_negative_integer(
+            accessor.get("count"), f"accessor {index} count")
+        component_size = COMPONENT_SIZES[component_type]
+        element_size = accessor_element_size(component_size, accessor_type)
+        if "bufferView" in accessor:
+            check_view_span(
+                f"accessor {index}", accessor["bufferView"],
+                accessor.get("byteOffset", 0), count, element_size,
+                component_size, True)
+        elif "sparse" not in accessor:
+            raise GlbError(
+                f"accessor {index} has neither bufferView nor sparse data")
+
+        sparse = accessor.get("sparse")
+        if sparse is None:
+            continue
+        if not isinstance(sparse, dict):
+            raise GlbError(f"accessor {index} sparse data is not an object")
+        sparse_count = non_negative_integer(
+            sparse.get("count"), f"accessor {index} sparse count")
+        if sparse_count > count:
+            raise GlbError(
+                f"accessor {index} sparse count exceeds accessor count")
+        indices = sparse.get("indices")
+        values = sparse.get("values")
+        if not isinstance(indices, dict) or not isinstance(values, dict):
+            raise GlbError(
+                f"accessor {index} sparse indices and values are required")
+        index_type = indices.get("componentType")
+        if index_type not in (5121, 5123, 5125):
+            raise GlbError(
+                f"accessor {index} sparse index componentType is invalid")
+        check_view_span(
+            f"accessor {index} sparse indices", indices.get("bufferView"),
+            indices.get("byteOffset", 0), sparse_count,
+            COMPONENT_SIZES[index_type], COMPONENT_SIZES[index_type], False)
+        check_view_span(
+            f"accessor {index} sparse values", values.get("bufferView"),
+            values.get("byteOffset", 0), sparse_count,
+            element_size, component_size, False)
 
 
 def parse_glb(path: Path) -> tuple[dict, bytes]:
@@ -119,6 +290,7 @@ def parse_glb(path: Path) -> tuple[dict, bytes]:
         raise GlbError(f"glTF asset version {asset.get('version')!r} != '2.0'")
     if not isinstance(document.get("nodes", []), list):
         raise GlbError("document nodes are not a list")
+    validate_binary_layout(document, binary)
     return document, binary
 
 

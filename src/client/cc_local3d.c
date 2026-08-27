@@ -1,9 +1,13 @@
 #include "client/cc_local3d.h"
 #include "client/cc_local3d_internal.h"
+#include "client/cc_creature_catalog.h"
 #include "client/cc_overlay.h"
 #include "client/cc_visual_style.h"
 
+#include "locomotion/cc_creature.h"
 #include "locomotion/cc_humanoid_skin.h"
+#include "locomotion/cc_quadruped.h"
+#include "locomotion/cc_robotics.h"
 
 #include "raymath.h"
 #include "rlgl.h"
@@ -33,6 +37,17 @@ static const float COMBAT_BYSTANDER_SPACE = 1.12f;
 static const float COMBAT_PLAYER_STANDOFF = 1.30f;
 static const float COMBAT_NPC_STANDOFF = 1.30f;
 static const float ROAD_BARRICADE_X = 51.85f;
+/* Walkable tops from environment_bridge_checkpoint_v01. These must stay in
+   lockstep with the exported deck and its two short causeways. */
+static const Rectangle ROAD_BRIDGE_DECK_SUPPORT = {
+    48.05f, 38.725f, 7.60f, 2.55f
+};
+static const Rectangle ROAD_BRIDGE_WEST_CAUSEWAY_SUPPORT = {
+    47.15f, 38.81f, 0.96f, 2.38f
+};
+static const Rectangle ROAD_BRIDGE_EAST_CAUSEWAY_SUPPORT = {
+    55.59f, 38.81f, 0.96f, 2.38f
+};
 static const float CARRIAGE_ASSET_SCALE = 0.92f;
 /* The exported carriage's hitch points along local +X. The street bay runs
    +Z, while the encounter road already runs +X. */
@@ -49,6 +64,15 @@ typedef enum BridgeCheckpointStatus {
 static BridgeCheckpointStatus bridge_checkpoint_status =
     BRIDGE_CHECKPOINT_UNKNOWN;
 
+static bool RoadUsesAuthoredCheckpoint(void);
+static void DrawBox(Vector3 center, Vector3 size, Color color);
+static void DrawCharacterSphere(Vector3 center, float radius, Color color);
+static void DrawCharacterEllipsoid(Vector3 center, Vector3 radius, Color color);
+static Vector3 LocalPoint(Vector3 base, float x, float y, float z, float yaw);
+static void DrawOrientedBox(Vector3 base, Vector3 local_center, Vector3 size,
+                            float yaw, Color color);
+static Color ShadeColor(Color color, float scale);
+static Color BlendColor(Color from, Color to, float amount);
 typedef struct WorldLabel {
     Vector3 point;
     const char *text;
@@ -120,6 +144,8 @@ static const Rectangle ROOM_ART_OBSTACLES[] = {
     {35.08f, 55.10f, 3.34f, 0.50f},
     {63.18f, 50.06f, 1.92f, 1.92f},
     {80.22f, 45.82f, 2.36f, 2.36f},
+    /* Grounded base of the mine ore station drawn at (26.45, 54.35). */
+    {25.725f, 53.825f, 1.45f, 1.05f},
 };
 static const Rectangle COURSE_POOL = {10.00f, 9.05f, 2.55f, 1.38f};
 static const float COURSE_WATER_SURFACE = 0.82f;
@@ -197,9 +223,9 @@ static const ArtLightProfileDefinition ART_LIGHT_PROFILES[] = {
         {18, 34, 39, 255}, 26.0f, 55.0f, 0.70f, 0.12f,
     },
     [ART_LIGHT_SHORTAGE_OVERCAST] = {
-        {-0.20f, 0.92f, 0.33f}, {0.90f, 0.96f, 1.04f},
-        {0.60f, 0.66f, 0.73f}, {0.73f, 0.84f, 1.06f},
-        {24, 38, 47, 255}, 23.0f, 50.0f, 0.90f, 0.08f,
+        {-0.20f, 0.92f, 0.33f}, {1.00f, 1.02f, 1.06f},
+        {0.69f, 0.74f, 0.78f}, {0.78f, 0.87f, 1.04f},
+        {24, 38, 47, 255}, 24.0f, 52.0f, 0.78f, 0.10f,
     },
     [ART_LIGHT_RECOVERY_WARM] = {
         {-0.56f, 0.72f, 0.40f}, {1.20f, 0.91f, 0.65f},
@@ -208,8 +234,8 @@ static const ArtLightProfileDefinition ART_LIGHT_PROFILES[] = {
     },
     [ART_LIGHT_ROAD_DUSK] = {
         {-0.63f, 0.55f, 0.31f}, {1.26f, 0.76f, 0.50f},
-        {0.48f, 0.55f, 0.65f}, {0.70f, 0.79f, 1.08f},
-        {9, 20, 25, 255}, 16.0f, 34.0f, 0.92f, 0.18f,
+        {0.57f, 0.62f, 0.69f}, {0.74f, 0.82f, 1.06f},
+        {9, 20, 25, 255}, 18.0f, 38.0f, 0.84f, 0.18f,
     },
     [ART_LIGHT_INTERIOR_EMBER] = {
         {-0.38f, 0.52f, 0.76f}, {1.24f, 0.74f, 0.44f},
@@ -232,7 +258,7 @@ typedef struct StreetCameraShot {
 static const StreetCameraShot STREET_CAMERA_SHOTS[] = {
     {
         .trigger = {10.5f, 7.5f}, .target = {10.5f, 1.05f, 7.5f},
-        .name = "WAYFARER YARD", .route = {8.6f, 10.2f, 6.0f, 3.0f},
+        .name = "TRAINING YARD", .route = {8.6f, 10.2f, 6.0f, 3.0f},
         .route_palette = 2, .camera_offset = {6.0f, 7.0f, 22.0f},
         .fovy = 10.6f,
         .art = {{10.5f, 1.05f, 7.5f}, {0.0f, 1.0f},
@@ -241,7 +267,7 @@ static const StreetCameraShot STREET_CAMERA_SHOTS[] = {
     },
     {
         .trigger = {11.0f, 28.5f}, .target = {12.5f, 1.05f, 28.5f},
-        .name = "WEST CROFTS", .route = {12.3f, 26.3f, 4.8f, 5.8f},
+        .name = "WEST FARMS", .route = {12.3f, 26.3f, 4.8f, 5.8f},
         .route_palette = 0, .camera_offset = {-5.0f, 8.0f, 23.0f},
         .fovy = 11.8f,
         .art = {{12.5f, 1.05f, 28.5f}, {0.0f, 1.0f},
@@ -249,17 +275,17 @@ static const StreetCameraShot STREET_CAMERA_SHOTS[] = {
                 {16.0f, 25.0f, 41.0f}, ART_LIGHT_CLEAR_MARKET},
     },
     {
-        .trigger = {14.0f, 52.0f}, .target = {22.0f, 1.38f, 52.0f},
+        .trigger = {14.0f, 52.0f}, .target = {25.0f, 1.38f, 52.0f},
         .name = "OLD MINE ROAD", .route = {14.0f, 54.2f, 28.0f, 2.7f},
-        .route_palette = 3, .camera_offset = {-10.0f, 8.0f, 23.0f},
-        .fovy = 13.8f,
-        .art = {{22.0f, 1.38f, 52.0f}, {1.0f, 0.0f},
+        .route_palette = 3, .camera_offset = {-7.0f, 9.2f, 25.0f},
+        .fovy = 15.2f,
+        .art = {{25.0f, 1.38f, 52.0f}, {1.0f, 0.0f},
                 {9.0f, 0.0f, 58.0f}, {0.18f, 0.17f, 0.62f, 0.66f},
                 {16.0f, 27.0f, 44.0f}, ART_LIGHT_SHORTAGE_OVERCAST},
     },
     {
         .trigger = {33.0f, 25.0f}, .target = {33.0f, 1.05f, 25.0f},
-        .name = "ARTISAN ROW", .route = {29.0f, 23.3f, 13.0f, 2.6f},
+        .name = "WORKSHOP STREET", .route = {29.0f, 23.3f, 13.0f, 2.6f},
         .route_palette = 1, .camera_offset = {10.0f, 7.6f, 22.0f},
         .fovy = 12.5f,
         .art = {{33.0f, 1.05f, 25.0f}, {1.0f, 0.0f},
@@ -268,16 +294,16 @@ static const StreetCameraShot STREET_CAMERA_SHOTS[] = {
     },
     {
         .trigger = {44.0f, 29.0f}, .target = {44.5f, 1.05f, 29.5f},
-        .name = "MERCERCALL COMMONS", .route = {0.0f, 0.0f, 0.0f, 0.0f},
-        .route_palette = 1, .camera_offset = {-3.5f, 9.0f, 27.0f},
-        .fovy = 14.0f,
+        .name = "TOWN SQUARE", .route = {0.0f, 0.0f, 0.0f, 0.0f},
+        .route_palette = 1, .camera_offset = {-17.0f, 11.0f, 23.0f},
+        .fovy = 17.8f,
         .art = {{44.5f, 1.05f, 29.5f}, {0.98f, 0.20f},
                 {39.0f, 0.0f, 39.0f}, {0.19f, 0.18f, 0.61f, 0.64f},
                 {18.0f, 29.0f, 47.0f}, ART_LIGHT_CLEAR_MARKET},
     },
     {
         .trigger = {42.0f, 52.0f}, .target = {41.5f, 1.05f, 52.0f},
-        .name = "COACH YARD", .route = {39.5f, 53.8f, 4.9f, 4.2f},
+        .name = "CARRIAGE YARD", .route = {39.5f, 53.8f, 4.9f, 4.2f},
         .route_palette = 0, .camera_offset = {8.0f, 9.5f, 27.0f},
         .fovy = 15.2f,
         .art = {{41.5f, 1.05f, 52.0f}, {0.0f, 1.0f},
@@ -295,7 +321,7 @@ static const StreetCameraShot STREET_CAMERA_SHOTS[] = {
     },
     {
         .trigger = {58.0f, 50.0f}, .target = {61.2f, 1.05f, 50.9f},
-        .name = "MILLER'S ROW", .route = {54.2f, 50.1f, 18.7f, 2.9f},
+        .name = "MILLER'S ROAD", .route = {54.2f, 50.1f, 18.7f, 2.9f},
         .route_palette = 0, .camera_offset = {6.0f, 9.0f, 27.0f},
         .fovy = 15.6f,
         .art = {{61.2f, 1.05f, 50.9f}, {1.0f, 0.0f},
@@ -328,7 +354,7 @@ static const StreetCameraShot STREET_CAMERA_SHOTS[] = {
    foreground facade. It is a camera composition only, never a logical room. */
 static const StreetCameraShot MARKET_GATE_ROAD_CAMERA = {
     .trigger = {64.0f, 31.0f}, .target = {66.0f, 2.0f, 31.0f},
-    .name = "MARKET-GATE ROAD", .route = {0.0f, 0.0f, 0.0f, 0.0f},
+    .name = "MARKET ROAD", .route = {0.0f, 0.0f, 0.0f, 0.0f},
     .route_palette = 2, .camera_offset = {-13.0f, 11.0f, 33.0f},
     .fovy = 21.0f,
     .art = {{77.5f, 4.20f, 23.5f}, {1.0f, 0.0f},
@@ -1080,9 +1106,14 @@ static int32_t StreetCameraShotFor(Vector3 focus, int32_t current_shot);
 static float WrapAngle(float angle);
 static float SmoothStep01(float amount);
 static Color ShadeColor(Color color, float scale);
+static void DrawCharacterEllipsoid(Vector3 center, Vector3 radius,
+                                   Color color);
 static void UpdateHeroCape(CcLocalAgent *agent, float delta_time);
 static int32_t RoadObstacleCount(void);
 static Rectangle RoadObstacleAt(int32_t index);
+static float CameraPositionRectangleClutter(Vector3 position,
+                                            Rectangle footprint,
+                                            float clearance);
 static bool RoomDetailPointVisible(float x, float z, Vector3 focus);
 static uint32_t StreetForegroundBuildingMask(void);
 static uint32_t StreetForegroundBuildingMaskForShot(int32_t shot);
@@ -1096,6 +1127,22 @@ static bool CourseWaterContains(CcLocalSceneKind scene, float x, float z)
 
 static float SurfaceHeightAt(CcLocalSceneKind scene, float x, float z)
 {
+    if (scene == CC_LOCAL_SCENE_ROAD) {
+        if (!RoadUsesAuthoredCheckpoint()) return 0.0f;
+        /* Match the exported bridge exactly: two 10 cm causeways lead onto
+           a 52 cm deck centered 30 cm above the asset origin. */
+        Vector2 point = {x, z};
+        if (CheckCollisionPointRec(point, ROAD_BRIDGE_DECK_SUPPORT)) {
+            return 0.56f;
+        }
+        if (CheckCollisionPointRec(point,
+                                   ROAD_BRIDGE_WEST_CAUSEWAY_SUPPORT) ||
+            CheckCollisionPointRec(point,
+                                   ROAD_BRIDGE_EAST_CAUSEWAY_SUPPORT)) {
+            return 0.10f;
+        }
+        return 0.0f;
+    }
     if (scene != CC_LOCAL_SCENE_STREET) return 0.0f;
     float height = CcLocalTerrainHeightAt(x, z);
     for (int32_t i = 0; i < StreetPhysicsPlatformCount(); ++i) {
@@ -1113,6 +1160,9 @@ static float SurfaceHeightAt(CcLocalSceneKind scene, float x, float z)
 
 static float BodySurfaceHeightAt(CcLocalSceneKind scene, float x, float z)
 {
+    if (scene == CC_LOCAL_SCENE_ROAD) {
+        return SurfaceHeightAt(scene, x, z);
+    }
     if (scene != CC_LOCAL_SCENE_STREET) return 0.0f;
     float height = CcLocalTerrainHeightAt(x, z);
     for (int32_t i = 0; i < StreetPhysicsPlatformCount(); ++i) {
@@ -1485,7 +1535,15 @@ static int32_t FindStreetPath(Vector2 from, Vector2 to, float radius,
             }
             float step = diagonal ? STREET_PATH_CELL_SIZE * 1.41421356f :
                                     STREET_PATH_CELL_SIZE;
-            float distance = search->distance[current] + step;
+            float current_height = CcLocalTerrainHeightAt(
+                current_point.x, current_point.y);
+            float next_height = CcLocalTerrainHeightAt(
+                next_point.x, next_point.y);
+            Vector3 next_normal = CcLocalTerrainNormalAt(
+                next_point.x, next_point.y);
+            float traversal_cost = CcRobotTraversabilityCost(
+                step, next_height - current_height, next_normal.y);
+            float distance = search->distance[current] + traversal_cost;
             if (distance + 0.0001f >= search->distance[next]) continue;
             search->distance[next] = distance;
             search->parent[next] = current;
@@ -1819,13 +1877,10 @@ static bool ProbeLocalCollision(void *raw_context,
         if (!corrected) break;
     }
 
-    float ground = scene == CC_LOCAL_SCENE_STREET ?
-        CcLocalTerrainHeightAt(proposed.x, proposed.z) : 0.0f;
+    float ground = BodySurfaceHeightAt(scene, proposed.x, proposed.z);
     if (proposed.y - radius < ground) {
         proposed.y = ground + radius;
-        normal = scene == CC_LOCAL_SCENE_STREET ?
-            CcLocalTerrainNormalAt(proposed.x, proposed.z) :
-            (Vector3){0.0f, 1.0f, 0.0f};
+        normal = SurfaceNormalAt(scene, proposed.x, proposed.z);
         collided = true;
     }
     if (!collided) return false;
@@ -1897,6 +1952,62 @@ static bool LocalAgentCapsuleBlocked(CcLocalSceneKind scene,
     return false;
 }
 
+static int32_t LocalAgentPointSpace(const CcLocalAgent *agent,
+                                    CcRobotCollisionPoint *points)
+{
+    if (agent == NULL || points == NULL) return 0;
+    /* The humanoid already has a tuned standing capsule, swept ragdoll
+       particles, and separate weapon contacts. The point-space proxy belongs
+       to the generalized multi-leg rigs whose reach extends well beyond that
+       root capsule. */
+    if (agent->morphology == CC_MORPHOLOGY_BIPED) return 0;
+    return CcRobotLimbPointSpace(
+        &agent->limb_rig, 0.085f, points, CC_ROBOT_POINT_CAPACITY);
+}
+
+bool CcLocalAgentPointSpaceBlockedInternal(const CcLocalAgent *agent,
+                                            Vector3 proposed)
+{
+    if (agent == NULL) return false;
+    CcRobotCollisionPoint points[CC_ROBOT_POINT_CAPACITY];
+    int32_t point_count = LocalAgentPointSpace(agent, points);
+    Vector3 movement = Vector3Subtract(proposed, agent->position);
+    LocalProbeContext context = {.scene = agent->scene};
+    for (int32_t point = 0; point < point_count; ++point) {
+        Vector3 before = {points[point].center.x, points[point].center.y,
+                          points[point].center.z};
+        Vector3 after = Vector3Add(before, movement);
+        CcBiomechVec3 corrected = {after.x, after.y, after.z};
+        CcBiomechVec3 normal = {0};
+        if (!ProbeLocalCollision(
+                &context,
+                (CcBiomechVec3){before.x, before.y, before.z},
+                (CcBiomechVec3){after.x, after.y, after.z},
+                points[point].radius, &corrected, &normal)) {
+            continue;
+        }
+        float correction_x = corrected.x - after.x;
+        float correction_z = corrected.z - after.z;
+        float proposed_correction = correction_x * correction_x +
+                                    correction_z * correction_z;
+        if (proposed_correction <= 0.0001f * 0.0001f) continue;
+
+        CcBiomechVec3 corrected_before = {before.x, before.y, before.z};
+        CcBiomechVec3 before_normal = {0};
+        (void)ProbeLocalCollision(
+            &context,
+            (CcBiomechVec3){before.x, before.y, before.z},
+            (CcBiomechVec3){before.x, before.y, before.z},
+            points[point].radius, &corrected_before, &before_normal);
+        float before_x = corrected_before.x - before.x;
+        float before_z = corrected_before.z - before.z;
+        float before_correction = before_x * before_x + before_z * before_z;
+        if (before_correction > proposed_correction + 0.000001f) continue;
+        return true;
+    }
+    return false;
+}
+
 static bool ResolveLocalAgentCapsuleMove(CcLocalSceneKind scene,
                                          Vector3 previous, Vector3 proposed,
                                          float radius,
@@ -1908,6 +2019,9 @@ static bool ResolveLocalAgentCapsuleMove(CcLocalSceneKind scene,
     Vector3 result = proposed;
     Vector3 normal = {0.0f, 1.0f, 0.0f};
     bool collided = false;
+    bool below_passable_support =
+        passable_support_height > -FLT_MAX &&
+        proposed.y < passable_support_height - 0.0001f;
     const float heights[] = {radius, 0.92f, 1.54f};
     for (int32_t iteration = 0; iteration < 2; ++iteration) {
         bool iteration_collision = false;
@@ -1934,7 +2048,29 @@ static bool ResolveLocalAgentCapsuleMove(CcLocalSceneKind scene,
                 corrected.y - heights[sample],
                 corrected.z,
             };
+            bool crossing_passable_support =
+                passable_support_height > -FLT_MAX * 0.5f &&
+                result.y < passable_support_height - 0.001f &&
+                candidate.y >= passable_support_height - 0.001f &&
+                sample_normal.y > 0.90f;
+            if (crossing_passable_support) {
+                /* During a mantle the ledge box is passable once contacts
+                   support the body. Its top is still a valid floor query,
+                   but snapping the root to that floor would skip the swept
+                   arc. Let the authored root reach the support height before
+                   normal grounding resumes. */
+                candidate.y = result.y;
+            }
             Vector3 correction = Vector3Subtract(candidate, result);
+            /* Traversal deliberately releases the platform's side wall while
+               the authored root crosses the lip. Do not turn the resulting
+               ground-height query into an early vertical teleport: the
+               authored root will reach the support height at montage end. */
+            if (below_passable_support && sample_normal.y > 0.50f &&
+                correction.y > 0.0f && fabsf(correction.x) <= 0.00001f &&
+                fabsf(correction.z) <= 0.00001f) {
+                continue;
+            }
             if (Vector3Length(correction) <= 0.00001f) continue;
             result = candidate;
             normal = (Vector3){sample_normal.x, sample_normal.y,
@@ -3221,31 +3357,19 @@ static void CourseAddSeparationPair(CcLocalAgent *first,
                      second->combat.team == CC_COMBAT_NEUTRAL;
     float minimum = hostile ? COMBAT_PERSONAL_SPACE :
                     bystander ? COMBAT_BYSTANDER_SPACE : COMBAT_ALLY_SPACE;
-    float x = first->position.x - second->position.x;
-    float z = first->position.z - second->position.z;
-    float distance_squared = x * x + z * z;
-    if (distance_squared >= minimum * minimum) return;
-    float distance = sqrtf(distance_squared);
-    if (distance <= 0.0001f) {
-        /* Stable, deterministic fallback for coincident actors. */
-        static const Vector2 directions[4] = {
-            {1.0f, 0.0f}, {0.0f, 1.0f},
-            {-1.0f, 0.0f}, {0.0f, -1.0f}
-        };
-        Vector2 direction = directions[pair_index & 3];
-        x = direction.x;
-        z = direction.y;
-        distance = 1.0f;
+    CcLimbVec3 first_correction = {0};
+    CcLimbVec3 second_correction = {0};
+    if (!CcRobotPredictiveAvoidance(
+            ToLimbVector(first->position), ToLimbVector(first->velocity),
+            ToLimbVector(second->position), ToLimbVector(second->velocity),
+            minimum, 0.85f, pair_index,
+            &first_correction, &second_correction)) {
+        return;
     }
-    float relative_speed = fminf(
-        0.92f, 0.12f + (minimum - sqrtf(distance_squared)) * 3.2f);
-    float shared_speed = relative_speed * 0.5f;
-    x /= distance;
-    z /= distance;
-    first->separation_velocity.x += x * shared_speed;
-    first->separation_velocity.z += z * shared_speed;
-    second->separation_velocity.x -= x * shared_speed;
-    second->separation_velocity.z -= z * shared_speed;
+    first->separation_velocity.x += first_correction.x;
+    first->separation_velocity.z += first_correction.z;
+    second->separation_velocity.x += second_correction.x;
+    second->separation_velocity.z += second_correction.z;
 }
 
 static void CourseLimitSeparation(CcLocalAgent *agent)
@@ -4463,6 +4587,11 @@ static bool SetStreetClickTarget(CcLocalAgent *agent, Vector3 target)
     return true;
 }
 
+bool CcLocalAgentSetStreetTarget(CcLocalAgent *agent, Vector3 target)
+{
+    return SetStreetClickTarget(agent, target);
+}
+
 static bool StartStreetPortalTraversal(CcLocalAgent *agent,
                                        int32_t portal_index,
                                        bool include_room_trigger)
@@ -4788,6 +4917,26 @@ static float RayFootprintDistance(Ray ray, Rectangle footprint, float height)
     return collision.hit ? collision.distance : FLT_MAX;
 }
 
+static float RoomArtObstacleRayDistance(Ray ray, Vector3 focus)
+{
+    float nearest = FLT_MAX;
+    for (int32_t i = 0; i < (int32_t)(sizeof(ROOM_ART_OBSTACLES) /
+                                      sizeof(ROOM_ART_OBSTACLES[0])); ++i) {
+        Rectangle footprint = ROOM_ART_OBSTACLES[i];
+        float center_x = footprint.x + footprint.width * 0.5f;
+        float center_z = footprint.y + footprint.height * 0.5f;
+        if (!RoomDetailPointVisible(center_x, center_z, focus)) continue;
+        nearest = fminf(nearest,
+                        RayFootprintDistance(ray, footprint, 4.90f));
+    }
+    return nearest;
+}
+
+float CcLocalRoomArtRayDistanceInternal(Ray ray, Vector3 focus)
+{
+    return RoomArtObstacleRayDistance(ray, focus);
+}
+
 static bool SetNearestClickTarget(CcLocalAgent *agent, Vector3 picked_point,
                                   bool market_interior)
 {
@@ -4973,18 +5122,8 @@ bool CcLocalAgentPickTarget(CcLocalAgent *agent, Vector2 screen_point,
                          RayFootprintDistance(ray, CARRIAGE_FOOTPRINT, 1.92f));
         occluder = fminf(occluder,
                          RayFootprintDistance(ray, DUNGEON_FOOTPRINT, 2.45f));
-        for (int32_t i = 0; i < (int32_t)(sizeof(ROOM_ART_OBSTACLES) /
-                                          sizeof(ROOM_ART_OBSTACLES[0])); ++i) {
-            Rectangle footprint = ROOM_ART_OBSTACLES[i];
-            float center_x = footprint.x + footprint.width * 0.5f;
-            float center_z = footprint.y + footprint.height * 0.5f;
-            if (!RoomDetailPointVisible(center_x, center_z, camera.target)) {
-                continue;
-            }
-            occluder = fminf(
-                occluder,
-                RayFootprintDistance(ray, footprint, 4.90f));
-        }
+        occluder = fminf(occluder,
+                         RoomArtObstacleRayDistance(ray, camera.target));
     } else {
         for (int32_t i = 0; i < RoadObstacleCount(); ++i) {
             occluder = fminf(
@@ -6144,7 +6283,8 @@ static bool TryHorizontalAxis(CcLocalAgent *agent, bool market_interior,
     candidate.z = candidate_z;
     if (StaticBodyBlocked(scene, candidate_x, candidate_z, agent->radius) ||
         LocalAgentCapsuleBlocked(scene, agent->position, candidate,
-                                 agent->radius)) {
+                                 agent->radius) ||
+        CcLocalAgentPointSpaceBlockedInternal(agent, candidate)) {
         return false;
     }
     if (move_x) agent->position.x = candidate_x;
@@ -6211,6 +6351,42 @@ static void SyncPhysicalLifeState(CcLocalAgent *agent)
         combat->weapon_mode = combat->team == CC_COMBAT_PLAYER ||
                               combat->team == CC_COMBAT_RAIDER ?
                               CC_WEAPON_HELD : CC_WEAPON_NONE;
+    }
+}
+
+static void ApplyRagdollWaterResponse(CcHumanoidGait *gait,
+                                      float water_surface, float immersion,
+                                      float delta_time)
+{
+    if (gait == NULL || !gait->ragdoll.active ||
+        !isfinite(delta_time) || delta_time <= 0.0f) return;
+    float water_amount = fmaxf(0.0f, fminf(immersion, 1.0f));
+    for (int32_t index = 0; index < gait->ragdoll.particle_count; ++index) {
+        CcBiomechRagdollParticle *particle = &gait->ragdoll.particles[index];
+        if (particle->inverse_mass <= 0.0f) continue;
+        float diameter = fmaxf(particle->radius * 2.0f, 0.08f);
+        float submerged = fmaxf(0.0f, fminf(
+            (water_surface + particle->radius - particle->position.y) /
+                diameter,
+            1.0f)) * water_amount;
+        if (submerged <= 0.0f) continue;
+
+        /* A fully submerged particle receives twice gravity, so the whole
+           body settles near the surface instead of resting on the pool bed.
+           The clamped submersion and exponential damping keep both the force
+           and the retained Verlet velocity bounded. */
+        particle->acceleration.y += 19.62f * submerged;
+        float retained_velocity = expf(-4.8f * submerged * delta_time);
+        CcBiomechVec3 velocity = {
+            particle->position.x - particle->previous_position.x,
+            particle->position.y - particle->previous_position.y,
+            particle->position.z - particle->previous_position.z,
+        };
+        particle->previous_position = (CcBiomechVec3){
+            particle->position.x - velocity.x * retained_velocity,
+            particle->position.y - velocity.y * retained_velocity,
+            particle->position.z - velocity.z * retained_velocity,
+        };
     }
 }
 
@@ -6373,7 +6549,7 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
         }
     }
     bool ragdoll_was_active = biped && agent->humanoid.ragdoll.active;
-    if (biped && in_water) {
+    if (biped && in_water && !agent->humanoid.ragdoll.active) {
         CcHumanoidGaitAdvanceSwim(
             &agent->humanoid, ToLimbVector(agent->position),
             agent->facing_yaw,
@@ -6382,6 +6558,11 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
         agent->velocity.x = agent->humanoid.root_velocity.x;
         agent->velocity.z = agent->humanoid.root_velocity.z;
     } else if (biped) {
+        if (in_water && agent->humanoid.ragdoll.active) {
+            ApplyRagdollWaterResponse(&agent->humanoid,
+                                      COURSE_WATER_SURFACE,
+                                      agent->immersion, delta_time);
+        }
         CcHumanoidGaitAdvancePhysical(
             &agent->humanoid, ToLimbVector(agent->position),
             agent->facing_yaw,
@@ -7485,6 +7666,48 @@ static float CameraStreetCourseClutterScore(Camera3D camera,
     return score;
 }
 
+static float CameraRoadCheckpointClutterScore(Camera3D camera,
+                                               Vector3 first_subject,
+                                               Vector3 second_subject,
+                                               Vector3 camera_position)
+{
+    CameraProjectedVolume subjects[] = {
+        CameraProjectVolume(camera, first_subject, 0.50f, 1.05f),
+        CameraProjectVolume(camera, second_subject, 0.50f, 1.05f),
+    };
+    float score = 0.0f;
+    int32_t count = RoadObstacleCount();
+    for (int32_t obstacle = 0; obstacle < count; ++obstacle) {
+        Rectangle footprint = RoadObstacleAt(obstacle);
+        float center_x = footprint.x + footprint.width * 0.5f;
+        float center_z = footprint.y + footprint.height * 0.5f;
+        float nearest_subject = fminf(
+            Vector2Distance((Vector2){center_x, center_z},
+                            (Vector2){first_subject.x, first_subject.z}),
+            Vector2Distance((Vector2){center_x, center_z},
+                            (Vector2){second_subject.x, second_subject.z}));
+        if (nearest_subject > 11.5f) continue;
+        float height = 2.45f;
+        if (obstacle == 4 || obstacle == 5) height = 0.92f;
+        else if (obstacle == 6) height = 4.10f;
+        else if (obstacle == 7) height = 1.55f;
+        else if (obstacle >= 8) height = 2.70f;
+        CameraProjectedVolume scenery = CameraProjectBox(
+            camera,
+            (Vector3){center_x, height * 0.5f, center_z},
+            (Vector3){footprint.width * 0.5f, height * 0.5f,
+                      footprint.height * 0.5f});
+        for (int32_t subject = 0; subject < 2; ++subject) {
+            score += CameraVolumeOverlap(subjects[subject], scenery) * 18.0f;
+            score += CameraVolumeScreenOverlap(subjects[subject], scenery) *
+                     0.75f;
+        }
+        score += CameraPositionRectangleClutter(
+            camera_position, footprint, 1.25f) * 3.0f;
+    }
+    return score;
+}
+
 static float CameraPositionRectangleClutter(Vector3 position,
                                             Rectangle footprint,
                                             float clearance)
@@ -7798,8 +8021,8 @@ static void FixedCameraRigAim(FixedCameraRig *rig, int32_t shot,
         rig->fovy_transition_from = rig->displayed_fovy;
         rig->fovy_destination = fovy;
         rig->transition_elapsed = 0.0f;
-        rig->transition_duration = fmaxf(0.55f, fminf(1.15f,
-                                                     0.42f + distance * 0.025f));
+        rig->transition_duration = fmaxf(0.90f, fminf(1.25f,
+                                                     0.78f + distance * 0.018f));
         /* A new authored shot owns its own framing. The hard visibility
            clamp covers the short transition before the new shot settles. */
         rig->framing_offset = (Vector3){0};
@@ -7819,15 +8042,28 @@ static void FixedCameraRigAim(FixedCameraRig *rig, int32_t shot,
     }
     rig->transition_elapsed = fminf(rig->transition_duration,
                                     rig->transition_elapsed + delta_time);
-    float amount = SmoothStep01(rig->transition_elapsed /
-                                rig->transition_duration);
-    rig->displayed_target = Vector3Lerp(rig->transition_from,
-                                        rig->destination, amount);
-    rig->displayed_offset = Vector3Lerp(rig->offset_transition_from,
-                                        rig->offset_destination, amount);
-    rig->displayed_fovy = rig->fovy_transition_from +
-                          (rig->fovy_destination -
-                           rig->fovy_transition_from) * amount;
+    /* Fixed adventure-game shots should not drift beside the actor. Hold the
+       old page while it fades down, switch at full darkness, then reveal the
+       new page. The fade hides the single-frame camera change. */
+    bool reveal_destination =
+        rig->transition_elapsed >= rig->transition_duration * 0.5f;
+    rig->displayed_target = reveal_destination ? rig->destination :
+                                                 rig->transition_from;
+    rig->displayed_offset = reveal_destination ? rig->offset_destination :
+                                                 rig->offset_transition_from;
+    rig->displayed_fovy = reveal_destination ? rig->fovy_destination :
+                                               rig->fovy_transition_from;
+}
+
+static void DrawFixedCameraFade(const FixedCameraRig *rig,
+                                Rectangle destination)
+{
+    if (rig == NULL || rig->transition_duration <= 0.0f ||
+        rig->transition_elapsed >= rig->transition_duration) return;
+    float progress = rig->transition_elapsed / rig->transition_duration;
+    float peak = 1.0f - fabsf(progress * 2.0f - 1.0f);
+    float opacity = SmoothStep01(peak);
+    DrawRectangleRec(destination, Fade(WORLD_VOID, opacity));
 }
 
 static Camera3D FixedCameraRigFrameHero(FixedCameraRig *rig,
@@ -7851,7 +8087,7 @@ static Camera3D FixedCameraRigFrameHero(FixedCameraRig *rig,
             rig->framing_from, rig->framing_destination, amount);
         if (rig->framing_elapsed >= rig->framing_duration) {
             rig->framing_duration = 0.0f;
-            rig->framing_hold_seconds = 0.65f;
+            rig->framing_hold_seconds = 1.00f;
         }
     }
     if (advance && rig->framing_duration <= 0.0f &&
@@ -7915,7 +8151,7 @@ static Camera3D FixedCameraRigFrameHero(FixedCameraRig *rig,
        could chain every few frames while the hero kept walking, which read
        as a nervous follow camera. Centering once creates the fixed-room
        adventure-game rhythm while still protecting long roads. */
-    rig->framing_duration = 0.55f;
+    rig->framing_duration = 1.05f;
     return camera;
 }
 
@@ -8134,6 +8370,10 @@ static void CombatCameraLockComposition(Camera3D base,
                 CameraStreetCourseClutterScore(
                     candidate, player_center, opponent_center) * 2.2f +
                 CombatCameraPositionClutter(camera_position) * 8.0f;
+        } else if (road_duel) {
+            cost += CameraRoadCheckpointClutterScore(
+                candidate, player_center, opponent_center,
+                camera_position) * 2.4f;
         }
         if (preserve_shoulder &&
             Vector3DotProduct(candidate_side,
@@ -8265,7 +8505,14 @@ Camera3D CcLocalCombatCameraInternal(Camera3D base,
         if (delta_time < 0.0f || delta_time > 0.12f) delta_time = 0.0f;
         delta_time = fminf(delta_time, 0.050f);
         combat_camera_rig.last_clock = clock;
-        float direction = active ? 4.2f : -3.0f;
+        /* Road ambushes begin inside a narrow authored bridge shot. Enter
+           their shoulder camera promptly so the parapets do not hold the
+           player at the edge of the wide establishing frame. Settlement
+           fights keep the calmer transition used by the gameplay reel. */
+        bool quick_road_entry = active && course != NULL &&
+                                course->scene == CC_LOCAL_SCENE_ROAD;
+        float direction = active ? (quick_road_entry ? 4.2f : 1.65f) :
+                                   -1.35f;
         combat_camera_rig.combat_weight = CombatClamp(
             combat_camera_rig.combat_weight + delta_time * direction,
             0.0f, 1.0f);
@@ -8295,7 +8542,8 @@ Camera3D CcLocalCombatCameraInternal(Camera3D base,
             base_offset, combat_camera_rig.locked_offset, weight);
         float desired_fovy = base_perspective_fovy +
             (combat_camera_rig.locked_fovy - base_perspective_fovy) * weight;
-        float ease = 1.0f - expf(-delta_time * 8.0f);
+        float response = quick_road_entry ? 8.0f : 4.5f;
+        float ease = 1.0f - expf(-delta_time * response);
         combat_camera_rig.displayed_target = Vector3Lerp(
             combat_camera_rig.displayed_target, desired_target, ease);
         combat_camera_rig.displayed_offset = Vector3Lerp(
@@ -8568,6 +8816,35 @@ static const char *NPC_ARCHETYPE_POSE_PATH_SUFFIXES
 
 static NpcArchetypeCache npc_archetypes
     [CC_NPC_ROLE_COUNT][CC_NPC_ARCHETYPE_POSE_COUNT] = {0};
+
+typedef struct CreatureModelCache {
+    Model model;
+    ModelAnimation animation;
+    Transform pose[CC_QUADRUPED_BONE_COUNT];
+    Transform *frames[1];
+    int32_t quadruped_bone[CC_QUADRUPED_BONE_COUNT];
+    bool ready;
+} CreatureModelCache;
+
+static CreatureModelCache creature_models
+    [CC_CREATURE_VARIANT_COUNT][CC_CREATURE_POSE_COUNT] = {0};
+
+typedef enum CreatureGaitSlot {
+    CREATURE_GAIT_ROAD_HORSE_LEFT,
+    CREATURE_GAIT_ROAD_HORSE_RIGHT,
+    CREATURE_GAIT_ROAD_COW,
+    CREATURE_GAIT_STREET_COW,
+    CREATURE_GAIT_SLOT_COUNT
+} CreatureGaitSlot;
+
+typedef struct CreatureGaitCache {
+    CcCreatureRigController controller;
+    CcCreatureRigProfile profile;
+    float last_clock;
+    bool ready;
+} CreatureGaitCache;
+
+static CreatureGaitCache creature_gaits[CREATURE_GAIT_SLOT_COUNT] = {0};
 
 /* Physics-driven people use unskinned, offline-generated rigid modules.  Each
    model is instanced against a resolved bone frame, so contact IK and ragdoll
@@ -9055,6 +9332,79 @@ static void LoadNpcArchetypes(void)
     }
 }
 
+static void LoadCreatureModels(void)
+{
+    for (int32_t variant = 0; variant < CC_CREATURE_VARIANT_COUNT;
+         ++variant) {
+        const CcCreatureDefinition *definition = CcCreatureDefinitionAt(
+            (CcCreatureVariant)variant);
+        int32_t loaded_count = 0;
+        for (int32_t pose = 0; pose < CC_CREATURE_POSE_COUNT; ++pose) {
+            const char *path = CcCreatureAssetPath(
+                (CcCreatureVariant)variant, (CcCreaturePose)pose);
+            if (path == NULL) continue;
+            char resolved[1024];
+            if (!ResolveAssetPath(path, resolved, sizeof(resolved))) {
+                TraceLog(LOG_WARNING, "CREATURE: %s was not found", path);
+                continue;
+            }
+            Model model = LoadModel(resolved);
+            int32_t expected_bones = definition != NULL && definition->skinned ?
+                                     CC_QUADRUPED_BONE_COUNT : 0;
+            if (model.meshCount != 1 || model.materialCount < 1 ||
+                model.skeleton.boneCount != expected_bones) {
+                TraceLog(LOG_WARNING,
+                         "CREATURE: invalid %s (%d meshes, %d materials, %d bones)",
+                         path, model.meshCount, model.materialCount,
+                         model.skeleton.boneCount);
+                if (model.meshCount > 0) UnloadModel(model);
+                continue;
+            }
+            CreatureModelCache *cached = &creature_models[variant][pose];
+            cached->model = model;
+            if (expected_bones > 0) {
+                bool found[CC_QUADRUPED_BONE_COUNT] = {false};
+                bool valid_skin = true;
+                for (int32_t bone = 0; bone < expected_bones; ++bone) {
+                    int32_t quadruped_bone = CcQuadrupedBoneFind(
+                        model.skeleton.bones[bone].name);
+                    cached->quadruped_bone[bone] = quadruped_bone;
+                    if (quadruped_bone < 0) {
+                        valid_skin = false;
+                    } else {
+                        found[quadruped_bone] = true;
+                    }
+                }
+                for (int32_t bone = 0; bone < CC_QUADRUPED_BONE_COUNT;
+                     ++bone) {
+                    if (!found[bone]) valid_skin = false;
+                }
+                if (!valid_skin) {
+                    TraceLog(LOG_WARNING,
+                             "CREATURE: %s has the wrong quadruped bones",
+                             path);
+                    UnloadModel(cached->model);
+                    *cached = (CreatureModelCache){0};
+                    continue;
+                }
+                cached->frames[0] = cached->pose;
+                cached->animation.boneCount = expected_bones;
+                cached->animation.keyframeCount = 1;
+                cached->animation.keyframePoses = cached->frames;
+                (void)snprintf(cached->animation.name,
+                               sizeof(cached->animation.name),
+                               "quadruped-runtime");
+            }
+            cached->ready = true;
+            loaded_count += 1;
+        }
+        TraceLog(LOG_INFO, "CREATURE: loaded %s (%d/%d poses)",
+                 definition != NULL ? definition->name : "unknown",
+                 loaded_count,
+                 CcCreaturePoseCount((CcCreatureVariant)variant));
+    }
+}
+
 static void LoadNpcDynamicModules(void)
 {
     int32_t loaded_count = 0;
@@ -9316,22 +9666,11 @@ static void ApplyNpcBodyStyle(Model *model)
     }
 }
 
-static void SetNpcPalette(const CcNpcAppearance *appearance,
-                          float ink_strength, bool hero_emphasis,
-                          Vector3 hero_head_position)
+static void SetIndexedPalette(
+    const Color colors[CC_NPC_ARCHETYPE_MATERIAL_COUNT],
+    float ink_strength, bool hero_emphasis, Vector3 hero_head_position)
 {
-    if (!visual_style.npc_ready || appearance == NULL) return;
-    const Color colors[CC_NPC_ARCHETYPE_MATERIAL_COUNT] = {
-        appearance->skin,
-        appearance->hair,
-        appearance->underlayer,
-        appearance->outer,
-        appearance->trousers,
-        appearance->leather,
-        appearance->metal,
-        appearance->accent,
-        ShadeColor(appearance->hair, 0.62f),
-    };
+    if (!visual_style.npc_ready || colors == NULL) return;
     float palette[CC_NPC_ARCHETYPE_MATERIAL_COUNT * 4];
     for (int32_t index = 0; index < CC_NPC_ARCHETYPE_MATERIAL_COUNT;
          ++index) {
@@ -9380,6 +9719,633 @@ static void SetNpcPalette(const CcNpcAppearance *appearance,
                        visual_style.npc_skinned_hero_head_position_location,
                        &hero_head_position, SHADER_UNIFORM_VEC3);
     }
+}
+
+static void SetNpcPalette(const CcNpcAppearance *appearance,
+                          float ink_strength, bool hero_emphasis,
+                          Vector3 hero_head_position)
+{
+    if (appearance == NULL) return;
+    const Color colors[CC_NPC_ARCHETYPE_MATERIAL_COUNT] = {
+        appearance->skin,
+        appearance->hair,
+        appearance->underlayer,
+        appearance->outer,
+        appearance->trousers,
+        appearance->leather,
+        appearance->metal,
+        appearance->accent,
+        ShadeColor(appearance->hair, 0.62f),
+    };
+    SetIndexedPalette(colors, ink_strength, hero_emphasis,
+                      hero_head_position);
+}
+
+typedef struct CreatureRenderPalette {
+    Color skin;
+    Color secondary;
+    Color hide;
+    Color cloth;
+    Color leather;
+    Color horn;
+    Color metal;
+    Color accent;
+    Color eye;
+} CreatureRenderPalette;
+
+static CreatureRenderPalette CreaturePalette(CcCreatureVariant variant,
+                                              Color primary)
+{
+    Color colors[CC_NPC_ARCHETYPE_MATERIAL_COUNT] = {
+        (Color){104, 130, 70, 255}, (Color){48, 58, 42, 255},
+        (Color){88, 66, 48, 255}, (Color){112, 71, 54, 255},
+        (Color){73, 51, 42, 255}, (Color){194, 174, 126, 255},
+        (Color){126, 132, 128, 255}, (Color){183, 128, 54, 255},
+        (Color){236, 196, 74, 255},
+    };
+    switch (variant) {
+        case CC_CREATURE_GOBLIN_RAIDER:
+            colors[0] = (Color){115, 135, 70, 255};
+            colors[3] = (Color){113, 52, 46, 255};
+            colors[6] = (Color){145, 142, 129, 255};
+            colors[7] = (Color){198, 75, 48, 255};
+            break;
+        case CC_CREATURE_GOBLIN_TRIBUTE_BEARER:
+            colors[0] = (Color){117, 141, 76, 255};
+            colors[3] = (Color){78, 83, 105, 255};
+            colors[7] = (Color){220, 158, 54, 255};
+            break;
+        case CC_CREATURE_HORSE: {
+            Color coat = primary.a > 0 ? primary :
+                                         (Color){104, 78, 59, 255};
+            colors[0] = coat;
+            colors[1] = ShadeColor(coat, 0.54f);
+            colors[2] = ShadeColor(coat, 0.82f);
+            colors[3] = (Color){72, 48, 38, 255};
+            colors[4] = (Color){50, 37, 32, 255};
+            colors[7] = (Color){128, 88, 52, 255};
+            break;
+        }
+        case CC_CREATURE_COW: {
+            Color hide = primary.a > 0 ? primary :
+                                         (Color){180, 166, 137, 255};
+            colors[0] = (Color){190, 154, 127, 255};
+            colors[1] = (Color){61, 49, 43, 255};
+            colors[2] = hide;
+            colors[3] = (Color){88, 70, 59, 255};
+            colors[5] = (Color){205, 186, 143, 255};
+            colors[7] = (Color){137, 85, 61, 255};
+            break;
+        }
+        case CC_CREATURE_DRAGON:
+            colors[0] = (Color){71, 100, 73, 255};
+            colors[1] = (Color){30, 48, 42, 255};
+            colors[2] = (Color){91, 117, 76, 255};
+            colors[3] = (Color){66, 54, 48, 255};
+            colors[5] = (Color){190, 154, 94, 255};
+            colors[7] = (Color){157, 57, 43, 255};
+            colors[8] = (Color){245, 190, 48, 255};
+            break;
+        case CC_CREATURE_GOBLIN_SCAVENGER:
+        default:
+            break;
+    }
+    return (CreatureRenderPalette){
+        colors[0], colors[1], colors[2], colors[3], colors[4],
+        colors[5], colors[6], colors[7], colors[8]
+    };
+}
+
+static CcCreatureRigProfile CreatureRigProfileForVariant(
+    CcCreatureVariant variant)
+{
+    switch (variant) {
+        case CC_CREATURE_HORSE: return CC_CREATURE_RIG_HORSE;
+        case CC_CREATURE_COW: return CC_CREATURE_RIG_COW;
+        case CC_CREATURE_DRAGON: return CC_CREATURE_RIG_DRAGON;
+        case CC_CREATURE_GOBLIN_SCAVENGER:
+        case CC_CREATURE_GOBLIN_RAIDER:
+        case CC_CREATURE_GOBLIN_TRIBUTE_BEARER:
+        default:
+            return CC_CREATURE_RIG_GOBLIN;
+    }
+}
+
+static bool ResolveControlledCreatureGait(
+    CreatureGaitSlot slot, CcCreatureRigProfile profile, float clock,
+    float initial_phase, float forward_speed, bool moving,
+    CcCreatureRigPose *pose)
+{
+    if (slot < 0 || slot >= CREATURE_GAIT_SLOT_COUNT || pose == NULL ||
+        !isfinite(clock)) {
+        return false;
+    }
+    CreatureGaitCache *cache = &creature_gaits[slot];
+    float elapsed = cache->ready ? clock - cache->last_clock : 0.0f;
+    bool reset = !cache->ready || cache->profile != profile ||
+                 elapsed < 0.0f || elapsed > 0.35f;
+    if (reset) {
+        *cache = (CreatureGaitCache){0};
+        if (!CcCreatureRigControllerInit(&cache->controller, profile,
+                                         initial_phase, 1.0f)) {
+            return false;
+        }
+        cache->profile = profile;
+        cache->last_clock = clock;
+        cache->ready = true;
+        if (moving) {
+            CcCreatureRigPose warm_pose;
+            for (int32_t frame = 0; frame < 36; ++frame) {
+                if (!CcCreatureRigControllerStep(
+                        &cache->controller, forward_speed, 1.0f,
+                        1.0f / 60.0f, &warm_pose)) {
+                    *cache = (CreatureGaitCache){0};
+                    return false;
+                }
+            }
+        }
+        elapsed = 0.0f;
+    }
+    cache->last_clock = clock;
+    return CcCreatureRigControllerStep(
+        &cache->controller, moving ? forward_speed : 0.0f,
+        moving ? 1.0f : 0.0f, elapsed, pose);
+}
+
+static float CreatureRigPhase(CcCreaturePose pose)
+{
+    switch (pose) {
+        case CC_CREATURE_POSE_CONTACT_A: return 0.00f;
+        case CC_CREATURE_POSE_DOWN_A: return 0.125f;
+        case CC_CREATURE_POSE_PASSING_A: return 0.250f;
+        case CC_CREATURE_POSE_UP_A: return 0.375f;
+        case CC_CREATURE_POSE_CONTACT_B: return 0.500f;
+        case CC_CREATURE_POSE_DOWN_B: return 0.625f;
+        case CC_CREATURE_POSE_PASSING_B: return 0.750f;
+        case CC_CREATURE_POSE_UP_B: return 0.875f;
+        case CC_CREATURE_POSE_STALK_A: return 0.18f;
+        case CC_CREATURE_POSE_STALK_B: return 0.68f;
+        case CC_CREATURE_POSE_THREAT: return 0.34f;
+        case CC_CREATURE_POSE_IDLE:
+        case CC_CREATURE_POSE_REST:
+        case CC_CREATURE_POSE_COUNT:
+        default:
+            return 0.0f;
+    }
+}
+
+static float CreatureRigMovement(CcCreaturePose pose)
+{
+    if (pose >= CC_CREATURE_POSE_CONTACT_A &&
+        pose <= CC_CREATURE_POSE_UP_B) {
+        return 1.0f;
+    }
+    if (pose == CC_CREATURE_POSE_STALK_A ||
+        pose == CC_CREATURE_POSE_STALK_B) {
+        return 0.68f;
+    }
+    return pose == CC_CREATURE_POSE_THREAT ? 0.28f : 0.0f;
+}
+
+static void DrawCreatureMuscleLimbs(const CcCreatureRigPose *rig,
+                                    const CreatureRenderPalette *palette,
+                                    float yaw, float scale)
+{
+    bool goblin = rig->profile == CC_CREATURE_RIG_GOBLIN;
+    for (int32_t limb = 0; limb < rig->limb_count; ++limb) {
+        const CcCreatureRigLimbPose *leg = &rig->limbs[limb];
+        float base_radius = goblin ? 0.092f :
+            rig->profile == CC_CREATURE_RIG_COW ? 0.115f :
+            rig->profile == CC_CREATURE_RIG_DRAGON ? 0.142f :
+            rig->profile >= CC_CREATURE_RIG_HEXAPOD ? 0.062f : 0.086f;
+        base_radius *= scale;
+        Color upper = goblin ? palette->cloth : palette->hide;
+        Color lower = goblin ? palette->skin : palette->secondary;
+        if (rig->profile == CC_CREATURE_RIG_DRAGON) {
+            upper = palette->skin;
+            lower = palette->accent;
+        }
+        for (int32_t segment = 0; segment < leg->segment_count; ++segment) {
+            float taper = 1.0f - (float)segment * 0.18f;
+            float radius = base_radius * taper *
+                (1.0f + leg->segment_activation[segment] *
+                 (0.42f - (float)segment * 0.06f));
+            Vector3 start = FromLimbVector(leg->joints[segment]);
+            Vector3 end = FromLimbVector(leg->joints[segment + 1]);
+            Color color = segment == 0 ? upper : lower;
+            DrawCylinderEx(start, end, radius, radius * 0.78f, 7, color);
+            if (segment + 1 < leg->segment_count) {
+                DrawCharacterSphere(end, radius * 0.94f,
+                                    BlendColor(upper, lower, 0.46f));
+            }
+        }
+        Vector3 foot = FromLimbVector(leg->joints[leg->segment_count]);
+        if (goblin) {
+            DrawOrientedBox(foot,
+                            (Vector3){0.0f, 0.025f * scale, 0.06f * scale},
+                            (Vector3){0.22f * scale, 0.10f * scale,
+                                      0.30f * scale},
+                            yaw, palette->leather);
+        } else {
+            Color hoof = rig->profile == CC_CREATURE_RIG_DRAGON ?
+                palette->accent : palette->leather;
+            DrawOrientedBox(foot,
+                            (Vector3){0.0f, 0.018f * scale, 0.03f * scale},
+                            (Vector3){0.18f * scale, 0.09f * scale,
+                                      0.24f * scale},
+                            yaw, hoof);
+        }
+    }
+}
+
+static void DrawGoblinRig(CcCreatureVariant variant,
+                          const CcCreatureRigPose *rig,
+                          const CreatureRenderPalette *palette,
+                          float yaw, float scale)
+{
+    Vector3 pelvis = FromLimbVector(rig->body);
+    float wave = sinf(rig->phase * 2.0f * PI);
+    Vector3 chest = LocalPoint(pelvis, 0.0f, 0.36f * scale,
+                               0.018f * wave * scale, yaw);
+    Vector3 neck = LocalPoint(pelvis, 0.0f, 0.58f * scale, 0.0f, yaw);
+    Vector3 head = LocalPoint(pelvis, 0.0f, 0.76f * scale, 0.025f, yaw);
+    float muscle = 1.0f + rig->mean_activation * 0.48f;
+
+    DrawOrientedBox(pelvis, (Vector3){0.0f, 0.10f * scale, 0.0f},
+                    (Vector3){0.38f * scale, 0.22f * scale,
+                              0.28f * scale},
+                    yaw, palette->leather);
+    DrawCylinderEx(pelvis, chest, 0.20f * scale * muscle,
+                   0.25f * scale * muscle, 7, palette->cloth);
+    DrawCylinderEx(chest, neck, 0.20f * scale, 0.10f * scale, 7,
+                   palette->cloth);
+    DrawCharacterEllipsoid(head,
+                           (Vector3){0.25f * scale, 0.24f * scale,
+                                     0.22f * scale},
+                           palette->skin);
+    for (int32_t side = -1; side <= 1; side += 2) {
+        Vector3 ear_root = LocalPoint(
+            head, (float)side * 0.18f * scale, 0.02f * scale,
+            0.0f, yaw);
+        Vector3 ear_tip = LocalPoint(
+            head, (float)side * 0.39f * scale, 0.04f * scale,
+            -0.01f * scale, yaw);
+        DrawCylinderEx(ear_root, ear_tip, 0.075f * scale, 0.012f * scale,
+                       5, palette->skin);
+        Vector3 eye = LocalPoint(
+            head, (float)side * 0.080f * scale, 0.035f * scale,
+            0.205f * scale, yaw);
+        DrawCharacterSphere(eye, 0.032f * scale, palette->eye);
+
+        float arm_wave = wave * (float)-side;
+        Vector3 shoulder = LocalPoint(
+            chest, (float)side * 0.26f * scale, 0.02f * scale,
+            0.0f, yaw);
+        Vector3 elbow = LocalPoint(
+            chest, (float)side * 0.32f * scale, -0.23f * scale,
+            arm_wave * 0.11f * scale, yaw);
+        Vector3 hand = LocalPoint(
+            chest, (float)side * 0.31f * scale, -0.48f * scale,
+            arm_wave * 0.18f * scale, yaw);
+        DrawCylinderEx(shoulder, elbow, 0.082f * scale * muscle,
+                       0.068f * scale, 7, palette->cloth);
+        DrawCylinderEx(elbow, hand, 0.068f * scale,
+                       0.055f * scale, 7, palette->skin);
+        DrawCharacterSphere(hand, 0.078f * scale, palette->skin);
+    }
+
+    if (variant == CC_CREATURE_GOBLIN_RAIDER) {
+        Vector3 helmet_tip = LocalPoint(head, 0.0f, 0.37f * scale,
+                                        0.0f, yaw);
+        DrawCylinderEx(head, helmet_tip, 0.23f * scale, 0.025f * scale,
+                       6, palette->metal);
+        DrawOrientedBox(chest, (Vector3){0.0f, 0.0f, 0.17f * scale},
+                        (Vector3){0.38f * scale, 0.30f * scale,
+                                  0.07f * scale},
+                        yaw, palette->metal);
+        Vector3 spear_hand = LocalPoint(chest, 0.32f * scale,
+                                        -0.38f * scale, 0.10f * scale, yaw);
+        Vector3 spear_tip = LocalPoint(chest, 0.32f * scale,
+                                       0.78f * scale, 0.08f * scale, yaw);
+        DrawCylinderEx(spear_hand, spear_tip, 0.025f * scale,
+                       0.018f * scale, 6, palette->leather);
+        Vector3 blade_tip = LocalPoint(chest, 0.32f * scale,
+                                       1.02f * scale, 0.08f * scale, yaw);
+        DrawCylinderEx(spear_tip, blade_tip, 0.075f * scale, 0.0f, 5,
+                       palette->metal);
+    } else if (variant == CC_CREATURE_GOBLIN_TRIBUTE_BEARER) {
+        DrawOrientedBox(chest,
+                        (Vector3){0.0f, -0.22f * scale, 0.30f * scale},
+                        (Vector3){0.48f * scale, 0.38f * scale,
+                                  0.38f * scale},
+                        yaw, palette->accent);
+        DrawOrientedBox(chest,
+                        (Vector3){0.0f, -0.22f * scale, 0.505f * scale},
+                        (Vector3){0.10f * scale, 0.40f * scale,
+                                  0.025f * scale},
+                        yaw, palette->horn);
+    } else {
+        DrawOrientedBox(chest,
+                        (Vector3){0.0f, -0.04f * scale, -0.20f * scale},
+                        (Vector3){0.40f * scale, 0.42f * scale,
+                                  0.18f * scale},
+                        yaw, palette->secondary);
+    }
+}
+
+static void DrawHorseOrCowRig(CcCreatureVariant variant,
+                              const CcCreatureRigPose *rig,
+                              const CreatureRenderPalette *palette,
+                              float yaw, float scale)
+{
+    Vector3 body = FromLimbVector(rig->body);
+    bool horse = variant == CC_CREATURE_HORSE;
+    float breathing = 1.0f + rig->mean_activation * 0.22f;
+    DrawOrientedBox(body, (Vector3){0.0f, 0.02f * scale, 0.0f},
+                    (Vector3){rig->body_width * breathing,
+                              rig->body_depth * breathing,
+                              rig->body_length},
+                    yaw, palette->hide);
+    Vector3 neck_base = LocalPoint(
+        body, 0.0f, horse ? 0.16f * scale : 0.04f * scale,
+        rig->body_length * 0.42f, yaw);
+    Vector3 neck = LocalPoint(
+        body, 0.0f, horse ? 0.58f * scale : -0.06f * scale,
+        rig->body_length * 0.62f, yaw);
+    Vector3 head = LocalPoint(
+        body, 0.0f, horse ? 0.72f * scale : -0.10f * scale,
+        rig->body_length * 0.82f, yaw);
+    DrawCylinderEx(neck_base, neck,
+                   (horse ? 0.19f : 0.25f) * scale,
+                   (horse ? 0.15f : 0.21f) * scale,
+                   7, palette->hide);
+    DrawCharacterEllipsoid(
+        head,
+        horse ? (Vector3){0.20f * scale, 0.23f * scale, 0.34f * scale} :
+                (Vector3){0.31f * scale, 0.25f * scale, 0.34f * scale},
+        horse ? palette->skin : palette->hide);
+    for (int32_t side = -1; side <= 1; side += 2) {
+        Vector3 eye = LocalPoint(
+            head, (float)side * (horse ? 0.14f : 0.20f) * scale,
+            0.045f * scale, 0.24f * scale, yaw);
+        DrawCharacterSphere(eye, 0.028f * scale, palette->eye);
+        Vector3 ear_root = LocalPoint(
+            head, (float)side * 0.11f * scale, 0.18f * scale,
+            -0.02f * scale, yaw);
+        Vector3 ear_tip = LocalPoint(
+            head, (float)side * (horse ? 0.14f : 0.24f) * scale,
+            (horse ? 0.38f : 0.29f) * scale, 0.0f, yaw);
+        DrawCylinderEx(ear_root, ear_tip, 0.045f * scale,
+                       0.012f * scale, 5, palette->secondary);
+        if (!horse) {
+            Vector3 horn_tip = LocalPoint(
+                head, (float)side * 0.40f * scale, 0.30f * scale,
+                0.02f * scale, yaw);
+            DrawCylinderEx(ear_root, horn_tip, 0.055f * scale, 0.0f, 6,
+                           palette->horn);
+        }
+    }
+    Vector3 tail_root = LocalPoint(body, 0.0f, 0.22f * scale,
+                                   -rig->body_length * 0.48f, yaw);
+    Vector3 tail_tip = LocalPoint(body, 0.0f, -0.40f * scale,
+                                  -rig->body_length * 0.70f, yaw);
+    DrawCylinderEx(tail_root, tail_tip,
+                   (horse ? 0.065f : 0.045f) * scale,
+                   0.018f * scale, 6, palette->secondary);
+    if (horse) {
+        Vector3 mane_top = LocalPoint(body, 0.0f, 0.72f * scale,
+                                      rig->body_length * 0.50f, yaw);
+        DrawCylinderEx(neck_base, mane_top, 0.08f * scale, 0.04f * scale,
+                       6, palette->secondary);
+    } else {
+        Vector3 udder = LocalPoint(body, 0.0f, -0.48f * scale,
+                                   -0.10f * scale, yaw);
+        DrawCharacterEllipsoid(udder,
+                               (Vector3){0.20f * scale, 0.12f * scale,
+                                         0.22f * scale},
+                               palette->accent);
+    }
+}
+
+static void DrawDoubleSidedTriangle(Vector3 a, Vector3 b, Vector3 c,
+                                    Color color)
+{
+    DrawTriangle3D(a, b, c, color);
+    DrawTriangle3D(c, b, a, color);
+}
+
+static void DrawDragonRig(const CcCreatureRigPose *rig,
+                          const CreatureRenderPalette *palette,
+                          float yaw, float scale)
+{
+    Vector3 body = FromLimbVector(rig->body);
+    float tension = 1.0f + rig->mean_activation * 0.30f;
+    DrawOrientedBox(body, (Vector3){0.0f, 0.02f * scale, 0.0f},
+                    (Vector3){rig->body_width * tension,
+                              rig->body_depth * tension,
+                              rig->body_length},
+                    yaw, palette->skin);
+    Vector3 chest = LocalPoint(body, 0.0f, 0.16f * scale,
+                               rig->body_length * 0.40f, yaw);
+    Vector3 neck = LocalPoint(body, 0.0f, 0.34f * scale,
+                              rig->body_length * 0.68f, yaw);
+    Vector3 head = LocalPoint(body, 0.0f, 0.38f * scale,
+                              rig->body_length * 0.98f, yaw);
+    DrawCylinderEx(chest, neck, 0.30f * scale, 0.23f * scale, 7,
+                   palette->hide);
+    DrawCylinderEx(neck, head, 0.23f * scale, 0.18f * scale, 7,
+                   palette->skin);
+    DrawCharacterEllipsoid(head,
+                           (Vector3){0.34f * scale, 0.25f * scale,
+                                     0.44f * scale},
+                           palette->skin);
+    Vector3 jaw = LocalPoint(head, 0.0f, -0.17f * scale,
+                             0.28f * scale, yaw);
+    DrawOrientedBox(jaw, (Vector3){0.0f, 0.0f, 0.0f},
+                    (Vector3){0.48f * scale, 0.13f * scale,
+                              0.42f * scale},
+                    yaw, palette->accent);
+    for (int32_t side = -1; side <= 1; side += 2) {
+        Vector3 eye = LocalPoint(head, (float)side * 0.22f * scale,
+                                 0.06f * scale, 0.31f * scale, yaw);
+        DrawCharacterSphere(eye, 0.042f * scale, palette->eye);
+        Vector3 horn_root = LocalPoint(head, (float)side * 0.18f * scale,
+                                       0.17f * scale, -0.08f * scale, yaw);
+        Vector3 horn_tip = LocalPoint(head, (float)side * 0.30f * scale,
+                                      0.50f * scale, -0.24f * scale, yaw);
+        DrawCylinderEx(horn_root, horn_tip, 0.075f * scale, 0.0f, 6,
+                       palette->horn);
+
+        Vector3 wing_root = LocalPoint(body, (float)side * 0.34f * scale,
+                                       0.35f * scale, 0.18f * scale, yaw);
+        Vector3 wing_tip = LocalPoint(body, (float)side * 1.55f * scale,
+                                      0.72f * scale, -0.18f * scale, yaw);
+        Vector3 wing_back = LocalPoint(body, (float)side * 1.02f * scale,
+                                       0.18f * scale, -0.98f * scale, yaw);
+        DrawCylinderEx(wing_root, wing_tip, 0.075f * scale,
+                       0.028f * scale, 6, palette->secondary);
+        DrawDoubleSidedTriangle(wing_root, wing_tip, wing_back,
+                                ShadeColor(palette->accent, 0.82f));
+    }
+    Vector3 tail_a = LocalPoint(body, 0.0f, 0.02f * scale,
+                                -rig->body_length * 0.48f, yaw);
+    Vector3 tail_b = LocalPoint(body, 0.10f * scale, -0.08f * scale,
+                                -rig->body_length * 0.88f, yaw);
+    Vector3 tail_c = LocalPoint(body, -0.12f * scale, -0.20f * scale,
+                                -rig->body_length * 1.24f, yaw);
+    DrawCylinderEx(tail_a, tail_b, 0.24f * scale, 0.15f * scale, 7,
+                   palette->skin);
+    DrawCylinderEx(tail_b, tail_c, 0.15f * scale, 0.025f * scale, 7,
+                   palette->secondary);
+    for (int32_t spine = 0; spine < 5; ++spine) {
+        float amount = (float)spine / 4.0f;
+        Vector3 root = LocalPoint(body, 0.0f,
+                                  (0.48f - amount * 0.20f) * scale,
+                                  (0.72f - amount * 1.30f) * scale, yaw);
+        Vector3 tip = root;
+        tip.y += (0.28f - amount * 0.08f) * scale;
+        DrawCylinderEx(root, tip, 0.065f * scale, 0.0f, 5, palette->horn);
+    }
+}
+
+static CcQuadrupedMorphology QuadrupedMorphologyForCreature(
+    CcCreatureVariant variant)
+{
+    if (variant == CC_CREATURE_HORSE) return CC_QUADRUPED_HORSE;
+    if (variant == CC_CREATURE_COW) return CC_QUADRUPED_COW;
+    return CC_QUADRUPED_MORPHOLOGY_COUNT;
+}
+
+static bool PoseQuadrupedCreature(CreatureModelCache *creature,
+                                  CcCreatureVariant variant, float phase,
+                                  bool moving,
+                                  const CcCreatureRigPose *controlled_pose)
+{
+    if (creature == NULL || !creature->ready) return false;
+    CcQuadrupedMorphology morphology = QuadrupedMorphologyForCreature(variant);
+    CcQuadrupedPose rest = {0};
+    CcQuadrupedPose target = {0};
+    CcQuadrupedPoseResolve(morphology, 0.0f, false, &rest);
+    if (controlled_pose != NULL && controlled_pose->valid) {
+        CcQuadrupedPoseResolveFromRig(morphology, controlled_pose, &target);
+    } else {
+        CcQuadrupedPoseResolve(morphology, phase, moving, &target);
+    }
+    if (!rest.valid || !target.valid) return false;
+
+    for (int32_t bone = 0; bone < creature->model.skeleton.boneCount;
+         ++bone) {
+        int32_t quadruped_bone = creature->quadruped_bone[bone];
+        if (quadruped_bone < 0 ||
+            quadruped_bone >= CC_QUADRUPED_BONE_COUNT) return false;
+        const CcQuadrupedBonePose *rest_bone = &rest.bones[quadruped_bone];
+        const CcQuadrupedBonePose *target_bone =
+            &target.bones[quadruped_bone];
+        Quaternion delta = HeroRotationBetween(
+            FromLimbVector(rest_bone->up),
+            FromLimbVector(target_bone->up));
+        creature->pose[bone].translation = FromLimbVector(target_bone->head);
+        creature->pose[bone].rotation = QuaternionMultiply(
+            delta, creature->model.skeleton.bindPose[bone].rotation);
+        creature->pose[bone].scale =
+            creature->model.skeleton.bindPose[bone].scale;
+    }
+    UpdateModelAnimation(creature->model, creature->animation, 0.0f);
+    CcLocalRendererRecordSkinUpdate(creature->model.meshCount);
+    return true;
+}
+
+static bool DrawCreatureGait3D(CcCreatureVariant variant,
+                               CcCreaturePose pose, Vector3 position,
+                               float yaw, float scale, Color primary,
+                               float gait_phase, bool moving,
+                               const CcCreatureRigPose *controlled_pose)
+{
+    if (variant < 0 || variant >= CC_CREATURE_VARIANT_COUNT || scale <= 0.0f) {
+        return false;
+    }
+    if (pose < 0 || pose >= CC_CREATURE_POSE_COUNT) {
+        pose = CC_CREATURE_POSE_IDLE;
+    }
+    const CcCreatureDefinition *definition = CcCreatureDefinitionAt(variant);
+    bool skinned = definition != NULL && definition->skinned;
+    float rig_phase = skinned ?
+        gait_phase / (2.0f * PI) : CreatureRigPhase(pose);
+    float rig_movement = skinned ? (moving ? 1.0f : 0.0f) :
+                                   CreatureRigMovement(pose);
+    CcCreatureRigPose generated_rig;
+    const CcCreatureRigPose *rig = controlled_pose;
+    if (rig == NULL || !rig->valid) {
+        if (!CcCreatureRigPoseResolve(
+                CreatureRigProfileForVariant(variant), rig_phase, rig_movement,
+                ToLimbVector(position), yaw, scale, &generated_rig)) {
+            return false;
+        }
+        rig = &generated_rig;
+    }
+
+    Vector3 shadow_size = {1.00f, 0.012f, 1.50f};
+    if (variant <= CC_CREATURE_GOBLIN_TRIBUTE_BEARER) {
+        shadow_size = (Vector3){0.58f, 0.012f, 0.46f};
+    } else if (variant == CC_CREATURE_COW) {
+        shadow_size = (Vector3){1.10f, 0.012f, 1.72f};
+    } else if (variant == CC_CREATURE_DRAGON) {
+        shadow_size = (Vector3){3.60f, 0.014f, 5.10f};
+    }
+    shadow_size.x *= scale;
+    shadow_size.z *= scale;
+    DrawBox((Vector3){position.x, position.y + 0.006f, position.z},
+            shadow_size, (Color){2, 7, 10, 104});
+    CreatureRenderPalette palette = CreaturePalette(variant, primary);
+    if (skinned) {
+        CreatureModelCache *creature =
+            &creature_models[variant][CC_CREATURE_POSE_IDLE];
+        if (creature->ready && creature->model.meshCount == 1 &&
+            PoseQuadrupedCreature(creature, variant, gait_phase, moving, rig)) {
+            Color colors[CC_NPC_ARCHETYPE_MATERIAL_COUNT] = {
+                palette.skin, palette.secondary, palette.hide,
+                palette.cloth, palette.leather, palette.horn,
+                palette.metal, palette.accent, palette.eye,
+            };
+            SetIndexedPalette(colors, 0.54f, false, (Vector3){0});
+            if (visual_style.npc_skinned_ready) {
+                float body_skin_remap = 0.0f;
+                SetShaderValue(
+                    visual_style.npc_skinned,
+                    visual_style.npc_skinned_body_skin_remap_location,
+                    &body_skin_remap, SHADER_UNIFORM_FLOAT);
+            }
+            DrawModelEx(creature->model, position,
+                        (Vector3){0.0f, 1.0f, 0.0f}, yaw * RAD2DEG,
+                        (Vector3){scale, scale, scale}, WHITE);
+            return true;
+        }
+    }
+    if (controlled_pose != NULL && skinned) {
+        if (!CcCreatureRigPoseResolve(
+                CreatureRigProfileForVariant(variant), rig_phase, rig_movement,
+                ToLimbVector(position), yaw, scale, &generated_rig)) {
+            return false;
+        }
+        rig = &generated_rig;
+    }
+    DrawCreatureMuscleLimbs(rig, &palette, yaw, scale);
+    if (variant <= CC_CREATURE_GOBLIN_TRIBUTE_BEARER) {
+        DrawGoblinRig(variant, rig, &palette, yaw, scale);
+    } else if (variant == CC_CREATURE_DRAGON) {
+        DrawDragonRig(rig, &palette, yaw, scale);
+    } else {
+        DrawHorseOrCowRig(variant, rig, &palette, yaw, scale);
+    }
+    return true;
+}
+
+static bool DrawCreature3D(CcCreatureVariant variant, CcCreaturePose pose,
+                           Vector3 position, float yaw, float scale,
+                           Color primary)
+{
+    return DrawCreatureGait3D(variant, pose, position, yaw, scale, primary,
+                              0.0f, false, NULL);
 }
 
 /* Procedural people use the same graphic lighting contract as the authored
@@ -9810,6 +10776,20 @@ static void LoadVisualStyle(void)
         for (int32_t pose = 0; pose < CC_NPC_ARCHETYPE_POSE_COUNT; ++pose) {
             if (npc_archetypes[role][pose].ready) {
                 ApplyNpcStyle(&npc_archetypes[role][pose].model);
+            }
+        }
+    }
+    for (int32_t variant = 0; variant < CC_CREATURE_VARIANT_COUNT;
+         ++variant) {
+        for (int32_t pose = 0; pose < CC_CREATURE_POSE_COUNT; ++pose) {
+            if (creature_models[variant][pose].ready) {
+                const CcCreatureDefinition *definition =
+                    CcCreatureDefinitionAt((CcCreatureVariant)variant);
+                if (definition != NULL && definition->skinned) {
+                    ApplyNpcBodyStyle(&creature_models[variant][pose].model);
+                } else {
+                    ApplyNpcStyle(&creature_models[variant][pose].model);
+                }
             }
         }
     }
@@ -10286,6 +11266,7 @@ void CcLocalRendererInit(void)
     road_camera_rig = (FixedCameraRig){0};
     combat_camera_rig = (CombatCameraRig){0};
     face_render_context = (FaceRenderContext){0};
+    (void)memset(creature_gaits, 0, sizeof(creature_gaits));
     sphere_models.small = LoadModelFromMesh(GenMeshSphere(1.0f, 6, 8));
     sphere_models.character = LoadModelFromMesh(GenMeshSphere(1.0f, 8, 8));
     sphere_models.scenery = LoadModelFromMesh(GenMeshSphere(1.0f, 10, 12));
@@ -10293,6 +11274,7 @@ void CcLocalRendererInit(void)
     LoadTreeCrownModels();
     LoadHeroSkin();
     LoadNpcArchetypes();
+    LoadCreatureModels();
     LoadNpcDynamicModules();
     LoadNpcBodySkins();
     LoadNpcHeadFamilies();
@@ -10337,6 +11319,15 @@ void CcLocalRendererShutdown(void)
             npc_archetypes[role][pose] = (NpcArchetypeCache){0};
         }
     }
+    for (int32_t variant = 0; variant < CC_CREATURE_VARIANT_COUNT;
+         ++variant) {
+        for (int32_t pose = 0; pose < CC_CREATURE_POSE_COUNT; ++pose) {
+            CreatureModelCache *creature = &creature_models[variant][pose];
+            if (creature->ready) UnloadModel(creature->model);
+            *creature = (CreatureModelCache){0};
+        }
+    }
+    (void)memset(creature_gaits, 0, sizeof(creature_gaits));
     for (int32_t id = 0; id < NPC_DYNAMIC_MODULE_COUNT; ++id) {
         if (npc_dynamic_modules[id].ready) {
             UnloadModel(npc_dynamic_modules[id].model);
@@ -10969,6 +11960,21 @@ static void DrawMineWaystone(void)
                           0.035f, 55.32f},
                 (Vector3){0.14f, 0.055f, 1.18f}, sleeper);
     }
+    /* The rail head ends in a working ore station, so the mine reads before
+       the entrance itself comes into view. */
+    DrawBox((Vector3){26.45f, 0.44f, 54.35f},
+            (Vector3){1.45f, 0.88f, 1.05f},
+            (Color){82, 57, 44, 255});
+    DrawBox((Vector3){26.45f, 0.91f, 54.35f},
+            (Vector3){1.62f, 0.10f, 1.18f}, sleeper);
+    for (int32_t ore = 0; ore < 4; ++ore) {
+        float ore_x = 25.98f + (float)(ore & 1) * 0.64f;
+        float ore_z = 54.02f + (float)(ore >> 1) * 0.54f;
+        DrawTiltedBox((Vector3){ore_x, 1.02f, ore_z},
+                      (Vector3){0.42f, 0.34f, 0.38f},
+                      (Vector3){0.0f, 1.0f, 0.0f},
+                      (float)ore * 19.0f, ShadeColor(stone, 0.78f));
+    }
 }
 
 static void DrawArtisanSign(Color kingdom)
@@ -10986,6 +11992,55 @@ static void DrawArtisanSign(Color kingdom)
                     0.11f, WORLD_GOLD);
 }
 
+static void DrawWorkshopForge(Color kingdom)
+{
+    const float x = 37.85f;
+    const float z = 23.08f;
+    Color brick = BlendColor((Color){104, 63, 50, 255}, kingdom, 0.12f);
+    Color iron = (Color){48, 49, 48, 255};
+    Color timber = (Color){79, 54, 39, 255};
+    DrawBox((Vector3){x, 0.48f, z},
+            (Vector3){1.72f, 0.96f, 0.82f}, brick);
+    DrawBox((Vector3){x, 1.10f, z - 0.10f},
+            (Vector3){1.38f, 0.42f, 0.58f}, ShadeColor(brick, 0.78f));
+    DrawBox((Vector3){x + 0.58f, 2.28f, z - 0.18f},
+            (Vector3){0.46f, 2.80f, 0.46f}, iron);
+    DrawBox((Vector3){x + 0.58f, 3.72f, z - 0.18f},
+            (Vector3){0.62f, 0.18f, 0.62f}, ShadeColor(iron, 0.76f));
+    DrawBox((Vector3){x - 0.14f, 0.70f, z + 0.44f},
+            (Vector3){0.74f, 0.18f, 0.12f}, WORLD_GOLD);
+    DrawSmallSphere((Vector3){x - 0.14f, 0.72f, z + 0.54f},
+                    0.18f, (Color){224, 101, 46, 255});
+    DrawBox((Vector3){x - 1.45f, 0.30f, z + 0.05f},
+            (Vector3){0.14f, 0.60f, 1.28f}, timber);
+    for (int32_t billet = 0; billet < 3; ++billet) {
+        DrawCylinderEx((Vector3){x - 1.72f, 0.16f + (float)billet * 0.15f,
+                                 z - 0.40f},
+                       (Vector3){x - 1.18f, 0.16f + (float)billet * 0.15f,
+                                 z + 0.48f},
+                       0.08f, 0.08f, 7, ShadeColor(timber, 1.08f));
+    }
+}
+
+static void DrawTownSquareFocus(Color kingdom)
+{
+    const float x = CC_LOCAL_NOTICE_X;
+    const float z = CC_LOCAL_NOTICE_Z;
+    Color stone = (Color){104, 101, 91, 255};
+    /* A low civic seal gathers the plaza around the notice board without
+       creating a new collision step or blocking click movement. */
+    DrawCylinder((Vector3){x, 0.015f, z}, 2.65f, 2.65f, 0.045f, 20,
+                 ShadeColor(stone, 0.78f));
+    DrawCylinder((Vector3){x, 0.052f, z}, 2.22f, 2.22f, 0.035f, 20,
+                 stone);
+    DrawBox((Vector3){x, 0.078f, z},
+            (Vector3){3.70f, 0.018f, 0.13f},
+            BlendColor(WORLD_GOLD, kingdom, 0.32f));
+    DrawBox((Vector3){x, 0.080f, z},
+            (Vector3){0.13f, 0.018f, 3.70f},
+            BlendColor(WORLD_GOLD, kingdom, 0.32f));
+}
+
 static void DrawCoachHitch(const CcSettlement *place)
 {
     Color wood = (Color){79, 53, 39, 255};
@@ -10998,6 +12053,12 @@ static void DrawCoachHitch(const CcSettlement *place)
     DrawBox((Vector3){36.75f, 2.18f, z + 0.05f},
             (Vector3){1.30f, 0.68f, 0.12f},
             (Color){111, 72, 52, 255});
+    DrawBox((Vector3){36.75f, 2.70f, z - 0.02f},
+            (Vector3){3.48f, 0.18f, 1.18f},
+            ShadeColor(wood, 0.88f));
+    DrawBox((Vector3){36.75f, 2.82f, z - 0.02f},
+            (Vector3){3.08f, 0.12f, 1.44f},
+            (Color){126, 88, 57, 255});
     DrawCylinder((Vector3){36.75f, 2.03f, z + 0.13f},
                  0.19f, 0.19f, 0.08f, 10, WORLD_GOLD);
     int32_t barrels = place != NULL ? place->stock[CC_GOOD_MATERIAL] / 24 : 1;
@@ -11007,6 +12068,12 @@ static void DrawCoachHitch(const CcSettlement *place)
         DrawCylinder((Vector3){35.65f + (float)i * 0.58f, 0.05f, z + 0.42f},
                      0.25f, 0.25f, 0.58f, 10,
                      (Color){129, 77, 43, 255});
+    }
+    for (int32_t wheel = 0; wheel < 2; ++wheel) {
+        float wheel_z = z - 0.28f + (float)wheel * 0.58f;
+        DrawCylinderEx((Vector3){38.50f, 0.62f, wheel_z},
+                       (Vector3){38.58f, 0.62f, wheel_z},
+                       0.48f, 0.48f, 12, ShadeColor(wood, 1.08f));
     }
 }
 
@@ -11023,6 +12090,14 @@ static void DrawMillersGranary(float hunger)
             (Vector3){0.58f, 1.20f, 0.08f}, timber);
     DrawBox((Vector3){x, 1.45f, z + 0.98f},
             (Vector3){0.72f, 0.10f, 0.12f}, WORLD_GOLD);
+    int32_t sacks = hunger > 0.45f ? 2 : 5;
+    for (int32_t sack = 0; sack < sacks; ++sack) {
+        float sack_x = x - 1.28f + (float)(sack % 3) * 0.48f;
+        float sack_z = z + 0.64f + (float)(sack / 3) * 0.40f;
+        DrawCharacterEllipsoid((Vector3){sack_x, 0.26f, sack_z},
+                               (Vector3){0.25f, 0.32f, 0.20f},
+                               (Color){151, 125, 82, 255});
+    }
 }
 
 static void DrawEastWindmill(Color kingdom, float hunger)
@@ -11077,6 +12152,15 @@ static void DrawRoomLandmarks(const CcSettlement *place, Color kingdom,
         rlPushMatrix();
         rlTranslatef(0.0f, CcLocalTerrainHeightAt(30.95f, 24.30f), 0.0f);
         DrawArtisanSign(kingdom);
+        DrawWorkshopForge(kingdom);
+        rlPopMatrix();
+    }
+    if (RoomDetailPointVisible(CC_LOCAL_NOTICE_X, CC_LOCAL_NOTICE_Z, focus)) {
+        rlPushMatrix();
+        rlTranslatef(0.0f,
+                     CcLocalTerrainHeightAt(CC_LOCAL_NOTICE_X,
+                                            CC_LOCAL_NOTICE_Z), 0.0f);
+        DrawTownSquareFocus(kingdom);
         rlPopMatrix();
     }
     if (RoomDetailPointVisible(36.75f, 55.36f, focus)) {
@@ -11120,6 +12204,70 @@ static float TerrainRectangleInset(float x, float z, Rectangle rectangle)
                        rectangle.y + rectangle.height - z));
 }
 
+static float TerrainRectangleSignedInset(float x, float z,
+                                          Rectangle rectangle)
+{
+    if (TerrainPointInRectangle(x, z, rectangle)) {
+        return TerrainRectangleInset(x, z, rectangle);
+    }
+    float closest_x = TerrainClamp(
+        x, rectangle.x, rectangle.x + rectangle.width);
+    float closest_z = TerrainClamp(
+        z, rectangle.y, rectangle.y + rectangle.height);
+    float dx = x - closest_x;
+    float dz = z - closest_z;
+    return -sqrtf(dx * dx + dz * dz);
+}
+
+static float TerrainRoadCenterline(const TerrainRoad *road,
+                                   int32_t road_index, float along)
+{
+    float start = road->runs_east_west ? road->footprint.x :
+                                         road->footprint.y;
+    float length = road->runs_east_west ? road->footprint.width :
+                                          road->footprint.height;
+    float amount = TerrainClamp((along - start) / fmaxf(length, 0.01f),
+                                0.0f, 1.0f);
+    float cross = road->runs_east_west ?
+        road->footprint.y + road->footprint.height * 0.5f :
+        road->footprint.x + road->footprint.width * 0.5f;
+    float cross_width = road->runs_east_west ? road->footprint.height :
+                                               road->footprint.width;
+    float bend = sinf(amount * PI) *
+                 sinf(amount * 2.35f + (float)road_index * 1.71f) *
+                 fminf(0.48f, cross_width * 0.105f);
+    float wandering = TerrainValueNoise(
+        along + (float)road_index * 7.0f,
+        (float)road_index * 5.0f, 8.0f, 71U) *
+        fminf(0.16f, cross_width * 0.035f) * sinf(amount * PI);
+    return cross + bend + wandering;
+}
+
+static float TerrainRoadSignedInset(const TerrainRoad *road,
+                                    int32_t road_index, float x, float z)
+{
+    float along = road->runs_east_west ? x : z;
+    float cross = road->runs_east_west ? z : x;
+    float start = road->runs_east_west ? road->footprint.x :
+                                         road->footprint.y;
+    float length = road->runs_east_west ? road->footprint.width :
+                                          road->footprint.height;
+    float cross_width = road->runs_east_west ? road->footprint.height :
+                                               road->footprint.width;
+    float amount = TerrainClamp((along - start) / fmaxf(length, 0.01f),
+                                0.0f, 1.0f);
+    float width_noise = TerrainValueNoise(
+        along - (float)road_index * 4.0f,
+        (float)road_index * 9.0f, 5.5f, 72U);
+    float half_width = cross_width * 0.5f * (0.94f + width_noise * 0.07f);
+    float cross_inset = half_width - fabsf(
+        cross - TerrainRoadCenterline(road, road_index, along));
+    float end_inset = fminf(along - start, start + length - along);
+    /* Soften square caps but leave enough overlap for road junctions. */
+    end_inset += sinf(amount * PI) * 0.16f;
+    return fminf(cross_inset, end_inset);
+}
+
 static int32_t TerrainVisibleRoadCount(void)
 {
     /* The final terrain road is an unpaved raid ingress. */
@@ -11130,11 +12278,9 @@ static float TerrainRoadAmount(float x, float z)
 {
     float amount = 0.0f;
     for (int32_t i = 0; i < TerrainVisibleRoadCount(); ++i) {
-        float inset = TerrainRectangleInset(
-            x, z, TERRAIN_ROADS[i].footprint);
-        if (inset <= 0.0f) continue;
+        float inset = TerrainRoadSignedInset(&TERRAIN_ROADS[i], i, x, z);
         float edge_breakup = TerrainValueNoise(
-            x + (float)i * 3.7f, z - (float)i * 2.9f, 4.5f, 17U) * 0.14f;
+            x + (float)i * 3.7f, z - (float)i * 2.9f, 4.5f, 17U) * 0.24f;
         amount = fmaxf(amount,
                        TerrainSmooth01(inset / 0.68f + edge_breakup));
     }
@@ -11146,9 +12292,15 @@ static float TerrainFieldAmount(float x, float z)
     float amount = 0.0f;
     for (int32_t i = 0; i < (int32_t)(sizeof(TERRAIN_FIELDS) /
                                       sizeof(TERRAIN_FIELDS[0])); ++i) {
-        float inset = TerrainRectangleInset(x, z, TERRAIN_FIELDS[i]);
-        if (inset <= 0.0f) continue;
-        amount = fmaxf(amount, TerrainSmooth01(inset / 0.80f));
+        Rectangle field = TERRAIN_FIELDS[i];
+        float inset = TerrainRectangleSignedInset(x, z, field);
+        float broad = TerrainValueNoise(
+            x + (float)i * 8.2f, z - (float)i * 5.3f, 6.4f, 73U);
+        float scallop = sinf((x - field.x) * 0.48f + (float)i) * 0.16f +
+                        sinf((z - field.y) * 0.61f - (float)i) * 0.12f;
+        amount = fmaxf(
+            amount,
+            TerrainSmooth01((inset + broad * 0.48f + scallop) / 0.80f));
     }
     return amount;
 }
@@ -11472,24 +12624,25 @@ static void DrawTerrainRoadRuts(const CcSettlement *place, Vector3 focus)
         const TerrainRoad *road = &TERRAIN_ROADS[i];
         Rectangle footprint = road->footprint;
         Color color = i < TerrainVisibleRoadCount() ? paved_rut : field_track;
-        float cross_center = road->runs_east_west ?
-            footprint.y + footprint.height * 0.5f :
-            footprint.x + footprint.width * 0.5f;
         float lane_offset = (road->runs_east_west ? footprint.height :
                                                        footprint.width) *
                             0.17f;
         for (int32_t lane = -1; lane <= 1; lane += 2) {
-            float cross = cross_center + (float)lane * lane_offset;
             float start = road->runs_east_west ? footprint.x : footprint.y;
             float finish = start + (road->runs_east_west ? footprint.width :
                                                              footprint.height);
             for (float along = start + 0.35f; along < finish - 0.35f;
                  along += 0.72f) {
                 float next = fminf(along + 0.74f, finish - 0.35f);
+                float cross = TerrainRoadCenterline(road, i, along) +
+                              (float)lane * lane_offset;
+                float next_cross = TerrainRoadCenterline(road, i, next) +
+                                   (float)lane * lane_offset;
                 Vector2 a = road->runs_east_west ?
                     (Vector2){along, cross} : (Vector2){cross, along};
                 Vector2 b = road->runs_east_west ?
-                    (Vector2){next, cross} : (Vector2){cross, next};
+                    (Vector2){next, next_cross} :
+                    (Vector2){next_cross, next};
                 Vector2 middle = {(a.x + b.x) * 0.5f,
                                   (a.y + b.y) * 0.5f};
                 float focus_x = middle.x - focus.x;
@@ -11500,6 +12653,7 @@ static void DrawTerrainRoadRuts(const CcSettlement *place, Vector3 focus)
                 if (TerrainPointInRectangle(middle.x, middle.y, plaza)) {
                     continue;
                 }
+                if (TerrainRoadAmount(middle.x, middle.y) < 0.34f) continue;
                 TerrainRibbonSegment(a, b, 0.055f, 0.055f, color);
             }
         }
@@ -11531,7 +12685,15 @@ static void DrawTerrainFieldRows(const CcSettlement *place, Vector3 focus)
                  x < field.x + field.width - 0.45f; x += 0.72f) {
                 float next = fminf(x + 0.74f,
                                    field.x + field.width - 0.45f);
-                TerrainRibbonSegment((Vector2){x, z}, (Vector2){next, z},
+                float row_bend = sinf(
+                    (x - field.x) * 0.36f + (float)i * 1.2f) * 0.10f;
+                float next_bend = sinf(
+                    (next - field.x) * 0.36f + (float)i * 1.2f) * 0.10f;
+                float middle_x = (x + next) * 0.5f;
+                float middle_z = z + (row_bend + next_bend) * 0.5f;
+                if (TerrainFieldAmount(middle_x, middle_z) < 0.30f) continue;
+                TerrainRibbonSegment((Vector2){x, z + row_bend},
+                                     (Vector2){next, z + next_bend},
                                      0.080f, 0.055f, color);
             }
         }
@@ -11652,7 +12814,9 @@ static void DrawTerrainPlantCover(const CcSettlement *place, Vector3 focus)
                 float scale = 0.82f + TerrainScatter01(
                     field_index * 37 + column_index,
                     row_index, 42U) * 0.38f;
-                TerrainTuft(x + jitter * 0.22f, z,
+                float crop_x = x + jitter * 0.22f;
+                if (TerrainFieldAmount(crop_x, z) < 0.22f) continue;
+                TerrainTuft(crop_x, z,
                              0.31f * scale, 0.070f * scale,
                              jitter * 0.55f, crop_bottom, crop_top);
             }
@@ -11781,6 +12945,9 @@ static uint32_t StreetForegroundBuildingMaskForShot(int32_t shot)
         case 3:
             return (UINT32_C(1) << 3) | (UINT32_C(1) << 4);
         case 4:
+            return (UINT32_C(1) << 3) | (UINT32_C(1) << 4) |
+                   (UINT32_C(1) << 6) |
+                   (UINT32_C(1) << 9);
         case 6:
             return (UINT32_C(1) << 4) | (UINT32_C(1) << 6);
         case 5:
@@ -11898,6 +13065,7 @@ static void DrawWorldBuildings(Color kingdom, Vector3 focus,
 {
     (void)focus;
     float reveal_cut_height = reveal_world.y - 0.30f;
+    uint32_t authored_foreground = StreetForegroundBuildingMask();
     UpdateWorldBuildingReveals(camera, reveal_world, reveal_center,
                                render_width, render_height, clock);
 
@@ -11928,6 +13096,12 @@ static void DrawWorldBuildings(Color kingdom, Vector3 focus,
            reveal, while a house behind the hero remains entirely solid. */
         if (i == 2 && runtime_assets[RUNTIME_ASSET_MARKET].ready) continue;
         float reveal = world_building_reveals[i].amount;
+        if ((authored_foreground & (UINT32_C(1) << i)) != 0) {
+            /* Fixed room compositions have fixed stage wings. Keep their
+               hero-centred cutaway armed for the whole shot, instead of
+               waiting for a broad roof to fully cross the sightline. */
+            reveal = fmaxf(reveal, 0.94f);
+        }
         if (fabsf(reveal - reveal_active) > 0.001f) {
             SetWorldForegroundReveal(reveal, reveal_cut_height);
             reveal_active = reveal;
@@ -11975,12 +13149,73 @@ static bool DrawAuthoredMarket(const CcSettlement *place)
     return true;
 }
 
-static void DrawCastle(Color kingdom, Vector3 focus)
+static WorldBuildingRevealState castle_structure_reveals[
+    sizeof(CASTLE_STRUCTURES) / sizeof(CASTLE_STRUCTURES[0])];
+static float castle_reveal_clock = 0.0f;
+static bool castle_reveals_initialized = false;
+
+static void UpdateCastleStructureReveals(Camera3D camera,
+                                         Vector3 reveal_world,
+                                         Vector2 reveal_center,
+                                         int32_t render_width,
+                                         int32_t render_height,
+                                         float clock)
+{
+    bool reset = !castle_reveals_initialized || clock < castle_reveal_clock;
+    float delta_time = reset ? 0.0f :
+        fmaxf(0.0f, fminf(clock - castle_reveal_clock, 0.05f));
+    castle_reveal_clock = clock;
+    castle_reveals_initialized = true;
+    for (int32_t i = 0; i < (int32_t)(sizeof(CASTLE_STRUCTURES) /
+                                      sizeof(CASTLE_STRUCTURES[0])); ++i) {
+        const WorldStructure *structure = &CASTLE_STRUCTURES[i];
+        WorldBuilding proxy = {
+            structure->footprint, structure->height, 0, false,
+        };
+        WorldBuildingRevealState *state = &castle_structure_reveals[i];
+        bool occluded = WorldBuildingObscuresReveal(
+            &proxy, camera, reveal_world, reveal_center,
+            render_width, render_height);
+        if (reset) {
+            state->amount = occluded ? 1.0f : 0.0f;
+            state->occluded_seconds = occluded ? 0.06f : 0.0f;
+            state->clear_seconds = occluded ? 0.0f : 0.16f;
+            continue;
+        }
+        if (occluded) {
+            state->occluded_seconds = fminf(
+                0.32f, state->occluded_seconds + delta_time);
+            state->clear_seconds = 0.0f;
+        } else {
+            state->clear_seconds = fminf(
+                0.32f, state->clear_seconds + delta_time);
+            state->occluded_seconds = 0.0f;
+        }
+        bool held = occluded ? state->occluded_seconds >= 0.06f :
+                    state->clear_seconds < 0.16f && state->amount > 0.002f;
+        float destination = held ? 1.0f : 0.0f;
+        float response = destination > state->amount ? 8.0f : 4.6f;
+        float blend = 1.0f - expf(-response * delta_time);
+        state->amount += (destination - state->amount) * blend;
+        if (fabsf(destination - state->amount) < 0.002f) {
+            state->amount = destination;
+        }
+    }
+}
+
+static void DrawCastle(Color kingdom, Vector3 focus, Camera3D camera,
+                       Vector3 reveal_world, Vector2 reveal_center,
+                       int32_t render_width, int32_t render_height,
+                       float clock)
 {
     (void)focus;
     Rectangle keep_pad = {65.20f, 8.20f, 26.50f, 24.40f};
+    float reveal_cut_height = reveal_world.y - 0.30f;
+    UpdateCastleStructureReveals(camera, reveal_world, reveal_center,
+                                 render_width, render_height, clock);
     rlPushMatrix();
     rlTranslatef(0.0f, TerrainFootprintHeight(keep_pad), 0.0f);
+    SetWorldForegroundReveal(0.0f, reveal_cut_height);
     for (int32_t i = 0; i < (int32_t)(sizeof(CASTLE_STRUCTURES) /
                                       sizeof(CASTLE_STRUCTURES[0])); ++i) {
         const WorldStructure *structure = &CASTLE_STRUCTURES[i];
@@ -11990,6 +13225,19 @@ static void DrawCastle(Color kingdom, Vector3 focus)
         DrawBuildingFoundation(
             footprint.x, footprint.y, footprint.width, footprint.height,
             structure->height, stone);
+    }
+    float reveal_active = -1.0f;
+    for (int32_t i = 0; i < (int32_t)(sizeof(CASTLE_STRUCTURES) /
+                                      sizeof(CASTLE_STRUCTURES[0])); ++i) {
+        const WorldStructure *structure = &CASTLE_STRUCTURES[i];
+        Rectangle footprint = structure->footprint;
+        Color stone = i == 5 ? (Color){82, 80, 78, 255} :
+                               (Color){100, 103, 98, 255};
+        float reveal = castle_structure_reveals[i].amount;
+        if (fabsf(reveal - reveal_active) > 0.001f) {
+            SetWorldForegroundReveal(reveal, reveal_cut_height);
+            reveal_active = reveal;
+        }
         DrawBox((Vector3){footprint.x + footprint.width * 0.5f,
                           structure->height * 0.5f,
                           footprint.y + footprint.height * 0.5f},
@@ -12002,6 +13250,7 @@ static void DrawCastle(Color kingdom, Vector3 focus)
                           footprint.height + 0.18f},
                 i >= 8 ? kingdom : (Color){74, 77, 75, 255});
     }
+    SetWorldForegroundReveal(0.0f, reveal_cut_height);
     {
         DrawBox((Vector3){78.5f, 1.20f, 22.03f},
                 (Vector3){1.35f, 2.40f, 0.06f},
@@ -14495,8 +15744,14 @@ static void DrawTree(float x, float z, TreeFamily family, Color leaves,
 static void DrawWorldTrees(Vector3 focus, Color kingdom)
 {
     TreeRegionalStyle regional_style = TreeStyleForKingdom(kingdom);
+    int32_t room = StreetCameraBaseShot(street_camera_rig.shot);
     for (int32_t i = 0;
          i < (int32_t)(sizeof(WORLD_TREES) / sizeof(WORLD_TREES[0])); ++i) {
+        /* The mine room uses rails as a leading line. Two otherwise sound
+           trees landed directly on that fixed camera axis and erased both
+           the rail head and mine entrance. The fade between room pages
+           makes this authored thinning stable and invisible in motion. */
+        if (room == 2 && (i == 4 || i == 25)) continue;
         Vector2 position = WORLD_TREES[i].position;
         position.x += (i & 1) != 0 ? -regional_style.cluster_pull :
                                      regional_style.cluster_pull;
@@ -14528,6 +15783,15 @@ static void DrawViewportText(const char *text, Rectangle viewport,
              (int32_t)lroundf(viewport.y) + y, font_size, color);
 }
 
+static bool AgentNearLabel(const CcLocalAgent *agent, float x, float z,
+                           float radius)
+{
+    if (agent == NULL) return false;
+    float dx = agent->position.x - x;
+    float dz = agent->position.z - z;
+    return dx * dx + dz * dz <= radius * radius;
+}
+
 static void DrawStreetTraversalPortals(const CcLocalAgent *agent,
                                        Camera3D camera, Rectangle viewport,
                                        int32_t art_width,
@@ -14537,6 +15801,8 @@ static void DrawStreetTraversalPortals(const CcLocalAgent *agent,
     for (int32_t portal_index = 0; portal_index < count; ++portal_index) {
         ResolvedStreetPortal portal = {0};
         if (!ResolveStreetPortal(agent, portal_index, &portal)) continue;
+        Vector3 approach = StreetPortalApproachWorldPoint(&portal);
+        if (!AgentNearLabel(agent, approach.x, approach.z, 7.0f)) continue;
         Vector2 art_point = StreetPortalEdgePoint(
             &portal, camera, art_width, art_height);
         Vector2 point = {
@@ -15453,65 +16719,40 @@ static const char *RoadArchetypeName(const CcRoute *route)
     return "HEDGEROW TRADE ROAD";
 }
 
-static void DrawRoadHorseTeam(Vector3 base)
+static void DrawRoadHorseTeam(Vector3 base, float clock, bool moving)
 {
     const float yaw = 0.5f * PI;
+    CcCreaturePose left_pose = CcCreatureSteppedPose(
+        CC_CREATURE_HORSE, clock * 4.8f, moving);
+    CcCreaturePose right_pose = CcCreatureSteppedPose(
+        CC_CREATURE_HORSE, clock * 4.8f + PI, moving);
     for (int32_t horse = -1; horse <= 1; horse += 2) {
         Color coat = horse < 0 ? (Color){89, 68, 56, 255} :
                                  (Color){112, 86, 63, 255};
-        Color coat_shadow = ShadeColor(coat, 0.72f);
         Vector3 horse_base = LocalPoint(
-            base, (float)horse * 0.66f, 0.0f, 4.55f, yaw);
-        DrawOrientedBox(horse_base, (Vector3){0.0f, 0.92f, 0.0f},
-                        (Vector3){0.62f, 0.78f, 1.34f}, yaw, coat);
-        Vector3 neck_base = LocalPoint(horse_base, 0.0f, 1.06f, 0.35f, yaw);
-        Vector3 neck = LocalPoint(horse_base, 0.0f, 1.36f, 0.54f, yaw);
-        Vector3 head = LocalPoint(horse_base, 0.0f, 1.53f, 0.78f, yaw);
-        DrawCylinderEx(neck_base, neck, 0.18f, 0.14f, 8, coat);
-        DrawCharacterEllipsoid(head, (Vector3){0.20f, 0.23f, 0.30f}, coat);
-        for (int32_t ear = -1; ear <= 1; ear += 2) {
-            Vector3 ear_base = LocalPoint(
-                horse_base, (float)ear * 0.095f, 1.70f, 0.70f, yaw);
-            Vector3 ear_tip = LocalPoint(
-                horse_base, (float)ear * 0.11f, 1.88f, 0.73f, yaw);
-            DrawCylinderEx(ear_base, ear_tip, 0.036f, 0.012f, 6,
-                           coat_shadow);
-        }
-        for (int32_t fore = -1; fore <= 1; fore += 2) {
-            for (int32_t side = -1; side <= 1; side += 2) {
-                Vector3 leg_top = LocalPoint(
-                    horse_base, (float)side * 0.17f, 0.72f,
-                    (float)fore * 0.39f, yaw);
-                Vector3 knee = LocalPoint(
-                    horse_base, (float)side * 0.18f, 0.39f,
-                    (float)fore * 0.43f, yaw);
-                Vector3 hoof = LocalPoint(
-                    horse_base, (float)side * 0.18f, 0.08f,
-                    (float)fore * 0.36f, yaw);
-                DrawCylinderEx(leg_top, knee, 0.070f, 0.058f, 7, coat);
-                DrawCylinderEx(knee, hoof, 0.058f, 0.045f, 7,
-                               coat_shadow);
-                DrawOrientedBox(hoof, (Vector3){0.0f, 0.02f, 0.035f},
-                                (Vector3){0.12f, 0.08f, 0.19f}, yaw,
-                                (Color){48, 42, 38, 255});
-            }
-        }
-        Vector3 tail_root = LocalPoint(horse_base, 0.0f, 1.13f, -0.66f, yaw);
-        Vector3 tail_end = LocalPoint(horse_base, 0.0f, 0.58f, -0.92f, yaw);
-        DrawCylinderEx(tail_root, tail_end, 0.055f, 0.025f, 7,
-                       coat_shadow);
+            base, (float)horse * 1.05f, 0.0f, 4.60f, yaw);
+        CcCreaturePose pose = horse < 0 ? left_pose : right_pose;
+        float gait_phase = clock * 4.8f + (horse < 0 ? 0.0f : PI);
+        CcCreatureRigPose controlled_pose;
+        CreatureGaitSlot slot = horse < 0 ? CREATURE_GAIT_ROAD_HORSE_LEFT :
+                                            CREATURE_GAIT_ROAD_HORSE_RIGHT;
+        bool controlled = ResolveControlledCreatureGait(
+            slot, CC_CREATURE_RIG_HORSE, clock,
+            horse < 0 ? 0.0f : 0.5f, 1.35f, moving, &controlled_pose);
+        (void)DrawCreatureGait3D(
+            CC_CREATURE_HORSE, pose, horse_base,
+            yaw, 0.96f, coat, gait_phase, moving,
+            controlled ? &controlled_pose : NULL);
         Vector3 trace_start = LocalPoint(
             base, (float)horse * 0.42f, 0.77f, 3.05f, yaw);
         Vector3 trace_end = LocalPoint(horse_base, 0.0f, 0.91f, -0.52f, yaw);
         DrawCylinderEx(trace_start, trace_end, 0.020f, 0.016f, 6,
                        (Color){57, 42, 34, 255});
-        DrawOrientedBox(horse_base, (Vector3){0.0f, 1.02f, 0.18f},
-                        (Vector3){0.66f, 0.055f, 0.055f}, yaw,
-                        (Color){62, 45, 35, 255});
     }
 }
 
-static void DrawRoadCarriage(Vector3 base, int32_t cargo_used)
+static void DrawRoadCarriage(Vector3 base, int32_t cargo_used, float clock,
+                             bool moving)
 {
     const float yaw = 0.5f * PI;
     RuntimeAsset *carriage = &runtime_assets[RUNTIME_ASSET_CARRIAGE];
@@ -15557,7 +16798,7 @@ static void DrawRoadCarriage(Vector3 base, int32_t cargo_used)
         DrawCylinderEx(pole_right, pole_right_end, 0.045f, 0.035f, 7,
                        (Color){91, 61, 43, 255});
     }
-    DrawRoadHorseTeam(base);
+    DrawRoadHorseTeam(base, clock, moving);
 }
 
 static void DrawRoadBarricade(const CcRoute *route)
@@ -15763,7 +17004,32 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     if (!travelling && !DrawBridgeCheckpoint()) DrawRoadBarricade(route);
     if (!travelling) DrawAgentPath(agent, false);
     int32_t road_cargo = CcPlayerCargoUsed(&sim->player);
-    DrawRoadCarriage(carriage_base, road_cargo);
+    DrawRoadCarriage(carriage_base, road_cargo, clock, travelling);
+    int32_t roadside_food = 0;
+    if (origin != NULL) roadside_food += origin->stock[CC_GOOD_FOOD];
+    if (destination_place != NULL) {
+        roadside_food += destination_place->stock[CC_GOOD_FOOD];
+    }
+    if (roadside_food > 0) {
+        Vector3 cow_position = {carriage_x + 3.8f, 0.0f, 33.40f};
+        CcCreaturePose cow_pose = CcCreatureSteppedPose(
+            CC_CREATURE_COW, clock * 1.55f, travelling);
+        CcCreatureRigPose controlled_cow;
+        bool controlled = ResolveControlledCreatureGait(
+            CREATURE_GAIT_ROAD_COW, CC_CREATURE_RIG_COW, clock,
+            0.18f, 0.62f, travelling, &controlled_cow);
+        (void)DrawCreatureGait3D(
+            CC_CREATURE_COW, cow_pose, cow_position,
+            -0.72f * PI, 0.88f, (Color){184, 169, 139, 255},
+            clock * 1.55f, travelling,
+            controlled ? &controlled_cow : NULL);
+        if (roadside_food >= 40) {
+            (void)DrawCreature3D(
+                CC_CREATURE_COW, CC_CREATURE_POSE_IDLE,
+                (Vector3){carriage_x + 5.60f, 0.0f, 32.80f},
+                -0.56f * PI, 0.78f, (Color){118, 86, 66, 255});
+        }
+    }
 
     if (!combat_presentation) {
         DrawNpcFigure3D(
@@ -15886,6 +17152,7 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
                    (int32_t)lroundf(agent->combat.health),
                    course->raider_resolve > 0 ? course->raider_resolve : 0),
         destination, 18, 35, 10, WORLD_INK);
+    DrawFixedCameraFade(&road_camera_rig, destination);
 }
 
 static void DrawJourneyAftermath3D(const CcSim *sim,
@@ -15921,6 +17188,120 @@ static void DrawJourneyAftermath3D(const CcSim *sim,
                         0.12f, WORLD_GOLD);
     }
     rlPopMatrix();
+}
+
+static void DrawTownRaidStaging(const CcLocalCourse *course)
+{
+    if (course == NULL || course->scene != CC_LOCAL_SCENE_STREET ||
+        !course->alarm_active || !course->combat_origin_valid) return;
+    Vector3 origin = course->combat_origin;
+    if (!TerrainPointInPlayableWorld(origin.x, origin.z)) return;
+    /* A broken muster line turns the broad road into an authored defence
+       point. It remains flush with the ground, so combat physics and click
+       paths stay exactly the same. */
+    for (int32_t mark = -2; mark <= 2; ++mark) {
+        float z = origin.z + (float)mark * 0.82f;
+        float x = origin.x + ((mark & 1) != 0 ? 0.12f : -0.05f);
+        float height = CcLocalTerrainHeightAt(x, z);
+        DrawBox((Vector3){x, height + 0.025f, z},
+                (Vector3){0.16f, 0.05f, 0.58f},
+                mark == 0 ? WORLD_GOLD : WORLD_TEAL);
+    }
+    for (int32_t side = -1; side <= 1; side += 2) {
+        float z = origin.z + (float)side * 2.35f;
+        float height = CcLocalTerrainHeightAt(origin.x - 0.20f, z);
+        DrawBox((Vector3){origin.x - 0.20f, height + 0.055f, z},
+                (Vector3){1.05f, 0.11f, 0.42f},
+                ShadeColor((Color){87, 76, 63, 255}, 0.84f));
+    }
+}
+
+static void DrawSettlementCreatures(const CcSim *sim,
+                                    const CcSettlement *place,
+                                    float clock, Vector3 scenery_focus)
+{
+    if (sim == NULL || place == NULL) return;
+    const CcGoblinCult *goblins = &sim->goblins;
+    const CcDragon *dragon = &sim->dragon;
+
+    if (place->stock[CC_GOOD_FOOD] >= 18 &&
+        SceneryPointVisible(63.0f, 38.3f, scenery_focus)) {
+        CcCreaturePose cow_pose = CcCreatureSteppedPose(
+            CC_CREATURE_COW, clock * 1.25f, true);
+        CcCreatureRigPose controlled_cow;
+        bool controlled = ResolveControlledCreatureGait(
+            CREATURE_GAIT_STREET_COW, CC_CREATURE_RIG_COW, clock,
+            0.34f, 0.48f, true, &controlled_cow);
+        (void)DrawCreatureGait3D(
+            CC_CREATURE_COW, cow_pose,
+            TerrainWorldPoint(63.0f, 38.3f), 0.72f * PI, 0.84f,
+            (Color){177, 162, 132, 255}, clock * 1.25f, true,
+            controlled ? &controlled_cow : NULL);
+    }
+
+    if (place->id == goblins->lair_settlement_id) {
+        CcCreaturePose scavenger_pose = CcCreatureSteppedPose(
+            CC_CREATURE_GOBLIN_SCAVENGER, clock * 3.2f, true);
+        CcCreaturePose raider_pose = CcCreatureSteppedPose(
+            CC_CREATURE_GOBLIN_RAIDER, clock * 3.8f + PI, true);
+        float patrol = sinf(clock * 0.42f) * 0.42f;
+        if (SceneryPointVisible(26.5f, 52.0f, scenery_focus)) {
+            (void)DrawCreature3D(
+                CC_CREATURE_GOBLIN_SCAVENGER, scavenger_pose,
+                TerrainWorldPoint(26.5f + patrol, 52.0f), -0.13f * PI, 1.28f,
+                (Color){0});
+        }
+        if (SceneryPointVisible(29.0f, 51.5f, scenery_focus)) {
+            (void)DrawCreature3D(
+                CC_CREATURE_GOBLIN_RAIDER, raider_pose,
+                TerrainWorldPoint(29.0f - patrol, 51.5f), -0.10f * PI, 1.34f,
+                (Color){0});
+        }
+    }
+
+    bool raid_at_place = goblins->tribute_target_id == place->id &&
+        (goblins->tribute_phase == CC_GOBLIN_TRIBUTE_OUTBOUND ||
+         goblins->tribute_phase == CC_GOBLIN_TRIBUTE_RETURNING);
+    if (raid_at_place && SceneryPointVisible(47.2f, 34.2f,
+                                             scenery_focus)) {
+        CcCreaturePose raid_pose = CcCreatureSteppedPose(
+            CC_CREATURE_GOBLIN_RAIDER, clock * 5.0f, true);
+        CcCreaturePose scout_pose = CcCreatureSteppedPose(
+            CC_CREATURE_GOBLIN_SCAVENGER, clock * 5.0f + PI, true);
+        (void)DrawCreature3D(
+            CC_CREATURE_GOBLIN_RAIDER, raid_pose,
+            TerrainWorldPoint(46.7f, 34.0f), 0.62f * PI, 1.02f,
+            (Color){0});
+        (void)DrawCreature3D(
+            CC_CREATURE_GOBLIN_SCAVENGER, scout_pose,
+            TerrainWorldPoint(48.0f, 34.7f), 0.62f * PI, 0.94f,
+            (Color){0});
+    }
+
+    if (place->id == dragon->lair_settlement_id && !dragon->slain &&
+        SceneryPointVisible(30.0f, 51.5f, scenery_focus)) {
+        CcCreaturePose dragon_pose = CC_CREATURE_POSE_REST;
+        if (dragon->stolen_outstanding > 0 ||
+            dragon->omen_days_remaining > 0) {
+            dragon_pose = CC_CREATURE_POSE_THREAT;
+        } else if (goblins->tribute_phase == CC_GOBLIN_TRIBUTE_TO_DRAGON) {
+            dragon_pose = CC_CREATURE_POSE_IDLE;
+        }
+        (void)DrawCreature3D(
+            CC_CREATURE_DRAGON, dragon_pose,
+            TerrainWorldPoint(30.0f, 51.5f), -0.48f * PI, 0.94f,
+            (Color){0});
+    }
+    if (place->id == dragon->lair_settlement_id &&
+        goblins->tribute_phase == CC_GOBLIN_TRIBUTE_TO_DRAGON &&
+        SceneryPointVisible(27.8f, 52.5f, scenery_focus)) {
+        CcCreaturePose bearer_pose = CcCreatureSteppedPose(
+            CC_CREATURE_GOBLIN_TRIBUTE_BEARER, clock * 3.4f, true);
+        (void)DrawCreature3D(
+            CC_CREATURE_GOBLIN_TRIBUTE_BEARER, bearer_pose,
+            TerrainWorldPoint(27.8f, 52.5f), -0.38f * PI, 1.12f,
+            (Color){0});
+    }
 }
 
 void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
@@ -15961,6 +17342,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     BeginWorldLighting(camera, &street_art);
 
     DrawExteriorTerrain(place, scenery_focus);
+    DrawTownRaidStaging(course);
     const CcLocalAgent *sightline_opponent =
         CombatCameraOpponent(course, agent);
     bool close_combat_sightline = course != NULL && agent != NULL &&
@@ -16024,7 +17406,9 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         (void)DrawAuthoredMarket(place);
         SetWorldForegroundReveal(0.0f, reveal_cut_height);
     }
-    DrawCastle(kingdom, scenery_focus);
+    DrawCastle(kingdom, scenery_focus, camera,
+               foreground_reveal_world, foreground_reveal_center,
+               target.texture.width, target.texture.height, clock);
     if (SceneryFootprintVisible(CARRIAGE_FOOTPRINT, scenery_focus)) {
         DrawCarriage3D(place);
     }
@@ -16058,6 +17442,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         SceneryFootprintVisible(DUNGEON_FOOTPRINT, scenery_focus)) {
         DrawDungeon3D(dungeon);
     }
+    DrawSettlementCreatures(sim, place, clock, scenery_focus);
 
     DrawNpcFigure3D(
         TerrainWorldPoint(STREET_PEOPLE[0].x, STREET_PEOPLE[0].y),
@@ -16091,6 +17476,32 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         underworld_present ? CC_NPC_ROLE_SCOUT : CC_NPC_ROLE_TRAVELLER,
         underworld_present ? WORLD_VIOLET : kingdom, clock * 0.7f,
         CC_TRAVERSAL_IDLE);
+    /* Each outer room has one resident whose job explains the place at a
+       glance. Their spacing leaves the authored travel lanes clear. */
+    DrawNpcFigure3D(TerrainWorldPoint(10.15f, 31.90f), 0.88f, -0.85f,
+                    UINT32_C(0x64697301), CC_NPC_ROLE_LABORER,
+                    (Color){143, 118, 65, 255}, clock * 0.52f + 0.5f,
+                    CC_TRAVERSAL_IDLE);
+    DrawNpcFigure3D(TerrainWorldPoint(24.10f, 53.20f), 0.90f, 1.50f,
+                    UINT32_C(0x64697302), CC_NPC_ROLE_SCOUT,
+                    (Color){103, 103, 112, 255}, clock * 0.48f + 1.1f,
+                    CC_TRAVERSAL_IDLE);
+    DrawNpcFigure3D(TerrainWorldPoint(35.20f, 26.65f), 0.94f, -0.15f,
+                    UINT32_C(0x64697303), CC_NPC_ROLE_LABORER,
+                    (Color){174, 94, 53, 255}, clock * 0.60f + 1.7f,
+                    CC_TRAVERSAL_IDLE);
+    DrawNpcFigure3D(TerrainWorldPoint(42.75f, 51.05f), 0.92f, 2.60f,
+                    UINT32_C(0x64697304), CC_NPC_ROLE_TRAVELLER,
+                    (Color){117, 145, 116, 255}, clock * 0.44f + 2.3f,
+                    CC_TRAVERSAL_IDLE);
+    DrawNpcFigure3D(TerrainWorldPoint(74.65f, 31.95f), 1.02f, 1.50f,
+                    UINT32_C(0x64697305), CC_NPC_ROLE_GUARD,
+                    kingdom, clock * 0.40f + 2.9f,
+                    CC_TRAVERSAL_IDLE);
+    DrawNpcFigure3D(TerrainWorldPoint(84.35f, 50.70f), 0.88f, -1.35f,
+                    UINT32_C(0x64697306), CC_NPC_ROLE_LABORER,
+                    (Color){161, 128, 68, 255}, clock * 0.47f + 3.5f,
+                    CC_TRAVERSAL_IDLE);
     if (sim->resolved_journey_outcome != CC_JOURNEY_OUTCOME_NONE &&
         sim->journey.destination_id == place->id) {
         DrawNpcFigure3D(TerrainWorldPoint(46.80f, 31.15f), 0.86f, -1.10f,
@@ -16118,6 +17529,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     EndMode3D();
     EndTextureMode();
     PresentTarget(target, destination);
+    bool alarm_active = course != NULL && course->alarm_active;
     bool combat_presentation = course != NULL && course->alarm_active &&
                                camera.projection == CAMERA_PERSPECTIVE;
 
@@ -16133,7 +17545,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
             0.24f, 4, (Color){4, 10, 14, 202});
         DrawViewportText(room_name, destination, 19, 14, 10, WORLD_GOLD);
     }
-    if (!combat_presentation) {
+    if (!alarm_active) {
         DrawStreetTraversalPortals(agent, camera, destination,
                                    target.texture.width,
                                    target.texture.height);
@@ -16141,54 +17553,66 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
 
     WorldLabel labels[20];
     int32_t count = 0;
-    labels[count++] = (WorldLabel){{agent->position.x,
-                                    agent->position.y + 2.50f,
-                                    agent->position.z}, "YOU", WORLD_TEAL};
-    labels[count++] = (WorldLabel){{50.0f,
-                                    TerrainFootprintHeight(
-                                        WORLD_BUILDINGS[2].footprint) + 4.75f,
-                                    21.0f},
-                                   "MARKET HALL", WORLD_GOLD};
-    labels[count++] = (WorldLabel){{36.80f,
-                                    TerrainFootprintHeight(
-                                        CARRIAGE_FOOTPRINT) + 2.28f,
-                                    31.70f},
-                                   "CROWNLESS CARRIAGE", WORLD_GOLD};
-    labels[count++] = (WorldLabel){{CC_LOCAL_NOTICE_X,
-                                    CcLocalTerrainHeightAt(
-                                        CC_LOCAL_NOTICE_X,
-                                        CC_LOCAL_NOTICE_Z) + 1.82f,
-                                    CC_LOCAL_NOTICE_Z},
-                                   "SITUATIONS", WORLD_INK};
-    labels[count++] = (WorldLabel){{11.80f,
-                                    CcLocalTerrainHeightAt(11.80f, 0.82f) +
-                                        2.05f,
-                                    0.82f},
-                                   "WAYFARER TRIALS", WORLD_GOLD};
-    labels[count++] = (WorldLabel){{11.28f,
-                                    CcLocalTerrainHeightAt(11.28f, 9.72f) +
-                                        1.12f,
-                                    9.72f},
-                                   "BUOYANCY TRENCH", WORLD_TEAL};
-    labels[count++] = (WorldLabel){{78.50f,
-                                    CcLocalTerrainHeightAt(78.50f, 17.50f) +
-                                        12.10f,
-                                    17.50f},
-                                   "GREYWARD KEEP", kingdom};
+    if (AgentNearLabel(agent, 50.0f, 21.0f, 8.0f)) {
+        labels[count++] = (WorldLabel){{50.0f,
+                                        TerrainFootprintHeight(
+                                            WORLD_BUILDINGS[2].footprint) + 4.75f,
+                                        21.0f},
+                                       "Market", WORLD_GOLD};
+    }
+    if (AgentNearLabel(agent, 36.80f, 31.70f, 7.0f)) {
+        labels[count++] = (WorldLabel){{36.80f,
+                                        TerrainFootprintHeight(
+                                            CARRIAGE_FOOTPRINT) + 2.28f,
+                                        31.70f},
+                                       "Carriage", WORLD_GOLD};
+    }
+    if (AgentNearLabel(agent, CC_LOCAL_NOTICE_X, CC_LOCAL_NOTICE_Z, 6.0f)) {
+        labels[count++] = (WorldLabel){{CC_LOCAL_NOTICE_X,
+                                        CcLocalTerrainHeightAt(
+                                            CC_LOCAL_NOTICE_X,
+                                            CC_LOCAL_NOTICE_Z) + 1.82f,
+                                        CC_LOCAL_NOTICE_Z},
+                                       "Quest board", WORLD_INK};
+    }
+    if (AgentNearLabel(agent, 11.80f, 0.82f, 7.0f)) {
+        labels[count++] = (WorldLabel){{11.80f,
+                                        CcLocalTerrainHeightAt(11.80f, 0.82f) +
+                                            2.05f,
+                                        0.82f},
+                                       "Training yard", WORLD_GOLD};
+    }
+    if (AgentNearLabel(agent, 11.28f, 9.72f, 7.0f)) {
+        labels[count++] = (WorldLabel){{11.28f,
+                                        CcLocalTerrainHeightAt(11.28f, 9.72f) +
+                                            1.12f,
+                                        9.72f},
+                                       "Swimming trench", WORLD_TEAL};
+    }
+    if (AgentNearLabel(agent, 78.50f, 17.50f, 10.0f)) {
+        labels[count++] = (WorldLabel){{78.50f,
+                                        CcLocalTerrainHeightAt(78.50f, 17.50f) +
+                                            12.10f,
+                                        17.50f},
+                                       "Greyward Castle", kingdom};
+    }
     if (sim->resolved_journey_outcome != CC_JOURNEY_OUTCOME_NONE &&
-        sim->journey.destination_id == place->id) {
+        sim->journey.destination_id == place->id &&
+        AgentNearLabel(agent, 47.35f, 31.05f, 7.0f)) {
         labels[count++] = (WorldLabel){
             {47.35f, CcLocalTerrainHeightAt(47.35f, 31.05f) + 2.05f,
              31.05f},
             sim->resolved_journey_outcome == CC_JOURNEY_OUTCOME_COMBAT ?
-                "ROAD GUARD MUSTER" : "COLLECTORS' TOLL MARK",
+                "Road guards" : "Toll marker",
             sim->resolved_journey_outcome == CC_JOURNEY_OUTCOME_COMBAT ?
                 WORLD_TEAL : WORLD_VIOLET};
     }
     if (course != NULL && course->situation_witness_active) {
         const CcSituation *situation = CcSimSituation(
             sim, course->situation_witness_id);
-        if (situation != NULL && situation->affected_name[0] != '\0') {
+        if (situation != NULL && situation->affected_name[0] != '\0' &&
+            AgentNearLabel(agent, course->situation_witness.position.x,
+                           course->situation_witness.position.z, 6.0f)) {
             labels[count++] = (WorldLabel){
                 {course->situation_witness.position.x,
                  course->situation_witness.position.y + 2.18f,
@@ -16199,14 +17623,16 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                     WORLD_GOLD : WORLD_DANGER};
         }
     }
-    if (dungeon != NULL) {
+    if (dungeon != NULL &&
+        AgentNearLabel(agent, CC_LOCAL_DUNGEON_X,
+                       CC_LOCAL_DUNGEON_Z, 8.0f)) {
         labels[count++] = (WorldLabel){{CC_LOCAL_DUNGEON_X,
                                         TerrainFootprintHeight(
                                             DUNGEON_FOOTPRINT) + 3.38f,
                                         CC_LOCAL_DUNGEON_Z - 0.70f},
-                                       CcDungeonStateName(dungeon->state), WORLD_VIOLET};
+                                       "Mine", WORLD_VIOLET};
     }
-    if (!combat_presentation) {
+    if (!alarm_active) {
         DrawLabels(labels, count, camera, destination);
     }
     if (course != NULL && course->alarm_active) {
@@ -16242,31 +17668,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                        CcLocalTraversalName(agent->traversal)),
             destination, 18, 18, 10, WORLD_TEAL);
     }
-    if (course != NULL && course->alarm_active) {
-        bool line_engaged = false;
-        for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
-            line_engaged = line_engaged ||
-                           course->runners[i].duty == CC_GUARD_ENGAGED;
-        }
-        DrawViewportText(
-            TextFormat("VILLAGE ALARM / YOU %d HP / %d POSTURE / GUARDS %s / RAIDERS %d%%",
-                       (int32_t)lroundf(agent->combat.health),
-                       (int32_t)lroundf(agent->combat.posture),
-                       course->raiders_retreating ? "DRIVING THEM OUT" :
-                       line_engaged ? "ENGAGED" : "FORMING LINE",
-                       course->raider_resolve > 0 ?
-                       course->raider_resolve : 0),
-            destination, 18, 33, 10, WORLD_DANGER);
-        if (course->combat_event_seconds > 0.0f) {
-            DrawViewportText(
-                TextFormat("%s / %s",
-                           CcLocalCombatTeamName(course->last_attacker_team),
-                           CcLocalCombatOutcomeName(course->last_outcome)),
-                destination, 18, 48, 12,
-                course->last_outcome == CC_COMBAT_OUTCOME_BLOCKED ?
-                WORLD_GOLD : WORLD_INK);
-        }
-    }
+    DrawFixedCameraFade(&street_camera_rig, destination);
 }
 
 void CcLocalDrawMarket3D(const CcSim *sim, const CcLocalAgent *agent, float clock,
@@ -16477,11 +17879,18 @@ void CcLocalDrawMarket3D(const CcSim *sim, const CcLocalAgent *agent, float cloc
     EndMode3D();
     EndTextureMode();
     PresentTarget(target, destination);
-    WorldLabel labels[] = {
-        {{6.55f, 2.05f, 1.60f}, "MARA / FACTOR", WORLD_GOLD},
-        {{1.55f, 2.25f, 6.54f}, "STREET", WORLD_MUTED}
-    };
-    DrawLabels(labels, 2, camera, destination);
+    WorldLabel labels[2];
+    int32_t label_count = 0;
+    if (AgentNearLabel(agent, MARKET_PEOPLE[0].x,
+                       MARKET_PEOPLE[0].y, 5.0f)) {
+        labels[label_count++] = (WorldLabel){
+            {6.55f, 2.05f, 1.60f}, "Mara — Merchant", WORLD_GOLD};
+    }
+    if (AgentNearLabel(agent, 1.55f, 6.54f, 3.5f)) {
+        labels[label_count++] = (WorldLabel){
+            {1.55f, 2.25f, 6.54f}, "Exit", WORLD_MUTED};
+    }
+    DrawLabels(labels, label_count, camera, destination);
     if (draw_hero_rig_debug &&
         agent->morphology == CC_MORPHOLOGY_BIPED) {
         DrawViewportText(
