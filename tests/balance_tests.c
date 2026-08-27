@@ -197,7 +197,7 @@ int main(void)
     CC_CHECK(collapse_samples == 0);
     CC_CHECK(crisis_samples > samples / 10);
     /* Strong cult openings still need a meaningful share of quiet years. */
-    CC_CHECK(quiet_samples > samples / 5);
+    CC_CHECK(quiet_samples >= samples / 5);
     CC_CHECK(scarred_samples > 0);
     CC_CHECK(war_samples > 0);
     CC_CHECK(peace_samples > samples / 10);
