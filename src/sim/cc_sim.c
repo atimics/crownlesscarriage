@@ -2184,8 +2184,7 @@ static void AdvanceGoblinTribute(CcSim *sim)
         goblins->tribute_days_remaining = GoblinTravelDays(sim, target->id);
         char text[CC_EVENT_TEXT_CAPACITY];
         (void)snprintf(text, sizeof(text),
-                       "%s raids %s and physically carries away %d %s, %" PRId64
-                       " crowns%s.",
+                       "%.16s raids %.16s: %d %.8s, %" PRId64 " crowns%s.",
                        goblins->name, target->name, taken_goods,
                        CcGoodName(chosen), taken_coins,
                        goblins->carried_treasure_id != 0U ?
@@ -2419,11 +2418,11 @@ static void AdvanceHoardRaid(CcSim *sim)
         char text[CC_EVENT_TEXT_CAPACITY];
         if (raiders->motive == CC_HOARD_RAID_WAR_FINANCE) {
             (void)snprintf(text, sizeof(text),
-                           "%s steals %d crowns from %s to pay soldiers at %s.",
+                           "%.16s steals %d crowns from %.16s for soldiers at %.16s.",
                            raiders->name, stolen, sim->dragon.name, origin->name);
         } else {
             (void)snprintf(text, sizeof(text),
-                           "%s steals %d crowns from %s for bread and debt relief in %s.",
+                           "%.16s steals %d crowns from %.16s for relief in %.16s.",
                            raiders->name, stolen, sim->dragon.name, origin->name);
         }
         CcEvent *theft = StartDragonTheft(
@@ -2585,18 +2584,17 @@ static void AdvanceDragonRetaliation(CcSim *sim)
         dragon->stolen_outstanding -= payment;
         if (household_levy > 0) {
             (void)snprintf(text, sizeof(text),
-                           "After %s burns, %s returns %" PRId64
-                           " crowns to %s: %" PRId64
-                           " from the war chest, %" PRId64
-                           " from the treasury, and %" PRId64
-                           " from household levies.",
-                           target->name, kingdom->name, payment, dragon->name,
-                           chest_payment, treasury_payment, household_levy);
+                           "After %.12s burns, %.12s pays %d to %.12s "
+                           "(%d chest, %d crown, %d levy).",
+                           target->name, kingdom->name, (int32_t)payment,
+                           dragon->name, (int32_t)chest_payment,
+                           (int32_t)treasury_payment,
+                           (int32_t)household_levy);
         } else {
             (void)snprintf(text, sizeof(text),
-                           "After %s burns, %s returns %" PRId64
-                           " crowns to %s from its war chest and treasury.",
-                           target->name, kingdom->name, payment, dragon->name);
+                           "After %.16s burns, %.16s pays %d crowns to %.16s from war funds.",
+                           target->name, kingdom->name, (int32_t)payment,
+                           dragon->name);
         }
         CcEvent *restitution = PushEvent(
             sim, CC_EVENT_DRAGON_TREASURE_RETURNED, kingdom->id,
@@ -2717,6 +2715,12 @@ static void UpdateShipments(CcSim *sim)
         CcShipment *shipment = &sim->shipments[i];
         if (shipment->status != CC_SHIPMENT_TRAVELLING ||
             shipment->arrival_day > sim->current_day) continue;
+        if (shipment->good < CC_GOOD_FOOD ||
+            shipment->good >= CC_GOOD_COUNT) {
+            shipment->status = CC_SHIPMENT_LOST;
+            continue;
+        }
+        CcGood shipment_good = shipment->good;
         CcId final_id = shipment->final_destination_id != 0U ?
                         shipment->final_destination_id : shipment->destination_id;
         CcBanditGroup *bandits = BanditsOnRoute(sim, shipment->route_id);
@@ -2733,7 +2737,7 @@ static void UpdateShipments(CcSim *sim)
             const CcSettlement *destination = CcSimSettlement(sim, final_id);
             (void)snprintf(text, sizeof(text),
                            "%d %s bound for %s vanish on a road with %d%% danger.",
-                           shipment->quantity, CcGoodName(shipment->good),
+                           shipment->quantity, CcGoodName(shipment_good),
                            destination != NULL ? destination->name : "the frontier", danger);
             (void)PushEvent(sim, CC_EVENT_SHIPMENT_LOST, shipment->id,
                             final_id,
@@ -2744,14 +2748,14 @@ static void UpdateShipments(CcSim *sim)
         CcSettlement *hop = CcSimSettlementMutable(sim, shipment->destination_id);
         if (shipment->destination_id != final_id && hop != NULL) {
             int32_t local_need = EffectiveReserveTarget(
-                                     sim, hop, shipment->good) -
-                                 hop->stock[shipment->good] -
-                                 CcSimIncomingGood(sim, hop->id, shipment->good);
+                                     sim, hop, shipment_good) -
+                                 hop->stock[shipment_good] -
+                                 CcSimIncomingGood(sim, hop->id, shipment_good);
             int32_t unload = MinimumI32(local_need, shipment->quantity / 3);
             unload = MinimumI32(unload, shipment->quantity - 4);
             unload = MaximumI32(0, unload);
             if (unload > 0) {
-                hop->stock[shipment->good] += unload;
+                hop->stock[shipment_good] += unload;
                 hop->prosperity = ClampI32(hop->prosperity + 1, 0, 100);
                 shipment->quantity -= unload;
             }
@@ -2773,19 +2777,19 @@ static void UpdateShipments(CcSim *sim)
                 (void)snprintf(text, sizeof(text),
                                "%s unloads %d and transfers %d %s onward toward %s.",
                                hop->name, unload,
-                               shipment->quantity, CcGoodName(shipment->good),
+                               shipment->quantity, CcGoodName(shipment_good),
                                final != NULL ? final->name : "the frontier");
                 (void)PushEvent(sim, CC_EVENT_SHIPMENT_DEPARTED, shipment->id,
                                 hop->id, departure != NULL ? departure->id : 0U,
                                 shipment->quantity, text);
                 continue;
             }
-            hop->stock[shipment->good] += shipment->quantity;
+            hop->stock[shipment_good] += shipment->quantity;
             shipment->status = CC_SHIPMENT_ARRIVED;
             char text[CC_EVENT_TEXT_CAPACITY];
             (void)snprintf(text, sizeof(text),
                            "%d %s become stranded at %s after their route changes.",
-                           shipment->quantity, CcGoodName(shipment->good), hop->name);
+                           shipment->quantity, CcGoodName(shipment_good), hop->name);
             (void)PushEvent(sim, CC_EVENT_SHIPMENT_ARRIVED, shipment->id, hop->id,
                             departure != NULL ? departure->id : 0U,
                             shipment->quantity, text);
@@ -2793,13 +2797,13 @@ static void UpdateShipments(CcSim *sim)
         }
         CcSettlement *destination = CcSimSettlementMutable(sim, final_id);
         if (destination != NULL) {
-            destination->stock[shipment->good] += shipment->quantity;
+            destination->stock[shipment_good] += shipment->quantity;
             destination->prosperity = ClampI32(destination->prosperity + 1, 0, 100);
         }
         shipment->status = CC_SHIPMENT_ARRIVED;
         char text[CC_EVENT_TEXT_CAPACITY];
         (void)snprintf(text, sizeof(text), "%d units of %s reach %s.",
-                       shipment->quantity, CcGoodName(shipment->good),
+                       shipment->quantity, CcGoodName(shipment_good),
                        destination != NULL ? destination->name : "their destination");
         (void)PushEvent(sim, CC_EVENT_SHIPMENT_ARRIVED, shipment->id,
                         final_id,
@@ -2876,7 +2880,8 @@ static void CreateTradeShipment(CcSim *sim, int32_t route_slot, CcId next_hop_id
     CcEvent *purchase = NULL;
     if (military_supply) {
         (void)snprintf(text, sizeof(text),
-                       "%s's war chest pays %" PRId64 " crowns to %s for %d %s.",
+                       "%.16s war chest pays %" PRId64
+                       " crowns to %.16s for %d %.8s.",
                        final_destination->name, payment, origin->name,
                        quantity, CcGoodName(good));
         purchase = PushEvent(
@@ -2885,8 +2890,7 @@ static void CreateTradeShipment(CcSim *sim, int32_t route_slot, CcId next_hop_id
             quantity, text);
     }
     (void)snprintf(text, sizeof(text),
-                   "%s sends %d %s toward %s via %s after receiving %" PRId64
-                   " crowns.",
+                   "%.16s sends %d %.8s to %.16s via %.16s; paid %" PRId64 ".",
                    origin->name, quantity, CcGoodName(good),
                    final_destination->name,
                    next_hop != NULL ? next_hop->name : "the road", payment);
@@ -3215,6 +3219,10 @@ static void ResolveSituation(CcSim *sim, CcSituation *situation)
             }
         }
         if (echo_settlement != 0U) {
+            char witness[CC_NAME_CAPACITY];
+            (void)snprintf(witness, sizeof(witness), "%.31s",
+                           situation->affected_name[0] != '\0' ?
+                               situation->affected_name : "A local witness");
             sim->delayed_echo = (CcDelayedEcho){
                 .active = true,
                 .situation_id = situation->id,
@@ -3228,8 +3236,7 @@ static void ResolveSituation(CcSim *sim, CcSituation *situation)
             };
             (void)snprintf(sim->delayed_echo.character_name,
                            sizeof(sim->delayed_echo.character_name), "%s",
-                           situation->affected_name[0] != '\0' ?
-                               situation->affected_name : "A local witness");
+                           witness);
         }
     }
     SupersedeCompetingCrisisSituations(sim, situation);
@@ -3905,7 +3912,7 @@ static bool ApplyBuyTreasure(CcSim *sim, const CcCommand *command,
     sim->player.treasure_cargo_slots += 1;
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(text, sizeof(text),
-                   "The Crownless company loads %s at %s for %d crowns; it fills one carriage slot.",
+                   "Loads %.24s at %.16s for %d crowns; one carriage slot.",
                    treasure->name, seller->name,
                    treasure->appraised_value);
     (void)PushEvent(sim, CC_EVENT_PLAYER_TRADE, treasure->id,
