@@ -56,7 +56,10 @@ static void PrintSummary(const CcSim *sim, bool detail)
                  " monastery_debt=%" PRId64
                  " hoard_raids=%d goblin_guards=%d"
                  " wars=%d alliances=%d couriers=%d"
-                 " dragon_slain=%d dragon_campaign=%d/%d/%d\n",
+                 " dragon_slain=%d dragon_campaign=%d/%d/%d"
+                 " dragon_stage=%s activity=%s age=%d crown=%d body=%d"
+                 " memory=%d territory=%d shadow=%d eggs=%d hunts=%d"
+                 " broods=%d whelps=%d afterdeath=%d\n",
                  sim->current_day, CcSimHash(sim),
                  total_hunger / sim->settlement_count, maximum_hunger,
                  travelling, sim->event_count,
@@ -70,7 +73,19 @@ static void PrintSummary(const CcSim *sim, bool detail)
                  active_couriers, sim->dragon.slain ? 1 : 0,
                  sim->dragon_campaign.attempts,
                  sim->dragon_campaign.victories,
-                 sim->dragon_campaign.defeats);
+                 sim->dragon_campaign.defeats,
+                 CcDragonLifeStageName(sim->dragon.life_stage),
+                 CcDragonActivityName(sim->dragon.activity),
+                 sim->dragon.age_days / 365,
+                 sim->dragon.crown_strength,
+                 sim->dragon.body_condition,
+                 sim->dragon.memory_integrity,
+                 sim->dragon.territory_stability,
+                 sim->dragon.regional_influence,
+                 sim->dragon.egg_count, sim->dragon.hunts,
+                 sim->dragon.broods_laid,
+                 sim->dragon.whelps_dispersed,
+                 sim->dragon.afterdeath_days);
     if (detail) {
         for (int32_t i = 0; i < sim->settlement_count; ++i) {
             const CcSettlement *place = &sim->settlements[i];

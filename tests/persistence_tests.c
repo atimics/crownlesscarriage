@@ -190,6 +190,38 @@ static void CheckSchema10Compatibility(char *error, size_t error_capacity)
     RemoveDatabase(path);
 }
 
+static void CheckSchema11Compatibility(char *error, size_t error_capacity)
+{
+    const char *path = "persistence-legacy-v11-test.ccsave";
+    RemoveDatabase(path);
+    CcSim legacy;
+    CcSimInit(&legacy, UINT32_C(0x1e9ac11));
+    legacy.dragon.life_stage = CC_DRAGON_STAGE_EGG;
+    legacy.dragon.activity = CC_DRAGON_ACTIVITY_DORMANT;
+    legacy.dragon.age_days = 0;
+    legacy.dragon.body_condition = 0;
+    legacy.dragon.crown_strength = 0;
+    legacy.dragon.memory_integrity = 0;
+    legacy.dragon.territory_stability = 0;
+    legacy.dragon.regional_influence = 0;
+    legacy.dragon.crown_continuity_days = 0;
+    legacy.dragon.hunt_cooldown_days = 0;
+    legacy.dragon.brood_cooldown_days = 0;
+    legacy.schema_version = 11U;
+    legacy.generator_version = 11U;
+    CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.generator_version == CC_GENERATOR_VERSION);
+    CC_CHECK(restored.dragon.life_stage == CC_DRAGON_STAGE_CROWNED);
+    CC_CHECK(restored.dragon.age_days > 0);
+    CC_CHECK(restored.dragon.crown_strength > 0);
+    CC_CHECK(restored.dragon.memory_integrity == 100);
+    CC_CHECK(CcSimValidate(&restored, error, error_capacity));
+    RemoveDatabase(path);
+}
+
 static void CheckJournalRecovery(char *error, size_t error_capacity)
 {
     const char *path = "persistence-journal-recovery-test.ccsave";
@@ -494,6 +526,7 @@ int main(void)
     CheckSchema6Compatibility(error, sizeof(error));
     CheckSchema8Compatibility(error, sizeof(error));
     CheckSchema10Compatibility(error, sizeof(error));
+    CheckSchema11Compatibility(error, sizeof(error));
     CheckDiplomacyPersistence(error, sizeof(error));
     CheckJournalRecovery(error, sizeof(error));
     CheckJournalCheckpointAndTamper(error, sizeof(error));
