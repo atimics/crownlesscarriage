@@ -225,6 +225,7 @@ int main(void)
         war.settlements[i].prosperity = 45;
         war.settlements[i].hunger = 0;
         war.settlements[i].stock[CC_GOOD_FOOD] = 500;
+        war.settlements[i].reserve_target[CC_GOOD_FOOD] = 24;
         war.settlements[i].production[CC_GOOD_FOOD] = 30;
         war.settlements[i].consumption[CC_GOOD_FOOD] = 1;
     }
@@ -246,6 +247,7 @@ int main(void)
     fortress->reserve_target[CC_GOOD_TOOLS] = 4;
     fortress->production[CC_GOOD_FOOD] = 0;
     fortress->consumption[CC_GOOD_FOOD] = 6;
+    war_supplier->consumption[CC_GOOD_FOOD] = 10;
     war_supplier->stock[CC_GOOD_TOOLS] = 500;
     war_kingdom->treasury = 40;
     war_kingdom->legitimacy = 30;

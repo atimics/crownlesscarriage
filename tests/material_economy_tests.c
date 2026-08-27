@@ -67,6 +67,68 @@ int main(void)
     CC_CHECK(place->stock[CC_GOOD_FOOD] > 0);
     CC_CHECK(place->farm_tool_wear == 1);
 
+    CcSim pantry;
+    place = IsolatedSettlement(&pantry);
+    place->stock[CC_GOOD_FOOD] = 1000;
+    place->consumption[CC_GOOD_FOOD] = 5;
+    CcSimAdvanceDays(&pantry, 7);
+    CC_CHECK(place->stock[CC_GOOD_FOOD] == 60);
+
+    CcSim granary;
+    place = IsolatedSettlement(&granary);
+    place->service_mask |= Service(CC_SERVICE_GRANARY);
+    place->stock[CC_GOOD_FOOD] = 1000;
+    place->consumption[CC_GOOD_FOOD] = 5;
+    CcSimAdvanceDays(&granary, 7);
+    CC_CHECK(place->stock[CC_GOOD_FOOD] == 160);
+
+    CcSim ordinary_spoilage;
+    place = IsolatedSettlement(&ordinary_spoilage);
+    place->service_mask |= Service(CC_SERVICE_GRANARY);
+    place->stock[CC_GOOD_FOOD] = 150;
+    place->consumption[CC_GOOD_FOOD] = 5;
+    CcSimAdvanceDays(&ordinary_spoilage, 7);
+    CC_CHECK(place->stock[CC_GOOD_FOOD] == 144);
+
+    CcSim famine_convoy;
+    CcSimInit(&famine_convoy, UINT32_C(0xfa61ce01));
+    famine_convoy.settlement_count = 2;
+    famine_convoy.route_count = 1;
+    famine_convoy.shipment_count = 0;
+    famine_convoy.bandit_count = 0;
+    famine_convoy.monster_count = 0;
+    famine_convoy.dungeon_count = 0;
+    famine_convoy.situation_count = 0;
+    famine_convoy.goblins.tribute_cooldown_days = 1000;
+    famine_convoy.hoard_raiders.cooldown_days = 1000;
+    CcSettlement *source = &famine_convoy.settlements[0];
+    CcSettlement *hungry = &famine_convoy.settlements[1];
+    hungry->kingdom_id = source->kingdom_id;
+    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        source->production[good] = 0;
+        hungry->production[good] = 0;
+        source->consumption[good] = 0;
+        hungry->consumption[good] = 0;
+    }
+    source->service_mask |= Service(CC_SERVICE_GRANARY);
+    source->stock[CC_GOOD_FOOD] = 200;
+    source->reserve_target[CC_GOOD_FOOD] = 20;
+    source->consumption[CC_GOOD_FOOD] = 5;
+    hungry->stock[CC_GOOD_FOOD] = 0;
+    hungry->reserve_target[CC_GOOD_FOOD] = 60;
+    hungry->consumption[CC_GOOD_FOOD] = 5;
+    hungry->market_coins = 1000;
+    hungry->hunger = 65;
+    famine_convoy.routes[0].closed = true;
+    famine_convoy.routes[0].condition = 10;
+    famine_convoy.routes[0].security = 100;
+    famine_convoy.routes[0].smuggler_route = false;
+    CcSimAdvanceDays(&famine_convoy, 6);
+    CC_CHECK(famine_convoy.shipment_count > 0);
+    CC_CHECK(famine_convoy.shipments[0].good == CC_GOOD_FOOD);
+    CC_CHECK(famine_convoy.shipments[0].status == CC_SHIPMENT_TRAVELLING);
+    CC_CHECK(famine_convoy.routes[0].closed);
+
     CcSim mine;
     place = IsolatedSettlement(&mine);
     place->service_mask |= Service(CC_SERVICE_MINE);

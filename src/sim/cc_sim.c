@@ -594,6 +594,37 @@ static int32_t EffectiveReserveTarget(const CcSim *sim,
            WarExtraConsumption(sim, place, good) * 3;
 }
 
+static int32_t WeeklyFoodUse(const CcSim *sim,
+                             const CcSettlement *place)
+{
+    if (place == NULL) return 1;
+    return MaximumI32(
+        1, place->consumption[CC_GOOD_FOOD] +
+           WarExtraConsumption(sim, place, CC_GOOD_FOOD));
+}
+
+static int32_t FoodStorageCapacity(const CcSim *sim,
+                                   const CcSettlement *place)
+{
+    int32_t storage_weeks = CcSettlementHasService(
+        place, CC_SERVICE_GRANARY) ? 32 : 12;
+    return WeeklyFoodUse(sim, place) * storage_weeks;
+}
+
+static int32_t SpoilStoredFood(const CcSim *sim, CcSettlement *place)
+{
+    int32_t stored = place->stock[CC_GOOD_FOOD];
+    int32_t spoiled = stored / 100;
+    stored -= spoiled;
+    int32_t capacity = FoodStorageCapacity(sim, place);
+    if (stored > capacity) {
+        spoiled += stored - capacity;
+        stored = capacity;
+    }
+    place->stock[CC_GOOD_FOOD] = stored;
+    return spoiled;
+}
+
 static int32_t WarWeeklyWage(const CcSim *sim, const CcSettlement *place)
 {
     if (!IsWarSeat(place)) return 0;
@@ -1706,6 +1737,9 @@ static void UpdateSettlement(CcSim *sim, int32_t index)
         settlement->stock[good] += production;
         settlement->stock[good] -= MinimumI32(settlement->stock[good],
                                                consumption);
+        if ((CcGood)good == CC_GOOD_FOOD) {
+            (void)SpoilStoredFood(sim, settlement);
+        }
         int32_t target = EffectiveReserveTarget(
             sim, settlement, (CcGood)good);
         int32_t incoming = CcSimIncomingGood(sim, settlement->id, (CcGood)good);
@@ -1738,9 +1772,7 @@ static void UpdateSettlement(CcSim *sim, int32_t index)
                         1, text);
     }
 
-    int32_t food_use = MaximumI32(
-        1, settlement->consumption[CC_GOOD_FOOD] +
-           WarExtraConsumption(sim, settlement, CC_GOOD_FOOD));
+    int32_t food_use = WeeklyFoodUse(sim, settlement);
     int32_t coverage = settlement->stock[CC_GOOD_FOOD] / food_use;
     int32_t hunger_delta = coverage == 0 ? 6 : coverage < 2 ? 3 :
                            coverage >= 8 ? -4 :
@@ -2632,16 +2664,17 @@ static void AdvanceDragonRetaliation(CcSim *sim)
 int32_t CcSimRouteDanger(const CcSim *sim, CcId route_id)
 {
     const CcRoute *route = CcSimRoute(sim, route_id);
-    if (route == NULL || route->closed) return 100;
+    if (route == NULL) return 100;
     int32_t danger = (100 - route->security) / 4 +
                      (100 - route->condition) / 8 +
-                     (route->smuggler_route ? 5 : 0);
+                     (route->smuggler_route ? 5 : 0) +
+                     (route->closed ? 25 : 0);
     for (int32_t i = 0; i < sim->bandit_count; ++i) {
         if (sim->bandits[i].route_id == route_id) danger += sim->bandits[i].influence / 3;
     }
     danger += MonsterPressureAtSettlement(sim, route->from_id) / 10;
     danger += MonsterPressureAtSettlement(sim, route->to_id) / 10;
-    return ClampI32(danger, 0, 95);
+    return ClampI32(danger, 0, route->closed ? 75 : 95);
 }
 
 static int32_t SettlementSlotById(const CcSim *sim, CcId id)
@@ -2653,6 +2686,7 @@ static int32_t SettlementSlotById(const CcSim *sim, CcId id)
 }
 
 static bool FindTradePath(const CcSim *sim, CcId from_id, CcId to_id,
+                          CcGood good,
                           int32_t *first_route_slot, CcId *first_hop_id,
                           int32_t *total_cost,
                           const int32_t route_used[CC_MAX_ROUTES])
@@ -2660,6 +2694,8 @@ static bool FindTradePath(const CcSim *sim, CcId from_id, CcId to_id,
     int32_t source = SettlementSlotById(sim, from_id);
     int32_t target = SettlementSlotById(sim, to_id);
     if (source < 0 || target < 0 || source == target) return false;
+    bool famine_route = good == CC_GOOD_FOOD &&
+                        sim->settlements[target].hunger >= 65;
     int32_t distance[CC_MAX_SETTLEMENTS];
     int32_t first_route[CC_MAX_SETTLEMENTS];
     CcId first_hop[CC_MAX_SETTLEMENTS];
@@ -2683,11 +2719,12 @@ static bool FindTradePath(const CcSim *sim, CcId from_id, CcId to_id,
         CcId current_id = sim->settlements[current].id;
         for (int32_t route_slot = 0; route_slot < sim->route_count; ++route_slot) {
             const CcRoute *route = &sim->routes[route_slot];
-            if (route->closed ||
-                (CcSimRouteCrossesWarBorder(sim, route->id) &&
-                 !route->smuggler_route)) continue;
-            int32_t effective_capacity = MaximumI32(3, route->capacity *
-                                                    MaximumI32(25, route->condition) / 100);
+            bool war_blockade = CcSimRouteCrossesWarBorder(sim, route->id) &&
+                                !route->smuggler_route;
+            if (war_blockade || (route->closed && !famine_route)) continue;
+            int32_t effective_capacity = route->closed ? 1 :
+                MaximumI32(3, route->capacity *
+                           MaximumI32(25, route->condition) / 100);
             if (route_used != NULL && route_used[route_slot] >= effective_capacity) continue;
             CcId neighbor_id = route->from_id == current_id ? route->to_id :
                                route->to_id == current_id ? route->from_id : 0U;
@@ -2764,7 +2801,8 @@ static void UpdateShipments(CcSim *sim)
             }
             int32_t next_route_slot = -1;
             CcId next_hop_id = 0U;
-            if (FindTradePath(sim, hop->id, final_id, &next_route_slot,
+            if (FindTradePath(sim, hop->id, final_id, shipment_good,
+                              &next_route_slot,
                               &next_hop_id, NULL, NULL)) {
                 CcRoute *next_route = &sim->routes[next_route_slot];
                 shipment->origin_id = hop->id;
@@ -2839,8 +2877,9 @@ static void CreateTradeShipment(CcSim *sim, int32_t route_slot, CcId next_hop_id
     int32_t incoming = CcSimIncomingGood(sim, final_destination->id, good);
     int32_t need = EffectiveReserveTarget(sim, final_destination, good) -
                    final_destination->stock[good] - incoming;
-    int32_t effective_capacity = MaximumI32(3, route->capacity *
-                                            MaximumI32(25, route->condition) / 100);
+    int32_t effective_capacity = route->closed ? 1 :
+        MaximumI32(3, route->capacity *
+                   MaximumI32(25, route->condition) / 100);
     int32_t available_capacity = effective_capacity - route_used[route_slot];
     int32_t cargo_capacity = available_capacity * GoodUnitsPerCargoSlot(good);
     int32_t quantity = MinimumI32(
@@ -2856,7 +2895,7 @@ static void CreateTradeShipment(CcSim *sim, int32_t route_slot, CcId next_hop_id
                          INT32_MAX : (int32_t)(*buyer_coins / unit_price);
     quantity = MinimumI32(quantity, affordable);
     int32_t minimum_load = good >= CC_GOOD_GOLD ? 1 :
-                           good >= CC_GOOD_TOOLS ? 2 : 4;
+                           good >= CC_GOOD_TOOLS ? 1 : 4;
     if (quantity < minimum_load) return;
     CcShipment *shipment = AllocateShipment(sim);
     if (shipment == NULL) return;
@@ -2911,7 +2950,7 @@ static void PlanTrade(CcSim *sim)
 {
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
         int32_t minimum_load = good >= CC_GOOD_GOLD ? 1 :
-                               good >= CC_GOOD_TOOLS ? 2 : 4;
+                               good >= CC_GOOD_TOOLS ? 1 : 4;
         int32_t route_used[CC_MAX_ROUTES] = {0};
         for (int32_t transfer = 0; transfer < sim->settlement_count * 2; ++transfer) {
             int32_t best_score = 0;
@@ -2934,7 +2973,8 @@ static void PlanTrade(CcSim *sim)
                     int32_t route_slot = -1;
                     CcId next_hop = 0U;
                     int32_t path_cost = 0;
-                    if (!FindTradePath(sim, from->id, to->id, &route_slot,
+                    if (!FindTradePath(sim, from->id, to->id,
+                                       (CcGood)good, &route_slot,
                                        &next_hop, &path_cost, route_used)) continue;
                     int32_t score = need * 3 + surplus +
                                     ((CcGood)good == CC_GOOD_FOOD ? to->hunger * 2 : 0) -
@@ -3440,6 +3480,52 @@ static int32_t ActiveShipmentsForKingdom(const CcSim *sim, CcId kingdom_id)
     return count;
 }
 
+static CcSettlement *RepairBaseForKingdom(CcSim *sim,
+                                          const CcRoute *route,
+                                          CcId kingdom_id)
+{
+    CcSettlement *from = CcSimSettlementMutable(sim, route->from_id);
+    CcSettlement *to = CcSimSettlementMutable(sim, route->to_id);
+    CcSettlement *best = NULL;
+    if (from != NULL && from->kingdom_id == kingdom_id) best = from;
+    if (to != NULL && to->kingdom_id == kingdom_id &&
+        (best == NULL ||
+         to->stock[CC_GOOD_TOOLS] + to->stock[CC_GOOD_FOOD] >
+         best->stock[CC_GOOD_TOOLS] + best->stock[CC_GOOD_FOOD])) {
+        best = to;
+    }
+    return best;
+}
+
+static int32_t RouteRecoveryScore(const CcSim *sim, const CcRoute *route,
+                                  CcId kingdom_id)
+{
+    if (!route->closed ||
+        (CcSimRouteCrossesWarBorder(sim, route->id) &&
+         !route->smuggler_route)) return -1;
+    const CcSettlement *from = CcSimSettlement(sim, route->from_id);
+    const CcSettlement *to = CcSimSettlement(sim, route->to_id);
+    bool touches_kingdom =
+        (from != NULL && from->kingdom_id == kingdom_id) ||
+        (to != NULL && to->kingdom_id == kingdom_id);
+    if (!touches_kingdom) return -1;
+    int32_t hunger = MaximumI32(from != NULL ? from->hunger : 0,
+                                to != NULL ? to->hunger : 0);
+    int32_t food_surplus = 0;
+    if (from != NULL) {
+        food_surplus = MaximumI32(
+            food_surplus,
+            from->stock[CC_GOOD_FOOD] - from->reserve_target[CC_GOOD_FOOD]);
+    }
+    if (to != NULL) {
+        food_surplus = MaximumI32(
+            food_surplus,
+            to->stock[CC_GOOD_FOOD] - to->reserve_target[CC_GOOD_FOOD]);
+    }
+    return hunger * 4 + MinimumI32(100, food_surplus) * 2 +
+           (100 - route->condition);
+}
+
 static void UpdateRoutesAndGovernments(CcSim *sim)
 {
     for (int32_t route_index = 0; route_index < sim->route_count; ++route_index) {
@@ -3599,26 +3685,53 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
                             shortage != NULL ? shortage->id : 0U, 28, text);
         }
 
-        if (sim->current_day % 28 == 0 && kingdom->treasury >= 34) {
+        if (sim->current_day % 28 == 0) {
+            CcRoute *best_route = NULL;
+            CcSettlement *repair_base = NULL;
+            int32_t best_score = -1;
             for (int32_t route_index = 0; route_index < sim->route_count; ++route_index) {
                 CcRoute *route = &sim->routes[route_index];
-                CcSettlement *to = CcSimSettlementMutable(sim, route->to_id);
-                if (!route->closed || to == NULL || to->kingdom_id != kingdom->id) continue;
-                kingdom->treasury -= 34;
-                to->market_coins += 34;
-                route->condition = ClampI32(route->condition + 21, 0, 100);
-                if (route->condition >= 70) {
-                    route->closed = false;
-                    route->security = ClampI32(route->security + 6, 0, 100);
-                    SupersedeTargetSituations(sim, CC_SITUATION_ROUTE_REPAIR, route->id);
+                int32_t score = RouteRecoveryScore(sim, route, kingdom->id);
+                if (score <= best_score) continue;
+                CcSettlement *base = RepairBaseForKingdom(
+                    sim, route, kingdom->id);
+                if (base == NULL) continue;
+                best_score = score;
+                best_route = route;
+                repair_base = base;
+            }
+            bool crown_funded = best_route != NULL &&
+                                kingdom->treasury >= 24;
+            bool locally_funded = best_route != NULL && !crown_funded &&
+                                  repair_base->stock[CC_GOOD_TOOLS] >= 1 &&
+                                  repair_base->stock[CC_GOOD_FOOD] >= 4;
+            if (crown_funded || locally_funded) {
+                if (crown_funded) {
+                    kingdom->treasury -= 24;
+                    repair_base->market_coins += 24;
+                } else {
+                    repair_base->stock[CC_GOOD_TOOLS] -= 1;
+                    repair_base->stock[CC_GOOD_FOOD] -= 4;
+                }
+                best_route->condition = ClampI32(
+                    best_route->condition + 25, 0, 100);
+                if (best_route->condition >= 45) {
+                    best_route->closed = false;
+                    best_route->security = ClampI32(
+                        best_route->security + 6, 0, 100);
+                    SupersedeTargetSituations(
+                        sim, CC_SITUATION_ROUTE_REPAIR, best_route->id);
                 }
                 char text[CC_EVENT_TEXT_CAPACITY];
                 (void)snprintf(text, sizeof(text),
-                               "%s funds works on the closed road; condition rises to %d.",
-                               kingdom->name, route->condition);
-                (void)PushEvent(sim, CC_EVENT_KINGDOM_ACTION, kingdom->id, route->id,
-                                LatestLocalCause(sim, route->to_id), route->condition, text);
-                break;
+                               "%s uses %s; road condition rises to %d.",
+                               crown_funded ? kingdom->name : repair_base->name,
+                               crown_funded ? "paid crews" : "local Food and Tools",
+                               best_route->condition);
+                (void)PushEvent(
+                    sim, CC_EVENT_KINGDOM_ACTION, kingdom->id, best_route->id,
+                    LatestLocalCause(sim, repair_base->id),
+                    best_route->condition, text);
             }
         }
 
