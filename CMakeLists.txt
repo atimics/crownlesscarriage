@@ -361,6 +361,11 @@ if(BUILD_TESTING)
     cc_strict_warnings(dragon_cycle_tests)
     add_test(NAME goblin_dragon_causal_cycle COMMAND dragon_cycle_tests)
 
+    add_executable(dragon_ecology_tests tests/dragon_ecology_tests.c)
+    target_link_libraries(dragon_ecology_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(dragon_ecology_tests)
+    add_test(NAME dragon_crown_ecology COMMAND dragon_ecology_tests)
+
     add_executable(material_economy_tests tests/material_economy_tests.c)
     target_link_libraries(material_economy_tests PRIVATE crownless_sim)
     cc_strict_warnings(material_economy_tests)
