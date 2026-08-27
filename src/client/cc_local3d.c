@@ -15961,7 +15961,7 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
         roadside_food += destination_place->stock[CC_GOOD_FOOD];
     }
     if (roadside_food > 0) {
-        Vector3 cow_position = {carriage_x + 7.4f, 0.0f, 34.25f};
+        Vector3 cow_position = {carriage_x + 3.8f, 0.0f, 33.40f};
         CcCreaturePose cow_pose = CcCreatureSteppedPose(
             CC_CREATURE_COW, clock * 1.55f, travelling);
         (void)DrawCreature3D(CC_CREATURE_COW, cow_pose, cow_position,
@@ -15970,7 +15970,7 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
         if (roadside_food >= 40) {
             (void)DrawCreature3D(
                 CC_CREATURE_COW, CC_CREATURE_POSE_IDLE,
-                (Vector3){carriage_x + 9.35f, 0.0f, 35.20f},
+                (Vector3){carriage_x + 5.60f, 0.0f, 32.80f},
                 -0.56f * PI, 0.78f, (Color){118, 86, 66, 255});
         }
     }
