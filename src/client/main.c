@@ -347,6 +347,9 @@ static void DrawBar(int x, int y, int width, const char *label,
 {
     CcOverlayDrawText(label, x, y, 11, MUTED);
     DrawRectangle(x + 76, y + 1, width, 10, BAR_TRACK);
+    DrawRectangleLinesEx((Rectangle){(float)x + 76.0f, (float)y + 1.0f,
+                                     (float)width, 10.0f},
+                         1.0f, MUTED);
     int fill = (int)((float)width * (float)value / 100.0f);
     DrawRectangle(x + 76, y + 1, fill, 10, color);
     CcOverlayDrawText(TextFormat("%d", value), x + 81 + width, y - 2, 12, INK);
@@ -982,6 +985,12 @@ static void DrawContextActionTray(const CcSim *sim, const LocalState *local,
         DrawRectangleRoundedLinesEx(bounds, 0.18f, 5,
                                     hover ? 2.0f : 1.0f,
                                     Fade(accent, hover ? 0.96f : 0.62f));
+        if (hover) {
+            DrawRectangleRounded(
+                (Rectangle){bounds.x + 8.0f, bounds.y + 12.0f,
+                            4.0f, bounds.height - 24.0f},
+                0.8f, 3, accent);
+        }
         int width = CcOverlayMeasureText(actions.items[i].label, 11);
         CcOverlayDrawText(actions.items[i].label,
                           (int)(bounds.x + (bounds.width - width) * 0.5f),

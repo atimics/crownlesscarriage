@@ -8917,58 +8917,157 @@ static VisualStyleCache visual_style = {0};
 
 #define CC_SHARED_PALETTE_LUT_SIZE 64
 #define CC_SHARED_PALETTE_LUT_TILES 8
+#define CC_FINAL_PALETTE_MAX_COLORS 64
+#define CC_HERO_RETRO_MATERIAL_COUNT 19
 
-static const Color SHARED_WORLD_PALETTE[] = {
-    /* Ink, slate, stone, parchment. */
-    {15, 16, 18, 255}, {27, 31, 32, 255}, {43, 51, 50, 255},
-    {66, 74, 71, 255}, {102, 108, 99, 255}, {145, 137, 122, 255},
-    {194, 184, 164, 255}, {226, 216, 193, 255},
-    /* Grass and field layers. */
-    {26, 49, 40, 255}, {35, 67, 53, 255}, {61, 84, 56, 255},
-    {96, 105, 61, 255}, {133, 125, 70, 255},
-    /* Timber, soil, and leather. */
-    {43, 32, 29, 255}, {69, 47, 39, 255}, {94, 62, 43, 255},
-    {129, 86, 55, 255}, {166, 126, 83, 255},
-    /* Skin. */
-    {79, 53, 43, 255}, {126, 84, 60, 255}, {172, 124, 86, 255},
-    {205, 157, 111, 255},
-    /* Teal. */
-    {27, 63, 64, 255}, {39, 104, 101, 255}, {57, 133, 125, 255},
-    {87, 165, 153, 255},
-    /* Oxblood and danger. */
-    {66, 36, 43, 255}, {94, 44, 53, 255}, {124, 55, 62, 255},
-    {174, 68, 61, 255},
-    /* Gold. */
-    {93, 69, 32, 255}, {142, 102, 38, 255}, {190, 142, 53, 255},
-    {224, 177, 78, 255},
-    /* Violet. */
-    {53, 42, 61, 255}, {88, 61, 91, 255}, {139, 96, 137, 255},
-};
+typedef enum FinalPaletteOwnership {
+    FINAL_PALETTE_ENVIRONMENT = 0,
+    FINAL_PALETTE_PROTECTED
+} FinalPaletteOwnership;
 
-/* Material order is part of the consolidated engine-hero export contract.
-   Nineteen material slots collapse into three readable masses at play scale:
-   warm skin, a middle-value teal/oxblood costume, and dark limbs/hair. */
-static const Color HERO_RETRO_PALETTE[] = {
-    {42, 51, 50, 255},   /* body neutral */
-    {172, 124, 86, 255}, /* skin */
-    {205, 157, 111, 255}, /* skin light */
-    {15, 16, 18, 255},   /* eye */
-    {27, 31, 32, 255},   /* hair */
-    {66, 74, 71, 255},   /* padding */
-    {43, 51, 50, 255},   /* padding dark */
-    {27, 63, 64, 255},   /* teal dark */
-    {57, 133, 125, 255}, /* teal chest */
-    {224, 177, 78, 255}, /* rare brass highlight */
-    {94, 44, 53, 255},   /* cape */
-    {124, 55, 62, 255},  /* cape light */
-    {43, 51, 50, 255},   /* steel dark */
-    {124, 55, 62, 255},  /* brigandine chest */
-    {174, 68, 61, 255},  /* brigandine edge */
-    {43, 32, 29, 255},   /* dark boots and leather */
-    {66, 74, 71, 255},   /* steel */
-    {102, 108, 99, 255}, /* steel light */
-    {69, 47, 39, 255},   /* leather light */
-};
+typedef struct FinalPaletteEntry {
+    Color color;
+    FinalPaletteOwnership ownership;
+} FinalPaletteEntry;
+
+/* Color values live only in cc_visual_style.h. This list owns semantic
+   membership: broad materials may fill the world, while character and signal
+   pigments receive smaller lookup regions so scenery cannot casually steal
+   the colors that identify the hero, combat, or an interaction. */
+static void AddFinalPaletteColor(FinalPaletteEntry *entries, int32_t capacity,
+                                 int32_t *count, Color color,
+                                 FinalPaletteOwnership ownership)
+{
+    if (entries == NULL || count == NULL) return;
+    for (int32_t index = 0; index < *count; ++index) {
+        Color current = entries[index].color;
+        if (current.r != color.r || current.g != color.g ||
+            current.b != color.b || current.a != color.a) continue;
+        if (ownership == FINAL_PALETTE_PROTECTED) {
+            entries[index].ownership = ownership;
+        }
+        return;
+    }
+    if (*count >= capacity) return;
+    entries[*count] = (FinalPaletteEntry){color, ownership};
+    *count += 1;
+}
+
+static void AddFinalPaletteRamp(FinalPaletteEntry *entries, int32_t capacity,
+                                int32_t *count, CcStyleRamp ramp,
+                                FinalPaletteOwnership ownership)
+{
+    AddFinalPaletteColor(entries, capacity, count, ramp.shadow, ownership);
+    AddFinalPaletteColor(entries, capacity, count, ramp.base, ownership);
+    AddFinalPaletteColor(entries, capacity, count, ramp.light, ownership);
+}
+
+static int32_t BuildFinalPalette(FinalPaletteEntry *entries, int32_t capacity)
+{
+    int32_t count = 0;
+    AddFinalPaletteColor(entries, capacity, &count, CC_STYLE_BACKGROUND,
+                         FINAL_PALETTE_ENVIRONMENT);
+    AddFinalPaletteColor(entries, capacity, &count, CC_STYLE_PANEL,
+                         FINAL_PALETTE_ENVIRONMENT);
+    AddFinalPaletteColor(entries, capacity, &count, CC_STYLE_PANEL_DEEP,
+                         FINAL_PALETTE_ENVIRONMENT);
+    AddFinalPaletteColor(entries, capacity, &count, CC_STYLE_PANEL_HOVER,
+                         FINAL_PALETTE_ENVIRONMENT);
+    AddFinalPaletteColor(entries, capacity, &count, CC_STYLE_BAR_TRACK,
+                         FINAL_PALETTE_ENVIRONMENT);
+    AddFinalPaletteColor(entries, capacity, &count, CC_STYLE_INK,
+                         FINAL_PALETTE_ENVIRONMENT);
+    AddFinalPaletteColor(entries, capacity, &count, CC_STYLE_MUTED,
+                         FINAL_PALETTE_ENVIRONMENT);
+
+    AddFinalPaletteRamp(entries, capacity, &count, CC_VISUAL_PALETTE.earth,
+                        FINAL_PALETTE_ENVIRONMENT);
+    AddFinalPaletteRamp(entries, capacity, &count, CC_VISUAL_PALETTE.road,
+                        FINAL_PALETTE_ENVIRONMENT);
+    AddFinalPaletteRamp(entries, capacity, &count, CC_VISUAL_PALETTE.wood,
+                        FINAL_PALETTE_ENVIRONMENT);
+    AddFinalPaletteRamp(entries, capacity, &count, CC_VISUAL_PALETTE.stone,
+                        FINAL_PALETTE_ENVIRONMENT);
+    AddFinalPaletteRamp(entries, capacity, &count, CC_VISUAL_PALETTE.grass,
+                        FINAL_PALETTE_ENVIRONMENT);
+    AddFinalPaletteRamp(entries, capacity, &count, CC_VISUAL_PALETTE.foliage,
+                        FINAL_PALETTE_ENVIRONMENT);
+    AddFinalPaletteRamp(entries, capacity, &count, CC_VISUAL_PALETTE.crop,
+                        FINAL_PALETTE_ENVIRONMENT);
+    AddFinalPaletteRamp(entries, capacity, &count, CC_VISUAL_PALETTE.metal,
+                        FINAL_PALETTE_ENVIRONMENT);
+    AddFinalPaletteRamp(entries, capacity, &count, CC_VISUAL_PALETTE.parchment,
+                        FINAL_PALETTE_ENVIRONMENT);
+    AddFinalPaletteRamp(entries, capacity, &count,
+                        CC_VISUAL_PALETTE.contraband,
+                        FINAL_PALETTE_ENVIRONMENT);
+
+    AddFinalPaletteRamp(entries, capacity, &count, CC_VISUAL_PALETTE.teal,
+                        FINAL_PALETTE_PROTECTED);
+    AddFinalPaletteRamp(entries, capacity, &count, CC_VISUAL_PALETTE.gold,
+                        FINAL_PALETTE_PROTECTED);
+    AddFinalPaletteRamp(entries, capacity, &count, CC_VISUAL_PALETTE.danger,
+                        FINAL_PALETTE_PROTECTED);
+    AddFinalPaletteRamp(entries, capacity, &count, CC_VISUAL_PALETTE.violet,
+                        FINAL_PALETTE_PROTECTED);
+    AddFinalPaletteRamp(entries, capacity, &count,
+                        CC_VISUAL_PALETTE.people_skin,
+                        FINAL_PALETTE_PROTECTED);
+
+    AddFinalPaletteColor(entries, capacity, &count,
+                         CC_STYLE_HERO_SKIN_SHADOW,
+                         FINAL_PALETTE_PROTECTED);
+    AddFinalPaletteColor(entries, capacity, &count, CC_STYLE_HERO_SKIN,
+                         FINAL_PALETTE_PROTECTED);
+    AddFinalPaletteColor(entries, capacity, &count, CC_STYLE_HERO_SKIN_LIGHT,
+                         FINAL_PALETTE_PROTECTED);
+    AddFinalPaletteColor(entries, capacity, &count, CC_STYLE_HERO_HAIR,
+                         FINAL_PALETTE_PROTECTED);
+    AddFinalPaletteColor(entries, capacity, &count, CC_STYLE_HERO_UNDERLAYER,
+                         FINAL_PALETTE_PROTECTED);
+    AddFinalPaletteColor(entries, capacity, &count, CC_STYLE_HERO_OUTER,
+                         FINAL_PALETTE_PROTECTED);
+    AddFinalPaletteColor(entries, capacity, &count, CC_STYLE_HERO_TROUSERS,
+                         FINAL_PALETTE_PROTECTED);
+    AddFinalPaletteColor(entries, capacity, &count, CC_STYLE_HERO_LEATHER,
+                         FINAL_PALETTE_PROTECTED);
+    AddFinalPaletteColor(entries, capacity, &count, CC_STYLE_HERO_METAL,
+                         FINAL_PALETTE_PROTECTED);
+    AddFinalPaletteColor(entries, capacity, &count, CC_STYLE_HERO_ACCENT,
+                         FINAL_PALETTE_PROTECTED);
+    AddFinalPaletteColor(entries, capacity, &count, CC_STYLE_HERO_PANEL_INK,
+                         FINAL_PALETTE_PROTECTED);
+    return count;
+}
+
+/* Material order is part of the engine-hero export contract. The fallback
+   renderer resolves each slot from named roles instead of owning another
+   independent list of RGB values. */
+static Color HeroRetroMaterialColor(int32_t material)
+{
+    switch (material) {
+        case 0: return CC_STYLE_HERO_TROUSERS;
+        case 1: return CC_STYLE_HERO_SKIN;
+        case 2: return CC_STYLE_HERO_SKIN_LIGHT;
+        case 3:
+        case 4: return CC_STYLE_HERO_HAIR;
+        case 5: return CC_STYLE_METAL;
+        case 6:
+        case 12: return CC_STYLE_METAL_SHADOW;
+        case 7: return CC_STYLE_TEAL_SHADOW;
+        case 8: return CC_STYLE_HERO_UNDERLAYER;
+        case 9: return CC_STYLE_HERO_ACCENT;
+        case 10: return CC_STYLE_HERO_OUTER;
+        case 11:
+        case 13: return CC_STYLE_HERO_METAL;
+        case 14: return CC_STYLE_DANGER;
+        case 15: return CC_STYLE_HERO_LEATHER;
+        case 16: return CC_STYLE_METAL;
+        case 17: return CC_STYLE_METAL_LIGHT;
+        case 18: return CC_STYLE_WOOD;
+        default: return CC_STYLE_HERO_TROUSERS;
+    }
+}
 
 static const Vector3 HERO_REST_DIRECTIONS[CC_HUMANOID_SKIN_BONE_COUNT] = {
     {0.0f, 1.0f, 0.0f},
@@ -9392,13 +9491,13 @@ static void ApplyHeroStyle(Model *model)
         }
         return;
     }
-    int32_t palette_count = (int32_t)(sizeof(HERO_RETRO_PALETTE) /
-                                      sizeof(HERO_RETRO_PALETTE[0]));
-    int32_t material_count = model->materialCount < palette_count ?
-                             model->materialCount : palette_count;
+    int32_t material_count = model->materialCount <
+                             CC_HERO_RETRO_MATERIAL_COUNT ?
+                             model->materialCount :
+                             CC_HERO_RETRO_MATERIAL_COUNT;
     for (int32_t material = 0; material < material_count; ++material) {
         model->materials[material].maps[MATERIAL_MAP_DIFFUSE].color =
-            HERO_RETRO_PALETTE[material];
+            HeroRetroMaterialColor(material);
         model->materials[material].shader = visual_style.hero_ready ?
                                              visual_style.hero :
                                              visual_style.world;
@@ -9409,10 +9508,10 @@ static void ApplyHeroStyle(Model *model)
                                              visual_style.hero :
                                              visual_style.world;
     }
-    if (model->materialCount < palette_count) {
+    if (model->materialCount < CC_HERO_RETRO_MATERIAL_COUNT) {
         TraceLog(LOG_WARNING,
                  "HERO: retro palette expected %d materials, found %d",
-                 palette_count, model->materialCount);
+                 CC_HERO_RETRO_MATERIAL_COUNT, model->materialCount);
     }
 }
 
@@ -9558,14 +9657,53 @@ static void SetWorldTerrainSurface(bool enabled)
                    &active, SHADER_UNIFORM_FLOAT);
 }
 
-static float SharedPaletteDistance(Color source, Color candidate)
+typedef struct OklabColor {
+    float lightness;
+    float green_red;
+    float blue_yellow;
+} OklabColor;
+
+static float SrgbChannelToLinear(unsigned char channel)
 {
-    float red = (float)source.r - (float)candidate.r;
-    float green = (float)source.g - (float)candidate.g;
-    float blue = (float)source.b - (float)candidate.b;
-    float luminance = red * 0.2126f + green * 0.7152f + blue * 0.0722f;
-    return red * red * 0.30f + green * green * 0.59f +
-           blue * blue * 0.11f + luminance * luminance * 0.55f;
+    float value = (float)channel / 255.0f;
+    return value <= 0.04045f ? value / 12.92f :
+        powf((value + 0.055f) / 1.055f, 2.4f);
+}
+
+static OklabColor ColorToOklab(Color color)
+{
+    float red = SrgbChannelToLinear(color.r);
+    float green = SrgbChannelToLinear(color.g);
+    float blue = SrgbChannelToLinear(color.b);
+    float long_wave = 0.4122214708f * red + 0.5363325363f * green +
+                      0.0514459929f * blue;
+    float medium_wave = 0.2119034982f * red + 0.6806995451f * green +
+                        0.1073969566f * blue;
+    float short_wave = 0.0883024619f * red + 0.2817188376f * green +
+                       0.6299787005f * blue;
+    long_wave = cbrtf(long_wave);
+    medium_wave = cbrtf(medium_wave);
+    short_wave = cbrtf(short_wave);
+    return (OklabColor){
+        0.2104542553f * long_wave + 0.7936177850f * medium_wave -
+            0.0040720468f * short_wave,
+        1.9779984951f * long_wave - 2.4285922050f * medium_wave +
+            0.4505937099f * short_wave,
+        0.0259040371f * long_wave + 0.7827717662f * medium_wave -
+            0.8086757660f * short_wave,
+    };
+}
+
+static float OklabDistanceSquared(OklabColor source, OklabColor candidate)
+{
+    /* Small art pixels need especially clear value separation. OKLab keeps
+       the comparison perceptual; the lightness weight slightly favors a
+       stable grayscale read over a merely nearby hue. */
+    float lightness = (source.lightness - candidate.lightness) * 1.24f;
+    float green_red = source.green_red - candidate.green_red;
+    float blue_yellow = source.blue_yellow - candidate.blue_yellow;
+    return lightness * lightness + green_red * green_red +
+           blue_yellow * blue_yellow;
 }
 
 static bool LoadSharedPaletteLookup(void)
@@ -9574,8 +9712,18 @@ static bool LoadSharedPaletteLookup(void)
     const int32_t tiles = CC_SHARED_PALETTE_LUT_TILES;
     const int32_t width = size * tiles;
     const int32_t height = size * (size / tiles);
-    const int32_t palette_count = (int32_t)(
-        sizeof(SHARED_WORLD_PALETTE) / sizeof(SHARED_WORLD_PALETTE[0]));
+    FinalPaletteEntry palette[CC_FINAL_PALETTE_MAX_COLORS] = {0};
+    int32_t palette_count = BuildFinalPalette(
+        palette, CC_FINAL_PALETTE_MAX_COLORS);
+    if (palette_count <= 0) return false;
+    OklabColor perceptual_palette[CC_FINAL_PALETTE_MAX_COLORS] = {0};
+    int32_t protected_count = 0;
+    for (int32_t index = 0; index < palette_count; ++index) {
+        perceptual_palette[index] = ColorToOklab(palette[index].color);
+        if (palette[index].ownership == FINAL_PALETTE_PROTECTED) {
+            protected_count += 1;
+        }
+    }
     size_t pixel_count = (size_t)width * (size_t)height;
     Color *pixels = MemAlloc(
         (unsigned int)(pixel_count * sizeof(Color)));
@@ -9593,20 +9741,40 @@ static bool LoadSharedPaletteLookup(void)
                                     (size - 1)),
                     255,
                 };
-                Color best = SHARED_WORLD_PALETTE[0];
-                float best_distance = SharedPaletteDistance(source, best);
-                for (int32_t index = 1; index < palette_count; ++index) {
-                    float distance = SharedPaletteDistance(
-                        source, SHARED_WORLD_PALETTE[index]);
-                    if (distance >= best_distance) continue;
-                    best_distance = distance;
-                    best = SHARED_WORLD_PALETTE[index];
+                OklabColor perceptual_source = ColorToOklab(source);
+                int32_t environment_index = -1;
+                int32_t protected_index = -1;
+                float environment_distance = FLT_MAX;
+                float protected_distance = FLT_MAX;
+                for (int32_t index = 0; index < palette_count; ++index) {
+                    float distance = OklabDistanceSquared(
+                        perceptual_source, perceptual_palette[index]);
+                    if (palette[index].ownership ==
+                        FINAL_PALETTE_PROTECTED) {
+                        if (distance >= protected_distance) continue;
+                        protected_distance = distance;
+                        protected_index = index;
+                    } else {
+                        if (distance >= environment_distance) continue;
+                        environment_distance = distance;
+                        environment_index = index;
+                    }
                 }
+                /* Protected colors own only a tight perceptual neighborhood.
+                   Exact character and signal pigments survive, while broad
+                   terrain is pulled toward its material family instead. */
+                const float protected_radius_squared = 0.003025f;
+                bool choose_protected = protected_index >= 0 &&
+                    protected_distance <= protected_radius_squared &&
+                    protected_distance * 1.20f < environment_distance;
+                int32_t best_index = choose_protected ? protected_index :
+                                                       environment_index;
+                if (best_index < 0) best_index = protected_index;
                 int32_t pixel_x = red + (blue % tiles) * size;
                 int32_t pixel_y = green + (blue / tiles) * size;
                 size_t pixel = (size_t)pixel_y * (size_t)width +
                                (size_t)pixel_x;
-                pixels[pixel] = best;
+                pixels[pixel] = palette[best_index].color;
             }
         }
     }
@@ -9625,8 +9793,9 @@ static bool LoadSharedPaletteLookup(void)
         visual_style.palette_lut = (Texture2D){0};
         return false;
     }
-    TraceLog(LOG_INFO, "STYLE: loaded %d-color final palette lookup",
-             palette_count);
+    TraceLog(LOG_INFO,
+             "STYLE: loaded %d-color perceptual lookup (%d protected)",
+             palette_count, protected_count);
     return true;
 }
 
