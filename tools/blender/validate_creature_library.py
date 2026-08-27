@@ -33,6 +33,14 @@ EXPECTED_STEPPED_POSES = (
     "contact_b", "down_b", "passing_b", "up_b",
 )
 EXPECTED_DRAGON_POSES = ("idle", "stalk_a", "stalk_b", "threat", "rest")
+EXPECTED_QUADRUPED_BONES = (
+    "root", "body", "chest", "neck", "head",
+    "upper_leg.FL", "lower_leg.FL", "hoof.FL",
+    "upper_leg.FR", "lower_leg.FR", "hoof.FR",
+    "upper_leg.HL", "lower_leg.HL", "hoof.HL",
+    "upper_leg.HR", "lower_leg.HR", "hoof.HR",
+    "tail.root", "tail",
+)
 EXPECTED_MATERIALS = ("MAT_CREATURE_INDEXED",)
 EXPECTED_PALETTE = (
     "skin", "secondary", "hide", "cloth", "leather",
@@ -50,8 +58,8 @@ EXPECTED_GAIT = {
     "goblin_scavenger": "npc_stepped",
     "goblin_raider": "npc_stepped",
     "goblin_tribute_bearer": "npc_stepped",
-    "horse": "quadruped_stepped",
-    "cow": "quadruped_stepped",
+    "horse": "quadruped_runtime_skin",
+    "cow": "quadruped_runtime_skin",
     "dragon": "dragon_authored",
 }
 HEIGHT_LIMITS = {
@@ -71,8 +79,12 @@ TRIANGLE_LIMITS = {
 def expected_pairs() -> tuple[tuple[str, str], ...]:
     pairs: list[tuple[str, str]] = []
     for variant in EXPECTED_VARIANTS:
-        poses = EXPECTED_DRAGON_POSES if variant == "dragon" \
-            else EXPECTED_STEPPED_POSES
+        if variant == "dragon":
+            poses = EXPECTED_DRAGON_POSES
+        elif variant in ("horse", "cow"):
+            poses = ("idle",)
+        else:
+            poses = EXPECTED_STEPPED_POSES
         pairs.extend((variant, pose) for pose in poses)
     return tuple(pairs)
 
@@ -152,10 +164,33 @@ def validate() -> int:
                                    abs(sample[1] - sample[2]) < 0.01):
                 failures.append(
                     f"{variant}: COLOR_0 has no authored value/fold channels")
-        if document.get("skins"):
-            failures.append(f"{variant}: static creature contains a skin")
+        skinned = variant in ("horse", "cow")
+        if bool(entry.get("skinned")) != skinned:
+            failures.append(f"{variant}: wrong skinned contract")
+        skins = document.get("skins", [])
+        if skinned:
+            if tuple(entry.get("bones", ())) != EXPECTED_QUADRUPED_BONES:
+                failures.append(f"{variant}: manifest bone contract changed")
+            if len(skins) != 1:
+                failures.append(f"{variant}: expected exactly one skin")
+            else:
+                nodes = document.get("nodes", [])
+                joint_names = tuple(
+                    nodes[index].get("name", "")
+                    for index in skins[0].get("joints", [])
+                )
+                if (len(joint_names) != len(EXPECTED_QUADRUPED_BONES) or
+                        set(joint_names) != set(EXPECTED_QUADRUPED_BONES)):
+                    failures.append(
+                        f"{variant}: exported bone contract {joint_names!r}")
+            if any("JOINTS_0" not in primitive.get("attributes", {}) or
+                   "WEIGHTS_0" not in primitive.get("attributes", {})
+                   for primitive in primitives):
+                failures.append(f"{variant}: skin weights are missing")
+        elif skins:
+            failures.append(f"{variant}: held-pose creature contains a skin")
         if document.get("animations"):
-            failures.append(f"{variant}: static creature contains animation")
+            failures.append(f"{variant}: creature contains baked animation")
         if stats.bounds_min and stats.bounds_max:
             height = stats.bounds_max[1] - stats.bounds_min[1]
             minimum, maximum = HEIGHT_LIMITS.get(family, (0.0, 0.0))

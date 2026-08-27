@@ -57,6 +57,7 @@ add_library(crownless_locomotion
     src/locomotion/cc_humanoid_skin.c
     src/locomotion/cc_limb.c
     src/locomotion/cc_motion.c
+    src/locomotion/cc_quadruped.c
     src/locomotion/cc_robotics.c
 )
 target_include_directories(crownless_locomotion PUBLIC src)
@@ -461,6 +462,11 @@ if(BUILD_TESTING)
     target_link_libraries(humanoid_skin_tests PRIVATE crownless_locomotion)
     cc_strict_warnings(humanoid_skin_tests)
     add_test(NAME blender_humanoid_skin_contract COMMAND humanoid_skin_tests)
+
+    add_executable(quadruped_skin_tests tests/quadruped_skin_tests.c)
+    target_link_libraries(quadruped_skin_tests PRIVATE crownless_locomotion)
+    cc_strict_warnings(quadruped_skin_tests)
+    add_test(NAME blender_quadruped_skin_contract COMMAND quadruped_skin_tests)
 
     add_executable(motion_system_tests tests/motion_system_tests.c)
     target_link_libraries(motion_system_tests PRIVATE crownless_locomotion)

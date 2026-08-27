@@ -25,10 +25,10 @@ int main(void)
                                    CC_CREATURE_POSE_IDLE) != NULL,
                "every creature idle pose has an asset path");
     }
-    EXPECT(CcCreaturePoseCount(CC_CREATURE_HORSE) == 9,
-           "horse has the full stepped gait");
-    EXPECT(CcCreaturePoseCount(CC_CREATURE_COW) == 9,
-           "cow has the full stepped gait");
+    EXPECT(CcCreaturePoseCount(CC_CREATURE_HORSE) == 1,
+           "horse uses one runtime-driven skin");
+    EXPECT(CcCreaturePoseCount(CC_CREATURE_COW) == 1,
+           "cow uses one runtime-driven skin");
     EXPECT(CcCreaturePoseCount(CC_CREATURE_DRAGON) == 5,
            "dragon has its authored pose set");
     EXPECT(!CcCreatureSupportsPose(CC_CREATURE_DRAGON,
@@ -38,8 +38,14 @@ int main(void)
                CC_CREATURE_POSE_IDLE,
            "a stopped horse uses idle");
     EXPECT(CcCreatureSteppedPose(CC_CREATURE_HORSE, 0.0f, true) ==
-               CC_CREATURE_POSE_CONTACT_A,
-           "a moving horse starts on contact A");
+               CC_CREATURE_POSE_IDLE,
+           "a moving horse keeps its single skinned asset");
+    EXPECT(CcCreatureDefinitionAt(CC_CREATURE_HORSE)->skinned,
+           "horse advertises its runtime skin");
+    EXPECT(CcCreatureDefinitionAt(CC_CREATURE_COW)->skinned,
+           "cow advertises its runtime skin");
+    EXPECT(!CcCreatureDefinitionAt(CC_CREATURE_DRAGON)->skinned,
+           "the authored dragon remains a held-pose actor");
     EXPECT(strstr(CcCreatureAssetPath(CC_CREATURE_GOBLIN_TRIBUTE_BEARER,
                                       CC_CREATURE_POSE_IDLE),
                   "goblin_tribute_bearer") != NULL,

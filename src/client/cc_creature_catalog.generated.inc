@@ -2,12 +2,12 @@
    Edit assets/creature_manifest.json through the Blender generator. */
 static const CcCreatureDefinition
 CC_CREATURE_DEFINITIONS[CC_CREATURE_VARIANT_COUNT] = {
-    [CC_CREATURE_GOBLIN_SCAVENGER] = {"goblin_scavenger", "goblin", "npc_stepped", false},
-    [CC_CREATURE_GOBLIN_RAIDER] = {"goblin_raider", "goblin", "npc_stepped", false},
-    [CC_CREATURE_GOBLIN_TRIBUTE_BEARER] = {"goblin_tribute_bearer", "goblin", "npc_stepped", false},
-    [CC_CREATURE_HORSE] = {"horse", "horse", "quadruped_stepped", true},
-    [CC_CREATURE_COW] = {"cow", "cow", "quadruped_stepped", true},
-    [CC_CREATURE_DRAGON] = {"dragon", "dragon", "dragon_authored", true},
+    [CC_CREATURE_GOBLIN_SCAVENGER] = {"goblin_scavenger", "goblin", "npc_stepped", false, false},
+    [CC_CREATURE_GOBLIN_RAIDER] = {"goblin_raider", "goblin", "npc_stepped", false, false},
+    [CC_CREATURE_GOBLIN_TRIBUTE_BEARER] = {"goblin_tribute_bearer", "goblin", "npc_stepped", false, false},
+    [CC_CREATURE_HORSE] = {"horse", "horse", "quadruped_runtime_skin", true, true},
+    [CC_CREATURE_COW] = {"cow", "cow", "quadruped_runtime_skin", true, true},
+    [CC_CREATURE_DRAGON] = {"dragon", "dragon", "dragon_authored", true, false},
 };
 
 static const char *const
@@ -48,25 +48,9 @@ CC_CREATURE_ASSET_PATHS[CC_CREATURE_VARIANT_COUNT]
     },
     [CC_CREATURE_HORSE] = {
         [CC_CREATURE_POSE_IDLE] = "assets/exports/creatures/creature_horse_v01.glb",
-        [CC_CREATURE_POSE_CONTACT_A] = "assets/exports/creatures/creature_horse_contact_a_v01.glb",
-        [CC_CREATURE_POSE_DOWN_A] = "assets/exports/creatures/creature_horse_down_a_v01.glb",
-        [CC_CREATURE_POSE_PASSING_A] = "assets/exports/creatures/creature_horse_passing_a_v01.glb",
-        [CC_CREATURE_POSE_UP_A] = "assets/exports/creatures/creature_horse_up_a_v01.glb",
-        [CC_CREATURE_POSE_CONTACT_B] = "assets/exports/creatures/creature_horse_contact_b_v01.glb",
-        [CC_CREATURE_POSE_DOWN_B] = "assets/exports/creatures/creature_horse_down_b_v01.glb",
-        [CC_CREATURE_POSE_PASSING_B] = "assets/exports/creatures/creature_horse_passing_b_v01.glb",
-        [CC_CREATURE_POSE_UP_B] = "assets/exports/creatures/creature_horse_up_b_v01.glb",
     },
     [CC_CREATURE_COW] = {
         [CC_CREATURE_POSE_IDLE] = "assets/exports/creatures/creature_cow_v01.glb",
-        [CC_CREATURE_POSE_CONTACT_A] = "assets/exports/creatures/creature_cow_contact_a_v01.glb",
-        [CC_CREATURE_POSE_DOWN_A] = "assets/exports/creatures/creature_cow_down_a_v01.glb",
-        [CC_CREATURE_POSE_PASSING_A] = "assets/exports/creatures/creature_cow_passing_a_v01.glb",
-        [CC_CREATURE_POSE_UP_A] = "assets/exports/creatures/creature_cow_up_a_v01.glb",
-        [CC_CREATURE_POSE_CONTACT_B] = "assets/exports/creatures/creature_cow_contact_b_v01.glb",
-        [CC_CREATURE_POSE_DOWN_B] = "assets/exports/creatures/creature_cow_down_b_v01.glb",
-        [CC_CREATURE_POSE_PASSING_B] = "assets/exports/creatures/creature_cow_passing_b_v01.glb",
-        [CC_CREATURE_POSE_UP_B] = "assets/exports/creatures/creature_cow_up_b_v01.glb",
     },
     [CC_CREATURE_DRAGON] = {
         [CC_CREATURE_POSE_IDLE] = "assets/exports/creatures/creature_dragon_v01.glb",

@@ -15,17 +15,17 @@ motion families:
   tail, crown horns, back spines, and wings. It is a unique world actor, not a
   scaled farm animal.
 
-All forms are generated from code rather than hand-edited exports. The GLBs
-remain the editable silhouette and palette prototypes. Runtime movement comes
-from the same skeletal and muscular foundation as the human cast: planted
-contacts, two-bone joint solves, flexor/extensor pairs, and activation-shaped
-muscle envelopes. The outer creature shapes are assembled around those live
-bones instead of swapping flattened pose meshes.
+All forms are generated from code rather than hand-edited exports. The horse
+and cow each ship as one rigged, skinned GLB. Their four legs are driven by the
+same planted contacts, two-bone joint solves, and flexor/extensor model as the
+rest of the cast. Goblins and the dragon keep their generated GLBs as editable
+shape references while the game assembles their visible forms around live
+bones.
 
 ## Generated artifacts
 
 - Source library: `assets/blender/crownless_creature_library.blend`
-- Shape-reference exports: `assets/exports/creatures/creature_*_v01.glb`
+- Runtime and shape-reference exports: `assets/exports/creatures/creature_*_v01.glb`
 - Contract manifest: `assets/creature_manifest.json`
 - Family preview: `assets/previews/creatures/creature_family_sheet.png`
 - Generator: `tools/blender/build_creature_library.py`
@@ -39,8 +39,9 @@ make blender-creature-assets
 make blender-creature-assets-check
 ```
 
-The macOS application bundle keeps the manifest and GLBs as art references.
-The active game renderer resolves each visible creature through the runtime rig.
+The macOS application bundle keeps the manifest and GLBs. The horse and cow
+use their skins at runtime. Goblins and the dragon use the procedural runtime
+rig, with their GLBs kept as art references.
 
 ## Variant grammar
 
@@ -53,16 +54,16 @@ The active game renderer resolves each visible creature through the runtime rig.
 | Cow | deep barrel, low horn line, short planted legs | food economy and livestock pressure |
 | Dragon | long grounded predator, crown horns, folded wings | singular hoard power and retaliation |
 
-Goblins and farm animals each have idle plus eight held walk poses. The dragon
-has idle, two stalk poses, threat, and rest. It should not loop like an ambient
-crowd actor. Its smaller authored set gives each appearance a clear dramatic
-purpose.
+Goblins have idle plus eight held walk poses. The horse and cow each have one
+skinned asset with 19 shared runtime bones. The dragon has idle, two stalk
+poses, threat, and rest. It should not loop like an ambient crowd actor. Its
+smaller authored set gives each appearance a clear dramatic purpose.
 
 ## Runtime contract
 
-Every reference export contains one mesh, one `MAT_CREATURE_INDEXED` material,
-no skin, and no animation tracks. `COLOR_0` stores one of nine semantic palette
-indices plus broad value and fold channels:
+Every export contains one mesh and one `MAT_CREATURE_INDEXED` material.
+`COLOR_0` stores one of nine semantic palette indices plus broad value and fold
+channels:
 
 `skin`, `secondary`, `hide`, `cloth`, `leather`, `horn`, `metal`, `accent`,
 and `eye`.
@@ -71,8 +72,9 @@ The manifest records one of three gait contracts. They now select a runtime
 skeletal profile rather than a baked mesh sequence:
 
 - `npc_stepped`: select the goblin pose with the current biped gait phase.
-- `quadruped_stepped`: select the horse or cow pose with the tested
-  `CC_MORPHOLOGY_QUADRUPED` phase.
+- `quadruped_runtime_skin`: load one horse or cow skin and drive its 19 bones
+  from `CcQuadrupedPoseResolve`. The horse and cow share bone names and contact
+  timing while keeping different proportions.
 - `dragon_authored`: select a named dramatic state rather than treating the
   dragon as ambient livestock.
 
@@ -80,9 +82,14 @@ skeletal profile rather than a baked mesh sequence:
 `CcBiomechRig`. Goblins use the biped contact layout. Horses, cows, and the
 dragon use separately proportioned quadruped layouts. Each joint has opposing
 flexor and extensor muscles; their activation changes the visible muscle
-envelope. The road scene uses rig-driven horses and food-linked cattle.
-Settlement scenes show rig-driven goblins at their lair or raid target, the
-tribute bearer during delivery, and the dragon at its lair.
+envelope. `CcQuadrupedPoseResolve` maps the horse and cow results onto the 19
+exported skin bones, while keeping the authored neck, head, body, and tail
+anchors. The generated C catalog keeps those assets in sync with the manifest.
+
+The quadruped gait is analytic and deterministic. It does not need a neural
+net, training data, or an inference runtime. A learned controller may be useful
+later for difficult terrain or reactive behavior, but it should be tested
+against this simple gait before it replaces it.
 
 ## Gameplay-scale rules
 
@@ -102,9 +109,9 @@ tribute bearer during delivery, and the dragon at its lair.
 
 The validator rejects missing pose families, reordered palette semantics,
 unexpected body-plan contracts, multiple material primitives, absent
-`COLOR_0`, skins, animation tracks, excessive triangle counts, and implausible
-bounds. The family preview remains the visual gate for silhouette, scale, and
-palette balance.
+`COLOR_0`, wrong skins, missing quadruped bones or weights, baked animation
+tracks, excessive triangle counts, and implausible bounds. The family preview
+remains the visual gate for silhouette, scale, and palette balance.
 
 Runtime art checks can capture the state-driven settlement compositions:
 
