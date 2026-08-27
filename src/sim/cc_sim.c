@@ -526,6 +526,79 @@ static CcRoute *RouteMutable(CcSim *sim, CcId id)
     return (CcRoute *)CcSimRoute((const CcSim *)sim, id);
 }
 
+static CcRoute *DungeonRouteMutable(CcSim *sim, const CcDungeon *dungeon)
+{
+    if (sim == NULL || dungeon == NULL) return NULL;
+    CcRoute *dungeon_route = NULL;
+    for (int32_t i = 0; i < sim->route_count; ++i) {
+        CcRoute *route = &sim->routes[i];
+        if (route->from_id != dungeon->settlement_id &&
+            route->to_id != dungeon->settlement_id) continue;
+        if (dungeon_route == NULL ||
+            route->capacity < dungeon_route->capacity) {
+            dungeon_route = route;
+        }
+    }
+    return dungeon_route;
+}
+
+typedef struct CcDungeonEffects {
+    int32_t mine_production;
+    int32_t prosperity;
+    int32_t route_capacity;
+    int32_t route_security;
+    int32_t route_condition;
+    int32_t bandit_supplies;
+    int32_t bandit_influence;
+    int32_t hunting_pressure;
+    int32_t population_loss;
+    int32_t monster_pressure_loss;
+} CcDungeonEffects;
+
+static CcDungeonEffects DungeonEffects(CcDungeonState state)
+{
+    switch (state) {
+        case CC_DUNGEON_EXPLORED:
+            return (CcDungeonEffects){
+                .hunting_pressure = 8,
+                .population_loss = 2,
+                .monster_pressure_loss = 4
+            };
+        case CC_DUNGEON_PUBLIC_ROUTE:
+            return (CcDungeonEffects){
+                .mine_production = 3,
+                .prosperity = 4,
+                .route_capacity = 6,
+                .route_security = 10,
+                .route_condition = 15,
+                .hunting_pressure = 24,
+                .population_loss = 8,
+                .monster_pressure_loss = 14
+            };
+        case CC_DUNGEON_SMUGGLER_ROUTE:
+            return (CcDungeonEffects){
+                .prosperity = 2,
+                .route_capacity = 4,
+                .route_condition = 8,
+                .bandit_supplies = 8,
+                .bandit_influence = 10,
+                .hunting_pressure = 12,
+                .population_loss = 4,
+                .monster_pressure_loss = 8
+            };
+        case CC_DUNGEON_RESEALED:
+            return (CcDungeonEffects){
+                .mine_production = -4,
+                .prosperity = -3,
+                .hunting_pressure = 40,
+                .population_loss = 16,
+                .monster_pressure_loss = 25
+            };
+        default:
+            return (CcDungeonEffects){0};
+    }
+}
+
 const CcRoute *CcSimRouteBetween(const CcSim *sim, CcId a, CcId b)
 {
     if (sim == NULL) return NULL;
@@ -3734,6 +3807,19 @@ static void ExpireSituations(CcSim *sim)
     }
 }
 
+static int32_t NextSituationExpiryDay(const CcSim *sim)
+{
+    int32_t next_day = INT_MAX;
+    for (int32_t i = 0; i < sim->situation_count; ++i) {
+        const CcSituation *situation = &sim->situations[i];
+        if (situation->status == CC_SITUATION_ACTIVE &&
+            situation->deadline_day < next_day) {
+            next_day = situation->deadline_day;
+        }
+    }
+    return next_day;
+}
+
 static CcSettlement *KingdomSeat(CcSim *sim, int32_t kingdom_slot)
 {
     if (sim == NULL || kingdom_slot < 0 ||
@@ -3883,7 +3969,8 @@ static void ApplyCourierMessage(CcSim *sim, CcCourier *courier,
         event_kind = CC_EVENT_WAR_DECLARED;
         changed = true;
     } else if (courier->kind == CC_COURIER_PEACE_OFFER &&
-               state == CC_DIPLOMACY_WAR) {
+               (state == CC_DIPLOMACY_WAR ||
+                (state == CC_DIPLOMACY_ALLIANCE && sim->dragon.slain))) {
         state = CC_DIPLOMACY_PEACE;
         event_kind = CC_EVENT_PEACE_DECLARED;
         changed = true;
@@ -5078,8 +5165,13 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
 void CcSimAdvanceDays(CcSim *sim, int32_t days)
 {
     if (sim == NULL || days <= 0) return;
+    int32_t next_situation_expiry = NextSituationExpiryDay(sim);
     for (int32_t day = 0; day < days; ++day) {
         sim->current_day += 1;
+        if (sim->current_day > next_situation_expiry) {
+            ExpireSituations(sim);
+            next_situation_expiry = NextSituationExpiryDay(sim);
+        }
         UpdateShipments(sim);
         AdvanceCouriers(sim);
         AdvanceServiceProjects(sim);
@@ -5096,10 +5188,10 @@ void CcSimAdvanceDays(CcSim *sim, int32_t days)
             UpdateRoutesAndGovernments(sim);
             UpdateRoyalDiplomacy(sim);
             PlanTrade(sim);
-            ExpireSituations(sim);
             GenerateSituations(sim);
             PlanGoblinTribute(sim);
             PlanHoardRaid(sim);
+            next_situation_expiry = NextSituationExpiryDay(sim);
         }
         DeliverDelayedEchoIfReady(sim);
     }
@@ -5632,10 +5724,27 @@ static void FinishJourneyArrival(CcSim *sim)
     if (destination == NULL || route == NULL) return;
     if (sim->journey.situation_id != 0U &&
         sim->player.accepted_situation_id == sim->journey.situation_id) {
-        if (sim->resolved_journey_situation_id != sim->journey.situation_id) {
+        const CcSituation *situation = CcSimSituation(
+            sim, sim->journey.situation_id);
+        bool delivery = situation != NULL &&
+            (situation->kind == CC_SITUATION_RELIEF_DELIVERY ||
+             situation->kind == CC_SITUATION_BLACK_MARKET_DELIVERY);
+        int32_t remaining = situation != NULL ?
+            situation->quantity - situation->progress : 0;
+        bool delivered_load_arrived = !delivery ||
+            (destination->id == situation->target_id &&
+             situation->good >= 0 && situation->good < CC_GOOD_COUNT &&
+             sim->player.cargo[situation->good] >= remaining);
+        if (delivered_load_arrived) {
+            if (sim->resolved_journey_situation_id !=
+                sim->journey.situation_id) {
+                sim->resolved_journey_outcome = CC_JOURNEY_OUTCOME_NONE;
+            }
+            sim->resolved_journey_situation_id = sim->journey.situation_id;
+        } else {
+            sim->resolved_journey_situation_id = 0U;
             sim->resolved_journey_outcome = CC_JOURNEY_OUTCOME_NONE;
         }
-        sim->resolved_journey_situation_id = sim->journey.situation_id;
     }
     sim->player.location_id = destination->id;
     for (int32_t i = 0; i < sim->treasure_count; ++i) {
@@ -5794,6 +5903,8 @@ static bool ApplyTravel(CcSim *sim, const CcCommand *command,
     CcId parent_event_id = LatestLocalCause(sim, destination->id);
     bool ambush_pending = !encounter_planned &&
         (int32_t)(NextRandom(sim) % 100U) < danger / 2;
+    sim->resolved_journey_situation_id = 0U;
+    sim->resolved_journey_outcome = CC_JOURNEY_OUTCOME_NONE;
     sim->player.coins -= fare;
     CcSettlement *origin_market = CcSimSettlementMutable(
         sim, sim->player.location_id);
@@ -5895,9 +6006,9 @@ static bool ApplyResolveEncounter(CcSim *sim, CcJourneyOutcome outcome,
         magnitude = damage;
     } else {
         sim->player.coins -= journey.bargain_cost;
+        destination->market_coins += journey.bargain_cost;
         route->security = ClampI32(route->security - 1, 0, 100);
         destination->prosperity = ClampI32(destination->prosperity + 1, 0, 100);
-        destination->stock[CC_GOOD_FOOD] += 2;
         if (bandits != NULL) {
             bandits->supplies = ClampI32(bandits->supplies + 4, 0, 100);
             bandits->influence = ClampI32(bandits->influence + 3, 0, 100);
@@ -6044,6 +6155,21 @@ static bool ApplyDungeonChange(CcSim *sim, const CcCommand *command,
         SetError(error, error_capacity, "That dungeon outcome is invalid.");
         return false;
     }
+    if (dungeon->state == command->dungeon_state) {
+        SetError(error, error_capacity,
+                 "The dungeon already has that lasting outcome.");
+        return false;
+    }
+    CcRoute *mine_road = DungeonRouteMutable(sim, dungeon);
+    if (command->dungeon_state != CC_DUNGEON_EXPLORED &&
+        mine_road == NULL) {
+        SetError(error, error_capacity,
+                 "No mine road is linked to that dungeon.");
+        return false;
+    }
+    CcDungeonState previous_state = dungeon->state;
+    CcDungeonEffects previous_effects = DungeonEffects(previous_state);
+    CcDungeonEffects next_effects = DungeonEffects(command->dungeon_state);
     int32_t tools = command->dungeon_state == CC_DUNGEON_PUBLIC_ROUTE ? 2 :
                     command->dungeon_state == CC_DUNGEON_SMUGGLER_ROUTE ? 1 :
                     command->dungeon_state == CC_DUNGEON_RESEALED ? 3 : 0;
@@ -6063,97 +6189,91 @@ static bool ApplyDungeonChange(CcSim *sim, const CcCommand *command,
     sim->player.coins -= crowns;
     CcSimAdvanceDays(sim, 3);
     dungeon->state = command->dungeon_state;
-    if (command->dungeon_state == CC_DUNGEON_EXPLORED) {
-        dungeon->regional_pressure = 40;
-        for (int32_t i = 0; i < sim->monster_count; ++i) {
-            if (sim->monsters[i].dungeon_id != dungeon->id) continue;
-            sim->monsters[i].hunting_pressure = ClampI32(
-                sim->monsters[i].hunting_pressure + 8, 0, 100);
-            sim->monsters[i].population = ClampI32(
-                sim->monsters[i].population - 2, 0, 160);
-            sim->monsters[i].pressure = ClampI32(
-                sim->monsters[i].pressure - 4, 0, 100);
-        }
-        (void)PushEvent(sim, CC_EVENT_DUNGEON_CHANGED, dungeon->id,
-                        dungeon->settlement_id, 0,
-                        dungeon->regional_pressure,
-                        "Scouts return from the disturbed tunnel with routes, losses, and three rival proposals.");
-        SetError(error, error_capacity, "");
-        return true;
-    }
     dungeon->regional_pressure = command->dungeon_state == CC_DUNGEON_RESEALED ? 12 :
                                  command->dungeon_state == CC_DUNGEON_PUBLIC_ROUTE ? 28 :
-                                 command->dungeon_state == CC_DUNGEON_SMUGGLER_ROUTE ? 38 : 36;
+                                 command->dungeon_state == CC_DUNGEON_SMUGGLER_ROUTE ? 38 : 40;
     CcSettlement *mine = CcSimSettlementMutable(sim, dungeon->settlement_id);
-    CcRoute *mine_road = NULL;
-    for (int32_t i = 0; i < sim->route_count; ++i) {
-        if (sim->routes[i].smuggler_route &&
-            (sim->routes[i].from_id == dungeon->settlement_id ||
-             sim->routes[i].to_id == dungeon->settlement_id)) {
-            mine_road = &sim->routes[i];
-            break;
-        }
-    }
-    int32_t hunting_gain = 0;
-    int32_t population_loss = 0;
-    int32_t pressure_loss = 0;
+    mine_road = DungeonRouteMutable(sim, dungeon);
+    if (mine != NULL) mine->market_coins += crowns;
     const char *event_text = NULL;
-    if (command->dungeon_state == CC_DUNGEON_PUBLIC_ROUTE) {
-        hunting_gain = 24;
-        population_loss = 8;
-        pressure_loss = 14;
-        if (mine != NULL) {
-            mine->production[CC_GOOD_MATERIAL] += 3;
-            mine->prosperity = ClampI32(mine->prosperity + 4, 0, 100);
-        }
-        if (mine_road != NULL) {
+    if (mine != NULL) {
+        mine->production[CC_GOOD_MATERIAL] = MaximumI32(
+            0, mine->production[CC_GOOD_MATERIAL] +
+               next_effects.mine_production -
+               previous_effects.mine_production);
+        mine->prosperity = ClampI32(
+            mine->prosperity + next_effects.prosperity -
+                previous_effects.prosperity,
+            0, 100);
+    }
+    if (mine_road != NULL) {
+        mine_road->capacity = ClampI32(
+            mine_road->capacity + next_effects.route_capacity -
+                previous_effects.route_capacity,
+            1, 40);
+        mine_road->security = ClampI32(
+            mine_road->security + next_effects.route_security -
+                previous_effects.route_security,
+            0, 100);
+        mine_road->condition = ClampI32(
+            mine_road->condition + next_effects.route_condition -
+                previous_effects.route_condition,
+            0, 100);
+        if (command->dungeon_state == CC_DUNGEON_PUBLIC_ROUTE) {
             mine_road->smuggler_route = false;
             mine_road->closed = false;
-            mine_road->capacity = ClampI32(mine_road->capacity + 6, 1, 40);
-            mine_road->security = ClampI32(mine_road->security + 10, 0, 100);
-            mine_road->condition = ClampI32(mine_road->condition + 15, 0, 100);
+        } else if (command->dungeon_state == CC_DUNGEON_SMUGGLER_ROUTE) {
+            mine_road->smuggler_route = true;
+            mine_road->closed = false;
+        } else if (command->dungeon_state == CC_DUNGEON_RESEALED) {
+            mine_road->smuggler_route = false;
+            mine_road->closed = true;
         }
+        CcBanditGroup *bandits = BanditsOnRoute(sim, mine_road->id);
+        if (bandits != NULL) {
+            bandits->supplies = ClampI32(
+                bandits->supplies + next_effects.bandit_supplies -
+                    previous_effects.bandit_supplies,
+                0, 100);
+            bandits->influence = ClampI32(
+                bandits->influence + next_effects.bandit_influence -
+                    previous_effects.bandit_influence,
+                0, 100);
+        }
+    }
+    if (command->dungeon_state == CC_DUNGEON_EXPLORED) {
+        event_text = "Scouts return from the disturbed tunnel with routes, losses, and three rival proposals.";
+    } else if (command->dungeon_state == CC_DUNGEON_PUBLIC_ROUTE) {
         event_text = "The old tunnel becomes a taxed public road; trade grows and officials take control.";
     } else if (command->dungeon_state == CC_DUNGEON_SMUGGLER_ROUTE) {
-        hunting_gain = 12;
-        population_loss = 4;
-        pressure_loss = 8;
-        if (mine != NULL) mine->prosperity = ClampI32(mine->prosperity + 2, 0, 100);
-        if (mine_road != NULL) {
-            mine_road->closed = false;
-            mine_road->capacity = ClampI32(mine_road->capacity + 4, 1, 40);
-            mine_road->condition = ClampI32(mine_road->condition + 8, 0, 100);
-        }
-        CcBanditGroup *bandits = mine_road != NULL ?
-            BanditsOnRoute(sim, mine_road->id) : NULL;
-        if (bandits != NULL) {
-            bandits->supplies = ClampI32(bandits->supplies + 8, 0, 100);
-            bandits->influence = ClampI32(bandits->influence + 10, 0, 100);
-        }
         event_text = "The old tunnel becomes a hidden toll road; goods move and the outlaws gain power.";
     } else {
-        hunting_gain = 40;
-        population_loss = 16;
-        pressure_loss = 25;
-        if (mine != NULL) {
-            mine->production[CC_GOOD_MATERIAL] = MaximumI32(
-                0, mine->production[CC_GOOD_MATERIAL] - 4);
-            mine->prosperity = ClampI32(mine->prosperity - 3, 0, 100);
-        }
-        if (mine_road != NULL) mine_road->closed = true;
         event_text = "The old tunnel is sealed; the monsters retreat and part of the mine economy dies with it.";
     }
     for (int32_t i = 0; i < sim->monster_count; ++i) {
         if (sim->monsters[i].dungeon_id != dungeon->id) continue;
-        sim->monsters[i].hunting_pressure = ClampI32(sim->monsters[i].hunting_pressure + hunting_gain,
-                                                     0, 100);
-        sim->monsters[i].population = ClampI32(sim->monsters[i].population - population_loss, 0, 160);
-        sim->monsters[i].pressure = ClampI32(sim->monsters[i].pressure - pressure_loss, 0, 100);
+        sim->monsters[i].hunting_pressure = ClampI32(
+            sim->monsters[i].hunting_pressure +
+                next_effects.hunting_pressure -
+                previous_effects.hunting_pressure,
+            0, 100);
+        sim->monsters[i].population = ClampI32(
+            sim->monsters[i].population - next_effects.population_loss +
+                previous_effects.population_loss,
+            0, 160);
+        sim->monsters[i].pressure = ClampI32(
+            sim->monsters[i].pressure -
+                next_effects.monster_pressure_loss +
+                previous_effects.monster_pressure_loss,
+            0, 100);
     }
     (void)PushEvent(sim, CC_EVENT_DUNGEON_CHANGED, dungeon->id,
                     dungeon->settlement_id, 0, dungeon->regional_pressure,
                     event_text);
-    ResolveTargetSituations(sim, CC_SITUATION_MONSTER_EXPEDITION, dungeon->id);
+    if (command->dungeon_state != CC_DUNGEON_EXPLORED) {
+        ResolveTargetSituations(
+            sim, CC_SITUATION_MONSTER_EXPEDITION, dungeon->id);
+    }
     SetError(error, error_capacity, "");
     return true;
 }
@@ -6163,6 +6283,21 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
 {
     if (sim == NULL || command == NULL) {
         SetError(error, error_capacity, "Command target is missing.");
+        return false;
+    }
+    bool settlement_action = command->kind == CC_COMMAND_TRADE ||
+        command->kind == CC_COMMAND_REPAIR_ROUTE ||
+        command->kind == CC_COMMAND_CHANGE_DUNGEON ||
+        command->kind == CC_COMMAND_BUY_MAP ||
+        command->kind == CC_COMMAND_SELL_MAP ||
+        command->kind == CC_COMMAND_BUY_TREASURE ||
+        command->kind == CC_COMMAND_SELL_TREASURE ||
+        command->kind == CC_COMMAND_ACCEPT_SITUATION ||
+        command->kind == CC_COMMAND_ABANDON_SITUATION ||
+        command->kind == CC_COMMAND_REFUSE_SITUATION;
+    if (sim->journey.active && settlement_action) {
+        SetError(error, error_capacity,
+                 "Settlement business must wait until the carriage arrives.");
         return false;
     }
     switch (command->kind) {
@@ -6328,17 +6463,6 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                  "The monastery reserve is invalid.");
         return false;
     }
-    for (int32_t i = 0; i < sim->kingdom_count; ++i) {
-        const CcKingdom *kingdom = &sim->kingdoms[i];
-        if (CcIdKind(kingdom->id) != CC_ENTITY_KINGDOM ||
-            kingdom->treasury < 0 || kingdom->legitimacy < 0 ||
-            kingdom->legitimacy > 100 ||
-            (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
-             kingdom->iron_ledger_debt < 0)) {
-            SetError(error, error_capacity, "Kingdom accounts are invalid.");
-            return false;
-        }
-    }
     if (sim->kingdom_count < 1 || sim->kingdom_count > CC_MAX_KINGDOMS ||
         sim->settlement_count < 1 || sim->settlement_count > CC_MAX_SETTLEMENTS ||
         sim->route_count < 0 || sim->route_count > CC_MAX_ROUTES ||
@@ -6356,6 +6480,17 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         sim->event_write_index >= CC_MAX_EVENTS) {
         SetError(error, error_capacity, "Simulation counts are invalid.");
         return false;
+    }
+    for (int32_t i = 0; i < sim->kingdom_count; ++i) {
+        const CcKingdom *kingdom = &sim->kingdoms[i];
+        if (CcIdKind(kingdom->id) != CC_ENTITY_KINGDOM ||
+            kingdom->treasury < 0 || kingdom->legitimacy < 0 ||
+            kingdom->legitimacy > 100 ||
+            (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
+             kingdom->iron_ledger_debt < 0)) {
+            SetError(error, error_capacity, "Kingdom accounts are invalid.");
+            return false;
+        }
     }
     if (sim->schema_version == CC_SIM_SCHEMA_VERSION) {
         for (int32_t first = 0; first < sim->kingdom_count; ++first) {
@@ -6511,14 +6646,32 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
     }
     for (int32_t i = 0; i < sim->shipment_count; ++i) {
         const CcShipment *shipment = &sim->shipments[i];
+        const CcRoute *shipment_route = CcSimRoute(sim, shipment->route_id);
+        bool route_connects = shipment_route != NULL &&
+            ((shipment_route->from_id == shipment->origin_id &&
+              shipment_route->to_id == shipment->destination_id) ||
+             (shipment_route->to_id == shipment->origin_id &&
+              shipment_route->from_id == shipment->destination_id));
+        bool timing_valid = shipment->status != CC_SHIPMENT_TRAVELLING ||
+            (shipment->departure_day >= 1 &&
+             shipment->departure_day <= sim->current_day &&
+             shipment->arrival_day > sim->current_day &&
+             shipment_route != NULL &&
+             (int64_t)shipment->arrival_day ==
+                 (int64_t)shipment->departure_day +
+                     (int64_t)shipment_route->travel_days);
+        bool capacity_valid = shipment_route != NULL &&
+            shipment->good >= 0 && shipment->good < CC_GOOD_COUNT &&
+            GoodCargoSlots(shipment->good, shipment->quantity) <=
+                shipment_route->capacity;
         if (CcIdKind(shipment->id) != CC_ENTITY_SHIPMENT ||
             CcSimSettlement(sim, shipment->origin_id) == NULL ||
             CcSimSettlement(sim, shipment->destination_id) == NULL ||
             CcSimSettlement(sim, shipment->final_destination_id) == NULL ||
-            CcSimRoute(sim, shipment->route_id) == NULL ||
+            shipment_route == NULL || !route_connects || !timing_valid ||
             shipment->good < 0 || shipment->good >= CC_GOOD_COUNT ||
             shipment->quantity < 1 || shipment->status < CC_SHIPMENT_UNUSED ||
-            shipment->status > CC_SHIPMENT_LOST) {
+            shipment->status > CC_SHIPMENT_LOST || !capacity_valid) {
             SetError(error, error_capacity, "Shipment data is invalid.");
             return false;
         }
@@ -6754,7 +6907,12 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         }
     }
     const CcSituation *accepted = CcSimAcceptedSituation(sim);
+    bool nonnegative_cargo = true;
+    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        if (sim->player.cargo[good] < 0) nonnegative_cargo = false;
+    }
     if (CcSimSettlement(sim, sim->player.location_id) == NULL ||
+        !nonnegative_cargo ||
         CcPlayerCargoUsed(&sim->player) > sim->player.cargo_capacity ||
         sim->player.treasure_cargo_slots != player_treasure_count ||
         sim->player.map_capacity < 1 ||
