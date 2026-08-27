@@ -1,11 +1,11 @@
 1
-00:00:00,150 --> 00:00:05,000
+00:00:00,150 --> 00:00:04,900
 Humans don't cooperate because they're good.
 
 2
-00:00:05,000 --> 00:00:13,250
+00:00:05,400 --> 00:00:13,000
 They cooperate because something bigger than any of them...
 
 3
-00:00:13,250 --> 00:00:18,000
+00:00:13,800 --> 00:00:17,900
 would eat them if they didn't.
