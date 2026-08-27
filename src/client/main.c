@@ -21,6 +21,8 @@
 #define CC_GOLD CC_STYLE_GOLD
 #define DANGER CC_STYLE_DANGER
 #define CC_VIOLET CC_STYLE_VIOLET
+#define CC_GLOAMGATE_ALDERWATCH_MAP_ASSET \
+    "assets/maps/gloamgate_to_alderwatch.png"
 
 typedef enum ClientView {
     VIEW_LOCAL,
@@ -84,6 +86,34 @@ static void CampaignSavePath(char *path, size_t capacity)
     }
 #endif
     (void)snprintf(path, capacity, "crownless_campaign.ccsave");
+}
+
+static bool ResolveClientAssetPath(const char *relative_path, char *resolved,
+                                   size_t capacity)
+{
+    if (relative_path == NULL || resolved == NULL || capacity == 0U) {
+        return false;
+    }
+    if (FileExists(relative_path)) {
+        (void)snprintf(resolved, capacity, "%s", relative_path);
+        return true;
+    }
+#if defined(CC_ASSET_SOURCE_ROOT)
+    (void)snprintf(resolved, capacity, "%s/%s", CC_ASSET_SOURCE_ROOT,
+                   relative_path);
+    if (FileExists(resolved)) return true;
+#endif
+    (void)snprintf(resolved, capacity, "../%s", relative_path);
+    if (FileExists(resolved)) return true;
+    (void)snprintf(resolved, capacity, "%s/../Resources/%s",
+                   GetApplicationDirectory(), relative_path);
+    return FileExists(resolved);
+}
+
+static bool IsGloamgateAlderwatchMap(const CcMap *map)
+{
+    return map != NULL &&
+           strcmp(map->name, CC_GLOAMGATE_ALDERWATCH_MAP_NAME) == 0;
 }
 
 static const CcKingdom *KingdomById(const CcSim *sim, CcId id)
@@ -1110,7 +1140,8 @@ static void DrawChartTown(Vector2 point, const CcSettlement *place, bool current
     if (current) CcOverlayDrawText("CARRIAGE", (int)point.x - 34, (int)point.y - 38, 10, DANGER);
 }
 
-static void DrawMap(const CcSim *sim, int32_t selected, float clock)
+static void DrawMap(const CcSim *sim, int32_t selected, float clock,
+                    Texture2D illustrated_map)
 {
     (void)clock;
     DrawPanel((Rectangle){20.0f, 82.0f, 900.0f, 568.0f},
@@ -1150,6 +1181,14 @@ static void DrawMap(const CcSim *sim, int32_t selected, float clock)
                                 (Color){91, 69, 46, 220});
     if (map == NULL) {
         CcOverlayDrawText("THE CASE IS EMPTY", 452, 335, 22, (Color){83, 65, 46, 255});
+        return;
+    }
+    if (IsGloamgateAlderwatchMap(map) && illustrated_map.id != 0U) {
+        Rectangle source = {0.0f, 0.0f, (float)illustrated_map.width,
+                            (float)illustrated_map.height};
+        Rectangle destination = {294.0f, 163.0f, 596.0f, 397.33f};
+        DrawTexturePro(illustrated_map, source, destination,
+                       (Vector2){0.0f, 0.0f}, 0.0f, WHITE);
         return;
     }
     const CcRoute *route = CcSimRoute(sim, map->route_id);
@@ -2554,6 +2593,14 @@ int main(int argc, char **argv)
     SetWindowMinSize(1080, 680);
     SetTargetFPS(render_benchmark || capture_action_reel ||
                  capture_gameplay_reel ? 0 : 60);
+    Texture2D illustrated_map = {0};
+    char illustrated_map_path[1024];
+    if (ResolveClientAssetPath(CC_GLOAMGATE_ALDERWATCH_MAP_ASSET,
+                               illustrated_map_path,
+                               sizeof(illustrated_map_path))) {
+        illustrated_map = LoadTexture(illustrated_map_path);
+        SetTextureFilter(illustrated_map, TEXTURE_FILTER_BILINEAR);
+    }
     /* The playable world is authored against a fixed 2x art-pixel grid.
        Render it at half the presentation size, then enlarge with point
        sampling. Screen-space labels and HUD are drawn after presentation. */
@@ -2632,6 +2679,14 @@ int main(int argc, char **argv)
         }
     }
     int32_t selected = FirstVisibleMapIndex(&sim);
+    if (capture_map_case) {
+        for (int32_t i = 0; i < sim.map_count; ++i) {
+            if (IsGloamgateAlderwatchMap(&sim.maps[i])) {
+                selected = i;
+                break;
+            }
+        }
+    }
     int32_t selected_situation = FirstActiveSituationIndex(&sim);
     ClientView view = capture_board ? VIEW_SITUATIONS :
                       capture_encounter ? VIEW_ENCOUNTER :
@@ -2808,6 +2863,7 @@ int main(int argc, char **argv)
                           walk_cycle_mask);
             CcLocalRendererShutdown();
             UnloadRenderTexture(local_target);
+            if (illustrated_map.id != 0U) UnloadTexture(illustrated_map);
             CloseWindow();
             return 1;
         }
@@ -2893,7 +2949,7 @@ int main(int argc, char **argv)
                              return_view == VIEW_MAP);
         if (map_underlay) {
             DrawHeader(&sim);
-            DrawMap(&sim, selected, clock);
+            DrawMap(&sim, selected, clock, illustrated_map);
             DrawSettlementPanel(&sim, selected);
             DrawEventRibbon(&sim);
         } else {
@@ -2996,6 +3052,7 @@ int main(int argc, char **argv)
         CcLocalRendererGetStats();
     CcLocalRendererShutdown();
     UnloadRenderTexture(local_target);
+    if (illustrated_map.id != 0U) UnloadTexture(illustrated_map);
     CloseWindow();
     if (render_benchmark) {
         double frames_per_second =

@@ -1298,6 +1298,15 @@ static void InitMaps(CcSim *sim)
                                                "%.10s-%.10s road sheet",
                        from != NULL ? from->name : "Unknown",
                        to != NULL ? to->name : "Unknown");
+        if (i == 1) {
+            map->surveyed_day = sim->current_day;
+            map->accuracy = 72;
+            map->recorded_condition = route->condition;
+            map->recorded_danger = CcSimRouteDanger(sim, route->id);
+            map->ask_price = 24;
+            (void)snprintf(map->name, sizeof(map->name), "%s",
+                           CC_GLOAMGATE_ALDERWATCH_MAP_NAME);
+        }
     }
 }
 
@@ -1487,13 +1496,13 @@ void CcSimInit(CcSim *sim, uint32_t seed)
     InitSettlement(sim, 0, 0, place_names[0], CC_SETTLEMENT_FARMING,
                    CC_SETTLEMENT_VILLAGE,
                    Jitter(sim, 125, 22), Jitter(sim, 500, 20), 1460, 58, 54);
-    InitSettlement(sim, 1, 0, place_names[2], CC_SETTLEMENT_MARKET,
+    InitSettlement(sim, 1, 0, "Gloamgate", CC_SETTLEMENT_MARKET,
                    CC_SETTLEMENT_TOWN,
                    Jitter(sim, 355, 22), Jitter(sim, 445, 20), 2180, 62, 67);
-    InitSettlement(sim, 2, 1, place_names[3], CC_SETTLEMENT_FORTRESS,
+    InitSettlement(sim, 2, 1, "Alderwatch", CC_SETTLEMENT_FORTRESS,
                    CC_SETTLEMENT_TOWN,
                    Jitter(sim, 535, 18), Jitter(sim, 325, 18), 1720, 82, 49);
-    InitSettlement(sim, 3, 1, place_names[1], CC_SETTLEMENT_MINING,
+    InitSettlement(sim, 3, 1, "Silverwick", CC_SETTLEMENT_MINING,
                    CC_SETTLEMENT_TOWN,
                    Jitter(sim, 755, 22), Jitter(sim, 455, 20), 2350, 43, 61);
     InitSettlement(sim, 4, 2, place_names[4], CC_SETTLEMENT_CAPITAL,

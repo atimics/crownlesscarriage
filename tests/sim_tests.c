@@ -2,6 +2,7 @@
 
 #include "test_support.h"
 #include <stdio.h>
+#include <string.h>
 
 static void AdvanceTravellingJourney(CcSim *sim)
 {
@@ -155,6 +156,29 @@ int main(void)
     CC_CHECK(CcPlayerMapCount(&first) == 1);
     CC_CHECK(CcSimMap(&first, offered_id)->owner_id ==
              first.player.location_id);
+
+    const CcMap *illustrated = NULL;
+    for (int32_t i = 0; i < first.map_count; ++i) {
+        if (strcmp(first.maps[i].name,
+                   CC_GLOAMGATE_ALDERWATCH_MAP_NAME) == 0) {
+            illustrated = &first.maps[i];
+            break;
+        }
+    }
+    CC_CHECK(illustrated != NULL);
+    CC_CHECK(strcmp(first.settlements[1].name, "Gloamgate") == 0);
+    CC_CHECK(strcmp(first.settlements[2].name, "Alderwatch") == 0);
+    CC_CHECK(illustrated->route_id == first.routes[1].id);
+    CC_CHECK(illustrated->owner_id == first.settlements[1].id);
+    CC_CHECK(illustrated->ask_price == 24);
+    first.player.location_id = first.settlements[1].id;
+    CcCommand buy_illustrated = {
+        .kind = CC_COMMAND_BUY_MAP,
+        .target_id = illustrated->id
+    };
+    CC_CHECK(CcSimApply(&first, &buy_illustrated, error, sizeof(error)));
+    CC_CHECK(CcSimMap(&first, illustrated->id)->owner_id == first.player.id);
+    CC_CHECK(CcPlayerMapCount(&first) == 2);
 
     CcSim uncharted;
     CcSimInit(&uncharted, UINT32_C(0x12345678));
