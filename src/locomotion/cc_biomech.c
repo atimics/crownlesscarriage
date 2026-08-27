@@ -120,9 +120,14 @@ int32_t CcBiomechAddMuscle(CcBiomechMorphology *morphology, const char *name,
 bool CcBiomechRigInit(CcBiomechRig *rig,
                       const CcBiomechMorphology *morphology)
 {
-    if (rig == NULL || morphology == NULL || morphology->bone_count <= 0 ||
-        morphology->joint_count <= 0) return false;
+    if (rig == NULL) return false;
     *rig = (CcBiomechRig){0};
+    if (morphology == NULL || morphology->bone_count <= 0 ||
+        morphology->bone_count > CC_BIOMECH_MAX_BONES ||
+        morphology->joint_count <= 0 ||
+        morphology->joint_count > CC_BIOMECH_MAX_JOINTS ||
+        morphology->muscle_count < 0 ||
+        morphology->muscle_count > CC_BIOMECH_MAX_MUSCLES) return false;
     rig->morphology = *morphology;
     for (int32_t bone = 0; bone < morphology->bone_count; ++bone) {
         rig->total_mass += morphology->bones[bone].mass;
@@ -719,6 +724,10 @@ static void CollideRagdollSegments(CcBiomechRagdoll *ragdoll,
                        &corrected, &normal)) {
                 continue;
             }
+            float normal_length = LengthVec3(normal);
+            normal = normal_length > 0.00001f && isfinite(normal_length) ?
+                ScaleVec3(normal, 1.0f / normal_length) :
+                (CcBiomechVec3){0.0f, 1.0f, 0.0f};
             CcBiomechVec3 correction = SubtractVec3(corrected, position);
             float weight_a = a->inverse_mass * (1.0f - amount);
             float weight_b = b->inverse_mass * amount;
@@ -864,6 +873,7 @@ void CcBiomechRagdollStep(CcBiomechRagdoll *ragdoll, float delta_time,
                           void *collision_context)
 {
     if (ragdoll == NULL || !ragdoll->active) return;
+    if (!isfinite(delta_time) || delta_time <= 0.0f) return;
     delta_time = Clamp(delta_time, 0.0f, 1.0f / 30.0f);
     constraint_iterations = constraint_iterations < 1 ? 1 :
                             constraint_iterations > 16 ? 16 :

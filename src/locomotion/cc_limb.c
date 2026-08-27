@@ -453,8 +453,18 @@ void CcLimbRigInit(CcLimbRig *rig, const CcLimbMorphology *morphology,
                    CcLimbVec3 body_position, float body_yaw,
                    CcLimbTerrainProbe probe, void *probe_context)
 {
-    if (rig == NULL || morphology == NULL) return;
+    if (rig == NULL) return;
     *rig = (CcLimbRig){0};
+    if (morphology == NULL || morphology->limb_count <= 0 ||
+        morphology->limb_count > CC_LIMB_MAX_COUNT) {
+        return;
+    }
+    for (int32_t index = 0; index < morphology->limb_count; ++index) {
+        int32_t segment_count = morphology->limbs[index].segment_count;
+        if (segment_count <= 0 || segment_count > CC_LIMB_MAX_SEGMENTS) {
+            return;
+        }
+    }
     rig->morphology = *morphology;
     rig->traction = 1.0f;
     rig->drive_scale = 1.0f;

@@ -30,6 +30,26 @@ function(cc_strict_warnings target)
     endif()
 endfunction()
 
+function(cc_manifest_export_paths output manifest section)
+    file(READ "${manifest}" manifest_json)
+    string(JSON export_count LENGTH "${manifest_json}" "${section}")
+    set(export_paths)
+    if(export_count GREATER 0)
+        math(EXPR last_export "${export_count} - 1")
+        foreach(export_index RANGE 0 ${last_export})
+            string(JSON export_path GET "${manifest_json}"
+                   "${section}" ${export_index} "export")
+            set(source_path "${CMAKE_CURRENT_SOURCE_DIR}/${export_path}")
+            if(NOT EXISTS "${source_path}")
+                message(FATAL_ERROR
+                    "Manifest ${manifest} references missing ${export_path}")
+            endif()
+            list(APPEND export_paths "${source_path}")
+        endforeach()
+    endif()
+    set(${output} "${export_paths}" PARENT_SCOPE)
+endfunction()
+
 add_library(crownless_locomotion
     src/locomotion/cc_biomech.c
     src/locomotion/cc_creature.c
@@ -37,6 +57,7 @@ add_library(crownless_locomotion
     src/locomotion/cc_humanoid_skin.c
     src/locomotion/cc_limb.c
     src/locomotion/cc_motion.c
+    src/locomotion/cc_robotics.c
 )
 target_include_directories(crownless_locomotion PUBLIC src)
 if(NOT MSVC)
@@ -155,15 +176,18 @@ if(CC_BUILD_CLIENT)
         set(CC_SCREEN_FIRST_HERO_ENGINE_MANIFEST
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/hero/crownless_screen_first_engine_rig_v08.json"
         )
-        file(GLOB CC_NPC_ARCHETYPE_ASSETS CONFIGURE_DEPENDS
-            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/npc/*.glb"
-        )
         set(CC_NPC_ARCHETYPE_MANIFEST
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/npc_archetype_manifest.json"
         )
         set(CC_NPC_DYNAMIC_MODULE_MANIFEST
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/npc_dynamic_module_manifest.json"
         )
+        cc_manifest_export_paths(CC_NPC_ARCHETYPE_ASSETS
+            "${CC_NPC_ARCHETYPE_MANIFEST}" "archetypes")
+        cc_manifest_export_paths(CC_NPC_DYNAMIC_MODULE_ASSETS
+            "${CC_NPC_DYNAMIC_MODULE_MANIFEST}" "modules")
+        list(APPEND CC_NPC_ARCHETYPE_ASSETS
+             ${CC_NPC_DYNAMIC_MODULE_ASSETS})
         file(GLOB CC_CREATURE_ASSETS CONFIGURE_DEPENDS
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/creatures/*.glb"
         )
@@ -354,8 +378,19 @@ endif()
 include(CTest)
 if(BUILD_TESTING)
     if(CC_BUILD_BENCHMARKS)
+        set(CC_BENCHMARK_TEST_ARGUMENTS --quick)
+        # Debug builds keep the benchmark as a functional smoke test, but
+        # compiler instrumentation makes a release timing budget unreliable.
+        if(CMAKE_BUILD_TYPE MATCHES "^(Release|RelWithDebInfo|MinSizeRel)$")
+            list(APPEND CC_BENCHMARK_TEST_ARGUMENTS --assert-budget)
+        endif()
         add_test(NAME headless_performance_budget
-                 COMMAND crownless_benchmark --quick --assert-budget)
+                 COMMAND crownless_benchmark ${CC_BENCHMARK_TEST_ARGUMENTS})
+        unset(CC_BENCHMARK_TEST_ARGUMENTS)
+        add_test(NAME benchmark_rejects_day_overflow
+                 COMMAND crownless_benchmark --sim-years 5883517)
+        set_tests_properties(benchmark_rejects_day_overflow
+                             PROPERTIES WILL_FAIL TRUE)
     endif()
     add_executable(sim_tests tests/sim_tests.c)
     target_link_libraries(sim_tests PRIVATE crownless_sim)

@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 static void Require(bool condition, const char *message)
 {
@@ -83,6 +84,14 @@ static void TestMotionTimeline(void)
             (contacts & CC_MOTION_MARKER_LEFT_CONTACT) != 0 &&
             (contacts & CC_MOTION_MARKER_RIGHT_CONTACT) != 0,
             "looping motion lost synchronized contact markers");
+
+    CcMotionPlayer paused = player;
+    CcMotionPlayerAdvance(&player, INFINITY);
+    Require(memcmp(&player, &paused, sizeof(player)) == 0,
+            "infinite elapsed time advanced or hung a looping motion");
+    CcMotionPlayerAdvance(&player, NAN);
+    Require(memcmp(&player, &paused, sizeof(player)) == 0,
+            "non-finite elapsed time mutated a motion player");
 }
 
 static void TestLocalClipSampling(void)

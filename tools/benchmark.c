@@ -74,6 +74,12 @@ int main(int argc, char **argv)
             return EXIT_FAILURE;
         }
     }
+    if (sim_years > INT32_MAX / 365) {
+        (void)fprintf(stderr,
+                      "Simulation years exceed the supported day range.\n");
+        return EXIT_FAILURE;
+    }
+    int32_t simulation_days_per_seed = sim_years * 365;
 
     uint64_t checksum = 0U;
     char validation[192];
@@ -81,7 +87,7 @@ int main(int argc, char **argv)
     for (int32_t seed = 0; seed < sim_seeds; ++seed) {
         CcSim sim;
         CcSimInit(&sim, (uint32_t)seed * UINT32_C(0x9e3779b9) + 1U);
-        CcSimAdvanceDays(&sim, sim_years * 365);
+        CcSimAdvanceDays(&sim, simulation_days_per_seed);
         if (!CcSimValidate(&sim, validation, sizeof(validation))) {
             (void)fprintf(stderr, "Simulation benchmark invalid: %s\n", validation);
             return EXIT_FAILURE;
@@ -89,7 +95,8 @@ int main(int argc, char **argv)
         checksum ^= CcSimHash(&sim);
     }
     double sim_seconds = ElapsedSeconds(started);
-    int64_t simulated_days = (int64_t)sim_seeds * sim_years * 365;
+    int64_t simulated_days =
+        (int64_t)sim_seeds * simulation_days_per_seed;
     double nanoseconds_per_day = sim_seconds * 1.0e9 / (double)simulated_days;
 
     CcHumanoidGait *gaits = calloc((size_t)agent_count, sizeof(*gaits));
