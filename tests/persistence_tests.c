@@ -91,6 +91,33 @@ static void CheckReadDoesNotCreateOrRelabel(char *error,
                  newer,
                  "SELECT COUNT(*) FROM sqlite_master WHERE name='meta';") == 0);
     RemoveDatabase(newer);
+
+    const char *malformed = "persistence-malformed-test.ccsave";
+    RemoveDatabase(malformed);
+    database = NULL;
+    RequireSqlite(sqlite3_open_v2(malformed, &database,
+                                  SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE,
+                                  NULL),
+                  database, "could not create malformed fixture");
+    ExecuteFixtureSql(database,
+                      "PRAGMA user_version=7;"
+                      "CREATE TABLE unrelated(value INTEGER);"
+                      "INSERT INTO unrelated VALUES(41);",
+                      "could not create malformed fixture contents");
+    sqlite3_close(database);
+    CcJournal *journal = CcJournalResume(malformed, &untouched,
+                                         error, error_capacity);
+    CC_CHECK(journal == NULL);
+    CC_CHECK(CcSimHash(&untouched) == untouched_hash);
+    CC_CHECK(ReadSqliteInteger(malformed, "PRAGMA application_id;") == 0);
+    CC_CHECK(ReadSqliteInteger(malformed, "PRAGMA user_version;") == 7);
+    CC_CHECK(ReadSqliteInteger(
+                 malformed,
+                 "SELECT COUNT(*) FROM sqlite_master WHERE name='meta';") == 0);
+    CC_CHECK(ReadSqliteInteger(
+                 malformed,
+                 "SELECT value FROM unrelated;") == 41);
+    RemoveDatabase(malformed);
 }
 
 static void AddLegacyJournalSuffix(const char *path,

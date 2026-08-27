@@ -3131,6 +3131,8 @@ CcJournal *CcJournalResume(const char *path, CcSim *sim,
                  "Journal path or simulation is missing.");
         return NULL;
     }
+    CcSim preflight;
+    if (!CcSaveRead(path, &preflight, error, error_capacity)) return NULL;
     CcJournal *journal = AllocateJournal(path, false,
                                          error, error_capacity);
     if (journal == NULL) return NULL;
