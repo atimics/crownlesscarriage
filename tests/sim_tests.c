@@ -101,6 +101,19 @@ int main(void)
     CC_CHECK(realtime.player.coins ==
              realtime_coins - realtime.journey.fare_reserved);
     CC_CHECK(realtime.carriage.mode == CC_CARRIAGE_MOVING);
+    int32_t travelling_food = realtime.player.cargo[CC_GOOD_FOOD];
+    int32_t origin_food = realtime.settlements[0].stock[CC_GOOD_FOOD];
+    CcMoney travelling_coins = realtime.player.coins;
+    CcCommand roadside_trade = {
+        .kind = CC_COMMAND_TRADE,
+        .good = CC_GOOD_FOOD,
+        .amount = 1
+    };
+    CC_CHECK(!CcSimApply(&realtime, &roadside_trade,
+                         error, sizeof(error)));
+    CC_CHECK(realtime.player.cargo[CC_GOOD_FOOD] == travelling_food);
+    CC_CHECK(realtime.settlements[0].stock[CC_GOOD_FOOD] == origin_food);
+    CC_CHECK(realtime.player.coins == travelling_coins);
     CcSimAdvanceRuntimeTicks(&realtime, 12);
     CC_CHECK(realtime.clock.tick == 12U);
     CC_CHECK(realtime.clock.minute_subticks ==
@@ -235,12 +248,87 @@ int main(void)
     CC_CHECK(delivery->progress == 0 &&
              delivery->status == CC_SITUATION_ACTIVE);
 
+    CcSim washed_load;
+    CcSimInit(&washed_load, UINT32_C(0x1a0d3e));
+    CcSituation *washed_delivery = NULL;
+    for (int32_t i = 0; i < washed_load.situation_count; ++i) {
+        if (washed_load.situations[i].kind == CC_SITUATION_RELIEF_DELIVERY) {
+            washed_delivery = &washed_load.situations[i];
+            break;
+        }
+    }
+    CC_CHECK(washed_delivery != NULL);
+    washed_delivery->target_id = washed_load.settlements[3].id;
+    washed_delivery->quantity = 1;
+    washed_delivery->progress = 0;
+    washed_delivery->deadline_day = washed_load.current_day + 60;
+    washed_load.player.coins = 500;
+    washed_load.player.cargo[CC_GOOD_FOOD] = 1;
+    washed_load.routes[0].security = 100;
+    washed_load.routes[0].condition = 100;
+    washed_load.routes[6].security = 100;
+    washed_load.routes[6].condition = 100;
+    washed_load.routes[6].smuggler_route = false;
+    washed_load.bandit_count = 0;
+    washed_load.monster_count = 0;
+    CcCommand accept_washed = {
+        .kind = CC_COMMAND_ACCEPT_SITUATION,
+        .target_id = washed_delivery->id
+    };
+    CC_CHECK(CcSimApply(&washed_load, &accept_washed,
+                        error, sizeof(error)));
+    CcCommand wrong_way = {
+        .kind = CC_COMMAND_TRAVEL,
+        .target_id = washed_load.settlements[1].id
+    };
+    CC_CHECK(CcSimApply(&washed_load, &wrong_way, error, sizeof(error)));
+    CcCommand roadside_abandon = {
+        .kind = CC_COMMAND_ABANDON_SITUATION,
+        .target_id = washed_delivery->id
+    };
+    CC_CHECK(!CcSimApply(&washed_load, &roadside_abandon,
+                         error, sizeof(error)));
+    CC_CHECK(washed_load.player.accepted_situation_id ==
+             washed_delivery->id);
+    AdvanceTravellingJourney(&washed_load);
+    CC_CHECK(washed_load.resolved_journey_situation_id == 0U);
+    CcCommand sell_load = {
+        .kind = CC_COMMAND_TRADE,
+        .good = CC_GOOD_FOOD,
+        .amount = -1
+    };
+    CC_CHECK(CcSimApply(&washed_load, &sell_load, error, sizeof(error)));
+    CcCommand empty_arrival = {
+        .kind = CC_COMMAND_TRAVEL,
+        .target_id = washed_delivery->target_id
+    };
+    CC_CHECK(CcSimApply(&washed_load, &empty_arrival,
+                        error, sizeof(error)));
+    AdvanceTravellingJourney(&washed_load);
+    CC_CHECK(washed_load.resolved_journey_situation_id == 0U);
+    CcCommand buy_local_replacement = {
+        .kind = CC_COMMAND_TRADE,
+        .good = CC_GOOD_FOOD,
+        .amount = 1
+    };
+    CC_CHECK(CcSimApply(&washed_load, &buy_local_replacement,
+                        error, sizeof(error)));
+    CcCommand deliver_replacement = {
+        .kind = CC_COMMAND_TRADE,
+        .good = CC_GOOD_FOOD,
+        .amount = -1
+    };
+    CC_CHECK(!CcSimApply(&washed_load, &deliver_replacement,
+                         error, sizeof(error)));
+    CC_CHECK(washed_delivery->status == CC_SITUATION_ACTIVE &&
+             washed_delivery->progress == 0);
+
     CcSim unanswered;
     CcSimInit(&unanswered, UINT32_C(0xc011ab1e));
     CcSituation *unanswered_charter = FirstActiveSituation(&unanswered, -1);
     CC_CHECK(unanswered_charter != NULL);
-    unanswered.current_day = 6;
-    unanswered_charter->deadline_day = 6;
+    unanswered.current_day = 36;
+    unanswered_charter->deadline_day = 36;
     int32_t reputation_before = unanswered.player.reputation;
     CcSimAdvanceDays(&unanswered, 1);
     CC_CHECK(unanswered.player.reputation == reputation_before);
@@ -254,8 +342,8 @@ int main(void)
         .target_id = promised_charter->id
     };
     CC_CHECK(CcSimApply(&promised, &promise, error, sizeof(error)));
-    promised.current_day = 6;
-    promised_charter->deadline_day = 6;
+    promised.current_day = 36;
+    promised_charter->deadline_day = 36;
     reputation_before = promised.player.reputation;
     CcSimAdvanceDays(&promised, 1);
     CC_CHECK(promised.player.reputation == reputation_before - 1 &&
@@ -329,6 +417,9 @@ int main(void)
     route_security = bargained_road.routes[0].security;
     int32_t bandit_influence = bargained_road.bandits[0].influence;
     CcMoney coins_before_bargain = bargained_road.player.coins;
+    CcMoney gold_before_bargain = CcSimTrackedGold(&bargained_road);
+    int32_t food_before_bargain = CcSimTrackedGood(
+        &bargained_road, CC_GOOD_FOOD);
     int32_t bargain_cost = bargained_road.journey.bargain_cost;
     CcCommand bargain = {
         .kind = CC_COMMAND_RESOLVE_ENCOUNTER_NEGOTIATE
@@ -340,6 +431,43 @@ int main(void)
     CC_CHECK(bargained_road.bandits[0].influence > bandit_influence);
     CC_CHECK(bargained_road.player.coins <=
              coins_before_bargain - bargain_cost);
+    CC_CHECK(CcSimTrackedGold(&bargained_road) == gold_before_bargain);
+    CC_CHECK(CcSimTrackedGood(&bargained_road, CC_GOOD_FOOD) ==
+             food_before_bargain);
+
+    CcSim invalid_state;
+    CcSimInit(&invalid_state, UINT32_C(0xbad5a7e));
+    invalid_state.player.cargo[CC_GOOD_FOOD] = -1;
+    CC_CHECK(!CcSimValidate(&invalid_state, error, sizeof(error)));
+    CcSimInit(&invalid_state, UINT32_C(0xbad5a7e));
+    invalid_state.kingdom_count = CC_MAX_KINGDOMS + 1;
+    CC_CHECK(!CcSimValidate(&invalid_state, error, sizeof(error)));
+    CcSimInit(&invalid_state, UINT32_C(0xbad5a7e));
+    invalid_state.shipment_count = 1;
+    invalid_state.shipments[0] = (CcShipment){
+        .id = CcMakeId(CC_ENTITY_SHIPMENT, UINT64_C(9999)),
+        .origin_id = invalid_state.settlements[0].id,
+        .destination_id = invalid_state.settlements[2].id,
+        .final_destination_id = invalid_state.settlements[2].id,
+        .route_id = invalid_state.routes[0].id,
+        .good = CC_GOOD_FOOD,
+        .quantity = 1,
+        .departure_day = invalid_state.current_day,
+        .arrival_day = invalid_state.current_day +
+                       invalid_state.routes[0].travel_days,
+        .status = CC_SHIPMENT_TRAVELLING
+    };
+    CC_CHECK(!CcSimValidate(&invalid_state, error, sizeof(error)));
+    invalid_state.shipments[0].destination_id =
+        invalid_state.settlements[1].id;
+    invalid_state.shipments[0].final_destination_id =
+        invalid_state.settlements[1].id;
+    invalid_state.shipments[0].quantity =
+        invalid_state.routes[0].capacity * 8 + 1;
+    CC_CHECK(!CcSimValidate(&invalid_state, error, sizeof(error)));
+    invalid_state.shipments[0].quantity = 1;
+    invalid_state.shipments[0].arrival_day += 1;
+    CC_CHECK(!CcSimValidate(&invalid_state, error, sizeof(error)));
 
     CcSim conserved;
     CcSimInit(&conserved, UINT32_C(0xc01d1ed6));

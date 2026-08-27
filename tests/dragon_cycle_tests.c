@@ -364,6 +364,45 @@ int main(void)
     CC_CHECK(CcSimTrackedGold(&dragon_host) == campaign_gold);
     CC_CHECK(CcSimValidate(&dragon_host, error, sizeof(error)));
 
+    CcSim alliance_peace;
+    CcSimInit(&alliance_peace, UINT32_C(0xa111a9ce));
+    alliance_peace.dragon.slain = true;
+    alliance_peace.dragon.slain_day = alliance_peace.current_day;
+    alliance_peace.dragon.stolen_outstanding = 0;
+    alliance_peace.dragon.theft_actor_id = 0U;
+    alliance_peace.dragon.retaliation_target_id = 0U;
+    alliance_peace.dragon.omen_event_id = 0U;
+    alliance_peace.dragon.omen_days_remaining = 0;
+    alliance_peace.diplomacy[0][1] = CC_DIPLOMACY_ALLIANCE;
+    alliance_peace.diplomacy[1][0] = CC_DIPLOMACY_ALLIANCE;
+    alliance_peace.routes[1].closed = false;
+    alliance_peace.routes[1].security = 100;
+    alliance_peace.routes[1].condition = 100;
+    alliance_peace.settlements[2].security = 100;
+    alliance_peace.kingdoms[1].legitimacy = 100;
+    alliance_peace.bandit_count = 0;
+    alliance_peace.monster_count = 0;
+    alliance_peace.courier_count = 1;
+    alliance_peace.couriers[0] = (CcCourier){
+        .id = CcMakeId(CC_ENTITY_COURIER, UINT64_C(9999)),
+        .kind = CC_COURIER_PEACE_OFFER,
+        .status = CC_COURIER_TRAVELLING,
+        .issuer_kingdom_id = alliance_peace.kingdoms[0].id,
+        .recipient_kingdom_id = alliance_peace.kingdoms[1].id,
+        .origin_settlement_id = alliance_peace.settlements[1].id,
+        .destination_settlement_id = alliance_peace.settlements[2].id,
+        .current_settlement_id = alliance_peace.settlements[1].id,
+        .route_id = alliance_peace.routes[1].id,
+        .departure_day = alliance_peace.current_day,
+        .arrival_day = alliance_peace.current_day + 1,
+        .reliability = 100
+    };
+    CcSimAdvanceDays(&alliance_peace, 1);
+    CC_CHECK(alliance_peace.couriers[0].status == CC_COURIER_DELIVERED);
+    CC_CHECK(alliance_peace.diplomacy[0][1] == CC_DIPLOMACY_PEACE &&
+             alliance_peace.diplomacy[1][0] == CC_DIPLOMACY_PEACE);
+    CC_CHECK(CountEvents(&alliance_peace, CC_EVENT_PEACE_DECLARED) == 1);
+
     puts("Goblin tribute, war finance, and dragon retaliation tests passed");
     return 0;
 }
