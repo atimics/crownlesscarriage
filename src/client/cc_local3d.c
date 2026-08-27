@@ -16157,16 +16157,16 @@ static void DrawSettlementCreatures(const CcSim *sim,
         CcCreaturePose raider_pose = CcCreatureSteppedPose(
             CC_CREATURE_GOBLIN_RAIDER, clock * 3.8f + PI, true);
         float patrol = sinf(clock * 0.42f) * 0.42f;
-        if (SceneryPointVisible(23.4f, 49.8f, scenery_focus)) {
+        if (SceneryPointVisible(27.8f, 47.0f, scenery_focus)) {
             (void)DrawCreature3D(
                 CC_CREATURE_GOBLIN_SCAVENGER, scavenger_pose,
-                TerrainWorldPoint(23.4f + patrol, 49.8f), 0.24f * PI, 1.12f,
+                TerrainWorldPoint(27.8f + patrol, 47.0f), -0.13f * PI, 1.28f,
                 (Color){0});
         }
-        if (SceneryPointVisible(26.2f, 50.8f, scenery_focus)) {
+        if (SceneryPointVisible(30.5f, 45.8f, scenery_focus)) {
             (void)DrawCreature3D(
                 CC_CREATURE_GOBLIN_RAIDER, raider_pose,
-                TerrainWorldPoint(26.2f - patrol, 50.8f), -0.34f * PI, 1.18f,
+                TerrainWorldPoint(30.5f - patrol, 45.8f), -0.10f * PI, 1.34f,
                 (Color){0});
         }
     }
@@ -16191,7 +16191,7 @@ static void DrawSettlementCreatures(const CcSim *sim,
     }
 
     if (place->id == dragon->lair_settlement_id && !dragon->slain &&
-        SceneryPointVisible(23.7f, 51.5f, scenery_focus)) {
+        SceneryPointVisible(28.8f, 46.8f, scenery_focus)) {
         CcCreaturePose dragon_pose = CC_CREATURE_POSE_REST;
         if (dragon->stolen_outstanding > 0 ||
             dragon->omen_days_remaining > 0) {
@@ -16201,17 +16201,17 @@ static void DrawSettlementCreatures(const CcSim *sim,
         }
         (void)DrawCreature3D(
             CC_CREATURE_DRAGON, dragon_pose,
-            TerrainWorldPoint(23.7f, 51.5f), -0.48f * PI, 0.94f,
+            TerrainWorldPoint(28.8f, 46.8f), -0.48f * PI, 0.94f,
             (Color){0});
     }
     if (place->id == dragon->lair_settlement_id &&
         goblins->tribute_phase == CC_GOBLIN_TRIBUTE_TO_DRAGON &&
-        SceneryPointVisible(28.9f, 51.6f, scenery_focus)) {
+        SceneryPointVisible(33.0f, 43.2f, scenery_focus)) {
         CcCreaturePose bearer_pose = CcCreatureSteppedPose(
             CC_CREATURE_GOBLIN_TRIBUTE_BEARER, clock * 3.4f, true);
         (void)DrawCreature3D(
             CC_CREATURE_GOBLIN_TRIBUTE_BEARER, bearer_pose,
-            TerrainWorldPoint(28.9f, 51.6f), -0.38f * PI, 1.12f,
+            TerrainWorldPoint(33.0f, 43.2f), -0.38f * PI, 1.12f,
             (Color){0});
     }
 }
