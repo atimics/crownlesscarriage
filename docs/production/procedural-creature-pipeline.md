@@ -3,7 +3,7 @@
 ## Production result
 
 The creature library expands the human cast with three distinct visual and
-motion families:
+motion families, backed by reusable 2-, 4-, 6-, and 8-leg rig templates:
 
 - Goblins are short bipeds with oversized ears, heads, hands, and carried
   goods. Scavenger, raider, and tribute-bearer variants make the lair economy
@@ -17,10 +17,22 @@ motion families:
 
 All forms are generated from code rather than hand-edited exports. The horse
 and cow each ship as one rigged, skinned GLB. Their four legs are driven by the
-same planted contacts, two-bone joint solves, and flexor/extensor model as the
-rest of the cast. Goblins and the dragon keep their generated GLBs as editable
-shape references while the game assembles their visible forms around live
-bones.
+same persistent planted contacts, joint solves, and flexor/extensor model as
+the rest of the cast. Goblins and the dragon keep their generated GLBs as
+editable shape references while the game assembles their visible forms around
+live bones.
+
+| Runtime template | Legs | Chain | Support rule | Current use |
+| --- | ---: | --- | --- | --- |
+| Biped | 2 | thigh and lower leg | at least 1 planted | goblins and people |
+| Quadruped | 4 | upper and lower leg | at least 3 planted | horse, cow, dragon |
+| Hexapod | 6 | upper and lower leg | tripod support | ready for six-leg species |
+| Octopod | 8 | upper, middle, and terminal leg | at least 6 planted | ready for eight-leg species |
+
+The six- and eight-leg templates are complete runtime skeletons, not animation
+labels. They have independent leg states, joint chains, opposing muscles,
+support budgets, and collision samples. A new creature can attach its body art
+to either template without changing the locomotion engine.
 
 ## Generated artifacts
 
@@ -78,18 +90,31 @@ skeletal profile rather than a baked mesh sequence:
 - `dragon_authored`: select a named dramatic state rather than treating the
   dragon as ambient livestock.
 
-`CcCreatureRigPoseResolve` derives each body from `CcLimbRig` and
-`CcBiomechRig`. Goblins use the biped contact layout. Horses, cows, and the
-dragon use separately proportioned quadruped layouts. Each joint has opposing
-flexor and extensor muscles; their activation changes the visible muscle
-envelope. `CcQuadrupedPoseResolve` maps the horse and cow results onto the 19
-exported skin bones, while keeping the authored neck, head, body, and tail
+`CcCreatureRigController` owns the live `CcLimbRig` and `CcBiomechRig` state.
+It keeps a planted foot fixed in world space until that leg starts its swing.
+Swinging feet follow a smooth path whose speed and acceleration both settle at
+contact. The gait scheduler limits how many legs can lift together and checks
+the remaining support shape before allowing another lift. This prevents the
+old skating motion where every foot followed the body throughout a step.
+
+`CcCreatureRigPoseResolve` remains available for held poses and previews.
+Goblins use the biped contact layout. Horses, cows, and the dragon use
+separately proportioned quadruped layouts. Hexapods use alternating tripods;
+octopods use staggered three-segment legs. Each joint has opposing flexor and
+extensor muscles, and their activation changes the visible muscle envelope.
+`CcQuadrupedPoseResolveFromRig` maps the live horse and cow results onto the 19
+exported skin bones while keeping the authored neck, head, body, and tail
 anchors. The generated C catalog keeps those assets in sync with the manifest.
 
-The quadruped gait is analytic and deterministic. It does not need a neural
-net, training data, or an inference runtime. A learned controller may be useful
-later for difficult terrain or reactive behavior, but it should be tested
-against this simple gait before it replaces it.
+Each healthy bone link can also be converted into overlapping collision
+spheres by `CcRobotLimbPointSpace`. This gives every supported body plan one
+continuous point-space proxy instead of collision only at the joints.
+
+The gait is analytic and deterministic. Animals and people do not need a
+neural net, training data, or an inference runtime for normal game movement.
+A learned controller may be useful later for unusually difficult terrain or
+new reactive tricks, but it should add to this tested controller instead of
+replacing the reliable baseline.
 
 ## Gameplay-scale rules
 
@@ -118,11 +143,14 @@ Runtime art checks can capture the state-driven settlement compositions:
 ```sh
 ./crownless_carriage --capture-creatures goblins goblins.png
 ./crownless_carriage --capture-creatures dragon dragon.png
-./crownless_carriage --capture-creatures animals animals.png
+./crownless_carriage --capture-creatures horse horse.png
+./crownless_carriage --capture-creatures cow cow.png
 ./crownless_carriage --capture-creature-reel goblins goblins/frame
 ./crownless_carriage --capture-creature-reel dragon dragon/frame
-./crownless_carriage --capture-creature-reel animals animals/frame
+./crownless_carriage --capture-creature-reel horse horse/frame
+./crownless_carriage --capture-creature-reel cow cow/frame
 ```
 
 Each reel command records 45 deterministic gameplay frames at 15 frames per
-second, ready to assemble into a three-second clip.
+second, ready to assemble into a three-second clip. The older `animals` name
+continues to capture the settlement cow for compatibility.

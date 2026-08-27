@@ -499,9 +499,12 @@ static void UpdateSwing(CcLimbRuntime *limb, const CcLimbMorphology *morphology,
     float duration = morphology->swing_seconds / fmaxf(0.35f, limb->health);
     limb->swing_progress = fminf(1.0f, limb->swing_progress + delta_time / duration);
     float amount = limb->swing_progress;
-    float eased = amount * amount * (3.0f - 2.0f * amount);
+    float eased = amount * amount * amount *
+                  (amount * (amount * 6.0f - 15.0f) + 10.0f);
     limb->planted_contact = Lerp(limb->contact_start, limb->contact_target, eased);
-    limb->planted_contact.y += sinf(amount * CC_LIMB_PI) * morphology->step_height;
+    float lift = amount * (1.0f - amount);
+    limb->planted_contact.y += 64.0f * lift * lift * lift *
+                               morphology->step_height;
     if (amount >= 1.0f) {
         limb->planted_contact = limb->contact_target;
         limb->state = CC_LIMB_STANCE;

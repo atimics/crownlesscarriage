@@ -8829,6 +8829,23 @@ typedef struct CreatureModelCache {
 static CreatureModelCache creature_models
     [CC_CREATURE_VARIANT_COUNT][CC_CREATURE_POSE_COUNT] = {0};
 
+typedef enum CreatureGaitSlot {
+    CREATURE_GAIT_ROAD_HORSE_LEFT,
+    CREATURE_GAIT_ROAD_HORSE_RIGHT,
+    CREATURE_GAIT_ROAD_COW,
+    CREATURE_GAIT_STREET_COW,
+    CREATURE_GAIT_SLOT_COUNT
+} CreatureGaitSlot;
+
+typedef struct CreatureGaitCache {
+    CcCreatureRigController controller;
+    CcCreatureRigProfile profile;
+    float last_clock;
+    bool ready;
+} CreatureGaitCache;
+
+static CreatureGaitCache creature_gaits[CREATURE_GAIT_SLOT_COUNT] = {0};
+
 /* Physics-driven people use unskinned, offline-generated rigid modules.  Each
    model is instanced against a resolved bone frame, so contact IK and ragdoll
    poses remain authoritative without a per-character vertex upload. */
@@ -9814,6 +9831,47 @@ static CcCreatureRigProfile CreatureRigProfileForVariant(
     }
 }
 
+static bool ResolveControlledCreatureGait(
+    CreatureGaitSlot slot, CcCreatureRigProfile profile, float clock,
+    float initial_phase, float forward_speed, bool moving,
+    CcCreatureRigPose *pose)
+{
+    if (slot < 0 || slot >= CREATURE_GAIT_SLOT_COUNT || pose == NULL ||
+        !isfinite(clock)) {
+        return false;
+    }
+    CreatureGaitCache *cache = &creature_gaits[slot];
+    float elapsed = cache->ready ? clock - cache->last_clock : 0.0f;
+    bool reset = !cache->ready || cache->profile != profile ||
+                 elapsed < 0.0f || elapsed > 0.35f;
+    if (reset) {
+        *cache = (CreatureGaitCache){0};
+        if (!CcCreatureRigControllerInit(&cache->controller, profile,
+                                         initial_phase, 1.0f)) {
+            return false;
+        }
+        cache->profile = profile;
+        cache->last_clock = clock;
+        cache->ready = true;
+        if (moving) {
+            CcCreatureRigPose warm_pose;
+            for (int32_t frame = 0; frame < 36; ++frame) {
+                if (!CcCreatureRigControllerStep(
+                        &cache->controller, forward_speed, 1.0f,
+                        1.0f / 60.0f, &warm_pose)) {
+                    *cache = (CreatureGaitCache){0};
+                    return false;
+                }
+            }
+        }
+        elapsed = 0.0f;
+    }
+    cache->last_clock = clock;
+    return CcCreatureRigControllerStep(
+        &cache->controller, moving ? forward_speed : 0.0f,
+        moving ? 1.0f : 0.0f, elapsed, pose);
+}
+
 static float CreatureRigPhase(CcCreaturePose pose)
 {
     switch (pose) {
@@ -9856,29 +9914,32 @@ static void DrawCreatureMuscleLimbs(const CcCreatureRigPose *rig,
     bool goblin = rig->profile == CC_CREATURE_RIG_GOBLIN;
     for (int32_t limb = 0; limb < rig->limb_count; ++limb) {
         const CcCreatureRigLimbPose *leg = &rig->limbs[limb];
-        Vector3 root = FromLimbVector(leg->joints[0]);
-        Vector3 joint = FromLimbVector(leg->joints[1]);
-        Vector3 foot = FromLimbVector(leg->joints[2]);
         float base_radius = goblin ? 0.092f :
             rig->profile == CC_CREATURE_RIG_COW ? 0.115f :
-            rig->profile == CC_CREATURE_RIG_DRAGON ? 0.142f : 0.086f;
+            rig->profile == CC_CREATURE_RIG_DRAGON ? 0.142f :
+            rig->profile >= CC_CREATURE_RIG_HEXAPOD ? 0.062f : 0.086f;
         base_radius *= scale;
-        float upper_radius = base_radius *
-            (1.0f + leg->upper_activation * 0.42f);
-        float lower_radius = base_radius * 0.78f *
-            (1.0f + leg->lower_activation * 0.34f);
         Color upper = goblin ? palette->cloth : palette->hide;
         Color lower = goblin ? palette->skin : palette->secondary;
         if (rig->profile == CC_CREATURE_RIG_DRAGON) {
             upper = palette->skin;
             lower = palette->accent;
         }
-        DrawCylinderEx(root, joint, upper_radius, upper_radius * 0.82f, 7,
-                       upper);
-        DrawCylinderEx(joint, foot, lower_radius, lower_radius * 0.72f, 7,
-                       lower);
-        DrawCharacterSphere(joint, lower_radius * 1.04f,
-                            BlendColor(upper, lower, 0.46f));
+        for (int32_t segment = 0; segment < leg->segment_count; ++segment) {
+            float taper = 1.0f - (float)segment * 0.18f;
+            float radius = base_radius * taper *
+                (1.0f + leg->segment_activation[segment] *
+                 (0.42f - (float)segment * 0.06f));
+            Vector3 start = FromLimbVector(leg->joints[segment]);
+            Vector3 end = FromLimbVector(leg->joints[segment + 1]);
+            Color color = segment == 0 ? upper : lower;
+            DrawCylinderEx(start, end, radius, radius * 0.78f, 7, color);
+            if (segment + 1 < leg->segment_count) {
+                DrawCharacterSphere(end, radius * 0.94f,
+                                    BlendColor(upper, lower, 0.46f));
+            }
+        }
+        Vector3 foot = FromLimbVector(leg->joints[leg->segment_count]);
         if (goblin) {
             DrawOrientedBox(foot,
                             (Vector3){0.0f, 0.025f * scale, 0.06f * scale},
@@ -10157,14 +10218,19 @@ static CcQuadrupedMorphology QuadrupedMorphologyForCreature(
 
 static bool PoseQuadrupedCreature(CreatureModelCache *creature,
                                   CcCreatureVariant variant, float phase,
-                                  bool moving)
+                                  bool moving,
+                                  const CcCreatureRigPose *controlled_pose)
 {
     if (creature == NULL || !creature->ready) return false;
     CcQuadrupedMorphology morphology = QuadrupedMorphologyForCreature(variant);
     CcQuadrupedPose rest = {0};
     CcQuadrupedPose target = {0};
     CcQuadrupedPoseResolve(morphology, 0.0f, false, &rest);
-    CcQuadrupedPoseResolve(morphology, phase, moving, &target);
+    if (controlled_pose != NULL && controlled_pose->valid) {
+        CcQuadrupedPoseResolveFromRig(morphology, controlled_pose, &target);
+    } else {
+        CcQuadrupedPoseResolve(morphology, phase, moving, &target);
+    }
     if (!rest.valid || !target.valid) return false;
 
     for (int32_t bone = 0; bone < creature->model.skeleton.boneCount;
@@ -10192,7 +10258,8 @@ static bool PoseQuadrupedCreature(CreatureModelCache *creature,
 static bool DrawCreatureGait3D(CcCreatureVariant variant,
                                CcCreaturePose pose, Vector3 position,
                                float yaw, float scale, Color primary,
-                               float gait_phase, bool moving)
+                               float gait_phase, bool moving,
+                               const CcCreatureRigPose *controlled_pose)
 {
     if (variant < 0 || variant >= CC_CREATURE_VARIANT_COUNT || scale <= 0.0f) {
         return false;
@@ -10206,11 +10273,15 @@ static bool DrawCreatureGait3D(CcCreatureVariant variant,
         gait_phase / (2.0f * PI) : CreatureRigPhase(pose);
     float rig_movement = skinned ? (moving ? 1.0f : 0.0f) :
                                    CreatureRigMovement(pose);
-    CcCreatureRigPose rig;
-    if (!CcCreatureRigPoseResolve(
-            CreatureRigProfileForVariant(variant), rig_phase, rig_movement,
-            ToLimbVector(position), yaw, scale, &rig)) {
-        return false;
+    CcCreatureRigPose generated_rig;
+    const CcCreatureRigPose *rig = controlled_pose;
+    if (rig == NULL || !rig->valid) {
+        if (!CcCreatureRigPoseResolve(
+                CreatureRigProfileForVariant(variant), rig_phase, rig_movement,
+                ToLimbVector(position), yaw, scale, &generated_rig)) {
+            return false;
+        }
+        rig = &generated_rig;
     }
 
     Vector3 shadow_size = {1.00f, 0.012f, 1.50f};
@@ -10230,7 +10301,7 @@ static bool DrawCreatureGait3D(CcCreatureVariant variant,
         CreatureModelCache *creature =
             &creature_models[variant][CC_CREATURE_POSE_IDLE];
         if (creature->ready && creature->model.meshCount == 1 &&
-            PoseQuadrupedCreature(creature, variant, gait_phase, moving)) {
+            PoseQuadrupedCreature(creature, variant, gait_phase, moving, rig)) {
             Color colors[CC_NPC_ARCHETYPE_MATERIAL_COUNT] = {
                 palette.skin, palette.secondary, palette.hide,
                 palette.cloth, palette.leather, palette.horn,
@@ -10250,13 +10321,21 @@ static bool DrawCreatureGait3D(CcCreatureVariant variant,
             return true;
         }
     }
-    DrawCreatureMuscleLimbs(&rig, &palette, yaw, scale);
+    if (controlled_pose != NULL && skinned) {
+        if (!CcCreatureRigPoseResolve(
+                CreatureRigProfileForVariant(variant), rig_phase, rig_movement,
+                ToLimbVector(position), yaw, scale, &generated_rig)) {
+            return false;
+        }
+        rig = &generated_rig;
+    }
+    DrawCreatureMuscleLimbs(rig, &palette, yaw, scale);
     if (variant <= CC_CREATURE_GOBLIN_TRIBUTE_BEARER) {
-        DrawGoblinRig(variant, &rig, &palette, yaw, scale);
+        DrawGoblinRig(variant, rig, &palette, yaw, scale);
     } else if (variant == CC_CREATURE_DRAGON) {
-        DrawDragonRig(&rig, &palette, yaw, scale);
+        DrawDragonRig(rig, &palette, yaw, scale);
     } else {
-        DrawHorseOrCowRig(variant, &rig, &palette, yaw, scale);
+        DrawHorseOrCowRig(variant, rig, &palette, yaw, scale);
     }
     return true;
 }
@@ -10266,7 +10345,7 @@ static bool DrawCreature3D(CcCreatureVariant variant, CcCreaturePose pose,
                            Color primary)
 {
     return DrawCreatureGait3D(variant, pose, position, yaw, scale, primary,
-                              0.0f, false);
+                              0.0f, false, NULL);
 }
 
 /* Procedural people use the same graphic lighting contract as the authored
@@ -11187,6 +11266,7 @@ void CcLocalRendererInit(void)
     road_camera_rig = (FixedCameraRig){0};
     combat_camera_rig = (CombatCameraRig){0};
     face_render_context = (FaceRenderContext){0};
+    (void)memset(creature_gaits, 0, sizeof(creature_gaits));
     sphere_models.small = LoadModelFromMesh(GenMeshSphere(1.0f, 6, 8));
     sphere_models.character = LoadModelFromMesh(GenMeshSphere(1.0f, 8, 8));
     sphere_models.scenery = LoadModelFromMesh(GenMeshSphere(1.0f, 10, 12));
@@ -11247,6 +11327,7 @@ void CcLocalRendererShutdown(void)
             *creature = (CreatureModelCache){0};
         }
     }
+    (void)memset(creature_gaits, 0, sizeof(creature_gaits));
     for (int32_t id = 0; id < NPC_DYNAMIC_MODULE_COUNT; ++id) {
         if (npc_dynamic_modules[id].ready) {
             UnloadModel(npc_dynamic_modules[id].model);
@@ -16652,9 +16733,16 @@ static void DrawRoadHorseTeam(Vector3 base, float clock, bool moving)
             base, (float)horse * 1.05f, 0.0f, 4.60f, yaw);
         CcCreaturePose pose = horse < 0 ? left_pose : right_pose;
         float gait_phase = clock * 4.8f + (horse < 0 ? 0.0f : PI);
+        CcCreatureRigPose controlled_pose;
+        CreatureGaitSlot slot = horse < 0 ? CREATURE_GAIT_ROAD_HORSE_LEFT :
+                                            CREATURE_GAIT_ROAD_HORSE_RIGHT;
+        bool controlled = ResolveControlledCreatureGait(
+            slot, CC_CREATURE_RIG_HORSE, clock,
+            horse < 0 ? 0.0f : 0.5f, 1.35f, moving, &controlled_pose);
         (void)DrawCreatureGait3D(
             CC_CREATURE_HORSE, pose, horse_base,
-            yaw, 0.96f, coat, gait_phase, moving);
+            yaw, 0.96f, coat, gait_phase, moving,
+            controlled ? &controlled_pose : NULL);
         Vector3 trace_start = LocalPoint(
             base, (float)horse * 0.42f, 0.77f, 3.05f, yaw);
         Vector3 trace_end = LocalPoint(horse_base, 0.0f, 0.91f, -0.52f, yaw);
@@ -16926,10 +17014,15 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
         Vector3 cow_position = {carriage_x + 3.8f, 0.0f, 33.40f};
         CcCreaturePose cow_pose = CcCreatureSteppedPose(
             CC_CREATURE_COW, clock * 1.55f, travelling);
+        CcCreatureRigPose controlled_cow;
+        bool controlled = ResolveControlledCreatureGait(
+            CREATURE_GAIT_ROAD_COW, CC_CREATURE_RIG_COW, clock,
+            0.18f, 0.62f, travelling, &controlled_cow);
         (void)DrawCreatureGait3D(
             CC_CREATURE_COW, cow_pose, cow_position,
             -0.72f * PI, 0.88f, (Color){184, 169, 139, 255},
-            clock * 1.55f, travelling);
+            clock * 1.55f, travelling,
+            controlled ? &controlled_cow : NULL);
         if (roadside_food >= 40) {
             (void)DrawCreature3D(
                 CC_CREATURE_COW, CC_CREATURE_POSE_IDLE,
@@ -17135,10 +17228,15 @@ static void DrawSettlementCreatures(const CcSim *sim,
         SceneryPointVisible(63.0f, 38.3f, scenery_focus)) {
         CcCreaturePose cow_pose = CcCreatureSteppedPose(
             CC_CREATURE_COW, clock * 1.25f, true);
+        CcCreatureRigPose controlled_cow;
+        bool controlled = ResolveControlledCreatureGait(
+            CREATURE_GAIT_STREET_COW, CC_CREATURE_RIG_COW, clock,
+            0.34f, 0.48f, true, &controlled_cow);
         (void)DrawCreatureGait3D(
             CC_CREATURE_COW, cow_pose,
             TerrainWorldPoint(63.0f, 38.3f), 0.72f * PI, 0.84f,
-            (Color){177, 162, 132, 255}, clock * 1.25f, true);
+            (Color){177, 162, 132, 255}, clock * 1.25f, true,
+            controlled ? &controlled_cow : NULL);
     }
 
     if (place->id == goblins->lair_settlement_id) {

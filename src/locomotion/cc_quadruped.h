@@ -1,7 +1,7 @@
 #ifndef CROWNLESS_QUADRUPED_H
 #define CROWNLESS_QUADRUPED_H
 
-#include "locomotion/cc_limb.h"
+#include "locomotion/cc_creature.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -52,5 +52,8 @@ int32_t CcQuadrupedBoneParent(CcQuadrupedBone bone);
 int32_t CcQuadrupedBoneFind(const char *name);
 void CcQuadrupedPoseResolve(CcQuadrupedMorphology morphology, float phase,
                             bool moving, CcQuadrupedPose *result);
+void CcQuadrupedPoseResolveFromRig(CcQuadrupedMorphology morphology,
+                                   const CcCreatureRigPose *rig,
+                                   CcQuadrupedPose *result);
 
 #endif
