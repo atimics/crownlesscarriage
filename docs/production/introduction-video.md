@@ -1,6 +1,6 @@
 # Introduction Video
 
-The finished 25-second introduction is
+The finished 29.7-second introduction is
 [`crownless.mp4`](../../assets/video/introduction/crownless.mp4).
 English captions are available beside it as
 [`crownless.en.srt`](../../assets/video/introduction/crownless.en.srt).
@@ -33,8 +33,9 @@ and dragon reveals.
 8. Show the `CROWNLESS` title card.
 9. End on black.
 
-The supplied track plays in full. The short silence after it ends carries the
-dragon into the final black frame.
+The supplied track plays in full. The delayed text beats are mapped to the new
+voice timings. The dragon and title card each stay on screen for about four and
+a half seconds before the final black frame.
 
 Rebuild the video with `tools/video/build_introduction_video.sh`. Set
 `CROWNLESS_FFMPEG` if FFmpeg is installed at a different path.

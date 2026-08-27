@@ -28,12 +28,12 @@ mkdir -p "$(dirname -- "$output_path")"
 
 "$ffmpeg_bin" -hide_banner -y \
     -loop 1 -framerate 24 -t 8.0 -i "$asset_dir/01-human-division.png" \
-    -loop 1 -framerate 24 -t 10.4 -i "$asset_dir/03-forced-cooperation.png" \
+    -loop 1 -framerate 24 -t 9.1 -i "$asset_dir/03-forced-cooperation.png" \
     -f lavfi -t 2.0 -i "color=c=090B0C:s=1920x1080:r=24" \
     -f lavfi -t 0.6 -i "color=c=090B0C:s=1920x1080:r=24" \
-    -loop 1 -framerate 24 -t 1.4 -i "$asset_dir/02-larger-threat.png" \
+    -loop 1 -framerate 24 -t 4.5 -i "$asset_dir/02-larger-threat.png" \
     -f lavfi -t 0.4 -i "color=c=090B0C:s=1920x1080:r=24" \
-    -f lavfi -t 1.5 -i "color=c=090B0C:s=1920x1080:r=24" \
+    -f lavfi -t 4.408333 -i "color=c=090B0C:s=1920x1080:r=24" \
     -f lavfi -t 0.7 -i "color=c=090B0C:s=1920x1080:r=24" \
     -i "$asset_dir/the-predator-clause.mp3" \
     -filter_complex "
@@ -67,35 +67,35 @@ mkdir -p "$(dirname -- "$output_path")"
                   text_align=C:x=(w-text_w)/2:y=h-170:
                   box=1:boxcolor=090B0C@0.72:boxborderw=22:
                   borderw=1:bordercolor=000000@0.9:
-                  enable='between(t,6.05,14.05)',
+                  enable='between(t,9.05,14.05)',
               drawtext=$drawtext_font:
                   textfile='$asset_dir/sentence-2.txt':
                   fontcolor=F2E9D0:fontsize=46:line_spacing=10:
                   text_align=C:x=(w-text_w)/2:y=h-170:
                   box=1:boxcolor=090B0C@0.72:boxborderw=22:
                   borderw=1:bordercolor=000000@0.9:
-                  enable='between(t,14.05,18.4)',
+                  enable='between(t,14.05,17.1)',
               drawtext=$drawtext_font:
                   textfile='$asset_dir/sentence-3.txt':
                   fontcolor=F2E9D0:fontsize=64:line_spacing=10:
                   text_align=C:x=(w-text_w)/2:y=(h-text_h)/2:
                   borderw=2:bordercolor=000000@0.9:
                   shadowx=4:shadowy=5:shadowcolor=000000@0.7:
-                  enable='between(t,18.4,20.4)',
+                  enable='between(t,17.1,19.1)',
               drawtext=$drawtext_font:
                   textfile='$asset_dir/title.txt':
                   fontcolor=F2E9D0:fontsize=104:
                   text_align=C:x=(w-text_w)/2:y=(h-text_h)/2:
                   borderw=3:bordercolor=080A0B@0.95:
                   shadowx=5:shadowy=6:shadowcolor=000000@0.7:
-                  alpha='if(lt(t,23.1),(t-22.8)/0.3,if(lt(t,24.0),1,(24.3-t)/0.3))':
-                  enable='between(t,22.8,24.3)',
+                  alpha='if(lt(t,25.0),(t-24.6)/0.4,if(lt(t,28.608333),1,(29.008333-t)/0.4))':
+                  enable='between(t,24.6,29.008333)',
               format=yuv420p[vout];
-        [8:a:0]aresample=48000,apad=pad_dur=1.72,atrim=duration=25,
+        [8:a:0]aresample=48000,apad=pad_dur=0.03,atrim=duration=29.708333,
              asetpts=PTS-STARTPTS[aout]
     " \
     -map "[vout]" -map "[aout]" \
-    -t 25 -r 24 \
+    -t 29.708333 -r 24 \
     -c:v libx264 -preset slow -crf 18 -pix_fmt yuv420p \
     -c:a aac -b:a 192k -ar 48000 \
     -movflags +faststart \
