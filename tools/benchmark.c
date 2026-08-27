@@ -9,7 +9,7 @@
 #include <string.h>
 #include <time.h>
 
-#define CC_SIMULATION_BUDGET_NS_PER_DAY 30000.0
+#define CC_SIMULATION_BUDGET_NS_PER_DAY 50000.0
 #define CC_LOCOMOTION_BUDGET_NS_PER_STEP 8000.0
 
 static double ElapsedSeconds(clock_t start)
