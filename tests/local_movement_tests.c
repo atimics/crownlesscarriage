@@ -54,6 +54,13 @@ static float VectorDistance3(Vector3 a, Vector3 b)
     return sqrtf(x * x + y * y + z * z);
 }
 
+static float VectorDistance2(Vector2 a, Vector2 b)
+{
+    float x = b.x - a.x;
+    float y = b.y - a.y;
+    return sqrtf(x * x + y * y);
+}
+
 static CcLimbVec3 ExpectedTopOutHand(const CcLocalAgent *agent, int32_t arm)
 {
     CcMotionMantleSample motion;
@@ -1914,6 +1921,131 @@ int main(void)
             VectorDistance3(held_alley_target, alley_camera.target),
             fabsf(held_alley_fovy - alley_camera.fovy),
             fabsf(moved_alley_hero_screen.x - alley_hero_screen.x));
+        return 1;
+    }
+
+    /* Miller's Row is long enough to expose follow-camera creep. Walk the
+       whole road at gameplay speed: the hero must stay in the safe frame,
+       and the camera may only make a few authored page changes rather than
+       moving continuously beside the actor. */
+    CcLocalAgent miller_camera_agent;
+    CcLocalAgentInit(&miller_camera_agent, (Vector2){54.6f, 51.4f}, false);
+    Camera3D miller_camera = {0};
+    for (int32_t frame = 0; frame < 120; ++frame) {
+        camera_clock += 1.0f / 60.0f;
+        miller_camera = CcLocalStreetCameraInternal(
+            &miller_camera_agent, camera_clock, true,
+            click_target.texture.height);
+    }
+    Vector3 previous_camera_target = miller_camera.target;
+    bool camera_was_moving = false;
+    int32_t camera_motion_runs = 0;
+    int32_t camera_moving_frames = 0;
+    int32_t current_motion_frames = 0;
+    int32_t longest_motion_run = 0;
+    for (int32_t frame = 0; frame < 720; ++frame) {
+        float amount = (float)frame / 719.0f;
+        miller_camera_agent.position.x = 54.6f + 17.0f * amount;
+        miller_camera_agent.position.z = 51.4f;
+        miller_camera_agent.position.y = CcLocalTerrainHeightAt(
+            miller_camera_agent.position.x,
+            miller_camera_agent.position.z);
+        camera_clock += 1.0f / 60.0f;
+        miller_camera = CcLocalStreetCameraInternal(
+            &miller_camera_agent, camera_clock, true,
+            click_target.texture.height);
+        Vector2 hero_screen = GetWorldToScreenEx(
+            (Vector3){miller_camera_agent.position.x,
+                      miller_camera_agent.position.y + 1.05f,
+                      miller_camera_agent.position.z},
+            miller_camera, click_target.texture.width,
+            click_target.texture.height);
+        if (hero_screen.x < 88.0f || hero_screen.x > 369.0f ||
+            hero_screen.y < 54.0f || hero_screen.y > 231.0f) {
+            (void)fprintf(stderr,
+                          "Miller's Row camera lost hero at frame %d: %.2f %.2f\n",
+                          frame, hero_screen.x, hero_screen.y);
+            return 1;
+        }
+        bool camera_moving =
+            VectorDistance3(previous_camera_target, miller_camera.target) >
+                0.002f;
+        if (camera_moving && !camera_was_moving) camera_motion_runs += 1;
+        if (camera_moving) camera_moving_frames += 1;
+        current_motion_frames = camera_moving ? current_motion_frames + 1 : 0;
+        if (current_motion_frames > longest_motion_run) {
+            longest_motion_run = current_motion_frames;
+        }
+        camera_was_moving = camera_moving;
+        previous_camera_target = miller_camera.target;
+    }
+    if (longest_motion_run > 75 || camera_moving_frames > 240) {
+        (void)fprintf(stderr,
+                      "Miller's Row camera followed continuously: %d runs, %d moving frames, longest %d frames\n",
+                      camera_motion_runs, camera_moving_frames,
+                      longest_motion_run);
+        return 1;
+    }
+
+    /* MMO-style ground commands project an obstructed click to the nearest
+       reachable edge. The windmill footprint on Miller's Row is a stable
+       regression target for clicks that used to be rejected outright. */
+    CcLocalAgent miller_click_agent;
+    CcLocalAgentInit(&miller_click_agent, (Vector2){58.0f, 51.5f}, false);
+    Camera3D miller_click_camera = CcLocalStreetCameraInternal(
+        &miller_click_agent, camera_clock, false,
+        click_target.texture.height);
+    Vector3 blocked_windmill_point = {
+        64.14f,
+        CcLocalTerrainHeightAt(64.14f, 51.02f),
+        51.02f,
+    };
+    Vector2 blocked_click_art = GetWorldToScreenEx(
+        blocked_windmill_point, miller_click_camera,
+        click_target.texture.width, click_target.texture.height);
+    Vector2 blocked_click_screen = {
+        blocked_click_art.x * click_viewport.width /
+            (float)click_target.texture.width,
+        blocked_click_art.y * click_viewport.height /
+            (float)click_target.texture.height,
+    };
+    if (!CcLocalAgentPickTarget(&miller_click_agent,
+                                blocked_click_screen,
+                                click_target, click_viewport, false)) {
+        (void)fprintf(stderr,
+                      "Miller's Row blocked click was not projected\n");
+        return 1;
+    }
+    Vector3 projected_command = miller_click_agent.command_point;
+    bool command_inside_windmill =
+        projected_command.x > 63.18f - miller_click_agent.radius &&
+        projected_command.x < 65.10f + miller_click_agent.radius &&
+        projected_command.z > 50.06f - miller_click_agent.radius &&
+        projected_command.z < 51.98f + miller_click_agent.radius;
+    float projection_distance = VectorDistance2(
+        (Vector2){projected_command.x, projected_command.z},
+        (Vector2){blocked_windmill_point.x, blocked_windmill_point.z});
+    if (command_inside_windmill || projection_distance > 2.75f) {
+        (void)fprintf(stderr,
+                      "Miller's Row click projection was unsafe: %.2f %.2f distance %.2f\n",
+                      projected_command.x, projected_command.z,
+                      projection_distance);
+        return 1;
+    }
+    for (int32_t frame = 0;
+         frame < 2400 && miller_click_agent.navigation_active; ++frame) {
+        CcLocalAgentUpdate(&miller_click_agent, 1.0f / 60.0f, false);
+    }
+    if (miller_click_agent.navigation_active ||
+        VectorDistance2(
+            (Vector2){miller_click_agent.position.x,
+                      miller_click_agent.position.z},
+            (Vector2){projected_command.x, projected_command.z}) > 0.38f) {
+        (void)fprintf(stderr,
+                      "Miller's Row projected path did not finish: %.2f %.2f toward %.2f %.2f\n",
+                      miller_click_agent.position.x,
+                      miller_click_agent.position.z,
+                      projected_command.x, projected_command.z);
         return 1;
     }
 

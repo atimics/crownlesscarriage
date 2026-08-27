@@ -194,6 +194,7 @@ typedef struct CcLocalAgent {
     CcLocalCapeState render_cape;
     float simulation_accumulator;
     float movement_stall_seconds;
+    int32_t navigation_repath_count;
     int32_t navigation_point_count;
     int32_t navigation_point_index;
     int32_t navigation_destination_room;

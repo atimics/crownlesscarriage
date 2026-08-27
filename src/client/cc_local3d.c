@@ -294,11 +294,11 @@ static const StreetCameraShot STREET_CAMERA_SHOTS[] = {
                 {22.0f, 35.0f, 54.0f}, ART_LIGHT_CLEAR_MARKET},
     },
     {
-        .trigger = {58.0f, 50.0f}, .target = {59.5f, 1.05f, 50.5f},
+        .trigger = {58.0f, 50.0f}, .target = {61.2f, 1.05f, 50.9f},
         .name = "MILLER'S ROW", .route = {54.2f, 50.1f, 18.7f, 2.9f},
         .route_palette = 0, .camera_offset = {6.0f, 9.0f, 27.0f},
-        .fovy = 14.2f,
-        .art = {{59.5f, 1.05f, 50.5f}, {1.0f, 0.0f},
+        .fovy = 15.6f,
+        .art = {{61.2f, 1.05f, 50.9f}, {1.0f, 0.0f},
                 {68.0f, 0.0f, 58.0f}, {0.20f, 0.18f, 0.60f, 0.64f},
                 {18.0f, 29.0f, 47.0f}, ART_LIGHT_RECOVERY_WARM},
     },
@@ -434,6 +434,7 @@ typedef struct FixedCameraRig {
     Vector3 framing_destination;
     float framing_elapsed;
     float framing_duration;
+    float framing_hold_seconds;
     float delta_time;
     float last_clock;
     int32_t shot;
@@ -457,6 +458,14 @@ typedef struct CombatCameraRig {
     bool initialized;
     bool scene_valid;
 } CombatCameraRig;
+
+typedef struct PresentedCameraState {
+    Camera3D camera;
+    Vector3 hero_position;
+    int32_t width;
+    int32_t height;
+    bool valid;
+} PresentedCameraState;
 
 typedef enum TreeFamily {
     TREE_FAMILY_ALDER = 0,
@@ -508,6 +517,41 @@ static const WorldTreePlacement WORLD_TREES[] = {
 static FixedCameraRig street_camera_rig = {0};
 static FixedCameraRig road_camera_rig = {0};
 static CombatCameraRig combat_camera_rig = {0};
+static PresentedCameraState presented_camera[3] = {0};
+
+static void RememberPresentedCamera(CcLocalSceneKind scene, Camera3D camera,
+                                    const CcLocalAgent *agent,
+                                    int32_t width, int32_t height)
+{
+    if (scene < CC_LOCAL_SCENE_STREET || scene > CC_LOCAL_SCENE_ROAD ||
+        width <= 0 || height <= 0) return;
+    PresentedCameraState *state = &presented_camera[scene];
+    state->camera = camera;
+    state->hero_position = agent != NULL ? agent->position : (Vector3){0};
+    state->width = width;
+    state->height = height;
+    state->valid = true;
+}
+
+static bool PresentedCameraForInput(CcLocalSceneKind scene,
+                                    const CcLocalAgent *agent,
+                                    int32_t width, int32_t height,
+                                    Camera3D *camera)
+{
+    if (camera == NULL || scene < CC_LOCAL_SCENE_STREET ||
+        scene > CC_LOCAL_SCENE_ROAD) return false;
+    const PresentedCameraState *state = &presented_camera[scene];
+    if (!state->valid || state->width != width || state->height != height) {
+        return false;
+    }
+    if (agent != NULL) {
+        float x = agent->position.x - state->hero_position.x;
+        float z = agent->position.z - state->hero_position.z;
+        if (x * x + z * z > 6.0f * 6.0f) return false;
+    }
+    *camera = state->camera;
+    return true;
+}
 
 typedef struct NavPlatform {
     float x;
@@ -1241,11 +1285,14 @@ static bool StreetSegmentClear(Vector2 from, Vector2 to, float radius)
     return true;
 }
 
-static int32_t StreetPathNearestNode(Vector2 point, float radius)
+static int32_t StreetPathNearestNode(Vector2 point, float radius,
+                                     bool require_point_connection)
 {
     int32_t center_column = (int32_t)floorf(point.x / STREET_PATH_CELL_SIZE);
     int32_t center_row = (int32_t)floorf(point.y / STREET_PATH_CELL_SIZE);
-    for (int32_t ring = 0; ring <= 8; ++ring) {
+    for (int32_t ring = 0; ring <= 12; ++ring) {
+        int32_t best = -1;
+        float best_distance = FLT_MAX;
         for (int32_t row = center_row - ring; row <= center_row + ring;
              ++row) {
             if (row < 0 || row >= STREET_PATH_ROWS) continue;
@@ -1258,12 +1305,19 @@ static int32_t StreetPathNearestNode(Vector2 point, float radius)
                 Vector2 candidate = StreetPathNodePoint(node);
                 if (StreetPathBodyBlocked(candidate.x, candidate.y,
                                           radius + 0.025f) ||
-                    !StreetSegmentClear(point, candidate, radius)) {
+                    (require_point_connection &&
+                     !StreetSegmentClear(point, candidate, radius))) {
                     continue;
                 }
-                return node;
+                float x = candidate.x - point.x;
+                float z = candidate.y - point.y;
+                float distance = x * x + z * z;
+                if (distance >= best_distance) continue;
+                best = node;
+                best_distance = distance;
             }
         }
+        if (best >= 0) return best;
     }
     return -1;
 }
@@ -1357,17 +1411,16 @@ static int32_t StreetPathHeapPop(StreetPathSearch *search, int32_t goal)
 static int32_t FindStreetPath(Vector2 from, Vector2 to, float radius,
                               Vector2 *points, int32_t capacity)
 {
-    if (points == NULL || capacity <= 0 ||
-        StreetPathBodyBlocked(to.x, to.y, radius)) {
-        return 0;
-    }
-    if (StreetSegmentClear(from, to, radius)) {
+    if (points == NULL || capacity <= 0) return 0;
+    bool target_blocked = StreetPathBodyBlocked(to.x, to.y, radius);
+    bool target_projected = target_blocked;
+    if (!target_blocked && StreetSegmentClear(from, to, radius)) {
         points[0] = to;
         return 1;
     }
 
-    int32_t start = StreetPathNearestNode(from, radius);
-    int32_t goal = StreetPathNearestNode(to, radius);
+    int32_t start = StreetPathNearestNode(from, radius, true);
+    int32_t goal = StreetPathNearestNode(to, radius, !target_blocked);
     if (start < 0 || goal < 0) return 0;
     StreetPathSearch *search = &street_path_search;
     search->heap_count = 0;
@@ -1427,7 +1480,27 @@ static int32_t FindStreetPath(Vector2 from, Vector2 to, float radius,
             StreetPathHeapPushOrDecrease(search, next, goal);
         }
     }
-    if (start != goal && search->parent[goal] < 0) return 0;
+    if (start != goal && search->parent[goal] < 0) {
+        /* Detour-style partial path: if the exact goal island is not
+           connected, finish at the reachable node closest to the click.
+           Limit the projection so a click never sends the hero somewhere
+           unrelated on the far side of a building. */
+        int32_t closest = -1;
+        float closest_distance = 2.75f * 2.75f;
+        for (int32_t node = 0; node < STREET_PATH_NODE_COUNT; ++node) {
+            if (!search->closed[node]) continue;
+            Vector2 candidate = StreetPathNodePoint(node);
+            float x = candidate.x - to.x;
+            float z = candidate.y - to.y;
+            float distance = x * x + z * z;
+            if (distance >= closest_distance) continue;
+            closest = node;
+            closest_distance = distance;
+        }
+        if (closest < 0) return 0;
+        goal = closest;
+        target_projected = true;
+    }
 
     int32_t ordered_count = 0;
     for (int32_t node = goal; node >= 0 && ordered_count < STREET_PATH_NODE_COUNT;
@@ -1456,10 +1529,12 @@ static int32_t FindStreetPath(Vector2 from, Vector2 to, float radius,
         points[point_count++] = start_point;
         current_point = start_point;
     }
+    Vector2 resolved_target = target_projected ?
+        StreetPathNodePoint(goal) : to;
     while (cursor < ordered_count - 1) {
-        if (StreetSegmentClear(current_point, to, radius)) {
+        if (StreetSegmentClear(current_point, resolved_target, radius)) {
             if (point_count >= capacity) return 0;
-            points[point_count++] = to;
+            points[point_count++] = resolved_target;
             return point_count;
         }
         int32_t chosen = cursor + 1;
@@ -1479,9 +1554,9 @@ static int32_t FindStreetPath(Vector2 from, Vector2 to, float radius,
         current_point = chosen_point;
         cursor = chosen;
     }
-    if (!StreetSegmentClear(current_point, to, radius) ||
+    if (!StreetSegmentClear(current_point, resolved_target, radius) ||
         point_count >= capacity) return 0;
-    points[point_count++] = to;
+    points[point_count++] = resolved_target;
     return point_count;
 }
 
@@ -3618,13 +3693,18 @@ int32_t CcLocalCoursePickPlayerTarget(CcLocalCourse *course,
         (screen_point.y - destination.y) / destination.height *
             (float)target.texture.height
     };
-    Camera3D base_camera = course->scene == CC_LOCAL_SCENE_ROAD ?
-        RoadCamera(player->position, false, 0.0f, false,
-                   target.texture.height) :
-        CcLocalStreetCameraInternal(player, 0.0f, false,
-                                    target.texture.height);
-    Camera3D camera = CombatCamera(base_camera, player, course, 0.0f,
-                                   false, target.texture.height);
+    Camera3D camera = {0};
+    if (!PresentedCameraForInput(course->scene, player,
+                                 target.texture.width,
+                                 target.texture.height, &camera)) {
+        Camera3D base_camera = course->scene == CC_LOCAL_SCENE_ROAD ?
+            RoadCamera(player->position, false, 0.0f, false,
+                       target.texture.height) :
+            CcLocalStreetCameraInternal(player, 0.0f, false,
+                                        target.texture.height);
+        camera = CombatCamera(base_camera, player, course, 0.0f,
+                              false, target.texture.height);
+    }
     Ray ray = GetScreenToWorldRayEx(local, camera, target.texture.width,
                                     target.texture.height);
     int32_t picked = -1;
@@ -4181,6 +4261,7 @@ static void ClearAgentNavigation(CcLocalAgent *agent)
     if (agent == NULL) return;
     agent->navigation_point_count = 0;
     agent->navigation_point_index = 0;
+    agent->navigation_repath_count = 0;
     agent->navigation_destination_room = -1;
     agent->navigation_active = false;
     agent->navigation_world_exit = false;
@@ -4294,7 +4375,10 @@ static bool SetStreetClickTarget(CcLocalAgent *agent, Vector3 target)
         ClearAgentNavigation(agent);
         return false;
     }
-    target.y = SurfaceHeightAt(CC_LOCAL_SCENE_STREET, target.x, target.z);
+    /* The requested point may have been projected off a wall, prop, or
+       disconnected sliver. Expose the actual reachable endpoint as the
+       command so the path marker and the body agree. */
+    target = agent->navigation_point[agent->navigation_point_count - 1];
     agent->command_origin = agent->position;
     agent->command_point = target;
     agent->command_point_valid = true;
@@ -4708,12 +4792,16 @@ bool CcLocalAgentPickTarget(CcLocalAgent *agent, Vector2 screen_point,
         (screen_point.x - destination.x) / destination.width * (float)target.texture.width,
         (screen_point.y - destination.y) / destination.height * (float)target.texture.height
     };
-    Camera3D camera = interior ? LocalCamera(true, agent->position) :
-        scene == CC_LOCAL_SCENE_ROAD ?
-            RoadCamera(agent->position, false, 0.0f, false,
-                       target.texture.height) :
-            CcLocalStreetCameraInternal(agent, 0.0f, false,
-                                        target.texture.height);
+    Camera3D camera = {0};
+    if (!PresentedCameraForInput(scene, agent, target.texture.width,
+                                 target.texture.height, &camera)) {
+        camera = interior ? LocalCamera(true, agent->position) :
+            scene == CC_LOCAL_SCENE_ROAD ?
+                RoadCamera(agent->position, false, 0.0f, false,
+                           target.texture.height) :
+                CcLocalStreetCameraInternal(agent, 0.0f, false,
+                                            target.texture.height);
+    }
     Ray ray = GetScreenToWorldRayEx(local, camera, target.texture.width,
                                     target.texture.height);
     float nearest = FLT_MAX;
@@ -6312,9 +6400,25 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
         agent->movement_stall_seconds = 0.0f;
     }
     if (agent->movement_stall_seconds > 0.42f) {
-        /* A direct target can become unreachable behind static geometry.
-           Stop feeding locomotion intent into a blocked body instead of
-           playing a walk cycle forever against the obstacle. */
+        bool click_path = agent->scene == CC_LOCAL_SCENE_STREET &&
+            agent->navigation_active &&
+            agent->navigation_destination_room ==
+                STREET_CLICK_NAVIGATION_DESTINATION &&
+            agent->command_point_valid;
+        Vector3 retry_target = agent->command_point;
+        int32_t retry_count = agent->navigation_repath_count;
+        if (click_path && retry_count < 1 &&
+            SetStreetClickTarget(agent, retry_target)) {
+            /* Moving actors and edge contacts can invalidate one corridor.
+               MMO path followers request a fresh corridor instead of
+               abandoning the command on the first stall. One retry avoids
+               hiding a genuinely bad destination behind an endless loop. */
+            agent->navigation_repath_count = retry_count + 1;
+            agent->movement_stall_seconds = 0.0f;
+            goto local_navigation_recovered;
+        }
+        /* A target that remains unreachable after projection and one replan
+           is a real failure. Stop the walk cycle cleanly. */
         agent->exact_target_valid = false;
         agent->target_valid = false;
         agent->command_point_valid = false;
@@ -6328,6 +6432,7 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
                 ToLimbVector(agent->velocity), agent->grounded);
         }
     }
+local_navigation_recovered:
     if (agent->grounded && !agent->climbing && training_step < 0.20f) {
         agent->athletics.travel_training_distance += training_step;
         while (agent->athletics.travel_training_distance >= 12.0f) {
@@ -7037,26 +7142,26 @@ static Camera3D ExteriorCameraComposed(Vector3 target, Vector3 offset,
 
 static Camera3D KeepHeroInsideStreetFrame(Camera3D camera, Vector3 hero,
                                           int32_t art_height,
-                                          Rectangle quiet_area)
+                                          Rectangle safe_area)
 {
     if (art_height <= 0 || camera.projection != CAMERA_ORTHOGRAPHIC) {
         return camera;
     }
     int32_t art_width = (int32_t)lroundf(
         (float)art_height * 457.0f / 285.0f);
-    /* The authored quiet area may be wider than the long-standing play-safe
-       frame. Intersect both contracts so labels get their room without ever
-       losing the hero during a camera transition. */
+    /* This is an emergency guard, not a follow camera. Keep it wider than
+       the authored dead zone so the smooth shot transition does the visible
+       work and the guard only prevents a body from reaching the bezel. */
     float safe_left = fmaxf((float)art_width * 0.195f,
-                            (float)art_width * quiet_area.x);
+                            (float)art_width * safe_area.x);
     float safe_right = fminf((float)art_width * 0.805f,
                              (float)art_width *
-                                 (quiet_area.x + quiet_area.width));
+                                 (safe_area.x + safe_area.width));
     float safe_top = fmaxf((float)art_height * 0.195f,
-                           (float)art_height * quiet_area.y);
+                           (float)art_height * safe_area.y);
     float safe_bottom = fminf((float)art_height * 0.805f,
                               (float)art_height *
-                                  (quiet_area.y + quiet_area.height));
+                                  (safe_area.y + safe_area.height));
     Vector3 forward = Vector3Normalize(
         Vector3Subtract(camera.target, camera.position));
     Vector3 right = Vector3Normalize(Vector3CrossProduct(forward, camera.up));
@@ -7500,6 +7605,7 @@ static void FixedCameraRigAim(FixedCameraRig *rig, int32_t shot,
         rig->framing_destination = (Vector3){0};
         rig->framing_elapsed = 0.0f;
         rig->framing_duration = 0.0f;
+        rig->framing_hold_seconds = 0.0f;
         rig->delta_time = 0.0f;
         rig->last_clock = clock;
         rig->shot = shot;
@@ -7532,6 +7638,7 @@ static void FixedCameraRigAim(FixedCameraRig *rig, int32_t shot,
         rig->framing_destination = (Vector3){0};
         rig->framing_elapsed = 0.0f;
         rig->framing_duration = 0.0f;
+        rig->framing_hold_seconds = 0.0f;
         rig->shot = shot;
     }
     if (rig->transition_elapsed >= rig->transition_duration ||
@@ -7575,7 +7682,13 @@ static Camera3D FixedCameraRigFrameHero(FixedCameraRig *rig,
             rig->framing_from, rig->framing_destination, amount);
         if (rig->framing_elapsed >= rig->framing_duration) {
             rig->framing_duration = 0.0f;
+            rig->framing_hold_seconds = 0.65f;
         }
+    }
+    if (advance && rig->framing_duration <= 0.0f &&
+        rig->framing_hold_seconds > 0.0f) {
+        rig->framing_hold_seconds = fmaxf(
+            0.0f, rig->framing_hold_seconds - rig->delta_time);
     }
 
     camera.target = Vector3Add(camera.target, rig->framing_offset);
@@ -7584,7 +7697,8 @@ static Camera3D FixedCameraRigFrameHero(FixedCameraRig *rig,
         rig->transition_duration <= 0.0f ||
         rig->transition_elapsed >= rig->transition_duration;
     if (!advance || !authored_transition_done ||
-        rig->framing_duration > 0.0f) return camera;
+        rig->framing_duration > 0.0f ||
+        rig->framing_hold_seconds > 0.0f) return camera;
 
     float quiet_left = quiet_area.x * (float)art_width;
     float quiet_right = (quiet_area.x + quiet_area.width) *
@@ -7592,24 +7706,26 @@ static Camera3D FixedCameraRigFrameHero(FixedCameraRig *rig,
     float quiet_top = quiet_area.y * (float)art_height;
     float quiet_bottom = (quiet_area.y + quiet_area.height) *
                          (float)art_height;
-    float trigger_left = fmaxf(quiet_left, (float)art_width * 0.24f);
-    float trigger_right = fminf(quiet_right, (float)art_width * 0.76f);
-    float trigger_top = fmaxf(quiet_top, (float)art_height * 0.24f);
+    float trigger_left = fmaxf(quiet_left, (float)art_width * 0.28f);
+    float trigger_right = fminf(quiet_right, (float)art_width * 0.72f);
+    float trigger_top = fmaxf(quiet_top, (float)art_height * 0.28f);
     float trigger_bottom = fminf(quiet_bottom,
-                                 (float)art_height * 0.76f);
+                                 (float)art_height * 0.72f);
     Vector2 screen = GetWorldToScreenEx(
         hero, camera, art_width, art_height);
     float target_x = screen.x;
     float target_y = screen.y;
+    float center_x = (quiet_left + quiet_right) * 0.5f;
+    float center_y = (quiet_top + quiet_bottom) * 0.5f;
     if (screen.x < trigger_left) {
-        target_x = fmaxf(quiet_left, (float)art_width * 0.36f);
+        target_x = center_x;
     } else if (screen.x > trigger_right) {
-        target_x = fminf(quiet_right, (float)art_width * 0.64f);
+        target_x = center_x;
     }
     if (screen.y < trigger_top) {
-        target_y = fmaxf(quiet_top, (float)art_height * 0.34f);
+        target_y = center_y;
     } else if (screen.y > trigger_bottom) {
-        target_y = fminf(quiet_bottom, (float)art_height * 0.66f);
+        target_y = center_y;
     }
     if (fabsf(target_x - screen.x) < 0.5f &&
         fabsf(target_y - screen.y) < 0.5f) return camera;
@@ -7626,7 +7742,11 @@ static Camera3D FixedCameraRigFrameHero(FixedCameraRig *rig,
     rig->framing_from = rig->framing_offset;
     rig->framing_destination = Vector3Add(rig->framing_offset, adjustment);
     rig->framing_elapsed = 0.0f;
-    rig->framing_duration = 0.42f;
+    /* Move to one new page and hold it. The old 12%-of-screen correction
+       could chain every few frames while the hero kept walking, which read
+       as a nervous follow camera. Centering once creates the fixed-room
+       adventure-game rhythm while still protecting long roads. */
+    rig->framing_duration = 0.55f;
     return camera;
 }
 
@@ -7686,7 +7806,8 @@ Camera3D CcLocalStreetCameraInternal(const CcLocalAgent *agent, float clock,
             &street_camera_rig, camera, hero, art_height,
             composition->art.quiet_area, advance);
         camera = KeepHeroInsideStreetFrame(
-            camera, hero, art_height, composition->art.quiet_area);
+            camera, hero, art_height,
+            (Rectangle){0.10f, 0.12f, 0.80f, 0.76f});
     }
     return SnapCameraToArtPixels(camera, art_height);
 }
@@ -7888,8 +8009,15 @@ static Camera3D CombatCamera(Camera3D base, const CcLocalAgent *player,
                              const CcLocalCourse *course, float clock,
                              bool advance, int32_t art_height)
 {
-    bool active = player != NULL && course != NULL && course->alarm_active &&
-                  !course->raiders_retreating;
+    const CcLocalAgent *opponent = CombatCameraOpponent(course, player);
+    float opponent_distance_squared = opponent != NULL && player != NULL ?
+        CombatHorizontalDistanceSquared(player, opponent) : FLT_MAX;
+    /* An alarm may cover the whole settlement, but the duel camera may not.
+       Hold the room shot while a raider is still approaching and enter the
+       two-subject composition only when the fight is locally readable. */
+    bool active = player != NULL && course != NULL && opponent != NULL &&
+                  course->alarm_active && !course->raiders_retreating &&
+                  opponent_distance_squared <= 9.0f * 9.0f;
     Vector3 base_offset = Vector3Subtract(base.position, base.target);
     bool scene_changed = course != NULL &&
         (!combat_camera_rig.scene_valid ||
@@ -7924,7 +8052,6 @@ static Camera3D CombatCamera(Camera3D base, const CcLocalAgent *player,
             combat_camera_rig.combat_weight + delta_time * direction,
             0.0f, 1.0f);
 
-        const CcLocalAgent *opponent = CombatCameraOpponent(course, player);
         if (active) {
             combat_camera_rig.reframe_cooldown = fmaxf(
                 0.0f, combat_camera_rig.reframe_cooldown - delta_time);
@@ -15297,6 +15424,16 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
                                       target.texture.height);
     Camera3D camera = CombatCamera(base_camera, agent, course, clock, true,
                                    target.texture.height);
+    if (!travelling) {
+        camera = KeepHeroInsideStreetFrame(
+            camera,
+            Vector3Add(agent->position, (Vector3){0.0f, 1.05f, 0.0f}),
+            target.texture.height,
+            (Rectangle){0.10f, 0.12f, 0.80f, 0.76f});
+        camera = SnapCameraToArtPixels(camera, target.texture.height);
+    }
+    RememberPresentedCamera(CC_LOCAL_SCENE_ROAD, camera, agent,
+                            target.texture.width, target.texture.height);
     ArtComposition road_art = ROAD_ART_COMPOSITION;
     road_art.focal_point = camera.target;
     road_art.foreground_anchor = carriage_base;
@@ -15472,6 +15609,16 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         agent, clock, true, target.texture.height);
     Camera3D camera = CombatCamera(base_camera, agent, course, clock, true,
                                    target.texture.height);
+    if (agent != NULL) {
+        camera = KeepHeroInsideStreetFrame(
+            camera,
+            Vector3Add(agent->position, (Vector3){0.0f, 1.05f, 0.0f}),
+            target.texture.height,
+            (Rectangle){0.10f, 0.12f, 0.80f, 0.76f});
+        camera = SnapCameraToArtPixels(camera, target.texture.height);
+    }
+    RememberPresentedCamera(CC_LOCAL_SCENE_STREET, camera, agent,
+                            target.texture.width, target.texture.height);
     const StreetCameraShot *camera_shot = StreetCameraShotAt(
         street_camera_rig.shot);
     ArtComposition street_art = camera_shot->art;
@@ -15790,6 +15937,8 @@ void CcLocalDrawMarket3D(const CcSim *sim, const CcLocalAgent *agent, float cloc
     const CcSettlement *place = CcSimSettlement(sim, sim->player.location_id);
     if (place == NULL) return;
     Camera3D camera = LocalCamera(true, agent->position);
+    RememberPresentedCamera(CC_LOCAL_SCENE_MARKET, camera, agent,
+                            target.texture.width, target.texture.height);
     Color background = ArtLightBackground(
         INTERIOR_ART_COMPOSITION.light_profile);
     SetFaceRenderContext(camera, target.texture.width, target.texture.height);
