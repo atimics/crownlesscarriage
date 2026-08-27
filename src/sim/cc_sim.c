@@ -786,12 +786,24 @@ static int32_t EffectiveReserveTarget(const CcSim *sim,
            WarExtraConsumption(sim, place, good) * 3;
 }
 
+static int32_t CivilianFoodUse(const CcSettlement *place)
+{
+    if (place == NULL || place->consumption[CC_GOOD_FOOD] <= 0) return 0;
+    if (place->population >= 600) {
+        return place->consumption[CC_GOOD_FOOD];
+    }
+    int32_t population_use = MaximumI32(
+        1, (place->population + 299) / 300);
+    return MinimumI32(
+        place->consumption[CC_GOOD_FOOD], population_use);
+}
+
 static int32_t WeeklyFoodUse(const CcSim *sim,
                              const CcSettlement *place)
 {
     if (place == NULL) return 1;
     return MaximumI32(
-        1, place->consumption[CC_GOOD_FOOD] +
+        1, CivilianFoodUse(place) +
            WarExtraConsumption(sim, place, CC_GOOD_FOOD));
 }
 
@@ -1808,17 +1820,25 @@ static int32_t EffectiveProduction(CcSim *sim, CcSettlement *settlement,
                                    int32_t index, CcGood good)
 {
     int32_t production = settlement->production[good];
-    if (production <= 0) return 0;
-    if (settlement->hunger > 65) production = production * 55 / 100;
-    else if (settlement->hunger > 35) production = production * 78 / 100;
+    bool subsistence_muster = good == CC_GOOD_FOOD &&
+        (settlement->hunger > 65 ||
+         (settlement->population < 600 && settlement->hunger >= 20));
+    int32_t subsistence_food = subsistence_muster ?
+                               CivilianFoodUse(settlement) : 0;
+    if (production <= 0 && subsistence_food <= 0) return 0;
+    if (settlement->hunger > 65) production = production * 72 / 100;
+    else if (settlement->hunger > 35) production = production * 86 / 100;
 
     if (good == CC_GOOD_FOOD) {
         if (!CcSettlementHasService(settlement, CC_SERVICE_FARM) ||
-            settlement->field_yield <= 0) return 0;
+            settlement->field_yield <= 0) return subsistence_food;
         production = production * FoodSeasonFactor(sim) / 100;
         production = production * settlement->field_yield / 100;
         if (index == 0 && sim->current_day < 112) production = production * 64 / 100;
-        if (settlement->stock[CC_GOOD_TOOLS] <= 0) production = production * 38 / 100;
+        if (settlement->stock[CC_GOOD_TOOLS] <= 0) {
+            production = production * 50 / 100;
+        }
+        production = MaximumI32(production, subsistence_food);
     }
     if (good == CC_GOOD_IRON) {
         if (!CcSettlementHasService(settlement, CC_SERVICE_MINE) ||
@@ -2018,7 +2038,9 @@ static void UpdateSettlement(CcSim *sim, int32_t index)
         if ((CcGood)good == CC_GOOD_IRON) {
             settlement->iron_deposit -= production;
         }
-        int32_t consumption = settlement->consumption[good] +
+        int32_t civilian_consumption = (CcGood)good == CC_GOOD_FOOD ?
+            CivilianFoodUse(settlement) : settlement->consumption[good];
+        int32_t consumption = civilian_consumption +
             WarExtraConsumption(sim, settlement, (CcGood)good);
         settlement->stock[good] += production;
         int32_t consumed = MinimumI32(settlement->stock[good], consumption);
@@ -2038,7 +2060,9 @@ static void UpdateSettlement(CcSim *sim, int32_t index)
             BasePrice((CcGood)good) * (100 + pressure) / 100);
         if (settlement->price[good] < 1) settlement->price[good] = 1;
     }
-    if (produced[CC_GOOD_FOOD] > 0) {
+    if (produced[CC_GOOD_FOOD] > 0 &&
+        CcSettlementHasService(settlement, CC_SERVICE_FARM) &&
+        settlement->field_yield > 0) {
         WearOneTool(settlement, &settlement->farm_tool_wear, 4);
     }
     if (produced[CC_GOOD_IRON] > 0) {
@@ -2070,16 +2094,27 @@ static void UpdateSettlement(CcSim *sim, int32_t index)
     if (CcSettlementHasService(settlement, CC_SERVICE_HEALER)) {
         settlement->hunger = ClampI32(settlement->hunger - 1, 0, 100);
     }
-    settlement->prosperity = ClampI32(settlement->prosperity +
-        (settlement->hunger > 55 ? -2 : settlement->hunger > 30 ? -1 :
-         coverage >= 8 ? 1 : 0), 0, 100);
-    if (CcSettlementHasService(settlement, CC_SERVICE_MARKET)) {
+    int32_t prosperity_change = settlement->hunger > 55 ? -2 :
+                                settlement->hunger > 30 ? -1 :
+                                coverage >= 8 &&
+                                settlement->prosperity < 78 ? 1 :
+                                settlement->hunger < 20 && coverage >= 3 &&
+                                settlement->prosperity < 45 ? 1 : 0;
+    settlement->prosperity = ClampI32(
+        settlement->prosperity + prosperity_change, 0, 100);
+    if (CcSettlementHasService(settlement, CC_SERVICE_MARKET) &&
+        settlement->hunger < 45 && settlement->prosperity < 78) {
         settlement->prosperity = ClampI32(settlement->prosperity + 1, 0, 100);
     }
     int32_t local_threat = MonsterPressureAtSettlement(sim, settlement->id);
-    settlement->security = ClampI32(settlement->security +
-        (settlement->hunger > 50 || local_threat > 60 ? -1 :
-         settlement->prosperity > 70 && settlement->hunger < 15 ? 1 : 0), 0, 100);
+    int32_t security_change = settlement->hunger > 50 || local_threat > 60 ? -1 :
+                              settlement->security < 45 &&
+                              settlement->hunger < 35 ? 1 :
+                              settlement->prosperity > 70 &&
+                              settlement->hunger < 15 &&
+                              settlement->security < 80 ? 1 : 0;
+    settlement->security = ClampI32(
+        settlement->security + security_change, 0, 100);
     if (CcSettlementHasService(settlement, CC_SERVICE_BARRACKS)) {
         settlement->security = ClampI32(settlement->security + 1, 0, 100);
     }
@@ -3614,6 +3649,14 @@ static void UpdateShipments(CcSim *sim)
              !CcSimRoute(sim, shipment->route_id)->smuggler_route)) {
             danger = MinimumI32(85, danger + 25);
         }
+        const CcSettlement *final_destination = CcSimSettlement(
+            sim, final_id);
+        if (shipment_good == CC_GOOD_FOOD &&
+            final_destination != NULL && final_destination->hunger >= 40) {
+            int32_t relief_escort = MinimumI32(
+                24, 8 + (final_destination->hunger - 40) / 3);
+            danger = MaximumI32(5, danger - relief_escort);
+        }
         bool lost = (int32_t)(NextRandom(sim) % 100U) < danger;
         const CcEvent *departure = LatestEvent(sim, CC_EVENT_SHIPMENT_DEPARTED,
                                                shipment->id, 0U);
@@ -3623,11 +3666,11 @@ static void UpdateShipments(CcSim *sim)
                 bandits->supplies = ClampI32(bandits->supplies + shipment->quantity, 0, 100);
             }
             char text[CC_EVENT_TEXT_CAPACITY];
-            const CcSettlement *destination = CcSimSettlement(sim, final_id);
             (void)snprintf(text, sizeof(text),
                            "%d %s bound for %s vanish on a road with %d%% danger.",
                            shipment->quantity, CcGoodName(shipment_good),
-                           destination != NULL ? destination->name : "the frontier", danger);
+                           final_destination != NULL ? final_destination->name :
+                           "the frontier", danger);
             (void)PushEvent(sim, CC_EVENT_SHIPMENT_LOST, shipment->id,
                             final_id,
                             departure != NULL ? departure->id : 0U,
@@ -3716,13 +3759,32 @@ static CcShipment *AllocateShipment(CcSim *sim)
     return shipment;
 }
 
+static int32_t TradeSurplus(const CcSim *sim,
+                            const CcSettlement *origin,
+                            const CcSettlement *destination,
+                            CcGood good)
+{
+    if (sim == NULL || origin == NULL || destination == NULL ||
+        good < 0 || good >= CC_GOOD_COUNT) return 0;
+    int32_t protected_stock = origin->reserve_target[good];
+    if (good == CC_GOOD_FOOD && destination->hunger >= 65 &&
+        origin->hunger < 35) {
+        int32_t survival_stock = MaximumI32(
+            WeeklyFoodUse(sim, origin) * 6,
+            origin->reserve_target[CC_GOOD_FOOD] / 2);
+        protected_stock = MinimumI32(protected_stock, survival_stock);
+    }
+    return origin->stock[good] - protected_stock;
+}
+
 static void CreateTradeShipment(CcSim *sim, int32_t route_slot, CcId next_hop_id,
                                 CcGood good, CcSettlement *origin,
                                 CcSettlement *final_destination,
                                 int32_t route_used[CC_MAX_ROUTES])
 {
     CcRoute *route = &sim->routes[route_slot];
-    int32_t surplus = origin->stock[good] - origin->reserve_target[good];
+    int32_t surplus = TradeSurplus(
+        sim, origin, final_destination, good);
     int32_t incoming = CcSimIncomingGood(sim, final_destination->id, good);
     int32_t need = EffectiveReserveTarget(sim, final_destination, good) -
                    final_destination->stock[good] - incoming;
@@ -3850,8 +3912,8 @@ static void PlanTrade(CcSim *sim)
                 for (int32_t source = 0; source < sim->settlement_count; ++source) {
                     if (source == destination) continue;
                     CcSettlement *from = &sim->settlements[source];
-                    int32_t surplus = from->stock[good] -
-                                      from->reserve_target[good];
+                    int32_t surplus = TradeSurplus(
+                        sim, from, to, (CcGood)good);
                     if (surplus < minimum_load) continue;
                     int32_t route_slot = -1;
                     CcId next_hop = 0U;
@@ -5023,9 +5085,10 @@ static void UpdateRoyalDiplomacy(CcSim *sim)
                                     sim->dragon.hoard_event_id);
                 return;
             }
-            if (state == CC_DIPLOMACY_WAR && age >= 728 &&
-                (KingdomAverageHunger(sim, first) > 45 ||
-                 KingdomAverageHunger(sim, second) > 45 ||
+            if (state == CC_DIPLOMACY_WAR && age >= 364 &&
+                (age >= 12 * 364 ||
+                 KingdomAverageHunger(sim, first) > 35 ||
+                 KingdomAverageHunger(sim, second) > 35 ||
                  (sim->kingdoms[first].legitimacy < 35 &&
                   sim->kingdoms[second].legitimacy < 35))) {
                 int32_t issuer = sim->kingdoms[first].legitimacy >=
@@ -5036,13 +5099,13 @@ static void UpdateRoyalDiplomacy(CcSim *sim)
                                     issuer, recipient, 0U);
                 return;
             }
-            if (state == CC_DIPLOMACY_PEACE && age >= 364) {
-                int32_t first_pressure =
-                    KingdomAverageHunger(sim, first) * 2 +
+            if (state == CC_DIPLOMACY_PEACE && age >= 1092) {
+                int32_t first_hunger = KingdomAverageHunger(sim, first);
+                int32_t second_hunger = KingdomAverageHunger(sim, second);
+                int32_t first_pressure = first_hunger * 2 +
                     MaximumI32(0, KingdomFood(sim, second) -
                                    KingdomFood(sim, first));
-                int32_t second_pressure =
-                    KingdomAverageHunger(sim, second) * 2 +
+                int32_t second_pressure = second_hunger * 2 +
                     MaximumI32(0, KingdomFood(sim, first) -
                                    KingdomFood(sim, second));
                 int32_t issuer = first_pressure >= second_pressure ?
@@ -5050,7 +5113,11 @@ static void UpdateRoyalDiplomacy(CcSim *sim)
                 int32_t recipient = issuer == first ? second : first;
                 int32_t pressure = issuer == first ?
                                    first_pressure : second_pressure;
-                if (pressure >= 90 &&
+                int32_t issuer_hunger = issuer == first ?
+                                         first_hunger : second_hunger;
+                if (pressure >= 110 && issuer_hunger >= 25 &&
+                    issuer_hunger <= 55 &&
+                    sim->kingdoms[issuer].legitimacy >= 30 &&
                     KingdomAverageProsperity(sim, recipient) >=
                         KingdomAverageProsperity(sim, issuer)) {
                     (void)LaunchCourier(
@@ -5258,6 +5325,38 @@ static int32_t RouteRecoveryScore(const CcSim *sim, const CcRoute *route,
            (100 - route->condition);
 }
 
+static void AdvanceRoadsideRecovery(CcSim *sim, CcRoute *route)
+{
+    if (sim == NULL || route == NULL || !route->closed ||
+        (CcSimRouteCrossesWarBorder(sim, route->id) &&
+         !route->smuggler_route)) return;
+    CcSettlement *from = CcSimSettlementMutable(sim, route->from_id);
+    CcSettlement *to = CcSimSettlementMutable(sim, route->to_id);
+    if (from == NULL || to == NULL) return;
+
+    int32_t distress = MaximumI32(from->hunger, to->hunger);
+    int32_t effort = 2 + distress / 30 + (route->smuggler_route ? 1 : 0);
+    route->condition = ClampI32(route->condition + effort, 0, 100);
+    if (sim->current_day % 112 == 0) {
+        CcSettlement *labor_base = from->population >= to->population ?
+                                   from : to;
+        labor_base->population = MaximumI32(100, labor_base->population - 1);
+    }
+    if (route->condition < 45) return;
+
+    route->closed = false;
+    route->security = ClampI32(route->security + 4, 0, 100);
+    SupersedeTargetSituations(sim, CC_SITUATION_ROUTE_REPAIR, route->id);
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(
+        text, sizeof(text),
+        "%s and %s reopen their road after a hard season of unpaid labor.",
+        from->name, to->name);
+    (void)PushEvent(
+        sim, CC_EVENT_KINGDOM_ACTION, route->id, route->to_id,
+        LatestLocalCause(sim, route->to_id), route->condition, text);
+}
+
 static void UpdateRoutesAndGovernments(CcSim *sim)
 {
     if (sim->current_day % 28 == 0) {
@@ -5315,9 +5414,26 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
     }
     for (int32_t route_index = 0; route_index < sim->route_count; ++route_index) {
         CcRoute *route = &sim->routes[route_index];
+        if (sim->current_day % 28 == 0) {
+            AdvanceRoadsideRecovery(sim, route);
+        }
         if (!route->closed && sim->current_day % 28 == 0) {
-            int32_t decay = route->smuggler_route ? 2 : 1;
+            const CcSettlement *route_from = CcSimSettlement(
+                sim, route->from_id);
+            const CcSettlement *route_to = CcSimSettlement(
+                sim, route->to_id);
+            bool locally_maintained = !route->smuggler_route &&
+                route_from != NULL && route_to != NULL &&
+                MaximumI32(route_from->hunger, route_to->hunger) < 30 &&
+                (route_from->prosperity + route_to->prosperity) / 2 >= 45;
+            int32_t decay = locally_maintained ? 0 :
+                            route->smuggler_route ? 2 : 1;
             route->condition = ClampI32(route->condition - decay, 0, 100);
+            CcBanditGroup *bandits = BanditsOnRoute(sim, route->id);
+            if (locally_maintained &&
+                (bandits == NULL || bandits->influence < 30)) {
+                route->security = ClampI32(route->security + 1, 0, 100);
+            }
             if (route->condition < 22) {
                 route->closed = true;
                 char text[CC_EVENT_TEXT_CAPACITY];
@@ -5486,10 +5602,14 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
         }
         int32_t average_hunger = settlements > 0 ? hunger_sum / settlements : 0;
         int32_t average_prosperity = settlements > 0 ? prosperity_sum / settlements : 0;
-        kingdom->legitimacy = ClampI32(kingdom->legitimacy +
-            (average_hunger > 55 ? -2 : average_hunger > 30 ? -1 :
-             average_hunger < 12 && average_prosperity > 55 &&
-             war_crisis_max < 30 ? 1 : 0), 0, 100);
+        int32_t legitimacy_change = average_hunger > 55 ? -2 :
+                                    average_hunger > 35 ? -1 :
+                                    average_hunger < 25 &&
+                                    average_prosperity > 25 &&
+                                    war_crisis_max < 50 &&
+                                    kingdom->legitimacy < 75 ? 1 : 0;
+        kingdom->legitimacy = ClampI32(
+            kingdom->legitimacy + legitimacy_change, 0, 100);
 
         CcFaction *crown = FactionFor(sim, kingdom->id, CC_FACTION_CROWN);
         CcFaction *guild = FactionFor(sim, kingdom->id, CC_FACTION_GUILD);
@@ -5510,7 +5630,12 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
         }
         if (commons != NULL && crown != NULL &&
             commons->support > 72 && crown->support < 38) {
-            kingdom->legitimacy = ClampI32(kingdom->legitimacy - 2, 0, 100);
+            int32_t faction_change = kingdom->legitimacy > 20 ? -1 :
+                                     average_hunger < 55 &&
+                                     (shipments > 0 ||
+                                      average_prosperity > 20) ? 1 : 0;
+            kingdom->legitimacy = ClampI32(
+                kingdom->legitimacy + faction_change, 0, 100);
         }
 
         if (sim->current_day % 28 == 0 && worst != NULL && worst->hunger >= 38 &&

@@ -398,6 +398,11 @@ if(BUILD_TESTING)
     cc_strict_warnings(sim_tests)
     add_test(NAME deterministic_simulation COMMAND sim_tests)
 
+    add_executable(balance_tests tests/balance_tests.c)
+    target_link_libraries(balance_tests PRIVATE crownless_sim)
+    cc_strict_warnings(balance_tests)
+    add_test(NAME osr_long_run_balance COMMAND balance_tests)
+
     add_executable(persistence_tests tests/persistence_tests.c)
     target_link_libraries(persistence_tests PRIVATE crownless_persistence)
     cc_strict_warnings(persistence_tests)
