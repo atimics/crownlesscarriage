@@ -153,6 +153,12 @@ if(CC_BUILD_CLIENT)
         set(CC_NPC_DYNAMIC_MODULE_MANIFEST
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/npc_dynamic_module_manifest.json"
         )
+        file(GLOB CC_CREATURE_ASSETS CONFIGURE_DEPENDS
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/creatures/*.glb"
+        )
+        set(CC_CREATURE_MANIFEST
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/creature_manifest.json"
+        )
         file(GLOB CC_WORLD_KIT_ASSETS CONFIGURE_DEPENDS
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/world_kit/*.glb"
         )
@@ -216,6 +222,8 @@ if(CC_BUILD_CLIENT)
             COMMAND ${CMAKE_COMMAND} -E make_directory
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/npc"
             COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/creatures"
+            COMMAND ${CMAKE_COMMAND} -E make_directory
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/glb"
             COMMAND ${CMAKE_COMMAND} -E make_directory
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/world_kit"
@@ -242,6 +250,12 @@ if(CC_BUILD_CLIENT)
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${CC_NPC_DYNAMIC_MODULE_MANIFEST}"
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/npc_dynamic_module_manifest.json"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${CC_CREATURE_ASSETS}
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/creatures"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CC_CREATURE_MANIFEST}"
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/creature_manifest.json"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 ${CC_WORLD_KIT_ASSETS}
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/world_kit"
@@ -302,6 +316,7 @@ if(CC_BUILD_CLIENT)
             DEPENDS "${CC_HERO_ENGINE_ASSET}" "${CC_HERO_ENGINE_MANIFEST}"
                     ${CC_NPC_ARCHETYPE_ASSETS} "${CC_NPC_ARCHETYPE_MANIFEST}"
                     "${CC_NPC_DYNAMIC_MODULE_MANIFEST}"
+                    ${CC_CREATURE_ASSETS} "${CC_CREATURE_MANIFEST}"
                     "${CC_BRIDGE_CHECKPOINT_ASSET}" "${CC_CARRIAGE_ASSET}"
                     "${CC_CARGO_RACK_ASSET}" "${CC_MARKET_ASSET}"
                     "${CC_MINE_ASSET}" "${CC_SHORTAGE_ASSET}"

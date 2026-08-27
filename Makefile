@@ -3,6 +3,7 @@
 	blender-hero-actions blender-hero-engine blender-hero-procedural-preview \
 	blender-hero-procedural-check blender-hero-paint-channels \
 	blender-npc-assets blender-npc-assets-check \
+	blender-creature-assets blender-creature-assets-check \
 	blender-world-kit blender-world-kit-check \
 	blender-character-experiments blender-character-animations blender-character-animations-check \
 	blender-character-hair-v08 \
@@ -109,12 +110,18 @@ blender-npc-assets-check:
 	python3 tools/blender/validate_npc_archetype_library.py
 	python3 tools/blender/validate_npc_dynamic_modules.py
 
+blender-creature-assets:
+	$(BLENDER) --background --python-exit-code 1 --factory-startup --python tools/blender/build_creature_library.py
+
+blender-creature-assets-check:
+	python3 tools/blender/validate_creature_library.py
+
 blender-world-kit:
 	$(BLENDER) --background --python-exit-code 1 --factory-startup --python tools/blender/build_world_kit.py
 
 blender-world-kit-check:
 	python3 tools/blender/validate_world_kit.py
 
-art-check: test-play blender-character-animations-check blender-npc-assets-check blender-world-kit-check
+art-check: test-play blender-character-animations-check blender-npc-assets-check blender-creature-assets-check blender-world-kit-check
 	python3 tools/blender/validate_character_paint_channels.py
 	python3 tools/art/run_art_check.py
