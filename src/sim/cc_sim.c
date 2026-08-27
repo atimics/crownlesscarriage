@@ -1551,8 +1551,11 @@ static void CompleteTreasure(CcSim *sim, CcSettlement *settlement)
         "Blackglass Icon", "Ember Casket"
     };
     const char *form = forms[(sim->treasure_count - 1) % 6];
-    (void)snprintf(treasure->name, sizeof(treasure->name),
+    char treasure_name[CC_MAP_NAME_CAPACITY];
+    (void)snprintf(treasure_name, sizeof(treasure_name),
                    "%.20s %s", settlement->name, form);
+    (void)snprintf(treasure->name, sizeof(treasure->name), "%s",
+                   treasure_name);
     treasure->maker_settlement_id = settlement->id;
     treasure->owner_id = settlement->id;
     treasure->location_id = settlement->id;
