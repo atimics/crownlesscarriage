@@ -175,12 +175,16 @@ int main(void)
     CC_CHECK(unjust.dragon.retaliation_target_id == unequal_town->id);
     const CcEvent *social_theft = LatestKind(
         &unjust, CC_EVENT_DRAGON_HOARD_STOLEN);
-    const CcEvent *social_departure = social_theft != NULL ?
+    const CcEvent *social_guard = social_theft != NULL ?
         CcSimEvent(&unjust, social_theft->parent_id) : NULL;
+    const CcEvent *social_departure = social_guard != NULL ?
+        CcSimEvent(&unjust, social_guard->parent_id) : NULL;
     const CcEvent *inequality = social_departure != NULL ?
         CcSimEvent(&unjust, social_departure->parent_id) : NULL;
     CC_CHECK(social_theft != NULL &&
              social_theft->subject_id == unjust.hoard_raiders.id);
+    CC_CHECK(social_guard != NULL &&
+             social_guard->kind == CC_EVENT_GOBLIN_HOARD_DEFENDED);
     CC_CHECK(social_departure != NULL &&
              social_departure->kind == CC_EVENT_HOARD_HEIST_DEPARTED);
     CC_CHECK(inequality != NULL &&
@@ -208,6 +212,8 @@ int main(void)
         CcSimAdvanceDays(&unjust, 1);
     }
     CC_CHECK(unjust.hoard_raiders.raids_completed == 1);
+    CC_CHECK(unjust.hoard_raiders.social_raid_latched);
+    CC_CHECK(unjust.goblins.hoard_defenses == 1);
     CC_CHECK(unequal_town->hunger < hunger_before_relief);
     for (int32_t day = 0;
          day < 14 && unjust.dragon.retaliations == 0; ++day) {
@@ -221,6 +227,8 @@ int main(void)
 
     CcSim war;
     CcSimInit(&war, UINT32_C(0x7a251e17));
+    war.diplomacy[1][2] = CC_DIPLOMACY_WAR;
+    war.diplomacy[2][1] = CC_DIPLOMACY_WAR;
     for (int32_t i = 0; i < war.settlement_count; ++i) {
         war.settlements[i].prosperity = 45;
         war.settlements[i].hunger = 0;
@@ -273,12 +281,16 @@ int main(void)
     CC_CHECK(war.hoard_raiders.motive == CC_HOARD_RAID_WAR_FINANCE);
     const CcEvent *war_theft = LatestKind(
         &war, CC_EVENT_DRAGON_HOARD_STOLEN);
-    const CcEvent *war_departure = war_theft != NULL ?
+    const CcEvent *war_guard = war_theft != NULL ?
         CcSimEvent(&war, war_theft->parent_id) : NULL;
+    const CcEvent *war_departure = war_guard != NULL ?
+        CcSimEvent(&war, war_guard->parent_id) : NULL;
     const CcEvent *war_pressure = war_departure != NULL ?
         CcSimEvent(&war, war_departure->parent_id) : NULL;
     CC_CHECK(war_theft != NULL &&
              war_theft->subject_id == war.hoard_raiders.id);
+    CC_CHECK(war_guard != NULL &&
+             war_guard->kind == CC_EVENT_GOBLIN_HOARD_DEFENDED);
     CC_CHECK(war_departure != NULL &&
              war_departure->kind == CC_EVENT_HOARD_HEIST_DEPARTED);
     CC_CHECK(war_pressure != NULL &&
@@ -291,6 +303,8 @@ int main(void)
     }
     CC_CHECK(war.hoard_raiders.raids_completed == 1);
     CC_CHECK(war.hoard_raiders.war_raids_completed == 1);
+    CC_CHECK(war.hoard_raiders.war_raid_latched);
+    CC_CHECK(war.goblins.hoard_defenses == 1);
     CC_CHECK(fortress->war_chest > chest_before_return);
     CC_CHECK(CcSimTrackedGold(&war) == gold_during_war_theft);
     for (int32_t day = 0;
@@ -310,7 +324,45 @@ int main(void)
     CC_CHECK(CcSaveRead(war_path, &war_restored, error, sizeof(error)));
     CC_CHECK(CcSimHash(&war_restored) == CcSimHash(&war));
     CC_CHECK(war_restored.hoard_raiders.war_raids_completed == 1);
+    CC_CHECK(war_restored.hoard_raiders.war_raid_latched);
+    CC_CHECK(war_restored.goblins.hoard_defenses == 1);
     CC_CHECK(remove(war_path) == 0);
+
+    CcSim dragon_host;
+    CcSimInit(&dragon_host, UINT32_C(0xd2a60a11));
+    for (int32_t first = 0; first < dragon_host.kingdom_count; ++first) {
+        dragon_host.dragon.hoard += dragon_host.kingdoms[first].treasury;
+        dragon_host.kingdoms[first].treasury = 0;
+        for (int32_t second = 0;
+             second < dragon_host.kingdom_count; ++second) {
+            if (first == second) continue;
+            dragon_host.diplomacy[first][second] = CC_DIPLOMACY_ALLIANCE;
+        }
+    }
+    dragon_host.dragon_campaign.pledged_kingdom_mask = UINT32_C(7);
+    dragon_host.goblins.members = 12;
+    dragon_host.goblins.devotion = 0;
+    dragon_host.goblins.hoard_defenses = 0;
+    for (int32_t i = 0; i < dragon_host.settlement_count; ++i) {
+        dragon_host.settlements[i].stock[CC_GOOD_FOOD] += 32;
+        dragon_host.settlements[i].stock[CC_GOOD_TOOLS] += 8;
+        dragon_host.settlements[i].stock[CC_GOOD_WEAPONS] += 12;
+    }
+    CcMoney campaign_gold = CcSimTrackedGold(&dragon_host);
+    CcSimAdvanceDays(&dragon_host, 55);
+    CC_CHECK(dragon_host.dragon.slain);
+    CC_CHECK(dragon_host.dragon.hoard == 0);
+    CC_CHECK(dragon_host.dragon_campaign.phase ==
+             CC_DRAGON_CAMPAIGN_IDLE);
+    CC_CHECK(dragon_host.dragon_campaign.attempts == 1);
+    CC_CHECK(dragon_host.dragon_campaign.victories == 1);
+    CC_CHECK(dragon_host.dragon_campaign.defeats == 0);
+    CC_CHECK(CountEvents(&dragon_host, CC_EVENT_DRAGON_BATTLE) == 0);
+    CC_CHECK(CountEvents(&dragon_host, CC_EVENT_DRAGON_SLAIN) == 1);
+    CC_CHECK(CountEvents(&dragon_host,
+                         CC_EVENT_DRAGON_HOARD_RECOVERED) == 1);
+    CC_CHECK(CcSimTrackedGold(&dragon_host) == campaign_gold);
+    CC_CHECK(CcSimValidate(&dragon_host, error, sizeof(error)));
 
     puts("Goblin tribute, war finance, and dragon retaliation tests passed");
     return 0;

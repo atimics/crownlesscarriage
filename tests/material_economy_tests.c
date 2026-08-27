@@ -90,6 +90,75 @@ int main(void)
     CcSimAdvanceDays(&ordinary_spoilage, 7);
     CC_CHECK(place->stock[CC_GOOD_FOOD] == 144);
 
+    CcSim fed;
+    place = IsolatedSettlement(&fed);
+    place->stock[CC_GOOD_FOOD] = 7;
+    place->consumption[CC_GOOD_FOOD] = 7;
+    place->hunger = 50;
+    CcSimAdvanceDays(&fed, 7);
+    CC_CHECK(place->stock[CC_GOOD_FOOD] == 0);
+    CC_CHECK(place->hunger == 49);
+
+    CcSim starving;
+    place = IsolatedSettlement(&starving);
+    place->consumption[CC_GOOD_FOOD] = 7;
+    place->hunger = 50;
+    CcSimAdvanceDays(&starving, 7);
+    CC_CHECK(place->hunger == 56);
+
+    CcSim tool_convoy;
+    CcSimInit(&tool_convoy, UINT32_C(0x7001c0a7));
+    tool_convoy.settlement_count = 2;
+    tool_convoy.route_count = 1;
+    tool_convoy.shipment_count = 0;
+    tool_convoy.bandit_count = 0;
+    tool_convoy.monster_count = 0;
+    tool_convoy.dungeon_count = 0;
+    tool_convoy.situation_count = 0;
+    tool_convoy.goblins.tribute_cooldown_days = 1000;
+    tool_convoy.hoard_raiders.cooldown_days = 1000;
+    CcSettlement *tool_source = &tool_convoy.settlements[0];
+    CcSettlement *tool_buyer = &tool_convoy.settlements[1];
+    for (int32_t kingdom = 0;
+         kingdom < tool_convoy.kingdom_count; ++kingdom) {
+        tool_convoy.kingdoms[kingdom].treasury = 0;
+    }
+    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        tool_source->production[good] = 0;
+        tool_buyer->production[good] = 0;
+        tool_source->consumption[good] = 0;
+        tool_buyer->consumption[good] = 0;
+        tool_source->stock[good] = 0;
+        tool_buyer->stock[good] = 0;
+        tool_source->reserve_target[good] = 0;
+        tool_buyer->reserve_target[good] = 0;
+        tool_source->price[good] = 1;
+        tool_buyer->price[good] = 1;
+    }
+    tool_source->stock[CC_GOOD_TOOLS] = 10;
+    tool_buyer->reserve_target[CC_GOOD_TOOLS] = 4;
+    tool_source->market_coins = 100;
+    tool_buyer->market_coins = 100;
+    tool_convoy.routes[0].closed = true;
+    tool_convoy.routes[0].condition = 10;
+    tool_convoy.routes[0].security = 100;
+    tool_convoy.routes[0].smuggler_route = false;
+    CcMoney tool_gold_before = CcSimTrackedGold(&tool_convoy);
+    CcSimAdvanceDays(&tool_convoy, 6);
+    CC_CHECK(tool_convoy.shipment_count > 0);
+    CC_CHECK(tool_convoy.shipments[0].good == CC_GOOD_TOOLS);
+    CC_CHECK(tool_convoy.shipments[0].quantity > 0);
+    CC_CHECK(tool_convoy.shipments[0].quantity <= 4);
+    CC_CHECK(tool_convoy.shipments[0].status == CC_SHIPMENT_TRAVELLING);
+    CC_CHECK(tool_convoy.routes[0].closed);
+    CC_CHECK(tool_convoy.kingdoms[0].treasury == 4);
+    CC_CHECK(tool_source->market_coins > 100);
+    CC_CHECK(tool_buyer->market_coins < 100);
+    CC_CHECK((tool_source->market_coins - 100) +
+             (tool_buyer->market_coins - 100) +
+             tool_convoy.kingdoms[0].treasury == 0);
+    CC_CHECK(CcSimTrackedGold(&tool_convoy) == tool_gold_before);
+
     CcSim famine_convoy;
     CcSimInit(&famine_convoy, UINT32_C(0xfa61ce01));
     famine_convoy.settlement_count = 2;
@@ -103,12 +172,20 @@ int main(void)
     famine_convoy.hoard_raiders.cooldown_days = 1000;
     CcSettlement *source = &famine_convoy.settlements[0];
     CcSettlement *hungry = &famine_convoy.settlements[1];
-    hungry->kingdom_id = source->kingdom_id;
+    hungry->kingdom_id = famine_convoy.kingdoms[1].id;
+    for (int32_t kingdom = 0;
+         kingdom < famine_convoy.kingdom_count; ++kingdom) {
+        famine_convoy.kingdoms[kingdom].treasury = 0;
+    }
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
         source->production[good] = 0;
         hungry->production[good] = 0;
         source->consumption[good] = 0;
         hungry->consumption[good] = 0;
+        source->stock[good] = 0;
+        hungry->stock[good] = 0;
+        source->reserve_target[good] = 0;
+        hungry->reserve_target[good] = 0;
     }
     source->service_mask |= Service(CC_SERVICE_GRANARY);
     source->stock[CC_GOOD_FOOD] = 200;
@@ -117,17 +194,33 @@ int main(void)
     hungry->stock[CC_GOOD_FOOD] = 0;
     hungry->reserve_target[CC_GOOD_FOOD] = 60;
     hungry->consumption[CC_GOOD_FOOD] = 5;
-    hungry->market_coins = 1000;
+    hungry->market_coins = 0;
     hungry->hunger = 65;
     famine_convoy.routes[0].closed = true;
     famine_convoy.routes[0].condition = 10;
     famine_convoy.routes[0].security = 100;
     famine_convoy.routes[0].smuggler_route = false;
+    CcMoney gold_before_credit = CcSimTrackedGold(&famine_convoy);
+    CcMoney reserve_before_credit = famine_convoy.iron_ledger_reserve;
     CcSimAdvanceDays(&famine_convoy, 6);
     CC_CHECK(famine_convoy.shipment_count > 0);
     CC_CHECK(famine_convoy.shipments[0].good == CC_GOOD_FOOD);
     CC_CHECK(famine_convoy.shipments[0].status == CC_SHIPMENT_TRAVELLING);
     CC_CHECK(famine_convoy.routes[0].closed);
+    CC_CHECK(famine_convoy.kingdoms[1].iron_ledger_debt > 0);
+    CC_CHECK(famine_convoy.iron_ledger_reserve < reserve_before_credit);
+    CC_CHECK(CcSimTrackedGold(&famine_convoy) == gold_before_credit);
+    bool loan_recorded = false;
+    for (int32_t event = 0; event < famine_convoy.event_count; ++event) {
+        const CcEvent *item = CcSimRecentEvent(&famine_convoy, event);
+        if (item != NULL && item->kind == CC_EVENT_IRON_LEDGER_LOAN) {
+            loan_recorded = true;
+        }
+    }
+    CC_CHECK(loan_recorded);
+    CcSimAdvanceDays(&famine_convoy, 21);
+    CC_CHECK(famine_convoy.routes[0].smuggler_route);
+    CC_CHECK(!famine_convoy.routes[0].closed);
 
     CcSim mine;
     place = IsolatedSettlement(&mine);

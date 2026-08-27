@@ -10,6 +10,7 @@
 #define CC_MAX_ROUTES 8
 #define CC_MAX_FACTIONS 9
 #define CC_MAX_SHIPMENTS 24
+#define CC_MAX_COURIERS 12
 #define CC_MAX_BANDITS 3
 #define CC_MAX_MONSTERS 3
 #define CC_MAX_DUNGEONS 3
@@ -23,8 +24,8 @@
 #define CC_CARGO_CAPACITY 12
 #define CC_MAP_CAPACITY 3
 
-#define CC_SIM_SCHEMA_VERSION 9
-#define CC_GENERATOR_VERSION 9
+#define CC_SIM_SCHEMA_VERSION 11
+#define CC_GENERATOR_VERSION 11
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
 #define CC_WORLD_DAY_SUBTICKS (24 * 60 * CC_WORLD_MINUTE_SUBTICKS)
@@ -51,7 +52,8 @@ typedef enum CcEntityKind {
     CC_ENTITY_GOBLIN_CULT = 13,
     CC_ENTITY_DRAGON = 14,
     CC_ENTITY_HOARD_RAIDERS = 15,
-    CC_ENTITY_TREASURE = 16
+    CC_ENTITY_TREASURE = 16,
+    CC_ENTITY_COURIER = 17
 } CcEntityKind;
 
 typedef enum CcGood {
@@ -171,7 +173,21 @@ typedef enum CcEventKind {
     CC_EVENT_GOBLIN_RAID_DEPARTED,
     CC_EVENT_GOBLIN_RAIDED,
     CC_EVENT_GOBLIN_RAID_RETURNED,
-    CC_EVENT_WAR_MATERIEL_LOST
+    CC_EVENT_WAR_MATERIEL_LOST,
+    CC_EVENT_IRON_LEDGER_LOAN,
+    CC_EVENT_IRON_LEDGER_REPAID,
+    CC_EVENT_GOBLIN_HOARD_DEFENDED,
+    CC_EVENT_COURIER_DEPARTED,
+    CC_EVENT_COURIER_ARRIVED,
+    CC_EVENT_COURIER_LOST,
+    CC_EVENT_COURIER_DISTORTED,
+    CC_EVENT_WAR_DECLARED,
+    CC_EVENT_PEACE_DECLARED,
+    CC_EVENT_ALLIANCE_DECLARED,
+    CC_EVENT_DRAGON_MUSTERED,
+    CC_EVENT_DRAGON_BATTLE,
+    CC_EVENT_DRAGON_SLAIN,
+    CC_EVENT_DRAGON_HOARD_RECOVERED
 } CcEventKind;
 
 typedef enum CcCommandKind {
@@ -200,8 +216,15 @@ typedef struct CcKingdom {
     uint8_t color_g;
     uint8_t color_b;
     CcMoney treasury;
+    CcMoney iron_ledger_debt;
     int32_t legitimacy;
 } CcKingdom;
+
+typedef enum CcDiplomaticState {
+    CC_DIPLOMACY_PEACE,
+    CC_DIPLOMACY_WAR,
+    CC_DIPLOMACY_ALLIANCE
+} CcDiplomaticState;
 
 typedef struct CcSettlement {
     CcId id;
@@ -294,6 +317,39 @@ typedef struct CcShipment {
     CcShipmentStatus status;
 } CcShipment;
 
+typedef enum CcCourierKind {
+    CC_COURIER_WAR_DECLARATION,
+    CC_COURIER_PEACE_OFFER,
+    CC_COURIER_DRAGON_ALLIANCE,
+    CC_COURIER_DRAGON_MUSTER
+} CcCourierKind;
+
+typedef enum CcCourierStatus {
+    CC_COURIER_WAITING,
+    CC_COURIER_TRAVELLING,
+    CC_COURIER_WITH_PLAYER,
+    CC_COURIER_DELIVERED,
+    CC_COURIER_LOST,
+    CC_COURIER_DISTORTED
+} CcCourierStatus;
+
+typedef struct CcCourier {
+    CcId id;
+    CcCourierKind kind;
+    CcCourierStatus status;
+    CcId issuer_kingdom_id;
+    CcId recipient_kingdom_id;
+    CcId origin_settlement_id;
+    CcId destination_settlement_id;
+    CcId current_settlement_id;
+    CcId route_id;
+    CcId cause_event_id;
+    CcId situation_id;
+    int32_t departure_day;
+    int32_t arrival_day;
+    int32_t reliability;
+} CcCourier;
+
 typedef enum CcBanditCampSize {
     CC_BANDIT_HIDEOUT,
     CC_BANDIT_CAMP,
@@ -360,6 +416,7 @@ typedef struct CcGoblinCult {
     int32_t tribute_days_remaining;
     int32_t tribute_cooldown_days;
     int32_t tributes_delivered;
+    int32_t hoard_defenses;
 } CcGoblinCult;
 
 typedef struct CcDragon {
@@ -376,7 +433,30 @@ typedef struct CcDragon {
     CcId omen_event_id;
     int32_t omen_days_remaining;
     int32_t retaliations;
+    bool slain;
+    int32_t slain_day;
 } CcDragon;
+
+typedef enum CcDragonCampaignPhase {
+    CC_DRAGON_CAMPAIGN_IDLE,
+    CC_DRAGON_CAMPAIGN_OUTBOUND,
+    CC_DRAGON_CAMPAIGN_RETURNING
+} CcDragonCampaignPhase;
+
+typedef struct CcDragonCampaign {
+    CcDragonCampaignPhase phase;
+    uint32_t pledged_kingdom_mask;
+    uint32_t alliance_kingdom_mask;
+    CcId origin_settlement_id;
+    CcId cause_event_id;
+    int32_t days_remaining;
+    int32_t cooldown_days;
+    int32_t supplies[CC_GOOD_COUNT];
+    CcMoney recovered_coins;
+    int32_t attempts;
+    int32_t victories;
+    int32_t defeats;
+} CcDragonCampaign;
 
 typedef struct CcTreasure {
     CcId id;
@@ -416,6 +496,8 @@ typedef struct CcHoardRaiders {
     int32_t cooldown_days;
     int32_t raids_completed;
     int32_t war_raids_completed;
+    bool social_raid_latched;
+    bool war_raid_latched;
 } CcHoardRaiders;
 
 typedef struct CcMonsterPopulation {
@@ -440,7 +522,8 @@ typedef enum CcSituationKind {
     CC_SITUATION_RELIEF_DELIVERY,
     CC_SITUATION_ROUTE_REPAIR,
     CC_SITUATION_MONSTER_EXPEDITION,
-    CC_SITUATION_BLACK_MARKET_DELIVERY
+    CC_SITUATION_BLACK_MARKET_DELIVERY,
+    CC_SITUATION_COURIER_DELIVERY
 } CcSituationKind;
 
 typedef enum CcSituationStatus {
@@ -570,6 +653,7 @@ typedef struct CcSim {
     uint32_t random_state;
     int32_t current_day;
     uint64_t next_entity_serial;
+    CcMoney iron_ledger_reserve;
     CcKingdom kingdoms[CC_MAX_KINGDOMS];
     CcSettlement settlements[CC_MAX_SETTLEMENTS];
     CcRoute routes[CC_MAX_ROUTES];
@@ -577,9 +661,11 @@ typedef struct CcSim {
     CcTreasure treasures[CC_MAX_TREASURES];
     CcFaction factions[CC_MAX_FACTIONS];
     CcShipment shipments[CC_MAX_SHIPMENTS];
+    CcCourier couriers[CC_MAX_COURIERS];
     CcBanditGroup bandits[CC_MAX_BANDITS];
     CcGoblinCult goblins;
     CcDragon dragon;
+    CcDragonCampaign dragon_campaign;
     CcHoardRaiders hoard_raiders;
     CcMonsterPopulation monsters[CC_MAX_MONSTERS];
     CcDungeon dungeons[CC_MAX_DUNGEONS];
@@ -605,6 +691,9 @@ typedef struct CcSim {
     int32_t situation_count;
     int32_t event_count;
     int32_t event_write_index;
+    int32_t courier_count;
+    CcDiplomaticState diplomacy[CC_MAX_KINGDOMS][CC_MAX_KINGDOMS];
+    int32_t diplomacy_changed_day[CC_MAX_KINGDOMS][CC_MAX_KINGDOMS];
     int32_t last_shortage_level[CC_MAX_SETTLEMENTS];
     int32_t last_bandit_level[CC_MAX_BANDITS];
     int32_t last_monster_level[CC_MAX_MONSTERS];
@@ -669,6 +758,8 @@ bool CcSimStartServiceProject(CcSim *sim, CcId settlement_id,
                               CcServiceKind service,
                               char *error, size_t error_capacity);
 bool CcSimKingdomsAtWar(const CcSim *sim, CcId first, CcId second);
+bool CcSimKingdomsAllied(const CcSim *sim, CcId first, CcId second);
+const char *CcDiplomaticStateName(CcDiplomaticState state);
 bool CcSimRouteCrossesWarBorder(const CcSim *sim, CcId route_id);
 int32_t CcBanditCampServiceCapacity(CcBanditCampSize size);
 bool CcSimLaunchBanditRaid(CcSim *sim, CcId bandit_id,

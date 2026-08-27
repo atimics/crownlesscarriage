@@ -68,11 +68,24 @@ The architecture proof connects these parts in one running build:
   production, trade, shipments, hunger, security, bandits, monsters, and
   dungeons
 - Fields, farms, mountain deposits, mines, smith recipes, tool wear, rare Gold
-  and Gems, supplied warfare, and unique one-slot crafted treasures
+  and Gems, bounded and perishable food stores, supplied warfare, and unique
+  one-slot crafted treasures
+- Restricted roads that still carry low-volume trade and travel while moving
+  real tolls, border sanctions, or night-road bribes into kingdom treasuries
+- An Iron Ledger of copied monastery accounts: kingdoms borrow deposited coin
+  for famine grain and productive Tools, record debt, and make real repayments
 - A goblin lair economy that raids for food or equipment, carries loot home,
   then carries portable offerings to a persistent dragon
-  hoard, plus inequality-driven thieves, war-financed Crown Levies, player
-  theft, omens, repayment, and bounded retaliation
+  hoard, defends it with real members and Weapons, and raids again to replace
+  losses; inequality or debt
+  can drive the Ash-Poor to steal, while war can finance a Crown Levy, followed
+  by omens, repayment, and bounded retaliation
+- Kings who send physical declarations, peace offers, dragon alliances, and
+  muster orders through a delayed and fallible courier network. The carriage
+  can carry a sealed dispatch. Allied hosts consume real Food, Tools, and
+  Weapons; victory slays the dragon and returns its actual hoard to the realms
+- Hunger and exhausted credit that create night roads and recruit bandits,
+  while unfed camps shrink and cannot raid empty towns
 - An append-only SQLite action journal with checkpoints, replay, and exact
   state hashing
 

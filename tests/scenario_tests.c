@@ -63,6 +63,74 @@ int main(void)
 {
     char error[192];
 
+    CcSim tolled_road;
+    CcSimInit(&tolled_road, UINT32_C(0x7011ed));
+    tolled_road.player.coins = 100;
+    tolled_road.routes[0].closed = true;
+    tolled_road.routes[0].security = 100;
+    tolled_road.routes[0].condition = 100;
+    CcMoney tolled_gold_before = CcSimTrackedGold(&tolled_road);
+    CcMoney toll_treasury_before = tolled_road.kingdoms[0].treasury;
+    CcMoney origin_market_before = tolled_road.settlements[0].market_coins;
+    CcCommand pay_toll = {
+        .kind = CC_COMMAND_TRAVEL,
+        .target_id = tolled_road.settlements[1].id
+    };
+    CC_CHECK(CcSimApply(&tolled_road, &pay_toll,
+                        error, sizeof(error)));
+    CC_CHECK(tolled_road.journey.active);
+    CC_CHECK(tolled_road.journey.fare_reserved ==
+             tolled_road.routes[0].travel_days + 4);
+    CC_CHECK(tolled_road.kingdoms[0].treasury ==
+             toll_treasury_before + 4);
+    CC_CHECK(tolled_road.settlements[0].market_coins ==
+             origin_market_before + tolled_road.routes[0].travel_days);
+    CC_CHECK(CcSimTrackedGold(&tolled_road) == tolled_gold_before);
+
+    CcSim dispatch;
+    CcSimInit(&dispatch, UINT32_C(0xc0a71e12));
+    for (int32_t kingdom = 0;
+         kingdom < dispatch.kingdom_count; ++kingdom) {
+        dispatch.dragon.hoard += dispatch.kingdoms[kingdom].treasury;
+        dispatch.kingdoms[kingdom].treasury = 0;
+        dispatch.kingdoms[kingdom].legitimacy = 100;
+    }
+    CcSimAdvanceDays(&dispatch, 27);
+    CC_CHECK(dispatch.courier_count > 0);
+    CcCourier *seal = &dispatch.couriers[0];
+    CC_CHECK(seal->status == CC_COURIER_WAITING);
+    CC_CHECK(!CcSimKingdomsAllied(
+        &dispatch, seal->issuer_kingdom_id,
+        seal->recipient_kingdom_id));
+    dispatch.player.location_id = seal->current_settlement_id;
+    dispatch.carriage.location_id = seal->current_settlement_id;
+    dispatch.player.coins = 100;
+    dispatch.maps[6].owner_id = dispatch.player.id;
+    for (int32_t i = 0; i < dispatch.route_count; ++i) {
+        dispatch.routes[i].security = 100;
+        dispatch.routes[i].condition = 100;
+        dispatch.routes[i].closed = false;
+    }
+    dispatch.routes[6].smuggler_route = false;
+    dispatch.bandit_count = 0;
+    CcSituation *dispatch_offer = (CcSituation *)CcSimSituation(
+        &dispatch, seal->situation_id);
+    CC_CHECK(dispatch_offer != NULL);
+    CcCommand carry_seal = {
+        .kind = CC_COMMAND_ACCEPT_SITUATION,
+        .target_id = dispatch_offer->id
+    };
+    CC_CHECK(CcSimApply(&dispatch, &carry_seal,
+                        error, sizeof(error)));
+    CC_CHECK(seal->status == CC_COURIER_WITH_PLAYER);
+    TravelAndArrive(&dispatch, seal->destination_settlement_id,
+                    error, sizeof(error));
+    CC_CHECK(seal->status == CC_COURIER_DELIVERED);
+    CC_CHECK(dispatch_offer->status == CC_SITUATION_RESOLVED);
+    CC_CHECK(CcSimKingdomsAllied(
+        &dispatch, seal->issuer_kingdom_id,
+        seal->recipient_kingdom_id));
+
     CcSim official;
     CcSimInit(&official, UINT32_C(0xc0a71a9e));
     official.player.coins = 120;
@@ -227,6 +295,10 @@ int main(void)
              public_mine.monsters[0].pressure);
 
     CC_CHECK(CcSimValidate(&official, error, sizeof(error)));
+    CC_CHECK(CcSimValidate(&tolled_road, error, sizeof(error)));
+    bool dispatch_valid = CcSimValidate(&dispatch, error, sizeof(error));
+    if (!dispatch_valid) (void)fprintf(stderr, "%s\n", error);
+    CC_CHECK(dispatch_valid);
     CC_CHECK(CcSimValidate(&repair, error, sizeof(error)));
     CC_CHECK(CcSimValidate(&tool_repair, error, sizeof(error)));
     CC_CHECK(CcSimValidate(&public_mine, error, sizeof(error)));

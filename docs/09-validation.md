@@ -58,6 +58,13 @@ Across batch simulations:
 - No shipments exceeding route capacity
 - No prices outside documented bounds
 - No permanent collapse without a declared recovery path
+- Food stocks remain below their physical storage limits after spoilage
+- Toll, debt, tribute, theft, and hoard recovery move tracked crowns instead of
+  minting or deleting them
+- A diplomatic relation changes only after a courier arrives, unless a
+  distorted message records an explicit false result
+- A dragon host removes its Food, Tools, and Weapons from allied settlements;
+  defeat consumes them and victory returns only the real cave hoard
 
 ### 5. Stability
 
@@ -72,6 +79,8 @@ Run at least 1,000 seeds for ten simulated years. Record:
 - Monster outbreak duration
 - Simultaneous situations per region
 - Situations invalidated before player arrival
+- Courier loss and distortion rate
+- Time to alliance, dragon-host defeat rate, and time to hoard recovery
 
 The acceptable band must be established through playtesting; universal
 prosperity and universal collapse are both failures.

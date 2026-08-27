@@ -26,6 +26,12 @@ The carriage has a small number of understandable capacities:
 - Specialized modules
 - Map-case slots
 
+A royal courier and sealed dispatch use the company's one accepted-charter
+slot. The court's war, peace, alliance, or muster decision remains only an
+intention until the carriage reaches the named royal seat. Encounters can
+damage the message's reliability; completing the road journey delivers the
+information and only then changes the political simulation.
+
 Passengers and cargo compete directly. Carrying refugees may mean leaving
 commercial goods behind. An armoured coach may survive ambushes but arrive too
 late. A hidden compartment may occupy the space needed for medical treatment.
@@ -71,8 +77,9 @@ The walker must expand route choice without erasing geography:
 
 The vertical slice should retain this hypothesis only if route tests show a
 legible choice between a dangerous physical crossing and a costly ecological
-detour. If the walker simply ignores closed roads, it undermines the strategic
-simulation and should be constrained or removed.
+detour. A restricted road remains passable, but sanctions, tolls, low freight
+capacity, poor condition, and encounters must make that choice materially
+different from an open road.
 
 ## Physical cartography
 
