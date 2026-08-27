@@ -14,10 +14,12 @@ static void AdvanceGoblinTribute(CcSim *sim);
 static void PlanHoardRaid(CcSim *sim);
 static void AdvanceHoardRaid(CcSim *sim);
 static void AdvanceDragonRetaliation(CcSim *sim);
+static void AdvanceDragonEcology(CcSim *sim);
 static void AdvanceCouriers(CcSim *sim);
 static void UpdateRoyalDiplomacy(CcSim *sim);
 static void AdvanceDragonCampaign(CcSim *sim);
 static int32_t BasePrice(CcGood good);
+static int32_t CalculateDragonCrownStrength(const CcSim *sim);
 
 static int32_t ClampI32(int32_t value, int32_t minimum, int32_t maximum)
 {
@@ -101,6 +103,31 @@ void CcSimInitializeDragonCycle(CcSim *sim)
         sim->settlements[sim->settlement_count - 1].id;
     /* Old offerings make the cave worth robbing before the first live tithe. */
     sim->dragon.hoard = 30;
+    CcSimInitializeDragonEcology(sim);
+}
+
+void CcSimInitializeDragonEcology(CcSim *sim)
+{
+    if (sim == NULL || sim->dragon.id == 0U) return;
+    CcDragon *dragon = &sim->dragon;
+    if (dragon->age_days > 0 || dragon->memory_integrity > 0 ||
+        dragon->crown_strength > 0 || dragon->regional_influence > 0) return;
+    dragon->life_stage = dragon->slain ? CC_DRAGON_STAGE_AFTERDRAGON :
+                                         CC_DRAGON_STAGE_CROWNED;
+    dragon->activity = dragon->slain ? CC_DRAGON_ACTIVITY_AFTERMATH :
+                                       CC_DRAGON_ACTIVITY_DORMANT;
+    dragon->age_days = dragon->slain ? 0 :
+        (220 + (int32_t)(sim->world_seed % 81U)) * 365;
+    dragon->body_condition = dragon->slain ? 0 : 82;
+    dragon->memory_integrity = dragon->slain ? 0 : 100;
+    dragon->territory_stability = dragon->slain ? 0 : 72;
+    dragon->regional_influence = dragon->slain ? 45 : 58;
+    dragon->crown_continuity_days = dragon->slain ? 0 : 80 * 365;
+    dragon->hunt_cooldown_days = dragon->slain ? 0 : 42;
+    dragon->brood_cooldown_days = dragon->slain ? 0 :
+        (90 + (int32_t)(sim->world_seed % 121U)) * 365;
+    dragon->crown_strength = dragon->slain ? 0 :
+        CalculateDragonCrownStrength(sim);
 }
 
 void CcSimInitializeHoardRaiders(CcSim *sim)
@@ -158,6 +185,7 @@ static bool EventIsPinned(const CcSim *sim, CcId event_id,
         event_id == sim->goblins.tribute_event_id ||
         event_id == sim->dragon.hoard_event_id ||
         event_id == sim->dragon.omen_event_id ||
+        event_id == sim->dragon.lifecycle_event_id ||
         event_id == sim->hoard_raiders.cause_event_id ||
         event_id == sim->dragon_campaign.cause_event_id) return true;
     for (int32_t i = 0; i < sim->courier_count; ++i) {
@@ -191,6 +219,9 @@ static void RedirectEventReference(CcSim *sim, CcId removed_id,
     }
     if (sim->dragon.omen_event_id == removed_id) {
         sim->dragon.omen_event_id = replacement_id;
+    }
+    if (sim->dragon.lifecycle_event_id == removed_id) {
+        sim->dragon.lifecycle_event_id = replacement_id;
     }
     if (sim->hoard_raiders.cause_event_id == removed_id) {
         sim->hoard_raiders.cause_event_id = replacement_id;
@@ -482,8 +513,41 @@ const char *CcEventKindName(CcEventKind kind)
         case CC_EVENT_DRAGON_BATTLE: return "DRAGON BATTLE";
         case CC_EVENT_DRAGON_SLAIN: return "DRAGON SLAIN";
         case CC_EVENT_DRAGON_HOARD_RECOVERED: return "HOARD RECOVERED";
+        case CC_EVENT_DRAGON_HUNT: return "DRAGON HUNT";
+        case CC_EVENT_DRAGON_CROWNED: return "DRAGON CROWNED";
+        case CC_EVENT_DRAGON_UNCROWNED: return "DRAGON UNCROWNED";
+        case CC_EVENT_DRAGON_BROOD: return "DRAGON BROOD";
+        case CC_EVENT_DRAGON_WHELP_DISPERSED: return "WHELPS DISPERSE";
+        case CC_EVENT_DRAGON_AFTERSHOCK: return "AFTERDRAGON";
+        case CC_EVENT_DRAGON_SUCCESSOR: return "DRAGON SUCCESSOR";
     }
     return "EVENT";
+}
+
+const char *CcDragonLifeStageName(CcDragonLifeStage stage)
+{
+    switch (stage) {
+        case CC_DRAGON_STAGE_EGG: return "egg";
+        case CC_DRAGON_STAGE_WHELP: return "whelp";
+        case CC_DRAGON_STAGE_WANDERER: return "wanderer";
+        case CC_DRAGON_STAGE_CROWNED: return "Crowned dragon";
+        case CC_DRAGON_STAGE_DEEP_WYRM: return "Deep Wyrm";
+        case CC_DRAGON_STAGE_UNCROWNED: return "Uncrowned dragon";
+        case CC_DRAGON_STAGE_AFTERDRAGON: return "Afterdragon";
+    }
+    return "dragon";
+}
+
+const char *CcDragonActivityName(CcDragonActivity activity)
+{
+    switch (activity) {
+        case CC_DRAGON_ACTIVITY_DORMANT: return "dormant";
+        case CC_DRAGON_ACTIVITY_HUNTING: return "hunting";
+        case CC_DRAGON_ACTIVITY_RETALIATING: return "retaliating";
+        case CC_DRAGON_ACTIVITY_BROODING: return "brooding";
+        case CC_DRAGON_ACTIVITY_AFTERMATH: return "an aftermath";
+    }
+    return "unknown";
 }
 
 const char *CcSituationKindName(CcSituationKind kind)
@@ -2291,11 +2355,19 @@ static CcEvent *StartDragonTheft(CcSim *sim, CcId thief_id,
     if (sim == NULL || target == NULL || amount <= 0 || sim->dragon.slain ||
         sim->dragon.stolen_outstanding > 0 ||
         (CcMoney)amount > sim->dragon.hoard) return NULL;
+    CcMoney hoard_before = sim->dragon.hoard;
     sim->dragon.hoard -= amount;
     sim->dragon.stolen_outstanding = amount;
     sim->dragon.theft_actor_id = thief_id;
     sim->dragon.retaliation_target_id = target->id;
     sim->dragon.omen_days_remaining = 14;
+    int32_t wound = 5 + (int32_t)MinimumI32(
+        55, hoard_before > 0 ?
+            (int32_t)(((int64_t)amount * 100) / hoard_before) : 55);
+    sim->dragon.memory_integrity = ClampI32(
+        sim->dragon.memory_integrity - wound, 0, 100);
+    sim->dragon.crown_continuity_days = 0;
+    sim->dragon.activity = CC_DRAGON_ACTIVITY_RETALIATING;
     CcEvent *theft = PushEvent(
         sim, CC_EVENT_DRAGON_HOARD_STOLEN, thief_id,
         sim->dragon.lair_settlement_id, parent_event_id,
@@ -2844,6 +2916,416 @@ static void AdvanceHoardRaid(CcSim *sim)
     CopyName(raiders->name, "The Ash-Poor Company");
 }
 
+static int32_t DragonCoinCrownScore(CcMoney coins)
+{
+    static const CcMoney thresholds[] = {
+        1, 4, 9, 16, 25, 50, 100, 250, 500, 1000, 2000, 5000
+    };
+    int32_t score = 0;
+    for (size_t i = 0; i < sizeof(thresholds) / sizeof(thresholds[0]); ++i) {
+        if (coins < thresholds[i]) break;
+        score += i < 5U ? 2 : 3;
+    }
+    return MinimumI32(30, score);
+}
+
+static int32_t DragonNamedTreasureScore(const CcSim *sim)
+{
+    int32_t score = 0;
+    for (int32_t i = 0; i < sim->treasure_count; ++i) {
+        const CcTreasure *treasure = &sim->treasures[i];
+        if (treasure->destroyed || treasure->owner_id != sim->dragon.id) {
+            continue;
+        }
+        score += 4 + MinimumI32(6, treasure->craft_work * 2) +
+                 MinimumI32(5, treasure->gem_content) +
+                 MinimumI32(5, treasure->appraised_value / 100);
+    }
+    return MinimumI32(25, score);
+}
+
+static int32_t CalculateDragonCrownStrength(const CcSim *sim)
+{
+    const CcDragon *dragon = &sim->dragon;
+    int64_t mineral_value =
+        (int64_t)dragon->hoard_goods[CC_GOOD_GOLD] * 2 +
+        (int64_t)dragon->hoard_goods[CC_GOOD_GEMS] * 4;
+    int32_t mineral_score = (int32_t)(mineral_value > 20 ? 20 :
+                                      mineral_value);
+    int32_t continuity_score = MinimumI32(
+        15, dragon->crown_continuity_days / (20 * 365));
+    int32_t devotion_score = sim->goblins.devotion * 15 / 100;
+    int32_t physical_score = DragonCoinCrownScore(dragon->hoard) +
+        mineral_score + DragonNamedTreasureScore(sim) + continuity_score +
+        devotion_score;
+    physical_score = MinimumI32(100, physical_score);
+    return physical_score * dragon->memory_integrity / 100;
+}
+
+static bool DragonTerritoryAtWar(const CcSim *sim)
+{
+    const CcSettlement *lair = CcSimSettlement(
+        sim, sim->dragon.lair_settlement_id);
+    if (lair == NULL) return false;
+    for (int32_t i = 0; i < sim->kingdom_count; ++i) {
+        if (sim->kingdoms[i].id == lair->kingdom_id) continue;
+        if (CcSimKingdomsAtWar(sim, lair->kingdom_id,
+                               sim->kingdoms[i].id)) return true;
+    }
+    return false;
+}
+
+static CcSettlement *DragonHuntTarget(CcSim *sim)
+{
+    CcSettlement *best = NULL;
+    int32_t best_score = INT32_MIN;
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        CcSettlement *place = &sim->settlements[i];
+        if (place->id == sim->dragon.lair_settlement_id ||
+            place->stock[CC_GOOD_FOOD] <= 0) continue;
+        int32_t score = place->stock[CC_GOOD_FOOD] * 3 - place->security;
+        if (place->function == CC_SETTLEMENT_FARMING ||
+            CcSettlementHasService(place, CC_SERVICE_FARM)) score += 40;
+        if (best == NULL || score > best_score) {
+            best = place;
+            best_score = score;
+        }
+    }
+    return best;
+}
+
+static void DragonHunt(CcSim *sim)
+{
+    CcDragon *dragon = &sim->dragon;
+    CcSettlement *target = DragonHuntTarget(sim);
+    if (target == NULL) {
+        dragon->body_condition = ClampI32(
+            dragon->body_condition - 2, 0, 100);
+        dragon->territory_stability = ClampI32(
+            dragon->territory_stability - 1, 0, 100);
+        dragon->hunt_cooldown_days = 14;
+        return;
+    }
+    int32_t appetite = dragon->life_stage == CC_DRAGON_STAGE_WHELP ? 4 :
+        dragon->life_stage == CC_DRAGON_STAGE_WANDERER ? 6 :
+        dragon->life_stage == CC_DRAGON_STAGE_DEEP_WYRM ? 12 : 8;
+    int32_t taken = MinimumI32(appetite, target->stock[CC_GOOD_FOOD]);
+    target->stock[CC_GOOD_FOOD] -= taken;
+    target->hunger = ClampI32(target->hunger + MaximumI32(1, taken / 4),
+                              0, 100);
+    target->prosperity = ClampI32(target->prosperity - 1, 0, 100);
+    dragon->body_condition = ClampI32(
+        dragon->body_condition + taken * 5, 0, 100);
+    dragon->hunt_cooldown_days =
+        28 + (int32_t)(NextRandom(sim) % 57U);
+    dragon->hunts += 1;
+    dragon->activity = CC_DRAGON_ACTIVITY_HUNTING;
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(
+        text, sizeof(text),
+        "%s takes %d Food worth of livestock from %s and leaves the roofs untouched.",
+        dragon->name, taken, target->name);
+    CcEvent *event = PushEvent(
+        sim, CC_EVENT_DRAGON_HUNT, dragon->id, target->id,
+        LatestLocalCause(sim, target->id), taken, text);
+    dragon->lifecycle_event_id = event != NULL ? event->id :
+                                 dragon->lifecycle_event_id;
+}
+
+static void HatchDragonBrood(CcSim *sim)
+{
+    CcDragon *dragon = &sim->dragon;
+    if (dragon->egg_count <= 0) return;
+    int32_t whelps = dragon->egg_count;
+    dragon->egg_count = 0;
+    dragon->brood_days_remaining = 0;
+    dragon->whelps_dispersed += whelps;
+    dragon->territory_stability = ClampI32(
+        dragon->territory_stability - whelps * 3, 0, 100);
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(
+        text, sizeof(text),
+        "%d whelp%s leave%s %s's brood hoard to seek distant caves.",
+        whelps, whelps == 1 ? "" : "s", whelps == 1 ? "s" : "",
+        dragon->name);
+    CcEvent *event = PushEvent(
+        sim, CC_EVENT_DRAGON_WHELP_DISPERSED, dragon->id,
+        dragon->lair_settlement_id, dragon->lifecycle_event_id,
+        whelps, text);
+    dragon->lifecycle_event_id = event != NULL ? event->id :
+                                 dragon->lifecycle_event_id;
+}
+
+static void HatchDragonSuccessor(CcSim *sim)
+{
+    CcDragon *dragon = &sim->dragon;
+    if (!dragon->slain || dragon->egg_count <= 0) return;
+    int32_t clutch = dragon->egg_count;
+    char former_name[CC_NAME_CAPACITY];
+    CopyName(former_name, dragon->name);
+    dragon->whelps_dispersed += MaximumI32(0, clutch - 1);
+    dragon->id = NextId(sim, CC_ENTITY_DRAGON);
+    static const char *successor_names[] = {
+        "Ashwing the Inheritor", "Cinder-Child", "The Remembered Scale",
+        "Ember Beneath Stone"
+    };
+    CopyName(dragon->name,
+             successor_names[NextRandom(sim) % 4U]);
+    dragon->slain = false;
+    dragon->slain_day = 0;
+    dragon->life_stage = CC_DRAGON_STAGE_WHELP;
+    dragon->activity = CC_DRAGON_ACTIVITY_HUNTING;
+    dragon->age_days = 1;
+    dragon->body_condition = 64;
+    dragon->memory_integrity = 45;
+    dragon->territory_stability = 28;
+    dragon->regional_influence = MaximumI32(24,
+        dragon->regional_influence / 2);
+    dragon->crown_continuity_days = 0;
+    dragon->hunt_cooldown_days = 7;
+    dragon->egg_count = 0;
+    dragon->brood_days_remaining = 0;
+    dragon->brood_cooldown_days =
+        (220 + (int32_t)(NextRandom(sim) % 121U)) * 365;
+    dragon->afterdeath_days = 0;
+    dragon->crown_strength = CalculateDragonCrownStrength(sim);
+    sim->goblins.devotion = MaximumI32(sim->goblins.devotion, 28);
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(
+        text, sizeof(text),
+        "%.20s hatches from %.20s's visible clutch; %d sibling%s leave with goblins.",
+        dragon->name, former_name, MaximumI32(0, clutch - 1),
+        clutch == 2 ? "" : "s");
+    CcEvent *event = PushEvent(
+        sim, CC_EVENT_DRAGON_SUCCESSOR, dragon->id,
+        dragon->lair_settlement_id, dragon->lifecycle_event_id,
+        clutch, text);
+    dragon->lifecycle_event_id = event != NULL ? event->id : 0U;
+    dragon->hoard_event_id = dragon->lifecycle_event_id;
+}
+
+static void BeginDragonBrood(CcSim *sim)
+{
+    CcDragon *dragon = &sim->dragon;
+    dragon->egg_count = 1 + (int32_t)(NextRandom(sim) % 3U);
+    dragon->brood_days_remaining =
+        (7 + (int32_t)(NextRandom(sim) % 9U)) * 365;
+    dragon->brood_cooldown_days =
+        (180 + (int32_t)(NextRandom(sim) % 121U)) * 365;
+    dragon->broods_laid += 1;
+    dragon->body_condition = ClampI32(
+        dragon->body_condition - 12, 0, 100);
+    dragon->memory_integrity = ClampI32(
+        dragon->memory_integrity - 8, 0, 100);
+    dragon->territory_stability = ClampI32(
+        dragon->territory_stability - 5, 0, 100);
+    dragon->activity = CC_DRAGON_ACTIVITY_BROODING;
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(
+        text, sizeof(text),
+        "%s accepts a distant heart-scale and lays %d egg%s; goblin Ashkeepers seal the brood hoard.",
+        dragon->name, dragon->egg_count,
+        dragon->egg_count == 1 ? "" : "s");
+    CcEvent *event = PushEvent(
+        sim, CC_EVENT_DRAGON_BROOD, dragon->id,
+        dragon->lair_settlement_id, dragon->hoard_event_id,
+        dragon->egg_count, text);
+    dragon->lifecycle_event_id = event != NULL ? event->id :
+                                 dragon->lifecycle_event_id;
+}
+
+static void ChangeDragonStage(CcSim *sim, CcDragonLifeStage stage,
+                              CcEventKind event_kind, const char *reason)
+{
+    CcDragon *dragon = &sim->dragon;
+    if (dragon->life_stage == stage) return;
+    dragon->life_stage = stage;
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text), "%s becomes %s: %s.",
+                   dragon->name, CcDragonLifeStageName(stage), reason);
+    CcEvent *event = PushEvent(
+        sim, event_kind, dragon->id, dragon->lair_settlement_id,
+        dragon->lifecycle_event_id, dragon->crown_strength, text);
+    dragon->lifecycle_event_id = event != NULL ? event->id :
+                                 dragon->lifecycle_event_id;
+}
+
+static void AdvanceAfterdragon(CcSim *sim)
+{
+    CcDragon *dragon = &sim->dragon;
+    dragon->life_stage = CC_DRAGON_STAGE_AFTERDRAGON;
+    dragon->activity = CC_DRAGON_ACTIVITY_AFTERMATH;
+    dragon->body_condition = 0;
+    dragon->crown_strength = 0;
+    dragon->afterdeath_days += 1;
+    if (dragon->afterdeath_days % 90 == 0) {
+        dragon->regional_influence = MaximumI32(
+            0, dragon->regional_influence - 1);
+    }
+    if (dragon->afterdeath_days % 28 == 0) {
+        dragon->memory_integrity = MaximumI32(
+            0, dragon->memory_integrity - 1);
+        dragon->territory_stability = MaximumI32(
+            0, dragon->territory_stability - 1);
+    }
+    if (dragon->egg_count > 0) {
+        if (sim->current_day % 14 == 0) {
+            if (sim->goblins.lair_stock[CC_GOOD_FOOD] > 0) {
+                sim->goblins.lair_stock[CC_GOOD_FOOD] -= 1;
+            } else {
+                dragon->brood_days_remaining += 7;
+            }
+        }
+        dragon->brood_days_remaining = MaximumI32(
+            0, dragon->brood_days_remaining - 1);
+        if (dragon->brood_days_remaining == 0) HatchDragonSuccessor(sim);
+    }
+    if (dragon->slain && dragon->afterdeath_days > 0 &&
+        (dragon->afterdeath_days == 365 ||
+         dragon->afterdeath_days % (10 * 365) == 0) &&
+        dragon->regional_influence > 0) {
+        char text[CC_EVENT_TEXT_CAPACITY];
+        (void)snprintf(
+            text, sizeof(text),
+            "%s's dragon shadow cools to %d; abandoned vents, ash fields, and goblin shrines still shape the country.",
+            dragon->name, dragon->regional_influence);
+        CcEvent *event = PushEvent(
+            sim, CC_EVENT_DRAGON_AFTERSHOCK, dragon->id,
+            dragon->lair_settlement_id, dragon->lifecycle_event_id,
+            dragon->regional_influence, text);
+        dragon->lifecycle_event_id = event != NULL ? event->id :
+                                     dragon->lifecycle_event_id;
+    }
+}
+
+static void AdvanceDragonEcology(CcSim *sim)
+{
+    CcDragon *dragon = &sim->dragon;
+    if (dragon->slain) {
+        AdvanceAfterdragon(sim);
+        return;
+    }
+    dragon->age_days += 1;
+    dragon->hunt_cooldown_days = MaximumI32(
+        0, dragon->hunt_cooldown_days - 1);
+    dragon->brood_cooldown_days = MaximumI32(
+        0, dragon->brood_cooldown_days - 1);
+    if (dragon->stolen_outstanding == 0) {
+        dragon->crown_continuity_days += 1;
+    }
+    if (sim->current_day % 28 == 0) {
+        if (dragon->stolen_outstanding == 0 && dragon->hoard > 0) {
+            dragon->memory_integrity = ClampI32(
+                dragon->memory_integrity + 1, 0, 100);
+        }
+        int32_t stability_change = 0;
+        if (sim->goblins.lair_stock[CC_GOOD_FOOD] >= 4 &&
+            sim->goblins.lair_stock[CC_GOOD_TOOLS] >= 1 &&
+            sim->goblins.devotion >= 50) stability_change += 1;
+        if (sim->goblins.lair_stock[CC_GOOD_FOOD] == 0) {
+            stability_change -= 2;
+        }
+        if (DragonTerritoryAtWar(sim)) stability_change -= 1;
+        dragon->territory_stability = ClampI32(
+            dragon->territory_stability + stability_change, 0, 100);
+    }
+    dragon->crown_strength = CalculateDragonCrownStrength(sim);
+    int32_t influence_target = dragon->life_stage ==
+        CC_DRAGON_STAGE_DEEP_WYRM ? 70 + dragon->crown_strength / 3 :
+        dragon->life_stage == CC_DRAGON_STAGE_CROWNED ?
+            35 + dragon->crown_strength / 2 :
+        dragon->life_stage == CC_DRAGON_STAGE_UNCROWNED ?
+            18 + dragon->crown_strength / 3 : 15 + dragon->crown_strength / 4;
+    influence_target = ClampI32(influence_target, 0, 100);
+    if (sim->current_day % 28 == 0) {
+        if (dragon->regional_influence < influence_target) {
+            dragon->regional_influence += 1;
+        } else if (dragon->regional_influence > influence_target) {
+            dragon->regional_influence -= 1;
+        }
+    }
+
+    if (dragon->egg_count > 0) {
+        if (sim->current_day % 14 == 0) {
+            if (sim->goblins.lair_stock[CC_GOOD_FOOD] > 0) {
+                sim->goblins.lair_stock[CC_GOOD_FOOD] -= 1;
+            } else {
+                dragon->brood_days_remaining += 7;
+                dragon->territory_stability = MaximumI32(
+                    0, dragon->territory_stability - 1);
+            }
+        }
+        dragon->brood_days_remaining = MaximumI32(
+            0, dragon->brood_days_remaining - 1);
+        if (dragon->brood_days_remaining == 0) HatchDragonBrood(sim);
+    }
+
+    bool fast_metabolism = dragon->life_stage == CC_DRAGON_STAGE_WHELP ||
+                           dragon->life_stage == CC_DRAGON_STAGE_WANDERER;
+    int32_t condition_interval = fast_metabolism ? 7 :
+        dragon->egg_count > 0 ? 14 :
+        dragon->life_stage == CC_DRAGON_STAGE_DEEP_WYRM ? 84 : 56;
+    if (sim->current_day % condition_interval == 0) {
+        dragon->body_condition = MaximumI32(
+            0, dragon->body_condition - 1);
+    }
+
+    if ((dragon->life_stage == CC_DRAGON_STAGE_CROWNED ||
+         dragon->life_stage == CC_DRAGON_STAGE_DEEP_WYRM) &&
+        (dragon->crown_strength < 12 || dragon->memory_integrity < 25)) {
+        ChangeDragonStage(sim, CC_DRAGON_STAGE_UNCROWNED,
+                          CC_EVENT_DRAGON_UNCROWNED,
+                          "its external memory can no longer hold a crown");
+    } else if ((dragon->life_stage == CC_DRAGON_STAGE_WANDERER ||
+                dragon->life_stage == CC_DRAGON_STAGE_UNCROWNED) &&
+               dragon->age_days >= 60 * 365 &&
+               dragon->crown_strength >= 25 &&
+               dragon->memory_integrity >= 60 &&
+               dragon->territory_stability >= 50 &&
+               sim->goblins.devotion >= 50) {
+        ChangeDragonStage(sim, CC_DRAGON_STAGE_CROWNED,
+                          CC_EVENT_DRAGON_CROWNED,
+                          "hoard, goblin court, and territory hold together");
+    } else if (dragon->life_stage == CC_DRAGON_STAGE_WHELP &&
+               dragon->age_days >= 15 * 365) {
+        ChangeDragonStage(sim, CC_DRAGON_STAGE_WANDERER,
+                          CC_EVENT_DRAGON_CROWNED,
+                          "it leaves the brood cave to seek a crown of its own");
+    } else if (dragon->life_stage == CC_DRAGON_STAGE_CROWNED &&
+               dragon->age_days >= 500 * 365 &&
+               dragon->crown_strength >= 70 &&
+               dragon->crown_continuity_days >= 200 * 365 &&
+               dragon->territory_stability >= 75) {
+        ChangeDragonStage(sim, CC_DRAGON_STAGE_DEEP_WYRM,
+                          CC_EVENT_DRAGON_CROWNED,
+                          "centuries of possession bind wyrm, hoard, and mountain");
+    }
+
+    if (dragon->brood_cooldown_days == 0 && dragon->egg_count == 0 &&
+        (dragon->life_stage == CC_DRAGON_STAGE_CROWNED ||
+         dragon->life_stage == CC_DRAGON_STAGE_DEEP_WYRM) &&
+        dragon->body_condition >= 75 && dragon->crown_strength >= 65 &&
+        dragon->territory_stability >= 60 &&
+        dragon->crown_continuity_days >= 30 * 365 &&
+        sim->goblins.devotion >= 65 &&
+        dragon->stolen_outstanding == 0) {
+        BeginDragonBrood(sim);
+    }
+
+    int32_t hunt_threshold = fast_metabolism ? 65 :
+        dragon->life_stage == CC_DRAGON_STAGE_DEEP_WYRM ? 35 : 45;
+    if (dragon->stolen_outstanding > 0) {
+        dragon->activity = CC_DRAGON_ACTIVITY_RETALIATING;
+    } else if (dragon->egg_count > 0) {
+        dragon->activity = CC_DRAGON_ACTIVITY_BROODING;
+    } else if (dragon->body_condition <= hunt_threshold &&
+               dragon->hunt_cooldown_days == 0) {
+        DragonHunt(sim);
+    } else {
+        dragon->activity = CC_DRAGON_ACTIVITY_DORMANT;
+    }
+}
+
 static void RemoveBurnedService(CcSettlement *target)
 {
     static const CcServiceKind order[] = {
@@ -2950,6 +3432,11 @@ static void AdvanceDragonRetaliation(CcSim *sim)
         CcMoney payment = debt - remaining;
         dragon->hoard += payment;
         dragon->stolen_outstanding -= payment;
+        int32_t healing = payment > 0 ?
+            1 + (int32_t)((payment * 40) / MaximumI32(
+                1, debt > INT32_MAX ? INT32_MAX : (int32_t)debt)) : 0;
+        dragon->memory_integrity = ClampI32(
+            dragon->memory_integrity + healing, 0, 100);
         if (household_levy > 0) {
             (void)snprintf(text, sizeof(text),
                            "After %.12s burns, %.12s pays %d to %.12s "
@@ -2971,6 +3458,8 @@ static void AdvanceDragonRetaliation(CcSim *sim)
         dragon->hoard_event_id = restitution != NULL ? restitution->id :
                                  dragon->hoard_event_id;
         if (dragon->stolen_outstanding == 0) {
+            dragon->memory_integrity = MaximumI32(
+                dragon->memory_integrity, 75);
             dragon->theft_actor_id = 0U;
             dragon->retaliation_target_id = 0U;
             dragon->omen_event_id = 0U;
@@ -4426,7 +4915,13 @@ static void AdvanceDragonCampaign(CcSim *sim)
     }
     sim->dragon.slain = true;
     sim->dragon.slain_day = sim->current_day;
+    sim->dragon.life_stage = CC_DRAGON_STAGE_AFTERDRAGON;
+    sim->dragon.activity = CC_DRAGON_ACTIVITY_AFTERMATH;
+    sim->dragon.body_condition = 0;
+    sim->dragon.crown_strength = 0;
+    sim->dragon.afterdeath_days = 0;
     sim->dragon.stolen_outstanding = 0;
+    sim->dragon.stolen_treasure_id = 0U;
     sim->dragon.theft_actor_id = 0U;
     sim->dragon.retaliation_target_id = 0U;
     sim->dragon.omen_event_id = 0U;
@@ -4462,6 +4957,8 @@ static void AdvanceDragonCampaign(CcSim *sim)
         sim->dragon.lair_settlement_id, campaign->cause_event_id,
         attack - defense, text);
     campaign->cause_event_id = battle != NULL ? battle->id : 0U;
+    sim->dragon.lifecycle_event_id = battle != NULL ? battle->id :
+                                      sim->dragon.lifecycle_event_id;
     campaign->phase = CC_DRAGON_CAMPAIGN_RETURNING;
     campaign->days_remaining = DragonCampaignTravelDays(
         sim, campaign->origin_settlement_id);
@@ -5177,6 +5674,7 @@ void CcSimAdvanceDays(CcSim *sim, int32_t days)
         AdvanceServiceProjects(sim);
         AdvanceBanditRaids(sim);
         AdvanceGoblinTribute(sim);
+        AdvanceDragonEcology(sim);
         AdvanceDragonRetaliation(sim);
         AdvanceHoardRaid(sim);
         AdvanceDragonCampaign(sim);
@@ -5422,6 +5920,141 @@ static bool ApplySellTreasure(CcSim *sim, const CcCommand *command,
                    treasure->name, buyer->name, payment);
     (void)PushEvent(sim, CC_EVENT_PLAYER_TRADE, treasure->id,
                     buyer->id, 0U, payment, text);
+    SetError(error, error_capacity, "");
+    return true;
+}
+
+static bool ApplyStealDragonNamedTreasure(
+    CcSim *sim, const CcCommand *command,
+    char *error, size_t error_capacity)
+{
+    CcTreasure *treasure = (CcTreasure *)CcSimTreasure(
+        sim, command->target_id);
+    if (sim->dragon.slain) {
+        SetError(error, error_capacity,
+                 "The slain dragon no longer guards a hoard.");
+        return false;
+    }
+    if (sim->journey.active ||
+        sim->player.location_id != sim->dragon.lair_settlement_id) {
+        SetError(error, error_capacity,
+                 "A named hoard treasure can only be taken from the cave.");
+        return false;
+    }
+    if (treasure == NULL || treasure->destroyed ||
+        treasure->owner_id != sim->dragon.id ||
+        treasure->location_id != sim->dragon.lair_settlement_id) {
+        SetError(error, error_capacity,
+                 "That named treasure is not in the dragon hoard.");
+        return false;
+    }
+    if (sim->dragon.stolen_outstanding > 0) {
+        SetError(error, error_capacity,
+                 "The dragon is already hunting for stolen treasure.");
+        return false;
+    }
+    if (CcPlayerCargoUsed(&sim->player) + 1 >
+        sim->player.cargo_capacity) {
+        SetError(error, error_capacity,
+                 "The carriage needs one empty slot for that treasure.");
+        return false;
+    }
+    CcSettlement *target = CcSimSettlementMutable(
+        sim, sim->goblins.last_tribute_origin_id);
+    if (target == NULL || target->id == sim->dragon.lair_settlement_id) {
+        target = RichestDragonTarget(sim);
+    }
+    if (target == NULL) {
+        SetError(error, error_capacity,
+                 "The dragon has no realm to threaten.");
+        return false;
+    }
+    treasure->owner_id = sim->player.id;
+    treasure->location_id = sim->player.location_id;
+    sim->player.treasure_cargo_slots += 1;
+    sim->dragon.stolen_treasure_id = treasure->id;
+    sim->dragon.stolen_outstanding = treasure->appraised_value;
+    sim->dragon.theft_actor_id = sim->player.id;
+    sim->dragon.retaliation_target_id = target->id;
+    sim->dragon.omen_days_remaining = 14;
+    sim->dragon.memory_integrity = ClampI32(
+        sim->dragon.memory_integrity - MinimumI32(
+            70, 25 + treasure->craft_work * 5 + treasure->gem_content * 2),
+        0, 100);
+    sim->dragon.crown_continuity_days = 0;
+    sim->dragon.activity = CC_DRAGON_ACTIVITY_RETALIATING;
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text),
+                   "The carriage takes %.28s from %s's remembered hoard.",
+                   treasure->name, sim->dragon.name);
+    CcEvent *theft = PushEvent(
+        sim, CC_EVENT_DRAGON_HOARD_STOLEN, sim->player.id,
+        sim->dragon.lair_settlement_id, sim->dragon.hoard_event_id,
+        treasure->appraised_value, text);
+    sim->dragon.hoard_event_id = theft != NULL ? theft->id :
+                                 sim->dragon.hoard_event_id;
+    (void)snprintf(
+        text, sizeof(text),
+        "Smoke falls over %.16s; old readers count 14 nights until %.16s comes for %.20s.",
+        target->name, sim->dragon.name, treasure->name);
+    CcEvent *omen = PushEvent(
+        sim, CC_EVENT_DRAGON_OMEN, sim->dragon.id, target->id,
+        theft != NULL ? theft->id : 0U, 14, text);
+    sim->dragon.omen_event_id = omen != NULL ? omen->id : 0U;
+    sim->player.reputation = ClampI32(
+        sim->player.reputation - 8, -100, 100);
+    SetError(error, error_capacity, "");
+    return true;
+}
+
+static bool ApplyReturnDragonNamedTreasure(
+    CcSim *sim, const CcCommand *command,
+    char *error, size_t error_capacity)
+{
+    CcTreasure *treasure = (CcTreasure *)CcSimTreasure(
+        sim, command->target_id);
+    if (sim->dragon.slain) {
+        SetError(error, error_capacity,
+                 "No dragon remains to receive the named treasure.");
+        return false;
+    }
+    if (sim->journey.active ||
+        sim->player.location_id != sim->dragon.lair_settlement_id) {
+        SetError(error, error_capacity,
+                 "The exact treasure must be carried back to the cave.");
+        return false;
+    }
+    if (treasure == NULL || treasure->id != sim->dragon.stolen_treasure_id ||
+        treasure->owner_id != sim->player.id ||
+        treasure->location_id != sim->player.location_id) {
+        SetError(error, error_capacity,
+                 "The carriage does not carry the exact object the dragon remembers.");
+        return false;
+    }
+    treasure->owner_id = sim->dragon.id;
+    treasure->location_id = sim->dragon.lair_settlement_id;
+    sim->player.treasure_cargo_slots -= 1;
+    sim->dragon.stolen_outstanding = 0;
+    sim->dragon.stolen_treasure_id = 0U;
+    sim->dragon.memory_integrity = ClampI32(
+        MaximumI32(90, sim->dragon.memory_integrity + 50), 0, 100);
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(
+        text, sizeof(text),
+        "The carriage restores %.28s to %s's remembered place in the hoard.",
+        treasure->name, sim->dragon.name);
+    CcEvent *returned = PushEvent(
+        sim, CC_EVENT_DRAGON_TREASURE_RETURNED, sim->player.id,
+        sim->dragon.lair_settlement_id, sim->dragon.omen_event_id,
+        treasure->appraised_value, text);
+    sim->dragon.hoard_event_id = returned != NULL ? returned->id :
+                                 sim->dragon.hoard_event_id;
+    sim->dragon.theft_actor_id = 0U;
+    sim->dragon.retaliation_target_id = 0U;
+    sim->dragon.omen_event_id = 0U;
+    sim->dragon.omen_days_remaining = 0;
+    sim->player.reputation = ClampI32(
+        sim->player.reputation + 3, -100, 100);
     SetError(error, error_capacity, "");
     return true;
 }
@@ -6317,6 +6950,12 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
             return ApplyBuyTreasure(sim, command, error, error_capacity);
         case CC_COMMAND_SELL_TREASURE:
             return ApplySellTreasure(sim, command, error, error_capacity);
+        case CC_COMMAND_STEAL_DRAGON_NAMED_TREASURE:
+            return ApplyStealDragonNamedTreasure(
+                sim, command, error, error_capacity);
+        case CC_COMMAND_RETURN_DRAGON_NAMED_TREASURE:
+            return ApplyReturnDragonNamedTreasure(
+                sim, command, error, error_capacity);
         case CC_COMMAND_ACCEPT_SITUATION:
             return ApplyAcceptSituation(sim, command, error, error_capacity);
         case CC_COMMAND_ABANDON_SITUATION:
@@ -6391,6 +7030,11 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
                          "Stolen treasure must be carried back to the dragon cave.");
                 return false;
             }
+            if (sim->dragon.stolen_treasure_id != 0U) {
+                SetError(error, error_capacity,
+                         "The dragon remembers the exact named object; replacement coins do not settle this wound.");
+                return false;
+            }
             if (command->amount <= 0 ||
                 (CcMoney)command->amount > sim->dragon.stolen_outstanding ||
                 (CcMoney)command->amount > sim->player.coins) {
@@ -6398,9 +7042,14 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
                          "Return a positive amount you carry and still owe.");
                 return false;
             }
+            CcMoney debt_before = sim->dragon.stolen_outstanding;
             sim->player.coins -= command->amount;
             sim->dragon.hoard += command->amount;
             sim->dragon.stolen_outstanding -= command->amount;
+            int32_t healing = 1 + (int32_t)(
+                ((CcMoney)command->amount * 40) / debt_before);
+            sim->dragon.memory_integrity = ClampI32(
+                sim->dragon.memory_integrity + healing, 0, 100);
             char text[CC_EVENT_TEXT_CAPACITY];
             (void)snprintf(text, sizeof(text),
                            "The carriage returns %d crowns to %s; %" PRId64 " remain missing.",
@@ -6413,6 +7062,8 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
             sim->dragon.hoard_event_id = returned != NULL ? returned->id :
                                          sim->dragon.hoard_event_id;
             if (sim->dragon.stolen_outstanding == 0) {
+                sim->dragon.memory_integrity = MaximumI32(
+                    sim->dragon.memory_integrity, 75);
                 sim->player.reputation = ClampI32(
                     sim->player.reputation + 2, -100, 100);
                 sim->dragon.theft_actor_id = 0U;
@@ -6443,7 +7094,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                          sim->schema_version == 7U ||
                          sim->schema_version == 8U ||
                          sim->schema_version == 9U ||
-                         sim->schema_version == 10U;
+                         sim->schema_version == 10U ||
+                         sim->schema_version == 11U;
     bool supported_generator = sim->generator_version == CC_GENERATOR_VERSION ||
         (legacy_schema && (sim->generator_version == 3U ||
                            sim->generator_version == 5U ||
@@ -6451,7 +7103,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                            sim->generator_version == 7U ||
                            sim->generator_version == 8U ||
                            sim->generator_version == 9U ||
-                           sim->generator_version == 10U));
+                           sim->generator_version == 10U ||
+                           sim->generator_version == 11U));
     if ((!legacy_schema && sim->schema_version != CC_SIM_SCHEMA_VERSION) ||
         !supported_generator) {
         SetError(error, error_capacity, "Simulation version is unsupported.");
@@ -6520,7 +7173,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             if (event == NULL || CcIdKind(event->id) != CC_ENTITY_EVENT ||
                 event->day < 1 || event->day > sim->current_day ||
                 event->kind < CC_EVENT_HARVEST_FAILED ||
-                event->kind > CC_EVENT_DRAGON_HOARD_RECOVERED ||
+                event->kind > CC_EVENT_DRAGON_SUCCESSOR ||
                 event->parent_id == event->id ||
                 (event->parent_id != 0U &&
                  CcSimEvent(sim, event->parent_id) == NULL)) {
@@ -6798,7 +7451,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             dragon->theft_actor_id == 0U &&
             dragon->retaliation_target_id == 0U &&
             dragon->omen_event_id == 0U &&
-            dragon->omen_days_remaining == 0 :
+            dragon->omen_days_remaining == 0 &&
+            dragon->stolen_treasure_id == 0U :
             CcSimSettlement(sim, dragon->retaliation_target_id) != NULL &&
             dragon->retaliation_target_id != dragon->lair_settlement_id &&
             (dragon->theft_actor_id == sim->player.id ||
@@ -6806,11 +7460,20 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             CcSimEvent(sim, dragon->omen_event_id) != NULL &&
             dragon->omen_days_remaining > 0 &&
             dragon->omen_days_remaining <= 28;
+        const CcTreasure *stolen_named = dragon->stolen_treasure_id != 0U ?
+            CcSimTreasure(sim, dragon->stolen_treasure_id) : NULL;
+        bool named_theft_valid = dragon->stolen_treasure_id == 0U ||
+            (stolen_named != NULL && !stolen_named->destroyed &&
+             stolen_named->owner_id == sim->player.id &&
+             stolen_named->location_id == sim->player.location_id &&
+             dragon->theft_actor_id == sim->player.id &&
+             dragon->stolen_outstanding == stolen_named->appraised_value);
         if (CcIdKind(dragon->id) != CC_ENTITY_DRAGON ||
             dragon->name[0] == '\0' ||
             CcSimSettlement(sim, dragon->lair_settlement_id) == NULL ||
             dragon->hoard < 0 || dragon->stolen_outstanding < 0 ||
             dragon->retaliations < 0 || !dragon_anger_valid ||
+            !named_theft_valid ||
             (dragon->slain &&
              (dragon->slain_day < 1 ||
               dragon->slain_day > sim->current_day ||
@@ -6818,6 +7481,40 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             (dragon->hoard_event_id != 0U &&
              CcSimEvent(sim, dragon->hoard_event_id) == NULL)) {
             SetError(error, error_capacity, "Dragon state is invalid.");
+            return false;
+        }
+        bool brood_valid = dragon->egg_count == 0 ?
+            dragon->brood_days_remaining == 0 :
+            dragon->brood_days_remaining > 0;
+        bool life_valid = dragon->slain ?
+            dragon->life_stage == CC_DRAGON_STAGE_AFTERDRAGON &&
+                dragon->activity == CC_DRAGON_ACTIVITY_AFTERMATH &&
+                dragon->body_condition == 0 &&
+                dragon->crown_strength == 0 :
+            dragon->life_stage != CC_DRAGON_STAGE_AFTERDRAGON;
+        if (dragon->life_stage < CC_DRAGON_STAGE_EGG ||
+            dragon->life_stage > CC_DRAGON_STAGE_AFTERDRAGON ||
+            dragon->activity < CC_DRAGON_ACTIVITY_DORMANT ||
+            dragon->activity > CC_DRAGON_ACTIVITY_AFTERMATH ||
+            dragon->age_days < 0 || dragon->body_condition < 0 ||
+            dragon->body_condition > 100 || dragon->crown_strength < 0 ||
+            dragon->crown_strength > 100 || dragon->memory_integrity < 0 ||
+            dragon->memory_integrity > 100 ||
+            dragon->territory_stability < 0 ||
+            dragon->territory_stability > 100 ||
+            dragon->regional_influence < 0 ||
+            dragon->regional_influence > 100 ||
+            dragon->crown_continuity_days < 0 ||
+            dragon->hunt_cooldown_days < 0 || dragon->hunts < 0 ||
+            dragon->egg_count < 0 || dragon->egg_count > 3 ||
+            dragon->brood_days_remaining < 0 ||
+            dragon->brood_cooldown_days < 0 ||
+            dragon->broods_laid < 0 || dragon->whelps_dispersed < 0 ||
+            dragon->afterdeath_days < 0 || !brood_valid || !life_valid ||
+            (dragon->lifecycle_event_id != 0U &&
+             CcSimEvent(sim, dragon->lifecycle_event_id) == NULL)) {
+            SetError(error, error_capacity,
+                     "Dragon ecology state is invalid.");
             return false;
         }
         const CcDragonCampaign *campaign = &sim->dragon_campaign;
@@ -7255,6 +7952,26 @@ uint64_t CcSimHash(const CcSim *sim)
         if (sim->schema_version >= 11U) {
             HASH_VALUE(dragon->slain);
             HASH_VALUE(dragon->slain_day);
+        }
+        if (sim->schema_version >= 12U) {
+            HASH_VALUE(dragon->life_stage);
+            HASH_VALUE(dragon->activity);
+            HASH_VALUE(dragon->age_days);
+            HASH_VALUE(dragon->body_condition);
+            HASH_VALUE(dragon->crown_strength);
+            HASH_VALUE(dragon->memory_integrity);
+            HASH_VALUE(dragon->territory_stability);
+            HASH_VALUE(dragon->regional_influence);
+            HASH_VALUE(dragon->crown_continuity_days);
+            HASH_VALUE(dragon->hunt_cooldown_days);
+            HASH_VALUE(dragon->hunts);
+            HASH_VALUE(dragon->egg_count);
+            HASH_VALUE(dragon->brood_days_remaining);
+            HASH_VALUE(dragon->brood_cooldown_days);
+            HASH_VALUE(dragon->broods_laid);
+            HASH_VALUE(dragon->whelps_dispersed);
+            HASH_VALUE(dragon->afterdeath_days);
+            HASH_VALUE(dragon->lifecycle_event_id);
         }
         if (sim->schema_version >= 9U) {
             HASH_VALUE(dragon->stolen_treasure_id);

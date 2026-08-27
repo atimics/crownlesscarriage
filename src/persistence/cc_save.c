@@ -9,7 +9,7 @@
 #include <string.h>
 
 #define CC_SQLITE_APPLICATION_ID 1128481362
-#define CC_SQLITE_USER_VERSION 11
+#define CC_SQLITE_USER_VERSION 12
 #define CC_JOURNAL_RECORD_VERSION 1
 #define CC_JOURNAL_RUNTIME_FLUSH_TICKS 6
 
@@ -174,6 +174,60 @@ static bool EnsureLegendColumns(sqlite3 *database,
             error, error_capacity) &&
         EnsureColumn(database, "dragon_state", "slain_day",
             "ALTER TABLE dragon_state ADD COLUMN slain_day INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "life_stage",
+            "ALTER TABLE dragon_state ADD COLUMN life_stage INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "activity",
+            "ALTER TABLE dragon_state ADD COLUMN activity INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "age_days",
+            "ALTER TABLE dragon_state ADD COLUMN age_days INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "body_condition",
+            "ALTER TABLE dragon_state ADD COLUMN body_condition INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "crown_strength",
+            "ALTER TABLE dragon_state ADD COLUMN crown_strength INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "memory_integrity",
+            "ALTER TABLE dragon_state ADD COLUMN memory_integrity INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "territory_stability",
+            "ALTER TABLE dragon_state ADD COLUMN territory_stability INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "regional_influence",
+            "ALTER TABLE dragon_state ADD COLUMN regional_influence INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "crown_continuity_days",
+            "ALTER TABLE dragon_state ADD COLUMN crown_continuity_days INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "hunt_cooldown_days",
+            "ALTER TABLE dragon_state ADD COLUMN hunt_cooldown_days INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "hunts",
+            "ALTER TABLE dragon_state ADD COLUMN hunts INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "egg_count",
+            "ALTER TABLE dragon_state ADD COLUMN egg_count INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "brood_days_remaining",
+            "ALTER TABLE dragon_state ADD COLUMN brood_days_remaining INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "brood_cooldown_days",
+            "ALTER TABLE dragon_state ADD COLUMN brood_cooldown_days INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "broods_laid",
+            "ALTER TABLE dragon_state ADD COLUMN broods_laid INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "whelps_dispersed",
+            "ALTER TABLE dragon_state ADD COLUMN whelps_dispersed INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "afterdeath_days",
+            "ALTER TABLE dragon_state ADD COLUMN afterdeath_days INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "lifecycle_event_id",
+            "ALTER TABLE dragon_state ADD COLUMN lifecycle_event_id INTEGER NOT NULL DEFAULT 0;",
             error, error_capacity);
 }
 
@@ -1144,8 +1198,12 @@ static bool SaveLegends(sqlite3 *database, const CcSim *sim,
                  "INSERT INTO dragon_state (slot,id,name,lair_settlement_id,hoard,"
                  "stolen_outstanding,theft_actor_id,retaliation_target_id,"
                  "hoard_event_id,omen_event_id,omen_days_remaining,retaliations,"
-                 "slain,slain_day) "
-                 "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?);",
+                 "slain,slain_day,life_stage,activity,age_days,body_condition,"
+                 "crown_strength,memory_integrity,territory_stability,"
+                 "regional_influence,crown_continuity_days,hunt_cooldown_days,"
+                 "hunts,egg_count,brood_days_remaining,brood_cooldown_days,"
+                 "broods_laid,whelps_dispersed,afterdeath_days,lifecycle_event_id) "
+                 "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
                  &statement, error, error_capacity)) return false;
     const CcDragon *dragon = &sim->dragon;
     column = 1;
@@ -1162,6 +1220,24 @@ static bool SaveLegends(sqlite3 *database, const CcSim *sim,
     BindInt(statement, column++, dragon->retaliations);
     BindInt(statement, column++, dragon->slain ? 1 : 0);
     BindInt(statement, column++, dragon->slain_day);
+    BindInt(statement, column++, (int32_t)dragon->life_stage);
+    BindInt(statement, column++, (int32_t)dragon->activity);
+    BindInt(statement, column++, dragon->age_days);
+    BindInt(statement, column++, dragon->body_condition);
+    BindInt(statement, column++, dragon->crown_strength);
+    BindInt(statement, column++, dragon->memory_integrity);
+    BindInt(statement, column++, dragon->territory_stability);
+    BindInt(statement, column++, dragon->regional_influence);
+    BindInt(statement, column++, dragon->crown_continuity_days);
+    BindInt(statement, column++, dragon->hunt_cooldown_days);
+    BindInt(statement, column++, dragon->hunts);
+    BindInt(statement, column++, dragon->egg_count);
+    BindInt(statement, column++, dragon->brood_days_remaining);
+    BindInt(statement, column++, dragon->brood_cooldown_days);
+    BindInt(statement, column++, dragon->broods_laid);
+    BindInt(statement, column++, dragon->whelps_dispersed);
+    BindInt(statement, column++, dragon->afterdeath_days);
+    BindId(statement, column++, dragon->lifecycle_event_id);
     result = StepDone(database, statement, error, error_capacity);
     sqlite3_finalize(statement);
     if (!result) return false;
@@ -2053,7 +2129,12 @@ static bool ReadLegends(sqlite3 *database, CcSim *sim,
     if (!Prepare(database,
                  "SELECT id,name,lair_settlement_id,hoard,stolen_outstanding,"
                  "theft_actor_id,retaliation_target_id,hoard_event_id,omen_event_id,"
-                 "omen_days_remaining,retaliations,slain,slain_day "
+                 "omen_days_remaining,retaliations,slain,slain_day,life_stage,"
+                 "activity,age_days,body_condition,crown_strength,memory_integrity,"
+                 "territory_stability,regional_influence,crown_continuity_days,"
+                 "hunt_cooldown_days,hunts,egg_count,brood_days_remaining,"
+                 "brood_cooldown_days,broods_laid,whelps_dispersed,afterdeath_days,"
+                 "lifecycle_event_id "
                  "FROM dragon_state WHERE slot=1;",
                  &statement, error, error_capacity)) return false;
     if (sqlite3_step(statement) != SQLITE_ROW) {
@@ -2084,6 +2165,28 @@ static bool ReadLegends(sqlite3 *database, CcSim *sim,
     dragon->retaliations = sqlite3_column_int(statement, column++);
     dragon->slain = sqlite3_column_int(statement, column++) != 0;
     dragon->slain_day = sqlite3_column_int(statement, column++);
+    dragon->life_stage =
+        (CcDragonLifeStage)sqlite3_column_int(statement, column++);
+    dragon->activity =
+        (CcDragonActivity)sqlite3_column_int(statement, column++);
+    dragon->age_days = sqlite3_column_int(statement, column++);
+    dragon->body_condition = sqlite3_column_int(statement, column++);
+    dragon->crown_strength = sqlite3_column_int(statement, column++);
+    dragon->memory_integrity = sqlite3_column_int(statement, column++);
+    dragon->territory_stability = sqlite3_column_int(statement, column++);
+    dragon->regional_influence = sqlite3_column_int(statement, column++);
+    dragon->crown_continuity_days =
+        sqlite3_column_int(statement, column++);
+    dragon->hunt_cooldown_days = sqlite3_column_int(statement, column++);
+    dragon->hunts = sqlite3_column_int(statement, column++);
+    dragon->egg_count = sqlite3_column_int(statement, column++);
+    dragon->brood_days_remaining = sqlite3_column_int(statement, column++);
+    dragon->brood_cooldown_days = sqlite3_column_int(statement, column++);
+    dragon->broods_laid = sqlite3_column_int(statement, column++);
+    dragon->whelps_dispersed = sqlite3_column_int(statement, column++);
+    dragon->afterdeath_days = sqlite3_column_int(statement, column++);
+    dragon->lifecycle_event_id =
+        (CcId)sqlite3_column_int64(statement, column++);
     sqlite3_finalize(statement);
 
     if (sim->schema_version >= 11U) {
@@ -2607,7 +2710,8 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
     if (legacy_version != 3U && legacy_version != 4U &&
         legacy_version != 5U && legacy_version != 6U &&
         legacy_version != 7U && legacy_version != 8U &&
-        legacy_version != 9U && legacy_version != 10U) return true;
+        legacy_version != 9U && legacy_version != 10U &&
+        legacy_version != 11U) return true;
     if (legacy_version == 3U) {
         sim->clock = (CcWorldClock){
             .game_minutes_per_second = CC_IDLE_GAME_MINUTES_PER_SECOND
@@ -2723,7 +2827,14 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
     }
 #undef LEGACY_SERVICE
     }
+    if (legacy_version == 11U) {
+        CcSimInitializeDragonEcology(sim);
+        sim->schema_version = CC_SIM_SCHEMA_VERSION;
+        sim->generator_version = CC_GENERATOR_VERSION;
+        return true;
+    }
     if (legacy_version == 10U) {
+        CcSimInitializeDragonEcology(sim);
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         sim->generator_version = CC_GENERATOR_VERSION;
         return true;
@@ -2739,6 +2850,7 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
                 sim->kingdoms[i].iron_ledger_debt = 0;
             }
         }
+        CcSimInitializeDragonEcology(sim);
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         sim->generator_version = CC_GENERATOR_VERSION;
         return true;
@@ -2822,6 +2934,7 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
         }
     }
     TunePhysicalReserveTargets(sim);
+    CcSimInitializeDragonEcology(sim);
     sim->schema_version = CC_SIM_SCHEMA_VERSION;
     sim->generator_version = CC_GENERATOR_VERSION;
     return true;
