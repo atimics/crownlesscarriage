@@ -5903,7 +5903,7 @@ static bool ApplyStealDragonNamedTreasure(
                                  sim->dragon.hoard_event_id;
     (void)snprintf(
         text, sizeof(text),
-        "Smoke falls into %s's chimneys; old readers count 14 nights until %s comes for %.24s.",
+        "Smoke falls over %.16s; old readers count 14 nights until %.16s comes for %.20s.",
         target->name, sim->dragon.name, treasure->name);
     CcEvent *omen = PushEvent(
         sim, CC_EVENT_DRAGON_OMEN, sim->dragon.id, target->id,
