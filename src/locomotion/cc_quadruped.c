@@ -1,5 +1,7 @@
 #include "locomotion/cc_quadruped.h"
 
+#include "locomotion/cc_creature.h"
+
 #include <math.h>
 #include <stddef.h>
 #include <string.h>
@@ -12,7 +14,6 @@ typedef struct CcQuadrupedBoneDefinition {
 typedef struct CcQuadrupedProfile {
     float body_height;
     float half_width;
-    float stride;
     float neck_end_height;
     float neck_end_forward;
     float head_height;
@@ -46,11 +47,11 @@ static const CcQuadrupedBoneDefinition BONE_DEFINITIONS[] = {
 
 static const CcQuadrupedProfile PROFILES[] = {
     [CC_QUADRUPED_HORSE] = {
-        1.24f, 0.31f, 0.27f, 1.74f, 0.87f,
+        1.24f, 0.31f, 1.74f, 0.87f,
         1.74f, 1.13f, 0.08f, 1.47f, 0.48f,
     },
     [CC_QUADRUPED_COW] = {
-        1.08f, 0.38f, 0.20f, 1.16f, 0.91f,
+        1.08f, 0.38f, 1.16f, 0.91f,
         1.10f, 1.15f, 0.06f, 1.46f, 0.62f,
     },
 };
@@ -58,6 +59,11 @@ static const CcQuadrupedProfile PROFILES[] = {
 static CcLimbVec3 Subtract(CcLimbVec3 a, CcLimbVec3 b)
 {
     return (CcLimbVec3){a.x - b.x, a.y - b.y, a.z - b.z};
+}
+
+static CcLimbVec3 Add(CcLimbVec3 a, CcLimbVec3 b)
+{
+    return (CcLimbVec3){a.x + b.x, a.y + b.y, a.z + b.z};
 }
 
 static CcLimbVec3 NormalizeOr(CcLimbVec3 value, CcLimbVec3 fallback)
@@ -85,7 +91,8 @@ static void ResolveBone(CcQuadrupedPose *pose, CcQuadrupedBone bone,
 
 static void ResolveLeg(CcQuadrupedPose *pose, int32_t leg,
                        const CcQuadrupedProfile *profile, float body_height,
-                       float cycle, bool moving)
+                       const CcCreatureRigPose *rig_rest,
+                       const CcCreatureRigPose *rig_target)
 {
     static const CcQuadrupedBone upper_bones[] = {
         CC_QUADRUPED_UPPER_LEG_FL, CC_QUADRUPED_UPPER_LEG_FR,
@@ -103,16 +110,22 @@ static void ResolveLeg(CcQuadrupedPose *pose, int32_t leg,
     bool left = (leg & 1) == 0;
     float x = left ? -profile->half_width : profile->half_width;
     float root_z = front ? 0.57f : -0.57f;
-    float travel = moving ? cycle * profile->stride : 0.0f;
-    float lift = moving ? fmaxf(0.0f, cycle) * 0.15f : 0.0f;
     CcLimbVec3 root = {x, body_height - (front ? 0.08f : 0.10f), root_z};
-    CcLimbVec3 hoof = {x, 0.10f + lift, root_z + travel};
+    CcLimbVec3 hoof = {x, 0.10f, root_z};
     float bend = front ? 0.10f : -0.10f;
     CcLimbVec3 knee = {
         0.5f * (root.x + hoof.x),
         0.5f * (root.y + hoof.y) + 0.02f,
         0.5f * (root.z + hoof.z) + bend,
     };
+    if (rig_rest != NULL && rig_target != NULL) {
+        root = Add(root, Subtract(rig_target->limbs[leg].joints[0],
+                                  rig_rest->limbs[leg].joints[0]));
+        knee = Add(knee, Subtract(rig_target->limbs[leg].joints[1],
+                                  rig_rest->limbs[leg].joints[1]));
+        hoof = Add(hoof, Subtract(rig_target->limbs[leg].joints[2],
+                                  rig_rest->limbs[leg].joints[2]));
+    }
     CcLimbVec3 hoof_tail = {hoof.x, hoof.y - 0.015f,
                             hoof.z + 0.20f};
     ResolveBone(pose, upper_bones[leg], root, knee);
@@ -150,9 +163,18 @@ void CcQuadrupedPoseResolve(CcQuadrupedMorphology morphology, float phase,
         !isfinite(phase)) return;
 
     const CcQuadrupedProfile *profile = &PROFILES[morphology];
-    float wave = moving ? sinf(phase) : 0.0f;
     float bob = moving ? -0.030f * fabsf(sinf(phase * 2.0f)) : 0.0f;
     float body_height = profile->body_height + bob;
+    CcCreatureRigProfile rig_profile = morphology == CC_QUADRUPED_HORSE ?
+        CC_CREATURE_RIG_HORSE : CC_CREATURE_RIG_COW;
+    CcCreatureRigPose rig_rest = {0};
+    CcCreatureRigPose rig_target = {0};
+    bool rig_ready = CcCreatureRigPoseResolve(
+        rig_profile, 0.0f, 0.0f, (CcLimbVec3){0}, 0.0f, 1.0f, &rig_rest) &&
+        CcCreatureRigPoseResolve(
+            rig_profile, phase / (2.0f * 3.14159265358979323846f),
+            moving ? 1.0f : 0.0f, (CcLimbVec3){0}, 0.0f, 1.0f,
+            &rig_target);
     ResolveBone(result, CC_QUADRUPED_ROOT,
                 (CcLimbVec3){0.0f, bob, 0.0f},
                 (CcLimbVec3){0.0f, bob + 0.20f, 0.0f});
@@ -174,8 +196,9 @@ void CcQuadrupedPoseResolve(CcQuadrupedMorphology morphology, float phase,
                              profile->muzzle_forward});
 
     for (int32_t leg = 0; leg < 4; ++leg) {
-        float leg_wave = (leg == 0 || leg == 3) ? wave : -wave;
-        ResolveLeg(result, leg, profile, body_height, leg_wave, moving);
+        ResolveLeg(result, leg, profile, body_height,
+                   rig_ready ? &rig_rest : NULL,
+                   rig_ready ? &rig_target : NULL);
     }
 
     float tail_sway = moving ? 0.11f * sinf(phase + 0.65f) : 0.0f;

@@ -35,10 +35,12 @@ int main(void)
     CcQuadrupedPose horse_step = {0};
     CcQuadrupedPose cow_idle = {0};
     CcQuadrupedPose repeated = {0};
+    CcQuadrupedPose horse_swing = {0};
     CcQuadrupedPoseResolve(CC_QUADRUPED_HORSE, 0.0f, false, &horse_idle);
     CcQuadrupedPoseResolve(CC_QUADRUPED_HORSE, 0.5f, true, &horse_step);
     CcQuadrupedPoseResolve(CC_QUADRUPED_COW, 0.0f, false, &cow_idle);
     CcQuadrupedPoseResolve(CC_QUADRUPED_HORSE, 0.5f, true, &repeated);
+    CcQuadrupedPoseResolve(CC_QUADRUPED_HORSE, 5.15f, true, &horse_swing);
     EXPECT(horse_idle.valid && horse_step.valid && cow_idle.valid,
            "supported animal poses resolve");
     EXPECT(memcmp(&horse_step, &repeated, sizeof(horse_step)) == 0,
@@ -52,9 +54,17 @@ int main(void)
     EXPECT(horse_step.bones[CC_QUADRUPED_HOOF_FR].head.z <
                horse_idle.bones[CC_QUADRUPED_HOOF_FR].head.z,
            "paired hooves use the opposite phase");
-    EXPECT(horse_step.bones[CC_QUADRUPED_HOOF_FL].head.y >
-               horse_idle.bones[CC_QUADRUPED_HOOF_FL].head.y,
-           "advancing hoof clears the ground");
+    float highest_lift = 0.0f;
+    const CcQuadrupedBone hooves[] = {
+        CC_QUADRUPED_HOOF_FL, CC_QUADRUPED_HOOF_FR,
+        CC_QUADRUPED_HOOF_HL, CC_QUADRUPED_HOOF_HR,
+    };
+    for (int32_t hoof = 0; hoof < 4; ++hoof) {
+        float lift = horse_swing.bones[hooves[hoof]].head.y -
+                     horse_idle.bones[hooves[hoof]].head.y;
+        highest_lift = fmaxf(highest_lift, lift);
+    }
+    EXPECT(highest_lift > 0.03f, "a swinging hoof clears the ground");
     for (int32_t bone = 0; bone < CC_QUADRUPED_BONE_COUNT; ++bone) {
         EXPECT(Distance(horse_step.bones[bone].head,
                         horse_step.bones[bone].tail) > 0.01f,

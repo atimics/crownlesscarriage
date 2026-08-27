@@ -15,19 +15,22 @@ motion families:
   tail, crown horns, back spines, and wings. It is a unique world actor, not a
   scaled farm animal.
 
-All forms are generated from code rather than hand-edited exports. Goblins and
-the dragon ship as held motion poses. The horse and cow each ship as one
-rigged, skinned GLB. The game moves their bones from the same deterministic
-gait phase that already controls travel.
+All forms are generated from code rather than hand-edited exports. The horse
+and cow each ship as one rigged, skinned GLB. Their four legs are driven by the
+same planted contacts, two-bone joint solves, and flexor/extensor model as the
+rest of the cast. Goblins and the dragon keep their generated GLBs as editable
+shape references while the game assembles their visible forms around live
+bones.
 
 ## Generated artifacts
 
 - Source library: `assets/blender/crownless_creature_library.blend`
-- Runtime exports: `assets/exports/creatures/creature_*_v01.glb`
+- Runtime and shape-reference exports: `assets/exports/creatures/creature_*_v01.glb`
 - Contract manifest: `assets/creature_manifest.json`
 - Family preview: `assets/previews/creatures/creature_family_sheet.png`
 - Generator: `tools/blender/build_creature_library.py`
 - Validator: `tools/blender/validate_creature_library.py`
+- Runtime rig: `src/locomotion/cc_creature.c`
 
 Generate and verify the library from the repository root:
 
@@ -36,8 +39,9 @@ make blender-creature-assets
 make blender-creature-assets-check
 ```
 
-The macOS application bundle copies the manifest and every creature GLB through
-the existing asset packaging target.
+The macOS application bundle keeps the manifest and GLBs. The horse and cow
+use their skins at runtime. Goblins and the dragon use the procedural runtime
+rig, with their GLBs kept as art references.
 
 ## Variant grammar
 
@@ -64,7 +68,8 @@ channels:
 `skin`, `secondary`, `hide`, `cloth`, `leather`, `horn`, `metal`, `accent`,
 and `eye`.
 
-The manifest records one of three gait contracts:
+The manifest records one of three gait contracts. They now select a runtime
+skeletal profile rather than a baked mesh sequence:
 
 - `npc_stepped`: select the goblin pose with the current biped gait phase.
 - `quadruped_runtime_skin`: load one horse or cow skin and drive its 19 bones
@@ -73,10 +78,13 @@ The manifest records one of three gait contracts:
 - `dragon_authored`: select a named dramatic state rather than treating the
   dragon as ambient livestock.
 
-The generated C catalog keeps runtime paths in sync with this manifest. The
-road scene uses rigged horses and food-linked cattle. Settlement scenes show
-goblins at their lair or raid target, the tribute bearer during delivery, and
-the dragon at its lair with a state-specific authored pose.
+`CcCreatureRigPoseResolve` derives each body from `CcLimbRig` and
+`CcBiomechRig`. Goblins use the biped contact layout. Horses, cows, and the
+dragon use separately proportioned quadruped layouts. Each joint has opposing
+flexor and extensor muscles; their activation changes the visible muscle
+envelope. `CcQuadrupedPoseResolve` maps the horse and cow results onto the 19
+exported skin bones, while keeping the authored neck, head, body, and tail
+anchors. The generated C catalog keeps those assets in sync with the manifest.
 
 The quadruped gait is analytic and deterministic. It does not need a neural
 net, training data, or an inference runtime. A learned controller may be useful
@@ -110,4 +118,11 @@ Runtime art checks can capture the state-driven settlement compositions:
 ```sh
 ./crownless_carriage --capture-creatures goblins goblins.png
 ./crownless_carriage --capture-creatures dragon dragon.png
+./crownless_carriage --capture-creatures animals animals.png
+./crownless_carriage --capture-creature-reel goblins goblins/frame
+./crownless_carriage --capture-creature-reel dragon dragon/frame
+./crownless_carriage --capture-creature-reel animals animals/frame
 ```
+
+Each reel command records 45 deterministic gameplay frames at 15 frames per
+second, ready to assemble into a three-second clip.
