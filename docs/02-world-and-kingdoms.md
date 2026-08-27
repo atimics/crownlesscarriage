@@ -20,13 +20,57 @@ recognize places and recurring people.
 
 The playable slice treats the three kingdoms as the three top-level powers.
 Every pair is at war. A road between different kingdoms is therefore a war
-border: ordinary freight will not cross it, but the neutral Crownless Carriage
-can. This makes the carriage useful even before a contract is attached to a
-journey.
+border: ordinary freight will not cross it. The one hidden smuggler road can
+carry illicit cross-border shipments, and the neutral Crownless Carriage can
+cross openly at its own risk. This makes both routes materially important.
+
+War burden is local rather than a single realm-wide number. It rises where a
+settlement touches contested roads, especially when those roads are unsafe or
+closed. Fortresses and capitals carry extra burden. That pressure also raises
+the garrison's need for pay, wheat, tools, and weapons. If the material chain fails,
+shortages and unpaid soldiers make the cost of war fall unevenly and inequality
+rises through those real conditions.
+
+War has no weekly money sink. The crown moves existing gold from its treasury
+into a named settlement's war chest. Wages move that gold into the local market.
+The war chest pays a named supplier before food, tools, or weapons leave its stock. The
+goods then occupy a real shipment, travel on real roads, and may be lost.
+
+A border war does not make the dragon attack. A fortress or capital may form a
+Crown Levy only when burden is high, pay or supplies are failing, the liquid war
+funds are low, and the kingdom has weak legitimacy. The levy must travel to the
+cave, steal real hoard treasure, and carry it back into the local war chest.
+Only that theft starts the omens. This keeps the cause readable: material war
+failure creates the motive, people commit the theft, and unpaid theft causes the
+fire.
 
 Each kingdom starts with two settlements that cover different parts of its
 economy. A kingdom must be viable inside its own borders, but no single town is
 self-sufficient.
+
+## Physical toy economy
+
+The ordinary goods are Food, Iron, Tools, Weapons, Raw Gold, and Gems. They are
+inventories, not bonuses.
+
+- A working farm on real fields creates Food. Without tools it works slowly.
+- A working mine removes Iron from a mountain deposit. Without tools it can
+  still recover a little Iron, preventing a permanent production lock.
+- A gold seam yields one Raw Gold after twelve equipped mine batches.
+- A gem seam yields one Gem after forty-eight equipped mine batches.
+- A smith spends two Iron on one Tools bundle or three Iron on one Weapons
+  bundle. Tools wear at farms, mines, smithies, and sieges.
+- A market or capital smith can commit Raw Gold and a Gem to three weeks of
+  work. The result is one named treasure with a maker, owner, location,
+  material content, appraisal, and history.
+
+A cargo slot holds eight Food, four Iron, two Tools, two Weapons, one Gold
+strongbox, one Gem case, or one named treasure. Treasure is valuable because it
+compresses rare materials and craft work into one guarded slot. It is not
+spendable coin.
+
+Prosperity, inequality, border burden, and supply crisis are derived readings.
+They can guide decisions, but they never create, remove, or teleport goods.
 
 ## Tiny town builder
 
@@ -47,7 +91,7 @@ set comes from a settlement's size and reason for existing, so towns do not
 receive one shared checklist.
 
 A settlement can build one service at a time. Construction occupies a future
-slot, spends local material and tools plus kingdom treasury, and completes over
+slot, spends local Iron and tools plus kingdom treasury, and completes over
 world days. Open services then affect production, hunger, prosperity, or
 security.
 
@@ -112,7 +156,7 @@ Every settlement receives:
 
 **Mining town**
 
-- Exports raw material
+- Exports Iron and may expose rare Gold or Gem seams
 - Depends on imported food and tools
 - Organized around yards, lifts, workshops, and worker housing
 - Vulnerable to tunnel disasters, monster incursions, and guild conflict
@@ -201,3 +245,5 @@ Every generated starting world must contain:
 - No settlement that is economically self-sufficient
 - No kingdom that begins in unavoidable collapse
 - At least one bandit, monster, and dungeon pressure connected to human systems
+- War changes local inequality only through moved coin, missing goods, prices,
+  hunger, and political power; it never directly causes dragon fire

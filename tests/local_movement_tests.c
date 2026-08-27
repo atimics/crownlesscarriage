@@ -3828,6 +3828,82 @@ int main(void)
                       "hostile road encounter was not staged around the carriage\n");
         return 1;
     }
+    if (!CcLocalCourseSelectPlayerTarget(&road_course, &road_player, 0)) {
+        (void)fprintf(stderr,
+                      "hostile road encounter did not accept its first target\n");
+        return 1;
+    }
+    Camera3D road_combat_base = {
+        .position = {51.60f, 5.35f, 54.50f},
+        .target = {48.60f, 0.95f, 40.00f},
+        .up = {0.0f, 1.0f, 0.0f},
+        .fovy = 10.8f,
+        .projection = CAMERA_ORTHOGRAPHIC,
+    };
+    Camera3D road_combat_camera = road_combat_base;
+    for (int32_t frame = 0; frame < 36; ++frame) {
+        CcLocalWorldUpdate(&road_course, &road_player, &witness_sim,
+                           1.0f / 60.0f, false, true);
+        camera_clock += 1.0f / 60.0f;
+        road_combat_camera = CcLocalCombatCameraInternal(
+            road_combat_base, &road_player, &road_course, camera_clock,
+            true, click_target.texture.height);
+    }
+    if (road_player.combat.target_index != 0) {
+        (void)fprintf(stderr,
+                      "hostile road encounter lost its target: player %.0f/%d raider %.0f/%d retreat %d\n",
+                      road_player.combat.health,
+                      road_player.combat.life_state,
+                      road_course.raiders[0].combat.health,
+                      road_course.raiders[0].combat.life_state,
+                      road_course.raiders_retreating);
+        return 1;
+    }
+    Vector3 road_fight = {
+        road_course.raiders[0].position.x - road_player.position.x,
+        0.0f,
+        road_course.raiders[0].position.z - road_player.position.z,
+    };
+    road_fight.y = 0.0f;
+    float road_fight_length = sqrtf(
+        road_fight.x * road_fight.x + road_fight.z * road_fight.z);
+    road_fight.x /= road_fight_length;
+    road_fight.z /= road_fight_length;
+    Vector3 road_camera_from_player = {
+        road_combat_camera.position.x - road_player.position.x,
+        road_combat_camera.position.y - road_player.position.y,
+        road_combat_camera.position.z - road_player.position.z,
+    };
+    float road_behind = road_camera_from_player.x * road_fight.x +
+                        road_camera_from_player.z * road_fight.z;
+    float road_side = road_camera_from_player.x * -road_fight.z +
+                      road_camera_from_player.z * road_fight.x;
+    Vector2 road_player_screen = GetWorldToScreenEx(
+        (Vector3){road_player.position.x, road_player.position.y + 1.02f,
+                  road_player.position.z},
+        road_combat_camera, click_target.texture.width,
+        click_target.texture.height);
+    Vector2 road_raider_screen = GetWorldToScreenEx(
+        (Vector3){road_course.raiders[0].position.x,
+                  road_course.raiders[0].position.y + 1.02f,
+                  road_course.raiders[0].position.z},
+        road_combat_camera, click_target.texture.width,
+        click_target.texture.height);
+    bool road_subjects_safe =
+        road_player_screen.x > 20.0f && road_player_screen.x < 437.0f &&
+        road_player_screen.y > 12.0f && road_player_screen.y < 273.0f &&
+        road_raider_screen.x > 20.0f && road_raider_screen.x < 437.0f &&
+        road_raider_screen.y > 12.0f && road_raider_screen.y < 273.0f;
+    if (road_combat_camera.projection != CAMERA_PERSPECTIVE ||
+        road_behind > -3.50f || fabsf(road_side) < 1.50f ||
+        !road_subjects_safe) {
+        (void)fprintf(stderr,
+                      "bridge shoulder framing failed: projection %d behind %.2f side %.2f player %.1f,%.1f raider %.1f,%.1f\n",
+                      road_combat_camera.projection, road_behind, road_side,
+                      road_player_screen.x, road_player_screen.y,
+                      road_raider_screen.x, road_raider_screen.y);
+        return 1;
+    }
     bool road_attackers_advanced = false;
     bool road_hands_advanced = false;
     for (int32_t frame = 0; frame < 900; ++frame) {

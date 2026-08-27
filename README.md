@@ -4,7 +4,7 @@
 independent carriage line between kingdoms threatened by war, monsters, and
 persistent dungeons.
 
-Your power comes from deciding what moves. Passengers, food, tools, sealed
+Your power comes from deciding what moves. Passengers, food, iron, tools, weapons, sealed
 messages, and contraband compete for limited space. A journey consumes time,
 changes who gets help, and can become a fight, a bargain, or an expedition.
 The result is written back into the same world that created the problem.
@@ -67,6 +67,12 @@ The architecture proof connects these parts in one running build:
 - A deterministic regional simulation of settlements, kingdoms, factions,
   production, trade, shipments, hunger, security, bandits, monsters, and
   dungeons
+- Fields, farms, mountain deposits, mines, smith recipes, tool wear, rare Gold
+  and Gems, supplied warfare, and unique one-slot crafted treasures
+- A goblin lair economy that raids for food or equipment, carries loot home,
+  then carries portable offerings to a persistent dragon
+  hoard, plus inequality-driven thieves, war-financed Crown Levies, player
+  theft, omens, repayment, and bounded retaliation
 - An append-only SQLite action journal with checkpoints, replay, and exact
   state hashing
 
@@ -107,6 +113,18 @@ Run it on Linux:
 ./out/build/play/crownless_carriage
 ```
 
+Run the presentation-free Empty Granary playtest:
+
+```sh
+./out/build/play/crownless_metagame_playtest
+```
+
+This text-first build uses the same simulation, commands, journeys, situations,
+and SQLite save format as the 3D client. It exists so carriage choices and delayed
+consequences can be tested while camera, movement, and art work continue. Type
+`rumors` for local clues, `treasures` for unique cargo, `help` for commands,
+and `debrief` at the end of a session.
+
 The headless build and tests run in CI on macOS and Linux. The full graphical
 client is also built in macOS CI.
 
@@ -130,7 +148,7 @@ Inputs are contextual.
 | `J` | Jump |
 | `Space` | Make a manual basic strike |
 | `X` | Enter or leave guard |
-| `1`, `2`, `3` | Use combat skills, trade goods, or choose an encounter response |
+| `1` through `6` | Trade goods in markets; `1`, `2`, and `3` remain combat skills and encounter choices |
 | `G` | Sound the village alarm and start a raid encounter |
 | `E` | Start an expedition beside the dungeon entrance |
 | `.` | Advance one day while parked |
@@ -140,8 +158,9 @@ Inputs are contextual.
 | `N` | Generate the crisis again with a new seed |
 | `F3` | Toggle performance and character diagnostics |
 
-In the market, use `1`, `2`, or `3` to buy food, materials, or tools. Hold
-`Shift` with the same key to sell.
+In the market, use `1` through `6` to buy Food, Iron, Tools, Weapons, Raw Gold,
+or Gems. Hold `Shift` with the same key to sell. Cargo slots hold eight Food,
+four Iron, two Tools, two Weapons, one Gold strongbox, or one Gem case.
 
 In the map case, use the arrow keys or click a sheet to select it. Press `B` to
 buy a local chart, `S` to sell one, `Enter` to follow it from the correct
@@ -156,6 +175,7 @@ Wind. Click the ground to disengage and return to direct movement.
 | --- | --- |
 | `src/sim/` | Deterministic strategic world and validated commands |
 | `src/persistence/` | SQLite snapshots, action journal, replay, and hashing |
+| `src/metagame/` | Presentation-free Empty Granary player loop |
 | `src/locomotion/` | Renderer-free biomechanical and robotic movement systems |
 | `src/client/` | raylib input, local world, cameras, art, UI, and projections |
 | `tests/` | Simulation, persistence, terrain, movement, and rendering contracts |
@@ -178,6 +198,13 @@ Run ten simulated years without graphics:
 
 ```sh
 ./out/build/play/crownless_sim_runner --seed 42 --years 10 --detail
+```
+
+Export yearly simulation-shape metrics across many seeds:
+
+```sh
+./out/build/play/crownless_sim_metrics --seeds 100 --years 10 \
+  > out/simulation-shape.csv
 ```
 
 Run optimized performance checks:
@@ -222,6 +249,7 @@ The manual labels important statements as **Contract**, **Target**,
 - [Vertical slice](docs/08-vertical-slice.md)
 - [Validation strategy](docs/09-validation.md)
 - [Production roadmap](docs/10-roadmap.md)
+- [Text-first metagame playtest](docs/11-metagame-playtest.md)
 - [Runtime environment design](docs/production/runtime-environment-design.md)
 - [Character readability](docs/production/character-readability.md)
 - [World-kit construction language](docs/production/world-kit-action-figure-language.md)

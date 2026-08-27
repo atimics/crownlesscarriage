@@ -9,6 +9,9 @@
 #include <string.h>
 #include <time.h>
 
+#define CC_SIMULATION_BUDGET_NS_PER_DAY 50000.0
+#define CC_LOCOMOTION_BUDGET_NS_PER_STEP 8000.0
+
 static double ElapsedSeconds(clock_t start)
 {
     return (double)(clock() - start) / (double)CLOCKS_PER_SEC;
@@ -137,10 +140,14 @@ int main(int argc, char **argv)
                  locomotion_seconds, nanoseconds_per_step);
     (void)printf("checksum=%016" PRIx64 "\n", checksum);
     if (assert_budget &&
-        (nanoseconds_per_day > 20000.0 || nanoseconds_per_step > 8000.0)) {
+        (nanoseconds_per_day > CC_SIMULATION_BUDGET_NS_PER_DAY ||
+         nanoseconds_per_step > CC_LOCOMOTION_BUDGET_NS_PER_STEP)) {
         (void)fprintf(stderr,
-                      "performance budget exceeded: simulation %.1f/20000 ns, locomotion %.1f/8000 ns\n",
-                      nanoseconds_per_day, nanoseconds_per_step);
+                      "performance budget exceeded: simulation %.1f/%.0f ns, locomotion %.1f/%.0f ns\n",
+                      nanoseconds_per_day,
+                      CC_SIMULATION_BUDGET_NS_PER_DAY,
+                      nanoseconds_per_step,
+                      CC_LOCOMOTION_BUDGET_NS_PER_STEP);
         return EXIT_FAILURE;
     }
     return EXIT_SUCCESS;

@@ -459,6 +459,7 @@ typedef struct CombatCameraRig {
     bool shoulder_valid;
     bool initialized;
     bool scene_valid;
+    bool road_encounter;
 } CombatCameraRig;
 
 typedef struct PresentedCameraState {
@@ -2287,6 +2288,36 @@ void CcLocalAgentSetMorphology(CcLocalAgent *agent, CcMorphologyPreset preset,
     }
 }
 
+void CcLocalAgentSetScene(CcLocalAgent *agent, CcLocalSceneKind scene)
+{
+    if (agent == NULL || scene < CC_LOCAL_SCENE_STREET ||
+        scene > CC_LOCAL_SCENE_ROAD) return;
+    agent->scene = scene;
+    agent->position.y = SurfaceHeightAt(
+        scene, agent->position.x, agent->position.z);
+    agent->velocity = (Vector3){0};
+    agent->separation_velocity = (Vector3){0};
+    agent->target_point = agent->position;
+    agent->command_point = agent->position;
+    agent->command_origin = agent->position;
+    agent->exact_target_valid = false;
+    agent->target_valid = false;
+    agent->command_point_valid = false;
+    agent->navigation_active = false;
+    agent->navigation_world_exit = false;
+    agent->navigation_point_count = 0;
+    agent->navigation_point_index = 0;
+    agent->navigation_destination_room = -1;
+    agent->climbing = false;
+    agent->climbing_down = false;
+    agent->vaulting = false;
+    agent->swimming = false;
+    agent->grounded = true;
+    agent->traversal = CC_TRAVERSAL_IDLE;
+    CcLocalAgentSetMorphology(
+        agent, agent->morphology, scene == CC_LOCAL_SCENE_MARKET);
+}
+
 void CcLocalAgentCycleMorphology(CcLocalAgent *agent, bool market_interior)
 {
     CcMorphologyPreset next = (CcMorphologyPreset)(agent->morphology + 1);
@@ -3061,7 +3092,7 @@ void CcLocalCourseStageRoadEncounter(CcLocalCourse *course,
     };
     course->road_encounter = true;
     course->scene = CC_LOCAL_SCENE_ROAD;
-    player->scene = CC_LOCAL_SCENE_ROAD;
+    CcLocalAgentSetScene(player, CC_LOCAL_SCENE_ROAD);
     course->situation_witness_active = false;
     course->situation_witness_id = 0U;
     for (int32_t i = 0; i < CC_LOCAL_TRAVELLER_COUNT; ++i) {
@@ -3070,7 +3101,7 @@ void CcLocalCourseStageRoadEncounter(CcLocalCourse *course,
     for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
         CcLocalCourseRunner *runner = &course->runners[i];
         CcLocalAgentInit(&runner->agent, guard_positions[i], false);
-        runner->agent.scene = CC_LOCAL_SCENE_ROAD;
+        CcLocalAgentSetScene(&runner->agent, CC_LOCAL_SCENE_ROAD);
         CcLocalCombatSetTeam(&runner->agent, CC_COMBAT_GUARD);
         runner->agent.crowned = false;
         CcLocalAgentSetNpcAppearance(
@@ -3088,7 +3119,7 @@ void CcLocalCourseStageRoadEncounter(CcLocalCourse *course,
             (Vector2){i == 0 ? 50.45f : 52.90f,
                       i == 0 ? 39.45f : 40.65f};
         CcLocalAgentInit(raider, raider_position, false);
-        raider->scene = CC_LOCAL_SCENE_ROAD;
+        CcLocalAgentSetScene(raider, CC_LOCAL_SCENE_ROAD);
         CcLocalCombatSetTeam(raider, CC_COMBAT_RAIDER);
         if (!hostile) raider->combat.weapon_mode = CC_WEAPON_NONE;
         raider->crowned = false;
@@ -8054,13 +8085,20 @@ static void CombatCameraLockComposition(Camera3D base,
     Vector3 target = Vector3Add(
         player->position, Vector3Scale(fight_line, look_ahead));
     target.y = player->position.y + 1.32f;
-    float follow_distance = 5.40f + fminf(span, 7.0f) * 0.12f;
-    float fovy = CombatClamp(44.0f + span * 0.75f, 45.0f, 50.0f);
+    bool road_duel = course->scene == CC_LOCAL_SCENE_ROAD;
+    float follow_distance = road_duel ?
+        4.45f + fminf(span, 7.0f) * 0.08f :
+        5.40f + fminf(span, 7.0f) * 0.12f;
+    float fovy = road_duel ?
+        CombatClamp(40.0f + span * 0.50f, 42.0f, 46.0f) :
+        CombatClamp(44.0f + span * 0.75f, 45.0f, 50.0f);
     /* Close melee needs a stronger diagonal than a long lock-on. Without
        this contact adjustment, the opponent disappears directly behind the
        hero at the moment the attack lands. */
     float contact_amount = CombatClamp(2.80f - span, 0.0f, 2.0f);
-    float shoulder_distance = 3.15f + contact_amount * 0.85f;
+    float shoulder_distance = road_duel ?
+        2.05f + contact_amount * 0.45f :
+        3.15f + contact_amount * 0.85f;
     Vector3 player_center = Vector3Add(
         player->position, (Vector3){0.0f, 1.02f, 0.0f});
     Vector3 opponent_center = Vector3Add(
@@ -8083,7 +8121,8 @@ static void CombatCameraLockComposition(Camera3D base,
             player->position,
             Vector3Add(Vector3Scale(fight_line, -follow_distance),
                        Vector3Scale(candidate_side, shoulder_distance)));
-        camera_position.y = player->position.y + 3.15f;
+        camera_position.y = player->position.y +
+                            (road_duel ? 2.85f : 3.15f);
         Vector3 candidate_offset = Vector3Subtract(camera_position, target);
         Camera3D candidate = PerspectiveCameraComposed(
             target, candidate_offset, fovy);
@@ -8147,8 +8186,9 @@ static bool CombatCameraSubjectsNeedReframe(const CcLocalAgent *player,
     if (target_x * target_x + target_z * target_z > 1.35f * 1.35f) {
         return true;
     }
-    float live_fovy = CombatClamp(44.0f + live_span * 0.75f,
-                                  45.0f, 50.0f);
+    float live_fovy = course->scene == CC_LOCAL_SCENE_ROAD ?
+        CombatClamp(40.0f + live_span * 0.50f, 42.0f, 46.0f) :
+        CombatClamp(44.0f + live_span * 0.75f, 45.0f, 50.0f);
     if (fabsf(live_fovy - combat_camera_rig.locked_fovy) > 1.20f) {
         return true;
     }
@@ -8196,7 +8236,8 @@ Camera3D CcLocalCombatCameraInternal(Camera3D base,
     float base_perspective_fovy = PerspectiveFovyForOrthographic(base);
     bool scene_changed = course != NULL &&
         (!combat_camera_rig.scene_valid ||
-         combat_camera_rig.scene != course->scene);
+         combat_camera_rig.scene != course->scene ||
+         combat_camera_rig.road_encounter != course->road_encounter);
     if (!combat_camera_rig.initialized || scene_changed) {
         combat_camera_rig.displayed_target = base.target;
         combat_camera_rig.displayed_offset = base_offset;
@@ -8215,6 +8256,7 @@ Camera3D CcLocalCombatCameraInternal(Camera3D base,
         if (course != NULL) {
             combat_camera_rig.scene = course->scene;
             combat_camera_rig.scene_valid = true;
+            combat_camera_rig.road_encounter = course->road_encounter;
         }
     }
 
@@ -15317,6 +15359,21 @@ static void DrawObstacleCourse(void)
             (Color){73, 55, 91, 255});
 }
 
+static void DrawCourseRaider(const CcLocalAgent *raider)
+{
+    if (raider == NULL) return;
+    DrawCombatFootprint(raider, WORLD_DANGER);
+    DrawRobotShell(raider);
+    DrawCombatSword(raider);
+    DrawCombatSkillTell(raider);
+    DrawCombatImpact(raider);
+    DrawPaintedOverheadDiamond(
+        (Vector3){raider->position.x,
+                  raider->position.y + 2.05f,
+                  raider->position.z},
+        0.085f, WORLD_DANGER);
+}
+
 static void DrawCourseRunners(const CcLocalCourse *course)
 {
     if (course == NULL) return;
@@ -15330,17 +15387,7 @@ static void DrawCourseRunners(const CcLocalCourse *course)
     Vector3 threat = CourseThreatCenter(course);
     if (course->alarm_active) {
         for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
-            const CcLocalAgent *raider = &course->raiders[i];
-            DrawCombatFootprint(raider, WORLD_DANGER);
-            DrawRobotShell(raider);
-            DrawCombatSword(raider);
-            DrawCombatSkillTell(raider);
-            DrawCombatImpact(raider);
-            DrawPaintedOverheadDiamond(
-                (Vector3){raider->position.x,
-                          raider->position.y + 2.05f,
-                          raider->position.z},
-                0.085f, WORLD_DANGER);
+            DrawCourseRaider(&course->raiders[i]);
         }
     }
     for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
@@ -15691,6 +15738,10 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
             (Rectangle){0.10f, 0.12f, 0.80f, 0.76f});
         camera = SnapCameraToArtPixels(camera, target.texture.height);
     }
+    bool combat_presentation = !travelling && course->alarm_active &&
+                               camera.projection == CAMERA_PERSPECTIVE;
+    const CcLocalAgent *duel_opponent = combat_presentation ?
+        CombatCameraOpponent(course, agent) : NULL;
     RememberPresentedCamera(CC_LOCAL_SCENE_ROAD, camera, agent,
                             target.texture.width, target.texture.height);
     ArtComposition road_art = ROAD_ART_COMPOSITION;
@@ -15714,26 +15765,34 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     int32_t road_cargo = CcPlayerCargoUsed(&sim->player);
     DrawRoadCarriage(carriage_base, road_cargo);
 
-    DrawNpcFigure3D((Vector3){carriage_x - 3.25f, 0.0f, 37.95f}, 0.90f, 1.35f,
-                    UINT32_C(0x726f6101), CC_NPC_ROLE_TRAVELLER,
-                    (Color){151, 103, 78, 255}, clock * 0.42f,
-                    CC_TRAVERSAL_IDLE);
-    DrawNpcFigure3D((Vector3){carriage_x - 4.00f, 0.0f, 39.40f}, 0.84f, 1.10f,
-                    UINT32_C(0x726f6102), CC_NPC_ROLE_HEALER,
-                    WORLD_TEAL, clock * 0.36f + 1.4f,
-                    CC_TRAVERSAL_IDLE);
-    DrawNpcFigure3D((Vector3){carriage_x - 3.35f, 0.0f, 41.55f}, 0.80f, 1.55f,
-                    UINT32_C(0x726f6103), CC_NPC_ROLE_REFUGEE,
-                    WORLD_VIOLET, clock * 0.31f + 2.1f,
-                    CC_TRAVERSAL_IDLE);
-    DrawBox((Vector3){carriage_x - 4.25f, 0.34f, 42.45f},
-            (Vector3){0.72f, 0.68f, 0.72f},
-            (Color){137, 91, 55, 255});
-    DrawBox((Vector3){carriage_x - 3.33f, 0.25f, 42.42f},
-            (Vector3){0.82f, 0.50f, 0.64f},
-            (Color){112, 76, 53, 255});
+    if (!combat_presentation) {
+        DrawNpcFigure3D(
+            (Vector3){carriage_x - 3.25f, 0.0f, 37.95f}, 0.90f, 1.35f,
+            UINT32_C(0x726f6101), CC_NPC_ROLE_TRAVELLER,
+            (Color){151, 103, 78, 255}, clock * 0.42f,
+            CC_TRAVERSAL_IDLE);
+        DrawNpcFigure3D(
+            (Vector3){carriage_x - 4.00f, 0.0f, 39.40f}, 0.84f, 1.10f,
+            UINT32_C(0x726f6102), CC_NPC_ROLE_HEALER,
+            WORLD_TEAL, clock * 0.36f + 1.4f,
+            CC_TRAVERSAL_IDLE);
+        DrawNpcFigure3D(
+            (Vector3){carriage_x - 3.35f, 0.0f, 41.55f}, 0.80f, 1.55f,
+            UINT32_C(0x726f6103), CC_NPC_ROLE_REFUGEE,
+            WORLD_VIOLET, clock * 0.31f + 2.1f,
+            CC_TRAVERSAL_IDLE);
+        DrawBox((Vector3){carriage_x - 4.25f, 0.34f, 42.45f},
+                (Vector3){0.72f, 0.68f, 0.72f},
+                (Color){137, 91, 55, 255});
+        DrawBox((Vector3){carriage_x - 3.33f, 0.25f, 42.42f},
+                (Vector3){0.82f, 0.50f, 0.64f},
+                (Color){112, 76, 53, 255});
+    }
 
-    if (!travelling) DrawCourseRunners(course);
+    if (!travelling) {
+        if (combat_presentation) DrawCourseRaider(duel_opponent);
+        else DrawCourseRunners(course);
+    }
     if (parley && !course->alarm_active) {
         for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
             DrawRobotShell(&course->raiders[i]);
@@ -15753,9 +15812,6 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     EndMode3D();
     EndTextureMode();
     PresentTarget(target, destination);
-    bool combat_presentation = !travelling && course->alarm_active &&
-                               camera.projection == CAMERA_PERSPECTIVE;
-
     char route_label[96];
     char blockade_label[96];
     (void)snprintf(route_label, sizeof(route_label), "%s -> %s",

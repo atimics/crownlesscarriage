@@ -1320,12 +1320,13 @@ static void BeginRagdollRecovery(CcHumanoidGait *gait,
              direction < (int32_t)(sizeof(directions) /
                                    sizeof(directions[0])); ++direction) {
             CcLimbVec3 root = Add(
-                body_position, Scale(directions[direction], ring * 0.25f));
+                body_position,
+                Scale(directions[direction], (float)ring * 0.25f));
             CcHumanoidGaitInit(&candidate, root, body_yaw,
                                probe, probe_context);
             float penalty = RecoveryCollisionPenalty(
                 gait, &candidate.pose, collision_probe, probe_context);
-            float distance = ring * 0.25f;
+            float distance = (float)ring * 0.25f;
             if (penalty < best_penalty - 0.0001f ||
                 (fabsf(penalty - best_penalty) <= 0.0001f &&
                  distance < best_distance)) {

@@ -57,9 +57,20 @@ target_include_directories(crownless_persistence PUBLIC src)
 target_link_libraries(crownless_persistence PUBLIC crownless_sim SQLite::SQLite3)
 cc_strict_warnings(crownless_persistence)
 
+add_library(crownless_metagame
+    src/metagame/cc_metagame.c
+)
+target_include_directories(crownless_metagame PUBLIC src)
+target_link_libraries(crownless_metagame PUBLIC crownless_persistence)
+cc_strict_warnings(crownless_metagame)
+
 add_executable(crownless_sim_runner tools/sim_runner.c)
 target_link_libraries(crownless_sim_runner PRIVATE crownless_persistence)
 cc_strict_warnings(crownless_sim_runner)
+
+add_executable(crownless_metagame_playtest tools/metagame.c)
+target_link_libraries(crownless_metagame_playtest PRIVATE crownless_metagame)
+cc_strict_warnings(crownless_metagame_playtest)
 
 if(CC_BUILD_BENCHMARKS)
     add_executable(crownless_benchmark tools/benchmark.c)
@@ -72,6 +83,10 @@ if(CC_BUILD_BENCHMARKS)
         DEPENDS crownless_benchmark
         USES_TERMINAL
     )
+
+    add_executable(crownless_sim_metrics tools/sim_metrics.c)
+    target_link_libraries(crownless_sim_metrics PRIVATE crownless_sim)
+    cc_strict_warnings(crownless_sim_metrics)
 endif()
 
 if(CC_BUILD_CLIENT)
@@ -335,6 +350,31 @@ if(BUILD_TESTING)
     target_link_libraries(world_spine_tests PRIVATE crownless_sim)
     cc_strict_warnings(world_spine_tests)
     add_test(NAME living_world_feedback COMMAND world_spine_tests)
+
+    add_executable(causal_history_tests tests/causal_history_tests.c)
+    target_link_libraries(causal_history_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(causal_history_tests)
+    add_test(NAME causal_history_retention COMMAND causal_history_tests)
+
+    add_executable(dragon_cycle_tests tests/dragon_cycle_tests.c)
+    target_link_libraries(dragon_cycle_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(dragon_cycle_tests)
+    add_test(NAME goblin_dragon_causal_cycle COMMAND dragon_cycle_tests)
+
+    add_executable(material_economy_tests tests/material_economy_tests.c)
+    target_link_libraries(material_economy_tests PRIVATE crownless_sim)
+    cc_strict_warnings(material_economy_tests)
+    add_test(NAME physical_material_economy COMMAND material_economy_tests)
+
+    add_executable(metagame_tests tests/metagame_tests.c)
+    target_link_libraries(metagame_tests PRIVATE crownless_metagame)
+    cc_strict_warnings(metagame_tests)
+    add_test(NAME text_first_metagame COMMAND metagame_tests)
+
+    if(CC_BUILD_BENCHMARKS)
+        add_test(NAME simulation_shape_metrics
+                 COMMAND crownless_sim_metrics --seeds 8 --years 3)
+    endif()
 
     add_executable(limb_system_tests tests/limb_system_tests.c)
     target_link_libraries(limb_system_tests PRIVATE crownless_locomotion)

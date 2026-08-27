@@ -370,7 +370,7 @@ static void BeginRoadTravelState(LocalState *local)
     RepositionHero(local,
                    (Vector2){CC_LOCAL_ROAD_START_X,
                              CC_LOCAL_ROAD_START_Z}, false);
-    local->agent.scene = CC_LOCAL_SCENE_ROAD;
+    CcLocalAgentSetScene(&local->agent, CC_LOCAL_SCENE_ROAD);
     local->course.scene = CC_LOCAL_SCENE_ROAD;
     local->course.alarm_countdown = 1000.0f;
     local->journey_travel_active = true;
@@ -728,19 +728,19 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
 
     CcOverlayDrawText("WHAT THE MARKET KNOWS", 966, 254, 11, TEAL);
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
-        int y = 278 + good * 30;
+        int y = 274 + good * 18;
         CcOverlayDrawText(TextFormat("%d  %-9s", good + 1, CcGoodName((CcGood)good)),
-                 966, y, 12, INK);
-        CcOverlayDrawText(TextFormat("%2d cr", place->price[good]), 1086, y, 12, CC_GOLD);
-        CcOverlayDrawText(TextFormat("%3d here", place->stock[good]), 1152, y, 11,
+                 966, y, 10, INK);
+        CcOverlayDrawText(TextFormat("%2d cr", place->price[good]), 1086, y, 10, CC_GOLD);
+        CcOverlayDrawText(TextFormat("%3d here", place->stock[good]), 1152, y, 9,
                  place->stock[good] < place->reserve_target[good] ? DANGER : MUTED);
     }
     bool can_trade = local->market_interior &&
                      GridDistance(LocalPosition(local), INTERIOR_COUNTER) < 2.25f;
-    CcOverlayDrawText(can_trade ? "1-3 BUY  /  SHIFT+1-3 SELL" :
+    CcOverlayDrawText(can_trade ? "1-6 BUY  /  SHIFT+1-6 SELL" :
              local->market_interior ? "Walk to the factor to trade." :
              "Enter the market house to trade.",
-             966, 374, 10, can_trade ? CC_GOLD : MUTED);
+             966, 388, 10, can_trade ? CC_GOLD : MUTED);
 
     const CcSituation *accepted = CcSimAcceptedSituation(sim);
     const CcSituation *situation = accepted != NULL ? accepted :
@@ -1582,6 +1582,7 @@ static void PrepareGameplayReel(CcSim *sim, LocalState *local,
                                 ClientView *view, ClientView *return_view)
 {
     *reel = (GameplayReelState){0};
+    if (sim->player.coins < 120) sim->player.coins = 120;
     *selected = FirstVisibleMapIndex(sim);
     *selected_situation = FirstActiveSituationIndex(sim);
     *view = VIEW_LOCAL;
@@ -1592,6 +1593,32 @@ static void PrepareGameplayReel(CcSim *sim, LocalState *local,
     local->course.alarm_countdown = 1000.0f;
     (void)CcLocalAgentSetExactTarget(
         &local->agent, (Vector3){46.65f, 0.0f, 29.35f}, false);
+}
+
+static void PrepareTownRaidReel(CcSim *sim, LocalState *local)
+{
+    ResetLocalState(local);
+    RepositionHero(local, (Vector2){44.25f, 28.85f}, false);
+    CcLocalCourseRaiseAlarmNear(&local->course, &local->agent);
+    (void)CcLocalCourseSelectPlayerTarget(
+        &local->course, &local->agent, 0);
+    /* This is still the live raid simulation. Fast-forward only the long
+       ingress so the reel opens when the selected raider reaches the same
+       local combat radius used by normal play. */
+    for (int32_t frame = 0; frame < 6000; ++frame) {
+        (void)CcLocalWorldUpdate(&local->course, &local->agent, sim,
+                                 1.0f / 60.0f, false, true);
+        float x = local->course.raiders[0].position.x -
+                  local->agent.position.x;
+        float z = local->course.raiders[0].position.z -
+                  local->agent.position.z;
+        if (local->agent.combat.target_index == 0 &&
+            x * x + z * z <= 7.5f * 7.5f) break;
+        if (local->agent.combat.target_index < 0) {
+            (void)CcLocalCourseSelectPlayerTarget(
+                &local->course, &local->agent, 0);
+        }
+    }
 }
 
 static void UpdateGameplayReel(CcSim *sim, LocalState *local,
@@ -1818,7 +1845,34 @@ static void UpdateGameplayReel(CcSim *sim, LocalState *local,
                                        message_capacity);
                 }
             }
-            if (reel->stage_frame >= 120) reel->complete = true;
+            if (reel->stage_frame >= 120) {
+                GameplayReelSetStage(reel, 9);
+            }
+            break;
+        case 9:
+            if (!reel->stage_started) {
+                reel->stage_started = true;
+                *view = VIEW_LOCAL;
+                PrepareTownRaidReel(sim, local);
+            }
+            (void)snprintf(message, message_capacity,
+                           "Defend the town in the same live lock-on combat, with guards and raiders still acting around you.");
+            if (local->agent.combat.target_index < 0) {
+                (void)CcLocalCourseSelectPlayerTarget(
+                    &local->course, &local->agent, 0);
+            }
+            if (reel->stage_frame == 12) {
+                (void)CcLocalCourseUsePlayerSkill(
+                    &local->course, &local->agent,
+                    CC_COMBAT_SKILL_CRUSHING_BLOW);
+            } else if (reel->stage_frame == 96 ||
+                       reel->stage_frame == 168) {
+                (void)CcLocalCourseBeginPlayerStrike(
+                    &local->course, &local->agent);
+            }
+            (void)CcLocalWorldUpdate(&local->course, &local->agent, sim,
+                                     delta_time, false, true);
+            if (reel->stage_frame >= 240) reel->complete = true;
             break;
         default:
             reel->complete = true;

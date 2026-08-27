@@ -14,6 +14,7 @@
 #define CC_MAX_MONSTERS 3
 #define CC_MAX_DUNGEONS 3
 #define CC_MAX_MAPS CC_MAX_ROUTES
+#define CC_MAX_TREASURES 24
 #define CC_MAX_SITUATIONS 12
 #define CC_MAX_EVENTS 256
 #define CC_NAME_CAPACITY 32
@@ -22,8 +23,8 @@
 #define CC_CARGO_CAPACITY 12
 #define CC_MAP_CAPACITY 3
 
-#define CC_SIM_SCHEMA_VERSION 5
-#define CC_GENERATOR_VERSION 4
+#define CC_SIM_SCHEMA_VERSION 9
+#define CC_GENERATOR_VERSION 9
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
 #define CC_WORLD_DAY_SUBTICKS (24 * 60 * CC_WORLD_MINUTE_SUBTICKS)
@@ -46,13 +47,22 @@ typedef enum CcEntityKind {
     CC_ENTITY_EVENT = 9,
     CC_ENTITY_PLAYER_COMPANY = 10,
     CC_ENTITY_SITUATION = 11,
-    CC_ENTITY_MAP = 12
+    CC_ENTITY_MAP = 12,
+    CC_ENTITY_GOBLIN_CULT = 13,
+    CC_ENTITY_DRAGON = 14,
+    CC_ENTITY_HOARD_RAIDERS = 15,
+    CC_ENTITY_TREASURE = 16
 } CcEntityKind;
 
 typedef enum CcGood {
-    CC_GOOD_FOOD,
-    CC_GOOD_MATERIAL,
-    CC_GOOD_TOOLS,
+    CC_GOOD_FOOD = 0,
+    CC_GOOD_IRON = 1,
+    /* Source compatibility for older callers and save migrations. */
+    CC_GOOD_MATERIAL = CC_GOOD_IRON,
+    CC_GOOD_TOOLS = 2,
+    CC_GOOD_WEAPONS = 3,
+    CC_GOOD_GOLD = 4,
+    CC_GOOD_GEMS = 5,
     CC_GOOD_COUNT
 } CcGood;
 
@@ -140,7 +150,28 @@ typedef enum CcEventKind {
     CC_EVENT_SERVICE_OPENED,
     CC_EVENT_BANDIT_RAID_DEPARTED,
     CC_EVENT_SETTLEMENT_RAIDED,
-    CC_EVENT_BANDIT_RAID_RETURNED
+    CC_EVENT_BANDIT_RAID_RETURNED,
+    CC_EVENT_GOBLIN_TRIBUTE_DEPARTED,
+    CC_EVENT_GOBLIN_TRIBUTE_TAKEN,
+    CC_EVENT_GOBLIN_TRIBUTE_DELIVERED,
+    CC_EVENT_DRAGON_HOARD_STOLEN,
+    CC_EVENT_DRAGON_OMEN,
+    CC_EVENT_DRAGON_TREASURE_RETURNED,
+    CC_EVENT_DRAGON_RETALIATION,
+    CC_EVENT_INEQUALITY_PRESSURE,
+    CC_EVENT_HOARD_HEIST_DEPARTED,
+    CC_EVENT_HOARD_HEIST_RETURNED,
+    CC_EVENT_WAR_PRESSURE,
+    CC_EVENT_WAR_CHEST_FUNDED,
+    CC_EVENT_WAR_SUPPLY_BOUGHT,
+    CC_EVENT_WAR_SUPPLY_SHORTAGE,
+    CC_EVENT_RESOURCE_EXTRACTED,
+    CC_EVENT_SMITH_PRODUCTION,
+    CC_EVENT_TREASURE_CRAFTED,
+    CC_EVENT_GOBLIN_RAID_DEPARTED,
+    CC_EVENT_GOBLIN_RAIDED,
+    CC_EVENT_GOBLIN_RAID_RETURNED,
+    CC_EVENT_WAR_MATERIEL_LOST
 } CcEventKind;
 
 typedef enum CcCommandKind {
@@ -154,7 +185,12 @@ typedef enum CcCommandKind {
     CC_COMMAND_ACCEPT_SITUATION,
     CC_COMMAND_ABANDON_SITUATION,
     CC_COMMAND_RESOLVE_ENCOUNTER_COMBAT,
-    CC_COMMAND_RESOLVE_ENCOUNTER_NEGOTIATE
+    CC_COMMAND_RESOLVE_ENCOUNTER_NEGOTIATE,
+    CC_COMMAND_REFUSE_SITUATION,
+    CC_COMMAND_STEAL_DRAGON_HOARD,
+    CC_COMMAND_RETURN_DRAGON_TREASURE,
+    CC_COMMAND_BUY_TREASURE,
+    CC_COMMAND_SELL_TREASURE
 } CcCommandKind;
 
 typedef struct CcKingdom {
@@ -187,6 +223,20 @@ typedef struct CcSettlement {
     int32_t production[CC_GOOD_COUNT];
     int32_t consumption[CC_GOOD_COUNT];
     int32_t price[CC_GOOD_COUNT];
+    CcMoney market_coins;
+    CcMoney war_chest;
+    int32_t field_yield;
+    int32_t iron_deposit;
+    bool gold_seam;
+    bool gem_seam;
+    int32_t gold_progress;
+    int32_t gem_progress;
+    int32_t farm_tool_wear;
+    int32_t mine_tool_wear;
+    int32_t smith_tool_wear;
+    int32_t treasure_gold_committed;
+    int32_t treasure_gems_committed;
+    int32_t treasure_work;
 } CcSettlement;
 
 typedef struct CcRoute {
@@ -275,6 +325,98 @@ typedef struct CcBanditGroup {
     int32_t raid_days_remaining;
     int32_t raids_completed;
 } CcBanditGroup;
+
+typedef enum CcGoblinTributePhase {
+    CC_GOBLIN_TRIBUTE_IDLE,
+    /* The old names remain stable in saved games. They now describe a raid. */
+    CC_GOBLIN_TRIBUTE_OUTBOUND,
+    CC_GOBLIN_TRIBUTE_RETURNING,
+    CC_GOBLIN_TRIBUTE_TO_DRAGON
+} CcGoblinTributePhase;
+
+typedef enum CcGoblinRaidMotive {
+    CC_GOBLIN_RAID_NONE,
+    CC_GOBLIN_RAID_HUNGER,
+    CC_GOBLIN_RAID_EQUIPMENT,
+    CC_GOBLIN_RAID_DRAGON_TRIBUTE
+} CcGoblinRaidMotive;
+
+typedef struct CcGoblinCult {
+    CcId id;
+    char name[CC_NAME_CAPACITY];
+    int32_t members;
+    int32_t devotion;
+    CcId lair_settlement_id;
+    CcGoblinTributePhase tribute_phase;
+    CcGoblinRaidMotive raid_motive;
+    CcId tribute_target_id;
+    CcId last_tribute_origin_id;
+    CcId tribute_event_id;
+    CcMoney carried_tribute;
+    CcMoney lair_coins;
+    int32_t carried_goods[CC_GOOD_COUNT];
+    int32_t lair_stock[CC_GOOD_COUNT];
+    CcId carried_treasure_id;
+    int32_t tribute_days_remaining;
+    int32_t tribute_cooldown_days;
+    int32_t tributes_delivered;
+} CcGoblinCult;
+
+typedef struct CcDragon {
+    CcId id;
+    char name[CC_NAME_CAPACITY];
+    CcId lair_settlement_id;
+    CcMoney hoard;
+    int32_t hoard_goods[CC_GOOD_COUNT];
+    CcId stolen_treasure_id;
+    CcMoney stolen_outstanding;
+    CcId theft_actor_id;
+    CcId retaliation_target_id;
+    CcId hoard_event_id;
+    CcId omen_event_id;
+    int32_t omen_days_remaining;
+    int32_t retaliations;
+} CcDragon;
+
+typedef struct CcTreasure {
+    CcId id;
+    char name[CC_MAP_NAME_CAPACITY];
+    CcId maker_settlement_id;
+    CcId owner_id;
+    CcId location_id;
+    int32_t gold_content;
+    int32_t gem_content;
+    int32_t craft_work;
+    int32_t appraised_value;
+    int32_t created_day;
+    bool destroyed;
+} CcTreasure;
+
+typedef enum CcHoardRaiderPhase {
+    CC_HOARD_RAIDERS_IDLE,
+    CC_HOARD_RAIDERS_OUTBOUND,
+    CC_HOARD_RAIDERS_RETURNING
+} CcHoardRaiderPhase;
+
+typedef enum CcHoardRaidMotive {
+    CC_HOARD_RAID_NO_MOTIVE,
+    CC_HOARD_RAID_SOCIAL_RELIEF,
+    CC_HOARD_RAID_WAR_FINANCE
+} CcHoardRaidMotive;
+
+typedef struct CcHoardRaiders {
+    CcId id;
+    char name[CC_NAME_CAPACITY];
+    CcHoardRaiderPhase phase;
+    CcHoardRaidMotive motive;
+    CcId origin_settlement_id;
+    CcId cause_event_id;
+    CcMoney carried_treasure;
+    int32_t days_remaining;
+    int32_t cooldown_days;
+    int32_t raids_completed;
+    int32_t war_raids_completed;
+} CcHoardRaiders;
 
 typedef struct CcMonsterPopulation {
     CcId id;
@@ -405,6 +547,7 @@ typedef struct CcPlayerCompany {
     CcId location_id;
     CcMoney coins;
     int32_t cargo[CC_GOOD_COUNT];
+    int32_t treasure_cargo_slots;
     int32_t cargo_capacity;
     int32_t passenger_capacity;
     int32_t map_capacity;
@@ -431,9 +574,13 @@ typedef struct CcSim {
     CcSettlement settlements[CC_MAX_SETTLEMENTS];
     CcRoute routes[CC_MAX_ROUTES];
     CcMap maps[CC_MAX_MAPS];
+    CcTreasure treasures[CC_MAX_TREASURES];
     CcFaction factions[CC_MAX_FACTIONS];
     CcShipment shipments[CC_MAX_SHIPMENTS];
     CcBanditGroup bandits[CC_MAX_BANDITS];
+    CcGoblinCult goblins;
+    CcDragon dragon;
+    CcHoardRaiders hoard_raiders;
     CcMonsterPopulation monsters[CC_MAX_MONSTERS];
     CcDungeon dungeons[CC_MAX_DUNGEONS];
     CcSituation situations[CC_MAX_SITUATIONS];
@@ -449,6 +596,7 @@ typedef struct CcSim {
     int32_t settlement_count;
     int32_t route_count;
     int32_t map_count;
+    int32_t treasure_count;
     int32_t faction_count;
     int32_t shipment_count;
     int32_t bandit_count;
@@ -463,6 +611,9 @@ typedef struct CcSim {
 } CcSim;
 
 void CcSimInit(CcSim *sim, uint32_t seed);
+/* Used by both new worlds and save migrations. Safe to call more than once. */
+void CcSimInitializeDragonCycle(CcSim *sim);
+void CcSimInitializeHoardRaiders(CcSim *sim);
 void CcSimAdvanceDays(CcSim *sim, int32_t days);
 /* Consumes exact 60 Hz ticks only while a committed journey is travelling. */
 void CcSimAdvanceRuntimeTicks(CcSim *sim, int32_t ticks);
@@ -493,6 +644,8 @@ const CcEvent *CcSimRecentEvent(const CcSim *sim, int32_t offset);
 const CcEvent *CcSimEvent(const CcSim *sim, CcId id);
 const CcSituation *CcSimSituation(const CcSim *sim, CcId id);
 const CcSituation *CcSimAcceptedSituation(const CcSim *sim);
+CcId CcSimSituationOfferSettlementId(const CcSim *sim,
+                                     const CcSituation *situation);
 bool CcSimSituationTouchesSettlement(const CcSim *sim,
                                      const CcSituation *situation,
                                      CcId settlement_id);
@@ -500,6 +653,14 @@ const CcSituation *CcSimSituationForSettlement(const CcSim *sim, CcId settlement
 int32_t CcSimActiveSituationCount(const CcSim *sim);
 int32_t CcSimIncomingGood(const CcSim *sim, CcId settlement_id, CcGood good);
 int32_t CcSimRouteDanger(const CcSim *sim, CcId route_id);
+int32_t CcSimInequalityAtSettlement(const CcSim *sim, CcId settlement_id);
+int32_t CcSimWarBurdenAtSettlement(const CcSim *sim, CcId settlement_id);
+int32_t CcSimWarSupplyCrisisAtSettlement(const CcSim *sim,
+                                         CcId settlement_id);
+CcMoney CcSimTrackedGold(const CcSim *sim);
+int32_t CcSimTrackedGood(const CcSim *sim, CcGood good);
+const CcTreasure *CcSimTreasure(const CcSim *sim, CcId id);
+int32_t CcSimTreasureCountForOwner(const CcSim *sim, CcId owner_id);
 int32_t CcSettlementServiceCapacity(CcSettlementSize size);
 int32_t CcSettlementServiceCount(const CcSettlement *settlement);
 bool CcSettlementHasService(const CcSettlement *settlement,
