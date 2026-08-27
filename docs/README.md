@@ -90,6 +90,7 @@ respond to a player decision.
 
 - Failed-harvest vertical slice
 - [Character physics foundation](production/character-physics-foundation.md)
+- [Procedural creature pipeline](production/procedural-creature-pipeline.md)
 - [Runtime environment design](production/runtime-environment-design.md)
 - [Robotics algorithms for character movement](production/robotics-algorithms.md)
 - Automated simulation validation

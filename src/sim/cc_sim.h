@@ -24,8 +24,8 @@
 #define CC_CARGO_CAPACITY 12
 #define CC_MAP_CAPACITY 3
 
-#define CC_SIM_SCHEMA_VERSION 11
-#define CC_GENERATOR_VERSION 11
+#define CC_SIM_SCHEMA_VERSION 12
+#define CC_GENERATOR_VERSION 12
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
 #define CC_WORLD_DAY_SUBTICKS (24 * 60 * CC_WORLD_MINUTE_SUBTICKS)
@@ -187,7 +187,14 @@ typedef enum CcEventKind {
     CC_EVENT_DRAGON_MUSTERED,
     CC_EVENT_DRAGON_BATTLE,
     CC_EVENT_DRAGON_SLAIN,
-    CC_EVENT_DRAGON_HOARD_RECOVERED
+    CC_EVENT_DRAGON_HOARD_RECOVERED,
+    CC_EVENT_DRAGON_HUNT,
+    CC_EVENT_DRAGON_CROWNED,
+    CC_EVENT_DRAGON_UNCROWNED,
+    CC_EVENT_DRAGON_BROOD,
+    CC_EVENT_DRAGON_WHELP_DISPERSED,
+    CC_EVENT_DRAGON_AFTERSHOCK,
+    CC_EVENT_DRAGON_SUCCESSOR
 } CcEventKind;
 
 typedef enum CcCommandKind {
@@ -206,7 +213,9 @@ typedef enum CcCommandKind {
     CC_COMMAND_STEAL_DRAGON_HOARD,
     CC_COMMAND_RETURN_DRAGON_TREASURE,
     CC_COMMAND_BUY_TREASURE,
-    CC_COMMAND_SELL_TREASURE
+    CC_COMMAND_SELL_TREASURE,
+    CC_COMMAND_STEAL_DRAGON_NAMED_TREASURE,
+    CC_COMMAND_RETURN_DRAGON_NAMED_TREASURE
 } CcCommandKind;
 
 typedef struct CcKingdom {
@@ -419,6 +428,24 @@ typedef struct CcGoblinCult {
     int32_t hoard_defenses;
 } CcGoblinCult;
 
+typedef enum CcDragonLifeStage {
+    CC_DRAGON_STAGE_EGG,
+    CC_DRAGON_STAGE_WHELP,
+    CC_DRAGON_STAGE_WANDERER,
+    CC_DRAGON_STAGE_CROWNED,
+    CC_DRAGON_STAGE_DEEP_WYRM,
+    CC_DRAGON_STAGE_UNCROWNED,
+    CC_DRAGON_STAGE_AFTERDRAGON
+} CcDragonLifeStage;
+
+typedef enum CcDragonActivity {
+    CC_DRAGON_ACTIVITY_DORMANT,
+    CC_DRAGON_ACTIVITY_HUNTING,
+    CC_DRAGON_ACTIVITY_RETALIATING,
+    CC_DRAGON_ACTIVITY_BROODING,
+    CC_DRAGON_ACTIVITY_AFTERMATH
+} CcDragonActivity;
+
 typedef struct CcDragon {
     CcId id;
     char name[CC_NAME_CAPACITY];
@@ -435,6 +462,24 @@ typedef struct CcDragon {
     int32_t retaliations;
     bool slain;
     int32_t slain_day;
+    CcDragonLifeStage life_stage;
+    CcDragonActivity activity;
+    int32_t age_days;
+    int32_t body_condition;
+    int32_t crown_strength;
+    int32_t memory_integrity;
+    int32_t territory_stability;
+    int32_t regional_influence;
+    int32_t crown_continuity_days;
+    int32_t hunt_cooldown_days;
+    int32_t hunts;
+    int32_t egg_count;
+    int32_t brood_days_remaining;
+    int32_t brood_cooldown_days;
+    int32_t broods_laid;
+    int32_t whelps_dispersed;
+    int32_t afterdeath_days;
+    CcId lifecycle_event_id;
 } CcDragon;
 
 typedef enum CcDragonCampaignPhase {
@@ -702,6 +747,7 @@ typedef struct CcSim {
 void CcSimInit(CcSim *sim, uint32_t seed);
 /* Used by both new worlds and save migrations. Safe to call more than once. */
 void CcSimInitializeDragonCycle(CcSim *sim);
+void CcSimInitializeDragonEcology(CcSim *sim);
 void CcSimInitializeHoardRaiders(CcSim *sim);
 void CcSimAdvanceDays(CcSim *sim, int32_t days);
 /* Consumes exact 60 Hz ticks only while a committed journey is travelling. */
@@ -721,6 +767,8 @@ const char *CcBanditCampSizeName(CcBanditCampSize size);
 const char *CcBanditRaidPhaseName(CcBanditRaidPhase phase);
 const char *CcDungeonStateName(CcDungeonState state);
 const char *CcEventKindName(CcEventKind kind);
+const char *CcDragonLifeStageName(CcDragonLifeStage stage);
+const char *CcDragonActivityName(CcDragonActivity activity);
 const char *CcSituationKindName(CcSituationKind kind);
 
 const CcSettlement *CcSimSettlement(const CcSim *sim, CcId id);

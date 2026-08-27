@@ -2531,6 +2531,19 @@ int main(int argc, char **argv)
         strcmp(argv[1], "--capture-golden") == 0;
     bool capture_face = argc >= 2 &&
         strcmp(argv[1], "--capture-face") == 0;
+    bool capture_creatures = argc >= 2 &&
+        strcmp(argv[1], "--capture-creatures") == 0;
+    const char *capture_creature_family = NULL;
+    if (capture_creatures) {
+        if (argc < 4 ||
+            (strcmp(argv[2], "goblins") != 0 &&
+             strcmp(argv[2], "dragon") != 0)) {
+            (void)fprintf(stderr,
+                          "capture creatures requires goblins or dragon and a frame path.\n");
+            return 1;
+        }
+        capture_creature_family = argv[2];
+    }
     int32_t capture_face_view = -1;
     if (capture_face) {
         if (argc < 4) {
@@ -2587,8 +2600,9 @@ int main(int argc, char **argv)
                     capture_witness || capture_travel || capture_road ||
                     capture_parley ||
                     capture_aftermath || capture_golden || capture_face ||
-                    capture_room);
-    const char *capture_path = capture_room ? argv[4] :
+                    capture_room || capture_creatures);
+    const char *capture_path = capture_creatures ? argv[3] :
+                               capture_room ? argv[4] :
                                capture_face ? argv[3] :
                                argc >= 3 ? argv[2] :
                                "architecture-proof.png";
@@ -2625,6 +2639,14 @@ int main(int argc, char **argv)
     CcLocalTerrainSetSeed(sim.world_seed);
     CcJournal *journal = NULL;
     if (capture || render_benchmark) CcSimAdvanceDays(&sim, 28);
+    if (capture_creatures &&
+        strcmp(capture_creature_family, "goblins") == 0) {
+        sim.player.location_id = sim.goblins.lair_settlement_id;
+    } else if (capture_creatures) {
+        sim.player.location_id = sim.dragon.lair_settlement_id;
+        sim.dragon.omen_days_remaining = 2;
+        sim.goblins.tribute_phase = CC_GOBLIN_TRIBUTE_TO_DRAGON;
+    }
     if (capture_map_case) sim.player.location_id = sim.settlements[1].id;
     if (capture_witness) {
         for (int32_t situation = 0; situation < sim.situation_count;
@@ -2728,6 +2750,11 @@ int main(int argc, char **argv)
         local.agent.facing_yaw = -0.18f;
         local.course.alarm_countdown = 1000.0f;
     }
+    if (capture_creatures) {
+        RepositionHero(&local, (Vector2){14.0f, 52.0f}, false);
+        local.agent.facing_yaw = -0.18f;
+        local.course.alarm_countdown = 1000.0f;
+    }
     if (capture_road || capture_parley) {
         BeginRoadLocalState(&local, capture_road);
     }
@@ -2738,7 +2765,8 @@ int main(int argc, char **argv)
         !capture_action_reel && !capture_gameplay_reel &&
         !capture_encounter && !capture_travel &&
         !capture_road &&
-        !capture_parley && !capture_golden && !capture_face && !capture_room) {
+        !capture_parley && !capture_golden && !capture_face && !capture_room &&
+        !capture_creatures) {
         local.course.alarm_countdown = 1000.0f;
         for (int32_t frame = 0; frame < 1500; ++frame) {
             CcLocalCourseUpdate(&local.course, &local.agent, &sim,
@@ -2885,7 +2913,10 @@ int main(int argc, char **argv)
         (void)snprintf(message, sizeof(message),
                        "Same character model.");
     } else if (capture_room) {
-        (void)snprintf(message, sizeof(message), "Town view.");
+        (void)snprintf(message, sizeof(message),
+                       "Each fixed room reveals a landmark, a route, and the state of the living settlement.");
+    } else if (capture_creatures) {
+        (void)snprintf(message, sizeof(message), "Creature settlement.");
     }
     if (capture_road) {
         (void)snprintf(message, sizeof(message), "Defeat the bandits.");

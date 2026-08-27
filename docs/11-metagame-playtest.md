@@ -62,6 +62,15 @@ then carry portable offerings on a second journey to the cave. At the cave, `dra
 starts 14 days of omens; `dragon return COUNT` repays the exact debt. The dragon
 does not attack because a town is rich. It attacks only while stolen hoard
 treasure remains unpaid.
+Use `dragon steal-treasure NUMBER` and `dragon return-treasure` to test the
+stronger wound caused by a named object. Equivalent coins cannot replace it.
+
+The same `dragon` view shows the Crown Cycle: life stage, current activity,
+age, body condition, derived crown strength, memory, territory, regional
+shadow, and visible eggs. A hungry dragon hunts physical Food and leaves roofs
+alone. Hoard theft damages memory and starts retaliation. A brood consumes
+goblin-lair Food for years, and a posthumous successor is possible only when
+that egg was visible before the parent died.
 
 Type `inequality` to inspect the social fault lines. The score is not a generic
 poverty meter. It rises when hunger and high prices exist beside prosperity,
@@ -160,6 +169,13 @@ Before each round of human tests, verify these hostile cases:
 - Full repayment prevents the attack; partial repayment does not reset time.
 - Fire never occurs without a retained theft and omen in its causal history.
 - Active dragon omens survive save and load with the same debt and target.
+- Crown strength rises from physical coin, Gold, Gems, named treasures,
+  continuity, and devotion with diminishing returns.
+- A hunger hunt removes Food but creates no omen, retaliation, lost service, or
+  burned town.
+- Brood eggs, tending time, and goblin Food survive save and load.
+- Killing a dragon with no recorded eggs cannot create a successor. If a
+  successor hatches, its event points back to the visible brood.
 
 ## Simulation review
 
@@ -175,3 +191,6 @@ staying at zero or one hundred, permanent route closure, repeated identical
 situations, bandit dominance, tribute frequency, hoard growth, dragon attacks
 without a retained theft, social and war-financed raid frequency, stuck dragon
 debts, and universal prosperity.
+For long lifecycle runs, also watch dragon stage, body condition, crown
+strength, memory, territory, regional influence, eggs, hunts, broods,
+dispersed whelps, and Afterdragon duration.
