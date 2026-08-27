@@ -285,6 +285,116 @@ static void TestSharedCharacterCollisionWorld(void)
     RequireSolidStreetHouse("artisan row house", 34.0f, 37.5f, 39.0f);
     RequireSolidStreetHouse("market road house", 55.0f, 58.25f, 33.25f);
     RequireSolidStreetHouse("coach yard house", 32.0f, 36.0f, 50.5f);
+
+    /* The visible ore station base is 1.45 x 1.05 m centered here. It must use
+       one footprint for physical sweeps, click paths, ray picking, and the
+       legacy movement helper. */
+    const Rectangle ore_station = {25.725f, 53.825f, 1.45f, 1.05f};
+    float ore_y = CcLocalTerrainHeightAt(26.45f, 54.35f) + 0.58f;
+    corrected = (Vector3){27.70f, ore_y, 54.35f};
+    normal = (Vector3){0};
+    if (!CcLocalProbePhysicsSphereInternal(
+            CC_LOCAL_SCENE_STREET,
+            (Vector3){24.90f, ore_y, 54.35f},
+            corrected, 0.16f, &corrected, &normal) ||
+        corrected.x > ore_station.x - 0.155f || normal.x > -0.90f) {
+        (void)fprintf(stderr,
+                      "ore station was ghost geometry for physics: %.3f %.3f normal %.3f %.3f %.3f\n",
+                      corrected.x, corrected.z, normal.x, normal.y, normal.z);
+        exit(1);
+    }
+
+    Vector2 legacy = CcLocalMove((Vector2){25.00f, 54.35f},
+                                 (Vector2){1.0f, 0.0f}, false);
+    if (legacy.x > ore_station.x - 0.21f) {
+        (void)fprintf(stderr,
+                      "legacy movement crossed the ore station: %.3f %.3f\n",
+                      legacy.x, legacy.y);
+        exit(1);
+    }
+
+    Ray ore_ray = {
+        .position = {26.45f, 6.0f, 54.35f},
+        .direction = {0.0f, -1.0f, 0.0f},
+    };
+    float ore_ray_distance = CcLocalRoomArtRayDistanceInternal(
+        ore_ray, (Vector3){26.45f, 0.0f, 54.35f});
+    if (!isfinite(ore_ray_distance) || ore_ray_distance > 1.11f) {
+        (void)fprintf(stderr,
+                      "ray picking ignored the ore station: %.3f\n",
+                      ore_ray_distance);
+        exit(1);
+    }
+
+    CcLocalAgent ore_path;
+    CcLocalAgentInit(&ore_path, (Vector2){24.90f, 54.35f}, false);
+    if (!CcLocalAgentSetStreetTarget(
+            &ore_path, (Vector3){28.0f, 0.0f, 54.35f}) ||
+        ore_path.navigation_point_count < 2) {
+        (void)fprintf(stderr,
+                      "pathfinding could not route around the ore station\n");
+        exit(1);
+    }
+    bool path_detoured = false;
+    for (int32_t point = 0; point < ore_path.navigation_point_count; ++point) {
+        Vector3 waypoint = ore_path.navigation_point[point];
+        if (waypoint.z < ore_station.y - ore_path.radius ||
+            waypoint.z > ore_station.y + ore_station.height + ore_path.radius) {
+            path_detoured = true;
+        }
+        if (waypoint.x > ore_station.x - ore_path.radius &&
+            waypoint.x < ore_station.x + ore_station.width + ore_path.radius &&
+            waypoint.z > ore_station.y - ore_path.radius &&
+            waypoint.z < ore_station.y + ore_station.height + ore_path.radius) {
+            (void)fprintf(stderr,
+                          "pathfinding placed a waypoint inside the ore station\n");
+            exit(1);
+        }
+    }
+    if (!path_detoured) {
+        (void)fprintf(stderr,
+                      "pathfinding crossed instead of avoiding the ore station\n");
+        exit(1);
+    }
+}
+
+static void TestRagdollStepsInWater(void)
+{
+    CcLocalAgent agent;
+    CcLocalAgentInit(&agent, (Vector2){11.0f, 9.70f}, false);
+    if (!CcHumanoidGaitKnockDown(&agent.humanoid)) {
+        (void)fprintf(stderr, "water ragdoll fixture could not fall\n");
+        exit(1);
+    }
+    float ragdoll_time = agent.humanoid.ragdoll_time;
+    CcBiomechVec3 center = CcBiomechRagdollCenterOfMass(
+        &agent.humanoid.ragdoll);
+    CcBiomechVec3 advanced = center;
+    float minimum_center_y = center.y;
+    float maximum_step = 0.0f;
+    for (int32_t step = 0; step < 360; ++step) {
+        CcBiomechVec3 previous = advanced;
+        CcLocalAgentFixedStepInternal(&agent, 1.0f / 60.0f, false);
+        advanced = CcBiomechRagdollCenterOfMass(&agent.humanoid.ragdoll);
+        minimum_center_y = fminf(minimum_center_y, advanced.y);
+        maximum_step = fmaxf(maximum_step,
+                             VectorDistance3(
+                                 (Vector3){previous.x, previous.y, previous.z},
+                                 (Vector3){advanced.x, advanced.y,
+                                           advanced.z}));
+    }
+    if (!agent.humanoid.ragdoll.active ||
+        agent.humanoid.ragdoll_time < ragdoll_time + 5.90f ||
+        fabsf(advanced.y - center.y) < 0.000001f ||
+        minimum_center_y < 0.27f || advanced.y < 0.50f ||
+        maximum_step > 0.10f) {
+        (void)fprintf(stderr,
+                      "water ragdoll was not bounded: active %d time %.4f -> %.4f y %.4f -> %.4f min %.4f step %.4f\n",
+                      agent.humanoid.ragdoll.active ? 1 : 0,
+                      ragdoll_time, agent.humanoid.ragdoll_time,
+                      center.y, advanced.y, minimum_center_y, maximum_step);
+        exit(1);
+    }
 }
 
 static void AdvanceRoadWorld(CcLocalCourse *course, CcLocalAgent *player,
@@ -1846,6 +1956,7 @@ int main(void)
     TestRoadBridgeSupport();
     TestFaceAngleAndLodContract();
     TestSharedCharacterCollisionWorld();
+    TestRagdollStepsInWater();
     RenderTexture2D click_target = {0};
     click_target.texture.width = 457;
     click_target.texture.height = 285;
