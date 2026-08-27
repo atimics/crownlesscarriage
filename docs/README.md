@@ -92,6 +92,7 @@ respond to a player decision.
 - [Character physics foundation](production/character-physics-foundation.md)
 - [Procedural creature pipeline](production/procedural-creature-pipeline.md)
 - [Runtime environment design](production/runtime-environment-design.md)
+- [Robotics algorithms for character movement](production/robotics-algorithms.md)
 - Automated simulation validation
 - Player-legibility tests
 - [Text-first metagame playtest](11-metagame-playtest.md)

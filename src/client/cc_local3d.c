@@ -5,6 +5,7 @@
 #include "client/cc_visual_style.h"
 
 #include "locomotion/cc_humanoid_skin.h"
+#include "locomotion/cc_robotics.h"
 
 #include "raymath.h"
 #include "rlgl.h"
@@ -34,6 +35,17 @@ static const float COMBAT_BYSTANDER_SPACE = 1.12f;
 static const float COMBAT_PLAYER_STANDOFF = 1.30f;
 static const float COMBAT_NPC_STANDOFF = 1.30f;
 static const float ROAD_BARRICADE_X = 51.85f;
+/* Walkable tops from environment_bridge_checkpoint_v01. These must stay in
+   lockstep with the exported deck and its two short causeways. */
+static const Rectangle ROAD_BRIDGE_DECK_SUPPORT = {
+    48.05f, 38.725f, 7.60f, 2.55f
+};
+static const Rectangle ROAD_BRIDGE_WEST_CAUSEWAY_SUPPORT = {
+    47.15f, 38.81f, 0.96f, 2.38f
+};
+static const Rectangle ROAD_BRIDGE_EAST_CAUSEWAY_SUPPORT = {
+    55.59f, 38.81f, 0.96f, 2.38f
+};
 static const float CARRIAGE_ASSET_SCALE = 0.92f;
 /* The exported carriage's hitch points along local +X. The street bay runs
    +Z, while the encounter road already runs +X. */
@@ -235,7 +247,7 @@ typedef struct StreetCameraShot {
 static const StreetCameraShot STREET_CAMERA_SHOTS[] = {
     {
         .trigger = {10.5f, 7.5f}, .target = {10.5f, 1.05f, 7.5f},
-        .name = "WAYFARER YARD", .route = {8.6f, 10.2f, 6.0f, 3.0f},
+        .name = "TRAINING YARD", .route = {8.6f, 10.2f, 6.0f, 3.0f},
         .route_palette = 2, .camera_offset = {6.0f, 7.0f, 22.0f},
         .fovy = 10.6f,
         .art = {{10.5f, 1.05f, 7.5f}, {0.0f, 1.0f},
@@ -244,7 +256,7 @@ static const StreetCameraShot STREET_CAMERA_SHOTS[] = {
     },
     {
         .trigger = {11.0f, 28.5f}, .target = {12.5f, 1.05f, 28.5f},
-        .name = "WEST CROFTS", .route = {12.3f, 26.3f, 4.8f, 5.8f},
+        .name = "WEST FARMS", .route = {12.3f, 26.3f, 4.8f, 5.8f},
         .route_palette = 0, .camera_offset = {-5.0f, 8.0f, 23.0f},
         .fovy = 11.8f,
         .art = {{12.5f, 1.05f, 28.5f}, {0.0f, 1.0f},
@@ -262,7 +274,7 @@ static const StreetCameraShot STREET_CAMERA_SHOTS[] = {
     },
     {
         .trigger = {33.0f, 25.0f}, .target = {33.0f, 1.05f, 25.0f},
-        .name = "ARTISAN ROW", .route = {29.0f, 23.3f, 13.0f, 2.6f},
+        .name = "WORKSHOP STREET", .route = {29.0f, 23.3f, 13.0f, 2.6f},
         .route_palette = 1, .camera_offset = {10.0f, 7.6f, 22.0f},
         .fovy = 12.5f,
         .art = {{33.0f, 1.05f, 25.0f}, {1.0f, 0.0f},
@@ -271,7 +283,7 @@ static const StreetCameraShot STREET_CAMERA_SHOTS[] = {
     },
     {
         .trigger = {44.0f, 29.0f}, .target = {44.5f, 1.05f, 29.5f},
-        .name = "MERCERCALL COMMONS", .route = {0.0f, 0.0f, 0.0f, 0.0f},
+        .name = "TOWN SQUARE", .route = {0.0f, 0.0f, 0.0f, 0.0f},
         .route_palette = 1, .camera_offset = {-3.5f, 9.0f, 27.0f},
         .fovy = 14.0f,
         .art = {{44.5f, 1.05f, 29.5f}, {0.98f, 0.20f},
@@ -280,7 +292,7 @@ static const StreetCameraShot STREET_CAMERA_SHOTS[] = {
     },
     {
         .trigger = {42.0f, 52.0f}, .target = {41.5f, 1.05f, 52.0f},
-        .name = "COACH YARD", .route = {39.5f, 53.8f, 4.9f, 4.2f},
+        .name = "CARRIAGE YARD", .route = {39.5f, 53.8f, 4.9f, 4.2f},
         .route_palette = 0, .camera_offset = {8.0f, 9.5f, 27.0f},
         .fovy = 15.2f,
         .art = {{41.5f, 1.05f, 52.0f}, {0.0f, 1.0f},
@@ -298,7 +310,7 @@ static const StreetCameraShot STREET_CAMERA_SHOTS[] = {
     },
     {
         .trigger = {58.0f, 50.0f}, .target = {61.2f, 1.05f, 50.9f},
-        .name = "MILLER'S ROW", .route = {54.2f, 50.1f, 18.7f, 2.9f},
+        .name = "MILLER'S ROAD", .route = {54.2f, 50.1f, 18.7f, 2.9f},
         .route_palette = 0, .camera_offset = {6.0f, 9.0f, 27.0f},
         .fovy = 15.6f,
         .art = {{61.2f, 1.05f, 50.9f}, {1.0f, 0.0f},
@@ -331,7 +343,7 @@ static const StreetCameraShot STREET_CAMERA_SHOTS[] = {
    foreground facade. It is a camera composition only, never a logical room. */
 static const StreetCameraShot MARKET_GATE_ROAD_CAMERA = {
     .trigger = {64.0f, 31.0f}, .target = {66.0f, 2.0f, 31.0f},
-    .name = "MARKET-GATE ROAD", .route = {0.0f, 0.0f, 0.0f, 0.0f},
+    .name = "MARKET ROAD", .route = {0.0f, 0.0f, 0.0f, 0.0f},
     .route_palette = 2, .camera_offset = {-13.0f, 11.0f, 33.0f},
     .fovy = 21.0f,
     .art = {{77.5f, 4.20f, 23.5f}, {1.0f, 0.0f},
@@ -1099,6 +1111,22 @@ static bool CourseWaterContains(CcLocalSceneKind scene, float x, float z)
 
 static float SurfaceHeightAt(CcLocalSceneKind scene, float x, float z)
 {
+    if (scene == CC_LOCAL_SCENE_ROAD) {
+        if (!RoadUsesAuthoredCheckpoint()) return 0.0f;
+        /* Match the exported bridge exactly: two 10 cm causeways lead onto
+           a 52 cm deck centered 30 cm above the asset origin. */
+        Vector2 point = {x, z};
+        if (CheckCollisionPointRec(point, ROAD_BRIDGE_DECK_SUPPORT)) {
+            return 0.56f;
+        }
+        if (CheckCollisionPointRec(point,
+                                   ROAD_BRIDGE_WEST_CAUSEWAY_SUPPORT) ||
+            CheckCollisionPointRec(point,
+                                   ROAD_BRIDGE_EAST_CAUSEWAY_SUPPORT)) {
+            return 0.10f;
+        }
+        return 0.0f;
+    }
     if (scene != CC_LOCAL_SCENE_STREET) return 0.0f;
     float height = CcLocalTerrainHeightAt(x, z);
     for (int32_t i = 0; i < StreetPhysicsPlatformCount(); ++i) {
@@ -1116,6 +1144,9 @@ static float SurfaceHeightAt(CcLocalSceneKind scene, float x, float z)
 
 static float BodySurfaceHeightAt(CcLocalSceneKind scene, float x, float z)
 {
+    if (scene == CC_LOCAL_SCENE_ROAD) {
+        return SurfaceHeightAt(scene, x, z);
+    }
     if (scene != CC_LOCAL_SCENE_STREET) return 0.0f;
     float height = CcLocalTerrainHeightAt(x, z);
     for (int32_t i = 0; i < StreetPhysicsPlatformCount(); ++i) {
@@ -1488,7 +1519,15 @@ static int32_t FindStreetPath(Vector2 from, Vector2 to, float radius,
             }
             float step = diagonal ? STREET_PATH_CELL_SIZE * 1.41421356f :
                                     STREET_PATH_CELL_SIZE;
-            float distance = search->distance[current] + step;
+            float current_height = CcLocalTerrainHeightAt(
+                current_point.x, current_point.y);
+            float next_height = CcLocalTerrainHeightAt(
+                next_point.x, next_point.y);
+            Vector3 next_normal = CcLocalTerrainNormalAt(
+                next_point.x, next_point.y);
+            float traversal_cost = CcRobotTraversabilityCost(
+                step, next_height - current_height, next_normal.y);
+            float distance = search->distance[current] + traversal_cost;
             if (distance + 0.0001f >= search->distance[next]) continue;
             search->distance[next] = distance;
             search->parent[next] = current;
@@ -1822,13 +1861,10 @@ static bool ProbeLocalCollision(void *raw_context,
         if (!corrected) break;
     }
 
-    float ground = scene == CC_LOCAL_SCENE_STREET ?
-        CcLocalTerrainHeightAt(proposed.x, proposed.z) : 0.0f;
+    float ground = BodySurfaceHeightAt(scene, proposed.x, proposed.z);
     if (proposed.y - radius < ground) {
         proposed.y = ground + radius;
-        normal = scene == CC_LOCAL_SCENE_STREET ?
-            CcLocalTerrainNormalAt(proposed.x, proposed.z) :
-            (Vector3){0.0f, 1.0f, 0.0f};
+        normal = SurfaceNormalAt(scene, proposed.x, proposed.z);
         collided = true;
     }
     if (!collided) return false;
@@ -1900,6 +1936,62 @@ static bool LocalAgentCapsuleBlocked(CcLocalSceneKind scene,
     return false;
 }
 
+static int32_t LocalAgentPointSpace(const CcLocalAgent *agent,
+                                    CcRobotCollisionPoint *points)
+{
+    if (agent == NULL || points == NULL) return 0;
+    /* The humanoid already has a tuned standing capsule, swept ragdoll
+       particles, and separate weapon contacts. The point-space proxy belongs
+       to the generalized multi-leg rigs whose reach extends well beyond that
+       root capsule. */
+    if (agent->morphology == CC_MORPHOLOGY_BIPED) return 0;
+    return CcRobotLimbPointSpace(
+        &agent->limb_rig, 0.085f, points, CC_ROBOT_POINT_CAPACITY);
+}
+
+bool CcLocalAgentPointSpaceBlockedInternal(const CcLocalAgent *agent,
+                                            Vector3 proposed)
+{
+    if (agent == NULL) return false;
+    CcRobotCollisionPoint points[CC_ROBOT_POINT_CAPACITY];
+    int32_t point_count = LocalAgentPointSpace(agent, points);
+    Vector3 movement = Vector3Subtract(proposed, agent->position);
+    LocalProbeContext context = {.scene = agent->scene};
+    for (int32_t point = 0; point < point_count; ++point) {
+        Vector3 before = {points[point].center.x, points[point].center.y,
+                          points[point].center.z};
+        Vector3 after = Vector3Add(before, movement);
+        CcBiomechVec3 corrected = {after.x, after.y, after.z};
+        CcBiomechVec3 normal = {0};
+        if (!ProbeLocalCollision(
+                &context,
+                (CcBiomechVec3){before.x, before.y, before.z},
+                (CcBiomechVec3){after.x, after.y, after.z},
+                points[point].radius, &corrected, &normal)) {
+            continue;
+        }
+        float correction_x = corrected.x - after.x;
+        float correction_z = corrected.z - after.z;
+        float proposed_correction = correction_x * correction_x +
+                                    correction_z * correction_z;
+        if (proposed_correction <= 0.0001f * 0.0001f) continue;
+
+        CcBiomechVec3 corrected_before = {before.x, before.y, before.z};
+        CcBiomechVec3 before_normal = {0};
+        (void)ProbeLocalCollision(
+            &context,
+            (CcBiomechVec3){before.x, before.y, before.z},
+            (CcBiomechVec3){before.x, before.y, before.z},
+            points[point].radius, &corrected_before, &before_normal);
+        float before_x = corrected_before.x - before.x;
+        float before_z = corrected_before.z - before.z;
+        float before_correction = before_x * before_x + before_z * before_z;
+        if (before_correction > proposed_correction + 0.000001f) continue;
+        return true;
+    }
+    return false;
+}
+
 static bool ResolveLocalAgentCapsuleMove(CcLocalSceneKind scene,
                                          Vector3 previous, Vector3 proposed,
                                          float radius,
@@ -1937,6 +2029,19 @@ static bool ResolveLocalAgentCapsuleMove(CcLocalSceneKind scene,
                 corrected.y - heights[sample],
                 corrected.z,
             };
+            bool crossing_passable_support =
+                passable_support_height > -FLT_MAX * 0.5f &&
+                result.y < passable_support_height - 0.001f &&
+                candidate.y >= passable_support_height - 0.001f &&
+                sample_normal.y > 0.90f;
+            if (crossing_passable_support) {
+                /* During a mantle the ledge box is passable once contacts
+                   support the body. Its top is still a valid floor query,
+                   but snapping the root to that floor would skip the swept
+                   arc. Let the authored root reach the support height before
+                   normal grounding resumes. */
+                candidate.y = result.y;
+            }
             Vector3 correction = Vector3Subtract(candidate, result);
             if (Vector3Length(correction) <= 0.00001f) continue;
             result = candidate;
@@ -3224,31 +3329,19 @@ static void CourseAddSeparationPair(CcLocalAgent *first,
                      second->combat.team == CC_COMBAT_NEUTRAL;
     float minimum = hostile ? COMBAT_PERSONAL_SPACE :
                     bystander ? COMBAT_BYSTANDER_SPACE : COMBAT_ALLY_SPACE;
-    float x = first->position.x - second->position.x;
-    float z = first->position.z - second->position.z;
-    float distance_squared = x * x + z * z;
-    if (distance_squared >= minimum * minimum) return;
-    float distance = sqrtf(distance_squared);
-    if (distance <= 0.0001f) {
-        /* Stable, deterministic fallback for coincident actors. */
-        static const Vector2 directions[4] = {
-            {1.0f, 0.0f}, {0.0f, 1.0f},
-            {-1.0f, 0.0f}, {0.0f, -1.0f}
-        };
-        Vector2 direction = directions[pair_index & 3];
-        x = direction.x;
-        z = direction.y;
-        distance = 1.0f;
+    CcLimbVec3 first_correction = {0};
+    CcLimbVec3 second_correction = {0};
+    if (!CcRobotPredictiveAvoidance(
+            ToLimbVector(first->position), ToLimbVector(first->velocity),
+            ToLimbVector(second->position), ToLimbVector(second->velocity),
+            minimum, 0.85f, pair_index,
+            &first_correction, &second_correction)) {
+        return;
     }
-    float relative_speed = fminf(
-        0.92f, 0.12f + (minimum - sqrtf(distance_squared)) * 3.2f);
-    float shared_speed = relative_speed * 0.5f;
-    x /= distance;
-    z /= distance;
-    first->separation_velocity.x += x * shared_speed;
-    first->separation_velocity.z += z * shared_speed;
-    second->separation_velocity.x -= x * shared_speed;
-    second->separation_velocity.z -= z * shared_speed;
+    first->separation_velocity.x += first_correction.x;
+    first->separation_velocity.z += first_correction.z;
+    second->separation_velocity.x += second_correction.x;
+    second->separation_velocity.z += second_correction.z;
 }
 
 static void CourseLimitSeparation(CcLocalAgent *agent)
@@ -4464,6 +4557,11 @@ static bool SetStreetClickTarget(CcLocalAgent *agent, Vector3 target)
     agent->command_point = target;
     agent->command_point_valid = true;
     return true;
+}
+
+bool CcLocalAgentSetStreetTarget(CcLocalAgent *agent, Vector3 target)
+{
+    return SetStreetClickTarget(agent, target);
 }
 
 static bool StartStreetPortalTraversal(CcLocalAgent *agent,
@@ -6147,7 +6245,8 @@ static bool TryHorizontalAxis(CcLocalAgent *agent, bool market_interior,
     candidate.z = candidate_z;
     if (StaticBodyBlocked(scene, candidate_x, candidate_z, agent->radius) ||
         LocalAgentCapsuleBlocked(scene, agent->position, candidate,
-                                 agent->radius)) {
+                                 agent->radius) ||
+        CcLocalAgentPointSpaceBlockedInternal(agent, candidate)) {
         return false;
     }
     if (move_x) agent->position.x = candidate_x;
@@ -7801,8 +7900,8 @@ static void FixedCameraRigAim(FixedCameraRig *rig, int32_t shot,
         rig->fovy_transition_from = rig->displayed_fovy;
         rig->fovy_destination = fovy;
         rig->transition_elapsed = 0.0f;
-        rig->transition_duration = fmaxf(0.55f, fminf(1.15f,
-                                                     0.42f + distance * 0.025f));
+        rig->transition_duration = fmaxf(0.90f, fminf(1.25f,
+                                                     0.78f + distance * 0.018f));
         /* A new authored shot owns its own framing. The hard visibility
            clamp covers the short transition before the new shot settles. */
         rig->framing_offset = (Vector3){0};
@@ -7822,15 +7921,28 @@ static void FixedCameraRigAim(FixedCameraRig *rig, int32_t shot,
     }
     rig->transition_elapsed = fminf(rig->transition_duration,
                                     rig->transition_elapsed + delta_time);
-    float amount = SmoothStep01(rig->transition_elapsed /
-                                rig->transition_duration);
-    rig->displayed_target = Vector3Lerp(rig->transition_from,
-                                        rig->destination, amount);
-    rig->displayed_offset = Vector3Lerp(rig->offset_transition_from,
-                                        rig->offset_destination, amount);
-    rig->displayed_fovy = rig->fovy_transition_from +
-                          (rig->fovy_destination -
-                           rig->fovy_transition_from) * amount;
+    /* Fixed adventure-game shots should not drift beside the actor. Hold the
+       old page while it fades down, switch at full darkness, then reveal the
+       new page. The fade hides the single-frame camera change. */
+    bool reveal_destination =
+        rig->transition_elapsed >= rig->transition_duration * 0.5f;
+    rig->displayed_target = reveal_destination ? rig->destination :
+                                                 rig->transition_from;
+    rig->displayed_offset = reveal_destination ? rig->offset_destination :
+                                                 rig->offset_transition_from;
+    rig->displayed_fovy = reveal_destination ? rig->fovy_destination :
+                                               rig->fovy_transition_from;
+}
+
+static void DrawFixedCameraFade(const FixedCameraRig *rig,
+                                Rectangle destination)
+{
+    if (rig == NULL || rig->transition_duration <= 0.0f ||
+        rig->transition_elapsed >= rig->transition_duration) return;
+    float progress = rig->transition_elapsed / rig->transition_duration;
+    float peak = 1.0f - fabsf(progress * 2.0f - 1.0f);
+    float opacity = SmoothStep01(peak);
+    DrawRectangleRec(destination, Fade(WORLD_VOID, opacity));
 }
 
 static Camera3D FixedCameraRigFrameHero(FixedCameraRig *rig,
@@ -7854,7 +7966,7 @@ static Camera3D FixedCameraRigFrameHero(FixedCameraRig *rig,
             rig->framing_from, rig->framing_destination, amount);
         if (rig->framing_elapsed >= rig->framing_duration) {
             rig->framing_duration = 0.0f;
-            rig->framing_hold_seconds = 0.65f;
+            rig->framing_hold_seconds = 1.00f;
         }
     }
     if (advance && rig->framing_duration <= 0.0f &&
@@ -7918,7 +8030,7 @@ static Camera3D FixedCameraRigFrameHero(FixedCameraRig *rig,
        could chain every few frames while the hero kept walking, which read
        as a nervous follow camera. Centering once creates the fixed-room
        adventure-game rhythm while still protecting long roads. */
-    rig->framing_duration = 0.55f;
+    rig->framing_duration = 1.05f;
     return camera;
 }
 
@@ -8268,7 +8380,14 @@ Camera3D CcLocalCombatCameraInternal(Camera3D base,
         if (delta_time < 0.0f || delta_time > 0.12f) delta_time = 0.0f;
         delta_time = fminf(delta_time, 0.050f);
         combat_camera_rig.last_clock = clock;
-        float direction = active ? 4.2f : -3.0f;
+        /* Road ambushes begin inside a narrow authored bridge shot. Enter
+           their shoulder camera promptly so the parapets do not hold the
+           player at the edge of the wide establishing frame. Settlement
+           fights keep the calmer transition used by the gameplay reel. */
+        bool quick_road_entry = active && course != NULL &&
+                                course->scene == CC_LOCAL_SCENE_ROAD;
+        float direction = active ? (quick_road_entry ? 4.2f : 1.65f) :
+                                   -1.35f;
         combat_camera_rig.combat_weight = CombatClamp(
             combat_camera_rig.combat_weight + delta_time * direction,
             0.0f, 1.0f);
@@ -8298,7 +8417,8 @@ Camera3D CcLocalCombatCameraInternal(Camera3D base,
             base_offset, combat_camera_rig.locked_offset, weight);
         float desired_fovy = base_perspective_fovy +
             (combat_camera_rig.locked_fovy - base_perspective_fovy) * weight;
-        float ease = 1.0f - expf(-delta_time * 8.0f);
+        float response = quick_road_entry ? 8.0f : 4.5f;
+        float ease = 1.0f - expf(-delta_time * response);
         combat_camera_rig.displayed_target = Vector3Lerp(
             combat_camera_rig.displayed_target, desired_target, ease);
         combat_camera_rig.displayed_offset = Vector3Lerp(
@@ -14695,6 +14815,15 @@ static void DrawViewportText(const char *text, Rectangle viewport,
              (int32_t)lroundf(viewport.y) + y, font_size, color);
 }
 
+static bool AgentNearLabel(const CcLocalAgent *agent, float x, float z,
+                           float radius)
+{
+    if (agent == NULL) return false;
+    float dx = agent->position.x - x;
+    float dz = agent->position.z - z;
+    return dx * dx + dz * dz <= radius * radius;
+}
+
 static void DrawStreetTraversalPortals(const CcLocalAgent *agent,
                                        Camera3D camera, Rectangle viewport,
                                        int32_t art_width,
@@ -14704,6 +14833,8 @@ static void DrawStreetTraversalPortals(const CcLocalAgent *agent,
     for (int32_t portal_index = 0; portal_index < count; ++portal_index) {
         ResolvedStreetPortal portal = {0};
         if (!ResolveStreetPortal(agent, portal_index, &portal)) continue;
+        Vector3 approach = StreetPortalApproachWorldPoint(&portal);
+        if (!AgentNearLabel(agent, approach.x, approach.z, 7.0f)) continue;
         Vector2 art_point = StreetPortalEdgePoint(
             &portal, camera, art_width, art_height);
         Vector2 point = {
@@ -16096,6 +16227,7 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
                    (int32_t)lroundf(agent->combat.health),
                    course->raider_resolve > 0 ? course->raider_resolve : 0),
         destination, 18, 35, 10, WORLD_INK);
+    DrawFixedCameraFade(&road_camera_rig, destination);
 }
 
 static void DrawJourneyAftermath3D(const CcSim *sim,
@@ -16435,54 +16567,66 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
 
     WorldLabel labels[20];
     int32_t count = 0;
-    labels[count++] = (WorldLabel){{agent->position.x,
-                                    agent->position.y + 2.50f,
-                                    agent->position.z}, "YOU", WORLD_TEAL};
-    labels[count++] = (WorldLabel){{50.0f,
-                                    TerrainFootprintHeight(
-                                        WORLD_BUILDINGS[2].footprint) + 4.75f,
-                                    21.0f},
-                                   "MARKET HALL", WORLD_GOLD};
-    labels[count++] = (WorldLabel){{36.80f,
-                                    TerrainFootprintHeight(
-                                        CARRIAGE_FOOTPRINT) + 2.28f,
-                                    31.70f},
-                                   "CROWNLESS CARRIAGE", WORLD_GOLD};
-    labels[count++] = (WorldLabel){{CC_LOCAL_NOTICE_X,
-                                    CcLocalTerrainHeightAt(
-                                        CC_LOCAL_NOTICE_X,
-                                        CC_LOCAL_NOTICE_Z) + 1.82f,
-                                    CC_LOCAL_NOTICE_Z},
-                                   "SITUATIONS", WORLD_INK};
-    labels[count++] = (WorldLabel){{11.80f,
-                                    CcLocalTerrainHeightAt(11.80f, 0.82f) +
-                                        2.05f,
-                                    0.82f},
-                                   "WAYFARER TRIALS", WORLD_GOLD};
-    labels[count++] = (WorldLabel){{11.28f,
-                                    CcLocalTerrainHeightAt(11.28f, 9.72f) +
-                                        1.12f,
-                                    9.72f},
-                                   "BUOYANCY TRENCH", WORLD_TEAL};
-    labels[count++] = (WorldLabel){{78.50f,
-                                    CcLocalTerrainHeightAt(78.50f, 17.50f) +
-                                        12.10f,
-                                    17.50f},
-                                   "GREYWARD KEEP", kingdom};
+    if (AgentNearLabel(agent, 50.0f, 21.0f, 8.0f)) {
+        labels[count++] = (WorldLabel){{50.0f,
+                                        TerrainFootprintHeight(
+                                            WORLD_BUILDINGS[2].footprint) + 4.75f,
+                                        21.0f},
+                                       "Market", WORLD_GOLD};
+    }
+    if (AgentNearLabel(agent, 36.80f, 31.70f, 7.0f)) {
+        labels[count++] = (WorldLabel){{36.80f,
+                                        TerrainFootprintHeight(
+                                            CARRIAGE_FOOTPRINT) + 2.28f,
+                                        31.70f},
+                                       "Carriage", WORLD_GOLD};
+    }
+    if (AgentNearLabel(agent, CC_LOCAL_NOTICE_X, CC_LOCAL_NOTICE_Z, 6.0f)) {
+        labels[count++] = (WorldLabel){{CC_LOCAL_NOTICE_X,
+                                        CcLocalTerrainHeightAt(
+                                            CC_LOCAL_NOTICE_X,
+                                            CC_LOCAL_NOTICE_Z) + 1.82f,
+                                        CC_LOCAL_NOTICE_Z},
+                                       "Quest board", WORLD_INK};
+    }
+    if (AgentNearLabel(agent, 11.80f, 0.82f, 7.0f)) {
+        labels[count++] = (WorldLabel){{11.80f,
+                                        CcLocalTerrainHeightAt(11.80f, 0.82f) +
+                                            2.05f,
+                                        0.82f},
+                                       "Training yard", WORLD_GOLD};
+    }
+    if (AgentNearLabel(agent, 11.28f, 9.72f, 7.0f)) {
+        labels[count++] = (WorldLabel){{11.28f,
+                                        CcLocalTerrainHeightAt(11.28f, 9.72f) +
+                                            1.12f,
+                                        9.72f},
+                                       "Swimming trench", WORLD_TEAL};
+    }
+    if (AgentNearLabel(agent, 78.50f, 17.50f, 10.0f)) {
+        labels[count++] = (WorldLabel){{78.50f,
+                                        CcLocalTerrainHeightAt(78.50f, 17.50f) +
+                                            12.10f,
+                                        17.50f},
+                                       "Greyward Castle", kingdom};
+    }
     if (sim->resolved_journey_outcome != CC_JOURNEY_OUTCOME_NONE &&
-        sim->journey.destination_id == place->id) {
+        sim->journey.destination_id == place->id &&
+        AgentNearLabel(agent, 47.35f, 31.05f, 7.0f)) {
         labels[count++] = (WorldLabel){
             {47.35f, CcLocalTerrainHeightAt(47.35f, 31.05f) + 2.05f,
              31.05f},
             sim->resolved_journey_outcome == CC_JOURNEY_OUTCOME_COMBAT ?
-                "ROAD GUARD MUSTER" : "COLLECTORS' TOLL MARK",
+                "Road guards" : "Toll marker",
             sim->resolved_journey_outcome == CC_JOURNEY_OUTCOME_COMBAT ?
                 WORLD_TEAL : WORLD_VIOLET};
     }
     if (course != NULL && course->situation_witness_active) {
         const CcSituation *situation = CcSimSituation(
             sim, course->situation_witness_id);
-        if (situation != NULL && situation->affected_name[0] != '\0') {
+        if (situation != NULL && situation->affected_name[0] != '\0' &&
+            AgentNearLabel(agent, course->situation_witness.position.x,
+                           course->situation_witness.position.z, 6.0f)) {
             labels[count++] = (WorldLabel){
                 {course->situation_witness.position.x,
                  course->situation_witness.position.y + 2.18f,
@@ -16493,12 +16637,14 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                     WORLD_GOLD : WORLD_DANGER};
         }
     }
-    if (dungeon != NULL) {
+    if (dungeon != NULL &&
+        AgentNearLabel(agent, CC_LOCAL_DUNGEON_X,
+                       CC_LOCAL_DUNGEON_Z, 8.0f)) {
         labels[count++] = (WorldLabel){{CC_LOCAL_DUNGEON_X,
                                         TerrainFootprintHeight(
                                             DUNGEON_FOOTPRINT) + 3.38f,
                                         CC_LOCAL_DUNGEON_Z - 0.70f},
-                                       CcDungeonStateName(dungeon->state), WORLD_VIOLET};
+                                       "Mine", WORLD_VIOLET};
     }
     if (!combat_presentation) {
         DrawLabels(labels, count, camera, destination);
@@ -16536,31 +16682,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                        CcLocalTraversalName(agent->traversal)),
             destination, 18, 18, 10, WORLD_TEAL);
     }
-    if (course != NULL && course->alarm_active) {
-        bool line_engaged = false;
-        for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
-            line_engaged = line_engaged ||
-                           course->runners[i].duty == CC_GUARD_ENGAGED;
-        }
-        DrawViewportText(
-            TextFormat("VILLAGE ALARM / YOU %d HP / %d POSTURE / GUARDS %s / RAIDERS %d%%",
-                       (int32_t)lroundf(agent->combat.health),
-                       (int32_t)lroundf(agent->combat.posture),
-                       course->raiders_retreating ? "DRIVING THEM OUT" :
-                       line_engaged ? "ENGAGED" : "FORMING LINE",
-                       course->raider_resolve > 0 ?
-                       course->raider_resolve : 0),
-            destination, 18, 33, 10, WORLD_DANGER);
-        if (course->combat_event_seconds > 0.0f) {
-            DrawViewportText(
-                TextFormat("%s / %s",
-                           CcLocalCombatTeamName(course->last_attacker_team),
-                           CcLocalCombatOutcomeName(course->last_outcome)),
-                destination, 18, 48, 12,
-                course->last_outcome == CC_COMBAT_OUTCOME_BLOCKED ?
-                WORLD_GOLD : WORLD_INK);
-        }
-    }
+    DrawFixedCameraFade(&street_camera_rig, destination);
 }
 
 void CcLocalDrawMarket3D(const CcSim *sim, const CcLocalAgent *agent, float clock,
@@ -16771,11 +16893,18 @@ void CcLocalDrawMarket3D(const CcSim *sim, const CcLocalAgent *agent, float cloc
     EndMode3D();
     EndTextureMode();
     PresentTarget(target, destination);
-    WorldLabel labels[] = {
-        {{6.55f, 2.05f, 1.60f}, "MARA / FACTOR", WORLD_GOLD},
-        {{1.55f, 2.25f, 6.54f}, "STREET", WORLD_MUTED}
-    };
-    DrawLabels(labels, 2, camera, destination);
+    WorldLabel labels[2];
+    int32_t label_count = 0;
+    if (AgentNearLabel(agent, MARKET_PEOPLE[0].x,
+                       MARKET_PEOPLE[0].y, 5.0f)) {
+        labels[label_count++] = (WorldLabel){
+            {6.55f, 2.05f, 1.60f}, "Mara — Merchant", WORLD_GOLD};
+    }
+    if (AgentNearLabel(agent, 1.55f, 6.54f, 3.5f)) {
+        labels[label_count++] = (WorldLabel){
+            {1.55f, 2.25f, 6.54f}, "Exit", WORLD_MUTED};
+    }
+    DrawLabels(labels, label_count, camera, destination);
     if (draw_hero_rig_debug &&
         agent->morphology == CC_MORPHOLOGY_BIPED) {
         DrawViewportText(

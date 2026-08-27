@@ -26,6 +26,8 @@ void CcLocalSetStreetMarketCratesInternal(int32_t count);
 bool CcLocalProbePhysicsSphereInternal(
     CcLocalSceneKind scene, Vector3 previous, Vector3 proposed, float radius,
     Vector3 *corrected, Vector3 *normal);
+bool CcLocalAgentPointSpaceBlockedInternal(const CcLocalAgent *agent,
+                                            Vector3 proposed);
 
 Camera3D CcLocalStreetCameraInternal(const CcLocalAgent *agent, float clock,
                                      bool advance, int32_t art_height);

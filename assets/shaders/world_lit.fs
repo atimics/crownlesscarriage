@@ -174,22 +174,19 @@ void main()
                           albedo.rgb * 0.20, 0.28);
     color = mix(color, coloredInk, edgeInk * 0.72 * detailPresence);
 
-    /* Foreground classification happens per complete house on the CPU. A
-       selected house becomes a stable waist-high architectural cutaway: roof,
-       upper wall, and trim all leave together while the grounded lower shell
-       remains. Only the narrow cut edge dithers, so the reveal never becomes
-       a large screen-space bubble around the hero. */
+    /* Foreground classification happens per complete house on the CPU. The
+       cut line moves down from above the roof instead of dissolving a whole
+       wall into screen-door dots. This reads as a deliberate architectural
+       wipe at the final pixel resolution. */
     float fragmentCameraDistance = viewDepth;
     float revealAmount = clamp(foregroundReveal, 0.0, 1.0);
     if (revealAmount > 0.001) {
-        float coverage = smoothstep(revealCutHeight - 0.10,
-                                    revealCutHeight + 0.08,
-                                    fragPosition.y);
-        float screenDither = orderedDither4x4(gl_FragCoord.xy);
-        if (screenDither < coverage * revealAmount) discard;
-        float belowCut = step(fragPosition.y, revealCutHeight);
+        float activeCutHeight = mix(revealCutHeight + 8.0,
+                                    revealCutHeight, revealAmount);
+        if (fragPosition.y > activeCutHeight) discard;
+        float belowCut = step(fragPosition.y, activeCutHeight);
         float cutBand = (1.0 - smoothstep(0.02, 0.13,
-                                          revealCutHeight - fragPosition.y)) *
+                                          activeCutHeight - fragPosition.y)) *
                         belowCut;
         color = mix(color, coloredInk, cutBand * 0.72 * revealAmount);
     }
