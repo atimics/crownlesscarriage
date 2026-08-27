@@ -1810,8 +1810,40 @@ static void TestFaceAngleAndLodContract(void)
     }
 }
 
+static void TestRoadBridgeSupport(void)
+{
+    CcLocalAgent bridge_agent;
+    CcLocalAgentInit(&bridge_agent, (Vector2){52.00f, 40.00f}, false);
+    CcLocalAgentSetScene(&bridge_agent, CC_LOCAL_SCENE_ROAD);
+    for (int32_t frame = 0; frame < 90; ++frame) {
+        CcLocalAgentUpdate(&bridge_agent, 1.0f / 60.0f, false);
+    }
+    if (fabsf(bridge_agent.position.y - 0.56f) > 0.02f ||
+        !bridge_agent.grounded) {
+        (void)fprintf(stderr,
+                      "bridge agent sank through the authored deck: y %.2f grounded %d\n",
+                      bridge_agent.position.y, bridge_agent.grounded);
+        exit(1);
+    }
+
+    Vector3 corrected = {0};
+    Vector3 normal = {0};
+    if (!CcLocalProbePhysicsSphereInternal(
+            CC_LOCAL_SCENE_ROAD,
+            (Vector3){52.00f, 1.20f, 40.00f},
+            (Vector3){52.00f, 0.20f, 40.00f}, 0.30f,
+            &corrected, &normal) ||
+        fabsf(corrected.y - 0.86f) > 0.02f || normal.y < 0.99f) {
+        (void)fprintf(stderr,
+                      "bridge deck did not support a physical body: corrected %.2f normal %.2f\n",
+                      corrected.y, normal.y);
+        exit(1);
+    }
+}
+
 int main(void)
 {
+    TestRoadBridgeSupport();
     TestFaceAngleAndLodContract();
     TestSharedCharacterCollisionWorld();
     RenderTexture2D click_target = {0};
@@ -3823,9 +3855,13 @@ int main(void)
     CcLocalCourseStageRoadEncounter(&road_course, &road_player, true);
     if (!road_course.road_encounter || !road_course.alarm_active ||
         fabsf(road_player.position.x - CC_LOCAL_ROAD_START_X) > 0.01f ||
-        road_course.raiders[0].position.x < road_player.position.x + 8.0f) {
+        road_course.raiders[0].position.x < road_player.position.x + 8.0f ||
+        fabsf(road_course.raiders[0].position.y - 0.56f) > 0.02f) {
         (void)fprintf(stderr,
-                      "hostile road encounter was not staged around the carriage\n");
+                      "hostile road encounter was not staged on the bridge deck: player %.2f %.2f raider %.2f %.2f\n",
+                      road_player.position.x, road_player.position.y,
+                      road_course.raiders[0].position.x,
+                      road_course.raiders[0].position.y);
         return 1;
     }
     if (!CcLocalCourseSelectPlayerTarget(&road_course, &road_player, 0)) {

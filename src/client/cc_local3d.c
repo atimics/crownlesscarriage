@@ -33,6 +33,17 @@ static const float COMBAT_BYSTANDER_SPACE = 1.12f;
 static const float COMBAT_PLAYER_STANDOFF = 1.30f;
 static const float COMBAT_NPC_STANDOFF = 1.30f;
 static const float ROAD_BARRICADE_X = 51.85f;
+/* Walkable tops from environment_bridge_checkpoint_v01. These must stay in
+   lockstep with the exported deck and its two short causeways. */
+static const Rectangle ROAD_BRIDGE_DECK_SUPPORT = {
+    48.05f, 38.725f, 7.60f, 2.55f
+};
+static const Rectangle ROAD_BRIDGE_WEST_CAUSEWAY_SUPPORT = {
+    47.15f, 38.81f, 0.96f, 2.38f
+};
+static const Rectangle ROAD_BRIDGE_EAST_CAUSEWAY_SUPPORT = {
+    55.59f, 38.81f, 0.96f, 2.38f
+};
 static const float CARRIAGE_ASSET_SCALE = 0.92f;
 /* The exported carriage's hitch points along local +X. The street bay runs
    +Z, while the encounter road already runs +X. */
@@ -48,6 +59,8 @@ typedef enum BridgeCheckpointStatus {
 
 static BridgeCheckpointStatus bridge_checkpoint_status =
     BRIDGE_CHECKPOINT_UNKNOWN;
+
+static bool RoadUsesAuthoredCheckpoint(void);
 
 typedef struct WorldLabel {
     Vector3 point;
@@ -1096,6 +1109,22 @@ static bool CourseWaterContains(CcLocalSceneKind scene, float x, float z)
 
 static float SurfaceHeightAt(CcLocalSceneKind scene, float x, float z)
 {
+    if (scene == CC_LOCAL_SCENE_ROAD) {
+        if (!RoadUsesAuthoredCheckpoint()) return 0.0f;
+        /* Match the exported bridge exactly: two 10 cm causeways lead onto
+           a 52 cm deck centered 30 cm above the asset origin. */
+        Vector2 point = {x, z};
+        if (CheckCollisionPointRec(point, ROAD_BRIDGE_DECK_SUPPORT)) {
+            return 0.56f;
+        }
+        if (CheckCollisionPointRec(point,
+                                   ROAD_BRIDGE_WEST_CAUSEWAY_SUPPORT) ||
+            CheckCollisionPointRec(point,
+                                   ROAD_BRIDGE_EAST_CAUSEWAY_SUPPORT)) {
+            return 0.10f;
+        }
+        return 0.0f;
+    }
     if (scene != CC_LOCAL_SCENE_STREET) return 0.0f;
     float height = CcLocalTerrainHeightAt(x, z);
     for (int32_t i = 0; i < StreetPhysicsPlatformCount(); ++i) {
@@ -1113,6 +1142,9 @@ static float SurfaceHeightAt(CcLocalSceneKind scene, float x, float z)
 
 static float BodySurfaceHeightAt(CcLocalSceneKind scene, float x, float z)
 {
+    if (scene == CC_LOCAL_SCENE_ROAD) {
+        return SurfaceHeightAt(scene, x, z);
+    }
     if (scene != CC_LOCAL_SCENE_STREET) return 0.0f;
     float height = CcLocalTerrainHeightAt(x, z);
     for (int32_t i = 0; i < StreetPhysicsPlatformCount(); ++i) {
@@ -1819,13 +1851,10 @@ static bool ProbeLocalCollision(void *raw_context,
         if (!corrected) break;
     }
 
-    float ground = scene == CC_LOCAL_SCENE_STREET ?
-        CcLocalTerrainHeightAt(proposed.x, proposed.z) : 0.0f;
+    float ground = BodySurfaceHeightAt(scene, proposed.x, proposed.z);
     if (proposed.y - radius < ground) {
         proposed.y = ground + radius;
-        normal = scene == CC_LOCAL_SCENE_STREET ?
-            CcLocalTerrainNormalAt(proposed.x, proposed.z) :
-            (Vector3){0.0f, 1.0f, 0.0f};
+        normal = SurfaceNormalAt(scene, proposed.x, proposed.z);
         collided = true;
     }
     if (!collided) return false;
