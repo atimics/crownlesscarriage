@@ -631,6 +631,13 @@ def hair_paths(style: str, center: tuple[float, float, float]
     back_r = (shifted(((0.055, 0.055, 0.135), (0.105, 0.095, 0.075),
                        (0.115, 0.105, -0.035), (0.075, 0.095, -0.125))),
               (0.17, 0.16, 0.105, 0.018), (0.13, 0.12, 0.08, 0.018))
+    # Close the small scalp channel between the mirrored rear clumps.  It was
+    # almost invisible from the front, but became a bright vertical stripe in
+    # the over-the-shoulder combat camera.
+    back_center = (shifted(((0.0, 0.065, 0.145), (0.0, 0.112, 0.075),
+                            (0.0, 0.122, -0.035), (0.0, 0.100, -0.130))),
+                   (0.145, 0.145, 0.105, 0.018),
+                   (0.125, 0.125, 0.080, 0.018))
     bang_l = (shifted(((-0.060, -0.055, 0.125), (-0.075, -0.105, 0.060),
                        (-0.055, -0.120, -0.015), (-0.020, -0.118, -0.095))),
               (0.13, 0.12, 0.075, 0.014), (0.11, 0.095, 0.055, 0.014))
@@ -639,7 +646,7 @@ def hair_paths(style: str, center: tuple[float, float, float]
               (0.13, 0.115, 0.068, 0.014), (0.11, 0.09, 0.05, 0.014))
 
     if style == "cropped":
-        return crown_l, crown_r, back_l, back_r
+        return crown_l, crown_r, back_l, back_r, back_center
     if style == "swept":
         long_side = (shifted(((-0.090, -0.020, 0.125), (-0.125, -0.075, 0.035),
                               (-0.130, -0.070, -0.085), (-0.110, -0.025, -0.185))),

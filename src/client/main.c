@@ -51,6 +51,16 @@ typedef struct ActionReelState {
     bool complete;
 } ActionReelState;
 
+typedef struct GameplayReelState {
+    int32_t stage;
+    int32_t stage_frame;
+    int32_t captured_frames;
+    int32_t journey_legs;
+    CcId destination_id;
+    bool stage_started;
+    bool complete;
+} GameplayReelState;
+
 static const Vector2 LOCAL_MARKET = {CC_LOCAL_MARKET_X, CC_LOCAL_MARKET_Z};
 static const Vector2 LOCAL_CARRIAGE = {CC_LOCAL_CARRIAGE_X,
                                       CC_LOCAL_CARRIAGE_Z};
@@ -1477,6 +1487,345 @@ static bool ApplyCommand(CcJournal *journal, CcSim *sim, CcCommand command,
     return true;
 }
 
+static void GameplayReelSetStage(GameplayReelState *reel, int32_t stage)
+{
+    reel->stage = stage;
+    reel->stage_frame = 0;
+    reel->stage_started = false;
+}
+
+static CcId GameplayReelDestination(const CcSim *sim, int32_t *selected)
+{
+    const CcSituation *accepted = CcSimAcceptedSituation(sim);
+    CcId preferred = SituationSettlementId(sim, accepted);
+    CcId next_hop = 0U;
+    if (preferred != 0U && preferred != sim->player.location_id) {
+        int32_t start = -1;
+        int32_t goal = -1;
+        for (int32_t i = 0; i < sim->settlement_count; ++i) {
+            if (sim->settlements[i].id == sim->player.location_id) start = i;
+            if (sim->settlements[i].id == preferred) goal = i;
+        }
+        if (start >= 0 && goal >= 0) {
+            int32_t queue[CC_MAX_SETTLEMENTS] = {0};
+            int32_t parent[CC_MAX_SETTLEMENTS];
+            for (int32_t i = 0; i < CC_MAX_SETTLEMENTS; ++i) parent[i] = -1;
+            int32_t head = 0;
+            int32_t tail = 0;
+            queue[tail++] = start;
+            parent[start] = start;
+            while (head < tail && parent[goal] < 0) {
+                int32_t current = queue[head++];
+                CcId current_id = sim->settlements[current].id;
+                for (int32_t route_index = 0;
+                     route_index < sim->route_count; ++route_index) {
+                    if (sim->routes[route_index].smuggler_route &&
+                        (accepted == NULL || accepted->kind !=
+                            CC_SITUATION_BLACK_MARKET_DELIVERY)) {
+                        continue;
+                    }
+                    CcId neighbor_id = RouteOtherEnd(
+                        &sim->routes[route_index], current_id);
+                    if (neighbor_id == 0U) continue;
+                    int32_t neighbor = -1;
+                    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+                        if (sim->settlements[i].id == neighbor_id) {
+                            neighbor = i;
+                            break;
+                        }
+                    }
+                    if (neighbor < 0 || parent[neighbor] >= 0) continue;
+                    parent[neighbor] = current;
+                    queue[tail++] = neighbor;
+                }
+            }
+            if (parent[goal] >= 0) {
+                int32_t step = goal;
+                while (parent[step] != start && parent[step] != step) {
+                    step = parent[step];
+                }
+                if (step != start) next_hop = sim->settlements[step].id;
+            }
+        }
+    }
+    if (next_hop != 0U) {
+        for (int32_t i = 0; i < sim->map_count; ++i) {
+            const CcRoute *route = CcSimRoute(sim, sim->maps[i].route_id);
+            if (MapVisibleAtCarriage(sim, &sim->maps[i]) && route != NULL &&
+                RouteOtherEnd(route, sim->player.location_id) == next_hop) {
+                *selected = i;
+                break;
+            }
+        }
+        return next_hop;
+    }
+    for (int32_t i = 0; i < sim->map_count; ++i) {
+        const CcMap *map = &sim->maps[i];
+        const CcRoute *route = CcSimRoute(sim, map->route_id);
+        CcId destination = RouteOtherEnd(route, sim->player.location_id);
+        if (!MapVisibleAtCarriage(sim, map) || destination == 0U) continue;
+        *selected = i;
+        return destination;
+    }
+    for (int32_t i = 0; i < sim->route_count; ++i) {
+        CcId destination = RouteOtherEnd(&sim->routes[i],
+                                         sim->player.location_id);
+        if (destination != 0U) return destination;
+    }
+    return 0U;
+}
+
+static void PrepareGameplayReel(CcSim *sim, LocalState *local,
+                                GameplayReelState *reel,
+                                int32_t *selected,
+                                int32_t *selected_situation,
+                                ClientView *view, ClientView *return_view)
+{
+    *reel = (GameplayReelState){0};
+    *selected = FirstVisibleMapIndex(sim);
+    *selected_situation = FirstActiveSituationIndex(sim);
+    *view = VIEW_LOCAL;
+    *return_view = VIEW_LOCAL;
+    ResetLocalState(local);
+    RepositionHero(local, (Vector2){44.25f, 28.85f}, false);
+    local->agent.facing_yaw = -0.35f;
+    local->course.alarm_countdown = 1000.0f;
+    (void)CcLocalAgentSetExactTarget(
+        &local->agent, (Vector3){46.65f, 0.0f, 29.35f}, false);
+}
+
+static void UpdateGameplayReel(CcSim *sim, LocalState *local,
+                               GameplayReelState *reel,
+                               int32_t *selected,
+                               int32_t *selected_situation,
+                               ClientView *view, ClientView *return_view,
+                               char *message, size_t message_capacity)
+{
+    const float delta_time = 1.0f / 60.0f;
+    reel->stage_frame += 1;
+
+    switch (reel->stage) {
+        case 0:
+            (void)snprintf(message, message_capacity,
+                           "Walk the living street and read the town before choosing a promise.");
+            (void)CcLocalWorldUpdate(&local->course, &local->agent, sim,
+                                     delta_time, false, true);
+            if (reel->stage_frame >= 120) {
+                GameplayReelSetStage(reel, 1);
+            }
+            break;
+        case 1:
+            if (!reel->stage_started) {
+                reel->stage_started = true;
+                *selected_situation = FirstActiveSituationIndex(sim);
+                *return_view = VIEW_LOCAL;
+                *view = VIEW_SITUATIONS;
+            }
+            (void)snprintf(message, message_capacity,
+                           "Open the notice board and accept a real charter from the simulation.");
+            if (reel->stage_frame == 62 && *selected_situation >= 0) {
+                CcCommand accept = {
+                    .kind = CC_COMMAND_ACCEPT_SITUATION,
+                    .target_id = sim->situations[*selected_situation].id
+                };
+                (void)ApplyCommand(NULL, sim, accept, message,
+                                   message_capacity);
+            }
+            if (reel->stage_frame >= 120) {
+                GameplayReelSetStage(reel, 2);
+            }
+            break;
+        case 2:
+            if (!reel->stage_started) {
+                reel->stage_started = true;
+                *view = VIEW_LOCAL;
+                ResetLocalState(local);
+                local->market_interior = true;
+                CcLocalAgentInit(&local->agent,
+                                 (Vector2){3.20f, 4.65f}, true);
+                CcLocalCombatSetTeam(&local->agent, CC_COMBAT_PLAYER);
+                (void)CcLocalAgentSetExactTarget(
+                    &local->agent, (Vector3){5.70f, 0.0f, 3.15f}, true);
+            }
+            (void)snprintf(message, message_capacity,
+                           "Enter Mara's market; stock, prices, cargo and crowns are live game state.");
+            (void)CcLocalWorldUpdate(&local->course, &local->agent, sim,
+                                     delta_time, true, false);
+            if (reel->stage_frame == 82) {
+                const CcSituation *accepted = CcSimAcceptedSituation(sim);
+                CcGood good = CC_GOOD_FOOD;
+                int32_t amount = 1;
+                if (accepted != NULL &&
+                    (accepted->kind == CC_SITUATION_RELIEF_DELIVERY ||
+                     accepted->kind == CC_SITUATION_BLACK_MARKET_DELIVERY)) {
+                    good = accepted->good;
+                    amount = accepted->quantity - accepted->progress;
+                    if (amount < 1) amount = 1;
+                }
+                CcCommand trade = {
+                    .kind = CC_COMMAND_TRADE,
+                    .good = good,
+                    .amount = amount
+                };
+                (void)ApplyCommand(NULL, sim, trade, message,
+                                   message_capacity);
+            }
+            if (reel->stage_frame >= 150) {
+                GameplayReelSetStage(reel, 3);
+            }
+            break;
+        case 3:
+            if (!reel->stage_started) {
+                reel->stage_started = true;
+                *view = VIEW_MAP;
+                *return_view = VIEW_LOCAL;
+                *selected = FirstVisibleMapIndex(sim);
+                reel->destination_id = GameplayReelDestination(sim, selected);
+            }
+            (void)snprintf(message, message_capacity,
+                           "Use the physical charts in the carriage map case, then commit to the road.");
+            if (reel->stage_frame == 62) {
+                const CcMap *map = SelectedVisibleMap(sim, *selected);
+                if (map != NULL &&
+                    map->owner_id == sim->player.location_id) {
+                    CcCommand buy_map = {
+                        .kind = CC_COMMAND_BUY_MAP,
+                        .target_id = map->id
+                    };
+                    (void)ApplyCommand(NULL, sim, buy_map, message,
+                                       message_capacity);
+                }
+            }
+            if (reel->stage_frame == 106 && reel->destination_id != 0U) {
+                CcCommand travel = {
+                    .kind = CC_COMMAND_TRAVEL,
+                    .target_id = reel->destination_id
+                };
+                if (ApplyCommand(NULL, sim, travel, message,
+                                 message_capacity)) {
+                    reel->journey_legs += 1;
+                    BeginRoadTravelState(local);
+                    *view = VIEW_LOCAL;
+                    GameplayReelSetStage(reel, 4);
+                }
+            }
+            if (reel->stage_frame >= 150) reel->complete = true;
+            break;
+        case 4:
+            (void)snprintf(message, message_capacity,
+                           "The real journey runs: carriage progress and the living world advance together.");
+            (void)CcLocalWorldUpdate(&local->course, &local->agent, sim,
+                                     delta_time, false, false);
+            CcSimAdvanceRuntimeTicks(sim, 16);
+            if (sim->journey.active &&
+                sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED) {
+                local->journey_travel_active = false;
+                *view = VIEW_ENCOUNTER;
+                GameplayReelSetStage(reel, 5);
+            } else if (!sim->journey.active) {
+                const CcSituation *accepted = CcSimAcceptedSituation(sim);
+                CcId target = SituationSettlementId(sim, accepted);
+                ResetLocalState(local);
+                if (target != 0U && target != sim->player.location_id &&
+                    reel->journey_legs < sim->settlement_count) {
+                    GameplayReelSetStage(reel, 3);
+                } else {
+                    RepositionHero(local,
+                                   (Vector2){44.25f, 28.85f}, false);
+                    GameplayReelSetStage(reel, 8);
+                }
+            }
+            break;
+        case 5:
+            (void)snprintf(message, message_capacity,
+                           "A road event pauses movement and asks for a lasting choice.");
+            if (reel->stage_frame >= 120) {
+                BeginRoadLocalState(local, true);
+                *view = VIEW_LOCAL;
+                (void)CcLocalCourseSelectPlayerTarget(
+                    &local->course, &local->agent, 0);
+                GameplayReelSetStage(reel, 6);
+            }
+            break;
+        case 6:
+            (void)snprintf(message, message_capacity,
+                           "Break the cordon in live combat beside the carriage.");
+            if (reel->stage_frame == 12) {
+                (void)CcLocalCourseSelectPlayerTarget(
+                    &local->course, &local->agent, 0);
+                (void)CcLocalCourseUsePlayerSkill(
+                    &local->course, &local->agent,
+                    CC_COMBAT_SKILL_CRUSHING_BLOW);
+            } else if (reel->stage_frame == 82 ||
+                       reel->stage_frame == 154) {
+                (void)CcLocalCourseBeginPlayerStrike(
+                    &local->course, &local->agent);
+            }
+            (void)CcLocalWorldUpdate(&local->course, &local->agent, sim,
+                                     delta_time, false, true);
+            if (reel->stage_frame >= 228) {
+                CcCommand victory = {
+                    .kind = CC_COMMAND_RESOLVE_ENCOUNTER_COMBAT
+                };
+                if (ApplyCommand(NULL, sim, victory, message,
+                                 message_capacity)) {
+                    *selected = FirstVisibleMapIndex(sim);
+                    BeginRoadTravelState(local);
+                    GameplayReelSetStage(reel, 7);
+                } else {
+                    reel->complete = true;
+                }
+            }
+            break;
+        case 7:
+            (void)snprintf(message, message_capacity,
+                           "The same journey resumes after the fight; the outcome travels with you.");
+            (void)CcLocalWorldUpdate(&local->course, &local->agent, sim,
+                                     delta_time, false, false);
+            CcSimAdvanceRuntimeTicks(sim, 32);
+            if (!sim->journey.active) {
+                ResetLocalState(local);
+                RepositionHero(local, (Vector2){44.25f, 28.85f}, false);
+                local->course.alarm_countdown = 1000.0f;
+                GameplayReelSetStage(reel, 8);
+            }
+            break;
+        case 8:
+            if (!reel->stage_started) {
+                reel->stage_started = true;
+                local->market_interior = true;
+                CcLocalAgentInit(&local->agent,
+                                 (Vector2){5.45f, 3.30f}, true);
+                CcLocalCombatSetTeam(&local->agent, CC_COMBAT_PLAYER);
+            }
+            (void)snprintf(message, message_capacity,
+                           "Deliver the charter cargo; arrival and consequence remain visible in the UX.");
+            (void)CcLocalWorldUpdate(&local->course, &local->agent, sim,
+                                     delta_time, true, false);
+            if (reel->stage_frame == 58) {
+                const CcSituation *accepted = CcSimAcceptedSituation(sim);
+                if (accepted != NULL &&
+                    (accepted->kind == CC_SITUATION_RELIEF_DELIVERY ||
+                     accepted->kind == CC_SITUATION_BLACK_MARKET_DELIVERY) &&
+                    accepted->target_id == sim->player.location_id) {
+                    int32_t amount = accepted->quantity - accepted->progress;
+                    CcCommand deliver = {
+                        .kind = CC_COMMAND_TRADE,
+                        .good = accepted->good,
+                        .amount = -amount
+                    };
+                    (void)ApplyCommand(NULL, sim, deliver, message,
+                                       message_capacity);
+                }
+            }
+            if (reel->stage_frame >= 120) reel->complete = true;
+            break;
+        default:
+            reel->complete = true;
+            break;
+    }
+}
+
 static void HandleExpedition(CcJournal *journal, CcSim *sim,
                              const CcDungeon *dungeon,
                              char *message, size_t message_capacity)
@@ -2053,6 +2402,8 @@ int main(int argc, char **argv)
     bool capture_jump = argc >= 2 && strcmp(argv[1], "--capture-jump") == 0;
     bool capture_action_reel = argc >= 2 &&
         strcmp(argv[1], "--capture-action-reel") == 0;
+    bool capture_gameplay_reel = argc >= 2 &&
+        strcmp(argv[1], "--capture-gameplay-reel") == 0;
     bool capture_encounter = argc >= 2 &&
         strcmp(argv[1], "--capture-encounter") == 0;
     bool capture_witness = argc >= 2 &&
@@ -2120,7 +2471,8 @@ int main(int argc, char **argv)
                     capture_interior || capture_navigation || capture_limbs ||
                     capture_walk_cycle || capture_defense ||
                     capture_downclimb || capture_map_case || capture_dojo ||
-                    capture_jump || capture_action_reel || capture_encounter ||
+                    capture_jump || capture_action_reel ||
+                    capture_gameplay_reel || capture_encounter ||
                     capture_witness || capture_travel || capture_road ||
                     capture_parley ||
                     capture_aftermath || capture_golden || capture_face ||
@@ -2132,7 +2484,7 @@ int main(int argc, char **argv)
     char save_path[640];
     CampaignSavePath(save_path, sizeof(save_path));
 
-    if (render_benchmark) SetTraceLogLevel(LOG_WARNING);
+    if (capture || render_benchmark) SetTraceLogLevel(LOG_WARNING);
     /* The world is deliberately rasterized at its final art-pixel
        resolution. Multisample coverage before that raster step makes thin
        edges change blend weights as actors move and reads as temporal
@@ -2146,7 +2498,8 @@ int main(int argc, char **argv)
         return 1;
     }
     SetWindowMinSize(1080, 680);
-    SetTargetFPS(render_benchmark || capture_action_reel ? 0 : 60);
+    SetTargetFPS(render_benchmark || capture_action_reel ||
+                 capture_gameplay_reel ? 0 : 60);
     /* The playable world is authored against a fixed 2x art-pixel grid.
        Render it at half the presentation size, then enlarge with point
        sampling. Screen-space labels and HUD are drawn after presentation. */
@@ -2234,6 +2587,7 @@ int main(int argc, char **argv)
     CcLocalAgent walk_cycle_frames[8] = {0};
     uint32_t walk_cycle_mask = 0;
     ActionReelState action_reel = {0};
+    GameplayReelState gameplay_reel = {0};
     ResetLocalState(&local);
     if (capture_golden) {
         RepositionHero(&local, (Vector2){44.25f, 28.85f}, false);
@@ -2270,7 +2624,8 @@ int main(int argc, char **argv)
     if (capture && !capture_interior && !capture_walk_cycle &&
         !capture_jump && !capture_defense && !capture_downclimb &&
         !capture_navigation && !capture_limbs && !capture_dojo &&
-        !capture_action_reel && !capture_encounter && !capture_travel &&
+        !capture_action_reel && !capture_gameplay_reel &&
+        !capture_encounter && !capture_travel &&
         !capture_road &&
         !capture_parley && !capture_golden && !capture_face && !capture_room) {
         local.course.alarm_countdown = 1000.0f;
@@ -2288,6 +2643,10 @@ int main(int argc, char **argv)
         }
     }
     if (capture_action_reel) PrepareActionReel(&local, &action_reel);
+    if (capture_gameplay_reel) {
+        PrepareGameplayReel(&sim, &local, &gameplay_reel, &selected,
+                            &selected_situation, &view, &return_view);
+    }
     if (capture_downclimb) {
         CcLocalAgentInit(&local.agent, (Vector2){3.50f, 6.20f}, false);
         (void)CcLocalAgentSetExactTarget(
@@ -2448,6 +2807,14 @@ int main(int argc, char **argv)
         }
         if (capture_walk_cycle) {
             local.agent = walk_cycle_frames[walk_frame_count];
+        } else if (capture_gameplay_reel) {
+            for (int32_t step = 0;
+                 step < 4 && !gameplay_reel.complete; ++step) {
+                UpdateGameplayReel(&sim, &local, &gameplay_reel,
+                                   &selected, &selected_situation,
+                                   &view, &return_view, message,
+                                   sizeof(message));
+            }
         } else if (capture_action_reel) {
             for (int32_t step = 0; step < 4 && !action_reel.complete; ++step) {
                 UpdateActionReel(&local, &action_reel, message,
@@ -2460,7 +2827,9 @@ int main(int argc, char **argv)
                         frame_delta_time,
                         save_path, message, sizeof(message));
         }
-        float clock = (float)GetTime();
+        float clock = capture_gameplay_reel ?
+            (float)gameplay_reel.captured_frames / 15.0f :
+            (float)GetTime();
 
         BeginDrawing();
         ClearBackground(BACKGROUND);
@@ -2523,6 +2892,15 @@ int main(int argc, char **argv)
         if (render_benchmark) {
             render_benchmark_count += 1;
             if (render_benchmark_count >= render_benchmark_frames) break;
+        } else if (capture_gameplay_reel) {
+            capture_frames += 1;
+            if (capture_frames <= 2) continue;
+            char frame_path[768];
+            (void)snprintf(frame_path, sizeof(frame_path), "%s-%03d.png",
+                           capture_path, gameplay_reel.captured_frames);
+            TakeScreenshot(frame_path);
+            gameplay_reel.captured_frames += 1;
+            if (gameplay_reel.complete) break;
         } else if (capture_action_reel) {
             capture_frames += 1;
             if (capture_frames <= 2) continue;
@@ -2608,6 +2986,9 @@ int main(int argc, char **argv)
     } else if (capture_walk_cycle) {
         (void)printf("captured %d walk-cycle frames with prefix %s\n",
                      walk_frame_count, capture_path);
+    } else if (capture_gameplay_reel) {
+        (void)printf("captured %d real-gameplay reel frames with prefix %s\n",
+                     gameplay_reel.captured_frames, capture_path);
     } else if (capture_action_reel) {
         (void)printf("captured %d heroic action-reel frames with prefix %s\n",
                      action_reel.captured_frames, capture_path);

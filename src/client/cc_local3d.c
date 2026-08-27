@@ -12197,7 +12197,7 @@ static void DrawWorldFace(Vector3 eye_center, Vector3 head_right,
     /* The fixed combat view often catches the hero just beyond profile while
        they face a target. Let the priority face wrap onto that visible cheek;
        ordinary actors still hide their features when genuinely turned away. */
-    float hidden_face_cutoff = priority_face ? -0.72f : -0.12f;
+    float hidden_face_cutoff = priority_face ? -0.08f : -0.12f;
     if (front_amount < hidden_face_cutoff) return;
 
     /* Keep the graphic on the visible head surface but face its tiny pixel
