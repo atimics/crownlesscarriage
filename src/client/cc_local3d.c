@@ -22,6 +22,30 @@
 #define WORLD_GOLD CC_STYLE_GOLD
 #define WORLD_DANGER CC_STYLE_DANGER
 #define WORLD_VIOLET CC_STYLE_VIOLET
+#define WORLD_EARTH_SHADOW CC_STYLE_EARTH_SHADOW
+#define WORLD_EARTH CC_STYLE_EARTH
+#define WORLD_EARTH_LIGHT CC_STYLE_EARTH_LIGHT
+#define WORLD_ROAD_SHADOW CC_STYLE_ROAD_SHADOW
+#define WORLD_ROAD CC_STYLE_ROAD
+#define WORLD_ROAD_LIGHT CC_STYLE_ROAD_LIGHT
+#define WORLD_WOOD_SHADOW CC_STYLE_WOOD_SHADOW
+#define WORLD_WOOD CC_STYLE_WOOD
+#define WORLD_WOOD_LIGHT CC_STYLE_WOOD_LIGHT
+#define WORLD_STONE_SHADOW CC_STYLE_STONE_SHADOW
+#define WORLD_STONE CC_STYLE_STONE
+#define WORLD_STONE_LIGHT CC_STYLE_STONE_LIGHT
+#define WORLD_GRASS_SHADOW CC_STYLE_GRASS_SHADOW
+#define WORLD_GRASS CC_STYLE_GRASS
+#define WORLD_GRASS_LIGHT CC_STYLE_GRASS_LIGHT
+#define WORLD_FOLIAGE_SHADOW CC_STYLE_FOLIAGE_SHADOW
+#define WORLD_FOLIAGE CC_STYLE_FOLIAGE
+#define WORLD_FOLIAGE_LIGHT CC_STYLE_FOLIAGE_LIGHT
+#define WORLD_CROP_SHADOW CC_STYLE_CROP_SHADOW
+#define WORLD_CROP CC_STYLE_CROP
+#define WORLD_CROP_LIGHT CC_STYLE_CROP_LIGHT
+#define WORLD_METAL_SHADOW CC_STYLE_METAL_SHADOW
+#define WORLD_METAL CC_STYLE_METAL
+#define WORLD_METAL_LIGHT CC_STYLE_METAL_LIGHT
 static const float PLAYER_COLLISION_RADIUS = 0.30f;
 static const float PERSON_COLLISION_RADIUS = 0.27f;
 static const float COURSE_GUARD_SPACING = 1.18f;
@@ -11002,7 +11026,7 @@ static void DrawStreetLantern(float x, float z)
 
 static void DrawWayfarerGate(Color accent, bool sightline_cut)
 {
-    Color wood = (Color){74, 51, 39, 255};
+    Color wood = WORLD_WOOD;
     float left = 8.66f;
     float right = 14.34f;
     float z = 10.56f;
@@ -11029,15 +11053,15 @@ static void DrawCroftScarecrow(float hunger)
 {
     const float x = 8.10f;
     const float z = 25.00f;
-    Color wood = (Color){89, 61, 39, 255};
-    Color cloth = BlendColor((Color){122, 83, 58, 255},
-                             (Color){83, 73, 55, 255}, hunger);
+    Color wood = WORLD_WOOD;
+    Color cloth = BlendColor(WORLD_EARTH_LIGHT,
+                             WORLD_ROAD_SHADOW, hunger);
     DrawBox((Vector3){x, 0.92f, z}, (Vector3){0.12f, 1.84f, 0.12f}, wood);
     DrawBox((Vector3){x, 1.38f, z}, (Vector3){1.38f, 0.10f, 0.10f}, wood);
     DrawBox((Vector3){x, 1.20f, z + 0.04f},
             (Vector3){0.78f, 0.68f, 0.12f}, cloth);
     DrawSmallSphere((Vector3){x, 1.80f, z}, 0.23f,
-                    (Color){166, 132, 77, 255});
+                    BlendColor(WORLD_CROP_LIGHT, WORLD_WOOD_LIGHT, 0.34f));
     DrawBox((Vector3){x, 2.03f, z}, (Vector3){0.72f, 0.08f, 0.44f}, wood);
     DrawBox((Vector3){x, 2.17f, z}, (Vector3){0.38f, 0.30f, 0.34f}, wood);
 }
@@ -11046,7 +11070,7 @@ static void DrawMineWaystone(void)
 {
     const float x = 18.0f;
     const float z = 54.72f;
-    Color stone = (Color){77, 75, 78, 255};
+    Color stone = WORLD_STONE;
     DrawBox((Vector3){x, 0.14f, z}, (Vector3){0.84f, 0.28f, 0.72f},
             ShadeColor(stone, 0.70f));
     DrawBox((Vector3){x, 0.82f, z}, (Vector3){0.56f, 1.38f, 0.46f}, stone);
@@ -11056,8 +11080,8 @@ static void DrawMineWaystone(void)
 
     /* Two rails and broad sleepers turn the colored road into an explicit
        visual sentence: this way leads to the mine beyond the next room. */
-    Color rail = (Color){65, 59, 56, 255};
-    Color sleeper = (Color){91, 62, 43, 255};
+    Color rail = WORLD_METAL_SHADOW;
+    Color sleeper = WORLD_WOOD;
     DrawBox((Vector3){22.65f, 0.055f, 54.92f},
             (Vector3){8.20f, 0.075f, 0.09f}, rail);
     DrawBox((Vector3){22.65f, 0.055f, 55.72f},
@@ -11071,7 +11095,7 @@ static void DrawMineWaystone(void)
        the entrance itself comes into view. */
     DrawBox((Vector3){26.45f, 0.44f, 54.35f},
             (Vector3){1.45f, 0.88f, 1.05f},
-            (Color){82, 57, 44, 255});
+            WORLD_WOOD_SHADOW);
     DrawBox((Vector3){26.45f, 0.91f, 54.35f},
             (Vector3){1.62f, 0.10f, 1.18f}, sleeper);
     for (int32_t ore = 0; ore < 4; ++ore) {
@@ -11088,13 +11112,13 @@ static void DrawArtisanSign(Color kingdom)
 {
     const float x = 30.95f;
     const float z = 24.30f;
-    Color wood = (Color){69, 47, 39, 255};
+    Color wood = WORLD_WOOD_SHADOW;
     DrawBox((Vector3){x, 1.16f, z}, (Vector3){0.14f, 2.32f, 0.14f}, wood);
     DrawBox((Vector3){x + 0.48f, 2.12f, z},
             (Vector3){1.08f, 0.12f, 0.14f}, wood);
     DrawBox((Vector3){x + 0.86f, 1.72f, z + 0.04f},
             (Vector3){0.72f, 0.66f, 0.12f},
-            BlendColor((Color){111, 73, 53, 255}, kingdom, 0.26f));
+            BlendColor(WORLD_WOOD_LIGHT, kingdom, 0.26f));
     DrawSmallSphere((Vector3){x + 0.86f, 1.73f, z + 0.12f},
                     0.11f, WORLD_GOLD);
 }
@@ -11103,9 +11127,9 @@ static void DrawWorkshopForge(Color kingdom)
 {
     const float x = 37.85f;
     const float z = 23.08f;
-    Color brick = BlendColor((Color){104, 63, 50, 255}, kingdom, 0.12f);
-    Color iron = (Color){48, 49, 48, 255};
-    Color timber = (Color){79, 54, 39, 255};
+    Color brick = BlendColor(WORLD_EARTH, kingdom, 0.12f);
+    Color iron = WORLD_METAL_SHADOW;
+    Color timber = WORLD_WOOD;
     DrawBox((Vector3){x, 0.48f, z},
             (Vector3){1.72f, 0.96f, 0.82f}, brick);
     DrawBox((Vector3){x, 1.10f, z - 0.10f},
@@ -11117,7 +11141,7 @@ static void DrawWorkshopForge(Color kingdom)
     DrawBox((Vector3){x - 0.14f, 0.70f, z + 0.44f},
             (Vector3){0.74f, 0.18f, 0.12f}, WORLD_GOLD);
     DrawSmallSphere((Vector3){x - 0.14f, 0.72f, z + 0.54f},
-                    0.18f, (Color){224, 101, 46, 255});
+                    0.18f, BlendColor(WORLD_GOLD, WORLD_DANGER, 0.48f));
     DrawBox((Vector3){x - 1.45f, 0.30f, z + 0.05f},
             (Vector3){0.14f, 0.60f, 1.28f}, timber);
     for (int32_t billet = 0; billet < 3; ++billet) {
@@ -11133,7 +11157,7 @@ static void DrawTownSquareFocus(Color kingdom)
 {
     const float x = CC_LOCAL_NOTICE_X;
     const float z = CC_LOCAL_NOTICE_Z;
-    Color stone = (Color){104, 101, 91, 255};
+    Color stone = WORLD_STONE_LIGHT;
     /* A low civic seal gathers the plaza around the notice board without
        creating a new collision step or blocking click movement. */
     DrawCylinder((Vector3){x, 0.015f, z}, 2.65f, 2.65f, 0.045f, 20,
@@ -11150,7 +11174,7 @@ static void DrawTownSquareFocus(Color kingdom)
 
 static void DrawCoachHitch(const CcSettlement *place)
 {
-    Color wood = (Color){79, 53, 39, 255};
+    Color wood = WORLD_WOOD;
     float z = 55.36f;
     DrawBox((Vector3){35.30f, 0.62f, z}, (Vector3){0.18f, 1.24f, 0.18f}, wood);
     DrawBox((Vector3){38.20f, 0.62f, z}, (Vector3){0.18f, 1.24f, 0.18f}, wood);
@@ -11159,13 +11183,13 @@ static void DrawCoachHitch(const CcSettlement *place)
             (Vector3){0.14f, 1.40f, 0.14f}, wood);
     DrawBox((Vector3){36.75f, 2.18f, z + 0.05f},
             (Vector3){1.30f, 0.68f, 0.12f},
-            (Color){111, 72, 52, 255});
+            WORLD_WOOD_LIGHT);
     DrawBox((Vector3){36.75f, 2.70f, z - 0.02f},
             (Vector3){3.48f, 0.18f, 1.18f},
             ShadeColor(wood, 0.88f));
     DrawBox((Vector3){36.75f, 2.82f, z - 0.02f},
             (Vector3){3.08f, 0.12f, 1.44f},
-            (Color){126, 88, 57, 255});
+            WORLD_EARTH_LIGHT);
     DrawCylinder((Vector3){36.75f, 2.03f, z + 0.13f},
                  0.19f, 0.19f, 0.08f, 10, WORLD_GOLD);
     int32_t barrels = place != NULL ? place->stock[CC_GOOD_MATERIAL] / 24 : 1;
@@ -11174,7 +11198,7 @@ static void DrawCoachHitch(const CcSettlement *place)
     for (int32_t i = 0; i < barrels; ++i) {
         DrawCylinder((Vector3){35.65f + (float)i * 0.58f, 0.05f, z + 0.42f},
                      0.25f, 0.25f, 0.58f, 10,
-                     (Color){129, 77, 43, 255});
+                     WORLD_WOOD_LIGHT);
     }
     for (int32_t wheel = 0; wheel < 2; ++wheel) {
         DrawCylinderEx((Vector3){38.50f, 0.62f, z - 0.28f + wheel * 0.58f},
@@ -11187,9 +11211,9 @@ static void DrawMillersGranary(float hunger)
 {
     const float x = 64.14f;
     const float z = 51.02f;
-    Color timber = (Color){105, 70, 43, 255};
-    Color plaster = BlendColor((Color){142, 124, 91, 255},
-                               (Color){101, 92, 70, 255}, hunger * 0.60f);
+    Color timber = WORLD_WOOD_LIGHT;
+    Color plaster = BlendColor(WORLD_STONE_LIGHT,
+                               WORLD_ROAD, hunger * 0.60f);
     DrawCylinder((Vector3){x, 0.08f, z}, 0.90f, 0.96f, 2.36f, 12, plaster);
     DrawCylinder((Vector3){x, 2.43f, z}, 0.10f, 1.10f, 0.88f, 12, timber);
     DrawBox((Vector3){x, 0.75f, z + 0.93f},
@@ -11202,7 +11226,8 @@ static void DrawMillersGranary(float hunger)
         float sack_z = z + 0.64f + (float)(sack / 3) * 0.40f;
         DrawCharacterEllipsoid((Vector3){sack_x, 0.26f, sack_z},
                                (Vector3){0.25f, 0.32f, 0.20f},
-                               (Color){151, 125, 82, 255});
+                               BlendColor(WORLD_CROP_LIGHT,
+                                          WORLD_ROAD_LIGHT, 0.42f));
     }
 }
 
@@ -11210,9 +11235,9 @@ static void DrawEastWindmill(Color kingdom, float hunger)
 {
     const float x = 81.4f;
     const float z = 47.0f;
-    Color tower = BlendColor((Color){128, 118, 96, 255},
-                             (Color){92, 86, 73, 255}, hunger * 0.50f);
-    Color timber = BlendColor((Color){78, 54, 40, 255}, kingdom, 0.16f);
+    Color tower = BlendColor(WORLD_STONE_LIGHT,
+                             WORLD_ROAD, hunger * 0.50f);
+    Color timber = BlendColor(WORLD_WOOD, kingdom, 0.16f);
     DrawCylinder((Vector3){x, 0.05f, z}, 0.74f, 1.08f, 3.45f, 12, tower);
     DrawCylinder((Vector3){x, 3.50f, z}, 0.08f, 0.92f, 0.82f, 12, timber);
     DrawCylinderEx((Vector3){x, 3.28f, z + 0.36f},
@@ -11226,7 +11251,7 @@ static void DrawEastWindmill(Color kingdom, float hunger)
                 (Vector3){0.18f, 2.04f, 0.10f}, timber);
         DrawBox((Vector3){0.20f, 1.38f, 0.0f},
                 (Vector3){0.38f, 0.92f, 0.075f},
-                Fade((Color){181, 158, 111, 255}, 0.78f));
+                Fade(BlendColor(WORLD_INK, WORLD_CROP_LIGHT, 0.42f), 0.78f));
         rlPopMatrix();
     }
     DrawSmallSphere((Vector3){x, 3.28f, z + 1.02f}, 0.20f, WORLD_GOLD);
@@ -11455,41 +11480,41 @@ static Color TerrainSurfaceColor(const CcSettlement *place,
     float hunger = place != NULL ? (float)place->hunger / 100.0f : 0.0f;
     float prosperity = place != NULL ?
                        (float)place->prosperity / 100.0f : 0.5f;
-    Color grass = BlendColor((Color){35, 67, 53, 255},
-                             (Color){75, 66, 42, 255}, hunger * 0.72f);
+    Color grass = BlendColor(WORLD_GRASS,
+                             WORLD_EARTH, hunger * 0.72f);
     float height = TerrainVisualHeightAt(x, z);
     float lowland = TerrainSmooth01((1.35f - height) / 2.40f);
     float highland = TerrainSmooth01((height - 4.20f) / 3.20f);
-    grass = BlendColor(grass, (Color){27, 65, 58, 255}, lowland * 0.34f);
-    grass = BlendColor(grass, (Color){74, 82, 53, 255}, highland * 0.30f);
+    grass = BlendColor(grass, WORLD_FOLIAGE_SHADOW, lowland * 0.34f);
+    grass = BlendColor(grass, WORLD_GRASS_LIGHT, highland * 0.30f);
     Color color = grass;
     float field_amount = TerrainFieldAmount(x, z);
-    Color field = BlendColor((Color){103, 102, 57, 255},
-                             (Color){128, 111, 63, 255}, prosperity * 0.26f);
+    Color field = BlendColor(WORLD_CROP,
+                             WORLD_CROP_LIGHT, prosperity * 0.26f);
     field = BlendColor(field, grass, hunger * 0.28f);
     color = BlendColor(color, field, field_amount * 0.84f);
 
     float road_amount = TerrainRoadAmount(x, z);
-    Color road = BlendColor((Color){82, 77, 66, 255},
-                            (Color){121, 102, 75, 255}, prosperity * 0.34f);
+    Color road = BlendColor(WORLD_ROAD,
+                            WORLD_ROAD_LIGHT, prosperity * 0.34f);
     color = BlendColor(color, road, road_amount);
 
     Rectangle plaza = {37.6f, 25.6f, 18.8f, 8.8f};
     float plaza_amount = TerrainSmooth01(
         TerrainRectangleInset(x, z, plaza) / 0.55f);
-    Color plaza_color = BlendColor((Color){101, 94, 81, 255},
-                                   (Color){133, 119, 93, 255},
+    Color plaza_color = BlendColor(WORLD_STONE,
+                                   WORLD_STONE_LIGHT,
                                    prosperity * 0.36f);
     color = BlendColor(color, plaza_color, plaza_amount);
 
     Rectangle wayfarer_yard = {1.0f, 0.0f, 14.6f, 11.1f};
     float yard_amount = TerrainSmooth01(
         TerrainRectangleInset(x, z, wayfarer_yard) / 0.52f);
-    color = BlendColor(color, (Color){43, 67, 61, 255}, yard_amount);
+    color = BlendColor(color, WORLD_FOLIAGE_SHADOW, yard_amount);
 
     float rock_amount = TerrainSmooth01((0.82f - normal.y) / 0.22f);
-    Color stone = BlendColor((Color){70, 75, 72, 255},
-                             (Color){91, 82, 70, 255}, highland * 0.36f);
+    Color stone = BlendColor(WORLD_STONE,
+                             WORLD_ROAD, highland * 0.36f);
     color = BlendColor(color, stone, rock_amount * 0.78f);
 
     float broad = TerrainValueNoise(x, z, 11.0f, 21U);
@@ -11715,10 +11740,11 @@ static void DrawTerrainRoadRuts(const CcSettlement *place, Vector3 focus)
 {
     float prosperity = place != NULL ?
                        (float)place->prosperity / 100.0f : 0.5f;
-    Color paved_rut = BlendColor((Color){84, 77, 64, 255},
-                                 (Color){101, 84, 61, 255},
+    Color paved_rut = BlendColor(WORLD_ROAD_SHADOW,
+                                 WORLD_ROAD,
                                  prosperity * 0.28f);
-    Color field_track = (Color){56, 72, 55, 255};
+    Color field_track = BlendColor(WORLD_GRASS_SHADOW,
+                                   WORLD_ROAD_SHADOW, 0.34f);
     Rectangle plaza = {37.6f, 25.6f, 18.8f, 8.8f};
     int32_t road_count =
         (int32_t)(sizeof(TERRAIN_ROADS) / sizeof(TERRAIN_ROADS[0]));
@@ -11772,11 +11798,11 @@ static void DrawTerrainFieldRows(const CcSettlement *place, Vector3 focus)
     float hunger = place != NULL ? (float)place->hunger / 100.0f : 0.0f;
     float prosperity = place != NULL ?
                        (float)place->prosperity / 100.0f : 0.5f;
-    Color crop = BlendColor((Color){104, 103, 49, 255},
-                            (Color){145, 119, 56, 255}, prosperity * 0.44f);
-    crop = BlendColor(crop, (Color){78, 76, 49, 255}, hunger * 0.42f);
-    Color furrow = BlendColor((Color){51, 61, 42, 255},
-                              (Color){75, 63, 40, 255}, hunger * 0.30f);
+    Color crop = BlendColor(WORLD_CROP,
+                            WORLD_CROP_LIGHT, prosperity * 0.44f);
+    crop = BlendColor(crop, WORLD_CROP_SHADOW, hunger * 0.42f);
+    Color furrow = BlendColor(WORLD_GRASS_SHADOW,
+                              WORLD_EARTH_SHADOW, hunger * 0.30f);
     rlBegin(RL_TRIANGLES);
     for (int32_t i = 0; i < (int32_t)(sizeof(TERRAIN_FIELDS) /
                                       sizeof(TERRAIN_FIELDS[0])); ++i) {
@@ -11850,11 +11876,11 @@ static void TerrainTuft(float x, float z, float height, float width,
 static void DrawTerrainPlantCover(const CcSettlement *place, Vector3 focus)
 {
     float hunger = place != NULL ? (float)place->hunger / 100.0f : 0.0f;
-    Color grass_bottom = BlendColor((Color){26, 62, 45, 255},
-                                    (Color){72, 59, 38, 255},
+    Color grass_bottom = BlendColor(WORLD_GRASS_SHADOW,
+                                    WORLD_EARTH_SHADOW,
                                     hunger * 0.62f);
-    Color grass_top = BlendColor((Color){61, 99, 61, 255},
-                                 (Color){106, 84, 46, 255},
+    Color grass_top = BlendColor(WORLD_GRASS_LIGHT,
+                                 WORLD_EARTH,
                                  hunger * 0.58f);
     const float spacing = 1.65f;
     int32_t first_column = (int32_t)floorf(
@@ -11896,10 +11922,10 @@ static void DrawTerrainPlantCover(const CcSettlement *place, Vector3 focus)
 
     float prosperity = place != NULL ?
                        (float)place->prosperity / 100.0f : 0.5f;
-    Color crop_bottom = BlendColor((Color){73, 79, 40, 255},
-                                   (Color){112, 88, 39, 255}, hunger * 0.38f);
-    Color crop_top = BlendColor((Color){133, 125, 55, 255},
-                                (Color){171, 136, 54, 255},
+    Color crop_bottom = BlendColor(WORLD_CROP_SHADOW,
+                                   WORLD_EARTH, hunger * 0.38f);
+    Color crop_top = BlendColor(WORLD_CROP,
+                                WORLD_CROP_LIGHT,
                                 prosperity * 0.42f);
     for (int32_t field_index = 0;
          field_index < (int32_t)(sizeof(TERRAIN_FIELDS) /
@@ -11964,8 +11990,7 @@ static void DrawTerrainRocks(Vector3 focus)
             float radius = 0.16f +
                            TerrainScatter01(column, row, 55U) * 0.20f;
             float height = CcLocalTerrainHeightAt(x, z);
-            Color rock = height > 4.0f ? (Color){94, 91, 79, 255} :
-                                         (Color){76, 84, 80, 255};
+            Color rock = height > 4.0f ? WORLD_STONE_LIGHT : WORLD_STONE;
             DrawTiltedBox((Vector3){x, height + radius * 0.34f, z},
                           (Vector3){radius * 1.55f, radius * 0.72f,
                                     radius * 1.18f},
@@ -12021,10 +12046,13 @@ static void DrawExteriorTerrain(const CcSettlement *place, Vector3 focus)
 static Color BuildingWallColor(int32_t style)
 {
     switch (style) {
-        case 1: return (Color){105, 96, 84, 255};
-        case 2: return (Color){122, 79, 61, 255};
-        case 3: return (Color){72, 89, 95, 255};
-        default: return (Color){88, 98, 91, 255};
+        case 1: return WORLD_STONE;
+        case 2: return BlendColor(WORLD_EARTH_LIGHT,
+                                  WORLD_DANGER, 0.14f);
+        case 3: return BlendColor(WORLD_STONE,
+                                  WORLD_TEAL, 0.16f);
+        default: return BlendColor(WORLD_STONE,
+                                   WORLD_GRASS, 0.24f);
     }
 }
 
@@ -12032,11 +12060,12 @@ static Color BuildingRoofColor(int32_t style, Color kingdom)
 {
     switch (style) {
         case 1:
-            return BlendColor((Color){76, 69, 62, 255}, kingdom, 0.18f);
-        case 2: return (Color){126, 78, 56, 255};
-        case 3: return (Color){76, 72, 84, 255};
+            return BlendColor(WORLD_ROAD_SHADOW, kingdom, 0.18f);
+        case 2: return WORLD_EARTH;
+        case 3: return BlendColor(WORLD_METAL_SHADOW,
+                                  WORLD_VIOLET, 0.22f);
         default:
-            return BlendColor((Color){66, 74, 71, 255}, kingdom, 0.16f);
+            return BlendColor(WORLD_FOLIAGE_SHADOW, kingdom, 0.16f);
     }
 }
 
@@ -12326,8 +12355,7 @@ static void DrawCastle(Color kingdom, Vector3 focus, Camera3D camera,
                                       sizeof(CASTLE_STRUCTURES[0])); ++i) {
         const WorldStructure *structure = &CASTLE_STRUCTURES[i];
         Rectangle footprint = structure->footprint;
-        Color stone = i == 5 ? (Color){82, 80, 78, 255} :
-                               (Color){100, 103, 98, 255};
+        Color stone = i == 5 ? WORLD_STONE_SHADOW : WORLD_STONE;
         DrawBuildingFoundation(
             footprint.x, footprint.y, footprint.width, footprint.height,
             structure->height, stone);
@@ -12337,8 +12365,7 @@ static void DrawCastle(Color kingdom, Vector3 focus, Camera3D camera,
                                       sizeof(CASTLE_STRUCTURES[0])); ++i) {
         const WorldStructure *structure = &CASTLE_STRUCTURES[i];
         Rectangle footprint = structure->footprint;
-        Color stone = i == 5 ? (Color){82, 80, 78, 255} :
-                               (Color){100, 103, 98, 255};
+        Color stone = i == 5 ? WORLD_STONE_SHADOW : WORLD_STONE;
         float reveal = castle_structure_reveals[i].amount;
         if (fabsf(reveal - reveal_active) > 0.001f) {
             SetWorldForegroundReveal(reveal, reveal_cut_height);
@@ -12354,13 +12381,13 @@ static void DrawCastle(Color kingdom, Vector3 focus, Camera3D camera,
                           footprint.y + footprint.height * 0.5f},
                 (Vector3){footprint.width + 0.18f, 0.22f,
                           footprint.height + 0.18f},
-                i >= 8 ? kingdom : (Color){74, 77, 75, 255});
+                i >= 8 ? kingdom : WORLD_STONE_SHADOW);
     }
     SetWorldForegroundReveal(0.0f, reveal_cut_height);
     {
         DrawBox((Vector3){78.5f, 1.20f, 22.03f},
                 (Vector3){1.35f, 2.40f, 0.06f},
-                (Color){43, 34, 37, 255});
+                WORLD_WOOD_SHADOW);
         DrawBox((Vector3){76.30f, 7.65f, 30.84f},
                 (Vector3){0.78f, 2.30f, 0.06f}, kingdom);
         DrawBox((Vector3){80.70f, 7.65f, 30.84f},
@@ -12369,7 +12396,7 @@ static void DrawCastle(Color kingdom, Vector3 focus, Camera3D camera,
         /* The open southern gate is the room's navigational promise. A high
            lintel and paired fire points frame the pass without putting an
            invisible portcullis across the traversable opening. */
-        Color gate_stone = (Color){86, 88, 85, 255};
+        Color gate_stone = WORLD_STONE;
         DrawBox((Vector3){78.50f, 7.15f, 30.84f},
                 (Vector3){2.30f, 1.08f, 0.72f}, gate_stone);
         for (int32_t merlon = 0; merlon < 3; ++merlon) {
@@ -12382,7 +12409,7 @@ static void DrawCastle(Color kingdom, Vector3 focus, Camera3D camera,
             float torch_x = 78.50f + (float)side * 1.32f;
             DrawBox((Vector3){torch_x, 1.82f, 31.20f},
                     (Vector3){0.10f, 0.86f, 0.10f},
-                    (Color){55, 43, 36, 255});
+                    WORLD_WOOD_SHADOW);
             DrawSmallSphere((Vector3){torch_x, 2.32f, 31.20f},
                             0.18f, WORLD_GOLD);
         }
@@ -13276,9 +13303,9 @@ static void DrawWayfarerHeroDetails(const CcHumanoidSkinPose *skin)
         skin->sockets[CC_HUMANOID_SOCKET_CHEST_FRONT].position);
     chest = PhysicsAdd(chest, PhysicsScale(forward, 0.032f));
 
-    Color panel_ink = (Color){43, 32, 29, 255};
-    Color portrait_burgundy = (Color){111, 48, 55, 255};
-    Color broken_gold = (Color){224, 169, 59, 255};
+    Color panel_ink = CC_STYLE_HERO_PANEL_INK;
+    Color portrait_burgundy = CC_STYLE_HERO_OUTER;
+    Color broken_gold = CC_STYLE_HERO_ACCENT;
     Vector3 panel = PhysicsAdd(chest, PhysicsScale(up, -0.018f));
     /* Match the portrait's large oxblood shoulder-and-chest mass. The broad
        shape survives at distance; the gold emblem is the second read. */
@@ -14864,12 +14891,12 @@ static void DrawWorldTrees(Vector3 focus, Color kingdom)
         if (!SceneryPointVisible(position.x, position.y, focus)) continue;
         TreeFamily family = RegionalTreeFamily(WORLD_TREES[i].family, i,
                                                regional_style);
-        Color leaves = (i & 1) != 0 ? (Color){54, 105, 85, 255} :
-                                      (Color){58, 119, 91, 255};
+        Color leaves = (i & 1) != 0 ? WORLD_FOLIAGE :
+                                      WORLD_FOLIAGE_LIGHT;
         if (family == TREE_FAMILY_OAK) {
             leaves = ShadeColor(leaves, 0.86f);
         } else if (family == TREE_FAMILY_POLLARD) {
-            leaves = BlendColor(leaves, (Color){96, 105, 61, 255}, 0.18f);
+            leaves = BlendColor(leaves, WORLD_GRASS_LIGHT, 0.18f);
         }
         DrawTree(position.x, position.y, family, leaves, regional_style);
     }
@@ -14934,7 +14961,7 @@ static void DrawStreetTraversalPortals(const CcLocalAgent *agent,
         Color accent = portal.exit != NULL ? WORLD_GOLD : WORLD_TEAL;
         DrawRectangleRounded(
             (Rectangle){bubble_x, bubble_y, bubble_width, 20.0f},
-            0.28f, 4, (Color){4, 10, 14, 224});
+            0.28f, 4, Fade(CC_STYLE_PANEL_DEEP, 0.88f));
         DrawRectangleLinesEx(
             (Rectangle){bubble_x, bubble_y, bubble_width, 20.0f},
             1.0f, Fade(accent, 0.62f));
@@ -15819,8 +15846,9 @@ static void DrawRoadHorseTeam(Vector3 base)
 {
     const float yaw = 0.5f * PI;
     for (int32_t horse = -1; horse <= 1; horse += 2) {
-        Color coat = horse < 0 ? (Color){89, 68, 56, 255} :
-                                 (Color){112, 86, 63, 255};
+        Color coat = horse < 0 ? BlendColor(WORLD_WOOD, WORLD_ROAD, 0.42f) :
+                                 BlendColor(WORLD_WOOD_LIGHT,
+                                            WORLD_ROAD, 0.36f);
         Color coat_shadow = ShadeColor(coat, 0.72f);
         Vector3 horse_base = LocalPoint(
             base, (float)horse * 0.66f, 0.0f, 4.55f, yaw);
@@ -15855,7 +15883,7 @@ static void DrawRoadHorseTeam(Vector3 base)
                                coat_shadow);
                 DrawOrientedBox(hoof, (Vector3){0.0f, 0.02f, 0.035f},
                                 (Vector3){0.12f, 0.08f, 0.19f}, yaw,
-                                (Color){48, 42, 38, 255});
+                                WORLD_WOOD_SHADOW);
             }
         }
         Vector3 tail_root = LocalPoint(horse_base, 0.0f, 1.13f, -0.66f, yaw);
@@ -15866,10 +15894,10 @@ static void DrawRoadHorseTeam(Vector3 base)
             base, (float)horse * 0.42f, 0.77f, 3.05f, yaw);
         Vector3 trace_end = LocalPoint(horse_base, 0.0f, 0.91f, -0.52f, yaw);
         DrawCylinderEx(trace_start, trace_end, 0.020f, 0.016f, 6,
-                       (Color){57, 42, 34, 255});
+                       WORLD_WOOD_SHADOW);
         DrawOrientedBox(horse_base, (Vector3){0.0f, 1.02f, 0.18f},
                         (Vector3){0.66f, 0.055f, 0.055f}, yaw,
-                        (Color){62, 45, 35, 255});
+                        WORLD_WOOD_SHADOW);
     }
 }
 
@@ -15894,7 +15922,7 @@ static void DrawRoadCarriage(Vector3 base, int32_t cargo_used)
     } else {
         DrawOrientedBox(base, (Vector3){0.0f, 1.10f, 0.0f},
                         (Vector3){2.55f, 1.58f, 4.15f}, yaw,
-                        (Color){125, 66, 50, 255});
+                        BlendColor(WORLD_EARTH, WORLD_DANGER, 0.28f));
         DrawOrientedBox(base, (Vector3){0.0f, 1.98f, 0.0f},
                         (Vector3){2.78f, 0.18f, 4.38f}, yaw,
                         WORLD_GOLD);
@@ -15907,7 +15935,7 @@ static void DrawRoadCarriage(Vector3 base, int32_t cargo_used)
         for (int32_t i = 0; i < 4; ++i) {
             Vector3 wheel = LocalPoint(base, wheel_offsets[i].x, 0.58f,
                                        wheel_offsets[i].y, yaw);
-            DrawScenerySphere(wheel, 0.53f, (Color){38, 31, 31, 255});
+            DrawScenerySphere(wheel, 0.53f, WORLD_WOOD_SHADOW);
             DrawSphereWires(wheel, 0.55f, 7, 7, WORLD_GOLD);
         }
         Vector3 pole_left = LocalPoint(base, -0.48f, 0.82f, 2.10f, yaw);
@@ -15915,9 +15943,9 @@ static void DrawRoadCarriage(Vector3 base, int32_t cargo_used)
         Vector3 pole_left_end = LocalPoint(base, -0.48f, 0.72f, 4.10f, yaw);
         Vector3 pole_right_end = LocalPoint(base, 0.48f, 0.72f, 4.10f, yaw);
         DrawCylinderEx(pole_left, pole_left_end, 0.045f, 0.035f, 7,
-                       (Color){91, 61, 43, 255});
+                       WORLD_WOOD);
         DrawCylinderEx(pole_right, pole_right_end, 0.045f, 0.035f, 7,
-                       (Color){91, 61, 43, 255});
+                       WORLD_WOOD);
     }
     DrawRoadHorseTeam(base);
 }
@@ -15926,7 +15954,7 @@ static void DrawRoadBarricade(const CcRoute *route)
 {
     const float x = ROAD_BARRICADE_X;
     Color timber = route != NULL && route->smuggler_route ?
-                   (Color){67, 48, 42, 255} : (Color){103, 70, 47, 255};
+                   WORLD_WOOD_SHADOW : WORLD_WOOD;
     for (int32_t rail = -1; rail <= 1; rail += 2) {
         Vector3 from = {x - 0.18f, 0.48f + (float)(rail + 1) * 0.18f,
                         36.95f};
@@ -15965,7 +15993,7 @@ static void DrawRoadSurface(float x, float width, Color road)
     for (int32_t rut = 0; rut < 2; ++rut) {
         DrawTerrainPatchAtTop(x, 38.45f + (float)rut * 3.05f,
                               width, 0.16f, -0.003f,
-                              Fade((Color){43, 35, 31, 255}, 0.72f));
+                              Fade(WORLD_WOOD_SHADOW, 0.72f));
     }
 }
 
@@ -15975,11 +16003,10 @@ static void DrawRoadTerrain(const CcRoute *route, int32_t danger,
     float decay = route != NULL ?
         1.0f - (float)route->condition / 100.0f : 0.5f;
     Color ground = route != NULL && route->smuggler_route ?
-        (Color){28, 54, 43, 255} :
-        BlendColor((Color){48, 72, 51, 255},
-                   (Color){87, 70, 46, 255}, decay * 0.75f);
-    Color road = BlendColor((Color){105, 96, 78, 255},
-                            (Color){78, 62, 49, 255}, decay);
+        WORLD_GRASS_SHADOW :
+        BlendColor(WORLD_GRASS, WORLD_EARTH, decay * 0.75f);
+    Color road = BlendColor(WORLD_ROAD_LIGHT,
+                            WORLD_EARTH_SHADOW, decay);
     DrawPlane((Vector3){CC_LOCAL_WORLD_WIDTH * 0.5f, -0.09f,
                         CC_LOCAL_WORLD_DEPTH * 0.5f},
               (Vector2){CC_LOCAL_WORLD_WIDTH + 8.0f,
@@ -16000,10 +16027,10 @@ static void DrawRoadTerrain(const CcRoute *route, int32_t danger,
             x < ROAD_BARRICADE_X + 4.40f) continue;
         float z = 39.10f + (float)(scar & 1) * 1.65f;
         DrawCylinder((Vector3){x, -0.025f, z}, 0.28f, 0.42f,
-                     0.035f, 12, (Color){54, 44, 37, 255});
+                     0.035f, 12, WORLD_EARTH_SHADOW);
     }
     Color leaves = route != NULL && route->smuggler_route ?
-        (Color){35, 87, 65, 255} : (Color){57, 109, 78, 255};
+        WORLD_FOLIAGE_SHADOW : WORLD_FOLIAGE;
     TreeRegionalStyle regional_style = TreeStyleForKingdom(kingdom);
     for (int32_t tree = 0; tree < 13; ++tree) {
         float x = 20.0f + (float)tree * 4.75f;
@@ -16021,24 +16048,23 @@ static void DrawRoadTerrain(const CcRoute *route, int32_t danger,
             tree_leaves = ShadeColor(tree_leaves, 0.86f);
         } else if (family == TREE_FAMILY_POLLARD) {
             tree_leaves = BlendColor(tree_leaves,
-                                     (Color){96, 105, 61, 255}, 0.16f);
+                                     WORLD_GRASS_LIGHT, 0.16f);
         }
         DrawTree(x, z, family, tree_leaves, regional_style);
     }
     if (route != NULL && (route->closed || route->condition < 42)) {
         DrawTerrainPatchAtTop(68.0f, 32.0f, 4.0f, 16.0f, -0.002f,
-                              (Color){12, 24, 27, 255});
+                              CC_STYLE_PANEL_DEEP);
         for (int32_t plank = 0; plank < 5; ++plank) {
             DrawBox((Vector3){70.0f, 0.12f, 37.35f + (float)plank * 1.32f},
                     (Vector3){4.45f, 0.18f, 0.92f},
-                    plank == 2 ? (Color){82, 58, 43, 255} :
-                                 (Color){113, 78, 51, 255});
+                    plank == 2 ? WORLD_WOOD_SHADOW : WORLD_WOOD_LIGHT);
         }
     }
     if (route != NULL && route->security >= 65) {
         DrawBox((Vector3){30.20f, 1.05f, 35.70f},
                 (Vector3){0.58f, 2.10f, 0.58f},
-                (Color){103, 104, 96, 255});
+                WORLD_STONE_LIGHT);
         DrawBox((Vector3){30.20f, 1.68f, 35.38f},
                 (Vector3){0.42f, 0.46f, 0.05f}, WORLD_GOLD);
     }
@@ -16047,7 +16073,7 @@ static void DrawRoadTerrain(const CcRoute *route, int32_t danger,
             DrawBox((Vector3){58.5f + (float)marker * 1.1f, 0.18f,
                               44.15f},
                     (Vector3){0.52f, 0.36f, 0.72f},
-                    (Color){82, 58, 49, 255});
+                    BlendColor(WORLD_EARTH_SHADOW, WORLD_DANGER, 0.24f));
         }
     }
 }
