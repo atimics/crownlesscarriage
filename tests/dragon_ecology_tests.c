@@ -84,6 +84,7 @@ int main(void)
     };
     (void)snprintf(remembered->name, sizeof(remembered->name),
                    "The First Crown's Seal");
+    sim.next_entity_serial = UINT64_C(9002);
     memory_before = sim.dragon.memory_integrity;
     CcCommand steal_named = {
         .kind = CC_COMMAND_STEAL_DRAGON_NAMED_TREASURE,

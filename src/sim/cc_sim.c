@@ -51,6 +51,11 @@ static bool ValidBoundedText(const char *text, size_t capacity)
            memchr(text, '\0', capacity) != NULL;
 }
 
+static bool ValidOptionalBoundedText(const char *text, size_t capacity)
+{
+    return text != NULL && memchr(text, '\0', capacity) != NULL;
+}
+
 static void SetError(char *error, size_t capacity, const char *message)
 {
     if (error == NULL || capacity == 0U) return;
@@ -9302,6 +9307,111 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
     return false;
 }
 
+#define CC_MAX_TRACKED_IDENTITIES \
+    (CC_MAX_KINGDOMS + CC_MAX_SETTLEMENTS + CC_MAX_ROUTES + CC_MAX_MAPS + \
+     CC_MAX_TREASURES + CC_MAX_FACTIONS + CC_MAX_SHIPMENTS + \
+     CC_MAX_COURIERS + CC_MAX_BANDITS + CC_MAX_MONSTERS + CC_MAX_DUNGEONS + \
+     CC_MAX_SITUATIONS + CC_MAX_EVENTS + CC_CARRIAGE_HORSE_COUNT + \
+     CC_MAX_STABLE_HORSES + 4)
+
+typedef struct CcIdentityLedger {
+    CcId ids[CC_MAX_TRACKED_IDENTITIES];
+    int32_t count;
+    uint64_t greatest_serial;
+} CcIdentityLedger;
+
+static bool TrackIdentity(CcIdentityLedger *ledger, CcId id,
+                          CcEntityKind expected_kind,
+                          char *error, size_t error_capacity)
+{
+    uint64_t serial = id & CC_ID_SERIAL_MASK;
+    if (CcIdKind(id) != expected_kind || serial == 0U ||
+        ledger->count >= CC_MAX_TRACKED_IDENTITIES) {
+        SetError(error, error_capacity, "Simulation identity is invalid.");
+        return false;
+    }
+    for (int32_t i = 0; i < ledger->count; ++i) {
+        if (ledger->ids[i] == id) {
+            SetError(error, error_capacity,
+                     "Simulation identities are not unique.");
+            return false;
+        }
+    }
+    ledger->ids[ledger->count++] = id;
+    if (serial > ledger->greatest_serial) ledger->greatest_serial = serial;
+    return true;
+}
+
+static bool ValidateIdentityState(const CcSim *sim,
+                                  char *error, size_t error_capacity)
+{
+    CcIdentityLedger ledger = {0};
+#define TRACK_ID(value, kind) \
+    do { \
+        if (!TrackIdentity(&ledger, (value), (kind), \
+                           error, error_capacity)) return false; \
+    } while (0)
+    for (int32_t i = 0; i < sim->kingdom_count; ++i)
+        TRACK_ID(sim->kingdoms[i].id, CC_ENTITY_KINGDOM);
+    for (int32_t i = 0; i < sim->settlement_count; ++i)
+        TRACK_ID(sim->settlements[i].id, CC_ENTITY_SETTLEMENT);
+    for (int32_t i = 0; i < sim->route_count; ++i)
+        TRACK_ID(sim->routes[i].id, CC_ENTITY_ROUTE);
+    for (int32_t i = 0; i < sim->map_count; ++i)
+        TRACK_ID(sim->maps[i].id, CC_ENTITY_MAP);
+    if (sim->schema_version >= 9U) {
+        for (int32_t i = 0; i < sim->treasure_count; ++i)
+            TRACK_ID(sim->treasures[i].id, CC_ENTITY_TREASURE);
+    }
+    for (int32_t i = 0; i < sim->faction_count; ++i)
+        TRACK_ID(sim->factions[i].id, CC_ENTITY_FACTION);
+    for (int32_t i = 0; i < sim->shipment_count; ++i)
+        TRACK_ID(sim->shipments[i].id, CC_ENTITY_SHIPMENT);
+    if (sim->schema_version >= 11U) {
+        for (int32_t i = 0; i < sim->courier_count; ++i)
+            TRACK_ID(sim->couriers[i].id, CC_ENTITY_COURIER);
+    }
+    for (int32_t i = 0; i < sim->bandit_count; ++i)
+        TRACK_ID(sim->bandits[i].id, CC_ENTITY_BANDIT_GROUP);
+    for (int32_t i = 0; i < sim->monster_count; ++i)
+        TRACK_ID(sim->monsters[i].id, CC_ENTITY_MONSTER_POPULATION);
+    for (int32_t i = 0; i < sim->dungeon_count; ++i)
+        TRACK_ID(sim->dungeons[i].id, CC_ENTITY_DUNGEON);
+    for (int32_t i = 0; i < sim->situation_count; ++i)
+        TRACK_ID(sim->situations[i].id, CC_ENTITY_SITUATION);
+    for (int32_t i = 0; i < sim->event_count; ++i) {
+        const CcEvent *event = CcSimRecentEvent(sim, i);
+        if (event == NULL) {
+            SetError(error, error_capacity, "Simulation event identity is invalid.");
+            return false;
+        }
+        TRACK_ID(event->id, CC_ENTITY_EVENT);
+    }
+    TRACK_ID(sim->player.id, CC_ENTITY_PLAYER_COMPANY);
+    if (sim->schema_version >= 6U) {
+        TRACK_ID(sim->goblins.id, CC_ENTITY_GOBLIN_CULT);
+        TRACK_ID(sim->dragon.id, CC_ENTITY_DRAGON);
+    }
+    if (sim->schema_version >= 7U)
+        TRACK_ID(sim->hoard_raiders.id, CC_ENTITY_HOARD_RAIDERS);
+    if (sim->schema_version >= 14U) {
+        for (int32_t i = 0; i < CC_CARRIAGE_HORSE_COUNT; ++i)
+            TRACK_ID(sim->horse_team[i].id, CC_ENTITY_HORSE);
+    }
+    if (sim->schema_version >= 15U) {
+        for (int32_t i = 0; i < sim->stable_horse_count; ++i)
+            TRACK_ID(sim->stable_horses[i].id, CC_ENTITY_HORSE);
+    }
+#undef TRACK_ID
+    if (sim->next_entity_serial <= ledger.greatest_serial ||
+        sim->next_entity_serial > CC_ID_SERIAL_MASK) {
+        SetError(error, error_capacity,
+                 "Simulation identity counter is behind saved entities.");
+        return false;
+    }
+    return true;
+}
+
 bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
 {
     if (sim == NULL) {
@@ -9375,6 +9485,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         SetError(error, error_capacity, "Simulation counts are invalid.");
         return false;
     }
+    if (!ValidateIdentityState(sim, error, error_capacity)) return false;
     for (int32_t i = 0; i < sim->kingdom_count; ++i) {
         const CcKingdom *kingdom = &sim->kingdoms[i];
         if (CcIdKind(kingdom->id) != CC_ENTITY_KINGDOM ||
@@ -9855,7 +9966,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             goblins->tribute_days_remaining > 0 &&
             goblins->carried_tribute >= 0;
         if (CcIdKind(goblins->id) != CC_ENTITY_GOBLIN_CULT ||
-            goblins->name[0] == '\0' || goblins->members < 1 ||
+            !ValidBoundedText(goblins->name, sizeof(goblins->name)) ||
+            goblins->members < 1 ||
             goblins->members > 120 || goblins->devotion < 0 ||
             goblins->devotion > 100 || goblins->cohesion < 0 ||
             goblins->cohesion > 100 ||
@@ -9915,7 +10027,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
              dragon->theft_actor_id == sim->player.id &&
              dragon->stolen_outstanding == stolen_named->appraised_value);
         if (CcIdKind(dragon->id) != CC_ENTITY_DRAGON ||
-            dragon->name[0] == '\0' ||
+            !ValidBoundedText(dragon->name, sizeof(dragon->name)) ||
             CcSimSettlement(sim, dragon->lair_settlement_id) == NULL ||
             dragon->hoard < 0 || dragon->hoard > CC_SIM_MAX_MONEY ||
             dragon->stolen_outstanding < 0 ||
@@ -10023,7 +10135,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             (raiders->phase == CC_HOARD_RAIDERS_RETURNING ||
              raiders->carried_treasure == 0);
         if (CcIdKind(raiders->id) != CC_ENTITY_HOARD_RAIDERS ||
-            raiders->name[0] == '\0' ||
+            !ValidBoundedText(raiders->name, sizeof(raiders->name)) ||
             raiders->phase < CC_HOARD_RAIDERS_IDLE ||
             raiders->phase > CC_HOARD_RAIDERS_RETURNING ||
             raiders->carried_treasure < 0 ||
@@ -10076,6 +10188,10 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                             situation->issuer_faction_id;
         }
         if (CcIdKind(situation->id) != CC_ENTITY_SITUATION ||
+            !ValidOptionalBoundedText(situation->sponsor_name,
+                                      sizeof(situation->sponsor_name)) ||
+            !ValidOptionalBoundedText(situation->affected_name,
+                                      sizeof(situation->affected_name)) ||
             situation->kind < CC_SITUATION_RELIEF_DELIVERY ||
             situation->kind > CC_SITUATION_COURIER_DELIVERY ||
             target_kind != expected_kind || !target_exists ||
@@ -10289,7 +10405,9 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         SetError(error, error_capacity, "Journey outcome state is invalid.");
         return false;
     }
-    if (sim->delayed_echo.active &&
+    if (!ValidOptionalBoundedText(sim->delayed_echo.character_name,
+                                  sizeof(sim->delayed_echo.character_name)) ||
+        (sim->delayed_echo.active &&
         (CcSimSituation(sim, sim->delayed_echo.situation_id) == NULL ||
          CcSimSettlement(sim, sim->delayed_echo.settlement_id) == NULL ||
          sim->delayed_echo.outcome <= CC_JOURNEY_OUTCOME_NONE ||
@@ -10297,7 +10415,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
          sim->delayed_echo.due_day < 0 ||
          (sim->delayed_echo.parent_event_id != 0U &&
           CcSimEvent(sim, sim->delayed_echo.parent_event_id) == NULL) ||
-         sim->delayed_echo.character_name[0] == '\0')) {
+         sim->delayed_echo.character_name[0] == '\0'))) {
         SetError(error, error_capacity, "Delayed journey echo is invalid.");
         return false;
     }

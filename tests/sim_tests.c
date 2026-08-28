@@ -667,6 +667,30 @@ int main(void)
     CcSimInit(&invalid_state, UINT32_C(0xbad5a7e));
     invalid_state.current_day = CC_SIM_MAX_DAY + 1;
     CC_CHECK(!CcSimValidate(&invalid_state, error, sizeof(error)));
+    CcSimInit(&invalid_state, UINT32_C(0xbad5a7e));
+    const CcEvent *existing_event = CcSimRecentEvent(&invalid_state, 0);
+    CC_CHECK(existing_event != NULL);
+    invalid_state.next_entity_serial =
+        existing_event->id & UINT64_C(0x00ffffffffffffff);
+    CC_CHECK(!CcSimValidate(&invalid_state, error, sizeof(error)));
+    CC_CHECK(strstr(error, "identity counter") != NULL);
+    CcSimInit(&invalid_state, UINT32_C(0xbad5a7e));
+    invalid_state.routes[1].id = invalid_state.routes[0].id;
+    CC_CHECK(!CcSimValidate(&invalid_state, error, sizeof(error)));
+    CC_CHECK(strstr(error, "not unique") != NULL);
+    CcSimInit(&invalid_state, UINT32_C(0xbad5a7e));
+    memset(invalid_state.goblins.name, 'G',
+           sizeof(invalid_state.goblins.name));
+    CC_CHECK(!CcSimValidate(&invalid_state, error, sizeof(error)));
+    CcSimInit(&invalid_state, UINT32_C(0xbad5a7e));
+    CC_CHECK(invalid_state.situation_count > 0);
+    memset(invalid_state.situations[0].sponsor_name, 'S',
+           sizeof(invalid_state.situations[0].sponsor_name));
+    CC_CHECK(!CcSimValidate(&invalid_state, error, sizeof(error)));
+    CcSimInit(&invalid_state, UINT32_C(0xbad5a7e));
+    memset(invalid_state.delayed_echo.character_name, 'E',
+           sizeof(invalid_state.delayed_echo.character_name));
+    CC_CHECK(!CcSimValidate(&invalid_state, error, sizeof(error)));
 
     CcSim trade_edge;
     CcSimInit(&trade_edge, UINT32_C(0x7adee9e));

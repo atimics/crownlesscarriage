@@ -164,6 +164,10 @@ static void CheckJournalOwnership(char *error, size_t error_capacity)
     CcJournal *second = CcJournalRestart(path, &replacement,
                                          error, error_capacity);
     CC_CHECK(second != NULL);
+    CC_CHECK(ReadSqliteInteger(
+                 path, "SELECT COUNT(*) FROM journal_epoch;") == 1);
+    CC_CHECK(ReadSqliteInteger(
+                 path, "SELECT COUNT(*) FROM action_journal;") == 0);
 
     CC_CHECK(!CcJournalAdvanceDays(first, &original, 1,
                                    error, error_capacity));
@@ -209,6 +213,70 @@ static void CheckForgedExtremeStateRejected(char *error,
     CcSim restored;
     CC_CHECK(!CcSaveRead(path, &restored, error, error_capacity));
     CC_CHECK(strstr(error, "Market accounting") != NULL);
+    RemoveDatabase(path);
+}
+
+static void CheckMalformedTextRejected(char *error, size_t error_capacity)
+{
+    const char *path = "persistence-malformed-text-test.ccsave";
+    RemoveDatabase(path);
+    CcSim sim;
+    CcSimInit(&sim, UINT32_C(0x7e870bad));
+    CC_CHECK(CcSaveWrite(path, &sim, error, error_capacity));
+
+    sqlite3 *database = NULL;
+    RequireSqlite(sqlite3_open_v2(path, &database, SQLITE_OPEN_READWRITE,
+                                  NULL),
+                  database, "could not open malformed-text fixture");
+    ExecuteFixtureSql(
+        database,
+        "CREATE TABLE kingdom_copy AS SELECT * FROM kingdom;"
+        "DROP TABLE kingdom;"
+        "ALTER TABLE kingdom_copy RENAME TO kingdom;"
+        "UPDATE kingdom SET name=NULL WHERE slot=0;",
+        "could not forge malformed-text fixture");
+    sqlite3_close(database);
+
+    CcSim restored;
+    CC_CHECK(!CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(strstr(error, "kingdom name text is invalid") != NULL);
+    RemoveDatabase(path);
+}
+
+static void CheckForgedIdentityStateRejected(char *error,
+                                             size_t error_capacity)
+{
+    const char *path = "persistence-forged-identity-test.ccsave";
+    RemoveDatabase(path);
+    CcSim sim;
+    CcSimInit(&sim, UINT32_C(0x1de1717e));
+    CC_CHECK(CcSaveWrite(path, &sim, error, error_capacity));
+
+    CcSim forged = sim;
+    const CcEvent *event = CcSimRecentEvent(&forged, 0);
+    CC_CHECK(event != NULL);
+    forged.next_entity_serial =
+        event->id & UINT64_C(0x00ffffffffffffff);
+    char forged_hash[24];
+    (void)snprintf(forged_hash, sizeof(forged_hash), "%016" PRIx64,
+                   CcSimHash(&forged));
+
+    sqlite3 *database = NULL;
+    RequireSqlite(sqlite3_open_v2(path, &database, SQLITE_OPEN_READWRITE,
+                                  NULL),
+                  database, "could not open forged-identity fixture");
+    char *sql = sqlite3_mprintf(
+        "UPDATE meta SET next_entity_serial=%llu,state_hash=%Q WHERE id=1;",
+        (unsigned long long)forged.next_entity_serial, forged_hash);
+    CC_CHECK(sql != NULL);
+    ExecuteFixtureSql(database, sql,
+                      "could not forge identity fixture");
+    sqlite3_free(sql);
+    sqlite3_close(database);
+
+    CcSim restored;
+    CC_CHECK(!CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(strstr(error, "identity counter") != NULL);
     RemoveDatabase(path);
 }
 
@@ -674,9 +742,13 @@ static void CheckJournalCheckpointAndTamper(char *error,
     uint64_t expected_hash = CcSimHash(&sim);
     CC_CHECK(CcJournalClose(&journal, &sim, error, error_capacity));
     CC_CHECK(ReadSqliteInteger(
-                 path, "SELECT journal_cursor FROM meta WHERE id=1;") == 1);
+                 path, "SELECT journal_cursor FROM meta WHERE id=1;") == 0);
     CC_CHECK(ReadSqliteInteger(
-                 path, "SELECT MAX(ordinal) FROM action_journal;") == 2);
+                 path, "SELECT COUNT(*) FROM journal_epoch;") == 1);
+    CC_CHECK(ReadSqliteInteger(
+                 path, "SELECT COUNT(*) FROM action_journal;") == 1);
+    CC_CHECK(ReadSqliteInteger(
+                 path, "SELECT MAX(ordinal) FROM action_journal;") == 1);
     CcSim restored;
     CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
     CC_CHECK(CcSimHash(&restored) == expected_hash);
@@ -883,6 +955,8 @@ int main(void)
     CheckReadDoesNotCreateOrRelabel(error, sizeof(error));
     CheckJournalOwnership(error, sizeof(error));
     CheckForgedExtremeStateRejected(error, sizeof(error));
+    CheckMalformedTextRejected(error, sizeof(error));
+    CheckForgedIdentityStateRejected(error, sizeof(error));
     CheckPreJourneySchema3Compatibility(error, sizeof(error));
     CheckSchema4Compatibility(error, sizeof(error));
     CheckSchema5Compatibility(error, sizeof(error));
