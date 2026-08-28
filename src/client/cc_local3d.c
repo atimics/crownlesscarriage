@@ -10970,89 +10970,129 @@ static void DrawTiltedBox(Vector3 center, Vector3 size, Vector3 axis,
 static float DrawPitchedRoof(float x, float z, float width, float depth,
                              float wall_height, Color wall, Color roof)
 {
-    const float overhang = 0.34f;
-    const float rise = 0.82f + fminf(width, depth) * 0.055f;
+    const float overhang = 0.42f;
+    const float rise = 0.96f + fminf(width, depth) * 0.075f;
+    const int32_t courses = 5;
     bool ridge_along_x = width >= depth;
     Color shadow = ShadeColor(roof, 0.72f);
 
-    rlDisableBackfaceCulling();
-    if (ridge_along_x) {
-        for (int32_t end = 0; end < 2; ++end) {
-            float gable_x = end == 0 ? x - 0.015f : x + width + 0.015f;
-            DrawTriangle3D(
-                (Vector3){gable_x, wall_height, z},
-                (Vector3){gable_x, wall_height, z + depth},
-                (Vector3){gable_x, wall_height + rise, z + depth * 0.5f},
-                wall);
-        }
-    } else {
-        for (int32_t end = 0; end < 2; ++end) {
-            float gable_z = end == 0 ? z - 0.015f : z + depth + 0.015f;
-            DrawTriangle3D(
-                (Vector3){x, wall_height, gable_z},
-                (Vector3){x + width, wall_height, gable_z},
-                (Vector3){x + width * 0.5f, wall_height + rise, gable_z},
-                wall);
-        }
+    /* A roof is a stack of heavy courses, not two thin planes. The stepped
+       silhouette survives the low art resolution and makes every house read
+       as a small construction assembled from physical blocks. */
+    DrawBox((Vector3){x + width * 0.5f, wall_height - 0.06f,
+                      z + depth * 0.5f},
+            (Vector3){width + overhang * 2.18f, 0.24f,
+                      depth + overhang * 2.18f},
+            BlendColor(ShadeColor(roof, 0.66f), wall, 0.16f));
+    for (int32_t course = 0; course < courses; ++course) {
+        float amount = (float)course / (float)courses;
+        float course_height = rise / (float)courses;
+        float roof_span = ridge_along_x ? depth : width;
+        float remaining = fmaxf(0.48f,
+            roof_span + overhang * 2.0f -
+            amount * (roof_span + overhang * 1.42f));
+        Vector3 size = ridge_along_x ?
+            (Vector3){width + overhang * 2.0f,
+                      course_height + 0.035f, remaining} :
+            (Vector3){remaining, course_height + 0.035f,
+                      depth + overhang * 2.0f};
+        Color course_color = course == 0 ? shadow :
+            ShadeColor(roof, 0.78f + (float)course * 0.045f);
+        DrawBox((Vector3){x + width * 0.5f,
+                          wall_height + course_height * ((float)course + 0.5f),
+                          z + depth * 0.5f},
+                size, course_color);
     }
-    rlEnableBackfaceCulling();
-
-    if (ridge_along_x) {
-        float run = depth * 0.5f + overhang;
-        float slope = sqrtf(run * run + rise * rise);
-        float pitch = atanf(rise / run) * RAD2DEG;
-        for (int32_t side = -1; side <= 1; side += 2) {
-            float side_sign = (float)side;
-            DrawTiltedBox(
-                (Vector3){x + width * 0.5f,
-                          wall_height + rise * 0.5f,
-                          z + depth * 0.5f + side_sign * run * 0.5f},
-                (Vector3){width + overhang * 2.0f, 0.16f, slope},
-                (Vector3){1.0f, 0.0f, 0.0f}, side_sign * pitch,
-                side > 0 ? roof : shadow);
-            for (int32_t course = 1; course <= 2; ++course) {
-                float along = (float)course / 3.0f;
-                DrawTiltedBox(
-                    (Vector3){x + width * 0.5f,
-                              wall_height + rise * (1.0f - along) + 0.035f,
-                              z + depth * 0.5f + side_sign * run * along},
-                    (Vector3){width + overhang * 2.04f, 0.045f, 0.12f},
-                    (Vector3){1.0f, 0.0f, 0.0f}, side_sign * pitch,
-                    ShadeColor(roof, side > 0 ? 0.82f : 0.68f));
-            }
-        }
-        DrawBox((Vector3){x + width * 0.5f, wall_height + rise + 0.03f,
-                          z + depth * 0.5f},
-                (Vector3){width + overhang * 2.1f, 0.13f, 0.16f}, shadow);
-    } else {
-        float run = width * 0.5f + overhang;
-        float slope = sqrtf(run * run + rise * rise);
-        float pitch = atanf(rise / run) * RAD2DEG;
-        for (int32_t side = -1; side <= 1; side += 2) {
-            float side_sign = (float)side;
-            DrawTiltedBox(
-                (Vector3){x + width * 0.5f + side_sign * run * 0.5f,
-                          wall_height + rise * 0.5f,
-                          z + depth * 0.5f},
-                (Vector3){slope, 0.16f, depth + overhang * 2.0f},
-                (Vector3){0.0f, 0.0f, 1.0f}, -side_sign * pitch,
-                side > 0 ? roof : shadow);
-            for (int32_t course = 1; course <= 2; ++course) {
-                float along = (float)course / 3.0f;
-                DrawTiltedBox(
-                    (Vector3){x + width * 0.5f + side_sign * run * along,
-                              wall_height + rise * (1.0f - along) + 0.035f,
-                              z + depth * 0.5f},
-                    (Vector3){0.12f, 0.045f, depth + overhang * 2.04f},
-                    (Vector3){0.0f, 0.0f, 1.0f}, -side_sign * pitch,
-                    ShadeColor(roof, side > 0 ? 0.82f : 0.68f));
-            }
-        }
-        DrawBox((Vector3){x + width * 0.5f, wall_height + rise + 0.03f,
-                          z + depth * 0.5f},
-                (Vector3){0.16f, 0.13f, depth + overhang * 2.1f}, shadow);
-    }
+    DrawBox((Vector3){x + width * 0.5f, wall_height + rise + 0.06f,
+                      z + depth * 0.5f},
+            ridge_along_x ?
+                (Vector3){width + overhang * 2.10f, 0.18f, 0.24f} :
+                (Vector3){0.24f, 0.18f, depth + overhang * 2.10f},
+            ShadeColor(roof, 0.62f));
     return rise;
+}
+
+static void DrawConstructedWallShell(float x, float z, float width,
+                                     float depth, float height,
+                                     Color wall, Color trim, int32_t style)
+{
+    const float inset = 0.18f;
+    const float base_height = fminf(1.06f, height * 0.20f);
+    float upper_height = height - base_height;
+    float corner = fmaxf(0.40f, fminf(0.58f,
+        fminf(width, depth) * 0.072f));
+    Color lower = ShadeColor(wall, 0.78f);
+    Color side = ShadeColor(wall, 0.90f);
+
+    /* The shell is built in layers. A deep lower block carries a smaller
+       wall core; projecting bays and corner piers then restore the complete
+       collision-sized silhouette. This gives the camera real parallax at
+       every edge instead of one flat facade with lines painted on it. */
+    DrawBox((Vector3){x + width * 0.5f, base_height * 0.5f,
+                      z + depth * 0.5f},
+            (Vector3){width, base_height, depth}, lower);
+    DrawBox((Vector3){x + width * 0.5f,
+                      base_height + upper_height * 0.5f,
+                      z + depth * 0.5f},
+            (Vector3){width - inset * 2.0f, upper_height,
+                      depth - inset * 2.0f}, wall);
+
+    for (int32_t corner_index = 0; corner_index < 4; ++corner_index) {
+        float corner_x = (corner_index & 1) == 0 ?
+            x + corner * 0.5f : x + width - corner * 0.5f;
+        float corner_z = (corner_index & 2) == 0 ?
+            z + corner * 0.5f : z + depth - corner * 0.5f;
+        DrawBox((Vector3){corner_x, height * 0.50f, corner_z},
+                (Vector3){corner, height, corner},
+                corner_index == 3 ? trim : ShadeColor(trim, 0.90f));
+    }
+
+    int32_t front_bays = width >= 10.0f ? 3 : 2;
+    float front_gap = 0.16f;
+    float front_available = width - corner * 2.0f;
+    float front_bay_width =
+        (front_available - front_gap * (float)(front_bays - 1)) /
+        (float)front_bays;
+    for (int32_t bay = 0; bay < front_bays; ++bay) {
+        float bay_x = x + corner + front_bay_width * ((float)bay + 0.5f) +
+            front_gap * (float)bay;
+        float projection = ((bay + style) & 1) != 0 ? 0.30f : 0.22f;
+        DrawBox((Vector3){bay_x,
+                          base_height + upper_height * 0.5f,
+                          z + depth - inset * 0.30f + projection * 0.18f},
+                (Vector3){front_bay_width, upper_height - 0.14f,
+                          inset + projection},
+                ((bay + style) & 1) != 0 ? wall : ShadeColor(wall, 0.96f));
+    }
+
+    int32_t side_bays = depth >= 9.0f ? 3 : 2;
+    float side_available = depth - corner * 2.0f;
+    float side_bay_depth =
+        (side_available - front_gap * (float)(side_bays - 1)) /
+        (float)side_bays;
+    for (int32_t bay = 0; bay < side_bays; ++bay) {
+        float bay_z = z + corner + side_bay_depth * ((float)bay + 0.5f) +
+            front_gap * (float)bay;
+        float projection = ((bay + style) & 1) != 0 ? 0.24f : 0.16f;
+        DrawBox((Vector3){x + width - inset * 0.30f + projection * 0.18f,
+                          base_height + upper_height * 0.5f, bay_z},
+                (Vector3){inset + projection, upper_height - 0.14f,
+                          side_bay_depth},
+                ((bay + style) & 1) != 0 ? side : ShadeColor(side, 0.96f));
+    }
+
+    /* Timber houses gain a visibly cantilevered upper storey. Stone and
+       civic buildings keep their weight closer to the foundation. */
+    if (style == 0 || style == 3) {
+        float storey = fminf(2.18f, height * 0.43f);
+        DrawBox((Vector3){x + width * 0.5f, storey,
+                          z + depth + 0.18f},
+                (Vector3){width + 0.24f, 0.22f, 0.42f}, trim);
+        DrawBox((Vector3){x + width + 0.18f, storey,
+                          z + depth * 0.5f},
+                (Vector3){0.42f, 0.22f, depth + 0.24f},
+                ShadeColor(trim, 0.88f));
+    }
 }
 
 static void DrawRoofDormer(float x, float z, float width, float depth,
@@ -11196,7 +11236,7 @@ static void DrawFacadeWindow(Vector3 center, bool side_facing, Color trim,
                                    (Vector3){1.02f, 1.34f, 0.075f};
     Vector3 pane = side_facing ? (Vector3){0.035f, 1.02f, 0.72f} :
                                  (Vector3){0.72f, 1.02f, 0.035f};
-    DrawBox(center, recess, ShadeColor(trim, 0.62f));
+    DrawBox(center, recess, ShadeColor(trim, 0.48f));
     DrawBox(center, pane, glass);
     Vector3 vertical = side_facing ? (Vector3){0.022f, 1.06f, 0.055f} :
                                      (Vector3){0.055f, 1.06f, 0.022f};
@@ -11219,6 +11259,28 @@ static void DrawFacadeWindow(Vector3 center, bool side_facing, Color trim,
                                    (Vector3){1.04f, 0.15f, 0.08f};
     DrawBox(sill_center, sill, ShadeColor(trim, 1.08f));
     DrawBox(lintel_center, lintel, ShadeColor(trim, 0.82f));
+
+    /* Deep jambs make the window a cavity in the wall. At gameplay scale the
+       visible side faces matter more than another line on the glass. */
+    float outward = 0.10f;
+    Vector3 jamb_a = center;
+    Vector3 jamb_b = center;
+    Vector3 jamb_size;
+    if (side_facing) {
+        jamb_a.x += outward;
+        jamb_b.x += outward;
+        jamb_a.z -= 0.49f;
+        jamb_b.z += 0.49f;
+        jamb_size = (Vector3){0.24f, 1.36f, 0.14f};
+    } else {
+        jamb_a.z += outward;
+        jamb_b.z += outward;
+        jamb_a.x -= 0.49f;
+        jamb_b.x += 0.49f;
+        jamb_size = (Vector3){0.14f, 1.36f, 0.24f};
+    }
+    DrawBox(jamb_a, jamb_size, ShadeColor(trim, 0.86f));
+    DrawBox(jamb_b, jamb_size, ShadeColor(trim, 0.92f));
 }
 
 static void DrawBuildingContactShadow(float x, float z, float width,
@@ -11246,6 +11308,33 @@ static void DrawBuildingFoundation(float x, float z, float width,
     DrawBox((Vector3){x + width * 0.5f, 0.47f,
                       z + depth * 0.5f},
             (Vector3){width + 0.30f, 0.12f, depth + 0.30f}, cap);
+
+    /* Two visible block courses turn the footing into laid masonry. The
+       alternating joints continue around the corner so it reads as one
+       weight-bearing construct from every street shot. */
+    for (int32_t course = 0; course < 2; ++course) {
+        float y = 0.13f + (float)course * 0.25f;
+        float block_width = 0.92f;
+        int32_t front_blocks = (int32_t)ceilf((width + 0.20f) / block_width);
+        for (int32_t block = 0; block < front_blocks; ++block) {
+            float start = x - 0.10f - (course != 0 ? block_width * 0.5f : 0.0f);
+            float block_x = start + ((float)block + 0.5f) * block_width;
+            if (block_x < x - 0.12f || block_x > x + width + 0.12f) continue;
+            DrawBox((Vector3){block_x, y, z + depth + 0.065f},
+                    (Vector3){block_width - 0.045f, 0.22f, 0.17f},
+                    course == 0 ? footing : cap);
+        }
+        int32_t side_blocks = (int32_t)ceilf((depth + 0.20f) / block_width);
+        for (int32_t block = 0; block < side_blocks; ++block) {
+            float start = z - 0.10f - (course == 0 ? block_width * 0.5f : 0.0f);
+            float block_z = start + ((float)block + 0.5f) * block_width;
+            if (block_z < z - 0.12f || block_z > z + depth + 0.12f) continue;
+            DrawBox((Vector3){x + width + 0.065f, y, block_z},
+                    (Vector3){0.17f, 0.22f, block_width - 0.045f},
+                    course == 0 ? ShadeColor(footing, 0.92f) :
+                                  ShadeColor(cap, 0.92f));
+        }
+    }
 }
 
 static void DrawBuilding(float x, float z, float width, float depth,
@@ -11257,7 +11346,7 @@ static void DrawBuilding(float x, float z, float width, float depth,
     Color glass = style == 1 ? (Color){148, 103, 55, 255} :
                   style == 3 ? Fade(WORLD_VIOLET, 0.84f) :
                                Fade(WORLD_TEAL, 0.78f);
-    DrawBox(center, (Vector3){width, height, depth}, wall);
+    DrawConstructedWallShell(x, z, width, depth, height, wall, trim, style);
 
     /* The positive Z and X facades face the runtime camera. Depth here is not
        decoration pasted onto a diorama: it follows the same authoritative
@@ -11304,16 +11393,23 @@ static void DrawBuilding(float x, float z, float width, float depth,
         DrawBox((Vector3){center.x, 0.045f, z + depth + 0.84f},
                 (Vector3){1.34f, 0.09f, 0.38f},
                 ShadeColor(wall, 0.66f));
-        DrawBox((Vector3){center.x, 1.12f, z + depth + 0.055f},
-                (Vector3){1.30f, 2.24f, 0.12f}, trim);
-        DrawBox((Vector3){center.x, 1.10f, z + depth + 0.125f},
+        DrawBox((Vector3){center.x, 1.10f, z + depth + 0.055f},
                 (Vector3){1.02f, 2.10f, 0.055f},
                 (Color){43, 34, 37, 255});
+        DrawBox((Vector3){center.x - 0.67f, 1.18f,
+                          z + depth + 0.24f},
+                (Vector3){0.24f, 2.36f, 0.52f}, trim);
+        DrawBox((Vector3){center.x + 0.67f, 1.18f,
+                          z + depth + 0.24f},
+                (Vector3){0.24f, 2.36f, 0.52f},
+                ShadeColor(trim, 0.92f));
+        DrawBox((Vector3){center.x, 2.30f, z + depth + 0.24f},
+                (Vector3){1.58f, 0.24f, 0.52f}, trim);
         DrawSmallSphere((Vector3){center.x + 0.39f, 1.075f,
-                                  z + depth + 0.18f},
+                                  z + depth + 0.11f},
                         0.035f, WORLD_GOLD);
-        DrawBox((Vector3){center.x, 2.34f, z + depth + 0.34f},
-                (Vector3){1.55f, 0.13f, 0.70f}, roof);
+        DrawBox((Vector3){center.x, 2.52f, z + depth + 0.48f},
+                (Vector3){1.82f, 0.18f, 0.92f}, roof);
         float lantern_x = center.x + 0.94f;
         DrawBox((Vector3){lantern_x, 1.92f, z + depth + 0.12f},
                 (Vector3){0.08f, 0.48f, 0.08f}, trim);
@@ -12723,6 +12819,91 @@ static void UpdateCastleStructureReveals(Camera3D camera,
     }
 }
 
+static void DrawCastleBattlements(Rectangle footprint, float height,
+                                  Color stone)
+{
+    const float spacing = 1.18f;
+    int32_t front_count = (int32_t)fmaxf(1.0f,
+        floorf(footprint.width / spacing));
+    float front_step = footprint.width / (float)front_count;
+    for (int32_t block = 0; block < front_count; ++block) {
+        float block_x = footprint.x + front_step * ((float)block + 0.5f);
+        DrawBox((Vector3){block_x, height + 0.42f,
+                          footprint.y + footprint.height - 0.10f},
+                (Vector3){fminf(0.66f, front_step * 0.62f), 0.78f, 0.56f},
+                block != front_count - 1 ? stone : ShadeColor(stone, 0.88f));
+    }
+    int32_t side_count = (int32_t)fmaxf(1.0f,
+        floorf(footprint.height / spacing));
+    float side_step = footprint.height / (float)side_count;
+    for (int32_t block = 0; block < side_count; ++block) {
+        float block_z = footprint.y + side_step * ((float)block + 0.5f);
+        DrawBox((Vector3){footprint.x + footprint.width - 0.10f,
+                          height + 0.42f, block_z},
+                (Vector3){0.56f, 0.78f,
+                          fminf(0.66f, side_step * 0.62f)},
+                ShadeColor(stone, block != side_count - 1 ? 0.94f : 0.84f));
+    }
+}
+
+static void DrawConstructedCastleStructure(Rectangle footprint,
+                                            float height, Color stone,
+                                            Color kingdom, int32_t index)
+{
+    float center_x = footprint.x + footprint.width * 0.5f;
+    float center_z = footprint.y + footprint.height * 0.5f;
+    bool wall_run = index < 5;
+    bool keep = index == 5;
+    bool tower = index >= 6;
+    Color base = ShadeColor(stone, 0.70f);
+
+    DrawBox((Vector3){center_x, 0.34f, center_z},
+            (Vector3){footprint.width + 0.32f, 0.68f,
+                      footprint.height + 0.32f}, base);
+    DrawBox((Vector3){center_x, height * 0.50f, center_z},
+            (Vector3){footprint.width, height, footprint.height}, stone);
+
+    /* Broad courses and buttresses make the fortification feel load-bearing.
+       The bands wrap the two visible sides; towers also get corner mass. */
+    int32_t courses = wall_run ? 2 : 3;
+    for (int32_t course = 1; course <= courses; ++course) {
+        float y = height * (float)course / (float)(courses + 1);
+        DrawBox((Vector3){center_x, y,
+                          footprint.y + footprint.height + 0.055f},
+                (Vector3){footprint.width + 0.12f, 0.16f, 0.15f},
+                ShadeColor(stone, 0.82f));
+        DrawBox((Vector3){footprint.x + footprint.width + 0.055f,
+                          y, center_z},
+                (Vector3){0.15f, 0.16f, footprint.height + 0.12f},
+                ShadeColor(stone, 0.76f));
+    }
+
+    if (tower || keep) {
+        float pier = tower ? 0.52f : 0.62f;
+        for (int32_t corner = 0; corner < 4; ++corner) {
+            float pier_x = (corner & 1) == 0 ?
+                footprint.x + pier * 0.5f :
+                footprint.x + footprint.width - pier * 0.5f;
+            float pier_z = (corner & 2) == 0 ?
+                footprint.y + pier * 0.5f :
+                footprint.y + footprint.height - pier * 0.5f;
+            DrawBox((Vector3){pier_x, height * 0.44f, pier_z},
+                    (Vector3){pier, height * 0.88f, pier},
+                    ShadeColor(stone, corner == 3 ? 0.76f : 0.86f));
+            DrawBox((Vector3){pier_x, height * 0.89f, pier_z},
+                    (Vector3){pier + 0.16f, 0.18f, pier + 0.16f},
+                    keep && corner == 3 ? kingdom : ShadeColor(stone, 0.72f));
+        }
+    }
+
+    DrawBox((Vector3){center_x, height + 0.10f, center_z},
+            (Vector3){footprint.width + 0.30f, 0.22f,
+                      footprint.height + 0.30f},
+            tower ? BlendColor(ShadeColor(stone, 0.76f), kingdom, 0.18f) :
+                    ShadeColor(stone, 0.70f));
+    DrawCastleBattlements(footprint, height, stone);
+}
+
 static void DrawCastle(Color kingdom, Vector3 focus, Camera3D camera,
                        Vector3 reveal_world, Vector2 reveal_center,
                        int32_t render_width, int32_t render_height,
@@ -12756,17 +12937,8 @@ static void DrawCastle(Color kingdom, Vector3 focus, Camera3D camera,
             SetWorldForegroundReveal(reveal, reveal_cut_height);
             reveal_active = reveal;
         }
-        DrawBox((Vector3){footprint.x + footprint.width * 0.5f,
-                          structure->height * 0.5f,
-                          footprint.y + footprint.height * 0.5f},
-                (Vector3){footprint.width, structure->height,
-                          footprint.height}, stone);
-        DrawBox((Vector3){footprint.x + footprint.width * 0.5f,
-                          structure->height + 0.11f,
-                          footprint.y + footprint.height * 0.5f},
-                (Vector3){footprint.width + 0.18f, 0.22f,
-                          footprint.height + 0.18f},
-                i >= 8 ? kingdom : WORLD_STONE_SHADOW);
+        DrawConstructedCastleStructure(footprint, structure->height, stone,
+                                       kingdom, i);
     }
     SetWorldForegroundReveal(0.0f, reveal_cut_height);
     {
