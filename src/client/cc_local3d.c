@@ -18370,6 +18370,71 @@ static void DrawTownRaidStaging(const CcLocalCourse *course)
     }
 }
 
+static void DrawDragonLairState(const CcDragon *dragon,
+                                Vector3 scenery_focus)
+{
+    if (dragon == NULL ||
+        !SceneryPointVisible(CC_LOCAL_DRAGON_CAVE_X,
+                             CC_LOCAL_DRAGON_CAVE_Z,
+                             scenery_focus)) return;
+    const float cave_x = CC_LOCAL_DRAGON_CAVE_X;
+    const float cave_z = CC_LOCAL_DRAGON_CAVE_Z - 1.35f;
+    float ground = CcLocalTerrainHeightAt(cave_x, cave_z);
+    Color cave_rock = (Color){47, 46, 54, 255};
+    Color ash = (Color){49, 44, 48, 255};
+    DrawBox((Vector3){cave_x, ground + 1.20f, cave_z + 0.34f},
+            (Vector3){2.35f, 2.40f, 0.48f}, cave_rock);
+    DrawBox((Vector3){cave_x, ground + 0.78f, cave_z + 0.04f},
+            (Vector3){1.08f, 1.56f, 0.32f}, (Color){7, 8, 12, 255});
+    DrawScenerySphere((Vector3){cave_x - 1.18f, ground + 0.54f,
+                                 cave_z - 0.06f}, 0.78f, cave_rock);
+    DrawScenerySphere((Vector3){cave_x + 1.15f, ground + 0.48f,
+                                 cave_z - 0.02f}, 0.72f, cave_rock);
+
+    int32_t coin_marks = 2 + dragon->crown_strength / 14;
+    if (coin_marks > 9) coin_marks = 9;
+    for (int32_t i = 0; i < coin_marks; ++i) {
+        float x = cave_x + 1.80f + (float)(i % 3) * 0.28f;
+        float z = cave_z - 0.62f + (float)(i / 3) * 0.25f;
+        float y = CcLocalTerrainHeightAt(x, z);
+        DrawSmallSphere((Vector3){x, y + 0.10f, z}, 0.13f,
+                        i % 3 == 0 ? WORLD_VIOLET : WORLD_GOLD);
+    }
+    for (int32_t egg = 0; egg < dragon->egg_count && egg < 3; ++egg) {
+        float x = cave_x - 1.72f + (float)egg * 0.48f;
+        float z = cave_z - 0.48f + (float)(egg & 1) * 0.22f;
+        float y = CcLocalTerrainHeightAt(x, z);
+        DrawScenerySphere((Vector3){x, y + 0.25f, z}, 0.31f,
+                          (Color){201, 187, 148, 255});
+        DrawSmallSphere((Vector3){x + 0.06f, y + 0.31f, z - 0.19f},
+                        0.08f, WORLD_GOLD);
+    }
+
+    if (!dragon->slain) return;
+    for (int32_t patch = 0; patch < 6; ++patch) {
+        float x = cave_x - 2.10f + (float)(patch % 3) * 1.25f;
+        float z = cave_z - 1.05f + (float)(patch / 3) * 0.82f;
+        float y = CcLocalTerrainHeightAt(x, z);
+        DrawBox((Vector3){x, y + 0.025f, z},
+                (Vector3){1.18f, 0.05f, 0.72f}, ash);
+    }
+    int32_t vents = dragon->regional_influence > 45 ? 3 :
+                    dragon->regional_influence > 18 ? 2 : 1;
+    for (int32_t vent = 0; vent < vents; ++vent) {
+        float x = cave_x + 1.55f + (float)vent * 0.48f;
+        float z = cave_z + 0.08f + (float)(vent & 1) * 0.36f;
+        float y = CcLocalTerrainHeightAt(x, z);
+        DrawCylinder((Vector3){x, y + 0.12f, z},
+                     0.18f, 0.12f, 0.24f, 7,
+                     dragon->regional_influence > 35 ?
+                         (Color){154, 69, 54, 255} : ash);
+    }
+    DrawBox((Vector3){cave_x - 0.82f, ground + 0.62f, cave_z - 0.38f},
+            (Vector3){0.20f, 1.24f, 0.20f}, WORLD_VIOLET);
+    DrawSmallSphere((Vector3){cave_x - 0.82f, ground + 1.32f,
+                               cave_z - 0.38f}, 0.19f, WORLD_GOLD);
+}
+
 static void DrawSettlementCreatures(const CcSim *sim,
                                     const CcSettlement *place,
                                     float clock, Vector3 scenery_focus)
@@ -18377,6 +18442,10 @@ static void DrawSettlementCreatures(const CcSim *sim,
     if (sim == NULL || place == NULL) return;
     const CcGoblinCult *goblins = &sim->goblins;
     const CcDragon *dragon = &sim->dragon;
+
+    if (place->id == dragon->lair_settlement_id) {
+        DrawDragonLairState(dragon, scenery_focus);
+    }
 
     if (place->stock[CC_GOOD_FOOD] >= 18 &&
         SceneryPointVisible(63.0f, 38.3f, scenery_focus)) {
@@ -18433,27 +18502,35 @@ static void DrawSettlementCreatures(const CcSim *sim,
     }
 
     if (place->id == dragon->lair_settlement_id && !dragon->slain &&
-        SceneryPointVisible(30.0f, 51.5f, scenery_focus)) {
+        SceneryPointVisible(20.7f, 52.6f, scenery_focus)) {
         CcCreaturePose dragon_pose = CC_CREATURE_POSE_REST;
-        if (dragon->stolen_outstanding > 0 ||
+        if (dragon->activity == CC_DRAGON_ACTIVITY_HUNTING) {
+            dragon_pose = fmodf(clock, 1.0f) < 0.5f ?
+                CC_CREATURE_POSE_STALK_A : CC_CREATURE_POSE_STALK_B;
+        } else if (dragon->stolen_outstanding > 0 ||
             dragon->omen_days_remaining > 0) {
             dragon_pose = CC_CREATURE_POSE_THREAT;
         } else if (goblins->tribute_phase == CC_GOBLIN_TRIBUTE_TO_DRAGON) {
             dragon_pose = CC_CREATURE_POSE_IDLE;
         }
+        float dragon_scale =
+            dragon->life_stage == CC_DRAGON_STAGE_WHELP ? 0.52f :
+            dragon->life_stage == CC_DRAGON_STAGE_WANDERER ? 0.72f :
+            dragon->life_stage == CC_DRAGON_STAGE_DEEP_WYRM ? 1.14f :
+            dragon->life_stage == CC_DRAGON_STAGE_UNCROWNED ? 0.84f : 0.94f;
         (void)DrawCreature3D(
             CC_CREATURE_DRAGON, dragon_pose,
-            TerrainWorldPoint(30.0f, 51.5f), -0.48f * PI, 0.94f,
+            TerrainWorldPoint(20.7f, 52.6f), -0.48f * PI, dragon_scale,
             (Color){0});
     }
     if (place->id == dragon->lair_settlement_id &&
         goblins->tribute_phase == CC_GOBLIN_TRIBUTE_TO_DRAGON &&
-        SceneryPointVisible(27.8f, 52.5f, scenery_focus)) {
+        SceneryPointVisible(18.0f, 52.7f, scenery_focus)) {
         CcCreaturePose bearer_pose = CcCreatureSteppedPose(
             CC_CREATURE_GOBLIN_TRIBUTE_BEARER, clock * 3.4f, true);
         (void)DrawCreature3D(
             CC_CREATURE_GOBLIN_TRIBUTE_BEARER, bearer_pose,
-            TerrainWorldPoint(27.8f, 52.5f), -0.38f * PI, 1.12f,
+            TerrainWorldPoint(18.0f, 52.7f), -0.38f * PI, 1.12f,
             (Color){0});
     }
 }
@@ -18811,6 +18888,17 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                                             DUNGEON_FOOTPRINT) + 3.38f,
                                         CC_LOCAL_DUNGEON_Z - 0.70f},
                                        "Mine", WORLD_VIOLET};
+    }
+    if (place->id == sim->dragon.lair_settlement_id &&
+        AgentNearLabel(agent, CC_LOCAL_DRAGON_CAVE_X,
+                       CC_LOCAL_DRAGON_CAVE_Z, 9.0f)) {
+        labels[count++] = (WorldLabel){
+            {CC_LOCAL_DRAGON_CAVE_X,
+             CcLocalTerrainHeightAt(CC_LOCAL_DRAGON_CAVE_X,
+                                    CC_LOCAL_DRAGON_CAVE_Z) + 2.75f,
+             CC_LOCAL_DRAGON_CAVE_Z},
+            sim->dragon.slain ? "Afterdragon cave" : "Dragon cave",
+            sim->dragon.slain ? WORLD_VIOLET : WORLD_DANGER};
     }
     if (!alarm_active) {
         DrawLabels(labels, count, camera, destination);

@@ -75,6 +75,13 @@ ATMOSPHERES = (
                 ("--capture-atmosphere", "omen")),
 )
 
+DRAGON_SCENES = (
+    CaptureSpec("dragon-cave-world", "Dragon Cave World", "dragon",
+                ("--capture-creatures", "dragon")),
+    CaptureSpec("dragon-cave-state", "Dragon Cave State", "dragon",
+                ("--capture-dragon-cave",)),
+)
+
 
 def image_pixels(image: Image.Image) -> list[tuple[int, ...] | int]:
     getter = getattr(image, "get_flattened_data", None)
@@ -518,7 +525,7 @@ def main() -> None:
     relative_capture_path(output_root)
     app = find_app(args.app.resolve() if args.app is not None else None)
     palette = read_authored_palette()
-    all_specs = (*ROOMS, *SCENES, *ATMOSPHERES)
+    all_specs = (*ROOMS, *SCENES, *ATMOSPHERES, *DRAGON_SCENES)
     capture_paths: dict[str, Path] = {}
 
     try:
@@ -613,6 +620,11 @@ def main() -> None:
             output_root / "contact-sheets" / "time-and-weather.png", 4,
         )
         contact_sheet(
+            [(spec.label, view_paths[spec.slug]["color"])
+             for spec in DRAGON_SCENES],
+            output_root / "contact-sheets" / "dragon-cave.png", 1,
+        )
+        contact_sheet(
             [(view.replace("-", " ").title(), view_paths["street"][view])
              for view in ("color", "grayscale", "silhouette", "three-value")],
             output_root / "contact-sheets" / "street-value-study.png", 4,
@@ -628,7 +640,7 @@ def main() -> None:
         print(f"FAIL art-check: {len(failures)} issue(s); see {output_root / 'report.md'}")
         raise SystemExit(1)
     print(
-        "PASS art-check: 10 rooms, 4 scenes, 5 atmosphere moods, "
+        "PASS art-check: 10 rooms, 4 scenes, 5 atmosphere moods, dragon cave, "
         "value studies, character sizes, and flicker"
     )
     print(f"REPORT {output_root / 'report.md'}")

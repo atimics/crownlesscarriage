@@ -37,7 +37,8 @@ typedef enum ClientView {
     VIEW_MAP,
     VIEW_LEDGER,
     VIEW_SITUATIONS,
-    VIEW_ENCOUNTER
+    VIEW_ENCOUNTER,
+    VIEW_DRAGON_CAVE
 } ClientView;
 
 typedef struct LocalState {
@@ -121,7 +122,13 @@ typedef enum ContextActionKind {
     CONTEXT_ACTION_WITHDRAW,
     CONTEXT_ACTION_SKILL_CRUSHING,
     CONTEXT_ACTION_SKILL_SUNDER,
-    CONTEXT_ACTION_SKILL_SECOND_WIND
+    CONTEXT_ACTION_SKILL_SECOND_WIND,
+    CONTEXT_ACTION_OPEN_DRAGON_CAVE,
+    CONTEXT_ACTION_STEAL_DRAGON_CROWNS,
+    CONTEXT_ACTION_RETURN_DRAGON_CROWNS,
+    CONTEXT_ACTION_STEAL_DRAGON_RELIC,
+    CONTEXT_ACTION_RETURN_DRAGON_RELIC,
+    CONTEXT_ACTION_INTERCEPT_DRAGON_TRIBUTE
 } ContextActionKind;
 
 typedef struct ContextAction {
@@ -218,6 +225,8 @@ static const Vector2 LOCAL_CARRIAGE = {CC_LOCAL_CARRIAGE_X,
 static const Vector2 LOCAL_NOTICE = {CC_LOCAL_NOTICE_X, CC_LOCAL_NOTICE_Z};
 static const Vector2 LOCAL_DUNGEON = {CC_LOCAL_DUNGEON_X,
                                      CC_LOCAL_DUNGEON_Z};
+static const Vector2 LOCAL_DRAGON_CAVE = {CC_LOCAL_DRAGON_CAVE_X,
+                                         CC_LOCAL_DRAGON_CAVE_Z};
 static const Vector2 INTERIOR_COUNTER = {6.65f, 2.50f};
 static const Vector2 INTERIOR_EXIT = {1.55f, 5.55f};
 
@@ -1343,6 +1352,121 @@ static CcId RouteOtherEnd(const CcRoute *route, CcId here)
     return 0U;
 }
 
+static const CcTreasure *FirstDragonTreasure(const CcSim *sim)
+{
+    if (sim == NULL) return NULL;
+    for (int32_t i = 0; i < sim->treasure_count; ++i) {
+        const CcTreasure *treasure = &sim->treasures[i];
+        if (!treasure->destroyed && treasure->owner_id == sim->dragon.id &&
+            treasure->location_id == sim->dragon.lair_settlement_id) {
+            return treasure;
+        }
+    }
+    return NULL;
+}
+
+static void DrawDragonCavePanel(const CcSim *sim)
+{
+    if (sim == NULL) return;
+    const CcDragon *dragon = &sim->dragon;
+    float width = 790.0f;
+    float height = 490.0f;
+    Rectangle bounds = {
+        ((float)GetScreenWidth() - width) * 0.5f,
+        ((float)GetScreenHeight() - height) * 0.5f - 8.0f,
+        width, height
+    };
+    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
+                  Fade(BACKGROUND, 0.76f));
+    DrawPanel(bounds, Fade(PANEL_DEEP, 0.98f));
+    int x = (int)bounds.x + 28;
+    int y = (int)bounds.y + 23;
+    Color state_color = dragon->slain ? CC_VIOLET :
+        dragon->activity == CC_DRAGON_ACTIVITY_RETALIATING ? DANGER : CC_GOLD;
+    CcOverlayDrawText("DRAGON CAVE", x, y, 11, state_color);
+    CcOverlayDrawText(dragon->name, x, y + 25, 25, INK);
+    CcOverlayDrawText(
+        TextFormat("%s  /  %s  /  age %d years",
+                   CcDragonLifeStageName(dragon->life_stage),
+                   CcDragonActivityName(dragon->activity),
+                   dragon->age_days / 365),
+        x, y + 59, 11, MUTED);
+
+    int named_count = CcSimTreasureCountForOwner(sim, dragon->id);
+    CcOverlayDrawText(
+        TextFormat("HOARD  %" PRId64 " crowns   GOLD %d   GEMS %d   RELICS %d",
+                   dragon->hoard, dragon->hoard_goods[CC_GOOD_GOLD],
+                   dragon->hoard_goods[CC_GOOD_GEMS], named_count),
+        x, y + 92, 12, CC_GOLD);
+    CcOverlayDrawText(
+        TextFormat("BATTLE STRENGTH  %d   GOBLIN COURT  %d members / %d devotion",
+                   CcSimDragonBattleStrength(sim), sim->goblins.members,
+                   sim->goblins.devotion),
+        x, y + 116, 10, INK);
+
+    int left = x;
+    int right = x + 370;
+    DrawBar(left, y + 158, 205, "BODY", dragon->body_condition, TEAL);
+    DrawBar(left, y + 188, 205, "CROWN", dragon->crown_strength, CC_GOLD);
+    DrawBar(left, y + 218, 205, "MEMORY", dragon->memory_integrity,
+            CC_VIOLET);
+    DrawBar(right, y + 158, 205, "TERRITORY",
+            dragon->territory_stability, TEAL);
+    DrawBar(right, y + 188, 205, "SHADOW",
+            dragon->regional_influence, CC_VIOLET);
+
+    int detail_y = y + 268;
+    if (dragon->slain) {
+        CcOverlayDrawText(
+            TextFormat("AFTERDRAGON  day %d  /  the shadow now changes nearby roads",
+                       dragon->afterdeath_days),
+            x, detail_y, 12, CC_VIOLET);
+        CcOverlayDrawText(
+            dragon->egg_count > 0 ?
+                TextFormat("VISIBLE CLUTCH  %d egg%s  /  successor in %d days",
+                           dragon->egg_count,
+                           dragon->egg_count == 1 ? "" : "s",
+                           dragon->brood_days_remaining) :
+                "NO VISIBLE CLUTCH  /  this dragon line ends here",
+            x, detail_y + 27, 11, INK);
+        DrawTwoLineText(
+            "Ash fields, heat vents, goblin shrines, and unsafe roads remain after the body is gone.",
+            x, detail_y + 57, 78, 10, MUTED);
+    } else if (dragon->stolen_outstanding > 0) {
+        const CcSettlement *target = CcSimSettlement(
+            sim, dragon->retaliation_target_id);
+        CcOverlayDrawText(
+            TextFormat("OPEN WOUND  %" PRId64 " crowns  /  %d nights remain",
+                       dragon->stolen_outstanding,
+                       dragon->omen_days_remaining),
+            x, detail_y, 12, DANGER);
+        CcOverlayDrawText(
+            TextFormat("RETALIATION TARGET  %s",
+                       target != NULL ? target->name : "the richest realm"),
+            x, detail_y + 27, 11, INK);
+        DrawTwoLineText(
+            dragon->stolen_treasure_id != 0U ?
+                "Only the exact named relic can repair this memory wound." :
+                "Return the missing crowns before the omen reaches zero.",
+            x, detail_y + 57, 78, 10, MUTED);
+    } else {
+        CcOverlayDrawText(
+            dragon->egg_count > 0 ?
+                TextFormat("BROOD  %d egg%s  /  hatching in %d days",
+                           dragon->egg_count,
+                           dragon->egg_count == 1 ? "" : "s",
+                           dragon->brood_days_remaining) :
+                "THE HOARD IS WHOLE  /  the dragon is calm",
+            x, detail_y, 12, state_color);
+        DrawTwoLineText(
+            "Taking treasure weakens crown and memory. The dragon gives fourteen nights to return it before burning a realm.",
+            x, detail_y + 36, 82, 10, MUTED);
+    }
+    CcOverlayDrawText(
+        "Click an action below. Number keys choose the same actions.",
+        x, (int)(bounds.y + bounds.height) - 31, 9, MUTED);
+}
+
 static void AddContextAction(ContextActionSet *set, ContextActionKind kind,
                              const char *label)
 {
@@ -1521,6 +1645,65 @@ static ContextActionSet BuildContextActions(
                                  "ENTER PARLEY", true, false);
         return set;
     }
+    if (view == VIEW_DRAGON_CAVE) {
+        const CcTreasure *treasure = FirstDragonTreasure(sim);
+        if (sim->goblins.tribute_phase == CC_GOBLIN_TRIBUTE_TO_DRAGON &&
+            !sim->dragon.slain) {
+            AddDetailedContextAction(
+                &set, CONTEXT_ACTION_INTERCEPT_DRAGON_TRIBUTE,
+                "Intercept tribute", TextFormat("%d", set.count + 1),
+                "TAKE IT BEFORE DELIVERY", true, false);
+        }
+        if (!sim->dragon.slain && sim->dragon.stolen_outstanding == 0) {
+            if (sim->dragon.hoard > 0) {
+                AddDetailedContextAction(
+                    &set, CONTEXT_ACTION_STEAL_DRAGON_CROWNS,
+                    TextFormat("Take %d crowns",
+                               sim->dragon.hoard < 10 ?
+                                   (int32_t)sim->dragon.hoard : 10),
+                    TextFormat("%d", set.count + 1),
+                    "14 NIGHTS TO RETURN", true, false);
+            }
+            if (treasure != NULL) {
+                AddDetailedContextAction(
+                    &set, CONTEXT_ACTION_STEAL_DRAGON_RELIC,
+                    TextFormat("Take %.28s", treasure->name),
+                    TextFormat("%d", set.count + 1),
+                    "THE DRAGON REMEMBERS", true, false);
+            }
+        } else if (!sim->dragon.slain &&
+                   sim->dragon.stolen_treasure_id != 0U) {
+            const CcTreasure *stolen = CcSimTreasure(
+                sim, sim->dragon.stolen_treasure_id);
+            bool carries_relic = stolen != NULL &&
+                stolen->owner_id == sim->player.id;
+            AddDetailedContextAction(
+                &set, CONTEXT_ACTION_RETURN_DRAGON_RELIC,
+                stolen != NULL ? TextFormat("Return %.28s", stolen->name) :
+                                  "Return remembered relic",
+                TextFormat("%d", set.count + 1),
+                carries_relic ? "SETTLE THE WOUND" : "NOT IN CARRIAGE",
+                carries_relic, false);
+        } else if (!sim->dragon.slain &&
+                   sim->dragon.stolen_outstanding > 0) {
+            CcMoney available =
+                sim->player.coins < sim->dragon.stolen_outstanding ?
+                    sim->player.coins : sim->dragon.stolen_outstanding;
+            int32_t payment = available > INT32_MAX ?
+                INT32_MAX : (int32_t)available;
+            AddDetailedContextAction(
+                &set, CONTEXT_ACTION_RETURN_DRAGON_CROWNS,
+                TextFormat("Return %d crowns", payment),
+                TextFormat("%d", set.count + 1),
+                payment > 0 ? "PAY DOWN THE DEBT" : "NO CROWNS CARRIED",
+                payment > 0, false);
+        }
+        AddDetailedContextAction(
+            &set, CONTEXT_ACTION_CLOSE_VIEW, "Leave cave", "ESC",
+            sim->dragon.slain ? "RETURN THROUGH THE ASH" :
+                                "RETURN TO THE ROAD", true, false);
+        return set;
+    }
     if (view == VIEW_LEDGER) {
         AddContextAction(&set, CONTEXT_ACTION_CLOSE_VIEW, "Close");
         return set;
@@ -1661,6 +1844,11 @@ static ContextActionSet BuildContextActions(
     }
     const CcDungeon *dungeon = DungeonAtSettlement(
         sim, sim->player.location_id);
+    if (sim->player.location_id == sim->dragon.lair_settlement_id &&
+        GridDistance(position, LOCAL_DRAGON_CAVE) < 1.35f) {
+        AddContextAction(&set, CONTEXT_ACTION_OPEN_DRAGON_CAVE,
+                         "Enter dragon cave");
+    }
     if (dungeon != NULL &&
         GridDistance(position, LOCAL_DUNGEON) < 1.35f) {
         AddContextAction(&set, CONTEXT_ACTION_EXPEDITION,
@@ -1691,13 +1879,19 @@ static Color ContextActionColor(ContextActionKind kind)
     if (kind == CONTEXT_ACTION_FIGHT ||
         kind == CONTEXT_ACTION_ABANDON_PROMISE ||
         kind == CONTEXT_ACTION_RAISE_ALARM ||
-        kind == CONTEXT_ACTION_WITHDRAW) return DANGER;
+        kind == CONTEXT_ACTION_WITHDRAW ||
+        kind == CONTEXT_ACTION_STEAL_DRAGON_CROWNS ||
+        kind == CONTEXT_ACTION_STEAL_DRAGON_RELIC) return DANGER;
     if (kind == CONTEXT_ACTION_ACCEPT_PROMISE ||
         kind == CONTEXT_ACTION_TRAVEL ||
         kind == CONTEXT_ACTION_DELIVER_CARGO ||
         kind == CONTEXT_ACTION_ENTER_MARKET ||
         kind == CONTEXT_ACTION_JUMP ||
-        kind == CONTEXT_ACTION_OFFER_PROVISIONS) return TEAL;
+        kind == CONTEXT_ACTION_OFFER_PROVISIONS ||
+        kind == CONTEXT_ACTION_RETURN_DRAGON_CROWNS ||
+        kind == CONTEXT_ACTION_RETURN_DRAGON_RELIC ||
+        kind == CONTEXT_ACTION_INTERCEPT_DRAGON_TRIBUTE ||
+        kind == CONTEXT_ACTION_OPEN_DRAGON_CAVE) return TEAL;
     if (kind == CONTEXT_ACTION_BASIC_STRIKE ||
         kind == CONTEXT_ACTION_TOGGLE_GUARD) return CC_GOLD;
     if (kind == CONTEXT_ACTION_SKILL_CRUSHING ||
@@ -2415,6 +2609,17 @@ static bool ApplyCommand(CcJournal *journal, CcSim *sim, CcCommand command,
         case CC_COMMAND_WITHDRAW_ENCOUNTER:
             confirmation = "The carriage withdrew.";
             break;
+        case CC_COMMAND_STEAL_DRAGON_HOARD:
+        case CC_COMMAND_STEAL_DRAGON_NAMED_TREASURE:
+            confirmation = "The hoard remembers what you took.";
+            break;
+        case CC_COMMAND_RETURN_DRAGON_TREASURE:
+        case CC_COMMAND_RETURN_DRAGON_NAMED_TREASURE:
+            confirmation = "The dragon's memory settles.";
+            break;
+        case CC_COMMAND_INTERCEPT_DRAGON_TRIBUTE:
+            confirmation = "The tribute is yours. The hoard never received it.";
+            break;
         default: break;
     }
     (void)snprintf(message, message_capacity, "%s", confirmation);
@@ -3036,6 +3241,53 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         }
         return;
     }
+    if (*view == VIEW_DRAGON_CAVE) {
+        ContextActionSet cave_actions = BuildContextActions(
+            sim, local, *view, *selected, *selected_situation);
+        if (context_action == CONTEXT_ACTION_NONE) {
+            for (int32_t i = 0; i < cave_actions.count && i < 6; ++i) {
+                if (cave_actions.items[i].enabled &&
+                    ClientKeyPressed(KEY_ONE + i)) {
+                    context_action = cave_actions.items[i].kind;
+                    break;
+                }
+            }
+        }
+        if (ClientKeyPressed(KEY_ESCAPE) ||
+            context_action == CONTEXT_ACTION_CLOSE_VIEW) {
+            *view = VIEW_LOCAL;
+            return;
+        }
+        CcCommand cave_command = {0};
+        if (context_action == CONTEXT_ACTION_STEAL_DRAGON_CROWNS) {
+            cave_command.kind = CC_COMMAND_STEAL_DRAGON_HOARD;
+            cave_command.amount = sim->dragon.hoard < 10 ?
+                (int32_t)sim->dragon.hoard : 10;
+        } else if (context_action ==
+                   CONTEXT_ACTION_RETURN_DRAGON_CROWNS) {
+            cave_command.kind = CC_COMMAND_RETURN_DRAGON_TREASURE;
+            CcMoney payment = sim->player.coins <
+                    sim->dragon.stolen_outstanding ? sim->player.coins :
+                    sim->dragon.stolen_outstanding;
+            cave_command.amount = payment > INT32_MAX ?
+                INT32_MAX : (int32_t)payment;
+        } else if (context_action == CONTEXT_ACTION_STEAL_DRAGON_RELIC) {
+            const CcTreasure *treasure = FirstDragonTreasure(sim);
+            cave_command.kind = CC_COMMAND_STEAL_DRAGON_NAMED_TREASURE;
+            cave_command.target_id = treasure != NULL ? treasure->id : 0U;
+        } else if (context_action == CONTEXT_ACTION_RETURN_DRAGON_RELIC) {
+            cave_command.kind = CC_COMMAND_RETURN_DRAGON_NAMED_TREASURE;
+            cave_command.target_id = sim->dragon.stolen_treasure_id;
+        } else if (context_action ==
+                   CONTEXT_ACTION_INTERCEPT_DRAGON_TRIBUTE) {
+            cave_command.kind = CC_COMMAND_INTERCEPT_DRAGON_TRIBUTE;
+        }
+        if (cave_command.kind != CC_COMMAND_NONE) {
+            (void)ApplyCommand(*journal, sim, cave_command,
+                               message, message_capacity);
+        }
+        return;
+    }
     if (context_action == CONTEXT_ACTION_CLOSE_VIEW &&
         (*view == VIEW_LEDGER || *view == VIEW_SITUATIONS)) {
         *view = *return_view;
@@ -3562,6 +3814,14 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                     *selected_situation = FirstActiveSituationIndex(sim);
                 }
                 *view = VIEW_SITUATIONS;
+            } else if ((interact || context_action ==
+                        CONTEXT_ACTION_OPEN_DRAGON_CAVE) &&
+                       !local->market_interior &&
+                       sim->player.location_id ==
+                           sim->dragon.lair_settlement_id &&
+                       GridDistance(position, LOCAL_DRAGON_CAVE) < 1.35f) {
+                *view = VIEW_DRAGON_CAVE;
+                message[0] = '\0';
             }
         }
 
@@ -3827,6 +4087,8 @@ int main(int argc, char **argv)
         strcmp(argv[1], "--capture-aftermath") == 0;
     bool capture_golden = argc >= 2 &&
         strcmp(argv[1], "--capture-golden") == 0;
+    bool capture_dragon_cave = argc >= 2 &&
+        strcmp(argv[1], "--capture-dragon-cave") == 0;
     bool capture_atmosphere = argc >= 2 &&
         strcmp(argv[1], "--capture-atmosphere") == 0;
     CcLocalAtmospherePreset capture_atmosphere_preset =
@@ -3936,6 +4198,7 @@ int main(int argc, char **argv)
                     capture_witness || capture_travel || capture_road ||
                     capture_parley ||
                     capture_aftermath || capture_golden ||
+                    capture_dragon_cave ||
                     capture_atmosphere || capture_face ||
                     capture_room || capture_creature_media);
     const char *capture_path = capture_creature_media ? argv[3] :
@@ -4011,6 +4274,12 @@ int main(int argc, char **argv)
             sim.settlements[settlement].stock[CC_GOOD_FOOD] = 32;
             break;
         }
+    }
+    if (capture_dragon_cave) {
+        sim.player.location_id = sim.dragon.lair_settlement_id;
+        sim.goblins.tribute_phase = CC_GOBLIN_TRIBUTE_TO_DRAGON;
+        sim.goblins.tribute_target_id = sim.dragon.lair_settlement_id;
+        sim.goblins.tribute_days_remaining = 2;
     }
     if (capture_road_fork || capture_map_case) {
         sim.player.location_id = sim.settlements[1].id;
@@ -4093,6 +4362,7 @@ int main(int argc, char **argv)
     int32_t selected_situation = FirstActiveSituationIndex(&sim);
     ClientView view = capture_board ? VIEW_SITUATIONS :
                       capture_encounter ? VIEW_ENCOUNTER :
+                      capture_dragon_cave ? VIEW_DRAGON_CAVE :
                       capture_road_fork ? VIEW_ROADS :
                       capture_map_case ? VIEW_MAP : VIEW_LOCAL;
     ClientView return_view = VIEW_LOCAL;
@@ -4102,6 +4372,10 @@ int main(int argc, char **argv)
     ActionReelState action_reel = {0};
     GameplayReelState gameplay_reel = {0};
     ResetLocalState(&local);
+    if (capture_dragon_cave) {
+        RepositionHero(&local, LOCAL_DRAGON_CAVE, false);
+        local.course.alarm_countdown = 1000.0f;
+    }
     if (capture_golden || capture_atmosphere) {
         RepositionHero(&local, (Vector2){44.25f, 28.85f}, false);
         local.agent.facing_yaw = -0.35f;
@@ -4137,8 +4411,10 @@ int main(int argc, char **argv)
             bool animal_view =
                 strcmp(capture_creature_family, "animals") == 0 ||
                 strcmp(capture_creature_family, "cow") == 0;
+            bool dragon_view = strcmp(capture_creature_family, "dragon") == 0;
             Vector2 creature_view = animal_view ?
-                (Vector2){59.5f, 40.0f} : (Vector2){24.5f, 49.5f};
+                (Vector2){59.5f, 40.0f} : dragon_view ?
+                (Vector2){17.5f, 50.0f} : (Vector2){24.5f, 49.5f};
             RepositionHero(&local, creature_view, false);
             local.agent.facing_yaw = -0.18f;
             local.course.alarm_countdown = 1000.0f;
@@ -4468,13 +4744,17 @@ int main(int argc, char **argv)
             CcOverlayFlush();
             DrawJourneyEncounter(&sim);
         }
+        if (view == VIEW_DRAGON_CAVE) {
+            CcOverlayFlush();
+            DrawDragonCavePanel(&sim);
+        }
         CcOverlayFlush();
         if (!capture_gameplay_reel ||
             gameplay_reel.stage != GAMEPLAY_REEL_QUEST_COMPLETE) {
             DrawContextActionTray(&sim, &local, view, selected,
                                   selected_situation);
         }
-        DrawCommandBar(view, &local);
+        if (view != VIEW_DRAGON_CAVE) DrawCommandBar(view, &local);
         if (performance_overlay) {
             CcOverlayFlush();
             DrawPerformanceOverlay();

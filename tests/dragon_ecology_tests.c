@@ -242,6 +242,42 @@ int main(void)
     CcSimAdvanceDays(&ash_poor_cult, 1);
     CC_CHECK(ash_poor_cult.goblins.members == 13);
 
+    CcSim stages;
+    CcSimInit(&stages, UINT32_C(0x57a6e500));
+    stages.dragon.memory_integrity = 20;
+    stages.dragon.brood_cooldown_days = 1000;
+    CcSimAdvanceDays(&stages, 1);
+    CC_CHECK(stages.dragon.life_stage == CC_DRAGON_STAGE_UNCROWNED);
+    CC_CHECK(CountEvents(&stages, CC_EVENT_DRAGON_UNCROWNED) == 1);
+
+    stages.dragon.age_days = 60 * 365;
+    stages.dragon.hoard = 5000;
+    stages.dragon.hoard_goods[CC_GOOD_GOLD] = 10;
+    stages.dragon.hoard_goods[CC_GOOD_GEMS] = 10;
+    stages.dragon.memory_integrity = 100;
+    stages.dragon.territory_stability = 100;
+    stages.goblins.devotion = 100;
+    CcSimAdvanceDays(&stages, 1);
+    CC_CHECK(stages.dragon.life_stage == CC_DRAGON_STAGE_CROWNED);
+
+    stages.dragon.age_days = 500 * 365;
+    stages.dragon.crown_continuity_days = 200 * 365;
+    stages.dragon.territory_stability = 100;
+    stages.dragon.memory_integrity = 100;
+    stages.dragon.brood_cooldown_days = 1000;
+    CcSimAdvanceDays(&stages, 1);
+    CC_CHECK(stages.dragon.life_stage == CC_DRAGON_STAGE_DEEP_WYRM);
+
+    stages.dragon.life_stage = CC_DRAGON_STAGE_UNCROWNED;
+    stages.dragon.age_days = 20 * 365;
+    stages.dragon.body_condition = 20;
+    stages.dragon.hunt_cooldown_days = 0;
+    stages.dragon.memory_integrity = 50;
+    CcSimAdvanceDays(&stages, 1);
+    CC_CHECK(stages.dragon.hunts == 1);
+    CC_CHECK(stages.dragon.hunt_cooldown_days >= 14);
+    CC_CHECK(stages.dragon.hunt_cooldown_days <= 42);
+
     CcSim strength;
     CcSimInit(&strength, UINT32_C(0x57a3e67a));
     strength.dragon.body_condition = 80;
@@ -271,11 +307,28 @@ int main(void)
         }
     }
     CC_CHECK(dragon_road != NULL);
+    strength.player.location_id = strength.dragon.lair_settlement_id;
+    CcId road_destination = dragon_road->from_id ==
+            strength.player.location_id ? dragon_road->to_id :
+            dragon_road->from_id;
+    for (int32_t i = 0; i < strength.map_count; ++i) {
+        if (strength.maps[i].route_id == dragon_road->id) {
+            strength.maps[i].owner_id = strength.player.id;
+            strength.player.map_catalogue_mask |= UINT32_C(1) << i;
+            strength.player.map_archive_mask &= ~(UINT32_C(1) << i);
+            break;
+        }
+    }
+    CcTravelPreview quiet_preview = {0};
+    CcTravelPreview shadow_preview = {0};
     strength.dragon.regional_influence = 0;
-    int32_t quiet_danger = CcSimRouteDanger(&strength, dragon_road->id);
+    CC_CHECK(CcSimTravelPreview(&strength, road_destination,
+                                &quiet_preview, error, sizeof(error)));
     strength.dragon.regional_influence = 96;
-    CC_CHECK(CcSimRouteDanger(&strength, dragon_road->id) ==
-             quiet_danger + 8);
+    CC_CHECK(CcSimTravelPreview(&strength, road_destination,
+                                &shadow_preview, error, sizeof(error)));
+    CC_CHECK(shadow_preview.claimed_danger ==
+             quiet_preview.claimed_danger + 2);
 
     puts("Dragon crown, cult recovery, brood, aftermath, and succession tests passed");
     return 0;

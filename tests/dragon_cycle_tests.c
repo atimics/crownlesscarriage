@@ -153,6 +153,22 @@ int main(void)
     intercepted.goblins.carried_tribute = 12;
     intercepted.goblins.carried_goods[CC_GOOD_GOLD] = 1;
     intercepted.goblins.carried_goods[CC_GOOD_GEMS] = 1;
+    CcTreasure *tribute_relic =
+        &intercepted.treasures[intercepted.treasure_count++];
+    *tribute_relic = (CcTreasure){
+        .id = CcMakeId(CC_ENTITY_TREASURE, UINT64_C(9102)),
+        .maker_settlement_id = intercepted.settlements[0].id,
+        .owner_id = intercepted.goblins.id,
+        .location_id = intercepted.goblins.lair_settlement_id,
+        .gold_content = 1,
+        .gem_content = 1,
+        .craft_work = 2,
+        .appraised_value = 90,
+        .created_day = 1
+    };
+    (void)snprintf(tribute_relic->name, sizeof(tribute_relic->name),
+                   "The Ember Tithe");
+    intercepted.goblins.carried_treasure_id = tribute_relic->id;
     CcMoney intercepted_hoard = intercepted.dragon.hoard;
     CcMoney intercepted_coins = intercepted.player.coins;
     CcCommand intercept = {
@@ -163,6 +179,9 @@ int main(void)
     CC_CHECK(intercepted.player.coins == intercepted_coins + 12);
     CC_CHECK(intercepted.player.cargo[CC_GOOD_GOLD] == 1);
     CC_CHECK(intercepted.player.cargo[CC_GOOD_GEMS] == 1);
+    CC_CHECK(intercepted.player.treasure_cargo_slots == 1);
+    CC_CHECK(tribute_relic->owner_id == intercepted.player.id);
+    CC_CHECK(tribute_relic->location_id == intercepted.player.location_id);
     CC_CHECK(intercepted.dragon.hoard == intercepted_hoard);
     CC_CHECK(intercepted.dragon.stolen_outstanding == 0);
     CC_CHECK(intercepted.dragon.omen_days_remaining == 0);

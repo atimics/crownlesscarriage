@@ -3775,6 +3775,17 @@ static void AdvanceDragonRetaliation(CcSim *sim)
     }
 }
 
+static int32_t DragonRouteShadowDanger(const CcSim *sim,
+                                       const CcRoute *route)
+{
+    if (sim == NULL || route == NULL ||
+        (route->from_id != sim->dragon.lair_settlement_id &&
+         route->to_id != sim->dragon.lair_settlement_id)) return 0;
+    int32_t influence = sim->dragon.regional_influence;
+    return sim->dragon.slain ? (influence >= 60 ? 1 : 0) :
+           influence >= 80 ? 2 : influence >= 50 ? 1 : 0;
+}
+
 int32_t CcSimRouteDanger(const CcSim *sim, CcId route_id)
 {
     const CcRoute *route = CcSimRoute(sim, route_id);
@@ -3788,13 +3799,6 @@ int32_t CcSimRouteDanger(const CcSim *sim, CcId route_id)
     }
     danger += MonsterPressureAtSettlement(sim, route->from_id) / 10;
     danger += MonsterPressureAtSettlement(sim, route->to_id) / 10;
-    bool touches_dragon_country =
-        route->from_id == sim->dragon.lair_settlement_id ||
-        route->to_id == sim->dragon.lair_settlement_id;
-    if (touches_dragon_country) {
-        int32_t shadow_divisor = sim->dragon.slain ? 20 : 12;
-        danger += sim->dragon.regional_influence / shadow_divisor;
-    }
     return ClampI32(danger, 0, 95);
 }
 
@@ -7082,13 +7086,15 @@ bool CcSimTravelPreview(const CcSim *sim, CcId destination_id,
     bool uncharted = map == NULL && !sponsored_night_passage;
     int32_t days = route->travel_days + (uncharted ? 2 : 0);
     int32_t base_fare = days + (route->smuggler_route ? 3 : 0);
+    int32_t shadow_danger = DragonRouteShadowDanger(sim, route);
     *preview = (CcTravelPreview){
         .route_id = route->id,
         .destination_id = destination->id,
         .provision_cost = base_fare + TradeRouteToll(sim, route),
         .travel_days = days,
         .claimed_condition = map != NULL ? map->recorded_condition : -1,
-        .claimed_danger = map != NULL ? map->recorded_danger : -1,
+        .claimed_danger = map != NULL ?
+            ClampI32(map->recorded_danger + shadow_danger, 0, 95) : -1,
         .chart_accuracy = map != NULL ? map->accuracy : 0,
         .charted = map != NULL,
         .destination_known = !route->smuggler_route || map != NULL ||
@@ -7157,7 +7163,9 @@ static bool ApplyTravel(CcSim *sim, const CcCommand *command,
          (accepted != NULL &&
           accepted->kind == CC_SITUATION_BLACK_MARKET_DELIVERY &&
           route->smuggler_route));
-    int32_t danger = CcSimRouteDanger(sim, route->id);
+    int32_t danger = ClampI32(
+        CcSimRouteDanger(sim, route->id) +
+        DragonRouteShadowDanger(sim, route), 0, 95);
     if (uncharted) danger = ClampI32(danger + 20, 0, 95);
     int32_t reaction = CcSimBanditReactionRoll(sim, route->id);
     int32_t bargain_cost = ClampI32(

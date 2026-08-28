@@ -64,6 +64,9 @@ does not attack because a town is rich. It attacks only while stolen hoard
 treasure remains unpaid.
 Use `dragon steal-treasure NUMBER` and `dragon return-treasure` to test the
 stronger wound caused by a named object. Equivalent coins cannot replace it.
+While a tribute carrier is on its final approach, `dragon intercept` transfers
+its crowns, goods, and named treasure into the carriage. The dragon never owned
+that load, so interception creates no hoard wound or omen.
 
 The same `dragon` view shows the Crown Cycle: life stage, current activity,
 age, body condition, derived crown strength, memory, territory, regional
@@ -71,6 +74,11 @@ shadow, and visible eggs. A hungry dragon hunts physical Food and leaves roofs
 alone. Hoard theft damages memory and starts retaliation. A brood consumes
 goblin-lair Food for years, and a posthumous successor is possible only when
 that egg was visible before the parent died.
+
+The graphical client exposes the same system. Travel to the dragon's lair,
+walk to the marked cave, and enter it. The cave panel shows Crown Cycle bars,
+battle strength, visible eggs, the current wound and retaliation target, plus
+the available theft, restitution, and tribute-interception actions.
 
 Type `inequality` to inspect the social fault lines. The score is not a generic
 poverty meter. It rises when hunger and high prices exist beside prosperity,
