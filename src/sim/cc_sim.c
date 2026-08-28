@@ -7619,7 +7619,7 @@ static bool ApplyTravel(CcSim *sim, const CcCommand *command,
     if (sim->schema_version >= 14U) {
         (void)snprintf(
             text, sizeof(text),
-            "%s and %s pull the Crownless carriage from %s toward %s with %d days of provisions and %d fodder reserved.",
+            "%.16s and %.16s pull from %.16s toward %.16s for %d days with %d fodder.",
             sim->horse_team[0].name, sim->horse_team[1].name,
             origin != NULL ? origin->name : "the waystation",
             destination->name, days, preview.horse_feed_required);
