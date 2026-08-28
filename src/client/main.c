@@ -2238,6 +2238,15 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         }
     }
     if (IsKeyPressed(KEY_N)) {
+        static double confirmation_deadline = 0.0;
+        double now = GetTime();
+        if (now > confirmation_deadline) {
+            confirmation_deadline = now + 3.0;
+            (void)snprintf(message, message_capacity,
+                           "Press N again to start a new campaign.");
+            return;
+        }
+        confirmation_deadline = 0.0;
         char error[256];
         if (!CcJournalClose(journal, sim, error, sizeof(error))) {
             (void)snprintf(message, message_capacity, "%s", error);
@@ -2249,7 +2258,10 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         CcLocalTerrainSetSeed(sim->world_seed);
         ResetLocalState(local);
         *view = VIEW_LOCAL;
-        (void)snprintf(message, message_capacity, "New game started.");
+        *journal = CcJournalStart(save_path, sim, error, sizeof(error));
+        (void)snprintf(message, message_capacity, "%s",
+                       *journal != NULL ? "New campaign started." : error);
+        return;
     }
     if (IsKeyPressed(KEY_PERIOD) && !sim->journey.active) {
         char error[256];
@@ -2896,9 +2908,23 @@ int main(int argc, char **argv)
 
     CcSim sim;
     CcSimInit(&sim, UINT32_C(0xc0a71a9e));
-    CcLocalTerrainSetSeed(sim.world_seed);
     CcJournal *journal = NULL;
-    if (capture || render_benchmark) CcSimAdvanceDays(&sim, 28);
+    char startup_message[256] = "";
+    if (capture || render_benchmark) {
+        CcSimAdvanceDays(&sim, 28);
+    } else {
+        char error[256];
+        if (FileExists(save_path)) {
+            journal = CcJournalResume(save_path, &sim, error, sizeof(error));
+            (void)snprintf(startup_message, sizeof(startup_message), "%s",
+                           journal != NULL ? "Campaign resumed." : error);
+        } else {
+            journal = CcJournalStart(save_path, &sim, error, sizeof(error));
+            (void)snprintf(startup_message, sizeof(startup_message), "%s",
+                           journal != NULL ? "New campaign started." : error);
+        }
+    }
+    CcLocalTerrainSetSeed(sim.world_seed);
     if (capture_creature_media &&
         strcmp(capture_creature_family, "goblins") == 0) {
         sim.player.location_id = sim.goblins.lair_settlement_id;
@@ -2995,6 +3021,14 @@ int main(int argc, char **argv)
     ActionReelState action_reel = {0};
     GameplayReelState gameplay_reel = {0};
     ResetLocalState(&local);
+    if (!capture && sim.journey.active) {
+        if (sim.journey.phase == CC_JOURNEY_PHASE_BLOCKED) {
+            view = VIEW_ENCOUNTER;
+        } else {
+            BeginRoadTravelState(&local);
+            view = VIEW_LOCAL;
+        }
+    }
     if (capture_golden || capture_atmosphere) {
         RepositionHero(&local, (Vector2){44.25f, 28.85f}, false);
         local.agent.facing_yaw = -0.35f;
@@ -3191,6 +3225,9 @@ int main(int argc, char **argv)
         }
     }
     char message[256] = "";
+    if (!capture && !render_benchmark && startup_message[0] != '\0') {
+        (void)snprintf(message, sizeof(message), "%s", startup_message);
+    }
     if (capture_golden) {
         (void)snprintf(message, sizeof(message), "Town square.");
     } else if (capture_atmosphere) {
