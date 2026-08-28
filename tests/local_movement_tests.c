@@ -2023,8 +2023,59 @@ static void TestRoadBridgeSupport(void)
     }
 }
 
+static void TestBuildingCutawaySelection(void)
+{
+    Camera3D camera = {
+        .position = {0.0f, 3.0f, 10.0f},
+        .target = {0.0f, 1.0f, 0.0f},
+        .up = {0.0f, 1.0f, 0.0f},
+        .fovy = 45.0f,
+        .projection = CAMERA_PERSPECTIVE,
+    };
+    Vector3 hero = {0.0f, 1.05f, 0.0f};
+    Rectangle direct_blocker = {-1.2f, 3.0f, 2.4f, 2.0f};
+    Rectangle shoulder_blocker = {0.18f, 3.0f, 0.72f, 2.0f};
+    Rectangle unrelated_house = {4.0f, 3.0f, 2.0f, 2.0f};
+    Rectangle house_behind_hero = {-1.2f, -4.0f, 2.4f, 2.0f};
+    bool direct = CcLocalBuildingObscuresHeroInternal(
+        direct_blocker, 4.0f, camera, hero, 457, 285);
+    bool shoulder = CcLocalBuildingObscuresHeroInternal(
+        shoulder_blocker, 4.0f, camera, hero, 457, 285);
+    bool unrelated = CcLocalBuildingObscuresHeroInternal(
+        unrelated_house, 4.0f, camera, hero, 457, 285);
+    bool behind = CcLocalBuildingObscuresHeroInternal(
+        house_behind_hero, 4.0f, camera, hero, 457, 285);
+
+    if (!direct || !shoulder || unrelated || behind) {
+        (void)fprintf(stderr,
+                      "building cutaway selection failed: direct %d shoulder %d unrelated %d behind %d\n",
+                      direct, shoulder, unrelated, behind);
+        exit(1);
+    }
+}
+
 int main(void)
 {
+    for (int32_t frame = 0; frame < 239; ++frame) {
+        CcLocalRendererBeginFrame(0.010f);
+    }
+    CcLocalRendererBeginFrame(0.050f);
+    CcLocalRendererRecordSkinUpdate(1);
+    CcLocalRendererRecordHeroSkinUpdate(3);
+    CcLocalRendererStats performance = CcLocalRendererGetStats();
+    if (performance.p95_frame_milliseconds < 9.9f ||
+        performance.p95_frame_milliseconds > 10.1f ||
+        performance.maximum_frame_milliseconds < 49.9f ||
+        performance.hitch_count != 1 ||
+        performance.skin_updates != 2 || performance.skinned_meshes != 4 ||
+        performance.hero_skin_updates != 1 ||
+        performance.hero_skinned_meshes != 3) {
+        (void)fprintf(stderr,
+                      "renderer hitch or hero skin metrics were incorrect\n");
+        return 1;
+    }
+
+    TestBuildingCutawaySelection();
     if (fabsf(CcLocalRoadCarriageX(0) - 20.15f) > 0.001f ||
         fabsf(CcLocalRoadCarriageX(350) - 38.35f) > 0.001f ||
         fabsf(CcLocalRoadCarriageX(1000) - 72.15f) > 0.001f) {
