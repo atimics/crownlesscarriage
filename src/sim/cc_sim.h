@@ -18,6 +18,8 @@
 #define CC_MAX_TREASURES 24
 #define CC_MAX_SITUATIONS 12
 #define CC_MAX_EVENTS 256
+#define CC_CARRIAGE_HORSE_COUNT 2
+#define CC_MAX_STABLE_HORSES 6
 #define CC_NAME_CAPACITY 32
 #define CC_MAP_NAME_CAPACITY 48
 #define CC_EVENT_TEXT_CAPACITY 144
@@ -27,8 +29,8 @@
 #define CC_GLOAMGATE_ALDERWATCH_MAP_NAME "Gloamgate to Alderwatch"
 #define CC_CROWNLESS_ATLAS_MAP_NAME "The Crownless Atlas"
 
-#define CC_SIM_SCHEMA_VERSION 13
-#define CC_GENERATOR_VERSION 13
+#define CC_SIM_SCHEMA_VERSION 15
+#define CC_GENERATOR_VERSION 15
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
 #define CC_WORLD_DAY_SUBTICKS (24 * 60 * CC_WORLD_MINUTE_SUBTICKS)
@@ -56,7 +58,8 @@ typedef enum CcEntityKind {
     CC_ENTITY_DRAGON = 14,
     CC_ENTITY_HOARD_RAIDERS = 15,
     CC_ENTITY_TREASURE = 16,
-    CC_ENTITY_COURIER = 17
+    CC_ENTITY_COURIER = 17,
+    CC_ENTITY_HORSE = 18
 } CcEntityKind;
 
 typedef enum CcGood {
@@ -112,6 +115,13 @@ typedef enum CcFactionKind {
     CC_FACTION_GUILD,
     CC_FACTION_COMMONS
 } CcFactionKind;
+
+typedef enum CcKingdomCalling {
+    CC_KINGDOM_CALLING_ROAD,
+    CC_KINGDOM_CALLING_IRON,
+    CC_KINGDOM_CALLING_DEEP,
+    CC_KINGDOM_CALLING_COUNT
+} CcKingdomCalling;
 
 typedef enum CcDungeonState {
     CC_DUNGEON_SEALED,
@@ -200,7 +210,12 @@ typedef enum CcEventKind {
     CC_EVENT_DRAGON_SUCCESSOR,
     CC_EVENT_GOBLIN_CULT_RALLIED,
     CC_EVENT_GOBLIN_DRAGON_SEED,
-    CC_EVENT_ENCOUNTER_WITHDRAWN
+    CC_EVENT_ENCOUNTER_WITHDRAWN,
+    CC_EVENT_COW_CALVING,
+    CC_EVENT_COW_SLAUGHTERED,
+    CC_EVENT_HORSE_BRED,
+    CC_EVENT_FOAL_BORN,
+    CC_EVENT_HORSE_TEAM_CHANGED
 } CcEventKind;
 
 typedef enum CcCommandKind {
@@ -228,8 +243,15 @@ typedef enum CcCommandKind {
        their stable numeric meanings. */
     CC_COMMAND_RESOLVE_ENCOUNTER_PROVISIONS,
     CC_COMMAND_WITHDRAW_ENCOUNTER,
+    CC_COMMAND_BREED_HORSES,
+    CC_COMMAND_ASSIGN_HORSE,
     CC_COMMAND_INTERCEPT_DRAGON_TRIBUTE
 } CcCommandKind;
+
+typedef enum CcHorseSex {
+    CC_HORSE_MARE,
+    CC_HORSE_STALLION
+} CcHorseSex;
 
 typedef enum CcCollectibleMapSlot {
     CC_MAP_THORNFORD_FORDINGS,
@@ -297,7 +319,31 @@ typedef struct CcSettlement {
     int32_t treasure_gold_committed;
     int32_t treasure_gems_committed;
     int32_t treasure_work;
+    int32_t cow_adults;
+    int32_t cow_calves;
+    int32_t cow_condition;
+    int32_t cow_hunger;
 } CcSettlement;
+
+typedef struct CcHorse {
+    CcId id;
+    char name[CC_NAME_CAPACITY];
+    int32_t age_days;
+    int32_t health;
+    int32_t fatigue;
+    int32_t hunger;
+    CcHorseSex sex;
+    CcId sire_id;
+    CcId dam_id;
+    CcId stable_settlement_id;
+    CcId pregnant_by_id;
+    int32_t pregnancy_days_remaining;
+    int32_t breeding_cooldown_days;
+    int32_t training;
+    int32_t strength;
+    int32_t temperament;
+    int32_t hardiness;
+} CcHorse;
 
 typedef struct CcRoute {
     CcId id;
@@ -674,6 +720,8 @@ typedef struct CcTravelPreview {
     int32_t claimed_condition;
     int32_t claimed_danger;
     int32_t chart_accuracy;
+    int32_t horse_feed_required;
+    int32_t horse_readiness;
     bool charted;
     bool destination_known;
     bool sponsored_guide;
@@ -760,6 +808,9 @@ typedef struct CcSim {
     CcSituation situations[CC_MAX_SITUATIONS];
     CcEvent events[CC_MAX_EVENTS];
     CcPlayerCompany player;
+    CcHorse horse_team[CC_CARRIAGE_HORSE_COUNT];
+    CcHorse stable_horses[CC_MAX_STABLE_HORSES];
+    int32_t stable_horse_count;
     CcWorldClock clock;
     CcJourneyEncounter journey;
     CcCarriageState carriage;
@@ -792,6 +843,8 @@ void CcSimInit(CcSim *sim, uint32_t seed);
 void CcSimInitializeDragonCycle(CcSim *sim);
 void CcSimInitializeDragonEcology(CcSim *sim);
 void CcSimInitializeHoardRaiders(CcSim *sim);
+void CcSimInitializeAnimalEconomy(CcSim *sim);
+void CcSimInitializeHorseStableSystem(CcSim *sim);
 void CcSimAdvanceDays(CcSim *sim, int32_t days);
 /* Consumes exact 60 Hz ticks only while a committed journey is travelling. */
 void CcSimAdvanceRuntimeTicks(CcSim *sim, int32_t ticks);
@@ -799,6 +852,13 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
                 char *error, size_t error_capacity);
 bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity);
 uint64_t CcSimHash(const CcSim *sim);
+int32_t CcSimHorseTeamReadiness(const CcSim *sim);
+int32_t CcSimHorseCount(const CcSim *sim);
+const CcHorse *CcSimHorseAt(const CcSim *sim, int32_t index);
+const CcHorse *CcSimHorse(const CcSim *sim, CcId horse_id);
+const char *CcHorseSexName(CcHorseSex sex);
+const char *CcHorseLifeStageName(const CcHorse *horse);
+bool CcHorseWorkingReady(const CcHorse *horse);
 
 CcId CcMakeId(CcEntityKind kind, uint64_t serial);
 CcEntityKind CcIdKind(CcId id);
@@ -806,6 +866,8 @@ const char *CcGoodName(CcGood good);
 const char *CcSettlementFunctionName(CcSettlementFunction function);
 const char *CcSettlementSizeName(CcSettlementSize size);
 const char *CcServiceName(CcServiceKind service);
+const char *CcFactionKindName(CcFactionKind kind);
+const char *CcKingdomCallingName(CcKingdomCalling calling);
 const char *CcBanditCampSizeName(CcBanditCampSize size);
 const char *CcBanditRaidPhaseName(CcBanditRaidPhase phase);
 const char *CcDungeonStateName(CcDungeonState state);
@@ -860,6 +922,8 @@ bool CcSimStartServiceProject(CcSim *sim, CcId settlement_id,
                               char *error, size_t error_capacity);
 bool CcSimKingdomsAtWar(const CcSim *sim, CcId first, CcId second);
 bool CcSimKingdomsAllied(const CcSim *sim, CcId first, CcId second);
+CcKingdomCalling CcSimKingdomCalling(const CcSim *sim, CcId kingdom_id);
+int32_t CcSimKingdomPressure(const CcSim *sim, CcId kingdom_id);
 const char *CcDiplomaticStateName(CcDiplomaticState state);
 bool CcSimRouteCrossesWarBorder(const CcSim *sim, CcId route_id);
 int32_t CcBanditCampServiceCapacity(CcBanditCampSize size);

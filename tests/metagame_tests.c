@@ -67,6 +67,20 @@ int main(void)
                                sizeof(output)));
     CC_CHECK(strstr(output, "Social fault lines") != NULL);
     CC_CHECK(strstr(output, "war burden") != NULL);
+    CC_CHECK(CcMetagameExecute(&metagame, "kingdoms", output,
+                               sizeof(output)));
+    CC_CHECK(strstr(output, "THE KINGDOMS OF MEN") != NULL);
+    CC_CHECK(strstr(output, "Road and Granary") != NULL);
+    CC_CHECK(strstr(output, "Iron and Wall") != NULL);
+    CC_CHECK(strstr(output, "Capital and Deep") != NULL);
+    CC_CHECK(strstr(output, "Politics (support / material power)") != NULL);
+    CC_CHECK(strstr(output, "Present road strain") != NULL);
+    for (int32_t i = 0; i < metagame.sim.kingdom_count; ++i) {
+        CC_CHECK(strstr(output, metagame.sim.kingdoms[i].name) != NULL);
+    }
+    CC_CHECK(CcMetagameExecute(&metagame, "look", output, sizeof(output)));
+    CC_CHECK(strstr(output, metagame.sim.kingdoms[0].name) != NULL);
+    CC_CHECK(strstr(output, "Road and Granary realm") != NULL);
     CC_CHECK(CcMetagameExecute(&metagame, "war", output, sizeof(output)));
     CC_CHECK(strstr(output, "Frontier roads") != NULL);
     CC_CHECK(strstr(output, "Crown Levy") != NULL);
@@ -196,6 +210,27 @@ int main(void)
     CC_CHECK(fight.sim.carriage.condition < condition_before);
     CC_CHECK(fight.sim.player.coins < fight_coins);
     CC_CHECK(CcSimValidate(&fight.sim, error, sizeof(error)));
+
+    CcMetagame horses;
+    CcMetagameInit(&horses, UINT32_C(0x57ab1e));
+    horses.sim.player.location_id = horses.sim.settlements[0].id;
+    horses.sim.carriage.location_id = horses.sim.player.location_id;
+    CC_CHECK(CcMetagameExecute(&horses, "animals", output,
+                               sizeof(output)));
+    CC_CHECK(strstr(output, "traits: strength") != NULL);
+    CC_CHECK(CcMetagameExecute(&horses, "stable breed 2 1", output,
+                               sizeof(output)));
+    CC_CHECK(strstr(output, "due in 330 days") != NULL);
+    horses.sim.horse_team[1].pregnancy_days_remaining = 1;
+    CC_CHECK(CcMetagameExecute(&horses, "wait 1", output,
+                               sizeof(output)));
+    CC_CHECK(horses.sim.stable_horse_count == 1);
+    horses.sim.stable_horses[0].age_days = 3 * 365;
+    horses.sim.stable_horses[0].training = 80;
+    CC_CHECK(CcMetagameExecute(&horses, "stable team 1 3", output,
+                               sizeof(output)));
+    CC_CHECK(strstr(output, "team 1") != NULL);
+    CC_CHECK(CcSimValidate(&horses.sim, error, sizeof(error)));
 
     CcMetagame dragon;
     CcMetagameInit(&dragon, UINT32_C(0xd12a60));

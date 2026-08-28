@@ -81,6 +81,18 @@ A visible local change produced soon after a player decision.
 A delayed, bounded piece of information derived from a causal event and sent
 through a known channel such as a letter, traveller, official notice, or rumour.
 
+## Kingdom calling
+
+A realm identity derived from the kinds of settlements it controls. It explains
+the realm's material power, dependence, and contradiction without granting a
+free bonus.
+
+## Kingdom pressure
+
+A derived reading of the strongest live threat to a kingdom's calling. It
+summarizes existing hunger, road, war supply, debt, legitimacy, dungeon,
+monster, and dragon state without becoming a separate resource.
+
 ## Local projection
 
 A visual, behavioural, dialogic, or interactive expression of strategic state

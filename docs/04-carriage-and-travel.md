@@ -54,6 +54,50 @@ Progression unlocks new choices rather than only larger numbers:
 Modules should create political, narrative, and route opportunities in
 addition to modifying combat or capacity.
 
+## V1 working animals
+
+The first playable animal economy contains only horses and cows. They share
+the quadruped movement system, but they have different jobs in the world.
+
+The Crownless company owns two named horses. Their age, health, fatigue, and
+hunger persist. Every journey reserves real fodder from the departure market.
+Cargo weight and a poor road tire the team, while food, time, and a settlement
+stable restore it. A tired team travels more slowly; an exhausted or hungry
+team cannot depart.
+
+Farm settlements keep cattle as adult cows and calves. A herd consumes stored
+Food as fodder and adds a small weekly food yield. Good conditions let calves
+join the adult herd and allow new calves to be born. Fodder failure weakens the
+herd and can force a cow to be slaughtered, exchanging future production for
+four immediate Food. Dragon hunts remove actual cows before taking anonymous
+stored food.
+
+Named horses are individual simulation records because they stay with the
+player. Cows remain settlement herds until a later situation needs to promote
+one animal. V1 does not include riding, mounted combat, breeds, genetics, milk
+as a separate good, or any other domestic animal species.
+
+## Stable breeding
+
+Settlement stables now support a small Crownless breeding program. Bracken is
+a stallion and Morrow is a mare. Breeding requires both horses to be present,
+mature, trained, healthy, fed, and rested. The stable charges 20 crowns and
+uses 2 Food. A pregnancy lasts 330 days, and a mare in her last 30 days cannot
+leave on a carriage journey.
+
+A foal receives a persistent identity, sex, sire, dam, and three inherited
+working traits: strength, temperament, and hardiness. Small deterministic
+variation keeps siblings from being copies. Young horses are boarded where
+they are born. Stable care consumes weekly Food, restores health, lowers
+fatigue, and trains them. A horse must be at least three years old, have 60
+training, and be healthy before it can pull the carriage.
+
+The company can board up to six horses in addition to its two-horse team. At a
+stable, `stable breed MARE STALLION` starts a pregnancy and
+`stable team SLOT HORSE` swaps a ready boarded horse into team slot 1 or 2.
+Numbers come from the `animals` view. The outgoing team horse remains owned by
+the company and is boarded at that settlement.
+
 ## Walker-chassis hypothesis
 
 **Hypothesis:** the Crownless Carriage is an old articulated walker built to

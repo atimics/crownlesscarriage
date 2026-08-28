@@ -94,6 +94,13 @@ Tools, while each kingdom records and repays its own debt. Type `treasures` for
 each named object's materials, maker, location, holder, and appraisal. A
 treasure can be moved with `buy-treasure NUMBER` and `sell-treasure NUMBER`; it
 fills one carriage slot.
+
+Type `kingdoms` to inspect each realm's material calling, settlements, vital
+dependence, current pressure, internal faction balance, and confirmed
+relations. The score is a projection of real hunger, roads, garrison supply,
+debt, dungeons, monsters, legitimacy, and dragon pressure. It is not a separate
+resource.
+
 Type `war` to inspect border pressure,
 kingdom treasuries, local markets, war chests, garrison food, tools, and
 weapons, legitimacy, current peace/war/alliance relations, and sealed

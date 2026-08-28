@@ -2135,6 +2135,14 @@ static void DrawRoadPanel(const CcSim *sim, int32_t selected)
     CcOverlayDrawText(TextFormat("%" PRId64 " CROWNS",
                                  preview.provision_cost),
                       1105, 185, 14, CC_GOLD);
+    DrawBar(998, 358, 92, "TEAM", preview.horse_readiness, TEAL);
+    CcOverlayDrawText(TextFormat("%d FODDER",
+                                 preview.horse_feed_required),
+                      1105, 362, 9, INK);
+    CcOverlayDrawText(TextFormat("%.10s + %.10s",
+                                 sim->horse_team[0].name,
+                                 sim->horse_team[1].name),
+                      998, 383, 8, MUTED);
 
     const CcMap *map = VisibleMapForRoute(sim, route->id);
     CcOverlayDrawText("NOTES", 998, 225, 9, TEAL);
