@@ -54,15 +54,16 @@ typedef struct CcVisualPalette {
 /* Blackthorn & Brass: violet-slate shadows, bottle-green land, tarnished
    brass routes, and oxblood character accents. Each material has three
    hand-authored bands so shadows change hue as well as value. UI neutrals
-   live beside the world colors, but are not part of the world lookup. */
+   use warm lampblack and leather instead of cool terminal blue; they live
+   beside the world colors, but are not part of the world lookup. */
 static const CcVisualPalette CC_VISUAL_PALETTE = {
     .cool_ink = {17, 16, 25, 255},
     .warm_ink = {33, 23, 26, 255},
     .background = {17, 16, 25, 255},
-    .panel = {23, 24, 36, 244},
-    .panel_deep = {11, 17, 24, 242},
-    .panel_hover = {35, 43, 51, 248},
-    .bar_track = {46, 48, 58, 255},
+    .panel = {28, 21, 24, 244},
+    .panel_deep = {20, 15, 20, 244},
+    .panel_hover = {51, 38, 37, 248},
+    .bar_track = {62, 52, 49, 255},
     .ink = {226, 216, 193, 255},
     .muted = {164, 154, 137, 255},
     /* Signal ramps own the brightest chroma. Their light bands are used by

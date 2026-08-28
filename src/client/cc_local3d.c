@@ -323,16 +323,16 @@ static const ArtAtmosphereDefinition ART_ATMOSPHERES[] = {
         -0.020f, 1.36f, 1.58f, 1.05f, 0.00f, 0.10f, 0.00f, 0.00f,
     },
     [CC_LOCAL_ATMOSPHERE_MOONLIT_NIGHT] = {
-        {-0.30f, 0.48f, -0.82f}, {0.72f, 0.82f, 1.06f},
-        {0.78f, 0.82f, 0.98f}, {0.86f, 0.88f, 1.08f},
-        {38, 31, 49, 255}, 0.82f, 0.58f, 0.82f, 1.12f, 1.12f,
-        -0.045f, 1.42f, 0.62f, 0.84f, 0.00f, 0.18f, 0.08f, 0.00f,
+        {-0.30f, 0.48f, -0.82f}, {0.82f, 0.90f, 1.10f},
+        {0.90f, 0.94f, 1.06f}, {0.92f, 0.92f, 1.07f},
+        {47, 44, 61, 255}, 0.76f, 0.50f, 0.90f, 1.06f, 1.18f,
+        -0.015f, 1.20f, 0.78f, 0.92f, 0.00f, 0.12f, 0.04f, 0.00f,
     },
     [CC_LOCAL_ATMOSPHERE_DRAGON_OMEN] = {
-        {-0.58f, 0.42f, 0.18f}, {0.88f, 0.68f, 0.72f},
-        {0.70f, 0.72f, 0.82f}, {0.88f, 0.78f, 1.08f},
-        {48, 44, 57, 255}, 0.78f, 0.68f, 0.74f, 1.18f, 1.12f,
-        -0.040f, 1.46f, 0.92f, 0.76f, 0.38f, 0.66f, 0.50f, 1.00f,
+        {-0.58f, 0.42f, 0.18f}, {0.96f, 0.75f, 0.76f},
+        {0.82f, 0.84f, 0.94f}, {0.94f, 0.84f, 1.08f},
+        {48, 44, 57, 255}, 0.74f, 0.58f, 0.82f, 1.10f, 1.20f,
+        -0.012f, 1.26f, 1.00f, 0.86f, 0.30f, 0.54f, 0.36f, 1.00f,
     },
 };
 
@@ -3608,7 +3608,7 @@ void CcLocalCourseStageRoadEncounter(CcLocalCourse *course,
 {
     if (course == NULL || player == NULL) return;
     static const Vector2 guard_positions[CC_LOCAL_COURSE_RUNNER_COUNT] = {
-        {44.75f, 38.35f}, {44.75f, 40.95f}, {44.75f, 42.10f}
+        {43.10f, 36.85f}, {42.40f, 40.20f}, {43.35f, 43.15f}
     };
     course->road_encounter = true;
     course->scene = CC_LOCAL_SCENE_ROAD;
@@ -12663,6 +12663,26 @@ static void DrawBuildingFoundation(float x, float z, float width,
     }
 }
 
+static void DrawBuildingRevealCap(float x, float z, float width, float depth,
+                                  float height, float local_cut_height,
+                                  Color wall, Color roof)
+{
+    if (local_cut_height < 0.58f || local_cut_height > height + 0.24f) return;
+    float y = local_cut_height - 0.055f;
+    Color cap = BlendColor(ShadeColor(wall, 0.54f), roof, 0.30f);
+    Color ink = ShadeColor(cap, 0.58f);
+    DrawBox((Vector3){x + width * 0.5f, y, z + 0.02f},
+            (Vector3){width + 0.18f, 0.10f, 0.18f}, cap);
+    DrawBox((Vector3){x + width * 0.5f, y, z + depth - 0.02f},
+            (Vector3){width + 0.18f, 0.10f, 0.18f}, cap);
+    DrawBox((Vector3){x + 0.02f, y, z + depth * 0.5f},
+            (Vector3){0.18f, 0.10f, depth - 0.12f}, cap);
+    DrawBox((Vector3){x + width - 0.02f, y, z + depth * 0.5f},
+            (Vector3){0.18f, 0.10f, depth - 0.12f}, cap);
+    DrawBox((Vector3){x + width * 0.5f, y + 0.052f, z + depth - 0.10f},
+            (Vector3){width - 0.18f, 0.025f, 0.055f}, ink);
+}
+
 static void DrawBuilding(float x, float z, float width, float depth,
                          float height, Color wall, Color roof, bool door,
                          int32_t style)
@@ -12687,6 +12707,19 @@ static void DrawBuilding(float x, float z, float width, float depth,
     DrawBox((Vector3){x + width + 0.045f, height - 0.24f, center.z},
             (Vector3){0.09f, 0.18f, depth - 0.18f}, trim);
 
+    /* Camera rooms can approach a house from either side. Give the rear and
+       left elevations the same large construction rhythm as the nominal
+       front so a camera turn never reveals an undecorated cuboid. */
+    for (int32_t corner = 0; corner < 2; ++corner) {
+        float post_x = corner == 0 ? x + 0.18f : x + width - 0.18f;
+        DrawBox((Vector3){post_x, height * 0.50f, z - 0.045f},
+                (Vector3){0.18f, height - 0.18f, 0.09f}, trim);
+    }
+    DrawBox((Vector3){center.x, height - 0.24f, z - 0.045f},
+            (Vector3){width - 0.18f, 0.18f, 0.09f}, trim);
+    DrawBox((Vector3){x - 0.045f, height - 0.24f, center.z},
+            (Vector3){0.09f, 0.18f, depth - 0.18f}, trim);
+
     /* Strong horizontal courses keep the low camera from reading each house
        as one unscaled slab. They also carry the trim language around the
        visible corner, so the facade remains coherent from adjacent rooms. */
@@ -12700,6 +12733,14 @@ static void DrawBuilding(float x, float z, float width, float depth,
             (Vector3){width - 0.16f, 0.13f, 0.115f}, trim);
     DrawBox((Vector3){x + width + 0.057f, story_course, center.z},
             (Vector3){0.115f, 0.13f, depth - 0.16f}, trim);
+    DrawBox((Vector3){center.x, 0.46f, z - 0.052f},
+            (Vector3){width - 0.14f, 0.42f, 0.105f}, plinth);
+    DrawBox((Vector3){x - 0.052f, 0.46f, center.z},
+            (Vector3){0.105f, 0.42f, depth - 0.14f}, plinth);
+    DrawBox((Vector3){center.x, story_course, z - 0.057f},
+            (Vector3){width - 0.16f, 0.13f, 0.115f}, trim);
+    DrawBox((Vector3){x - 0.057f, story_course, center.z},
+            (Vector3){0.115f, 0.13f, depth - 0.16f}, trim);
 
     int32_t bays = width >= 10.0f ? 3 : 2;
     float window_y = fminf(height * 0.56f, 2.90f);
@@ -12711,6 +12752,14 @@ static void DrawBuilding(float x, float z, float width, float depth,
     }
     DrawFacadeWindow((Vector3){x + width + 0.075f, window_y,
                                center.z + depth * 0.12f}, true, trim, glass);
+    for (int32_t bay = 0; bay < bays; ++bay) {
+        float window_x = x + width * (float)(bay + 1) / (float)(bays + 1);
+        DrawFacadeWindow((Vector3){window_x, window_y, z - 0.075f},
+                         false, trim, ShadeColor(glass, 0.88f));
+    }
+    DrawFacadeWindow((Vector3){x - 0.075f, window_y,
+                               center.z - depth * 0.12f}, true, trim,
+                     ShadeColor(glass, 0.84f));
 
     if (door) {
         DrawBox((Vector3){center.x, 0.10f, z + depth + 0.42f},
@@ -14546,13 +14595,24 @@ static void DrawWorldBuildings(Color kingdom, Vector3 focus,
             reveal_active = reveal;
         }
         rlPushMatrix();
-        rlTranslatef(0.0f, TerrainFootprintHeight(building->footprint), 0.0f);
+        float building_base = TerrainFootprintHeight(building->footprint);
+        rlTranslatef(0.0f, building_base, 0.0f);
         DrawBuilding(building->footprint.x, building->footprint.y,
                      building->footprint.width, building->footprint.height,
                      building->height,
                      BuildingWallColor(building->style, profile),
                      BuildingRoofColor(building->style, kingdom, profile),
                      building->door, building->style);
+        if (reveal > 0.05f) {
+            float active_cut_world = reveal_cut_height +
+                                     (1.0f - reveal) * 8.0f;
+            DrawBuildingRevealCap(
+                building->footprint.x, building->footprint.y,
+                building->footprint.width, building->footprint.height,
+                building->height, active_cut_world - building_base,
+                BuildingWallColor(building->style, profile),
+                BuildingRoofColor(building->style, kingdom, profile));
+        }
         rlPopMatrix();
     }
     SetWorldForegroundReveal(0.0f, reveal_cut_height);
@@ -14758,10 +14818,11 @@ static void DrawCastle(Color kingdom, const CcLocalPlaceProfile *profile,
     Rectangle keep_pad = {65.20f, 8.20f, 26.50f, 24.40f};
     if (!SceneryFootprintVisible(keep_pad, focus)) return;
     float reveal_cut_height = reveal_world.y - 0.30f;
+    float castle_base = TerrainFootprintHeight(keep_pad);
     UpdateCastleStructureReveals(camera, reveal_world,
                                  render_width, render_height, clock);
     rlPushMatrix();
-    rlTranslatef(0.0f, TerrainFootprintHeight(keep_pad), 0.0f);
+    rlTranslatef(0.0f, castle_base, 0.0f);
     SetWorldForegroundReveal(0.0f, reveal_cut_height);
     for (int32_t i = 0; i < (int32_t)(sizeof(CASTLE_STRUCTURES) /
                                       sizeof(CASTLE_STRUCTURES[0])); ++i) {
@@ -17448,8 +17509,8 @@ static void DrawStreetTraversalPortals(const CcLocalAgent *agent,
         char label[96];
         (void)snprintf(label, sizeof(label), "%s  %s",
                        portal.exit != NULL ? "ROAD" : "TO", name);
-        int32_t text_width = CcOverlayMeasureText(label, 9);
-        float bubble_width = (float)text_width + 16.0f;
+    int32_t text_width = CcOverlayMeasureText(label, 9);
+    float bubble_width = (float)text_width + 16.0f;
         float bubble_x = point.x < viewport.x + viewport.width * 0.5f ?
             point.x + 10.0f : point.x - bubble_width - 10.0f;
         float bubble_y = point.y - 10.0f;
@@ -17458,27 +17519,31 @@ static void DrawStreetTraversalPortals(const CcLocalAgent *agent,
                                              bubble_width - 5.0f));
         bubble_y = fmaxf(viewport.y + 5.0f,
                          fminf(bubble_y, viewport.y + viewport.height -
-                                             23.0f));
+                                             25.0f));
         Color accent = portal.exit != NULL ? WORLD_GOLD : WORLD_TEAL;
         DrawRectangleRounded(
-            (Rectangle){bubble_x, bubble_y, bubble_width, 20.0f},
-            0.28f, 4, Fade(CC_STYLE_PANEL_DEEP, 0.88f));
-        DrawRectangleLinesEx(
-            (Rectangle){bubble_x, bubble_y, bubble_width, 20.0f},
-            1.0f, Fade(accent, 0.62f));
-        DrawCircleV(point, 5.0f, accent);
-        DrawCircleLines((int32_t)lroundf(point.x),
-                        (int32_t)lroundf(point.y), 7.0f,
+            (Rectangle){bubble_x, bubble_y, bubble_width, 22.0f},
+            0.04f, 3, Fade(CC_STYLE_PANEL_DEEP, 0.94f));
+        DrawRectangleRoundedLinesEx(
+            (Rectangle){bubble_x, bubble_y, bubble_width, 22.0f},
+            0.04f, 3, 1.0f, Fade(WORLD_GOLD, 0.62f));
+        DrawLine((int32_t)lroundf(bubble_x) + 7,
+                 (int32_t)lroundf(bubble_y) + 5,
+                 (int32_t)lroundf(bubble_x) + 30,
+                 (int32_t)lroundf(bubble_y) + 5,
+                 Fade(accent, 0.72f));
+        DrawPoly(point, 4, 6.0f, 45.0f, accent);
+        DrawPolyLinesEx(point, 4, 8.0f, 45.0f, 1.0f,
                         Fade(WORLD_INK, 0.82f));
-        CcOverlayDrawText(label, (int32_t)lroundf(bubble_x) + 8,
-                         (int32_t)lroundf(bubble_y) + 6, 9, accent);
+        CcOverlayDrawText(label, (int32_t)lroundf(bubble_x) + 10,
+                         (int32_t)lroundf(bubble_y) + 8, 10, accent);
     }
 }
 
 static void DrawLabels(const WorldLabel *labels, int32_t count, Camera3D camera,
                        Rectangle viewport)
 {
-    const float bubble_height = 16.0f;
+    const float bubble_height = 18.0f;
     const float head_clearance = 8.0f;
     int32_t width = (int32_t)lroundf(viewport.width);
     int32_t height = (int32_t)lroundf(viewport.height);
@@ -17489,7 +17554,7 @@ static void DrawLabels(const WorldLabel *labels, int32_t count, Camera3D camera,
             screen.y < bubble_height + head_clearance + 4.0f ||
             screen.y > viewport.height + 40.0f) continue;
         int text_width = CcOverlayMeasureText(labels[i].text, 10);
-        float bubble_width = (float)text_width + 10.0f;
+        float bubble_width = (float)text_width + 16.0f;
         float bubble_x = viewport.x + screen.x - bubble_width * 0.5f;
         /* The projected point is the top of the subject. Keep the complete
            nameplate above it so the plate never paints across a face. */
@@ -17502,11 +17567,21 @@ static void DrawLabels(const WorldLabel *labels, int32_t count, Camera3D camera,
         bubble_y = fmaxf(viewport.y + 4.0f,
                          fminf(bubble_y,
                                viewport.y + viewport.height - 20.0f));
-        DrawRectangleRounded((Rectangle){bubble_x, bubble_y,
-                                         bubble_width, bubble_height},
-                             0.30f, 4, (Color){4, 10, 14, 210});
-        CcOverlayDrawText(labels[i].text, (int)lroundf(bubble_x) + 5,
-                 (int)lroundf(bubble_y) + 3, 10, labels[i].color);
+        Rectangle bubble = {bubble_x, bubble_y, bubble_width, bubble_height};
+        DrawRectangleRounded(bubble, 0.05f, 3,
+                             Fade(CC_STYLE_PANEL_DEEP, 0.94f));
+        DrawRectangleRoundedLinesEx(bubble, 0.05f, 3, 1.0f,
+                                    Fade(WORLD_GOLD, 0.44f));
+        DrawRectangle((int32_t)lroundf(bubble_x) + 4,
+                      (int32_t)lroundf(bubble_y) + 4, 3, 10,
+                      Fade(labels[i].color, 0.78f));
+        DrawLine((int32_t)lroundf(bubble_x + bubble_width * 0.5f),
+                 (int32_t)lroundf(bubble_y + bubble_height),
+                 (int32_t)lroundf(bubble_x + bubble_width * 0.5f),
+                 (int32_t)lroundf(bubble_y + bubble_height + 4.0f),
+                 Fade(labels[i].color, 0.66f));
+        CcOverlayDrawText(labels[i].text, (int)lroundf(bubble_x) + 10,
+                 (int)lroundf(bubble_y) + 4, 10, labels[i].color);
     }
 }
 
@@ -19462,8 +19537,12 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     Rectangle road_status = ViewportRectangle(
         destination, 10.0f, 9.0f, 610.0f, 46.0f);
     DrawRectangleRounded(road_status,
-                         0.08f, 4, Fade(WORLD_VOID, 0.90f));
-    DrawRectangleLinesEx(road_status, 1.0f, Fade(WORLD_GOLD, 0.28f));
+                         0.02f, 3, Fade(CC_STYLE_PANEL_DEEP, 0.94f));
+    DrawRectangleRoundedLinesEx(road_status, 0.02f, 3, 1.0f,
+                                Fade(WORLD_GOLD, 0.52f));
+    DrawLine((int32_t)road_status.x + 8, (int32_t)road_status.y + 7,
+             (int32_t)road_status.x + 46, (int32_t)road_status.y + 7,
+             Fade(WORLD_GOLD, 0.56f));
     DrawViewportText(
         TextFormat("%s  /  DANGER %d%%  /  ROAD %d%%  /  SECURITY %d%%",
                    RoadArchetypeName(route), sim->journey.danger,

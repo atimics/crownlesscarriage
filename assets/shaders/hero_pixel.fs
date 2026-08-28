@@ -59,7 +59,7 @@ void main()
        grid or an unstable screen-space halo. */
     float skyExposure = smoothstep(-0.30, 0.82, normal.y);
     color += albedo.rgb * vec3(0.74, 0.91, 1.04) * skyExposure *
-             (1.0 - lightBand) * 0.072;
+             (1.0 - lightBand) * 0.095;
 
     vec3 halfDirection = normalize(toCamera + toLight);
     float paintedHighlight = pow(max(dot(normal, halfDirection), 0.0), 18.0);
@@ -75,6 +75,15 @@ void main()
     color = mix(color, ink, edgeInk * inkStrength);
     float litEdge = edgeInk * smoothstep(0.08, 0.68, facing) * lightBand;
     color += vec3(0.19, 0.28, 0.28) * litEdge * 0.055;
+
+    /* The player keeps one narrow, in-silhouette brass/cool rim. It protects
+       the crown, shoulders, and weapon at the 35-pixel gameplay size without
+       giving every internal polygon a noisy outline. */
+    float silhouette = smoothstep(0.70, 0.94, 1.0 - viewFacing);
+    float heroRim = silhouette * (0.045 + skyExposure * 0.085);
+    vec3 heroRimColor = mix(vec3(0.12, 0.30, 0.29),
+                            vec3(0.58, 0.42, 0.19), lightBand);
+    color += heroRimColor * heroRim;
 
     float distanceToCamera = length(cameraPosition - fragPosition);
     float fog = smoothstep(fogNear, fogFar, distanceToCamera) * 0.24;
