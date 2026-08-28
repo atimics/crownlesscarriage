@@ -454,6 +454,11 @@ if(BUILD_TESTING)
     cc_strict_warnings(dragon_cycle_tests)
     add_test(NAME goblin_dragon_causal_cycle COMMAND dragon_cycle_tests)
 
+    add_executable(goblin_society_tests tests/goblin_society_tests.c)
+    target_link_libraries(goblin_society_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(goblin_society_tests)
+    add_test(NAME goblin_society_choices COMMAND goblin_society_tests)
+
     add_executable(dragon_ecology_tests tests/dragon_ecology_tests.c)
     target_link_libraries(dragon_ecology_tests PRIVATE crownless_persistence)
     cc_strict_warnings(dragon_ecology_tests)

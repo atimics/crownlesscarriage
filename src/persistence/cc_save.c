@@ -9,7 +9,7 @@
 #include <string.h>
 
 #define CC_SQLITE_APPLICATION_ID 1128481362
-#define CC_SQLITE_USER_VERSION 15
+#define CC_SQLITE_USER_VERSION 16
 #define CC_JOURNAL_RECORD_VERSION 1
 #define CC_JOURNAL_RUNTIME_FLUSH_TICKS 6
 
@@ -208,6 +208,21 @@ static bool EnsureLegendColumns(sqlite3 *database,
 {
     return EnsureColumn(database, "goblin_cult", "hoard_defenses",
             "ALTER TABLE goblin_cult ADD COLUMN hoard_defenses INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "goblin_cult", "cohesion",
+            "ALTER TABLE goblin_cult ADD COLUMN cohesion INTEGER NOT NULL DEFAULT 60;",
+            error, error_capacity) &&
+        EnsureColumn(database, "goblin_cult", "target_warned",
+            "ALTER TABLE goblin_cult ADD COLUMN target_warned INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "goblin_cult", "expeditions_intercepted",
+            "ALTER TABLE goblin_cult ADD COLUMN expeditions_intercepted INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "goblin_cult", "dragon_seed_phase",
+            "ALTER TABLE goblin_cult ADD COLUMN dragon_seed_phase INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "goblin_cult", "dragon_seed_days_remaining",
+            "ALTER TABLE goblin_cult ADD COLUMN dragon_seed_days_remaining INTEGER NOT NULL DEFAULT 0;",
             error, error_capacity) &&
         EnsureColumn(database, "dragon_state", "theft_actor_id",
             "ALTER TABLE dragon_state ADD COLUMN theft_actor_id INTEGER NOT NULL DEFAULT 0;",
@@ -699,7 +714,12 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " last_tribute_origin_id INTEGER NOT NULL, tribute_event_id INTEGER NOT NULL,"
         " carried_tribute INTEGER NOT NULL, tribute_days_remaining INTEGER NOT NULL,"
         " tribute_cooldown_days INTEGER NOT NULL, tributes_delivered INTEGER NOT NULL,"
-        " hoard_defenses INTEGER NOT NULL DEFAULT 0);"
+        " hoard_defenses INTEGER NOT NULL DEFAULT 0,"
+        " cohesion INTEGER NOT NULL DEFAULT 60,"
+        " target_warned INTEGER NOT NULL DEFAULT 0,"
+        " expeditions_intercepted INTEGER NOT NULL DEFAULT 0,"
+        " dragon_seed_phase INTEGER NOT NULL DEFAULT 0,"
+        " dragon_seed_days_remaining INTEGER NOT NULL DEFAULT 0);"
         "CREATE TABLE IF NOT EXISTS dragon_state ("
         " slot INTEGER PRIMARY KEY CHECK(slot=1), id INTEGER NOT NULL UNIQUE,"
         " name TEXT NOT NULL, lair_settlement_id INTEGER NOT NULL, hoard INTEGER NOT NULL,"
@@ -1360,8 +1380,10 @@ static bool SaveLegends(sqlite3 *database, const CcSim *sim,
                  "INSERT INTO goblin_cult (slot,id,name,members,devotion,"
                  "tribute_phase,tribute_target_id,last_tribute_origin_id,"
                  "tribute_event_id,carried_tribute,tribute_days_remaining,"
-                 "tribute_cooldown_days,tributes_delivered,hoard_defenses) "
-                 "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?);",
+                 "tribute_cooldown_days,tributes_delivered,hoard_defenses,"
+                 "cohesion,target_warned,expeditions_intercepted,"
+                 "dragon_seed_phase,dragon_seed_days_remaining) "
+                 "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
                  &statement, error, error_capacity)) return false;
     const CcGoblinCult *goblins = &sim->goblins;
     int column = 1;
@@ -1378,6 +1400,11 @@ static bool SaveLegends(sqlite3 *database, const CcSim *sim,
     BindInt(statement, column++, goblins->tribute_cooldown_days);
     BindInt(statement, column++, goblins->tributes_delivered);
     BindInt(statement, column++, goblins->hoard_defenses);
+    BindInt(statement, column++, goblins->cohesion);
+    BindInt(statement, column++, goblins->target_warned ? 1 : 0);
+    BindInt(statement, column++, goblins->expeditions_intercepted);
+    BindInt(statement, column++, (int32_t)goblins->dragon_seed_phase);
+    BindInt(statement, column++, goblins->dragon_seed_days_remaining);
     bool result = StepDone(database, statement, error, error_capacity);
     sqlite3_finalize(statement);
     if (!result) return false;
@@ -2412,7 +2439,8 @@ static bool ReadLegends(sqlite3 *database, CcSim *sim,
                  "SELECT id,name,members,devotion,tribute_phase,tribute_target_id,"
                  "last_tribute_origin_id,tribute_event_id,carried_tribute,"
                  "tribute_days_remaining,tribute_cooldown_days,tributes_delivered,"
-                 "hoard_defenses "
+                 "hoard_defenses,cohesion,target_warned,expeditions_intercepted,"
+                 "dragon_seed_phase,dragon_seed_days_remaining "
                  "FROM goblin_cult WHERE slot=1;",
                  &statement, error, error_capacity)) return false;
     if (sqlite3_step(statement) != SQLITE_ROW) {
@@ -2443,6 +2471,14 @@ static bool ReadLegends(sqlite3 *database, CcSim *sim,
         sqlite3_column_int(statement, column++);
     goblins->tributes_delivered = sqlite3_column_int(statement, column++);
     goblins->hoard_defenses = sqlite3_column_int(statement, column++);
+    goblins->cohesion = sqlite3_column_int(statement, column++);
+    goblins->target_warned = sqlite3_column_int(statement, column++) != 0;
+    goblins->expeditions_intercepted =
+        sqlite3_column_int(statement, column++);
+    goblins->dragon_seed_phase =
+        (CcGoblinDragonSeedPhase)sqlite3_column_int(statement, column++);
+    goblins->dragon_seed_days_remaining =
+        sqlite3_column_int(statement, column++);
     sqlite3_finalize(statement);
 
     if (!Prepare(database,
@@ -3031,8 +3067,19 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
         legacy_version != 7U && legacy_version != 8U &&
         legacy_version != 9U && legacy_version != 10U &&
         legacy_version != 11U && legacy_version != 12U &&
-        legacy_version != 13U && legacy_version != 14U) return true;
+        legacy_version != 13U && legacy_version != 14U &&
+        legacy_version != 15U) return true;
+    sim->goblins.cohesion = 60;
+    sim->goblins.target_warned = false;
+    sim->goblins.expeditions_intercepted = 0;
+    sim->goblins.dragon_seed_phase = CC_GOBLIN_DRAGON_SEED_NONE;
+    sim->goblins.dragon_seed_days_remaining = 0;
     CcSimUpgradeMapCollection(sim);
+    if (legacy_version == 15U) {
+        sim->schema_version = CC_SIM_SCHEMA_VERSION;
+        sim->generator_version = CC_GENERATOR_VERSION;
+        return true;
+    }
     if (legacy_version == 14U) {
         CcSimInitializeHorseStableSystem(sim);
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
@@ -3160,7 +3207,7 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
     }
 #undef LEGACY_SERVICE
     }
-    if (legacy_version == 11U || legacy_version == 12U) {
+    if (legacy_version >= 11U) {
         CcSimInitializeDragonEcology(sim);
         CcSimInitializeAnimalEconomy(sim);
         sim->schema_version = CC_SIM_SCHEMA_VERSION;

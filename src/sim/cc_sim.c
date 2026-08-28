@@ -90,6 +90,7 @@ void CcSimInitializeDragonCycle(CcSim *sim)
     CopyName(sim->goblins.name, "The Cinder Tithe");
     sim->goblins.members = 48;
     sim->goblins.devotion = 74;
+    sim->goblins.cohesion = 68;
     sim->goblins.tribute_phase = CC_GOBLIN_TRIBUTE_IDLE;
     sim->goblins.raid_motive = CC_GOBLIN_RAID_NONE;
     sim->goblins.lair_settlement_id = sim->settlements[
@@ -701,6 +702,12 @@ const char *CcEventKindName(CcEventKind kind)
         case CC_EVENT_HORSE_BRED: return "HORSE BRED";
         case CC_EVENT_FOAL_BORN: return "FOAL BORN";
         case CC_EVENT_HORSE_TEAM_CHANGED: return "HORSE TEAM";
+        case CC_EVENT_GOBLIN_RAID_PREPARED: return "GOBLIN MUSTER";
+        case CC_EVENT_GOBLIN_TARGET_WARNED: return "RAID WARNING";
+        case CC_EVENT_GOBLIN_EXPEDITION_INTERCEPTED: return "RAID INTERCEPTED";
+        case CC_EVENT_GOBLIN_TRADE: return "GOBLIN TRADE";
+        case CC_EVENT_GOBLIN_DRAGON_SEED_RUMORED: return "ASH-VAULT RUMOR";
+        case CC_EVENT_GOBLIN_DRAGON_SEED_PREPARED: return "ASH-VAULT WORK";
     }
     return "EVENT";
 }
@@ -2991,8 +2998,9 @@ static void PlanGoblinTribute(CcSim *sim)
         }
     }
     if (target == NULL) return;
-    goblins->tribute_phase = CC_GOBLIN_TRIBUTE_OUTBOUND;
+    goblins->tribute_phase = CC_GOBLIN_TRIBUTE_PREPARING;
     goblins->tribute_target_id = target->id;
+    goblins->target_warned = false;
     goblins->carried_tribute = 0;
     goblins->carried_treasure_id = 0U;
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
@@ -3001,15 +3009,15 @@ static void PlanGoblinTribute(CcSim *sim)
     goblins->tribute_days_remaining = GoblinTravelDays(sim, target->id);
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(text, sizeof(text),
-                   "%s leaves its lair to raid %s for %s.",
-                   goblins->name, target->name,
+                   "Nara Soot-Tongue names %s for %s; %s musters until tomorrow.",
+                   target->name,
                    goblins->raid_motive == CC_GOBLIN_RAID_HUNGER ? "Food" :
                    goblins->raid_motive == CC_GOBLIN_RAID_EQUIPMENT ?
                        "Tools and Weapons" : sim->dragon.slain ?
                        "coin and relics for the dead dragon" :
-                       "dragon tribute");
+                       "dragon tribute", goblins->name);
     CcEvent *event = PushEvent(
-        sim, CC_EVENT_GOBLIN_RAID_DEPARTED, goblins->id,
+        sim, CC_EVENT_GOBLIN_RAID_PREPARED, goblins->id,
         target->id, LatestLocalCause(sim, target->id),
         goblins->tribute_days_remaining, text);
     goblins->tribute_event_id = event != NULL ? event->id : 0U;
@@ -3025,8 +3033,13 @@ static void AdvanceGoblinTribute(CcSim *sim)
             int32_t food_eaten = MinimumI32(
                 goblins->lair_stock[CC_GOOD_FOOD], food_needed);
             goblins->lair_stock[CC_GOOD_FOOD] -= food_eaten;
+            int32_t hunger_loss = food_needed - food_eaten;
             goblins->members = MaximumI32(
-                12, goblins->members - (food_needed - food_eaten));
+                12, goblins->members - hunger_loss);
+            if (hunger_loss > 0) {
+                goblins->cohesion = ClampI32(
+                    goblins->cohesion - hunger_loss * 3, 0, 100);
+            }
         }
         goblins->tribute_cooldown_days = MaximumI32(
             0, goblins->tribute_cooldown_days - 1);
@@ -3041,6 +3054,7 @@ static void AdvanceGoblinTribute(CcSim *sim)
         goblins->carried_tribute = 0;
         goblins->carried_treasure_id = 0U;
         goblins->raid_motive = CC_GOBLIN_RAID_NONE;
+        goblins->target_warned = false;
         for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
             goblins->carried_goods[good] = 0;
         }
@@ -3048,6 +3062,22 @@ static void AdvanceGoblinTribute(CcSim *sim)
         goblins->tribute_cooldown_days = 14;
         return;
     }
+    if (goblins->tribute_phase == CC_GOBLIN_TRIBUTE_PREPARING) {
+        goblins->tribute_phase = CC_GOBLIN_TRIBUTE_OUTBOUND;
+        char text[CC_EVENT_TEXT_CAPACITY];
+        (void)snprintf(text, sizeof(text),
+                       "%s leaves its lair to raid %s%s.",
+                       goblins->name, target->name,
+                       goblins->target_warned ?
+                           ", where warned defenders wait" : "");
+        CcEvent *event = PushEvent(
+            sim, CC_EVENT_GOBLIN_RAID_DEPARTED, goblins->id,
+            target->id, goblins->tribute_event_id,
+            goblins->tribute_days_remaining, text);
+        goblins->tribute_event_id = event != NULL ? event->id :
+                                      goblins->tribute_event_id;
+    }
+
     goblins->tribute_days_remaining = MaximumI32(
         0, goblins->tribute_days_remaining - 1);
     if (goblins->tribute_days_remaining > 0) return;
@@ -3061,7 +3091,7 @@ static void AdvanceGoblinTribute(CcSim *sim)
                 CC_GOOD_TOOLS : CC_GOOD_IRON;
         } else if (goblins->raid_motive == CC_GOBLIN_RAID_DRAGON_TRIBUTE) {
             CcTreasure *treasure = TreasureAtSettlementMutable(sim, target->id);
-            if (treasure != NULL) {
+            if (treasure != NULL && !goblins->target_warned) {
                 treasure->owner_id = goblins->id;
                 treasure->location_id = target->id;
                 goblins->carried_treasure_id = treasure->id;
@@ -3070,13 +3100,15 @@ static void AdvanceGoblinTribute(CcSim *sim)
                      target->stock[CC_GOOD_GOLD] > 0 ? CC_GOOD_GOLD :
                      CC_GOOD_FOOD;
         }
-        int32_t taken_goods = MinimumI32(target->stock[chosen],
-                                          raid_capacity[chosen]);
+        int32_t capacity = raid_capacity[chosen];
+        if (goblins->target_warned) capacity = MaximumI32(1, capacity / 2);
+        int32_t taken_goods = MinimumI32(target->stock[chosen], capacity);
         target->stock[chosen] -= taken_goods;
         goblins->carried_goods[chosen] = taken_goods;
         CcMoney taken_coins = 0;
         if (goblins->raid_motive == CC_GOBLIN_RAID_DRAGON_TRIBUTE) {
             CcMoney wanted = 8 + goblins->members / 6;
+            if (goblins->target_warned) wanted = wanted > 1 ? wanted / 2 : 1;
             taken_coins = MinimumI32(
                 target->market_coins > INT32_MAX ? INT32_MAX :
                     (int32_t)target->market_coins,
@@ -3104,15 +3136,23 @@ static void AdvanceGoblinTribute(CcSim *sim)
             goblins->tribute_event_id, taken_goods + (int32_t)taken_coins, text);
         goblins->tribute_event_id = event != NULL ? event->id :
                                       goblins->tribute_event_id;
+        goblins->target_warned = false;
         return;
     }
 
     if (goblins->tribute_phase == CC_GOBLIN_TRIBUTE_RETURNING) {
         CcId raid_origin = target->id;
+        int32_t returned_value = goblins->carried_tribute > INT32_MAX ?
+            INT32_MAX : (int32_t)goblins->carried_tribute;
         for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+            int32_t carried = goblins->carried_goods[good];
+            returned_value = carried > INT32_MAX - returned_value ?
+                INT32_MAX : returned_value + carried;
             goblins->lair_stock[good] += goblins->carried_goods[good];
             goblins->carried_goods[good] = 0;
         }
+        goblins->cohesion = ClampI32(
+            goblins->cohesion + (returned_value > 0 ? 1 : -3), 0, 100);
         goblins->lair_coins += goblins->carried_tribute;
         goblins->carried_tribute = 0;
         if (goblins->carried_treasure_id != 0U) {
@@ -3148,6 +3188,7 @@ static void AdvanceGoblinTribute(CcSim *sim)
             goblins->tribute_target_id = 0U;
             goblins->tribute_event_id = 0U;
             goblins->carried_treasure_id = 0U;
+            goblins->target_warned = false;
             goblins->tribute_days_remaining = 0;
             if (relic_raid) {
                 goblins->devotion = ClampI32(
@@ -3205,6 +3246,7 @@ static void AdvanceGoblinTribute(CcSim *sim)
         }
         goblins->tributes_delivered += 1;
         goblins->devotion = ClampI32(goblins->devotion + 1, 0, 100);
+        goblins->cohesion = ClampI32(goblins->cohesion + 1, 0, 100);
         char text[CC_EVENT_TEXT_CAPACITY];
         (void)snprintf(text, sizeof(text),
                        "%s lays %" PRId64 " crowns and its portable spoils in %s's hoard.",
@@ -3222,6 +3264,7 @@ static void AdvanceGoblinTribute(CcSim *sim)
     goblins->tribute_event_id = 0U;
     goblins->carried_tribute = 0;
     goblins->carried_treasure_id = 0U;
+    goblins->target_warned = false;
     goblins->tribute_days_remaining = 0;
     goblins->tribute_cooldown_days = 21 +
         (int32_t)(NextRandom(sim) % 15U);
@@ -3415,6 +3458,8 @@ static void AdvanceHoardRaid(CcSim *sim)
                 12, sim->goblins.members - MaximumI32(1, defended / 4));
             sim->goblins.devotion = ClampI32(
                 sim->goblins.devotion + 1, 0, 100);
+            sim->goblins.cohesion = ClampI32(
+                sim->goblins.cohesion + 2, 0, 100);
             sim->goblins.hoard_defenses += 1;
             (void)snprintf(
                 text, sizeof(text),
@@ -3684,6 +3729,8 @@ static void HatchDragonSuccessor(CcSim *sim)
     dragon->afterdeath_days = 0;
     dragon->crown_strength = CalculateDragonCrownStrength(sim);
     sim->goblins.devotion = MaximumI32(sim->goblins.devotion, 28);
+    sim->goblins.dragon_seed_phase = CC_GOBLIN_DRAGON_SEED_NONE;
+    sim->goblins.dragon_seed_days_remaining = 0;
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(
         text, sizeof(text),
@@ -3755,7 +3802,7 @@ static void AdvanceAfterdragonCult(CcSim *sim)
     bool provisioned = goblins->lair_stock[CC_GOOD_FOOD] >= 8;
     bool armed = goblins->lair_stock[CC_GOOD_TOOLS] >= 2 &&
                  goblins->lair_stock[CC_GOOD_WEAPONS] >= 3;
-    int32_t cult_limit = armed ? 84 :
+    int32_t cult_limit = goblins->cohesion < 35 ? 24 : armed ? 84 :
         goblins->devotion >= 60 ? 48 : 24;
     if (provisioned && goblins->members < cult_limit) {
         int32_t recruits = armed ? 1 + goblins->devotion / 40 : 1;
@@ -3767,6 +3814,8 @@ static void AdvanceAfterdragonCult(CcSim *sim)
             goblins->members += recruits;
             goblins->devotion = ClampI32(
                 goblins->devotion + 2, 0, 100);
+            goblins->cohesion = ClampI32(
+                goblins->cohesion + 2, 0, 100);
             char text[CC_EVENT_TEXT_CAPACITY];
             (void)snprintf(
                 text, sizeof(text),
@@ -3779,10 +3828,93 @@ static void AdvanceAfterdragonCult(CcSim *sim)
         }
     } else if (!provisioned) {
         goblins->devotion = MaximumI32(20, goblins->devotion - 1);
+        goblins->cohesion = MaximumI32(0, goblins->cohesion - 2);
     } else {
         goblins->devotion = ClampI32(goblins->devotion + 1, 0, 100);
     }
 
+    if (dragon->egg_count != 0) return;
+    if (goblins->dragon_seed_phase == CC_GOBLIN_DRAGON_SEED_NONE) {
+        bool can_begin = dragon->afterdeath_days >= 100 * 365 &&
+            goblins->members >= 36 && goblins->devotion >= 60 &&
+            goblins->cohesion >= 50;
+        if (!can_begin) return;
+        goblins->dragon_seed_phase = CC_GOBLIN_DRAGON_SEED_RUMORED;
+        goblins->dragon_seed_days_remaining = 20 * 365;
+        char text[CC_EVENT_TEXT_CAPACITY];
+        (void)snprintf(
+            text, sizeof(text),
+            "Nara Soot-Tongue admits that %s has opened an ash-vault; any dragon seed is at least twenty years away.",
+            goblins->name);
+        CcEvent *event = PushEvent(
+            sim, CC_EVENT_GOBLIN_DRAGON_SEED_RUMORED, goblins->id,
+            dragon->lair_settlement_id, dragon->lifecycle_event_id,
+            goblins->dragon_seed_days_remaining, text);
+        dragon->lifecycle_event_id = event != NULL ? event->id :
+                                      dragon->lifecycle_event_id;
+        return;
+    }
+
+    goblins->dragon_seed_days_remaining = MaximumI32(
+        0, goblins->dragon_seed_days_remaining - 365);
+    if (goblins->dragon_seed_phase == CC_GOBLIN_DRAGON_SEED_RUMORED &&
+        goblins->dragon_seed_days_remaining <= 15 * 365) {
+        goblins->dragon_seed_phase = CC_GOBLIN_DRAGON_SEED_PREPARING;
+        char text[CC_EVENT_TEXT_CAPACITY];
+        (void)snprintf(
+            text, sizeof(text),
+            "%s's Ashkeepers begin public work on the ash-vault; Food, Tools, Weapons, coin, and relics are still required.",
+            goblins->name);
+        CcEvent *event = PushEvent(
+            sim, CC_EVENT_GOBLIN_DRAGON_SEED_PREPARED, goblins->id,
+            dragon->lair_settlement_id, dragon->lifecycle_event_id,
+            goblins->dragon_seed_days_remaining, text);
+        dragon->lifecycle_event_id = event != NULL ? event->id :
+                                      dragon->lifecycle_event_id;
+    }
+    if (goblins->dragon_seed_days_remaining > 0) return;
+
+    int32_t relics = goblins->lair_stock[CC_GOOD_GOLD] +
+                     goblins->lair_stock[CC_GOOD_GEMS];
+    bool can_reveal_clutch = goblins->members >= 48 &&
+        goblins->devotion >= 75 && goblins->cohesion >= 75 &&
+        goblins->lair_coins >= 120 && relics >= 2 &&
+        goblins->lair_stock[CC_GOOD_FOOD] >= 12 &&
+        goblins->lair_stock[CC_GOOD_TOOLS] >= 2 &&
+        goblins->lair_stock[CC_GOOD_WEAPONS] >= 3;
+    if (!can_reveal_clutch) return;
+
+    CcMoney ritual_coins = 120;
+    goblins->lair_coins -= ritual_coins;
+    dragon->hoard += ritual_coins;
+    for (int32_t relic = 0; relic < 2; ++relic) {
+        CcGood good = goblins->lair_stock[CC_GOOD_GEMS] > 0 ?
+                      CC_GOOD_GEMS : CC_GOOD_GOLD;
+        goblins->lair_stock[good] -= 1;
+        dragon->hoard_goods[good] += 1;
+    }
+    goblins->lair_stock[CC_GOOD_FOOD] -= 12;
+    goblins->lair_stock[CC_GOOD_TOOLS] -= 1;
+    goblins->lair_stock[CC_GOOD_WEAPONS] -= 1;
+    dragon->egg_count = goblins->members >= 72 &&
+                        goblins->devotion >= 90 &&
+                        goblins->cohesion >= 90 ? 2 : 1;
+    dragon->brood_days_remaining =
+        (10 + (int32_t)(NextRandom(sim) % 6U)) * 365;
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(
+        text, sizeof(text),
+        "%s opens a sealed ash-vault and reveals %d dragon egg%s, bought with stolen coin and years of sacrifice.",
+        goblins->name, dragon->egg_count,
+        dragon->egg_count == 1 ? "" : "s");
+    CcEvent *event = PushEvent(
+        sim, CC_EVENT_GOBLIN_DRAGON_SEED, goblins->id,
+        dragon->lair_settlement_id, dragon->lifecycle_event_id,
+        dragon->egg_count, text);
+    dragon->lifecycle_event_id = event != NULL ? event->id :
+                                  dragon->lifecycle_event_id;
+    goblins->dragon_seed_phase = CC_GOBLIN_DRAGON_SEED_NONE;
+    goblins->dragon_seed_days_remaining = 0;
 }
 
 static void AdvanceLivingDragonCult(CcSim *sim)
@@ -3792,7 +3924,8 @@ static void AdvanceLivingDragonCult(CcSim *sim)
     if (sim->current_day % (2 * 365) != 0 ||
         goblins->tribute_phase != CC_GOBLIN_TRIBUTE_IDLE ||
         goblins->members >= 48 ||
-        goblins->lair_stock[CC_GOOD_FOOD] < 6) return;
+        goblins->lair_stock[CC_GOOD_FOOD] < 6 ||
+        goblins->cohesion < 35) return;
 
     bool armed = goblins->lair_stock[CC_GOOD_TOOLS] >= 2 &&
                  goblins->lair_stock[CC_GOOD_WEAPONS] >= 3;
@@ -3807,6 +3940,7 @@ static void AdvanceLivingDragonCult(CcSim *sim)
     if (goblins->lair_stock[CC_GOOD_FOOD] < food_cost) return;
     goblins->lair_stock[CC_GOOD_FOOD] -= food_cost;
     goblins->members += recruits;
+    goblins->cohesion = ClampI32(goblins->cohesion + 1, 0, 100);
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(
         text, sizeof(text),
@@ -3891,7 +4025,8 @@ static void AdvanceDragonEcology(CcSim *sim)
         int32_t stability_change = 0;
         if (sim->goblins.lair_stock[CC_GOOD_FOOD] >= 4 &&
             sim->goblins.lair_stock[CC_GOOD_TOOLS] >= 1 &&
-            sim->goblins.devotion >= 50) stability_change += 1;
+            sim->goblins.devotion >= 50 &&
+            sim->goblins.cohesion >= 50) stability_change += 1;
         if (sim->goblins.lair_stock[CC_GOOD_FOOD] == 0) {
             stability_change -= 2;
         }
@@ -5600,7 +5735,7 @@ static void AdvanceDragonCampaign(CcSim *sim)
                      allies * 12 + (int32_t)(NextRandom(sim) % 21U);
     int32_t defense = CcSimDragonBattleStrength(sim) +
                       sim->goblins.members / 2 +
-                      sim->goblins.devotion / 4 +
+                      (sim->goblins.devotion + sim->goblins.cohesion) / 8 +
                       MinimumI32(18, sim->goblins.hoard_defenses * 3) +
                       (int32_t)(NextRandom(sim) % 31U);
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
@@ -5624,6 +5759,8 @@ static void AdvanceDragonCampaign(CcSim *sim)
         sim->goblins.members = MaximumI32(12, sim->goblins.members - 6);
         sim->goblins.devotion = ClampI32(
             sim->goblins.devotion + 4, 0, 100);
+        sim->goblins.cohesion = ClampI32(
+            sim->goblins.cohesion + 2, 0, 100);
         (void)snprintf(
             text, sizeof(text),
             "The allied dragon host breaks at the cave: strength %d against %d.",
@@ -5679,6 +5816,8 @@ static void AdvanceDragonCampaign(CcSim *sim)
     sim->goblins.devotion = ClampI32(MaximumI32(
         25, sim->goblins.devotion * 2 / 3 +
             sim->goblins.hoard_defenses * 2), 0, 100);
+    sim->goblins.cohesion = ClampI32(
+        sim->goblins.cohesion - 15, 0, 100);
     sim->goblins.members = MaximumI32(
         12, sim->goblins.members * 3 / 4);
     (void)snprintf(
@@ -6787,6 +6926,153 @@ static bool ApplyTrade(CcSim *sim, const CcCommand *command,
     if (amount < 0) {
         ProgressDeliverySituations(sim, settlement->id, command->good, -amount);
     }
+    SetError(error, error_capacity, "");
+    return true;
+}
+
+static bool ApplyGoblinTrade(CcSim *sim, const CcCommand *command,
+                             char *error, size_t error_capacity)
+{
+    bool useful_good = command->good == CC_GOOD_FOOD ||
+        command->good == CC_GOOD_TOOLS ||
+        command->good == CC_GOOD_WEAPONS;
+    if (!useful_good || command->amount <= 0) {
+        SetError(error, error_capacity,
+                 "The Cinder Tithe trades only for Food, Tools, or Weapons.");
+        return false;
+    }
+    if (sim->player.location_id != sim->goblins.lair_settlement_id) {
+        SetError(error, error_capacity,
+                 "Goblin trade must be made at the Cinder Tithe's lair.");
+        return false;
+    }
+    if (sim->player.cargo[command->good] < command->amount) {
+        SetError(error, error_capacity,
+                 "The carriage does not carry that much cargo.");
+        return false;
+    }
+    CcSettlement *lair = CcSimSettlementMutable(
+        sim, sim->goblins.lair_settlement_id);
+    if (lair == NULL) {
+        SetError(error, error_capacity, "The goblin lair cannot be reached.");
+        return false;
+    }
+    int32_t unit_price = MaximumI32(1, lair->price[command->good] * 3 / 4);
+    CcMoney proceeds = (CcMoney)unit_price * command->amount;
+    if (lair->market_coins < proceeds) {
+        SetError(error, error_capacity,
+                 "The lair market cannot pay for that whole load.");
+        return false;
+    }
+    sim->player.cargo[command->good] -= command->amount;
+    sim->goblins.lair_stock[command->good] += command->amount;
+    lair->market_coins -= proceeds;
+    sim->player.coins += proceeds;
+    int32_t social_change = MinimumI32(8, 1 + command->amount / 2);
+    sim->goblins.cohesion = ClampI32(
+        sim->goblins.cohesion + social_change, 0, 100);
+    sim->goblins.devotion = ClampI32(
+        sim->goblins.devotion - MinimumI32(4, 1 + command->amount / 6),
+        0, 100);
+    sim->player.reputation = ClampI32(
+        sim->player.reputation + MinimumI32(5, command->amount), -100, 100);
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(
+        text, sizeof(text),
+        "Nara Soot-Tongue buys %d %s from the Crownless company for %" PRId64
+        " crowns; the lair relies less on the dragon.",
+        command->amount, CcGoodName(command->good), proceeds);
+    (void)PushEvent(sim, CC_EVENT_GOBLIN_TRADE, sim->goblins.id,
+                    sim->goblins.lair_settlement_id, 0U,
+                    command->amount, text);
+    SetError(error, error_capacity, "");
+    return true;
+}
+
+static bool ApplyGoblinWarning(CcSim *sim,
+                               char *error, size_t error_capacity)
+{
+    CcGoblinCult *goblins = &sim->goblins;
+    bool warning_window =
+        goblins->tribute_phase == CC_GOBLIN_TRIBUTE_PREPARING ||
+        goblins->tribute_phase == CC_GOBLIN_TRIBUTE_OUTBOUND;
+    if (!warning_window || goblins->tribute_target_id == 0U) {
+        SetError(error, error_capacity,
+                 "No goblin expedition is still close enough to warn about.");
+        return false;
+    }
+    if (sim->player.location_id != goblins->tribute_target_id) {
+        SetError(error, error_capacity,
+                 "The warning must be delivered at the threatened settlement.");
+        return false;
+    }
+    if (goblins->target_warned) {
+        SetError(error, error_capacity, "This settlement has already been warned.");
+        return false;
+    }
+    CcSettlement *target = CcSimSettlementMutable(
+        sim, goblins->tribute_target_id);
+    if (target == NULL) {
+        SetError(error, error_capacity, "The threatened settlement is missing.");
+        return false;
+    }
+    goblins->target_warned = true;
+    target->security = ClampI32(target->security + 6, 0, 100);
+    goblins->cohesion = ClampI32(goblins->cohesion - 2, 0, 100);
+    sim->player.reputation = ClampI32(sim->player.reputation + 3, -100, 100);
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text),
+                   "The Crownless company warns %s about %s; stores are hidden and defenders gather.",
+                   target->name, goblins->name);
+    CcEvent *event = PushEvent(
+        sim, CC_EVENT_GOBLIN_TARGET_WARNED, sim->player.id,
+        target->id, goblins->tribute_event_id, 6, text);
+    if (event != NULL) goblins->tribute_event_id = event->id;
+    SetError(error, error_capacity, "");
+    return true;
+}
+
+static bool ApplyGoblinIntercept(CcSim *sim,
+                                 char *error, size_t error_capacity)
+{
+    CcGoblinCult *goblins = &sim->goblins;
+    bool intercept_window =
+        goblins->tribute_phase == CC_GOBLIN_TRIBUTE_PREPARING ||
+        goblins->tribute_phase == CC_GOBLIN_TRIBUTE_OUTBOUND;
+    if (!intercept_window || goblins->tribute_target_id == 0U) {
+        SetError(error, error_capacity,
+                 "No outbound goblin expedition can be intercepted now.");
+        return false;
+    }
+    if (sim->player.location_id != goblins->tribute_target_id) {
+        SetError(error, error_capacity,
+                 "Meet the expedition at its threatened settlement to intercept it.");
+        return false;
+    }
+    CcId target_id = goblins->tribute_target_id;
+    const CcSettlement *target = CcSimSettlement(sim, target_id);
+    int32_t losses = MaximumI32(2, goblins->members / 24);
+    goblins->members = MaximumI32(12, goblins->members - losses);
+    goblins->cohesion = ClampI32(goblins->cohesion - 8, 0, 100);
+    goblins->devotion = ClampI32(goblins->devotion + 3, 0, 100);
+    goblins->expeditions_intercepted += 1;
+    sim->carriage.condition = ClampI32(sim->carriage.condition - 6, 0, 100);
+    sim->player.reputation = ClampI32(sim->player.reputation + 5, -100, 100);
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text),
+                   "The Crownless company turns %s back outside %s; %d goblins fall and the survivors close ranks.",
+                   goblins->name, target != NULL ? target->name : "the town",
+                   losses);
+    (void)PushEvent(
+        sim, CC_EVENT_GOBLIN_EXPEDITION_INTERCEPTED, sim->player.id,
+        target_id, goblins->tribute_event_id, losses, text);
+    goblins->tribute_phase = CC_GOBLIN_TRIBUTE_IDLE;
+    goblins->raid_motive = CC_GOBLIN_RAID_NONE;
+    goblins->tribute_target_id = 0U;
+    goblins->tribute_event_id = 0U;
+    goblins->tribute_days_remaining = 0;
+    goblins->target_warned = false;
+    goblins->tribute_cooldown_days = 28;
     SetError(error, error_capacity, "");
     return true;
 }
@@ -8443,7 +8729,10 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
         command->kind == CC_COMMAND_ABANDON_SITUATION ||
         command->kind == CC_COMMAND_REFUSE_SITUATION ||
         command->kind == CC_COMMAND_BREED_HORSES ||
-        command->kind == CC_COMMAND_ASSIGN_HORSE;
+        command->kind == CC_COMMAND_ASSIGN_HORSE ||
+        command->kind == CC_COMMAND_GOBLIN_TRADE ||
+        command->kind == CC_COMMAND_GOBLIN_WARN ||
+        command->kind == CC_COMMAND_GOBLIN_INTERCEPT;
     if (sim->journey.active && settlement_action) {
         SetError(error, error_capacity,
                  "Settlement business must wait until the carriage arrives.");
@@ -8476,6 +8765,12 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
         case CC_COMMAND_RETURN_DRAGON_NAMED_TREASURE:
             return ApplyReturnDragonNamedTreasure(
                 sim, command, error, error_capacity);
+        case CC_COMMAND_GOBLIN_TRADE:
+            return ApplyGoblinTrade(sim, command, error, error_capacity);
+        case CC_COMMAND_GOBLIN_WARN:
+            return ApplyGoblinWarning(sim, error, error_capacity);
+        case CC_COMMAND_GOBLIN_INTERCEPT:
+            return ApplyGoblinIntercept(sim, error, error_capacity);
         case CC_COMMAND_ACCEPT_SITUATION:
             return ApplyAcceptSituation(sim, command, error, error_capacity);
         case CC_COMMAND_ABANDON_SITUATION:
@@ -8634,7 +8929,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                          sim->schema_version == 11U ||
                          sim->schema_version == 12U ||
                          sim->schema_version == 13U ||
-                         sim->schema_version == 14U;
+                         sim->schema_version == 14U ||
+                         sim->schema_version == 15U;
     bool supported_generator = sim->generator_version == CC_GENERATOR_VERSION ||
         (legacy_schema && (sim->generator_version == 3U ||
                            sim->generator_version == 5U ||
@@ -8719,7 +9015,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             if (event == NULL || CcIdKind(event->id) != CC_ENTITY_EVENT ||
                 event->day < 1 || event->day > sim->current_day ||
                 event->kind < CC_EVENT_HARVEST_FAILED ||
-                event->kind > CC_EVENT_HORSE_TEAM_CHANGED ||
+                event->kind > CC_EVENT_GOBLIN_DRAGON_SEED_PREPARED ||
                 event->parent_id == event->id ||
                 (event->parent_id != 0U &&
                  CcSimEvent(sim, event->parent_id) == NULL)) {
@@ -9001,15 +9297,27 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         if (CcIdKind(goblins->id) != CC_ENTITY_GOBLIN_CULT ||
             goblins->name[0] == '\0' || goblins->members < 1 ||
             goblins->members > 120 || goblins->devotion < 0 ||
-            goblins->devotion > 100 ||
+            goblins->devotion > 100 || goblins->cohesion < 0 ||
+            goblins->cohesion > 100 ||
             goblins->tribute_phase < CC_GOBLIN_TRIBUTE_IDLE ||
-            goblins->tribute_phase > CC_GOBLIN_TRIBUTE_TO_DRAGON ||
+            goblins->tribute_phase > CC_GOBLIN_TRIBUTE_PREPARING ||
             goblins->raid_motive < CC_GOBLIN_RAID_NONE ||
             goblins->raid_motive > CC_GOBLIN_RAID_DRAGON_TRIBUTE ||
             CcSimSettlement(sim, goblins->lair_settlement_id) == NULL ||
             goblins->lair_coins < 0 ||
             goblins->tribute_cooldown_days < 0 ||
             goblins->tributes_delivered < 0 || goblins->hoard_defenses < 0 ||
+            goblins->expeditions_intercepted < 0 ||
+            (goblins->target_warned &&
+             goblins->tribute_phase != CC_GOBLIN_TRIBUTE_PREPARING &&
+             goblins->tribute_phase != CC_GOBLIN_TRIBUTE_OUTBOUND) ||
+            goblins->dragon_seed_phase < CC_GOBLIN_DRAGON_SEED_NONE ||
+            goblins->dragon_seed_phase > CC_GOBLIN_DRAGON_SEED_PREPARING ||
+            goblins->dragon_seed_days_remaining < 0 ||
+            (goblins->dragon_seed_phase == CC_GOBLIN_DRAGON_SEED_NONE &&
+             goblins->dragon_seed_days_remaining != 0) ||
+            (goblins->dragon_seed_phase != CC_GOBLIN_DRAGON_SEED_NONE &&
+             (!dragon->slain || dragon->egg_count != 0)) ||
             !goblin_trip_valid ||
             (goblins->last_tribute_origin_id != 0U &&
              CcSimSettlement(sim, goblins->last_tribute_origin_id) == NULL)) {
@@ -9556,6 +9864,13 @@ uint64_t CcSimHash(const CcSim *sim)
         HASH_VALUE(goblins->tributes_delivered);
         if (sim->schema_version >= 10U) {
             HASH_VALUE(goblins->hoard_defenses);
+        }
+        if (sim->schema_version >= 16U) {
+            HASH_VALUE(goblins->cohesion);
+            HASH_VALUE(goblins->target_warned);
+            HASH_VALUE(goblins->expeditions_intercepted);
+            HASH_VALUE(goblins->dragon_seed_phase);
+            HASH_VALUE(goblins->dragon_seed_days_remaining);
         }
         if (sim->schema_version >= 9U) {
             HASH_VALUE(goblins->lair_settlement_id);

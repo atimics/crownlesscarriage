@@ -56,6 +56,36 @@ int main(void)
     CC_CHECK(metagame.sim.player.location_id == metagame.sim.settlements[1].id);
     CC_CHECK(metagame.sim.player.coins == 75);
 
+    CcMetagame goblin_ui;
+    CcMetagameInit(&goblin_ui, UINT32_C(0x60b11d));
+    CC_CHECK(CcMetagameExecute(
+        &goblin_ui, "goblins", output, sizeof(output)));
+    CC_CHECK(strstr(output, "Nara Soot-Tongue") != NULL);
+    CC_CHECK(strstr(output, "covenant") != NULL);
+    CcSettlement *goblin_lair = CcSimSettlementMutable(
+        &goblin_ui.sim, goblin_ui.sim.goblins.lair_settlement_id);
+    CC_CHECK(goblin_lair != NULL);
+    goblin_ui.sim.player.location_id = goblin_lair->id;
+    goblin_ui.sim.carriage.location_id = goblin_lair->id;
+    goblin_ui.sim.player.cargo[CC_GOOD_FOOD] = 2;
+    goblin_lair->market_coins = 200;
+    CC_CHECK(CcMetagameExecute(
+        &goblin_ui, "goblins trade food 2", output, sizeof(output)));
+    CC_CHECK(strstr(output, "Lair stores") != NULL);
+    goblin_ui.sim.current_day = 6;
+    goblin_ui.sim.goblins.tribute_cooldown_days = 0;
+    CcSimAdvanceDays(&goblin_ui.sim, 1);
+    CcId goblin_target = goblin_ui.sim.goblins.tribute_target_id;
+    CC_CHECK(goblin_target != 0U);
+    goblin_ui.sim.player.location_id = goblin_target;
+    goblin_ui.sim.carriage.location_id = goblin_target;
+    CC_CHECK(CcMetagameExecute(
+        &goblin_ui, "goblins warn", output, sizeof(output)));
+    CC_CHECK(strstr(output, "has been warned") != NULL);
+    CC_CHECK(CcMetagameExecute(
+        &goblin_ui, "goblins intercept", output, sizeof(output)));
+    CC_CHECK(strstr(output, "No expedition is active") != NULL);
+
     CC_CHECK(CcMetagameExecute(&metagame, "causes", output, sizeof(output)));
     CC_CHECK(strstr(output, "short chain") != NULL);
     CC_CHECK(CcMetagameExecute(&metagame, "rumors", output, sizeof(output)));

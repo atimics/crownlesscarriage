@@ -250,6 +250,15 @@ static void DescribeLook(const CcMetagame *metagame,
         Append(output, capacity,
                "A black cave overlooks the roofs. Goblins climb to it with wrapped gifts.\n");
     }
+    if (place->id == sim->goblins.lair_settlement_id) {
+        Append(output, capacity,
+               "Nara Soot-Tongue receives traders beside the Cinder Tithe's store caves.\n");
+    }
+    if (place->id == sim->goblins.tribute_target_id &&
+        sim->goblins.tribute_phase == CC_GOBLIN_TRIBUTE_PREPARING) {
+        Append(output, capacity,
+               "Word has arrived that goblins are mustering for this settlement. There is still time to warn or intercept them.\n");
+    }
     if (place->id == sim->dragon.retaliation_target_id &&
         sim->dragon.stolen_outstanding > 0) {
         if (sim->dragon.omen_days_remaining <= 3) {
@@ -696,7 +705,14 @@ static void DescribeDragon(const CcMetagame *metagame,
                    sim->dragon.brood_days_remaining);
         }
     }
-    if (sim->goblins.tribute_phase == CC_GOBLIN_TRIBUTE_OUTBOUND) {
+    if (sim->goblins.tribute_phase == CC_GOBLIN_TRIBUTE_PREPARING) {
+        const CcSettlement *target = CcSimSettlement(
+            sim, sim->goblins.tribute_target_id);
+        Append(output, capacity,
+               "%s is mustering to raid %s and leaves tomorrow.\n",
+               sim->goblins.name,
+               target != NULL ? target->name : "a rich town");
+    } else if (sim->goblins.tribute_phase == CC_GOBLIN_TRIBUTE_OUTBOUND) {
         const CcSettlement *target = CcSimSettlement(
             sim, sim->goblins.tribute_target_id);
         Append(output, capacity,
@@ -805,6 +821,69 @@ static void DescribeDragon(const CcMetagame *metagame,
         sim->player.location_id == sim->dragon.lair_settlement_id) {
         Append(output, capacity,
                "Here you may steal or return crowns, or use 'dragon steal-treasure NUMBER' and 'dragon return-treasure' for a named object.\n");
+    }
+}
+
+static void DescribeGoblins(const CcMetagame *metagame,
+                            char *output, size_t capacity)
+{
+    const CcSim *sim = &metagame->sim;
+    const CcGoblinCult *goblins = &sim->goblins;
+    const CcSettlement *lair = CcSimSettlement(
+        sim, goblins->lair_settlement_id);
+    const char *future = goblins->devotion >= 60 ?
+        goblins->cohesion >= 60 ? "a united dragon court" :
+                                  "fanatical ash-splinters" :
+        goblins->cohesion >= 60 ? "a free lair beyond the dragon" :
+                                  "scattered hungry bands";
+    Append(output, capacity,
+           "%s lives beneath %s. Nara Soot-Tongue speaks for its Hoardkeepers, Ashkeepers, Tongues, and Foragers.\n",
+           goblins->name, lair != NULL ? lair->name : "an unknown lair");
+    Append(output, capacity,
+           "%d members; covenant %d/100, cohesion %d/100. Its present course points toward %s.\n",
+           goblins->members, goblins->devotion, goblins->cohesion, future);
+    Append(output, capacity,
+           "Lair stores: %d Food, %d Tools, %d Weapons, %" PRId64
+           " crowns. %d expeditions have been intercepted.\n",
+           goblins->lair_stock[CC_GOOD_FOOD],
+           goblins->lair_stock[CC_GOOD_TOOLS],
+           goblins->lair_stock[CC_GOOD_WEAPONS], goblins->lair_coins,
+           goblins->expeditions_intercepted);
+    if (goblins->tribute_phase == CC_GOBLIN_TRIBUTE_PREPARING ||
+        goblins->tribute_phase == CC_GOBLIN_TRIBUTE_OUTBOUND) {
+        const CcSettlement *target = CcSimSettlement(
+            sim, goblins->tribute_target_id);
+        Append(output, capacity,
+               "An expedition threatens %s. It is %s%s.\n",
+               target != NULL ? target->name : "an unknown settlement",
+               goblins->tribute_phase == CC_GOBLIN_TRIBUTE_PREPARING ?
+                   "still mustering" : "on the road",
+               goblins->target_warned ? "; the target has been warned" : "");
+    } else if (goblins->tribute_phase == CC_GOBLIN_TRIBUTE_RETURNING) {
+        Append(output, capacity,
+               "An expedition is returning to the lair with physical loot.\n");
+    } else if (goblins->tribute_phase == CC_GOBLIN_TRIBUTE_TO_DRAGON) {
+        Append(output, capacity,
+               "A tribute bearer is taking portable spoils to the dragon cave.\n");
+    } else {
+        Append(output, capacity, "No expedition is active.\n");
+    }
+    if (goblins->dragon_seed_phase != CC_GOBLIN_DRAGON_SEED_NONE) {
+        Append(output, capacity,
+               "The ash-vault project is %s, with about %d years left before it can reveal a dragon seed.\n",
+               goblins->dragon_seed_phase == CC_GOBLIN_DRAGON_SEED_RUMORED ?
+                   "an open rumor" : "under public preparation",
+               (goblins->dragon_seed_days_remaining + 364) / 365);
+    }
+    if (sim->player.location_id == goblins->lair_settlement_id) {
+        Append(output, capacity,
+               "Here you may use 'goblins trade food|tools|weapons COUNT'.\n");
+    }
+    if (sim->player.location_id == goblins->tribute_target_id &&
+        (goblins->tribute_phase == CC_GOBLIN_TRIBUTE_PREPARING ||
+         goblins->tribute_phase == CC_GOBLIN_TRIBUTE_OUTBOUND)) {
+        Append(output, capacity,
+               "Here you may use 'goblins warn' or 'goblins intercept'.\n");
     }
 }
 
@@ -1068,7 +1147,7 @@ static void DescribeHelp(char *output, size_t capacity)
 {
     Append(output, capacity,
            "See the world:\n"
-           "  look, causes, people, rumors, charters, roads, notes, cargo, animals, economy, treasures, inequality, kingdoms, war, dragon, status, history [COUNT]\n"
+           "  look, causes, people, rumors, charters, roads, notes, cargo, animals, economy, treasures, inequality, kingdoms, war, dragon, goblins, status, history [COUNT]\n"
            "Make commitments:\n"
            "  accept NUMBER, refuse NUMBER, abandon\n"
            "Move goods and people:\n"
@@ -1085,6 +1164,8 @@ static void DescribeHelp(char *output, size_t capacity)
            "  dragon steal COUNT, dragon return COUNT (at the cave)\n"
            "  dragon steal-treasure NUMBER, dragon return-treasure\n"
            "  dragon intercept (when tribute approaches the cave)\n"
+           "  goblins trade food|tools|weapons COUNT (at their lair)\n"
+           "  goblins warn|intercept (at the threatened settlement)\n"
            "Keep the test:\n"
            "  save PATH, load PATH, debrief, quit\n");
 }
@@ -1266,6 +1347,25 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
         action.amount = amount;
         if (!ApplyCommand(metagame, &action, output, output_capacity)) return false;
         DescribeDragon(metagame, output, output_capacity);
+    } else if (strcmp(command, "goblins") == 0 && first == NULL) {
+        DescribeGoblins(metagame, output, output_capacity);
+    } else if (strcmp(command, "goblins") == 0) {
+        CcCommand action = {0};
+        if (strcmp(first, "trade") == 0 &&
+            ParseGood(second, &action.good) &&
+            ParseAmount(third, &action.amount)) {
+            action.kind = CC_COMMAND_GOBLIN_TRADE;
+        } else if (strcmp(first, "warn") == 0 && second == NULL) {
+            action.kind = CC_COMMAND_GOBLIN_WARN;
+        } else if (strcmp(first, "intercept") == 0 && second == NULL) {
+            action.kind = CC_COMMAND_GOBLIN_INTERCEPT;
+        } else {
+            Append(output, output_capacity,
+                   "Use 'goblins trade food|tools|weapons COUNT', 'goblins warn', or 'goblins intercept'.\n");
+            return false;
+        }
+        if (!ApplyCommand(metagame, &action, output, output_capacity)) return false;
+        DescribeGoblins(metagame, output, output_capacity);
     } else if (strcmp(command, "status") == 0) {
         DescribeStatus(metagame, output, output_capacity);
     } else if (strcmp(command, "history") == 0) {

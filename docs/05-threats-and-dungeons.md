@@ -136,6 +136,18 @@ The player can perform step 6 at the cave approach. In the graphical client,
 the action appears while tribute is inbound. In the text playtest, use
 `dragon intercept`. The carriage must have room for the entire physical load.
 
+The Cinder Tithe does not leave without warning. Nara Soot-Tongue publicly
+names the target while the expedition musters. A player already at the target
+can warn its defenders or intercept the band before the raid lands. A warning
+raises security, hides named treasure, and reduces the goods and coin taken.
+An interception stops the raid but costs goblin lives, carriage condition, and
+future trust.
+
+The goblin society tracks two different bonds. **Covenant** is commitment to
+the dragon. **Cohesion** is the ability to remain one community. Trade in Food,
+Tools, and Weapons raises cohesion while reducing dependence on the covenant.
+Violent opposition can instead weaken cohesion while hardening belief.
+
 ### The Crown Cycle
 
 A dragon's hoard is an external organ, not food and not a second treasury.
@@ -176,14 +188,21 @@ food, gear, and offerings. Egg tending consumes real Food from the goblin
 lair. Goblins can go hungry, lose devotion, fail to maintain the territory, or
 survive their god.
 
+Nara Soot-Tongue speaks for these offices without erasing their disputes.
+High covenant and cohesion produce a united dragon court. High covenant with
+low cohesion produces ash-splinters. Low covenant with high cohesion points
+toward a free lair. When both fail, the society breaks into hungry bands.
+
 A well-fed Crowned dragon with a strong hoard, stable territory, old
 continuity, and devoted goblins can accept a distant heart-scale and lay one to
 three eggs. Broods take years to hatch and are rare. Most whelps disperse
 beyond the simulated region. If the parent is alive, all surviving whelps
 leave. If the parent has been slain, one visible egg may hatch as a successor
-under goblin care. This never creates a surprise replacement: the eggs, their
-remaining tending time, and their Food cost are public state before the dragon
-dies.
+under goblin care. A strong Afterdragon cult may instead begin a public
+dragon-seed project after a century. Rumor and visible ash-vault work provide
+at least twenty years of warning before it can reveal an egg. This never
+creates a surprise replacement: an egg or a named project, its remaining time,
+and its material cost are public state before a successor can hatch.
 
 ### Why anyone robs a dragon
 
@@ -233,6 +252,7 @@ would cost.
 - No town burns merely for being rich.
 - Every attack has a recorded hoard theft and omen as its parents.
 - Goblin tribute and dragon retaliation are separate systems.
+- Goblin expeditions expose a warning window before they leave the lair.
 - Inequality causes a physical theft expedition; it never angers the dragon
   directly.
 - War can cause a physical Crown Levy expedition; it never angers the dragon
@@ -303,8 +323,9 @@ The dragon's death does not delete the goblins or instantly erase the dragon's
 ecology. Without their god they cease tribute, but their lair still consumes
 Food and still needs Tools and Weapons. Shortages send the surviving goblins
 back onto the roads as ordinary raiders. The Afterdragon's regional influence
-decays slowly. A successor can appear only from an egg already recorded in the
-brood hoard; otherwise the dragon remains dead.
+decays slowly. A successor can appear from a recorded brood egg or from a
+public, twenty-year goblin dragon-seed project. Without either, the dragon
+remains dead.
 
 ## Smuggling and black markets
 

@@ -196,6 +196,7 @@ int main(void)
     cult.dragon.afterdeath_days = 120 * 365 - 1;
     cult.goblins.members = 84;
     cult.goblins.devotion = 90;
+    cult.goblins.cohesion = 90;
     cult.goblins.lair_coins = 120;
     cult.goblins.lair_stock[CC_GOOD_FOOD] = 64;
     cult.goblins.lair_stock[CC_GOOD_TOOLS] = 4;
@@ -204,16 +205,36 @@ int main(void)
     cult.goblins.lair_stock[CC_GOOD_GEMS] = 1;
     cult.dragon.hoard = 0;
     CcMoney cult_coins = cult.goblins.lair_coins;
-    int32_t cult_gold_goods = cult.goblins.lair_stock[CC_GOOD_GOLD];
-    int32_t cult_gems = cult.goblins.lair_stock[CC_GOOD_GEMS];
+    CcMoney cult_gold = CcSimTrackedGold(&cult);
+    int32_t cult_gold_goods = CcSimTrackedGood(&cult, CC_GOOD_GOLD);
+    int32_t cult_gems = CcSimTrackedGood(&cult, CC_GOOD_GEMS);
     CcSimAdvanceDays(&cult, 1);
     CC_CHECK(cult.dragon.egg_count == 0);
     CC_CHECK(cult.dragon.brood_days_remaining == 0);
     CC_CHECK(cult.dragon.hoard == 0);
     CC_CHECK(cult.goblins.lair_coins == cult_coins);
-    CC_CHECK(cult.goblins.lair_stock[CC_GOOD_GOLD] == cult_gold_goods);
-    CC_CHECK(cult.goblins.lair_stock[CC_GOOD_GEMS] == cult_gems);
+    CC_CHECK(CcSimTrackedGood(&cult, CC_GOOD_GOLD) == cult_gold_goods);
+    CC_CHECK(CcSimTrackedGood(&cult, CC_GOOD_GEMS) == cult_gems);
     CC_CHECK(CountEvents(&cult, CC_EVENT_GOBLIN_DRAGON_SEED) == 0);
+    CC_CHECK(cult.goblins.dragon_seed_phase ==
+             CC_GOBLIN_DRAGON_SEED_RUMORED);
+    CC_CHECK(cult.goblins.dragon_seed_days_remaining == 20 * 365);
+    CC_CHECK(CountEvents(
+        &cult, CC_EVENT_GOBLIN_DRAGON_SEED_RUMORED) == 1);
+
+    cult.current_day = 121 * 365;
+    cult.dragon.afterdeath_days = 121 * 365 - 1;
+    cult.goblins.dragon_seed_phase = CC_GOBLIN_DRAGON_SEED_PREPARING;
+    cult.goblins.dragon_seed_days_remaining = 365;
+    CcSimAdvanceDays(&cult, 1);
+    CC_CHECK(cult.dragon.egg_count == 2);
+    CC_CHECK(cult.dragon.brood_days_remaining >= 10 * 365 - 1);
+    CC_CHECK(cult.dragon.brood_days_remaining <= 15 * 365 - 1);
+    CC_CHECK(cult.dragon.hoard == 120);
+    CC_CHECK(CcSimTrackedGold(&cult) == cult_gold);
+    CC_CHECK(CcSimTrackedGood(&cult, CC_GOOD_GOLD) == cult_gold_goods);
+    CC_CHECK(CcSimTrackedGood(&cult, CC_GOOD_GEMS) == cult_gems);
+    CC_CHECK(CountEvents(&cult, CC_EVENT_GOBLIN_DRAGON_SEED) == 1);
     CC_CHECK(CcSimValidate(&cult, error, sizeof(error)));
 
     CcSim living_cult;

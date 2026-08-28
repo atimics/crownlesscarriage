@@ -29,7 +29,7 @@
 #define CC_GLOAMGATE_ALDERWATCH_MAP_NAME "Gloamgate to Alderwatch"
 #define CC_CROWNLESS_ATLAS_MAP_NAME "The Crownless Atlas"
 
-#define CC_SIM_SCHEMA_VERSION 15
+#define CC_SIM_SCHEMA_VERSION 16
 #define CC_GENERATOR_VERSION 15
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
@@ -215,7 +215,13 @@ typedef enum CcEventKind {
     CC_EVENT_COW_SLAUGHTERED,
     CC_EVENT_HORSE_BRED,
     CC_EVENT_FOAL_BORN,
-    CC_EVENT_HORSE_TEAM_CHANGED
+    CC_EVENT_HORSE_TEAM_CHANGED,
+    CC_EVENT_GOBLIN_RAID_PREPARED,
+    CC_EVENT_GOBLIN_TARGET_WARNED,
+    CC_EVENT_GOBLIN_EXPEDITION_INTERCEPTED,
+    CC_EVENT_GOBLIN_TRADE,
+    CC_EVENT_GOBLIN_DRAGON_SEED_RUMORED,
+    CC_EVENT_GOBLIN_DRAGON_SEED_PREPARED
 } CcEventKind;
 
 typedef enum CcCommandKind {
@@ -245,7 +251,10 @@ typedef enum CcCommandKind {
     CC_COMMAND_WITHDRAW_ENCOUNTER,
     CC_COMMAND_BREED_HORSES,
     CC_COMMAND_ASSIGN_HORSE,
-    CC_COMMAND_INTERCEPT_DRAGON_TRIBUTE
+    CC_COMMAND_INTERCEPT_DRAGON_TRIBUTE,
+    CC_COMMAND_GOBLIN_TRADE,
+    CC_COMMAND_GOBLIN_WARN,
+    CC_COMMAND_GOBLIN_INTERCEPT
 } CcCommandKind;
 
 typedef enum CcHorseSex {
@@ -470,7 +479,9 @@ typedef enum CcGoblinTributePhase {
     /* The old names remain stable in saved games. They now describe a raid. */
     CC_GOBLIN_TRIBUTE_OUTBOUND,
     CC_GOBLIN_TRIBUTE_RETURNING,
-    CC_GOBLIN_TRIBUTE_TO_DRAGON
+    CC_GOBLIN_TRIBUTE_TO_DRAGON,
+    /* Added last so older save values remain stable. */
+    CC_GOBLIN_TRIBUTE_PREPARING
 } CcGoblinTributePhase;
 
 typedef enum CcGoblinRaidMotive {
@@ -480,11 +491,19 @@ typedef enum CcGoblinRaidMotive {
     CC_GOBLIN_RAID_DRAGON_TRIBUTE
 } CcGoblinRaidMotive;
 
+typedef enum CcGoblinDragonSeedPhase {
+    CC_GOBLIN_DRAGON_SEED_NONE,
+    CC_GOBLIN_DRAGON_SEED_RUMORED,
+    CC_GOBLIN_DRAGON_SEED_PREPARING
+} CcGoblinDragonSeedPhase;
+
 typedef struct CcGoblinCult {
     CcId id;
     char name[CC_NAME_CAPACITY];
     int32_t members;
+    /* Devotion is the saved legacy name for commitment to the covenant. */
     int32_t devotion;
+    int32_t cohesion;
     CcId lair_settlement_id;
     CcGoblinTributePhase tribute_phase;
     CcGoblinRaidMotive raid_motive;
@@ -500,6 +519,10 @@ typedef struct CcGoblinCult {
     int32_t tribute_cooldown_days;
     int32_t tributes_delivered;
     int32_t hoard_defenses;
+    bool target_warned;
+    int32_t expeditions_intercepted;
+    CcGoblinDragonSeedPhase dragon_seed_phase;
+    int32_t dragon_seed_days_remaining;
 } CcGoblinCult;
 
 typedef enum CcDragonLifeStage {
