@@ -1994,6 +1994,23 @@ static void TestFaceAngleAndLodContract(void)
 
 static void TestRoadBridgeSupport(void)
 {
+    if (fabsf(CcLocalRoadCheckpointSurfaceYInternal(52.00f, 40.00f) -
+               0.56f) > 0.001f ||
+        fabsf(CcLocalRoadCheckpointSurfaceYInternal(47.50f, 40.00f) -
+               0.10f) > 0.001f ||
+        fabsf(CcLocalRoadCheckpointSurfaceYInternal(46.00f, 40.00f)) >
+               0.001f ||
+        fabsf(CcLocalRoadHorseLateralSpacingInternal(true) - 0.78f) >
+               0.001f ||
+        fabsf(CcLocalRoadHorseLateralSpacingInternal(false) - 1.05f) >
+               0.001f ||
+        fabsf(CcLocalRoadHorseLongitudinalOffsetInternal() - 5.55f) >
+               0.001f) {
+        (void)fprintf(stderr,
+                      "road horse team did not fit the authored bridge support\n");
+        exit(1);
+    }
+
     CcLocalAgent bridge_agent;
     CcLocalAgentInit(&bridge_agent, (Vector2){52.00f, 40.00f}, false);
     CcLocalAgentSetScene(&bridge_agent, CC_LOCAL_SCENE_ROAD);

@@ -1411,19 +1411,7 @@ static float SurfaceHeightAt(CcLocalSceneKind scene, float x, float z)
 {
     if (scene == CC_LOCAL_SCENE_ROAD) {
         if (!RoadUsesAuthoredCheckpoint()) return 0.0f;
-        /* Match the exported bridge exactly: two 10 cm causeways lead onto
-           a 52 cm deck centered 30 cm above the asset origin. */
-        Vector2 point = {x, z};
-        if (CheckCollisionPointRec(point, ROAD_BRIDGE_DECK_SUPPORT)) {
-            return 0.56f;
-        }
-        if (CheckCollisionPointRec(point,
-                                   ROAD_BRIDGE_WEST_CAUSEWAY_SUPPORT) ||
-            CheckCollisionPointRec(point,
-                                   ROAD_BRIDGE_EAST_CAUSEWAY_SUPPORT)) {
-            return 0.10f;
-        }
-        return 0.0f;
+        return CcLocalRoadCheckpointSurfaceYInternal(x, z);
     }
     if (scene != CC_LOCAL_SCENE_STREET) return 0.0f;
     float height = CcLocalTerrainHeightAt(x, z);
@@ -18210,19 +18198,64 @@ static const char *RoadArchetypeName(const CcRoute *route)
     return "HEDGEROW TRADE ROAD";
 }
 
+float CcLocalRoadCheckpointSurfaceYInternal(float x, float z)
+{
+    /* Match the exported bridge exactly: two 10 cm causeways lead onto
+       a 52 cm deck centered 30 cm above the asset origin. Convoy art uses
+       this same support contract as physical actors. */
+    Vector2 point = {x, z};
+    if (CheckCollisionPointRec(point, ROAD_BRIDGE_DECK_SUPPORT)) {
+        return 0.56f;
+    }
+    if (CheckCollisionPointRec(point,
+                               ROAD_BRIDGE_WEST_CAUSEWAY_SUPPORT) ||
+        CheckCollisionPointRec(point,
+                               ROAD_BRIDGE_EAST_CAUSEWAY_SUPPORT)) {
+        return 0.10f;
+    }
+    return 0.0f;
+}
+
+float CcLocalRoadHorseLateralSpacingInternal(bool bridge_checkpoint)
+{
+    /* The authored checkpoint leaves a 2.5 m lane. Pull the paired horses
+       inside its parapets instead of letting their outer flanks intersect
+       the foreground walls. */
+    return bridge_checkpoint ? 0.78f : 1.05f;
+}
+
+float CcLocalRoadHorseLongitudinalOffsetInternal(void)
+{
+    /* Leave a full horse-length read between the wagon shell and the team.
+       The older 4.6 m placement let the carriage hide their hindquarters in
+       the close combat camera, making both animals look cut in half. */
+    return 5.55f;
+}
+
 static void DrawRoadHorseTeam(Vector3 base, float clock, bool moving,
-                              float yaw)
+                              float yaw, bool bridge_checkpoint)
 {
     CcCreaturePose left_pose = CcCreatureSteppedPose(
         CC_CREATURE_HORSE, clock * 4.8f, moving);
     CcCreaturePose right_pose = CcCreatureSteppedPose(
         CC_CREATURE_HORSE, clock * 4.8f + PI, moving);
+    float lateral_spacing =
+        CcLocalRoadHorseLateralSpacingInternal(bridge_checkpoint);
     for (int32_t horse = -1; horse <= 1; horse += 2) {
         Color coat = horse < 0 ? BlendColor(WORLD_WOOD, WORLD_ROAD, 0.42f) :
                                  BlendColor(WORLD_WOOD_LIGHT,
                                             WORLD_ROAD, 0.36f);
         Vector3 horse_base = LocalPoint(
-            base, (float)horse * 1.05f, 0.0f, 4.60f, yaw);
+            base, (float)horse * lateral_spacing, 0.0f,
+            CcLocalRoadHorseLongitudinalOffsetInternal(), yaw);
+        if (bridge_checkpoint) {
+            float carriage_support =
+                CcLocalRoadCheckpointSurfaceYInternal(base.x, base.z);
+            float horse_support =
+                CcLocalRoadCheckpointSurfaceYInternal(
+                    horse_base.x, horse_base.z);
+            horse_base.y += horse_support - carriage_support;
+        }
         CcCreaturePose pose = horse < 0 ? left_pose : right_pose;
         float gait_phase = clock * 4.8f + (horse < 0 ? 0.0f : PI);
         CcCreatureRigPose controlled_pose;
@@ -18247,7 +18280,8 @@ static void DrawRoadHorseTeam(Vector3 base, float clock, bool moving,
 }
 
 static void DrawRoadCarriage(Vector3 base, int32_t cargo_used, float clock,
-                             bool moving, float yaw, bool horses_hitched)
+                             bool moving, float yaw, bool horses_hitched,
+                             bool bridge_checkpoint)
 {
     float asset_yaw_degrees = yaw * RAD2DEG - 90.0f;
     RuntimeAsset *carriage = &runtime_assets[RUNTIME_ASSET_CARRIAGE];
@@ -18293,7 +18327,9 @@ static void DrawRoadCarriage(Vector3 base, int32_t cargo_used, float clock,
         DrawCylinderEx(pole_right, pole_right_end, 0.045f, 0.035f, 7,
                        WORLD_WOOD);
     }
-    if (horses_hitched) DrawRoadHorseTeam(base, clock, moving, yaw);
+    if (horses_hitched) {
+        DrawRoadHorseTeam(base, clock, moving, yaw, bridge_checkpoint);
+    }
 }
 
 static void DrawStableHorseTeam(float clock)
@@ -18509,7 +18545,7 @@ void CcLocalDrawFork3D(const CcSim *sim, int32_t selected_route,
 
     int32_t cargo = CcPlayerCargoUsed(&sim->player);
     Vector3 carriage = {29.0f, 0.0f, 41.0f};
-    DrawRoadCarriage(carriage, cargo, clock, false, 0.5f * PI, true);
+    DrawRoadCarriage(carriage, cargo, clock, false, 0.5f * PI, true, false);
     DrawVisibleNpcFigure3D(
         (Vector3){33.0f, 0.0f, 35.6f}, 0.90f, 1.42f,
         UINT32_C(0x666f726b), CC_NPC_ROLE_SCOUT, kingdom,
@@ -18697,6 +18733,8 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     }
     bool crossing_gate = convoy != NULL &&
         convoy->phase == CC_LOCAL_CONVOY_GATE;
+    bool authored_checkpoint = !travelling &&
+        runtime_assets[RUNTIME_ASSET_BRIDGE].ready;
     float carriage_x = crossing_gate ?
         15.50f + convoy->phase_progress * 4.65f :
         CcLocalRoadCarriageX(sim->carriage.progress_milli);
@@ -18708,6 +18746,10 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
         carriage_moving ? 0.025f + sinf(clock * 5.0f) * 0.018f : 0.0f,
         40.0f + lateral_offset
     };
+    if (authored_checkpoint) {
+        carriage_base.y += CcLocalRoadCheckpointSurfaceYInternal(
+            carriage_base.x, carriage_base.z);
+    }
     Vector3 camera_focus = travelling ? carriage_base : agent->position;
     Camera3D base_camera = RoadCamera(camera_focus, travelling, clock, true,
                                       target.texture.height);
@@ -18736,8 +18778,6 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     ClearBackground(background);
     BeginMode3D(camera);
     BeginWorldLighting(camera, &road_art);
-    bool authored_checkpoint = !travelling &&
-        runtime_assets[RUNTIME_ASSET_BRIDGE].ready;
     CcId road_kingdom_id = origin != NULL ? origin->kingdom_id :
         destination_place != NULL ? destination_place->kingdom_id : 0;
     Color road_kingdom = KingdomColor3D(sim, road_kingdom_id);
@@ -18751,7 +18791,7 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     if (!travelling) DrawAgentPath(agent, false);
     int32_t road_cargo = CcPlayerCargoUsed(&sim->player);
     DrawRoadCarriage(carriage_base, road_cargo, clock, carriage_moving,
-                     0.5f * PI, true);
+                     0.5f * PI, true, authored_checkpoint);
     int32_t roadside_cattle = 0;
     if (origin != NULL) {
         roadside_cattle += origin->cow_adults + origin->cow_calves;
@@ -19272,7 +19312,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         DrawRoadCarriage(convoy->town_position,
                          CcPlayerCargoUsed(&sim->player), clock,
                          convoy->pace > 0.02f,
-                         convoy->town_heading_yaw, true);
+                         convoy->town_heading_yaw, true, false);
     }
     if (SceneryPointVisible(CC_LOCAL_NOTICE_X, CC_LOCAL_NOTICE_Z,
                             scenery_focus)) {
