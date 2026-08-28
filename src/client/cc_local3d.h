@@ -347,6 +347,7 @@ typedef struct CcLocalRendererStats {
 /* The exterior land is deterministic for a world seed. Rendering, movement,
    picking, roads, and building foundations all use these same samples. */
 void CcLocalTerrainSetSeed(uint32_t seed);
+void CcLocalBindPlace(const CcSim *sim);
 float CcLocalTerrainHeightAt(float x, float z);
 Vector3 CcLocalTerrainNormalAt(float x, float z);
 

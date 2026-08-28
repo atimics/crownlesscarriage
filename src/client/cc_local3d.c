@@ -1,5 +1,6 @@
 #include "client/cc_local3d.h"
 #include "client/cc_local3d_internal.h"
+#include "client/cc_local_place.h"
 #include "client/cc_creature_catalog.h"
 #include "client/cc_overlay.h"
 #include "client/cc_visual_style.h"
@@ -906,6 +907,7 @@ static const TerrainRoad TERRAIN_ROADS[] = {
 
 static uint32_t street_terrain_seed = UINT32_C(0xc0a71a9e);
 static bool street_terrain_ready = false;
+static CcSettlementFunction active_place_function = CC_SETTLEMENT_MARKET;
 static float street_terrain_natural[CC_TERRAIN_SAMPLE_COUNT];
 static float street_terrain_height[CC_TERRAIN_SAMPLE_COUNT];
 
@@ -1253,6 +1255,17 @@ void CcLocalTerrainSetSeed(uint32_t seed)
     if (street_terrain_ready && seed == street_terrain_seed) return;
     street_terrain_seed = seed;
     street_terrain_ready = false;
+}
+
+void CcLocalBindPlace(const CcSim *sim)
+{
+    const CcSettlement *place = sim != NULL ?
+        CcSimSettlement(sim, sim->player.location_id) : NULL;
+    active_place_function = place != NULL ? place->function :
+                                            CC_SETTLEMENT_MARKET;
+    CcLocalTerrainSetSeed(sim != NULL ?
+        CcLocalPlaceTerrainSeed(sim->world_seed, place) :
+        UINT32_C(0xc0a71a9e));
 }
 
 float CcLocalTerrainHeightAt(float x, float z)
@@ -4794,7 +4807,8 @@ const char *CcLocalAgentStreetPortalName(const CcLocalAgent *agent,
     ResolvedStreetPortal portal = {0};
     if (!ResolveStreetPortal(agent, portal_index, &portal)) return NULL;
     if (portal.destination_room >= 0) {
-        return STREET_CAMERA_SHOTS[portal.destination_room].name;
+        return CcLocalPlaceRoomName(active_place_function,
+                                    portal.destination_room);
     }
     return portal.exit != NULL ? portal.exit->name : NULL;
 }
@@ -5011,7 +5025,8 @@ const char *CcLocalAgentNavigationName(const CcLocalAgent *agent)
     if (agent->navigation_destination_room ==
         STREET_CLICK_NAVIGATION_DESTINATION) return NULL;
     if (agent->navigation_destination_room >= 0) {
-        return STREET_CAMERA_SHOTS[agent->navigation_destination_room].name;
+        return CcLocalPlaceRoomName(active_place_function,
+                                    agent->navigation_destination_room);
     }
     int32_t exit_index = -1 - agent->navigation_destination_room;
     if (exit_index < 0 ||
@@ -12658,23 +12673,81 @@ static void DrawWorkshopForge(Color kingdom)
     }
 }
 
-static void DrawTownSquareFocus(Color kingdom)
+static Color PlaceIdentityAccent(const CcLocalPlaceProfile *profile,
+                                 Color kingdom)
+{
+    if (profile == NULL) return kingdom;
+    switch (profile->function) {
+        case CC_SETTLEMENT_FARMING: return WORLD_CROP_LIGHT;
+        case CC_SETTLEMENT_MINING: return WORLD_METAL_LIGHT;
+        case CC_SETTLEMENT_MARKET: return WORLD_TEAL;
+        case CC_SETTLEMENT_FORTRESS: return WORLD_DANGER;
+        case CC_SETTLEMENT_CAPITAL: return WORLD_GOLD;
+        case CC_SETTLEMENT_DUNGEON_TOWN: return WORLD_VIOLET;
+    }
+    return kingdom;
+}
+
+static void DrawTownSquareFocus(Color kingdom,
+                                const CcLocalPlaceProfile *profile)
 {
     const float x = CC_LOCAL_NOTICE_X;
     const float z = CC_LOCAL_NOTICE_Z;
     Color stone = WORLD_STONE_LIGHT;
+    Color accent = PlaceIdentityAccent(profile, kingdom);
     /* A low civic seal gathers the plaza around the notice board without
        creating a new collision step or blocking click movement. */
     DrawCylinder((Vector3){x, 0.015f, z}, 2.65f, 2.65f, 0.045f, 20,
                  ShadeColor(stone, 0.78f));
     DrawCylinder((Vector3){x, 0.052f, z}, 2.22f, 2.22f, 0.035f, 20,
                  stone);
-    DrawBox((Vector3){x, 0.078f, z},
-            (Vector3){3.70f, 0.018f, 0.13f},
-            BlendColor(WORLD_GOLD, kingdom, 0.32f));
-    DrawBox((Vector3){x, 0.080f, z},
-            (Vector3){0.13f, 0.018f, 3.70f},
-            BlendColor(WORLD_GOLD, kingdom, 0.32f));
+    if (profile != NULL && profile->function == CC_SETTLEMENT_FARMING) {
+        for (int32_t row = -1; row <= 1; ++row) {
+            DrawTiltedBox((Vector3){x, 0.080f, z + (float)row * 0.48f},
+                          (Vector3){3.62f, 0.018f, 0.12f},
+                          (Vector3){0.0f, 1.0f, 0.0f},
+                          (float)row * 4.0f, accent);
+        }
+    } else if (profile != NULL &&
+               profile->function == CC_SETTLEMENT_MINING) {
+        DrawBox((Vector3){x - 0.34f, 0.080f, z},
+                (Vector3){0.12f, 0.018f, 3.70f}, accent);
+        DrawBox((Vector3){x + 0.34f, 0.080f, z},
+                (Vector3){0.12f, 0.018f, 3.70f}, accent);
+        DrawTiltedBox((Vector3){x, 0.095f, z},
+                      (Vector3){0.72f, 0.035f, 0.72f},
+                      (Vector3){0.0f, 1.0f, 0.0f}, 45.0f,
+                      WORLD_VIOLET);
+    } else if (profile != NULL &&
+               profile->function == CC_SETTLEMENT_FORTRESS) {
+        DrawTiltedBox((Vector3){x, 0.080f, z},
+                      (Vector3){3.30f, 0.018f, 0.15f},
+                      (Vector3){0.0f, 1.0f, 0.0f}, 45.0f, accent);
+        DrawTiltedBox((Vector3){x, 0.082f, z},
+                      (Vector3){3.30f, 0.018f, 0.15f},
+                      (Vector3){0.0f, 1.0f, 0.0f}, -45.0f, accent);
+    } else if (profile != NULL &&
+               profile->function == CC_SETTLEMENT_CAPITAL) {
+        for (int32_t spoke = 0; spoke < 4; ++spoke) {
+            DrawTiltedBox((Vector3){x, 0.080f, z},
+                          (Vector3){3.52f, 0.018f, 0.11f},
+                          (Vector3){0.0f, 1.0f, 0.0f},
+                          (float)spoke * 45.0f, accent);
+        }
+    } else if (profile != NULL &&
+               profile->function == CC_SETTLEMENT_DUNGEON_TOWN) {
+        for (int32_t bar = -1; bar <= 1; ++bar) {
+            DrawTiltedBox((Vector3){x + (float)bar * 0.44f, 0.080f, z},
+                          (Vector3){0.12f, 0.018f, 3.45f},
+                          (Vector3){0.0f, 1.0f, 0.0f},
+                          (float)bar * 5.0f, accent);
+        }
+    } else {
+        DrawBox((Vector3){x, 0.078f, z},
+                (Vector3){3.70f, 0.018f, 0.13f}, accent);
+        DrawBox((Vector3){x, 0.080f, z},
+                (Vector3){0.13f, 0.018f, 3.70f}, accent);
+    }
 }
 
 static void DrawCoachHitch(const CcSettlement *place)
@@ -12764,6 +12837,7 @@ static void DrawEastWindmill(Color kingdom, float hunger)
 }
 
 static void DrawRoomLandmarks(const CcSettlement *place, Color kingdom,
+                              const CcLocalPlaceProfile *profile,
                               Vector3 focus, bool wayfarer_gate_sightline_cut)
 {
     float hunger = place != NULL ? (float)place->hunger / 100.0f : 0.0f;
@@ -12797,7 +12871,7 @@ static void DrawRoomLandmarks(const CcSettlement *place, Color kingdom,
         rlTranslatef(0.0f,
                      CcLocalTerrainHeightAt(CC_LOCAL_NOTICE_X,
                                             CC_LOCAL_NOTICE_Z), 0.0f);
-        DrawTownSquareFocus(kingdom);
+        DrawTownSquareFocus(kingdom, profile);
         rlPopMatrix();
     }
     if (RoomDetailPointVisible(36.75f, 55.36f, focus)) {
@@ -13549,30 +13623,70 @@ static void DrawExteriorTerrain(const CcSettlement *place, Vector3 focus)
     }
 }
 
-static Color BuildingWallColor(int32_t style)
+static Color BuildingWallColor(int32_t style,
+                               const CcLocalPlaceProfile *profile)
 {
+    Color wall;
     switch (style) {
-        case 1: return WORLD_STONE;
-        case 2: return BlendColor(WORLD_EARTH_LIGHT,
-                                  WORLD_DANGER, 0.14f);
-        case 3: return BlendColor(WORLD_STONE,
-                                  WORLD_TEAL, 0.16f);
-        default: return BlendColor(WORLD_STONE,
-                                   WORLD_GRASS, 0.24f);
+        case 1: wall = WORLD_STONE; break;
+        case 2:
+            wall = BlendColor(WORLD_EARTH_LIGHT, WORLD_DANGER, 0.14f);
+            break;
+        case 3:
+            wall = BlendColor(WORLD_STONE, WORLD_TEAL, 0.16f);
+            break;
+        default:
+            wall = BlendColor(WORLD_STONE, WORLD_GRASS, 0.24f);
+            break;
     }
+    if (profile == NULL) return wall;
+    switch (profile->function) {
+        case CC_SETTLEMENT_FARMING:
+            return BlendColor(wall, WORLD_CROP_LIGHT, 0.16f);
+        case CC_SETTLEMENT_MINING:
+            return BlendColor(wall, WORLD_METAL_SHADOW, 0.22f);
+        case CC_SETTLEMENT_FORTRESS:
+            return BlendColor(wall, WORLD_STONE_LIGHT, 0.16f);
+        case CC_SETTLEMENT_CAPITAL:
+            return BlendColor(wall, WORLD_GOLD, 0.10f);
+        case CC_SETTLEMENT_DUNGEON_TOWN:
+            return BlendColor(wall, WORLD_VIOLET, 0.14f);
+        case CC_SETTLEMENT_MARKET: return wall;
+    }
+    return wall;
 }
 
-static Color BuildingRoofColor(int32_t style, Color kingdom)
+static Color BuildingRoofColor(int32_t style, Color kingdom,
+                               const CcLocalPlaceProfile *profile)
 {
+    Color roof;
     switch (style) {
         case 1:
-            return BlendColor(WORLD_ROAD_SHADOW, kingdom, 0.18f);
-        case 2: return WORLD_EARTH;
-        case 3: return BlendColor(WORLD_METAL_SHADOW,
-                                  WORLD_VIOLET, 0.22f);
+            roof = BlendColor(WORLD_ROAD_SHADOW, kingdom, 0.18f);
+            break;
+        case 2: roof = WORLD_EARTH; break;
+        case 3:
+            roof = BlendColor(WORLD_METAL_SHADOW, WORLD_VIOLET, 0.22f);
+            break;
         default:
-            return BlendColor(WORLD_FOLIAGE_SHADOW, kingdom, 0.16f);
+            roof = BlendColor(WORLD_FOLIAGE_SHADOW, kingdom, 0.16f);
+            break;
     }
+    if (profile == NULL) return roof;
+    switch (profile->function) {
+        case CC_SETTLEMENT_FARMING:
+            return BlendColor(roof, WORLD_FOLIAGE, 0.18f);
+        case CC_SETTLEMENT_MINING:
+            return BlendColor(roof, WORLD_METAL_SHADOW, 0.24f);
+        case CC_SETTLEMENT_FORTRESS:
+            return BlendColor(roof, WORLD_DANGER, 0.12f);
+        case CC_SETTLEMENT_CAPITAL:
+            return BlendColor(roof, WORLD_GOLD, 0.12f);
+        case CC_SETTLEMENT_DUNGEON_TOWN:
+            return BlendColor(roof, WORLD_VIOLET, 0.16f);
+        case CC_SETTLEMENT_MARKET: return roof;
+    }
+    return roof;
 }
 
 static uint32_t StreetForegroundBuildingMaskForShot(int32_t shot)
@@ -13699,6 +13813,7 @@ static void UpdateWorldBuildingReveals(Camera3D camera,
 }
 
 static void DrawWorldBuildings(Color kingdom, Vector3 focus,
+                               const CcLocalPlaceProfile *profile,
                                Camera3D camera, Vector3 reveal_world,
                                Vector2 reveal_center,
                                int32_t render_width, int32_t render_height,
@@ -13716,7 +13831,7 @@ static void DrawWorldBuildings(Color kingdom, Vector3 focus,
     for (int32_t i = 0; i < (int32_t)(sizeof(WORLD_BUILDINGS) /
                                       sizeof(WORLD_BUILDINGS[0])); ++i) {
         const WorldBuilding *building = &WORLD_BUILDINGS[i];
-        Color wall = BuildingWallColor(building->style);
+        Color wall = BuildingWallColor(building->style, profile);
         rlPushMatrix();
         rlTranslatef(0.0f, TerrainFootprintHeight(building->footprint), 0.0f);
         DrawBuildingFoundation(
@@ -13751,8 +13866,9 @@ static void DrawWorldBuildings(Color kingdom, Vector3 focus,
         rlTranslatef(0.0f, TerrainFootprintHeight(building->footprint), 0.0f);
         DrawBuilding(building->footprint.x, building->footprint.y,
                      building->footprint.width, building->footprint.height,
-                     building->height, BuildingWallColor(building->style),
-                     BuildingRoofColor(building->style, kingdom),
+                     building->height,
+                     BuildingWallColor(building->style, profile),
+                     BuildingRoofColor(building->style, kingdom, profile),
                      building->door, building->style);
         rlPopMatrix();
     }
@@ -13929,7 +14045,30 @@ static void DrawConstructedCastleStructure(Rectangle footprint,
     DrawCastleBattlements(footprint, height, stone);
 }
 
-static void DrawCastle(Color kingdom, Vector3 focus, Camera3D camera,
+static Color CompoundStoneColor(const CcLocalPlaceProfile *profile,
+                                Color kingdom, int32_t structure)
+{
+    Color stone = structure == 5 ? WORLD_STONE_SHADOW : WORLD_STONE;
+    if (profile == NULL) return stone;
+    switch (profile->function) {
+        case CC_SETTLEMENT_FARMING:
+            return BlendColor(stone, WORLD_WOOD, 0.24f);
+        case CC_SETTLEMENT_MINING:
+            return BlendColor(stone, WORLD_METAL_SHADOW, 0.28f);
+        case CC_SETTLEMENT_MARKET:
+            return BlendColor(stone, WORLD_TEAL, 0.10f);
+        case CC_SETTLEMENT_FORTRESS:
+            return BlendColor(stone, kingdom, 0.16f);
+        case CC_SETTLEMENT_CAPITAL:
+            return BlendColor(stone, WORLD_GOLD, 0.14f);
+        case CC_SETTLEMENT_DUNGEON_TOWN:
+            return BlendColor(stone, WORLD_VIOLET, 0.18f);
+    }
+    return stone;
+}
+
+static void DrawCastle(Color kingdom, const CcLocalPlaceProfile *profile,
+                       Vector3 focus, Camera3D camera,
                        Vector3 reveal_world, Vector2 reveal_center,
                        int32_t render_width, int32_t render_height,
                        float clock)
@@ -13946,7 +14085,7 @@ static void DrawCastle(Color kingdom, Vector3 focus, Camera3D camera,
                                       sizeof(CASTLE_STRUCTURES[0])); ++i) {
         const WorldStructure *structure = &CASTLE_STRUCTURES[i];
         Rectangle footprint = structure->footprint;
-        Color stone = i == 5 ? WORLD_STONE_SHADOW : WORLD_STONE;
+        Color stone = CompoundStoneColor(profile, kingdom, i);
         DrawBuildingFoundation(
             footprint.x, footprint.y, footprint.width, footprint.height,
             structure->height, stone);
@@ -13956,7 +14095,7 @@ static void DrawCastle(Color kingdom, Vector3 focus, Camera3D camera,
                                       sizeof(CASTLE_STRUCTURES[0])); ++i) {
         const WorldStructure *structure = &CASTLE_STRUCTURES[i];
         Rectangle footprint = structure->footprint;
-        Color stone = i == 5 ? WORLD_STONE_SHADOW : WORLD_STONE;
+        Color stone = CompoundStoneColor(profile, kingdom, i);
         float reveal = castle_structure_reveals[i].amount;
         if (fabsf(reveal - reveal_active) > 0.001f) {
             SetWorldForegroundReveal(reveal, reveal_cut_height);
@@ -13978,7 +14117,7 @@ static void DrawCastle(Color kingdom, Vector3 focus, Camera3D camera,
         /* The open southern gate is the room's navigational promise. A high
            lintel and paired fire points frame the pass without putting an
            invisible portcullis across the traversable opening. */
-        Color gate_stone = WORLD_STONE;
+        Color gate_stone = CompoundStoneColor(profile, kingdom, 0);
         DrawBox((Vector3){78.50f, 7.15f, 30.84f},
                 (Vector3){2.30f, 1.08f, 0.72f}, gate_stone);
         for (int32_t merlon = 0; merlon < 3; ++merlon) {
@@ -18626,7 +18765,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                          const CcLocalConvoyState *convoy, float clock,
                          RenderTexture2D target, Rectangle destination)
 {
-    CcLocalTerrainSetSeed(sim->world_seed);
+    CcLocalBindPlace(sim);
     const CcSettlement *place = CcSimSettlement(sim, sim->player.location_id);
     if (place == NULL) return;
     bool convoy_visible = convoy != NULL &&
@@ -18639,6 +18778,8 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     }
     const CcLocalAgent *camera_subject = convoy_visible ?
         &convoy_subject : agent;
+    const CcLocalPlaceProfile *profile =
+        CcLocalPlaceProfileForSettlement(place);
     Camera3D base_camera = CcLocalStreetCameraInternal(
         camera_subject, clock, true, target.texture.height);
     Camera3D camera = CcLocalCombatCameraInternal(
@@ -18733,7 +18874,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     Vector2 foreground_reveal_center = GetWorldToScreenEx(
         foreground_reveal_world,
         camera, target.texture.width, target.texture.height);
-    DrawWorldBuildings(kingdom, scenery_focus, camera,
+    DrawWorldBuildings(kingdom, scenery_focus, profile, camera,
                        foreground_reveal_world, foreground_reveal_center,
                        target.texture.width, target.texture.height, clock);
     {
@@ -18743,7 +18884,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         (void)DrawAuthoredMarket(place);
         SetWorldForegroundReveal(0.0f, reveal_cut_height);
     }
-    DrawCastle(kingdom, scenery_focus, camera,
+    DrawCastle(kingdom, profile, scenery_focus, camera,
                foreground_reveal_world, foreground_reveal_center,
                target.texture.width, target.texture.height, clock);
     if (SceneryFootprintVisible(CARRIAGE_FOOTPRINT, scenery_focus)) {
@@ -18767,7 +18908,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         (camera.projection == CAMERA_PERSPECTIVE ||
          CameraWayfarerGateSubjectOverlap(
              camera, player_sightline, opponent_sightline) > 0.001f);
-    DrawRoomLandmarks(place, kingdom, scenery_focus,
+    DrawRoomLandmarks(place, kingdom, profile, scenery_focus,
                       wayfarer_gate_sightline_cut);
     if (SceneryPointVisible(47.35f, 31.05f, scenery_focus)) {
         DrawJourneyAftermath3D(sim, place);
@@ -18897,7 +19038,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     int32_t room_count = (int32_t)(sizeof(STREET_CAMERA_SHOTS) /
                                    sizeof(STREET_CAMERA_SHOTS[0]));
     if (!combat_presentation && room_index >= 0 && room_index < room_count) {
-        const char *room_name = STREET_CAMERA_SHOTS[room_index].name;
+        const char *room_name = profile->room_name[room_index];
         int32_t title_width = CcOverlayMeasureText(room_name, 10);
         DrawRectangleRounded(
             ViewportRectangle(destination, 11.0f, 10.0f,
@@ -18918,7 +19059,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                                         TerrainFootprintHeight(
                                             WORLD_BUILDINGS[2].footprint) + 4.75f,
                                         21.0f},
-                                       "Market", WORLD_GOLD};
+                                       profile->primary_hall, WORLD_GOLD};
     }
     if (AgentNearLabel(agent, 36.80f, 31.70f, 7.0f)) {
         labels[count++] = (WorldLabel){{36.80f,
@@ -18933,14 +19074,14 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                                             CC_LOCAL_NOTICE_X,
                                             CC_LOCAL_NOTICE_Z) + 1.82f,
                                         CC_LOCAL_NOTICE_Z},
-                                       "Quest board", WORLD_INK};
+                                       profile->notice_board, WORLD_INK};
     }
     if (AgentNearLabel(agent, 11.80f, 0.82f, 7.0f)) {
         labels[count++] = (WorldLabel){{11.80f,
                                         CcLocalTerrainHeightAt(11.80f, 0.82f) +
                                             2.05f,
                                         0.82f},
-                                       "Training yard", WORLD_GOLD};
+                                       profile->training_yard, WORLD_GOLD};
     }
     if (AgentNearLabel(agent, 11.28f, 9.72f, 7.0f)) {
         labels[count++] = (WorldLabel){{11.28f,
@@ -18954,7 +19095,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                                         CcLocalTerrainHeightAt(78.50f, 17.50f) +
                                             12.10f,
                                         17.50f},
-                                       "Greyward Castle", kingdom};
+                                       profile->compound, kingdom};
     }
     if (sim->resolved_journey_outcome != CC_JOURNEY_OUTCOME_NONE &&
         sim->journey.destination_id == place->id &&
@@ -18990,7 +19131,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                                         TerrainFootprintHeight(
                                             DUNGEON_FOOTPRINT) + 3.38f,
                                         CC_LOCAL_DUNGEON_Z - 0.70f},
-                                       "Mine", WORLD_VIOLET};
+                                       dungeon->name, WORLD_VIOLET};
     }
     if (place->id == sim->dragon.lair_settlement_id &&
         AgentNearLabel(agent, CC_LOCAL_DRAGON_CAVE_X,

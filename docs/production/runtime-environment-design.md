@@ -75,6 +75,20 @@ An environment should be derived from four questions before geometry is added:
 This produces bounded variation with meaning. Random roof colors and scattered
 props do not constitute a city grammar.
 
+### Place profile contract
+
+Every settlement function owns a local place profile before it receives a
+separate authored layout. The profile supplies a stable terrain seed, ten room
+names, a statement of purpose, civic labels, a material tint, a compound name,
+and a low plaza mark. Thornford therefore reads as granary country, Gloamgate
+as a crossroads market, Alderwatch as a contested bridge, and Silverwick as
+the working deeps even while they share the proven movement skeleton.
+
+The profile is not allowed to change collision by hiding geometry. A later
+authored layout must replace visible geometry and its collision contract
+together. This keeps local differentiation honest and gives new settlement
+grammars one small, testable interface.
+
 ## Runtime authoring contract
 
 - Collision footprints and surface heights remain the shared authority for

@@ -66,6 +66,16 @@ produce deterministic strategic results.
 
 ## Stage 4 — One living city
 
+### Current buildout
+
+The shared exterior now resolves each settlement through a stable place
+profile. Farming, market, fortress, mining, capital, and dungeon-frontier towns
+have their own terrain seed, district language, civic labels, material tint,
+and plaza mark. This is the reusable identity contract for later authored
+layouts; it does not claim that the six settlements already have separate
+geometry. The remaining gate is distinct local layouts, reusable interiors,
+and a persistent recurring cast.
+
 ### Work
 
 - Create one authored city grammar.

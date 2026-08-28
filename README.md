@@ -51,6 +51,9 @@ The architecture proof connects these parts in one running build:
 
 - A seeded 96 by 72 metre waystation with farms, streets, market steps, a
   coach yard, a mine road, Crown Gate, and the Wayfarer Trials
+- Settlement profiles that give every town a stable local terrain seed,
+  purpose-specific district names, civic labels, material palette, and plaza
+  mark while sharing the proven movement and collision skeleton
 - Continuous click-to-move navigation across real terrain and solid geometry,
   with no tile or screen-space movement grid
 - One physical humanoid body for walking, vaulting, climbing, down-climbing,
@@ -109,10 +112,10 @@ The architecture proof connects these parts in one running build:
   state hashing
 
 This is still a proof, not a finished campaign. It uses a small generated
-region, one main local settlement grammar, one detailed market interior, and a
-limited set of journey and dungeon interventions. Content breadth, balance,
-carriage progression, deeper interiors, and playable dungeon maps remain in
-production.
+region, one shared local settlement skeleton with six distinct place profiles,
+one detailed market interior, and a limited set of journey and dungeon
+interventions. Separate authored layouts, content breadth, balance, carriage
+progression, deeper interiors, and playable dungeon maps remain in production.
 
 ## Build and run
 
