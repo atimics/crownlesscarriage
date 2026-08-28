@@ -51,6 +51,7 @@ typedef struct LocalState {
     Vector2 movement_reticle;
     float movement_reticle_age;
     bool market_interior;
+    bool road_choice_active;
     bool journey_travel_active;
     bool journey_combat_active;
     bool journey_parley_active;
@@ -661,6 +662,7 @@ static void ResetLocalState(LocalState *local)
     local->movement_reticle_accepted = false;
     local->pending_interaction = CONTEXT_ACTION_NONE;
     local->market_interior = false;
+    local->road_choice_active = false;
     local->journey_travel_active = false;
     local->journey_combat_active = false;
     local->journey_parley_active = false;
@@ -687,7 +689,8 @@ static void RepositionHero(LocalState *local, Vector2 position,
 
 static bool LocalSessionEligible(const LocalState *local)
 {
-    return local != NULL && !local->journey_travel_active &&
+    return local != NULL && !local->road_choice_active &&
+           !local->journey_travel_active &&
            !local->journey_combat_active && !local->journey_parley_active &&
            !local->course.alarm_active &&
            local->agent.combat.life_state == CC_LIFE_ALIVE;
@@ -777,16 +780,45 @@ static void BeginRoadTravelState(LocalState *local)
     local->journey_travel_active = true;
 }
 
-static void BeginTownDepartureState(LocalState *local)
+static void BeginRoadChoiceApproachState(LocalState *local, bool from_town)
 {
     CcAthleticProfile athletics = local->agent.athletics;
+    float pace = local->convoy.pace;
     ResetLocalState(local);
     local->agent.athletics = athletics;
-    local->convoy.phase = CC_LOCAL_CONVOY_DEPARTING;
-    local->convoy.pace = 0.0f;
-    SetConvoyTownPose(&local->convoy, 0.0f);
+    local->road_choice_active = true;
+    local->convoy.phase = from_town ? CC_LOCAL_CONVOY_DEPARTING :
+                                      CC_LOCAL_CONVOY_ROAD;
+    local->convoy.pace = from_town ? 0.0f :
+        (pace > 0.05f ? pace : 0.72f);
+    local->convoy.phase_progress = 0.0f;
     local->course.alarm_countdown = 1000.0f;
-    local->journey_travel_active = true;
+    if (from_town) {
+        SetConvoyTownPose(&local->convoy, 0.0f);
+    } else {
+        RepositionHero(local,
+                       (Vector2){CC_LOCAL_ROAD_START_X,
+                                 CC_LOCAL_ROAD_START_Z}, false);
+        CcLocalAgentSetScene(&local->agent, CC_LOCAL_SCENE_ROAD);
+        local->course.scene = CC_LOCAL_SCENE_ROAD;
+    }
+}
+
+static bool UpdateRoadChoiceApproach(LocalState *local, float delta_time)
+{
+    ConvoyUpdateResult update = UpdateDrivenConvoy(local, delta_time);
+    if (update == CONVOY_UPDATE_ENTER_ROAD) {
+        local->convoy.phase = CC_LOCAL_CONVOY_ROAD;
+        local->convoy.phase_progress = 0.0f;
+        local->convoy.lateral_offset = 0.0f;
+        return false;
+    }
+    if (local->convoy.phase != CC_LOCAL_CONVOY_ROAD) return false;
+    local->convoy.phase_progress = CcClientRoadApproachStep(
+        local->convoy.phase_progress, local->convoy.pace, delta_time);
+    if (local->convoy.phase_progress < 1.0f) return false;
+    local->convoy.pace = 0.0f;
+    return true;
 }
 
 static void BeginTownArrivalState(LocalState *local)
@@ -1018,14 +1050,18 @@ static void DrawLocalHeader(const CcSim *sim, const LocalState *local)
     const CcSettlement *place = CcSimSettlement(sim, sim->player.location_id);
     const CcLocalPlaceProfile *profile =
         CcLocalPlaceProfileForSettlement(place);
-    bool road = local->journey_travel_active ||
+    bool finding_road = local->road_choice_active;
+    bool road = finding_road || local->journey_travel_active ||
                 local->journey_combat_active ||
                 local->journey_parley_active;
-    const CcSettlement *origin = road ?
+    const CcSettlement *origin = finding_road ? place : road ?
         CcSimSettlement(sim, sim->journey.origin_id) : NULL;
-    const CcSettlement *destination = road ?
+    const CcSettlement *destination = road && !finding_road ?
         CcSimSettlement(sim, sim->journey.destination_id) : NULL;
-    CcOverlayDrawText(road ?
+    CcOverlayDrawText(finding_road ?
+             TextFormat("%s  ->  ROAD AHEAD",
+                        origin != NULL ? origin->name : "Town") :
+             road ?
              TextFormat("%s  ->  %s",
                         origin != NULL ? origin->name : "Road",
                         destination != NULL ? destination->name : "Gate") :
@@ -1244,7 +1280,8 @@ static void DrawCombatPanel(const LocalState *local)
 
 static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
 {
-    bool road = local->journey_travel_active ||
+    bool road = local->road_choice_active ||
+                local->journey_travel_active ||
                 local->journey_combat_active ||
                 local->journey_parley_active;
     if (road) {
@@ -1258,6 +1295,24 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
         int content_x = (int)panel_x + 18;
         DrawPanel((Rectangle){panel_x, 78.0f, 264.0f, 150.0f},
                   Fade(PANEL_DEEP, 0.93f));
+        if (local->road_choice_active) {
+            bool town_departure =
+                local->convoy.phase == CC_LOCAL_CONVOY_DEPARTING;
+            bool gate = local->convoy.phase == CC_LOCAL_CONVOY_GATE;
+            int32_t progress = (int32_t)lroundf(
+                local->convoy.phase_progress * 100.0f);
+            CcOverlayDrawText(town_departure ? "LEAVING THE STABLE" :
+                              gate ? "CROSSING THE GATE" :
+                                     "FOLLOWING THE TRACK",
+                              content_x, 91, 9, TEAL);
+            CcOverlayDrawText("NEXT JUNCTION", content_x, 112, 15, INK);
+            DrawBar(content_x, 145, 74, "APPROACH", progress, TEAL);
+            DrawBar(content_x, 166, 74, "PACE",
+                    (int32_t)lroundf(local->convoy.pace * 100.0f), CC_GOLD);
+            CcOverlayDrawText("AUTO DRIVE  /  WASD REINS  /  SPACE STOP",
+                              content_x, 205, 7, MUTED);
+            return;
+        }
         if (local->journey_travel_active) {
             bool town_departure =
                 local->convoy.phase == CC_LOCAL_CONVOY_DEPARTING;
@@ -1435,6 +1490,18 @@ static int32_t OutgoingRouteCount(const CcSim *sim)
         if (RouteLeavesCurrentPlace(sim, &sim->routes[i])) count += 1;
     }
     return count;
+}
+
+static int32_t OutgoingRouteOrdinal(const CcSim *sim, int32_t selected)
+{
+    int32_t ordinal = 0;
+    if (sim == NULL) return -1;
+    for (int32_t i = 0; i < sim->route_count; ++i) {
+        if (!RouteLeavesCurrentPlace(sim, &sim->routes[i])) continue;
+        if (i == selected) return ordinal;
+        ordinal += 1;
+    }
+    return -1;
 }
 
 static int32_t StepOutgoingRouteIndex(const CcSim *sim, int32_t selected,
@@ -1888,9 +1955,12 @@ static ContextActionSet BuildContextActions(
         if (route != NULL) {
             AddContextAction(&set, CONTEXT_ACTION_TRAVEL,
                              route->smuggler_route ?
-                                 "Take hidden branch" : "Take branch");
+                                 "Turn onto hidden track" :
+                                 "Turn onto branch");
         }
-        if (OutgoingRouteCount(sim) > 1) {
+        int32_t ordinal = OutgoingRouteOrdinal(sim, selected);
+        if (CcClientRoadHasNextBranch(ordinal,
+                                      OutgoingRouteCount(sim))) {
             AddContextAction(&set, CONTEXT_ACTION_NEXT_BRANCH,
                              "Keep on track");
         }
@@ -1902,9 +1972,12 @@ static ContextActionSet BuildContextActions(
             AddContextAction(&set, CONTEXT_ACTION_REPAIR_ROUTE,
                              "Repair road");
         }
-        AddContextAction(&set, CONTEXT_ACTION_CLOSE_VIEW, "Return to town");
+        AddContextAction(&set, CONTEXT_ACTION_CLOSE_VIEW,
+                         "Turn back to town");
         return set;
     }
+
+    if (local->road_choice_active) return set;
 
     if (local->journey_travel_active) {
         bool safe_journey = sim->journey.active && sim->journey.danger <= 30;
@@ -2221,9 +2294,13 @@ static bool CommandActionEnabled(CommandActionKind action,
                                  ClientView view)
 {
     bool road_local = local != NULL &&
-        (local->journey_travel_active || local->journey_combat_active ||
-         local->journey_parley_active);
-    if (action == COMMAND_ACTION_QUESTS) return !road_local;
+        (local->road_choice_active || local->journey_travel_active ||
+         local->journey_combat_active || local->journey_parley_active);
+    bool choosing_road = local != NULL && local->road_choice_active;
+    if (action == COMMAND_ACTION_QUESTS) {
+        return !road_local && !choosing_road;
+    }
+    if (action == COMMAND_ACTION_SAVE) return !choosing_road;
     if (action == COMMAND_ACTION_MAP) {
         float carriage_distance = local != NULL ?
             GridDistance(LocalPosition(local), LOCAL_CARRIAGE) : 1000.0f;
@@ -2304,7 +2381,13 @@ static void DrawRoadPanel(const CcSim *sim, int32_t selected)
     Rectangle panel = {978.0f, 82.0f, 282.0f, 322.0f};
     DrawPanel(panel, (Color){8, 16, 20, 226});
     const CcRoute *route = SelectedOutgoingRoute(sim, selected);
-    CcOverlayDrawText("BRANCH", 998, 102, 9, TEAL);
+    int32_t ordinal = OutgoingRouteOrdinal(sim, selected);
+    CcOverlayDrawText(
+        ordinal >= 0 ?
+            TextFormat("JUNCTION %d OF %d", ordinal + 1,
+                       OutgoingRouteCount(sim)) :
+            "JUNCTION",
+        998, 102, 9, TEAL);
     if (route == NULL) {
         CcOverlayDrawText("NO ROAD", 998, 128, 15, MUTED);
         return;
@@ -3136,20 +3219,31 @@ static void UpdateGameplayReel(CcSim *sim, LocalState *local,
                 *selected = FirstOutgoingRouteIndex(sim);
                 reel->destination_id = GameplayReelDestination(sim, selected);
                 *return_view = VIEW_LOCAL;
-                *view = VIEW_ROADS;
+                BeginRoadChoiceApproachState(local, true);
+                *view = VIEW_LOCAL;
                 GameplayReelSetStage(reel, GAMEPLAY_REEL_CHOOSE_ROUTE);
             }
             break;
         case GAMEPLAY_REEL_CHOOSE_ROUTE:
+            if (!reel->stage_started) {
+                (void)snprintf(message, message_capacity,
+                               "The carriage leaves before a road is chosen.");
+                if (UpdateRoadChoiceApproach(local, delta_time)) {
+                    *view = VIEW_ROADS;
+                    reel->stage_started = true;
+                    reel->stage_frame = 0;
+                    (void)snprintf(message, message_capacity,
+                                   "A roadside choice comes into view.");
+                }
+                break;
+            }
             (void)snprintf(message, message_capacity,
-                           "A branch lies ahead.");
-            if (reel->stage_frame >= 150 && !reel->stage_started &&
-                reel->destination_id != 0U) {
+                           "Choose the branch when the carriage reaches it.");
+            if (reel->stage_frame >= 150 && reel->destination_id != 0U) {
                 CcCommand travel = {
                     .kind = CC_COMMAND_TRAVEL,
                     .target_id = reel->destination_id
                 };
-                reel->stage_started = true;
                 if (ApplyCommand(NULL, sim, travel, message,
                                  message_capacity)) {
                     reel->journey_legs += 1;
@@ -3410,6 +3504,12 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                    IsKeyDown(KEY_LEFT_SUPER) || IsKeyDown(KEY_RIGHT_SUPER);
     if (command_action == COMMAND_ACTION_SAVE || ClientKeyPressed(KEY_F5) ||
         queued_save_shortcut || (control && ClientKeyPressed(KEY_S))) {
+        if (local->road_choice_active) {
+            (void)snprintf(
+                message, message_capacity,
+                "Choose a road or turn back before saving.");
+            return;
+        }
         char error[256];
         bool saved = false;
         if (*journal == NULL) {
@@ -3509,13 +3609,16 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         }
         return;
     }
-    bool road_local = local->journey_travel_active ||
+    bool road_local = local->road_choice_active ||
+                      local->journey_travel_active ||
                       local->journey_combat_active ||
                       local->journey_parley_active;
     bool quests_requested = ClientKeyPressed(KEY_Q) ||
                             command_action == COMMAND_ACTION_QUESTS;
     if (quests_requested && road_local) {
         (void)snprintf(message, message_capacity,
+                       local->road_choice_active ?
+                           "Choose this branch or keep moving first." :
                        local->journey_travel_active ?
                            "Quests are unavailable while travelling." :
                            "Finish the fight first.");
@@ -3537,6 +3640,8 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                          command_action == COMMAND_ACTION_MAP;
     if (map_requested && road_local) {
         (void)snprintf(message, message_capacity,
+                       local->road_choice_active ?
+                           "The visible road notes are beside the junction." :
                        local->journey_travel_active ?
                            "Map case unavailable while travelling." :
                            "Finish the fight first.");
@@ -3624,10 +3729,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED) {
                 *view = VIEW_ENCOUNTER;
             } else {
-                if (sim->journey.active &&
-                    sim->journey.elapsed_subticks == 0) {
-                    BeginTownDepartureState(local);
-                } else if (sim->journey.active) {
+                if (sim->journey.active) {
                     BeginRoadTravelState(local);
                 }
                 *view = VIEW_LOCAL;
@@ -3682,6 +3784,14 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
     }
 
     if (*view == VIEW_LOCAL) {
+        if (local->road_choice_active) {
+            if (UpdateRoadChoiceApproach(local, delta_time)) {
+                *view = VIEW_ROADS;
+                (void)snprintf(message, message_capacity,
+                               "A roadside choice comes into view.");
+            }
+            return;
+        }
         if (local->journey_travel_active) {
             if (context_action == CONTEXT_ACTION_SKIP_TRAVEL) {
                 char error[256];
@@ -3952,10 +4062,11 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         if (!local->market_interior &&
             CcLocalAgentConsumeWorldExit(&local->agent)) {
             *selected = FirstOutgoingRouteIndex(sim);
-            *view = VIEW_ROADS;
+            BeginRoadChoiceApproachState(local, true);
+            *view = VIEW_LOCAL;
             (void)snprintf(
                 message, message_capacity,
-                "The first branch is ahead.");
+                "The carriage leaves town and follows the first track.");
             return;
         }
         if (local->journey_combat_active &&
@@ -4075,8 +4186,11 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                        (queued_interact ||
                         GridDistance(position, LOCAL_CARRIAGE) < 1.35f)) {
                 *selected = FirstOutgoingRouteIndex(sim);
-                *view = VIEW_ROADS;
-                message[0] = '\0';
+                BeginRoadChoiceApproachState(local, true);
+                *view = VIEW_LOCAL;
+                (void)snprintf(
+                    message, message_capacity,
+                    "Take the reins. The first choice lies beyond the gate.");
             } else if (context_action == CONTEXT_ACTION_OPEN_MAP &&
                        !local->market_interior &&
                        (queued_interact ||
@@ -4226,22 +4340,28 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
     }
 
     if (context_action == CONTEXT_ACTION_CLOSE_VIEW) {
+        ResetLocalState(local);
         *view = VIEW_LOCAL;
+        (void)snprintf(message, message_capacity,
+                       "The carriage turns back into town.");
         return;
     }
-    bool moved_to_next_branch = false;
-    if (ClientKeyPressed(KEY_RIGHT) || ClientKeyPressed(KEY_DOWN) ||
-        context_action == CONTEXT_ACTION_NEXT_BRANCH) {
+    bool continue_on_track = ClientKeyPressed(KEY_RIGHT) ||
+        ClientKeyPressed(KEY_DOWN) ||
+        context_action == CONTEXT_ACTION_NEXT_BRANCH;
+    int32_t branch_ordinal = OutgoingRouteOrdinal(sim, *selected);
+    if (continue_on_track && CcClientRoadHasNextBranch(
+            branch_ordinal, OutgoingRouteCount(sim))) {
         *selected = StepOutgoingRouteIndex(sim, *selected, 1);
-        moved_to_next_branch = true;
-    }
-    if (ClientKeyPressed(KEY_LEFT) || ClientKeyPressed(KEY_UP)) {
-        *selected = StepOutgoingRouteIndex(sim, *selected, -1);
-        moved_to_next_branch = true;
-    }
-    if (moved_to_next_branch) {
+        BeginRoadChoiceApproachState(local, false);
+        *view = VIEW_LOCAL;
         (void)snprintf(message, message_capacity,
-                       "The carriage reaches the next branch.");
+                       "The carriage keeps moving toward the next junction.");
+        return;
+    }
+    if (continue_on_track) {
+        (void)snprintf(message, message_capacity,
+                       "There are no more branches on this track.");
         return;
     }
 
@@ -4272,10 +4392,10 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         };
         if (ApplyCommand(*journal, sim, travel, message, message_capacity)) {
             *selected = FirstOutgoingRouteIndex(sim);
-            BeginTownDepartureState(local);
+            BeginRoadTravelState(local);
             *view = VIEW_LOCAL;
             (void)snprintf(message, message_capacity,
-                           "Take the reins. W urges the team; S or Space reins in.");
+                           "The carriage turns onto the chosen road.");
         }
     }
     if ((ClientKeyPressed(KEY_R) ||
@@ -4713,9 +4833,6 @@ int main(int argc, char **argv)
     if (!capture && sim.journey.active) {
         if (sim.journey.phase == CC_JOURNEY_PHASE_BLOCKED) {
             view = VIEW_ENCOUNTER;
-        } else if (sim.journey.elapsed_subticks == 0) {
-            BeginTownDepartureState(&local);
-            view = VIEW_LOCAL;
         } else {
             BeginRoadTravelState(&local);
             view = VIEW_LOCAL;
@@ -5043,13 +5160,15 @@ int main(int argc, char **argv)
                 CcLocalDrawRoad3D(&sim, &local.agent, &local.course,
                                   false, false, &local.convoy, clock,
                                   local_target, local_bounds);
-            } else if ((local.journey_travel_active &&
+            } else if (((local.road_choice_active ||
+                         local.journey_travel_active) &&
                         (local.convoy.phase == CC_LOCAL_CONVOY_GATE ||
                          local.convoy.phase == CC_LOCAL_CONVOY_ROAD)) ||
                        local.journey_combat_active ||
                 local.journey_parley_active) {
                 CcLocalDrawRoad3D(&sim, &local.agent, &local.course,
-                                  local.journey_travel_active,
+                                  local.road_choice_active ||
+                                      local.journey_travel_active,
                                   local.journey_parley_active,
                                   &local.convoy, clock,
                                   local_target, local_bounds);

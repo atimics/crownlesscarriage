@@ -26,6 +26,14 @@ int main(void)
     CC_CHECK(CcClientConvoyPaceStep(
                  0.50f, true, false, true, false, 1.0f) < 0.50f);
 
+    float approach = CcClientRoadApproachStep(0.0f, 0.72f, 1.0f);
+    CC_CHECK(approach > 0.17f && approach < 0.18f);
+    CC_CHECK(CcClientRoadApproachStep(approach, 0.0f, 1.0f) == approach);
+    CC_CHECK(CcClientRoadApproachStep(0.95f, 1.0f, 1.0f) == 1.0f);
+    CC_CHECK(CcClientRoadHasNextBranch(0, 2));
+    CC_CHECK(!CcClientRoadHasNextBranch(1, 2));
+    CC_CHECK(!CcClientRoadHasNextBranch(-1, 2));
+
     CC_CHECK(CcClientMapCommandEnabled(true, true, true, 99.0f));
     CC_CHECK(CcClientMapCommandEnabled(false, false, false, 1.0f));
     CC_CHECK(!CcClientMapCommandEnabled(false, false, false, 2.0f));

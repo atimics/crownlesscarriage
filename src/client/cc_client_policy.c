@@ -26,6 +26,19 @@ float CcClientConvoyPaceStep(float pace, bool road_phase,
     return ClampPace(pace);
 }
 
+float CcClientRoadApproachStep(float progress, float pace, float delta_time)
+{
+    float step = fmaxf(0.0f, delta_time);
+    float next = progress + ClampPace(pace) * step * 0.24f;
+    return fmaxf(0.0f, fminf(1.0f, next));
+}
+
+bool CcClientRoadHasNextBranch(int32_t branch_ordinal,
+                               int32_t branch_count)
+{
+    return branch_ordinal >= 0 && branch_ordinal + 1 < branch_count;
+}
+
 bool CcClientMapCommandEnabled(bool viewing_map, bool road_local,
                                bool market_interior,
                                float carriage_distance)
