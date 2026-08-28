@@ -14904,10 +14904,9 @@ static void DrawNpcEquipment(const CcNpcAppearance *appearance,
                         ShadeColor(appearance->outer, 0.68f));
     }
     if ((appearance->equipment & CC_NPC_EQUIPMENT_ARMOR) != 0U) {
-        DrawOrientedBox(chest, (Vector3){0.0f, -0.06f * scale,
-                                         0.16f * scale},
-                        (Vector3){0.36f * scale, 0.31f * scale,
-                                  0.055f * scale}, yaw, appearance->metal);
+        /* Shoulder pieces keep armor readable without laying a broad flat
+           slab across the torso. The torso volume supplies the breastplate
+           mass in this low-detail fallback. */
         DrawCharacterSphere(shoulder_l, 0.098f * scale, appearance->metal);
         DrawCharacterSphere(shoulder_r, 0.098f * scale, appearance->metal);
     }
@@ -15117,7 +15116,12 @@ static void DrawNpcAppearanceFigure3D(
         appearance.role == CC_NPC_ROLE_GUARD ||
         appearance.role == CC_NPC_ROLE_RAIDER ? CC_NPC_PORTRAIT_FOCUSED :
                                                CC_NPC_PORTRAIT_NEUTRAL;
-    if (!draw_hero_rig_debug && DrawNpcArchetype3D(
+    /* Baked armored archetypes still contain the old front card. Use the
+       articulated fallback for those roles until their armor is rebuilt as
+       body-following volume. */
+    bool planar_baked_armor =
+        (appearance.equipment & CC_NPC_EQUIPMENT_ARMOR) != 0U;
+    if (!draw_hero_rig_debug && !planar_baked_armor && DrawNpcArchetype3D(
             position, size_hint, yaw, phase, mode, expression, &appearance)) {
         return;
     }
@@ -15453,16 +15457,12 @@ static void DrawWayfarerHeroDetails(const CcHumanoidSkinPose *skin)
         skin->sockets[CC_HUMANOID_SOCKET_CHEST_FRONT].position);
     chest = PhysicsAdd(chest, PhysicsScale(forward, 0.032f));
 
-    Color panel_ink = CC_STYLE_HERO_PANEL_INK;
     Color portrait_burgundy = CC_STYLE_HERO_OUTER;
     Color broken_gold = CC_STYLE_HERO_ACCENT;
     Vector3 panel = PhysicsAdd(chest, PhysicsScale(up, -0.018f));
-    /* Match the portrait's large oxblood shoulder-and-chest mass. The broad
-       shape survives at distance; the gold emblem is the second read. */
-    DrawFaceQuad(panel, right, up, forward, 0.0f, 0.0f,
-                 0.350f, 0.270f, 0.006f, panel_ink);
-    DrawFaceQuad(panel, right, up, forward, 0.0f, 0.0f,
-                 0.306f, 0.226f, 0.011f, portrait_burgundy);
+    /* The fitted torso owns the chest silhouette. Keep only the raised
+       shoulder tabs and emblem here; the former stacked quads read as a
+       camera-facing board whenever the body turned. */
 
     static const CcHumanoidSkinBone shoulder_bones[] = {
         CC_HUMANOID_SKIN_UPPER_ARM_LEFT,
@@ -15799,8 +15799,6 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
 
     Vector3 back = FromLimbVector(
         skin->sockets[CC_HUMANOID_SOCKET_BACK].position);
-    Vector3 chest_front = FromLimbVector(
-        skin->sockets[CC_HUMANOID_SOCKET_CHEST_FRONT].position);
     if ((appearance->equipment & CC_NPC_EQUIPMENT_MANTLE) != 0U &&
         npc_dynamic_modules[NPC_DYNAMIC_MANTLE].ready) {
         Vector3 mantle_root = NpcModuleLocalPoint(
@@ -15820,15 +15818,10 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
             ShadeColor(appearance->outer, 0.68f));
     }
     if ((appearance->equipment & CC_NPC_EQUIPMENT_ARMOR) != 0U) {
-        (void)DrawNpcDynamicModule(
-            NPC_DYNAMIC_CHEST_PLATE,
-            NpcModuleTransform(chest_front, body_right, body_up,
-                               body_forward,
-                               (Vector3){(featured_hero ? 0.28f : 0.43f) *
-                                             mass,
-                                         featured_hero ? 0.23f : 0.36f,
-                                         featured_hero ? 0.17f : 0.28f}),
-            appearance->metal);
+        /* The old chest-plate module was a solidified plane. At the fixed
+           art resolution it cut across every combatant like a signboard.
+           The fitted torso and volumetric pauldrons retain the armor read
+           without that intersecting surface. */
         for (int32_t side = 0; side < 2; ++side) {
             const CcHumanoidSkinBonePose *shoulder =
                 &skin->bones[upper_arms[side]];
