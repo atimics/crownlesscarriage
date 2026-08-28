@@ -15826,22 +15826,13 @@ static void DrawCharacterContactEffects(const CcLocalAgent *agent)
     float within = agent->humanoid.phase * 8.0f;
     within -= floorf(within);
     float dust = 1.0f - SmoothStep01(within / 0.72f);
-    Vector3 side = {cosf(agent->facing_yaw), 0.0f,
-                    -sinf(agent->facing_yaw)};
     Vector3 back = {-sinf(agent->facing_yaw), 0.0f,
                     -cosf(agent->facing_yaw)};
-    for (int32_t mote = 0; mote < 3; ++mote) {
-        float lateral = ((float)mote - 1.0f) * 0.12f;
-        Vector3 center = PhysicsAdd(
-            heel, PhysicsAdd(PhysicsScale(side, lateral),
-                             PhysicsScale(back, 0.05f + (float)mote * 0.04f)));
-        center.x = SnapContactCoordinate(center.x);
-        center.z = SnapContactCoordinate(center.z);
-        center.y += 0.035f + (float)mote * 0.022f;
-        float size = (0.07f + (float)mote * 0.018f) * dust;
-        DrawBox(center, (Vector3){size, size, size},
-                Fade((Color){150, 125, 86, 255}, dust * 0.54f));
-    }
+    Vector3 dust_smear = PhysicsAdd(heel, PhysicsScale(back, 0.08f));
+    dust_smear.y = shadow.y + 0.006f;
+    DrawGroundBrushStroke(dust_smear, back, 0.32f * dust,
+                          0.12f * dust,
+                          Fade((Color){150, 125, 86, 255}, dust * 0.42f));
 }
 
 static void DrawRobotShell(const CcLocalAgent *agent)
