@@ -14,6 +14,7 @@
 #define CC_JOURNAL_RUNTIME_FLUSH_TICKS 6
 #define CC_JOURNAL_MAX_DAY_ADVANCE 3650
 #define CC_JOURNAL_MAX_RUNTIME_ADVANCE 3600
+#define CC_JOURNAL_COMPACT_RECORDS UINT64_C(4096)
 
 typedef enum CcJournalOperationKind {
     CC_JOURNAL_OPERATION_COMMAND = 1,
@@ -44,6 +45,36 @@ static void SetSqlError(char *error, size_t capacity, sqlite3 *database,
     if (error == NULL || capacity == 0U) return;
     (void)snprintf(error, capacity, "%s: %s", context,
                    database != NULL ? sqlite3_errmsg(database) : "SQLite error");
+}
+
+static bool ReadTextColumn(sqlite3_stmt *statement, int column,
+                           char *destination, size_t destination_capacity,
+                           const char *field,
+                           char *error, size_t error_capacity)
+{
+    if (statement == NULL || destination == NULL ||
+        destination_capacity == 0U ||
+        sqlite3_column_type(statement, column) != SQLITE_TEXT) {
+        if (error != NULL && error_capacity > 0U) {
+            (void)snprintf(error, error_capacity,
+                           "Campaign %s text is invalid.", field);
+        }
+        return false;
+    }
+    const unsigned char *value = sqlite3_column_text(statement, column);
+    int length = sqlite3_column_bytes(statement, column);
+    if (value == NULL || length < 0 ||
+        (size_t)length >= destination_capacity ||
+        memchr(value, '\0', (size_t)length) != NULL) {
+        if (error != NULL && error_capacity > 0U) {
+            (void)snprintf(error, error_capacity,
+                           "Campaign %s text is invalid.", field);
+        }
+        return false;
+    }
+    memcpy(destination, value, (size_t)length);
+    destination[length] = '\0';
+    return true;
 }
 
 static bool ParseStoredHash(const unsigned char *text, uint64_t *hash)
@@ -418,10 +449,26 @@ typedef enum WritableOpenMode {
     WRITABLE_OPEN_EXISTING_OR_NEW
 } WritableOpenMode;
 
+static void RemoveDatabaseArtifacts(const char *path)
+{
+    if (path == NULL) return;
+    (void)remove(path);
+    size_t length = strlen(path);
+    char *sidecar = malloc(length + 5U);
+    if (sidecar == NULL) return;
+    (void)snprintf(sidecar, length + 5U, "%s-wal", path);
+    (void)remove(sidecar);
+    (void)snprintf(sidecar, length + 5U, "%s-shm", path);
+    (void)remove(sidecar);
+    free(sidecar);
+}
+
 static bool OpenWritableDatabase(const char *path, WritableOpenMode mode,
                                  sqlite3 **database,
+                                 bool *created,
                                  char *error, size_t error_capacity)
 {
+    if (created != NULL) *created = false;
     bool new_database = false;
     if (mode == WRITABLE_OPEN_NEW) {
         FILE *claim = fopen(path, "wbx");
@@ -431,7 +478,7 @@ static bool OpenWritableDatabase(const char *path, WritableOpenMode mode,
             return false;
         }
         if (fclose(claim) != 0) {
-            (void)remove(path);
+            RemoveDatabaseArtifacts(path);
             SetError(error, error_capacity,
                      "Could not create the campaign database.");
             return false;
@@ -454,7 +501,7 @@ static bool OpenWritableDatabase(const char *path, WritableOpenMode mode,
         SetSqlError(error, error_capacity, *database, "Could not open campaign database");
         if (*database != NULL) sqlite3_close(*database);
         *database = NULL;
-        if (new_database) (void)remove(path);
+        if (new_database) RemoveDatabaseArtifacts(path);
         return false;
     }
     if (!ValidateDatabaseHeader(*database, new_database,
@@ -462,9 +509,10 @@ static bool OpenWritableDatabase(const char *path, WritableOpenMode mode,
         !ConfigureWritableDatabase(*database, error, error_capacity)) {
         sqlite3_close(*database);
         *database = NULL;
-        if (new_database) (void)remove(path);
+        if (new_database) RemoveDatabaseArtifacts(path);
         return false;
     }
+    if (created != NULL) *created = new_database;
     return true;
 }
 
@@ -1822,7 +1870,9 @@ bool CcSaveWrite(const char *path, const CcSim *sim,
         return false;
     }
     sqlite3 *database = NULL;
+    bool created = false;
     if (!OpenWritableDatabase(path, WRITABLE_OPEN_EXISTING_OR_NEW, &database,
+                              &created,
                               error, error_capacity)) return false;
     bool ok = CreateSchema(database, error, error_capacity) &&
               MarkDatabaseCurrent(database, error, error_capacity) &&
@@ -1832,6 +1882,7 @@ bool CcSaveWrite(const char *path, const CcSim *sim,
         SetError(error, error_capacity, "Could not close campaign database.");
         return false;
     }
+    if (!ok && created) RemoveDatabaseArtifacts(path);
     return ok;
 }
 
@@ -1894,7 +1945,11 @@ static bool ReadKingdoms(sqlite3 *database, CcSim *sim,
         if (slot < 0 || slot >= CC_MAX_KINGDOMS) { sqlite3_finalize(statement); return false; }
         CcKingdom *k = &sim->kingdoms[slot];
         k->id = (CcId)sqlite3_column_int64(statement, 1);
-        (void)snprintf(k->name, sizeof(k->name), "%s", sqlite3_column_text(statement, 2));
+        if (!ReadTextColumn(statement, 2, k->name, sizeof(k->name),
+                            "kingdom name", error, error_capacity)) {
+            sqlite3_finalize(statement);
+            return false;
+        }
         k->color_r = (uint8_t)sqlite3_column_int(statement, 3);
         k->color_g = (uint8_t)sqlite3_column_int(statement, 4);
         k->color_b = (uint8_t)sqlite3_column_int(statement, 5);
@@ -2003,7 +2058,11 @@ static bool ReadSettlements(sqlite3 *database, CcSim *sim,
         int column = 1;
         s->id = (CcId)sqlite3_column_int64(statement, column++);
         s->kingdom_id = (CcId)sqlite3_column_int64(statement, column++);
-        (void)snprintf(s->name, sizeof(s->name), "%s", sqlite3_column_text(statement, column++));
+        if (!ReadTextColumn(statement, column++, s->name, sizeof(s->name),
+                            "settlement name", error, error_capacity)) {
+            sqlite3_finalize(statement);
+            return false;
+        }
         s->function = (CcSettlementFunction)sqlite3_column_int(statement, column++);
         s->map_x = sqlite3_column_int(statement, column++); s->map_y = sqlite3_column_int(statement, column++);
         s->population = sqlite3_column_int(statement, column++); s->security = sqlite3_column_int(statement, column++);
@@ -2051,8 +2110,11 @@ static bool ReadHorseTeam(sqlite3 *database, CcSim *sim,
         }
         CcHorse *horse = &sim->horse_team[slot];
         horse->id = (CcId)sqlite3_column_int64(statement, 1);
-        (void)snprintf(horse->name, sizeof(horse->name), "%s",
-                       sqlite3_column_text(statement, 2));
+        if (!ReadTextColumn(statement, 2, horse->name, sizeof(horse->name),
+                            "horse name", error, error_capacity)) {
+            sqlite3_finalize(statement);
+            return false;
+        }
         horse->age_days = sqlite3_column_int(statement, 3);
         horse->health = sqlite3_column_int(statement, 4);
         horse->fatigue = sqlite3_column_int(statement, 5);
@@ -2101,8 +2163,11 @@ static bool ReadStableHorses(sqlite3 *database, CcSim *sim,
         }
         CcHorse *horse = &sim->stable_horses[slot];
         horse->id = (CcId)sqlite3_column_int64(statement, 1);
-        (void)snprintf(horse->name, sizeof(horse->name), "%s",
-                       sqlite3_column_text(statement, 2));
+        if (!ReadTextColumn(statement, 2, horse->name, sizeof(horse->name),
+                            "horse name", error, error_capacity)) {
+            sqlite3_finalize(statement);
+            return false;
+        }
         horse->age_days = sqlite3_column_int(statement, 3);
         horse->health = sqlite3_column_int(statement, 4);
         horse->fatigue = sqlite3_column_int(statement, 5);
@@ -2251,8 +2316,12 @@ static bool ReadMaterialEconomy(sqlite3 *database, CcSim *sim,
         }
         CcTreasure *treasure = &sim->treasures[slot];
         treasure->id = (CcId)sqlite3_column_int64(statement, 1);
-        (void)snprintf(treasure->name, sizeof(treasure->name), "%s",
-                       sqlite3_column_text(statement, 2));
+        if (!ReadTextColumn(statement, 2, treasure->name,
+                            sizeof(treasure->name), "treasure name",
+                            error, error_capacity)) {
+            sqlite3_finalize(statement);
+            return false;
+        }
         treasure->maker_settlement_id =
             (CcId)sqlite3_column_int64(statement, 3);
         treasure->owner_id = (CcId)sqlite3_column_int64(statement, 4);
@@ -2312,8 +2381,11 @@ static bool ReadMaps(sqlite3 *database, CcSim *sim,
         map->route_id = (CcId)sqlite3_column_int64(statement, 2);
         map->maker_settlement_id = (CcId)sqlite3_column_int64(statement, 3);
         map->owner_id = (CcId)sqlite3_column_int64(statement, 4);
-        (void)snprintf(map->name, sizeof(map->name), "%s",
-                       sqlite3_column_text(statement, 5));
+        if (!ReadTextColumn(statement, 5, map->name, sizeof(map->name),
+                            "map name", error, error_capacity)) {
+            sqlite3_finalize(statement);
+            return false;
+        }
         map->surveyed_day = sqlite3_column_int(statement, 6);
         map->accuracy = sqlite3_column_int(statement, 7);
         map->recorded_condition = sqlite3_column_int(statement, 8);
@@ -2363,7 +2435,11 @@ static bool ReadFactions(sqlite3 *database, CcSim *sim,
         CcFaction *f = &sim->factions[slot];
         f->id = (CcId)sqlite3_column_int64(statement, 1);
         f->kingdom_id = (CcId)sqlite3_column_int64(statement, 2);
-        (void)snprintf(f->name, sizeof(f->name), "%s", sqlite3_column_text(statement, 3));
+        if (!ReadTextColumn(statement, 3, f->name, sizeof(f->name),
+                            "faction name", error, error_capacity)) {
+            sqlite3_finalize(statement);
+            return false;
+        }
         f->kind = (CcFactionKind)sqlite3_column_int(statement, 4);
         f->power = sqlite3_column_int(statement, 5); f->support = sqlite3_column_int(statement, 6);
         rows += 1;
@@ -2430,7 +2506,11 @@ static bool ReadThreats(sqlite3 *database, CcSim *sim,
         CcBanditGroup *b = &sim->bandits[slot];
         b->id = (CcId)sqlite3_column_int64(statement, 1);
         b->route_id = (CcId)sqlite3_column_int64(statement, 2);
-        (void)snprintf(b->name, sizeof(b->name), "%s", sqlite3_column_text(statement, 3));
+        if (!ReadTextColumn(statement, 3, b->name, sizeof(b->name),
+                            "bandit name", error, error_capacity)) {
+            sqlite3_finalize(statement);
+            return false;
+        }
         b->members = sqlite3_column_int(statement, 4); b->supplies = sqlite3_column_int(statement, 5);
         b->influence = sqlite3_column_int(statement, 6); sim->last_bandit_level[slot] = sqlite3_column_int(statement, 7);
         b->camp_size = (CcBanditCampSize)sqlite3_column_int(statement, 8);
@@ -2454,7 +2534,11 @@ static bool ReadThreats(sqlite3 *database, CcSim *sim,
         CcMonsterPopulation *m = &sim->monsters[slot];
         m->id = (CcId)sqlite3_column_int64(statement, 1);
         m->dungeon_id = (CcId)sqlite3_column_int64(statement, 2);
-        (void)snprintf(m->name, sizeof(m->name), "%s", sqlite3_column_text(statement, 3));
+        if (!ReadTextColumn(statement, 3, m->name, sizeof(m->name),
+                            "monster name", error, error_capacity)) {
+            sqlite3_finalize(statement);
+            return false;
+        }
         m->population = sqlite3_column_int(statement, 4); m->pressure = sqlite3_column_int(statement, 5);
         m->hunting_pressure = sqlite3_column_int(statement, 6); sim->last_monster_level[slot] = sqlite3_column_int(statement, 7);
         rows += 1;
@@ -2476,7 +2560,11 @@ static bool ReadDungeons(sqlite3 *database, CcSim *sim,
         CcDungeon *d = &sim->dungeons[slot];
         d->id = (CcId)sqlite3_column_int64(statement, 1);
         d->settlement_id = (CcId)sqlite3_column_int64(statement, 2);
-        (void)snprintf(d->name, sizeof(d->name), "%s", sqlite3_column_text(statement, 3));
+        if (!ReadTextColumn(statement, 3, d->name, sizeof(d->name),
+                            "dungeon name", error, error_capacity)) {
+            sqlite3_finalize(statement);
+            return false;
+        }
         d->state = (CcDungeonState)sqlite3_column_int(statement, 4);
         d->depth = sqlite3_column_int(statement, 5); d->regional_pressure = sqlite3_column_int(statement, 6);
         rows += 1;
@@ -2507,8 +2595,12 @@ static bool ReadLegends(sqlite3 *database, CcSim *sim,
     CcGoblinCult *goblins = &sim->goblins;
     int column = 0;
     goblins->id = (CcId)sqlite3_column_int64(statement, column++);
-    (void)snprintf(goblins->name, sizeof(goblins->name), "%s",
-                   sqlite3_column_text(statement, column++));
+    if (!ReadTextColumn(statement, column++, goblins->name,
+                        sizeof(goblins->name), "goblin name",
+                        error, error_capacity)) {
+        sqlite3_finalize(statement);
+        return false;
+    }
     goblins->members = sqlite3_column_int(statement, column++);
     goblins->devotion = sqlite3_column_int(statement, column++);
     goblins->tribute_phase =
@@ -2556,8 +2648,12 @@ static bool ReadLegends(sqlite3 *database, CcSim *sim,
     CcDragon *dragon = &sim->dragon;
     column = 0;
     dragon->id = (CcId)sqlite3_column_int64(statement, column++);
-    (void)snprintf(dragon->name, sizeof(dragon->name), "%s",
-                   sqlite3_column_text(statement, column++));
+    if (!ReadTextColumn(statement, column++, dragon->name,
+                        sizeof(dragon->name), "dragon name",
+                        error, error_capacity)) {
+        sqlite3_finalize(statement);
+        return false;
+    }
     dragon->lair_settlement_id =
         (CcId)sqlite3_column_int64(statement, column++);
     dragon->hoard = (CcMoney)sqlite3_column_int64(statement, column++);
@@ -2655,8 +2751,12 @@ static bool ReadLegends(sqlite3 *database, CcSim *sim,
     CcHoardRaiders *raiders = &sim->hoard_raiders;
     column = 0;
     raiders->id = (CcId)sqlite3_column_int64(statement, column++);
-    (void)snprintf(raiders->name, sizeof(raiders->name), "%s",
-                   sqlite3_column_text(statement, column++));
+    if (!ReadTextColumn(statement, column++, raiders->name,
+                        sizeof(raiders->name), "hoard-raider name",
+                        error, error_capacity)) {
+        sqlite3_finalize(statement);
+        return false;
+    }
     raiders->phase =
         (CcHoardRaiderPhase)sqlite3_column_int(statement, column++);
     raiders->motive =
@@ -2699,7 +2799,11 @@ static bool ReadEvents(sqlite3 *database, CcSim *sim,
         e->location_id = (CcId)sqlite3_column_int64(statement, 5);
         e->parent_id = (CcId)sqlite3_column_int64(statement, 6);
         e->magnitude = sqlite3_column_int(statement, 7);
-        (void)snprintf(e->text, sizeof(e->text), "%s", sqlite3_column_text(statement, 8));
+        if (!ReadTextColumn(statement, 8, e->text, sizeof(e->text),
+                            "event text", error, error_capacity)) {
+            sqlite3_finalize(statement);
+            return false;
+        }
         rows += 1;
     }
     sqlite3_finalize(statement);
@@ -2761,12 +2865,15 @@ static bool ReadSituationCasts(sqlite3 *database, CcSim *sim,
             return false;
         }
         CcSituation *situation = &sim->situations[slot];
-        (void)snprintf(situation->sponsor_name,
-                       sizeof(situation->sponsor_name), "%s",
-                       sqlite3_column_text(statement, 2));
-        (void)snprintf(situation->affected_name,
-                       sizeof(situation->affected_name), "%s",
-                       sqlite3_column_text(statement, 3));
+        if (!ReadTextColumn(statement, 2, situation->sponsor_name,
+                            sizeof(situation->sponsor_name),
+                            "situation sponsor", error, error_capacity) ||
+            !ReadTextColumn(statement, 3, situation->affected_name,
+                            sizeof(situation->affected_name),
+                            "situation participant", error, error_capacity)) {
+            sqlite3_finalize(statement);
+            return false;
+        }
     }
     sqlite3_finalize(statement);
     return true;
@@ -2922,10 +3029,14 @@ static bool ReadJourneyState(sqlite3 *database, CcSim *sim,
         sim->delayed_echo.outcome =
             (CcJourneyOutcome)sqlite3_column_int(statement, 4);
         sim->delayed_echo.due_day = sqlite3_column_int(statement, 5);
-        const unsigned char *name = sqlite3_column_text(statement, 6);
-        (void)snprintf(sim->delayed_echo.character_name,
-                       sizeof(sim->delayed_echo.character_name), "%s",
-                       name != NULL ? (const char *)name : "");
+        if (!ReadTextColumn(statement, 6,
+                            sim->delayed_echo.character_name,
+                            sizeof(sim->delayed_echo.character_name),
+                            "delayed-echo character", error,
+                            error_capacity)) {
+            sqlite3_finalize(statement);
+            return false;
+        }
     } else if (result != SQLITE_DONE) {
         SetSqlError(error, error_capacity, database,
                     "Could not read delayed echo");
@@ -3523,22 +3634,28 @@ static bool ReadJournalHead(sqlite3 *database, uint64_t generation,
 }
 
 static CcJournal *AllocateJournal(const char *path, WritableOpenMode mode,
+                                  bool *created,
                                   char *error, size_t error_capacity)
 {
+    if (created != NULL) *created = false;
     CcJournal *journal = calloc(1U, sizeof(*journal));
     if (journal == NULL) {
         SetError(error, error_capacity,
                  "Could not allocate action journal state.");
         return NULL;
     }
+    bool database_created = false;
     if (!OpenWritableDatabase(path, mode, &journal->database,
+                              &database_created,
                               error, error_capacity) ||
         !CreateSchema(journal->database, error, error_capacity) ||
         !MarkDatabaseCurrent(journal->database, error, error_capacity)) {
         if (journal->database != NULL) sqlite3_close(journal->database);
+        if (database_created) RemoveDatabaseArtifacts(path);
         free(journal);
         return NULL;
     }
+    if (created != NULL) *created = database_created;
     return journal;
 }
 
@@ -3586,6 +3703,79 @@ static bool CreateJournalEpoch(CcJournal *journal, const CcSim *sim,
     return FinishTransaction(journal->database, ok, error, error_capacity);
 }
 
+static bool PruneJournalHistory(sqlite3 *database, uint64_t keep_generation,
+                                char *error, size_t error_capacity)
+{
+    char sql[1024];
+    int written = snprintf(
+        sql, sizeof(sql),
+        "DROP TRIGGER IF EXISTS action_journal_no_delete;"
+        "DROP TRIGGER IF EXISTS journal_epoch_no_delete;"
+        "DELETE FROM action_journal WHERE generation!=%" PRIu64 ";"
+        "DELETE FROM journal_epoch WHERE generation!=%" PRIu64 ";"
+        "CREATE TRIGGER action_journal_no_delete "
+        "BEFORE DELETE ON action_journal BEGIN "
+        "SELECT RAISE(ABORT, 'action journal is append-only'); END;"
+        "CREATE TRIGGER journal_epoch_no_delete "
+        "BEFORE DELETE ON journal_epoch BEGIN "
+        "SELECT RAISE(ABORT, 'journal epoch is append-only'); END;",
+        keep_generation, keep_generation);
+    if (written < 0 || (size_t)written >= sizeof(sql)) {
+        SetError(error, error_capacity,
+                 "Could not prepare action journal compaction.");
+        return false;
+    }
+    return Execute(database, sql, error, error_capacity);
+}
+
+static bool CompactJournal(CcJournal *journal, const CcSim *sim,
+                           bool verify_active,
+                           char *error, size_t error_capacity)
+{
+    uint64_t previous_generation = journal->generation;
+    uint64_t previous_ordinal = journal->last_ordinal;
+    bool ok = Execute(journal->database, "BEGIN IMMEDIATE;",
+                      error, error_capacity);
+    if (ok && verify_active) {
+        uint64_t active_generation = 0U;
+        uint64_t checkpoint_cursor = 0U;
+        uint64_t stored_head = 0U;
+        ok = ReadSnapshotJournalCursor(
+                 journal->database, &active_generation, &checkpoint_cursor,
+                 error, error_capacity) &&
+             active_generation == previous_generation &&
+             ReadJournalHead(journal->database, previous_generation,
+                             &stored_head, error, error_capacity) &&
+             stored_head == previous_ordinal;
+        if (!ok && active_generation != previous_generation) {
+            SetError(error, error_capacity,
+                     "Another writer started a new campaign epoch.");
+        } else if (!ok && stored_head != previous_ordinal) {
+            SetError(error, error_capacity,
+                     "Action journal advanced from another writer.");
+        }
+    }
+    if (ok) ok = InsertJournalEpoch(journal, sim, error, error_capacity);
+    if (ok) {
+        ok = SaveSnapshotContents(journal->database, sim,
+                                  journal->generation, 0U,
+                                  error, error_capacity) &&
+             PruneJournalHistory(journal->database, journal->generation,
+                                 error, error_capacity);
+    }
+    ok = FinishTransaction(journal->database, ok, error, error_capacity);
+    if (!ok) {
+        journal->generation = previous_generation;
+        journal->last_ordinal = previous_ordinal;
+        return false;
+    }
+    journal->last_ordinal = 0U;
+    (void)Execute(journal->database,
+                  "PRAGMA wal_checkpoint(TRUNCATE); VACUUM;", NULL, 0U);
+    SetError(error, error_capacity, "");
+    return true;
+}
+
 static bool AppendJournalOperation(CcJournal *journal,
                                    CcJournalOperationKind operation,
                                    const CcCommand *command,
@@ -3610,6 +3800,9 @@ static bool AppendJournalOperation(CcJournal *journal,
                      validation);
         return false;
     }
+    if (journal->last_ordinal >= CC_JOURNAL_COMPACT_RECORDS &&
+        !CompactJournal(journal, before, true,
+                        error, error_capacity)) return false;
     if (!Execute(journal->database, "BEGIN IMMEDIATE;",
                  error, error_capacity)) return false;
     uint64_t active_generation = 0U;
@@ -3689,7 +3882,8 @@ CcJournal *CcJournalStart(const char *path, const CcSim *sim,
         SetError(error, error_capacity, validation);
         return NULL;
     }
-    CcJournal *journal = AllocateJournal(path, WRITABLE_OPEN_NEW,
+    bool created = false;
+    CcJournal *journal = AllocateJournal(path, WRITABLE_OPEN_NEW, &created,
                                          error, error_capacity);
     if (journal == NULL) return NULL;
     if (!CreateJournalEpoch(journal, sim, error, error_capacity) ||
@@ -3697,6 +3891,7 @@ CcJournal *CcJournalStart(const char *path, const CcSim *sim,
                       error, error_capacity)) {
         sqlite3_close(journal->database);
         free(journal);
+        if (created) RemoveDatabaseArtifacts(path);
         return NULL;
     }
     SetError(error, error_capacity, "");
@@ -3717,12 +3912,10 @@ CcJournal *CcJournalRestart(const char *path, const CcSim *sim,
         SetError(error, error_capacity, validation);
         return NULL;
     }
-    CcJournal *journal = AllocateJournal(path, WRITABLE_OPEN_EXISTING,
+    CcJournal *journal = AllocateJournal(path, WRITABLE_OPEN_EXISTING, NULL,
                                          error, error_capacity);
     if (journal == NULL) return NULL;
-    if (!CreateJournalEpoch(journal, sim, error, error_capacity) ||
-        !SaveSnapshot(journal->database, sim, journal->generation, 0U,
-                      error, error_capacity)) {
+    if (!CompactJournal(journal, sim, false, error, error_capacity)) {
         sqlite3_close(journal->database);
         free(journal);
         return NULL;
@@ -3741,7 +3934,7 @@ CcJournal *CcJournalResume(const char *path, CcSim *sim,
     }
     CcSim preflight;
     if (!CcSaveRead(path, &preflight, error, error_capacity)) return NULL;
-    CcJournal *journal = AllocateJournal(path, WRITABLE_OPEN_EXISTING,
+    CcJournal *journal = AllocateJournal(path, WRITABLE_OPEN_EXISTING, NULL,
                                          error, error_capacity);
     if (journal == NULL) return NULL;
     bool ok = Execute(journal->database, "BEGIN IMMEDIATE;",
@@ -3753,6 +3946,7 @@ CcJournal *CcJournalResume(const char *path, CcSim *sim,
                           error, error_capacity);
     }
     uint64_t checkpoint_cursor = 0U;
+    bool compacted = false;
     if (ok) {
         ok = ReadSnapshotJournalCursor(journal->database,
                                        &journal->generation,
@@ -3764,7 +3958,10 @@ CcJournal *CcJournalResume(const char *path, CcSim *sim,
                                 error, error_capacity) &&
              SaveSnapshotContents(journal->database, &recovered,
                                   journal->generation, 0U,
-                                  error, error_capacity);
+                                  error, error_capacity) &&
+             PruneJournalHistory(journal->database, journal->generation,
+                                 error, error_capacity);
+        compacted = ok;
     } else if (ok) {
         ok = ReadJournalHead(journal->database, journal->generation,
                              &journal->last_ordinal,
@@ -3778,6 +3975,16 @@ CcJournal *CcJournalResume(const char *path, CcSim *sim,
     ok = FinishTransaction(journal->database, ok,
                            error, error_capacity);
     if (!ok) {
+        sqlite3_close(journal->database);
+        free(journal);
+        return NULL;
+    }
+    if (compacted) {
+        (void)Execute(journal->database,
+                      "PRAGMA wal_checkpoint(TRUNCATE); VACUUM;", NULL, 0U);
+    } else if (journal->last_ordinal >= CC_JOURNAL_COMPACT_RECORDS &&
+               !CompactJournal(journal, &recovered, true,
+                               error, error_capacity)) {
         sqlite3_close(journal->database);
         free(journal);
         return NULL;
@@ -3817,30 +4024,7 @@ bool CcJournalCheckpoint(CcJournal *journal, CcSim *sim,
                          char *error, size_t error_capacity)
 {
     if (!CcJournalFlush(journal, sim, error, error_capacity)) return false;
-    bool ok = Execute(journal->database, "BEGIN IMMEDIATE;",
-                      error, error_capacity);
-    uint64_t active_generation = 0U;
-    uint64_t checkpoint_cursor = 0U;
-    if (ok) {
-        ok = ReadSnapshotJournalCursor(
-                 journal->database, &active_generation, &checkpoint_cursor,
-                 error, error_capacity) &&
-             active_generation == journal->generation;
-        if (!ok && active_generation != journal->generation) {
-            SetError(error, error_capacity,
-                     "Another writer started a new campaign epoch.");
-        }
-    }
-    if (ok) {
-        ok = SaveSnapshotContents(journal->database, sim,
-                                  journal->generation,
-                                  journal->last_ordinal,
-                                  error, error_capacity);
-    }
-    ok = FinishTransaction(journal->database, ok,
-                           error, error_capacity);
-    if (ok) SetError(error, error_capacity, "");
-    return ok;
+    return CompactJournal(journal, sim, true, error, error_capacity);
 }
 
 bool CcJournalApply(CcJournal *journal, CcSim *sim,

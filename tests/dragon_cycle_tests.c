@@ -168,6 +168,7 @@ int main(void)
     };
     (void)snprintf(tribute_relic->name, sizeof(tribute_relic->name),
                    "The Ember Tithe");
+    intercepted.next_entity_serial = UINT64_C(9103);
     intercepted.goblins.carried_treasure_id = tribute_relic->id;
     CcMoney intercepted_hoard = intercepted.dragon.hoard;
     CcMoney intercepted_coins = intercepted.player.coins;
@@ -450,6 +451,7 @@ int main(void)
         .arrival_day = alliance_peace.current_day + 1,
         .reliability = 100
     };
+    alliance_peace.next_entity_serial = UINT64_C(10000);
     CcSimAdvanceDays(&alliance_peace, 1);
     CC_CHECK(alliance_peace.couriers[0].status == CC_COURIER_DELIVERED);
     CC_CHECK(alliance_peace.diplomacy[0][1] == CC_DIPLOMACY_PEACE &&
