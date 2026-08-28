@@ -16573,6 +16573,23 @@ static void DrawRobotShell(const CcLocalAgent *agent)
     }
 }
 
+static void PrepareHeroDisplayAt(const CcLocalAgent *source,
+                                 Vector3 position,
+                                 CcLocalSceneKind scene,
+                                 float facing_yaw,
+                                 CcLocalAgent *display)
+{
+    CcLocalAgentInit(display, (Vector2){position.x, position.z}, false);
+    display->position = position;
+    display->scene = scene;
+    display->facing_yaw = facing_yaw;
+    display->appearance = source->appearance;
+    display->tunic_color = source->tunic_color;
+    display->crowned = source->crowned;
+    display->athletics = source->athletics;
+    CcLocalAgentSetMorphology(display, source->morphology, false);
+}
+
 static void DrawCarriage3D(const CcSettlement *place)
 {
     float x = CARRIAGE_FOOTPRINT.x + CARRIAGE_FOOTPRINT.width * 0.5f;
@@ -17047,7 +17064,7 @@ static void DrawStreetTraversalPortals(const CcLocalAgent *agent,
         if (name == NULL) continue;
         char label[96];
         (void)snprintf(label, sizeof(label), "%s  %s",
-                       portal.exit != NULL ? "LEAVE" : "TO", name);
+                       portal.exit != NULL ? "ROAD" : "TO", name);
         int32_t text_width = CcOverlayMeasureText(label, 9);
         float bubble_width = (float)text_width + 16.0f;
         float bubble_x = point.x < viewport.x + viewport.width * 0.5f ?
@@ -18750,6 +18767,15 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
         carriage_base.y += CcLocalRoadCheckpointSurfaceYInternal(
             carriage_base.x, carriage_base.z);
     }
+    Vector3 travelling_hero_position = {
+        carriage_x - 3.25f, 0.0f, 37.95f + lateral_offset
+    };
+    CcLocalAgent travelling_hero = {0};
+    if (travelling) {
+        PrepareHeroDisplayAt(agent, travelling_hero_position,
+                             CC_LOCAL_SCENE_ROAD, 0.5f * PI,
+                             &travelling_hero);
+    }
     Vector3 camera_focus = travelling ? carriage_base : agent->position;
     Camera3D base_camera = RoadCamera(camera_focus, travelling, clock, true,
                                       target.texture.height);
@@ -18822,11 +18848,15 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     }
 
     if (!combat_presentation) {
-        DrawNpcFigure3D(
-            (Vector3){carriage_x - 3.25f, 0.0f, 37.95f}, 0.90f, 1.35f,
-            UINT32_C(0x726f6101), CC_NPC_ROLE_TRAVELLER,
-            (Color){151, 103, 78, 255}, clock * 0.42f,
-            CC_TRAVERSAL_IDLE);
+        if (travelling) {
+            DrawRobotShell(&travelling_hero);
+        } else {
+            DrawNpcFigure3D(
+                travelling_hero_position, 0.90f, 1.35f,
+                UINT32_C(0x726f6101), CC_NPC_ROLE_TRAVELLER,
+                (Color){151, 103, 78, 255}, clock * 0.42f,
+                CC_TRAVERSAL_IDLE);
+        }
         DrawNpcFigure3D(
             (Vector3){carriage_x - 4.00f, 0.0f, 39.40f}, 0.84f, 1.10f,
             UINT32_C(0x726f6102), CC_NPC_ROLE_HEALER,
@@ -18883,6 +18913,11 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
         labels[count++] = (WorldLabel){{agent->position.x,
                                         agent->position.y + 2.50f,
                                         agent->position.z}, "YOU", WORLD_TEAL};
+    } else if (travelling) {
+        labels[count++] = (WorldLabel){
+            {travelling_hero_position.x,
+             travelling_hero_position.y + 2.50f,
+             travelling_hero_position.z}, "YOU", WORLD_TEAL};
     }
     if (!travelling && !parley && !combat_presentation) {
         labels[count++] = (WorldLabel){{ROAD_BARRICADE_X, 2.58f, 40.00f},
@@ -19189,9 +19224,21 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         (convoy->phase == CC_LOCAL_CONVOY_DEPARTING ||
          convoy->phase == CC_LOCAL_CONVOY_ARRIVING);
     CcLocalAgent convoy_subject = agent != NULL ? *agent : (CcLocalAgent){0};
+    CcLocalAgent convoy_hero = {0};
+    Vector3 convoy_hero_position = {0};
     if (convoy_visible) {
         convoy_subject.position = convoy->town_position;
         convoy_subject.facing_yaw = convoy->town_heading_yaw;
+        convoy_hero_position = LocalPoint(
+            convoy->town_position, -1.65f, 0.0f, -2.10f,
+            convoy->town_heading_yaw);
+        convoy_hero_position.y = CcLocalTerrainHeightAt(
+            convoy_hero_position.x, convoy_hero_position.z);
+        if (agent != NULL) {
+            PrepareHeroDisplayAt(agent, convoy_hero_position,
+                                 CC_LOCAL_SCENE_STREET,
+                                 convoy->town_heading_yaw, &convoy_hero);
+        }
     }
     const CcLocalAgent *camera_subject = convoy_visible ?
         &convoy_subject : agent;
@@ -19313,6 +19360,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                          CcPlayerCargoUsed(&sim->player), clock,
                          convoy->pace > 0.02f,
                          convoy->town_heading_yaw, true, false);
+        if (agent != NULL) DrawRobotShell(&convoy_hero);
     }
     if (SceneryPointVisible(CC_LOCAL_NOTICE_X, CC_LOCAL_NOTICE_Z,
                             scenery_focus)) {
@@ -19470,12 +19518,20 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
 
     WorldLabel labels[20];
     int32_t count = 0;
+    if (convoy_visible && agent != NULL) {
+        labels[count++] = (WorldLabel){
+            {convoy_hero_position.x, convoy_hero_position.y + 2.50f,
+             convoy_hero_position.z}, "YOU", WORLD_TEAL};
+    }
+    char primary_hall_label[96];
+    (void)snprintf(primary_hall_label, sizeof(primary_hall_label),
+                   "%s  /  click door or F", profile->primary_hall);
     if (AgentNearLabel(agent, 50.0f, 21.0f, 8.0f)) {
         labels[count++] = (WorldLabel){{50.0f,
                                         TerrainFootprintHeight(
                                             WORLD_BUILDINGS[2].footprint) + 4.75f,
                                         21.0f},
-                                       profile->primary_hall, WORLD_GOLD};
+                                       primary_hall_label, WORLD_GOLD};
     }
     if (AgentNearLabel(agent, 36.80f, 31.70f, 7.0f)) {
         labels[count++] = (WorldLabel){{36.80f,
@@ -19957,7 +20013,7 @@ void CcLocalDrawInterior3D(const CcSim *sim, const CcLocalAgent *agent,
     }
     if (AgentNearLabel(agent, 1.55f, 6.54f, 3.5f)) {
         labels[label_count++] = (WorldLabel){
-            {1.55f, 2.25f, 6.54f}, "Exit", WORLD_MUTED};
+            {1.55f, 2.25f, 6.54f}, "Exit  /  click door or F", WORLD_MUTED};
     }
     DrawLabels(labels, label_count, camera, destination);
     if (draw_hero_rig_debug &&
