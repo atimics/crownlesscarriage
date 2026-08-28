@@ -7509,15 +7509,26 @@ static bool ApplyLocomotionPostureCorrection(const CcLocalAgent *agent,
     CcLimbVec3 right = {cosf(agent->facing_yaw), 0.0f,
                         -sinf(agent->facing_yaw)};
     CcLimbVec3 up = {0.0f, 1.0f, 0.0f};
+    float momentum_x = agent->humanoid.root_velocity.x;
+    float momentum_z = agent->humanoid.root_velocity.z;
+    float momentum_speed = sqrtf(momentum_x * momentum_x +
+                                 momentum_z * momentum_z);
     CcLimbVec3 forward = {sinf(agent->facing_yaw), 0.0f,
                           cosf(agent->facing_yaw)};
-    float weight = SmoothStep01((agent->humanoid.speed.value - 0.08f) /
-                                0.32f);
+    float facing_momentum = forward.x * momentum_x +
+                            forward.z * momentum_z;
+    if (momentum_speed > 0.035f &&
+        facing_momentum < momentum_speed * 0.985f) {
+        forward = (CcLimbVec3){momentum_x / momentum_speed, 0.0f,
+                               momentum_z / momentum_speed};
+    }
+    float weight = SmoothStep01((momentum_speed - 0.06f) / 0.34f);
     float depth = 0.058f * weight;
 
-    /* Keep the planted legs untouched while bringing the torso back over the
-       hips. Progressive offsets remove the slight backward read without
-       flattening the authored gait or changing physical contacts. */
+    /* Preserve the planted feet while carrying the visible upper body at its
+       actual momentum. A forward-facing walk keeps the stable stepped-pose
+       axis; retreating follows the body's travel instead of leaning backward
+       just because the face remains on an opponent. */
     pose->spine = OffsetPosePoint(pose->spine, right, up, forward,
                                   0.0f, 0.0f, depth * 0.24f);
     pose->chest = OffsetPosePoint(pose->chest, right, up, forward,

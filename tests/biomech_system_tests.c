@@ -1062,9 +1062,45 @@ static void TestWalkingProfilesAndContactMarkers(void)
     Require(fast.cadence > slow.cadence + 0.30f,
             "walking cadence profile was not applied to the gait clock");
     float torso_lean = fast.pose.neck.z - fast.pose.pelvis.z;
-    Require(torso_lean > 0.040f && torso_lean < 0.095f &&
-            fast.pose.spine.z > fast.pose.pelvis.z + 0.004f,
+    Require(torso_lean > 0.075f && torso_lean < 0.145f &&
+            fast.pose.spine.z > fast.pose.pelvis.z + 0.015f,
             "walking posture was backward, bolt upright, or over-leaned");
+
+    CcHumanoidGait opposed_facing;
+    CcLimbVec3 opposed_body = {8.0f, 0.0f, 0.0f};
+    const float reverse_yaw = 3.14159265358979323846f;
+    CcHumanoidGaitInit(&opposed_facing, opposed_body, reverse_yaw,
+                       PlaneProbe, NULL);
+    for (int32_t frame = 0; frame < 180; ++frame) {
+        CcHumanoidGaitAdvance(
+            &opposed_facing, opposed_body, reverse_yaw,
+            (CcLimbVec3){0.0f, 0.0f, 1.0f}, true, delta_time,
+            PlaneProbe, NULL);
+        opposed_body.x += opposed_facing.root_velocity.x * delta_time;
+        opposed_body.z += opposed_facing.root_velocity.z * delta_time;
+    }
+    CcLimbVec3 opposed_torso = {
+        opposed_facing.pose.neck.x - opposed_facing.pose.pelvis.x,
+        0.0f,
+        opposed_facing.pose.neck.z - opposed_facing.pose.pelvis.z,
+    };
+    float opposed_speed = sqrtf(
+        opposed_facing.root_velocity.x * opposed_facing.root_velocity.x +
+        opposed_facing.root_velocity.z * opposed_facing.root_velocity.z);
+    CcLimbVec3 opposed_momentum = {
+        opposed_facing.root_velocity.x / opposed_speed,
+        0.0f,
+        opposed_facing.root_velocity.z / opposed_speed,
+    };
+    float opposed_lead = opposed_torso.x * opposed_momentum.x +
+                          opposed_torso.z * opposed_momentum.z;
+    if (opposed_speed <= 0.70f || opposed_lead <= 0.070f ||
+        opposed_torso.z <= 0.070f) {
+        (void)fprintf(stderr,
+                      "walking torso followed facing instead of momentum: speed %.3f lead %.3f z %.3f\n",
+                      opposed_speed, opposed_lead, opposed_torso.z);
+        exit(1);
+    }
 
     CcHumanoidGait short_stride;
     CcHumanoidGait long_stride;
