@@ -1494,7 +1494,8 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
     if (road) {
         const CcSettlement *destination = CcSimSettlement(
             sim, sim->journey.destination_id);
-        if (local->journey_combat_active) {
+        if (local->journey_combat_active &&
+            SelectedCombatTargetIndex(local) >= 0) {
             DrawCombatPanel(local);
             return;
         }
@@ -1562,7 +1563,8 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
                 DANGER);
         return;
     }
-    if (!local->market_interior && local->course.alarm_active) {
+    if (!local->market_interior && local->course.alarm_active &&
+        SelectedCombatTargetIndex(local) >= 0) {
         DrawCombatPanel(local);
         return;
     }
@@ -2006,12 +2008,11 @@ static void AddCombatActions(ContextActionSet *set,
         AddDetailedContextAction(
             set, CONTEXT_ACTION_BASIC_STRIKE, "Attack", "SPACE",
             local->course.raider_names[target], true, false);
-    }
-    AddDetailedContextAction(
-        set, CONTEXT_ACTION_TOGGLE_GUARD, "Guard", "X",
-        local->agent.humanoid.guard_requested ? "GUARD UP" : "GUARD DOWN",
-        true, local->agent.humanoid.guard_requested);
-    if (has_target) {
+        AddDetailedContextAction(
+            set, CONTEXT_ACTION_TOGGLE_GUARD, "Guard", "X",
+            local->agent.humanoid.guard_requested ?
+                "GUARD UP" : "GUARD DOWN",
+            true, local->agent.humanoid.guard_requested);
         AddDetailedContextAction(
             set, CONTEXT_ACTION_SKILL_CRUSHING, "Crushing blow", "1",
             CombatSkillDetail(&local->agent,
@@ -2030,13 +2031,13 @@ static void AddCombatActions(ContextActionSet *set,
                                true, has_target),
             combat->queued_skill == CC_COMBAT_SKILL_SUNDER ||
                 combat->active_skill == CC_COMBAT_SKILL_SUNDER);
+        AddDetailedContextAction(
+            set, CONTEXT_ACTION_SKILL_SECOND_WIND, "Second wind", "3",
+            CombatSkillDetail(&local->agent, CC_COMBAT_SKILL_SECOND_WIND,
+                              true, has_target),
+            CombatSkillEnabled(&local->agent, CC_COMBAT_SKILL_SECOND_WIND,
+                               true, has_target), false);
     }
-    AddDetailedContextAction(
-        set, CONTEXT_ACTION_SKILL_SECOND_WIND, "Second wind", "3",
-        CombatSkillDetail(&local->agent, CC_COMBAT_SKILL_SECOND_WIND,
-                          false, has_target),
-        CombatSkillEnabled(&local->agent, CC_COMBAT_SKILL_SECOND_WIND,
-                           false, has_target), false);
     if (allow_withdraw) {
         AddDetailedContextAction(
             set, CONTEXT_ACTION_WITHDRAW, "Withdraw", "BACKSPACE",
@@ -2495,7 +2496,8 @@ static void DrawCombatStatusLine(const LocalState *local,
         status = "Attack with Space, guard with X, and use skills with 1–3.";
     }
     char shown[96];
-    (void)snprintf(shown, sizeof(shown), "COMBAT  /  %.72s", status);
+    (void)snprintf(shown, sizeof(shown), "%s  /  %.72s",
+                   target != NULL ? "COMBAT" : "THREAT", status);
     int width = CcOverlayMeasureText(shown, 9) + 30;
     if (width > 760) width = 760;
     float x = ((float)GetScreenWidth() - (float)width) * 0.5f;
@@ -4217,28 +4219,40 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
              context_action == CONTEXT_ACTION_TOGGLE_GUARD) &&
             local->agent.morphology == CC_MORPHOLOGY_BIPED &&
             !local->journey_parley_active) {
-            bool guarded = !local->agent.humanoid.guard_requested;
-            CcLocalCourseSetPlayerGuarded(&local->course, &local->agent,
-                                          guarded);
-            (void)snprintf(
-                message, message_capacity, "%s",
-                guarded ? "Guard raised — posture absorbs the next blow." :
-                          "Guard lowered — movement and attacks are open.");
+            if (SelectedCombatTargetIndex(local) >= 0) {
+                bool guarded = !local->agent.humanoid.guard_requested;
+                bool changed = CcLocalCourseSetPlayerGuarded(
+                    &local->course, &local->agent, guarded);
+                if (changed) {
+                    (void)snprintf(
+                        message, message_capacity, "%s",
+                        guarded ?
+                            "Guard raised — posture absorbs the next blow." :
+                            "Guard lowered — movement and attacks are open.");
+                }
+            } else if (LocalCombatActive(local)) {
+                (void)snprintf(message, message_capacity,
+                               "Choose an outlaw before guarding.");
+            }
         }
         if ((ClientKeyPressed(KEY_SPACE) ||
              context_action == CONTEXT_ACTION_BASIC_STRIKE) &&
             local->agent.morphology == CC_MORPHOLOGY_BIPED &&
             !local->journey_parley_active) {
             int32_t target = SelectedCombatTargetIndex(local);
-            bool struck = CcLocalCourseBeginPlayerStrike(
-                &local->course, &local->agent);
-            (void)snprintf(
-                message, message_capacity, "%s",
-                struck && target >= 0 ?
-                    TextFormat("Striking %s.",
-                               local->course.raider_names[target]) :
-                target < 0 ? "Choose an outlaw before attacking." :
-                             "Recovering — wait for an opening.");
+            if (target >= 0) {
+                bool struck = CcLocalCourseBeginPlayerStrike(
+                    &local->course, &local->agent);
+                (void)snprintf(
+                    message, message_capacity, "%s",
+                    struck ? TextFormat(
+                        "Striking %s.",
+                        local->course.raider_names[target]) :
+                        "Recovering — wait for an opening.");
+            } else if (LocalCombatActive(local)) {
+                (void)snprintf(message, message_capacity,
+                               "Choose an outlaw before attacking.");
+            }
         }
         if (local->journey_combat_active ||
             (!local->market_interior && local->course.alarm_active)) {
@@ -4256,6 +4270,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                     &local->course, &local->agent, combat_skill);
                 float cooldown = CcLocalCombatSkillCooldown(
                     &local->agent, combat_skill);
+                bool has_target = SelectedCombatTargetIndex(local) >= 0;
                 (void)snprintf(
                     message, message_capacity, "%s",
                     used && combat_skill == CC_COMBAT_SKILL_SECOND_WIND ?
@@ -4266,9 +4281,11 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                         TextFormat("%s ready in %.1fs.",
                                    CcLocalCombatSkillName(combat_skill),
                                    cooldown) :
+                    !has_target ?
+                        "Choose an outlaw before using that skill." :
                     combat_skill == CC_COMBAT_SKILL_SECOND_WIND ?
                         "Posture is already full." :
-                        "Choose an outlaw before using that skill.");
+                        "That skill is not available now.");
             }
         }
         if (context_action == CONTEXT_ACTION_NONE &&

@@ -1481,10 +1481,30 @@ static void TestTargetDrivenCombat(void)
         course.raider_response_waypoint_active[i] = false;
     }
 
+    player.combat.posture = 30.0f;
+    if (CcLocalCourseBeginPlayerStrike(&course, &player) ||
+        CcLocalCourseSetPlayerGuarded(&course, &player, true) ||
+        CcLocalCourseUsePlayerSkill(&course, &player,
+                                    CC_COMBAT_SKILL_SECOND_WIND) ||
+        player.combat.target_index != -1 || player.combat.focus_valid ||
+        player.humanoid.guard_requested || player.combat.posture != 30.0f) {
+        (void)fprintf(stderr,
+                      "combat activated before a hostile was targeted\n");
+        exit(1);
+    }
     if (CcLocalCourseSelectPlayerTarget(&course, &player, -1) ||
         !CcLocalCourseSelectPlayerTarget(&course, &player, 0) ||
         player.combat.target_index != 0 || !player.combat.focus_valid) {
         (void)fprintf(stderr, "explicit hostile targeting failed\n");
+        exit(1);
+    }
+    if (!CcLocalCourseSetPlayerGuarded(&course, &player, true) ||
+        !player.humanoid.guard_requested ||
+        !CcLocalCourseSetPlayerGuarded(&course, &player, false) ||
+        player.humanoid.guard_requested ||
+        player.combat.target_index != 0 || !player.combat.focus_valid) {
+        (void)fprintf(stderr,
+                      "targeted guard did not preserve hostile focus\n");
         exit(1);
     }
     if (!CcLocalCourseUsePlayerSkill(&course, &player,

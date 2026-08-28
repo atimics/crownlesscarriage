@@ -432,7 +432,7 @@ void CcLocalCourseBindRaiderCompany(CcLocalCourse *course,
 const char *CcLocalRaiderRoleName(CcLocalRaiderRole role);
 bool CcLocalCourseBeginPlayerStrike(CcLocalCourse *course,
                                     CcLocalAgent *player);
-void CcLocalCourseSetPlayerGuarded(CcLocalCourse *course,
+bool CcLocalCourseSetPlayerGuarded(CcLocalCourse *course,
                                    CcLocalAgent *player, bool guarded);
 bool CcLocalCourseSelectPlayerTarget(CcLocalCourse *course,
                                      CcLocalAgent *player,
