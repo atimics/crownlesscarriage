@@ -171,6 +171,9 @@ static const Rectangle ROOM_ART_OBSTACLES[] = {
     {25.725f, 53.825f, 1.45f, 1.05f},
 };
 static const Rectangle COURSE_POOL = {10.00f, 9.05f, 2.55f, 1.38f};
+static const Rectangle COURSE_SCENERY_FOOTPRINT = {
+    8.80f, 0.70f, 5.90f, 9.90f
+};
 static const float COURSE_WATER_SURFACE = 0.82f;
 static const Rectangle MARKET_COUNTER_FOOTPRINT = {6.05f, 1.84f, 2.10f, 0.72f};
 static const Rectangle MARKET_SHELF_FOOTPRINT = {1.10f, 1.175f, 0.72f, 3.45f};
@@ -10095,6 +10098,18 @@ static void ApplyNpcStyle(Model *model)
     }
 }
 
+static void ApplyNeutralNpcStyle(Model *model)
+{
+    ApplyNpcStyle(model);
+    if (model == NULL || model->materials == NULL) return;
+    /* COLOR_0 stores the semantic palette slot. The shader supplies runtime
+       color variation, so these rigid pieces stay neutral for their lifetime
+       instead of rewriting raylib material state for every body part. */
+    for (int32_t material = 0; material < model->materialCount; ++material) {
+        model->materials[material].maps[MATERIAL_MAP_DIFFUSE].color = WHITE;
+    }
+}
+
 static void ApplyNpcBodyStyle(Model *model)
 {
     if (model == NULL || model->materials == NULL) return;
@@ -11314,7 +11329,7 @@ static void LoadVisualStyle(void)
     }
     for (int32_t id = 0; id < NPC_DYNAMIC_MODULE_COUNT; ++id) {
         if (npc_dynamic_modules[id].ready) {
-            ApplyNpcStyle(&npc_dynamic_modules[id].model);
+            ApplyNeutralNpcStyle(&npc_dynamic_modules[id].model);
         }
     }
     for (int32_t frame = 0; frame < CC_NPC_BODY_FRAME_COUNT; ++frame) {
@@ -11329,12 +11344,12 @@ static void LoadVisualStyle(void)
     }
     for (int32_t family = 0; family < CC_NPC_HEAD_FAMILY_COUNT; ++family) {
         if (npc_head_families[family].ready) {
-            ApplyNpcStyle(&npc_head_families[family].model);
+            ApplyNeutralNpcStyle(&npc_head_families[family].model);
         }
     }
     for (int32_t family = 0; family < CC_NPC_HAIR_FAMILY_COUNT; ++family) {
         if (npc_hair_families[family].ready) {
-            ApplyNpcStyle(&npc_hair_families[family].model);
+            ApplyNeutralNpcStyle(&npc_hair_families[family].model);
         }
     }
     for (int32_t id = 0; id < RUNTIME_ASSET_COUNT; ++id) {
@@ -14742,9 +14757,47 @@ static void DrawNpcFigure3D(Vector3 position, float size_hint, float yaw,
                             uint32_t seed, CcNpcRole role, Color accent,
                             float phase, CcTraversalMode mode)
 {
-    CcNpcAppearance appearance = CcNpcAppearanceGenerate(seed, role, accent);
-    DrawNpcAppearanceFigure3D(position, size_hint, yaw, &appearance, phase,
-                              mode);
+    enum { NPC_APPEARANCE_CACHE_CAPACITY = 64 };
+    typedef struct NpcAppearanceCacheEntry {
+        bool valid;
+        uint32_t seed;
+        CcNpcRole role;
+        Color accent;
+        CcNpcAppearance appearance;
+    } NpcAppearanceCacheEntry;
+    static NpcAppearanceCacheEntry cache[NPC_APPEARANCE_CACHE_CAPACITY];
+
+    uint32_t accent_key = (uint32_t)accent.r |
+        ((uint32_t)accent.g << 8U) |
+        ((uint32_t)accent.b << 16U) |
+        ((uint32_t)accent.a << 24U);
+    uint32_t hash = seed ^ accent_key ^
+        ((uint32_t)role * UINT32_C(0x9e3779b9));
+    hash ^= hash >> 16U;
+    NpcAppearanceCacheEntry *entry =
+        &cache[hash % NPC_APPEARANCE_CACHE_CAPACITY];
+    bool cache_hit = entry->valid && entry->seed == seed &&
+        entry->role == role && entry->accent.r == accent.r &&
+        entry->accent.g == accent.g && entry->accent.b == accent.b &&
+        entry->accent.a == accent.a;
+    if (!cache_hit) {
+        entry->valid = true;
+        entry->seed = seed;
+        entry->role = role;
+        entry->accent = accent;
+        entry->appearance = CcNpcAppearanceGenerate(seed, role, accent);
+    }
+    DrawNpcAppearanceFigure3D(position, size_hint, yaw, &entry->appearance,
+                              phase, mode);
+}
+
+static void DrawVisibleNpcFigure3D(Vector3 position, float size_hint,
+                                   float yaw, uint32_t seed, CcNpcRole role,
+                                   Color accent, float phase,
+                                   CcTraversalMode mode, Vector3 focus)
+{
+    if (!SceneryPointVisible(position.x, position.z, focus)) return;
+    DrawNpcFigure3D(position, size_hint, yaw, seed, role, accent, phase, mode);
 }
 
 static void DrawPitchedFoot(Vector3 heel, Vector3 toe, float yaw, Color color)
@@ -14917,10 +14970,6 @@ static bool DrawNpcDynamicModule(NpcDynamicModuleId id, Matrix transform,
     NpcDynamicModuleCache *module = &npc_dynamic_modules[id];
     if (!module->ready || module->model.meshCount != 1 ||
         module->model.materialCount < 1) return false;
-    /* COLOR_0 stores the semantic palette slot. Runtime variation belongs in
-       the indexed shader, so each generated module keeps one neutral material
-       instead of mutating raylib material state for every body part. */
-    module->model.materials[0].maps[MATERIAL_MAP_DIFFUSE].color = WHITE;
     for (int32_t mesh = 0; mesh < module->model.meshCount; ++mesh) {
         int32_t material = module->model.meshMaterial[mesh];
         if (material < 0 || material >= module->model.materialCount) {
@@ -14951,11 +15000,6 @@ static bool DrawNpcHeadFamily(const CcNpcAppearance *appearance,
         return DrawNpcDynamicModule(NPC_DYNAMIC_HEAD, fallback_transform,
                                     appearance != NULL ? appearance->skin :
                                                          WHITE);
-    }
-    for (int32_t material = 0; material < head->model.materialCount;
-         ++material) {
-        head->model.materials[material].maps[MATERIAL_MAP_DIFFUSE].color =
-            WHITE;
     }
     for (int32_t mesh = 0; mesh < head->model.meshCount; ++mesh) {
         int32_t material = head->model.meshMaterial[mesh];
@@ -14991,11 +15035,6 @@ static bool DrawNpcHairFamily(const CcNpcAppearance *appearance,
             (NpcDynamicModuleId)(NPC_DYNAMIC_HAIR_0 + fallback),
             fallback_transform,
             appearance != NULL ? appearance->hair : WHITE);
-    }
-    for (int32_t material = 0; material < hair->model.materialCount;
-         ++material) {
-        hair->model.materials[material].maps[MATERIAL_MAP_DIFFUSE].color =
-            WHITE;
     }
     for (int32_t mesh = 0; mesh < hair->model.meshCount; ++mesh) {
         int32_t material = hair->model.meshMaterial[mesh];
@@ -17499,8 +17538,9 @@ static Color CoursePlatformColor(int32_t style)
     }
 }
 
-static void DrawObstacleCourse(void)
+static void DrawObstacleCourse(Vector3 focus)
 {
+    if (!SceneryFootprintVisible(COURSE_SCENERY_FOOTPRINT, focus)) return;
     float pool_center_x = COURSE_POOL.x + COURSE_POOL.width * 0.5f;
     float pool_center_z = COURSE_POOL.y + COURSE_POOL.height * 0.5f;
     DrawBox((Vector3){pool_center_x, 0.36f, pool_center_z},
@@ -17550,24 +17590,49 @@ static void DrawCourseRaider(const CcLocalAgent *raider)
         0.085f, WORLD_DANGER);
 }
 
-static void DrawCourseRunners(const CcLocalCourse *course)
+static void DrawCourseRunners(const CcLocalCourse *course, Vector3 focus)
 {
     if (course == NULL) return;
-    if (course->situation_witness_active) {
+    if (course->situation_witness_active &&
+        SceneryPointVisible(course->situation_witness.position.x,
+                            course->situation_witness.position.z, focus)) {
         DrawRobotShell(&course->situation_witness);
     }
     for (int32_t i = 0; i < CC_LOCAL_TRAVELLER_COUNT; ++i) {
         const CcLocalTraveller *traveller = &course->travellers[i];
-        if (traveller->active) DrawRobotShell(&traveller->agent);
+        if (traveller->active &&
+            SceneryPointVisible(traveller->agent.position.x,
+                                traveller->agent.position.z, focus)) {
+            DrawRobotShell(&traveller->agent);
+        }
     }
     Vector3 threat = CourseThreatCenter(course);
     if (course->alarm_active) {
         for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
-            DrawCourseRaider(&course->raiders[i]);
+            const CcLocalAgent *raider = &course->raiders[i];
+            if (SceneryPointVisible(raider->position.x,
+                                    raider->position.z, focus)) {
+                DrawCourseRaider(raider);
+            }
         }
     }
     for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
         const CcLocalCourseRunner *runner = &course->runners[i];
+        bool runner_visible = SceneryPointVisible(runner->agent.position.x,
+                                                   runner->agent.position.z,
+                                                   focus);
+        if (!runner_visible) {
+            if (runner->agent.exact_target_valid) {
+                Vector3 target = runner->agent.target_point;
+                if (SceneryPointVisible(target.x, target.z, focus)) {
+                    DrawGroundBrushStroke(
+                        (Vector3){target.x, target.y + 0.025f, target.z},
+                        (Vector3){1.0f, 0.0f, 0.45f}, 0.32f, 0.075f,
+                        Fade(runner->marker_color, 0.58f));
+                }
+            }
+            continue;
+        }
         if (course->alarm_active) {
             DrawCombatFootprint(&runner->agent, runner->marker_color);
         }
@@ -17912,6 +17977,11 @@ void CcLocalDrawFork3D(const CcSim *sim, int32_t selected_route,
     for (int32_t tree = 0;
          tree < (int32_t)(sizeof(tree_positions) /
                           sizeof(tree_positions[0])); ++tree) {
+        if (!SceneryPointVisible(tree_positions[tree].x,
+                                 tree_positions[tree].y,
+                                 camera.target)) {
+            continue;
+        }
         TreeFamily family = tree % 4 == 0 ? TREE_FAMILY_OAK :
                             tree % 3 == 0 ? TREE_FAMILY_POLLARD :
                                             TREE_FAMILY_ALDER;
@@ -17924,13 +17994,14 @@ void CcLocalDrawFork3D(const CcSim *sim, int32_t selected_route,
     int32_t cargo = CcPlayerCargoUsed(&sim->player);
     Vector3 carriage = {29.0f, 0.0f, 41.0f};
     DrawRoadCarriage(carriage, cargo, clock, false, 0.5f * PI, true);
-    DrawNpcFigure3D((Vector3){33.0f, 0.0f, 35.6f}, 0.90f, 1.42f,
-                    UINT32_C(0x666f726b), CC_NPC_ROLE_SCOUT,
-                    kingdom, clock * 0.35f, CC_TRAVERSAL_IDLE);
-    DrawNpcFigure3D((Vector3){26.0f, 0.0f, 45.2f}, 0.86f, 0.74f,
-                    UINT32_C(0x666f726d), CC_NPC_ROLE_TRAVELLER,
-                    WORLD_TEAL, clock * 0.28f + 1.0f,
-                    CC_TRAVERSAL_IDLE);
+    DrawVisibleNpcFigure3D(
+        (Vector3){33.0f, 0.0f, 35.6f}, 0.90f, 1.42f,
+        UINT32_C(0x666f726b), CC_NPC_ROLE_SCOUT, kingdom,
+        clock * 0.35f, CC_TRAVERSAL_IDLE, camera.target);
+    DrawVisibleNpcFigure3D(
+        (Vector3){26.0f, 0.0f, 45.2f}, 0.86f, 0.74f,
+        UINT32_C(0x666f726d), CC_NPC_ROLE_TRAVELLER, WORLD_TEAL,
+        clock * 0.28f + 1.0f, CC_TRAVERSAL_IDLE, camera.target);
     EndWorldLighting();
     EndMode3D();
     EndTextureMode();
@@ -17986,7 +18057,8 @@ static void DrawRoadSurface(float x, float width, Color road)
 }
 
 static void DrawRoadTerrain(const CcRoute *route, int32_t danger,
-                            bool bridge_checkpoint, Color kingdom)
+                            bool bridge_checkpoint, Color kingdom,
+                            Vector3 focus)
 {
     float decay = route != NULL ?
         1.0f - (float)route->condition / 100.0f : 0.5f;
@@ -18014,6 +18086,7 @@ static void DrawRoadTerrain(const CcRoute *route, int32_t danger,
             x > ROAD_BARRICADE_X - 4.40f &&
             x < ROAD_BARRICADE_X + 4.40f) continue;
         float z = 39.10f + (float)(scar & 1) * 1.65f;
+        if (!SceneryPointVisible(x, z, focus)) continue;
         DrawCylinder((Vector3){x, -0.025f, z}, 0.28f, 0.42f,
                      0.035f, 12, WORLD_EARTH_SHADOW);
     }
@@ -18026,6 +18099,7 @@ static void DrawRoadTerrain(const CcRoute *route, int32_t danger,
                                regional_style.cluster_pull;
         float z = (tree & 1) != 0 ? 46.0f + (float)(tree % 3) * 1.2f :
                                     33.8f - (float)(tree % 3) * 1.1f;
+        if (!SceneryPointVisible(x, z, focus)) continue;
         TreeFamily family = tree == 4 || tree == 10 ? TREE_FAMILY_OAK :
                             tree == 1 || tree == 7 ? TREE_FAMILY_POLLARD :
                                                     TREE_FAMILY_ALDER;
@@ -18040,7 +18114,9 @@ static void DrawRoadTerrain(const CcRoute *route, int32_t danger,
         }
         DrawTree(x, z, family, tree_leaves, regional_style);
     }
-    if (route != NULL && (route->closed || route->condition < 42)) {
+    if (route != NULL && (route->closed || route->condition < 42) &&
+        SceneryFootprintVisible((Rectangle){68.0f, 32.0f, 4.0f, 16.0f},
+                                focus)) {
         DrawTerrainPatchAtTop(68.0f, 32.0f, 4.0f, 16.0f, -0.002f,
                               CC_STYLE_PANEL_DEEP);
         for (int32_t plank = 0; plank < 5; ++plank) {
@@ -18049,14 +18125,16 @@ static void DrawRoadTerrain(const CcRoute *route, int32_t danger,
                     plank == 2 ? WORLD_WOOD_SHADOW : WORLD_WOOD_LIGHT);
         }
     }
-    if (route != NULL && route->security >= 65) {
+    if (route != NULL && route->security >= 65 &&
+        SceneryPointVisible(30.20f, 35.70f, focus)) {
         DrawBox((Vector3){30.20f, 1.05f, 35.70f},
                 (Vector3){0.58f, 2.10f, 0.58f},
                 WORLD_STONE_LIGHT);
         DrawBox((Vector3){30.20f, 1.68f, 35.38f},
                 (Vector3){0.42f, 0.46f, 0.05f}, WORLD_GOLD);
     }
-    if (danger >= 45) {
+    if (danger >= 45 && SceneryFootprintVisible(
+            (Rectangle){58.5f, 43.79f, 2.72f, 0.72f}, focus)) {
         for (int32_t marker = 0; marker < 3; ++marker) {
             DrawBox((Vector3){58.5f + (float)marker * 1.1f, 0.18f,
                               44.15f},
@@ -18148,8 +18226,12 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
         destination_place != NULL ? destination_place->kingdom_id : 0;
     Color road_kingdom = KingdomColor3D(sim, road_kingdom_id);
     DrawRoadTerrain(route, sim->journey.danger, authored_checkpoint,
-                    road_kingdom);
-    if (!travelling && !DrawBridgeCheckpoint()) DrawRoadBarricade(route);
+                    road_kingdom, camera.target);
+    if (!travelling &&
+        SceneryPointVisible(ROAD_BARRICADE_X, 40.0f, camera.target) &&
+        !DrawBridgeCheckpoint()) {
+        DrawRoadBarricade(route);
+    }
     if (!travelling) DrawAgentPath(agent, false);
     int32_t road_cargo = CcPlayerCargoUsed(&sim->player);
     DrawRoadCarriage(carriage_base, road_cargo, clock, carriage_moving,
@@ -18206,7 +18288,7 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
 
     if (!travelling) {
         if (combat_presentation) DrawCourseRaider(duel_opponent);
-        else DrawCourseRunners(course);
+        else DrawCourseRunners(course, camera.target);
     }
     if (parley && !course->alarm_active) {
         for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
@@ -18344,12 +18426,13 @@ static void DrawJourneyAftermath3D(const CcSim *sim,
     rlPopMatrix();
 }
 
-static void DrawTownRaidStaging(const CcLocalCourse *course)
+static void DrawTownRaidStaging(const CcLocalCourse *course, Vector3 focus)
 {
     if (course == NULL || course->scene != CC_LOCAL_SCENE_STREET ||
         !course->alarm_active || !course->combat_origin_valid) return;
     Vector3 origin = course->combat_origin;
-    if (!TerrainPointInPlayableWorld(origin.x, origin.z)) return;
+    if (!TerrainPointInPlayableWorld(origin.x, origin.z) ||
+        !SceneryPointVisible(origin.x, origin.z, focus)) return;
     /* A broken muster line turns the broad road into an authored defence
        point. It remains flush with the ground, so combat physics and click
        paths stay exactly the same. */
@@ -18509,7 +18592,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     BeginWorldLighting(camera, &street_art);
 
     DrawExteriorTerrain(place, scenery_focus);
-    DrawTownRaidStaging(course);
+    DrawTownRaidStaging(course, scenery_focus);
     const CcLocalAgent *sightline_opponent =
         CombatCameraOpponent(course, agent);
     bool close_combat_sightline = course != NULL && agent != NULL &&
@@ -18526,6 +18609,12 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     for (int32_t i = 0; i < (int32_t)(sizeof(STREET_PLATFORMS) /
                                       sizeof(STREET_PLATFORMS[0])); ++i) {
         const NavPlatform *platform = &STREET_PLATFORMS[i];
+        Rectangle footprint = {
+            platform->x, platform->z, platform->width, platform->depth
+        };
+        if (!SceneryFootprintVisible(footprint, scenery_focus)) {
+            continue;
+        }
         float overlap = close_combat_sightline ?
             CameraStreetPlatformSubjectOverlap(
                 camera, platform, player_sightline, opponent_sightline) :
@@ -18555,7 +18644,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                 i == 0 ? (Color){124, 145, 131, 255} :
                          Fade(WORLD_GOLD, 0.70f));
     }
-    DrawObstacleCourse();
+    DrawObstacleCourse(scenery_focus);
     if (!convoy_visible) DrawAgentPath(agent, false);
     Vector3 foreground_reveal_world = {
         camera_subject->position.x, camera_subject->position.y + 1.05f,
@@ -18608,6 +18697,10 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     if (crates > 4) crates = 4;
     for (int32_t i = 0; i < crates; ++i) {
         const NavPlatform *crate = &STREET_CRATE_PLATFORMS[i];
+        Rectangle footprint = {
+            crate->x, crate->z, crate->width, crate->depth
+        };
+        if (!SceneryFootprintVisible(footprint, scenery_focus)) continue;
         DrawBox((Vector3){crate->x + crate->width * 0.5f,
                           PlatformBaseHeight(crate) + crate->height * 0.5f,
                           crate->z + crate->depth * 0.5f},
@@ -18621,78 +18714,85 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     }
     DrawSettlementCreatures(sim, place, clock, scenery_focus);
 
-    DrawNpcFigure3D(
+    DrawVisibleNpcFigure3D(
         TerrainWorldPoint(STREET_PEOPLE[0].x, STREET_PEOPLE[0].y),
         0.96f, -0.55f, UINT32_C(0x73747201), CC_NPC_ROLE_MERCHANT,
-        (Color){223, 151, 68, 255}, clock * 1.2f, CC_TRAVERSAL_IDLE);
-    DrawNpcFigure3D(
+        (Color){223, 151, 68, 255}, clock * 1.2f, CC_TRAVERSAL_IDLE,
+        scenery_focus);
+    DrawVisibleNpcFigure3D(
         TerrainWorldPoint(STREET_PEOPLE[1].x, STREET_PEOPLE[1].y),
         1.02f, 1.70f, UINT32_C(0x73747202), CC_NPC_ROLE_GUARD,
-        kingdom, clock + 1.0f, CC_TRAVERSAL_IDLE);
-    DrawNpcFigure3D(
+        kingdom, clock + 1.0f, CC_TRAVERSAL_IDLE, scenery_focus);
+    DrawVisibleNpcFigure3D(
         TerrainWorldPoint(STREET_PEOPLE[2].x, STREET_PEOPLE[2].y),
         0.92f, 0.35f, UINT32_C(0x73747203), CC_NPC_ROLE_LABORER,
-        (Color){97, 154, 137, 255}, clock + 2.0f, CC_TRAVERSAL_IDLE);
-    DrawNpcFigure3D(
+        (Color){97, 154, 137, 255}, clock + 2.0f, CC_TRAVERSAL_IDLE,
+        scenery_focus);
+    DrawVisibleNpcFigure3D(
         TerrainWorldPoint(STREET_PEOPLE[3].x, STREET_PEOPLE[3].y),
         0.88f, 2.40f, UINT32_C(0x73747204), CC_NPC_ROLE_HEALER,
         (Color){168, 112, 128, 255}, clock * 0.8f + 3.0f,
-        CC_TRAVERSAL_IDLE);
+        CC_TRAVERSAL_IDLE, scenery_focus);
     bool hungry_crowd = place->hunger >= 30;
-    DrawNpcFigure3D(
+    DrawVisibleNpcFigure3D(
         TerrainWorldPoint(STREET_PEOPLE[4].x, STREET_PEOPLE[4].y),
         0.82f, -0.40f, UINT32_C(0x73747205),
         hungry_crowd ? CC_NPC_ROLE_REFUGEE : CC_NPC_ROLE_TRAVELLER,
         hungry_crowd ? WORLD_DANGER : kingdom, clock * 0.6f,
-        CC_TRAVERSAL_IDLE);
+        CC_TRAVERSAL_IDLE, scenery_focus);
     bool underworld_present = HasSmugglerRoad(sim, place->id) ||
                               place->security < 50;
-    DrawNpcFigure3D(
+    DrawVisibleNpcFigure3D(
         TerrainWorldPoint(STREET_PEOPLE[5].x, STREET_PEOPLE[5].y),
         0.88f, 2.75f, UINT32_C(0x73747206),
         underworld_present ? CC_NPC_ROLE_SCOUT : CC_NPC_ROLE_TRAVELLER,
         underworld_present ? WORLD_VIOLET : kingdom, clock * 0.7f,
-        CC_TRAVERSAL_IDLE);
+        CC_TRAVERSAL_IDLE, scenery_focus);
     /* Each outer room has one resident whose job explains the place at a
        glance. Their spacing leaves the authored travel lanes clear. */
-    DrawNpcFigure3D(TerrainWorldPoint(10.15f, 31.90f), 0.88f, -0.85f,
-                    UINT32_C(0x64697301), CC_NPC_ROLE_LABORER,
-                    (Color){143, 118, 65, 255}, clock * 0.52f + 0.5f,
-                    CC_TRAVERSAL_IDLE);
-    DrawNpcFigure3D(TerrainWorldPoint(24.10f, 53.20f), 0.90f, 1.50f,
-                    UINT32_C(0x64697302), CC_NPC_ROLE_SCOUT,
-                    (Color){103, 103, 112, 255}, clock * 0.48f + 1.1f,
-                    CC_TRAVERSAL_IDLE);
-    DrawNpcFigure3D(TerrainWorldPoint(35.20f, 26.65f), 0.94f, -0.15f,
-                    UINT32_C(0x64697303), CC_NPC_ROLE_LABORER,
-                    (Color){174, 94, 53, 255}, clock * 0.60f + 1.7f,
-                    CC_TRAVERSAL_IDLE);
-    DrawNpcFigure3D(TerrainWorldPoint(42.75f, 51.05f), 0.92f, 2.60f,
-                    UINT32_C(0x64697304), CC_NPC_ROLE_TRAVELLER,
-                    (Color){117, 145, 116, 255}, clock * 0.44f + 2.3f,
-                    CC_TRAVERSAL_IDLE);
-    DrawNpcFigure3D(TerrainWorldPoint(74.65f, 31.95f), 1.02f, 1.50f,
-                    UINT32_C(0x64697305), CC_NPC_ROLE_GUARD,
-                    kingdom, clock * 0.40f + 2.9f,
-                    CC_TRAVERSAL_IDLE);
-    DrawNpcFigure3D(TerrainWorldPoint(84.35f, 50.70f), 0.88f, -1.35f,
-                    UINT32_C(0x64697306), CC_NPC_ROLE_LABORER,
-                    (Color){161, 128, 68, 255}, clock * 0.47f + 3.5f,
-                    CC_TRAVERSAL_IDLE);
+    DrawVisibleNpcFigure3D(
+        TerrainWorldPoint(10.15f, 31.90f), 0.88f, -0.85f,
+        UINT32_C(0x64697301), CC_NPC_ROLE_LABORER,
+        (Color){143, 118, 65, 255}, clock * 0.52f + 0.5f,
+        CC_TRAVERSAL_IDLE, scenery_focus);
+    DrawVisibleNpcFigure3D(
+        TerrainWorldPoint(24.10f, 53.20f), 0.90f, 1.50f,
+        UINT32_C(0x64697302), CC_NPC_ROLE_SCOUT,
+        (Color){103, 103, 112, 255}, clock * 0.48f + 1.1f,
+        CC_TRAVERSAL_IDLE, scenery_focus);
+    DrawVisibleNpcFigure3D(
+        TerrainWorldPoint(35.20f, 26.65f), 0.94f, -0.15f,
+        UINT32_C(0x64697303), CC_NPC_ROLE_LABORER,
+        (Color){174, 94, 53, 255}, clock * 0.60f + 1.7f,
+        CC_TRAVERSAL_IDLE, scenery_focus);
+    DrawVisibleNpcFigure3D(
+        TerrainWorldPoint(42.75f, 51.05f), 0.92f, 2.60f,
+        UINT32_C(0x64697304), CC_NPC_ROLE_TRAVELLER,
+        (Color){117, 145, 116, 255}, clock * 0.44f + 2.3f,
+        CC_TRAVERSAL_IDLE, scenery_focus);
+    DrawVisibleNpcFigure3D(
+        TerrainWorldPoint(74.65f, 31.95f), 1.02f, 1.50f,
+        UINT32_C(0x64697305), CC_NPC_ROLE_GUARD, kingdom,
+        clock * 0.40f + 2.9f, CC_TRAVERSAL_IDLE, scenery_focus);
+    DrawVisibleNpcFigure3D(
+        TerrainWorldPoint(84.35f, 50.70f), 0.88f, -1.35f,
+        UINT32_C(0x64697306), CC_NPC_ROLE_LABORER,
+        (Color){161, 128, 68, 255}, clock * 0.47f + 3.5f,
+        CC_TRAVERSAL_IDLE, scenery_focus);
     if (sim->resolved_journey_outcome != CC_JOURNEY_OUTCOME_NONE &&
         sim->journey.destination_id == place->id) {
-        DrawNpcFigure3D(TerrainWorldPoint(46.80f, 31.15f), 0.86f, -1.10f,
-                        UINT32_C(0x61667401), CC_NPC_ROLE_GUARD,
-                        WORLD_TEAL, clock * 0.64f + 1.4f,
-                        CC_TRAVERSAL_IDLE);
+        DrawVisibleNpcFigure3D(
+            TerrainWorldPoint(46.80f, 31.15f), 0.86f, -1.10f,
+            UINT32_C(0x61667401), CC_NPC_ROLE_GUARD, WORLD_TEAL,
+            clock * 0.64f + 1.4f, CC_TRAVERSAL_IDLE, scenery_focus);
         if (sim->resolved_journey_outcome == CC_JOURNEY_OUTCOME_COMBAT) {
-            DrawNpcFigure3D(TerrainWorldPoint(47.65f, 30.55f), 0.82f,
-                            -0.85f, UINT32_C(0x61667402),
-                            CC_NPC_ROLE_HEALER, WORLD_GOLD,
-                            clock * 0.58f + 2.1f, CC_TRAVERSAL_IDLE);
+            DrawVisibleNpcFigure3D(
+                TerrainWorldPoint(47.65f, 30.55f), 0.82f, -0.85f,
+                UINT32_C(0x61667402), CC_NPC_ROLE_HEALER, WORLD_GOLD,
+                clock * 0.58f + 2.1f, CC_TRAVERSAL_IDLE, scenery_focus);
         }
     }
-    DrawCourseRunners(course);
+    DrawCourseRunners(course, scenery_focus);
     if (course != NULL && agent->combat.target_index >= 0 &&
         agent->combat.target_index < CC_LOCAL_RAIDER_COUNT) {
         DrawSelectedTarget(
