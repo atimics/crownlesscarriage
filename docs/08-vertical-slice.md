@@ -19,7 +19,7 @@ The slice uses:
 - Five to seven settlements
 - One agricultural exporter
 - One mining settlement
-- One crossroads market
+- One road-market waystation
 - One fortress controlling a bridge
 - One legal carriage route
 - One smuggling route

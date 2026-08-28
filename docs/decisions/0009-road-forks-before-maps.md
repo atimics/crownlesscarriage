@@ -1,4 +1,4 @@
-# 0009 — Choose roads at forks; let maps advise
+# 0009 — Meet one branch at a time; let maps advise
 
 **Status:** Accepted
 
@@ -6,24 +6,28 @@
 
 Physical route maps removed the all-knowing kingdom screen, but they still made
 travel feel like selecting a destination from a menu. The paper changed, but
-the action stayed abstract. A traveller does not move through a map. A
-traveller reaches a fork and takes a road.
+the action stayed abstract. A carriage follows a track, reaches a side branch,
+and either turns or keeps going.
 
 ## Decision
 
-Travel starts from the roads that leave the player's current place. The choice
-shows only that immediate fork. It is rendered as a carriage scene, with each
-road and its current physical state present in the set. It never shows the
-whole network.
+Travel starts with the carriage on a track leaving the player's current place.
+The presentation orders outgoing routes into a sequence of local junctions.
+Each junction set has one continuous cart track and no more than one side
+branch. Keeping on the track advances to the next branch. Taking the branch
+commits to that route. The set never shows the whole network or turns several
+graph edges into one crossroads.
 
 Maps remain physical, limited, tradeable objects. They add old claims about a
 road, can reveal the destination of an unmarked track, and reduce wayfinding
 delay and risk. They do not create a road and are not required to travel. A
-player may take an uncharted fork and accept the uncertainty.
+player may take an uncharted branch and accept the uncertainty.
 
 ## Consequences
 
 - The main travel choice is local and embodied.
+- Carriages stay on visible tracks instead of radiating from a hub.
+- A place with many outgoing routes becomes several small encounters.
 - The player can leave without first buying permission in the form of a map.
 - Maps remain useful because they change knowledge and preparation.
 - Hidden roads can be entered as unmarked tracks before their destination is
@@ -37,4 +41,5 @@ player may take an uncharted fork and accept the uncertainty.
 - Making maps cosmetic collectibles was rejected because knowledge should
   still affect time, risk, trade, and carriage capacity.
 - Showing all known roads at once was rejected because discovered topology is
-  still a strategic map, even without live data.
+  still a strategic map, even without live data, and it produces implausible
+  hub-shaped crossroads.

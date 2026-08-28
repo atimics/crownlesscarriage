@@ -400,7 +400,7 @@ static void DescribeRoutes(const CcMetagame *metagame,
                            char *output, size_t capacity)
 {
     const CcSim *sim = &metagame->sim;
-    Append(output, capacity, "The road forks here:\n");
+    Append(output, capacity, "Branches found along the road out:\n");
     for (int32_t i = 0; i < sim->route_count; ++i) {
         const CcRoute *route = &sim->routes[i];
         if (route->from_id != sim->player.location_id &&
@@ -434,7 +434,7 @@ static void DescribeRoutes(const CcMetagame *metagame,
                    ", no notes: slower travel and unknown risk\n");
         }
     }
-    Append(output, capacity, "Take a fork with 'travel NUMBER'.\n");
+    Append(output, capacity, "Turn onto a branch with 'travel NUMBER'.\n");
 }
 
 static void DescribeMaps(const CcMetagame *metagame,
@@ -950,7 +950,7 @@ void CcMetagameIntro(const CcMetagame *metagame,
            "CROWNLESS CARRIAGE — THE EMPTY GRANARY\n"
            "You decide what people, goods, and news fit in one carriage.\n"
            "The world will continue after every promise and refusal.\n"
-           "You start at the hungry crossroads with 75 crowns and no given plan.\n");
+           "You start in the hungry waystation with 75 crowns and no given plan.\n");
     DescribeLook(metagame, output, output_capacity);
 }
 

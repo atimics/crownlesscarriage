@@ -10,8 +10,9 @@ changes who gets help, and can become a fight, a bargain, or an expedition.
 The result is written back into the same world that created the problem.
 
 The game begins at character scale. Settlements, people, markets, and roads are
-the main interface. Travel starts by taking one of the roads that leaves the
-current place. Maps are old, tradeable advice, not a travel screen.
+the main interface. Travel starts with the carriage following a track and
+meeting one side branch at a time. Maps are old, tradeable advice, not a travel
+screen.
 
 This project is in pre-production. The repository contains a living design
 manual and a playable architecture proof written in C17.
@@ -59,8 +60,8 @@ The architecture proof connects these parts in one running build:
 - A market interior whose stock and prices come from the regional simulation
 - Local situation boards with named sponsors, affected people, deadlines,
   rewards, accepted promises, and reputation consequences
-- Carriage-stage fork scenes that show only the physical roads leaving the
-  current place, plus a three-slot case of tradeable traveller's notes
+- Carriage-stage junction scenes with one continuous cart track and no more
+  than one side branch, plus a three-slot case of tradeable traveller's notes
 - Real-time carriage journeys, a dedicated road scene, and a route crisis that
   can be resolved through combat or payment
 - Immediate local aftermath and delayed consequences after a journey
@@ -159,7 +160,7 @@ Inputs are contextual.
 | --- | --- |
 | Left click | Move to a visible surface, or select a raider |
 | `F` | Use a nearby door, notice board, carriage, or toll collector |
-| `M` | Consider the roads leaving this place while beside the carriage |
+| `M` | Drive out to the roadside branches while beside the carriage |
 | `Q` | Open the situation board |
 | `Tab` | Open the causal event ledger |
 | `J` | Jump |
@@ -179,10 +180,10 @@ In the market, use `1` through `6` to buy Food, Iron, Tools, Weapons, Raw Gold,
 or Gems. Hold `Shift` with the same key to sell. Cargo slots hold eight Food,
 four Iron, two Tools, two Weapons, one Gold strongbox, or one Gem case.
 
-At the road fork, use the arrow keys or click a road to select it. Press `Enter`
-to take that road. Press `B` to buy local notes, `S` to sell carried notes, or
-`R` to repair the selected road. A chart can save time and warn of danger, but
-it is never required to take a visible road.
+At a roadside branch, press `Enter` to turn onto it. Use the arrow keys or
+`Keep on track` to reach the next branch. Press `B` to buy local notes, `S` to
+sell carried notes, or `R` to repair the branch. A chart can save time and warn
+of danger, but it is never required to take a visible track.
 
 During combat, `1` uses Crushing Blow, `2` uses Sunder, and `3` uses Second
 Wind. Click the ground to disengage and return to direct movement.

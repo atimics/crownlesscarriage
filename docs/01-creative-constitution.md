@@ -46,10 +46,10 @@ No major state is surfaced without:
 The detailed ledger is optional evidence, never the primary storytelling
 interface.
 
-The default view is character-scale and local. Travel begins at a visible road
-fork. Physical route notes are secondary evidence kept in the carriage. They
-can warn, mislead, or save time, but they never replace the act of choosing the
-road in front of the player.
+The default view is character-scale and local. Travel begins on a cart track.
+The carriage meets one side branch at a time. Physical route notes are
+secondary evidence kept in the carriage. They can warn, mislead, or save time,
+but they never replace the act of taking the branch in front of the player.
 
 ### 3. Every journey is a commitment
 
@@ -108,9 +108,9 @@ player cannot understand or influence create a busy world, not a living one.
 - The game opens and returns from journeys at character scale.
 - Local movement, people, buildings, interiors, and physical symptoms are the
   primary interface to the world.
-- The next fork answers where the player can go now. A carried route chart only
-  adds what its maker claimed at survey time. No interface answers for the
-  entire world.
+- The next roadside branch answers where the player can turn now. Continuing
+  along the track reveals later branches. A carried route chart only adds what
+  its maker claimed at survey time. No interface answers for the entire world.
 - Strategic facts that matter to the player must project into at least one
   local sensory or social expression before requiring a statistics panel.
 - Choosing a destination is only the beginning of an adventure. Arrival,

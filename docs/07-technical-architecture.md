@@ -74,8 +74,9 @@ stale ID cannot silently refer to a different entity.
 
 ## Presentation responsibilities
 
-- Carriage-stage fork scenes for roads leaving the current place, with carried
-  or locally offered route notes shown as supporting evidence
+- Carriage-stage junction scenes that project outgoing routes one side branch
+  at a time along a continuous cart track, with carried or locally offered
+  route notes shown as supporting evidence
 - Active city or route segment
 - Local navigation, animation, and combat
 - Instantiating strategic entities near the player

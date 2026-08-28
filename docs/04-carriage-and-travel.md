@@ -84,10 +84,16 @@ different from an open road.
 ## Roads before maps
 
 **Contract:** there is no free, omniscient kingdom map, and travel never starts
-by selecting a line on a chart. At the edge of a place, the player chooses one
-of the roads that physically leaves it. The choice shows only the immediate
-fork, not the wider route graph. The fork is a local carriage scene with the
-coach, road surfaces, signs, vegetation, damage, and closures in the world.
+by selecting a line on a chart. At the edge of a place, the carriage follows a
+cart track. Each choice scene contains that continuous track and no more than
+one side branch. The player can take the branch or keep moving until the next
+one. The scene includes the coach, road surfaces, signs, vegetation, damage,
+and closures in the world.
+
+The strategic graph may connect a place to many routes. The local presentation
+orders those routes into a short sequence of roadside encounters. It never
+turns every graph edge into a hub-shaped crossroads. Continuing advances to
+the next encounter; taking the visible branch commits to that route.
 
 A map is a tradeable set of traveller's notes carried in the carriage map case.
 Each sheet describes one route and its two termini.
@@ -107,9 +113,9 @@ made there, while smugglers trade suppressed routes.
 
 Owning a chart can reveal the end of an unmarked track, reduce wayfinding delay,
 and provide old claims about danger and condition. It does not create or unlock
-the road. An uncharted fork can still be taken, but the player may not know its
-destination and the journey is slower and more dangerous. A local guide can
-provide the same immediate wayfinding help without transferring a map.
+the road. An uncharted branch can still be taken, but the player may not know
+its destination and the journey is slower and more dangerous. A local guide
+can provide the same immediate wayfinding help without transferring a map.
 
 Every cartographer chooses different names, omissions, and warnings. The notes
 are arguments about the road, not live telemetry. Closures, troop movements,

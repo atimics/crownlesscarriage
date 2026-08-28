@@ -96,6 +96,7 @@ typedef enum ContextActionKind {
     CONTEXT_ACTION_FIGHT,
     CONTEXT_ACTION_PAY,
     CONTEXT_ACTION_TRAVEL,
+    CONTEXT_ACTION_NEXT_BRANCH,
     CONTEXT_ACTION_BUY_MAP,
     CONTEXT_ACTION_REPAIR_ROUTE,
     CONTEXT_ACTION_PAY_COLLECTOR,
@@ -111,7 +112,7 @@ typedef struct ContextAction {
 } ContextAction;
 
 typedef struct ContextActionSet {
-    ContextAction items[3];
+    ContextAction items[4];
     int32_t count;
 } ContextActionSet;
 
@@ -748,6 +749,16 @@ static int32_t FirstOutgoingRouteIndex(const CcSim *sim)
     return -1;
 }
 
+static int32_t OutgoingRouteCount(const CcSim *sim)
+{
+    int32_t count = 0;
+    if (sim == NULL) return count;
+    for (int32_t i = 0; i < sim->route_count; ++i) {
+        if (RouteLeavesCurrentPlace(sim, &sim->routes[i])) count += 1;
+    }
+    return count;
+}
+
 static int32_t StepOutgoingRouteIndex(const CcSim *sim, int32_t selected,
                                       int32_t direction)
 {
@@ -794,7 +805,7 @@ static CcId RouteOtherEnd(const CcRoute *route, CcId here)
 static void AddContextAction(ContextActionSet *set, ContextActionKind kind,
                              const char *label)
 {
-    if (set == NULL || label == NULL || set->count >= 3) return;
+    if (set == NULL || label == NULL || set->count >= 4) return;
     ContextAction *action = &set->items[set->count++];
     action->kind = kind;
     (void)snprintf(action->label, sizeof(action->label), "%s", label);
@@ -862,7 +873,11 @@ static ContextActionSet BuildContextActions(
         if (route != NULL) {
             AddContextAction(&set, CONTEXT_ACTION_TRAVEL,
                              route->smuggler_route ?
-                                 "Take unmarked fork" : "Take this road");
+                                 "Take hidden branch" : "Take branch");
+        }
+        if (OutgoingRouteCount(sim) > 1) {
+            AddContextAction(&set, CONTEXT_ACTION_NEXT_BRANCH,
+                             "Keep on track");
         }
         if (map != NULL && map->owner_id == sim->player.location_id) {
             AddContextAction(&set, CONTEXT_ACTION_BUY_MAP,
@@ -943,7 +958,7 @@ static ContextActionSet BuildContextActions(
                          "Enter market");
     }
     if (GridDistance(position, LOCAL_CARRIAGE) < 1.35f) {
-        AddContextAction(&set, CONTEXT_ACTION_CHOOSE_ROAD, "Choose a road");
+        AddContextAction(&set, CONTEXT_ACTION_CHOOSE_ROAD, "Drive out");
     }
     if (GridDistance(position, LOCAL_NOTICE) < 1.15f) {
         AddContextAction(&set, CONTEXT_ACTION_OPEN_PROMISES,
@@ -1044,48 +1059,12 @@ static void RoadChoiceLabel(const CcSim *sim, const CcRoute *route,
                    destination != NULL ? destination->name : "Unknown road");
 }
 
-static void DrawForkRouteList(const CcSim *sim, int32_t selected)
-{
-    const CcSettlement *here = CcSimSettlement(sim, sim->player.location_id);
-    int32_t route_count = 0;
-    for (int32_t i = 0; i < sim->route_count; ++i) {
-        if (RouteLeavesCurrentPlace(sim, &sim->routes[i])) route_count += 1;
-    }
-    float height = 72.0f + (float)route_count * 48.0f;
-    DrawPanel((Rectangle){20.0f, 82.0f, 262.0f, height},
-              (Color){8, 16, 20, 226});
-    CcOverlayDrawText("FROM", 38, 99, 9, CC_GOLD);
-    CcOverlayDrawText(here != NULL ? here->name : "HERE",
-                      38, 116, 16, INK);
-
-    int32_t row = 0;
-    for (int32_t i = 0; i < sim->route_count; ++i) {
-        const CcRoute *route = &sim->routes[i];
-        if (!RouteLeavesCurrentPlace(sim, route)) continue;
-        int y = 146 + row * 48;
-        bool active = i == selected;
-        DrawRectangleRounded((Rectangle){37.0f, (float)y, 226.0f, 40.0f},
-                             0.16f, 5,
-                             active ? (Color){70, 60, 39, 238} :
-                                      (Color){18, 29, 31, 220});
-        char label[64];
-        RoadChoiceLabel(sim, route, label, sizeof(label));
-        CcOverlayDrawText(label, 48, y + 7, 11,
-                          active ? CC_GOLD : INK);
-        const char *detail = route->smuggler_route ? "UNMARKED FORK" :
-            route->closed ? "RESTRICTED ROAD" : "OPEN ROAD";
-        CcOverlayDrawText(detail, 48, y + 25, 8,
-                          route->smuggler_route ? CC_VIOLET : MUTED);
-        row += 1;
-    }
-}
-
 static void DrawRoadPanel(const CcSim *sim, int32_t selected)
 {
     Rectangle panel = {978.0f, 82.0f, 282.0f, 322.0f};
     DrawPanel(panel, (Color){8, 16, 20, 226});
     const CcRoute *route = SelectedOutgoingRoute(sim, selected);
-    CcOverlayDrawText("SELECTED", 998, 102, 9, TEAL);
+    CcOverlayDrawText("BRANCH", 998, 102, 9, TEAL);
     if (route == NULL) {
         CcOverlayDrawText("NO ROAD", 998, 128, 15, MUTED);
         return;
@@ -1131,7 +1110,8 @@ static void DrawRoadPanel(const CcSim *sim, int32_t selected)
 static void DrawHeader(const CcSim *sim)
 {
     const CcSettlement *here = CcSimSettlement(sim, sim->player.location_id);
-    CcOverlayDrawText(TextFormat("%s FORK", here != NULL ? here->name : "ROAD"),
+    CcOverlayDrawText(TextFormat("ROAD FROM %s",
+                                 here != NULL ? here->name : "HERE"),
                       26, 22, 22, INK);
     CcOverlayDrawText(TextFormat("DAY %d     %" PRId64 " cr     NOTES %d/%d",
                         sim->current_day, sim->player.coins,
@@ -1588,7 +1568,7 @@ static void UpdateGameplayReel(CcSim *sim, LocalState *local,
             break;
         case GAMEPLAY_REEL_CHOOSE_ROUTE:
             (void)snprintf(message, message_capacity,
-                           "Choose the next road.");
+                           "A branch lies ahead.");
             if (reel->stage_frame >= 150 && !reel->stage_started &&
                 reel->destination_id != 0U) {
                 CcCommand travel = {
@@ -2195,7 +2175,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             *view = VIEW_ROADS;
             (void)snprintf(
                 message, message_capacity,
-                "The road divides ahead.");
+                "The first branch is ahead.");
             return;
         }
         if (local->journey_parley_active) {
@@ -2349,21 +2329,20 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         *view = VIEW_LOCAL;
         return;
     }
-    if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_DOWN)) {
+    bool moved_to_next_branch = false;
+    if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_DOWN) ||
+        context_action == CONTEXT_ACTION_NEXT_BRANCH) {
         *selected = StepOutgoingRouteIndex(sim, *selected, 1);
+        moved_to_next_branch = true;
     }
     if (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_UP)) {
         *selected = StepOutgoingRouteIndex(sim, *selected, -1);
+        moved_to_next_branch = true;
     }
-    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-        Vector2 mouse = GetMousePosition();
-        int32_t row = 0;
-        for (int32_t i = 0; i < sim->route_count; ++i) {
-            if (!RouteLeavesCurrentPlace(sim, &sim->routes[i])) continue;
-            Rectangle item = {37.0f, (float)(146 + row * 48), 226.0f, 40.0f};
-            if (CheckCollisionPointRec(mouse, item)) *selected = i;
-            row += 1;
-        }
+    if (moved_to_next_branch) {
+        (void)snprintf(message, message_capacity,
+                       "The carriage reaches the next branch.");
+        return;
     }
 
     const CcRoute *route = SelectedOutgoingRoute(sim, *selected);
@@ -2962,7 +2941,6 @@ int main(int argc, char **argv)
             CcLocalDrawFork3D(&sim, selected, clock,
                               local_target, local_bounds);
             DrawHeader(&sim);
-            DrawForkRouteList(&sim, selected);
             DrawRoadPanel(&sim, selected);
         } else {
             if (view == VIEW_ENCOUNTER) {
