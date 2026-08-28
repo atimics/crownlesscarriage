@@ -10832,6 +10832,48 @@ static bool PoseQuadrupedCreature(CreatureModelCache *creature,
     return true;
 }
 
+static void DrawContactShadow(Vector3 center, float width, float depth,
+                              float yaw, Color color)
+{
+    if (width <= 0.0f || depth <= 0.0f || color.a == 0) return;
+
+    /* Contact shadows are paint on the ground, not thin solid objects. A flat
+       twelve-sided oval keeps the low-resolution silhouette deliberate while
+       avoiding the square top and dark vertical edge produced by DrawBox. */
+    const int32_t segment_count = 12;
+    const float half_width = width * 0.5f;
+    const float half_depth = depth * 0.5f;
+    const float yaw_cos = cosf(yaw);
+    const float yaw_sin = sinf(yaw);
+    rlBegin(RL_TRIANGLES);
+    rlColor4ub(color.r, color.g, color.b, color.a);
+    rlNormal3f(0.0f, 1.0f, 0.0f);
+    for (int32_t segment = 0; segment < segment_count; ++segment) {
+        float angle_a = 2.0f * PI * (float)segment /
+                        (float)segment_count;
+        float angle_b = 2.0f * PI * (float)(segment + 1) /
+                        (float)segment_count;
+        float local_ax = cosf(angle_a) * half_width;
+        float local_az = sinf(angle_a) * half_depth;
+        float local_bx = cosf(angle_b) * half_width;
+        float local_bz = sinf(angle_b) * half_depth;
+        Vector3 edge_a = {
+            center.x + local_ax * yaw_cos + local_az * yaw_sin,
+            center.y,
+            center.z - local_ax * yaw_sin + local_az * yaw_cos,
+        };
+        Vector3 edge_b = {
+            center.x + local_bx * yaw_cos + local_bz * yaw_sin,
+            center.y,
+            center.z - local_bx * yaw_sin + local_bz * yaw_cos,
+        };
+        rlVertex3f(center.x, center.y, center.z);
+        rlVertex3f(edge_b.x, edge_b.y, edge_b.z);
+        rlVertex3f(edge_a.x, edge_a.y, edge_a.z);
+    }
+    rlEnd();
+}
+
 static bool DrawCreatureGait3D(CcCreatureVariant variant,
                                CcCreaturePose pose, Vector3 position,
                                float yaw, float scale, Color primary,
@@ -10861,18 +10903,19 @@ static bool DrawCreatureGait3D(CcCreatureVariant variant,
         rig = &generated_rig;
     }
 
-    Vector3 shadow_size = {1.00f, 0.012f, 1.50f};
+    Vector2 shadow_size = {1.00f, 1.50f};
     if (variant <= CC_CREATURE_GOBLIN_TRIBUTE_BEARER) {
-        shadow_size = (Vector3){0.58f, 0.012f, 0.46f};
+        shadow_size = (Vector2){0.58f, 0.46f};
     } else if (variant == CC_CREATURE_COW) {
-        shadow_size = (Vector3){1.10f, 0.012f, 1.72f};
+        shadow_size = (Vector2){1.10f, 1.72f};
     } else if (variant == CC_CREATURE_DRAGON) {
-        shadow_size = (Vector3){3.60f, 0.014f, 5.10f};
+        shadow_size = (Vector2){3.60f, 5.10f};
     }
     shadow_size.x *= scale;
-    shadow_size.z *= scale;
-    DrawBox((Vector3){position.x, position.y + 0.006f, position.z},
-            shadow_size, (Color){2, 7, 10, 104});
+    shadow_size.y *= scale;
+    DrawContactShadow(
+        (Vector3){position.x, position.y + 0.008f, position.z},
+        shadow_size.x, shadow_size.y, yaw, (Color){2, 7, 10, 104});
     CreatureRenderPalette palette = CreaturePalette(variant, primary);
     if (skinned) {
         CreatureModelCache *creature =
@@ -15002,10 +15045,10 @@ static bool DrawNpcArchetype3D(Vector3 position, float size_hint, float yaw,
         0.006f,
         roundf(position.z / contact_grid) * contact_grid,
     };
-    DrawBox(contact_shadow,
-            (Vector3){0.62f * scale * width * silhouette_gain, 0.012f,
-                      0.43f * scale * width * silhouette_gain},
-            (Color){2, 7, 10, 98});
+    DrawContactShadow(
+        contact_shadow, 0.62f * scale * width * silhouette_gain,
+        0.43f * scale * width * silhouette_gain, presentation_yaw,
+        (Color){2, 7, 10, 98});
     SetNpcPalette(appearance, 0.50f, false, (Vector3){0});
     DrawModelEx(archetype->model, position,
                 (Vector3){0.0f, 1.0f, 0.0f},
@@ -15149,9 +15192,9 @@ static void DrawNpcAppearanceFigure3D(
                             0.03f, yaw);
     }
 
-    DrawCylinder((Vector3){position.x, position.y + 0.005f, position.z},
-                 0.31f * scale, 0.31f * scale, 0.012f, 18,
-                 (Color){2, 7, 10, 115});
+    DrawContactShadow(
+        (Vector3){position.x, position.y + 0.006f, position.z},
+        0.62f * scale, 0.43f * scale, yaw, (Color){2, 7, 10, 115});
     float thigh = (0.084f + muscle * 0.024f) * mass * scale;
     DrawCylinderEx(hip, knee_l, thigh, thigh * 0.82f, 9,
                    appearance.trousers);
@@ -15948,11 +15991,6 @@ static void DrawBiomechanicalBiped(const CcLocalAgent *agent)
     if (!skin.valid) return;
     bool modular_hero = agent->crowned;
     if (agent->crowned) {
-        DrawCylinder((Vector3){agent->position.x,
-                               agent->position.y + 0.008f,
-                               agent->position.z},
-                     0.35f, 0.35f, 0.014f, 24,
-                     (Color){3, 10, 14, 118});
         DrawGroundBrushStroke(
             (Vector3){agent->position.x, agent->position.y + 0.020f,
                       agent->position.z},
@@ -16300,13 +16338,11 @@ static void DrawCharacterContactEffects(const CcLocalAgent *agent)
         fmaxf(0.006f, surface + 0.008f),
         SnapContactCoordinate(agent->position.z),
     };
-    Vector3 shadow_size = fallen ? (Vector3){1.20f, 0.014f, 0.56f} :
-                                   (Vector3){0.70f, 0.014f, 0.46f};
-    DrawBox(shadow, shadow_size, (Color){3, 8, 10, fallen ? 102 : 82});
-    DrawCubeWiresV((Vector3){shadow.x, shadow.y + 0.003f, shadow.z},
-                   (Vector3){shadow_size.x + 0.03f, 0.016f,
-                             shadow_size.z + 0.03f},
-                   (Color){21, 35, 37, 72});
+    Vector2 shadow_size = fallen ? (Vector2){1.20f, 0.56f} :
+                                   (Vector2){0.70f, 0.46f};
+    DrawContactShadow(shadow, shadow_size.x, shadow_size.y,
+                      agent->facing_yaw,
+                      (Color){3, 8, 10, fallen ? 102 : 82});
 
     if (agent->swimming || agent->immersion > 0.08f) {
         float phase = agent->humanoid.swim_phase -
