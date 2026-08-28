@@ -2,6 +2,7 @@
 #include "sim/cc_sim.h"
 
 #include "test_support.h"
+#include <inttypes.h>
 #include <sqlite3.h>
 #include <stdio.h>
 #include <string.h>
@@ -38,6 +39,170 @@ static int64_t ReadSqliteInteger(const char *path, const char *sql)
     sqlite3_finalize(statement);
     sqlite3_close(database);
     return value;
+}
+
+static void ExecuteFixtureSql(sqlite3 *database, const char *sql,
+                              const char *context)
+{
+    char *sqlite_error = NULL;
+    int result = sqlite3_exec(database, sql, NULL, NULL, &sqlite_error);
+    if (result != SQLITE_OK) {
+        (void)fprintf(stderr, "%s: %s\n", context,
+                      sqlite_error != NULL ? sqlite_error :
+                      sqlite3_errmsg(database));
+        sqlite3_free(sqlite_error);
+        sqlite3_close(database);
+        exit(EXIT_FAILURE);
+    }
+}
+
+static void CheckReadDoesNotCreateOrRelabel(char *error,
+                                             size_t error_capacity)
+{
+    const char *missing = "persistence-missing-test.ccsave";
+    RemoveDatabase(missing);
+    CcSim untouched;
+    CcSimInit(&untouched, UINT32_C(0x51a7e));
+    uint64_t untouched_hash = CcSimHash(&untouched);
+    CC_CHECK(!CcSaveRead(missing, &untouched, error, error_capacity));
+    CC_CHECK(CcSimHash(&untouched) == untouched_hash);
+    FILE *created = fopen(missing, "rb");
+    CC_CHECK(created == NULL);
+
+    const char *newer = "persistence-newer-test.ccsave";
+    RemoveDatabase(newer);
+    sqlite3 *database = NULL;
+    RequireSqlite(sqlite3_open_v2(newer, &database,
+                                  SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE,
+                                  NULL),
+                  database, "could not create newer fixture");
+    ExecuteFixtureSql(database,
+                      "PRAGMA application_id=1128481362;"
+                      "PRAGMA user_version=99;",
+                      "could not label newer fixture");
+    sqlite3_close(database);
+    CC_CHECK(!CcSaveRead(newer, &untouched, error, error_capacity));
+    CC_CHECK(strstr(error, "newer") != NULL);
+    CC_CHECK(CcSimHash(&untouched) == untouched_hash);
+    CC_CHECK(ReadSqliteInteger(newer, "PRAGMA application_id;") ==
+             INT64_C(1128481362));
+    CC_CHECK(ReadSqliteInteger(newer, "PRAGMA user_version;") == 99);
+    CC_CHECK(ReadSqliteInteger(
+                 newer,
+                 "SELECT COUNT(*) FROM sqlite_master WHERE name='meta';") == 0);
+    RemoveDatabase(newer);
+
+    const char *malformed = "persistence-malformed-test.ccsave";
+    RemoveDatabase(malformed);
+    database = NULL;
+    RequireSqlite(sqlite3_open_v2(malformed, &database,
+                                  SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE,
+                                  NULL),
+                  database, "could not create malformed fixture");
+    ExecuteFixtureSql(database,
+                      "PRAGMA user_version=7;"
+                      "CREATE TABLE unrelated(value INTEGER);"
+                      "INSERT INTO unrelated VALUES(41);",
+                      "could not create malformed fixture contents");
+    sqlite3_close(database);
+    CcJournal *journal = CcJournalResume(malformed, &untouched,
+                                         error, error_capacity);
+    CC_CHECK(journal == NULL);
+    CC_CHECK(CcSimHash(&untouched) == untouched_hash);
+    CC_CHECK(ReadSqliteInteger(malformed, "PRAGMA application_id;") == 0);
+    CC_CHECK(ReadSqliteInteger(malformed, "PRAGMA user_version;") == 7);
+    CC_CHECK(ReadSqliteInteger(
+                 malformed,
+                 "SELECT COUNT(*) FROM sqlite_master WHERE name='meta';") == 0);
+    CC_CHECK(ReadSqliteInteger(
+                 malformed,
+                 "SELECT value FROM unrelated;") == 41);
+    RemoveDatabase(malformed);
+}
+
+static void AddLegacyJournalSuffix(const char *path,
+                                   const CcSim *before,
+                                   const CcSim *after)
+{
+    sqlite3 *database = NULL;
+    RequireSqlite(sqlite3_open_v2(path, &database,
+                                  SQLITE_OPEN_READWRITE, NULL),
+                  database, "could not open legacy journal fixture");
+    char pre_hash[24];
+    char post_hash[24];
+    (void)snprintf(pre_hash, sizeof(pre_hash), "%016" PRIx64,
+                   CcSimHash(before));
+    (void)snprintf(post_hash, sizeof(post_hash), "%016" PRIx64,
+                   CcSimHash(after));
+    char *sql = sqlite3_mprintf(
+        "BEGIN IMMEDIATE;"
+        "INSERT INTO journal_epoch "
+        "(record_version,world_seed,initial_state_hash,created_tick) "
+        "VALUES(1,%u,%Q,%llu);"
+        "INSERT INTO action_journal "
+        "(generation,ordinal,record_version,operation_kind,command_kind,"
+        "target_id,good,amount,dungeon_state,step_count,sim_schema_version,"
+        "generator_version,pre_state_hash,post_state_hash,committed_tick) "
+        "VALUES(last_insert_rowid(),1,1,2,0,0,0,0,0,1,10,10,%Q,%Q,%llu);"
+        "UPDATE meta SET journal_generation="
+        "(SELECT MAX(generation) FROM journal_epoch),"
+        "journal_cursor=0 WHERE id=1;"
+        "PRAGMA user_version=10;"
+        "COMMIT;",
+        before->world_seed, pre_hash,
+        (unsigned long long)before->clock.tick,
+        pre_hash, post_hash,
+        (unsigned long long)after->clock.tick);
+    CC_CHECK(sql != NULL);
+    ExecuteFixtureSql(database, sql,
+                      "could not create legacy journal suffix");
+    sqlite3_free(sql);
+    sqlite3_close(database);
+}
+
+static void CheckLegacyJournalMigration(char *error,
+                                        size_t error_capacity)
+{
+    const char *path = "persistence-legacy-journal-test.ccsave";
+    RemoveDatabase(path);
+    CcSim legacy;
+    CcSimInit(&legacy, UINT32_C(0x1e9ac11));
+    legacy.schema_version = 10U;
+    legacy.generator_version = 10U;
+    CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
+    CcSim suffix = legacy;
+    CcSimAdvanceDays(&suffix, 1);
+    AddLegacyJournalSuffix(path, &legacy, &suffix);
+    int64_t legacy_generation = ReadSqliteInteger(
+        path, "SELECT journal_generation FROM meta WHERE id=1;");
+
+    CcSim read_only_result;
+    CC_CHECK(CcSaveRead(path, &read_only_result, error, error_capacity));
+    CC_CHECK(read_only_result.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(read_only_result.generator_version == CC_GENERATOR_VERSION);
+    CC_CHECK(read_only_result.current_day == suffix.current_day);
+    uint64_t migrated_hash = CcSimHash(&read_only_result);
+    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 10);
+
+    CcSim resumed;
+    CcJournal *journal = CcJournalResume(path, &resumed,
+                                         error, error_capacity);
+    CC_CHECK(journal != NULL);
+    CC_CHECK(CcSimHash(&resumed) == migrated_hash);
+    CC_CHECK(ReadSqliteInteger(
+                 path, "SELECT journal_generation FROM meta WHERE id=1;") !=
+             legacy_generation);
+    CC_CHECK(ReadSqliteInteger(
+                 path, "SELECT journal_cursor FROM meta WHERE id=1;") == 0);
+    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 13);
+    CC_CHECK(CcJournalAdvanceDays(journal, &resumed, 2,
+                                  error, error_capacity));
+    uint64_t expected_hash = CcSimHash(&resumed);
+    CC_CHECK(CcJournalClose(&journal, &resumed,
+                            error, error_capacity));
+    CC_CHECK(CcSaveRead(path, &resumed, error, error_capacity));
+    CC_CHECK(CcSimHash(&resumed) == expected_hash);
+    RemoveDatabase(path);
 }
 
 static void CheckSchema4Compatibility(char *error, size_t error_capacity)
@@ -186,6 +351,70 @@ static void CheckSchema10Compatibility(char *error, size_t error_capacity)
                 restored.kingdoms[second].id));
         }
     }
+    CC_CHECK(CcSimValidate(&restored, error, error_capacity));
+    RemoveDatabase(path);
+}
+
+static void CheckSchema11Compatibility(char *error, size_t error_capacity)
+{
+    const char *path = "persistence-legacy-v11-test.ccsave";
+    RemoveDatabase(path);
+    CcSim legacy;
+    CcSimInit(&legacy, UINT32_C(0x1e9ac11));
+    legacy.map_count = CC_MAX_ROUTES;
+    legacy.player.map_catalogue_mask = 0U;
+    legacy.player.map_archive_mask = 0U;
+    legacy.dragon.life_stage = CC_DRAGON_STAGE_EGG;
+    legacy.dragon.activity = CC_DRAGON_ACTIVITY_DORMANT;
+    legacy.dragon.age_days = 0;
+    legacy.dragon.body_condition = 0;
+    legacy.dragon.crown_strength = 0;
+    legacy.dragon.memory_integrity = 0;
+    legacy.dragon.territory_stability = 0;
+    legacy.dragon.regional_influence = 0;
+    legacy.dragon.crown_continuity_days = 0;
+    legacy.dragon.hunt_cooldown_days = 0;
+    legacy.dragon.brood_cooldown_days = 0;
+    legacy.schema_version = 11U;
+    legacy.generator_version = 11U;
+    CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.generator_version == CC_GENERATOR_VERSION);
+    CC_CHECK(restored.map_count == CC_MAP_COLLECTION_COUNT);
+    CC_CHECK(CcPlayerMapCollectionCount(&restored) == 1);
+    CC_CHECK(strcmp(restored.maps[CC_MAP_CROWNLESS_ATLAS].name,
+                    CC_CROWNLESS_ATLAS_MAP_NAME) == 0);
+    CC_CHECK(restored.dragon.life_stage == CC_DRAGON_STAGE_CROWNED);
+    CC_CHECK(restored.dragon.age_days > 0);
+    CC_CHECK(restored.dragon.crown_strength > 0);
+    CC_CHECK(restored.dragon.memory_integrity == 100);
+    CC_CHECK(CcSimValidate(&restored, error, error_capacity));
+    RemoveDatabase(path);
+}
+
+static void CheckSchema12Compatibility(char *error, size_t error_capacity)
+{
+    const char *path = "persistence-legacy-v12-test.ccsave";
+    RemoveDatabase(path);
+    CcSim legacy;
+    CcSimInit(&legacy, UINT32_C(0x1e9ac12));
+    legacy.map_count = CC_MAX_ROUTES;
+    legacy.player.map_catalogue_mask = 0U;
+    legacy.player.map_archive_mask = 0U;
+    int32_t dragon_age = legacy.dragon.age_days;
+    legacy.schema_version = 12U;
+    legacy.generator_version = 12U;
+    CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.generator_version == CC_GENERATOR_VERSION);
+    CC_CHECK(restored.map_count == CC_MAP_COLLECTION_COUNT);
+    CC_CHECK(CcPlayerMapCollectionCount(&restored) == 1);
+    CC_CHECK(restored.dragon.age_days == dragon_age);
+    CC_CHECK(restored.dragon.memory_integrity == 100);
     CC_CHECK(CcSimValidate(&restored, error, error_capacity));
     RemoveDatabase(path);
 }
@@ -488,15 +717,19 @@ int main(void)
     CC_CHECK(CcSimStartServiceProject(&original, capital->id,
                                       CC_SERVICE_GRANARY,
                                       error, sizeof(error)));
+    CheckReadDoesNotCreateOrRelabel(error, sizeof(error));
     CheckPreJourneySchema3Compatibility(error, sizeof(error));
     CheckSchema4Compatibility(error, sizeof(error));
     CheckSchema5Compatibility(error, sizeof(error));
     CheckSchema6Compatibility(error, sizeof(error));
     CheckSchema8Compatibility(error, sizeof(error));
     CheckSchema10Compatibility(error, sizeof(error));
+    CheckSchema11Compatibility(error, sizeof(error));
+    CheckSchema12Compatibility(error, sizeof(error));
     CheckDiplomacyPersistence(error, sizeof(error));
     CheckJournalRecovery(error, sizeof(error));
     CheckJournalCheckpointAndTamper(error, sizeof(error));
+    CheckLegacyJournalMigration(error, sizeof(error));
     CcCommand command = {
         .kind = CC_COMMAND_TRAVEL,
         .target_id = original.settlements[1].id
@@ -560,6 +793,10 @@ int main(void)
     CC_CHECK(restored.player.map_capacity == original.player.map_capacity);
     CC_CHECK(restored.player.accepted_situation_id ==
              original.player.accepted_situation_id);
+    CC_CHECK(restored.player.map_catalogue_mask ==
+             original.player.map_catalogue_mask);
+    CC_CHECK(restored.player.map_archive_mask ==
+             original.player.map_archive_mask);
     CC_CHECK(restored.settlements[4].service_mask ==
              original.settlements[4].service_mask);
     CC_CHECK(restored.settlements[4].service_project ==

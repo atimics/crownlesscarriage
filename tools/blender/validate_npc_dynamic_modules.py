@@ -38,6 +38,15 @@ def validate() -> int:
     if document.get("runtime_strategy") != \
             "bone-frame instancing without skins or animations":
         failures.append("runtime strategy contract changed")
+    expected_exports = {Path(entry["export"]).name for entry in entries}
+    export_dir = ROOT / "assets" / "exports" / "npc"
+    shipped_exports = {
+        path.name for path in export_dir.glob("npc_module_*.glb")
+    }
+    for name in sorted(shipped_exports - expected_exports):
+        failures.append(f"stale module export is not in the manifest: {name}")
+    for name in sorted(expected_exports - shipped_exports):
+        failures.append(f"manifest module export is missing: {name}")
     total_triangles = 0
     for entry in entries:
         path = ROOT / entry["export"]

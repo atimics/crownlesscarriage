@@ -24,6 +24,11 @@
 #define CC_GOLD CC_STYLE_GOLD
 #define DANGER CC_STYLE_DANGER
 #define CC_VIOLET CC_STYLE_VIOLET
+#define CC_GLOAMGATE_ALDERWATCH_MAP_ASSET \
+    "assets/maps/gloamgate_to_alderwatch.png"
+#define CC_COLLECTIBLE_MAP_ATLAS_ASSET \
+    "assets/maps/collectible_map_atlas.png"
+#define CC_MAP_LIST_ROWS 8
 
 typedef enum ClientView {
     VIEW_LOCAL,
@@ -141,6 +146,34 @@ static void CampaignSavePath(char *path, size_t capacity)
     }
 #endif
     (void)snprintf(path, capacity, "crownless_campaign.ccsave");
+}
+
+static bool ResolveClientAssetPath(const char *relative_path, char *resolved,
+                                   size_t capacity)
+{
+    if (relative_path == NULL || resolved == NULL || capacity == 0U) {
+        return false;
+    }
+    if (FileExists(relative_path)) {
+        (void)snprintf(resolved, capacity, "%s", relative_path);
+        return true;
+    }
+#if defined(CC_ASSET_SOURCE_ROOT)
+    (void)snprintf(resolved, capacity, "%s/%s", CC_ASSET_SOURCE_ROOT,
+                   relative_path);
+    if (FileExists(resolved)) return true;
+#endif
+    (void)snprintf(resolved, capacity, "../%s", relative_path);
+    if (FileExists(resolved)) return true;
+    (void)snprintf(resolved, capacity, "%s/../Resources/%s",
+                   GetApplicationDirectory(), relative_path);
+    return FileExists(resolved);
+}
+
+static bool IsGloamgateAlderwatchMap(const CcMap *map)
+{
+    return map != NULL &&
+           strcmp(map->name, CC_GLOAMGATE_ALDERWATCH_MAP_NAME) == 0;
 }
 
 static void SituationTargetLabel(const CcSim *sim, const CcSituation *situation,
@@ -733,9 +766,39 @@ static void DrawLocalMovementReticle(const LocalState *local,
 
 static bool MapVisibleAtCarriage(const CcSim *sim, const CcMap *map)
 {
-    return sim != NULL && map != NULL &&
-           (map->owner_id == sim->player.id ||
-            map->owner_id == sim->player.location_id);
+    if (sim == NULL || map == NULL) return false;
+    if (map->owner_id == sim->player.location_id) return true;
+    if (map->owner_id != sim->player.id ||
+        !CcSimMapIsCatalogued(sim, map)) return false;
+    return !CcSimMapIsArchived(sim, map) ||
+           sim->player.location_id == sim->settlements[1].id;
+}
+
+static int32_t VisibleMapCount(const CcSim *sim)
+{
+    if (sim == NULL) return 0;
+    int32_t count = 0;
+    for (int32_t i = 0; i < sim->map_count; ++i) {
+        if (MapVisibleAtCarriage(sim, &sim->maps[i])) count += 1;
+    }
+    return count;
+}
+
+static int32_t VisibleMapListStart(const CcSim *sim, int32_t selected)
+{
+    int32_t rank = 0;
+    int32_t selected_rank = 0;
+    for (int32_t i = 0; sim != NULL && i < sim->map_count; ++i) {
+        if (!MapVisibleAtCarriage(sim, &sim->maps[i])) continue;
+        if (i == selected) selected_rank = rank;
+        rank += 1;
+    }
+    int32_t start = selected_rank - CC_MAP_LIST_ROWS / 2;
+    int32_t maximum = rank - CC_MAP_LIST_ROWS;
+    if (start < 0) start = 0;
+    if (maximum < 0) maximum = 0;
+    if (start > maximum) start = maximum;
+    return start;
 }
 
 static int32_t FirstVisibleMapIndex(const CcSim *sim)
@@ -993,7 +1056,8 @@ static void DrawContextActionTray(const CcSim *sim, const LocalState *local,
         }
         int width = CcOverlayMeasureText(actions.items[i].label, 11);
         CcOverlayDrawText(actions.items[i].label,
-                          (int)(bounds.x + (bounds.width - width) * 0.5f),
+                          (int)(bounds.x +
+                                (bounds.width - (float)width) * 0.5f),
                           (int)bounds.y + 17, 11, hover ? accent : INK);
     }
 }
@@ -1082,20 +1146,65 @@ static void MapRouteTitle(const CcSim *sim, const CcMap *map,
                    to != NULL ? to->name : "Unknown");
 }
 
-static void DrawMap(const CcSim *sim, int32_t selected, float clock)
+static bool DrawCollectibleMapArt(const CcSim *sim, const CcMap *map,
+                                  Texture2D illustrated_map,
+                                  Texture2D collectible_atlas)
+{
+    if (IsGloamgateAlderwatchMap(map) && illustrated_map.id != 0U) {
+        Rectangle source = {0.0f, 0.0f, (float)illustrated_map.width,
+                            (float)illustrated_map.height};
+        Rectangle destination = {294.0f, 163.0f, 596.0f, 397.33f};
+        DrawTexturePro(illustrated_map, source, destination,
+                       (Vector2){0.0f, 0.0f}, 0.0f, WHITE);
+        return true;
+    }
+    if (sim == NULL || map == NULL || collectible_atlas.id == 0U) {
+        return false;
+    }
+    static const int32_t art_cell[CC_MAP_COLLECTION_COUNT] = {
+        2, 0, 4, 5, 8, 9, 1, 3, 6, 7, 10, 11
+    };
+    int32_t slot = (int32_t)(map - sim->maps);
+    if (slot < 0 || slot >= CC_MAP_COLLECTION_COUNT) return false;
+    int32_t cell = art_cell[slot];
+    float cell_width = (float)collectible_atlas.width / 4.0f;
+    float cell_height = (float)collectible_atlas.height / 3.0f;
+    Rectangle source = {(float)(cell % 4) * cell_width,
+                        (float)(cell / 4) * cell_height,
+                        cell_width, cell_height};
+    Rectangle destination = {393.5f, 164.0f, 397.0f, 397.0f};
+    DrawTexturePro(collectible_atlas, source, destination,
+                   (Vector2){0.0f, 0.0f}, 0.0f, WHITE);
+    Color title_ink = (Color){66, 57, 43, 255};
+    int32_t title_width = CcOverlayMeasureText(map->name, 20);
+    CcOverlayDrawText(map->name, 592 - title_width / 2, 125, 20,
+                      title_ink);
+    return true;
+}
+
+static void DrawMap(const CcSim *sim, int32_t selected, float clock,
+                    Texture2D illustrated_map,
+                    Texture2D collectible_atlas)
 {
     (void)clock;
     DrawPanel((Rectangle){20.0f, 82.0f, 900.0f, 568.0f},
               PANEL);
-    CcOverlayDrawText("MAPS", 38, 101, 18, CC_GOLD);
-    CcOverlayDrawText(TextFormat("%d of %d owned", CcPlayerMapCount(sim),
-                        sim->player.map_capacity), 38, 126, 10, MUTED);
+    CcOverlayDrawText("CARRIAGE MAP CASE", 38, 101, 18, CC_GOLD);
+    CcOverlayDrawText(TextFormat("CASE %d/%d   CATALOGUE %d/%d",
+                        CcPlayerMapCount(sim), sim->player.map_capacity,
+                        CcPlayerMapCollectionCount(sim),
+                        CC_MAP_COLLECTION_COUNT), 38, 126, 10, MUTED);
 
+    int32_t visible_start = VisibleMapListStart(sim, selected);
+    int32_t visible_rank = 0;
     int32_t row = 0;
     for (int32_t i = 0; i < sim->map_count; ++i) {
         const CcMap *map = &sim->maps[i];
         if (!MapVisibleAtCarriage(sim, map)) continue;
+        if (visible_rank++ < visible_start) continue;
+        if (row >= CC_MAP_LIST_ROWS) break;
         bool owned = map->owner_id == sim->player.id;
+        bool archived = CcSimMapIsArchived(sim, map);
         int y = 154 + row * 51;
         Color paper_color = map->contraband ? CC_STYLE_CONTRABAND_SHADOW :
                                               CC_STYLE_PARCHMENT_SHADOW;
@@ -1105,15 +1214,20 @@ static void DrawMap(const CcSim *sim, int32_t selected, float clock)
         }
         DrawRectangleRounded((Rectangle){37.0f, (float)y, 226.0f, 43.0f},
                              0.16f, 5, paper_color);
-        char route_title[96];
-        MapRouteTitle(sim, map, route_title, sizeof(route_title));
-        CcOverlayDrawText(route_title, 48, y + 7, 11, INK);
-        CcOverlayDrawText(owned ? "OWNED" : TextFormat("%d crowns", map->ask_price),
+        CcOverlayDrawText(map->name, 48, y + 7, 11, INK);
+        CcOverlayDrawText(archived ? "IN GLOAMGATE ARCHIVE" :
+                 owned ? "IN THE CASE" :
+                 TextFormat("FOR SALE  %d C", map->ask_price),
                  48, y + 25, 9, owned ? TEAL : CC_GOLD);
         if (map->contraband) CcOverlayDrawText("UNLICENSED", 181, y + 25, 8, CC_VIOLET);
         row += 1;
     }
-    if (row == 0) CcOverlayDrawText("No maps here.", 42, 172, 11, MUTED);
+    if (VisibleMapCount(sim) > CC_MAP_LIST_ROWS) {
+        CcOverlayDrawText(TextFormat("%d-%d OF %d", visible_start + 1,
+                            visible_start + row, VisibleMapCount(sim)),
+                 48, 570, 9, MUTED);
+    }
+    if (row == 0) CcOverlayDrawText("No charts are present at this stop.", 42, 172, 11, MUTED);
 
     const CcMap *map = SelectedVisibleMap(sim, selected);
     Rectangle paper = {282.0f, 105.0f, 620.0f, 525.0f};
@@ -1128,6 +1242,8 @@ static void DrawMap(const CcSim *sim, int32_t selected, float clock)
                           CC_STYLE_PARCHMENT);
         return;
     }
+    if (DrawCollectibleMapArt(sim, map, illustrated_map,
+                              collectible_atlas)) return;
     const CcRoute *route = CcSimRoute(sim, map->route_id);
     const CcSettlement *from = route != NULL ? CcSimSettlement(sim, route->from_id) : NULL;
     const CcSettlement *to = route != NULL ? CcSimSettlement(sim, route->to_id) : NULL;
@@ -1162,21 +1278,72 @@ static void DrawSettlementPanel(const CcSim *sim, int32_t selected)
     Rectangle panel = {938.0f, 82.0f, 322.0f, 310.0f};
     DrawPanel(panel, PANEL);
     const CcMap *map = SelectedVisibleMap(sim, selected);
-    CcOverlayDrawText("SELECTED ROUTE", 958, 104, 10, TEAL);
+    const CcSettlement *here = CcSimSettlement(sim, sim->player.location_id);
+    CcOverlayDrawText("CARTOGRAPHER'S CASE", 958, 102, 12, TEAL);
+    CcOverlayDrawText(here != NULL ? here->name : "Unknown stop", 958, 125, 22, INK);
+    CcOverlayDrawText(TextFormat("CROWNS %" PRId64 "   CASE %d/%d", sim->player.coins,
+                        CcPlayerMapCount(sim), sim->player.map_capacity),
+             958, 154, 10, MUTED);
+    CcOverlayDrawText(TextFormat("CATALOGUE %d/%d",
+                        CcPlayerMapCollectionCount(sim),
+                        CC_MAP_COLLECTION_COUNT),
+             958, 171, 10, MUTED);
     if (map == NULL) {
         CcOverlayDrawText("NO MAP", 958, 143, 15, MUTED);
         return;
     }
     const CcRoute *route = CcSimRoute(sim, map->route_id);
+    const CcSettlement *from = route != NULL ? CcSimSettlement(sim, route->from_id) : NULL;
+    const CcSettlement *to = route != NULL ? CcSimSettlement(sim, route->to_id) : NULL;
+    const CcSettlement *maker = CcSimSettlement(sim, map->maker_settlement_id);
+    CcOverlayDrawText("THIS OBJECT DEPICTS", 958, 193, 10, MUTED);
+    CcOverlayDrawText(from != NULL ? from->name : "Unknown", 958, 214, 16, INK);
+    CcOverlayDrawText("TO", 958, 235, 9, MUTED);
+    CcOverlayDrawText(to != NULL ? to->name : "Unknown", 958, 252, 16, INK);
+    CcOverlayDrawText(TextFormat("MAKER  %s", maker != NULL ? maker->name : "unknown"),
+             958, 289, 10, MUTED);
+    CcOverlayDrawText(TextFormat("AGE    %d days", sim->current_day - map->surveyed_day),
+             958, 308, 10, MUTED);
+    DrawBar(958, 337, 124, "ACCURACY", map->accuracy, TEAL);
+    DrawBar(958, 361, 124, "ROAD INK", map->recorded_condition, CC_GOLD);
+    DrawBar(958, 385, 124, "DANGER", map->recorded_danger, DANGER);
+    CcOverlayDrawText("These are recorded claims,", 958, 421, 10, MUTED);
+    CcOverlayDrawText("not live world-state telemetry.", 958, 437, 10, MUTED);
+
+    bool owned = map->owner_id == sim->player.id;
+    bool archived = CcSimMapIsArchived(sim, map);
     CcId destination_id = route != NULL ? RouteOtherEnd(route, sim->player.location_id) : 0U;
     const CcSettlement *destination = CcSimSettlement(sim, destination_id);
-    CcOverlayDrawText(destination != NULL ? destination->name : "NOT FROM HERE",
-             958, 137, 19, destination != NULL ? INK : MUTED);
-    DrawBar(958, 187, 116, "ROAD", map->recorded_condition, CC_GOLD);
-    DrawBar(958, 218, 116, "DANGER", map->recorded_danger, DANGER);
-    DrawBar(958, 249, 116, "TRUST", map->accuracy, TEAL);
-    CcOverlayDrawText(map->contraband ? "UNLICENSED MAP" : "OWNED MAP",
-             958, 294, 9, map->contraband ? CC_VIOLET : MUTED);
+    if (!owned) {
+        CcOverlayDrawText(TextFormat("B  BUY FOR %d CROWNS", map->ask_price),
+                 958, 486, 13, CC_GOLD);
+    } else if (archived) {
+        CcOverlayDrawText("A  RETRIEVE FROM ARCHIVE",
+                 958, 486, 12, TEAL);
+        CcOverlayDrawText(TextFormat("S  SELL FOR %d CROWNS",
+                            map->ask_price * 2 / 3),
+                 958, 511, 11, MUTED);
+    } else {
+        CcOverlayDrawText(TextFormat("S  SELL FOR %d CROWNS", map->ask_price * 2 / 3),
+                 958, 486, 11, MUTED);
+        CcOverlayDrawText(destination != NULL ?
+                 TextFormat("ENTER  FOLLOW TO %s", destination->name) :
+                 "This sheet begins elsewhere.",
+                 958, 511, destination != NULL ? 12 : 11,
+                 destination != NULL ? CC_GOLD : MUTED);
+        if (route != NULL && route->closed && destination != NULL) {
+            CcOverlayDrawText("R  attempt work at the route", 958, 535, 10, TEAL);
+        }
+        if (sim->player.location_id == sim->settlements[1].id) {
+            CcOverlayDrawText("A  STORE IN GLOAMGATE ARCHIVE",
+                     958, route != NULL && route->closed &&
+                     destination != NULL ? 555 : 535, 10, TEAL);
+        }
+    }
+    CcOverlayDrawText("LEFT/RIGHT  leaf through objects", 958, 584, 9, MUTED);
+    CcOverlayDrawText("M  close case   Q situations", 958, 604, 9, MUTED);
+    CcOverlayDrawText("No chart reveals the whole world.", 958, 624, 9,
+             map->contraband ? CC_VIOLET : MUTED);
 }
 
 static void DrawHeader(const CcSim *sim)
@@ -2423,9 +2590,13 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
     }
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         Vector2 mouse = GetMousePosition();
+        int32_t visible_start = VisibleMapListStart(sim, *selected);
+        int32_t visible_rank = 0;
         int32_t row = 0;
         for (int32_t i = 0; i < sim->map_count; ++i) {
             if (!MapVisibleAtCarriage(sim, &sim->maps[i])) continue;
+            if (visible_rank++ < visible_start) continue;
+            if (row >= CC_MAP_LIST_ROWS) break;
             Rectangle item = {37.0f, (float)(154 + row * 51), 226.0f, 43.0f};
             if (CheckCollisionPointRec(mouse, item)) *selected = i;
             row += 1;
@@ -2447,12 +2618,23 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         (void)ApplyCommand(*journal, sim, sell, message, message_capacity);
         return;
     }
+    if (IsKeyPressed(KEY_A) && map->owner_id == sim->player.id) {
+        CcCommand archive = {
+            .kind = CcSimMapIsArchived(sim, map) ?
+                CC_COMMAND_RETRIEVE_MAP : CC_COMMAND_ARCHIVE_MAP,
+            .target_id = map_id
+        };
+        (void)ApplyCommand(*journal, sim, archive, message,
+                           message_capacity);
+        return;
+    }
 
     const CcRoute *route = CcSimRoute(sim, map->route_id);
     CcId destination_id = RouteOtherEnd(route, sim->player.location_id);
     if ((IsKeyPressed(KEY_ENTER) ||
          context_action == CONTEXT_ACTION_TRAVEL) &&
         map->owner_id == sim->player.id &&
+        !CcSimMapIsArchived(sim, map) &&
         destination_id != 0U) {
         CcCommand travel = {
             .kind = CC_COMMAND_TRAVEL,
@@ -2582,6 +2764,28 @@ int main(int argc, char **argv)
     }
     bool capture_face = argc >= 2 &&
         strcmp(argv[1], "--capture-face") == 0;
+    bool capture_creatures = argc >= 2 &&
+        strcmp(argv[1], "--capture-creatures") == 0;
+    bool capture_creature_reel = argc >= 2 &&
+        strcmp(argv[1], "--capture-creature-reel") == 0;
+    bool capture_creature_media = capture_creatures || capture_creature_reel;
+    const char *capture_creature_family = NULL;
+    if (capture_creature_media) {
+        if (argc < 4 ||
+            (strcmp(argv[2], "goblins") != 0 &&
+             strcmp(argv[2], "dragon") != 0 &&
+             strcmp(argv[2], "animals") != 0 &&
+             strcmp(argv[2], "horse") != 0 &&
+             strcmp(argv[2], "cow") != 0)) {
+            (void)fprintf(stderr,
+                          "creature capture requires goblins, dragon, horse, "
+                          "cow, or animals and a frame path.\n");
+            return 1;
+        }
+        capture_creature_family = argv[2];
+    }
+    bool capture_creature_horse = capture_creature_media &&
+        strcmp(capture_creature_family, "horse") == 0;
     int32_t capture_face_view = -1;
     if (capture_face) {
         if (argc < 4) {
@@ -2639,8 +2843,9 @@ int main(int argc, char **argv)
                     capture_parley ||
                     capture_aftermath || capture_golden ||
                     capture_atmosphere || capture_face ||
-                    capture_room);
-    const char *capture_path = capture_room ? argv[4] :
+                    capture_room || capture_creature_media);
+    const char *capture_path = capture_creature_media ? argv[3] :
+                               capture_room ? argv[4] :
                                capture_face ? argv[3] :
                                capture_atmosphere ? argv[3] :
                                argc >= 3 ? argv[2] :
@@ -2663,7 +2868,23 @@ int main(int argc, char **argv)
     }
     SetWindowMinSize(1080, 680);
     SetTargetFPS(render_benchmark || capture_action_reel ||
-                 capture_gameplay_reel ? 0 : 60);
+                 capture_gameplay_reel || capture_creature_reel ? 0 : 60);
+    Texture2D illustrated_map = {0};
+    Texture2D collectible_atlas = {0};
+    char illustrated_map_path[1024];
+    if (ResolveClientAssetPath(CC_GLOAMGATE_ALDERWATCH_MAP_ASSET,
+                               illustrated_map_path,
+                               sizeof(illustrated_map_path))) {
+        illustrated_map = LoadTexture(illustrated_map_path);
+        SetTextureFilter(illustrated_map, TEXTURE_FILTER_BILINEAR);
+    }
+    char collectible_atlas_path[1024];
+    if (ResolveClientAssetPath(CC_COLLECTIBLE_MAP_ATLAS_ASSET,
+                               collectible_atlas_path,
+                               sizeof(collectible_atlas_path))) {
+        collectible_atlas = LoadTexture(collectible_atlas_path);
+        SetTextureFilter(collectible_atlas, TEXTURE_FILTER_BILINEAR);
+    }
     /* The playable world is authored against a fixed 2x art-pixel grid.
        Render it at half the presentation size, then enlarge with point
        sampling. Screen-space labels and HUD are drawn after presentation. */
@@ -2678,6 +2899,24 @@ int main(int argc, char **argv)
     CcLocalTerrainSetSeed(sim.world_seed);
     CcJournal *journal = NULL;
     if (capture || render_benchmark) CcSimAdvanceDays(&sim, 28);
+    if (capture_creature_media &&
+        strcmp(capture_creature_family, "goblins") == 0) {
+        sim.player.location_id = sim.goblins.lair_settlement_id;
+    } else if (capture_creature_media &&
+               strcmp(capture_creature_family, "dragon") == 0) {
+        sim.player.location_id = sim.dragon.lair_settlement_id;
+        sim.dragon.omen_days_remaining = 2;
+        sim.goblins.tribute_phase = CC_GOBLIN_TRIBUTE_TO_DRAGON;
+    } else if (capture_creature_media) {
+        for (int32_t settlement = 0; settlement < sim.settlement_count;
+             ++settlement) {
+            if (sim.settlements[settlement].id != sim.player.location_id) {
+                continue;
+            }
+            sim.settlements[settlement].stock[CC_GOOD_FOOD] = 32;
+            break;
+        }
+    }
     if (capture_map_case) sim.player.location_id = sim.settlements[1].id;
     if (capture_witness) {
         for (int32_t situation = 0; situation < sim.situation_count;
@@ -2699,7 +2938,7 @@ int main(int argc, char **argv)
         }
     }
     if (capture_encounter || capture_travel || capture_road || capture_parley ||
-        capture_aftermath) {
+        capture_aftermath || capture_creature_horse) {
         int32_t charter_index = FirstActiveSituationIndex(&sim);
         if (charter_index >= 0) {
             char setup_error[192];
@@ -2715,7 +2954,7 @@ int main(int argc, char **argv)
             };
             (void)CcSimApply(&sim, &travel, setup_error,
                              sizeof(setup_error));
-            if (capture_travel) {
+            if (capture_travel || capture_creature_horse) {
                 while (sim.journey.active &&
                        sim.carriage.progress_milli < 200) {
                     CcSimAdvanceRuntimeTicks(
@@ -2742,6 +2981,9 @@ int main(int argc, char **argv)
         }
     }
     int32_t selected = FirstVisibleMapIndex(&sim);
+    if (capture_map_case) {
+        selected = CC_MAP_GLOAMGATE_NIGHT_ROAD;
+    }
     int32_t selected_situation = FirstActiveSituationIndex(&sim);
     ClientView view = capture_board ? VIEW_SITUATIONS :
                       capture_encounter ? VIEW_ENCOUNTER :
@@ -2781,6 +3023,20 @@ int main(int argc, char **argv)
         local.agent.facing_yaw = -0.18f;
         local.course.alarm_countdown = 1000.0f;
     }
+    if (capture_creature_media) {
+        if (capture_creature_horse) {
+            BeginRoadTravelState(&local);
+        } else {
+            bool animal_view =
+                strcmp(capture_creature_family, "animals") == 0 ||
+                strcmp(capture_creature_family, "cow") == 0;
+            Vector2 creature_view = animal_view ?
+                (Vector2){59.5f, 40.0f} : (Vector2){24.5f, 49.5f};
+            RepositionHero(&local, creature_view, false);
+            local.agent.facing_yaw = -0.18f;
+            local.course.alarm_countdown = 1000.0f;
+        }
+    }
     if (capture_road || capture_parley) {
         BeginRoadLocalState(&local, capture_road);
     }
@@ -2792,7 +3048,7 @@ int main(int argc, char **argv)
         !capture_encounter && !capture_travel &&
         !capture_road &&
         !capture_parley && !capture_golden && !capture_atmosphere &&
-        !capture_face && !capture_room) {
+        !capture_face && !capture_room && !capture_creature_media) {
         local.course.alarm_countdown = 1000.0f;
         for (int32_t frame = 0; frame < 1500; ++frame) {
             CcLocalCourseUpdate(&local.course, &local.agent, &sim,
@@ -2919,6 +3175,8 @@ int main(int argc, char **argv)
                           walk_cycle_mask);
             CcLocalRendererShutdown();
             UnloadRenderTexture(local_target);
+            if (illustrated_map.id != 0U) UnloadTexture(illustrated_map);
+            if (collectible_atlas.id != 0U) UnloadTexture(collectible_atlas);
             CloseWindow();
             return 1;
         }
@@ -2943,6 +3201,8 @@ int main(int argc, char **argv)
                        "Same character model.");
     } else if (capture_room) {
         (void)snprintf(message, sizeof(message), "Town view.");
+    } else if (capture_creature_media) {
+        (void)snprintf(message, sizeof(message), "Creature settlement.");
     }
     if (capture_road) {
         (void)snprintf(message, sizeof(message), "Defeat the bandits.");
@@ -3012,6 +3272,7 @@ int main(int argc, char **argv)
         }
         float clock = capture_gameplay_reel ?
             (float)gameplay_reel.captured_frames / 15.0f :
+            capture_creature_reel ? (float)capture_frames / 15.0f :
             (float)GetTime();
 
         BeginDrawing();
@@ -3022,7 +3283,8 @@ int main(int argc, char **argv)
                              return_view == VIEW_MAP);
         if (map_underlay) {
             DrawHeader(&sim);
-            DrawMap(&sim, selected, clock);
+            DrawMap(&sim, selected, clock, illustrated_map,
+                    collectible_atlas);
             DrawSettlementPanel(&sim, selected);
         } else {
             if (view == VIEW_ENCOUNTER) {
@@ -3125,6 +3387,15 @@ int main(int argc, char **argv)
             TakeScreenshot(frame_path);
             walk_frame_count += 1;
             if (walk_frame_count >= 8) break;
+        } else if (capture_creature_reel) {
+            capture_frames += 1;
+            if (capture_frames <= 2) continue;
+            int32_t creature_frame = capture_frames - 3;
+            char frame_path[768];
+            (void)snprintf(frame_path, sizeof(frame_path), "%s-%03d.png",
+                           capture_path, creature_frame);
+            TakeScreenshot(frame_path);
+            if (creature_frame >= 44) break;
         } else if (capture) {
             capture_frames += 1;
             int32_t settled_frames = capture_road ? 45 : 3;
@@ -3148,6 +3419,8 @@ int main(int argc, char **argv)
         CcLocalRendererGetStats();
     CcLocalRendererShutdown();
     UnloadRenderTexture(local_target);
+    if (illustrated_map.id != 0U) UnloadTexture(illustrated_map);
+    if (collectible_atlas.id != 0U) UnloadTexture(collectible_atlas);
     CloseWindow();
     if (render_benchmark) {
         double frames_per_second =

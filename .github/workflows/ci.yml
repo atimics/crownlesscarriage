@@ -8,6 +8,34 @@ permissions:
   contents: read
 
 jobs:
+  assets:
+    name: Shipped assets and shaders
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install shader compiler
+        run: sudo apt-get update && sudo apt-get install -y glslc
+      - name: Test GLB corruption checks
+        run: python3 tests/inspect_glb_tests.py
+      - name: Validate shipped GLB assets
+        run: |
+          make blender-exports-check
+          make blender-npc-assets-check
+          make blender-world-kit-check
+          python3 tools/blender/validate_character_paint_channels.py
+      - name: Compile shipped shaders
+        run: |
+          for shader in assets/shaders/*.vs; do
+            glslc --target-env=opengl -fauto-map-locations \
+              -fauto-bind-uniforms -fshader-stage=vertex \
+              "$shader" -o "/tmp/$(basename "$shader").spv"
+          done
+          for shader in assets/shaders/*.fs; do
+            glslc --target-env=opengl -fauto-map-locations \
+              -fauto-bind-uniforms -fshader-stage=fragment \
+              "$shader" -o "/tmp/$(basename "$shader").spv"
+          done
+
   headless:
     name: Headless ${{ matrix.build_type }} / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}

@@ -14,7 +14,7 @@
 #define CC_MAX_BANDITS 3
 #define CC_MAX_MONSTERS 3
 #define CC_MAX_DUNGEONS 3
-#define CC_MAX_MAPS CC_MAX_ROUTES
+#define CC_MAX_MAPS 12
 #define CC_MAX_TREASURES 24
 #define CC_MAX_SITUATIONS 12
 #define CC_MAX_EVENTS 256
@@ -23,9 +23,12 @@
 #define CC_EVENT_TEXT_CAPACITY 144
 #define CC_CARGO_CAPACITY 12
 #define CC_MAP_CAPACITY 3
+#define CC_MAP_COLLECTION_COUNT 12
+#define CC_GLOAMGATE_ALDERWATCH_MAP_NAME "Gloamgate to Alderwatch"
+#define CC_CROWNLESS_ATLAS_MAP_NAME "The Crownless Atlas"
 
-#define CC_SIM_SCHEMA_VERSION 11
-#define CC_GENERATOR_VERSION 11
+#define CC_SIM_SCHEMA_VERSION 13
+#define CC_GENERATOR_VERSION 13
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
 #define CC_WORLD_DAY_SUBTICKS (24 * 60 * CC_WORLD_MINUTE_SUBTICKS)
@@ -187,7 +190,16 @@ typedef enum CcEventKind {
     CC_EVENT_DRAGON_MUSTERED,
     CC_EVENT_DRAGON_BATTLE,
     CC_EVENT_DRAGON_SLAIN,
-    CC_EVENT_DRAGON_HOARD_RECOVERED
+    CC_EVENT_DRAGON_HOARD_RECOVERED,
+    CC_EVENT_DRAGON_HUNT,
+    CC_EVENT_DRAGON_CROWNED,
+    CC_EVENT_DRAGON_UNCROWNED,
+    CC_EVENT_DRAGON_BROOD,
+    CC_EVENT_DRAGON_WHELP_DISPERSED,
+    CC_EVENT_DRAGON_AFTERSHOCK,
+    CC_EVENT_DRAGON_SUCCESSOR,
+    CC_EVENT_GOBLIN_CULT_RALLIED,
+    CC_EVENT_GOBLIN_DRAGON_SEED
 } CcEventKind;
 
 typedef enum CcCommandKind {
@@ -206,8 +218,27 @@ typedef enum CcCommandKind {
     CC_COMMAND_STEAL_DRAGON_HOARD,
     CC_COMMAND_RETURN_DRAGON_TREASURE,
     CC_COMMAND_BUY_TREASURE,
-    CC_COMMAND_SELL_TREASURE
+    CC_COMMAND_SELL_TREASURE,
+    CC_COMMAND_ARCHIVE_MAP,
+    CC_COMMAND_RETRIEVE_MAP,
+    CC_COMMAND_STEAL_DRAGON_NAMED_TREASURE,
+    CC_COMMAND_RETURN_DRAGON_NAMED_TREASURE
 } CcCommandKind;
+
+typedef enum CcCollectibleMapSlot {
+    CC_MAP_THORNFORD_FORDINGS,
+    CC_MAP_GLOAMGATE_ALDERWATCH,
+    CC_MAP_SILVERWICK_MINE_ROADS,
+    CC_MAP_ROSESPIRE_PILGRIM_WAY,
+    CC_MAP_TRIBUTE_ROADS,
+    CC_MAP_BROKEN_MARCH,
+    CC_MAP_GLOAMGATE_NIGHT_ROAD,
+    CC_MAP_ALDERWATCH_MUSTER,
+    CC_MAP_TREATY_BRIDGE_SURVEY,
+    CC_MAP_LOWER_SILVERWORKS,
+    CC_MAP_ASH_POOR_SKIN,
+    CC_MAP_CROWNLESS_ATLAS
+} CcCollectibleMapSlot;
 
 typedef struct CcKingdom {
     CcId id;
@@ -419,6 +450,24 @@ typedef struct CcGoblinCult {
     int32_t hoard_defenses;
 } CcGoblinCult;
 
+typedef enum CcDragonLifeStage {
+    CC_DRAGON_STAGE_EGG,
+    CC_DRAGON_STAGE_WHELP,
+    CC_DRAGON_STAGE_WANDERER,
+    CC_DRAGON_STAGE_CROWNED,
+    CC_DRAGON_STAGE_DEEP_WYRM,
+    CC_DRAGON_STAGE_UNCROWNED,
+    CC_DRAGON_STAGE_AFTERDRAGON
+} CcDragonLifeStage;
+
+typedef enum CcDragonActivity {
+    CC_DRAGON_ACTIVITY_DORMANT,
+    CC_DRAGON_ACTIVITY_HUNTING,
+    CC_DRAGON_ACTIVITY_RETALIATING,
+    CC_DRAGON_ACTIVITY_BROODING,
+    CC_DRAGON_ACTIVITY_AFTERMATH
+} CcDragonActivity;
+
 typedef struct CcDragon {
     CcId id;
     char name[CC_NAME_CAPACITY];
@@ -435,6 +484,24 @@ typedef struct CcDragon {
     int32_t retaliations;
     bool slain;
     int32_t slain_day;
+    CcDragonLifeStage life_stage;
+    CcDragonActivity activity;
+    int32_t age_days;
+    int32_t body_condition;
+    int32_t crown_strength;
+    int32_t memory_integrity;
+    int32_t territory_stability;
+    int32_t regional_influence;
+    int32_t crown_continuity_days;
+    int32_t hunt_cooldown_days;
+    int32_t hunts;
+    int32_t egg_count;
+    int32_t brood_days_remaining;
+    int32_t brood_cooldown_days;
+    int32_t broods_laid;
+    int32_t whelps_dispersed;
+    int32_t afterdeath_days;
+    CcId lifecycle_event_id;
 } CcDragon;
 
 typedef enum CcDragonCampaignPhase {
@@ -635,6 +702,8 @@ typedef struct CcPlayerCompany {
     int32_t passenger_capacity;
     int32_t map_capacity;
     int32_t reputation;
+    uint32_t map_catalogue_mask;
+    uint32_t map_archive_mask;
     CcId accepted_situation_id;
 } CcPlayerCompany;
 
@@ -702,6 +771,7 @@ typedef struct CcSim {
 void CcSimInit(CcSim *sim, uint32_t seed);
 /* Used by both new worlds and save migrations. Safe to call more than once. */
 void CcSimInitializeDragonCycle(CcSim *sim);
+void CcSimInitializeDragonEcology(CcSim *sim);
 void CcSimInitializeHoardRaiders(CcSim *sim);
 void CcSimAdvanceDays(CcSim *sim, int32_t days);
 /* Consumes exact 60 Hz ticks only while a committed journey is travelling. */
@@ -721,6 +791,8 @@ const char *CcBanditCampSizeName(CcBanditCampSize size);
 const char *CcBanditRaidPhaseName(CcBanditRaidPhase phase);
 const char *CcDungeonStateName(CcDungeonState state);
 const char *CcEventKindName(CcEventKind kind);
+const char *CcDragonLifeStageName(CcDragonLifeStage stage);
+const char *CcDragonActivityName(CcDragonActivity activity);
 const char *CcSituationKindName(CcSituationKind kind);
 
 const CcSettlement *CcSimSettlement(const CcSim *sim, CcId id);
@@ -766,5 +838,9 @@ bool CcSimLaunchBanditRaid(CcSim *sim, CcId bandit_id,
                            char *error, size_t error_capacity);
 int32_t CcPlayerCargoUsed(const CcPlayerCompany *player);
 int32_t CcPlayerMapCount(const CcSim *sim);
+int32_t CcPlayerMapCollectionCount(const CcSim *sim);
+bool CcSimMapIsCatalogued(const CcSim *sim, const CcMap *map);
+bool CcSimMapIsArchived(const CcSim *sim, const CcMap *map);
+void CcSimUpgradeMapCollection(CcSim *sim);
 
 #endif
