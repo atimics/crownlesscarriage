@@ -227,7 +227,8 @@ typedef enum CcCommandKind {
     /* Appended so command journals written by earlier schema versions keep
        their stable numeric meanings. */
     CC_COMMAND_RESOLVE_ENCOUNTER_PROVISIONS,
-    CC_COMMAND_WITHDRAW_ENCOUNTER
+    CC_COMMAND_WITHDRAW_ENCOUNTER,
+    CC_COMMAND_INTERCEPT_DRAGON_TRIBUTE
 } CcCommandKind;
 
 typedef enum CcCollectibleMapSlot {
@@ -841,6 +842,7 @@ const char *CcBanditReactionName(int32_t roll);
 int32_t CcSimActiveSituationCount(const CcSim *sim);
 int32_t CcSimIncomingGood(const CcSim *sim, CcId settlement_id, CcGood good);
 int32_t CcSimRouteDanger(const CcSim *sim, CcId route_id);
+int32_t CcSimDragonBattleStrength(const CcSim *sim);
 int32_t CcSimInequalityAtSettlement(const CcSim *sim, CcId settlement_id);
 int32_t CcSimWarBurdenAtSettlement(const CcSim *sim, CcId settlement_id);
 int32_t CcSimWarSupplyCrisisAtSettlement(const CcSim *sim,

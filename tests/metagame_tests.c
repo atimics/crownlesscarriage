@@ -262,6 +262,17 @@ int main(void)
                                output, sizeof(output)));
     CC_CHECK(dragon.sim.dragon.stolen_treasure_id == 0U);
     CC_CHECK(remembered->owner_id == dragon.sim.dragon.id);
+    dragon.sim.goblins.tribute_phase = CC_GOBLIN_TRIBUTE_TO_DRAGON;
+    dragon.sim.goblins.tribute_target_id =
+        dragon.sim.dragon.lair_settlement_id;
+    dragon.sim.goblins.tribute_days_remaining = 2;
+    dragon.sim.goblins.carried_tribute = 7;
+    CcMoney intercept_coins = dragon.sim.player.coins;
+    CC_CHECK(CcMetagameExecute(&dragon, "dragon intercept",
+                               output, sizeof(output)));
+    CC_CHECK(dragon.sim.player.coins == intercept_coins + 7);
+    CC_CHECK(dragon.sim.goblins.tribute_phase ==
+             CC_GOBLIN_TRIBUTE_IDLE);
 
     puts("Text-first metagame tests passed");
     return 0;

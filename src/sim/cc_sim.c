@@ -2594,17 +2594,11 @@ static void PlanGoblinTribute(CcSim *sim)
                goblins->lair_stock[CC_GOOD_WEAPONS] < 3) {
         goblins->raid_motive = CC_GOBLIN_RAID_EQUIPMENT;
     } else if (sim->dragon.slain) {
-        int32_t relics = goblins->lair_stock[CC_GOOD_GOLD] +
-                         goblins->lair_stock[CC_GOOD_GEMS];
-        bool rebuilding = sim->dragon.egg_count == 0 &&
-                          goblins->members >= 24 &&
-                          goblins->devotion >= 40 &&
-                          (goblins->lair_coins < 120 || relics < 2);
-        if (!rebuilding) {
-            goblins->tribute_cooldown_days = 14;
-            return;
-        }
-        goblins->raid_motive = CC_GOBLIN_RAID_DRAGON_TRIBUTE;
+        /* A dead dragon has no hidden replacement clutch to provision.
+           The cult may still raid when hungry or under-equipped, but it
+           cannot manufacture a successor from stolen relics. */
+        goblins->tribute_cooldown_days = 14;
+        return;
     } else {
         goblins->raid_motive = CC_GOBLIN_RAID_DRAGON_TRIBUTE;
     }
@@ -3236,7 +3230,9 @@ static void DragonHunt(CcSim *sim)
     dragon->body_condition = ClampI32(
         dragon->body_condition + taken * 5, 0, 100);
     dragon->hunt_cooldown_days =
-        28 + (int32_t)(NextRandom(sim) % 57U);
+        dragon->life_stage == CC_DRAGON_STAGE_UNCROWNED ?
+            14 + (int32_t)(NextRandom(sim) % 29U) :
+            28 + (int32_t)(NextRandom(sim) % 57U);
     dragon->hunts += 1;
     dragon->activity = CC_DRAGON_ACTIVITY_HUNTING;
     char text[CC_EVENT_TEXT_CAPACITY];
@@ -3408,45 +3404,6 @@ static void AdvanceAfterdragonCult(CcSim *sim)
         goblins->devotion = ClampI32(goblins->devotion + 1, 0, 100);
     }
 
-    int32_t relics = goblins->lair_stock[CC_GOOD_GOLD] +
-                     goblins->lair_stock[CC_GOOD_GEMS];
-    bool can_reveal_clutch = dragon->egg_count == 0 &&
-        dragon->afterdeath_days >= 120 * 365 &&
-        goblins->members >= 48 && goblins->devotion >= 75 &&
-        goblins->lair_coins >= 120 && relics >= 2 &&
-        goblins->lair_stock[CC_GOOD_FOOD] >= 12 &&
-        goblins->lair_stock[CC_GOOD_TOOLS] >= 2 &&
-        goblins->lair_stock[CC_GOOD_WEAPONS] >= 3;
-    if (!can_reveal_clutch) return;
-
-    CcMoney ritual_coins = 120;
-    goblins->lair_coins -= ritual_coins;
-    dragon->hoard += ritual_coins;
-    for (int32_t relic = 0; relic < 2; ++relic) {
-        CcGood good = goblins->lair_stock[CC_GOOD_GEMS] > 0 ?
-                      CC_GOOD_GEMS : CC_GOOD_GOLD;
-        goblins->lair_stock[good] -= 1;
-        dragon->hoard_goods[good] += 1;
-    }
-    goblins->lair_stock[CC_GOOD_FOOD] -= 12;
-    goblins->lair_stock[CC_GOOD_TOOLS] -= 1;
-    goblins->lair_stock[CC_GOOD_WEAPONS] -= 1;
-    dragon->egg_count = goblins->members >= 72 &&
-                        goblins->devotion >= 90 ? 2 : 1;
-    dragon->brood_days_remaining =
-        (10 + (int32_t)(NextRandom(sim) % 6U)) * 365;
-    char text[CC_EVENT_TEXT_CAPACITY];
-    (void)snprintf(
-        text, sizeof(text),
-        "%s opens a sealed ash-vault and reveals %d dragon egg%s, bought with stolen coin and years of sacrifice.",
-        goblins->name, dragon->egg_count,
-        dragon->egg_count == 1 ? "" : "s");
-    CcEvent *event = PushEvent(
-        sim, CC_EVENT_GOBLIN_DRAGON_SEED, goblins->id,
-        dragon->lair_settlement_id, dragon->lifecycle_event_id,
-        dragon->egg_count, text);
-    dragon->lifecycle_event_id = event != NULL ? event->id :
-                                  dragon->lifecycle_event_id;
 }
 
 static void AdvanceLivingDragonCult(CcSim *sim)
@@ -3647,6 +3604,7 @@ static void AdvanceDragonEcology(CcSim *sim)
     }
 
     int32_t hunt_threshold = fast_metabolism ? 65 :
+        dragon->life_stage == CC_DRAGON_STAGE_UNCROWNED ? 58 :
         dragon->life_stage == CC_DRAGON_STAGE_DEEP_WYRM ? 35 : 45;
     if (dragon->stolen_outstanding > 0) {
         dragon->activity = CC_DRAGON_ACTIVITY_RETALIATING;
@@ -3830,7 +3788,34 @@ int32_t CcSimRouteDanger(const CcSim *sim, CcId route_id)
     }
     danger += MonsterPressureAtSettlement(sim, route->from_id) / 10;
     danger += MonsterPressureAtSettlement(sim, route->to_id) / 10;
+    bool touches_dragon_country =
+        route->from_id == sim->dragon.lair_settlement_id ||
+        route->to_id == sim->dragon.lair_settlement_id;
+    if (touches_dragon_country) {
+        int32_t shadow_divisor = sim->dragon.slain ? 20 : 12;
+        danger += sim->dragon.regional_influence / shadow_divisor;
+    }
     return ClampI32(danger, 0, 95);
+}
+
+int32_t CcSimDragonBattleStrength(const CcSim *sim)
+{
+    if (sim == NULL || sim->dragon.slain) return 0;
+    const CcDragon *dragon = &sim->dragon;
+    int32_t stage_strength = 0;
+    switch (dragon->life_stage) {
+        case CC_DRAGON_STAGE_EGG: stage_strength = 8; break;
+        case CC_DRAGON_STAGE_WHELP: stage_strength = 28; break;
+        case CC_DRAGON_STAGE_WANDERER: stage_strength = 40; break;
+        case CC_DRAGON_STAGE_CROWNED: stage_strength = 55; break;
+        case CC_DRAGON_STAGE_DEEP_WYRM: stage_strength = 70; break;
+        case CC_DRAGON_STAGE_UNCROWNED: stage_strength = 36; break;
+        case CC_DRAGON_STAGE_AFTERDRAGON: return 0;
+    }
+    return stage_strength + dragon->body_condition / 10 +
+           dragon->crown_strength / 12 +
+           dragon->territory_stability / 20 +
+           dragon->memory_integrity / 25;
 }
 
 static CcMoney TradeRouteToll(const CcSim *sim, const CcRoute *route)
@@ -5230,7 +5215,8 @@ static void AdvanceDragonCampaign(CcSim *sim)
                      campaign->supplies[CC_GOOD_TOOLS] * 2 +
                      campaign->supplies[CC_GOOD_FOOD] / 4 +
                      allies * 12 + (int32_t)(NextRandom(sim) % 21U);
-    int32_t defense = 65 + sim->goblins.members / 2 +
+    int32_t defense = CcSimDragonBattleStrength(sim) +
+                      sim->goblins.members / 2 +
                       sim->goblins.devotion / 4 +
                       MinimumI32(18, sim->goblins.hoard_defenses * 3) +
                       (int32_t)(NextRandom(sim) % 31U);
@@ -6586,6 +6572,89 @@ static bool ApplyReturnDragonNamedTreasure(
     return true;
 }
 
+static bool ApplyInterceptDragonTribute(
+    CcSim *sim, char *error, size_t error_capacity)
+{
+    CcGoblinCult *goblins = &sim->goblins;
+    if (sim->journey.active ||
+        sim->player.location_id != sim->dragon.lair_settlement_id) {
+        SetError(error, error_capacity,
+                 "The tribute can only be intercepted at the dragon cave approach.");
+        return false;
+    }
+    if (sim->dragon.slain ||
+        goblins->tribute_phase != CC_GOBLIN_TRIBUTE_TO_DRAGON) {
+        SetError(error, error_capacity,
+                 "No dragon tribute is approaching the cave.");
+        return false;
+    }
+
+    CcTreasure *treasure = NULL;
+    if (goblins->carried_treasure_id != 0U) {
+        treasure = (CcTreasure *)CcSimTreasure(
+            sim, goblins->carried_treasure_id);
+        if (treasure == NULL || treasure->destroyed) {
+            SetError(error, error_capacity,
+                     "The tribute's named treasure cannot be accounted for.");
+            return false;
+        }
+    }
+    CcPlayerCompany loaded = sim->player;
+    int32_t goods_taken = 0;
+    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        loaded.cargo[good] += goblins->carried_goods[good];
+        goods_taken += goblins->carried_goods[good];
+    }
+    if (treasure != NULL) loaded.treasure_cargo_slots += 1;
+    if (CcPlayerCargoUsed(&loaded) > loaded.cargo_capacity) {
+        SetError(error, error_capacity,
+                 "The carriage lacks room for the whole tribute load.");
+        return false;
+    }
+
+    CcId parent_id = goblins->tribute_event_id;
+    CcMoney coins_taken = goblins->carried_tribute;
+    sim->player.coins += coins_taken;
+    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        sim->player.cargo[good] += goblins->carried_goods[good];
+        goblins->carried_goods[good] = 0;
+    }
+    if (treasure != NULL) {
+        treasure->owner_id = sim->player.id;
+        treasure->location_id = sim->player.location_id;
+        sim->player.treasure_cargo_slots += 1;
+    }
+
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(
+        text, sizeof(text),
+        "The Crownless carriage intercepts %" PRId64
+        " tribute crowns, %d goods%s before they enter %s's hoard.",
+        coins_taken, goods_taken,
+        treasure != NULL ? ", and a named treasure" : "",
+        sim->dragon.name);
+    int64_t value = coins_taken + goods_taken +
+                    (treasure != NULL ? treasure->appraised_value : 0);
+    (void)PushEvent(
+        sim, CC_EVENT_GOBLIN_TRIBUTE_TAKEN, sim->player.id,
+        sim->dragon.lair_settlement_id, parent_id,
+        value > INT32_MAX ? INT32_MAX : (int32_t)value, text);
+
+    goblins->tribute_phase = CC_GOBLIN_TRIBUTE_IDLE;
+    goblins->raid_motive = CC_GOBLIN_RAID_NONE;
+    goblins->tribute_target_id = 0U;
+    goblins->tribute_event_id = 0U;
+    goblins->carried_tribute = 0;
+    goblins->carried_treasure_id = 0U;
+    goblins->tribute_days_remaining = 0;
+    goblins->tribute_cooldown_days = 35;
+    goblins->devotion = ClampI32(goblins->devotion - 8, 0, 100);
+    sim->player.reputation = ClampI32(
+        sim->player.reputation - 3, -100, 100);
+    SetError(error, error_capacity, "");
+    return true;
+}
+
 static bool ApplyAcceptSituation(CcSim *sim, const CcCommand *command,
                                  char *error, size_t error_capacity)
 {
@@ -7647,6 +7716,9 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
         case CC_COMMAND_WITHDRAW_ENCOUNTER:
             return ApplyWithdrawEncounter(sim, command,
                                           error, error_capacity);
+        case CC_COMMAND_INTERCEPT_DRAGON_TRIBUTE:
+            return ApplyInterceptDragonTribute(
+                sim, error, error_capacity);
         case CC_COMMAND_STEAL_DRAGON_HOARD: {
             if (sim->dragon.slain) {
                 SetError(error, error_capacity,
