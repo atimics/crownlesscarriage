@@ -11387,7 +11387,7 @@ static bool DrawHeroSkin(const CcHumanoidSkinPose *skin,
             hero_skin.pose[bone].scale, gameplay_scale);
     }
     if (record_statistics) {
-        CcLocalRendererRecordSkinUpdate(hero_skin.model.meshCount);
+        CcLocalRendererRecordHeroSkinUpdate(hero_skin.model.meshCount);
     }
     UpdateModelAnimation(hero_skin.model, hero_skin.animation, 0.0f);
     if (visible) {
@@ -13477,7 +13477,6 @@ static void DrawWorldBuildings(Color kingdom, Vector3 focus,
                                int32_t render_width, int32_t render_height,
                                float clock)
 {
-    (void)focus;
     float reveal_cut_height = reveal_world.y - 0.30f;
     UpdateWorldBuildingReveals(camera, reveal_world,
                                render_width, render_height, clock);
@@ -13488,6 +13487,7 @@ static void DrawWorldBuildings(Color kingdom, Vector3 focus,
     for (int32_t i = 0; i < (int32_t)(sizeof(WORLD_BUILDINGS) /
                                       sizeof(WORLD_BUILDINGS[0])); ++i) {
         const WorldBuilding *building = &WORLD_BUILDINGS[i];
+        if (!SceneryFootprintVisible(building->footprint, focus)) continue;
         Color wall = BuildingWallColor(building->style);
         rlPushMatrix();
         rlTranslatef(0.0f, TerrainFootprintHeight(building->footprint), 0.0f);
@@ -13502,6 +13502,7 @@ static void DrawWorldBuildings(Color kingdom, Vector3 focus,
     for (int32_t i = 0; i < (int32_t)(sizeof(WORLD_BUILDINGS) /
                                       sizeof(WORLD_BUILDINGS[0])); ++i) {
         const WorldBuilding *building = &WORLD_BUILDINGS[i];
+        if (!SceneryFootprintVisible(building->footprint, focus)) continue;
         /* The market footprint remains authoritative for collision, but its
            visible shell comes from the shared Blender library when present.
            A camera-to-hero sightline classifies the complete house at its
@@ -13614,8 +13615,8 @@ static void DrawCastle(Color kingdom, Vector3 focus, Camera3D camera,
                        int32_t render_width, int32_t render_height,
                        float clock)
 {
-    (void)focus;
     Rectangle keep_pad = {65.20f, 8.20f, 26.50f, 24.40f};
+    if (!SceneryFootprintVisible(keep_pad, focus)) return;
     float reveal_cut_height = reveal_world.y - 0.30f;
     UpdateCastleStructureReveals(camera, reveal_world,
                                  render_width, render_height, clock);
@@ -18022,7 +18023,8 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     DrawWorldBuildings(kingdom, scenery_focus, camera,
                        foreground_reveal_world,
                        target.texture.width, target.texture.height, clock);
-    {
+    if (SceneryFootprintVisible(WORLD_BUILDINGS[2].footprint,
+                                scenery_focus)) {
         float reveal_cut_height = foreground_reveal_world.y - 0.30f;
         SetWorldForegroundReveal(world_building_reveals[2].amount,
                                  reveal_cut_height);

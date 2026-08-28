@@ -349,7 +349,7 @@ static void DrawPerformanceOverlay(void)
     float fps = stats.smoothed_frame_milliseconds > 0.001f ?
         1000.0f / stats.smoothed_frame_milliseconds : 0.0f;
     Rectangle bounds = {(float)GetScreenWidth() - 294.0f, 18.0f,
-                        276.0f, 92.0f};
+                        276.0f, 110.0f};
     DrawPanel(bounds, PANEL_DEEP);
     CcOverlayDrawText("LOCAL PERFORMANCE", (int)bounds.x + 14,
              (int)bounds.y + 11, 12, TEAL);
@@ -359,11 +359,17 @@ static void DrawPerformanceOverlay(void)
     CcOverlayDrawText(TextFormat("skin %d update  %d mesh uploads",
                         stats.skin_updates, stats.skinned_meshes),
              (int)bounds.x + 14, (int)bounds.y + 50, 11, INK);
+    CcOverlayDrawText(TextFormat("p95 %4.1f  p99 %4.1f  hitches %d",
+                        stats.p95_frame_milliseconds,
+                        stats.p99_frame_milliseconds,
+                        stats.hitch_count),
+             (int)bounds.x + 14, (int)bounds.y + 68, 10,
+             stats.hitch_count > 0 ? DANGER : MUTED);
     CcOverlayDrawText(TextFormat("bipeds %d  hero %d  lod %d",
                         stats.biomechanical_characters,
                         stats.high_detail_characters,
                         stats.low_detail_characters),
-             (int)bounds.x + 14, (int)bounds.y + 68, 11, MUTED);
+             (int)bounds.x + 14, (int)bounds.y + 86, 11, MUTED);
 }
 
 static void DrawTwoLineText(const char *text, int x, int y,
@@ -3016,7 +3022,9 @@ int main(int argc, char **argv)
                       "Crownless Carriage could not connect to the desktop window server.\n");
         return 1;
     }
-    SetWindowMinSize(1080, 680);
+    /* The HUD and two-times pixel-art viewport share a 1280x760 canvas.
+       Do not let the window shrink below that canvas and hide controls. */
+    SetWindowMinSize(1280, 760);
     SetTargetFPS(render_benchmark || capture_action_reel ||
                  capture_gameplay_reel || capture_creature_reel ? 0 : 60);
     Texture2D illustrated_map = {0};
@@ -3600,12 +3608,19 @@ int main(int argc, char **argv)
     if (render_benchmark) {
         double frames_per_second =
             (double)render_benchmark_count / render_benchmark_elapsed;
-        (void)printf("render: frames=%d seconds=%.6f ms/frame=%.3f fps=%.1f skin_updates=%d skinned_meshes=%d high_detail=%d lod=%d\n",
+        (void)printf("render: frames=%d seconds=%.6f ms/frame=%.3f fps=%.1f p95=%.3f p99=%.3f max=%.3f hitches=%d skin_updates=%d skinned_meshes=%d hero_skin_updates=%d hero_skinned_meshes=%d high_detail=%d lod=%d\n",
                      render_benchmark_count, render_benchmark_elapsed,
                      render_benchmark_elapsed * 1000.0 /
                          (double)render_benchmark_count,
-                     frames_per_second, final_renderer_stats.skin_updates,
+                     frames_per_second,
+                     final_renderer_stats.p95_frame_milliseconds,
+                     final_renderer_stats.p99_frame_milliseconds,
+                     final_renderer_stats.maximum_frame_milliseconds,
+                     final_renderer_stats.hitch_count,
+                     final_renderer_stats.skin_updates,
                      final_renderer_stats.skinned_meshes,
+                     final_renderer_stats.hero_skin_updates,
+                     final_renderer_stats.hero_skinned_meshes,
                      final_renderer_stats.high_detail_characters,
                      final_renderer_stats.low_detail_characters);
         bool performance_failed = render_benchmark_minimum_fps > 0.0 &&
@@ -3615,11 +3630,11 @@ int main(int argc, char **argv)
             final_renderer_stats.high_detail_characters != 1 ||
             final_renderer_stats.low_detail_characters <= 0;
         bool skin_layout_failed = screen_first_hero ?
-            final_renderer_stats.skin_updates != 0 ||
-                final_renderer_stats.skinned_meshes != 0 ||
+            final_renderer_stats.hero_skin_updates != 0 ||
+                final_renderer_stats.hero_skinned_meshes != 0 ||
                 hero_layout_failed :
-            final_renderer_stats.skin_updates != 1 ||
-                final_renderer_stats.skinned_meshes >
+            final_renderer_stats.hero_skin_updates != 1 ||
+                final_renderer_stats.hero_skinned_meshes >
                     CC_LOCAL_HERO_RUNTIME_MESH_BUDGET ||
                 hero_layout_failed;
         if (performance_failed) {
@@ -3629,9 +3644,9 @@ int main(int argc, char **argv)
         }
         if (skin_layout_failed) {
             (void)fprintf(stderr,
-                          "render skin budget failed: updates=%d meshes=%d hero=%d lod=%d (mesh budget %d)\n",
-                          final_renderer_stats.skin_updates,
-                          final_renderer_stats.skinned_meshes,
+                          "render hero skin budget failed: updates=%d meshes=%d hero=%d lod=%d (mesh budget %d)\n",
+                          final_renderer_stats.hero_skin_updates,
+                          final_renderer_stats.hero_skinned_meshes,
                           final_renderer_stats.high_detail_characters,
                           final_renderer_stats.low_detail_characters,
                           CC_LOCAL_HERO_RUNTIME_MESH_BUDGET);

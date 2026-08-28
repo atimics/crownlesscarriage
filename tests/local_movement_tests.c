@@ -1998,6 +1998,25 @@ static void TestBuildingCutawaySelection(void)
 
 int main(void)
 {
+    for (int32_t frame = 0; frame < 239; ++frame) {
+        CcLocalRendererBeginFrame(0.010f);
+    }
+    CcLocalRendererBeginFrame(0.050f);
+    CcLocalRendererRecordSkinUpdate(1);
+    CcLocalRendererRecordHeroSkinUpdate(3);
+    CcLocalRendererStats performance = CcLocalRendererGetStats();
+    if (performance.p95_frame_milliseconds < 9.9f ||
+        performance.p95_frame_milliseconds > 10.1f ||
+        performance.maximum_frame_milliseconds < 49.9f ||
+        performance.hitch_count != 1 ||
+        performance.skin_updates != 2 || performance.skinned_meshes != 4 ||
+        performance.hero_skin_updates != 1 ||
+        performance.hero_skinned_meshes != 3) {
+        (void)fprintf(stderr,
+                      "renderer hitch or hero skin metrics were incorrect\n");
+        return 1;
+    }
+
     TestBuildingCutawaySelection();
     TestRoadBridgeSupport();
     TestFaceAngleAndLodContract();

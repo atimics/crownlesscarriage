@@ -295,11 +295,17 @@ typedef struct CcLocalCourse {
 typedef struct CcLocalRendererStats {
     float frame_milliseconds;
     float smoothed_frame_milliseconds;
+    float p95_frame_milliseconds;
+    float p99_frame_milliseconds;
+    float maximum_frame_milliseconds;
+    int32_t hitch_count;
     int32_t biomechanical_characters;
     int32_t high_detail_characters;
     int32_t low_detail_characters;
     int32_t skin_updates;
     int32_t skinned_meshes;
+    int32_t hero_skin_updates;
+    int32_t hero_skinned_meshes;
 } CcLocalRendererStats;
 
 /* Keep the player skin comfortably below raylib's CPU skinning/upload cliff.
