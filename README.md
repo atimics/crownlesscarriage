@@ -70,6 +70,8 @@ The architecture proof connects these parts in one running build:
 - Two persistent named carriage horses whose food, health, and fatigue affect
   travel, plus cattle herds that consume fodder, support farms, reproduce,
   face famine slaughter, and can be taken by dragons
+- Stable breeding with pregnancy, named foals, inherited working traits,
+  boarding care, training, lineage, and two-horse carriage team selection
 - Immediate local aftermath and delayed consequences after a journey
 - A deterministic regional simulation of settlements, kingdoms, factions,
   production, trade, shipments, hunger, security, bandits, monsters, and

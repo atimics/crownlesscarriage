@@ -19,6 +19,7 @@
 #define CC_MAX_SITUATIONS 12
 #define CC_MAX_EVENTS 256
 #define CC_CARRIAGE_HORSE_COUNT 2
+#define CC_MAX_STABLE_HORSES 6
 #define CC_NAME_CAPACITY 32
 #define CC_MAP_NAME_CAPACITY 48
 #define CC_EVENT_TEXT_CAPACITY 144
@@ -28,8 +29,8 @@
 #define CC_GLOAMGATE_ALDERWATCH_MAP_NAME "Gloamgate to Alderwatch"
 #define CC_CROWNLESS_ATLAS_MAP_NAME "The Crownless Atlas"
 
-#define CC_SIM_SCHEMA_VERSION 14
-#define CC_GENERATOR_VERSION 14
+#define CC_SIM_SCHEMA_VERSION 15
+#define CC_GENERATOR_VERSION 15
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
 #define CC_WORLD_DAY_SUBTICKS (24 * 60 * CC_WORLD_MINUTE_SUBTICKS)
@@ -211,7 +212,10 @@ typedef enum CcEventKind {
     CC_EVENT_GOBLIN_DRAGON_SEED,
     CC_EVENT_ENCOUNTER_WITHDRAWN,
     CC_EVENT_COW_CALVING,
-    CC_EVENT_COW_SLAUGHTERED
+    CC_EVENT_COW_SLAUGHTERED,
+    CC_EVENT_HORSE_BRED,
+    CC_EVENT_FOAL_BORN,
+    CC_EVENT_HORSE_TEAM_CHANGED
 } CcEventKind;
 
 typedef enum CcCommandKind {
@@ -238,8 +242,15 @@ typedef enum CcCommandKind {
     /* Appended so command journals written by earlier schema versions keep
        their stable numeric meanings. */
     CC_COMMAND_RESOLVE_ENCOUNTER_PROVISIONS,
-    CC_COMMAND_WITHDRAW_ENCOUNTER
+    CC_COMMAND_WITHDRAW_ENCOUNTER,
+    CC_COMMAND_BREED_HORSES,
+    CC_COMMAND_ASSIGN_HORSE
 } CcCommandKind;
+
+typedef enum CcHorseSex {
+    CC_HORSE_MARE,
+    CC_HORSE_STALLION
+} CcHorseSex;
 
 typedef enum CcCollectibleMapSlot {
     CC_MAP_THORNFORD_FORDINGS,
@@ -320,6 +331,17 @@ typedef struct CcHorse {
     int32_t health;
     int32_t fatigue;
     int32_t hunger;
+    CcHorseSex sex;
+    CcId sire_id;
+    CcId dam_id;
+    CcId stable_settlement_id;
+    CcId pregnant_by_id;
+    int32_t pregnancy_days_remaining;
+    int32_t breeding_cooldown_days;
+    int32_t training;
+    int32_t strength;
+    int32_t temperament;
+    int32_t hardiness;
 } CcHorse;
 
 typedef struct CcRoute {
@@ -786,6 +808,8 @@ typedef struct CcSim {
     CcEvent events[CC_MAX_EVENTS];
     CcPlayerCompany player;
     CcHorse horse_team[CC_CARRIAGE_HORSE_COUNT];
+    CcHorse stable_horses[CC_MAX_STABLE_HORSES];
+    int32_t stable_horse_count;
     CcWorldClock clock;
     CcJourneyEncounter journey;
     CcCarriageState carriage;
@@ -819,6 +843,7 @@ void CcSimInitializeDragonCycle(CcSim *sim);
 void CcSimInitializeDragonEcology(CcSim *sim);
 void CcSimInitializeHoardRaiders(CcSim *sim);
 void CcSimInitializeAnimalEconomy(CcSim *sim);
+void CcSimInitializeHorseStableSystem(CcSim *sim);
 void CcSimAdvanceDays(CcSim *sim, int32_t days);
 /* Consumes exact 60 Hz ticks only while a committed journey is travelling. */
 void CcSimAdvanceRuntimeTicks(CcSim *sim, int32_t ticks);
@@ -827,6 +852,12 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
 bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity);
 uint64_t CcSimHash(const CcSim *sim);
 int32_t CcSimHorseTeamReadiness(const CcSim *sim);
+int32_t CcSimHorseCount(const CcSim *sim);
+const CcHorse *CcSimHorseAt(const CcSim *sim, int32_t index);
+const CcHorse *CcSimHorse(const CcSim *sim, CcId horse_id);
+const char *CcHorseSexName(CcHorseSex sex);
+const char *CcHorseLifeStageName(const CcHorse *horse);
+bool CcHorseWorkingReady(const CcHorse *horse);
 
 CcId CcMakeId(CcEntityKind kind, uint64_t serial);
 CcEntityKind CcIdKind(CcId id);
