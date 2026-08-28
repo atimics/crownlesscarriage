@@ -131,19 +131,105 @@ int main(void)
     }
     for (int32_t place = 0;
          place < road_work.settlement_count; ++place) {
-        road_work.settlements[place].stock[CC_GOOD_FOOD] = 0;
-        road_work.settlements[place].stock[CC_GOOD_TOOLS] = 0;
-        road_work.settlements[place].production[CC_GOOD_FOOD] = 0;
-        road_work.settlements[place].consumption[CC_GOOD_FOOD] = 0;
+        road_work.settlements[place].market_coins = 0;
+        road_work.settlements[place].war_chest = 0;
+        road_work.settlements[place].service_mask = 0U;
+        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+            road_work.settlements[place].stock[good] = 0;
+            road_work.settlements[place].reserve_target[good] = 0;
+            road_work.settlements[place].production[good] = 0;
+            road_work.settlements[place].consumption[good] = 0;
+        }
     }
+    road_work.iron_ledger_reserve = 0;
     road_work.routes[0].closed = true;
     road_work.routes[0].condition = 20;
     road_work.routes[0].smuggler_route = false;
     int32_t road_population = road_work.settlements[1].population;
     CcSimAdvanceDays(&road_work, 364);
+    CC_CHECK(road_work.routes[0].closed);
+    road_work.settlements[1].stock[CC_GOOD_FOOD] = 40;
+    road_work.settlements[1].stock[CC_GOOD_TOOLS] = 10;
+    CcSimAdvanceDays(&road_work, 560);
     CC_CHECK(!road_work.routes[0].closed);
-    CC_CHECK(road_work.routes[0].condition >= 45);
     CC_CHECK(road_work.settlements[1].population < road_population);
+
+    CcSim ruin;
+    QuietWorld(&ruin, UINT32_C(0xba1abadd));
+    CcSettlement *failed = &ruin.settlements[0];
+    failed->population = 79;
+    failed->hunger = 90;
+    failed->stock[CC_GOOD_FOOD] = 0;
+    failed->production[CC_GOOD_FOOD] = 0;
+    failed->consumption[CC_GOOD_FOOD] = 7;
+    CcSimAdvanceDays(&ruin, 27);
+    CC_CHECK(CcSettlementIsAbandoned(failed));
+    CC_CHECK(failed->service_mask == 0U);
+    CC_CHECK(failed->prosperity == 0);
+
+    CcSim reclaimed;
+    CcSimInit(&reclaimed, UINT32_C(0xba1a5eed));
+    reclaimed.settlement_count = 2;
+    reclaimed.route_count = 1;
+    reclaimed.shipment_count = 0;
+    reclaimed.courier_count = 0;
+    reclaimed.bandit_count = 0;
+    reclaimed.monster_count = 0;
+    reclaimed.dungeon_count = 0;
+    reclaimed.situation_count = 0;
+    reclaimed.dragon.slain = true;
+    reclaimed.goblins.tribute_cooldown_days = 10000;
+    reclaimed.hoard_raiders.cooldown_days = 10000;
+    CcSettlement *donor = &reclaimed.settlements[0];
+    CcSettlement *old_ruin = &reclaimed.settlements[1];
+    old_ruin->population = 0;
+    old_ruin->security = 0;
+    old_ruin->prosperity = 0;
+    old_ruin->hunger = 100;
+    old_ruin->service_mask = 0U;
+    old_ruin->service_project = CC_SERVICE_NONE;
+    old_ruin->service_project_days = 0;
+    donor->population = 2000;
+    donor->hunger = 0;
+    donor->prosperity = 90;
+    donor->stock[CC_GOOD_FOOD] = 100;
+    donor->stock[CC_GOOD_TOOLS] = 10;
+    donor->market_coins = 100;
+    reclaimed.current_day = 379 * 7 - 7;
+    CcSimAdvanceDays(&reclaimed, 7);
+    CC_CHECK(!CcSettlementIsAbandoned(old_ruin));
+    CC_CHECK(old_ruin->population == 180);
+    CC_CHECK(old_ruin->kingdom_id == donor->kingdom_id);
+    CC_CHECK(old_ruin->service_mask != 0U);
+
+    CcSim defaulted;
+    CcSimInit(&defaulted, UINT32_C(0xba1adeb7));
+    CcKingdom *debtor = &defaulted.kingdoms[0];
+    debtor->iron_ledger_debt = 500;
+    debtor->treasury = 0;
+    debtor->legitimacy = 80;
+    for (int32_t place = 0;
+         place < defaulted.settlement_count; ++place) {
+        if (defaulted.settlements[place].kingdom_id == debtor->id) {
+            defaulted.settlements[place].market_coins = 0;
+        }
+    }
+    defaulted.current_day = 10 * 364 - 7;
+    CcSimAdvanceDays(&defaulted, 7);
+    CC_CHECK(debtor->iron_ledger_debt == 0);
+    CC_CHECK(debtor->legitimacy <= 56);
+
+    CcSim climate;
+    CcSimInit(&climate, UINT32_C(0xc11a7e00));
+    int32_t first_climate = CcSimClimateFactor(&climate);
+    bool climate_changed = false;
+    for (int32_t era = 1; era <= 12; ++era) {
+        climate.current_day = era * 40 * 364 + 1;
+        int32_t factor = CcSimClimateFactor(&climate);
+        CC_CHECK(factor >= 58 && factor <= 132);
+        if (factor != first_climate) climate_changed = true;
+    }
+    CC_CHECK(climate_changed);
 
     int32_t samples = 0;
     int32_t collapse_samples = 0;
@@ -197,11 +283,12 @@ int main(void)
         CC_CHECK(legitimacy > 0);
     }
     (void)printf(
-        "balance samples=%d crisis=%d quiet=%d scars=%d war=%d peace=%d\n",
-        samples, crisis_samples, quiet_samples, scarred_samples,
+        "balance samples=%d collapse=%d crisis=%d quiet=%d scars=%d war=%d peace=%d\n",
+        samples, collapse_samples, crisis_samples, quiet_samples, scarred_samples,
         war_samples, peace_samples);
     CC_CHECK(samples > 0);
-    CC_CHECK(collapse_samples == 0);
+    CC_CHECK(collapse_samples > 0);
+    CC_CHECK(collapse_samples < samples / 5);
     CC_CHECK(crisis_samples > samples / 10);
     /* Strong cult openings still need a meaningful share of quiet years. */
     CC_CHECK(quiet_samples >= samples / 5);

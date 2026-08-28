@@ -17,8 +17,12 @@ static void PrintSummary(const CcSim *sim, bool detail)
     int32_t wars = 0;
     int32_t alliances = 0;
     int32_t active_couriers = 0;
+    int32_t abandoned_settlements = 0;
     CcMoney debt = 0;
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        if (CcSettlementIsAbandoned(&sim->settlements[i])) {
+            abandoned_settlements += 1;
+        }
         total_hunger += sim->settlements[i].hunger;
         if (sim->settlements[i].hunger > maximum_hunger) {
             maximum_hunger = sim->settlements[i].hunger;
@@ -60,7 +64,8 @@ static void PrintSummary(const CcSim *sim, bool detail)
                  " dragon_slain=%d dragon_campaign=%d/%d/%d"
                  " dragon_stage=%s activity=%s age=%d crown=%d body=%d"
                  " memory=%d territory=%d shadow=%d eggs=%d hunts=%d"
-                 " broods=%d whelps=%d afterdeath=%d\n",
+                 " broods=%d whelps=%d afterdeath=%d ruins=%d climate=%d"
+                 " campaign_experience=%d\n",
                  sim->current_day, CcSimHash(sim),
                  total_hunger / sim->settlement_count, maximum_hunger,
                  travelling, sim->event_count,
@@ -89,7 +94,9 @@ static void PrintSummary(const CcSim *sim, bool detail)
                  sim->dragon.egg_count, sim->dragon.hunts,
                  sim->dragon.broods_laid,
                  sim->dragon.whelps_dispersed,
-                 sim->dragon.afterdeath_days);
+                 sim->dragon.afterdeath_days,
+                 abandoned_settlements, CcSimClimateFactor(sim),
+                 CcDragonCampaignExperience(sim));
     if (detail) {
         for (int32_t i = 0; i < sim->settlement_count; ++i) {
             const CcSettlement *place = &sim->settlements[i];

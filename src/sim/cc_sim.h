@@ -869,6 +869,9 @@ void CcSimInitializeHoardRaiders(CcSim *sim);
 void CcSimInitializeAnimalEconomy(CcSim *sim);
 void CcSimInitializeHorseStableSystem(CcSim *sim);
 void CcSimAdvanceDays(CcSim *sim, int32_t days);
+bool CcSettlementIsAbandoned(const CcSettlement *settlement);
+int32_t CcSimClimateFactor(const CcSim *sim);
+int32_t CcDragonCampaignExperience(const CcSim *sim);
 /* Consumes exact 60 Hz ticks only while a committed journey is travelling. */
 void CcSimAdvanceRuntimeTicks(CcSim *sim, int32_t ticks);
 bool CcSimApply(CcSim *sim, const CcCommand *command,
