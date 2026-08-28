@@ -500,13 +500,39 @@ static void DescribeAnimals(const CcMetagame *metagame,
     const CcSim *sim = &metagame->sim;
     Append(output, capacity, "Carriage horses — team readiness %d%%:\n",
            CcSimHorseTeamReadiness(sim));
-    for (int32_t i = 0; i < CC_CARRIAGE_HORSE_COUNT; ++i) {
-        const CcHorse *horse = &sim->horse_team[i];
+    for (int32_t i = 0; i < CcSimHorseCount(sim); ++i) {
+        const CcHorse *horse = CcSimHorseAt(sim, i);
+        const CcSettlement *stable = CcSimSettlement(
+            sim, horse->stable_settlement_id);
         Append(output, capacity,
-               "  %s: age %d, health %d, fatigue %d, hunger %d\n",
-               horse->name, horse->age_days / 365, horse->health,
-               horse->fatigue, horse->hunger);
+               "  %d. %s [%s] — %s, %s, age %d; health %d, fatigue %d, hunger %d, training %d\n",
+               i + 1, horse->name,
+               i < CC_CARRIAGE_HORSE_COUNT ?
+                   (i == 0 ? "team 1" : "team 2") :
+                   (stable != NULL ? stable->name : "boarded"),
+               CcHorseSexName(horse->sex), CcHorseLifeStageName(horse),
+               horse->age_days / 365, horse->health, horse->fatigue,
+               horse->hunger, horse->training);
+        Append(output, capacity,
+               "     traits: strength %d, temperament %d, hardiness %d",
+               horse->strength, horse->temperament, horse->hardiness);
+        if (horse->sire_id != 0U || horse->dam_id != 0U) {
+            const CcHorse *sire = CcSimHorse(sim, horse->sire_id);
+            const CcHorse *dam = CcSimHorse(sim, horse->dam_id);
+            Append(output, capacity, "; by %s out of %s",
+                   sire != NULL ? sire->name : "unknown",
+                   dam != NULL ? dam->name : "unknown");
+        }
+        if (horse->pregnant_by_id != 0U) {
+            const CcHorse *sire = CcSimHorse(sim, horse->pregnant_by_id);
+            Append(output, capacity, "; foal by %s due in %d days",
+                   sire != NULL ? sire->name : "unknown",
+                   horse->pregnancy_days_remaining);
+        }
+        Append(output, capacity, "\n");
     }
+    Append(output, capacity,
+           "At a stable: 'stable breed MARE STALLION' or 'stable team SLOT HORSE'.\n");
     Append(output, capacity, "Cattle herds:\n");
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         const CcSettlement *place = &sim->settlements[i];
@@ -915,6 +941,7 @@ static void DescribeHelp(char *output, size_t capacity)
            "  buy-treasure NUMBER, sell-treasure NUMBER, travel NUMBER\n"
            "Act on the road and world:\n"
            "  road fight|bargain, repair NUMBER tools|cash\n"
+           "  stable breed MARE STALLION, stable team SLOT HORSE\n"
            "  dungeon public|smuggler|seal, wait DAYS\n"
            "  dragon steal COUNT, dragon return COUNT (at the cave)\n"
            "  dragon steal-treasure NUMBER, dragon return-treasure\n"
@@ -1004,6 +1031,7 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
     char *command = strtok(copy, " \t");
     char *first = strtok(NULL, " \t");
     char *second = strtok(NULL, " \t");
+    char *third = strtok(NULL, " \t");
     if (command == NULL) return true;
 
     if (strcmp(command, "help") == 0) DescribeHelp(output, output_capacity);
@@ -1026,6 +1054,37 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
     } else if (strcmp(command, "cargo") == 0) {
         DescribeCargo(metagame, output, output_capacity);
     } else if (strcmp(command, "animals") == 0) {
+        DescribeAnimals(metagame, output, output_capacity);
+    } else if (strcmp(command, "stable") == 0) {
+        int32_t first_index = 0;
+        int32_t second_index = 0;
+        CcCommand action = {0};
+        if (first != NULL && strcmp(first, "breed") == 0 &&
+            ParseIndex(second, CcSimHorseCount(&metagame->sim),
+                       &first_index) &&
+            ParseIndex(third, CcSimHorseCount(&metagame->sim),
+                       &second_index)) {
+            action.kind = CC_COMMAND_BREED_HORSES;
+            action.target_id = CcSimHorseAt(
+                &metagame->sim, first_index)->id;
+            action.amount = second_index + 1;
+        } else if (first != NULL && strcmp(first, "team") == 0 &&
+                   ParseIndex(second, CC_CARRIAGE_HORSE_COUNT,
+                              &first_index) &&
+                   ParseIndex(third, CcSimHorseCount(&metagame->sim),
+                              &second_index)) {
+            action.kind = CC_COMMAND_ASSIGN_HORSE;
+            action.target_id = CcSimHorseAt(
+                &metagame->sim, second_index)->id;
+            action.amount = first_index + 1;
+        } else {
+            Append(output, output_capacity,
+                   "Use 'stable breed MARE STALLION' or 'stable team SLOT HORSE' with numbers from 'animals'.\n");
+            return false;
+        }
+        if (!ApplyCommand(metagame, &action, output, output_capacity)) {
+            return false;
+        }
         DescribeAnimals(metagame, output, output_capacity);
     } else if (strcmp(command, "economy") == 0) {
         DescribeEconomy(metagame, output, output_capacity);

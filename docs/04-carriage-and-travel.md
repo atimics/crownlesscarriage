@@ -77,6 +77,27 @@ player. Cows remain settlement herds until a later situation needs to promote
 one animal. V1 does not include riding, mounted combat, breeds, genetics, milk
 as a separate good, or any other domestic animal species.
 
+## Stable breeding
+
+Settlement stables now support a small Crownless breeding program. Bracken is
+a stallion and Morrow is a mare. Breeding requires both horses to be present,
+mature, trained, healthy, fed, and rested. The stable charges 20 crowns and
+uses 2 Food. A pregnancy lasts 330 days, and a mare in her last 30 days cannot
+leave on a carriage journey.
+
+A foal receives a persistent identity, sex, sire, dam, and three inherited
+working traits: strength, temperament, and hardiness. Small deterministic
+variation keeps siblings from being copies. Young horses are boarded where
+they are born. Stable care consumes weekly Food, restores health, lowers
+fatigue, and trains them. A horse must be at least three years old, have 60
+training, and be healthy before it can pull the carriage.
+
+The company can board up to six horses in addition to its two-horse team. At a
+stable, `stable breed MARE STALLION` starts a pregnancy and
+`stable team SLOT HORSE` swaps a ready boarded horse into team slot 1 or 2.
+Numbers come from the `animals` view. The outgoing team horse remains owned by
+the company and is boarded at that settlement.
+
 ## Walker-chassis hypothesis
 
 **Hypothesis:** the Crownless Carriage is an old articulated walker built to
