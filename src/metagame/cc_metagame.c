@@ -1084,6 +1084,7 @@ static void DescribeHelp(char *output, size_t capacity)
            "  dungeon public|smuggler|seal, wait DAYS\n"
            "  dragon steal COUNT, dragon return COUNT (at the cave)\n"
            "  dragon steal-treasure NUMBER, dragon return-treasure\n"
+           "  dragon intercept (when tribute approaches the cave)\n"
            "Keep the test:\n"
            "  save PATH, load PATH, debrief, quit\n");
 }
@@ -1255,9 +1256,11 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
                    metagame->sim.dragon.stolen_treasure_id != 0U) {
             action.kind = CC_COMMAND_RETURN_DRAGON_NAMED_TREASURE;
             action.target_id = metagame->sim.dragon.stolen_treasure_id;
+        } else if (strcmp(first, "intercept") == 0 && second == NULL) {
+            action.kind = CC_COMMAND_INTERCEPT_DRAGON_TRIBUTE;
         } else {
             Append(output, output_capacity,
-                   "Use 'dragon steal COUNT', 'dragon return COUNT', 'dragon steal-treasure NUMBER', or 'dragon return-treasure'.\n");
+                   "Use 'dragon steal COUNT', 'dragon return COUNT', 'dragon steal-treasure NUMBER', 'dragon return-treasure', or 'dragon intercept'.\n");
             return false;
         }
         action.amount = amount;

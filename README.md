@@ -96,6 +96,9 @@ The architecture proof connects these parts in one running build:
   Deep Wyrm, Uncrowned, and Afterdragon states; physical hoards stabilize
   memory, hunger takes livestock instead of burning towns, goblins tend rare
   broods with real Food, and only a visible surviving egg can found a successor
+- A playable dragon cave in the graphical client, with live Crown Cycle state,
+  hoard theft and exact restitution, visible broods and Afterdragon remains,
+  and a chance to intercept physical tribute before the dragon owns it
 - Kings who send physical declarations, peace offers, dragon alliances, and
   muster orders through a delayed and fallible courier network. The carriage
   can carry a sealed dispatch. Allied hosts consume real Food, Tools, and

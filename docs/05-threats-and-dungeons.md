@@ -132,6 +132,10 @@ recorded:
 7. The dragon remains calm unless someone later steals from the delivered
    hoard.
 
+The player can perform step 6 at the cave approach. In the graphical client,
+the action appears while tribute is inbound. In the text playtest, use
+`dragon intercept`. The carriage must have room for the entire physical load.
+
 ### The Crown Cycle
 
 A dragon's hoard is an external organ, not food and not a second treasury.
@@ -287,7 +291,8 @@ sending alliance calls. Delivered muster orders pledge real kingdoms. Two or
 more pledged realms may assemble a host only if their towns can supply 32 Food,
 8 Tools, and 12 Weapons. These goods leave the towns and travel with the host.
 The cave battle measures this supplied force against the dragon and its goblin
-worshippers. Defeat destroys the expedition's supplies and hurts its mustering
+worshippers. Dragon stage, body condition, crown strength, memory, and
+territory all contribute to its bounded battle strength. Defeat destroys the expedition's supplies and hurts its mustering
 town. Victory kills the dragon, breaks goblin devotion, and puts the dragon's
 actual crowns, cave goods, and named treasures into a returning train. Nothing
 is minted as a reward. The recovered crowns are divided between the allied
