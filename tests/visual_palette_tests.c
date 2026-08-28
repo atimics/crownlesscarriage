@@ -103,6 +103,12 @@ int main(void)
     passed &= RequireContrast("gold", CC_STYLE_GOLD, CC_STYLE_PANEL, 4.5);
     passed &= RequireContrast("danger", CC_STYLE_DANGER, CC_STYLE_PANEL, 4.5);
     passed &= RequireContrast("violet", CC_STYLE_VIOLET, CC_STYLE_PANEL, 4.5);
+    passed &= RequireContrast("ink on deep panel", CC_STYLE_INK,
+                              CC_STYLE_PANEL_DEEP, 4.5);
+    passed &= RequireContrast("muted on deep panel", CC_STYLE_MUTED,
+                              CC_STYLE_PANEL_DEEP, 4.5);
+    passed &= RequireContrast("gold on deep panel", CC_STYLE_GOLD,
+                              CC_STYLE_PANEL_DEEP, 4.5);
 
     passed &= RequireLightnessGap("road and earth", CC_STYLE_ROAD,
                                   CC_STYLE_EARTH, 0.08);
@@ -145,6 +151,11 @@ int main(void)
         !SameRgb(CC_STYLE_FOLIAGE, 37, 91, 70) ||
         !SameRgb(CC_STYLE_TEAL, 98, 180, 168)) {
         (void)fprintf(stderr, "Blackthorn & Brass anchors changed\n");
+        passed = false;
+    }
+    if (CC_STYLE_PANEL.r <= CC_STYLE_PANEL.b ||
+        CC_STYLE_PANEL.g >= CC_STYLE_PANEL.r) {
+        (void)fprintf(stderr, "UI panel lost its warm leather bias\n");
         passed = false;
     }
 

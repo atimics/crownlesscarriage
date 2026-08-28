@@ -329,12 +329,19 @@ static void SituationNextAction(const CcSim *sim,
 
 static void DrawPanel(Rectangle bounds, Color color)
 {
-    DrawRectangleRounded(bounds, 0.025f, 4, color);
-    DrawRectangleRoundedLinesEx(bounds, 0.025f, 4, 1.0f,
-                                Fade(CC_GOLD, 0.62f));
-    DrawLine((int)bounds.x + 11, (int)bounds.y + 8,
-             (int)bounds.x + 45, (int)bounds.y + 8,
-             Fade(CC_GOLD, 0.50f));
+    DrawRectangleRounded(bounds, 0.015f, 3, color);
+    DrawRectangleRoundedLinesEx(bounds, 0.015f, 3, 1.0f,
+                                Fade(CC_GOLD, 0.68f));
+    DrawLine((int)bounds.x + 10, (int)bounds.y + 8,
+             (int)bounds.x + 48, (int)bounds.y + 8,
+             Fade(CC_GOLD, 0.64f));
+    DrawLine((int)(bounds.x + bounds.width) - 34,
+             (int)(bounds.y + bounds.height) - 8,
+             (int)(bounds.x + bounds.width) - 10,
+             (int)(bounds.y + bounds.height) - 8,
+             Fade(CC_STYLE_GOLD_SHADOW, 0.76f));
+    DrawRectangle((int)bounds.x + 5, (int)bounds.y + 5, 3, 3,
+                  Fade(CC_GOLD, 0.72f));
 }
 
 static void DrawPerformanceOverlay(void)
@@ -640,12 +647,13 @@ static void DrawLocalHeader(const CcSim *sim, const LocalState *local)
              local->market_interior && place != NULL ?
                  TextFormat("%s  /  Market", place->name) :
              place != NULL ? place->name : "Crownless",
-             22, 18, 18, INK);
+             22, 17, 19, INK);
+    DrawLine(22, 42, 82, 42, Fade(CC_GOLD, 0.58f));
     CcOverlayDrawText(TextFormat("DAY %d     %" PRId64 " cr     CARGO %d/%d",
                         sim->current_day, sim->player.coins,
                         CcPlayerCargoUsed(&sim->player),
                         sim->player.cargo_capacity),
-             1002, 22, 10, road ? TEAL : CC_GOLD);
+             990, 21, 11, road ? TEAL : CC_GOLD);
 }
 
 static void DrawTownCombatPanel(const LocalState *local)
@@ -1010,12 +1018,12 @@ static ContextActionSet BuildContextActions(
 
 static Rectangle ContextActionBounds(int32_t index, int32_t count)
 {
-    const float width = 220.0f;
+    const float width = 224.0f;
     const float gap = 12.0f;
     float total = (float)count * width + (float)(count - 1) * gap;
     return (Rectangle){((float)GetScreenWidth() - total) * 0.5f +
                            (float)index * (width + gap),
-                       697.0f, width, 46.0f};
+                       695.0f, width, 48.0f};
 }
 
 static Color ContextActionColor(ContextActionKind kind)
@@ -1043,22 +1051,25 @@ static void DrawContextActionTray(const CcSim *sim, const LocalState *local,
         Rectangle bounds = ContextActionBounds(i, actions.count);
         bool hover = CheckCollisionPointRec(mouse, bounds);
         Color accent = ContextActionColor(actions.items[i].kind);
-        DrawRectangleRounded(bounds, 0.18f, 5,
-                             hover ? PANEL_HOVER : Fade(PANEL_DEEP, 0.96f));
-        DrawRectangleRoundedLinesEx(bounds, 0.18f, 5,
+        DrawRectangleRounded(bounds, 0.025f, 3,
+                             hover ? PANEL_HOVER : Fade(PANEL_DEEP, 0.97f));
+        DrawRectangleRoundedLinesEx(bounds, 0.025f, 3,
                                     hover ? 2.0f : 1.0f,
-                                    Fade(accent, hover ? 0.96f : 0.62f));
+                                    Fade(accent, hover ? 0.96f : 0.72f));
+        DrawLine((int)bounds.x + 10, (int)bounds.y + 8,
+                 (int)bounds.x + 42, (int)bounds.y + 8,
+                 Fade(CC_GOLD, hover ? 0.82f : 0.48f));
+        DrawRectangle((int)bounds.x + 6, (int)bounds.y + 6, 3, 3,
+                      Fade(accent, 0.76f));
         if (hover) {
-            DrawRectangleRounded(
-                (Rectangle){bounds.x + 8.0f, bounds.y + 12.0f,
-                            4.0f, bounds.height - 24.0f},
-                0.8f, 3, accent);
+            DrawRectangle((int)bounds.x + 7, (int)bounds.y + 14, 3,
+                          (int)bounds.height - 24, accent);
         }
-        int width = CcOverlayMeasureText(actions.items[i].label, 11);
+        int width = CcOverlayMeasureText(actions.items[i].label, 12);
         CcOverlayDrawText(actions.items[i].label,
                           (int)(bounds.x +
                                 (bounds.width - (float)width) * 0.5f),
-                          (int)bounds.y + 17, 11, hover ? accent : INK);
+                          (int)bounds.y + 18, 12, hover ? accent : INK);
     }
 }
 
