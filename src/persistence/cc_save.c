@@ -12,6 +12,8 @@
 #define CC_SQLITE_USER_VERSION 16
 #define CC_JOURNAL_RECORD_VERSION 1
 #define CC_JOURNAL_RUNTIME_FLUSH_TICKS 6
+#define CC_JOURNAL_MAX_DAY_ADVANCE 3650
+#define CC_JOURNAL_MAX_RUNTIME_ADVANCE 3600
 
 typedef enum CcJournalOperationKind {
     CC_JOURNAL_OPERATION_COMMAND = 1,
@@ -366,6 +368,7 @@ static bool ReadPragmaInteger(sqlite3 *database, const char *sql,
 }
 
 static bool ValidateDatabaseHeader(sqlite3 *database,
+                                   bool allow_unmarked,
                                    char *error, size_t error_capacity)
 {
     int32_t application_id = 0;
@@ -374,7 +377,8 @@ static bool ValidateDatabaseHeader(sqlite3 *database,
                            &application_id, error, error_capacity) ||
         !ReadPragmaInteger(database, "PRAGMA user_version;",
                            &user_version, error, error_capacity)) return false;
-    if (application_id != 0 && application_id != CC_SQLITE_APPLICATION_ID) {
+    if (application_id != CC_SQLITE_APPLICATION_ID &&
+        !(allow_unmarked && application_id == 0)) {
         SetError(error, error_capacity,
                  "The selected database is not a Crownless campaign.");
         return false;
@@ -408,22 +412,57 @@ static bool MarkDatabaseCurrent(sqlite3 *database,
     return Execute(database, sql, error, error_capacity);
 }
 
-static bool OpenWritableDatabase(const char *path, bool create,
+typedef enum WritableOpenMode {
+    WRITABLE_OPEN_EXISTING,
+    WRITABLE_OPEN_NEW,
+    WRITABLE_OPEN_EXISTING_OR_NEW
+} WritableOpenMode;
+
+static bool OpenWritableDatabase(const char *path, WritableOpenMode mode,
                                  sqlite3 **database,
                                  char *error, size_t error_capacity)
 {
-    int flags = SQLITE_OPEN_READWRITE | (create ? SQLITE_OPEN_CREATE : 0);
-    if (sqlite3_open_v2(path, database,
-                        flags, NULL) != SQLITE_OK) {
+    bool new_database = false;
+    if (mode == WRITABLE_OPEN_NEW) {
+        FILE *claim = fopen(path, "wbx");
+        if (claim == NULL) {
+            SetError(error, error_capacity,
+                     "A campaign already exists at that path.");
+            return false;
+        }
+        if (fclose(claim) != 0) {
+            (void)remove(path);
+            SetError(error, error_capacity,
+                     "Could not create the campaign database.");
+            return false;
+        }
+        new_database = true;
+    }
+    int result = sqlite3_open_v2(path, database, SQLITE_OPEN_READWRITE,
+                                 NULL);
+    if (result != SQLITE_OK && mode == WRITABLE_OPEN_EXISTING_OR_NEW) {
+        if (*database != NULL) sqlite3_close(*database);
+        *database = NULL;
+        FILE *claim = fopen(path, "wbx");
+        if (claim != NULL && fclose(claim) == 0) {
+            new_database = true;
+            result = sqlite3_open_v2(path, database, SQLITE_OPEN_READWRITE,
+                                     NULL);
+        }
+    }
+    if (result != SQLITE_OK) {
         SetSqlError(error, error_capacity, *database, "Could not open campaign database");
         if (*database != NULL) sqlite3_close(*database);
         *database = NULL;
+        if (new_database) (void)remove(path);
         return false;
     }
-    if (!ValidateDatabaseHeader(*database, error, error_capacity) ||
+    if (!ValidateDatabaseHeader(*database, new_database,
+                                error, error_capacity) ||
         !ConfigureWritableDatabase(*database, error, error_capacity)) {
         sqlite3_close(*database);
         *database = NULL;
+        if (new_database) (void)remove(path);
         return false;
     }
     return true;
@@ -439,7 +478,24 @@ static bool OpenReadSnapshot(const char *path, sqlite3 **database,
         if (source != NULL) sqlite3_close(source);
         return false;
     }
-    if (!ValidateDatabaseHeader(source, error, error_capacity)) {
+    if (!ValidateDatabaseHeader(source, false, error, error_capacity)) {
+        sqlite3_close(source);
+        return false;
+    }
+    int32_t page_size = 0;
+    int32_t page_count = 0;
+    if (!ReadPragmaInteger(source, "PRAGMA page_size;", &page_size,
+                           error, error_capacity) ||
+        !ReadPragmaInteger(source, "PRAGMA page_count;", &page_count,
+                           error, error_capacity)) {
+        sqlite3_close(source);
+        return false;
+    }
+    const int64_t maximum_snapshot_bytes = INT64_C(16) * 1024 * 1024;
+    if (page_size <= 0 || page_count < 0 ||
+        (int64_t)page_size * (int64_t)page_count > maximum_snapshot_bytes) {
+        SetError(error, error_capacity,
+                 "Campaign database is too large to load safely.");
         sqlite3_close(source);
         return false;
     }
@@ -1766,7 +1822,7 @@ bool CcSaveWrite(const char *path, const CcSim *sim,
         return false;
     }
     sqlite3 *database = NULL;
-    if (!OpenWritableDatabase(path, true, &database,
+    if (!OpenWritableDatabase(path, WRITABLE_OPEN_EXISTING_OR_NEW, &database,
                               error, error_capacity)) return false;
     bool ok = CreateSchema(database, error, error_capacity) &&
               MarkDatabaseCurrent(database, error, error_capacity) &&
@@ -2995,11 +3051,19 @@ static bool ReplayJournal(sqlite3 *database, CcSim *sim,
                                      sizeof(replay_error));
                 break;
             case CC_JOURNAL_OPERATION_ADVANCE_DAYS:
-                if (step_count <= 0) applied = false;
+                if (step_count <= 0 ||
+                    step_count > CC_JOURNAL_MAX_DAY_ADVANCE ||
+                    sim->current_day > CC_SIM_MAX_DAY - step_count) {
+                    applied = false;
+                }
                 else CcSimAdvanceDays(sim, step_count);
                 break;
             case CC_JOURNAL_OPERATION_ADVANCE_RUNTIME_TICKS:
-                if (step_count <= 0) applied = false;
+                if (step_count <= 0 ||
+                    step_count > CC_JOURNAL_MAX_RUNTIME_ADVANCE ||
+                    sim->clock.tick > UINT64_MAX - (uint64_t)step_count) {
+                    applied = false;
+                }
                 else CcSimAdvanceRuntimeTicks(sim, step_count);
                 break;
             default:
@@ -3458,7 +3522,7 @@ static bool ReadJournalHead(sqlite3 *database, uint64_t generation,
     return true;
 }
 
-static CcJournal *AllocateJournal(const char *path, bool create,
+static CcJournal *AllocateJournal(const char *path, WritableOpenMode mode,
                                   char *error, size_t error_capacity)
 {
     CcJournal *journal = calloc(1U, sizeof(*journal));
@@ -3467,7 +3531,7 @@ static CcJournal *AllocateJournal(const char *path, bool create,
                  "Could not allocate action journal state.");
         return NULL;
     }
-    if (!OpenWritableDatabase(path, create, &journal->database,
+    if (!OpenWritableDatabase(path, mode, &journal->database,
                               error, error_capacity) ||
         !CreateSchema(journal->database, error, error_capacity) ||
         !MarkDatabaseCurrent(journal->database, error, error_capacity)) {
@@ -3548,11 +3612,20 @@ static bool AppendJournalOperation(CcJournal *journal,
     }
     if (!Execute(journal->database, "BEGIN IMMEDIATE;",
                  error, error_capacity)) return false;
+    uint64_t active_generation = 0U;
+    uint64_t checkpoint_cursor = 0U;
     uint64_t stored_head = 0U;
-    bool ok = ReadJournalHead(journal->database, journal->generation,
+    bool ok = ReadSnapshotJournalCursor(
+                  journal->database, &active_generation, &checkpoint_cursor,
+                  error, error_capacity) &&
+              active_generation == journal->generation &&
+              ReadJournalHead(journal->database, journal->generation,
                               &stored_head, error, error_capacity) &&
               stored_head == journal->last_ordinal;
-    if (!ok && stored_head != journal->last_ordinal) {
+    if (!ok && active_generation != journal->generation) {
+        SetError(error, error_capacity,
+                 "Another writer started a new campaign epoch.");
+    } else if (!ok && stored_head != journal->last_ordinal) {
         SetError(error, error_capacity,
                  "Action journal advanced from another writer.");
     }
@@ -3611,7 +3684,40 @@ CcJournal *CcJournalStart(const char *path, const CcSim *sim,
                  "Journal path or current-schema simulation is missing.");
         return NULL;
     }
-    CcJournal *journal = AllocateJournal(path, true,
+    char validation[160];
+    if (!CcSimValidate(sim, validation, sizeof(validation))) {
+        SetError(error, error_capacity, validation);
+        return NULL;
+    }
+    CcJournal *journal = AllocateJournal(path, WRITABLE_OPEN_NEW,
+                                         error, error_capacity);
+    if (journal == NULL) return NULL;
+    if (!CreateJournalEpoch(journal, sim, error, error_capacity) ||
+        !SaveSnapshot(journal->database, sim, journal->generation, 0U,
+                      error, error_capacity)) {
+        sqlite3_close(journal->database);
+        free(journal);
+        return NULL;
+    }
+    SetError(error, error_capacity, "");
+    return journal;
+}
+
+CcJournal *CcJournalRestart(const char *path, const CcSim *sim,
+                            char *error, size_t error_capacity)
+{
+    if (path == NULL || sim == NULL ||
+        sim->schema_version != CC_SIM_SCHEMA_VERSION) {
+        SetError(error, error_capacity,
+                 "Journal path or current-schema simulation is missing.");
+        return NULL;
+    }
+    char validation[160];
+    if (!CcSimValidate(sim, validation, sizeof(validation))) {
+        SetError(error, error_capacity, validation);
+        return NULL;
+    }
+    CcJournal *journal = AllocateJournal(path, WRITABLE_OPEN_EXISTING,
                                          error, error_capacity);
     if (journal == NULL) return NULL;
     if (!CreateJournalEpoch(journal, sim, error, error_capacity) ||
@@ -3635,7 +3741,7 @@ CcJournal *CcJournalResume(const char *path, CcSim *sim,
     }
     CcSim preflight;
     if (!CcSaveRead(path, &preflight, error, error_capacity)) return NULL;
-    CcJournal *journal = AllocateJournal(path, false,
+    CcJournal *journal = AllocateJournal(path, WRITABLE_OPEN_EXISTING,
                                          error, error_capacity);
     if (journal == NULL) return NULL;
     bool ok = Execute(journal->database, "BEGIN IMMEDIATE;",
@@ -3711,8 +3817,28 @@ bool CcJournalCheckpoint(CcJournal *journal, CcSim *sim,
                          char *error, size_t error_capacity)
 {
     if (!CcJournalFlush(journal, sim, error, error_capacity)) return false;
-    bool ok = SaveSnapshot(journal->database, sim, journal->generation,
-                           journal->last_ordinal, error, error_capacity);
+    bool ok = Execute(journal->database, "BEGIN IMMEDIATE;",
+                      error, error_capacity);
+    uint64_t active_generation = 0U;
+    uint64_t checkpoint_cursor = 0U;
+    if (ok) {
+        ok = ReadSnapshotJournalCursor(
+                 journal->database, &active_generation, &checkpoint_cursor,
+                 error, error_capacity) &&
+             active_generation == journal->generation;
+        if (!ok && active_generation != journal->generation) {
+            SetError(error, error_capacity,
+                     "Another writer started a new campaign epoch.");
+        }
+    }
+    if (ok) {
+        ok = SaveSnapshotContents(journal->database, sim,
+                                  journal->generation,
+                                  journal->last_ordinal,
+                                  error, error_capacity);
+    }
+    ok = FinishTransaction(journal->database, ok,
+                           error, error_capacity);
     if (ok) SetError(error, error_capacity, "");
     return ok;
 }
@@ -3740,7 +3866,10 @@ bool CcJournalApply(CcJournal *journal, CcSim *sim,
 bool CcJournalAdvanceDays(CcJournal *journal, CcSim *sim, int32_t days,
                           char *error, size_t error_capacity)
 {
-    if (journal == NULL || sim == NULL || days <= 0) {
+    if (journal == NULL || sim == NULL || days <= 0 ||
+        days > CC_JOURNAL_MAX_DAY_ADVANCE ||
+        sim->current_day < 1 ||
+        sim->current_day > CC_SIM_MAX_DAY - days) {
         SetError(error, error_capacity,
                  "Journaled day advance requires a positive duration.");
         return false;
@@ -3760,7 +3889,10 @@ bool CcJournalAdvanceRuntimeTicks(CcJournal *journal, CcSim *sim,
                                   int32_t ticks,
                                   char *error, size_t error_capacity)
 {
-    if (journal == NULL || sim == NULL || ticks < 0) {
+    if (journal == NULL || sim == NULL || ticks < 0 ||
+        ticks > CC_JOURNAL_MAX_RUNTIME_ADVANCE ||
+        (sim != NULL &&
+         sim->clock.tick > UINT64_MAX - (uint64_t)ticks)) {
         SetError(error, error_capacity,
                  "Journaled runtime advance has invalid input.");
         return false;
@@ -3805,4 +3937,12 @@ bool CcJournalClose(CcJournal **journal, CcSim *sim,
     *journal = NULL;
     SetError(error, error_capacity, "");
     return true;
+}
+
+void CcJournalAbandon(CcJournal **journal)
+{
+    if (journal == NULL || *journal == NULL) return;
+    (void)sqlite3_close((*journal)->database);
+    free(*journal);
+    *journal = NULL;
 }

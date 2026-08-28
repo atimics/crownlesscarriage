@@ -644,6 +644,42 @@ int main(void)
     invalid_state.kingdom_count = CC_MAX_KINGDOMS + 1;
     CC_CHECK(!CcSimValidate(&invalid_state, error, sizeof(error)));
     CcSimInit(&invalid_state, UINT32_C(0xbad5a7e));
+    invalid_state.settlements[0].stock[CC_GOOD_FOOD] =
+        CC_SIM_MAX_UNITS + 1;
+    CC_CHECK(!CcSimValidate(&invalid_state, error, sizeof(error)));
+    CcSimInit(&invalid_state, UINT32_C(0xbad5a7e));
+    invalid_state.settlements[0].production[CC_GOOD_FOOD] = INT32_MAX;
+    CC_CHECK(!CcSimValidate(&invalid_state, error, sizeof(error)));
+    CcSimInit(&invalid_state, UINT32_C(0xbad5a7e));
+    invalid_state.settlements[0].kingdom_id =
+        CcMakeId(CC_ENTITY_KINGDOM, UINT64_C(999999));
+    CC_CHECK(!CcSimValidate(&invalid_state, error, sizeof(error)));
+    CcSimInit(&invalid_state, UINT32_C(0xbad5a7e));
+    invalid_state.factions[0].support = 101;
+    CC_CHECK(!CcSimValidate(&invalid_state, error, sizeof(error)));
+    CcSimInit(&invalid_state, UINT32_C(0xbad5a7e));
+    invalid_state.monsters[0].dungeon_id =
+        CcMakeId(CC_ENTITY_DUNGEON, UINT64_C(999999));
+    CC_CHECK(!CcSimValidate(&invalid_state, error, sizeof(error)));
+    CcSimInit(&invalid_state, UINT32_C(0xbad5a7e));
+    invalid_state.dungeons[0].regional_pressure = 101;
+    CC_CHECK(!CcSimValidate(&invalid_state, error, sizeof(error)));
+    CcSimInit(&invalid_state, UINT32_C(0xbad5a7e));
+    invalid_state.current_day = CC_SIM_MAX_DAY + 1;
+    CC_CHECK(!CcSimValidate(&invalid_state, error, sizeof(error)));
+
+    CcSim trade_edge;
+    CcSimInit(&trade_edge, UINT32_C(0x7adee9e));
+    uint64_t trade_edge_hash = CcSimHash(&trade_edge);
+    CcCommand impossible_sale = {
+        .kind = CC_COMMAND_TRADE,
+        .good = CC_GOOD_FOOD,
+        .amount = INT32_MIN
+    };
+    CC_CHECK(!CcSimApply(&trade_edge, &impossible_sale,
+                         error, sizeof(error)));
+    CC_CHECK(CcSimHash(&trade_edge) == trade_edge_hash);
+    CcSimInit(&invalid_state, UINT32_C(0xbad5a7e));
     invalid_state.shipment_count = 1;
     invalid_state.shipments[0] = (CcShipment){
         .id = CcMakeId(CC_ENTITY_SHIPMENT, UINT64_C(9999)),

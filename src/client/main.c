@@ -3757,7 +3757,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         CcLocalBindPlace(sim);
         ResetLocalState(local);
         *view = VIEW_LOCAL;
-        *journal = CcJournalStart(save_path, sim, error, sizeof(error));
+        *journal = CcJournalRestart(save_path, sim, error, sizeof(error));
         (void)snprintf(message, message_capacity, "%s",
                        *journal != NULL ? "New campaign started." : error);
         return;
