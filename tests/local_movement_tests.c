@@ -1965,8 +1965,40 @@ static void TestRoadBridgeSupport(void)
     }
 }
 
+static void TestBuildingCutawaySelection(void)
+{
+    Camera3D camera = {
+        .position = {0.0f, 3.0f, 10.0f},
+        .target = {0.0f, 1.0f, 0.0f},
+        .up = {0.0f, 1.0f, 0.0f},
+        .fovy = 45.0f,
+        .projection = CAMERA_PERSPECTIVE,
+    };
+    Vector3 hero = {0.0f, 1.05f, 0.0f};
+    Rectangle direct_blocker = {-1.2f, 3.0f, 2.4f, 2.0f};
+    Rectangle shoulder_blocker = {0.18f, 3.0f, 0.72f, 2.0f};
+    Rectangle unrelated_house = {4.0f, 3.0f, 2.0f, 2.0f};
+    Rectangle house_behind_hero = {-1.2f, -4.0f, 2.4f, 2.0f};
+    bool direct = CcLocalBuildingObscuresHeroInternal(
+        direct_blocker, 4.0f, camera, hero, 457, 285);
+    bool shoulder = CcLocalBuildingObscuresHeroInternal(
+        shoulder_blocker, 4.0f, camera, hero, 457, 285);
+    bool unrelated = CcLocalBuildingObscuresHeroInternal(
+        unrelated_house, 4.0f, camera, hero, 457, 285);
+    bool behind = CcLocalBuildingObscuresHeroInternal(
+        house_behind_hero, 4.0f, camera, hero, 457, 285);
+
+    if (!direct || !shoulder || unrelated || behind) {
+        (void)fprintf(stderr,
+                      "building cutaway selection failed: direct %d shoulder %d unrelated %d behind %d\n",
+                      direct, shoulder, unrelated, behind);
+        exit(1);
+    }
+}
+
 int main(void)
 {
+    TestBuildingCutawaySelection();
     TestRoadBridgeSupport();
     TestFaceAngleAndLodContract();
     TestSharedCharacterCollisionWorld();

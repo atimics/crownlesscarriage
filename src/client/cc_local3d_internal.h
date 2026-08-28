@@ -45,6 +45,11 @@ Camera3D CcLocalCameraClearSightlinesInternal(Camera3D camera,
                                               Vector3 second_subject,
                                               float preferred_angle,
                                               float *chosen_angle);
+bool CcLocalBuildingObscuresHeroInternal(Rectangle footprint, float height,
+                                         Camera3D camera,
+                                         Vector3 hero_center,
+                                         int32_t render_width,
+                                         int32_t render_height);
 
 CcLocalFaceLodInternal CcLocalFaceLodForProjectedHeightInternal(
     float projected_face_height);

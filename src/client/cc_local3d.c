@@ -1337,8 +1337,6 @@ static float CameraPositionRectangleClutter(Vector3 position,
                                             Rectangle footprint,
                                             float clearance);
 static bool RoomDetailPointVisible(float x, float z, Vector3 focus);
-static uint32_t StreetForegroundBuildingMask(void);
-static uint32_t StreetForegroundBuildingMaskForShot(int32_t shot);
 
 static bool CourseWaterContains(CcLocalSceneKind scene, float x, float z)
 {
@@ -5324,10 +5322,8 @@ bool CcLocalAgentPickTarget(CcLocalAgent *agent, Vector2 screen_point,
         occluder = fminf(occluder, RayFootprintDistance(
             ray, (Rectangle){0.0f, 0.0f, 0.50f, 7.0f}, 2.60f));
     } else if (scene == CC_LOCAL_SCENE_STREET) {
-        uint32_t foreground_mask = StreetForegroundBuildingMask();
         for (int32_t i = 0; i < (int32_t)(sizeof(WORLD_BUILDINGS) /
                                           sizeof(WORLD_BUILDINGS[0])); ++i) {
-            if ((foreground_mask & (UINT32_C(1) << i)) != 0) continue;
             occluder = fminf(occluder,
                              RayFootprintDistance(
                                  ray, WORLD_BUILDINGS[i].footprint,
@@ -13348,65 +13344,71 @@ static Color BuildingRoofColor(int32_t style, Color kingdom)
     }
 }
 
-static uint32_t StreetForegroundBuildingMaskForShot(int32_t shot)
+bool CcLocalBuildingObscuresHeroInternal(Rectangle footprint, float height,
+                                         Camera3D camera,
+                                         Vector3 hero_center,
+                                         int32_t render_width,
+                                         int32_t render_height)
 {
-    shot = StreetCameraBaseShot(shot);
-    /* These are authored stage wings, not player-dependent pop-in. A given
-       shot always presents the same architecture; buildings between the low
-       camera and its route receive the hero-centered ink reveal. */
-    switch (shot) {
-        case 1: return UINT32_C(1) << 3;
-        case 3:
-            return (UINT32_C(1) << 3) | (UINT32_C(1) << 4);
-        case 4:
-            return (UINT32_C(1) << 3) | (UINT32_C(1) << 4) |
-                   (UINT32_C(1) << 6) |
-                   (UINT32_C(1) << 9);
-        case 6:
-            return (UINT32_C(1) << 4) | (UINT32_C(1) << 6);
-        case 5:
-            return (UINT32_C(1) << 8) | (UINT32_C(1) << 9);
-        default: return 0;
+    if (render_width <= 0 || render_height <= 0 || height <= 0.0f) {
+        return false;
     }
-}
-
-static uint32_t StreetForegroundBuildingMask(void)
-{
-    return StreetForegroundBuildingMaskForShot(street_camera_rig.shot);
+    Vector3 camera_forward = Vector3Normalize(
+        Vector3Subtract(camera.target, camera.position));
+    Vector3 camera_right = PhysicsNormalizeOr(
+        Vector3CrossProduct(camera_forward, camera.up),
+        (Vector3){1.0f, 0.0f, 0.0f});
+    float base = TerrainFootprintHeight(footprint);
+    BoundingBox visible_walls = {
+        .min = {footprint.x, base, footprint.y},
+        .max = {footprint.x + footprint.width, base + height,
+                footprint.y + footprint.height},
+    };
+    Vector3 samples[] = {
+        hero_center,
+        Vector3Add(hero_center, (Vector3){0.0f, 0.78f, 0.0f}),
+        Vector3Add(hero_center, (Vector3){0.0f, -0.72f, 0.0f}),
+        Vector3Add(Vector3Add(hero_center,
+                             Vector3Scale(camera_right, 0.38f)),
+                   (Vector3){0.0f, 0.16f, 0.0f}),
+        Vector3Add(Vector3Add(hero_center,
+                             Vector3Scale(camera_right, -0.38f)),
+                   (Vector3){0.0f, 0.16f, 0.0f}),
+    };
+    /* Test the hero's readable silhouette, not one exact torso pixel. A roof
+       edge can hide the head or both shoulders while missing that center
+       ray, especially when combat changes to a perspective camera. The box
+       is still the owning building's physical footprint, so an overlapping
+       neighboring house cannot be selected by accident. */
+    for (int32_t sample = 0;
+         sample < (int32_t)(sizeof(samples) / sizeof(samples[0])); ++sample) {
+        Vector2 screen = GetWorldToScreenEx(
+            samples[sample], camera, render_width, render_height);
+        Ray ray = GetScreenToWorldRayEx(screen, camera,
+                                        render_width, render_height);
+        RayCollision collision = GetRayCollisionBox(ray, visible_walls);
+        if (!collision.hit) continue;
+        float hero_depth = Vector3DotProduct(
+            Vector3Subtract(samples[sample], camera.position),
+            camera_forward);
+        float collision_depth = Vector3DotProduct(
+            Vector3Subtract(collision.point, camera.position),
+            camera_forward);
+        if (collision_depth + 0.18f < hero_depth) return true;
+    }
+    return false;
 }
 
 static bool WorldBuildingObscuresReveal(const WorldBuilding *building,
                                         Camera3D camera,
                                         Vector3 reveal_world,
-                                        Vector2 reveal_center,
                                         int32_t render_width,
                                         int32_t render_height)
 {
-    if (building == NULL || render_width <= 0 || render_height <= 0) {
-        return false;
-    }
-    Vector3 camera_forward = Vector3Normalize(
-        Vector3Subtract(camera.target, camera.position));
-    float hero_depth = Vector3DotProduct(
-        Vector3Subtract(reveal_world, camera.position), camera_forward);
-    float base = TerrainFootprintHeight(building->footprint);
-    BoundingBox visible_walls = {
-        .min = {building->footprint.x, base, building->footprint.y},
-        .max = {building->footprint.x + building->footprint.width,
-                base + building->height,
-                building->footprint.y + building->footprint.height},
-    };
-    /* A side wall or roof bound must not erase a neighboring house. Test the
-       center of the hero against the solid wall volume that is actually
-       drawn. Whole buildings remain submitted, so this precise trigger does
-       not bring back the old distance-culling blink. */
-    Ray ray = GetScreenToWorldRayEx(reveal_center, camera,
-                                    render_width, render_height);
-    RayCollision collision = GetRayCollisionBox(ray, visible_walls);
-    if (!collision.hit) return false;
-    float collision_depth = Vector3DotProduct(
-        Vector3Subtract(collision.point, camera.position), camera_forward);
-    return collision_depth + 0.30f < hero_depth;
+    if (building == NULL) return false;
+    return CcLocalBuildingObscuresHeroInternal(
+        building->footprint, building->height, camera, reveal_world,
+        render_width, render_height);
 }
 
 typedef struct WorldBuildingRevealState {
@@ -13422,7 +13424,6 @@ static bool world_building_reveals_initialized = false;
 
 static void UpdateWorldBuildingReveals(Camera3D camera,
                                        Vector3 reveal_world,
-                                       Vector2 reveal_center,
                                        int32_t render_width,
                                        int32_t render_height,
                                        float clock)
@@ -13438,7 +13439,7 @@ static void UpdateWorldBuildingReveals(Camera3D camera,
                                       sizeof(WORLD_BUILDINGS[0])); ++i) {
         WorldBuildingRevealState *state = &world_building_reveals[i];
         bool occluded = WorldBuildingObscuresReveal(
-            &WORLD_BUILDINGS[i], camera, reveal_world, reveal_center,
+            &WORLD_BUILDINGS[i], camera, reveal_world,
             render_width, render_height);
         if (reset) {
             state->amount = occluded ? 1.0f : 0.0f;
@@ -13473,14 +13474,12 @@ static void UpdateWorldBuildingReveals(Camera3D camera,
 
 static void DrawWorldBuildings(Color kingdom, Vector3 focus,
                                Camera3D camera, Vector3 reveal_world,
-                               Vector2 reveal_center,
                                int32_t render_width, int32_t render_height,
                                float clock)
 {
     (void)focus;
     float reveal_cut_height = reveal_world.y - 0.30f;
-    uint32_t authored_foreground = StreetForegroundBuildingMask();
-    UpdateWorldBuildingReveals(camera, reveal_world, reveal_center,
+    UpdateWorldBuildingReveals(camera, reveal_world,
                                render_width, render_height, clock);
 
     /* Every structure gets an opaque footing pass before any upper-wall
@@ -13510,12 +13509,6 @@ static void DrawWorldBuildings(Color kingdom, Vector3 focus,
            reveal, while a house behind the hero remains entirely solid. */
         if (i == 2 && runtime_assets[RUNTIME_ASSET_MARKET].ready) continue;
         float reveal = world_building_reveals[i].amount;
-        if ((authored_foreground & (UINT32_C(1) << i)) != 0) {
-            /* Fixed room compositions have fixed stage wings. Keep their
-               hero-centred cutaway armed for the whole shot, instead of
-               waiting for a broad roof to fully cross the sightline. */
-            reveal = fmaxf(reveal, 0.94f);
-        }
         if (fabsf(reveal - reveal_active) > 0.001f) {
             SetWorldForegroundReveal(reveal, reveal_cut_height);
             reveal_active = reveal;
@@ -13570,7 +13563,6 @@ static bool castle_reveals_initialized = false;
 
 static void UpdateCastleStructureReveals(Camera3D camera,
                                          Vector3 reveal_world,
-                                         Vector2 reveal_center,
                                          int32_t render_width,
                                          int32_t render_height,
                                          float clock)
@@ -13588,7 +13580,7 @@ static void UpdateCastleStructureReveals(Camera3D camera,
         };
         WorldBuildingRevealState *state = &castle_structure_reveals[i];
         bool occluded = WorldBuildingObscuresReveal(
-            &proxy, camera, reveal_world, reveal_center,
+            &proxy, camera, reveal_world,
             render_width, render_height);
         if (reset) {
             state->amount = occluded ? 1.0f : 0.0f;
@@ -13618,14 +13610,14 @@ static void UpdateCastleStructureReveals(Camera3D camera,
 }
 
 static void DrawCastle(Color kingdom, Vector3 focus, Camera3D camera,
-                       Vector3 reveal_world, Vector2 reveal_center,
+                       Vector3 reveal_world,
                        int32_t render_width, int32_t render_height,
                        float clock)
 {
     (void)focus;
     Rectangle keep_pad = {65.20f, 8.20f, 26.50f, 24.40f};
     float reveal_cut_height = reveal_world.y - 0.30f;
-    UpdateCastleStructureReveals(camera, reveal_world, reveal_center,
+    UpdateCastleStructureReveals(camera, reveal_world,
                                  render_width, render_height, clock);
     rlPushMatrix();
     rlTranslatef(0.0f, TerrainFootprintHeight(keep_pad), 0.0f);
@@ -18027,11 +18019,8 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     Vector3 foreground_reveal_world = {
         agent->position.x, agent->position.y + 1.05f, agent->position.z,
     };
-    Vector2 foreground_reveal_center = GetWorldToScreenEx(
-        foreground_reveal_world,
-        camera, target.texture.width, target.texture.height);
     DrawWorldBuildings(kingdom, scenery_focus, camera,
-                       foreground_reveal_world, foreground_reveal_center,
+                       foreground_reveal_world,
                        target.texture.width, target.texture.height, clock);
     {
         float reveal_cut_height = foreground_reveal_world.y - 0.30f;
@@ -18041,7 +18030,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         SetWorldForegroundReveal(0.0f, reveal_cut_height);
     }
     DrawCastle(kingdom, scenery_focus, camera,
-               foreground_reveal_world, foreground_reveal_center,
+               foreground_reveal_world,
                target.texture.width, target.texture.height, clock);
     if (SceneryFootprintVisible(CARRIAGE_FOOTPRINT, scenery_focus)) {
         DrawCarriage3D(place);
