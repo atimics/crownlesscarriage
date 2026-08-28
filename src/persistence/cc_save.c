@@ -9,7 +9,7 @@
 #include <string.h>
 
 #define CC_SQLITE_APPLICATION_ID 1128481362
-#define CC_SQLITE_USER_VERSION 12
+#define CC_SQLITE_USER_VERSION 13
 #define CC_JOURNAL_RECORD_VERSION 1
 #define CC_JOURNAL_RUNTIME_FLUSH_TICKS 6
 
@@ -573,7 +573,10 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " maker_settlement_id INTEGER NOT NULL, owner_id INTEGER NOT NULL, name TEXT NOT NULL,"
         " surveyed_day INTEGER NOT NULL, accuracy INTEGER NOT NULL,"
         " recorded_condition INTEGER NOT NULL, recorded_danger INTEGER NOT NULL,"
-        " ask_price INTEGER NOT NULL, contraband INTEGER NOT NULL);";
+        " ask_price INTEGER NOT NULL, contraband INTEGER NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS map_collection ("
+        " id INTEGER PRIMARY KEY CHECK(id=1),"
+        " catalogue_mask INTEGER NOT NULL, archive_mask INTEGER NOT NULL);";
     const char *commitment_schema =
         "CREATE TABLE IF NOT EXISTS player_commitment ("
         " id INTEGER PRIMARY KEY CHECK(id=1), situation_id INTEGER NOT NULL);"
@@ -981,6 +984,20 @@ static bool SaveMaps(sqlite3 *database, const CcSim *sim,
     }
     sqlite3_finalize(statement);
     return true;
+}
+
+static bool SaveMapCollection(sqlite3 *database, const CcSim *sim,
+                              char *error, size_t error_capacity)
+{
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database,
+                 "INSERT INTO map_collection VALUES(1,?,?);",
+                 &statement, error, error_capacity)) return false;
+    BindInt(statement, 1, (int32_t)sim->player.map_catalogue_mask);
+    BindInt(statement, 2, (int32_t)sim->player.map_archive_mask);
+    bool result = StepDone(database, statement, error, error_capacity);
+    sqlite3_finalize(statement);
+    return result;
 }
 
 static bool SaveFactions(sqlite3 *database, const CcSim *sim,
@@ -1485,7 +1502,8 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
     }
     return Execute(database,
             "DELETE FROM meta; DELETE FROM kingdom; DELETE FROM settlement;"
-            "DELETE FROM route; DELETE FROM map_object; DELETE FROM faction; DELETE FROM shipment;"
+            "DELETE FROM route; DELETE FROM map_object; DELETE FROM map_collection;"
+            "DELETE FROM faction; DELETE FROM shipment;"
             "DELETE FROM shipment_intent; DELETE FROM diplomacy; DELETE FROM courier;"
             "DELETE FROM bandit_group; DELETE FROM monster_population;"
             "DELETE FROM goblin_cult; DELETE FROM dragon_state;"
@@ -1506,6 +1524,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
         SaveMaterialEconomy(database, sim, error, error_capacity) &&
         SaveRoutes(database, sim, error, error_capacity) &&
         SaveMaps(database, sim, error, error_capacity) &&
+        SaveMapCollection(database, sim, error, error_capacity) &&
         SaveFactions(database, sim, error, error_capacity) &&
         SaveShipments(database, sim, error, error_capacity) &&
         SaveDiplomacyAndCouriers(database, sim, error, error_capacity) &&
@@ -1946,6 +1965,30 @@ static bool ReadMaps(sqlite3 *database, CcSim *sim,
     }
     sqlite3_finalize(statement);
     sim->map_count = rows;
+    return true;
+}
+
+static bool ReadMapCollection(sqlite3 *database, CcSim *sim,
+                              char *error, size_t error_capacity)
+{
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database,
+                 "SELECT catalogue_mask,archive_mask "
+                 "FROM map_collection WHERE id=1;",
+                 &statement, error, error_capacity)) return false;
+    int result = sqlite3_step(statement);
+    if (result == SQLITE_ROW) {
+        sim->player.map_catalogue_mask =
+            (uint32_t)sqlite3_column_int(statement, 0);
+        sim->player.map_archive_mask =
+            (uint32_t)sqlite3_column_int(statement, 1);
+    } else if (result != SQLITE_DONE) {
+        SetSqlError(error, error_capacity, database,
+                    "Could not read the map collection");
+        sqlite3_finalize(statement);
+        return false;
+    }
+    sqlite3_finalize(statement);
     return true;
 }
 
@@ -2711,7 +2754,8 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
         legacy_version != 5U && legacy_version != 6U &&
         legacy_version != 7U && legacy_version != 8U &&
         legacy_version != 9U && legacy_version != 10U &&
-        legacy_version != 11U) return true;
+        legacy_version != 11U && legacy_version != 12U) return true;
+    CcSimUpgradeMapCollection(sim);
     if (legacy_version == 3U) {
         sim->clock = (CcWorldClock){
             .game_minutes_per_second = CC_IDLE_GAME_MINUTES_PER_SECOND
@@ -2827,7 +2871,7 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
     }
 #undef LEGACY_SERVICE
     }
-    if (legacy_version == 11U) {
+    if (legacy_version == 11U || legacy_version == 12U) {
         CcSimInitializeDragonEcology(sim);
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         sim->generator_version = CC_GENERATOR_VERSION;
@@ -2969,6 +3013,7 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
               ReadEvents(database, sim, error, error_capacity) &&
               ReadLegends(database, sim, error, error_capacity) &&
               ReadPlayer(database, sim, error, error_capacity) &&
+              ReadMapCollection(database, sim, error, error_capacity) &&
               ReadMaterialEconomy(database, sim, error, error_capacity) &&
               ReadPlayerCommitment(database, sim, error, error_capacity) &&
               ReadJourneyState(database, sim, error, error_capacity);

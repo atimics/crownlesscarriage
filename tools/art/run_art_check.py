@@ -21,7 +21,7 @@ DEFAULT_OUTPUT = ROOT / "out" / "art-check"
 WORLD_CROP = (17, 81, 931, 651)
 ART_SIZE = (457, 285)
 EXPECTED_SCREEN_SIZE = (1280, 760)
-PALETTE_NEAR_DISTANCE = 24.0
+PALETTE_NEAR_DISTANCE = 0.055
 
 
 @dataclass(frozen=True)
@@ -60,6 +60,19 @@ SCENES = (
     CaptureSpec("road", "Road", "scene", ("--capture-road",)),
     CaptureSpec("interior", "Interior", "scene", ("--capture-interior",)),
     CaptureSpec("parley", "Parley", "scene", ("--capture-parley",)),
+)
+
+ATMOSPHERES = (
+    CaptureSpec("atmosphere-clear", "Clear Day", "atmosphere",
+                ("--capture-atmosphere", "clear")),
+    CaptureSpec("atmosphere-rain", "Rainy Overcast", "atmosphere",
+                ("--capture-atmosphere", "rain")),
+    CaptureSpec("atmosphere-dusk", "Amber Dusk", "atmosphere",
+                ("--capture-atmosphere", "dusk")),
+    CaptureSpec("atmosphere-night", "Moonlit Night", "atmosphere",
+                ("--capture-atmosphere", "night")),
+    CaptureSpec("atmosphere-omen", "Dragon Omen", "atmosphere",
+                ("--capture-atmosphere", "omen")),
 )
 
 
@@ -118,40 +131,74 @@ def crop_world(path: Path) -> Image.Image:
     return image.crop(WORLD_CROP).resize(ART_SIZE, Image.Resampling.NEAREST)
 
 
-def read_shared_palette() -> list[tuple[int, int, int]]:
-    source = (ROOT / "src" / "client" / "cc_local3d.c").read_text()
-    marker = "static const Color SHARED_WORLD_PALETTE[] = {"
+def read_authored_palette() -> list[tuple[int, int, int]]:
+    source = (ROOT / "src" / "client" / "cc_visual_style.h").read_text()
+    marker = "static const CcVisualPalette CC_VISUAL_PALETTE = {"
     if marker not in source:
-        raise ValueError("shared world palette was not found")
+        raise ValueError("authored visual palette was not found")
     block = source.split(marker, 1)[1].split("};", 1)[0]
     colors = [
-        tuple(map(int, match))
+        tuple(map(int, match[:3]))
         for match in re.findall(
-            r"\{\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*255\s*\}",
+            r"\{\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\}",
             block,
         )
     ]
     if len(colors) < 24:
-        raise ValueError(f"shared palette is unexpectedly small ({len(colors)} colors)")
-    return colors
+        raise ValueError(f"authored palette is unexpectedly small ({len(colors)} colors)")
+    return list(dict.fromkeys(colors))
+
+
+def srgb_channel_to_linear(channel: int) -> float:
+    value = channel / 255.0
+    return value / 12.92 if value <= 0.04045 else \
+        ((value + 0.055) / 1.055) ** 2.4
+
+
+def rgb_to_oklab(color: tuple[int, int, int]) -> tuple[float, float, float]:
+    red, green, blue = (srgb_channel_to_linear(channel) for channel in color)
+    long_wave = 0.4122214708 * red + 0.5363325363 * green + \
+        0.0514459929 * blue
+    medium_wave = 0.2119034982 * red + 0.6806995451 * green + \
+        0.1073969566 * blue
+    short_wave = 0.0883024619 * red + 0.2817188376 * green + \
+        0.6299787005 * blue
+    long_wave = math.copysign(abs(long_wave) ** (1.0 / 3.0), long_wave)
+    medium_wave = math.copysign(abs(medium_wave) ** (1.0 / 3.0), medium_wave)
+    short_wave = math.copysign(abs(short_wave) ** (1.0 / 3.0), short_wave)
+    return (
+        0.2104542553 * long_wave + 0.7936177850 * medium_wave -
+            0.0040720468 * short_wave,
+        1.9779984951 * long_wave - 2.4285922050 * medium_wave +
+            0.4505937099 * short_wave,
+        0.0259040371 * long_wave + 0.7827717662 * medium_wave -
+            0.8086757660 * short_wave,
+    )
+
+
+def oklab_distance(source: tuple[float, float, float],
+                   candidate: tuple[float, float, float]) -> float:
+    lightness = (source[0] - candidate[0]) * 1.24
+    green_red = source[1] - candidate[1]
+    blue_yellow = source[2] - candidate[2]
+    return math.sqrt(lightness * lightness + green_red * green_red +
+                     blue_yellow * blue_yellow)
 
 
 def palette_metrics(image: Image.Image,
                     palette: list[tuple[int, int, int]]) -> dict[str, float]:
     counts = Counter(image_pixels(image.convert("RGB")))
     palette_set = set(palette)
+    perceptual_palette = [rgb_to_oklab(color) for color in palette]
     total = sum(counts.values())
     exact = sum(count for color, count in counts.items() if color in palette_set)
     near = 0
     weighted_distance = 0.0
     maximum_distance = 0.0
     for color, count in counts.items():
-        distance = math.sqrt(min(
-            (color[0] - candidate[0]) ** 2 +
-            (color[1] - candidate[1]) ** 2 +
-            (color[2] - candidate[2]) ** 2
-            for candidate in palette
-        ))
+        perceptual_color = rgb_to_oklab(color)
+        distance = min(oklab_distance(perceptual_color, candidate)
+                       for candidate in perceptual_palette)
         weighted_distance += distance * count
         maximum_distance = max(maximum_distance, distance)
         if distance <= PALETTE_NEAR_DISTANCE:
@@ -470,8 +517,8 @@ def main() -> None:
     output_root = args.output.resolve()
     relative_capture_path(output_root)
     app = find_app(args.app.resolve() if args.app is not None else None)
-    palette = read_shared_palette()
-    all_specs = (*ROOMS, *SCENES)
+    palette = read_authored_palette()
+    all_specs = (*ROOMS, *SCENES, *ATMOSPHERES)
     capture_paths: dict[str, Path] = {}
 
     try:
@@ -524,6 +571,24 @@ def main() -> None:
                 "reasons": reasons,
             })
 
+        clear_atmosphere = crop_world(capture_paths["atmosphere-clear"])
+        for spec in ATMOSPHERES[1:]:
+            mood = crop_world(capture_paths[spec.slug])
+            difference = ImageChops.difference(clear_atmosphere, mood)
+            difference_pixels = image_pixels(difference)
+            changed = sum(
+                any(channel != 0 for channel in pixel)
+                for pixel in difference_pixels
+            ) / len(difference_pixels)
+            mean_delta = sum(
+                sum(pixel) for pixel in difference_pixels
+            ) / (len(difference_pixels) * 3)
+            if changed < 0.35 or mean_delta < 6.0:
+                failures.append(
+                    f"{spec.label}: mood is not distinct from clear day "
+                    f"({changed:.1%} changed, {mean_delta:.1f} mean delta)"
+                )
+
         flicker = flicker_metrics(flicker_paths)
         if not flicker["passed"]:
             failures.append("stationary world target changes between repeat captures")
@@ -543,6 +608,11 @@ def main() -> None:
             output_root / "contact-sheets" / "street-road-interior-parley.png", 4,
         )
         contact_sheet(
+            [(spec.label, view_paths[spec.slug]["color"])
+             for spec in ATMOSPHERES],
+            output_root / "contact-sheets" / "time-and-weather.png", 4,
+        )
+        contact_sheet(
             [(view.replace("-", " ").title(), view_paths["street"][view])
              for view in ("color", "grayscale", "silhouette", "three-value")],
             output_root / "contact-sheets" / "street-value-study.png", 4,
@@ -557,7 +627,10 @@ def main() -> None:
     if failures:
         print(f"FAIL art-check: {len(failures)} issue(s); see {output_root / 'report.md'}")
         raise SystemExit(1)
-    print(f"PASS art-check: 10 rooms, 4 scenes, value studies, character sizes, and flicker")
+    print(
+        "PASS art-check: 10 rooms, 4 scenes, 5 atmosphere moods, "
+        "value studies, character sizes, and flicker"
+    )
     print(f"REPORT {output_root / 'report.md'}")
 
 

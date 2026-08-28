@@ -252,6 +252,12 @@ if(CC_BUILD_CLIENT)
         set(CC_NPC_INDEXED_FRAGMENT_SHADER
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/npc_indexed.fs"
         )
+        set(CC_GLOAMGATE_ALDERWATCH_MAP_ASSET
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/maps/gloamgate_to_alderwatch.png"
+        )
+        set(CC_COLLECTIBLE_MAP_ATLAS_ASSET
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/maps/collectible_map_atlas.png"
+        )
         add_custom_target(crownless_hero_assets ALL
             COMMAND ${CMAKE_COMMAND} -E make_directory
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/hero"
@@ -265,6 +271,8 @@ if(CC_BUILD_CLIENT)
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/world_kit"
             COMMAND ${CMAKE_COMMAND} -E make_directory
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/shaders"
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/maps"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${CC_HERO_ENGINE_ASSET}"
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/hero/crownless_hero_engine_rig_v01.glb"
@@ -349,6 +357,12 @@ if(CC_BUILD_CLIENT)
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${CC_NPC_INDEXED_FRAGMENT_SHADER}"
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/shaders/npc_indexed.fs"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CC_GLOAMGATE_ALDERWATCH_MAP_ASSET}"
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/maps/gloamgate_to_alderwatch.png"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CC_COLLECTIBLE_MAP_ATLAS_ASSET}"
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/maps/collectible_map_atlas.png"
             DEPENDS "${CC_HERO_ENGINE_ASSET}" "${CC_HERO_ENGINE_MANIFEST}"
                     ${CC_NPC_ARCHETYPE_ASSETS} "${CC_NPC_ARCHETYPE_MANIFEST}"
                     "${CC_NPC_DYNAMIC_MODULE_MANIFEST}"
@@ -363,6 +377,8 @@ if(CC_BUILD_CLIENT)
                     "${CC_WORLD_LIGHT_FRAGMENT_SHADER}"
                     "${CC_TREE_FOLIAGE_FRAGMENT_SHADER}"
                     "${CC_HERO_PIXEL_FRAGMENT_SHADER}"
+                    "${CC_GLOAMGATE_ALDERWATCH_MAP_ASSET}"
+                    "${CC_COLLECTIBLE_MAP_ATLAS_ASSET}"
             VERBATIM
         )
         add_dependencies(crownless_carriage crownless_hero_assets)
@@ -494,6 +510,12 @@ if(BUILD_TESTING)
         target_include_directories(npc_appearance_tests PRIVATE src)
         cc_strict_warnings(npc_appearance_tests)
         add_test(NAME deterministic_npc_population COMMAND npc_appearance_tests)
+
+        add_executable(visual_palette_tests tests/visual_palette_tests.c)
+        target_link_libraries(visual_palette_tests PRIVATE raylib)
+        target_include_directories(visual_palette_tests PRIVATE src)
+        cc_strict_warnings(visual_palette_tests)
+        add_test(NAME perceptual_visual_palette COMMAND visual_palette_tests)
 
         add_executable(local_movement_tests
             tests/local_movement_tests.c

@@ -62,6 +62,8 @@ The architecture proof connects these parts in one running build:
   rewards, accepted promises, and reputation consequences
 - Carriage-stage junction scenes with one continuous cart track and no more
   than one side branch, plus a three-slot case of tradeable traveller's notes
+- A twelve-chart collectible map set with distinct physical artwork, a
+  three-slot carriage case, and a persistent storage archive in Gloamgate
 - Real-time carriage journeys, a dedicated road scene, and a route crisis that
   can be resolved through combat or payment
 - Immediate local aftermath and delayed consequences after a journey
@@ -160,7 +162,7 @@ Inputs are contextual.
 | --- | --- |
 | Left click | Move to a visible surface, or select a raider |
 | `F` | Use a nearby door, notice board, carriage, or toll collector |
-| `M` | Drive out to the roadside branches while beside the carriage |
+| `M` | Open or close the map case while beside the carriage |
 | `Q` | Open the situation board |
 | `Tab` | Open the causal event ledger |
 | `J` | Jump |
@@ -184,6 +186,10 @@ At a roadside branch, press `Enter` to turn onto it. Use the arrow keys or
 `Keep on track` to reach the next branch. Press `B` to buy local notes, `S` to
 sell carried notes, or `R` to repair the branch. A chart can save time and warn
 of danger, but it is never required to take a visible track.
+
+In the map case, use the arrow keys or click a sheet to select it. Press `B` to
+buy a local chart, `S` to sell one, or `A` to store or retrieve it at the
+Gloamgate archive. Travel begins from the carriage's `Drive out` action.
 
 During combat, `1` uses Crushing Blow, `2` uses Sunder, and `3` uses Second
 Wind. Click the ground to disengage and return to direct movement.

@@ -194,7 +194,7 @@ static void CheckLegacyJournalMigration(char *error,
              legacy_generation);
     CC_CHECK(ReadSqliteInteger(
                  path, "SELECT journal_cursor FROM meta WHERE id=1;") == 0);
-    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 12);
+    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 13);
     CC_CHECK(CcJournalAdvanceDays(journal, &resumed, 2,
                                   error, error_capacity));
     uint64_t expected_hash = CcSimHash(&resumed);
@@ -361,6 +361,9 @@ static void CheckSchema11Compatibility(char *error, size_t error_capacity)
     RemoveDatabase(path);
     CcSim legacy;
     CcSimInit(&legacy, UINT32_C(0x1e9ac11));
+    legacy.map_count = CC_MAX_ROUTES;
+    legacy.player.map_catalogue_mask = 0U;
+    legacy.player.map_archive_mask = 0U;
     legacy.dragon.life_stage = CC_DRAGON_STAGE_EGG;
     legacy.dragon.activity = CC_DRAGON_ACTIVITY_DORMANT;
     legacy.dragon.age_days = 0;
@@ -379,9 +382,38 @@ static void CheckSchema11Compatibility(char *error, size_t error_capacity)
     CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
     CC_CHECK(restored.generator_version == CC_GENERATOR_VERSION);
+    CC_CHECK(restored.map_count == CC_MAP_COLLECTION_COUNT);
+    CC_CHECK(CcPlayerMapCollectionCount(&restored) == 1);
+    CC_CHECK(strcmp(restored.maps[CC_MAP_CROWNLESS_ATLAS].name,
+                    CC_CROWNLESS_ATLAS_MAP_NAME) == 0);
     CC_CHECK(restored.dragon.life_stage == CC_DRAGON_STAGE_CROWNED);
     CC_CHECK(restored.dragon.age_days > 0);
     CC_CHECK(restored.dragon.crown_strength > 0);
+    CC_CHECK(restored.dragon.memory_integrity == 100);
+    CC_CHECK(CcSimValidate(&restored, error, error_capacity));
+    RemoveDatabase(path);
+}
+
+static void CheckSchema12Compatibility(char *error, size_t error_capacity)
+{
+    const char *path = "persistence-legacy-v12-test.ccsave";
+    RemoveDatabase(path);
+    CcSim legacy;
+    CcSimInit(&legacy, UINT32_C(0x1e9ac12));
+    legacy.map_count = CC_MAX_ROUTES;
+    legacy.player.map_catalogue_mask = 0U;
+    legacy.player.map_archive_mask = 0U;
+    int32_t dragon_age = legacy.dragon.age_days;
+    legacy.schema_version = 12U;
+    legacy.generator_version = 12U;
+    CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.generator_version == CC_GENERATOR_VERSION);
+    CC_CHECK(restored.map_count == CC_MAP_COLLECTION_COUNT);
+    CC_CHECK(CcPlayerMapCollectionCount(&restored) == 1);
+    CC_CHECK(restored.dragon.age_days == dragon_age);
     CC_CHECK(restored.dragon.memory_integrity == 100);
     CC_CHECK(CcSimValidate(&restored, error, error_capacity));
     RemoveDatabase(path);
@@ -693,6 +725,7 @@ int main(void)
     CheckSchema8Compatibility(error, sizeof(error));
     CheckSchema10Compatibility(error, sizeof(error));
     CheckSchema11Compatibility(error, sizeof(error));
+    CheckSchema12Compatibility(error, sizeof(error));
     CheckDiplomacyPersistence(error, sizeof(error));
     CheckJournalRecovery(error, sizeof(error));
     CheckJournalCheckpointAndTamper(error, sizeof(error));
@@ -760,6 +793,10 @@ int main(void)
     CC_CHECK(restored.player.map_capacity == original.player.map_capacity);
     CC_CHECK(restored.player.accepted_situation_id ==
              original.player.accepted_situation_id);
+    CC_CHECK(restored.player.map_catalogue_mask ==
+             original.player.map_catalogue_mask);
+    CC_CHECK(restored.player.map_archive_mask ==
+             original.player.map_archive_mask);
     CC_CHECK(restored.settlements[4].service_mask ==
              original.settlements[4].service_mask);
     CC_CHECK(restored.settlements[4].service_project ==
