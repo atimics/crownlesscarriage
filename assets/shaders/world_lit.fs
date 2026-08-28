@@ -25,8 +25,29 @@ uniform float focalContrast;
 uniform float foregroundReveal;
 uniform float revealCutHeight;
 uniform float terrainSurface;
+uniform float weatherWetness;
 
 out vec4 finalColor;
+
+vec3 srgbToLinear(vec3 color)
+{
+    vec3 low = color / 12.92;
+    vec3 high = pow((color + 0.055) / 1.055, vec3(2.4));
+    return mix(low, high, step(vec3(0.04045), color));
+}
+
+float linearToSrgb(float value)
+{
+    return value <= 0.0031308 ? value * 12.92 :
+           1.055 * pow(value, 1.0 / 2.4) - 0.055;
+}
+
+float perceivedGray(vec3 color)
+{
+    vec3 linear = srgbToLinear(clamp(color, 0.0, 1.0));
+    float luminance = dot(linear, vec3(0.2126, 0.7152, 0.0722));
+    return linearToSrgb(luminance);
+}
 
 float hash21(vec2 point)
 {
@@ -154,6 +175,11 @@ void main()
                  isTerrain * detailPresence);
     color += lightColor * specular * mix(1.0, 0.12, isTerrain) *
              detailPresence;
+    float wetSurface = weatherWetness * smoothstep(0.58, 0.94, normal.y);
+    float wetSheen = pow(max(dot(normal, halfDirection), 0.0), 8.0) *
+                     smoothstep(0.02, 0.64, key) * wetSurface;
+    color *= mix(1.0, 0.86, wetSurface);
+    color += lightColor * wetSheen * 0.13 * detailPresence;
     color += vec3(0.20, 0.46, 0.48) * rim *
              mix(0.052, 0.018, isTerrain) * detailPresence;
 
@@ -194,7 +220,7 @@ void main()
        effect of radial fog. The far layer loses chips and ink, cools, and
        moves toward the background value. A nearby framing mass is darker. */
     float backgroundWeight = backgroundBand * depthStrength;
-    float luminance = dot(color, vec3(0.299, 0.587, 0.114));
+    float luminance = perceivedGray(color);
     vec3 quietBackground = mix(vec3(luminance) * vec3(0.84, 0.94, 1.06),
                                fogColor + vec3(0.055), 0.42);
     color = mix(color, quietBackground, backgroundWeight * 0.48);

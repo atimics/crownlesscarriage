@@ -1,4 +1,5 @@
 #include "client/cc_npc_appearance.h"
+#include "client/cc_visual_style.h"
 
 #include <math.h>
 #include <stddef.h>
@@ -299,7 +300,7 @@ static void PaintPortraitFace(const CcFaceRecipe *face,
     }
 
     if (crowned) {
-        Color gold = (Color){224, 177, 78, 255};
+        Color gold = CC_STYLE_GOLD;
         paint(context, 7, 0, 6, 1, gold);
         paint(context, 7, 0, 1, 2, gold);
         paint(context, 9, 0, 1, 2, gold);
@@ -321,11 +322,11 @@ void CcNpcDrawPixelPortrait(const CcNpcAppearance *appearance,
     ScreenPortraitCanvas canvas = {x, y, pixel};
     DrawRectangle((int32_t)bounds.x, (int32_t)bounds.y,
                   (int32_t)bounds.width, (int32_t)bounds.height,
-                  (Color){8, 16, 21, 255});
+                  CC_STYLE_PANEL_DEEP);
     DrawRectangleLines((int32_t)bounds.x, (int32_t)bounds.y,
                        (int32_t)bounds.width, (int32_t)bounds.height,
                        Shade(appearance->accent, 0.88f));
-    DrawRectangle(x, y, width, height, (Color){17, 28, 32, 255});
+    DrawRectangle(x, y, width, height, CC_STYLE_PANEL_HOVER);
     PaintScreenBlock(&canvas, 2, 18, 16, 6, appearance->outer);
     PaintScreenBlock(&canvas, 0, 21, 20, 3,
                      Shade(appearance->outer, 0.68f));
@@ -435,14 +436,14 @@ CcNpcAppearance CcNpcAppearanceGenerate(uint32_t seed, CcNpcRole role,
         leather_palette, (int32_t)(sizeof(leather_palette) /
                                    sizeof(leather_palette[0])), seed, 15U);
     result.metal = (Sample(seed, 16U) & 1U) != 0U ?
-        (Color){91, 103, 101, 255} : (Color){119, 111, 94, 255};
+        CC_STYLE_METAL : Blend(CC_STYLE_METAL, CC_STYLE_ROAD_LIGHT, 0.48f);
     result.accent = accent.a != 0U ? accent : Shade(result.outer, 1.22f);
 
     switch (role) {
         case CC_NPC_ROLE_WAYFARER:
             result.equipment = CC_NPC_EQUIPMENT_MANTLE |
                                CC_NPC_EQUIPMENT_SATCHEL;
-            result.outer = Blend(result.outer, (Color){45, 116, 119, 255},
+            result.outer = Blend(result.outer, CC_STYLE_TEAL,
                                  0.42f);
             result.stride_scale *= 1.06f;
             result.arm_swing_scale *= 1.08f;
@@ -466,7 +467,7 @@ CcNpcAppearance CcNpcAppearanceGenerate(uint32_t seed, CcNpcRole role,
             result.equipment = CC_NPC_EQUIPMENT_MANTLE |
                                CC_NPC_EQUIPMENT_ARMOR |
                                CC_NPC_EQUIPMENT_TOOL;
-            result.outer = Blend(result.outer, (Color){104, 46, 51, 255},
+            result.outer = Blend(result.outer, CC_STYLE_DANGER,
                                  0.68f);
             result.muscularity = fmaxf(result.muscularity, 0.56f);
             result.shoulder_scale = fmaxf(result.shoulder_scale, 1.06f);
@@ -481,7 +482,7 @@ CcNpcAppearance CcNpcAppearanceGenerate(uint32_t seed, CcNpcRole role,
                                CC_NPC_EQUIPMENT_HEADWEAR;
             result.outer = Blend(result.outer, result.accent, 0.36f);
             result.underlayer = Blend(result.underlayer,
-                                      (Color){132, 141, 126, 255}, 0.68f);
+                                      CC_STYLE_METAL_LIGHT, 0.68f);
             result.body_mass = fmaxf(result.body_mass, 1.04f);
             result.head_width = fmaxf(result.head_width, 1.02f);
             result.gait_cadence_scale *= 0.92f;
@@ -498,7 +499,7 @@ CcNpcAppearance CcNpcAppearanceGenerate(uint32_t seed, CcNpcRole role,
             result.body_mass = fmaxf(result.body_mass, 1.04f);
             result.shoulder_scale = fmaxf(result.shoulder_scale, 1.04f);
             result.underlayer = Blend(result.underlayer,
-                                      (Color){111, 112, 99, 255}, 0.58f);
+                                      CC_STYLE_STONE_LIGHT, 0.58f);
             result.gait_cadence_scale *= 0.84f;
             result.bob_scale *= 0.68f;
             result.arm_swing_scale *= 0.80f;
@@ -546,9 +547,10 @@ CcNpcAppearance CcNpcAppearanceGenerate(uint32_t seed, CcNpcRole role,
             result.equipment = CC_NPC_EQUIPMENT_APRON |
                                CC_NPC_EQUIPMENT_SATCHEL |
                                CC_NPC_EQUIPMENT_MANTLE;
-            result.outer = Blend(result.outer, (Color){83, 118, 105, 255},
+            result.outer = Blend(result.outer, CC_STYLE_FOLIAGE_LIGHT,
                                  0.62f);
-            result.underlayer = (Color){186, 179, 154, 255};
+            result.underlayer = Blend(CC_STYLE_INK, CC_STYLE_STONE_LIGHT,
+                                      0.32f);
             result.gait_cadence_scale *= 0.90f;
             result.stride_scale *= 0.92f;
             result.arm_swing_scale *= 0.88f;
@@ -565,7 +567,7 @@ CcNpcAppearance CcNpcCrownlessAppearance(void)
 {
     CcNpcAppearance result = CcNpcAppearanceGenerate(
         UINT32_C(0xc04e1e55), CC_NPC_ROLE_WAYFARER,
-        (Color){224, 169, 59, 255});
+        CC_STYLE_HERO_ACCENT);
     result.equipment = CC_NPC_EQUIPMENT_MANTLE |
                        CC_NPC_EQUIPMENT_ARMOR;
     result.stature = 1.0f;
@@ -583,14 +585,14 @@ CcNpcAppearance CcNpcCrownlessAppearance(void)
     result.scar_style = 0U;
     result.headwear_style = 0U;
     result.garment_style = 0U;
-    result.skin = (Color){177, 131, 93, 255};
-    result.hair = (Color){27, 31, 32, 255};
-    result.underlayer = (Color){47, 108, 106, 255};
-    result.outer = (Color){111, 48, 55, 255};
-    result.trousers = (Color){40, 48, 57, 255};
-    result.leather = (Color){82, 50, 35, 255};
-    result.metal = (Color){139, 55, 62, 255};
-    result.accent = (Color){224, 169, 59, 255};
+    result.skin = CC_STYLE_HERO_SKIN;
+    result.hair = CC_STYLE_HERO_HAIR;
+    result.underlayer = CC_STYLE_HERO_UNDERLAYER;
+    result.outer = CC_STYLE_HERO_OUTER;
+    result.trousers = CC_STYLE_HERO_TROUSERS;
+    result.leather = CC_STYLE_HERO_LEATHER;
+    result.metal = CC_STYLE_HERO_METAL;
+    result.accent = CC_STYLE_HERO_ACCENT;
     return result;
 }
 
@@ -598,7 +600,7 @@ CcNpcAppearance CcNpcMaraAppearance(void)
 {
     CcNpcAppearance result = CcNpcAppearanceGenerate(
         UINT32_C(0x4d415241), CC_NPC_ROLE_MERCHANT,
-        (Color){218, 148, 61, 255});
+        CC_STYLE_GOLD);
     result.body_mass = 1.09f;
     result.head_width = 1.07f;
     result.head_depth = 1.03f;

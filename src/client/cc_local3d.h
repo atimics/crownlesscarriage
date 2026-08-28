@@ -58,6 +58,30 @@ typedef enum CcLocalSceneKind {
     CC_LOCAL_SCENE_ROAD
 } CcLocalSceneKind;
 
+typedef enum CcLocalAtmospherePreset {
+    CC_LOCAL_ATMOSPHERE_CLEAR_DAY = 0,
+    CC_LOCAL_ATMOSPHERE_RAINY_OVERCAST,
+    CC_LOCAL_ATMOSPHERE_AMBER_DUSK,
+    CC_LOCAL_ATMOSPHERE_MOONLIT_NIGHT,
+    CC_LOCAL_ATMOSPHERE_DRAGON_OMEN,
+    CC_LOCAL_ATMOSPHERE_COUNT
+} CcLocalAtmospherePreset;
+
+/* A day is one authored lighting beat, not a continuously rotating clock.
+   Clear weather remains most common; travel and explicit day advances are
+   the moments when the world may move to another mood. */
+static inline CcLocalAtmospherePreset CcLocalAtmosphereForDay(int32_t day)
+{
+    int32_t beat = day % 8;
+    if (beat < 0) beat += 8;
+    if (beat == 2 || beat == 6) {
+        return CC_LOCAL_ATMOSPHERE_RAINY_OVERCAST;
+    }
+    if (beat == 4) return CC_LOCAL_ATMOSPHERE_AMBER_DUSK;
+    if (beat == 7) return CC_LOCAL_ATMOSPHERE_MOONLIT_NIGHT;
+    return CC_LOCAL_ATMOSPHERE_CLEAR_DAY;
+}
+
 typedef enum CcAthleticDiscipline {
     CC_ATHLETIC_MOBILITY,
     CC_ATHLETIC_GRIP,
@@ -375,6 +399,10 @@ void CcLocalRendererSetScreenFirstHero(bool enabled);
 void CcLocalRendererBeginFrame(float delta_time);
 CcLocalRendererStats CcLocalRendererGetStats(void);
 void CcLocalRendererSetDiagnosticOverlay(bool enabled);
+void CcLocalRendererSetAtmosphere(CcLocalAtmospherePreset preset,
+                                  float transition_seconds);
+void CcLocalRendererUpdateAtmosphere(float delta_time);
+const char *CcLocalAtmosphereName(CcLocalAtmospherePreset preset);
 void CcLocalRendererShutdown(void);
 void CcLocalDrawNpcPortrait3D(const CcNpcAppearance *appearance,
                               Rectangle bounds,

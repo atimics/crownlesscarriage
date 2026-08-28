@@ -26,6 +26,30 @@
 #define WORLD_GOLD CC_STYLE_GOLD
 #define WORLD_DANGER CC_STYLE_DANGER
 #define WORLD_VIOLET CC_STYLE_VIOLET
+#define WORLD_EARTH_SHADOW CC_STYLE_EARTH_SHADOW
+#define WORLD_EARTH CC_STYLE_EARTH
+#define WORLD_EARTH_LIGHT CC_STYLE_EARTH_LIGHT
+#define WORLD_ROAD_SHADOW CC_STYLE_ROAD_SHADOW
+#define WORLD_ROAD CC_STYLE_ROAD
+#define WORLD_ROAD_LIGHT CC_STYLE_ROAD_LIGHT
+#define WORLD_WOOD_SHADOW CC_STYLE_WOOD_SHADOW
+#define WORLD_WOOD CC_STYLE_WOOD
+#define WORLD_WOOD_LIGHT CC_STYLE_WOOD_LIGHT
+#define WORLD_STONE_SHADOW CC_STYLE_STONE_SHADOW
+#define WORLD_STONE CC_STYLE_STONE
+#define WORLD_STONE_LIGHT CC_STYLE_STONE_LIGHT
+#define WORLD_GRASS_SHADOW CC_STYLE_GRASS_SHADOW
+#define WORLD_GRASS CC_STYLE_GRASS
+#define WORLD_GRASS_LIGHT CC_STYLE_GRASS_LIGHT
+#define WORLD_FOLIAGE_SHADOW CC_STYLE_FOLIAGE_SHADOW
+#define WORLD_FOLIAGE CC_STYLE_FOLIAGE
+#define WORLD_FOLIAGE_LIGHT CC_STYLE_FOLIAGE_LIGHT
+#define WORLD_CROP_SHADOW CC_STYLE_CROP_SHADOW
+#define WORLD_CROP CC_STYLE_CROP
+#define WORLD_CROP_LIGHT CC_STYLE_CROP_LIGHT
+#define WORLD_METAL_SHADOW CC_STYLE_METAL_SHADOW
+#define WORLD_METAL CC_STYLE_METAL
+#define WORLD_METAL_LIGHT CC_STYLE_METAL_LIGHT
 static const float PLAYER_COLLISION_RADIUS = 0.30f;
 static const float PERSON_COLLISION_RADIUS = 0.27f;
 static const float COURSE_GUARD_SPACING = 1.18f;
@@ -216,6 +240,34 @@ typedef struct ArtLightProfileDefinition {
     float focal_contrast;
 } ArtLightProfileDefinition;
 
+typedef struct ArtAtmosphereDefinition {
+    Vector3 light_direction;
+    Vector3 light_tint;
+    Vector3 ambient_tint;
+    Vector3 shadow_tint;
+    Color fog_color;
+    float direction_influence;
+    float fog_influence;
+    float fog_distance_scale;
+    float depth_scale;
+    float focal_scale;
+    float grade_exposure;
+    float grade_shadow_tone;
+    float grade_highlight_tone;
+    float grade_chroma;
+    float rain;
+    float mist;
+    float wetness;
+    float omen;
+} ArtAtmosphereDefinition;
+
+typedef struct ArtAtmosphereState {
+    ArtAtmosphereDefinition from;
+    CcLocalAtmospherePreset target;
+    float blend;
+    float duration;
+} ArtAtmosphereState;
+
 static const ArtLightProfileDefinition ART_LIGHT_PROFILES[] = {
     [ART_LIGHT_CLEAR_MARKET] = {
         {-0.42f, 0.84f, 0.34f}, {1.12f, 0.96f, 0.78f},
@@ -243,6 +295,176 @@ static const ArtLightProfileDefinition ART_LIGHT_PROFILES[] = {
         {31, 23, 25, 255}, 10.0f, 21.0f, 0.52f, 0.17f,
     },
 };
+
+/* These are complete art recipes rather than physical sky simulations.
+   Their job is to keep gameplay shapes readable while giving travel and day
+   changes a strong emotional beat. */
+static const ArtAtmosphereDefinition ART_ATMOSPHERES[] = {
+    [CC_LOCAL_ATMOSPHERE_CLEAR_DAY] = {
+        {-0.42f, 0.84f, 0.34f}, {1.00f, 1.00f, 1.00f},
+        {1.00f, 1.00f, 1.00f}, {1.00f, 1.00f, 1.00f},
+        {47, 44, 61, 255}, 0.10f, 0.10f, 1.00f, 1.00f, 1.00f,
+        0.000f, 1.00f, 1.00f, 1.00f, 0.00f, 0.00f, 0.00f, 0.00f,
+    },
+    [CC_LOCAL_ATMOSPHERE_RAINY_OVERCAST] = {
+        {-0.20f, 0.92f, 0.22f}, {0.78f, 0.86f, 0.98f},
+        {0.90f, 0.97f, 1.07f}, {0.96f, 0.90f, 1.10f},
+        {48, 52, 63, 255}, 0.70f, 0.74f, 0.70f, 1.14f, 0.88f,
+        -0.035f, 1.34f, 0.38f, 0.84f, 0.82f, 0.36f, 0.82f, 0.00f,
+    },
+    [CC_LOCAL_ATMOSPHERE_AMBER_DUSK] = {
+        {-0.70f, 0.36f, 0.30f}, {1.24f, 0.72f, 0.46f},
+        {0.84f, 0.78f, 0.92f}, {1.05f, 0.82f, 1.12f},
+        {53, 35, 63, 255}, 0.82f, 0.48f, 0.82f, 1.08f, 1.08f,
+        -0.020f, 1.36f, 1.58f, 1.05f, 0.00f, 0.10f, 0.00f, 0.00f,
+    },
+    [CC_LOCAL_ATMOSPHERE_MOONLIT_NIGHT] = {
+        {-0.30f, 0.48f, -0.82f}, {0.72f, 0.82f, 1.06f},
+        {0.78f, 0.82f, 0.98f}, {0.86f, 0.88f, 1.08f},
+        {38, 31, 49, 255}, 0.82f, 0.58f, 0.82f, 1.12f, 1.12f,
+        -0.045f, 1.42f, 0.62f, 0.84f, 0.00f, 0.18f, 0.08f, 0.00f,
+    },
+    [CC_LOCAL_ATMOSPHERE_DRAGON_OMEN] = {
+        {-0.58f, 0.42f, 0.18f}, {0.88f, 0.68f, 0.72f},
+        {0.70f, 0.72f, 0.82f}, {0.88f, 0.78f, 1.08f},
+        {48, 44, 57, 255}, 0.78f, 0.68f, 0.74f, 1.18f, 1.12f,
+        -0.040f, 1.46f, 0.92f, 0.76f, 0.38f, 0.66f, 0.50f, 1.00f,
+    },
+};
+
+static ArtAtmosphereState art_atmosphere = {
+    .target = CC_LOCAL_ATMOSPHERE_CLEAR_DAY,
+    .blend = 1.0f,
+    .duration = 1.0f,
+};
+
+static float ArtAtmosphereClamp(float value)
+{
+    return fmaxf(0.0f, fminf(value, 1.0f));
+}
+
+static float ArtAtmosphereMixFloat(float from, float to, float amount)
+{
+    return from + (to - from) * amount;
+}
+
+static Vector3 ArtAtmosphereMixVector(Vector3 from, Vector3 to, float amount)
+{
+    return (Vector3){
+        ArtAtmosphereMixFloat(from.x, to.x, amount),
+        ArtAtmosphereMixFloat(from.y, to.y, amount),
+        ArtAtmosphereMixFloat(from.z, to.z, amount),
+    };
+}
+
+static Color ArtAtmosphereMixColor(Color from, Color to, float amount)
+{
+    return (Color){
+        (unsigned char)roundf(ArtAtmosphereMixFloat(
+            (float)from.r, (float)to.r, amount)),
+        (unsigned char)roundf(ArtAtmosphereMixFloat(
+            (float)from.g, (float)to.g, amount)),
+        (unsigned char)roundf(ArtAtmosphereMixFloat(
+            (float)from.b, (float)to.b, amount)),
+        255,
+    };
+}
+
+static ArtAtmosphereDefinition ArtAtmosphereMix(
+    ArtAtmosphereDefinition from, ArtAtmosphereDefinition to, float amount)
+{
+    amount = ArtAtmosphereClamp(amount);
+    return (ArtAtmosphereDefinition){
+        .light_direction = ArtAtmosphereMixVector(
+            from.light_direction, to.light_direction, amount),
+        .light_tint = ArtAtmosphereMixVector(
+            from.light_tint, to.light_tint, amount),
+        .ambient_tint = ArtAtmosphereMixVector(
+            from.ambient_tint, to.ambient_tint, amount),
+        .shadow_tint = ArtAtmosphereMixVector(
+            from.shadow_tint, to.shadow_tint, amount),
+        .fog_color = ArtAtmosphereMixColor(
+            from.fog_color, to.fog_color, amount),
+        .direction_influence = ArtAtmosphereMixFloat(
+            from.direction_influence, to.direction_influence, amount),
+        .fog_influence = ArtAtmosphereMixFloat(
+            from.fog_influence, to.fog_influence, amount),
+        .fog_distance_scale = ArtAtmosphereMixFloat(
+            from.fog_distance_scale, to.fog_distance_scale, amount),
+        .depth_scale = ArtAtmosphereMixFloat(
+            from.depth_scale, to.depth_scale, amount),
+        .focal_scale = ArtAtmosphereMixFloat(
+            from.focal_scale, to.focal_scale, amount),
+        .grade_exposure = ArtAtmosphereMixFloat(
+            from.grade_exposure, to.grade_exposure, amount),
+        .grade_shadow_tone = ArtAtmosphereMixFloat(
+            from.grade_shadow_tone, to.grade_shadow_tone, amount),
+        .grade_highlight_tone = ArtAtmosphereMixFloat(
+            from.grade_highlight_tone, to.grade_highlight_tone, amount),
+        .grade_chroma = ArtAtmosphereMixFloat(
+            from.grade_chroma, to.grade_chroma, amount),
+        .rain = ArtAtmosphereMixFloat(from.rain, to.rain, amount),
+        .mist = ArtAtmosphereMixFloat(from.mist, to.mist, amount),
+        .wetness = ArtAtmosphereMixFloat(
+            from.wetness, to.wetness, amount),
+        .omen = ArtAtmosphereMixFloat(from.omen, to.omen, amount),
+    };
+}
+
+static ArtAtmosphereDefinition ArtAtmosphereCurrent(void)
+{
+    int32_t target = (int32_t)art_atmosphere.target;
+    if (target < 0 || target >= CC_LOCAL_ATMOSPHERE_COUNT) {
+        target = CC_LOCAL_ATMOSPHERE_CLEAR_DAY;
+    }
+    float amount = ArtAtmosphereClamp(art_atmosphere.blend);
+    amount = amount * amount * (3.0f - 2.0f * amount);
+    return ArtAtmosphereMix(art_atmosphere.from,
+                            ART_ATMOSPHERES[target], amount);
+}
+
+static ArtAtmosphereDefinition ArtAtmosphereForProfile(
+    ArtLightProfileId profile_id)
+{
+    ArtAtmosphereDefinition current = ArtAtmosphereCurrent();
+    if (profile_id != ART_LIGHT_INTERIOR_EMBER) return current;
+    return ArtAtmosphereMix(
+        ART_ATMOSPHERES[CC_LOCAL_ATMOSPHERE_CLEAR_DAY], current, 0.16f);
+}
+
+void CcLocalRendererSetAtmosphere(CcLocalAtmospherePreset preset,
+                                  float transition_seconds)
+{
+    if (preset < 0 || preset >= CC_LOCAL_ATMOSPHERE_COUNT) {
+        preset = CC_LOCAL_ATMOSPHERE_CLEAR_DAY;
+    }
+    if (preset == art_atmosphere.target) return;
+    ArtAtmosphereDefinition current = ArtAtmosphereCurrent();
+    art_atmosphere.from = current;
+    art_atmosphere.target = preset;
+    art_atmosphere.duration = fmaxf(0.0f, transition_seconds);
+    art_atmosphere.blend = transition_seconds <= 0.001f ? 1.0f : 0.0f;
+}
+
+void CcLocalRendererUpdateAtmosphere(float delta_time)
+{
+    if (art_atmosphere.blend >= 1.0f) return;
+    float duration = fmaxf(0.001f, art_atmosphere.duration);
+    art_atmosphere.blend = fminf(
+        1.0f, art_atmosphere.blend + fmaxf(0.0f, delta_time) / duration);
+}
+
+const char *CcLocalAtmosphereName(CcLocalAtmospherePreset preset)
+{
+    switch (preset) {
+        case CC_LOCAL_ATMOSPHERE_CLEAR_DAY: return "Clear day";
+        case CC_LOCAL_ATMOSPHERE_RAINY_OVERCAST: return "Rain";
+        case CC_LOCAL_ATMOSPHERE_AMBER_DUSK: return "Dusk";
+        case CC_LOCAL_ATMOSPHERE_MOONLIT_NIGHT: return "Night";
+        case CC_LOCAL_ATMOSPHERE_DRAGON_OMEN: return "Dragon omen";
+        default: return "Clear day";
+    }
+}
 
 typedef struct StreetCameraShot {
     Vector2 trigger;
@@ -8995,6 +9217,10 @@ typedef struct VisualStyleCache {
     Shader grade;
     Texture2D palette_lut;
     int32_t palette_lut_location;
+    int32_t grade_exposure_location;
+    int32_t grade_shadow_tone_location;
+    int32_t grade_highlight_tone_location;
+    int32_t grade_chroma_location;
     bool grade_ready;
     Shader world;
     int32_t light_direction_location;
@@ -9015,6 +9241,7 @@ typedef struct VisualStyleCache {
     int32_t reveal_cut_height_location;
     int32_t foreground_reveal_location;
     int32_t terrain_surface_location;
+    int32_t weather_wetness_location;
     bool world_ready;
     PaintedEnvironmentStyle painted_environment;
     Shader foliage;
@@ -9066,64 +9293,160 @@ typedef struct VisualStyleCache {
     int32_t npc_skinned_hero_head_position_location;
     int32_t npc_skinned_body_skin_remap_location;
     bool npc_skinned_ready;
+    ArtAtmosphereDefinition presentation_atmosphere;
 } VisualStyleCache;
 
 static VisualStyleCache visual_style = {0};
 
 #define CC_SHARED_PALETTE_LUT_SIZE 64
 #define CC_SHARED_PALETTE_LUT_TILES 8
+#define CC_FINAL_PALETTE_MAX_COLORS 64
+#define CC_HERO_RETRO_MATERIAL_COUNT 19
 
-static const Color SHARED_WORLD_PALETTE[] = {
-    /* Ink, slate, stone, parchment. */
-    {15, 16, 18, 255}, {27, 31, 32, 255}, {43, 51, 50, 255},
-    {66, 74, 71, 255}, {102, 108, 99, 255}, {145, 137, 122, 255},
-    {194, 184, 164, 255}, {226, 216, 193, 255},
-    /* Grass and field layers. */
-    {26, 49, 40, 255}, {35, 67, 53, 255}, {61, 84, 56, 255},
-    {96, 105, 61, 255}, {133, 125, 70, 255},
-    /* Timber, soil, and leather. */
-    {43, 32, 29, 255}, {69, 47, 39, 255}, {94, 62, 43, 255},
-    {129, 86, 55, 255}, {166, 126, 83, 255},
-    /* Skin. */
-    {79, 53, 43, 255}, {126, 84, 60, 255}, {172, 124, 86, 255},
-    {205, 157, 111, 255},
-    /* Teal. */
-    {27, 63, 64, 255}, {39, 104, 101, 255}, {57, 133, 125, 255},
-    {87, 165, 153, 255},
-    /* Oxblood and danger. */
-    {66, 36, 43, 255}, {94, 44, 53, 255}, {124, 55, 62, 255},
-    {174, 68, 61, 255},
-    /* Gold. */
-    {93, 69, 32, 255}, {142, 102, 38, 255}, {190, 142, 53, 255},
-    {224, 177, 78, 255},
-    /* Violet. */
-    {53, 42, 61, 255}, {88, 61, 91, 255}, {139, 96, 137, 255},
-};
+typedef enum FinalPaletteOwnership {
+    FINAL_PALETTE_ENVIRONMENT = 0,
+    FINAL_PALETTE_PROTECTED
+} FinalPaletteOwnership;
 
-/* Material order is part of the consolidated engine-hero export contract.
-   Nineteen material slots collapse into three readable masses at play scale:
-   warm skin, a middle-value teal/oxblood costume, and dark limbs/hair. */
-static const Color HERO_RETRO_PALETTE[] = {
-    {42, 51, 50, 255},   /* body neutral */
-    {172, 124, 86, 255}, /* skin */
-    {205, 157, 111, 255}, /* skin light */
-    {15, 16, 18, 255},   /* eye */
-    {27, 31, 32, 255},   /* hair */
-    {66, 74, 71, 255},   /* padding */
-    {43, 51, 50, 255},   /* padding dark */
-    {27, 63, 64, 255},   /* teal dark */
-    {57, 133, 125, 255}, /* teal chest */
-    {224, 177, 78, 255}, /* rare brass highlight */
-    {94, 44, 53, 255},   /* cape */
-    {124, 55, 62, 255},  /* cape light */
-    {43, 51, 50, 255},   /* steel dark */
-    {124, 55, 62, 255},  /* brigandine chest */
-    {174, 68, 61, 255},  /* brigandine edge */
-    {43, 32, 29, 255},   /* dark boots and leather */
-    {66, 74, 71, 255},   /* steel */
-    {102, 108, 99, 255}, /* steel light */
-    {69, 47, 39, 255},   /* leather light */
-};
+typedef struct FinalPaletteEntry {
+    Color color;
+    FinalPaletteOwnership ownership;
+} FinalPaletteEntry;
+
+/* Color values live only in cc_visual_style.h. This list owns semantic
+   membership: broad materials may fill the world, while character and signal
+   pigments receive smaller lookup regions so scenery cannot casually steal
+   the colors that identify the hero, combat, or an interaction. */
+static void AddFinalPaletteColor(FinalPaletteEntry *entries, int32_t capacity,
+                                 int32_t *count, Color color,
+                                 FinalPaletteOwnership ownership)
+{
+    if (entries == NULL || count == NULL) return;
+    for (int32_t index = 0; index < *count; ++index) {
+        Color current = entries[index].color;
+        if (current.r != color.r || current.g != color.g ||
+            current.b != color.b || current.a != color.a) continue;
+        if (ownership == FINAL_PALETTE_PROTECTED) {
+            entries[index].ownership = ownership;
+        }
+        return;
+    }
+    if (*count >= capacity) return;
+    entries[*count] = (FinalPaletteEntry){color, ownership};
+    *count += 1;
+}
+
+static void AddFinalPaletteRamp(FinalPaletteEntry *entries, int32_t capacity,
+                                int32_t *count, CcStyleRamp ramp,
+                                FinalPaletteOwnership ownership)
+{
+    AddFinalPaletteColor(entries, capacity, count, ramp.shadow, ownership);
+    AddFinalPaletteColor(entries, capacity, count, ramp.base, ownership);
+    AddFinalPaletteColor(entries, capacity, count, ramp.light, ownership);
+}
+
+static int32_t BuildFinalPalette(FinalPaletteEntry *entries, int32_t capacity)
+{
+    int32_t count = 0;
+    /* The grade is applied before the HUD is drawn. Keep interface neutrals
+       out of this lookup so stone and fog cannot snap to panel or text
+       colors. Two authored inks give the world cool outdoor and warm indoor
+       shadow anchors. */
+    AddFinalPaletteColor(entries, capacity, &count,
+                         CC_VISUAL_PALETTE.cool_ink,
+                         FINAL_PALETTE_ENVIRONMENT);
+    AddFinalPaletteColor(entries, capacity, &count,
+                         CC_VISUAL_PALETTE.warm_ink,
+                         FINAL_PALETTE_ENVIRONMENT);
+
+    AddFinalPaletteRamp(entries, capacity, &count, CC_VISUAL_PALETTE.earth,
+                        FINAL_PALETTE_ENVIRONMENT);
+    AddFinalPaletteRamp(entries, capacity, &count, CC_VISUAL_PALETTE.road,
+                        FINAL_PALETTE_ENVIRONMENT);
+    AddFinalPaletteRamp(entries, capacity, &count, CC_VISUAL_PALETTE.wood,
+                        FINAL_PALETTE_ENVIRONMENT);
+    AddFinalPaletteRamp(entries, capacity, &count, CC_VISUAL_PALETTE.stone,
+                        FINAL_PALETTE_ENVIRONMENT);
+    AddFinalPaletteRamp(entries, capacity, &count, CC_VISUAL_PALETTE.grass,
+                        FINAL_PALETTE_ENVIRONMENT);
+    AddFinalPaletteRamp(entries, capacity, &count, CC_VISUAL_PALETTE.foliage,
+                        FINAL_PALETTE_ENVIRONMENT);
+    AddFinalPaletteRamp(entries, capacity, &count, CC_VISUAL_PALETTE.crop,
+                        FINAL_PALETTE_ENVIRONMENT);
+    AddFinalPaletteRamp(entries, capacity, &count, CC_VISUAL_PALETTE.metal,
+                        FINAL_PALETTE_ENVIRONMENT);
+    AddFinalPaletteRamp(entries, capacity, &count, CC_VISUAL_PALETTE.parchment,
+                        FINAL_PALETTE_ENVIRONMENT);
+    AddFinalPaletteRamp(entries, capacity, &count,
+                        CC_VISUAL_PALETTE.contraband,
+                        FINAL_PALETTE_ENVIRONMENT);
+
+    AddFinalPaletteRamp(entries, capacity, &count, CC_VISUAL_PALETTE.teal,
+                        FINAL_PALETTE_PROTECTED);
+    AddFinalPaletteRamp(entries, capacity, &count, CC_VISUAL_PALETTE.gold,
+                        FINAL_PALETTE_PROTECTED);
+    AddFinalPaletteRamp(entries, capacity, &count, CC_VISUAL_PALETTE.danger,
+                        FINAL_PALETTE_PROTECTED);
+    AddFinalPaletteRamp(entries, capacity, &count, CC_VISUAL_PALETTE.violet,
+                        FINAL_PALETTE_PROTECTED);
+    AddFinalPaletteRamp(entries, capacity, &count,
+                        CC_VISUAL_PALETTE.people_skin,
+                        FINAL_PALETTE_PROTECTED);
+
+    AddFinalPaletteColor(entries, capacity, &count,
+                         CC_STYLE_HERO_SKIN_SHADOW,
+                         FINAL_PALETTE_PROTECTED);
+    AddFinalPaletteColor(entries, capacity, &count, CC_STYLE_HERO_SKIN,
+                         FINAL_PALETTE_PROTECTED);
+    AddFinalPaletteColor(entries, capacity, &count, CC_STYLE_HERO_SKIN_LIGHT,
+                         FINAL_PALETTE_PROTECTED);
+    AddFinalPaletteColor(entries, capacity, &count, CC_STYLE_HERO_HAIR,
+                         FINAL_PALETTE_PROTECTED);
+    AddFinalPaletteColor(entries, capacity, &count, CC_STYLE_HERO_UNDERLAYER,
+                         FINAL_PALETTE_PROTECTED);
+    AddFinalPaletteColor(entries, capacity, &count, CC_STYLE_HERO_OUTER,
+                         FINAL_PALETTE_PROTECTED);
+    AddFinalPaletteColor(entries, capacity, &count, CC_STYLE_HERO_TROUSERS,
+                         FINAL_PALETTE_PROTECTED);
+    AddFinalPaletteColor(entries, capacity, &count, CC_STYLE_HERO_LEATHER,
+                         FINAL_PALETTE_PROTECTED);
+    AddFinalPaletteColor(entries, capacity, &count, CC_STYLE_HERO_METAL,
+                         FINAL_PALETTE_PROTECTED);
+    AddFinalPaletteColor(entries, capacity, &count, CC_STYLE_HERO_ACCENT,
+                         FINAL_PALETTE_PROTECTED);
+    AddFinalPaletteColor(entries, capacity, &count, CC_STYLE_HERO_PANEL_INK,
+                         FINAL_PALETTE_PROTECTED);
+    return count;
+}
+
+/* Material order is part of the engine-hero export contract. The fallback
+   renderer resolves each slot from named roles instead of owning another
+   independent list of RGB values. */
+static Color HeroRetroMaterialColor(int32_t material)
+{
+    switch (material) {
+        case 0: return CC_STYLE_HERO_TROUSERS;
+        case 1: return CC_STYLE_HERO_SKIN;
+        case 2: return CC_STYLE_HERO_SKIN_LIGHT;
+        case 3:
+        case 4: return CC_STYLE_HERO_HAIR;
+        case 5: return CC_STYLE_METAL;
+        case 6:
+        case 12: return CC_STYLE_METAL_SHADOW;
+        case 7: return CC_STYLE_TEAL_SHADOW;
+        case 8: return CC_STYLE_HERO_UNDERLAYER;
+        case 9: return CC_STYLE_HERO_ACCENT;
+        case 10: return CC_STYLE_HERO_OUTER;
+        case 11:
+        case 13: return CC_STYLE_HERO_METAL;
+        case 14: return CC_STYLE_DANGER;
+        case 15: return CC_STYLE_HERO_LEATHER;
+        case 16: return CC_STYLE_METAL;
+        case 17: return CC_STYLE_METAL_LIGHT;
+        case 18: return CC_STYLE_WOOD;
+        default: return CC_STYLE_HERO_TROUSERS;
+    }
+}
 
 static const Vector3 HERO_REST_DIRECTIONS[CC_HUMANOID_SKIN_BONE_COUNT] = {
     {0.0f, 1.0f, 0.0f},
@@ -9620,13 +9943,13 @@ static void ApplyHeroStyle(Model *model)
         }
         return;
     }
-    int32_t palette_count = (int32_t)(sizeof(HERO_RETRO_PALETTE) /
-                                      sizeof(HERO_RETRO_PALETTE[0]));
-    int32_t material_count = model->materialCount < palette_count ?
-                             model->materialCount : palette_count;
+    int32_t material_count = model->materialCount <
+                             CC_HERO_RETRO_MATERIAL_COUNT ?
+                             model->materialCount :
+                             CC_HERO_RETRO_MATERIAL_COUNT;
     for (int32_t material = 0; material < material_count; ++material) {
         model->materials[material].maps[MATERIAL_MAP_DIFFUSE].color =
-            HERO_RETRO_PALETTE[material];
+            HeroRetroMaterialColor(material);
         model->materials[material].shader = visual_style.hero_ready ?
                                              visual_style.hero :
                                              visual_style.world;
@@ -9637,10 +9960,10 @@ static void ApplyHeroStyle(Model *model)
                                              visual_style.hero :
                                              visual_style.world;
     }
-    if (model->materialCount < palette_count) {
+    if (model->materialCount < CC_HERO_RETRO_MATERIAL_COUNT) {
         TraceLog(LOG_WARNING,
                  "HERO: retro palette expected %d materials, found %d",
-                 palette_count, model->materialCount);
+                 CC_HERO_RETRO_MATERIAL_COUNT, model->materialCount);
     }
 }
 
@@ -10402,14 +10725,53 @@ static void SetWorldTerrainSurface(bool enabled)
                    &active, SHADER_UNIFORM_FLOAT);
 }
 
-static float SharedPaletteDistance(Color source, Color candidate)
+typedef struct OklabColor {
+    float lightness;
+    float green_red;
+    float blue_yellow;
+} OklabColor;
+
+static float SrgbChannelToLinear(unsigned char channel)
 {
-    float red = (float)source.r - (float)candidate.r;
-    float green = (float)source.g - (float)candidate.g;
-    float blue = (float)source.b - (float)candidate.b;
-    float luminance = red * 0.2126f + green * 0.7152f + blue * 0.0722f;
-    return red * red * 0.30f + green * green * 0.59f +
-           blue * blue * 0.11f + luminance * luminance * 0.55f;
+    float value = (float)channel / 255.0f;
+    return value <= 0.04045f ? value / 12.92f :
+        powf((value + 0.055f) / 1.055f, 2.4f);
+}
+
+static OklabColor ColorToOklab(Color color)
+{
+    float red = SrgbChannelToLinear(color.r);
+    float green = SrgbChannelToLinear(color.g);
+    float blue = SrgbChannelToLinear(color.b);
+    float long_wave = 0.4122214708f * red + 0.5363325363f * green +
+                      0.0514459929f * blue;
+    float medium_wave = 0.2119034982f * red + 0.6806995451f * green +
+                        0.1073969566f * blue;
+    float short_wave = 0.0883024619f * red + 0.2817188376f * green +
+                       0.6299787005f * blue;
+    long_wave = cbrtf(long_wave);
+    medium_wave = cbrtf(medium_wave);
+    short_wave = cbrtf(short_wave);
+    return (OklabColor){
+        0.2104542553f * long_wave + 0.7936177850f * medium_wave -
+            0.0040720468f * short_wave,
+        1.9779984951f * long_wave - 2.4285922050f * medium_wave +
+            0.4505937099f * short_wave,
+        0.0259040371f * long_wave + 0.7827717662f * medium_wave -
+            0.8086757660f * short_wave,
+    };
+}
+
+static float OklabDistanceSquared(OklabColor source, OklabColor candidate)
+{
+    /* Small art pixels need especially clear value separation. OKLab keeps
+       the comparison perceptual; the lightness weight slightly favors a
+       stable grayscale read over a merely nearby hue. */
+    float lightness = (source.lightness - candidate.lightness) * 1.24f;
+    float green_red = source.green_red - candidate.green_red;
+    float blue_yellow = source.blue_yellow - candidate.blue_yellow;
+    return lightness * lightness + green_red * green_red +
+           blue_yellow * blue_yellow;
 }
 
 static bool LoadSharedPaletteLookup(void)
@@ -10418,8 +10780,18 @@ static bool LoadSharedPaletteLookup(void)
     const int32_t tiles = CC_SHARED_PALETTE_LUT_TILES;
     const int32_t width = size * tiles;
     const int32_t height = size * (size / tiles);
-    const int32_t palette_count = (int32_t)(
-        sizeof(SHARED_WORLD_PALETTE) / sizeof(SHARED_WORLD_PALETTE[0]));
+    FinalPaletteEntry palette[CC_FINAL_PALETTE_MAX_COLORS] = {0};
+    int32_t palette_count = BuildFinalPalette(
+        palette, CC_FINAL_PALETTE_MAX_COLORS);
+    if (palette_count <= 0) return false;
+    OklabColor perceptual_palette[CC_FINAL_PALETTE_MAX_COLORS] = {0};
+    int32_t protected_count = 0;
+    for (int32_t index = 0; index < palette_count; ++index) {
+        perceptual_palette[index] = ColorToOklab(palette[index].color);
+        if (palette[index].ownership == FINAL_PALETTE_PROTECTED) {
+            protected_count += 1;
+        }
+    }
     size_t pixel_count = (size_t)width * (size_t)height;
     Color *pixels = MemAlloc(
         (unsigned int)(pixel_count * sizeof(Color)));
@@ -10437,20 +10809,40 @@ static bool LoadSharedPaletteLookup(void)
                                     (size - 1)),
                     255,
                 };
-                Color best = SHARED_WORLD_PALETTE[0];
-                float best_distance = SharedPaletteDistance(source, best);
-                for (int32_t index = 1; index < palette_count; ++index) {
-                    float distance = SharedPaletteDistance(
-                        source, SHARED_WORLD_PALETTE[index]);
-                    if (distance >= best_distance) continue;
-                    best_distance = distance;
-                    best = SHARED_WORLD_PALETTE[index];
+                OklabColor perceptual_source = ColorToOklab(source);
+                int32_t environment_index = -1;
+                int32_t protected_index = -1;
+                float environment_distance = FLT_MAX;
+                float protected_distance = FLT_MAX;
+                for (int32_t index = 0; index < palette_count; ++index) {
+                    float distance = OklabDistanceSquared(
+                        perceptual_source, perceptual_palette[index]);
+                    if (palette[index].ownership ==
+                        FINAL_PALETTE_PROTECTED) {
+                        if (distance >= protected_distance) continue;
+                        protected_distance = distance;
+                        protected_index = index;
+                    } else {
+                        if (distance >= environment_distance) continue;
+                        environment_distance = distance;
+                        environment_index = index;
+                    }
                 }
+                /* Protected colors own only a tight perceptual neighborhood.
+                   Exact character and signal pigments survive, while broad
+                   terrain is pulled toward its material family instead. */
+                const float protected_radius_squared = 0.003025f;
+                bool choose_protected = protected_index >= 0 &&
+                    protected_distance <= protected_radius_squared &&
+                    protected_distance * 1.20f < environment_distance;
+                int32_t best_index = choose_protected ? protected_index :
+                                                       environment_index;
+                if (best_index < 0) best_index = protected_index;
                 int32_t pixel_x = red + (blue % tiles) * size;
                 int32_t pixel_y = green + (blue / tiles) * size;
                 size_t pixel = (size_t)pixel_y * (size_t)width +
                                (size_t)pixel_x;
-                pixels[pixel] = best;
+                pixels[pixel] = palette[best_index].color;
             }
         }
     }
@@ -10469,8 +10861,9 @@ static bool LoadSharedPaletteLookup(void)
         visual_style.palette_lut = (Texture2D){0};
         return false;
     }
-    TraceLog(LOG_INFO, "STYLE: loaded %d-color final palette lookup",
-             palette_count);
+    TraceLog(LOG_INFO,
+             "STYLE: loaded %d-color perceptual lookup (%d protected)",
+             palette_count, protected_count);
     return true;
 }
 
@@ -10484,6 +10877,14 @@ static void LoadVisualStyle(void)
         visual_style.grade = LoadShader(NULL, grade_path);
     }
     if (IsShaderValid(visual_style.grade) && LoadSharedPaletteLookup()) {
+        visual_style.grade_exposure_location = GetShaderLocation(
+            visual_style.grade, "atmosphereExposure");
+        visual_style.grade_shadow_tone_location = GetShaderLocation(
+            visual_style.grade, "atmosphereShadowTone");
+        visual_style.grade_highlight_tone_location = GetShaderLocation(
+            visual_style.grade, "atmosphereHighlightTone");
+        visual_style.grade_chroma_location = GetShaderLocation(
+            visual_style.grade, "atmosphereChroma");
         visual_style.grade_ready = true;
     } else {
         if (IsShaderValid(visual_style.grade)) {
@@ -10545,6 +10946,8 @@ static void LoadVisualStyle(void)
         visual_style.world, "foregroundReveal");
     visual_style.terrain_surface_location = GetShaderLocation(
         visual_style.world, "terrainSurface");
+    visual_style.weather_wetness_location = GetShaderLocation(
+        visual_style.world, "weatherWetness");
     visual_style.world_ready = true;
 
     char skinned_vertex_path[1024] = {0};
@@ -11262,6 +11665,12 @@ static void LoadTreeCrownModels(void)
 void CcLocalRendererInit(void)
 {
     if (sphere_models.ready) return;
+    art_atmosphere = (ArtAtmosphereState){
+        .from = ART_ATMOSPHERES[CC_LOCAL_ATMOSPHERE_CLEAR_DAY],
+        .target = CC_LOCAL_ATMOSPHERE_CLEAR_DAY,
+        .blend = 1.0f,
+        .duration = 1.0f,
+    };
     street_camera_rig = (FixedCameraRig){0};
     road_camera_rig = (FixedCameraRig){0};
     combat_camera_rig = (CombatCameraRig){0};
@@ -11895,7 +12304,7 @@ static void DrawStreetLantern(float x, float z)
 
 static void DrawWayfarerGate(Color accent, bool sightline_cut)
 {
-    Color wood = (Color){74, 51, 39, 255};
+    Color wood = WORLD_WOOD;
     float left = 8.66f;
     float right = 14.34f;
     float z = 10.56f;
@@ -11922,15 +12331,15 @@ static void DrawCroftScarecrow(float hunger)
 {
     const float x = 8.10f;
     const float z = 25.00f;
-    Color wood = (Color){89, 61, 39, 255};
-    Color cloth = BlendColor((Color){122, 83, 58, 255},
-                             (Color){83, 73, 55, 255}, hunger);
+    Color wood = WORLD_WOOD;
+    Color cloth = BlendColor(WORLD_EARTH_LIGHT,
+                             WORLD_ROAD_SHADOW, hunger);
     DrawBox((Vector3){x, 0.92f, z}, (Vector3){0.12f, 1.84f, 0.12f}, wood);
     DrawBox((Vector3){x, 1.38f, z}, (Vector3){1.38f, 0.10f, 0.10f}, wood);
     DrawBox((Vector3){x, 1.20f, z + 0.04f},
             (Vector3){0.78f, 0.68f, 0.12f}, cloth);
     DrawSmallSphere((Vector3){x, 1.80f, z}, 0.23f,
-                    (Color){166, 132, 77, 255});
+                    BlendColor(WORLD_CROP_LIGHT, WORLD_WOOD_LIGHT, 0.34f));
     DrawBox((Vector3){x, 2.03f, z}, (Vector3){0.72f, 0.08f, 0.44f}, wood);
     DrawBox((Vector3){x, 2.17f, z}, (Vector3){0.38f, 0.30f, 0.34f}, wood);
 }
@@ -11939,7 +12348,7 @@ static void DrawMineWaystone(void)
 {
     const float x = 18.0f;
     const float z = 54.72f;
-    Color stone = (Color){77, 75, 78, 255};
+    Color stone = WORLD_STONE;
     DrawBox((Vector3){x, 0.14f, z}, (Vector3){0.84f, 0.28f, 0.72f},
             ShadeColor(stone, 0.70f));
     DrawBox((Vector3){x, 0.82f, z}, (Vector3){0.56f, 1.38f, 0.46f}, stone);
@@ -11949,8 +12358,8 @@ static void DrawMineWaystone(void)
 
     /* Two rails and broad sleepers turn the colored road into an explicit
        visual sentence: this way leads to the mine beyond the next room. */
-    Color rail = (Color){65, 59, 56, 255};
-    Color sleeper = (Color){91, 62, 43, 255};
+    Color rail = WORLD_METAL_SHADOW;
+    Color sleeper = WORLD_WOOD;
     DrawBox((Vector3){22.65f, 0.055f, 54.92f},
             (Vector3){8.20f, 0.075f, 0.09f}, rail);
     DrawBox((Vector3){22.65f, 0.055f, 55.72f},
@@ -11964,7 +12373,7 @@ static void DrawMineWaystone(void)
        the entrance itself comes into view. */
     DrawBox((Vector3){26.45f, 0.44f, 54.35f},
             (Vector3){1.45f, 0.88f, 1.05f},
-            (Color){82, 57, 44, 255});
+            WORLD_WOOD_SHADOW);
     DrawBox((Vector3){26.45f, 0.91f, 54.35f},
             (Vector3){1.62f, 0.10f, 1.18f}, sleeper);
     for (int32_t ore = 0; ore < 4; ++ore) {
@@ -11981,13 +12390,13 @@ static void DrawArtisanSign(Color kingdom)
 {
     const float x = 30.95f;
     const float z = 24.30f;
-    Color wood = (Color){69, 47, 39, 255};
+    Color wood = WORLD_WOOD_SHADOW;
     DrawBox((Vector3){x, 1.16f, z}, (Vector3){0.14f, 2.32f, 0.14f}, wood);
     DrawBox((Vector3){x + 0.48f, 2.12f, z},
             (Vector3){1.08f, 0.12f, 0.14f}, wood);
     DrawBox((Vector3){x + 0.86f, 1.72f, z + 0.04f},
             (Vector3){0.72f, 0.66f, 0.12f},
-            BlendColor((Color){111, 73, 53, 255}, kingdom, 0.26f));
+            BlendColor(WORLD_WOOD_LIGHT, kingdom, 0.26f));
     DrawSmallSphere((Vector3){x + 0.86f, 1.73f, z + 0.12f},
                     0.11f, WORLD_GOLD);
 }
@@ -11996,9 +12405,9 @@ static void DrawWorkshopForge(Color kingdom)
 {
     const float x = 37.85f;
     const float z = 23.08f;
-    Color brick = BlendColor((Color){104, 63, 50, 255}, kingdom, 0.12f);
-    Color iron = (Color){48, 49, 48, 255};
-    Color timber = (Color){79, 54, 39, 255};
+    Color brick = BlendColor(WORLD_EARTH, kingdom, 0.12f);
+    Color iron = WORLD_METAL_SHADOW;
+    Color timber = WORLD_WOOD;
     DrawBox((Vector3){x, 0.48f, z},
             (Vector3){1.72f, 0.96f, 0.82f}, brick);
     DrawBox((Vector3){x, 1.10f, z - 0.10f},
@@ -12010,7 +12419,7 @@ static void DrawWorkshopForge(Color kingdom)
     DrawBox((Vector3){x - 0.14f, 0.70f, z + 0.44f},
             (Vector3){0.74f, 0.18f, 0.12f}, WORLD_GOLD);
     DrawSmallSphere((Vector3){x - 0.14f, 0.72f, z + 0.54f},
-                    0.18f, (Color){224, 101, 46, 255});
+                    0.18f, BlendColor(WORLD_GOLD, WORLD_DANGER, 0.48f));
     DrawBox((Vector3){x - 1.45f, 0.30f, z + 0.05f},
             (Vector3){0.14f, 0.60f, 1.28f}, timber);
     for (int32_t billet = 0; billet < 3; ++billet) {
@@ -12026,7 +12435,7 @@ static void DrawTownSquareFocus(Color kingdom)
 {
     const float x = CC_LOCAL_NOTICE_X;
     const float z = CC_LOCAL_NOTICE_Z;
-    Color stone = (Color){104, 101, 91, 255};
+    Color stone = WORLD_STONE_LIGHT;
     /* A low civic seal gathers the plaza around the notice board without
        creating a new collision step or blocking click movement. */
     DrawCylinder((Vector3){x, 0.015f, z}, 2.65f, 2.65f, 0.045f, 20,
@@ -12043,7 +12452,7 @@ static void DrawTownSquareFocus(Color kingdom)
 
 static void DrawCoachHitch(const CcSettlement *place)
 {
-    Color wood = (Color){79, 53, 39, 255};
+    Color wood = WORLD_WOOD;
     float z = 55.36f;
     DrawBox((Vector3){35.30f, 0.62f, z}, (Vector3){0.18f, 1.24f, 0.18f}, wood);
     DrawBox((Vector3){38.20f, 0.62f, z}, (Vector3){0.18f, 1.24f, 0.18f}, wood);
@@ -12052,13 +12461,13 @@ static void DrawCoachHitch(const CcSettlement *place)
             (Vector3){0.14f, 1.40f, 0.14f}, wood);
     DrawBox((Vector3){36.75f, 2.18f, z + 0.05f},
             (Vector3){1.30f, 0.68f, 0.12f},
-            (Color){111, 72, 52, 255});
+            WORLD_WOOD_LIGHT);
     DrawBox((Vector3){36.75f, 2.70f, z - 0.02f},
             (Vector3){3.48f, 0.18f, 1.18f},
             ShadeColor(wood, 0.88f));
     DrawBox((Vector3){36.75f, 2.82f, z - 0.02f},
             (Vector3){3.08f, 0.12f, 1.44f},
-            (Color){126, 88, 57, 255});
+            WORLD_EARTH_LIGHT);
     DrawCylinder((Vector3){36.75f, 2.03f, z + 0.13f},
                  0.19f, 0.19f, 0.08f, 10, WORLD_GOLD);
     int32_t barrels = place != NULL ? place->stock[CC_GOOD_MATERIAL] / 24 : 1;
@@ -12067,7 +12476,7 @@ static void DrawCoachHitch(const CcSettlement *place)
     for (int32_t i = 0; i < barrels; ++i) {
         DrawCylinder((Vector3){35.65f + (float)i * 0.58f, 0.05f, z + 0.42f},
                      0.25f, 0.25f, 0.58f, 10,
-                     (Color){129, 77, 43, 255});
+                     WORLD_WOOD_LIGHT);
     }
     for (int32_t wheel = 0; wheel < 2; ++wheel) {
         float wheel_z = z - 0.28f + (float)wheel * 0.58f;
@@ -12081,9 +12490,9 @@ static void DrawMillersGranary(float hunger)
 {
     const float x = 64.14f;
     const float z = 51.02f;
-    Color timber = (Color){105, 70, 43, 255};
-    Color plaster = BlendColor((Color){142, 124, 91, 255},
-                               (Color){101, 92, 70, 255}, hunger * 0.60f);
+    Color timber = WORLD_WOOD_LIGHT;
+    Color plaster = BlendColor(WORLD_STONE_LIGHT,
+                               WORLD_ROAD, hunger * 0.60f);
     DrawCylinder((Vector3){x, 0.08f, z}, 0.90f, 0.96f, 2.36f, 12, plaster);
     DrawCylinder((Vector3){x, 2.43f, z}, 0.10f, 1.10f, 0.88f, 12, timber);
     DrawBox((Vector3){x, 0.75f, z + 0.93f},
@@ -12096,7 +12505,8 @@ static void DrawMillersGranary(float hunger)
         float sack_z = z + 0.64f + (float)(sack / 3) * 0.40f;
         DrawCharacterEllipsoid((Vector3){sack_x, 0.26f, sack_z},
                                (Vector3){0.25f, 0.32f, 0.20f},
-                               (Color){151, 125, 82, 255});
+                               BlendColor(WORLD_CROP_LIGHT,
+                                          WORLD_ROAD_LIGHT, 0.42f));
     }
 }
 
@@ -12104,9 +12514,9 @@ static void DrawEastWindmill(Color kingdom, float hunger)
 {
     const float x = 81.4f;
     const float z = 47.0f;
-    Color tower = BlendColor((Color){128, 118, 96, 255},
-                             (Color){92, 86, 73, 255}, hunger * 0.50f);
-    Color timber = BlendColor((Color){78, 54, 40, 255}, kingdom, 0.16f);
+    Color tower = BlendColor(WORLD_STONE_LIGHT,
+                             WORLD_ROAD, hunger * 0.50f);
+    Color timber = BlendColor(WORLD_WOOD, kingdom, 0.16f);
     DrawCylinder((Vector3){x, 0.05f, z}, 0.74f, 1.08f, 3.45f, 12, tower);
     DrawCylinder((Vector3){x, 3.50f, z}, 0.08f, 0.92f, 0.82f, 12, timber);
     DrawCylinderEx((Vector3){x, 3.28f, z + 0.36f},
@@ -12120,7 +12530,7 @@ static void DrawEastWindmill(Color kingdom, float hunger)
                 (Vector3){0.18f, 2.04f, 0.10f}, timber);
         DrawBox((Vector3){0.20f, 1.38f, 0.0f},
                 (Vector3){0.38f, 0.92f, 0.075f},
-                Fade((Color){181, 158, 111, 255}, 0.78f));
+                Fade(BlendColor(WORLD_INK, WORLD_CROP_LIGHT, 0.42f), 0.78f));
         rlPopMatrix();
     }
     DrawSmallSphere((Vector3){x, 3.28f, z + 1.02f}, 0.20f, WORLD_GOLD);
@@ -12349,41 +12759,41 @@ static Color TerrainSurfaceColor(const CcSettlement *place,
     float hunger = place != NULL ? (float)place->hunger / 100.0f : 0.0f;
     float prosperity = place != NULL ?
                        (float)place->prosperity / 100.0f : 0.5f;
-    Color grass = BlendColor((Color){35, 67, 53, 255},
-                             (Color){75, 66, 42, 255}, hunger * 0.72f);
+    Color grass = BlendColor(WORLD_GRASS,
+                             WORLD_EARTH, hunger * 0.72f);
     float height = TerrainVisualHeightAt(x, z);
     float lowland = TerrainSmooth01((1.35f - height) / 2.40f);
     float highland = TerrainSmooth01((height - 4.20f) / 3.20f);
-    grass = BlendColor(grass, (Color){27, 65, 58, 255}, lowland * 0.34f);
-    grass = BlendColor(grass, (Color){74, 82, 53, 255}, highland * 0.30f);
+    grass = BlendColor(grass, WORLD_FOLIAGE_SHADOW, lowland * 0.34f);
+    grass = BlendColor(grass, WORLD_GRASS_LIGHT, highland * 0.30f);
     Color color = grass;
     float field_amount = TerrainFieldAmount(x, z);
-    Color field = BlendColor((Color){103, 102, 57, 255},
-                             (Color){128, 111, 63, 255}, prosperity * 0.26f);
+    Color field = BlendColor(WORLD_CROP,
+                             WORLD_CROP_LIGHT, prosperity * 0.26f);
     field = BlendColor(field, grass, hunger * 0.28f);
     color = BlendColor(color, field, field_amount * 0.84f);
 
     float road_amount = TerrainRoadAmount(x, z);
-    Color road = BlendColor((Color){82, 77, 66, 255},
-                            (Color){121, 102, 75, 255}, prosperity * 0.34f);
+    Color road = BlendColor(WORLD_ROAD,
+                            WORLD_ROAD_LIGHT, prosperity * 0.34f);
     color = BlendColor(color, road, road_amount);
 
     Rectangle plaza = {37.6f, 25.6f, 18.8f, 8.8f};
     float plaza_amount = TerrainSmooth01(
         TerrainRectangleInset(x, z, plaza) / 0.55f);
-    Color plaza_color = BlendColor((Color){101, 94, 81, 255},
-                                   (Color){133, 119, 93, 255},
+    Color plaza_color = BlendColor(WORLD_STONE,
+                                   WORLD_STONE_LIGHT,
                                    prosperity * 0.36f);
     color = BlendColor(color, plaza_color, plaza_amount);
 
     Rectangle wayfarer_yard = {1.0f, 0.0f, 14.6f, 11.1f};
     float yard_amount = TerrainSmooth01(
         TerrainRectangleInset(x, z, wayfarer_yard) / 0.52f);
-    color = BlendColor(color, (Color){43, 67, 61, 255}, yard_amount);
+    color = BlendColor(color, WORLD_FOLIAGE_SHADOW, yard_amount);
 
     float rock_amount = TerrainSmooth01((0.82f - normal.y) / 0.22f);
-    Color stone = BlendColor((Color){70, 75, 72, 255},
-                             (Color){91, 82, 70, 255}, highland * 0.36f);
+    Color stone = BlendColor(WORLD_STONE,
+                             WORLD_ROAD, highland * 0.36f);
     color = BlendColor(color, stone, rock_amount * 0.78f);
 
     float broad = TerrainValueNoise(x, z, 11.0f, 21U);
@@ -12609,10 +13019,11 @@ static void DrawTerrainRoadRuts(const CcSettlement *place, Vector3 focus)
 {
     float prosperity = place != NULL ?
                        (float)place->prosperity / 100.0f : 0.5f;
-    Color paved_rut = BlendColor((Color){84, 77, 64, 255},
-                                 (Color){101, 84, 61, 255},
+    Color paved_rut = BlendColor(WORLD_ROAD_SHADOW,
+                                 WORLD_ROAD,
                                  prosperity * 0.28f);
-    Color field_track = (Color){56, 72, 55, 255};
+    Color field_track = BlendColor(WORLD_GRASS_SHADOW,
+                                   WORLD_ROAD_SHADOW, 0.34f);
     Rectangle plaza = {37.6f, 25.6f, 18.8f, 8.8f};
     int32_t road_count =
         (int32_t)(sizeof(TERRAIN_ROADS) / sizeof(TERRAIN_ROADS[0]));
@@ -12666,11 +13077,11 @@ static void DrawTerrainFieldRows(const CcSettlement *place, Vector3 focus)
     float hunger = place != NULL ? (float)place->hunger / 100.0f : 0.0f;
     float prosperity = place != NULL ?
                        (float)place->prosperity / 100.0f : 0.5f;
-    Color crop = BlendColor((Color){104, 103, 49, 255},
-                            (Color){145, 119, 56, 255}, prosperity * 0.44f);
-    crop = BlendColor(crop, (Color){78, 76, 49, 255}, hunger * 0.42f);
-    Color furrow = BlendColor((Color){51, 61, 42, 255},
-                              (Color){75, 63, 40, 255}, hunger * 0.30f);
+    Color crop = BlendColor(WORLD_CROP,
+                            WORLD_CROP_LIGHT, prosperity * 0.44f);
+    crop = BlendColor(crop, WORLD_CROP_SHADOW, hunger * 0.42f);
+    Color furrow = BlendColor(WORLD_GRASS_SHADOW,
+                              WORLD_EARTH_SHADOW, hunger * 0.30f);
     rlBegin(RL_TRIANGLES);
     for (int32_t i = 0; i < (int32_t)(sizeof(TERRAIN_FIELDS) /
                                       sizeof(TERRAIN_FIELDS[0])); ++i) {
@@ -12744,11 +13155,11 @@ static void TerrainTuft(float x, float z, float height, float width,
 static void DrawTerrainPlantCover(const CcSettlement *place, Vector3 focus)
 {
     float hunger = place != NULL ? (float)place->hunger / 100.0f : 0.0f;
-    Color grass_bottom = BlendColor((Color){26, 62, 45, 255},
-                                    (Color){72, 59, 38, 255},
+    Color grass_bottom = BlendColor(WORLD_GRASS_SHADOW,
+                                    WORLD_EARTH_SHADOW,
                                     hunger * 0.62f);
-    Color grass_top = BlendColor((Color){61, 99, 61, 255},
-                                 (Color){106, 84, 46, 255},
+    Color grass_top = BlendColor(WORLD_GRASS_LIGHT,
+                                 WORLD_EARTH,
                                  hunger * 0.58f);
     const float spacing = 1.65f;
     int32_t first_column = (int32_t)floorf(
@@ -12790,10 +13201,10 @@ static void DrawTerrainPlantCover(const CcSettlement *place, Vector3 focus)
 
     float prosperity = place != NULL ?
                        (float)place->prosperity / 100.0f : 0.5f;
-    Color crop_bottom = BlendColor((Color){73, 79, 40, 255},
-                                   (Color){112, 88, 39, 255}, hunger * 0.38f);
-    Color crop_top = BlendColor((Color){133, 125, 55, 255},
-                                (Color){171, 136, 54, 255},
+    Color crop_bottom = BlendColor(WORLD_CROP_SHADOW,
+                                   WORLD_EARTH, hunger * 0.38f);
+    Color crop_top = BlendColor(WORLD_CROP,
+                                WORLD_CROP_LIGHT,
                                 prosperity * 0.42f);
     for (int32_t field_index = 0;
          field_index < (int32_t)(sizeof(TERRAIN_FIELDS) /
@@ -12858,8 +13269,7 @@ static void DrawTerrainRocks(Vector3 focus)
             float radius = 0.16f +
                            TerrainScatter01(column, row, 55U) * 0.20f;
             float height = CcLocalTerrainHeightAt(x, z);
-            Color rock = height > 4.0f ? (Color){94, 91, 79, 255} :
-                                         (Color){76, 84, 80, 255};
+            Color rock = height > 4.0f ? WORLD_STONE_LIGHT : WORLD_STONE;
             DrawTiltedBox((Vector3){x, height + radius * 0.34f, z},
                           (Vector3){radius * 1.55f, radius * 0.72f,
                                     radius * 1.18f},
@@ -12915,10 +13325,13 @@ static void DrawExteriorTerrain(const CcSettlement *place, Vector3 focus)
 static Color BuildingWallColor(int32_t style)
 {
     switch (style) {
-        case 1: return (Color){105, 96, 84, 255};
-        case 2: return (Color){122, 79, 61, 255};
-        case 3: return (Color){72, 89, 95, 255};
-        default: return (Color){88, 98, 91, 255};
+        case 1: return WORLD_STONE;
+        case 2: return BlendColor(WORLD_EARTH_LIGHT,
+                                  WORLD_DANGER, 0.14f);
+        case 3: return BlendColor(WORLD_STONE,
+                                  WORLD_TEAL, 0.16f);
+        default: return BlendColor(WORLD_STONE,
+                                   WORLD_GRASS, 0.24f);
     }
 }
 
@@ -12926,11 +13339,12 @@ static Color BuildingRoofColor(int32_t style, Color kingdom)
 {
     switch (style) {
         case 1:
-            return BlendColor((Color){76, 69, 62, 255}, kingdom, 0.18f);
-        case 2: return (Color){126, 78, 56, 255};
-        case 3: return (Color){76, 72, 84, 255};
+            return BlendColor(WORLD_ROAD_SHADOW, kingdom, 0.18f);
+        case 2: return WORLD_EARTH;
+        case 3: return BlendColor(WORLD_METAL_SHADOW,
+                                  WORLD_VIOLET, 0.22f);
         default:
-            return BlendColor((Color){66, 74, 71, 255}, kingdom, 0.16f);
+            return BlendColor(WORLD_FOLIAGE_SHADOW, kingdom, 0.16f);
     }
 }
 
@@ -13220,8 +13634,7 @@ static void DrawCastle(Color kingdom, Vector3 focus, Camera3D camera,
                                       sizeof(CASTLE_STRUCTURES[0])); ++i) {
         const WorldStructure *structure = &CASTLE_STRUCTURES[i];
         Rectangle footprint = structure->footprint;
-        Color stone = i == 5 ? (Color){82, 80, 78, 255} :
-                               (Color){100, 103, 98, 255};
+        Color stone = i == 5 ? WORLD_STONE_SHADOW : WORLD_STONE;
         DrawBuildingFoundation(
             footprint.x, footprint.y, footprint.width, footprint.height,
             structure->height, stone);
@@ -13231,8 +13644,7 @@ static void DrawCastle(Color kingdom, Vector3 focus, Camera3D camera,
                                       sizeof(CASTLE_STRUCTURES[0])); ++i) {
         const WorldStructure *structure = &CASTLE_STRUCTURES[i];
         Rectangle footprint = structure->footprint;
-        Color stone = i == 5 ? (Color){82, 80, 78, 255} :
-                               (Color){100, 103, 98, 255};
+        Color stone = i == 5 ? WORLD_STONE_SHADOW : WORLD_STONE;
         float reveal = castle_structure_reveals[i].amount;
         if (fabsf(reveal - reveal_active) > 0.001f) {
             SetWorldForegroundReveal(reveal, reveal_cut_height);
@@ -13248,13 +13660,13 @@ static void DrawCastle(Color kingdom, Vector3 focus, Camera3D camera,
                           footprint.y + footprint.height * 0.5f},
                 (Vector3){footprint.width + 0.18f, 0.22f,
                           footprint.height + 0.18f},
-                i >= 8 ? kingdom : (Color){74, 77, 75, 255});
+                i >= 8 ? kingdom : WORLD_STONE_SHADOW);
     }
     SetWorldForegroundReveal(0.0f, reveal_cut_height);
     {
         DrawBox((Vector3){78.5f, 1.20f, 22.03f},
                 (Vector3){1.35f, 2.40f, 0.06f},
-                (Color){43, 34, 37, 255});
+                WORLD_WOOD_SHADOW);
         DrawBox((Vector3){76.30f, 7.65f, 30.84f},
                 (Vector3){0.78f, 2.30f, 0.06f}, kingdom);
         DrawBox((Vector3){80.70f, 7.65f, 30.84f},
@@ -13263,7 +13675,7 @@ static void DrawCastle(Color kingdom, Vector3 focus, Camera3D camera,
         /* The open southern gate is the room's navigational promise. A high
            lintel and paired fire points frame the pass without putting an
            invisible portcullis across the traversable opening. */
-        Color gate_stone = (Color){86, 88, 85, 255};
+        Color gate_stone = WORLD_STONE;
         DrawBox((Vector3){78.50f, 7.15f, 30.84f},
                 (Vector3){2.30f, 1.08f, 0.72f}, gate_stone);
         for (int32_t merlon = 0; merlon < 3; ++merlon) {
@@ -13276,7 +13688,7 @@ static void DrawCastle(Color kingdom, Vector3 focus, Camera3D camera,
             float torch_x = 78.50f + (float)side * 1.32f;
             DrawBox((Vector3){torch_x, 1.82f, 31.20f},
                     (Vector3){0.10f, 0.86f, 0.10f},
-                    (Color){55, 43, 36, 255});
+                    WORLD_WOOD_SHADOW);
             DrawSmallSphere((Vector3){torch_x, 2.32f, 31.20f},
                             0.18f, WORLD_GOLD);
         }
@@ -14170,9 +14582,9 @@ static void DrawWayfarerHeroDetails(const CcHumanoidSkinPose *skin)
         skin->sockets[CC_HUMANOID_SOCKET_CHEST_FRONT].position);
     chest = PhysicsAdd(chest, PhysicsScale(forward, 0.032f));
 
-    Color panel_ink = (Color){43, 32, 29, 255};
-    Color portrait_burgundy = (Color){111, 48, 55, 255};
-    Color broken_gold = (Color){224, 169, 59, 255};
+    Color panel_ink = CC_STYLE_HERO_PANEL_INK;
+    Color portrait_burgundy = CC_STYLE_HERO_OUTER;
+    Color broken_gold = CC_STYLE_HERO_ACCENT;
     Vector3 panel = PhysicsAdd(chest, PhysicsScale(up, -0.018f));
     /* Match the portrait's large oxblood shoulder-and-chest mass. The broad
        shape survives at distance; the gold emblem is the second read. */
@@ -15758,12 +16170,12 @@ static void DrawWorldTrees(Vector3 focus, Color kingdom)
         if (!SceneryPointVisible(position.x, position.y, focus)) continue;
         TreeFamily family = RegionalTreeFamily(WORLD_TREES[i].family, i,
                                                regional_style);
-        Color leaves = (i & 1) != 0 ? (Color){54, 105, 85, 255} :
-                                      (Color){58, 119, 91, 255};
+        Color leaves = (i & 1) != 0 ? WORLD_FOLIAGE :
+                                      WORLD_FOLIAGE_LIGHT;
         if (family == TREE_FAMILY_OAK) {
             leaves = ShadeColor(leaves, 0.86f);
         } else if (family == TREE_FAMILY_POLLARD) {
-            leaves = BlendColor(leaves, (Color){96, 105, 61, 255}, 0.18f);
+            leaves = BlendColor(leaves, WORLD_GRASS_LIGHT, 0.18f);
         }
         DrawTree(position.x, position.y, family, leaves, regional_style);
     }
@@ -15828,7 +16240,7 @@ static void DrawStreetTraversalPortals(const CcLocalAgent *agent,
         Color accent = portal.exit != NULL ? WORLD_GOLD : WORLD_TEAL;
         DrawRectangleRounded(
             (Rectangle){bubble_x, bubble_y, bubble_width, 20.0f},
-            0.28f, 4, (Color){4, 10, 14, 224});
+            0.28f, 4, Fade(CC_STYLE_PANEL_DEEP, 0.88f));
         DrawRectangleLinesEx(
             (Rectangle){bubble_x, bubble_y, bubble_width, 20.0f},
             1.0f, Fade(accent, 0.62f));
@@ -16166,6 +16578,22 @@ static void PresentTarget(RenderTexture2D target, Rectangle destination)
         SetShaderValueTexture(visual_style.grade,
                               visual_style.palette_lut_location,
                               visual_style.palette_lut);
+        const ArtAtmosphereDefinition *atmosphere =
+            &visual_style.presentation_atmosphere;
+        SetShaderValue(visual_style.grade,
+                       visual_style.grade_exposure_location,
+                       &atmosphere->grade_exposure, SHADER_UNIFORM_FLOAT);
+        SetShaderValue(visual_style.grade,
+                       visual_style.grade_shadow_tone_location,
+                       &atmosphere->grade_shadow_tone,
+                       SHADER_UNIFORM_FLOAT);
+        SetShaderValue(visual_style.grade,
+                       visual_style.grade_highlight_tone_location,
+                       &atmosphere->grade_highlight_tone,
+                       SHADER_UNIFORM_FLOAT);
+        SetShaderValue(visual_style.grade,
+                       visual_style.grade_chroma_location,
+                       &atmosphere->grade_chroma, SHADER_UNIFORM_FLOAT);
     }
     DrawTexturePro(target.texture, source, destination, (Vector2){0.0f, 0.0f},
                    0.0f, WHITE);
@@ -16177,7 +16605,189 @@ static Color ArtLightBackground(ArtLightProfileId profile_id)
     if (profile_id < 0 || profile_id >= ART_LIGHT_PROFILE_COUNT) {
         profile_id = ART_LIGHT_CLEAR_MARKET;
     }
-    return ART_LIGHT_PROFILES[profile_id].fog_color;
+    ArtAtmosphereDefinition atmosphere = ArtAtmosphereForProfile(profile_id);
+    return ArtAtmosphereMixColor(
+        ART_LIGHT_PROFILES[profile_id].fog_color,
+        atmosphere.fog_color, atmosphere.fog_influence);
+}
+
+static float ArtAtmosphereHash(uint32_t value)
+{
+    value ^= value >> 16U;
+    value *= UINT32_C(0x7feb352d);
+    value ^= value >> 15U;
+    value *= UINT32_C(0x846ca68b);
+    value ^= value >> 16U;
+    return (float)(value & UINT32_C(0xffff)) / 65535.0f;
+}
+
+static Vector2 ArtAtmospherePoint(float x, float y, float scale_x,
+                                  float scale_y, float drift_y)
+{
+    const float dragon_scale = 0.78f;
+    float placed_x = 38.0f + (x - 68.0f) * dragon_scale;
+    float placed_y = 8.0f + (y - 40.0f) * dragon_scale + drift_y;
+    return (Vector2){placed_x * scale_x, placed_y * scale_y};
+}
+
+static void DrawDragonOmenSilhouette(int32_t width, int32_t height,
+                                     float clock, float omen)
+{
+    if (omen <= 0.01f) return;
+    float scale_x = (float)width / 630.0f;
+    float scale_y = (float)height / 320.0f;
+    float drift_y = sinf(clock * 0.08f) * 1.8f;
+    Color shadow = Fade(CC_VISUAL_PALETTE.cool_ink, omen * 0.60f);
+    Color thin_shadow = Fade(CC_VISUAL_PALETTE.violet.shadow, omen * 0.46f);
+
+    /* Long tail and the two wings sit behind the body. Broad triangles keep
+       the omen readable at the fixed art-pixel scale; small notches at the
+       trailing edges suggest a dragon without tracing a detailed mascot. */
+    DrawTriangle(ArtAtmospherePoint(278, 72, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(474, 54, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(330, 86, scale_x, scale_y, drift_y),
+                 thin_shadow);
+    DrawTriangle(ArtAtmospherePoint(246, 72, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(150, 10, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(78, 18, scale_x, scale_y, drift_y),
+                 shadow);
+    DrawTriangle(ArtAtmospherePoint(244, 72, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(78, 18, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(174, 70, scale_x, scale_y, drift_y),
+                 shadow);
+    DrawTriangle(ArtAtmospherePoint(272, 72, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(365, 23, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(455, 38, scale_x, scale_y, drift_y),
+                 shadow);
+    DrawTriangle(ArtAtmospherePoint(272, 72, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(455, 38, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(330, 81, scale_x, scale_y, drift_y),
+                 shadow);
+    DrawTriangle(ArtAtmospherePoint(168, 61, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(130, 84, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(215, 82, scale_x, scale_y, drift_y),
+                 shadow);
+
+    DrawEllipse((int32_t)((38.0f + (250.0f - 68.0f) * 0.78f) * scale_x),
+                (int32_t)((8.0f + (73.0f - 40.0f) * 0.78f + drift_y) *
+                          scale_y),
+                67.0f * scale_x, 12.0f * scale_y, shadow);
+    DrawTriangle(ArtAtmospherePoint(185, 66, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(112, 60, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(170, 84, scale_x, scale_y, drift_y),
+                 shadow);
+    DrawEllipse((int32_t)((38.0f + (108.0f - 68.0f) * 0.78f) * scale_x),
+                (int32_t)((8.0f + (68.0f - 40.0f) * 0.78f + drift_y) *
+                          scale_y),
+                21.0f * scale_x, 11.0f * scale_y, shadow);
+    DrawRectangle((int32_t)(38.0f * scale_x),
+                  (int32_t)((8.0f + (66.0f - 40.0f) * 0.78f + drift_y) *
+                            scale_y),
+                  (int32_t)(30.0f * scale_x),
+                  (int32_t)(9.0f * scale_y), shadow);
+
+    DrawTriangle(ArtAtmospherePoint(95, 58, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(82, 42, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(108, 59, scale_x, scale_y, drift_y),
+                 shadow);
+    DrawTriangle(ArtAtmospherePoint(112, 58, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(110, 40, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(123, 61, scale_x, scale_y, drift_y),
+                 shadow);
+    DrawTriangle(ArtAtmospherePoint(83, 76, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(71, 86, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(104, 77, scale_x, scale_y, drift_y),
+                 thin_shadow);
+
+    DrawTriangle(ArtAtmospherePoint(222, 83, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(206, 112, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(240, 86, scale_x, scale_y, drift_y),
+                 thin_shadow);
+    DrawTriangle(ArtAtmospherePoint(282, 82, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(306, 108, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(298, 80, scale_x, scale_y, drift_y),
+                 thin_shadow);
+}
+
+static void DrawTargetAtmosphere(RenderTexture2D target, float clock)
+{
+    ArtAtmosphereDefinition atmosphere =
+        visual_style.presentation_atmosphere;
+    int32_t width = target.texture.width;
+    int32_t height = target.texture.height;
+
+    if (atmosphere.omen > 0.01f) {
+        Color cloud = Fade(CC_VISUAL_PALETTE.stone.shadow,
+                           atmosphere.omen * 0.20f);
+        Color clear_cloud = Fade(cloud, 0.0f);
+        Color horizon = Fade(CC_VISUAL_PALETTE.earth.light,
+                             atmosphere.omen * 0.13f);
+        Color cloud_break = Fade(CC_VISUAL_PALETTE.stone.light,
+                                 atmosphere.omen * 0.16f);
+        DrawRectangleGradientV(0, 0, width, height / 2,
+                               cloud, clear_cloud);
+        DrawRectangleGradientV(0, height / 3, width, height / 5,
+                               Fade(horizon, 0.0f), horizon);
+        DrawRectangleGradientV(0, height / 3 + height / 5,
+                               width, height / 7,
+                               horizon, Fade(horizon, 0.0f));
+        DrawEllipse(width / 5, height / 8,
+                    (float)width * 0.24f, (float)height * 0.10f, cloud);
+        DrawEllipse(width / 2, height / 10,
+                    (float)width * 0.31f, (float)height * 0.09f, cloud);
+        DrawEllipse(width * 4 / 5, height / 7,
+                    (float)width * 0.25f, (float)height * 0.11f, cloud);
+        DrawEllipse((int32_t)((float)width * 0.30f),
+                    (int32_t)((float)height * 0.12f),
+                    (float)width * 0.29f, (float)height * 0.12f,
+                    cloud_break);
+        DrawDragonOmenSilhouette(width, height, clock, atmosphere.omen);
+    }
+
+    /* Mist uses a few broad, slow bands. It is depth atmosphere, not a noisy
+       smoke texture, and the final palette lookup resolves it back to the
+       authored slate and violet families. */
+    if (atmosphere.mist > 0.01f) {
+        Color fog = atmosphere.fog_color;
+        for (int32_t band = 0; band < 3; ++band) {
+            float phase = clock * (0.035f + (float)band * 0.009f) +
+                          (float)band * 1.83f;
+            int32_t y = (int32_t)((0.30f + (float)band * 0.19f) *
+                                  (float)height + sinf(phase) * 7.0f);
+            int32_t band_height = 18 + band * 5;
+            float opacity = atmosphere.mist *
+                            (0.055f - (float)band * 0.009f);
+            Color clear = Fade(fog, 0.0f);
+            Color visible = Fade(fog, opacity);
+            DrawRectangleGradientH(-12, y, width / 2 + 18, band_height,
+                                   clear, visible);
+            DrawRectangleGradientH(width / 2, y, width / 2 + 18,
+                                   band_height, visible, clear);
+        }
+    }
+
+    /* Rain is drawn on the fixed art-pixel target so every drop keeps the
+       same chunky shape after enlargement. Movement is steady and diagonal;
+       there is no random per-frame sparkle. */
+    int32_t drop_count = (int32_t)roundf(atmosphere.rain * 88.0f);
+    for (int32_t drop = 0; drop < drop_count; ++drop) {
+        float seed_x = ArtAtmosphereHash(
+            UINT32_C(0x91e10da5) + (uint32_t)drop * UINT32_C(0x9e3779b9));
+        float seed_y = ArtAtmosphereHash(
+            UINT32_C(0x68bc21eb) + (uint32_t)drop * UINT32_C(0x85ebca6b));
+        float speed = 74.0f + ArtAtmosphereHash(
+            UINT32_C(0x27d4eb2d) + (uint32_t)drop * UINT32_C(0xc2b2ae35)) *
+            38.0f;
+        float x = fmodf(seed_x * (float)(width + 36) + clock * 18.0f,
+                        (float)(width + 36)) - 18.0f;
+        float y = fmodf(seed_y * (float)(height + 24) + clock * speed,
+                        (float)(height + 24)) - 12.0f;
+        float opacity = atmosphere.rain * (0.20f + seed_y * 0.14f);
+        Vector2 start = {x, y};
+        Vector2 end = {x - 2.4f, y + 7.0f + seed_x * 3.0f};
+        DrawLineEx(start, end, seed_x > 0.74f ? 1.4f : 1.0f,
+                   Fade(WORLD_METAL_LIGHT, opacity));
+    }
 }
 
 static ArtLightProfileId StreetLightProfile(
@@ -16202,28 +16812,46 @@ static void BeginWorldLighting(Camera3D camera,
     }
     const ArtLightProfileDefinition *profile =
         &ART_LIGHT_PROFILES[profile_id];
+    ArtAtmosphereDefinition atmosphere = ArtAtmosphereForProfile(profile_id);
+    visual_style.presentation_atmosphere = atmosphere;
     Vector3 light_direction = Vector3Normalize(
-        profile->light_direction);
+        ArtAtmosphereMixVector(profile->light_direction,
+                               atmosphere.light_direction,
+                               atmosphere.direction_influence));
     Vector3 camera_forward_vector = Vector3Normalize(
         Vector3Subtract(camera.target, camera.position));
     float direction[3] = {light_direction.x, light_direction.y,
                           light_direction.z};
-    float light_color[3] = {profile->light_color.x, profile->light_color.y,
-                            profile->light_color.z};
-    float ambient_color[3] = {profile->ambient_color.x,
-                              profile->ambient_color.y,
-                              profile->ambient_color.z};
-    float shadow_color[3] = {profile->shadow_color.x,
-                             profile->shadow_color.y,
-                             profile->shadow_color.z};
+    float light_color[3] = {
+        profile->light_color.x * atmosphere.light_tint.x,
+        profile->light_color.y * atmosphere.light_tint.y,
+        profile->light_color.z * atmosphere.light_tint.z,
+    };
+    float ambient_color[3] = {
+        profile->ambient_color.x * atmosphere.ambient_tint.x,
+        profile->ambient_color.y * atmosphere.ambient_tint.y,
+        profile->ambient_color.z * atmosphere.ambient_tint.z,
+    };
+    float shadow_color[3] = {
+        profile->shadow_color.x * atmosphere.shadow_tint.x,
+        profile->shadow_color.y * atmosphere.shadow_tint.y,
+        profile->shadow_color.z * atmosphere.shadow_tint.z,
+    };
     float camera_position[3] = {camera.position.x, camera.position.y,
                                 camera.position.z};
     float camera_forward[3] = {camera_forward_vector.x,
                                camera_forward_vector.y,
                                camera_forward_vector.z};
-    float fog_color[3] = {(float)profile->fog_color.r / 255.0f,
-                          (float)profile->fog_color.g / 255.0f,
-                          (float)profile->fog_color.b / 255.0f};
+    Color atmosphere_fog = ArtAtmosphereMixColor(
+        profile->fog_color, atmosphere.fog_color,
+        atmosphere.fog_influence);
+    float fog_color[3] = {(float)atmosphere_fog.r / 255.0f,
+                          (float)atmosphere_fog.g / 255.0f,
+                          (float)atmosphere_fog.b / 255.0f};
+    float fog_near = profile->fog_near * atmosphere.fog_distance_scale;
+    float fog_far = profile->fog_far * atmosphere.fog_distance_scale;
+    float depth_strength = profile->depth_strength * atmosphere.depth_scale;
+    float focal_contrast = profile->focal_contrast * atmosphere.focal_scale;
     float focal_point[3] = {composition->focal_point.x,
                             composition->focal_point.y,
                             composition->focal_point.z};
@@ -16253,9 +16881,9 @@ static void BeginWorldLighting(Camera3D camera,
     SetShaderValue(visual_style.world, visual_style.fog_color_location,
                    fog_color, SHADER_UNIFORM_VEC3);
     SetShaderValue(visual_style.world, visual_style.fog_near_location,
-                   &profile->fog_near, SHADER_UNIFORM_FLOAT);
+                   &fog_near, SHADER_UNIFORM_FLOAT);
     SetShaderValue(visual_style.world, visual_style.fog_far_location,
-                   &profile->fog_far, SHADER_UNIFORM_FLOAT);
+                   &fog_far, SHADER_UNIFORM_FLOAT);
     SetShaderValue(visual_style.world, visual_style.focal_point_location,
                    focal_point, SHADER_UNIFORM_VEC3);
     SetShaderValue(visual_style.world, visual_style.story_axis_location,
@@ -16266,9 +16894,12 @@ static void BeginWorldLighting(Camera3D camera,
     SetShaderValue(visual_style.world, visual_style.depth_splits_location,
                    depth_splits, SHADER_UNIFORM_VEC3);
     SetShaderValue(visual_style.world, visual_style.depth_strength_location,
-                   &profile->depth_strength, SHADER_UNIFORM_FLOAT);
+                   &depth_strength, SHADER_UNIFORM_FLOAT);
     SetShaderValue(visual_style.world, visual_style.focal_contrast_location,
-                   &profile->focal_contrast, SHADER_UNIFORM_FLOAT);
+                   &focal_contrast, SHADER_UNIFORM_FLOAT);
+    SetShaderValue(visual_style.world,
+                   visual_style.weather_wetness_location,
+                   &atmosphere.wetness, SHADER_UNIFORM_FLOAT);
     if (visual_style.painted_environment.ready) {
         PaintedEnvironmentStyle *painted =
             &visual_style.painted_environment;
@@ -16287,9 +16918,9 @@ static void BeginWorldLighting(Camera3D camera,
         SetShaderValue(painted->shader, painted->fog_color_location,
                        fog_color, SHADER_UNIFORM_VEC3);
         SetShaderValue(painted->shader, painted->fog_near_location,
-                       &profile->fog_near, SHADER_UNIFORM_FLOAT);
+                       &fog_near, SHADER_UNIFORM_FLOAT);
         SetShaderValue(painted->shader, painted->fog_far_location,
-                       &profile->fog_far, SHADER_UNIFORM_FLOAT);
+                       &fog_far, SHADER_UNIFORM_FLOAT);
         SetShaderValue(painted->shader, painted->focal_point_location,
                        focal_point, SHADER_UNIFORM_VEC3);
         SetShaderValue(painted->shader, painted->story_axis_location,
@@ -16299,9 +16930,9 @@ static void BeginWorldLighting(Camera3D camera,
         SetShaderValue(painted->shader, painted->depth_splits_location,
                        depth_splits, SHADER_UNIFORM_VEC3);
         SetShaderValue(painted->shader, painted->depth_strength_location,
-                       &profile->depth_strength, SHADER_UNIFORM_FLOAT);
+                       &depth_strength, SHADER_UNIFORM_FLOAT);
         SetShaderValue(painted->shader, painted->focal_contrast_location,
-                       &profile->focal_contrast, SHADER_UNIFORM_FLOAT);
+                       &focal_contrast, SHADER_UNIFORM_FLOAT);
     }
     const float foreground_reveal = 0.0f;
     SetShaderValue(visual_style.world,
@@ -16341,16 +16972,16 @@ static void BeginWorldLighting(Camera3D camera,
                        fog_color, SHADER_UNIFORM_VEC3);
         SetShaderValue(visual_style.foliage,
                        visual_style.foliage_fog_near_location,
-                       &profile->fog_near, SHADER_UNIFORM_FLOAT);
+                       &fog_near, SHADER_UNIFORM_FLOAT);
         SetShaderValue(visual_style.foliage,
                        visual_style.foliage_fog_far_location,
-                       &profile->fog_far, SHADER_UNIFORM_FLOAT);
+                       &fog_far, SHADER_UNIFORM_FLOAT);
         SetShaderValue(visual_style.foliage,
                        visual_style.foliage_depth_splits_location,
                        depth_splits, SHADER_UNIFORM_VEC3);
         SetShaderValue(visual_style.foliage,
                        visual_style.foliage_depth_strength_location,
-                       &profile->depth_strength, SHADER_UNIFORM_FLOAT);
+                       &depth_strength, SHADER_UNIFORM_FLOAT);
     }
     if (visual_style.hero_ready) {
         SetShaderValue(visual_style.hero,
@@ -16367,11 +16998,11 @@ static void BeginWorldLighting(Camera3D camera,
                        SHADER_UNIFORM_VEC3);
         SetShaderValue(visual_style.hero,
                        visual_style.hero_fog_near_location,
-                       &profile->fog_near,
+                       &fog_near,
                        SHADER_UNIFORM_FLOAT);
         SetShaderValue(visual_style.hero,
                        visual_style.hero_fog_far_location,
-                       &profile->fog_far,
+                       &fog_far,
                        SHADER_UNIFORM_FLOAT);
     }
     if (visual_style.npc_ready) {
@@ -16389,11 +17020,11 @@ static void BeginWorldLighting(Camera3D camera,
                        SHADER_UNIFORM_VEC3);
         SetShaderValue(visual_style.npc,
                        visual_style.npc_fog_near_location,
-                       &profile->fog_near,
+                       &fog_near,
                        SHADER_UNIFORM_FLOAT);
         SetShaderValue(visual_style.npc,
                        visual_style.npc_fog_far_location,
-                       &profile->fog_far,
+                       &fog_far,
                        SHADER_UNIFORM_FLOAT);
     }
     if (visual_style.npc_skinned_ready) {
@@ -16411,10 +17042,10 @@ static void BeginWorldLighting(Camera3D camera,
                        fog_color, SHADER_UNIFORM_VEC3);
         SetShaderValue(visual_style.npc_skinned,
                        visual_style.npc_skinned_fog_near_location,
-                       &profile->fog_near, SHADER_UNIFORM_FLOAT);
+                       &fog_near, SHADER_UNIFORM_FLOAT);
         SetShaderValue(visual_style.npc_skinned,
                        visual_style.npc_skinned_fog_far_location,
-                       &profile->fog_far, SHADER_UNIFORM_FLOAT);
+                       &fog_far, SHADER_UNIFORM_FLOAT);
     }
     BeginShaderMode(visual_style.world);
 }
@@ -16727,8 +17358,9 @@ static void DrawRoadHorseTeam(Vector3 base, float clock, bool moving)
     CcCreaturePose right_pose = CcCreatureSteppedPose(
         CC_CREATURE_HORSE, clock * 4.8f + PI, moving);
     for (int32_t horse = -1; horse <= 1; horse += 2) {
-        Color coat = horse < 0 ? (Color){89, 68, 56, 255} :
-                                 (Color){112, 86, 63, 255};
+        Color coat = horse < 0 ? BlendColor(WORLD_WOOD, WORLD_ROAD, 0.42f) :
+                                 BlendColor(WORLD_WOOD_LIGHT,
+                                            WORLD_ROAD, 0.36f);
         Vector3 horse_base = LocalPoint(
             base, (float)horse * 1.05f, 0.0f, 4.60f, yaw);
         CcCreaturePose pose = horse < 0 ? left_pose : right_pose;
@@ -16747,7 +17379,10 @@ static void DrawRoadHorseTeam(Vector3 base, float clock, bool moving)
             base, (float)horse * 0.42f, 0.77f, 3.05f, yaw);
         Vector3 trace_end = LocalPoint(horse_base, 0.0f, 0.91f, -0.52f, yaw);
         DrawCylinderEx(trace_start, trace_end, 0.020f, 0.016f, 6,
-                       (Color){57, 42, 34, 255});
+                       WORLD_WOOD_SHADOW);
+        DrawOrientedBox(horse_base, (Vector3){0.0f, 1.02f, 0.18f},
+                        (Vector3){0.66f, 0.055f, 0.055f}, yaw,
+                        WORLD_WOOD_SHADOW);
     }
 }
 
@@ -16773,7 +17408,7 @@ static void DrawRoadCarriage(Vector3 base, int32_t cargo_used, float clock,
     } else {
         DrawOrientedBox(base, (Vector3){0.0f, 1.10f, 0.0f},
                         (Vector3){2.55f, 1.58f, 4.15f}, yaw,
-                        (Color){125, 66, 50, 255});
+                        BlendColor(WORLD_EARTH, WORLD_DANGER, 0.28f));
         DrawOrientedBox(base, (Vector3){0.0f, 1.98f, 0.0f},
                         (Vector3){2.78f, 0.18f, 4.38f}, yaw,
                         WORLD_GOLD);
@@ -16786,7 +17421,7 @@ static void DrawRoadCarriage(Vector3 base, int32_t cargo_used, float clock,
         for (int32_t i = 0; i < 4; ++i) {
             Vector3 wheel = LocalPoint(base, wheel_offsets[i].x, 0.58f,
                                        wheel_offsets[i].y, yaw);
-            DrawScenerySphere(wheel, 0.53f, (Color){38, 31, 31, 255});
+            DrawScenerySphere(wheel, 0.53f, WORLD_WOOD_SHADOW);
             DrawSphereWires(wheel, 0.55f, 7, 7, WORLD_GOLD);
         }
         Vector3 pole_left = LocalPoint(base, -0.48f, 0.82f, 2.10f, yaw);
@@ -16794,9 +17429,9 @@ static void DrawRoadCarriage(Vector3 base, int32_t cargo_used, float clock,
         Vector3 pole_left_end = LocalPoint(base, -0.48f, 0.72f, 4.10f, yaw);
         Vector3 pole_right_end = LocalPoint(base, 0.48f, 0.72f, 4.10f, yaw);
         DrawCylinderEx(pole_left, pole_left_end, 0.045f, 0.035f, 7,
-                       (Color){91, 61, 43, 255});
+                       WORLD_WOOD);
         DrawCylinderEx(pole_right, pole_right_end, 0.045f, 0.035f, 7,
-                       (Color){91, 61, 43, 255});
+                       WORLD_WOOD);
     }
     DrawRoadHorseTeam(base, clock, moving);
 }
@@ -16805,7 +17440,7 @@ static void DrawRoadBarricade(const CcRoute *route)
 {
     const float x = ROAD_BARRICADE_X;
     Color timber = route != NULL && route->smuggler_route ?
-                   (Color){67, 48, 42, 255} : (Color){103, 70, 47, 255};
+                   WORLD_WOOD_SHADOW : WORLD_WOOD;
     for (int32_t rail = -1; rail <= 1; rail += 2) {
         Vector3 from = {x - 0.18f, 0.48f + (float)(rail + 1) * 0.18f,
                         36.95f};
@@ -16844,7 +17479,7 @@ static void DrawRoadSurface(float x, float width, Color road)
     for (int32_t rut = 0; rut < 2; ++rut) {
         DrawTerrainPatchAtTop(x, 38.45f + (float)rut * 3.05f,
                               width, 0.16f, -0.003f,
-                              Fade((Color){43, 35, 31, 255}, 0.72f));
+                              Fade(WORLD_WOOD_SHADOW, 0.72f));
     }
 }
 
@@ -16854,11 +17489,10 @@ static void DrawRoadTerrain(const CcRoute *route, int32_t danger,
     float decay = route != NULL ?
         1.0f - (float)route->condition / 100.0f : 0.5f;
     Color ground = route != NULL && route->smuggler_route ?
-        (Color){28, 54, 43, 255} :
-        BlendColor((Color){48, 72, 51, 255},
-                   (Color){87, 70, 46, 255}, decay * 0.75f);
-    Color road = BlendColor((Color){105, 96, 78, 255},
-                            (Color){78, 62, 49, 255}, decay);
+        WORLD_GRASS_SHADOW :
+        BlendColor(WORLD_GRASS, WORLD_EARTH, decay * 0.75f);
+    Color road = BlendColor(WORLD_ROAD_LIGHT,
+                            WORLD_EARTH_SHADOW, decay);
     DrawPlane((Vector3){CC_LOCAL_WORLD_WIDTH * 0.5f, -0.09f,
                         CC_LOCAL_WORLD_DEPTH * 0.5f},
               (Vector2){CC_LOCAL_WORLD_WIDTH + 8.0f,
@@ -16879,10 +17513,10 @@ static void DrawRoadTerrain(const CcRoute *route, int32_t danger,
             x < ROAD_BARRICADE_X + 4.40f) continue;
         float z = 39.10f + (float)(scar & 1) * 1.65f;
         DrawCylinder((Vector3){x, -0.025f, z}, 0.28f, 0.42f,
-                     0.035f, 12, (Color){54, 44, 37, 255});
+                     0.035f, 12, WORLD_EARTH_SHADOW);
     }
     Color leaves = route != NULL && route->smuggler_route ?
-        (Color){35, 87, 65, 255} : (Color){57, 109, 78, 255};
+        WORLD_FOLIAGE_SHADOW : WORLD_FOLIAGE;
     TreeRegionalStyle regional_style = TreeStyleForKingdom(kingdom);
     for (int32_t tree = 0; tree < 13; ++tree) {
         float x = 20.0f + (float)tree * 4.75f;
@@ -16900,24 +17534,23 @@ static void DrawRoadTerrain(const CcRoute *route, int32_t danger,
             tree_leaves = ShadeColor(tree_leaves, 0.86f);
         } else if (family == TREE_FAMILY_POLLARD) {
             tree_leaves = BlendColor(tree_leaves,
-                                     (Color){96, 105, 61, 255}, 0.16f);
+                                     WORLD_GRASS_LIGHT, 0.16f);
         }
         DrawTree(x, z, family, tree_leaves, regional_style);
     }
     if (route != NULL && (route->closed || route->condition < 42)) {
         DrawTerrainPatchAtTop(68.0f, 32.0f, 4.0f, 16.0f, -0.002f,
-                              (Color){12, 24, 27, 255});
+                              CC_STYLE_PANEL_DEEP);
         for (int32_t plank = 0; plank < 5; ++plank) {
             DrawBox((Vector3){70.0f, 0.12f, 37.35f + (float)plank * 1.32f},
                     (Vector3){4.45f, 0.18f, 0.92f},
-                    plank == 2 ? (Color){82, 58, 43, 255} :
-                                 (Color){113, 78, 51, 255});
+                    plank == 2 ? WORLD_WOOD_SHADOW : WORLD_WOOD_LIGHT);
         }
     }
     if (route != NULL && route->security >= 65) {
         DrawBox((Vector3){30.20f, 1.05f, 35.70f},
                 (Vector3){0.58f, 2.10f, 0.58f},
-                (Color){103, 104, 96, 255});
+                WORLD_STONE_LIGHT);
         DrawBox((Vector3){30.20f, 1.68f, 35.38f},
                 (Vector3){0.42f, 0.46f, 0.05f}, WORLD_GOLD);
     }
@@ -16926,7 +17559,7 @@ static void DrawRoadTerrain(const CcRoute *route, int32_t danger,
             DrawBox((Vector3){58.5f + (float)marker * 1.1f, 0.18f,
                               44.15f},
                     (Vector3){0.52f, 0.36f, 0.72f},
-                    (Color){82, 58, 49, 255});
+                    BlendColor(WORLD_EARTH_SHADOW, WORLD_DANGER, 0.24f));
         }
     }
 }
@@ -17076,6 +17709,7 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     }
     EndWorldLighting();
     EndMode3D();
+    DrawTargetAtmosphere(target, clock);
     EndTextureMode();
     PresentTarget(target, destination);
     char route_label[96];
@@ -17527,6 +18161,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     DrawCombatImpact(agent);
     EndWorldLighting();
     EndMode3D();
+    DrawTargetAtmosphere(target, clock);
     EndTextureMode();
     PresentTarget(target, destination);
     bool alarm_active = course != NULL && course->alarm_active;

@@ -511,6 +511,12 @@ if(BUILD_TESTING)
         cc_strict_warnings(npc_appearance_tests)
         add_test(NAME deterministic_npc_population COMMAND npc_appearance_tests)
 
+        add_executable(visual_palette_tests tests/visual_palette_tests.c)
+        target_link_libraries(visual_palette_tests PRIVATE raylib)
+        target_include_directories(visual_palette_tests PRIVATE src)
+        cc_strict_warnings(visual_palette_tests)
+        add_test(NAME perceptual_visual_palette COMMAND visual_palette_tests)
+
         add_executable(local_movement_tests
             tests/local_movement_tests.c
             src/client/cc_overlay.c

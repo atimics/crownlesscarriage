@@ -15,6 +15,9 @@
 
 #define BACKGROUND CC_STYLE_BACKGROUND
 #define PANEL CC_STYLE_PANEL
+#define PANEL_DEEP CC_STYLE_PANEL_DEEP
+#define PANEL_HOVER CC_STYLE_PANEL_HOVER
+#define BAR_TRACK CC_STYLE_BAR_TRACK
 #define INK CC_STYLE_INK
 #define MUTED CC_STYLE_MUTED
 #define TEAL CC_STYLE_TEAL
@@ -328,10 +331,10 @@ static void DrawPanel(Rectangle bounds, Color color)
 {
     DrawRectangleRounded(bounds, 0.025f, 4, color);
     DrawRectangleRoundedLinesEx(bounds, 0.025f, 4, 1.0f,
-                                (Color){126, 105, 69, 205});
+                                Fade(CC_GOLD, 0.62f));
     DrawLine((int)bounds.x + 11, (int)bounds.y + 8,
              (int)bounds.x + 45, (int)bounds.y + 8,
-             (Color){207, 157, 67, 128});
+             Fade(CC_GOLD, 0.50f));
 }
 
 static void DrawPerformanceOverlay(void)
@@ -341,7 +344,7 @@ static void DrawPerformanceOverlay(void)
         1000.0f / stats.smoothed_frame_milliseconds : 0.0f;
     Rectangle bounds = {(float)GetScreenWidth() - 294.0f, 18.0f,
                         276.0f, 92.0f};
-    DrawPanel(bounds, (Color){5, 11, 17, 238});
+    DrawPanel(bounds, PANEL_DEEP);
     CcOverlayDrawText("LOCAL PERFORMANCE", (int)bounds.x + 14,
              (int)bounds.y + 11, 12, TEAL);
     CcOverlayDrawText(TextFormat("frame %5.2f ms  %5.1f fps",
@@ -376,7 +379,10 @@ static void DrawBar(int x, int y, int width, const char *label,
                     int32_t value, Color color)
 {
     CcOverlayDrawText(label, x, y, 11, MUTED);
-    DrawRectangle(x + 76, y + 1, width, 10, (Color){34, 45, 48, 255});
+    DrawRectangle(x + 76, y + 1, width, 10, BAR_TRACK);
+    DrawRectangleLinesEx((Rectangle){(float)x + 76.0f, (float)y + 1.0f,
+                                     (float)width, 10.0f},
+                         1.0f, MUTED);
     int fill = (int)((float)width * (float)value / 100.0f);
     DrawRectangle(x + 76, y + 1, fill, 10, color);
     CcOverlayDrawText(TextFormat("%d", value), x + 81 + width, y - 2, 12, INK);
@@ -479,7 +485,7 @@ static void PrepareActionReel(LocalState *local, ActionReelState *reel)
     CcLocalAgent *opponent = &local->course.raiders[0];
     CcLocalAgentInit(opponent, (Vector2){18.20f, 9.65f}, false);
     opponent->crowned = false;
-    opponent->tunic_color = (Color){126, 55, 61, 255};
+    opponent->tunic_color = DANGER;
     opponent->facing_yaw = -0.5f * PI;
     CcLocalCombatSetTeam(opponent, CC_COMBAT_RAIDER);
     CcLocalAgentSetAthleticLevel(opponent, CC_ATHLETIC_MOBILITY, 3);
@@ -661,7 +667,7 @@ static void DrawTownCombatPanel(const LocalState *local)
     }
 
     DrawPanel((Rectangle){994.0f, 72.0f, 246.0f, 142.0f},
-              (Color){10, 17, 21, 236});
+              Fade(PANEL_DEEP, 0.93f));
     CcOverlayDrawText("HOLD THE STREET", 1012, 91, 14, DANGER);
     DrawBar(1012, 125, 74, "YOU",
             (int32_t)lroundf(local->agent.combat.health), TEAL);
@@ -694,7 +700,7 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
         const CcSettlement *destination = CcSimSettlement(
             sim, sim->journey.destination_id);
         DrawPanel((Rectangle){994.0f, 72.0f, 246.0f, 150.0f},
-                  (Color){10, 17, 21, 236});
+                  Fade(PANEL_DEEP, 0.93f));
         if (local->journey_travel_active) {
             int32_t progress = sim->carriage.progress_milli / 10;
             CcOverlayDrawText("ON THE ROAD", 1012, 91, 9, TEAL);
@@ -1038,11 +1044,16 @@ static void DrawContextActionTray(const CcSim *sim, const LocalState *local,
         bool hover = CheckCollisionPointRec(mouse, bounds);
         Color accent = ContextActionColor(actions.items[i].kind);
         DrawRectangleRounded(bounds, 0.18f, 5,
-                             hover ? (Color){24, 38, 43, 248} :
-                                     (Color){8, 16, 21, 232});
+                             hover ? PANEL_HOVER : Fade(PANEL_DEEP, 0.96f));
         DrawRectangleRoundedLinesEx(bounds, 0.18f, 5,
                                     hover ? 2.0f : 1.0f,
                                     Fade(accent, hover ? 0.96f : 0.62f));
+        if (hover) {
+            DrawRectangleRounded(
+                (Rectangle){bounds.x + 8.0f, bounds.y + 12.0f,
+                            4.0f, bounds.height - 24.0f},
+                0.8f, 3, accent);
+        }
         int width = CcOverlayMeasureText(actions.items[i].label, 11);
         CcOverlayDrawText(actions.items[i].label,
                           (int)(bounds.x +
@@ -1177,7 +1188,7 @@ static void DrawMap(const CcSim *sim, int32_t selected, float clock,
 {
     (void)clock;
     DrawPanel((Rectangle){20.0f, 82.0f, 900.0f, 568.0f},
-              (Color){11, 20, 24, 248});
+              PANEL);
     CcOverlayDrawText("CARRIAGE MAP CASE", 38, 101, 18, CC_GOLD);
     CcOverlayDrawText(TextFormat("CASE %d/%d   CATALOGUE %d/%d",
                         CcPlayerMapCount(sim), sim->player.map_capacity,
@@ -1195,11 +1206,11 @@ static void DrawMap(const CcSim *sim, int32_t selected, float clock,
         bool owned = map->owner_id == sim->player.id;
         bool archived = CcSimMapIsArchived(sim, map);
         int y = 154 + row * 51;
-        Color paper_color = map->contraband ? (Color){57, 34, 55, 255} :
-                                              (Color){52, 48, 37, 255};
+        Color paper_color = map->contraband ? CC_STYLE_CONTRABAND_SHADOW :
+                                              CC_STYLE_PARCHMENT_SHADOW;
         if (i == selected) {
-            paper_color = map->contraband ? (Color){96, 49, 91, 255} :
-                                            (Color){91, 78, 49, 255};
+            paper_color = map->contraband ? CC_STYLE_CONTRABAND :
+                                            CC_STYLE_PARCHMENT;
         }
         DrawRectangleRounded((Rectangle){37.0f, (float)y, 226.0f, 43.0f},
                              0.16f, 5, paper_color);
@@ -1222,11 +1233,13 @@ static void DrawMap(const CcSim *sim, int32_t selected, float clock,
     Rectangle paper = {282.0f, 105.0f, 620.0f, 525.0f};
     DrawRectangleRounded(paper, 0.025f, 4,
                          map != NULL && map->contraband ?
-                         (Color){158, 132, 119, 255} : (Color){214, 197, 151, 255});
+                         CC_STYLE_CONTRABAND_LIGHT :
+                         CC_STYLE_PARCHMENT_LIGHT);
     DrawRectangleRoundedLinesEx(paper, 0.025f, 4, 2.0f,
-                                (Color){91, 69, 46, 220});
+                                Fade(CC_STYLE_PARCHMENT, 0.86f));
     if (map == NULL) {
-        CcOverlayDrawText("NO MAP SELECTED", 452, 335, 22, (Color){83, 65, 46, 255});
+        CcOverlayDrawText("NO MAP SELECTED", 452, 335, 22,
+                          CC_STYLE_PARCHMENT);
         return;
     }
     if (DrawCollectibleMapArt(sim, map, illustrated_map,
@@ -1234,8 +1247,8 @@ static void DrawMap(const CcSim *sim, int32_t selected, float clock,
     const CcRoute *route = CcSimRoute(sim, map->route_id);
     const CcSettlement *from = route != NULL ? CcSimSettlement(sim, route->from_id) : NULL;
     const CcSettlement *to = route != NULL ? CcSimSettlement(sim, route->to_id) : NULL;
-    Color chart_ink = map->contraband ? (Color){86, 31, 72, 255} :
-                                       (Color){66, 57, 43, 255};
+    Color chart_ink = map->contraband ? CC_STYLE_CONTRABAND_SHADOW :
+                                       CC_STYLE_PARCHMENT_SHADOW;
     char route_title[96];
     MapRouteTitle(sim, map, route_title, sizeof(route_title));
     CcOverlayDrawText(route_title, 307, 125, 20, chart_ink);
@@ -1345,9 +1358,9 @@ static void DrawHeader(const CcSim *sim)
 static void DrawLedger(const CcSim *sim)
 {
     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
-                  (Color){3, 7, 11, 172});
+                  Fade(BACKGROUND, 0.67f));
     Rectangle bounds = {350.0f, 205.0f, 580.0f, 300.0f};
-    DrawPanel(bounds, (Color){8, 17, 24, 248});
+    DrawPanel(bounds, PANEL_DEEP);
     CcOverlayDrawText("NEWS", 382, 237, 22, INK);
     int32_t shown = sim->event_count < 3 ? sim->event_count : 3;
     for (int32_t i = 0; i < shown; ++i) {
@@ -1384,9 +1397,9 @@ static const char *SituationTitle(CcSituationKind kind)
 static void DrawSituationBoard(const CcSim *sim, int32_t selected)
 {
     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
-                  (Color){3, 7, 11, 172});
+                  Fade(BACKGROUND, 0.67f));
     Rectangle bounds = {330.0f, 190.0f, 620.0f, 340.0f};
-    DrawPanel(bounds, (Color){8, 17, 24, 248});
+    DrawPanel(bounds, PANEL_DEEP);
     const CcSituation *detail = SelectedActiveSituation(sim, selected);
     int32_t active_count = 0;
     int32_t active_ordinal = 0;
@@ -1428,9 +1441,9 @@ static void DrawJourneyEncounter(const CcSim *sim)
     const CcSettlement *from = CcSimSettlement(sim, sim->journey.origin_id);
     const CcSettlement *to = CcSimSettlement(sim, sim->journey.destination_id);
     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
-                  (Color){3, 7, 11, 142});
+                  Fade(BACKGROUND, 0.56f));
     DrawPanel((Rectangle){350.0f, 220.0f, 580.0f, 185.0f},
-              (Color){8, 17, 24, 248});
+              PANEL_DEEP);
     CcOverlayDrawText("ROAD BLOCKED", 386, 252, 24, INK);
     CcOverlayDrawText(TextFormat("%s  ->  %s", from != NULL ? from->name : "Origin",
                         to != NULL ? to->name : "Destination"),
@@ -2028,7 +2041,7 @@ static void DrawGameplayReelQuestComplete(const GameplayReelState *reel)
     float opacity = fmaxf(0.0f, fminf(fade_in, fade_out));
     Rectangle bounds = {438.0f, 92.0f, 404.0f, 82.0f};
     DrawRectangleRounded(bounds, 0.16f, 5,
-                         Fade((Color){8, 17, 24, 246}, opacity));
+                         Fade(PANEL_DEEP, opacity));
     DrawRectangleRoundedLinesEx(bounds, 0.16f, 5, 1.5f,
                                 Fade(TEAL, opacity));
     const char *title = "QUEST COMPLETE";
@@ -2645,6 +2658,17 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
     }
 }
 
+static CcLocalAtmospherePreset LocalAtmosphereForSimulation(
+    const CcSim *sim)
+{
+    if (sim != NULL && !sim->dragon.slain &&
+        sim->dragon.omen_days_remaining > 0 &&
+        sim->dragon.retaliation_target_id == sim->player.location_id) {
+        return CC_LOCAL_ATMOSPHERE_DRAGON_OMEN;
+    }
+    return CcLocalAtmosphereForDay(sim != NULL ? sim->current_day : 0);
+}
+
 int main(int argc, char **argv)
 {
     bool screen_first_hero = true;
@@ -2710,6 +2734,34 @@ int main(int argc, char **argv)
         strcmp(argv[1], "--capture-aftermath") == 0;
     bool capture_golden = argc >= 2 &&
         strcmp(argv[1], "--capture-golden") == 0;
+    bool capture_atmosphere = argc >= 2 &&
+        strcmp(argv[1], "--capture-atmosphere") == 0;
+    CcLocalAtmospherePreset capture_atmosphere_preset =
+        CC_LOCAL_ATMOSPHERE_CLEAR_DAY;
+    if (capture_atmosphere) {
+        if (argc < 4) {
+            (void)fprintf(stderr,
+                          "capture atmosphere requires a mood and a frame path.\n");
+            return 1;
+        }
+        if (strcmp(argv[2], "clear") == 0) {
+            capture_atmosphere_preset = CC_LOCAL_ATMOSPHERE_CLEAR_DAY;
+        } else if (strcmp(argv[2], "rain") == 0) {
+            capture_atmosphere_preset =
+                CC_LOCAL_ATMOSPHERE_RAINY_OVERCAST;
+        } else if (strcmp(argv[2], "dusk") == 0) {
+            capture_atmosphere_preset = CC_LOCAL_ATMOSPHERE_AMBER_DUSK;
+        } else if (strcmp(argv[2], "night") == 0) {
+            capture_atmosphere_preset =
+                CC_LOCAL_ATMOSPHERE_MOONLIT_NIGHT;
+        } else if (strcmp(argv[2], "omen") == 0) {
+            capture_atmosphere_preset = CC_LOCAL_ATMOSPHERE_DRAGON_OMEN;
+        } else {
+            (void)fprintf(stderr,
+                          "atmosphere must be clear, rain, dusk, night, or omen.\n");
+            return 1;
+        }
+    }
     bool capture_face = argc >= 2 &&
         strcmp(argv[1], "--capture-face") == 0;
     bool capture_creatures = argc >= 2 &&
@@ -2789,11 +2841,13 @@ int main(int argc, char **argv)
                     capture_gameplay_reel || capture_encounter ||
                     capture_witness || capture_travel || capture_road ||
                     capture_parley ||
-                    capture_aftermath || capture_golden || capture_face ||
+                    capture_aftermath || capture_golden ||
+                    capture_atmosphere || capture_face ||
                     capture_room || capture_creature_media);
     const char *capture_path = capture_creature_media ? argv[3] :
                                capture_room ? argv[4] :
                                capture_face ? argv[3] :
+                               capture_atmosphere ? argv[3] :
                                argc >= 3 ? argv[2] :
                                "architecture-proof.png";
     char save_path[640];
@@ -2941,7 +2995,7 @@ int main(int argc, char **argv)
     ActionReelState action_reel = {0};
     GameplayReelState gameplay_reel = {0};
     ResetLocalState(&local);
-    if (capture_golden) {
+    if (capture_golden || capture_atmosphere) {
         RepositionHero(&local, (Vector2){44.25f, 28.85f}, false);
         local.agent.facing_yaw = -0.35f;
         local.course.alarm_countdown = 1000.0f;
@@ -2993,8 +3047,8 @@ int main(int argc, char **argv)
         !capture_action_reel && !capture_gameplay_reel &&
         !capture_encounter && !capture_travel &&
         !capture_road &&
-        !capture_parley && !capture_golden && !capture_face && !capture_room &&
-        !capture_creature_media) {
+        !capture_parley && !capture_golden && !capture_atmosphere &&
+        !capture_face && !capture_room && !capture_creature_media) {
         local.course.alarm_countdown = 1000.0f;
         for (int32_t frame = 0; frame < 1500; ++frame) {
             CcLocalCourseUpdate(&local.course, &local.agent, &sim,
@@ -3139,6 +3193,9 @@ int main(int argc, char **argv)
     char message[256] = "";
     if (capture_golden) {
         (void)snprintf(message, sizeof(message), "Town square.");
+    } else if (capture_atmosphere) {
+        (void)snprintf(message, sizeof(message), "%s.",
+                       CcLocalAtmosphereName(capture_atmosphere_preset));
     } else if (capture_face) {
         (void)snprintf(message, sizeof(message),
                        "Same character model.");
@@ -3161,6 +3218,11 @@ int main(int argc, char **argv)
     bool performance_overlay = false;
     float message_age = 0.0f;
 
+    CcLocalRendererSetAtmosphere(
+        capture_atmosphere ? capture_atmosphere_preset :
+            LocalAtmosphereForSimulation(&sim),
+        0.0f);
+
     Rectangle local_bounds = {10.0f, 54.0f, 1260.0f, 640.0f};
     while (!WindowShouldClose()) {
         float frame_delta_time = GetFrameTime();
@@ -3168,6 +3230,11 @@ int main(int argc, char **argv)
         (void)snprintf(previous_message, sizeof(previous_message), "%s",
                        message);
         CcLocalRendererBeginFrame(frame_delta_time);
+        CcLocalRendererSetAtmosphere(
+            capture_atmosphere ? capture_atmosphere_preset :
+                LocalAtmosphereForSimulation(&sim),
+            2.4f);
+        CcLocalRendererUpdateAtmosphere(frame_delta_time);
         if (!capture && IsKeyPressed(KEY_F3)) {
             performance_overlay = !performance_overlay;
             (void)snprintf(message, sizeof(message), "%s",
@@ -3256,7 +3323,7 @@ int main(int argc, char **argv)
             float x = ((float)GetScreenWidth() - (float)width) * 0.5f;
             DrawRectangleRounded((Rectangle){x, 653.0f, (float)width, 28.0f},
                                  0.22f, 5,
-                                 Fade((Color){6, 12, 18, 245}, opacity));
+                                 Fade(BACKGROUND, opacity));
             CcOverlayDrawText(toast, (int)x + 13, 661, 10,
                               Fade(INK, opacity));
         }
