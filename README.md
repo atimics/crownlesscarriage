@@ -205,15 +205,18 @@ In the market, use `1` through `6` to buy Food, Iron, Tools, Weapons, Raw Gold,
 or Gems. Hold `Shift` with the same key to sell. Cargo slots hold eight Food,
 four Iron, two Tools, two Weapons, one Gold strongbox, or one Gem case.
 
-At a roadside branch, press `Enter` to turn onto it. Use the arrow keys or
-`Keep on track` to reach the next branch. Press `B` to buy local notes, `S` to
-sell carried notes, or `R` to repair the branch. A chart can save time and warn
-of danger, but it is never required to take a visible track.
+`Drive out` sends the carriage through the gate before any destination is
+chosen. The team follows the track until a roadside branch actually comes into
+view. Press `Enter` to turn onto it, or use `Right`, `Down`, or `Keep on track`
+to drive onward until the next junction is reached. Press `B` to buy local
+notes, `S` to sell carried notes, or `R` to repair the visible branch. A chart
+can save time and warn of danger, but it is never required to take a visible
+track.
 
 In the map case, use the arrow keys or click a sheet to select it. Press `B` to
 buy a local chart, `S` to sell one, or `A` to store or retrieve it at the
-Gloamgate archive. Travel begins from the carriage's `Drive out` action.
-The team drives routine departure, road, and arrival sections automatically.
+Gloamgate archive. The team drives routine departure, road, and arrival
+sections automatically.
 Use `W`, `A`, `S`, and `D` to take the reins, or `Space` to stop. A safe route
 also offers `Finish safe trip`, while dangerous routes still stop for their
 actual decision.

@@ -134,10 +134,13 @@ one side branch. The player can take the branch or keep moving until the next
 one. The scene includes the coach, road surfaces, signs, vegetation, damage,
 and closures in the world.
 
-The strategic graph may connect a place to many routes. The local presentation
-orders those routes into a short sequence of roadside encounters. It never
-turns every graph edge into a hub-shaped crossroads. Continuing advances to
-the next encounter; taking the visible branch commits to that route.
+The strategic graph may connect a place to many routes. `Drive out` commits
+only to leaving the yard: the carriage moves through the town and gate before
+the first route choice is shown. The local presentation orders outgoing routes
+into a short sequence of roadside encounters. It never turns every graph edge
+into a hub-shaped crossroads or lets the player leaf through branches while
+the carriage stands in town. Continuing puts the carriage back in motion;
+taking the visible branch commits to that route.
 
 A map is a tradeable set of traveller's notes carried in the carriage map case.
 Each sheet describes one route and its two termini.
@@ -172,12 +175,15 @@ strategic screen.
 
 ## Travel commitment
 
-A departure creates a persistent journey whose exact duration is measured by
-the authoritative world clock. The company remains at the origin for command
-validation while the carriage records its route, endpoints, progress, speed,
-condition, and reserved fare. Every 60 Hz travel tick moves that state forward;
-calendar boundaries run the same daily world update used by headless play.
-Arrival changes the company location only after the full duration has elapsed.
+Leaving the yard begins a local road-seeking sequence, not a planned journey.
+No destination, fare, provisions, or danger roll is committed until the player
+turns onto a branch encountered in the world. That choice creates a persistent
+journey whose exact duration is measured by the authoritative world clock. The
+company remains at the origin for command validation while the carriage
+records its route, endpoints, progress, speed, condition, and reserved fare.
+Every 60 Hz travel tick moves that state forward; calendar boundaries run the
+same daily world update used by headless play. Arrival changes the company
+location only after the full duration has elapsed.
 
 Before confirmation the game presents:
 
