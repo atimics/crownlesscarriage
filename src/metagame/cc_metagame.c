@@ -93,6 +93,77 @@ static const char *CourierPurpose(CcCourierKind kind)
     return "sealed news";
 }
 
+static const CcKingdom *KingdomById(const CcSim *sim, CcId id)
+{
+    if (sim == NULL) return NULL;
+    for (int32_t i = 0; i < sim->kingdom_count; ++i) {
+        if (sim->kingdoms[i].id == id) return &sim->kingdoms[i];
+    }
+    return NULL;
+}
+
+static const char *KingdomPressureName(CcKingdomCalling calling)
+{
+    switch (calling) {
+        case CC_KINGDOM_CALLING_ROAD: return "road strain";
+        case CC_KINGDOM_CALLING_IRON: return "garrison strain";
+        case CC_KINGDOM_CALLING_DEEP: return "deep strain";
+        case CC_KINGDOM_CALLING_COUNT: break;
+    }
+    return "realm strain";
+}
+
+static const char *KingdomPressureWord(int32_t pressure)
+{
+    if (pressure < 30) return "steady";
+    if (pressure < 50) return "watchful";
+    if (pressure < 70) return "strained";
+    if (pressure < 85) return "severe";
+    return "breaking";
+}
+
+static const char *KingdomPower(CcKingdomCalling calling)
+{
+    switch (calling) {
+        case CC_KINGDOM_CALLING_ROAD:
+            return "food, markets, maps, and carriage roads";
+        case CC_KINGDOM_CALLING_IRON:
+            return "mines, smiths, fortifications, and armed force";
+        case CC_KINGDOM_CALLING_DEEP:
+            return "capital wealth, old institutions, and dungeon access";
+        case CC_KINGDOM_CALLING_COUNT: break;
+    }
+    return "uncertain claims";
+}
+
+static const char *KingdomDependence(CcKingdomCalling calling)
+{
+    switch (calling) {
+        case CC_KINGDOM_CALLING_ROAD:
+            return "open roads and buyers beyond its borders";
+        case CC_KINGDOM_CALLING_IRON:
+            return "imported food and a paid, supplied garrison";
+        case CC_KINGDOM_CALLING_DEEP:
+            return "contained ruins, safe pilgrim roads, and frontier labour";
+        case CC_KINGDOM_CALLING_COUNT: break;
+    }
+    return "the wider road network";
+}
+
+static const char *KingdomContradiction(CcKingdomCalling calling)
+{
+    switch (calling) {
+        case CC_KINGDOM_CALLING_ROAD:
+            return "It needs peace to prosper, yet can profit from carrying a war.";
+        case CC_KINGDOM_CALLING_IRON:
+            return "It holds the tools of conquest, yet cannot feed those who wield them.";
+        case CC_KINGDOM_CALLING_DEEP:
+            return "Its public order depends on wealth drawn from places it cannot fully control.";
+        case CC_KINGDOM_CALLING_COUNT: break;
+    }
+    return "Its claim is larger than its reach.";
+}
+
 static const char *SituationTarget(const CcSim *sim,
                                    const CcSituation *situation,
                                    char *buffer, size_t capacity)
@@ -147,6 +218,16 @@ static void DescribeLook(const CcMetagame *metagame,
     Append(output, capacity, "\n%s — %s, day %d\n",
            place->name, CcSettlementFunctionName(place->function),
            sim->current_day);
+    const CcKingdom *kingdom = KingdomById(sim, place->kingdom_id);
+    if (kingdom != NULL) {
+        CcKingdomCalling calling = CcSimKingdomCalling(sim, kingdom->id);
+        int32_t pressure = CcSimKingdomPressure(sim, kingdom->id);
+        Append(output, capacity,
+               "%s signs mark this as a %s realm. Its %s stands at %d/100: %s.\n",
+               kingdom->name, CcKingdomCallingName(calling),
+               KingdomPressureName(calling), pressure,
+               KingdomPressureWord(pressure));
+    }
     if (place->stock[CC_GOOD_FOOD] < place->reserve_target[CC_GOOD_FOOD] / 2) {
         Append(output, capacity,
                "Empty baskets line the market. A guard keeps people back from the granary door.\n");
@@ -766,6 +847,64 @@ static void DescribeEconomy(const CcMetagame *metagame,
            sim->iron_ledger_reserve);
 }
 
+static void DescribeKingdoms(const CcMetagame *metagame,
+                             char *output, size_t capacity)
+{
+    const CcSim *sim = &metagame->sim;
+    Append(output, capacity,
+           "THE KINGDOMS OF MEN\n"
+           "A realm holds only what its food, money, orders, and people can reach.\n");
+    for (int32_t kingdom_index = 0;
+         kingdom_index < sim->kingdom_count; ++kingdom_index) {
+        const CcKingdom *kingdom = &sim->kingdoms[kingdom_index];
+        CcKingdomCalling calling = CcSimKingdomCalling(sim, kingdom->id);
+        int32_t pressure = CcSimKingdomPressure(sim, kingdom->id);
+        Append(output, capacity, "\n%s — %s\n",
+               kingdom->name, CcKingdomCallingName(calling));
+        Append(output, capacity, "  Holds: ");
+        int32_t holdings = 0;
+        for (int32_t i = 0; i < sim->settlement_count; ++i) {
+            const CcSettlement *place = &sim->settlements[i];
+            if (place->kingdom_id != kingdom->id) continue;
+            Append(output, capacity, "%s%s (%s)", holdings > 0 ? ", " : "",
+                   place->name, CcSettlementFunctionName(place->function));
+            holdings += 1;
+        }
+        if (holdings == 0) Append(output, capacity, "no settled seat");
+        Append(output, capacity,
+               ".\n  Power: %s.\n  Dependence: %s.\n"
+               "  Contradiction: %s\n"
+               "  Present %s: %d/100, %s. Treasury %" PRId64
+               ", debt %" PRId64 ", legitimacy %d.\n",
+               KingdomPower(calling), KingdomDependence(calling),
+               KingdomContradiction(calling), KingdomPressureName(calling),
+               pressure, KingdomPressureWord(pressure), kingdom->treasury,
+               kingdom->iron_ledger_debt, kingdom->legitimacy);
+        Append(output, capacity, "  Politics (support / material power):\n");
+        for (int32_t i = 0; i < sim->faction_count; ++i) {
+            const CcFaction *faction = &sim->factions[i];
+            if (faction->kingdom_id != kingdom->id) continue;
+            Append(output, capacity, "    %s: %d / %d\n",
+                   CcFactionKindName(faction->kind), faction->support,
+                   faction->power);
+        }
+        Append(output, capacity, "  Relations: ");
+        int32_t relations = 0;
+        for (int32_t other = 0; other < sim->kingdom_count; ++other) {
+            if (other == kingdom_index) continue;
+            Append(output, capacity, "%s%s — %s",
+                   relations > 0 ? "; " : "",
+                   sim->kingdoms[other].name,
+                   CcDiplomaticStateName(
+                       sim->diplomacy[kingdom_index][other]));
+            relations += 1;
+        }
+        Append(output, capacity, ".\n");
+    }
+    Append(output, capacity,
+           "\nThe Crownless Carriage serves no realm. Moving food, tools, weapons, maps, and sealed dispatches changes which of these claims can survive.\n");
+}
+
 static void DescribeWar(const CcMetagame *metagame,
                         char *output, size_t capacity)
 {
@@ -903,7 +1042,7 @@ static void DescribeHelp(char *output, size_t capacity)
 {
     Append(output, capacity,
            "See the world:\n"
-           "  look, causes, people, rumors, charters, roads, notes, cargo, animals, economy, treasures, inequality, war, dragon, status, history [COUNT]\n"
+           "  look, causes, people, rumors, charters, roads, notes, cargo, animals, economy, treasures, inequality, kingdoms, war, dragon, status, history [COUNT]\n"
            "Make commitments:\n"
            "  accept NUMBER, refuse NUMBER, abandon\n"
            "Move goods and people:\n"
@@ -1033,6 +1172,9 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
         DescribeTreasures(metagame, output, output_capacity);
     } else if (strcmp(command, "inequality") == 0) {
         DescribeInequality(metagame, output, output_capacity);
+    } else if (strcmp(command, "kingdoms") == 0 ||
+               strcmp(command, "realms") == 0) {
+        DescribeKingdoms(metagame, output, output_capacity);
     } else if (strcmp(command, "war") == 0) {
         DescribeWar(metagame, output, output_capacity);
     } else if (strcmp(command, "dragon") == 0 && first == NULL) {

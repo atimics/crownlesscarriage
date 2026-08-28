@@ -74,6 +74,9 @@ The architecture proof connects these parts in one running build:
 - A deterministic regional simulation of settlements, kingdoms, factions,
   production, trade, shipments, hunger, security, bandits, monsters, and
   dungeons
+- Three material kingdom identities—Road and Granary, Iron and Wall, and
+  Capital and Deep—with live pressure derived from their holdings, roads,
+  supplies, debts, factions, dungeons, and dragon exposure
 - Fields, farms, mountain deposits, mines, smith recipes, tool wear, rare Gold
   and Gems, bounded and perishable food stores, supplied warfare, and unique
   one-slot crafted treasures
@@ -146,8 +149,8 @@ Run the presentation-free Empty Granary playtest:
 This text-first build uses the same simulation, commands, journeys, situations,
 and SQLite save format as the 3D client. It exists so carriage choices and delayed
 consequences can be tested while camera, movement, and art work continue. Type
-`rumors` for local clues, `treasures` for unique cargo, `help` for commands,
-and `debrief` at the end of a session.
+`rumors` for local clues, `kingdoms` for the three realms, `treasures` for
+unique cargo, `help` for commands, and `debrief` at the end of a session.
 
 The headless build and tests run in CI on macOS and Linux. The full graphical
 client is also built in macOS CI.

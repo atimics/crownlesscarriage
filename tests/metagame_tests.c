@@ -67,6 +67,20 @@ int main(void)
                                sizeof(output)));
     CC_CHECK(strstr(output, "Social fault lines") != NULL);
     CC_CHECK(strstr(output, "war burden") != NULL);
+    CC_CHECK(CcMetagameExecute(&metagame, "kingdoms", output,
+                               sizeof(output)));
+    CC_CHECK(strstr(output, "THE KINGDOMS OF MEN") != NULL);
+    CC_CHECK(strstr(output, "Road and Granary") != NULL);
+    CC_CHECK(strstr(output, "Iron and Wall") != NULL);
+    CC_CHECK(strstr(output, "Capital and Deep") != NULL);
+    CC_CHECK(strstr(output, "Politics (support / material power)") != NULL);
+    CC_CHECK(strstr(output, "Present road strain") != NULL);
+    for (int32_t i = 0; i < metagame.sim.kingdom_count; ++i) {
+        CC_CHECK(strstr(output, metagame.sim.kingdoms[i].name) != NULL);
+    }
+    CC_CHECK(CcMetagameExecute(&metagame, "look", output, sizeof(output)));
+    CC_CHECK(strstr(output, metagame.sim.kingdoms[0].name) != NULL);
+    CC_CHECK(strstr(output, "Road and Granary realm") != NULL);
     CC_CHECK(CcMetagameExecute(&metagame, "war", output, sizeof(output)));
     CC_CHECK(strstr(output, "Frontier roads") != NULL);
     CC_CHECK(strstr(output, "Crown Levy") != NULL);
