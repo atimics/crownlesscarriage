@@ -56,9 +56,16 @@ are not keys to normal roads: an uncharted trip is slower and more dangerous.
 The hidden night road still needs its physical chart, unless its sponsor is
 guiding an accepted commission.
 
-The longer campaign also exposes the goblin and dragon cycle. Type `dragon` to
-see it. Goblins raid for whichever physical stock their lair lacks, return home,
-then carry portable offerings on a second journey to the cave. At the cave, `dragon steal COUNT`
+The longer campaign also exposes the goblin and dragon cycle. Type `goblins`
+to see the Cinder Tithe's members, covenant, cohesion, stores, current
+expedition, and public ash-vault work. Goblins raid for whichever physical
+stock their lair lacks, return home, then carry portable offerings on a second
+journey to the cave. A named target is visible before departure. At that target,
+`goblins warn` prepares the town and `goblins intercept` stops the expedition
+at a material cost. At the goblin lair, `goblins trade food|tools|weapons COUNT`
+supports the community while reducing its dependence on the covenant.
+
+Type `dragon` to inspect the connected dragon state. At the cave, `dragon steal COUNT`
 starts 14 days of omens; `dragon return COUNT` repays the exact debt. The dragon
 does not attack because a town is rich. It attacks only while stolen hoard
 treasure remains unpaid.
@@ -72,8 +79,9 @@ The same `dragon` view shows the Crown Cycle: life stage, current activity,
 age, body condition, derived crown strength, memory, territory, regional
 shadow, and visible eggs. A hungry dragon hunts physical Food and leaves roofs
 alone. Hoard theft damages memory and starts retaliation. A brood consumes
-goblin-lair Food for years, and a posthumous successor is possible only when
-that egg was visible before the parent died.
+goblin-lair Food for years. A posthumous successor requires either a visible
+brood egg or a public dragon-seed project that spends at least twenty years in
+rumor and preparation before it can reveal an egg.
 
 The graphical client exposes the same system. Travel to the dragon's lair,
 walk to the marked cave, and enter it. The cave panel shows Crown Cycle bars,
@@ -157,6 +165,10 @@ Before each round of human tests, verify these hostile cases:
 - Restitution uses existing war-chest, treasury, and household coin.
 - Goblin loot leaves a real market, returns to the lair, and reaches the hoard
   only after a separate tribute journey.
+- A goblin target is visible before departure. Warning reduces the raid;
+  interception stops it and records its social and material costs.
+- Goblin trade moves real goods and market coin while changing covenant and
+  cohesion in opposite directions.
 - Intercepted tribute that never reaches the cave does not belong to the dragon.
 - Goblins defending the cave lose real members and Weapons. Missing equipment
   drives later goblin raids.
@@ -189,8 +201,9 @@ Before each round of human tests, verify these hostile cases:
 - A hunger hunt removes Food but creates no omen, retaliation, lost service, or
   burned town.
 - Brood eggs, tending time, and goblin Food survive save and load.
-- Killing a dragon with no recorded eggs cannot create a successor. If a
-  successor hatches, its event points back to the visible brood.
+- Killing a dragon with no recorded eggs or public dragon-seed project cannot
+  create a successor. If a successor hatches, its event points back to the
+  visible brood or the long-running ash-vault work.
 
 ## Simulation review
 

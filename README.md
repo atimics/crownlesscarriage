@@ -90,8 +90,9 @@ The architecture proof connects these parts in one running build:
   real tolls, border sanctions, or night-road bribes into kingdom treasuries
 - An Iron Ledger of copied monastery accounts: kingdoms borrow deposited coin
   for famine grain and productive Tools, record debt, and make real repayments
-- A goblin lair economy that raids for food or equipment, carries loot home,
-  then carries portable offerings to a persistent dragon
+- A goblin society with covenant, cohesion, a named representative, visible
+  musters, trade, warnings, and interceptions; its lair economy raids for food
+  or equipment, carries loot home, then carries portable offerings to a persistent dragon
   hoard, defends it with real members and Weapons, and raids again to replace
   losses; inequality or debt
   can drive the Ash-Poor to steal, while war can finance a Crown Levy, followed
@@ -99,7 +100,8 @@ The architecture proof connects these parts in one running build:
 - A persistent Crown Cycle: dragons age through whelp, wanderer, Crowned,
   Deep Wyrm, Uncrowned, and Afterdragon states; physical hoards stabilize
   memory, hunger takes livestock instead of burning towns, goblins tend rare
-  broods with real Food, and only a visible surviving egg can found a successor
+  broods with real Food, while a successor requires a visible surviving egg or
+  a public, twenty-year goblin dragon-seed project
 - A playable dragon cave in the graphical client, with live Crown Cycle state,
   hoard theft and exact restitution, visible broods and Afterdragon remains,
   and a chance to intercept physical tribute before the dragon owns it
