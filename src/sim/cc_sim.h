@@ -113,6 +113,13 @@ typedef enum CcFactionKind {
     CC_FACTION_COMMONS
 } CcFactionKind;
 
+typedef enum CcKingdomCalling {
+    CC_KINGDOM_CALLING_ROAD,
+    CC_KINGDOM_CALLING_IRON,
+    CC_KINGDOM_CALLING_DEEP,
+    CC_KINGDOM_CALLING_COUNT
+} CcKingdomCalling;
+
 typedef enum CcDungeonState {
     CC_DUNGEON_SEALED,
     CC_DUNGEON_DISTURBED,
@@ -805,6 +812,8 @@ const char *CcGoodName(CcGood good);
 const char *CcSettlementFunctionName(CcSettlementFunction function);
 const char *CcSettlementSizeName(CcSettlementSize size);
 const char *CcServiceName(CcServiceKind service);
+const char *CcFactionKindName(CcFactionKind kind);
+const char *CcKingdomCallingName(CcKingdomCalling calling);
 const char *CcBanditCampSizeName(CcBanditCampSize size);
 const char *CcBanditRaidPhaseName(CcBanditRaidPhase phase);
 const char *CcDungeonStateName(CcDungeonState state);
@@ -858,6 +867,8 @@ bool CcSimStartServiceProject(CcSim *sim, CcId settlement_id,
                               char *error, size_t error_capacity);
 bool CcSimKingdomsAtWar(const CcSim *sim, CcId first, CcId second);
 bool CcSimKingdomsAllied(const CcSim *sim, CcId first, CcId second);
+CcKingdomCalling CcSimKingdomCalling(const CcSim *sim, CcId kingdom_id);
+int32_t CcSimKingdomPressure(const CcSim *sim, CcId kingdom_id);
 const char *CcDiplomaticStateName(CcDiplomaticState state);
 bool CcSimRouteCrossesWarBorder(const CcSim *sim, CcId route_id);
 int32_t CcBanditCampServiceCapacity(CcBanditCampSize size);
