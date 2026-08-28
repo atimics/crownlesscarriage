@@ -3613,6 +3613,9 @@ void CcLocalCourseRaiseAlarmNear(CcLocalCourse *course,
         course->raider_initial_resolve : 78;
     course->last_outcome = CC_COMBAT_OUTCOME_NONE;
     course->last_attacker_team = CC_COMBAT_NEUTRAL;
+    course->last_defender_team = CC_COMBAT_NEUTRAL;
+    course->last_health_damage = 0.0f;
+    course->last_posture_damage = 0.0f;
     course->combat_event_seconds = 0.0f;
     for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
         CcLocalCourseRunner *runner = &course->runners[i];
@@ -4020,11 +4023,20 @@ static CcLocalAgent *CourseClosestDefender(CcLocalCourse *course,
 
 static void CourseRecordOutcome(CcLocalCourse *course,
                                 const CcLocalAgent *attacker,
+                                const CcLocalAgent *defender,
+                                float previous_health,
+                                float previous_posture,
                                 CcCombatOutcome outcome)
 {
     if (outcome == CC_COMBAT_OUTCOME_NONE) return;
     course->last_outcome = outcome;
     course->last_attacker_team = attacker->combat.team;
+    course->last_defender_team = defender != NULL ?
+        defender->combat.team : CC_COMBAT_NEUTRAL;
+    course->last_health_damage = defender != NULL ?
+        fmaxf(0.0f, previous_health - defender->combat.health) : 0.0f;
+    course->last_posture_damage = defender != NULL ?
+        fmaxf(0.0f, previous_posture - defender->combat.posture) : 0.0f;
     course->combat_event_seconds = 0.72f;
 }
 
@@ -4033,7 +4045,11 @@ static void CourseResolveImpact(CcLocalCourse *course,
                                 CcLocalAgent *defender)
 {
     if (!CcHumanoidGaitConsumeStrikeImpact(&attacker->humanoid)) return;
-    CourseRecordOutcome(course, attacker,
+    float previous_health = defender != NULL ? defender->combat.health : 0.0f;
+    float previous_posture = defender != NULL ?
+        defender->combat.posture : 0.0f;
+    CourseRecordOutcome(course, attacker, defender,
+                        previous_health, previous_posture,
                         CcLocalCombatResolveStrike(attacker, defender));
 }
 

@@ -1493,6 +1493,22 @@ static void TestTargetDrivenCombat(void)
                           &player, CC_COMBAT_SKILL_SUNDER));
         exit(1);
     }
+    bool damaging_outcome =
+        course.last_outcome != CC_COMBAT_OUTCOME_NONE &&
+        course.last_outcome != CC_COMBAT_OUTCOME_MISS;
+    if (course.last_outcome == CC_COMBAT_OUTCOME_NONE ||
+        course.last_attacker_team == CC_COMBAT_NEUTRAL ||
+        course.last_defender_team == CC_COMBAT_NEUTRAL ||
+        (damaging_outcome && course.last_health_damage < 0.5f &&
+         course.last_posture_damage < 0.5f)) {
+        (void)fprintf(stderr,
+                      "combat feedback event was incomplete: outcome %d attacker %d defender %d health %.1f posture %.1f\n",
+                      course.last_outcome, course.last_attacker_team,
+                      course.last_defender_team,
+                      course.last_health_damage,
+                      course.last_posture_damage);
+        exit(1);
+    }
     CcLocalCourseClearPlayerTarget(&player);
     if (player.combat.target_index != -1 || player.combat.focus_valid ||
         player.combat.queued_skill != -1 || player.humanoid.guard_requested) {
