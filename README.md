@@ -216,10 +216,10 @@ track.
 In the map case, use the arrow keys or click a sheet to select it. Press `B` to
 buy a local chart, `S` to sell one, or `A` to store or retrieve it at the
 Gloamgate archive. The team drives routine departure, road, and arrival
-sections automatically.
-Use `W`, `A`, `S`, and `D` to take the reins, or `Space` to stop. A safe route
-also offers `Finish safe trip`, while dangerous routes still stop for their
-actual decision.
+sections automatically. Use `W` to speed up, `S` to slow down, or `Space` to
+pause. Press `Enter` to finish a safe trip or advance a dangerous trip to its
+next real decision. Walking to the edge of town never summons the carriage;
+start every departure from the carriage yard.
 
 Normal play keeps one campaign window active at a time. Clean exits and manual
 saves remember the hero's exact street or market position as well as the

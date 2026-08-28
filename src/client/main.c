@@ -617,16 +617,12 @@ static ConvoyUpdateResult UpdateDrivenConvoy(LocalState *local,
         convoy->pace, convoy->phase == CC_LOCAL_CONVOY_ROAD,
         urge, rein_in, stopped, delta_time);
 
-    float steering = 0.0f;
-    if (IsKeyDown(KEY_A) || IsKeyDown(KEY_LEFT)) steering -= 1.0f;
-    if (IsKeyDown(KEY_D) || IsKeyDown(KEY_RIGHT)) steering += 1.0f;
-    float lane_limit = convoy->phase == CC_LOCAL_CONVOY_ROAD ? 1.35f : 0.42f;
-    convoy->lateral_offset += steering * delta_time * 1.30f;
-    if (convoy->lateral_offset < -lane_limit) {
-        convoy->lateral_offset = -lane_limit;
-    }
-    if (convoy->lateral_offset > lane_limit) {
-        convoy->lateral_offset = lane_limit;
+    float centering_step = delta_time * 1.30f;
+    if (fabsf(convoy->lateral_offset) <= centering_step) {
+        convoy->lateral_offset = 0.0f;
+    } else {
+        convoy->lateral_offset -= copysignf(
+            centering_step, convoy->lateral_offset);
     }
 
     if (convoy->phase == CC_LOCAL_CONVOY_DEPARTING ||
@@ -681,8 +677,18 @@ static void RepositionHero(LocalState *local, Vector2 position,
                            bool market_interior)
 {
     CcAthleticProfile athletics = local->agent.athletics;
+    CcCombatState combat = local->agent.combat;
+    CcNpcAppearance appearance = local->agent.appearance;
+    CcMorphologyPreset morphology = local->agent.morphology;
+    Color tunic_color = local->agent.tunic_color;
+    bool crowned = local->agent.crowned;
     CcLocalAgentInit(&local->agent, position, market_interior);
     local->agent.athletics = athletics;
+    local->agent.combat = combat;
+    local->agent.appearance = appearance;
+    local->agent.tunic_color = tunic_color;
+    local->agent.crowned = crowned;
+    CcLocalAgentSetMorphology(&local->agent, morphology, market_interior);
     CcLocalCombatSetTeam(&local->agent, CC_COMBAT_PLAYER);
     local->pending_interaction = CONTEXT_ACTION_NONE;
 }
@@ -1014,26 +1020,40 @@ static ContextActionKind InteractionForCommandPoint(const LocalState *local)
     }
     Vector2 point = {local->agent.command_point.x,
                      local->agent.command_point.z};
-    if (local->market_interior) {
-        return GridDistance(point, INTERIOR_EXIT) < 3.0f ?
-            CONTEXT_ACTION_LEAVE_MARKET : CONTEXT_ACTION_NONE;
+    CcClientClickIntent intent = CcClientClickIntentForDistances(
+        local->market_interior,
+        GridDistance(point, INTERIOR_EXIT),
+        GridDistance(point, LOCAL_NOTICE),
+        GridDistance(point, LOCAL_CARRIAGE),
+        GridDistance(point, LOCAL_DRAGON_CAVE),
+        GridDistance(point, LOCAL_MARKET));
+    switch (intent) {
+        case CC_CLIENT_CLICK_LEAVE_INTERIOR:
+            return CONTEXT_ACTION_LEAVE_MARKET;
+        case CC_CLIENT_CLICK_OPEN_PROMISES:
+            return CONTEXT_ACTION_OPEN_PROMISES;
+        case CC_CLIENT_CLICK_DRIVE_OUT:
+            return CONTEXT_ACTION_CHOOSE_ROAD;
+        case CC_CLIENT_CLICK_OPEN_DRAGON_CAVE:
+            return CONTEXT_ACTION_OPEN_DRAGON_CAVE;
+        case CC_CLIENT_CLICK_ENTER_INTERIOR:
+            return CONTEXT_ACTION_ENTER_MARKET;
+        case CC_CLIENT_CLICK_NONE:
+        default:
+            return CONTEXT_ACTION_NONE;
     }
-    if (GridDistance(point, LOCAL_NOTICE) < 3.0f) {
-        return CONTEXT_ACTION_OPEN_PROMISES;
+}
+
+static const char *PendingInteractionName(ContextActionKind kind)
+{
+    switch (kind) {
+        case CONTEXT_ACTION_ENTER_MARKET: return "the market door";
+        case CONTEXT_ACTION_LEAVE_MARKET: return "the exit";
+        case CONTEXT_ACTION_CHOOSE_ROAD: return "the carriage";
+        case CONTEXT_ACTION_OPEN_PROMISES: return "the promise board";
+        case CONTEXT_ACTION_OPEN_DRAGON_CAVE: return "the cave entrance";
+        default: return NULL;
     }
-    if (GridDistance(point, LOCAL_CARRIAGE) < 4.0f) {
-        return CONTEXT_ACTION_CHOOSE_ROAD;
-    }
-    if (GridDistance(point, LOCAL_DRAGON_CAVE) < 5.0f) {
-        return CONTEXT_ACTION_OPEN_DRAGON_CAVE;
-    }
-    if (GridDistance(point, LOCAL_DUNGEON) < 5.0f) {
-        return CONTEXT_ACTION_EXPEDITION;
-    }
-    if (GridDistance(point, LOCAL_MARKET) < 7.0f) {
-        return CONTEXT_ACTION_ENTER_MARKET;
-    }
-    return CONTEXT_ACTION_NONE;
 }
 
 static const CcDungeon *DungeonAtSettlement(const CcSim *sim, CcId settlement_id)
@@ -1309,7 +1329,7 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
             DrawBar(content_x, 145, 74, "APPROACH", progress, TEAL);
             DrawBar(content_x, 166, 74, "PACE",
                     (int32_t)lroundf(local->convoy.pace * 100.0f), CC_GOLD);
-            CcOverlayDrawText("AUTO DRIVE  /  WASD REINS  /  SPACE STOP",
+            CcOverlayDrawText("W FASTER  /  S SLOWER  /  SPACE PAUSE",
                               content_x, 205, 7, MUTED);
             return;
         }
@@ -1331,7 +1351,7 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
             DrawBar(content_x, 145, 74, "PROGRESS", progress, TEAL);
             DrawBar(content_x, 166, 74, "PACE",
                     (int32_t)lroundf(local->convoy.pace * 100.0f), CC_GOLD);
-            CcOverlayDrawText("AUTO DRIVE  /  WASD REINS  /  SPACE STOP",
+            CcOverlayDrawText("W FASTER  /  S SLOWER  /  SPACE PAUSE",
                               content_x, 205, 7, MUTED);
             return;
         }
@@ -1983,9 +2003,16 @@ static ContextActionSet BuildContextActions(
         bool safe_journey = sim->journey.active && sim->journey.danger <= 30;
         bool parking = !sim->journey.active &&
             local->convoy.phase == CC_LOCAL_CONVOY_ARRIVING;
-        if (safe_journey || parking) {
-            AddContextAction(&set, CONTEXT_ACTION_SKIP_TRAVEL,
-                             parking ? "Park carriage" : "Finish safe trip");
+        if (sim->journey.active || parking) {
+            AddDetailedContextAction(
+                &set, CONTEXT_ACTION_SKIP_TRAVEL,
+                parking ? "Park carriage" :
+                safe_journey ? "Finish safe trip" : "Advance to next event",
+                "ENTER",
+                parking ? "END ARRIVAL" :
+                safe_journey ? "COMPLETE ROUTINE ROAD" :
+                               "STOP AT THE NEXT DECISION",
+                true, false);
         }
         return set;
     }
@@ -2019,10 +2046,6 @@ static ContextActionSet BuildContextActions(
     }
 
     Vector2 position = LocalPosition(local);
-    const CcSettlement *local_place = CcSimSettlement(
-        sim, sim->player.location_id);
-    const CcLocalPlaceProfile *local_profile =
-        CcLocalPlaceProfileForSettlement(local_place);
     if (local->market_interior) {
         if (GridDistance(position, INTERIOR_COUNTER) < 2.25f) {
             CcGood good = ContextCargoGood(sim);
@@ -2055,19 +2078,10 @@ static ContextActionSet BuildContextActions(
                                    sim->player.cargo[cargo_good]));
                 }
             }
-        } else if (GridDistance(position, INTERIOR_EXIT) < 1.25f) {
-            AddContextAction(&set, CONTEXT_ACTION_LEAVE_MARKET,
-                             TextFormat("Leave %s",
-                                        local_profile->primary_hall));
         }
         return set;
     }
 
-    if (GridDistance(position, LOCAL_MARKET) < 1.30f) {
-        AddContextAction(&set, CONTEXT_ACTION_ENTER_MARKET,
-                         TextFormat("Enter %s",
-                                    local_profile->primary_hall));
-    }
     if (GridDistance(position, LOCAL_CARRIAGE) < 1.35f) {
         AddContextAction(&set, CONTEXT_ACTION_CHOOSE_ROAD, "Drive out");
         AddContextAction(&set, CONTEXT_ACTION_OPEN_MAP, "Open map case");
@@ -2085,8 +2099,9 @@ static ContextActionSet BuildContextActions(
     }
     if (dungeon != NULL &&
         GridDistance(position, LOCAL_DUNGEON) < 1.35f) {
-        AddContextAction(&set, CONTEXT_ACTION_EXPEDITION,
-                         "Enter the mine");
+        AddDetailedContextAction(
+            &set, CONTEXT_ACTION_EXPEDITION,
+            "Mount expedition", "E", "COMMITS ONE DAY", true, false);
     }
     return set;
 }
@@ -3485,7 +3500,16 @@ static void HandleExpedition(CcJournal *journal, CcSim *sim,
         .target_id = dungeon->id,
         .dungeon_state = next
     };
-    (void)ApplyCommand(journal, sim, expedition, message, message_capacity);
+    if (!ApplyCommand(journal, sim, expedition, message, message_capacity)) {
+        return;
+    }
+    char error[256];
+    bool advanced = journal != NULL ?
+        CcJournalAdvanceDays(journal, sim, 1, error, sizeof(error)) :
+        (CcSimAdvanceDays(sim, 1), true);
+    (void)snprintf(message, message_capacity, "%s",
+                   advanced ? "Expedition completed. One day passed." :
+                              error);
 }
 
 static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
@@ -3687,8 +3711,11 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                     .kind = CC_COMMAND_ACCEPT_SITUATION,
                     .target_id = situation->id
                 };
-                (void)ApplyCommand(*journal, sim, accept, message,
-                                   message_capacity);
+                if (ApplyCommand(*journal, sim, accept, message,
+                                 message_capacity)) {
+                    *view = *return_view;
+                    return;
+                }
             } else {
                 (void)snprintf(message, message_capacity,
                                "Visit the local board to make that promise.");
@@ -3793,7 +3820,8 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             return;
         }
         if (local->journey_travel_active) {
-            if (context_action == CONTEXT_ACTION_SKIP_TRAVEL) {
+            if (context_action == CONTEXT_ACTION_SKIP_TRAVEL ||
+                ClientKeyPressed(KEY_ENTER)) {
                 char error[256];
                 bool advanced = true;
                 while (advanced && sim->journey.active &&
@@ -4019,9 +4047,15 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                         local->course.alarm_active) {
                         CcLocalCourseClearPlayerTarget(&local->agent);
                     }
+                    const char *interaction = PendingInteractionName(
+                        (ContextActionKind)local->pending_interaction);
                     const char *navigation =
                         CcLocalAgentNavigationName(&local->agent);
-                    if (navigation != NULL) {
+                    if (interaction != NULL) {
+                        (void)snprintf(
+                            message, message_capacity,
+                            "Walking to %s.", interaction);
+                    } else if (navigation != NULL) {
                         (void)snprintf(
                             message, message_capacity,
                             "Going to %s.",
@@ -4061,12 +4095,9 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         }
         if (!local->market_interior &&
             CcLocalAgentConsumeWorldExit(&local->agent)) {
-            *selected = FirstOutgoingRouteIndex(sim);
-            BeginRoadChoiceApproachState(local, true);
-            *view = VIEW_LOCAL;
             (void)snprintf(
                 message, message_capacity,
-                "The carriage leaves town and follows the first track.");
+                "That road is for the carriage. Return to the yard to drive out.");
             return;
         }
         if (local->journey_combat_active &&

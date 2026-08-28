@@ -44,6 +44,31 @@ int main(void)
     CC_CHECK(!CcClientPromiseCanBeAccepted(false, 2.0f));
     CC_CHECK(!CcClientPromiseCanBeAccepted(true, 1.0f));
 
+    CC_CHECK(CcClientClickIntentForDistances(
+                 true, 1.24f, 99.0f, 99.0f, 99.0f, 99.0f) ==
+             CC_CLIENT_CLICK_LEAVE_INTERIOR);
+    CC_CHECK(CcClientClickIntentForDistances(
+                 true, 1.25f, 0.2f, 0.2f, 0.2f, 0.2f) ==
+             CC_CLIENT_CLICK_NONE);
+    CC_CHECK(CcClientClickIntentForDistances(
+                 false, 99.0f, 1.14f, 99.0f, 99.0f, 99.0f) ==
+             CC_CLIENT_CLICK_OPEN_PROMISES);
+    CC_CHECK(CcClientClickIntentForDistances(
+                 false, 99.0f, 99.0f, 1.34f, 99.0f, 99.0f) ==
+             CC_CLIENT_CLICK_DRIVE_OUT);
+    CC_CHECK(CcClientClickIntentForDistances(
+                 false, 99.0f, 99.0f, 99.0f, 1.34f, 99.0f) ==
+             CC_CLIENT_CLICK_OPEN_DRAGON_CAVE);
+    CC_CHECK(CcClientClickIntentForDistances(
+                 false, 99.0f, 99.0f, 99.0f, 99.0f, 1.29f) ==
+             CC_CLIENT_CLICK_ENTER_INTERIOR);
+    CC_CHECK(CcClientClickIntentForDistances(
+                 false, 99.0f, 99.0f, 99.0f, 99.0f, 1.30f) ==
+             CC_CLIENT_CLICK_NONE);
+    CC_CHECK(CcClientClickIntentForDistances(
+                 false, 99.0f, 99.0f, 99.0f, 99.0f, 6.0f) ==
+             CC_CLIENT_CLICK_NONE);
+
     puts("Client policy tests passed");
     return 0;
 }

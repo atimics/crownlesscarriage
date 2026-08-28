@@ -207,9 +207,11 @@ sequence:
 
 1. The carriage waits in the town yard while its two horses rest beside the
    hitch rail.
-2. Choosing a road hitches the team and puts the player on the reins.
-3. The player controls pace with `W`, reins in with `S` or `Space`, and steers
-   within the road lane with `A` and `D`.
+2. Choosing a road at the carriage yard hitches the team. Walking to a town
+   boundary does not summon or move the carriage.
+3. The player changes playback pace with `W`, slows with `S`, and pauses with
+   `Space`. `Enter` advances to the next real decision. The road view does not
+   claim to offer steering when route movement is automatic.
 4. The town road, gate approach, and route segment play as one movement. The
    route clock does not advance until the carriage clears the gate.
 5. A road interruption keeps the carriage at its saved route progress instead
