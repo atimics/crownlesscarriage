@@ -5,6 +5,7 @@
 #include "sim/cc_sim.h"
 
 #include "raylib.h"
+#include "GLFW/glfw3.h"
 
 #include <inttypes.h>
 #include <math.h>
@@ -108,6 +109,10 @@ typedef enum ContextActionKind {
     CONTEXT_ACTION_REPAIR_ROUTE,
     CONTEXT_ACTION_PAY_COLLECTOR,
     CONTEXT_ACTION_RETURN_TO_CHOICE,
+    CONTEXT_ACTION_JUMP,
+    CONTEXT_ACTION_RAISE_ALARM,
+    CONTEXT_ACTION_BASIC_STRIKE,
+    CONTEXT_ACTION_TOGGLE_GUARD,
     CONTEXT_ACTION_SKILL_CRUSHING,
     CONTEXT_ACTION_SKILL_SUNDER,
     CONTEXT_ACTION_SKILL_SECOND_WIND
@@ -119,9 +124,83 @@ typedef struct ContextAction {
 } ContextAction;
 
 typedef struct ContextActionSet {
-    ContextAction items[3];
+    ContextAction items[5];
     int32_t count;
 } ContextActionSet;
+
+typedef enum CommandActionKind {
+    COMMAND_ACTION_NONE = 0,
+    COMMAND_ACTION_QUESTS,
+    COMMAND_ACTION_LEDGER,
+    COMMAND_ACTION_MAP,
+    COMMAND_ACTION_SAVE,
+    COMMAND_ACTION_COUNT
+} CommandActionKind;
+
+/* Accessibility tools can post a complete press/release pair between two
+   raylib frames. Keep the GLFW press edge so fast synthetic input is handled
+   on the next gameplay update instead of disappearing between polls. */
+static GLFWkeyfun previous_key_callback = NULL;
+static GLFWmousebuttonfun previous_mouse_button_callback = NULL;
+static bool queued_key_press[GLFW_KEY_LAST + 1] = {0};
+static bool queued_mouse_button_press[GLFW_MOUSE_BUTTON_LAST + 1] = {0};
+static bool queued_save_shortcut = false;
+
+static void ClientKeyCallback(GLFWwindow *window, int key, int scancode,
+                              int action, int mods)
+{
+    if (previous_key_callback != NULL) {
+        previous_key_callback(window, key, scancode, action, mods);
+    }
+    if (action != GLFW_PRESS) return;
+    if (key >= 0 && key <= GLFW_KEY_LAST) queued_key_press[key] = true;
+    if (key == GLFW_KEY_S &&
+        (mods & (GLFW_MOD_CONTROL | GLFW_MOD_SUPER)) != 0) {
+        queued_save_shortcut = true;
+    }
+}
+
+static void ClientMouseButtonCallback(GLFWwindow *window, int button,
+                                      int action, int mods)
+{
+    if (previous_mouse_button_callback != NULL) {
+        previous_mouse_button_callback(window, button, action, mods);
+    }
+    if (action == GLFW_PRESS && button >= 0 &&
+        button <= GLFW_MOUSE_BUTTON_LAST) {
+        queued_mouse_button_press[button] = true;
+    }
+}
+
+static void ClientInputInstall(void)
+{
+    GLFWwindow *window = glfwGetCurrentContext();
+    if (window == NULL) return;
+    previous_key_callback = glfwSetKeyCallback(window, ClientKeyCallback);
+    previous_mouse_button_callback = glfwSetMouseButtonCallback(
+        window, ClientMouseButtonCallback);
+}
+
+static bool ClientKeyPressed(int32_t key)
+{
+    bool queued = key >= 0 && key <= GLFW_KEY_LAST && queued_key_press[key];
+    return IsKeyPressed(key) || queued;
+}
+
+static bool ClientMouseButtonPressed(int32_t button)
+{
+    bool queued = button >= 0 && button <= GLFW_MOUSE_BUTTON_LAST &&
+                  queued_mouse_button_press[button];
+    return IsMouseButtonPressed(button) || queued;
+}
+
+static void ClientInputClearPressed(void)
+{
+    (void)memset(queued_key_press, 0, sizeof(queued_key_press));
+    (void)memset(queued_mouse_button_press, 0,
+                 sizeof(queued_mouse_button_press));
+    queued_save_shortcut = false;
+}
 
 static const Vector2 LOCAL_MARKET = {CC_LOCAL_MARKET_X, CC_LOCAL_MARKET_Z};
 static const Vector2 LOCAL_CARRIAGE = {CC_LOCAL_CARRIAGE_X,
@@ -850,7 +929,10 @@ static CcId RouteOtherEnd(const CcRoute *route, CcId here)
 static void AddContextAction(ContextActionSet *set, ContextActionKind kind,
                              const char *label)
 {
-    if (set == NULL || label == NULL || set->count >= 3) return;
+    if (set == NULL || label == NULL ||
+        set->count >= (int32_t)(sizeof(set->items) / sizeof(set->items[0]))) {
+        return;
+    }
     ContextAction *action = &set->items[set->count++];
     action->kind = kind;
     (void)snprintf(action->label, sizeof(action->label), "%s", label);
@@ -940,6 +1022,8 @@ static ContextActionSet BuildContextActions(
     }
     if (local->journey_combat_active ||
         (!local->market_interior && local->course.alarm_active)) {
+        AddContextAction(&set, CONTEXT_ACTION_BASIC_STRIKE, "Attack");
+        AddContextAction(&set, CONTEXT_ACTION_TOGGLE_GUARD, "Guard");
         AddContextAction(&set, CONTEXT_ACTION_SKILL_CRUSHING,
                          "Crushing blow");
         AddContextAction(&set, CONTEXT_ACTION_SKILL_SUNDER, "Sunder");
@@ -1005,6 +1089,10 @@ static ContextActionSet BuildContextActions(
         AddContextAction(&set, CONTEXT_ACTION_EXPEDITION,
                          "Enter the mine");
     }
+    if (local->agent.morphology == CC_MORPHOLOGY_BIPED) {
+        AddContextAction(&set, CONTEXT_ACTION_JUMP, "Jump");
+    }
+    AddContextAction(&set, CONTEXT_ACTION_RAISE_ALARM, "Raise alarm");
     return set;
 }
 
@@ -1021,11 +1109,15 @@ static Rectangle ContextActionBounds(int32_t index, int32_t count)
 static Color ContextActionColor(ContextActionKind kind)
 {
     if (kind == CONTEXT_ACTION_FIGHT ||
-        kind == CONTEXT_ACTION_ABANDON_PROMISE) return DANGER;
+        kind == CONTEXT_ACTION_ABANDON_PROMISE ||
+        kind == CONTEXT_ACTION_RAISE_ALARM) return DANGER;
     if (kind == CONTEXT_ACTION_ACCEPT_PROMISE ||
         kind == CONTEXT_ACTION_TRAVEL ||
         kind == CONTEXT_ACTION_DELIVER_CARGO ||
-        kind == CONTEXT_ACTION_ENTER_MARKET) return TEAL;
+        kind == CONTEXT_ACTION_ENTER_MARKET ||
+        kind == CONTEXT_ACTION_JUMP) return TEAL;
+    if (kind == CONTEXT_ACTION_BASIC_STRIKE ||
+        kind == CONTEXT_ACTION_TOGGLE_GUARD) return CC_GOLD;
     if (kind == CONTEXT_ACTION_SKILL_CRUSHING ||
         kind == CONTEXT_ACTION_SKILL_SUNDER ||
         kind == CONTEXT_ACTION_SKILL_SECOND_WIND) return CC_VIOLET;
@@ -1066,7 +1158,7 @@ static ContextActionKind PressedContextAction(
     const CcSim *sim, const LocalState *local, ClientView view,
     int32_t selected, int32_t selected_situation)
 {
-    if (!IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+    if (!ClientMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         return CONTEXT_ACTION_NONE;
     }
     ContextActionSet actions = BuildContextActions(
@@ -1079,6 +1171,75 @@ static ContextActionKind PressedContextAction(
         }
     }
     return CONTEXT_ACTION_NONE;
+}
+
+static Rectangle CommandActionBounds(CommandActionKind action)
+{
+    const float width = 112.0f;
+    const float gap = 8.0f;
+    int32_t index = (int32_t)action - 1;
+    return (Rectangle){22.0f + (float)index * (width + gap),
+                       47.0f, width, 28.0f};
+}
+
+static const char *CommandActionLabel(CommandActionKind action)
+{
+    switch (action) {
+        case COMMAND_ACTION_QUESTS: return "Quests";
+        case COMMAND_ACTION_LEDGER: return "Ledger";
+        case COMMAND_ACTION_MAP: return "Map";
+        case COMMAND_ACTION_SAVE: return "Save";
+        default: return "";
+    }
+}
+
+static bool CommandActionActive(CommandActionKind action, ClientView view)
+{
+    return (action == COMMAND_ACTION_QUESTS && view == VIEW_SITUATIONS) ||
+           (action == COMMAND_ACTION_LEDGER && view == VIEW_LEDGER) ||
+           (action == COMMAND_ACTION_MAP && view == VIEW_MAP);
+}
+
+static void DrawCommandBar(ClientView view)
+{
+    Vector2 mouse = GetMousePosition();
+    for (int32_t value = COMMAND_ACTION_QUESTS;
+         value < COMMAND_ACTION_COUNT; ++value) {
+        CommandActionKind action = (CommandActionKind)value;
+        Rectangle bounds = CommandActionBounds(action);
+        bool hover = CheckCollisionPointRec(mouse, bounds);
+        bool active = CommandActionActive(action, view);
+        Color accent = action == COMMAND_ACTION_SAVE ? TEAL : CC_GOLD;
+        DrawRectangleRounded(
+            bounds, 0.18f, 5,
+            hover || active ? PANEL_HOVER : Fade(PANEL_DEEP, 0.96f));
+        DrawRectangleRoundedLinesEx(
+            bounds, 0.18f, 5, hover || active ? 2.0f : 1.0f,
+            Fade(accent, hover || active ? 0.96f : 0.62f));
+        const char *label = CommandActionLabel(action);
+        int width = CcOverlayMeasureText(label, 10);
+        CcOverlayDrawText(label,
+                          (int)(bounds.x +
+                                (bounds.width - (float)width) * 0.5f),
+                          (int)bounds.y + 9, 10,
+                          hover || active ? accent : INK);
+    }
+}
+
+static CommandActionKind PressedCommandAction(void)
+{
+    if (!ClientMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        return COMMAND_ACTION_NONE;
+    }
+    Vector2 mouse = GetMousePosition();
+    for (int32_t value = COMMAND_ACTION_QUESTS;
+         value < COMMAND_ACTION_COUNT; ++value) {
+        CommandActionKind action = (CommandActionKind)value;
+        if (CheckCollisionPointRec(mouse, CommandActionBounds(action))) {
+            return action;
+        }
+    }
+    return COMMAND_ACTION_NONE;
 }
 
 static Vector2 ChartEndpoint(const CcMap *map, bool far_end)
@@ -2078,21 +2239,38 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                         float delta_time,
                         const char *save_path, char *message, size_t message_capacity)
 {
+    CommandActionKind command_action = PressedCommandAction();
     ContextActionKind context_action = PressedContextAction(
         sim, local, *view, *selected, *selected_situation);
+    bool control = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL) ||
+                   IsKeyDown(KEY_LEFT_SUPER) || IsKeyDown(KEY_RIGHT_SUPER);
+    if (command_action == COMMAND_ACTION_SAVE || ClientKeyPressed(KEY_F5) ||
+        queued_save_shortcut || (control && ClientKeyPressed(KEY_S))) {
+        char error[256];
+        bool saved = false;
+        if (*journal == NULL) {
+            *journal = CcJournalStart(save_path, sim, error, sizeof(error));
+            saved = *journal != NULL;
+        } else {
+            saved = CcJournalCheckpoint(*journal, sim, error, sizeof(error));
+        }
+        (void)snprintf(message, message_capacity, "%s",
+                       saved ? "Game saved." : error);
+        return;
+    }
     if (*view == VIEW_ENCOUNTER) {
         if (!sim->journey.active ||
             sim->journey.phase != CC_JOURNEY_PHASE_BLOCKED) {
             *view = VIEW_LOCAL;
             return;
         }
-        if (IsKeyPressed(KEY_ONE) ||
+        if (ClientKeyPressed(KEY_ONE) ||
             context_action == CONTEXT_ACTION_FIGHT) {
             BeginRoadLocalState(local, true);
             *view = VIEW_LOCAL;
             (void)snprintf(message, message_capacity,
                            "Defeat the bandits.");
-        } else if (IsKeyPressed(KEY_TWO) ||
+        } else if (ClientKeyPressed(KEY_TWO) ||
                    context_action == CONTEXT_ACTION_PAY) {
             BeginRoadLocalState(local, false);
             *view = VIEW_LOCAL;
@@ -2106,7 +2284,8 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         *view = *return_view;
         return;
     }
-    if (IsKeyPressed(KEY_TAB)) {
+    if (ClientKeyPressed(KEY_TAB) ||
+        command_action == COMMAND_ACTION_LEDGER) {
         if (*view == VIEW_LEDGER) {
             *view = *return_view;
         } else {
@@ -2118,14 +2297,16 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
     bool road_local = local->journey_travel_active ||
                       local->journey_combat_active ||
                       local->journey_parley_active;
-    if (IsKeyPressed(KEY_Q) && road_local) {
+    bool quests_requested = ClientKeyPressed(KEY_Q) ||
+                            command_action == COMMAND_ACTION_QUESTS;
+    if (quests_requested && road_local) {
         (void)snprintf(message, message_capacity,
                        local->journey_travel_active ?
                            "Quests are unavailable while travelling." :
                            "Finish the fight first.");
         return;
     }
-    if (IsKeyPressed(KEY_Q)) {
+    if (quests_requested) {
         if (*view == VIEW_SITUATIONS) {
             *view = *return_view;
         } else {
@@ -2137,14 +2318,16 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         }
         return;
     }
-    if (IsKeyPressed(KEY_M) && road_local) {
+    bool map_requested = ClientKeyPressed(KEY_M) ||
+                         command_action == COMMAND_ACTION_MAP;
+    if (map_requested && road_local) {
         (void)snprintf(message, message_capacity,
                        local->journey_travel_active ?
                            "The map is unavailable while travelling." :
                            "Finish the fight first.");
         return;
     }
-    if (IsKeyPressed(KEY_M)) {
+    if (map_requested) {
         if (*view == VIEW_MAP) {
             *view = VIEW_LOCAL;
         } else if (*view == VIEW_LOCAL && !local->market_interior &&
@@ -2161,18 +2344,18 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         if (SelectedActiveSituation(sim, *selected_situation) == NULL) {
             *selected_situation = FirstActiveSituationIndex(sim);
         }
-        if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_RIGHT) ||
+        if (ClientKeyPressed(KEY_DOWN) || ClientKeyPressed(KEY_RIGHT) ||
             context_action == CONTEXT_ACTION_NEXT_PROMISE) {
             *selected_situation = StepActiveSituationIndex(
                 sim, *selected_situation, 1);
         }
-        if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_LEFT)) {
+        if (ClientKeyPressed(KEY_UP) || ClientKeyPressed(KEY_LEFT)) {
             *selected_situation = StepActiveSituationIndex(
                 sim, *selected_situation, -1);
         }
         const CcSituation *situation = SelectedActiveSituation(
             sim, *selected_situation);
-        if ((IsKeyPressed(KEY_ENTER) ||
+        if ((ClientKeyPressed(KEY_ENTER) ||
              context_action == CONTEXT_ACTION_ACCEPT_PROMISE) &&
             situation != NULL) {
             CcCommand accept = {
@@ -2182,7 +2365,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             (void)ApplyCommand(*journal, sim, accept, message,
                                message_capacity);
         }
-        if ((IsKeyPressed(KEY_BACKSPACE) ||
+        if ((ClientKeyPressed(KEY_BACKSPACE) ||
              context_action == CONTEXT_ACTION_ABANDON_PROMISE) &&
             CcSimAcceptedSituation(sim) != NULL) {
             CcCommand abandon = {
@@ -2196,22 +2379,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
     }
     if (*view == VIEW_LEDGER) return;
 
-    bool control = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL) ||
-                   IsKeyDown(KEY_LEFT_SUPER) || IsKeyDown(KEY_RIGHT_SUPER);
-    if (IsKeyPressed(KEY_F5) || (control && IsKeyPressed(KEY_S))) {
-        char error[256];
-        bool saved = false;
-        if (*journal == NULL) {
-            *journal = CcJournalStart(save_path, sim, error, sizeof(error));
-            saved = *journal != NULL;
-        } else {
-            saved = CcJournalCheckpoint(*journal, sim, error, sizeof(error));
-        }
-        (void)snprintf(message, message_capacity, "%s",
-                       saved ? "Game saved." :
-                               error);
-    }
-    if (IsKeyPressed(KEY_F9)) {
+    if (ClientKeyPressed(KEY_F9)) {
         char error[256];
         if (!CcJournalClose(journal, sim, error, sizeof(error))) {
             (void)snprintf(message, message_capacity, "%s", error);
@@ -2237,7 +2405,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             }
         }
     }
-    if (IsKeyPressed(KEY_N)) {
+    if (ClientKeyPressed(KEY_N)) {
         char error[256];
         if (!CcJournalClose(journal, sim, error, sizeof(error))) {
             (void)snprintf(message, message_capacity, "%s", error);
@@ -2251,7 +2419,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         *view = VIEW_LOCAL;
         (void)snprintf(message, message_capacity, "New game started.");
     }
-    if (IsKeyPressed(KEY_PERIOD) && !sim->journey.active) {
+    if (ClientKeyPressed(KEY_PERIOD) && !sim->journey.active) {
         char error[256];
         bool advanced = *journal != NULL ?
             CcJournalAdvanceDays(*journal, sim, 1, error, sizeof(error)) :
@@ -2261,7 +2429,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                            "One day passed." :
                            error);
     }
-    if (IsKeyPressed(KEY_K) && !sim->journey.active) {
+    if (ClientKeyPressed(KEY_K) && !sim->journey.active) {
         char error[256];
         bool advanced = *journal != NULL ?
             CcJournalAdvanceDays(*journal, sim, 7, error, sizeof(error)) :
@@ -2304,14 +2472,16 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             }
             return;
         }
-        if (IsKeyPressed(KEY_J) &&
+        if ((ClientKeyPressed(KEY_J) ||
+             context_action == CONTEXT_ACTION_JUMP) &&
             local->agent.morphology == CC_MORPHOLOGY_BIPED) {
             bool jumped = CcLocalAgentJump(&local->agent);
             (void)snprintf(
                 message, message_capacity, "%s",
                 jumped ? "Jump." : "Can't jump now.");
         }
-        if (IsKeyPressed(KEY_X) &&
+        if ((ClientKeyPressed(KEY_X) ||
+             context_action == CONTEXT_ACTION_TOGGLE_GUARD) &&
             local->agent.morphology == CC_MORPHOLOGY_BIPED &&
             !local->journey_parley_active) {
             bool guarded = !local->agent.humanoid.guard_requested;
@@ -2321,7 +2491,8 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 message, message_capacity, "%s",
                 guarded ? "Guarding." : "Guard lowered.");
         }
-        if (IsKeyPressed(KEY_SPACE) &&
+        if ((ClientKeyPressed(KEY_SPACE) ||
+             context_action == CONTEXT_ACTION_BASIC_STRIKE) &&
             local->agent.morphology == CC_MORPHOLOGY_BIPED &&
             !local->journey_parley_active) {
             bool struck = CcLocalCourseBeginPlayerStrike(
@@ -2341,7 +2512,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                     skill == CC_COMBAT_SKILL_SUNDER ?
                         CONTEXT_ACTION_SKILL_SUNDER :
                         CONTEXT_ACTION_SKILL_SECOND_WIND;
-                if (!IsKeyPressed(KEY_ONE + skill) &&
+                if (!ClientKeyPressed(KEY_ONE + skill) &&
                     context_action != skill_action) continue;
                 CcCombatSkill combat_skill = (CcCombatSkill)skill;
                 bool used = CcLocalCourseUsePlayerSkill(
@@ -2360,7 +2531,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                         "Select a bandit.");
             }
         }
-        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        if (ClientMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
             Vector2 mouse = GetMousePosition();
             int32_t combat_target = local->market_interior ? -1 :
                 CcLocalCoursePickPlayerTarget(
@@ -2434,7 +2605,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         if (local->journey_parley_active) {
             Vector2 collector = {CC_LOCAL_ROAD_PARLEY_X,
                                  CC_LOCAL_ROAD_PARLEY_Z};
-            if (IsKeyPressed(KEY_BACKSPACE) ||
+            if (ClientKeyPressed(KEY_BACKSPACE) ||
                 context_action == CONTEXT_ACTION_RETURN_TO_CHOICE) {
                 ResetLocalState(local);
                 *view = VIEW_ENCOUNTER;
@@ -2442,7 +2613,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                                "Back at the carriage.");
                 return;
             }
-            if ((IsKeyPressed(KEY_F) ||
+            if ((ClientKeyPressed(KEY_F) ||
                  context_action == CONTEXT_ACTION_PAY_COLLECTOR) &&
                 GridDistance(LocalPosition(local), collector) < 1.55f) {
                 CcCommand negotiate = {
@@ -2473,7 +2644,8 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             return;
         }
         if (!local->market_interior) {
-            if (IsKeyPressed(KEY_G)) {
+            if (ClientKeyPressed(KEY_G) ||
+                context_action == CONTEXT_ACTION_RAISE_ALARM) {
                 if (!local->course.alarm_active) {
                     CcLocalCourseRaiseAlarmNear(&local->course,
                                                 &local->agent);
@@ -2487,7 +2659,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         }
         Vector2 position = LocalPosition(local);
 
-        bool interact = IsKeyPressed(KEY_F);
+        bool interact = ClientKeyPressed(KEY_F);
         if (interact || context_action != CONTEXT_ACTION_NONE) {
             if ((interact ||
                  context_action == CONTEXT_ACTION_LEAVE_MARKET) &&
@@ -2557,7 +2729,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             }
             bool shift = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
             for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
-                if (!IsKeyPressed(KEY_ONE + good)) continue;
+                if (!ClientKeyPressed(KEY_ONE + good)) continue;
                 CcCommand trade = {
                     .kind = CC_COMMAND_TRADE,
                     .good = (CcGood)good,
@@ -2569,7 +2741,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         }
         const CcDungeon *dungeon = DungeonAtSettlement(sim, sim->player.location_id);
         if (!local->market_interior && dungeon != NULL &&
-            (IsKeyPressed(KEY_E) ||
+            (ClientKeyPressed(KEY_E) ||
              context_action == CONTEXT_ACTION_EXPEDITION) &&
             GridDistance(position, LOCAL_DUNGEON) < 1.35f) {
             HandleExpedition(*journal, sim, dungeon, message,
@@ -2582,13 +2754,13 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         *view = VIEW_LOCAL;
         return;
     }
-    if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_DOWN)) {
+    if (ClientKeyPressed(KEY_RIGHT) || ClientKeyPressed(KEY_DOWN)) {
         *selected = StepVisibleMapIndex(sim, *selected, 1);
     }
-    if (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_UP)) {
+    if (ClientKeyPressed(KEY_LEFT) || ClientKeyPressed(KEY_UP)) {
         *selected = StepVisibleMapIndex(sim, *selected, -1);
     }
-    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+    if (ClientMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         Vector2 mouse = GetMousePosition();
         int32_t visible_start = VisibleMapListStart(sim, *selected);
         int32_t visible_rank = 0;
@@ -2606,19 +2778,19 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
     const CcMap *map = SelectedVisibleMap(sim, *selected);
     if (map == NULL) return;
     CcId map_id = map->id;
-    if ((IsKeyPressed(KEY_B) ||
+    if ((ClientKeyPressed(KEY_B) ||
          context_action == CONTEXT_ACTION_BUY_MAP) &&
         map->owner_id == sim->player.location_id) {
         CcCommand buy = {.kind = CC_COMMAND_BUY_MAP, .target_id = map_id};
         (void)ApplyCommand(*journal, sim, buy, message, message_capacity);
         return;
     }
-    if (IsKeyPressed(KEY_S) && map->owner_id == sim->player.id) {
+    if (ClientKeyPressed(KEY_S) && map->owner_id == sim->player.id) {
         CcCommand sell = {.kind = CC_COMMAND_SELL_MAP, .target_id = map_id};
         (void)ApplyCommand(*journal, sim, sell, message, message_capacity);
         return;
     }
-    if (IsKeyPressed(KEY_A) && map->owner_id == sim->player.id) {
+    if (ClientKeyPressed(KEY_A) && map->owner_id == sim->player.id) {
         CcCommand archive = {
             .kind = CcSimMapIsArchived(sim, map) ?
                 CC_COMMAND_RETRIEVE_MAP : CC_COMMAND_ARCHIVE_MAP,
@@ -2631,7 +2803,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
 
     const CcRoute *route = CcSimRoute(sim, map->route_id);
     CcId destination_id = RouteOtherEnd(route, sim->player.location_id);
-    if ((IsKeyPressed(KEY_ENTER) ||
+    if ((ClientKeyPressed(KEY_ENTER) ||
          context_action == CONTEXT_ACTION_TRAVEL) &&
         map->owner_id == sim->player.id &&
         !CcSimMapIsArchived(sim, map) &&
@@ -2646,7 +2818,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             *view = VIEW_LOCAL;
         }
     }
-    if ((IsKeyPressed(KEY_R) ||
+    if ((ClientKeyPressed(KEY_R) ||
          context_action == CONTEXT_ACTION_REPAIR_ROUTE) &&
         map->owner_id == sim->player.id &&
         destination_id != 0U) {
@@ -2866,6 +3038,7 @@ int main(int argc, char **argv)
                       "Crownless Carriage could not connect to the desktop window server.\n");
         return 1;
     }
+    ClientInputInstall();
     SetWindowMinSize(1080, 680);
     SetTargetFPS(render_benchmark || capture_action_reel ||
                  capture_gameplay_reel || capture_creature_reel ? 0 : 60);
@@ -3235,7 +3408,7 @@ int main(int argc, char **argv)
                 LocalAtmosphereForSimulation(&sim),
             2.4f);
         CcLocalRendererUpdateAtmosphere(frame_delta_time);
-        if (!capture && IsKeyPressed(KEY_F3)) {
+        if (!capture && ClientKeyPressed(KEY_F3)) {
             performance_overlay = !performance_overlay;
             (void)snprintf(message, sizeof(message), "%s",
                            performance_overlay ?
@@ -3263,6 +3436,7 @@ int main(int argc, char **argv)
                         local_target, local_bounds,
                         frame_delta_time,
                         save_path, message, sizeof(message));
+            ClientInputClearPressed();
         }
         if (strcmp(previous_message, message) != 0) {
             message_age = 0.0f;
@@ -3345,6 +3519,7 @@ int main(int argc, char **argv)
             DrawContextActionTray(&sim, &local, view, selected,
                                   selected_situation);
         }
+        DrawCommandBar(view);
         if (performance_overlay) {
             CcOverlayFlush();
             DrawPerformanceOverlay();
