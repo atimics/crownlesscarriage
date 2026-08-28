@@ -1,5 +1,6 @@
 #include "client/cc_local3d.h"
 #include "client/cc_local3d_internal.h"
+#include "client/cc_local_place.h"
 #include "locomotion/cc_humanoid_skin.h"
 
 #include <math.h>
@@ -228,6 +229,46 @@ static void RequireSolidStreetHouse(const char *name, float wall_x,
                       normal.x, normal.y, normal.z);
         exit(1);
     }
+}
+
+static void TestPlaceLandmarkCollision(void)
+{
+    CcSim sim;
+    CcSimInit(&sim, UINT32_C(0x1a7d4a2b));
+    sim.player.location_id = sim.settlements[0].id;
+    CcLocalBindPlace(&sim);
+    const CcLocalPlaceLandmark *barn = CcLocalPlaceLandmarkAt(
+        CC_SETTLEMENT_FARMING, 0);
+    if (barn == NULL) {
+        (void)fprintf(stderr, "farming layout did not provide a landmark\n");
+        exit(1);
+    }
+    float center_z = barn->z + barn->depth * 0.5f;
+    float body_y = CcLocalTerrainHeightAt(barn->x, center_z) + 1.0f;
+    Vector3 corrected = {0};
+    Vector3 normal = {0};
+    if (!CcLocalProbePhysicsSphereInternal(
+            CC_LOCAL_SCENE_STREET,
+            (Vector3){barn->x - 0.80f, body_y, center_z},
+            (Vector3){barn->x + 0.80f, body_y, center_z}, 0.16f,
+            &corrected, &normal) ||
+        corrected.x > barn->x - 0.154f || normal.x > -0.90f) {
+        (void)fprintf(stderr,
+                      "authored landmark was not solid: %.3f normal %.3f\n",
+                      corrected.x, normal.x);
+        exit(1);
+    }
+    Vector2 legacy = CcLocalMove(
+        (Vector2){barn->x - 0.70f, center_z},
+        (Vector2){1.40f, 0.0f}, false);
+    if (legacy.x > barn->x - 0.29f) {
+        (void)fprintf(stderr,
+                      "legacy movement crossed an authored landmark: %.3f\n",
+                      legacy.x);
+        exit(1);
+    }
+
+    CcLocalBindPlace(NULL);
 }
 
 static void TestSharedCharacterCollisionWorld(void)
@@ -1456,10 +1497,11 @@ static void TestTargetDrivenCombat(void)
     player.combat.posture = 30.0f;
     if (!CcLocalCourseUsePlayerSkill(&course, &player,
                                      CC_COMBAT_SKILL_SECOND_WIND) ||
-        player.combat.health <= 42.0f || player.combat.posture <= 30.0f ||
+        player.combat.health != 42.0f || player.combat.posture <= 30.0f ||
         CcLocalCombatSkillCooldown(&player,
             CC_COMBAT_SKILL_SECOND_WIND) <= 0.0f) {
-        (void)fprintf(stderr, "Second Wind did not restore the combatant\n");
+        (void)fprintf(stderr,
+                      "Catch Breath healed a wound or failed to restore posture\n");
         exit(1);
     }
 
@@ -1490,6 +1532,22 @@ static void TestTargetDrivenCombat(void)
                       course.raiders[0].combat.posture,
                       CcLocalCombatSkillCooldown(
                           &player, CC_COMBAT_SKILL_SUNDER));
+        exit(1);
+    }
+    bool damaging_outcome =
+        course.last_outcome != CC_COMBAT_OUTCOME_NONE &&
+        course.last_outcome != CC_COMBAT_OUTCOME_MISS;
+    if (course.last_outcome == CC_COMBAT_OUTCOME_NONE ||
+        course.last_attacker_team == CC_COMBAT_NEUTRAL ||
+        course.last_defender_team == CC_COMBAT_NEUTRAL ||
+        (damaging_outcome && course.last_health_damage < 0.5f &&
+         course.last_posture_damage < 0.5f)) {
+        (void)fprintf(stderr,
+                      "combat feedback event was incomplete: outcome %d attacker %d defender %d health %.1f posture %.1f\n",
+                      course.last_outcome, course.last_attacker_team,
+                      course.last_defender_team,
+                      course.last_health_damage,
+                      course.last_posture_damage);
         exit(1);
     }
     CcLocalCourseClearPlayerTarget(&player);
@@ -2018,8 +2076,16 @@ int main(void)
     }
 
     TestBuildingCutawaySelection();
+    if (fabsf(CcLocalRoadCarriageX(0) - 20.15f) > 0.001f ||
+        fabsf(CcLocalRoadCarriageX(350) - 38.35f) > 0.001f ||
+        fabsf(CcLocalRoadCarriageX(1000) - 72.15f) > 0.001f) {
+        (void)fprintf(stderr,
+                      "road carriage did not preserve its encounter position\n");
+        return 1;
+    }
     TestRoadBridgeSupport();
     TestFaceAngleAndLodContract();
+    TestPlaceLandmarkCollision();
     TestSharedCharacterCollisionWorld();
     TestRagdollStepsInWater();
     RenderTexture2D click_target = {0};
@@ -3209,6 +3275,50 @@ int main(void)
                         expected_cape_anchor) > 0.00001f) {
         (void)fprintf(stderr,
                       "render cape did not share the interpolated skeleton clock\n");
+        return 1;
+    }
+
+    CcLocalAgent retreat_walk;
+    CcLocalAgentInit(&retreat_walk, (Vector2){4.00f, 5.50f}, true);
+    if (!CcLocalAgentSetExactTarget(
+            &retreat_walk, (Vector3){7.00f, 0.0f, 5.50f}, true)) {
+        (void)fprintf(stderr, "momentum posture target was rejected\n");
+        return 1;
+    }
+    retreat_walk.combat.focus_valid = true;
+    retreat_walk.combat.focus_point = (Vector3){2.00f, 0.0f, 5.50f};
+    bool saw_opposed_facing = false;
+    float maximum_retreat_lead = 0.0f;
+    for (int32_t frame = 0; frame < 75; ++frame) {
+        CcLocalAgentUpdate(&retreat_walk, 1.0f / 60.0f, true);
+        float speed = sqrtf(retreat_walk.velocity.x *
+                            retreat_walk.velocity.x +
+                            retreat_walk.velocity.z *
+                            retreat_walk.velocity.z);
+        if (speed <= 0.45f) continue;
+        float momentum_x = retreat_walk.velocity.x / speed;
+        float momentum_z = retreat_walk.velocity.z / speed;
+        float facing_x = sinf(retreat_walk.facing_yaw);
+        float facing_z = cosf(retreat_walk.facing_yaw);
+        float facing_alignment = facing_x * momentum_x +
+                                 facing_z * momentum_z;
+        if (facing_alignment > -0.80f) continue;
+        saw_opposed_facing = true;
+        CcLimbVec3 torso = {
+            retreat_walk.render_pose.neck.x -
+                retreat_walk.render_pose.pelvis.x,
+            0.0f,
+            retreat_walk.render_pose.neck.z -
+                retreat_walk.render_pose.pelvis.z,
+        };
+        maximum_retreat_lead = fmaxf(
+            maximum_retreat_lead,
+            torso.x * momentum_x + torso.z * momentum_z);
+    }
+    if (!saw_opposed_facing || maximum_retreat_lead <= 0.105f) {
+        (void)fprintf(stderr,
+                      "visible torso did not lead a retreating body's momentum: opposed %d lead %.3f\n",
+                      saw_opposed_facing, maximum_retreat_lead);
         return 1;
     }
 

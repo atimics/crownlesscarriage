@@ -194,7 +194,7 @@ static void CheckLegacyJournalMigration(char *error,
              legacy_generation);
     CC_CHECK(ReadSqliteInteger(
                  path, "SELECT journal_cursor FROM meta WHERE id=1;") == 0);
-    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 13);
+    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 16);
     CC_CHECK(CcJournalAdvanceDays(journal, &resumed, 2,
                                   error, error_capacity));
     uint64_t expected_hash = CcSimHash(&resumed);
@@ -415,6 +415,77 @@ static void CheckSchema12Compatibility(char *error, size_t error_capacity)
     CC_CHECK(CcPlayerMapCollectionCount(&restored) == 1);
     CC_CHECK(restored.dragon.age_days == dragon_age);
     CC_CHECK(restored.dragon.memory_integrity == 100);
+    CC_CHECK(CcSimValidate(&restored, error, error_capacity));
+    RemoveDatabase(path);
+}
+
+static void CheckSchema13Compatibility(char *error, size_t error_capacity)
+{
+    const char *path = "persistence-legacy-v13-test.ccsave";
+    RemoveDatabase(path);
+    CcSim legacy;
+    CcSimInit(&legacy, UINT32_C(0x1e9ac13));
+    legacy.schema_version = 13U;
+    legacy.generator_version = 13U;
+    legacy.goblins.cohesion = 0;
+    CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.generator_version == CC_GENERATOR_VERSION);
+    CC_CHECK(CcIdKind(restored.horse_team[0].id) == CC_ENTITY_HORSE);
+    CC_CHECK(CcIdKind(restored.horse_team[1].id) == CC_ENTITY_HORSE);
+    CC_CHECK(restored.settlements[0].cow_adults > 0);
+    CC_CHECK(restored.goblins.cohesion == 60);
+    CC_CHECK(restored.goblins.dragon_seed_phase ==
+             CC_GOBLIN_DRAGON_SEED_NONE);
+    CC_CHECK(CcSimValidate(&restored, error, error_capacity));
+    RemoveDatabase(path);
+}
+
+static void CheckSchema14Compatibility(char *error, size_t error_capacity)
+{
+    const char *path = "persistence-legacy-v14-test.ccsave";
+    RemoveDatabase(path);
+    CcSim legacy;
+    CcSimInit(&legacy, UINT32_C(0x1e9ac14));
+    legacy.schema_version = 14U;
+    legacy.generator_version = 14U;
+    legacy.goblins.cohesion = 0;
+    CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.generator_version == CC_GENERATOR_VERSION);
+    CC_CHECK(restored.horse_team[0].sex == CC_HORSE_STALLION);
+    CC_CHECK(restored.horse_team[1].sex == CC_HORSE_MARE);
+    CC_CHECK(restored.horse_team[0].training == 100);
+    CC_CHECK(restored.horse_team[0].strength > 0);
+    CC_CHECK(restored.goblins.cohesion == 60);
+    CC_CHECK(restored.goblins.dragon_seed_phase ==
+             CC_GOBLIN_DRAGON_SEED_NONE);
+    CC_CHECK(CcSimValidate(&restored, error, error_capacity));
+    RemoveDatabase(path);
+}
+
+static void CheckSchema15Compatibility(char *error, size_t error_capacity)
+{
+    const char *path = "persistence-legacy-v15-test.ccsave";
+    RemoveDatabase(path);
+    CcSim legacy;
+    CcSimInit(&legacy, UINT32_C(0x1e9ac15));
+    legacy.schema_version = 15U;
+    legacy.generator_version = 15U;
+    legacy.goblins.cohesion = 0;
+    CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.generator_version == CC_GENERATOR_VERSION);
+    CC_CHECK(restored.goblins.cohesion == 60);
+    CC_CHECK(restored.goblins.dragon_seed_phase ==
+             CC_GOBLIN_DRAGON_SEED_NONE);
+    CC_CHECK(restored.stable_horse_count == legacy.stable_horse_count);
     CC_CHECK(CcSimValidate(&restored, error, error_capacity));
     RemoveDatabase(path);
 }
@@ -726,6 +797,9 @@ int main(void)
     CheckSchema10Compatibility(error, sizeof(error));
     CheckSchema11Compatibility(error, sizeof(error));
     CheckSchema12Compatibility(error, sizeof(error));
+    CheckSchema13Compatibility(error, sizeof(error));
+    CheckSchema14Compatibility(error, sizeof(error));
+    CheckSchema15Compatibility(error, sizeof(error));
     CheckDiplomacyPersistence(error, sizeof(error));
     CheckJournalRecovery(error, sizeof(error));
     CheckJournalCheckpointAndTamper(error, sizeof(error));
@@ -775,6 +849,8 @@ int main(void)
     (void)snprintf(original.delayed_echo.character_name,
                    sizeof(original.delayed_echo.character_name), "%s",
                    charter->affected_name);
+    original.goblins.cohesion = 77;
+    original.goblins.expeditions_intercepted = 3;
     uint64_t expected = CcSimHash(&original);
     CC_CHECK(CcSaveWrite(path, &original, error, sizeof(error)));
 
@@ -787,6 +863,8 @@ int main(void)
     CC_CHECK(restored.kingdoms[0].iron_ledger_debt ==
              original.kingdoms[0].iron_ledger_debt);
     CC_CHECK(restored.goblins.hoard_defenses == 4);
+    CC_CHECK(restored.goblins.cohesion == 77);
+    CC_CHECK(restored.goblins.expeditions_intercepted == 3);
     CC_CHECK(restored.hoard_raiders.social_raid_latched);
     CC_CHECK(restored.hoard_raiders.war_raid_latched);
     CC_CHECK(restored.player.location_id == original.player.location_id);

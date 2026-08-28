@@ -194,8 +194,9 @@ int main(void)
 
     cult.current_day = 120 * 365;
     cult.dragon.afterdeath_days = 120 * 365 - 1;
-    cult.goblins.members = 72;
+    cult.goblins.members = 84;
     cult.goblins.devotion = 90;
+    cult.goblins.cohesion = 90;
     cult.goblins.lair_coins = 120;
     cult.goblins.lair_stock[CC_GOOD_FOOD] = 64;
     cult.goblins.lair_stock[CC_GOOD_TOOLS] = 4;
@@ -203,9 +204,28 @@ int main(void)
     cult.goblins.lair_stock[CC_GOOD_GOLD] = 1;
     cult.goblins.lair_stock[CC_GOOD_GEMS] = 1;
     cult.dragon.hoard = 0;
+    CcMoney cult_coins = cult.goblins.lair_coins;
     CcMoney cult_gold = CcSimTrackedGold(&cult);
     int32_t cult_gold_goods = CcSimTrackedGood(&cult, CC_GOOD_GOLD);
     int32_t cult_gems = CcSimTrackedGood(&cult, CC_GOOD_GEMS);
+    CcSimAdvanceDays(&cult, 1);
+    CC_CHECK(cult.dragon.egg_count == 0);
+    CC_CHECK(cult.dragon.brood_days_remaining == 0);
+    CC_CHECK(cult.dragon.hoard == 0);
+    CC_CHECK(cult.goblins.lair_coins == cult_coins);
+    CC_CHECK(CcSimTrackedGood(&cult, CC_GOOD_GOLD) == cult_gold_goods);
+    CC_CHECK(CcSimTrackedGood(&cult, CC_GOOD_GEMS) == cult_gems);
+    CC_CHECK(CountEvents(&cult, CC_EVENT_GOBLIN_DRAGON_SEED) == 0);
+    CC_CHECK(cult.goblins.dragon_seed_phase ==
+             CC_GOBLIN_DRAGON_SEED_RUMORED);
+    CC_CHECK(cult.goblins.dragon_seed_days_remaining == 20 * 365);
+    CC_CHECK(CountEvents(
+        &cult, CC_EVENT_GOBLIN_DRAGON_SEED_RUMORED) == 1);
+
+    cult.current_day = 121 * 365;
+    cult.dragon.afterdeath_days = 121 * 365 - 1;
+    cult.goblins.dragon_seed_phase = CC_GOBLIN_DRAGON_SEED_PREPARING;
+    cult.goblins.dragon_seed_days_remaining = 365;
     CcSimAdvanceDays(&cult, 1);
     CC_CHECK(cult.dragon.egg_count == 2);
     CC_CHECK(cult.dragon.brood_days_remaining >= 10 * 365 - 1);
@@ -242,6 +262,94 @@ int main(void)
     ash_poor_cult.goblins.tribute_cooldown_days = 1000;
     CcSimAdvanceDays(&ash_poor_cult, 1);
     CC_CHECK(ash_poor_cult.goblins.members == 13);
+
+    CcSim stages;
+    CcSimInit(&stages, UINT32_C(0x57a6e500));
+    stages.dragon.memory_integrity = 20;
+    stages.dragon.brood_cooldown_days = 1000;
+    CcSimAdvanceDays(&stages, 1);
+    CC_CHECK(stages.dragon.life_stage == CC_DRAGON_STAGE_UNCROWNED);
+    CC_CHECK(CountEvents(&stages, CC_EVENT_DRAGON_UNCROWNED) == 1);
+
+    stages.dragon.age_days = 60 * 365;
+    stages.dragon.hoard = 5000;
+    stages.dragon.hoard_goods[CC_GOOD_GOLD] = 10;
+    stages.dragon.hoard_goods[CC_GOOD_GEMS] = 10;
+    stages.dragon.memory_integrity = 100;
+    stages.dragon.territory_stability = 100;
+    stages.goblins.devotion = 100;
+    CcSimAdvanceDays(&stages, 1);
+    CC_CHECK(stages.dragon.life_stage == CC_DRAGON_STAGE_CROWNED);
+
+    stages.dragon.age_days = 500 * 365;
+    stages.dragon.crown_continuity_days = 200 * 365;
+    stages.dragon.territory_stability = 100;
+    stages.dragon.memory_integrity = 100;
+    stages.dragon.brood_cooldown_days = 1000;
+    CcSimAdvanceDays(&stages, 1);
+    CC_CHECK(stages.dragon.life_stage == CC_DRAGON_STAGE_DEEP_WYRM);
+
+    stages.dragon.life_stage = CC_DRAGON_STAGE_UNCROWNED;
+    stages.dragon.age_days = 20 * 365;
+    stages.dragon.body_condition = 20;
+    stages.dragon.hunt_cooldown_days = 0;
+    stages.dragon.memory_integrity = 50;
+    CcSimAdvanceDays(&stages, 1);
+    CC_CHECK(stages.dragon.hunts == 1);
+    CC_CHECK(stages.dragon.hunt_cooldown_days >= 14);
+    CC_CHECK(stages.dragon.hunt_cooldown_days <= 42);
+
+    CcSim strength;
+    CcSimInit(&strength, UINT32_C(0x57a3e67a));
+    strength.dragon.body_condition = 80;
+    strength.dragon.crown_strength = 60;
+    strength.dragon.memory_integrity = 80;
+    strength.dragon.territory_stability = 80;
+    strength.dragon.life_stage = CC_DRAGON_STAGE_UNCROWNED;
+    int32_t uncrowned_strength = CcSimDragonBattleStrength(&strength);
+    strength.dragon.life_stage = CC_DRAGON_STAGE_CROWNED;
+    int32_t crowned_strength = CcSimDragonBattleStrength(&strength);
+    strength.dragon.life_stage = CC_DRAGON_STAGE_DEEP_WYRM;
+    int32_t deep_strength = CcSimDragonBattleStrength(&strength);
+    CC_CHECK(uncrowned_strength < crowned_strength);
+    CC_CHECK(crowned_strength < deep_strength);
+    strength.dragon.crown_strength = 0;
+    int32_t crownless_strength = CcSimDragonBattleStrength(&strength);
+    strength.dragon.crown_strength = 120;
+    CC_CHECK(CcSimDragonBattleStrength(&strength) ==
+             crownless_strength + 10);
+
+    const CcRoute *dragon_road = NULL;
+    for (int32_t i = 0; i < strength.route_count; ++i) {
+        if (strength.routes[i].from_id == strength.dragon.lair_settlement_id ||
+            strength.routes[i].to_id == strength.dragon.lair_settlement_id) {
+            dragon_road = &strength.routes[i];
+            break;
+        }
+    }
+    CC_CHECK(dragon_road != NULL);
+    strength.player.location_id = strength.dragon.lair_settlement_id;
+    CcId road_destination = dragon_road->from_id ==
+            strength.player.location_id ? dragon_road->to_id :
+            dragon_road->from_id;
+    for (int32_t i = 0; i < strength.map_count; ++i) {
+        if (strength.maps[i].route_id == dragon_road->id) {
+            strength.maps[i].owner_id = strength.player.id;
+            strength.player.map_catalogue_mask |= UINT32_C(1) << i;
+            strength.player.map_archive_mask &= ~(UINT32_C(1) << i);
+            break;
+        }
+    }
+    CcTravelPreview quiet_preview = {0};
+    CcTravelPreview shadow_preview = {0};
+    strength.dragon.regional_influence = 0;
+    CC_CHECK(CcSimTravelPreview(&strength, road_destination,
+                                &quiet_preview, error, sizeof(error)));
+    strength.dragon.regional_influence = 96;
+    CC_CHECK(CcSimTravelPreview(&strength, road_destination,
+                                &shadow_preview, error, sizeof(error)));
+    CC_CHECK(shadow_preview.claimed_danger ==
+             quiet_preview.claimed_danger + 2);
 
     puts("Dragon crown, cult recovery, brood, aftermath, and succession tests passed");
     return 0;

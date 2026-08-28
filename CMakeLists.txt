@@ -81,6 +81,12 @@ if(NOT MSVC)
 endif()
 cc_strict_warnings(crownless_creature_catalog)
 
+add_library(crownless_local_place
+    src/client/cc_local_place.c
+)
+target_include_directories(crownless_local_place PUBLIC src)
+cc_strict_warnings(crownless_local_place)
+
 find_package(SQLite3 REQUIRED)
 add_library(crownless_persistence
     src/persistence/cc_save.c
@@ -159,7 +165,7 @@ if(CC_BUILD_CLIENT)
     endif()
     target_link_libraries(crownless_carriage PRIVATE
         crownless_persistence crownless_locomotion
-        crownless_creature_catalog raylib
+        crownless_creature_catalog crownless_local_place raylib glfw
     )
     target_compile_definitions(crownless_carriage PRIVATE
         CC_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}"
@@ -414,6 +420,16 @@ if(BUILD_TESTING)
     cc_strict_warnings(sim_tests)
     add_test(NAME deterministic_simulation COMMAND sim_tests)
 
+    add_executable(animal_economy_tests tests/animal_economy_tests.c)
+    target_link_libraries(animal_economy_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(animal_economy_tests)
+    add_test(NAME horse_and_cow_economy COMMAND animal_economy_tests)
+
+    add_executable(horse_stable_tests tests/horse_stable_tests.c)
+    target_link_libraries(horse_stable_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(horse_stable_tests)
+    add_test(NAME horse_stable_breeding COMMAND horse_stable_tests)
+
     add_executable(balance_tests tests/balance_tests.c)
     target_link_libraries(balance_tests PRIVATE crownless_sim)
     cc_strict_warnings(balance_tests)
@@ -444,6 +460,11 @@ if(BUILD_TESTING)
     cc_strict_warnings(dragon_cycle_tests)
     add_test(NAME goblin_dragon_causal_cycle COMMAND dragon_cycle_tests)
 
+    add_executable(goblin_society_tests tests/goblin_society_tests.c)
+    target_link_libraries(goblin_society_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(goblin_society_tests)
+    add_test(NAME goblin_society_choices COMMAND goblin_society_tests)
+
     add_executable(dragon_ecology_tests tests/dragon_ecology_tests.c)
     target_link_libraries(dragon_ecology_tests PRIVATE crownless_persistence)
     cc_strict_warnings(dragon_ecology_tests)
@@ -458,6 +479,13 @@ if(BUILD_TESTING)
     target_link_libraries(metagame_tests PRIVATE crownless_metagame)
     cc_strict_warnings(metagame_tests)
     add_test(NAME text_first_metagame COMMAND metagame_tests)
+
+    add_executable(local_place_tests tests/local_place_tests.c)
+    target_link_libraries(local_place_tests PRIVATE
+        crownless_local_place crownless_sim
+    )
+    cc_strict_warnings(local_place_tests)
+    add_test(NAME distinct_local_places COMMAND local_place_tests)
 
     if(CC_BUILD_BENCHMARKS)
         add_test(NAME simulation_shape_metrics
@@ -527,7 +555,7 @@ if(BUILD_TESTING)
         )
         target_link_libraries(local_movement_tests PRIVATE
             crownless_sim crownless_locomotion
-            crownless_creature_catalog raylib
+            crownless_creature_catalog crownless_local_place raylib
         )
         target_compile_definitions(local_movement_tests PRIVATE
             CC_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}"
@@ -545,7 +573,7 @@ if(BUILD_TESTING)
         )
         target_link_libraries(terrain_tests PRIVATE
             crownless_sim crownless_locomotion
-            crownless_creature_catalog raylib
+            crownless_creature_catalog crownless_local_place raylib
         )
         target_compile_definitions(terrain_tests PRIVATE
             CC_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}"

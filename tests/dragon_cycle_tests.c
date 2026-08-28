@@ -138,6 +138,59 @@ int main(void)
     CC_CHECK(CcSimValidate(&restored, error, sizeof(error)));
     CC_CHECK(remove(path) == 0);
 
+    CcSim intercepted;
+    CcSimInit(&intercepted, UINT32_C(0x1a7e2ce7));
+    intercepted.player.location_id = intercepted.dragon.lair_settlement_id;
+    intercepted.carriage.location_id = intercepted.player.location_id;
+    intercepted.goblins.tribute_phase = CC_GOBLIN_TRIBUTE_TO_DRAGON;
+    intercepted.goblins.raid_motive = CC_GOBLIN_RAID_DRAGON_TRIBUTE;
+    intercepted.goblins.tribute_target_id =
+        intercepted.dragon.lair_settlement_id;
+    intercepted.goblins.tribute_days_remaining = 3;
+    const CcEvent *tribute_parent = CcSimRecentEvent(&intercepted, 0);
+    CC_CHECK(tribute_parent != NULL);
+    intercepted.goblins.tribute_event_id = tribute_parent->id;
+    intercepted.goblins.carried_tribute = 12;
+    intercepted.goblins.carried_goods[CC_GOOD_GOLD] = 1;
+    intercepted.goblins.carried_goods[CC_GOOD_GEMS] = 1;
+    CcTreasure *tribute_relic =
+        &intercepted.treasures[intercepted.treasure_count++];
+    *tribute_relic = (CcTreasure){
+        .id = CcMakeId(CC_ENTITY_TREASURE, UINT64_C(9102)),
+        .maker_settlement_id = intercepted.settlements[0].id,
+        .owner_id = intercepted.goblins.id,
+        .location_id = intercepted.goblins.lair_settlement_id,
+        .gold_content = 1,
+        .gem_content = 1,
+        .craft_work = 2,
+        .appraised_value = 90,
+        .created_day = 1
+    };
+    (void)snprintf(tribute_relic->name, sizeof(tribute_relic->name),
+                   "The Ember Tithe");
+    intercepted.goblins.carried_treasure_id = tribute_relic->id;
+    CcMoney intercepted_hoard = intercepted.dragon.hoard;
+    CcMoney intercepted_coins = intercepted.player.coins;
+    CcCommand intercept = {
+        .kind = CC_COMMAND_INTERCEPT_DRAGON_TRIBUTE
+    };
+    CC_CHECK(CcSimApply(&intercepted, &intercept,
+                        error, sizeof(error)));
+    CC_CHECK(intercepted.player.coins == intercepted_coins + 12);
+    CC_CHECK(intercepted.player.cargo[CC_GOOD_GOLD] == 1);
+    CC_CHECK(intercepted.player.cargo[CC_GOOD_GEMS] == 1);
+    CC_CHECK(intercepted.player.treasure_cargo_slots == 1);
+    CC_CHECK(tribute_relic->owner_id == intercepted.player.id);
+    CC_CHECK(tribute_relic->location_id == intercepted.player.location_id);
+    CC_CHECK(intercepted.dragon.hoard == intercepted_hoard);
+    CC_CHECK(intercepted.dragon.stolen_outstanding == 0);
+    CC_CHECK(intercepted.dragon.omen_days_remaining == 0);
+    CC_CHECK(intercepted.goblins.tribute_phase ==
+             CC_GOBLIN_TRIBUTE_IDLE);
+    CC_CHECK(CountEvents(
+        &intercepted, CC_EVENT_GOBLIN_TRIBUTE_TAKEN) == 1);
+    CC_CHECK(CcSimValidate(&intercepted, error, sizeof(error)));
+
     CcSim unjust;
     CcSimInit(&unjust, UINT32_C(0x1ae0a117));
     for (int32_t i = 0; i < unjust.settlement_count; ++i) {

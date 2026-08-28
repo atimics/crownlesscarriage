@@ -10,8 +10,9 @@ changes who gets help, and can become a fight, a bargain, or an expedition.
 The result is written back into the same world that created the problem.
 
 The game begins at character scale. Settlements, people, markets, and roads are
-the main interface. Route maps are physical sheets kept in the carriage, not an
-all-knowing strategy screen.
+the main interface. Travel starts with the carriage following a track and
+meeting one side branch at a time. Maps are old, tradeable advice, not a travel
+screen.
 
 This project is in pre-production. The repository contains a living design
 manual and a playable architecture proof written in C17.
@@ -50,23 +51,38 @@ The architecture proof connects these parts in one running build:
 
 - A seeded 96 by 72 metre waystation with farms, streets, market steps, a
   coach yard, a mine road, Crown Gate, and the Wayfarer Trials
+- Settlement profiles that give every town a stable local terrain seed,
+  purpose-specific district names, civic labels, material palette, plaza mark,
+  three named physical landmarks, three secondary roads, and a staffed civic
+  hall with matched terrain, collision, navigation, and rendering
 - Continuous click-to-move navigation across real terrain and solid geometry,
   with no tile or screen-space movement grid
 - One physical humanoid body for walking, vaulting, climbing, down-climbing,
   jumping, swimming, falling, ragdolls, and staged recovery
-- Shared contact-based combat for the player, guards, scouts, and raiders,
-  including guard, posture, skills, recoil, knockback, and defeat
+- OSR contact-based combat for the player, guards, scouts, and named outlaw
+  companies, including reaction, telegraphed risk, guard, posture, morale,
+  recoil, withdrawal, knockback, and defeat
 - A market interior whose stock and prices come from the regional simulation
 - Local situation boards with named sponsors, affected people, deadlines,
   rewards, accepted promises, and reputation consequences
+- Carriage-stage junction scenes with one continuous cart track and no more
+  than one side branch, plus a three-slot case of tradeable traveller's notes
 - A twelve-chart collectible map set with distinct physical artwork, a
   three-slot carriage case, and a persistent storage archive in Gloamgate
 - Real-time carriage journeys, a dedicated road scene, and a route crisis that
-  can be resolved through combat or payment
+  can be resolved through combat, coin, demanded cargo, or withdrawal
+- Two persistent named carriage horses whose food, health, and fatigue affect
+  travel, plus cattle herds that consume fodder, support farms, reproduce,
+  face famine slaughter, and can be taken by dragons
+- Stable breeding with pregnancy, named foals, inherited working traits,
+  boarding care, training, lineage, and two-horse carriage team selection
 - Immediate local aftermath and delayed consequences after a journey
 - A deterministic regional simulation of settlements, kingdoms, factions,
   production, trade, shipments, hunger, security, bandits, monsters, and
   dungeons
+- Three material kingdom identities—Road and Granary, Iron and Wall, and
+  Capital and Deep—with live pressure derived from their holdings, roads,
+  supplies, debts, factions, dungeons, and dragon exposure
 - Fields, farms, mountain deposits, mines, smith recipes, tool wear, rare Gold
   and Gems, bounded and perishable food stores, supplied warfare, and unique
   one-slot crafted treasures
@@ -74,8 +90,9 @@ The architecture proof connects these parts in one running build:
   real tolls, border sanctions, or night-road bribes into kingdom treasuries
 - An Iron Ledger of copied monastery accounts: kingdoms borrow deposited coin
   for famine grain and productive Tools, record debt, and make real repayments
-- A goblin lair economy that raids for food or equipment, carries loot home,
-  then carries portable offerings to a persistent dragon
+- A goblin society with covenant, cohesion, a named representative, visible
+  musters, trade, warnings, and interceptions; its lair economy raids for food
+  or equipment, carries loot home, then carries portable offerings to a persistent dragon
   hoard, defends it with real members and Weapons, and raids again to replace
   losses; inequality or debt
   can drive the Ash-Poor to steal, while war can finance a Crown Levy, followed
@@ -83,7 +100,11 @@ The architecture proof connects these parts in one running build:
 - A persistent Crown Cycle: dragons age through whelp, wanderer, Crowned,
   Deep Wyrm, Uncrowned, and Afterdragon states; physical hoards stabilize
   memory, hunger takes livestock instead of burning towns, goblins tend rare
-  broods with real Food, and only a visible surviving egg can found a successor
+  broods with real Food, while a successor requires a visible surviving egg or
+  a public, twenty-year goblin dragon-seed project
+- A playable dragon cave in the graphical client, with live Crown Cycle state,
+  hoard theft and exact restitution, visible broods and Afterdragon remains,
+  and a chance to intercept physical tribute before the dragon owns it
 - Kings who send physical declarations, peace offers, dragon alliances, and
   muster orders through a delayed and fallible courier network. The carriage
   can carry a sealed dispatch. Allied hosts consume real Food, Tools, and
@@ -94,10 +115,11 @@ The architecture proof connects these parts in one running build:
   state hashing
 
 This is still a proof, not a finished campaign. It uses a small generated
-region, one main local settlement grammar, one detailed market interior, and a
-limited set of journey and dungeon interventions. Content breadth, balance,
-carriage progression, deeper interiors, and playable dungeon maps remain in
-production.
+region, one shared primary road spine with six distinct secondary-road and
+landmark layouts, one reusable profile-specific civic interior, and a limited
+set of journey and dungeon interventions. Content breadth, balance, carriage
+progression, deeper interior grammars, stateful local casts, and playable
+dungeon maps remain in production.
 
 ## Build and run
 
@@ -139,8 +161,8 @@ Run the presentation-free Empty Granary playtest:
 This text-first build uses the same simulation, commands, journeys, situations,
 and SQLite save format as the 3D client. It exists so carriage choices and delayed
 consequences can be tested while camera, movement, and art work continue. Type
-`rumors` for local clues, `treasures` for unique cargo, `help` for commands,
-and `debrief` at the end of a session.
+`rumors` for local clues, `kingdoms` for the three realms, `treasures` for
+unique cargo, `help` for commands, and `debrief` at the end of a session.
 
 The headless build and tests run in CI on macOS and Linux. The full graphical
 client is also built in macOS CI.
@@ -157,7 +179,7 @@ Inputs are contextual.
 
 | Input | Action |
 | --- | --- |
-| Left click | Move to a visible surface, or select a raider |
+| Left click | Move to a visible surface, or select a named outlaw |
 | `F` | Use a nearby door, notice board, carriage, or toll collector |
 | `M` | Open or close the map case while beside the carriage |
 | `Q` | Open the situation board |
@@ -165,6 +187,7 @@ Inputs are contextual.
 | `J` | Jump |
 | `Space` | Make a manual basic strike |
 | `X` | Enter or leave guard |
+| `Backspace` | Withdraw from a road fight or return from a parley |
 | `1` through `6` | Trade goods in markets; `1`, `2`, and `3` remain combat skills and encounter choices |
 | `G` | Sound the village alarm and start a raid encounter |
 | `E` | Start an expedition beside the dungeon entrance |
@@ -179,12 +202,19 @@ In the market, use `1` through `6` to buy Food, Iron, Tools, Weapons, Raw Gold,
 or Gems. Hold `Shift` with the same key to sell. Cargo slots hold eight Food,
 four Iron, two Tools, two Weapons, one Gold strongbox, or one Gem case.
 
-In the map case, use the arrow keys or click a sheet to select it. Press `B` to
-buy a local chart, `S` to sell one, `Enter` to follow it from the correct
-endpoint, or `R` to repair its contested route.
+At a roadside branch, press `Enter` to turn onto it. Use the arrow keys or
+`Keep on track` to reach the next branch. Press `B` to buy local notes, `S` to
+sell carried notes, or `R` to repair the branch. A chart can save time and warn
+of danger, but it is never required to take a visible track.
 
-During combat, `1` uses Crushing Blow, `2` uses Sunder, and `3` uses Second
-Wind. Click the ground to disengage and return to direct movement.
+In the map case, use the arrow keys or click a sheet to select it. Press `B` to
+buy a local chart, `S` to sell one, or `A` to store or retrieve it at the
+Gloamgate archive. Travel begins from the carriage's `Drive out` action.
+
+During combat, `1` uses Crushing Blow, `2` uses Sunder, and `3` uses Catch
+Breath. Catch Breath restores posture but never heals wounds. Click the ground
+to disengage and return to direct movement. A road company can break and flee
+before every opponent falls; the Crownless company can also withdraw.
 
 ## Code layout
 

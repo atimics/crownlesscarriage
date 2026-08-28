@@ -57,6 +57,36 @@ Each kingdom starts with two settlements that cover different parts of its
 economy. A kingdom must be viable inside its own borders, but no single town is
 self-sufficient.
 
+## The Kingdoms of Men
+
+The three realms have stable callings derived from the settlements they
+actually hold. A calling is not a free bonus or a fixed biography. If later
+generation changes the holdings, the calling changes with them.
+
+| Calling | Starting holdings | Material power | Vital dependence | Founding contradiction |
+| --- | --- | --- | --- | --- |
+| Road and Granary | Farm and crossroads market | Food, markets, maps, and carriage roads | Open roads and outside buyers | It needs peace to prosper, yet can profit from carrying a war |
+| Iron and Wall | Fortress and mining town | Mines, smiths, fortifications, and armed force | Imported food and a paid, supplied garrison | It holds the tools of conquest, yet cannot feed those who wield them |
+| Capital and Deep | Capital and dungeon frontier | Capital wealth, old institutions, and dungeon access | Contained ruins, safe pilgrim roads, and frontier labour | Its public order depends on wealth drawn from places it cannot fully control |
+
+Every realm has a Court, Factors, and Commons. Their support and material power
+move independently. The Court depends on public order and legitimacy. The
+Factors depend on shipments and working markets. The Commons gain support when
+hunger makes the existing order visibly fail.
+
+Realm pressure is a derived reading, not a new resource. It exposes the worst
+current threat to that calling:
+
+- Road strain reads food gaps, broken or unsafe roads, closures, and war borders.
+- Garrison strain reads food gaps, war burden, unpaid wages, and missing supplies.
+- Deep strain reads food gaps, dungeon and monster pressure, and the dragon's
+  regional shadow.
+- Debt and weak legitimacy can raise pressure in every realm.
+
+The text-first playtest exposes this through the kingdoms command, while look
+names the realm and strain visible in the current settlement. These reports
+explain existing state; they never create goods, political support, or danger.
+
 ## Physical toy economy
 
 The ordinary goods are Food, Iron, Tools, Weapons, Raw Gold, and Gems. They are

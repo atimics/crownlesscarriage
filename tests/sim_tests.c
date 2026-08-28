@@ -265,11 +265,45 @@ int main(void)
     };
     CC_CHECK(CcSimMapForRoute(&uncharted, uncharted.routes[5].id,
                               uncharted.player.id) == NULL);
+    CcTravelPreview uncharted_preview = {0};
+    CC_CHECK(CcSimTravelPreview(&uncharted,
+                                uncharted_travel.target_id,
+                                &uncharted_preview,
+                                error, sizeof(error)));
+    CC_CHECK(!uncharted_preview.charted);
+    CC_CHECK(uncharted_preview.destination_known);
+    CC_CHECK(uncharted_preview.travel_days ==
+             uncharted.routes[5].travel_days + 2);
     CC_CHECK(CcSimApply(&uncharted, &uncharted_travel,
                         error, sizeof(error)));
     CC_CHECK(uncharted.journey.total_subticks ==
              (uncharted.routes[5].travel_days + 2) *
                  CC_WORLD_DAY_SUBTICKS);
+
+    CcSim hidden_fork;
+    CcSimInit(&hidden_fork, UINT32_C(0xf04c));
+    hidden_fork.player.location_id = hidden_fork.settlements[1].id;
+    hidden_fork.carriage.location_id = hidden_fork.player.location_id;
+    const CcRoute *night_road = &hidden_fork.routes[6];
+    CC_CHECK(night_road->smuggler_route);
+    CC_CHECK(CcSimMapForRoute(&hidden_fork, night_road->id,
+                              hidden_fork.player.id) == NULL);
+    CcId hidden_destination = night_road->from_id ==
+            hidden_fork.player.location_id ?
+        night_road->to_id : night_road->from_id;
+    CcTravelPreview hidden_preview = {0};
+    CC_CHECK(CcSimTravelPreview(&hidden_fork, hidden_destination,
+                                &hidden_preview, error, sizeof(error)));
+    CC_CHECK(!hidden_preview.charted);
+    CC_CHECK(!hidden_preview.destination_known);
+    CC_CHECK(hidden_preview.travel_days == night_road->travel_days + 2);
+    CcCommand take_hidden_fork = {
+        .kind = CC_COMMAND_TRAVEL,
+        .target_id = hidden_destination
+    };
+    CC_CHECK(CcSimApply(&hidden_fork, &take_hidden_fork,
+                        error, sizeof(error)));
+    CC_CHECK(hidden_fork.journey.route_id == night_road->id);
 
     CcSim commitment;
     CcSimInit(&commitment, UINT32_C(0xc011ab1e));
@@ -520,6 +554,87 @@ int main(void)
     CC_CHECK(CcSimTrackedGold(&bargained_road) == gold_before_bargain);
     CC_CHECK(CcSimTrackedGood(&bargained_road, CC_GOOD_FOOD) ==
              food_before_bargain);
+
+    CcSim provisioned_road;
+    CcSimInit(&provisioned_road, UINT32_C(0x50adca11));
+    provisioned_road.bandits[0].route_id = provisioned_road.routes[0].id;
+    (void)PreparePromisedJourney(&provisioned_road, error, sizeof(error));
+    CcGood demanded_good = CC_GOOD_COUNT;
+    int32_t demanded_quantity = 0;
+    CC_CHECK(CcSimBanditProvisionDemand(
+        &provisioned_road, provisioned_road.journey.route_id,
+        &demanded_good, &demanded_quantity));
+    CC_CHECK(demanded_good >= CC_GOOD_FOOD &&
+             demanded_good <= CC_GOOD_WEAPONS && demanded_quantity > 0);
+    int32_t reaction = CcSimBanditReactionRoll(
+        &provisioned_road, provisioned_road.journey.route_id);
+    CC_CHECK(reaction >= 2 && reaction <= 12);
+    CC_CHECK(CcBanditReactionName(reaction) != NULL);
+    provisioned_road.player.cargo[demanded_good] = demanded_quantity;
+    CcMoney provision_coins = provisioned_road.player.coins;
+    int32_t provision_supplies = provisioned_road.bandits[0].supplies;
+    int32_t provision_influence = provisioned_road.bandits[0].influence;
+    CcCommand provisions = {
+        .kind = CC_COMMAND_RESOLVE_ENCOUNTER_PROVISIONS
+    };
+    CC_CHECK(CcSimApply(&provisioned_road, &provisions,
+                        error, sizeof(error)));
+    CC_CHECK(provisioned_road.journey.phase ==
+             CC_JOURNEY_PHASE_TRAVELLING);
+    CC_CHECK(provisioned_road.player.cargo[demanded_good] == 0);
+    CC_CHECK(provisioned_road.player.coins == provision_coins);
+    CC_CHECK(provisioned_road.bandits[0].supplies > provision_supplies);
+    CC_CHECK(provisioned_road.bandits[0].influence > provision_influence);
+    const CcEvent *provision_event = NULL;
+    for (int32_t offset = 0; offset < provisioned_road.event_count; ++offset) {
+        const CcEvent *candidate = CcSimRecentEvent(&provisioned_road, offset);
+        if (candidate != NULL &&
+            candidate->kind == CC_EVENT_ENCOUNTER_NEGOTIATED) {
+            provision_event = candidate;
+            break;
+        }
+    }
+    CC_CHECK(provision_event != NULL);
+    CC_CHECK(strstr(provision_event->text,
+                    provisioned_road.bandits[0].name) != NULL);
+
+    CcSim empty_carriage;
+    CcSimInit(&empty_carriage, UINT32_C(0x50adca11));
+    empty_carriage.bandits[0].route_id = empty_carriage.routes[0].id;
+    (void)PreparePromisedJourney(&empty_carriage, error, sizeof(error));
+    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        empty_carriage.player.cargo[good] = 0;
+    }
+    CC_CHECK(!CcSimApply(&empty_carriage, &provisions,
+                         error, sizeof(error)));
+    CC_CHECK(empty_carriage.journey.phase == CC_JOURNEY_PHASE_BLOCKED);
+
+    CcSim withdrawn_road;
+    CcSimInit(&withdrawn_road, UINT32_C(0x50adca11));
+    withdrawn_road.bandits[0].route_id = withdrawn_road.routes[0].id;
+    (void)PreparePromisedJourney(&withdrawn_road, error, sizeof(error));
+    CcId withdrawal_origin = withdrawn_road.journey.origin_id;
+    int32_t withdrawal_condition = withdrawn_road.carriage.condition;
+    int32_t withdrawal_security = withdrawn_road.routes[0].security;
+    int32_t withdrawal_influence = withdrawn_road.bandits[0].influence;
+    CcMoney withdrawal_gold = CcSimTrackedGold(&withdrawn_road);
+    CcCommand withdraw = {
+        .kind = CC_COMMAND_WITHDRAW_ENCOUNTER,
+        .amount = 1
+    };
+    CC_CHECK(CcSimApply(&withdrawn_road, &withdraw,
+                        error, sizeof(error)));
+    CC_CHECK(!withdrawn_road.journey.active);
+    CC_CHECK(withdrawn_road.journey.phase == CC_JOURNEY_PHASE_NONE);
+    CC_CHECK(withdrawn_road.player.location_id == withdrawal_origin);
+    CC_CHECK(withdrawn_road.carriage.mode == CC_CARRIAGE_PARKED);
+    CC_CHECK(withdrawn_road.carriage.location_id == withdrawal_origin);
+    CC_CHECK(withdrawn_road.carriage.condition < withdrawal_condition);
+    CC_CHECK(withdrawn_road.routes[0].security < withdrawal_security);
+    CC_CHECK(withdrawn_road.bandits[0].influence > withdrawal_influence);
+    CC_CHECK(CcSimTrackedGold(&withdrawn_road) == withdrawal_gold);
+    CC_CHECK(CcSimRecentEvent(&withdrawn_road, 0)->kind ==
+             CC_EVENT_ENCOUNTER_WITHDRAWN);
 
     CcSim invalid_state;
     CcSimInit(&invalid_state, UINT32_C(0xbad5a7e));

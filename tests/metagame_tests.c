@@ -56,6 +56,36 @@ int main(void)
     CC_CHECK(metagame.sim.player.location_id == metagame.sim.settlements[1].id);
     CC_CHECK(metagame.sim.player.coins == 75);
 
+    CcMetagame goblin_ui;
+    CcMetagameInit(&goblin_ui, UINT32_C(0x60b11d));
+    CC_CHECK(CcMetagameExecute(
+        &goblin_ui, "goblins", output, sizeof(output)));
+    CC_CHECK(strstr(output, "Nara Soot-Tongue") != NULL);
+    CC_CHECK(strstr(output, "covenant") != NULL);
+    CcSettlement *goblin_lair = CcSimSettlementMutable(
+        &goblin_ui.sim, goblin_ui.sim.goblins.lair_settlement_id);
+    CC_CHECK(goblin_lair != NULL);
+    goblin_ui.sim.player.location_id = goblin_lair->id;
+    goblin_ui.sim.carriage.location_id = goblin_lair->id;
+    goblin_ui.sim.player.cargo[CC_GOOD_FOOD] = 2;
+    goblin_lair->market_coins = 200;
+    CC_CHECK(CcMetagameExecute(
+        &goblin_ui, "goblins trade food 2", output, sizeof(output)));
+    CC_CHECK(strstr(output, "Lair stores") != NULL);
+    goblin_ui.sim.current_day = 6;
+    goblin_ui.sim.goblins.tribute_cooldown_days = 0;
+    CcSimAdvanceDays(&goblin_ui.sim, 1);
+    CcId goblin_target = goblin_ui.sim.goblins.tribute_target_id;
+    CC_CHECK(goblin_target != 0U);
+    goblin_ui.sim.player.location_id = goblin_target;
+    goblin_ui.sim.carriage.location_id = goblin_target;
+    CC_CHECK(CcMetagameExecute(
+        &goblin_ui, "goblins warn", output, sizeof(output)));
+    CC_CHECK(strstr(output, "has been warned") != NULL);
+    CC_CHECK(CcMetagameExecute(
+        &goblin_ui, "goblins intercept", output, sizeof(output)));
+    CC_CHECK(strstr(output, "No expedition is active") != NULL);
+
     CC_CHECK(CcMetagameExecute(&metagame, "causes", output, sizeof(output)));
     CC_CHECK(strstr(output, "short chain") != NULL);
     CC_CHECK(CcMetagameExecute(&metagame, "rumors", output, sizeof(output)));
@@ -67,6 +97,20 @@ int main(void)
                                sizeof(output)));
     CC_CHECK(strstr(output, "Social fault lines") != NULL);
     CC_CHECK(strstr(output, "war burden") != NULL);
+    CC_CHECK(CcMetagameExecute(&metagame, "kingdoms", output,
+                               sizeof(output)));
+    CC_CHECK(strstr(output, "THE KINGDOMS OF MEN") != NULL);
+    CC_CHECK(strstr(output, "Road and Granary") != NULL);
+    CC_CHECK(strstr(output, "Iron and Wall") != NULL);
+    CC_CHECK(strstr(output, "Capital and Deep") != NULL);
+    CC_CHECK(strstr(output, "Politics (support / material power)") != NULL);
+    CC_CHECK(strstr(output, "Present road strain") != NULL);
+    for (int32_t i = 0; i < metagame.sim.kingdom_count; ++i) {
+        CC_CHECK(strstr(output, metagame.sim.kingdoms[i].name) != NULL);
+    }
+    CC_CHECK(CcMetagameExecute(&metagame, "look", output, sizeof(output)));
+    CC_CHECK(strstr(output, metagame.sim.kingdoms[0].name) != NULL);
+    CC_CHECK(strstr(output, "Road and Granary realm") != NULL);
     CC_CHECK(CcMetagameExecute(&metagame, "war", output, sizeof(output)));
     CC_CHECK(strstr(output, "Frontier roads") != NULL);
     CC_CHECK(strstr(output, "Crown Levy") != NULL);
@@ -75,8 +119,8 @@ int main(void)
     CC_CHECK(strstr(output, "Quiet commission") != NULL);
     CC_CHECK(strstr(output, "Relief charter") == NULL);
     CC_CHECK(CcMetagameExecute(&metagame, "routes", output, sizeof(output)));
-    CC_CHECK(strstr(output, "risk is unknown") != NULL);
-    CC_CHECK(strstr(output, "hidden road") == NULL);
+    CC_CHECK(strstr(output, "no notes") != NULL);
+    CC_CHECK(strstr(output, "unmarked track") != NULL);
 
     int32_t relief_number = SituationNumber(
         &metagame, CC_SITUATION_RELIEF_DELIVERY);
@@ -91,7 +135,7 @@ int main(void)
     ExecuteNumber(&metagame, "accept", quiet_number, output, sizeof(output));
     CC_CHECK(CcPlayerMapCount(&metagame.sim) == maps_before_commission);
     CC_CHECK(CcMetagameExecute(&metagame, "routes", output, sizeof(output)));
-    CC_CHECK(strstr(output, "hidden road") != NULL);
+    CC_CHECK(strstr(output, "guide knows the turns") != NULL);
 
     CcSituation *quiet = Situation(
         &metagame, CC_SITUATION_BLACK_MARKET_DELIVERY);
@@ -197,6 +241,27 @@ int main(void)
     CC_CHECK(fight.sim.player.coins < fight_coins);
     CC_CHECK(CcSimValidate(&fight.sim, error, sizeof(error)));
 
+    CcMetagame horses;
+    CcMetagameInit(&horses, UINT32_C(0x57ab1e));
+    horses.sim.player.location_id = horses.sim.settlements[0].id;
+    horses.sim.carriage.location_id = horses.sim.player.location_id;
+    CC_CHECK(CcMetagameExecute(&horses, "animals", output,
+                               sizeof(output)));
+    CC_CHECK(strstr(output, "traits: strength") != NULL);
+    CC_CHECK(CcMetagameExecute(&horses, "stable breed 2 1", output,
+                               sizeof(output)));
+    CC_CHECK(strstr(output, "due in 330 days") != NULL);
+    horses.sim.horse_team[1].pregnancy_days_remaining = 1;
+    CC_CHECK(CcMetagameExecute(&horses, "wait 1", output,
+                               sizeof(output)));
+    CC_CHECK(horses.sim.stable_horse_count == 1);
+    horses.sim.stable_horses[0].age_days = 3 * 365;
+    horses.sim.stable_horses[0].training = 80;
+    CC_CHECK(CcMetagameExecute(&horses, "stable team 1 3", output,
+                               sizeof(output)));
+    CC_CHECK(strstr(output, "team 1") != NULL);
+    CC_CHECK(CcSimValidate(&horses.sim, error, sizeof(error)));
+
     CcMetagame dragon;
     CcMetagameInit(&dragon, UINT32_C(0xd12a60));
     dragon.sim.player.location_id = dragon.sim.dragon.lair_settlement_id;
@@ -262,6 +327,17 @@ int main(void)
                                output, sizeof(output)));
     CC_CHECK(dragon.sim.dragon.stolen_treasure_id == 0U);
     CC_CHECK(remembered->owner_id == dragon.sim.dragon.id);
+    dragon.sim.goblins.tribute_phase = CC_GOBLIN_TRIBUTE_TO_DRAGON;
+    dragon.sim.goblins.tribute_target_id =
+        dragon.sim.dragon.lair_settlement_id;
+    dragon.sim.goblins.tribute_days_remaining = 2;
+    dragon.sim.goblins.carried_tribute = 7;
+    CcMoney intercept_coins = dragon.sim.player.coins;
+    CC_CHECK(CcMetagameExecute(&dragon, "dragon intercept",
+                               output, sizeof(output)));
+    CC_CHECK(dragon.sim.player.coins == intercept_coins + 7);
+    CC_CHECK(dragon.sim.goblins.tribute_phase ==
+             CC_GOBLIN_TRIBUTE_IDLE);
 
     puts("Text-first metagame tests passed");
     return 0;

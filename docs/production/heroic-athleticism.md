@@ -87,7 +87,8 @@ a living raider establishes a persistent target, drives a physical approach,
 and starts a bounded auto-attack cadence once contact range is reached. The
 target remains visually marked until the player clicks the ground, the target
 falls, or the raid breaks. A compact skill bar adds queued Crushing Blow and
-Sunder contacts plus a cooldown-gated Second Wind recovery. These abilities
+Sunder contacts plus a cooldown-gated Catch Breath action. Catch Breath restores
+posture, never health: wounds cannot be erased inside a fight. These abilities
 modify damage, posture pressure, or recovery while still resolving through the
 same swept contacts, guards, support, collision, and momentum rules.
 

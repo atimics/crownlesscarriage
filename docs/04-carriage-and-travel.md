@@ -54,6 +54,50 @@ Progression unlocks new choices rather than only larger numbers:
 Modules should create political, narrative, and route opportunities in
 addition to modifying combat or capacity.
 
+## V1 working animals
+
+The first playable animal economy contains only horses and cows. They share
+the quadruped movement system, but they have different jobs in the world.
+
+The Crownless company owns two named horses. Their age, health, fatigue, and
+hunger persist. Every journey reserves real fodder from the departure market.
+Cargo weight and a poor road tire the team, while food, time, and a settlement
+stable restore it. A tired team travels more slowly; an exhausted or hungry
+team cannot depart.
+
+Farm settlements keep cattle as adult cows and calves. A herd consumes stored
+Food as fodder and adds a small weekly food yield. Good conditions let calves
+join the adult herd and allow new calves to be born. Fodder failure weakens the
+herd and can force a cow to be slaughtered, exchanging future production for
+four immediate Food. Dragon hunts remove actual cows before taking anonymous
+stored food.
+
+Named horses are individual simulation records because they stay with the
+player. Cows remain settlement herds until a later situation needs to promote
+one animal. V1 does not include riding, mounted combat, breeds, genetics, milk
+as a separate good, or any other domestic animal species.
+
+## Stable breeding
+
+Settlement stables now support a small Crownless breeding program. Bracken is
+a stallion and Morrow is a mare. Breeding requires both horses to be present,
+mature, trained, healthy, fed, and rested. The stable charges 20 crowns and
+uses 2 Food. A pregnancy lasts 330 days, and a mare in her last 30 days cannot
+leave on a carriage journey.
+
+A foal receives a persistent identity, sex, sire, dam, and three inherited
+working traits: strength, temperament, and hardiness. Small deterministic
+variation keeps siblings from being copies. Young horses are boarded where
+they are born. Stable care consumes weekly Food, restores health, lowers
+fatigue, and trains them. A horse must be at least three years old, have 60
+training, and be healthy before it can pull the carriage.
+
+The company can board up to six horses in addition to its two-horse team. At a
+stable, `stable breed MARE STALLION` starts a pregnancy and
+`stable team SLOT HORSE` swaps a ready boarded horse into team slot 1 or 2.
+Numbers come from the `animals` view. The outgoing team horse remains owned by
+the company and is boarded at that settlement.
+
 ## Walker-chassis hypothesis
 
 **Hypothesis:** the Crownless Carriage is an old articulated walker built to
@@ -81,11 +125,22 @@ detour. A restricted road remains passable, but sanctions, tolls, low freight
 capacity, poor condition, and encounters must make that choice materially
 different from an open road.
 
-## Physical cartography
+## Roads before maps
 
-**Contract:** there is no free, omniscient kingdom map. A map is an
-authoritative tradeable object carried in the carriage map case. Each sheet
-depicts one route and its two termini.
+**Contract:** there is no free, omniscient kingdom map, and travel never starts
+by selecting a line on a chart. At the edge of a place, the carriage follows a
+cart track. Each choice scene contains that continuous track and no more than
+one side branch. The player can take the branch or keep moving until the next
+one. The scene includes the coach, road surfaces, signs, vegetation, damage,
+and closures in the world.
+
+The strategic graph may connect a place to many routes. The local presentation
+orders those routes into a short sequence of roadside encounters. It never
+turns every graph edge into a hub-shaped crossroads. Continuing advances to
+the next encounter; taking the visible branch commits to that route.
+
+A map is a tradeable set of traveller's notes carried in the carriage map case.
+Each sheet describes one route and its two termini.
 
 A chart records:
 
@@ -96,19 +151,24 @@ A chart records:
 - Legal or contraband status
 - Current owner and market price
 
-The carriage carries only a small number of sheets. Buying a safer road map may
+The carriage carries only a small number of sheets. Buying better road notes may
 mean selling the illicit tunnel chart needed later. A settlement may sell maps
-made there, while smugglers trade suppressed routes. Following a route requires
-owning its chart and being at one of its endpoints.
+made there, while smugglers trade suppressed routes.
 
-Changing sheets morphs the presentation because every cartographer chooses a
-different orientation, scale, curvature, omissions, and annotation. These
-views are arguments about the world, not live telemetry. Closures, troop
-movements, or new dangers may therefore contradict the ink.
+Owning a chart can reveal the end of an unmarked track, reduce wayfinding delay,
+and provide old claims about danger and condition. It does not create or unlock
+the road. An uncharted branch can still be taken, but the player may not know
+its destination and the journey is slower and more dangerous. A local guide
+can provide the same immediate wayfinding help without transferring a map.
 
-The player selects a physical chart, manifest, companions, and legal posture
-before committing. Wider atlases or copying equipment may later be carriage
-modules, but cannot restore a universal strategic screen.
+Every cartographer chooses different names, omissions, and warnings. The notes
+are arguments about the road, not live telemetry. Closures, troop movements,
+or new dangers may therefore contradict the ink.
+
+The player selects a physical road, manifest, companions, and legal posture
+before committing. Maps remain supporting evidence. Wider atlases or copying
+equipment may later be carriage modules, but cannot restore a universal
+strategic screen.
 
 ## Travel commitment
 
@@ -132,6 +192,29 @@ Before confirmation the game presents:
 Information may be incomplete, but mechanical stakes should remain legible.
 Uncertainty should focus on motives and responsibility rather than hiding basic
 rules.
+
+## Continuous convoy presentation
+
+The route graph remains the source of truth, but the player should see one
+carriage move through the whole journey. A normal trip follows this visible
+sequence:
+
+1. The carriage waits in the town yard while its two horses rest beside the
+   hitch rail.
+2. Choosing a road hitches the team and puts the player on the reins.
+3. The player controls pace with `W`, reins in with `S` or `Space`, and steers
+   within the road lane with `A` and `D`.
+4. The town road, gate approach, and route segment play as one movement. The
+   route clock does not advance until the carriage clears the gate.
+5. A road interruption keeps the carriage at its saved route progress instead
+   of rebuilding it at a generic encounter point.
+6. Arrival continues through the destination gate and ends with the horses
+   resting in that town's yard.
+
+The local presentation may be rebuilt after loading, but the simulation's
+route, endpoints, clock, progress, condition, and stopped or moving state stay
+authoritative. This keeps old saves compatible and prevents local scenes from
+inventing a second journey state.
 
 ## Routine versus meaningful travel
 

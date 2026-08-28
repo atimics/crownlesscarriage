@@ -93,6 +93,77 @@ static const char *CourierPurpose(CcCourierKind kind)
     return "sealed news";
 }
 
+static const CcKingdom *KingdomById(const CcSim *sim, CcId id)
+{
+    if (sim == NULL) return NULL;
+    for (int32_t i = 0; i < sim->kingdom_count; ++i) {
+        if (sim->kingdoms[i].id == id) return &sim->kingdoms[i];
+    }
+    return NULL;
+}
+
+static const char *KingdomPressureName(CcKingdomCalling calling)
+{
+    switch (calling) {
+        case CC_KINGDOM_CALLING_ROAD: return "road strain";
+        case CC_KINGDOM_CALLING_IRON: return "garrison strain";
+        case CC_KINGDOM_CALLING_DEEP: return "deep strain";
+        case CC_KINGDOM_CALLING_COUNT: break;
+    }
+    return "realm strain";
+}
+
+static const char *KingdomPressureWord(int32_t pressure)
+{
+    if (pressure < 30) return "steady";
+    if (pressure < 50) return "watchful";
+    if (pressure < 70) return "strained";
+    if (pressure < 85) return "severe";
+    return "breaking";
+}
+
+static const char *KingdomPower(CcKingdomCalling calling)
+{
+    switch (calling) {
+        case CC_KINGDOM_CALLING_ROAD:
+            return "food, markets, maps, and carriage roads";
+        case CC_KINGDOM_CALLING_IRON:
+            return "mines, smiths, fortifications, and armed force";
+        case CC_KINGDOM_CALLING_DEEP:
+            return "capital wealth, old institutions, and dungeon access";
+        case CC_KINGDOM_CALLING_COUNT: break;
+    }
+    return "uncertain claims";
+}
+
+static const char *KingdomDependence(CcKingdomCalling calling)
+{
+    switch (calling) {
+        case CC_KINGDOM_CALLING_ROAD:
+            return "open roads and buyers beyond its borders";
+        case CC_KINGDOM_CALLING_IRON:
+            return "imported food and a paid, supplied garrison";
+        case CC_KINGDOM_CALLING_DEEP:
+            return "contained ruins, safe pilgrim roads, and frontier labour";
+        case CC_KINGDOM_CALLING_COUNT: break;
+    }
+    return "the wider road network";
+}
+
+static const char *KingdomContradiction(CcKingdomCalling calling)
+{
+    switch (calling) {
+        case CC_KINGDOM_CALLING_ROAD:
+            return "It needs peace to prosper, yet can profit from carrying a war.";
+        case CC_KINGDOM_CALLING_IRON:
+            return "It holds the tools of conquest, yet cannot feed those who wield them.";
+        case CC_KINGDOM_CALLING_DEEP:
+            return "Its public order depends on wealth drawn from places it cannot fully control.";
+        case CC_KINGDOM_CALLING_COUNT: break;
+    }
+    return "Its claim is larger than its reach.";
+}
+
 static const char *SituationTarget(const CcSim *sim,
                                    const CcSituation *situation,
                                    char *buffer, size_t capacity)
@@ -147,6 +218,16 @@ static void DescribeLook(const CcMetagame *metagame,
     Append(output, capacity, "\n%s — %s, day %d\n",
            place->name, CcSettlementFunctionName(place->function),
            sim->current_day);
+    const CcKingdom *kingdom = KingdomById(sim, place->kingdom_id);
+    if (kingdom != NULL) {
+        CcKingdomCalling calling = CcSimKingdomCalling(sim, kingdom->id);
+        int32_t pressure = CcSimKingdomPressure(sim, kingdom->id);
+        Append(output, capacity,
+               "%s signs mark this as a %s realm. Its %s stands at %d/100: %s.\n",
+               kingdom->name, CcKingdomCallingName(calling),
+               KingdomPressureName(calling), pressure,
+               KingdomPressureWord(pressure));
+    }
     if (place->stock[CC_GOOD_FOOD] < place->reserve_target[CC_GOOD_FOOD] / 2) {
         Append(output, capacity,
                "Empty baskets line the market. A guard keeps people back from the granary door.\n");
@@ -168,6 +249,15 @@ static void DescribeLook(const CcMetagame *metagame,
     if (place->id == sim->dragon.lair_settlement_id) {
         Append(output, capacity,
                "A black cave overlooks the roofs. Goblins climb to it with wrapped gifts.\n");
+    }
+    if (place->id == sim->goblins.lair_settlement_id) {
+        Append(output, capacity,
+               "Nara Soot-Tongue receives traders beside the Cinder Tithe's store caves.\n");
+    }
+    if (place->id == sim->goblins.tribute_target_id &&
+        sim->goblins.tribute_phase == CC_GOBLIN_TRIBUTE_PREPARING) {
+        Append(output, capacity,
+               "Word has arrived that goblins are mustering for this settlement. There is still time to warn or intercept them.\n");
     }
     if (place->id == sim->dragon.retaliation_target_id &&
         sim->dragon.stolen_outstanding > 0) {
@@ -400,7 +490,7 @@ static void DescribeRoutes(const CcMetagame *metagame,
                            char *output, size_t capacity)
 {
     const CcSim *sim = &metagame->sim;
-    Append(output, capacity, "Roads from here:\n");
+    Append(output, capacity, "Branches found along the road out:\n");
     for (int32_t i = 0; i < sim->route_count; ++i) {
         const CcRoute *route = &sim->routes[i];
         if (route->from_id != sim->player.location_id &&
@@ -409,31 +499,33 @@ static void DescribeRoutes(const CcMetagame *metagame,
             route->to_id : route->from_id;
         const CcSettlement *destination = CcSimSettlement(sim, destination_id);
         const CcMap *map = CcSimMapForRoute(sim, route->id, sim->player.id);
-        const CcSituation *accepted = CcSimAcceptedSituation(sim);
-        bool sponsored_night_passage = route->smuggler_route &&
-            accepted != NULL &&
-            accepted->kind == CC_SITUATION_BLACK_MARKET_DELIVERY &&
-            route->to_id == accepted->target_id;
-        if (route->smuggler_route && map == NULL &&
-            !sponsored_night_passage) continue;
-        Append(output, capacity, "  %d. %s — %d days, %s",
-               i + 1, destination != NULL ? destination->name : "unknown",
-               route->travel_days, route->closed ? "restricted and tolled" : "open");
+        CcTravelPreview preview = {0};
+        if (!CcSimTravelPreview(sim, destination_id, &preview,
+                                NULL, 0U)) continue;
+        const char *road_name = preview.destination_known &&
+                                destination != NULL ?
+            destination->name : "unmarked track";
+        Append(output, capacity,
+               "  %d. %s — %d days, %" PRId64 " crowns, %d fodder, horse team %d%%, %s",
+               i + 1, road_name, preview.travel_days,
+               preview.provision_cost, preview.horse_feed_required,
+               preview.horse_readiness,
+               route->closed ? "restricted and tolled" : "open");
         if (map != NULL) {
             Append(output, capacity,
-                   ", %s chart says %s (%d days old)%s\n",
+                   ", %s notes say %s (%d days old)%s\n",
                    AccuracyWord(map->accuracy), DangerWord(map->recorded_danger),
                    sim->current_day - map->surveyed_day,
-                   route->smuggler_route ? ", hidden road" : "");
-        } else if (sponsored_night_passage) {
+                   route->smuggler_route ? ", unmarked road" : "");
+        } else if (preview.sponsored_guide) {
             Append(output, capacity,
-                   ", the sponsor's guide knows this hidden road\n");
+                   ", the sponsor's guide knows the turns\n");
         } else {
             Append(output, capacity,
-                   ", uncharted: travel is slower and the risk is unknown\n");
+                   ", no notes: slower travel and unknown risk\n");
         }
     }
-    Append(output, capacity, "Use 'travel NUMBER'.\n");
+    Append(output, capacity, "Turn onto a branch with 'travel NUMBER'.\n");
 }
 
 static void DescribeMaps(const CcMetagame *metagame,
@@ -489,6 +581,56 @@ static void DescribeCargo(const CcMetagame *metagame,
                    "  Treasure %d: %s; one slot, value %d crowns\n",
                    i + 1, treasure->name, treasure->appraised_value);
         }
+    }
+}
+
+static void DescribeAnimals(const CcMetagame *metagame,
+                            char *output, size_t capacity)
+{
+    const CcSim *sim = &metagame->sim;
+    Append(output, capacity, "Carriage horses — team readiness %d%%:\n",
+           CcSimHorseTeamReadiness(sim));
+    for (int32_t i = 0; i < CcSimHorseCount(sim); ++i) {
+        const CcHorse *horse = CcSimHorseAt(sim, i);
+        const CcSettlement *stable = CcSimSettlement(
+            sim, horse->stable_settlement_id);
+        Append(output, capacity,
+               "  %d. %s [%s] — %s, %s, age %d; health %d, fatigue %d, hunger %d, training %d\n",
+               i + 1, horse->name,
+               i < CC_CARRIAGE_HORSE_COUNT ?
+                   (i == 0 ? "team 1" : "team 2") :
+                   (stable != NULL ? stable->name : "boarded"),
+               CcHorseSexName(horse->sex), CcHorseLifeStageName(horse),
+               horse->age_days / 365, horse->health, horse->fatigue,
+               horse->hunger, horse->training);
+        Append(output, capacity,
+               "     traits: strength %d, temperament %d, hardiness %d",
+               horse->strength, horse->temperament, horse->hardiness);
+        if (horse->sire_id != 0U || horse->dam_id != 0U) {
+            const CcHorse *sire = CcSimHorse(sim, horse->sire_id);
+            const CcHorse *dam = CcSimHorse(sim, horse->dam_id);
+            Append(output, capacity, "; by %s out of %s",
+                   sire != NULL ? sire->name : "unknown",
+                   dam != NULL ? dam->name : "unknown");
+        }
+        if (horse->pregnant_by_id != 0U) {
+            const CcHorse *sire = CcSimHorse(sim, horse->pregnant_by_id);
+            Append(output, capacity, "; foal by %s due in %d days",
+                   sire != NULL ? sire->name : "unknown",
+                   horse->pregnancy_days_remaining);
+        }
+        Append(output, capacity, "\n");
+    }
+    Append(output, capacity,
+           "At a stable: 'stable breed MARE STALLION' or 'stable team SLOT HORSE'.\n");
+    Append(output, capacity, "Cattle herds:\n");
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        const CcSettlement *place = &sim->settlements[i];
+        if (place->cow_adults + place->cow_calves <= 0) continue;
+        Append(output, capacity,
+               "  %s: %d cows, %d calves, condition %d, hunger %d\n",
+               place->name, place->cow_adults, place->cow_calves,
+               place->cow_condition, place->cow_hunger);
     }
 }
 
@@ -563,7 +705,14 @@ static void DescribeDragon(const CcMetagame *metagame,
                    sim->dragon.brood_days_remaining);
         }
     }
-    if (sim->goblins.tribute_phase == CC_GOBLIN_TRIBUTE_OUTBOUND) {
+    if (sim->goblins.tribute_phase == CC_GOBLIN_TRIBUTE_PREPARING) {
+        const CcSettlement *target = CcSimSettlement(
+            sim, sim->goblins.tribute_target_id);
+        Append(output, capacity,
+               "%s is mustering to raid %s and leaves tomorrow.\n",
+               sim->goblins.name,
+               target != NULL ? target->name : "a rich town");
+    } else if (sim->goblins.tribute_phase == CC_GOBLIN_TRIBUTE_OUTBOUND) {
         const CcSettlement *target = CcSimSettlement(
             sim, sim->goblins.tribute_target_id);
         Append(output, capacity,
@@ -675,6 +824,69 @@ static void DescribeDragon(const CcMetagame *metagame,
     }
 }
 
+static void DescribeGoblins(const CcMetagame *metagame,
+                            char *output, size_t capacity)
+{
+    const CcSim *sim = &metagame->sim;
+    const CcGoblinCult *goblins = &sim->goblins;
+    const CcSettlement *lair = CcSimSettlement(
+        sim, goblins->lair_settlement_id);
+    const char *future = goblins->devotion >= 60 ?
+        goblins->cohesion >= 60 ? "a united dragon court" :
+                                  "fanatical ash-splinters" :
+        goblins->cohesion >= 60 ? "a free lair beyond the dragon" :
+                                  "scattered hungry bands";
+    Append(output, capacity,
+           "%s lives beneath %s. Nara Soot-Tongue speaks for its Hoardkeepers, Ashkeepers, Tongues, and Foragers.\n",
+           goblins->name, lair != NULL ? lair->name : "an unknown lair");
+    Append(output, capacity,
+           "%d members; covenant %d/100, cohesion %d/100. Its present course points toward %s.\n",
+           goblins->members, goblins->devotion, goblins->cohesion, future);
+    Append(output, capacity,
+           "Lair stores: %d Food, %d Tools, %d Weapons, %" PRId64
+           " crowns. %d expeditions have been intercepted.\n",
+           goblins->lair_stock[CC_GOOD_FOOD],
+           goblins->lair_stock[CC_GOOD_TOOLS],
+           goblins->lair_stock[CC_GOOD_WEAPONS], goblins->lair_coins,
+           goblins->expeditions_intercepted);
+    if (goblins->tribute_phase == CC_GOBLIN_TRIBUTE_PREPARING ||
+        goblins->tribute_phase == CC_GOBLIN_TRIBUTE_OUTBOUND) {
+        const CcSettlement *target = CcSimSettlement(
+            sim, goblins->tribute_target_id);
+        Append(output, capacity,
+               "An expedition threatens %s. It is %s%s.\n",
+               target != NULL ? target->name : "an unknown settlement",
+               goblins->tribute_phase == CC_GOBLIN_TRIBUTE_PREPARING ?
+                   "still mustering" : "on the road",
+               goblins->target_warned ? "; the target has been warned" : "");
+    } else if (goblins->tribute_phase == CC_GOBLIN_TRIBUTE_RETURNING) {
+        Append(output, capacity,
+               "An expedition is returning to the lair with physical loot.\n");
+    } else if (goblins->tribute_phase == CC_GOBLIN_TRIBUTE_TO_DRAGON) {
+        Append(output, capacity,
+               "A tribute bearer is taking portable spoils to the dragon cave.\n");
+    } else {
+        Append(output, capacity, "No expedition is active.\n");
+    }
+    if (goblins->dragon_seed_phase != CC_GOBLIN_DRAGON_SEED_NONE) {
+        Append(output, capacity,
+               "The ash-vault project is %s, with about %d years left before it can reveal a dragon seed.\n",
+               goblins->dragon_seed_phase == CC_GOBLIN_DRAGON_SEED_RUMORED ?
+                   "an open rumor" : "under public preparation",
+               (goblins->dragon_seed_days_remaining + 364) / 365);
+    }
+    if (sim->player.location_id == goblins->lair_settlement_id) {
+        Append(output, capacity,
+               "Here you may use 'goblins trade food|tools|weapons COUNT'.\n");
+    }
+    if (sim->player.location_id == goblins->tribute_target_id &&
+        (goblins->tribute_phase == CC_GOBLIN_TRIBUTE_PREPARING ||
+         goblins->tribute_phase == CC_GOBLIN_TRIBUTE_OUTBOUND)) {
+        Append(output, capacity,
+               "Here you may use 'goblins warn' or 'goblins intercept'.\n");
+    }
+}
+
 static const char *InequalityWord(int32_t score)
 {
     if (score < 40) return "shared";
@@ -718,7 +930,10 @@ static void DescribeEconomy(const CcMetagame *metagame,
                place->stock[CC_GOOD_WEAPONS], place->stock[CC_GOOD_GOLD],
                place->stock[CC_GOOD_GEMS]);
         if (CcSettlementHasService(place, CC_SERVICE_FARM)) {
-            Append(output, capacity, "; fields %d%%", place->field_yield);
+            Append(output, capacity,
+                   "; fields %d%%, cattle %d + %d calves",
+                   place->field_yield, place->cow_adults,
+                   place->cow_calves);
         }
         if (CcSettlementHasService(place, CC_SERVICE_MINE)) {
             Append(output, capacity,
@@ -735,6 +950,64 @@ static void DescribeEconomy(const CcMetagame *metagame,
     Append(output, capacity,
            "The copied monastery ledger holds %" PRId64 " crowns. It lends real deposited coin for famine grain and productive Tools; realms repay from treasury and market tithes.\n",
            sim->iron_ledger_reserve);
+}
+
+static void DescribeKingdoms(const CcMetagame *metagame,
+                             char *output, size_t capacity)
+{
+    const CcSim *sim = &metagame->sim;
+    Append(output, capacity,
+           "THE KINGDOMS OF MEN\n"
+           "A realm holds only what its food, money, orders, and people can reach.\n");
+    for (int32_t kingdom_index = 0;
+         kingdom_index < sim->kingdom_count; ++kingdom_index) {
+        const CcKingdom *kingdom = &sim->kingdoms[kingdom_index];
+        CcKingdomCalling calling = CcSimKingdomCalling(sim, kingdom->id);
+        int32_t pressure = CcSimKingdomPressure(sim, kingdom->id);
+        Append(output, capacity, "\n%s — %s\n",
+               kingdom->name, CcKingdomCallingName(calling));
+        Append(output, capacity, "  Holds: ");
+        int32_t holdings = 0;
+        for (int32_t i = 0; i < sim->settlement_count; ++i) {
+            const CcSettlement *place = &sim->settlements[i];
+            if (place->kingdom_id != kingdom->id) continue;
+            Append(output, capacity, "%s%s (%s)", holdings > 0 ? ", " : "",
+                   place->name, CcSettlementFunctionName(place->function));
+            holdings += 1;
+        }
+        if (holdings == 0) Append(output, capacity, "no settled seat");
+        Append(output, capacity,
+               ".\n  Power: %s.\n  Dependence: %s.\n"
+               "  Contradiction: %s\n"
+               "  Present %s: %d/100, %s. Treasury %" PRId64
+               ", debt %" PRId64 ", legitimacy %d.\n",
+               KingdomPower(calling), KingdomDependence(calling),
+               KingdomContradiction(calling), KingdomPressureName(calling),
+               pressure, KingdomPressureWord(pressure), kingdom->treasury,
+               kingdom->iron_ledger_debt, kingdom->legitimacy);
+        Append(output, capacity, "  Politics (support / material power):\n");
+        for (int32_t i = 0; i < sim->faction_count; ++i) {
+            const CcFaction *faction = &sim->factions[i];
+            if (faction->kingdom_id != kingdom->id) continue;
+            Append(output, capacity, "    %s: %d / %d\n",
+                   CcFactionKindName(faction->kind), faction->support,
+                   faction->power);
+        }
+        Append(output, capacity, "  Relations: ");
+        int32_t relations = 0;
+        for (int32_t other = 0; other < sim->kingdom_count; ++other) {
+            if (other == kingdom_index) continue;
+            Append(output, capacity, "%s%s — %s",
+                   relations > 0 ? "; " : "",
+                   sim->kingdoms[other].name,
+                   CcDiplomaticStateName(
+                       sim->diplomacy[kingdom_index][other]));
+            relations += 1;
+        }
+        Append(output, capacity, ".\n");
+    }
+    Append(output, capacity,
+           "\nThe Crownless Carriage serves no realm. Moving food, tools, weapons, maps, and sealed dispatches changes which of these claims can survive.\n");
 }
 
 static void DescribeWar(const CcMetagame *metagame,
@@ -874,20 +1147,25 @@ static void DescribeHelp(char *output, size_t capacity)
 {
     Append(output, capacity,
            "See the world:\n"
-           "  look, causes, people, rumors, charters, routes, maps, cargo, economy, treasures, inequality, war, dragon, status, history [COUNT]\n"
+           "  look, causes, people, rumors, charters, roads, notes, cargo, animals, economy, treasures, inequality, kingdoms, war, dragon, goblins, status, history [COUNT]\n"
            "Make commitments:\n"
            "  accept NUMBER, refuse NUMBER, abandon\n"
            "Move goods and people:\n"
            "  buy food|iron|tools|weapons|gold|gems COUNT\n"
            "  sell food|iron|tools|weapons|gold|gems COUNT\n"
            "  buy-map NUMBER, sell-map NUMBER\n"
+           "  buy-notes NUMBER, sell-notes NUMBER (aliases)\n"
            "  archive-map NUMBER, retrieve-map NUMBER (in Gloamgate)\n"
            "  buy-treasure NUMBER, sell-treasure NUMBER, travel NUMBER\n"
            "Act on the road and world:\n"
            "  road fight|bargain, repair NUMBER tools|cash\n"
+           "  stable breed MARE STALLION, stable team SLOT HORSE\n"
            "  dungeon public|smuggler|seal, wait DAYS\n"
            "  dragon steal COUNT, dragon return COUNT (at the cave)\n"
            "  dragon steal-treasure NUMBER, dragon return-treasure\n"
+           "  dragon intercept (when tribute approaches the cave)\n"
+           "  goblins trade food|tools|weapons COUNT (at their lair)\n"
+           "  goblins warn|intercept (at the threatened settlement)\n"
            "Keep the test:\n"
            "  save PATH, load PATH, debrief, quit\n");
 }
@@ -954,7 +1232,7 @@ void CcMetagameIntro(const CcMetagame *metagame,
            "CROWNLESS CARRIAGE — THE EMPTY GRANARY\n"
            "You decide what people, goods, and news fit in one carriage.\n"
            "The world will continue after every promise and refusal.\n"
-           "You start at the hungry crossroads with 75 crowns and no given plan.\n");
+           "You start in the hungry waystation with 75 crowns and no given plan.\n");
     DescribeLook(metagame, output, output_capacity);
 }
 
@@ -974,6 +1252,7 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
     char *command = strtok(copy, " \t");
     char *first = strtok(NULL, " \t");
     char *second = strtok(NULL, " \t");
+    char *third = strtok(NULL, " \t");
     if (command == NULL) return true;
 
     if (strcmp(command, "help") == 0) DescribeHelp(output, output_capacity);
@@ -987,18 +1266,56 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
         DescribeRumors(metagame, output, output_capacity);
     } else if (strcmp(command, "charters") == 0) {
         DescribeCharters(metagame, output, output_capacity);
-    } else if (strcmp(command, "routes") == 0) {
+    } else if (strcmp(command, "roads") == 0 ||
+               strcmp(command, "routes") == 0) {
         DescribeRoutes(metagame, output, output_capacity);
-    } else if (strcmp(command, "maps") == 0) {
+    } else if (strcmp(command, "notes") == 0 ||
+               strcmp(command, "maps") == 0) {
         DescribeMaps(metagame, output, output_capacity);
     } else if (strcmp(command, "cargo") == 0) {
         DescribeCargo(metagame, output, output_capacity);
+    } else if (strcmp(command, "animals") == 0) {
+        DescribeAnimals(metagame, output, output_capacity);
+    } else if (strcmp(command, "stable") == 0) {
+        int32_t first_index = 0;
+        int32_t second_index = 0;
+        CcCommand action = {0};
+        if (first != NULL && strcmp(first, "breed") == 0 &&
+            ParseIndex(second, CcSimHorseCount(&metagame->sim),
+                       &first_index) &&
+            ParseIndex(third, CcSimHorseCount(&metagame->sim),
+                       &second_index)) {
+            action.kind = CC_COMMAND_BREED_HORSES;
+            action.target_id = CcSimHorseAt(
+                &metagame->sim, first_index)->id;
+            action.amount = second_index + 1;
+        } else if (first != NULL && strcmp(first, "team") == 0 &&
+                   ParseIndex(second, CC_CARRIAGE_HORSE_COUNT,
+                              &first_index) &&
+                   ParseIndex(third, CcSimHorseCount(&metagame->sim),
+                              &second_index)) {
+            action.kind = CC_COMMAND_ASSIGN_HORSE;
+            action.target_id = CcSimHorseAt(
+                &metagame->sim, second_index)->id;
+            action.amount = first_index + 1;
+        } else {
+            Append(output, output_capacity,
+                   "Use 'stable breed MARE STALLION' or 'stable team SLOT HORSE' with numbers from 'animals'.\n");
+            return false;
+        }
+        if (!ApplyCommand(metagame, &action, output, output_capacity)) {
+            return false;
+        }
+        DescribeAnimals(metagame, output, output_capacity);
     } else if (strcmp(command, "economy") == 0) {
         DescribeEconomy(metagame, output, output_capacity);
     } else if (strcmp(command, "treasures") == 0) {
         DescribeTreasures(metagame, output, output_capacity);
     } else if (strcmp(command, "inequality") == 0) {
         DescribeInequality(metagame, output, output_capacity);
+    } else if (strcmp(command, "kingdoms") == 0 ||
+               strcmp(command, "realms") == 0) {
+        DescribeKingdoms(metagame, output, output_capacity);
     } else if (strcmp(command, "war") == 0) {
         DescribeWar(metagame, output, output_capacity);
     } else if (strcmp(command, "dragon") == 0 && first == NULL) {
@@ -1020,14 +1337,35 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
                    metagame->sim.dragon.stolen_treasure_id != 0U) {
             action.kind = CC_COMMAND_RETURN_DRAGON_NAMED_TREASURE;
             action.target_id = metagame->sim.dragon.stolen_treasure_id;
+        } else if (strcmp(first, "intercept") == 0 && second == NULL) {
+            action.kind = CC_COMMAND_INTERCEPT_DRAGON_TRIBUTE;
         } else {
             Append(output, output_capacity,
-                   "Use 'dragon steal COUNT', 'dragon return COUNT', 'dragon steal-treasure NUMBER', or 'dragon return-treasure'.\n");
+                   "Use 'dragon steal COUNT', 'dragon return COUNT', 'dragon steal-treasure NUMBER', 'dragon return-treasure', or 'dragon intercept'.\n");
             return false;
         }
         action.amount = amount;
         if (!ApplyCommand(metagame, &action, output, output_capacity)) return false;
         DescribeDragon(metagame, output, output_capacity);
+    } else if (strcmp(command, "goblins") == 0 && first == NULL) {
+        DescribeGoblins(metagame, output, output_capacity);
+    } else if (strcmp(command, "goblins") == 0) {
+        CcCommand action = {0};
+        if (strcmp(first, "trade") == 0 &&
+            ParseGood(second, &action.good) &&
+            ParseAmount(third, &action.amount)) {
+            action.kind = CC_COMMAND_GOBLIN_TRADE;
+        } else if (strcmp(first, "warn") == 0 && second == NULL) {
+            action.kind = CC_COMMAND_GOBLIN_WARN;
+        } else if (strcmp(first, "intercept") == 0 && second == NULL) {
+            action.kind = CC_COMMAND_GOBLIN_INTERCEPT;
+        } else {
+            Append(output, output_capacity,
+                   "Use 'goblins trade food|tools|weapons COUNT', 'goblins warn', or 'goblins intercept'.\n");
+            return false;
+        }
+        if (!ApplyCommand(metagame, &action, output, output_capacity)) return false;
+        DescribeGoblins(metagame, output, output_capacity);
     } else if (strcmp(command, "status") == 0) {
         DescribeStatus(metagame, output, output_capacity);
     } else if (strcmp(command, "history") == 0) {
@@ -1090,6 +1428,8 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
                amount > 0 ? amount : -amount, CcGoodName(good));
     } else if (strcmp(command, "buy-map") == 0 ||
                strcmp(command, "sell-map") == 0 ||
+               strcmp(command, "buy-notes") == 0 ||
+               strcmp(command, "sell-notes") == 0 ||
                strcmp(command, "archive-map") == 0 ||
                strcmp(command, "retrieve-map") == 0) {
         int32_t index;
@@ -1097,10 +1437,14 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
             Append(output, output_capacity, "Choose a map number.\n");
             return false;
         }
-        CcCommandKind kind = strcmp(command, "buy-map") == 0 ?
-            CC_COMMAND_BUY_MAP : strcmp(command, "sell-map") == 0 ?
-            CC_COMMAND_SELL_MAP : strcmp(command, "archive-map") == 0 ?
-            CC_COMMAND_ARCHIVE_MAP : CC_COMMAND_RETRIEVE_MAP;
+        bool buying = strcmp(command, "buy-map") == 0 ||
+                      strcmp(command, "buy-notes") == 0;
+        bool selling = strcmp(command, "sell-map") == 0 ||
+                       strcmp(command, "sell-notes") == 0;
+        CcCommandKind kind = buying ? CC_COMMAND_BUY_MAP :
+            selling ? CC_COMMAND_SELL_MAP :
+            strcmp(command, "archive-map") == 0 ?
+                CC_COMMAND_ARCHIVE_MAP : CC_COMMAND_RETRIEVE_MAP;
         CcCommand action = {
             .kind = kind,
             .target_id = metagame->sim.maps[index].id

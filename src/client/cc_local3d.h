@@ -31,6 +31,8 @@
 #define CC_LOCAL_NOTICE_Z 27.80f
 #define CC_LOCAL_DUNGEON_X 29.0f
 #define CC_LOCAL_DUNGEON_Z 51.80f
+#define CC_LOCAL_DRAGON_CAVE_X 19.0f
+#define CC_LOCAL_DRAGON_CAVE_Z 52.0f
 #define CC_LOCAL_ROAD_START_X 46.20f
 #define CC_LOCAL_ROAD_START_Z 40.00f
 #define CC_LOCAL_ROAD_PARLEY_X 49.70f
@@ -57,6 +59,27 @@ typedef enum CcLocalSceneKind {
     CC_LOCAL_SCENE_MARKET,
     CC_LOCAL_SCENE_ROAD
 } CcLocalSceneKind;
+
+typedef enum CcLocalConvoyPhase {
+    CC_LOCAL_CONVOY_PARKED = 0,
+    CC_LOCAL_CONVOY_DEPARTING,
+    CC_LOCAL_CONVOY_GATE,
+    CC_LOCAL_CONVOY_ROAD,
+    CC_LOCAL_CONVOY_ARRIVING
+} CcLocalConvoyPhase;
+
+/* The strategic simulation owns the durable route and progress. This small
+   presentation state keeps the same carriage under the camera while it
+   leaves a stable, crosses a gate, travels, and enters the next town. */
+typedef struct CcLocalConvoyState {
+    CcLocalConvoyPhase phase;
+    Vector3 town_position;
+    float town_heading_yaw;
+    float phase_progress;
+    float pace;
+    float lateral_offset;
+    float runtime_tick_accumulator;
+} CcLocalConvoyState;
 
 typedef enum CcLocalAtmospherePreset {
     CC_LOCAL_ATMOSPHERE_CLEAR_DAY = 0,
@@ -245,6 +268,11 @@ typedef enum CcGuardDuty {
     CC_GUARD_RETURNING
 } CcGuardDuty;
 
+typedef enum CcLocalRaiderRole {
+    CC_LOCAL_RAIDER_CAPTAIN,
+    CC_LOCAL_RAIDER_FORAGER
+} CcLocalRaiderRole;
+
 typedef struct CcLocalCourseRunner {
     CcLocalAgent agent;
     int32_t next_waypoint;
@@ -269,6 +297,10 @@ typedef struct CcLocalCourse {
     CcLocalTraveller travellers[CC_LOCAL_TRAVELLER_COUNT];
     Vector3 guard_entry[CC_LOCAL_COURSE_RUNNER_COUNT];
     CcLocalAgent raiders[CC_LOCAL_RAIDER_COUNT];
+    CcLocalRaiderRole raider_roles[CC_LOCAL_RAIDER_COUNT];
+    char raider_names[CC_LOCAL_RAIDER_COUNT][CC_NAME_CAPACITY];
+    char raider_company_name[CC_NAME_CAPACITY];
+    CcId raider_company_id;
     CcLocalAgent situation_witness;
     CcId situation_witness_id;
     Vector3 raider_entry[CC_LOCAL_RAIDER_COUNT];
@@ -277,10 +309,14 @@ typedef struct CcLocalCourse {
     float engagement_time;
     float raider_attack_cooldown[CC_LOCAL_RAIDER_COUNT];
     int32_t raider_response_stage[CC_LOCAL_RAIDER_COUNT];
+    int32_t raider_initial_resolve;
     int32_t raider_resolve;
     int32_t defenses_completed;
     CcCombatOutcome last_outcome;
     CcCombatTeam last_attacker_team;
+    CcCombatTeam last_defender_team;
+    float last_health_damage;
+    float last_posture_damage;
     float combat_event_seconds;
     double world_simulation_accumulator;
     bool alarm_active;
@@ -317,6 +353,7 @@ typedef struct CcLocalRendererStats {
 /* The exterior land is deterministic for a world seed. Rendering, movement,
    picking, roads, and building foundations all use these same samples. */
 void CcLocalTerrainSetSeed(uint32_t seed);
+void CcLocalBindPlace(const CcSim *sim);
 float CcLocalTerrainHeightAt(float x, float z);
 Vector3 CcLocalTerrainNormalAt(float x, float z);
 
@@ -379,6 +416,9 @@ void CcLocalCourseRaiseAlarmNear(CcLocalCourse *course,
 void CcLocalCourseStageRoadEncounter(CcLocalCourse *course,
                                      CcLocalAgent *player,
                                      bool hostile);
+void CcLocalCourseBindRaiderCompany(CcLocalCourse *course,
+                                    const CcSim *sim);
+const char *CcLocalRaiderRoleName(CcLocalRaiderRole role);
 bool CcLocalCourseBeginPlayerStrike(CcLocalCourse *course,
                                     CcLocalAgent *player);
 void CcLocalCourseSetPlayerGuarded(CcLocalCourse *course,
@@ -416,15 +456,23 @@ void CcLocalDrawNpcPortrait3D(const CcNpcAppearance *appearance,
 void CcLocalDrawAgentPortrait3D(const CcLocalAgent *agent,
                                 Rectangle bounds);
 void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
-                         const CcLocalCourse *course, float clock,
+                         const CcLocalCourse *course,
+                         const CcLocalConvoyState *convoy, float clock,
                          RenderTexture2D target, Rectangle destination);
 void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
                        const CcLocalCourse *course, bool travelling,
-                       bool parley,
+                       bool parley, const CcLocalConvoyState *convoy,
+                       float clock, RenderTexture2D target,
+                       Rectangle destination);
+float CcLocalRoadCarriageX(int32_t progress_milli);
+void CcLocalDrawFork3D(const CcSim *sim, int32_t selected_route,
                        float clock, RenderTexture2D target,
                        Rectangle destination);
 void CcLocalDrawMarket3D(const CcSim *sim, const CcLocalAgent *agent, float clock,
                          RenderTexture2D target, Rectangle destination);
+void CcLocalDrawInterior3D(const CcSim *sim, const CcLocalAgent *agent,
+                           float clock, RenderTexture2D target,
+                           Rectangle destination);
 Vector2 CcLocalMove(Vector2 current, Vector2 delta, bool market_interior);
 
 #endif
