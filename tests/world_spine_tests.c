@@ -28,6 +28,32 @@ int main(void)
         &first, first.kingdoms[0].id, first.kingdoms[2].id));
     CC_CHECK(!CcSimKingdomsAtWar(
         &first, first.kingdoms[1].id, first.kingdoms[2].id));
+    CC_CHECK(CcSimKingdomCalling(
+        &first, first.kingdoms[0].id) == CC_KINGDOM_CALLING_ROAD);
+    CC_CHECK(CcSimKingdomCalling(
+        &first, first.kingdoms[1].id) == CC_KINGDOM_CALLING_IRON);
+    CC_CHECK(CcSimKingdomCalling(
+        &first, first.kingdoms[2].id) == CC_KINGDOM_CALLING_DEEP);
+    CC_CHECK(strcmp(
+        CcKingdomCallingName(CC_KINGDOM_CALLING_ROAD),
+        "Road and Granary") == 0);
+    CC_CHECK(strcmp(CcFactionKindName(CC_FACTION_GUILD), "Factors") == 0);
+    for (int32_t i = 0; i < first.kingdom_count; ++i) {
+        int32_t pressure = CcSimKingdomPressure(
+            &first, first.kingdoms[i].id);
+        CC_CHECK(pressure >= 0 && pressure <= 100);
+    }
+    CcSim blocked_roads = first;
+    int32_t road_pressure_before = CcSimKingdomPressure(
+        &blocked_roads, blocked_roads.kingdoms[0].id);
+    blocked_roads.routes[0].condition = 0;
+    blocked_roads.routes[0].security = 0;
+    blocked_roads.routes[0].closed = true;
+    CC_CHECK(CcSimKingdomPressure(
+        &blocked_roads, blocked_roads.kingdoms[0].id) == 95);
+    CC_CHECK(CcSimKingdomPressure(
+        &blocked_roads, blocked_roads.kingdoms[0].id) >
+        road_pressure_before);
     for (int32_t i = 0; i < first.settlement_count; ++i) {
         const CcSettlement *settlement = &first.settlements[i];
         CC_CHECK(CcSettlementServiceCount(settlement) > 0);

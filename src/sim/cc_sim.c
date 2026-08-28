@@ -364,6 +364,27 @@ const char *CcServiceName(CcServiceKind service)
     return "No service";
 }
 
+const char *CcFactionKindName(CcFactionKind kind)
+{
+    switch (kind) {
+        case CC_FACTION_CROWN: return "Court";
+        case CC_FACTION_GUILD: return "Factors";
+        case CC_FACTION_COMMONS: return "Commons";
+    }
+    return "Faction";
+}
+
+const char *CcKingdomCallingName(CcKingdomCalling calling)
+{
+    switch (calling) {
+        case CC_KINGDOM_CALLING_ROAD: return "Road and Granary";
+        case CC_KINGDOM_CALLING_IRON: return "Iron and Wall";
+        case CC_KINGDOM_CALLING_DEEP: return "Capital and Deep";
+        case CC_KINGDOM_CALLING_COUNT: break;
+    }
+    return "Unknown realm";
+}
+
 const char *CcBanditCampSizeName(CcBanditCampSize size)
 {
     switch (size) {
@@ -712,6 +733,34 @@ bool CcSimKingdomsAllied(const CcSim *sim, CcId first, CcId second)
         sim->diplomacy[first_slot][second_slot] == CC_DIPLOMACY_ALLIANCE;
 }
 
+CcKingdomCalling CcSimKingdomCalling(const CcSim *sim, CcId kingdom_id)
+{
+    if (sim == NULL || KingdomSlotById(sim, kingdom_id) < 0) {
+        return CC_KINGDOM_CALLING_COUNT;
+    }
+    bool holds_fortress = false;
+    bool holds_mine = false;
+    bool holds_capital = false;
+    bool holds_dungeon_frontier = false;
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        const CcSettlement *place = &sim->settlements[i];
+        if (place->kingdom_id != kingdom_id) continue;
+        holds_fortress = holds_fortress ||
+            place->function == CC_SETTLEMENT_FORTRESS;
+        holds_mine = holds_mine ||
+            place->function == CC_SETTLEMENT_MINING;
+        holds_capital = holds_capital ||
+            place->function == CC_SETTLEMENT_CAPITAL;
+        holds_dungeon_frontier = holds_dungeon_frontier ||
+            place->function == CC_SETTLEMENT_DUNGEON_TOWN;
+    }
+    if (holds_capital || holds_dungeon_frontier) {
+        return CC_KINGDOM_CALLING_DEEP;
+    }
+    if (holds_fortress || holds_mine) return CC_KINGDOM_CALLING_IRON;
+    return CC_KINGDOM_CALLING_ROAD;
+}
+
 bool CcSimRouteCrossesWarBorder(const CcSim *sim, CcId route_id)
 {
     const CcRoute *route = CcSimRoute(sim, route_id);
@@ -861,6 +910,90 @@ int32_t CcSimWarSupplyCrisisAtSettlement(const CcSim *sim,
     int32_t score = burden / 3 + food_gap * 4 + tool_gap * 8 +
                     weapon_gap * 10 + wage_gap * 6;
     return ClampI32(score, 0, 100);
+}
+
+int32_t CcSimKingdomPressure(const CcSim *sim, CcId kingdom_id)
+{
+    if (sim == NULL || KingdomSlotById(sim, kingdom_id) < 0) return 0;
+    CcKingdomCalling calling = CcSimKingdomCalling(sim, kingdom_id);
+    int32_t pressure = 0;
+    const CcKingdom *kingdom = NULL;
+    for (int32_t i = 0; i < sim->kingdom_count; ++i) {
+        if (sim->kingdoms[i].id == kingdom_id) {
+            kingdom = &sim->kingdoms[i];
+            break;
+        }
+    }
+    if (kingdom != NULL) {
+        pressure = MaximumI32(pressure, 100 - kingdom->legitimacy);
+        CcMoney credit_limit = 480 + (CcMoney)kingdom->legitimacy * 4;
+        if (credit_limit > 0) {
+            CcMoney debt_pressure = kingdom->iron_ledger_debt * 100 /
+                                    credit_limit;
+            pressure = MaximumI32(
+                pressure, debt_pressure > INT32_MAX ? INT32_MAX :
+                (int32_t)debt_pressure);
+        }
+    }
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        const CcSettlement *place = &sim->settlements[i];
+        if (place->kingdom_id != kingdom_id) continue;
+        pressure = MaximumI32(pressure, place->hunger);
+        int32_t food_target = place->reserve_target[CC_GOOD_FOOD];
+        if (food_target > 0 && place->stock[CC_GOOD_FOOD] < food_target) {
+            int32_t food_gap =
+                (food_target - place->stock[CC_GOOD_FOOD]) * 100 /
+                food_target;
+            pressure = MaximumI32(pressure, food_gap);
+        }
+        if (calling == CC_KINGDOM_CALLING_IRON &&
+            (place->function == CC_SETTLEMENT_FORTRESS ||
+             place->function == CC_SETTLEMENT_CAPITAL)) {
+            pressure = MaximumI32(
+                pressure,
+                CcSimWarSupplyCrisisAtSettlement(sim, place->id));
+            pressure = MaximumI32(
+                pressure, CcSimWarBurdenAtSettlement(sim, place->id));
+        }
+    }
+    if (calling == CC_KINGDOM_CALLING_ROAD) {
+        for (int32_t i = 0; i < sim->route_count; ++i) {
+            const CcRoute *route = &sim->routes[i];
+            const CcSettlement *from = CcSimSettlement(sim, route->from_id);
+            const CcSettlement *to = CcSimSettlement(sim, route->to_id);
+            if ((from == NULL || from->kingdom_id != kingdom_id) &&
+                (to == NULL || to->kingdom_id != kingdom_id)) continue;
+            int32_t route_pressure = (100 - route->condition) / 2 +
+                                     (100 - route->security) / 4;
+            if (route->closed) route_pressure += 20;
+            if (CcSimRouteCrossesWarBorder(sim, route->id)) {
+                route_pressure += 10;
+            }
+            pressure = MaximumI32(pressure, route_pressure);
+        }
+    } else if (calling == CC_KINGDOM_CALLING_DEEP) {
+        for (int32_t i = 0; i < sim->dungeon_count; ++i) {
+            const CcDungeon *dungeon = &sim->dungeons[i];
+            const CcSettlement *place = CcSimSettlement(
+                sim, dungeon->settlement_id);
+            if (place == NULL || place->kingdom_id != kingdom_id) continue;
+            pressure = MaximumI32(pressure, dungeon->regional_pressure);
+            for (int32_t monster = 0; monster < sim->monster_count;
+                 ++monster) {
+                if (sim->monsters[monster].dungeon_id == dungeon->id) {
+                    pressure = MaximumI32(
+                        pressure, sim->monsters[monster].pressure);
+                }
+            }
+        }
+        const CcSettlement *lair = CcSimSettlement(
+            sim, sim->dragon.lair_settlement_id);
+        if (lair != NULL && lair->kingdom_id == kingdom_id) {
+            pressure = MaximumI32(
+                pressure, sim->dragon.regional_influence);
+        }
+    }
+    return ClampI32(pressure, 0, 100);
 }
 
 CcMoney CcSimTrackedGold(const CcSim *sim)
