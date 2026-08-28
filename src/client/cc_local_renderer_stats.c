@@ -25,6 +25,11 @@ static void UpdateFramePercentiles(float milliseconds)
     if (frame_sample_count < CC_RENDER_FRAME_SAMPLE_COUNT) {
         frame_sample_count += 1;
     }
+}
+
+static void RefreshFramePercentiles(void)
+{
+    if (frame_sample_count <= 0) return;
     float sorted[CC_RENDER_FRAME_SAMPLE_COUNT];
     int32_t hitch_count = 0;
     for (int32_t i = 0; i < frame_sample_count; ++i) {
@@ -65,6 +70,7 @@ void CcLocalRendererBeginFrame(float delta_time)
 
 CcLocalRendererStats CcLocalRendererGetStats(void)
 {
+    RefreshFramePercentiles();
     return renderer_stats;
 }
 

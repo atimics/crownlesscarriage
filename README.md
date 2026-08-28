@@ -185,7 +185,7 @@ Inputs are contextual.
 | Left click | Move to a visible surface, or select a named outlaw |
 | `F` | Use a nearby door, notice board, carriage, or toll collector |
 | `M` | Open or close the map case while beside the carriage |
-| `Q` | Open the situation board |
+| `Q` | Review situations; promises are made at the local notice board |
 | `Tab` | Open the causal event ledger |
 | `J` | Jump |
 | `Space` | Make a manual basic strike |
@@ -213,6 +213,14 @@ of danger, but it is never required to take a visible track.
 In the map case, use the arrow keys or click a sheet to select it. Press `B` to
 buy a local chart, `S` to sell one, or `A` to store or retrieve it at the
 Gloamgate archive. Travel begins from the carriage's `Drive out` action.
+The team drives routine departure, road, and arrival sections automatically.
+Use `W`, `A`, `S`, and `D` to take the reins, or `Space` to stop. A safe route
+also offers `Finish safe trip`, while dangerous routes still stop for their
+actual decision.
+
+Normal play keeps one campaign window active at a time. Clean exits and manual
+saves remember the hero's exact street or market position as well as the
+durable strategic action journal.
 
 During combat, `1` uses Crushing Blow, `2` uses Sunder, and `3` uses Catch
 Breath. Catch Breath restores posture but never heals wounds. Click the ground

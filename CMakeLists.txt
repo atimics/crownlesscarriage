@@ -87,6 +87,21 @@ add_library(crownless_local_place
 target_include_directories(crownless_local_place PUBLIC src)
 cc_strict_warnings(crownless_local_place)
 
+add_library(crownless_client_session
+    src/client/cc_client_session.c
+)
+target_include_directories(crownless_client_session PUBLIC src)
+cc_strict_warnings(crownless_client_session)
+
+add_library(crownless_client_policy
+    src/client/cc_client_policy.c
+)
+target_include_directories(crownless_client_policy PUBLIC src)
+if(NOT MSVC)
+    target_link_libraries(crownless_client_policy PUBLIC m)
+endif()
+cc_strict_warnings(crownless_client_policy)
+
 find_package(SQLite3 REQUIRED)
 add_library(crownless_persistence
     src/persistence/cc_save.c
@@ -165,7 +180,8 @@ if(CC_BUILD_CLIENT)
     endif()
     target_link_libraries(crownless_carriage PRIVATE
         crownless_persistence crownless_locomotion
-        crownless_creature_catalog crownless_local_place raylib glfw
+        crownless_creature_catalog crownless_local_place
+        crownless_client_session crownless_client_policy raylib glfw
     )
     target_compile_definitions(crownless_carriage PRIVATE
         CC_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}"
@@ -419,6 +435,16 @@ if(BUILD_TESTING)
     target_link_libraries(sim_tests PRIVATE crownless_sim)
     cc_strict_warnings(sim_tests)
     add_test(NAME deterministic_simulation COMMAND sim_tests)
+
+    add_executable(client_session_tests tests/client_session_tests.c)
+    target_link_libraries(client_session_tests PRIVATE crownless_client_session)
+    cc_strict_warnings(client_session_tests)
+    add_test(NAME local_session_round_trip COMMAND client_session_tests)
+
+    add_executable(client_policy_tests tests/client_policy_tests.c)
+    target_link_libraries(client_policy_tests PRIVATE crownless_client_policy)
+    cc_strict_warnings(client_policy_tests)
+    add_test(NAME daily_play_policy COMMAND client_policy_tests)
 
     add_executable(animal_economy_tests tests/animal_economy_tests.c)
     target_link_libraries(animal_economy_tests PRIVATE crownless_persistence)
