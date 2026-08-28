@@ -1278,30 +1278,36 @@ static void AddCombatActions(ContextActionSet *set,
     int32_t target = SelectedCombatTargetIndex(local);
     bool has_target = target >= 0;
     const CcCombatState *combat = &local->agent.combat;
-    AddDetailedContextAction(
-        set, CONTEXT_ACTION_BASIC_STRIKE, "Attack", "SPACE",
-        has_target ? local->course.raider_names[target] : "CHOOSE TARGET",
-        has_target, false);
+    /* Target-bound cards only exist when they name an exact legal target. */
+    if (has_target) {
+        AddDetailedContextAction(
+            set, CONTEXT_ACTION_BASIC_STRIKE, "Attack", "SPACE",
+            local->course.raider_names[target], true, false);
+    }
     AddDetailedContextAction(
         set, CONTEXT_ACTION_TOGGLE_GUARD, "Guard", "X",
         local->agent.humanoid.guard_requested ? "GUARD UP" : "GUARD DOWN",
         true, local->agent.humanoid.guard_requested);
-    AddDetailedContextAction(
-        set, CONTEXT_ACTION_SKILL_CRUSHING, "Crushing blow", "1",
-        CombatSkillDetail(&local->agent, CC_COMBAT_SKILL_CRUSHING_BLOW,
-                          true, has_target),
-        CombatSkillEnabled(&local->agent, CC_COMBAT_SKILL_CRUSHING_BLOW,
-                           true, has_target),
-        combat->queued_skill == CC_COMBAT_SKILL_CRUSHING_BLOW ||
-            combat->active_skill == CC_COMBAT_SKILL_CRUSHING_BLOW);
-    AddDetailedContextAction(
-        set, CONTEXT_ACTION_SKILL_SUNDER, "Sunder", "2",
-        CombatSkillDetail(&local->agent, CC_COMBAT_SKILL_SUNDER,
-                          true, has_target),
-        CombatSkillEnabled(&local->agent, CC_COMBAT_SKILL_SUNDER,
-                           true, has_target),
-        combat->queued_skill == CC_COMBAT_SKILL_SUNDER ||
-            combat->active_skill == CC_COMBAT_SKILL_SUNDER);
+    if (has_target) {
+        AddDetailedContextAction(
+            set, CONTEXT_ACTION_SKILL_CRUSHING, "Crushing blow", "1",
+            CombatSkillDetail(&local->agent,
+                              CC_COMBAT_SKILL_CRUSHING_BLOW, true,
+                              has_target),
+            CombatSkillEnabled(&local->agent,
+                               CC_COMBAT_SKILL_CRUSHING_BLOW, true,
+                               has_target),
+            combat->queued_skill == CC_COMBAT_SKILL_CRUSHING_BLOW ||
+                combat->active_skill == CC_COMBAT_SKILL_CRUSHING_BLOW);
+        AddDetailedContextAction(
+            set, CONTEXT_ACTION_SKILL_SUNDER, "Sunder", "2",
+            CombatSkillDetail(&local->agent, CC_COMBAT_SKILL_SUNDER,
+                              true, has_target),
+            CombatSkillEnabled(&local->agent, CC_COMBAT_SKILL_SUNDER,
+                               true, has_target),
+            combat->queued_skill == CC_COMBAT_SKILL_SUNDER ||
+                combat->active_skill == CC_COMBAT_SKILL_SUNDER);
+    }
     AddDetailedContextAction(
         set, CONTEXT_ACTION_SKILL_SECOND_WIND, "Second wind", "3",
         CombatSkillDetail(&local->agent, CC_COMBAT_SKILL_SECOND_WIND,
