@@ -24,6 +24,8 @@ typedef struct CcCharacterPalette {
 } CcCharacterPalette;
 
 typedef struct CcVisualPalette {
+    Color cool_ink;
+    Color warm_ink;
     Color background;
     Color panel;
     Color panel_deep;
@@ -49,51 +51,53 @@ typedef struct CcVisualPalette {
     CcCharacterPalette crownless;
 } CcVisualPalette;
 
-/* One authored palette for UI and world materials. Each material has three
-   hue-aware bands; lighting may shade within a band, but scene code should
-   not invent another near-duplicate brown or green. Warm earth and timber
-   separate routes from cool grass and foliage at the final pixel scale. */
+/* Blackthorn & Brass: violet-slate shadows, bottle-green land, tarnished
+   brass routes, and oxblood character accents. Each material has three
+   hand-authored bands so shadows change hue as well as value. UI neutrals
+   live beside the world colors, but are not part of the world lookup. */
 static const CcVisualPalette CC_VISUAL_PALETTE = {
-    .background = {15, 16, 18, 255},
-    .panel = {20, 24, 25, 244},
-    .panel_deep = {8, 16, 21, 242},
-    .panel_hover = {31, 46, 52, 248},
-    .bar_track = {38, 51, 54, 255},
+    .cool_ink = {17, 16, 25, 255},
+    .warm_ink = {33, 23, 26, 255},
+    .background = {17, 16, 25, 255},
+    .panel = {23, 24, 36, 244},
+    .panel_deep = {11, 17, 24, 242},
+    .panel_hover = {35, 43, 51, 248},
+    .bar_track = {46, 48, 58, 255},
     .ink = {226, 216, 193, 255},
-    .muted = {145, 137, 122, 255},
+    .muted = {164, 154, 137, 255},
     /* Signal ramps own the brightest chroma. Their light bands are used by
        the UI; the darker bands keep lit world markers in the same family. */
-    .teal = {{27, 63, 64, 255}, {57, 133, 125, 255},
-             {87, 165, 153, 255}},
-    .gold = {{93, 69, 32, 255}, {142, 102, 38, 255},
-             {207, 157, 67, 255}},
+    .teal = {{32, 75, 74, 255}, {63, 132, 125, 255},
+             {98, 180, 168, 255}},
+    .gold = {{93, 67, 31, 255}, {154, 113, 48, 255},
+             {216, 173, 83, 255}},
     .danger = {{66, 36, 43, 255}, {139, 55, 62, 255},
                {209, 93, 81, 255}},
-    .violet = {{53, 42, 61, 255}, {98, 70, 103, 255},
-               {168, 116, 166, 255}},
+    .violet = {{38, 31, 49, 255}, {89, 74, 104, 255},
+               {166, 132, 173, 255}},
     /* Material ramps use perceptually spaced lightness bands. Navigation
        surfaces sit above soil, timber sits below it, and reflective metal
        sits above stone so those pairs survive the final art-pixel scale. */
-    .earth = {{59, 41, 33, 255}, {102, 73, 48, 255},
-              {149, 106, 64, 255}},
-    .road = {{69, 63, 53, 255}, {125, 108, 81, 255},
-             {173, 144, 104, 255}},
-    .wood = {{51, 33, 28, 255}, {84, 52, 34, 255},
-             {135, 86, 47, 255}},
-    .stone = {{51, 57, 57, 255}, {86, 93, 87, 255},
-              {129, 130, 115, 255}},
-    .grass = {{21, 53, 40, 255}, {46, 78, 50, 255},
-              {82, 105, 58, 255}},
-    .foliage = {{28, 67, 54, 255}, {48, 100, 77, 255},
-                {79, 134, 96, 255}},
-    .crop = {{75, 81, 42, 255}, {130, 121, 58, 255},
-             {182, 147, 63, 255}},
-    .metal = {{44, 49, 51, 255}, {102, 117, 116, 255},
-              {158, 169, 152, 255}},
-    .parchment = {{53, 48, 36, 255}, {112, 98, 66, 255},
+    .earth = {{60, 41, 48, 255}, {112, 72, 56, 255},
+              {167, 111, 79, 255}},
+    .road = {{81, 72, 63, 255}, {173, 143, 80, 255},
+             {208, 182, 110, 255}},
+    .wood = {{48, 31, 36, 255}, {88, 53, 42, 255},
+             {145, 96, 61, 255}},
+    .stone = {{47, 44, 61, 255}, {85, 74, 97, 255},
+              {131, 120, 143, 255}},
+    .grass = {{23, 45, 46, 255}, {42, 67, 54, 255},
+              {72, 102, 70, 255}},
+    .foliage = {{28, 57, 51, 255}, {37, 91, 70, 255},
+                {67, 131, 94, 255}},
+    .crop = {{92, 81, 46, 255}, {141, 120, 59, 255},
+             {184, 155, 76, 255}},
+    .metal = {{48, 52, 63, 255}, {104, 114, 125, 255},
+              {173, 177, 173, 255}},
+    .parchment = {{69, 58, 50, 255}, {129, 112, 74, 255},
                   {201, 182, 132, 255}},
-    .contraband = {{58, 33, 56, 255}, {112, 61, 106, 255},
-                   {175, 125, 158, 255}},
+    .contraband = {{53, 35, 63, 255}, {107, 69, 111, 255},
+                   {172, 124, 172, 255}},
     /* The full cast may vary in complexion, but final shading resolves to a
        small protected skin family rather than drifting into wood or soil. */
     .people_skin = {{86, 53, 44, 255}, {154, 120, 96, 255},

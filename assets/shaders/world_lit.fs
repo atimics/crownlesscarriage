@@ -25,6 +25,7 @@ uniform float focalContrast;
 uniform float foregroundReveal;
 uniform float revealCutHeight;
 uniform float terrainSurface;
+uniform float weatherWetness;
 
 out vec4 finalColor;
 
@@ -174,6 +175,11 @@ void main()
                  isTerrain * detailPresence);
     color += lightColor * specular * mix(1.0, 0.12, isTerrain) *
              detailPresence;
+    float wetSurface = weatherWetness * smoothstep(0.58, 0.94, normal.y);
+    float wetSheen = pow(max(dot(normal, halfDirection), 0.0), 8.0) *
+                     smoothstep(0.02, 0.64, key) * wetSurface;
+    color *= mix(1.0, 0.86, wetSurface);
+    color += lightColor * wetSheen * 0.13 * detailPresence;
     color += vec3(0.20, 0.46, 0.48) * rim *
              mix(0.052, 0.018, isTerrain) * detailPresence;
 

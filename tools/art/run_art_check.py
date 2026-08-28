@@ -62,6 +62,19 @@ SCENES = (
     CaptureSpec("parley", "Parley", "scene", ("--capture-parley",)),
 )
 
+ATMOSPHERES = (
+    CaptureSpec("atmosphere-clear", "Clear Day", "atmosphere",
+                ("--capture-atmosphere", "clear")),
+    CaptureSpec("atmosphere-rain", "Rainy Overcast", "atmosphere",
+                ("--capture-atmosphere", "rain")),
+    CaptureSpec("atmosphere-dusk", "Amber Dusk", "atmosphere",
+                ("--capture-atmosphere", "dusk")),
+    CaptureSpec("atmosphere-night", "Moonlit Night", "atmosphere",
+                ("--capture-atmosphere", "night")),
+    CaptureSpec("atmosphere-omen", "Dragon Omen", "atmosphere",
+                ("--capture-atmosphere", "omen")),
+)
+
 
 def image_pixels(image: Image.Image) -> list[tuple[int, ...] | int]:
     getter = getattr(image, "get_flattened_data", None)
@@ -505,7 +518,7 @@ def main() -> None:
     relative_capture_path(output_root)
     app = find_app(args.app.resolve() if args.app is not None else None)
     palette = read_authored_palette()
-    all_specs = (*ROOMS, *SCENES)
+    all_specs = (*ROOMS, *SCENES, *ATMOSPHERES)
     capture_paths: dict[str, Path] = {}
 
     try:
@@ -558,6 +571,24 @@ def main() -> None:
                 "reasons": reasons,
             })
 
+        clear_atmosphere = crop_world(capture_paths["atmosphere-clear"])
+        for spec in ATMOSPHERES[1:]:
+            mood = crop_world(capture_paths[spec.slug])
+            difference = ImageChops.difference(clear_atmosphere, mood)
+            difference_pixels = image_pixels(difference)
+            changed = sum(
+                any(channel != 0 for channel in pixel)
+                for pixel in difference_pixels
+            ) / len(difference_pixels)
+            mean_delta = sum(
+                sum(pixel) for pixel in difference_pixels
+            ) / (len(difference_pixels) * 3)
+            if changed < 0.35 or mean_delta < 6.0:
+                failures.append(
+                    f"{spec.label}: mood is not distinct from clear day "
+                    f"({changed:.1%} changed, {mean_delta:.1f} mean delta)"
+                )
+
         flicker = flicker_metrics(flicker_paths)
         if not flicker["passed"]:
             failures.append("stationary world target changes between repeat captures")
@@ -577,6 +608,11 @@ def main() -> None:
             output_root / "contact-sheets" / "street-road-interior-parley.png", 4,
         )
         contact_sheet(
+            [(spec.label, view_paths[spec.slug]["color"])
+             for spec in ATMOSPHERES],
+            output_root / "contact-sheets" / "time-and-weather.png", 4,
+        )
+        contact_sheet(
             [(view.replace("-", " ").title(), view_paths["street"][view])
              for view in ("color", "grayscale", "silhouette", "three-value")],
             output_root / "contact-sheets" / "street-value-study.png", 4,
@@ -591,7 +627,10 @@ def main() -> None:
     if failures:
         print(f"FAIL art-check: {len(failures)} issue(s); see {output_root / 'report.md'}")
         raise SystemExit(1)
-    print(f"PASS art-check: 10 rooms, 4 scenes, value studies, character sizes, and flicker")
+    print(
+        "PASS art-check: 10 rooms, 4 scenes, 5 atmosphere moods, "
+        "value studies, character sizes, and flicker"
+    )
     print(f"REPORT {output_root / 'report.md'}")
 
 

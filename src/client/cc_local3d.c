@@ -227,6 +227,34 @@ typedef struct ArtLightProfileDefinition {
     float focal_contrast;
 } ArtLightProfileDefinition;
 
+typedef struct ArtAtmosphereDefinition {
+    Vector3 light_direction;
+    Vector3 light_tint;
+    Vector3 ambient_tint;
+    Vector3 shadow_tint;
+    Color fog_color;
+    float direction_influence;
+    float fog_influence;
+    float fog_distance_scale;
+    float depth_scale;
+    float focal_scale;
+    float grade_exposure;
+    float grade_shadow_tone;
+    float grade_highlight_tone;
+    float grade_chroma;
+    float rain;
+    float mist;
+    float wetness;
+    float omen;
+} ArtAtmosphereDefinition;
+
+typedef struct ArtAtmosphereState {
+    ArtAtmosphereDefinition from;
+    CcLocalAtmospherePreset target;
+    float blend;
+    float duration;
+} ArtAtmosphereState;
+
 static const ArtLightProfileDefinition ART_LIGHT_PROFILES[] = {
     [ART_LIGHT_CLEAR_MARKET] = {
         {-0.42f, 0.84f, 0.34f}, {1.12f, 0.96f, 0.78f},
@@ -254,6 +282,176 @@ static const ArtLightProfileDefinition ART_LIGHT_PROFILES[] = {
         {31, 23, 25, 255}, 10.0f, 21.0f, 0.52f, 0.17f,
     },
 };
+
+/* These are complete art recipes rather than physical sky simulations.
+   Their job is to keep gameplay shapes readable while giving travel and day
+   changes a strong emotional beat. */
+static const ArtAtmosphereDefinition ART_ATMOSPHERES[] = {
+    [CC_LOCAL_ATMOSPHERE_CLEAR_DAY] = {
+        {-0.42f, 0.84f, 0.34f}, {1.00f, 1.00f, 1.00f},
+        {1.00f, 1.00f, 1.00f}, {1.00f, 1.00f, 1.00f},
+        {47, 44, 61, 255}, 0.10f, 0.10f, 1.00f, 1.00f, 1.00f,
+        0.000f, 1.00f, 1.00f, 1.00f, 0.00f, 0.00f, 0.00f, 0.00f,
+    },
+    [CC_LOCAL_ATMOSPHERE_RAINY_OVERCAST] = {
+        {-0.20f, 0.92f, 0.22f}, {0.78f, 0.86f, 0.98f},
+        {0.90f, 0.97f, 1.07f}, {0.96f, 0.90f, 1.10f},
+        {48, 52, 63, 255}, 0.70f, 0.74f, 0.70f, 1.14f, 0.88f,
+        -0.035f, 1.34f, 0.38f, 0.84f, 0.82f, 0.36f, 0.82f, 0.00f,
+    },
+    [CC_LOCAL_ATMOSPHERE_AMBER_DUSK] = {
+        {-0.70f, 0.36f, 0.30f}, {1.24f, 0.72f, 0.46f},
+        {0.84f, 0.78f, 0.92f}, {1.05f, 0.82f, 1.12f},
+        {53, 35, 63, 255}, 0.82f, 0.48f, 0.82f, 1.08f, 1.08f,
+        -0.020f, 1.36f, 1.58f, 1.05f, 0.00f, 0.10f, 0.00f, 0.00f,
+    },
+    [CC_LOCAL_ATMOSPHERE_MOONLIT_NIGHT] = {
+        {-0.30f, 0.48f, -0.82f}, {0.72f, 0.82f, 1.06f},
+        {0.78f, 0.82f, 0.98f}, {0.86f, 0.88f, 1.08f},
+        {38, 31, 49, 255}, 0.82f, 0.58f, 0.82f, 1.12f, 1.12f,
+        -0.045f, 1.42f, 0.62f, 0.84f, 0.00f, 0.18f, 0.08f, 0.00f,
+    },
+    [CC_LOCAL_ATMOSPHERE_DRAGON_OMEN] = {
+        {-0.58f, 0.42f, 0.18f}, {0.88f, 0.68f, 0.72f},
+        {0.70f, 0.72f, 0.82f}, {0.88f, 0.78f, 1.08f},
+        {48, 44, 57, 255}, 0.78f, 0.68f, 0.74f, 1.18f, 1.12f,
+        -0.040f, 1.46f, 0.92f, 0.76f, 0.38f, 0.66f, 0.50f, 1.00f,
+    },
+};
+
+static ArtAtmosphereState art_atmosphere = {
+    .target = CC_LOCAL_ATMOSPHERE_CLEAR_DAY,
+    .blend = 1.0f,
+    .duration = 1.0f,
+};
+
+static float ArtAtmosphereClamp(float value)
+{
+    return fmaxf(0.0f, fminf(value, 1.0f));
+}
+
+static float ArtAtmosphereMixFloat(float from, float to, float amount)
+{
+    return from + (to - from) * amount;
+}
+
+static Vector3 ArtAtmosphereMixVector(Vector3 from, Vector3 to, float amount)
+{
+    return (Vector3){
+        ArtAtmosphereMixFloat(from.x, to.x, amount),
+        ArtAtmosphereMixFloat(from.y, to.y, amount),
+        ArtAtmosphereMixFloat(from.z, to.z, amount),
+    };
+}
+
+static Color ArtAtmosphereMixColor(Color from, Color to, float amount)
+{
+    return (Color){
+        (unsigned char)roundf(ArtAtmosphereMixFloat(
+            (float)from.r, (float)to.r, amount)),
+        (unsigned char)roundf(ArtAtmosphereMixFloat(
+            (float)from.g, (float)to.g, amount)),
+        (unsigned char)roundf(ArtAtmosphereMixFloat(
+            (float)from.b, (float)to.b, amount)),
+        255,
+    };
+}
+
+static ArtAtmosphereDefinition ArtAtmosphereMix(
+    ArtAtmosphereDefinition from, ArtAtmosphereDefinition to, float amount)
+{
+    amount = ArtAtmosphereClamp(amount);
+    return (ArtAtmosphereDefinition){
+        .light_direction = ArtAtmosphereMixVector(
+            from.light_direction, to.light_direction, amount),
+        .light_tint = ArtAtmosphereMixVector(
+            from.light_tint, to.light_tint, amount),
+        .ambient_tint = ArtAtmosphereMixVector(
+            from.ambient_tint, to.ambient_tint, amount),
+        .shadow_tint = ArtAtmosphereMixVector(
+            from.shadow_tint, to.shadow_tint, amount),
+        .fog_color = ArtAtmosphereMixColor(
+            from.fog_color, to.fog_color, amount),
+        .direction_influence = ArtAtmosphereMixFloat(
+            from.direction_influence, to.direction_influence, amount),
+        .fog_influence = ArtAtmosphereMixFloat(
+            from.fog_influence, to.fog_influence, amount),
+        .fog_distance_scale = ArtAtmosphereMixFloat(
+            from.fog_distance_scale, to.fog_distance_scale, amount),
+        .depth_scale = ArtAtmosphereMixFloat(
+            from.depth_scale, to.depth_scale, amount),
+        .focal_scale = ArtAtmosphereMixFloat(
+            from.focal_scale, to.focal_scale, amount),
+        .grade_exposure = ArtAtmosphereMixFloat(
+            from.grade_exposure, to.grade_exposure, amount),
+        .grade_shadow_tone = ArtAtmosphereMixFloat(
+            from.grade_shadow_tone, to.grade_shadow_tone, amount),
+        .grade_highlight_tone = ArtAtmosphereMixFloat(
+            from.grade_highlight_tone, to.grade_highlight_tone, amount),
+        .grade_chroma = ArtAtmosphereMixFloat(
+            from.grade_chroma, to.grade_chroma, amount),
+        .rain = ArtAtmosphereMixFloat(from.rain, to.rain, amount),
+        .mist = ArtAtmosphereMixFloat(from.mist, to.mist, amount),
+        .wetness = ArtAtmosphereMixFloat(
+            from.wetness, to.wetness, amount),
+        .omen = ArtAtmosphereMixFloat(from.omen, to.omen, amount),
+    };
+}
+
+static ArtAtmosphereDefinition ArtAtmosphereCurrent(void)
+{
+    int32_t target = (int32_t)art_atmosphere.target;
+    if (target < 0 || target >= CC_LOCAL_ATMOSPHERE_COUNT) {
+        target = CC_LOCAL_ATMOSPHERE_CLEAR_DAY;
+    }
+    float amount = ArtAtmosphereClamp(art_atmosphere.blend);
+    amount = amount * amount * (3.0f - 2.0f * amount);
+    return ArtAtmosphereMix(art_atmosphere.from,
+                            ART_ATMOSPHERES[target], amount);
+}
+
+static ArtAtmosphereDefinition ArtAtmosphereForProfile(
+    ArtLightProfileId profile_id)
+{
+    ArtAtmosphereDefinition current = ArtAtmosphereCurrent();
+    if (profile_id != ART_LIGHT_INTERIOR_EMBER) return current;
+    return ArtAtmosphereMix(
+        ART_ATMOSPHERES[CC_LOCAL_ATMOSPHERE_CLEAR_DAY], current, 0.16f);
+}
+
+void CcLocalRendererSetAtmosphere(CcLocalAtmospherePreset preset,
+                                  float transition_seconds)
+{
+    if (preset < 0 || preset >= CC_LOCAL_ATMOSPHERE_COUNT) {
+        preset = CC_LOCAL_ATMOSPHERE_CLEAR_DAY;
+    }
+    if (preset == art_atmosphere.target) return;
+    ArtAtmosphereDefinition current = ArtAtmosphereCurrent();
+    art_atmosphere.from = current;
+    art_atmosphere.target = preset;
+    art_atmosphere.duration = fmaxf(0.0f, transition_seconds);
+    art_atmosphere.blend = transition_seconds <= 0.001f ? 1.0f : 0.0f;
+}
+
+void CcLocalRendererUpdateAtmosphere(float delta_time)
+{
+    if (art_atmosphere.blend >= 1.0f) return;
+    float duration = fmaxf(0.001f, art_atmosphere.duration);
+    art_atmosphere.blend = fminf(
+        1.0f, art_atmosphere.blend + fmaxf(0.0f, delta_time) / duration);
+}
+
+const char *CcLocalAtmosphereName(CcLocalAtmospherePreset preset)
+{
+    switch (preset) {
+        case CC_LOCAL_ATMOSPHERE_CLEAR_DAY: return "Clear day";
+        case CC_LOCAL_ATMOSPHERE_RAINY_OVERCAST: return "Rain";
+        case CC_LOCAL_ATMOSPHERE_AMBER_DUSK: return "Dusk";
+        case CC_LOCAL_ATMOSPHERE_MOONLIT_NIGHT: return "Night";
+        case CC_LOCAL_ATMOSPHERE_DRAGON_OMEN: return "Dragon omen";
+        default: return "Clear day";
+    }
+}
 
 typedef struct StreetCameraShot {
     Vector2 trigger;
@@ -8840,6 +9038,10 @@ typedef struct VisualStyleCache {
     Shader grade;
     Texture2D palette_lut;
     int32_t palette_lut_location;
+    int32_t grade_exposure_location;
+    int32_t grade_shadow_tone_location;
+    int32_t grade_highlight_tone_location;
+    int32_t grade_chroma_location;
     bool grade_ready;
     Shader world;
     int32_t light_direction_location;
@@ -8860,6 +9062,7 @@ typedef struct VisualStyleCache {
     int32_t reveal_cut_height_location;
     int32_t foreground_reveal_location;
     int32_t terrain_surface_location;
+    int32_t weather_wetness_location;
     bool world_ready;
     PaintedEnvironmentStyle painted_environment;
     Shader foliage;
@@ -8911,6 +9114,7 @@ typedef struct VisualStyleCache {
     int32_t npc_skinned_hero_head_position_location;
     int32_t npc_skinned_body_skin_remap_location;
     bool npc_skinned_ready;
+    ArtAtmosphereDefinition presentation_atmosphere;
 } VisualStyleCache;
 
 static VisualStyleCache visual_style = {0};
@@ -8965,19 +9169,15 @@ static void AddFinalPaletteRamp(FinalPaletteEntry *entries, int32_t capacity,
 static int32_t BuildFinalPalette(FinalPaletteEntry *entries, int32_t capacity)
 {
     int32_t count = 0;
-    AddFinalPaletteColor(entries, capacity, &count, CC_STYLE_BACKGROUND,
+    /* The grade is applied before the HUD is drawn. Keep interface neutrals
+       out of this lookup so stone and fog cannot snap to panel or text
+       colors. Two authored inks give the world cool outdoor and warm indoor
+       shadow anchors. */
+    AddFinalPaletteColor(entries, capacity, &count,
+                         CC_VISUAL_PALETTE.cool_ink,
                          FINAL_PALETTE_ENVIRONMENT);
-    AddFinalPaletteColor(entries, capacity, &count, CC_STYLE_PANEL,
-                         FINAL_PALETTE_ENVIRONMENT);
-    AddFinalPaletteColor(entries, capacity, &count, CC_STYLE_PANEL_DEEP,
-                         FINAL_PALETTE_ENVIRONMENT);
-    AddFinalPaletteColor(entries, capacity, &count, CC_STYLE_PANEL_HOVER,
-                         FINAL_PALETTE_ENVIRONMENT);
-    AddFinalPaletteColor(entries, capacity, &count, CC_STYLE_BAR_TRACK,
-                         FINAL_PALETTE_ENVIRONMENT);
-    AddFinalPaletteColor(entries, capacity, &count, CC_STYLE_INK,
-                         FINAL_PALETTE_ENVIRONMENT);
-    AddFinalPaletteColor(entries, capacity, &count, CC_STYLE_MUTED,
+    AddFinalPaletteColor(entries, capacity, &count,
+                         CC_VISUAL_PALETTE.warm_ink,
                          FINAL_PALETTE_ENVIRONMENT);
 
     AddFinalPaletteRamp(entries, capacity, &count, CC_VISUAL_PALETTE.earth,
@@ -9809,6 +10009,14 @@ static void LoadVisualStyle(void)
         visual_style.grade = LoadShader(NULL, grade_path);
     }
     if (IsShaderValid(visual_style.grade) && LoadSharedPaletteLookup()) {
+        visual_style.grade_exposure_location = GetShaderLocation(
+            visual_style.grade, "atmosphereExposure");
+        visual_style.grade_shadow_tone_location = GetShaderLocation(
+            visual_style.grade, "atmosphereShadowTone");
+        visual_style.grade_highlight_tone_location = GetShaderLocation(
+            visual_style.grade, "atmosphereHighlightTone");
+        visual_style.grade_chroma_location = GetShaderLocation(
+            visual_style.grade, "atmosphereChroma");
         visual_style.grade_ready = true;
     } else {
         if (IsShaderValid(visual_style.grade)) {
@@ -9870,6 +10078,8 @@ static void LoadVisualStyle(void)
         visual_style.world, "foregroundReveal");
     visual_style.terrain_surface_location = GetShaderLocation(
         visual_style.world, "terrainSurface");
+    visual_style.weather_wetness_location = GetShaderLocation(
+        visual_style.world, "weatherWetness");
     visual_style.world_ready = true;
 
     char skinned_vertex_path[1024] = {0};
@@ -10573,6 +10783,12 @@ static void LoadTreeCrownModels(void)
 void CcLocalRendererInit(void)
 {
     if (sphere_models.ready) return;
+    art_atmosphere = (ArtAtmosphereState){
+        .from = ART_ATMOSPHERES[CC_LOCAL_ATMOSPHERE_CLEAR_DAY],
+        .target = CC_LOCAL_ATMOSPHERE_CLEAR_DAY,
+        .blend = 1.0f,
+        .duration = 1.0f,
+    };
     street_camera_rig = (FixedCameraRig){0};
     road_camera_rig = (FixedCameraRig){0};
     combat_camera_rig = (CombatCameraRig){0};
@@ -15468,6 +15684,22 @@ static void PresentTarget(RenderTexture2D target, Rectangle destination)
         SetShaderValueTexture(visual_style.grade,
                               visual_style.palette_lut_location,
                               visual_style.palette_lut);
+        const ArtAtmosphereDefinition *atmosphere =
+            &visual_style.presentation_atmosphere;
+        SetShaderValue(visual_style.grade,
+                       visual_style.grade_exposure_location,
+                       &atmosphere->grade_exposure, SHADER_UNIFORM_FLOAT);
+        SetShaderValue(visual_style.grade,
+                       visual_style.grade_shadow_tone_location,
+                       &atmosphere->grade_shadow_tone,
+                       SHADER_UNIFORM_FLOAT);
+        SetShaderValue(visual_style.grade,
+                       visual_style.grade_highlight_tone_location,
+                       &atmosphere->grade_highlight_tone,
+                       SHADER_UNIFORM_FLOAT);
+        SetShaderValue(visual_style.grade,
+                       visual_style.grade_chroma_location,
+                       &atmosphere->grade_chroma, SHADER_UNIFORM_FLOAT);
     }
     DrawTexturePro(target.texture, source, destination, (Vector2){0.0f, 0.0f},
                    0.0f, WHITE);
@@ -15479,7 +15711,189 @@ static Color ArtLightBackground(ArtLightProfileId profile_id)
     if (profile_id < 0 || profile_id >= ART_LIGHT_PROFILE_COUNT) {
         profile_id = ART_LIGHT_CLEAR_MARKET;
     }
-    return ART_LIGHT_PROFILES[profile_id].fog_color;
+    ArtAtmosphereDefinition atmosphere = ArtAtmosphereForProfile(profile_id);
+    return ArtAtmosphereMixColor(
+        ART_LIGHT_PROFILES[profile_id].fog_color,
+        atmosphere.fog_color, atmosphere.fog_influence);
+}
+
+static float ArtAtmosphereHash(uint32_t value)
+{
+    value ^= value >> 16U;
+    value *= UINT32_C(0x7feb352d);
+    value ^= value >> 15U;
+    value *= UINT32_C(0x846ca68b);
+    value ^= value >> 16U;
+    return (float)(value & UINT32_C(0xffff)) / 65535.0f;
+}
+
+static Vector2 ArtAtmospherePoint(float x, float y, float scale_x,
+                                  float scale_y, float drift_y)
+{
+    const float dragon_scale = 0.78f;
+    float placed_x = 38.0f + (x - 68.0f) * dragon_scale;
+    float placed_y = 8.0f + (y - 40.0f) * dragon_scale + drift_y;
+    return (Vector2){placed_x * scale_x, placed_y * scale_y};
+}
+
+static void DrawDragonOmenSilhouette(int32_t width, int32_t height,
+                                     float clock, float omen)
+{
+    if (omen <= 0.01f) return;
+    float scale_x = (float)width / 630.0f;
+    float scale_y = (float)height / 320.0f;
+    float drift_y = sinf(clock * 0.08f) * 1.8f;
+    Color shadow = Fade(CC_VISUAL_PALETTE.cool_ink, omen * 0.60f);
+    Color thin_shadow = Fade(CC_VISUAL_PALETTE.violet.shadow, omen * 0.46f);
+
+    /* Long tail and the two wings sit behind the body. Broad triangles keep
+       the omen readable at the fixed art-pixel scale; small notches at the
+       trailing edges suggest a dragon without tracing a detailed mascot. */
+    DrawTriangle(ArtAtmospherePoint(278, 72, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(474, 54, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(330, 86, scale_x, scale_y, drift_y),
+                 thin_shadow);
+    DrawTriangle(ArtAtmospherePoint(246, 72, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(150, 10, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(78, 18, scale_x, scale_y, drift_y),
+                 shadow);
+    DrawTriangle(ArtAtmospherePoint(244, 72, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(78, 18, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(174, 70, scale_x, scale_y, drift_y),
+                 shadow);
+    DrawTriangle(ArtAtmospherePoint(272, 72, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(365, 23, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(455, 38, scale_x, scale_y, drift_y),
+                 shadow);
+    DrawTriangle(ArtAtmospherePoint(272, 72, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(455, 38, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(330, 81, scale_x, scale_y, drift_y),
+                 shadow);
+    DrawTriangle(ArtAtmospherePoint(168, 61, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(130, 84, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(215, 82, scale_x, scale_y, drift_y),
+                 shadow);
+
+    DrawEllipse((int32_t)((38.0f + (250.0f - 68.0f) * 0.78f) * scale_x),
+                (int32_t)((8.0f + (73.0f - 40.0f) * 0.78f + drift_y) *
+                          scale_y),
+                67.0f * scale_x, 12.0f * scale_y, shadow);
+    DrawTriangle(ArtAtmospherePoint(185, 66, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(112, 60, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(170, 84, scale_x, scale_y, drift_y),
+                 shadow);
+    DrawEllipse((int32_t)((38.0f + (108.0f - 68.0f) * 0.78f) * scale_x),
+                (int32_t)((8.0f + (68.0f - 40.0f) * 0.78f + drift_y) *
+                          scale_y),
+                21.0f * scale_x, 11.0f * scale_y, shadow);
+    DrawRectangle((int32_t)(38.0f * scale_x),
+                  (int32_t)((8.0f + (66.0f - 40.0f) * 0.78f + drift_y) *
+                            scale_y),
+                  (int32_t)(30.0f * scale_x),
+                  (int32_t)(9.0f * scale_y), shadow);
+
+    DrawTriangle(ArtAtmospherePoint(95, 58, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(82, 42, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(108, 59, scale_x, scale_y, drift_y),
+                 shadow);
+    DrawTriangle(ArtAtmospherePoint(112, 58, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(110, 40, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(123, 61, scale_x, scale_y, drift_y),
+                 shadow);
+    DrawTriangle(ArtAtmospherePoint(83, 76, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(71, 86, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(104, 77, scale_x, scale_y, drift_y),
+                 thin_shadow);
+
+    DrawTriangle(ArtAtmospherePoint(222, 83, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(206, 112, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(240, 86, scale_x, scale_y, drift_y),
+                 thin_shadow);
+    DrawTriangle(ArtAtmospherePoint(282, 82, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(306, 108, scale_x, scale_y, drift_y),
+                 ArtAtmospherePoint(298, 80, scale_x, scale_y, drift_y),
+                 thin_shadow);
+}
+
+static void DrawTargetAtmosphere(RenderTexture2D target, float clock)
+{
+    ArtAtmosphereDefinition atmosphere =
+        visual_style.presentation_atmosphere;
+    int32_t width = target.texture.width;
+    int32_t height = target.texture.height;
+
+    if (atmosphere.omen > 0.01f) {
+        Color cloud = Fade(CC_VISUAL_PALETTE.stone.shadow,
+                           atmosphere.omen * 0.20f);
+        Color clear_cloud = Fade(cloud, 0.0f);
+        Color horizon = Fade(CC_VISUAL_PALETTE.earth.light,
+                             atmosphere.omen * 0.13f);
+        Color cloud_break = Fade(CC_VISUAL_PALETTE.stone.light,
+                                 atmosphere.omen * 0.16f);
+        DrawRectangleGradientV(0, 0, width, height / 2,
+                               cloud, clear_cloud);
+        DrawRectangleGradientV(0, height / 3, width, height / 5,
+                               Fade(horizon, 0.0f), horizon);
+        DrawRectangleGradientV(0, height / 3 + height / 5,
+                               width, height / 7,
+                               horizon, Fade(horizon, 0.0f));
+        DrawEllipse(width / 5, height / 8,
+                    (float)width * 0.24f, (float)height * 0.10f, cloud);
+        DrawEllipse(width / 2, height / 10,
+                    (float)width * 0.31f, (float)height * 0.09f, cloud);
+        DrawEllipse(width * 4 / 5, height / 7,
+                    (float)width * 0.25f, (float)height * 0.11f, cloud);
+        DrawEllipse((int32_t)((float)width * 0.30f),
+                    (int32_t)((float)height * 0.12f),
+                    (float)width * 0.29f, (float)height * 0.12f,
+                    cloud_break);
+        DrawDragonOmenSilhouette(width, height, clock, atmosphere.omen);
+    }
+
+    /* Mist uses a few broad, slow bands. It is depth atmosphere, not a noisy
+       smoke texture, and the final palette lookup resolves it back to the
+       authored slate and violet families. */
+    if (atmosphere.mist > 0.01f) {
+        Color fog = atmosphere.fog_color;
+        for (int32_t band = 0; band < 3; ++band) {
+            float phase = clock * (0.035f + (float)band * 0.009f) +
+                          (float)band * 1.83f;
+            int32_t y = (int32_t)((0.30f + (float)band * 0.19f) *
+                                  (float)height + sinf(phase) * 7.0f);
+            int32_t band_height = 18 + band * 5;
+            float opacity = atmosphere.mist *
+                            (0.055f - (float)band * 0.009f);
+            Color clear = Fade(fog, 0.0f);
+            Color visible = Fade(fog, opacity);
+            DrawRectangleGradientH(-12, y, width / 2 + 18, band_height,
+                                   clear, visible);
+            DrawRectangleGradientH(width / 2, y, width / 2 + 18,
+                                   band_height, visible, clear);
+        }
+    }
+
+    /* Rain is drawn on the fixed art-pixel target so every drop keeps the
+       same chunky shape after enlargement. Movement is steady and diagonal;
+       there is no random per-frame sparkle. */
+    int32_t drop_count = (int32_t)roundf(atmosphere.rain * 88.0f);
+    for (int32_t drop = 0; drop < drop_count; ++drop) {
+        float seed_x = ArtAtmosphereHash(
+            UINT32_C(0x91e10da5) + (uint32_t)drop * UINT32_C(0x9e3779b9));
+        float seed_y = ArtAtmosphereHash(
+            UINT32_C(0x68bc21eb) + (uint32_t)drop * UINT32_C(0x85ebca6b));
+        float speed = 74.0f + ArtAtmosphereHash(
+            UINT32_C(0x27d4eb2d) + (uint32_t)drop * UINT32_C(0xc2b2ae35)) *
+            38.0f;
+        float x = fmodf(seed_x * (float)(width + 36) + clock * 18.0f,
+                        (float)(width + 36)) - 18.0f;
+        float y = fmodf(seed_y * (float)(height + 24) + clock * speed,
+                        (float)(height + 24)) - 12.0f;
+        float opacity = atmosphere.rain * (0.20f + seed_y * 0.14f);
+        Vector2 start = {x, y};
+        Vector2 end = {x - 2.4f, y + 7.0f + seed_x * 3.0f};
+        DrawLineEx(start, end, seed_x > 0.74f ? 1.4f : 1.0f,
+                   Fade(WORLD_METAL_LIGHT, opacity));
+    }
 }
 
 static ArtLightProfileId StreetLightProfile(
@@ -15504,28 +15918,46 @@ static void BeginWorldLighting(Camera3D camera,
     }
     const ArtLightProfileDefinition *profile =
         &ART_LIGHT_PROFILES[profile_id];
+    ArtAtmosphereDefinition atmosphere = ArtAtmosphereForProfile(profile_id);
+    visual_style.presentation_atmosphere = atmosphere;
     Vector3 light_direction = Vector3Normalize(
-        profile->light_direction);
+        ArtAtmosphereMixVector(profile->light_direction,
+                               atmosphere.light_direction,
+                               atmosphere.direction_influence));
     Vector3 camera_forward_vector = Vector3Normalize(
         Vector3Subtract(camera.target, camera.position));
     float direction[3] = {light_direction.x, light_direction.y,
                           light_direction.z};
-    float light_color[3] = {profile->light_color.x, profile->light_color.y,
-                            profile->light_color.z};
-    float ambient_color[3] = {profile->ambient_color.x,
-                              profile->ambient_color.y,
-                              profile->ambient_color.z};
-    float shadow_color[3] = {profile->shadow_color.x,
-                             profile->shadow_color.y,
-                             profile->shadow_color.z};
+    float light_color[3] = {
+        profile->light_color.x * atmosphere.light_tint.x,
+        profile->light_color.y * atmosphere.light_tint.y,
+        profile->light_color.z * atmosphere.light_tint.z,
+    };
+    float ambient_color[3] = {
+        profile->ambient_color.x * atmosphere.ambient_tint.x,
+        profile->ambient_color.y * atmosphere.ambient_tint.y,
+        profile->ambient_color.z * atmosphere.ambient_tint.z,
+    };
+    float shadow_color[3] = {
+        profile->shadow_color.x * atmosphere.shadow_tint.x,
+        profile->shadow_color.y * atmosphere.shadow_tint.y,
+        profile->shadow_color.z * atmosphere.shadow_tint.z,
+    };
     float camera_position[3] = {camera.position.x, camera.position.y,
                                 camera.position.z};
     float camera_forward[3] = {camera_forward_vector.x,
                                camera_forward_vector.y,
                                camera_forward_vector.z};
-    float fog_color[3] = {(float)profile->fog_color.r / 255.0f,
-                          (float)profile->fog_color.g / 255.0f,
-                          (float)profile->fog_color.b / 255.0f};
+    Color atmosphere_fog = ArtAtmosphereMixColor(
+        profile->fog_color, atmosphere.fog_color,
+        atmosphere.fog_influence);
+    float fog_color[3] = {(float)atmosphere_fog.r / 255.0f,
+                          (float)atmosphere_fog.g / 255.0f,
+                          (float)atmosphere_fog.b / 255.0f};
+    float fog_near = profile->fog_near * atmosphere.fog_distance_scale;
+    float fog_far = profile->fog_far * atmosphere.fog_distance_scale;
+    float depth_strength = profile->depth_strength * atmosphere.depth_scale;
+    float focal_contrast = profile->focal_contrast * atmosphere.focal_scale;
     float focal_point[3] = {composition->focal_point.x,
                             composition->focal_point.y,
                             composition->focal_point.z};
@@ -15555,9 +15987,9 @@ static void BeginWorldLighting(Camera3D camera,
     SetShaderValue(visual_style.world, visual_style.fog_color_location,
                    fog_color, SHADER_UNIFORM_VEC3);
     SetShaderValue(visual_style.world, visual_style.fog_near_location,
-                   &profile->fog_near, SHADER_UNIFORM_FLOAT);
+                   &fog_near, SHADER_UNIFORM_FLOAT);
     SetShaderValue(visual_style.world, visual_style.fog_far_location,
-                   &profile->fog_far, SHADER_UNIFORM_FLOAT);
+                   &fog_far, SHADER_UNIFORM_FLOAT);
     SetShaderValue(visual_style.world, visual_style.focal_point_location,
                    focal_point, SHADER_UNIFORM_VEC3);
     SetShaderValue(visual_style.world, visual_style.story_axis_location,
@@ -15568,9 +16000,12 @@ static void BeginWorldLighting(Camera3D camera,
     SetShaderValue(visual_style.world, visual_style.depth_splits_location,
                    depth_splits, SHADER_UNIFORM_VEC3);
     SetShaderValue(visual_style.world, visual_style.depth_strength_location,
-                   &profile->depth_strength, SHADER_UNIFORM_FLOAT);
+                   &depth_strength, SHADER_UNIFORM_FLOAT);
     SetShaderValue(visual_style.world, visual_style.focal_contrast_location,
-                   &profile->focal_contrast, SHADER_UNIFORM_FLOAT);
+                   &focal_contrast, SHADER_UNIFORM_FLOAT);
+    SetShaderValue(visual_style.world,
+                   visual_style.weather_wetness_location,
+                   &atmosphere.wetness, SHADER_UNIFORM_FLOAT);
     if (visual_style.painted_environment.ready) {
         PaintedEnvironmentStyle *painted =
             &visual_style.painted_environment;
@@ -15589,9 +16024,9 @@ static void BeginWorldLighting(Camera3D camera,
         SetShaderValue(painted->shader, painted->fog_color_location,
                        fog_color, SHADER_UNIFORM_VEC3);
         SetShaderValue(painted->shader, painted->fog_near_location,
-                       &profile->fog_near, SHADER_UNIFORM_FLOAT);
+                       &fog_near, SHADER_UNIFORM_FLOAT);
         SetShaderValue(painted->shader, painted->fog_far_location,
-                       &profile->fog_far, SHADER_UNIFORM_FLOAT);
+                       &fog_far, SHADER_UNIFORM_FLOAT);
         SetShaderValue(painted->shader, painted->focal_point_location,
                        focal_point, SHADER_UNIFORM_VEC3);
         SetShaderValue(painted->shader, painted->story_axis_location,
@@ -15601,9 +16036,9 @@ static void BeginWorldLighting(Camera3D camera,
         SetShaderValue(painted->shader, painted->depth_splits_location,
                        depth_splits, SHADER_UNIFORM_VEC3);
         SetShaderValue(painted->shader, painted->depth_strength_location,
-                       &profile->depth_strength, SHADER_UNIFORM_FLOAT);
+                       &depth_strength, SHADER_UNIFORM_FLOAT);
         SetShaderValue(painted->shader, painted->focal_contrast_location,
-                       &profile->focal_contrast, SHADER_UNIFORM_FLOAT);
+                       &focal_contrast, SHADER_UNIFORM_FLOAT);
     }
     const float foreground_reveal = 0.0f;
     SetShaderValue(visual_style.world,
@@ -15643,16 +16078,16 @@ static void BeginWorldLighting(Camera3D camera,
                        fog_color, SHADER_UNIFORM_VEC3);
         SetShaderValue(visual_style.foliage,
                        visual_style.foliage_fog_near_location,
-                       &profile->fog_near, SHADER_UNIFORM_FLOAT);
+                       &fog_near, SHADER_UNIFORM_FLOAT);
         SetShaderValue(visual_style.foliage,
                        visual_style.foliage_fog_far_location,
-                       &profile->fog_far, SHADER_UNIFORM_FLOAT);
+                       &fog_far, SHADER_UNIFORM_FLOAT);
         SetShaderValue(visual_style.foliage,
                        visual_style.foliage_depth_splits_location,
                        depth_splits, SHADER_UNIFORM_VEC3);
         SetShaderValue(visual_style.foliage,
                        visual_style.foliage_depth_strength_location,
-                       &profile->depth_strength, SHADER_UNIFORM_FLOAT);
+                       &depth_strength, SHADER_UNIFORM_FLOAT);
     }
     if (visual_style.hero_ready) {
         SetShaderValue(visual_style.hero,
@@ -15669,11 +16104,11 @@ static void BeginWorldLighting(Camera3D camera,
                        SHADER_UNIFORM_VEC3);
         SetShaderValue(visual_style.hero,
                        visual_style.hero_fog_near_location,
-                       &profile->fog_near,
+                       &fog_near,
                        SHADER_UNIFORM_FLOAT);
         SetShaderValue(visual_style.hero,
                        visual_style.hero_fog_far_location,
-                       &profile->fog_far,
+                       &fog_far,
                        SHADER_UNIFORM_FLOAT);
     }
     if (visual_style.npc_ready) {
@@ -15691,11 +16126,11 @@ static void BeginWorldLighting(Camera3D camera,
                        SHADER_UNIFORM_VEC3);
         SetShaderValue(visual_style.npc,
                        visual_style.npc_fog_near_location,
-                       &profile->fog_near,
+                       &fog_near,
                        SHADER_UNIFORM_FLOAT);
         SetShaderValue(visual_style.npc,
                        visual_style.npc_fog_far_location,
-                       &profile->fog_far,
+                       &fog_far,
                        SHADER_UNIFORM_FLOAT);
     }
     if (visual_style.npc_skinned_ready) {
@@ -15713,10 +16148,10 @@ static void BeginWorldLighting(Camera3D camera,
                        fog_color, SHADER_UNIFORM_VEC3);
         SetShaderValue(visual_style.npc_skinned,
                        visual_style.npc_skinned_fog_near_location,
-                       &profile->fog_near, SHADER_UNIFORM_FLOAT);
+                       &fog_near, SHADER_UNIFORM_FLOAT);
         SetShaderValue(visual_style.npc_skinned,
                        visual_style.npc_skinned_fog_far_location,
-                       &profile->fog_far, SHADER_UNIFORM_FLOAT);
+                       &fog_far, SHADER_UNIFORM_FLOAT);
     }
     BeginShaderMode(visual_style.world);
 }
@@ -16360,6 +16795,7 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     }
     EndWorldLighting();
     EndMode3D();
+    DrawTargetAtmosphere(target, clock);
     EndTextureMode();
     PresentTarget(target, destination);
     WorldLabel labels[6];
@@ -16678,6 +17114,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     DrawCombatImpact(agent);
     EndWorldLighting();
     EndMode3D();
+    DrawTargetAtmosphere(target, clock);
     EndTextureMode();
     PresentTarget(target, destination);
     bool alarm_active = course != NULL && course->alarm_active;

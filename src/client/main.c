@@ -2476,6 +2476,17 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
     }
 }
 
+static CcLocalAtmospherePreset LocalAtmosphereForSimulation(
+    const CcSim *sim)
+{
+    if (sim != NULL && !sim->dragon.slain &&
+        sim->dragon.omen_days_remaining > 0 &&
+        sim->dragon.retaliation_target_id == sim->player.location_id) {
+        return CC_LOCAL_ATMOSPHERE_DRAGON_OMEN;
+    }
+    return CcLocalAtmosphereForDay(sim != NULL ? sim->current_day : 0);
+}
+
 int main(int argc, char **argv)
 {
     bool screen_first_hero = true;
@@ -2541,6 +2552,34 @@ int main(int argc, char **argv)
         strcmp(argv[1], "--capture-aftermath") == 0;
     bool capture_golden = argc >= 2 &&
         strcmp(argv[1], "--capture-golden") == 0;
+    bool capture_atmosphere = argc >= 2 &&
+        strcmp(argv[1], "--capture-atmosphere") == 0;
+    CcLocalAtmospherePreset capture_atmosphere_preset =
+        CC_LOCAL_ATMOSPHERE_CLEAR_DAY;
+    if (capture_atmosphere) {
+        if (argc < 4) {
+            (void)fprintf(stderr,
+                          "capture atmosphere requires a mood and a frame path.\n");
+            return 1;
+        }
+        if (strcmp(argv[2], "clear") == 0) {
+            capture_atmosphere_preset = CC_LOCAL_ATMOSPHERE_CLEAR_DAY;
+        } else if (strcmp(argv[2], "rain") == 0) {
+            capture_atmosphere_preset =
+                CC_LOCAL_ATMOSPHERE_RAINY_OVERCAST;
+        } else if (strcmp(argv[2], "dusk") == 0) {
+            capture_atmosphere_preset = CC_LOCAL_ATMOSPHERE_AMBER_DUSK;
+        } else if (strcmp(argv[2], "night") == 0) {
+            capture_atmosphere_preset =
+                CC_LOCAL_ATMOSPHERE_MOONLIT_NIGHT;
+        } else if (strcmp(argv[2], "omen") == 0) {
+            capture_atmosphere_preset = CC_LOCAL_ATMOSPHERE_DRAGON_OMEN;
+        } else {
+            (void)fprintf(stderr,
+                          "atmosphere must be clear, rain, dusk, night, or omen.\n");
+            return 1;
+        }
+    }
     bool capture_face = argc >= 2 &&
         strcmp(argv[1], "--capture-face") == 0;
     int32_t capture_face_view = -1;
@@ -2598,10 +2637,12 @@ int main(int argc, char **argv)
                     capture_gameplay_reel || capture_encounter ||
                     capture_witness || capture_travel || capture_road ||
                     capture_parley ||
-                    capture_aftermath || capture_golden || capture_face ||
+                    capture_aftermath || capture_golden ||
+                    capture_atmosphere || capture_face ||
                     capture_room);
     const char *capture_path = capture_room ? argv[4] :
                                capture_face ? argv[3] :
+                               capture_atmosphere ? argv[3] :
                                argc >= 3 ? argv[2] :
                                "architecture-proof.png";
     char save_path[640];
@@ -2712,7 +2753,7 @@ int main(int argc, char **argv)
     ActionReelState action_reel = {0};
     GameplayReelState gameplay_reel = {0};
     ResetLocalState(&local);
-    if (capture_golden) {
+    if (capture_golden || capture_atmosphere) {
         RepositionHero(&local, (Vector2){44.25f, 28.85f}, false);
         local.agent.facing_yaw = -0.35f;
         local.course.alarm_countdown = 1000.0f;
@@ -2750,7 +2791,8 @@ int main(int argc, char **argv)
         !capture_action_reel && !capture_gameplay_reel &&
         !capture_encounter && !capture_travel &&
         !capture_road &&
-        !capture_parley && !capture_golden && !capture_face && !capture_room) {
+        !capture_parley && !capture_golden && !capture_atmosphere &&
+        !capture_face && !capture_room) {
         local.course.alarm_countdown = 1000.0f;
         for (int32_t frame = 0; frame < 1500; ++frame) {
             CcLocalCourseUpdate(&local.course, &local.agent, &sim,
@@ -2893,6 +2935,9 @@ int main(int argc, char **argv)
     char message[256] = "";
     if (capture_golden) {
         (void)snprintf(message, sizeof(message), "Town square.");
+    } else if (capture_atmosphere) {
+        (void)snprintf(message, sizeof(message), "%s.",
+                       CcLocalAtmosphereName(capture_atmosphere_preset));
     } else if (capture_face) {
         (void)snprintf(message, sizeof(message),
                        "Same character model.");
@@ -2913,6 +2958,11 @@ int main(int argc, char **argv)
     bool performance_overlay = false;
     float message_age = 0.0f;
 
+    CcLocalRendererSetAtmosphere(
+        capture_atmosphere ? capture_atmosphere_preset :
+            LocalAtmosphereForSimulation(&sim),
+        0.0f);
+
     Rectangle local_bounds = {10.0f, 54.0f, 1260.0f, 640.0f};
     while (!WindowShouldClose()) {
         float frame_delta_time = GetFrameTime();
@@ -2920,6 +2970,11 @@ int main(int argc, char **argv)
         (void)snprintf(previous_message, sizeof(previous_message), "%s",
                        message);
         CcLocalRendererBeginFrame(frame_delta_time);
+        CcLocalRendererSetAtmosphere(
+            capture_atmosphere ? capture_atmosphere_preset :
+                LocalAtmosphereForSimulation(&sim),
+            2.4f);
+        CcLocalRendererUpdateAtmosphere(frame_delta_time);
         if (!capture && IsKeyPressed(KEY_F3)) {
             performance_overlay = !performance_overlay;
             (void)snprintf(message, sizeof(message), "%s",

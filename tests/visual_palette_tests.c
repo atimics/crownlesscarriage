@@ -1,4 +1,5 @@
 #include "client/cc_visual_style.h"
+#include "client/cc_local3d.h"
 
 #include <math.h>
 #include <stdbool.h>
@@ -74,6 +75,20 @@ static bool RequireLightnessGap(const char *name, Color first, Color second,
     return false;
 }
 
+static bool RequireOrderedRamp(const char *name, CcStyleRamp ramp,
+                               double minimum_gap)
+{
+    double shadow = ToOklab(ramp.shadow).lightness;
+    double base = ToOklab(ramp.base).lightness;
+    double light = ToOklab(ramp.light).lightness;
+    if (base - shadow >= minimum_gap &&
+        light - base >= minimum_gap) return true;
+    (void)fprintf(stderr,
+                  "%s ramp gaps %.3f and %.3f are below %.3f\n",
+                  name, base - shadow, light - base, minimum_gap);
+    return false;
+}
+
 static bool SameRgb(Color color, int red, int green, int blue)
 {
     return color.r == red && color.g == green && color.b == blue;
@@ -100,12 +115,55 @@ int main(void)
     passed &= RequireLightnessGap("crop and grass", CC_STYLE_CROP,
                                   CC_STYLE_GRASS, 0.14);
 
+    passed &= RequireOrderedRamp("teal", CC_VISUAL_PALETTE.teal, 0.07);
+    passed &= RequireOrderedRamp("gold", CC_VISUAL_PALETTE.gold, 0.07);
+    passed &= RequireOrderedRamp("danger", CC_VISUAL_PALETTE.danger, 0.07);
+    passed &= RequireOrderedRamp("violet", CC_VISUAL_PALETTE.violet, 0.07);
+    passed &= RequireOrderedRamp("earth", CC_VISUAL_PALETTE.earth, 0.07);
+    passed &= RequireOrderedRamp("road", CC_VISUAL_PALETTE.road, 0.07);
+    passed &= RequireOrderedRamp("wood", CC_VISUAL_PALETTE.wood, 0.07);
+    passed &= RequireOrderedRamp("stone", CC_VISUAL_PALETTE.stone, 0.07);
+    passed &= RequireOrderedRamp("grass", CC_VISUAL_PALETTE.grass, 0.07);
+    passed &= RequireOrderedRamp("foliage", CC_VISUAL_PALETTE.foliage,
+                                 0.07);
+    passed &= RequireOrderedRamp("crop", CC_VISUAL_PALETTE.crop, 0.07);
+    passed &= RequireOrderedRamp("metal", CC_VISUAL_PALETTE.metal, 0.07);
+    passed &= RequireOrderedRamp("parchment", CC_VISUAL_PALETTE.parchment,
+                                 0.07);
+    passed &= RequireOrderedRamp("contraband",
+                                 CC_VISUAL_PALETTE.contraband, 0.07);
+    passed &= RequireOrderedRamp("people skin",
+                                 CC_VISUAL_PALETTE.people_skin, 0.07);
+
+    /* Lock the art direction anchors separately from the hero contract.
+       Scene lighting may vary later, but the base world must remain the
+       Blackthorn & Brass family. */
+    if (!SameRgb(CC_VISUAL_PALETTE.cool_ink, 17, 16, 25) ||
+        !SameRgb(CC_STYLE_STONE, 85, 74, 97) ||
+        !SameRgb(CC_STYLE_EARTH, 112, 72, 56) ||
+        !SameRgb(CC_STYLE_ROAD, 173, 143, 80) ||
+        !SameRgb(CC_STYLE_FOLIAGE, 37, 91, 70) ||
+        !SameRgb(CC_STYLE_TEAL, 98, 180, 168)) {
+        (void)fprintf(stderr, "Blackthorn & Brass anchors changed\n");
+        passed = false;
+    }
+
     if (!SameRgb(CC_STYLE_HERO_SKIN, 177, 131, 93) ||
         !SameRgb(CC_STYLE_HERO_HAIR, 27, 31, 32) ||
         !SameRgb(CC_STYLE_HERO_UNDERLAYER, 47, 108, 106) ||
         !SameRgb(CC_STYLE_HERO_OUTER, 111, 48, 55) ||
         !SameRgb(CC_STYLE_HERO_ACCENT, 224, 169, 59)) {
         (void)fprintf(stderr, "Crownless identity colors changed\n");
+        passed = false;
+    }
+    if (CcLocalAtmosphereForDay(0) != CC_LOCAL_ATMOSPHERE_CLEAR_DAY ||
+        CcLocalAtmosphereForDay(2) !=
+            CC_LOCAL_ATMOSPHERE_RAINY_OVERCAST ||
+        CcLocalAtmosphereForDay(4) != CC_LOCAL_ATMOSPHERE_AMBER_DUSK ||
+        CcLocalAtmosphereForDay(7) !=
+            CC_LOCAL_ATMOSPHERE_MOONLIT_NIGHT ||
+        CcLocalAtmosphereForDay(8) != CC_LOCAL_ATMOSPHERE_CLEAR_DAY) {
+        (void)fprintf(stderr, "authored atmosphere sequence changed\n");
         passed = false;
     }
     if (!passed) return 1;
