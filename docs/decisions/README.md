@@ -12,8 +12,9 @@ accidentally reintroduce rejected scope.
 - [0004 — Separate the deterministic simulation core from raylib](0004-simulation-boundary.md)
 - [0005 — Build the proof in C17, raylib, and SQLite](0005-c-raylib-sqlite.md)
 - [0006 — Freight retains intent and the world may answer its own crises](0006-logistics-and-agency.md)
-- [0007 — Replace the kingdom screen with physical route maps](0007-physical-cartography.md)
+- [0007 — Replace the kingdom screen with physical route maps](0007-physical-cartography.md) (superseded)
 - [0008 — Make committed simulation inputs the durable source of truth](0008-durable-action-journal.md)
+- [0009 — Meet one branch at a time; let maps advise](0009-road-forks-before-maps.md)
 
 ## Record template
 

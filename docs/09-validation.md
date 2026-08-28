@@ -44,9 +44,10 @@ hashes before migration to the current schema.
 No active route, shipment, situation, character memory, or causal event may
 reference a missing or generation-mismatched entity.
 
-Every physical map must reference an existing route and maker, have exactly one
-valid owner, and be refused for travel when it is not carried or when the
-carriage is not at one of its route endpoints.
+Every physical map must reference an existing route and maker and have exactly
+one valid owner. Every travel choice must use a road at the carriage's current
+endpoint. A road without a carried chart must remain usable, apply the
+deterministic uncharted penalty, and hide the end of an unmarked track.
 
 ### 4. Economic invariants
 

@@ -24,7 +24,7 @@ cmake --build --preset play
 
 Use `--seed NUMBER` to repeat a specific world.
 
-The test begins at the hungry crossroads with 75 crowns. The player has enough
+The test begins at the hungry waystation with 75 crowns. The player has enough
 to commit to one answer, but not enough to ignore price, time, and road costs.
 
 ## Facilitation

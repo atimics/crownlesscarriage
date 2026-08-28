@@ -1,6 +1,6 @@
 # 0007 — Replace the kingdom screen with physical route maps
 
-**Status:** Accepted
+**Status:** Superseded by [0009](0009-road-forks-before-maps.md)
 
 ## Context
 

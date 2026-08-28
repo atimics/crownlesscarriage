@@ -10,8 +10,9 @@ changes who gets help, and can become a fight, a bargain, or an expedition.
 The result is written back into the same world that created the problem.
 
 The game begins at character scale. Settlements, people, markets, and roads are
-the main interface. Route maps are physical sheets kept in the carriage, not an
-all-knowing strategy screen.
+the main interface. Travel starts with the carriage following a track and
+meeting one side branch at a time. Maps are old, tradeable advice, not a travel
+screen.
 
 This project is in pre-production. The repository contains a living design
 manual and a playable architecture proof written in C17.
@@ -59,6 +60,8 @@ The architecture proof connects these parts in one running build:
 - A market interior whose stock and prices come from the regional simulation
 - Local situation boards with named sponsors, affected people, deadlines,
   rewards, accepted promises, and reputation consequences
+- Carriage-stage junction scenes with one continuous cart track and no more
+  than one side branch, plus a three-slot case of tradeable traveller's notes
 - A twelve-chart collectible map set with distinct physical artwork, a
   three-slot carriage case, and a persistent storage archive in Gloamgate
 - Real-time carriage journeys, a dedicated road scene, and a route crisis that
@@ -179,9 +182,14 @@ In the market, use `1` through `6` to buy Food, Iron, Tools, Weapons, Raw Gold,
 or Gems. Hold `Shift` with the same key to sell. Cargo slots hold eight Food,
 four Iron, two Tools, two Weapons, one Gold strongbox, or one Gem case.
 
+At a roadside branch, press `Enter` to turn onto it. Use the arrow keys or
+`Keep on track` to reach the next branch. Press `B` to buy local notes, `S` to
+sell carried notes, or `R` to repair the branch. A chart can save time and warn
+of danger, but it is never required to take a visible track.
+
 In the map case, use the arrow keys or click a sheet to select it. Press `B` to
-buy a local chart, `S` to sell one, `Enter` to follow it from the correct
-endpoint, or `R` to repair its contested route.
+buy a local chart, `S` to sell one, or `A` to store or retrieve it at the
+Gloamgate archive. Travel begins from the carriage's `Drive out` action.
 
 During combat, `1` uses Crushing Blow, `2` uses Sunder, and `3` uses Second
 Wind. Click the ground to disengage and return to direct movement.
