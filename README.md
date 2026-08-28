@@ -67,6 +67,10 @@ The architecture proof connects these parts in one running build:
 - A deterministic regional simulation of settlements, kingdoms, factions,
   production, trade, shipments, hunger, security, bandits, monsters, and
   dungeons
+- Multi-decade climate eras, bounded populations, abandoned towns, and
+  resource-backed recolonization make long histories contract and recover
+- Kingdoms can default on monastery debt, lose public services during long
+  crises, and cede settlements when a peace courier ends a losing war
 - Fields, farms, mountain deposits, mines, smith recipes, tool wear, rare Gold
   and Gems, bounded and perishable food stores, supplied warfare, and unique
   one-slot crafted treasures
@@ -87,7 +91,8 @@ The architecture proof connects these parts in one running build:
 - Kings who send physical declarations, peace offers, dragon alliances, and
   muster orders through a delayed and fallible courier network. The carriage
   can carry a sealed dispatch. Allied hosts consume real Food, Tools, and
-  Weapons; victory slays the dragon and returns its actual hoard to the realms
+  Weapons; surviving armies learn from failed campaigns, while victory slays
+  the dragon and returns its actual hoard to the realms
 - Hunger and exhausted credit that create night roads and recruit bandits,
   while unfed camps shrink and cannot raid empty towns
 - An append-only SQLite action journal with checkpoints, replay, and exact
