@@ -1,4 +1,5 @@
 #include "client/cc_local3d.h"
+#include "client/cc_local_place.h"
 #include "client/cc_overlay.h"
 #include "client/cc_visual_style.h"
 #include "persistence/cc_save.h"
@@ -911,6 +912,8 @@ static const CcDungeon *DungeonAtSettlement(const CcSim *sim, CcId settlement_id
 static void DrawLocalHeader(const CcSim *sim, const LocalState *local)
 {
     const CcSettlement *place = CcSimSettlement(sim, sim->player.location_id);
+    const CcLocalPlaceProfile *profile =
+        CcLocalPlaceProfileForSettlement(place);
     bool road = local->journey_travel_active ||
                 local->journey_combat_active ||
                 local->journey_parley_active;
@@ -923,7 +926,8 @@ static void DrawLocalHeader(const CcSim *sim, const LocalState *local)
                         origin != NULL ? origin->name : "Road",
                         destination != NULL ? destination->name : "Gate") :
              local->market_interior && place != NULL ?
-                 TextFormat("%s  /  Market", place->name) :
+                 TextFormat("%s  /  %s", place->name,
+                            profile->primary_hall) :
              place != NULL ? place->name : "Crownless",
              22, 18, 18, INK);
     const char *summary = TextFormat(
@@ -933,6 +937,11 @@ static void DrawLocalHeader(const CcSim *sim, const LocalState *local)
     int summary_width = CcOverlayMeasureText(summary, 10);
     CcOverlayDrawText(summary, GetScreenWidth() - summary_width - 22,
                       22, 10, road ? TEAL : CC_GOLD);
+    if (!road && !local->market_interior && place != NULL) {
+        CcOverlayDrawText(
+            TextFormat("%s  /  %s", profile->identity, profile->purpose),
+            22, 40, 8, MUTED);
+    }
 }
 
 static bool LocalCombatActive(const LocalState *local)
@@ -1792,6 +1801,10 @@ static ContextActionSet BuildContextActions(
     }
 
     Vector2 position = LocalPosition(local);
+    const CcSettlement *local_place = CcSimSettlement(
+        sim, sim->player.location_id);
+    const CcLocalPlaceProfile *local_profile =
+        CcLocalPlaceProfileForSettlement(local_place);
     if (local->market_interior) {
         if (GridDistance(position, INTERIOR_COUNTER) < 2.25f) {
             CcGood good = ContextCargoGood(sim);
@@ -1825,14 +1838,16 @@ static ContextActionSet BuildContextActions(
             }
         } else if (GridDistance(position, INTERIOR_EXIT) < 1.25f) {
             AddContextAction(&set, CONTEXT_ACTION_LEAVE_MARKET,
-                             "Leave market");
+                             TextFormat("Leave %s",
+                                        local_profile->primary_hall));
         }
         return set;
     }
 
     if (GridDistance(position, LOCAL_MARKET) < 1.30f) {
         AddContextAction(&set, CONTEXT_ACTION_ENTER_MARKET,
-                         "Enter market");
+                         TextFormat("Enter %s",
+                                    local_profile->primary_hall));
     }
     if (GridDistance(position, LOCAL_CARRIAGE) < 1.35f) {
         AddContextAction(&set, CONTEXT_ACTION_CHOOSE_ROAD, "Drive out");
@@ -2984,6 +2999,7 @@ static void UpdateGameplayReel(CcSim *sim, LocalState *local,
             } else if (!sim->journey.active) {
                 const CcSituation *accepted = CcSimAcceptedSituation(sim);
                 CcId target = SituationSettlementId(sim, accepted);
+                CcLocalBindPlace(sim);
                 ResetLocalState(local);
                 local->course.alarm_countdown = 1000.0f;
                 if (target != 0U && target != sim->player.location_id &&
@@ -3048,6 +3064,7 @@ static void UpdateGameplayReel(CcSim *sim, LocalState *local,
             if (!sim->journey.active) {
                 const CcSituation *accepted = CcSimAcceptedSituation(sim);
                 CcId target = SituationSettlementId(sim, accepted);
+                CcLocalBindPlace(sim);
                 ResetLocalState(local);
                 local->course.alarm_countdown = 1000.0f;
                 if (target != 0U && target != sim->player.location_id &&
@@ -3412,7 +3429,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         if (loaded) {
             *selected = FirstOutgoingRouteIndex(sim);
             *selected_situation = FirstActiveSituationIndex(sim);
-            CcLocalTerrainSetSeed(sim->world_seed);
+            CcLocalBindPlace(sim);
             ResetLocalState(local);
             if (sim->journey.active &&
                 sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED) {
@@ -3437,7 +3454,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         CcSimInit(sim, sim->world_seed + UINT32_C(0x9e3779b9));
         *selected = FirstOutgoingRouteIndex(sim);
         *selected_situation = FirstActiveSituationIndex(sim);
-        CcLocalTerrainSetSeed(sim->world_seed);
+        CcLocalBindPlace(sim);
         ResetLocalState(local);
         *view = VIEW_LOCAL;
         (void)snprintf(message, message_capacity, "New game started.");
@@ -3510,6 +3527,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                                "An outlaw company blocked the road.");
             } else if (!sim->journey.active) {
                 *selected = FirstOutgoingRouteIndex(sim);
+                CcLocalBindPlace(sim);
                 BeginTownArrivalState(local);
                 const CcEvent *event = CcSimRecentEvent(sim, 0);
                 (void)snprintf(message, message_capacity, "%s",
@@ -4262,7 +4280,7 @@ int main(int argc, char **argv)
 
     CcSim sim;
     CcSimInit(&sim, UINT32_C(0xc0a71a9e));
-    CcLocalTerrainSetSeed(sim.world_seed);
+    CcLocalBindPlace(&sim);
     CcJournal *journal = NULL;
     if (capture || render_benchmark) CcSimAdvanceDays(&sim, 28);
     if (capture_creature_media &&
@@ -4311,6 +4329,7 @@ int main(int argc, char **argv)
             if (found) break;
         }
     }
+    CcLocalBindPlace(&sim);
     if (capture_encounter || capture_travel || capture_road || capture_parley ||
         capture_aftermath || capture_creature_horse) {
         int32_t charter_index = FirstActiveSituationIndex(&sim);
@@ -4623,6 +4642,7 @@ int main(int argc, char **argv)
         (void)snprintf(previous_message, sizeof(previous_message), "%s",
                        message);
         CcLocalRendererBeginFrame(frame_delta_time);
+        CcLocalBindPlace(&sim);
         CcLocalRendererSetAtmosphere(
             capture_atmosphere ? capture_atmosphere_preset :
                 LocalAtmosphereForSimulation(&sim),
@@ -4658,6 +4678,7 @@ int main(int argc, char **argv)
                         save_path, message, sizeof(message));
             ClientInputClearPressed();
         }
+        CcLocalBindPlace(&sim);
         if (strcmp(previous_message, message) != 0) {
             message_age = 0.0f;
         } else {
@@ -4703,8 +4724,8 @@ int main(int argc, char **argv)
                                   &local.convoy, clock,
                                   local_target, local_bounds);
             } else if (local.market_interior) {
-                CcLocalDrawMarket3D(&sim, &local.agent, clock,
-                                    local_target, local_bounds);
+                CcLocalDrawInterior3D(&sim, &local.agent, clock,
+                                      local_target, local_bounds);
             } else {
                 CcLocalDrawStreet3D(&sim, &local.agent, &local.course,
                                     &local.convoy, clock,

@@ -66,6 +66,19 @@ produce deterministic strategic results.
 
 ## Stage 4 — One living city
 
+### Current buildout
+
+The shared exterior now resolves each settlement through a stable place
+profile. Farming, market, fortress, mining, capital, and dungeon-frontier towns
+have their own terrain seed, district language, civic labels, material tint,
+plaza mark, three named physical landmarks, and three secondary roads that join
+those landmarks to the shared regional spine. Each profile also turns the
+trade-room skeleton into its own staffed civic hall, with a stable keeper,
+service, palette, wall mark, and stock display. Place records are the single
+source for grading, movement, camera picking, labels, and rendering, so each
+town has a distinct walkable local layout without ghost geometry. The remaining
+gate is deeper interior grammars and a stateful recurring cast.
+
 ### Work
 
 - Create one authored city grammar.
