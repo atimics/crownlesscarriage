@@ -3227,6 +3227,50 @@ int main(void)
         return 1;
     }
 
+    CcLocalAgent retreat_walk;
+    CcLocalAgentInit(&retreat_walk, (Vector2){4.00f, 5.50f}, true);
+    if (!CcLocalAgentSetExactTarget(
+            &retreat_walk, (Vector3){7.00f, 0.0f, 5.50f}, true)) {
+        (void)fprintf(stderr, "momentum posture target was rejected\n");
+        return 1;
+    }
+    retreat_walk.combat.focus_valid = true;
+    retreat_walk.combat.focus_point = (Vector3){2.00f, 0.0f, 5.50f};
+    bool saw_opposed_facing = false;
+    float maximum_retreat_lead = 0.0f;
+    for (int32_t frame = 0; frame < 75; ++frame) {
+        CcLocalAgentUpdate(&retreat_walk, 1.0f / 60.0f, true);
+        float speed = sqrtf(retreat_walk.velocity.x *
+                            retreat_walk.velocity.x +
+                            retreat_walk.velocity.z *
+                            retreat_walk.velocity.z);
+        if (speed <= 0.45f) continue;
+        float momentum_x = retreat_walk.velocity.x / speed;
+        float momentum_z = retreat_walk.velocity.z / speed;
+        float facing_x = sinf(retreat_walk.facing_yaw);
+        float facing_z = cosf(retreat_walk.facing_yaw);
+        float facing_alignment = facing_x * momentum_x +
+                                 facing_z * momentum_z;
+        if (facing_alignment > -0.80f) continue;
+        saw_opposed_facing = true;
+        CcLimbVec3 torso = {
+            retreat_walk.render_pose.neck.x -
+                retreat_walk.render_pose.pelvis.x,
+            0.0f,
+            retreat_walk.render_pose.neck.z -
+                retreat_walk.render_pose.pelvis.z,
+        };
+        maximum_retreat_lead = fmaxf(
+            maximum_retreat_lead,
+            torso.x * momentum_x + torso.z * momentum_z);
+    }
+    if (!saw_opposed_facing || maximum_retreat_lead <= 0.105f) {
+        (void)fprintf(stderr,
+                      "visible torso did not lead a retreating body's momentum: opposed %d lead %.3f\n",
+                      saw_opposed_facing, maximum_retreat_lead);
+        return 1;
+    }
+
     CcLocalAgent scout_walk;
     CcLocalAgent refugee_walk;
     CcLocalAgentInit(&scout_walk, (Vector2){2.00f, 3.40f}, true);

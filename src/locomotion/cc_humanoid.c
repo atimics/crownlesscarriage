@@ -289,6 +289,15 @@ static CcLimbVec3 NormalizeOr(CcLimbVec3 value, CcLimbVec3 fallback)
     return length > 0.00001f ? Scale(value, 1.0f / length) : fallback;
 }
 
+static CcLimbVec3 HorizontalMomentumDirection(const CcHumanoidGait *gait,
+                                              CcLimbVec3 fallback)
+{
+    CcLimbVec3 momentum = {gait->root_velocity.x, 0.0f,
+                           gait->root_velocity.z};
+    return Length(momentum) > 0.035f ? NormalizeOr(momentum, fallback) :
+                                      fallback;
+}
+
 static bool AddDrivenJoint(CcBiomechMorphology *morphology,
                            CcHumanoidJoint expected, const char *joint_name,
                            const char *flexor_name, const char *extensor_name,
@@ -1607,7 +1616,12 @@ static CcLimbVec3 PlanFootTarget(const CcHumanoidGait *gait, int32_t leg,
                                  CcLimbTerrainProbe probe, void *probe_context,
                                  CcLimbVec3 *normal)
 {
-    CcLimbVec3 forward = Forward(gait->travel_yaw);
+    CcLimbVec3 travel_forward = Forward(gait->travel_yaw);
+    CcLimbVec3 momentum_forward = HorizontalMomentumDirection(
+        gait, travel_forward);
+    float momentum_alignment = Dot(momentum_forward, travel_forward);
+    CcLimbVec3 forward = momentum_alignment < 0.985f ? momentum_forward :
+                                                        travel_forward;
     CcLimbVec3 right = Right(gait->travel_yaw);
     float side = leg == 0 ? -1.0f : 1.0f;
     float preview_seconds = (0.38f + 0.31f) /
@@ -1880,6 +1894,11 @@ static void ResolveHumanoidPose(CcHumanoidGait *gait,
         Subtract(world_forward, Scale(up, Dot(world_forward, up))),
         world_forward);
     CcLimbVec3 right = NormalizeOr(Cross(up, forward), world_right);
+    CcLimbVec3 momentum_forward = HorizontalMomentumDirection(gait, forward);
+    momentum_forward = NormalizeOr(
+        Subtract(momentum_forward,
+                 Scale(up, Dot(momentum_forward, up))),
+        forward);
     gait->pose.pelvis = Add(FromBiomech(gait->body.root.position),
                             Scale(right, gait->pelvis_sway.value));
     gait->pose.pelvis = Add(gait->pose.pelvis,
@@ -1979,19 +1998,25 @@ static void ResolveHumanoidPose(CcHumanoidGait *gait,
                                    gait->last_delta_time);
     }
 
-    float locomotion_lean = gait->grounded &&
-                            gait->action == CC_HUMANOID_ACTION_LOCOMOTION ?
-        0.050f * Smooth01(gait->speed.value / 0.90f) : 0.0f;
+    float momentum_speed = sqrtf(gait->root_velocity.x *
+                                 gait->root_velocity.x +
+                                 gait->root_velocity.z *
+                                 gait->root_velocity.z);
+    float momentum_lead = gait->grounded &&
+                          gait->action == CC_HUMANOID_ACTION_LOCOMOTION ?
+        Clamp(momentum_speed * 0.085f, 0.0f, 0.120f) *
+            Smooth01(momentum_speed / 0.22f) : 0.0f;
     gait->pose.spine = Add(gait->pose.pelvis, Scale(up, 0.10f));
     gait->pose.spine = Add(gait->pose.spine,
-                           Scale(forward, locomotion_lean * 0.18f));
+                           Scale(momentum_forward, momentum_lead * 0.30f));
     gait->pose.chest = Add(gait->pose.pelvis, Scale(up, 0.48f));
     gait->pose.chest = Add(gait->pose.chest,
                            Scale(forward,
                                  (CcBiomechRigJointAngle(&gait->body,
                                       CC_HUMANOID_SPINE_PITCH) +
-                                  gait->pose.pelvis_pitch) * 0.14f +
-                                 locomotion_lean));
+                                  gait->pose.pelvis_pitch) * 0.14f));
+    gait->pose.chest = Add(gait->pose.chest,
+                           Scale(momentum_forward, momentum_lead));
     gait->pose.neck = Add(gait->pose.chest, Scale(up, 0.25f));
     gait->pose.head = Add(gait->pose.neck, Scale(up, 0.18f));
     gait->pose.chest_yaw = CcBiomechRigJointAngle(
