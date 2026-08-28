@@ -9,7 +9,10 @@
 
 typedef enum CcClientSessionScene {
     CC_CLIENT_SESSION_STREET = 0,
-    CC_CLIENT_SESSION_MARKET = 1
+    CC_CLIENT_SESSION_MARKET = 1,
+    CC_CLIENT_SESSION_DUNGEON_SITE = 2,
+    CC_CLIENT_SESSION_GOBLIN_SITE = 3,
+    CC_CLIENT_SESSION_DRAGON_SITE = 4
 } CcClientSessionScene;
 
 typedef struct CcClientSession {

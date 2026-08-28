@@ -495,7 +495,11 @@ int main(void)
     empty_court.courier_count = 0;
     CcSimAdvanceDays(&empty_court, 27);
     CC_CHECK(empty_court.courier_count == 0);
-    CC_CHECK(CcSimValidate(&empty_court, error, sizeof(error)));
+    if (!CcSimValidate(&empty_court, error, sizeof(error))) {
+        (void)fprintf(stderr, "%s:%d: empty court validation failed: %s\n",
+                      __FILE__, __LINE__, error);
+        return 1;
+    }
 
     CcSim territorial_peace;
     CcSimInit(&territorial_peace, UINT32_C(0x7e221701));

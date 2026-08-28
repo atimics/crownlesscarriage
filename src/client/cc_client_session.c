@@ -24,8 +24,8 @@ bool CcClientSessionValidate(const CcClientSession *session)
     return session != NULL &&
            session->version == CC_CLIENT_SESSION_VERSION &&
            session->location_id != 0U &&
-           (session->scene == CC_CLIENT_SESSION_STREET ||
-            session->scene == CC_CLIENT_SESSION_MARKET) &&
+           session->scene >= CC_CLIENT_SESSION_STREET &&
+           session->scene <= CC_CLIENT_SESSION_DRAGON_SITE &&
            isfinite(session->position_x) && isfinite(session->position_z) &&
            isfinite(session->facing_yaw) &&
            fabsf(session->position_x) <= 100000.0f &&

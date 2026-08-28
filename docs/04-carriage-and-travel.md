@@ -129,18 +129,27 @@ different from an open road.
 
 **Contract:** there is no free, omniscient kingdom map, and travel never starts
 by selecting a line on a chart. At the edge of a place, the carriage follows a
-cart track. Each choice scene contains that continuous track and no more than
-one side branch. The player can take the branch or keep moving until the next
-one. The scene includes the coach, road surfaces, signs, vegetation, damage,
-and closures in the world.
+cart track. Each choice scene is a real local crossroads containing every road
+that leaves that junction. The player faces a branch and takes it. The scene
+includes the coach, road surfaces, signs, vegetation, damage, and closures in
+the world, but never exposes roads beyond the nearby sightline.
 
 The strategic graph may connect a place to many routes. `Drive out` commits
 only to leaving the yard: the carriage moves through the town and gate before
-the first route choice is shown. The local presentation orders outgoing routes
-into a short sequence of roadside encounters. It never turns every graph edge
-into a hub-shaped crossroads or lets the player leaf through branches while
-the carriage stands in town. Continuing puts the carriage back in motion;
-taking the visible branch commits to that route.
+the route choice is shown. The local presentation fans the real outgoing roads
+into one legible junction and lets the player turn the carriage to inspect each
+sign. It never lets the player leaf through routes while the carriage stands in
+town. Taking a visible branch commits to that route.
+
+During travel, the camera may rise and widen only as far as a passenger could
+plausibly see from the carriage. Movement and the calendar can run faster, but
+the player never receives a live top-down world view. The only complete world
+views are physical, hand-drawn map objects carried or stored by the company.
+
+Small destinations use the same rule. A mine, dungeon, goblin cave, dragon
+cave, or remote settlement is its own local map. A short procedural wilderness
+road joins it to the nearest settlement. The carriage remains parked on arrival
+and is the physical return point.
 
 A map is a tradeable set of traveller's notes carried in the carriage map case.
 Each sheet describes one route and its two termini.

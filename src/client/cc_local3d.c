@@ -1376,6 +1376,8 @@ static Camera3D LocalCamera(bool interior, Vector3 focus);
 static Camera3D ExteriorCameraAt(Vector3 target, float fovy);
 static Camera3D ExteriorCameraComposed(Vector3 target, Vector3 offset,
                                        float fovy);
+static Camera3D PerspectiveCameraComposed(Vector3 target, Vector3 offset,
+                                          float fovy);
 static Camera3D SnapCameraToArtPixels(Camera3D camera, int32_t art_height);
 Camera3D CcLocalStreetCameraInternal(const CcLocalAgent *agent, float clock,
                                      bool advance, int32_t art_height);
@@ -8676,36 +8678,22 @@ Camera3D CcLocalStreetCameraInternal(const CcLocalAgent *agent, float clock,
     return SnapCameraToArtPixels(camera, art_height);
 }
 
-static int32_t RoadCameraShotFor(float x, int32_t current_shot)
-{
-    static const float centers[] = {
-        25.0f, 35.0f, 45.0f, 55.0f, 65.0f, 75.0f
-    };
-    int32_t count = (int32_t)(sizeof(centers) / sizeof(centers[0]));
-    if (current_shot >= 0 && current_shot < count &&
-        fabsf(x - centers[current_shot]) <= 6.2f) return current_shot;
-    int32_t nearest = 0;
-    float nearest_distance = FLT_MAX;
-    for (int32_t shot = 0; shot < count; ++shot) {
-        float distance = fabsf(x - centers[shot]);
-        if (distance >= nearest_distance) continue;
-        nearest = shot;
-        nearest_distance = distance;
-    }
-    return nearest;
-}
-
 static Camera3D RoadCamera(Vector3 focus, bool travelling, float clock,
                            bool advance, int32_t art_height)
 {
-    static const float centers[] = {
-        25.0f, 35.0f, 45.0f, 55.0f, 65.0f, 75.0f
-    };
-    int32_t shot = travelling ?
-        RoadCameraShotFor(focus.x, road_camera_rig.shot) : 4;
-    Vector3 destination = travelling ?
-        (Vector3){centers[shot] - 0.90f, 0.95f, 40.0f} :
-        (Vector3){48.60f, 0.95f, 40.0f};
+    if (travelling) {
+        float sway = sinf(clock * 0.85f) * 0.24f;
+        Vector3 look_ahead = {
+            focus.x + 12.0f,
+            focus.y + 1.20f,
+            focus.z + sway * 0.35f
+        };
+        Camera3D camera = PerspectiveCameraComposed(
+            look_ahead, (Vector3){-11.5f, 4.8f, 3.8f + sway}, 43.0f);
+        return SnapCameraToArtPixels(camera, art_height);
+    }
+    int32_t shot = 4;
+    Vector3 destination = {48.60f, 0.95f, 40.0f};
     const Vector3 road_offset = {3.0f, 4.4f, 14.5f};
     FixedCameraRigAim(&road_camera_rig, shot, destination, road_offset,
                       10.8f, clock, advance);
@@ -16673,40 +16661,25 @@ static void DrawNotice3D(const CcSim *sim)
     rlPopMatrix();
 }
 
-static void DrawDungeon3D(const CcDungeon *dungeon)
+static void DrawSiteRoadGate(float x, float z, Color accent)
 {
-    float x = CC_LOCAL_DUNGEON_X;
-    float z = DUNGEON_FOOTPRINT.y + DUNGEON_FOOTPRINT.height * 0.5f;
     rlPushMatrix();
-    rlTranslatef(0.0f, TerrainFootprintHeight(DUNGEON_FOOTPRINT), 0.0f);
-    RuntimeAsset *mine = &runtime_assets[RUNTIME_ASSET_MINE];
-    if (mine->ready) {
-        const float scale = 0.58f;
-        DrawModelEx(mine->model, (Vector3){x, 0.0f, z - 0.35f},
-                    (Vector3){0.0f, 1.0f, 0.0f}, 0.0f,
-                    (Vector3){scale, scale, scale}, WHITE);
-        float pulse = 0.06f + (float)dungeon->regional_pressure / 500.0f;
-        DrawScenerySphere((Vector3){x, 0.86f,
-                                    DUNGEON_FOOTPRINT.y +
-                                    DUNGEON_FOOTPRINT.height + 0.08f},
-                          pulse, Fade(WORLD_VIOLET, 0.82f));
-        rlPopMatrix();
-        return;
+    rlTranslatef(0.0f, CcLocalTerrainHeightAt(x, z), 0.0f);
+    DrawBox((Vector3){x - 1.15f, 1.35f, z},
+            (Vector3){0.22f, 2.70f, 0.22f}, WORLD_WOOD_SHADOW);
+    DrawBox((Vector3){x + 1.15f, 1.35f, z},
+            (Vector3){0.22f, 2.70f, 0.22f}, WORLD_WOOD_SHADOW);
+    DrawBox((Vector3){x, 2.38f, z},
+            (Vector3){2.55f, 0.55f, 0.18f}, WORLD_WOOD);
+    DrawBox((Vector3){x, 2.39f, z - 0.10f},
+            (Vector3){1.72f, 0.22f, 0.05f}, accent);
+    for (int32_t mark = 0; mark < 5; ++mark) {
+        float road_x = x + 2.4f + (float)mark * 1.2f;
+        float road_y = CcLocalTerrainHeightAt(road_x, z);
+        DrawBox((Vector3){road_x, road_y + 0.025f, z},
+                (Vector3){0.72f, 0.05f, 1.48f},
+                Fade(WORLD_STONE, 0.74f));
     }
-    DrawBox((Vector3){x - 1.15f, 1.40f, z}, (Vector3){0.62f, 2.80f, 0.82f},
-            (Color){64, 56, 72, 255});
-    DrawBox((Vector3){x + 1.15f, 1.40f, z}, (Vector3){0.62f, 2.80f, 0.82f},
-            (Color){64, 56, 72, 255});
-    DrawBox((Vector3){x, 2.84f, z}, (Vector3){2.92f, 0.42f, 0.82f},
-            (Color){74, 62, 84, 255});
-    DrawBox((Vector3){x, 1.22f, DUNGEON_FOOTPRINT.y +
-                                     DUNGEON_FOOTPRINT.height + 0.03f},
-            (Vector3){1.28f, 2.44f, 0.05f},
-            (Color){8, 5, 14, 255});
-    float pulse = 0.06f + (float)dungeon->regional_pressure / 500.0f;
-    DrawScenerySphere((Vector3){x, 1.32f, DUNGEON_FOOTPRINT.y +
-                                            DUNGEON_FOOTPRINT.height + 0.08f}, pulse,
-                      Fade(WORLD_VIOLET, 0.82f));
     rlPopMatrix();
 }
 
@@ -18377,25 +18350,18 @@ static bool ForkRouteLeaves(const CcSim *sim, const CcRoute *route)
             route->to_id == sim->player.location_id);
 }
 
-static const CcRoute *ForkSelectedRoute(const CcSim *sim,
-                                        int32_t selected_route)
+Vector2 CcLocalForkBranchEndInternal(int32_t branch_ordinal,
+                                     int32_t branch_count)
 {
-    if (sim == NULL || selected_route < 0 ||
-        selected_route >= sim->route_count) return NULL;
-    const CcRoute *route = &sim->routes[selected_route];
-    return ForkRouteLeaves(sim, route) ? route : NULL;
-}
-
-static int32_t ForkRouteOrdinal(const CcSim *sim, int32_t selected_route)
-{
-    int32_t ordinal = 0;
-    if (sim == NULL) return ordinal;
-    for (int32_t i = 0; i < sim->route_count; ++i) {
-        if (!ForkRouteLeaves(sim, &sim->routes[i])) continue;
-        if (i == selected_route) return ordinal;
-        ordinal += 1;
-    }
-    return 0;
+    if (branch_count < 1) branch_count = 1;
+    if (branch_ordinal < 0) branch_ordinal = 0;
+    if (branch_ordinal >= branch_count) branch_ordinal = branch_count - 1;
+    float amount = branch_count == 1 ? 0.5f :
+        (float)branch_ordinal / (float)(branch_count - 1);
+    float spread = fminf(1.44f, 0.48f * (float)(branch_count - 1));
+    float angle = -0.5f * spread + amount * spread;
+    return (Vector2){50.5f + cosf(angle) * 42.0f,
+                     40.0f + sinf(angle) * 40.0f};
 }
 
 static void DrawForkRoadSegment(Vector3 from, Vector3 to, float width,
@@ -18458,9 +18424,10 @@ static void DrawForkRouteState(const CcRoute *route, Vector3 from,
     }
 }
 
-static void DrawForkSignpost(Vector3 branch_end, bool hidden)
+static void DrawForkSignpost(Vector3 junction, Vector3 branch_end,
+                             bool hidden)
 {
-    Vector3 base = {50.5f, 0.0f, 40.0f};
+    Vector3 base = Vector3Lerp(junction, branch_end, 0.32f);
     DrawCylinder(base, 0.17f, 0.13f, 3.25f, 8,
                  (Color){91, 61, 42, 255});
     float yaw = atan2f(branch_end.x - base.x, branch_end.z - base.z);
@@ -18480,9 +18447,9 @@ void CcLocalDrawFork3D(const CcSim *sim, int32_t selected_route,
     CcId kingdom_id = here != NULL ? here->kingdom_id : 0U;
     Color kingdom = KingdomColor3D(sim, kingdom_id);
     Color ground = BlendColor((Color){41, 67, 48, 255}, kingdom, 0.16f);
-    Camera3D camera = ExteriorCameraComposed(
-        (Vector3){48.0f, 0.85f, 41.0f},
-        (Vector3){17.0f, 24.0f, 27.0f}, 32.0f);
+    Camera3D camera = PerspectiveCameraComposed(
+        (Vector3){54.0f, 1.15f, 40.0f},
+        (Vector3){-24.0f, 7.2f, 8.5f}, 44.0f);
     camera = SnapCameraToArtPixels(camera, target.texture.height);
     ArtComposition fork_art = ROAD_ART_COMPOSITION;
     fork_art.focal_point = camera.target;
@@ -18496,26 +18463,32 @@ void CcLocalDrawFork3D(const CcSim *sim, int32_t selected_route,
               (Vector2){104.0f, 78.0f}, ground);
     Vector3 approach = {5.0f, 0.0f, 42.0f};
     Vector3 junction = {50.5f, 0.0f, 40.0f};
-    Vector3 onward = {96.0f, 0.0f, 35.5f};
     DrawForkRoadSegment(approach, junction, 5.1f,
                         (Color){101, 91, 72, 255}, true);
-    DrawForkRoadSegment(junction, onward, 5.1f,
-                        (Color){98, 88, 70, 255}, true);
 
-    WorldLabel labels[1] = {0};
-    char label_text[CC_NAME_CAPACITY] = {0};
+    WorldLabel labels[CC_MAX_ROUTES] = {0};
+    char label_text[CC_MAX_ROUTES][CC_NAME_CAPACITY] = {{0}};
     int32_t label_count = 0;
-    const CcRoute *route = ForkSelectedRoute(sim, selected_route);
-    if (route != NULL) {
-        int32_t ordinal = ForkRouteOrdinal(sim, selected_route);
-        float side = (ordinal & 1) != 0 ? 1.0f : -1.0f;
-        Vector3 branch_end = {77.0f, 0.0f, 40.0f + side * 23.0f};
+    int32_t branch_count = 0;
+    for (int32_t i = 0; i < sim->route_count; ++i) {
+        if (ForkRouteLeaves(sim, &sim->routes[i])) branch_count += 1;
+    }
+    int32_t ordinal = 0;
+    for (int32_t i = 0; i < sim->route_count; ++i) {
+        const CcRoute *route = &sim->routes[i];
+        if (!ForkRouteLeaves(sim, route)) continue;
+        Vector2 endpoint = CcLocalForkBranchEndInternal(ordinal,
+                                                        branch_count);
+        Vector3 branch_end = {endpoint.x, 0.0f, endpoint.y};
         float decay = 1.0f - (float)route->condition / 100.0f;
         Color road = route->smuggler_route ?
             (Color){69, 56, 49, 255} :
             BlendColor((Color){113, 102, 80, 255},
                        (Color){77, 61, 47, 255}, decay);
-        float width = route->smuggler_route ? 2.8f : 4.2f;
+        bool selected = i == selected_route;
+        if (selected) road = BlendColor(road, WORLD_GOLD, 0.30f);
+        float width = (route->smuggler_route ? 2.8f : 4.2f) +
+                      (selected ? 0.65f : 0.0f);
         DrawForkRoadSegment(junction, branch_end, width, road, true);
         DrawForkRouteState(route, junction, branch_end);
 
@@ -18525,15 +18498,19 @@ void CcLocalDrawFork3D(const CcSim *sim, int32_t selected_route,
         CcTravelPreview preview = {0};
         (void)CcSimTravelPreview(sim, destination_id, &preview, NULL, 0U);
         (void)snprintf(
-            label_text, sizeof(label_text), "%s",
+            label_text[label_count], sizeof(label_text[label_count]), "%s",
             preview.destination_known && place != NULL ?
-                place->name : "UNMARKED");
-        labels[0] = (WorldLabel){
-            {50.5f, 2.35f, 40.0f}, label_text,
-            route->smuggler_route ? WORLD_VIOLET : WORLD_GOLD
+                place->name : "UNMARKED TRACK");
+        Vector3 label_position = Vector3Lerp(junction, branch_end, 0.72f);
+        labels[label_count] = (WorldLabel){
+            {label_position.x, 1.30f, label_position.z},
+            label_text[label_count],
+            selected ? WORLD_GOLD :
+            route->smuggler_route ? WORLD_VIOLET : WORLD_MUTED
         };
-        label_count = 1;
-        DrawForkSignpost(branch_end, route->smuggler_route);
+        label_count += 1;
+        DrawForkSignpost(junction, branch_end, route->smuggler_route);
+        ordinal += 1;
     }
 
     TreeRegionalStyle tree_style = TreeStyleForKingdom(kingdom);
@@ -18625,9 +18602,24 @@ static void DrawRoadSurface(float x, float width, Color road)
     }
 }
 
-static void DrawRoadTerrain(const CcRoute *route, int32_t danger,
-                            bool bridge_checkpoint, Color kingdom,
-                            Vector3 focus)
+uint32_t CcLocalRoadWildernessSeedInternal(uint32_t world_seed,
+                                           CcId route_id,
+                                           int32_t segment_index)
+{
+    uint32_t seed = world_seed ^ (uint32_t)route_id ^
+                    (uint32_t)(route_id >> 32U);
+    seed ^= (uint32_t)segment_index * UINT32_C(0x9e3779b9);
+    seed ^= seed >> 16U;
+    seed *= UINT32_C(0x7feb352d);
+    seed ^= seed >> 15U;
+    seed *= UINT32_C(0x846ca68b);
+    seed ^= seed >> 16U;
+    return seed == 0U ? UINT32_C(0xa341316c) : seed;
+}
+
+static void DrawRoadTerrain(uint32_t world_seed, const CcRoute *route,
+                            int32_t danger, bool bridge_checkpoint,
+                            Color kingdom, Vector3 focus)
 {
     float decay = route != NULL ?
         1.0f - (float)route->condition / 100.0f : 0.5f;
@@ -18662,18 +18654,23 @@ static void DrawRoadTerrain(const CcRoute *route, int32_t danger,
     Color leaves = route != NULL && route->smuggler_route ?
         WORLD_FOLIAGE_SHADOW : WORLD_FOLIAGE;
     TreeRegionalStyle regional_style = TreeStyleForKingdom(kingdom);
+    CcId route_id = route != NULL ? route->id : 0U;
     for (int32_t tree = 0; tree < 13; ++tree) {
-        float x = 20.0f + (float)tree * 4.75f;
-        x += (tree & 1) != 0 ? -regional_style.cluster_pull :
-                               regional_style.cluster_pull;
-        float z = (tree & 1) != 0 ? 46.0f + (float)(tree % 3) * 1.2f :
-                                    33.8f - (float)(tree % 3) * 1.1f;
+        uint32_t seed = CcLocalRoadWildernessSeedInternal(
+            world_seed, route_id, tree);
+        float x = 15.5f + (float)tree * 5.35f +
+                  ((float)((seed >> 8U) % 101U) / 100.0f - 0.5f) * 2.2f;
+        bool far_side = (seed & 1U) != 0U;
+        float verge = 1.0f + (float)((seed >> 16U) % 31U) / 10.0f;
+        float z = far_side ? 45.4f + verge : 34.6f - verge;
+        x += far_side ? -regional_style.cluster_pull :
+                        regional_style.cluster_pull;
         if (!SceneryPointVisible(x, z, focus)) continue;
-        TreeFamily family = tree == 4 || tree == 10 ? TREE_FAMILY_OAK :
-                            tree == 1 || tree == 7 ? TREE_FAMILY_POLLARD :
-                                                    TREE_FAMILY_ALDER;
+        TreeFamily family = (seed % 7U) == 0U ? TREE_FAMILY_OAK :
+                            (seed % 5U) == 0U ? TREE_FAMILY_POLLARD :
+                                               TREE_FAMILY_ALDER;
         family = RegionalTreeFamily(family, tree, regional_style);
-        Color tree_leaves = (tree % 3) == 0 ?
+        Color tree_leaves = (seed % 3U) == 0U ?
                             ShadeColor(leaves, 0.82f) : leaves;
         if (family == TREE_FAMILY_OAK) {
             tree_leaves = ShadeColor(tree_leaves, 0.86f);
@@ -18682,6 +18679,12 @@ static void DrawRoadTerrain(const CcRoute *route, int32_t danger,
                                      WORLD_GRASS_LIGHT, 0.16f);
         }
         DrawTree(x, z, family, tree_leaves, regional_style);
+        if ((seed & 12U) == 12U) {
+            DrawScenerySphere(
+                (Vector3){x + (far_side ? -1.1f : 1.1f), 0.22f, z},
+                0.38f + (float)((seed >> 20U) % 4U) * 0.08f,
+                ShadeColor(WORLD_STONE, 0.78f));
+        }
     }
     if (route != NULL && (route->closed || route->condition < 42) &&
         SceneryFootprintVisible((Rectangle){68.0f, 32.0f, 4.0f, 16.0f},
@@ -18807,8 +18810,8 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     CcId road_kingdom_id = origin != NULL ? origin->kingdom_id :
         destination_place != NULL ? destination_place->kingdom_id : 0;
     Color road_kingdom = KingdomColor3D(sim, road_kingdom_id);
-    DrawRoadTerrain(route, sim->journey.danger, authored_checkpoint,
-                    road_kingdom, camera.target);
+    DrawRoadTerrain(sim->world_seed, route, sim->journey.danger,
+                    authored_checkpoint, road_kingdom, camera.target);
     if (!travelling &&
         SceneryPointVisible(ROAD_BARRICADE_X, 40.0f, camera.target) &&
         !DrawBridgeCheckpoint()) {
@@ -18985,6 +18988,173 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     DrawFixedCameraFade(&road_camera_rig, destination);
 }
 
+const char *CcLocalSiteName(const CcSim *sim, CcLocalSiteKind site)
+{
+    if (sim == NULL) return "Remote site";
+    if (site == CC_LOCAL_SITE_DUNGEON) {
+        for (int32_t i = 0; i < sim->dungeon_count; ++i) {
+            if (sim->dungeons[i].settlement_id ==
+                sim->player.location_id) {
+                return sim->dungeons[i].name;
+            }
+        }
+        return "Dungeon road";
+    }
+    if (site == CC_LOCAL_SITE_GOBLIN_CAVE) return sim->goblins.name;
+    if (site == CC_LOCAL_SITE_DRAGON_CAVE) return sim->dragon.name;
+    return "Remote site";
+}
+
+static const CcRoute *SiteAnchorRoad(const CcSim *sim)
+{
+    if (sim == NULL) return NULL;
+    for (int32_t i = 0; i < sim->route_count; ++i) {
+        const CcRoute *route = &sim->routes[i];
+        if (route->from_id == sim->player.location_id ||
+            route->to_id == sim->player.location_id) return route;
+    }
+    return NULL;
+}
+
+static void DrawRemoteSiteEntrance(const CcSim *sim, CcLocalSiteKind site,
+                                   float clock)
+{
+    const float x = CC_LOCAL_SITE_ENTRANCE_X;
+    const float z = CC_LOCAL_SITE_ENTRANCE_Z;
+    Color rock = site == CC_LOCAL_SITE_DRAGON_CAVE ?
+        BlendColor(WORLD_STONE_SHADOW, WORLD_DANGER, 0.20f) :
+        site == CC_LOCAL_SITE_GOBLIN_CAVE ?
+        BlendColor(WORLD_STONE_SHADOW, WORLD_VIOLET, 0.18f) :
+        WORLD_STONE_SHADOW;
+    DrawScenerySphere((Vector3){x - 1.55f, 1.35f, z}, 1.75f, rock);
+    DrawScenerySphere((Vector3){x + 1.45f, 1.25f, z}, 1.65f, rock);
+    DrawBox((Vector3){x, 2.35f, z}, (Vector3){4.8f, 1.65f, 1.15f}, rock);
+    DrawBox((Vector3){x, 1.20f, z - 0.58f},
+            (Vector3){2.05f, 2.40f, 0.32f}, WORLD_VOID);
+
+    if (site == CC_LOCAL_SITE_DUNGEON) {
+        for (int32_t rail = -1; rail <= 1; rail += 2) {
+            DrawBox((Vector3){x - 5.0f, 0.10f, z + (float)rail * 0.72f},
+                    (Vector3){9.0f, 0.12f, 0.13f}, WORLD_WOOD_SHADOW);
+        }
+        DrawBox((Vector3){x - 2.9f, 0.55f, z + 2.2f},
+                (Vector3){1.9f, 1.1f, 1.25f}, WORLD_WOOD);
+    } else if (site == CC_LOCAL_SITE_GOBLIN_CAVE) {
+        CcCreaturePose scavenger = CcCreatureSteppedPose(
+            CC_CREATURE_GOBLIN_SCAVENGER, clock * 2.1f, true);
+        CcCreaturePose raider = CcCreatureSteppedPose(
+            CC_CREATURE_GOBLIN_RAIDER, clock * 2.5f + PI, true);
+        (void)DrawCreature3D(
+            CC_CREATURE_GOBLIN_SCAVENGER, scavenger,
+            (Vector3){x - 5.2f, 0.0f, z - 2.2f}, -0.5f * PI, 1.18f,
+            (Color){0});
+        (void)DrawCreature3D(
+            CC_CREATURE_GOBLIN_RAIDER, raider,
+            (Vector3){x - 3.7f, 0.0f, z + 2.4f}, -0.5f * PI, 1.24f,
+            (Color){0});
+        DrawBox((Vector3){x - 5.0f, 0.42f, z + 0.6f},
+                (Vector3){1.0f, 0.84f, 1.0f}, WORLD_WOOD);
+    } else if (site == CC_LOCAL_SITE_DRAGON_CAVE) {
+        CcCreaturePose pose = sim->dragon.slain ? CC_CREATURE_POSE_DOWN_A :
+            sim->dragon.stolen_outstanding > 0 ? CC_CREATURE_POSE_THREAT :
+                                                CC_CREATURE_POSE_REST;
+        (void)DrawCreature3D(
+            CC_CREATURE_DRAGON, pose,
+            (Vector3){x - 3.8f, 0.0f, z + 3.3f}, -0.58f * PI, 0.90f,
+            (Color){0});
+        int32_t marks = 2 + sim->dragon.crown_strength / 20;
+        for (int32_t i = 0; i < marks && i < 6; ++i) {
+            DrawSmallSphere(
+                (Vector3){x - 1.8f + (float)(i % 3) * 0.38f,
+                          0.12f, z - 1.2f + (float)(i / 3) * 0.34f},
+                0.14f, WORLD_GOLD);
+        }
+    }
+}
+
+void CcLocalDrawSite3D(const CcSim *sim, const CcLocalAgent *agent,
+                       CcLocalSiteKind site, bool travelling,
+                       bool returning, float progress, float clock,
+                       RenderTexture2D target, Rectangle destination)
+{
+    if (sim == NULL || agent == NULL || site == CC_LOCAL_SITE_NONE) return;
+    float amount = fmaxf(0.0f, fminf(1.0f, progress));
+    float carriage_x = travelling ?
+        returning ? 62.0f - amount * 40.0f : 22.0f + amount * 40.0f :
+        CC_LOCAL_SITE_CARRIAGE_X;
+    Vector3 carriage = {carriage_x, 0.0f, CC_LOCAL_SITE_CARRIAGE_Z};
+    Camera3D camera;
+    if (travelling && returning) {
+        float sway = sinf(clock * 0.85f) * 0.24f;
+        camera = SnapCameraToArtPixels(
+            PerspectiveCameraComposed(
+                (Vector3){carriage.x - 12.0f, carriage.y + 1.20f,
+                          carriage.z + sway * 0.35f},
+                (Vector3){11.5f, 4.8f, 3.8f + sway}, 43.0f),
+            target.texture.height);
+    } else if (travelling) {
+        camera = RoadCamera(carriage, true, clock, true,
+                            target.texture.height);
+    } else {
+        camera = SnapCameraToArtPixels(
+            PerspectiveCameraComposed(
+                Vector3Add(agent->position, (Vector3){5.0f, 1.0f, 0.0f}),
+                (Vector3){-11.0f, 7.5f, 12.5f}, 43.0f),
+            target.texture.height);
+    }
+    RememberPresentedCamera(CC_LOCAL_SCENE_ROAD, camera, agent,
+                            target.texture.width, target.texture.height);
+    const CcSettlement *anchor = CcSimSettlement(
+        sim, sim->player.location_id);
+    CcId kingdom_id = anchor != NULL ? anchor->kingdom_id : 0U;
+    Color kingdom = KingdomColor3D(sim, kingdom_id);
+    const CcRoute *road = SiteAnchorRoad(sim);
+    ArtComposition site_art = ROAD_ART_COMPOSITION;
+    site_art.focal_point = camera.target;
+    site_art.foreground_anchor = carriage;
+    SetFaceRenderContext(camera, target.texture.width, target.texture.height);
+    BeginTextureMode(target);
+    ClearBackground(ArtLightBackground(site_art.light_profile));
+    BeginMode3D(camera);
+    BeginWorldLighting(camera, &site_art);
+    DrawRoadTerrain(sim->world_seed ^ ((uint32_t)site << 24U), road,
+                    site == CC_LOCAL_SITE_DRAGON_CAVE ? 72 :
+                    site == CC_LOCAL_SITE_GOBLIN_CAVE ? 48 : 38,
+                    false, kingdom, camera.target);
+    DrawRemoteSiteEntrance(sim, site, clock);
+    DrawRoadCarriage(carriage, CcPlayerCargoUsed(&sim->player), clock,
+                     travelling, returning ? -0.5f * PI : 0.5f * PI,
+                     true, false);
+    if (!travelling) {
+        DrawAgentPath(agent, false);
+        DrawRobotShell(agent);
+        DrawCombatSword(agent);
+    }
+    EndWorldLighting();
+    EndMode3D();
+    DrawTargetAtmosphere(target, clock);
+    EndTextureMode();
+    PresentTarget(target, destination);
+
+    WorldLabel labels[3] = {
+        {{CC_LOCAL_SITE_ENTRANCE_X, 3.55f, CC_LOCAL_SITE_ENTRANCE_Z},
+         CcLocalSiteName(sim, site),
+         site == CC_LOCAL_SITE_DRAGON_CAVE ? WORLD_DANGER :
+         site == CC_LOCAL_SITE_GOBLIN_CAVE ? WORLD_VIOLET : WORLD_GOLD},
+        {{CC_LOCAL_SITE_CARRIAGE_X, 2.65f, CC_LOCAL_SITE_CARRIAGE_Z},
+         "CARRIAGE", WORLD_TEAL},
+        {{agent->position.x, agent->position.y + 2.45f, agent->position.z},
+         "YOU", WORLD_TEAL}
+    };
+    DrawLabels(labels, travelling ? 1 : 3, camera, destination);
+    DrawViewportText(
+        travelling ?
+            returning ? "CARRIAGE VIEW  /  RETURNING TO TOWN" :
+                        "CARRIAGE VIEW  /  THE SITE ROAD AHEAD" :
+            "SEPARATE LOCAL MAP  /  THE CARRIAGE REMAINS PARKED",
+        destination, 18, 18, 10, WORLD_INK);
+}
+
 static void DrawJourneyAftermath3D(const CcSim *sim,
                                    const CcSettlement *place)
 {
@@ -19047,82 +19217,12 @@ static void DrawTownRaidStaging(const CcLocalCourse *course, Vector3 focus)
     }
 }
 
-static void DrawDragonLairState(const CcDragon *dragon,
-                                Vector3 scenery_focus)
-{
-    if (dragon == NULL ||
-        !SceneryPointVisible(CC_LOCAL_DRAGON_CAVE_X,
-                             CC_LOCAL_DRAGON_CAVE_Z,
-                             scenery_focus)) return;
-    const float cave_x = CC_LOCAL_DRAGON_CAVE_X;
-    const float cave_z = CC_LOCAL_DRAGON_CAVE_Z - 1.35f;
-    float ground = CcLocalTerrainHeightAt(cave_x, cave_z);
-    Color cave_rock = (Color){47, 46, 54, 255};
-    Color ash = (Color){49, 44, 48, 255};
-    DrawBox((Vector3){cave_x, ground + 1.20f, cave_z + 0.34f},
-            (Vector3){2.35f, 2.40f, 0.48f}, cave_rock);
-    DrawBox((Vector3){cave_x, ground + 0.78f, cave_z + 0.04f},
-            (Vector3){1.08f, 1.56f, 0.32f}, (Color){7, 8, 12, 255});
-    DrawScenerySphere((Vector3){cave_x - 1.18f, ground + 0.54f,
-                                 cave_z - 0.06f}, 0.78f, cave_rock);
-    DrawScenerySphere((Vector3){cave_x + 1.15f, ground + 0.48f,
-                                 cave_z - 0.02f}, 0.72f, cave_rock);
-
-    int32_t coin_marks = 2 + dragon->crown_strength / 14;
-    if (coin_marks > 9) coin_marks = 9;
-    for (int32_t i = 0; i < coin_marks; ++i) {
-        float x = cave_x + 1.80f + (float)(i % 3) * 0.28f;
-        float z = cave_z - 0.62f + (float)(i / 3) * 0.25f;
-        float y = CcLocalTerrainHeightAt(x, z);
-        DrawSmallSphere((Vector3){x, y + 0.10f, z}, 0.13f,
-                        i % 3 == 0 ? WORLD_VIOLET : WORLD_GOLD);
-    }
-    for (int32_t egg = 0; egg < dragon->egg_count && egg < 3; ++egg) {
-        float x = cave_x - 1.72f + (float)egg * 0.48f;
-        float z = cave_z - 0.48f + (float)(egg & 1) * 0.22f;
-        float y = CcLocalTerrainHeightAt(x, z);
-        DrawScenerySphere((Vector3){x, y + 0.25f, z}, 0.31f,
-                          (Color){201, 187, 148, 255});
-        DrawSmallSphere((Vector3){x + 0.06f, y + 0.31f, z - 0.19f},
-                        0.08f, WORLD_GOLD);
-    }
-
-    if (!dragon->slain) return;
-    for (int32_t patch = 0; patch < 6; ++patch) {
-        float x = cave_x - 2.10f + (float)(patch % 3) * 1.25f;
-        float z = cave_z - 1.05f + (float)(patch / 3) * 0.82f;
-        float y = CcLocalTerrainHeightAt(x, z);
-        DrawBox((Vector3){x, y + 0.025f, z},
-                (Vector3){1.18f, 0.05f, 0.72f}, ash);
-    }
-    int32_t vents = dragon->regional_influence > 45 ? 3 :
-                    dragon->regional_influence > 18 ? 2 : 1;
-    for (int32_t vent = 0; vent < vents; ++vent) {
-        float x = cave_x + 1.55f + (float)vent * 0.48f;
-        float z = cave_z + 0.08f + (float)(vent & 1) * 0.36f;
-        float y = CcLocalTerrainHeightAt(x, z);
-        DrawCylinder((Vector3){x, y + 0.12f, z},
-                     0.18f, 0.12f, 0.24f, 7,
-                     dragon->regional_influence > 35 ?
-                         (Color){154, 69, 54, 255} : ash);
-    }
-    DrawBox((Vector3){cave_x - 0.82f, ground + 0.62f, cave_z - 0.38f},
-            (Vector3){0.20f, 1.24f, 0.20f}, WORLD_VIOLET);
-    DrawSmallSphere((Vector3){cave_x - 0.82f, ground + 1.32f,
-                               cave_z - 0.38f}, 0.19f, WORLD_GOLD);
-}
-
 static void DrawSettlementCreatures(const CcSim *sim,
                                     const CcSettlement *place,
                                     float clock, Vector3 scenery_focus)
 {
     if (sim == NULL || place == NULL) return;
     const CcGoblinCult *goblins = &sim->goblins;
-    const CcDragon *dragon = &sim->dragon;
-
-    if (place->id == dragon->lair_settlement_id) {
-        DrawDragonLairState(dragon, scenery_focus);
-    }
 
     if (place->cow_adults + place->cow_calves > 0 &&
         SceneryPointVisible(63.0f, 38.3f, scenery_focus)) {
@@ -19137,26 +19237,6 @@ static void DrawSettlementCreatures(const CcSim *sim,
             TerrainWorldPoint(63.0f, 38.3f), 0.72f * PI, 0.84f,
             (Color){177, 162, 132, 255}, clock * 1.25f, true,
             controlled ? &controlled_cow : NULL);
-    }
-
-    if (place->id == goblins->lair_settlement_id) {
-        CcCreaturePose scavenger_pose = CcCreatureSteppedPose(
-            CC_CREATURE_GOBLIN_SCAVENGER, clock * 3.2f, true);
-        CcCreaturePose raider_pose = CcCreatureSteppedPose(
-            CC_CREATURE_GOBLIN_RAIDER, clock * 3.8f + PI, true);
-        float patrol = sinf(clock * 0.42f) * 0.42f;
-        if (SceneryPointVisible(26.5f, 52.0f, scenery_focus)) {
-            (void)DrawCreature3D(
-                CC_CREATURE_GOBLIN_SCAVENGER, scavenger_pose,
-                TerrainWorldPoint(26.5f + patrol, 52.0f), -0.13f * PI, 1.28f,
-                (Color){0});
-        }
-        if (SceneryPointVisible(29.0f, 51.5f, scenery_focus)) {
-            (void)DrawCreature3D(
-                CC_CREATURE_GOBLIN_RAIDER, raider_pose,
-                TerrainWorldPoint(29.0f - patrol, 51.5f), -0.10f * PI, 1.34f,
-                (Color){0});
-        }
     }
 
     bool raid_at_place = goblins->tribute_target_id == place->id &&
@@ -19178,38 +19258,6 @@ static void DrawSettlementCreatures(const CcSim *sim,
             (Color){0});
     }
 
-    if (place->id == dragon->lair_settlement_id && !dragon->slain &&
-        SceneryPointVisible(20.7f, 52.6f, scenery_focus)) {
-        CcCreaturePose dragon_pose = CC_CREATURE_POSE_REST;
-        if (dragon->activity == CC_DRAGON_ACTIVITY_HUNTING) {
-            dragon_pose = fmodf(clock, 1.0f) < 0.5f ?
-                CC_CREATURE_POSE_STALK_A : CC_CREATURE_POSE_STALK_B;
-        } else if (dragon->stolen_outstanding > 0 ||
-            dragon->omen_days_remaining > 0) {
-            dragon_pose = CC_CREATURE_POSE_THREAT;
-        } else if (goblins->tribute_phase == CC_GOBLIN_TRIBUTE_TO_DRAGON) {
-            dragon_pose = CC_CREATURE_POSE_IDLE;
-        }
-        float dragon_scale =
-            dragon->life_stage == CC_DRAGON_STAGE_WHELP ? 0.52f :
-            dragon->life_stage == CC_DRAGON_STAGE_WANDERER ? 0.72f :
-            dragon->life_stage == CC_DRAGON_STAGE_DEEP_WYRM ? 1.14f :
-            dragon->life_stage == CC_DRAGON_STAGE_UNCROWNED ? 0.84f : 0.94f;
-        (void)DrawCreature3D(
-            CC_CREATURE_DRAGON, dragon_pose,
-            TerrainWorldPoint(20.7f, 52.6f), -0.48f * PI, dragon_scale,
-            (Color){0});
-    }
-    if (place->id == dragon->lair_settlement_id &&
-        goblins->tribute_phase == CC_GOBLIN_TRIBUTE_TO_DRAGON &&
-        SceneryPointVisible(18.0f, 52.7f, scenery_focus)) {
-        CcCreaturePose bearer_pose = CcCreatureSteppedPose(
-            CC_CREATURE_GOBLIN_TRIBUTE_BEARER, clock * 3.4f, true);
-        (void)DrawCreature3D(
-            CC_CREATURE_GOBLIN_TRIBUTE_BEARER, bearer_pose,
-            TerrainWorldPoint(18.0f, 52.7f), -0.38f * PI, 1.12f,
-            (Color){0});
-    }
 }
 
 void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
@@ -19395,7 +19443,17 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     const CcDungeon *dungeon = DungeonAt(sim, place->id);
     if (dungeon != NULL &&
         SceneryFootprintVisible(DUNGEON_FOOTPRINT, scenery_focus)) {
-        DrawDungeon3D(dungeon);
+        DrawSiteRoadGate(CC_LOCAL_DUNGEON_X, CC_LOCAL_DUNGEON_Z,
+                         WORLD_VIOLET);
+    }
+    if ((place->id == sim->dragon.lair_settlement_id ||
+         place->id == sim->goblins.lair_settlement_id) &&
+        SceneryPointVisible(CC_LOCAL_DRAGON_CAVE_X,
+                            CC_LOCAL_DRAGON_CAVE_Z, scenery_focus)) {
+        DrawSiteRoadGate(
+            CC_LOCAL_DRAGON_CAVE_X, CC_LOCAL_DRAGON_CAVE_Z,
+            place->id == sim->dragon.lair_settlement_id ?
+                WORLD_DANGER : WORLD_VIOLET);
     }
     DrawSettlementCreatures(sim, place, clock, scenery_focus);
 
@@ -19631,7 +19689,9 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                                         TerrainFootprintHeight(
                                             DUNGEON_FOOTPRINT) + 3.38f,
                                         CC_LOCAL_DUNGEON_Z - 0.70f},
-                                       dungeon->name, WORLD_VIOLET};
+                                       TextFormat("Road to %s",
+                                                  dungeon->name),
+                                       WORLD_VIOLET};
     }
     if (place->id == sim->dragon.lair_settlement_id &&
         AgentNearLabel(agent, CC_LOCAL_DRAGON_CAVE_X,
@@ -19641,8 +19701,19 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
              CcLocalTerrainHeightAt(CC_LOCAL_DRAGON_CAVE_X,
                                     CC_LOCAL_DRAGON_CAVE_Z) + 2.75f,
              CC_LOCAL_DRAGON_CAVE_Z},
-            sim->dragon.slain ? "Afterdragon cave" : "Dragon cave",
+            sim->dragon.slain ? "Road to the ashen cave" :
+                                "Road to the dragon cave",
             sim->dragon.slain ? WORLD_VIOLET : WORLD_DANGER};
+    }
+    if (place->id == sim->goblins.lair_settlement_id &&
+        AgentNearLabel(agent, CC_LOCAL_DRAGON_CAVE_X,
+                       CC_LOCAL_DRAGON_CAVE_Z, 9.0f)) {
+        labels[count++] = (WorldLabel){
+            {CC_LOCAL_DRAGON_CAVE_X,
+             CcLocalTerrainHeightAt(CC_LOCAL_DRAGON_CAVE_X,
+                                    CC_LOCAL_DRAGON_CAVE_Z) + 2.75f,
+             CC_LOCAL_DRAGON_CAVE_Z},
+            "Road to the goblin cave", WORLD_VIOLET};
     }
     if (!alarm_active) {
         DrawLabels(labels, count, camera, destination);

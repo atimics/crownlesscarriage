@@ -48,6 +48,11 @@ int main(void)
     invalid = original;
     invalid.position_x = INFINITY;
     CC_CHECK(!CcClientSessionValidate(&invalid));
+    invalid = original;
+    invalid.scene = CC_CLIENT_SESSION_DRAGON_SITE;
+    CC_CHECK(CcClientSessionValidate(&invalid));
+    invalid.scene = (CcClientSessionScene)99;
+    CC_CHECK(!CcClientSessionValidate(&invalid));
 
     FILE *corrupt = fopen(session_path, "wb");
     CC_CHECK(corrupt != NULL);

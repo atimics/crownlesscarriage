@@ -1,6 +1,6 @@
 # 0009 — Meet one branch at a time; let maps advise
 
-**Status:** Accepted
+**Status:** Superseded by 0011
 
 ## Context
 

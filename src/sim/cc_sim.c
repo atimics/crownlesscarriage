@@ -9465,7 +9465,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             settlement->map_x > CC_SIM_MAX_UNITS ||
             settlement->map_y < -CC_SIM_MAX_UNITS ||
             settlement->map_y > CC_SIM_MAX_UNITS ||
-            settlement->population < 1 ||
+            settlement->population < 0 ||
             settlement->population > CC_SIM_MAX_UNITS ||
             settlement->security < 0 || settlement->security > 100 ||
             settlement->prosperity < 0 || settlement->prosperity > 100 ||
