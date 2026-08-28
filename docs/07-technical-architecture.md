@@ -74,7 +74,7 @@ stale ID cannot silently refer to a different entity.
 
 ## Presentation responsibilities
 
-- Immediate-fork visualization of roads leaving the current place, with carried
+- Carriage-stage fork scenes for roads leaving the current place, with carried
   or locally offered route notes shown as supporting evidence
 - Active city or route segment
 - Local navigation, animation, and combat

@@ -86,7 +86,8 @@ different from an open road.
 **Contract:** there is no free, omniscient kingdom map, and travel never starts
 by selecting a line on a chart. At the edge of a place, the player chooses one
 of the roads that physically leaves it. The choice shows only the immediate
-fork, not the wider route graph.
+fork, not the wider route graph. The fork is a local carriage scene with the
+coach, road surfaces, signs, vegetation, damage, and closures in the world.
 
 A map is a tradeable set of traveller's notes carried in the carriage map case.
 Each sheet describes one route and its two termini.

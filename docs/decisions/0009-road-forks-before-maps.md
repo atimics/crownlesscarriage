@@ -12,7 +12,9 @@ traveller reaches a fork and takes a road.
 ## Decision
 
 Travel starts from the roads that leave the player's current place. The choice
-shows only that immediate fork. It never shows the whole network.
+shows only that immediate fork. It is rendered as a carriage scene, with each
+road and its current physical state present in the set. It never shows the
+whole network.
 
 Maps remain physical, limited, tradeable objects. They add old claims about a
 road, can reveal the destination of an unmarked track, and reduce wayfinding

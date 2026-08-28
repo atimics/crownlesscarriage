@@ -59,8 +59,8 @@ The architecture proof connects these parts in one running build:
 - A market interior whose stock and prices come from the regional simulation
 - Local situation boards with named sponsors, affected people, deadlines,
   rewards, accepted promises, and reputation consequences
-- An immediate road-fork choice that shows only the ways out of the current
-  place, plus a three-slot case of tradeable traveller's notes
+- Carriage-stage fork scenes that show only the physical roads leaving the
+  current place, plus a three-slot case of tradeable traveller's notes
 - Real-time carriage journeys, a dedicated road scene, and a route crisis that
   can be resolved through combat or payment
 - Immediate local aftermath and delayed consequences after a journey
