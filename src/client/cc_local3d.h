@@ -37,6 +37,10 @@
 #define CC_LOCAL_ROAD_START_Z 40.00f
 #define CC_LOCAL_ROAD_PARLEY_X 49.70f
 #define CC_LOCAL_ROAD_PARLEY_Z 40.00f
+#define CC_LOCAL_SITE_CARRIAGE_X 24.0f
+#define CC_LOCAL_SITE_CARRIAGE_Z 40.0f
+#define CC_LOCAL_SITE_ENTRANCE_X 70.0f
+#define CC_LOCAL_SITE_ENTRANCE_Z 40.0f
 #define CC_LOCAL_COMBAT_MAX_HEALTH 100.0f
 #define CC_LOCAL_COMBAT_MAX_POSTURE 100.0f
 #define CC_LOCAL_CAPE_POINT_COUNT 5
@@ -59,6 +63,13 @@ typedef enum CcLocalSceneKind {
     CC_LOCAL_SCENE_MARKET,
     CC_LOCAL_SCENE_ROAD
 } CcLocalSceneKind;
+
+typedef enum CcLocalSiteKind {
+    CC_LOCAL_SITE_NONE = 0,
+    CC_LOCAL_SITE_DUNGEON,
+    CC_LOCAL_SITE_GOBLIN_CAVE,
+    CC_LOCAL_SITE_DRAGON_CAVE
+} CcLocalSiteKind;
 
 typedef enum CcLocalConvoyPhase {
     CC_LOCAL_CONVOY_PARKED = 0,
@@ -465,12 +476,22 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
                        float clock, RenderTexture2D target,
                        Rectangle destination);
 float CcLocalRoadCarriageX(int32_t progress_milli);
+uint32_t CcLocalRoadWildernessSeedInternal(uint32_t world_seed,
+                                           CcId route_id,
+                                           int32_t segment_index);
+Vector2 CcLocalForkBranchEndInternal(int32_t branch_ordinal,
+                                     int32_t branch_count);
 float CcLocalRoadCheckpointSurfaceYInternal(float x, float z);
 float CcLocalRoadHorseLateralSpacingInternal(bool bridge_checkpoint);
 float CcLocalRoadHorseLongitudinalOffsetInternal(void);
 void CcLocalDrawFork3D(const CcSim *sim, int32_t selected_route,
                        float clock, RenderTexture2D target,
                        Rectangle destination);
+const char *CcLocalSiteName(const CcSim *sim, CcLocalSiteKind site);
+void CcLocalDrawSite3D(const CcSim *sim, const CcLocalAgent *agent,
+                       CcLocalSiteKind site, bool travelling,
+                       bool returning, float progress, float clock,
+                       RenderTexture2D target, Rectangle destination);
 void CcLocalDrawMarket3D(const CcSim *sim, const CcLocalAgent *agent, float clock,
                          RenderTexture2D target, Rectangle destination);
 void CcLocalDrawInterior3D(const CcSim *sim, const CcLocalAgent *agent,

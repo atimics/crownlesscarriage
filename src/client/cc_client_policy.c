@@ -26,6 +26,19 @@ float CcClientConvoyPaceStep(float pace, bool road_phase,
     return ClampPace(pace);
 }
 
+float CcClientRoadApproachStep(float progress, float pace, float delta_time)
+{
+    float step = fmaxf(0.0f, delta_time);
+    float next = progress + ClampPace(pace) * step * 0.24f;
+    return fmaxf(0.0f, fminf(1.0f, next));
+}
+
+bool CcClientRoadHasNextBranch(int32_t branch_ordinal,
+                               int32_t branch_count)
+{
+    return branch_ordinal >= 0 && branch_ordinal + 1 < branch_count;
+}
+
 bool CcClientMapCommandEnabled(bool viewing_map, bool road_local,
                                bool market_interior,
                                float carriage_distance)
@@ -38,4 +51,28 @@ bool CcClientPromiseCanBeAccepted(bool market_interior,
                                   float notice_distance)
 {
     return !market_interior && notice_distance < 1.15f;
+}
+
+CcClientClickIntent CcClientClickIntentForDistances(
+    bool market_interior, float interior_exit_distance,
+    float notice_distance, float carriage_distance,
+    float dragon_cave_distance, float market_distance)
+{
+    if (market_interior) {
+        return interior_exit_distance < 1.25f ?
+            CC_CLIENT_CLICK_LEAVE_INTERIOR : CC_CLIENT_CLICK_NONE;
+    }
+    if (notice_distance < 1.15f) {
+        return CC_CLIENT_CLICK_OPEN_PROMISES;
+    }
+    if (carriage_distance < 1.35f) {
+        return CC_CLIENT_CLICK_DRIVE_OUT;
+    }
+    if (dragon_cave_distance < 1.35f) {
+        return CC_CLIENT_CLICK_OPEN_DRAGON_CAVE;
+    }
+    if (market_distance < 1.30f) {
+        return CC_CLIENT_CLICK_ENTER_INTERIOR;
+    }
+    return CC_CLIENT_CLICK_NONE;
 }

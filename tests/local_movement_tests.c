@@ -2100,6 +2100,31 @@ int main(void)
                       "road carriage did not preserve its encounter position\n");
         return 1;
     }
+    Vector2 first_branch = CcLocalForkBranchEndInternal(0, 4);
+    Vector2 second_branch = CcLocalForkBranchEndInternal(1, 4);
+    Vector2 third_branch = CcLocalForkBranchEndInternal(2, 4);
+    Vector2 fourth_branch = CcLocalForkBranchEndInternal(3, 4);
+    if (first_branch.x <= 50.0f || second_branch.x <= 50.0f ||
+        third_branch.x <= 50.0f || fourth_branch.x <= 50.0f ||
+        !(first_branch.y < second_branch.y &&
+          second_branch.y < third_branch.y &&
+          third_branch.y < fourth_branch.y)) {
+        (void)fprintf(stderr,
+                      "road fork did not expose four distinct physical branches\n");
+        return 1;
+    }
+    uint32_t wilderness_seed = CcLocalRoadWildernessSeedInternal(
+        UINT32_C(0x1234abcd), UINT32_C(42), 3);
+    if (wilderness_seed != CcLocalRoadWildernessSeedInternal(
+            UINT32_C(0x1234abcd), UINT32_C(42), 3) ||
+        wilderness_seed == CcLocalRoadWildernessSeedInternal(
+            UINT32_C(0x1234abcd), UINT32_C(43), 3) ||
+        wilderness_seed == CcLocalRoadWildernessSeedInternal(
+            UINT32_C(0x1234abcd), UINT32_C(42), 4)) {
+        (void)fprintf(stderr,
+                      "procedural road wilderness seed was not stable and distinct\n");
+        return 1;
+    }
     TestRoadBridgeSupport();
     TestFaceAngleAndLodContract();
     TestPlaceLandmarkCollision();

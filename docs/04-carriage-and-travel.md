@@ -129,15 +129,27 @@ different from an open road.
 
 **Contract:** there is no free, omniscient kingdom map, and travel never starts
 by selecting a line on a chart. At the edge of a place, the carriage follows a
-cart track. Each choice scene contains that continuous track and no more than
-one side branch. The player can take the branch or keep moving until the next
-one. The scene includes the coach, road surfaces, signs, vegetation, damage,
-and closures in the world.
+cart track. Each choice scene is a real local crossroads containing every road
+that leaves that junction. The player faces a branch and takes it. The scene
+includes the coach, road surfaces, signs, vegetation, damage, and closures in
+the world, but never exposes roads beyond the nearby sightline.
 
-The strategic graph may connect a place to many routes. The local presentation
-orders those routes into a short sequence of roadside encounters. It never
-turns every graph edge into a hub-shaped crossroads. Continuing advances to
-the next encounter; taking the visible branch commits to that route.
+The strategic graph may connect a place to many routes. `Drive out` commits
+only to leaving the yard: the carriage moves through the town and gate before
+the route choice is shown. The local presentation fans the real outgoing roads
+into one legible junction and lets the player turn the carriage to inspect each
+sign. It never lets the player leaf through routes while the carriage stands in
+town. Taking a visible branch commits to that route.
+
+During travel, the camera may rise and widen only as far as a passenger could
+plausibly see from the carriage. Movement and the calendar can run faster, but
+the player never receives a live top-down world view. The only complete world
+views are physical, hand-drawn map objects carried or stored by the company.
+
+Small destinations use the same rule. A mine, dungeon, goblin cave, dragon
+cave, or remote settlement is its own local map. A short procedural wilderness
+road joins it to the nearest settlement. The carriage remains parked on arrival
+and is the physical return point.
 
 A map is a tradeable set of traveller's notes carried in the carriage map case.
 Each sheet describes one route and its two termini.
@@ -172,12 +184,15 @@ strategic screen.
 
 ## Travel commitment
 
-A departure creates a persistent journey whose exact duration is measured by
-the authoritative world clock. The company remains at the origin for command
-validation while the carriage records its route, endpoints, progress, speed,
-condition, and reserved fare. Every 60 Hz travel tick moves that state forward;
-calendar boundaries run the same daily world update used by headless play.
-Arrival changes the company location only after the full duration has elapsed.
+Leaving the yard begins a local road-seeking sequence, not a planned journey.
+No destination, fare, provisions, or danger roll is committed until the player
+turns onto a branch encountered in the world. That choice creates a persistent
+journey whose exact duration is measured by the authoritative world clock. The
+company remains at the origin for command validation while the carriage
+records its route, endpoints, progress, speed, condition, and reserved fare.
+Every 60 Hz travel tick moves that state forward; calendar boundaries run the
+same daily world update used by headless play. Arrival changes the company
+location only after the full duration has elapsed.
 
 Before confirmation the game presents:
 
@@ -201,9 +216,11 @@ sequence:
 
 1. The carriage waits in the town yard while its two horses rest beside the
    hitch rail.
-2. Choosing a road hitches the team and puts the player on the reins.
-3. The player controls pace with `W`, reins in with `S` or `Space`, and steers
-   within the road lane with `A` and `D`.
+2. Choosing a road at the carriage yard hitches the team. Walking to a town
+   boundary does not summon or move the carriage.
+3. The player changes playback pace with `W`, slows with `S`, and pauses with
+   `Space`. `Enter` advances to the next real decision. The road view does not
+   claim to offer steering when route movement is automatic.
 4. The town road, gate approach, and route segment play as one movement. The
    route clock does not advance until the carriage clears the gate.
 5. A road interruption keeps the carriage at its saved route progress instead
