@@ -49,6 +49,7 @@ typedef struct LocalState {
     bool journey_parley_active;
     bool movement_reticle_valid;
     bool movement_reticle_accepted;
+    int32_t pending_interaction;
 } LocalState;
 
 typedef struct ActionReelState {
@@ -108,6 +109,9 @@ typedef enum ContextActionKind {
     CONTEXT_ACTION_REPAIR_ROUTE,
     CONTEXT_ACTION_PAY_COLLECTOR,
     CONTEXT_ACTION_RETURN_TO_CHOICE,
+    CONTEXT_ACTION_SKIP_TRAVEL,
+    CONTEXT_ACTION_STRIKE,
+    CONTEXT_ACTION_GUARD,
     CONTEXT_ACTION_SKILL_CRUSHING,
     CONTEXT_ACTION_SKILL_SUNDER,
     CONTEXT_ACTION_SKILL_SECOND_WIND
@@ -115,11 +119,13 @@ typedef enum ContextActionKind {
 
 typedef struct ContextAction {
     ContextActionKind kind;
+    CcGood good;
+    int32_t amount;
     char label[64];
 } ContextAction;
 
 typedef struct ContextActionSet {
-    ContextAction items[3];
+    ContextAction items[8];
     int32_t count;
 } ContextActionSet;
 
@@ -403,6 +409,7 @@ static void ResetLocalState(LocalState *local)
     local->movement_reticle_age = 0.0f;
     local->movement_reticle_valid = false;
     local->movement_reticle_accepted = false;
+    local->pending_interaction = CONTEXT_ACTION_NONE;
     local->market_interior = false;
     local->journey_travel_active = false;
     local->journey_combat_active = false;
@@ -420,6 +427,7 @@ static void RepositionHero(LocalState *local, Vector2 position,
     CcLocalAgentInit(&local->agent, position, market_interior);
     local->agent.athletics = athletics;
     CcLocalCombatSetTeam(&local->agent, CC_COMBAT_PLAYER);
+    local->pending_interaction = CONTEXT_ACTION_NONE;
 }
 
 static void BeginRoadLocalState(LocalState *local, bool hostile)
@@ -612,6 +620,32 @@ static void UpdateActionReel(LocalState *local, ActionReelState *reel,
 static Vector2 LocalPosition(const LocalState *local)
 {
     return CcLocalAgentPosition(&local->agent);
+}
+
+static ContextActionKind InteractionForCommandPoint(const LocalState *local)
+{
+    if (local == NULL || !local->agent.command_point_valid) {
+        return CONTEXT_ACTION_NONE;
+    }
+    Vector2 point = {local->agent.command_point.x,
+                     local->agent.command_point.z};
+    if (local->market_interior) {
+        return GridDistance(point, INTERIOR_EXIT) < 3.0f ?
+            CONTEXT_ACTION_LEAVE_MARKET : CONTEXT_ACTION_NONE;
+    }
+    if (GridDistance(point, LOCAL_NOTICE) < 3.0f) {
+        return CONTEXT_ACTION_OPEN_PROMISES;
+    }
+    if (GridDistance(point, LOCAL_CARRIAGE) < 4.0f) {
+        return CONTEXT_ACTION_OPEN_MAP;
+    }
+    if (GridDistance(point, LOCAL_DUNGEON) < 5.0f) {
+        return CONTEXT_ACTION_EXPEDITION;
+    }
+    if (GridDistance(point, LOCAL_MARKET) < 7.0f) {
+        return CONTEXT_ACTION_ENTER_MARKET;
+    }
+    return CONTEXT_ACTION_NONE;
 }
 
 static const CcDungeon *DungeonAtSettlement(const CcSim *sim, CcId settlement_id)
@@ -850,10 +884,25 @@ static CcId RouteOtherEnd(const CcRoute *route, CcId here)
 static void AddContextAction(ContextActionSet *set, ContextActionKind kind,
                              const char *label)
 {
-    if (set == NULL || label == NULL || set->count >= 3) return;
+    if (set == NULL || label == NULL ||
+        set->count >= (int32_t)(sizeof(set->items) / sizeof(set->items[0]))) {
+        return;
+    }
     ContextAction *action = &set->items[set->count++];
     action->kind = kind;
+    action->good = CC_GOOD_FOOD;
+    action->amount = 0;
     (void)snprintf(action->label, sizeof(action->label), "%s", label);
+}
+
+static void AddCargoContextAction(ContextActionSet *set, CcGood good,
+                                  const char *label)
+{
+    AddContextAction(set, CONTEXT_ACTION_BUY_CARGO, label);
+    if (set == NULL || set->count <= 0) return;
+    ContextAction *action = &set->items[set->count - 1];
+    action->good = good;
+    action->amount = 1;
 }
 
 static int32_t ActiveSituationCount(const CcSim *sim)
@@ -925,7 +974,13 @@ static ContextActionSet BuildContextActions(
         return set;
     }
 
-    if (local->journey_travel_active) return set;
+    if (local->journey_travel_active) {
+        if (sim->journey.active && sim->journey.danger <= 30) {
+            AddContextAction(&set, CONTEXT_ACTION_SKIP_TRAVEL,
+                             "Finish safe trip");
+        }
+        return set;
+    }
     if (local->journey_parley_active) {
         Vector2 collector = {CC_LOCAL_ROAD_PARLEY_X,
                              CC_LOCAL_ROAD_PARLEY_Z};
@@ -940,6 +995,12 @@ static ContextActionSet BuildContextActions(
     }
     if (local->journey_combat_active ||
         (!local->market_interior && local->course.alarm_active)) {
+        AddContextAction(&set, CONTEXT_ACTION_STRIKE,
+                         local->agent.combat.target_index >= 0 ?
+                             "Attack" : "Pick a bandit");
+        AddContextAction(&set, CONTEXT_ACTION_GUARD,
+                         local->agent.humanoid.guard_requested ?
+                             "Lower guard" : "Guard");
         AddContextAction(&set, CONTEXT_ACTION_SKILL_CRUSHING,
                          "Crushing blow");
         AddContextAction(&set, CONTEXT_ACTION_SKILL_SUNDER, "Sunder");
@@ -965,19 +1026,20 @@ static ContextActionSet BuildContextActions(
                     &set, CONTEXT_ACTION_DELIVER_CARGO,
                     TextFormat("Deliver %d %s", remaining,
                                CcGoodName(good)));
-            } else {
-                const CcSettlement *place = CcSimSettlement(
-                    sim, sim->player.location_id);
-                if (place != NULL && place->stock[good] > 0) {
-                    AddContextAction(
-                        &set, CONTEXT_ACTION_BUY_CARGO,
-                        TextFormat("Buy %s — %d crowns", CcGoodName(good),
-                                   place->price[good]));
-                }
-                if (sim->player.cargo[good] > 0) {
-                    AddContextAction(
-                        &set, CONTEXT_ACTION_SELL_CARGO,
-                        TextFormat("Sell %s", CcGoodName(good)));
+            }
+            const CcSettlement *place = CcSimSettlement(
+                sim, sim->player.location_id);
+            if (place != NULL) {
+                for (int32_t cargo_good = 0;
+                     cargo_good < CC_GOOD_COUNT; ++cargo_good) {
+                    if (place->stock[cargo_good] <= 0 &&
+                        sim->player.cargo[cargo_good] <= 0) continue;
+                    AddCargoContextAction(
+                        &set, (CcGood)cargo_good,
+                        TextFormat("%s %dc · %d held",
+                                   CcGoodName((CcGood)cargo_good),
+                                   place->price[cargo_good],
+                                   sim->player.cargo[cargo_good]));
                 }
             }
         } else if (GridDistance(position, INTERIOR_EXIT) < 1.25f) {
@@ -1010,10 +1072,12 @@ static ContextActionSet BuildContextActions(
 
 static Rectangle ContextActionBounds(int32_t index, int32_t count)
 {
-    const float width = 220.0f;
-    const float gap = 12.0f;
+    const float width = count <= 4 ? 220.0f :
+                        count == 5 ? 196.0f :
+                        count == 6 ? 188.0f : 164.0f;
+    const float gap = count <= 4 ? 12.0f : 8.0f;
     float total = (float)count * width + (float)(count - 1) * gap;
-    return (Rectangle){((float)GetScreenWidth() - total) * 0.5f +
+    return (Rectangle){(1280.0f - total) * 0.5f +
                            (float)index * (width + gap),
                        697.0f, width, 46.0f};
 }
@@ -1024,8 +1088,10 @@ static Color ContextActionColor(ContextActionKind kind)
         kind == CONTEXT_ACTION_ABANDON_PROMISE) return DANGER;
     if (kind == CONTEXT_ACTION_ACCEPT_PROMISE ||
         kind == CONTEXT_ACTION_TRAVEL ||
+        kind == CONTEXT_ACTION_SKIP_TRAVEL ||
         kind == CONTEXT_ACTION_DELIVER_CARGO ||
         kind == CONTEXT_ACTION_ENTER_MARKET) return TEAL;
+    if (kind == CONTEXT_ACTION_STRIKE) return DANGER;
     if (kind == CONTEXT_ACTION_SKILL_CRUSHING ||
         kind == CONTEXT_ACTION_SKILL_SUNDER ||
         kind == CONTEXT_ACTION_SKILL_SECOND_WIND) return CC_VIOLET;
@@ -1039,6 +1105,17 @@ static void DrawContextActionTray(const CcSim *sim, const LocalState *local,
     ContextActionSet actions = BuildContextActions(
         sim, local, view, selected, selected_situation);
     Vector2 mouse = GetMousePosition();
+    bool cargo_controls = false;
+    for (int32_t i = 0; i < actions.count; ++i) {
+        if (actions.items[i].kind == CONTEXT_ACTION_BUY_CARGO) {
+            cargo_controls = true;
+        }
+    }
+    if (cargo_controls) {
+        int width = CcOverlayMeasureText("LEFT BUY · RIGHT SELL", 9);
+        CcOverlayDrawText("LEFT BUY · RIGHT SELL", (1280 - width) / 2,
+                          682, 9, MUTED);
+    }
     for (int32_t i = 0; i < actions.count; ++i) {
         Rectangle bounds = ContextActionBounds(i, actions.count);
         bool hover = CheckCollisionPointRec(mouse, bounds);
@@ -1054,20 +1131,25 @@ static void DrawContextActionTray(const CcSim *sim, const LocalState *local,
                             4.0f, bounds.height - 24.0f},
                 0.8f, 3, accent);
         }
-        int width = CcOverlayMeasureText(actions.items[i].label, 11);
+        int font_size = actions.count >= 6 ? 9 : 11;
+        int width = CcOverlayMeasureText(actions.items[i].label, font_size);
         CcOverlayDrawText(actions.items[i].label,
                           (int)(bounds.x +
                                 (bounds.width - (float)width) * 0.5f),
-                          (int)bounds.y + 17, 11, hover ? accent : INK);
+                          (int)bounds.y + 17, font_size,
+                          hover ? accent : INK);
     }
 }
 
-static ContextActionKind PressedContextAction(
+static ContextAction PressedContextAction(
     const CcSim *sim, const LocalState *local, ClientView view,
     int32_t selected, int32_t selected_situation)
 {
-    if (!IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-        return CONTEXT_ACTION_NONE;
+    ContextAction none = {.kind = CONTEXT_ACTION_NONE};
+    bool left = IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
+    bool right = IsMouseButtonPressed(MOUSE_BUTTON_RIGHT);
+    if (!left && !right) {
+        return none;
     }
     ContextActionSet actions = BuildContextActions(
         sim, local, view, selected, selected_situation);
@@ -1075,10 +1157,15 @@ static ContextActionKind PressedContextAction(
     for (int32_t i = 0; i < actions.count; ++i) {
         if (CheckCollisionPointRec(
                 mouse, ContextActionBounds(i, actions.count))) {
-            return actions.items[i].kind;
+            ContextAction pressed = actions.items[i];
+            if (right && pressed.kind != CONTEXT_ACTION_BUY_CARGO) {
+                return none;
+            }
+            if (right) pressed.amount = -1;
+            return pressed;
         }
     }
-    return CONTEXT_ACTION_NONE;
+    return none;
 }
 
 static Vector2 ChartEndpoint(const CcMap *map, bool far_end)
@@ -2078,8 +2165,9 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                         float delta_time,
                         const char *save_path, char *message, size_t message_capacity)
 {
-    ContextActionKind context_action = PressedContextAction(
+    ContextAction pressed_action = PressedContextAction(
         sim, local, *view, *selected, *selected_situation);
+    ContextActionKind context_action = pressed_action.kind;
     if (*view == VIEW_ENCOUNTER) {
         if (!sim->journey.active ||
             sim->journey.phase != CC_JOURNEY_PHASE_BLOCKED) {
@@ -2286,6 +2374,35 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
 
     if (*view == VIEW_LOCAL) {
         if (local->journey_travel_active) {
+            if (context_action == CONTEXT_ACTION_SKIP_TRAVEL) {
+                char error[256];
+                bool advanced = true;
+                while (advanced && sim->journey.active &&
+                       sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
+                    advanced = *journal != NULL ?
+                        CcJournalAdvanceRuntimeTicks(
+                            *journal, sim, CC_WORLD_TICKS_PER_SECOND,
+                            error, sizeof(error)) :
+                        (CcSimAdvanceRuntimeTicks(
+                             sim, CC_WORLD_TICKS_PER_SECOND), true);
+                }
+                if (!advanced) {
+                    (void)snprintf(message, message_capacity, "%s", error);
+                    return;
+                }
+                if (sim->journey.active) {
+                    local->journey_travel_active = false;
+                    *view = VIEW_ENCOUNTER;
+                    (void)snprintf(message, message_capacity,
+                                   "The road is blocked.");
+                } else {
+                    *selected = FirstVisibleMapIndex(sim);
+                    ResetLocalState(local);
+                    (void)snprintf(message, message_capacity,
+                                   "Arrived.");
+                }
+                return;
+            }
             int32_t ticks = CcLocalWorldUpdate(
                 &local->course, &local->agent, sim, delta_time,
                 false, false);
@@ -2323,7 +2440,8 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 message, message_capacity, "%s",
                 jumped ? "Jump." : "Can't jump now.");
         }
-        if (IsKeyPressed(KEY_X) &&
+        if ((IsKeyPressed(KEY_X) ||
+             context_action == CONTEXT_ACTION_GUARD) &&
             local->agent.morphology == CC_MORPHOLOGY_BIPED &&
             !local->journey_parley_active) {
             bool guarded = !local->agent.humanoid.guard_requested;
@@ -2333,7 +2451,8 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 message, message_capacity, "%s",
                 guarded ? "Guarding." : "Guard lowered.");
         }
-        if (IsKeyPressed(KEY_SPACE) &&
+        if ((IsKeyPressed(KEY_SPACE) ||
+             context_action == CONTEXT_ACTION_STRIKE) &&
             local->agent.morphology == CC_MORPHOLOGY_BIPED &&
             !local->journey_parley_active) {
             bool struck = CcLocalCourseBeginPlayerStrike(
@@ -2372,21 +2491,25 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                         "Select a bandit.");
             }
         }
-        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        if (context_action == CONTEXT_ACTION_NONE &&
+            IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
             Vector2 mouse = GetMousePosition();
             int32_t combat_target = local->market_interior ? -1 :
                 CcLocalCoursePickPlayerTarget(
                     &local->course, &local->agent, mouse, local_target,
                     local_bounds);
             if (combat_target >= 0) {
+                local->pending_interaction = CONTEXT_ACTION_NONE;
                 local->movement_reticle = mouse;
                 local->movement_reticle_age = 0.0f;
                 local->movement_reticle_valid = true;
                 local->movement_reticle_accepted = true;
-                (void)snprintf(
-                    message, message_capacity,
-                    "Bandit %d selected.",
-                    combat_target + 1);
+                bool struck = CcLocalCourseBeginPlayerStrike(
+                    &local->course, &local->agent);
+                (void)snprintf(message, message_capacity,
+                               struck ? "Attacking bandit %d." :
+                                        "Bandit %d selected.",
+                               combat_target + 1);
             } else {
                 bool movement_accepted = CcLocalAgentPickTarget(
                     &local->agent, mouse, local_target, local_bounds,
@@ -2400,6 +2523,8 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                     local->movement_reticle_accepted = movement_accepted;
                 }
                 if (movement_accepted) {
+                    local->pending_interaction = (int32_t)
+                        InteractionForCommandPoint(local);
                     if (!local->market_interior &&
                         local->course.alarm_active) {
                         CcLocalCourseClearPlayerTarget(&local->agent);
@@ -2426,6 +2551,16 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         (void)CcLocalWorldUpdate(
             &local->course, &local->agent, sim, delta_time,
             local->market_interior, advance_course);
+        bool queued_interact =
+            context_action == CONTEXT_ACTION_NONE &&
+            local->pending_interaction != CONTEXT_ACTION_NONE &&
+            !local->agent.exact_target_valid &&
+            !local->agent.navigation_active;
+        if (queued_interact) {
+            context_action =
+                (ContextActionKind)local->pending_interaction;
+            local->pending_interaction = CONTEXT_ACTION_NONE;
+        }
         if (local->movement_reticle_valid) {
             local->movement_reticle_age += delta_time;
             float reticle_lifetime = local->movement_reticle_accepted ?
@@ -2504,7 +2639,8 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             if ((interact ||
                  context_action == CONTEXT_ACTION_LEAVE_MARKET) &&
                 local->market_interior &&
-                GridDistance(position, INTERIOR_EXIT) < 1.25f) {
+                (queued_interact ||
+                 GridDistance(position, INTERIOR_EXIT) < 1.25f)) {
                 local->market_interior = false;
                 RepositionHero(local,
                                (Vector2){CC_LOCAL_MARKET_X,
@@ -2513,21 +2649,24 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             } else if ((interact ||
                         context_action == CONTEXT_ACTION_ENTER_MARKET) &&
                        !local->market_interior &&
-                       GridDistance(position, LOCAL_MARKET) < 1.30f) {
+                       (queued_interact ||
+                        GridDistance(position, LOCAL_MARKET) < 1.30f)) {
                 local->market_interior = true;
                 RepositionHero(local, (Vector2){2.05f, 5.35f}, true);
                 message[0] = '\0';
             } else if ((interact ||
                         context_action == CONTEXT_ACTION_OPEN_MAP) &&
                        !local->market_interior &&
-                       GridDistance(position, LOCAL_CARRIAGE) < 1.35f) {
+                       (queued_interact ||
+                        GridDistance(position, LOCAL_CARRIAGE) < 1.35f)) {
                 *selected = FirstVisibleMapIndex(sim);
                 *view = VIEW_MAP;
                 message[0] = '\0';
             } else if ((interact ||
                         context_action == CONTEXT_ACTION_OPEN_PROMISES) &&
                        !local->market_interior &&
-                       GridDistance(position, LOCAL_NOTICE) < 1.15f) {
+                       (queued_interact ||
+                        GridDistance(position, LOCAL_NOTICE) < 1.15f)) {
                 *return_view = VIEW_LOCAL;
                 if (SelectedActiveSituation(sim, *selected_situation) == NULL) {
                     *selected_situation = FirstActiveSituationIndex(sim);
@@ -2556,13 +2695,11 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                     (void)ApplyCommand(*journal, sim, trade, message,
                                        message_capacity);
                 }
-            } else if (context_action == CONTEXT_ACTION_BUY_CARGO ||
-                       context_action == CONTEXT_ACTION_SELL_CARGO) {
+            } else if (context_action == CONTEXT_ACTION_BUY_CARGO) {
                 CcCommand trade = {
                     .kind = CC_COMMAND_TRADE,
-                    .good = context_good,
-                    .amount = context_action == CONTEXT_ACTION_BUY_CARGO ?
-                                  1 : -1
+                    .good = pressed_action.good,
+                    .amount = pressed_action.amount
                 };
                 (void)ApplyCommand(*journal, sim, trade, message,
                                    message_capacity);
@@ -2583,7 +2720,8 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         if (!local->market_interior && dungeon != NULL &&
             (IsKeyPressed(KEY_E) ||
              context_action == CONTEXT_ACTION_EXPEDITION) &&
-            GridDistance(position, LOCAL_DUNGEON) < 1.35f) {
+            (queued_interact ||
+             GridDistance(position, LOCAL_DUNGEON) < 1.35f)) {
             HandleExpedition(*journal, sim, dungeon, message,
                              message_capacity);
         }
