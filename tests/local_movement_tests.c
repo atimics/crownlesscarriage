@@ -2525,6 +2525,66 @@ int main(void)
         return 1;
     }
 
+    /* The market-side street fight used to lock its camera behind the east
+       workshop wall. The combat composer must choose another nearby stage
+       angle before either fighter is hidden by that complete building. */
+    CcLocalAgent workshop_player;
+    CcLocalAgentInit(&workshop_player, (Vector2){45.15f, 30.60f}, false);
+    CcLocalCourse workshop_course;
+    CcLocalCourseInit(&workshop_course);
+    workshop_course.scene = CC_LOCAL_SCENE_STREET;
+    workshop_course.alarm_active = true;
+    workshop_course.raiders_retreating = false;
+    workshop_course.raiders[0].position = (Vector3){
+        52.83f, CcLocalTerrainHeightAt(52.83f, 36.44f), 36.44f};
+    if (!CcLocalCourseSelectPlayerTarget(
+            &workshop_course, &workshop_player, 0)) {
+        (void)fprintf(stderr,
+                      "workshop camera fixture could not select its raider\n");
+        return 1;
+    }
+    Camera3D workshop_base = shoulder_base;
+    for (int32_t frame = 0; frame < 120; ++frame) {
+        camera_clock += 1.0f / 60.0f;
+        workshop_base = CcLocalStreetCameraInternal(
+            &workshop_player, camera_clock, true,
+            click_target.texture.height);
+    }
+    Camera3D workshop_camera = workshop_base;
+    for (int32_t frame = 0; frame < 180; ++frame) {
+        camera_clock += 1.0f / 60.0f;
+        workshop_camera = CcLocalCombatCameraInternal(
+            workshop_base, &workshop_player, &workshop_course,
+            camera_clock, true, click_target.texture.height);
+    }
+    Rectangle east_workshop = {55.0f, 29.0f, 6.5f, 8.5f};
+    Vector3 workshop_player_center = {
+        workshop_player.position.x, workshop_player.position.y + 1.02f,
+        workshop_player.position.z};
+    Vector3 workshop_raider_center = {
+        workshop_course.raiders[0].position.x,
+        workshop_course.raiders[0].position.y + 1.02f,
+        workshop_course.raiders[0].position.z};
+    if (CcLocalBuildingObscuresHeroInternal(
+            east_workshop, 5.90f, workshop_camera,
+            workshop_player_center, click_target.texture.width,
+            click_target.texture.height) ||
+        CcLocalBuildingObscuresHeroInternal(
+            east_workshop, 5.90f, workshop_camera,
+            workshop_raider_center, click_target.texture.width,
+            click_target.texture.height)) {
+        (void)fprintf(stderr,
+                      "workshop wall still obscured the combat camera\n");
+        return 1;
+    }
+    workshop_course.alarm_active = false;
+    for (int32_t frame = 0; frame < 240; ++frame) {
+        camera_clock += 1.0f / 60.0f;
+        (void)CcLocalCombatCameraInternal(
+            workshop_base, &workshop_player, &workshop_course,
+            camera_clock, true, click_target.texture.height);
+    }
+
     /* The Wayfarer Yard tree used to sit across both fighters in the combat
        reel. The visibility pass must find a nearby angle that clears both
        bodies without moving or hiding the tree. */

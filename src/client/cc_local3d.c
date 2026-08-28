@@ -8213,6 +8213,63 @@ static float CombatCameraPositionClutter(Vector3 position)
     return score;
 }
 
+static float CombatCameraBuildingOcclusionScore(
+    Camera3D camera, Vector3 first_subject, Vector3 second_subject,
+    int32_t art_height)
+{
+    if (art_height <= 0) return 0.0f;
+    int32_t art_width = (int32_t)lroundf(
+        (float)art_height * 457.0f / 285.0f);
+    float score = 0.0f;
+    for (int32_t building = 0;
+         building < (int32_t)(sizeof(WORLD_BUILDINGS) /
+                              sizeof(WORLD_BUILDINGS[0])); ++building) {
+        const WorldBuilding *house = &WORLD_BUILDINGS[building];
+        if (CcLocalBuildingObscuresHeroInternal(
+                house->footprint, house->height, camera, first_subject,
+                art_width, art_height)) {
+            score += 1.0f;
+        }
+        if (CcLocalBuildingObscuresHeroInternal(
+                house->footprint, house->height, camera, second_subject,
+                art_width, art_height)) {
+            score += 1.0f;
+        }
+    }
+    for (int32_t structure = 0;
+         structure < (int32_t)(sizeof(CASTLE_STRUCTURES) /
+                               sizeof(CASTLE_STRUCTURES[0])); ++structure) {
+        const WorldStructure *item = &CASTLE_STRUCTURES[structure];
+        if (CcLocalBuildingObscuresHeroInternal(
+                item->footprint, item->height, camera, first_subject,
+                art_width, art_height)) {
+            score += 1.0f;
+        }
+        if (CcLocalBuildingObscuresHeroInternal(
+                item->footprint, item->height, camera, second_subject,
+                art_width, art_height)) {
+            score += 1.0f;
+        }
+    }
+    for (int32_t landmark = 0;
+         landmark < CC_LOCAL_PLACE_LANDMARK_COUNT; ++landmark) {
+        const CcLocalPlaceLandmark *item = ActivePlaceLandmarkAt(landmark);
+        if (item == NULL) continue;
+        Rectangle footprint = PlaceLandmarkFootprint(item);
+        if (CcLocalBuildingObscuresHeroInternal(
+                footprint, item->height, camera, first_subject,
+                art_width, art_height)) {
+            score += 1.0f;
+        }
+        if (CcLocalBuildingObscuresHeroInternal(
+                footprint, item->height, camera, second_subject,
+                art_width, art_height)) {
+            score += 1.0f;
+        }
+    }
+    return score;
+}
+
 static float CameraStreetPlatformSubjectOverlap(
     Camera3D camera, const NavPlatform *block,
     Vector3 first_subject, Vector3 second_subject)
@@ -8742,7 +8799,8 @@ static int32_t CombatCameraOpponentIndex(const CcLocalCourse *course,
 static void CombatCameraLockComposition(Camera3D base,
                                          const CcLocalAgent *player,
                                          const CcLocalAgent *opponent,
-                                         const CcLocalCourse *course)
+                                         const CcLocalCourse *course,
+                                         int32_t art_height)
 {
     Vector3 opponent_position = opponent != NULL ? opponent->position :
         course->combat_origin;
@@ -8794,45 +8852,78 @@ static void CombatCameraLockComposition(Camera3D base,
         combat_camera_rig.composition_locked &&
         combat_camera_rig.opponent_index == opponent_index;
 
-    /* Try both shoulders. The current side receives a real hysteresis
-       advantage, so a small movement or equal clutter score cannot flip the
-       whole shot. A badly blocked side can still lose decisively. */
+    static const float sightline_angles[] = {
+        0.0f,
+        12.0f * DEG2RAD, -12.0f * DEG2RAD,
+        24.0f * DEG2RAD, -24.0f * DEG2RAD,
+        36.0f * DEG2RAD, -36.0f * DEG2RAD,
+    };
+    float chosen_angle = 0.0f;
+    /* Try both shoulders and nearby stage angles. The current side receives
+       a real hysteresis advantage, so a small movement or equal clutter
+       score cannot flip the whole shot. A badly blocked side can still lose
+       decisively. */
     for (int32_t shoulder = 0; shoulder < 2; ++shoulder) {
         Vector3 candidate_side = shoulder == 0 ? fight_side :
                                                 Vector3Negate(fight_side);
-        Vector3 camera_position = Vector3Add(
+        Vector3 base_camera_position = Vector3Add(
             player->position,
             Vector3Add(Vector3Scale(fight_line, -follow_distance),
                        Vector3Scale(candidate_side, shoulder_distance)));
-        camera_position.y = player->position.y +
-                            (road_duel ? 2.85f : 3.15f);
-        Vector3 candidate_offset = Vector3Subtract(camera_position, target);
-        Camera3D candidate = PerspectiveCameraComposed(
-            target, candidate_offset, fovy);
-        float cost = shoulder == 0 ? 0.0f : 0.12f;
-        if (course->scene == CC_LOCAL_SCENE_STREET) {
-            cost +=
-                CcLocalCameraTreeOcclusionScoreInternal(
-                    candidate, player_center, opponent_center) * 14.0f +
-                CameraStreetCourseClutterScore(
-                    candidate, player_center, opponent_center) * 2.2f +
-                CombatCameraPositionClutter(camera_position) * 8.0f;
-        } else if (road_duel) {
-            cost += CameraRoadCheckpointClutterScore(
-                candidate, player_center, opponent_center,
-                camera_position) * 2.4f;
+        base_camera_position.y = player->position.y +
+                                 (road_duel ? 2.85f : 3.15f);
+        Vector3 base_candidate_offset = Vector3Subtract(
+            base_camera_position, target);
+        for (int32_t sightline = 0;
+             sightline < (int32_t)(sizeof(sightline_angles) /
+                                   sizeof(sightline_angles[0]));
+             ++sightline) {
+            float angle = road_duel ? 0.0f :
+                          sightline_angles[sightline];
+            if (road_duel && sightline > 0) break;
+            float cosine = cosf(angle);
+            float sine = sinf(angle);
+            Vector3 candidate_offset = {
+                base_candidate_offset.x * cosine +
+                    base_candidate_offset.z * sine,
+                base_candidate_offset.y,
+                -base_candidate_offset.x * sine +
+                    base_candidate_offset.z * cosine,
+            };
+            Vector3 camera_position = Vector3Add(target, candidate_offset);
+            Camera3D candidate = PerspectiveCameraComposed(
+                target, candidate_offset, fovy);
+            float cost = shoulder == 0 ? 0.0f : 0.12f;
+            cost += fabsf(angle) * 0.38f;
+            if (course->scene == CC_LOCAL_SCENE_STREET) {
+                cost +=
+                    CombatCameraBuildingOcclusionScore(
+                        candidate, player_center, opponent_center,
+                        art_height) * 42.0f +
+                    CcLocalCameraTreeOcclusionScoreInternal(
+                        candidate, player_center, opponent_center) * 14.0f +
+                    CameraStreetCourseClutterScore(
+                        candidate, player_center, opponent_center) * 2.2f +
+                    CombatCameraPositionClutter(camera_position) * 8.0f;
+            } else if (road_duel) {
+                cost += CameraRoadCheckpointClutterScore(
+                    candidate, player_center, opponent_center,
+                    camera_position) * 2.4f;
+            }
+            if (preserve_shoulder &&
+                Vector3DotProduct(
+                    candidate_side,
+                    combat_camera_rig.locked_shoulder_side) < 0.0f) {
+                cost += 0.90f;
+            }
+            if (cost >= best_cost) continue;
+            best_cost = cost;
+            offset = candidate_offset;
+            chosen_side = candidate_side;
+            chosen_angle = angle;
         }
-        if (preserve_shoulder &&
-            Vector3DotProduct(candidate_side,
-                              combat_camera_rig.locked_shoulder_side) < 0.0f) {
-            cost += 0.90f;
-        }
-        if (cost >= best_cost) continue;
-        best_cost = cost;
-        offset = candidate_offset;
-        chosen_side = candidate_side;
     }
-    combat_camera_rig.tree_clear_angle = 0.0f;
+    combat_camera_rig.tree_clear_angle = chosen_angle;
     combat_camera_rig.locked_target = target;
     combat_camera_rig.locked_offset = offset;
     combat_camera_rig.locked_shoulder_side = chosen_side;
@@ -8978,7 +9069,8 @@ Camera3D CcLocalCombatCameraInternal(Camera3D base,
             if (!combat_camera_rig.composition_locked || opponent_changed ||
                 left_safe_frame) {
                 if (opponent_changed) combat_camera_rig.shoulder_valid = false;
-                CombatCameraLockComposition(base, player, opponent, course);
+                CombatCameraLockComposition(base, player, opponent, course,
+                                            art_height);
             }
         }
 
