@@ -465,6 +465,9 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
                        float clock, RenderTexture2D target,
                        Rectangle destination);
 float CcLocalRoadCarriageX(int32_t progress_milli);
+float CcLocalRoadCheckpointSurfaceYInternal(float x, float z);
+float CcLocalRoadHorseLateralSpacingInternal(bool bridge_checkpoint);
+float CcLocalRoadHorseLongitudinalOffsetInternal(void);
 void CcLocalDrawFork3D(const CcSim *sim, int32_t selected_route,
                        float clock, RenderTexture2D target,
                        Rectangle destination);
