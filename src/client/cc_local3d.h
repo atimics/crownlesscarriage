@@ -58,6 +58,27 @@ typedef enum CcLocalSceneKind {
     CC_LOCAL_SCENE_ROAD
 } CcLocalSceneKind;
 
+typedef enum CcLocalConvoyPhase {
+    CC_LOCAL_CONVOY_PARKED = 0,
+    CC_LOCAL_CONVOY_DEPARTING,
+    CC_LOCAL_CONVOY_GATE,
+    CC_LOCAL_CONVOY_ROAD,
+    CC_LOCAL_CONVOY_ARRIVING
+} CcLocalConvoyPhase;
+
+/* The strategic simulation owns the durable route and progress. This small
+   presentation state keeps the same carriage under the camera while it
+   leaves a stable, crosses a gate, travels, and enters the next town. */
+typedef struct CcLocalConvoyState {
+    CcLocalConvoyPhase phase;
+    Vector3 town_position;
+    float town_heading_yaw;
+    float phase_progress;
+    float pace;
+    float lateral_offset;
+    float runtime_tick_accumulator;
+} CcLocalConvoyState;
+
 typedef enum CcLocalAtmospherePreset {
     CC_LOCAL_ATMOSPHERE_CLEAR_DAY = 0,
     CC_LOCAL_ATMOSPHERE_RAINY_OVERCAST,
@@ -426,13 +447,15 @@ void CcLocalDrawNpcPortrait3D(const CcNpcAppearance *appearance,
 void CcLocalDrawAgentPortrait3D(const CcLocalAgent *agent,
                                 Rectangle bounds);
 void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
-                         const CcLocalCourse *course, float clock,
+                         const CcLocalCourse *course,
+                         const CcLocalConvoyState *convoy, float clock,
                          RenderTexture2D target, Rectangle destination);
 void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
                        const CcLocalCourse *course, bool travelling,
-                       bool parley,
+                       bool parley, const CcLocalConvoyState *convoy,
                        float clock, RenderTexture2D target,
                        Rectangle destination);
+float CcLocalRoadCarriageX(int32_t progress_milli);
 void CcLocalDrawFork3D(const CcSim *sim, int32_t selected_route,
                        float clock, RenderTexture2D target,
                        Rectangle destination);

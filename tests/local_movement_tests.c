@@ -1984,6 +1984,13 @@ static void TestRoadBridgeSupport(void)
 
 int main(void)
 {
+    if (fabsf(CcLocalRoadCarriageX(0) - 20.15f) > 0.001f ||
+        fabsf(CcLocalRoadCarriageX(350) - 38.35f) > 0.001f ||
+        fabsf(CcLocalRoadCarriageX(1000) - 72.15f) > 0.001f) {
+        (void)fprintf(stderr,
+                      "road carriage did not preserve its encounter position\n");
+        return 1;
+    }
     TestRoadBridgeSupport();
     TestFaceAngleAndLodContract();
     TestSharedCharacterCollisionWorld();
