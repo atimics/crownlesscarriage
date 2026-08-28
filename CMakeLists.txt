@@ -159,7 +159,7 @@ if(CC_BUILD_CLIENT)
     endif()
     target_link_libraries(crownless_carriage PRIVATE
         crownless_persistence crownless_locomotion
-        crownless_creature_catalog raylib
+        crownless_creature_catalog raylib glfw
     )
     target_compile_definitions(crownless_carriage PRIVATE
         CC_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}"
