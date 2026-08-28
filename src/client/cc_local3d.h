@@ -245,6 +245,11 @@ typedef enum CcGuardDuty {
     CC_GUARD_RETURNING
 } CcGuardDuty;
 
+typedef enum CcLocalRaiderRole {
+    CC_LOCAL_RAIDER_CAPTAIN,
+    CC_LOCAL_RAIDER_FORAGER
+} CcLocalRaiderRole;
+
 typedef struct CcLocalCourseRunner {
     CcLocalAgent agent;
     int32_t next_waypoint;
@@ -269,6 +274,10 @@ typedef struct CcLocalCourse {
     CcLocalTraveller travellers[CC_LOCAL_TRAVELLER_COUNT];
     Vector3 guard_entry[CC_LOCAL_COURSE_RUNNER_COUNT];
     CcLocalAgent raiders[CC_LOCAL_RAIDER_COUNT];
+    CcLocalRaiderRole raider_roles[CC_LOCAL_RAIDER_COUNT];
+    char raider_names[CC_LOCAL_RAIDER_COUNT][CC_NAME_CAPACITY];
+    char raider_company_name[CC_NAME_CAPACITY];
+    CcId raider_company_id;
     CcLocalAgent situation_witness;
     CcId situation_witness_id;
     Vector3 raider_entry[CC_LOCAL_RAIDER_COUNT];
@@ -277,6 +286,7 @@ typedef struct CcLocalCourse {
     float engagement_time;
     float raider_attack_cooldown[CC_LOCAL_RAIDER_COUNT];
     int32_t raider_response_stage[CC_LOCAL_RAIDER_COUNT];
+    int32_t raider_initial_resolve;
     int32_t raider_resolve;
     int32_t defenses_completed;
     CcCombatOutcome last_outcome;
@@ -373,6 +383,9 @@ void CcLocalCourseRaiseAlarmNear(CcLocalCourse *course,
 void CcLocalCourseStageRoadEncounter(CcLocalCourse *course,
                                      CcLocalAgent *player,
                                      bool hostile);
+void CcLocalCourseBindRaiderCompany(CcLocalCourse *course,
+                                    const CcSim *sim);
+const char *CcLocalRaiderRoleName(CcLocalRaiderRole role);
 bool CcLocalCourseBeginPlayerStrike(CcLocalCourse *course,
                                     CcLocalAgent *player);
 void CcLocalCourseSetPlayerGuarded(CcLocalCourse *course,

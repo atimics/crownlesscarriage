@@ -199,7 +199,8 @@ typedef enum CcEventKind {
     CC_EVENT_DRAGON_AFTERSHOCK,
     CC_EVENT_DRAGON_SUCCESSOR,
     CC_EVENT_GOBLIN_CULT_RALLIED,
-    CC_EVENT_GOBLIN_DRAGON_SEED
+    CC_EVENT_GOBLIN_DRAGON_SEED,
+    CC_EVENT_ENCOUNTER_WITHDRAWN
 } CcEventKind;
 
 typedef enum CcCommandKind {
@@ -222,7 +223,11 @@ typedef enum CcCommandKind {
     CC_COMMAND_ARCHIVE_MAP,
     CC_COMMAND_RETRIEVE_MAP,
     CC_COMMAND_STEAL_DRAGON_NAMED_TREASURE,
-    CC_COMMAND_RETURN_DRAGON_NAMED_TREASURE
+    CC_COMMAND_RETURN_DRAGON_NAMED_TREASURE,
+    /* Appended so command journals written by earlier schema versions keep
+       their stable numeric meanings. */
+    CC_COMMAND_RESOLVE_ENCOUNTER_PROVISIONS,
+    CC_COMMAND_WITHDRAW_ENCOUNTER
 } CcCommandKind;
 
 typedef enum CcCollectibleMapSlot {
@@ -811,6 +816,12 @@ bool CcSimSituationTouchesSettlement(const CcSim *sim,
                                      const CcSituation *situation,
                                      CcId settlement_id);
 const CcSituation *CcSimSituationForSettlement(const CcSim *sim, CcId settlement_id);
+const CcBanditGroup *CcSimBanditGroupOnRoute(const CcSim *sim,
+                                             CcId route_id);
+bool CcSimBanditProvisionDemand(const CcSim *sim, CcId route_id,
+                                CcGood *good, int32_t *quantity);
+int32_t CcSimBanditReactionRoll(const CcSim *sim, CcId route_id);
+const char *CcBanditReactionName(int32_t roll);
 int32_t CcSimActiveSituationCount(const CcSim *sim);
 int32_t CcSimIncomingGood(const CcSim *sim, CcId settlement_id, CcGood good);
 int32_t CcSimRouteDanger(const CcSim *sim, CcId route_id);

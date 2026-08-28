@@ -1456,10 +1456,11 @@ static void TestTargetDrivenCombat(void)
     player.combat.posture = 30.0f;
     if (!CcLocalCourseUsePlayerSkill(&course, &player,
                                      CC_COMBAT_SKILL_SECOND_WIND) ||
-        player.combat.health <= 42.0f || player.combat.posture <= 30.0f ||
+        player.combat.health != 42.0f || player.combat.posture <= 30.0f ||
         CcLocalCombatSkillCooldown(&player,
             CC_COMBAT_SKILL_SECOND_WIND) <= 0.0f) {
-        (void)fprintf(stderr, "Second Wind did not restore the combatant\n");
+        (void)fprintf(stderr,
+                      "Catch Breath healed a wound or failed to restore posture\n");
         exit(1);
     }
 

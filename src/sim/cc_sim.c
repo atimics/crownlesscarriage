@@ -522,6 +522,7 @@ const char *CcEventKindName(CcEventKind kind)
         case CC_EVENT_DRAGON_SUCCESSOR: return "DRAGON SUCCESSOR";
         case CC_EVENT_GOBLIN_CULT_RALLIED: return "CULT RALLIES";
         case CC_EVENT_GOBLIN_DRAGON_SEED: return "DRAGON SEED";
+        case CC_EVENT_ENCOUNTER_WITHDRAWN: return "ROAD WITHDRAWAL";
     }
     return "EVENT";
 }
@@ -2249,6 +2250,64 @@ static CcBanditGroup *BanditsOnRoute(CcSim *sim, CcId route_id)
         if (sim->bandits[i].route_id == route_id) return &sim->bandits[i];
     }
     return NULL;
+}
+
+const CcBanditGroup *CcSimBanditGroupOnRoute(const CcSim *sim,
+                                             CcId route_id)
+{
+    if (sim == NULL || route_id == 0U) return NULL;
+    for (int32_t i = 0; i < sim->bandit_count; ++i) {
+        if (sim->bandits[i].route_id == route_id) return &sim->bandits[i];
+    }
+    return NULL;
+}
+
+int32_t CcSimBanditReactionRoll(const CcSim *sim, CcId route_id)
+{
+    const CcBanditGroup *bandits = CcSimBanditGroupOnRoute(sim, route_id);
+    if (sim == NULL || bandits == NULL) return 7;
+    uint32_t value = sim->world_seed ^ (uint32_t)route_id ^
+                     (uint32_t)(route_id >> 32U) ^
+                     (uint32_t)bandits->id ^ (uint32_t)sim->current_day;
+    value ^= value >> 16U;
+    value *= UINT32_C(0x7feb352d);
+    value ^= value >> 15U;
+    int32_t first = 1 + (int32_t)(value % 6U);
+    int32_t second = 1 + (int32_t)((value / 7U) % 6U);
+    int32_t modifier = ClampI32(sim->player.reputation / 20, -2, 2);
+    if (bandits->supplies < 24) modifier -= 1;
+    if (bandits->influence >= 75) modifier -= 1;
+    return ClampI32(first + second + modifier, 2, 12);
+}
+
+const char *CcBanditReactionName(int32_t roll)
+{
+    if (roll <= 5) return "HOSTILE";
+    if (roll <= 8) return "WARY";
+    if (roll <= 10) return "READY TO BARGAIN";
+    return "OPEN TO TERMS";
+}
+
+bool CcSimBanditProvisionDemand(const CcSim *sim, CcId route_id,
+                                CcGood *good, int32_t *quantity)
+{
+    const CcBanditGroup *bandits = CcSimBanditGroupOnRoute(sim, route_id);
+    if (bandits == NULL) return false;
+    CcGood wanted = bandits->raid_good;
+    if (wanted < CC_GOOD_FOOD || wanted > CC_GOOD_WEAPONS) {
+        wanted = CC_GOOD_FOOD;
+    }
+    int32_t wanted_quantity = 1 + (int32_t)bandits->camp_size;
+    if (wanted == CC_GOOD_TOOLS || wanted == CC_GOOD_WEAPONS) {
+        wanted_quantity = MinimumI32(wanted_quantity, 2);
+    }
+    int32_t reaction = CcSimBanditReactionRoll(sim, route_id);
+    if (reaction <= 5) wanted_quantity += 1;
+    if (reaction >= 10) wanted_quantity = MaximumI32(1,
+                                                      wanted_quantity - 1);
+    if (good != NULL) *good = wanted;
+    if (quantity != NULL) *quantity = wanted_quantity;
+    return true;
 }
 
 static CcBanditGroup *BanditMutable(CcSim *sim, CcId id)
@@ -7000,6 +7059,10 @@ static bool ApplyTravel(CcSim *sim, const CcCommand *command,
           route->smuggler_route));
     int32_t danger = CcSimRouteDanger(sim, route->id);
     if (uncharted) danger = ClampI32(danger + 20, 0, 95);
+    int32_t reaction = CcSimBanditReactionRoll(sim, route->id);
+    int32_t bargain_cost = ClampI32(
+        4 + danger / 7 + (reaction <= 5 ? 3 : reaction >= 10 ? -2 : 0),
+        3, 21);
     int32_t total_subticks = days * CC_WORLD_DAY_SUBTICKS;
     CcId parent_event_id = LatestLocalCause(sim, destination->id);
     bool ambush_pending = !encounter_planned &&
@@ -7020,7 +7083,7 @@ static bool ApplyTravel(CcSim *sim, const CcCommand *command,
         .destination_id = destination->id,
         .route_id = route->id,
         .danger = danger,
-        .bargain_cost = ClampI32(4 + danger / 7, 5, 18),
+        .bargain_cost = bargain_cost,
         .departure_day = sim->current_day,
         .total_subticks = total_subticks,
         .encounter_subticks = encounter_planned ?
@@ -7057,6 +7120,7 @@ static bool ApplyTravel(CcSim *sim, const CcCommand *command,
 }
 
 static bool ApplyResolveEncounter(CcSim *sim, CcJourneyOutcome outcome,
+                                  bool provisions,
                                   char *error, size_t error_capacity)
 {
     if (!sim->journey.active ||
@@ -7068,19 +7132,30 @@ static bool ApplyResolveEncounter(CcSim *sim, CcJourneyOutcome outcome,
     }
     CcJourneyEncounter journey = sim->journey;
     CcRoute *route = RouteMutable(sim, journey.route_id);
+    CcSettlement *origin = CcSimSettlementMutable(sim, journey.origin_id);
     CcSettlement *destination = CcSimSettlementMutable(
         sim, journey.destination_id);
     CcBanditGroup *bandits = BanditsOnRoute(sim, journey.route_id);
-    if (route == NULL || destination == NULL ||
+    if (route == NULL || origin == NULL || destination == NULL ||
         sim->player.location_id != journey.origin_id) {
         SetError(error, error_capacity,
                  "The road encounter no longer matches the prepared journey.");
         return false;
     }
-    if (outcome == CC_JOURNEY_OUTCOME_NEGOTIATED &&
+    if (!provisions && outcome == CC_JOURNEY_OUTCOME_NEGOTIATED &&
         sim->player.coins < journey.bargain_cost) {
         SetError(error, error_capacity,
                  "The company cannot cover the negotiated passage.");
+        return false;
+    }
+    CcGood demanded_good = CC_GOOD_FOOD;
+    int32_t demanded_quantity = 0;
+    if (provisions &&
+        (!CcSimBanditProvisionDemand(sim, journey.route_id,
+                                     &demanded_good, &demanded_quantity) ||
+         sim->player.cargo[demanded_good] < demanded_quantity)) {
+        SetError(error, error_capacity,
+                 "The carriage does not carry the provisions they asked for.");
         return false;
     }
     char text[CC_EVENT_TEXT_CAPACITY];
@@ -7093,6 +7168,7 @@ static bool ApplyResolveEncounter(CcSim *sim, CcJourneyOutcome outcome,
         sim->carriage.condition = ClampI32(
             sim->carriage.condition - damage, 0, 100);
         sim->player.coins -= medical_cost;
+        origin->market_coins += medical_cost;
         route->security = ClampI32(route->security + 6, 0, 100);
         destination->security = ClampI32(destination->security + 2, 0, 100);
         if (bandits != NULL) {
@@ -7105,7 +7181,7 @@ static bool ApplyResolveEncounter(CcSim *sim, CcJourneyOutcome outcome,
                        damage, medical_cost);
         event_kind = CC_EVENT_ENCOUNTER_COMBAT;
         magnitude = damage;
-    } else {
+    } else if (!provisions) {
         sim->player.coins -= journey.bargain_cost;
         destination->market_coins += journey.bargain_cost;
         route->security = ClampI32(route->security - 1, 0, 100);
@@ -7119,6 +7195,33 @@ static bool ApplyResolveEncounter(CcSim *sim, CcJourneyOutcome outcome,
                        journey.bargain_cost);
         event_kind = CC_EVENT_ENCOUNTER_NEGOTIATED;
         magnitude = journey.bargain_cost;
+    } else {
+        int32_t supply_value = demanded_good == CC_GOOD_WEAPONS ? 4 :
+                               demanded_good == CC_GOOD_TOOLS ? 3 :
+                               demanded_good == CC_GOOD_IRON ? 2 : 1;
+        sim->player.cargo[demanded_good] -= demanded_quantity;
+        route->security = ClampI32(route->security - 1, 0, 100);
+        if (bandits != NULL) {
+            bandits->supplies = ClampI32(
+                bandits->supplies + demanded_quantity * supply_value,
+                0, 100);
+            bandits->influence = ClampI32(bandits->influence + 1, 0, 100);
+            if ((bandits->raid_phase == CC_BANDIT_RAID_SCOUTING ||
+                 bandits->raid_phase == CC_BANDIT_RAID_MUSTERING) &&
+                bandits->raid_good == demanded_good) {
+                bandits->raid_phase = CC_BANDIT_RAID_IDLE;
+                bandits->raid_target_id = 0U;
+                bandits->raid_quantity = 0;
+                bandits->raid_days_remaining = 0;
+            }
+        }
+        (void)snprintf(
+            text, sizeof(text),
+            "The Crownless company gives %d %s to %s; their immediate shortage eases and the cordon opens.",
+            demanded_quantity, CcGoodName(demanded_good),
+            bandits != NULL ? bandits->name : "the road company");
+        event_kind = CC_EVENT_ENCOUNTER_NEGOTIATED;
+        magnitude = demanded_quantity;
     }
     CcEvent *outcome_event = PushEvent(
         sim, event_kind, journey.situation_id, journey.route_id,
@@ -7135,6 +7238,70 @@ static bool ApplyResolveEncounter(CcSim *sim, CcJourneyOutcome outcome,
         JourneyCarriageSpeed(sim->journey.total_subticks);
     CreateJourneyTraffic(sim, &journey,
                          outcome_event != NULL ? outcome_event->id : 0U);
+    SetError(error, error_capacity, "");
+    return true;
+}
+
+static bool ApplyWithdrawEncounter(CcSim *sim, const CcCommand *command,
+                                   char *error, size_t error_capacity)
+{
+    if (!sim->journey.active ||
+        sim->journey.phase != CC_JOURNEY_PHASE_BLOCKED ||
+        (command->amount != 0 && command->amount != 1)) {
+        SetError(error, error_capacity,
+                 "There is no road fight to withdraw from.");
+        return false;
+    }
+    CcJourneyEncounter journey = sim->journey;
+    CcRoute *route = RouteMutable(sim, journey.route_id);
+    CcSettlement *origin = CcSimSettlementMutable(sim, journey.origin_id);
+    CcBanditGroup *bandits = BanditsOnRoute(sim, journey.route_id);
+    if (route == NULL || origin == NULL ||
+        sim->player.location_id != journey.origin_id) {
+        SetError(error, error_capacity,
+                 "The road withdrawal no longer matches this journey.");
+        return false;
+    }
+    bool under_fire = command->amount == 1;
+    int32_t damage = under_fire ? ClampI32(4 + journey.danger / 15,
+                                           4, 10) : 0;
+    int32_t medical_cost = under_fire ? MinimumI32(
+        (int32_t)sim->player.coins, 2 + journey.danger / 20) : 0;
+    sim->carriage.condition = ClampI32(
+        sim->carriage.condition - damage, 0, 100);
+    sim->player.coins -= medical_cost;
+    origin->market_coins += medical_cost;
+    route->security = ClampI32(route->security - (under_fire ? 2 : 1),
+                               0, 100);
+    if (bandits != NULL) {
+        bandits->influence = ClampI32(
+            bandits->influence + (under_fire ? 2 : 1), 0, 100);
+    }
+    char text[CC_EVENT_TEXT_CAPACITY];
+    if (under_fire) {
+        (void)snprintf(
+            text, sizeof(text),
+            "The Crownless carriage withdraws under fire to %s; it takes %d damage and treatment costs %d crowns.",
+            origin->name, damage, medical_cost);
+    } else {
+        (void)snprintf(
+            text, sizeof(text),
+            "The Crownless carriage refuses the fight and returns to %s before blood is drawn.",
+            origin->name);
+    }
+    (void)PushEvent(sim, CC_EVENT_ENCOUNTER_WITHDRAWN, sim->player.id,
+                    journey.route_id, journey.parent_event_id,
+                    under_fire ? damage : 0, text);
+    sim->resolved_journey_situation_id = 0U;
+    sim->resolved_journey_outcome = CC_JOURNEY_OUTCOME_NONE;
+    sim->journey.active = false;
+    sim->journey.phase = CC_JOURNEY_PHASE_NONE;
+    sim->clock.game_minutes_per_second = CC_IDLE_GAME_MINUTES_PER_SECOND;
+    sim->carriage = (CcCarriageState){
+        .mode = CC_CARRIAGE_PARKED,
+        .location_id = origin->id,
+        .condition = sim->carriage.condition
+    };
     SetError(error, error_capacity, "");
     return true;
 }
@@ -7436,10 +7603,19 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
             return ApplyRefuseSituation(sim, command, error, error_capacity);
         case CC_COMMAND_RESOLVE_ENCOUNTER_COMBAT:
             return ApplyResolveEncounter(sim, CC_JOURNEY_OUTCOME_COMBAT,
+                                         false,
                                          error, error_capacity);
         case CC_COMMAND_RESOLVE_ENCOUNTER_NEGOTIATE:
             return ApplyResolveEncounter(sim, CC_JOURNEY_OUTCOME_NEGOTIATED,
+                                         false,
                                          error, error_capacity);
+        case CC_COMMAND_RESOLVE_ENCOUNTER_PROVISIONS:
+            return ApplyResolveEncounter(sim, CC_JOURNEY_OUTCOME_NEGOTIATED,
+                                         true,
+                                         error, error_capacity);
+        case CC_COMMAND_WITHDRAW_ENCOUNTER:
+            return ApplyWithdrawEncounter(sim, command,
+                                          error, error_capacity);
         case CC_COMMAND_STEAL_DRAGON_HOARD: {
             if (sim->dragon.slain) {
                 SetError(error, error_capacity,
@@ -7649,7 +7825,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             if (event == NULL || CcIdKind(event->id) != CC_ENTITY_EVENT ||
                 event->day < 1 || event->day > sim->current_day ||
                 event->kind < CC_EVENT_HARVEST_FAILED ||
-                event->kind > CC_EVENT_GOBLIN_DRAGON_SEED ||
+                event->kind > CC_EVENT_ENCOUNTER_WITHDRAWN ||
                 event->parent_id == event->id ||
                 (event->parent_id != 0U &&
                  CcSimEvent(sim, event->parent_id) == NULL)) {
