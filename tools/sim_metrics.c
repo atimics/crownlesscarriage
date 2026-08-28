@@ -36,10 +36,16 @@ static void PrintYear(const CcSim *sim, int32_t seed_number, int32_t year)
     CcMoney market_coins = 0;
     CcMoney war_chests = 0;
     int32_t food_stock = 0;
+    int32_t active_settlements = 0;
+    int32_t abandoned_settlements = 0;
+    int32_t total_population = 0;
     int32_t war_crisis_total = 0;
     int32_t war_crisis_maximum = 0;
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         const CcSettlement *place = &sim->settlements[i];
+        if (CcSettlementIsAbandoned(place)) abandoned_settlements += 1;
+        else active_settlements += 1;
+        total_population += place->population;
         hunger_total += place->hunger;
         if (place->hunger > hunger_maximum) hunger_maximum = place->hunger;
         prosperity_total += place->prosperity;
@@ -154,7 +160,8 @@ static void PrintYear(const CcSim *sim, int32_t seed_number, int32_t year)
         sim->iron_ledger_reserve, debt_total, smuggler_routes,
         sim->goblins.hoard_defenses);
     (void)printf(
-        ",%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
+        ",%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,"
+        "%d,%d,%d,%d,%d\n",
         wars, alliances, active_couriers, lost_couriers,
         distorted_couriers, sim->dragon.slain ? 1 : 0,
         sim->dragon_campaign.attempts,
@@ -171,7 +178,9 @@ static void PrintYear(const CcSim *sim, int32_t seed_number, int32_t year)
         sim->dragon.hunts,
         sim->dragon.broods_laid,
         sim->dragon.whelps_dispersed,
-        sim->dragon.afterdeath_days);
+        sim->dragon.afterdeath_days,
+        active_settlements, abandoned_settlements, total_population,
+        CcSimClimateFactor(sim), CcDragonCampaignExperience(sim));
 }
 
 int main(int argc, char **argv)
@@ -213,7 +222,8 @@ int main(int argc, char **argv)
         "dragon_crown_strength,dragon_body_condition,dragon_memory_integrity,"
         "dragon_territory_stability,dragon_regional_influence,dragon_eggs,"
         "dragon_hunts,dragon_broods,dragon_whelps_dispersed,"
-        "dragon_afterdeath_days");
+        "dragon_afterdeath_days,active_settlements,abandoned_settlements,"
+        "total_population,climate_factor,dragon_campaign_experience");
     char error[192];
     for (int32_t seed_number = 1; seed_number <= seeds; ++seed_number) {
         CcSim sim;
