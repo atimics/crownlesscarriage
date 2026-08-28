@@ -453,8 +453,18 @@ void CcLimbRigInit(CcLimbRig *rig, const CcLimbMorphology *morphology,
                    CcLimbVec3 body_position, float body_yaw,
                    CcLimbTerrainProbe probe, void *probe_context)
 {
-    if (rig == NULL || morphology == NULL) return;
+    if (rig == NULL) return;
     *rig = (CcLimbRig){0};
+    if (morphology == NULL || morphology->limb_count <= 0 ||
+        morphology->limb_count > CC_LIMB_MAX_COUNT) {
+        return;
+    }
+    for (int32_t index = 0; index < morphology->limb_count; ++index) {
+        int32_t segment_count = morphology->limbs[index].segment_count;
+        if (segment_count <= 0 || segment_count > CC_LIMB_MAX_SEGMENTS) {
+            return;
+        }
+    }
     rig->morphology = *morphology;
     rig->traction = 1.0f;
     rig->drive_scale = 1.0f;
@@ -489,9 +499,12 @@ static void UpdateSwing(CcLimbRuntime *limb, const CcLimbMorphology *morphology,
     float duration = morphology->swing_seconds / fmaxf(0.35f, limb->health);
     limb->swing_progress = fminf(1.0f, limb->swing_progress + delta_time / duration);
     float amount = limb->swing_progress;
-    float eased = amount * amount * (3.0f - 2.0f * amount);
+    float eased = amount * amount * amount *
+                  (amount * (amount * 6.0f - 15.0f) + 10.0f);
     limb->planted_contact = Lerp(limb->contact_start, limb->contact_target, eased);
-    limb->planted_contact.y += sinf(amount * CC_LIMB_PI) * morphology->step_height;
+    float lift = amount * (1.0f - amount);
+    limb->planted_contact.y += 64.0f * lift * lift * lift *
+                               morphology->step_height;
     if (amount >= 1.0f) {
         limb->planted_contact = limb->contact_target;
         limb->state = CC_LIMB_STANCE;

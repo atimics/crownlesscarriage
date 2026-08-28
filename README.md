@@ -59,8 +59,8 @@ The architecture proof connects these parts in one running build:
 - A market interior whose stock and prices come from the regional simulation
 - Local situation boards with named sponsors, affected people, deadlines,
   rewards, accepted promises, and reputation consequences
-- A three-slot carriage map case with route-specific, tradeable charts that
-  record age, accuracy, legality, and old road conditions
+- A twelve-chart collectible map set with distinct physical artwork, a
+  three-slot carriage case, and a persistent storage archive in Gloamgate
 - Real-time carriage journeys, a dedicated road scene, and a route crisis that
   can be resolved through combat or payment
 - Immediate local aftermath and delayed consequences after a journey
@@ -80,6 +80,10 @@ The architecture proof connects these parts in one running build:
   losses; inequality or debt
   can drive the Ash-Poor to steal, while war can finance a Crown Levy, followed
   by omens, repayment, and bounded retaliation
+- A persistent Crown Cycle: dragons age through whelp, wanderer, Crowned,
+  Deep Wyrm, Uncrowned, and Afterdragon states; physical hoards stabilize
+  memory, hunger takes livestock instead of burning towns, goblins tend rare
+  broods with real Food, and only a visible surviving egg can found a successor
 - Kings who send physical declarations, peace offers, dragon alliances, and
   muster orders through a delayed and fallible courier network. The carriage
   can carry a sealed dispatch. Allied hosts consume real Food, Tools, and

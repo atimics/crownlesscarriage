@@ -85,6 +85,21 @@ Run at least 1,000 seeds for ten simulated years. Record:
 The acceptable band must be established through playtesting; universal
 prosperity and universal collapse are both failures.
 
+The current automated long-run band samples four deterministic worlds for 120
+years after a 20-year burn-in. No sample may have average hunger at 60 or more.
+The same run must still contain local crises with maximum hunger at 40 or more,
+quiet years with every settlement below 25 hunger, and lasting population loss.
+The sample must include both war and regional peace; an old war eventually
+causes a peace offer even when its courts remain solvent. This is a guardrail,
+not a claim that the final balance is proven fun.
+
+Recovery must keep its material cost. A badly reduced population eats less, a
+starving community can fall back on subsistence work, and residents can reopen
+a peaceful road with unpaid labor. Famine convoys may draw a granary below its
+normal reserve and travel with an escort, but their food and crowns remain real.
+None of these paths restores population, prosperity, road condition, or public
+trust for free.
+
 ### 5a. Locomotion invariants
 
 Both locomotion families must pass renderer-free tests. Robotic morphologies

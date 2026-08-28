@@ -1859,8 +1859,9 @@ static void ResolveFootGeometry(CcHumanoidGait *gait, int32_t leg,
     gait->pose.foot_pitch[leg] = pitch;
 }
 
-void CcHumanoidGaitResolvePose(CcHumanoidGait *gait,
-                               CcLimbVec3 body_position, float body_yaw)
+static void ResolveHumanoidPose(CcHumanoidGait *gait,
+                                CcLimbVec3 body_position, float body_yaw,
+                                bool constrain_physical_root)
 {
     if (gait == NULL || !gait->initialized) return;
     if (gait->ragdoll.active) {
@@ -1922,11 +1923,13 @@ void CcHumanoidGaitResolvePose(CcHumanoidGait *gait,
     }
     float constrained_drop = Clamp(support_compression, 0.0f, 0.16f);
     gait->pose.pelvis.y -= constrained_drop;
-    gait->body.root.position.y -= constrained_drop;
-    if (constrained_drop > 0.0f && gait->body.root.velocity.y > 0.0f) {
-        gait->body.root.contact_impulse.y -= gait->body.root.velocity.y *
-                                             gait->body.total_mass;
-        gait->body.root.velocity.y = 0.0f;
+    if (constrain_physical_root) {
+        gait->body.root.position.y -= constrained_drop;
+        if (constrained_drop > 0.0f && gait->body.root.velocity.y > 0.0f) {
+            gait->body.root.contact_impulse.y -= gait->body.root.velocity.y *
+                                                 gait->body.total_mass;
+            gait->body.root.velocity.y = 0.0f;
+        }
     }
     for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
         float side = leg == 0 ? -1.0f : 1.0f;
@@ -2029,6 +2032,12 @@ void CcHumanoidGaitResolvePose(CcHumanoidGait *gait,
     }
     ResolveCombatArmPresentation(gait, chest_right, up, chest_forward);
     RefreshCurrentPoseSnapshot(gait);
+}
+
+void CcHumanoidGaitResolvePose(CcHumanoidGait *gait,
+                               CcLimbVec3 body_position, float body_yaw)
+{
+    ResolveHumanoidPose(gait, body_position, body_yaw, false);
 }
 
 static CcLimbVec3 ClampClimbTarget(CcLimbVec3 root, CcLimbVec3 target,
@@ -2161,6 +2170,7 @@ void CcHumanoidGaitAdvanceMantle(
         takeoff_feet == NULL) {
         return;
     }
+    if (!isfinite(delta_time) || delta_time <= 0.0f) return;
     if (!gait->climbing) CcHumanoidGaitBeginClimb(gait);
     if (!gait->climbing) return;
 
@@ -2469,6 +2479,7 @@ void CcHumanoidGaitAdvanceClimb(
         foot_targets == NULL || foot_normals == NULL || foot_support == NULL) {
         return;
     }
+    if (!isfinite(delta_time) || delta_time <= 0.0f) return;
     if (!gait->climbing) CcHumanoidGaitBeginClimb(gait);
     if (!gait->climbing) return;
 
@@ -2809,10 +2820,13 @@ void CcHumanoidGaitFinishClimb(CcHumanoidGait *gait,
                                void *probe_context)
 {
     if (gait == NULL || !gait->initialized) return;
+    float cadence_scale = gait->walk_cadence_scale;
+    float stride_scale = gait->walk_stride_scale;
     CcHumanoidGait standing;
     CcHumanoidGaitInit(&standing, body_position, body_yaw,
                        probe, probe_context);
     if (!standing.initialized) return;
+    CcHumanoidGaitSetWalkingProfile(&standing, cadence_scale, stride_scale);
     *gait = standing;
     gait->climbing = false;
 }
@@ -3075,6 +3089,7 @@ void CcHumanoidGaitAdvancePhysical(
     CcBiomechRagdollCollisionProbe collision_probe, void *probe_context)
 {
     if (gait == NULL) return;
+    if (!isfinite(delta_time) || delta_time <= 0.0f) return;
     if (!gait->initialized) {
         CcHumanoidGaitInit(gait, body_position, body_yaw, probe, probe_context);
     }
@@ -3520,7 +3535,7 @@ void CcHumanoidGaitAdvancePhysical(
     LockIdleDrivenPose(gait);
 
     gait->previous_pose = gait->pose;
-    CcHumanoidGaitResolvePose(gait, body_position, body_yaw);
+    ResolveHumanoidPose(gait, body_position, body_yaw, true);
     CommitPoseSnapshot(gait, delta_time);
 }
 
@@ -3531,6 +3546,7 @@ void CcHumanoidGaitAdvanceSwim(CcHumanoidGait *gait,
                                float delta_time)
 {
     if (gait == NULL) return;
+    if (!isfinite(delta_time) || delta_time <= 0.0f) return;
     if (!gait->initialized) {
         CcHumanoidGaitInit(gait, body_position, body_yaw, NULL, NULL);
     }

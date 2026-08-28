@@ -203,6 +203,9 @@ int main(void)
     dragon.sim.carriage.location_id = dragon.sim.player.location_id;
     CC_CHECK(CcMetagameExecute(&dragon, "dragon", output, sizeof(output)));
     CC_CHECK(strstr(output, "only theft from the delivered hoard") != NULL);
+    CC_CHECK(strstr(output, "Crowned dragon") != NULL);
+    CC_CHECK(strstr(output, "Crown strength") != NULL);
+    CC_CHECK(strstr(output, "Hoardkeepers") != NULL);
     CC_CHECK(CcMetagameExecute(&dragon, "economy", output, sizeof(output)));
     CC_CHECK(strstr(output, "Material economy") != NULL);
     CC_CHECK(strstr(output, "Weapons") != NULL);
@@ -247,6 +250,18 @@ int main(void)
                                output, sizeof(output)));
     CC_CHECK(dragon.sim.dragon.stolen_outstanding == 0);
     CC_CHECK(strstr(output, "dragon is calm") != NULL);
+    CcTreasure *remembered = &dragon.sim.treasures[treasure_number - 1];
+    remembered->owner_id = dragon.sim.dragon.id;
+    remembered->location_id = dragon.sim.dragon.lair_settlement_id;
+    (void)snprintf(command, sizeof(command),
+                   "dragon steal-treasure %d", treasure_number);
+    CC_CHECK(CcMetagameExecute(&dragon, command, output, sizeof(output)));
+    CC_CHECK(dragon.sim.dragon.stolen_treasure_id == remembered->id);
+    CC_CHECK(strstr(output, "Only the exact object") != NULL);
+    CC_CHECK(CcMetagameExecute(&dragon, "dragon return-treasure",
+                               output, sizeof(output)));
+    CC_CHECK(dragon.sim.dragon.stolen_treasure_id == 0U);
+    CC_CHECK(remembered->owner_id == dragon.sim.dragon.id);
 
     puts("Text-first metagame tests passed");
     return 0;

@@ -440,13 +440,17 @@ static void DescribeMaps(const CcMetagame *metagame,
                          char *output, size_t capacity)
 {
     const CcSim *sim = &metagame->sim;
-    Append(output, capacity, "Physical map case (%d/%d):\n",
-           CcPlayerMapCount(sim), sim->player.map_capacity);
+    Append(output, capacity,
+           "Physical map case (%d/%d); catalogue %d/%d:\n",
+           CcPlayerMapCount(sim), sim->player.map_capacity,
+           CcPlayerMapCollectionCount(sim), CC_MAP_COLLECTION_COUNT);
     for (int32_t i = 0; i < sim->map_count; ++i) {
         const CcMap *map = &sim->maps[i];
-        if (map->owner_id == sim->player.id) {
-            Append(output, capacity, "  %d. %s [carried]\n", i + 1,
-                   map->name);
+        if (map->owner_id == sim->player.id &&
+            CcSimMapIsCatalogued(sim, map)) {
+            Append(output, capacity, "  %d. %s [%s]\n", i + 1,
+                   map->name, CcSimMapIsArchived(sim, map) ?
+                   "Gloamgate archive" : "carried");
         } else if (map->owner_id == sim->player.location_id) {
             Append(output, capacity, "  %d. %s [for sale: %d crowns]%s\n",
                    i + 1, map->name, map->ask_price,
@@ -526,18 +530,38 @@ static void DescribeDragon(const CcMetagame *metagame,
     if (sim->dragon.slain) {
         Append(output, capacity,
                "%s was slain on day %d above %s. Its cave now holds %" PRId64
-               " crowns; the goblin cult has broken into hungry raiders.\n",
+               " crowns; the goblin cult has broken into hungry raiders. "
+               "The Afterdragon's shadow is %d/100, with %d visible egg%s.\n",
                sim->dragon.name, sim->dragon.slain_day,
                lair != NULL ? lair->name : "an unknown cave",
-               sim->dragon.hoard);
+               sim->dragon.hoard, sim->dragon.regional_influence,
+               sim->dragon.egg_count,
+               sim->dragon.egg_count == 1 ? "" : "s");
     } else {
         Append(output, capacity,
-               "%s sleeps above %s. Its hoard holds %" PRId64
+               "%s is a %s above %s, now %s. Its hoard holds %" PRId64
                " crowns, %d Raw Gold, %d Gems, and %d named treasures.\n",
-               sim->dragon.name, lair != NULL ? lair->name : "an unknown cave",
+               sim->dragon.name,
+               CcDragonLifeStageName(sim->dragon.life_stage),
+               lair != NULL ? lair->name : "an unknown cave",
+               CcDragonActivityName(sim->dragon.activity),
                sim->dragon.hoard, sim->dragon.hoard_goods[CC_GOOD_GOLD],
                sim->dragon.hoard_goods[CC_GOOD_GEMS],
                CcSimTreasureCountForOwner(sim, sim->dragon.id));
+        Append(output, capacity,
+               "Crown strength %d/100, body %d/100, memory %d/100, territory %d/100, dragon shadow %d/100; age %d years.\n",
+               sim->dragon.crown_strength, sim->dragon.body_condition,
+               sim->dragon.memory_integrity,
+               sim->dragon.territory_stability,
+               sim->dragon.regional_influence,
+               sim->dragon.age_days / 365);
+        if (sim->dragon.egg_count > 0) {
+            Append(output, capacity,
+                   "%d egg%s lie in the brood hoard. Goblin Ashkeepers have %d days of tending left.\n",
+                   sim->dragon.egg_count,
+                   sim->dragon.egg_count == 1 ? "" : "s",
+                   sim->dragon.brood_days_remaining);
+        }
     }
     if (sim->goblins.tribute_phase == CC_GOBLIN_TRIBUTE_OUTBOUND) {
         const CcSettlement *target = CcSimSettlement(
@@ -566,7 +590,7 @@ static void DescribeDragon(const CcMetagame *metagame,
     } else {
         Append(output, capacity,
                "%s waits in its lair with %d Food, %d Tools, %d Weapons, and %" PRId64
-               " crowns. It has defended the dragon's hoard %d times; its next raid follows its real needs.\n",
+               " crowns. It has defended the dragon's hoard %d times; its Hoardkeepers, Ashkeepers, Tongues, and Foragers follow real needs.\n",
                sim->goblins.name,
                sim->goblins.lair_stock[CC_GOOD_FOOD],
                sim->goblins.lair_stock[CC_GOOD_TOOLS],
@@ -622,11 +646,21 @@ static void DescribeDragon(const CcMetagame *metagame,
     if (sim->dragon.stolen_outstanding > 0) {
         const CcSettlement *target = CcSimSettlement(
             sim, sim->dragon.retaliation_target_id);
-        Append(output, capacity,
-               "%" PRId64 " stolen crowns remain missing. Omens gather over %s; old readers count %d nights.\n",
-               sim->dragon.stolen_outstanding,
-               target != NULL ? target->name : "the countryside",
-               sim->dragon.omen_days_remaining);
+        const CcTreasure *stolen = sim->dragon.stolen_treasure_id != 0U ?
+            CcSimTreasure(sim, sim->dragon.stolen_treasure_id) : NULL;
+        if (stolen != NULL) {
+            Append(output, capacity,
+                   "%s remains outside its remembered place. Omens gather over %s; old readers count %d nights. Only the exact object will close this wound.\n",
+                   stolen->name,
+                   target != NULL ? target->name : "the countryside",
+                   sim->dragon.omen_days_remaining);
+        } else {
+            Append(output, capacity,
+                   "%" PRId64 " stolen crowns remain missing. Omens gather over %s; old readers count %d nights.\n",
+                   sim->dragon.stolen_outstanding,
+                   target != NULL ? target->name : "the countryside",
+                   sim->dragon.omen_days_remaining);
+        }
     } else if (!sim->dragon.slain) {
         Append(output, capacity,
                "The dragon is calm. Goblins raid for food, gear, and offerings; only theft from the delivered hoard brings dragon fire.\n");
@@ -637,7 +671,7 @@ static void DescribeDragon(const CcMetagame *metagame,
     if (!sim->dragon.slain &&
         sim->player.location_id == sim->dragon.lair_settlement_id) {
         Append(output, capacity,
-               "Here you may use 'dragon steal COUNT' or 'dragon return COUNT'.\n");
+               "Here you may steal or return crowns, or use 'dragon steal-treasure NUMBER' and 'dragon return-treasure' for a named object.\n");
     }
 }
 
@@ -847,11 +881,13 @@ static void DescribeHelp(char *output, size_t capacity)
            "  buy food|iron|tools|weapons|gold|gems COUNT\n"
            "  sell food|iron|tools|weapons|gold|gems COUNT\n"
            "  buy-map NUMBER, sell-map NUMBER\n"
+           "  archive-map NUMBER, retrieve-map NUMBER (in Gloamgate)\n"
            "  buy-treasure NUMBER, sell-treasure NUMBER, travel NUMBER\n"
            "Act on the road and world:\n"
            "  road fight|bargain, repair NUMBER tools|cash\n"
            "  dungeon public|smuggler|seal, wait DAYS\n"
            "  dragon steal COUNT, dragon return COUNT (at the cave)\n"
+           "  dragon steal-treasure NUMBER, dragon return-treasure\n"
            "Keep the test:\n"
            "  save PATH, load PATH, debrief, quit\n");
 }
@@ -968,16 +1004,25 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
     } else if (strcmp(command, "dragon") == 0 && first == NULL) {
         DescribeDragon(metagame, output, output_capacity);
     } else if (strcmp(command, "dragon") == 0) {
-        int32_t amount;
+        int32_t amount = 0;
+        int32_t index = 0;
         CcCommand action = {0};
         if (strcmp(first, "steal") == 0 && ParseAmount(second, &amount)) {
             action.kind = CC_COMMAND_STEAL_DRAGON_HOARD;
         } else if (strcmp(first, "return") == 0 &&
                    ParseAmount(second, &amount)) {
             action.kind = CC_COMMAND_RETURN_DRAGON_TREASURE;
+        } else if (strcmp(first, "steal-treasure") == 0 &&
+                   ParseIndex(second, metagame->sim.treasure_count, &index)) {
+            action.kind = CC_COMMAND_STEAL_DRAGON_NAMED_TREASURE;
+            action.target_id = metagame->sim.treasures[index].id;
+        } else if (strcmp(first, "return-treasure") == 0 && second == NULL &&
+                   metagame->sim.dragon.stolen_treasure_id != 0U) {
+            action.kind = CC_COMMAND_RETURN_DRAGON_NAMED_TREASURE;
+            action.target_id = metagame->sim.dragon.stolen_treasure_id;
         } else {
             Append(output, output_capacity,
-                   "Use 'dragon steal COUNT' or 'dragon return COUNT'.\n");
+                   "Use 'dragon steal COUNT', 'dragon return COUNT', 'dragon steal-treasure NUMBER', or 'dragon return-treasure'.\n");
             return false;
         }
         action.amount = amount;
@@ -1044,19 +1089,25 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
                amount > 0 ? "Loaded" : "Unloaded",
                amount > 0 ? amount : -amount, CcGoodName(good));
     } else if (strcmp(command, "buy-map") == 0 ||
-               strcmp(command, "sell-map") == 0) {
+               strcmp(command, "sell-map") == 0 ||
+               strcmp(command, "archive-map") == 0 ||
+               strcmp(command, "retrieve-map") == 0) {
         int32_t index;
         if (!ParseIndex(first, metagame->sim.map_count, &index)) {
             Append(output, output_capacity, "Choose a map number.\n");
             return false;
         }
+        CcCommandKind kind = strcmp(command, "buy-map") == 0 ?
+            CC_COMMAND_BUY_MAP : strcmp(command, "sell-map") == 0 ?
+            CC_COMMAND_SELL_MAP : strcmp(command, "archive-map") == 0 ?
+            CC_COMMAND_ARCHIVE_MAP : CC_COMMAND_RETRIEVE_MAP;
         CcCommand action = {
-            .kind = strcmp(command, "buy-map") == 0 ?
-                CC_COMMAND_BUY_MAP : CC_COMMAND_SELL_MAP,
+            .kind = kind,
             .target_id = metagame->sim.maps[index].id
         };
         if (!ApplyCommand(metagame, &action, output, output_capacity)) return false;
-        Append(output, output_capacity, "The physical map case changes hands.\n");
+        Append(output, output_capacity,
+               "The physical map collection is rearranged.\n");
     } else if (strcmp(command, "buy-treasure") == 0 ||
                strcmp(command, "sell-treasure") == 0) {
         int32_t index;

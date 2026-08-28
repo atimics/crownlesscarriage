@@ -9,6 +9,7 @@
 #include <string.h>
 
 #define CC_SQLITE_APPLICATION_ID 1128481362
+#define CC_SQLITE_USER_VERSION 13
 #define CC_JOURNAL_RECORD_VERSION 1
 #define CC_JOURNAL_RUNTIME_FLUSH_TICKS 6
 
@@ -173,6 +174,60 @@ static bool EnsureLegendColumns(sqlite3 *database,
             error, error_capacity) &&
         EnsureColumn(database, "dragon_state", "slain_day",
             "ALTER TABLE dragon_state ADD COLUMN slain_day INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "life_stage",
+            "ALTER TABLE dragon_state ADD COLUMN life_stage INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "activity",
+            "ALTER TABLE dragon_state ADD COLUMN activity INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "age_days",
+            "ALTER TABLE dragon_state ADD COLUMN age_days INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "body_condition",
+            "ALTER TABLE dragon_state ADD COLUMN body_condition INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "crown_strength",
+            "ALTER TABLE dragon_state ADD COLUMN crown_strength INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "memory_integrity",
+            "ALTER TABLE dragon_state ADD COLUMN memory_integrity INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "territory_stability",
+            "ALTER TABLE dragon_state ADD COLUMN territory_stability INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "regional_influence",
+            "ALTER TABLE dragon_state ADD COLUMN regional_influence INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "crown_continuity_days",
+            "ALTER TABLE dragon_state ADD COLUMN crown_continuity_days INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "hunt_cooldown_days",
+            "ALTER TABLE dragon_state ADD COLUMN hunt_cooldown_days INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "hunts",
+            "ALTER TABLE dragon_state ADD COLUMN hunts INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "egg_count",
+            "ALTER TABLE dragon_state ADD COLUMN egg_count INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "brood_days_remaining",
+            "ALTER TABLE dragon_state ADD COLUMN brood_days_remaining INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "brood_cooldown_days",
+            "ALTER TABLE dragon_state ADD COLUMN brood_cooldown_days INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "broods_laid",
+            "ALTER TABLE dragon_state ADD COLUMN broods_laid INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "whelps_dispersed",
+            "ALTER TABLE dragon_state ADD COLUMN whelps_dispersed INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "afterdeath_days",
+            "ALTER TABLE dragon_state ADD COLUMN afterdeath_days INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "dragon_state", "lifecycle_event_id",
+            "ALTER TABLE dragon_state ADD COLUMN lifecycle_event_id INTEGER NOT NULL DEFAULT 0;",
             error, error_capacity);
 }
 
@@ -223,29 +278,147 @@ static void BindText(sqlite3_stmt *statement, int column, const char *value)
     (void)sqlite3_bind_text(statement, column, value, -1, SQLITE_TRANSIENT);
 }
 
-static bool OpenDatabase(const char *path, sqlite3 **database,
-                         char *error, size_t error_capacity)
+static bool ReadPragmaInteger(sqlite3 *database, const char *sql,
+                              int32_t *value,
+                              char *error, size_t error_capacity)
 {
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database, sql, &statement, error, error_capacity)) return false;
+    if (sqlite3_step(statement) != SQLITE_ROW) {
+        SetSqlError(error, error_capacity, database,
+                    "Could not inspect campaign database");
+        sqlite3_finalize(statement);
+        return false;
+    }
+    *value = sqlite3_column_int(statement, 0);
+    sqlite3_finalize(statement);
+    return true;
+}
+
+static bool ValidateDatabaseHeader(sqlite3 *database,
+                                   char *error, size_t error_capacity)
+{
+    int32_t application_id = 0;
+    int32_t user_version = 0;
+    if (!ReadPragmaInteger(database, "PRAGMA application_id;",
+                           &application_id, error, error_capacity) ||
+        !ReadPragmaInteger(database, "PRAGMA user_version;",
+                           &user_version, error, error_capacity)) return false;
+    if (application_id != 0 && application_id != CC_SQLITE_APPLICATION_ID) {
+        SetError(error, error_capacity,
+                 "The selected database is not a Crownless campaign.");
+        return false;
+    }
+    if (user_version > CC_SQLITE_USER_VERSION) {
+        SetError(error, error_capacity,
+                 "Campaign database was written by a newer version.");
+        return false;
+    }
+    return true;
+}
+
+static bool ConfigureWritableDatabase(sqlite3 *database,
+                                      char *error, size_t error_capacity)
+{
+    return Execute(database,
+        "PRAGMA foreign_keys=ON;"
+        "PRAGMA journal_mode=WAL;"
+        "PRAGMA synchronous=FULL;"
+        "PRAGMA wal_autocheckpoint=1000;",
+        error, error_capacity);
+}
+
+static bool MarkDatabaseCurrent(sqlite3 *database,
+                                char *error, size_t error_capacity)
+{
+    char sql[96];
+    (void)snprintf(sql, sizeof(sql),
+                   "PRAGMA application_id=%d; PRAGMA user_version=%d;",
+                   CC_SQLITE_APPLICATION_ID, CC_SQLITE_USER_VERSION);
+    return Execute(database, sql, error, error_capacity);
+}
+
+static bool OpenWritableDatabase(const char *path, bool create,
+                                 sqlite3 **database,
+                                 char *error, size_t error_capacity)
+{
+    int flags = SQLITE_OPEN_READWRITE | (create ? SQLITE_OPEN_CREATE : 0);
     if (sqlite3_open_v2(path, database,
-                        SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL) != SQLITE_OK) {
+                        flags, NULL) != SQLITE_OK) {
         SetSqlError(error, error_capacity, *database, "Could not open campaign database");
         if (*database != NULL) sqlite3_close(*database);
         *database = NULL;
         return false;
     }
-    if (!Execute(*database,
-        "PRAGMA foreign_keys=ON;"
-        "PRAGMA journal_mode=WAL;"
-        "PRAGMA synchronous=FULL;"
-        "PRAGMA wal_autocheckpoint=1000;"
-        "PRAGMA application_id=1128481362;"
-        "PRAGMA user_version=11;",
-        error, error_capacity)) {
+    if (!ValidateDatabaseHeader(*database, error, error_capacity) ||
+        !ConfigureWritableDatabase(*database, error, error_capacity)) {
         sqlite3_close(*database);
         *database = NULL;
         return false;
     }
     return true;
+}
+
+static bool OpenReadSnapshot(const char *path, sqlite3 **database,
+                             char *error, size_t error_capacity)
+{
+    sqlite3 *source = NULL;
+    if (sqlite3_open_v2(path, &source, SQLITE_OPEN_READONLY, NULL) != SQLITE_OK) {
+        SetSqlError(error, error_capacity, source,
+                    "Could not open campaign database");
+        if (source != NULL) sqlite3_close(source);
+        return false;
+    }
+    if (!ValidateDatabaseHeader(source, error, error_capacity)) {
+        sqlite3_close(source);
+        return false;
+    }
+    if (sqlite3_open_v2(":memory:", database,
+                        SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE,
+                        NULL) != SQLITE_OK) {
+        SetSqlError(error, error_capacity, *database,
+                    "Could not allocate campaign read snapshot");
+        if (*database != NULL) sqlite3_close(*database);
+        *database = NULL;
+        sqlite3_close(source);
+        return false;
+    }
+    sqlite3_backup *backup = sqlite3_backup_init(*database, "main",
+                                                 source, "main");
+    if (backup == NULL) {
+        SetSqlError(error, error_capacity, *database,
+                    "Could not start campaign read snapshot");
+        sqlite3_close(*database);
+        *database = NULL;
+        sqlite3_close(source);
+        return false;
+    }
+    int result = sqlite3_backup_step(backup, -1);
+    int finish_result = sqlite3_backup_finish(backup);
+    if (result != SQLITE_DONE || finish_result != SQLITE_OK) {
+        SetSqlError(error, error_capacity, *database,
+                    "Could not copy campaign read snapshot");
+        sqlite3_close(*database);
+        *database = NULL;
+        sqlite3_close(source);
+        return false;
+    }
+    if (sqlite3_close(source) != SQLITE_OK) {
+        SetError(error, error_capacity,
+                 "Could not close campaign source database.");
+        sqlite3_close(*database);
+        *database = NULL;
+        return false;
+    }
+    return true;
+}
+
+static bool FinishTransaction(sqlite3 *database, bool ok,
+                              char *error, size_t error_capacity)
+{
+    if (ok && Execute(database, "COMMIT;", error, error_capacity)) return true;
+    (void)Execute(database, "ROLLBACK;", NULL, 0U);
+    return false;
 }
 
 static bool MetaColumnExists(sqlite3 *database, const char *column,
@@ -400,7 +573,10 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " maker_settlement_id INTEGER NOT NULL, owner_id INTEGER NOT NULL, name TEXT NOT NULL,"
         " surveyed_day INTEGER NOT NULL, accuracy INTEGER NOT NULL,"
         " recorded_condition INTEGER NOT NULL, recorded_danger INTEGER NOT NULL,"
-        " ask_price INTEGER NOT NULL, contraband INTEGER NOT NULL);";
+        " ask_price INTEGER NOT NULL, contraband INTEGER NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS map_collection ("
+        " id INTEGER PRIMARY KEY CHECK(id=1),"
+        " catalogue_mask INTEGER NOT NULL, archive_mask INTEGER NOT NULL);";
     const char *commitment_schema =
         "CREATE TABLE IF NOT EXISTS player_commitment ("
         " id INTEGER PRIMARY KEY CHECK(id=1), situation_id INTEGER NOT NULL);"
@@ -810,6 +986,20 @@ static bool SaveMaps(sqlite3 *database, const CcSim *sim,
     return true;
 }
 
+static bool SaveMapCollection(sqlite3 *database, const CcSim *sim,
+                              char *error, size_t error_capacity)
+{
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database,
+                 "INSERT INTO map_collection VALUES(1,?,?);",
+                 &statement, error, error_capacity)) return false;
+    BindInt(statement, 1, (int32_t)sim->player.map_catalogue_mask);
+    BindInt(statement, 2, (int32_t)sim->player.map_archive_mask);
+    bool result = StepDone(database, statement, error, error_capacity);
+    sqlite3_finalize(statement);
+    return result;
+}
+
 static bool SaveFactions(sqlite3 *database, const CcSim *sim,
                          char *error, size_t error_capacity)
 {
@@ -1025,8 +1215,12 @@ static bool SaveLegends(sqlite3 *database, const CcSim *sim,
                  "INSERT INTO dragon_state (slot,id,name,lair_settlement_id,hoard,"
                  "stolen_outstanding,theft_actor_id,retaliation_target_id,"
                  "hoard_event_id,omen_event_id,omen_days_remaining,retaliations,"
-                 "slain,slain_day) "
-                 "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?);",
+                 "slain,slain_day,life_stage,activity,age_days,body_condition,"
+                 "crown_strength,memory_integrity,territory_stability,"
+                 "regional_influence,crown_continuity_days,hunt_cooldown_days,"
+                 "hunts,egg_count,brood_days_remaining,brood_cooldown_days,"
+                 "broods_laid,whelps_dispersed,afterdeath_days,lifecycle_event_id) "
+                 "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
                  &statement, error, error_capacity)) return false;
     const CcDragon *dragon = &sim->dragon;
     column = 1;
@@ -1043,6 +1237,24 @@ static bool SaveLegends(sqlite3 *database, const CcSim *sim,
     BindInt(statement, column++, dragon->retaliations);
     BindInt(statement, column++, dragon->slain ? 1 : 0);
     BindInt(statement, column++, dragon->slain_day);
+    BindInt(statement, column++, (int32_t)dragon->life_stage);
+    BindInt(statement, column++, (int32_t)dragon->activity);
+    BindInt(statement, column++, dragon->age_days);
+    BindInt(statement, column++, dragon->body_condition);
+    BindInt(statement, column++, dragon->crown_strength);
+    BindInt(statement, column++, dragon->memory_integrity);
+    BindInt(statement, column++, dragon->territory_stability);
+    BindInt(statement, column++, dragon->regional_influence);
+    BindInt(statement, column++, dragon->crown_continuity_days);
+    BindInt(statement, column++, dragon->hunt_cooldown_days);
+    BindInt(statement, column++, dragon->hunts);
+    BindInt(statement, column++, dragon->egg_count);
+    BindInt(statement, column++, dragon->brood_days_remaining);
+    BindInt(statement, column++, dragon->brood_cooldown_days);
+    BindInt(statement, column++, dragon->broods_laid);
+    BindInt(statement, column++, dragon->whelps_dispersed);
+    BindInt(statement, column++, dragon->afterdeath_days);
+    BindId(statement, column++, dragon->lifecycle_event_id);
     result = StepDone(database, statement, error, error_capacity);
     sqlite3_finalize(statement);
     if (!result) return false;
@@ -1276,10 +1488,10 @@ static bool SaveJourneyState(sqlite3 *database, const CcSim *sim,
     return result;
 }
 
-static bool SaveSnapshot(sqlite3 *database, const CcSim *sim,
-                         uint64_t journal_generation,
-                         uint64_t journal_cursor,
-                         char *error, size_t error_capacity)
+static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
+                                 uint64_t journal_generation,
+                                 uint64_t journal_cursor,
+                                 char *error, size_t error_capacity)
 {
     char validation[160];
     if (database == NULL || sim == NULL ||
@@ -1288,12 +1500,10 @@ static bool SaveSnapshot(sqlite3 *database, const CcSim *sim,
                  "Save database or simulation is missing." : validation);
         return false;
     }
-    bool ok = EnsureRealmColumns(database, error, error_capacity) &&
-        EnsureLegendColumns(database, error, error_capacity) &&
-        Execute(database, "BEGIN IMMEDIATE;", error, error_capacity) &&
-        Execute(database,
+    return Execute(database,
             "DELETE FROM meta; DELETE FROM kingdom; DELETE FROM settlement;"
-            "DELETE FROM route; DELETE FROM map_object; DELETE FROM faction; DELETE FROM shipment;"
+            "DELETE FROM route; DELETE FROM map_object; DELETE FROM map_collection;"
+            "DELETE FROM faction; DELETE FROM shipment;"
             "DELETE FROM shipment_intent; DELETE FROM diplomacy; DELETE FROM courier;"
             "DELETE FROM bandit_group; DELETE FROM monster_population;"
             "DELETE FROM goblin_cult; DELETE FROM dragon_state;"
@@ -1314,6 +1524,7 @@ static bool SaveSnapshot(sqlite3 *database, const CcSim *sim,
         SaveMaterialEconomy(database, sim, error, error_capacity) &&
         SaveRoutes(database, sim, error, error_capacity) &&
         SaveMaps(database, sim, error, error_capacity) &&
+        SaveMapCollection(database, sim, error, error_capacity) &&
         SaveFactions(database, sim, error, error_capacity) &&
         SaveShipments(database, sim, error, error_capacity) &&
         SaveDiplomacyAndCouriers(database, sim, error, error_capacity) &&
@@ -1326,9 +1537,21 @@ static bool SaveSnapshot(sqlite3 *database, const CcSim *sim,
         SavePlayer(database, sim, error, error_capacity) &&
         SavePlayerCommitment(database, sim, error, error_capacity) &&
         SaveJourneyState(database, sim, error, error_capacity);
-    if (ok) ok = Execute(database, "COMMIT;", error, error_capacity);
-    else (void)Execute(database, "ROLLBACK;", NULL, 0U);
-    return ok;
+}
+
+static bool SaveSnapshot(sqlite3 *database, const CcSim *sim,
+                         uint64_t journal_generation,
+                         uint64_t journal_cursor,
+                         char *error, size_t error_capacity)
+{
+    bool ok = EnsureRealmColumns(database, error, error_capacity) &&
+        EnsureLegendColumns(database, error, error_capacity) &&
+        Execute(database, "BEGIN IMMEDIATE;", error, error_capacity);
+    if (ok) {
+        ok = SaveSnapshotContents(database, sim, journal_generation,
+                                  journal_cursor, error, error_capacity);
+    }
+    return FinishTransaction(database, ok, error, error_capacity);
 }
 
 bool CcSaveWrite(const char *path, const CcSim *sim,
@@ -1340,8 +1563,10 @@ bool CcSaveWrite(const char *path, const CcSim *sim,
         return false;
     }
     sqlite3 *database = NULL;
-    if (!OpenDatabase(path, &database, error, error_capacity)) return false;
+    if (!OpenWritableDatabase(path, true, &database,
+                              error, error_capacity)) return false;
     bool ok = CreateSchema(database, error, error_capacity) &&
+              MarkDatabaseCurrent(database, error, error_capacity) &&
               SaveSnapshot(database, sim, 0U, 0U,
                            error, error_capacity);
     if (sqlite3_close(database) != SQLITE_OK && ok) {
@@ -1743,6 +1968,30 @@ static bool ReadMaps(sqlite3 *database, CcSim *sim,
     return true;
 }
 
+static bool ReadMapCollection(sqlite3 *database, CcSim *sim,
+                              char *error, size_t error_capacity)
+{
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database,
+                 "SELECT catalogue_mask,archive_mask "
+                 "FROM map_collection WHERE id=1;",
+                 &statement, error, error_capacity)) return false;
+    int result = sqlite3_step(statement);
+    if (result == SQLITE_ROW) {
+        sim->player.map_catalogue_mask =
+            (uint32_t)sqlite3_column_int(statement, 0);
+        sim->player.map_archive_mask =
+            (uint32_t)sqlite3_column_int(statement, 1);
+    } else if (result != SQLITE_DONE) {
+        SetSqlError(error, error_capacity, database,
+                    "Could not read the map collection");
+        sqlite3_finalize(statement);
+        return false;
+    }
+    sqlite3_finalize(statement);
+    return true;
+}
+
 static bool ReadFactions(sqlite3 *database, CcSim *sim,
                          char *error, size_t error_capacity)
 {
@@ -1923,7 +2172,12 @@ static bool ReadLegends(sqlite3 *database, CcSim *sim,
     if (!Prepare(database,
                  "SELECT id,name,lair_settlement_id,hoard,stolen_outstanding,"
                  "theft_actor_id,retaliation_target_id,hoard_event_id,omen_event_id,"
-                 "omen_days_remaining,retaliations,slain,slain_day "
+                 "omen_days_remaining,retaliations,slain,slain_day,life_stage,"
+                 "activity,age_days,body_condition,crown_strength,memory_integrity,"
+                 "territory_stability,regional_influence,crown_continuity_days,"
+                 "hunt_cooldown_days,hunts,egg_count,brood_days_remaining,"
+                 "brood_cooldown_days,broods_laid,whelps_dispersed,afterdeath_days,"
+                 "lifecycle_event_id "
                  "FROM dragon_state WHERE slot=1;",
                  &statement, error, error_capacity)) return false;
     if (sqlite3_step(statement) != SQLITE_ROW) {
@@ -1954,6 +2208,28 @@ static bool ReadLegends(sqlite3 *database, CcSim *sim,
     dragon->retaliations = sqlite3_column_int(statement, column++);
     dragon->slain = sqlite3_column_int(statement, column++) != 0;
     dragon->slain_day = sqlite3_column_int(statement, column++);
+    dragon->life_stage =
+        (CcDragonLifeStage)sqlite3_column_int(statement, column++);
+    dragon->activity =
+        (CcDragonActivity)sqlite3_column_int(statement, column++);
+    dragon->age_days = sqlite3_column_int(statement, column++);
+    dragon->body_condition = sqlite3_column_int(statement, column++);
+    dragon->crown_strength = sqlite3_column_int(statement, column++);
+    dragon->memory_integrity = sqlite3_column_int(statement, column++);
+    dragon->territory_stability = sqlite3_column_int(statement, column++);
+    dragon->regional_influence = sqlite3_column_int(statement, column++);
+    dragon->crown_continuity_days =
+        sqlite3_column_int(statement, column++);
+    dragon->hunt_cooldown_days = sqlite3_column_int(statement, column++);
+    dragon->hunts = sqlite3_column_int(statement, column++);
+    dragon->egg_count = sqlite3_column_int(statement, column++);
+    dragon->brood_days_remaining = sqlite3_column_int(statement, column++);
+    dragon->brood_cooldown_days = sqlite3_column_int(statement, column++);
+    dragon->broods_laid = sqlite3_column_int(statement, column++);
+    dragon->whelps_dispersed = sqlite3_column_int(statement, column++);
+    dragon->afterdeath_days = sqlite3_column_int(statement, column++);
+    dragon->lifecycle_event_id =
+        (CcId)sqlite3_column_int64(statement, column++);
     sqlite3_finalize(statement);
 
     if (sim->schema_version >= 11U) {
@@ -2363,6 +2639,8 @@ static bool ReplayJournal(sqlite3 *database, CcSim *sim,
     (void)sqlite3_bind_int64(statement, 1, (sqlite3_int64)generation);
     (void)sqlite3_bind_int64(statement, 2, (sqlite3_int64)cursor);
     uint64_t expected_ordinal = cursor + 1U;
+    uint32_t expected_schema_version = sim->schema_version;
+    uint32_t expected_generator_version = sim->generator_version;
     int result = SQLITE_ROW;
     while ((result = sqlite3_step(statement)) == SQLITE_ROW) {
         uint64_t ordinal = (uint64_t)sqlite3_column_int64(statement, 0);
@@ -2389,8 +2667,8 @@ static bool ReplayJournal(sqlite3 *database, CcSim *sim,
             ParseStoredHash(sqlite3_column_text(statement, 12), &post_hash);
         if (ordinal != expected_ordinal ||
             version != CC_JOURNAL_RECORD_VERSION ||
-            schema_version != CC_SIM_SCHEMA_VERSION ||
-            generator_version != CC_GENERATOR_VERSION ||
+            schema_version != expected_schema_version ||
+            generator_version != expected_generator_version ||
             !hashes_valid || CcSimHash(sim) != pre_hash) {
             SetError(error, error_capacity,
                      "Action journal continuity check failed.");
@@ -2475,7 +2753,9 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
     if (legacy_version != 3U && legacy_version != 4U &&
         legacy_version != 5U && legacy_version != 6U &&
         legacy_version != 7U && legacy_version != 8U &&
-        legacy_version != 9U && legacy_version != 10U) return true;
+        legacy_version != 9U && legacy_version != 10U &&
+        legacy_version != 11U && legacy_version != 12U) return true;
+    CcSimUpgradeMapCollection(sim);
     if (legacy_version == 3U) {
         sim->clock = (CcWorldClock){
             .game_minutes_per_second = CC_IDLE_GAME_MINUTES_PER_SECOND
@@ -2591,7 +2871,14 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
     }
 #undef LEGACY_SERVICE
     }
+    if (legacy_version == 11U || legacy_version == 12U) {
+        CcSimInitializeDragonEcology(sim);
+        sim->schema_version = CC_SIM_SCHEMA_VERSION;
+        sim->generator_version = CC_GENERATOR_VERSION;
+        return true;
+    }
     if (legacy_version == 10U) {
+        CcSimInitializeDragonEcology(sim);
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         sim->generator_version = CC_GENERATOR_VERSION;
         return true;
@@ -2607,6 +2894,7 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
                 sim->kingdoms[i].iron_ledger_debt = 0;
             }
         }
+        CcSimInitializeDragonEcology(sim);
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         sim->generator_version = CC_GENERATOR_VERSION;
         return true;
@@ -2690,21 +2978,17 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
         }
     }
     TunePhysicalReserveTargets(sim);
+    CcSimInitializeDragonEcology(sim);
     sim->schema_version = CC_SIM_SCHEMA_VERSION;
     sim->generator_version = CC_GENERATOR_VERSION;
     return true;
 }
 
-bool CcSaveRead(const char *path, CcSim *sim,
-                char *error, size_t error_capacity)
+static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
+                         char *error, size_t error_capacity)
 {
-    if (path == NULL || sim == NULL) {
-        SetError(error, error_capacity, "Load path or simulation is missing.");
-        return false;
-    }
-    sqlite3 *database = NULL;
-    if (!OpenDatabase(path, &database, error, error_capacity)) return false;
     *sim = (CcSim){0};
+    if (upgraded != NULL) *upgraded = false;
     uint64_t expected_hash = 0U;
     uint64_t journal_generation = 0U;
     uint64_t journal_cursor = 0U;
@@ -2729,44 +3013,60 @@ bool CcSaveRead(const char *path, CcSim *sim,
               ReadEvents(database, sim, error, error_capacity) &&
               ReadLegends(database, sim, error, error_capacity) &&
               ReadPlayer(database, sim, error, error_capacity) &&
+              ReadMapCollection(database, sim, error, error_capacity) &&
               ReadMaterialEconomy(database, sim, error, error_capacity) &&
               ReadPlayerCommitment(database, sim, error, error_capacity) &&
               ReadJourneyState(database, sim, error, error_capacity);
     if (!ok) {
-        sqlite3_close(database);
         return false;
     }
     char validation[160];
     if (!CcSimValidate(sim, validation, sizeof(validation))) {
         SetError(error, error_capacity, validation);
-        sqlite3_close(database);
         return false;
     }
     if (CcSimHash(sim) != expected_hash) {
         SetError(error, error_capacity, "Campaign state hash does not match stored data.");
-        sqlite3_close(database);
-        return false;
-    }
-    if (!UpgradeLegacyRuntime(sim, error, error_capacity)) {
-        sqlite3_close(database);
         return false;
     }
     uint64_t replayed_through = journal_cursor;
     if (journal_generation > 0U &&
         !ReplayJournal(database, sim, journal_generation, journal_cursor,
                        &replayed_through, error, error_capacity)) {
-        sqlite3_close(database);
         return false;
+    }
+    uint32_t stored_schema_version = sim->schema_version;
+    uint32_t stored_generator_version = sim->generator_version;
+    if (!UpgradeLegacyRuntime(sim, error, error_capacity)) return false;
+    if (upgraded != NULL) {
+        *upgraded = sim->schema_version != stored_schema_version ||
+                    sim->generator_version != stored_generator_version;
     }
     if (!CcSimValidate(sim, validation, sizeof(validation))) {
         SetError(error, error_capacity, validation);
-        sqlite3_close(database);
         return false;
     }
+    return true;
+}
+
+bool CcSaveRead(const char *path, CcSim *sim,
+                char *error, size_t error_capacity)
+{
+    if (path == NULL || sim == NULL) {
+        SetError(error, error_capacity, "Load path or simulation is missing.");
+        return false;
+    }
+    sqlite3 *database = NULL;
+    if (!OpenReadSnapshot(path, &database, error, error_capacity)) return false;
+    CcSim recovered;
+    bool ok = LoadDatabase(database, &recovered, NULL,
+                           error, error_capacity);
     if (sqlite3_close(database) != SQLITE_OK) {
         SetError(error, error_capacity, "Could not close campaign database.");
         return false;
     }
+    if (!ok) return false;
+    *sim = recovered;
     SetError(error, error_capacity, "");
     return true;
 }
@@ -2814,7 +3114,7 @@ static bool ReadJournalHead(sqlite3 *database, uint64_t generation,
     return true;
 }
 
-static CcJournal *AllocateJournal(const char *path,
+static CcJournal *AllocateJournal(const char *path, bool create,
                                   char *error, size_t error_capacity)
 {
     CcJournal *journal = calloc(1U, sizeof(*journal));
@@ -2823,8 +3123,10 @@ static CcJournal *AllocateJournal(const char *path,
                  "Could not allocate action journal state.");
         return NULL;
     }
-    if (!OpenDatabase(path, &journal->database, error, error_capacity) ||
-        !CreateSchema(journal->database, error, error_capacity)) {
+    if (!OpenWritableDatabase(path, create, &journal->database,
+                              error, error_capacity) ||
+        !CreateSchema(journal->database, error, error_capacity) ||
+        !MarkDatabaseCurrent(journal->database, error, error_capacity)) {
         if (journal->database != NULL) sqlite3_close(journal->database);
         free(journal);
         return NULL;
@@ -2832,11 +3134,9 @@ static CcJournal *AllocateJournal(const char *path,
     return journal;
 }
 
-static bool CreateJournalEpoch(CcJournal *journal, const CcSim *sim,
+static bool InsertJournalEpoch(CcJournal *journal, const CcSim *sim,
                                char *error, size_t error_capacity)
 {
-    if (!Execute(journal->database, "BEGIN IMMEDIATE;",
-                 error, error_capacity)) return false;
     sqlite3_stmt *statement = NULL;
     const char *sql =
         "INSERT INTO journal_epoch "
@@ -2866,10 +3166,16 @@ static bool CreateJournalEpoch(CcJournal *journal, const CcSim *sim,
             journal->last_ordinal = 0U;
         }
     }
-    if (ok) ok = Execute(journal->database, "COMMIT;",
-                         error, error_capacity);
-    else (void)Execute(journal->database, "ROLLBACK;", NULL, 0U);
     return ok;
+}
+
+static bool CreateJournalEpoch(CcJournal *journal, const CcSim *sim,
+                               char *error, size_t error_capacity)
+{
+    bool ok = Execute(journal->database, "BEGIN IMMEDIATE;",
+                      error, error_capacity);
+    if (ok) ok = InsertJournalEpoch(journal, sim, error, error_capacity);
+    return FinishTransaction(journal->database, ok, error, error_capacity);
 }
 
 static bool AppendJournalOperation(CcJournal *journal,
@@ -2947,9 +3253,7 @@ static bool AppendJournalOperation(CcJournal *journal,
                       error, error_capacity);
     }
     sqlite3_finalize(statement);
-    if (ok) ok = Execute(journal->database, "COMMIT;",
-                         error, error_capacity);
-    else (void)Execute(journal->database, "ROLLBACK;", NULL, 0U);
+    ok = FinishTransaction(journal->database, ok, error, error_capacity);
     if (ok) journal->last_ordinal = next_ordinal;
     return ok;
 }
@@ -2963,7 +3267,8 @@ CcJournal *CcJournalStart(const char *path, const CcSim *sim,
                  "Journal path or current-schema simulation is missing.");
         return NULL;
     }
-    CcJournal *journal = AllocateJournal(path, error, error_capacity);
+    CcJournal *journal = AllocateJournal(path, true,
+                                         error, error_capacity);
     if (journal == NULL) return NULL;
     if (!CreateJournalEpoch(journal, sim, error, error_capacity) ||
         !SaveSnapshot(journal->database, sim, journal->generation, 0U,
@@ -2984,33 +3289,45 @@ CcJournal *CcJournalResume(const char *path, CcSim *sim,
                  "Journal path or simulation is missing.");
         return NULL;
     }
-    CcSim recovered;
-    if (!CcSaveRead(path, &recovered, error, error_capacity)) return NULL;
-    CcJournal *journal = AllocateJournal(path, error, error_capacity);
+    CcSim preflight;
+    if (!CcSaveRead(path, &preflight, error, error_capacity)) return NULL;
+    CcJournal *journal = AllocateJournal(path, false,
+                                         error, error_capacity);
     if (journal == NULL) return NULL;
-    uint64_t checkpoint_cursor = 0U;
-    if (!ReadSnapshotJournalCursor(journal->database,
-                                   &journal->generation,
-                                   &checkpoint_cursor,
-                                   error, error_capacity)) {
-        sqlite3_close(journal->database);
-        free(journal);
-        return NULL;
+    bool ok = Execute(journal->database, "BEGIN IMMEDIATE;",
+                      error, error_capacity);
+    CcSim recovered;
+    bool upgraded = false;
+    if (ok) {
+        ok = LoadDatabase(journal->database, &recovered, &upgraded,
+                          error, error_capacity);
     }
-    if (journal->generation == 0U) {
-        sqlite3_close(journal->database);
-        free(journal);
-        journal = CcJournalStart(path, &recovered,
-                                 error, error_capacity);
-        if (journal == NULL) return NULL;
-    } else if (!ReadJournalHead(journal->database, journal->generation,
-                                &journal->last_ordinal,
-                                error, error_capacity) ||
-               journal->last_ordinal < checkpoint_cursor) {
-        if (journal->last_ordinal < checkpoint_cursor) {
+    uint64_t checkpoint_cursor = 0U;
+    if (ok) {
+        ok = ReadSnapshotJournalCursor(journal->database,
+                                       &journal->generation,
+                                       &checkpoint_cursor,
+                                       error, error_capacity);
+    }
+    if (ok && (upgraded || journal->generation == 0U)) {
+        ok = InsertJournalEpoch(journal, &recovered,
+                                error, error_capacity) &&
+             SaveSnapshotContents(journal->database, &recovered,
+                                  journal->generation, 0U,
+                                  error, error_capacity);
+    } else if (ok) {
+        ok = ReadJournalHead(journal->database, journal->generation,
+                             &journal->last_ordinal,
+                             error, error_capacity);
+        if (ok && journal->last_ordinal < checkpoint_cursor) {
             SetError(error, error_capacity,
                      "Action journal is behind its snapshot checkpoint.");
+            ok = false;
         }
+    }
+    ok = FinishTransaction(journal->database, ok,
+                           error, error_capacity);
+    if (!ok) {
         sqlite3_close(journal->database);
         free(journal);
         return NULL;
