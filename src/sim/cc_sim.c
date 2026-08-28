@@ -6440,7 +6440,7 @@ static void TryBirthFoal(CcSim *sim, CcHorse *mare)
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(
         text, sizeof(text),
-        "%s gives birth to %s, a %s by %s, at %s.",
+        "%.18s gives birth to %.18s, a %.8s by %.18s, at %.18s.",
         mare->name, foal->name, CcHorseSexName(foal->sex),
         sire->name, place->name);
     (void)PushEvent(sim, CC_EVENT_FOAL_BORN, foal->id, location_id,
@@ -8153,7 +8153,7 @@ static bool ApplyBreedHorses(CcSim *sim, const CcCommand *command,
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(
         text, sizeof(text),
-        "%s's stable breeds %s with %s; a foal is due in about 330 days.",
+        "%.18s stable breeds %.18s with %.18s; foal due in 330 days.",
         place->name, mare->name, stallion->name);
     (void)PushEvent(sim, CC_EVENT_HORSE_BRED, mare->id, place->id,
                     0U, 330, text);
@@ -8207,7 +8207,7 @@ static bool ApplyAssignHorse(CcSim *sim, const CcCommand *command,
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(
         text, sizeof(text),
-        "%s joins the Crownless carriage team; %s is boarded at %s.",
+        "%.20s joins the carriage team; %.20s is boarded at %.20s.",
         incoming.name, outgoing.name, place->name);
     (void)PushEvent(sim, CC_EVENT_HORSE_TEAM_CHANGED, incoming.id,
                     place->id, 0U, team_slot + 1, text);
