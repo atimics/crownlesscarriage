@@ -75,6 +75,42 @@ The player may:
 Destroying a camp without changing recruitment pressure may create a successor
 group later.
 
+### OSR road contact procedure
+
+A road encounter is not a balanced arena containing two disposable enemies.
+The two people shown at the cordon are representatives of the real company in
+the regional simulation: a named captain who holds the line and a forager who
+moves quickly to protect the camp's immediate need. The encounter exposes the
+company's camp tier, total membership, stores, current raid activity, and
+demand before the player commits.
+
+Use this procedure:
+
+1. Roll a stable 2d6 reaction, modified by Crownless reputation and by the
+   company's desperation or power. Show both the roll and its reading.
+2. State what the company needs. The demand comes from its real raid good and
+   camp size, with hostile reactions asking more and open reactions asking
+   less.
+3. State the price of violence before steel is drawn. Winning still damages
+   the carriage and moves treatment money into the origin market.
+4. Allow coin, demanded cargo, withdrawal, positioning, and morale pressure to
+   solve the contact. These are primary play, not consolation choices.
+5. Write the result back to the route and company. Payment grows influence;
+   provisions enter company supplies and can stop a raid that is still
+   scouting or mustering; withdrawal concedes road control; a broken cordon
+   loses members, supplies, and influence.
+
+Combat follows the same OSR assumptions. Wounds do not disappear during a
+fight; Catch Breath only restores posture. The outlaw line tests nerve as it
+is hurt, outnumbered, or deprived of its captain, and survivors retreat when
+their morale breaks. The Crownless company may withdraw before blood is drawn
+or retreat under fire at a real cost. Player defeat is an under-fire
+withdrawal, not a free resurrection at the cordon.
+
+The core question is therefore not “can I clear two raiders?” It is “what is
+this company, why is it here, what do I risk by fighting it, and which scarce
+thing am I willing to spend?”
+
 ## Goblin tribute and the dragon hoard
 
 Prosperity does not make the dragon attack. Goblins are a material faction with

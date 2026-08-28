@@ -110,7 +110,9 @@ typedef enum ContextActionKind {
     CONTEXT_ACTION_BUY_MAP,
     CONTEXT_ACTION_REPAIR_ROUTE,
     CONTEXT_ACTION_PAY_COLLECTOR,
+    CONTEXT_ACTION_OFFER_PROVISIONS,
     CONTEXT_ACTION_RETURN_TO_CHOICE,
+    CONTEXT_ACTION_WITHDRAW,
     CONTEXT_ACTION_SKILL_CRUSHING,
     CONTEXT_ACTION_SKILL_SUNDER,
     CONTEXT_ACTION_SKILL_SECOND_WIND
@@ -425,7 +427,8 @@ static void RepositionHero(LocalState *local, Vector2 position,
     CcLocalCombatSetTeam(&local->agent, CC_COMBAT_PLAYER);
 }
 
-static void BeginRoadLocalState(LocalState *local, bool hostile)
+static void BeginRoadLocalState(const CcSim *sim, LocalState *local,
+                                bool hostile)
 {
     CcAthleticProfile athletics = local->agent.athletics;
     ResetLocalState(local);
@@ -435,6 +438,7 @@ static void BeginRoadLocalState(LocalState *local, bool hostile)
                              CC_LOCAL_ROAD_START_Z}, false);
     CcLocalCourseStageRoadEncounter(&local->course, &local->agent,
                                     hostile);
+    CcLocalCourseBindRaiderCompany(&local->course, sim);
     local->journey_combat_active = hostile;
     local->journey_parley_active = !hostile;
 }
@@ -669,12 +673,14 @@ static void DrawTownCombatPanel(const LocalState *local)
         }
     }
 
-    DrawPanel((Rectangle){994.0f, 72.0f, 246.0f, 142.0f},
+    DrawPanel((Rectangle){994.0f, 72.0f, 246.0f, 154.0f},
               Fade(PANEL_DEEP, 0.93f));
-    CcOverlayDrawText("HOLD THE STREET", 1012, 91, 14, DANGER);
-    DrawBar(1012, 125, 74, "YOU",
+    CcOverlayDrawText("HOLD THE STREET", 1012, 88, 12, DANGER);
+    CcOverlayDrawText(TextFormat("%.22s", local->course.raider_company_name),
+                      1012, 107, 9, INK);
+    DrawBar(1012, 132, 74, "YOU",
             (int32_t)lroundf(local->agent.combat.health), TEAL);
-    DrawBar(1012, 146, 74, "RAIDERS",
+    DrawBar(1012, 153, 74, "NERVE",
             local->course.raider_resolve, DANGER);
 
     int32_t target_index = local->agent.combat.target_index;
@@ -683,14 +689,18 @@ static void DrawTownCombatPanel(const LocalState *local)
         local->course.raiders[target_index].combat.life_state == CC_LIFE_ALIVE ?
         &local->course.raiders[target_index] : NULL;
     if (target != NULL) {
-        CcOverlayDrawText(TextFormat("TARGET  RAIDER %d", target_index + 1),
-                 1012, 180, 9, CC_GOLD);
+        CcOverlayDrawText(
+            TextFormat("%s  /  %s",
+                       local->course.raider_names[target_index],
+                       CcLocalRaiderRoleName(
+                           local->course.raider_roles[target_index])),
+            1012, 184, 8, CC_GOLD);
     } else {
-        CcOverlayDrawText("SELECT A RAIDER", 1012, 180, 9, CC_GOLD);
+        CcOverlayDrawText("SELECT AN OUTLAW", 1012, 184, 9, CC_GOLD);
     }
-    CcOverlayDrawText(TextFormat("GUARDS %d   RAIDERS %d   ENGAGED %d",
+    CcOverlayDrawText(TextFormat("GUARDS %d   COMPANY %d   ENGAGED %d",
                         guards_standing, raiders_standing, guards_engaged),
-             1012, 198, 7, MUTED);
+             1012, 207, 7, MUTED);
 }
 
 static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
@@ -715,17 +725,20 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
                     route != NULL ? route->condition : 0, CC_GOLD);
             return;
         }
-        CcOverlayDrawText(local->journey_parley_active ? "COLLECTOR" :
-                                               "FIGHT",
+        CcOverlayDrawText(local->journey_parley_active ? "PARLEY" :
+                                               "CORDON",
                  1012, 91, 9, local->journey_parley_active ? TEAL : DANGER);
-        CcOverlayDrawText("BANDITS", 1012, 112, 14, INK);
+        CcOverlayDrawText(TextFormat("%.20s",
+                                    local->course.raider_company_name),
+                          1012, 112, 12, INK);
         CcLocalDrawAgentPortrait3D(
             &local->course.raiders[0],
             (Rectangle){1012.0f, 143.0f, 44.0f, 54.0f});
-        CcOverlayDrawText(local->journey_parley_active ? "COLLECTOR" :
-                                               "BANDIT",
+        CcOverlayDrawText(local->course.raider_names[0],
                  1066, 148, 9, local->journey_parley_active ? CC_GOLD :
                                                                DANGER);
+        CcOverlayDrawText(CcLocalRaiderRoleName(local->course.raider_roles[0]),
+                          1066, 160, 7, MUTED);
         DrawBar(1066, 175, 44, "HP",
                 (int32_t)lroundf(local->course.raiders[0].combat.health),
                 DANGER);
@@ -948,9 +961,8 @@ static ContextActionSet BuildContextActions(
     ContextActionSet set = {0};
     if (sim == NULL || local == NULL) return set;
     if (view == VIEW_ENCOUNTER) {
-        AddContextAction(&set, CONTEXT_ACTION_FIGHT, "Fight");
-        AddContextAction(&set, CONTEXT_ACTION_PAY,
-                         TextFormat("Pay %d crowns", sim->journey.bargain_cost));
+        AddContextAction(&set, CONTEXT_ACTION_FIGHT, "Draw steel");
+        AddContextAction(&set, CONTEXT_ACTION_PAY, "Hear them out");
         return set;
     }
     if (view == VIEW_LEDGER) {
@@ -1018,18 +1030,33 @@ static ContextActionSet BuildContextActions(
             AddContextAction(&set, CONTEXT_ACTION_PAY_COLLECTOR,
                              TextFormat("Pay %d crowns",
                                         sim->journey.bargain_cost));
+            CcGood good = CC_GOOD_FOOD;
+            int32_t quantity = 0;
+            if (CcSimBanditProvisionDemand(sim, sim->journey.route_id,
+                                           &good, &quantity)) {
+                AddContextAction(&set, CONTEXT_ACTION_OFFER_PROVISIONS,
+                                 TextFormat("Offer %d %s", quantity,
+                                            CcGoodName(good)));
+            }
         }
         AddContextAction(&set, CONTEXT_ACTION_RETURN_TO_CHOICE,
                          "Return to carriage");
         return set;
     }
-    if (local->journey_combat_active ||
-        (!local->market_interior && local->course.alarm_active)) {
+    if (local->journey_combat_active) {
+        AddContextAction(&set, CONTEXT_ACTION_SKILL_CRUSHING,
+                         "Crushing blow");
+        AddContextAction(&set, CONTEXT_ACTION_SKILL_SUNDER, "Sunder");
+        AddContextAction(&set, CONTEXT_ACTION_WITHDRAW,
+                         "Withdraw to carriage");
+        return set;
+    }
+    if (!local->market_interior && local->course.alarm_active) {
         AddContextAction(&set, CONTEXT_ACTION_SKILL_CRUSHING,
                          "Crushing blow");
         AddContextAction(&set, CONTEXT_ACTION_SKILL_SUNDER, "Sunder");
         AddContextAction(&set, CONTEXT_ACTION_SKILL_SECOND_WIND,
-                         "Second wind");
+                         "Catch breath");
         return set;
     }
 
@@ -1111,7 +1138,8 @@ static Color ContextActionColor(ContextActionKind kind)
     if (kind == CONTEXT_ACTION_ACCEPT_PROMISE ||
         kind == CONTEXT_ACTION_TRAVEL ||
         kind == CONTEXT_ACTION_DELIVER_CARGO ||
-        kind == CONTEXT_ACTION_ENTER_MARKET) return TEAL;
+        kind == CONTEXT_ACTION_ENTER_MARKET ||
+        kind == CONTEXT_ACTION_OFFER_PROVISIONS) return TEAL;
     if (kind == CONTEXT_ACTION_SKILL_CRUSHING ||
         kind == CONTEXT_ACTION_SKILL_SUNDER ||
         kind == CONTEXT_ACTION_SKILL_SECOND_WIND) return CC_VIOLET;
@@ -1587,15 +1615,65 @@ static void DrawJourneyEncounter(const CcSim *sim)
         sim->journey.phase != CC_JOURNEY_PHASE_BLOCKED) return;
     const CcSettlement *from = CcSimSettlement(sim, sim->journey.origin_id);
     const CcSettlement *to = CcSimSettlement(sim, sim->journey.destination_id);
+    const CcBanditGroup *bandits = CcSimBanditGroupOnRoute(
+        sim, sim->journey.route_id);
+    CcGood demanded_good = CC_GOOD_FOOD;
+    int32_t demanded_quantity = 0;
+    bool has_demand = CcSimBanditProvisionDemand(
+        sim, sim->journey.route_id, &demanded_good, &demanded_quantity);
+    int32_t reaction = CcSimBanditReactionRoll(
+        sim, sim->journey.route_id);
+    int32_t combat_damage = 7 + sim->journey.danger / 8;
+    if (combat_damage < 8) combat_damage = 8;
+    if (combat_damage > 20) combat_damage = 20;
+    int32_t wound_cost = 3 + sim->journey.danger / 12;
+    if ((CcMoney)wound_cost > sim->player.coins) {
+        wound_cost = (int32_t)sim->player.coins;
+    }
     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
                   Fade(BACKGROUND, 0.56f));
-    DrawPanel((Rectangle){350.0f, 220.0f, 580.0f, 185.0f},
+    DrawPanel((Rectangle){350.0f, 170.0f, 580.0f, 320.0f},
               PANEL_DEEP);
-    CcOverlayDrawText("ROAD BLOCKED", 386, 252, 24, INK);
+    CcOverlayDrawText("A COMPANY HOLDS THE ROAD", 386, 199, 20, INK);
     CcOverlayDrawText(TextFormat("%s  ->  %s", from != NULL ? from->name : "Origin",
                         to != NULL ? to->name : "Destination"),
-             386, 294, 12, CC_GOLD);
-    CcOverlayDrawText("Bandits", 386, 333, 13, DANGER);
+             386, 236, 11, CC_GOLD);
+    CcOverlayDrawText(bandits != NULL ? bandits->name : "Road company",
+                      386, 273, 17, DANGER);
+    if (bandits != NULL) {
+        CcOverlayDrawText(
+            TextFormat("%s  /  %d PEOPLE  /  SUPPLIES %d",
+                       CcBanditCampSizeName(bandits->camp_size),
+                       bandits->members, bandits->supplies),
+            386, 304, 10, MUTED);
+        CcOverlayDrawText(
+            TextFormat("REACTION %d  /  %s", reaction,
+                       CcBanditReactionName(reaction)),
+            386, 329, 10, reaction <= 5 ? DANGER : TEAL);
+        const char *pressure = bandits->raid_phase != CC_BANDIT_RAID_IDLE ?
+            TextFormat("%s FOR %s",
+                       CcBanditRaidPhaseName(bandits->raid_phase),
+                       CcGoodName(bandits->raid_good)) :
+            bandits->supplies < 30 ? "SHORT STORES. THE CAMP IS HUNGRY." :
+            bandits->influence >= 70 ?
+                "THEY CLAIM THIS BORDER AS THEIR OWN." :
+                "THEIR NO-MAN'S-LAND CAMP NEEDS SUPPLY.";
+        CcOverlayDrawText(pressure, 386, 354, 10, INK);
+    }
+    if (has_demand) {
+        CcOverlayDrawText(
+            TextFormat("DEMAND  %d %s  OR  %d CROWNS",
+                       demanded_quantity, CcGoodName(demanded_good),
+                       sim->journey.bargain_cost),
+            386, 393, 12, TEAL);
+    }
+    CcOverlayDrawText(
+        TextFormat("IF YOU WIN  /  CARRIAGE -%d  /  WOUNDS %d CROWNS",
+                   combat_damage, wound_cost),
+        386, 425, 10, DANGER);
+    CcOverlayDrawText(
+        "You may withdraw. Under fire, retreat also costs condition and care.",
+        386, 455, 9, MUTED);
 }
 
 static bool ApplyCommand(CcJournal *journal, CcSim *sim, CcCommand command,
@@ -1627,6 +1705,12 @@ static bool ApplyCommand(CcJournal *journal, CcSim *sim, CcCommand command,
             break;
         case CC_COMMAND_RESOLVE_ENCOUNTER_NEGOTIATE:
             confirmation = "Toll paid.";
+            break;
+        case CC_COMMAND_RESOLVE_ENCOUNTER_PROVISIONS:
+            confirmation = "Provisions accepted.";
+            break;
+        case CC_COMMAND_WITHDRAW_ENCOUNTER:
+            confirmation = "The carriage withdrew.";
             break;
         default: break;
     }
@@ -1739,6 +1823,7 @@ static void PrepareGameplayReel(CcSim *sim, LocalState *local,
 static void PrepareTownRaidReel(CcSim *sim, LocalState *local)
 {
     if (!local->course.alarm_active) {
+        CcLocalCourseBindRaiderCompany(&local->course, sim);
         CcLocalCourseRaiseAlarmNear(&local->course, &local->agent);
     }
     (void)CcLocalCourseSelectPlayerTarget(
@@ -1764,7 +1849,7 @@ static void PrepareTownRaidReel(CcSim *sim, LocalState *local)
 
 static void PrepareRoadCombatReel(CcSim *sim, LocalState *local)
 {
-    BeginRoadLocalState(local, true);
+    BeginRoadLocalState(sim, local, true);
     (void)CcLocalCourseSelectPlayerTarget(
         &local->course, &local->agent, 0);
     /* Keep the real road fight, but skip most of the uneventful run-in. The
@@ -2093,7 +2178,7 @@ static void UpdateGameplayReel(CcSim *sim, LocalState *local,
                 CcLocalCourseRaiseAlarmNear(&local->course, &local->agent);
             }
             (void)snprintf(message, message_capacity,
-                           "The village bell sounds. Raiders are coming.");
+                           "The village bell names the company on the road.");
             (void)CcLocalWorldUpdate(&local->course, &local->agent, sim,
                                      delta_time, false, true);
             if (reel->stage_frame >= 180) {
@@ -2218,16 +2303,16 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         }
         if (IsKeyPressed(KEY_ONE) ||
             context_action == CONTEXT_ACTION_FIGHT) {
-            BeginRoadLocalState(local, true);
+            BeginRoadLocalState(sim, local, true);
             *view = VIEW_LOCAL;
             (void)snprintf(message, message_capacity,
-                           "Defeat the bandits.");
+                           "Break the company line.");
         } else if (IsKeyPressed(KEY_TWO) ||
                    context_action == CONTEXT_ACTION_PAY) {
-            BeginRoadLocalState(local, false);
+            BeginRoadLocalState(sim, local, false);
             *view = VIEW_LOCAL;
             (void)snprintf(message, message_capacity,
-                           "Walk to the collector.");
+                           "Walk to the captain and hear the demand.");
         }
         return;
     }
@@ -2424,7 +2509,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 const CcEvent *event = CcSimRecentEvent(sim, 0);
                 (void)snprintf(message, message_capacity, "%s",
                                event != NULL ? event->text :
-                               "Bandits blocked the road.");
+                               "An outlaw company blocked the road.");
             } else if (!sim->journey.active) {
                 *selected = FirstOutgoingRouteIndex(sim);
                 ResetLocalState(local);
@@ -2432,6 +2517,27 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 (void)snprintf(message, message_capacity, "%s",
                                event != NULL ? event->text :
                                "Arrived.");
+            }
+            return;
+        }
+        if (local->journey_combat_active &&
+            (context_action == CONTEXT_ACTION_WITHDRAW ||
+             IsKeyPressed(KEY_BACKSPACE))) {
+            bool under_fire = local->agent.combat.health <
+                                  CC_LOCAL_COMBAT_MAX_HEALTH ||
+                              local->course.raider_resolve <
+                                  local->course.raider_initial_resolve;
+            CcCommand withdraw = {
+                .kind = CC_COMMAND_WITHDRAW_ENCOUNTER,
+                .amount = under_fire ? 1 : 0
+            };
+            if (ApplyCommand(*journal, sim, withdraw, message,
+                             message_capacity)) {
+                CcAthleticProfile athletics = local->agent.athletics;
+                ResetLocalState(local);
+                local->agent.athletics = athletics;
+                *selected = FirstVisibleMapIndex(sim);
+                *view = VIEW_LOCAL;
             }
             return;
         }
@@ -2482,13 +2588,13 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 (void)snprintf(
                     message, message_capacity, "%s",
                     used && combat_skill == CC_COMBAT_SKILL_SECOND_WIND ?
-                        "Health restored." :
+                        "Posture restored." :
                     used ? TextFormat("%s ready.",
                                       CcLocalCombatSkillName(combat_skill)) :
                     cooldown > 0.0f ? TextFormat("Ready in %.1fs.", cooldown) :
                     combat_skill == CC_COMBAT_SKILL_SECOND_WIND ?
-                        "Health is full." :
-                        "Select a bandit.");
+                        "Posture is full." :
+                        "Select an outlaw.");
             }
         }
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
@@ -2504,8 +2610,8 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 local->movement_reticle_accepted = true;
                 (void)snprintf(
                     message, message_capacity,
-                    "Bandit %d selected.",
-                    combat_target + 1);
+                    "%s selected.",
+                    local->course.raider_names[combat_target]);
             } else {
                 bool movement_accepted = CcLocalAgentPickTarget(
                     &local->agent, mouse, local_target, local_bounds,
@@ -2562,6 +2668,25 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 "The first branch is ahead.");
             return;
         }
+        if (local->journey_combat_active &&
+            local->agent.combat.life_state == CC_LIFE_DEAD &&
+            sim->journey.active) {
+            CcCommand defeated = {
+                .kind = CC_COMMAND_WITHDRAW_ENCOUNTER,
+                .amount = 1
+            };
+            if (ApplyCommand(*journal, sim, defeated, message,
+                             message_capacity)) {
+                CcAthleticProfile athletics = local->agent.athletics;
+                ResetLocalState(local);
+                local->agent.athletics = athletics;
+                *selected = FirstVisibleMapIndex(sim);
+                *view = VIEW_LOCAL;
+                (void)snprintf(message, message_capacity,
+                               "Defeated. The carriage withdrew under fire.");
+            }
+            return;
+        }
         if (local->journey_parley_active) {
             Vector2 collector = {CC_LOCAL_ROAD_PARLEY_X,
                                  CC_LOCAL_ROAD_PARLEY_Z};
@@ -2571,6 +2696,19 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 *view = VIEW_ENCOUNTER;
                 (void)snprintf(message, message_capacity,
                                "Back at the carriage.");
+                return;
+            }
+            if (context_action == CONTEXT_ACTION_OFFER_PROVISIONS &&
+                GridDistance(LocalPosition(local), collector) < 1.55f) {
+                CcCommand offer = {
+                    .kind = CC_COMMAND_RESOLVE_ENCOUNTER_PROVISIONS
+                };
+                if (ApplyCommand(*journal, sim, offer, message,
+                                 message_capacity)) {
+                    *selected = FirstVisibleMapIndex(sim);
+                    BeginRoadTravelState(local);
+                    *view = VIEW_LOCAL;
+                }
                 return;
             }
             if ((IsKeyPressed(KEY_F) ||
@@ -2606,10 +2744,12 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         if (!local->market_interior) {
             if (IsKeyPressed(KEY_G)) {
                 if (!local->course.alarm_active) {
+                    CcLocalCourseBindRaiderCompany(&local->course, sim);
                     CcLocalCourseRaiseAlarmNear(&local->course,
                                                 &local->agent);
                     (void)snprintf(message, message_capacity,
-                                   "Raiders are attacking.");
+                                   "%s is approaching.",
+                                   local->course.raider_company_name);
                 } else {
                     (void)snprintf(message, message_capacity,
                                    "The alarm is already active.");
@@ -3132,9 +3272,20 @@ int main(int argc, char **argv)
         int32_t charter_index = FirstActiveSituationIndex(&sim);
         if (charter_index >= 0) {
             char setup_error[192];
+            CcSituation *capture_charter = &sim.situations[charter_index];
+            capture_charter->kind = CC_SITUATION_RELIEF_DELIVERY;
+            capture_charter->target_id = sim.settlements[1].id;
+            capture_charter->good = CC_GOOD_FOOD;
+            capture_charter->quantity = 1;
+            capture_charter->progress = 0;
+            sim.player.cargo[CC_GOOD_FOOD] = 1;
+            sim.routes[0].closed = true;
+            if (sim.bandit_count > 0) {
+                sim.bandits[0].route_id = sim.routes[0].id;
+            }
             CcCommand accept = {
                 .kind = CC_COMMAND_ACCEPT_SITUATION,
-                .target_id = sim.situations[charter_index].id
+                .target_id = capture_charter->id
             };
             (void)CcSimApply(&sim, &accept, setup_error,
                              sizeof(setup_error));
@@ -3227,7 +3378,7 @@ int main(int argc, char **argv)
         }
     }
     if (capture_road || capture_parley) {
-        BeginRoadLocalState(&local, capture_road);
+        BeginRoadLocalState(&sim, &local, capture_road);
     }
     if (capture_travel) BeginRoadTravelState(&local);
     if (capture && !capture_interior && !capture_walk_cycle &&
@@ -3275,6 +3426,7 @@ int main(int argc, char **argv)
         }
     }
     if (capture_defense) {
+        CcLocalCourseBindRaiderCompany(&local.course, &sim);
         CcLocalCourseRaiseAlarmNear(&local.course, &local.agent);
         (void)CcLocalCourseSelectPlayerTarget(&local.course,
                                                &local.agent, 0);
@@ -3289,7 +3441,8 @@ int main(int argc, char **argv)
                                 1.0f / 60.0f);
             fighting_frames = local.course.alarm_active &&
                               !local.course.raiders_retreating &&
-                              local.course.raider_resolve < 100 ?
+                              local.course.raider_resolve <
+                                  local.course.raider_initial_resolve ?
                               fighting_frames + 1 : 0;
             captured_skill_impact =
                 local.agent.humanoid.action == CC_HUMANOID_ACTION_STRIKE &&
@@ -3394,9 +3547,9 @@ int main(int argc, char **argv)
         (void)snprintf(message, sizeof(message), "Creature settlement.");
     }
     if (capture_road) {
-        (void)snprintf(message, sizeof(message), "Defeat the bandits.");
+        (void)snprintf(message, sizeof(message), "Break the company line.");
     } else if (capture_parley) {
-        (void)snprintf(message, sizeof(message), "Walk to the collector.");
+        (void)snprintf(message, sizeof(message), "Speak with the captain.");
     } else if (capture_travel) {
         (void)snprintf(message, sizeof(message), "Travelling.");
     }
