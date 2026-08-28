@@ -18,6 +18,14 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
             "PROVISION HALL", "NORTH FIELDS", "RIVER GATE",
             "EAST ORCHARDS",
         },
+        .landmark = {
+            {CC_LOCAL_LANDMARK_AGRICULTURE, 0, "Threshing barn",
+             4.20f, 18.00f, 6.20f, 4.20f, 4.80f},
+            {CC_LOCAL_LANDMARK_AGRICULTURE, 1, "Hill granaries",
+             5.20f, 43.20f, 4.80f, 4.20f, 4.60f},
+            {CC_LOCAL_LANDMARK_AGRICULTURE, 2, "Orchard press",
+             66.20f, 44.00f, 5.20f, 4.40f, 3.80f},
+        },
     },
     {
         .function = CC_SETTLEMENT_MINING,
@@ -36,6 +44,14 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
             "SMELTER ROW", "MINERS' SQUARE", "ORE YARD",
             "COMPANY STORE", "FURNACE ROAD", "MINE GATE",
             "SLAG FIELDS",
+        },
+        .landmark = {
+            {CC_LOCAL_LANDMARK_INDUSTRY, 0, "North headframe",
+             4.60f, 18.00f, 5.30f, 5.00f, 6.80f},
+            {CC_LOCAL_LANDMARK_INDUSTRY, 1, "Company furnace",
+             18.20f, 44.20f, 5.50f, 4.40f, 5.80f},
+            {CC_LOCAL_LANDMARK_INDUSTRY, 2, "Ore breaker",
+             84.00f, 44.00f, 5.20f, 4.60f, 4.40f},
         },
     },
     {
@@ -56,6 +72,14 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
             "MARKET STEPS", "MILLER'S ROAD", "CROWN GATE",
             "EAST FIELDS",
         },
+        .landmark = {
+            {CC_LOCAL_LANDMARK_COMMERCE, 0, "Wool warehouse",
+             4.00f, 18.00f, 6.50f, 4.50f, 5.20f},
+            {CC_LOCAL_LANDMARK_COMMERCE, 1, "Caravan pavilion",
+             5.00f, 43.00f, 5.50f, 4.00f, 4.20f},
+            {CC_LOCAL_LANDMARK_COMMERCE, 2, "East customs",
+             66.00f, 44.00f, 5.50f, 4.50f, 5.50f},
+        },
     },
     {
         .function = CC_SETTLEMENT_FORTRESS,
@@ -74,6 +98,14 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
             "ARMOURER'S ROW", "MUSTER SQUARE", "SUPPLY YARD",
             "TOLL HALL", "GARRISON ROAD", "ALDER GATE",
             "EASTERN MARCH",
+        },
+        .landmark = {
+            {CC_LOCAL_LANDMARK_MILITARY, 0, "West barracks",
+             4.20f, 18.00f, 6.50f, 4.50f, 5.00f},
+            {CC_LOCAL_LANDMARK_MILITARY, 1, "March tower",
+             6.00f, 43.00f, 4.00f, 4.00f, 7.00f},
+            {CC_LOCAL_LANDMARK_MILITARY, 2, "Field armoury",
+             65.50f, 43.50f, 6.00f, 4.50f, 5.20f},
         },
     },
     {
@@ -95,6 +127,14 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
             "ROYAL EXCHANGE", "PROCESSION WAY", "ROSE GATE",
             "EAST GARDENS",
         },
+        .landmark = {
+            {CC_LOCAL_LANDMARK_CIVIC, 0, "West chancery",
+             4.00f, 18.00f, 6.50f, 4.50f, 5.80f},
+            {CC_LOCAL_LANDMARK_CIVIC, 1, "Founders' stone",
+             7.00f, 43.00f, 3.00f, 3.00f, 5.50f},
+            {CC_LOCAL_LANDMARK_CIVIC, 2, "Rose pavilion",
+             65.00f, 43.70f, 6.00f, 4.50f, 4.80f},
+        },
     },
     {
         .function = CC_SETTLEMENT_DUNGEON_TOWN,
@@ -113,6 +153,14 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
             "SALVAGE STREET", "LANTERN SQUARE", "EXPEDITION YARD",
             "SUPPLY HOUSE", "WATCH ROAD", "WARD GATE",
             "OUTER DIGS",
+        },
+        .landmark = {
+            {CC_LOCAL_LANDMARK_EXPEDITION, 0, "Delvers' lodge",
+             4.00f, 18.00f, 6.20f, 4.50f, 5.00f},
+            {CC_LOCAL_LANDMARK_EXPEDITION, 1, "Lantern tower",
+             18.50f, 44.00f, 4.00f, 4.00f, 7.00f},
+            {CC_LOCAL_LANDMARK_EXPEDITION, 2, "Salvage works",
+             66.00f, 44.00f, 5.50f, 4.50f, 4.50f},
         },
     },
 };
@@ -151,6 +199,16 @@ const char *CcLocalPlaceRoomName(CcSettlementFunction function,
         CcLocalPlaceProfileForFunction(function);
     if (room_index < 0 || room_index >= CC_LOCAL_PLACE_ROOM_COUNT) return NULL;
     return profile->room_name[room_index];
+}
+
+const CcLocalPlaceLandmark *CcLocalPlaceLandmarkAt(
+    CcSettlementFunction function, int32_t landmark_index)
+{
+    const CcLocalPlaceProfile *profile =
+        CcLocalPlaceProfileForFunction(function);
+    if (landmark_index < 0 ||
+        landmark_index >= CC_LOCAL_PLACE_LANDMARK_COUNT) return NULL;
+    return &profile->landmark[landmark_index];
 }
 
 bool CcLocalPlaceHasFeature(const CcLocalPlaceProfile *profile,

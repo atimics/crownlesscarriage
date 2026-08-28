@@ -30,10 +30,82 @@ static int ProfileContract(void)
                 (CcSettlementFunction)function, room);
             CHECK(name != NULL && name[0] != '\0');
         }
+        for (int32_t landmark = 0;
+             landmark < CC_LOCAL_PLACE_LANDMARK_COUNT; ++landmark) {
+            const CcLocalPlaceLandmark *structure =
+                CcLocalPlaceLandmarkAt(
+                    (CcSettlementFunction)function, landmark);
+            CHECK(structure != NULL);
+            CHECK(structure->name != NULL && structure->name[0] != '\0');
+            CHECK(structure->width >= 3.0f);
+            CHECK(structure->depth >= 3.0f);
+            CHECK(structure->height >= 3.0f);
+            CHECK(structure->x >= 0.0f &&
+                  structure->x + structure->width <= 96.0f);
+            CHECK(structure->z >= 0.0f &&
+                  structure->z + structure->depth <= 72.0f);
+        }
     }
     CHECK(CcLocalPlaceRoomName(CC_SETTLEMENT_MARKET, -1) == NULL);
     CHECK(CcLocalPlaceRoomName(CC_SETTLEMENT_MARKET,
                                CC_LOCAL_PLACE_ROOM_COUNT) == NULL);
+    CHECK(CcLocalPlaceLandmarkAt(CC_SETTLEMENT_MARKET, -1) == NULL);
+    CHECK(CcLocalPlaceLandmarkAt(
+              CC_SETTLEMENT_MARKET,
+              CC_LOCAL_PLACE_LANDMARK_COUNT) == NULL);
+    return 0;
+}
+
+static bool LandmarksOverlap(const CcLocalPlaceLandmark *left,
+                             const CcLocalPlaceLandmark *right)
+{
+    return left->x < right->x + right->width &&
+           left->x + left->width > right->x &&
+           left->z < right->z + right->depth &&
+           left->z + left->depth > right->z;
+}
+
+static bool SameLandmarkGeometry(const CcLocalPlaceLandmark *left,
+                                 const CcLocalPlaceLandmark *right)
+{
+    return left->x == right->x && left->z == right->z &&
+           left->width == right->width && left->depth == right->depth &&
+           left->height == right->height;
+}
+
+static int AuthoredLandmarkLayouts(void)
+{
+    for (int32_t function = CC_SETTLEMENT_FARMING;
+         function <= CC_SETTLEMENT_DUNGEON_TOWN; ++function) {
+        const CcLocalPlaceProfile *profile =
+            CcLocalPlaceProfileForFunction((CcSettlementFunction)function);
+        CHECK(profile->landmark[0].family ==
+              (CcLocalLandmarkFamily)function);
+        for (int32_t left = 0;
+             left < CC_LOCAL_PLACE_LANDMARK_COUNT; ++left) {
+            for (int32_t right = left + 1;
+                 right < CC_LOCAL_PLACE_LANDMARK_COUNT; ++right) {
+                CHECK(!LandmarksOverlap(&profile->landmark[left],
+                                        &profile->landmark[right]));
+            }
+        }
+        for (int32_t previous = CC_SETTLEMENT_FARMING;
+             previous < function; ++previous) {
+            const CcLocalPlaceProfile *other =
+                CcLocalPlaceProfileForFunction(
+                    (CcSettlementFunction)previous);
+            bool same_layout = true;
+            for (int32_t landmark = 0;
+                 landmark < CC_LOCAL_PLACE_LANDMARK_COUNT; ++landmark) {
+                if (!SameLandmarkGeometry(&profile->landmark[landmark],
+                                          &other->landmark[landmark])) {
+                    same_layout = false;
+                    break;
+                }
+            }
+            CHECK(!same_layout);
+        }
+    }
     return 0;
 }
 
@@ -90,6 +162,7 @@ static int StableDistinctTerrain(void)
 int main(void)
 {
     if (ProfileContract() != 0) return 1;
+    if (AuthoredLandmarkLayouts() != 0) return 1;
     if (CanonicalRegionProfiles() != 0) return 1;
     if (StableDistinctTerrain() != 0) return 1;
     (void)puts("local place profile tests passed");

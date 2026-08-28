@@ -77,17 +77,19 @@ props do not constitute a city grammar.
 
 ### Place profile contract
 
-Every settlement function owns a local place profile before it receives a
-separate authored layout. The profile supplies a stable terrain seed, ten room
-names, a statement of purpose, civic labels, a material tint, a compound name,
-and a low plaza mark. Thornford therefore reads as granary country, Gloamgate
-as a crossroads market, Alderwatch as a contested bridge, and Silverwick as
-the working deeps even while they share the proven movement skeleton.
+Every settlement function owns a local place profile. The profile supplies a
+stable terrain seed, ten room names, a statement of purpose, civic labels, a
+material tint, a compound name, a low plaza mark, and three authored landmark
+records. Thornford therefore reads as granary country, Gloamgate as a
+crossroads market, Alderwatch as a contested bridge, and Silverwick as the
+working deeps even while they share the proven road skeleton.
 
-The profile is not allowed to change collision by hiding geometry. A later
-authored layout must replace visible geometry and its collision contract
-together. This keeps local differentiation honest and gives new settlement
-grammars one small, testable interface.
+Each landmark record owns its name, family, variant, footprint, and height.
+Terrain grading, physical sweeps, pathfinding, camera picking, nearby labels,
+and visible construction all consume that same record. The profile is not
+allowed to change collision by merely hiding geometry. This keeps local
+differentiation honest and gives future settlement road grammars one small,
+testable interface.
 
 ## Runtime authoring contract
 

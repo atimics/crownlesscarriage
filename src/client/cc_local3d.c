@@ -911,6 +911,19 @@ static CcSettlementFunction active_place_function = CC_SETTLEMENT_MARKET;
 static float street_terrain_natural[CC_TERRAIN_SAMPLE_COUNT];
 static float street_terrain_height[CC_TERRAIN_SAMPLE_COUNT];
 
+static const CcLocalPlaceLandmark *ActivePlaceLandmarkAt(int32_t index)
+{
+    return CcLocalPlaceLandmarkAt(active_place_function, index);
+}
+
+static Rectangle PlaceLandmarkFootprint(
+    const CcLocalPlaceLandmark *landmark)
+{
+    if (landmark == NULL) return (Rectangle){0};
+    return (Rectangle){landmark->x, landmark->z,
+                       landmark->width, landmark->depth};
+}
+
 typedef struct TerrainRenderCache {
     Model model;
     uint32_t seed;
@@ -1078,6 +1091,11 @@ static bool TerrainPointInsideMajorFoundation(float x, float z)
         if (x >= pad.x && x <= pad.x + pad.width &&
             z >= pad.y && z <= pad.y + pad.height) return true;
     }
+    for (int32_t i = 0; i < CC_LOCAL_PLACE_LANDMARK_COUNT; ++i) {
+        Rectangle pad = PlaceLandmarkFootprint(ActivePlaceLandmarkAt(i));
+        if (x >= pad.x && x <= pad.x + pad.width &&
+            z >= pad.y && z <= pad.y + pad.height) return true;
+    }
     return false;
 }
 
@@ -1195,6 +1213,11 @@ static void TerrainGenerate(void)
                                       sizeof(WORLD_BUILDINGS[0])); ++i) {
         Rectangle footprint = WORLD_BUILDINGS[i].footprint;
         TerrainGradePad(footprint, TerrainRectangleAverage(footprint), 1.45f);
+    }
+    for (int32_t i = 0; i < CC_LOCAL_PLACE_LANDMARK_COUNT; ++i) {
+        Rectangle footprint =
+            PlaceLandmarkFootprint(ActivePlaceLandmarkAt(i));
+        TerrainGradePad(footprint, TerrainRectangleAverage(footprint), 1.35f);
     }
     Rectangle keep_pad = {65.20f, 8.20f, 26.50f, 24.40f};
     float keep_elevation = TerrainRectangleAverage(keep_pad) + 0.45f;
@@ -1487,6 +1510,13 @@ static bool StaticBodyBlocked(CcLocalSceneKind scene, float x, float z,
                                       sizeof(CASTLE_STRUCTURES[0])); ++i) {
         if (CircleTouchesFootprint(x, z, radius,
                                    CASTLE_STRUCTURES[i].footprint)) return true;
+    }
+    for (int32_t i = 0; i < CC_LOCAL_PLACE_LANDMARK_COUNT; ++i) {
+        if (CircleTouchesFootprint(
+                x, z, radius,
+                PlaceLandmarkFootprint(ActivePlaceLandmarkAt(i)))) {
+            return true;
+        }
     }
     if (CircleTouchesFootprint(x, z, radius, CARRIAGE_FOOTPRINT) ||
         CircleTouchesFootprint(x, z, radius, DUNGEON_FOOTPRINT)) return true;
@@ -1941,6 +1971,16 @@ static int32_t GatherLocalCollisionBoxes(const LocalProbeContext *context,
         AddLocalCollisionBox(boxes, &count, world->footprint,
                              TerrainFootprintHeight(world->footprint),
                              world->height);
+    }
+    for (int32_t landmark = 0;
+         landmark < CC_LOCAL_PLACE_LANDMARK_COUNT; ++landmark) {
+        const CcLocalPlaceLandmark *place_landmark =
+            ActivePlaceLandmarkAt(landmark);
+        Rectangle footprint = PlaceLandmarkFootprint(place_landmark);
+        AddLocalCollisionBox(boxes, &count, footprint,
+                             TerrainFootprintHeight(footprint),
+                             place_landmark != NULL ?
+                                 place_landmark->height : 0.0f);
     }
     AddLocalCollisionBox(boxes, &count, CARRIAGE_FOOTPRINT,
                          TerrainFootprintHeight(CARRIAGE_FOOTPRINT), 2.65f);
@@ -5474,6 +5514,15 @@ bool CcLocalAgentPickTarget(CcLocalAgent *agent, Vector2 screen_point,
                                  ray, CASTLE_STRUCTURES[i].footprint,
                                  CASTLE_STRUCTURES[i].height));
         }
+        for (int32_t i = 0; i < CC_LOCAL_PLACE_LANDMARK_COUNT; ++i) {
+            const CcLocalPlaceLandmark *landmark =
+                ActivePlaceLandmarkAt(i);
+            if (landmark == NULL) continue;
+            occluder = fminf(
+                occluder,
+                RayFootprintDistance(ray, PlaceLandmarkFootprint(landmark),
+                                     landmark->height));
+        }
         occluder = fminf(occluder,
                          RayFootprintDistance(ray, CARRIAGE_FOOTPRINT, 1.92f));
         occluder = fminf(occluder,
@@ -8013,6 +8062,34 @@ static float CameraStreetCourseClutterScore(Camera3D camera,
             score += CameraVolumeScreenOverlap(subjects[subject], scenery);
         }
     }
+    for (int32_t landmark = 0;
+         landmark < CC_LOCAL_PLACE_LANDMARK_COUNT; ++landmark) {
+        const CcLocalPlaceLandmark *place_landmark =
+            ActivePlaceLandmarkAt(landmark);
+        if (place_landmark == NULL) continue;
+        Vector3 half_size = {place_landmark->width * 0.5f,
+                             place_landmark->height * 0.5f,
+                             place_landmark->depth * 0.5f};
+        Rectangle footprint = PlaceLandmarkFootprint(place_landmark);
+        float center_x = place_landmark->x + half_size.x;
+        float center_z = place_landmark->z + half_size.z;
+        float nearest_subject = fminf(
+            Vector2Distance((Vector2){center_x, center_z},
+                            (Vector2){first_subject.x, first_subject.z}),
+            Vector2Distance((Vector2){center_x, center_z},
+                            (Vector2){second_subject.x, second_subject.z}));
+        if (nearest_subject > 12.0f) continue;
+        Vector3 center = {
+            center_x,
+            TerrainFootprintHeight(footprint) + half_size.y,
+            center_z,
+        };
+        CameraProjectedVolume scenery = CameraProjectBox(
+            camera, center, half_size);
+        for (int32_t subject = 0; subject < 2; ++subject) {
+            score += CameraVolumeScreenOverlap(subjects[subject], scenery);
+        }
+    }
     CameraProjectedVolume wayfarer_gate = CameraProjectBox(
         camera, (Vector3){11.50f, 1.16f, 10.56f},
         (Vector3){3.06f, 1.16f, 0.16f});
@@ -8098,6 +8175,13 @@ static float CombatCameraPositionClutter(Vector3 position)
                                sizeof(CASTLE_STRUCTURES[0])); ++structure) {
         score += CameraPositionRectangleClutter(
             position, CASTLE_STRUCTURES[structure].footprint, 1.80f) * 2.0f;
+    }
+    for (int32_t landmark = 0;
+         landmark < CC_LOCAL_PLACE_LANDMARK_COUNT; ++landmark) {
+        score += CameraPositionRectangleClutter(
+            position,
+            PlaceLandmarkFootprint(ActivePlaceLandmarkAt(landmark)),
+            1.80f) * 2.0f;
     }
     score += CameraPositionRectangleClutter(
         position, COURSE_POOL, 1.25f) * 1.5f;
@@ -12834,6 +12918,155 @@ static void DrawEastWindmill(Color kingdom, float hunger)
         rlPopMatrix();
     }
     DrawSmallSphere((Vector3){x, 3.28f, z + 1.02f}, 0.20f, WORLD_GOLD);
+}
+
+static void DrawPlaceLandmark(const CcLocalPlaceLandmark *landmark,
+                              Color kingdom)
+{
+    if (landmark == NULL) return;
+    float center_x = landmark->x + landmark->width * 0.5f;
+    float center_z = landmark->z + landmark->depth * 0.5f;
+    float height = landmark->height;
+    Color wall = WORLD_WOOD;
+    Color roof = WORLD_WOOD_SHADOW;
+    Color trim = WORLD_CROP_LIGHT;
+    switch (landmark->family) {
+        case CC_LOCAL_LANDMARK_AGRICULTURE:
+            wall = BlendColor(WORLD_WOOD, WORLD_CROP, 0.30f);
+            roof = WORLD_CROP_SHADOW;
+            trim = WORLD_CROP_LIGHT;
+            break;
+        case CC_LOCAL_LANDMARK_INDUSTRY:
+            wall = WORLD_STONE_SHADOW;
+            roof = WORLD_METAL_SHADOW;
+            trim = WORLD_METAL_LIGHT;
+            break;
+        case CC_LOCAL_LANDMARK_COMMERCE:
+            wall = BlendColor(WORLD_STONE_LIGHT, kingdom, 0.16f);
+            roof = BlendColor(WORLD_WOOD_SHADOW, kingdom, 0.22f);
+            trim = WORLD_GOLD;
+            break;
+        case CC_LOCAL_LANDMARK_MILITARY:
+            wall = BlendColor(WORLD_STONE, kingdom, 0.20f);
+            roof = WORLD_METAL_SHADOW;
+            trim = kingdom;
+            break;
+        case CC_LOCAL_LANDMARK_CIVIC:
+            wall = WORLD_STONE_LIGHT;
+            roof = BlendColor(WORLD_STONE, kingdom, 0.20f);
+            trim = WORLD_GOLD;
+            break;
+        case CC_LOCAL_LANDMARK_EXPEDITION:
+            wall = BlendColor(WORLD_STONE_SHADOW, WORLD_VIOLET, 0.16f);
+            roof = WORLD_WOOD_SHADOW;
+            trim = WORLD_VIOLET;
+            break;
+    }
+
+    DrawBox((Vector3){center_x, 0.16f, center_z},
+            (Vector3){landmark->width, 0.32f, landmark->depth},
+            ShadeColor(wall, 0.62f));
+
+    if (landmark->family == CC_LOCAL_LANDMARK_AGRICULTURE &&
+        landmark->variant == 1) {
+        float body_height = height * 0.72f;
+        DrawBox((Vector3){center_x, body_height * 0.16f, center_z},
+                (Vector3){landmark->width, body_height * 0.32f,
+                          landmark->depth}, wall);
+        for (int32_t silo = 0; silo < 2; ++silo) {
+            float silo_x = landmark->x + landmark->width *
+                           (silo == 0 ? 0.31f : 0.69f);
+            float radius = fminf(landmark->width * 0.19f,
+                                 landmark->depth * 0.34f);
+            DrawCylinder((Vector3){silo_x, height * 0.20f, center_z},
+                         radius * 0.88f, radius, height * 0.62f, 12, wall);
+            DrawCylinder((Vector3){silo_x, height * 0.82f, center_z},
+                         0.04f, radius * 1.06f, height * 0.18f, 12, roof);
+        }
+        return;
+    }
+
+    if (landmark->family == CC_LOCAL_LANDMARK_CIVIC &&
+        landmark->variant == 1) {
+        DrawBox((Vector3){center_x, height * 0.12f, center_z},
+                (Vector3){landmark->width, height * 0.24f,
+                          landmark->depth}, ShadeColor(wall, 0.78f));
+        DrawBox((Vector3){center_x, height * 0.52f, center_z},
+                (Vector3){landmark->width * 0.42f, height * 0.80f,
+                          landmark->depth * 0.42f}, wall);
+        DrawBox((Vector3){center_x, height * 0.94f, center_z},
+                (Vector3){landmark->width * 0.58f, height * 0.14f,
+                          landmark->depth * 0.58f}, trim);
+        return;
+    }
+
+    float body_height = height * 0.88f;
+    DrawBox((Vector3){center_x, body_height * 0.50f, center_z},
+            (Vector3){landmark->width, body_height, landmark->depth}, wall);
+    DrawBox((Vector3){center_x, body_height + height * 0.06f, center_z},
+            (Vector3){landmark->width + 0.34f, height * 0.12f,
+                      landmark->depth + 0.34f}, roof);
+    DrawBox((Vector3){center_x, body_height * 0.48f,
+                      landmark->z + landmark->depth + 0.035f},
+            (Vector3){landmark->width * 0.24f, body_height * 0.56f, 0.07f},
+            ShadeColor(roof, 0.72f));
+
+    if (landmark->family == CC_LOCAL_LANDMARK_INDUSTRY) {
+        int32_t stacks = landmark->variant == 1 ? 3 : 2;
+        for (int32_t stack = 0; stack < stacks; ++stack) {
+            float stack_x = landmark->x + landmark->width *
+                ((float)(stack + 1) / (float)(stacks + 1));
+            DrawCylinder((Vector3){stack_x, body_height * 0.82f,
+                                   landmark->z + landmark->depth * 0.68f},
+                         0.18f, 0.24f, height * 0.28f, 8,
+                         WORLD_METAL_SHADOW);
+        }
+    } else if (landmark->family == CC_LOCAL_LANDMARK_COMMERCE) {
+        for (int32_t panel = 0; panel < 4; ++panel) {
+            float panel_x = landmark->x + landmark->width *
+                ((float)panel + 0.5f) / 4.0f;
+            DrawBox((Vector3){panel_x, body_height * 0.58f,
+                              landmark->z + landmark->depth + 0.26f},
+                    (Vector3){landmark->width * 0.22f, 0.12f, 0.52f},
+                    (panel & 1) == 0 ? trim : roof);
+        }
+    } else if (landmark->family == CC_LOCAL_LANDMARK_MILITARY) {
+        int32_t merlons = landmark->variant == 1 ? 3 : 5;
+        for (int32_t merlon = 0; merlon < merlons; ++merlon) {
+            float merlon_x = landmark->x + landmark->width *
+                ((float)merlon + 0.5f) / (float)merlons;
+            DrawBox((Vector3){merlon_x, body_height + height * 0.16f,
+                              center_z},
+                    (Vector3){landmark->width / (float)merlons * 0.52f,
+                              height * 0.20f, landmark->depth * 0.18f},
+                    trim);
+        }
+    } else if (landmark->family == CC_LOCAL_LANDMARK_CIVIC) {
+        DrawBox((Vector3){center_x, body_height * 0.62f,
+                          landmark->z + landmark->depth + 0.08f},
+                (Vector3){landmark->width * 0.72f, height * 0.10f, 0.16f},
+                trim);
+    } else if (landmark->family == CC_LOCAL_LANDMARK_EXPEDITION) {
+        DrawBox((Vector3){center_x, body_height + height * 0.20f, center_z},
+                (Vector3){0.26f, height * 0.30f, 0.26f},
+                WORLD_WOOD_SHADOW);
+        DrawSmallSphere((Vector3){center_x, height * 1.02f, center_z},
+                        0.22f, trim);
+    }
+}
+
+static void DrawPlaceLandmarks(Color kingdom, Vector3 focus)
+{
+    for (int32_t i = 0; i < CC_LOCAL_PLACE_LANDMARK_COUNT; ++i) {
+        const CcLocalPlaceLandmark *landmark = ActivePlaceLandmarkAt(i);
+        if (landmark == NULL) continue;
+        Rectangle footprint = PlaceLandmarkFootprint(landmark);
+        if (!SceneryFootprintVisible(footprint, focus)) continue;
+        rlPushMatrix();
+        rlTranslatef(0.0f, TerrainFootprintHeight(footprint), 0.0f);
+        DrawPlaceLandmark(landmark, kingdom);
+        rlPopMatrix();
+    }
 }
 
 static void DrawRoomLandmarks(const CcSettlement *place, Color kingdom,
@@ -18910,6 +19143,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
              camera, player_sightline, opponent_sightline) > 0.001f);
     DrawRoomLandmarks(place, kingdom, profile, scenery_focus,
                       wayfarer_gate_sightline_cut);
+    DrawPlaceLandmarks(kingdom, scenery_focus);
     if (SceneryPointVisible(47.35f, 31.05f, scenery_focus)) {
         DrawJourneyAftermath3D(sim, place);
     }
@@ -19096,6 +19330,22 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                                             12.10f,
                                         17.50f},
                                        profile->compound, kingdom};
+    }
+    for (int32_t i = 0;
+         i < CC_LOCAL_PLACE_LANDMARK_COUNT && count < 20; ++i) {
+        const CcLocalPlaceLandmark *landmark =
+            ActivePlaceLandmarkAt(i);
+        if (landmark == NULL) continue;
+        float center_x = landmark->x + landmark->width * 0.5f;
+        float center_z = landmark->z + landmark->depth * 0.5f;
+        if (!AgentNearLabel(agent, center_x, center_z, 7.5f)) continue;
+        Rectangle footprint = PlaceLandmarkFootprint(landmark);
+        labels[count++] = (WorldLabel){
+            {center_x, TerrainFootprintHeight(footprint) +
+                       landmark->height + 0.42f, center_z},
+            landmark->name,
+            landmark->family == CC_LOCAL_LANDMARK_EXPEDITION ?
+                WORLD_VIOLET : kingdom};
     }
     if (sim->resolved_journey_outcome != CC_JOURNEY_OUTCOME_NONE &&
         sim->journey.destination_id == place->id &&
@@ -19445,6 +19695,11 @@ static bool StreetCanOccupy(Vector2 point)
         if (InsideExpanded(point, WORLD_BUILDINGS[i].footprint, radius)) {
             return false;
         }
+    }
+    for (int32_t i = 0; i < CC_LOCAL_PLACE_LANDMARK_COUNT; ++i) {
+        if (InsideExpanded(
+                point, PlaceLandmarkFootprint(ActivePlaceLandmarkAt(i)),
+                radius)) return false;
     }
     for (int32_t i = 0; i < (int32_t)(sizeof(CASTLE_STRUCTURES) /
                                       sizeof(CASTLE_STRUCTURES[0])); ++i) {

@@ -1,5 +1,6 @@
 #include "client/cc_local3d.h"
 #include "client/cc_local3d_internal.h"
+#include "client/cc_local_place.h"
 #include "locomotion/cc_humanoid_skin.h"
 
 #include <math.h>
@@ -228,6 +229,46 @@ static void RequireSolidStreetHouse(const char *name, float wall_x,
                       normal.x, normal.y, normal.z);
         exit(1);
     }
+}
+
+static void TestPlaceLandmarkCollision(void)
+{
+    CcSim sim;
+    CcSimInit(&sim, UINT32_C(0x1a7d4a2b));
+    sim.player.location_id = sim.settlements[0].id;
+    CcLocalBindPlace(&sim);
+    const CcLocalPlaceLandmark *barn = CcLocalPlaceLandmarkAt(
+        CC_SETTLEMENT_FARMING, 0);
+    if (barn == NULL) {
+        (void)fprintf(stderr, "farming layout did not provide a landmark\n");
+        exit(1);
+    }
+    float center_z = barn->z + barn->depth * 0.5f;
+    float body_y = CcLocalTerrainHeightAt(barn->x, center_z) + 1.0f;
+    Vector3 corrected = {0};
+    Vector3 normal = {0};
+    if (!CcLocalProbePhysicsSphereInternal(
+            CC_LOCAL_SCENE_STREET,
+            (Vector3){barn->x - 0.80f, body_y, center_z},
+            (Vector3){barn->x + 0.80f, body_y, center_z}, 0.16f,
+            &corrected, &normal) ||
+        corrected.x > barn->x - 0.154f || normal.x > -0.90f) {
+        (void)fprintf(stderr,
+                      "authored landmark was not solid: %.3f normal %.3f\n",
+                      corrected.x, normal.x);
+        exit(1);
+    }
+    Vector2 legacy = CcLocalMove(
+        (Vector2){barn->x - 0.70f, center_z},
+        (Vector2){1.40f, 0.0f}, false);
+    if (legacy.x > barn->x - 0.29f) {
+        (void)fprintf(stderr,
+                      "legacy movement crossed an authored landmark: %.3f\n",
+                      legacy.x);
+        exit(1);
+    }
+
+    CcLocalBindPlace(NULL);
 }
 
 static void TestSharedCharacterCollisionWorld(void)
@@ -1993,6 +2034,7 @@ int main(void)
     }
     TestRoadBridgeSupport();
     TestFaceAngleAndLodContract();
+    TestPlaceLandmarkCollision();
     TestSharedCharacterCollisionWorld();
     TestRagdollStepsInWater();
     RenderTexture2D click_target = {0};

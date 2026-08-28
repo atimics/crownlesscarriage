@@ -71,10 +71,11 @@ produce deterministic strategic results.
 The shared exterior now resolves each settlement through a stable place
 profile. Farming, market, fortress, mining, capital, and dungeon-frontier towns
 have their own terrain seed, district language, civic labels, material tint,
-and plaza mark. This is the reusable identity contract for later authored
-layouts; it does not claim that the six settlements already have separate
-geometry. The remaining gate is distinct local layouts, reusable interiors,
-and a persistent recurring cast.
+plaza mark, and three named physical landmarks. Landmark footprints are the
+single source for grading, movement, camera picking, and rendering, so each
+town now has a distinct walkable local layout without ghost geometry. The
+remaining gate is separate road grammars, reusable interiors, and a persistent
+recurring cast.
 
 ### Work
 
