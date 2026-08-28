@@ -89,6 +89,7 @@ respond to a player decision.
 ### Part VIII — Production proof
 
 - Failed-harvest vertical slice
+- [Introduction video](production/introduction-video.md)
 - [Character physics foundation](production/character-physics-foundation.md)
 - [Procedural creature pipeline](production/procedural-creature-pipeline.md)
 - [Runtime environment design](production/runtime-environment-design.md)
