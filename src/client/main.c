@@ -903,7 +903,7 @@ static void DrawCombatPanel(const LocalState *local)
     CcOverlayDrawText(target != NULL ?
                           CcLocalRaiderRoleName(
                               local->course.raider_roles[target_index]) :
-                          "CLICK AN OUTLAW",
+                          "CLICK OR [T] CYCLE",
                       target_x, y + 81, 7, target != NULL ? MUTED : CC_GOLD);
     DrawCombatMeter(target_x, y + 99, column_width, "HEALTH",
                     target != NULL ? target->combat.health : 0.0f,
@@ -1226,6 +1226,20 @@ static const CcLocalAgent *SelectedCombatTarget(const LocalState *local)
 {
     int32_t target = SelectedCombatTargetIndex(local);
     return target >= 0 ? &local->course.raiders[target] : NULL;
+}
+
+static int32_t NextCombatTargetIndex(const LocalState *local)
+{
+    if (local == NULL) return -1;
+    int32_t current = SelectedCombatTargetIndex(local);
+    for (int32_t step = 1; step <= CC_LOCAL_RAIDER_COUNT; ++step) {
+        int32_t candidate = (current + step) % CC_LOCAL_RAIDER_COUNT;
+        if (local->course.raiders[candidate].combat.life_state ==
+            CC_LIFE_ALIVE) {
+            return candidate;
+        }
+    }
+    return -1;
 }
 
 static const char *CombatSkillDetail(const CcLocalAgent *player,
@@ -1589,7 +1603,7 @@ static void DrawCombatStatusLine(const LocalState *local,
     if (message != NULL && message[0] != '\0' && message_age < 3.2f) {
         status = message;
     } else if (target == NULL) {
-        status = "Click an outlaw to focus your attacks.";
+        status = "Click an outlaw or press T to choose a target.";
     } else if (local->agent.humanoid.guard_requested) {
         status = "Guard is up. Watch posture and strike after the block.";
     } else {
@@ -3024,6 +3038,19 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                                "Arrived.");
             }
             return;
+        }
+        if (LocalCombatActive(local) && ClientKeyPressed(KEY_T)) {
+            int32_t target = NextCombatTargetIndex(local);
+            if (target >= 0 && CcLocalCourseSelectPlayerTarget(
+                    &local->course, &local->agent, target)) {
+                (void)snprintf(
+                    message, message_capacity, "Focused: %s / %s.",
+                    local->course.raider_names[target],
+                    CcLocalRaiderRoleName(local->course.raider_roles[target]));
+            } else {
+                (void)snprintf(message, message_capacity,
+                               "No outlaw is still standing.");
+            }
         }
         if (local->journey_combat_active &&
             (context_action == CONTEXT_ACTION_WITHDRAW ||
