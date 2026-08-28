@@ -18,6 +18,7 @@ static void AdvanceDragonEcology(CcSim *sim);
 static void AdvanceCouriers(CcSim *sim);
 static void UpdateRoyalDiplomacy(CcSim *sim);
 static void AdvanceDragonCampaign(CcSim *sim);
+static void AdvanceHorseTeam(CcSim *sim);
 static int32_t BasePrice(CcGood good);
 static int32_t CalculateDragonCrownStrength(const CcSim *sim);
 
@@ -138,6 +139,69 @@ void CcSimInitializeHoardRaiders(CcSim *sim)
     sim->hoard_raiders.phase = CC_HOARD_RAIDERS_IDLE;
     sim->hoard_raiders.motive = CC_HOARD_RAID_NO_MOTIVE;
     sim->hoard_raiders.cooldown_days = 42;
+}
+
+void CcSimInitializeAnimalEconomy(CcSim *sim)
+{
+    if (sim == NULL || sim->player.id == 0U ||
+        sim->settlement_count < 1 || sim->horse_team[0].id != 0U) return;
+
+    static const char *horse_names[CC_CARRIAGE_HORSE_COUNT] = {
+        "Bracken", "Morrow"
+    };
+    static const int32_t horse_ages[CC_CARRIAGE_HORSE_COUNT] = {
+        8 * 365, 9 * 365
+    };
+    for (int32_t i = 0; i < CC_CARRIAGE_HORSE_COUNT; ++i) {
+        CcHorse *horse = &sim->horse_team[i];
+        horse->id = NextId(sim, CC_ENTITY_HORSE);
+        CopyName(horse->name, horse_names[i]);
+        horse->age_days = horse_ages[i];
+        horse->health = 100;
+    }
+
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        CcSettlement *place = &sim->settlements[i];
+        if (!CcSettlementHasService(place, CC_SERVICE_FARM)) continue;
+        switch (place->function) {
+            case CC_SETTLEMENT_FARMING:
+                place->cow_adults = 28;
+                place->cow_calves = 7;
+                break;
+            case CC_SETTLEMENT_CAPITAL:
+                place->cow_adults = 18;
+                place->cow_calves = 4;
+                break;
+            case CC_SETTLEMENT_FORTRESS:
+                place->cow_adults = 12;
+                place->cow_calves = 3;
+                break;
+            case CC_SETTLEMENT_MINING:
+                place->cow_adults = 8;
+                place->cow_calves = 2;
+                break;
+            case CC_SETTLEMENT_MARKET:
+            case CC_SETTLEMENT_DUNGEON_TOWN:
+                place->cow_adults = 6;
+                place->cow_calves = 1;
+                break;
+        }
+        place->cow_condition = 88;
+    }
+}
+
+int32_t CcSimHorseTeamReadiness(const CcSim *sim)
+{
+    if (sim == NULL) return 0;
+    int32_t readiness = 100;
+    for (int32_t i = 0; i < CC_CARRIAGE_HORSE_COUNT; ++i) {
+        const CcHorse *horse = &sim->horse_team[i];
+        if (CcIdKind(horse->id) != CC_ENTITY_HORSE) return 0;
+        int32_t value = horse->health - horse->fatigue / 2 -
+                        horse->hunger / 2;
+        readiness = MinimumI32(readiness, value);
+    }
+    return ClampI32(readiness, 0, 100);
 }
 
 static uint32_t ServiceBit(CcServiceKind service)
@@ -544,6 +608,8 @@ const char *CcEventKindName(CcEventKind kind)
         case CC_EVENT_GOBLIN_CULT_RALLIED: return "CULT RALLIES";
         case CC_EVENT_GOBLIN_DRAGON_SEED: return "DRAGON SEED";
         case CC_EVENT_ENCOUNTER_WITHDRAWN: return "ROAD WITHDRAWAL";
+        case CC_EVENT_COW_CALVING: return "CALVING";
+        case CC_EVENT_COW_SLAUGHTERED: return "CATTLE LOSS";
     }
     return "EVENT";
 }
@@ -2006,6 +2072,7 @@ void CcSimInit(CcSim *sim, uint32_t seed)
                     sim->dungeons[0].id, bridge->id,
                     sim->monsters[0].pressure, text);
     GenerateSituations(sim);
+    CcSimInitializeAnimalEconomy(sim);
 }
 
 static int32_t BasePrice(CcGood good)
@@ -2263,14 +2330,86 @@ static void AdvanceServiceProjects(CcSim *sim)
     }
 }
 
+static int32_t AdvanceCowHerd(CcSim *sim, CcSettlement *settlement)
+{
+    if (sim->schema_version < 14U) return 0;
+    if (!CcSettlementHasService(settlement, CC_SERVICE_FARM)) return 0;
+    int32_t herd = settlement->cow_adults + settlement->cow_calves;
+    if (herd <= 0) return 0;
+
+    int32_t feed_required = MaximumI32(1, (herd + 11) / 12);
+    int32_t feed_eaten = MinimumI32(
+        feed_required, settlement->stock[CC_GOOD_FOOD]);
+    settlement->stock[CC_GOOD_FOOD] -= feed_eaten;
+    int32_t feed_shortfall = feed_required - feed_eaten;
+    if (feed_shortfall > 0) {
+        settlement->cow_hunger = ClampI32(
+            settlement->cow_hunger + feed_shortfall * 12, 0, 100);
+        settlement->cow_condition = ClampI32(
+            settlement->cow_condition - feed_shortfall * 3, 1, 100);
+    } else {
+        settlement->cow_hunger = ClampI32(
+            settlement->cow_hunger - 10, 0, 100);
+        settlement->cow_condition = ClampI32(
+            settlement->cow_condition + 2, 1, 100);
+    }
+
+    if (sim->current_day % 112 == 0 &&
+        settlement->cow_condition >= 65 &&
+        settlement->cow_hunger <= 30) {
+        int32_t matured = settlement->cow_calves > 0 ?
+            MaximumI32(1, settlement->cow_calves / 4) : 0;
+        matured = MinimumI32(matured, settlement->cow_calves);
+        settlement->cow_calves -= matured;
+        settlement->cow_adults += matured;
+        int32_t capacity = MaximumI32(6, settlement->population / 50);
+        int32_t room = MaximumI32(
+            0, capacity - settlement->cow_adults - settlement->cow_calves);
+        int32_t births = MinimumI32(
+            room, MaximumI32(1, settlement->cow_adults / 14));
+        settlement->cow_calves += births;
+        if (births > 0) {
+            char text[CC_EVENT_TEXT_CAPACITY];
+            (void)snprintf(
+                text, sizeof(text),
+                "%s's cattle herd raises %d new %s; %d older %s join the working herd.",
+                settlement->name, births, births == 1 ? "calf" : "calves",
+                matured, matured == 1 ? "calf" : "calves");
+            (void)PushEvent(
+                sim, CC_EVENT_COW_CALVING, settlement->id, settlement->id,
+                LatestLocalCause(sim, settlement->id), births, text);
+        }
+    }
+
+    if (settlement->cow_hunger >= 65 && settlement->cow_adults > 0) {
+        settlement->cow_adults -= 1;
+        settlement->stock[CC_GOOD_FOOD] += 4;
+        settlement->cow_hunger = ClampI32(
+            settlement->cow_hunger - 12, 0, 100);
+        char text[CC_EVENT_TEXT_CAPACITY];
+        (void)snprintf(
+            text, sizeof(text),
+            "%s slaughters one cow after the herd's fodder runs short; 4 Food enters the local store.",
+            settlement->name);
+        (void)PushEvent(
+            sim, CC_EVENT_COW_SLAUGHTERED, settlement->id, settlement->id,
+            LatestLocalCause(sim, settlement->id), 1, text);
+    }
+
+    return MaximumI32(
+        1, settlement->cow_adults * settlement->cow_condition / 1200);
+}
+
 static void UpdateSettlement(CcSim *sim, int32_t index)
 {
     CcSettlement *settlement = &sim->settlements[index];
     int32_t produced[CC_GOOD_COUNT] = {0};
+    int32_t cow_food = AdvanceCowHerd(sim, settlement);
     int32_t food_required = 1;
     int32_t food_eaten = 0;
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
         int32_t production = EffectiveProduction(sim, settlement, index, (CcGood)good);
+        if ((CcGood)good == CC_GOOD_FOOD) production += cow_food;
         produced[good] = production;
         if ((CcGood)good == CC_GOOD_IRON) {
             settlement->iron_deposit -= production;
@@ -3334,8 +3473,10 @@ static CcSettlement *DragonHuntTarget(CcSim *sim)
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         CcSettlement *place = &sim->settlements[i];
         if (place->id == sim->dragon.lair_settlement_id ||
-            place->stock[CC_GOOD_FOOD] <= 0) continue;
-        int32_t score = place->stock[CC_GOOD_FOOD] * 3 - place->security;
+            (place->stock[CC_GOOD_FOOD] <= 0 &&
+             place->cow_adults <= 0)) continue;
+        int32_t score = place->stock[CC_GOOD_FOOD] * 3 +
+                        place->cow_adults * 8 - place->security;
         if (place->function == CC_SETTLEMENT_FARMING ||
             CcSettlementHasService(place, CC_SERVICE_FARM)) score += 40;
         if (best == NULL || score > best_score) {
@@ -3361,8 +3502,14 @@ static void DragonHunt(CcSim *sim)
     int32_t appetite = dragon->life_stage == CC_DRAGON_STAGE_WHELP ? 4 :
         dragon->life_stage == CC_DRAGON_STAGE_WANDERER ? 6 :
         dragon->life_stage == CC_DRAGON_STAGE_DEEP_WYRM ? 12 : 8;
-    int32_t taken = MinimumI32(appetite, target->stock[CC_GOOD_FOOD]);
-    target->stock[CC_GOOD_FOOD] -= taken;
+    int32_t cows_taken = MinimumI32(
+        target->cow_adults, MaximumI32(1, appetite / 4));
+    target->cow_adults -= cows_taken;
+    int32_t food_wanted = MaximumI32(1, appetite - cows_taken * 3);
+    int32_t food_taken = MinimumI32(
+        food_wanted, target->stock[CC_GOOD_FOOD]);
+    target->stock[CC_GOOD_FOOD] -= food_taken;
+    int32_t taken = cows_taken * 3 + food_taken;
     target->hunger = ClampI32(target->hunger + MaximumI32(1, taken / 4),
                               0, 100);
     target->prosperity = ClampI32(target->prosperity - 1, 0, 100);
@@ -3373,10 +3520,18 @@ static void DragonHunt(CcSim *sim)
     dragon->hunts += 1;
     dragon->activity = CC_DRAGON_ACTIVITY_HUNTING;
     char text[CC_EVENT_TEXT_CAPACITY];
-    (void)snprintf(
-        text, sizeof(text),
-        "%s takes %d Food worth of livestock from %s and leaves the roofs untouched.",
-        dragon->name, taken, target->name);
+    if (sim->schema_version >= 14U) {
+        (void)snprintf(
+            text, sizeof(text),
+            "%s takes %d cow%s and %d Food from %s and leaves the roofs untouched.",
+            dragon->name, cows_taken, cows_taken == 1 ? "" : "s",
+            food_taken, target->name);
+    } else {
+        (void)snprintf(
+            text, sizeof(text),
+            "%s takes %d Food worth of livestock from %s and leaves the roofs untouched.",
+            dragon->name, taken, target->name);
+    }
     CcEvent *event = PushEvent(
         sim, CC_EVENT_DRAGON_HUNT, dragon->id, target->id,
         LatestLocalCause(sim, target->id), taken, text);
@@ -6239,12 +6394,61 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
     }
 }
 
+static void AdvanceHorseTeam(CcSim *sim)
+{
+    if (sim->schema_version < 14U) return;
+    bool travelling = sim->journey.active;
+    const CcRoute *route = travelling ?
+        CcSimRoute(sim, sim->journey.route_id) : NULL;
+    const CcSettlement *place = !travelling ?
+        CcSimSettlement(sim, sim->player.location_id) : NULL;
+    bool stable_care = CcSettlementHasService(place, CC_SERVICE_STABLE);
+    int32_t cargo_strain = sim->player.cargo_capacity > 0 ?
+        CcPlayerCargoUsed(&sim->player) * 4 /
+            sim->player.cargo_capacity : 0;
+    int32_t road_strain = route != NULL ?
+        MaximumI32(0, 60 - route->condition) / 12 : 0;
+
+    bool weekly_feed = !travelling && sim->current_day % 7 == 0;
+    bool feed_available = weekly_feed && stable_care && place != NULL &&
+        place->stock[CC_GOOD_FOOD] > 0;
+    if (feed_available) {
+        CcSettlement *mutable_place = CcSimSettlementMutable(
+            sim, place->id);
+        mutable_place->stock[CC_GOOD_FOOD] -= 1;
+    }
+
+    for (int32_t i = 0; i < CC_CARRIAGE_HORSE_COUNT; ++i) {
+        CcHorse *horse = &sim->horse_team[i];
+        horse->age_days += 1;
+        if (travelling) {
+            horse->fatigue = ClampI32(
+                horse->fatigue + 7 + cargo_strain + road_strain,
+                0, 100);
+            horse->hunger = ClampI32(horse->hunger + 2, 0, 100);
+        } else {
+            horse->fatigue = ClampI32(
+                horse->fatigue - (stable_care ? 10 : 4), 0, 100);
+            if (weekly_feed) {
+                horse->hunger = ClampI32(
+                    horse->hunger + (feed_available ? -24 : 12), 0, 100);
+            }
+        }
+        if (horse->fatigue >= 88 || horse->hunger >= 80) {
+            horse->health = ClampI32(horse->health - 2, 1, 100);
+        } else if (!travelling && stable_care && horse->hunger < 45) {
+            horse->health = ClampI32(horse->health + 1, 1, 100);
+        }
+    }
+}
+
 void CcSimAdvanceDays(CcSim *sim, int32_t days)
 {
     if (sim == NULL || days <= 0) return;
     int32_t next_situation_expiry = NextSituationExpiryDay(sim);
     for (int32_t day = 0; day < days; ++day) {
         sim->current_day += 1;
+        AdvanceHorseTeam(sim);
         if (sim->current_day > next_situation_expiry) {
             ExpireSituations(sim);
             next_situation_expiry = NextSituationExpiryDay(sim);
@@ -7117,6 +7321,11 @@ static int32_t JourneyCarriageSpeed(int32_t total_subticks)
                       CC_WORLD_TICKS_PER_SECOND) / total_subticks);
 }
 
+static int32_t HorseFeedRequired(int32_t travel_days)
+{
+    return MaximumI32(1, (travel_days + 1) / 2);
+}
+
 bool CcSimTravelPreview(const CcSim *sim, CcId destination_id,
                         CcTravelPreview *preview, char *error,
                         size_t error_capacity)
@@ -7144,7 +7353,11 @@ bool CcSimTravelPreview(const CcSim *sim, CcId destination_id,
         accepted->kind == CC_SITUATION_BLACK_MARKET_DELIVERY &&
         route->to_id == accepted->target_id;
     bool uncharted = map == NULL && !sponsored_night_passage;
-    int32_t days = route->travel_days + (uncharted ? 2 : 0);
+    int32_t readiness = sim->schema_version >= 14U ?
+        CcSimHorseTeamReadiness(sim) : 100;
+    int32_t days = route->travel_days + (uncharted ? 2 : 0) +
+                   (readiness < 70 ? 1 : 0) +
+                   (readiness < 45 ? 1 : 0);
     int32_t base_fare = days + (route->smuggler_route ? 3 : 0);
     *preview = (CcTravelPreview){
         .route_id = route->id,
@@ -7154,6 +7367,8 @@ bool CcSimTravelPreview(const CcSim *sim, CcId destination_id,
         .claimed_condition = map != NULL ? map->recorded_condition : -1,
         .claimed_danger = map != NULL ? map->recorded_danger : -1,
         .chart_accuracy = map != NULL ? map->accuracy : 0,
+        .horse_feed_required = HorseFeedRequired(days),
+        .horse_readiness = readiness,
         .charted = map != NULL,
         .destination_known = !route->smuggler_route || map != NULL ||
                              sponsored_night_passage,
@@ -7193,6 +7408,19 @@ static bool ApplyTravel(CcSim *sim, const CcCommand *command,
     int32_t base_fare = days + (route->smuggler_route ? 3 : 0);
     CcMoney toll = TradeRouteToll(sim, route);
     CcMoney fare = preview.provision_cost;
+    const CcSettlement *origin = CcSimSettlement(
+        sim, sim->player.location_id);
+    if (sim->schema_version >= 14U && preview.horse_readiness < 30) {
+        SetError(error, error_capacity,
+                 "The horse team needs food and rest before another journey.");
+        return false;
+    }
+    if (sim->schema_version >= 14U && (origin == NULL ||
+        origin->stock[CC_GOOD_FOOD] < preview.horse_feed_required)) {
+        SetError(error, error_capacity,
+                 "The departure market lacks enough fodder for the horse team.");
+        return false;
+    }
     if (sim->player.coins < fare) {
         SetError(error, error_capacity, "The company cannot provision that journey.");
         return false;
@@ -7236,7 +7464,20 @@ static bool ApplyTravel(CcSim *sim, const CcCommand *command,
     sim->player.coins -= fare;
     CcSettlement *origin_market = CcSimSettlementMutable(
         sim, sim->player.location_id);
-    if (origin_market != NULL) origin_market->market_coins += base_fare;
+    if (origin_market != NULL) {
+        origin_market->market_coins += base_fare;
+        if (sim->schema_version >= 14U) {
+            origin_market->stock[CC_GOOD_FOOD] -=
+                preview.horse_feed_required;
+        }
+    }
+    if (sim->schema_version >= 14U) {
+        for (int32_t i = 0; i < CC_CARRIAGE_HORSE_COUNT; ++i) {
+            sim->horse_team[i].hunger = ClampI32(
+                sim->horse_team[i].hunger -
+                    preview.horse_feed_required * 12, 0, 100);
+        }
+    }
     CcKingdom *toll_kingdom = KingdomMutable(sim, destination->kingdom_id);
     if (toll_kingdom != NULL) toll_kingdom->treasury += toll;
     sim->journey = (CcJourneyEncounter){
@@ -7269,12 +7510,20 @@ static bool ApplyTravel(CcSim *sim, const CcCommand *command,
         .condition = sim->carriage.condition
     };
     char text[CC_EVENT_TEXT_CAPACITY];
-    const CcSettlement *origin = CcSimSettlement(
-        sim, sim->journey.origin_id);
-    (void)snprintf(text, sizeof(text),
-                   "The Crownless carriage leaves %s for %s with %d days of provisions reserved.",
-                   origin != NULL ? origin->name : "the waystation",
-                   destination->name, days);
+    if (sim->schema_version >= 14U) {
+        (void)snprintf(
+            text, sizeof(text),
+            "%.16s and %.16s pull from %.16s toward %.16s for %d days with %d fodder.",
+            sim->horse_team[0].name, sim->horse_team[1].name,
+            origin != NULL ? origin->name : "the waystation",
+            destination->name, days, preview.horse_feed_required);
+    } else {
+        (void)snprintf(
+            text, sizeof(text),
+            "The Crownless carriage leaves %s for %s with %d days of provisions reserved.",
+            origin != NULL ? origin->name : "the waystation",
+            destination->name, days);
+    }
     CcEvent *departure = PushEvent(
         sim, CC_EVENT_JOURNEY_DEPARTED, sim->player.id, route->id,
         parent_event_id, days, text);
@@ -7908,7 +8157,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                          sim->schema_version == 9U ||
                          sim->schema_version == 10U ||
                          sim->schema_version == 11U ||
-                         sim->schema_version == 12U;
+                         sim->schema_version == 12U ||
+                         sim->schema_version == 13U;
     bool supported_generator = sim->generator_version == CC_GENERATOR_VERSION ||
         (legacy_schema && (sim->generator_version == 3U ||
                            sim->generator_version == 5U ||
@@ -7918,7 +8168,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                            sim->generator_version == 9U ||
                            sim->generator_version == 10U ||
                            sim->generator_version == 11U ||
-                           sim->generator_version == 12U));
+                           sim->generator_version == 12U ||
+                           sim->generator_version == 13U));
     if ((!legacy_schema && sim->schema_version != CC_SIM_SCHEMA_VERSION) ||
         !supported_generator) {
         SetError(error, error_capacity, "Simulation version is unsupported.");
@@ -7989,7 +8240,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             if (event == NULL || CcIdKind(event->id) != CC_ENTITY_EVENT ||
                 event->day < 1 || event->day > sim->current_day ||
                 event->kind < CC_EVENT_HARVEST_FAILED ||
-                event->kind > CC_EVENT_ENCOUNTER_WITHDRAWN ||
+                event->kind > CC_EVENT_COW_SLAUGHTERED ||
                 event->parent_id == event->id ||
                 (event->parent_id != 0U &&
                  CcSimEvent(sim, event->parent_id) == NULL)) {
@@ -8046,6 +8297,12 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 settlement->treasure_gems_committed < 0 ||
                 settlement->treasure_work < 0 ||
                 settlement->treasure_work > 3 ||
+                settlement->cow_adults < 0 ||
+                settlement->cow_calves < 0 ||
+                settlement->cow_condition < 0 ||
+                settlement->cow_condition > 100 ||
+                settlement->cow_hunger < 0 ||
+                settlement->cow_hunger > 100 ||
                 (settlement->service_mask & ~known_services) != 0U ||
                 CcSettlementServiceCount(settlement) >
                     CcSettlementServiceCapacity(settlement->size) ||
@@ -8455,6 +8712,21 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         SetError(error, error_capacity, "Player company state is invalid.");
         return false;
     }
+    if (sim->schema_version == CC_SIM_SCHEMA_VERSION) {
+        for (int32_t i = 0; i < CC_CARRIAGE_HORSE_COUNT; ++i) {
+            const CcHorse *horse = &sim->horse_team[i];
+            if (CcIdKind(horse->id) != CC_ENTITY_HORSE ||
+                horse->name[0] == '\0' || horse->age_days < 0 ||
+                horse->health < 1 || horse->health > 100 ||
+                horse->fatigue < 0 || horse->fatigue > 100 ||
+                horse->hunger < 0 || horse->hunger > 100 ||
+                (i > 0 && horse->id == sim->horse_team[i - 1].id)) {
+                SetError(error, error_capacity,
+                         "Carriage horse state is invalid.");
+                return false;
+            }
+        }
+    }
     if (sim->schema_version == 3U) {
         if (sim->journey.active &&
             (CcSimSituation(sim, sim->journey.situation_id) == NULL ||
@@ -8679,6 +8951,12 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(item->treasure_gems_committed);
             HASH_VALUE(item->treasure_work);
         }
+        if (sim->schema_version >= 14U) {
+            HASH_VALUE(item->cow_adults);
+            HASH_VALUE(item->cow_calves);
+            HASH_VALUE(item->cow_condition);
+            HASH_VALUE(item->cow_hunger);
+        }
         HASH_VALUE(sim->last_shortage_level[i]);
     }
     for (int32_t i = 0; i < sim->route_count; ++i) {
@@ -8880,6 +9158,17 @@ uint64_t CcSimHash(const CcSim *sim)
     if (sim->schema_version >= 13U) {
         HASH_VALUE(sim->player.map_catalogue_mask);
         HASH_VALUE(sim->player.map_archive_mask);
+    }
+    if (sim->schema_version >= 14U) {
+        for (int32_t i = 0; i < CC_CARRIAGE_HORSE_COUNT; ++i) {
+            const CcHorse *horse = &sim->horse_team[i];
+            HASH_VALUE(horse->id);
+            hash = HashString(hash, horse->name);
+            HASH_VALUE(horse->age_days);
+            HASH_VALUE(horse->health);
+            HASH_VALUE(horse->fatigue);
+            HASH_VALUE(horse->hunger);
+        }
     }
     /* Optional schema-v3 extension: omitting zero preserves hashes written by
        saves created before explicit charter commitments existed. */

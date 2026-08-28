@@ -194,7 +194,7 @@ static void CheckLegacyJournalMigration(char *error,
              legacy_generation);
     CC_CHECK(ReadSqliteInteger(
                  path, "SELECT journal_cursor FROM meta WHERE id=1;") == 0);
-    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 13);
+    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 14);
     CC_CHECK(CcJournalAdvanceDays(journal, &resumed, 2,
                                   error, error_capacity));
     uint64_t expected_hash = CcSimHash(&resumed);
@@ -415,6 +415,26 @@ static void CheckSchema12Compatibility(char *error, size_t error_capacity)
     CC_CHECK(CcPlayerMapCollectionCount(&restored) == 1);
     CC_CHECK(restored.dragon.age_days == dragon_age);
     CC_CHECK(restored.dragon.memory_integrity == 100);
+    CC_CHECK(CcSimValidate(&restored, error, error_capacity));
+    RemoveDatabase(path);
+}
+
+static void CheckSchema13Compatibility(char *error, size_t error_capacity)
+{
+    const char *path = "persistence-legacy-v13-test.ccsave";
+    RemoveDatabase(path);
+    CcSim legacy;
+    CcSimInit(&legacy, UINT32_C(0x1e9ac13));
+    legacy.schema_version = 13U;
+    legacy.generator_version = 13U;
+    CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.generator_version == CC_GENERATOR_VERSION);
+    CC_CHECK(CcIdKind(restored.horse_team[0].id) == CC_ENTITY_HORSE);
+    CC_CHECK(CcIdKind(restored.horse_team[1].id) == CC_ENTITY_HORSE);
+    CC_CHECK(restored.settlements[0].cow_adults > 0);
     CC_CHECK(CcSimValidate(&restored, error, error_capacity));
     RemoveDatabase(path);
 }
@@ -726,6 +746,7 @@ int main(void)
     CheckSchema10Compatibility(error, sizeof(error));
     CheckSchema11Compatibility(error, sizeof(error));
     CheckSchema12Compatibility(error, sizeof(error));
+    CheckSchema13Compatibility(error, sizeof(error));
     CheckDiplomacyPersistence(error, sizeof(error));
     CheckJournalRecovery(error, sizeof(error));
     CheckJournalCheckpointAndTamper(error, sizeof(error));

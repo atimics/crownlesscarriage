@@ -497,9 +497,10 @@ static void DescribeRoutes(const CcMetagame *metagame,
                                 destination != NULL ?
             destination->name : "unmarked track";
         Append(output, capacity,
-               "  %d. %s — %d days, %" PRId64 " crowns, %s",
+               "  %d. %s — %d days, %" PRId64 " crowns, %d fodder, horse team %d%%, %s",
                i + 1, road_name, preview.travel_days,
-               preview.provision_cost,
+               preview.provision_cost, preview.horse_feed_required,
+               preview.horse_readiness,
                route->closed ? "restricted and tolled" : "open");
         if (map != NULL) {
             Append(output, capacity,
@@ -571,6 +572,30 @@ static void DescribeCargo(const CcMetagame *metagame,
                    "  Treasure %d: %s; one slot, value %d crowns\n",
                    i + 1, treasure->name, treasure->appraised_value);
         }
+    }
+}
+
+static void DescribeAnimals(const CcMetagame *metagame,
+                            char *output, size_t capacity)
+{
+    const CcSim *sim = &metagame->sim;
+    Append(output, capacity, "Carriage horses — team readiness %d%%:\n",
+           CcSimHorseTeamReadiness(sim));
+    for (int32_t i = 0; i < CC_CARRIAGE_HORSE_COUNT; ++i) {
+        const CcHorse *horse = &sim->horse_team[i];
+        Append(output, capacity,
+               "  %s: age %d, health %d, fatigue %d, hunger %d\n",
+               horse->name, horse->age_days / 365, horse->health,
+               horse->fatigue, horse->hunger);
+    }
+    Append(output, capacity, "Cattle herds:\n");
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        const CcSettlement *place = &sim->settlements[i];
+        if (place->cow_adults + place->cow_calves <= 0) continue;
+        Append(output, capacity,
+               "  %s: %d cows, %d calves, condition %d, hunger %d\n",
+               place->name, place->cow_adults, place->cow_calves,
+               place->cow_condition, place->cow_hunger);
     }
 }
 
@@ -800,7 +825,10 @@ static void DescribeEconomy(const CcMetagame *metagame,
                place->stock[CC_GOOD_WEAPONS], place->stock[CC_GOOD_GOLD],
                place->stock[CC_GOOD_GEMS]);
         if (CcSettlementHasService(place, CC_SERVICE_FARM)) {
-            Append(output, capacity, "; fields %d%%", place->field_yield);
+            Append(output, capacity,
+                   "; fields %d%%, cattle %d + %d calves",
+                   place->field_yield, place->cow_adults,
+                   place->cow_calves);
         }
         if (CcSettlementHasService(place, CC_SERVICE_MINE)) {
             Append(output, capacity,
@@ -1014,7 +1042,7 @@ static void DescribeHelp(char *output, size_t capacity)
 {
     Append(output, capacity,
            "See the world:\n"
-           "  look, causes, people, rumors, charters, roads, notes, cargo, economy, treasures, inequality, kingdoms, war, dragon, status, history [COUNT]\n"
+           "  look, causes, people, rumors, charters, roads, notes, cargo, animals, economy, treasures, inequality, kingdoms, war, dragon, status, history [COUNT]\n"
            "Make commitments:\n"
            "  accept NUMBER, refuse NUMBER, abandon\n"
            "Move goods and people:\n"
@@ -1136,6 +1164,8 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
         DescribeMaps(metagame, output, output_capacity);
     } else if (strcmp(command, "cargo") == 0) {
         DescribeCargo(metagame, output, output_capacity);
+    } else if (strcmp(command, "animals") == 0) {
+        DescribeAnimals(metagame, output, output_capacity);
     } else if (strcmp(command, "economy") == 0) {
         DescribeEconomy(metagame, output, output_capacity);
     } else if (strcmp(command, "treasures") == 0) {

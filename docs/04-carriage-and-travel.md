@@ -54,6 +54,29 @@ Progression unlocks new choices rather than only larger numbers:
 Modules should create political, narrative, and route opportunities in
 addition to modifying combat or capacity.
 
+## V1 working animals
+
+The first playable animal economy contains only horses and cows. They share
+the quadruped movement system, but they have different jobs in the world.
+
+The Crownless company owns two named horses. Their age, health, fatigue, and
+hunger persist. Every journey reserves real fodder from the departure market.
+Cargo weight and a poor road tire the team, while food, time, and a settlement
+stable restore it. A tired team travels more slowly; an exhausted or hungry
+team cannot depart.
+
+Farm settlements keep cattle as adult cows and calves. A herd consumes stored
+Food as fodder and adds a small weekly food yield. Good conditions let calves
+join the adult herd and allow new calves to be born. Fodder failure weakens the
+herd and can force a cow to be slaughtered, exchanging future production for
+four immediate Food. Dragon hunts remove actual cows before taking anonymous
+stored food.
+
+Named horses are individual simulation records because they stay with the
+player. Cows remain settlement herds until a later situation needs to promote
+one animal. V1 does not include riding, mounted combat, breeds, genetics, milk
+as a separate good, or any other domestic animal species.
+
 ## Walker-chassis hypothesis
 
 **Hypothesis:** the Crownless Carriage is an old articulated walker built to

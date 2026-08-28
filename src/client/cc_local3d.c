@@ -18236,12 +18236,15 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     int32_t road_cargo = CcPlayerCargoUsed(&sim->player);
     DrawRoadCarriage(carriage_base, road_cargo, clock, carriage_moving,
                      0.5f * PI, true);
-    int32_t roadside_food = 0;
-    if (origin != NULL) roadside_food += origin->stock[CC_GOOD_FOOD];
-    if (destination_place != NULL) {
-        roadside_food += destination_place->stock[CC_GOOD_FOOD];
+    int32_t roadside_cattle = 0;
+    if (origin != NULL) {
+        roadside_cattle += origin->cow_adults + origin->cow_calves;
     }
-    if (roadside_food > 0) {
+    if (destination_place != NULL) {
+        roadside_cattle += destination_place->cow_adults +
+                           destination_place->cow_calves;
+    }
+    if (roadside_cattle > 0) {
         Vector3 cow_position = {carriage_x + 3.8f, 0.0f, 33.40f};
         CcCreaturePose cow_pose = CcCreatureSteppedPose(
             CC_CREATURE_COW, clock * 1.55f, travelling);
@@ -18254,7 +18257,7 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
             -0.72f * PI, 0.88f, (Color){184, 169, 139, 255},
             clock * 1.55f, travelling,
             controlled ? &controlled_cow : NULL);
-        if (roadside_food >= 40) {
+        if (roadside_cattle >= 24) {
             (void)DrawCreature3D(
                 CC_CREATURE_COW, CC_CREATURE_POSE_IDLE,
                 (Vector3){carriage_x + 5.60f, 0.0f, 32.80f},
@@ -18461,7 +18464,7 @@ static void DrawSettlementCreatures(const CcSim *sim,
     const CcGoblinCult *goblins = &sim->goblins;
     const CcDragon *dragon = &sim->dragon;
 
-    if (place->stock[CC_GOOD_FOOD] >= 18 &&
+    if (place->cow_adults + place->cow_calves > 0 &&
         SceneryPointVisible(63.0f, 38.3f, scenery_focus)) {
         CcCreaturePose cow_pose = CcCreatureSteppedPose(
             CC_CREATURE_COW, clock * 1.25f, true);
