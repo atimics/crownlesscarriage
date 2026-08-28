@@ -291,6 +291,9 @@ typedef struct CcLocalCourse {
     int32_t defenses_completed;
     CcCombatOutcome last_outcome;
     CcCombatTeam last_attacker_team;
+    CcCombatTeam last_defender_team;
+    float last_health_damage;
+    float last_posture_damage;
     float combat_event_seconds;
     double world_simulation_accumulator;
     bool alarm_active;

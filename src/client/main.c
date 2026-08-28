@@ -126,10 +126,14 @@ typedef enum ContextActionKind {
 typedef struct ContextAction {
     ContextActionKind kind;
     char label[64];
+    char key_hint[16];
+    char detail[48];
+    bool enabled;
+    bool active;
 } ContextAction;
 
 typedef struct ContextActionSet {
-    ContextAction items[5];
+    ContextAction items[6];
     int32_t count;
 } ContextActionSet;
 
@@ -473,6 +477,8 @@ static void DrawBar(int x, int y, int width, const char *label,
 }
 
 static Color SituationColor(CcSituationKind kind);
+static int32_t SelectedCombatTargetIndex(const LocalState *local);
+static const CcLocalAgent *SelectedCombatTarget(const LocalState *local);
 
 static float GridDistance(Vector2 a, Vector2 b)
 {
@@ -589,8 +595,17 @@ static void RecordActionReelImpact(CcLocalCourse *course,
                                    CcLocalAgent *defender)
 {
     if (!CcHumanoidGaitConsumeStrikeImpact(&attacker->humanoid)) return;
+    float previous_health = defender != NULL ? defender->combat.health : 0.0f;
+    float previous_posture = defender != NULL ?
+        defender->combat.posture : 0.0f;
     course->last_outcome = CcLocalCombatResolveStrike(attacker, defender);
     course->last_attacker_team = attacker->combat.team;
+    course->last_defender_team = defender != NULL ?
+        defender->combat.team : CC_COMBAT_NEUTRAL;
+    course->last_health_damage = defender != NULL ?
+        fmaxf(0.0f, previous_health - defender->combat.health) : 0.0f;
+    course->last_posture_damage = defender != NULL ?
+        fmaxf(0.0f, previous_posture - defender->combat.posture) : 0.0f;
     course->combat_event_seconds = 0.72f;
 }
 
@@ -727,18 +742,116 @@ static void DrawLocalHeader(const CcSim *sim, const LocalState *local)
                  TextFormat("%s  /  Market", place->name) :
              place != NULL ? place->name : "Crownless",
              22, 18, 18, INK);
-    CcOverlayDrawText(TextFormat("DAY %d     %" PRId64 " cr     CARGO %d/%d",
-                        sim->current_day, sim->player.coins,
-                        CcPlayerCargoUsed(&sim->player),
-                        sim->player.cargo_capacity),
-             1002, 22, 10, road ? TEAL : CC_GOLD);
+    const char *summary = TextFormat(
+        "DAY %d     %" PRId64 " cr     CARGO %d/%d",
+        sim->current_day, sim->player.coins,
+        CcPlayerCargoUsed(&sim->player), sim->player.cargo_capacity);
+    int summary_width = CcOverlayMeasureText(summary, 10);
+    CcOverlayDrawText(summary, GetScreenWidth() - summary_width - 22,
+                      22, 10, road ? TEAL : CC_GOLD);
 }
 
-static void DrawTownCombatPanel(const LocalState *local)
+static bool LocalCombatActive(const LocalState *local)
+{
+    return local != NULL &&
+           (local->journey_combat_active ||
+            (!local->market_interior && local->course.alarm_active));
+}
+
+static int32_t StandingRaiders(const LocalState *local)
+{
+    int32_t standing = 0;
+    for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
+        if (local->course.raiders[i].combat.life_state == CC_LIFE_ALIVE) {
+            standing += 1;
+        }
+    }
+    return standing;
+}
+
+static void DrawCombatMeter(int x, int y, int width, const char *label,
+                            float value, Color color, bool enabled)
+{
+    float clamped = fmaxf(0.0f, fminf(100.0f, value));
+    Color ink = enabled ? INK : Fade(MUTED, 0.52f);
+    Color meter = enabled ? color : Fade(MUTED, 0.34f);
+    CcOverlayDrawText(label, x, y, 7, Fade(ink, 0.88f));
+    const char *number = TextFormat("%d", (int32_t)lroundf(clamped));
+    int number_width = CcOverlayMeasureText(number, 8);
+    CcOverlayDrawText(number, x + width - number_width, y - 1, 8, ink);
+    DrawRectangle(x, y + 12, width, 7, Fade(BAR_TRACK, 0.94f));
+    DrawRectangle(x, y + 12,
+                  (int)lroundf((float)width * clamped / 100.0f), 7, meter);
+}
+
+static const char *CombatResolveLabel(const LocalState *local)
+{
+    if (local->course.raiders_retreating) return "BREAKING";
+    if (local->course.raider_resolve <= 25) return "WAVERING";
+    if (local->course.raider_resolve <= 55) return "PRESSURED";
+    return "HOLDING";
+}
+
+static Color CombatTeamColor(CcCombatTeam team)
+{
+    switch (team) {
+        case CC_COMBAT_PLAYER: return TEAL;
+        case CC_COMBAT_GUARD: return CC_GOLD;
+        case CC_COMBAT_RAIDER: return DANGER;
+        case CC_COMBAT_NEUTRAL:
+        default: return MUTED;
+    }
+}
+
+static void DrawCombatImpactBanner(const LocalState *local)
+{
+    const CcLocalCourse *course = &local->course;
+    if (course->combat_event_seconds <= 0.0f ||
+        course->last_outcome == CC_COMBAT_OUTCOME_NONE) {
+        return;
+    }
+    char headline[64];
+    char detail[64];
+    (void)snprintf(headline, sizeof(headline), "%s  /  %s",
+                   CcLocalCombatTeamName(course->last_attacker_team),
+                   CcLocalCombatOutcomeName(course->last_outcome));
+    if (course->last_health_damage >= 0.5f) {
+        (void)snprintf(detail, sizeof(detail), "-%d HEALTH",
+                       (int32_t)lroundf(course->last_health_damage));
+    } else if (course->last_posture_damage >= 0.5f) {
+        (void)snprintf(detail, sizeof(detail), "-%d POSTURE",
+                       (int32_t)lroundf(course->last_posture_damage));
+    } else {
+        (void)snprintf(detail, sizeof(detail), "%s",
+                       course->last_outcome == CC_COMBAT_OUTCOME_MISS ?
+                           "NO CONTACT" : "NO DAMAGE");
+    }
+    float opacity = fminf(1.0f, course->combat_event_seconds / 0.24f);
+    int headline_width = CcOverlayMeasureText(headline, 12);
+    int detail_width = CcOverlayMeasureText(detail, 8);
+    int width = (headline_width > detail_width ? headline_width :
+                 detail_width) + 32;
+    float x = ((float)GetScreenWidth() - (float)width) * 0.5f;
+    Rectangle bounds = {x, 87.0f, (float)width, 52.0f};
+    Color team_color = CombatTeamColor(course->last_attacker_team);
+    DrawRectangleRounded(bounds, 0.20f, 5, Fade(PANEL_DEEP, 0.94f * opacity));
+    DrawRectangleRoundedLinesEx(bounds, 0.20f, 5, 2.0f,
+                                Fade(team_color, opacity));
+    CcOverlayDrawText(headline,
+                      (int)(x + ((float)width - (float)headline_width) * 0.5f),
+                      98, 12, Fade(team_color, opacity));
+    CcOverlayDrawText(detail,
+                      (int)(x + ((float)width - (float)detail_width) * 0.5f),
+                      120, 8,
+                      Fade(course->last_defender_team == CC_COMBAT_PLAYER ?
+                               DANGER : INK,
+                           opacity));
+}
+
+static void DrawCombatPanel(const LocalState *local)
 {
     int32_t guards_standing = 0;
     int32_t guards_engaged = 0;
-    int32_t raiders_standing = 0;
     for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
         const CcLocalCourseRunner *guard = &local->course.runners[i];
         if (guard->agent.combat.life_state == CC_LIFE_ALIVE) {
@@ -746,40 +859,75 @@ static void DrawTownCombatPanel(const LocalState *local)
             if (guard->duty == CC_GUARD_ENGAGED) guards_engaged += 1;
         }
     }
-    for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
-        if (local->course.raiders[i].combat.life_state == CC_LIFE_ALIVE) {
-            raiders_standing += 1;
-        }
-    }
 
-    DrawPanel((Rectangle){994.0f, 72.0f, 246.0f, 154.0f},
-              Fade(PANEL_DEEP, 0.93f));
-    CcOverlayDrawText("HOLD THE STREET", 1012, 88, 12, DANGER);
-    CcOverlayDrawText(TextFormat("%.22s", local->course.raider_company_name),
-                      1012, 107, 9, INK);
-    DrawBar(1012, 132, 74, "YOU",
-            (int32_t)lroundf(local->agent.combat.health), TEAL);
-    DrawBar(1012, 153, 74, "NERVE",
-            local->course.raider_resolve, DANGER);
+    Rectangle panel = {(float)GetScreenWidth() - 326.0f, 78.0f,
+                       304.0f, 240.0f};
+    DrawPanel(panel, Fade(PANEL_DEEP, 0.95f));
+    int x = (int)panel.x + 16;
+    int y = (int)panel.y;
+    const char *title = local->journey_combat_active ?
+        "ROAD AMBUSH" : "STREET DEFENSE";
+    CcOverlayDrawText(title, x, y + 13, 11, DANGER);
+    CcOverlayDrawText(TextFormat("%.28s", local->course.raider_company_name),
+                      x, y + 32, 9, INK);
+    const char *resolve_label = CombatResolveLabel(local);
+    int resolve_width = CcOverlayMeasureText(resolve_label, 8);
+    CcOverlayDrawText(resolve_label,
+                      (int)(panel.x + panel.width) - resolve_width - 16,
+                      y + 14, 8,
+                      local->course.raiders_retreating ? TEAL : CC_GOLD);
+    DrawRectangle(x, y + 53, (int)panel.width - 32, 1, Fade(MUTED, 0.30f));
 
-    int32_t target_index = local->agent.combat.target_index;
-    const CcLocalAgent *target =
-        target_index >= 0 && target_index < CC_LOCAL_RAIDER_COUNT &&
-        local->course.raiders[target_index].combat.life_state == CC_LIFE_ALIVE ?
-        &local->course.raiders[target_index] : NULL;
-    if (target != NULL) {
-        CcOverlayDrawText(
-            TextFormat("%s  /  %s",
-                       local->course.raider_names[target_index],
-                       CcLocalRaiderRoleName(
-                           local->course.raider_roles[target_index])),
-            1012, 184, 8, CC_GOLD);
-    } else {
-        CcOverlayDrawText("SELECT AN OUTLAW", 1012, 184, 9, CC_GOLD);
-    }
-    CcOverlayDrawText(TextFormat("GUARDS %d   COMPANY %d   ENGAGED %d",
-                        guards_standing, raiders_standing, guards_engaged),
-             1012, 207, 7, MUTED);
+    const int column_width = 126;
+    const int target_x = x + 146;
+    const CcLocalAgent *target = SelectedCombatTarget(local);
+    int32_t target_index = SelectedCombatTargetIndex(local);
+    const char *player_state =
+        local->agent.combat.life_state != CC_LIFE_ALIVE ? "DOWN" :
+        local->agent.combat.stagger_seconds > 0.0f ? "STAGGERED" :
+        local->agent.humanoid.guard_requested ? "GUARD UP" : "READY";
+    CcOverlayDrawText("YOU", x, y + 65, 9, TEAL);
+    CcOverlayDrawText(player_state, x, y + 81, 7,
+                      local->agent.humanoid.guard_requested ? CC_GOLD : MUTED);
+    DrawCombatMeter(x, y + 99, column_width, "HEALTH",
+                    local->agent.combat.health, TEAL, true);
+    DrawCombatMeter(x, y + 127, column_width, "POSTURE",
+                    local->agent.combat.posture, CC_GOLD, true);
+
+    CcOverlayDrawText(target != NULL ?
+                          TextFormat("%.16s",
+                                     local->course.raider_names[target_index]) :
+                          "NO TARGET",
+                      target_x, y + 65, 9,
+                      target != NULL ? DANGER : Fade(MUTED, 0.68f));
+    CcOverlayDrawText(target != NULL ?
+                          CcLocalRaiderRoleName(
+                              local->course.raider_roles[target_index]) :
+                          "CLICK OR [T] CYCLE",
+                      target_x, y + 81, 7, target != NULL ? MUTED : CC_GOLD);
+    DrawCombatMeter(target_x, y + 99, column_width, "HEALTH",
+                    target != NULL ? target->combat.health : 0.0f,
+                    DANGER, target != NULL);
+    DrawCombatMeter(target_x, y + 127, column_width, "POSTURE",
+                    target != NULL ? target->combat.posture : 0.0f,
+                    CC_VIOLET, target != NULL);
+
+    CcOverlayDrawText("COMPANY NERVE", x, y + 164, 7, MUTED);
+    CcOverlayDrawText(TextFormat("%d", local->course.raider_resolve),
+                      x + 256, y + 163, 8, INK);
+    DrawRectangle(x, y + 177, 268, 8, BAR_TRACK);
+    DrawRectangle(x, y + 177,
+                  (int)lroundf(268.0f *
+                               (float)local->course.raider_resolve / 100.0f),
+                  8, DANGER);
+    CcOverlayDrawText(
+        TextFormat("GUARDS %d  ENGAGED %d  OUTLAWS %d",
+                   guards_standing, guards_engaged, StandingRaiders(local)),
+        x, y + 204, 7, MUTED);
+    CcOverlayDrawText(local->journey_combat_active ?
+                          "BREAK THEM OR WITHDRAW" : "BREAK THEIR NERVE",
+                      x, y + 220, 7, CC_GOLD);
+    DrawCombatImpactBanner(local);
 }
 
 static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
@@ -791,40 +939,47 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
         const CcRoute *route = CcSimRoute(sim, sim->journey.route_id);
         const CcSettlement *destination = CcSimSettlement(
             sim, sim->journey.destination_id);
-        DrawPanel((Rectangle){994.0f, 72.0f, 246.0f, 150.0f},
+        if (local->journey_combat_active) {
+            DrawCombatPanel(local);
+            return;
+        }
+        float panel_x = (float)GetScreenWidth() - 286.0f;
+        int content_x = (int)panel_x + 18;
+        DrawPanel((Rectangle){panel_x, 78.0f, 264.0f, 150.0f},
                   Fade(PANEL_DEEP, 0.93f));
         if (local->journey_travel_active) {
             int32_t progress = sim->carriage.progress_milli / 10;
-            CcOverlayDrawText("ON THE ROAD", 1012, 91, 9, TEAL);
+            CcOverlayDrawText("ON THE ROAD", content_x, 91, 9, TEAL);
             CcOverlayDrawText(destination != NULL ? destination->name : "THE FAR GATE",
-                     1012, 112, 15, INK);
-            DrawBar(1012, 145, 74, "PROGRESS", progress, TEAL);
-            DrawBar(1012, 166, 74, "DANGER", sim->journey.danger, DANGER);
-            DrawBar(1012, 187, 74, "ROAD",
+                     content_x, 112, 15, INK);
+            DrawBar(content_x, 145, 74, "PROGRESS", progress, TEAL);
+            DrawBar(content_x, 166, 74, "DANGER", sim->journey.danger, DANGER);
+            DrawBar(content_x, 187, 74, "ROAD",
                     route != NULL ? route->condition : 0, CC_GOLD);
             return;
         }
         CcOverlayDrawText(local->journey_parley_active ? "PARLEY" :
                                                "CORDON",
-                 1012, 91, 9, local->journey_parley_active ? TEAL : DANGER);
+                 content_x, 91, 9,
+                 local->journey_parley_active ? TEAL : DANGER);
         CcOverlayDrawText(TextFormat("%.20s",
                                     local->course.raider_company_name),
-                          1012, 112, 12, INK);
+                          content_x, 112, 12, INK);
         CcLocalDrawAgentPortrait3D(
             &local->course.raiders[0],
-            (Rectangle){1012.0f, 143.0f, 44.0f, 54.0f});
+            (Rectangle){(float)content_x, 143.0f, 44.0f, 54.0f});
         CcOverlayDrawText(local->course.raider_names[0],
-                 1066, 148, 9, local->journey_parley_active ? CC_GOLD :
-                                                               DANGER);
+                 content_x + 54, 148, 9,
+                 local->journey_parley_active ? CC_GOLD : DANGER);
         CcOverlayDrawText(CcLocalRaiderRoleName(local->course.raider_roles[0]),
-                          1066, 160, 7, MUTED);
-        DrawBar(1066, 175, 44, "HP",
+                          content_x + 54, 160, 7, MUTED);
+        DrawBar(content_x + 54, 175, 44, "HP",
                 (int32_t)lroundf(local->course.raiders[0].combat.health),
                 DANGER);
         return;
     }
     if (!local->market_interior && local->course.alarm_active) {
-        DrawTownCombatPanel(local);
+        DrawCombatPanel(local);
         return;
     }
 }
@@ -1012,7 +1167,27 @@ static void AddContextAction(ContextActionSet *set, ContextActionKind kind,
     }
     ContextAction *action = &set->items[set->count++];
     action->kind = kind;
+    action->enabled = true;
     (void)snprintf(action->label, sizeof(action->label), "%s", label);
+}
+
+static void AddDetailedContextAction(ContextActionSet *set,
+                                     ContextActionKind kind,
+                                     const char *label,
+                                     const char *key_hint,
+                                     const char *detail,
+                                     bool enabled, bool active)
+{
+    int32_t previous_count = set != NULL ? set->count : 0;
+    AddContextAction(set, kind, label);
+    if (set == NULL || set->count == previous_count) return;
+    ContextAction *action = &set->items[set->count - 1];
+    action->enabled = enabled;
+    action->active = active;
+    (void)snprintf(action->key_hint, sizeof(action->key_hint), "%s",
+                   key_hint != NULL ? key_hint : "");
+    (void)snprintf(action->detail, sizeof(action->detail), "%s",
+                   detail != NULL ? detail : "");
 }
 
 static int32_t ActiveSituationCount(const CcSim *sim)
@@ -1036,6 +1211,110 @@ static CcGood ContextCargoGood(const CcSim *sim)
     return CC_GOOD_FOOD;
 }
 
+static int32_t SelectedCombatTargetIndex(const LocalState *local)
+{
+    if (local == NULL) return -1;
+    int32_t target = local->agent.combat.target_index;
+    if (target < 0 || target >= CC_LOCAL_RAIDER_COUNT ||
+        local->course.raiders[target].combat.life_state != CC_LIFE_ALIVE) {
+        return -1;
+    }
+    return target;
+}
+
+static const CcLocalAgent *SelectedCombatTarget(const LocalState *local)
+{
+    int32_t target = SelectedCombatTargetIndex(local);
+    return target >= 0 ? &local->course.raiders[target] : NULL;
+}
+
+static int32_t NextCombatTargetIndex(const LocalState *local)
+{
+    if (local == NULL) return -1;
+    int32_t current = SelectedCombatTargetIndex(local);
+    for (int32_t step = 1; step <= CC_LOCAL_RAIDER_COUNT; ++step) {
+        int32_t candidate = (current + step) % CC_LOCAL_RAIDER_COUNT;
+        if (local->course.raiders[candidate].combat.life_state ==
+            CC_LIFE_ALIVE) {
+            return candidate;
+        }
+    }
+    return -1;
+}
+
+static const char *CombatSkillDetail(const CcLocalAgent *player,
+                                     CcCombatSkill skill,
+                                     bool needs_target,
+                                     bool has_target)
+{
+    float cooldown = CcLocalCombatSkillCooldown(player, skill);
+    if (cooldown > 0.0f) return TextFormat("READY IN %.1fs", cooldown);
+    if (needs_target && !has_target) return "CHOOSE TARGET";
+    if (skill == CC_COMBAT_SKILL_SECOND_WIND) {
+        return TextFormat("POSTURE %d",
+                          (int32_t)lroundf(player->combat.posture));
+    }
+    return "READY";
+}
+
+static bool CombatSkillEnabled(const CcLocalAgent *player,
+                               CcCombatSkill skill,
+                               bool needs_target,
+                               bool has_target)
+{
+    if (player == NULL || player->combat.life_state != CC_LIFE_ALIVE ||
+        CcLocalCombatSkillCooldown(player, skill) > 0.0f ||
+        (needs_target && !has_target)) {
+        return false;
+    }
+    return skill != CC_COMBAT_SKILL_SECOND_WIND ||
+           player->combat.posture < CC_LOCAL_COMBAT_MAX_POSTURE;
+}
+
+static void AddCombatActions(ContextActionSet *set,
+                             const LocalState *local,
+                             bool allow_withdraw)
+{
+    int32_t target = SelectedCombatTargetIndex(local);
+    bool has_target = target >= 0;
+    const CcCombatState *combat = &local->agent.combat;
+    AddDetailedContextAction(
+        set, CONTEXT_ACTION_BASIC_STRIKE, "Attack", "SPACE",
+        has_target ? local->course.raider_names[target] : "CHOOSE TARGET",
+        has_target, false);
+    AddDetailedContextAction(
+        set, CONTEXT_ACTION_TOGGLE_GUARD, "Guard", "X",
+        local->agent.humanoid.guard_requested ? "GUARD UP" : "GUARD DOWN",
+        true, local->agent.humanoid.guard_requested);
+    AddDetailedContextAction(
+        set, CONTEXT_ACTION_SKILL_CRUSHING, "Crushing blow", "1",
+        CombatSkillDetail(&local->agent, CC_COMBAT_SKILL_CRUSHING_BLOW,
+                          true, has_target),
+        CombatSkillEnabled(&local->agent, CC_COMBAT_SKILL_CRUSHING_BLOW,
+                           true, has_target),
+        combat->queued_skill == CC_COMBAT_SKILL_CRUSHING_BLOW ||
+            combat->active_skill == CC_COMBAT_SKILL_CRUSHING_BLOW);
+    AddDetailedContextAction(
+        set, CONTEXT_ACTION_SKILL_SUNDER, "Sunder", "2",
+        CombatSkillDetail(&local->agent, CC_COMBAT_SKILL_SUNDER,
+                          true, has_target),
+        CombatSkillEnabled(&local->agent, CC_COMBAT_SKILL_SUNDER,
+                           true, has_target),
+        combat->queued_skill == CC_COMBAT_SKILL_SUNDER ||
+            combat->active_skill == CC_COMBAT_SKILL_SUNDER);
+    AddDetailedContextAction(
+        set, CONTEXT_ACTION_SKILL_SECOND_WIND, "Second wind", "3",
+        CombatSkillDetail(&local->agent, CC_COMBAT_SKILL_SECOND_WIND,
+                          false, has_target),
+        CombatSkillEnabled(&local->agent, CC_COMBAT_SKILL_SECOND_WIND,
+                           false, has_target), false);
+    if (allow_withdraw) {
+        AddDetailedContextAction(
+            set, CONTEXT_ACTION_WITHDRAW, "Withdraw", "BACKSPACE",
+            "LEAVE THE FIGHT", true, false);
+    }
+}
+
 static ContextActionSet BuildContextActions(
     const CcSim *sim, const LocalState *local, ClientView view,
     int32_t selected, int32_t selected_situation)
@@ -1043,8 +1322,12 @@ static ContextActionSet BuildContextActions(
     ContextActionSet set = {0};
     if (sim == NULL || local == NULL) return set;
     if (view == VIEW_ENCOUNTER) {
-        AddContextAction(&set, CONTEXT_ACTION_FIGHT, "Draw steel");
-        AddContextAction(&set, CONTEXT_ACTION_PAY, "Hear them out");
+        AddDetailedContextAction(&set, CONTEXT_ACTION_FIGHT,
+                                 "Draw steel", "1",
+                                 "ENTER COMBAT", true, false);
+        AddDetailedContextAction(&set, CONTEXT_ACTION_PAY,
+                                 "Hear them out", "2",
+                                 "ENTER PARLEY", true, false);
         return set;
     }
     if (view == VIEW_LEDGER) {
@@ -1126,23 +1409,11 @@ static ContextActionSet BuildContextActions(
         return set;
     }
     if (local->journey_combat_active) {
-        AddContextAction(&set, CONTEXT_ACTION_BASIC_STRIKE, "Attack");
-        AddContextAction(&set, CONTEXT_ACTION_TOGGLE_GUARD, "Guard");
-        AddContextAction(&set, CONTEXT_ACTION_SKILL_CRUSHING,
-                         "Crushing blow");
-        AddContextAction(&set, CONTEXT_ACTION_SKILL_SUNDER, "Sunder");
-        AddContextAction(&set, CONTEXT_ACTION_WITHDRAW,
-                         "Withdraw to carriage");
+        AddCombatActions(&set, local, true);
         return set;
     }
     if (!local->market_interior && local->course.alarm_active) {
-        AddContextAction(&set, CONTEXT_ACTION_BASIC_STRIKE, "Attack");
-        AddContextAction(&set, CONTEXT_ACTION_TOGGLE_GUARD, "Guard");
-        AddContextAction(&set, CONTEXT_ACTION_SKILL_CRUSHING,
-                         "Crushing blow");
-        AddContextAction(&set, CONTEXT_ACTION_SKILL_SUNDER, "Sunder");
-        AddContextAction(&set, CONTEXT_ACTION_SKILL_SECOND_WIND,
-                         "Catch breath");
+        AddCombatActions(&set, local, false);
         return set;
     }
 
@@ -1213,19 +1484,23 @@ static ContextActionSet BuildContextActions(
 
 static Rectangle ContextActionBounds(int32_t index, int32_t count)
 {
-    const float width = 220.0f;
-    const float gap = 12.0f;
+    const float gap = 8.0f;
+    const float margin = 22.0f;
+    float width = ((float)GetScreenWidth() - margin * 2.0f -
+                   (float)(count - 1) * gap) / (float)count;
+    if (width > 220.0f) width = 220.0f;
     float total = (float)count * width + (float)(count - 1) * gap;
     return (Rectangle){((float)GetScreenWidth() - total) * 0.5f +
                            (float)index * (width + gap),
-                       697.0f, width, 46.0f};
+                       (float)GetScreenHeight() - 66.0f, width, 58.0f};
 }
 
 static Color ContextActionColor(ContextActionKind kind)
 {
     if (kind == CONTEXT_ACTION_FIGHT ||
         kind == CONTEXT_ACTION_ABANDON_PROMISE ||
-        kind == CONTEXT_ACTION_RAISE_ALARM) return DANGER;
+        kind == CONTEXT_ACTION_RAISE_ALARM ||
+        kind == CONTEXT_ACTION_WITHDRAW) return DANGER;
     if (kind == CONTEXT_ACTION_ACCEPT_PROMISE ||
         kind == CONTEXT_ACTION_TRAVEL ||
         kind == CONTEXT_ACTION_DELIVER_CARGO ||
@@ -1249,24 +1524,54 @@ static void DrawContextActionTray(const CcSim *sim, const LocalState *local,
     Vector2 mouse = GetMousePosition();
     for (int32_t i = 0; i < actions.count; ++i) {
         Rectangle bounds = ContextActionBounds(i, actions.count);
-        bool hover = CheckCollisionPointRec(mouse, bounds);
-        Color accent = ContextActionColor(actions.items[i].kind);
-        DrawRectangleRounded(bounds, 0.18f, 5,
-                             hover ? PANEL_HOVER : Fade(PANEL_DEEP, 0.96f));
+        const ContextAction *action = &actions.items[i];
+        bool hover = action->enabled && CheckCollisionPointRec(mouse, bounds);
+        Color accent = ContextActionColor(action->kind);
+        Color fill = action->active ? Fade(accent, 0.20f) :
+                     hover ? PANEL_HOVER : Fade(PANEL_DEEP, 0.96f);
+        DrawRectangleRounded(bounds, 0.16f, 5, fill);
         DrawRectangleRoundedLinesEx(bounds, 0.18f, 5,
-                                    hover ? 2.0f : 1.0f,
-                                    Fade(accent, hover ? 0.96f : 0.62f));
-        if (hover) {
+                                    hover || action->active ? 2.0f : 1.0f,
+                                    action->enabled ?
+                                        Fade(accent, hover || action->active ?
+                                                     0.96f : 0.62f) :
+                                        Fade(MUTED, 0.34f));
+        if (hover || action->active) {
             DrawRectangleRounded(
-                (Rectangle){bounds.x + 8.0f, bounds.y + 12.0f,
-                            4.0f, bounds.height - 24.0f},
+                (Rectangle){bounds.x + 7.0f, bounds.y + 10.0f,
+                            3.0f, bounds.height - 20.0f},
                 0.8f, 3, accent);
         }
-        int width = CcOverlayMeasureText(actions.items[i].label, 11);
-        CcOverlayDrawText(actions.items[i].label,
+        bool detailed = action->detail[0] != '\0' ||
+                        action->key_hint[0] != '\0';
+        Color label_color = !action->enabled ? Fade(MUTED, 0.62f) :
+                            hover || action->active ? accent : INK;
+        int width = CcOverlayMeasureText(action->label, detailed ? 10 : 11);
+        CcOverlayDrawText(action->label,
                           (int)(bounds.x +
                                 (bounds.width - (float)width) * 0.5f),
-                          (int)bounds.y + 17, 11, hover ? accent : INK);
+                          (int)bounds.y + (detailed ? 10 : 22),
+                          detailed ? 10 : 11, label_color);
+        if (action->key_hint[0] != '\0') {
+            const char *hint = TextFormat("[%s]", action->key_hint);
+            int hint_width = CcOverlayMeasureText(hint, 7);
+            CcOverlayDrawText(hint,
+                              (int)(bounds.x + bounds.width -
+                                    (float)hint_width - 9.0f),
+                              (int)bounds.y + 9, 7,
+                              action->enabled ? Fade(accent, 0.86f) :
+                                                Fade(MUTED, 0.48f));
+        }
+        if (action->detail[0] != '\0') {
+            int detail_width = CcOverlayMeasureText(action->detail, 7);
+            CcOverlayDrawText(action->detail,
+                              (int)(bounds.x +
+                                    (bounds.width - (float)detail_width) *
+                                        0.5f),
+                              (int)bounds.y + 38, 7,
+                              action->enabled ? Fade(MUTED, 0.92f) :
+                                                Fade(MUTED, 0.46f));
+        }
     }
 }
 
@@ -1281,12 +1586,41 @@ static ContextActionKind PressedContextAction(
         sim, local, view, selected, selected_situation);
     Vector2 mouse = GetMousePosition();
     for (int32_t i = 0; i < actions.count; ++i) {
-        if (CheckCollisionPointRec(
+        if (actions.items[i].enabled && CheckCollisionPointRec(
                 mouse, ContextActionBounds(i, actions.count))) {
             return actions.items[i].kind;
         }
     }
     return CONTEXT_ACTION_NONE;
+}
+
+static void DrawCombatStatusLine(const LocalState *local,
+                                 const char *message, float message_age)
+{
+    if (!LocalCombatActive(local)) return;
+    const CcLocalAgent *target = SelectedCombatTarget(local);
+    const char *status = NULL;
+    if (message != NULL && message[0] != '\0' && message_age < 3.2f) {
+        status = message;
+    } else if (target == NULL) {
+        status = "Click an outlaw or press T to choose a target.";
+    } else if (local->agent.humanoid.guard_requested) {
+        status = "Guard is up. Watch posture and strike after the block.";
+    } else {
+        status = "Attack with Space, guard with X, and use skills with 1–3.";
+    }
+    char shown[96];
+    (void)snprintf(shown, sizeof(shown), "COMBAT  /  %.72s", status);
+    int width = CcOverlayMeasureText(shown, 9) + 30;
+    if (width > 760) width = 760;
+    float x = ((float)GetScreenWidth() - (float)width) * 0.5f;
+    float y = (float)GetScreenHeight() - 99.0f;
+    Color accent = target != NULL ? TEAL : CC_GOLD;
+    DrawRectangleRounded((Rectangle){x, y, (float)width, 27.0f},
+                         0.20f, 5, Fade(PANEL_DEEP, 0.96f));
+    DrawRectangleRoundedLinesEx((Rectangle){x, y, (float)width, 27.0f},
+                                0.20f, 5, 1.0f, Fade(accent, 0.62f));
+    CcOverlayDrawText(shown, (int)x + 15, (int)y + 8, 9, INK);
 }
 
 static Rectangle CommandActionBounds(CommandActionKind action)
@@ -1316,33 +1650,47 @@ static bool CommandActionActive(CommandActionKind action, ClientView view)
            (action == COMMAND_ACTION_MAP && view == VIEW_MAP);
 }
 
-static void DrawCommandBar(ClientView view)
+static bool CommandActionEnabled(CommandActionKind action,
+                                 const LocalState *local)
+{
+    bool road_local = local != NULL &&
+        (local->journey_travel_active || local->journey_combat_active ||
+         local->journey_parley_active);
+    return !road_local ||
+           (action != COMMAND_ACTION_QUESTS && action != COMMAND_ACTION_MAP);
+}
+
+static void DrawCommandBar(ClientView view, const LocalState *local)
 {
     Vector2 mouse = GetMousePosition();
     for (int32_t value = COMMAND_ACTION_QUESTS;
          value < COMMAND_ACTION_COUNT; ++value) {
         CommandActionKind action = (CommandActionKind)value;
         Rectangle bounds = CommandActionBounds(action);
-        bool hover = CheckCollisionPointRec(mouse, bounds);
+        bool enabled = CommandActionEnabled(action, local);
+        bool hover = enabled && CheckCollisionPointRec(mouse, bounds);
         bool active = CommandActionActive(action, view);
         Color accent = action == COMMAND_ACTION_SAVE ? TEAL : CC_GOLD;
         DrawRectangleRounded(
             bounds, 0.18f, 5,
-            hover || active ? PANEL_HOVER : Fade(PANEL_DEEP, 0.96f));
+            hover || active ? PANEL_HOVER :
+            enabled ? Fade(PANEL_DEEP, 0.96f) : Fade(PANEL_DEEP, 0.72f));
         DrawRectangleRoundedLinesEx(
             bounds, 0.18f, 5, hover || active ? 2.0f : 1.0f,
-            Fade(accent, hover || active ? 0.96f : 0.62f));
+            enabled ? Fade(accent, hover || active ? 0.96f : 0.62f) :
+                      Fade(MUTED, 0.28f));
         const char *label = CommandActionLabel(action);
         int width = CcOverlayMeasureText(label, 10);
         CcOverlayDrawText(label,
                           (int)(bounds.x +
                                 (bounds.width - (float)width) * 0.5f),
                           (int)bounds.y + 9, 10,
+                          !enabled ? Fade(MUTED, 0.48f) :
                           hover || active ? accent : INK);
     }
 }
 
-static CommandActionKind PressedCommandAction(void)
+static CommandActionKind PressedCommandAction(const LocalState *local)
 {
     if (!ClientMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         return COMMAND_ACTION_NONE;
@@ -1351,7 +1699,8 @@ static CommandActionKind PressedCommandAction(void)
     for (int32_t value = COMMAND_ACTION_QUESTS;
          value < COMMAND_ACTION_COUNT; ++value) {
         CommandActionKind action = (CommandActionKind)value;
-        if (CheckCollisionPointRec(mouse, CommandActionBounds(action))) {
+        if (CommandActionEnabled(action, local) &&
+            CheckCollisionPointRec(mouse, CommandActionBounds(action))) {
             return action;
         }
     }
@@ -2456,7 +2805,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                         float delta_time,
                         const char *save_path, char *message, size_t message_capacity)
 {
-    CommandActionKind command_action = PressedCommandAction();
+    CommandActionKind command_action = PressedCommandAction(local);
     ContextActionKind context_action = PressedContextAction(
         sim, local, *view, *selected, *selected_situation);
     bool control = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL) ||
@@ -2690,6 +3039,19 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             }
             return;
         }
+        if (LocalCombatActive(local) && ClientKeyPressed(KEY_T)) {
+            int32_t target = NextCombatTargetIndex(local);
+            if (target >= 0 && CcLocalCourseSelectPlayerTarget(
+                    &local->course, &local->agent, target)) {
+                (void)snprintf(
+                    message, message_capacity, "Focused: %s / %s.",
+                    local->course.raider_names[target],
+                    CcLocalRaiderRoleName(local->course.raider_roles[target]));
+            } else {
+                (void)snprintf(message, message_capacity,
+                               "No outlaw is still standing.");
+            }
+        }
         if (local->journey_combat_active &&
             (context_action == CONTEXT_ACTION_WITHDRAW ||
              ClientKeyPressed(KEY_BACKSPACE))) {
@@ -2728,19 +3090,23 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                                           guarded);
             (void)snprintf(
                 message, message_capacity, "%s",
-                guarded ? "Guarding." : "Guard lowered.");
+                guarded ? "Guard raised — posture absorbs the next blow." :
+                          "Guard lowered — movement and attacks are open.");
         }
         if ((ClientKeyPressed(KEY_SPACE) ||
              context_action == CONTEXT_ACTION_BASIC_STRIKE) &&
             local->agent.morphology == CC_MORPHOLOGY_BIPED &&
             !local->journey_parley_active) {
+            int32_t target = SelectedCombatTargetIndex(local);
             bool struck = CcLocalCourseBeginPlayerStrike(
                 &local->course, &local->agent);
             (void)snprintf(
                 message, message_capacity, "%s",
-                struck && local->agent.combat.target_index >= 0 ?
-                         "Attack started." :
-                struck ? "No target." : "Can't attack now.");
+                struck && target >= 0 ?
+                    TextFormat("Striking %s.",
+                               local->course.raider_names[target]) :
+                target < 0 ? "Choose an outlaw before attacking." :
+                             "Recovering — wait for an opening.");
         }
         if (local->journey_combat_active ||
             (!local->market_interior && local->course.alarm_active)) {
@@ -2761,13 +3127,16 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 (void)snprintf(
                     message, message_capacity, "%s",
                     used && combat_skill == CC_COMBAT_SKILL_SECOND_WIND ?
-                        "Posture restored." :
-                    used ? TextFormat("%s ready.",
+                        "Second wind restored your posture." :
+                    used ? TextFormat("%s committed.",
                                       CcLocalCombatSkillName(combat_skill)) :
-                    cooldown > 0.0f ? TextFormat("Ready in %.1fs.", cooldown) :
+                    cooldown > 0.0f ?
+                        TextFormat("%s ready in %.1fs.",
+                                   CcLocalCombatSkillName(combat_skill),
+                                   cooldown) :
                     combat_skill == CC_COMBAT_SKILL_SECOND_WIND ?
-                        "Posture is full." :
-                        "Select an outlaw.");
+                        "Posture is already full." :
+                        "Choose an outlaw before using that skill.");
             }
         }
         if (ClientMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
@@ -2783,8 +3152,10 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 local->movement_reticle_accepted = true;
                 (void)snprintf(
                     message, message_capacity,
-                    "%s selected.",
-                    local->course.raider_names[combat_target]);
+                    "Focused: %s / %s.",
+                    local->course.raider_names[combat_target],
+                    CcLocalRaiderRoleName(
+                        local->course.raider_roles[combat_target]));
             } else {
                 bool movement_accepted = CcLocalAgentPickTarget(
                     &local->agent, mouse, local_target, local_bounds,
@@ -3837,6 +4208,11 @@ int main(int argc, char **argv)
             }
         }
         if (!capture_gameplay_reel && view == VIEW_LOCAL &&
+            LocalCombatActive(&local)) {
+            DrawCombatStatusLine(&local, message, message_age);
+        }
+        if (!capture_gameplay_reel && view == VIEW_LOCAL &&
+            !LocalCombatActive(&local) &&
             message_age < 2.2f &&
             message[0] != '\0' &&
             !local.journey_travel_active) {
@@ -3846,10 +4222,13 @@ int main(int argc, char **argv)
             float opacity = message_age > 1.6f ?
                 1.0f - (message_age - 1.6f) / 0.6f : 1.0f;
             float x = ((float)GetScreenWidth() - (float)width) * 0.5f;
-            DrawRectangleRounded((Rectangle){x, 653.0f, (float)width, 28.0f},
+            float toast_y = (float)GetScreenHeight() - 107.0f;
+            DrawRectangleRounded((Rectangle){x, toast_y,
+                                              (float)width, 28.0f},
                                  0.22f, 5,
                                  Fade(BACKGROUND, opacity));
-            CcOverlayDrawText(toast, (int)x + 13, 661, 10,
+            CcOverlayDrawText(toast, (int)x + 13,
+                              (int)toast_y + 8, 10,
                               Fade(INK, opacity));
         }
         if (view == VIEW_LEDGER) {
@@ -3870,7 +4249,7 @@ int main(int argc, char **argv)
             DrawContextActionTray(&sim, &local, view, selected,
                                   selected_situation);
         }
-        DrawCommandBar(view);
+        DrawCommandBar(view, &local);
         if (performance_overlay) {
             CcOverlayFlush();
             DrawPerformanceOverlay();
