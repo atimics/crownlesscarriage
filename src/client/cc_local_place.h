@@ -8,6 +8,7 @@
 
 #define CC_LOCAL_PLACE_ROOM_COUNT 10
 #define CC_LOCAL_PLACE_LANDMARK_COUNT 3
+#define CC_LOCAL_PLACE_ROAD_COUNT 3
 
 typedef enum CcLocalPlaceFeature {
     CC_LOCAL_PLACE_FARMLAND = UINT32_C(1) << 0,
@@ -39,6 +40,25 @@ typedef struct CcLocalPlaceLandmark {
     float height;
 } CcLocalPlaceLandmark;
 
+typedef enum CcLocalRoadSurface {
+    CC_LOCAL_ROAD_FARM_TRACK = 0,
+    CC_LOCAL_ROAD_INDUSTRIAL,
+    CC_LOCAL_ROAD_TRADE,
+    CC_LOCAL_ROAD_MILITARY,
+    CC_LOCAL_ROAD_PROCESSIONAL,
+    CC_LOCAL_ROAD_EXPEDITION
+} CcLocalRoadSurface;
+
+typedef struct CcLocalPlaceRoad {
+    const char *name;
+    float x;
+    float z;
+    float width;
+    float depth;
+    bool runs_east_west;
+    CcLocalRoadSurface surface;
+} CcLocalPlaceRoad;
+
 typedef struct CcLocalPlaceProfile {
     CcSettlementFunction function;
     const char *identity;
@@ -47,10 +67,14 @@ typedef struct CcLocalPlaceProfile {
     const char *notice_board;
     const char *training_yard;
     const char *compound;
+    const char *keeper_name;
+    const char *interior_service;
+    uint32_t keeper_seed;
     uint32_t terrain_salt;
     uint32_t feature_mask;
     const char *room_name[CC_LOCAL_PLACE_ROOM_COUNT];
     CcLocalPlaceLandmark landmark[CC_LOCAL_PLACE_LANDMARK_COUNT];
+    CcLocalPlaceRoad road[CC_LOCAL_PLACE_ROAD_COUNT];
 } CcLocalPlaceProfile;
 
 const CcLocalPlaceProfile *CcLocalPlaceProfileForFunction(
@@ -61,6 +85,8 @@ const char *CcLocalPlaceRoomName(CcSettlementFunction function,
                                  int32_t room_index);
 const CcLocalPlaceLandmark *CcLocalPlaceLandmarkAt(
     CcSettlementFunction function, int32_t landmark_index);
+const CcLocalPlaceRoad *CcLocalPlaceRoadAt(
+    CcSettlementFunction function, int32_t road_index);
 bool CcLocalPlaceHasFeature(const CcLocalPlaceProfile *profile,
                             CcLocalPlaceFeature feature);
 uint32_t CcLocalPlaceTerrainSeed(uint32_t world_seed,

@@ -80,16 +80,28 @@ props do not constitute a city grammar.
 Every settlement function owns a local place profile. The profile supplies a
 stable terrain seed, ten room names, a statement of purpose, civic labels, a
 material tint, a compound name, a low plaza mark, and three authored landmark
-records. Thornford therefore reads as granary country, Gloamgate as a
-crossroads market, Alderwatch as a contested bridge, and Silverwick as the
-working deeps even while they share the proven road skeleton.
+records. It also owns three named secondary roads and one civic-hall service
+with a stable keeper identity. Thornford therefore reads as granary country,
+Gloamgate as a crossroads market, Alderwatch as a contested bridge, and
+Silverwick as the working deeps even while they share the proven regional
+spine and interior footprint.
 
 Each landmark record owns its name, family, variant, footprint, and height.
 Terrain grading, physical sweeps, pathfinding, camera picking, nearby labels,
 and visible construction all consume that same record. The profile is not
 allowed to change collision by merely hiding geometry. This keeps local
-differentiation honest and gives future settlement road grammars one small,
-testable interface.
+differentiation honest and gives future place expansion one small, testable
+interface.
+
+Secondary-road records own their footprint, direction, surface family, and
+name. Terrain grading, surface color, wheel ruts, and nearby road labels consume
+the same record. Each road overlaps its destination landmark and joins the
+shared primary spine, so a profile cannot add a disconnected decorative road.
+
+The civic interior is reusable geometry rather than a universal market. Its
+keeper, service description, material palette, wall mark, and role come from
+the current place profile. The counter, shelf, exit, and navigation envelope
+stay shared and tested; the local purpose and person change with the town.
 
 ## Runtime authoring contract
 

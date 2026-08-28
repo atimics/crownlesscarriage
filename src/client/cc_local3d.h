@@ -464,6 +464,9 @@ void CcLocalDrawFork3D(const CcSim *sim, int32_t selected_route,
                        Rectangle destination);
 void CcLocalDrawMarket3D(const CcSim *sim, const CcLocalAgent *agent, float clock,
                          RenderTexture2D target, Rectangle destination);
+void CcLocalDrawInterior3D(const CcSim *sim, const CcLocalAgent *agent,
+                           float clock, RenderTexture2D target,
+                           Rectangle destination);
 Vector2 CcLocalMove(Vector2 current, Vector2 delta, bool market_interior);
 
 #endif

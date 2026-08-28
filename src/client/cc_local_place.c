@@ -9,6 +9,9 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
         .notice_board = "Harvest board",
         .training_yard = "Drovers' yard",
         .compound = "Manor granary",
+        .keeper_name = "Edda — Granary keeper",
+        .interior_service = "Provisions, seed, and harvest accounts",
+        .keeper_seed = UINT32_C(0xedda1001),
         .terrain_salt = UINT32_C(0x16f11fe9),
         .feature_mask = CC_LOCAL_PLACE_FARMLAND |
                         CC_LOCAL_PLACE_CARRIAGE,
@@ -26,6 +29,14 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
             {CC_LOCAL_LANDMARK_AGRICULTURE, 2, "Orchard press",
              66.20f, 44.00f, 5.20f, 4.40f, 3.80f},
         },
+        .road = {
+            {"Thresher lane", 9.40f, 12.60f, 3.10f, 15.00f, false,
+             CC_LOCAL_ROAD_FARM_TRACK},
+            {"Hill cartway", 9.20f, 31.00f, 5.20f, 24.50f, false,
+             CC_LOCAL_ROAD_FARM_TRACK},
+            {"Orchard lane", 68.00f, 47.40f, 3.00f, 5.40f, false,
+             CC_LOCAL_ROAD_FARM_TRACK},
+        },
     },
     {
         .function = CC_SETTLEMENT_MINING,
@@ -35,6 +46,9 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
         .notice_board = "Shift board",
         .training_yard = "Haulage yard",
         .compound = "Mine company",
+        .keeper_name = "Oren — Company clerk",
+        .interior_service = "Ore, tools, and expedition stores",
+        .keeper_seed = UINT32_C(0x0e2e4002),
         .terrain_salt = UINT32_C(0x8b62c4d7),
         .feature_mask = CC_LOCAL_PLACE_INDUSTRY |
                         CC_LOCAL_PLACE_CARRIAGE |
@@ -53,6 +67,14 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
             {CC_LOCAL_LANDMARK_INDUSTRY, 2, "Ore breaker",
              84.00f, 44.00f, 5.20f, 4.60f, 4.40f},
         },
+        .road = {
+            {"Pit lane", 9.20f, 12.50f, 3.40f, 15.30f, false,
+             CC_LOCAL_ROAD_INDUSTRIAL},
+            {"Furnace road", 22.10f, 47.40f, 3.20f, 8.20f, false,
+             CC_LOCAL_ROAD_INDUSTRIAL},
+            {"Ore tramway", 80.00f, 47.40f, 9.40f, 3.20f, true,
+             CC_LOCAL_ROAD_INDUSTRIAL},
+        },
     },
     {
         .function = CC_SETTLEMENT_MARKET,
@@ -62,6 +84,9 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
         .notice_board = "Contract board",
         .training_yard = "Wayfarer trials",
         .compound = "Customs keep",
+        .keeper_name = "Mara — Merchant",
+        .interior_service = "Contracts, cargo, and regional goods",
+        .keeper_seed = UINT32_C(0x6d617261),
         .terrain_salt = UINT32_C(0x45d9f3b1),
         .feature_mask = CC_LOCAL_PLACE_MARKET |
                         CC_LOCAL_PLACE_INDUSTRY |
@@ -80,6 +105,14 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
             {CC_LOCAL_LANDMARK_COMMERCE, 2, "East customs",
              66.00f, 44.00f, 5.50f, 4.50f, 5.50f},
         },
+        .road = {
+            {"Wool lane", 9.80f, 12.60f, 3.60f, 15.00f, false,
+             CC_LOCAL_ROAD_TRADE},
+            {"Caravan lane", 9.00f, 46.20f, 5.20f, 9.20f, false,
+             CC_LOCAL_ROAD_TRADE},
+            {"Customs lane", 68.00f, 47.50f, 3.20f, 5.30f, false,
+             CC_LOCAL_ROAD_TRADE},
+        },
     },
     {
         .function = CC_SETTLEMENT_FORTRESS,
@@ -89,6 +122,9 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
         .notice_board = "Muster board",
         .training_yard = "Drill yard",
         .compound = "Alderwatch keep",
+        .keeper_name = "Seren — Quartermaster",
+        .interior_service = "Rations, arms, and bridge passage",
+        .keeper_seed = UINT32_C(0x5e2e4004),
         .terrain_salt = UINT32_C(0xca4b2d53),
         .feature_mask = CC_LOCAL_PLACE_FORTIFICATION |
                         CC_LOCAL_PLACE_INDUSTRY |
@@ -107,6 +143,14 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
             {CC_LOCAL_LANDMARK_MILITARY, 2, "Field armoury",
              65.50f, 43.50f, 6.00f, 4.50f, 5.20f},
         },
+        .road = {
+            {"Barracks lane", 10.00f, 12.60f, 4.20f, 15.00f, false,
+             CC_LOCAL_ROAD_MILITARY},
+            {"March road", 9.00f, 46.00f, 5.20f, 9.50f, false,
+             CC_LOCAL_ROAD_MILITARY},
+            {"Armoury road", 68.00f, 47.30f, 3.40f, 5.50f, false,
+             CC_LOCAL_ROAD_MILITARY},
+        },
     },
     {
         .function = CC_SETTLEMENT_CAPITAL,
@@ -116,6 +160,9 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
         .notice_board = "Petition board",
         .training_yard = "Royal yard",
         .compound = "Crown palace",
+        .keeper_name = "Ilyra — Royal factor",
+        .interior_service = "Petitions, court supply, and royal exchange",
+        .keeper_seed = UINT32_C(0x1172a005),
         .terrain_salt = UINT32_C(0x71d54a8f),
         .feature_mask = CC_LOCAL_PLACE_MARKET |
                         CC_LOCAL_PLACE_FORTIFICATION |
@@ -135,6 +182,14 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
             {CC_LOCAL_LANDMARK_CIVIC, 2, "Rose pavilion",
              65.00f, 43.70f, 6.00f, 4.50f, 4.80f},
         },
+        .road = {
+            {"Chancery way", 9.80f, 12.60f, 4.00f, 15.00f, false,
+             CC_LOCAL_ROAD_PROCESSIONAL},
+            {"Founders' walk", 8.20f, 45.00f, 6.00f, 10.00f, false,
+             CC_LOCAL_ROAD_PROCESSIONAL},
+            {"Rose walk", 67.00f, 47.30f, 3.60f, 5.70f, false,
+             CC_LOCAL_ROAD_PROCESSIONAL},
+        },
     },
     {
         .function = CC_SETTLEMENT_DUNGEON_TOWN,
@@ -144,6 +199,9 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
         .notice_board = "Expedition board",
         .training_yard = "Warden yard",
         .compound = "Dungeon ward",
+        .keeper_name = "Vey — Expedition broker",
+        .interior_service = "Rope, lamps, salvage, and return bonds",
+        .keeper_seed = UINT32_C(0x0b3e7006),
         .terrain_salt = UINT32_C(0x9e37b97d),
         .feature_mask = CC_LOCAL_PLACE_INDUSTRY |
                         CC_LOCAL_PLACE_CARRIAGE |
@@ -161,6 +219,14 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
              18.50f, 44.00f, 4.00f, 4.00f, 7.00f},
             {CC_LOCAL_LANDMARK_EXPEDITION, 2, "Salvage works",
              66.00f, 44.00f, 5.50f, 4.50f, 4.50f},
+        },
+        .road = {
+            {"Delvers' path", 9.50f, 12.60f, 3.20f, 15.00f, false,
+             CC_LOCAL_ROAD_EXPEDITION},
+            {"Lantern road", 21.00f, 47.00f, 3.20f, 8.00f, false,
+             CC_LOCAL_ROAD_EXPEDITION},
+            {"Salvage path", 68.00f, 47.30f, 3.20f, 5.50f, false,
+             CC_LOCAL_ROAD_EXPEDITION},
         },
     },
 };
@@ -209,6 +275,15 @@ const CcLocalPlaceLandmark *CcLocalPlaceLandmarkAt(
     if (landmark_index < 0 ||
         landmark_index >= CC_LOCAL_PLACE_LANDMARK_COUNT) return NULL;
     return &profile->landmark[landmark_index];
+}
+
+const CcLocalPlaceRoad *CcLocalPlaceRoadAt(
+    CcSettlementFunction function, int32_t road_index)
+{
+    const CcLocalPlaceProfile *profile =
+        CcLocalPlaceProfileForFunction(function);
+    if (road_index < 0 || road_index >= CC_LOCAL_PLACE_ROAD_COUNT) return NULL;
+    return &profile->road[road_index];
 }
 
 bool CcLocalPlaceHasFeature(const CcLocalPlaceProfile *profile,

@@ -916,12 +916,26 @@ static const CcLocalPlaceLandmark *ActivePlaceLandmarkAt(int32_t index)
     return CcLocalPlaceLandmarkAt(active_place_function, index);
 }
 
+static const CcLocalPlaceRoad *ActivePlaceRoadAt(int32_t index)
+{
+    return CcLocalPlaceRoadAt(active_place_function, index);
+}
+
 static Rectangle PlaceLandmarkFootprint(
     const CcLocalPlaceLandmark *landmark)
 {
     if (landmark == NULL) return (Rectangle){0};
     return (Rectangle){landmark->x, landmark->z,
                        landmark->width, landmark->depth};
+}
+
+static TerrainRoad PlaceTerrainRoad(const CcLocalPlaceRoad *road)
+{
+    if (road == NULL) return (TerrainRoad){0};
+    return (TerrainRoad){
+        {road->x, road->z, road->width, road->depth},
+        road->runs_east_west,
+    };
 }
 
 typedef struct TerrainRenderCache {
@@ -1124,6 +1138,14 @@ static void TerrainGradeRoad(const TerrainRoad *road)
     }
 }
 
+static void TerrainGradeActivePlaceRoads(void)
+{
+    for (int32_t road = 0; road < CC_LOCAL_PLACE_ROAD_COUNT; ++road) {
+        TerrainRoad terrain_road = PlaceTerrainRoad(ActivePlaceRoadAt(road));
+        TerrainGradeRoad(&terrain_road);
+    }
+}
+
 static float TerrainRectangleAverage(Rectangle footprint)
 {
     static const Vector2 samples[] = {
@@ -1206,6 +1228,7 @@ static void TerrainGenerate(void)
                           sizeof(TERRAIN_ROADS[0])); ++road) {
         TerrainGradeRoad(&TERRAIN_ROADS[road]);
     }
+    TerrainGradeActivePlaceRoads();
 
     /* Foundations are small human changes to the generated land. Each pad
        takes its elevation from the land and nearby road before construction. */
@@ -1244,6 +1267,7 @@ static void TerrainGenerate(void)
                           sizeof(TERRAIN_ROADS[0])); ++road) {
         TerrainGradeRoad(&TERRAIN_ROADS[road]);
     }
+    TerrainGradeActivePlaceRoads();
     float artisan_south_height = TerrainSampleGrid(street_terrain_height,
                                                     33.0f, 25.0f);
     float artisan_north_height = TerrainSampleGrid(street_terrain_height,
@@ -13218,6 +13242,24 @@ static int32_t TerrainVisibleRoadCount(void)
     return (int32_t)(sizeof(TERRAIN_ROADS) / sizeof(TERRAIN_ROADS[0])) - 1;
 }
 
+static float TerrainPlaceRoadAmount(float x, float z)
+{
+    float amount = 0.0f;
+    int32_t index_offset =
+        (int32_t)(sizeof(TERRAIN_ROADS) / sizeof(TERRAIN_ROADS[0]));
+    for (int32_t i = 0; i < CC_LOCAL_PLACE_ROAD_COUNT; ++i) {
+        TerrainRoad road = PlaceTerrainRoad(ActivePlaceRoadAt(i));
+        int32_t road_index = index_offset + i;
+        float inset = TerrainRoadSignedInset(&road, road_index, x, z);
+        float edge_breakup = TerrainValueNoise(
+            x + (float)road_index * 3.7f,
+            z - (float)road_index * 2.9f, 4.5f, 17U) * 0.24f;
+        amount = fmaxf(amount,
+                       TerrainSmooth01(inset / 0.68f + edge_breakup));
+    }
+    return amount;
+}
+
 static float TerrainRoadAmount(float x, float z)
 {
     float amount = 0.0f;
@@ -13228,7 +13270,27 @@ static float TerrainRoadAmount(float x, float z)
         amount = fmaxf(amount,
                        TerrainSmooth01(inset / 0.68f + edge_breakup));
     }
-    return amount;
+    return fmaxf(amount, TerrainPlaceRoadAmount(x, z));
+}
+
+static Color TerrainPlaceRoadColor(CcLocalRoadSurface surface)
+{
+    switch (surface) {
+        case CC_LOCAL_ROAD_FARM_TRACK:
+            return BlendColor(WORLD_EARTH, WORLD_CROP_SHADOW, 0.24f);
+        case CC_LOCAL_ROAD_INDUSTRIAL:
+            return BlendColor(WORLD_ROAD_SHADOW,
+                              WORLD_METAL_SHADOW, 0.30f);
+        case CC_LOCAL_ROAD_TRADE:
+            return BlendColor(WORLD_ROAD_LIGHT, WORLD_GOLD, 0.10f);
+        case CC_LOCAL_ROAD_MILITARY:
+            return BlendColor(WORLD_STONE, WORLD_ROAD_SHADOW, 0.28f);
+        case CC_LOCAL_ROAD_PROCESSIONAL:
+            return BlendColor(WORLD_STONE_LIGHT, WORLD_ROAD, 0.20f);
+        case CC_LOCAL_ROAD_EXPEDITION:
+            return BlendColor(WORLD_EARTH_SHADOW, WORLD_VIOLET, 0.12f);
+    }
+    return WORLD_ROAD;
 }
 
 static float TerrainFieldAmount(float x, float z)
@@ -13311,6 +13373,14 @@ static Color TerrainSurfaceColor(const CcSettlement *place,
     Color road = BlendColor(WORLD_ROAD,
                             WORLD_ROAD_LIGHT, prosperity * 0.34f);
     color = BlendColor(color, road, road_amount);
+    const CcLocalPlaceRoad *place_road = ActivePlaceRoadAt(0);
+    float place_road_amount = TerrainPlaceRoadAmount(x, z);
+    if (place_road != NULL) {
+        Color place_road_color = TerrainPlaceRoadColor(place_road->surface);
+        place_road_color = BlendColor(
+            place_road_color, WORLD_ROAD_LIGHT, prosperity * 0.16f);
+        color = BlendColor(color, place_road_color, place_road_amount);
+    }
 
     Rectangle plaza = {37.6f, 25.6f, 18.8f, 8.8f};
     float plaza_amount = TerrainSmooth01(
@@ -13599,6 +13669,47 @@ static void DrawTerrainRoadRuts(const CcSettlement *place, Vector3 focus)
                     continue;
                 }
                 if (TerrainRoadAmount(middle.x, middle.y) < 0.34f) continue;
+                TerrainRibbonSegment(a, b, 0.055f, 0.055f, color);
+            }
+        }
+    }
+    for (int32_t i = 0; i < CC_LOCAL_PLACE_ROAD_COUNT; ++i) {
+        const CcLocalPlaceRoad *place_road = ActivePlaceRoadAt(i);
+        if (place_road == NULL) continue;
+        TerrainRoad road = PlaceTerrainRoad(place_road);
+        Rectangle footprint = road.footprint;
+        int32_t road_index = road_count + i;
+        Color color = ShadeColor(
+            TerrainPlaceRoadColor(place_road->surface),
+            place_road->surface == CC_LOCAL_ROAD_PROCESSIONAL ? 0.82f :
+                                                                0.68f);
+        float lane_offset = (road.runs_east_west ? footprint.height :
+                                                    footprint.width) * 0.17f;
+        for (int32_t lane = -1; lane <= 1; lane += 2) {
+            float start = road.runs_east_west ? footprint.x : footprint.y;
+            float finish = start + (road.runs_east_west ? footprint.width :
+                                                             footprint.height);
+            for (float along = start + 0.35f; along < finish - 0.35f;
+                 along += 0.72f) {
+                float next = fminf(along + 0.74f, finish - 0.35f);
+                float cross = TerrainRoadCenterline(
+                    &road, road_index, along) + (float)lane * lane_offset;
+                float next_cross = TerrainRoadCenterline(
+                    &road, road_index, next) + (float)lane * lane_offset;
+                Vector2 a = road.runs_east_west ?
+                    (Vector2){along, cross} : (Vector2){cross, along};
+                Vector2 b = road.runs_east_west ?
+                    (Vector2){next, next_cross} :
+                    (Vector2){next_cross, next};
+                Vector2 middle = {(a.x + b.x) * 0.5f,
+                                  (a.y + b.y) * 0.5f};
+                float focus_x = middle.x - focus.x;
+                float focus_z = middle.y - focus.z;
+                if (focus_x * focus_x + focus_z * focus_z >
+                    24.0f * 24.0f) continue;
+                if (TerrainPlaceRoadAmount(middle.x, middle.y) < 0.34f) {
+                    continue;
+                }
                 TerrainRibbonSegment(a, b, 0.055f, 0.055f, color);
             }
         }
@@ -19347,6 +19458,18 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
             landmark->family == CC_LOCAL_LANDMARK_EXPEDITION ?
                 WORLD_VIOLET : kingdom};
     }
+    for (int32_t i = 0;
+         i < CC_LOCAL_PLACE_ROAD_COUNT && count < 20; ++i) {
+        const CcLocalPlaceRoad *road = ActivePlaceRoadAt(i);
+        if (road == NULL) continue;
+        float center_x = road->x + road->width * 0.5f;
+        float center_z = road->z + road->depth * 0.5f;
+        if (!AgentNearLabel(agent, center_x, center_z, 5.5f)) continue;
+        labels[count++] = (WorldLabel){
+            {center_x, CcLocalTerrainHeightAt(center_x, center_z) + 0.42f,
+             center_z},
+            road->name, WORLD_MUTED};
+    }
     if (sim->resolved_journey_outcome != CC_JOURNEY_OUTCOME_NONE &&
         sim->journey.destination_id == place->id &&
         AgentNearLabel(agent, 47.35f, 31.05f, 7.0f)) {
@@ -19433,11 +19556,117 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     DrawFixedCameraFade(&street_camera_rig, destination);
 }
 
-void CcLocalDrawMarket3D(const CcSim *sim, const CcLocalAgent *agent, float clock,
-                         RenderTexture2D target, Rectangle destination)
+static CcNpcRole InteriorKeeperRole(CcSettlementFunction function)
 {
+    switch (function) {
+        case CC_SETTLEMENT_FARMING: return CC_NPC_ROLE_LABORER;
+        case CC_SETTLEMENT_MINING: return CC_NPC_ROLE_LABORER;
+        case CC_SETTLEMENT_MARKET: return CC_NPC_ROLE_MERCHANT;
+        case CC_SETTLEMENT_FORTRESS: return CC_NPC_ROLE_GUARD;
+        case CC_SETTLEMENT_CAPITAL: return CC_NPC_ROLE_MERCHANT;
+        case CC_SETTLEMENT_DUNGEON_TOWN: return CC_NPC_ROLE_SCOUT;
+    }
+    return CC_NPC_ROLE_MERCHANT;
+}
+
+static Color InteriorWallColor(const CcLocalPlaceProfile *profile,
+                               Color kingdom)
+{
+    if (profile == NULL) return WORLD_EARTH_SHADOW;
+    switch (profile->function) {
+        case CC_SETTLEMENT_FARMING:
+            return BlendColor(WORLD_EARTH_SHADOW, WORLD_CROP, 0.18f);
+        case CC_SETTLEMENT_MINING:
+            return BlendColor(WORLD_STONE_SHADOW,
+                              WORLD_METAL_SHADOW, 0.28f);
+        case CC_SETTLEMENT_MARKET:
+            return BlendColor(WORLD_EARTH_SHADOW, WORLD_TEAL, 0.10f);
+        case CC_SETTLEMENT_FORTRESS:
+            return BlendColor(WORLD_STONE_SHADOW, kingdom, 0.18f);
+        case CC_SETTLEMENT_CAPITAL:
+            return BlendColor(WORLD_STONE, WORLD_GOLD, 0.12f);
+        case CC_SETTLEMENT_DUNGEON_TOWN:
+            return BlendColor(WORLD_STONE_SHADOW, WORLD_VIOLET, 0.20f);
+    }
+    return WORLD_EARTH_SHADOW;
+}
+
+static void DrawInteriorServiceMark(const CcLocalPlaceProfile *profile,
+                                    Color accent)
+{
+    if (profile == NULL) return;
+    const float z = 0.586f;
+    const float x = 6.55f;
+    switch (profile->function) {
+        case CC_SETTLEMENT_FARMING:
+            for (int32_t stalk = -1; stalk <= 1; ++stalk) {
+                DrawBox((Vector3){x + (float)stalk * 0.30f, 1.48f, z},
+                        (Vector3){0.09f, 0.88f, 0.035f}, accent);
+                DrawBox((Vector3){x + (float)stalk * 0.30f + 0.10f,
+                                  1.54f, z + 0.006f},
+                        (Vector3){0.24f, 0.08f, 0.040f}, accent);
+            }
+            break;
+        case CC_SETTLEMENT_MINING:
+            DrawBox((Vector3){x, 1.48f, z},
+                    (Vector3){1.10f, 0.22f, 0.040f}, accent);
+            DrawBox((Vector3){x, 1.48f, z},
+                    (Vector3){0.22f, 1.10f, 0.040f}, accent);
+            DrawBox((Vector3){x, 1.48f, z + 0.004f},
+                    (Vector3){0.62f, 0.62f, 0.045f},
+                    ShadeColor(accent, 0.72f));
+            break;
+        case CC_SETTLEMENT_MARKET:
+            DrawBox((Vector3){x, 1.62f, z},
+                    (Vector3){1.16f, 0.10f, 0.040f}, accent);
+            DrawBox((Vector3){x, 1.37f, z},
+                    (Vector3){0.10f, 0.60f, 0.040f}, accent);
+            DrawBox((Vector3){x - 0.42f, 1.30f, z},
+                    (Vector3){0.48f, 0.10f, 0.040f}, accent);
+            DrawBox((Vector3){x + 0.42f, 1.30f, z},
+                    (Vector3){0.48f, 0.10f, 0.040f}, accent);
+            break;
+        case CC_SETTLEMENT_FORTRESS:
+            DrawBox((Vector3){x, 1.48f, z},
+                    (Vector3){0.72f, 1.08f, 0.040f}, accent);
+            DrawBox((Vector3){x, 1.48f, z + 0.004f},
+                    (Vector3){1.16f, 0.24f, 0.045f},
+                    ShadeColor(accent, 0.74f));
+            break;
+        case CC_SETTLEMENT_CAPITAL:
+            DrawBox((Vector3){x, 1.28f, z},
+                    (Vector3){1.22f, 0.22f, 0.040f}, accent);
+            for (int32_t point = -1; point <= 1; ++point) {
+                DrawBox((Vector3){x + (float)point * 0.42f,
+                                  1.58f + (point == 0 ? 0.12f : 0.0f), z},
+                        (Vector3){0.24f,
+                                  point == 0 ? 0.78f : 0.56f, 0.040f},
+                        accent);
+            }
+            break;
+        case CC_SETTLEMENT_DUNGEON_TOWN:
+            DrawBox((Vector3){x, 1.46f, z},
+                    (Vector3){0.72f, 0.86f, 0.040f}, accent);
+            DrawBox((Vector3){x, 1.90f, z},
+                    (Vector3){1.02f, 0.12f, 0.040f}, accent);
+            DrawBox((Vector3){x, 1.03f, z},
+                    (Vector3){0.24f, 0.18f, 0.040f}, accent);
+            break;
+    }
+}
+
+void CcLocalDrawInterior3D(const CcSim *sim, const CcLocalAgent *agent,
+                           float clock, RenderTexture2D target,
+                           Rectangle destination)
+{
+    CcLocalBindPlace(sim);
     const CcSettlement *place = CcSimSettlement(sim, sim->player.location_id);
     if (place == NULL) return;
+    const CcLocalPlaceProfile *profile =
+        CcLocalPlaceProfileForSettlement(place);
+    Color kingdom = KingdomColor3D(sim, place->kingdom_id);
+    Color identity = PlaceIdentityAccent(profile, kingdom);
+    Color wall = InteriorWallColor(profile, kingdom);
     Camera3D camera = LocalCamera(true, agent->position);
     RememberPresentedCamera(CC_LOCAL_SCENE_MARKET, camera, agent,
                             target.texture.width, target.texture.height);
@@ -19450,8 +19679,8 @@ void CcLocalDrawMarket3D(const CcSim *sim, const CcLocalAgent *agent, float cloc
     BeginWorldLighting(camera, &INTERIOR_ART_COMPOSITION);
     /* Six broad floor flags replace the old 63-box checkerboard. Their quiet
        value rhythm leaves the actor silhouettes and goods as the room detail. */
-    const Color floor_dark = {88, 67, 57, 255};
-    const Color floor_light = {108, 82, 64, 255};
+    Color floor_dark = BlendColor(WORLD_EARTH_SHADOW, identity, 0.12f);
+    Color floor_light = BlendColor(WORLD_EARTH, identity, 0.14f);
     DrawBox((Vector3){4.50f, -0.055f, 3.50f}, (Vector3){9.0f, 0.11f, 7.0f},
             floor_dark);
     for (int32_t row = 0; row < 2; ++row) {
@@ -19466,11 +19695,11 @@ void CcLocalDrawMarket3D(const CcSim *sim, const CcLocalAgent *agent, float cloc
     }
     DrawAgentPath(agent, true);
     DrawBox((Vector3){4.50f, 1.30f, 0.25f}, (Vector3){9.0f, 2.60f, 0.50f},
-            (Color){80, 53, 48, 255});
+            wall);
     DrawBox((Vector3){0.25f, 1.30f, 3.50f}, (Vector3){0.50f, 2.60f, 7.0f},
-            (Color){67, 48, 47, 255});
-    Color interior_timber = (Color){55, 38, 37, 255};
-    Color interior_trim = (Color){116, 76, 48, 255};
+            ShadeColor(wall, 0.86f));
+    Color interior_timber = BlendColor(WORLD_WOOD_SHADOW, identity, 0.08f);
+    Color interior_trim = BlendColor(WORLD_WOOD, identity, 0.16f);
     DrawBox((Vector3){4.50f, 0.54f, 0.515f},
             (Vector3){8.86f, 0.10f, 0.045f},
             interior_timber);
@@ -19490,9 +19719,10 @@ void CcLocalDrawMarket3D(const CcSim *sim, const CcLocalAgent *agent, float cloc
     }
     DrawBox((Vector3){6.55f, 1.42f, 0.525f},
             (Vector3){2.05f, 1.56f, 0.055f},
-            (Color){47, 70, 69, 255});
+            ShadeColor(wall, 0.66f));
     DrawBox((Vector3){6.55f, 2.21f, 0.535f},
-            (Vector3){2.24f, 0.10f, 0.065f}, WORLD_GOLD);
+            (Vector3){2.24f, 0.10f, 0.065f}, identity);
+    DrawInteriorServiceMark(profile, identity);
     DrawBox((Vector3){MARKET_COUNTER_FOOTPRINT.x +
                       MARKET_COUNTER_FOOTPRINT.width * 0.5f,
                       0.46f,
@@ -19500,7 +19730,7 @@ void CcLocalDrawMarket3D(const CcSim *sim, const CcLocalAgent *agent, float cloc
                       MARKET_COUNTER_FOOTPRINT.height * 0.5f},
             (Vector3){MARKET_COUNTER_FOOTPRINT.width, 0.92f,
                       MARKET_COUNTER_FOOTPRINT.height},
-            (Color){139, 85, 49, 255});
+            BlendColor(WORLD_WOOD, identity, 0.14f));
     for (int32_t panel = 0; panel < 3; ++panel) {
         float panel_x = MARKET_COUNTER_FOOTPRINT.x + 0.38f +
                         (float)panel * 0.66f;
@@ -19527,7 +19757,7 @@ void CcLocalDrawMarket3D(const CcSim *sim, const CcLocalAgent *agent, float cloc
                       MARKET_COUNTER_FOOTPRINT.height * 0.5f},
             (Vector3){MARKET_COUNTER_FOOTPRINT.width + 0.12f, 0.10f,
                       MARKET_COUNTER_FOOTPRINT.height + 0.12f},
-            (Color){181, 119, 62, 255});
+            BlendColor(WORLD_WOOD_LIGHT, identity, 0.18f));
     /* A real open shelf replaces the former solid obstacle block. The same
        collision footprint remains authoritative, but the visible model now
        has legs, boards, gaps, and stock silhouettes. */
@@ -19567,9 +19797,9 @@ void CcLocalDrawMarket3D(const CcSim *sim, const CcLocalAgent *agent, float cloc
     }
     DrawBox((Vector3){4.48f, 0.032f, 3.88f},
             (Vector3){1.64f, 0.035f, 3.20f},
-            (Color){48, 72, 68, 255});
+            ShadeColor(identity, 0.62f));
     DrawBox((Vector3){4.48f, 0.050f, 2.36f},
-            (Vector3){1.84f, 0.045f, 0.11f}, WORLD_GOLD);
+            (Vector3){1.84f, 0.045f, 0.11f}, identity);
 
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
         float stock = fminf((float)place->stock[good] / 54.0f, 1.0f);
@@ -19630,10 +19860,14 @@ void CcLocalDrawMarket3D(const CcSim *sim, const CcLocalAgent *agent, float cloc
                           0.30f},
                 ShadeColor(stock_color, 0.82f));
     }
-    CcNpcAppearance mara = CcNpcMaraAppearance();
+    CcNpcAppearance keeper = profile->function == CC_SETTLEMENT_MARKET ?
+        CcNpcMaraAppearance() :
+        CcNpcAppearanceGenerate(profile->keeper_seed,
+                                InteriorKeeperRole(profile->function),
+                                identity);
     DrawNpcAppearanceFigure3D(
         (Vector3){MARKET_PEOPLE[0].x, 0.0f, MARKET_PEOPLE[0].y},
-        1.02f, 2.75f, &mara, clock, CC_TRAVERSAL_IDLE);
+        1.02f, 2.75f, &keeper, clock, CC_TRAVERSAL_IDLE);
     DrawRobotShell(agent);
     DrawCombatSword(agent);
     DrawCombatSkillTell(agent);
@@ -19641,12 +19875,14 @@ void CcLocalDrawMarket3D(const CcSim *sim, const CcLocalAgent *agent, float cloc
     EndMode3D();
     EndTextureMode();
     PresentTarget(target, destination);
-    WorldLabel labels[2];
+    WorldLabel labels[3];
     int32_t label_count = 0;
     if (AgentNearLabel(agent, MARKET_PEOPLE[0].x,
                        MARKET_PEOPLE[0].y, 5.0f)) {
         labels[label_count++] = (WorldLabel){
-            {6.55f, 2.05f, 1.60f}, "Mara — Merchant", WORLD_GOLD};
+            {6.55f, 2.05f, 1.60f}, profile->keeper_name, identity};
+        labels[label_count++] = (WorldLabel){
+            {6.55f, 2.36f, 0.62f}, profile->interior_service, WORLD_MUTED};
     }
     if (AgentNearLabel(agent, 1.55f, 6.54f, 3.5f)) {
         labels[label_count++] = (WorldLabel){
@@ -19673,6 +19909,13 @@ void CcLocalDrawMarket3D(const CcSim *sim, const CcLocalAgent *agent, float cloc
                        agent->limb_rig.morphology.limb_count),
             destination, 18, 18, 10, WORLD_TEAL);
     }
+}
+
+void CcLocalDrawMarket3D(const CcSim *sim, const CcLocalAgent *agent,
+                         float clock, RenderTexture2D target,
+                         Rectangle destination)
+{
+    CcLocalDrawInterior3D(sim, agent, clock, target, destination);
 }
 
 static bool InsideExpanded(Vector2 point, Rectangle footprint, float radius)

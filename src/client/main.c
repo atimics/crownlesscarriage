@@ -1801,6 +1801,10 @@ static ContextActionSet BuildContextActions(
     }
 
     Vector2 position = LocalPosition(local);
+    const CcSettlement *local_place = CcSimSettlement(
+        sim, sim->player.location_id);
+    const CcLocalPlaceProfile *local_profile =
+        CcLocalPlaceProfileForSettlement(local_place);
     if (local->market_interior) {
         if (GridDistance(position, INTERIOR_COUNTER) < 2.25f) {
             CcGood good = ContextCargoGood(sim);
@@ -1834,14 +1838,16 @@ static ContextActionSet BuildContextActions(
             }
         } else if (GridDistance(position, INTERIOR_EXIT) < 1.25f) {
             AddContextAction(&set, CONTEXT_ACTION_LEAVE_MARKET,
-                             "Leave market");
+                             TextFormat("Leave %s",
+                                        local_profile->primary_hall));
         }
         return set;
     }
 
     if (GridDistance(position, LOCAL_MARKET) < 1.30f) {
         AddContextAction(&set, CONTEXT_ACTION_ENTER_MARKET,
-                         "Enter market");
+                         TextFormat("Enter %s",
+                                    local_profile->primary_hall));
     }
     if (GridDistance(position, LOCAL_CARRIAGE) < 1.35f) {
         AddContextAction(&set, CONTEXT_ACTION_CHOOSE_ROAD, "Drive out");
@@ -4718,8 +4724,8 @@ int main(int argc, char **argv)
                                   &local.convoy, clock,
                                   local_target, local_bounds);
             } else if (local.market_interior) {
-                CcLocalDrawMarket3D(&sim, &local.agent, clock,
-                                    local_target, local_bounds);
+                CcLocalDrawInterior3D(&sim, &local.agent, clock,
+                                      local_target, local_bounds);
             } else {
                 CcLocalDrawStreet3D(&sim, &local.agent, &local.course,
                                     &local.convoy, clock,
