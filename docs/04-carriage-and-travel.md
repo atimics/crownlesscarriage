@@ -149,6 +149,29 @@ Information may be incomplete, but mechanical stakes should remain legible.
 Uncertainty should focus on motives and responsibility rather than hiding basic
 rules.
 
+## Continuous convoy presentation
+
+The route graph remains the source of truth, but the player should see one
+carriage move through the whole journey. A normal trip follows this visible
+sequence:
+
+1. The carriage waits in the town yard while its two horses rest beside the
+   hitch rail.
+2. Choosing a road hitches the team and puts the player on the reins.
+3. The player controls pace with `W`, reins in with `S` or `Space`, and steers
+   within the road lane with `A` and `D`.
+4. The town road, gate approach, and route segment play as one movement. The
+   route clock does not advance until the carriage clears the gate.
+5. A road interruption keeps the carriage at its saved route progress instead
+   of rebuilding it at a generic encounter point.
+6. Arrival continues through the destination gate and ends with the horses
+   resting in that town's yard.
+
+The local presentation may be rebuilt after loading, but the simulation's
+route, endpoints, clock, progress, condition, and stopped or moving state stay
+authoritative. This keeps old saves compatible and prevents local scenes from
+inventing a second journey state.
+
 ## Routine versus meaningful travel
 
 Travel on a stable, recently traversed route runs in a carriage-following road

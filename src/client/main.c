@@ -43,6 +43,7 @@ typedef enum ClientView {
 typedef struct LocalState {
     CcLocalAgent agent;
     CcLocalCourse course;
+    CcLocalConvoyState convoy;
     Vector2 movement_reticle;
     float movement_reticle_age;
     bool market_interior;
@@ -487,6 +488,140 @@ static float GridDistance(Vector2 a, Vector2 b)
     return sqrtf(x * x + y * y);
 }
 
+static float ClampUnit(float value)
+{
+    if (value < 0.0f) return 0.0f;
+    if (value > 1.0f) return 1.0f;
+    return value;
+}
+
+static float WrapLocalAngle(float angle)
+{
+    while (angle > PI) angle -= 2.0f * PI;
+    while (angle < -PI) angle += 2.0f * PI;
+    return angle;
+}
+
+static void SampleConvoyPath(const Vector2 *points, int32_t count,
+                             float progress, Vector2 *position,
+                             float *heading)
+{
+    if (points == NULL || count < 2 || position == NULL || heading == NULL) {
+        return;
+    }
+    float length = 0.0f;
+    for (int32_t i = 0; i + 1 < count; ++i) {
+        float x = points[i + 1].x - points[i].x;
+        float y = points[i + 1].y - points[i].y;
+        length += sqrtf(x * x + y * y);
+    }
+    float remaining = ClampUnit(progress) * length;
+    for (int32_t i = 0; i + 1 < count; ++i) {
+        Vector2 delta = {points[i + 1].x - points[i].x,
+                         points[i + 1].y - points[i].y};
+        float segment = sqrtf(delta.x * delta.x + delta.y * delta.y);
+        if (remaining <= segment || i + 2 == count) {
+            float amount = segment > 0.0001f ? remaining / segment : 0.0f;
+            amount = ClampUnit(amount);
+            *position = (Vector2){
+                points[i].x + delta.x * amount,
+                points[i].y + delta.y * amount
+            };
+            *heading = atan2f(delta.x, delta.y);
+            return;
+        }
+        remaining -= segment;
+    }
+}
+
+static void SetConvoyTownPose(CcLocalConvoyState *convoy, float delta_time)
+{
+    static const Vector2 departure_path[] = {
+        {CC_LOCAL_CARRIAGE_X, CC_LOCAL_CARRIAGE_Z},
+        {38.2f, 35.8f}, {48.0f, 36.0f}, {63.8f, 34.0f},
+        {78.5f, 34.0f}, {93.0f, 34.0f}, {97.0f, 29.0f}
+    };
+    static const Vector2 arrival_path[] = {
+        {97.0f, 29.0f}, {93.0f, 34.0f}, {78.5f, 34.0f},
+        {63.8f, 34.0f}, {48.0f, 36.0f}, {38.2f, 35.8f},
+        {CC_LOCAL_CARRIAGE_X, CC_LOCAL_CARRIAGE_Z}
+    };
+    const Vector2 *path = convoy->phase == CC_LOCAL_CONVOY_ARRIVING ?
+        arrival_path : departure_path;
+    int32_t count = convoy->phase == CC_LOCAL_CONVOY_ARRIVING ?
+        (int32_t)(sizeof(arrival_path) / sizeof(arrival_path[0])) :
+        (int32_t)(sizeof(departure_path) / sizeof(departure_path[0]));
+    Vector2 position = {0};
+    float heading = convoy->town_heading_yaw;
+    SampleConvoyPath(path, count, convoy->phase_progress,
+                     &position, &heading);
+    float turn = WrapLocalAngle(heading - convoy->town_heading_yaw);
+    float turn_weight = delta_time > 0.0f ?
+        ClampUnit(delta_time * 4.5f) : 1.0f;
+    convoy->town_heading_yaw = WrapLocalAngle(
+        convoy->town_heading_yaw + turn * turn_weight);
+    position.x += cosf(convoy->town_heading_yaw) * convoy->lateral_offset;
+    position.y -= sinf(convoy->town_heading_yaw) * convoy->lateral_offset;
+    convoy->town_position = (Vector3){
+        position.x, CcLocalTerrainHeightAt(position.x, position.y), position.y
+    };
+}
+
+typedef enum ConvoyUpdateResult {
+    CONVOY_UPDATE_NONE = 0,
+    CONVOY_UPDATE_ENTER_ROAD,
+    CONVOY_UPDATE_PARKED
+} ConvoyUpdateResult;
+
+static ConvoyUpdateResult UpdateDrivenConvoy(LocalState *local,
+                                              float delta_time)
+{
+    CcLocalConvoyState *convoy = &local->convoy;
+    bool urge = IsKeyDown(KEY_W) || IsKeyDown(KEY_UP);
+    bool rein_in = IsKeyDown(KEY_S) || IsKeyDown(KEY_DOWN);
+    if (urge) convoy->pace += delta_time * 0.72f;
+    if (rein_in) convoy->pace -= delta_time * 1.08f;
+    if (!urge && !rein_in) convoy->pace -= delta_time * 0.025f;
+    if (IsKeyDown(KEY_SPACE)) convoy->pace = 0.0f;
+    convoy->pace = ClampUnit(convoy->pace);
+
+    float steering = 0.0f;
+    if (IsKeyDown(KEY_A) || IsKeyDown(KEY_LEFT)) steering -= 1.0f;
+    if (IsKeyDown(KEY_D) || IsKeyDown(KEY_RIGHT)) steering += 1.0f;
+    float lane_limit = convoy->phase == CC_LOCAL_CONVOY_ROAD ? 1.35f : 0.42f;
+    convoy->lateral_offset += steering * delta_time * 1.30f;
+    if (convoy->lateral_offset < -lane_limit) {
+        convoy->lateral_offset = -lane_limit;
+    }
+    if (convoy->lateral_offset > lane_limit) {
+        convoy->lateral_offset = lane_limit;
+    }
+
+    if (convoy->phase == CC_LOCAL_CONVOY_DEPARTING ||
+        convoy->phase == CC_LOCAL_CONVOY_ARRIVING) {
+        float rate = convoy->phase == CC_LOCAL_CONVOY_ARRIVING ? 0.13f : 0.11f;
+        convoy->phase_progress = ClampUnit(
+            convoy->phase_progress + delta_time * rate * convoy->pace);
+        SetConvoyTownPose(convoy, delta_time);
+        if (convoy->phase_progress < 1.0f) return CONVOY_UPDATE_NONE;
+        if (convoy->phase == CC_LOCAL_CONVOY_ARRIVING) {
+            return CONVOY_UPDATE_PARKED;
+        }
+        convoy->phase = CC_LOCAL_CONVOY_GATE;
+        convoy->phase_progress = 0.0f;
+        convoy->lateral_offset = 0.0f;
+        return CONVOY_UPDATE_NONE;
+    }
+    if (convoy->phase == CC_LOCAL_CONVOY_GATE) {
+        convoy->phase_progress = ClampUnit(
+            convoy->phase_progress + delta_time * 0.42f * convoy->pace);
+        if (convoy->phase_progress >= 1.0f) {
+            return CONVOY_UPDATE_ENTER_ROAD;
+        }
+    }
+    return CONVOY_UPDATE_NONE;
+}
+
 static void ResetLocalState(LocalState *local)
 {
     local->movement_reticle = (Vector2){0};
@@ -497,6 +632,11 @@ static void ResetLocalState(LocalState *local)
     local->journey_travel_active = false;
     local->journey_combat_active = false;
     local->journey_parley_active = false;
+    local->convoy = (CcLocalConvoyState){
+        .phase = CC_LOCAL_CONVOY_PARKED,
+        .town_position = {CC_LOCAL_CARRIAGE_X, 0.0f,
+                          CC_LOCAL_CARRIAGE_Z}
+    };
     CcLocalAgentInit(&local->agent,
                      (Vector2){CC_LOCAL_START_X, CC_LOCAL_START_Z}, false);
     CcLocalCombatSetTeam(&local->agent, CC_COMBAT_PLAYER);
@@ -516,8 +656,13 @@ static void BeginRoadLocalState(const CcSim *sim, LocalState *local,
                                 bool hostile)
 {
     CcAthleticProfile athletics = local->agent.athletics;
+    float lateral_offset = local->convoy.lateral_offset;
+    float pace = local->convoy.pace;
     ResetLocalState(local);
     local->agent.athletics = athletics;
+    local->convoy.phase = CC_LOCAL_CONVOY_ROAD;
+    local->convoy.lateral_offset = lateral_offset;
+    local->convoy.pace = pace;
     RepositionHero(local,
                    (Vector2){CC_LOCAL_ROAD_START_X,
                              CC_LOCAL_ROAD_START_Z}, false);
@@ -531,13 +676,43 @@ static void BeginRoadLocalState(const CcSim *sim, LocalState *local,
 static void BeginRoadTravelState(LocalState *local)
 {
     CcAthleticProfile athletics = local->agent.athletics;
+    float lateral_offset = local->convoy.lateral_offset;
+    float pace = local->convoy.pace;
     ResetLocalState(local);
     local->agent.athletics = athletics;
+    local->convoy.phase = CC_LOCAL_CONVOY_ROAD;
+    local->convoy.lateral_offset = lateral_offset;
+    local->convoy.pace = pace > 0.05f ? pace : 0.72f;
     RepositionHero(local,
                    (Vector2){CC_LOCAL_ROAD_START_X,
                              CC_LOCAL_ROAD_START_Z}, false);
     CcLocalAgentSetScene(&local->agent, CC_LOCAL_SCENE_ROAD);
     local->course.scene = CC_LOCAL_SCENE_ROAD;
+    local->course.alarm_countdown = 1000.0f;
+    local->journey_travel_active = true;
+}
+
+static void BeginTownDepartureState(LocalState *local)
+{
+    CcAthleticProfile athletics = local->agent.athletics;
+    ResetLocalState(local);
+    local->agent.athletics = athletics;
+    local->convoy.phase = CC_LOCAL_CONVOY_DEPARTING;
+    local->convoy.pace = 0.0f;
+    SetConvoyTownPose(&local->convoy, 0.0f);
+    local->course.alarm_countdown = 1000.0f;
+    local->journey_travel_active = true;
+}
+
+static void BeginTownArrivalState(LocalState *local)
+{
+    CcAthleticProfile athletics = local->agent.athletics;
+    float pace = local->convoy.pace;
+    ResetLocalState(local);
+    local->agent.athletics = athletics;
+    local->convoy.phase = CC_LOCAL_CONVOY_ARRIVING;
+    local->convoy.pace = pace > 0.05f ? pace : 0.48f;
+    SetConvoyTownPose(&local->convoy, 0.0f);
     local->course.alarm_countdown = 1000.0f;
     local->journey_travel_active = true;
 }
@@ -936,7 +1111,6 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
                 local->journey_combat_active ||
                 local->journey_parley_active;
     if (road) {
-        const CcRoute *route = CcSimRoute(sim, sim->journey.route_id);
         const CcSettlement *destination = CcSimSettlement(
             sim, sim->journey.destination_id);
         if (local->journey_combat_active) {
@@ -948,14 +1122,25 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
         DrawPanel((Rectangle){panel_x, 78.0f, 264.0f, 150.0f},
                   Fade(PANEL_DEEP, 0.93f));
         if (local->journey_travel_active) {
-            int32_t progress = sim->carriage.progress_milli / 10;
-            CcOverlayDrawText("ON THE ROAD", content_x, 91, 9, TEAL);
+            bool town_departure =
+                local->convoy.phase == CC_LOCAL_CONVOY_DEPARTING;
+            bool gate = local->convoy.phase == CC_LOCAL_CONVOY_GATE;
+            bool arrival = local->convoy.phase == CC_LOCAL_CONVOY_ARRIVING;
+            int32_t progress = arrival || town_departure || gate ?
+                (int32_t)lroundf(local->convoy.phase_progress * 100.0f) :
+                sim->carriage.progress_milli / 10;
+            CcOverlayDrawText(arrival ? "ENTERING TOWN" :
+                              gate ? "CROSSING THE GATE" :
+                              town_departure ? "LEAVING THE STABLE" :
+                              "ON THE ROAD",
+                              content_x, 91, 9, TEAL);
             CcOverlayDrawText(destination != NULL ? destination->name : "THE FAR GATE",
                      content_x, 112, 15, INK);
             DrawBar(content_x, 145, 74, "PROGRESS", progress, TEAL);
-            DrawBar(content_x, 166, 74, "DANGER", sim->journey.danger, DANGER);
-            DrawBar(content_x, 187, 74, "ROAD",
-                    route != NULL ? route->condition : 0, CC_GOLD);
+            DrawBar(content_x, 166, 74, "PACE",
+                    (int32_t)lroundf(local->convoy.pace * 100.0f), CC_GOLD);
+            CcOverlayDrawText("W URGE  S/SPACE REIN  A/D STEER",
+                              content_x, 205, 7, MUTED);
             return;
         }
         CcOverlayDrawText(local->journey_parley_active ? "PARLEY" :
@@ -2973,7 +3158,12 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED) {
                 *view = VIEW_ENCOUNTER;
             } else {
-                if (sim->journey.active) BeginRoadTravelState(local);
+                if (sim->journey.active &&
+                    sim->journey.elapsed_subticks == 0) {
+                    BeginTownDepartureState(local);
+                } else if (sim->journey.active) {
+                    BeginRoadTravelState(local);
+                }
                 *view = VIEW_LOCAL;
             }
         }
@@ -3015,9 +3205,31 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
 
     if (*view == VIEW_LOCAL) {
         if (local->journey_travel_active) {
-            int32_t ticks = CcLocalWorldUpdate(
+            ConvoyUpdateResult convoy_update = UpdateDrivenConvoy(
+                local, delta_time);
+            if (convoy_update == CONVOY_UPDATE_PARKED) {
+                *selected = FirstOutgoingRouteIndex(sim);
+                ResetLocalState(local);
+                (void)snprintf(message, message_capacity,
+                               "The team is watered and stabled.");
+                return;
+            }
+            if (convoy_update == CONVOY_UPDATE_ENTER_ROAD) {
+                BeginRoadTravelState(local);
+                (void)snprintf(message, message_capacity,
+                               "The gate opens onto the king's road.");
+                return;
+            }
+            if (local->convoy.phase != CC_LOCAL_CONVOY_ROAD) return;
+
+            int32_t fixed_steps = CcLocalWorldUpdate(
                 &local->course, &local->agent, sim, delta_time,
                 false, false);
+            local->convoy.runtime_tick_accumulator +=
+                (float)fixed_steps * local->convoy.pace;
+            int32_t ticks = (int32_t)floorf(
+                local->convoy.runtime_tick_accumulator);
+            local->convoy.runtime_tick_accumulator -= (float)ticks;
             char error[256];
             bool advanced = *journal != NULL ?
                 CcJournalAdvanceRuntimeTicks(*journal, sim, ticks,
@@ -3029,6 +3241,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             }
             if (sim->journey.active &&
                 sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED) {
+                local->convoy.pace = 0.0f;
                 local->journey_travel_active = false;
                 *view = VIEW_ENCOUNTER;
                 const CcEvent *event = CcSimRecentEvent(sim, 0);
@@ -3037,11 +3250,11 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                                "An outlaw company blocked the road.");
             } else if (!sim->journey.active) {
                 *selected = FirstOutgoingRouteIndex(sim);
-                ResetLocalState(local);
+                BeginTownArrivalState(local);
                 const CcEvent *event = CcSimRecentEvent(sim, 0);
                 (void)snprintf(message, message_capacity, "%s",
                                event != NULL ? event->text :
-                               "Arrived.");
+                               "Drive the team into the destination yard.");
             }
             return;
         }
@@ -3519,8 +3732,10 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         };
         if (ApplyCommand(*journal, sim, travel, message, message_capacity)) {
             *selected = FirstOutgoingRouteIndex(sim);
-            BeginRoadTravelState(local);
+            BeginTownDepartureState(local);
             *view = VIEW_LOCAL;
+            (void)snprintf(message, message_capacity,
+                           "Take the reins. W urges the team; S or Space reins in.");
         }
     }
     if ((ClientKeyPressed(KEY_R) ||
@@ -4191,20 +4406,24 @@ int main(int argc, char **argv)
         } else {
             if (view == VIEW_ENCOUNTER) {
                 CcLocalDrawRoad3D(&sim, &local.agent, &local.course,
-                                  false, false, clock,
+                                  false, false, &local.convoy, clock,
                                   local_target, local_bounds);
-            } else if (local.journey_travel_active ||
-                local.journey_combat_active ||
+            } else if ((local.journey_travel_active &&
+                        (local.convoy.phase == CC_LOCAL_CONVOY_GATE ||
+                         local.convoy.phase == CC_LOCAL_CONVOY_ROAD)) ||
+                       local.journey_combat_active ||
                 local.journey_parley_active) {
                 CcLocalDrawRoad3D(&sim, &local.agent, &local.course,
                                   local.journey_travel_active,
-                                  local.journey_parley_active, clock,
+                                  local.journey_parley_active,
+                                  &local.convoy, clock,
                                   local_target, local_bounds);
             } else if (local.market_interior) {
                 CcLocalDrawMarket3D(&sim, &local.agent, clock,
                                     local_target, local_bounds);
             } else {
-                CcLocalDrawStreet3D(&sim, &local.agent, &local.course, clock,
+                CcLocalDrawStreet3D(&sim, &local.agent, &local.course,
+                                    &local.convoy, clock,
                                     local_target, local_bounds);
             }
             if (view != VIEW_ENCOUNTER) {
