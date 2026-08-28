@@ -4187,7 +4187,8 @@ static CcLocalAgent *CoursePlayerTarget(CcLocalCourse *course,
         return NULL;
     }
     CcLocalAgent *target = &course->raiders[player->combat.target_index];
-    return CombatCanAct(&target->combat) ? target : NULL;
+    return CombatCanAct(&target->combat) &&
+           target->combat.team == CC_COMBAT_RAIDER ? target : NULL;
 }
 
 static Vector3 CourseCombatApproachPoint(const CcLocalAgent *mover,
@@ -4232,6 +4233,7 @@ bool CcLocalCourseSelectPlayerTarget(CcLocalCourse *course,
     if (course == NULL || player == NULL || !course->alarm_active ||
         course->raiders_retreating || target_index < 0 ||
         target_index >= CC_LOCAL_RAIDER_COUNT ||
+        course->raiders[target_index].combat.team != CC_COMBAT_RAIDER ||
         !CombatCanAct(&course->raiders[target_index].combat)) {
         return false;
     }
@@ -4345,6 +4347,10 @@ bool CcLocalCourseUsePlayerSkill(CcLocalCourse *course,
         player->combat.skill_cooldown[skill] > 0.0f) {
         return false;
     }
+    if (!course->alarm_active || course->raiders_retreating ||
+        CoursePlayerTarget(course, player) == NULL) {
+        return false;
+    }
     if (skill == CC_COMBAT_SKILL_SECOND_WIND) {
         if (player->combat.posture >= CC_LOCAL_COMBAT_MAX_POSTURE) {
             return false;
@@ -4354,10 +4360,6 @@ bool CcLocalCourseUsePlayerSkill(CcLocalCourse *course,
         player->combat.skill_cooldown[skill] =
             CcLocalCombatSkillDuration(skill);
         return true;
-    }
-    if (!course->alarm_active || course->raiders_retreating ||
-        CoursePlayerTarget(course, player) == NULL) {
-        return false;
     }
     player->combat.queued_skill = (int32_t)skill;
     return true;
@@ -4461,35 +4463,35 @@ bool CcLocalCourseBeginPlayerStrike(CcLocalCourse *course,
                                     CcLocalAgent *player)
 {
     if (course == NULL || player == NULL) return false;
-    CcLocalCombatSetTeam(player, CC_COMBAT_PLAYER);
-    int32_t target = CoursePlayerTarget(course, player) != NULL ?
-        player->combat.target_index :
-        course->alarm_active && !course->raiders_retreating ?
-        CourseClosestRaider(course, player, 2.75f, true, -1) : -1;
-    player->combat.target_index = target;
-    if (target < 0) CcLocalCombatClearFocus(player);
     player->combat.queued_skill = -1;
-    return CourseBeginPlayerAttack(
-        player, target >= 0 ? &course->raiders[target] : NULL,
-        CC_COMBAT_SKILL_COUNT);
+    CcLocalAgent *target = CoursePlayerTarget(course, player);
+    if (!course->alarm_active || course->raiders_retreating ||
+        target == NULL) {
+        CcLocalCombatClearFocus(player);
+        return false;
+    }
+    CcLocalCombatSetTeam(player, CC_COMBAT_PLAYER);
+    return CourseBeginPlayerAttack(player, target, CC_COMBAT_SKILL_COUNT);
 }
 
-void CcLocalCourseSetPlayerGuarded(CcLocalCourse *course,
+bool CcLocalCourseSetPlayerGuarded(CcLocalCourse *course,
                                    CcLocalAgent *player, bool guarded)
 {
-    if (course == NULL || player == NULL) return;
-    CcLocalCombatSetTeam(player, CC_COMBAT_PLAYER);
-    int32_t target = CoursePlayerTarget(course, player) != NULL ?
-        player->combat.target_index :
-        guarded && course->alarm_active && !course->raiders_retreating ?
-        CourseClosestRaider(course, player, 3.10f, false, -1) : -1;
-    player->combat.target_index = target;
-    CcLocalCombatSetGuarded(
-        player, target >= 0 ? &course->raiders[target] : NULL, guarded);
-    if (!guarded && target >= 0) {
-        player->combat.target_index = target;
-        CcLocalCombatSetFocus(player, &course->raiders[target]);
+    if (course == NULL || player == NULL) return false;
+    CcLocalAgent *target = CoursePlayerTarget(course, player);
+    if (!course->alarm_active || course->raiders_retreating ||
+        target == NULL) {
+        CcLocalCombatSetGuarded(player, NULL, false);
+        return false;
     }
+    int32_t target_index = player->combat.target_index;
+    CcLocalCombatSetTeam(player, CC_COMBAT_PLAYER);
+    CcLocalCombatSetGuarded(player, target, guarded);
+    if (!guarded) {
+        player->combat.target_index = target_index;
+        CcLocalCombatSetFocus(player, target);
+    }
+    return true;
 }
 
 void CcLocalCourseFixedStepInternal(CcLocalCourse *course,
