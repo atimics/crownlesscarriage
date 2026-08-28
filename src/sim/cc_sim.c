@@ -3009,7 +3009,7 @@ static void PlanGoblinTribute(CcSim *sim)
     goblins->tribute_days_remaining = GoblinTravelDays(sim, target->id);
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(text, sizeof(text),
-                   "Nara Soot-Tongue names %s for %s; %s musters until tomorrow.",
+                   "Nara names %.24s for %.32s. %.20s musters until tomorrow.",
                    target->name,
                    goblins->raid_motive == CC_GOBLIN_RAID_HUNGER ? "Food" :
                    goblins->raid_motive == CC_GOBLIN_RAID_EQUIPMENT ?
@@ -7060,7 +7060,8 @@ static bool ApplyGoblinIntercept(CcSim *sim,
     sim->player.reputation = ClampI32(sim->player.reputation + 5, -100, 100);
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(text, sizeof(text),
-                   "The Crownless company turns %s back outside %s; %d goblins fall and the survivors close ranks.",
+                   "Crownless turns %.24s back outside %.24s; %d goblins fall. "
+                   "Survivors close ranks.",
                    goblins->name, target != NULL ? target->name : "the town",
                    losses);
     (void)PushEvent(
