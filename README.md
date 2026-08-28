@@ -16,10 +16,13 @@ all-knowing strategy screen.
 This project is in pre-production. The repository contains a living design
 manual and a playable architecture proof written in C17.
 
-![Current Crownless Carriage gameplay](assets/previews/crownless_runtime_reel_v04.gif)
+![Current Crownless Carriage gameplay](assets/previews/crownless_gameplay_demo_reel_v07.gif)
 
-_Captured from the current `play` build. The reel shows live climbing,
-jumping, swimming, combat, room transitions, and the fixed-pixel world pass._
+_Captured from the current `play` build. The reel follows one complete promise:
+accepting the job, loading cargo, choosing roads, crossing three settlements,
+breaking a bandit cordon, making the delivery, and defending the destination._
+
+[Download the higher-quality MP4 reel](assets/previews/crownless_gameplay_demo_reel_v07.mp4).
 
 ## Visual direction
 
