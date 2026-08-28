@@ -67,6 +67,9 @@ The architecture proof connects these parts in one running build:
   three-slot carriage case, and a persistent storage archive in Gloamgate
 - Real-time carriage journeys, a dedicated road scene, and a route crisis that
   can be resolved through combat, coin, demanded cargo, or withdrawal
+- Two persistent named carriage horses whose food, health, and fatigue affect
+  travel, plus cattle herds that consume fodder, support farms, reproduce,
+  face famine slaughter, and can be taken by dragons
 - Immediate local aftermath and delayed consequences after a journey
 - A deterministic regional simulation of settlements, kingdoms, factions,
   production, trade, shipments, hunger, security, bandits, monsters, and

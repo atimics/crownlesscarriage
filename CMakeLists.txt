@@ -414,6 +414,11 @@ if(BUILD_TESTING)
     cc_strict_warnings(sim_tests)
     add_test(NAME deterministic_simulation COMMAND sim_tests)
 
+    add_executable(animal_economy_tests tests/animal_economy_tests.c)
+    target_link_libraries(animal_economy_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(animal_economy_tests)
+    add_test(NAME horse_and_cow_economy COMMAND animal_economy_tests)
+
     add_executable(balance_tests tests/balance_tests.c)
     target_link_libraries(balance_tests PRIVATE crownless_sim)
     cc_strict_warnings(balance_tests)

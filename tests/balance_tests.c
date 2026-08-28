@@ -18,6 +18,12 @@ static void QuietWorld(CcSim *sim, uint32_t seed)
     sim->dragon.egg_count = 0;
     sim->goblins.tribute_cooldown_days = 1000;
     sim->hoard_raiders.cooldown_days = 1000;
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        sim->settlements[i].cow_adults = 0;
+        sim->settlements[i].cow_calves = 0;
+        sim->settlements[i].cow_condition = 0;
+        sim->settlements[i].cow_hunger = 0;
+    }
     for (int32_t kingdom = 0;
          kingdom < sim->kingdom_count; ++kingdom) {
         sim->kingdoms[kingdom].treasury = 0;
@@ -57,7 +63,8 @@ int main(void)
     survivors->production[CC_GOOD_FOOD] = 0;
     survivors->consumption[CC_GOOD_FOOD] = 7;
     CcSimAdvanceDays(&contracted, 7);
-    CC_CHECK(survivors->stock[CC_GOOD_FOOD] == 6);
+    /* The settlement's stable also feeds the Crownless horse team. */
+    CC_CHECK(survivors->stock[CC_GOOD_FOOD] == 5);
 
     survivors->hunger = 20;
     survivors->stock[CC_GOOD_FOOD] = 0;
