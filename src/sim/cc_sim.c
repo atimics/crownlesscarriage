@@ -4939,7 +4939,7 @@ static void ResolveWarSettlement(CcSim *sim, int32_t first,
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(
         text, sizeof(text),
-        "%s cedes %s to %s in the peace; the border and tax rolls change.",
+        "%.16s cedes %.16s to %.16s; peace redraws the border.",
         sim->kingdoms[loser].name, ceded->name,
         sim->kingdoms[winner].name);
     (void)PushEvent(
