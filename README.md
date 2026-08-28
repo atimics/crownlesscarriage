@@ -55,8 +55,9 @@ The architecture proof connects these parts in one running build:
   with no tile or screen-space movement grid
 - One physical humanoid body for walking, vaulting, climbing, down-climbing,
   jumping, swimming, falling, ragdolls, and staged recovery
-- Shared contact-based combat for the player, guards, scouts, and raiders,
-  including guard, posture, skills, recoil, knockback, and defeat
+- OSR contact-based combat for the player, guards, scouts, and named outlaw
+  companies, including reaction, telegraphed risk, guard, posture, morale,
+  recoil, withdrawal, knockback, and defeat
 - A market interior whose stock and prices come from the regional simulation
 - Local situation boards with named sponsors, affected people, deadlines,
   rewards, accepted promises, and reputation consequences
@@ -65,7 +66,7 @@ The architecture proof connects these parts in one running build:
 - A twelve-chart collectible map set with distinct physical artwork, a
   three-slot carriage case, and a persistent storage archive in Gloamgate
 - Real-time carriage journeys, a dedicated road scene, and a route crisis that
-  can be resolved through combat or payment
+  can be resolved through combat, coin, demanded cargo, or withdrawal
 - Immediate local aftermath and delayed consequences after a journey
 - A deterministic regional simulation of settlements, kingdoms, factions,
   production, trade, shipments, hunger, security, bandits, monsters, and
@@ -160,7 +161,7 @@ Inputs are contextual.
 
 | Input | Action |
 | --- | --- |
-| Left click | Move to a visible surface, or select a raider |
+| Left click | Move to a visible surface, or select a named outlaw |
 | `F` | Use a nearby door, notice board, carriage, or toll collector |
 | `M` | Open or close the map case while beside the carriage |
 | `Q` | Open the situation board |
@@ -168,6 +169,7 @@ Inputs are contextual.
 | `J` | Jump |
 | `Space` | Make a manual basic strike |
 | `X` | Enter or leave guard |
+| `Backspace` | Withdraw from a road fight or return from a parley |
 | `1` through `6` | Trade goods in markets; `1`, `2`, and `3` remain combat skills and encounter choices |
 | `G` | Sound the village alarm and start a raid encounter |
 | `E` | Start an expedition beside the dungeon entrance |
@@ -191,8 +193,10 @@ In the map case, use the arrow keys or click a sheet to select it. Press `B` to
 buy a local chart, `S` to sell one, or `A` to store or retrieve it at the
 Gloamgate archive. Travel begins from the carriage's `Drive out` action.
 
-During combat, `1` uses Crushing Blow, `2` uses Sunder, and `3` uses Second
-Wind. Click the ground to disengage and return to direct movement.
+During combat, `1` uses Crushing Blow, `2` uses Sunder, and `3` uses Catch
+Breath. Catch Breath restores posture but never heals wounds. Click the ground
+to disengage and return to direct movement. A road company can break and flee
+before every opponent falls; the Crownless company can also withdraw.
 
 ## Code layout
 

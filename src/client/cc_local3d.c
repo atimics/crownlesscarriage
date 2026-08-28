@@ -3297,7 +3297,7 @@ const char *CcLocalCombatSkillName(CcCombatSkill skill)
     switch (skill) {
         case CC_COMBAT_SKILL_CRUSHING_BLOW: return "CRUSHING BLOW";
         case CC_COMBAT_SKILL_SUNDER: return "SUNDER";
-        case CC_COMBAT_SKILL_SECOND_WIND: return "SECOND WIND";
+        case CC_COMBAT_SKILL_SECOND_WIND: return "CATCH BREATH";
         case CC_COMBAT_SKILL_COUNT:
         default: return "SKILL";
     }
@@ -3343,6 +3343,16 @@ void CcLocalCourseInit(CcLocalCourse *course)
                                               sizeof(COURSE_WAYPOINTS[0]));
     *course = (CcLocalCourse){0};
     course->scene = CC_LOCAL_SCENE_STREET;
+    course->raider_initial_resolve = 78;
+    course->raider_resolve = course->raider_initial_resolve;
+    (void)snprintf(course->raider_company_name,
+                   sizeof(course->raider_company_name), "Road company");
+    (void)snprintf(course->raider_names[0],
+                   sizeof(course->raider_names[0]), "The Captain");
+    (void)snprintf(course->raider_names[1],
+                   sizeof(course->raider_names[1]), "The Forager");
+    course->raider_roles[0] = CC_LOCAL_RAIDER_CAPTAIN;
+    course->raider_roles[1] = CC_LOCAL_RAIDER_FORAGER;
     for (int32_t i = 0; i < CC_LOCAL_COURSE_RUNNER_COUNT; ++i) {
         const Vector3 start = COURSE_WAYPOINTS[starts[i]];
         CcLocalCourseRunner *runner = &course->runners[i];
@@ -3405,6 +3415,87 @@ void CcLocalCourseInit(CcLocalCourse *course)
     course->alarm_countdown = 24.0f;
     course->raider_attack_cooldown[0] = 0.52f;
     course->raider_attack_cooldown[1] = 0.78f;
+}
+
+const char *CcLocalRaiderRoleName(CcLocalRaiderRole role)
+{
+    switch (role) {
+        case CC_LOCAL_RAIDER_CAPTAIN: return "CAPTAIN";
+        case CC_LOCAL_RAIDER_FORAGER: return "FORAGER";
+    }
+    return "OUTLAW";
+}
+
+static const CcBanditGroup *CourseRaiderCompany(const CcSim *sim)
+{
+    if (sim == NULL) return NULL;
+    if (sim->journey.active) {
+        return CcSimBanditGroupOnRoute(sim, sim->journey.route_id);
+    }
+    const CcBanditGroup *strongest = NULL;
+    for (int32_t i = 0; i < sim->bandit_count; ++i) {
+        if (strongest == NULL ||
+            sim->bandits[i].influence > strongest->influence) {
+            strongest = &sim->bandits[i];
+        }
+    }
+    return strongest;
+}
+
+static void CourseApplyRaiderIdentity(CcLocalCourse *course, int32_t index)
+{
+    if (course == NULL || index < 0 || index >= CC_LOCAL_RAIDER_COUNT) return;
+    uint64_t mark = course->raider_company_id != 0U ?
+        course->raider_company_id : UINT64_C(0x524149444552);
+    uint32_t seed = (uint32_t)(mark ^ (mark >> 32U)) ^
+                    (index == 0 ? UINT32_C(0x43415054) :
+                                  UINT32_C(0x464f5247));
+    Color accent = index == 0 ? (Color){168, 126, 58, 255} :
+                                (Color){112, 65, 78, 255};
+    CcLocalAgentSetNpcAppearance(&course->raiders[index], seed,
+                                 CC_NPC_ROLE_RAIDER, accent);
+    if (index == 0) {
+        CcLocalAgentSetAthleticLevel(&course->raiders[index],
+                                     CC_ATHLETIC_POWER, 3);
+        CcLocalAgentSetAthleticLevel(&course->raiders[index],
+                                     CC_ATHLETIC_GRIP, 3);
+    } else {
+        CcLocalAgentSetAthleticLevel(&course->raiders[index],
+                                     CC_ATHLETIC_MOBILITY, 3);
+    }
+}
+
+void CcLocalCourseBindRaiderCompany(CcLocalCourse *course,
+                                    const CcSim *sim)
+{
+    if (course == NULL) return;
+    const CcBanditGroup *bandits = CourseRaiderCompany(sim);
+    if (bandits == NULL) return;
+    static const char *captain_names[] = {
+        "Maud Vey", "Harl Rook", "Ysabet Pike", "Osric Dunn",
+        "Ren Tallow", "Tavin Grey"
+    };
+    static const char *forager_names[] = {
+        "Kerrin", "Sable", "Noll", "Brin", "Edda", "Moss"
+    };
+    uint64_t serial = bandits->id & UINT64_C(0x00ffffffffffffff);
+    course->raider_company_id = bandits->id;
+    (void)snprintf(course->raider_company_name,
+                   sizeof(course->raider_company_name), "%s", bandits->name);
+    (void)snprintf(course->raider_names[0],
+                   sizeof(course->raider_names[0]), "%s",
+                   captain_names[serial % 6U]);
+    (void)snprintf(course->raider_names[1],
+                   sizeof(course->raider_names[1]), "%s",
+                   forager_names[(serial / 3U + 2U) % 6U]);
+    course->raider_initial_resolve = (int32_t)lroundf(CombatClamp(
+        38.0f + (float)bandits->members * 0.45f +
+        (float)bandits->influence * 0.34f +
+        (float)bandits->supplies * 0.16f, 48.0f, 100.0f));
+    course->raider_resolve = course->raider_initial_resolve;
+    for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
+        CourseApplyRaiderIdentity(course, i);
+    }
 }
 
 static bool CourseCombatOriginOpen(CcLocalSceneKind scene, Vector3 origin)
@@ -3518,7 +3609,8 @@ void CcLocalCourseRaiseAlarmNear(CcLocalCourse *course,
     course->alarm_active = true;
     course->raiders_retreating = false;
     course->engagement_time = 0.0f;
-    course->raider_resolve = 100;
+    course->raider_resolve = course->raider_initial_resolve > 0 ?
+        course->raider_initial_resolve : 78;
     course->last_outcome = CC_COMBAT_OUTCOME_NONE;
     course->last_attacker_team = CC_COMBAT_NEUTRAL;
     course->combat_event_seconds = 0.0f;
@@ -3540,12 +3632,10 @@ void CcLocalCourseRaiseAlarmNear(CcLocalCourse *course,
         course->raider_entry[i] = raider->position;
         CoursePrepareCombatant(raider, CC_COMBAT_RAIDER);
         raider->crowned = false;
-        CcLocalAgentSetNpcAppearance(
-            raider, UINT32_C(0x52414900) + (uint32_t)i,
-            CC_NPC_ROLE_RAIDER, (Color){126, 55, 61, 255});
+        CourseApplyRaiderIdentity(course, i);
         course->raider_response_stage[i] = 0;
         course->raider_response_waypoint_active[i] = false;
-        course->raider_attack_cooldown[i] = 0.46f + (float)i * 0.24f;
+        course->raider_attack_cooldown[i] = i == 0 ? 0.74f : 0.38f;
     }
 }
 
@@ -3947,15 +4037,25 @@ static void CourseResolveImpact(CcLocalCourse *course,
                         CcLocalCombatResolveStrike(attacker, defender));
 }
 
-static void CourseRefreshRaiderResolve(CcLocalCourse *course)
+static void CourseRefreshRaiderResolve(CcLocalCourse *course,
+                                       int32_t engaged_guards)
 {
-    float total = 0.0f;
+    float lost_health = 0.0f;
+    int32_t defeated = 0;
     for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
-        total += course->raiders[i].combat.health;
+        lost_health += CC_LOCAL_COMBAT_MAX_HEALTH -
+                       course->raiders[i].combat.health;
+        if (CombatIsDefeated(&course->raiders[i].combat)) defeated += 1;
     }
-    float average = total / (float)CC_LOCAL_RAIDER_COUNT;
+    float pressure = lost_health * 0.28f + (float)defeated * 12.0f;
+    if (CombatIsDefeated(&course->raiders[0].combat)) pressure += 28.0f;
+    if (engaged_guards >= 2) pressure += 7.0f;
+    if (course->engagement_time > 8.0f) {
+        pressure += fminf(12.0f, course->engagement_time - 8.0f);
+    }
     course->raider_resolve = (int32_t)lroundf(CombatClamp(
-        average, 0.0f, CC_LOCAL_COMBAT_MAX_HEALTH));
+        (float)course->raider_initial_resolve - pressure,
+        0.0f, CC_LOCAL_COMBAT_MAX_HEALTH));
 }
 
 static bool CourseRaidersBroken(const CcLocalCourse *course)
@@ -3966,7 +4066,8 @@ static bool CourseRaidersBroken(const CcLocalCourse *course)
         total_health += course->raiders[i].combat.health;
         standing += CombatIsDefeated(&course->raiders[i].combat) ? 0 : 1;
     }
-    return standing == 0 || total_health <= 60.0f;
+    return standing == 0 || total_health <= 60.0f ||
+           course->raider_resolve <= 35;
 }
 
 static void CourseBeginRetreat(CcLocalCourse *course, CcLocalAgent *player)
@@ -4162,14 +4263,11 @@ bool CcLocalCourseUsePlayerSkill(CcLocalCourse *course,
         return false;
     }
     if (skill == CC_COMBAT_SKILL_SECOND_WIND) {
-        if (player->combat.health >= CC_LOCAL_COMBAT_MAX_HEALTH &&
-            player->combat.posture >= CC_LOCAL_COMBAT_MAX_POSTURE) {
+        if (player->combat.posture >= CC_LOCAL_COMBAT_MAX_POSTURE) {
             return false;
         }
-        player->combat.health = fminf(CC_LOCAL_COMBAT_MAX_HEALTH,
-                                      player->combat.health + 34.0f);
         player->combat.posture = fminf(CC_LOCAL_COMBAT_MAX_POSTURE,
-                                       player->combat.posture + 52.0f);
+                                       player->combat.posture + 65.0f);
         player->combat.skill_cooldown[skill] =
             CcLocalCombatSkillDuration(skill);
         return true;
@@ -4336,6 +4434,9 @@ void CcLocalCourseFixedStepInternal(CcLocalCourse *course,
         if (player != NULL) CourseResolveImpact(course, player, NULL);
         course->alarm_countdown -= delta_time;
         if (course->alarm_countdown <= 0.0f) {
+            if (course->raider_company_id == 0U) {
+                CcLocalCourseBindRaiderCompany(course, sim);
+            }
             CcLocalCourseRaiseAlarmNear(course, player);
         } else {
             UpdateCourseTraining(course, delta_time);
@@ -4570,7 +4671,7 @@ void CcLocalCourseFixedStepInternal(CcLocalCourse *course,
         }
         CourseResolveImpact(course, player, target);
     }
-    CourseRefreshRaiderResolve(course);
+    CourseRefreshRaiderResolve(course, engaged_guards);
     if (CourseRaidersBroken(course)) {
         CourseBeginRetreat(course, player);
     }
@@ -18115,10 +18216,10 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
             {course->raiders[0].position.x,
              course->raiders[0].position.y + 2.18f,
              course->raiders[0].position.z},
-            "TOLL COLLECTOR", WORLD_DANGER};
+            course->raider_names[0], WORLD_DANGER};
         labels[count++] = (WorldLabel){{CC_LOCAL_ROAD_PARLEY_X, 0.42f,
                                         CC_LOCAL_ROAD_PARLEY_Z},
-                                       "F  OFFER PAYMENT", WORLD_TEAL};
+                                       "F  SPEAK WITH CAPTAIN", WORLD_TEAL};
     }
     DrawLabels(labels, count, camera, destination);
     if (!travelling && course->alarm_active) {
@@ -18155,8 +18256,8 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
         TextFormat("CARRIAGE MOVING / %d%% COMPLETE / %d GAME MIN / REAL SEC",
                    sim->carriage.progress_milli / 10,
                    CC_TRAVEL_GAME_MINUTES_PER_SECOND) : parley ?
-        "PARLEY / approach the collector and press F to exchange crowns for passage" :
-        TextFormat("BREAK THE CORDON / YOU %d HP / RAIDERS %d%% RESOLVE",
+        "PARLEY / approach the captain, then choose coin or needed supplies" :
+        TextFormat("BREAK THE CORDON / YOU %d HP / COMPANY %d%% NERVE",
                    (int32_t)lroundf(agent->combat.health),
                    course->raider_resolve > 0 ? course->raider_resolve : 0),
         destination, 18, 35, 10, WORLD_INK);
@@ -18612,7 +18713,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
             {47.35f, CcLocalTerrainHeightAt(47.35f, 31.05f) + 2.05f,
              31.05f},
             sim->resolved_journey_outcome == CC_JOURNEY_OUTCOME_COMBAT ?
-                "Road guards" : "Toll marker",
+                "Road guards" : "Company token",
             sim->resolved_journey_outcome == CC_JOURNEY_OUTCOME_COMBAT ?
                 WORLD_TEAL : WORLD_VIOLET};
     }
