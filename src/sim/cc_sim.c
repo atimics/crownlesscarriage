@@ -19,6 +19,7 @@ static void AdvanceCouriers(CcSim *sim);
 static void UpdateRoyalDiplomacy(CcSim *sim);
 static void AdvanceDragonCampaign(CcSim *sim);
 static void AdvanceHorseTeam(CcSim *sim);
+static void AdvanceRuins(CcSim *sim);
 static int32_t BasePrice(CcGood good);
 static int32_t CalculateDragonCrownStrength(const CcSim *sim);
 
@@ -44,6 +45,12 @@ static int32_t AbsoluteI32(int32_t value)
     return value < 0 ? -value : value;
 }
 
+static bool ValidBoundedText(const char *text, size_t capacity)
+{
+    return text != NULL && text[0] != '\0' &&
+           memchr(text, '\0', capacity) != NULL;
+}
+
 static void SetError(char *error, size_t capacity, const char *message)
 {
     if (error == NULL || capacity == 0U) return;
@@ -58,6 +65,39 @@ static uint32_t NextRandom(CcSim *sim)
     value ^= value << 5;
     sim->random_state = value == 0U ? UINT32_C(0xa341316c) : value;
     return sim->random_state;
+}
+
+bool CcSettlementIsAbandoned(const CcSettlement *settlement)
+{
+    return settlement != NULL && settlement->population <= 0;
+}
+
+int32_t CcSimClimateFactor(const CcSim *sim)
+{
+    if (sim == NULL) return 100;
+    uint32_t year = sim->current_day > 1 ?
+        (uint32_t)((sim->current_day - 1) / 364) : 0U;
+    uint32_t era = year / 40U;
+    uint32_t value = sim->world_seed ^
+        ((era + 1U) * UINT32_C(0x9e3779b9));
+    value ^= value >> 16U;
+    value *= UINT32_C(0x7feb352d);
+    value ^= value >> 15U;
+    value *= UINT32_C(0x846ca68b);
+    value ^= value >> 16U;
+    uint32_t roll = value % 100U;
+    if (roll < 10U) return 58;
+    if (roll < 28U) return 78;
+    if (roll < 68U) return 100;
+    if (roll < 90U) return 116;
+    return 132;
+}
+
+int32_t CcDragonCampaignExperience(const CcSim *sim)
+{
+    if (sim == NULL || sim->dragon_campaign.defeats <= 0) return 0;
+    return sim->dragon_campaign.defeats >= 6 ?
+        72 : sim->dragon_campaign.defeats * 12;
 }
 
 static CcId NextId(CcSim *sim, CcEntityKind kind)
@@ -1014,6 +1054,16 @@ static int32_t CivilianFoodUse(const CcSettlement *place)
         place->consumption[CC_GOOD_FOOD], population_use);
 }
 
+static int32_t SettlementPopulationCapacity(const CcSettlement *place)
+{
+    if (place == NULL) return 0;
+    static const int32_t capacity[] = {900, 2200, 4200, 7000, 9500};
+    int32_t result = capacity[place->size];
+    if (place->function == CC_SETTLEMENT_FARMING) result += 600;
+    if (place->function == CC_SETTLEMENT_MARKET) result += 400;
+    return result;
+}
+
 static int32_t WeeklyFoodUse(const CcSim *sim,
                              const CcSettlement *place)
 {
@@ -1577,7 +1627,7 @@ const CcSituation *CcSimSituationForSettlement(const CcSim *sim,
 int32_t CcSimIncomingGood(const CcSim *sim, CcId settlement_id, CcGood good)
 {
     if (sim == NULL || good < 0 || good >= CC_GOOD_COUNT) return 0;
-    int32_t incoming = 0;
+    int64_t incoming = 0;
     for (int32_t i = 0; i < sim->shipment_count; ++i) {
         const CcShipment *shipment = &sim->shipments[i];
         if (shipment->status == CC_SHIPMENT_TRAVELLING &&
@@ -1585,7 +1635,8 @@ int32_t CcSimIncomingGood(const CcSim *sim, CcId settlement_id, CcGood good)
             incoming += shipment->quantity;
         }
     }
-    return incoming;
+    return incoming > CC_SIM_MAX_UNITS ? CC_SIM_MAX_UNITS :
+           incoming < 0 ? 0 : (int32_t)incoming;
 }
 
 int32_t CcPlayerCargoUsed(const CcPlayerCompany *player)
@@ -2221,12 +2272,13 @@ static int32_t FoodSeasonFactor(const CcSim *sim)
 static int32_t EffectiveProduction(CcSim *sim, CcSettlement *settlement,
                                    int32_t index, CcGood good)
 {
+    if (CcSettlementIsAbandoned(settlement)) return 0;
     int32_t production = settlement->production[good];
     bool subsistence_muster = good == CC_GOOD_FOOD &&
         (settlement->hunger > 65 ||
          (settlement->population < 600 && settlement->hunger >= 20));
     int32_t subsistence_food = subsistence_muster ?
-                               CivilianFoodUse(settlement) : 0;
+        MaximumI32(1, CivilianFoodUse(settlement) * 2 / 3) : 0;
     if (production <= 0 && subsistence_food <= 0) return 0;
     if (settlement->hunger > 65) production = production * 72 / 100;
     else if (settlement->hunger > 35) production = production * 86 / 100;
@@ -2236,6 +2288,10 @@ static int32_t EffectiveProduction(CcSim *sim, CcSettlement *settlement,
             settlement->field_yield <= 0) return subsistence_food;
         production = production * FoodSeasonFactor(sim) / 100;
         production = production * settlement->field_yield / 100;
+        production = production * CcSimClimateFactor(sim) / 100;
+        int32_t labor_factor = ClampI32(
+            35 + settlement->population / 20, 35, 100);
+        production = production * labor_factor / 100;
         if (index == 0 && sim->current_day < 112) production = production * 64 / 100;
         if (settlement->stock[CC_GOOD_TOOLS] <= 0) {
             production = production * 50 / 100;
@@ -2501,6 +2557,7 @@ static int32_t AdvanceCowHerd(CcSim *sim, CcSettlement *settlement)
 static void UpdateSettlement(CcSim *sim, int32_t index)
 {
     CcSettlement *settlement = &sim->settlements[index];
+    if (CcSettlementIsAbandoned(settlement)) return;
     int32_t produced[CC_GOOD_COUNT] = {0};
     int32_t cow_food = AdvanceCowHerd(sim, settlement);
     int32_t food_required = 1;
@@ -2516,7 +2573,12 @@ static void UpdateSettlement(CcSim *sim, int32_t index)
             CivilianFoodUse(settlement) : settlement->consumption[good];
         int32_t consumption = civilian_consumption +
             WarExtraConsumption(sim, settlement, (CcGood)good);
-        settlement->stock[good] += production;
+        int64_t replenished = (int64_t)settlement->stock[good] +
+                              (int64_t)production;
+        settlement->stock[good] = replenished > CC_SIM_MAX_UNITS ?
+                                  CC_SIM_MAX_UNITS :
+                                  replenished < 0 ? 0 :
+                                  (int32_t)replenished;
         int32_t consumed = MinimumI32(settlement->stock[good], consumption);
         settlement->stock[good] -= consumed;
         if ((CcGood)good == CC_GOOD_FOOD) {
@@ -2594,9 +2656,47 @@ static void UpdateSettlement(CcSim *sim, int32_t index)
     }
     if (sim->current_day % 28 == 0) {
         int32_t population_delta = settlement->hunger > 65 ? -MaximumI32(1, settlement->population / 250) :
-                                   settlement->prosperity > 70 && settlement->hunger < 15 ?
+                                   settlement->prosperity > 70 &&
+                                   settlement->hunger < 15 &&
+                                   settlement->population <
+                                       SettlementPopulationCapacity(settlement) ?
                                    MaximumI32(1, settlement->population / 500) : 0;
-        settlement->population = MaximumI32(100, settlement->population + population_delta);
+        settlement->population = MaximumI32(
+            0, settlement->population + population_delta);
+        if (settlement->population < 80 && settlement->hunger >= 65) {
+            CcKingdom *kingdom = KingdomMutable(sim, settlement->kingdom_id);
+            if (kingdom != NULL) {
+                kingdom->treasury += settlement->market_coins +
+                                     settlement->war_chest;
+            }
+            settlement->market_coins = 0;
+            settlement->war_chest = 0;
+            settlement->population = 0;
+            settlement->security = 0;
+            settlement->prosperity = 0;
+            settlement->hunger = 100;
+            settlement->field_yield = settlement->field_yield * 85 / 100;
+            settlement->service_mask = 0U;
+            settlement->service_project = CC_SERVICE_NONE;
+            settlement->service_project_days = 0;
+            for (int32_t route = 0; route < sim->route_count; ++route) {
+                CcRoute *road = &sim->routes[route];
+                if (road->from_id != settlement->id &&
+                    road->to_id != settlement->id) continue;
+                road->closed = true;
+                road->condition = MinimumI32(road->condition, 12);
+            }
+            char text[CC_EVENT_TEXT_CAPACITY];
+            (void)snprintf(
+                text, sizeof(text),
+                "%s is abandoned after famine reduces its last households to refugees.",
+                settlement->name);
+            (void)PushEvent(
+                sim, CC_EVENT_KINGDOM_ACTION, settlement->id,
+                settlement->id, LatestLocalCause(sim, settlement->id),
+                -1, text);
+            return;
+        }
     }
 
     int32_t level = settlement->hunger >= 65 ? 3 :
@@ -2612,6 +2712,92 @@ static void UpdateSettlement(CcSim *sim, int32_t index)
                         settlement->hunger, text);
     }
     sim->last_shortage_level[index] = level;
+}
+
+static uint32_t RecolonizedServiceMask(const CcSettlement *settlement)
+{
+    uint32_t mask = ServiceBit(CC_SERVICE_INN);
+    if (settlement->field_yield > 0) {
+        return mask | ServiceBit(CC_SERVICE_FARM);
+    }
+    if (settlement->iron_deposit > 0) {
+        return mask | ServiceBit(CC_SERVICE_MINE);
+    }
+    return mask | ServiceBit(CC_SERVICE_MARKET);
+}
+
+static void AdvanceRuins(CcSim *sim)
+{
+    if (sim == NULL || sim->current_day % 7 != 0) return;
+    int32_t week = sim->current_day / 7;
+    for (int32_t slot = 0; slot < sim->settlement_count; ++slot) {
+        CcSettlement *ruin = &sim->settlements[slot];
+        if (!CcSettlementIsAbandoned(ruin) ||
+            (week + slot * 37) % (8 * 52) != 0) continue;
+
+        CcSettlement *donor = NULL;
+        int32_t donor_score = INT32_MIN;
+        for (int32_t route_slot = 0;
+             route_slot < sim->route_count; ++route_slot) {
+            const CcRoute *route = &sim->routes[route_slot];
+            CcId neighbor_id = route->from_id == ruin->id ? route->to_id :
+                route->to_id == ruin->id ? route->from_id : 0U;
+            CcSettlement *candidate = CcSimSettlementMutable(
+                sim, neighbor_id);
+            if (candidate == NULL || CcSettlementIsAbandoned(candidate) ||
+                candidate->population < 900 || candidate->hunger > 25 ||
+                candidate->prosperity < 55 ||
+                candidate->stock[CC_GOOD_FOOD] < 18 ||
+                candidate->stock[CC_GOOD_TOOLS] < 2 ||
+                candidate->market_coins < 20) continue;
+            int32_t score = candidate->population +
+                candidate->prosperity * 12 - candidate->hunger * 20;
+            if (donor == NULL || score > donor_score) {
+                donor = candidate;
+                donor_score = score;
+            }
+        }
+        if (donor == NULL) continue;
+
+        donor->population -= 180;
+        donor->stock[CC_GOOD_FOOD] -= 12;
+        donor->stock[CC_GOOD_TOOLS] -= 2;
+        donor->market_coins -= 12;
+        ruin->kingdom_id = donor->kingdom_id;
+        ruin->population = 180;
+        ruin->security = 15;
+        ruin->prosperity = 20;
+        ruin->hunger = 25;
+        ruin->service_mask = RecolonizedServiceMask(ruin);
+        ruin->stock[CC_GOOD_FOOD] += 10;
+        ruin->stock[CC_GOOD_TOOLS] += 1;
+        ruin->market_coins += 12;
+        char text[CC_EVENT_TEXT_CAPACITY];
+        (void)snprintf(
+            text, sizeof(text),
+            "%s sends 180 settlers to reclaim %s; the ruin changes allegiance.",
+            donor->name, ruin->name);
+        (void)PushEvent(
+            sim, CC_EVENT_KINGDOM_ACTION, ruin->id, ruin->id,
+            LatestLocalCause(sim, donor->id), 180, text);
+    }
+
+    if (sim->current_day % (40 * 364) == 0) {
+        int32_t climate = CcSimClimateFactor(sim);
+        char text[CC_EVENT_TEXT_CAPACITY];
+        (void)snprintf(
+            text, sizeof(text),
+            climate < 90 ?
+                "A long lean era begins; regional field yield falls to %d%%." :
+                climate > 110 ?
+                "A long generous era begins; regional field yield rises to %d%%." :
+                "A temperate era begins; regional field yield settles at %d%%.",
+            climate);
+        (void)PushEvent(
+            sim, climate < 90 ? CC_EVENT_HARVEST_FAILED :
+                CC_EVENT_KINGDOM_ACTION,
+            0U, 0U, 0U, climate, text);
+    }
 }
 
 static CcBanditGroup *BanditsOnRoute(CcSim *sim, CcId route_id)
@@ -2743,7 +2929,7 @@ bool CcSimLaunchBanditRaid(CcSim *sim, CcId bandit_id,
     int32_t best_score = INT_MIN;
     for (int32_t i = 0; i < 2; ++i) {
         CcSettlement *candidate = candidates[i];
-        if (candidate == NULL) continue;
+        if (candidate == NULL || CcSettlementIsAbandoned(candidate)) continue;
         int32_t score = -candidate->security * 2;
         for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
             score += candidate->stock[good];
@@ -2901,7 +3087,8 @@ static CcSettlement *RichestDragonTarget(CcSim *sim)
     int64_t best_score = INT64_MIN;
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         CcSettlement *place = &sim->settlements[i];
-        if (place->id == sim->dragon.lair_settlement_id) continue;
+        if (CcSettlementIsAbandoned(place) ||
+            place->id == sim->dragon.lair_settlement_id) continue;
         CcKingdom *kingdom = KingdomMutable(sim, place->kingdom_id);
         int64_t score = (int64_t)place->prosperity * 4 +
                         (int64_t)CcSettlementServiceCount(place) * 8 +
@@ -2976,7 +3163,8 @@ static void PlanGoblinTribute(CcSim *sim)
     int64_t best_score = INT64_MIN;
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         CcSettlement *place = &sim->settlements[i];
-        if (place->id == sim->dragon.lair_settlement_id ||
+        if (CcSettlementIsAbandoned(place) ||
+            place->id == sim->dragon.lair_settlement_id ||
             place->id == goblins->lair_settlement_id) continue;
         int64_t score = -place->security * 2;
         if (goblins->raid_motive == CC_GOBLIN_RAID_HUNGER) {
@@ -3282,6 +3470,7 @@ static void PlanHoardRaid(CcSim *sim)
     int32_t social_pressure = 0;
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         CcSettlement *place = &sim->settlements[i];
+        if (CcSettlementIsAbandoned(place)) continue;
         int32_t inequality = CcSimInequalityAtSettlement(sim, place->id);
         int32_t debt_pressure = IronLedgerDebtPressure(
             sim, place->kingdom_id);
@@ -3295,6 +3484,7 @@ static void PlanHoardRaid(CcSim *sim)
     if (social_pressure < 55) raiders->social_raid_latched = false;
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         CcSettlement *place = &sim->settlements[i];
+        if (CcSettlementIsAbandoned(place)) continue;
         int32_t inequality = CcSimInequalityAtSettlement(sim, place->id);
         CcKingdom *kingdom = KingdomMutable(sim, place->kingdom_id);
         int32_t debt_pressure = IronLedgerDebtPressure(
@@ -3317,6 +3507,7 @@ static void PlanHoardRaid(CcSim *sim)
         int32_t war_pressure = 0;
         for (int32_t i = 0; i < sim->settlement_count; ++i) {
             CcSettlement *place = &sim->settlements[i];
+            if (CcSettlementIsAbandoned(place)) continue;
             bool war_seat = place->function == CC_SETTLEMENT_FORTRESS ||
                             place->function == CC_SETTLEMENT_CAPITAL;
             int32_t burden = CcSimWarBurdenAtSettlement(sim, place->id);
@@ -3329,6 +3520,7 @@ static void PlanHoardRaid(CcSim *sim)
         if (war_pressure < 35) raiders->war_raid_latched = false;
         for (int32_t i = 0; i < sim->settlement_count; ++i) {
             CcSettlement *place = &sim->settlements[i];
+            if (CcSettlementIsAbandoned(place)) continue;
             CcKingdom *kingdom = KingdomMutable(sim, place->kingdom_id);
             int32_t burden = CcSimWarBurdenAtSettlement(sim, place->id);
             int32_t crisis = CcSimWarSupplyCrisisAtSettlement(
@@ -3602,7 +3794,8 @@ static CcSettlement *DragonHuntTarget(CcSim *sim)
     int32_t best_score = INT32_MIN;
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         CcSettlement *place = &sim->settlements[i];
-        if (place->id == sim->dragon.lair_settlement_id ||
+        if (CcSettlementIsAbandoned(place) ||
+            place->id == sim->dragon.lair_settlement_id ||
             (place->stock[CC_GOOD_FOOD] <= 0 &&
              place->cow_adults <= 0)) continue;
         int32_t score = place->stock[CC_GOOD_FOOD] * 3 +
@@ -4018,7 +4211,8 @@ static void AdvanceDragonEcology(CcSim *sim)
         dragon->crown_continuity_days += 1;
     }
     if (sim->current_day % 28 == 0) {
-        if (dragon->stolen_outstanding == 0 && dragon->hoard > 0) {
+        if (sim->current_day % (10 * 364) == 0 &&
+            dragon->stolen_outstanding == 0 && dragon->hoard > 0) {
             dragon->memory_integrity = ClampI32(
                 dragon->memory_integrity + 1, 0, 100);
         }
@@ -4074,6 +4268,11 @@ static void AdvanceDragonEcology(CcSim *sim)
         dragon->body_condition = MaximumI32(
             0, dragon->body_condition - 1);
     }
+    if (dragon->age_days >= 2000 * 365 &&
+        sim->current_day % (50 * 364) == 0) {
+        dragon->memory_integrity = MaximumI32(
+            0, dragon->memory_integrity - 1);
+    }
 
     if ((dragon->life_stage == CC_DRAGON_STAGE_CROWNED ||
          dragon->life_stage == CC_DRAGON_STAGE_DEEP_WYRM) &&
@@ -4098,7 +4297,7 @@ static void AdvanceDragonEcology(CcSim *sim)
                           "it leaves the brood cave to seek a crown of its own");
     } else if (dragon->life_stage == CC_DRAGON_STAGE_CROWNED &&
                dragon->age_days >= 500 * 365 &&
-               dragon->crown_strength >= 70 &&
+               dragon->crown_strength >= 60 &&
                dragon->crown_continuity_days >= 200 * 365 &&
                dragon->territory_stability >= 75) {
         ChangeDragonStage(sim, CC_DRAGON_STAGE_DEEP_WYRM,
@@ -4109,7 +4308,7 @@ static void AdvanceDragonEcology(CcSim *sim)
     if (dragon->brood_cooldown_days == 0 && dragon->egg_count == 0 &&
         (dragon->life_stage == CC_DRAGON_STAGE_CROWNED ||
          dragon->life_stage == CC_DRAGON_STAGE_DEEP_WYRM) &&
-        dragon->body_condition >= 75 && dragon->crown_strength >= 65 &&
+        dragon->body_condition >= 68 && dragon->crown_strength >= 58 &&
         dragon->territory_stability >= 60 &&
         dragon->crown_continuity_days >= 30 * 365 &&
         sim->goblins.devotion >= 65 &&
@@ -4377,7 +4576,9 @@ static bool FindTradePath(const CcSim *sim, CcId from_id, CcId to_id,
 {
     int32_t source = SettlementSlotById(sim, from_id);
     int32_t target = SettlementSlotById(sim, to_id);
-    if (source < 0 || target < 0 || source == target) return false;
+    if (source < 0 || target < 0 || source == target ||
+        CcSettlementIsAbandoned(&sim->settlements[source]) ||
+        CcSettlementIsAbandoned(&sim->settlements[target])) return false;
     (void)good;
     int32_t distance[CC_MAX_SETTLEMENTS];
     int32_t first_route[CC_MAX_SETTLEMENTS];
@@ -4409,7 +4610,8 @@ static bool FindTradePath(const CcSim *sim, CcId from_id, CcId to_id,
             CcId neighbor_id = route->from_id == current_id ? route->to_id :
                                route->to_id == current_id ? route->from_id : 0U;
             int32_t neighbor = SettlementSlotById(sim, neighbor_id);
-            if (neighbor < 0 || visited[neighbor]) continue;
+            if (neighbor < 0 || visited[neighbor] ||
+                CcSettlementIsAbandoned(&sim->settlements[neighbor])) continue;
             int32_t edge_cost = route->travel_days * 10 +
                                 CcSimRouteDanger(sim, route->id) +
                                 (war_blockade ? 25 : 0);
@@ -4567,6 +4769,8 @@ static int32_t TradeSurplus(const CcSim *sim,
                             CcGood good)
 {
     if (sim == NULL || origin == NULL || destination == NULL ||
+        CcSettlementIsAbandoned(origin) ||
+        CcSettlementIsAbandoned(destination) ||
         good < 0 || good >= CC_GOOD_COUNT) return 0;
     int32_t protected_stock = origin->reserve_target[good];
     if (good == CC_GOOD_FOOD && destination->hunger >= 65 &&
@@ -4707,6 +4911,7 @@ static void PlanTrade(CcSim *sim)
             CcId best_hop = 0U;
             for (int32_t destination = 0; destination < sim->settlement_count; ++destination) {
                 CcSettlement *to = &sim->settlements[destination];
+                if (CcSettlementIsAbandoned(to)) continue;
                 int32_t need = EffectiveReserveTarget(
                                    sim, to, (CcGood)good) - to->stock[good] -
                                CcSimIncomingGood(sim, to->id, (CcGood)good);
@@ -4714,6 +4919,7 @@ static void PlanTrade(CcSim *sim)
                 for (int32_t source = 0; source < sim->settlement_count; ++source) {
                     if (source == destination) continue;
                     CcSettlement *from = &sim->settlements[source];
+                    if (CcSettlementIsAbandoned(from)) continue;
                     int32_t surplus = TradeSurplus(
                         sim, from, to, (CcGood)good);
                     if (surplus < minimum_load) continue;
@@ -4861,13 +5067,13 @@ static bool HasRecentSituation(const CcSim *sim, CcSituationKind kind, CcId targ
     return false;
 }
 
-static void CreateSituation(CcSim *sim, CcSituationKind kind, CcId target,
-                            CcId issuer, CcId cause, CcGood good,
-                            int32_t quantity, CcMoney reward, int32_t duration)
+static CcSituation *CreateSituation(
+    CcSim *sim, CcSituationKind kind, CcId target, CcId issuer, CcId cause,
+    CcGood good, int32_t quantity, CcMoney reward, int32_t duration)
 {
-    if (HasRecentSituation(sim, kind, target)) return;
+    if (HasRecentSituation(sim, kind, target)) return NULL;
     CcSituation *situation = AllocateSituation(sim);
-    if (situation == NULL) return;
+    if (situation == NULL) return NULL;
     situation->id = NextId(sim, CC_ENTITY_SITUATION);
     situation->kind = kind;
     situation->status = CC_SITUATION_ACTIVE;
@@ -4886,6 +5092,7 @@ static void CreateSituation(CcSim *sim, CcSituationKind kind, CcId target,
                    situation->deadline_day);
     (void)PushEvent(sim, CC_EVENT_SITUATION_CREATED, situation->id, target,
                     cause, quantity, text);
+    return situation;
 }
 
 static void GenerateSituations(CcSim *sim)
@@ -4895,6 +5102,7 @@ static void GenerateSituations(CcSim *sim)
     int32_t relief_need = 0;
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         CcSettlement *settlement = &sim->settlements[i];
+        if (CcSettlementIsAbandoned(settlement)) continue;
         int32_t projected = settlement->stock[CC_GOOD_FOOD] +
                             CcSimIncomingGood(sim, settlement->id, CC_GOOD_FOOD);
         int32_t need = settlement->reserve_target[CC_GOOD_FOOD] - projected +
@@ -4917,7 +5125,11 @@ static void GenerateSituations(CcSim *sim)
 
     for (int32_t i = 0; i < sim->route_count; ++i) {
         CcRoute *route = &sim->routes[i];
-        if (primary_settled || !route->closed) continue;
+        const CcSettlement *from = CcSimSettlement(sim, route->from_id);
+        const CcSettlement *to = CcSimSettlement(sim, route->to_id);
+        if (primary_settled || !route->closed || from == NULL || to == NULL ||
+            CcSettlementIsAbandoned(from) ||
+            CcSettlementIsAbandoned(to)) continue;
         CcSettlement *place = CcSimSettlementMutable(sim, route->to_id);
         CcFaction *issuer = place != NULL ?
             FactionFor(sim, place->kingdom_id, CC_FACTION_CROWN) : NULL;
@@ -4934,6 +5146,7 @@ static void GenerateSituations(CcSim *sim)
         CcDungeon *dungeon = DungeonByIdMutable(sim, monster->dungeon_id);
         CcSettlement *place = dungeon != NULL ?
             CcSimSettlementMutable(sim, dungeon->settlement_id) : NULL;
+        if (place != NULL && CcSettlementIsAbandoned(place)) continue;
         CcFaction *issuer = place != NULL ?
             FactionFor(sim, place->kingdom_id, CC_FACTION_GUILD) : NULL;
         const CcEvent *pressure = LatestEvent(sim, CC_EVENT_MONSTER_PRESSURE,
@@ -4952,6 +5165,7 @@ static void GenerateSituations(CcSim *sim)
         if (primary_settled || route == NULL || !route->smuggler_route ||
             bandits->influence < 42) continue;
         CcSettlement *target = CcSimSettlementMutable(sim, route->to_id);
+        if (target != NULL && CcSettlementIsAbandoned(target)) continue;
         CcFaction *issuer = target != NULL ?
             FactionFor(sim, target->kingdom_id, CC_FACTION_GUILD) : NULL;
         const CcEvent *pressure = LatestEvent(sim, CC_EVENT_BANDIT_PRESSURE,
@@ -5181,7 +5395,8 @@ static CcSettlement *KingdomSeat(CcSim *sim, int32_t kingdom_slot)
     CcId kingdom_id = sim->kingdoms[kingdom_slot].id;
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         CcSettlement *place = &sim->settlements[i];
-        if (place->kingdom_id != kingdom_id) continue;
+        if (place->kingdom_id != kingdom_id ||
+            CcSettlementIsAbandoned(place)) continue;
         if (best == NULL || place->function == CC_SETTLEMENT_CAPITAL ||
             (best->function != CC_SETTLEMENT_CAPITAL &&
              place->population > best->population)) {
@@ -5199,7 +5414,8 @@ static int32_t KingdomAverageHunger(const CcSim *sim, int32_t kingdom_slot)
     int32_t count = 0;
     CcId kingdom_id = sim->kingdoms[kingdom_slot].id;
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
-        if (sim->settlements[i].kingdom_id != kingdom_id) continue;
+        if (sim->settlements[i].kingdom_id != kingdom_id ||
+            CcSettlementIsAbandoned(&sim->settlements[i])) continue;
         total += sim->settlements[i].hunger;
         count += 1;
     }
@@ -5215,7 +5431,8 @@ static int32_t KingdomAverageProsperity(const CcSim *sim,
     int32_t count = 0;
     CcId kingdom_id = sim->kingdoms[kingdom_slot].id;
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
-        if (sim->settlements[i].kingdom_id != kingdom_id) continue;
+        if (sim->settlements[i].kingdom_id != kingdom_id ||
+            CcSettlementIsAbandoned(&sim->settlements[i])) continue;
         total += sim->settlements[i].prosperity;
         count += 1;
     }
@@ -5229,11 +5446,79 @@ static int32_t KingdomFood(const CcSim *sim, int32_t kingdom_slot)
     int32_t total = 0;
     CcId kingdom_id = sim->kingdoms[kingdom_slot].id;
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
-        if (sim->settlements[i].kingdom_id == kingdom_id) {
+        if (sim->settlements[i].kingdom_id == kingdom_id &&
+            !CcSettlementIsAbandoned(&sim->settlements[i])) {
             total += sim->settlements[i].stock[CC_GOOD_FOOD];
         }
     }
     return total;
+}
+
+static int64_t KingdomWarScore(const CcSim *sim, int32_t kingdom_slot)
+{
+    const CcKingdom *kingdom = &sim->kingdoms[kingdom_slot];
+    int64_t score = (int64_t)kingdom->legitimacy * 3 +
+                    MinimumI32(100, kingdom->treasury > INT32_MAX ?
+                        INT32_MAX : (int32_t)kingdom->treasury / 10);
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        const CcSettlement *place = &sim->settlements[i];
+        if (place->kingdom_id != kingdom->id ||
+            CcSettlementIsAbandoned(place)) continue;
+        score += place->security + place->prosperity - place->hunger;
+    }
+    return score;
+}
+
+static void ResolveWarSettlement(CcSim *sim, int32_t first,
+                                 int32_t second, CcId cause_event_id)
+{
+    int32_t winner = KingdomWarScore(sim, first) >=
+                     KingdomWarScore(sim, second) ? first : second;
+    int32_t loser = winner == first ? second : first;
+    CcId loser_id = sim->kingdoms[loser].id;
+    int32_t active_loser_settlements = 0;
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        const CcSettlement *place = &sim->settlements[i];
+        if (place->kingdom_id == loser_id &&
+            !CcSettlementIsAbandoned(place)) {
+            active_loser_settlements += 1;
+        }
+    }
+    if (active_loser_settlements <= 1) return;
+
+    CcSettlement *ceded = NULL;
+    int32_t weakest_score = INT32_MAX;
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        CcSettlement *place = &sim->settlements[i];
+        if (place->kingdom_id != loser_id ||
+            CcSettlementIsAbandoned(place) ||
+            place->function == CC_SETTLEMENT_CAPITAL) continue;
+        int32_t score = place->security + place->prosperity -
+                        place->hunger;
+        if (ceded == NULL || score < weakest_score) {
+            ceded = place;
+            weakest_score = score;
+        }
+    }
+    if (ceded == NULL) return;
+
+    ceded->kingdom_id = sim->kingdoms[winner].id;
+    ceded->security = MaximumI32(10, ceded->security - 12);
+    ceded->prosperity = MaximumI32(0, ceded->prosperity - 8);
+    ceded->hunger = ClampI32(ceded->hunger + 8, 0, 100);
+    sim->kingdoms[winner].legitimacy = ClampI32(
+        sim->kingdoms[winner].legitimacy + 5, 0, 100);
+    sim->kingdoms[loser].legitimacy = ClampI32(
+        sim->kingdoms[loser].legitimacy - 12, 0, 100);
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(
+        text, sizeof(text),
+        "%.16s cedes %.16s to %.16s; peace redraws the border.",
+        sim->kingdoms[loser].name, ceded->name,
+        sim->kingdoms[winner].name);
+    (void)PushEvent(
+        sim, CC_EVENT_KINGDOM_ACTION, ceded->id, ceded->id,
+        cause_event_id, winner + 1, text);
 }
 
 static void SetDiplomacy(CcSim *sim, int32_t first, int32_t second,
@@ -5316,6 +5601,7 @@ static void ApplyCourierMessage(CcSim *sim, CcCourier *courier,
     if (issuer < 0 || recipient < 0) return;
     CcEventKind event_kind = CC_EVENT_COURIER_ARRIVED;
     CcDiplomaticState state = sim->diplomacy[issuer][recipient];
+    bool ending_war = false;
     bool changed = false;
     if (courier->kind == CC_COURIER_WAR_DECLARATION) {
         state = CC_DIPLOMACY_WAR;
@@ -5324,6 +5610,7 @@ static void ApplyCourierMessage(CcSim *sim, CcCourier *courier,
     } else if (courier->kind == CC_COURIER_PEACE_OFFER &&
                (state == CC_DIPLOMACY_WAR ||
                 state == CC_DIPLOMACY_ALLIANCE)) {
+        ending_war = state == CC_DIPLOMACY_WAR;
         state = CC_DIPLOMACY_PEACE;
         event_kind = CC_EVENT_PEACE_DECLARED;
         changed = true;
@@ -5343,6 +5630,9 @@ static void ApplyCourierMessage(CcSim *sim, CcCourier *courier,
         changed = true;
     }
     if (courier->kind != CC_COURIER_DRAGON_MUSTER && changed) {
+        if (ending_war) {
+            ResolveWarSettlement(sim, issuer, recipient, arrival_event_id);
+        }
         SetDiplomacy(sim, issuer, recipient, state);
     }
     char text[CC_EVENT_TEXT_CAPACITY];
@@ -5498,8 +5788,9 @@ static CcCourier *LaunchCourier(CcSim *sim, CcCourierKind kind,
                              sim->kingdoms[recipient_slot].id)) return NULL;
     CcSettlement *origin = KingdomSeat(sim, issuer_slot);
     CcSettlement *destination = KingdomSeat(sim, recipient_slot);
+    if (origin == NULL || destination == NULL) return NULL;
     CcCourier *courier = AllocateCourier(sim);
-    if (origin == NULL || destination == NULL || courier == NULL) return NULL;
+    if (courier == NULL) return NULL;
     *courier = (CcCourier){
         .id = NextId(sim, CC_ENTITY_COURIER),
         .kind = kind,
@@ -5515,17 +5806,15 @@ static CcCourier *LaunchCourier(CcSim *sim, CcCourierKind kind,
     };
     CcFaction *issuer = FactionFor(
         sim, courier->issuer_kingdom_id, CC_FACTION_CROWN);
-    CreateSituation(sim, CC_SITUATION_COURIER_DELIVERY, courier->id,
-                    issuer != NULL ? issuer->id : 0U, cause_event_id,
-                    CC_GOOD_FOOD, 0, 16, 7);
-    for (int32_t i = 0; i < sim->situation_count; ++i) {
-        if (sim->situations[i].kind == CC_SITUATION_COURIER_DELIVERY &&
-            sim->situations[i].target_id == courier->id &&
-            sim->situations[i].status == CC_SITUATION_ACTIVE) {
-            courier->situation_id = sim->situations[i].id;
-            break;
-        }
+    CcSituation *situation = CreateSituation(
+        sim, CC_SITUATION_COURIER_DELIVERY, courier->id,
+        issuer != NULL ? issuer->id : 0U, cause_event_id,
+        CC_GOOD_FOOD, 0, 16, 7);
+    if (situation == NULL) {
+        courier->status = CC_COURIER_LOST;
+        return NULL;
     }
+    courier->situation_id = situation->id;
     return courier;
 }
 
@@ -5729,10 +6018,12 @@ static void AdvanceDragonCampaign(CcSim *sim)
         return;
     }
     int32_t allies = MaskCount(campaign->alliance_kingdom_mask);
+    int32_t campaign_experience = CcDragonCampaignExperience(sim);
     int32_t attack = campaign->supplies[CC_GOOD_WEAPONS] * 4 +
                      campaign->supplies[CC_GOOD_TOOLS] * 2 +
                      campaign->supplies[CC_GOOD_FOOD] / 4 +
-                     allies * 12 + (int32_t)(NextRandom(sim) % 21U);
+                     allies * 12 + campaign_experience +
+                     (int32_t)(NextRandom(sim) % 21U);
     int32_t defense = CcSimDragonBattleStrength(sim) +
                       sim->goblins.members / 2 +
                       (sim->goblins.devotion + sim->goblins.cohesion) / 8 +
@@ -5761,9 +6052,15 @@ static void AdvanceDragonCampaign(CcSim *sim)
             sim->goblins.devotion + 4, 0, 100);
         sim->goblins.cohesion = ClampI32(
             sim->goblins.cohesion + 2, 0, 100);
+        sim->dragon.body_condition = MaximumI32(
+            0, sim->dragon.body_condition - 12 - allies * 2);
+        sim->dragon.memory_integrity = MaximumI32(
+            0, sim->dragon.memory_integrity - 4);
+        sim->dragon.territory_stability = MaximumI32(
+            0, sim->dragon.territory_stability - 8);
         (void)snprintf(
             text, sizeof(text),
-            "The allied dragon host breaks at the cave: strength %d against %d.",
+            "The allied dragon host breaks at the cave: strength %d against %d, but survivors carry hard-won knowledge home.",
             attack, defense);
         battle = PushEvent(
             sim, CC_EVENT_DRAGON_BATTLE, sim->dragon.id,
@@ -5840,8 +6137,9 @@ static void UpdateRoyalDiplomacy(CcSim *sim)
 {
     if (sim == NULL || sim->current_day % 28 != 0) return;
     CcMoney tracked_gold = CcSimTrackedGold(sim);
-    bool dragon_crisis = !sim->dragon.slain && tracked_gold > 0 &&
-                         sim->dragon.hoard * 3 >= tracked_gold;
+    bool dragon_crisis = !sim->dragon.slain &&
+        ((tracked_gold > 0 && sim->dragon.hoard * 3 >= tracked_gold) ||
+         sim->dragon.regional_influence >= 60);
     if (sim->current_day % 112 == 0 &&
         sim->dragon_campaign.cooldown_days == 0) {
         for (int32_t first = 0; first < sim->kingdom_count; ++first) {
@@ -6116,8 +6414,10 @@ static CcSettlement *RepairBaseForKingdom(CcSim *sim,
     CcSettlement *from = CcSimSettlementMutable(sim, route->from_id);
     CcSettlement *to = CcSimSettlementMutable(sim, route->to_id);
     CcSettlement *best = NULL;
-    if (from != NULL && from->kingdom_id == kingdom_id) best = from;
-    if (to != NULL && to->kingdom_id == kingdom_id &&
+    if (from != NULL && !CcSettlementIsAbandoned(from) &&
+        from->kingdom_id == kingdom_id) best = from;
+    if (to != NULL && !CcSettlementIsAbandoned(to) &&
+        to->kingdom_id == kingdom_id &&
         (best == NULL ||
          to->stock[CC_GOOD_TOOLS] + to->stock[CC_GOOD_FOOD] >
          best->stock[CC_GOOD_TOOLS] + best->stock[CC_GOOD_FOOD])) {
@@ -6134,6 +6434,9 @@ static int32_t RouteRecoveryScore(const CcSim *sim, const CcRoute *route,
          !route->smuggler_route)) return -1;
     const CcSettlement *from = CcSimSettlement(sim, route->from_id);
     const CcSettlement *to = CcSimSettlement(sim, route->to_id);
+    if (CcSettlementIsAbandoned(from) || CcSettlementIsAbandoned(to)) {
+        return -1;
+    }
     bool touches_kingdom =
         (from != NULL && from->kingdom_id == kingdom_id) ||
         (to != NULL && to->kingdom_id == kingdom_id);
@@ -6159,19 +6462,29 @@ static void AdvanceRoadsideRecovery(CcSim *sim, CcRoute *route)
 {
     if (sim == NULL || route == NULL || !route->closed ||
         (CcSimRouteCrossesWarBorder(sim, route->id) &&
-         !route->smuggler_route)) return;
+         !route->smuggler_route) || sim->current_day % 112 != 0) return;
     CcSettlement *from = CcSimSettlementMutable(sim, route->from_id);
     CcSettlement *to = CcSimSettlementMutable(sim, route->to_id);
-    if (from == NULL || to == NULL) return;
+    if (from == NULL || to == NULL || CcSettlementIsAbandoned(from) ||
+        CcSettlementIsAbandoned(to)) return;
 
     int32_t distress = MaximumI32(from->hunger, to->hunger);
-    int32_t effort = 2 + distress / 30 + (route->smuggler_route ? 1 : 0);
+    CcSettlement *labor_base = from->population >= to->population ?
+                               from : to;
+    CcSettlement *supplier =
+        from->stock[CC_GOOD_FOOD] + from->stock[CC_GOOD_TOOLS] >=
+        to->stock[CC_GOOD_FOOD] + to->stock[CC_GOOD_TOOLS] ? from : to;
+    if (labor_base->population < 220 ||
+        supplier->stock[CC_GOOD_FOOD] < 4 ||
+        supplier->stock[CC_GOOD_TOOLS] < 1) return;
+    supplier->stock[CC_GOOD_FOOD] -= 4;
+    supplier->stock[CC_GOOD_TOOLS] -= 1;
+    int32_t effort = 6 + distress / 20 +
+                     (route->smuggler_route ? 1 : 0);
     route->condition = ClampI32(route->condition + effort, 0, 100);
-    if (sim->current_day % 112 == 0) {
-        CcSettlement *labor_base = from->population >= to->population ?
-                                   from : to;
-        labor_base->population = MaximumI32(100, labor_base->population - 1);
-    }
+    labor_base->population = MaximumI32(
+        0, labor_base->population - MaximumI32(1,
+        labor_base->population / 500));
     if (route->condition < 45) return;
 
     route->closed = false;
@@ -6199,6 +6512,8 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
                 !CcSimRouteCrossesWarBorder(sim, route->id)) continue;
             const CcSettlement *from = CcSimSettlement(sim, route->from_id);
             const CcSettlement *to = CcSimSettlement(sim, route->to_id);
+            if (CcSettlementIsAbandoned(from) ||
+                CcSettlementIsAbandoned(to)) continue;
             int32_t distress = MaximumI32(
                 from != NULL ? from->hunger : 0,
                 to != NULL ? to->hunger : 0);
@@ -6254,6 +6569,8 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
                 sim, route->to_id);
             bool locally_maintained = !route->smuggler_route &&
                 route_from != NULL && route_to != NULL &&
+                !CcSettlementIsAbandoned(route_from) &&
+                !CcSettlementIsAbandoned(route_to) &&
                 MaximumI32(route_from->hunger, route_to->hunger) < 30 &&
                 (route_from->prosperity + route_to->prosperity) / 2 >= 45;
             int32_t decay = locally_maintained ? 0 :
@@ -6288,7 +6605,8 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
         CcSettlement *worst = NULL;
         for (int32_t i = 0; i < sim->settlement_count; ++i) {
             CcSettlement *settlement = &sim->settlements[i];
-            if (settlement->kingdom_id != kingdom->id) continue;
+            if (settlement->kingdom_id != kingdom->id ||
+                CcSettlementIsAbandoned(settlement)) continue;
             settlements += 1;
             hunger_sum += settlement->hunger;
             prosperity_sum += settlement->prosperity;
@@ -6320,6 +6638,7 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
                  i < sim->settlement_count && payment < due; ++i) {
                 CcSettlement *place = &sim->settlements[i];
                 if (place->kingdom_id != kingdom->id ||
+                    CcSettlementIsAbandoned(place) ||
                     place->market_coins <= 80) continue;
                 CcMoney available = place->market_coins - 80;
                 CcMoney taken = MinimumI32(
@@ -6342,6 +6661,45 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
                 loan != NULL ? loan->id : 0U, (int32_t)payment, text);
             }
         }
+        if (sim->current_day % (10 * 364) == 0 &&
+            kingdom->iron_ledger_debt > 0) {
+            bool can_pay = kingdom->treasury > 60;
+            for (int32_t i = 0;
+                 i < sim->settlement_count && !can_pay; ++i) {
+                const CcSettlement *place = &sim->settlements[i];
+                can_pay = place->kingdom_id == kingdom->id &&
+                    !CcSettlementIsAbandoned(place) &&
+                    place->market_coins > 80;
+            }
+            if (!can_pay) {
+                CcMoney repudiated = kingdom->iron_ledger_debt;
+                kingdom->iron_ledger_debt = 0;
+                kingdom->legitimacy = ClampI32(
+                    kingdom->legitimacy - 25, 0, 100);
+                if (worst != NULL) RemoveBurnedService(worst);
+                CcFaction *commons = FactionFor(
+                    sim, kingdom->id, CC_FACTION_COMMONS);
+                CcFaction *crown = FactionFor(
+                    sim, kingdom->id, CC_FACTION_CROWN);
+                if (commons != NULL) commons->support = ClampI32(
+                    commons->support + 18, 0, 100);
+                if (crown != NULL) crown->support = ClampI32(
+                    crown->support - 18, 0, 100);
+                char text[CC_EVENT_TEXT_CAPACITY];
+                (void)snprintf(
+                    text, sizeof(text),
+                    "%s repudiates %d crowns of monastery debt; a royal service closes and the commons rally.",
+                    kingdom->name,
+                    repudiated > INT32_MAX ? INT32_MAX :
+                        (int32_t)repudiated);
+                (void)PushEvent(
+                    sim, CC_EVENT_KINGDOM_ACTION, kingdom->id,
+                    worst != NULL ? worst->id : kingdom->id,
+                    LatestLocalCause(sim, kingdom->id),
+                    repudiated > INT32_MAX ? INT32_MAX :
+                        (int32_t)repudiated, text);
+            }
+        }
         if (sim->current_day % 28 == 0 &&
             kingdom->iron_ledger_debt == 0 &&
             kingdom->treasury > 320 && sim->iron_ledger_reserve < 480) {
@@ -6362,7 +6720,8 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
         }
         for (int32_t i = 0; i < sim->settlement_count; ++i) {
             CcSettlement *place = &sim->settlements[i];
-            if (place->kingdom_id != kingdom->id) continue;
+            if (place->kingdom_id != kingdom->id ||
+                CcSettlementIsAbandoned(place)) continue;
             int32_t target = EffectiveReserveTarget(
                 sim, place, CC_GOOD_FOOD);
             int32_t projected = place->stock[CC_GOOD_FOOD] +
@@ -6378,7 +6737,8 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
         }
         for (int32_t i = 0; i < sim->settlement_count; ++i) {
             CcSettlement *front = &sim->settlements[i];
-            if (front->kingdom_id != kingdom->id || !IsWarSeat(front)) continue;
+            if (front->kingdom_id != kingdom->id ||
+                CcSettlementIsAbandoned(front) || !IsWarSeat(front)) continue;
             int32_t burden = CcSimWarBurdenAtSettlement(sim, front->id);
             int32_t wage = WarWeeklyWage(sim, front);
             if (burden < 20 || wage < 1) continue;
@@ -6440,6 +6800,26 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
                                     kingdom->legitimacy < 75 ? 1 : 0;
         kingdom->legitimacy = ClampI32(
             kingdom->legitimacy + legitimacy_change, 0, 100);
+
+        if (sim->current_day % (5 * 364) == 0) {
+            for (int32_t i = 0; i < sim->settlement_count; ++i) {
+                CcSettlement *place = &sim->settlements[i];
+                if (place->kingdom_id != kingdom->id ||
+                    CcSettlementIsAbandoned(place) ||
+                    (place->hunger < 60 && place->prosperity > 10)) continue;
+                int32_t services_before = CcSettlementServiceCount(place);
+                RemoveBurnedService(place);
+                if (CcSettlementServiceCount(place) == services_before) continue;
+                char text[CC_EVENT_TEXT_CAPACITY];
+                (void)snprintf(
+                    text, sizeof(text),
+                    "%s loses a public service after five years of hunger and neglect.",
+                    place->name);
+                (void)PushEvent(
+                    sim, CC_EVENT_KINGDOM_ACTION, place->id, place->id,
+                    LatestLocalCause(sim, place->id), -1, text);
+            }
+        }
 
         CcFaction *crown = FactionFor(sim, kingdom->id, CC_FACTION_CROWN);
         CcFaction *guild = FactionFor(sim, kingdom->id, CC_FACTION_GUILD);
@@ -6538,6 +6918,7 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
                 CcRoute *route = &sim->routes[route_index];
                 CcSettlement *to = CcSimSettlementMutable(sim, route->to_id);
                 if (route->closed || route->condition >= 58 || to == NULL ||
+                    CcSettlementIsAbandoned(to) ||
                     to->kingdom_id != kingdom->id) continue;
                 kingdom->treasury -= 12;
                 to->market_coins += 12;
@@ -6563,7 +6944,9 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
                 CcDungeon *dungeon = DungeonByIdMutable(sim, monster->dungeon_id);
                 CcSettlement *place = dungeon != NULL ?
                     CcSimSettlementMutable(sim, dungeon->settlement_id) : NULL;
-                if (place == NULL || place->kingdom_id != kingdom->id || monster->pressure < 72) continue;
+                if (place == NULL || CcSettlementIsAbandoned(place) ||
+                    place->kingdom_id != kingdom->id ||
+                    monster->pressure < 72) continue;
                 if (worst_monster == NULL || monster->pressure > worst_monster->pressure) {
                     worst_monster = monster;
                     worst_dungeon = dungeon;
@@ -6802,7 +7185,9 @@ static void AdvanceHorseTeam(CcSim *sim)
 
 void CcSimAdvanceDays(CcSim *sim, int32_t days)
 {
-    if (sim == NULL || days <= 0) return;
+    if (sim == NULL || days <= 0 || sim->current_day < 1 ||
+        sim->current_day > CC_SIM_MAX_DAY ||
+        days > CC_SIM_MAX_DAY - sim->current_day) return;
     int32_t next_situation_expiry = NextSituationExpiryDay(sim);
     for (int32_t day = 0; day < days; ++day) {
         sim->current_day += 1;
@@ -6824,6 +7209,7 @@ void CcSimAdvanceDays(CcSim *sim, int32_t days)
             for (int32_t settlement = 0; settlement < sim->settlement_count; ++settlement) {
                 UpdateSettlement(sim, settlement);
             }
+            AdvanceRuins(sim);
             UpdateThreats(sim);
             UpdateRoutesAndGovernments(sim);
             UpdateRoyalDiplomacy(sim);
@@ -6840,7 +7226,8 @@ void CcSimAdvanceDays(CcSim *sim, int32_t days)
 static bool ApplyTrade(CcSim *sim, const CcCommand *command,
                        char *error, size_t error_capacity)
 {
-    if (command->good < 0 || command->good >= CC_GOOD_COUNT || command->amount == 0) {
+    if (command->good < 0 || command->good >= CC_GOOD_COUNT ||
+        command->amount == 0 || command->amount == INT32_MIN) {
         SetError(error, error_capacity, "Trade command is invalid.");
         return false;
     }
@@ -6912,7 +7299,8 @@ static bool ApplyTrade(CcSim *sim, const CcCommand *command,
         sim->player.coins += proceeds;
         if (command->good == CC_GOOD_FOOD && settlement->hunger > 0) {
             settlement->hunger = ClampI32(settlement->hunger - selling * 2, 0, 100);
-            sim->player.reputation += selling;
+            sim->player.reputation = ClampI32(
+                sim->player.reputation + selling, -100, 100);
         }
     }
     char text[CC_EVENT_TEXT_CAPACITY];
@@ -8325,7 +8713,8 @@ static bool ApplyWithdrawEncounter(CcSim *sim, const CcCommand *command,
 void CcSimAdvanceRuntimeTicks(CcSim *sim, int32_t ticks)
 {
     if (sim == NULL || ticks <= 0 || !sim->journey.active ||
-        sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING) return;
+        sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING ||
+        sim->clock.tick > UINT64_MAX - (uint64_t)ticks) return;
     for (int32_t tick = 0; tick < ticks; ++tick) {
         if (!sim->journey.active ||
             sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING) break;
@@ -8949,8 +9338,17 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         SetError(error, error_capacity, "Simulation version is unsupported.");
         return false;
     }
+    if (sim->current_day < 1 || sim->current_day > CC_SIM_MAX_DAY ||
+        sim->next_entity_serial == 0U ||
+        sim->next_entity_serial > CC_ID_SERIAL_MASK ||
+        sim->random_state == 0U || sim->clock.tick == UINT64_MAX) {
+        SetError(error, error_capacity,
+                 "Simulation clock or identity state is invalid.");
+        return false;
+    }
     if (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
-        sim->iron_ledger_reserve < 0) {
+        (sim->iron_ledger_reserve < 0 ||
+         sim->iron_ledger_reserve > CC_SIM_MAX_MONEY)) {
         SetError(error, error_capacity,
                  "The monastery reserve is invalid.");
         return false;
@@ -8980,10 +9378,14 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
     for (int32_t i = 0; i < sim->kingdom_count; ++i) {
         const CcKingdom *kingdom = &sim->kingdoms[i];
         if (CcIdKind(kingdom->id) != CC_ENTITY_KINGDOM ||
-            kingdom->treasury < 0 || kingdom->legitimacy < 0 ||
+            !ValidBoundedText(kingdom->name, sizeof(kingdom->name)) ||
+            kingdom->treasury < 0 ||
+            kingdom->treasury > CC_SIM_MAX_MONEY ||
+            kingdom->legitimacy < 0 ||
             kingdom->legitimacy > 100 ||
             (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
-             kingdom->iron_ledger_debt < 0)) {
+             (kingdom->iron_ledger_debt < 0 ||
+              kingdom->iron_ledger_debt > CC_SIM_MAX_MONEY))) {
             SetError(error, error_capacity, "Kingdom accounts are invalid.");
             return false;
         }
@@ -9014,6 +9416,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         for (int32_t i = 0; i < sim->event_count; ++i) {
             const CcEvent *event = CcSimRecentEvent(sim, i);
             if (event == NULL || CcIdKind(event->id) != CC_ENTITY_EVENT ||
+                !ValidBoundedText(event->text, sizeof(event->text)) ||
                 event->day < 1 || event->day > sim->current_day ||
                 event->kind < CC_EVENT_HARVEST_FAILED ||
                 event->kind > CC_EVENT_GOBLIN_DRAGON_SEED_PREPARED ||
@@ -9030,16 +9433,59 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             }
         }
     }
+    for (int32_t i = 0; i < sim->faction_count; ++i) {
+        const CcFaction *faction = &sim->factions[i];
+        if (CcIdKind(faction->id) != CC_ENTITY_FACTION ||
+            KingdomSlotById(sim, faction->kingdom_id) < 0 ||
+            !ValidBoundedText(faction->name, sizeof(faction->name)) ||
+            faction->kind < CC_FACTION_CROWN ||
+            faction->kind > CC_FACTION_COMMONS ||
+            faction->power < 0 || faction->power > 100 ||
+            faction->support < 0 || faction->support > 100) {
+            SetError(error, error_capacity, "Faction state is invalid.");
+            return false;
+        }
+        for (int32_t earlier = 0; earlier < i; ++earlier) {
+            if (sim->factions[earlier].id == faction->id) {
+                SetError(error, error_capacity,
+                         "Faction identities are not unique.");
+                return false;
+            }
+        }
+    }
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         const CcSettlement *settlement = &sim->settlements[i];
-        if (CcIdKind(settlement->id) != CC_ENTITY_SETTLEMENT) {
-            SetError(error, error_capacity, "Settlement ID is invalid.");
+        if (CcIdKind(settlement->id) != CC_ENTITY_SETTLEMENT ||
+            KingdomSlotById(sim, settlement->kingdom_id) < 0 ||
+            !ValidBoundedText(settlement->name,
+                              sizeof(settlement->name)) ||
+            settlement->function < CC_SETTLEMENT_FARMING ||
+            settlement->function > CC_SETTLEMENT_DUNGEON_TOWN ||
+            settlement->map_x < -CC_SIM_MAX_UNITS ||
+            settlement->map_x > CC_SIM_MAX_UNITS ||
+            settlement->map_y < -CC_SIM_MAX_UNITS ||
+            settlement->map_y > CC_SIM_MAX_UNITS ||
+            settlement->population < 0 ||
+            settlement->population > CC_SIM_MAX_UNITS ||
+            settlement->security < 0 || settlement->security > 100 ||
+            settlement->prosperity < 0 || settlement->prosperity > 100 ||
+            settlement->hunger < 0 || settlement->hunger > 100) {
+            SetError(error, error_capacity, "Settlement state is invalid.");
             return false;
         }
         int32_t saved_good_count = sim->schema_version >= 9U ?
                                    CC_GOOD_COUNT : 3;
         for (int32_t good = 0; good < saved_good_count; ++good) {
-            if (settlement->stock[good] < 0 || settlement->price[good] < 1) {
+            if (settlement->stock[good] < 0 ||
+                settlement->stock[good] > CC_SIM_MAX_UNITS ||
+                settlement->reserve_target[good] < 0 ||
+                settlement->reserve_target[good] > CC_SIM_MAX_UNITS ||
+                settlement->production[good] < 0 ||
+                settlement->production[good] > CC_SIM_MAX_UNITS ||
+                settlement->consumption[good] < 0 ||
+                settlement->consumption[good] > CC_SIM_MAX_UNITS ||
+                settlement->price[good] < 1 ||
+                settlement->price[good] > 99) {
                 SetError(error, error_capacity, "Market accounting is invalid.");
                 return false;
             }
@@ -9054,11 +9500,23 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 settlement->service_project_days <= 7 &&
                 !CcSettlementHasService(settlement,
                                         settlement->service_project);
-            if (settlement->size < CC_SETTLEMENT_HAMLET ||
+            bool valid_ruin = !CcSettlementIsAbandoned(settlement) ||
+                (settlement->service_mask == 0U &&
+                 settlement->service_project == CC_SERVICE_NONE &&
+                 settlement->service_project_days == 0 &&
+                 settlement->security == 0 &&
+                 settlement->prosperity == 0);
+            if (settlement->population < 0 || !valid_ruin ||
+                settlement->size < CC_SETTLEMENT_HAMLET ||
                 settlement->size > CC_SETTLEMENT_CAPITAL_SIZE ||
-                settlement->market_coins < 0 || settlement->war_chest < 0 ||
+                settlement->market_coins < 0 ||
+                settlement->market_coins > CC_SIM_MAX_MONEY ||
+                settlement->war_chest < 0 ||
+                settlement->war_chest > CC_SIM_MAX_MONEY ||
                 settlement->field_yield < 0 ||
+                settlement->field_yield > 100 ||
                 settlement->iron_deposit < 0 ||
+                settlement->iron_deposit > CC_SIM_MAX_UNITS ||
                 settlement->gold_progress < 0 ||
                 settlement->gold_progress >= 12 ||
                 settlement->gem_progress < 0 ||
@@ -9070,11 +9528,15 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 settlement->smith_tool_wear < 0 ||
                 settlement->smith_tool_wear >= 4 ||
                 settlement->treasure_gold_committed < 0 ||
+                settlement->treasure_gold_committed > CC_SIM_MAX_UNITS ||
                 settlement->treasure_gems_committed < 0 ||
+                settlement->treasure_gems_committed > CC_SIM_MAX_UNITS ||
                 settlement->treasure_work < 0 ||
                 settlement->treasure_work > 3 ||
                 settlement->cow_adults < 0 ||
+                settlement->cow_adults > CC_SIM_MAX_UNITS ||
                 settlement->cow_calves < 0 ||
+                settlement->cow_calves > CC_SIM_MAX_UNITS ||
                 settlement->cow_condition < 0 ||
                 settlement->cow_condition > 100 ||
                 settlement->cow_hunger < 0 ||
@@ -9094,9 +9556,12 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         if (CcIdKind(route->id) != CC_ENTITY_ROUTE ||
             CcSimSettlement(sim, route->from_id) == NULL ||
             CcSimSettlement(sim, route->to_id) == NULL ||
+            route->from_id == route->to_id ||
             route->travel_days < 1 ||
-            route->travel_days > INT32_MAX / CC_WORLD_DAY_SUBTICKS ||
-            route->capacity < 1) {
+            route->travel_days > CC_SIM_MAX_ROUTE_DAYS ||
+            route->capacity < 1 || route->capacity > CC_SIM_MAX_UNITS ||
+            route->security < 0 || route->security > 100 ||
+            route->condition < 0 || route->condition > 100) {
             SetError(error, error_capacity, "Route data is invalid.");
             return false;
         }
@@ -9111,7 +9576,10 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             !valid_owner || map->accuracy < 0 || map->accuracy > 100 ||
             map->recorded_condition < 0 || map->recorded_condition > 100 ||
             map->recorded_danger < 0 || map->recorded_danger > 100 ||
-            map->ask_price < 1) {
+            !ValidBoundedText(map->name, sizeof(map->name)) ||
+            map->surveyed_day < -CC_SIM_MAX_DAY ||
+            map->surveyed_day > sim->current_day ||
+            map->ask_price < 1 || map->ask_price > CC_SIM_MAX_UNITS) {
             SetError(error, error_capacity, "Physical map data is invalid.");
             return false;
         }
@@ -9144,12 +9612,17 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             treasure->owner_id == sim->player.id ||
             treasure->owner_id == sim->hoard_raiders.id;
         if (CcIdKind(treasure->id) != CC_ENTITY_TREASURE ||
-            treasure->name[0] == '\0' ||
+            !ValidBoundedText(treasure->name, sizeof(treasure->name)) ||
             CcSimSettlement(sim, treasure->maker_settlement_id) == NULL ||
             CcSimSettlement(sim, treasure->location_id) == NULL ||
             !valid_owner || treasure->gold_content < 1 ||
-            treasure->gem_content < 1 || treasure->craft_work < 1 ||
+            treasure->gold_content > CC_SIM_MAX_UNITS ||
+            treasure->gem_content < 1 ||
+            treasure->gem_content > CC_SIM_MAX_UNITS ||
+            treasure->craft_work < 1 ||
+            treasure->craft_work > CC_SIM_MAX_UNITS ||
             treasure->appraised_value < 1 ||
+            treasure->appraised_value > CC_SIM_MAX_UNITS ||
             treasure->created_day < 1 ||
             treasure->created_day > sim->current_day) {
             SetError(error, error_capacity, "Treasure state is invalid.");
@@ -9183,6 +9656,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                      (int64_t)shipment_route->travel_days);
         bool capacity_valid = shipment_route != NULL &&
             shipment->good >= 0 && shipment->good < CC_GOOD_COUNT &&
+            shipment->quantity >= 1 &&
+            shipment->quantity <= CC_SIM_MAX_UNITS &&
             GoodCargoSlots(shipment->good, shipment->quantity) <=
                 shipment_route->capacity;
         if (CcIdKind(shipment->id) != CC_ENTITY_SHIPMENT ||
@@ -9191,7 +9666,9 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             CcSimSettlement(sim, shipment->final_destination_id) == NULL ||
             shipment_route == NULL || !route_connects || !timing_valid ||
             shipment->good < 0 || shipment->good >= CC_GOOD_COUNT ||
-            shipment->quantity < 1 || shipment->status < CC_SHIPMENT_UNUSED ||
+            shipment->quantity < 1 ||
+            shipment->quantity > CC_SIM_MAX_UNITS ||
+            shipment->status < CC_SHIPMENT_UNUSED ||
             shipment->status > CC_SHIPMENT_LOST || !capacity_valid) {
             SetError(error, error_capacity, "Shipment data is invalid.");
             return false;
@@ -9215,22 +9692,47 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 courier->kind < CC_COURIER_WAR_DECLARATION ||
                 courier->kind > CC_COURIER_DRAGON_MUSTER ||
                 courier->status < CC_COURIER_WAITING ||
-                courier->status > CC_COURIER_DISTORTED ||
-                KingdomSlotById(sim, courier->issuer_kingdom_id) < 0 ||
+                courier->status > CC_COURIER_DISTORTED) {
+                SetError(error, error_capacity,
+                         "Courier identity or enum is invalid.");
+                return false;
+            }
+            if (KingdomSlotById(sim, courier->issuer_kingdom_id) < 0 ||
                 KingdomSlotById(sim, courier->recipient_kingdom_id) < 0 ||
                 courier->issuer_kingdom_id ==
-                    courier->recipient_kingdom_id ||
-                CcSimSettlement(sim, courier->origin_settlement_id) == NULL ||
+                    courier->recipient_kingdom_id) {
+                SetError(error, error_capacity,
+                         "Courier kingdom endpoints are invalid.");
+                return false;
+            }
+            if (CcSimSettlement(sim, courier->origin_settlement_id) == NULL ||
                 CcSimSettlement(
                     sim, courier->destination_settlement_id) == NULL ||
-                CcSimSettlement(sim, courier->current_settlement_id) == NULL ||
-                courier->reliability < 0 || courier->reliability > 100 ||
-                courier->departure_day < 1 ||
-                !route_valid || !situation_valid ||
-                (courier->cause_event_id != 0U &&
-                 CcSimEvent(sim, courier->cause_event_id) == NULL)) {
+                CcSimSettlement(sim, courier->current_settlement_id) == NULL) {
                 SetError(error, error_capacity,
-                         "Courier state is invalid.");
+                         "Courier settlement endpoint is invalid.");
+                return false;
+            }
+            if (courier->reliability < 0 || courier->reliability > 100 ||
+                courier->departure_day < 1) {
+                SetError(error, error_capacity,
+                         "Courier timing or reliability is invalid.");
+                return false;
+            }
+            if (!route_valid) {
+                SetError(error, error_capacity,
+                         "Courier route timing is invalid.");
+                return false;
+            }
+            if (!situation_valid) {
+                SetError(error, error_capacity,
+                         "Active courier has no matching situation.");
+                return false;
+            }
+            if (courier->cause_event_id != 0U &&
+                CcSimEvent(sim, courier->cause_event_id) == NULL) {
+                SetError(error, error_capacity,
+                         "Courier cause is missing from history.");
                 return false;
             }
         }
@@ -9239,6 +9741,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         const CcBanditGroup *bandits = &sim->bandits[i];
         if (CcIdKind(bandits->id) != CC_ENTITY_BANDIT_GROUP ||
             CcSimRoute(sim, bandits->route_id) == NULL ||
+            !ValidBoundedText(bandits->name, sizeof(bandits->name)) ||
             bandits->members < 0 || bandits->members > 120 ||
             bandits->supplies < 0 || bandits->supplies > 100 ||
             bandits->influence < 0 || bandits->influence > 100) {
@@ -9255,7 +9758,9 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 CcSimSettlement(sim, bandits->raid_target_id) != NULL &&
                 bandits->raid_good >= 0 && bandits->raid_good < CC_GOOD_COUNT &&
                 bandits->raid_quantity >= 0 &&
-                bandits->raid_days_remaining > 0;
+                bandits->raid_quantity <= CC_SIM_MAX_UNITS &&
+                bandits->raid_days_remaining > 0 &&
+                bandits->raid_days_remaining <= CC_SIM_MAX_DAY;
             if (bandits->camp_size < CC_BANDIT_HIDEOUT ||
                 bandits->camp_size > CC_BANDIT_OUTLAW_TOWN ||
                 (bandits->service_mask & ~known_services) != 0U ||
@@ -9263,8 +9768,58 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                     CcBanditCampServiceCapacity(bandits->camp_size) ||
                 bandits->raid_phase < CC_BANDIT_RAID_IDLE ||
                 bandits->raid_phase > CC_BANDIT_RAID_RETURNING ||
-                bandits->raids_completed < 0 || !valid_raid) {
+                bandits->raids_completed < 0 ||
+                bandits->raids_completed > CC_SIM_MAX_UNITS || !valid_raid) {
                 SetError(error, error_capacity, "Bandit expedition state is invalid.");
+                return false;
+            }
+        }
+    }
+    for (int32_t i = 0; i < sim->dungeon_count; ++i) {
+        const CcDungeon *dungeon = &sim->dungeons[i];
+        if (CcIdKind(dungeon->id) != CC_ENTITY_DUNGEON ||
+            CcSimSettlement(sim, dungeon->settlement_id) == NULL ||
+            !ValidBoundedText(dungeon->name, sizeof(dungeon->name)) ||
+            dungeon->state < CC_DUNGEON_SEALED ||
+            dungeon->state > CC_DUNGEON_RESEALED ||
+            dungeon->depth < 1 || dungeon->depth > 1000 ||
+            dungeon->regional_pressure < 0 ||
+            dungeon->regional_pressure > 100) {
+            SetError(error, error_capacity, "Dungeon state is invalid.");
+            return false;
+        }
+        for (int32_t earlier = 0; earlier < i; ++earlier) {
+            if (sim->dungeons[earlier].id == dungeon->id) {
+                SetError(error, error_capacity,
+                         "Dungeon identities are not unique.");
+                return false;
+            }
+        }
+    }
+    for (int32_t i = 0; i < sim->monster_count; ++i) {
+        const CcMonsterPopulation *monster = &sim->monsters[i];
+        bool dungeon_exists = false;
+        for (int32_t dungeon = 0; dungeon < sim->dungeon_count; ++dungeon) {
+            if (sim->dungeons[dungeon].id == monster->dungeon_id) {
+                dungeon_exists = true;
+                break;
+            }
+        }
+        if (CcIdKind(monster->id) != CC_ENTITY_MONSTER_POPULATION ||
+            !dungeon_exists ||
+            !ValidBoundedText(monster->name, sizeof(monster->name)) ||
+            monster->population < 0 || monster->population > 160 ||
+            monster->pressure < 0 || monster->pressure > 100 ||
+            monster->hunting_pressure < 0 ||
+            monster->hunting_pressure > 100) {
+            SetError(error, error_capacity,
+                     "Monster population state is invalid.");
+            return false;
+        }
+        for (int32_t earlier = 0; earlier < i; ++earlier) {
+            if (sim->monsters[earlier].id == monster->id) {
+                SetError(error, error_capacity,
+                         "Monster identities are not unique.");
                 return false;
             }
         }
@@ -9277,7 +9832,11 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         int32_t goblin_carried_goods = 0;
         for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
             if (goblins->carried_goods[good] < 0 ||
-                goblins->lair_stock[good] < 0) {
+                goblins->carried_goods[good] > CC_SIM_MAX_UNITS ||
+                goblins->lair_stock[good] < 0 ||
+                goblins->lair_stock[good] > CC_SIM_MAX_UNITS ||
+                dragon->hoard_goods[good] < 0 ||
+                dragon->hoard_goods[good] > CC_SIM_MAX_UNITS) {
                 SetError(error, error_capacity,
                          "Goblin inventory is invalid.");
                 return false;
@@ -9306,9 +9865,16 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             goblins->raid_motive > CC_GOBLIN_RAID_DRAGON_TRIBUTE ||
             CcSimSettlement(sim, goblins->lair_settlement_id) == NULL ||
             goblins->lair_coins < 0 ||
+            goblins->lair_coins > CC_SIM_MAX_MONEY ||
+            goblins->carried_tribute < 0 ||
+            goblins->carried_tribute > CC_SIM_MAX_MONEY ||
             goblins->tribute_cooldown_days < 0 ||
-            goblins->tributes_delivered < 0 || goblins->hoard_defenses < 0 ||
+            goblins->tributes_delivered < 0 ||
+            goblins->tributes_delivered > CC_SIM_MAX_UNITS ||
+            goblins->hoard_defenses < 0 ||
+            goblins->hoard_defenses > CC_SIM_MAX_UNITS ||
             goblins->expeditions_intercepted < 0 ||
+            goblins->expeditions_intercepted > CC_SIM_MAX_UNITS ||
             (goblins->target_warned &&
              goblins->tribute_phase != CC_GOBLIN_TRIBUTE_PREPARING &&
              goblins->tribute_phase != CC_GOBLIN_TRIBUTE_OUTBOUND) ||
@@ -9351,8 +9917,12 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         if (CcIdKind(dragon->id) != CC_ENTITY_DRAGON ||
             dragon->name[0] == '\0' ||
             CcSimSettlement(sim, dragon->lair_settlement_id) == NULL ||
-            dragon->hoard < 0 || dragon->stolen_outstanding < 0 ||
-            dragon->retaliations < 0 || !dragon_anger_valid ||
+            dragon->hoard < 0 || dragon->hoard > CC_SIM_MAX_MONEY ||
+            dragon->stolen_outstanding < 0 ||
+            dragon->stolen_outstanding > CC_SIM_MAX_MONEY ||
+            dragon->retaliations < 0 ||
+            dragon->retaliations > CC_SIM_MAX_UNITS ||
+            !dragon_anger_valid ||
             !named_theft_valid ||
             (dragon->slain &&
              (dragon->slain_day < 1 ||
@@ -9376,7 +9946,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             dragon->life_stage > CC_DRAGON_STAGE_AFTERDRAGON ||
             dragon->activity < CC_DRAGON_ACTIVITY_DORMANT ||
             dragon->activity > CC_DRAGON_ACTIVITY_AFTERMATH ||
-            dragon->age_days < 0 || dragon->body_condition < 0 ||
+            dragon->age_days < 0 || dragon->age_days > CC_SIM_MAX_DAY ||
+            dragon->body_condition < 0 ||
             dragon->body_condition > 100 || dragon->crown_strength < 0 ||
             dragon->crown_strength > 100 || dragon->memory_integrity < 0 ||
             dragon->memory_integrity > 100 ||
@@ -9408,7 +9979,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             campaign->days_remaining > 0 &&
             MaskCount(campaign->alliance_kingdom_mask) >= 2;
         for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
-            if (campaign->supplies[good] < 0) {
+            if (campaign->supplies[good] < 0 ||
+                campaign->supplies[good] > CC_SIM_MAX_UNITS) {
                 SetError(error, error_capacity,
                          "Dragon-host supplies are invalid.");
                 return false;
@@ -9418,9 +9990,14 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             campaign->phase > CC_DRAGON_CAMPAIGN_RETURNING ||
             campaign->cooldown_days < 0 ||
             campaign->recovered_coins < 0 ||
-            campaign->attempts < 0 || campaign->victories < 0 ||
+            campaign->recovered_coins > CC_SIM_MAX_MONEY ||
+            campaign->attempts < 0 ||
+            campaign->attempts > CC_SIM_MAX_UNITS ||
+            campaign->victories < 0 ||
+            campaign->victories > CC_SIM_MAX_UNITS ||
             campaign->defeats < 0 ||
-            campaign->victories + campaign->defeats >
+            campaign->defeats > CC_SIM_MAX_UNITS ||
+            (int64_t)campaign->victories + campaign->defeats >
                 campaign->attempts ||
             !campaign_trip_valid ||
             (campaign->cause_event_id != 0U &&
@@ -9449,7 +10026,10 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             raiders->name[0] == '\0' ||
             raiders->phase < CC_HOARD_RAIDERS_IDLE ||
             raiders->phase > CC_HOARD_RAIDERS_RETURNING ||
+            raiders->carried_treasure < 0 ||
+            raiders->carried_treasure > CC_SIM_MAX_MONEY ||
             raiders->cooldown_days < 0 || raiders->raids_completed < 0 ||
+            raiders->raids_completed > CC_SIM_MAX_UNITS ||
             raiders->war_raids_completed < 0 ||
             raiders->war_raids_completed > raiders->raids_completed ||
             !raider_trip_valid) {
@@ -9467,14 +10047,50 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                                      CC_ENTITY_DUNGEON :
                                      situation->kind == CC_SITUATION_COURIER_DELIVERY ?
                                      CC_ENTITY_COURIER : CC_ENTITY_SETTLEMENT;
+        bool target_exists = false;
+        if (expected_kind == CC_ENTITY_ROUTE) {
+            target_exists = CcSimRoute(sim, situation->target_id) != NULL;
+        } else if (expected_kind == CC_ENTITY_DUNGEON) {
+            for (int32_t dungeon = 0; dungeon < sim->dungeon_count;
+                 ++dungeon) {
+                if (sim->dungeons[dungeon].id == situation->target_id) {
+                    target_exists = true;
+                    break;
+                }
+            }
+        } else if (expected_kind == CC_ENTITY_COURIER) {
+            for (int32_t courier = 0; courier < sim->courier_count;
+                 ++courier) {
+                if (sim->couriers[courier].id == situation->target_id) {
+                    target_exists = true;
+                    break;
+                }
+            }
+        } else {
+            target_exists = CcSimSettlement(sim, situation->target_id) != NULL;
+        }
+        bool issuer_exists = situation->issuer_faction_id == 0U;
+        for (int32_t faction = 0;
+             !issuer_exists && faction < sim->faction_count; ++faction) {
+            issuer_exists = sim->factions[faction].id ==
+                            situation->issuer_faction_id;
+        }
         if (CcIdKind(situation->id) != CC_ENTITY_SITUATION ||
-            target_kind != expected_kind ||
-            (situation->issuer_faction_id != 0U &&
-             CcIdKind(situation->issuer_faction_id) != CC_ENTITY_FACTION) ||
+            situation->kind < CC_SITUATION_RELIEF_DELIVERY ||
+            situation->kind > CC_SITUATION_COURIER_DELIVERY ||
+            target_kind != expected_kind || !target_exists ||
+            !issuer_exists ||
             situation->status < CC_SITUATION_ACTIVE ||
             situation->status > CC_SITUATION_FAILED ||
-            situation->quantity < 0 || situation->progress < 0 ||
-            situation->progress > situation->quantity || situation->reward < 0 ||
+            situation->good < 0 || situation->good >= CC_GOOD_COUNT ||
+            situation->quantity < 0 ||
+            situation->quantity > CC_SIM_MAX_UNITS ||
+            situation->progress < 0 ||
+            situation->progress > situation->quantity ||
+            situation->reward < 0 ||
+            situation->reward > CC_SIM_MAX_MONEY ||
+            situation->created_day < 1 ||
+            situation->created_day > sim->current_day ||
             situation->deadline_day < situation->created_day ||
             (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
              situation->cause_event_id != 0U &&
@@ -9486,16 +10102,25 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
     const CcSituation *accepted = CcSimAcceptedSituation(sim);
     bool nonnegative_cargo = true;
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
-        if (sim->player.cargo[good] < 0) nonnegative_cargo = false;
+        if (sim->player.cargo[good] < 0 ||
+            sim->player.cargo[good] > CC_SIM_MAX_UNITS) {
+            nonnegative_cargo = false;
+        }
     }
-    if (CcSimSettlement(sim, sim->player.location_id) == NULL ||
+    if (CcIdKind(sim->player.id) != CC_ENTITY_PLAYER_COMPANY ||
+        CcSimSettlement(sim, sim->player.location_id) == NULL ||
         !nonnegative_cargo ||
         CcPlayerCargoUsed(&sim->player) > sim->player.cargo_capacity ||
         sim->player.treasure_cargo_slots != player_treasure_count ||
+        sim->player.cargo_capacity < 1 ||
+        sim->player.cargo_capacity > CC_SIM_MAX_UNITS ||
+        sim->player.passenger_capacity < 0 ||
+        sim->player.passenger_capacity > CC_SIM_MAX_UNITS ||
         sim->player.map_capacity < 1 ||
         sim->player.map_capacity > CC_MAX_MAPS ||
         CcPlayerMapCount(sim) > sim->player.map_capacity ||
-        sim->player.coins < 0 ||
+        sim->player.coins < 0 || sim->player.coins > CC_SIM_MAX_MONEY ||
+        sim->player.reputation < -100 || sim->player.reputation > 100 ||
         (sim->player.accepted_situation_id != 0U && accepted == NULL)) {
         SetError(error, error_capacity, "Player company state is invalid.");
         return false;
@@ -9510,7 +10135,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 sim, horse->pregnant_by_id);
             bool on_team = i < CC_CARRIAGE_HORSE_COUNT;
             if (CcIdKind(horse->id) != CC_ENTITY_HORSE ||
-                horse->name[0] == '\0' || horse->age_days < 0 ||
+                !ValidBoundedText(horse->name, sizeof(horse->name)) ||
+                horse->age_days < 0 || horse->age_days > CC_SIM_MAX_DAY ||
                 horse->health < 1 || horse->health > 100 ||
                 horse->fatigue < 0 || horse->fatigue > 100 ||
                 horse->hunger < 0 || horse->hunger > 100 ||
@@ -9603,6 +10229,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 sim->journey.departure_day > sim->current_day ||
                 sim->journey.elapsed_subticks < 0 ||
                 sim->journey.total_subticks < CC_WORLD_DAY_SUBTICKS ||
+                sim->journey.total_subticks >
+                    CC_SIM_MAX_ROUTE_DAYS * CC_WORLD_DAY_SUBTICKS ||
                 sim->journey.elapsed_subticks >
                     sim->journey.total_subticks ||
                 sim->journey.encounter_subticks < 0 ||

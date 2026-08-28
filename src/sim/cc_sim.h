@@ -26,6 +26,10 @@
 #define CC_CARGO_CAPACITY 12
 #define CC_MAP_CAPACITY 3
 #define CC_MAP_COLLECTION_COUNT 12
+#define CC_SIM_MAX_DAY INT32_C(2147000000)
+#define CC_SIM_MAX_UNITS INT32_C(1000000)
+#define CC_SIM_MAX_MONEY INT64_C(1000000000000)
+#define CC_SIM_MAX_ROUTE_DAYS INT32_C(365)
 #define CC_GLOAMGATE_ALDERWATCH_MAP_NAME "Gloamgate to Alderwatch"
 #define CC_CROWNLESS_ATLAS_MAP_NAME "The Crownless Atlas"
 
@@ -869,6 +873,9 @@ void CcSimInitializeHoardRaiders(CcSim *sim);
 void CcSimInitializeAnimalEconomy(CcSim *sim);
 void CcSimInitializeHorseStableSystem(CcSim *sim);
 void CcSimAdvanceDays(CcSim *sim, int32_t days);
+bool CcSettlementIsAbandoned(const CcSettlement *settlement);
+int32_t CcSimClimateFactor(const CcSim *sim);
+int32_t CcDragonCampaignExperience(const CcSim *sim);
 /* Consumes exact 60 Hz ticks only while a committed journey is travelling. */
 void CcSimAdvanceRuntimeTicks(CcSim *sim, int32_t ticks);
 bool CcSimApply(CcSim *sim, const CcCommand *command,

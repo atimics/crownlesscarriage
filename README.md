@@ -10,9 +10,10 @@ changes who gets help, and can become a fight, a bargain, or an expedition.
 The result is written back into the same world that created the problem.
 
 The game begins at character scale. Settlements, people, markets, and roads are
-the main interface. Travel starts with the carriage following a track and
-meeting one side branch at a time. Maps are old, tradeable advice, not a travel
-screen.
+the main interface. Travel starts with the carriage following a track. The
+camera stays low enough to show only what the crew could see from the coach,
+including every road at the junction ahead. Maps are hand-drawn, tradeable
+objects kept in the carriage, not a travel screen.
 
 This project is in pre-production. The repository contains a living design
 manual and a playable architecture proof written in C17.
@@ -68,8 +69,10 @@ The architecture proof connects these parts in one running build:
 - A market interior whose stock and prices come from the regional simulation
 - Local situation boards with named sponsors, affected people, deadlines,
   rewards, accepted promises, and reputation consequences
-- Carriage-stage junction scenes with one continuous cart track and no more
-  than one side branch, plus a three-slot case of tradeable traveller's notes
+- Carriage-stage junction scenes that show every physical branch at the current
+  crossroads, plus a three-slot case of tradeable traveller's notes
+- Separate mine, goblin-cave, and dragon-cave maps reached by short carriage
+  roads, with the carriage parked as the return point
 - A twelve-chart collectible map set with distinct physical artwork, a
   three-slot carriage case, and a persistent storage archive in Gloamgate
 - Real-time carriage journeys, a dedicated road scene, and a route crisis that
@@ -86,6 +89,10 @@ The architecture proof connects these parts in one running build:
 - Three material kingdom identities—Road and Granary, Iron and Wall, and
   Capital and Deep—with live pressure derived from their holdings, roads,
   supplies, debts, factions, dungeons, and dragon exposure
+- Multi-decade climate eras, bounded populations, abandoned towns, and
+  resource-backed recolonization make long histories contract and recover
+- Kingdoms can default on monastery debt, lose public services during long
+  crises, and cede settlements when a peace courier ends a losing war
 - Fields, farms, mountain deposits, mines, smith recipes, tool wear, rare Gold
   and Gems, bounded and perishable food stores, supplied warfare, and unique
   one-slot crafted treasures
@@ -111,7 +118,8 @@ The architecture proof connects these parts in one running build:
 - Kings who send physical declarations, peace offers, dragon alliances, and
   muster orders through a delayed and fallible courier network. The carriage
   can carry a sealed dispatch. Allied hosts consume real Food, Tools, and
-  Weapons; victory slays the dragon and returns its actual hoard to the realms
+  Weapons; surviving armies learn from failed campaigns, while victory slays
+  the dragon and returns its actual hoard to the realms
 - Hunger and exhausted credit that create night roads and recruit bandits,
   while unfed camps shrink and cannot raid empty towns
 - An append-only SQLite action journal with checkpoints, replay, and exact
@@ -207,19 +215,25 @@ four Iron, two Tools, two Weapons, one Gold strongbox, or one Gem case.
 
 `Drive out` sends the carriage through the gate before any destination is
 chosen. The team follows the track until a roadside branch actually comes into
-view. Press `Enter` to turn onto it, or use `Right`, `Down`, or `Keep on track`
-to drive onward until the next junction is reached. Press `B` to buy local
-notes, `S` to sell carried notes, or `R` to repair the visible branch. A chart
-can save time and warn of danger, but it is never required to take a visible
-track.
+view. Every route at that junction is visible in the world. Use the arrow keys
+or `Face next branch` to turn the carriage toward one, then press `Enter` to
+take it. Press `B` to buy local notes, `S` to sell carried notes, or `R` to
+repair the selected branch. A chart can save time and warn of danger, but it is
+never required to take a visible track.
+
+Mine roads and cave roads lead to separate local maps. Their short carriage
+rides use the same reins controls as regional travel. The camera pulls back
+only to a carriage-passenger view and time moves faster; it never reveals the
+whole world. Walk back to the parked carriage to return or open the physical
+map case.
 
 In the map case, use the arrow keys or click a sheet to select it. Press `B` to
 buy a local chart, `S` to sell one, or `A` to store or retrieve it at the
 Gloamgate archive. The team drives routine departure, road, and arrival
-sections automatically.
-Use `W`, `A`, `S`, and `D` to take the reins, or `Space` to stop. A safe route
-also offers `Finish safe trip`, while dangerous routes still stop for their
-actual decision.
+sections automatically. Use `W` to speed up, `S` to slow down, or `Space` to
+pause. Press `Enter` to finish a safe trip or advance a dangerous trip to its
+next real decision. Walking to the edge of town never summons the carriage;
+start every departure from the carriage yard.
 
 Normal play keeps one campaign window active at a time. Clean exits and manual
 saves remember the hero's exact street or market position as well as the

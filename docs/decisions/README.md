@@ -14,8 +14,9 @@ accidentally reintroduce rejected scope.
 - [0006 — Freight retains intent and the world may answer its own crises](0006-logistics-and-agency.md)
 - [0007 — Replace the kingdom screen with physical route maps](0007-physical-cartography.md) (superseded)
 - [0008 — Make committed simulation inputs the durable source of truth](0008-durable-action-journal.md)
-- [0009 — Meet one branch at a time; let maps advise](0009-road-forks-before-maps.md)
+- [0009 — Meet one branch at a time; let maps advise](0009-road-forks-before-maps.md) (superseded)
 - [0010 — Derive kingdom identity from material holdings](0010-material-kingdom-identities.md)
+- [0011 — One cohesive world through local maps and visible roads](0011-cohesive-carriage-world.md)
 
 ## Record template
 

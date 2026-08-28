@@ -47,9 +47,10 @@ The detailed ledger is optional evidence, never the primary storytelling
 interface.
 
 The default view is character-scale and local. Travel begins on a cart track.
-The carriage meets one side branch at a time. Physical route notes are
-secondary evidence kept in the carriage. They can warn, mislead, or save time,
-but they never replace the act of taking the branch in front of the player.
+At a junction the carriage can see every road that physically leaves it, but
+nothing beyond the nearby terrain. Physical route notes are secondary evidence
+kept in the carriage. They can warn, mislead, or save time, but they never
+replace the act of taking a branch in front of the player.
 
 ### 3. Every journey is a commitment
 
@@ -108,9 +109,14 @@ player cannot understand or influence create a busy world, not a living one.
 - The game opens and returns from journeys at character scale.
 - Local movement, people, buildings, interiors, and physical symptoms are the
   primary interface to the world.
-- The next roadside branch answers where the player can turn now. Continuing
-  along the track reveals later branches. A carried route chart only adds what
-  its maker claimed at survey time. No interface answers for the entire world.
+- The current roadside junction answers where the player can turn now. Every
+  branch there is visible at once, while later roads remain out of sight. A
+  carried route chart only adds what its maker claimed at survey time. No live
+  interface answers for the entire world.
+- Travel may pull the camera back only to a view plausible from the carriage.
+  A whole-world view exists only on a hand-drawn map object.
+- Settlements, dungeons, goblin caves, and dragon caves are separate local
+  maps joined by carriage roads, not rooms placed together on one town stage.
 - Strategic facts that matter to the player must project into at least one
   local sensory or social expression before requiring a statistics panel.
 - Choosing a destination is only the beginning of an adventure. Arrival,

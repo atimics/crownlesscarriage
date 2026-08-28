@@ -417,6 +417,28 @@ int main(void)
     CC_CHECK(CcSimTrackedGold(&dragon_host) == campaign_gold);
     CC_CHECK(CcSimValidate(&dragon_host, error, sizeof(error)));
 
+    CcSim learning_host;
+    CcSimInit(&learning_host, UINT32_C(0xd2a61ea7));
+    learning_host.dragon_campaign.phase = CC_DRAGON_CAMPAIGN_OUTBOUND;
+    learning_host.dragon_campaign.alliance_kingdom_mask = UINT32_C(7);
+    learning_host.dragon_campaign.origin_settlement_id =
+        learning_host.settlements[0].id;
+    learning_host.dragon_campaign.days_remaining = 1;
+    learning_host.dragon_campaign.supplies[CC_GOOD_FOOD] = 32;
+    learning_host.dragon_campaign.supplies[CC_GOOD_TOOLS] = 8;
+    learning_host.dragon_campaign.supplies[CC_GOOD_WEAPONS] = 12;
+    learning_host.goblins.members = 100;
+    learning_host.goblins.devotion = 100;
+    learning_host.goblins.hoard_defenses = 12;
+    learning_host.dragon.body_condition = 90;
+    CcSimAdvanceDays(&learning_host, 1);
+    CC_CHECK(learning_host.dragon_campaign.defeats == 1);
+    CC_CHECK(CcDragonCampaignExperience(&learning_host) == 12);
+    CC_CHECK(learning_host.dragon.body_condition < 90);
+    CC_CHECK(learning_host.dragon.memory_integrity < 100);
+    learning_host.dragon_campaign.defeats = 20;
+    CC_CHECK(CcDragonCampaignExperience(&learning_host) == 72);
+
     CcSim alliance_peace;
     CcSimInit(&alliance_peace, UINT32_C(0xa111a9ce));
     alliance_peace.dragon.slain = true;
@@ -455,6 +477,86 @@ int main(void)
     CC_CHECK(alliance_peace.diplomacy[0][1] == CC_DIPLOMACY_PEACE &&
              alliance_peace.diplomacy[1][0] == CC_DIPLOMACY_PEACE);
     CC_CHECK(CountEvents(&alliance_peace, CC_EVENT_PEACE_DECLARED) == 1);
+
+    CcSim empty_court;
+    CcSimInit(&empty_court, UINT32_C(0xe607c017));
+    CcId empty_kingdom = empty_court.kingdoms[1].id;
+    for (int32_t place = 0; place < empty_court.settlement_count; ++place) {
+        CcSettlement *settlement = &empty_court.settlements[place];
+        if (settlement->kingdom_id != empty_kingdom) continue;
+        settlement->population = 0;
+        settlement->security = 0;
+        settlement->prosperity = 0;
+        settlement->service_mask = 0U;
+        settlement->service_project = CC_SERVICE_NONE;
+        settlement->service_project_days = 0;
+    }
+    empty_court.dragon.regional_influence = 100;
+    empty_court.courier_count = 0;
+    CcSimAdvanceDays(&empty_court, 27);
+    CC_CHECK(empty_court.courier_count == 0);
+    if (!CcSimValidate(&empty_court, error, sizeof(error))) {
+        (void)fprintf(stderr, "%s:%d: empty court validation failed: %s\n",
+                      __FILE__, __LINE__, error);
+        return 1;
+    }
+
+    CcSim territorial_peace;
+    CcSimInit(&territorial_peace, UINT32_C(0x7e221701));
+    territorial_peace.dragon.slain = true;
+    territorial_peace.dragon.slain_day = territorial_peace.current_day;
+    territorial_peace.routes[1].closed = false;
+    territorial_peace.routes[1].security = 100;
+    territorial_peace.routes[1].condition = 100;
+    territorial_peace.settlements[2].security = 100;
+    territorial_peace.kingdoms[0].legitimacy = 100;
+    territorial_peace.kingdoms[0].treasury = 5000;
+    territorial_peace.kingdoms[1].legitimacy = 100;
+    territorial_peace.kingdoms[1].treasury = 0;
+    for (int32_t place = 0;
+         place < territorial_peace.settlement_count; ++place) {
+        CcSettlement *settlement = &territorial_peace.settlements[place];
+        if (settlement->kingdom_id == territorial_peace.kingdoms[0].id) {
+            settlement->security = 100;
+            settlement->prosperity = 100;
+            settlement->hunger = 0;
+        } else if (settlement->kingdom_id ==
+                   territorial_peace.kingdoms[1].id) {
+            settlement->security = 10;
+            settlement->prosperity = 10;
+            settlement->hunger = 60;
+        }
+    }
+    territorial_peace.settlements[2].security = 100;
+    territorial_peace.courier_count = 1;
+    territorial_peace.couriers[0] = (CcCourier){
+        .id = CcMakeId(CC_ENTITY_COURIER, UINT64_C(10001)),
+        .kind = CC_COURIER_PEACE_OFFER,
+        .status = CC_COURIER_TRAVELLING,
+        .issuer_kingdom_id = territorial_peace.kingdoms[0].id,
+        .recipient_kingdom_id = territorial_peace.kingdoms[1].id,
+        .origin_settlement_id = territorial_peace.settlements[1].id,
+        .destination_settlement_id = territorial_peace.settlements[2].id,
+        .current_settlement_id = territorial_peace.settlements[1].id,
+        .route_id = territorial_peace.routes[1].id,
+        .departure_day = territorial_peace.current_day,
+        .arrival_day = territorial_peace.current_day + 1,
+        .reliability = 100
+    };
+    CcSimAdvanceDays(&territorial_peace, 1);
+    int32_t winner_settlements = 0;
+    int32_t loser_settlements = 0;
+    for (int32_t place = 0;
+         place < territorial_peace.settlement_count; ++place) {
+        if (territorial_peace.settlements[place].kingdom_id ==
+            territorial_peace.kingdoms[0].id) winner_settlements += 1;
+        if (territorial_peace.settlements[place].kingdom_id ==
+            territorial_peace.kingdoms[1].id) loser_settlements += 1;
+    }
+    CC_CHECK(winner_settlements == 3);
+    CC_CHECK(loser_settlements == 1);
+    CC_CHECK(territorial_peace.diplomacy[0][1] ==
+             CC_DIPLOMACY_PEACE);
 
     CcSim dormant_alliance;
     CcSimInit(&dormant_alliance, UINT32_C(0xa111d0a0));

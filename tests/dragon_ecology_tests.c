@@ -107,6 +107,21 @@ int main(void)
     CC_CHECK(remembered->owner_id == sim.dragon.id);
     CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
 
+    CcSim deep_wyrm;
+    CcSimInit(&deep_wyrm, UINT32_C(0xdee00001));
+    deep_wyrm.dragon.hoard = 5000;
+    deep_wyrm.dragon.hoard_goods[CC_GOOD_GOLD] = 10;
+    deep_wyrm.dragon.hoard_goods[CC_GOOD_GEMS] = 10;
+    deep_wyrm.dragon.age_days = 500 * 365 - 1;
+    deep_wyrm.dragon.body_condition = 50;
+    deep_wyrm.dragon.memory_integrity = 100;
+    deep_wyrm.dragon.territory_stability = 100;
+    deep_wyrm.dragon.crown_continuity_days = 250 * 365;
+    deep_wyrm.goblins.devotion = 100;
+    CcSimAdvanceDays(&deep_wyrm, 1);
+    CC_CHECK(deep_wyrm.dragon.crown_strength >= 60);
+    CC_CHECK(deep_wyrm.dragon.life_stage == CC_DRAGON_STAGE_DEEP_WYRM);
+
     CcSim brood;
     CcSimInit(&brood, UINT32_C(0xb200dc0d));
     brood.dragon.hoard = 5000;

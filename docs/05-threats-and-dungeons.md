@@ -376,6 +376,19 @@ The player may hunt, trap, relocate, protect, exploit, contain, or investigate
 monsters. Killing every visible creature should not resolve a habitat problem
 unless the nest or causal pressure is addressed.
 
+## Separate lair and dungeon maps
+
+Threat sites are not tucked into a settlement stage. The town contains a road
+gate or sign for a nearby mine, goblin cave, or dragon cave. Taking the carriage
+down that spur crosses procedural wilderness and loads a separate local map.
+The site's terrain, materials, vegetation, and road treatment inherit the
+nearby kingdom and settlement so the transition feels like one cohesive world.
+
+The carriage remains visible and parked at the site. It holds the hand-drawn
+map case and provides the return journey. The cave or dungeon entrance is a
+second physical point on the map, so entering danger is distinct from deciding
+to travel there.
+
 ## Persistent dungeons
 
 A dungeon begins with six answers:
