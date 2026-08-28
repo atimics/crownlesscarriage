@@ -17608,6 +17608,208 @@ static void DrawRoadCarriage(Vector3 base, int32_t cargo_used, float clock,
     DrawRoadHorseTeam(base, clock, moving);
 }
 
+static bool ForkRouteLeaves(const CcSim *sim, const CcRoute *route)
+{
+    return sim != NULL && route != NULL &&
+           (route->from_id == sim->player.location_id ||
+            route->to_id == sim->player.location_id);
+}
+
+static const CcRoute *ForkSelectedRoute(const CcSim *sim,
+                                        int32_t selected_route)
+{
+    if (sim == NULL || selected_route < 0 ||
+        selected_route >= sim->route_count) return NULL;
+    const CcRoute *route = &sim->routes[selected_route];
+    return ForkRouteLeaves(sim, route) ? route : NULL;
+}
+
+static int32_t ForkRouteOrdinal(const CcSim *sim, int32_t selected_route)
+{
+    int32_t ordinal = 0;
+    if (sim == NULL) return ordinal;
+    for (int32_t i = 0; i < sim->route_count; ++i) {
+        if (!ForkRouteLeaves(sim, &sim->routes[i])) continue;
+        if (i == selected_route) return ordinal;
+        ordinal += 1;
+    }
+    return 0;
+}
+
+static void DrawForkRoadSegment(Vector3 from, Vector3 to, float width,
+                                Color color, bool rutted)
+{
+    float dx = to.x - from.x;
+    float dz = to.z - from.z;
+    float length = sqrtf(dx * dx + dz * dz);
+    if (length <= 0.01f) return;
+    float yaw = atan2f(dx, dz);
+    DrawOrientedBox(from, (Vector3){0.0f, 0.015f, length * 0.5f},
+                    (Vector3){width + 0.55f, 0.055f, length}, yaw,
+                    ShadeColor(color, 0.58f));
+    DrawOrientedBox(from, (Vector3){0.0f, 0.050f, length * 0.5f},
+                    (Vector3){width, 0.045f, length}, yaw, color);
+    if (!rutted) return;
+    for (int32_t side = -1; side <= 1; side += 2) {
+        DrawOrientedBox(
+            from,
+            (Vector3){(float)side * width * 0.22f, 0.078f,
+                      length * 0.5f},
+            (Vector3){0.13f, 0.012f, length}, yaw,
+            Fade((Color){45, 35, 29, 255}, 0.72f));
+    }
+}
+
+static void DrawForkRouteState(const CcRoute *route, Vector3 from,
+                               Vector3 to)
+{
+    float dx = to.x - from.x;
+    float dz = to.z - from.z;
+    float length = sqrtf(dx * dx + dz * dz);
+    if (route == NULL || length <= 0.01f) return;
+    Vector3 forward = {dx / length, 0.0f, dz / length};
+    Vector3 side = {-forward.z, 0.0f, forward.x};
+    if (route->closed) {
+        Vector3 center = Vector3Add(from, Vector3Scale(forward, 20.0f));
+        Vector3 left = Vector3Add(center, Vector3Scale(side, -2.8f));
+        Vector3 right = Vector3Add(center, Vector3Scale(side, 2.8f));
+        left.y = 0.72f;
+        right.y = 0.72f;
+        DrawCylinderEx(left, right, 0.13f, 0.13f, 7,
+                       (Color){108, 69, 43, 255});
+        DrawCylinder((Vector3){left.x, 0.0f, left.z},
+                     0.12f, 0.09f, 1.25f, 7,
+                     (Color){86, 59, 42, 255});
+        DrawCylinder((Vector3){right.x, 0.0f, right.z},
+                     0.12f, 0.09f, 1.25f, 7,
+                     (Color){86, 59, 42, 255});
+    }
+    int32_t scars = (100 - route->condition) / 18;
+    for (int32_t scar = 0; scar < scars && scar < 4; ++scar) {
+        Vector3 center = Vector3Add(
+            from, Vector3Scale(forward, 7.0f + (float)scar * 5.0f));
+        center = Vector3Add(
+            center, Vector3Scale(side, (scar & 1) != 0 ? 0.9f : -0.7f));
+        DrawCylinder((Vector3){center.x, 0.08f, center.z},
+                     0.34f, 0.48f, 0.025f, 12,
+                     (Color){49, 39, 32, 255});
+    }
+}
+
+static void DrawForkSignpost(Vector3 branch_end, bool hidden)
+{
+    Vector3 base = {50.5f, 0.0f, 40.0f};
+    DrawCylinder(base, 0.17f, 0.13f, 3.25f, 8,
+                 (Color){91, 61, 42, 255});
+    float yaw = atan2f(branch_end.x - base.x, branch_end.z - base.z);
+    DrawOrientedBox(base, (Vector3){0.0f, 1.58f, 0.72f},
+                    (Vector3){1.65f, 0.30f, 0.12f}, yaw,
+                    hidden ? (Color){77, 61, 48, 255} :
+                             (Color){132, 91, 54, 255});
+}
+
+void CcLocalDrawFork3D(const CcSim *sim, int32_t selected_route,
+                       float clock, RenderTexture2D target,
+                       Rectangle destination)
+{
+    if (sim == NULL) return;
+    const CcSettlement *here = CcSimSettlement(
+        sim, sim->player.location_id);
+    CcId kingdom_id = here != NULL ? here->kingdom_id : 0U;
+    Color kingdom = KingdomColor3D(sim, kingdom_id);
+    Color ground = BlendColor((Color){41, 67, 48, 255}, kingdom, 0.16f);
+    Camera3D camera = ExteriorCameraComposed(
+        (Vector3){48.0f, 0.85f, 41.0f},
+        (Vector3){17.0f, 24.0f, 27.0f}, 32.0f);
+    camera = SnapCameraToArtPixels(camera, target.texture.height);
+    ArtComposition fork_art = ROAD_ART_COMPOSITION;
+    fork_art.focal_point = camera.target;
+    fork_art.foreground_anchor = (Vector3){29.0f, 0.0f, 41.0f};
+    SetFaceRenderContext(camera, target.texture.width, target.texture.height);
+    BeginTextureMode(target);
+    ClearBackground(ArtLightBackground(fork_art.light_profile));
+    BeginMode3D(camera);
+    BeginWorldLighting(camera, &fork_art);
+    DrawPlane((Vector3){48.0f, -0.08f, 40.0f},
+              (Vector2){104.0f, 78.0f}, ground);
+    Vector3 approach = {5.0f, 0.0f, 42.0f};
+    Vector3 junction = {50.5f, 0.0f, 40.0f};
+    Vector3 onward = {96.0f, 0.0f, 35.5f};
+    DrawForkRoadSegment(approach, junction, 5.1f,
+                        (Color){101, 91, 72, 255}, true);
+    DrawForkRoadSegment(junction, onward, 5.1f,
+                        (Color){98, 88, 70, 255}, true);
+
+    WorldLabel labels[1] = {0};
+    char label_text[CC_NAME_CAPACITY] = {0};
+    int32_t label_count = 0;
+    const CcRoute *route = ForkSelectedRoute(sim, selected_route);
+    if (route != NULL) {
+        int32_t ordinal = ForkRouteOrdinal(sim, selected_route);
+        float side = (ordinal & 1) != 0 ? 1.0f : -1.0f;
+        Vector3 branch_end = {77.0f, 0.0f, 40.0f + side * 23.0f};
+        float decay = 1.0f - (float)route->condition / 100.0f;
+        Color road = route->smuggler_route ?
+            (Color){69, 56, 49, 255} :
+            BlendColor((Color){113, 102, 80, 255},
+                       (Color){77, 61, 47, 255}, decay);
+        float width = route->smuggler_route ? 2.8f : 4.2f;
+        DrawForkRoadSegment(junction, branch_end, width, road, true);
+        DrawForkRouteState(route, junction, branch_end);
+
+        CcId destination_id = route->from_id == sim->player.location_id ?
+            route->to_id : route->from_id;
+        const CcSettlement *place = CcSimSettlement(sim, destination_id);
+        CcTravelPreview preview = {0};
+        (void)CcSimTravelPreview(sim, destination_id, &preview, NULL, 0U);
+        (void)snprintf(
+            label_text, sizeof(label_text), "%s",
+            preview.destination_known && place != NULL ?
+                place->name : "UNMARKED");
+        labels[0] = (WorldLabel){
+            {50.5f, 2.35f, 40.0f}, label_text,
+            route->smuggler_route ? WORLD_VIOLET : WORLD_GOLD
+        };
+        label_count = 1;
+        DrawForkSignpost(branch_end, route->smuggler_route);
+    }
+
+    TreeRegionalStyle tree_style = TreeStyleForKingdom(kingdom);
+    static const Vector2 tree_positions[] = {
+        {17.0f, 27.0f}, {23.0f, 55.0f}, {35.0f, 24.0f},
+        {39.0f, 58.0f}, {54.0f, 9.0f}, {56.0f, 72.0f},
+        {72.0f, 7.0f}, {74.0f, 75.0f}, {88.0f, 15.0f},
+        {91.0f, 55.0f}
+    };
+    for (int32_t tree = 0;
+         tree < (int32_t)(sizeof(tree_positions) /
+                          sizeof(tree_positions[0])); ++tree) {
+        TreeFamily family = tree % 4 == 0 ? TREE_FAMILY_OAK :
+                            tree % 3 == 0 ? TREE_FAMILY_POLLARD :
+                                            TREE_FAMILY_ALDER;
+        Color leaves = (tree & 1) != 0 ? (Color){46, 96, 69, 255} :
+                                        (Color){63, 112, 77, 255};
+        DrawTree(tree_positions[tree].x, tree_positions[tree].y,
+                 family, leaves, tree_style);
+    }
+
+    int32_t cargo = CcPlayerCargoUsed(&sim->player);
+    Vector3 carriage = {29.0f, 0.0f, 41.0f};
+    DrawRoadCarriage(carriage, cargo, clock, false);
+    DrawNpcFigure3D((Vector3){33.0f, 0.0f, 35.6f}, 0.90f, 1.42f,
+                    UINT32_C(0x666f726b), CC_NPC_ROLE_SCOUT,
+                    kingdom, clock * 0.35f, CC_TRAVERSAL_IDLE);
+    DrawNpcFigure3D((Vector3){26.0f, 0.0f, 45.2f}, 0.86f, 0.74f,
+                    UINT32_C(0x666f726d), CC_NPC_ROLE_TRAVELLER,
+                    WORLD_TEAL, clock * 0.28f + 1.0f,
+                    CC_TRAVERSAL_IDLE);
+    EndWorldLighting();
+    EndMode3D();
+    EndTextureMode();
+    PresentTarget(target, destination);
+    DrawLabels(labels, label_count, camera, destination);
+}
+
 static void DrawRoadBarricade(const CcRoute *route)
 {
     const float x = ROAD_BARRICADE_X;

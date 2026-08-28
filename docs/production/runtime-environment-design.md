@@ -63,7 +63,7 @@ degrades maintenance in the same market the player already knows.
 
 An environment should be derived from four questions before geometry is added:
 
-- **Why does this place exist?** Agricultural basin, crossroads market, mine,
+- **Why does this place exist?** Agricultural basin, road market, mine,
   fortress, capital, frontier depot, or another material function.
 - **How does work shape it?** Cart clearances, storage, drainage, livestock,
   workshops, hoists, defensive sightlines, and worker routes create its plan.

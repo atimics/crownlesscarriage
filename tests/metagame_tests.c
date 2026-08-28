@@ -75,8 +75,8 @@ int main(void)
     CC_CHECK(strstr(output, "Quiet commission") != NULL);
     CC_CHECK(strstr(output, "Relief charter") == NULL);
     CC_CHECK(CcMetagameExecute(&metagame, "routes", output, sizeof(output)));
-    CC_CHECK(strstr(output, "risk is unknown") != NULL);
-    CC_CHECK(strstr(output, "hidden road") == NULL);
+    CC_CHECK(strstr(output, "no notes") != NULL);
+    CC_CHECK(strstr(output, "unmarked track") != NULL);
 
     int32_t relief_number = SituationNumber(
         &metagame, CC_SITUATION_RELIEF_DELIVERY);
@@ -91,7 +91,7 @@ int main(void)
     ExecuteNumber(&metagame, "accept", quiet_number, output, sizeof(output));
     CC_CHECK(CcPlayerMapCount(&metagame.sim) == maps_before_commission);
     CC_CHECK(CcMetagameExecute(&metagame, "routes", output, sizeof(output)));
-    CC_CHECK(strstr(output, "hidden road") != NULL);
+    CC_CHECK(strstr(output, "guide knows the turns") != NULL);
 
     CcSituation *quiet = Situation(
         &metagame, CC_SITUATION_BLACK_MARKET_DELIVERY);

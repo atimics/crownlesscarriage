@@ -400,7 +400,7 @@ static void DescribeRoutes(const CcMetagame *metagame,
                            char *output, size_t capacity)
 {
     const CcSim *sim = &metagame->sim;
-    Append(output, capacity, "Roads from here:\n");
+    Append(output, capacity, "Branches found along the road out:\n");
     for (int32_t i = 0; i < sim->route_count; ++i) {
         const CcRoute *route = &sim->routes[i];
         if (route->from_id != sim->player.location_id &&
@@ -409,31 +409,32 @@ static void DescribeRoutes(const CcMetagame *metagame,
             route->to_id : route->from_id;
         const CcSettlement *destination = CcSimSettlement(sim, destination_id);
         const CcMap *map = CcSimMapForRoute(sim, route->id, sim->player.id);
-        const CcSituation *accepted = CcSimAcceptedSituation(sim);
-        bool sponsored_night_passage = route->smuggler_route &&
-            accepted != NULL &&
-            accepted->kind == CC_SITUATION_BLACK_MARKET_DELIVERY &&
-            route->to_id == accepted->target_id;
-        if (route->smuggler_route && map == NULL &&
-            !sponsored_night_passage) continue;
-        Append(output, capacity, "  %d. %s — %d days, %s",
-               i + 1, destination != NULL ? destination->name : "unknown",
-               route->travel_days, route->closed ? "restricted and tolled" : "open");
+        CcTravelPreview preview = {0};
+        if (!CcSimTravelPreview(sim, destination_id, &preview,
+                                NULL, 0U)) continue;
+        const char *road_name = preview.destination_known &&
+                                destination != NULL ?
+            destination->name : "unmarked track";
+        Append(output, capacity,
+               "  %d. %s — %d days, %" PRId64 " crowns, %s",
+               i + 1, road_name, preview.travel_days,
+               preview.provision_cost,
+               route->closed ? "restricted and tolled" : "open");
         if (map != NULL) {
             Append(output, capacity,
-                   ", %s chart says %s (%d days old)%s\n",
+                   ", %s notes say %s (%d days old)%s\n",
                    AccuracyWord(map->accuracy), DangerWord(map->recorded_danger),
                    sim->current_day - map->surveyed_day,
-                   route->smuggler_route ? ", hidden road" : "");
-        } else if (sponsored_night_passage) {
+                   route->smuggler_route ? ", unmarked road" : "");
+        } else if (preview.sponsored_guide) {
             Append(output, capacity,
-                   ", the sponsor's guide knows this hidden road\n");
+                   ", the sponsor's guide knows the turns\n");
         } else {
             Append(output, capacity,
-                   ", uncharted: travel is slower and the risk is unknown\n");
+                   ", no notes: slower travel and unknown risk\n");
         }
     }
-    Append(output, capacity, "Use 'travel NUMBER'.\n");
+    Append(output, capacity, "Turn onto a branch with 'travel NUMBER'.\n");
 }
 
 static void DescribeMaps(const CcMetagame *metagame,
@@ -874,13 +875,14 @@ static void DescribeHelp(char *output, size_t capacity)
 {
     Append(output, capacity,
            "See the world:\n"
-           "  look, causes, people, rumors, charters, routes, maps, cargo, economy, treasures, inequality, war, dragon, status, history [COUNT]\n"
+           "  look, causes, people, rumors, charters, roads, notes, cargo, economy, treasures, inequality, war, dragon, status, history [COUNT]\n"
            "Make commitments:\n"
            "  accept NUMBER, refuse NUMBER, abandon\n"
            "Move goods and people:\n"
            "  buy food|iron|tools|weapons|gold|gems COUNT\n"
            "  sell food|iron|tools|weapons|gold|gems COUNT\n"
            "  buy-map NUMBER, sell-map NUMBER\n"
+           "  buy-notes NUMBER, sell-notes NUMBER (aliases)\n"
            "  archive-map NUMBER, retrieve-map NUMBER (in Gloamgate)\n"
            "  buy-treasure NUMBER, sell-treasure NUMBER, travel NUMBER\n"
            "Act on the road and world:\n"
@@ -954,7 +956,7 @@ void CcMetagameIntro(const CcMetagame *metagame,
            "CROWNLESS CARRIAGE — THE EMPTY GRANARY\n"
            "You decide what people, goods, and news fit in one carriage.\n"
            "The world will continue after every promise and refusal.\n"
-           "You start at the hungry crossroads with 75 crowns and no given plan.\n");
+           "You start in the hungry waystation with 75 crowns and no given plan.\n");
     DescribeLook(metagame, output, output_capacity);
 }
 
@@ -987,9 +989,11 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
         DescribeRumors(metagame, output, output_capacity);
     } else if (strcmp(command, "charters") == 0) {
         DescribeCharters(metagame, output, output_capacity);
-    } else if (strcmp(command, "routes") == 0) {
+    } else if (strcmp(command, "roads") == 0 ||
+               strcmp(command, "routes") == 0) {
         DescribeRoutes(metagame, output, output_capacity);
-    } else if (strcmp(command, "maps") == 0) {
+    } else if (strcmp(command, "notes") == 0 ||
+               strcmp(command, "maps") == 0) {
         DescribeMaps(metagame, output, output_capacity);
     } else if (strcmp(command, "cargo") == 0) {
         DescribeCargo(metagame, output, output_capacity);
@@ -1090,6 +1094,8 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
                amount > 0 ? amount : -amount, CcGoodName(good));
     } else if (strcmp(command, "buy-map") == 0 ||
                strcmp(command, "sell-map") == 0 ||
+               strcmp(command, "buy-notes") == 0 ||
+               strcmp(command, "sell-notes") == 0 ||
                strcmp(command, "archive-map") == 0 ||
                strcmp(command, "retrieve-map") == 0) {
         int32_t index;
@@ -1097,10 +1103,14 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
             Append(output, output_capacity, "Choose a map number.\n");
             return false;
         }
-        CcCommandKind kind = strcmp(command, "buy-map") == 0 ?
-            CC_COMMAND_BUY_MAP : strcmp(command, "sell-map") == 0 ?
-            CC_COMMAND_SELL_MAP : strcmp(command, "archive-map") == 0 ?
-            CC_COMMAND_ARCHIVE_MAP : CC_COMMAND_RETRIEVE_MAP;
+        bool buying = strcmp(command, "buy-map") == 0 ||
+                      strcmp(command, "buy-notes") == 0;
+        bool selling = strcmp(command, "sell-map") == 0 ||
+                       strcmp(command, "sell-notes") == 0;
+        CcCommandKind kind = buying ? CC_COMMAND_BUY_MAP :
+            selling ? CC_COMMAND_SELL_MAP :
+            strcmp(command, "archive-map") == 0 ?
+                CC_COMMAND_ARCHIVE_MAP : CC_COMMAND_RETRIEVE_MAP;
         CcCommand action = {
             .kind = kind,
             .target_id = metagame->sim.maps[index].id
