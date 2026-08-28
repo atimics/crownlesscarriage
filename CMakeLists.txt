@@ -150,7 +150,8 @@ if(CC_BUILD_CLIENT)
     FetchContent_Declare(
         raylib
         GIT_REPOSITORY https://github.com/raysan5/raylib.git
-        GIT_TAG 6.0
+        # Exact commit for the signed raylib 6.0 release tag.
+        GIT_TAG dbc56a87da87d973a9c5baa4e7438a9d20121d28
         GIT_SHALLOW TRUE
     )
     FetchContent_MakeAvailable(raylib)

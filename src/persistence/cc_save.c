@@ -12,6 +12,8 @@
 #define CC_SQLITE_USER_VERSION 16
 #define CC_JOURNAL_RECORD_VERSION 1
 #define CC_JOURNAL_RUNTIME_FLUSH_TICKS 6
+#define CC_JOURNAL_MAX_DAY_ADVANCE 3650
+#define CC_JOURNAL_MAX_RUNTIME_ADVANCE 3600
 
 typedef enum CcJournalOperationKind {
     CC_JOURNAL_OPERATION_COMMAND = 1,
@@ -3049,11 +3051,19 @@ static bool ReplayJournal(sqlite3 *database, CcSim *sim,
                                      sizeof(replay_error));
                 break;
             case CC_JOURNAL_OPERATION_ADVANCE_DAYS:
-                if (step_count <= 0) applied = false;
+                if (step_count <= 0 ||
+                    step_count > CC_JOURNAL_MAX_DAY_ADVANCE ||
+                    sim->current_day > CC_SIM_MAX_DAY - step_count) {
+                    applied = false;
+                }
                 else CcSimAdvanceDays(sim, step_count);
                 break;
             case CC_JOURNAL_OPERATION_ADVANCE_RUNTIME_TICKS:
-                if (step_count <= 0) applied = false;
+                if (step_count <= 0 ||
+                    step_count > CC_JOURNAL_MAX_RUNTIME_ADVANCE ||
+                    sim->clock.tick > UINT64_MAX - (uint64_t)step_count) {
+                    applied = false;
+                }
                 else CcSimAdvanceRuntimeTicks(sim, step_count);
                 break;
             default:
@@ -3856,7 +3866,10 @@ bool CcJournalApply(CcJournal *journal, CcSim *sim,
 bool CcJournalAdvanceDays(CcJournal *journal, CcSim *sim, int32_t days,
                           char *error, size_t error_capacity)
 {
-    if (journal == NULL || sim == NULL || days <= 0) {
+    if (journal == NULL || sim == NULL || days <= 0 ||
+        days > CC_JOURNAL_MAX_DAY_ADVANCE ||
+        sim->current_day < 1 ||
+        sim->current_day > CC_SIM_MAX_DAY - days) {
         SetError(error, error_capacity,
                  "Journaled day advance requires a positive duration.");
         return false;
@@ -3876,7 +3889,10 @@ bool CcJournalAdvanceRuntimeTicks(CcJournal *journal, CcSim *sim,
                                   int32_t ticks,
                                   char *error, size_t error_capacity)
 {
-    if (journal == NULL || sim == NULL || ticks < 0) {
+    if (journal == NULL || sim == NULL || ticks < 0 ||
+        ticks > CC_JOURNAL_MAX_RUNTIME_ADVANCE ||
+        (sim != NULL &&
+         sim->clock.tick > UINT64_MAX - (uint64_t)ticks)) {
         SetError(error, error_capacity,
                  "Journaled runtime advance has invalid input.");
         return false;
