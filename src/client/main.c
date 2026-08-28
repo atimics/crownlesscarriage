@@ -127,6 +127,7 @@ typedef enum ContextActionKind {
     CONTEXT_ACTION_SKIP_TRAVEL,
     CONTEXT_ACTION_JUMP,
     CONTEXT_ACTION_RAISE_ALARM,
+    CONTEXT_ACTION_SELECT_TARGET,
     CONTEXT_ACTION_BASIC_STRIKE,
     CONTEXT_ACTION_TOGGLE_GUARD,
     CONTEXT_ACTION_WITHDRAW,
@@ -1431,7 +1432,7 @@ static void DrawCombatPanel(const LocalState *local)
     CcOverlayDrawText(target != NULL ?
                           CcLocalRaiderRoleName(
                               local->course.raider_roles[target_index]) :
-                          "CLICK OR [T] CYCLE",
+                          "CHOOSE BELOW / [T] NEXT",
                       target_x, y + 81, 7, target != NULL ? MUTED : CC_GOLD);
     DrawCombatMeter(target_x, y + 99, column_width, "HEALTH",
                     target != NULL ? target->combat.health : 0.0f,
@@ -2001,6 +2002,20 @@ static void AddCombatActions(ContextActionSet *set,
     int32_t target = SelectedCombatTargetIndex(local);
     bool has_target = target >= 0;
     const CcCombatState *combat = &local->agent.combat;
+    for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
+        if (local->course.raiders[i].combat.life_state != CC_LIFE_ALIVE) {
+            continue;
+        }
+        int32_t previous_count = set != NULL ? set->count : 0;
+        AddDetailedContextAction(
+            set, CONTEXT_ACTION_SELECT_TARGET,
+            local->course.raider_names[i], i == target ? "TARGET" : "",
+            CcLocalRaiderRoleName(local->course.raider_roles[i]),
+            true, i == target);
+        if (set != NULL && set->count > previous_count) {
+            set->items[set->count - 1].amount = i;
+        }
+    }
     /* Target-bound cards only exist when they name an exact legal target. */
     if (has_target) {
         AddDetailedContextAction(
@@ -2372,6 +2387,7 @@ static Color ContextActionColor(ContextActionKind kind)
         kind == CONTEXT_ACTION_RETURN_DRAGON_RELIC ||
         kind == CONTEXT_ACTION_INTERCEPT_DRAGON_TRIBUTE ||
         kind == CONTEXT_ACTION_OPEN_DRAGON_CAVE) return TEAL;
+    if (kind == CONTEXT_ACTION_SELECT_TARGET) return DANGER;
     if (kind == CONTEXT_ACTION_BASIC_STRIKE ||
         kind == CONTEXT_ACTION_TOGGLE_GUARD) return CC_GOLD;
     if (kind == CONTEXT_ACTION_SKILL_CRUSHING ||
@@ -2419,10 +2435,38 @@ static void DrawContextActionTray(const CcSim *sim, const LocalState *local,
                             3.0f, bounds.height - 20.0f},
                 0.8f, 3, accent);
         }
-        bool detailed = action->detail[0] != '\0' ||
-                        action->key_hint[0] != '\0';
         Color label_color = !action->enabled ? Fade(MUTED, 0.62f) :
                             hover || action->active ? accent : INK;
+        if (action->kind == CONTEXT_ACTION_SELECT_TARGET &&
+            action->amount >= 0 && action->amount < CC_LOCAL_RAIDER_COUNT) {
+            const CcLocalAgent *outlaw =
+                &local->course.raiders[action->amount];
+            Rectangle portrait = {bounds.x + 7.0f, bounds.y + 5.0f,
+                                  40.0f, bounds.height - 10.0f};
+            CcLocalDrawAgentPortrait3D(outlaw, portrait);
+            float text_x = portrait.x + portrait.width + 8.0f;
+            int text_width = (int)(bounds.x + bounds.width - text_x - 7.0f);
+            const char *name = TextFormat("%.14s", action->label);
+            CcOverlayDrawText(name, (int)text_x, (int)bounds.y + 8, 8,
+                              label_color);
+            CcOverlayDrawText(action->detail, (int)text_x,
+                              (int)bounds.y + 22, 6, MUTED);
+            int32_t health = (int32_t)lroundf(outlaw->combat.health);
+            CcOverlayDrawText(TextFormat("HP %d", health), (int)text_x,
+                              (int)bounds.y + 36, 6,
+                              health < 35 ? DANGER : INK);
+            int bar_width = text_width > 5 ? text_width : 5;
+            DrawRectangle((int)text_x, (int)bounds.y + 47,
+                          bar_width, 3, BAR_TRACK);
+            DrawRectangle((int)text_x, (int)bounds.y + 47,
+                          (int)lroundf((float)bar_width *
+                                      ClampUnit(outlaw->combat.health /
+                                                CC_LOCAL_COMBAT_MAX_HEALTH)),
+                          3, DANGER);
+            continue;
+        }
+        bool detailed = action->detail[0] != '\0' ||
+                        action->key_hint[0] != '\0';
         int width = CcOverlayMeasureText(action->label, detailed ? 10 : 11);
         CcOverlayDrawText(action->label,
                           (int)(bounds.x +
@@ -2488,7 +2532,7 @@ static void DrawCombatStatusLine(const LocalState *local,
     if (message != NULL && message[0] != '\0' && message_age < 3.2f) {
         status = message;
     } else if (target == NULL) {
-        status = "Click an outlaw or press T to choose a target.";
+        status = "Choose an outlaw below or press T to cycle targets.";
     } else if (local->agent.humanoid.guard_requested) {
         status = "Guard is up. Watch posture and strike after the block.";
     } else {
@@ -4171,8 +4215,11 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             }
             return;
         }
-        if (LocalCombatActive(local) && ClientKeyPressed(KEY_T)) {
-            int32_t target = NextCombatTargetIndex(local);
+        if (LocalCombatActive(local) &&
+            (context_action == CONTEXT_ACTION_SELECT_TARGET ||
+             ClientKeyPressed(KEY_T))) {
+            int32_t target = context_action == CONTEXT_ACTION_SELECT_TARGET ?
+                pressed_action.amount : NextCombatTargetIndex(local);
             if (target >= 0 && CcLocalCourseSelectPlayerTarget(
                     &local->course, &local->agent, target)) {
                 (void)snprintf(
