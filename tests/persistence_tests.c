@@ -108,6 +108,8 @@ static void CheckReadDoesNotCreateOrRelabel(char *error,
     CcJournal *journal = CcJournalResume(malformed, &untouched,
                                          error, error_capacity);
     CC_CHECK(journal == NULL);
+    CC_CHECK(!CcSaveWrite(malformed, &untouched, error, error_capacity));
+    CC_CHECK(strstr(error, "not a Crownless campaign") != NULL);
     CC_CHECK(CcSimHash(&untouched) == untouched_hash);
     CC_CHECK(ReadSqliteInteger(malformed, "PRAGMA application_id;") == 0);
     CC_CHECK(ReadSqliteInteger(malformed, "PRAGMA user_version;") == 7);
@@ -118,6 +120,62 @@ static void CheckReadDoesNotCreateOrRelabel(char *error,
                  malformed,
                  "SELECT value FROM unrelated;") == 41);
     RemoveDatabase(malformed);
+
+    const char *oversized = "persistence-oversized-test.ccsave";
+    RemoveDatabase(oversized);
+    database = NULL;
+    RequireSqlite(sqlite3_open_v2(oversized, &database,
+                                  SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE,
+                                  NULL),
+                  database, "could not create oversized fixture");
+    ExecuteFixtureSql(database,
+                      "PRAGMA application_id=1128481362;"
+                      "CREATE TABLE payload(value BLOB);"
+                      "INSERT INTO payload VALUES(zeroblob(16777216));",
+                      "could not create oversized fixture contents");
+    sqlite3_close(database);
+    CC_CHECK(!CcSaveRead(oversized, &untouched, error, error_capacity));
+    CC_CHECK(strstr(error, "too large") != NULL);
+    CC_CHECK(CcSimHash(&untouched) == untouched_hash);
+    RemoveDatabase(oversized);
+}
+
+static void CheckJournalOwnership(char *error, size_t error_capacity)
+{
+    const char *path = "persistence-journal-ownership-test.ccsave";
+    RemoveDatabase(path);
+    CcSim original;
+    CcSimInit(&original, UINT32_C(0xa11ce001));
+    CcJournal *first = CcJournalStart(path, &original,
+                                      error, error_capacity);
+    CC_CHECK(first != NULL);
+    uint64_t original_hash = CcSimHash(&original);
+
+    CcJournal *accidental = CcJournalStart(path, &original,
+                                           error, error_capacity);
+    CC_CHECK(accidental == NULL);
+    CcSim preserved;
+    CC_CHECK(CcSaveRead(path, &preserved, error, error_capacity));
+    CC_CHECK(CcSimHash(&preserved) == original_hash);
+
+    CcSim replacement;
+    CcSimInit(&replacement, UINT32_C(0xa11ce002));
+    uint64_t replacement_hash = CcSimHash(&replacement);
+    CcJournal *second = CcJournalRestart(path, &replacement,
+                                         error, error_capacity);
+    CC_CHECK(second != NULL);
+
+    CC_CHECK(!CcJournalAdvanceDays(first, &original, 1,
+                                   error, error_capacity));
+    CC_CHECK(strstr(error, "new campaign epoch") != NULL);
+    CC_CHECK(CcSimHash(&original) == original_hash);
+    CcJournalAbandon(&first);
+    CC_CHECK(first == NULL);
+    CC_CHECK(CcJournalClose(&second, &replacement,
+                            error, error_capacity));
+    CC_CHECK(CcSaveRead(path, &preserved, error, error_capacity));
+    CC_CHECK(CcSimHash(&preserved) == replacement_hash);
+    RemoveDatabase(path);
 }
 
 static void AddLegacyJournalSuffix(const char *path,
@@ -789,6 +847,7 @@ int main(void)
                                       CC_SERVICE_GRANARY,
                                       error, sizeof(error)));
     CheckReadDoesNotCreateOrRelabel(error, sizeof(error));
+    CheckJournalOwnership(error, sizeof(error));
     CheckPreJourneySchema3Compatibility(error, sizeof(error));
     CheckSchema4Compatibility(error, sizeof(error));
     CheckSchema5Compatibility(error, sizeof(error));

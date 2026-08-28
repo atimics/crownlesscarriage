@@ -13,9 +13,12 @@ bool CcSaveWrite(const char *path, const CcSim *sim,
 bool CcSaveRead(const char *path, CcSim *sim,
                 char *error, size_t error_capacity);
 
-/* Starts a new append-only journal epoch with `sim` as its replay checkpoint. */
+/* Creates a new campaign file and starts its append-only journal. */
 CcJournal *CcJournalStart(const char *path, const CcSim *sim,
                           char *error, size_t error_capacity);
+/* Explicitly starts a new campaign epoch in an existing Crownless save. */
+CcJournal *CcJournalRestart(const char *path, const CcSim *sim,
+                            char *error, size_t error_capacity);
 /* Loads the last checkpoint, replays its durable suffix, and resumes writing. */
 CcJournal *CcJournalResume(const char *path, CcSim *sim,
                            char *error, size_t error_capacity);
@@ -36,5 +39,7 @@ bool CcJournalFlush(CcJournal *journal, CcSim *sim,
 /* On failure the journal remains open and `sim` is restored to its durable prefix. */
 bool CcJournalClose(CcJournal **journal, CcSim *sim,
                     char *error, size_t error_capacity);
+/* Closes a stale or unwanted writer without changing its campaign file. */
+void CcJournalAbandon(CcJournal **journal);
 
 #endif
