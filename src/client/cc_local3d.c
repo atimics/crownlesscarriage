@@ -10954,7 +10954,7 @@ static bool PoseQuadrupedCreature(CreatureModelCache *creature,
             creature->model.skeleton.bindPose[bone].scale;
     }
     UpdateModelAnimation(creature->model, creature->animation, 0.0f);
-    CcLocalRendererRecordSkinUpdate(creature->model.meshCount);
+    CcLocalRendererRecordCreatureSkinUpdate(creature->model.meshCount);
     return true;
 }
 
@@ -11867,7 +11867,8 @@ static NpcBodySkinCache *NpcBodyForAppearance(
 }
 
 static bool DrawNpcBodySkin(const CcHumanoidSkinPose *skin,
-                            const CcNpcAppearance *appearance)
+                            const CcNpcAppearance *appearance,
+                            bool featured_hero)
 {
     NpcBodySkinCache *body = NpcBodyForAppearance(appearance);
     if (body == NULL || !body->ready || !visual_style.npc_skinned_ready ||
@@ -11895,6 +11896,11 @@ static bool DrawNpcBodySkin(const CcHumanoidSkinPose *skin,
         body->pose[bone].scale = body->model.skeleton.bindPose[bone].scale;
     }
     UpdateModelAnimation(body->model, body->animation, 0.0f);
+    if (featured_hero) {
+        CcLocalRendererRecordHeroSkinUpdate(body->model.meshCount);
+    } else {
+        CcLocalRendererRecordNpcSkinUpdate(body->model.meshCount);
+    }
     for (int32_t material = 0; material < body->model.materialCount;
          ++material) {
         body->model.materials[material].maps[MATERIAL_MAP_DIFFUSE].color =
@@ -15910,7 +15916,7 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
     /* The skeleton, muscle controls, and soft tissue are construction data.
        The visible body is one baked skin; the rigid pieces below are fitted
        clothing, boots, head identity, hair, armor, and equipment. */
-    bool drew = DrawNpcBodySkin(skin, appearance);
+    bool drew = DrawNpcBodySkin(skin, appearance, featured_hero);
     if (!drew) return false;
 
     const CcHumanoidSkinBonePose *spine =
