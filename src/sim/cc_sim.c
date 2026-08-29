@@ -768,6 +768,7 @@ const char *CcEventKindName(CcEventKind kind)
         case CC_EVENT_GOBLIN_DRAGON_SEED_RUMORED: return "ASH-VAULT RUMOR";
         case CC_EVENT_GOBLIN_DRAGON_SEED_PREPARED: return "ASH-VAULT WORK";
         case CC_EVENT_CHARACTER_INTERACTION: return "PERSONAL WORD";
+        case CC_EVENT_ENCOUNTER_LOOT: return "ROAD LOOT";
     }
     return "EVENT";
 }
@@ -8844,6 +8845,103 @@ static bool ApplyTravel(CcSim *sim, const CcCommand *command,
     return true;
 }
 
+static int32_t RollD6(CcSim *sim)
+{
+    return 1 + (int32_t)(NextRandom(sim) % 6U);
+}
+
+/* OSR encounter loot: the ledger decides what exists (the group's real
+ * supplies stock), the 2d6 table decides what the company recovers. Loot is
+ * carried, never minted: every recovered good is deducted from the defeated
+ * group's supplies at a fixed ten-supplies-per-good rate, bounded by free
+ * cargo slots. A natural 12 takes a trophy: a named curio with provenance
+ * that occupies one carriage slot and sells at markets like any treasure. */
+static void RollEncounterLoot(CcSim *sim, CcBanditGroup *bandits,
+                              const CcJourneyEncounter *journey,
+                              const CcEvent *combat_event)
+{
+    const int32_t roll = RollD6(sim) + RollD6(sim);
+    if (bandits == NULL || roll < 4) return;
+
+    CcGood good = CC_GOOD_FOOD;
+    if (bandits->raid_phase == CC_BANDIT_RAID_RETURNING &&
+        bandits->raid_good >= 0 && bandits->raid_good < CC_GOOD_COUNT) {
+        good = bandits->raid_good;
+    }
+    const int32_t recoverable = bandits->supplies / 10;
+    int32_t take = 0;
+    if (roll <= 5) {
+        take = recoverable * RollD6(sim) / 10;
+    } else if (roll <= 8) {
+        take = recoverable / 2;
+    } else {
+        take = recoverable;
+    }
+
+    int32_t free_slots = sim->player.cargo_capacity -
+                         CcPlayerCargoUsed(&sim->player);
+    if (free_slots < 0) free_slots = 0;
+    const int32_t cap = free_slots * GoodUnitsPerCargoSlot(good);
+    if (take > cap) take = cap;
+
+    char text[CC_EVENT_TEXT_CAPACITY];
+    size_t length = 0;
+    int32_t magnitude = 0;
+    CcTreasure *trophy = NULL;
+
+    if (take > 0) {
+        sim->player.cargo[good] += take;
+        bandits->supplies = ClampI32(bandits->supplies - take * 10, 0, 100);
+        magnitude += take;
+        length += (size_t)snprintf(
+            text + length, sizeof(text) - length,
+            "The company strips the broken cordon: %d %s recovered",
+            take, CcGoodName(good));
+    }
+
+    if (roll >= 12) {
+        if (take == 0) {
+            length += (size_t)snprintf(
+                text + length, sizeof(text) - length,
+                "The broken cordon yields little");
+        }
+        if (CcPlayerCargoUsed(&sim->player) <
+                sim->player.cargo_capacity &&
+            sim->treasure_count < CC_MAX_TREASURES) {
+            trophy = AllocateTreasure(sim);
+        }
+        if (trophy != NULL) {
+            const int32_t value = RollD6(sim) + RollD6(sim);
+            (void)snprintf(trophy->name, sizeof(trophy->name),
+                           "Outlaw Trophy of %.16s", bandits->name);
+            trophy->owner_id = sim->player.id;
+            trophy->location_id = sim->player.location_id;
+            trophy->appraised_value = value;
+            trophy->created_day = sim->current_day;
+            sim->player.treasure_cargo_slots += 1;
+            magnitude += value;
+            length += (size_t)snprintf(
+                text + length, sizeof(text) - length,
+                "%sthe outlaw trophy %s (%d crowns)",
+                length > 0 && text[length - 1] != ' ' ? ", " : "",
+                trophy->name, value);
+        } else if (length > 0 && length < sizeof(text) - 1) {
+            length += (size_t)snprintf(
+                text + length, sizeof(text) - length,
+                "; the trophy is left on the road");
+        }
+    }
+
+    if (length > 0) {
+        length += (size_t)snprintf(
+            text + length, sizeof(text) - length, ".");
+        (void)PushEvent(sim, CC_EVENT_ENCOUNTER_LOOT, journey->situation_id,
+                        journey->route_id,
+                        combat_event != NULL ? combat_event->id : 0U,
+                        magnitude, text);
+    }
+}
+
 static bool ApplyResolveEncounter(CcSim *sim, CcJourneyOutcome outcome,
                                   bool provisions,
                                   char *error, size_t error_capacity)
@@ -8954,6 +9052,9 @@ static bool ApplyResolveEncounter(CcSim *sim, CcJourneyOutcome outcome,
     sim->journey.phase = CC_JOURNEY_PHASE_TRAVELLING;
     sim->journey.parent_event_id = outcome_event != NULL ?
         outcome_event->id : journey.parent_event_id;
+    if (outcome == CC_JOURNEY_OUTCOME_COMBAT) {
+        RollEncounterLoot(sim, bandits, &journey, outcome_event);
+    }
     sim->resolved_journey_situation_id = journey.situation_id;
     sim->resolved_journey_outcome = outcome;
     sim->clock.game_minutes_per_second =

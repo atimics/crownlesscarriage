@@ -1501,6 +1501,13 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
             return false;
         }
         if (!ApplyCommand(metagame, &action, output, output_capacity)) return false;
+        if (metagame->sim.journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
+            for (int32_t i = 0; i < 8; ++i) {
+                const CcEvent *event = CcSimRecentEvent(&metagame->sim, i);
+                if (event == NULL || event->kind != CC_EVENT_ENCOUNTER_LOOT) break;
+                Append(output, output_capacity, "%s\n", event->text);
+            }
+        }
         Append(output, output_capacity,
                "The road choice costs %" PRId64
                " crowns and %d carriage condition.\n",
