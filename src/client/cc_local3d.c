@@ -61,6 +61,7 @@ static const float COMBAT_ALLY_SPACE = 0.92f;
 static const float COMBAT_BYSTANDER_SPACE = 1.12f;
 static const float COMBAT_PLAYER_STANDOFF = 1.30f;
 static const float COMBAT_NPC_STANDOFF = 1.30f;
+static const float COMBAT_PLAYER_ENGAGEMENT_RADIUS = 7.50f;
 static const float ROAD_BARRICADE_X = 51.85f;
 /* Walkable tops from environment_bridge_checkpoint_v01. These must stay in
    lockstep with the exported deck and its two short causeways. */
@@ -4191,6 +4192,32 @@ static CcLocalAgent *CoursePlayerTarget(CcLocalCourse *course,
            target->combat.team == CC_COMBAT_RAIDER ? target : NULL;
 }
 
+bool CcLocalCourseCanPlayerEngage(const CcLocalCourse *course,
+                                  const CcLocalAgent *player,
+                                  int32_t target_index)
+{
+    if (course == NULL || player == NULL || !course->alarm_active ||
+        course->raiders_retreating || !CombatCanAct(&player->combat) ||
+        target_index < 0 || target_index >= CC_LOCAL_RAIDER_COUNT) {
+        return false;
+    }
+    const CcLocalAgent *target = &course->raiders[target_index];
+    return target->combat.team == CC_COMBAT_RAIDER &&
+           CombatCanAct(&target->combat) &&
+           CombatHorizontalDistanceSquared(player, target) <=
+               COMBAT_PLAYER_ENGAGEMENT_RADIUS *
+               COMBAT_PLAYER_ENGAGEMENT_RADIUS;
+}
+
+bool CcLocalCourseHasNearbyHostile(const CcLocalCourse *course,
+                                   const CcLocalAgent *player)
+{
+    for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
+        if (CcLocalCourseCanPlayerEngage(course, player, i)) return true;
+    }
+    return false;
+}
+
 static Vector3 CourseCombatApproachPoint(const CcLocalAgent *mover,
                                          const CcLocalAgent *target,
                                          float standoff,
@@ -4230,11 +4257,7 @@ bool CcLocalCourseSelectPlayerTarget(CcLocalCourse *course,
                                      CcLocalAgent *player,
                                      int32_t target_index)
 {
-    if (course == NULL || player == NULL || !course->alarm_active ||
-        course->raiders_retreating || target_index < 0 ||
-        target_index >= CC_LOCAL_RAIDER_COUNT ||
-        course->raiders[target_index].combat.team != CC_COMBAT_RAIDER ||
-        !CombatCanAct(&course->raiders[target_index].combat)) {
+    if (!CcLocalCourseCanPlayerEngage(course, player, target_index)) {
         return false;
     }
     CcLocalCombatSetTeam(player, CC_COMBAT_PLAYER);
@@ -4348,7 +4371,9 @@ bool CcLocalCourseUsePlayerSkill(CcLocalCourse *course,
         return false;
     }
     if (!course->alarm_active || course->raiders_retreating ||
-        CoursePlayerTarget(course, player) == NULL) {
+        CoursePlayerTarget(course, player) == NULL ||
+        !CcLocalCourseCanPlayerEngage(
+            course, player, player->combat.target_index)) {
         return false;
     }
     if (skill == CC_COMBAT_SKILL_SECOND_WIND) {
@@ -4409,7 +4434,9 @@ static void CourseUpdatePlayerCombat(CcLocalCourse *course,
     }
     CcLocalAgent *target = CoursePlayerTarget(course, player);
     if (target == NULL || !CombatCanAct(&player->combat) ||
-        course->raiders_retreating) {
+        course->raiders_retreating ||
+        !CcLocalCourseCanPlayerEngage(
+            course, player, player->combat.target_index)) {
         CcLocalCourseClearPlayerTarget(player);
         return;
     }
@@ -4466,7 +4493,9 @@ bool CcLocalCourseBeginPlayerStrike(CcLocalCourse *course,
     player->combat.queued_skill = -1;
     CcLocalAgent *target = CoursePlayerTarget(course, player);
     if (!course->alarm_active || course->raiders_retreating ||
-        target == NULL) {
+        target == NULL || !CcLocalCourseCanPlayerEngage(
+                              course, player,
+                              player->combat.target_index)) {
         CcLocalCombatClearFocus(player);
         return false;
     }
@@ -4480,7 +4509,9 @@ bool CcLocalCourseSetPlayerGuarded(CcLocalCourse *course,
     if (course == NULL || player == NULL) return false;
     CcLocalAgent *target = CoursePlayerTarget(course, player);
     if (!course->alarm_active || course->raiders_retreating ||
-        target == NULL) {
+        target == NULL || !CcLocalCourseCanPlayerEngage(
+                              course, player,
+                              player->combat.target_index)) {
         CcLocalCombatSetGuarded(player, NULL, false);
         return false;
     }
@@ -18944,7 +18975,8 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
                                        "F  SPEAK WITH CAPTAIN", WORLD_TEAL};
     }
     DrawLabels(labels, count, camera, destination);
-    if (!travelling && course->alarm_active) {
+    if (!travelling &&
+        CcLocalCourseHasNearbyHostile(course, agent)) {
         DrawCombatBar(agent, camera, destination, WORLD_TEAL);
         if (combat_presentation) {
             DrawCombatBar(CombatCameraOpponent(course, agent), camera,
@@ -19554,7 +19586,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     DrawTargetAtmosphere(target, clock);
     EndTextureMode();
     PresentTarget(target, destination);
-    bool alarm_active = course != NULL && course->alarm_active;
+    bool combat_nearby = CcLocalCourseHasNearbyHostile(course, agent);
     bool combat_presentation = course != NULL && course->alarm_active &&
                                camera.projection == CAMERA_PERSPECTIVE;
 
@@ -19570,7 +19602,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
             0.24f, 4, (Color){4, 10, 14, 202});
         DrawViewportText(room_name, destination, 19, 14, 10, WORLD_GOLD);
     }
-    if (!alarm_active && !convoy_visible) {
+    if (!combat_nearby && !convoy_visible) {
         DrawStreetTraversalPortals(agent, camera, destination,
                                    target.texture.width,
                                    target.texture.height);
@@ -19585,7 +19617,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     }
     char primary_hall_label[96];
     (void)snprintf(primary_hall_label, sizeof(primary_hall_label),
-                   "%s  /  click door or F", profile->primary_hall);
+                   "%s  /  approach, then press F", profile->primary_hall);
     if (AgentNearLabel(agent, 50.0f, 21.0f, 8.0f)) {
         labels[count++] = (WorldLabel){{50.0f,
                                         TerrainFootprintHeight(
@@ -19717,10 +19749,10 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
              CC_LOCAL_DRAGON_CAVE_Z},
             "Road to the goblin cave", WORLD_VIOLET};
     }
-    if (!alarm_active) {
+    if (!combat_nearby) {
         DrawLabels(labels, count, camera, destination);
     }
-    if (course != NULL && course->alarm_active) {
+    if (combat_nearby) {
         DrawCombatBar(agent, camera, destination, WORLD_TEAL);
         if (combat_presentation) {
             DrawCombatBar(CombatCameraOpponent(course, agent), camera,
@@ -20086,7 +20118,8 @@ void CcLocalDrawInterior3D(const CcSim *sim, const CcLocalAgent *agent,
     }
     if (AgentNearLabel(agent, 1.55f, 6.54f, 3.5f)) {
         labels[label_count++] = (WorldLabel){
-            {1.55f, 2.25f, 6.54f}, "Exit  /  click door or F", WORLD_MUTED};
+            {1.55f, 2.25f, 6.54f}, "Exit  /  approach, then press F",
+            WORLD_MUTED};
     }
     DrawLabels(labels, label_count, camera, destination);
     if (draw_hero_rig_debug &&

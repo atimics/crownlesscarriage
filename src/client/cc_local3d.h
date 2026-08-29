@@ -434,6 +434,11 @@ bool CcLocalCourseBeginPlayerStrike(CcLocalCourse *course,
                                     CcLocalAgent *player);
 bool CcLocalCourseSetPlayerGuarded(CcLocalCourse *course,
                                    CcLocalAgent *player, bool guarded);
+bool CcLocalCourseHasNearbyHostile(const CcLocalCourse *course,
+                                   const CcLocalAgent *player);
+bool CcLocalCourseCanPlayerEngage(const CcLocalCourse *course,
+                                  const CcLocalAgent *player,
+                                  int32_t target_index);
 bool CcLocalCourseSelectPlayerTarget(CcLocalCourse *course,
                                      CcLocalAgent *player,
                                      int32_t target_index);

@@ -1469,11 +1469,11 @@ static void TestTargetDrivenCombat(void)
         course.runners[i].agent.combat.health = 0.0f;
     }
     CcLocalAgentInit(&course.raiders[0],
-                     (Vector2){CC_LOCAL_START_X + 3.0f,
+                     (Vector2){CC_LOCAL_START_X + 12.0f,
                                CC_LOCAL_START_Z}, false);
     CcLocalCombatSetTeam(&course.raiders[0], CC_COMBAT_RAIDER);
     CcLocalAgentInit(&course.raiders[1],
-                     (Vector2){CC_LOCAL_START_X + 7.0f,
+                     (Vector2){CC_LOCAL_START_X + 14.0f,
                                CC_LOCAL_START_Z + 3.0f}, false);
     CcLocalCombatSetTeam(&course.raiders[1], CC_COMBAT_RAIDER);
     for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
@@ -1492,6 +1492,21 @@ static void TestTargetDrivenCombat(void)
                       "combat activated before a hostile was targeted\n");
         exit(1);
     }
+    if (CcLocalCourseHasNearbyHostile(&course, &player) ||
+        CcLocalCourseSelectPlayerTarget(&course, &player, 0)) {
+        (void)fprintf(stderr,
+                      "distant map hostile activated player combat\n");
+        exit(1);
+    }
+    CcLocalAgentInit(&course.raiders[0],
+                     (Vector2){CC_LOCAL_START_X + 3.0f,
+                               CC_LOCAL_START_Z}, false);
+    CcLocalCombatSetTeam(&course.raiders[0], CC_COMBAT_RAIDER);
+    if (!CcLocalCourseHasNearbyHostile(&course, &player)) {
+        (void)fprintf(stderr,
+                      "nearby hostile did not activate player combat\n");
+        exit(1);
+    }
     if (CcLocalCourseSelectPlayerTarget(&course, &player, -1) ||
         !CcLocalCourseSelectPlayerTarget(&course, &player, 0) ||
         player.combat.target_index != 0 || !player.combat.focus_valid) {
@@ -1505,6 +1520,30 @@ static void TestTargetDrivenCombat(void)
         player.combat.target_index != 0 || !player.combat.focus_valid) {
         (void)fprintf(stderr,
                       "targeted guard did not preserve hostile focus\n");
+        exit(1);
+    }
+    if (!CcLocalCourseSetPlayerGuarded(&course, &player, true)) {
+        (void)fprintf(stderr, "nearby target did not accept guard\n");
+        exit(1);
+    }
+    course.raiders[0].position = (Vector3){CC_LOCAL_START_X + 12.0f,
+                                           0.0f,
+                                           CC_LOCAL_START_Z};
+    CcLocalCourseUpdate(&course, &player, &sim, 1.0f / 60.0f);
+    if (player.combat.target_index != -1 || player.combat.focus_valid ||
+        player.humanoid.guard_requested ||
+        CcLocalCourseHasNearbyHostile(&course, &player)) {
+        (void)fprintf(stderr,
+                      "combat did not disengage after hostile left proximity\n");
+        exit(1);
+    }
+    CcLocalAgentInit(&course.raiders[0],
+                     (Vector2){CC_LOCAL_START_X + 3.0f,
+                               CC_LOCAL_START_Z}, false);
+    CcLocalCombatSetTeam(&course.raiders[0], CC_COMBAT_RAIDER);
+    if (!CcLocalCourseSelectPlayerTarget(&course, &player, 0)) {
+        (void)fprintf(stderr,
+                      "nearby hostile could not be targeted after re-entry\n");
         exit(1);
     }
     if (!CcLocalCourseUsePlayerSkill(&course, &player,
@@ -4212,9 +4251,25 @@ int main(void)
                       road_course.raiders[0].position.y);
         return 1;
     }
-    if (!CcLocalCourseSelectPlayerTarget(&road_course, &road_player, 0)) {
+    if (CcLocalCourseHasNearbyHostile(&road_course, &road_player) ||
+        CcLocalCourseSelectPlayerTarget(&road_course, &road_player, 0)) {
         (void)fprintf(stderr,
-                      "hostile road encounter did not accept its first target\n");
+                      "distant road hostile activated combat at map entry\n");
+        return 1;
+    }
+    bool road_hostile_nearby = false;
+    for (int32_t frame = 0; frame < 900; ++frame) {
+        CcLocalWorldUpdate(&road_course, &road_player, &witness_sim,
+                           1.0f / 60.0f, false, true);
+        if (CcLocalCourseHasNearbyHostile(&road_course, &road_player)) {
+            road_hostile_nearby = true;
+            break;
+        }
+    }
+    if (!road_hostile_nearby ||
+        !CcLocalCourseSelectPlayerTarget(&road_course, &road_player, 0)) {
+        (void)fprintf(stderr,
+                      "road hostile never entered player combat proximity\n");
         return 1;
     }
     Camera3D road_combat_base = {
