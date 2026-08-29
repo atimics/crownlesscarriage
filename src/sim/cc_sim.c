@@ -2180,7 +2180,7 @@ void CcSimInit(CcSim *sim, uint32_t seed)
     InitSettlement(sim, 4, 2, "Rosespire", CC_SETTLEMENT_CAPITAL,
                    CC_SETTLEMENT_CAPITAL_SIZE,
                    Jitter(sim, 770, 18), Jitter(sim, 145, 18), 3180, 71, 72);
-    InitSettlement(sim, 5, 2, place_names[5], CC_SETTLEMENT_DUNGEON_TOWN,
+    InitSettlement(sim, 5, 2, "Hollowbarrow", CC_SETTLEMENT_DUNGEON_TOWN,
                    CC_SETTLEMENT_VILLAGE,
                    Jitter(sim, 335, 22), Jitter(sim, 155, 20), 1280, 46, 45);
     sim->settlement_count = CC_MAX_SETTLEMENTS;

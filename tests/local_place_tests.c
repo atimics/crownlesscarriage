@@ -27,8 +27,49 @@ static int ProfileContract(void)
         CHECK(profile->keeper_name != NULL && profile->keeper_name[0] != '\0');
         CHECK(profile->interior_service != NULL &&
               profile->interior_service[0] != '\0');
+        CHECK(profile->map_form != NULL && profile->map_form[0] != '\0');
         CHECK(profile->keeper_seed != 0U);
         CHECK(profile->feature_mask != 0U);
+        CHECK(profile->building_count >= 7);
+        CHECK(profile->building_count <= CC_LOCAL_PLACE_BUILDING_CAPACITY);
+        CHECK(profile->primary_building >= 0);
+        CHECK(profile->primary_building < profile->building_count);
+        CHECK(profile->compound_structure_count > 5);
+        CHECK(profile->compound_structure_count <=
+              CC_LOCAL_PLACE_COMPOUND_CAPACITY);
+        CHECK(profile->compound_structure[3].kind ==
+              CC_LOCAL_COMPOUND_WALL);
+        CHECK(profile->compound_structure[5].kind ==
+              CC_LOCAL_COMPOUND_HALL);
+        for (int32_t scene = 0;
+             scene < CC_LOCAL_PLACE_SCENE_COUNT; ++scene) {
+            const CcLocalTownScene *camera = CcLocalTownSceneAt(
+                (CcSettlementFunction)function, scene);
+            CHECK(camera != NULL);
+            CHECK(camera->kind == (CcLocalTownSceneKind)scene);
+            CHECK(camera->name != NULL && camera->name[0] != '\0');
+            CHECK(camera->trigger_x >= 0.0f && camera->trigger_x <= 96.0f);
+            CHECK(camera->trigger_z >= 0.0f && camera->trigger_z <= 72.0f);
+            CHECK(camera->target_x >= 0.0f && camera->target_x <= 96.0f);
+            CHECK(camera->target_z >= 0.0f && camera->target_z <= 72.0f);
+            if (scene < CC_LOCAL_PLACE_ESTABLISHING_SCENE_COUNT) {
+                CHECK(camera->camera_offset_y >= 8.0f);
+                CHECK(camera->fovy >= 26.0f && camera->fovy <= 35.0f);
+            } else {
+                CHECK(camera->camera_offset_y >= 6.0f);
+                CHECK(camera->fovy >= 16.0f && camera->fovy <= 19.0f);
+                for (int32_t establishing = 0;
+                     establishing < CC_LOCAL_PLACE_ESTABLISHING_SCENE_COUNT;
+                     ++establishing) {
+                    CHECK(camera->fovy <
+                          profile->scene[establishing].fovy - 7.0f);
+                }
+            }
+            for (int32_t previous = 0; previous < scene; ++previous) {
+                CHECK(strcmp(camera->name,
+                             profile->scene[previous].name) != 0);
+            }
+        }
         for (int32_t room = 0; room < CC_LOCAL_PLACE_ROOM_COUNT; ++room) {
             const char *name = CcLocalPlaceRoomName(
                 (CcSettlementFunction)function, room);
@@ -61,6 +102,39 @@ static int ProfileContract(void)
             CHECK(route->x >= 0.0f && route->x + route->width <= 96.0f);
             CHECK(route->z >= 0.0f && route->z + route->depth <= 72.0f);
         }
+        for (int32_t building = 0;
+             building < profile->building_count; ++building) {
+            const CcLocalPlaceBuilding *structure =
+                CcLocalPlaceBuildingAt(
+                    (CcSettlementFunction)function, building);
+            CHECK(structure != NULL);
+            CHECK(structure->name != NULL && structure->name[0] != '\0');
+            CHECK(structure->width >= 4.5f);
+            CHECK(structure->depth >= 4.5f);
+            CHECK(structure->height >= 4.5f);
+            CHECK(structure->style >= CC_LOCAL_BUILDING_DOMESTIC);
+            CHECK(structure->style <= CC_LOCAL_BUILDING_WORKER_ROW);
+            CHECK(structure->x >= 0.0f &&
+                  structure->x + structure->width <= 96.0f);
+            CHECK(structure->z >= 0.0f &&
+                  structure->z + structure->depth <= 72.0f);
+        }
+        for (int32_t structure = 0;
+             structure < profile->compound_structure_count; ++structure) {
+            const CcLocalPlaceCompoundStructure *compound =
+                CcLocalPlaceCompoundStructureAt(
+                    (CcSettlementFunction)function, structure);
+            CHECK(compound != NULL);
+            CHECK(compound->kind >= CC_LOCAL_COMPOUND_WALL);
+            CHECK(compound->kind <= CC_LOCAL_COMPOUND_SILO);
+            CHECK(compound->width >= 0.7f);
+            CHECK(compound->depth >= 0.7f);
+            CHECK(compound->height >= 2.0f);
+            CHECK(compound->x >= 0.0f &&
+                  compound->x + compound->width <= 96.0f);
+            CHECK(compound->z >= 0.0f &&
+                  compound->z + compound->depth <= 72.0f);
+        }
     }
     CHECK(CcLocalPlaceRoomName(CC_SETTLEMENT_MARKET, -1) == NULL);
     CHECK(CcLocalPlaceRoomName(CC_SETTLEMENT_MARKET,
@@ -72,6 +146,18 @@ static int ProfileContract(void)
     CHECK(CcLocalPlaceRoadAt(CC_SETTLEMENT_MARKET, -1) == NULL);
     CHECK(CcLocalPlaceRoadAt(
               CC_SETTLEMENT_MARKET, CC_LOCAL_PLACE_ROAD_COUNT) == NULL);
+    CHECK(CcLocalPlaceBuildingAt(CC_SETTLEMENT_MARKET, -1) == NULL);
+    CHECK(CcLocalPlaceBuildingAt(
+              CC_SETTLEMENT_MARKET,
+              CC_LOCAL_PLACE_BUILDING_CAPACITY) == NULL);
+    CHECK(CcLocalPlaceCompoundStructureAt(
+              CC_SETTLEMENT_MARKET, -1) == NULL);
+    CHECK(CcLocalPlaceCompoundStructureAt(
+              CC_SETTLEMENT_MARKET,
+              CC_LOCAL_PLACE_COMPOUND_CAPACITY) == NULL);
+    CHECK(CcLocalTownSceneAt(CC_SETTLEMENT_MARKET, -1) == NULL);
+    CHECK(CcLocalTownSceneAt(
+              CC_SETTLEMENT_MARKET, CC_LOCAL_PLACE_SCENE_COUNT) == NULL);
     return 0;
 }
 
@@ -107,6 +193,56 @@ static bool SameRoadGeometry(const CcLocalPlaceRoad *left,
     return left->x == right->x && left->z == right->z &&
            left->width == right->width && left->depth == right->depth &&
            left->runs_east_west == right->runs_east_west;
+}
+
+static bool BuildingsOverlap(const CcLocalPlaceBuilding *left,
+                             const CcLocalPlaceBuilding *right)
+{
+    return left->x < right->x + right->width &&
+           left->x + left->width > right->x &&
+           left->z < right->z + right->depth &&
+           left->z + left->depth > right->z;
+}
+
+static bool SameBuildingGeometry(const CcLocalPlaceBuilding *left,
+                                 const CcLocalPlaceBuilding *right)
+{
+    return left->x == right->x && left->z == right->z &&
+           left->width == right->width && left->depth == right->depth &&
+           left->height == right->height && left->style == right->style;
+}
+
+static bool BuildingTouchesLandmark(
+    const CcLocalPlaceBuilding *building,
+    const CcLocalPlaceLandmark *landmark)
+{
+    return building->x < landmark->x + landmark->width &&
+           building->x + building->width > landmark->x &&
+           building->z < landmark->z + landmark->depth &&
+           building->z + building->depth > landmark->z;
+}
+
+static bool BuildingTouchesCompound(
+    const CcLocalPlaceBuilding *building,
+    const CcLocalPlaceCompoundStructure *structure)
+{
+    return building->x < structure->x + structure->width &&
+           building->x + building->width > structure->x &&
+           building->z < structure->z + structure->depth &&
+           building->z + building->depth > structure->z;
+}
+
+static bool CompoundTouchesGateLane(
+    const CcLocalPlaceCompoundStructure *structure)
+{
+    const float gate_left = 77.55f;
+    const float gate_right = 79.45f;
+    const float gate_near = 27.00f;
+    const float gate_far = 32.80f;
+    return structure->x < gate_right &&
+           structure->x + structure->width > gate_left &&
+           structure->z < gate_far &&
+           structure->z + structure->depth > gate_near;
 }
 
 static bool RoadsOverlap(const CcLocalPlaceRoad *left,
@@ -208,6 +344,68 @@ static int AuthoredLandmarkLayouts(void)
     return 0;
 }
 
+static int AuthoredTownMaps(void)
+{
+    for (int32_t function = CC_SETTLEMENT_FARMING;
+         function <= CC_SETTLEMENT_DUNGEON_TOWN; ++function) {
+        const CcLocalPlaceProfile *profile =
+            CcLocalPlaceProfileForFunction((CcSettlementFunction)function);
+        const CcLocalPlaceBuilding *primary = CcLocalPlaceBuildingAt(
+            (CcSettlementFunction)function, profile->primary_building);
+        CHECK(primary != NULL);
+        CHECK(primary->x == 44.0f && primary->z == 16.0f);
+        CHECK(primary->width == 12.0f && primary->depth == 10.0f);
+        CHECK(primary->door);
+
+        for (int32_t building = 0;
+             building < profile->building_count; ++building) {
+            const CcLocalPlaceBuilding *current =
+                &profile->building[building];
+            for (int32_t previous = 0; previous < building; ++previous) {
+                CHECK(!BuildingsOverlap(current,
+                                        &profile->building[previous]));
+            }
+            for (int32_t landmark = 0;
+                 landmark < CC_LOCAL_PLACE_LANDMARK_COUNT; ++landmark) {
+                CHECK(!BuildingTouchesLandmark(
+                    current, &profile->landmark[landmark]));
+            }
+            for (int32_t structure = 0;
+                 structure < profile->compound_structure_count;
+                 ++structure) {
+                CHECK(!BuildingTouchesCompound(
+                    current, &profile->compound_structure[structure]));
+            }
+        }
+        for (int32_t structure = 0;
+             structure < profile->compound_structure_count; ++structure) {
+            CHECK(!CompoundTouchesGateLane(
+                &profile->compound_structure[structure]));
+        }
+
+        for (int32_t previous = CC_SETTLEMENT_FARMING;
+             previous < function; ++previous) {
+            const CcLocalPlaceProfile *other =
+                CcLocalPlaceProfileForFunction(
+                    (CcSettlementFunction)previous);
+            bool same_map = profile->building_count == other->building_count;
+            if (same_map) {
+                for (int32_t building = 0;
+                     building < profile->building_count; ++building) {
+                    if (!SameBuildingGeometry(&profile->building[building],
+                                              &other->building[building])) {
+                        same_map = false;
+                        break;
+                    }
+                }
+            }
+            CHECK(!same_map);
+            CHECK(strcmp(profile->map_form, other->map_form) != 0);
+        }
+    }
+    return 0;
+}
+
 static int CanonicalRegionProfiles(void)
 {
     CcSim sim;
@@ -262,6 +460,7 @@ int main(void)
 {
     if (ProfileContract() != 0) return 1;
     if (AuthoredLandmarkLayouts() != 0) return 1;
+    if (AuthoredTownMaps() != 0) return 1;
     if (CanonicalRegionProfiles() != 0) return 1;
     if (StableDistinctTerrain() != 0) return 1;
     (void)puts("local place profile tests passed");
