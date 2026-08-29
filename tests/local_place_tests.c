@@ -41,6 +41,24 @@ static int ProfileContract(void)
               CC_LOCAL_COMPOUND_WALL);
         CHECK(profile->compound_structure[5].kind ==
               CC_LOCAL_COMPOUND_HALL);
+        for (int32_t scene = 0;
+             scene < CC_LOCAL_PLACE_SCENE_COUNT; ++scene) {
+            const CcLocalTownScene *camera = CcLocalTownSceneAt(
+                (CcSettlementFunction)function, scene);
+            CHECK(camera != NULL);
+            CHECK(camera->kind == (CcLocalTownSceneKind)scene);
+            CHECK(camera->name != NULL && camera->name[0] != '\0');
+            CHECK(camera->trigger_x >= 0.0f && camera->trigger_x <= 96.0f);
+            CHECK(camera->trigger_z >= 0.0f && camera->trigger_z <= 72.0f);
+            CHECK(camera->target_x >= 0.0f && camera->target_x <= 96.0f);
+            CHECK(camera->target_z >= 0.0f && camera->target_z <= 72.0f);
+            CHECK(camera->camera_offset_y >= 8.0f);
+            CHECK(camera->fovy >= 15.0f && camera->fovy <= 25.0f);
+            for (int32_t previous = 0; previous < scene; ++previous) {
+                CHECK(strcmp(camera->name,
+                             profile->scene[previous].name) != 0);
+            }
+        }
         for (int32_t room = 0; room < CC_LOCAL_PLACE_ROOM_COUNT; ++room) {
             const char *name = CcLocalPlaceRoomName(
                 (CcSettlementFunction)function, room);
@@ -126,6 +144,9 @@ static int ProfileContract(void)
     CHECK(CcLocalPlaceCompoundStructureAt(
               CC_SETTLEMENT_MARKET,
               CC_LOCAL_PLACE_COMPOUND_CAPACITY) == NULL);
+    CHECK(CcLocalTownSceneAt(CC_SETTLEMENT_MARKET, -1) == NULL);
+    CHECK(CcLocalTownSceneAt(
+              CC_SETTLEMENT_MARKET, CC_LOCAL_PLACE_SCENE_COUNT) == NULL);
     return 0;
 }
 

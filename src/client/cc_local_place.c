@@ -12,6 +12,17 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
         .keeper_name = "Edda — Granary keeper",
         .interior_service = "Provisions, seed, and harvest accounts",
         .map_form = "Dispersed crofts around a threshing green",
+        .scene = {
+            {CC_LOCAL_TOWN_SCENE_ARRIVAL, "RIVERFORD ARRIVAL",
+             82.0f, 34.0f, 81.0f, 1.8f, 34.0f,
+             -17.0f, 11.5f, 27.0f, 20.5f},
+            {CC_LOCAL_TOWN_SCENE_HEART, "THRESHING GREEN",
+             44.0f, 29.0f, 45.0f, 1.4f, 29.5f,
+             -18.0f, 12.5f, 24.0f, 19.0f},
+            {CC_LOCAL_TOWN_SCENE_LANDMARK, "HILL GRANARIES",
+             78.0f, 19.0f, 78.0f, 4.2f, 19.0f,
+             -15.0f, 16.0f, 29.0f, 21.5f},
+        },
         .keeper_seed = UINT32_C(0xedda1001),
         .terrain_salt = UINT32_C(0x16f11fe9),
         .feature_mask = CC_LOCAL_PLACE_FARMLAND |
@@ -83,6 +94,17 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
         .keeper_name = "Oren — Company clerk",
         .interior_service = "Ore, tools, and expedition stores",
         .map_form = "Dense worker terraces climbing toward the pit",
+        .scene = {
+            {CC_LOCAL_TOWN_SCENE_ARRIVAL, "QUARRY APPROACH",
+             82.0f, 34.0f, 81.0f, 2.5f, 34.0f,
+             -18.0f, 10.0f, 27.0f, 21.0f},
+            {CC_LOCAL_TOWN_SCENE_HEART, "MINERS' TERRACES",
+             44.0f, 29.0f, 45.0f, 2.8f, 30.0f,
+             18.0f, 14.0f, 25.0f, 20.0f},
+            {CC_LOCAL_TOWN_SCENE_LANDMARK, "LOWER SILVERWORKS",
+             78.0f, 19.0f, 79.0f, 5.6f, 18.0f,
+             -20.0f, 18.0f, 27.0f, 22.0f},
+        },
         .keeper_seed = UINT32_C(0x0e2e4002),
         .terrain_salt = UINT32_C(0x8b62c4d7),
         .feature_mask = CC_LOCAL_PLACE_INDUSTRY |
@@ -162,6 +184,17 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
         .keeper_name = "Mara — Merchant",
         .interior_service = "Contracts, cargo, and regional goods",
         .map_form = "A radial bazaar gathered around the coach road",
+        .scene = {
+            {CC_LOCAL_TOWN_SCENE_ARRIVAL, "CUSTOMS CAUSEWAY",
+             82.0f, 34.0f, 81.0f, 2.0f, 34.0f,
+             -18.0f, 12.0f, 28.0f, 21.0f},
+            {CC_LOCAL_TOWN_SCENE_HEART, "CROSSROADS BAZAAR",
+             44.0f, 29.0f, 46.0f, 2.0f, 29.5f,
+             -18.0f, 13.5f, 24.0f, 20.0f},
+            {CC_LOCAL_TOWN_SCENE_LANDMARK, "CUSTOMS KEEP",
+             78.0f, 19.0f, 78.0f, 5.0f, 19.0f,
+             -15.0f, 17.0f, 30.0f, 22.0f},
+        },
         .keeper_seed = UINT32_C(0x6d617261),
         .terrain_salt = UINT32_C(0x45d9f3b1),
         .feature_mask = CC_LOCAL_PLACE_MARKET |
@@ -240,6 +273,17 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
         .keeper_name = "Seren — Quartermaster",
         .interior_service = "Rations, arms, and bridge passage",
         .map_form = "A straight garrison town aimed at the bridge",
+        .scene = {
+            {CC_LOCAL_TOWN_SCENE_ARRIVAL, "CONTESTED BRIDGE",
+             82.0f, 34.0f, 81.0f, 2.8f, 34.0f,
+             17.0f, 12.0f, 26.0f, 21.0f},
+            {CC_LOCAL_TOWN_SCENE_HEART, "MUSTER SPINE",
+             44.0f, 29.0f, 46.0f, 2.6f, 29.5f,
+             -18.0f, 13.0f, 25.0f, 19.5f},
+            {CC_LOCAL_TOWN_SCENE_LANDMARK, "ALDERWATCH KEEP",
+             78.0f, 19.0f, 78.0f, 5.8f, 19.0f,
+             17.0f, 18.0f, 27.0f, 22.0f},
+        },
         .keeper_seed = UINT32_C(0x5e2e4004),
         .terrain_salt = UINT32_C(0xca4b2d53),
         .feature_mask = CC_LOCAL_PLACE_FORTIFICATION |
@@ -316,6 +360,17 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
         .keeper_name = "Ilyra — Royal factor",
         .interior_service = "Petitions, court supply, and royal exchange",
         .map_form = "Tall ceremonial wards on a processional axis",
+        .scene = {
+            {CC_LOCAL_TOWN_SCENE_ARRIVAL, "ROSE AVENUE",
+             82.0f, 34.0f, 81.0f, 3.4f, 34.0f,
+             -18.0f, 15.0f, 30.0f, 22.0f},
+            {CC_LOCAL_TOWN_SCENE_HEART, "PETITION SQUARE",
+             44.0f, 29.0f, 46.0f, 3.0f, 29.0f,
+             19.0f, 16.0f, 28.0f, 21.0f},
+            {CC_LOCAL_TOWN_SCENE_LANDMARK, "CROWN PALACE",
+             78.0f, 19.0f, 78.0f, 7.0f, 18.0f,
+             -19.0f, 21.0f, 32.0f, 23.0f},
+        },
         .keeper_seed = UINT32_C(0x1172a005),
         .terrain_salt = UINT32_C(0x71d54a8f),
         .feature_mask = CC_LOCAL_PLACE_MARKET |
@@ -399,6 +454,17 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
         .keeper_name = "Vey — Expedition broker",
         .interior_service = "Rope, lamps, salvage, and return bonds",
         .map_form = "A loose lantern ward facing the sealed road",
+        .scene = {
+            {CC_LOCAL_TOWN_SCENE_ARRIVAL, "LANTERN ROAD",
+             82.0f, 34.0f, 81.0f, 1.8f, 34.0f,
+             -16.0f, 10.5f, 27.0f, 20.5f},
+            {CC_LOCAL_TOWN_SCENE_HEART, "EXPEDITION HOLLOW",
+             44.0f, 29.0f, 46.0f, 1.5f, 30.0f,
+             18.0f, 12.5f, 24.0f, 19.5f},
+            {CC_LOCAL_TOWN_SCENE_LANDMARK, "SEALED DUNGEON ROAD",
+             78.0f, 19.0f, 79.0f, 4.5f, 18.0f,
+             -18.0f, 16.0f, 28.0f, 22.0f},
+        },
         .keeper_seed = UINT32_C(0x0b3e7006),
         .terrain_salt = UINT32_C(0x9e37b97d),
         .feature_mask = CC_LOCAL_PLACE_INDUSTRY |
@@ -536,6 +602,17 @@ const CcLocalPlaceCompoundStructure *CcLocalPlaceCompoundStructureAt(
         return NULL;
     }
     return &profile->compound_structure[structure_index];
+}
+
+const CcLocalTownScene *CcLocalTownSceneAt(
+    CcSettlementFunction function, int32_t scene_index)
+{
+    const CcLocalPlaceProfile *profile =
+        CcLocalPlaceProfileForFunction(function);
+    if (scene_index < 0 || scene_index >= CC_LOCAL_PLACE_SCENE_COUNT) {
+        return NULL;
+    }
+    return &profile->scene[scene_index];
 }
 
 bool CcLocalPlaceHasFeature(const CcLocalPlaceProfile *profile,

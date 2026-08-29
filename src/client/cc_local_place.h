@@ -11,6 +11,7 @@
 #define CC_LOCAL_PLACE_ROAD_COUNT 3
 #define CC_LOCAL_PLACE_BUILDING_CAPACITY 12
 #define CC_LOCAL_PLACE_COMPOUND_CAPACITY 12
+#define CC_LOCAL_PLACE_SCENE_COUNT 3
 
 typedef enum CcLocalPlaceFeature {
     CC_LOCAL_PLACE_FARMLAND = UINT32_C(1) << 0,
@@ -96,6 +97,26 @@ typedef struct CcLocalPlaceCompoundStructure {
     float height;
 } CcLocalPlaceCompoundStructure;
 
+typedef enum CcLocalTownSceneKind {
+    CC_LOCAL_TOWN_SCENE_ARRIVAL = 0,
+    CC_LOCAL_TOWN_SCENE_HEART,
+    CC_LOCAL_TOWN_SCENE_LANDMARK
+} CcLocalTownSceneKind;
+
+typedef struct CcLocalTownScene {
+    CcLocalTownSceneKind kind;
+    const char *name;
+    float trigger_x;
+    float trigger_z;
+    float target_x;
+    float target_y;
+    float target_z;
+    float camera_offset_x;
+    float camera_offset_y;
+    float camera_offset_z;
+    float fovy;
+} CcLocalTownScene;
+
 typedef struct CcLocalPlaceProfile {
     CcSettlementFunction function;
     const char *identity;
@@ -119,6 +140,7 @@ typedef struct CcLocalPlaceProfile {
     CcLocalPlaceBuilding building[CC_LOCAL_PLACE_BUILDING_CAPACITY];
     CcLocalPlaceCompoundStructure
         compound_structure[CC_LOCAL_PLACE_COMPOUND_CAPACITY];
+    CcLocalTownScene scene[CC_LOCAL_PLACE_SCENE_COUNT];
 } CcLocalPlaceProfile;
 
 const CcLocalPlaceProfile *CcLocalPlaceProfileForFunction(
@@ -135,6 +157,8 @@ const CcLocalPlaceBuilding *CcLocalPlaceBuildingAt(
     CcSettlementFunction function, int32_t building_index);
 const CcLocalPlaceCompoundStructure *CcLocalPlaceCompoundStructureAt(
     CcSettlementFunction function, int32_t structure_index);
+const CcLocalTownScene *CcLocalTownSceneAt(
+    CcSettlementFunction function, int32_t scene_index);
 bool CcLocalPlaceHasFeature(const CcLocalPlaceProfile *profile,
                             CcLocalPlaceFeature feature);
 uint32_t CcLocalPlaceTerrainSeed(uint32_t world_seed,
