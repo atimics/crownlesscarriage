@@ -15279,19 +15279,6 @@ static void DrawBiomechanicalBiped(const CcLocalAgent *agent)
     CcHumanoidSkinPoseResolve(pose, &skin);
     if (!skin.valid) return;
     bool modular_hero = agent->crowned;
-    if (agent->crowned) {
-        DrawCylinder((Vector3){agent->position.x,
-                               agent->position.y + 0.008f,
-                               agent->position.z},
-                     0.35f, 0.35f, 0.014f, 24,
-                     (Color){3, 10, 14, 118});
-        DrawGroundBrushStroke(
-            (Vector3){agent->position.x, agent->position.y + 0.020f,
-                      agent->position.z},
-            (Vector3){sinf(agent->facing_yaw), 0.0f,
-                      cosf(agent->facing_yaw)},
-            0.72f, 0.085f, Fade(WORLD_TEAL, 0.82f));
-    }
     CcNpcAppearance procedural_hero = ProceduralHeroAppearance(agent);
     if (modular_hero && screen_first_hero_active) {
         UseCharacterLighting();
@@ -15620,6 +15607,47 @@ static float SnapContactCoordinate(float value)
     return roundf(value / contact_grid) * contact_grid;
 }
 
+static void DrawContactShadow(Vector3 center, float width, float depth,
+                              float yaw, Color color)
+{
+    if (width <= 0.0f || depth <= 0.0f || color.a == 0) return;
+
+    /* This is paint on the terrain, not a thin solid. A flat oval has no
+       vertical side that can become a horizontal bar through the actor. */
+    const int32_t segment_count = 12;
+    const float half_width = width * 0.5f;
+    const float half_depth = depth * 0.5f;
+    const float yaw_cos = cosf(yaw);
+    const float yaw_sin = sinf(yaw);
+    rlBegin(RL_TRIANGLES);
+    rlColor4ub(color.r, color.g, color.b, color.a);
+    rlNormal3f(0.0f, 1.0f, 0.0f);
+    for (int32_t segment = 0; segment < segment_count; ++segment) {
+        float angle_a = 2.0f * PI * (float)segment /
+                        (float)segment_count;
+        float angle_b = 2.0f * PI * (float)(segment + 1) /
+                        (float)segment_count;
+        float local_ax = cosf(angle_a) * half_width;
+        float local_az = sinf(angle_a) * half_depth;
+        float local_bx = cosf(angle_b) * half_width;
+        float local_bz = sinf(angle_b) * half_depth;
+        Vector3 edge_a = {
+            center.x + local_ax * yaw_cos + local_az * yaw_sin,
+            center.y,
+            center.z - local_ax * yaw_sin + local_az * yaw_cos,
+        };
+        Vector3 edge_b = {
+            center.x + local_bx * yaw_cos + local_bz * yaw_sin,
+            center.y,
+            center.z - local_bx * yaw_sin + local_bz * yaw_cos,
+        };
+        rlVertex3f(center.x, center.y, center.z);
+        rlVertex3f(edge_b.x, edge_b.y, edge_b.z);
+        rlVertex3f(edge_a.x, edge_a.y, edge_a.z);
+    }
+    rlEnd();
+}
+
 static void DrawCharacterContactEffects(const CcLocalAgent *agent)
 {
     if (agent == NULL) return;
@@ -15632,32 +15660,26 @@ static void DrawCharacterContactEffects(const CcLocalAgent *agent)
         fmaxf(0.006f, surface + 0.008f),
         SnapContactCoordinate(agent->position.z),
     };
-    Vector3 shadow_size = fallen ? (Vector3){1.20f, 0.014f, 0.56f} :
+    float vertical_gap = fmaxf(0.0f, agent->position.y - surface);
+    float lift = fminf(vertical_gap / 1.60f, 1.0f);
+    float shadow_scale = fallen ? 1.0f : 1.0f - lift * 0.38f;
+    float shadow_visibility = 1.0f - lift * 0.72f;
+    Vector2 shadow_size = fallen ? (Vector2){1.20f, 0.56f} :
                                    agent->crowned ?
-                                       (Vector3){0.82f, 0.014f, 0.52f} :
-                                       (Vector3){0.70f, 0.014f, 0.46f};
+                                       (Vector2){0.82f, 0.52f} :
+                                       (Vector2){0.70f, 0.46f};
     Color shadow_color = agent->crowned && !fallen ?
-        (Color){15, 38, 38, 108} :
-        (Color){3, 8, 10, fallen ? 102 : 82};
-    DrawBox(shadow, shadow_size, shadow_color);
-    DrawCubeWiresV((Vector3){shadow.x, shadow.y + 0.003f, shadow.z},
-                   (Vector3){shadow_size.x + 0.03f, 0.016f,
-                             shadow_size.z + 0.03f},
-                   agent->crowned && !fallen ?
-                       Fade(WORLD_TEAL, 0.40f) :
-                       (Color){21, 35, 37, 72});
-    if (agent->crowned && !fallen) {
-        /* A short brass footlight is the hero's only persistent ground cue.
-           It reads as a painted contact accent, not a selection ring, and
-           keeps the player distinct when night compresses nearby figures. */
-        Vector3 footlight = {shadow.x - 0.05f, shadow.y + 0.009f,
-                             shadow.z + 0.29f};
-        DrawBox(footlight, (Vector3){0.42f, 0.012f, 0.045f},
-                Fade(WORLD_GOLD, 0.72f));
-        DrawBox((Vector3){footlight.x + 0.25f, footlight.y,
-                          footlight.z - 0.035f},
-                (Vector3){0.14f, 0.012f, 0.035f},
-                Fade(CC_STYLE_GOLD_SHADOW, 0.64f));
+        (Color){15, 38, 38, 255} : (Color){3, 8, 10, 255};
+    float base_opacity = fallen ? 102.0f / 255.0f :
+                         agent->crowned ? 108.0f / 255.0f :
+                                          82.0f / 255.0f;
+    /* A bad terrain sample must never place the contact mark through the
+       character. It is safer to omit the shadow until the sample is valid. */
+    if (surface <= agent->position.y + 0.12f) {
+        DrawContactShadow(shadow, shadow_size.x * shadow_scale,
+                          shadow_size.y * shadow_scale, agent->facing_yaw,
+                          Fade(shadow_color,
+                               base_opacity * shadow_visibility));
     }
 
     if (agent->swimming || agent->immersion > 0.08f) {
