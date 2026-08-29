@@ -314,6 +314,10 @@ typedef struct CcLocalCourse {
     CcId raider_company_id;
     CcLocalAgent situation_witness;
     CcId situation_witness_id;
+    CcId situation_witness_character_id;
+    CcCharacterActivity situation_witness_activity;
+    float situation_witness_activity_seconds;
+    int32_t situation_witness_activity_stage;
     Vector3 raider_entry[CC_LOCAL_RAIDER_COUNT];
     Vector3 combat_origin;
     float alarm_countdown;
@@ -353,6 +357,10 @@ typedef struct CcLocalRendererStats {
     int32_t skinned_meshes;
     int32_t hero_skin_updates;
     int32_t hero_skinned_meshes;
+    int32_t npc_skin_updates;
+    int32_t npc_skinned_meshes;
+    int32_t creature_skin_updates;
+    int32_t creature_skinned_meshes;
 } CcLocalRendererStats;
 
 /* Keep the player skin comfortably below raylib's CPU skinning/upload cliff.
@@ -432,8 +440,13 @@ void CcLocalCourseBindRaiderCompany(CcLocalCourse *course,
 const char *CcLocalRaiderRoleName(CcLocalRaiderRole role);
 bool CcLocalCourseBeginPlayerStrike(CcLocalCourse *course,
                                     CcLocalAgent *player);
-void CcLocalCourseSetPlayerGuarded(CcLocalCourse *course,
+bool CcLocalCourseSetPlayerGuarded(CcLocalCourse *course,
                                    CcLocalAgent *player, bool guarded);
+bool CcLocalCourseHasNearbyHostile(const CcLocalCourse *course,
+                                   const CcLocalAgent *player);
+bool CcLocalCourseCanPlayerEngage(const CcLocalCourse *course,
+                                  const CcLocalAgent *player,
+                                  int32_t target_index);
 bool CcLocalCourseSelectPlayerTarget(CcLocalCourse *course,
                                      CcLocalAgent *player,
                                      int32_t target_index);
@@ -454,6 +467,7 @@ float CcLocalCombatSkillDuration(CcCombatSkill skill);
 void CcLocalRendererInit(void);
 void CcLocalRendererSetScreenFirstHero(bool enabled);
 void CcLocalRendererBeginFrame(float delta_time);
+void CcLocalRendererResetPerformanceMetrics(void);
 CcLocalRendererStats CcLocalRendererGetStats(void);
 void CcLocalRendererSetDiagnosticOverlay(bool enabled);
 void CcLocalRendererSetAtmosphere(CcLocalAtmospherePreset preset,
@@ -466,6 +480,8 @@ void CcLocalDrawNpcPortrait3D(const CcNpcAppearance *appearance,
                               CcNpcPortraitExpression expression);
 void CcLocalDrawAgentPortrait3D(const CcLocalAgent *agent,
                                 Rectangle bounds);
+void CcLocalDrawNpcReview3D(int32_t view, float clock,
+                            RenderTexture2D target, Rectangle destination);
 void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                          const CcLocalCourse *course,
                          const CcLocalConvoyState *convoy, float clock,

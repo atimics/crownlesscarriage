@@ -40,6 +40,7 @@ typedef enum ClientView {
     VIEW_MAP,
     VIEW_LEDGER,
     VIEW_SITUATIONS,
+    VIEW_CHARACTER,
     VIEW_ENCOUNTER,
     VIEW_DRAGON_CAVE
 } ClientView;
@@ -61,7 +62,8 @@ typedef struct LocalState {
     bool journey_parley_active;
     bool movement_reticle_valid;
     bool movement_reticle_accepted;
-    int32_t pending_interaction;
+    CcId conversation_character_id;
+    CcId conversation_situation_id;
 } LocalState;
 
 typedef struct ActionReelState {
@@ -144,7 +146,10 @@ typedef enum ContextActionKind {
     CONTEXT_ACTION_TRAVEL_GOBLIN_SITE,
     CONTEXT_ACTION_TRAVEL_DRAGON_SITE,
     CONTEXT_ACTION_RETURN_FROM_SITE,
-    CONTEXT_ACTION_GOBLIN_TRADE
+    CONTEXT_ACTION_GOBLIN_TRADE,
+    CONTEXT_ACTION_TALK_CHARACTER,
+    CONTEXT_ACTION_LISTEN_CHARACTER,
+    CONTEXT_ACTION_PLEDGE_CHARACTER
 } ContextActionKind;
 
 typedef struct ContextAction {
@@ -455,12 +460,19 @@ static void SituationNextAction(const CcSim *sim,
 
 static void DrawPanel(Rectangle bounds, Color color)
 {
-    DrawRectangleRounded(bounds, 0.025f, 4, color);
-    DrawRectangleRoundedLinesEx(bounds, 0.025f, 4, 1.0f,
-                                Fade(CC_GOLD, 0.62f));
-    DrawLine((int)bounds.x + 11, (int)bounds.y + 8,
-             (int)bounds.x + 45, (int)bounds.y + 8,
-             Fade(CC_GOLD, 0.50f));
+    DrawRectangleRounded(bounds, 0.015f, 3, color);
+    DrawRectangleRoundedLinesEx(bounds, 0.015f, 3, 1.0f,
+                                Fade(CC_GOLD, 0.68f));
+    DrawLine((int)bounds.x + 10, (int)bounds.y + 8,
+             (int)bounds.x + 48, (int)bounds.y + 8,
+             Fade(CC_GOLD, 0.64f));
+    DrawLine((int)(bounds.x + bounds.width) - 34,
+             (int)(bounds.y + bounds.height) - 8,
+             (int)(bounds.x + bounds.width) - 10,
+             (int)(bounds.y + bounds.height) - 8,
+             Fade(CC_STYLE_GOLD_SHADOW, 0.76f));
+    DrawRectangle((int)bounds.x + 5, (int)bounds.y + 5, 3, 3,
+                  Fade(CC_GOLD, 0.72f));
 }
 
 static void DrawPerformanceOverlay(void)
@@ -469,7 +481,7 @@ static void DrawPerformanceOverlay(void)
     float fps = stats.smoothed_frame_milliseconds > 0.001f ?
         1000.0f / stats.smoothed_frame_milliseconds : 0.0f;
     Rectangle bounds = {(float)GetScreenWidth() - 294.0f, 18.0f,
-                        276.0f, 110.0f};
+                        276.0f, 128.0f};
     DrawPanel(bounds, PANEL_DEEP);
     CcOverlayDrawText("LOCAL PERFORMANCE", (int)bounds.x + 14,
              (int)bounds.y + 11, 12, TEAL);
@@ -479,17 +491,22 @@ static void DrawPerformanceOverlay(void)
     CcOverlayDrawText(TextFormat("skin %d update  %d mesh uploads",
                         stats.skin_updates, stats.skinned_meshes),
              (int)bounds.x + 14, (int)bounds.y + 50, 11, INK);
+    CcOverlayDrawText(TextFormat("npc %d/%d  creature %d/%d",
+                        stats.npc_skin_updates, stats.npc_skinned_meshes,
+                        stats.creature_skin_updates,
+                        stats.creature_skinned_meshes),
+             (int)bounds.x + 14, (int)bounds.y + 68, 10, MUTED);
     CcOverlayDrawText(TextFormat("p95 %4.1f  p99 %4.1f  hitches %d",
                         stats.p95_frame_milliseconds,
                         stats.p99_frame_milliseconds,
                         stats.hitch_count),
-             (int)bounds.x + 14, (int)bounds.y + 68, 10,
+             (int)bounds.x + 14, (int)bounds.y + 86, 10,
              stats.hitch_count > 0 ? DANGER : MUTED);
     CcOverlayDrawText(TextFormat("bipeds %d  hero %d  lod %d",
                         stats.biomechanical_characters,
                         stats.high_detail_characters,
                         stats.low_detail_characters),
-             (int)bounds.x + 14, (int)bounds.y + 86, 11, MUTED);
+             (int)bounds.x + 14, (int)bounds.y + 104, 11, MUTED);
 }
 
 static void DrawTwoLineText(const char *text, int x, int y,
@@ -666,7 +683,8 @@ static void ResetLocalState(LocalState *local)
     local->movement_reticle_age = 0.0f;
     local->movement_reticle_valid = false;
     local->movement_reticle_accepted = false;
-    local->pending_interaction = CONTEXT_ACTION_NONE;
+    local->conversation_character_id = 0U;
+    local->conversation_situation_id = 0U;
     local->market_interior = false;
     local->site_kind = CC_LOCAL_SITE_NONE;
     local->site_travel_progress = 0.0f;
@@ -704,7 +722,6 @@ static void RepositionHero(LocalState *local, Vector2 position,
     local->agent.crowned = crowned;
     CcLocalAgentSetMorphology(&local->agent, morphology, market_interior);
     CcLocalCombatSetTeam(&local->agent, CC_COMBAT_PLAYER);
-    local->pending_interaction = CONTEXT_ACTION_NONE;
 }
 
 static bool LocalSessionEligible(const LocalState *local)
@@ -713,7 +730,7 @@ static bool LocalSessionEligible(const LocalState *local)
            !local->journey_travel_active &&
            !local->site_travel_active &&
            !local->journey_combat_active && !local->journey_parley_active &&
-           !local->course.alarm_active &&
+           !CcLocalCourseHasNearbyHostile(&local->course, &local->agent) &&
            local->agent.combat.life_state == CC_LIFE_ALIVE;
 }
 
@@ -1126,88 +1143,6 @@ static Vector2 LocalPosition(const LocalState *local)
     return CcLocalAgentPosition(&local->agent);
 }
 
-static ContextActionKind InteractionForCommandPoint(const CcSim *sim,
-                                                     const LocalState *local)
-{
-    if (sim == NULL || local == NULL || !local->agent.command_point_valid) {
-        return CONTEXT_ACTION_NONE;
-    }
-    Vector2 point = {local->agent.command_point.x,
-                     local->agent.command_point.z};
-    if (local->site_kind != CC_LOCAL_SITE_NONE) {
-        if (GridDistance(point,
-                         (Vector2){CC_LOCAL_SITE_CARRIAGE_X,
-                                   CC_LOCAL_SITE_CARRIAGE_Z}) < 4.0f) {
-            return CONTEXT_ACTION_RETURN_FROM_SITE;
-        }
-        if (GridDistance(point,
-                         (Vector2){CC_LOCAL_SITE_ENTRANCE_X,
-                                   CC_LOCAL_SITE_ENTRANCE_Z}) < 5.0f) {
-            if (local->site_kind == CC_LOCAL_SITE_DRAGON_CAVE) {
-                return CONTEXT_ACTION_OPEN_DRAGON_CAVE;
-            }
-            if (local->site_kind == CC_LOCAL_SITE_DUNGEON) {
-                return CONTEXT_ACTION_EXPEDITION;
-            }
-        }
-        return CONTEXT_ACTION_NONE;
-    }
-    if (GridDistance(point, LOCAL_DUNGEON) < 5.0f) {
-        for (int32_t i = 0; i < sim->dungeon_count; ++i) {
-            if (sim->dungeons[i].settlement_id ==
-                sim->player.location_id) {
-                return CONTEXT_ACTION_TRAVEL_DUNGEON_SITE;
-            }
-        }
-    }
-    if (GridDistance(point, LOCAL_DRAGON_CAVE) < 5.0f) {
-        if (sim->player.location_id == sim->dragon.lair_settlement_id) {
-            return CONTEXT_ACTION_TRAVEL_DRAGON_SITE;
-        }
-        if (sim->player.location_id == sim->goblins.lair_settlement_id) {
-            return CONTEXT_ACTION_TRAVEL_GOBLIN_SITE;
-        }
-    }
-    CcClientClickIntent intent = CcClientClickIntentForDistances(
-        local->market_interior,
-        GridDistance(point, INTERIOR_EXIT),
-        GridDistance(point, LOCAL_NOTICE),
-        GridDistance(point, LOCAL_CARRIAGE),
-        1000.0f,
-        GridDistance(point, LOCAL_MARKET));
-    switch (intent) {
-        case CC_CLIENT_CLICK_LEAVE_INTERIOR:
-            return CONTEXT_ACTION_LEAVE_MARKET;
-        case CC_CLIENT_CLICK_OPEN_PROMISES:
-            return CONTEXT_ACTION_OPEN_PROMISES;
-        case CC_CLIENT_CLICK_DRIVE_OUT:
-            return CONTEXT_ACTION_CHOOSE_ROAD;
-        case CC_CLIENT_CLICK_OPEN_DRAGON_CAVE:
-            return CONTEXT_ACTION_OPEN_DRAGON_CAVE;
-        case CC_CLIENT_CLICK_ENTER_INTERIOR:
-            return CONTEXT_ACTION_ENTER_MARKET;
-        case CC_CLIENT_CLICK_NONE:
-        default:
-            return CONTEXT_ACTION_NONE;
-    }
-}
-
-static const char *PendingInteractionName(ContextActionKind kind)
-{
-    switch (kind) {
-        case CONTEXT_ACTION_ENTER_MARKET: return "the market door";
-        case CONTEXT_ACTION_LEAVE_MARKET: return "the exit";
-        case CONTEXT_ACTION_CHOOSE_ROAD: return "the carriage";
-        case CONTEXT_ACTION_OPEN_PROMISES: return "the promise board";
-        case CONTEXT_ACTION_OPEN_DRAGON_CAVE: return "the cave entrance";
-        case CONTEXT_ACTION_TRAVEL_DUNGEON_SITE: return "the mine road";
-        case CONTEXT_ACTION_TRAVEL_GOBLIN_SITE: return "the goblin road";
-        case CONTEXT_ACTION_TRAVEL_DRAGON_SITE: return "the dragon road";
-        case CONTEXT_ACTION_RETURN_FROM_SITE: return "the carriage";
-        default: return NULL;
-    }
-}
-
 static const CcDungeon *DungeonAtSettlement(const CcSim *sim, CcId settlement_id)
 {
     for (int32_t i = 0; i < sim->dungeon_count; ++i) {
@@ -1249,7 +1184,9 @@ static void DrawLocalHeader(const CcSim *sim, const LocalState *local)
              local->market_interior && place != NULL ?
                  TextFormat("%s  /  %s", place->name,
                             profile->primary_hall) :
-             place != NULL ? place->name : "Crownless",
+             place != NULL ?
+                 TextFormat("%s  /  %s", place->name, profile->identity) :
+                 "Crownless",
              22, 18, 18, INK);
     const char *summary = TextFormat(
         "DAY %d     %" PRId64 " cr     CARGO %d/%d",
@@ -1268,8 +1205,8 @@ static void DrawLocalHeader(const CcSim *sim, const LocalState *local)
                               22, 40, 8, TEAL);
         } else if (!local->market_interior) {
             CcOverlayDrawText(
-                TextFormat("NEXT  /  Visit the %s for a promise.",
-                           profile->notice_board),
+                TextFormat("NEXT  /  Visit the %s.    MAP  /  %s",
+                           profile->notice_board, profile->map_form),
                 22, 40, 8, MUTED);
         } else {
             CcOverlayDrawText(
@@ -1282,9 +1219,8 @@ static void DrawLocalHeader(const CcSim *sim, const LocalState *local)
 
 static bool LocalCombatActive(const LocalState *local)
 {
-    return local != NULL &&
-           (local->journey_combat_active ||
-            (!local->market_interior && local->course.alarm_active));
+    return local != NULL && !local->market_interior &&
+           CcLocalCourseHasNearbyHostile(&local->course, &local->agent);
 }
 
 static int32_t StandingRaiders(const LocalState *local)
@@ -1495,7 +1431,8 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
     if (road) {
         const CcSettlement *destination = CcSimSettlement(
             sim, sim->journey.destination_id);
-        if (local->journey_combat_active) {
+        if (local->journey_combat_active &&
+            SelectedCombatTargetIndex(local) >= 0) {
             DrawCombatPanel(local);
             return;
         }
@@ -1563,7 +1500,8 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
                 DANGER);
         return;
     }
-    if (!local->market_interior && local->course.alarm_active) {
+    if (!local->market_interior && local->course.alarm_active &&
+        SelectedCombatTargetIndex(local) >= 0) {
         DrawCombatPanel(local);
         return;
     }
@@ -1940,7 +1878,9 @@ static int32_t SelectedCombatTargetIndex(const LocalState *local)
     if (local == NULL) return -1;
     int32_t target = local->agent.combat.target_index;
     if (target < 0 || target >= CC_LOCAL_RAIDER_COUNT ||
-        local->course.raiders[target].combat.life_state != CC_LIFE_ALIVE) {
+        local->course.raiders[target].combat.life_state != CC_LIFE_ALIVE ||
+        !CcLocalCourseCanPlayerEngage(
+            &local->course, &local->agent, target)) {
         return -1;
     }
     return target;
@@ -1958,8 +1898,8 @@ static int32_t NextCombatTargetIndex(const LocalState *local)
     int32_t current = SelectedCombatTargetIndex(local);
     for (int32_t step = 1; step <= CC_LOCAL_RAIDER_COUNT; ++step) {
         int32_t candidate = (current + step) % CC_LOCAL_RAIDER_COUNT;
-        if (local->course.raiders[candidate].combat.life_state ==
-            CC_LIFE_ALIVE) {
+        if (CcLocalCourseCanPlayerEngage(
+                &local->course, &local->agent, candidate)) {
             return candidate;
         }
     }
@@ -2021,12 +1961,11 @@ static void AddCombatActions(ContextActionSet *set,
         AddDetailedContextAction(
             set, CONTEXT_ACTION_BASIC_STRIKE, "Attack", "SPACE",
             local->course.raider_names[target], true, false);
-    }
-    AddDetailedContextAction(
-        set, CONTEXT_ACTION_TOGGLE_GUARD, "Guard", "X",
-        local->agent.humanoid.guard_requested ? "GUARD UP" : "GUARD DOWN",
-        true, local->agent.humanoid.guard_requested);
-    if (has_target) {
+        AddDetailedContextAction(
+            set, CONTEXT_ACTION_TOGGLE_GUARD, "Guard", "X",
+            local->agent.humanoid.guard_requested ?
+                "GUARD UP" : "GUARD DOWN",
+            true, local->agent.humanoid.guard_requested);
         AddDetailedContextAction(
             set, CONTEXT_ACTION_SKILL_CRUSHING, "Crushing blow", "1",
             CombatSkillDetail(&local->agent,
@@ -2045,13 +1984,13 @@ static void AddCombatActions(ContextActionSet *set,
                                true, has_target),
             combat->queued_skill == CC_COMBAT_SKILL_SUNDER ||
                 combat->active_skill == CC_COMBAT_SKILL_SUNDER);
+        AddDetailedContextAction(
+            set, CONTEXT_ACTION_SKILL_SECOND_WIND, "Second wind", "3",
+            CombatSkillDetail(&local->agent, CC_COMBAT_SKILL_SECOND_WIND,
+                              true, has_target),
+            CombatSkillEnabled(&local->agent, CC_COMBAT_SKILL_SECOND_WIND,
+                               true, has_target), false);
     }
-    AddDetailedContextAction(
-        set, CONTEXT_ACTION_SKILL_SECOND_WIND, "Second wind", "3",
-        CombatSkillDetail(&local->agent, CC_COMBAT_SKILL_SECOND_WIND,
-                          false, has_target),
-        CombatSkillEnabled(&local->agent, CC_COMBAT_SKILL_SECOND_WIND,
-                           false, has_target), false);
     if (allow_withdraw) {
         AddDetailedContextAction(
             set, CONTEXT_ACTION_WITHDRAW, "Withdraw", "BACKSPACE",
@@ -2160,6 +2099,42 @@ static ContextActionSet BuildContextActions(
         AddContextAction(&set, CONTEXT_ACTION_CLOSE_VIEW, "Close");
         return set;
     }
+    if (view == VIEW_CHARACTER) {
+        const CcSituation *situation = CcSimSituation(
+            sim, local->conversation_situation_id);
+        const CcCharacter *character = CcSimCharacter(
+            sim, local->conversation_character_id);
+        if (situation != NULL && character != NULL) {
+            bool listened = CcCharacterRemembers(
+                character, CC_CHARACTER_MEMORY_MET_PLAYER, situation->id);
+            bool promised = CcCharacterRemembers(
+                character, CC_CHARACTER_MEMORY_PLAYER_PROMISED,
+                situation->id);
+            AddDetailedContextAction(
+                &set, CONTEXT_ACTION_LISTEN_CHARACTER,
+                listened ? "Account heard" : "Hear their account", "1",
+                listened ? "THEY REMEMBER YOU LISTENED" :
+                           "LEARN THEIR STAKE",
+                !listened, listened);
+            const CcSituation *accepted = CcSimAcceptedSituation(sim);
+            bool can_promise = situation->status == CC_SITUATION_ACTIVE &&
+                (accepted == NULL || accepted->id == situation->id) &&
+                !promised;
+            AddDetailedContextAction(
+                &set, CONTEXT_ACTION_PLEDGE_CHARACTER,
+                promised ? "Promise remembered" :
+                accepted != NULL && accepted->id == situation->id ?
+                    "Reassure them" : "Promise help",
+                "2", promised ? "THEY WILL HOLD YOU TO IT" :
+                     accepted != NULL && accepted->id != situation->id ?
+                         "ANOTHER PROMISE IS ACTIVE" : "TAKE THE QUEST",
+                can_promise, promised);
+        }
+        AddDetailedContextAction(
+            &set, CONTEXT_ACTION_CLOSE_VIEW, "Step away", "ESC",
+            "RETURN TO TOWN", true, false);
+        return set;
+    }
     if (view == VIEW_MAP) {
         const CcMap *map = SelectedVisibleMap(sim, selected);
         if (map != NULL && map->owner_id == sim->player.location_id) {
@@ -2242,7 +2217,7 @@ static ContextActionSet BuildContextActions(
         AddCombatActions(&set, local, true);
         return set;
     }
-    if (!local->market_interior && local->course.alarm_active) {
+    if (LocalCombatActive(local)) {
         AddCombatActions(&set, local, false);
         return set;
     }
@@ -2330,6 +2305,19 @@ static ContextActionSet BuildContextActions(
         AddContextAction(&set, CONTEXT_ACTION_CHOOSE_ROAD, "Drive out");
         AddContextAction(&set, CONTEXT_ACTION_OPEN_MAP, "Open map case");
     }
+    if (local->course.situation_witness_active &&
+        GridDistance(position,
+                     (Vector2){local->course.situation_witness.position.x,
+                               local->course.situation_witness.position.z}) <
+            1.85f) {
+        const CcCharacter *character = CcSimCharacter(
+            sim, local->course.situation_witness_character_id);
+        AddContextAction(
+            &set, CONTEXT_ACTION_TALK_CHARACTER,
+            character != NULL ? TextFormat("Speak with %.28s",
+                                            character->name) :
+                                "Speak with witness");
+    }
     if (GridDistance(position, LOCAL_NOTICE) < 1.15f) {
         AddContextAction(&set, CONTEXT_ACTION_OPEN_PROMISES,
                          "View quests");
@@ -2380,6 +2368,8 @@ static Color ContextActionColor(ContextActionKind kind)
         kind == CONTEXT_ACTION_TRAVEL ||
         kind == CONTEXT_ACTION_SKIP_TRAVEL ||
         kind == CONTEXT_ACTION_DELIVER_CARGO ||
+        kind == CONTEXT_ACTION_PLEDGE_CHARACTER ||
+        kind == CONTEXT_ACTION_TALK_CHARACTER ||
         kind == CONTEXT_ACTION_ENTER_MARKET ||
         kind == CONTEXT_ACTION_JUMP ||
         kind == CONTEXT_ACTION_OFFER_PROVISIONS ||
@@ -2539,7 +2529,8 @@ static void DrawCombatStatusLine(const LocalState *local,
         status = "Attack with Space, guard with X, and use skills with 1–3.";
     }
     char shown[96];
-    (void)snprintf(shown, sizeof(shown), "COMBAT  /  %.72s", status);
+    (void)snprintf(shown, sizeof(shown), "%s  /  %.72s",
+                   target != NULL ? "COMBAT" : "THREAT", status);
     int width = CcOverlayMeasureText(shown, 9) + 30;
     if (width > 760) width = 760;
     float x = ((float)GetScreenWidth() - (float)width) * 0.5f;
@@ -3117,6 +3108,77 @@ static void DrawSituationBoard(const CcSim *sim, int32_t selected)
     } else {
         CcOverlayDrawText("NO QUESTS", 360, 268, 17, MUTED);
     }
+}
+
+static const char *CharacterStakeLine(const CcSituation *situation)
+{
+    if (situation == NULL) return "They have nothing more to ask.";
+    switch (situation->kind) {
+        case CC_SITUATION_RELIEF_DELIVERY:
+            return "Food is running short. Their household cannot wait for the next convoy.";
+        case CC_SITUATION_ROUTE_REPAIR:
+            return "The broken road has cut work, medicine, and family from the town.";
+        case CC_SITUATION_MONSTER_EXPEDITION:
+            return "They saw what came out of the mine and know who is still below.";
+        case CC_SITUATION_BLACK_MARKET_DELIVERY:
+            return "Official stores will not reach the people who are hiding from the levy.";
+        case CC_SITUATION_COURIER_DELIVERY:
+            return "The message will change lives only if it reaches the right hands intact.";
+    }
+    return "The trouble has reached their own door.";
+}
+
+static void DrawCharacterConversation(const CcSim *sim,
+                                      const LocalState *local)
+{
+    if (sim == NULL || local == NULL) return;
+    const CcSituation *situation = CcSimSituation(
+        sim, local->conversation_situation_id);
+    const CcCharacter *character = CcSimCharacter(
+        sim, local->conversation_character_id);
+    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
+                  Fade(BACKGROUND, 0.72f));
+    Rectangle bounds = {292.0f, 142.0f, 696.0f, 388.0f};
+    DrawPanel(bounds, PANEL_DEEP);
+    if (situation == NULL || character == NULL) {
+        CcOverlayDrawText("NO ONE IS HERE", 330, 180, 20, MUTED);
+        return;
+    }
+    Color mood = character->player_disposition >= 12 ? TEAL :
+                 character->stress >= 65 ? DANGER : CC_GOLD;
+    CcOverlayDrawText("A PERSON, NOT A NOTICE", 330, 174, 9, MUTED);
+    CcOverlayDrawText(character->name, 330, 205, 24, mood);
+    CcOverlayDrawText(
+        TextFormat("%s  /  %s  /  TRUST %+d  /  STRESS %d",
+                   CcCharacterRoleName(character->role),
+                   CcCharacterActivityName(character->activity),
+                   character->player_disposition, character->stress),
+        330, 240, 10, INK);
+    char target[96];
+    SituationTargetLabel(sim, situation, target, sizeof(target));
+    CcOverlayDrawText(
+        TextFormat("%s  /  %s", SituationTitle(situation->kind), target),
+        330, 282, 13, CC_GOLD);
+    DrawTwoLineText(CharacterStakeLine(situation), 330, 318, 72U, 11, INK);
+    const char *memory =
+        CcCharacterRemembers(character, CC_CHARACTER_MEMORY_PLAYER_HELPED,
+                             situation->id) ?
+            "They remember that you kept your word." :
+        CcCharacterRemembers(character, CC_CHARACTER_MEMORY_PLAYER_WITHDREW,
+                             situation->id) ?
+            "They remember that your company walked away." :
+        CcCharacterRemembers(character, CC_CHARACTER_MEMORY_PLAYER_PROMISED,
+                             situation->id) ?
+            "They remember your promise and are preparing around it." :
+        CcCharacterRemembers(character, CC_CHARACTER_MEMORY_MET_PLAYER,
+                             situation->id) ?
+            "They remember that you stopped and listened." :
+            "You have not spoken before.";
+    CcOverlayDrawText("MEMORY", 330, 399, 9, MUTED);
+    CcOverlayDrawText(memory, 330, 422, 11, mood);
+    CcOverlayDrawText(
+        "Their state, trust, and memory persist when you leave town.",
+        330, 466, 9, MUTED);
 }
 
 static void DrawJourneyEncounter(const CcSim *sim)
@@ -3935,6 +3997,38 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         }
         return;
     }
+    if (*view == VIEW_CHARACTER) {
+        if (ClientKeyPressed(KEY_ESCAPE) ||
+            context_action == CONTEXT_ACTION_CLOSE_VIEW) {
+            *view = VIEW_LOCAL;
+            return;
+        }
+        CcCharacterResponse response = ClientKeyPressed(KEY_ONE) ||
+                context_action == CONTEXT_ACTION_LISTEN_CHARACTER ?
+            CC_CHARACTER_RESPONSE_LISTEN :
+            ClientKeyPressed(KEY_TWO) ||
+                context_action == CONTEXT_ACTION_PLEDGE_CHARACTER ?
+            CC_CHARACTER_RESPONSE_PLEDGE_HELP : 0;
+        if (response != 0) {
+            CcCommand reply = {
+                .kind = CC_COMMAND_CHARACTER_RESPONSE,
+                .target_id = local->conversation_situation_id,
+                .amount = (int32_t)response
+            };
+            if (ApplyCommand(*journal, sim, reply,
+                             message, message_capacity)) {
+                const CcCharacter *character = CcSimCharacter(
+                    sim, local->conversation_character_id);
+                (void)snprintf(
+                    message, message_capacity,
+                    response == CC_CHARACTER_RESPONSE_LISTEN ?
+                        "%.28s remembers that you listened." :
+                        "%.28s will hold the company to its promise.",
+                    character != NULL ? character->name : "They");
+            }
+        }
+        return;
+    }
     if (context_action == CONTEXT_ACTION_CLOSE_VIEW &&
         (*view == VIEW_LEDGER || *view == VIEW_SITUATIONS)) {
         *view = *return_view;
@@ -4296,31 +4390,42 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
              context_action == CONTEXT_ACTION_TOGGLE_GUARD) &&
             local->agent.morphology == CC_MORPHOLOGY_BIPED &&
             !local->journey_parley_active) {
-            bool guarded = !local->agent.humanoid.guard_requested;
-            CcLocalCourseSetPlayerGuarded(&local->course, &local->agent,
-                                          guarded);
-            (void)snprintf(
-                message, message_capacity, "%s",
-                guarded ? "Guard raised — posture absorbs the next blow." :
-                          "Guard lowered — movement and attacks are open.");
+            if (SelectedCombatTargetIndex(local) >= 0) {
+                bool guarded = !local->agent.humanoid.guard_requested;
+                bool changed = CcLocalCourseSetPlayerGuarded(
+                    &local->course, &local->agent, guarded);
+                if (changed) {
+                    (void)snprintf(
+                        message, message_capacity, "%s",
+                        guarded ?
+                            "Guard raised — posture absorbs the next blow." :
+                            "Guard lowered — movement and attacks are open.");
+                }
+            } else if (LocalCombatActive(local)) {
+                (void)snprintf(message, message_capacity,
+                               "Choose an outlaw before guarding.");
+            }
         }
         if ((ClientKeyPressed(KEY_SPACE) ||
              context_action == CONTEXT_ACTION_BASIC_STRIKE) &&
             local->agent.morphology == CC_MORPHOLOGY_BIPED &&
             !local->journey_parley_active) {
             int32_t target = SelectedCombatTargetIndex(local);
-            bool struck = CcLocalCourseBeginPlayerStrike(
-                &local->course, &local->agent);
-            (void)snprintf(
-                message, message_capacity, "%s",
-                struck && target >= 0 ?
-                    TextFormat("Striking %s.",
-                               local->course.raider_names[target]) :
-                target < 0 ? "Choose an outlaw before attacking." :
-                             "Recovering — wait for an opening.");
+            if (target >= 0) {
+                bool struck = CcLocalCourseBeginPlayerStrike(
+                    &local->course, &local->agent);
+                (void)snprintf(
+                    message, message_capacity, "%s",
+                    struck ? TextFormat(
+                        "Striking %s.",
+                        local->course.raider_names[target]) :
+                        "Recovering — wait for an opening.");
+            } else if (LocalCombatActive(local)) {
+                (void)snprintf(message, message_capacity,
+                               "Choose an outlaw before attacking.");
+            }
         }
-        if (local->journey_combat_active ||
-            (!local->market_interior && local->course.alarm_active)) {
+        if (LocalCombatActive(local)) {
             for (int32_t skill = 0; skill < CC_COMBAT_SKILL_COUNT; ++skill) {
                 ContextActionKind skill_action =
                     skill == CC_COMBAT_SKILL_CRUSHING_BLOW ?
@@ -4335,6 +4440,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                     &local->course, &local->agent, combat_skill);
                 float cooldown = CcLocalCombatSkillCooldown(
                     &local->agent, combat_skill);
+                bool has_target = SelectedCombatTargetIndex(local) >= 0;
                 (void)snprintf(
                     message, message_capacity, "%s",
                     used && combat_skill == CC_COMBAT_SKILL_SECOND_WIND ?
@@ -4345,9 +4451,11 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                         TextFormat("%s ready in %.1fs.",
                                    CcLocalCombatSkillName(combat_skill),
                                    cooldown) :
+                    !has_target ?
+                        "Choose an outlaw before using that skill." :
                     combat_skill == CC_COMBAT_SKILL_SECOND_WIND ?
                         "Posture is already full." :
-                        "Choose an outlaw before using that skill.");
+                        "That skill is not available now.");
             }
         }
         if (context_action == CONTEXT_ACTION_NONE &&
@@ -4358,7 +4466,6 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                     &local->course, &local->agent, mouse, local_target,
                     local_bounds);
             if (combat_target >= 0) {
-                local->pending_interaction = CONTEXT_ACTION_NONE;
                 local->movement_reticle = mouse;
                 local->movement_reticle_age = 0.0f;
                 local->movement_reticle_valid = true;
@@ -4385,21 +4492,13 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                     local->movement_reticle_accepted = movement_accepted;
                 }
                 if (movement_accepted) {
-                    local->pending_interaction = (int32_t)
-                        InteractionForCommandPoint(sim, local);
                     if (!local->market_interior &&
                         local->course.alarm_active) {
                         CcLocalCourseClearPlayerTarget(&local->agent);
                     }
-                    const char *interaction = PendingInteractionName(
-                        (ContextActionKind)local->pending_interaction);
                     const char *navigation =
                         CcLocalAgentNavigationName(&local->agent);
-                    if (interaction != NULL) {
-                        (void)snprintf(
-                            message, message_capacity,
-                            "Walking to %s.", interaction);
-                    } else if (navigation != NULL) {
+                    if (navigation != NULL) {
                         (void)snprintf(
                             message, message_capacity,
                             "Going to %s.",
@@ -4420,16 +4519,6 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         (void)CcLocalWorldUpdate(
             &local->course, &local->agent, sim, delta_time,
             local->market_interior, advance_course);
-        bool queued_interact =
-            context_action == CONTEXT_ACTION_NONE &&
-            local->pending_interaction != CONTEXT_ACTION_NONE &&
-            !local->agent.exact_target_valid &&
-            !local->agent.navigation_active;
-        if (queued_interact) {
-            context_action =
-                (ContextActionKind)local->pending_interaction;
-            local->pending_interaction = CONTEXT_ACTION_NONE;
-        }
         if (local->movement_reticle_valid) {
             local->movement_reticle_age += delta_time;
             float reticle_lifetime = local->movement_reticle_accepted ?
@@ -4594,68 +4683,92 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                     return;
                 }
             }
-            if ((interact ||
-                 context_action == CONTEXT_ACTION_LEAVE_MARKET) &&
-                local->market_interior &&
-                (queued_interact ||
-                 GridDistance(position, INTERIOR_EXIT) < 1.25f)) {
+            if (!local->market_interior &&
+                local->site_kind == CC_LOCAL_SITE_NONE &&
+                !local->course.alarm_active &&
+                local->course.situation_witness_active &&
+                CcClientInteractionActivated(
+                    interact ||
+                        context_action == CONTEXT_ACTION_TALK_CHARACTER,
+                    GridDistance(
+                        position,
+                        (Vector2){
+                            local->course.situation_witness.position.x,
+                            local->course.situation_witness.position.z}),
+                    1.85f)) {
+                local->conversation_character_id =
+                    local->course.situation_witness_character_id;
+                local->conversation_situation_id =
+                    local->course.situation_witness_id;
+                *view = VIEW_CHARACTER;
+                message[0] = '\0';
+                return;
+            } else if (local->market_interior &&
+                CcClientInteractionActivated(
+                    interact ||
+                        context_action == CONTEXT_ACTION_LEAVE_MARKET,
+                    GridDistance(position, INTERIOR_EXIT), 1.25f)) {
                 local->market_interior = false;
                 RepositionHero(local,
                                (Vector2){CC_LOCAL_MARKET_X,
                                          CC_LOCAL_MARKET_Z + 1.10f}, false);
                 message[0] = '\0';
-            } else if ((interact ||
-                        context_action == CONTEXT_ACTION_ENTER_MARKET) &&
-                       !local->market_interior &&
+            } else if (!local->market_interior &&
                        local->site_kind == CC_LOCAL_SITE_NONE &&
-                       (queued_interact ||
-                        GridDistance(position, LOCAL_MARKET) < 1.30f)) {
+                       CcClientInteractionActivated(
+                           interact ||
+                               context_action == CONTEXT_ACTION_ENTER_MARKET,
+                           GridDistance(position, LOCAL_MARKET),
+                           1.30f)) {
                 local->market_interior = true;
                 RepositionHero(local, (Vector2){2.05f, 5.35f}, true);
                 message[0] = '\0';
-            } else if ((interact ||
-                       context_action == CONTEXT_ACTION_CHOOSE_ROAD) &&
-                       !local->market_interior &&
+            } else if (!local->market_interior &&
                        local->site_kind == CC_LOCAL_SITE_NONE &&
-                       (queued_interact ||
-                        GridDistance(position, LOCAL_CARRIAGE) < 1.35f)) {
+                       CcClientInteractionActivated(
+                           interact ||
+                               context_action == CONTEXT_ACTION_CHOOSE_ROAD,
+                           GridDistance(position, LOCAL_CARRIAGE),
+                           1.35f)) {
                 *selected = FirstOutgoingRouteIndex(sim);
                 BeginRoadChoiceApproachState(local, true);
                 *view = VIEW_LOCAL;
                 (void)snprintf(
                     message, message_capacity,
                     "Take the reins. The first choice lies beyond the gate.");
-            } else if (context_action == CONTEXT_ACTION_OPEN_MAP &&
-                       !local->market_interior &&
-                       (queued_interact ||
-                        GridDistance(
-                            position,
-                            local->site_kind == CC_LOCAL_SITE_NONE ?
-                                LOCAL_CARRIAGE :
-                                (Vector2){CC_LOCAL_SITE_CARRIAGE_X,
-                                          CC_LOCAL_SITE_CARRIAGE_Z}) <
-                            1.75f)) {
+            } else if (!local->market_interior &&
+                       CcClientInteractionActivated(
+                           context_action == CONTEXT_ACTION_OPEN_MAP,
+                           GridDistance(
+                               position,
+                               local->site_kind == CC_LOCAL_SITE_NONE ?
+                                   LOCAL_CARRIAGE :
+                                   (Vector2){CC_LOCAL_SITE_CARRIAGE_X,
+                                             CC_LOCAL_SITE_CARRIAGE_Z}),
+                           1.75f)) {
                 *selected = FirstVisibleMapIndex(sim);
                 *view = VIEW_MAP;
                 message[0] = '\0';
-            } else if ((interact ||
-                        context_action == CONTEXT_ACTION_OPEN_PROMISES) &&
-                       !local->market_interior &&
-                       (queued_interact ||
-                        GridDistance(position, LOCAL_NOTICE) < 1.15f)) {
+            } else if (!local->market_interior &&
+                       CcClientInteractionActivated(
+                           interact ||
+                               context_action == CONTEXT_ACTION_OPEN_PROMISES,
+                           GridDistance(position, LOCAL_NOTICE),
+                           1.15f)) {
                 *return_view = VIEW_LOCAL;
                 if (SelectedActiveSituation(sim, *selected_situation) == NULL) {
                     *selected_situation = FirstActiveSituationIndex(sim);
                 }
                 *view = VIEW_SITUATIONS;
-            } else if ((interact || context_action ==
-                        CONTEXT_ACTION_OPEN_DRAGON_CAVE) &&
-                       !local->market_interior &&
+            } else if (!local->market_interior &&
                        local->site_kind == CC_LOCAL_SITE_DRAGON_CAVE &&
                        sim->player.location_id ==
                            sim->dragon.lair_settlement_id &&
-                       (queued_interact ||
-                        GridDistance(position, site_entrance) < 2.25f)) {
+                       CcClientInteractionActivated(
+                           interact || context_action ==
+                               CONTEXT_ACTION_OPEN_DRAGON_CAVE,
+                           GridDistance(position, site_entrance),
+                           2.25f)) {
                 *view = VIEW_DRAGON_CAVE;
                 message[0] = '\0';
             }
@@ -4716,12 +4829,13 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         const CcDungeon *dungeon = DungeonAtSettlement(sim, sim->player.location_id);
         if (!local->market_interior &&
             local->site_kind == CC_LOCAL_SITE_DUNGEON && dungeon != NULL &&
-            (ClientKeyPressed(KEY_E) ||
-             context_action == CONTEXT_ACTION_EXPEDITION) &&
-            (queued_interact ||
-             GridDistance(position,
-                          (Vector2){CC_LOCAL_SITE_ENTRANCE_X,
-                                    CC_LOCAL_SITE_ENTRANCE_Z}) < 2.25f)) {
+            CcClientInteractionActivated(
+                ClientKeyPressed(KEY_E) ||
+                    context_action == CONTEXT_ACTION_EXPEDITION,
+                GridDistance(position,
+                             (Vector2){CC_LOCAL_SITE_ENTRANCE_X,
+                                       CC_LOCAL_SITE_ENTRANCE_Z}),
+                2.25f)) {
             HandleExpedition(*journal, sim, dungeon, message,
                              message_capacity);
         }
@@ -4909,6 +5023,7 @@ int main(int argc, char **argv)
                             strcmp(argv[1], "--benchmark-render") == 0;
     int32_t render_benchmark_frames = 600;
     double render_benchmark_minimum_fps = 0.0;
+    const char *render_benchmark_scene = "street";
     if (render_benchmark && argc >= 3) {
         char *end = NULL;
         long parsed = strtol(argv[2], &end, 10);
@@ -4927,6 +5042,17 @@ int main(int argc, char **argv)
             return 1;
         }
         render_benchmark_minimum_fps = parsed;
+    }
+    if (render_benchmark && argc >= 5 && argv[4][0] != '-') {
+        render_benchmark_scene = argv[4];
+        if (strcmp(render_benchmark_scene, "street") != 0 &&
+            strcmp(render_benchmark_scene, "market") != 0 &&
+            strcmp(render_benchmark_scene, "road") != 0 &&
+            strcmp(render_benchmark_scene, "combat") != 0) {
+            (void)fprintf(stderr,
+                          "Render benchmark scene must be street, market, road, or combat.\n");
+            return 1;
+        }
     }
     bool capture_board = argc >= 2 && strcmp(argv[1], "--capture-board") == 0;
     bool capture_interior = argc >= 2 && strcmp(argv[1], "--capture-interior") == 0;
@@ -4952,6 +5078,8 @@ int main(int argc, char **argv)
         strcmp(argv[1], "--capture-encounter") == 0;
     bool capture_witness = argc >= 2 &&
         strcmp(argv[1], "--capture-witness") == 0;
+    bool capture_character = argc >= 2 &&
+        strcmp(argv[1], "--capture-character") == 0;
     bool capture_travel = argc >= 2 &&
         strcmp(argv[1], "--capture-travel") == 0;
     bool capture_road = argc >= 2 &&
@@ -4962,6 +5090,66 @@ int main(int argc, char **argv)
         strcmp(argv[1], "--capture-aftermath") == 0;
     bool capture_golden = argc >= 2 &&
         strcmp(argv[1], "--capture-golden") == 0;
+    bool capture_town = argc >= 2 &&
+        strcmp(argv[1], "--capture-town") == 0;
+    bool capture_town_arrival = argc >= 2 &&
+        strcmp(argv[1], "--capture-town-arrival") == 0;
+    int32_t capture_town_index = 0;
+    float capture_town_x = 44.25f;
+    float capture_town_z = 28.85f;
+    if (capture_town) {
+        if (argc < 4) {
+            (void)fprintf(stderr,
+                          "capture town requires an index from 0 to 5 and a frame path.\n");
+            return 1;
+        }
+        char *end = NULL;
+        long parsed = strtol(argv[2], &end, 10);
+        if (end == argv[2] || *end != '\0' || parsed < 0 || parsed >= 6) {
+            (void)fprintf(stderr, "capture town index must be from 0 to 5.\n");
+            return 1;
+        }
+        capture_town_index = (int32_t)parsed;
+        if (argc >= 6) {
+            char *x_end = NULL;
+            char *z_end = NULL;
+            capture_town_x = strtof(argv[3], &x_end);
+            capture_town_z = strtof(argv[4], &z_end);
+            if (x_end == argv[3] || *x_end != '\0' ||
+                z_end == argv[4] || *z_end != '\0' ||
+                capture_town_x < 0.5f ||
+                capture_town_x > CC_LOCAL_WORLD_WIDTH - 0.5f ||
+                capture_town_z < 0.5f ||
+                capture_town_z > CC_LOCAL_WORLD_DEPTH - 0.5f) {
+                (void)fprintf(stderr,
+                              "capture town coordinates are invalid.\n");
+                return 1;
+            }
+        }
+    }
+    float capture_town_arrival_progress = 0.58f;
+    if (capture_town_arrival) {
+        if (argc < 5) {
+            (void)fprintf(
+                stderr,
+                "capture town arrival requires an index from 0 to 5, progress from 0 to 1, and a frame path.\n");
+            return 1;
+        }
+        char *index_end = NULL;
+        char *progress_end = NULL;
+        long parsed_index = strtol(argv[2], &index_end, 10);
+        float parsed_progress = strtof(argv[3], &progress_end);
+        if (index_end == argv[2] || *index_end != '\0' ||
+            parsed_index < 0 || parsed_index >= 6 ||
+            progress_end == argv[3] || *progress_end != '\0' ||
+            parsed_progress < 0.0f || parsed_progress > 1.0f) {
+            (void)fprintf(stderr,
+                          "capture town arrival values are invalid.\n");
+            return 1;
+        }
+        capture_town_index = (int32_t)parsed_index;
+        capture_town_arrival_progress = parsed_progress;
+    }
     bool capture_dragon_cave = argc >= 2 &&
         strcmp(argv[1], "--capture-dragon-cave") == 0;
     bool capture_atmosphere = argc >= 2 &&
@@ -4994,6 +5182,26 @@ int main(int argc, char **argv)
     }
     bool capture_face = argc >= 2 &&
         strcmp(argv[1], "--capture-face") == 0;
+    bool capture_npc_review = argc >= 2 &&
+        strcmp(argv[1], "--capture-npc-review") == 0;
+    int32_t capture_npc_review_view = -1;
+    if (capture_npc_review) {
+        if (argc < 4) {
+            (void)fprintf(stderr,
+                          "NPC review requires front, side, motion, or state "
+                          "and a frame path.\n");
+            return 1;
+        }
+        if (strcmp(argv[2], "front") == 0) capture_npc_review_view = 0;
+        else if (strcmp(argv[2], "side") == 0) capture_npc_review_view = 1;
+        else if (strcmp(argv[2], "motion") == 0) capture_npc_review_view = 2;
+        else if (strcmp(argv[2], "state") == 0) capture_npc_review_view = 3;
+        else {
+            (void)fprintf(stderr,
+                          "NPC review must be front, side, motion, or state.\n");
+            return 1;
+        }
+    }
     bool capture_creatures = argc >= 2 &&
         strcmp(argv[1], "--capture-creatures") == 0;
     bool capture_creature_reel = argc >= 2 &&
@@ -5070,16 +5278,22 @@ int main(int argc, char **argv)
                     capture_map_case || capture_dojo ||
                     capture_jump || capture_action_reel ||
                     capture_gameplay_reel || capture_encounter ||
-                    capture_witness || capture_travel || capture_road ||
+                    capture_witness || capture_character ||
+                    capture_travel || capture_road ||
                     capture_parley ||
-                    capture_aftermath || capture_golden ||
+                    capture_aftermath || capture_golden || capture_town ||
+                    capture_town_arrival ||
                     capture_dragon_cave ||
                     capture_atmosphere || capture_face ||
-                    capture_room || capture_creature_media);
+                    capture_room || capture_npc_review ||
+                    capture_creature_media);
     const char *capture_path = capture_creature_media ? argv[3] :
                                capture_room ? argv[4] :
                                capture_face ? argv[3] :
                                capture_atmosphere ? argv[3] :
+                               capture_town_arrival ? argv[4] :
+                               capture_town ? (argc >= 6 ? argv[5] : argv[3]) :
+                               capture_npc_review ? argv[3] :
                                argc >= 3 ? argv[2] :
                                "architecture-proof.png";
     char save_path[640];
@@ -5104,7 +5318,8 @@ int main(int argc, char **argv)
         }
     }
 
-    if (capture || render_benchmark) SetTraceLogLevel(LOG_WARNING);
+    if (render_benchmark) SetTraceLogLevel(LOG_ERROR);
+    else if (capture) SetTraceLogLevel(LOG_WARNING);
     /* The world is deliberately rasterized at its final art-pixel
        resolution. Multisample coverage before that raster step makes thin
        edges change blend weights as actors move and reads as temporal
@@ -5200,23 +5415,20 @@ int main(int argc, char **argv)
     if (capture_road_fork || capture_map_case) {
         sim.player.location_id = sim.settlements[1].id;
     }
-    if (capture_witness) {
+    if (capture_town || capture_town_arrival) {
+        sim.player.location_id = sim.settlements[capture_town_index].id;
+    }
+    if (capture_witness || capture_character) {
         for (int32_t situation = 0; situation < sim.situation_count;
              ++situation) {
             if (sim.situations[situation].status != CC_SITUATION_ACTIVE) {
                 continue;
             }
-            bool found = false;
-            for (int32_t settlement = 0;
-                 settlement < sim.settlement_count; ++settlement) {
-                if (!CcSimSituationTouchesSettlement(
-                        &sim, &sim.situations[situation],
-                        sim.settlements[settlement].id)) continue;
-                sim.player.location_id = sim.settlements[settlement].id;
-                found = true;
-                break;
-            }
-            if (found) break;
+            const CcCharacter *character = CcSimSituationAffectedCharacter(
+                &sim, &sim.situations[situation]);
+            if (character == NULL) continue;
+            sim.player.location_id = character->current_settlement_id;
+            break;
         }
     }
     CcLocalBindPlace(&sim);
@@ -5278,6 +5490,7 @@ int main(int argc, char **argv)
         CC_MAP_GLOAMGATE_NIGHT_ROAD : FirstOutgoingRouteIndex(&sim);
     int32_t selected_situation = FirstActiveSituationIndex(&sim);
     ClientView view = capture_board ? VIEW_SITUATIONS :
+                      capture_character ? VIEW_CHARACTER :
                       capture_encounter ? VIEW_ENCOUNTER :
                       capture_dragon_cave ? VIEW_DRAGON_CAVE :
                       capture_road_fork ? VIEW_ROADS :
@@ -5311,10 +5524,19 @@ int main(int argc, char **argv)
         local.course.scene = CC_LOCAL_SCENE_ROAD;
         local.course.alarm_countdown = 1000.0f;
     }
-    if (capture_golden || capture_atmosphere) {
-        RepositionHero(&local, (Vector2){44.25f, 28.85f}, false);
+    if (capture_golden || capture_town || capture_atmosphere) {
+        RepositionHero(
+            &local,
+            capture_town ? (Vector2){capture_town_x, capture_town_z} :
+                           (Vector2){44.25f, 28.85f},
+            false);
         local.agent.facing_yaw = -0.35f;
         local.course.alarm_countdown = 1000.0f;
+    }
+    if (capture_town_arrival) {
+        BeginTownArrivalState(&local);
+        local.convoy.phase_progress = capture_town_arrival_progress;
+        SetConvoyTownPose(&local.convoy, 0.0f);
     }
     if (capture_face) {
         if (capture_face_view == 3) {
@@ -5376,13 +5598,21 @@ int main(int argc, char **argv)
         !capture_action_reel && !capture_gameplay_reel &&
         !capture_encounter && !capture_travel &&
         !capture_road &&
-        !capture_parley && !capture_golden && !capture_atmosphere &&
+        !capture_parley && !capture_golden && !capture_town &&
+        !capture_town_arrival &&
+        !capture_atmosphere &&
         !capture_face && !capture_room && !capture_creature_media) {
         local.course.alarm_countdown = 1000.0f;
         for (int32_t frame = 0; frame < 1500; ++frame) {
             CcLocalCourseUpdate(&local.course, &local.agent, &sim,
                                 1.0f / 60.0f);
         }
+    }
+    if (capture_character && local.course.situation_witness_active) {
+        local.conversation_character_id =
+            local.course.situation_witness_character_id;
+        local.conversation_situation_id =
+            local.course.situation_witness_id;
     }
     if (capture_jump) {
         local.course.alarm_countdown = 1000.0f;
@@ -5521,12 +5751,34 @@ int main(int argc, char **argv)
             if (!local.agent.grounded && local.agent.position.y > 0.65f) break;
         }
     }
+    if (render_benchmark) {
+        view = VIEW_LOCAL;
+        return_view = VIEW_LOCAL;
+        if (strcmp(render_benchmark_scene, "market") == 0) {
+            local.market_interior = true;
+            RepositionHero(&local, (Vector2){4.60f, 5.10f}, true);
+            local.agent.facing_yaw = 0.14f;
+        } else if (strcmp(render_benchmark_scene, "road") == 0) {
+            BeginRoadTravelState(&local);
+            local.convoy.pace = 0.0f;
+        } else if (strcmp(render_benchmark_scene, "combat") == 0) {
+            PrepareRoadCombatReel(&sim, &local);
+        } else {
+            RepositionHero(&local, (Vector2){44.25f, 28.85f}, false);
+            local.agent.facing_yaw = -0.35f;
+            local.course.alarm_countdown = 1000.0f;
+        }
+    }
     char message[256] = "";
     if (!capture && !render_benchmark && startup_message[0] != '\0') {
         (void)snprintf(message, sizeof(message), "%s", startup_message);
     }
     if (capture_golden) {
         (void)snprintf(message, sizeof(message), "Town square.");
+    } else if (capture_town || capture_town_arrival) {
+        (void)snprintf(message, sizeof(message), "%s town plan.",
+                       CcSettlementFunctionName(
+                           sim.settlements[capture_town_index].function));
     } else if (capture_atmosphere) {
         (void)snprintf(message, sizeof(message), "%s.",
                        CcLocalAtmosphereName(capture_atmosphere_preset));
@@ -5547,8 +5799,10 @@ int main(int argc, char **argv)
     }
     int capture_frames = 0;
     int walk_frame_count = 0;
+    const int32_t render_benchmark_warmup_frames = 60;
+    int32_t render_benchmark_warmup_count = 0;
     int32_t render_benchmark_count = 0;
-    double render_benchmark_started = GetTime();
+    double render_benchmark_started = 0.0;
     bool performance_overlay = false;
     float message_age = 0.0f;
 
@@ -5558,7 +5812,7 @@ int main(int argc, char **argv)
         0.0f);
 
     Rectangle local_bounds = LocalViewportBounds();
-    while (!WindowShouldClose()) {
+    while (render_benchmark || !WindowShouldClose()) {
         local_bounds = LocalViewportBounds();
         float frame_delta_time = GetFrameTime();
         char previous_message[sizeof(message)];
@@ -5571,7 +5825,7 @@ int main(int argc, char **argv)
                 LocalAtmosphereForSimulation(&sim),
             2.4f);
         CcLocalRendererUpdateAtmosphere(frame_delta_time);
-        if (!capture && ClientKeyPressed(KEY_F3)) {
+        if (!capture && !render_benchmark && ClientKeyPressed(KEY_F3)) {
             performance_overlay = !performance_overlay;
             (void)snprintf(message, sizeof(message), "%s",
                            performance_overlay ?
@@ -5593,6 +5847,8 @@ int main(int argc, char **argv)
                 UpdateActionReel(&local, &action_reel, message,
                                  sizeof(message));
             }
+        } else if (render_benchmark) {
+            ClientInputClearPressed();
         } else {
             HandleInput(&journal, &sim, &selected, &selected_situation,
                         &view, &return_view, &local,
@@ -5608,7 +5864,10 @@ int main(int argc, char **argv)
             message_age += capture_gameplay_reel ? 1.0f / 15.0f :
                            frame_delta_time;
         }
-        float clock = capture_gameplay_reel ?
+        float clock = render_benchmark ?
+            (float)(render_benchmark_warmup_count +
+                    render_benchmark_count) / 60.0f :
+            capture_gameplay_reel ?
             (float)gameplay_reel.captured_frames / 15.0f :
             capture_creature_reel ? (float)capture_frames / 15.0f :
             (float)GetTime();
@@ -5632,7 +5891,10 @@ int main(int argc, char **argv)
                     collectible_atlas);
             DrawSettlementPanel(&sim, selected);
         } else {
-            if (local.site_kind != CC_LOCAL_SITE_NONE) {
+            if (capture_npc_review) {
+                CcLocalDrawNpcReview3D(capture_npc_review_view, clock,
+                                       local_target, local_bounds);
+            } else if (local.site_kind != CC_LOCAL_SITE_NONE) {
                 CcLocalDrawSite3D(
                     &sim, &local.agent, local.site_kind,
                     local.site_travel_active, local.site_returning,
@@ -5662,7 +5924,7 @@ int main(int argc, char **argv)
                                     &local.convoy, clock,
                                     local_target, local_bounds);
             }
-            if (view != VIEW_ENCOUNTER) {
+            if (!capture_npc_review && view != VIEW_ENCOUNTER) {
                 DrawLocalMovementReticle(&local, local_bounds);
                 DrawLocalHeader(&sim, &local);
                 DrawLocalPanel(&sim, &local);
@@ -5700,6 +5962,10 @@ int main(int argc, char **argv)
             CcOverlayFlush();
             DrawSituationBoard(&sim, selected_situation);
         }
+        if (view == VIEW_CHARACTER) {
+            CcOverlayFlush();
+            DrawCharacterConversation(&sim, &local);
+        }
         if (view == VIEW_ENCOUNTER) {
             CcOverlayFlush();
             DrawJourneyEncounter(&sim);
@@ -5709,12 +5975,14 @@ int main(int argc, char **argv)
             DrawDragonCavePanel(&sim);
         }
         CcOverlayFlush();
-        if (!capture_gameplay_reel ||
-            gameplay_reel.stage != GAMEPLAY_REEL_QUEST_COMPLETE) {
+        if (!capture_npc_review && (!capture_gameplay_reel ||
+            gameplay_reel.stage != GAMEPLAY_REEL_QUEST_COMPLETE)) {
             DrawContextActionTray(&sim, &local, view, selected,
                                   selected_situation);
         }
-        if (view != VIEW_DRAGON_CAVE) DrawCommandBar(view, &local);
+        if (!capture_npc_review && view != VIEW_DRAGON_CAVE) {
+            DrawCommandBar(view, &local);
+        }
         if (performance_overlay) {
             CcOverlayFlush();
             DrawPerformanceOverlay();
@@ -5728,6 +5996,16 @@ int main(int argc, char **argv)
         EndDrawing();
 
         if (render_benchmark) {
+            if (render_benchmark_warmup_count <
+                render_benchmark_warmup_frames) {
+                render_benchmark_warmup_count += 1;
+                if (render_benchmark_warmup_count ==
+                    render_benchmark_warmup_frames) {
+                    CcLocalRendererResetPerformanceMetrics();
+                    render_benchmark_started = GetTime();
+                }
+                continue;
+            }
             render_benchmark_count += 1;
             if (render_benchmark_count >= render_benchmark_frames) break;
         } else if (capture_gameplay_reel) {
@@ -5802,8 +6080,9 @@ int main(int argc, char **argv)
     if (render_benchmark) {
         double frames_per_second =
             (double)render_benchmark_count / render_benchmark_elapsed;
-        (void)printf("render: frames=%d seconds=%.6f ms/frame=%.3f fps=%.1f p95=%.3f p99=%.3f max=%.3f hitches=%d skin_updates=%d skinned_meshes=%d hero_skin_updates=%d hero_skinned_meshes=%d high_detail=%d lod=%d\n",
-                     render_benchmark_count, render_benchmark_elapsed,
+        (void)printf("render: scene=%s frames=%d seconds=%.6f ms/frame=%.3f fps=%.1f p95=%.3f p99=%.3f max=%.3f hitches=%d skin_updates=%d skinned_meshes=%d hero_skin_updates=%d hero_skinned_meshes=%d npc_skin_updates=%d npc_skinned_meshes=%d creature_skin_updates=%d creature_skinned_meshes=%d high_detail=%d lod=%d\n",
+                     render_benchmark_scene, render_benchmark_count,
+                     render_benchmark_elapsed,
                      render_benchmark_elapsed * 1000.0 /
                          (double)render_benchmark_count,
                      frames_per_second,
@@ -5815,26 +6094,41 @@ int main(int argc, char **argv)
                      final_renderer_stats.skinned_meshes,
                      final_renderer_stats.hero_skin_updates,
                      final_renderer_stats.hero_skinned_meshes,
+                     final_renderer_stats.npc_skin_updates,
+                     final_renderer_stats.npc_skinned_meshes,
+                     final_renderer_stats.creature_skin_updates,
+                     final_renderer_stats.creature_skinned_meshes,
                      final_renderer_stats.high_detail_characters,
                      final_renderer_stats.low_detail_characters);
         bool performance_failed = render_benchmark_minimum_fps > 0.0 &&
                                   frames_per_second <
                                       render_benchmark_minimum_fps;
+        double p95_budget = render_benchmark_minimum_fps > 0.0 ?
+            1500.0 / render_benchmark_minimum_fps : 0.0;
+        bool frame_time_failed = p95_budget > 0.0 &&
+            final_renderer_stats.p95_frame_milliseconds > p95_budget;
+        bool scene_expects_lod =
+            strcmp(render_benchmark_scene, "combat") == 0;
         bool hero_layout_failed =
             final_renderer_stats.high_detail_characters != 1 ||
-            final_renderer_stats.low_detail_characters <= 0;
-        bool skin_layout_failed = screen_first_hero ?
-            final_renderer_stats.hero_skin_updates != 0 ||
-                final_renderer_stats.hero_skinned_meshes != 0 ||
-                hero_layout_failed :
+            (scene_expects_lod &&
+             final_renderer_stats.low_detail_characters <= 0);
+        bool skin_layout_failed =
             final_renderer_stats.hero_skin_updates != 1 ||
-                final_renderer_stats.hero_skinned_meshes >
-                    CC_LOCAL_HERO_RUNTIME_MESH_BUDGET ||
-                hero_layout_failed;
+            final_renderer_stats.hero_skinned_meshes <= 0 ||
+            final_renderer_stats.hero_skinned_meshes >
+                CC_LOCAL_HERO_RUNTIME_MESH_BUDGET ||
+            hero_layout_failed;
         if (performance_failed) {
             (void)fprintf(stderr,
                           "render performance budget failed: %.1f FPS < %.1f FPS\n",
                           frames_per_second, render_benchmark_minimum_fps);
+        }
+        if (frame_time_failed) {
+            (void)fprintf(stderr,
+                          "render frame-time budget failed: p95 %.1f ms > %.1f ms\n",
+                          final_renderer_stats.p95_frame_milliseconds,
+                          p95_budget);
         }
         if (skin_layout_failed) {
             (void)fprintf(stderr,
@@ -5845,7 +6139,9 @@ int main(int argc, char **argv)
                           final_renderer_stats.low_detail_characters,
                           CC_LOCAL_HERO_RUNTIME_MESH_BUDGET);
         }
-        if (performance_failed || skin_layout_failed) return 2;
+        if (performance_failed || frame_time_failed || skin_layout_failed) {
+            return 2;
+        }
     } else if (capture_walk_cycle) {
         (void)printf("captured %d walk-cycle frames with prefix %s\n",
                      walk_frame_count, capture_path);

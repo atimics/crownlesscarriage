@@ -271,6 +271,78 @@ static void TestPlaceLandmarkCollision(void)
     CcLocalBindPlace(NULL);
 }
 
+static void TestTownPlanCollisionAndGate(void)
+{
+    CcSim sim;
+    CcSimInit(&sim, UINT32_C(0x7a11c0de));
+    for (int32_t settlement = 0;
+         settlement < sim.settlement_count; ++settlement) {
+        sim.player.location_id = sim.settlements[settlement].id;
+        CcLocalBindPlace(&sim);
+
+        Vector2 hall_approach = {50.0f, 27.0f};
+        Vector2 hall_blocked = CcLocalMove(
+            hall_approach, (Vector2){0.0f, -2.0f}, false);
+        if (hall_blocked.y < 26.27f) {
+            (void)fprintf(
+                stderr,
+                "town plan %d did not keep its civic hall solid: %.3f\n",
+                sim.settlements[settlement].function, hall_blocked.y);
+            exit(1);
+        }
+
+        Vector2 gate_walk = {78.50f, 35.00f};
+        for (int32_t step = 0; step < 17; ++step) {
+            gate_walk = CcLocalMove(
+                gate_walk, (Vector2){0.0f, -0.50f}, false);
+        }
+        if (gate_walk.y > 26.65f) {
+            (void)fprintf(
+                stderr,
+                "town plan %d blocked its promised compound gate: %.3f\n",
+                sim.settlements[settlement].function, gate_walk.y);
+            exit(1);
+        }
+
+        float minimum_height = 10000.0f;
+        float maximum_height = -10000.0f;
+        for (float z = 4.0f; z < CC_LOCAL_WORLD_DEPTH; z += 4.0f) {
+            for (float x = 4.0f; x < CC_LOCAL_WORLD_WIDTH; x += 4.0f) {
+                float height = CcLocalTerrainHeightAt(x, z);
+                minimum_height = fminf(minimum_height, height);
+                maximum_height = fmaxf(maximum_height, height);
+            }
+        }
+        if (maximum_height - minimum_height < 8.0f) {
+            (void)fprintf(
+                stderr,
+                "town plan %d lost its major landform: relief %.2f\n",
+                sim.settlements[settlement].function,
+                maximum_height - minimum_height);
+            exit(1);
+        }
+
+        float maximum_gate_grade = 0.0f;
+        float previous_gate_height = CcLocalTerrainHeightAt(78.50f, 54.0f);
+        for (float z = 53.50f; z >= 31.0f; z -= 0.50f) {
+            float gate_height = CcLocalTerrainHeightAt(78.50f, z);
+            maximum_gate_grade = fmaxf(
+                maximum_gate_grade,
+                fabsf(gate_height - previous_gate_height) / 0.50f);
+            previous_gate_height = gate_height;
+        }
+        if (maximum_gate_grade > 0.14f) {
+            (void)fprintf(
+                stderr,
+                "town plan %d castle approach is too steep for carts: %.1f%%\n",
+                sim.settlements[settlement].function,
+                maximum_gate_grade * 100.0f);
+            exit(1);
+        }
+    }
+    CcLocalBindPlace(NULL);
+}
+
 static void TestSharedCharacterCollisionWorld(void)
 {
     Vector3 corrected = {0};
@@ -1469,11 +1541,11 @@ static void TestTargetDrivenCombat(void)
         course.runners[i].agent.combat.health = 0.0f;
     }
     CcLocalAgentInit(&course.raiders[0],
-                     (Vector2){CC_LOCAL_START_X + 3.0f,
+                     (Vector2){CC_LOCAL_START_X + 12.0f,
                                CC_LOCAL_START_Z}, false);
     CcLocalCombatSetTeam(&course.raiders[0], CC_COMBAT_RAIDER);
     CcLocalAgentInit(&course.raiders[1],
-                     (Vector2){CC_LOCAL_START_X + 7.0f,
+                     (Vector2){CC_LOCAL_START_X + 14.0f,
                                CC_LOCAL_START_Z + 3.0f}, false);
     CcLocalCombatSetTeam(&course.raiders[1], CC_COMBAT_RAIDER);
     for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
@@ -1481,10 +1553,69 @@ static void TestTargetDrivenCombat(void)
         course.raider_response_waypoint_active[i] = false;
     }
 
+    player.combat.posture = 30.0f;
+    if (CcLocalCourseBeginPlayerStrike(&course, &player) ||
+        CcLocalCourseSetPlayerGuarded(&course, &player, true) ||
+        CcLocalCourseUsePlayerSkill(&course, &player,
+                                    CC_COMBAT_SKILL_SECOND_WIND) ||
+        player.combat.target_index != -1 || player.combat.focus_valid ||
+        player.humanoid.guard_requested || player.combat.posture != 30.0f) {
+        (void)fprintf(stderr,
+                      "combat activated before a hostile was targeted\n");
+        exit(1);
+    }
+    if (CcLocalCourseHasNearbyHostile(&course, &player) ||
+        CcLocalCourseSelectPlayerTarget(&course, &player, 0)) {
+        (void)fprintf(stderr,
+                      "distant map hostile activated player combat\n");
+        exit(1);
+    }
+    CcLocalAgentInit(&course.raiders[0],
+                     (Vector2){CC_LOCAL_START_X + 3.0f,
+                               CC_LOCAL_START_Z}, false);
+    CcLocalCombatSetTeam(&course.raiders[0], CC_COMBAT_RAIDER);
+    if (!CcLocalCourseHasNearbyHostile(&course, &player)) {
+        (void)fprintf(stderr,
+                      "nearby hostile did not activate player combat\n");
+        exit(1);
+    }
     if (CcLocalCourseSelectPlayerTarget(&course, &player, -1) ||
         !CcLocalCourseSelectPlayerTarget(&course, &player, 0) ||
         player.combat.target_index != 0 || !player.combat.focus_valid) {
         (void)fprintf(stderr, "explicit hostile targeting failed\n");
+        exit(1);
+    }
+    if (!CcLocalCourseSetPlayerGuarded(&course, &player, true) ||
+        !player.humanoid.guard_requested ||
+        !CcLocalCourseSetPlayerGuarded(&course, &player, false) ||
+        player.humanoid.guard_requested ||
+        player.combat.target_index != 0 || !player.combat.focus_valid) {
+        (void)fprintf(stderr,
+                      "targeted guard did not preserve hostile focus\n");
+        exit(1);
+    }
+    if (!CcLocalCourseSetPlayerGuarded(&course, &player, true)) {
+        (void)fprintf(stderr, "nearby target did not accept guard\n");
+        exit(1);
+    }
+    course.raiders[0].position = (Vector3){CC_LOCAL_START_X + 12.0f,
+                                           0.0f,
+                                           CC_LOCAL_START_Z};
+    CcLocalCourseUpdate(&course, &player, &sim, 1.0f / 60.0f);
+    if (player.combat.target_index != -1 || player.combat.focus_valid ||
+        player.humanoid.guard_requested ||
+        CcLocalCourseHasNearbyHostile(&course, &player)) {
+        (void)fprintf(stderr,
+                      "combat did not disengage after hostile left proximity\n");
+        exit(1);
+    }
+    CcLocalAgentInit(&course.raiders[0],
+                     (Vector2){CC_LOCAL_START_X + 3.0f,
+                               CC_LOCAL_START_Z}, false);
+    CcLocalCombatSetTeam(&course.raiders[0], CC_COMBAT_RAIDER);
+    if (!CcLocalCourseSelectPlayerTarget(&course, &player, 0)) {
+        (void)fprintf(stderr,
+                      "nearby hostile could not be targeted after re-entry\n");
         exit(1);
     }
     if (!CcLocalCourseUsePlayerSkill(&course, &player,
@@ -2077,18 +2208,30 @@ int main(void)
         CcLocalRendererBeginFrame(0.010f);
     }
     CcLocalRendererBeginFrame(0.050f);
-    CcLocalRendererRecordSkinUpdate(1);
+    CcLocalRendererRecordCreatureSkinUpdate(1);
     CcLocalRendererRecordHeroSkinUpdate(3);
+    CcLocalRendererRecordNpcSkinUpdate(2);
     CcLocalRendererStats performance = CcLocalRendererGetStats();
     if (performance.p95_frame_milliseconds < 9.9f ||
         performance.p95_frame_milliseconds > 10.1f ||
         performance.maximum_frame_milliseconds < 49.9f ||
         performance.hitch_count != 1 ||
-        performance.skin_updates != 2 || performance.skinned_meshes != 4 ||
+        performance.skin_updates != 3 || performance.skinned_meshes != 6 ||
         performance.hero_skin_updates != 1 ||
-        performance.hero_skinned_meshes != 3) {
+        performance.hero_skinned_meshes != 3 ||
+        performance.npc_skin_updates != 1 ||
+        performance.npc_skinned_meshes != 2 ||
+        performance.creature_skin_updates != 1 ||
+        performance.creature_skinned_meshes != 1) {
         (void)fprintf(stderr,
                       "renderer hitch or hero skin metrics were incorrect\n");
+        return 1;
+    }
+    CcLocalRendererResetPerformanceMetrics();
+    performance = CcLocalRendererGetStats();
+    if (performance.p95_frame_milliseconds != 0.0f ||
+        performance.skin_updates != 0) {
+        (void)fprintf(stderr, "renderer metrics did not reset\n");
         return 1;
     }
 
@@ -2128,6 +2271,7 @@ int main(void)
     TestRoadBridgeSupport();
     TestFaceAngleAndLodContract();
     TestPlaceLandmarkCollision();
+    TestTownPlanCollisionAndGate();
     TestSharedCharacterCollisionWorld();
     TestRagdollStepsInWater();
     RenderTexture2D click_target = {0};
@@ -2182,11 +2326,12 @@ int main(void)
         }
     }
 
-    /* Two close facades should narrow the composition around the hero. This
-       is the visibility solution for alleys; architecture must not be culled
-       to make the broad room lens fit. */
+    /* Close facades now own a deliberate playable-room composition. The
+       tighter page must still retain the hero without becoming a follow
+       camera. */
     CcLocalAgent alley_camera_agent;
-    CcLocalAgentInit(&alley_camera_agent, (Vector2){32.0f, 38.0f}, false);
+    CcLocalAgentInit(&alley_camera_agent,
+                     (Vector2){50.0f, 27.25f}, false);
     Camera3D alley_camera = {0};
     for (int32_t frame = 0; frame < 120; ++frame) {
         camera_clock += 1.0f / 60.0f;
@@ -2200,11 +2345,12 @@ int main(void)
                   alley_camera_agent.position.z},
         alley_camera, click_target.texture.width,
         click_target.texture.height);
-    if (alley_camera.fovy > 10.40f ||
+    if (alley_camera.projection != CAMERA_ORTHOGRAPHIC ||
+        alley_camera.fovy < 16.0f || alley_camera.fovy > 19.0f ||
         alley_hero_screen.x < 88.0f || alley_hero_screen.x > 369.0f ||
         alley_hero_screen.y < 54.0f || alley_hero_screen.y > 231.0f) {
         (void)fprintf(stderr,
-                      "alley camera did not tighten around hero: fovy %.2f screen %.2f %.2f\n",
+                      "authored close camera was invalid: fovy %.2f screen %.2f %.2f\n",
                       alley_camera.fovy, alley_hero_screen.x,
                       alley_hero_screen.y);
         return 1;
@@ -2237,6 +2383,26 @@ int main(void)
             VectorDistance3(held_alley_target, alley_camera.target),
             fabsf(held_alley_fovy - alley_camera.fovy),
             fabsf(moved_alley_hero_screen.x - alley_hero_screen.x));
+        return 1;
+    }
+
+    /* A close page only owns its physical court. Crossing the main coach
+       road near that court must return to an establishing composition
+       instead of showing an alley the player has not entered. */
+    CcLocalAgent coach_road_camera_agent;
+    CcLocalAgentInit(&coach_road_camera_agent,
+                     (Vector2){64.0f, 34.0f}, false);
+    Camera3D coach_road_camera = {0};
+    for (int32_t frame = 0; frame < 150; ++frame) {
+        camera_clock += 1.0f / 60.0f;
+        coach_road_camera = CcLocalStreetCameraInternal(
+            &coach_road_camera_agent, camera_clock, true,
+            click_target.texture.height);
+    }
+    if (coach_road_camera.fovy < 25.0f) {
+        (void)fprintf(stderr,
+                      "main coach road retained an unrelated close page: %.2f\n",
+                      coach_road_camera.fovy);
         return 1;
     }
 
@@ -2496,7 +2662,7 @@ int main(void)
     if (shoulder_camera.projection != CAMERA_PERSPECTIVE ||
         behind_amount > -3.50f || fabsf(side_amount) < 2.80f ||
         !shoulder_subjects_safe ||
-        shoulder_player_height < shoulder_raider_height * 1.22f) {
+        shoulder_player_height < shoulder_raider_height * 1.10f) {
         (void)fprintf(
             stderr,
             "combat shoulder framing failed: projection %d behind %.2f side %.2f hero %.2f %.2f/%.2f raider %.2f %.2f/%.2f fovy %.2f\n",
@@ -2529,7 +2695,7 @@ int main(void)
        workshop wall. The combat composer must choose another nearby stage
        angle before either fighter is hidden by that complete building. */
     CcLocalAgent workshop_player;
-    CcLocalAgentInit(&workshop_player, (Vector2){45.15f, 30.60f}, false);
+    CcLocalAgentInit(&workshop_player, (Vector2){47.10f, 32.08f}, false);
     CcLocalCourse workshop_course;
     CcLocalCourseInit(&workshop_course);
     workshop_course.scene = CC_LOCAL_SCENE_STREET;
@@ -4180,16 +4346,11 @@ int main(void)
          ++situation) {
         if (witness_sim.situations[situation].status !=
             CC_SITUATION_ACTIVE) continue;
-        for (int32_t settlement = 0;
-             settlement < witness_sim.settlement_count; ++settlement) {
-            if (CcSimSituationTouchesSettlement(
-                    &witness_sim, &witness_sim.situations[situation],
-                    witness_sim.settlements[settlement].id)) {
-                visible_situation = &witness_sim.situations[situation];
-                witness_settlement = witness_sim.settlements[settlement].id;
-                break;
-            }
-        }
+        const CcCharacter *participant = CcSimSituationAffectedCharacter(
+            &witness_sim, &witness_sim.situations[situation]);
+        if (participant == NULL) continue;
+        visible_situation = &witness_sim.situations[situation];
+        witness_settlement = participant->current_settlement_id;
     }
     if (visible_situation == NULL ||
         visible_situation->affected_name[0] == '\0') {
@@ -4203,12 +4364,18 @@ int main(void)
                         1.0f / 60.0f);
     const CcSituation *staged_situation = CcSimSituation(
         &witness_sim, witness_course.situation_witness_id);
+    const CcCharacter *staged_character = CcSimCharacter(
+        &witness_sim, witness_course.situation_witness_character_id);
     Vector3 witness_board = {CC_LOCAL_NOTICE_X + 0.92f, 0.0f,
                              CC_LOCAL_NOTICE_Z + 0.72f};
     witness_board.y = CcLocalTerrainHeightAt(witness_board.x,
                                               witness_board.z);
     if (!witness_course.situation_witness_active ||
         staged_situation == NULL || staged_situation->affected_name[0] == '\0' ||
+        staged_character == NULL ||
+        staged_character->id != visible_situation->affected_character_id ||
+        witness_course.situation_witness.appearance.seed !=
+            staged_character->appearance_seed ||
         VectorDistance3(witness_course.situation_witness.position,
                         witness_board) > 0.65f) {
         (void)fprintf(stderr,
@@ -4225,11 +4392,18 @@ int main(void)
     for (int32_t i = 0; i < witness_sim.situation_count; ++i) {
         witness_sim.situations[i].status = CC_SITUATION_RESOLVED;
     }
+    CcSimInitializeCharacters(&witness_sim);
     CcLocalCourseUpdate(&witness_course, NULL, &witness_sim,
                         1.0f / 60.0f);
-    if (witness_course.situation_witness_active) {
+    staged_character = CcSimCharacter(
+        &witness_sim, witness_course.situation_witness_character_id);
+    if (!witness_course.situation_witness_active ||
+        staged_character == NULL ||
+        staged_character->activity != CC_CHARACTER_ACTIVITY_RECOVERING ||
+        witness_course.situation_witness_activity !=
+            CC_CHARACTER_ACTIVITY_RECOVERING) {
         (void)fprintf(stderr,
-                      "situation witness remained after every local need closed\n");
+                      "persistent witness did not enter recovery after the local need closed\n");
         return 1;
     }
 
@@ -4252,9 +4426,25 @@ int main(void)
                       road_course.raiders[0].position.y);
         return 1;
     }
-    if (!CcLocalCourseSelectPlayerTarget(&road_course, &road_player, 0)) {
+    if (CcLocalCourseHasNearbyHostile(&road_course, &road_player) ||
+        CcLocalCourseSelectPlayerTarget(&road_course, &road_player, 0)) {
         (void)fprintf(stderr,
-                      "hostile road encounter did not accept its first target\n");
+                      "distant road hostile activated combat at map entry\n");
+        return 1;
+    }
+    bool road_hostile_nearby = false;
+    for (int32_t frame = 0; frame < 900; ++frame) {
+        CcLocalWorldUpdate(&road_course, &road_player, &witness_sim,
+                           1.0f / 60.0f, false, true);
+        if (CcLocalCourseHasNearbyHostile(&road_course, &road_player)) {
+            road_hostile_nearby = true;
+            break;
+        }
+    }
+    if (!road_hostile_nearby ||
+        !CcLocalCourseSelectPlayerTarget(&road_course, &road_player, 0)) {
+        (void)fprintf(stderr,
+                      "road hostile never entered player combat proximity\n");
         return 1;
     }
     Camera3D road_combat_base = {

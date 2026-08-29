@@ -17,6 +17,8 @@
 #define CC_MAX_MAPS 12
 #define CC_MAX_TREASURES 24
 #define CC_MAX_SITUATIONS 12
+#define CC_MAX_CHARACTERS 24
+#define CC_CHARACTER_MEMORY_CAPACITY 4
 #define CC_MAX_EVENTS 256
 #define CC_CARRIAGE_HORSE_COUNT 2
 #define CC_MAX_STABLE_HORSES 6
@@ -33,8 +35,8 @@
 #define CC_GLOAMGATE_ALDERWATCH_MAP_NAME "Gloamgate to Alderwatch"
 #define CC_CROWNLESS_ATLAS_MAP_NAME "The Crownless Atlas"
 
-#define CC_SIM_SCHEMA_VERSION 16
-#define CC_GENERATOR_VERSION 15
+#define CC_SIM_SCHEMA_VERSION 17
+#define CC_GENERATOR_VERSION 16
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
 #define CC_WORLD_DAY_SUBTICKS (24 * 60 * CC_WORLD_MINUTE_SUBTICKS)
@@ -63,7 +65,8 @@ typedef enum CcEntityKind {
     CC_ENTITY_HOARD_RAIDERS = 15,
     CC_ENTITY_TREASURE = 16,
     CC_ENTITY_COURIER = 17,
-    CC_ENTITY_HORSE = 18
+    CC_ENTITY_HORSE = 18,
+    CC_ENTITY_CHARACTER = 19
 } CcEntityKind;
 
 typedef enum CcGood {
@@ -225,7 +228,8 @@ typedef enum CcEventKind {
     CC_EVENT_GOBLIN_EXPEDITION_INTERCEPTED,
     CC_EVENT_GOBLIN_TRADE,
     CC_EVENT_GOBLIN_DRAGON_SEED_RUMORED,
-    CC_EVENT_GOBLIN_DRAGON_SEED_PREPARED
+    CC_EVENT_GOBLIN_DRAGON_SEED_PREPARED,
+    CC_EVENT_CHARACTER_INTERACTION
 } CcEventKind;
 
 typedef enum CcCommandKind {
@@ -258,7 +262,8 @@ typedef enum CcCommandKind {
     CC_COMMAND_INTERCEPT_DRAGON_TRIBUTE,
     CC_COMMAND_GOBLIN_TRADE,
     CC_COMMAND_GOBLIN_WARN,
-    CC_COMMAND_GOBLIN_INTERCEPT
+    CC_COMMAND_GOBLIN_INTERCEPT,
+    CC_COMMAND_CHARACTER_RESPONSE
 } CcCommandKind;
 
 typedef enum CcHorseSex {
@@ -678,6 +683,69 @@ typedef enum CcSituationStatus {
     CC_SITUATION_FAILED
 } CcSituationStatus;
 
+typedef enum CcCharacterRole {
+    CC_CHARACTER_OFFICIAL,
+    CC_CHARACTER_LABORER,
+    CC_CHARACTER_SCOUT,
+    CC_CHARACTER_TRAVELLER,
+    CC_CHARACTER_REFUGEE,
+    CC_CHARACTER_COURIER
+} CcCharacterRole;
+
+typedef enum CcCharacterGoal {
+    CC_CHARACTER_GOAL_KEEP_ORDER,
+    CC_CHARACTER_GOAL_SECURE_LIVELIHOOD,
+    CC_CHARACTER_GOAL_SURVIVE_CRISIS,
+    CC_CHARACTER_GOAL_CARRY_NEWS
+} CcCharacterGoal;
+
+typedef enum CcCharacterActivity {
+    CC_CHARACTER_ACTIVITY_WORKING,
+    CC_CHARACTER_ACTIVITY_SEEKING_AID,
+    CC_CHARACTER_ACTIVITY_PREPARING,
+    CC_CHARACTER_ACTIVITY_RECOVERING,
+    CC_CHARACTER_ACTIVITY_HIDING,
+    CC_CHARACTER_ACTIVITY_TRAVELLING
+} CcCharacterActivity;
+
+typedef enum CcCharacterMemoryKind {
+    CC_CHARACTER_MEMORY_NONE,
+    CC_CHARACTER_MEMORY_MET_PLAYER,
+    CC_CHARACTER_MEMORY_PLAYER_PROMISED,
+    CC_CHARACTER_MEMORY_PLAYER_HELPED,
+    CC_CHARACTER_MEMORY_PLAYER_WITHDREW
+} CcCharacterMemoryKind;
+
+typedef enum CcCharacterResponse {
+    CC_CHARACTER_RESPONSE_LISTEN = 1,
+    CC_CHARACTER_RESPONSE_PLEDGE_HELP = 2
+} CcCharacterResponse;
+
+typedef struct CcCharacterMemory {
+    CcCharacterMemoryKind kind;
+    CcId subject_id;
+    CcId event_id;
+    int32_t day;
+} CcCharacterMemory;
+
+typedef struct CcCharacter {
+    CcId id;
+    char name[CC_NAME_CAPACITY];
+    CcId home_settlement_id;
+    CcId current_settlement_id;
+    CcId faction_id;
+    CcCharacterRole role;
+    CcCharacterGoal goal;
+    CcCharacterActivity activity;
+    uint32_t appearance_seed;
+    int32_t player_disposition;
+    int32_t stress;
+    int32_t courage;
+    CcCharacterMemory memories[CC_CHARACTER_MEMORY_CAPACITY];
+    int32_t memory_count;
+    int32_t memory_write_index;
+} CcCharacter;
+
 typedef struct CcSituation {
     CcId id;
     CcSituationKind kind;
@@ -691,6 +759,8 @@ typedef struct CcSituation {
     CcMoney reward;
     int32_t created_day;
     int32_t deadline_day;
+    CcId sponsor_character_id;
+    CcId affected_character_id;
     char sponsor_name[CC_NAME_CAPACITY];
     char affected_name[CC_NAME_CAPACITY];
 } CcSituation;
@@ -833,6 +903,7 @@ typedef struct CcSim {
     CcMonsterPopulation monsters[CC_MAX_MONSTERS];
     CcDungeon dungeons[CC_MAX_DUNGEONS];
     CcSituation situations[CC_MAX_SITUATIONS];
+    CcCharacter characters[CC_MAX_CHARACTERS];
     CcEvent events[CC_MAX_EVENTS];
     CcPlayerCompany player;
     CcHorse horse_team[CC_CARRIAGE_HORSE_COUNT];
@@ -855,6 +926,7 @@ typedef struct CcSim {
     int32_t monster_count;
     int32_t dungeon_count;
     int32_t situation_count;
+    int32_t character_count;
     int32_t event_count;
     int32_t event_write_index;
     int32_t courier_count;
@@ -872,6 +944,7 @@ void CcSimInitializeDragonEcology(CcSim *sim);
 void CcSimInitializeHoardRaiders(CcSim *sim);
 void CcSimInitializeAnimalEconomy(CcSim *sim);
 void CcSimInitializeHorseStableSystem(CcSim *sim);
+void CcSimInitializeCharacters(CcSim *sim);
 void CcSimAdvanceDays(CcSim *sim, int32_t days);
 bool CcSettlementIsAbandoned(const CcSettlement *settlement);
 int32_t CcSimClimateFactor(const CcSim *sim);
@@ -918,6 +991,13 @@ bool CcSimTravelPreview(const CcSim *sim, CcId destination_id,
 const CcEvent *CcSimRecentEvent(const CcSim *sim, int32_t offset);
 const CcEvent *CcSimEvent(const CcSim *sim, CcId id);
 const CcSituation *CcSimSituation(const CcSim *sim, CcId id);
+const CcCharacter *CcSimCharacter(const CcSim *sim, CcId id);
+const CcCharacter *CcSimSituationAffectedCharacter(
+    const CcSim *sim, const CcSituation *situation);
+bool CcCharacterRemembers(const CcCharacter *character,
+                          CcCharacterMemoryKind kind, CcId subject_id);
+const char *CcCharacterRoleName(CcCharacterRole role);
+const char *CcCharacterActivityName(CcCharacterActivity activity);
 const CcSituation *CcSimAcceptedSituation(const CcSim *sim);
 CcId CcSimSituationOfferSettlementId(const CcSim *sim,
                                      const CcSituation *situation);

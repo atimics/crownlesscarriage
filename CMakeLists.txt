@@ -409,7 +409,13 @@ if(CC_BUILD_CLIENT)
     cc_strict_warnings(crownless_carriage)
     add_custom_target(run_render_benchmark
         COMMAND $<TARGET_FILE:crownless_carriage>
-                --benchmark-render 600 90
+                --benchmark-render 600 90 street
+        COMMAND $<TARGET_FILE:crownless_carriage>
+                --benchmark-render 600 60 market
+        COMMAND $<TARGET_FILE:crownless_carriage>
+                --benchmark-render 600 60 road
+        COMMAND $<TARGET_FILE:crownless_carriage>
+                --benchmark-render 600 60 combat
         DEPENDS crownless_carriage
         USES_TERMINAL
     )

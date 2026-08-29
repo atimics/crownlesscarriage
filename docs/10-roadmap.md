@@ -66,20 +66,19 @@ grammar, an external dependency, and a recoverable vulnerability.
 The player can make a constrained manifest choice, complete a journey, and
 produce deterministic strategic results.
 
-## Stage 4 — One living city
+## Stage 4 — Living town grammar
 
 ### Current buildout
 
-The shared exterior now resolves each settlement through a stable place
-profile. Farming, market, fortress, mining, capital, and dungeon-frontier towns
-have their own terrain seed, district language, civic labels, material tint,
-plaza mark, three named physical landmarks, and three secondary roads that join
-those landmarks to the shared regional spine. Each profile also turns the
-trade-room skeleton into its own staffed civic hall, with a stable keeper,
-service, palette, wall mark, and stock display. Place records are the single
-source for grading, movement, camera picking, labels, and rendering, so each
-town has a distinct walkable local layout without ghost geometry. The remaining
-gate is deeper interior grammars and a stateful recurring cast.
+The exterior now resolves each settlement through an authored town plan.
+Farming, market, fortress, mining, capital, and dungeon-frontier towns have
+different building counts, footprints, heights, styles, civic halls, compound
+plans, terrain seeds, district language, plaza marks, landmarks, and secondary
+roads. They share tested travel corridors and camera thresholds, but no longer
+share the same town hidden beneath different dressing. Place records are the
+single source for terrain grading, movement, camera clearance, picking,
+cutaways, labels, and rendering. The remaining gate is deeper interior
+grammars and a stateful recurring cast.
 
 ### Work
 

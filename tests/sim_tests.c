@@ -84,6 +84,66 @@ int main(void)
     CcSimInit(&first, UINT32_C(0x12345678));
     CcSimInit(&second, UINT32_C(0x12345678));
     CC_CHECK(CcSimHash(&first) == CcSimHash(&second));
+    CC_CHECK(first.character_count > 0);
+    CC_CHECK(first.character_count == second.character_count);
+    CC_CHECK(first.characters[0].id == second.characters[0].id);
+    CC_CHECK(first.characters[0].appearance_seed ==
+             second.characters[0].appearance_seed);
+
+    CcSim character_sim;
+    CcSimInit(&character_sim, UINT32_C(0xc4a4ac7e));
+    CcSituation *personal_situation = FirstActiveSituation(
+        &character_sim, -1);
+    CC_CHECK(personal_situation != NULL);
+    const CcCharacter *personal_character =
+        CcSimSituationAffectedCharacter(&character_sim, personal_situation);
+    CC_CHECK(personal_character != NULL);
+    CcId personal_character_id = personal_character->id;
+    uint32_t personal_appearance = personal_character->appearance_seed;
+    character_sim.player.location_id =
+        personal_character->current_settlement_id;
+    character_sim.carriage.location_id = character_sim.player.location_id;
+    CcCommand listen = {
+        .kind = CC_COMMAND_CHARACTER_RESPONSE,
+        .target_id = personal_situation->id,
+        .amount = CC_CHARACTER_RESPONSE_LISTEN
+    };
+    CC_CHECK(CcSimApply(&character_sim, &listen, error, sizeof(error)));
+    personal_character = CcSimCharacter(&character_sim, personal_character_id);
+    CC_CHECK(personal_character != NULL);
+    CC_CHECK(CcCharacterRemembers(
+        personal_character, CC_CHARACTER_MEMORY_MET_PLAYER,
+        personal_situation->id));
+    CC_CHECK(personal_character->player_disposition == 2);
+    CC_CHECK(CcSimRecentEvent(&character_sim, 0)->kind ==
+             CC_EVENT_CHARACTER_INTERACTION);
+    CcCommand pledge = listen;
+    pledge.amount = CC_CHARACTER_RESPONSE_PLEDGE_HELP;
+    CC_CHECK(CcSimApply(&character_sim, &pledge, error, sizeof(error)));
+    personal_character = CcSimCharacter(&character_sim, personal_character_id);
+    CC_CHECK(character_sim.player.accepted_situation_id ==
+             personal_situation->id);
+    CC_CHECK(personal_character->activity ==
+             CC_CHARACTER_ACTIVITY_PREPARING);
+    CC_CHECK(personal_character->appearance_seed == personal_appearance);
+    CC_CHECK(CcCharacterRemembers(
+        personal_character, CC_CHARACTER_MEMORY_PLAYER_PROMISED,
+        personal_situation->id));
+    uint64_t remembered_hash = CcSimHash(&character_sim);
+    CC_CHECK(!CcSimApply(&character_sim, &pledge, error, sizeof(error)));
+    CC_CHECK(CcSimHash(&character_sim) == remembered_hash);
+    CcCommand abandon_person = {
+        .kind = CC_COMMAND_ABANDON_SITUATION,
+        .target_id = personal_situation->id
+    };
+    CC_CHECK(CcSimApply(&character_sim, &abandon_person,
+                        error, sizeof(error)));
+    personal_character = CcSimCharacter(
+        &character_sim, personal_character_id);
+    CC_CHECK(CcCharacterRemembers(
+        personal_character, CC_CHARACTER_MEMORY_PLAYER_WITHDREW,
+        personal_situation->id));
+    CC_CHECK(CcSimValidate(&character_sim, error, sizeof(error)));
 
     CcSim realtime;
     CcSimInit(&realtime, UINT32_C(0x71ae71e));
@@ -184,6 +244,7 @@ int main(void)
     CC_CHECK(illustrated != NULL);
     CC_CHECK(strcmp(first.settlements[1].name, "Gloamgate") == 0);
     CC_CHECK(strcmp(first.settlements[2].name, "Alderwatch") == 0);
+    CC_CHECK(strcmp(first.settlements[5].name, "Hollowbarrow") == 0);
     CC_CHECK(illustrated->route_id == first.routes[1].id);
     CC_CHECK(illustrated->owner_id == first.settlements[1].id);
     CC_CHECK(illustrated->ask_price == 24);
