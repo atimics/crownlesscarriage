@@ -314,6 +314,10 @@ typedef struct CcLocalCourse {
     CcId raider_company_id;
     CcLocalAgent situation_witness;
     CcId situation_witness_id;
+    CcId situation_witness_character_id;
+    CcCharacterActivity situation_witness_activity;
+    float situation_witness_activity_seconds;
+    int32_t situation_witness_activity_stage;
     Vector3 raider_entry[CC_LOCAL_RAIDER_COUNT];
     Vector3 combat_origin;
     float alarm_countdown;
@@ -471,6 +475,8 @@ void CcLocalDrawNpcPortrait3D(const CcNpcAppearance *appearance,
                               CcNpcPortraitExpression expression);
 void CcLocalDrawAgentPortrait3D(const CcLocalAgent *agent,
                                 Rectangle bounds);
+void CcLocalDrawNpcReview3D(int32_t view, float clock,
+                            RenderTexture2D target, Rectangle destination);
 void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                          const CcLocalCourse *course,
                          const CcLocalConvoyState *convoy, float clock,

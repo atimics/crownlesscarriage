@@ -301,8 +301,9 @@ out/build/play/crownless_carriage.app/Contents/MacOS/crownless_carriage \
 ```
 
 Use `make art-check` from a desktop session to capture all ten exterior rooms,
-the market, road, and parley scenes. It checks the palette, subject coverage,
-contrast, edge density, scale, and frame-to-frame stability.
+the market, road, parley, and a focused six-role NPC model review. It checks
+the palette, subject coverage, contrast, edge density, scale, and
+frame-to-frame stability.
 
 Asset-library work uses Blender and Python 3:
 

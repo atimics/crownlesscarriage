@@ -33,12 +33,20 @@ BLEND_PATH = ROOT / "assets" / "blender" / "crownless_npc_archetypes.blend"
 EXPORT_DIR = ROOT / "assets" / "exports" / "npc"
 PREVIEW_PATH = ROOT / "assets" / "previews" / "npc" / "npc_archetype_sheet.png"
 MANIFEST_PATH = ROOT / "assets" / "npc_archetype_manifest.json"
-LIBRARY_VERSION = "0.4.0"
+LIBRARY_VERSION = "0.6.0"
 MOTION_POSES = (
     "idle",
     "contact_l", "down_l", "passing_l", "up_l",
     "contact_r", "down_r", "passing_r", "up_r",
+    "work", "react",
 )
+
+BODY_FAMILY_SCALE = {
+    "broad": (1.07, 1.04, 1.06),
+    "athletic": (1.00, 1.00, 1.00),
+    "lean": (0.92, 0.96, 0.91),
+    "compact": (0.97, 1.03, 0.96),
+}
 
 MATERIAL_ORDER = (
     "skin",
@@ -82,6 +90,7 @@ class Archetype:
     posture: str
     hair: str
     garment: str
+    body_family: str
     equipment: tuple[str, ...]
     motion_pose: str = "idle"
 
@@ -93,25 +102,31 @@ class Archetype:
 
 ARCHETYPES = (
     Archetype("wayfarer", 0, 1.06, 1.14, 0.98, 1.08, 1.06, 1.15, 1.13,
-              "ready", "swept", "split_tunic", ("mantle", "satchel")),
+              "ready", "swept", "split_tunic", "athletic",
+              ("mantle", "satchel")),
     Archetype("guard", 1, 1.18, 1.22, 1.06, 1.04, 1.02, 1.18, 1.18,
-              "upright", "cropped", "armored_coat",
+              "upright", "cropped", "armored_coat", "broad",
               ("armor", "helmet", "weapon")),
     Archetype("raider", 2, 1.13, 1.20, 1.02, 1.06, 1.05, 1.20, 1.17,
-              "forward", "crest", "rough_mantle",
+              "forward", "crest", "rough_mantle", "athletic",
               ("mantle", "half_armor", "weapon")),
     Archetype("merchant", 3, 1.22, 1.08, 1.14, 1.17, 1.10, 1.15, 1.10,
-              "open", "bob", "apron", ("hat", "apron", "satchel")),
+              "open", "bob", "apron", "broad",
+              ("hat", "apron", "satchel")),
     Archetype("laborer", 4, 1.23, 1.19, 1.12, 1.08, 1.05, 1.22, 1.21,
-              "heavy", "cropped", "work_apron", ("apron", "tool")),
+              "heavy", "cropped", "work_apron", "broad",
+              ("apron", "tool")),
     Archetype("traveller", 5, 1.07, 1.09, 1.01, 1.09, 1.08, 1.14, 1.16,
-              "walking", "wrapped", "road_coat", ("mantle", "pack", "hat")),
+              "walking", "wrapped", "road_coat", "lean",
+              ("mantle", "pack", "hat")),
     Archetype("refugee", 6, 0.95, 0.98, 0.94, 1.12, 1.10, 1.05, 1.06,
-              "inward", "hooded", "wrapped", ("hood", "mantle", "pack")),
+              "inward", "hooded", "wrapped", "compact",
+              ("hood", "mantle", "pack")),
     Archetype("scout", 7, 0.98, 1.04, 0.94, 1.04, 1.03, 1.12, 1.15,
-              "forward", "short", "short_coat", ("short_mantle", "satchel", "weapon")),
+              "forward", "short", "short_coat", "lean",
+              ("short_mantle", "satchel", "weapon")),
     Archetype("healer", 8, 1.04, 1.06, 1.02, 1.12, 1.10, 1.12, 1.09,
-              "measured", "braided", "layered_apron",
+              "measured", "braided", "layered_apron", "compact",
               ("mantle", "apron", "satchel", "healer_mark")),
 )
 
@@ -390,7 +405,8 @@ def pose_points(spec: Archetype) -> dict[str, Vector]:
     elif spec.posture == "measured":
         points["hand_l"] = Vector((-0.35, -0.10, 1.02))
         points["hand_r"] = Vector((0.35, -0.10, 1.02))
-    if spec.motion_pose != "idle":
+    locomotion_poses = MOTION_POSES[1:9]
+    if spec.motion_pose in locomotion_poses:
         pose_index = MOTION_POSES.index(spec.motion_pose) - 1
         angle = math.tau * pose_index / 8.0
         stride = math.cos(angle)
@@ -418,6 +434,68 @@ def pose_points(spec: Archetype) -> dict[str, Vector]:
         elif spec.motion_pose.startswith("up_"):
             points["knee_l"].z += 0.024
             points["knee_r"].z += 0.024
+    elif spec.motion_pose == "work":
+        # Each role gets a readable task silhouette. These poses are used at
+        # route work points, not only in the asset review scene.
+        if spec.role == "laborer":
+            points["elbow_r"] = Vector((0.42, -0.06, 1.34))
+            points["hand_r"] = Vector((0.59, -0.04, 1.22))
+            points["elbow_l"] = Vector((0.22, -0.08, 1.02))
+            points["hand_l"] = Vector((0.57, -0.03, 0.82))
+            points["knee_l"].y -= 0.06
+            points["ankle_l"].y -= 0.10
+        elif spec.role in {"guard", "raider", "scout"}:
+            weapon_side = 1.0 if spec.role == "guard" else -1.0
+            points["elbow_r" if weapon_side > 0 else "elbow_l"] = Vector(
+                (weapon_side * 0.42, -0.07, 1.28))
+            points["hand_r" if weapon_side > 0 else "hand_l"] = Vector(
+                (weapon_side * 0.59, -0.03, 1.15))
+            points["elbow_l" if weapon_side > 0 else "elbow_r"] = Vector(
+                (-weapon_side * 0.34, -0.12, 1.53))
+            points["hand_l" if weapon_side > 0 else "hand_r"] = Vector(
+                (-weapon_side * 0.20, -0.19, 1.66))
+        elif spec.role in {"traveller", "refugee", "wayfarer"}:
+            points["elbow_l"] = Vector((-0.32, -0.10, 1.37))
+            points["elbow_r"] = Vector((0.32, -0.10, 1.37))
+            points["hand_l"] = Vector((-0.20, -0.18, 1.25))
+            points["hand_r"] = Vector((0.20, -0.18, 1.25))
+        elif spec.role == "healer":
+            points["elbow_l"] = Vector((-0.31, -0.10, 1.21))
+            points["elbow_r"] = Vector((0.31, -0.10, 1.21))
+            points["hand_l"] = Vector((-0.13, -0.20, 1.04))
+            points["hand_r"] = Vector((0.13, -0.20, 1.04))
+        else:  # Merchant arranging or counting wares.
+            points["elbow_l"] = Vector((-0.35, -0.10, 1.24))
+            points["elbow_r"] = Vector((0.35, -0.10, 1.24))
+            points["hand_l"] = Vector((-0.18, -0.24, 1.07))
+            points["hand_r"] = Vector((0.18, -0.24, 1.07))
+    elif spec.motion_pose == "react":
+        # A compact recoil/alert pose reads at gameplay scale and lets the
+        # same role respond differently when settlement pressure rises.
+        points["knee_l"].y += 0.06
+        points["ankle_l"].y += 0.12
+        points["knee_r"].y -= 0.04
+        points["ankle_r"].y -= 0.08
+        if spec.role in {"guard", "raider", "scout"}:
+            weapon_side = 1.0 if spec.role == "guard" else -1.0
+            points["elbow_r" if weapon_side > 0 else "elbow_l"] = Vector(
+                (weapon_side * 0.43, -0.08, 1.28))
+            points["hand_r" if weapon_side > 0 else "hand_l"] = Vector(
+                (weapon_side * 0.59, -0.04, 1.16))
+            points["elbow_l" if weapon_side > 0 else "elbow_r"] = Vector(
+                (-weapon_side * 0.42, -0.12, 1.38))
+            points["hand_l" if weapon_side > 0 else "hand_r"] = Vector(
+                (-weapon_side * 0.25, -0.24, 1.48))
+        elif spec.role == "refugee":
+            points["elbow_l"] = Vector((-0.31, -0.10, 1.43))
+            points["elbow_r"] = Vector((0.31, -0.10, 1.43))
+            points["hand_l"] = Vector((-0.16, -0.22, 1.55))
+            points["hand_r"] = Vector((0.16, -0.22, 1.55))
+        else:
+            points["elbow_l"] = Vector((-0.43, -0.08, 1.36))
+            points["elbow_r"] = Vector((0.43, -0.08, 1.36))
+            points["hand_l"] = Vector((-0.52, -0.20, 1.25))
+            points["hand_r"] = Vector((0.52, -0.20, 1.25))
     return points
 
 
@@ -461,19 +539,27 @@ def build_body(spec: Archetype, collection: bpy.types.Collection) -> None:
     mass = spec.mass
     shoulder = spec.shoulder
     hip = spec.hip
+    body_width, body_depth, limb_scale = BODY_FAMILY_SCALE[spec.body_family]
     torso_y = 0.014 if spec.posture in {"forward", "walking"} else 0.0
     add_loft(f"GEO_{spec.role}_torso", (
-        (0.0, torso_y, 0.98, 0.205 * hip, 0.145 * mass),
-        (0.0, torso_y, 1.20, 0.232 * mass, 0.155 * mass),
-        (0.0, torso_y, 1.43, 0.278 * shoulder, 0.163 * mass),
-        (0.0, torso_y, 1.58, 0.292 * shoulder, 0.155 * mass),
+        (0.0, torso_y, 0.98, 0.205 * hip * body_width,
+         0.145 * mass * body_depth),
+        (0.0, torso_y, 1.20, 0.232 * mass * body_width,
+         0.155 * mass * body_depth),
+        (0.0, torso_y, 1.43, 0.278 * shoulder * body_width,
+         0.163 * mass * body_depth),
+        (0.0, torso_y, 1.58, 0.292 * shoulder * body_width,
+         0.155 * mass * body_depth),
     ), "outer", collection, spec, "torso")
     add_loft(f"GEO_{spec.role}_pelvis", (
-        (0.0, 0.0, 0.83, 0.185 * hip, 0.142 * mass),
-        (0.0, 0.0, 1.03, 0.218 * hip, 0.155 * mass),
+        (0.0, 0.0, 0.83, 0.185 * hip * body_width,
+         0.142 * mass * body_depth),
+        (0.0, 0.0, 1.03, 0.218 * hip * body_width,
+         0.155 * mass * body_depth),
     ), "trousers", collection, spec, "pelvis")
     add_box(f"GEO_{spec.role}_belt", (0.0, -0.008, 1.025),
-            (0.410 * hip, 0.285 * mass, 0.060), "leather",
+            (0.410 * hip * body_width, 0.285 * mass * body_depth, 0.060),
+            "leather",
             collection, spec, "belt", bevel=0.012)
     add_box(f"GEO_{spec.role}_buckle", (0.0, -0.158 * mass, 1.025),
             (0.065, 0.025, 0.060), "metal", collection, spec, "buckle",
@@ -482,7 +568,7 @@ def build_body(spec: Archetype, collection: bpy.types.Collection) -> None:
             (0.245 * shoulder, 0.030, 0.070), "accent", collection, spec,
             "collar", bevel=0.009)
 
-    leg_radius = 0.116 * mass
+    leg_radius = 0.116 * mass * limb_scale
     for side in ("l", "r"):
         hip_point = points[f"hip_{side}"]
         knee = points[f"knee_{side}"]
@@ -500,7 +586,7 @@ def build_body(spec: Archetype, collection: bpy.types.Collection) -> None:
                 collection, spec, "boot", rotation=(0.035 * sign, 0.0, 0.0),
                 bevel=0.025)
 
-    arm_radius = 0.100 * mass
+    arm_radius = 0.100 * mass * limb_scale
     for side in ("l", "r"):
         shoulder_point = points[f"shoulder_{side}"]
         elbow = points[f"elbow_{side}"]
@@ -526,11 +612,28 @@ def build_body(spec: Archetype, collection: bpy.types.Collection) -> None:
                 bevel=0.018)
 
     if "armor" in spec.equipment or "half_armor" in spec.equipment:
-        plate_width = 0.45 * shoulder if "armor" in spec.equipment else 0.29
-        plate_x = 0.0 if "armor" in spec.equipment else -0.09
-        add_box(f"GEO_{spec.role}_chest_plate", (plate_x, -0.155 * mass, 1.365),
-                (plate_width, 0.055, 0.36), "metal", collection, spec, "armor",
-                bevel=0.028)
+        # Armor must read as clothing around a body from every camera angle.
+        # A thin front box becomes a floating signboard at the final pixel
+        # scale, so guards get a closed cuirass and raiders get a smaller,
+        # off-centre half cuirass. Both follow the same torso rings as the
+        # garment below them and keep enough depth for a clear side view.
+        full_armor = "armor" in spec.equipment
+        plate_x = 0.0 if full_armor else -0.08
+        width_scale = 1.0 if full_armor else 0.73
+        add_loft(f"GEO_{spec.role}_chest_plate", (
+            (plate_x, -0.010, 1.13,
+             0.205 * mass * width_scale, 0.166 * mass),
+            (plate_x, -0.012, 1.25,
+             0.232 * mass * width_scale, 0.181 * mass),
+            (plate_x, -0.014, 1.43,
+             0.274 * shoulder * width_scale, 0.188 * mass),
+            (plate_x, -0.012, 1.56,
+             0.252 * shoulder * width_scale, 0.170 * mass),
+        ), "metal", collection, spec, "armor", sides=10)
+        add_box(f"GEO_{spec.role}_chest_ridge",
+                (plate_x, -0.192 * mass, 1.365),
+                (0.055, 0.040, 0.285), "metal", collection, spec, "armor",
+                bevel=0.009)
         pauldron_side = ("l", "r") if "armor" in spec.equipment else ("l",)
         for side in pauldron_side:
             shoulder_point = points[f"shoulder_{side}"]
@@ -539,12 +642,23 @@ def build_body(spec: Archetype, collection: bpy.types.Collection) -> None:
                           "armor", subdivisions=1)
 
     if "apron" in spec.equipment:
-        add_box(f"GEO_{spec.role}_apron", (0.0, -0.158 * mass, 1.06),
-                (0.34 * mass, 0.030, 0.70), "underlayer", collection, spec,
-                "apron", bevel=0.022)
-        add_box(f"GEO_{spec.role}_apron_hem", (0.0, -0.177 * mass, 0.75),
-                (0.35 * mass, 0.034, 0.065), "accent", collection, spec,
-                "apron", bevel=0.008)
+        # A short fitted bib plus split skirt panels reads as clothing around
+        # a person. It keeps the waist and leg motion visible instead of
+        # turning the NPC into a single flat rectangle.
+        apron_y = -0.170 * mass * body_depth
+        add_box(f"GEO_{spec.role}_apron_bib", (0.0, apron_y, 1.27),
+                (0.275 * mass, 0.050, 0.235), "underlayer", collection,
+                spec, "apron", bevel=0.018)
+        for side in (-1.0, 1.0):
+            add_box(f"GEO_{spec.role}_apron_skirt_{side:+.0f}",
+                    (side * 0.090 * mass, apron_y - 0.006, 0.94),
+                    (0.155 * mass, 0.058, 0.390), "underlayer", collection,
+                    spec, "apron", rotation=(0.0, side * 0.035, 0.0),
+                    bevel=0.018)
+            add_box(f"GEO_{spec.role}_apron_hem_{side:+.0f}",
+                    (side * 0.090 * mass, apron_y - 0.010, 0.765),
+                    (0.160 * mass, 0.064, 0.060), "accent", collection,
+                    spec, "apron", bevel=0.008)
 
     mantle = "mantle" in spec.equipment or "short_mantle" in spec.equipment
     if mantle:
@@ -760,6 +874,11 @@ def build() -> None:
                 "id": spec.asset_id,
                 "export": str(path.relative_to(ROOT)),
                 "material_order": list(MATERIAL_ORDER),
+                "armor_geometry": "closed torso volume"
+                if "armor" in spec.equipment or
+                   "half_armor" in spec.equipment else "none",
+                "apron_geometry": "fitted bib with split skirt"
+                if "apron" in spec.equipment else "none",
             })
 
     manifest = {

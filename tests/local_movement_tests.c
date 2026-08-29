@@ -4179,16 +4179,11 @@ int main(void)
          ++situation) {
         if (witness_sim.situations[situation].status !=
             CC_SITUATION_ACTIVE) continue;
-        for (int32_t settlement = 0;
-             settlement < witness_sim.settlement_count; ++settlement) {
-            if (CcSimSituationTouchesSettlement(
-                    &witness_sim, &witness_sim.situations[situation],
-                    witness_sim.settlements[settlement].id)) {
-                visible_situation = &witness_sim.situations[situation];
-                witness_settlement = witness_sim.settlements[settlement].id;
-                break;
-            }
-        }
+        const CcCharacter *participant = CcSimSituationAffectedCharacter(
+            &witness_sim, &witness_sim.situations[situation]);
+        if (participant == NULL) continue;
+        visible_situation = &witness_sim.situations[situation];
+        witness_settlement = participant->current_settlement_id;
     }
     if (visible_situation == NULL ||
         visible_situation->affected_name[0] == '\0') {
@@ -4202,12 +4197,18 @@ int main(void)
                         1.0f / 60.0f);
     const CcSituation *staged_situation = CcSimSituation(
         &witness_sim, witness_course.situation_witness_id);
+    const CcCharacter *staged_character = CcSimCharacter(
+        &witness_sim, witness_course.situation_witness_character_id);
     Vector3 witness_board = {CC_LOCAL_NOTICE_X + 0.92f, 0.0f,
                              CC_LOCAL_NOTICE_Z + 0.72f};
     witness_board.y = CcLocalTerrainHeightAt(witness_board.x,
                                               witness_board.z);
     if (!witness_course.situation_witness_active ||
         staged_situation == NULL || staged_situation->affected_name[0] == '\0' ||
+        staged_character == NULL ||
+        staged_character->id != visible_situation->affected_character_id ||
+        witness_course.situation_witness.appearance.seed !=
+            staged_character->appearance_seed ||
         VectorDistance3(witness_course.situation_witness.position,
                         witness_board) > 0.65f) {
         (void)fprintf(stderr,
@@ -4224,11 +4225,18 @@ int main(void)
     for (int32_t i = 0; i < witness_sim.situation_count; ++i) {
         witness_sim.situations[i].status = CC_SITUATION_RESOLVED;
     }
+    CcSimInitializeCharacters(&witness_sim);
     CcLocalCourseUpdate(&witness_course, NULL, &witness_sim,
                         1.0f / 60.0f);
-    if (witness_course.situation_witness_active) {
+    staged_character = CcSimCharacter(
+        &witness_sim, witness_course.situation_witness_character_id);
+    if (!witness_course.situation_witness_active ||
+        staged_character == NULL ||
+        staged_character->activity != CC_CHARACTER_ACTIVITY_RECOVERING ||
+        witness_course.situation_witness_activity !=
+            CC_CHARACTER_ACTIVITY_RECOVERING) {
         (void)fprintf(stderr,
-                      "situation witness remained after every local need closed\n");
+                      "persistent witness did not enter recovery after the local need closed\n");
         return 1;
     }
 

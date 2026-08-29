@@ -3612,6 +3612,7 @@ void CcLocalCourseStageRoadEncounter(CcLocalCourse *course,
     CcLocalAgentSetScene(player, CC_LOCAL_SCENE_ROAD);
     course->situation_witness_active = false;
     course->situation_witness_id = 0U;
+    course->situation_witness_character_id = 0U;
     for (int32_t i = 0; i < CC_LOCAL_TRAVELLER_COUNT; ++i) {
         course->travellers[i].active = false;
     }
@@ -3774,14 +3775,46 @@ static void CourseConfigureSituationWitness(CcLocalCourse *course,
     if (course->road_encounter) {
         course->situation_witness_active = false;
         course->situation_witness_id = 0U;
+        course->situation_witness_character_id = 0U;
         return;
     }
     const CcSituation *situation = CcSimAcceptedSituation(sim);
-    if (situation == NULL ||
-        !CcSimSituationTouchesSettlement(sim, situation,
-                                         sim->player.location_id)) {
-        situation = CcSimSituationForSettlement(sim,
-                                                sim->player.location_id);
+    const CcCharacter *character = CcSimSituationAffectedCharacter(
+        sim, situation);
+    if (situation == NULL || character == NULL ||
+        character->current_settlement_id != sim->player.location_id) {
+        situation = NULL;
+        character = NULL;
+        for (int32_t i = 0; i < sim->situation_count; ++i) {
+            const CcSituation *candidate = &sim->situations[i];
+            if (candidate->status != CC_SITUATION_ACTIVE) continue;
+            const CcCharacter *participant =
+                CcSimSituationAffectedCharacter(sim, candidate);
+            if (participant != NULL &&
+                participant->current_settlement_id ==
+                    sim->player.location_id) {
+                situation = candidate;
+                character = participant;
+                break;
+            }
+        }
+    }
+    if (situation == NULL) {
+        for (int32_t i = 0; i < sim->situation_count; ++i) {
+            const CcSituation *candidate = &sim->situations[i];
+            if (candidate->status == CC_SITUATION_ACTIVE ||
+                candidate->created_day < sim->current_day - 56) continue;
+            const CcCharacter *participant =
+                CcSimSituationAffectedCharacter(sim, candidate);
+            if (participant == NULL ||
+                participant->current_settlement_id !=
+                    sim->player.location_id) continue;
+            if (situation == NULL ||
+                candidate->created_day > situation->created_day) {
+                situation = candidate;
+                character = participant;
+            }
+        }
     }
     if (situation == NULL) {
         for (int32_t offset = 0; offset < sim->event_count; ++offset) {
@@ -3789,16 +3822,29 @@ static void CourseConfigureSituationWitness(CcLocalCourse *course,
             if (event == NULL || event->kind != CC_EVENT_DELAYED_ECHO ||
                 event->location_id != sim->player.location_id) continue;
             situation = CcSimSituation(sim, event->subject_id);
-            if (situation != NULL) break;
+            character = CcSimSituationAffectedCharacter(sim, situation);
+            if (situation != NULL && character != NULL &&
+                character->current_settlement_id ==
+                    sim->player.location_id) break;
+            situation = NULL;
+            character = NULL;
         }
     }
     if (situation == NULL) {
         course->situation_witness_active = false;
         course->situation_witness_id = 0U;
+        course->situation_witness_character_id = 0U;
         course->situation_witness.separation_velocity = (Vector3){0};
         return;
     }
-    if (course->situation_witness_id != situation->id) {
+    if (character == NULL) {
+        course->situation_witness_active = false;
+        course->situation_witness_id = 0U;
+        course->situation_witness_character_id = 0U;
+        return;
+    }
+    if (course->situation_witness_id != situation->id ||
+        course->situation_witness_character_id != character->id) {
         CcLocalAgentInit(&course->situation_witness,
                          (Vector2){CC_LOCAL_NOTICE_X + 0.92f,
                                    CC_LOCAL_NOTICE_Z + 0.72f}, false);
@@ -3811,18 +3857,77 @@ static void CourseConfigureSituationWitness(CcLocalCourse *course,
             situation->kind == CC_SITUATION_MONSTER_EXPEDITION ?
                 (Color){128, 82, 66, 255} :
                 (Color){173, 112, 76, 255};
-        CcNpcRole witness_role =
-            situation->kind == CC_SITUATION_MONSTER_EXPEDITION ?
+        CcNpcRole witness_role = character->role == CC_CHARACTER_SCOUT ?
                 CC_NPC_ROLE_SCOUT :
-            situation->kind == CC_SITUATION_BLACK_MARKET_DELIVERY ?
-                CC_NPC_ROLE_TRAVELLER : CC_NPC_ROLE_LABORER;
+            character->role == CC_CHARACTER_TRAVELLER ||
+            character->role == CC_CHARACTER_COURIER ?
+                CC_NPC_ROLE_TRAVELLER :
+            character->role == CC_CHARACTER_REFUGEE ?
+                CC_NPC_ROLE_REFUGEE : CC_NPC_ROLE_LABORER;
         CcLocalAgentSetNpcAppearance(
             &course->situation_witness,
-            (uint32_t)(situation->id ^ (situation->id >> 32)),
+            character->appearance_seed,
             witness_role, witness_accent);
         course->situation_witness_id = situation->id;
+        course->situation_witness_character_id = character->id;
+        course->situation_witness_activity = character->activity;
+        course->situation_witness_activity_seconds = 0.0f;
+        course->situation_witness_activity_stage = 0;
+    } else if (course->situation_witness_activity != character->activity) {
+        course->situation_witness_activity = character->activity;
+        course->situation_witness_activity_seconds = 0.0f;
+        course->situation_witness_activity_stage = 0;
+        course->situation_witness.exact_target_valid = false;
+        course->situation_witness.target_valid = false;
     }
     course->situation_witness_active = true;
+}
+
+static void CourseUpdateSituationWitnessBehavior(CcLocalCourse *course,
+                                                 float delta_time)
+{
+    if (course == NULL || !course->situation_witness_active) return;
+    CcLocalAgent *witness = &course->situation_witness;
+    course->situation_witness_activity_seconds += delta_time;
+    Vector3 target = witness->position;
+    bool wants_target = false;
+    if (course->alarm_active) {
+        target = (Vector3){37.55f, 0.0f, 24.65f};
+        wants_target = true;
+    } else if (course->situation_witness_activity ==
+               CC_CHARACTER_ACTIVITY_PREPARING ||
+               course->situation_witness_activity ==
+               CC_CHARACTER_ACTIVITY_WORKING) {
+        if (!witness->exact_target_valid && !CourseAgentBusy(witness) &&
+            course->situation_witness_activity_seconds >= 1.2f) {
+            static const Vector3 work_points[2] = {
+                {42.20f, 0.0f, 28.52f},
+                {44.10f, 0.0f, 29.30f}
+            };
+            target = work_points[course->situation_witness_activity_stage % 2];
+            course->situation_witness_activity_stage += 1;
+            course->situation_witness_activity_seconds = 0.0f;
+            wants_target = true;
+        }
+    } else if (course->situation_witness_activity ==
+               CC_CHARACTER_ACTIVITY_RECOVERING) {
+        target = (Vector3){39.62f, 0.0f, 26.54f};
+        wants_target = true;
+    } else if (course->situation_witness_activity ==
+               CC_CHARACTER_ACTIVITY_HIDING) {
+        target = (Vector3){38.10f, 0.0f, 24.90f};
+        wants_target = true;
+    } else {
+        target = (Vector3){CC_LOCAL_NOTICE_X + 0.92f, 0.0f,
+                           CC_LOCAL_NOTICE_Z + 0.72f};
+        wants_target = true;
+    }
+    float dx = target.x - witness->position.x;
+    float dz = target.z - witness->position.z;
+    if (wants_target && dx * dx + dz * dz > 0.20f &&
+        !witness->exact_target_valid && !CourseAgentBusy(witness)) {
+        (void)CcLocalAgentSetExactTarget(witness, target, false);
+    }
 }
 
 static void CoursePlanActorSeparation(CcLocalCourse *course,
@@ -4535,6 +4640,7 @@ void CcLocalCourseFixedStepInternal(CcLocalCourse *course,
     } else {
         course->situation_witness_active = false;
     }
+    CourseUpdateSituationWitnessBehavior(course, delta_time);
     CoursePlanActorSeparation(course, player);
     if (course->situation_witness_active) {
         CcLocalAgentFixedStepInternal(&course->situation_witness,
@@ -9161,7 +9267,9 @@ static TreeCrownModelCache tree_crown_models = {0};
 #define CC_NPC_INDEXED_FRAGMENT_SHADER "assets/shaders/npc_indexed.fs"
 #define CC_NPC_ARCHETYPE_MATERIAL_COUNT 9
 #define CC_NPC_ARCHETYPE_LOCOMOTION_POSE_COUNT 8
-#define CC_NPC_ARCHETYPE_POSE_COUNT 9
+#define CC_NPC_ARCHETYPE_WORK_POSE 9
+#define CC_NPC_ARCHETYPE_REACT_POSE 10
+#define CC_NPC_ARCHETYPE_POSE_COUNT 11
 #define CC_NPC_DYNAMIC_HAIR_COUNT 8
 
 typedef enum RuntimeAssetId {
@@ -9292,10 +9400,12 @@ static const char *NPC_ARCHETYPE_POSE_PATH_SUFFIXES
     [CC_NPC_ARCHETYPE_POSE_COUNT] = {
     "", "_contact_l", "_down_l", "_passing_l", "_up_l",
     "_contact_r", "_down_r", "_passing_r", "_up_r",
+    "_work", "_react",
 };
 
 static NpcArchetypeCache npc_archetypes
     [CC_NPC_ROLE_COUNT][CC_NPC_ARCHETYPE_POSE_COUNT] = {0};
+static bool npc_review_exact_yaw = false;
 
 typedef struct CreatureModelCache {
     Model model;
@@ -12743,14 +12853,48 @@ static void DrawCroftScarecrow(float hunger)
     Color wood = WORLD_WOOD;
     Color cloth = BlendColor(WORLD_EARTH_LIGHT,
                              WORLD_ROAD_SHADOW, hunger);
-    DrawBox((Vector3){x, 0.92f, z}, (Vector3){0.12f, 1.84f, 0.12f}, wood);
-    DrawBox((Vector3){x, 1.38f, z}, (Vector3){1.38f, 0.10f, 0.10f}, wood);
-    DrawBox((Vector3){x, 1.20f, z + 0.04f},
-            (Vector3){0.78f, 0.68f, 0.12f}, cloth);
-    DrawSmallSphere((Vector3){x, 1.80f, z}, 0.23f,
-                    BlendColor(WORLD_CROP_LIGHT, WORLD_WOOD_LIGHT, 0.34f));
-    DrawBox((Vector3){x, 2.03f, z}, (Vector3){0.72f, 0.08f, 0.44f}, wood);
-    DrawBox((Vector3){x, 2.17f, z}, (Vector3){0.38f, 0.30f, 0.34f}, wood);
+    Color straw = BlendColor(WORLD_CROP_LIGHT, WORLD_WOOD_LIGHT, 0.34f);
+    Vector3 post_base = {x - 0.06f, 0.02f, z};
+    Vector3 post_top = {x + 0.13f, 1.97f, z + 0.02f};
+    Vector3 arm_left = {x - 0.77f, 1.47f, z - 0.02f};
+    Vector3 arm_right = {x + 0.70f, 1.35f, z + 0.03f};
+    DrawCylinderEx(post_base, post_top, 0.060f, 0.045f, 7, wood);
+    DrawCylinderEx(arm_left, arm_right, 0.052f, 0.045f, 7, wood);
+
+    /* Uneven hanging rags and exposed straw make this read as a field prop,
+       not another motionless person sharing the road. */
+    DrawTiltedBox((Vector3){x - 0.18f, 1.17f, z - 0.01f},
+                  (Vector3){0.34f, 0.58f, 0.09f},
+                  (Vector3){0.0f, 0.0f, 1.0f}, 10.0f, cloth);
+    DrawTiltedBox((Vector3){x + 0.17f, 1.12f, z + 0.02f},
+                  (Vector3){0.24f, 0.48f, 0.08f},
+                  (Vector3){0.0f, 0.0f, 1.0f}, -14.0f,
+                  ShadeColor(cloth, 0.78f));
+    DrawCylinderEx(arm_left,
+                   (Vector3){x - 0.58f, 1.19f, z - 0.01f},
+                   0.020f, 0.012f, 5, straw);
+    DrawCylinderEx(arm_right,
+                   (Vector3){x + 0.58f, 1.08f, z + 0.04f},
+                   0.020f, 0.012f, 5, straw);
+    for (int32_t tuft = -1; tuft <= 1; ++tuft) {
+        float spread = (float)tuft * 0.07f;
+        DrawCylinderEx(arm_left,
+                       (Vector3){arm_left.x - 0.17f,
+                                 arm_left.y + spread, arm_left.z + spread},
+                       0.014f, 0.004f, 5, straw);
+        DrawCylinderEx(arm_right,
+                       (Vector3){arm_right.x + 0.17f,
+                                 arm_right.y + spread, arm_right.z - spread},
+                       0.014f, 0.004f, 5, straw);
+    }
+    Vector3 head = {x + 0.14f, 1.82f, z + 0.01f};
+    DrawSmallSphere(head, 0.19f, straw);
+    DrawTiltedBox((Vector3){x + 0.17f, 2.01f, z + 0.01f},
+                  (Vector3){0.63f, 0.065f, 0.38f},
+                  (Vector3){0.0f, 0.0f, 1.0f}, -9.0f, wood);
+    DrawTiltedBox((Vector3){x + 0.23f, 2.12f, z + 0.01f},
+                  (Vector3){0.32f, 0.24f, 0.30f},
+                  (Vector3){0.0f, 0.0f, 1.0f}, -9.0f, wood);
 }
 
 static void DrawMineWaystone(void)
@@ -14920,11 +15064,19 @@ static void DrawNpcEquipment(const CcNpcAppearance *appearance,
         DrawCharacterSphere(shoulder_r, 0.098f * scale, appearance->metal);
     }
     if ((appearance->equipment & CC_NPC_EQUIPMENT_APRON) != 0U) {
-        DrawOrientedBox(hip, (Vector3){0.0f, 0.17f * scale,
-                                       0.17f * scale},
-                        (Vector3){0.33f * scale, 0.50f * scale,
-                                  0.035f * scale}, yaw,
+        DrawOrientedBox(hip, (Vector3){0.0f, 0.26f * scale,
+                                       0.18f * scale},
+                        (Vector3){0.27f * scale, 0.22f * scale,
+                                  0.06f * scale}, yaw,
                         appearance->underlayer);
+        for (int32_t side = -1; side <= 1; side += 2) {
+            DrawOrientedBox(
+                hip, (Vector3){(float)side * 0.085f * scale,
+                               0.02f * scale, 0.18f * scale},
+                (Vector3){0.145f * scale, 0.38f * scale,
+                          0.065f * scale}, yaw,
+                appearance->underlayer);
+        }
     }
     if ((appearance->equipment & CC_NPC_EQUIPMENT_SATCHEL) != 0U) {
         Vector3 bag = LocalPoint(hip, 0.25f * scale, -0.02f * scale,
@@ -15003,18 +15155,19 @@ static void DrawNpcGarmentCut(const CcNpcAppearance *appearance,
     }
 }
 
-static bool DrawNpcArchetype3D(Vector3 position, float size_hint, float yaw,
-                               float phase, CcTraversalMode mode,
-                               CcNpcPortraitExpression expression,
-                               const CcNpcAppearance *appearance)
+static bool DrawNpcArchetypePose3D(
+    Vector3 position, float size_hint, float yaw, float phase,
+    CcTraversalMode mode, int32_t fixed_pose,
+    CcNpcPortraitExpression expression, const CcNpcAppearance *appearance)
 {
     if (appearance == NULL || appearance->role < CC_NPC_ROLE_WAYFARER ||
         appearance->role >= CC_NPC_ROLE_COUNT) {
         return false;
     }
     float pulse = sinf(phase * appearance->gait_cadence_scale);
-    int32_t pose = 0;
-    if (mode != CC_TRAVERSAL_IDLE) {
+    int32_t pose = fixed_pose >= 0 &&
+        fixed_pose < CC_NPC_ARCHETYPE_POSE_COUNT ? fixed_pose : 0;
+    if (fixed_pose < 0 && mode != CC_TRAVERSAL_IDLE) {
         float cycle = fmodf(phase * appearance->gait_cadence_scale /
                                 (2.0f * PI),
                             1.0f);
@@ -15045,10 +15198,12 @@ static bool DrawNpcArchetype3D(Vector3 position, float size_hint, float yaw,
     /* Ambient people are stage actors, not navigation arrows. Bias them toward
        the fixed adventure-game camera so a broad face/torso read survives even
        when their simulated travel heading would present a one-pixel profile. */
-    const float camera_read_yaw = 0.20f;
-    presentation_yaw = WrapAngle(
-        presentation_yaw +
-        WrapAngle(camera_read_yaw - presentation_yaw) * 0.68f);
+    if (!npc_review_exact_yaw) {
+        const float camera_read_yaw = 0.20f;
+        presentation_yaw = WrapAngle(
+            presentation_yaw +
+            WrapAngle(camera_read_yaw - presentation_yaw) * 0.68f);
+    }
 
     const float silhouette_gain = 1.18f;
     const float contact_grid = 0.125f;
@@ -15114,9 +15269,19 @@ static bool DrawNpcArchetype3D(Vector3 position, float size_hint, float yaw,
     return true;
 }
 
-static void DrawNpcAppearanceFigure3D(
+static bool DrawNpcArchetype3D(Vector3 position, float size_hint, float yaw,
+                               float phase, CcTraversalMode mode,
+                               CcNpcPortraitExpression expression,
+                               const CcNpcAppearance *appearance)
+{
+    return DrawNpcArchetypePose3D(position, size_hint, yaw, phase, mode, -1,
+                                  expression, appearance);
+}
+
+static void DrawNpcAppearancePoseFigure3D(
     Vector3 position, float size_hint, float yaw,
-    const CcNpcAppearance *identity, float phase, CcTraversalMode mode)
+    const CcNpcAppearance *identity, float phase, CcTraversalMode mode,
+    int32_t fixed_pose)
 {
     if (identity == NULL) return;
     CcNpcAppearance appearance = *identity;
@@ -15125,13 +15290,9 @@ static void DrawNpcAppearanceFigure3D(
         appearance.role == CC_NPC_ROLE_GUARD ||
         appearance.role == CC_NPC_ROLE_RAIDER ? CC_NPC_PORTRAIT_FOCUSED :
                                                CC_NPC_PORTRAIT_NEUTRAL;
-    /* Baked armored archetypes still contain the old front card. Use the
-       articulated fallback for those roles until their armor is rebuilt as
-       body-following volume. */
-    bool planar_baked_armor =
-        (appearance.equipment & CC_NPC_EQUIPMENT_ARMOR) != 0U;
-    if (!draw_hero_rig_debug && !planar_baked_armor && DrawNpcArchetype3D(
-            position, size_hint, yaw, phase, mode, expression, &appearance)) {
+    if (!draw_hero_rig_debug && DrawNpcArchetypePose3D(
+            position, size_hint, yaw, phase, mode, fixed_pose, expression,
+            &appearance)) {
         return;
     }
     UseCharacterLighting();
@@ -15296,9 +15457,18 @@ static void DrawNpcAppearanceFigure3D(
     RestoreWorldLighting();
 }
 
-static void DrawNpcFigure3D(Vector3 position, float size_hint, float yaw,
-                            uint32_t seed, CcNpcRole role, Color accent,
-                            float phase, CcTraversalMode mode)
+static void DrawNpcAppearanceFigure3D(
+    Vector3 position, float size_hint, float yaw,
+    const CcNpcAppearance *identity, float phase, CcTraversalMode mode)
+{
+    DrawNpcAppearancePoseFigure3D(position, size_hint, yaw, identity, phase,
+                                  mode, -1);
+}
+
+static void DrawNpcFigurePose3D(Vector3 position, float size_hint, float yaw,
+                                uint32_t seed, CcNpcRole role, Color accent,
+                                float phase, CcTraversalMode mode,
+                                int32_t fixed_pose)
 {
     enum { NPC_APPEARANCE_CACHE_CAPACITY = 64 };
     typedef struct NpcAppearanceCacheEntry {
@@ -15330,8 +15500,17 @@ static void DrawNpcFigure3D(Vector3 position, float size_hint, float yaw,
         entry->accent = accent;
         entry->appearance = CcNpcAppearanceGenerate(seed, role, accent);
     }
-    DrawNpcAppearanceFigure3D(position, size_hint, yaw, &entry->appearance,
-                              phase, mode);
+    DrawNpcAppearancePoseFigure3D(position, size_hint, yaw,
+                                  &entry->appearance, phase, mode,
+                                  fixed_pose);
+}
+
+static void DrawNpcFigure3D(Vector3 position, float size_hint, float yaw,
+                            uint32_t seed, CcNpcRole role, Color accent,
+                            float phase, CcTraversalMode mode)
+{
+    DrawNpcFigurePose3D(position, size_hint, yaw, seed, role, accent, phase,
+                        mode, -1);
 }
 
 static void DrawVisibleNpcFigure3D(Vector3 position, float size_hint,
@@ -15341,6 +15520,56 @@ static void DrawVisibleNpcFigure3D(Vector3 position, float size_hint,
 {
     if (!SceneryPointVisible(position.x, position.z, focus)) return;
     DrawNpcFigure3D(position, size_hint, yaw, seed, role, accent, phase, mode);
+}
+
+static void DrawVisibleNpcPoseFigure3D(
+    Vector3 position, float size_hint, float yaw, uint32_t seed,
+    CcNpcRole role, Color accent, float phase, CcTraversalMode mode,
+    int32_t fixed_pose, Vector3 focus)
+{
+    if (!SceneryPointVisible(position.x, position.z, focus)) return;
+    DrawNpcFigurePose3D(position, size_hint, yaw, seed, role, accent, phase,
+                        mode, fixed_pose);
+}
+
+static void DrawAmbientNpcRoute3D(Vector2 start, Vector2 end,
+                                  float size_hint, uint32_t seed,
+                                  CcNpcRole role, Color accent, float clock,
+                                  float route_offset, float world_pressure,
+                                  Vector3 focus)
+{
+    float route_speed = 0.10f + Clamp(world_pressure, 0.0f, 1.0f) * 0.08f;
+    float cycle = fmodf(clock * route_speed + route_offset, 1.0f);
+    if (cycle < 0.0f) cycle += 1.0f;
+    bool moving_forward = cycle < 0.40f;
+    bool resting_at_end = cycle >= 0.40f && cycle < 0.50f;
+    bool moving_back = cycle >= 0.50f && cycle < 0.90f;
+    float progress = 0.0f;
+    if (moving_forward) {
+        progress = SmoothStep01(cycle / 0.40f);
+    } else if (resting_at_end) {
+        progress = 1.0f;
+    } else if (moving_back) {
+        progress = 1.0f - SmoothStep01((cycle - 0.50f) / 0.40f);
+    }
+    Vector2 point = {
+        start.x + (end.x - start.x) * progress,
+        start.y + (end.y - start.y) * progress,
+    };
+    float route_yaw = atan2f(end.x - start.x, end.y - start.y);
+    if (moving_back || cycle >= 0.90f) route_yaw = WrapAngle(route_yaw + PI);
+    CcTraversalMode mode = moving_forward || moving_back ?
+        CC_TRAVERSAL_WALK : CC_TRAVERSAL_IDLE;
+    int32_t fixed_pose = -1;
+    if (resting_at_end) {
+        fixed_pose = CC_NPC_ARCHETYPE_WORK_POSE;
+    } else if (cycle >= 0.90f && world_pressure >= 0.35f) {
+        fixed_pose = CC_NPC_ARCHETYPE_REACT_POSE;
+    }
+    DrawVisibleNpcPoseFigure3D(
+        TerrainWorldPoint(point.x, point.y), size_hint, route_yaw,
+        seed, role, accent, clock * 4.2f + route_offset * 2.0f * PI,
+        mode, fixed_pose, focus);
 }
 
 static void DrawPitchedFoot(Vector3 heel, Vector3 toe, float yaw, Color color)
@@ -15827,10 +16056,18 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
             ShadeColor(appearance->outer, 0.68f));
     }
     if ((appearance->equipment & CC_NPC_EQUIPMENT_ARMOR) != 0U) {
-        /* The old chest-plate module was a solidified plane. At the fixed
-           art resolution it cut across every combatant like a signboard.
-           The fitted torso and volumetric pauldrons retain the armor read
-           without that intersecting surface. */
+        Vector3 chest_front = FromLimbVector(
+            skin->sockets[CC_HUMANOID_SOCKET_CHEST_FRONT].position);
+        (void)DrawNpcDynamicModule(
+            NPC_DYNAMIC_CHEST_PLATE,
+            NpcModuleTransform(chest_front, gear_right, gear_up,
+                               gear_forward,
+                               (Vector3){(featured_hero ? 0.34f : 0.46f) *
+                                             mass,
+                                         featured_hero ? 0.43f : 0.50f,
+                                         (featured_hero ? 0.24f : 0.30f) *
+                                             mass}),
+            appearance->metal);
         for (int32_t side = 0; side < 2; ++side) {
             const CcHumanoidSkinBonePose *shoulder =
                 &skin->bones[upper_arms[side]];
@@ -17900,6 +18137,94 @@ static void EndWorldLighting(void)
     if (visual_style.world_ready) EndShaderMode();
 }
 
+void CcLocalDrawNpcReview3D(int32_t view, float clock,
+                            RenderTexture2D target, Rectangle destination)
+{
+    Camera3D camera = {0};
+    camera.target = (Vector3){0.0f, 1.05f, 0.0f};
+    camera.position = (Vector3){0.0f, 2.75f, 7.0f};
+    camera.up = (Vector3){0.0f, 1.0f, 0.0f};
+    camera.fovy = 3.05f;
+    camera.projection = CAMERA_ORTHOGRAPHIC;
+
+    FaceRenderContext previous_face_context = face_render_context;
+    SetFaceRenderContext(camera, target.texture.width, target.texture.height);
+    BeginTextureMode(target);
+    ClearBackground(CC_VISUAL_PALETTE.cool_ink);
+    BeginMode3D(camera);
+    BeginWorldLighting(camera, &INTERIOR_ART_COMPOSITION);
+    CcNpcRole roles[6] = {
+        CC_NPC_ROLE_GUARD, CC_NPC_ROLE_RAIDER, CC_NPC_ROLE_LABORER,
+        CC_NPC_ROLE_MERCHANT, CC_NPC_ROLE_TRAVELLER, CC_NPC_ROLE_REFUGEE,
+    };
+    Color accents[6] = {
+        WORLD_TEAL, WORLD_DANGER, (Color){174, 94, 53, 255},
+        (Color){223, 151, 68, 255}, (Color){117, 145, 116, 255},
+        WORLD_GOLD,
+    };
+    int32_t poses[6] = {-1, -1, -1, -1, -1, -1};
+    CcTraversalMode modes[6] = {
+        CC_TRAVERSAL_IDLE, CC_TRAVERSAL_IDLE, CC_TRAVERSAL_IDLE,
+        CC_TRAVERSAL_IDLE, CC_TRAVERSAL_IDLE, CC_TRAVERSAL_IDLE,
+    };
+    float yaw = view == 1 ? PI * 0.5f : 0.0f;
+    if (view == 2) {
+        const CcNpcRole motion_roles[6] = {
+            CC_NPC_ROLE_TRAVELLER, CC_NPC_ROLE_SCOUT, CC_NPC_ROLE_GUARD,
+            CC_NPC_ROLE_LABORER, CC_NPC_ROLE_MERCHANT, CC_NPC_ROLE_HEALER,
+        };
+        const int32_t motion_poses[6] = {
+            1, 4, 7, CC_NPC_ARCHETYPE_WORK_POSE,
+            CC_NPC_ARCHETYPE_WORK_POSE, CC_NPC_ARCHETYPE_WORK_POSE,
+        };
+        for (int32_t actor = 0; actor < 6; ++actor) {
+            roles[actor] = motion_roles[actor];
+            poses[actor] = motion_poses[actor];
+            modes[actor] = actor < 3 ? CC_TRAVERSAL_WALK :
+                                      CC_TRAVERSAL_IDLE;
+        }
+    } else if (view == 3) {
+        const CcNpcRole state_roles[6] = {
+            CC_NPC_ROLE_GUARD, CC_NPC_ROLE_GUARD,
+            CC_NPC_ROLE_REFUGEE, CC_NPC_ROLE_REFUGEE,
+            CC_NPC_ROLE_HEALER, CC_NPC_ROLE_HEALER,
+        };
+        for (int32_t actor = 0; actor < 6; ++actor) {
+            roles[actor] = state_roles[actor];
+            poses[actor] = (actor & 1) == 0 ?
+                CC_NPC_ARCHETYPE_WORK_POSE :
+                CC_NPC_ARCHETYPE_REACT_POSE;
+            accents[actor] = (actor & 1) == 0 ? WORLD_TEAL : WORLD_DANGER;
+        }
+    }
+    bool previous_exact_yaw = npc_review_exact_yaw;
+    npc_review_exact_yaw = view == 1;
+    DrawBox((Vector3){0.0f, -0.08f, 0.0f},
+            (Vector3){6.45f, 0.16f, 2.25f}, WORLD_ROAD_SHADOW);
+    DrawBox((Vector3){0.0f, 1.30f, -0.72f},
+            (Vector3){6.45f, 2.76f, 0.10f}, WORLD_STONE_SHADOW);
+    for (int32_t actor = 0; actor < 6; ++actor) {
+        float x = -2.58f + (float)actor * 1.03f;
+        DrawBox((Vector3){x, 0.015f, 0.0f},
+                (Vector3){0.88f, 0.03f, 0.88f},
+                view == 3 && (actor & 1) != 0 ?
+                    ShadeColor(WORLD_DANGER, 0.58f) :
+                    (actor & 1) == 0 ? WORLD_EARTH : WORLD_ROAD);
+        DrawNpcFigurePose3D(
+            (Vector3){x, 0.04f, 0.0f},
+            actor == 0 ? 1.00f : 0.94f, yaw,
+            UINT32_C(0x6e706301) + (uint32_t)actor, roles[actor],
+            accents[actor], clock * 2.4f + (float)actor * 0.8f,
+            modes[actor], poses[actor]);
+    }
+    npc_review_exact_yaw = previous_exact_yaw;
+    EndWorldLighting();
+    EndMode3D();
+    EndTextureMode();
+    face_render_context = previous_face_context;
+    PresentTarget(target, destination);
+}
+
 static void PresentCharacterPortrait(Rectangle bounds, Color accent)
 {
     DrawRectangle((int32_t)bounds.x, (int32_t)bounds.y,
@@ -19525,37 +19850,42 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         underworld_present ? CC_NPC_ROLE_SCOUT : CC_NPC_ROLE_TRAVELLER,
         underworld_present ? WORLD_VIOLET : kingdom, clock * 0.7f,
         CC_TRAVERSAL_IDLE, scenery_focus);
+    float settlement_pressure = fmaxf(
+        Clamp((float)place->hunger / 100.0f, 0.0f, 1.0f),
+        Clamp((50.0f - (float)place->security) / 50.0f, 0.0f, 1.0f));
+    if (course != NULL && course->alarm_active) settlement_pressure = 1.0f;
     /* Each outer room has one resident whose job explains the place at a
-       glance. Their spacing leaves the authored travel lanes clear. */
-    DrawVisibleNpcFigure3D(
-        TerrainWorldPoint(10.15f, 31.90f), 0.88f, -0.85f,
+       glance. At the work point they perform their job; hunger, insecurity,
+       or an alarm makes the return pause an alert reaction instead. */
+    DrawAmbientNpcRoute3D(
+        (Vector2){13.60f, 25.80f}, (Vector2){14.80f, 26.60f}, 0.88f,
         UINT32_C(0x64697301), CC_NPC_ROLE_LABORER,
-        (Color){143, 118, 65, 255}, clock * 0.52f + 0.5f,
-        CC_TRAVERSAL_IDLE, scenery_focus);
-    DrawVisibleNpcFigure3D(
-        TerrainWorldPoint(24.10f, 53.20f), 0.90f, 1.50f,
+        (Color){143, 118, 65, 255}, clock, 0.08f, settlement_pressure,
+        scenery_focus);
+    DrawAmbientNpcRoute3D(
+        (Vector2){24.10f, 53.20f}, (Vector2){25.70f, 53.20f}, 0.90f,
         UINT32_C(0x64697302), CC_NPC_ROLE_SCOUT,
-        (Color){103, 103, 112, 255}, clock * 0.48f + 1.1f,
-        CC_TRAVERSAL_IDLE, scenery_focus);
-    DrawVisibleNpcFigure3D(
-        TerrainWorldPoint(35.20f, 26.65f), 0.94f, -0.15f,
+        (Color){103, 103, 112, 255}, clock, 0.29f, settlement_pressure,
+        scenery_focus);
+    DrawAmbientNpcRoute3D(
+        (Vector2){35.20f, 26.65f}, (Vector2){36.75f, 27.25f}, 0.94f,
         UINT32_C(0x64697303), CC_NPC_ROLE_LABORER,
-        (Color){174, 94, 53, 255}, clock * 0.60f + 1.7f,
-        CC_TRAVERSAL_IDLE, scenery_focus);
-    DrawVisibleNpcFigure3D(
-        TerrainWorldPoint(42.75f, 51.05f), 0.92f, 2.60f,
+        (Color){174, 94, 53, 255}, clock, 0.47f, settlement_pressure,
+        scenery_focus);
+    DrawAmbientNpcRoute3D(
+        (Vector2){42.75f, 51.05f}, (Vector2){44.15f, 50.15f}, 0.92f,
         UINT32_C(0x64697304), CC_NPC_ROLE_TRAVELLER,
-        (Color){117, 145, 116, 255}, clock * 0.44f + 2.3f,
-        CC_TRAVERSAL_IDLE, scenery_focus);
+        (Color){117, 145, 116, 255}, clock, 0.72f, settlement_pressure,
+        scenery_focus);
     DrawVisibleNpcFigure3D(
         TerrainWorldPoint(74.65f, 31.95f), 1.02f, 1.50f,
         UINT32_C(0x64697305), CC_NPC_ROLE_GUARD, kingdom,
         clock * 0.40f + 2.9f, CC_TRAVERSAL_IDLE, scenery_focus);
-    DrawVisibleNpcFigure3D(
-        TerrainWorldPoint(84.35f, 50.70f), 0.88f, -1.35f,
+    DrawAmbientNpcRoute3D(
+        (Vector2){84.80f, 51.80f}, (Vector2){86.30f, 51.00f}, 0.94f,
         UINT32_C(0x64697306), CC_NPC_ROLE_LABORER,
-        (Color){161, 128, 68, 255}, clock * 0.47f + 3.5f,
-        CC_TRAVERSAL_IDLE, scenery_focus);
+        (Color){161, 128, 68, 255}, clock, 0.88f, settlement_pressure,
+        scenery_focus);
     if (sim->resolved_journey_outcome != CC_JOURNEY_OUTCOME_NONE &&
         sim->journey.destination_id == place->id) {
         DrawVisibleNpcFigure3D(
@@ -19703,14 +20033,20 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     if (course != NULL && course->situation_witness_active) {
         const CcSituation *situation = CcSimSituation(
             sim, course->situation_witness_id);
-        if (situation != NULL && situation->affected_name[0] != '\0' &&
+        const CcCharacter *character = CcSimCharacter(
+            sim, course->situation_witness_character_id);
+        char witness_label[96];
+        if (situation != NULL && character != NULL &&
             AgentNearLabel(agent, course->situation_witness.position.x,
                            course->situation_witness.position.z, 6.0f)) {
+            (void)snprintf(witness_label, sizeof(witness_label),
+                           "%.31s / %s / F", character->name,
+                           CcCharacterActivityName(character->activity));
             labels[count++] = (WorldLabel){
                 {course->situation_witness.position.x,
                  course->situation_witness.position.y + 2.18f,
                  course->situation_witness.position.z},
-                situation->affected_name,
+                witness_label,
                 situation->status == CC_SITUATION_RESOLVED ? WORLD_TEAL :
                 sim->player.accepted_situation_id == situation->id ?
                     WORLD_GOLD : WORLD_DANGER};
