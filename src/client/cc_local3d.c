@@ -16446,14 +16446,6 @@ static void DrawBiomechanicalBiped(const CcLocalAgent *agent)
     CcHumanoidSkinPoseResolve(pose, &skin);
     if (!skin.valid) return;
     bool modular_hero = agent->crowned;
-    if (agent->crowned) {
-        DrawGroundBrushStroke(
-            (Vector3){agent->position.x, agent->position.y + 0.020f,
-                      agent->position.z},
-            (Vector3){sinf(agent->facing_yaw), 0.0f,
-                      cosf(agent->facing_yaw)},
-            0.72f, 0.085f, Fade(WORLD_TEAL, 0.82f));
-    }
     CcNpcAppearance procedural_hero = ProceduralHeroAppearance(agent);
     if (modular_hero && screen_first_hero_active) {
         UseCharacterLighting();
@@ -16794,11 +16786,27 @@ static void DrawCharacterContactEffects(const CcLocalAgent *agent)
         fmaxf(0.006f, surface + 0.008f),
         SnapContactCoordinate(agent->position.z),
     };
+    float vertical_gap = fmaxf(0.0f, agent->position.y - surface);
+    float lift = fminf(vertical_gap / 1.60f, 1.0f);
+    float shadow_scale = fallen ? 1.0f : 1.0f - lift * 0.38f;
+    float shadow_visibility = 1.0f - lift * 0.72f;
     Vector2 shadow_size = fallen ? (Vector2){1.20f, 0.56f} :
-                                   (Vector2){0.70f, 0.46f};
-    DrawContactShadow(shadow, shadow_size.x, shadow_size.y,
-                      agent->facing_yaw,
-                      (Color){3, 8, 10, fallen ? 102 : 82});
+                                   agent->crowned ?
+                                       (Vector2){0.82f, 0.52f} :
+                                       (Vector2){0.70f, 0.46f};
+    Color shadow_color = agent->crowned && !fallen ?
+        (Color){15, 38, 38, 255} : (Color){3, 8, 10, 255};
+    float base_opacity = fallen ? 102.0f / 255.0f :
+                         agent->crowned ? 108.0f / 255.0f :
+                                          82.0f / 255.0f;
+    /* A bad terrain sample must never place the contact mark through the
+       character. It is safer to omit the shadow until the sample is valid. */
+    if (surface <= agent->position.y + 0.12f) {
+        DrawContactShadow(shadow, shadow_size.x * shadow_scale,
+                          shadow_size.y * shadow_scale, agent->facing_yaw,
+                          Fade(shadow_color,
+                               base_opacity * shadow_visibility));
+    }
 
     if (agent->swimming || agent->immersion > 0.08f) {
         float phase = agent->humanoid.swim_phase -
