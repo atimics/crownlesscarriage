@@ -1,5 +1,5 @@
 {
-  "library_version": "0.5.0",
+  "library_version": "0.6.0",
   "art_direction": "silhouette_first_pseudo_pixel_cast",
   "generation": "offline_curated_procedural_geometry",
   "runtime_strategy": "stepped static pose GLBs + deterministic indexed palette and scale",
@@ -30,6 +30,7 @@
       "posture": "ready",
       "hair": "swept",
       "garment": "split_tunic",
+      "body_family": "athletic",
       "equipment": [
         "mantle",
         "satchel"
@@ -48,7 +49,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "none"
     },
     {
       "role": "wayfarer",
@@ -63,6 +65,7 @@
       "posture": "ready",
       "hair": "swept",
       "garment": "split_tunic",
+      "body_family": "athletic",
       "equipment": [
         "mantle",
         "satchel"
@@ -81,7 +84,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "none"
     },
     {
       "role": "wayfarer",
@@ -96,6 +100,7 @@
       "posture": "ready",
       "hair": "swept",
       "garment": "split_tunic",
+      "body_family": "athletic",
       "equipment": [
         "mantle",
         "satchel"
@@ -114,7 +119,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "none"
     },
     {
       "role": "wayfarer",
@@ -129,6 +135,7 @@
       "posture": "ready",
       "hair": "swept",
       "garment": "split_tunic",
+      "body_family": "athletic",
       "equipment": [
         "mantle",
         "satchel"
@@ -147,7 +154,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "none"
     },
     {
       "role": "wayfarer",
@@ -162,6 +170,7 @@
       "posture": "ready",
       "hair": "swept",
       "garment": "split_tunic",
+      "body_family": "athletic",
       "equipment": [
         "mantle",
         "satchel"
@@ -180,7 +189,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "none"
     },
     {
       "role": "wayfarer",
@@ -195,6 +205,7 @@
       "posture": "ready",
       "hair": "swept",
       "garment": "split_tunic",
+      "body_family": "athletic",
       "equipment": [
         "mantle",
         "satchel"
@@ -213,7 +224,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "none"
     },
     {
       "role": "wayfarer",
@@ -228,6 +240,7 @@
       "posture": "ready",
       "hair": "swept",
       "garment": "split_tunic",
+      "body_family": "athletic",
       "equipment": [
         "mantle",
         "satchel"
@@ -246,7 +259,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "none"
     },
     {
       "role": "wayfarer",
@@ -261,6 +275,7 @@
       "posture": "ready",
       "hair": "swept",
       "garment": "split_tunic",
+      "body_family": "athletic",
       "equipment": [
         "mantle",
         "satchel"
@@ -279,7 +294,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "none"
     },
     {
       "role": "wayfarer",
@@ -294,6 +310,7 @@
       "posture": "ready",
       "hair": "swept",
       "garment": "split_tunic",
+      "body_family": "athletic",
       "equipment": [
         "mantle",
         "satchel"
@@ -312,7 +329,78 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "none"
+    },
+    {
+      "role": "wayfarer",
+      "role_index": 0,
+      "mass": 1.06,
+      "shoulder": 1.14,
+      "hip": 0.98,
+      "head_width": 1.08,
+      "head_height": 1.06,
+      "hand": 1.15,
+      "boot": 1.13,
+      "posture": "ready",
+      "hair": "swept",
+      "garment": "split_tunic",
+      "body_family": "athletic",
+      "equipment": [
+        "mantle",
+        "satchel"
+      ],
+      "motion_pose": "work",
+      "id": "npc_wayfarer_work_v01",
+      "export": "assets/exports/npc/npc_wayfarer_work_v01.glb",
+      "material_order": [
+        "skin",
+        "hair",
+        "underlayer",
+        "outer",
+        "trousers",
+        "leather",
+        "metal",
+        "accent",
+        "eye"
+      ],
+      "armor_geometry": "none",
+      "apron_geometry": "none"
+    },
+    {
+      "role": "wayfarer",
+      "role_index": 0,
+      "mass": 1.06,
+      "shoulder": 1.14,
+      "hip": 0.98,
+      "head_width": 1.08,
+      "head_height": 1.06,
+      "hand": 1.15,
+      "boot": 1.13,
+      "posture": "ready",
+      "hair": "swept",
+      "garment": "split_tunic",
+      "body_family": "athletic",
+      "equipment": [
+        "mantle",
+        "satchel"
+      ],
+      "motion_pose": "react",
+      "id": "npc_wayfarer_react_v01",
+      "export": "assets/exports/npc/npc_wayfarer_react_v01.glb",
+      "material_order": [
+        "skin",
+        "hair",
+        "underlayer",
+        "outer",
+        "trousers",
+        "leather",
+        "metal",
+        "accent",
+        "eye"
+      ],
+      "armor_geometry": "none",
+      "apron_geometry": "none"
     },
     {
       "role": "guard",
@@ -327,6 +415,7 @@
       "posture": "upright",
       "hair": "cropped",
       "garment": "armored_coat",
+      "body_family": "broad",
       "equipment": [
         "armor",
         "helmet",
@@ -346,7 +435,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "closed torso volume"
+      "armor_geometry": "closed torso volume",
+      "apron_geometry": "none"
     },
     {
       "role": "guard",
@@ -361,6 +451,7 @@
       "posture": "upright",
       "hair": "cropped",
       "garment": "armored_coat",
+      "body_family": "broad",
       "equipment": [
         "armor",
         "helmet",
@@ -380,7 +471,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "closed torso volume"
+      "armor_geometry": "closed torso volume",
+      "apron_geometry": "none"
     },
     {
       "role": "guard",
@@ -395,6 +487,7 @@
       "posture": "upright",
       "hair": "cropped",
       "garment": "armored_coat",
+      "body_family": "broad",
       "equipment": [
         "armor",
         "helmet",
@@ -414,7 +507,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "closed torso volume"
+      "armor_geometry": "closed torso volume",
+      "apron_geometry": "none"
     },
     {
       "role": "guard",
@@ -429,6 +523,7 @@
       "posture": "upright",
       "hair": "cropped",
       "garment": "armored_coat",
+      "body_family": "broad",
       "equipment": [
         "armor",
         "helmet",
@@ -448,7 +543,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "closed torso volume"
+      "armor_geometry": "closed torso volume",
+      "apron_geometry": "none"
     },
     {
       "role": "guard",
@@ -463,6 +559,7 @@
       "posture": "upright",
       "hair": "cropped",
       "garment": "armored_coat",
+      "body_family": "broad",
       "equipment": [
         "armor",
         "helmet",
@@ -482,7 +579,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "closed torso volume"
+      "armor_geometry": "closed torso volume",
+      "apron_geometry": "none"
     },
     {
       "role": "guard",
@@ -497,6 +595,7 @@
       "posture": "upright",
       "hair": "cropped",
       "garment": "armored_coat",
+      "body_family": "broad",
       "equipment": [
         "armor",
         "helmet",
@@ -516,7 +615,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "closed torso volume"
+      "armor_geometry": "closed torso volume",
+      "apron_geometry": "none"
     },
     {
       "role": "guard",
@@ -531,6 +631,7 @@
       "posture": "upright",
       "hair": "cropped",
       "garment": "armored_coat",
+      "body_family": "broad",
       "equipment": [
         "armor",
         "helmet",
@@ -550,7 +651,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "closed torso volume"
+      "armor_geometry": "closed torso volume",
+      "apron_geometry": "none"
     },
     {
       "role": "guard",
@@ -565,6 +667,7 @@
       "posture": "upright",
       "hair": "cropped",
       "garment": "armored_coat",
+      "body_family": "broad",
       "equipment": [
         "armor",
         "helmet",
@@ -584,7 +687,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "closed torso volume"
+      "armor_geometry": "closed torso volume",
+      "apron_geometry": "none"
     },
     {
       "role": "guard",
@@ -599,6 +703,7 @@
       "posture": "upright",
       "hair": "cropped",
       "garment": "armored_coat",
+      "body_family": "broad",
       "equipment": [
         "armor",
         "helmet",
@@ -618,7 +723,80 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "closed torso volume"
+      "armor_geometry": "closed torso volume",
+      "apron_geometry": "none"
+    },
+    {
+      "role": "guard",
+      "role_index": 1,
+      "mass": 1.18,
+      "shoulder": 1.22,
+      "hip": 1.06,
+      "head_width": 1.04,
+      "head_height": 1.02,
+      "hand": 1.18,
+      "boot": 1.18,
+      "posture": "upright",
+      "hair": "cropped",
+      "garment": "armored_coat",
+      "body_family": "broad",
+      "equipment": [
+        "armor",
+        "helmet",
+        "weapon"
+      ],
+      "motion_pose": "work",
+      "id": "npc_guard_work_v01",
+      "export": "assets/exports/npc/npc_guard_work_v01.glb",
+      "material_order": [
+        "skin",
+        "hair",
+        "underlayer",
+        "outer",
+        "trousers",
+        "leather",
+        "metal",
+        "accent",
+        "eye"
+      ],
+      "armor_geometry": "closed torso volume",
+      "apron_geometry": "none"
+    },
+    {
+      "role": "guard",
+      "role_index": 1,
+      "mass": 1.18,
+      "shoulder": 1.22,
+      "hip": 1.06,
+      "head_width": 1.04,
+      "head_height": 1.02,
+      "hand": 1.18,
+      "boot": 1.18,
+      "posture": "upright",
+      "hair": "cropped",
+      "garment": "armored_coat",
+      "body_family": "broad",
+      "equipment": [
+        "armor",
+        "helmet",
+        "weapon"
+      ],
+      "motion_pose": "react",
+      "id": "npc_guard_react_v01",
+      "export": "assets/exports/npc/npc_guard_react_v01.glb",
+      "material_order": [
+        "skin",
+        "hair",
+        "underlayer",
+        "outer",
+        "trousers",
+        "leather",
+        "metal",
+        "accent",
+        "eye"
+      ],
+      "armor_geometry": "closed torso volume",
+      "apron_geometry": "none"
     },
     {
       "role": "raider",
@@ -633,6 +811,7 @@
       "posture": "forward",
       "hair": "crest",
       "garment": "rough_mantle",
+      "body_family": "athletic",
       "equipment": [
         "mantle",
         "half_armor",
@@ -652,7 +831,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "closed torso volume"
+      "armor_geometry": "closed torso volume",
+      "apron_geometry": "none"
     },
     {
       "role": "raider",
@@ -667,6 +847,7 @@
       "posture": "forward",
       "hair": "crest",
       "garment": "rough_mantle",
+      "body_family": "athletic",
       "equipment": [
         "mantle",
         "half_armor",
@@ -686,7 +867,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "closed torso volume"
+      "armor_geometry": "closed torso volume",
+      "apron_geometry": "none"
     },
     {
       "role": "raider",
@@ -701,6 +883,7 @@
       "posture": "forward",
       "hair": "crest",
       "garment": "rough_mantle",
+      "body_family": "athletic",
       "equipment": [
         "mantle",
         "half_armor",
@@ -720,7 +903,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "closed torso volume"
+      "armor_geometry": "closed torso volume",
+      "apron_geometry": "none"
     },
     {
       "role": "raider",
@@ -735,6 +919,7 @@
       "posture": "forward",
       "hair": "crest",
       "garment": "rough_mantle",
+      "body_family": "athletic",
       "equipment": [
         "mantle",
         "half_armor",
@@ -754,7 +939,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "closed torso volume"
+      "armor_geometry": "closed torso volume",
+      "apron_geometry": "none"
     },
     {
       "role": "raider",
@@ -769,6 +955,7 @@
       "posture": "forward",
       "hair": "crest",
       "garment": "rough_mantle",
+      "body_family": "athletic",
       "equipment": [
         "mantle",
         "half_armor",
@@ -788,7 +975,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "closed torso volume"
+      "armor_geometry": "closed torso volume",
+      "apron_geometry": "none"
     },
     {
       "role": "raider",
@@ -803,6 +991,7 @@
       "posture": "forward",
       "hair": "crest",
       "garment": "rough_mantle",
+      "body_family": "athletic",
       "equipment": [
         "mantle",
         "half_armor",
@@ -822,7 +1011,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "closed torso volume"
+      "armor_geometry": "closed torso volume",
+      "apron_geometry": "none"
     },
     {
       "role": "raider",
@@ -837,6 +1027,7 @@
       "posture": "forward",
       "hair": "crest",
       "garment": "rough_mantle",
+      "body_family": "athletic",
       "equipment": [
         "mantle",
         "half_armor",
@@ -856,7 +1047,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "closed torso volume"
+      "armor_geometry": "closed torso volume",
+      "apron_geometry": "none"
     },
     {
       "role": "raider",
@@ -871,6 +1063,7 @@
       "posture": "forward",
       "hair": "crest",
       "garment": "rough_mantle",
+      "body_family": "athletic",
       "equipment": [
         "mantle",
         "half_armor",
@@ -890,7 +1083,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "closed torso volume"
+      "armor_geometry": "closed torso volume",
+      "apron_geometry": "none"
     },
     {
       "role": "raider",
@@ -905,6 +1099,7 @@
       "posture": "forward",
       "hair": "crest",
       "garment": "rough_mantle",
+      "body_family": "athletic",
       "equipment": [
         "mantle",
         "half_armor",
@@ -924,7 +1119,80 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "closed torso volume"
+      "armor_geometry": "closed torso volume",
+      "apron_geometry": "none"
+    },
+    {
+      "role": "raider",
+      "role_index": 2,
+      "mass": 1.13,
+      "shoulder": 1.2,
+      "hip": 1.02,
+      "head_width": 1.06,
+      "head_height": 1.05,
+      "hand": 1.2,
+      "boot": 1.17,
+      "posture": "forward",
+      "hair": "crest",
+      "garment": "rough_mantle",
+      "body_family": "athletic",
+      "equipment": [
+        "mantle",
+        "half_armor",
+        "weapon"
+      ],
+      "motion_pose": "work",
+      "id": "npc_raider_work_v01",
+      "export": "assets/exports/npc/npc_raider_work_v01.glb",
+      "material_order": [
+        "skin",
+        "hair",
+        "underlayer",
+        "outer",
+        "trousers",
+        "leather",
+        "metal",
+        "accent",
+        "eye"
+      ],
+      "armor_geometry": "closed torso volume",
+      "apron_geometry": "none"
+    },
+    {
+      "role": "raider",
+      "role_index": 2,
+      "mass": 1.13,
+      "shoulder": 1.2,
+      "hip": 1.02,
+      "head_width": 1.06,
+      "head_height": 1.05,
+      "hand": 1.2,
+      "boot": 1.17,
+      "posture": "forward",
+      "hair": "crest",
+      "garment": "rough_mantle",
+      "body_family": "athletic",
+      "equipment": [
+        "mantle",
+        "half_armor",
+        "weapon"
+      ],
+      "motion_pose": "react",
+      "id": "npc_raider_react_v01",
+      "export": "assets/exports/npc/npc_raider_react_v01.glb",
+      "material_order": [
+        "skin",
+        "hair",
+        "underlayer",
+        "outer",
+        "trousers",
+        "leather",
+        "metal",
+        "accent",
+        "eye"
+      ],
+      "armor_geometry": "closed torso volume",
+      "apron_geometry": "none"
     },
     {
       "role": "merchant",
@@ -939,6 +1207,7 @@
       "posture": "open",
       "hair": "bob",
       "garment": "apron",
+      "body_family": "broad",
       "equipment": [
         "hat",
         "apron",
@@ -958,7 +1227,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "fitted bib with split skirt"
     },
     {
       "role": "merchant",
@@ -973,6 +1243,7 @@
       "posture": "open",
       "hair": "bob",
       "garment": "apron",
+      "body_family": "broad",
       "equipment": [
         "hat",
         "apron",
@@ -992,7 +1263,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "fitted bib with split skirt"
     },
     {
       "role": "merchant",
@@ -1007,6 +1279,7 @@
       "posture": "open",
       "hair": "bob",
       "garment": "apron",
+      "body_family": "broad",
       "equipment": [
         "hat",
         "apron",
@@ -1026,7 +1299,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "fitted bib with split skirt"
     },
     {
       "role": "merchant",
@@ -1041,6 +1315,7 @@
       "posture": "open",
       "hair": "bob",
       "garment": "apron",
+      "body_family": "broad",
       "equipment": [
         "hat",
         "apron",
@@ -1060,7 +1335,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "fitted bib with split skirt"
     },
     {
       "role": "merchant",
@@ -1075,6 +1351,7 @@
       "posture": "open",
       "hair": "bob",
       "garment": "apron",
+      "body_family": "broad",
       "equipment": [
         "hat",
         "apron",
@@ -1094,7 +1371,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "fitted bib with split skirt"
     },
     {
       "role": "merchant",
@@ -1109,6 +1387,7 @@
       "posture": "open",
       "hair": "bob",
       "garment": "apron",
+      "body_family": "broad",
       "equipment": [
         "hat",
         "apron",
@@ -1128,7 +1407,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "fitted bib with split skirt"
     },
     {
       "role": "merchant",
@@ -1143,6 +1423,7 @@
       "posture": "open",
       "hair": "bob",
       "garment": "apron",
+      "body_family": "broad",
       "equipment": [
         "hat",
         "apron",
@@ -1162,7 +1443,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "fitted bib with split skirt"
     },
     {
       "role": "merchant",
@@ -1177,6 +1459,7 @@
       "posture": "open",
       "hair": "bob",
       "garment": "apron",
+      "body_family": "broad",
       "equipment": [
         "hat",
         "apron",
@@ -1196,7 +1479,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "fitted bib with split skirt"
     },
     {
       "role": "merchant",
@@ -1211,6 +1495,7 @@
       "posture": "open",
       "hair": "bob",
       "garment": "apron",
+      "body_family": "broad",
       "equipment": [
         "hat",
         "apron",
@@ -1230,7 +1515,80 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "fitted bib with split skirt"
+    },
+    {
+      "role": "merchant",
+      "role_index": 3,
+      "mass": 1.22,
+      "shoulder": 1.08,
+      "hip": 1.14,
+      "head_width": 1.17,
+      "head_height": 1.1,
+      "hand": 1.15,
+      "boot": 1.1,
+      "posture": "open",
+      "hair": "bob",
+      "garment": "apron",
+      "body_family": "broad",
+      "equipment": [
+        "hat",
+        "apron",
+        "satchel"
+      ],
+      "motion_pose": "work",
+      "id": "npc_merchant_work_v01",
+      "export": "assets/exports/npc/npc_merchant_work_v01.glb",
+      "material_order": [
+        "skin",
+        "hair",
+        "underlayer",
+        "outer",
+        "trousers",
+        "leather",
+        "metal",
+        "accent",
+        "eye"
+      ],
+      "armor_geometry": "none",
+      "apron_geometry": "fitted bib with split skirt"
+    },
+    {
+      "role": "merchant",
+      "role_index": 3,
+      "mass": 1.22,
+      "shoulder": 1.08,
+      "hip": 1.14,
+      "head_width": 1.17,
+      "head_height": 1.1,
+      "hand": 1.15,
+      "boot": 1.1,
+      "posture": "open",
+      "hair": "bob",
+      "garment": "apron",
+      "body_family": "broad",
+      "equipment": [
+        "hat",
+        "apron",
+        "satchel"
+      ],
+      "motion_pose": "react",
+      "id": "npc_merchant_react_v01",
+      "export": "assets/exports/npc/npc_merchant_react_v01.glb",
+      "material_order": [
+        "skin",
+        "hair",
+        "underlayer",
+        "outer",
+        "trousers",
+        "leather",
+        "metal",
+        "accent",
+        "eye"
+      ],
+      "armor_geometry": "none",
+      "apron_geometry": "fitted bib with split skirt"
     },
     {
       "role": "laborer",
@@ -1245,6 +1603,7 @@
       "posture": "heavy",
       "hair": "cropped",
       "garment": "work_apron",
+      "body_family": "broad",
       "equipment": [
         "apron",
         "tool"
@@ -1263,7 +1622,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "fitted bib with split skirt"
     },
     {
       "role": "laborer",
@@ -1278,6 +1638,7 @@
       "posture": "heavy",
       "hair": "cropped",
       "garment": "work_apron",
+      "body_family": "broad",
       "equipment": [
         "apron",
         "tool"
@@ -1296,7 +1657,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "fitted bib with split skirt"
     },
     {
       "role": "laborer",
@@ -1311,6 +1673,7 @@
       "posture": "heavy",
       "hair": "cropped",
       "garment": "work_apron",
+      "body_family": "broad",
       "equipment": [
         "apron",
         "tool"
@@ -1329,7 +1692,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "fitted bib with split skirt"
     },
     {
       "role": "laborer",
@@ -1344,6 +1708,7 @@
       "posture": "heavy",
       "hair": "cropped",
       "garment": "work_apron",
+      "body_family": "broad",
       "equipment": [
         "apron",
         "tool"
@@ -1362,7 +1727,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "fitted bib with split skirt"
     },
     {
       "role": "laborer",
@@ -1377,6 +1743,7 @@
       "posture": "heavy",
       "hair": "cropped",
       "garment": "work_apron",
+      "body_family": "broad",
       "equipment": [
         "apron",
         "tool"
@@ -1395,7 +1762,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "fitted bib with split skirt"
     },
     {
       "role": "laborer",
@@ -1410,6 +1778,7 @@
       "posture": "heavy",
       "hair": "cropped",
       "garment": "work_apron",
+      "body_family": "broad",
       "equipment": [
         "apron",
         "tool"
@@ -1428,7 +1797,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "fitted bib with split skirt"
     },
     {
       "role": "laborer",
@@ -1443,6 +1813,7 @@
       "posture": "heavy",
       "hair": "cropped",
       "garment": "work_apron",
+      "body_family": "broad",
       "equipment": [
         "apron",
         "tool"
@@ -1461,7 +1832,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "fitted bib with split skirt"
     },
     {
       "role": "laborer",
@@ -1476,6 +1848,7 @@
       "posture": "heavy",
       "hair": "cropped",
       "garment": "work_apron",
+      "body_family": "broad",
       "equipment": [
         "apron",
         "tool"
@@ -1494,7 +1867,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "fitted bib with split skirt"
     },
     {
       "role": "laborer",
@@ -1509,6 +1883,7 @@
       "posture": "heavy",
       "hair": "cropped",
       "garment": "work_apron",
+      "body_family": "broad",
       "equipment": [
         "apron",
         "tool"
@@ -1527,7 +1902,78 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "fitted bib with split skirt"
+    },
+    {
+      "role": "laborer",
+      "role_index": 4,
+      "mass": 1.23,
+      "shoulder": 1.19,
+      "hip": 1.12,
+      "head_width": 1.08,
+      "head_height": 1.05,
+      "hand": 1.22,
+      "boot": 1.21,
+      "posture": "heavy",
+      "hair": "cropped",
+      "garment": "work_apron",
+      "body_family": "broad",
+      "equipment": [
+        "apron",
+        "tool"
+      ],
+      "motion_pose": "work",
+      "id": "npc_laborer_work_v01",
+      "export": "assets/exports/npc/npc_laborer_work_v01.glb",
+      "material_order": [
+        "skin",
+        "hair",
+        "underlayer",
+        "outer",
+        "trousers",
+        "leather",
+        "metal",
+        "accent",
+        "eye"
+      ],
+      "armor_geometry": "none",
+      "apron_geometry": "fitted bib with split skirt"
+    },
+    {
+      "role": "laborer",
+      "role_index": 4,
+      "mass": 1.23,
+      "shoulder": 1.19,
+      "hip": 1.12,
+      "head_width": 1.08,
+      "head_height": 1.05,
+      "hand": 1.22,
+      "boot": 1.21,
+      "posture": "heavy",
+      "hair": "cropped",
+      "garment": "work_apron",
+      "body_family": "broad",
+      "equipment": [
+        "apron",
+        "tool"
+      ],
+      "motion_pose": "react",
+      "id": "npc_laborer_react_v01",
+      "export": "assets/exports/npc/npc_laborer_react_v01.glb",
+      "material_order": [
+        "skin",
+        "hair",
+        "underlayer",
+        "outer",
+        "trousers",
+        "leather",
+        "metal",
+        "accent",
+        "eye"
+      ],
+      "armor_geometry": "none",
+      "apron_geometry": "fitted bib with split skirt"
     },
     {
       "role": "traveller",
@@ -1542,6 +1988,7 @@
       "posture": "walking",
       "hair": "wrapped",
       "garment": "road_coat",
+      "body_family": "lean",
       "equipment": [
         "mantle",
         "pack",
@@ -1561,7 +2008,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "none"
     },
     {
       "role": "traveller",
@@ -1576,6 +2024,7 @@
       "posture": "walking",
       "hair": "wrapped",
       "garment": "road_coat",
+      "body_family": "lean",
       "equipment": [
         "mantle",
         "pack",
@@ -1595,7 +2044,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "none"
     },
     {
       "role": "traveller",
@@ -1610,6 +2060,7 @@
       "posture": "walking",
       "hair": "wrapped",
       "garment": "road_coat",
+      "body_family": "lean",
       "equipment": [
         "mantle",
         "pack",
@@ -1629,7 +2080,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "none"
     },
     {
       "role": "traveller",
@@ -1644,6 +2096,7 @@
       "posture": "walking",
       "hair": "wrapped",
       "garment": "road_coat",
+      "body_family": "lean",
       "equipment": [
         "mantle",
         "pack",
@@ -1663,7 +2116,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "none"
     },
     {
       "role": "traveller",
@@ -1678,6 +2132,7 @@
       "posture": "walking",
       "hair": "wrapped",
       "garment": "road_coat",
+      "body_family": "lean",
       "equipment": [
         "mantle",
         "pack",
@@ -1697,7 +2152,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "none"
     },
     {
       "role": "traveller",
@@ -1712,6 +2168,7 @@
       "posture": "walking",
       "hair": "wrapped",
       "garment": "road_coat",
+      "body_family": "lean",
       "equipment": [
         "mantle",
         "pack",
@@ -1731,7 +2188,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "none"
     },
     {
       "role": "traveller",
@@ -1746,6 +2204,7 @@
       "posture": "walking",
       "hair": "wrapped",
       "garment": "road_coat",
+      "body_family": "lean",
       "equipment": [
         "mantle",
         "pack",
@@ -1765,7 +2224,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "none"
     },
     {
       "role": "traveller",
@@ -1780,6 +2240,7 @@
       "posture": "walking",
       "hair": "wrapped",
       "garment": "road_coat",
+      "body_family": "lean",
       "equipment": [
         "mantle",
         "pack",
@@ -1799,7 +2260,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "none"
     },
     {
       "role": "traveller",
@@ -1814,6 +2276,7 @@
       "posture": "walking",
       "hair": "wrapped",
       "garment": "road_coat",
+      "body_family": "lean",
       "equipment": [
         "mantle",
         "pack",
@@ -1833,7 +2296,80 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "none"
+    },
+    {
+      "role": "traveller",
+      "role_index": 5,
+      "mass": 1.07,
+      "shoulder": 1.09,
+      "hip": 1.01,
+      "head_width": 1.09,
+      "head_height": 1.08,
+      "hand": 1.14,
+      "boot": 1.16,
+      "posture": "walking",
+      "hair": "wrapped",
+      "garment": "road_coat",
+      "body_family": "lean",
+      "equipment": [
+        "mantle",
+        "pack",
+        "hat"
+      ],
+      "motion_pose": "work",
+      "id": "npc_traveller_work_v01",
+      "export": "assets/exports/npc/npc_traveller_work_v01.glb",
+      "material_order": [
+        "skin",
+        "hair",
+        "underlayer",
+        "outer",
+        "trousers",
+        "leather",
+        "metal",
+        "accent",
+        "eye"
+      ],
+      "armor_geometry": "none",
+      "apron_geometry": "none"
+    },
+    {
+      "role": "traveller",
+      "role_index": 5,
+      "mass": 1.07,
+      "shoulder": 1.09,
+      "hip": 1.01,
+      "head_width": 1.09,
+      "head_height": 1.08,
+      "hand": 1.14,
+      "boot": 1.16,
+      "posture": "walking",
+      "hair": "wrapped",
+      "garment": "road_coat",
+      "body_family": "lean",
+      "equipment": [
+        "mantle",
+        "pack",
+        "hat"
+      ],
+      "motion_pose": "react",
+      "id": "npc_traveller_react_v01",
+      "export": "assets/exports/npc/npc_traveller_react_v01.glb",
+      "material_order": [
+        "skin",
+        "hair",
+        "underlayer",
+        "outer",
+        "trousers",
+        "leather",
+        "metal",
+        "accent",
+        "eye"
+      ],
+      "armor_geometry": "none",
+      "apron_geometry": "none"
     },
     {
       "role": "refugee",
@@ -1848,6 +2384,7 @@
       "posture": "inward",
       "hair": "hooded",
       "garment": "wrapped",
+      "body_family": "compact",
       "equipment": [
         "hood",
         "mantle",
@@ -1867,7 +2404,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "none"
     },
     {
       "role": "refugee",
@@ -1882,6 +2420,7 @@
       "posture": "inward",
       "hair": "hooded",
       "garment": "wrapped",
+      "body_family": "compact",
       "equipment": [
         "hood",
         "mantle",
@@ -1901,7 +2440,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "none"
     },
     {
       "role": "refugee",
@@ -1916,6 +2456,7 @@
       "posture": "inward",
       "hair": "hooded",
       "garment": "wrapped",
+      "body_family": "compact",
       "equipment": [
         "hood",
         "mantle",
@@ -1935,7 +2476,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "none"
     },
     {
       "role": "refugee",
@@ -1950,6 +2492,7 @@
       "posture": "inward",
       "hair": "hooded",
       "garment": "wrapped",
+      "body_family": "compact",
       "equipment": [
         "hood",
         "mantle",
@@ -1969,7 +2512,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "none"
     },
     {
       "role": "refugee",
@@ -1984,6 +2528,7 @@
       "posture": "inward",
       "hair": "hooded",
       "garment": "wrapped",
+      "body_family": "compact",
       "equipment": [
         "hood",
         "mantle",
@@ -2003,7 +2548,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "none"
     },
     {
       "role": "refugee",
@@ -2018,6 +2564,7 @@
       "posture": "inward",
       "hair": "hooded",
       "garment": "wrapped",
+      "body_family": "compact",
       "equipment": [
         "hood",
         "mantle",
@@ -2037,7 +2584,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "none"
     },
     {
       "role": "refugee",
@@ -2052,6 +2600,7 @@
       "posture": "inward",
       "hair": "hooded",
       "garment": "wrapped",
+      "body_family": "compact",
       "equipment": [
         "hood",
         "mantle",
@@ -2071,7 +2620,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "none"
     },
     {
       "role": "refugee",
@@ -2086,6 +2636,7 @@
       "posture": "inward",
       "hair": "hooded",
       "garment": "wrapped",
+      "body_family": "compact",
       "equipment": [
         "hood",
         "mantle",
@@ -2105,7 +2656,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "none"
     },
     {
       "role": "refugee",
@@ -2120,6 +2672,7 @@
       "posture": "inward",
       "hair": "hooded",
       "garment": "wrapped",
+      "body_family": "compact",
       "equipment": [
         "hood",
         "mantle",
@@ -2139,7 +2692,80 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "none"
+    },
+    {
+      "role": "refugee",
+      "role_index": 6,
+      "mass": 0.95,
+      "shoulder": 0.98,
+      "hip": 0.94,
+      "head_width": 1.12,
+      "head_height": 1.1,
+      "hand": 1.05,
+      "boot": 1.06,
+      "posture": "inward",
+      "hair": "hooded",
+      "garment": "wrapped",
+      "body_family": "compact",
+      "equipment": [
+        "hood",
+        "mantle",
+        "pack"
+      ],
+      "motion_pose": "work",
+      "id": "npc_refugee_work_v01",
+      "export": "assets/exports/npc/npc_refugee_work_v01.glb",
+      "material_order": [
+        "skin",
+        "hair",
+        "underlayer",
+        "outer",
+        "trousers",
+        "leather",
+        "metal",
+        "accent",
+        "eye"
+      ],
+      "armor_geometry": "none",
+      "apron_geometry": "none"
+    },
+    {
+      "role": "refugee",
+      "role_index": 6,
+      "mass": 0.95,
+      "shoulder": 0.98,
+      "hip": 0.94,
+      "head_width": 1.12,
+      "head_height": 1.1,
+      "hand": 1.05,
+      "boot": 1.06,
+      "posture": "inward",
+      "hair": "hooded",
+      "garment": "wrapped",
+      "body_family": "compact",
+      "equipment": [
+        "hood",
+        "mantle",
+        "pack"
+      ],
+      "motion_pose": "react",
+      "id": "npc_refugee_react_v01",
+      "export": "assets/exports/npc/npc_refugee_react_v01.glb",
+      "material_order": [
+        "skin",
+        "hair",
+        "underlayer",
+        "outer",
+        "trousers",
+        "leather",
+        "metal",
+        "accent",
+        "eye"
+      ],
+      "armor_geometry": "none",
+      "apron_geometry": "none"
     },
     {
       "role": "scout",
@@ -2154,6 +2780,7 @@
       "posture": "forward",
       "hair": "short",
       "garment": "short_coat",
+      "body_family": "lean",
       "equipment": [
         "short_mantle",
         "satchel",
@@ -2173,7 +2800,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "none"
     },
     {
       "role": "scout",
@@ -2188,6 +2816,7 @@
       "posture": "forward",
       "hair": "short",
       "garment": "short_coat",
+      "body_family": "lean",
       "equipment": [
         "short_mantle",
         "satchel",
@@ -2207,7 +2836,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "none"
     },
     {
       "role": "scout",
@@ -2222,6 +2852,7 @@
       "posture": "forward",
       "hair": "short",
       "garment": "short_coat",
+      "body_family": "lean",
       "equipment": [
         "short_mantle",
         "satchel",
@@ -2241,7 +2872,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "none"
     },
     {
       "role": "scout",
@@ -2256,6 +2888,7 @@
       "posture": "forward",
       "hair": "short",
       "garment": "short_coat",
+      "body_family": "lean",
       "equipment": [
         "short_mantle",
         "satchel",
@@ -2275,7 +2908,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "none"
     },
     {
       "role": "scout",
@@ -2290,6 +2924,7 @@
       "posture": "forward",
       "hair": "short",
       "garment": "short_coat",
+      "body_family": "lean",
       "equipment": [
         "short_mantle",
         "satchel",
@@ -2309,7 +2944,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "none"
     },
     {
       "role": "scout",
@@ -2324,6 +2960,7 @@
       "posture": "forward",
       "hair": "short",
       "garment": "short_coat",
+      "body_family": "lean",
       "equipment": [
         "short_mantle",
         "satchel",
@@ -2343,7 +2980,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "none"
     },
     {
       "role": "scout",
@@ -2358,6 +2996,7 @@
       "posture": "forward",
       "hair": "short",
       "garment": "short_coat",
+      "body_family": "lean",
       "equipment": [
         "short_mantle",
         "satchel",
@@ -2377,7 +3016,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "none"
     },
     {
       "role": "scout",
@@ -2392,6 +3032,7 @@
       "posture": "forward",
       "hair": "short",
       "garment": "short_coat",
+      "body_family": "lean",
       "equipment": [
         "short_mantle",
         "satchel",
@@ -2411,7 +3052,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "none"
     },
     {
       "role": "scout",
@@ -2426,6 +3068,7 @@
       "posture": "forward",
       "hair": "short",
       "garment": "short_coat",
+      "body_family": "lean",
       "equipment": [
         "short_mantle",
         "satchel",
@@ -2445,7 +3088,80 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "none"
+    },
+    {
+      "role": "scout",
+      "role_index": 7,
+      "mass": 0.98,
+      "shoulder": 1.04,
+      "hip": 0.94,
+      "head_width": 1.04,
+      "head_height": 1.03,
+      "hand": 1.12,
+      "boot": 1.15,
+      "posture": "forward",
+      "hair": "short",
+      "garment": "short_coat",
+      "body_family": "lean",
+      "equipment": [
+        "short_mantle",
+        "satchel",
+        "weapon"
+      ],
+      "motion_pose": "work",
+      "id": "npc_scout_work_v01",
+      "export": "assets/exports/npc/npc_scout_work_v01.glb",
+      "material_order": [
+        "skin",
+        "hair",
+        "underlayer",
+        "outer",
+        "trousers",
+        "leather",
+        "metal",
+        "accent",
+        "eye"
+      ],
+      "armor_geometry": "none",
+      "apron_geometry": "none"
+    },
+    {
+      "role": "scout",
+      "role_index": 7,
+      "mass": 0.98,
+      "shoulder": 1.04,
+      "hip": 0.94,
+      "head_width": 1.04,
+      "head_height": 1.03,
+      "hand": 1.12,
+      "boot": 1.15,
+      "posture": "forward",
+      "hair": "short",
+      "garment": "short_coat",
+      "body_family": "lean",
+      "equipment": [
+        "short_mantle",
+        "satchel",
+        "weapon"
+      ],
+      "motion_pose": "react",
+      "id": "npc_scout_react_v01",
+      "export": "assets/exports/npc/npc_scout_react_v01.glb",
+      "material_order": [
+        "skin",
+        "hair",
+        "underlayer",
+        "outer",
+        "trousers",
+        "leather",
+        "metal",
+        "accent",
+        "eye"
+      ],
+      "armor_geometry": "none",
+      "apron_geometry": "none"
     },
     {
       "role": "healer",
@@ -2460,6 +3176,7 @@
       "posture": "measured",
       "hair": "braided",
       "garment": "layered_apron",
+      "body_family": "compact",
       "equipment": [
         "mantle",
         "apron",
@@ -2480,7 +3197,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "fitted bib with split skirt"
     },
     {
       "role": "healer",
@@ -2495,6 +3213,7 @@
       "posture": "measured",
       "hair": "braided",
       "garment": "layered_apron",
+      "body_family": "compact",
       "equipment": [
         "mantle",
         "apron",
@@ -2515,7 +3234,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "fitted bib with split skirt"
     },
     {
       "role": "healer",
@@ -2530,6 +3250,7 @@
       "posture": "measured",
       "hair": "braided",
       "garment": "layered_apron",
+      "body_family": "compact",
       "equipment": [
         "mantle",
         "apron",
@@ -2550,7 +3271,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "fitted bib with split skirt"
     },
     {
       "role": "healer",
@@ -2565,6 +3287,7 @@
       "posture": "measured",
       "hair": "braided",
       "garment": "layered_apron",
+      "body_family": "compact",
       "equipment": [
         "mantle",
         "apron",
@@ -2585,7 +3308,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "fitted bib with split skirt"
     },
     {
       "role": "healer",
@@ -2600,6 +3324,7 @@
       "posture": "measured",
       "hair": "braided",
       "garment": "layered_apron",
+      "body_family": "compact",
       "equipment": [
         "mantle",
         "apron",
@@ -2620,7 +3345,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "fitted bib with split skirt"
     },
     {
       "role": "healer",
@@ -2635,6 +3361,7 @@
       "posture": "measured",
       "hair": "braided",
       "garment": "layered_apron",
+      "body_family": "compact",
       "equipment": [
         "mantle",
         "apron",
@@ -2655,7 +3382,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "fitted bib with split skirt"
     },
     {
       "role": "healer",
@@ -2670,6 +3398,7 @@
       "posture": "measured",
       "hair": "braided",
       "garment": "layered_apron",
+      "body_family": "compact",
       "equipment": [
         "mantle",
         "apron",
@@ -2690,7 +3419,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "fitted bib with split skirt"
     },
     {
       "role": "healer",
@@ -2705,6 +3435,7 @@
       "posture": "measured",
       "hair": "braided",
       "garment": "layered_apron",
+      "body_family": "compact",
       "equipment": [
         "mantle",
         "apron",
@@ -2725,7 +3456,8 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "fitted bib with split skirt"
     },
     {
       "role": "healer",
@@ -2740,6 +3472,7 @@
       "posture": "measured",
       "hair": "braided",
       "garment": "layered_apron",
+      "body_family": "compact",
       "equipment": [
         "mantle",
         "apron",
@@ -2760,7 +3493,82 @@
         "accent",
         "eye"
       ],
-      "armor_geometry": "none"
+      "armor_geometry": "none",
+      "apron_geometry": "fitted bib with split skirt"
+    },
+    {
+      "role": "healer",
+      "role_index": 8,
+      "mass": 1.04,
+      "shoulder": 1.06,
+      "hip": 1.02,
+      "head_width": 1.12,
+      "head_height": 1.1,
+      "hand": 1.12,
+      "boot": 1.09,
+      "posture": "measured",
+      "hair": "braided",
+      "garment": "layered_apron",
+      "body_family": "compact",
+      "equipment": [
+        "mantle",
+        "apron",
+        "satchel",
+        "healer_mark"
+      ],
+      "motion_pose": "work",
+      "id": "npc_healer_work_v01",
+      "export": "assets/exports/npc/npc_healer_work_v01.glb",
+      "material_order": [
+        "skin",
+        "hair",
+        "underlayer",
+        "outer",
+        "trousers",
+        "leather",
+        "metal",
+        "accent",
+        "eye"
+      ],
+      "armor_geometry": "none",
+      "apron_geometry": "fitted bib with split skirt"
+    },
+    {
+      "role": "healer",
+      "role_index": 8,
+      "mass": 1.04,
+      "shoulder": 1.06,
+      "hip": 1.02,
+      "head_width": 1.12,
+      "head_height": 1.1,
+      "hand": 1.12,
+      "boot": 1.09,
+      "posture": "measured",
+      "hair": "braided",
+      "garment": "layered_apron",
+      "body_family": "compact",
+      "equipment": [
+        "mantle",
+        "apron",
+        "satchel",
+        "healer_mark"
+      ],
+      "motion_pose": "react",
+      "id": "npc_healer_react_v01",
+      "export": "assets/exports/npc/npc_healer_react_v01.glb",
+      "material_order": [
+        "skin",
+        "hair",
+        "underlayer",
+        "outer",
+        "trousers",
+        "leather",
+        "metal",
+        "accent",
+        "eye"
+      ],
+      "armor_geometry": "none",
+      "apron_geometry": "fitted bib with split skirt"
     }
   ]
 }

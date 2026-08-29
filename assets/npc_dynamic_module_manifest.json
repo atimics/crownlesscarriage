@@ -1,5 +1,5 @@
 {
-  "library_version": "0.5.0",
+  "library_version": "0.6.0",
   "generation": "offline procedural rigid character modules",
   "runtime_strategy": "bone-frame instancing without skins or animations",
   "coordinate_system": "glTF +Y up, +Z forward",
@@ -115,7 +115,7 @@
       "anchor": "pelvis",
       "material": "underlayer",
       "export": "assets/exports/npc/npc_module_apron_v01.glb",
-      "shape_contract": "rigid fitted module"
+      "shape_contract": "fitted bib with split skirt"
     },
     {
       "id": "npc_module_pack_v01",

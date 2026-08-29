@@ -29,7 +29,13 @@ EXPECTED_POSES = (
     "idle",
     "contact_l", "down_l", "passing_l", "up_l",
     "contact_r", "down_r", "passing_r", "up_r",
+    "work", "react",
 )
+EXPECTED_BODY_FAMILIES = {
+    "wayfarer": "athletic", "guard": "broad", "raider": "athletic",
+    "merchant": "broad", "laborer": "broad", "traveller": "lean",
+    "refugee": "compact", "scout": "lean", "healer": "compact",
+}
 EXPECTED_MATERIALS = ("MAT_NPC_INDEXED",)
 EXPECTED_PALETTE = (
     "skin", "hair", "underlayer", "outer", "trousers",
@@ -58,6 +64,17 @@ def validate() -> int:
         failures.append(f"role indices do not match pose families: {indices!r}")
     if tuple(manifest.get("material_order", ())) != EXPECTED_PALETTE:
         failures.append("manifest material order changed")
+    for entry in entries:
+        expected_family = EXPECTED_BODY_FAMILIES.get(entry.get("role"))
+        if entry.get("body_family") != expected_family:
+            failures.append(
+                f"{entry.get('role')}: body family {entry.get('body_family')!r} "
+                f"!= {expected_family!r}")
+        has_apron = "apron" in entry.get("equipment", ())
+        expected_apron = "fitted bib with split skirt" if has_apron else "none"
+        if entry.get("apron_geometry") != expected_apron:
+            failures.append(
+                f"{entry.get('role')}: apron geometry contract changed")
     expected_exports = {Path(entry["export"]).name for entry in entries}
     export_dir = ROOT / "assets" / "exports" / "npc"
     shipped_exports = {

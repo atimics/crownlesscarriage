@@ -43,6 +43,10 @@ def validate() -> int:
     if len(chest_entries) != 1 or \
             chest_entries[0].get("shape_contract") != "closed torso volume":
         failures.append("chest plate must declare a closed torso volume")
+    apron_entries = [entry for entry in entries if entry.get("slot") == "apron"]
+    if len(apron_entries) != 1 or apron_entries[0].get("shape_contract") != \
+            "fitted bib with split skirt":
+        failures.append("apron must declare a fitted split-skirt volume")
     expected_exports = {Path(entry["export"]).name for entry in entries}
     export_dir = ROOT / "assets" / "exports" / "npc"
     shipped_exports = {

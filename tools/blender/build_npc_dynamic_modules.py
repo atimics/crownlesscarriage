@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parents[2]
 BLEND_PATH = ROOT / "assets" / "blender" / "crownless_npc_dynamic_modules.blend"
 EXPORT_DIR = ROOT / "assets" / "exports" / "npc"
 MANIFEST_PATH = ROOT / "assets" / "npc_dynamic_module_manifest.json"
-LIBRARY_VERSION = "0.5.0"
+LIBRARY_VERSION = "0.6.0"
 MATERIAL_NAME = "MAT_NPC_INDEXED"
 PALETTE_INDEX = {
     "skin": 0,
@@ -342,10 +342,13 @@ def build_geometry(slot: str, collection: bpy.types.Collection,
         add_box("GEO_ModulePauldronLip", (0.0, -0.26, -0.18),
                 (0.94, 0.14, 0.22), collection, material, width=0.05)
     elif slot == "apron":
-        add_panel("GEO_ModuleApron", (
-            (-0.48, 0.0, 0.45), (0.48, 0.0, 0.45),
-            (0.42, 0.04, -0.55), (-0.42, 0.04, -0.55),
-        ), collection, material, thickness=0.05)
+        add_box("GEO_ModuleApronBib", (0.0, -0.05, 0.28),
+                (0.62, 0.12, 0.38), collection, material, width=0.06)
+        for side in (-1.0, 1.0):
+            add_box(f"GEO_ModuleApronSkirt{side:+.0f}",
+                    (side * 0.22, -0.03, -0.30),
+                    (0.38, 0.14, 0.72), collection, material, width=0.06,
+                    rotation=(0.0, side * 0.035, 0.0))
     elif slot == "pack":
         add_box("GEO_ModulePack", (0.0, 0.0, 0.0),
                 (1.0, 0.52, 1.0), collection, material, width=0.14)
@@ -592,7 +595,9 @@ def build() -> None:
             id=asset_id, slot=slot, anchor=anchor, material=palette,
             export=str(path.relative_to(ROOT)),
             shape_contract="closed torso volume"
-            if slot == "chest_plate" else "rigid fitted module"))
+            if slot == "chest_plate" else
+            "fitted bib with split skirt"
+            if slot == "apron" else "rigid fitted module"))
     manifest = {
         "library_version": LIBRARY_VERSION,
         "generation": "offline procedural rigid character modules",
