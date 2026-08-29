@@ -18,8 +18,9 @@ respond to a player decision.
 9. [Validation](09-validation.md)
 10. [Production roadmap](10-roadmap.md)
 11. [Text-first metagame playtest](11-metagame-playtest.md)
-12. [Glossary](glossary.md)
-13. [Decision log](decisions/README.md)
+12. [Story, quests, and narration](12-story-quests-and-narration.md)
+13. [Glossary](glossary.md)
+14. [Decision log](decisions/README.md)
 
 ## Full table of contents
 
