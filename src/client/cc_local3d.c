@@ -12710,14 +12710,48 @@ static void DrawCroftScarecrow(float hunger)
     Color wood = WORLD_WOOD;
     Color cloth = BlendColor(WORLD_EARTH_LIGHT,
                              WORLD_ROAD_SHADOW, hunger);
-    DrawBox((Vector3){x, 0.92f, z}, (Vector3){0.12f, 1.84f, 0.12f}, wood);
-    DrawBox((Vector3){x, 1.38f, z}, (Vector3){1.38f, 0.10f, 0.10f}, wood);
-    DrawBox((Vector3){x, 1.20f, z + 0.04f},
-            (Vector3){0.78f, 0.68f, 0.12f}, cloth);
-    DrawSmallSphere((Vector3){x, 1.80f, z}, 0.23f,
-                    BlendColor(WORLD_CROP_LIGHT, WORLD_WOOD_LIGHT, 0.34f));
-    DrawBox((Vector3){x, 2.03f, z}, (Vector3){0.72f, 0.08f, 0.44f}, wood);
-    DrawBox((Vector3){x, 2.17f, z}, (Vector3){0.38f, 0.30f, 0.34f}, wood);
+    Color straw = BlendColor(WORLD_CROP_LIGHT, WORLD_WOOD_LIGHT, 0.34f);
+    Vector3 post_base = {x - 0.06f, 0.02f, z};
+    Vector3 post_top = {x + 0.13f, 1.97f, z + 0.02f};
+    Vector3 arm_left = {x - 0.77f, 1.47f, z - 0.02f};
+    Vector3 arm_right = {x + 0.70f, 1.35f, z + 0.03f};
+    DrawCylinderEx(post_base, post_top, 0.060f, 0.045f, 7, wood);
+    DrawCylinderEx(arm_left, arm_right, 0.052f, 0.045f, 7, wood);
+
+    /* Uneven hanging rags and exposed straw make this read as a field prop,
+       not another motionless person sharing the road. */
+    DrawTiltedBox((Vector3){x - 0.18f, 1.17f, z - 0.01f},
+                  (Vector3){0.34f, 0.58f, 0.09f},
+                  (Vector3){0.0f, 0.0f, 1.0f}, 10.0f, cloth);
+    DrawTiltedBox((Vector3){x + 0.17f, 1.12f, z + 0.02f},
+                  (Vector3){0.24f, 0.48f, 0.08f},
+                  (Vector3){0.0f, 0.0f, 1.0f}, -14.0f,
+                  ShadeColor(cloth, 0.78f));
+    DrawCylinderEx(arm_left,
+                   (Vector3){x - 0.58f, 1.19f, z - 0.01f},
+                   0.020f, 0.012f, 5, straw);
+    DrawCylinderEx(arm_right,
+                   (Vector3){x + 0.58f, 1.08f, z + 0.04f},
+                   0.020f, 0.012f, 5, straw);
+    for (int32_t tuft = -1; tuft <= 1; ++tuft) {
+        float spread = (float)tuft * 0.07f;
+        DrawCylinderEx(arm_left,
+                       (Vector3){arm_left.x - 0.17f,
+                                 arm_left.y + spread, arm_left.z + spread},
+                       0.014f, 0.004f, 5, straw);
+        DrawCylinderEx(arm_right,
+                       (Vector3){arm_right.x + 0.17f,
+                                 arm_right.y + spread, arm_right.z - spread},
+                       0.014f, 0.004f, 5, straw);
+    }
+    Vector3 head = {x + 0.14f, 1.82f, z + 0.01f};
+    DrawSmallSphere(head, 0.19f, straw);
+    DrawTiltedBox((Vector3){x + 0.17f, 2.01f, z + 0.01f},
+                  (Vector3){0.63f, 0.065f, 0.38f},
+                  (Vector3){0.0f, 0.0f, 1.0f}, -9.0f, wood);
+    DrawTiltedBox((Vector3){x + 0.23f, 2.12f, z + 0.01f},
+                  (Vector3){0.32f, 0.24f, 0.30f},
+                  (Vector3){0.0f, 0.0f, 1.0f}, -9.0f, wood);
 }
 
 static void DrawMineWaystone(void)
@@ -15303,6 +15337,38 @@ static void DrawVisibleNpcFigure3D(Vector3 position, float size_hint,
 {
     if (!SceneryPointVisible(position.x, position.z, focus)) return;
     DrawNpcFigure3D(position, size_hint, yaw, seed, role, accent, phase, mode);
+}
+
+static void DrawAmbientNpcRoute3D(Vector2 start, Vector2 end,
+                                  float size_hint, uint32_t seed,
+                                  CcNpcRole role, Color accent, float clock,
+                                  float route_offset, Vector3 focus)
+{
+    float cycle = fmodf(clock * 0.12f + route_offset, 1.0f);
+    if (cycle < 0.0f) cycle += 1.0f;
+    bool moving_forward = cycle < 0.40f;
+    bool resting_at_end = cycle >= 0.40f && cycle < 0.50f;
+    bool moving_back = cycle >= 0.50f && cycle < 0.90f;
+    float progress = 0.0f;
+    if (moving_forward) {
+        progress = SmoothStep01(cycle / 0.40f);
+    } else if (resting_at_end) {
+        progress = 1.0f;
+    } else if (moving_back) {
+        progress = 1.0f - SmoothStep01((cycle - 0.50f) / 0.40f);
+    }
+    Vector2 point = {
+        start.x + (end.x - start.x) * progress,
+        start.y + (end.y - start.y) * progress,
+    };
+    float route_yaw = atan2f(end.x - start.x, end.y - start.y);
+    if (moving_back || cycle >= 0.90f) route_yaw = WrapAngle(route_yaw + PI);
+    CcTraversalMode mode = moving_forward || moving_back ?
+        CC_TRAVERSAL_WALK : CC_TRAVERSAL_IDLE;
+    DrawVisibleNpcFigure3D(
+        TerrainWorldPoint(point.x, point.y), size_hint, route_yaw,
+        seed, role, accent, clock * 4.2f + route_offset * 2.0f * PI,
+        mode, focus);
 }
 
 static void DrawPitchedFoot(Vector3 heel, Vector3 toe, float yaw, Color color)
@@ -19496,35 +19562,30 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         CC_TRAVERSAL_IDLE, scenery_focus);
     /* Each outer room has one resident whose job explains the place at a
        glance. Their spacing leaves the authored travel lanes clear. */
-    DrawVisibleNpcFigure3D(
-        TerrainWorldPoint(10.15f, 31.90f), 0.88f, -0.85f,
+    DrawAmbientNpcRoute3D(
+        (Vector2){13.60f, 25.80f}, (Vector2){14.80f, 26.60f}, 0.88f,
         UINT32_C(0x64697301), CC_NPC_ROLE_LABORER,
-        (Color){143, 118, 65, 255}, clock * 0.52f + 0.5f,
-        CC_TRAVERSAL_IDLE, scenery_focus);
-    DrawVisibleNpcFigure3D(
-        TerrainWorldPoint(24.10f, 53.20f), 0.90f, 1.50f,
+        (Color){143, 118, 65, 255}, clock, 0.08f, scenery_focus);
+    DrawAmbientNpcRoute3D(
+        (Vector2){24.10f, 53.20f}, (Vector2){25.70f, 53.20f}, 0.90f,
         UINT32_C(0x64697302), CC_NPC_ROLE_SCOUT,
-        (Color){103, 103, 112, 255}, clock * 0.48f + 1.1f,
-        CC_TRAVERSAL_IDLE, scenery_focus);
-    DrawVisibleNpcFigure3D(
-        TerrainWorldPoint(35.20f, 26.65f), 0.94f, -0.15f,
+        (Color){103, 103, 112, 255}, clock, 0.29f, scenery_focus);
+    DrawAmbientNpcRoute3D(
+        (Vector2){35.20f, 26.65f}, (Vector2){36.75f, 27.25f}, 0.94f,
         UINT32_C(0x64697303), CC_NPC_ROLE_LABORER,
-        (Color){174, 94, 53, 255}, clock * 0.60f + 1.7f,
-        CC_TRAVERSAL_IDLE, scenery_focus);
-    DrawVisibleNpcFigure3D(
-        TerrainWorldPoint(42.75f, 51.05f), 0.92f, 2.60f,
+        (Color){174, 94, 53, 255}, clock, 0.47f, scenery_focus);
+    DrawAmbientNpcRoute3D(
+        (Vector2){42.75f, 51.05f}, (Vector2){44.15f, 50.15f}, 0.92f,
         UINT32_C(0x64697304), CC_NPC_ROLE_TRAVELLER,
-        (Color){117, 145, 116, 255}, clock * 0.44f + 2.3f,
-        CC_TRAVERSAL_IDLE, scenery_focus);
+        (Color){117, 145, 116, 255}, clock, 0.72f, scenery_focus);
     DrawVisibleNpcFigure3D(
         TerrainWorldPoint(74.65f, 31.95f), 1.02f, 1.50f,
         UINT32_C(0x64697305), CC_NPC_ROLE_GUARD, kingdom,
         clock * 0.40f + 2.9f, CC_TRAVERSAL_IDLE, scenery_focus);
-    DrawVisibleNpcFigure3D(
-        TerrainWorldPoint(84.35f, 50.70f), 0.88f, -1.35f,
+    DrawAmbientNpcRoute3D(
+        (Vector2){84.80f, 51.80f}, (Vector2){86.30f, 51.00f}, 0.94f,
         UINT32_C(0x64697306), CC_NPC_ROLE_LABORER,
-        (Color){161, 128, 68, 255}, clock * 0.47f + 3.5f,
-        CC_TRAVERSAL_IDLE, scenery_focus);
+        (Color){161, 128, 68, 255}, clock, 0.88f, scenery_focus);
     if (sim->resolved_journey_outcome != CC_JOURNEY_OUTCOME_NONE &&
         sim->journey.destination_id == place->id) {
         DrawVisibleNpcFigure3D(
