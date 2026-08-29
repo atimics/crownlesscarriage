@@ -9,7 +9,7 @@
 #include <string.h>
 
 #define CC_SQLITE_APPLICATION_ID 1128481362
-#define CC_SQLITE_USER_VERSION 16
+#define CC_SQLITE_USER_VERSION 17
 #define CC_JOURNAL_RECORD_VERSION 1
 #define CC_JOURNAL_RUNTIME_FLUSH_TICKS 6
 #define CC_JOURNAL_MAX_DAY_ADVANCE 3650
@@ -810,6 +810,24 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " situation_id INTEGER NOT NULL, settlement_id INTEGER NOT NULL,"
         " parent_event_id INTEGER NOT NULL, outcome INTEGER NOT NULL,"
         " due_day INTEGER NOT NULL, character_name TEXT NOT NULL);";
+    const char *character_schema =
+        "CREATE TABLE IF NOT EXISTS npc_character ("
+        " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL UNIQUE,"
+        " name TEXT NOT NULL, home_settlement_id INTEGER NOT NULL,"
+        " current_settlement_id INTEGER NOT NULL, faction_id INTEGER NOT NULL,"
+        " role INTEGER NOT NULL, goal INTEGER NOT NULL, activity INTEGER NOT NULL,"
+        " appearance_seed INTEGER NOT NULL, player_disposition INTEGER NOT NULL,"
+        " stress INTEGER NOT NULL, courage INTEGER NOT NULL,"
+        " memory_count INTEGER NOT NULL, memory_write_index INTEGER NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS character_memory ("
+        " character_slot INTEGER NOT NULL, memory_slot INTEGER NOT NULL,"
+        " kind INTEGER NOT NULL, subject_id INTEGER NOT NULL,"
+        " event_id INTEGER NOT NULL, day INTEGER NOT NULL,"
+        " PRIMARY KEY(character_slot,memory_slot));"
+        "CREATE TABLE IF NOT EXISTS situation_character ("
+        " slot INTEGER PRIMARY KEY, situation_id INTEGER NOT NULL UNIQUE,"
+        " sponsor_character_id INTEGER NOT NULL,"
+        " affected_character_id INTEGER NOT NULL);";
     const char *legend_schema =
         "CREATE TABLE IF NOT EXISTS goblin_cult ("
         " slot INTEGER PRIMARY KEY CHECK(slot=1), id INTEGER NOT NULL UNIQUE,"
@@ -927,6 +945,7 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
            Execute(database, situation_schema, error, error_capacity) &&
            Execute(database, map_schema, error, error_capacity) &&
            Execute(database, commitment_schema, error, error_capacity) &&
+           Execute(database, character_schema, error, error_capacity) &&
            Execute(database, legend_schema, error, error_capacity) &&
            Execute(database, material_schema, error, error_capacity) &&
            Execute(database, journal_schema, error, error_capacity) &&
@@ -1695,6 +1714,86 @@ static bool SaveSituationCasts(sqlite3 *database, const CcSim *sim,
     return true;
 }
 
+static bool SaveCharacters(sqlite3 *database, const CcSim *sim,
+                           char *error, size_t error_capacity)
+{
+    sqlite3_stmt *character_statement = NULL;
+    sqlite3_stmt *memory_statement = NULL;
+    sqlite3_stmt *situation_statement = NULL;
+    if (!Prepare(database,
+                 "INSERT INTO npc_character VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
+                 &character_statement, error, error_capacity) ||
+        !Prepare(database,
+                 "INSERT INTO character_memory VALUES(?,?,?,?,?,?);",
+                 &memory_statement, error, error_capacity) ||
+        !Prepare(database,
+                 "INSERT INTO situation_character VALUES(?,?,?,?);",
+                 &situation_statement, error, error_capacity)) {
+        sqlite3_finalize(character_statement);
+        sqlite3_finalize(memory_statement);
+        sqlite3_finalize(situation_statement);
+        return false;
+    }
+    for (int32_t i = 0; i < sim->character_count; ++i) {
+        const CcCharacter *character = &sim->characters[i];
+        int column = 1;
+        BindInt(character_statement, column++, i);
+        BindId(character_statement, column++, character->id);
+        BindText(character_statement, column++, character->name);
+        BindId(character_statement, column++, character->home_settlement_id);
+        BindId(character_statement, column++, character->current_settlement_id);
+        BindId(character_statement, column++, character->faction_id);
+        BindInt(character_statement, column++, (int32_t)character->role);
+        BindInt(character_statement, column++, (int32_t)character->goal);
+        BindInt(character_statement, column++, (int32_t)character->activity);
+        BindInt(character_statement, column++,
+                (int32_t)character->appearance_seed);
+        BindInt(character_statement, column++, character->player_disposition);
+        BindInt(character_statement, column++, character->stress);
+        BindInt(character_statement, column++, character->courage);
+        BindInt(character_statement, column++, character->memory_count);
+        BindInt(character_statement, column++, character->memory_write_index);
+        if (!StepDone(database, character_statement, error, error_capacity) ||
+            !ResetStatement(database, character_statement,
+                            error, error_capacity)) goto failed;
+        for (int32_t memory = 0;
+             memory < CC_CHARACTER_MEMORY_CAPACITY; ++memory) {
+            const CcCharacterMemory *item = &character->memories[memory];
+            BindInt(memory_statement, 1, i);
+            BindInt(memory_statement, 2, memory);
+            BindInt(memory_statement, 3, (int32_t)item->kind);
+            BindId(memory_statement, 4, item->subject_id);
+            BindId(memory_statement, 5, item->event_id);
+            BindInt(memory_statement, 6, item->day);
+            if (!StepDone(database, memory_statement,
+                          error, error_capacity) ||
+                !ResetStatement(database, memory_statement,
+                                error, error_capacity)) goto failed;
+        }
+    }
+    for (int32_t i = 0; i < sim->situation_count; ++i) {
+        const CcSituation *situation = &sim->situations[i];
+        BindInt(situation_statement, 1, i);
+        BindId(situation_statement, 2, situation->id);
+        BindId(situation_statement, 3, situation->sponsor_character_id);
+        BindId(situation_statement, 4, situation->affected_character_id);
+        if (!StepDone(database, situation_statement,
+                      error, error_capacity) ||
+            !ResetStatement(database, situation_statement,
+                            error, error_capacity)) goto failed;
+    }
+    sqlite3_finalize(character_statement);
+    sqlite3_finalize(memory_statement);
+    sqlite3_finalize(situation_statement);
+    return true;
+
+failed:
+    sqlite3_finalize(character_statement);
+    sqlite3_finalize(memory_statement);
+    sqlite3_finalize(situation_statement);
+    return false;
+}
+
 static bool SavePlayer(sqlite3 *database, const CcSim *sim,
                        char *error, size_t error_capacity)
 {
@@ -1812,6 +1911,8 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
             "DELETE FROM goblin_cult; DELETE FROM dragon_state;"
             "DELETE FROM dragon_campaign; DELETE FROM hoard_raiders;"
             "DELETE FROM dungeon; DELETE FROM situation; DELETE FROM situation_cast;"
+            "DELETE FROM situation_character; DELETE FROM character_memory;"
+            "DELETE FROM npc_character;"
             "DELETE FROM causal_event;"
             "DELETE FROM player_company; DELETE FROM player_commitment;"
             "DELETE FROM player_journey; DELETE FROM runtime_state;"
@@ -1838,6 +1939,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
         SaveLegends(database, sim, error, error_capacity) &&
         SaveSituations(database, sim, error, error_capacity) &&
         SaveSituationCasts(database, sim, error, error_capacity) &&
+        SaveCharacters(database, sim, error, error_capacity) &&
         SaveEvents(database, sim, error, error_capacity) &&
         SavePlayer(database, sim, error, error_capacity) &&
         SavePlayerCommitment(database, sim, error, error_capacity) &&
@@ -2879,6 +2981,118 @@ static bool ReadSituationCasts(sqlite3 *database, CcSim *sim,
     return true;
 }
 
+static bool ReadCharacters(sqlite3 *database, CcSim *sim,
+                           char *error, size_t error_capacity)
+{
+    if (sim->schema_version < 17U) return true;
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database,
+                 "SELECT * FROM npc_character ORDER BY slot;",
+                 &statement, error, error_capacity)) return false;
+    int32_t rows = 0;
+    while (sqlite3_step(statement) == SQLITE_ROW) {
+        int32_t slot = sqlite3_column_int(statement, 0);
+        if (slot != rows || slot < 0 || slot >= CC_MAX_CHARACTERS) {
+            SetError(error, error_capacity,
+                     "Character rows exceed save limits.");
+            sqlite3_finalize(statement);
+            return false;
+        }
+        CcCharacter *character = &sim->characters[slot];
+        character->id = (CcId)sqlite3_column_int64(statement, 1);
+        if (!ReadTextColumn(statement, 2, character->name,
+                            sizeof(character->name), "character name",
+                            error, error_capacity)) {
+            sqlite3_finalize(statement);
+            return false;
+        }
+        character->home_settlement_id =
+            (CcId)sqlite3_column_int64(statement, 3);
+        character->current_settlement_id =
+            (CcId)sqlite3_column_int64(statement, 4);
+        character->faction_id = (CcId)sqlite3_column_int64(statement, 5);
+        character->role =
+            (CcCharacterRole)sqlite3_column_int(statement, 6);
+        character->goal =
+            (CcCharacterGoal)sqlite3_column_int(statement, 7);
+        character->activity =
+            (CcCharacterActivity)sqlite3_column_int(statement, 8);
+        character->appearance_seed =
+            (uint32_t)sqlite3_column_int(statement, 9);
+        character->player_disposition = sqlite3_column_int(statement, 10);
+        character->stress = sqlite3_column_int(statement, 11);
+        character->courage = sqlite3_column_int(statement, 12);
+        character->memory_count = sqlite3_column_int(statement, 13);
+        character->memory_write_index = sqlite3_column_int(statement, 14);
+        rows += 1;
+    }
+    sqlite3_finalize(statement);
+    sim->character_count = rows;
+
+    if (!Prepare(database,
+                 "SELECT character_slot,memory_slot,kind,subject_id,event_id,day "
+                 "FROM character_memory ORDER BY character_slot,memory_slot;",
+                 &statement, error, error_capacity)) return false;
+    int32_t memory_rows = 0;
+    while (sqlite3_step(statement) == SQLITE_ROW) {
+        int32_t character_slot = sqlite3_column_int(statement, 0);
+        int32_t memory_slot = sqlite3_column_int(statement, 1);
+        if (character_slot < 0 || character_slot >= sim->character_count ||
+            memory_slot < 0 ||
+            memory_slot >= CC_CHARACTER_MEMORY_CAPACITY) {
+            SetError(error, error_capacity,
+                     "Character memory rows exceed save limits.");
+            sqlite3_finalize(statement);
+            return false;
+        }
+        CcCharacterMemory *memory =
+            &sim->characters[character_slot].memories[memory_slot];
+        memory->kind =
+            (CcCharacterMemoryKind)sqlite3_column_int(statement, 2);
+        memory->subject_id = (CcId)sqlite3_column_int64(statement, 3);
+        memory->event_id = (CcId)sqlite3_column_int64(statement, 4);
+        memory->day = sqlite3_column_int(statement, 5);
+        memory_rows += 1;
+    }
+    sqlite3_finalize(statement);
+    if (memory_rows != sim->character_count *
+                       CC_CHARACTER_MEMORY_CAPACITY) {
+        SetError(error, error_capacity,
+                 "Character memory rows are incomplete.");
+        return false;
+    }
+
+    if (!Prepare(database,
+                 "SELECT slot,situation_id,sponsor_character_id,"
+                 "affected_character_id FROM situation_character "
+                 "ORDER BY slot;",
+                 &statement, error, error_capacity)) return false;
+    int32_t situation_rows = 0;
+    while (sqlite3_step(statement) == SQLITE_ROW) {
+        int32_t slot = sqlite3_column_int(statement, 0);
+        CcId situation_id = (CcId)sqlite3_column_int64(statement, 1);
+        if (slot < 0 || slot >= sim->situation_count ||
+            sim->situations[slot].id != situation_id) {
+            SetError(error, error_capacity,
+                     "Situation character rows do not match their charters.");
+            sqlite3_finalize(statement);
+            return false;
+        }
+        sim->situations[slot].sponsor_character_id =
+            (CcId)sqlite3_column_int64(statement, 2);
+        sim->situations[slot].affected_character_id =
+            (CcId)sqlite3_column_int64(statement, 3);
+        situation_rows += 1;
+    }
+    sqlite3_finalize(statement);
+    if (situation_rows != sim->situation_count) {
+        SetError(error, error_capacity,
+                 "Situation character rows are incomplete.");
+        return false;
+    }
+    return true;
+}
+
 static bool ReadPlayer(sqlite3 *database, CcSim *sim,
                        char *error, size_t error_capacity)
 {
@@ -3243,26 +3457,35 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
         legacy_version != 9U && legacy_version != 10U &&
         legacy_version != 11U && legacy_version != 12U &&
         legacy_version != 13U && legacy_version != 14U &&
-        legacy_version != 15U) return true;
+        legacy_version != 15U && legacy_version != 16U) return true;
     sim->goblins.cohesion = 60;
     sim->goblins.target_warned = false;
     sim->goblins.expeditions_intercepted = 0;
     sim->goblins.dragon_seed_phase = CC_GOBLIN_DRAGON_SEED_NONE;
     sim->goblins.dragon_seed_days_remaining = 0;
     CcSimUpgradeMapCollection(sim);
+    if (legacy_version == 16U) {
+        CcSimInitializeCharacters(sim);
+        sim->schema_version = CC_SIM_SCHEMA_VERSION;
+        sim->generator_version = CC_GENERATOR_VERSION;
+        return true;
+    }
     if (legacy_version == 15U) {
+        CcSimInitializeCharacters(sim);
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         sim->generator_version = CC_GENERATOR_VERSION;
         return true;
     }
     if (legacy_version == 14U) {
         CcSimInitializeHorseStableSystem(sim);
+        CcSimInitializeCharacters(sim);
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         sim->generator_version = CC_GENERATOR_VERSION;
         return true;
     }
     if (legacy_version == 13U) {
         CcSimInitializeAnimalEconomy(sim);
+        CcSimInitializeCharacters(sim);
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         sim->generator_version = CC_GENERATOR_VERSION;
         return true;
@@ -3385,6 +3608,7 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
     if (legacy_version >= 11U) {
         CcSimInitializeDragonEcology(sim);
         CcSimInitializeAnimalEconomy(sim);
+        CcSimInitializeCharacters(sim);
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         sim->generator_version = CC_GENERATOR_VERSION;
         return true;
@@ -3392,6 +3616,7 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
     if (legacy_version == 10U) {
         CcSimInitializeDragonEcology(sim);
         CcSimInitializeAnimalEconomy(sim);
+        CcSimInitializeCharacters(sim);
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         sim->generator_version = CC_GENERATOR_VERSION;
         return true;
@@ -3409,6 +3634,7 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
         }
         CcSimInitializeDragonEcology(sim);
         CcSimInitializeAnimalEconomy(sim);
+        CcSimInitializeCharacters(sim);
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         sim->generator_version = CC_GENERATOR_VERSION;
         return true;
@@ -3494,6 +3720,7 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
     TunePhysicalReserveTargets(sim);
     CcSimInitializeDragonEcology(sim);
     CcSimInitializeAnimalEconomy(sim);
+    CcSimInitializeCharacters(sim);
     sim->schema_version = CC_SIM_SCHEMA_VERSION;
     sim->generator_version = CC_GENERATOR_VERSION;
     return true;
@@ -3529,6 +3756,7 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
               ReadDungeons(database, sim, error, error_capacity) &&
               ReadSituations(database, sim, error, error_capacity) &&
               ReadSituationCasts(database, sim, error, error_capacity) &&
+              ReadCharacters(database, sim, error, error_capacity) &&
               ReadEvents(database, sim, error, error_capacity) &&
               ReadLegends(database, sim, error, error_capacity) &&
               ReadPlayer(database, sim, error, error_capacity) &&

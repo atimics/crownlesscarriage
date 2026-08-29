@@ -38,6 +38,15 @@ def validate() -> int:
     if document.get("runtime_strategy") != \
             "bone-frame instancing without skins or animations":
         failures.append("runtime strategy contract changed")
+    chest_entries = [entry for entry in entries
+                     if entry.get("slot") == "chest_plate"]
+    if len(chest_entries) != 1 or \
+            chest_entries[0].get("shape_contract") != "closed torso volume":
+        failures.append("chest plate must declare a closed torso volume")
+    apron_entries = [entry for entry in entries if entry.get("slot") == "apron"]
+    if len(apron_entries) != 1 or apron_entries[0].get("shape_contract") != \
+            "fitted bib with split skirt":
+        failures.append("apron must declare a fitted split-skirt volume")
     expected_exports = {Path(entry["export"]).name for entry in entries}
     export_dir = ROOT / "assets" / "exports" / "npc"
     shipped_exports = {
@@ -86,6 +95,14 @@ def validate() -> int:
         if stats.triangles > 900:
             failures.append(
                 f"{entry['slot']}: {stats.triangles} triangles > 900")
+        if entry["slot"] == "chest_plate" and \
+                stats.bounds_min and stats.bounds_max:
+            width = stats.bounds_max[0] - stats.bounds_min[0]
+            depth = stats.bounds_max[2] - stats.bounds_min[2]
+            if depth < width * 0.28:
+                failures.append(
+                    f"chest_plate: depth {depth:.3f} is too flat for "
+                    f"width {width:.3f}")
         print(f"{entry['slot']:<14} {stats.triangles:>4} tris  "
               f"{stats.vertices:>4} verts  {stats.primitives} material")
     if failures:

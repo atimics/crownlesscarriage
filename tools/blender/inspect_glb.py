@@ -421,6 +421,39 @@ def accessor_first_values(document: dict, binary: bytes,
     return tuple(float(value) for value in values)
 
 
+def accessor_values(document: dict, binary: bytes,
+                    accessor_index: int) -> list[tuple[float, ...]]:
+    """Decode every value in a simple, non-sparse numeric accessor."""
+    accessor = document["accessors"][accessor_index]
+    view = document["bufferViews"][accessor["bufferView"]]
+    component_type = accessor["componentType"]
+    component_formats = {
+        5120: "b", 5121: "B", 5122: "h", 5123: "H",
+        5125: "I", 5126: "f",
+    }
+    component_counts = {
+        "SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4,
+    }
+    if component_type not in component_formats or \
+            accessor["type"] not in component_counts:
+        return []
+    count = component_counts[accessor["type"]]
+    fmt = "<" + component_formats[component_type] * count
+    element_size = struct.calcsize(fmt)
+    stride = view.get("byteStride", element_size)
+    offset = view.get("byteOffset", 0) + accessor.get("byteOffset", 0)
+    values: list[tuple[float, ...]] = []
+    for index in range(accessor["count"]):
+        value = struct.unpack_from(fmt, binary, offset + index * stride)
+        if accessor.get("normalized"):
+            if component_type == 5121:
+                value = tuple(component / 255.0 for component in value)
+            elif component_type == 5123:
+                value = tuple(component / 65535.0 for component in value)
+        values.append(tuple(float(component) for component in value))
+    return values
+
+
 def check_library_contract(stats: GlbStats, document: dict, binary: bytes,
                            max_triangles: int) -> None:
     """Enforce the crownless_asset_library export contract on one GLB."""

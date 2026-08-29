@@ -53,26 +53,9 @@ bool CcClientPromiseCanBeAccepted(bool market_interior,
     return !market_interior && notice_distance < 1.15f;
 }
 
-CcClientClickIntent CcClientClickIntentForDistances(
-    bool market_interior, float interior_exit_distance,
-    float notice_distance, float carriage_distance,
-    float dragon_cave_distance, float market_distance)
+bool CcClientInteractionActivated(bool requested, float distance,
+                                  float maximum_distance)
 {
-    if (market_interior) {
-        return interior_exit_distance < 1.25f ?
-            CC_CLIENT_CLICK_LEAVE_INTERIOR : CC_CLIENT_CLICK_NONE;
-    }
-    if (notice_distance < 1.15f) {
-        return CC_CLIENT_CLICK_OPEN_PROMISES;
-    }
-    if (carriage_distance < 1.35f) {
-        return CC_CLIENT_CLICK_DRIVE_OUT;
-    }
-    if (dragon_cave_distance < 1.35f) {
-        return CC_CLIENT_CLICK_OPEN_DRAGON_CAVE;
-    }
-    if (market_distance < 1.30f) {
-        return CC_CLIENT_CLICK_ENTER_INTERIOR;
-    }
-    return CC_CLIENT_CLICK_NONE;
+    return requested && isfinite(distance) && isfinite(maximum_distance) &&
+           maximum_distance >= 0.0f && distance < maximum_distance;
 }
