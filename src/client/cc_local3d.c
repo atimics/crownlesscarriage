@@ -8697,12 +8697,23 @@ static const StreetCameraShot *StreetCameraShotAt(int32_t shot)
         scene = CcLocalTownSceneAt(active_place_function,
                                    CC_LOCAL_TOWN_SCENE_HEART);
     }
+    bool close_scene =
+        scene->kind >= CC_LOCAL_TOWN_SCENE_CLOSE_FIRST;
     ArtLightProfileId light = scene->kind == CC_LOCAL_TOWN_SCENE_ARRIVAL ?
         ART_LIGHT_ROAD_DUSK : ART_LIGHT_CLEAR_MARKET;
     if (scene->kind == CC_LOCAL_TOWN_SCENE_LANDMARK) {
         light = active_place_function == CC_SETTLEMENT_MINING ||
                 active_place_function == CC_SETTLEMENT_DUNGEON_TOWN ?
             ART_LIGHT_SHORTAGE_OVERCAST : ART_LIGHT_RECOVERY_WARM;
+    }
+    if (close_scene &&
+        (active_place_function == CC_SETTLEMENT_MINING ||
+         active_place_function == CC_SETTLEMENT_DUNGEON_TOWN)) {
+        light = ART_LIGHT_SHORTAGE_OVERCAST;
+    } else if (close_scene &&
+               (active_place_function == CC_SETTLEMENT_FARMING ||
+                active_place_function == CC_SETTLEMENT_CAPITAL)) {
+        light = ART_LIGHT_RECOVERY_WARM;
     }
     composition = (StreetCameraShot){
         .trigger = {scene->trigger_x, scene->trigger_z},
@@ -8717,13 +8728,19 @@ static const StreetCameraShot *StreetCameraShotAt(int32_t shot)
         .fovy = scene->fovy,
         .art = {
             {scene->target_x, scene->target_y, scene->target_z},
-            {scene->kind == CC_LOCAL_TOWN_SCENE_ARRIVAL ? -1.0f : 1.0f,
-             scene->kind == CC_LOCAL_TOWN_SCENE_LANDMARK ? -1.0f : 0.0f},
-            {scene->target_x - scene->camera_offset_x * 0.36f,
+            {scene->kind == CC_LOCAL_TOWN_SCENE_ARRIVAL ? -1.0f :
+             scene->camera_offset_x < 0.0f ? 1.0f : -1.0f,
+             scene->kind == CC_LOCAL_TOWN_SCENE_LANDMARK ? -1.0f :
+             close_scene ? 0.35f : 0.0f},
+            {scene->target_x - scene->camera_offset_x *
+                                   (close_scene ? 0.24f : 0.36f),
              0.0f,
-             scene->target_z - scene->camera_offset_z * 0.36f},
-            {0.16f, 0.16f, 0.66f, 0.68f},
-            {20.0f, 34.0f, 56.0f},
+             scene->target_z - scene->camera_offset_z *
+                                   (close_scene ? 0.24f : 0.36f)},
+            close_scene ? (Rectangle){0.13f, 0.14f, 0.74f, 0.72f} :
+                          (Rectangle){0.16f, 0.16f, 0.66f, 0.68f},
+            close_scene ? (Vector3){9.0f, 18.0f, 32.0f} :
+                          (Vector3){20.0f, 34.0f, 56.0f},
             light,
         },
     };
@@ -13276,7 +13293,8 @@ static void DrawArtisanSign(Color kingdom)
                     0.11f, WORLD_GOLD);
 }
 
-static void DrawWorkshopForge(Color kingdom)
+static void DrawWorkshopForge(Color kingdom,
+                              const CcLocalPlaceProfile *profile)
 {
     const float x = 37.85f;
     const float z = 23.08f;
@@ -13303,6 +13321,57 @@ static void DrawWorkshopForge(Color kingdom)
                        (Vector3){x - 1.18f, 0.16f + (float)billet * 0.15f,
                                  z + 0.48f},
                        0.08f, 0.08f, 7, ShadeColor(timber, 1.08f));
+    }
+    if (profile == NULL) return;
+    if (profile->function == CC_SETTLEMENT_MINING) {
+        /* A low ore tram and its rails make this a lampwright's working
+           alley, rather than the same village smithy in darker colors. */
+        for (int32_t rail = -1; rail <= 1; rail += 2) {
+            DrawBox((Vector3){x - 0.65f, 0.07f,
+                              z + (float)rail * 0.52f},
+                    (Vector3){2.50f, 0.09f, 0.09f}, iron);
+        }
+        DrawBox((Vector3){x - 0.70f, 0.52f, z},
+                (Vector3){1.18f, 0.72f, 0.94f},
+                ShadeColor(timber, 0.76f));
+        for (int32_t ore = 0; ore < 3; ++ore) {
+            DrawSmallSphere((Vector3){x - 1.02f + (float)ore * 0.32f,
+                                      0.96f, z},
+                            0.22f, ShadeColor(WORLD_STONE, 0.66f));
+        }
+    } else if (profile->function == CC_SETTLEMENT_FORTRESS) {
+        /* The armourer displays polearms against a red muster rail. */
+        DrawBox((Vector3){x - 1.55f, 1.05f, z},
+                (Vector3){0.16f, 1.95f, 1.55f}, WORLD_WOOD_SHADOW);
+        DrawBox((Vector3){x - 1.48f, 1.62f, z},
+                (Vector3){0.12f, 0.16f, 1.62f}, kingdom);
+        for (int32_t weapon = -1; weapon <= 1; ++weapon) {
+            float weapon_z = z + (float)weapon * 0.48f;
+            DrawBox((Vector3){x - 1.36f, 1.25f, weapon_z},
+                    (Vector3){0.08f, 2.35f, 0.08f}, iron);
+            DrawTiltedBox((Vector3){x - 1.36f, 2.43f, weapon_z},
+                          (Vector3){0.10f, 0.34f, 0.16f},
+                          (Vector3){0.0f, 0.0f, 1.0f}, 45.0f,
+                          WORLD_METAL_LIGHT);
+        }
+    } else if (profile->function == CC_SETTLEMENT_CAPITAL) {
+        /* The royal ward turns the forge into a goldsmith's open counter. */
+        DrawBox((Vector3){x - 1.48f, 0.58f, z},
+                (Vector3){1.55f, 0.92f, 1.25f},
+                ShadeColor(WORLD_WOOD_LIGHT, 0.86f));
+        DrawBox((Vector3){x - 1.48f, 1.08f, z},
+                (Vector3){1.72f, 0.12f, 1.38f}, WORLD_GOLD);
+        for (int32_t work = 0; work < 3; ++work) {
+            DrawSmallSphere((Vector3){x - 1.88f + (float)work * 0.40f,
+                                      1.25f, z + 0.16f},
+                            0.12f, work == 1 ? kingdom : WORLD_GOLD);
+        }
+        for (int32_t side = -1; side <= 1; side += 2) {
+            DrawBox((Vector3){x - 1.48f, 2.22f,
+                              z + (float)side * 0.58f},
+                    (Vector3){1.70f, 0.12f, 0.10f},
+                    ShadeColor(WORLD_GOLD, 0.78f));
+        }
     }
 }
 
@@ -13419,11 +13488,78 @@ static void DrawCoachHitch(const CcSettlement *place)
     }
 }
 
-static void DrawMillersGranary(float hunger)
+static void DrawEastRoomFocus(float hunger, Color kingdom,
+                              const CcLocalPlaceProfile *profile)
 {
     const float x = 64.14f;
     const float z = 51.02f;
     Color timber = WORLD_WOOD_LIGHT;
+    if (profile != NULL && profile->function == CC_SETTLEMENT_CAPITAL) {
+        /* Four slim columns and a clipped hedge turn the east room into a
+           rose cloister. The old generic grain silo was especially obvious
+           once this room received its close camera. */
+        DrawCylinder((Vector3){x, 0.07f, z}, 0.90f, 0.90f, 0.14f, 14,
+                     WORLD_STONE_LIGHT);
+        for (int32_t corner = 0; corner < 4; ++corner) {
+            float column_x = x + ((corner & 1) == 0 ? -0.68f : 0.68f);
+            float column_z = z + ((corner & 2) == 0 ? -0.68f : 0.68f);
+            DrawCylinder((Vector3){column_x, 0.16f, column_z},
+                         0.12f, 0.16f, 2.35f, 8, WORLD_STONE_LIGHT);
+            DrawSmallSphere((Vector3){column_x, 1.55f, column_z},
+                            0.30f, BlendColor(kingdom, WORLD_FOLIAGE, 0.62f));
+            DrawSmallSphere((Vector3){column_x, 1.78f, column_z},
+                            0.11f, WORLD_DANGER);
+        }
+        DrawBox((Vector3){x, 2.48f, z - 0.68f},
+                (Vector3){1.70f, 0.16f, 0.18f}, WORLD_GOLD);
+        DrawBox((Vector3){x, 2.48f, z + 0.68f},
+                (Vector3){1.70f, 0.16f, 0.18f}, WORLD_GOLD);
+        DrawBox((Vector3){x - 0.68f, 2.48f, z},
+                (Vector3){0.18f, 0.16f, 1.70f}, WORLD_GOLD);
+        DrawBox((Vector3){x + 0.68f, 2.48f, z},
+                (Vector3){0.18f, 0.16f, 1.70f}, WORLD_GOLD);
+        return;
+    }
+    if (profile != NULL && profile->function == CC_SETTLEMENT_MINING) {
+        DrawBox((Vector3){x, 0.78f, z},
+                (Vector3){1.62f, 1.56f, 1.42f}, WORLD_WOOD_SHADOW);
+        DrawBox((Vector3){x, 1.63f, z},
+                (Vector3){1.88f, 0.16f, 1.68f}, WORLD_METAL_SHADOW);
+        DrawBox((Vector3){x, 2.28f, z},
+                (Vector3){0.26f, 1.46f, 0.26f}, WORLD_METAL_LIGHT);
+        return;
+    }
+    if (profile != NULL && profile->function == CC_SETTLEMENT_MARKET) {
+        DrawBox((Vector3){x, 0.80f, z},
+                (Vector3){1.72f, 1.60f, 1.48f}, WORLD_WOOD_LIGHT);
+        DrawBox((Vector3){x, 1.72f, z + 0.12f},
+                (Vector3){2.10f, 0.18f, 1.84f}, kingdom);
+        DrawBox((Vector3){x, 1.08f, z + 0.78f},
+                (Vector3){1.24f, 0.12f, 0.22f}, WORLD_GOLD);
+        return;
+    }
+    if (profile != NULL && profile->function == CC_SETTLEMENT_FORTRESS) {
+        DrawBox((Vector3){x, 0.72f, z},
+                (Vector3){1.72f, 1.44f, 1.52f}, WORLD_STONE_SHADOW);
+        for (int32_t merlon = -1; merlon <= 1; ++merlon) {
+            DrawBox((Vector3){x + (float)merlon * 0.58f, 1.72f, z},
+                    (Vector3){0.34f, 0.58f, 1.62f}, kingdom);
+        }
+        return;
+    }
+    if (profile != NULL &&
+        profile->function == CC_SETTLEMENT_DUNGEON_TOWN) {
+        for (int32_t leg = -1; leg <= 1; leg += 2) {
+            DrawTiltedBox((Vector3){x + (float)leg * 0.52f, 1.15f, z},
+                          (Vector3){0.16f, 2.45f, 0.16f},
+                          (Vector3){0.0f, 0.0f, 1.0f},
+                          (float)-leg * 14.0f, WORLD_WOOD_SHADOW);
+        }
+        DrawBox((Vector3){x, 2.25f, z},
+                (Vector3){1.62f, 0.16f, 0.18f}, WORLD_WOOD);
+        DrawSmallSphere((Vector3){x, 1.42f, z}, 0.26f, WORLD_VIOLET);
+        return;
+    }
     Color plaster = BlendColor(WORLD_STONE_LIGHT,
                                WORLD_ROAD, hunger * 0.60f);
     DrawCylinder((Vector3){x, 0.08f, z}, 0.90f, 0.96f, 2.36f, 12, plaster);
@@ -13655,7 +13791,7 @@ static void DrawRoomLandmarks(const CcSettlement *place, Color kingdom,
         rlPushMatrix();
         rlTranslatef(0.0f, CcLocalTerrainHeightAt(30.95f, 24.30f), 0.0f);
         DrawArtisanSign(kingdom);
-        DrawWorkshopForge(kingdom);
+        DrawWorkshopForge(kingdom, profile);
         rlPopMatrix();
     }
     if (RoomDetailPointVisible(CC_LOCAL_NOTICE_X, CC_LOCAL_NOTICE_Z, focus)) {
@@ -13675,7 +13811,7 @@ static void DrawRoomLandmarks(const CcSettlement *place, Color kingdom,
     if (RoomDetailPointVisible(64.14f, 51.02f, focus)) {
         rlPushMatrix();
         rlTranslatef(0.0f, CcLocalTerrainHeightAt(64.14f, 51.02f), 0.0f);
-        DrawMillersGranary(hunger);
+        DrawEastRoomFocus(hunger, kingdom, profile);
         rlPopMatrix();
     }
     if (RoomDetailPointVisible(81.4f, 47.0f, focus)) {

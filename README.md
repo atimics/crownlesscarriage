@@ -244,10 +244,11 @@ pulls out to reveal the threshold. Walking past the town edge is reserved for
 the later procedural wilderness; for now, start every departure from the
 carriage yard.
 
-The current three-scene review sheet is
+The current five-scene-per-town review sheet is
 [here](docs/images/town-scene-sheet.png). Rows are Thornford, Gloamgate,
-Alderwatch, Silverwick, Rosespire, and Hollowbarrow; columns are Arrival, Town
-Heart, and Landmark.
+Alderwatch, Silverwick, Rosespire, and Hollowbarrow. The first three columns
+are the wide Arrival, Town Heart, and Landmark pages; the last two are tighter
+playable rooms built around local work, gates, and street life.
 
 Normal play keeps one campaign window active at a time. Clean exits and manual
 saves remember the hero's exact street or market position as well as the
@@ -312,6 +313,8 @@ out/build/play/crownless_carriage.app/Contents/MacOS/crownless_carriage \
   --capture-golden /tmp/crownless-street.png
 out/build/play/crownless_carriage.app/Contents/MacOS/crownless_carriage \
   --capture-town 0 thornford.png
+out/build/play/crownless_carriage.app/Contents/MacOS/crownless_carriage \
+  --capture-town 0 32 38 thornford-drovers-close.png
 out/build/play/crownless_carriage.app/Contents/MacOS/crownless_carriage \
   --capture-town-arrival 0 0.35 thornford-arrival.png
 out/build/play/crownless_carriage.app/Contents/MacOS/crownless_carriage \

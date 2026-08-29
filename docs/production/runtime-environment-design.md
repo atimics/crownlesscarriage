@@ -102,9 +102,48 @@ the palace. Hollowbarrow gathers around an expedition hollow below the sealed
 dungeon ridge. Retaining walls, bridges, rails, paving, water, and standing
 stones make those landforms legible at the play camera.
 
-The current 18-scene runtime review is captured in
+The current 30-scene runtime review is captured in
 [`town-scene-sheet.png`](../images/town-scene-sheet.png). Its rows are the six
-towns and its columns are Arrival, Town Heart, and Landmark.
+towns. The first three columns are Arrival, Town Heart, and Landmark: wide
+establishing pages that explain the whole place. The last two columns are
+close, playable rooms built around local work and story: a drovers' close,
+furnace alley, arcade, armourers' row, rose cloister, lantern gate, and their
+counterparts. The close lenses show roughly half as much vertical world space
+as the establishing lenses, so the actor, doors, signs, stalls, and tools can
+carry a scene without turning the outdoor game into a follow camera.
+
+### Research-to-layout rules
+
+The fixed camera is part of the level plan. Roberta Williams describes the
+original *King's Quest* rhythm as walking through a storybook where turning a
+page should reveal something new. The town therefore changes composition at
+authored thresholds; it does not keep one distant camera moving beside the
+hero. The wide pages establish identity, while the close pages pay that
+identity off with a person-sized place and a clear possible interaction.
+[Roberta Williams' design notes](https://robertawilliams.com/design-philosophy/)
+
+Each close page uses a foreground edge, one dominant, one quieter
+counterpoint, and a visible route through the frame. Organic working streets
+use asymmetric weight. The fortress gate alone uses strict frontal symmetry,
+because the controlled entrance is the subject. These choices follow the
+foreground/interest/background layers, observation spots, leading lines, and
+static-versus-dynamic composition described in this environment-composition
+study.
+[Composition in Level Design](https://www.gamedeveloper.com/design/composition-in-level-design)
+
+The medieval plan also supports the camera plan. Castle borough research at
+Longtown describes a broad market street stretching from the castle gate with
+long plots behind it. Northallerton preserves an even more cinematic pattern:
+a managed approach funnels through a narrow entrance, then opens onto the
+high-status facade. Our public spine, market heart, and gate reveal use the
+same spatial sentence without copying either site.
+[Historic England: Longtown](https://historicengland.org.uk/research/results/reports/7322/LongtownHerefordshire_amedievalcastleandborough)
+[Historic England: Northallerton](https://historicengland.org.uk/listing/the-list/list-entry/1020719)
+
+Finally, the close rooms stay fixed during ordinary movement and change behind
+a brief page fade. That gives them the authored cinematic value of a fixed
+third-person angle while leaving the character directly controllable.
+[GDC: *Alone in the Dark* postmortem](https://gdcvault.com/play/1015485/Classic-Game-Postmortem-Alone-in)
 
 The six plans share proven travel corridors and camera-room thresholds, not a
 generic town underneath. Their different massing, density, skyline, hall, and
@@ -123,6 +162,12 @@ authoritative for collision, but the visible result is no longer one decorated
 cube with the same roof in every town. Secondary landmarks now use those same
 local kits, so the foreground customs house, watch post, workshop, and lantern
 lodge reinforce the town silhouette instead of falling back to box props.
+The close-room pass also replaces generic roadside dressing where repetition
+became obvious: the shared east prop becomes Thornford's grain store,
+Silverwick's ore hopper, Gloamgate's kiosk, Alderwatch's supply block,
+Rosespire's rose cloister, or Hollowbarrow's salvage winch. Workshop details
+similarly distinguish a mining tram, armourer's polearms, and a goldsmith's
+counter.
 
 Regional relief and civic access are separate scale decisions. Ravines,
 quarries, ridges, and river shelves can remain severe, but a public keep court

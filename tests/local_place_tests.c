@@ -52,8 +52,19 @@ static int ProfileContract(void)
             CHECK(camera->trigger_z >= 0.0f && camera->trigger_z <= 72.0f);
             CHECK(camera->target_x >= 0.0f && camera->target_x <= 96.0f);
             CHECK(camera->target_z >= 0.0f && camera->target_z <= 72.0f);
-            CHECK(camera->camera_offset_y >= 8.0f);
-            CHECK(camera->fovy >= 26.0f && camera->fovy <= 35.0f);
+            if (scene < CC_LOCAL_PLACE_ESTABLISHING_SCENE_COUNT) {
+                CHECK(camera->camera_offset_y >= 8.0f);
+                CHECK(camera->fovy >= 26.0f && camera->fovy <= 35.0f);
+            } else {
+                CHECK(camera->camera_offset_y >= 6.0f);
+                CHECK(camera->fovy >= 16.0f && camera->fovy <= 19.0f);
+                for (int32_t establishing = 0;
+                     establishing < CC_LOCAL_PLACE_ESTABLISHING_SCENE_COUNT;
+                     ++establishing) {
+                    CHECK(camera->fovy <
+                          profile->scene[establishing].fovy - 7.0f);
+                }
+            }
             for (int32_t previous = 0; previous < scene; ++previous) {
                 CHECK(strcmp(camera->name,
                              profile->scene[previous].name) != 0);
