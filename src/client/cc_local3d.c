@@ -15092,12 +15092,7 @@ static void DrawNpcAppearanceFigure3D(
         appearance.role == CC_NPC_ROLE_GUARD ||
         appearance.role == CC_NPC_ROLE_RAIDER ? CC_NPC_PORTRAIT_FOCUSED :
                                                CC_NPC_PORTRAIT_NEUTRAL;
-    /* Baked armored archetypes still contain the old front card. Use the
-       articulated fallback for those roles until their armor is rebuilt as
-       body-following volume. */
-    bool planar_baked_armor =
-        (appearance.equipment & CC_NPC_EQUIPMENT_ARMOR) != 0U;
-    if (!draw_hero_rig_debug && !planar_baked_armor && DrawNpcArchetype3D(
+    if (!draw_hero_rig_debug && DrawNpcArchetype3D(
             position, size_hint, yaw, phase, mode, expression, &appearance)) {
         return;
     }
@@ -15794,10 +15789,18 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
             ShadeColor(appearance->outer, 0.68f));
     }
     if ((appearance->equipment & CC_NPC_EQUIPMENT_ARMOR) != 0U) {
-        /* The old chest-plate module was a solidified plane. At the fixed
-           art resolution it cut across every combatant like a signboard.
-           The fitted torso and volumetric pauldrons retain the armor read
-           without that intersecting surface. */
+        Vector3 chest_front = FromLimbVector(
+            skin->sockets[CC_HUMANOID_SOCKET_CHEST_FRONT].position);
+        (void)DrawNpcDynamicModule(
+            NPC_DYNAMIC_CHEST_PLATE,
+            NpcModuleTransform(chest_front, gear_right, gear_up,
+                               gear_forward,
+                               (Vector3){(featured_hero ? 0.34f : 0.46f) *
+                                             mass,
+                                         featured_hero ? 0.43f : 0.50f,
+                                         (featured_hero ? 0.24f : 0.30f) *
+                                             mass}),
+            appearance->metal);
         for (int32_t side = 0; side < 2; ++side) {
             const CcHumanoidSkinBonePose *shoulder =
                 &skin->bones[upper_arms[side]];

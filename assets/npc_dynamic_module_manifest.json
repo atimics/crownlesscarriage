@@ -1,5 +1,5 @@
 {
-  "library_version": "0.4.1",
+  "library_version": "0.5.0",
   "generation": "offline procedural rigid character modules",
   "runtime_strategy": "bone-frame instancing without skins or animations",
   "coordinate_system": "glTF +Y up, +Z forward",
@@ -10,210 +10,240 @@
       "slot": "torso",
       "anchor": "spine_to_neck",
       "material": "outer",
-      "export": "assets/exports/npc/npc_module_torso_v01.glb"
+      "export": "assets/exports/npc/npc_module_torso_v01.glb",
+      "shape_contract": "rigid fitted module"
     },
     {
       "id": "npc_module_pelvis_v01",
       "slot": "pelvis",
       "anchor": "pelvis_to_spine",
       "material": "trousers",
-      "export": "assets/exports/npc/npc_module_pelvis_v01.glb"
+      "export": "assets/exports/npc/npc_module_pelvis_v01.glb",
+      "shape_contract": "rigid fitted module"
     },
     {
       "id": "npc_module_upper_arm_v01",
       "slot": "upper_arm",
       "anchor": "bone_segment",
       "material": "outer",
-      "export": "assets/exports/npc/npc_module_upper_arm_v01.glb"
+      "export": "assets/exports/npc/npc_module_upper_arm_v01.glb",
+      "shape_contract": "rigid fitted module"
     },
     {
       "id": "npc_module_forearm_v01",
       "slot": "forearm",
       "anchor": "bone_segment",
       "material": "underlayer",
-      "export": "assets/exports/npc/npc_module_forearm_v01.glb"
+      "export": "assets/exports/npc/npc_module_forearm_v01.glb",
+      "shape_contract": "rigid fitted module"
     },
     {
       "id": "npc_module_thigh_v01",
       "slot": "thigh",
       "anchor": "bone_segment",
       "material": "trousers",
-      "export": "assets/exports/npc/npc_module_thigh_v01.glb"
+      "export": "assets/exports/npc/npc_module_thigh_v01.glb",
+      "shape_contract": "rigid fitted module"
     },
     {
       "id": "npc_module_shin_v01",
       "slot": "shin",
       "anchor": "bone_segment",
       "material": "trousers_shadow",
-      "export": "assets/exports/npc/npc_module_shin_v01.glb"
+      "export": "assets/exports/npc/npc_module_shin_v01.glb",
+      "shape_contract": "rigid fitted module"
     },
     {
       "id": "npc_module_hand_v01",
       "slot": "hand",
       "anchor": "bone_head",
       "material": "skin",
-      "export": "assets/exports/npc/npc_module_hand_v01.glb"
+      "export": "assets/exports/npc/npc_module_hand_v01.glb",
+      "shape_contract": "rigid fitted module"
     },
     {
       "id": "npc_module_foot_v01",
       "slot": "foot",
       "anchor": "bone_segment",
       "material": "leather",
-      "export": "assets/exports/npc/npc_module_foot_v01.glb"
+      "export": "assets/exports/npc/npc_module_foot_v01.glb",
+      "shape_contract": "rigid fitted module"
     },
     {
       "id": "npc_module_head_v01",
       "slot": "head",
       "anchor": "head_center",
       "material": "skin",
-      "export": "assets/exports/npc/npc_module_head_v01.glb"
+      "export": "assets/exports/npc/npc_module_head_v01.glb",
+      "shape_contract": "rigid fitted module"
     },
     {
       "id": "npc_module_mantle_v01",
       "slot": "mantle",
       "anchor": "back_socket",
       "material": "trousers",
-      "export": "assets/exports/npc/npc_module_mantle_v01.glb"
+      "export": "assets/exports/npc/npc_module_mantle_v01.glb",
+      "shape_contract": "rigid fitted module"
     },
     {
       "id": "npc_module_coat_tail_v01",
       "slot": "coat_tail",
       "anchor": "pelvis",
       "material": "outer_shadow",
-      "export": "assets/exports/npc/npc_module_coat_tail_v01.glb"
+      "export": "assets/exports/npc/npc_module_coat_tail_v01.glb",
+      "shape_contract": "rigid fitted module"
     },
     {
       "id": "npc_module_chest_plate_v01",
       "slot": "chest_plate",
       "anchor": "chest_front_socket",
       "material": "metal",
-      "export": "assets/exports/npc/npc_module_chest_plate_v01.glb"
+      "export": "assets/exports/npc/npc_module_chest_plate_v01.glb",
+      "shape_contract": "closed torso volume"
     },
     {
       "id": "npc_module_pauldron_v01",
       "slot": "pauldron",
       "anchor": "shoulder_socket",
       "material": "metal",
-      "export": "assets/exports/npc/npc_module_pauldron_v01.glb"
+      "export": "assets/exports/npc/npc_module_pauldron_v01.glb",
+      "shape_contract": "rigid fitted module"
     },
     {
       "id": "npc_module_apron_v01",
       "slot": "apron",
       "anchor": "pelvis",
       "material": "underlayer",
-      "export": "assets/exports/npc/npc_module_apron_v01.glb"
+      "export": "assets/exports/npc/npc_module_apron_v01.glb",
+      "shape_contract": "rigid fitted module"
     },
     {
       "id": "npc_module_pack_v01",
       "slot": "pack",
       "anchor": "back_socket",
       "material": "leather",
-      "export": "assets/exports/npc/npc_module_pack_v01.glb"
+      "export": "assets/exports/npc/npc_module_pack_v01.glb",
+      "shape_contract": "rigid fitted module"
     },
     {
       "id": "npc_module_satchel_v01",
       "slot": "satchel",
       "anchor": "pelvis",
       "material": "leather",
-      "export": "assets/exports/npc/npc_module_satchel_v01.glb"
+      "export": "assets/exports/npc/npc_module_satchel_v01.glb",
+      "shape_contract": "rigid fitted module"
     },
     {
       "id": "npc_module_helmet_v01",
       "slot": "helmet",
       "anchor": "head_center",
       "material": "metal",
-      "export": "assets/exports/npc/npc_module_helmet_v01.glb"
+      "export": "assets/exports/npc/npc_module_helmet_v01.glb",
+      "shape_contract": "rigid fitted module"
     },
     {
       "id": "npc_module_hat_v01",
       "slot": "hat",
       "anchor": "head_center",
       "material": "outer",
-      "export": "assets/exports/npc/npc_module_hat_v01.glb"
+      "export": "assets/exports/npc/npc_module_hat_v01.glb",
+      "shape_contract": "rigid fitted module"
     },
     {
       "id": "npc_module_hood_v01",
       "slot": "hood",
       "anchor": "head_center",
       "material": "outer",
-      "export": "assets/exports/npc/npc_module_hood_v01.glb"
+      "export": "assets/exports/npc/npc_module_hood_v01.glb",
+      "shape_contract": "rigid fitted module"
     },
     {
       "id": "npc_module_headwrap_v01",
       "slot": "headwrap",
       "anchor": "head_center",
       "material": "outer",
-      "export": "assets/exports/npc/npc_module_headwrap_v01.glb"
+      "export": "assets/exports/npc/npc_module_headwrap_v01.glb",
+      "shape_contract": "rigid fitted module"
     },
     {
       "id": "npc_module_tool_shaft_v01",
       "slot": "tool_shaft",
       "anchor": "hand_grip",
       "material": "leather",
-      "export": "assets/exports/npc/npc_module_tool_shaft_v01.glb"
+      "export": "assets/exports/npc/npc_module_tool_shaft_v01.glb",
+      "shape_contract": "rigid fitted module"
     },
     {
       "id": "npc_module_tool_head_v01",
       "slot": "tool_head",
       "anchor": "tool_tip",
       "material": "metal",
-      "export": "assets/exports/npc/npc_module_tool_head_v01.glb"
+      "export": "assets/exports/npc/npc_module_tool_head_v01.glb",
+      "shape_contract": "rigid fitted module"
     },
     {
       "id": "npc_module_hair_0_v01",
       "slot": "hair_0",
       "anchor": "head_center",
       "material": "hair",
-      "export": "assets/exports/npc/npc_module_hair_0_v01.glb"
+      "export": "assets/exports/npc/npc_module_hair_0_v01.glb",
+      "shape_contract": "rigid fitted module"
     },
     {
       "id": "npc_module_hair_1_v01",
       "slot": "hair_1",
       "anchor": "head_center",
       "material": "hair",
-      "export": "assets/exports/npc/npc_module_hair_1_v01.glb"
+      "export": "assets/exports/npc/npc_module_hair_1_v01.glb",
+      "shape_contract": "rigid fitted module"
     },
     {
       "id": "npc_module_hair_2_v01",
       "slot": "hair_2",
       "anchor": "head_center",
       "material": "hair",
-      "export": "assets/exports/npc/npc_module_hair_2_v01.glb"
+      "export": "assets/exports/npc/npc_module_hair_2_v01.glb",
+      "shape_contract": "rigid fitted module"
     },
     {
       "id": "npc_module_hair_3_v01",
       "slot": "hair_3",
       "anchor": "head_center",
       "material": "hair",
-      "export": "assets/exports/npc/npc_module_hair_3_v01.glb"
+      "export": "assets/exports/npc/npc_module_hair_3_v01.glb",
+      "shape_contract": "rigid fitted module"
     },
     {
       "id": "npc_module_hair_4_v01",
       "slot": "hair_4",
       "anchor": "head_center",
       "material": "hair",
-      "export": "assets/exports/npc/npc_module_hair_4_v01.glb"
+      "export": "assets/exports/npc/npc_module_hair_4_v01.glb",
+      "shape_contract": "rigid fitted module"
     },
     {
       "id": "npc_module_hair_5_v01",
       "slot": "hair_5",
       "anchor": "head_center",
       "material": "hair",
-      "export": "assets/exports/npc/npc_module_hair_5_v01.glb"
+      "export": "assets/exports/npc/npc_module_hair_5_v01.glb",
+      "shape_contract": "rigid fitted module"
     },
     {
       "id": "npc_module_hair_6_v01",
       "slot": "hair_6",
       "anchor": "head_center",
       "material": "hair",
-      "export": "assets/exports/npc/npc_module_hair_6_v01.glb"
+      "export": "assets/exports/npc/npc_module_hair_6_v01.glb",
+      "shape_contract": "rigid fitted module"
     },
     {
       "id": "npc_module_hair_7_v01",
       "slot": "hair_7",
       "anchor": "head_center",
       "material": "hair",
-      "export": "assets/exports/npc/npc_module_hair_7_v01.glb"
+      "export": "assets/exports/npc/npc_module_hair_7_v01.glb",
+      "shape_contract": "rigid fitted module"
     }
   ]
 }

@@ -33,7 +33,7 @@ BLEND_PATH = ROOT / "assets" / "blender" / "crownless_npc_archetypes.blend"
 EXPORT_DIR = ROOT / "assets" / "exports" / "npc"
 PREVIEW_PATH = ROOT / "assets" / "previews" / "npc" / "npc_archetype_sheet.png"
 MANIFEST_PATH = ROOT / "assets" / "npc_archetype_manifest.json"
-LIBRARY_VERSION = "0.4.0"
+LIBRARY_VERSION = "0.5.0"
 MOTION_POSES = (
     "idle",
     "contact_l", "down_l", "passing_l", "up_l",
@@ -526,11 +526,28 @@ def build_body(spec: Archetype, collection: bpy.types.Collection) -> None:
                 bevel=0.018)
 
     if "armor" in spec.equipment or "half_armor" in spec.equipment:
-        plate_width = 0.45 * shoulder if "armor" in spec.equipment else 0.29
-        plate_x = 0.0 if "armor" in spec.equipment else -0.09
-        add_box(f"GEO_{spec.role}_chest_plate", (plate_x, -0.155 * mass, 1.365),
-                (plate_width, 0.055, 0.36), "metal", collection, spec, "armor",
-                bevel=0.028)
+        # Armor must read as clothing around a body from every camera angle.
+        # A thin front box becomes a floating signboard at the final pixel
+        # scale, so guards get a closed cuirass and raiders get a smaller,
+        # off-centre half cuirass. Both follow the same torso rings as the
+        # garment below them and keep enough depth for a clear side view.
+        full_armor = "armor" in spec.equipment
+        plate_x = 0.0 if full_armor else -0.08
+        width_scale = 1.0 if full_armor else 0.73
+        add_loft(f"GEO_{spec.role}_chest_plate", (
+            (plate_x, -0.010, 1.13,
+             0.205 * mass * width_scale, 0.166 * mass),
+            (plate_x, -0.012, 1.25,
+             0.232 * mass * width_scale, 0.181 * mass),
+            (plate_x, -0.014, 1.43,
+             0.274 * shoulder * width_scale, 0.188 * mass),
+            (plate_x, -0.012, 1.56,
+             0.252 * shoulder * width_scale, 0.170 * mass),
+        ), "metal", collection, spec, "armor", sides=10)
+        add_box(f"GEO_{spec.role}_chest_ridge",
+                (plate_x, -0.192 * mass, 1.365),
+                (0.055, 0.040, 0.285), "metal", collection, spec, "armor",
+                bevel=0.009)
         pauldron_side = ("l", "r") if "armor" in spec.equipment else ("l",)
         for side in pauldron_side:
             shoulder_point = points[f"shoulder_{side}"]
@@ -760,6 +777,9 @@ def build() -> None:
                 "id": spec.asset_id,
                 "export": str(path.relative_to(ROOT)),
                 "material_order": list(MATERIAL_ORDER),
+                "armor_geometry": "closed torso volume"
+                if "armor" in spec.equipment or
+                   "half_armor" in spec.equipment else "none",
             })
 
     manifest = {

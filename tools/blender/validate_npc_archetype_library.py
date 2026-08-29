@@ -11,7 +11,12 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from inspect_glb import accessor_first_values, collect_stats, parse_glb
+from inspect_glb import (
+    accessor_first_values,
+    accessor_values,
+    collect_stats,
+    parse_glb,
+)
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -30,6 +35,7 @@ EXPECTED_PALETTE = (
     "skin", "hair", "underlayer", "outer", "trousers",
     "leather", "metal", "accent", "eye",
 )
+ARMORED_ROLES = {"guard", "raider"}
 
 
 def validate() -> int:
@@ -99,6 +105,32 @@ def validate() -> int:
                                    abs(sample[1] - sample[2]) < 0.01):
                 failures.append(
                     f"{entry['role']}: COLOR_0 has no authored value/fold channels")
+        if entry["role"] in ARMORED_ROLES:
+            if entry.get("armor_geometry") != "closed torso volume":
+                failures.append(
+                    f"{entry['role']}: armor is not marked as closed volume")
+            if primitives:
+                attributes = primitives[0].get("attributes", {})
+                positions = accessor_values(
+                    document, binary, attributes.get("POSITION", -1))
+                colors = accessor_values(
+                    document, binary, attributes.get("COLOR_0", -1))
+                metal_palette = (EXPECTED_PALETTE.index("metal") + 0.5) / \
+                    len(EXPECTED_PALETTE)
+                torso_metal = [
+                    position for position, color in zip(positions, colors)
+                    if len(position) >= 3 and len(color) >= 1 and
+                    abs(color[0] - metal_palette) < 0.025 and
+                    abs(position[0]) <= 0.25 and
+                    1.16 <= position[1] <= 1.58
+                ]
+                depth = 0.0 if not torso_metal else \
+                    max(point[2] for point in torso_metal) - \
+                    min(point[2] for point in torso_metal)
+                if len(torso_metal) < 16 or depth < 0.22:
+                    failures.append(
+                        f"{entry['role']}: chest armor is not volumetric "
+                        f"({len(torso_metal)} torso vertices, {depth:.3f}m depth)")
         if document.get("skins"):
             failures.append(f"{entry['role']}: static archetype contains a skin")
         if document.get("animations"):

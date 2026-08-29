@@ -1,5 +1,5 @@
 {
-  "library_version": "0.4.0",
+  "library_version": "0.5.0",
   "art_direction": "silhouette_first_pseudo_pixel_cast",
   "generation": "offline_curated_procedural_geometry",
   "runtime_strategy": "stepped static pose GLBs + deterministic indexed palette and scale",
@@ -47,7 +47,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "wayfarer",
@@ -79,7 +80,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "wayfarer",
@@ -111,7 +113,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "wayfarer",
@@ -143,7 +146,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "wayfarer",
@@ -175,7 +179,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "wayfarer",
@@ -207,7 +212,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "wayfarer",
@@ -239,7 +245,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "wayfarer",
@@ -271,7 +278,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "wayfarer",
@@ -303,7 +311,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "guard",
@@ -336,7 +345,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "closed torso volume"
     },
     {
       "role": "guard",
@@ -369,7 +379,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "closed torso volume"
     },
     {
       "role": "guard",
@@ -402,7 +413,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "closed torso volume"
     },
     {
       "role": "guard",
@@ -435,7 +447,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "closed torso volume"
     },
     {
       "role": "guard",
@@ -468,7 +481,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "closed torso volume"
     },
     {
       "role": "guard",
@@ -501,7 +515,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "closed torso volume"
     },
     {
       "role": "guard",
@@ -534,7 +549,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "closed torso volume"
     },
     {
       "role": "guard",
@@ -567,7 +583,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "closed torso volume"
     },
     {
       "role": "guard",
@@ -600,7 +617,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "closed torso volume"
     },
     {
       "role": "raider",
@@ -633,7 +651,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "closed torso volume"
     },
     {
       "role": "raider",
@@ -666,7 +685,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "closed torso volume"
     },
     {
       "role": "raider",
@@ -699,7 +719,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "closed torso volume"
     },
     {
       "role": "raider",
@@ -732,7 +753,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "closed torso volume"
     },
     {
       "role": "raider",
@@ -765,7 +787,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "closed torso volume"
     },
     {
       "role": "raider",
@@ -798,7 +821,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "closed torso volume"
     },
     {
       "role": "raider",
@@ -831,7 +855,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "closed torso volume"
     },
     {
       "role": "raider",
@@ -864,7 +889,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "closed torso volume"
     },
     {
       "role": "raider",
@@ -897,7 +923,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "closed torso volume"
     },
     {
       "role": "merchant",
@@ -930,7 +957,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "merchant",
@@ -963,7 +991,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "merchant",
@@ -996,7 +1025,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "merchant",
@@ -1029,7 +1059,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "merchant",
@@ -1062,7 +1093,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "merchant",
@@ -1095,7 +1127,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "merchant",
@@ -1128,7 +1161,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "merchant",
@@ -1161,7 +1195,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "merchant",
@@ -1194,7 +1229,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "laborer",
@@ -1226,7 +1262,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "laborer",
@@ -1258,7 +1295,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "laborer",
@@ -1290,7 +1328,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "laborer",
@@ -1322,7 +1361,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "laborer",
@@ -1354,7 +1394,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "laborer",
@@ -1386,7 +1427,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "laborer",
@@ -1418,7 +1460,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "laborer",
@@ -1450,7 +1493,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "laborer",
@@ -1482,7 +1526,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "traveller",
@@ -1515,7 +1560,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "traveller",
@@ -1548,7 +1594,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "traveller",
@@ -1581,7 +1628,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "traveller",
@@ -1614,7 +1662,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "traveller",
@@ -1647,7 +1696,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "traveller",
@@ -1680,7 +1730,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "traveller",
@@ -1713,7 +1764,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "traveller",
@@ -1746,7 +1798,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "traveller",
@@ -1779,7 +1832,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "refugee",
@@ -1812,7 +1866,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "refugee",
@@ -1845,7 +1900,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "refugee",
@@ -1878,7 +1934,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "refugee",
@@ -1911,7 +1968,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "refugee",
@@ -1944,7 +2002,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "refugee",
@@ -1977,7 +2036,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "refugee",
@@ -2010,7 +2070,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "refugee",
@@ -2043,7 +2104,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "refugee",
@@ -2076,7 +2138,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "scout",
@@ -2109,7 +2172,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "scout",
@@ -2142,7 +2206,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "scout",
@@ -2175,7 +2240,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "scout",
@@ -2208,7 +2274,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "scout",
@@ -2241,7 +2308,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "scout",
@@ -2274,7 +2342,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "scout",
@@ -2307,7 +2376,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "scout",
@@ -2340,7 +2410,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "scout",
@@ -2373,7 +2444,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "healer",
@@ -2407,7 +2479,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "healer",
@@ -2441,7 +2514,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "healer",
@@ -2475,7 +2549,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "healer",
@@ -2509,7 +2584,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "healer",
@@ -2543,7 +2619,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "healer",
@@ -2577,7 +2654,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "healer",
@@ -2611,7 +2689,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "healer",
@@ -2645,7 +2724,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     },
     {
       "role": "healer",
@@ -2679,7 +2759,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "armor_geometry": "none"
     }
   ]
 }

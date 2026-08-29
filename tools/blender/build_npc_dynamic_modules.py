@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parents[2]
 BLEND_PATH = ROOT / "assets" / "blender" / "crownless_npc_dynamic_modules.blend"
 EXPORT_DIR = ROOT / "assets" / "exports" / "npc"
 MANIFEST_PATH = ROOT / "assets" / "npc_dynamic_module_manifest.json"
-LIBRARY_VERSION = "0.4.1"
+LIBRARY_VERSION = "0.5.0"
 MATERIAL_NAME = "MAT_NPC_INDEXED"
 PALETTE_INDEX = {
     "skin": 0,
@@ -56,6 +56,7 @@ class ModuleRecord:
     anchor: str
     material: str
     export: str
+    shape_contract: str
 
 
 def reset_scene() -> None:
@@ -325,16 +326,16 @@ def build_geometry(slot: str, collection: bpy.types.Collection,
                 (0.78, 0.20, 1.0), collection, material, width=0.08,
                 rotation=(0.05, 0.0, 0.0))
     elif slot == "chest_plate":
-        # A shaped breastplate leaves the tunic visible around it.  A full
-        # rectangular block turns into a shield at the final art-pixel size.
-        add_panel("GEO_ModuleChestPlate", (
-            (-0.38, -0.12, 0.45), (0.38, -0.12, 0.45),
-            (0.46, -0.11, 0.18), (0.31, -0.09, -0.43),
-            (0.0, -0.08, -0.51), (-0.31, -0.09, -0.43),
-            (-0.46, -0.11, 0.18),
-        ), collection, material, thickness=0.10)
-        add_box("GEO_ModuleChestRidge", (0.0, -0.18, 0.07),
-                (0.11, 0.07, 0.62), collection, material, width=0.025)
+        # This is a closed, torso-shaped volume. The old solidified front
+        # panel crossed the body like a signboard after bone-frame scaling.
+        add_loft("GEO_ModuleChestPlate", (
+            (-0.50, 0.36, 0.34),
+            (-0.24, 0.46, 0.39),
+            (0.16, 0.50, 0.41),
+            (0.46, 0.42, 0.35),
+        ), collection, material, sides=10)
+        add_box("GEO_ModuleChestRidge", (0.0, -0.39, 0.02),
+                (0.10, 0.08, 0.66), collection, material, width=0.020)
     elif slot == "pauldron":
         add_ico("GEO_ModulePauldron", (0.0, 0.0, 0.0),
                 (0.58, 0.48, 0.50), collection, material, subdivisions=1)
@@ -589,7 +590,9 @@ def build() -> None:
         path = export_model(model, asset_id)
         records.append(ModuleRecord(
             id=asset_id, slot=slot, anchor=anchor, material=palette,
-            export=str(path.relative_to(ROOT))))
+            export=str(path.relative_to(ROOT)),
+            shape_contract="closed torso volume"
+            if slot == "chest_plate" else "rigid fitted module"))
     manifest = {
         "library_version": LIBRARY_VERSION,
         "generation": "offline procedural rigid character modules",
