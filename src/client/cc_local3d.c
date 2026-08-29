@@ -125,7 +125,9 @@ typedef struct WorldStructure {
     float height;
     CcLocalCompoundKind kind;
 } WorldStructure;
-static const Rectangle CARRIAGE_FOOTPRINT = {35.20f, 29.00f, 3.20f, 5.40f};
+/* The carriage parks in a side bay inside the coach yard. Its east edge
+   touches the public spine without occupying the through lane. */
+static const Rectangle CARRIAGE_FOOTPRINT = {35.80f, 48.50f, 3.20f, 5.40f};
 static const Rectangle DUNGEON_FOOTPRINT = {27.40f, 49.70f, 3.20f, 1.60f};
 /* Set-dressing with a grounded footprint participates in the same collision
    contract as authored buildings. Route markers remain at the edges of the
@@ -175,7 +177,7 @@ static const Rectangle ROAD_FALLBACK_OBSTACLES[] = {
     {51.67f, 42.47f, 0.36f, 0.56f}
 };
 static const Vector2 STREET_PEOPLE[] = {
-    {50.50f, 28.80f}, {42.00f, 30.80f}, {37.00f, 44.00f},
+    {50.50f, 28.80f}, {49.20f, 35.20f}, {33.80f, 44.00f},
     {29.00f, 28.00f}, {52.00f, 31.00f}, {58.00f, 26.50f}
 };
 static const Vector2 MARKET_PEOPLE[] = {{6.55f, 1.60f}};
@@ -585,8 +587,10 @@ static const StreetTraversalLink STREET_TRAVERSAL_LINKS[] = {
     {4, 5, {{42.0f, 36.0f}, {42.0f, 46.0f}}, 2},
     {4, 6, {{47.0f, 28.2f}}, 1},
     {5, 7, {{42.0f, 55.0f}, {54.8f, 55.0f}, {54.8f, 50.0f}}, 3},
-    {6, 8, {{63.8f, 27.5f}, {64.4f, 38.0f},
-            {78.5f, 38.0f}, {78.5f, 34.0f}}, 4},
+    {5, 8, {{42.0f, 52.0f}, {42.0f, 35.8f},
+            {78.5f, 35.8f}, {78.5f, 34.0f}}, 4},
+    {6, 8, {{57.5f, 28.2f}, {57.5f, 35.8f},
+            {78.5f, 35.8f}, {78.5f, 34.0f}}, 4},
     {7, 9, {{68.0f, 51.5f}, {76.0f, 51.5f}}, 2},
     {8, 9, {{78.5f, 38.0f}, {78.5f, 45.0f}}, 2},
 };
@@ -595,7 +599,7 @@ static const StreetBoundaryExit STREET_BOUNDARY_EXITS[] = {
     {1, {1.0f, 29.0f}, {{7.0f, 29.0f}}, 1, "WESTERN ROAD"},
     {2, {1.0f, 55.4f}, {{8.0f, 55.4f}}, 1, "OLD MINE TRACK"},
     {8, {94.8f, 34.0f},
-     {{78.5f, 34.0f}, {93.0f, 34.0f}}, 2,
+     {{78.5f, 35.8f}, {93.0f, 35.8f}}, 2,
      "EASTERN KING'S ROAD"},
     {9, {78.0f, 70.8f}, {{78.0f, 61.0f}}, 1, "NORTH FIELD ROAD"},
 };
@@ -827,7 +831,7 @@ static const TerrainRoad TERRAIN_ROADS[] = {
     {{39.50f, 53.80f, 4.90f, 4.20f}, false},
     {{47.00f, 25.25f, 6.00f, 1.38f}, true},
     {{54.20f, 50.10f, 18.70f, 2.90f}, true},
-    {{75.40f, 27.00f, 6.20f, 5.20f}, false},
+    {{75.80f, 27.00f, 5.20f, 5.20f}, false},
     {{62.80f, 27.00f, 2.60f, 11.50f}, false},
     {{63.80f, 32.40f, 17.50f, 3.20f}, true},
     {{39.50f, 53.50f, 16.20f, 3.00f}, true},
@@ -857,6 +861,11 @@ static CcLocalRoadSurface ActiveTownRoadSurface(void)
 {
     const CcLocalPlaceRoad *road = ActivePlaceRoadAt(0);
     return road != NULL ? road->surface : CC_LOCAL_ROAD_TRADE;
+}
+
+static const CcLocalPlaceRoad *ActiveCarriageRouteAt(int32_t index)
+{
+    return CcLocalPlaceCarriageRouteAt(active_place_function, index);
 }
 
 static const CcLocalPlaceProfile *ActivePlaceProfile(void)
@@ -951,6 +960,18 @@ static TerrainRoad PlaceTerrainRoad(const CcLocalPlaceRoad *road)
         {road->x, road->z, road->width, road->depth},
         road->runs_east_west,
     };
+}
+
+static int32_t TerrainCarriageRoadIndexOffset(void)
+{
+    return (int32_t)(sizeof(TERRAIN_ROADS) / sizeof(TERRAIN_ROADS[0])) +
+           CC_LOCAL_PLACE_ROAD_COUNT;
+}
+
+static bool TerrainRoadIndexIsCarriageLane(int32_t road_index)
+{
+    int32_t carriage_index = road_index - TerrainCarriageRoadIndexOffset();
+    return carriage_index >= 0 && carriage_index < 3;
 }
 
 typedef struct TerrainRenderCache {
@@ -1191,8 +1212,13 @@ static bool TerrainPointInsideMajorFoundation(float x, float z)
     Rectangle keep = ActiveCompoundBounds();
     if (x >= keep.x && x <= keep.x + keep.width &&
         z >= keep.y && z <= keep.y + keep.height) return true;
+    if (x >= CARRIAGE_FOOTPRINT.x &&
+        x <= CARRIAGE_FOOTPRINT.x + CARRIAGE_FOOTPRINT.width &&
+        z >= CARRIAGE_FOOTPRINT.y &&
+        z <= CARRIAGE_FOOTPRINT.y + CARRIAGE_FOOTPRINT.height) {
+        return true;
+    }
     static const Rectangle local_pads[] = {
-        {35.20f, 29.00f, 3.20f, 5.40f},
         {27.40f, 49.70f, 3.20f, 1.60f},
         {1.00f, 0.00f, 14.60f, 11.10f},
     };
@@ -1243,6 +1269,15 @@ static void TerrainGradeActivePlaceRoads(void)
     }
 }
 
+static void TerrainGradeActiveCarriageLanes(void)
+{
+    for (int32_t route = 0; route < 3; ++route) {
+        TerrainRoad terrain_road = PlaceTerrainRoad(
+            ActiveCarriageRouteAt(route));
+        TerrainGradeRoad(&terrain_road);
+    }
+}
+
 static float TerrainRectangleAverage(Rectangle footprint)
 {
     static const Vector2 samples[] = {
@@ -1279,6 +1314,16 @@ static void TerrainGradePad(Rectangle footprint, float elevation,
             street_terrain_height[index] +=
                 (elevation - street_terrain_height[index]) * weight;
         }
+    }
+}
+
+static void TerrainGradeActiveCarriageCourts(void)
+{
+    for (int32_t route = 3;
+         route < CC_LOCAL_CARRIAGE_ROUTE_COUNT; ++route) {
+        TerrainRoad court = PlaceTerrainRoad(ActiveCarriageRouteAt(route));
+        float elevation = TerrainRectangleAverage(court.footprint);
+        TerrainGradePad(court.footprint, elevation, 1.80f);
     }
 }
 
@@ -1393,6 +1438,7 @@ static void TerrainGenerate(void)
         TerrainGradeRoad(&TERRAIN_ROADS[road]);
     }
     TerrainGradeActivePlaceRoads();
+    TerrainGradeActiveCarriageLanes();
     /* The east road is the opening composition for every town. Give it an
        authored, readable grade through the large landform rather than
        letting a smoothed terrain road sag into a quarry or gorge. Farming
@@ -1446,6 +1492,7 @@ static void TerrainGenerate(void)
     TerrainGradePad(plaza_pad, plaza_elevation, 1.80f);
     TerrainGradePad(CARRIAGE_FOOTPRINT,
                     TerrainRectangleAverage(CARRIAGE_FOOTPRINT), 1.20f);
+    TerrainGradeActiveCarriageCourts();
     TerrainGradePad(DUNGEON_FOOTPRINT,
                     TerrainRectangleAverage(DUNGEON_FOOTPRINT), 1.35f);
 
@@ -1475,6 +1522,7 @@ static void TerrainGenerate(void)
         TerrainGradeRoad(&TERRAIN_ROADS[road]);
     }
     TerrainGradeActivePlaceRoads();
+    TerrainGradeActiveCarriageLanes();
     float artisan_south_height = TerrainSampleGrid(street_terrain_height,
                                                     33.0f, 25.0f);
     float artisan_north_height = TerrainSampleGrid(street_terrain_height,
@@ -1521,7 +1569,7 @@ static void TerrainGenerate(void)
     float crown_road_north_height = TerrainSampleGrid(
         street_terrain_height, 78.5f, 54.0f);
     TerrainGradeNorthSouthGentleRamp(
-        (Rectangle){75.40f, 30.60f, 6.20f, 23.40f},
+        (Rectangle){75.80f, 30.60f, 5.20f, 23.40f},
         keep_elevation, crown_road_north_height);
     float eastern_gate_height = TerrainSampleGrid(
         street_terrain_height, 81.0f, 34.0f);
@@ -1540,6 +1588,7 @@ static void TerrainGenerate(void)
     }
     TerrainGradePad((Rectangle){39.00f, 27.00f, 15.00f, 6.00f},
                     plaza_elevation, 2.50f);
+    TerrainGradeActiveCarriageCourts();
     /* Public road grading crosses the two yard approaches near z=11. Recut
        their gentle ramps last so a high regional road never leaves a single
        half-metre cliff at the training-yard threshold. */
@@ -14199,6 +14248,10 @@ static float TerrainRoadCenterline(const TerrainRoad *road,
         road->footprint.x + road->footprint.width * 0.5f;
     float cross_width = road->runs_east_west ? road->footprint.height :
                                                road->footprint.width;
+    /* Main carriage lanes are surveyed public ways. Keeping their centerline
+       straight protects the long gate and yard sightlines; smaller local
+       roads retain the hand-made wander that gives each district texture. */
+    if (TerrainRoadIndexIsCarriageLane(road_index)) return cross;
     float bend = sinf(amount * PI) *
                  sinf(amount * 2.35f + (float)road_index * 1.71f) *
                  fminf(0.48f, cross_width * 0.105f);
@@ -14228,7 +14281,8 @@ static float TerrainRoadSignedInset(const TerrainRoad *road,
     /* The grading footprint includes drainage and a safe movement shoulder;
        it is not all paved road. Keeping the visible wheel surface narrower
        restores the scale of doors, carts, houses, and gate openings. */
-    float visible_scale = cross_width >= 4.50f ? 0.72f :
+    float visible_scale = TerrainRoadIndexIsCarriageLane(road_index) ? 0.94f :
+                          cross_width >= 4.50f ? 0.72f :
                           cross_width >= 3.40f ? 0.80f : 0.90f;
     float half_width = cross_width * 0.5f * visible_scale *
                        (0.94f + width_noise * 0.07f);
@@ -14264,6 +14318,24 @@ static float TerrainPlaceRoadAmount(float x, float z)
     return amount;
 }
 
+static float TerrainCarriageRoadAmount(float x, float z)
+{
+    float amount = 0.0f;
+    int32_t index_offset = TerrainCarriageRoadIndexOffset();
+    for (int32_t i = 0; i < CC_LOCAL_CARRIAGE_ROUTE_COUNT; ++i) {
+        TerrainRoad road = PlaceTerrainRoad(ActiveCarriageRouteAt(i));
+        float inset = i < 3 ?
+            TerrainRoadSignedInset(&road, index_offset + i, x, z) :
+            TerrainRectangleSignedInset(x, z, road.footprint);
+        float edge_breakup = TerrainValueNoise(
+            x + (float)(index_offset + i) * 3.7f,
+            z - (float)(index_offset + i) * 2.9f, 5.5f, 19U) * 0.12f;
+        amount = fmaxf(amount,
+                       TerrainSmooth01(inset / 0.72f + edge_breakup));
+    }
+    return amount;
+}
+
 static float TerrainRoadAmount(float x, float z)
 {
     float amount = 0.0f;
@@ -14274,7 +14346,8 @@ static float TerrainRoadAmount(float x, float z)
         amount = fmaxf(amount,
                        TerrainSmooth01(inset / 0.68f + edge_breakup));
     }
-    return fmaxf(amount, TerrainPlaceRoadAmount(x, z));
+    amount = fmaxf(amount, TerrainPlaceRoadAmount(x, z));
+    return fmaxf(amount, TerrainCarriageRoadAmount(x, z));
 }
 
 static Color TerrainPlaceRoadColor(CcLocalRoadSurface surface)
@@ -14421,6 +14494,17 @@ static Color TerrainSurfaceColor(const CcSettlement *place,
         Color place_road_color = TerrainBrightRoadColor(
             place_road->surface, prosperity);
         color = BlendColor(color, place_road_color, place_road_amount);
+    }
+    const CcLocalPlaceRoad *carriage_road = ActiveCarriageRouteAt(0);
+    float carriage_road_amount = TerrainCarriageRoadAmount(x, z);
+    if (carriage_road != NULL) {
+        Color carriage_road_color = TerrainPlaceRoadColor(
+            carriage_road->surface);
+        carriage_road_color = BlendColor(
+            carriage_road_color, WORLD_ROAD_LIGHT,
+            0.22f + prosperity * 0.12f);
+        color = BlendColor(color, carriage_road_color,
+                           carriage_road_amount);
     }
 
     Rectangle plaza = {37.6f, 25.6f, 18.8f, 8.8f};
@@ -14918,6 +15002,53 @@ static void DrawTerrainRoadRuts(const CcSettlement *place, Vector3 focus)
             }
         }
     }
+    /* The two wheel lines make the carriage route readable through every
+       district material. Courts stay unmarked so they read as turning and
+       loading space rather than a second narrow lane. */
+    for (int32_t i = 0; i < 3; ++i) {
+        const CcLocalPlaceRoad *carriage_road = ActiveCarriageRouteAt(i);
+        if (carriage_road == NULL) continue;
+        TerrainRoad road = PlaceTerrainRoad(carriage_road);
+        Rectangle footprint = road.footprint;
+        int32_t road_index = TerrainCarriageRoadIndexOffset() + i;
+        Color color = ShadeColor(
+            TerrainPlaceRoadColor(carriage_road->surface), 0.58f);
+        float lane_offset = fminf(
+            0.92f,
+            (road.runs_east_west ? footprint.height : footprint.width) *
+                0.18f);
+        for (int32_t lane = -1; lane <= 1; lane += 2) {
+            float start = road.runs_east_west ? footprint.x : footprint.y;
+            float finish = start + (road.runs_east_west ? footprint.width :
+                                                             footprint.height);
+            for (float along = start + 0.35f; along < finish - 0.35f;
+                 along += 0.72f) {
+                float next = fminf(along + 0.74f, finish - 0.35f);
+                float cross = TerrainRoadCenterline(
+                    &road, road_index, along) + (float)lane * lane_offset;
+                float next_cross = TerrainRoadCenterline(
+                    &road, road_index, next) + (float)lane * lane_offset;
+                Vector2 a = road.runs_east_west ?
+                    (Vector2){along, cross} : (Vector2){cross, along};
+                Vector2 b = road.runs_east_west ?
+                    (Vector2){next, next_cross} :
+                    (Vector2){next_cross, next};
+                Vector2 middle = {(a.x + b.x) * 0.5f,
+                                  (a.y + b.y) * 0.5f};
+                float focus_x = middle.x - focus.x;
+                float focus_z = middle.y - focus.z;
+                if (!terrain_detail_cache_building &&
+                    focus_x * focus_x + focus_z * focus_z >
+                        24.0f * 24.0f) {
+                    continue;
+                }
+                if (TerrainCarriageRoadAmount(middle.x, middle.y) < 0.34f) {
+                    continue;
+                }
+                TerrainRibbonSegment(a, b, 0.065f, 0.060f, color);
+            }
+        }
+    }
     for (int32_t i = 0; i < TerrainVisibleRoadCount(); ++i) {
         DrawTerrainRoadIdentityMotif(
             &TERRAIN_ROADS[i], i, active_surface, focus);
@@ -14928,6 +15059,14 @@ static void DrawTerrainRoadRuts(const CcSettlement *place, Vector3 focus)
         TerrainRoad road = PlaceTerrainRoad(place_road);
         DrawTerrainRoadIdentityMotif(
             &road, road_count + i, place_road->surface, focus);
+    }
+    for (int32_t i = 0; i < 3; ++i) {
+        const CcLocalPlaceRoad *carriage_road = ActiveCarriageRouteAt(i);
+        if (carriage_road == NULL) continue;
+        TerrainRoad road = PlaceTerrainRoad(carriage_road);
+        DrawTerrainRoadIdentityMotif(
+            &road, TerrainCarriageRoadIndexOffset() + i,
+            carriage_road->surface, focus);
     }
     TerrainDetailEnd();
 }
@@ -21468,7 +21607,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         (Color){174, 94, 53, 255}, clock, 0.47f, settlement_pressure,
         scenery_focus);
     DrawAmbientNpcRoute3D(
-        (Vector2){42.75f, 51.05f}, (Vector2){44.15f, 50.15f}, 0.92f,
+        (Vector2){49.25f, 51.05f}, (Vector2){50.15f, 52.35f}, 0.92f,
         UINT32_C(0x64697304), CC_NPC_ROLE_TRAVELLER,
         (Color){117, 145, 116, 255}, clock, 0.72f, settlement_pressure,
         scenery_focus);
@@ -21550,11 +21689,12 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                                         21.0f},
                                        primary_hall_label, WORLD_GOLD};
     }
-    if (AgentNearLabel(agent, 36.80f, 31.70f, 7.0f)) {
-        labels[count++] = (WorldLabel){{36.80f,
+    if (AgentNearLabel(agent, CC_LOCAL_CARRIAGE_X,
+                       CC_LOCAL_CARRIAGE_Z, 7.0f)) {
+        labels[count++] = (WorldLabel){{CC_LOCAL_CARRIAGE_X,
                                         TerrainFootprintHeight(
                                             CARRIAGE_FOOTPRINT) + 2.28f,
-                                        31.70f},
+                                        CC_LOCAL_CARRIAGE_Z},
                                        "Carriage", WORLD_GOLD};
     }
     if (AgentNearLabel(agent, CC_LOCAL_NOTICE_X, CC_LOCAL_NOTICE_Z, 6.0f)) {

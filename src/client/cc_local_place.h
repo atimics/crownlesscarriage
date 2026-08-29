@@ -9,6 +9,7 @@
 #define CC_LOCAL_PLACE_ROOM_COUNT 10
 #define CC_LOCAL_PLACE_LANDMARK_COUNT 3
 #define CC_LOCAL_PLACE_ROAD_COUNT 3
+#define CC_LOCAL_CARRIAGE_ROUTE_COUNT 5
 #define CC_LOCAL_PLACE_BUILDING_CAPACITY 12
 #define CC_LOCAL_PLACE_COMPOUND_CAPACITY 12
 #define CC_LOCAL_PLACE_ESTABLISHING_SCENE_COUNT 3
@@ -140,6 +141,10 @@ typedef struct CcLocalPlaceProfile {
     const char *room_name[CC_LOCAL_PLACE_ROOM_COUNT];
     CcLocalPlaceLandmark landmark[CC_LOCAL_PLACE_LANDMARK_COUNT];
     CcLocalPlaceRoad road[CC_LOCAL_PLACE_ROAD_COUNT];
+    /* Every settlement gives the carriage a complete public route. The first
+       three records are travel lanes; the last two are the turning court and
+       service yard where a full team can reverse without blocking traffic. */
+    CcLocalPlaceRoad carriage_route[CC_LOCAL_CARRIAGE_ROUTE_COUNT];
     CcLocalPlaceBuilding building[CC_LOCAL_PLACE_BUILDING_CAPACITY];
     CcLocalPlaceCompoundStructure
         compound_structure[CC_LOCAL_PLACE_COMPOUND_CAPACITY];
@@ -156,6 +161,8 @@ const CcLocalPlaceLandmark *CcLocalPlaceLandmarkAt(
     CcSettlementFunction function, int32_t landmark_index);
 const CcLocalPlaceRoad *CcLocalPlaceRoadAt(
     CcSettlementFunction function, int32_t road_index);
+const CcLocalPlaceRoad *CcLocalPlaceCarriageRouteAt(
+    CcSettlementFunction function, int32_t route_index);
 const CcLocalPlaceBuilding *CcLocalPlaceBuildingAt(
     CcSettlementFunction function, int32_t building_index);
 const CcLocalPlaceCompoundStructure *CcLocalPlaceCompoundStructureAt(

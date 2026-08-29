@@ -395,9 +395,9 @@ static void TestSharedCharacterCollisionWorld(void)
     /* These houses are faded by several low camera shots. The reveal must
        never remove their physical walls for the player, NPCs, or ragdoll. */
     RequireSolidStreetHouse("west crofts house", 20.0f, 25.0f, 37.0f);
-    RequireSolidStreetHouse("artisan row house", 34.0f, 37.5f, 39.0f);
-    RequireSolidStreetHouse("market road house", 55.0f, 58.25f, 33.25f);
-    RequireSolidStreetHouse("coach yard house", 32.0f, 36.0f, 50.5f);
+    RequireSolidStreetHouse("artisan row house", 31.0f, 33.25f, 39.0f);
+    RequireSolidStreetHouse("market road house", 57.0f, 60.25f, 27.75f);
+    RequireSolidStreetHouse("coach yard house", 50.0f, 55.0f, 61.5f);
 
     /* The visible ore station base is 1.45 x 1.05 m centered here. It must use
        one footprint for physical sweeps, click paths, ray picking, and the
@@ -3267,9 +3267,9 @@ int main(void)
                                 (Vector2){2.00f, -1.00f}, false),
                     (Vector2){44.50f, 26.65f});
     RequirePosition("carriage blocks movement",
-                    CcLocalMove((Vector2){39.10f, 31.70f},
+                    CcLocalMove((Vector2){39.70f, 51.20f},
                                 (Vector2){-1.00f, 0.00f}, false),
-                    (Vector2){39.10f, 31.70f});
+                    (Vector2){39.70f, 51.20f});
     RequirePosition("castle wall blocks movement",
                     CcLocalMove((Vector2){65.30f, 20.00f},
                                 (Vector2){1.00f, 0.00f}, false),
