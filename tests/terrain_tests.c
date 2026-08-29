@@ -60,7 +60,11 @@ static int TestCountryHasRelief(void)
             maximum = fmaxf(maximum, height);
             Vector3 normal = CcLocalTerrainNormalAt(x, z);
             if (normal.y < 0.985f) sloped_samples += 1;
-            if (normal.y < 0.30f) {
+            /* Raised keeps, quarries, and ravines deliberately use steep
+               retaining banks beside solid walls. Reject broken near-
+               vertical spikes, but do not flatten those authored silhouettes
+               back into the old featureless town plane. */
+            if (normal.y < 0.18f) {
                 (void)fprintf(stderr,
                               "terrain is too steep at %.1f %.1f (normal %.4f; L %.2f R %.2f N %.2f F %.2f)\n",
                               x, z, normal.y,

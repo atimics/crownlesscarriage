@@ -593,8 +593,8 @@ static const StreetTraversalLink STREET_TRAVERSAL_LINKS[] = {
 static const StreetBoundaryExit STREET_BOUNDARY_EXITS[] = {
     {1, {1.0f, 29.0f}, {{7.0f, 29.0f}}, 1, "WESTERN ROAD"},
     {2, {1.0f, 55.4f}, {{8.0f, 55.4f}}, 1, "OLD MINE TRACK"},
-    {8, {94.8f, 29.0f},
-     {{78.5f, 34.0f}, {93.0f, 34.0f}, {94.8f, 33.0f}}, 3,
+    {8, {94.8f, 34.0f},
+     {{78.5f, 34.0f}, {93.0f, 34.0f}}, 2,
      "EASTERN KING'S ROAD"},
     {9, {78.0f, 70.8f}, {{78.0f, 61.0f}}, 1, "NORTH FIELD ROAD"},
 };
@@ -1021,65 +1021,74 @@ static float TerrainLandform(float x, float z, float center_x,
 
 static float TerrainNaturalHeight(float x, float z)
 {
-    float broad = TerrainValueNoise(x, z, 34.0f, 1U) * 1.25f;
+    float broad = TerrainValueNoise(x, z, 34.0f, 1U) * 1.40f;
     float hills = TerrainValueNoise(x + 19.0f, z - 11.0f,
-                                    18.0f, 2U) * 0.72f;
+                                    18.0f, 2U) * 0.82f;
     float detail = TerrainValueNoise(x - 7.0f, z + 23.0f,
-                                     7.0f, 3U) * 0.24f;
-    float land = 1.80f + broad + hills + detail;
+                                     7.0f, 3U) * 0.26f;
+    float land = 1.20f + broad + hills + detail;
     switch (active_place_function) {
         case CC_SETTLEMENT_FARMING: {
             float river_center = 91.0f + sinf(z * 0.082f) * 1.7f;
-            float river_distance = (x - river_center) / 4.5f;
-            land -= 3.55f * expf(-river_distance * river_distance);
+            float river_distance = (x - river_center) / 4.8f;
+            land -= 8.50f * expf(-river_distance * river_distance);
             land += TerrainLandform(x, z, 45.0f, 28.0f,
-                                    22.0f, 14.0f) * 1.35f;
+                                    25.0f, 17.0f) * 2.80f;
             land += TerrainLandform(x, z, 79.0f, 18.0f,
-                                    17.0f, 13.0f) * 4.10f;
+                                    21.0f, 15.0f) * 11.20f;
+            land += TerrainLandform(x, z, 68.0f, 2.0f,
+                                    34.0f, 13.0f) * 4.20f;
             break;
         }
         case CC_SETTLEMENT_MINING:
-            land += x * 0.045f + z * 0.040f;
+            land += x * 0.040f;
+            land += TerrainSmooth01((54.0f - z) / 46.0f) * 5.20f;
             land += TerrainValueNoise(x + 8.0f, z - 4.0f,
-                                      11.0f, 41U) * 1.10f;
+                                      11.0f, 41U) * 1.25f;
             land -= TerrainLandform(x, z, 82.0f, 35.0f,
-                                    18.0f, 12.0f) * 4.70f;
-            land += TerrainLandform(x, z, 78.0f, 17.0f,
-                                    16.0f, 11.0f) * 3.80f;
+                                    21.0f, 15.0f) * 6.80f;
+            land -= TerrainLandform(x, z, 48.0f, 30.0f,
+                                    23.0f, 17.0f) * 3.80f;
+            land += TerrainLandform(x, z, 78.0f, 14.0f,
+                                    23.0f, 15.0f) * 13.20f;
+            land += TerrainSmooth01((20.0f - z) / 13.0f) * 4.80f;
             break;
         case CC_SETTLEMENT_MARKET:
             land += TerrainLandform(x, z, 47.0f, 30.0f,
-                                    34.0f, 26.0f) * 1.05f;
+                                    39.0f, 29.0f) * 3.40f;
             land -= TerrainLandform(x, z, 47.0f, 30.0f,
-                                    21.0f, 16.0f) * 1.35f;
-            land += TerrainLandform(x, z, 79.0f, 18.0f,
-                                    28.0f, 22.0f) * 4.10f;
+                                    21.0f, 16.0f) * 3.10f;
+            land += TerrainLandform(x, z, 79.0f, 16.0f,
+                                    25.0f, 18.0f) * 11.40f;
+            land += TerrainSmooth01((19.0f - z) / 15.0f) * 3.20f;
             break;
         case CC_SETTLEMENT_FORTRESS: {
             float ravine_center = 91.0f + sinf(z * 0.052f) * 1.2f;
-            float ravine_distance = (x - ravine_center) / 4.0f;
-            land -= 4.80f * expf(-ravine_distance * ravine_distance);
+            float ravine_distance = (x - ravine_center) / 4.5f;
+            land -= 10.20f * expf(-ravine_distance * ravine_distance);
             land += TerrainLandform(x, z, 48.0f, 27.0f,
-                                    28.0f, 15.0f) * 2.20f;
+                                    32.0f, 16.0f) * 5.00f;
             land += TerrainLandform(x, z, 79.0f, 18.0f,
-                                    16.0f, 12.0f) * 4.25f;
+                                    21.0f, 15.0f) * 13.00f;
+            land += TerrainSmooth01((19.0f - z) / 14.0f) * 4.80f;
             break;
         }
         case CC_SETTLEMENT_CAPITAL:
-            land += TerrainSmooth01((x - 18.0f) / 62.0f) * 3.20f;
-            land += TerrainSmooth01((z - 8.0f) / 48.0f) * 1.50f;
+            land += TerrainSmooth01((x - 14.0f) / 68.0f) * 9.20f;
+            land += TerrainSmooth01((50.0f - z) / 43.0f) * 3.80f;
             land += TerrainLandform(x, z, 79.0f, 18.0f,
-                                    19.0f, 14.0f) * 4.60f;
+                                    23.0f, 17.0f) * 7.40f;
             land += TerrainLandform(x, z, 46.0f, 29.0f,
-                                    19.0f, 14.0f) * 1.40f;
+                                    24.0f, 17.0f) * 2.80f;
             break;
         case CC_SETTLEMENT_DUNGEON_TOWN:
             land += TerrainLandform(x, z, 51.0f, 30.0f,
-                                    34.0f, 23.0f) * 1.60f;
+                                    39.0f, 27.0f) * 3.10f;
             land -= TerrainLandform(x, z, 47.0f, 30.0f,
-                                    13.0f, 10.0f) * 4.20f;
+                                    18.0f, 13.0f) * 6.20f;
             land += TerrainLandform(x, z, 79.0f, 17.0f,
-                                    17.0f, 12.0f) * 4.35f;
+                                    22.0f, 15.0f) * 13.80f;
+            land += TerrainSmooth01((18.0f - z) / 14.0f) * 4.50f;
             break;
     }
     return land;
@@ -1271,6 +1280,33 @@ static void TerrainGradeNorthSouthRamp(Rectangle footprint,
     }
 }
 
+static void TerrainGradeEastWestRamp(Rectangle footprint,
+                                     float west_height,
+                                     float east_height)
+{
+    const float shoulder = 0.95f;
+    for (int32_t column = 0; column < CC_TERRAIN_COLUMNS; ++column) {
+        float x = (float)column * CC_TERRAIN_CELL_SIZE;
+        if (x < footprint.x || x > footprint.x + footprint.width) continue;
+        float progress = TerrainSmooth01((x - footprint.x) /
+                                         footprint.width);
+        float elevation = west_height +
+                          (east_height - west_height) * progress;
+        for (int32_t row = 0; row < CC_TERRAIN_ROWS; ++row) {
+            float z = (float)row * CC_TERRAIN_CELL_SIZE;
+            float side_distance = z < footprint.y ? footprint.y - z :
+                z > footprint.y + footprint.height ?
+                    z - (footprint.y + footprint.height) : 0.0f;
+            if (side_distance >= shoulder) continue;
+            float weight = side_distance <= 0.0f ? 1.0f :
+                TerrainSmooth01(1.0f - side_distance / shoulder);
+            int32_t index = TerrainIndex(column, row);
+            street_terrain_height[index] +=
+                (elevation - street_terrain_height[index]) * weight;
+        }
+    }
+}
+
 static void TerrainGenerate(void)
 {
     for (int32_t row = 0; row < CC_TERRAIN_ROWS; ++row) {
@@ -1288,6 +1324,28 @@ static void TerrainGenerate(void)
         TerrainGradeRoad(&TERRAIN_ROADS[road]);
     }
     TerrainGradeActivePlaceRoads();
+    /* The east road is the opening composition for every town. Give it an
+       authored, readable grade through the large landform rather than
+       letting a smoothed terrain road sag into a quarry or gorge. Farming
+       and fortress towns use the same strip as a level bridge deck. */
+    float arrival_west_height = TerrainSampleGrid(
+        street_terrain_height, 83.5f, 34.0f);
+    float arrival_east_height = TerrainSampleGrid(
+        street_terrain_height, 96.0f, 34.0f);
+    float arrival_bridge_height = 0.0f;
+    if (active_place_function == CC_SETTLEMENT_FARMING ||
+        active_place_function == CC_SETTLEMENT_FORTRESS) {
+        arrival_bridge_height = fmaxf(arrival_west_height,
+                                      arrival_east_height) + 0.18f;
+        TerrainGradeEastWestRamp((Rectangle){83.5f, 31.75f, 12.5f, 4.50f},
+                                 arrival_bridge_height,
+                                 arrival_bridge_height);
+    } else {
+        TerrainGradeEastWestRamp((Rectangle){63.8f, 31.75f, 32.2f, 4.50f},
+                                 TerrainSampleGrid(street_terrain_height,
+                                                   63.8f, 34.0f),
+                                 arrival_east_height);
+    }
 
     /* Foundations are small human changes to the generated land. Each pad
        takes its elevation from the land and nearby road before construction. */
@@ -1355,12 +1413,60 @@ static void TerrainGenerate(void)
     /* Restore the compound terrace after the street grading. Only the
        authored gate ramp below should climb onto this raised civic stage. */
     TerrainGradePad(keep_pad, keep_elevation, 4.00f);
-    float crown_road_height = TerrainSampleGrid(street_terrain_height,
-                                                 78.5f, 38.0f);
-    TerrainGradeNorthSouthRamp((Rectangle){75.40f, 30.60f, 6.20f, 7.40f},
-                               keep_elevation, crown_road_height);
+    /* Preserve the lower road that circles the terrace before it reaches the
+       gate. This route is how a player approaches a dramatic raised keep
+       without being asked to walk straight up its retaining bank. */
+    TerrainGradeRoad(&TERRAIN_ROADS[
+        (int32_t)(sizeof(TERRAIN_ROADS) / sizeof(TERRAIN_ROADS[0])) - 1]);
+    float west_gate_height = TerrainSampleGrid(street_terrain_height,
+                                                57.0f, 29.4f);
+    TerrainGradeEastWestRamp((Rectangle){54.0f, 26.80f, 11.4f, 5.20f},
+                             west_gate_height, west_gate_height);
+    float west_gate_north_height = TerrainSampleGrid(
+        street_terrain_height, 64.1f, 38.0f);
+    TerrainGradeNorthSouthRamp((Rectangle){62.80f, 27.00f, 2.60f, 11.50f},
+                               west_gate_height,
+                               west_gate_north_height);
+    float gate_causeway_height = keep_elevation - 2.0f;
+    /* Keep both raid lanes on the authored causeway. The upper lane sits at
+       z=40.4, so the graded deck must extend past that line rather than put
+       an NPC exactly on the retaining-bank edge. */
+    TerrainGradeEastWestRamp((Rectangle){63.80f, 36.20f, 15.20f, 6.00f},
+                             west_gate_north_height,
+                             gate_causeway_height);
+    TerrainGradeEastWestRamp(
+        (Rectangle){79.00f, 36.20f, 17.00f, 6.00f},
+        gate_causeway_height,
+        TerrainSampleGrid(street_terrain_height, 96.0f, 38.0f));
+    float crown_road_north_height = TerrainSampleGrid(
+        street_terrain_height, 78.5f, 45.0f);
+    TerrainGradeNorthSouthRamp((Rectangle){75.40f, 30.60f, 6.20f, 14.40f},
+                               keep_elevation,
+                               crown_road_north_height);
+    float eastern_gate_height = TerrainSampleGrid(
+        street_terrain_height, 81.0f, 34.0f);
+    if (active_place_function == CC_SETTLEMENT_FARMING ||
+        active_place_function == CC_SETTLEMENT_FORTRESS) {
+        TerrainGradeEastWestRamp((Rectangle){81.0f, 31.75f, 2.5f, 4.50f},
+                                 eastern_gate_height,
+                                 arrival_bridge_height);
+        TerrainGradeEastWestRamp((Rectangle){83.5f, 31.75f, 12.5f, 4.50f},
+                                 arrival_bridge_height,
+                                 arrival_bridge_height);
+    } else {
+        TerrainGradeEastWestRamp((Rectangle){81.0f, 31.75f, 15.0f, 4.50f},
+                                 eastern_gate_height,
+                                 arrival_east_height);
+    }
     TerrainGradePad((Rectangle){39.00f, 27.00f, 15.00f, 6.00f},
                     plaza_elevation, 2.50f);
+    /* Public road grading crosses the two yard approaches near z=11. Recut
+       their gentle ramps last so a high regional road never leaves a single
+       half-metre cliff at the training-yard threshold. */
+    TerrainGradeNorthSouthRamp((Rectangle){7.45f, 10.50f, 1.80f, 16.25f},
+                               0.0f, west_course_road_height);
+    TerrainGradeNorthSouthRamp((Rectangle){14.65f, 10.50f, 3.50f, 16.60f},
+                               0.0f, east_course_road_height);
     street_terrain_ready = true;
 }
 
@@ -8900,7 +9006,11 @@ static void CombatCameraLockComposition(Camera3D base,
     float look_ahead = fminf(span * 0.72f, 3.30f);
     Vector3 target = Vector3Add(
         player->position, Vector3Scale(fight_line, look_ahead));
-    target.y = player->position.y + 1.32f;
+    float duel_ground_y = (player->position.y + opponent_position.y) * 0.50f;
+    /* On the new terraces one fighter may be several metres uphill. Aim and
+       place the shoulder camera around their shared elevation so the higher
+       body does not leave the fixed scene's safe frame. */
+    target.y = duel_ground_y + 1.32f;
     bool road_duel = course->scene == CC_LOCAL_SCENE_ROAD;
     float follow_distance = road_duel ?
         4.45f + fminf(span, 7.0f) * 0.08f :
@@ -8937,7 +9047,7 @@ static void CombatCameraLockComposition(Camera3D base,
             player->position,
             Vector3Add(Vector3Scale(fight_line, -follow_distance),
                        Vector3Scale(candidate_side, shoulder_distance)));
-        camera_position.y = player->position.y +
+        camera_position.y = duel_ground_y +
                             (road_duel ? 2.85f : 3.15f);
         Vector3 candidate_offset = Vector3Subtract(camera_position, target);
         Camera3D candidate = PerspectiveCameraComposed(
@@ -12755,6 +12865,192 @@ static void DrawBuilding(float x, float z, float width, float depth,
     }
 }
 
+static void DrawOpenRoofBay(float x, float z, float width, float depth,
+                            float height, Color timber, Color roof)
+{
+    float post_inset = 0.24f;
+    for (int32_t corner = 0; corner < 4; ++corner) {
+        float post_x = (corner & 1) == 0 ? x + post_inset :
+                                             x + width - post_inset;
+        float post_z = (corner & 2) == 0 ? z + post_inset :
+                                             z + depth - post_inset;
+        DrawBox((Vector3){post_x, height * 0.50f, post_z},
+                (Vector3){0.28f, height, 0.28f}, timber);
+    }
+    DrawBox((Vector3){x + width * 0.50f, height - 0.12f,
+                      z + depth * 0.50f},
+            (Vector3){width, 0.24f, depth}, ShadeColor(timber, 0.82f));
+    DrawPitchedRoof(x, z, width, depth, height,
+                    ShadeColor(timber, 0.86f), roof);
+}
+
+static void DrawRoundTower(float center_x, float center_z, float radius,
+                           float height, Color wall, Color roof, bool door)
+{
+    Color trim = ShadeColor(wall, 0.62f);
+    DrawCylinder((Vector3){center_x, 0.0f, center_z},
+                 radius, radius * 1.03f, height, 12, wall);
+    DrawCylinder((Vector3){center_x, height, center_z},
+                 0.10f, radius * 1.22f, radius * 1.12f, 12, roof);
+    DrawBox((Vector3){center_x, height * 0.58f,
+                      center_z + radius + 0.025f},
+            (Vector3){radius * 0.62f, 0.72f, 0.07f}, WORLD_INK);
+    DrawBox((Vector3){center_x, height * 0.58f,
+                      center_z + radius + 0.055f},
+            (Vector3){0.08f, 0.78f, 0.11f}, trim);
+    if (door) {
+        DrawBox((Vector3){center_x, 1.05f,
+                          center_z + radius + 0.035f},
+                (Vector3){0.82f, 2.10f, 0.08f}, WORLD_WOOD_SHADOW);
+    }
+}
+
+/* A building footprint is the stable gameplay contract. Its visible shell
+   can still be a believable collection of wings, aisles, upper floors, and
+   towers. Each settlement gets a kit derived from its work and landscape so
+   the skyline communicates place before banners or labels are read. */
+static void DrawSettlementBuilding(const WorldBuilding *building,
+                                   Color wall, Color roof,
+                                   const CcLocalPlaceProfile *profile,
+                                   int32_t building_index)
+{
+    if (building == NULL || profile == NULL) return;
+    float x = building->footprint.x;
+    float z = building->footprint.y;
+    float width = building->footprint.width;
+    float depth = building->footprint.height;
+    float height = building->height;
+    bool mirror = (building_index & 1) != 0;
+
+    switch (profile->function) {
+        case CC_SETTLEMENT_FARMING:
+            if (building->style == CC_LOCAL_BUILDING_WORKSHOP ||
+                building_index < 0) {
+                /* Barns have a tall working nave and genuinely open side
+                   sheds, rather than a house facade painted onto a box. */
+                float aisle = width * 0.20f;
+                DrawBuilding(x + aisle, z, width - aisle * 2.0f, depth,
+                             height, wall, roof, building->door,
+                             building->style);
+                DrawOpenRoofBay(x, z + depth * 0.12f, aisle * 1.18f,
+                                depth * 0.78f, height * 0.48f,
+                                WORLD_WOOD_SHADOW, ShadeColor(roof, 0.88f));
+                DrawOpenRoofBay(x + width - aisle * 1.18f,
+                                z + depth * 0.12f, aisle * 1.18f,
+                                depth * 0.78f, height * 0.48f,
+                                WORLD_WOOD_SHADOW, ShadeColor(roof, 0.92f));
+            } else {
+                float main_width = width * 0.70f;
+                float main_x = mirror ? x + width - main_width : x;
+                float annex_width = width * 0.38f;
+                float annex_x = mirror ? x : x + width - annex_width;
+                DrawBuilding(main_x, z, main_width, depth, height,
+                             wall, roof, building->door, building->style);
+                DrawBuilding(annex_x, z + depth * 0.24f,
+                             annex_width, depth * 0.68f, height * 0.60f,
+                             ShadeColor(wall, 0.94f), ShadeColor(roof, 0.90f),
+                             false, building->style);
+            }
+            break;
+        case CC_SETTLEMENT_MINING: {
+            /* Stone lower storeys carry inset timber lodgings. Their stepped
+               sections echo the worker terraces cut into the quarry. */
+            float lower_height = height * 0.48f;
+            DrawBuilding(x, z, width, depth, lower_height,
+                         ShadeColor(wall, 0.82f), ShadeColor(roof, 0.78f),
+                         building->door, 1);
+            float upper_width = width * 0.76f;
+            float upper_x = x + (mirror ? width * 0.08f : width * 0.16f);
+            rlPushMatrix();
+            rlTranslatef(0.0f, height * 0.43f, 0.0f);
+            DrawBuilding(upper_x, z + depth * 0.10f,
+                         upper_width, depth * 0.80f, height * 0.54f,
+                         wall, roof, false, building->style);
+            rlPopMatrix();
+            float gantry_x = mirror ? x + width * 0.16f :
+                                      x + width * 0.84f;
+            DrawBox((Vector3){gantry_x, height * 0.58f, z + depth * 0.50f},
+                    (Vector3){0.28f, height * 1.08f, depth * 0.88f},
+                    WORLD_WOOD_SHADOW);
+            DrawBox((Vector3){gantry_x, height * 1.08f, z + depth * 0.50f},
+                    (Vector3){width * 0.28f, 0.26f, depth * 0.88f},
+                    WORLD_WOOD);
+            break;
+        }
+        case CC_SETTLEMENT_MARKET: {
+            /* Trading houses wrap an open central bay. The arcade and three
+               rooflines make a public hall rather than another residence. */
+            float wing_width = width * 0.34f;
+            DrawBuilding(x, z, wing_width, depth, height * 0.72f,
+                         wall, roof, building->door, building->style);
+            DrawBuilding(x + width - wing_width, z, wing_width, depth,
+                         height * 0.72f, wall, roof, false, building->style);
+            DrawBuilding(x + width * 0.31f, z,
+                         width * 0.38f, depth * 0.52f, height,
+                         ShadeColor(wall, 1.06f), roof, false, 2);
+            int32_t bays = 3;
+            for (int32_t bay = 0; bay < bays; ++bay) {
+                float post_x = x + width * (0.37f + (float)bay * 0.13f);
+                DrawBox((Vector3){post_x, height * 0.28f,
+                                  z + depth * 0.88f},
+                        (Vector3){0.24f, height * 0.56f, 0.30f},
+                        WORLD_STONE_LIGHT);
+            }
+            DrawBox((Vector3){x + width * 0.50f, height * 0.57f,
+                              z + depth * 0.88f},
+                    (Vector3){width * 0.38f, 0.24f, 0.38f}, WORLD_GOLD);
+            break;
+        }
+        case CC_SETTLEMENT_FORTRESS: {
+            float tower_radius = fminf(width * 0.15f, depth * 0.24f);
+            float tower_x = mirror ? x + tower_radius :
+                                     x + width - tower_radius;
+            float block_x = mirror ? x + width * 0.18f : x;
+            DrawBuilding(block_x, z, width * 0.82f, depth,
+                         height * 0.70f, wall, roof, building->door,
+                         building->style);
+            DrawRoundTower(tower_x, z + depth * 0.54f, tower_radius,
+                           height * 1.06f, ShadeColor(wall, 0.88f),
+                           roof, false);
+            break;
+        }
+        case CC_SETTLEMENT_CAPITAL:
+            /* Palace-front buildings use a tall central pavilion and two
+               lower wings, creating the formal stepped silhouette visible
+               in the reference's long axial views. */
+            DrawBuilding(x, z + depth * 0.10f, width * 0.31f,
+                         depth * 0.90f, height * 0.62f,
+                         wall, ShadeColor(roof, 0.92f), false,
+                         building->style);
+            DrawBuilding(x + width * 0.69f, z + depth * 0.10f,
+                         width * 0.31f, depth * 0.90f, height * 0.62f,
+                         wall, ShadeColor(roof, 0.92f), false,
+                         building->style);
+            DrawBuilding(x + width * 0.27f, z, width * 0.46f, depth,
+                         height * 1.04f, ShadeColor(wall, 1.06f), roof,
+                         building->door, 2);
+            break;
+        case CC_SETTLEMENT_DUNGEON_TOWN: {
+            float main_width = width * 0.68f;
+            float main_x = mirror ? x + width - main_width : x;
+            float annex_x = mirror ? x : x + width * 0.54f;
+            DrawBuilding(main_x, z, main_width, depth, height,
+                         wall, roof, building->door, building->style);
+            DrawBuilding(annex_x, z + depth * 0.32f,
+                         width * 0.46f, depth * 0.60f, height * 0.58f,
+                         ShadeColor(wall, 0.80f), ShadeColor(roof, 0.84f),
+                         false, 3);
+            float tower_x = mirror ? x + width * 0.26f :
+                                     x + width * 0.74f;
+            DrawRoundTower(tower_x, z + depth * 0.24f,
+                           fminf(width, depth) * 0.15f,
+                           height * 0.92f, ShadeColor(wall, 0.72f),
+                           ShadeColor(roof, 0.76f), false);
+            break;
+        }
+    }
+}
+
 static void DrawTerrainPatchAtTop(float x, float z, float width, float depth,
                                   float top, Color color)
 {
@@ -12784,7 +13080,7 @@ static bool SceneryFootprintVisibleWithin(Rectangle footprint, Vector3 focus,
 
 static bool SceneryFootprintVisible(Rectangle footprint, Vector3 focus)
 {
-    return SceneryFootprintVisibleWithin(footprint, focus, 30.0f);
+    return SceneryFootprintVisibleWithin(footprint, focus, 42.0f);
 }
 
 static bool SceneryPointVisible(float x, float z, Vector3 focus)
@@ -13606,7 +13902,10 @@ static void TerrainMeshWriteVertex(TerrainMeshWriter *writer,
 {
     int32_t vertex = writer->cursor;
     Vector3 normal = TerrainVisualNormalAt(point.x, point.z);
-    normal.y = fmaxf(normal.y, 0.62f);
+    /* Keep the true face direction on steep landforms. The old clamp made
+       quarry walls and ravines light like gentle grass slopes, which erased
+       their height in the fixed storybook camera. */
+    normal.y = fmaxf(normal.y, 0.24f);
     normal = Vector3Normalize(normal);
     writer->mesh.vertices[vertex * 3 + 0] = point.x;
     writer->mesh.vertices[vertex * 3 + 1] = point.y;
@@ -13644,7 +13943,7 @@ static void TerrainMeshWriteCell(TerrainMeshWriter *writer,
 
 static int32_t TerrainMeshVertexCount(void)
 {
-    const float margin = 14.0f;
+    const float margin = 28.0f;
     int32_t cells = 0;
     for (float z = -margin; z < CC_LOCAL_WORLD_DEPTH + margin; z += 1.0f) {
         for (float x = -margin; x < CC_LOCAL_WORLD_WIDTH + margin;
@@ -13674,7 +13973,7 @@ static bool TerrainRenderCacheBuild(const CcSettlement *place)
         return false;
     }
 
-    const float margin = 14.0f;
+    const float margin = 28.0f;
     for (float z = -margin; z < CC_LOCAL_WORLD_DEPTH + margin; z += 1.0f) {
         float far_z = z + 1.0f;
         for (float x = -margin; x < CC_LOCAL_WORLD_WIDTH + margin;
@@ -14153,7 +14452,10 @@ static void DrawFarmTerrainStage(Vector3 focus)
         if (!SceneryPointVisible(river_x, z, focus)) continue;
         float next_x = 91.0f + sinf((z + 4.0f) * 0.082f) * 1.7f;
         float angle = -atan2f(next_x - river_x, 4.0f) * RAD2DEG;
-        float ground = CcLocalTerrainHeightAt(river_x, z);
+        /* The playable bridge uses a graded terrain strip for collision, but
+           the water must remain down in the authored river gorge. */
+        float ground = TerrainSampleGrid(street_terrain_natural,
+                                         river_x, z);
         DrawTiltedBox((Vector3){(river_x + next_x) * 0.5f,
                                 ground + 0.045f, z + 2.0f},
                       (Vector3){7.2f, 0.07f, 4.5f},
@@ -14222,6 +14524,19 @@ static void DrawMarketTerrainStage(Vector3 focus)
 
 static void DrawFortressTerrainStage(Vector3 focus)
 {
+    for (float z = 2.0f; z < 72.0f; z += 4.0f) {
+        float ravine_x = 91.0f + sinf(z * 0.052f) * 1.2f;
+        if (!SceneryPointVisible(ravine_x, z, focus)) continue;
+        float next_x = 91.0f + sinf((z + 4.0f) * 0.052f) * 1.2f;
+        float floor = TerrainSampleGrid(street_terrain_natural,
+                                        ravine_x, z);
+        DrawTiltedBox((Vector3){(ravine_x + next_x) * 0.5f,
+                                floor + 0.035f, z + 2.0f},
+                      (Vector3){5.6f, 0.07f, 4.4f},
+                      (Vector3){0.0f, 1.0f, 0.0f},
+                      -atan2f(next_x - ravine_x, 4.0f) * RAD2DEG,
+                      WORLD_INK);
+    }
     if (SceneryPointVisible(91.0f, 34.0f, focus)) {
         DrawArrivalBridge(true);
         for (int32_t side = -1; side <= 1; side += 2) {
@@ -14569,12 +14884,10 @@ static void DrawWorldBuildings(Color kingdom, Vector3 focus,
         }
         rlPushMatrix();
         rlTranslatef(0.0f, TerrainFootprintHeight(building.footprint), 0.0f);
-        DrawBuilding(building.footprint.x, building.footprint.y,
-                     building.footprint.width, building.footprint.height,
-                     building.height,
-                     BuildingWallColor(building.style, profile),
-                     BuildingRoofColor(building.style, kingdom, profile),
-                     building.door, building.style);
+        DrawSettlementBuilding(
+            &building, BuildingWallColor(building.style, profile),
+            BuildingRoofColor(building.style, kingdom, profile),
+            profile, i);
         rlPopMatrix();
     }
     SetWorldForegroundReveal(0.0f, reveal_cut_height);
@@ -14725,9 +15038,15 @@ static void DrawConstructedCompoundStructure(
             (profile->function == CC_SETTLEMENT_CAPITAL ||
              profile->function == CC_SETTLEMENT_FORTRESS ? 2 : 1) : 1;
         Color roof = BuildingRoofColor(style, kingdom, profile);
-        DrawBuilding(footprint.x, footprint.y,
-                     footprint.width, footprint.height, height,
-                     stone, roof, true, style);
+        WorldBuilding building = {
+            .footprint = footprint,
+            .height = height,
+            .style = style,
+            .door = true,
+        };
+        DrawSettlementBuilding(&building, stone, roof, profile,
+                               structure->kind == CC_LOCAL_COMPOUND_HALL ?
+                                   -2 : -1);
         return;
     }
 
@@ -14742,6 +15061,39 @@ static void DrawConstructedCompoundStructure(
                           center_z + radius + 0.025f},
                 (Vector3){radius * 1.15f, 0.18f, 0.08f},
                 ShadeColor(stone, 0.68f));
+        return;
+    }
+
+    if (tower && profile != NULL &&
+        (profile->function == CC_SETTLEMENT_MARKET ||
+         profile->function == CC_SETTLEMENT_CAPITAL ||
+         profile->function == CC_SETTLEMENT_DUNGEON_TOWN)) {
+        /* Customs and palace compounds use round gate turrets; the dungeon
+           town inherits a rougher version of the same old masonry. This
+           breaks the all-square castle silhouette while keeping the exact
+           authored tower footprint solid for collision. */
+        float radius = fminf(footprint.width, footprint.height) * 0.48f;
+        Color tower_stone = profile->function ==
+                CC_SETTLEMENT_DUNGEON_TOWN ? ShadeColor(stone, 0.76f) : stone;
+        Color tower_roof = BuildingRoofColor(
+            profile->function == CC_SETTLEMENT_CAPITAL ? 2 : 1,
+            kingdom, profile);
+        DrawBox((Vector3){center_x, 0.34f, center_z},
+                (Vector3){footprint.width, 0.68f, footprint.height},
+                ShadeColor(tower_stone, 0.66f));
+        for (int32_t corner = 0; corner < 4; ++corner) {
+            float buttress_x = (corner & 1) == 0 ?
+                footprint.x + 0.24f :
+                footprint.x + footprint.width - 0.24f;
+            float buttress_z = (corner & 2) == 0 ?
+                footprint.y + 0.24f :
+                footprint.y + footprint.height - 0.24f;
+            DrawBox((Vector3){buttress_x, height * 0.30f, buttress_z},
+                    (Vector3){0.48f, height * 0.60f, 0.48f},
+                    ShadeColor(tower_stone, 0.72f));
+        }
+        DrawRoundTower(center_x, center_z, radius, height,
+                       tower_stone, tower_roof, false);
         return;
     }
 
@@ -14791,6 +15143,34 @@ static void DrawConstructedCompoundStructure(
                     ShadeColor(stone, 0.70f));
     if (tower || CompoundUsesBattlements(profile)) {
         DrawCastleBattlements(footprint, height, stone);
+    }
+    if (wall_run) {
+        bool horizontal = footprint.width >= footprint.height;
+        float length = horizontal ? footprint.width : footprint.height;
+        int32_t pier_count = (int32_t)fmaxf(1.0f, floorf(length / 3.2f));
+        for (int32_t pier = 0; pier <= pier_count; ++pier) {
+            float amount = (float)pier / (float)pier_count;
+            float pier_x = horizontal ?
+                footprint.x + footprint.width * amount :
+                footprint.x + footprint.width + 0.13f;
+            float pier_z = horizontal ?
+                footprint.y + footprint.height + 0.13f :
+                footprint.y + footprint.height * amount;
+            DrawBox((Vector3){pier_x, height * 0.43f, pier_z},
+                    horizontal ?
+                        (Vector3){0.42f, height * 0.86f, 0.52f} :
+                        (Vector3){0.52f, height * 0.86f, 0.42f},
+                    ShadeColor(stone, 0.74f));
+        }
+    }
+    if (tower && profile != NULL &&
+        profile->function == CC_SETTLEMENT_FORTRESS) {
+        DrawPitchedRoof(footprint.x + footprint.width * 0.10f,
+                        footprint.y + footprint.height * 0.10f,
+                        footprint.width * 0.80f,
+                        footprint.height * 0.80f,
+                        height + 0.35f, stone,
+                        BuildingRoofColor(1, kingdom, profile));
     }
 }
 

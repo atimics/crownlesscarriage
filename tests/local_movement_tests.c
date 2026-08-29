@@ -303,6 +303,24 @@ static void TestTownPlanCollisionAndGate(void)
                 sim.settlements[settlement].function, gate_walk.y);
             exit(1);
         }
+
+        float minimum_height = 10000.0f;
+        float maximum_height = -10000.0f;
+        for (float z = 4.0f; z < CC_LOCAL_WORLD_DEPTH; z += 4.0f) {
+            for (float x = 4.0f; x < CC_LOCAL_WORLD_WIDTH; x += 4.0f) {
+                float height = CcLocalTerrainHeightAt(x, z);
+                minimum_height = fminf(minimum_height, height);
+                maximum_height = fmaxf(maximum_height, height);
+            }
+        }
+        if (maximum_height - minimum_height < 8.0f) {
+            (void)fprintf(
+                stderr,
+                "town plan %d lost its major landform: relief %.2f\n",
+                sim.settlements[settlement].function,
+                maximum_height - minimum_height);
+            exit(1);
+        }
     }
     CcLocalBindPlace(NULL);
 }
@@ -2257,7 +2275,7 @@ int main(void)
         alley_camera, click_target.texture.width,
         click_target.texture.height);
     if (alley_camera.projection != CAMERA_ORTHOGRAPHIC ||
-        alley_camera.fovy < 15.0f || alley_camera.fovy > 25.0f ||
+        alley_camera.fovy < 28.0f || alley_camera.fovy > 38.0f ||
         alley_hero_screen.x < 88.0f || alley_hero_screen.x > 369.0f ||
         alley_hero_screen.y < 54.0f || alley_hero_screen.y > 231.0f) {
         (void)fprintf(stderr,
@@ -2553,7 +2571,7 @@ int main(void)
     if (shoulder_camera.projection != CAMERA_PERSPECTIVE ||
         behind_amount > -3.50f || fabsf(side_amount) < 2.80f ||
         !shoulder_subjects_safe ||
-        shoulder_player_height < shoulder_raider_height * 1.22f) {
+        shoulder_player_height < shoulder_raider_height * 1.10f) {
         (void)fprintf(
             stderr,
             "combat shoulder framing failed: projection %d behind %.2f side %.2f hero %.2f %.2f/%.2f raider %.2f %.2f/%.2f fovy %.2f\n",

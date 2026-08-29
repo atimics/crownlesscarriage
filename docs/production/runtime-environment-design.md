@@ -113,6 +113,15 @@ clearance, picking, cutaways, labels, and rendering. Only Gloamgate uses the
 authored market model; the other civic halls use their own procedural
 architecture instead of wearing the market as a skin.
 
+The building renderer now treats each gameplay footprint as a small kit of
+connected masses. Thornford uses tall barn naves, lean-to sheds, and cottage
+annexes; Silverwick stacks timber upper floors over stone workshops and adds
+headframes; Gloamgate wraps arcaded trade bays; Alderwatch joins barrack blocks
+to defensive towers; Rosespire steps formal wings around tall pavilions; and
+Hollowbarrow overlaps rough lodges with old round turrets. The footprint stays
+authoritative for collision, but the visible result is no longer one decorated
+cube with the same roof in every town.
+
 Each landmark record owns its name, family, variant, footprint, and height.
 Terrain grading, physical sweeps, pathfinding, camera picking, nearby labels,
 and visible construction all consume that same record. The profile is not
