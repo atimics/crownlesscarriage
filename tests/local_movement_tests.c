@@ -2335,6 +2335,26 @@ int main(void)
         return 1;
     }
 
+    /* A close page only owns its physical court. Crossing the main coach
+       road near that court must return to an establishing composition
+       instead of showing an alley the player has not entered. */
+    CcLocalAgent coach_road_camera_agent;
+    CcLocalAgentInit(&coach_road_camera_agent,
+                     (Vector2){64.0f, 34.0f}, false);
+    Camera3D coach_road_camera = {0};
+    for (int32_t frame = 0; frame < 150; ++frame) {
+        camera_clock += 1.0f / 60.0f;
+        coach_road_camera = CcLocalStreetCameraInternal(
+            &coach_road_camera_agent, camera_clock, true,
+            click_target.texture.height);
+    }
+    if (coach_road_camera.fovy < 25.0f) {
+        (void)fprintf(stderr,
+                      "main coach road retained an unrelated close page: %.2f\n",
+                      coach_road_camera.fovy);
+        return 1;
+    }
+
     /* Miller's Row is long enough to expose follow-camera creep. Walk the
        whole road at gameplay speed: the hero must stay in the safe frame,
        and the camera may only make a few authored page changes rather than

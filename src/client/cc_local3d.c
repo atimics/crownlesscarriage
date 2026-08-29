@@ -8660,6 +8660,7 @@ static int32_t StreetNavigationRoomFor(Vector3 focus,
 
 static int32_t TownCameraSceneFor(Vector3 focus, int32_t current_scene)
 {
+    const float close_activation_radius = 10.50f;
     int32_t nearest = 0;
     float nearest_distance = FLT_MAX;
     for (int32_t scene = 0;
@@ -8669,6 +8670,14 @@ static int32_t TownCameraSceneFor(Vector3 focus, int32_t current_scene)
         float x = focus.x - candidate->trigger_x;
         float z = focus.z - candidate->trigger_z;
         float distance = x * x + z * z;
+        /* Close pages belong to small authored rooms. Without a boundary,
+           their trigger can win by simple proximity from the main road and
+           cut to an alley the player has not entered. Establishing pages
+           remain available everywhere between those rooms. */
+        if (candidate->kind >= CC_LOCAL_TOWN_SCENE_CLOSE_FIRST &&
+            distance > close_activation_radius * close_activation_radius) {
+            continue;
+        }
         if (distance >= nearest_distance) continue;
         nearest = scene;
         nearest_distance = distance;
@@ -8681,7 +8690,11 @@ static int32_t TownCameraSceneFor(Vector3 focus, int32_t current_scene)
         float x = focus.x - current->trigger_x;
         float z = focus.z - current->trigger_z;
         float current_distance = sqrtf(x * x + z * z);
-        if (sqrtf(nearest_distance) + 2.25f >= current_distance) {
+        bool current_is_eligible =
+            current->kind < CC_LOCAL_TOWN_SCENE_CLOSE_FIRST ||
+            current_distance <= close_activation_radius + 1.25f;
+        if (current_is_eligible &&
+            sqrtf(nearest_distance) + 2.25f >= current_distance) {
             return current_scene;
         }
     }
@@ -12474,37 +12487,59 @@ static float DrawPitchedRoof(float x, float z, float width, float depth,
                              float wall_height, Color wall, Color roof)
 {
     const float overhang = 0.42f;
-    const float rise = 0.96f + fminf(width, depth) * 0.075f;
-    const int32_t courses = 5;
+    const float rise = 1.10f + fminf(width, depth) * 0.14f;
     bool ridge_along_x = width >= depth;
     Color shadow = ShadeColor(roof, 0.72f);
 
-    /* A roof is a stack of heavy courses, not two thin planes. The stepped
-       silhouette survives the low art resolution and makes every house read
-       as a small construction assembled from physical blocks. */
+    /* Real pitched planes make the roof change the building silhouette. The
+       old stack of flat courses still read as a decorated box, especially in
+       close pages. Thick timber-edged slopes keep the pixel-art weight while
+       producing a clear medieval gable. */
     DrawBox((Vector3){x + width * 0.5f, wall_height - 0.06f,
                       z + depth * 0.5f},
             (Vector3){width + overhang * 2.18f, 0.24f,
                       depth + overhang * 2.18f},
             BlendColor(ShadeColor(roof, 0.66f), wall, 0.16f));
-    for (int32_t course = 0; course < courses; ++course) {
-        float amount = (float)course / (float)courses;
-        float course_height = rise / (float)courses;
-        float roof_span = ridge_along_x ? depth : width;
-        float remaining = fmaxf(0.48f,
-            roof_span + overhang * 2.0f -
-            amount * (roof_span + overhang * 1.42f));
+    float half_span = (ridge_along_x ? depth : width) * 0.5f + overhang;
+    float slope_length = sqrtf(half_span * half_span + rise * rise);
+    float angle = atanf(rise / half_span) * RAD2DEG;
+    for (int32_t side = -1; side <= 1; side += 2) {
+        float sign = (float)side;
+        Vector3 center = {
+            x + width * 0.5f +
+                (ridge_along_x ? 0.0f : sign * half_span * 0.5f),
+            wall_height + rise * 0.5f,
+            z + depth * 0.5f +
+                (ridge_along_x ? sign * half_span * 0.5f : 0.0f),
+        };
         Vector3 size = ridge_along_x ?
-            (Vector3){width + overhang * 2.0f,
-                      course_height + 0.035f, remaining} :
-            (Vector3){remaining, course_height + 0.035f,
-                      depth + overhang * 2.0f};
-        Color course_color = course == 0 ? shadow :
-            ShadeColor(roof, 0.78f + (float)course * 0.045f);
-        DrawBox((Vector3){x + width * 0.5f,
-                          wall_height + course_height * ((float)course + 0.5f),
-                          z + depth * 0.5f},
-                size, course_color);
+            (Vector3){width + overhang * 2.0f, 0.22f, slope_length} :
+            (Vector3){slope_length, 0.22f, depth + overhang * 2.0f};
+        Vector3 axis = ridge_along_x ? (Vector3){1.0f, 0.0f, 0.0f} :
+                                          (Vector3){0.0f, 0.0f, 1.0f};
+        float plane_angle = ridge_along_x ? sign * angle : -sign * angle;
+        DrawTiltedBox(center, size, axis, plane_angle,
+                      side > 0 ? roof : shadow);
+
+        /* Three raised shingle battens make each slope catch light without
+           turning it back into a stack of horizontal terraces. */
+        for (int32_t batten = 1; batten <= 3; ++batten) {
+            float amount = (float)batten / 4.0f;
+            float run = half_span * amount;
+            float batten_height = rise * (1.0f - amount);
+            Vector3 batten_center = {
+                x + width * 0.5f +
+                    (ridge_along_x ? 0.0f : sign * run),
+                wall_height + batten_height + 0.10f,
+                z + depth * 0.5f +
+                    (ridge_along_x ? sign * run : 0.0f),
+            };
+            Vector3 batten_size = ridge_along_x ?
+                (Vector3){width + overhang * 2.04f, 0.09f, 0.15f} :
+                (Vector3){0.15f, 0.09f, depth + overhang * 2.04f};
+            DrawBox(batten_center, batten_size,
+                    ShadeColor(roof, side > 0 ? 0.74f : 0.58f));
+        }
     }
     DrawBox((Vector3){x + width * 0.5f, wall_height + rise + 0.06f,
                       z + depth * 0.5f},
@@ -12582,6 +12617,12 @@ static void DrawConstructedWallShell(float x, float z, float width,
                 (Vector3){inset + projection, upper_height - 0.14f,
                           side_bay_depth},
                 ((bay + style) & 1) != 0 ? side : ShadeColor(side, 0.96f));
+        DrawBox((Vector3){x + inset * 0.30f - projection * 0.18f,
+                          base_height + upper_height * 0.5f, bay_z},
+                (Vector3){inset + projection, upper_height - 0.14f,
+                          side_bay_depth},
+                ((bay + style) & 1) != 0 ? ShadeColor(side, 0.86f) :
+                                           ShadeColor(side, 0.92f));
     }
 
     /* Timber houses gain a visibly cantilevered upper storey. Stone and
@@ -12595,6 +12636,10 @@ static void DrawConstructedWallShell(float x, float z, float width,
                           z + depth * 0.5f},
                 (Vector3){0.42f, 0.22f, depth + 0.24f},
                 ShadeColor(trim, 0.88f));
+        DrawBox((Vector3){x - 0.18f, storey,
+                          z + depth * 0.5f},
+                (Vector3){0.42f, 0.22f, depth + 0.24f},
+                ShadeColor(trim, 0.80f));
     }
 }
 
@@ -12732,9 +12777,11 @@ static void DrawBuildingArchetypeDetails(float x, float z, float width,
     }
 }
 
-static void DrawFacadeWindow(Vector3 center, bool side_facing, Color trim,
+static void DrawFacadeWindow(Vector3 center, int32_t side, Color trim,
                              Color glass)
 {
+    bool side_facing = side != 0;
+    float side_sign = side < 0 ? -1.0f : 1.0f;
     Vector3 recess = side_facing ? (Vector3){0.075f, 1.34f, 1.02f} :
                                    (Vector3){1.02f, 1.34f, 0.075f};
     Vector3 pane = side_facing ? (Vector3){0.035f, 1.02f, 0.72f} :
@@ -12750,8 +12797,8 @@ static void DrawFacadeWindow(Vector3 center, bool side_facing, Color trim,
     Vector3 sill_center = {center.x, center.y - 0.70f, center.z};
     Vector3 lintel_center = {center.x, center.y + 0.70f, center.z};
     if (side_facing) {
-        sill_center.x += 0.025f;
-        lintel_center.x += 0.025f;
+        sill_center.x += side_sign * 0.025f;
+        lintel_center.x += side_sign * 0.025f;
     } else {
         sill_center.z += 0.025f;
         lintel_center.z += 0.025f;
@@ -12770,8 +12817,8 @@ static void DrawFacadeWindow(Vector3 center, bool side_facing, Color trim,
     Vector3 jamb_b = center;
     Vector3 jamb_size;
     if (side_facing) {
-        jamb_a.x += outward;
-        jamb_b.x += outward;
+        jamb_a.x += side_sign * outward;
+        jamb_b.x += side_sign * outward;
         jamb_a.z -= 0.49f;
         jamb_b.z += 0.49f;
         jamb_size = (Vector3){0.24f, 1.36f, 0.14f};
@@ -12851,9 +12898,9 @@ static void DrawBuilding(float x, float z, float width, float depth,
                                Fade(WORLD_TEAL, 0.78f);
     DrawConstructedWallShell(x, z, width, depth, height, wall, trim, style);
 
-    /* The positive Z and X facades face the runtime camera. Depth here is not
-       decoration pasted onto a diorama: it follows the same authoritative
-       footprint used by collision. */
+    /* The front and both side facades can face a close runtime camera. Depth
+       here is not decoration pasted onto a diorama: it follows the same
+       authoritative footprint used by collision. */
     for (int32_t corner = 0; corner < 2; ++corner) {
         float post_x = corner == 0 ? x + 0.18f : x + width - 0.18f;
         DrawBox((Vector3){post_x, height * 0.50f, z + depth + 0.045f},
@@ -12863,6 +12910,9 @@ static void DrawBuilding(float x, float z, float width, float depth,
             (Vector3){width - 0.18f, 0.18f, 0.09f}, trim);
     DrawBox((Vector3){x + width + 0.045f, height - 0.24f, center.z},
             (Vector3){0.09f, 0.18f, depth - 0.18f}, trim);
+    DrawBox((Vector3){x - 0.045f, height - 0.24f, center.z},
+            (Vector3){0.09f, 0.18f, depth - 0.18f},
+            ShadeColor(trim, 0.86f));
 
     /* Strong horizontal courses keep the low camera from reading each house
        as one unscaled slab. They also carry the trim language around the
@@ -12873,10 +12923,16 @@ static void DrawBuilding(float x, float z, float width, float depth,
             (Vector3){width - 0.14f, 0.42f, 0.105f}, plinth);
     DrawBox((Vector3){x + width + 0.052f, 0.46f, center.z},
             (Vector3){0.105f, 0.42f, depth - 0.14f}, plinth);
+    DrawBox((Vector3){x - 0.052f, 0.46f, center.z},
+            (Vector3){0.105f, 0.42f, depth - 0.14f},
+            ShadeColor(plinth, 0.84f));
     DrawBox((Vector3){center.x, story_course, z + depth + 0.057f},
             (Vector3){width - 0.16f, 0.13f, 0.115f}, trim);
     DrawBox((Vector3){x + width + 0.057f, story_course, center.z},
             (Vector3){0.115f, 0.13f, depth - 0.16f}, trim);
+    DrawBox((Vector3){x - 0.057f, story_course, center.z},
+            (Vector3){0.115f, 0.13f, depth - 0.16f},
+            ShadeColor(trim, 0.86f));
 
     int32_t bays = width >= 10.0f ? 3 : 2;
     float window_y = fminf(height * 0.56f, 2.90f);
@@ -12884,10 +12940,13 @@ static void DrawBuilding(float x, float z, float width, float depth,
         float window_x = x + width * (float)(bay + 1) / (float)(bays + 1);
         if (door && fabsf(window_x - center.x) < 0.82f) continue;
         DrawFacadeWindow((Vector3){window_x, window_y,
-                                   z + depth + 0.075f}, false, trim, glass);
+                                   z + depth + 0.075f}, 0, trim, glass);
     }
     DrawFacadeWindow((Vector3){x + width + 0.075f, window_y,
-                               center.z + depth * 0.12f}, true, trim, glass);
+                               center.z + depth * 0.12f}, 1, trim, glass);
+    DrawFacadeWindow((Vector3){x - 0.075f, window_y,
+                               center.z - depth * 0.12f}, -1,
+                     ShadeColor(trim, 0.88f), ShadeColor(glass, 0.82f));
 
     if (door) {
         DrawBox((Vector3){center.x, 0.10f, z + depth + 0.42f},
@@ -14833,6 +14892,130 @@ static void DrawDungeonTerrainStage(Vector3 focus)
     }
 }
 
+static void DrawBackdropHill(float x, float z, float lower_radius,
+                             float upper_radius, float height,
+                             int32_t sides, Color color)
+{
+    DrawCylinder((Vector3){x, -3.4f, z}, upper_radius, lower_radius,
+                 height, sides, color);
+}
+
+static void DrawTownBackdrop(const CcSettlement *place)
+{
+    if (place == NULL) return;
+
+    /* Every town looks north toward a composed horizon. These broad, low
+       polygon forms replace the empty edge of the terrain with a readable
+       regional silhouette. They sit outside the playable space, so they can
+       carry visual drama without changing collision or road gradients. */
+    Color far_color = BlendColor(WORLD_INK, WORLD_STONE_SHADOW, 0.26f);
+    Color near_color = BlendColor(WORLD_STONE_SHADOW, WORLD_INK, 0.38f);
+    switch (place->function) {
+        case CC_SETTLEMENT_FARMING:
+            far_color = BlendColor(WORLD_GRASS_SHADOW, WORLD_INK, 0.48f);
+            near_color = BlendColor(WORLD_GRASS, WORLD_STONE_SHADOW, 0.56f);
+            for (int32_t hill = 0; hill < 6; ++hill) {
+                DrawBackdropHill(-8.0f + (float)hill * 22.0f,
+                                 -6.0f + (float)(hill % 2) * 2.2f,
+                                 18.0f, 7.8f, 8.0f + (float)(hill % 3),
+                                 12, far_color);
+            }
+            for (int32_t hill = 0; hill < 5; ++hill) {
+                DrawBackdropHill(4.0f + (float)hill * 24.0f, 2.0f,
+                                 14.0f, 5.5f,
+                                 5.8f + (float)((hill + 1) % 3),
+                                 12, near_color);
+            }
+            break;
+        case CC_SETTLEMENT_MINING:
+            far_color = BlendColor(WORLD_METAL_SHADOW, WORLD_INK, 0.34f);
+            near_color = BlendColor(WORLD_STONE_SHADOW,
+                                    WORLD_METAL_SHADOW, 0.52f);
+            for (int32_t peak = 0; peak < 8; ++peak) {
+                float height = 12.0f + (float)((peak * 5) % 9);
+                DrawBackdropHill(-10.0f + (float)peak * 16.5f,
+                                 -5.0f + (float)(peak % 2) * 2.0f,
+                                 13.0f, 1.2f, height, 6, far_color);
+            }
+            for (int32_t shelf = 0; shelf < 5; ++shelf) {
+                DrawBackdropHill((float)shelf * 25.0f, 3.0f,
+                                 15.0f, 7.0f,
+                                 7.0f + (float)(shelf % 2) * 2.0f,
+                                 7, near_color);
+            }
+            break;
+        case CC_SETTLEMENT_MARKET:
+            far_color = BlendColor(WORLD_VIOLET, WORLD_INK, 0.72f);
+            near_color = BlendColor(WORLD_STONE, WORLD_INK, 0.52f);
+            for (int32_t hill = 0; hill < 7; ++hill) {
+                DrawBackdropHill(-12.0f + (float)hill * 19.0f,
+                                 -6.0f + (float)(hill % 2),
+                                 15.0f, 4.0f,
+                                 8.0f + (float)((hill + 2) % 4),
+                                 9, far_color);
+            }
+            for (int32_t hill = 0; hill < 5; ++hill) {
+                DrawBackdropHill(2.0f + (float)hill * 24.0f, 2.0f,
+                                 13.0f, 6.5f,
+                                 6.2f + (float)(hill % 2),
+                                 10, near_color);
+            }
+            break;
+        case CC_SETTLEMENT_FORTRESS:
+            far_color = BlendColor(WORLD_STONE_SHADOW, WORLD_INK, 0.24f);
+            near_color = BlendColor(WORLD_STONE, WORLD_INK, 0.38f);
+            for (int32_t peak = 0; peak < 9; ++peak) {
+                float height = 15.0f + (float)((peak * 7) % 12);
+                DrawBackdropHill(-14.0f + (float)peak * 15.5f,
+                                 -6.0f + (float)(peak % 3),
+                                 14.5f, 0.45f, height, 5, far_color);
+            }
+            for (int32_t spur = 0; spur < 6; ++spur) {
+                DrawBackdropHill(-3.0f + (float)spur * 22.0f, 3.0f,
+                                 12.0f, 2.5f,
+                                 9.0f + (float)(spur % 3) * 2.0f,
+                                 6, near_color);
+            }
+            break;
+        case CC_SETTLEMENT_CAPITAL:
+            far_color = BlendColor(WORLD_VIOLET, WORLD_STONE_SHADOW, 0.72f);
+            near_color = BlendColor(WORLD_STONE_LIGHT, WORLD_INK, 0.48f);
+            for (int32_t hill = 0; hill < 6; ++hill) {
+                DrawBackdropHill(-10.0f + (float)hill * 23.0f,
+                                 -6.0f + (float)(hill % 2) * 1.4f,
+                                 18.0f, 6.0f,
+                                 9.0f + (float)((hill + 1) % 3),
+                                 11, far_color);
+            }
+            for (int32_t tower = 0; tower < 5; ++tower) {
+                float x = 8.0f + (float)tower * 23.0f;
+                float height = 7.0f + (float)(tower % 3) * 1.8f;
+                DrawCylinder((Vector3){x, -1.0f, 1.5f},
+                             1.0f, 1.35f, height, 8, near_color);
+                DrawCylinder((Vector3){x, height - 1.0f, 1.5f},
+                             0.08f, 1.9f, 3.4f, 8,
+                             BlendColor(WORLD_DANGER, WORLD_INK, 0.55f));
+            }
+            break;
+        case CC_SETTLEMENT_DUNGEON_TOWN:
+            far_color = BlendColor(WORLD_VIOLET, WORLD_INK, 0.82f);
+            near_color = BlendColor(WORLD_STONE_SHADOW, WORLD_INK, 0.58f);
+            for (int32_t peak = 0; peak < 10; ++peak) {
+                float height = 10.0f + (float)((peak * 9) % 13);
+                DrawBackdropHill(-13.0f + (float)peak * 14.5f,
+                                 -6.0f + (float)(peak % 2) * 2.0f,
+                                 10.5f, 0.25f, height, 5, far_color);
+            }
+            for (int32_t tooth = 0; tooth < 7; ++tooth) {
+                DrawBackdropHill(-2.0f + (float)tooth * 18.0f, 3.0f,
+                                 8.0f, 0.18f,
+                                 8.0f + (float)((tooth + 2) % 4) * 2.0f,
+                                 5, near_color);
+            }
+            break;
+    }
+}
+
 static void DrawTownTerrainStage(const CcSettlement *place, Vector3 focus)
 {
     if (place == NULL) return;
@@ -14850,6 +15033,7 @@ static void DrawTownTerrainStage(const CcSettlement *place, Vector3 focus)
 
 static void DrawExteriorTerrain(const CcSettlement *place, Vector3 focus)
 {
+    DrawTownBackdrop(place);
     SetWorldTerrainSurface(true);
     DrawCachedTerrain(place);
     DrawTerrainSurfaceDetails(place, focus);

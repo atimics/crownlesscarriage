@@ -253,14 +253,17 @@ scene is reset.
 
 The runtime now provides:
 
-- Three authored camera scenes per town, including the moving carriage
-  follow-and-pull-out Arrival
+- Five authored camera scenes per town: three establishing pages, two close
+  playable rooms, and a moving carriage follow-and-pull-out Arrival
+- Bounded close-page triggers, so the main road keeps its establishing view
+  until the player actually enters a court, alley, cloister, or gate pass
 - Clean hero and inhabitant silhouettes without default rig overlays
 - Pitched roofs with gables, eaves, ridge lines, chimneys, and readable dormers
-- Roof construction courses and material-specific cottage, workshop, civic,
-  and mine-row facade structures instead of one recolored building shell
+- Thick sloped roof planes, raised shingle battens, cantilevered storeys, and
+  material-specific cottage, workshop, civic, and mine-row facade structures
+  instead of one recolored building shell
 - Facade structure with foundations, frames, deep windows, lintels, sills,
-  doors, steps, and canopies
+  doors, steps, and canopies on both camera-facing sides
 - Stable hero-occlusion cutaways that remove complete roofs and upper walls
   while keeping an inked low shell around the building footprint
 - A collision-aligned civic plaza rather than one undifferentiated road patch
@@ -273,6 +276,8 @@ The runtime now provides:
   placement for inhabitants and world props
 - A visual country apron beyond the playable border, with seeded grass tufts,
   crop stalks, wheel tracks, wet-lowland color, and slope-biased stones
+- A regional horizon for every town: rolling granary hills, quarry teeth,
+  crossroads valley layers, fortress peaks, capital spires, or dungeon crags
 - A reserved town-edge handoff for later procedural wilderness exploration;
   the wilderness itself is not part of this pass
 - A world-seed and economy keyed GPU terrain cache, plus camera-local detail
