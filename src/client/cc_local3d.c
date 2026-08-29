@@ -259,6 +259,7 @@ typedef struct ArtAtmosphereDefinition {
     float mist;
     float wetness;
     float omen;
+    float practical_glow;
 } ArtAtmosphereDefinition;
 
 typedef struct ArtAtmosphereState {
@@ -305,30 +306,35 @@ static const ArtAtmosphereDefinition ART_ATMOSPHERES[] = {
         {1.00f, 1.00f, 1.00f}, {1.00f, 1.00f, 1.00f},
         {47, 44, 61, 255}, 0.10f, 0.10f, 1.00f, 1.00f, 1.00f,
         0.000f, 1.00f, 1.00f, 1.00f, 0.00f, 0.00f, 0.00f, 0.00f,
+        0.05f,
     },
     [CC_LOCAL_ATMOSPHERE_RAINY_OVERCAST] = {
         {-0.20f, 0.92f, 0.22f}, {0.78f, 0.86f, 0.98f},
         {0.90f, 0.97f, 1.07f}, {0.96f, 0.90f, 1.10f},
         {48, 52, 63, 255}, 0.70f, 0.74f, 0.70f, 1.14f, 0.88f,
         -0.035f, 1.34f, 0.38f, 0.84f, 0.82f, 0.36f, 0.82f, 0.00f,
+        0.18f,
     },
     [CC_LOCAL_ATMOSPHERE_AMBER_DUSK] = {
         {-0.70f, 0.36f, 0.30f}, {1.24f, 0.72f, 0.46f},
         {0.84f, 0.78f, 0.92f}, {1.05f, 0.82f, 1.12f},
         {53, 35, 63, 255}, 0.82f, 0.48f, 0.82f, 1.08f, 1.08f,
         -0.020f, 1.36f, 1.58f, 1.05f, 0.00f, 0.10f, 0.00f, 0.00f,
+        0.52f,
     },
     [CC_LOCAL_ATMOSPHERE_MOONLIT_NIGHT] = {
         {-0.30f, 0.48f, -0.82f}, {0.82f, 0.90f, 1.10f},
         {0.90f, 0.94f, 1.06f}, {0.92f, 0.92f, 1.07f},
         {47, 44, 61, 255}, 0.76f, 0.50f, 0.90f, 1.06f, 1.18f,
         -0.015f, 1.20f, 0.78f, 0.92f, 0.00f, 0.12f, 0.04f, 0.00f,
+        0.88f,
     },
     [CC_LOCAL_ATMOSPHERE_DRAGON_OMEN] = {
         {-0.58f, 0.42f, 0.18f}, {0.96f, 0.75f, 0.76f},
         {0.82f, 0.84f, 0.94f}, {0.94f, 0.84f, 1.08f},
         {48, 44, 57, 255}, 0.74f, 0.58f, 0.82f, 1.10f, 1.20f,
         -0.012f, 1.26f, 1.00f, 0.86f, 0.30f, 0.54f, 0.36f, 1.00f,
+        0.46f,
     },
 };
 
@@ -408,6 +414,8 @@ static ArtAtmosphereDefinition ArtAtmosphereMix(
         .wetness = ArtAtmosphereMixFloat(
             from.wetness, to.wetness, amount),
         .omen = ArtAtmosphereMixFloat(from.omen, to.omen, amount),
+        .practical_glow = ArtAtmosphereMixFloat(
+            from.practical_glow, to.practical_glow, amount),
     };
 }
 
@@ -8822,7 +8830,7 @@ static Camera3D LocalCamera(bool interior, Vector3 focus)
                                 camera.target.y + 3.7f,
                                 camera.target.z + 13.0f};
     camera.up = (Vector3){0.0f, 1.0f, 0.0f};
-    camera.fovy = 7.6f;
+    camera.fovy = 6.45f;
     camera.projection = CAMERA_ORTHOGRAPHIC;
     return camera;
 }
@@ -9221,6 +9229,7 @@ typedef struct VisualStyleCache {
     int32_t grade_shadow_tone_location;
     int32_t grade_highlight_tone_location;
     int32_t grade_chroma_location;
+    int32_t grade_practical_glow_location;
     bool grade_ready;
     Shader world;
     int32_t light_direction_location;
@@ -9294,6 +9303,7 @@ typedef struct VisualStyleCache {
     int32_t npc_skinned_body_skin_remap_location;
     bool npc_skinned_ready;
     ArtAtmosphereDefinition presentation_atmosphere;
+    float presentation_practical_glow;
 } VisualStyleCache;
 
 static VisualStyleCache visual_style = {0};
@@ -10885,6 +10895,8 @@ static void LoadVisualStyle(void)
             visual_style.grade, "atmosphereHighlightTone");
         visual_style.grade_chroma_location = GetShaderLocation(
             visual_style.grade, "atmosphereChroma");
+        visual_style.grade_practical_glow_location = GetShaderLocation(
+            visual_style.grade, "atmospherePracticalGlow");
         visual_style.grade_ready = true;
     } else {
         if (IsShaderValid(visual_style.grade)) {
@@ -16758,6 +16770,10 @@ static void PresentTarget(RenderTexture2D target, Rectangle destination)
         SetShaderValue(visual_style.grade,
                        visual_style.grade_chroma_location,
                        &atmosphere->grade_chroma, SHADER_UNIFORM_FLOAT);
+        SetShaderValue(visual_style.grade,
+                       visual_style.grade_practical_glow_location,
+                       &visual_style.presentation_practical_glow,
+                       SHADER_UNIFORM_FLOAT);
     }
     DrawTexturePro(target.texture, source, destination, (Vector2){0.0f, 0.0f},
                    0.0f, WHITE);
@@ -16954,6 +16970,52 @@ static void DrawTargetAtmosphere(RenderTexture2D target, float clock)
     }
 }
 
+static void DrawMarketEmberFlames(float clock)
+{
+    const float lamp_x[] = {3.05f, 8.10f};
+    for (int32_t lamp = 0; lamp < 2; ++lamp) {
+        float flicker = sinf(clock * 8.3f + (float)lamp * 2.4f) * 0.018f +
+                        sinf(clock * 13.7f + (float)lamp) * 0.010f;
+        Vector3 flame = {lamp_x[lamp] + flicker * 0.45f,
+                         1.84f + flicker, 0.735f};
+        DrawCharacterEllipsoid(
+            flame, (Vector3){0.095f, 0.19f + flicker, 0.070f},
+            CC_STYLE_DANGER);
+        DrawCharacterEllipsoid(
+            (Vector3){flame.x - flicker * 0.30f, flame.y - 0.025f,
+                      flame.z - 0.012f},
+            (Vector3){0.054f, 0.125f, 0.044f}, WORLD_GOLD);
+        DrawSmallSphere(
+            (Vector3){flame.x, flame.y - 0.042f, flame.z - 0.024f},
+            0.034f, CC_STYLE_ROAD_LIGHT);
+    }
+}
+
+static void DrawMarketPracticalLightHalos(Camera3D camera,
+                                          RenderTexture2D target,
+                                          float clock)
+{
+    const Vector3 lamps[] = {
+        {3.05f, 1.84f, 0.735f}, {8.10f, 1.84f, 0.735f},
+    };
+    BeginBlendMode(BLEND_ADDITIVE);
+    for (int32_t lamp = 0; lamp < 2; ++lamp) {
+        Vector2 screen = GetWorldToScreenEx(
+            lamps[lamp], camera, target.texture.width, target.texture.height);
+        float flicker = 0.92f +
+                        sinf(clock * 8.3f + (float)lamp * 2.4f) * 0.08f;
+        DrawCircleGradient(
+            (Vector2){roundf(screen.x), roundf(screen.y)},
+            25.0f * flicker, Fade(CC_STYLE_DANGER, 0.105f),
+            Fade(CC_STYLE_DANGER_SHADOW, 0.0f));
+        DrawCircleGradient(
+            (Vector2){roundf(screen.x), roundf(screen.y)},
+            12.0f * flicker, Fade(WORLD_GOLD, 0.135f),
+            Fade(CC_STYLE_GOLD_SHADOW, 0.0f));
+    }
+    EndBlendMode();
+}
+
 static ArtLightProfileId StreetLightProfile(
     const CcSettlement *place, ArtLightProfileId authored)
 {
@@ -16978,6 +17040,14 @@ static void BeginWorldLighting(Camera3D camera,
         &ART_LIGHT_PROFILES[profile_id];
     ArtAtmosphereDefinition atmosphere = ArtAtmosphereForProfile(profile_id);
     visual_style.presentation_atmosphere = atmosphere;
+    visual_style.presentation_practical_glow = atmosphere.practical_glow;
+    if (profile_id == ART_LIGHT_INTERIOR_EMBER) {
+        visual_style.presentation_practical_glow = fmaxf(
+            visual_style.presentation_practical_glow, 1.0f);
+    } else if (profile_id == ART_LIGHT_ROAD_DUSK) {
+        visual_style.presentation_practical_glow = fmaxf(
+            visual_style.presentation_practical_glow, 0.52f);
+    }
     Vector3 light_direction = Vector3Normalize(
         ArtAtmosphereMixVector(profile->light_direction,
                                atmosphere.light_direction,
@@ -18679,7 +18749,9 @@ void CcLocalDrawMarket3D(const CcSim *sim, const CcLocalAgent *agent, float cloc
     DrawCombatSword(agent);
     DrawCombatSkillTell(agent);
     EndWorldLighting();
+    DrawMarketEmberFlames(clock);
     EndMode3D();
+    DrawMarketPracticalLightHalos(camera, target, clock);
     EndTextureMode();
     PresentTarget(target, destination);
     WorldLabel labels[2];
