@@ -436,8 +436,13 @@ void CcLocalCourseBindRaiderCompany(CcLocalCourse *course,
 const char *CcLocalRaiderRoleName(CcLocalRaiderRole role);
 bool CcLocalCourseBeginPlayerStrike(CcLocalCourse *course,
                                     CcLocalAgent *player);
-void CcLocalCourseSetPlayerGuarded(CcLocalCourse *course,
+bool CcLocalCourseSetPlayerGuarded(CcLocalCourse *course,
                                    CcLocalAgent *player, bool guarded);
+bool CcLocalCourseHasNearbyHostile(const CcLocalCourse *course,
+                                   const CcLocalAgent *player);
+bool CcLocalCourseCanPlayerEngage(const CcLocalCourse *course,
+                                  const CcLocalAgent *player,
+                                  int32_t target_index);
 bool CcLocalCourseSelectPlayerTarget(CcLocalCourse *course,
                                      CcLocalAgent *player,
                                      int32_t target_index);
