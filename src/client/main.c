@@ -40,6 +40,7 @@ typedef enum ClientView {
     VIEW_MAP,
     VIEW_LEDGER,
     VIEW_SITUATIONS,
+    VIEW_CHARACTER,
     VIEW_ENCOUNTER,
     VIEW_DRAGON_CAVE
 } ClientView;
@@ -62,6 +63,8 @@ typedef struct LocalState {
     bool movement_reticle_valid;
     bool movement_reticle_accepted;
     int32_t pending_interaction;
+    CcId conversation_character_id;
+    CcId conversation_situation_id;
 } LocalState;
 
 typedef struct ActionReelState {
@@ -143,7 +146,10 @@ typedef enum ContextActionKind {
     CONTEXT_ACTION_TRAVEL_GOBLIN_SITE,
     CONTEXT_ACTION_TRAVEL_DRAGON_SITE,
     CONTEXT_ACTION_RETURN_FROM_SITE,
-    CONTEXT_ACTION_GOBLIN_TRADE
+    CONTEXT_ACTION_GOBLIN_TRADE,
+    CONTEXT_ACTION_TALK_CHARACTER,
+    CONTEXT_ACTION_LISTEN_CHARACTER,
+    CONTEXT_ACTION_PLEDGE_CHARACTER
 } ContextActionKind;
 
 typedef struct ContextAction {
@@ -666,6 +672,8 @@ static void ResetLocalState(LocalState *local)
     local->movement_reticle_valid = false;
     local->movement_reticle_accepted = false;
     local->pending_interaction = CONTEXT_ACTION_NONE;
+    local->conversation_character_id = 0U;
+    local->conversation_situation_id = 0U;
     local->market_interior = false;
     local->site_kind = CC_LOCAL_SITE_NONE;
     local->site_travel_progress = 0.0f;
@@ -2145,6 +2153,42 @@ static ContextActionSet BuildContextActions(
         AddContextAction(&set, CONTEXT_ACTION_CLOSE_VIEW, "Close");
         return set;
     }
+    if (view == VIEW_CHARACTER) {
+        const CcSituation *situation = CcSimSituation(
+            sim, local->conversation_situation_id);
+        const CcCharacter *character = CcSimCharacter(
+            sim, local->conversation_character_id);
+        if (situation != NULL && character != NULL) {
+            bool listened = CcCharacterRemembers(
+                character, CC_CHARACTER_MEMORY_MET_PLAYER, situation->id);
+            bool promised = CcCharacterRemembers(
+                character, CC_CHARACTER_MEMORY_PLAYER_PROMISED,
+                situation->id);
+            AddDetailedContextAction(
+                &set, CONTEXT_ACTION_LISTEN_CHARACTER,
+                listened ? "Account heard" : "Hear their account", "1",
+                listened ? "THEY REMEMBER YOU LISTENED" :
+                           "LEARN THEIR STAKE",
+                !listened, listened);
+            const CcSituation *accepted = CcSimAcceptedSituation(sim);
+            bool can_promise = situation->status == CC_SITUATION_ACTIVE &&
+                (accepted == NULL || accepted->id == situation->id) &&
+                !promised;
+            AddDetailedContextAction(
+                &set, CONTEXT_ACTION_PLEDGE_CHARACTER,
+                promised ? "Promise remembered" :
+                accepted != NULL && accepted->id == situation->id ?
+                    "Reassure them" : "Promise help",
+                "2", promised ? "THEY WILL HOLD YOU TO IT" :
+                     accepted != NULL && accepted->id != situation->id ?
+                         "ANOTHER PROMISE IS ACTIVE" : "TAKE THE QUEST",
+                can_promise, promised);
+        }
+        AddDetailedContextAction(
+            &set, CONTEXT_ACTION_CLOSE_VIEW, "Step away", "ESC",
+            "RETURN TO TOWN", true, false);
+        return set;
+    }
     if (view == VIEW_MAP) {
         const CcMap *map = SelectedVisibleMap(sim, selected);
         if (map != NULL && map->owner_id == sim->player.location_id) {
@@ -2315,6 +2359,19 @@ static ContextActionSet BuildContextActions(
         AddContextAction(&set, CONTEXT_ACTION_CHOOSE_ROAD, "Drive out");
         AddContextAction(&set, CONTEXT_ACTION_OPEN_MAP, "Open map case");
     }
+    if (local->course.situation_witness_active &&
+        GridDistance(position,
+                     (Vector2){local->course.situation_witness.position.x,
+                               local->course.situation_witness.position.z}) <
+            1.85f) {
+        const CcCharacter *character = CcSimCharacter(
+            sim, local->course.situation_witness_character_id);
+        AddContextAction(
+            &set, CONTEXT_ACTION_TALK_CHARACTER,
+            character != NULL ? TextFormat("Speak with %.28s",
+                                            character->name) :
+                                "Speak with witness");
+    }
     if (GridDistance(position, LOCAL_NOTICE) < 1.15f) {
         AddContextAction(&set, CONTEXT_ACTION_OPEN_PROMISES,
                          "View quests");
@@ -2365,6 +2422,8 @@ static Color ContextActionColor(ContextActionKind kind)
         kind == CONTEXT_ACTION_TRAVEL ||
         kind == CONTEXT_ACTION_SKIP_TRAVEL ||
         kind == CONTEXT_ACTION_DELIVER_CARGO ||
+        kind == CONTEXT_ACTION_PLEDGE_CHARACTER ||
+        kind == CONTEXT_ACTION_TALK_CHARACTER ||
         kind == CONTEXT_ACTION_ENTER_MARKET ||
         kind == CONTEXT_ACTION_JUMP ||
         kind == CONTEXT_ACTION_OFFER_PROVISIONS ||
@@ -3041,6 +3100,77 @@ static void DrawSituationBoard(const CcSim *sim, int32_t selected)
     } else {
         CcOverlayDrawText("NO QUESTS", 360, 268, 17, MUTED);
     }
+}
+
+static const char *CharacterStakeLine(const CcSituation *situation)
+{
+    if (situation == NULL) return "They have nothing more to ask.";
+    switch (situation->kind) {
+        case CC_SITUATION_RELIEF_DELIVERY:
+            return "Food is running short. Their household cannot wait for the next convoy.";
+        case CC_SITUATION_ROUTE_REPAIR:
+            return "The broken road has cut work, medicine, and family from the town.";
+        case CC_SITUATION_MONSTER_EXPEDITION:
+            return "They saw what came out of the mine and know who is still below.";
+        case CC_SITUATION_BLACK_MARKET_DELIVERY:
+            return "Official stores will not reach the people who are hiding from the levy.";
+        case CC_SITUATION_COURIER_DELIVERY:
+            return "The message will change lives only if it reaches the right hands intact.";
+    }
+    return "The trouble has reached their own door.";
+}
+
+static void DrawCharacterConversation(const CcSim *sim,
+                                      const LocalState *local)
+{
+    if (sim == NULL || local == NULL) return;
+    const CcSituation *situation = CcSimSituation(
+        sim, local->conversation_situation_id);
+    const CcCharacter *character = CcSimCharacter(
+        sim, local->conversation_character_id);
+    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
+                  Fade(BACKGROUND, 0.72f));
+    Rectangle bounds = {292.0f, 142.0f, 696.0f, 388.0f};
+    DrawPanel(bounds, PANEL_DEEP);
+    if (situation == NULL || character == NULL) {
+        CcOverlayDrawText("NO ONE IS HERE", 330, 180, 20, MUTED);
+        return;
+    }
+    Color mood = character->player_disposition >= 12 ? TEAL :
+                 character->stress >= 65 ? DANGER : CC_GOLD;
+    CcOverlayDrawText("A PERSON, NOT A NOTICE", 330, 174, 9, MUTED);
+    CcOverlayDrawText(character->name, 330, 205, 24, mood);
+    CcOverlayDrawText(
+        TextFormat("%s  /  %s  /  TRUST %+d  /  STRESS %d",
+                   CcCharacterRoleName(character->role),
+                   CcCharacterActivityName(character->activity),
+                   character->player_disposition, character->stress),
+        330, 240, 10, INK);
+    char target[96];
+    SituationTargetLabel(sim, situation, target, sizeof(target));
+    CcOverlayDrawText(
+        TextFormat("%s  /  %s", SituationTitle(situation->kind), target),
+        330, 282, 13, CC_GOLD);
+    DrawTwoLineText(CharacterStakeLine(situation), 330, 318, 72U, 11, INK);
+    const char *memory =
+        CcCharacterRemembers(character, CC_CHARACTER_MEMORY_PLAYER_HELPED,
+                             situation->id) ?
+            "They remember that you kept your word." :
+        CcCharacterRemembers(character, CC_CHARACTER_MEMORY_PLAYER_WITHDREW,
+                             situation->id) ?
+            "They remember that your company walked away." :
+        CcCharacterRemembers(character, CC_CHARACTER_MEMORY_PLAYER_PROMISED,
+                             situation->id) ?
+            "They remember your promise and are preparing around it." :
+        CcCharacterRemembers(character, CC_CHARACTER_MEMORY_MET_PLAYER,
+                             situation->id) ?
+            "They remember that you stopped and listened." :
+            "You have not spoken before.";
+    CcOverlayDrawText("MEMORY", 330, 399, 9, MUTED);
+    CcOverlayDrawText(memory, 330, 422, 11, mood);
+    CcOverlayDrawText(
+        "Their state, trust, and memory persist when you leave town.",
+        330, 466, 9, MUTED);
 }
 
 static void DrawJourneyEncounter(const CcSim *sim)
@@ -3859,6 +3989,38 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         }
         return;
     }
+    if (*view == VIEW_CHARACTER) {
+        if (ClientKeyPressed(KEY_ESCAPE) ||
+            context_action == CONTEXT_ACTION_CLOSE_VIEW) {
+            *view = VIEW_LOCAL;
+            return;
+        }
+        CcCharacterResponse response = ClientKeyPressed(KEY_ONE) ||
+                context_action == CONTEXT_ACTION_LISTEN_CHARACTER ?
+            CC_CHARACTER_RESPONSE_LISTEN :
+            ClientKeyPressed(KEY_TWO) ||
+                context_action == CONTEXT_ACTION_PLEDGE_CHARACTER ?
+            CC_CHARACTER_RESPONSE_PLEDGE_HELP : 0;
+        if (response != 0) {
+            CcCommand reply = {
+                .kind = CC_COMMAND_CHARACTER_RESPONSE,
+                .target_id = local->conversation_situation_id,
+                .amount = (int32_t)response
+            };
+            if (ApplyCommand(*journal, sim, reply,
+                             message, message_capacity)) {
+                const CcCharacter *character = CcSimCharacter(
+                    sim, local->conversation_character_id);
+                (void)snprintf(
+                    message, message_capacity,
+                    response == CC_CHARACTER_RESPONSE_LISTEN ?
+                        "%.28s remembers that you listened." :
+                        "%.28s will hold the company to its promise.",
+                    character != NULL ? character->name : "They");
+            }
+        }
+        return;
+    }
     if (context_action == CONTEXT_ACTION_CLOSE_VIEW &&
         (*view == VIEW_LEDGER || *view == VIEW_SITUATIONS)) {
         *view = *return_view;
@@ -4515,8 +4677,27 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                     return;
                 }
             }
-            if ((interact ||
-                 context_action == CONTEXT_ACTION_LEAVE_MARKET) &&
+            if (!local->market_interior &&
+                local->site_kind == CC_LOCAL_SITE_NONE &&
+                !local->course.alarm_active &&
+                local->course.situation_witness_active &&
+                (context_action == CONTEXT_ACTION_TALK_CHARACTER ||
+                 (interact &&
+                  GridDistance(
+                      position,
+                      (Vector2){
+                          local->course.situation_witness.position.x,
+                          local->course.situation_witness.position.z}) <
+                      1.85f))) {
+                local->conversation_character_id =
+                    local->course.situation_witness_character_id;
+                local->conversation_situation_id =
+                    local->course.situation_witness_id;
+                *view = VIEW_CHARACTER;
+                message[0] = '\0';
+                return;
+            } else if ((interact ||
+                        context_action == CONTEXT_ACTION_LEAVE_MARKET) &&
                 local->market_interior &&
                 (queued_interact ||
                  GridDistance(position, INTERIOR_EXIT) < 1.25f)) {
@@ -4868,6 +5049,8 @@ int main(int argc, char **argv)
         strcmp(argv[1], "--capture-encounter") == 0;
     bool capture_witness = argc >= 2 &&
         strcmp(argv[1], "--capture-witness") == 0;
+    bool capture_character = argc >= 2 &&
+        strcmp(argv[1], "--capture-character") == 0;
     bool capture_travel = argc >= 2 &&
         strcmp(argv[1], "--capture-travel") == 0;
     bool capture_road = argc >= 2 &&
@@ -5006,7 +5189,8 @@ int main(int argc, char **argv)
                     capture_map_case || capture_dojo ||
                     capture_jump || capture_action_reel ||
                     capture_gameplay_reel || capture_encounter ||
-                    capture_witness || capture_travel || capture_road ||
+                    capture_witness || capture_character ||
+                    capture_travel || capture_road ||
                     capture_parley ||
                     capture_aftermath || capture_golden ||
                     capture_dragon_cave ||
@@ -5134,23 +5318,17 @@ int main(int argc, char **argv)
     if (capture_road_fork || capture_map_case) {
         sim.player.location_id = sim.settlements[1].id;
     }
-    if (capture_witness) {
+    if (capture_witness || capture_character) {
         for (int32_t situation = 0; situation < sim.situation_count;
              ++situation) {
             if (sim.situations[situation].status != CC_SITUATION_ACTIVE) {
                 continue;
             }
-            bool found = false;
-            for (int32_t settlement = 0;
-                 settlement < sim.settlement_count; ++settlement) {
-                if (!CcSimSituationTouchesSettlement(
-                        &sim, &sim.situations[situation],
-                        sim.settlements[settlement].id)) continue;
-                sim.player.location_id = sim.settlements[settlement].id;
-                found = true;
-                break;
-            }
-            if (found) break;
+            const CcCharacter *character = CcSimSituationAffectedCharacter(
+                &sim, &sim.situations[situation]);
+            if (character == NULL) continue;
+            sim.player.location_id = character->current_settlement_id;
+            break;
         }
     }
     CcLocalBindPlace(&sim);
@@ -5212,6 +5390,7 @@ int main(int argc, char **argv)
         CC_MAP_GLOAMGATE_NIGHT_ROAD : FirstOutgoingRouteIndex(&sim);
     int32_t selected_situation = FirstActiveSituationIndex(&sim);
     ClientView view = capture_board ? VIEW_SITUATIONS :
+                      capture_character ? VIEW_CHARACTER :
                       capture_encounter ? VIEW_ENCOUNTER :
                       capture_dragon_cave ? VIEW_DRAGON_CAVE :
                       capture_road_fork ? VIEW_ROADS :
@@ -5317,6 +5496,12 @@ int main(int argc, char **argv)
             CcLocalCourseUpdate(&local.course, &local.agent, &sim,
                                 1.0f / 60.0f);
         }
+    }
+    if (capture_character && local.course.situation_witness_active) {
+        local.conversation_character_id =
+            local.course.situation_witness_character_id;
+        local.conversation_situation_id =
+            local.course.situation_witness_id;
     }
     if (capture_jump) {
         local.course.alarm_countdown = 1000.0f;
@@ -5636,6 +5821,10 @@ int main(int argc, char **argv)
         if (view == VIEW_SITUATIONS) {
             CcOverlayFlush();
             DrawSituationBoard(&sim, selected_situation);
+        }
+        if (view == VIEW_CHARACTER) {
+            CcOverlayFlush();
+            DrawCharacterConversation(&sim, &local);
         }
         if (view == VIEW_ENCOUNTER) {
             CcOverlayFlush();

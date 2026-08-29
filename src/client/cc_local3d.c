@@ -3611,6 +3611,7 @@ void CcLocalCourseStageRoadEncounter(CcLocalCourse *course,
     CcLocalAgentSetScene(player, CC_LOCAL_SCENE_ROAD);
     course->situation_witness_active = false;
     course->situation_witness_id = 0U;
+    course->situation_witness_character_id = 0U;
     for (int32_t i = 0; i < CC_LOCAL_TRAVELLER_COUNT; ++i) {
         course->travellers[i].active = false;
     }
@@ -3773,14 +3774,46 @@ static void CourseConfigureSituationWitness(CcLocalCourse *course,
     if (course->road_encounter) {
         course->situation_witness_active = false;
         course->situation_witness_id = 0U;
+        course->situation_witness_character_id = 0U;
         return;
     }
     const CcSituation *situation = CcSimAcceptedSituation(sim);
-    if (situation == NULL ||
-        !CcSimSituationTouchesSettlement(sim, situation,
-                                         sim->player.location_id)) {
-        situation = CcSimSituationForSettlement(sim,
-                                                sim->player.location_id);
+    const CcCharacter *character = CcSimSituationAffectedCharacter(
+        sim, situation);
+    if (situation == NULL || character == NULL ||
+        character->current_settlement_id != sim->player.location_id) {
+        situation = NULL;
+        character = NULL;
+        for (int32_t i = 0; i < sim->situation_count; ++i) {
+            const CcSituation *candidate = &sim->situations[i];
+            if (candidate->status != CC_SITUATION_ACTIVE) continue;
+            const CcCharacter *participant =
+                CcSimSituationAffectedCharacter(sim, candidate);
+            if (participant != NULL &&
+                participant->current_settlement_id ==
+                    sim->player.location_id) {
+                situation = candidate;
+                character = participant;
+                break;
+            }
+        }
+    }
+    if (situation == NULL) {
+        for (int32_t i = 0; i < sim->situation_count; ++i) {
+            const CcSituation *candidate = &sim->situations[i];
+            if (candidate->status == CC_SITUATION_ACTIVE ||
+                candidate->created_day < sim->current_day - 56) continue;
+            const CcCharacter *participant =
+                CcSimSituationAffectedCharacter(sim, candidate);
+            if (participant == NULL ||
+                participant->current_settlement_id !=
+                    sim->player.location_id) continue;
+            if (situation == NULL ||
+                candidate->created_day > situation->created_day) {
+                situation = candidate;
+                character = participant;
+            }
+        }
     }
     if (situation == NULL) {
         for (int32_t offset = 0; offset < sim->event_count; ++offset) {
@@ -3788,16 +3821,29 @@ static void CourseConfigureSituationWitness(CcLocalCourse *course,
             if (event == NULL || event->kind != CC_EVENT_DELAYED_ECHO ||
                 event->location_id != sim->player.location_id) continue;
             situation = CcSimSituation(sim, event->subject_id);
-            if (situation != NULL) break;
+            character = CcSimSituationAffectedCharacter(sim, situation);
+            if (situation != NULL && character != NULL &&
+                character->current_settlement_id ==
+                    sim->player.location_id) break;
+            situation = NULL;
+            character = NULL;
         }
     }
     if (situation == NULL) {
         course->situation_witness_active = false;
         course->situation_witness_id = 0U;
+        course->situation_witness_character_id = 0U;
         course->situation_witness.separation_velocity = (Vector3){0};
         return;
     }
-    if (course->situation_witness_id != situation->id) {
+    if (character == NULL) {
+        course->situation_witness_active = false;
+        course->situation_witness_id = 0U;
+        course->situation_witness_character_id = 0U;
+        return;
+    }
+    if (course->situation_witness_id != situation->id ||
+        course->situation_witness_character_id != character->id) {
         CcLocalAgentInit(&course->situation_witness,
                          (Vector2){CC_LOCAL_NOTICE_X + 0.92f,
                                    CC_LOCAL_NOTICE_Z + 0.72f}, false);
@@ -3810,18 +3856,77 @@ static void CourseConfigureSituationWitness(CcLocalCourse *course,
             situation->kind == CC_SITUATION_MONSTER_EXPEDITION ?
                 (Color){128, 82, 66, 255} :
                 (Color){173, 112, 76, 255};
-        CcNpcRole witness_role =
-            situation->kind == CC_SITUATION_MONSTER_EXPEDITION ?
+        CcNpcRole witness_role = character->role == CC_CHARACTER_SCOUT ?
                 CC_NPC_ROLE_SCOUT :
-            situation->kind == CC_SITUATION_BLACK_MARKET_DELIVERY ?
-                CC_NPC_ROLE_TRAVELLER : CC_NPC_ROLE_LABORER;
+            character->role == CC_CHARACTER_TRAVELLER ||
+            character->role == CC_CHARACTER_COURIER ?
+                CC_NPC_ROLE_TRAVELLER :
+            character->role == CC_CHARACTER_REFUGEE ?
+                CC_NPC_ROLE_REFUGEE : CC_NPC_ROLE_LABORER;
         CcLocalAgentSetNpcAppearance(
             &course->situation_witness,
-            (uint32_t)(situation->id ^ (situation->id >> 32)),
+            character->appearance_seed,
             witness_role, witness_accent);
         course->situation_witness_id = situation->id;
+        course->situation_witness_character_id = character->id;
+        course->situation_witness_activity = character->activity;
+        course->situation_witness_activity_seconds = 0.0f;
+        course->situation_witness_activity_stage = 0;
+    } else if (course->situation_witness_activity != character->activity) {
+        course->situation_witness_activity = character->activity;
+        course->situation_witness_activity_seconds = 0.0f;
+        course->situation_witness_activity_stage = 0;
+        course->situation_witness.exact_target_valid = false;
+        course->situation_witness.target_valid = false;
     }
     course->situation_witness_active = true;
+}
+
+static void CourseUpdateSituationWitnessBehavior(CcLocalCourse *course,
+                                                 float delta_time)
+{
+    if (course == NULL || !course->situation_witness_active) return;
+    CcLocalAgent *witness = &course->situation_witness;
+    course->situation_witness_activity_seconds += delta_time;
+    Vector3 target = witness->position;
+    bool wants_target = false;
+    if (course->alarm_active) {
+        target = (Vector3){37.55f, 0.0f, 24.65f};
+        wants_target = true;
+    } else if (course->situation_witness_activity ==
+               CC_CHARACTER_ACTIVITY_PREPARING ||
+               course->situation_witness_activity ==
+               CC_CHARACTER_ACTIVITY_WORKING) {
+        if (!witness->exact_target_valid && !CourseAgentBusy(witness) &&
+            course->situation_witness_activity_seconds >= 1.2f) {
+            static const Vector3 work_points[2] = {
+                {42.20f, 0.0f, 28.52f},
+                {44.10f, 0.0f, 29.30f}
+            };
+            target = work_points[course->situation_witness_activity_stage % 2];
+            course->situation_witness_activity_stage += 1;
+            course->situation_witness_activity_seconds = 0.0f;
+            wants_target = true;
+        }
+    } else if (course->situation_witness_activity ==
+               CC_CHARACTER_ACTIVITY_RECOVERING) {
+        target = (Vector3){39.62f, 0.0f, 26.54f};
+        wants_target = true;
+    } else if (course->situation_witness_activity ==
+               CC_CHARACTER_ACTIVITY_HIDING) {
+        target = (Vector3){38.10f, 0.0f, 24.90f};
+        wants_target = true;
+    } else {
+        target = (Vector3){CC_LOCAL_NOTICE_X + 0.92f, 0.0f,
+                           CC_LOCAL_NOTICE_Z + 0.72f};
+        wants_target = true;
+    }
+    float dx = target.x - witness->position.x;
+    float dz = target.z - witness->position.z;
+    if (wants_target && dx * dx + dz * dz > 0.20f &&
+        !witness->exact_target_valid && !CourseAgentBusy(witness)) {
+        (void)CcLocalAgentSetExactTarget(witness, target, false);
+    }
 }
 
 static void CoursePlanActorSeparation(CcLocalCourse *course,
@@ -4502,6 +4607,7 @@ void CcLocalCourseFixedStepInternal(CcLocalCourse *course,
     } else {
         course->situation_witness_active = false;
     }
+    CourseUpdateSituationWitnessBehavior(course, delta_time);
     CoursePlanActorSeparation(course, player);
     if (course->situation_witness_active) {
         CcLocalAgentFixedStepInternal(&course->situation_witness,
@@ -19893,14 +19999,20 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     if (course != NULL && course->situation_witness_active) {
         const CcSituation *situation = CcSimSituation(
             sim, course->situation_witness_id);
-        if (situation != NULL && situation->affected_name[0] != '\0' &&
+        const CcCharacter *character = CcSimCharacter(
+            sim, course->situation_witness_character_id);
+        char witness_label[96];
+        if (situation != NULL && character != NULL &&
             AgentNearLabel(agent, course->situation_witness.position.x,
                            course->situation_witness.position.z, 6.0f)) {
+            (void)snprintf(witness_label, sizeof(witness_label),
+                           "%.31s / %s / F", character->name,
+                           CcCharacterActivityName(character->activity));
             labels[count++] = (WorldLabel){
                 {course->situation_witness.position.x,
                  course->situation_witness.position.y + 2.18f,
                  course->situation_witness.position.z},
-                situation->affected_name,
+                witness_label,
                 situation->status == CC_SITUATION_RESOLVED ? WORLD_TEAL :
                 sim->player.accepted_situation_id == situation->id ?
                     WORLD_GOLD : WORLD_DANGER};

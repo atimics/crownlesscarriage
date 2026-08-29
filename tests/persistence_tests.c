@@ -354,7 +354,7 @@ static void CheckLegacyJournalMigration(char *error,
              legacy_generation);
     CC_CHECK(ReadSqliteInteger(
                  path, "SELECT journal_cursor FROM meta WHERE id=1;") == 0);
-    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 16);
+    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 17);
     CC_CHECK(CcJournalAdvanceDays(journal, &resumed, 2,
                                   error, error_capacity));
     uint64_t expected_hash = CcSimHash(&resumed);
@@ -650,6 +650,34 @@ static void CheckSchema15Compatibility(char *error, size_t error_capacity)
     RemoveDatabase(path);
 }
 
+static void CheckSchema16Compatibility(char *error, size_t error_capacity)
+{
+    const char *path = "persistence-legacy-v16-test.ccsave";
+    RemoveDatabase(path);
+    CcSim legacy;
+    CcSimInit(&legacy, UINT32_C(0x1e9ac16));
+    legacy.schema_version = 16U;
+    legacy.generator_version = 15U;
+    legacy.character_count = 0;
+    (void)memset(legacy.characters, 0, sizeof(legacy.characters));
+    for (int32_t i = 0; i < legacy.situation_count; ++i) {
+        legacy.situations[i].sponsor_character_id = 0U;
+        legacy.situations[i].affected_character_id = 0U;
+    }
+    CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.generator_version == CC_GENERATOR_VERSION);
+    CC_CHECK(restored.character_count > 0);
+    for (int32_t i = 0; i < restored.situation_count; ++i) {
+        CC_CHECK(CcSimSituationAffectedCharacter(
+            &restored, &restored.situations[i]) != NULL);
+    }
+    CC_CHECK(CcSimValidate(&restored, error, error_capacity));
+    RemoveDatabase(path);
+}
+
 static void CheckJournalRecovery(char *error, size_t error_capacity)
 {
     const char *path = "persistence-journal-recovery-test.ccsave";
@@ -863,9 +891,15 @@ static void CheckPreJourneySchema3Compatibility(char *error,
     CC_CHECK(restored.carriage.mode == CC_CARRIAGE_PARKED);
     CC_CHECK(restored.carriage.location_id == restored.player.location_id);
     CC_CHECK(!restored.delayed_echo.active);
+    CC_CHECK(restored.character_count > 0);
     for (int32_t i = 0; i < restored.situation_count; ++i) {
-        CC_CHECK(restored.situations[i].sponsor_name[0] == '\0');
-        CC_CHECK(restored.situations[i].affected_name[0] == '\0');
+        CC_CHECK(restored.situations[i].sponsor_name[0] != '\0');
+        CC_CHECK(restored.situations[i].affected_name[0] != '\0');
+        CC_CHECK(CcSimCharacter(
+            &restored,
+            restored.situations[i].sponsor_character_id) != NULL);
+        CC_CHECK(CcSimSituationAffectedCharacter(
+            &restored, &restored.situations[i]) != NULL);
     }
 
     /* The migrated file must remain stable after the new writer adopts it. */
@@ -924,6 +958,48 @@ static void CheckPreJourneySchema3Compatibility(char *error,
     RemoveDatabase(journey_path);
 }
 
+static void CheckCharacterPersistence(char *error, size_t error_capacity)
+{
+    const char *path = "persistence-character-test.ccsave";
+    RemoveDatabase(path);
+    CcSim original;
+    CcSimInit(&original, UINT32_C(0xc4a4ac7e));
+    CcSituation *situation = NULL;
+    for (int32_t i = 0; i < original.situation_count; ++i) {
+        if (original.situations[i].status == CC_SITUATION_ACTIVE) {
+            situation = &original.situations[i];
+            break;
+        }
+    }
+    CC_CHECK(situation != NULL);
+    const CcCharacter *character = CcSimSituationAffectedCharacter(
+        &original, situation);
+    CC_CHECK(character != NULL);
+    CcId character_id = character->id;
+    CcId situation_id = situation->id;
+    original.player.location_id = character->current_settlement_id;
+    original.carriage.location_id = original.player.location_id;
+    CcCommand listen = {
+        .kind = CC_COMMAND_CHARACTER_RESPONSE,
+        .target_id = situation_id,
+        .amount = CC_CHARACTER_RESPONSE_LISTEN
+    };
+    CC_CHECK(CcSimApply(&original, &listen, error, error_capacity));
+    uint64_t expected_hash = CcSimHash(&original);
+    CC_CHECK(CcSaveWrite(path, &original, error, error_capacity));
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(CcSimHash(&restored) == expected_hash);
+    const CcCharacter *remembering = CcSimCharacter(
+        &restored, character_id);
+    CC_CHECK(remembering != NULL);
+    CC_CHECK(remembering->appearance_seed == character->appearance_seed);
+    CC_CHECK(remembering->player_disposition == 2);
+    CC_CHECK(CcCharacterRemembers(
+        remembering, CC_CHARACTER_MEMORY_MET_PLAYER, situation_id));
+    RemoveDatabase(path);
+}
+
 int main(void)
 {
     const char *path = "persistence-test.ccsave";
@@ -968,10 +1044,12 @@ int main(void)
     CheckSchema13Compatibility(error, sizeof(error));
     CheckSchema14Compatibility(error, sizeof(error));
     CheckSchema15Compatibility(error, sizeof(error));
+    CheckSchema16Compatibility(error, sizeof(error));
     CheckDiplomacyPersistence(error, sizeof(error));
     CheckJournalRecovery(error, sizeof(error));
     CheckJournalCheckpointAndTamper(error, sizeof(error));
     CheckLegacyJournalMigration(error, sizeof(error));
+    CheckCharacterPersistence(error, sizeof(error));
     CcCommand command = {
         .kind = CC_COMMAND_TRAVEL,
         .target_id = original.settlements[1].id

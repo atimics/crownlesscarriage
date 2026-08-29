@@ -314,6 +314,10 @@ typedef struct CcLocalCourse {
     CcId raider_company_id;
     CcLocalAgent situation_witness;
     CcId situation_witness_id;
+    CcId situation_witness_character_id;
+    CcCharacterActivity situation_witness_activity;
+    float situation_witness_activity_seconds;
+    int32_t situation_witness_activity_stage;
     Vector3 raider_entry[CC_LOCAL_RAIDER_COUNT];
     Vector3 combat_origin;
     float alarm_countdown;
