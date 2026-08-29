@@ -10,6 +10,7 @@ uniform float atmosphereExposure;
 uniform float atmosphereShadowTone;
 uniform float atmosphereHighlightTone;
 uniform float atmosphereChroma;
+uniform float atmospherePracticalGlow;
 
 out vec4 finalColor;
 
@@ -76,12 +77,67 @@ vec3 nearestPaletteColor(vec3 color)
     return texelFetch(paletteLut, address, 0).rgb;
 }
 
+float warmEmitter(vec3 color)
+{
+    float luminance = dot(color, vec3(0.299, 0.587, 0.114));
+    float warmth = min(color.r - color.b, color.g - color.b);
+    return smoothstep(0.50, 0.82, luminance) *
+           smoothstep(0.045, 0.20, warmth);
+}
+
+vec3 paintedSource(vec2 coordinate)
+{
+    return texture(texture0, clamp(coordinate, vec2(0.0), vec2(1.0))).rgb;
+}
+
 void main()
 {
     /* Spatial pixelation is structural: the world is rendered into a true
        half-resolution target and enlarged with nearest-neighbor sampling.
        This pass only grades those already-stable art pixels. */
     vec4 source = texture(texture0, fragTexCoord) * fragColor * colDiffuse;
+    vec2 texel = 1.0 / vec2(textureSize(texture0, 0));
+
+    /* The reference look gets much of its richness from hand-placed dark
+       joins and bright chips. A restrained cross-shaped unsharp pass brings
+       that separation back after the 3D scene has been rasterized onto the
+       stable art-pixel grid. */
+    vec3 nearAverage = (
+        paintedSource(fragTexCoord + vec2(texel.x, 0.0)) +
+        paintedSource(fragTexCoord - vec2(texel.x, 0.0)) +
+        paintedSource(fragTexCoord + vec2(0.0, texel.y)) +
+        paintedSource(fragTexCoord - vec2(0.0, texel.y))) * 0.25;
+    source.rgb = clamp(source.rgb + (source.rgb - nearAverage) * 0.085,
+                       0.0, 1.0);
+
+    /* Bright warm pixels act as authored torches, lamps, windows, and fire.
+       Sampling only the fixed world target keeps the glow blocky and stable;
+       the strength comes from the scene recipe, so daylight does not bloom
+       like a modern HDR render. */
+    float ember = warmEmitter(source.rgb) * 0.14;
+    const float radii[3] = float[3](2.0, 5.0, 9.0);
+    const float weights[3] = float[3](0.52, 0.31, 0.17);
+    for (int ring = 0; ring < 3; ++ring) {
+        vec2 radius = texel * radii[ring];
+        float ringGlow = 0.0;
+        ringGlow += warmEmitter(paintedSource(
+            fragTexCoord + vec2(radius.x, 0.0)));
+        ringGlow += warmEmitter(paintedSource(
+            fragTexCoord - vec2(radius.x, 0.0)));
+        ringGlow += warmEmitter(paintedSource(
+            fragTexCoord + vec2(0.0, radius.y)));
+        ringGlow += warmEmitter(paintedSource(
+            fragTexCoord - vec2(0.0, radius.y)));
+        ringGlow += warmEmitter(paintedSource(fragTexCoord + radius));
+        ringGlow += warmEmitter(paintedSource(fragTexCoord - radius));
+        ringGlow += warmEmitter(paintedSource(
+            fragTexCoord + vec2(radius.x, -radius.y)));
+        ringGlow += warmEmitter(paintedSource(
+            fragTexCoord + vec2(-radius.x, radius.y)));
+        ember += ringGlow * 0.125 * weights[ring];
+    }
+    float practicalGlow = clamp(atmospherePracticalGlow, 0.0, 1.0);
+    source.rgb += vec3(1.00, 0.43, 0.105) * ember * practicalGlow * 0.24;
     vec3 perceptual = linearSrgbToOklab(
         srgbToLinear(clamp(source.rgb, 0.0, 1.0)));
     float originalLightness = perceptual.x;
@@ -111,7 +167,7 @@ void main()
     vec2 centered = fragTexCoord * 2.0 - 1.0;
     float vignette = 1.0 - smoothstep(0.38, 1.28,
                                      dot(centered, centered));
-    perceptual.x *= mix(0.94, 1.0, vignette);
+    perceptual.x *= mix(0.94 - practicalGlow * 0.025, 1.0, vignette);
 
     vec3 color = linearToSrgb(clamp(oklabToLinearSrgb(perceptual),
                                     0.0, 1.0));
