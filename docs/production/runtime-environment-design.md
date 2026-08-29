@@ -79,12 +79,20 @@ props do not constitute a city grammar.
 
 Every settlement function owns a local place profile. The profile supplies a
 stable terrain seed, ten room names, a statement of purpose, civic labels, a
-material tint, a compound name, a low plaza mark, and three authored landmark
-records. It also owns three named secondary roads and one civic-hall service
-with a stable keeper identity. Thornford therefore reads as granary country,
-Gloamgate as a crossroads market, Alderwatch as a contested bridge, and
-Silverwick as the working deeps even while they share the proven regional
-spine and interior footprint.
+material tint, a low plaza mark, and three authored landmark records. More
+importantly, it owns the complete building plan and the civic compound plan:
+footprints, heights, styles, doors, structure kinds, and the primary hall.
+Thornford is dispersed around barns and crofts, Gloamgate gathers tightly
+around a radial bazaar, Alderwatch forms a straight bridge garrison,
+Silverwick climbs in dense worker rows, Rosespire uses tall processional wards,
+and the frontier town leaves open ground around its lantern ward.
+
+The six plans share proven travel corridors and camera-room thresholds, not a
+generic town underneath. Their different massing, density, skyline, hall, and
+compound are authoritative for terrain pads, collision, pathfinding, camera
+clearance, picking, cutaways, labels, and rendering. Only Gloamgate uses the
+authored market model; the other civic halls use their own procedural
+architecture instead of wearing the market as a skin.
 
 Each landmark record owns its name, family, variant, footprint, and height.
 Terrain grading, physical sweeps, pathfinding, camera picking, nearby labels,
@@ -97,6 +105,11 @@ Secondary-road records own their footprint, direction, surface family, and
 name. Terrain grading, surface color, wheel ruts, and nearby road labels consume
 the same record. Each road overlaps its destination landmark and joins the
 shared primary spine, so a profile cannot add a disconnected decorative road.
+
+Building records are bounded, non-overlapping, and kept clear of their town's
+landmarks and compound. Every primary hall retains a tested public threshold,
+and every compound leaves the Crown Gate lane physically open. Profile tests
+also reject any pair of settlement functions with the same building map.
 
 The civic interior is reusable geometry rather than a universal market. Its
 keeper, service description, material palette, wall mark, and role come from

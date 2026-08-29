@@ -119,41 +119,11 @@ typedef struct WorldBuilding {
     bool door;
 } WorldBuilding;
 
-/* One world unit is one metre. Even the smallest cottage has room for an
-   actual household around the 1.9 m hero; the market is a 12 x 10 m hall. */
-static const WorldBuilding WORLD_BUILDINGS[] = {
-    {{20.0f, 15.0f, 8.0f, 10.0f}, 7.20f, 0, true},
-    {{32.0f, 14.0f, 7.0f, 9.0f}, 6.40f, 1, true},
-    {{44.0f, 16.0f, 12.0f, 10.0f}, 8.80f, 2, true},
-    {{20.0f, 33.0f, 10.0f, 8.0f}, 6.60f, 3, true},
-    {{34.0f, 35.0f, 7.0f, 8.0f}, 5.80f, 0, true},
-    {{55.0f, 42.0f, 8.0f, 7.0f}, 6.20f, 1, true},
-    {{55.0f, 29.0f, 6.5f, 8.5f}, 5.90f, 0, true},
-    {{55.0f, 14.0f, 7.0f, 9.0f}, 6.10f, 3, true},
-    {{32.0f, 47.0f, 8.0f, 7.0f}, 5.80f, 1, true},
-    {{44.0f, 46.0f, 10.0f, 7.0f}, 6.90f, 2, true}
-};
-
 typedef struct WorldStructure {
     Rectangle footprint;
     float height;
+    CcLocalCompoundKind kind;
 } WorldStructure;
-
-/* A 25 x 23 m fortified bailey, with a person-width gate left physically open. */
-static const WorldStructure CASTLE_STRUCTURES[] = {
-    {{66.0f, 9.0f, 1.2f, 23.0f}, 6.5f},
-    {{90.0f, 9.0f, 1.2f, 23.0f}, 6.5f},
-    {{66.0f, 9.0f, 25.2f, 1.2f}, 6.5f},
-    {{66.0f, 30.8f, 9.5f, 1.2f}, 6.5f},
-    {{81.5f, 30.8f, 9.7f, 1.2f}, 6.5f},
-    {{72.0f, 13.0f, 13.0f, 9.0f}, 11.5f},
-    {{75.3f, 27.8f, 2.0f, 3.0f}, 9.0f},
-    {{79.7f, 27.8f, 2.0f, 3.0f}, 9.0f},
-    {{64.8f, 7.8f, 4.0f, 4.0f}, 12.5f},
-    {{88.4f, 7.8f, 4.0f, 4.0f}, 12.5f},
-    {{64.8f, 29.2f, 4.0f, 4.0f}, 12.5f},
-    {{88.4f, 29.2f, 4.0f, 4.0f}, 12.5f}
-};
 static const Rectangle CARRIAGE_FOOTPRINT = {35.20f, 29.00f, 3.20f, 5.40f};
 static const Rectangle DUNGEON_FOOTPRINT = {27.40f, 49.70f, 3.20f, 1.60f};
 /* Set-dressing with a grounded footprint participates in the same collision
@@ -921,6 +891,83 @@ static const CcLocalPlaceRoad *ActivePlaceRoadAt(int32_t index)
     return CcLocalPlaceRoadAt(active_place_function, index);
 }
 
+static const CcLocalPlaceProfile *ActivePlaceProfile(void)
+{
+    return CcLocalPlaceProfileForFunction(active_place_function);
+}
+
+static int32_t ActiveWorldBuildingCount(void)
+{
+    return ActivePlaceProfile()->building_count;
+}
+
+static WorldBuilding ActiveWorldBuildingAt(int32_t index)
+{
+    const CcLocalPlaceBuilding *building =
+        CcLocalPlaceBuildingAt(active_place_function, index);
+    if (building == NULL) return (WorldBuilding){0};
+    return (WorldBuilding){
+        {building->x, building->z, building->width, building->depth},
+        building->height,
+        (int32_t)building->style,
+        building->door,
+    };
+}
+
+static int32_t ActiveCompoundStructureCount(void)
+{
+    return ActivePlaceProfile()->compound_structure_count;
+}
+
+static WorldStructure ActiveCompoundStructureAt(int32_t index)
+{
+    const CcLocalPlaceCompoundStructure *structure =
+        CcLocalPlaceCompoundStructureAt(active_place_function, index);
+    if (structure == NULL) return (WorldStructure){0};
+    return (WorldStructure){
+        {structure->x, structure->z, structure->width, structure->depth},
+        structure->height,
+        structure->kind,
+    };
+}
+
+static Rectangle ActiveCompoundBounds(void)
+{
+    Rectangle bounds = {0};
+    int32_t count = ActiveCompoundStructureCount();
+    for (int32_t index = 0; index < count; ++index) {
+        Rectangle footprint = ActiveCompoundStructureAt(index).footprint;
+        if (index == 0) {
+            bounds = footprint;
+            continue;
+        }
+        float maximum_x = fmaxf(bounds.x + bounds.width,
+                                footprint.x + footprint.width);
+        float maximum_z = fmaxf(bounds.y + bounds.height,
+                                footprint.y + footprint.height);
+        bounds.x = fminf(bounds.x, footprint.x);
+        bounds.y = fminf(bounds.y, footprint.y);
+        bounds.width = maximum_x - bounds.x;
+        bounds.height = maximum_z - bounds.y;
+    }
+    return bounds;
+}
+
+static float ActiveCompoundMaximumHeight(void)
+{
+    float height = 0.0f;
+    for (int32_t index = 0;
+         index < ActiveCompoundStructureCount(); ++index) {
+        height = fmaxf(height, ActiveCompoundStructureAt(index).height);
+    }
+    return height;
+}
+
+static WorldBuilding ActivePrimaryBuilding(void)
+{
+    return ActiveWorldBuildingAt(ActivePlaceProfile()->primary_building);
+}
+
 static Rectangle PlaceLandmarkFootprint(
     const CcLocalPlaceLandmark *landmark)
 {
@@ -1083,15 +1130,14 @@ static float TerrainRoadProfile(const TerrainRoad *road, float x, float z)
 
 static bool TerrainPointInsideMajorFoundation(float x, float z)
 {
-    for (int32_t i = 0; i < (int32_t)(sizeof(WORLD_BUILDINGS) /
-                                      sizeof(WORLD_BUILDINGS[0])); ++i) {
-        Rectangle footprint = WORLD_BUILDINGS[i].footprint;
+    for (int32_t i = 0; i < ActiveWorldBuildingCount(); ++i) {
+        Rectangle footprint = ActiveWorldBuildingAt(i).footprint;
         if (x >= footprint.x && x <= footprint.x + footprint.width &&
             z >= footprint.y && z <= footprint.y + footprint.height) {
             return true;
         }
     }
-    Rectangle keep = {65.20f, 8.20f, 26.50f, 24.40f};
+    Rectangle keep = ActiveCompoundBounds();
     if (x >= keep.x && x <= keep.x + keep.width &&
         z >= keep.y && z <= keep.y + keep.height) return true;
     static const Rectangle local_pads[] = {
@@ -1232,9 +1278,8 @@ static void TerrainGenerate(void)
 
     /* Foundations are small human changes to the generated land. Each pad
        takes its elevation from the land and nearby road before construction. */
-    for (int32_t i = 0; i < (int32_t)(sizeof(WORLD_BUILDINGS) /
-                                      sizeof(WORLD_BUILDINGS[0])); ++i) {
-        Rectangle footprint = WORLD_BUILDINGS[i].footprint;
+    for (int32_t i = 0; i < ActiveWorldBuildingCount(); ++i) {
+        Rectangle footprint = ActiveWorldBuildingAt(i).footprint;
         TerrainGradePad(footprint, TerrainRectangleAverage(footprint), 1.45f);
     }
     for (int32_t i = 0; i < CC_LOCAL_PLACE_LANDMARK_COUNT; ++i) {
@@ -1242,7 +1287,7 @@ static void TerrainGenerate(void)
             PlaceLandmarkFootprint(ActivePlaceLandmarkAt(i));
         TerrainGradePad(footprint, TerrainRectangleAverage(footprint), 1.35f);
     }
-    Rectangle keep_pad = {65.20f, 8.20f, 26.50f, 24.40f};
+    Rectangle keep_pad = ActiveCompoundBounds();
     float keep_elevation = TerrainRectangleAverage(keep_pad) + 0.45f;
     TerrainGradePad(keep_pad, keep_elevation, 2.80f);
 
@@ -1510,18 +1555,18 @@ static bool StaticBodyBlocked(CcLocalSceneKind scene, float x, float z,
         }
         return false;
     }
-    for (int32_t i = 0; i < (int32_t)(sizeof(WORLD_BUILDINGS) /
-                                      sizeof(WORLD_BUILDINGS[0])); ++i) {
+    for (int32_t i = 0; i < ActiveWorldBuildingCount(); ++i) {
+        WorldBuilding building = ActiveWorldBuildingAt(i);
         /* Foreground reveal is only a drawing rule. A house remains solid in
            every camera shot, including while its roof and facade are faded
            so the player can see the character behind it. */
         if (CircleTouchesFootprint(x, z, radius,
-                                   WORLD_BUILDINGS[i].footprint)) return true;
+                                   building.footprint)) return true;
     }
-    for (int32_t i = 0; i < (int32_t)(sizeof(CASTLE_STRUCTURES) /
-                                      sizeof(CASTLE_STRUCTURES[0])); ++i) {
+    for (int32_t i = 0; i < ActiveCompoundStructureCount(); ++i) {
+        WorldStructure structure = ActiveCompoundStructureAt(i);
         if (CircleTouchesFootprint(x, z, radius,
-                                   CASTLE_STRUCTURES[i].footprint)) return true;
+                                   structure.footprint)) return true;
     }
     for (int32_t i = 0; i < CC_LOCAL_PLACE_LANDMARK_COUNT; ++i) {
         if (CircleTouchesFootprint(
@@ -1969,20 +2014,18 @@ static int32_t GatherLocalCollisionBoxes(const LocalProbeContext *context,
     }
 
     for (int32_t building = 0;
-         building < (int32_t)(sizeof(WORLD_BUILDINGS) /
-                              sizeof(WORLD_BUILDINGS[0])); ++building) {
-        const WorldBuilding *world = &WORLD_BUILDINGS[building];
-        AddLocalCollisionBox(boxes, &count, world->footprint,
-                             TerrainFootprintHeight(world->footprint),
-                             world->height);
+         building < ActiveWorldBuildingCount(); ++building) {
+        WorldBuilding world = ActiveWorldBuildingAt(building);
+        AddLocalCollisionBox(boxes, &count, world.footprint,
+                             TerrainFootprintHeight(world.footprint),
+                             world.height);
     }
     for (int32_t structure = 0;
-         structure < (int32_t)(sizeof(CASTLE_STRUCTURES) /
-                               sizeof(CASTLE_STRUCTURES[0])); ++structure) {
-        const WorldStructure *world = &CASTLE_STRUCTURES[structure];
-        AddLocalCollisionBox(boxes, &count, world->footprint,
-                             TerrainFootprintHeight(world->footprint),
-                             world->height);
+         structure < ActiveCompoundStructureCount(); ++structure) {
+        WorldStructure world = ActiveCompoundStructureAt(structure);
+        AddLocalCollisionBox(boxes, &count, world.footprint,
+                             TerrainFootprintHeight(world.footprint),
+                             world.height);
     }
     for (int32_t landmark = 0;
          landmark < CC_LOCAL_PLACE_LANDMARK_COUNT; ++landmark) {
@@ -5512,19 +5555,19 @@ bool CcLocalAgentPickTarget(CcLocalAgent *agent, Vector2 screen_point,
         occluder = fminf(occluder, RayFootprintDistance(
             ray, (Rectangle){0.0f, 0.0f, 0.50f, 7.0f}, 2.60f));
     } else if (scene == CC_LOCAL_SCENE_STREET) {
-        for (int32_t i = 0; i < (int32_t)(sizeof(WORLD_BUILDINGS) /
-                                          sizeof(WORLD_BUILDINGS[0])); ++i) {
+        for (int32_t i = 0; i < ActiveWorldBuildingCount(); ++i) {
+            WorldBuilding building = ActiveWorldBuildingAt(i);
             occluder = fminf(occluder,
                              RayFootprintDistance(
-                                 ray, WORLD_BUILDINGS[i].footprint,
-                                 WORLD_BUILDINGS[i].height));
+                                 ray, building.footprint,
+                                 building.height));
         }
-        for (int32_t i = 0; i < (int32_t)(sizeof(CASTLE_STRUCTURES) /
-                                          sizeof(CASTLE_STRUCTURES[0])); ++i) {
+        for (int32_t i = 0; i < ActiveCompoundStructureCount(); ++i) {
+            WorldStructure structure = ActiveCompoundStructureAt(i);
             occluder = fminf(occluder,
                              RayFootprintDistance(
-                                 ray, CASTLE_STRUCTURES[i].footprint,
-                                 CASTLE_STRUCTURES[i].height));
+                                 ray, structure.footprint,
+                                 structure.height));
         }
         for (int32_t i = 0; i < CC_LOCAL_PLACE_LANDMARK_COUNT; ++i) {
             const CcLocalPlaceLandmark *landmark =
@@ -8068,16 +8111,15 @@ static float CameraStreetCourseClutterScore(Camera3D camera,
         }
     }
     for (int32_t building = 0;
-         building < (int32_t)(sizeof(WORLD_BUILDINGS) /
-                              sizeof(WORLD_BUILDINGS[0])); ++building) {
-        const WorldBuilding *house = &WORLD_BUILDINGS[building];
-        Vector3 half_size = {house->footprint.width * 0.5f,
-                             house->height * 0.5f,
-                             house->footprint.height * 0.5f};
+         building < ActiveWorldBuildingCount(); ++building) {
+        WorldBuilding house = ActiveWorldBuildingAt(building);
+        Vector3 half_size = {house.footprint.width * 0.5f,
+                             house.height * 0.5f,
+                             house.footprint.height * 0.5f};
         Vector3 center = {
-            house->footprint.x + half_size.x,
-            TerrainFootprintHeight(house->footprint) + half_size.y,
-            house->footprint.y + half_size.z,
+            house.footprint.x + half_size.x,
+            TerrainFootprintHeight(house.footprint) + half_size.y,
+            house.footprint.y + half_size.z,
         };
         CameraProjectedVolume scenery = CameraProjectBox(
             camera, center, half_size);
@@ -8179,10 +8221,10 @@ static float CombatCameraPositionClutter(Vector3 position)
 {
     float score = 0.0f;
     for (int32_t building = 0;
-         building < (int32_t)(sizeof(WORLD_BUILDINGS) /
-                              sizeof(WORLD_BUILDINGS[0])); ++building) {
+         building < ActiveWorldBuildingCount(); ++building) {
+        WorldBuilding world = ActiveWorldBuildingAt(building);
         score += CameraPositionRectangleClutter(
-            position, WORLD_BUILDINGS[building].footprint, 1.80f) * 2.0f;
+            position, world.footprint, 1.80f) * 2.0f;
     }
     for (int32_t platform = 0;
          platform < (int32_t)(sizeof(STREET_PLATFORMS) /
@@ -8194,10 +8236,10 @@ static float CombatCameraPositionClutter(Vector3 position)
             1.10f);
     }
     for (int32_t structure = 0;
-         structure < (int32_t)(sizeof(CASTLE_STRUCTURES) /
-                               sizeof(CASTLE_STRUCTURES[0])); ++structure) {
+         structure < ActiveCompoundStructureCount(); ++structure) {
+        WorldStructure world = ActiveCompoundStructureAt(structure);
         score += CameraPositionRectangleClutter(
-            position, CASTLE_STRUCTURES[structure].footprint, 1.80f) * 2.0f;
+            position, world.footprint, 1.80f) * 2.0f;
     }
     for (int32_t landmark = 0;
          landmark < CC_LOCAL_PLACE_LANDMARK_COUNT; ++landmark) {
@@ -8623,10 +8665,10 @@ static float StreetAlleyWeight(Vector3 focus)
     float nearest = FLT_MAX;
     float second_nearest = FLT_MAX;
     for (int32_t building = 0;
-         building < (int32_t)(sizeof(WORLD_BUILDINGS) /
-                              sizeof(WORLD_BUILDINGS[0])); ++building) {
+         building < ActiveWorldBuildingCount(); ++building) {
+        WorldBuilding world = ActiveWorldBuildingAt(building);
         float distance = sqrtf(FootprintDistanceSquared(
-            focus.x, focus.z, WORLD_BUILDINGS[building].footprint));
+            focus.x, focus.z, world.footprint));
         if (distance < nearest) {
             second_nearest = nearest;
             nearest = distance;
@@ -14135,9 +14177,11 @@ typedef struct WorldBuildingRevealState {
 } WorldBuildingRevealState;
 
 static WorldBuildingRevealState world_building_reveals[
-    sizeof(WORLD_BUILDINGS) / sizeof(WORLD_BUILDINGS[0])];
+    CC_LOCAL_PLACE_BUILDING_CAPACITY];
 static float world_building_reveal_clock = 0.0f;
 static bool world_building_reveals_initialized = false;
+static CcSettlementFunction world_building_reveal_function =
+    CC_SETTLEMENT_MARKET;
 
 static void UpdateWorldBuildingReveals(Camera3D camera,
                                        Vector3 reveal_world,
@@ -14146,17 +14190,19 @@ static void UpdateWorldBuildingReveals(Camera3D camera,
                                        float clock)
 {
     bool reset = !world_building_reveals_initialized ||
-                 clock < world_building_reveal_clock;
+                 clock < world_building_reveal_clock ||
+                 world_building_reveal_function != active_place_function;
     float delta_time = reset ? 0.0f :
         fmaxf(0.0f, fminf(clock - world_building_reveal_clock, 0.05f));
     world_building_reveal_clock = clock;
     world_building_reveals_initialized = true;
+    world_building_reveal_function = active_place_function;
 
-    for (int32_t i = 0; i < (int32_t)(sizeof(WORLD_BUILDINGS) /
-                                      sizeof(WORLD_BUILDINGS[0])); ++i) {
+    for (int32_t i = 0; i < ActiveWorldBuildingCount(); ++i) {
+        WorldBuilding building = ActiveWorldBuildingAt(i);
         WorldBuildingRevealState *state = &world_building_reveals[i];
         bool occluded = WorldBuildingObscuresReveal(
-            &WORLD_BUILDINGS[i], camera, reveal_world,
+            &building, camera, reveal_world,
             render_width, render_height);
         if (reset) {
             state->amount = occluded ? 1.0f : 0.0f;
@@ -14202,44 +14248,44 @@ static void DrawWorldBuildings(Color kingdom, Vector3 focus,
     /* Every structure gets an opaque footing pass before any upper-wall
        reveal. This includes the authored market replacement. */
     SetWorldForegroundReveal(0.0f, reveal_cut_height);
-    for (int32_t i = 0; i < (int32_t)(sizeof(WORLD_BUILDINGS) /
-                                      sizeof(WORLD_BUILDINGS[0])); ++i) {
-        const WorldBuilding *building = &WORLD_BUILDINGS[i];
-        if (!SceneryFootprintVisible(building->footprint, focus)) continue;
-        Color wall = BuildingWallColor(building->style, profile);
+    for (int32_t i = 0; i < ActiveWorldBuildingCount(); ++i) {
+        WorldBuilding building = ActiveWorldBuildingAt(i);
+        if (!SceneryFootprintVisible(building.footprint, focus)) continue;
+        Color wall = BuildingWallColor(building.style, profile);
         rlPushMatrix();
-        rlTranslatef(0.0f, TerrainFootprintHeight(building->footprint), 0.0f);
+        rlTranslatef(0.0f, TerrainFootprintHeight(building.footprint), 0.0f);
         DrawBuildingFoundation(
-            building->footprint.x, building->footprint.y,
-            building->footprint.width, building->footprint.height,
-            building->height, wall);
+            building.footprint.x, building.footprint.y,
+            building.footprint.width, building.footprint.height,
+            building.height, wall);
         rlPopMatrix();
     }
 
     float reveal_active = -1.0f;
-    for (int32_t i = 0; i < (int32_t)(sizeof(WORLD_BUILDINGS) /
-                                      sizeof(WORLD_BUILDINGS[0])); ++i) {
-        const WorldBuilding *building = &WORLD_BUILDINGS[i];
-        if (!SceneryFootprintVisible(building->footprint, focus)) continue;
+    for (int32_t i = 0; i < ActiveWorldBuildingCount(); ++i) {
+        WorldBuilding building = ActiveWorldBuildingAt(i);
+        if (!SceneryFootprintVisible(building.footprint, focus)) continue;
         /* The market footprint remains authoritative for collision, but its
            visible shell comes from the shared Blender library when present.
            A camera-to-hero sightline classifies the complete house at its
            current position. Rear wall, roof, and trim therefore share one
            reveal, while a house behind the hero remains entirely solid. */
-        if (i == 2 && runtime_assets[RUNTIME_ASSET_MARKET].ready) continue;
+        if (profile->function == CC_SETTLEMENT_MARKET &&
+            i == profile->primary_building &&
+            runtime_assets[RUNTIME_ASSET_MARKET].ready) continue;
         float reveal = world_building_reveals[i].amount;
         if (fabsf(reveal - reveal_active) > 0.001f) {
             SetWorldForegroundReveal(reveal, reveal_cut_height);
             reveal_active = reveal;
         }
         rlPushMatrix();
-        rlTranslatef(0.0f, TerrainFootprintHeight(building->footprint), 0.0f);
-        DrawBuilding(building->footprint.x, building->footprint.y,
-                     building->footprint.width, building->footprint.height,
-                     building->height,
-                     BuildingWallColor(building->style, profile),
-                     BuildingRoofColor(building->style, kingdom, profile),
-                     building->door, building->style);
+        rlTranslatef(0.0f, TerrainFootprintHeight(building.footprint), 0.0f);
+        DrawBuilding(building.footprint.x, building.footprint.y,
+                     building.footprint.width, building.footprint.height,
+                     building.height,
+                     BuildingWallColor(building.style, profile),
+                     BuildingRoofColor(building.style, kingdom, profile),
+                     building.door, building.style);
         rlPopMatrix();
     }
     SetWorldForegroundReveal(0.0f, reveal_cut_height);
@@ -14248,15 +14294,19 @@ static void DrawWorldBuildings(Color kingdom, Vector3 focus,
 static bool DrawAuthoredMarket(const CcSettlement *place)
 {
     RuntimeAsset *market = &runtime_assets[RUNTIME_ASSET_MARKET];
-    if (!market->ready) return false;
+    const CcLocalPlaceProfile *profile =
+        CcLocalPlaceProfileForSettlement(place);
+    if (!market->ready || profile->function != CC_SETTLEMENT_MARKET) {
+        return false;
+    }
     const Vector3 origin = {50.0f, 0.0f, 21.0f};
     const float scale = 1.70f;
-    const WorldBuilding *building = &WORLD_BUILDINGS[2];
+    WorldBuilding building = ActivePrimaryBuilding();
     rlPushMatrix();
-    rlTranslatef(0.0f, TerrainFootprintHeight(building->footprint), 0.0f);
-    DrawBuildingContactShadow(building->footprint.x, building->footprint.y,
-                              building->footprint.width,
-                              building->footprint.height, building->height);
+    rlTranslatef(0.0f, TerrainFootprintHeight(building.footprint), 0.0f);
+    DrawBuildingContactShadow(building.footprint.x, building.footprint.y,
+                              building.footprint.width,
+                              building.footprint.height, building.height);
     DrawModelEx(market->model, origin, (Vector3){0.0f, 1.0f, 0.0f},
                 0.0f, (Vector3){scale, scale, scale}, WHITE);
     RuntimeAssetId state = RUNTIME_ASSET_COUNT;
@@ -14277,9 +14327,10 @@ static bool DrawAuthoredMarket(const CcSettlement *place)
 }
 
 static WorldBuildingRevealState castle_structure_reveals[
-    sizeof(CASTLE_STRUCTURES) / sizeof(CASTLE_STRUCTURES[0])];
+    CC_LOCAL_PLACE_COMPOUND_CAPACITY];
 static float castle_reveal_clock = 0.0f;
 static bool castle_reveals_initialized = false;
+static CcSettlementFunction castle_reveal_function = CC_SETTLEMENT_MARKET;
 
 static void UpdateCastleStructureReveals(Camera3D camera,
                                          Vector3 reveal_world,
@@ -14287,16 +14338,17 @@ static void UpdateCastleStructureReveals(Camera3D camera,
                                          int32_t render_height,
                                          float clock)
 {
-    bool reset = !castle_reveals_initialized || clock < castle_reveal_clock;
+    bool reset = !castle_reveals_initialized || clock < castle_reveal_clock ||
+                 castle_reveal_function != active_place_function;
     float delta_time = reset ? 0.0f :
         fmaxf(0.0f, fminf(clock - castle_reveal_clock, 0.05f));
     castle_reveal_clock = clock;
     castle_reveals_initialized = true;
-    for (int32_t i = 0; i < (int32_t)(sizeof(CASTLE_STRUCTURES) /
-                                      sizeof(CASTLE_STRUCTURES[0])); ++i) {
-        const WorldStructure *structure = &CASTLE_STRUCTURES[i];
+    castle_reveal_function = active_place_function;
+    for (int32_t i = 0; i < ActiveCompoundStructureCount(); ++i) {
+        WorldStructure structure = ActiveCompoundStructureAt(i);
         WorldBuilding proxy = {
-            structure->footprint, structure->height, 0, false,
+            structure.footprint, structure.height, 0, false,
         };
         WorldBuildingRevealState *state = &castle_structure_reveals[i];
         bool occluded = WorldBuildingObscuresReveal(
@@ -14356,16 +14408,53 @@ static void DrawCastleBattlements(Rectangle footprint, float height,
     }
 }
 
-static void DrawConstructedCastleStructure(Rectangle footprint,
-                                            float height, Color stone,
-                                            Color kingdom, int32_t index)
+static bool CompoundUsesBattlements(const CcLocalPlaceProfile *profile)
 {
+    return profile != NULL &&
+           (profile->function == CC_SETTLEMENT_MARKET ||
+            profile->function == CC_SETTLEMENT_FORTRESS ||
+            profile->function == CC_SETTLEMENT_CAPITAL);
+}
+
+static void DrawConstructedCompoundStructure(
+    const WorldStructure *structure, Color stone, Color kingdom,
+    const CcLocalPlaceProfile *profile)
+{
+    if (structure == NULL) return;
+    Rectangle footprint = structure->footprint;
+    float height = structure->height;
     float center_x = footprint.x + footprint.width * 0.5f;
     float center_z = footprint.y + footprint.height * 0.5f;
-    bool wall_run = index < 5;
-    bool keep = index == 5;
-    bool tower = index >= 6;
+    bool wall_run = structure->kind == CC_LOCAL_COMPOUND_WALL;
+    bool keep = structure->kind == CC_LOCAL_COMPOUND_HALL;
+    bool tower = structure->kind == CC_LOCAL_COMPOUND_TOWER;
     Color base = ShadeColor(stone, 0.70f);
+
+    if (structure->kind == CC_LOCAL_COMPOUND_HALL ||
+        structure->kind == CC_LOCAL_COMPOUND_STOREHOUSE) {
+        int32_t style = structure->kind == CC_LOCAL_COMPOUND_HALL ?
+            (profile->function == CC_SETTLEMENT_CAPITAL ||
+             profile->function == CC_SETTLEMENT_FORTRESS ? 2 : 1) : 1;
+        Color roof = BuildingRoofColor(style, kingdom, profile);
+        DrawBuilding(footprint.x, footprint.y,
+                     footprint.width, footprint.height, height,
+                     stone, roof, true, style);
+        return;
+    }
+
+    if (structure->kind == CC_LOCAL_COMPOUND_SILO) {
+        float radius = fminf(footprint.width, footprint.height) * 0.43f;
+        DrawCylinder((Vector3){center_x, 0.0f, center_z},
+                     radius, radius * 1.05f, height, 12, stone);
+        DrawCylinder((Vector3){center_x, height, center_z},
+                     0.08f, radius * 1.18f, radius * 0.90f, 12,
+                     BuildingRoofColor(1, kingdom, profile));
+        DrawBox((Vector3){center_x, height * 0.54f,
+                          center_z + radius + 0.025f},
+                (Vector3){radius * 1.15f, 0.18f, 0.08f},
+                ShadeColor(stone, 0.68f));
+        return;
+    }
 
     DrawBox((Vector3){center_x, 0.34f, center_z},
             (Vector3){footprint.width + 0.32f, 0.68f,
@@ -14411,13 +14500,16 @@ static void DrawConstructedCastleStructure(Rectangle footprint,
                       footprint.height + 0.30f},
             tower ? BlendColor(ShadeColor(stone, 0.76f), kingdom, 0.18f) :
                     ShadeColor(stone, 0.70f));
-    DrawCastleBattlements(footprint, height, stone);
+    if (tower || CompoundUsesBattlements(profile)) {
+        DrawCastleBattlements(footprint, height, stone);
+    }
 }
 
 static Color CompoundStoneColor(const CcLocalPlaceProfile *profile,
-                                Color kingdom, int32_t structure)
+                                Color kingdom, CcLocalCompoundKind kind)
 {
-    Color stone = structure == 5 ? WORLD_STONE_SHADOW : WORLD_STONE;
+    Color stone = kind == CC_LOCAL_COMPOUND_HALL ?
+        WORLD_STONE_SHADOW : WORLD_STONE;
     if (profile == NULL) return stone;
     switch (profile->function) {
         case CC_SETTLEMENT_FARMING:
@@ -14442,7 +14534,7 @@ static void DrawCastle(Color kingdom, const CcLocalPlaceProfile *profile,
                        int32_t render_width, int32_t render_height,
                        float clock)
 {
-    Rectangle keep_pad = {65.20f, 8.20f, 26.50f, 24.40f};
+    Rectangle keep_pad = ActiveCompoundBounds();
     if (!SceneryFootprintVisible(keep_pad, focus)) return;
     float reveal_cut_height = reveal_world.y - 0.30f;
     UpdateCastleStructureReveals(camera, reveal_world,
@@ -14450,57 +14542,68 @@ static void DrawCastle(Color kingdom, const CcLocalPlaceProfile *profile,
     rlPushMatrix();
     rlTranslatef(0.0f, TerrainFootprintHeight(keep_pad), 0.0f);
     SetWorldForegroundReveal(0.0f, reveal_cut_height);
-    for (int32_t i = 0; i < (int32_t)(sizeof(CASTLE_STRUCTURES) /
-                                      sizeof(CASTLE_STRUCTURES[0])); ++i) {
-        const WorldStructure *structure = &CASTLE_STRUCTURES[i];
-        Rectangle footprint = structure->footprint;
-        Color stone = CompoundStoneColor(profile, kingdom, i);
+    for (int32_t i = 0; i < ActiveCompoundStructureCount(); ++i) {
+        WorldStructure structure = ActiveCompoundStructureAt(i);
+        Rectangle footprint = structure.footprint;
+        Color stone = CompoundStoneColor(profile, kingdom, structure.kind);
         DrawBuildingFoundation(
             footprint.x, footprint.y, footprint.width, footprint.height,
-            structure->height, stone);
+            structure.height, stone);
     }
     float reveal_active = -1.0f;
-    for (int32_t i = 0; i < (int32_t)(sizeof(CASTLE_STRUCTURES) /
-                                      sizeof(CASTLE_STRUCTURES[0])); ++i) {
-        const WorldStructure *structure = &CASTLE_STRUCTURES[i];
-        Rectangle footprint = structure->footprint;
-        Color stone = CompoundStoneColor(profile, kingdom, i);
+    for (int32_t i = 0; i < ActiveCompoundStructureCount(); ++i) {
+        WorldStructure structure = ActiveCompoundStructureAt(i);
+        Color stone = CompoundStoneColor(profile, kingdom, structure.kind);
         float reveal = castle_structure_reveals[i].amount;
         if (fabsf(reveal - reveal_active) > 0.001f) {
             SetWorldForegroundReveal(reveal, reveal_cut_height);
             reveal_active = reveal;
         }
-        DrawConstructedCastleStructure(footprint, structure->height, stone,
-                                       kingdom, i);
+        DrawConstructedCompoundStructure(&structure, stone, kingdom, profile);
     }
     SetWorldForegroundReveal(0.0f, reveal_cut_height);
     {
-        DrawBox((Vector3){78.5f, 1.20f, 22.03f},
+        WorldStructure compound_hall = ActiveCompoundStructureAt(5);
+        float hall_door_x = compound_hall.footprint.x +
+                            compound_hall.footprint.width * 0.5f;
+        float hall_door_z = compound_hall.footprint.y +
+                            compound_hall.footprint.height + 0.03f;
+        float gate_x = 78.50f;
+        float gate_z = ActiveCompoundStructureAt(3).footprint.y +
+                       ActiveCompoundStructureAt(3).footprint.height * 0.5f;
+        float gate_height = profile->function == CC_SETTLEMENT_FARMING ? 3.20f :
+                            profile->function == CC_SETTLEMENT_MINING ? 5.40f :
+                            profile->function == CC_SETTLEMENT_FORTRESS ? 8.40f :
+                            profile->function == CC_SETTLEMENT_CAPITAL ? 7.60f :
+                            profile->function == CC_SETTLEMENT_DUNGEON_TOWN ?
+                                6.20f : 7.15f;
+        DrawBox((Vector3){hall_door_x, 1.20f, hall_door_z},
                 (Vector3){1.35f, 2.40f, 0.06f},
                 WORLD_WOOD_SHADOW);
-        DrawBox((Vector3){76.30f, 7.65f, 30.84f},
+        DrawBox((Vector3){76.30f, gate_height + 0.50f, gate_z},
                 (Vector3){0.78f, 2.30f, 0.06f}, kingdom);
-        DrawBox((Vector3){80.70f, 7.65f, 30.84f},
+        DrawBox((Vector3){80.70f, gate_height + 0.50f, gate_z},
                 (Vector3){0.78f, 2.30f, 0.06f}, kingdom);
 
         /* The open southern gate is the room's navigational promise. A high
            lintel and paired fire points frame the pass without putting an
            invisible portcullis across the traversable opening. */
-        Color gate_stone = CompoundStoneColor(profile, kingdom, 0);
-        DrawBox((Vector3){78.50f, 7.15f, 30.84f},
+        Color gate_stone = CompoundStoneColor(
+            profile, kingdom, CC_LOCAL_COMPOUND_WALL);
+        DrawBox((Vector3){gate_x, gate_height, gate_z},
                 (Vector3){2.30f, 1.08f, 0.72f}, gate_stone);
         for (int32_t merlon = 0; merlon < 3; ++merlon) {
-            DrawBox((Vector3){77.62f + (float)merlon * 0.88f,
-                              8.02f, 30.84f},
+            DrawBox((Vector3){gate_x - 0.88f + (float)merlon * 0.88f,
+                              gate_height + 0.87f, gate_z},
                     (Vector3){0.42f, 0.70f, 0.76f},
                     ShadeColor(gate_stone, 0.92f));
         }
         for (int32_t side = -1; side <= 1; side += 2) {
-            float torch_x = 78.50f + (float)side * 1.32f;
-            DrawBox((Vector3){torch_x, 1.82f, 31.20f},
+            float torch_x = gate_x + (float)side * 1.32f;
+            DrawBox((Vector3){torch_x, 1.82f, gate_z + 0.36f},
                     (Vector3){0.10f, 0.86f, 0.10f},
                     WORLD_WOOD_SHADOW);
-            DrawSmallSphere((Vector3){torch_x, 2.32f, 31.20f},
+            DrawSmallSphere((Vector3){torch_x, 2.32f, gate_z + 0.36f},
                             0.18f, WORLD_GOLD);
         }
     }
@@ -19388,11 +19491,13 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     DrawWorldBuildings(kingdom, scenery_focus, profile, camera,
                        foreground_reveal_world,
                        target.texture.width, target.texture.height, clock);
-    if (SceneryFootprintVisible(WORLD_BUILDINGS[2].footprint,
-                                scenery_focus)) {
+    WorldBuilding primary_building = ActivePrimaryBuilding();
+    if (profile->function == CC_SETTLEMENT_MARKET &&
+        SceneryFootprintVisible(primary_building.footprint, scenery_focus)) {
         float reveal_cut_height = foreground_reveal_world.y - 0.30f;
-        SetWorldForegroundReveal(world_building_reveals[2].amount,
-                                 reveal_cut_height);
+        SetWorldForegroundReveal(
+            world_building_reveals[profile->primary_building].amount,
+            reveal_cut_height);
         (void)DrawAuthoredMarket(place);
         SetWorldForegroundReveal(0.0f, reveal_cut_height);
     }
@@ -19589,7 +19694,8 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     if (AgentNearLabel(agent, 50.0f, 21.0f, 8.0f)) {
         labels[count++] = (WorldLabel){{50.0f,
                                         TerrainFootprintHeight(
-                                            WORLD_BUILDINGS[2].footprint) + 4.75f,
+                                            primary_building.footprint) +
+                                            primary_building.height + 0.42f,
                                         21.0f},
                                        primary_hall_label, WORLD_GOLD};
     }
@@ -19622,11 +19728,16 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                                         9.72f},
                                        "Swimming trench", WORLD_TEAL};
     }
-    if (AgentNearLabel(agent, 78.50f, 17.50f, 10.0f)) {
-        labels[count++] = (WorldLabel){{78.50f,
-                                        CcLocalTerrainHeightAt(78.50f, 17.50f) +
-                                            12.10f,
-                                        17.50f},
+    Rectangle compound_bounds = ActiveCompoundBounds();
+    float compound_x = compound_bounds.x + compound_bounds.width * 0.5f;
+    float compound_z = compound_bounds.y + compound_bounds.height * 0.5f;
+    if (AgentNearLabel(agent, compound_x, compound_z, 10.0f)) {
+        labels[count++] = (WorldLabel){{compound_x,
+                                        CcLocalTerrainHeightAt(
+                                            compound_x, compound_z) +
+                                            ActiveCompoundMaximumHeight() +
+                                            0.55f,
+                                        compound_z},
                                        profile->compound, kingdom};
     }
     for (int32_t i = 0;
@@ -20133,9 +20244,9 @@ static bool StreetCanOccupy(Vector2 point)
         point.x > CC_LOCAL_WORLD_WIDTH - 0.28f - radius ||
         point.y < 0.28f + radius ||
         point.y > CC_LOCAL_WORLD_DEPTH - 0.28f - radius) return false;
-    for (int32_t i = 0; i < (int32_t)(sizeof(WORLD_BUILDINGS) /
-                                      sizeof(WORLD_BUILDINGS[0])); ++i) {
-        if (InsideExpanded(point, WORLD_BUILDINGS[i].footprint, radius)) {
+    for (int32_t i = 0; i < ActiveWorldBuildingCount(); ++i) {
+        WorldBuilding building = ActiveWorldBuildingAt(i);
+        if (InsideExpanded(point, building.footprint, radius)) {
             return false;
         }
     }
@@ -20144,9 +20255,9 @@ static bool StreetCanOccupy(Vector2 point)
                 point, PlaceLandmarkFootprint(ActivePlaceLandmarkAt(i)),
                 radius)) return false;
     }
-    for (int32_t i = 0; i < (int32_t)(sizeof(CASTLE_STRUCTURES) /
-                                      sizeof(CASTLE_STRUCTURES[0])); ++i) {
-        if (InsideExpanded(point, CASTLE_STRUCTURES[i].footprint, radius)) {
+    for (int32_t i = 0; i < ActiveCompoundStructureCount(); ++i) {
+        WorldStructure structure = ActiveCompoundStructureAt(i);
+        if (InsideExpanded(point, structure.footprint, radius)) {
             return false;
         }
     }

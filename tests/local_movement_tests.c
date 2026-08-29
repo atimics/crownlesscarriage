@@ -271,6 +271,42 @@ static void TestPlaceLandmarkCollision(void)
     CcLocalBindPlace(NULL);
 }
 
+static void TestTownPlanCollisionAndGate(void)
+{
+    CcSim sim;
+    CcSimInit(&sim, UINT32_C(0x7a11c0de));
+    for (int32_t settlement = 0;
+         settlement < sim.settlement_count; ++settlement) {
+        sim.player.location_id = sim.settlements[settlement].id;
+        CcLocalBindPlace(&sim);
+
+        Vector2 hall_approach = {50.0f, 27.0f};
+        Vector2 hall_blocked = CcLocalMove(
+            hall_approach, (Vector2){0.0f, -2.0f}, false);
+        if (hall_blocked.y < 26.27f) {
+            (void)fprintf(
+                stderr,
+                "town plan %d did not keep its civic hall solid: %.3f\n",
+                sim.settlements[settlement].function, hall_blocked.y);
+            exit(1);
+        }
+
+        Vector2 gate_walk = {78.50f, 35.00f};
+        for (int32_t step = 0; step < 17; ++step) {
+            gate_walk = CcLocalMove(
+                gate_walk, (Vector2){0.0f, -0.50f}, false);
+        }
+        if (gate_walk.y > 26.65f) {
+            (void)fprintf(
+                stderr,
+                "town plan %d blocked its promised compound gate: %.3f\n",
+                sim.settlements[settlement].function, gate_walk.y);
+            exit(1);
+        }
+    }
+    CcLocalBindPlace(NULL);
+}
+
 static void TestSharedCharacterCollisionWorld(void)
 {
     Vector3 corrected = {0};
@@ -2148,6 +2184,7 @@ int main(void)
     TestRoadBridgeSupport();
     TestFaceAngleAndLodContract();
     TestPlaceLandmarkCollision();
+    TestTownPlanCollisionAndGate();
     TestSharedCharacterCollisionWorld();
     TestRagdollStepsInWater();
     RenderTexture2D click_target = {0};

@@ -53,12 +53,13 @@ the simulation beneath it.
 
 The architecture proof connects these parts in one running build:
 
-- A seeded 96 by 72 metre waystation with farms, streets, market steps, a
-  coach yard, a mine road, Crown Gate, and the Wayfarer Trials
-- Settlement profiles that give every town a stable local terrain seed,
-  purpose-specific district names, civic labels, material palette, plaza mark,
-  three named physical landmarks, three secondary roads, and a staffed civic
-  hall with matched terrain, collision, navigation, and rendering
+- Six authored 96 by 72 metre town plans: dispersed farm crofts, dense mining
+  terraces, a radial crossroads market, a bridge garrison, tall capital wards,
+  and a sparse lantern-lit expedition town
+- Settlement profiles that own each town's building footprints and heights,
+  civic hall, compound or keep, stable terrain seed, district names, material
+  palette, plaza mark, physical landmarks, and secondary roads, with matched
+  terrain, collision, navigation, camera picking, and rendering
 - Continuous click-to-move navigation across real terrain and solid geometry,
   with no tile or screen-space movement grid
 - One physical humanoid body for walking, vaulting, climbing, down-climbing,
@@ -296,6 +297,8 @@ On macOS, capture directly from the executable inside the app bundle:
 ```sh
 out/build/play/crownless_carriage.app/Contents/MacOS/crownless_carriage \
   --capture-golden /tmp/crownless-street.png
+out/build/play/crownless_carriage.app/Contents/MacOS/crownless_carriage \
+  --capture-town 0 thornford.png
 out/build/play/crownless_carriage.app/Contents/MacOS/crownless_carriage \
   --capture-action-reel /tmp/crownless-action
 ```

@@ -1248,7 +1248,9 @@ static void DrawLocalHeader(const CcSim *sim, const LocalState *local)
              local->market_interior && place != NULL ?
                  TextFormat("%s  /  %s", place->name,
                             profile->primary_hall) :
-             place != NULL ? place->name : "Crownless",
+             place != NULL ?
+                 TextFormat("%s  /  %s", place->name, profile->identity) :
+                 "Crownless",
              22, 18, 18, INK);
     const char *summary = TextFormat(
         "DAY %d     %" PRId64 " cr     CARGO %d/%d",
@@ -1267,8 +1269,8 @@ static void DrawLocalHeader(const CcSim *sim, const LocalState *local)
                               22, 40, 8, TEAL);
         } else if (!local->market_interior) {
             CcOverlayDrawText(
-                TextFormat("NEXT  /  Visit the %s for a promise.",
-                           profile->notice_board),
+                TextFormat("NEXT  /  Visit the %s.    MAP  /  %s",
+                           profile->notice_board, profile->map_form),
                 22, 40, 8, MUTED);
         } else {
             CcOverlayDrawText(
@@ -4895,6 +4897,41 @@ int main(int argc, char **argv)
         strcmp(argv[1], "--capture-aftermath") == 0;
     bool capture_golden = argc >= 2 &&
         strcmp(argv[1], "--capture-golden") == 0;
+    bool capture_town = argc >= 2 &&
+        strcmp(argv[1], "--capture-town") == 0;
+    int32_t capture_town_index = 0;
+    float capture_town_x = 44.25f;
+    float capture_town_z = 28.85f;
+    if (capture_town) {
+        if (argc < 4) {
+            (void)fprintf(stderr,
+                          "capture town requires an index from 0 to 5 and a frame path.\n");
+            return 1;
+        }
+        char *end = NULL;
+        long parsed = strtol(argv[2], &end, 10);
+        if (end == argv[2] || *end != '\0' || parsed < 0 || parsed >= 6) {
+            (void)fprintf(stderr, "capture town index must be from 0 to 5.\n");
+            return 1;
+        }
+        capture_town_index = (int32_t)parsed;
+        if (argc >= 6) {
+            char *x_end = NULL;
+            char *z_end = NULL;
+            capture_town_x = strtof(argv[3], &x_end);
+            capture_town_z = strtof(argv[4], &z_end);
+            if (x_end == argv[3] || *x_end != '\0' ||
+                z_end == argv[4] || *z_end != '\0' ||
+                capture_town_x < 0.5f ||
+                capture_town_x > CC_LOCAL_WORLD_WIDTH - 0.5f ||
+                capture_town_z < 0.5f ||
+                capture_town_z > CC_LOCAL_WORLD_DEPTH - 0.5f) {
+                (void)fprintf(stderr,
+                              "capture town coordinates are invalid.\n");
+                return 1;
+            }
+        }
+    }
     bool capture_dragon_cave = argc >= 2 &&
         strcmp(argv[1], "--capture-dragon-cave") == 0;
     bool capture_atmosphere = argc >= 2 &&
@@ -5005,7 +5042,7 @@ int main(int argc, char **argv)
                     capture_gameplay_reel || capture_encounter ||
                     capture_witness || capture_travel || capture_road ||
                     capture_parley ||
-                    capture_aftermath || capture_golden ||
+                    capture_aftermath || capture_golden || capture_town ||
                     capture_dragon_cave ||
                     capture_atmosphere || capture_face ||
                     capture_room || capture_creature_media);
@@ -5013,6 +5050,7 @@ int main(int argc, char **argv)
                                capture_room ? argv[4] :
                                capture_face ? argv[3] :
                                capture_atmosphere ? argv[3] :
+                               capture_town ? (argc >= 6 ? argv[5] : argv[3]) :
                                argc >= 3 ? argv[2] :
                                "architecture-proof.png";
     char save_path[640];
@@ -5129,6 +5167,9 @@ int main(int argc, char **argv)
     if (capture_road_fork || capture_map_case) {
         sim.player.location_id = sim.settlements[1].id;
     }
+    if (capture_town) {
+        sim.player.location_id = sim.settlements[capture_town_index].id;
+    }
     if (capture_witness) {
         for (int32_t situation = 0; situation < sim.situation_count;
              ++situation) {
@@ -5240,8 +5281,12 @@ int main(int argc, char **argv)
         local.course.scene = CC_LOCAL_SCENE_ROAD;
         local.course.alarm_countdown = 1000.0f;
     }
-    if (capture_golden || capture_atmosphere) {
-        RepositionHero(&local, (Vector2){44.25f, 28.85f}, false);
+    if (capture_golden || capture_town || capture_atmosphere) {
+        RepositionHero(
+            &local,
+            capture_town ? (Vector2){capture_town_x, capture_town_z} :
+                           (Vector2){44.25f, 28.85f},
+            false);
         local.agent.facing_yaw = -0.35f;
         local.course.alarm_countdown = 1000.0f;
     }
@@ -5305,7 +5350,8 @@ int main(int argc, char **argv)
         !capture_action_reel && !capture_gameplay_reel &&
         !capture_encounter && !capture_travel &&
         !capture_road &&
-        !capture_parley && !capture_golden && !capture_atmosphere &&
+        !capture_parley && !capture_golden && !capture_town &&
+        !capture_atmosphere &&
         !capture_face && !capture_room && !capture_creature_media) {
         local.course.alarm_countdown = 1000.0f;
         for (int32_t frame = 0; frame < 1500; ++frame) {
@@ -5456,6 +5502,10 @@ int main(int argc, char **argv)
     }
     if (capture_golden) {
         (void)snprintf(message, sizeof(message), "Town square.");
+    } else if (capture_town) {
+        (void)snprintf(message, sizeof(message), "%s town plan.",
+                       CcSettlementFunctionName(
+                           sim.settlements[capture_town_index].function));
     } else if (capture_atmosphere) {
         (void)snprintf(message, sizeof(message), "%s.",
                        CcLocalAtmosphereName(capture_atmosphere_preset));
