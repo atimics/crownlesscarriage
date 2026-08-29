@@ -197,7 +197,8 @@ Inputs are contextual.
 
 | Input | Action |
 | --- | --- |
-| Left click | Move to a visible surface, or select a named outlaw |
+| Left click | Move to a visible surface, or choose an outlaw from their live-face combat card |
+| `T` | Cycle through living outlaw targets |
 | `F` | Use a nearby door, notice board, carriage, or toll collector |
 | `M` | Open or close the map case while beside the carriage |
 | `Q` | Review situations; promises are made at the local notice board |

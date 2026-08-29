@@ -129,6 +129,7 @@ typedef enum ContextActionKind {
     CONTEXT_ACTION_SKIP_TRAVEL,
     CONTEXT_ACTION_JUMP,
     CONTEXT_ACTION_RAISE_ALARM,
+    CONTEXT_ACTION_SELECT_TARGET,
     CONTEXT_ACTION_BASIC_STRIKE,
     CONTEXT_ACTION_TOGGLE_GUARD,
     CONTEXT_ACTION_WITHDRAW,
@@ -1367,7 +1368,7 @@ static void DrawCombatPanel(const LocalState *local)
     CcOverlayDrawText(target != NULL ?
                           CcLocalRaiderRoleName(
                               local->course.raider_roles[target_index]) :
-                          "CLICK OR [T] CYCLE",
+                          "CHOOSE BELOW / [T] NEXT",
                       target_x, y + 81, 7, target != NULL ? MUTED : CC_GOLD);
     DrawCombatMeter(target_x, y + 99, column_width, "HEALTH",
                     target != NULL ? target->combat.health : 0.0f,
@@ -1941,6 +1942,20 @@ static void AddCombatActions(ContextActionSet *set,
     int32_t target = SelectedCombatTargetIndex(local);
     bool has_target = target >= 0;
     const CcCombatState *combat = &local->agent.combat;
+    for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
+        if (local->course.raiders[i].combat.life_state != CC_LIFE_ALIVE) {
+            continue;
+        }
+        int32_t previous_count = set != NULL ? set->count : 0;
+        AddDetailedContextAction(
+            set, CONTEXT_ACTION_SELECT_TARGET,
+            local->course.raider_names[i], i == target ? "TARGET" : "",
+            CcLocalRaiderRoleName(local->course.raider_roles[i]),
+            true, i == target);
+        if (set != NULL && set->count > previous_count) {
+            set->items[set->count - 1].amount = i;
+        }
+    }
     /* Target-bound cards only exist when they name an exact legal target. */
     if (has_target) {
         AddDetailedContextAction(
@@ -2362,6 +2377,7 @@ static Color ContextActionColor(ContextActionKind kind)
         kind == CONTEXT_ACTION_RETURN_DRAGON_RELIC ||
         kind == CONTEXT_ACTION_INTERCEPT_DRAGON_TRIBUTE ||
         kind == CONTEXT_ACTION_OPEN_DRAGON_CAVE) return TEAL;
+    if (kind == CONTEXT_ACTION_SELECT_TARGET) return DANGER;
     if (kind == CONTEXT_ACTION_BASIC_STRIKE ||
         kind == CONTEXT_ACTION_TOGGLE_GUARD) return CC_GOLD;
     if (kind == CONTEXT_ACTION_SKILL_CRUSHING ||
@@ -2409,10 +2425,38 @@ static void DrawContextActionTray(const CcSim *sim, const LocalState *local,
                             3.0f, bounds.height - 20.0f},
                 0.8f, 3, accent);
         }
-        bool detailed = action->detail[0] != '\0' ||
-                        action->key_hint[0] != '\0';
         Color label_color = !action->enabled ? Fade(MUTED, 0.62f) :
                             hover || action->active ? accent : INK;
+        if (action->kind == CONTEXT_ACTION_SELECT_TARGET &&
+            action->amount >= 0 && action->amount < CC_LOCAL_RAIDER_COUNT) {
+            const CcLocalAgent *outlaw =
+                &local->course.raiders[action->amount];
+            Rectangle portrait = {bounds.x + 7.0f, bounds.y + 5.0f,
+                                  40.0f, bounds.height - 10.0f};
+            CcLocalDrawAgentPortrait3D(outlaw, portrait);
+            float text_x = portrait.x + portrait.width + 8.0f;
+            int text_width = (int)(bounds.x + bounds.width - text_x - 7.0f);
+            const char *name = TextFormat("%.14s", action->label);
+            CcOverlayDrawText(name, (int)text_x, (int)bounds.y + 8, 8,
+                              label_color);
+            CcOverlayDrawText(action->detail, (int)text_x,
+                              (int)bounds.y + 22, 6, MUTED);
+            int32_t health = (int32_t)lroundf(outlaw->combat.health);
+            CcOverlayDrawText(TextFormat("HP %d", health), (int)text_x,
+                              (int)bounds.y + 36, 6,
+                              health < 35 ? DANGER : INK);
+            int bar_width = text_width > 5 ? text_width : 5;
+            DrawRectangle((int)text_x, (int)bounds.y + 47,
+                          bar_width, 3, BAR_TRACK);
+            DrawRectangle((int)text_x, (int)bounds.y + 47,
+                          (int)lroundf((float)bar_width *
+                                      ClampUnit(outlaw->combat.health /
+                                                CC_LOCAL_COMBAT_MAX_HEALTH)),
+                          3, DANGER);
+            continue;
+        }
+        bool detailed = action->detail[0] != '\0' ||
+                        action->key_hint[0] != '\0';
         int width = CcOverlayMeasureText(action->label, detailed ? 10 : 11);
         CcOverlayDrawText(action->label,
                           (int)(bounds.x +
@@ -2478,7 +2522,7 @@ static void DrawCombatStatusLine(const LocalState *local,
     if (message != NULL && message[0] != '\0' && message_age < 3.2f) {
         status = message;
     } else if (target == NULL) {
-        status = "Click an outlaw or press T to choose a target.";
+        status = "Choose an outlaw below or press T to cycle targets.";
     } else if (local->agent.humanoid.guard_requested) {
         status = "Guard is up. Watch posture and strike after the block.";
     } else {
@@ -2959,20 +3003,52 @@ static void DrawLedger(const CcSim *sim)
 {
     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
                   Fade(BACKGROUND, 0.67f));
-    Rectangle bounds = {350.0f, 205.0f, 580.0f, 300.0f};
+    float panel_width = fminf(820.0f, (float)GetScreenWidth() - 80.0f);
+    float panel_height = fminf(500.0f, (float)GetScreenHeight() - 150.0f);
+    if (panel_width < 520.0f) panel_width = 520.0f;
+    if (panel_height < 360.0f) panel_height = 360.0f;
+    Rectangle bounds = {
+        ((float)GetScreenWidth() - panel_width) * 0.5f,
+        ((float)GetScreenHeight() - panel_height) * 0.5f - 8.0f,
+        panel_width, panel_height
+    };
     DrawPanel(bounds, PANEL_DEEP);
-    CcOverlayDrawText("NEWS", 382, 237, 22, INK);
-    int32_t shown = sim->event_count < 3 ? sim->event_count : 3;
+    int x = (int)bounds.x + 24;
+    int title_y = (int)bounds.y + 25;
+    CcOverlayDrawText("LEDGER", x, title_y, 22, INK);
+    CcOverlayDrawText("MOST RECENT FIRST", x + 126, title_y + 7,
+                      9, MUTED);
+    int32_t shown = sim->event_count < 4 ? sim->event_count : 4;
+    float row_height = (bounds.height - 82.0f) / 4.0f;
+    size_t line_capacity = (size_t)fmaxf(
+        42.0f, fminf(88.0f, (bounds.width - 190.0f) / 6.2f));
     for (int32_t i = 0; i < shown; ++i) {
         const CcEvent *event = CcSimRecentEvent(sim, i);
         if (event == NULL) continue;
-        int y = 292 + i * 54;
-        CcOverlayDrawText(TextFormat("DAY %d", event->day), 382, y, 9,
-                 CC_GOLD);
-        CcOverlayDrawText(CcEventKindName(event->kind), 458, y, 11,
-                 event->kind == CC_EVENT_MONSTER_PRESSURE ? CC_VIOLET : TEAL);
+        int y = (int)(bounds.y + 66.0f + (float)i * row_height);
+        DrawRectangle((int)bounds.x + 14, y - 4,
+                      (int)bounds.width - 28, (int)row_height - 5,
+                      i == 0 ? Fade(PANEL_HOVER, 0.52f) :
+                               Fade(PANEL, 0.30f));
+        CcOverlayDrawText(TextFormat("DAY %d", event->day), x, y + 7, 9,
+                          CC_GOLD);
+        Color kind_color = event->kind == CC_EVENT_MONSTER_PRESSURE ||
+                           event->kind == CC_EVENT_DRAGON_OMEN ||
+                           event->kind == CC_EVENT_DRAGON_RETALIATION ?
+                           CC_VIOLET :
+                           event->kind == CC_EVENT_SITUATION_FAILED ||
+                           event->kind == CC_EVENT_SETTLEMENT_RAIDED ||
+                           event->kind == CC_EVENT_SHIPMENT_LOST ?
+                           DANGER : TEAL;
+        CcOverlayDrawText(CcEventKindName(event->kind), x, y + 27, 10,
+                          kind_color);
+        DrawTwoLineText(event->text, x + 132, y + 7,
+                        line_capacity, 10, INK);
     }
-    if (shown == 0) CcOverlayDrawText("No news.", 382, 292, 12, MUTED);
+    if (shown == 0) {
+        CcOverlayDrawText("No events have reached the ledger yet.",
+                          x, (int)bounds.y + 86, 12, MUTED);
+    }
 }
 
 static Color SituationColor(CcSituationKind kind)
@@ -4265,8 +4341,11 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             }
             return;
         }
-        if (LocalCombatActive(local) && ClientKeyPressed(KEY_T)) {
-            int32_t target = NextCombatTargetIndex(local);
+        if (LocalCombatActive(local) &&
+            (context_action == CONTEXT_ACTION_SELECT_TARGET ||
+             ClientKeyPressed(KEY_T))) {
+            int32_t target = context_action == CONTEXT_ACTION_SELECT_TARGET ?
+                pressed_action.amount : NextCombatTargetIndex(local);
             if (target >= 0 && CcLocalCourseSelectPlayerTarget(
                     &local->course, &local->agent, target)) {
                 (void)snprintf(
@@ -4915,9 +4994,14 @@ static Rectangle LocalViewportBounds(void)
     float available_width = (float)GetScreenWidth() - side_margin * 2.0f;
     float available_height =
         (float)GetScreenHeight() - top_margin - bottom_margin;
-    float scale = floorf(fminf(available_width / art_width,
-                               available_height / art_height));
-    if (scale < 2.0f) scale = 2.0f;
+    float available_scale = fminf(available_width / art_width,
+                                  available_height / art_height);
+    float scale = floorf(available_scale);
+    /* Small laptop desktops cannot fit a 1280 x 760 content area below the
+       macOS title bar. Fit the complete stage at a fractional scale there;
+       larger windows retain whole-pixel enlargement. */
+    if (scale < 2.0f) scale = available_scale;
+    if (scale < 0.50f) scale = 0.50f;
     float width = art_width * scale;
     float height = art_height * scale;
     return (Rectangle){((float)GetScreenWidth() - width) * 0.5f,
@@ -5242,7 +5326,10 @@ int main(int argc, char **argv)
        flicker after nearest-neighbor enlargement. */
     SetConfigFlags(FLAG_WINDOW_RESIZABLE |
                    (capture ? FLAG_WINDOW_HIDDEN : 0U));
-    InitWindow(1280, 760, "Crownless Carriage — living world spine");
+    int32_t initial_width = normal_play ? 1200 : 1280;
+    int32_t initial_height = normal_play ? 700 : 760;
+    InitWindow(initial_width, initial_height,
+               "Crownless Carriage — living world spine");
     if (!IsWindowReady()) {
         (void)fprintf(stderr,
                       "Crownless Carriage could not connect to the desktop window server.\n");
@@ -5250,9 +5337,10 @@ int main(int argc, char **argv)
         return 1;
     }
     ClientInputInstall();
-    /* The HUD needs a 1280x760 floor. Larger windows use the largest whole
-       art-pixel scale that still leaves room for the action tray. */
-    SetWindowMinSize(1280, 760);
+    /* Normal play fits below a laptop title bar. Capture and benchmark modes
+       keep the stable 1280 x 760 presentation used by visual contracts. */
+    SetWindowMinSize(normal_play ? 1040 : 1280,
+                     normal_play ? 620 : 760);
     SetTargetFPS(render_benchmark || capture_action_reel ||
                  capture_gameplay_reel || capture_creature_reel ? 0 : 60);
     Texture2D illustrated_map = {0};
