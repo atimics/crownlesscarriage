@@ -22,21 +22,26 @@ physical skeleton, so improvements to that export do reach the game.
 
 ## The view
 
-The exterior uses an asymmetric three-quarter orthographic camera. Orthographic
-projection preserves reliable surface picking and a readable relationship
-between the hero and nearby contact geometry. The unequal horizontal offsets
-avoid the visual shorthand of a perfect 45-degree isometric grid and expose
-more of the camera-facing facades.
+The walkable exterior uses an asymmetric three-quarter orthographic camera.
+Orthographic projection preserves reliable surface picking and a readable
+relationship between the hero and nearby contact geometry. The unequal
+horizontal offsets avoid the visual shorthand of a perfect 45-degree isometric
+grid and expose more of the camera-facing facades.
 
 This is a street-scale view, not a whole-settlement map. Buildings may frame or
 leave the viewport as the hero moves. Roof and wall cutaways are driven by hero
 occlusion and leave a stable waist-high shell instead of making every structure
 short or opening a distracting circular reveal.
 
-Each exterior room also stores a focal point, story axis, foreground anchor,
-quiet area, three depth splits, and a light profile. The camera keeps the hero
-inside both the authored quiet area and the stable play-safe frame. Roads,
-rivers, walls, and building lines should lead toward the story focus.
+Each town exposes exactly three camera scenes: Arrival, Town Heart, and
+Landmark. Arrival is a continuous perspective move that begins behind the
+carriage and pulls upward and outward as the team crosses the threshold. Town
+Heart and Landmark are fixed adventure-game stages. Each stores a focal point,
+story axis, foreground anchor, quiet area, three depth splits, and a light
+profile. The camera keeps the hero inside both the authored quiet area and the
+stable play-safe frame. Roads, rivers, walls, and building lines should lead
+toward the story focus. Navigation may use finer hidden districts, but they do
+not create additional visible camera scenes.
 
 Five stable light profiles cover clear market morning, cold shortage overcast,
 warm recovery light, dangerous road dusk, and the ember-lit interior. A profile
@@ -85,7 +90,21 @@ footprints, heights, styles, doors, structure kinds, and the primary hall.
 Thornford is dispersed around barns and crofts, Gloamgate gathers tightly
 around a radial bazaar, Alderwatch forms a straight bridge garrison,
 Silverwick climbs in dense worker rows, Rosespire uses tall processional wards,
-and the frontier town leaves open ground around its lantern ward.
+and Hollowbarrow leaves open ground around its lantern ward.
+
+Each profile also owns three terrain-scale ideas rather than inheriting one
+generic rolling field. Thornford crosses a river shelf toward a threshing green
+and hill granaries. Gloamgate rises from its customs causeway into a bazaar bowl
+and raised keep. Alderwatch spans a ravine and climbs a fortified muster spine.
+Silverwick cuts into a quarry floor below worker terraces and the lower
+silverworks. Rosespire follows a processional rise through civic terraces to
+the palace. Hollowbarrow gathers around an expedition hollow below the sealed
+dungeon ridge. Retaining walls, bridges, rails, paving, water, and standing
+stones make those landforms legible at the play camera.
+
+The current 18-scene runtime review is captured in
+[`town-scene-sheet.png`](../images/town-scene-sheet.png). Its rows are the six
+towns and its columns are Arrival, Town Heart, and Landmark.
 
 The six plans share proven travel corridors and camera-room thresholds, not a
 generic town underneath. Their different massing, density, skyline, hall, and
@@ -170,7 +189,8 @@ scene is reset.
 
 The runtime now provides:
 
-- A closer asymmetric exterior camera
+- Three authored camera scenes per town, including the moving carriage
+  follow-and-pull-out Arrival
 - Clean hero and inhabitant silhouettes without default rig overlays
 - Pitched roofs with gables, eaves, ridge lines, chimneys, and readable dormers
 - Roof construction courses and material-specific cottage, workshop, civic,
@@ -180,14 +200,17 @@ The runtime now provides:
 - Stable hero-occlusion cutaways that remove complete roofs and upper walls
   while keeping an inked low shell around the building footprint
 - A collision-aligned civic plaza rather than one undifferentiated road patch
-- A seeded, continuous exterior height field with hills, valleys, ridges, and
-  smaller natural variation across farms, town, mine, and keep
+- Six seeded, continuous terrain grammars with rivers, quarry cuts, a bazaar
+  bowl, a defensive ravine, processional terraces, an expedition hollow, and
+  smaller natural variation
 - Roads that follow and gently grade the landscape, plus local foundations for
   plazas, buildings, the keep, the dungeon, and the carriage yard
 - Terrain-aware walking, targeting, climbing surfaces, camera framing, and
   placement for inhabitants and world props
 - A visual country apron beyond the playable border, with seeded grass tufts,
   crop stalks, wheel tracks, wet-lowland color, and slope-biased stones
+- A reserved town-edge handoff for later procedural wilderness exploration;
+  the wilderness itself is not part of this pass
 - A world-seed and economy keyed GPU terrain cache, plus camera-local detail
   submission, so the full-resolution landscape is not rebuilt every frame
 - Seeded ground-cover clustering, varied tree silhouettes, and directional tree

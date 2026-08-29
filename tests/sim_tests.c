@@ -184,6 +184,7 @@ int main(void)
     CC_CHECK(illustrated != NULL);
     CC_CHECK(strcmp(first.settlements[1].name, "Gloamgate") == 0);
     CC_CHECK(strcmp(first.settlements[2].name, "Alderwatch") == 0);
+    CC_CHECK(strcmp(first.settlements[5].name, "Hollowbarrow") == 0);
     CC_CHECK(illustrated->route_id == first.routes[1].id);
     CC_CHECK(illustrated->owner_id == first.settlements[1].id);
     CC_CHECK(illustrated->ask_price == 24);

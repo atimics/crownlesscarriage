@@ -30,10 +30,14 @@ breaking a bandit cordon, making the delivery, and defending the destination._
 
 Crownless Carriage is not built around a conventional isometric grid. The
 current client is a fully 3D, street-scale adventure stage viewed through
-authored three-quarter orthographic shots.
+authored three-quarter shots.
 
-- The exterior is split into ten named camera rooms. Each room has its own
-  landmark, story axis, foreground, quiet area, depth bands, and light profile.
+- Every town has exactly three visible camera scenes: Arrival, Town Heart, and
+  Landmark. Hidden navigation districts do not invent extra camera cuts.
+- Arrival begins in perspective behind the moving carriage, then pans up and
+  out until the road and town threshold become one readable composition.
+- Town Heart and Landmark are stable King's Quest-style orthographic stages
+  with their own focus, foreground, quiet area, depth bands, and light profile.
 - Camera angles are deliberately uneven. They show useful facades and avoid
   the perfect 45-degree look of a classic isometric map.
 - The world renders at 457 by 285 art pixels and is enlarged with nearest-
@@ -56,6 +60,8 @@ The architecture proof connects these parts in one running build:
 - Six authored 96 by 72 metre town plans: dispersed farm crofts, dense mining
   terraces, a radial crossroads market, a bridge garrison, tall capital wards,
   and a sparse lantern-lit expedition town
+- Eighteen authored town compositions—three per location—with a moving
+  carriage reveal, a social heart, and a purpose-built landmark stage
 - Settlement profiles that own each town's building footprints and heights,
   civic hall, compound or keep, stable terrain seed, district names, material
   palette, plaza mark, physical landmarks, and secondary roads, with matched
@@ -233,8 +239,15 @@ buy a local chart, `S` to sell one, or `A` to store or retrieve it at the
 Gloamgate archive. The team drives routine departure, road, and arrival
 sections automatically. Use `W` to speed up, `S` to slow down, or `Space` to
 pause. Press `Enter` to finish a safe trip or advance a dangerous trip to its
-next real decision. Walking to the edge of town never summons the carriage;
-start every departure from the carriage yard.
+next real decision. Arrival follows the carriage into town while the camera
+pulls out to reveal the threshold. Walking past the town edge is reserved for
+the later procedural wilderness; for now, start every departure from the
+carriage yard.
+
+The current three-scene review sheet is
+[here](docs/images/town-scene-sheet.png). Rows are Thornford, Gloamgate,
+Alderwatch, Silverwick, Rosespire, and Hollowbarrow; columns are Arrival, Town
+Heart, and Landmark.
 
 Normal play keeps one campaign window active at a time. Clean exits and manual
 saves remember the hero's exact street or market position as well as the
@@ -299,6 +312,8 @@ out/build/play/crownless_carriage.app/Contents/MacOS/crownless_carriage \
   --capture-golden /tmp/crownless-street.png
 out/build/play/crownless_carriage.app/Contents/MacOS/crownless_carriage \
   --capture-town 0 thornford.png
+out/build/play/crownless_carriage.app/Contents/MacOS/crownless_carriage \
+  --capture-town-arrival 0 0.35 thornford-arrival.png
 out/build/play/crownless_carriage.app/Contents/MacOS/crownless_carriage \
   --capture-action-reel /tmp/crownless-action
 ```

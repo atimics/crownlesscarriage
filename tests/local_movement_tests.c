@@ -2239,9 +2239,8 @@ int main(void)
         }
     }
 
-    /* Two close facades should narrow the composition around the hero. This
-       is the visibility solution for alleys; architecture must not be culled
-       to make the broad room lens fit. */
+    /* Close facades remain part of the authored town-heart composition. They
+       must not create a hidden fourth camera scene or lose the hero. */
     CcLocalAgent alley_camera_agent;
     CcLocalAgentInit(&alley_camera_agent, (Vector2){32.0f, 38.0f}, false);
     Camera3D alley_camera = {0};
@@ -2257,11 +2256,12 @@ int main(void)
                   alley_camera_agent.position.z},
         alley_camera, click_target.texture.width,
         click_target.texture.height);
-    if (alley_camera.fovy > 10.40f ||
+    if (alley_camera.projection != CAMERA_ORTHOGRAPHIC ||
+        alley_camera.fovy < 15.0f || alley_camera.fovy > 25.0f ||
         alley_hero_screen.x < 88.0f || alley_hero_screen.x > 369.0f ||
         alley_hero_screen.y < 54.0f || alley_hero_screen.y > 231.0f) {
         (void)fprintf(stderr,
-                      "alley camera did not tighten around hero: fovy %.2f screen %.2f %.2f\n",
+                      "authored town-heart camera was invalid: fovy %.2f screen %.2f %.2f\n",
                       alley_camera.fovy, alley_hero_screen.x,
                       alley_hero_screen.y);
         return 1;

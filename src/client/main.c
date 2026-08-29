@@ -4899,6 +4899,8 @@ int main(int argc, char **argv)
         strcmp(argv[1], "--capture-golden") == 0;
     bool capture_town = argc >= 2 &&
         strcmp(argv[1], "--capture-town") == 0;
+    bool capture_town_arrival = argc >= 2 &&
+        strcmp(argv[1], "--capture-town-arrival") == 0;
     int32_t capture_town_index = 0;
     float capture_town_x = 44.25f;
     float capture_town_z = 28.85f;
@@ -4931,6 +4933,29 @@ int main(int argc, char **argv)
                 return 1;
             }
         }
+    }
+    float capture_town_arrival_progress = 0.58f;
+    if (capture_town_arrival) {
+        if (argc < 5) {
+            (void)fprintf(
+                stderr,
+                "capture town arrival requires an index from 0 to 5, progress from 0 to 1, and a frame path.\n");
+            return 1;
+        }
+        char *index_end = NULL;
+        char *progress_end = NULL;
+        long parsed_index = strtol(argv[2], &index_end, 10);
+        float parsed_progress = strtof(argv[3], &progress_end);
+        if (index_end == argv[2] || *index_end != '\0' ||
+            parsed_index < 0 || parsed_index >= 6 ||
+            progress_end == argv[3] || *progress_end != '\0' ||
+            parsed_progress < 0.0f || parsed_progress > 1.0f) {
+            (void)fprintf(stderr,
+                          "capture town arrival values are invalid.\n");
+            return 1;
+        }
+        capture_town_index = (int32_t)parsed_index;
+        capture_town_arrival_progress = parsed_progress;
     }
     bool capture_dragon_cave = argc >= 2 &&
         strcmp(argv[1], "--capture-dragon-cave") == 0;
@@ -5043,6 +5068,7 @@ int main(int argc, char **argv)
                     capture_witness || capture_travel || capture_road ||
                     capture_parley ||
                     capture_aftermath || capture_golden || capture_town ||
+                    capture_town_arrival ||
                     capture_dragon_cave ||
                     capture_atmosphere || capture_face ||
                     capture_room || capture_creature_media);
@@ -5050,6 +5076,7 @@ int main(int argc, char **argv)
                                capture_room ? argv[4] :
                                capture_face ? argv[3] :
                                capture_atmosphere ? argv[3] :
+                               capture_town_arrival ? argv[4] :
                                capture_town ? (argc >= 6 ? argv[5] : argv[3]) :
                                argc >= 3 ? argv[2] :
                                "architecture-proof.png";
@@ -5167,7 +5194,7 @@ int main(int argc, char **argv)
     if (capture_road_fork || capture_map_case) {
         sim.player.location_id = sim.settlements[1].id;
     }
-    if (capture_town) {
+    if (capture_town || capture_town_arrival) {
         sim.player.location_id = sim.settlements[capture_town_index].id;
     }
     if (capture_witness) {
@@ -5290,6 +5317,11 @@ int main(int argc, char **argv)
         local.agent.facing_yaw = -0.35f;
         local.course.alarm_countdown = 1000.0f;
     }
+    if (capture_town_arrival) {
+        BeginTownArrivalState(&local);
+        local.convoy.phase_progress = capture_town_arrival_progress;
+        SetConvoyTownPose(&local.convoy, 0.0f);
+    }
     if (capture_face) {
         if (capture_face_view == 3) {
             RepositionHero(&local, (Vector2){64.0f, 31.0f}, false);
@@ -5351,6 +5383,7 @@ int main(int argc, char **argv)
         !capture_encounter && !capture_travel &&
         !capture_road &&
         !capture_parley && !capture_golden && !capture_town &&
+        !capture_town_arrival &&
         !capture_atmosphere &&
         !capture_face && !capture_room && !capture_creature_media) {
         local.course.alarm_countdown = 1000.0f;
@@ -5502,7 +5535,7 @@ int main(int argc, char **argv)
     }
     if (capture_golden) {
         (void)snprintf(message, sizeof(message), "Town square.");
-    } else if (capture_town) {
+    } else if (capture_town || capture_town_arrival) {
         (void)snprintf(message, sizeof(message), "%s town plan.",
                        CcSettlementFunctionName(
                            sim.settlements[capture_town_index].function));

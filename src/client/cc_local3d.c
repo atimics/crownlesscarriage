@@ -543,45 +543,6 @@ static const StreetCameraShot STREET_CAMERA_SHOTS[] = {
     },
 };
 
-/* The long road between Market Steps and Crown Gate needs its own establishing
-   view. It is deliberately higher and wider than either room, holding both
-   the departing house line and the gate approach without slicing through a
-   foreground facade. It is a camera composition only, never a logical room. */
-static const StreetCameraShot MARKET_GATE_ROAD_CAMERA = {
-    .trigger = {64.0f, 31.0f}, .target = {66.0f, 2.0f, 31.0f},
-    .name = "MARKET ROAD", .route = {0.0f, 0.0f, 0.0f, 0.0f},
-    .route_palette = 2, .camera_offset = {-13.0f, 11.0f, 33.0f},
-    .fovy = 21.0f,
-    .art = {{77.5f, 4.20f, 23.5f}, {1.0f, 0.0f},
-            {54.0f, 0.0f, 39.0f}, {0.16f, 0.16f, 0.64f, 0.68f},
-            {24.0f, 39.0f, 60.0f}, ART_LIGHT_ROAD_DUSK},
-};
-
-#define MARKET_GATE_ROAD_CAMERA_SHOT \
-    ((int32_t)(sizeof(STREET_CAMERA_SHOTS) / \
-               sizeof(STREET_CAMERA_SHOTS[0])))
-
-#define STREET_ALLEY_CAMERA_SHOT_BASE \
-    (MARKET_GATE_ROAD_CAMERA_SHOT + 1)
-
-static bool StreetCameraShotIsAlley(int32_t shot)
-{
-    return shot >= STREET_ALLEY_CAMERA_SHOT_BASE &&
-           shot <= STREET_ALLEY_CAMERA_SHOT_BASE +
-                   MARKET_GATE_ROAD_CAMERA_SHOT;
-}
-
-static int32_t StreetCameraBaseShot(int32_t shot)
-{
-    return StreetCameraShotIsAlley(shot) ?
-        shot - STREET_ALLEY_CAMERA_SHOT_BASE : shot;
-}
-
-static int32_t StreetCameraAlleyShot(int32_t shot)
-{
-    return STREET_ALLEY_CAMERA_SHOT_BASE + StreetCameraBaseShot(shot);
-}
-
 static const ArtComposition ROAD_ART_COMPOSITION = {
     {49.0f, 1.10f, 40.0f}, {1.0f, 0.0f}, {36.0f, 0.0f, 44.0f},
     {0.17f, 0.17f, 0.64f, 0.66f}, {8.0f, 16.0f, 29.0f},
@@ -1049,27 +1010,79 @@ static float TerrainValueNoise(float x, float z, float wavelength,
     return bottom + (top - bottom) * tz;
 }
 
+static float TerrainLandform(float x, float z, float center_x,
+                             float center_z, float radius_x,
+                             float radius_z)
+{
+    float dx = (x - center_x) / radius_x;
+    float dz = (z - center_z) / radius_z;
+    return expf(-(dx * dx + dz * dz));
+}
+
 static float TerrainNaturalHeight(float x, float z)
 {
-    float large = TerrainValueNoise(x, z, 38.0f, 1U) * 2.45f;
-    float hills = TerrainValueNoise(x + 19.0f, z - 11.0f, 20.0f, 2U) * 1.35f;
-    float detail = TerrainValueNoise(x - 7.0f, z + 23.0f, 8.0f, 3U) * 0.34f;
-    float eastern_rise = TerrainSmooth01((x - 48.0f) / 44.0f) * 3.10f;
-    float northern_rise = TerrainSmooth01((z - 30.0f) / 40.0f) * 1.20f;
-
-    float valley_center = 30.0f + sinf(x * 0.075f + 0.45f) * 4.4f;
-    float valley_distance = (z - valley_center) / 7.2f;
-    float valley = -2.15f * expf(-valley_distance * valley_distance);
-
-    float mine_x = (x - 25.0f) / 15.0f;
-    float mine_z = (z - 51.0f) / 8.0f;
-    float mine_ridge = 2.05f * expf(-(mine_x * mine_x + mine_z * mine_z));
-
-    float keep_x = (x - 79.0f) / 17.0f;
-    float keep_z = (z - 20.0f) / 15.0f;
-    float keep_ridge = 1.85f * expf(-(keep_x * keep_x + keep_z * keep_z));
-    return 1.65f + large + hills + detail + eastern_rise + northern_rise +
-           valley + mine_ridge + keep_ridge;
+    float broad = TerrainValueNoise(x, z, 34.0f, 1U) * 1.25f;
+    float hills = TerrainValueNoise(x + 19.0f, z - 11.0f,
+                                    18.0f, 2U) * 0.72f;
+    float detail = TerrainValueNoise(x - 7.0f, z + 23.0f,
+                                     7.0f, 3U) * 0.24f;
+    float land = 1.80f + broad + hills + detail;
+    switch (active_place_function) {
+        case CC_SETTLEMENT_FARMING: {
+            float river_center = 91.0f + sinf(z * 0.082f) * 1.7f;
+            float river_distance = (x - river_center) / 4.5f;
+            land -= 3.55f * expf(-river_distance * river_distance);
+            land += TerrainLandform(x, z, 45.0f, 28.0f,
+                                    22.0f, 14.0f) * 1.35f;
+            land += TerrainLandform(x, z, 79.0f, 18.0f,
+                                    17.0f, 13.0f) * 4.10f;
+            break;
+        }
+        case CC_SETTLEMENT_MINING:
+            land += x * 0.045f + z * 0.040f;
+            land += TerrainValueNoise(x + 8.0f, z - 4.0f,
+                                      11.0f, 41U) * 1.10f;
+            land -= TerrainLandform(x, z, 82.0f, 35.0f,
+                                    18.0f, 12.0f) * 4.70f;
+            land += TerrainLandform(x, z, 78.0f, 17.0f,
+                                    16.0f, 11.0f) * 3.80f;
+            break;
+        case CC_SETTLEMENT_MARKET:
+            land += TerrainLandform(x, z, 47.0f, 30.0f,
+                                    34.0f, 26.0f) * 1.05f;
+            land -= TerrainLandform(x, z, 47.0f, 30.0f,
+                                    21.0f, 16.0f) * 1.35f;
+            land += TerrainLandform(x, z, 79.0f, 18.0f,
+                                    28.0f, 22.0f) * 4.10f;
+            break;
+        case CC_SETTLEMENT_FORTRESS: {
+            float ravine_center = 91.0f + sinf(z * 0.052f) * 1.2f;
+            float ravine_distance = (x - ravine_center) / 4.0f;
+            land -= 4.80f * expf(-ravine_distance * ravine_distance);
+            land += TerrainLandform(x, z, 48.0f, 27.0f,
+                                    28.0f, 15.0f) * 2.20f;
+            land += TerrainLandform(x, z, 79.0f, 18.0f,
+                                    16.0f, 12.0f) * 4.25f;
+            break;
+        }
+        case CC_SETTLEMENT_CAPITAL:
+            land += TerrainSmooth01((x - 18.0f) / 62.0f) * 3.20f;
+            land += TerrainSmooth01((z - 8.0f) / 48.0f) * 1.50f;
+            land += TerrainLandform(x, z, 79.0f, 18.0f,
+                                    19.0f, 14.0f) * 4.60f;
+            land += TerrainLandform(x, z, 46.0f, 29.0f,
+                                    19.0f, 14.0f) * 1.40f;
+            break;
+        case CC_SETTLEMENT_DUNGEON_TOWN:
+            land += TerrainLandform(x, z, 51.0f, 30.0f,
+                                    34.0f, 23.0f) * 1.60f;
+            land -= TerrainLandform(x, z, 47.0f, 30.0f,
+                                    13.0f, 10.0f) * 4.20f;
+            land += TerrainLandform(x, z, 79.0f, 17.0f,
+                                    17.0f, 12.0f) * 4.35f;
+            break;
+    }
+    return land;
 }
 
 static int32_t TerrainIndex(int32_t column, int32_t row)
@@ -1161,7 +1174,7 @@ static bool TerrainPointInsideMajorFoundation(float x, float z)
 
 static void TerrainGradeRoad(const TerrainRoad *road)
 {
-    const float shoulder = 1.25f;
+    const float shoulder = 1.85f;
     for (int32_t row = 0; row < CC_TERRAIN_ROWS; ++row) {
         float z = (float)row * CC_TERRAIN_CELL_SIZE;
         for (int32_t column = 0; column < CC_TERRAIN_COLUMNS; ++column) {
@@ -1289,7 +1302,7 @@ static void TerrainGenerate(void)
     }
     Rectangle keep_pad = ActiveCompoundBounds();
     float keep_elevation = TerrainRectangleAverage(keep_pad) + 0.45f;
-    TerrainGradePad(keep_pad, keep_elevation, 2.80f);
+    TerrainGradePad(keep_pad, keep_elevation, 4.00f);
 
     Rectangle plaza_pad = {37.60f, 25.60f, 18.80f, 8.80f};
     float plaza_elevation = TerrainRectangleAverage(plaza_pad);
@@ -1303,6 +1316,18 @@ static void TerrainGenerate(void)
        this one training pad flat also preserves its fixed waterline. */
     TerrainGradePad((Rectangle){1.00f, 0.00f, 14.60f, 11.10f},
                     0.0f, 2.20f);
+
+    /* Two worn approaches connect the training yard to the public road.
+       Their long, gentle grade keeps guards and players on a readable path
+       even when the surrounding town occupies a strong landform. */
+    float west_course_road_height = TerrainSampleGrid(
+        street_terrain_height, 8.35f, 26.50f);
+    TerrainGradeNorthSouthRamp((Rectangle){7.45f, 10.50f, 1.80f, 16.25f},
+                               0.0f, west_course_road_height);
+    float east_course_road_height = TerrainSampleGrid(
+        street_terrain_height, 16.40f, 26.85f);
+    TerrainGradeNorthSouthRamp((Rectangle){14.65f, 10.50f, 3.50f, 16.60f},
+                               0.0f, east_course_road_height);
 
     /* Re-establish the public ways after all foundation banks are cut. Pads
        stay level inside actual structures, while streets and open squares
@@ -1327,6 +1352,9 @@ static void TerrainGenerate(void)
     TerrainGradeNorthSouthRamp((Rectangle){39.40f, 11.60f, 4.20f, 13.40f},
                                commons_south_height,
                                commons_north_height);
+    /* Restore the compound terrace after the street grading. Only the
+       authored gate ramp below should climb onto this raised civic stage. */
+    TerrainGradePad(keep_pad, keep_elevation, 4.00f);
     float crown_road_height = TerrainSampleGrid(street_terrain_height,
                                                  78.5f, 38.0f);
     TerrainGradeNorthSouthRamp((Rectangle){75.40f, 30.60f, 6.20f, 7.40f},
@@ -1353,8 +1381,12 @@ void CcLocalBindPlace(const CcSim *sim)
 {
     const CcSettlement *place = sim != NULL ?
         CcSimSettlement(sim, sim->player.location_id) : NULL;
-    active_place_function = place != NULL ? place->function :
-                                            CC_SETTLEMENT_MARKET;
+    CcSettlementFunction function = place != NULL ? place->function :
+                                                    CC_SETTLEMENT_MARKET;
+    if (function != active_place_function) {
+        street_camera_rig = (FixedCameraRig){0};
+    }
+    active_place_function = function;
     CcLocalTerrainSetSeed(sim != NULL ?
         CcLocalPlaceTerrainSeed(sim->world_seed, place) :
         UINT32_C(0xc0a71a9e));
@@ -1433,7 +1465,8 @@ Camera3D CcLocalCombatCameraInternal(Camera3D base,
                                      const CcLocalCourse *course,
                                      float clock, bool advance,
                                      int32_t art_height);
-static int32_t StreetCameraShotFor(Vector3 focus, int32_t current_shot);
+static int32_t StreetNavigationRoomFor(Vector3 focus,
+                                       int32_t current_room);
 static float WrapAngle(float angle);
 static float SmoothStep01(float amount);
 static Color ShadeColor(Color color, float scale);
@@ -4838,7 +4871,7 @@ typedef struct ResolvedStreetPortal {
 static int32_t StreetRoomForAgent(const CcLocalAgent *agent)
 {
     if (agent == NULL || agent->scene != CC_LOCAL_SCENE_STREET) return -1;
-    return StreetCameraShotFor(agent->position, -1);
+    return StreetNavigationRoomFor(agent->position, -1);
 }
 
 static bool ResolveStreetPortal(const CcLocalAgent *agent,
@@ -8418,7 +8451,8 @@ Camera3D CcLocalCameraClearSightlinesInternal(Camera3D camera,
     return best;
 }
 
-static int32_t StreetCameraShotFor(Vector3 focus, int32_t current_shot)
+static int32_t StreetNavigationRoomFor(Vector3 focus,
+                                       int32_t current_room)
 {
     int32_t count = (int32_t)(sizeof(STREET_CAMERA_SHOTS) /
                               sizeof(STREET_CAMERA_SHOTS[0]));
@@ -8432,53 +8466,92 @@ static int32_t StreetCameraShotFor(Vector3 focus, int32_t current_shot)
         nearest = shot;
         nearest_distance = distance;
     }
-    if (current_shot >= 0 && current_shot < count &&
-        current_shot != nearest) {
+    if (current_room >= 0 && current_room < count &&
+        current_room != nearest) {
         float current_x = focus.x -
-                          STREET_CAMERA_SHOTS[current_shot].trigger.x;
+                          STREET_CAMERA_SHOTS[current_room].trigger.x;
         float current_z = focus.z -
-                          STREET_CAMERA_SHOTS[current_shot].trigger.y;
+                          STREET_CAMERA_SHOTS[current_room].trigger.y;
         float current_distance = sqrtf(current_x * current_x +
                                        current_z * current_z);
         float candidate_distance = sqrtf(nearest_distance);
         if (candidate_distance + 1.25f >= current_distance) {
-            return current_shot;
+            return current_room;
         }
     }
     return nearest;
 }
 
-static int32_t StreetCameraCompositionFor(Vector3 focus,
-                                          int32_t current_shot)
+static int32_t TownCameraSceneFor(Vector3 focus, int32_t current_scene)
 {
-    current_shot = StreetCameraBaseShot(current_shot);
-    /* Turn toward Crown Gate as soon as the market road clears its last
-       house. The room lenses share a viewing side, so this becomes a gentle
-       reveal of the gate instead of lingering behind the foreground wing. A
-       wider reverse threshold supplies hysteresis on the walk back. Keep
-       this visual handoff separate from logical room ownership. */
-    bool crown_gate_corridor = focus.z >= 26.2f && focus.z <= 35.2f;
-    if (crown_gate_corridor) {
-        if (current_shot == MARKET_GATE_ROAD_CAMERA_SHOT &&
-            focus.x >= 57.6f && focus.x <= 68.6f) {
-            return MARKET_GATE_ROAD_CAMERA_SHOT;
-        }
-        if (focus.x >= 68.0f && focus.x <= 79.5f) return 8;
-        if (focus.x >= 58.8f) return MARKET_GATE_ROAD_CAMERA_SHOT;
+    int32_t nearest = 0;
+    float nearest_distance = FLT_MAX;
+    for (int32_t scene = 0;
+         scene < CC_LOCAL_PLACE_SCENE_COUNT; ++scene) {
+        const CcLocalTownScene *candidate = CcLocalTownSceneAt(
+            active_place_function, scene);
+        float x = focus.x - candidate->trigger_x;
+        float z = focus.z - candidate->trigger_z;
+        float distance = x * x + z * z;
+        if (distance >= nearest_distance) continue;
+        nearest = scene;
+        nearest_distance = distance;
     }
-    return StreetCameraShotFor(focus, current_shot);
+    if (current_scene >= 0 &&
+        current_scene < CC_LOCAL_PLACE_SCENE_COUNT &&
+        current_scene != nearest) {
+        const CcLocalTownScene *current = CcLocalTownSceneAt(
+            active_place_function, current_scene);
+        float x = focus.x - current->trigger_x;
+        float z = focus.z - current->trigger_z;
+        float current_distance = sqrtf(x * x + z * z);
+        if (sqrtf(nearest_distance) + 2.25f >= current_distance) {
+            return current_scene;
+        }
+    }
+    return nearest;
 }
 
 static const StreetCameraShot *StreetCameraShotAt(int32_t shot)
 {
-    shot = StreetCameraBaseShot(shot);
-    int32_t count = (int32_t)(sizeof(STREET_CAMERA_SHOTS) /
-                              sizeof(STREET_CAMERA_SHOTS[0]));
-    if (shot == MARKET_GATE_ROAD_CAMERA_SHOT) {
-        return &MARKET_GATE_ROAD_CAMERA;
+    static StreetCameraShot composition;
+    const CcLocalTownScene *scene = CcLocalTownSceneAt(
+        active_place_function, shot);
+    if (scene == NULL) {
+        scene = CcLocalTownSceneAt(active_place_function,
+                                   CC_LOCAL_TOWN_SCENE_HEART);
     }
-    if (shot < 0 || shot >= count) return &STREET_CAMERA_SHOTS[0];
-    return &STREET_CAMERA_SHOTS[shot];
+    ArtLightProfileId light = scene->kind == CC_LOCAL_TOWN_SCENE_ARRIVAL ?
+        ART_LIGHT_ROAD_DUSK : ART_LIGHT_CLEAR_MARKET;
+    if (scene->kind == CC_LOCAL_TOWN_SCENE_LANDMARK) {
+        light = active_place_function == CC_SETTLEMENT_MINING ||
+                active_place_function == CC_SETTLEMENT_DUNGEON_TOWN ?
+            ART_LIGHT_SHORTAGE_OVERCAST : ART_LIGHT_RECOVERY_WARM;
+    }
+    composition = (StreetCameraShot){
+        .trigger = {scene->trigger_x, scene->trigger_z},
+        .target = {scene->target_x, scene->target_y, scene->target_z},
+        .name = scene->name,
+        .route_palette = (int32_t)scene->kind,
+        .camera_offset = {
+            scene->camera_offset_x,
+            scene->camera_offset_y,
+            scene->camera_offset_z,
+        },
+        .fovy = scene->fovy,
+        .art = {
+            {scene->target_x, scene->target_y, scene->target_z},
+            {scene->kind == CC_LOCAL_TOWN_SCENE_ARRIVAL ? -1.0f : 1.0f,
+             scene->kind == CC_LOCAL_TOWN_SCENE_LANDMARK ? -1.0f : 0.0f},
+            {scene->target_x - scene->camera_offset_x * 0.36f,
+             0.0f,
+             scene->target_z - scene->camera_offset_z * 0.36f},
+            {0.16f, 0.16f, 0.66f, 0.68f},
+            {20.0f, 34.0f, 56.0f},
+            light,
+        },
+    };
+    return &composition;
 }
 
 static void FixedCameraRigAim(FixedCameraRig *rig, int32_t shot,
@@ -8660,51 +8733,16 @@ static Camera3D FixedCameraRigFrameHero(FixedCameraRig *rig,
     return camera;
 }
 
-static float StreetAlleyWeight(Vector3 focus)
-{
-    float nearest = FLT_MAX;
-    float second_nearest = FLT_MAX;
-    for (int32_t building = 0;
-         building < ActiveWorldBuildingCount(); ++building) {
-        WorldBuilding world = ActiveWorldBuildingAt(building);
-        float distance = sqrtf(FootprintDistanceSquared(
-            focus.x, focus.z, world.footprint));
-        if (distance < nearest) {
-            second_nearest = nearest;
-            nearest = distance;
-        } else if (distance < second_nearest) {
-            second_nearest = distance;
-        }
-    }
-    return SmoothStep01((6.8f - second_nearest) / 3.8f);
-}
-
 Camera3D CcLocalStreetCameraInternal(const CcLocalAgent *agent, float clock,
                                      bool advance, int32_t art_height)
 {
     Vector3 focus = agent != NULL ? agent->position : (Vector3){0};
-    int32_t base_shot = StreetCameraCompositionFor(
-        focus, street_camera_rig.shot);
-    const StreetCameraShot *composition = StreetCameraShotAt(base_shot);
-    int32_t shot = base_shot;
+    int32_t shot = TownCameraSceneFor(focus, street_camera_rig.shot);
+    const StreetCameraShot *composition = StreetCameraShotAt(shot);
     Vector3 destination = composition->target;
     destination.y += CcLocalTerrainHeightAt(destination.x, destination.z);
-    float fovy = composition->fovy;
-    if (agent != NULL) {
-        float alley_weight = StreetAlleyWeight(focus);
-        bool hold_alley = StreetCameraShotIsAlley(street_camera_rig.shot) &&
-                          StreetCameraBaseShot(street_camera_rig.shot) ==
-                              base_shot;
-        if (alley_weight >= (hold_alley ? 0.34f : 0.58f)) {
-            /* Like an adventure-game close-up: choose the composition once
-               on entering the alley, animate to it, then hold it. */
-            shot = StreetCameraAlleyShot(base_shot);
-            destination = (Vector3){focus.x, focus.y + 1.00f, focus.z};
-            fovy = fminf(fovy, 9.8f);
-        }
-    }
     FixedCameraRigAim(&street_camera_rig, shot, destination,
-                      composition->camera_offset, fovy,
+                      composition->camera_offset, composition->fovy,
                       clock, advance);
     Camera3D camera = ExteriorCameraComposed(
         street_camera_rig.displayed_target,
@@ -8719,6 +8757,57 @@ Camera3D CcLocalStreetCameraInternal(const CcLocalAgent *agent, float clock,
             camera, hero, art_height,
             (Rectangle){0.10f, 0.12f, 0.80f, 0.76f});
     }
+    return SnapCameraToArtPixels(camera, art_height);
+}
+
+static Camera3D TownArrivalCamera(const CcLocalConvoyState *convoy,
+                                  int32_t art_height)
+{
+    const CcLocalTownScene *arrival = CcLocalTownSceneAt(
+        active_place_function, CC_LOCAL_TOWN_SCENE_ARRIVAL);
+    if (convoy == NULL || arrival == NULL) {
+        return ExteriorCameraAt((Vector3){81.0f, 2.0f, 34.0f}, 21.0f);
+    }
+    /* Start close behind the moving carriage, then pull up and away until
+       the whole arrival stage is readable. This is one continuous camera
+       move: the road remains the subject while the town becomes the reveal. */
+    float heading = convoy->town_heading_yaw;
+    Vector3 forward = {sinf(heading), 0.0f, cosf(heading)};
+    Vector3 right = {cosf(heading), 0.0f, -sinf(heading)};
+    Vector3 follow_target = Vector3Add(
+        convoy->town_position,
+        Vector3Add(Vector3Scale(forward, 5.2f),
+                   (Vector3){0.0f, 1.55f, 0.0f}));
+    Vector3 follow_position = Vector3Add(
+        convoy->town_position,
+        Vector3Add(Vector3Scale(forward, -10.5f),
+                   Vector3Add(Vector3Scale(right, 3.8f),
+                              (Vector3){0.0f, 5.2f, 0.0f})));
+    Vector3 wide_target = {
+        arrival->target_x,
+        arrival->target_y + CcLocalTerrainHeightAt(
+            arrival->target_x, arrival->target_z),
+        arrival->target_z,
+    };
+    Vector3 wide_position = Vector3Add(
+        wide_target,
+        (Vector3){arrival->camera_offset_x,
+                  arrival->camera_offset_y,
+                  arrival->camera_offset_z});
+    float pull_out = SmoothStep01(
+        (convoy->phase_progress - 0.08f) / 0.78f);
+    Camera3D camera = {
+        .position = Vector3Lerp(follow_position, wide_position, pull_out),
+        .target = Vector3Lerp(follow_target, wide_target, pull_out),
+        .up = {0.0f, 1.0f, 0.0f},
+        .fovy = 43.0f + (32.0f - 43.0f) * pull_out,
+        .projection = CAMERA_PERSPECTIVE,
+    };
+    /* The fixed rig starts fresh after parking, avoiding a residual camera
+       page from the town that the player just left. */
+    street_camera_rig = (FixedCameraRig){
+        .shot = CC_LOCAL_TOWN_SCENE_ARRIVAL,
+    };
     return SnapCameraToArtPixels(camera, art_height);
 }
 
@@ -14023,12 +14112,212 @@ static void DrawTerrainPlacedLantern(float x, float z)
     rlPopMatrix();
 }
 
+static void DrawTerrainStageBox(float x, float z, float width, float depth,
+                                float height, Color color)
+{
+    float ground = CcLocalTerrainHeightAt(x + width * 0.5f,
+                                           z + depth * 0.5f);
+    DrawBox((Vector3){x + width * 0.5f, ground + height * 0.5f,
+                      z + depth * 0.5f},
+            (Vector3){width, height, depth}, color);
+}
+
+static void DrawArrivalBridge(bool fortified)
+{
+    float ground = CcLocalTerrainHeightAt(91.0f, 34.0f);
+    Color stone = fortified ? WORLD_STONE : WORLD_WOOD_LIGHT;
+    Color shadow = ShadeColor(stone, 0.58f);
+    DrawBox((Vector3){91.0f, ground - 0.10f, 34.0f},
+            (Vector3){12.5f, 0.32f, 4.75f}, shadow);
+    DrawBox((Vector3){91.0f, ground + 0.06f, 34.0f},
+            (Vector3){12.5f, 0.10f, 4.45f}, stone);
+    for (int32_t side = -1; side <= 1; side += 2) {
+        float rail_z = 34.0f + (float)side * 2.12f;
+        DrawBox((Vector3){91.0f, ground + 0.55f, rail_z},
+                (Vector3){12.2f, fortified ? 1.05f : 0.72f, 0.28f},
+                stone);
+        for (int32_t post = 0; post < 5; ++post) {
+            DrawBox((Vector3){86.2f + (float)post * 2.4f,
+                              ground + 0.76f, rail_z},
+                    (Vector3){0.34f, fortified ? 1.46f : 1.10f, 0.42f},
+                    ShadeColor(stone, post % 2 == 0 ? 0.86f : 1.04f));
+        }
+    }
+}
+
+static void DrawFarmTerrainStage(Vector3 focus)
+{
+    Color water = BlendColor(WORLD_TEAL, WORLD_INK, 0.42f);
+    for (float z = 2.0f; z < 72.0f; z += 4.0f) {
+        float river_x = 91.0f + sinf(z * 0.082f) * 1.7f;
+        if (!SceneryPointVisible(river_x, z, focus)) continue;
+        float next_x = 91.0f + sinf((z + 4.0f) * 0.082f) * 1.7f;
+        float angle = -atan2f(next_x - river_x, 4.0f) * RAD2DEG;
+        float ground = CcLocalTerrainHeightAt(river_x, z);
+        DrawTiltedBox((Vector3){(river_x + next_x) * 0.5f,
+                                ground + 0.045f, z + 2.0f},
+                      (Vector3){7.2f, 0.07f, 4.5f},
+                      (Vector3){0.0f, 1.0f, 0.0f}, angle, water);
+    }
+    if (SceneryPointVisible(91.0f, 34.0f, focus)) {
+        DrawArrivalBridge(false);
+    }
+    if (SceneryPointVisible(45.0f, 29.0f, focus)) {
+        for (int32_t terrace = 0; terrace < 3; ++terrace) {
+            float radius = 4.7f - (float)terrace * 0.72f;
+            float y = CcLocalTerrainHeightAt(45.0f, 29.5f) +
+                      0.03f + (float)terrace * 0.035f;
+            DrawCylinder((Vector3){45.0f, y, 29.5f},
+                         radius, radius, 0.06f, 20,
+                         terrace == 2 ? WORLD_CROP_LIGHT : WORLD_EARTH);
+        }
+    }
+}
+
+static void DrawMiningTerrainStage(Vector3 focus)
+{
+    Color iron = WORLD_METAL_SHADOW;
+    Color timber = WORLD_WOOD_SHADOW;
+    for (float x = 65.0f; x < 96.0f; x += 3.5f) {
+        if (!SceneryPointVisible(x, 34.0f, focus)) continue;
+        float ground = CcLocalTerrainHeightAt(x, 34.0f) + 0.055f;
+        for (int32_t rail = -1; rail <= 1; rail += 2) {
+            DrawBox((Vector3){x + 1.75f, ground, 34.0f + (float)rail * 0.62f},
+                    (Vector3){3.65f, 0.10f, 0.10f}, iron);
+        }
+        DrawBox((Vector3){x + 1.75f, ground - 0.035f, 34.0f},
+                (Vector3){0.18f, 0.10f, 2.10f}, timber);
+    }
+    if (SceneryPointVisible(75.0f, 42.0f, focus)) {
+        DrawTerrainStageBox(69.0f, 40.8f, 18.0f, 0.65f, 2.25f,
+                            WORLD_STONE_SHADOW);
+        DrawTerrainStageBox(73.0f, 44.0f, 14.0f, 0.65f, 3.30f,
+                            ShadeColor(WORLD_STONE_SHADOW, 0.84f));
+    }
+}
+
+static void DrawMarketTerrainStage(Vector3 focus)
+{
+    if (SceneryPointVisible(46.0f, 29.5f, focus)) {
+        float ground = CcLocalTerrainHeightAt(46.0f, 29.5f);
+        for (int32_t ring = 0; ring < 4; ++ring) {
+            float radius = 6.1f - (float)ring * 1.15f;
+            DrawCylinder((Vector3){46.0f, ground + 0.025f +
+                                   (float)ring * 0.025f, 29.5f},
+                         radius, radius, 0.055f, 24,
+                         ring == 3 ? WORLD_GOLD : WORLD_STONE);
+        }
+        DrawCylinder((Vector3){46.0f, ground + 0.26f, 29.5f},
+                     0.62f, 0.78f, 0.48f, 14, WORLD_STONE_LIGHT);
+    }
+    for (float x = 66.0f; x < 96.0f; x += 5.0f) {
+        if (!SceneryPointVisible(x, 34.0f, focus)) continue;
+        float ground = CcLocalTerrainHeightAt(x, 34.0f);
+        DrawBox((Vector3){x, ground + 0.10f, 31.95f},
+                (Vector3){4.2f, 0.20f, 0.24f}, WORLD_STONE_LIGHT);
+        DrawBox((Vector3){x, ground + 0.10f, 36.05f},
+                (Vector3){4.2f, 0.20f, 0.24f}, WORLD_STONE_LIGHT);
+    }
+}
+
+static void DrawFortressTerrainStage(Vector3 focus)
+{
+    if (SceneryPointVisible(91.0f, 34.0f, focus)) {
+        DrawArrivalBridge(true);
+        for (int32_t side = -1; side <= 1; side += 2) {
+            float z = 34.0f + (float)side * 3.35f;
+            DrawTerrainStageBox(86.0f, z - 0.65f, 2.4f, 1.3f, 4.8f,
+                                WORLD_STONE_SHADOW);
+            DrawTerrainStageBox(93.5f, z - 0.65f, 2.4f, 1.3f, 4.8f,
+                                WORLD_STONE_SHADOW);
+        }
+    }
+    if (SceneryPointVisible(46.0f, 29.5f, focus)) {
+        for (int32_t step = 0; step < 5; ++step) {
+            float x = 39.0f + (float)step * 3.2f;
+            float ground = CcLocalTerrainHeightAt(x, 29.5f);
+            DrawBox((Vector3){x, ground + 0.06f, 29.5f},
+                    (Vector3){2.7f, 0.12f, 7.2f},
+                    step % 2 == 0 ? WORLD_STONE : WORLD_ROAD_LIGHT);
+        }
+    }
+}
+
+static void DrawCapitalTerrainStage(Vector3 focus)
+{
+    for (int32_t stair = 0; stair < 8; ++stair) {
+        float x = 58.0f + (float)stair * 4.1f;
+        if (!SceneryPointVisible(x, 34.0f, focus)) continue;
+        float ground = CcLocalTerrainHeightAt(x, 34.0f);
+        DrawBox((Vector3){x, ground + 0.075f, 34.0f},
+                (Vector3){3.7f, 0.15f, 5.2f},
+                stair % 2 == 0 ? WORLD_STONE_LIGHT : WORLD_STONE);
+        for (int32_t side = -1; side <= 1; side += 2) {
+            DrawSmallSphere((Vector3){x, ground + 0.22f,
+                                      34.0f + (float)side * 2.45f},
+                            0.18f, WORLD_GOLD);
+        }
+    }
+    if (SceneryPointVisible(75.0f, 25.0f, focus)) {
+        DrawTerrainStageBox(66.0f, 25.0f, 24.0f, 0.55f, 2.20f,
+                            WORLD_STONE_LIGHT);
+        DrawTerrainStageBox(69.0f, 21.0f, 20.0f, 0.55f, 3.20f,
+                            WORLD_STONE);
+    }
+}
+
+static void DrawDungeonTerrainStage(Vector3 focus)
+{
+    if (SceneryPointVisible(48.5f, 35.5f, focus)) {
+        float ground = CcLocalTerrainHeightAt(48.5f, 35.5f);
+        DrawCylinder((Vector3){48.5f, ground + 0.025f, 35.5f},
+                     3.75f, 3.75f, 0.05f, 22, WORLD_INK);
+        DrawCylinder((Vector3){48.5f, ground + 0.065f, 35.5f},
+                     3.20f, 3.20f, 0.04f, 22,
+                     BlendColor(WORLD_VIOLET, WORLD_INK, 0.72f));
+        for (int32_t post = 0; post < 10; ++post) {
+            float angle = (float)post / 10.0f * PI * 2.0f;
+            DrawBox((Vector3){48.5f + cosf(angle) * 4.25f,
+                              ground + 0.68f,
+                              35.5f + sinf(angle) * 4.25f},
+                    (Vector3){0.16f, 1.36f, 0.16f}, WORLD_WOOD_SHADOW);
+        }
+    }
+    for (int32_t stone = 0; stone < 4; ++stone) {
+        float x = 84.0f + (float)stone * 3.1f;
+        float z = stone % 2 == 0 ? 29.8f : 38.2f;
+        if (!SceneryPointVisible(x, z, focus)) continue;
+        float ground = CcLocalTerrainHeightAt(x, z);
+        DrawTiltedBox((Vector3){x, ground + 1.30f, z},
+                      (Vector3){0.62f, 2.60f, 0.74f},
+                      (Vector3){0.0f, 0.0f, 1.0f},
+                      stone % 2 == 0 ? 7.0f : -9.0f,
+                      WORLD_STONE_SHADOW);
+    }
+}
+
+static void DrawTownTerrainStage(const CcSettlement *place, Vector3 focus)
+{
+    if (place == NULL) return;
+    switch (place->function) {
+        case CC_SETTLEMENT_FARMING: DrawFarmTerrainStage(focus); break;
+        case CC_SETTLEMENT_MINING: DrawMiningTerrainStage(focus); break;
+        case CC_SETTLEMENT_MARKET: DrawMarketTerrainStage(focus); break;
+        case CC_SETTLEMENT_FORTRESS: DrawFortressTerrainStage(focus); break;
+        case CC_SETTLEMENT_CAPITAL: DrawCapitalTerrainStage(focus); break;
+        case CC_SETTLEMENT_DUNGEON_TOWN:
+            DrawDungeonTerrainStage(focus);
+            break;
+    }
+}
+
 static void DrawExteriorTerrain(const CcSettlement *place, Vector3 focus)
 {
     SetWorldTerrainSurface(true);
     DrawCachedTerrain(place);
     DrawTerrainSurfaceDetails(place, focus);
     SetWorldTerrainSurface(false);
+    DrawTownTerrainStage(place, focus);
     if (SceneryPointVisible(46.15f, 26.10f, focus)) {
         DrawTerrainPlacedLantern(46.15f, 26.10f);
     }
@@ -17073,14 +17362,14 @@ static void DrawTree(float x, float z, TreeFamily family, Color leaves,
 static void DrawWorldTrees(Vector3 focus, Color kingdom)
 {
     TreeRegionalStyle regional_style = TreeStyleForKingdom(kingdom);
-    int32_t room = StreetCameraBaseShot(street_camera_rig.shot);
+    int32_t scene = street_camera_rig.shot;
     for (int32_t i = 0;
          i < (int32_t)(sizeof(WORLD_TREES) / sizeof(WORLD_TREES[0])); ++i) {
-        /* The mine room uses rails as a leading line. Two otherwise sound
-           trees landed directly on that fixed camera axis and erased both
-           the rail head and mine entrance. The fade between room pages
-           makes this authored thinning stable and invisible in motion. */
-        if (room == 2 && (i == 4 || i == 25)) continue;
+        /* Keep the Silverwick landmark silhouette clear of two trees that
+           otherwise erase the headframe in its fixed scene. */
+        if (active_place_function == CC_SETTLEMENT_MINING &&
+            scene == CC_LOCAL_TOWN_SCENE_LANDMARK &&
+            (i == 4 || i == 25)) continue;
         Vector2 position = WORLD_TREES[i].position;
         position.x += (i & 1) != 0 ? -regional_style.cluster_pull :
                                      regional_style.cluster_pull;
@@ -19376,6 +19665,8 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     bool convoy_visible = convoy != NULL &&
         (convoy->phase == CC_LOCAL_CONVOY_DEPARTING ||
          convoy->phase == CC_LOCAL_CONVOY_ARRIVING);
+    bool arrival_pan = convoy_visible &&
+        convoy->phase == CC_LOCAL_CONVOY_ARRIVING;
     CcLocalAgent convoy_subject = agent != NULL ? *agent : (CcLocalAgent){0};
     CcLocalAgent convoy_hero = {0};
     Vector3 convoy_hero_position = {0};
@@ -19397,12 +19688,14 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         &convoy_subject : agent;
     const CcLocalPlaceProfile *profile =
         CcLocalPlaceProfileForSettlement(place);
-    Camera3D base_camera = CcLocalStreetCameraInternal(
-        camera_subject, clock, true, target.texture.height);
+    Camera3D base_camera = arrival_pan ?
+        TownArrivalCamera(convoy, target.texture.height) :
+        CcLocalStreetCameraInternal(
+            camera_subject, clock, true, target.texture.height);
     Camera3D camera = CcLocalCombatCameraInternal(
         base_camera, camera_subject, course, clock, true,
         target.texture.height);
-    if (camera_subject != NULL) {
+    if (camera_subject != NULL && !arrival_pan) {
         camera = KeepHeroInsideStreetFrame(
             camera,
             Vector3Add(camera_subject->position,
@@ -19413,8 +19706,10 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     }
     RememberPresentedCamera(CC_LOCAL_SCENE_STREET, camera, camera_subject,
                             target.texture.width, target.texture.height);
+    int32_t presented_scene = arrival_pan ?
+        CC_LOCAL_TOWN_SCENE_ARRIVAL : street_camera_rig.shot;
     const StreetCameraShot *camera_shot = StreetCameraShotAt(
-        street_camera_rig.shot);
+        presented_scene);
     ArtComposition street_art = camera_shot->art;
     street_art.light_profile = StreetLightProfile(
         place, street_art.light_profile);
@@ -19663,17 +19958,16 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     bool combat_presentation = course != NULL && course->alarm_active &&
                                camera.projection == CAMERA_PERSPECTIVE;
 
-    int32_t room_index = StreetCameraBaseShot(street_camera_rig.shot);
-    int32_t room_count = (int32_t)(sizeof(STREET_CAMERA_SHOTS) /
-                                   sizeof(STREET_CAMERA_SHOTS[0]));
-    if (!combat_presentation && room_index >= 0 && room_index < room_count) {
-        const char *room_name = profile->room_name[room_index];
-        int32_t title_width = CcOverlayMeasureText(room_name, 10);
+    int32_t scene_index = presented_scene;
+    if (!combat_presentation && scene_index >= 0 &&
+        scene_index < CC_LOCAL_PLACE_SCENE_COUNT) {
+        const char *scene_name = profile->scene[scene_index].name;
+        int32_t title_width = CcOverlayMeasureText(scene_name, 10);
         DrawRectangleRounded(
             ViewportRectangle(destination, 11.0f, 10.0f,
                               (float)title_width + 16.0f, 18.0f),
             0.24f, 4, (Color){4, 10, 14, 202});
-        DrawViewportText(room_name, destination, 19, 14, 10, WORLD_GOLD);
+        DrawViewportText(scene_name, destination, 19, 14, 10, WORLD_GOLD);
     }
     if (!alarm_active && !convoy_visible) {
         DrawStreetTraversalPortals(agent, camera, destination,
