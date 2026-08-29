@@ -466,8 +466,8 @@ void CcLocalDrawNpcPortrait3D(const CcNpcAppearance *appearance,
                               CcNpcPortraitExpression expression);
 void CcLocalDrawAgentPortrait3D(const CcLocalAgent *agent,
                                 Rectangle bounds);
-void CcLocalDrawNpcReview3D(float clock, RenderTexture2D target,
-                            Rectangle destination);
+void CcLocalDrawNpcReview3D(int32_t view, float clock,
+                            RenderTexture2D target, Rectangle destination);
 void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                          const CcLocalCourse *course,
                          const CcLocalConvoyState *convoy, float clock,

@@ -4912,6 +4912,24 @@ int main(int argc, char **argv)
         strcmp(argv[1], "--capture-face") == 0;
     bool capture_npc_review = argc >= 2 &&
         strcmp(argv[1], "--capture-npc-review") == 0;
+    int32_t capture_npc_review_view = -1;
+    if (capture_npc_review) {
+        if (argc < 4) {
+            (void)fprintf(stderr,
+                          "NPC review requires front, side, motion, or state "
+                          "and a frame path.\n");
+            return 1;
+        }
+        if (strcmp(argv[2], "front") == 0) capture_npc_review_view = 0;
+        else if (strcmp(argv[2], "side") == 0) capture_npc_review_view = 1;
+        else if (strcmp(argv[2], "motion") == 0) capture_npc_review_view = 2;
+        else if (strcmp(argv[2], "state") == 0) capture_npc_review_view = 3;
+        else {
+            (void)fprintf(stderr,
+                          "NPC review must be front, side, motion, or state.\n");
+            return 1;
+        }
+    }
     bool capture_creatures = argc >= 2 &&
         strcmp(argv[1], "--capture-creatures") == 0;
     bool capture_creature_reel = argc >= 2 &&
@@ -4999,6 +5017,7 @@ int main(int argc, char **argv)
                                capture_room ? argv[4] :
                                capture_face ? argv[3] :
                                capture_atmosphere ? argv[3] :
+                               capture_npc_review ? argv[3] :
                                argc >= 3 ? argv[2] :
                                "architecture-proof.png";
     char save_path[640];
@@ -5548,7 +5567,8 @@ int main(int argc, char **argv)
             DrawSettlementPanel(&sim, selected);
         } else {
             if (capture_npc_review) {
-                CcLocalDrawNpcReview3D(clock, local_target, local_bounds);
+                CcLocalDrawNpcReview3D(capture_npc_review_view, clock,
+                                       local_target, local_bounds);
             } else if (local.site_kind != CC_LOCAL_SITE_NONE) {
                 CcLocalDrawSite3D(
                     &sim, &local.agent, local.site_kind,

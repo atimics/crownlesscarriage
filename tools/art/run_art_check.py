@@ -83,8 +83,14 @@ DRAGON_SCENES = (
 )
 
 NPC_REVIEWS = (
-    CaptureSpec("npc-model-review", "NPC Model Review", "npc",
-                ("--capture-npc-review",)),
+    CaptureSpec("npc-front-review", "NPC Front Review", "npc",
+                ("--capture-npc-review", "front")),
+    CaptureSpec("npc-side-review", "NPC Side Review", "npc",
+                ("--capture-npc-review", "side")),
+    CaptureSpec("npc-motion-review", "NPC Motion Review", "npc",
+                ("--capture-npc-review", "motion")),
+    CaptureSpec("npc-state-review", "NPC State Review", "npc",
+                ("--capture-npc-review", "state")),
 )
 
 
@@ -506,7 +512,7 @@ def write_report(output_root: Path, capture_results: list[dict[str, object]],
         "Character comparisons: 35, 48, and 60 art pixels are in "
         "`character/hero-height-comparison.png`.",
         "",
-        "The focused NPC model review is in "
+        "The focused NPC model reviews are in "
         "`contact-sheets/npc-model-review.png`.",
         "",
         "Review sheets are in `contact-sheets/`. Every capture also has color, "
@@ -635,7 +641,7 @@ def main() -> None:
         contact_sheet(
             [(spec.label, view_paths[spec.slug]["color"])
              for spec in NPC_REVIEWS],
-            output_root / "contact-sheets" / "npc-model-review.png", 1,
+            output_root / "contact-sheets" / "npc-model-review.png", 4,
         )
         contact_sheet(
             [(view.replace("-", " ").title(), view_paths["street"][view])
