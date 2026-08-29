@@ -853,6 +853,12 @@ static const CcLocalPlaceRoad *ActivePlaceRoadAt(int32_t index)
     return CcLocalPlaceRoadAt(active_place_function, index);
 }
 
+static CcLocalRoadSurface ActiveTownRoadSurface(void)
+{
+    const CcLocalPlaceRoad *road = ActivePlaceRoadAt(0);
+    return road != NULL ? road->surface : CC_LOCAL_ROAD_TRADE;
+}
+
 static const CcLocalPlaceProfile *ActivePlaceProfile(void)
 {
     return CcLocalPlaceProfileForFunction(active_place_function);
@@ -13391,17 +13397,62 @@ static bool RoomDetailPointVisible(float x, float z, Vector3 focus)
         (Rectangle){x, z, 0.0f, 0.0f}, focus, 23.0f);
 }
 
-static void DrawStreetLantern(float x, float z)
+static void DrawStreetLantern(float x, float z,
+                              CcLocalRoadSurface surface)
 {
     Color metal = (Color){43, 43, 39, 255};
+    Color glow = WORLD_GOLD;
+    float post_height = 2.14f;
+    switch (surface) {
+        case CC_LOCAL_ROAD_FARM_TRACK:
+            metal = WORLD_WOOD;
+            glow = WORLD_CROP_LIGHT;
+            post_height = 1.78f;
+            break;
+        case CC_LOCAL_ROAD_INDUSTRIAL:
+            metal = WORLD_METAL_SHADOW;
+            glow = WORLD_EARTH_LIGHT;
+            post_height = 1.92f;
+            break;
+        case CC_LOCAL_ROAD_TRADE:
+            metal = WORLD_WOOD_SHADOW;
+            glow = WORLD_GOLD;
+            break;
+        case CC_LOCAL_ROAD_MILITARY:
+            metal = WORLD_STONE_SHADOW;
+            glow = WORLD_DANGER;
+            post_height = 2.30f;
+            break;
+        case CC_LOCAL_ROAD_PROCESSIONAL:
+            metal = ShadeColor(WORLD_GOLD, 0.54f);
+            glow = WORLD_GOLD;
+            post_height = 2.48f;
+            break;
+        case CC_LOCAL_ROAD_EXPEDITION:
+            metal = WORLD_WOOD_SHADOW;
+            glow = WORLD_VIOLET;
+            post_height = 1.88f;
+            break;
+    }
+    float lantern_y = post_height - 0.16f;
     DrawCylinder((Vector3){x, 0.05f, z}, 0.23f, 0.28f, 0.10f, 8,
                  ShadeColor(metal, 0.72f));
-    DrawCylinder((Vector3){x, 1.12f, z}, 0.055f, 0.075f, 2.14f, 8, metal);
-    DrawBox((Vector3){x, 2.18f, z}, (Vector3){0.42f, 0.08f, 0.42f}, metal);
-    DrawSmallSphere((Vector3){x, 1.98f, z}, 0.18f, WORLD_GOLD);
-    DrawBox((Vector3){x, 1.96f, z}, (Vector3){0.27f, 0.30f, 0.27f},
-            Fade((Color){234, 181, 77, 255}, 0.82f));
-    DrawBox((Vector3){x, 1.76f, z}, (Vector3){0.34f, 0.07f, 0.34f}, metal);
+    DrawCylinder((Vector3){x, post_height * 0.50f, z},
+                 0.055f, 0.075f, post_height, 8, metal);
+    DrawBox((Vector3){x, post_height + 0.04f, z},
+            (Vector3){0.42f, 0.08f, 0.42f}, metal);
+    DrawSmallSphere((Vector3){x, lantern_y, z}, 0.18f, glow);
+    DrawBox((Vector3){x, lantern_y - 0.02f, z},
+            (Vector3){0.27f, 0.30f, 0.27f}, Fade(glow, 0.82f));
+    DrawBox((Vector3){x, lantern_y - 0.22f, z},
+            (Vector3){0.34f, 0.07f, 0.34f}, metal);
+    if (surface == CC_LOCAL_ROAD_PROCESSIONAL) {
+        DrawSmallSphere((Vector3){x, post_height + 0.20f, z},
+                        0.10f, WORLD_GOLD);
+    } else if (surface == CC_LOCAL_ROAD_INDUSTRIAL) {
+        DrawBox((Vector3){x, lantern_y - 0.02f, z},
+                (Vector3){0.36f, 0.06f, 0.36f}, WORLD_METAL_LIGHT);
+    }
 }
 
 static void DrawWayfarerGate(Color accent, bool sightline_cut)
@@ -13699,6 +13750,38 @@ static void DrawTownSquareFocus(Color kingdom,
 static void DrawCoachHitch(const CcSettlement *place)
 {
     Color wood = WORLD_WOOD;
+    Color sign = WORLD_WOOD_LIGHT;
+    Color canopy = WORLD_EARTH_LIGHT;
+    Color seal = WORLD_GOLD;
+    switch (ActiveTownRoadSurface()) {
+        case CC_LOCAL_ROAD_FARM_TRACK:
+            sign = WORLD_CROP_LIGHT;
+            canopy = WORLD_CROP;
+            break;
+        case CC_LOCAL_ROAD_INDUSTRIAL:
+            wood = WORLD_METAL_SHADOW;
+            sign = WORLD_METAL_LIGHT;
+            canopy = WORLD_ROAD_SHADOW;
+            break;
+        case CC_LOCAL_ROAD_TRADE:
+            sign = WORLD_GOLD;
+            break;
+        case CC_LOCAL_ROAD_MILITARY:
+            wood = WORLD_STONE_SHADOW;
+            sign = WORLD_STONE_LIGHT;
+            canopy = WORLD_STONE;
+            seal = WORLD_DANGER;
+            break;
+        case CC_LOCAL_ROAD_PROCESSIONAL:
+            sign = WORLD_STONE_LIGHT;
+            canopy = WORLD_GOLD;
+            break;
+        case CC_LOCAL_ROAD_EXPEDITION:
+            sign = WORLD_VIOLET;
+            canopy = WORLD_EARTH_SHADOW;
+            seal = WORLD_VIOLET;
+            break;
+    }
     float z = 55.36f;
     DrawBox((Vector3){35.30f, 0.62f, z}, (Vector3){0.18f, 1.24f, 0.18f}, wood);
     DrawBox((Vector3){38.20f, 0.62f, z}, (Vector3){0.18f, 1.24f, 0.18f}, wood);
@@ -13707,15 +13790,15 @@ static void DrawCoachHitch(const CcSettlement *place)
             (Vector3){0.14f, 1.40f, 0.14f}, wood);
     DrawBox((Vector3){36.75f, 2.18f, z + 0.05f},
             (Vector3){1.30f, 0.68f, 0.12f},
-            WORLD_WOOD_LIGHT);
+            sign);
     DrawBox((Vector3){36.75f, 2.70f, z - 0.02f},
             (Vector3){3.48f, 0.18f, 1.18f},
             ShadeColor(wood, 0.88f));
     DrawBox((Vector3){36.75f, 2.82f, z - 0.02f},
             (Vector3){3.08f, 0.12f, 1.44f},
-            WORLD_EARTH_LIGHT);
+            canopy);
     DrawCylinder((Vector3){36.75f, 2.03f, z + 0.13f},
-                 0.19f, 0.19f, 0.08f, 10, WORLD_GOLD);
+                 0.19f, 0.19f, 0.08f, 10, seal);
     int32_t barrels = place != NULL ? place->stock[CC_GOOD_MATERIAL] / 24 : 1;
     if (barrels < 1) barrels = 1;
     if (barrels > 3) barrels = 3;
@@ -14214,6 +14297,44 @@ static Color TerrainPlaceRoadColor(CcLocalRoadSurface surface)
     return WORLD_ROAD;
 }
 
+static Color TerrainBrightRoadColor(CcLocalRoadSurface surface,
+                                    float prosperity)
+{
+    float light_mix = 0.38f + prosperity * 0.12f;
+    if (surface == CC_LOCAL_ROAD_TRADE) light_mix = 0.18f;
+    if (surface == CC_LOCAL_ROAD_PROCESSIONAL) light_mix = 0.30f;
+    return BlendColor(TerrainPlaceRoadColor(surface), WORLD_ROAD_LIGHT,
+                      light_mix);
+}
+
+static Color TerrainRoadRutColor(CcLocalRoadSurface surface,
+                                 float prosperity)
+{
+    Color rut = WORLD_ROAD_SHADOW;
+    switch (surface) {
+        case CC_LOCAL_ROAD_FARM_TRACK:
+            rut = BlendColor(WORLD_EARTH_SHADOW, WORLD_CROP_SHADOW, 0.28f);
+            break;
+        case CC_LOCAL_ROAD_INDUSTRIAL:
+            rut = BlendColor(WORLD_METAL_SHADOW, WORLD_ROAD_SHADOW, 0.34f);
+            break;
+        case CC_LOCAL_ROAD_TRADE:
+            rut = BlendColor(WORLD_ROAD_SHADOW, WORLD_GOLD, 0.08f);
+            break;
+        case CC_LOCAL_ROAD_MILITARY:
+            rut = BlendColor(WORLD_STONE_SHADOW, WORLD_ROAD_SHADOW, 0.28f);
+            break;
+        case CC_LOCAL_ROAD_PROCESSIONAL:
+            rut = BlendColor(WORLD_STONE, WORLD_GOLD, 0.08f);
+            break;
+        case CC_LOCAL_ROAD_EXPEDITION:
+            rut = BlendColor(WORLD_EARTH_SHADOW, WORLD_VIOLET, 0.12f);
+            break;
+    }
+    return BlendColor(rut, TerrainPlaceRoadColor(surface),
+                      prosperity * 0.10f);
+}
+
 static float TerrainFieldAmount(float x, float z)
 {
     float amount = 0.0f;
@@ -14291,15 +14412,14 @@ static Color TerrainSurfaceColor(const CcSettlement *place,
     color = BlendColor(color, field, field_amount * 0.84f);
 
     float road_amount = TerrainRoadAmount(x, z);
-    Color road = BlendColor(WORLD_ROAD,
-                            WORLD_ROAD_LIGHT, prosperity * 0.34f);
+    CcLocalRoadSurface road_surface = ActiveTownRoadSurface();
+    Color road = TerrainBrightRoadColor(road_surface, prosperity);
     color = BlendColor(color, road, road_amount);
     const CcLocalPlaceRoad *place_road = ActivePlaceRoadAt(0);
     float place_road_amount = TerrainPlaceRoadAmount(x, z);
     if (place_road != NULL) {
-        Color place_road_color = TerrainPlaceRoadColor(place_road->surface);
-        place_road_color = BlendColor(
-            place_road_color, WORLD_ROAD_LIGHT, prosperity * 0.16f);
+        Color place_road_color = TerrainBrightRoadColor(
+            place_road->surface, prosperity);
         color = BlendColor(color, place_road_color, place_road_amount);
     }
 
@@ -14586,13 +14706,131 @@ static void TerrainRibbonSegment(Vector2 start, Vector2 end,
     TerrainDetailVertex(left_end, color);
 }
 
+static Vector2 TerrainRoadDetailPoint(const TerrainRoad *road,
+                                      int32_t road_index, float along,
+                                      float cross_offset)
+{
+    float cross = TerrainRoadCenterline(road, road_index, along) + cross_offset;
+    return road->runs_east_west ? (Vector2){along, cross} :
+                                  (Vector2){cross, along};
+}
+
+static void DrawTerrainRoadIdentityMotif(const TerrainRoad *road,
+                                         int32_t road_index,
+                                         CcLocalRoadSurface surface,
+                                         Vector3 focus)
+{
+    Rectangle footprint = road->footprint;
+    float start = road->runs_east_west ? footprint.x : footprint.y;
+    float finish = start + (road->runs_east_west ? footprint.width :
+                                                      footprint.height);
+    float cross_width = road->runs_east_west ? footprint.height :
+                                               footprint.width;
+    float visible_scale = cross_width >= 4.50f ? 0.72f :
+                          cross_width >= 3.40f ? 0.80f : 0.90f;
+    float edge = cross_width * 0.5f * visible_scale * 0.78f;
+    float step = surface == CC_LOCAL_ROAD_EXPEDITION ? 1.42f : 1.08f;
+    float segment_length = surface == CC_LOCAL_ROAD_EXPEDITION ? 0.72f :
+                                                                  1.10f;
+    Rectangle plaza = {37.6f, 25.6f, 18.8f, 8.8f};
+    int32_t segment = 0;
+    for (float along = start + 0.35f; along < finish - 0.35f;
+         along += step, ++segment) {
+        float next = fminf(along + segment_length, finish - 0.35f);
+        Vector2 center_a = TerrainRoadDetailPoint(
+            road, road_index, along, 0.0f);
+        Vector2 center_b = TerrainRoadDetailPoint(
+            road, road_index, next, 0.0f);
+        Vector2 middle = {(center_a.x + center_b.x) * 0.5f,
+                          (center_a.y + center_b.y) * 0.5f};
+        float focus_x = middle.x - focus.x;
+        float focus_z = middle.y - focus.z;
+        if (!terrain_detail_cache_building &&
+            focus_x * focus_x + focus_z * focus_z > 24.0f * 24.0f) {
+            continue;
+        }
+        if (TerrainPointInRectangle(middle.x, middle.y, plaza)) continue;
+
+        Vector2 left_a = TerrainRoadDetailPoint(
+            road, road_index, along, -edge);
+        Vector2 left_b = TerrainRoadDetailPoint(
+            road, road_index, next, -edge);
+        Vector2 right_a = TerrainRoadDetailPoint(
+            road, road_index, along, edge);
+        Vector2 right_b = TerrainRoadDetailPoint(
+            road, road_index, next, edge);
+        switch (surface) {
+            case CC_LOCAL_ROAD_FARM_TRACK:
+                if (segment % 3 != 2) {
+                    TerrainRibbonSegment(center_a, center_b, 0.085f, 0.058f,
+                                         WORLD_GRASS_SHADOW);
+                }
+                break;
+            case CC_LOCAL_ROAD_INDUSTRIAL:
+                TerrainRibbonSegment(left_a, left_b, 0.045f, 0.060f,
+                                     WORLD_METAL_SHADOW);
+                TerrainRibbonSegment(right_a, right_b, 0.045f, 0.060f,
+                                     WORLD_METAL_SHADOW);
+                if (segment % 2 == 0) {
+                    Vector2 sleeper_a = TerrainRoadDetailPoint(
+                        road, road_index, along, -edge * 0.82f);
+                    Vector2 sleeper_b = TerrainRoadDetailPoint(
+                        road, road_index, along, edge * 0.82f);
+                    TerrainRibbonSegment(sleeper_a, sleeper_b, 0.035f,
+                                         0.057f, WORLD_WOOD_SHADOW);
+                }
+                break;
+            case CC_LOCAL_ROAD_TRADE:
+                TerrainRibbonSegment(left_a, left_b, 0.055f, 0.060f,
+                                     WORLD_STONE_LIGHT);
+                TerrainRibbonSegment(right_a, right_b, 0.055f, 0.060f,
+                                     WORLD_STONE_LIGHT);
+                if (segment % 4 == 0) {
+                    TerrainRibbonSegment(center_a, center_b, 0.035f, 0.059f,
+                                         WORLD_GOLD);
+                }
+                break;
+            case CC_LOCAL_ROAD_MILITARY:
+                TerrainRibbonSegment(left_a, left_b, 0.070f, 0.059f,
+                                     WORLD_STONE_SHADOW);
+                TerrainRibbonSegment(right_a, right_b, 0.070f, 0.059f,
+                                     WORLD_STONE_SHADOW);
+                if (segment % 6 == 0) {
+                    Vector2 stripe_a = TerrainRoadDetailPoint(
+                        road, road_index, along, -edge * 0.72f);
+                    Vector2 stripe_b = TerrainRoadDetailPoint(
+                        road, road_index, along, edge * 0.72f);
+                    TerrainRibbonSegment(stripe_a, stripe_b, 0.040f,
+                                         0.058f, WORLD_STONE_LIGHT);
+                }
+                break;
+            case CC_LOCAL_ROAD_PROCESSIONAL:
+                TerrainRibbonSegment(center_a, center_b, 0.050f, 0.061f,
+                                     WORLD_GOLD);
+                TerrainRibbonSegment(left_a, left_b, 0.050f, 0.060f,
+                                     WORLD_STONE_LIGHT);
+                TerrainRibbonSegment(right_a, right_b, 0.050f, 0.060f,
+                                     WORLD_STONE_LIGHT);
+                break;
+            case CC_LOCAL_ROAD_EXPEDITION:
+                if (segment % 2 == 0) {
+                    TerrainRibbonSegment(left_a, left_b, 0.065f, 0.060f,
+                                         WORLD_VIOLET);
+                } else {
+                    TerrainRibbonSegment(right_a, right_b, 0.065f, 0.060f,
+                                         WORLD_VIOLET);
+                }
+                break;
+        }
+    }
+}
+
 static void DrawTerrainRoadRuts(const CcSettlement *place, Vector3 focus)
 {
     float prosperity = place != NULL ?
                        (float)place->prosperity / 100.0f : 0.5f;
-    Color paved_rut = BlendColor(WORLD_ROAD_SHADOW,
-                                 WORLD_ROAD,
-                                 prosperity * 0.28f);
+    CcLocalRoadSurface active_surface = ActiveTownRoadSurface();
+    Color paved_rut = TerrainRoadRutColor(active_surface, prosperity);
     Color field_track = BlendColor(WORLD_GRASS_SHADOW,
                                    WORLD_ROAD_SHADOW, 0.34f);
     Rectangle plaza = {37.6f, 25.6f, 18.8f, 8.8f};
@@ -14647,10 +14885,7 @@ static void DrawTerrainRoadRuts(const CcSettlement *place, Vector3 focus)
         TerrainRoad road = PlaceTerrainRoad(place_road);
         Rectangle footprint = road.footprint;
         int32_t road_index = road_count + i;
-        Color color = ShadeColor(
-            TerrainPlaceRoadColor(place_road->surface),
-            place_road->surface == CC_LOCAL_ROAD_PROCESSIONAL ? 0.82f :
-                                                                0.68f);
+        Color color = TerrainRoadRutColor(place_road->surface, prosperity);
         float lane_offset = (road.runs_east_west ? footprint.height :
                                                     footprint.width) * 0.17f;
         for (int32_t lane = -1; lane <= 1; lane += 2) {
@@ -14682,6 +14917,17 @@ static void DrawTerrainRoadRuts(const CcSettlement *place, Vector3 focus)
                 TerrainRibbonSegment(a, b, 0.055f, 0.055f, color);
             }
         }
+    }
+    for (int32_t i = 0; i < TerrainVisibleRoadCount(); ++i) {
+        DrawTerrainRoadIdentityMotif(
+            &TERRAIN_ROADS[i], i, active_surface, focus);
+    }
+    for (int32_t i = 0; i < CC_LOCAL_PLACE_ROAD_COUNT; ++i) {
+        const CcLocalPlaceRoad *place_road = ActivePlaceRoadAt(i);
+        if (place_road == NULL) continue;
+        TerrainRoad road = PlaceTerrainRoad(place_road);
+        DrawTerrainRoadIdentityMotif(
+            &road, road_count + i, place_road->surface, focus);
     }
     TerrainDetailEnd();
 }
@@ -15001,7 +15247,7 @@ static void DrawTerrainPlacedLantern(float x, float z)
 {
     rlPushMatrix();
     rlTranslatef(0.0f, CcLocalTerrainHeightAt(x, z), 0.0f);
-    DrawStreetLantern(x, z);
+    DrawStreetLantern(x, z, ActiveTownRoadSurface());
     rlPopMatrix();
 }
 
@@ -19999,6 +20245,31 @@ static void DrawRoadCarriage(Vector3 base, int32_t cargo_used, float clock,
 static void DrawStableHorseTeam(float clock)
 {
     static const Vector2 stalls[] = {{40.55f, 30.25f}, {40.55f, 33.05f}};
+    Color rail = WORLD_WOOD_SHADOW;
+    Color rail_cap = WORLD_WOOD_LIGHT;
+    switch (ActiveTownRoadSurface()) {
+        case CC_LOCAL_ROAD_FARM_TRACK:
+            rail_cap = WORLD_CROP_LIGHT;
+            break;
+        case CC_LOCAL_ROAD_INDUSTRIAL:
+            rail = WORLD_METAL_SHADOW;
+            rail_cap = WORLD_METAL_LIGHT;
+            break;
+        case CC_LOCAL_ROAD_TRADE:
+            rail_cap = WORLD_GOLD;
+            break;
+        case CC_LOCAL_ROAD_MILITARY:
+            rail = WORLD_STONE_SHADOW;
+            rail_cap = WORLD_STONE_LIGHT;
+            break;
+        case CC_LOCAL_ROAD_PROCESSIONAL:
+            rail = WORLD_STONE;
+            rail_cap = WORLD_GOLD;
+            break;
+        case CC_LOCAL_ROAD_EXPEDITION:
+            rail_cap = WORLD_VIOLET;
+            break;
+    }
     for (int32_t horse = 0; horse < 2; ++horse) {
         Vector3 base = TerrainWorldPoint(stalls[horse].x, stalls[horse].y);
         Color coat = horse == 0 ?
@@ -20012,9 +20283,9 @@ static void DrawStableHorseTeam(float clock)
     }
     float rail_y = CcLocalTerrainHeightAt(39.45f, 31.65f);
     DrawBox((Vector3){39.45f, rail_y + 0.72f, 31.65f},
-            (Vector3){0.12f, 1.44f, 4.15f}, WORLD_WOOD_SHADOW);
+            (Vector3){0.12f, 1.44f, 4.15f}, rail);
     DrawBox((Vector3){39.45f, rail_y + 1.12f, 31.65f},
-            (Vector3){0.18f, 0.12f, 4.25f}, WORLD_WOOD_LIGHT);
+            (Vector3){0.18f, 0.12f, 4.25f}, rail_cap);
 }
 
 static bool ForkRouteLeaves(const CcSim *sim, const CcRoute *route)
