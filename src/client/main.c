@@ -87,7 +87,6 @@ typedef struct LocalState {
     bool journey_parley_active;
     bool movement_reticle_valid;
     bool movement_reticle_accepted;
-    bool carriage_screen_pending;
     CcId conversation_character_id;
     CcId conversation_situation_id;
 } LocalState;
@@ -716,7 +715,6 @@ static void ResetLocalState(LocalState *local)
     local->movement_reticle_age = 0.0f;
     local->movement_reticle_valid = false;
     local->movement_reticle_accepted = false;
-    local->carriage_screen_pending = false;
     local->conversation_character_id = 0U;
     local->conversation_situation_id = 0U;
     local->market_interior = false;
@@ -1491,7 +1489,10 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
             bool gate = local->convoy.phase == CC_LOCAL_CONVOY_GATE;
             int32_t progress = (int32_t)lroundf(
                 local->convoy.phase_progress * 100.0f);
-            CcOverlayDrawText(town_departure ? "LEAVING THE STABLE" :
+            bool ready = local->convoy.phase == CC_LOCAL_CONVOY_ROAD &&
+                         progress >= 100;
+            CcOverlayDrawText(ready ? "JUNCTION REACHED" :
+                              town_departure ? "LEAVING THE STABLE" :
                               gate ? "CROSSING THE GATE" :
                                      "FOLLOWING THE TRACK",
                               content_x, 91, 9, TEAL);
@@ -1499,7 +1500,8 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
             DrawBar(content_x, 145, 74, "APPROACH", progress, TEAL);
             DrawBar(content_x, 166, 74, "PACE",
                     (int32_t)lroundf(local->convoy.pace * 100.0f), CC_GOLD);
-            CcOverlayDrawText("W FASTER  /  S SLOWER  /  SPACE PAUSE",
+            CcOverlayDrawText(ready ? "ENTER INSPECT ROUTES" :
+                              "W FASTER  /  S SLOWER  /  SPACE PAUSE",
                               content_x, 205, 7, MUTED);
             return;
         }
@@ -4386,7 +4388,8 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             ResetLocalState(local);
             if (sim->journey.active &&
                 sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED) {
-                *view = VIEW_ENCOUNTER;
+                BeginRoadLocalState(sim, local, false);
+                *view = VIEW_LOCAL;
             } else {
                 if (sim->journey.active) {
                     BeginRoadTravelState(sim, local);
@@ -4457,10 +4460,15 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             return;
         }
         if (local->road_choice_active) {
-            if (UpdateRoadChoiceApproach(local, delta_time)) {
+            bool was_ready = local->convoy.phase == CC_LOCAL_CONVOY_ROAD &&
+                local->convoy.phase_progress >= 1.0f;
+            bool ready = UpdateRoadChoiceApproach(local, delta_time);
+            if (ready && ClientKeyPressed(KEY_ENTER)) {
                 *view = VIEW_ROADS;
+                message[0] = '\0';
+            } else if (ready && !was_ready) {
                 (void)snprintf(message, message_capacity,
-                               "A roadside choice comes into view.");
+                               "Junction reached. Press Enter to inspect the roads.");
             }
             return;
         }
@@ -4522,11 +4530,10 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 }
                 if (sim->journey.active &&
                     sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED) {
-                    local->convoy.pace = 0.0f;
-                    local->journey_travel_active = false;
-                    *view = VIEW_ENCOUNTER;
+                    BeginRoadLocalState(sim, local, false);
+                    *view = VIEW_LOCAL;
                     (void)snprintf(message, message_capacity,
-                                   "The road is blocked.");
+                                   "The road is blocked. Walk to the captain or return to the carriage.");
                 } else if (sim->journey.active && warning_reached) {
                     const CcEvent *event = CcSimRecentEvent(sim, 0);
                     (void)snprintf(message, message_capacity, "%s",
@@ -4584,9 +4591,8 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             }
             if (sim->journey.active &&
                 sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED) {
-                local->convoy.pace = 0.0f;
-                local->journey_travel_active = false;
-                *view = VIEW_ENCOUNTER;
+                BeginRoadLocalState(sim, local, false);
+                *view = VIEW_LOCAL;
                 const CcEvent *event = CcSimRecentEvent(sim, 0);
                 (void)snprintf(message, message_capacity, "%s",
                                event != NULL ? event->text :
@@ -4732,20 +4738,29 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                     &local->agent, mouse, local_target, local_bounds,
                     local->market_interior);
             if (world_target != CC_LOCAL_WORLD_TARGET_NONE) {
+                bool carriage_in_reach =
+                    world_target == CC_LOCAL_WORLD_TARGET_CARRIAGE &&
+                    GridDistance(LocalPosition(local), LOCAL_CARRIAGE_BAY) <
+                        1.85f;
+                if (carriage_in_reach) {
+                    *return_view = VIEW_LOCAL;
+                    *view = VIEW_CARRIAGE;
+                    message[0] = '\0';
+                    return;
+                }
                 bool approach_started = CcLocalAgentApproachWorldTarget(
                     &local->agent, world_target);
                 local->movement_reticle = mouse;
                 local->movement_reticle_age = 0.0f;
                 local->movement_reticle_valid = true;
                 local->movement_reticle_accepted = approach_started;
-                local->carriage_screen_pending = approach_started &&
-                    world_target == CC_LOCAL_WORLD_TARGET_CARRIAGE;
                 if (approach_started) {
                     CcLocalCourseClearPlayerTarget(&local->agent);
                 }
                 (void)snprintf(
                     message, message_capacity,
-                    approach_started ? "%s targeted. Walking to its clear bay." :
+                    approach_started ?
+                        "%s targeted. Walk to its bay, then click again or press F." :
                                        "Can't reach %s from here.",
                     CcLocalWorldTargetName(world_target));
             } else {
@@ -4769,7 +4784,6 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                         CcLocalRaiderRoleName(
                             local->course.raider_roles[combat_target]));
                 } else {
-                    local->carriage_screen_pending = false;
                     bool movement_accepted = CcLocalAgentPickTarget(
                         &local->agent, mouse, local_target, local_bounds,
                         local->market_interior);
@@ -4810,19 +4824,6 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         (void)CcLocalWorldUpdate(
             &local->course, &local->agent, sim, delta_time,
             local->market_interior, advance_course);
-        if (local->carriage_screen_pending &&
-            !local->agent.navigation_active) {
-            local->carriage_screen_pending = false;
-            if (!local->market_interior &&
-                local->site_kind == CC_LOCAL_SITE_NONE &&
-                GridDistance(LocalPosition(local), LOCAL_CARRIAGE_BAY) <
-                    2.25f) {
-                *return_view = VIEW_LOCAL;
-                *view = VIEW_CARRIAGE;
-                message[0] = '\0';
-                return;
-            }
-        }
         if (local->movement_reticle_valid) {
             local->movement_reticle_age += delta_time;
             float reticle_lifetime = local->movement_reticle_accepted ?
@@ -5813,7 +5814,8 @@ int main(int argc, char **argv)
     if (capture_road_fork) local.fork_turn_progress = 1.0f;
     if (!capture && sim.journey.active) {
         if (sim.journey.phase == CC_JOURNEY_PHASE_BLOCKED) {
-            view = VIEW_ENCOUNTER;
+            BeginRoadLocalState(&sim, &local, false);
+            view = VIEW_LOCAL;
         } else {
             BeginRoadTravelState(&sim, &local);
             view = VIEW_LOCAL;
