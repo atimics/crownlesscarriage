@@ -35,7 +35,7 @@
 #define CC_GLOAMGATE_ALDERWATCH_MAP_NAME "Gloamgate to Alderwatch"
 #define CC_CROWNLESS_ATLAS_MAP_NAME "The Crownless Atlas"
 
-#define CC_SIM_SCHEMA_VERSION 17
+#define CC_SIM_SCHEMA_VERSION 18
 #define CC_GENERATOR_VERSION 16
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
@@ -229,7 +229,9 @@ typedef enum CcEventKind {
     CC_EVENT_GOBLIN_TRADE,
     CC_EVENT_GOBLIN_DRAGON_SEED_RUMORED,
     CC_EVENT_GOBLIN_DRAGON_SEED_PREPARED,
-    CC_EVENT_CHARACTER_INTERACTION
+    CC_EVENT_CHARACTER_INTERACTION,
+    CC_EVENT_JOURNEY_WARNING,
+    CC_EVENT_AMBUSH_EVADED
 } CcEventKind;
 
 typedef enum CcCommandKind {
@@ -263,7 +265,8 @@ typedef enum CcCommandKind {
     CC_COMMAND_GOBLIN_TRADE,
     CC_COMMAND_GOBLIN_WARN,
     CC_COMMAND_GOBLIN_INTERCEPT,
-    CC_COMMAND_CHARACTER_RESPONSE
+    CC_COMMAND_CHARACTER_RESPONSE,
+    CC_COMMAND_SET_JOURNEY_PACE
 } CcCommandKind;
 
 typedef enum CcHorseSex {
@@ -777,6 +780,12 @@ typedef enum CcJourneyPhase {
     CC_JOURNEY_PHASE_BLOCKED
 } CcJourneyPhase;
 
+typedef enum CcJourneyPace {
+    CC_JOURNEY_PACE_CAREFUL = 0,
+    CC_JOURNEY_PACE_STEADY,
+    CC_JOURNEY_PACE_PUSH
+} CcJourneyPace;
+
 typedef enum CcCarriageMode {
     CC_CARRIAGE_PARKED,
     CC_CARRIAGE_MOVING,
@@ -803,8 +812,10 @@ typedef struct CcJourneyEncounter {
     int32_t total_subticks;
     int32_t encounter_subticks;
     int32_t fare_reserved;
+    CcJourneyPace pace;
     bool encounter_triggered;
     bool ambush_pending;
+    bool ambush_warned;
     bool ambush_resolved;
     CcId parent_event_id;
 } CcJourneyEncounter;
@@ -956,6 +967,8 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
 bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity);
 uint64_t CcSimHash(const CcSim *sim);
 int32_t CcSimHorseTeamReadiness(const CcSim *sim);
+const char *CcJourneyPaceName(CcJourneyPace pace);
+int32_t CcSimJourneyEtaMinutes(const CcSim *sim);
 int32_t CcSimHorseCount(const CcSim *sim);
 const CcHorse *CcSimHorseAt(const CcSim *sim, int32_t index);
 const CcHorse *CcSimHorse(const CcSim *sim, CcId horse_id);

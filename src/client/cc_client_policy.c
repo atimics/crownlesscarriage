@@ -33,6 +33,21 @@ float CcClientRoadApproachStep(float progress, float pace, float delta_time)
     return fmaxf(0.0f, fminf(1.0f, next));
 }
 
+float CcClientConvoyPosturePace(int32_t posture)
+{
+    if (posture <= 0) return 0.52f;
+    if (posture >= 2) return 1.0f;
+    return 0.72f;
+}
+
+int32_t CcClientStepConvoyPosture(int32_t posture, int32_t direction)
+{
+    int32_t next = posture + (direction > 0 ? 1 : direction < 0 ? -1 : 0);
+    if (next < 0) next = 0;
+    if (next > 2) next = 2;
+    return next;
+}
+
 bool CcClientRoadHasNextBranch(int32_t branch_ordinal,
                                int32_t branch_count)
 {

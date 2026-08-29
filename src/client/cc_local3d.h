@@ -501,7 +501,8 @@ float CcLocalRoadCheckpointSurfaceYInternal(float x, float z);
 float CcLocalRoadHorseLateralSpacingInternal(bool bridge_checkpoint);
 float CcLocalRoadHorseLongitudinalOffsetInternal(void);
 void CcLocalDrawFork3D(const CcSim *sim, int32_t selected_route,
-                       float clock, RenderTexture2D target,
+                       float turn_progress, float clock,
+                       RenderTexture2D target,
                        Rectangle destination);
 const char *CcLocalSiteName(const CcSim *sim, CcLocalSiteKind site);
 void CcLocalDrawSite3D(const CcSim *sim, const CcLocalAgent *agent,

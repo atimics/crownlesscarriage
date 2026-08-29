@@ -236,6 +236,17 @@ static bool EnsureHorseStableColumns(sqlite3 *database,
             error, error_capacity);
 }
 
+static bool EnsureJourneyColumns(sqlite3 *database,
+                                 char *error, size_t error_capacity)
+{
+    return EnsureColumn(database, "runtime_state", "journey_pace",
+            "ALTER TABLE runtime_state ADD COLUMN journey_pace INTEGER NOT NULL DEFAULT 1;",
+            error, error_capacity) &&
+        EnsureColumn(database, "runtime_state", "ambush_warned",
+            "ALTER TABLE runtime_state ADD COLUMN ambush_warned INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity);
+}
+
 static bool EnsureLegendColumns(sqlite3 *database,
                                 char *error, size_t error_capacity)
 {
@@ -804,7 +815,9 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " carriage_mode INTEGER NOT NULL, carriage_location_id INTEGER NOT NULL,"
         " carriage_route_id INTEGER NOT NULL, carriage_origin_id INTEGER NOT NULL,"
         " carriage_destination_id INTEGER NOT NULL, carriage_progress_milli INTEGER NOT NULL,"
-        " carriage_speed_milli_per_second INTEGER NOT NULL, carriage_condition INTEGER NOT NULL);"
+        " carriage_speed_milli_per_second INTEGER NOT NULL, carriage_condition INTEGER NOT NULL,"
+        " journey_pace INTEGER NOT NULL DEFAULT 1,"
+        " ambush_warned INTEGER NOT NULL DEFAULT 0);"
         "CREATE TABLE IF NOT EXISTS delayed_echo ("
         " id INTEGER PRIMARY KEY CHECK(id=1), active INTEGER NOT NULL,"
         " situation_id INTEGER NOT NULL, settlement_id INTEGER NOT NULL,"
@@ -949,6 +962,7 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
            Execute(database, legend_schema, error, error_capacity) &&
            Execute(database, material_schema, error, error_capacity) &&
            Execute(database, journal_schema, error, error_capacity) &&
+           EnsureJourneyColumns(database, error, error_capacity) &&
            EnsureJournalMetaColumns(database, error, error_capacity);
 }
 
@@ -1845,8 +1859,16 @@ static bool SaveJourneyState(sqlite3 *database, const CcSim *sim,
     if (!result) return false;
 
     if (!Prepare(database,
-                 "INSERT INTO runtime_state VALUES(1,?,?,?,?,?,?,?,?,?,?,"
-                 "?,?,?,?,?,?,?,?,?,?,?);",
+                 "INSERT INTO runtime_state (id,clock_tick,minute_subticks,"
+                 "game_minutes_per_second,journey_phase,departure_day,"
+                 "elapsed_subticks,total_subticks,encounter_subticks,"
+                 "fare_reserved,encounter_triggered,ambush_pending,"
+                 "ambush_resolved,parent_event_id,carriage_mode,"
+                 "carriage_location_id,carriage_route_id,carriage_origin_id,"
+                 "carriage_destination_id,carriage_progress_milli,"
+                 "carriage_speed_milli_per_second,carriage_condition,"
+                 "journey_pace,ambush_warned) "
+                 "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
                  &statement, error, error_capacity)) return false;
     int column = 1;
     BindId(statement, column++, sim->clock.tick);
@@ -1870,6 +1892,8 @@ static bool SaveJourneyState(sqlite3 *database, const CcSim *sim,
     BindInt(statement, column++, sim->carriage.progress_milli);
     BindInt(statement, column++, sim->carriage.speed_milli_per_second);
     BindInt(statement, column++, sim->carriage.condition);
+    BindInt(statement, column++, (int32_t)sim->journey.pace);
+    BindInt(statement, column++, sim->journey.ambush_warned ? 1 : 0);
     result = StepDone(database, statement, error, error_capacity);
     sqlite3_finalize(statement);
     if (!result) return false;
@@ -1954,6 +1978,7 @@ static bool SaveSnapshot(sqlite3 *database, const CcSim *sim,
     bool ok = EnsureRealmColumns(database, error, error_capacity) &&
         EnsureAnimalColumns(database, error, error_capacity) &&
         EnsureHorseStableColumns(database, error, error_capacity) &&
+        EnsureJourneyColumns(database, error, error_capacity) &&
         EnsureLegendColumns(database, error, error_capacity) &&
         Execute(database, "BEGIN IMMEDIATE;", error, error_capacity);
     if (ok) {
@@ -3178,7 +3203,8 @@ static bool ReadJourneyState(sqlite3 *database, CcSim *sim,
                  "ambush_pending,ambush_resolved,parent_event_id,carriage_mode,"
                  "carriage_location_id,carriage_route_id,carriage_origin_id,"
                  "carriage_destination_id,carriage_progress_milli,"
-                 "carriage_speed_milli_per_second,carriage_condition "
+                 "carriage_speed_milli_per_second,carriage_condition,"
+                 "journey_pace,ambush_warned "
                  "FROM runtime_state WHERE id=1;",
                  &statement, error, error_capacity)) return false;
     result = sqlite3_step(statement);
@@ -3219,6 +3245,10 @@ static bool ReadJourneyState(sqlite3 *database, CcSim *sim,
         sim->carriage.speed_milli_per_second =
             sqlite3_column_int(statement, column++);
         sim->carriage.condition = sqlite3_column_int(statement, column++);
+        sim->journey.pace =
+            (CcJourneyPace)sqlite3_column_int(statement, column++);
+        sim->journey.ambush_warned =
+            sqlite3_column_int(statement, column++) != 0;
     } else if (result != SQLITE_DONE) {
         SetSqlError(error, error_capacity, database,
                     "Could not read world runtime state");
@@ -3457,13 +3487,22 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
         legacy_version != 9U && legacy_version != 10U &&
         legacy_version != 11U && legacy_version != 12U &&
         legacy_version != 13U && legacy_version != 14U &&
-        legacy_version != 15U && legacy_version != 16U) return true;
+        legacy_version != 15U && legacy_version != 16U &&
+        legacy_version != 17U) return true;
     sim->goblins.cohesion = 60;
     sim->goblins.target_warned = false;
     sim->goblins.expeditions_intercepted = 0;
     sim->goblins.dragon_seed_phase = CC_GOBLIN_DRAGON_SEED_NONE;
     sim->goblins.dragon_seed_days_remaining = 0;
     CcSimUpgradeMapCollection(sim);
+    if (legacy_version == 17U) {
+        sim->journey.pace = CC_JOURNEY_PACE_STEADY;
+        sim->journey.ambush_warned = false;
+        CcSimInitializeCharacters(sim);
+        sim->schema_version = CC_SIM_SCHEMA_VERSION;
+        sim->generator_version = CC_GENERATOR_VERSION;
+        return true;
+    }
     if (legacy_version == 16U) {
         CcSimInitializeCharacters(sim);
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
@@ -3738,6 +3777,7 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
               EnsureRealmColumns(database, error, error_capacity) &&
               EnsureAnimalColumns(database, error, error_capacity) &&
               EnsureHorseStableColumns(database, error, error_capacity) &&
+              EnsureJourneyColumns(database, error, error_capacity) &&
               EnsureLegendColumns(database, error, error_capacity) &&
               ReadMeta(database, sim, &expected_hash,
                        &journal_generation, &journal_cursor,

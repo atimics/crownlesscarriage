@@ -8,6 +8,8 @@ float CcClientConvoyPaceStep(float pace, bool road_phase,
                              bool urge, bool rein_in, bool stopped,
                              float delta_time);
 float CcClientRoadApproachStep(float progress, float pace, float delta_time);
+float CcClientConvoyPosturePace(int32_t posture);
+int32_t CcClientStepConvoyPosture(int32_t posture, int32_t direction);
 bool CcClientRoadHasNextBranch(int32_t branch_ordinal,
                                int32_t branch_count);
 bool CcClientMapCommandEnabled(bool viewing_map, bool road_local,
