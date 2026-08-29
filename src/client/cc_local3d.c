@@ -969,6 +969,25 @@ static float TerrainSmooth01(float amount)
     return amount * amount * (3.0f - 2.0f * amount);
 }
 
+/* Roads need a short eased join at each end, but ordinary smoothstep makes
+   the middle of a ramp fifty per cent steeper than its average grade. This
+   profile spends most of its length at an almost constant cart-friendly
+   slope while still meeting each landing without a sharp crease. */
+static float TerrainGentleRamp01(float amount)
+{
+    const float ease = 0.14f;
+    amount = TerrainClamp(amount, 0.0f, 1.0f);
+    if (amount < ease) {
+        return amount * amount / (2.0f * ease * (1.0f - ease));
+    }
+    if (amount > 1.0f - ease) {
+        float remaining = 1.0f - amount;
+        return 1.0f - remaining * remaining /
+                      (2.0f * ease * (1.0f - ease));
+    }
+    return (amount - ease * 0.5f) / (1.0f - ease);
+}
+
 static uint32_t TerrainMix(uint32_t value)
 {
     value ^= value >> 16U;
@@ -1280,6 +1299,33 @@ static void TerrainGradeNorthSouthRamp(Rectangle footprint,
     }
 }
 
+static void TerrainGradeNorthSouthGentleRamp(Rectangle footprint,
+                                             float south_height,
+                                             float north_height)
+{
+    const float shoulder = 0.85f;
+    for (int32_t row = 0; row < CC_TERRAIN_ROWS; ++row) {
+        float z = (float)row * CC_TERRAIN_CELL_SIZE;
+        if (z < footprint.y || z > footprint.y + footprint.height) continue;
+        float progress = TerrainGentleRamp01((z - footprint.y) /
+                                             footprint.height);
+        float elevation = south_height +
+                          (north_height - south_height) * progress;
+        for (int32_t column = 0; column < CC_TERRAIN_COLUMNS; ++column) {
+            float x = (float)column * CC_TERRAIN_CELL_SIZE;
+            float side_distance = x < footprint.x ? footprint.x - x :
+                x > footprint.x + footprint.width ?
+                    x - (footprint.x + footprint.width) : 0.0f;
+            if (side_distance >= shoulder) continue;
+            float weight = side_distance <= 0.0f ? 1.0f :
+                TerrainSmooth01(1.0f - side_distance / shoulder);
+            int32_t index = TerrainIndex(column, row);
+            street_terrain_height[index] +=
+                (elevation - street_terrain_height[index]) * weight;
+        }
+    }
+}
+
 static void TerrainGradeEastWestRamp(Rectangle footprint,
                                      float west_height,
                                      float east_height)
@@ -1305,6 +1351,19 @@ static void TerrainGradeEastWestRamp(Rectangle footprint,
                 (elevation - street_terrain_height[index]) * weight;
         }
     }
+}
+
+static float TerrainKeepRise(void)
+{
+    switch (active_place_function) {
+        case CC_SETTLEMENT_FARMING: return 1.80f;
+        case CC_SETTLEMENT_MINING: return 2.40f;
+        case CC_SETTLEMENT_MARKET: return 2.20f;
+        case CC_SETTLEMENT_FORTRESS: return 2.80f;
+        case CC_SETTLEMENT_CAPITAL: return 2.20f;
+        case CC_SETTLEMENT_DUNGEON_TOWN: return 2.60f;
+    }
+    return 2.20f;
 }
 
 static void TerrainGenerate(void)
@@ -1359,7 +1418,17 @@ static void TerrainGenerate(void)
         TerrainGradePad(footprint, TerrainRectangleAverage(footprint), 1.35f);
     }
     Rectangle keep_pad = ActiveCompoundBounds();
-    float keep_elevation = TerrainRectangleAverage(keep_pad) + 0.45f;
+    float keep_approach_height = TerrainSampleGrid(
+        street_terrain_height, 78.5f, 54.0f);
+    float natural_keep_elevation = TerrainRectangleAverage(keep_pad) + 0.45f;
+    /* A keep can crown the regional landform without putting its public gate
+       on top of the whole mountain. The wider hill and ravine still carry
+       the skyline; the constructed court rises only as far as a long cart
+       approach can honestly climb. */
+    float keep_elevation = fminf(
+        natural_keep_elevation,
+        keep_approach_height + TerrainKeepRise());
+    keep_elevation = fmaxf(keep_elevation, keep_approach_height + 0.80f);
     TerrainGradePad(keep_pad, keep_elevation, 4.00f);
 
     Rectangle plaza_pad = {37.60f, 25.60f, 18.80f, 8.80f};
@@ -1427,7 +1496,8 @@ static void TerrainGenerate(void)
     TerrainGradeNorthSouthRamp((Rectangle){62.80f, 27.00f, 2.60f, 11.50f},
                                west_gate_height,
                                west_gate_north_height);
-    float gate_causeway_height = keep_elevation - 2.0f;
+    float gate_causeway_height = fmaxf(
+        west_gate_north_height, keep_elevation - 0.90f);
     /* Keep both raid lanes on the authored causeway. The upper lane sits at
        z=40.4, so the graded deck must extend past that line rather than put
        an NPC exactly on the retaining-bank edge. */
@@ -1439,10 +1509,10 @@ static void TerrainGenerate(void)
         gate_causeway_height,
         TerrainSampleGrid(street_terrain_height, 96.0f, 38.0f));
     float crown_road_north_height = TerrainSampleGrid(
-        street_terrain_height, 78.5f, 45.0f);
-    TerrainGradeNorthSouthRamp((Rectangle){75.40f, 30.60f, 6.20f, 14.40f},
-                               keep_elevation,
-                               crown_road_north_height);
+        street_terrain_height, 78.5f, 54.0f);
+    TerrainGradeNorthSouthGentleRamp(
+        (Rectangle){75.40f, 30.60f, 6.20f, 23.40f},
+        keep_elevation, crown_road_north_height);
     float eastern_gate_height = TerrainSampleGrid(
         street_terrain_height, 81.0f, 34.0f);
     if (active_place_function == CC_SETTLEMENT_FARMING ||
@@ -13479,16 +13549,26 @@ static void DrawPlaceLandmark(const CcLocalPlaceLandmark *landmark,
         return;
     }
 
-    float body_height = height * 0.88f;
-    DrawBox((Vector3){center_x, body_height * 0.50f, center_z},
-            (Vector3){landmark->width, body_height, landmark->depth}, wall);
-    DrawBox((Vector3){center_x, body_height + height * 0.06f, center_z},
-            (Vector3){landmark->width + 0.34f, height * 0.12f,
-                      landmark->depth + 0.34f}, roof);
-    DrawBox((Vector3){center_x, body_height * 0.48f,
-                      landmark->z + landmark->depth + 0.035f},
-            (Vector3){landmark->width * 0.24f, body_height * 0.56f, 0.07f},
-            ShadeColor(roof, 0.72f));
+    float body_height = height * 0.78f;
+    int32_t building_style = landmark->family ==
+                                 CC_LOCAL_LANDMARK_COMMERCE ||
+                             landmark->family == CC_LOCAL_LANDMARK_CIVIC ?
+                                 CC_LOCAL_BUILDING_CIVIC :
+                             landmark->family == CC_LOCAL_LANDMARK_MILITARY ?
+                                 CC_LOCAL_BUILDING_WORKER_ROW :
+                                 CC_LOCAL_BUILDING_WORKSHOP;
+    WorldBuilding shell = {
+        .footprint = {landmark->x, landmark->z,
+                      landmark->width, landmark->depth},
+        .height = body_height,
+        .style = building_style,
+        .door = true,
+    };
+    /* Secondary landmarks occupy real building footprints, so they should
+       use the same massing language as the rest of their town. This removes
+       the old foreground cubes without inventing separate collision shapes. */
+    DrawSettlementBuilding(&shell, wall, roof, ActivePlaceProfile(),
+                           landmark->variant);
 
     if (landmark->family == CC_LOCAL_LANDMARK_INDUSTRY) {
         int32_t stacks = landmark->variant == 1 ? 3 : 2;
@@ -13682,7 +13762,13 @@ static float TerrainRoadSignedInset(const TerrainRoad *road,
     float width_noise = TerrainValueNoise(
         along - (float)road_index * 4.0f,
         (float)road_index * 9.0f, 5.5f, 72U);
-    float half_width = cross_width * 0.5f * (0.94f + width_noise * 0.07f);
+    /* The grading footprint includes drainage and a safe movement shoulder;
+       it is not all paved road. Keeping the visible wheel surface narrower
+       restores the scale of doors, carts, houses, and gate openings. */
+    float visible_scale = cross_width >= 4.50f ? 0.72f :
+                          cross_width >= 3.40f ? 0.80f : 0.90f;
+    float half_width = cross_width * 0.5f * visible_scale *
+                       (0.94f + width_noise * 0.07f);
     float cross_inset = half_width - fabsf(
         cross - TerrainRoadCenterline(road, road_index, along));
     float end_inset = fminf(along - start, start + length - along);

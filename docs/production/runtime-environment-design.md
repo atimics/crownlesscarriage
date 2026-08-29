@@ -120,7 +120,17 @@ headframes; Gloamgate wraps arcaded trade bays; Alderwatch joins barrack blocks
 to defensive towers; Rosespire steps formal wings around tall pavilions; and
 Hollowbarrow overlaps rough lodges with old round turrets. The footprint stays
 authoritative for collision, but the visible result is no longer one decorated
-cube with the same roof in every town.
+cube with the same roof in every town. Secondary landmarks now use those same
+local kits, so the foreground customs house, watch post, workshop, and lantern
+lodge reinforce the town silhouette instead of falling back to box props.
+
+Regional relief and civic access are separate scale decisions. Ravines,
+quarries, ridges, and river shelves can remain severe, but a public keep court
+rises only as far as its long gate road can plausibly climb. The complete
+castle approach is tested at no more than a fourteen-percent grade. The
+terrain grading footprint still includes drainage and movement shoulders,
+while the visible road is narrower; this keeps carts safe without making every
+street look as wide as a house.
 
 Each landmark record owns its name, family, variant, footprint, and height.
 Terrain grading, physical sweeps, pathfinding, camera picking, nearby labels,

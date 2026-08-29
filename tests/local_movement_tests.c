@@ -321,6 +321,24 @@ static void TestTownPlanCollisionAndGate(void)
                 maximum_height - minimum_height);
             exit(1);
         }
+
+        float maximum_gate_grade = 0.0f;
+        float previous_gate_height = CcLocalTerrainHeightAt(78.50f, 54.0f);
+        for (float z = 53.50f; z >= 31.0f; z -= 0.50f) {
+            float gate_height = CcLocalTerrainHeightAt(78.50f, z);
+            maximum_gate_grade = fmaxf(
+                maximum_gate_grade,
+                fabsf(gate_height - previous_gate_height) / 0.50f);
+            previous_gate_height = gate_height;
+        }
+        if (maximum_gate_grade > 0.14f) {
+            (void)fprintf(
+                stderr,
+                "town plan %d castle approach is too steep for carts: %.1f%%\n",
+                sim.settlements[settlement].function,
+                maximum_gate_grade * 100.0f);
+            exit(1);
+        }
     }
     CcLocalBindPlace(NULL);
 }
@@ -2275,7 +2293,7 @@ int main(void)
         alley_camera, click_target.texture.width,
         click_target.texture.height);
     if (alley_camera.projection != CAMERA_ORTHOGRAPHIC ||
-        alley_camera.fovy < 28.0f || alley_camera.fovy > 38.0f ||
+        alley_camera.fovy < 26.0f || alley_camera.fovy > 35.0f ||
         alley_hero_screen.x < 88.0f || alley_hero_screen.x > 369.0f ||
         alley_hero_screen.y < 54.0f || alley_hero_screen.y > 231.0f) {
         (void)fprintf(stderr,

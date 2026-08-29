@@ -53,7 +53,7 @@ static int ProfileContract(void)
             CHECK(camera->target_x >= 0.0f && camera->target_x <= 96.0f);
             CHECK(camera->target_z >= 0.0f && camera->target_z <= 72.0f);
             CHECK(camera->camera_offset_y >= 8.0f);
-            CHECK(camera->fovy >= 28.0f && camera->fovy <= 38.0f);
+            CHECK(camera->fovy >= 26.0f && camera->fovy <= 35.0f);
             for (int32_t previous = 0; previous < scene; ++previous) {
                 CHECK(strcmp(camera->name,
                              profile->scene[previous].name) != 0);
