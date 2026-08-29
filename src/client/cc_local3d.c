@@ -589,7 +589,7 @@ static const StreetTraversalLink STREET_TRAVERSAL_LINKS[] = {
     {5, 7, {{42.0f, 55.0f}, {54.8f, 55.0f}, {54.8f, 50.0f}}, 3},
     {5, 8, {{42.0f, 52.0f}, {42.0f, 35.8f},
             {78.5f, 35.8f}, {78.5f, 34.0f}}, 4},
-    {6, 8, {{57.5f, 28.2f}, {57.5f, 35.8f},
+    {6, 8, {{54.5f, 28.2f}, {54.5f, 35.8f},
             {78.5f, 35.8f}, {78.5f, 34.0f}}, 4},
     {7, 9, {{68.0f, 51.5f}, {76.0f, 51.5f}}, 2},
     {8, 9, {{78.5f, 38.0f}, {78.5f, 45.0f}}, 2},
@@ -5704,7 +5704,7 @@ static float StreetPortalProximityScore(const CcLocalAgent *agent,
     float corridor_z = composition->trigger.y - approach.z;
     float corridor_length = sqrtf(corridor_x * corridor_x +
                                   corridor_z * corridor_z);
-    float physical_radius = corridor_length >= 8.0f ?
+    float physical_radius = corridor_length >= 4.0f ?
         fminf(7.2f, corridor_length * 0.55f) : 0.0f;
     float physical_score = physical_radius > 0.0f &&
                            approach_distance <= physical_radius ?
