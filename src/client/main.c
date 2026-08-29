@@ -5162,7 +5162,8 @@ int main(int argc, char **argv)
         }
     }
 
-    if (capture || render_benchmark) SetTraceLogLevel(LOG_WARNING);
+    if (render_benchmark) SetTraceLogLevel(LOG_ERROR);
+    else if (capture) SetTraceLogLevel(LOG_WARNING);
     /* The world is deliberately rasterized at its final art-pixel
        resolution. Multisample coverage before that raster step makes thin
        edges change blend weights as actors move and reads as temporal
