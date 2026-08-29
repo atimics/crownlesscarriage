@@ -459,12 +459,19 @@ static void SituationNextAction(const CcSim *sim,
 
 static void DrawPanel(Rectangle bounds, Color color)
 {
-    DrawRectangleRounded(bounds, 0.025f, 4, color);
-    DrawRectangleRoundedLinesEx(bounds, 0.025f, 4, 1.0f,
-                                Fade(CC_GOLD, 0.62f));
-    DrawLine((int)bounds.x + 11, (int)bounds.y + 8,
-             (int)bounds.x + 45, (int)bounds.y + 8,
-             Fade(CC_GOLD, 0.50f));
+    DrawRectangleRounded(bounds, 0.015f, 3, color);
+    DrawRectangleRoundedLinesEx(bounds, 0.015f, 3, 1.0f,
+                                Fade(CC_GOLD, 0.68f));
+    DrawLine((int)bounds.x + 10, (int)bounds.y + 8,
+             (int)bounds.x + 48, (int)bounds.y + 8,
+             Fade(CC_GOLD, 0.64f));
+    DrawLine((int)(bounds.x + bounds.width) - 34,
+             (int)(bounds.y + bounds.height) - 8,
+             (int)(bounds.x + bounds.width) - 10,
+             (int)(bounds.y + bounds.height) - 8,
+             Fade(CC_STYLE_GOLD_SHADOW, 0.76f));
+    DrawRectangle((int)bounds.x + 5, (int)bounds.y + 5, 3, 3,
+                  Fade(CC_GOLD, 0.72f));
 }
 
 static void DrawPerformanceOverlay(void)

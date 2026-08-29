@@ -22,6 +22,10 @@ WORLD_CROP = (17, 81, 931, 651)
 ART_SIZE = (457, 285)
 EXPECTED_SCREEN_SIZE = (1280, 760)
 PALETTE_NEAR_DISTANCE = 0.055
+MAXIMUM_DOMINANT_COLOR_RATIO = 0.60
+MINIMUM_LUMINANCE_STDDEV = 0.04
+MINIMUM_LOCAL_CONTRAST = 0.038
+MINIMUM_MOOD_LOCAL_CONTRAST_RATIO = 0.68
 
 
 @dataclass(frozen=True)
@@ -445,10 +449,12 @@ def capture_passes(palette: dict[str, float],
         reasons.append("too many exact off-palette pixels")
     if palette["near_ratio"] < 0.985:
         reasons.append("world colors drift too far from the shared palette")
-    if composition["dominant_color_ratio"] > 0.86:
-        reasons.append("one color covers almost the whole frame")
-    if composition["luminance_stddev"] < 0.04:
+    if composition["dominant_color_ratio"] > MAXIMUM_DOMINANT_COLOR_RATIO:
+        reasons.append("one color covers too much of the frame")
+    if composition["luminance_stddev"] < MINIMUM_LUMINANCE_STDDEV:
         reasons.append("frame has too little value separation")
+    if composition["mean_local_contrast"] < MINIMUM_LOCAL_CONTRAST:
+        reasons.append("nearby shapes have too little local contrast")
     if composition["edge_density"] < 0.01:
         reasons.append("frame has too little visible subject coverage")
     if composition["center_unique_colors"] < 6:
@@ -468,8 +474,11 @@ def write_report(output_root: Path, capture_results: list[dict[str, object]],
             "palette_exact_ratio": 0.82,
             "palette_near_ratio": 0.985,
             "palette_near_distance": PALETTE_NEAR_DISTANCE,
-            "maximum_dominant_color_ratio": 0.86,
-            "minimum_luminance_stddev": 0.04,
+            "maximum_dominant_color_ratio": MAXIMUM_DOMINANT_COLOR_RATIO,
+            "minimum_luminance_stddev": MINIMUM_LUMINANCE_STDDEV,
+            "minimum_mean_local_contrast": MINIMUM_LOCAL_CONTRAST,
+            "minimum_mood_local_contrast_ratio":
+                MINIMUM_MOOD_LOCAL_CONTRAST_RATIO,
             "minimum_edge_density": 0.01,
             "flicker_changed_pixel_ratio": 0.005,
             "flicker_mean_channel_delta": 1.0,
@@ -489,7 +498,8 @@ def write_report(output_root: Path, capture_results: list[dict[str, object]],
         "",
         f"Capture mode: **{capture_mode}**",
         "",
-        "The checks use only the 457 x 285 world target. UI outside the stage is excluded.",
+        "World metrics use the 457 x 285 art target. The full-screen UI is "
+        "included in `contact-sheets/full-screen-ui.png` for manual review.",
         "",
         "| View | Palette exact | Palette near | Dominant | Edges | Local contrast | Result |",
         "| --- | ---: | ---: | ---: | ---: | ---: | --- |",
@@ -515,8 +525,9 @@ def write_report(output_root: Path, capture_results: list[dict[str, object]],
         "The focused NPC model reviews are in "
         "`contact-sheets/npc-model-review.png`.",
         "",
-        "Review sheets are in `contact-sheets/`. Every capture also has color, "
-        "grayscale, silhouette, and three-value files in `views/`.",
+        "Review sheets are in `contact-sheets/`, including the full-screen UI. "
+        "Every capture also has color, grayscale, silhouette, and three-value "
+        "files in `views/`.",
     ])
     if failures:
         lines.extend(["", "## Failures", ""])
@@ -592,7 +603,14 @@ def main() -> None:
                 "reasons": reasons,
             })
 
+        results_by_slug = {
+            str(result["slug"]): result for result in capture_results
+        }
         clear_atmosphere = crop_world(capture_paths["atmosphere-clear"])
+        clear_local_contrast = float(
+            results_by_slug["atmosphere-clear"]["composition"]
+            ["mean_local_contrast"]
+        )
         for spec in ATMOSPHERES[1:]:
             mood = crop_world(capture_paths[spec.slug])
             difference = ImageChops.difference(clear_atmosphere, mood)
@@ -604,10 +622,29 @@ def main() -> None:
             mean_delta = sum(
                 sum(pixel) for pixel in difference_pixels
             ) / (len(difference_pixels) * 3)
+            mood_result = results_by_slug[spec.slug]
+            mood_reasons: list[str] = []
             if changed < 0.35 or mean_delta < 6.0:
-                failures.append(
-                    f"{spec.label}: mood is not distinct from clear day "
+                mood_reasons.append(
+                    "mood is not distinct from clear day "
                     f"({changed:.1%} changed, {mean_delta:.1f} mean delta)"
+                )
+            mood_local_contrast = float(
+                mood_result["composition"]["mean_local_contrast"]
+            )
+            minimum_mood_contrast = clear_local_contrast * \
+                MINIMUM_MOOD_LOCAL_CONTRAST_RATIO
+            if mood_local_contrast < minimum_mood_contrast:
+                mood_reasons.append(
+                    "mood crushes local gameplay contrast "
+                    f"({mood_local_contrast:.3f} below "
+                    f"{minimum_mood_contrast:.3f})"
+                )
+            if mood_reasons:
+                mood_result["passed"] = False
+                mood_result["reasons"].extend(mood_reasons)
+                failures.extend(
+                    f"{spec.label}: {reason}" for reason in mood_reasons
                 )
 
         flicker = flicker_metrics(flicker_paths)
@@ -627,6 +664,11 @@ def main() -> None:
         contact_sheet(
             [(spec.label, view_paths[spec.slug]["color"]) for spec in SCENES],
             output_root / "contact-sheets" / "street-road-interior-parley.png", 4,
+        )
+        contact_sheet(
+            [(spec.label, capture_paths[spec.slug]) for spec in SCENES],
+            output_root / "contact-sheets" / "full-screen-ui.png", 2,
+            thumb_size=(384, 228),
         )
         contact_sheet(
             [(spec.label, view_paths[spec.slug]["color"])
@@ -659,8 +701,9 @@ def main() -> None:
         print(f"FAIL art-check: {len(failures)} issue(s); see {output_root / 'report.md'}")
         raise SystemExit(1)
     print(
-        "PASS art-check: 10 rooms, 4 scenes, 5 atmosphere moods, dragon cave, "
-        "NPC model review, value studies, character sizes, and flicker"
+        "PASS art-check: 10 rooms, 4 scenes, 5 atmosphere moods, "
+        "dragon cave, NPC model review, value studies, full-screen UI, "
+        "character sizes, and flicker"
     )
     print(f"REPORT {output_root / 'report.md'}")
 

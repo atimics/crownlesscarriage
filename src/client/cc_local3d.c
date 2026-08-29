@@ -233,6 +233,7 @@ typedef struct ArtAtmosphereDefinition {
     float mist;
     float wetness;
     float omen;
+    float practical_glow;
 } ArtAtmosphereDefinition;
 
 typedef struct ArtAtmosphereState {
@@ -279,30 +280,35 @@ static const ArtAtmosphereDefinition ART_ATMOSPHERES[] = {
         {1.00f, 1.00f, 1.00f}, {1.00f, 1.00f, 1.00f},
         {47, 44, 61, 255}, 0.10f, 0.10f, 1.00f, 1.00f, 1.00f,
         0.000f, 1.00f, 1.00f, 1.00f, 0.00f, 0.00f, 0.00f, 0.00f,
+        0.05f,
     },
     [CC_LOCAL_ATMOSPHERE_RAINY_OVERCAST] = {
         {-0.20f, 0.92f, 0.22f}, {0.78f, 0.86f, 0.98f},
         {0.90f, 0.97f, 1.07f}, {0.96f, 0.90f, 1.10f},
         {48, 52, 63, 255}, 0.70f, 0.74f, 0.70f, 1.14f, 0.88f,
         -0.035f, 1.34f, 0.38f, 0.84f, 0.82f, 0.36f, 0.82f, 0.00f,
+        0.18f,
     },
     [CC_LOCAL_ATMOSPHERE_AMBER_DUSK] = {
         {-0.70f, 0.36f, 0.30f}, {1.24f, 0.72f, 0.46f},
         {0.84f, 0.78f, 0.92f}, {1.05f, 0.82f, 1.12f},
         {53, 35, 63, 255}, 0.82f, 0.48f, 0.82f, 1.08f, 1.08f,
         -0.020f, 1.36f, 1.58f, 1.05f, 0.00f, 0.10f, 0.00f, 0.00f,
+        0.52f,
     },
     [CC_LOCAL_ATMOSPHERE_MOONLIT_NIGHT] = {
-        {-0.30f, 0.48f, -0.82f}, {0.72f, 0.82f, 1.06f},
-        {0.78f, 0.82f, 0.98f}, {0.86f, 0.88f, 1.08f},
-        {38, 31, 49, 255}, 0.82f, 0.58f, 0.82f, 1.12f, 1.12f,
-        -0.045f, 1.42f, 0.62f, 0.84f, 0.00f, 0.18f, 0.08f, 0.00f,
+        {-0.30f, 0.48f, -0.82f}, {0.82f, 0.90f, 1.10f},
+        {0.90f, 0.94f, 1.06f}, {0.92f, 0.92f, 1.07f},
+        {47, 44, 61, 255}, 0.76f, 0.50f, 0.90f, 1.06f, 1.18f,
+        -0.015f, 1.20f, 0.78f, 0.92f, 0.00f, 0.12f, 0.04f, 0.00f,
+        0.88f,
     },
     [CC_LOCAL_ATMOSPHERE_DRAGON_OMEN] = {
-        {-0.58f, 0.42f, 0.18f}, {0.88f, 0.68f, 0.72f},
-        {0.70f, 0.72f, 0.82f}, {0.88f, 0.78f, 1.08f},
-        {48, 44, 57, 255}, 0.78f, 0.68f, 0.74f, 1.18f, 1.12f,
-        -0.040f, 1.46f, 0.92f, 0.76f, 0.38f, 0.66f, 0.50f, 1.00f,
+        {-0.58f, 0.42f, 0.18f}, {0.96f, 0.75f, 0.76f},
+        {0.82f, 0.84f, 0.94f}, {0.94f, 0.84f, 1.08f},
+        {48, 44, 57, 255}, 0.74f, 0.58f, 0.82f, 1.10f, 1.20f,
+        -0.012f, 1.26f, 1.00f, 0.86f, 0.30f, 0.54f, 0.36f, 1.00f,
+        0.46f,
     },
 };
 
@@ -382,6 +388,8 @@ static ArtAtmosphereDefinition ArtAtmosphereMix(
         .wetness = ArtAtmosphereMixFloat(
             from.wetness, to.wetness, amount),
         .omen = ArtAtmosphereMixFloat(from.omen, to.omen, amount),
+        .practical_glow = ArtAtmosphereMixFloat(
+            from.practical_glow, to.practical_glow, amount),
     };
 }
 
@@ -3860,7 +3868,7 @@ void CcLocalCourseStageRoadEncounter(CcLocalCourse *course,
 {
     if (course == NULL || player == NULL) return;
     static const Vector2 guard_positions[CC_LOCAL_COURSE_RUNNER_COUNT] = {
-        {44.75f, 38.35f}, {44.75f, 40.95f}, {44.75f, 42.10f}
+        {43.10f, 36.85f}, {42.40f, 40.20f}, {43.35f, 43.15f}
     };
     course->road_encounter = true;
     course->scene = CC_LOCAL_SCENE_ROAD;
@@ -9530,7 +9538,7 @@ static Camera3D LocalCamera(bool interior, Vector3 focus)
                                 camera.target.y + 3.7f,
                                 camera.target.z + 13.0f};
     camera.up = (Vector3){0.0f, 1.0f, 0.0f};
-    camera.fovy = 7.6f;
+    camera.fovy = 6.45f;
     camera.projection = CAMERA_ORTHOGRAPHIC;
     return camera;
 }
@@ -9933,6 +9941,7 @@ typedef struct VisualStyleCache {
     int32_t grade_shadow_tone_location;
     int32_t grade_highlight_tone_location;
     int32_t grade_chroma_location;
+    int32_t grade_practical_glow_location;
     bool grade_ready;
     Shader world;
     int32_t light_direction_location;
@@ -10006,6 +10015,7 @@ typedef struct VisualStyleCache {
     int32_t npc_skinned_body_skin_remap_location;
     bool npc_skinned_ready;
     ArtAtmosphereDefinition presentation_atmosphere;
+    float presentation_practical_glow;
 } VisualStyleCache;
 
 static VisualStyleCache visual_style = {0};
@@ -11652,6 +11662,8 @@ static void LoadVisualStyle(void)
             visual_style.grade, "atmosphereHighlightTone");
         visual_style.grade_chroma_location = GetShaderLocation(
             visual_style.grade, "atmosphereChroma");
+        visual_style.grade_practical_glow_location = GetShaderLocation(
+            visual_style.grade, "atmospherePracticalGlow");
         visual_style.grade_ready = true;
     } else {
         if (IsShaderValid(visual_style.grade)) {
@@ -13038,6 +13050,26 @@ static void DrawBuildingFoundation(float x, float z, float width,
     }
 }
 
+static void DrawBuildingRevealCap(float x, float z, float width, float depth,
+                                  float height, float local_cut_height,
+                                  Color wall, Color roof)
+{
+    if (local_cut_height < 0.58f || local_cut_height > height + 0.24f) return;
+    float y = local_cut_height - 0.055f;
+    Color cap = BlendColor(ShadeColor(wall, 0.54f), roof, 0.30f);
+    Color ink = ShadeColor(cap, 0.58f);
+    DrawBox((Vector3){x + width * 0.5f, y, z + 0.02f},
+            (Vector3){width + 0.18f, 0.10f, 0.18f}, cap);
+    DrawBox((Vector3){x + width * 0.5f, y, z + depth - 0.02f},
+            (Vector3){width + 0.18f, 0.10f, 0.18f}, cap);
+    DrawBox((Vector3){x + 0.02f, y, z + depth * 0.5f},
+            (Vector3){0.18f, 0.10f, depth - 0.12f}, cap);
+    DrawBox((Vector3){x + width - 0.02f, y, z + depth * 0.5f},
+            (Vector3){0.18f, 0.10f, depth - 0.12f}, cap);
+    DrawBox((Vector3){x + width * 0.5f, y + 0.052f, z + depth - 0.10f},
+            (Vector3){width - 0.18f, 0.025f, 0.055f}, ink);
+}
+
 static void DrawBuilding(float x, float z, float width, float depth,
                          float height, Color wall, Color roof, bool door,
                          int32_t style)
@@ -13065,6 +13097,19 @@ static void DrawBuilding(float x, float z, float width, float depth,
             (Vector3){0.09f, 0.18f, depth - 0.18f},
             ShadeColor(trim, 0.86f));
 
+    /* Camera rooms can approach a house from either side. Give the rear and
+       left elevations the same large construction rhythm as the nominal
+       front so a camera turn never reveals an undecorated cuboid. */
+    for (int32_t corner = 0; corner < 2; ++corner) {
+        float post_x = corner == 0 ? x + 0.18f : x + width - 0.18f;
+        DrawBox((Vector3){post_x, height * 0.50f, z - 0.045f},
+                (Vector3){0.18f, height - 0.18f, 0.09f}, trim);
+    }
+    DrawBox((Vector3){center.x, height - 0.24f, z - 0.045f},
+            (Vector3){width - 0.18f, 0.18f, 0.09f}, trim);
+    DrawBox((Vector3){x - 0.045f, height - 0.24f, center.z},
+            (Vector3){0.09f, 0.18f, depth - 0.18f}, trim);
+
     /* Strong horizontal courses keep the low camera from reading each house
        as one unscaled slab. They also carry the trim language around the
        visible corner, so the facade remains coherent from adjacent rooms. */
@@ -13081,6 +13126,10 @@ static void DrawBuilding(float x, float z, float width, float depth,
             (Vector3){width - 0.16f, 0.13f, 0.115f}, trim);
     DrawBox((Vector3){x + width + 0.057f, story_course, center.z},
             (Vector3){0.115f, 0.13f, depth - 0.16f}, trim);
+    DrawBox((Vector3){center.x, 0.46f, z - 0.052f},
+            (Vector3){width - 0.14f, 0.42f, 0.105f}, plinth);
+    DrawBox((Vector3){center.x, story_course, z - 0.057f},
+            (Vector3){width - 0.16f, 0.13f, 0.115f}, trim);
     DrawBox((Vector3){x - 0.057f, story_course, center.z},
             (Vector3){0.115f, 0.13f, depth - 0.16f},
             ShadeColor(trim, 0.86f));
@@ -13095,6 +13144,11 @@ static void DrawBuilding(float x, float z, float width, float depth,
     }
     DrawFacadeWindow((Vector3){x + width + 0.075f, window_y,
                                center.z + depth * 0.12f}, 1, trim, glass);
+    for (int32_t bay = 0; bay < bays; ++bay) {
+        float window_x = x + width * (float)(bay + 1) / (float)(bays + 1);
+        DrawFacadeWindow((Vector3){window_x, window_y, z - 0.075f},
+                         0, trim, ShadeColor(glass, 0.88f));
+    }
     DrawFacadeWindow((Vector3){x - 0.075f, window_y,
                                center.z - depth * 0.12f}, -1,
                      ShadeColor(trim, 0.88f), ShadeColor(glass, 0.82f));
@@ -15602,11 +15656,22 @@ static void DrawWorldBuildings(Color kingdom, Vector3 focus,
             reveal_active = reveal;
         }
         rlPushMatrix();
-        rlTranslatef(0.0f, TerrainFootprintHeight(building.footprint), 0.0f);
+        float building_base = TerrainFootprintHeight(building.footprint);
+        rlTranslatef(0.0f, building_base, 0.0f);
         DrawSettlementBuilding(
             &building, BuildingWallColor(building.style, profile),
             BuildingRoofColor(building.style, kingdom, profile),
             profile, i);
+        if (reveal > 0.05f) {
+            float active_cut_world = reveal_cut_height +
+                                     (1.0f - reveal) * 8.0f;
+            DrawBuildingRevealCap(
+                building.footprint.x, building.footprint.y,
+                building.footprint.width, building.footprint.height,
+                building.height, active_cut_world - building_base,
+                BuildingWallColor(building.style, profile),
+                BuildingRoofColor(building.style, kingdom, profile));
+        }
         rlPopMatrix();
     }
     SetWorldForegroundReveal(0.0f, reveal_cut_height);
@@ -15925,10 +15990,11 @@ static void DrawCastle(Color kingdom, const CcLocalPlaceProfile *profile,
     Rectangle keep_pad = ActiveCompoundBounds();
     if (!SceneryFootprintVisible(keep_pad, focus)) return;
     float reveal_cut_height = reveal_world.y - 0.30f;
+    float castle_base = TerrainFootprintHeight(keep_pad);
     UpdateCastleStructureReveals(camera, reveal_world,
                                  render_width, render_height, clock);
     rlPushMatrix();
-    rlTranslatef(0.0f, TerrainFootprintHeight(keep_pad), 0.0f);
+    rlTranslatef(0.0f, castle_base, 0.0f);
     SetWorldForegroundReveal(0.0f, reveal_cut_height);
     for (int32_t i = 0; i < ActiveCompoundStructureCount(); ++i) {
         WorldStructure structure = ActiveCompoundStructureAt(i);
@@ -17549,14 +17615,6 @@ static void DrawBiomechanicalBiped(const CcLocalAgent *agent)
     CcHumanoidSkinPoseResolve(pose, &skin);
     if (!skin.valid) return;
     bool modular_hero = agent->crowned;
-    if (agent->crowned) {
-        DrawGroundBrushStroke(
-            (Vector3){agent->position.x, agent->position.y + 0.020f,
-                      agent->position.z},
-            (Vector3){sinf(agent->facing_yaw), 0.0f,
-                      cosf(agent->facing_yaw)},
-            0.72f, 0.085f, Fade(WORLD_TEAL, 0.82f));
-    }
     CcNpcAppearance procedural_hero = ProceduralHeroAppearance(agent);
     if (modular_hero && screen_first_hero_active) {
         UseCharacterLighting();
@@ -17897,11 +17955,27 @@ static void DrawCharacterContactEffects(const CcLocalAgent *agent)
         fmaxf(0.006f, surface + 0.008f),
         SnapContactCoordinate(agent->position.z),
     };
+    float vertical_gap = fmaxf(0.0f, agent->position.y - surface);
+    float lift = fminf(vertical_gap / 1.60f, 1.0f);
+    float shadow_scale = fallen ? 1.0f : 1.0f - lift * 0.38f;
+    float shadow_visibility = 1.0f - lift * 0.72f;
     Vector2 shadow_size = fallen ? (Vector2){1.20f, 0.56f} :
-                                   (Vector2){0.70f, 0.46f};
-    DrawContactShadow(shadow, shadow_size.x, shadow_size.y,
-                      agent->facing_yaw,
-                      (Color){3, 8, 10, fallen ? 102 : 82});
+                                   agent->crowned ?
+                                       (Vector2){0.82f, 0.52f} :
+                                       (Vector2){0.70f, 0.46f};
+    Color shadow_color = agent->crowned && !fallen ?
+        (Color){15, 38, 38, 255} : (Color){3, 8, 10, 255};
+    float base_opacity = fallen ? 102.0f / 255.0f :
+                         agent->crowned ? 108.0f / 255.0f :
+                                          82.0f / 255.0f;
+    /* A bad terrain sample must never place the contact mark through the
+       character. It is safer to omit the shadow until the sample is valid. */
+    if (surface <= agent->position.y + 0.12f) {
+        DrawContactShadow(shadow, shadow_size.x * shadow_scale,
+                          shadow_size.y * shadow_scale, agent->facing_yaw,
+                          Fade(shadow_color,
+                               base_opacity * shadow_visibility));
+    }
 
     if (agent->swimming || agent->immersion > 0.08f) {
         float phase = agent->humanoid.swim_phase -
@@ -18624,8 +18698,8 @@ static void DrawStreetTraversalPortals(const CcLocalAgent *agent,
         char label[96];
         (void)snprintf(label, sizeof(label), "%s  %s",
                        portal.exit != NULL ? "ROAD" : "TO", name);
-        int32_t text_width = CcOverlayMeasureText(label, 9);
-        float bubble_width = (float)text_width + 16.0f;
+    int32_t text_width = CcOverlayMeasureText(label, 9);
+    float bubble_width = (float)text_width + 16.0f;
         float bubble_x = point.x < viewport.x + viewport.width * 0.5f ?
             point.x + 10.0f : point.x - bubble_width - 10.0f;
         float bubble_y = point.y - 10.0f;
@@ -18634,27 +18708,31 @@ static void DrawStreetTraversalPortals(const CcLocalAgent *agent,
                                              bubble_width - 5.0f));
         bubble_y = fmaxf(viewport.y + 5.0f,
                          fminf(bubble_y, viewport.y + viewport.height -
-                                             23.0f));
+                                             25.0f));
         Color accent = portal.exit != NULL ? WORLD_GOLD : WORLD_TEAL;
         DrawRectangleRounded(
-            (Rectangle){bubble_x, bubble_y, bubble_width, 20.0f},
-            0.28f, 4, Fade(CC_STYLE_PANEL_DEEP, 0.88f));
-        DrawRectangleLinesEx(
-            (Rectangle){bubble_x, bubble_y, bubble_width, 20.0f},
-            1.0f, Fade(accent, 0.62f));
-        DrawCircleV(point, 5.0f, accent);
-        DrawCircleLines((int32_t)lroundf(point.x),
-                        (int32_t)lroundf(point.y), 7.0f,
+            (Rectangle){bubble_x, bubble_y, bubble_width, 22.0f},
+            0.04f, 3, Fade(CC_STYLE_PANEL_DEEP, 0.94f));
+        DrawRectangleRoundedLinesEx(
+            (Rectangle){bubble_x, bubble_y, bubble_width, 22.0f},
+            0.04f, 3, 1.0f, Fade(WORLD_GOLD, 0.62f));
+        DrawLine((int32_t)lroundf(bubble_x) + 7,
+                 (int32_t)lroundf(bubble_y) + 5,
+                 (int32_t)lroundf(bubble_x) + 30,
+                 (int32_t)lroundf(bubble_y) + 5,
+                 Fade(accent, 0.72f));
+        DrawPoly(point, 4, 6.0f, 45.0f, accent);
+        DrawPolyLinesEx(point, 4, 8.0f, 45.0f, 1.0f,
                         Fade(WORLD_INK, 0.82f));
-        CcOverlayDrawText(label, (int32_t)lroundf(bubble_x) + 8,
-                         (int32_t)lroundf(bubble_y) + 6, 9, accent);
+        CcOverlayDrawText(label, (int32_t)lroundf(bubble_x) + 10,
+                         (int32_t)lroundf(bubble_y) + 8, 10, accent);
     }
 }
 
 static void DrawLabels(const WorldLabel *labels, int32_t count, Camera3D camera,
                        Rectangle viewport)
 {
-    const float bubble_height = 16.0f;
+    const float bubble_height = 18.0f;
     const float head_clearance = 8.0f;
     int32_t width = (int32_t)lroundf(viewport.width);
     int32_t height = (int32_t)lroundf(viewport.height);
@@ -18665,7 +18743,7 @@ static void DrawLabels(const WorldLabel *labels, int32_t count, Camera3D camera,
             screen.y < bubble_height + head_clearance + 4.0f ||
             screen.y > viewport.height + 40.0f) continue;
         int text_width = CcOverlayMeasureText(labels[i].text, 10);
-        float bubble_width = (float)text_width + 10.0f;
+        float bubble_width = (float)text_width + 16.0f;
         float bubble_x = viewport.x + screen.x - bubble_width * 0.5f;
         /* The projected point is the top of the subject. Keep the complete
            nameplate above it so the plate never paints across a face. */
@@ -18678,11 +18756,21 @@ static void DrawLabels(const WorldLabel *labels, int32_t count, Camera3D camera,
         bubble_y = fmaxf(viewport.y + 4.0f,
                          fminf(bubble_y,
                                viewport.y + viewport.height - 20.0f));
-        DrawRectangleRounded((Rectangle){bubble_x, bubble_y,
-                                         bubble_width, bubble_height},
-                             0.30f, 4, (Color){4, 10, 14, 210});
-        CcOverlayDrawText(labels[i].text, (int)lroundf(bubble_x) + 5,
-                 (int)lroundf(bubble_y) + 3, 10, labels[i].color);
+        Rectangle bubble = {bubble_x, bubble_y, bubble_width, bubble_height};
+        DrawRectangleRounded(bubble, 0.05f, 3,
+                             Fade(CC_STYLE_PANEL_DEEP, 0.94f));
+        DrawRectangleRoundedLinesEx(bubble, 0.05f, 3, 1.0f,
+                                    Fade(WORLD_GOLD, 0.44f));
+        DrawRectangle((int32_t)lroundf(bubble_x) + 4,
+                      (int32_t)lroundf(bubble_y) + 4, 3, 10,
+                      Fade(labels[i].color, 0.78f));
+        DrawLine((int32_t)lroundf(bubble_x + bubble_width * 0.5f),
+                 (int32_t)lroundf(bubble_y + bubble_height),
+                 (int32_t)lroundf(bubble_x + bubble_width * 0.5f),
+                 (int32_t)lroundf(bubble_y + bubble_height + 4.0f),
+                 Fade(labels[i].color, 0.66f));
+        CcOverlayDrawText(labels[i].text, (int)lroundf(bubble_x) + 10,
+                 (int)lroundf(bubble_y) + 4, 10, labels[i].color);
     }
 }
 
@@ -18992,6 +19080,10 @@ static void PresentTarget(RenderTexture2D target, Rectangle destination)
         SetShaderValue(visual_style.grade,
                        visual_style.grade_chroma_location,
                        &atmosphere->grade_chroma, SHADER_UNIFORM_FLOAT);
+        SetShaderValue(visual_style.grade,
+                       visual_style.grade_practical_glow_location,
+                       &visual_style.presentation_practical_glow,
+                       SHADER_UNIFORM_FLOAT);
     }
     DrawTexturePro(target.texture, source, destination, (Vector2){0.0f, 0.0f},
                    0.0f, WHITE);
@@ -19188,6 +19280,52 @@ static void DrawTargetAtmosphere(RenderTexture2D target, float clock)
     }
 }
 
+static void DrawMarketEmberFlames(float clock)
+{
+    const float lamp_x[] = {3.05f, 8.10f};
+    for (int32_t lamp = 0; lamp < 2; ++lamp) {
+        float flicker = sinf(clock * 8.3f + (float)lamp * 2.4f) * 0.018f +
+                        sinf(clock * 13.7f + (float)lamp) * 0.010f;
+        Vector3 flame = {lamp_x[lamp] + flicker * 0.45f,
+                         1.84f + flicker, 0.735f};
+        DrawCharacterEllipsoid(
+            flame, (Vector3){0.095f, 0.19f + flicker, 0.070f},
+            CC_STYLE_DANGER);
+        DrawCharacterEllipsoid(
+            (Vector3){flame.x - flicker * 0.30f, flame.y - 0.025f,
+                      flame.z - 0.012f},
+            (Vector3){0.054f, 0.125f, 0.044f}, WORLD_GOLD);
+        DrawSmallSphere(
+            (Vector3){flame.x, flame.y - 0.042f, flame.z - 0.024f},
+            0.034f, CC_STYLE_ROAD_LIGHT);
+    }
+}
+
+static void DrawMarketPracticalLightHalos(Camera3D camera,
+                                          RenderTexture2D target,
+                                          float clock)
+{
+    const Vector3 lamps[] = {
+        {3.05f, 1.84f, 0.735f}, {8.10f, 1.84f, 0.735f},
+    };
+    BeginBlendMode(BLEND_ADDITIVE);
+    for (int32_t lamp = 0; lamp < 2; ++lamp) {
+        Vector2 screen = GetWorldToScreenEx(
+            lamps[lamp], camera, target.texture.width, target.texture.height);
+        float flicker = 0.92f +
+                        sinf(clock * 8.3f + (float)lamp * 2.4f) * 0.08f;
+        DrawCircleGradient(
+            (Vector2){roundf(screen.x), roundf(screen.y)},
+            25.0f * flicker, Fade(CC_STYLE_DANGER, 0.105f),
+            Fade(CC_STYLE_DANGER_SHADOW, 0.0f));
+        DrawCircleGradient(
+            (Vector2){roundf(screen.x), roundf(screen.y)},
+            12.0f * flicker, Fade(WORLD_GOLD, 0.135f),
+            Fade(CC_STYLE_GOLD_SHADOW, 0.0f));
+    }
+    EndBlendMode();
+}
+
 static ArtLightProfileId StreetLightProfile(
     const CcSettlement *place, ArtLightProfileId authored)
 {
@@ -19212,6 +19350,14 @@ static void BeginWorldLighting(Camera3D camera,
         &ART_LIGHT_PROFILES[profile_id];
     ArtAtmosphereDefinition atmosphere = ArtAtmosphereForProfile(profile_id);
     visual_style.presentation_atmosphere = atmosphere;
+    visual_style.presentation_practical_glow = atmosphere.practical_glow;
+    if (profile_id == ART_LIGHT_INTERIOR_EMBER) {
+        visual_style.presentation_practical_glow = fmaxf(
+            visual_style.presentation_practical_glow, 1.0f);
+    } else if (profile_id == ART_LIGHT_ROAD_DUSK) {
+        visual_style.presentation_practical_glow = fmaxf(
+            visual_style.presentation_practical_glow, 0.52f);
+    }
     Vector3 light_direction = Vector3Normalize(
         ArtAtmosphereMixVector(profile->light_direction,
                                atmosphere.light_direction,
@@ -20638,8 +20784,12 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     Rectangle road_status = ViewportRectangle(
         destination, 10.0f, 9.0f, 610.0f, 46.0f);
     DrawRectangleRounded(road_status,
-                         0.08f, 4, Fade(WORLD_VOID, 0.90f));
-    DrawRectangleLinesEx(road_status, 1.0f, Fade(WORLD_GOLD, 0.28f));
+                         0.02f, 3, Fade(CC_STYLE_PANEL_DEEP, 0.94f));
+    DrawRectangleRoundedLinesEx(road_status, 0.02f, 3, 1.0f,
+                                Fade(WORLD_GOLD, 0.52f));
+    DrawLine((int32_t)road_status.x + 8, (int32_t)road_status.y + 7,
+             (int32_t)road_status.x + 46, (int32_t)road_status.y + 7,
+             Fade(WORLD_GOLD, 0.56f));
     DrawViewportText(
         TextFormat("%s  /  DANGER %d%%  /  ROAD %d%%  /  SECURITY %d%%",
                    RoadArchetypeName(route), sim->journey.danger,
@@ -21769,7 +21919,9 @@ void CcLocalDrawInterior3D(const CcSim *sim, const CcLocalAgent *agent,
     DrawCombatSword(agent);
     DrawCombatSkillTell(agent);
     EndWorldLighting();
+    DrawMarketEmberFlames(clock);
     EndMode3D();
+    DrawMarketPracticalLightHalos(camera, target, clock);
     EndTextureMode();
     PresentTarget(target, destination);
     WorldLabel labels[3];

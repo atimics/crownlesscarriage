@@ -181,10 +181,12 @@ six-role NPC model review. The report is written to `out/art-check/report.md`.
 
 Each capture is cropped to the 457 by 285 world target. The gate fails on a
 missing or blank subject, strong drift from the shared palette, weak value
-separation, or an empty story center. It also records edge density and local
-contrast for manual review. Each view gets color, grayscale, silhouette, and
-three-value versions. Contact sheets show the ten rooms, the four scene types,
-the NPC model lineup, and the street value study.
+separation, weak local contrast, an over-dominant flat color, or an empty story
+center. Weather and time moods must remain distinct without crushing local
+contrast relative to clear day. Each view gets color, grayscale, silhouette,
+and three-value versions. Contact sheets show the ten rooms, the four scene
+types, the full-screen UI, the five atmosphere states, the focused NPC model
+lineup, and the street value study.
 
 The same run creates 35, 48, and 60 art-pixel hero comparisons from the checked
 V05 source frame. Three repeat captures of one stationary room must stay inside
