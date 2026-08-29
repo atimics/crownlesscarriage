@@ -419,18 +419,6 @@ if(CC_BUILD_CLIENT)
         DEPENDS crownless_carriage
         USES_TERMINAL
     )
-    add_custom_target(run_render_benchmark_ci
-        COMMAND $<TARGET_FILE:crownless_carriage>
-                --benchmark-render 180 45 street
-        COMMAND $<TARGET_FILE:crownless_carriage>
-                --benchmark-render 180 45 market
-        COMMAND $<TARGET_FILE:crownless_carriage>
-                --benchmark-render 180 45 road
-        COMMAND $<TARGET_FILE:crownless_carriage>
-                --benchmark-render 180 45 combat
-        DEPENDS crownless_carriage
-        USES_TERMINAL
-    )
 endif()
 
 include(CTest)
