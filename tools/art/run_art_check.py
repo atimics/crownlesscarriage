@@ -82,6 +82,11 @@ DRAGON_SCENES = (
                 ("--capture-dragon-cave",)),
 )
 
+NPC_REVIEWS = (
+    CaptureSpec("npc-model-review", "NPC Model Review", "npc",
+                ("--capture-npc-review",)),
+)
+
 
 def image_pixels(image: Image.Image) -> list[tuple[int, ...] | int]:
     getter = getattr(image, "get_flattened_data", None)
@@ -501,6 +506,9 @@ def write_report(output_root: Path, capture_results: list[dict[str, object]],
         "Character comparisons: 35, 48, and 60 art pixels are in "
         "`character/hero-height-comparison.png`.",
         "",
+        "The focused NPC model review is in "
+        "`contact-sheets/npc-model-review.png`.",
+        "",
         "Review sheets are in `contact-sheets/`. Every capture also has color, "
         "grayscale, silhouette, and three-value files in `views/`.",
     ])
@@ -525,7 +533,7 @@ def main() -> None:
     relative_capture_path(output_root)
     app = find_app(args.app.resolve() if args.app is not None else None)
     palette = read_authored_palette()
-    all_specs = (*ROOMS, *SCENES, *ATMOSPHERES, *DRAGON_SCENES)
+    all_specs = (*ROOMS, *SCENES, *ATMOSPHERES, *DRAGON_SCENES, *NPC_REVIEWS)
     capture_paths: dict[str, Path] = {}
 
     try:
@@ -625,6 +633,11 @@ def main() -> None:
             output_root / "contact-sheets" / "dragon-cave.png", 1,
         )
         contact_sheet(
+            [(spec.label, view_paths[spec.slug]["color"])
+             for spec in NPC_REVIEWS],
+            output_root / "contact-sheets" / "npc-model-review.png", 1,
+        )
+        contact_sheet(
             [(view.replace("-", " ").title(), view_paths["street"][view])
              for view in ("color", "grayscale", "silhouette", "three-value")],
             output_root / "contact-sheets" / "street-value-study.png", 4,
@@ -641,7 +654,7 @@ def main() -> None:
         raise SystemExit(1)
     print(
         "PASS art-check: 10 rooms, 4 scenes, 5 atmosphere moods, dragon cave, "
-        "value studies, character sizes, and flicker"
+        "NPC model review, value studies, character sizes, and flicker"
     )
     print(f"REPORT {output_root / 'report.md'}")
 

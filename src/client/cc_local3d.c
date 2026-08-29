@@ -17936,6 +17936,62 @@ static void EndWorldLighting(void)
     if (visual_style.world_ready) EndShaderMode();
 }
 
+void CcLocalDrawNpcReview3D(float clock, RenderTexture2D target,
+                            Rectangle destination)
+{
+    Camera3D camera = {0};
+    camera.target = (Vector3){0.0f, 1.05f, 0.0f};
+    camera.position = (Vector3){0.0f, 2.75f, 7.0f};
+    camera.up = (Vector3){0.0f, 1.0f, 0.0f};
+    camera.fovy = 3.05f;
+    camera.projection = CAMERA_ORTHOGRAPHIC;
+
+    FaceRenderContext previous_face_context = face_render_context;
+    SetFaceRenderContext(camera, target.texture.width, target.texture.height);
+    BeginTextureMode(target);
+    ClearBackground(CC_VISUAL_PALETTE.cool_ink);
+    BeginMode3D(camera);
+    BeginWorldLighting(camera, &INTERIOR_ART_COMPOSITION);
+    DrawBox((Vector3){0.0f, -0.08f, 0.0f},
+            (Vector3){6.45f, 0.16f, 2.25f}, WORLD_ROAD_SHADOW);
+    DrawBox((Vector3){0.0f, 1.30f, -0.72f},
+            (Vector3){6.45f, 2.76f, 0.10f}, WORLD_STONE_SHADOW);
+    for (int32_t actor = 0; actor < 6; ++actor) {
+        float x = -2.58f + (float)actor * 1.03f;
+        DrawBox((Vector3){x, 0.015f, 0.0f},
+                (Vector3){0.88f, 0.03f, 0.88f},
+                (actor & 1) == 0 ? WORLD_EARTH : WORLD_ROAD);
+    }
+    DrawNpcFigure3D((Vector3){-2.58f, 0.04f, 0.0f}, 1.00f, 0.0f,
+                    UINT32_C(0x6e706301), CC_NPC_ROLE_GUARD,
+                    WORLD_TEAL, clock * 0.8f, CC_TRAVERSAL_IDLE);
+    DrawNpcFigure3D((Vector3){-1.55f, 0.04f, 0.0f}, 1.00f, -0.62f,
+                    UINT32_C(0x6e706302), CC_NPC_ROLE_GUARD,
+                    WORLD_GOLD, clock * 0.8f + 0.8f,
+                    CC_TRAVERSAL_IDLE);
+    DrawNpcFigure3D((Vector3){-0.52f, 0.04f, 0.0f}, 0.98f, 0.18f,
+                    UINT32_C(0x6e706303), CC_NPC_ROLE_RAIDER,
+                    WORLD_DANGER, clock * 0.8f + 1.6f,
+                    CC_TRAVERSAL_IDLE);
+    DrawNpcFigure3D((Vector3){0.51f, 0.04f, 0.0f}, 0.94f, -0.12f,
+                    UINT32_C(0x6e706304), CC_NPC_ROLE_LABORER,
+                    (Color){174, 94, 53, 255}, clock * 4.2f + 2.4f,
+                    CC_TRAVERSAL_WALK);
+    DrawNpcFigure3D((Vector3){1.54f, 0.04f, 0.0f}, 0.92f, 0.15f,
+                    UINT32_C(0x6e706305), CC_NPC_ROLE_TRAVELLER,
+                    (Color){117, 145, 116, 255}, clock * 4.2f + 3.2f,
+                    CC_TRAVERSAL_WALK);
+    DrawNpcFigure3D((Vector3){2.57f, 0.04f, 0.0f}, 0.94f, -0.12f,
+                    UINT32_C(0x6e706306), CC_NPC_ROLE_MERCHANT,
+                    (Color){223, 151, 68, 255}, clock * 0.8f + 4.0f,
+                    CC_TRAVERSAL_IDLE);
+    EndWorldLighting();
+    EndMode3D();
+    EndTextureMode();
+    face_render_context = previous_face_context;
+    PresentTarget(target, destination);
+}
+
 static void PresentCharacterPortrait(Rectangle bounds, Color accent)
 {
     DrawRectangle((int32_t)bounds.x, (int32_t)bounds.y,

@@ -4910,6 +4910,8 @@ int main(int argc, char **argv)
     }
     bool capture_face = argc >= 2 &&
         strcmp(argv[1], "--capture-face") == 0;
+    bool capture_npc_review = argc >= 2 &&
+        strcmp(argv[1], "--capture-npc-review") == 0;
     bool capture_creatures = argc >= 2 &&
         strcmp(argv[1], "--capture-creatures") == 0;
     bool capture_creature_reel = argc >= 2 &&
@@ -4991,7 +4993,8 @@ int main(int argc, char **argv)
                     capture_aftermath || capture_golden ||
                     capture_dragon_cave ||
                     capture_atmosphere || capture_face ||
-                    capture_room || capture_creature_media);
+                    capture_room || capture_npc_review ||
+                    capture_creature_media);
     const char *capture_path = capture_creature_media ? argv[3] :
                                capture_room ? argv[4] :
                                capture_face ? argv[3] :
@@ -5544,7 +5547,9 @@ int main(int argc, char **argv)
                     collectible_atlas);
             DrawSettlementPanel(&sim, selected);
         } else {
-            if (local.site_kind != CC_LOCAL_SITE_NONE) {
+            if (capture_npc_review) {
+                CcLocalDrawNpcReview3D(clock, local_target, local_bounds);
+            } else if (local.site_kind != CC_LOCAL_SITE_NONE) {
                 CcLocalDrawSite3D(
                     &sim, &local.agent, local.site_kind,
                     local.site_travel_active, local.site_returning,
@@ -5574,7 +5579,7 @@ int main(int argc, char **argv)
                                     &local.convoy, clock,
                                     local_target, local_bounds);
             }
-            if (view != VIEW_ENCOUNTER) {
+            if (!capture_npc_review && view != VIEW_ENCOUNTER) {
                 DrawLocalMovementReticle(&local, local_bounds);
                 DrawLocalHeader(&sim, &local);
                 DrawLocalPanel(&sim, &local);
@@ -5621,12 +5626,14 @@ int main(int argc, char **argv)
             DrawDragonCavePanel(&sim);
         }
         CcOverlayFlush();
-        if (!capture_gameplay_reel ||
-            gameplay_reel.stage != GAMEPLAY_REEL_QUEST_COMPLETE) {
+        if (!capture_npc_review && (!capture_gameplay_reel ||
+            gameplay_reel.stage != GAMEPLAY_REEL_QUEST_COMPLETE)) {
             DrawContextActionTray(&sim, &local, view, selected,
                                   selected_situation);
         }
-        if (view != VIEW_DRAGON_CAVE) DrawCommandBar(view, &local);
+        if (!capture_npc_review && view != VIEW_DRAGON_CAVE) {
+            DrawCommandBar(view, &local);
+        }
         if (performance_overlay) {
             CcOverlayFlush();
             DrawPerformanceOverlay();

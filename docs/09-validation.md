@@ -176,15 +176,15 @@ make art-check
 
 This command first runs the C test suite, then checks the V05 animation frames,
 hero and NPC paint channels, and NPC asset contracts. It then captures all ten
-exterior camera rooms plus street, road, interior, and parley. The report is written to
-`out/art-check/report.md`.
+exterior camera rooms plus street, road, interior, parley, and a focused
+six-role NPC model review. The report is written to `out/art-check/report.md`.
 
 Each capture is cropped to the 457 by 285 world target. The gate fails on a
 missing or blank subject, strong drift from the shared palette, weak value
 separation, or an empty story center. It also records edge density and local
 contrast for manual review. Each view gets color, grayscale, silhouette, and
 three-value versions. Contact sheets show the ten rooms, the four scene types,
-and the street value study.
+the NPC model lineup, and the street value study.
 
 The same run creates 35, 48, and 60 art-pixel hero comparisons from the checked
 V05 source frame. Three repeat captures of one stationary room must stay inside
