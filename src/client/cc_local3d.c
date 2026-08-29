@@ -942,6 +942,7 @@ static TerrainRoad PlaceTerrainRoad(const CcLocalPlaceRoad *road)
 typedef struct TerrainRenderCache {
     Model model;
     uint32_t seed;
+    CcId place_id;
     int32_t hunger_band;
     int32_t prosperity_band;
     int32_t vertex_count;
@@ -949,7 +950,9 @@ typedef struct TerrainRenderCache {
 } TerrainRenderCache;
 
 static TerrainRenderCache terrain_render_cache = {0};
+static TerrainRenderCache terrain_detail_render_cache = {0};
 static void TerrainRenderCacheClear(void);
+static void TerrainDetailRenderCacheClear(void);
 
 static float TerrainClamp(float value, float minimum, float maximum)
 {
@@ -10954,7 +10957,7 @@ static bool PoseQuadrupedCreature(CreatureModelCache *creature,
             creature->model.skeleton.bindPose[bone].scale;
     }
     UpdateModelAnimation(creature->model, creature->animation, 0.0f);
-    CcLocalRendererRecordSkinUpdate(creature->model.meshCount);
+    CcLocalRendererRecordCreatureSkinUpdate(creature->model.meshCount);
     return true;
 }
 
@@ -11867,7 +11870,8 @@ static NpcBodySkinCache *NpcBodyForAppearance(
 }
 
 static bool DrawNpcBodySkin(const CcHumanoidSkinPose *skin,
-                            const CcNpcAppearance *appearance)
+                            const CcNpcAppearance *appearance,
+                            bool featured_hero)
 {
     NpcBodySkinCache *body = NpcBodyForAppearance(appearance);
     if (body == NULL || !body->ready || !visual_style.npc_skinned_ready ||
@@ -11895,6 +11899,11 @@ static bool DrawNpcBodySkin(const CcHumanoidSkinPose *skin,
         body->pose[bone].scale = body->model.skeleton.bindPose[bone].scale;
     }
     UpdateModelAnimation(body->model, body->animation, 0.0f);
+    if (featured_hero) {
+        CcLocalRendererRecordHeroSkinUpdate(body->model.meshCount);
+    } else {
+        CcLocalRendererRecordNpcSkinUpdate(body->model.meshCount);
+    }
     for (int32_t material = 0; material < body->model.materialCount;
          ++material) {
         body->model.materials[material].maps[MATERIAL_MAP_DIFFUSE].color =
@@ -12134,6 +12143,7 @@ void CcLocalRendererShutdown(void)
 {
     if (!sphere_models.ready) return;
     TerrainRenderCacheClear();
+    TerrainDetailRenderCacheClear();
     UnloadModel(sphere_models.small);
     UnloadModel(sphere_models.character);
     UnloadModel(sphere_models.scenery);
@@ -13611,7 +13621,11 @@ static Color TerrainSurfaceColor(const CcSettlement *place,
 typedef struct TerrainMeshWriter {
     Mesh mesh;
     int32_t cursor;
+    bool count_only;
 } TerrainMeshWriter;
+
+static TerrainMeshWriter *terrain_detail_mesh_writer = NULL;
+static bool terrain_detail_cache_building = false;
 
 static void TerrainRenderCacheClear(void)
 {
@@ -13619,6 +13633,14 @@ static void TerrainRenderCacheClear(void)
         UnloadModel(terrain_render_cache.model);
     }
     terrain_render_cache = (TerrainRenderCache){0};
+}
+
+static void TerrainDetailRenderCacheClear(void)
+{
+    if (terrain_detail_render_cache.ready) {
+        UnloadModel(terrain_detail_render_cache.model);
+    }
+    terrain_detail_render_cache = (TerrainRenderCache){0};
 }
 
 static bool TerrainMeshWriterAllocate(TerrainMeshWriter *writer,
@@ -13645,11 +13667,17 @@ static bool TerrainMeshWriterAllocate(TerrainMeshWriter *writer,
     return false;
 }
 
-static void TerrainMeshWriteVertex(TerrainMeshWriter *writer,
-                                   Vector3 point, Color color)
+static void TerrainMeshWriteVertexWithNormal(TerrainMeshWriter *writer,
+                                             Vector3 point, Vector3 normal,
+                                             Color color)
 {
+    if (writer == NULL) return;
+    if (writer->count_only) {
+        writer->cursor += 1;
+        return;
+    }
+    if (writer->cursor >= writer->mesh.vertexCount) return;
     int32_t vertex = writer->cursor;
-    Vector3 normal = TerrainVisualNormalAt(point.x, point.z);
     normal.y = fmaxf(normal.y, 0.62f);
     normal = Vector3Normalize(normal);
     writer->mesh.vertices[vertex * 3 + 0] = point.x;
@@ -13663,6 +13691,13 @@ static void TerrainMeshWriteVertex(TerrainMeshWriter *writer,
     writer->mesh.colors[vertex * 4 + 2] = color.b;
     writer->mesh.colors[vertex * 4 + 3] = color.a;
     writer->cursor += 1;
+}
+
+static void TerrainMeshWriteVertex(TerrainMeshWriter *writer,
+                                   Vector3 point, Color color)
+{
+    TerrainMeshWriteVertexWithNormal(
+        writer, point, TerrainVisualNormalAt(point.x, point.z), color);
 }
 
 static void TerrainMeshWriteCell(TerrainMeshWriter *writer,
@@ -13760,6 +13795,7 @@ static bool TerrainRenderCacheBuild(const CcSettlement *place)
     terrain_render_cache.model = LoadModelFromMesh(writer.mesh);
     ApplyWorldShader(&terrain_render_cache.model);
     terrain_render_cache.seed = street_terrain_seed;
+    terrain_render_cache.place_id = place != NULL ? place->id : 0U;
     terrain_render_cache.hunger_band = place != NULL ? place->hunger / 5 : 0;
     terrain_render_cache.prosperity_band =
         place != NULL ? place->prosperity / 5 : 10;
@@ -13775,6 +13811,8 @@ static void DrawCachedTerrain(const CcSettlement *place)
     int32_t prosperity_band = place != NULL ? place->prosperity / 5 : 10;
     bool stale = !terrain_render_cache.ready ||
                  terrain_render_cache.seed != street_terrain_seed ||
+                 terrain_render_cache.place_id !=
+                     (place != NULL ? place->id : 0U) ||
                  terrain_render_cache.hunger_band != hunger_band ||
                  terrain_render_cache.prosperity_band != prosperity_band;
     if (stale && !TerrainRenderCacheBuild(place)) return;
@@ -13787,9 +13825,24 @@ static void TerrainDetailVertex(Vector3 point, Color color)
     Vector3 normal = CcLocalTerrainNormalAt(point.x, point.z);
     normal.y = fmaxf(normal.y, 0.62f);
     normal = Vector3Normalize(normal);
+    if (terrain_detail_mesh_writer != NULL) {
+        TerrainMeshWriteVertexWithNormal(
+            terrain_detail_mesh_writer, point, normal, color);
+        return;
+    }
     rlColor4ub(color.r, color.g, color.b, color.a);
     rlNormal3f(normal.x, normal.y, normal.z);
     rlVertex3f(point.x, point.y, point.z);
+}
+
+static void TerrainDetailBegin(void)
+{
+    if (terrain_detail_mesh_writer == NULL) rlBegin(RL_TRIANGLES);
+}
+
+static void TerrainDetailEnd(void)
+{
+    if (terrain_detail_mesh_writer == NULL) rlEnd();
 }
 
 static void TerrainRibbonSegment(Vector2 start, Vector2 end,
@@ -13834,7 +13887,7 @@ static void DrawTerrainRoadRuts(const CcSettlement *place, Vector3 focus)
     Rectangle plaza = {37.6f, 25.6f, 18.8f, 8.8f};
     int32_t road_count =
         (int32_t)(sizeof(TERRAIN_ROADS) / sizeof(TERRAIN_ROADS[0]));
-    rlBegin(RL_TRIANGLES);
+    TerrainDetailBegin();
     for (int32_t i = 0; i < road_count; ++i) {
         bool rural_track = i == 0 || i == 1 || i == 3 || i == 4 ||
                            i == 9 || i == 12 || i == 13 || i == 14;
@@ -13865,7 +13918,8 @@ static void DrawTerrainRoadRuts(const CcSettlement *place, Vector3 focus)
                                   (a.y + b.y) * 0.5f};
                 float focus_x = middle.x - focus.x;
                 float focus_z = middle.y - focus.z;
-                if (focus_x * focus_x + focus_z * focus_z > 24.0f * 24.0f) {
+                if (!terrain_detail_cache_building &&
+                    focus_x * focus_x + focus_z * focus_z > 24.0f * 24.0f) {
                     continue;
                 }
                 if (TerrainPointInRectangle(middle.x, middle.y, plaza)) {
@@ -13908,7 +13962,8 @@ static void DrawTerrainRoadRuts(const CcSettlement *place, Vector3 focus)
                                   (a.y + b.y) * 0.5f};
                 float focus_x = middle.x - focus.x;
                 float focus_z = middle.y - focus.z;
-                if (focus_x * focus_x + focus_z * focus_z >
+                if (!terrain_detail_cache_building &&
+                    focus_x * focus_x + focus_z * focus_z >
                     24.0f * 24.0f) continue;
                 if (TerrainPlaceRoadAmount(middle.x, middle.y) < 0.34f) {
                     continue;
@@ -13917,7 +13972,7 @@ static void DrawTerrainRoadRuts(const CcSettlement *place, Vector3 focus)
             }
         }
     }
-    rlEnd();
+    TerrainDetailEnd();
 }
 
 static void DrawTerrainFieldRows(const CcSettlement *place, Vector3 focus)
@@ -13930,11 +13985,12 @@ static void DrawTerrainFieldRows(const CcSettlement *place, Vector3 focus)
     crop = BlendColor(crop, WORLD_CROP_SHADOW, hunger * 0.42f);
     Color furrow = BlendColor(WORLD_GRASS_SHADOW,
                               WORLD_EARTH_SHADOW, hunger * 0.30f);
-    rlBegin(RL_TRIANGLES);
+    TerrainDetailBegin();
     for (int32_t i = 0; i < (int32_t)(sizeof(TERRAIN_FIELDS) /
                                       sizeof(TERRAIN_FIELDS[0])); ++i) {
         Rectangle field = TERRAIN_FIELDS[i];
-        if (!SceneryFootprintVisible(field, focus)) continue;
+        if (!terrain_detail_cache_building &&
+            !SceneryFootprintVisible(field, focus)) continue;
         int32_t row = 0;
         for (float z = field.y + 0.78f;
              z < field.y + field.height - 0.45f; z += 1.32f, ++row) {
@@ -13957,7 +14013,7 @@ static void DrawTerrainFieldRows(const CcSettlement *place, Vector3 focus)
             }
         }
     }
-    rlEnd();
+    TerrainDetailEnd();
 }
 
 static float TerrainScatter01(int32_t column, int32_t row, uint32_t stream)
@@ -13972,6 +14028,12 @@ static float TerrainScatter01(int32_t column, int32_t row, uint32_t stream)
 
 static void TerrainCoverVertex(Vector3 point, Color color)
 {
+    if (terrain_detail_mesh_writer != NULL) {
+        TerrainMeshWriteVertexWithNormal(
+            terrain_detail_mesh_writer, point,
+            (Vector3){0.18f, 0.96f, 0.14f}, color);
+        return;
+    }
     rlColor4ub(color.r, color.g, color.b, color.a);
     rlNormal3f(0.18f, 0.96f, 0.14f);
     rlVertex3f(point.x, point.y, point.z);
@@ -14010,16 +14072,20 @@ static void DrawTerrainPlantCover(const CcSettlement *place, Vector3 focus)
                                  WORLD_EARTH,
                                  hunger * 0.58f);
     const float spacing = 1.65f;
-    int32_t first_column = (int32_t)floorf(
-        fmaxf(0.0f, focus.x - 24.0f) / spacing);
-    int32_t last_column = (int32_t)ceilf(
-        fminf(CC_LOCAL_WORLD_WIDTH, focus.x + 24.0f) / spacing);
-    int32_t first_row = (int32_t)floorf(
-        fmaxf(0.0f, focus.z - 24.0f) / spacing);
-    int32_t last_row = (int32_t)ceilf(
-        fminf(CC_LOCAL_WORLD_DEPTH, focus.z + 24.0f) / spacing);
+    int32_t first_column = terrain_detail_cache_building ? 0 :
+        (int32_t)floorf(fmaxf(0.0f, focus.x - 24.0f) / spacing);
+    int32_t last_column = terrain_detail_cache_building ?
+        (int32_t)ceilf(CC_LOCAL_WORLD_WIDTH / spacing) :
+        (int32_t)ceilf(
+            fminf(CC_LOCAL_WORLD_WIDTH, focus.x + 24.0f) / spacing);
+    int32_t first_row = terrain_detail_cache_building ? 0 :
+        (int32_t)floorf(fmaxf(0.0f, focus.z - 24.0f) / spacing);
+    int32_t last_row = terrain_detail_cache_building ?
+        (int32_t)ceilf(CC_LOCAL_WORLD_DEPTH / spacing) :
+        (int32_t)ceilf(
+            fminf(CC_LOCAL_WORLD_DEPTH, focus.z + 24.0f) / spacing);
 
-    rlBegin(RL_TRIANGLES);
+    TerrainDetailBegin();
     for (int32_t row = first_row; row <= last_row; ++row) {
         for (int32_t column = first_column; column <= last_column; ++column) {
             float chance = TerrainScatter01(column, row, 31U);
@@ -14058,7 +14124,8 @@ static void DrawTerrainPlantCover(const CcSettlement *place, Vector3 focus)
          field_index < (int32_t)(sizeof(TERRAIN_FIELDS) /
                                   sizeof(TERRAIN_FIELDS[0])); ++field_index) {
         Rectangle field = TERRAIN_FIELDS[field_index];
-        if (!SceneryFootprintVisible(field, focus)) continue;
+        if (!terrain_detail_cache_building &&
+            !SceneryFootprintVisible(field, focus)) continue;
         int32_t row_index = 0;
         for (float z = field.y + 0.78f;
              z < field.y + field.height - 0.55f;
@@ -14081,7 +14148,7 @@ static void DrawTerrainPlantCover(const CcSettlement *place, Vector3 focus)
             }
         }
     }
-    rlEnd();
+    TerrainDetailEnd();
 }
 
 static void DrawTerrainRocks(Vector3 focus)
@@ -14139,12 +14206,83 @@ static void DrawTerrainRocks(Vector3 focus)
     }
 }
 
+static void EmitTerrainDetailMesh(const CcSettlement *place,
+                                  TerrainMeshWriter *writer)
+{
+    Vector3 world_center = {
+        CC_LOCAL_WORLD_WIDTH * 0.5f, 0.0f,
+        CC_LOCAL_WORLD_DEPTH * 0.5f,
+    };
+    terrain_detail_mesh_writer = writer;
+    terrain_detail_cache_building = true;
+    DrawTerrainRoadRuts(place, world_center);
+    DrawTerrainFieldRows(place, world_center);
+    DrawTerrainPlantCover(place, world_center);
+    terrain_detail_cache_building = false;
+    terrain_detail_mesh_writer = NULL;
+}
+
+static bool TerrainDetailRenderCacheBuild(const CcSettlement *place)
+{
+    TerrainDetailRenderCacheClear();
+    TerrainEnsureReady();
+
+    TerrainMeshWriter counter = {.count_only = true};
+    EmitTerrainDetailMesh(place, &counter);
+    if (counter.cursor <= 0) return false;
+
+    TerrainMeshWriter writer;
+    if (!TerrainMeshWriterAllocate(&writer, counter.cursor)) {
+        TraceLog(LOG_WARNING,
+                 "TERRAIN: could not allocate detail cache (%d vertices)",
+                 counter.cursor);
+        return false;
+    }
+    EmitTerrainDetailMesh(place, &writer);
+    if (writer.cursor != counter.cursor) {
+        TraceLog(LOG_WARNING,
+                 "TERRAIN: detail cache count mismatch (%d/%d)",
+                 writer.cursor, counter.cursor);
+        UnloadMesh(writer.mesh);
+        return false;
+    }
+
+    UploadMesh(&writer.mesh, false);
+    terrain_detail_render_cache.model = LoadModelFromMesh(writer.mesh);
+    ApplyWorldShader(&terrain_detail_render_cache.model);
+    terrain_detail_render_cache.seed = street_terrain_seed;
+    terrain_detail_render_cache.place_id = place != NULL ? place->id : 0U;
+    terrain_detail_render_cache.hunger_band =
+        place != NULL ? place->hunger / 5 : 0;
+    terrain_detail_render_cache.prosperity_band =
+        place != NULL ? place->prosperity / 5 : 10;
+    terrain_detail_render_cache.vertex_count = counter.cursor;
+    terrain_detail_render_cache.ready = true;
+    TraceLog(LOG_INFO, "TERRAIN: cached %d detail vertices on the GPU",
+             counter.cursor);
+    return true;
+}
+
 static void DrawTerrainSurfaceDetails(const CcSettlement *place,
                                       Vector3 focus)
 {
-    DrawTerrainRoadRuts(place, focus);
-    DrawTerrainFieldRows(place, focus);
-    DrawTerrainPlantCover(place, focus);
+    int32_t hunger_band = place != NULL ? place->hunger / 5 : 0;
+    int32_t prosperity_band = place != NULL ? place->prosperity / 5 : 10;
+    bool stale = !terrain_detail_render_cache.ready ||
+                 terrain_detail_render_cache.seed != street_terrain_seed ||
+                 terrain_detail_render_cache.place_id !=
+                     (place != NULL ? place->id : 0U) ||
+                 terrain_detail_render_cache.hunger_band != hunger_band ||
+                 terrain_detail_render_cache.prosperity_band !=
+                     prosperity_band;
+    if (stale && !TerrainDetailRenderCacheBuild(place)) {
+        DrawTerrainRoadRuts(place, focus);
+        DrawTerrainFieldRows(place, focus);
+        DrawTerrainPlantCover(place, focus);
+    } else {
+        DrawModel(terrain_detail_render_cache.model,
+                  (Vector3){0.0f, 0.0f, 0.0f}, 1.0f, WHITE);
+    }
     DrawTerrainRocks(focus);
 }
 
@@ -14629,6 +14767,7 @@ static void DrawCastle(Color kingdom, const CcLocalPlaceProfile *profile,
                                       sizeof(CASTLE_STRUCTURES[0])); ++i) {
         const WorldStructure *structure = &CASTLE_STRUCTURES[i];
         Rectangle footprint = structure->footprint;
+        if (!SceneryFootprintVisible(footprint, focus)) continue;
         Color stone = CompoundStoneColor(profile, kingdom, i);
         DrawBuildingFoundation(
             footprint.x, footprint.y, footprint.width, footprint.height,
@@ -14639,6 +14778,7 @@ static void DrawCastle(Color kingdom, const CcLocalPlaceProfile *profile,
                                       sizeof(CASTLE_STRUCTURES[0])); ++i) {
         const WorldStructure *structure = &CASTLE_STRUCTURES[i];
         Rectangle footprint = structure->footprint;
+        if (!SceneryFootprintVisible(footprint, focus)) continue;
         Color stone = CompoundStoneColor(profile, kingdom, i);
         float reveal = castle_structure_reveals[i].amount;
         if (fabsf(reveal - reveal_active) > 0.001f) {
@@ -14649,7 +14789,7 @@ static void DrawCastle(Color kingdom, const CcLocalPlaceProfile *profile,
                                        kingdom, i);
     }
     SetWorldForegroundReveal(0.0f, reveal_cut_height);
-    {
+    if (SceneryPointVisible(78.50f, 30.84f, focus)) {
         DrawBox((Vector3){78.5f, 1.20f, 22.03f},
                 (Vector3){1.35f, 2.40f, 0.06f},
                 WORLD_WOOD_SHADOW);
@@ -15910,7 +16050,7 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
     /* The skeleton, muscle controls, and soft tissue are construction data.
        The visible body is one baked skin; the rigid pieces below are fitted
        clothing, boots, head identity, hair, armor, and equipment. */
-    bool drew = DrawNpcBodySkin(skin, appearance);
+    bool drew = DrawNpcBodySkin(skin, appearance, featured_hero);
     if (!drew) return false;
 
     const CcHumanoidSkinBonePose *spine =

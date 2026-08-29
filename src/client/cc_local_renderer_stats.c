@@ -4,7 +4,7 @@
 #include <stdlib.h>
 
 static CcLocalRendererStats renderer_stats = {0};
-#define CC_RENDER_FRAME_SAMPLE_COUNT 240
+#define CC_RENDER_FRAME_SAMPLE_COUNT 2048
 static float frame_samples[CC_RENDER_FRAME_SAMPLE_COUNT] = {0};
 static int32_t frame_sample_count = 0;
 static int32_t frame_sample_cursor = 0;
@@ -66,6 +66,20 @@ void CcLocalRendererBeginFrame(float delta_time)
     renderer_stats.skinned_meshes = 0;
     renderer_stats.hero_skin_updates = 0;
     renderer_stats.hero_skinned_meshes = 0;
+    renderer_stats.npc_skin_updates = 0;
+    renderer_stats.npc_skinned_meshes = 0;
+    renderer_stats.creature_skin_updates = 0;
+    renderer_stats.creature_skinned_meshes = 0;
+}
+
+void CcLocalRendererResetPerformanceMetrics(void)
+{
+    renderer_stats = (CcLocalRendererStats){0};
+    for (int32_t i = 0; i < CC_RENDER_FRAME_SAMPLE_COUNT; ++i) {
+        frame_samples[i] = 0.0f;
+    }
+    frame_sample_count = 0;
+    frame_sample_cursor = 0;
 }
 
 CcLocalRendererStats CcLocalRendererGetStats(void)
@@ -92,4 +106,18 @@ void CcLocalRendererRecordHeroSkinUpdate(int32_t mesh_count)
     CcLocalRendererRecordSkinUpdate(mesh_count);
     renderer_stats.hero_skin_updates += 1;
     renderer_stats.hero_skinned_meshes += mesh_count;
+}
+
+void CcLocalRendererRecordNpcSkinUpdate(int32_t mesh_count)
+{
+    CcLocalRendererRecordSkinUpdate(mesh_count);
+    renderer_stats.npc_skin_updates += 1;
+    renderer_stats.npc_skinned_meshes += mesh_count;
+}
+
+void CcLocalRendererRecordCreatureSkinUpdate(int32_t mesh_count)
+{
+    CcLocalRendererRecordSkinUpdate(mesh_count);
+    renderer_stats.creature_skin_updates += 1;
+    renderer_stats.creature_skinned_meshes += mesh_count;
 }

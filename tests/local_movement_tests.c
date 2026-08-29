@@ -2136,18 +2136,30 @@ int main(void)
         CcLocalRendererBeginFrame(0.010f);
     }
     CcLocalRendererBeginFrame(0.050f);
-    CcLocalRendererRecordSkinUpdate(1);
+    CcLocalRendererRecordCreatureSkinUpdate(1);
     CcLocalRendererRecordHeroSkinUpdate(3);
+    CcLocalRendererRecordNpcSkinUpdate(2);
     CcLocalRendererStats performance = CcLocalRendererGetStats();
     if (performance.p95_frame_milliseconds < 9.9f ||
         performance.p95_frame_milliseconds > 10.1f ||
         performance.maximum_frame_milliseconds < 49.9f ||
         performance.hitch_count != 1 ||
-        performance.skin_updates != 2 || performance.skinned_meshes != 4 ||
+        performance.skin_updates != 3 || performance.skinned_meshes != 6 ||
         performance.hero_skin_updates != 1 ||
-        performance.hero_skinned_meshes != 3) {
+        performance.hero_skinned_meshes != 3 ||
+        performance.npc_skin_updates != 1 ||
+        performance.npc_skinned_meshes != 2 ||
+        performance.creature_skin_updates != 1 ||
+        performance.creature_skinned_meshes != 1) {
         (void)fprintf(stderr,
                       "renderer hitch or hero skin metrics were incorrect\n");
+        return 1;
+    }
+    CcLocalRendererResetPerformanceMetrics();
+    performance = CcLocalRendererGetStats();
+    if (performance.p95_frame_milliseconds != 0.0f ||
+        performance.skin_updates != 0) {
+        (void)fprintf(stderr, "renderer metrics did not reset\n");
         return 1;
     }
 

@@ -473,7 +473,7 @@ static void DrawPerformanceOverlay(void)
     float fps = stats.smoothed_frame_milliseconds > 0.001f ?
         1000.0f / stats.smoothed_frame_milliseconds : 0.0f;
     Rectangle bounds = {(float)GetScreenWidth() - 294.0f, 18.0f,
-                        276.0f, 110.0f};
+                        276.0f, 128.0f};
     DrawPanel(bounds, PANEL_DEEP);
     CcOverlayDrawText("LOCAL PERFORMANCE", (int)bounds.x + 14,
              (int)bounds.y + 11, 12, TEAL);
@@ -483,17 +483,22 @@ static void DrawPerformanceOverlay(void)
     CcOverlayDrawText(TextFormat("skin %d update  %d mesh uploads",
                         stats.skin_updates, stats.skinned_meshes),
              (int)bounds.x + 14, (int)bounds.y + 50, 11, INK);
+    CcOverlayDrawText(TextFormat("npc %d/%d  creature %d/%d",
+                        stats.npc_skin_updates, stats.npc_skinned_meshes,
+                        stats.creature_skin_updates,
+                        stats.creature_skinned_meshes),
+             (int)bounds.x + 14, (int)bounds.y + 68, 10, MUTED);
     CcOverlayDrawText(TextFormat("p95 %4.1f  p99 %4.1f  hitches %d",
                         stats.p95_frame_milliseconds,
                         stats.p99_frame_milliseconds,
                         stats.hitch_count),
-             (int)bounds.x + 14, (int)bounds.y + 68, 10,
+             (int)bounds.x + 14, (int)bounds.y + 86, 10,
              stats.hitch_count > 0 ? DANGER : MUTED);
     CcOverlayDrawText(TextFormat("bipeds %d  hero %d  lod %d",
                         stats.biomechanical_characters,
                         stats.high_detail_characters,
                         stats.low_detail_characters),
-             (int)bounds.x + 14, (int)bounds.y + 86, 11, MUTED);
+             (int)bounds.x + 14, (int)bounds.y + 104, 11, MUTED);
 }
 
 static void DrawTwoLineText(const char *text, int x, int y,
@@ -4925,6 +4930,7 @@ int main(int argc, char **argv)
                             strcmp(argv[1], "--benchmark-render") == 0;
     int32_t render_benchmark_frames = 600;
     double render_benchmark_minimum_fps = 0.0;
+    const char *render_benchmark_scene = "street";
     if (render_benchmark && argc >= 3) {
         char *end = NULL;
         long parsed = strtol(argv[2], &end, 10);
@@ -4943,6 +4949,17 @@ int main(int argc, char **argv)
             return 1;
         }
         render_benchmark_minimum_fps = parsed;
+    }
+    if (render_benchmark && argc >= 5 && argv[4][0] != '-') {
+        render_benchmark_scene = argv[4];
+        if (strcmp(render_benchmark_scene, "street") != 0 &&
+            strcmp(render_benchmark_scene, "market") != 0 &&
+            strcmp(render_benchmark_scene, "road") != 0 &&
+            strcmp(render_benchmark_scene, "combat") != 0) {
+            (void)fprintf(stderr,
+                          "Render benchmark scene must be street, market, road, or combat.\n");
+            return 1;
+        }
     }
     bool capture_board = argc >= 2 && strcmp(argv[1], "--capture-board") == 0;
     bool capture_interior = argc >= 2 && strcmp(argv[1], "--capture-interior") == 0;
@@ -5145,7 +5162,8 @@ int main(int argc, char **argv)
         }
     }
 
-    if (capture || render_benchmark) SetTraceLogLevel(LOG_WARNING);
+    if (render_benchmark) SetTraceLogLevel(LOG_ERROR);
+    else if (capture) SetTraceLogLevel(LOG_WARNING);
     /* The world is deliberately rasterized at its final art-pixel
        resolution. Multisample coverage before that raster step makes thin
        edges change blend weights as actors move and reads as temporal
@@ -5559,6 +5577,24 @@ int main(int argc, char **argv)
             if (!local.agent.grounded && local.agent.position.y > 0.65f) break;
         }
     }
+    if (render_benchmark) {
+        view = VIEW_LOCAL;
+        return_view = VIEW_LOCAL;
+        if (strcmp(render_benchmark_scene, "market") == 0) {
+            local.market_interior = true;
+            RepositionHero(&local, (Vector2){4.60f, 5.10f}, true);
+            local.agent.facing_yaw = 0.14f;
+        } else if (strcmp(render_benchmark_scene, "road") == 0) {
+            BeginRoadTravelState(&local);
+            local.convoy.pace = 0.0f;
+        } else if (strcmp(render_benchmark_scene, "combat") == 0) {
+            PrepareRoadCombatReel(&sim, &local);
+        } else {
+            RepositionHero(&local, (Vector2){44.25f, 28.85f}, false);
+            local.agent.facing_yaw = -0.35f;
+            local.course.alarm_countdown = 1000.0f;
+        }
+    }
     char message[256] = "";
     if (!capture && !render_benchmark && startup_message[0] != '\0') {
         (void)snprintf(message, sizeof(message), "%s", startup_message);
@@ -5585,8 +5621,10 @@ int main(int argc, char **argv)
     }
     int capture_frames = 0;
     int walk_frame_count = 0;
+    const int32_t render_benchmark_warmup_frames = 60;
+    int32_t render_benchmark_warmup_count = 0;
     int32_t render_benchmark_count = 0;
-    double render_benchmark_started = GetTime();
+    double render_benchmark_started = 0.0;
     bool performance_overlay = false;
     float message_age = 0.0f;
 
@@ -5596,7 +5634,7 @@ int main(int argc, char **argv)
         0.0f);
 
     Rectangle local_bounds = LocalViewportBounds();
-    while (!WindowShouldClose()) {
+    while (render_benchmark || !WindowShouldClose()) {
         local_bounds = LocalViewportBounds();
         float frame_delta_time = GetFrameTime();
         char previous_message[sizeof(message)];
@@ -5609,7 +5647,7 @@ int main(int argc, char **argv)
                 LocalAtmosphereForSimulation(&sim),
             2.4f);
         CcLocalRendererUpdateAtmosphere(frame_delta_time);
-        if (!capture && ClientKeyPressed(KEY_F3)) {
+        if (!capture && !render_benchmark && ClientKeyPressed(KEY_F3)) {
             performance_overlay = !performance_overlay;
             (void)snprintf(message, sizeof(message), "%s",
                            performance_overlay ?
@@ -5631,6 +5669,8 @@ int main(int argc, char **argv)
                 UpdateActionReel(&local, &action_reel, message,
                                  sizeof(message));
             }
+        } else if (render_benchmark) {
+            ClientInputClearPressed();
         } else {
             HandleInput(&journal, &sim, &selected, &selected_situation,
                         &view, &return_view, &local,
@@ -5646,7 +5686,10 @@ int main(int argc, char **argv)
             message_age += capture_gameplay_reel ? 1.0f / 15.0f :
                            frame_delta_time;
         }
-        float clock = capture_gameplay_reel ?
+        float clock = render_benchmark ?
+            (float)(render_benchmark_warmup_count +
+                    render_benchmark_count) / 60.0f :
+            capture_gameplay_reel ?
             (float)gameplay_reel.captured_frames / 15.0f :
             capture_creature_reel ? (float)capture_frames / 15.0f :
             (float)GetTime();
@@ -5775,6 +5818,16 @@ int main(int argc, char **argv)
         EndDrawing();
 
         if (render_benchmark) {
+            if (render_benchmark_warmup_count <
+                render_benchmark_warmup_frames) {
+                render_benchmark_warmup_count += 1;
+                if (render_benchmark_warmup_count ==
+                    render_benchmark_warmup_frames) {
+                    CcLocalRendererResetPerformanceMetrics();
+                    render_benchmark_started = GetTime();
+                }
+                continue;
+            }
             render_benchmark_count += 1;
             if (render_benchmark_count >= render_benchmark_frames) break;
         } else if (capture_gameplay_reel) {
@@ -5849,8 +5902,9 @@ int main(int argc, char **argv)
     if (render_benchmark) {
         double frames_per_second =
             (double)render_benchmark_count / render_benchmark_elapsed;
-        (void)printf("render: frames=%d seconds=%.6f ms/frame=%.3f fps=%.1f p95=%.3f p99=%.3f max=%.3f hitches=%d skin_updates=%d skinned_meshes=%d hero_skin_updates=%d hero_skinned_meshes=%d high_detail=%d lod=%d\n",
-                     render_benchmark_count, render_benchmark_elapsed,
+        (void)printf("render: scene=%s frames=%d seconds=%.6f ms/frame=%.3f fps=%.1f p95=%.3f p99=%.3f max=%.3f hitches=%d skin_updates=%d skinned_meshes=%d hero_skin_updates=%d hero_skinned_meshes=%d npc_skin_updates=%d npc_skinned_meshes=%d creature_skin_updates=%d creature_skinned_meshes=%d high_detail=%d lod=%d\n",
+                     render_benchmark_scene, render_benchmark_count,
+                     render_benchmark_elapsed,
                      render_benchmark_elapsed * 1000.0 /
                          (double)render_benchmark_count,
                      frames_per_second,
@@ -5862,26 +5916,41 @@ int main(int argc, char **argv)
                      final_renderer_stats.skinned_meshes,
                      final_renderer_stats.hero_skin_updates,
                      final_renderer_stats.hero_skinned_meshes,
+                     final_renderer_stats.npc_skin_updates,
+                     final_renderer_stats.npc_skinned_meshes,
+                     final_renderer_stats.creature_skin_updates,
+                     final_renderer_stats.creature_skinned_meshes,
                      final_renderer_stats.high_detail_characters,
                      final_renderer_stats.low_detail_characters);
         bool performance_failed = render_benchmark_minimum_fps > 0.0 &&
                                   frames_per_second <
                                       render_benchmark_minimum_fps;
+        double p95_budget = render_benchmark_minimum_fps > 0.0 ?
+            1500.0 / render_benchmark_minimum_fps : 0.0;
+        bool frame_time_failed = p95_budget > 0.0 &&
+            final_renderer_stats.p95_frame_milliseconds > p95_budget;
+        bool scene_expects_lod =
+            strcmp(render_benchmark_scene, "combat") == 0;
         bool hero_layout_failed =
             final_renderer_stats.high_detail_characters != 1 ||
-            final_renderer_stats.low_detail_characters <= 0;
-        bool skin_layout_failed = screen_first_hero ?
-            final_renderer_stats.hero_skin_updates != 0 ||
-                final_renderer_stats.hero_skinned_meshes != 0 ||
-                hero_layout_failed :
+            (scene_expects_lod &&
+             final_renderer_stats.low_detail_characters <= 0);
+        bool skin_layout_failed =
             final_renderer_stats.hero_skin_updates != 1 ||
-                final_renderer_stats.hero_skinned_meshes >
-                    CC_LOCAL_HERO_RUNTIME_MESH_BUDGET ||
-                hero_layout_failed;
+            final_renderer_stats.hero_skinned_meshes <= 0 ||
+            final_renderer_stats.hero_skinned_meshes >
+                CC_LOCAL_HERO_RUNTIME_MESH_BUDGET ||
+            hero_layout_failed;
         if (performance_failed) {
             (void)fprintf(stderr,
                           "render performance budget failed: %.1f FPS < %.1f FPS\n",
                           frames_per_second, render_benchmark_minimum_fps);
+        }
+        if (frame_time_failed) {
+            (void)fprintf(stderr,
+                          "render frame-time budget failed: p95 %.1f ms > %.1f ms\n",
+                          final_renderer_stats.p95_frame_milliseconds,
+                          p95_budget);
         }
         if (skin_layout_failed) {
             (void)fprintf(stderr,
@@ -5892,7 +5961,9 @@ int main(int argc, char **argv)
                           final_renderer_stats.low_detail_characters,
                           CC_LOCAL_HERO_RUNTIME_MESH_BUDGET);
         }
-        if (performance_failed || skin_layout_failed) return 2;
+        if (performance_failed || frame_time_failed || skin_layout_failed) {
+            return 2;
+        }
     } else if (capture_walk_cycle) {
         (void)printf("captured %d walk-cycle frames with prefix %s\n",
                      walk_frame_count, capture_path);

@@ -59,5 +59,7 @@ CcLocalFaceViewInternal CcLocalFaceViewForFrontAmountInternal(
 void CcLocalRendererRecordBiped(bool high_detail);
 void CcLocalRendererRecordSkinUpdate(int32_t mesh_count);
 void CcLocalRendererRecordHeroSkinUpdate(int32_t mesh_count);
+void CcLocalRendererRecordNpcSkinUpdate(int32_t mesh_count);
+void CcLocalRendererRecordCreatureSkinUpdate(int32_t mesh_count);
 
 #endif

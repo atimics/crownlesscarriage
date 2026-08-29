@@ -357,6 +357,10 @@ typedef struct CcLocalRendererStats {
     int32_t skinned_meshes;
     int32_t hero_skin_updates;
     int32_t hero_skinned_meshes;
+    int32_t npc_skin_updates;
+    int32_t npc_skinned_meshes;
+    int32_t creature_skin_updates;
+    int32_t creature_skinned_meshes;
 } CcLocalRendererStats;
 
 /* Keep the player skin comfortably below raylib's CPU skinning/upload cliff.
@@ -463,6 +467,7 @@ float CcLocalCombatSkillDuration(CcCombatSkill skill);
 void CcLocalRendererInit(void);
 void CcLocalRendererSetScreenFirstHero(bool enabled);
 void CcLocalRendererBeginFrame(float delta_time);
+void CcLocalRendererResetPerformanceMetrics(void);
 CcLocalRendererStats CcLocalRendererGetStats(void);
 void CcLocalRendererSetDiagnosticOverlay(bool enabled);
 void CcLocalRendererSetAtmosphere(CcLocalAtmospherePreset preset,
