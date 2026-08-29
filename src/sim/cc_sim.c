@@ -8596,7 +8596,7 @@ static void FinishJourneyArrival(CcSim *sim)
     }
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(text, sizeof(text),
-                   "The Crownless carriage reaches %s from %s along a %d-day road at %s pace (%d%% danger).",
+                   "The carriage reaches %.24s from %.24s along a %d-day road at %s pace (%d%% danger).",
                    destination->name,
                    origin != NULL ? origin->name : "the road",
                    sim->journey.total_subticks / CC_WORLD_DAY_SUBTICKS,
