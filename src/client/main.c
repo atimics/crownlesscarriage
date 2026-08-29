@@ -45,6 +45,29 @@ typedef enum ClientView {
     VIEW_DRAGON_CAVE
 } ClientView;
 
+static bool IsCommandOverlay(ClientView view)
+{
+    return view == VIEW_LEDGER || view == VIEW_SITUATIONS;
+}
+
+static ClientView SafeOverlayReturnView(ClientView return_view)
+{
+    return IsCommandOverlay(return_view) ? VIEW_LOCAL : return_view;
+}
+
+static void ToggleCommandOverlay(ClientView requested,
+                                 ClientView *view,
+                                 ClientView *return_view)
+{
+    if (view == NULL || return_view == NULL) return;
+    if (*view == requested) {
+        *view = SafeOverlayReturnView(*return_view);
+        return;
+    }
+    if (!IsCommandOverlay(*view)) *return_view = *view;
+    *view = requested;
+}
+
 typedef struct LocalState {
     CcLocalAgent agent;
     CcLocalCourse course;
@@ -2099,7 +2122,9 @@ static ContextActionSet BuildContextActions(
         return set;
     }
     if (view == VIEW_LEDGER) {
-        AddContextAction(&set, CONTEXT_ACTION_CLOSE_VIEW, "Close");
+        AddDetailedContextAction(
+            &set, CONTEXT_ACTION_CLOSE_VIEW, "Close ledger", "ESC",
+            "RETURN TO PREVIOUS VIEW", true, false);
         return set;
     }
     if (view == VIEW_SITUATIONS) {
@@ -2122,7 +2147,9 @@ static ContextActionSet BuildContextActions(
             AddContextAction(&set, CONTEXT_ACTION_NEXT_PROMISE,
                              "Next quest");
         }
-        AddContextAction(&set, CONTEXT_ACTION_CLOSE_VIEW, "Close");
+        AddDetailedContextAction(
+            &set, CONTEXT_ACTION_CLOSE_VIEW, "Close quests", "ESC",
+            "RETURN TO PREVIOUS VIEW", true, false);
         return set;
     }
     if (view == VIEW_CHARACTER) {
@@ -2168,7 +2195,9 @@ static ContextActionSet BuildContextActions(
                              TextFormat("Buy map — %d crowns",
                                         map->ask_price));
         }
-        AddContextAction(&set, CONTEXT_ACTION_CLOSE_VIEW, "Close map case");
+        AddDetailedContextAction(
+            &set, CONTEXT_ACTION_CLOSE_VIEW, "Close map case", "ESC",
+            "RETURN TO THE CARRIAGE", true, false);
         return set;
     }
     if (view == VIEW_ROADS) {
@@ -2193,8 +2222,9 @@ static ContextActionSet BuildContextActions(
             AddContextAction(&set, CONTEXT_ACTION_REPAIR_ROUTE,
                              "Repair road");
         }
-        AddContextAction(&set, CONTEXT_ACTION_CLOSE_VIEW,
-                         "Turn back to town");
+        AddDetailedContextAction(
+            &set, CONTEXT_ACTION_CLOSE_VIEW, "Turn back to town", "ESC",
+            "LEAVE THE JUNCTION", true, false);
         return set;
     }
 
@@ -2379,7 +2409,7 @@ static Rectangle ContextActionBounds(int32_t index, int32_t count)
     float total = (float)count * width + (float)(count - 1) * gap;
     return (Rectangle){((float)GetScreenWidth() - total) * 0.5f +
                            (float)index * (width + gap),
-                       (float)GetScreenHeight() - 66.0f, width, 58.0f};
+                       (float)GetScreenHeight() - 78.0f, width, 58.0f};
 }
 
 static Color ContextActionColor(ContextActionKind kind)
@@ -2428,7 +2458,7 @@ static void DrawContextActionTray(const CcSim *sim, const LocalState *local,
         int width = CcOverlayMeasureText("LEFT BUY · RIGHT SELL", 9);
         CcOverlayDrawText("LEFT BUY · RIGHT SELL",
                           (GetScreenWidth() - width) / 2,
-                          GetScreenHeight() - 81, 9, MUTED);
+                          GetScreenHeight() - 94, 9, MUTED);
     }
     for (int32_t i = 0; i < actions.count; ++i) {
         Rectangle bounds = ContextActionBounds(i, actions.count);
@@ -3002,20 +3032,34 @@ static void DrawLedger(const CcSim *sim)
 {
     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
                   Fade(BACKGROUND, 0.67f));
-    Rectangle bounds = {350.0f, 205.0f, 580.0f, 300.0f};
+    Rectangle bounds = {300.0f, 110.0f, 680.0f, 500.0f};
     DrawPanel(bounds, PANEL_DEEP);
-    CcOverlayDrawText("NEWS", 382, 237, 22, INK);
-    int32_t shown = sim->event_count < 3 ? sim->event_count : 3;
+    CcOverlayDrawText("COMPANY LEDGER", 332, 138, 22, INK);
+    CcOverlayDrawText("RECENT EVENTS / MOST RECENT FIRST",
+                      332, 171, 9, MUTED);
+    DrawRectangle(332, 194, 616, 1, Fade(CC_GOLD, 0.42f));
+    int32_t shown = sim->event_count < 4 ? sim->event_count : 4;
     for (int32_t i = 0; i < shown; ++i) {
         const CcEvent *event = CcSimRecentEvent(sim, i);
         if (event == NULL) continue;
-        int y = 292 + i * 54;
-        CcOverlayDrawText(TextFormat("DAY %d", event->day), 382, y, 9,
-                 CC_GOLD);
-        CcOverlayDrawText(CcEventKindName(event->kind), 458, y, 11,
-                 event->kind == CC_EVENT_MONSTER_PRESSURE ? CC_VIOLET : TEAL);
+        int y = 216 + i * 88;
+        CcOverlayDrawText(TextFormat("DAY %d", event->day), 332, y, 9,
+                          CC_GOLD);
+        Color event_color =
+            event->kind == CC_EVENT_MONSTER_PRESSURE ? CC_VIOLET :
+            event->kind == CC_EVENT_JOURNEY_WARNING ? DANGER : TEAL;
+        CcOverlayDrawText(CcEventKindName(event->kind), 416, y, 11,
+                          event_color);
+        DrawTwoLineText(event->text, 332, y + 25, 76U, 10, INK);
+        if (i + 1 < shown) {
+            DrawRectangle(332, y + 76, 616, 1, Fade(MUTED, 0.20f));
+        }
     }
-    if (shown == 0) CcOverlayDrawText("No news.", 382, 292, 12, MUTED);
+    if (shown == 0) {
+        CcOverlayDrawText("No company news yet.", 332, 226, 12, MUTED);
+    }
+    CcOverlayDrawText("TAB OR ESC CLOSES THE LEDGER",
+                      332, 578, 9, MUTED);
 }
 
 static Color SituationColor(CcSituationKind kind)
@@ -3996,19 +4040,15 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         }
         return;
     }
-    if (context_action == CONTEXT_ACTION_CLOSE_VIEW &&
-        (*view == VIEW_LEDGER || *view == VIEW_SITUATIONS)) {
-        *view = *return_view;
+    if (IsCommandOverlay(*view) &&
+        (ClientKeyPressed(KEY_ESCAPE) ||
+         context_action == CONTEXT_ACTION_CLOSE_VIEW)) {
+        *view = SafeOverlayReturnView(*return_view);
         return;
     }
     if (ClientKeyPressed(KEY_TAB) ||
         command_action == COMMAND_ACTION_LEDGER) {
-        if (*view == VIEW_LEDGER) {
-            *view = *return_view;
-        } else {
-            *return_view = *view;
-            *view = VIEW_LEDGER;
-        }
+        ToggleCommandOverlay(VIEW_LEDGER, view, return_view);
         return;
     }
     bool road_local = local->road_choice_active ||
@@ -4029,15 +4069,12 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         return;
     }
     if (quests_requested) {
-        if (*view == VIEW_SITUATIONS) {
-            *view = *return_view;
-        } else {
-            *return_view = *view;
+        if (*view != VIEW_SITUATIONS) {
             if (SelectedActiveSituation(sim, *selected_situation) == NULL) {
                 *selected_situation = FirstActiveSituationIndex(sim);
             }
-            *view = VIEW_SITUATIONS;
         }
+        ToggleCommandOverlay(VIEW_SITUATIONS, view, return_view);
         return;
     }
     bool map_requested = ClientKeyPressed(KEY_M) ||
@@ -4056,21 +4093,23 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         if (*view == VIEW_MAP) {
             *view = VIEW_LOCAL;
             *selected = FirstOutgoingRouteIndex(sim);
-        } else if (*view == VIEW_LOCAL && !local->market_interior) {
+        } else {
+            ClientView map_origin = IsCommandOverlay(*view) ?
+                SafeOverlayReturnView(*return_view) : *view;
             Vector2 carriage = local->site_kind == CC_LOCAL_SITE_NONE ?
                 LOCAL_CARRIAGE :
                 (Vector2){CC_LOCAL_SITE_CARRIAGE_X,
                           CC_LOCAL_SITE_CARRIAGE_Z};
-            if (GridDistance(LocalPosition(local), carriage) < 1.75f) {
+            if (map_origin == VIEW_MAP) {
+                *view = VIEW_MAP;
+            } else if (map_origin == VIEW_LOCAL && !local->market_interior &&
+                       GridDistance(LocalPosition(local), carriage) < 1.75f) {
                 *selected = FirstVisibleMapIndex(sim);
                 *view = VIEW_MAP;
             } else {
                 (void)snprintf(message, message_capacity,
                                "Walk closer to the carriage.");
             }
-        } else {
-            (void)snprintf(message, message_capacity,
-                           "Walk closer to the carriage.");
         }
         return;
     }
@@ -4865,7 +4904,8 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
     }
 
     if (*view == VIEW_MAP) {
-        if (context_action == CONTEXT_ACTION_CLOSE_VIEW) {
+        if (ClientKeyPressed(KEY_ESCAPE) ||
+            context_action == CONTEXT_ACTION_CLOSE_VIEW) {
             *view = VIEW_LOCAL;
             *selected = FirstOutgoingRouteIndex(sim);
             return;
@@ -4930,7 +4970,8 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         return;
     }
 
-    if (context_action == CONTEXT_ACTION_CLOSE_VIEW) {
+    if (ClientKeyPressed(KEY_ESCAPE) ||
+        context_action == CONTEXT_ACTION_CLOSE_VIEW) {
         ResetLocalState(local);
         *view = VIEW_LOCAL;
         (void)snprintf(message, message_capacity,
