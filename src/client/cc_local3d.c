@@ -3044,6 +3044,7 @@ void CcLocalAgentSetScene(CcLocalAgent *agent, CcLocalSceneKind scene)
     agent->navigation_point_count = 0;
     agent->navigation_point_index = 0;
     agent->navigation_destination_room = -1;
+    agent->world_target = CC_LOCAL_WORLD_TARGET_NONE;
     agent->climbing = false;
     agent->climbing_down = false;
     agent->vaulting = false;
@@ -5348,6 +5349,7 @@ bool CcLocalAgentSetExactTarget(CcLocalAgent *agent, Vector3 target,
 {
     ClearAgentNavigation(agent);
     if (agent == NULL) return false;
+    agent->world_target = CC_LOCAL_WORLD_TARGET_NONE;
     agent->exact_target_valid = false;
     agent->target_valid = false;
     agent->command_point_valid = false;
@@ -5445,7 +5447,44 @@ static bool SetStreetClickTarget(CcLocalAgent *agent, Vector3 target)
 
 bool CcLocalAgentSetStreetTarget(CcLocalAgent *agent, Vector3 target)
 {
+    if (agent != NULL) agent->world_target = CC_LOCAL_WORLD_TARGET_NONE;
     return SetStreetClickTarget(agent, target);
+}
+
+Vector2 CcLocalWorldTargetApproachPoint(CcLocalWorldTargetKind target)
+{
+    if (target == CC_LOCAL_WORLD_TARGET_CARRIAGE) {
+        return (Vector2){CC_LOCAL_CARRIAGE_APPROACH_X,
+                         CC_LOCAL_CARRIAGE_APPROACH_Z};
+    }
+    return (Vector2){0};
+}
+
+const char *CcLocalWorldTargetName(CcLocalWorldTargetKind target)
+{
+    if (target == CC_LOCAL_WORLD_TARGET_CARRIAGE) return "Carriage";
+    return NULL;
+}
+
+void CcLocalAgentClearWorldTarget(CcLocalAgent *agent)
+{
+    if (agent != NULL) agent->world_target = CC_LOCAL_WORLD_TARGET_NONE;
+}
+
+bool CcLocalAgentApproachWorldTarget(CcLocalAgent *agent,
+                                     CcLocalWorldTargetKind target)
+{
+    if (agent == NULL || target != CC_LOCAL_WORLD_TARGET_CARRIAGE) {
+        return false;
+    }
+    agent->world_target = CC_LOCAL_WORLD_TARGET_NONE;
+    Vector2 approach = CcLocalWorldTargetApproachPoint(target);
+    Vector3 world = {
+        approach.x, CcLocalTerrainHeightAt(approach.x, approach.y), approach.y
+    };
+    if (!SetStreetClickTarget(agent, world)) return false;
+    agent->world_target = target;
+    return true;
 }
 
 static bool StartStreetPortalTraversal(CcLocalAgent *agent,
@@ -5864,12 +5903,43 @@ static RayCollision RayTerrainCollision(Ray ray)
     return nearest;
 }
 
+CcLocalWorldTargetKind CcLocalAgentPickWorldTarget(
+    const CcLocalAgent *agent, Vector2 screen_point, RenderTexture2D target,
+    Rectangle destination, bool market_interior)
+{
+    if (agent == NULL || market_interior ||
+        agent->scene != CC_LOCAL_SCENE_STREET ||
+        !CombatCanAct(&agent->combat) ||
+        !CheckCollisionPointRec(screen_point, destination)) {
+        return CC_LOCAL_WORLD_TARGET_NONE;
+    }
+    Vector2 local = {
+        (screen_point.x - destination.x) / destination.width *
+            (float)target.texture.width,
+        (screen_point.y - destination.y) / destination.height *
+            (float)target.texture.height
+    };
+    Camera3D camera = {0};
+    if (!PresentedCameraForInput(CC_LOCAL_SCENE_STREET, agent,
+                                 target.texture.width,
+                                 target.texture.height, &camera)) {
+        camera = CcLocalStreetCameraInternal(agent, 0.0f, false,
+                                              target.texture.height);
+    }
+    Ray ray = GetScreenToWorldRayEx(local, camera, target.texture.width,
+                                    target.texture.height);
+    float carriage = RayFootprintDistance(ray, CARRIAGE_FOOTPRINT, 2.65f);
+    return carriage < FLT_MAX ? CC_LOCAL_WORLD_TARGET_CARRIAGE :
+                                CC_LOCAL_WORLD_TARGET_NONE;
+}
+
 bool CcLocalAgentPickTarget(CcLocalAgent *agent, Vector2 screen_point,
                             RenderTexture2D target, Rectangle destination,
                             bool market_interior)
 {
     if (agent == NULL || !CombatCanAct(&agent->combat) ||
         !CheckCollisionPointRec(screen_point, destination)) return false;
+    agent->world_target = CC_LOCAL_WORLD_TARGET_NONE;
     CcLocalSceneKind scene = AgentSceneForCall(agent, market_interior);
     bool interior = scene == CC_LOCAL_SCENE_MARKET;
     Vector2 local = {
@@ -18549,7 +18619,8 @@ static void PrepareHeroDisplayAt(const CcLocalAgent *source,
     CcLocalAgentSetMorphology(display, source->morphology, false);
 }
 
-static void DrawCarriage3D(const CcSettlement *place)
+static void DrawCarriage3D(const CcSettlement *place, bool targeted,
+                           float clock)
 {
     float x = CARRIAGE_FOOTPRINT.x + CARRIAGE_FOOTPRINT.width * 0.5f;
     float z = CARRIAGE_FOOTPRINT.y + CARRIAGE_FOOTPRINT.height * 0.5f;
@@ -18558,11 +18629,15 @@ static void DrawCarriage3D(const CcSettlement *place)
     RuntimeAsset *carriage = &runtime_assets[RUNTIME_ASSET_CARRIAGE];
     if (carriage->ready) {
         Vector3 origin = {x, 0.0f, z};
+        float pulse = targeted ? 0.5f + 0.5f * sinf(clock * 5.0f) : 0.0f;
+        Color tint = targeted ?
+            (Color){255, (unsigned char)(235 + 12 * pulse),
+                    (unsigned char)(174 + 34 * pulse), 255} : WHITE;
         DrawModelEx(carriage->model, origin, (Vector3){0.0f, 1.0f, 0.0f},
                     CARRIAGE_ASSET_STREET_YAW_DEGREES,
                     (Vector3){CARRIAGE_ASSET_SCALE,
                               CARRIAGE_ASSET_SCALE,
-                              CARRIAGE_ASSET_SCALE}, WHITE);
+                              CARRIAGE_ASSET_SCALE}, tint);
         int32_t cargo = place != NULL ?
             place->stock[CC_GOOD_FOOD] + place->stock[CC_GOOD_MATERIAL] +
             place->stock[CC_GOOD_TOOLS] : 0;
@@ -18608,6 +18683,35 @@ static void DrawCarriage3D(const CcSettlement *place)
                         Fade(WORLD_GOLD, 0.62f));
     }
     rlPopMatrix();
+}
+
+static void DrawCarriageTargetMarker3D(float clock)
+{
+    float ground = TerrainFootprintHeight(CARRIAGE_FOOTPRINT);
+    float pulse = 0.72f + 0.18f * sinf(clock * 5.0f);
+    Color accent = Fade(WORLD_GOLD, pulse);
+    Vector3 center = {
+        CARRIAGE_FOOTPRINT.x + CARRIAGE_FOOTPRINT.width * 0.5f,
+        ground + 1.32f,
+        CARRIAGE_FOOTPRINT.y + CARRIAGE_FOOTPRINT.height * 0.5f
+    };
+    DrawCubeWiresV(center,
+                   (Vector3){CARRIAGE_FOOTPRINT.width + 0.42f, 2.72f,
+                             CARRIAGE_FOOTPRINT.height + 0.42f},
+                   accent);
+    Vector3 approach = {
+        CC_LOCAL_CARRIAGE_APPROACH_X,
+        CcLocalTerrainHeightAt(CC_LOCAL_CARRIAGE_APPROACH_X,
+                               CC_LOCAL_CARRIAGE_APPROACH_Z) + 0.025f,
+        CC_LOCAL_CARRIAGE_APPROACH_Z
+    };
+    DrawCylinder(approach, 0.40f, 0.40f, 0.035f, 24,
+                 Fade(WORLD_TEAL, pulse));
+    DrawGroundBrushStroke(
+        approach,
+        (Vector3){CC_LOCAL_CARRIAGE_X - approach.x, 0.0f,
+                  CC_LOCAL_CARRIAGE_Z - approach.z},
+        0.78f, 0.11f, accent);
 }
 
 static void DrawNotice3D(const CcSim *sim)
@@ -20073,6 +20177,26 @@ static void DrawAgentPath(const CcLocalAgent *agent, bool market_interior)
     if (!agent->command_point_valid ||
         (!agent->exact_target_valid && !agent->navigation_active)) return;
     Vector3 target = agent->command_point;
+    Vector3 previous = agent->position;
+    if (agent->navigation_active) {
+        for (int32_t index = agent->navigation_point_index;
+             index < agent->navigation_point_count; ++index) {
+            Vector3 waypoint = agent->navigation_point[index];
+            Vector3 along = PhysicsSubtract(waypoint, previous);
+            float length = sqrtf(along.x * along.x + along.z * along.z);
+            if (length > 0.08f) {
+                Vector3 center = PhysicsScale(
+                    PhysicsAdd(previous, waypoint), 0.5f);
+                center.y = CcLocalTerrainHeightAt(center.x, center.z) + 0.025f;
+                DrawGroundBrushStroke(center, along, length, 0.075f,
+                                      Fade(WORLD_GOLD, 0.62f));
+            }
+            waypoint.y += 0.022f;
+            DrawCylinder(waypoint, 0.12f, 0.12f, 0.030f, 12,
+                         Fade(WORLD_GOLD, 0.78f));
+            previous = waypoint;
+        }
+    }
     DrawCylinder((Vector3){target.x, target.y + 0.018f, target.z},
                  0.24f, 0.24f, 0.036f, 24, Fade(WORLD_GOLD, 0.42f));
     Vector3 facing = PhysicsSubtract(target, agent->position);
@@ -21303,7 +21427,7 @@ void CcLocalDrawSite3D(const CcSim *sim, const CcLocalAgent *agent,
          site == CC_LOCAL_SITE_DRAGON_CAVE ? WORLD_DANGER :
          site == CC_LOCAL_SITE_GOBLIN_CAVE ? WORLD_VIOLET : WORLD_GOLD},
         {{CC_LOCAL_SITE_CARRIAGE_X, 2.65f, CC_LOCAL_SITE_CARRIAGE_Z},
-         "CARRIAGE", WORLD_TEAL},
+         "CARRIAGE / F", WORLD_TEAL},
         {{agent->position.x, agent->position.y + 2.45f, agent->position.z},
          "YOU", WORLD_TEAL}
     };
@@ -21568,8 +21692,11 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                target.texture.width, target.texture.height, clock);
     if (SceneryFootprintVisible(CARRIAGE_FOOTPRINT, scenery_focus)) {
         if (!convoy_visible) {
-            DrawCarriage3D(place);
+            bool carriage_targeted = agent != NULL &&
+                agent->world_target == CC_LOCAL_WORLD_TARGET_CARRIAGE;
+            DrawCarriage3D(place, carriage_targeted, clock);
             DrawStableHorseTeam(clock);
+            if (carriage_targeted) DrawCarriageTargetMarker3D(clock);
         }
     }
     if (convoy_visible) {
@@ -21765,13 +21892,20 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                                         21.0f},
                                        primary_hall_label, WORLD_GOLD};
     }
-    if (AgentNearLabel(agent, CC_LOCAL_CARRIAGE_X,
+    bool carriage_targeted = agent != NULL &&
+        agent->world_target == CC_LOCAL_WORLD_TARGET_CARRIAGE;
+    if (carriage_targeted ||
+        AgentNearLabel(agent, CC_LOCAL_CARRIAGE_X,
                        CC_LOCAL_CARRIAGE_Z, 7.0f)) {
         labels[count++] = (WorldLabel){{CC_LOCAL_CARRIAGE_X,
                                         TerrainFootprintHeight(
                                             CARRIAGE_FOOTPRINT) + 2.28f,
                                         CC_LOCAL_CARRIAGE_Z},
-                                       "Carriage", WORLD_GOLD};
+                                       carriage_targeted ?
+                                           "Carriage targeted / approaching" :
+                                           "Carriage / click or F",
+                                       carriage_targeted ? WORLD_TEAL :
+                                                           WORLD_GOLD};
     }
     if (AgentNearLabel(agent, CC_LOCAL_NOTICE_X, CC_LOCAL_NOTICE_Z, 6.0f)) {
         labels[count++] = (WorldLabel){{CC_LOCAL_NOTICE_X,

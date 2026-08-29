@@ -470,6 +470,33 @@ static void TestSharedCharacterCollisionWorld(void)
         exit(1);
     }
 
+    CcLocalAgent carriage_path;
+    CcLocalAgentInit(&carriage_path,
+                     (Vector2){CC_LOCAL_START_X, CC_LOCAL_START_Z}, false);
+    Vector2 carriage_approach = CcLocalWorldTargetApproachPoint(
+        CC_LOCAL_WORLD_TARGET_CARRIAGE);
+    if (!CcLocalAgentApproachWorldTarget(
+            &carriage_path, CC_LOCAL_WORLD_TARGET_CARRIAGE) ||
+        carriage_path.world_target != CC_LOCAL_WORLD_TARGET_CARRIAGE ||
+        carriage_path.navigation_point_count < 1 ||
+        fabsf(carriage_path.command_point.x - carriage_approach.x) > 0.20f ||
+        fabsf(carriage_path.command_point.z - carriage_approach.y) > 0.20f) {
+        (void)fprintf(stderr,
+                      "carriage target did not create a safe town path: target %d points %d end %.2f,%.2f expected %.2f,%.2f\n",
+                      carriage_path.world_target,
+                      carriage_path.navigation_point_count,
+                      carriage_path.command_point.x,
+                      carriage_path.command_point.z,
+                      carriage_approach.x, carriage_approach.y);
+        exit(1);
+    }
+    if (carriage_approach.x <= CC_LOCAL_CARRIAGE_X + 4.0f ||
+        carriage_approach.y <= CC_LOCAL_CARRIAGE_Z + 3.0f) {
+        (void)fprintf(stderr,
+                      "carriage approach still overlaps its screen silhouette\n");
+        exit(1);
+    }
+
     CcLocalAgent articulated;
     CcLocalAgentInit(&articulated, (Vector2){2.10f, 7.50f}, false);
     articulated.facing_yaw = 0.0f;
