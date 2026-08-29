@@ -120,41 +120,11 @@ typedef struct WorldBuilding {
     bool door;
 } WorldBuilding;
 
-/* One world unit is one metre. Even the smallest cottage has room for an
-   actual household around the 1.9 m hero; the market is a 12 x 10 m hall. */
-static const WorldBuilding WORLD_BUILDINGS[] = {
-    {{20.0f, 15.0f, 8.0f, 10.0f}, 7.20f, 0, true},
-    {{32.0f, 14.0f, 7.0f, 9.0f}, 6.40f, 1, true},
-    {{44.0f, 16.0f, 12.0f, 10.0f}, 8.80f, 2, true},
-    {{20.0f, 33.0f, 10.0f, 8.0f}, 6.60f, 3, true},
-    {{34.0f, 35.0f, 7.0f, 8.0f}, 5.80f, 0, true},
-    {{55.0f, 42.0f, 8.0f, 7.0f}, 6.20f, 1, true},
-    {{55.0f, 29.0f, 6.5f, 8.5f}, 5.90f, 0, true},
-    {{55.0f, 14.0f, 7.0f, 9.0f}, 6.10f, 3, true},
-    {{32.0f, 47.0f, 8.0f, 7.0f}, 5.80f, 1, true},
-    {{44.0f, 46.0f, 10.0f, 7.0f}, 6.90f, 2, true}
-};
-
 typedef struct WorldStructure {
     Rectangle footprint;
     float height;
+    CcLocalCompoundKind kind;
 } WorldStructure;
-
-/* A 25 x 23 m fortified bailey, with a person-width gate left physically open. */
-static const WorldStructure CASTLE_STRUCTURES[] = {
-    {{66.0f, 9.0f, 1.2f, 23.0f}, 6.5f},
-    {{90.0f, 9.0f, 1.2f, 23.0f}, 6.5f},
-    {{66.0f, 9.0f, 25.2f, 1.2f}, 6.5f},
-    {{66.0f, 30.8f, 9.5f, 1.2f}, 6.5f},
-    {{81.5f, 30.8f, 9.7f, 1.2f}, 6.5f},
-    {{72.0f, 13.0f, 13.0f, 9.0f}, 11.5f},
-    {{75.3f, 27.8f, 2.0f, 3.0f}, 9.0f},
-    {{79.7f, 27.8f, 2.0f, 3.0f}, 9.0f},
-    {{64.8f, 7.8f, 4.0f, 4.0f}, 12.5f},
-    {{88.4f, 7.8f, 4.0f, 4.0f}, 12.5f},
-    {{64.8f, 29.2f, 4.0f, 4.0f}, 12.5f},
-    {{88.4f, 29.2f, 4.0f, 4.0f}, 12.5f}
-};
 static const Rectangle CARRIAGE_FOOTPRINT = {35.20f, 29.00f, 3.20f, 5.40f};
 static const Rectangle DUNGEON_FOOTPRINT = {27.40f, 49.70f, 3.20f, 1.60f};
 /* Set-dressing with a grounded footprint participates in the same collision
@@ -582,45 +552,6 @@ static const StreetCameraShot STREET_CAMERA_SHOTS[] = {
     },
 };
 
-/* The long road between Market Steps and Crown Gate needs its own establishing
-   view. It is deliberately higher and wider than either room, holding both
-   the departing house line and the gate approach without slicing through a
-   foreground facade. It is a camera composition only, never a logical room. */
-static const StreetCameraShot MARKET_GATE_ROAD_CAMERA = {
-    .trigger = {64.0f, 31.0f}, .target = {66.0f, 2.0f, 31.0f},
-    .name = "MARKET ROAD", .route = {0.0f, 0.0f, 0.0f, 0.0f},
-    .route_palette = 2, .camera_offset = {-13.0f, 11.0f, 33.0f},
-    .fovy = 21.0f,
-    .art = {{77.5f, 4.20f, 23.5f}, {1.0f, 0.0f},
-            {54.0f, 0.0f, 39.0f}, {0.16f, 0.16f, 0.64f, 0.68f},
-            {24.0f, 39.0f, 60.0f}, ART_LIGHT_ROAD_DUSK},
-};
-
-#define MARKET_GATE_ROAD_CAMERA_SHOT \
-    ((int32_t)(sizeof(STREET_CAMERA_SHOTS) / \
-               sizeof(STREET_CAMERA_SHOTS[0])))
-
-#define STREET_ALLEY_CAMERA_SHOT_BASE \
-    (MARKET_GATE_ROAD_CAMERA_SHOT + 1)
-
-static bool StreetCameraShotIsAlley(int32_t shot)
-{
-    return shot >= STREET_ALLEY_CAMERA_SHOT_BASE &&
-           shot <= STREET_ALLEY_CAMERA_SHOT_BASE +
-                   MARKET_GATE_ROAD_CAMERA_SHOT;
-}
-
-static int32_t StreetCameraBaseShot(int32_t shot)
-{
-    return StreetCameraShotIsAlley(shot) ?
-        shot - STREET_ALLEY_CAMERA_SHOT_BASE : shot;
-}
-
-static int32_t StreetCameraAlleyShot(int32_t shot)
-{
-    return STREET_ALLEY_CAMERA_SHOT_BASE + StreetCameraBaseShot(shot);
-}
-
 static const ArtComposition ROAD_ART_COMPOSITION = {
     {49.0f, 1.10f, 40.0f}, {1.0f, 0.0f}, {36.0f, 0.0f, 44.0f},
     {0.17f, 0.17f, 0.64f, 0.66f}, {8.0f, 16.0f, 29.0f},
@@ -671,8 +602,8 @@ static const StreetTraversalLink STREET_TRAVERSAL_LINKS[] = {
 static const StreetBoundaryExit STREET_BOUNDARY_EXITS[] = {
     {1, {1.0f, 29.0f}, {{7.0f, 29.0f}}, 1, "WESTERN ROAD"},
     {2, {1.0f, 55.4f}, {{8.0f, 55.4f}}, 1, "OLD MINE TRACK"},
-    {8, {94.8f, 29.0f},
-     {{78.5f, 34.0f}, {93.0f, 34.0f}, {94.8f, 33.0f}}, 3,
+    {8, {94.8f, 34.0f},
+     {{78.5f, 34.0f}, {93.0f, 34.0f}}, 2,
      "EASTERN KING'S ROAD"},
     {9, {78.0f, 70.8f}, {{78.0f, 61.0f}}, 1, "NORTH FIELD ROAD"},
 };
@@ -930,6 +861,83 @@ static const CcLocalPlaceRoad *ActivePlaceRoadAt(int32_t index)
     return CcLocalPlaceRoadAt(active_place_function, index);
 }
 
+static const CcLocalPlaceProfile *ActivePlaceProfile(void)
+{
+    return CcLocalPlaceProfileForFunction(active_place_function);
+}
+
+static int32_t ActiveWorldBuildingCount(void)
+{
+    return ActivePlaceProfile()->building_count;
+}
+
+static WorldBuilding ActiveWorldBuildingAt(int32_t index)
+{
+    const CcLocalPlaceBuilding *building =
+        CcLocalPlaceBuildingAt(active_place_function, index);
+    if (building == NULL) return (WorldBuilding){0};
+    return (WorldBuilding){
+        {building->x, building->z, building->width, building->depth},
+        building->height,
+        (int32_t)building->style,
+        building->door,
+    };
+}
+
+static int32_t ActiveCompoundStructureCount(void)
+{
+    return ActivePlaceProfile()->compound_structure_count;
+}
+
+static WorldStructure ActiveCompoundStructureAt(int32_t index)
+{
+    const CcLocalPlaceCompoundStructure *structure =
+        CcLocalPlaceCompoundStructureAt(active_place_function, index);
+    if (structure == NULL) return (WorldStructure){0};
+    return (WorldStructure){
+        {structure->x, structure->z, structure->width, structure->depth},
+        structure->height,
+        structure->kind,
+    };
+}
+
+static Rectangle ActiveCompoundBounds(void)
+{
+    Rectangle bounds = {0};
+    int32_t count = ActiveCompoundStructureCount();
+    for (int32_t index = 0; index < count; ++index) {
+        Rectangle footprint = ActiveCompoundStructureAt(index).footprint;
+        if (index == 0) {
+            bounds = footprint;
+            continue;
+        }
+        float maximum_x = fmaxf(bounds.x + bounds.width,
+                                footprint.x + footprint.width);
+        float maximum_z = fmaxf(bounds.y + bounds.height,
+                                footprint.y + footprint.height);
+        bounds.x = fminf(bounds.x, footprint.x);
+        bounds.y = fminf(bounds.y, footprint.y);
+        bounds.width = maximum_x - bounds.x;
+        bounds.height = maximum_z - bounds.y;
+    }
+    return bounds;
+}
+
+static float ActiveCompoundMaximumHeight(void)
+{
+    float height = 0.0f;
+    for (int32_t index = 0;
+         index < ActiveCompoundStructureCount(); ++index) {
+        height = fmaxf(height, ActiveCompoundStructureAt(index).height);
+    }
+    return height;
+}
+
+static WorldBuilding ActivePrimaryBuilding(void)
+{
+    return ActiveWorldBuildingAt(ActivePlaceProfile()->primary_building);
+}
+
 static Rectangle PlaceLandmarkFootprint(
     const CcLocalPlaceLandmark *landmark)
 {
@@ -973,6 +981,25 @@ static float TerrainSmooth01(float amount)
     return amount * amount * (3.0f - 2.0f * amount);
 }
 
+/* Roads need a short eased join at each end, but ordinary smoothstep makes
+   the middle of a ramp fifty per cent steeper than its average grade. This
+   profile spends most of its length at an almost constant cart-friendly
+   slope while still meeting each landing without a sharp crease. */
+static float TerrainGentleRamp01(float amount)
+{
+    const float ease = 0.14f;
+    amount = TerrainClamp(amount, 0.0f, 1.0f);
+    if (amount < ease) {
+        return amount * amount / (2.0f * ease * (1.0f - ease));
+    }
+    if (amount > 1.0f - ease) {
+        float remaining = 1.0f - amount;
+        return 1.0f - remaining * remaining /
+                      (2.0f * ease * (1.0f - ease));
+    }
+    return (amount - ease * 0.5f) / (1.0f - ease);
+}
+
 static uint32_t TerrainMix(uint32_t value)
 {
     value ^= value >> 16U;
@@ -1014,27 +1041,88 @@ static float TerrainValueNoise(float x, float z, float wavelength,
     return bottom + (top - bottom) * tz;
 }
 
+static float TerrainLandform(float x, float z, float center_x,
+                             float center_z, float radius_x,
+                             float radius_z)
+{
+    float dx = (x - center_x) / radius_x;
+    float dz = (z - center_z) / radius_z;
+    return expf(-(dx * dx + dz * dz));
+}
+
 static float TerrainNaturalHeight(float x, float z)
 {
-    float large = TerrainValueNoise(x, z, 38.0f, 1U) * 2.45f;
-    float hills = TerrainValueNoise(x + 19.0f, z - 11.0f, 20.0f, 2U) * 1.35f;
-    float detail = TerrainValueNoise(x - 7.0f, z + 23.0f, 8.0f, 3U) * 0.34f;
-    float eastern_rise = TerrainSmooth01((x - 48.0f) / 44.0f) * 3.10f;
-    float northern_rise = TerrainSmooth01((z - 30.0f) / 40.0f) * 1.20f;
-
-    float valley_center = 30.0f + sinf(x * 0.075f + 0.45f) * 4.4f;
-    float valley_distance = (z - valley_center) / 7.2f;
-    float valley = -2.15f * expf(-valley_distance * valley_distance);
-
-    float mine_x = (x - 25.0f) / 15.0f;
-    float mine_z = (z - 51.0f) / 8.0f;
-    float mine_ridge = 2.05f * expf(-(mine_x * mine_x + mine_z * mine_z));
-
-    float keep_x = (x - 79.0f) / 17.0f;
-    float keep_z = (z - 20.0f) / 15.0f;
-    float keep_ridge = 1.85f * expf(-(keep_x * keep_x + keep_z * keep_z));
-    return 1.65f + large + hills + detail + eastern_rise + northern_rise +
-           valley + mine_ridge + keep_ridge;
+    float broad = TerrainValueNoise(x, z, 34.0f, 1U) * 1.40f;
+    float hills = TerrainValueNoise(x + 19.0f, z - 11.0f,
+                                    18.0f, 2U) * 0.82f;
+    float detail = TerrainValueNoise(x - 7.0f, z + 23.0f,
+                                     7.0f, 3U) * 0.26f;
+    float land = 1.20f + broad + hills + detail;
+    switch (active_place_function) {
+        case CC_SETTLEMENT_FARMING: {
+            float river_center = 91.0f + sinf(z * 0.082f) * 1.7f;
+            float river_distance = (x - river_center) / 4.8f;
+            land -= 8.50f * expf(-river_distance * river_distance);
+            land += TerrainLandform(x, z, 45.0f, 28.0f,
+                                    25.0f, 17.0f) * 2.80f;
+            land += TerrainLandform(x, z, 79.0f, 18.0f,
+                                    21.0f, 15.0f) * 11.20f;
+            land += TerrainLandform(x, z, 68.0f, 2.0f,
+                                    34.0f, 13.0f) * 4.20f;
+            break;
+        }
+        case CC_SETTLEMENT_MINING:
+            land += x * 0.040f;
+            land += TerrainSmooth01((54.0f - z) / 46.0f) * 5.20f;
+            land += TerrainValueNoise(x + 8.0f, z - 4.0f,
+                                      11.0f, 41U) * 1.25f;
+            land -= TerrainLandform(x, z, 82.0f, 35.0f,
+                                    21.0f, 15.0f) * 6.80f;
+            land -= TerrainLandform(x, z, 48.0f, 30.0f,
+                                    23.0f, 17.0f) * 3.80f;
+            land += TerrainLandform(x, z, 78.0f, 14.0f,
+                                    23.0f, 15.0f) * 13.20f;
+            land += TerrainSmooth01((20.0f - z) / 13.0f) * 4.80f;
+            break;
+        case CC_SETTLEMENT_MARKET:
+            land += TerrainLandform(x, z, 47.0f, 30.0f,
+                                    39.0f, 29.0f) * 3.40f;
+            land -= TerrainLandform(x, z, 47.0f, 30.0f,
+                                    21.0f, 16.0f) * 3.10f;
+            land += TerrainLandform(x, z, 79.0f, 16.0f,
+                                    25.0f, 18.0f) * 11.40f;
+            land += TerrainSmooth01((19.0f - z) / 15.0f) * 3.20f;
+            break;
+        case CC_SETTLEMENT_FORTRESS: {
+            float ravine_center = 91.0f + sinf(z * 0.052f) * 1.2f;
+            float ravine_distance = (x - ravine_center) / 4.5f;
+            land -= 10.20f * expf(-ravine_distance * ravine_distance);
+            land += TerrainLandform(x, z, 48.0f, 27.0f,
+                                    32.0f, 16.0f) * 5.00f;
+            land += TerrainLandform(x, z, 79.0f, 18.0f,
+                                    21.0f, 15.0f) * 13.00f;
+            land += TerrainSmooth01((19.0f - z) / 14.0f) * 4.80f;
+            break;
+        }
+        case CC_SETTLEMENT_CAPITAL:
+            land += TerrainSmooth01((x - 14.0f) / 68.0f) * 9.20f;
+            land += TerrainSmooth01((50.0f - z) / 43.0f) * 3.80f;
+            land += TerrainLandform(x, z, 79.0f, 18.0f,
+                                    23.0f, 17.0f) * 7.40f;
+            land += TerrainLandform(x, z, 46.0f, 29.0f,
+                                    24.0f, 17.0f) * 2.80f;
+            break;
+        case CC_SETTLEMENT_DUNGEON_TOWN:
+            land += TerrainLandform(x, z, 51.0f, 30.0f,
+                                    39.0f, 27.0f) * 3.10f;
+            land -= TerrainLandform(x, z, 47.0f, 30.0f,
+                                    18.0f, 13.0f) * 6.20f;
+            land += TerrainLandform(x, z, 79.0f, 17.0f,
+                                    22.0f, 15.0f) * 13.80f;
+            land += TerrainSmooth01((18.0f - z) / 14.0f) * 4.50f;
+            break;
+    }
+    return land;
 }
 
 static int32_t TerrainIndex(int32_t column, int32_t row)
@@ -1095,15 +1183,14 @@ static float TerrainRoadProfile(const TerrainRoad *road, float x, float z)
 
 static bool TerrainPointInsideMajorFoundation(float x, float z)
 {
-    for (int32_t i = 0; i < (int32_t)(sizeof(WORLD_BUILDINGS) /
-                                      sizeof(WORLD_BUILDINGS[0])); ++i) {
-        Rectangle footprint = WORLD_BUILDINGS[i].footprint;
+    for (int32_t i = 0; i < ActiveWorldBuildingCount(); ++i) {
+        Rectangle footprint = ActiveWorldBuildingAt(i).footprint;
         if (x >= footprint.x && x <= footprint.x + footprint.width &&
             z >= footprint.y && z <= footprint.y + footprint.height) {
             return true;
         }
     }
-    Rectangle keep = {65.20f, 8.20f, 26.50f, 24.40f};
+    Rectangle keep = ActiveCompoundBounds();
     if (x >= keep.x && x <= keep.x + keep.width &&
         z >= keep.y && z <= keep.y + keep.height) return true;
     static const Rectangle local_pads[] = {
@@ -1127,7 +1214,7 @@ static bool TerrainPointInsideMajorFoundation(float x, float z)
 
 static void TerrainGradeRoad(const TerrainRoad *road)
 {
-    const float shoulder = 1.25f;
+    const float shoulder = 1.85f;
     for (int32_t row = 0; row < CC_TERRAIN_ROWS; ++row) {
         float z = (float)row * CC_TERRAIN_CELL_SIZE;
         for (int32_t column = 0; column < CC_TERRAIN_COLUMNS; ++column) {
@@ -1224,6 +1311,73 @@ static void TerrainGradeNorthSouthRamp(Rectangle footprint,
     }
 }
 
+static void TerrainGradeNorthSouthGentleRamp(Rectangle footprint,
+                                             float south_height,
+                                             float north_height)
+{
+    const float shoulder = 0.85f;
+    for (int32_t row = 0; row < CC_TERRAIN_ROWS; ++row) {
+        float z = (float)row * CC_TERRAIN_CELL_SIZE;
+        if (z < footprint.y || z > footprint.y + footprint.height) continue;
+        float progress = TerrainGentleRamp01((z - footprint.y) /
+                                             footprint.height);
+        float elevation = south_height +
+                          (north_height - south_height) * progress;
+        for (int32_t column = 0; column < CC_TERRAIN_COLUMNS; ++column) {
+            float x = (float)column * CC_TERRAIN_CELL_SIZE;
+            float side_distance = x < footprint.x ? footprint.x - x :
+                x > footprint.x + footprint.width ?
+                    x - (footprint.x + footprint.width) : 0.0f;
+            if (side_distance >= shoulder) continue;
+            float weight = side_distance <= 0.0f ? 1.0f :
+                TerrainSmooth01(1.0f - side_distance / shoulder);
+            int32_t index = TerrainIndex(column, row);
+            street_terrain_height[index] +=
+                (elevation - street_terrain_height[index]) * weight;
+        }
+    }
+}
+
+static void TerrainGradeEastWestRamp(Rectangle footprint,
+                                     float west_height,
+                                     float east_height)
+{
+    const float shoulder = 0.95f;
+    for (int32_t column = 0; column < CC_TERRAIN_COLUMNS; ++column) {
+        float x = (float)column * CC_TERRAIN_CELL_SIZE;
+        if (x < footprint.x || x > footprint.x + footprint.width) continue;
+        float progress = TerrainSmooth01((x - footprint.x) /
+                                         footprint.width);
+        float elevation = west_height +
+                          (east_height - west_height) * progress;
+        for (int32_t row = 0; row < CC_TERRAIN_ROWS; ++row) {
+            float z = (float)row * CC_TERRAIN_CELL_SIZE;
+            float side_distance = z < footprint.y ? footprint.y - z :
+                z > footprint.y + footprint.height ?
+                    z - (footprint.y + footprint.height) : 0.0f;
+            if (side_distance >= shoulder) continue;
+            float weight = side_distance <= 0.0f ? 1.0f :
+                TerrainSmooth01(1.0f - side_distance / shoulder);
+            int32_t index = TerrainIndex(column, row);
+            street_terrain_height[index] +=
+                (elevation - street_terrain_height[index]) * weight;
+        }
+    }
+}
+
+static float TerrainKeepRise(void)
+{
+    switch (active_place_function) {
+        case CC_SETTLEMENT_FARMING: return 1.80f;
+        case CC_SETTLEMENT_MINING: return 2.40f;
+        case CC_SETTLEMENT_MARKET: return 2.20f;
+        case CC_SETTLEMENT_FORTRESS: return 2.80f;
+        case CC_SETTLEMENT_CAPITAL: return 2.20f;
+        case CC_SETTLEMENT_DUNGEON_TOWN: return 2.60f;
+    }
+    return 2.20f;
+}
+
 static void TerrainGenerate(void)
 {
     for (int32_t row = 0; row < CC_TERRAIN_ROWS; ++row) {
@@ -1241,12 +1395,33 @@ static void TerrainGenerate(void)
         TerrainGradeRoad(&TERRAIN_ROADS[road]);
     }
     TerrainGradeActivePlaceRoads();
+    /* The east road is the opening composition for every town. Give it an
+       authored, readable grade through the large landform rather than
+       letting a smoothed terrain road sag into a quarry or gorge. Farming
+       and fortress towns use the same strip as a level bridge deck. */
+    float arrival_west_height = TerrainSampleGrid(
+        street_terrain_height, 83.5f, 34.0f);
+    float arrival_east_height = TerrainSampleGrid(
+        street_terrain_height, 96.0f, 34.0f);
+    float arrival_bridge_height = 0.0f;
+    if (active_place_function == CC_SETTLEMENT_FARMING ||
+        active_place_function == CC_SETTLEMENT_FORTRESS) {
+        arrival_bridge_height = fmaxf(arrival_west_height,
+                                      arrival_east_height) + 0.18f;
+        TerrainGradeEastWestRamp((Rectangle){83.5f, 31.75f, 12.5f, 4.50f},
+                                 arrival_bridge_height,
+                                 arrival_bridge_height);
+    } else {
+        TerrainGradeEastWestRamp((Rectangle){63.8f, 31.75f, 32.2f, 4.50f},
+                                 TerrainSampleGrid(street_terrain_height,
+                                                   63.8f, 34.0f),
+                                 arrival_east_height);
+    }
 
     /* Foundations are small human changes to the generated land. Each pad
        takes its elevation from the land and nearby road before construction. */
-    for (int32_t i = 0; i < (int32_t)(sizeof(WORLD_BUILDINGS) /
-                                      sizeof(WORLD_BUILDINGS[0])); ++i) {
-        Rectangle footprint = WORLD_BUILDINGS[i].footprint;
+    for (int32_t i = 0; i < ActiveWorldBuildingCount(); ++i) {
+        Rectangle footprint = ActiveWorldBuildingAt(i).footprint;
         TerrainGradePad(footprint, TerrainRectangleAverage(footprint), 1.45f);
     }
     for (int32_t i = 0; i < CC_LOCAL_PLACE_LANDMARK_COUNT; ++i) {
@@ -1254,9 +1429,19 @@ static void TerrainGenerate(void)
             PlaceLandmarkFootprint(ActivePlaceLandmarkAt(i));
         TerrainGradePad(footprint, TerrainRectangleAverage(footprint), 1.35f);
     }
-    Rectangle keep_pad = {65.20f, 8.20f, 26.50f, 24.40f};
-    float keep_elevation = TerrainRectangleAverage(keep_pad) + 0.45f;
-    TerrainGradePad(keep_pad, keep_elevation, 2.80f);
+    Rectangle keep_pad = ActiveCompoundBounds();
+    float keep_approach_height = TerrainSampleGrid(
+        street_terrain_height, 78.5f, 54.0f);
+    float natural_keep_elevation = TerrainRectangleAverage(keep_pad) + 0.45f;
+    /* A keep can crown the regional landform without putting its public gate
+       on top of the whole mountain. The wider hill and ravine still carry
+       the skyline; the constructed court rises only as far as a long cart
+       approach can honestly climb. */
+    float keep_elevation = fminf(
+        natural_keep_elevation,
+        keep_approach_height + TerrainKeepRise());
+    keep_elevation = fmaxf(keep_elevation, keep_approach_height + 0.80f);
+    TerrainGradePad(keep_pad, keep_elevation, 4.00f);
 
     Rectangle plaza_pad = {37.60f, 25.60f, 18.80f, 8.80f};
     float plaza_elevation = TerrainRectangleAverage(plaza_pad);
@@ -1270,6 +1455,18 @@ static void TerrainGenerate(void)
        this one training pad flat also preserves its fixed waterline. */
     TerrainGradePad((Rectangle){1.00f, 0.00f, 14.60f, 11.10f},
                     0.0f, 2.20f);
+
+    /* Two worn approaches connect the training yard to the public road.
+       Their long, gentle grade keeps guards and players on a readable path
+       even when the surrounding town occupies a strong landform. */
+    float west_course_road_height = TerrainSampleGrid(
+        street_terrain_height, 8.35f, 26.50f);
+    TerrainGradeNorthSouthRamp((Rectangle){7.45f, 10.50f, 1.80f, 16.25f},
+                               0.0f, west_course_road_height);
+    float east_course_road_height = TerrainSampleGrid(
+        street_terrain_height, 16.40f, 26.85f);
+    TerrainGradeNorthSouthRamp((Rectangle){14.65f, 10.50f, 3.50f, 16.60f},
+                               0.0f, east_course_road_height);
 
     /* Re-establish the public ways after all foundation banks are cut. Pads
        stay level inside actual structures, while streets and open squares
@@ -1294,12 +1491,64 @@ static void TerrainGenerate(void)
     TerrainGradeNorthSouthRamp((Rectangle){39.40f, 11.60f, 4.20f, 13.40f},
                                commons_south_height,
                                commons_north_height);
-    float crown_road_height = TerrainSampleGrid(street_terrain_height,
-                                                 78.5f, 38.0f);
-    TerrainGradeNorthSouthRamp((Rectangle){75.40f, 30.60f, 6.20f, 7.40f},
-                               keep_elevation, crown_road_height);
+    /* Restore the compound terrace after the street grading. Only the
+       authored gate ramp below should climb onto this raised civic stage. */
+    TerrainGradePad(keep_pad, keep_elevation, 4.00f);
+    /* Preserve the lower road that circles the terrace before it reaches the
+       gate. This route is how a player approaches a dramatic raised keep
+       without being asked to walk straight up its retaining bank. */
+    TerrainGradeRoad(&TERRAIN_ROADS[
+        (int32_t)(sizeof(TERRAIN_ROADS) / sizeof(TERRAIN_ROADS[0])) - 1]);
+    float west_gate_height = TerrainSampleGrid(street_terrain_height,
+                                                57.0f, 29.4f);
+    TerrainGradeEastWestRamp((Rectangle){54.0f, 26.80f, 11.4f, 5.20f},
+                             west_gate_height, west_gate_height);
+    float west_gate_north_height = TerrainSampleGrid(
+        street_terrain_height, 64.1f, 38.0f);
+    TerrainGradeNorthSouthRamp((Rectangle){62.80f, 27.00f, 2.60f, 11.50f},
+                               west_gate_height,
+                               west_gate_north_height);
+    float gate_causeway_height = fmaxf(
+        west_gate_north_height, keep_elevation - 0.90f);
+    /* Keep both raid lanes on the authored causeway. The upper lane sits at
+       z=40.4, so the graded deck must extend past that line rather than put
+       an NPC exactly on the retaining-bank edge. */
+    TerrainGradeEastWestRamp((Rectangle){63.80f, 36.20f, 15.20f, 6.00f},
+                             west_gate_north_height,
+                             gate_causeway_height);
+    TerrainGradeEastWestRamp(
+        (Rectangle){79.00f, 36.20f, 17.00f, 6.00f},
+        gate_causeway_height,
+        TerrainSampleGrid(street_terrain_height, 96.0f, 38.0f));
+    float crown_road_north_height = TerrainSampleGrid(
+        street_terrain_height, 78.5f, 54.0f);
+    TerrainGradeNorthSouthGentleRamp(
+        (Rectangle){75.40f, 30.60f, 6.20f, 23.40f},
+        keep_elevation, crown_road_north_height);
+    float eastern_gate_height = TerrainSampleGrid(
+        street_terrain_height, 81.0f, 34.0f);
+    if (active_place_function == CC_SETTLEMENT_FARMING ||
+        active_place_function == CC_SETTLEMENT_FORTRESS) {
+        TerrainGradeEastWestRamp((Rectangle){81.0f, 31.75f, 2.5f, 4.50f},
+                                 eastern_gate_height,
+                                 arrival_bridge_height);
+        TerrainGradeEastWestRamp((Rectangle){83.5f, 31.75f, 12.5f, 4.50f},
+                                 arrival_bridge_height,
+                                 arrival_bridge_height);
+    } else {
+        TerrainGradeEastWestRamp((Rectangle){81.0f, 31.75f, 15.0f, 4.50f},
+                                 eastern_gate_height,
+                                 arrival_east_height);
+    }
     TerrainGradePad((Rectangle){39.00f, 27.00f, 15.00f, 6.00f},
                     plaza_elevation, 2.50f);
+    /* Public road grading crosses the two yard approaches near z=11. Recut
+       their gentle ramps last so a high regional road never leaves a single
+       half-metre cliff at the training-yard threshold. */
+    TerrainGradeNorthSouthRamp((Rectangle){7.45f, 10.50f, 1.80f, 16.25f},
+                               0.0f, west_course_road_height);
+    TerrainGradeNorthSouthRamp((Rectangle){14.65f, 10.50f, 3.50f, 16.60f},
+                               0.0f, east_course_road_height);
     street_terrain_ready = true;
 }
 
@@ -1320,8 +1569,12 @@ void CcLocalBindPlace(const CcSim *sim)
 {
     const CcSettlement *place = sim != NULL ?
         CcSimSettlement(sim, sim->player.location_id) : NULL;
-    active_place_function = place != NULL ? place->function :
-                                            CC_SETTLEMENT_MARKET;
+    CcSettlementFunction function = place != NULL ? place->function :
+                                                    CC_SETTLEMENT_MARKET;
+    if (function != active_place_function) {
+        street_camera_rig = (FixedCameraRig){0};
+    }
+    active_place_function = function;
     CcLocalTerrainSetSeed(sim != NULL ?
         CcLocalPlaceTerrainSeed(sim->world_seed, place) :
         UINT32_C(0xc0a71a9e));
@@ -1400,7 +1653,8 @@ Camera3D CcLocalCombatCameraInternal(Camera3D base,
                                      const CcLocalCourse *course,
                                      float clock, bool advance,
                                      int32_t art_height);
-static int32_t StreetCameraShotFor(Vector3 focus, int32_t current_shot);
+static int32_t StreetNavigationRoomFor(Vector3 focus,
+                                       int32_t current_room);
 static float WrapAngle(float angle);
 static float SmoothStep01(float amount);
 static Color ShadeColor(Color color, float scale);
@@ -1522,18 +1776,18 @@ static bool StaticBodyBlocked(CcLocalSceneKind scene, float x, float z,
         }
         return false;
     }
-    for (int32_t i = 0; i < (int32_t)(sizeof(WORLD_BUILDINGS) /
-                                      sizeof(WORLD_BUILDINGS[0])); ++i) {
+    for (int32_t i = 0; i < ActiveWorldBuildingCount(); ++i) {
+        WorldBuilding building = ActiveWorldBuildingAt(i);
         /* Foreground reveal is only a drawing rule. A house remains solid in
            every camera shot, including while its roof and facade are faded
            so the player can see the character behind it. */
         if (CircleTouchesFootprint(x, z, radius,
-                                   WORLD_BUILDINGS[i].footprint)) return true;
+                                   building.footprint)) return true;
     }
-    for (int32_t i = 0; i < (int32_t)(sizeof(CASTLE_STRUCTURES) /
-                                      sizeof(CASTLE_STRUCTURES[0])); ++i) {
+    for (int32_t i = 0; i < ActiveCompoundStructureCount(); ++i) {
+        WorldStructure structure = ActiveCompoundStructureAt(i);
         if (CircleTouchesFootprint(x, z, radius,
-                                   CASTLE_STRUCTURES[i].footprint)) return true;
+                                   structure.footprint)) return true;
     }
     for (int32_t i = 0; i < CC_LOCAL_PLACE_LANDMARK_COUNT; ++i) {
         if (CircleTouchesFootprint(
@@ -1981,20 +2235,18 @@ static int32_t GatherLocalCollisionBoxes(const LocalProbeContext *context,
     }
 
     for (int32_t building = 0;
-         building < (int32_t)(sizeof(WORLD_BUILDINGS) /
-                              sizeof(WORLD_BUILDINGS[0])); ++building) {
-        const WorldBuilding *world = &WORLD_BUILDINGS[building];
-        AddLocalCollisionBox(boxes, &count, world->footprint,
-                             TerrainFootprintHeight(world->footprint),
-                             world->height);
+         building < ActiveWorldBuildingCount(); ++building) {
+        WorldBuilding world = ActiveWorldBuildingAt(building);
+        AddLocalCollisionBox(boxes, &count, world.footprint,
+                             TerrainFootprintHeight(world.footprint),
+                             world.height);
     }
     for (int32_t structure = 0;
-         structure < (int32_t)(sizeof(CASTLE_STRUCTURES) /
-                               sizeof(CASTLE_STRUCTURES[0])); ++structure) {
-        const WorldStructure *world = &CASTLE_STRUCTURES[structure];
-        AddLocalCollisionBox(boxes, &count, world->footprint,
-                             TerrainFootprintHeight(world->footprint),
-                             world->height);
+         structure < ActiveCompoundStructureCount(); ++structure) {
+        WorldStructure world = ActiveCompoundStructureAt(structure);
+        AddLocalCollisionBox(boxes, &count, world.footprint,
+                             TerrainFootprintHeight(world.footprint),
+                             world.height);
     }
     for (int32_t landmark = 0;
          landmark < CC_LOCAL_PLACE_LANDMARK_COUNT; ++landmark) {
@@ -4943,7 +5195,7 @@ typedef struct ResolvedStreetPortal {
 static int32_t StreetRoomForAgent(const CcLocalAgent *agent)
 {
     if (agent == NULL || agent->scene != CC_LOCAL_SCENE_STREET) return -1;
-    return StreetCameraShotFor(agent->position, -1);
+    return StreetNavigationRoomFor(agent->position, -1);
 }
 
 static bool ResolveStreetPortal(const CcLocalAgent *agent,
@@ -5660,19 +5912,19 @@ bool CcLocalAgentPickTarget(CcLocalAgent *agent, Vector2 screen_point,
         occluder = fminf(occluder, RayFootprintDistance(
             ray, (Rectangle){0.0f, 0.0f, 0.50f, 7.0f}, 2.60f));
     } else if (scene == CC_LOCAL_SCENE_STREET) {
-        for (int32_t i = 0; i < (int32_t)(sizeof(WORLD_BUILDINGS) /
-                                          sizeof(WORLD_BUILDINGS[0])); ++i) {
+        for (int32_t i = 0; i < ActiveWorldBuildingCount(); ++i) {
+            WorldBuilding building = ActiveWorldBuildingAt(i);
             occluder = fminf(occluder,
                              RayFootprintDistance(
-                                 ray, WORLD_BUILDINGS[i].footprint,
-                                 WORLD_BUILDINGS[i].height));
+                                 ray, building.footprint,
+                                 building.height));
         }
-        for (int32_t i = 0; i < (int32_t)(sizeof(CASTLE_STRUCTURES) /
-                                          sizeof(CASTLE_STRUCTURES[0])); ++i) {
+        for (int32_t i = 0; i < ActiveCompoundStructureCount(); ++i) {
+            WorldStructure structure = ActiveCompoundStructureAt(i);
             occluder = fminf(occluder,
                              RayFootprintDistance(
-                                 ray, CASTLE_STRUCTURES[i].footprint,
-                                 CASTLE_STRUCTURES[i].height));
+                                 ray, structure.footprint,
+                                 structure.height));
         }
         for (int32_t i = 0; i < CC_LOCAL_PLACE_LANDMARK_COUNT; ++i) {
             const CcLocalPlaceLandmark *landmark =
@@ -8216,16 +8468,15 @@ static float CameraStreetCourseClutterScore(Camera3D camera,
         }
     }
     for (int32_t building = 0;
-         building < (int32_t)(sizeof(WORLD_BUILDINGS) /
-                              sizeof(WORLD_BUILDINGS[0])); ++building) {
-        const WorldBuilding *house = &WORLD_BUILDINGS[building];
-        Vector3 half_size = {house->footprint.width * 0.5f,
-                             house->height * 0.5f,
-                             house->footprint.height * 0.5f};
+         building < ActiveWorldBuildingCount(); ++building) {
+        WorldBuilding house = ActiveWorldBuildingAt(building);
+        Vector3 half_size = {house.footprint.width * 0.5f,
+                             house.height * 0.5f,
+                             house.footprint.height * 0.5f};
         Vector3 center = {
-            house->footprint.x + half_size.x,
-            TerrainFootprintHeight(house->footprint) + half_size.y,
-            house->footprint.y + half_size.z,
+            house.footprint.x + half_size.x,
+            TerrainFootprintHeight(house.footprint) + half_size.y,
+            house.footprint.y + half_size.z,
         };
         CameraProjectedVolume scenery = CameraProjectBox(
             camera, center, half_size);
@@ -8327,10 +8578,10 @@ static float CombatCameraPositionClutter(Vector3 position)
 {
     float score = 0.0f;
     for (int32_t building = 0;
-         building < (int32_t)(sizeof(WORLD_BUILDINGS) /
-                              sizeof(WORLD_BUILDINGS[0])); ++building) {
+         building < ActiveWorldBuildingCount(); ++building) {
+        WorldBuilding world = ActiveWorldBuildingAt(building);
         score += CameraPositionRectangleClutter(
-            position, WORLD_BUILDINGS[building].footprint, 1.80f) * 2.0f;
+            position, world.footprint, 1.80f) * 2.0f;
     }
     for (int32_t platform = 0;
          platform < (int32_t)(sizeof(STREET_PLATFORMS) /
@@ -8342,10 +8593,10 @@ static float CombatCameraPositionClutter(Vector3 position)
             1.10f);
     }
     for (int32_t structure = 0;
-         structure < (int32_t)(sizeof(CASTLE_STRUCTURES) /
-                               sizeof(CASTLE_STRUCTURES[0])); ++structure) {
+         structure < ActiveCompoundStructureCount(); ++structure) {
+        WorldStructure world = ActiveCompoundStructureAt(structure);
         score += CameraPositionRectangleClutter(
-            position, CASTLE_STRUCTURES[structure].footprint, 1.80f) * 2.0f;
+            position, world.footprint, 1.80f) * 2.0f;
     }
     for (int32_t landmark = 0;
          landmark < CC_LOCAL_PLACE_LANDMARK_COUNT; ++landmark) {
@@ -8524,7 +8775,8 @@ Camera3D CcLocalCameraClearSightlinesInternal(Camera3D camera,
     return best;
 }
 
-static int32_t StreetCameraShotFor(Vector3 focus, int32_t current_shot)
+static int32_t StreetNavigationRoomFor(Vector3 focus,
+                                       int32_t current_room)
 {
     int32_t count = (int32_t)(sizeof(STREET_CAMERA_SHOTS) /
                               sizeof(STREET_CAMERA_SHOTS[0]));
@@ -8538,53 +8790,122 @@ static int32_t StreetCameraShotFor(Vector3 focus, int32_t current_shot)
         nearest = shot;
         nearest_distance = distance;
     }
-    if (current_shot >= 0 && current_shot < count &&
-        current_shot != nearest) {
+    if (current_room >= 0 && current_room < count &&
+        current_room != nearest) {
         float current_x = focus.x -
-                          STREET_CAMERA_SHOTS[current_shot].trigger.x;
+                          STREET_CAMERA_SHOTS[current_room].trigger.x;
         float current_z = focus.z -
-                          STREET_CAMERA_SHOTS[current_shot].trigger.y;
+                          STREET_CAMERA_SHOTS[current_room].trigger.y;
         float current_distance = sqrtf(current_x * current_x +
                                        current_z * current_z);
         float candidate_distance = sqrtf(nearest_distance);
         if (candidate_distance + 1.25f >= current_distance) {
-            return current_shot;
+            return current_room;
         }
     }
     return nearest;
 }
 
-static int32_t StreetCameraCompositionFor(Vector3 focus,
-                                          int32_t current_shot)
+static int32_t TownCameraSceneFor(Vector3 focus, int32_t current_scene)
 {
-    current_shot = StreetCameraBaseShot(current_shot);
-    /* Turn toward Crown Gate as soon as the market road clears its last
-       house. The room lenses share a viewing side, so this becomes a gentle
-       reveal of the gate instead of lingering behind the foreground wing. A
-       wider reverse threshold supplies hysteresis on the walk back. Keep
-       this visual handoff separate from logical room ownership. */
-    bool crown_gate_corridor = focus.z >= 26.2f && focus.z <= 35.2f;
-    if (crown_gate_corridor) {
-        if (current_shot == MARKET_GATE_ROAD_CAMERA_SHOT &&
-            focus.x >= 57.6f && focus.x <= 68.6f) {
-            return MARKET_GATE_ROAD_CAMERA_SHOT;
+    const float close_activation_radius = 10.50f;
+    int32_t nearest = 0;
+    float nearest_distance = FLT_MAX;
+    for (int32_t scene = 0;
+         scene < CC_LOCAL_PLACE_SCENE_COUNT; ++scene) {
+        const CcLocalTownScene *candidate = CcLocalTownSceneAt(
+            active_place_function, scene);
+        float x = focus.x - candidate->trigger_x;
+        float z = focus.z - candidate->trigger_z;
+        float distance = x * x + z * z;
+        /* Close pages belong to small authored rooms. Without a boundary,
+           their trigger can win by simple proximity from the main road and
+           cut to an alley the player has not entered. Establishing pages
+           remain available everywhere between those rooms. */
+        if (candidate->kind >= CC_LOCAL_TOWN_SCENE_CLOSE_FIRST &&
+            distance > close_activation_radius * close_activation_radius) {
+            continue;
         }
-        if (focus.x >= 68.0f && focus.x <= 79.5f) return 8;
-        if (focus.x >= 58.8f) return MARKET_GATE_ROAD_CAMERA_SHOT;
+        if (distance >= nearest_distance) continue;
+        nearest = scene;
+        nearest_distance = distance;
     }
-    return StreetCameraShotFor(focus, current_shot);
+    if (current_scene >= 0 &&
+        current_scene < CC_LOCAL_PLACE_SCENE_COUNT &&
+        current_scene != nearest) {
+        const CcLocalTownScene *current = CcLocalTownSceneAt(
+            active_place_function, current_scene);
+        float x = focus.x - current->trigger_x;
+        float z = focus.z - current->trigger_z;
+        float current_distance = sqrtf(x * x + z * z);
+        bool current_is_eligible =
+            current->kind < CC_LOCAL_TOWN_SCENE_CLOSE_FIRST ||
+            current_distance <= close_activation_radius + 1.25f;
+        if (current_is_eligible &&
+            sqrtf(nearest_distance) + 2.25f >= current_distance) {
+            return current_scene;
+        }
+    }
+    return nearest;
 }
 
 static const StreetCameraShot *StreetCameraShotAt(int32_t shot)
 {
-    shot = StreetCameraBaseShot(shot);
-    int32_t count = (int32_t)(sizeof(STREET_CAMERA_SHOTS) /
-                              sizeof(STREET_CAMERA_SHOTS[0]));
-    if (shot == MARKET_GATE_ROAD_CAMERA_SHOT) {
-        return &MARKET_GATE_ROAD_CAMERA;
+    static StreetCameraShot composition;
+    const CcLocalTownScene *scene = CcLocalTownSceneAt(
+        active_place_function, shot);
+    if (scene == NULL) {
+        scene = CcLocalTownSceneAt(active_place_function,
+                                   CC_LOCAL_TOWN_SCENE_HEART);
     }
-    if (shot < 0 || shot >= count) return &STREET_CAMERA_SHOTS[0];
-    return &STREET_CAMERA_SHOTS[shot];
+    bool close_scene =
+        scene->kind >= CC_LOCAL_TOWN_SCENE_CLOSE_FIRST;
+    ArtLightProfileId light = scene->kind == CC_LOCAL_TOWN_SCENE_ARRIVAL ?
+        ART_LIGHT_ROAD_DUSK : ART_LIGHT_CLEAR_MARKET;
+    if (scene->kind == CC_LOCAL_TOWN_SCENE_LANDMARK) {
+        light = active_place_function == CC_SETTLEMENT_MINING ||
+                active_place_function == CC_SETTLEMENT_DUNGEON_TOWN ?
+            ART_LIGHT_SHORTAGE_OVERCAST : ART_LIGHT_RECOVERY_WARM;
+    }
+    if (close_scene &&
+        (active_place_function == CC_SETTLEMENT_MINING ||
+         active_place_function == CC_SETTLEMENT_DUNGEON_TOWN)) {
+        light = ART_LIGHT_SHORTAGE_OVERCAST;
+    } else if (close_scene &&
+               (active_place_function == CC_SETTLEMENT_FARMING ||
+                active_place_function == CC_SETTLEMENT_CAPITAL)) {
+        light = ART_LIGHT_RECOVERY_WARM;
+    }
+    composition = (StreetCameraShot){
+        .trigger = {scene->trigger_x, scene->trigger_z},
+        .target = {scene->target_x, scene->target_y, scene->target_z},
+        .name = scene->name,
+        .route_palette = (int32_t)scene->kind,
+        .camera_offset = {
+            scene->camera_offset_x,
+            scene->camera_offset_y,
+            scene->camera_offset_z,
+        },
+        .fovy = scene->fovy,
+        .art = {
+            {scene->target_x, scene->target_y, scene->target_z},
+            {scene->kind == CC_LOCAL_TOWN_SCENE_ARRIVAL ? -1.0f :
+             scene->camera_offset_x < 0.0f ? 1.0f : -1.0f,
+             scene->kind == CC_LOCAL_TOWN_SCENE_LANDMARK ? -1.0f :
+             close_scene ? 0.35f : 0.0f},
+            {scene->target_x - scene->camera_offset_x *
+                                   (close_scene ? 0.24f : 0.36f),
+             0.0f,
+             scene->target_z - scene->camera_offset_z *
+                                   (close_scene ? 0.24f : 0.36f)},
+            close_scene ? (Rectangle){0.13f, 0.14f, 0.74f, 0.72f} :
+                          (Rectangle){0.16f, 0.16f, 0.66f, 0.68f},
+            close_scene ? (Vector3){9.0f, 18.0f, 32.0f} :
+                          (Vector3){20.0f, 34.0f, 56.0f},
+            light,
+        },
+    };
+    return &composition;
 }
 
 static void FixedCameraRigAim(FixedCameraRig *rig, int32_t shot,
@@ -8766,51 +9087,16 @@ static Camera3D FixedCameraRigFrameHero(FixedCameraRig *rig,
     return camera;
 }
 
-static float StreetAlleyWeight(Vector3 focus)
-{
-    float nearest = FLT_MAX;
-    float second_nearest = FLT_MAX;
-    for (int32_t building = 0;
-         building < (int32_t)(sizeof(WORLD_BUILDINGS) /
-                              sizeof(WORLD_BUILDINGS[0])); ++building) {
-        float distance = sqrtf(FootprintDistanceSquared(
-            focus.x, focus.z, WORLD_BUILDINGS[building].footprint));
-        if (distance < nearest) {
-            second_nearest = nearest;
-            nearest = distance;
-        } else if (distance < second_nearest) {
-            second_nearest = distance;
-        }
-    }
-    return SmoothStep01((6.8f - second_nearest) / 3.8f);
-}
-
 Camera3D CcLocalStreetCameraInternal(const CcLocalAgent *agent, float clock,
                                      bool advance, int32_t art_height)
 {
     Vector3 focus = agent != NULL ? agent->position : (Vector3){0};
-    int32_t base_shot = StreetCameraCompositionFor(
-        focus, street_camera_rig.shot);
-    const StreetCameraShot *composition = StreetCameraShotAt(base_shot);
-    int32_t shot = base_shot;
+    int32_t shot = TownCameraSceneFor(focus, street_camera_rig.shot);
+    const StreetCameraShot *composition = StreetCameraShotAt(shot);
     Vector3 destination = composition->target;
     destination.y += CcLocalTerrainHeightAt(destination.x, destination.z);
-    float fovy = composition->fovy;
-    if (agent != NULL) {
-        float alley_weight = StreetAlleyWeight(focus);
-        bool hold_alley = StreetCameraShotIsAlley(street_camera_rig.shot) &&
-                          StreetCameraBaseShot(street_camera_rig.shot) ==
-                              base_shot;
-        if (alley_weight >= (hold_alley ? 0.34f : 0.58f)) {
-            /* Like an adventure-game close-up: choose the composition once
-               on entering the alley, animate to it, then hold it. */
-            shot = StreetCameraAlleyShot(base_shot);
-            destination = (Vector3){focus.x, focus.y + 1.00f, focus.z};
-            fovy = fminf(fovy, 9.8f);
-        }
-    }
     FixedCameraRigAim(&street_camera_rig, shot, destination,
-                      composition->camera_offset, fovy,
+                      composition->camera_offset, composition->fovy,
                       clock, advance);
     Camera3D camera = ExteriorCameraComposed(
         street_camera_rig.displayed_target,
@@ -8825,6 +9111,57 @@ Camera3D CcLocalStreetCameraInternal(const CcLocalAgent *agent, float clock,
             camera, hero, art_height,
             (Rectangle){0.10f, 0.12f, 0.80f, 0.76f});
     }
+    return SnapCameraToArtPixels(camera, art_height);
+}
+
+static Camera3D TownArrivalCamera(const CcLocalConvoyState *convoy,
+                                  int32_t art_height)
+{
+    const CcLocalTownScene *arrival = CcLocalTownSceneAt(
+        active_place_function, CC_LOCAL_TOWN_SCENE_ARRIVAL);
+    if (convoy == NULL || arrival == NULL) {
+        return ExteriorCameraAt((Vector3){81.0f, 2.0f, 34.0f}, 21.0f);
+    }
+    /* Start close behind the moving carriage, then pull up and away until
+       the whole arrival stage is readable. This is one continuous camera
+       move: the road remains the subject while the town becomes the reveal. */
+    float heading = convoy->town_heading_yaw;
+    Vector3 forward = {sinf(heading), 0.0f, cosf(heading)};
+    Vector3 right = {cosf(heading), 0.0f, -sinf(heading)};
+    Vector3 follow_target = Vector3Add(
+        convoy->town_position,
+        Vector3Add(Vector3Scale(forward, 5.2f),
+                   (Vector3){0.0f, 1.55f, 0.0f}));
+    Vector3 follow_position = Vector3Add(
+        convoy->town_position,
+        Vector3Add(Vector3Scale(forward, -10.5f),
+                   Vector3Add(Vector3Scale(right, 3.8f),
+                              (Vector3){0.0f, 5.2f, 0.0f})));
+    Vector3 wide_target = {
+        arrival->target_x,
+        arrival->target_y + CcLocalTerrainHeightAt(
+            arrival->target_x, arrival->target_z),
+        arrival->target_z,
+    };
+    Vector3 wide_position = Vector3Add(
+        wide_target,
+        (Vector3){arrival->camera_offset_x,
+                  arrival->camera_offset_y,
+                  arrival->camera_offset_z});
+    float pull_out = SmoothStep01(
+        (convoy->phase_progress - 0.08f) / 0.78f);
+    Camera3D camera = {
+        .position = Vector3Lerp(follow_position, wide_position, pull_out),
+        .target = Vector3Lerp(follow_target, wide_target, pull_out),
+        .up = {0.0f, 1.0f, 0.0f},
+        .fovy = 43.0f + (32.0f - 43.0f) * pull_out,
+        .projection = CAMERA_PERSPECTIVE,
+    };
+    /* The fixed rig starts fresh after parking, avoiding a residual camera
+       page from the town that the player just left. */
+    street_camera_rig = (FixedCameraRig){
+        .shot = CC_LOCAL_TOWN_SCENE_ARRIVAL,
+    };
     return SnapCameraToArtPixels(camera, art_height);
 }
 
@@ -8917,7 +9254,11 @@ static void CombatCameraLockComposition(Camera3D base,
     float look_ahead = fminf(span * 0.72f, 3.30f);
     Vector3 target = Vector3Add(
         player->position, Vector3Scale(fight_line, look_ahead));
-    target.y = player->position.y + 1.32f;
+    float duel_ground_y = (player->position.y + opponent_position.y) * 0.50f;
+    /* On the new terraces one fighter may be several metres uphill. Aim and
+       place the shoulder camera around their shared elevation so the higher
+       body does not leave the fixed scene's safe frame. */
+    target.y = duel_ground_y + 1.32f;
     bool road_duel = course->scene == CC_LOCAL_SCENE_ROAD;
     float follow_distance = road_duel ?
         4.45f + fminf(span, 7.0f) * 0.08f :
@@ -8954,7 +9295,7 @@ static void CombatCameraLockComposition(Camera3D base,
             player->position,
             Vector3Add(Vector3Scale(fight_line, -follow_distance),
                        Vector3Scale(candidate_side, shoulder_distance)));
-        camera_position.y = player->position.y +
+        camera_position.y = duel_ground_y +
                             (road_duel ? 2.85f : 3.15f);
         Vector3 candidate_offset = Vector3Subtract(camera_position, target);
         Camera3D candidate = PerspectiveCameraComposed(
@@ -12309,37 +12650,59 @@ static float DrawPitchedRoof(float x, float z, float width, float depth,
                              float wall_height, Color wall, Color roof)
 {
     const float overhang = 0.42f;
-    const float rise = 0.96f + fminf(width, depth) * 0.075f;
-    const int32_t courses = 5;
+    const float rise = 1.10f + fminf(width, depth) * 0.14f;
     bool ridge_along_x = width >= depth;
     Color shadow = ShadeColor(roof, 0.72f);
 
-    /* A roof is a stack of heavy courses, not two thin planes. The stepped
-       silhouette survives the low art resolution and makes every house read
-       as a small construction assembled from physical blocks. */
+    /* Real pitched planes make the roof change the building silhouette. The
+       old stack of flat courses still read as a decorated box, especially in
+       close pages. Thick timber-edged slopes keep the pixel-art weight while
+       producing a clear medieval gable. */
     DrawBox((Vector3){x + width * 0.5f, wall_height - 0.06f,
                       z + depth * 0.5f},
             (Vector3){width + overhang * 2.18f, 0.24f,
                       depth + overhang * 2.18f},
             BlendColor(ShadeColor(roof, 0.66f), wall, 0.16f));
-    for (int32_t course = 0; course < courses; ++course) {
-        float amount = (float)course / (float)courses;
-        float course_height = rise / (float)courses;
-        float roof_span = ridge_along_x ? depth : width;
-        float remaining = fmaxf(0.48f,
-            roof_span + overhang * 2.0f -
-            amount * (roof_span + overhang * 1.42f));
+    float half_span = (ridge_along_x ? depth : width) * 0.5f + overhang;
+    float slope_length = sqrtf(half_span * half_span + rise * rise);
+    float angle = atanf(rise / half_span) * RAD2DEG;
+    for (int32_t side = -1; side <= 1; side += 2) {
+        float sign = (float)side;
+        Vector3 center = {
+            x + width * 0.5f +
+                (ridge_along_x ? 0.0f : sign * half_span * 0.5f),
+            wall_height + rise * 0.5f,
+            z + depth * 0.5f +
+                (ridge_along_x ? sign * half_span * 0.5f : 0.0f),
+        };
         Vector3 size = ridge_along_x ?
-            (Vector3){width + overhang * 2.0f,
-                      course_height + 0.035f, remaining} :
-            (Vector3){remaining, course_height + 0.035f,
-                      depth + overhang * 2.0f};
-        Color course_color = course == 0 ? shadow :
-            ShadeColor(roof, 0.78f + (float)course * 0.045f);
-        DrawBox((Vector3){x + width * 0.5f,
-                          wall_height + course_height * ((float)course + 0.5f),
-                          z + depth * 0.5f},
-                size, course_color);
+            (Vector3){width + overhang * 2.0f, 0.22f, slope_length} :
+            (Vector3){slope_length, 0.22f, depth + overhang * 2.0f};
+        Vector3 axis = ridge_along_x ? (Vector3){1.0f, 0.0f, 0.0f} :
+                                          (Vector3){0.0f, 0.0f, 1.0f};
+        float plane_angle = ridge_along_x ? sign * angle : -sign * angle;
+        DrawTiltedBox(center, size, axis, plane_angle,
+                      side > 0 ? roof : shadow);
+
+        /* Three raised shingle battens make each slope catch light without
+           turning it back into a stack of horizontal terraces. */
+        for (int32_t batten = 1; batten <= 3; ++batten) {
+            float amount = (float)batten / 4.0f;
+            float run = half_span * amount;
+            float batten_height = rise * (1.0f - amount);
+            Vector3 batten_center = {
+                x + width * 0.5f +
+                    (ridge_along_x ? 0.0f : sign * run),
+                wall_height + batten_height + 0.10f,
+                z + depth * 0.5f +
+                    (ridge_along_x ? sign * run : 0.0f),
+            };
+            Vector3 batten_size = ridge_along_x ?
+                (Vector3){width + overhang * 2.04f, 0.09f, 0.15f} :
+                (Vector3){0.15f, 0.09f, depth + overhang * 2.04f};
+            DrawBox(batten_center, batten_size,
+                    ShadeColor(roof, side > 0 ? 0.74f : 0.58f));
+        }
     }
     DrawBox((Vector3){x + width * 0.5f, wall_height + rise + 0.06f,
                       z + depth * 0.5f},
@@ -12417,6 +12780,12 @@ static void DrawConstructedWallShell(float x, float z, float width,
                 (Vector3){inset + projection, upper_height - 0.14f,
                           side_bay_depth},
                 ((bay + style) & 1) != 0 ? side : ShadeColor(side, 0.96f));
+        DrawBox((Vector3){x + inset * 0.30f - projection * 0.18f,
+                          base_height + upper_height * 0.5f, bay_z},
+                (Vector3){inset + projection, upper_height - 0.14f,
+                          side_bay_depth},
+                ((bay + style) & 1) != 0 ? ShadeColor(side, 0.86f) :
+                                           ShadeColor(side, 0.92f));
     }
 
     /* Timber houses gain a visibly cantilevered upper storey. Stone and
@@ -12430,6 +12799,10 @@ static void DrawConstructedWallShell(float x, float z, float width,
                           z + depth * 0.5f},
                 (Vector3){0.42f, 0.22f, depth + 0.24f},
                 ShadeColor(trim, 0.88f));
+        DrawBox((Vector3){x - 0.18f, storey,
+                          z + depth * 0.5f},
+                (Vector3){0.42f, 0.22f, depth + 0.24f},
+                ShadeColor(trim, 0.80f));
     }
 }
 
@@ -12567,9 +12940,11 @@ static void DrawBuildingArchetypeDetails(float x, float z, float width,
     }
 }
 
-static void DrawFacadeWindow(Vector3 center, bool side_facing, Color trim,
+static void DrawFacadeWindow(Vector3 center, int32_t side, Color trim,
                              Color glass)
 {
+    bool side_facing = side != 0;
+    float side_sign = side < 0 ? -1.0f : 1.0f;
     Vector3 recess = side_facing ? (Vector3){0.075f, 1.34f, 1.02f} :
                                    (Vector3){1.02f, 1.34f, 0.075f};
     Vector3 pane = side_facing ? (Vector3){0.035f, 1.02f, 0.72f} :
@@ -12585,8 +12960,8 @@ static void DrawFacadeWindow(Vector3 center, bool side_facing, Color trim,
     Vector3 sill_center = {center.x, center.y - 0.70f, center.z};
     Vector3 lintel_center = {center.x, center.y + 0.70f, center.z};
     if (side_facing) {
-        sill_center.x += 0.025f;
-        lintel_center.x += 0.025f;
+        sill_center.x += side_sign * 0.025f;
+        lintel_center.x += side_sign * 0.025f;
     } else {
         sill_center.z += 0.025f;
         lintel_center.z += 0.025f;
@@ -12605,8 +12980,8 @@ static void DrawFacadeWindow(Vector3 center, bool side_facing, Color trim,
     Vector3 jamb_b = center;
     Vector3 jamb_size;
     if (side_facing) {
-        jamb_a.x += outward;
-        jamb_b.x += outward;
+        jamb_a.x += side_sign * outward;
+        jamb_b.x += side_sign * outward;
         jamb_a.z -= 0.49f;
         jamb_b.z += 0.49f;
         jamb_size = (Vector3){0.24f, 1.36f, 0.14f};
@@ -12706,9 +13081,9 @@ static void DrawBuilding(float x, float z, float width, float depth,
                                Fade(WORLD_TEAL, 0.78f);
     DrawConstructedWallShell(x, z, width, depth, height, wall, trim, style);
 
-    /* The positive Z and X facades face the runtime camera. Depth here is not
-       decoration pasted onto a diorama: it follows the same authoritative
-       footprint used by collision. */
+    /* The front and both side facades can face a close runtime camera. Depth
+       here is not decoration pasted onto a diorama: it follows the same
+       authoritative footprint used by collision. */
     for (int32_t corner = 0; corner < 2; ++corner) {
         float post_x = corner == 0 ? x + 0.18f : x + width - 0.18f;
         DrawBox((Vector3){post_x, height * 0.50f, z + depth + 0.045f},
@@ -12718,6 +13093,9 @@ static void DrawBuilding(float x, float z, float width, float depth,
             (Vector3){width - 0.18f, 0.18f, 0.09f}, trim);
     DrawBox((Vector3){x + width + 0.045f, height - 0.24f, center.z},
             (Vector3){0.09f, 0.18f, depth - 0.18f}, trim);
+    DrawBox((Vector3){x - 0.045f, height - 0.24f, center.z},
+            (Vector3){0.09f, 0.18f, depth - 0.18f},
+            ShadeColor(trim, 0.86f));
 
     /* Camera rooms can approach a house from either side. Give the rear and
        left elevations the same large construction rhythm as the nominal
@@ -12741,18 +13119,20 @@ static void DrawBuilding(float x, float z, float width, float depth,
             (Vector3){width - 0.14f, 0.42f, 0.105f}, plinth);
     DrawBox((Vector3){x + width + 0.052f, 0.46f, center.z},
             (Vector3){0.105f, 0.42f, depth - 0.14f}, plinth);
+    DrawBox((Vector3){x - 0.052f, 0.46f, center.z},
+            (Vector3){0.105f, 0.42f, depth - 0.14f},
+            ShadeColor(plinth, 0.84f));
     DrawBox((Vector3){center.x, story_course, z + depth + 0.057f},
             (Vector3){width - 0.16f, 0.13f, 0.115f}, trim);
     DrawBox((Vector3){x + width + 0.057f, story_course, center.z},
             (Vector3){0.115f, 0.13f, depth - 0.16f}, trim);
     DrawBox((Vector3){center.x, 0.46f, z - 0.052f},
             (Vector3){width - 0.14f, 0.42f, 0.105f}, plinth);
-    DrawBox((Vector3){x - 0.052f, 0.46f, center.z},
-            (Vector3){0.105f, 0.42f, depth - 0.14f}, plinth);
     DrawBox((Vector3){center.x, story_course, z - 0.057f},
             (Vector3){width - 0.16f, 0.13f, 0.115f}, trim);
     DrawBox((Vector3){x - 0.057f, story_course, center.z},
-            (Vector3){0.115f, 0.13f, depth - 0.16f}, trim);
+            (Vector3){0.115f, 0.13f, depth - 0.16f},
+            ShadeColor(trim, 0.86f));
 
     int32_t bays = width >= 10.0f ? 3 : 2;
     float window_y = fminf(height * 0.56f, 2.90f);
@@ -12760,18 +13140,18 @@ static void DrawBuilding(float x, float z, float width, float depth,
         float window_x = x + width * (float)(bay + 1) / (float)(bays + 1);
         if (door && fabsf(window_x - center.x) < 0.82f) continue;
         DrawFacadeWindow((Vector3){window_x, window_y,
-                                   z + depth + 0.075f}, false, trim, glass);
+                                   z + depth + 0.075f}, 0, trim, glass);
     }
     DrawFacadeWindow((Vector3){x + width + 0.075f, window_y,
-                               center.z + depth * 0.12f}, true, trim, glass);
+                               center.z + depth * 0.12f}, 1, trim, glass);
     for (int32_t bay = 0; bay < bays; ++bay) {
         float window_x = x + width * (float)(bay + 1) / (float)(bays + 1);
         DrawFacadeWindow((Vector3){window_x, window_y, z - 0.075f},
-                         false, trim, ShadeColor(glass, 0.88f));
+                         0, trim, ShadeColor(glass, 0.88f));
     }
     DrawFacadeWindow((Vector3){x - 0.075f, window_y,
-                               center.z - depth * 0.12f}, true, trim,
-                     ShadeColor(glass, 0.84f));
+                               center.z - depth * 0.12f}, -1,
+                     ShadeColor(trim, 0.88f), ShadeColor(glass, 0.82f));
 
     if (door) {
         DrawBox((Vector3){center.x, 0.10f, z + depth + 0.42f},
@@ -12836,6 +13216,192 @@ static void DrawBuilding(float x, float z, float width, float depth,
     }
 }
 
+static void DrawOpenRoofBay(float x, float z, float width, float depth,
+                            float height, Color timber, Color roof)
+{
+    float post_inset = 0.24f;
+    for (int32_t corner = 0; corner < 4; ++corner) {
+        float post_x = (corner & 1) == 0 ? x + post_inset :
+                                             x + width - post_inset;
+        float post_z = (corner & 2) == 0 ? z + post_inset :
+                                             z + depth - post_inset;
+        DrawBox((Vector3){post_x, height * 0.50f, post_z},
+                (Vector3){0.28f, height, 0.28f}, timber);
+    }
+    DrawBox((Vector3){x + width * 0.50f, height - 0.12f,
+                      z + depth * 0.50f},
+            (Vector3){width, 0.24f, depth}, ShadeColor(timber, 0.82f));
+    DrawPitchedRoof(x, z, width, depth, height,
+                    ShadeColor(timber, 0.86f), roof);
+}
+
+static void DrawRoundTower(float center_x, float center_z, float radius,
+                           float height, Color wall, Color roof, bool door)
+{
+    Color trim = ShadeColor(wall, 0.62f);
+    DrawCylinder((Vector3){center_x, 0.0f, center_z},
+                 radius, radius * 1.03f, height, 12, wall);
+    DrawCylinder((Vector3){center_x, height, center_z},
+                 0.10f, radius * 1.22f, radius * 1.12f, 12, roof);
+    DrawBox((Vector3){center_x, height * 0.58f,
+                      center_z + radius + 0.025f},
+            (Vector3){radius * 0.62f, 0.72f, 0.07f}, WORLD_INK);
+    DrawBox((Vector3){center_x, height * 0.58f,
+                      center_z + radius + 0.055f},
+            (Vector3){0.08f, 0.78f, 0.11f}, trim);
+    if (door) {
+        DrawBox((Vector3){center_x, 1.05f,
+                          center_z + radius + 0.035f},
+                (Vector3){0.82f, 2.10f, 0.08f}, WORLD_WOOD_SHADOW);
+    }
+}
+
+/* A building footprint is the stable gameplay contract. Its visible shell
+   can still be a believable collection of wings, aisles, upper floors, and
+   towers. Each settlement gets a kit derived from its work and landscape so
+   the skyline communicates place before banners or labels are read. */
+static void DrawSettlementBuilding(const WorldBuilding *building,
+                                   Color wall, Color roof,
+                                   const CcLocalPlaceProfile *profile,
+                                   int32_t building_index)
+{
+    if (building == NULL || profile == NULL) return;
+    float x = building->footprint.x;
+    float z = building->footprint.y;
+    float width = building->footprint.width;
+    float depth = building->footprint.height;
+    float height = building->height;
+    bool mirror = (building_index & 1) != 0;
+
+    switch (profile->function) {
+        case CC_SETTLEMENT_FARMING:
+            if (building->style == CC_LOCAL_BUILDING_WORKSHOP ||
+                building_index < 0) {
+                /* Barns have a tall working nave and genuinely open side
+                   sheds, rather than a house facade painted onto a box. */
+                float aisle = width * 0.20f;
+                DrawBuilding(x + aisle, z, width - aisle * 2.0f, depth,
+                             height, wall, roof, building->door,
+                             building->style);
+                DrawOpenRoofBay(x, z + depth * 0.12f, aisle * 1.18f,
+                                depth * 0.78f, height * 0.48f,
+                                WORLD_WOOD_SHADOW, ShadeColor(roof, 0.88f));
+                DrawOpenRoofBay(x + width - aisle * 1.18f,
+                                z + depth * 0.12f, aisle * 1.18f,
+                                depth * 0.78f, height * 0.48f,
+                                WORLD_WOOD_SHADOW, ShadeColor(roof, 0.92f));
+            } else {
+                float main_width = width * 0.70f;
+                float main_x = mirror ? x + width - main_width : x;
+                float annex_width = width * 0.38f;
+                float annex_x = mirror ? x : x + width - annex_width;
+                DrawBuilding(main_x, z, main_width, depth, height,
+                             wall, roof, building->door, building->style);
+                DrawBuilding(annex_x, z + depth * 0.24f,
+                             annex_width, depth * 0.68f, height * 0.60f,
+                             ShadeColor(wall, 0.94f), ShadeColor(roof, 0.90f),
+                             false, building->style);
+            }
+            break;
+        case CC_SETTLEMENT_MINING: {
+            /* Stone lower storeys carry inset timber lodgings. Their stepped
+               sections echo the worker terraces cut into the quarry. */
+            float lower_height = height * 0.48f;
+            DrawBuilding(x, z, width, depth, lower_height,
+                         ShadeColor(wall, 0.82f), ShadeColor(roof, 0.78f),
+                         building->door, 1);
+            float upper_width = width * 0.76f;
+            float upper_x = x + (mirror ? width * 0.08f : width * 0.16f);
+            rlPushMatrix();
+            rlTranslatef(0.0f, height * 0.43f, 0.0f);
+            DrawBuilding(upper_x, z + depth * 0.10f,
+                         upper_width, depth * 0.80f, height * 0.54f,
+                         wall, roof, false, building->style);
+            rlPopMatrix();
+            float gantry_x = mirror ? x + width * 0.16f :
+                                      x + width * 0.84f;
+            DrawBox((Vector3){gantry_x, height * 0.58f, z + depth * 0.50f},
+                    (Vector3){0.28f, height * 1.08f, depth * 0.88f},
+                    WORLD_WOOD_SHADOW);
+            DrawBox((Vector3){gantry_x, height * 1.08f, z + depth * 0.50f},
+                    (Vector3){width * 0.28f, 0.26f, depth * 0.88f},
+                    WORLD_WOOD);
+            break;
+        }
+        case CC_SETTLEMENT_MARKET: {
+            /* Trading houses wrap an open central bay. The arcade and three
+               rooflines make a public hall rather than another residence. */
+            float wing_width = width * 0.34f;
+            DrawBuilding(x, z, wing_width, depth, height * 0.72f,
+                         wall, roof, building->door, building->style);
+            DrawBuilding(x + width - wing_width, z, wing_width, depth,
+                         height * 0.72f, wall, roof, false, building->style);
+            DrawBuilding(x + width * 0.31f, z,
+                         width * 0.38f, depth * 0.52f, height,
+                         ShadeColor(wall, 1.06f), roof, false, 2);
+            int32_t bays = 3;
+            for (int32_t bay = 0; bay < bays; ++bay) {
+                float post_x = x + width * (0.37f + (float)bay * 0.13f);
+                DrawBox((Vector3){post_x, height * 0.28f,
+                                  z + depth * 0.88f},
+                        (Vector3){0.24f, height * 0.56f, 0.30f},
+                        WORLD_STONE_LIGHT);
+            }
+            DrawBox((Vector3){x + width * 0.50f, height * 0.57f,
+                              z + depth * 0.88f},
+                    (Vector3){width * 0.38f, 0.24f, 0.38f}, WORLD_GOLD);
+            break;
+        }
+        case CC_SETTLEMENT_FORTRESS: {
+            float tower_radius = fminf(width * 0.15f, depth * 0.24f);
+            float tower_x = mirror ? x + tower_radius :
+                                     x + width - tower_radius;
+            float block_x = mirror ? x + width * 0.18f : x;
+            DrawBuilding(block_x, z, width * 0.82f, depth,
+                         height * 0.70f, wall, roof, building->door,
+                         building->style);
+            DrawRoundTower(tower_x, z + depth * 0.54f, tower_radius,
+                           height * 1.06f, ShadeColor(wall, 0.88f),
+                           roof, false);
+            break;
+        }
+        case CC_SETTLEMENT_CAPITAL:
+            /* Palace-front buildings use a tall central pavilion and two
+               lower wings, creating the formal stepped silhouette visible
+               in the reference's long axial views. */
+            DrawBuilding(x, z + depth * 0.10f, width * 0.31f,
+                         depth * 0.90f, height * 0.62f,
+                         wall, ShadeColor(roof, 0.92f), false,
+                         building->style);
+            DrawBuilding(x + width * 0.69f, z + depth * 0.10f,
+                         width * 0.31f, depth * 0.90f, height * 0.62f,
+                         wall, ShadeColor(roof, 0.92f), false,
+                         building->style);
+            DrawBuilding(x + width * 0.27f, z, width * 0.46f, depth,
+                         height * 1.04f, ShadeColor(wall, 1.06f), roof,
+                         building->door, 2);
+            break;
+        case CC_SETTLEMENT_DUNGEON_TOWN: {
+            float main_width = width * 0.68f;
+            float main_x = mirror ? x + width - main_width : x;
+            float annex_x = mirror ? x : x + width * 0.54f;
+            DrawBuilding(main_x, z, main_width, depth, height,
+                         wall, roof, building->door, building->style);
+            DrawBuilding(annex_x, z + depth * 0.32f,
+                         width * 0.46f, depth * 0.60f, height * 0.58f,
+                         ShadeColor(wall, 0.80f), ShadeColor(roof, 0.84f),
+                         false, 3);
+            float tower_x = mirror ? x + width * 0.26f :
+                                     x + width * 0.74f;
+            DrawRoundTower(tower_x, z + depth * 0.24f,
+                           fminf(width, depth) * 0.15f,
+                           height * 0.92f, ShadeColor(wall, 0.72f),
+                           ShadeColor(roof, 0.76f), false);
+            break;
+        }
+    }
+}
+
 static void DrawTerrainPatchAtTop(float x, float z, float width, float depth,
                                   float top, Color color)
 {
@@ -12865,7 +13431,7 @@ static bool SceneryFootprintVisibleWithin(Rectangle footprint, Vector3 focus,
 
 static bool SceneryFootprintVisible(Rectangle footprint, Vector3 focus)
 {
-    return SceneryFootprintVisibleWithin(footprint, focus, 30.0f);
+    return SceneryFootprintVisibleWithin(footprint, focus, 42.0f);
 }
 
 static bool SceneryPointVisible(float x, float z, Vector3 focus)
@@ -13025,7 +13591,8 @@ static void DrawArtisanSign(Color kingdom)
                     0.11f, WORLD_GOLD);
 }
 
-static void DrawWorkshopForge(Color kingdom)
+static void DrawWorkshopForge(Color kingdom,
+                              const CcLocalPlaceProfile *profile)
 {
     const float x = 37.85f;
     const float z = 23.08f;
@@ -13052,6 +13619,57 @@ static void DrawWorkshopForge(Color kingdom)
                        (Vector3){x - 1.18f, 0.16f + (float)billet * 0.15f,
                                  z + 0.48f},
                        0.08f, 0.08f, 7, ShadeColor(timber, 1.08f));
+    }
+    if (profile == NULL) return;
+    if (profile->function == CC_SETTLEMENT_MINING) {
+        /* A low ore tram and its rails make this a lampwright's working
+           alley, rather than the same village smithy in darker colors. */
+        for (int32_t rail = -1; rail <= 1; rail += 2) {
+            DrawBox((Vector3){x - 0.65f, 0.07f,
+                              z + (float)rail * 0.52f},
+                    (Vector3){2.50f, 0.09f, 0.09f}, iron);
+        }
+        DrawBox((Vector3){x - 0.70f, 0.52f, z},
+                (Vector3){1.18f, 0.72f, 0.94f},
+                ShadeColor(timber, 0.76f));
+        for (int32_t ore = 0; ore < 3; ++ore) {
+            DrawSmallSphere((Vector3){x - 1.02f + (float)ore * 0.32f,
+                                      0.96f, z},
+                            0.22f, ShadeColor(WORLD_STONE, 0.66f));
+        }
+    } else if (profile->function == CC_SETTLEMENT_FORTRESS) {
+        /* The armourer displays polearms against a red muster rail. */
+        DrawBox((Vector3){x - 1.55f, 1.05f, z},
+                (Vector3){0.16f, 1.95f, 1.55f}, WORLD_WOOD_SHADOW);
+        DrawBox((Vector3){x - 1.48f, 1.62f, z},
+                (Vector3){0.12f, 0.16f, 1.62f}, kingdom);
+        for (int32_t weapon = -1; weapon <= 1; ++weapon) {
+            float weapon_z = z + (float)weapon * 0.48f;
+            DrawBox((Vector3){x - 1.36f, 1.25f, weapon_z},
+                    (Vector3){0.08f, 2.35f, 0.08f}, iron);
+            DrawTiltedBox((Vector3){x - 1.36f, 2.43f, weapon_z},
+                          (Vector3){0.10f, 0.34f, 0.16f},
+                          (Vector3){0.0f, 0.0f, 1.0f}, 45.0f,
+                          WORLD_METAL_LIGHT);
+        }
+    } else if (profile->function == CC_SETTLEMENT_CAPITAL) {
+        /* The royal ward turns the forge into a goldsmith's open counter. */
+        DrawBox((Vector3){x - 1.48f, 0.58f, z},
+                (Vector3){1.55f, 0.92f, 1.25f},
+                ShadeColor(WORLD_WOOD_LIGHT, 0.86f));
+        DrawBox((Vector3){x - 1.48f, 1.08f, z},
+                (Vector3){1.72f, 0.12f, 1.38f}, WORLD_GOLD);
+        for (int32_t work = 0; work < 3; ++work) {
+            DrawSmallSphere((Vector3){x - 1.88f + (float)work * 0.40f,
+                                      1.25f, z + 0.16f},
+                            0.12f, work == 1 ? kingdom : WORLD_GOLD);
+        }
+        for (int32_t side = -1; side <= 1; side += 2) {
+            DrawBox((Vector3){x - 1.48f, 2.22f,
+                              z + (float)side * 0.58f},
+                    (Vector3){1.70f, 0.12f, 0.10f},
+                    ShadeColor(WORLD_GOLD, 0.78f));
+        }
     }
 }
 
@@ -13168,11 +13786,78 @@ static void DrawCoachHitch(const CcSettlement *place)
     }
 }
 
-static void DrawMillersGranary(float hunger)
+static void DrawEastRoomFocus(float hunger, Color kingdom,
+                              const CcLocalPlaceProfile *profile)
 {
     const float x = 64.14f;
     const float z = 51.02f;
     Color timber = WORLD_WOOD_LIGHT;
+    if (profile != NULL && profile->function == CC_SETTLEMENT_CAPITAL) {
+        /* Four slim columns and a clipped hedge turn the east room into a
+           rose cloister. The old generic grain silo was especially obvious
+           once this room received its close camera. */
+        DrawCylinder((Vector3){x, 0.07f, z}, 0.90f, 0.90f, 0.14f, 14,
+                     WORLD_STONE_LIGHT);
+        for (int32_t corner = 0; corner < 4; ++corner) {
+            float column_x = x + ((corner & 1) == 0 ? -0.68f : 0.68f);
+            float column_z = z + ((corner & 2) == 0 ? -0.68f : 0.68f);
+            DrawCylinder((Vector3){column_x, 0.16f, column_z},
+                         0.12f, 0.16f, 2.35f, 8, WORLD_STONE_LIGHT);
+            DrawSmallSphere((Vector3){column_x, 1.55f, column_z},
+                            0.30f, BlendColor(kingdom, WORLD_FOLIAGE, 0.62f));
+            DrawSmallSphere((Vector3){column_x, 1.78f, column_z},
+                            0.11f, WORLD_DANGER);
+        }
+        DrawBox((Vector3){x, 2.48f, z - 0.68f},
+                (Vector3){1.70f, 0.16f, 0.18f}, WORLD_GOLD);
+        DrawBox((Vector3){x, 2.48f, z + 0.68f},
+                (Vector3){1.70f, 0.16f, 0.18f}, WORLD_GOLD);
+        DrawBox((Vector3){x - 0.68f, 2.48f, z},
+                (Vector3){0.18f, 0.16f, 1.70f}, WORLD_GOLD);
+        DrawBox((Vector3){x + 0.68f, 2.48f, z},
+                (Vector3){0.18f, 0.16f, 1.70f}, WORLD_GOLD);
+        return;
+    }
+    if (profile != NULL && profile->function == CC_SETTLEMENT_MINING) {
+        DrawBox((Vector3){x, 0.78f, z},
+                (Vector3){1.62f, 1.56f, 1.42f}, WORLD_WOOD_SHADOW);
+        DrawBox((Vector3){x, 1.63f, z},
+                (Vector3){1.88f, 0.16f, 1.68f}, WORLD_METAL_SHADOW);
+        DrawBox((Vector3){x, 2.28f, z},
+                (Vector3){0.26f, 1.46f, 0.26f}, WORLD_METAL_LIGHT);
+        return;
+    }
+    if (profile != NULL && profile->function == CC_SETTLEMENT_MARKET) {
+        DrawBox((Vector3){x, 0.80f, z},
+                (Vector3){1.72f, 1.60f, 1.48f}, WORLD_WOOD_LIGHT);
+        DrawBox((Vector3){x, 1.72f, z + 0.12f},
+                (Vector3){2.10f, 0.18f, 1.84f}, kingdom);
+        DrawBox((Vector3){x, 1.08f, z + 0.78f},
+                (Vector3){1.24f, 0.12f, 0.22f}, WORLD_GOLD);
+        return;
+    }
+    if (profile != NULL && profile->function == CC_SETTLEMENT_FORTRESS) {
+        DrawBox((Vector3){x, 0.72f, z},
+                (Vector3){1.72f, 1.44f, 1.52f}, WORLD_STONE_SHADOW);
+        for (int32_t merlon = -1; merlon <= 1; ++merlon) {
+            DrawBox((Vector3){x + (float)merlon * 0.58f, 1.72f, z},
+                    (Vector3){0.34f, 0.58f, 1.62f}, kingdom);
+        }
+        return;
+    }
+    if (profile != NULL &&
+        profile->function == CC_SETTLEMENT_DUNGEON_TOWN) {
+        for (int32_t leg = -1; leg <= 1; leg += 2) {
+            DrawTiltedBox((Vector3){x + (float)leg * 0.52f, 1.15f, z},
+                          (Vector3){0.16f, 2.45f, 0.16f},
+                          (Vector3){0.0f, 0.0f, 1.0f},
+                          (float)-leg * 14.0f, WORLD_WOOD_SHADOW);
+        }
+        DrawBox((Vector3){x, 2.25f, z},
+                (Vector3){1.62f, 0.16f, 0.18f}, WORLD_WOOD);
+        DrawSmallSphere((Vector3){x, 1.42f, z}, 0.26f, WORLD_VIOLET);
+        return;
+    }
     Color plaster = BlendColor(WORLD_STONE_LIGHT,
                                WORLD_ROAD, hunger * 0.60f);
     DrawCylinder((Vector3){x, 0.08f, z}, 0.90f, 0.96f, 2.36f, 12, plaster);
@@ -13298,16 +13983,26 @@ static void DrawPlaceLandmark(const CcLocalPlaceLandmark *landmark,
         return;
     }
 
-    float body_height = height * 0.88f;
-    DrawBox((Vector3){center_x, body_height * 0.50f, center_z},
-            (Vector3){landmark->width, body_height, landmark->depth}, wall);
-    DrawBox((Vector3){center_x, body_height + height * 0.06f, center_z},
-            (Vector3){landmark->width + 0.34f, height * 0.12f,
-                      landmark->depth + 0.34f}, roof);
-    DrawBox((Vector3){center_x, body_height * 0.48f,
-                      landmark->z + landmark->depth + 0.035f},
-            (Vector3){landmark->width * 0.24f, body_height * 0.56f, 0.07f},
-            ShadeColor(roof, 0.72f));
+    float body_height = height * 0.78f;
+    int32_t building_style = landmark->family ==
+                                 CC_LOCAL_LANDMARK_COMMERCE ||
+                             landmark->family == CC_LOCAL_LANDMARK_CIVIC ?
+                                 CC_LOCAL_BUILDING_CIVIC :
+                             landmark->family == CC_LOCAL_LANDMARK_MILITARY ?
+                                 CC_LOCAL_BUILDING_WORKER_ROW :
+                                 CC_LOCAL_BUILDING_WORKSHOP;
+    WorldBuilding shell = {
+        .footprint = {landmark->x, landmark->z,
+                      landmark->width, landmark->depth},
+        .height = body_height,
+        .style = building_style,
+        .door = true,
+    };
+    /* Secondary landmarks occupy real building footprints, so they should
+       use the same massing language as the rest of their town. This removes
+       the old foreground cubes without inventing separate collision shapes. */
+    DrawSettlementBuilding(&shell, wall, roof, ActivePlaceProfile(),
+                           landmark->variant);
 
     if (landmark->family == CC_LOCAL_LANDMARK_INDUSTRY) {
         int32_t stacks = landmark->variant == 1 ? 3 : 2;
@@ -13394,7 +14089,7 @@ static void DrawRoomLandmarks(const CcSettlement *place, Color kingdom,
         rlPushMatrix();
         rlTranslatef(0.0f, CcLocalTerrainHeightAt(30.95f, 24.30f), 0.0f);
         DrawArtisanSign(kingdom);
-        DrawWorkshopForge(kingdom);
+        DrawWorkshopForge(kingdom, profile);
         rlPopMatrix();
     }
     if (RoomDetailPointVisible(CC_LOCAL_NOTICE_X, CC_LOCAL_NOTICE_Z, focus)) {
@@ -13414,7 +14109,7 @@ static void DrawRoomLandmarks(const CcSettlement *place, Color kingdom,
     if (RoomDetailPointVisible(64.14f, 51.02f, focus)) {
         rlPushMatrix();
         rlTranslatef(0.0f, CcLocalTerrainHeightAt(64.14f, 51.02f), 0.0f);
-        DrawMillersGranary(hunger);
+        DrawEastRoomFocus(hunger, kingdom, profile);
         rlPopMatrix();
     }
     if (RoomDetailPointVisible(81.4f, 47.0f, focus)) {
@@ -13501,7 +14196,13 @@ static float TerrainRoadSignedInset(const TerrainRoad *road,
     float width_noise = TerrainValueNoise(
         along - (float)road_index * 4.0f,
         (float)road_index * 9.0f, 5.5f, 72U);
-    float half_width = cross_width * 0.5f * (0.94f + width_noise * 0.07f);
+    /* The grading footprint includes drainage and a safe movement shoulder;
+       it is not all paved road. Keeping the visible wheel surface narrower
+       restores the scale of doors, carts, houses, and gate openings. */
+    float visible_scale = cross_width >= 4.50f ? 0.72f :
+                          cross_width >= 3.40f ? 0.80f : 0.90f;
+    float half_width = cross_width * 0.5f * visible_scale *
+                       (0.94f + width_noise * 0.07f);
     float cross_inset = half_width - fabsf(
         cross - TerrainRoadCenterline(road, road_index, along));
     float end_inset = fminf(along - start, start + length - along);
@@ -13739,7 +14440,10 @@ static void TerrainMeshWriteVertexWithNormal(TerrainMeshWriter *writer,
     }
     if (writer->cursor >= writer->mesh.vertexCount) return;
     int32_t vertex = writer->cursor;
-    normal.y = fmaxf(normal.y, 0.62f);
+    /* Keep the true face direction on steep landforms. The old clamp made
+       quarry walls and ravines light like gentle grass slopes, which erased
+       their height in the fixed storybook camera. */
+    normal.y = fmaxf(normal.y, 0.24f);
     normal = Vector3Normalize(normal);
     writer->mesh.vertices[vertex * 3 + 0] = point.x;
     writer->mesh.vertices[vertex * 3 + 1] = point.y;
@@ -13784,7 +14488,7 @@ static void TerrainMeshWriteCell(TerrainMeshWriter *writer,
 
 static int32_t TerrainMeshVertexCount(void)
 {
-    const float margin = 14.0f;
+    const float margin = 28.0f;
     int32_t cells = 0;
     for (float z = -margin; z < CC_LOCAL_WORLD_DEPTH + margin; z += 1.0f) {
         for (float x = -margin; x < CC_LOCAL_WORLD_WIDTH + margin;
@@ -13814,7 +14518,7 @@ static bool TerrainRenderCacheBuild(const CcSettlement *place)
         return false;
     }
 
-    const float margin = 14.0f;
+    const float margin = 28.0f;
     for (float z = -margin; z < CC_LOCAL_WORLD_DEPTH + margin; z += 1.0f) {
         float far_z = z + 1.0f;
         for (float x = -margin; x < CC_LOCAL_WORLD_WIDTH + margin;
@@ -14355,12 +15059,353 @@ static void DrawTerrainPlacedLantern(float x, float z)
     rlPopMatrix();
 }
 
+static void DrawTerrainStageBox(float x, float z, float width, float depth,
+                                float height, Color color)
+{
+    float ground = CcLocalTerrainHeightAt(x + width * 0.5f,
+                                           z + depth * 0.5f);
+    DrawBox((Vector3){x + width * 0.5f, ground + height * 0.5f,
+                      z + depth * 0.5f},
+            (Vector3){width, height, depth}, color);
+}
+
+static void DrawArrivalBridge(bool fortified)
+{
+    float ground = CcLocalTerrainHeightAt(91.0f, 34.0f);
+    Color stone = fortified ? WORLD_STONE : WORLD_WOOD_LIGHT;
+    Color shadow = ShadeColor(stone, 0.58f);
+    DrawBox((Vector3){91.0f, ground - 0.10f, 34.0f},
+            (Vector3){12.5f, 0.32f, 4.75f}, shadow);
+    DrawBox((Vector3){91.0f, ground + 0.06f, 34.0f},
+            (Vector3){12.5f, 0.10f, 4.45f}, stone);
+    for (int32_t side = -1; side <= 1; side += 2) {
+        float rail_z = 34.0f + (float)side * 2.12f;
+        DrawBox((Vector3){91.0f, ground + 0.55f, rail_z},
+                (Vector3){12.2f, fortified ? 1.05f : 0.72f, 0.28f},
+                stone);
+        for (int32_t post = 0; post < 5; ++post) {
+            DrawBox((Vector3){86.2f + (float)post * 2.4f,
+                              ground + 0.76f, rail_z},
+                    (Vector3){0.34f, fortified ? 1.46f : 1.10f, 0.42f},
+                    ShadeColor(stone, post % 2 == 0 ? 0.86f : 1.04f));
+        }
+    }
+}
+
+static void DrawFarmTerrainStage(Vector3 focus)
+{
+    Color water = BlendColor(WORLD_TEAL, WORLD_INK, 0.42f);
+    for (float z = 2.0f; z < 72.0f; z += 4.0f) {
+        float river_x = 91.0f + sinf(z * 0.082f) * 1.7f;
+        if (!SceneryPointVisible(river_x, z, focus)) continue;
+        float next_x = 91.0f + sinf((z + 4.0f) * 0.082f) * 1.7f;
+        float angle = -atan2f(next_x - river_x, 4.0f) * RAD2DEG;
+        /* The playable bridge uses a graded terrain strip for collision, but
+           the water must remain down in the authored river gorge. */
+        float ground = TerrainSampleGrid(street_terrain_natural,
+                                         river_x, z);
+        DrawTiltedBox((Vector3){(river_x + next_x) * 0.5f,
+                                ground + 0.045f, z + 2.0f},
+                      (Vector3){7.2f, 0.07f, 4.5f},
+                      (Vector3){0.0f, 1.0f, 0.0f}, angle, water);
+    }
+    if (SceneryPointVisible(91.0f, 34.0f, focus)) {
+        DrawArrivalBridge(false);
+    }
+    if (SceneryPointVisible(45.0f, 29.0f, focus)) {
+        for (int32_t terrace = 0; terrace < 3; ++terrace) {
+            float radius = 4.7f - (float)terrace * 0.72f;
+            float y = CcLocalTerrainHeightAt(45.0f, 29.5f) +
+                      0.03f + (float)terrace * 0.035f;
+            DrawCylinder((Vector3){45.0f, y, 29.5f},
+                         radius, radius, 0.06f, 20,
+                         terrace == 2 ? WORLD_CROP_LIGHT : WORLD_EARTH);
+        }
+    }
+}
+
+static void DrawMiningTerrainStage(Vector3 focus)
+{
+    Color iron = WORLD_METAL_SHADOW;
+    Color timber = WORLD_WOOD_SHADOW;
+    for (float x = 65.0f; x < 96.0f; x += 3.5f) {
+        if (!SceneryPointVisible(x, 34.0f, focus)) continue;
+        float ground = CcLocalTerrainHeightAt(x, 34.0f) + 0.055f;
+        for (int32_t rail = -1; rail <= 1; rail += 2) {
+            DrawBox((Vector3){x + 1.75f, ground, 34.0f + (float)rail * 0.62f},
+                    (Vector3){3.65f, 0.10f, 0.10f}, iron);
+        }
+        DrawBox((Vector3){x + 1.75f, ground - 0.035f, 34.0f},
+                (Vector3){0.18f, 0.10f, 2.10f}, timber);
+    }
+    if (SceneryPointVisible(75.0f, 42.0f, focus)) {
+        DrawTerrainStageBox(69.0f, 40.8f, 18.0f, 0.65f, 2.25f,
+                            WORLD_STONE_SHADOW);
+        DrawTerrainStageBox(73.0f, 44.0f, 14.0f, 0.65f, 3.30f,
+                            ShadeColor(WORLD_STONE_SHADOW, 0.84f));
+    }
+}
+
+static void DrawMarketTerrainStage(Vector3 focus)
+{
+    if (SceneryPointVisible(46.0f, 29.5f, focus)) {
+        float ground = CcLocalTerrainHeightAt(46.0f, 29.5f);
+        for (int32_t ring = 0; ring < 4; ++ring) {
+            float radius = 6.1f - (float)ring * 1.15f;
+            DrawCylinder((Vector3){46.0f, ground + 0.025f +
+                                   (float)ring * 0.025f, 29.5f},
+                         radius, radius, 0.055f, 24,
+                         ring == 3 ? WORLD_GOLD : WORLD_STONE);
+        }
+        DrawCylinder((Vector3){46.0f, ground + 0.26f, 29.5f},
+                     0.62f, 0.78f, 0.48f, 14, WORLD_STONE_LIGHT);
+    }
+    for (float x = 66.0f; x < 96.0f; x += 5.0f) {
+        if (!SceneryPointVisible(x, 34.0f, focus)) continue;
+        float ground = CcLocalTerrainHeightAt(x, 34.0f);
+        DrawBox((Vector3){x, ground + 0.10f, 31.95f},
+                (Vector3){4.2f, 0.20f, 0.24f}, WORLD_STONE_LIGHT);
+        DrawBox((Vector3){x, ground + 0.10f, 36.05f},
+                (Vector3){4.2f, 0.20f, 0.24f}, WORLD_STONE_LIGHT);
+    }
+}
+
+static void DrawFortressTerrainStage(Vector3 focus)
+{
+    for (float z = 2.0f; z < 72.0f; z += 4.0f) {
+        float ravine_x = 91.0f + sinf(z * 0.052f) * 1.2f;
+        if (!SceneryPointVisible(ravine_x, z, focus)) continue;
+        float next_x = 91.0f + sinf((z + 4.0f) * 0.052f) * 1.2f;
+        float floor = TerrainSampleGrid(street_terrain_natural,
+                                        ravine_x, z);
+        DrawTiltedBox((Vector3){(ravine_x + next_x) * 0.5f,
+                                floor + 0.035f, z + 2.0f},
+                      (Vector3){5.6f, 0.07f, 4.4f},
+                      (Vector3){0.0f, 1.0f, 0.0f},
+                      -atan2f(next_x - ravine_x, 4.0f) * RAD2DEG,
+                      WORLD_INK);
+    }
+    if (SceneryPointVisible(91.0f, 34.0f, focus)) {
+        DrawArrivalBridge(true);
+        for (int32_t side = -1; side <= 1; side += 2) {
+            float z = 34.0f + (float)side * 3.35f;
+            DrawTerrainStageBox(86.0f, z - 0.65f, 2.4f, 1.3f, 4.8f,
+                                WORLD_STONE_SHADOW);
+            DrawTerrainStageBox(93.5f, z - 0.65f, 2.4f, 1.3f, 4.8f,
+                                WORLD_STONE_SHADOW);
+        }
+    }
+    if (SceneryPointVisible(46.0f, 29.5f, focus)) {
+        for (int32_t step = 0; step < 5; ++step) {
+            float x = 39.0f + (float)step * 3.2f;
+            float ground = CcLocalTerrainHeightAt(x, 29.5f);
+            DrawBox((Vector3){x, ground + 0.06f, 29.5f},
+                    (Vector3){2.7f, 0.12f, 7.2f},
+                    step % 2 == 0 ? WORLD_STONE : WORLD_ROAD_LIGHT);
+        }
+    }
+}
+
+static void DrawCapitalTerrainStage(Vector3 focus)
+{
+    for (int32_t stair = 0; stair < 8; ++stair) {
+        float x = 58.0f + (float)stair * 4.1f;
+        if (!SceneryPointVisible(x, 34.0f, focus)) continue;
+        float ground = CcLocalTerrainHeightAt(x, 34.0f);
+        DrawBox((Vector3){x, ground + 0.075f, 34.0f},
+                (Vector3){3.7f, 0.15f, 5.2f},
+                stair % 2 == 0 ? WORLD_STONE_LIGHT : WORLD_STONE);
+        for (int32_t side = -1; side <= 1; side += 2) {
+            DrawSmallSphere((Vector3){x, ground + 0.22f,
+                                      34.0f + (float)side * 2.45f},
+                            0.18f, WORLD_GOLD);
+        }
+    }
+    if (SceneryPointVisible(75.0f, 25.0f, focus)) {
+        DrawTerrainStageBox(66.0f, 25.0f, 24.0f, 0.55f, 2.20f,
+                            WORLD_STONE_LIGHT);
+        DrawTerrainStageBox(69.0f, 21.0f, 20.0f, 0.55f, 3.20f,
+                            WORLD_STONE);
+    }
+}
+
+static void DrawDungeonTerrainStage(Vector3 focus)
+{
+    if (SceneryPointVisible(48.5f, 35.5f, focus)) {
+        float ground = CcLocalTerrainHeightAt(48.5f, 35.5f);
+        DrawCylinder((Vector3){48.5f, ground + 0.025f, 35.5f},
+                     3.75f, 3.75f, 0.05f, 22, WORLD_INK);
+        DrawCylinder((Vector3){48.5f, ground + 0.065f, 35.5f},
+                     3.20f, 3.20f, 0.04f, 22,
+                     BlendColor(WORLD_VIOLET, WORLD_INK, 0.72f));
+        for (int32_t post = 0; post < 10; ++post) {
+            float angle = (float)post / 10.0f * PI * 2.0f;
+            DrawBox((Vector3){48.5f + cosf(angle) * 4.25f,
+                              ground + 0.68f,
+                              35.5f + sinf(angle) * 4.25f},
+                    (Vector3){0.16f, 1.36f, 0.16f}, WORLD_WOOD_SHADOW);
+        }
+    }
+    for (int32_t stone = 0; stone < 4; ++stone) {
+        float x = 84.0f + (float)stone * 3.1f;
+        float z = stone % 2 == 0 ? 29.8f : 38.2f;
+        if (!SceneryPointVisible(x, z, focus)) continue;
+        float ground = CcLocalTerrainHeightAt(x, z);
+        DrawTiltedBox((Vector3){x, ground + 1.30f, z},
+                      (Vector3){0.62f, 2.60f, 0.74f},
+                      (Vector3){0.0f, 0.0f, 1.0f},
+                      stone % 2 == 0 ? 7.0f : -9.0f,
+                      WORLD_STONE_SHADOW);
+    }
+}
+
+static void DrawBackdropHill(float x, float z, float lower_radius,
+                             float upper_radius, float height,
+                             int32_t sides, Color color)
+{
+    DrawCylinder((Vector3){x, -3.4f, z}, upper_radius, lower_radius,
+                 height, sides, color);
+}
+
+static void DrawTownBackdrop(const CcSettlement *place)
+{
+    if (place == NULL) return;
+
+    /* Every town looks north toward a composed horizon. These broad, low
+       polygon forms replace the empty edge of the terrain with a readable
+       regional silhouette. They sit outside the playable space, so they can
+       carry visual drama without changing collision or road gradients. */
+    Color far_color = BlendColor(WORLD_INK, WORLD_STONE_SHADOW, 0.26f);
+    Color near_color = BlendColor(WORLD_STONE_SHADOW, WORLD_INK, 0.38f);
+    switch (place->function) {
+        case CC_SETTLEMENT_FARMING:
+            far_color = BlendColor(WORLD_GRASS_SHADOW, WORLD_INK, 0.48f);
+            near_color = BlendColor(WORLD_GRASS, WORLD_STONE_SHADOW, 0.56f);
+            for (int32_t hill = 0; hill < 6; ++hill) {
+                DrawBackdropHill(-8.0f + (float)hill * 22.0f,
+                                 -6.0f + (float)(hill % 2) * 2.2f,
+                                 18.0f, 7.8f, 8.0f + (float)(hill % 3),
+                                 12, far_color);
+            }
+            for (int32_t hill = 0; hill < 5; ++hill) {
+                DrawBackdropHill(4.0f + (float)hill * 24.0f, 2.0f,
+                                 14.0f, 5.5f,
+                                 5.8f + (float)((hill + 1) % 3),
+                                 12, near_color);
+            }
+            break;
+        case CC_SETTLEMENT_MINING:
+            far_color = BlendColor(WORLD_METAL_SHADOW, WORLD_INK, 0.34f);
+            near_color = BlendColor(WORLD_STONE_SHADOW,
+                                    WORLD_METAL_SHADOW, 0.52f);
+            for (int32_t peak = 0; peak < 8; ++peak) {
+                float height = 12.0f + (float)((peak * 5) % 9);
+                DrawBackdropHill(-10.0f + (float)peak * 16.5f,
+                                 -5.0f + (float)(peak % 2) * 2.0f,
+                                 13.0f, 1.2f, height, 6, far_color);
+            }
+            for (int32_t shelf = 0; shelf < 5; ++shelf) {
+                DrawBackdropHill((float)shelf * 25.0f, 3.0f,
+                                 15.0f, 7.0f,
+                                 7.0f + (float)(shelf % 2) * 2.0f,
+                                 7, near_color);
+            }
+            break;
+        case CC_SETTLEMENT_MARKET:
+            far_color = BlendColor(WORLD_VIOLET, WORLD_INK, 0.72f);
+            near_color = BlendColor(WORLD_STONE, WORLD_INK, 0.52f);
+            for (int32_t hill = 0; hill < 7; ++hill) {
+                DrawBackdropHill(-12.0f + (float)hill * 19.0f,
+                                 -6.0f + (float)(hill % 2),
+                                 15.0f, 4.0f,
+                                 8.0f + (float)((hill + 2) % 4),
+                                 9, far_color);
+            }
+            for (int32_t hill = 0; hill < 5; ++hill) {
+                DrawBackdropHill(2.0f + (float)hill * 24.0f, 2.0f,
+                                 13.0f, 6.5f,
+                                 6.2f + (float)(hill % 2),
+                                 10, near_color);
+            }
+            break;
+        case CC_SETTLEMENT_FORTRESS:
+            far_color = BlendColor(WORLD_STONE_SHADOW, WORLD_INK, 0.24f);
+            near_color = BlendColor(WORLD_STONE, WORLD_INK, 0.38f);
+            for (int32_t peak = 0; peak < 9; ++peak) {
+                float height = 15.0f + (float)((peak * 7) % 12);
+                DrawBackdropHill(-14.0f + (float)peak * 15.5f,
+                                 -6.0f + (float)(peak % 3),
+                                 14.5f, 0.45f, height, 5, far_color);
+            }
+            for (int32_t spur = 0; spur < 6; ++spur) {
+                DrawBackdropHill(-3.0f + (float)spur * 22.0f, 3.0f,
+                                 12.0f, 2.5f,
+                                 9.0f + (float)(spur % 3) * 2.0f,
+                                 6, near_color);
+            }
+            break;
+        case CC_SETTLEMENT_CAPITAL:
+            far_color = BlendColor(WORLD_VIOLET, WORLD_STONE_SHADOW, 0.72f);
+            near_color = BlendColor(WORLD_STONE_LIGHT, WORLD_INK, 0.48f);
+            for (int32_t hill = 0; hill < 6; ++hill) {
+                DrawBackdropHill(-10.0f + (float)hill * 23.0f,
+                                 -6.0f + (float)(hill % 2) * 1.4f,
+                                 18.0f, 6.0f,
+                                 9.0f + (float)((hill + 1) % 3),
+                                 11, far_color);
+            }
+            for (int32_t tower = 0; tower < 5; ++tower) {
+                float x = 8.0f + (float)tower * 23.0f;
+                float height = 7.0f + (float)(tower % 3) * 1.8f;
+                DrawCylinder((Vector3){x, -1.0f, 1.5f},
+                             1.0f, 1.35f, height, 8, near_color);
+                DrawCylinder((Vector3){x, height - 1.0f, 1.5f},
+                             0.08f, 1.9f, 3.4f, 8,
+                             BlendColor(WORLD_DANGER, WORLD_INK, 0.55f));
+            }
+            break;
+        case CC_SETTLEMENT_DUNGEON_TOWN:
+            far_color = BlendColor(WORLD_VIOLET, WORLD_INK, 0.82f);
+            near_color = BlendColor(WORLD_STONE_SHADOW, WORLD_INK, 0.58f);
+            for (int32_t peak = 0; peak < 10; ++peak) {
+                float height = 10.0f + (float)((peak * 9) % 13);
+                DrawBackdropHill(-13.0f + (float)peak * 14.5f,
+                                 -6.0f + (float)(peak % 2) * 2.0f,
+                                 10.5f, 0.25f, height, 5, far_color);
+            }
+            for (int32_t tooth = 0; tooth < 7; ++tooth) {
+                DrawBackdropHill(-2.0f + (float)tooth * 18.0f, 3.0f,
+                                 8.0f, 0.18f,
+                                 8.0f + (float)((tooth + 2) % 4) * 2.0f,
+                                 5, near_color);
+            }
+            break;
+    }
+}
+
+static void DrawTownTerrainStage(const CcSettlement *place, Vector3 focus)
+{
+    if (place == NULL) return;
+    switch (place->function) {
+        case CC_SETTLEMENT_FARMING: DrawFarmTerrainStage(focus); break;
+        case CC_SETTLEMENT_MINING: DrawMiningTerrainStage(focus); break;
+        case CC_SETTLEMENT_MARKET: DrawMarketTerrainStage(focus); break;
+        case CC_SETTLEMENT_FORTRESS: DrawFortressTerrainStage(focus); break;
+        case CC_SETTLEMENT_CAPITAL: DrawCapitalTerrainStage(focus); break;
+        case CC_SETTLEMENT_DUNGEON_TOWN:
+            DrawDungeonTerrainStage(focus);
+            break;
+    }
+}
+
 static void DrawExteriorTerrain(const CcSettlement *place, Vector3 focus)
 {
+    DrawTownBackdrop(place);
     SetWorldTerrainSurface(true);
     DrawCachedTerrain(place);
     DrawTerrainSurfaceDetails(place, focus);
     SetWorldTerrainSurface(false);
+    DrawTownTerrainStage(place, focus);
     if (SceneryPointVisible(46.15f, 26.10f, focus)) {
         DrawTerrainPlacedLantern(46.15f, 26.10f);
     }
@@ -14509,9 +15554,11 @@ typedef struct WorldBuildingRevealState {
 } WorldBuildingRevealState;
 
 static WorldBuildingRevealState world_building_reveals[
-    sizeof(WORLD_BUILDINGS) / sizeof(WORLD_BUILDINGS[0])];
+    CC_LOCAL_PLACE_BUILDING_CAPACITY];
 static float world_building_reveal_clock = 0.0f;
 static bool world_building_reveals_initialized = false;
+static CcSettlementFunction world_building_reveal_function =
+    CC_SETTLEMENT_MARKET;
 
 static void UpdateWorldBuildingReveals(Camera3D camera,
                                        Vector3 reveal_world,
@@ -14520,17 +15567,19 @@ static void UpdateWorldBuildingReveals(Camera3D camera,
                                        float clock)
 {
     bool reset = !world_building_reveals_initialized ||
-                 clock < world_building_reveal_clock;
+                 clock < world_building_reveal_clock ||
+                 world_building_reveal_function != active_place_function;
     float delta_time = reset ? 0.0f :
         fmaxf(0.0f, fminf(clock - world_building_reveal_clock, 0.05f));
     world_building_reveal_clock = clock;
     world_building_reveals_initialized = true;
+    world_building_reveal_function = active_place_function;
 
-    for (int32_t i = 0; i < (int32_t)(sizeof(WORLD_BUILDINGS) /
-                                      sizeof(WORLD_BUILDINGS[0])); ++i) {
+    for (int32_t i = 0; i < ActiveWorldBuildingCount(); ++i) {
+        WorldBuilding building = ActiveWorldBuildingAt(i);
         WorldBuildingRevealState *state = &world_building_reveals[i];
         bool occluded = WorldBuildingObscuresReveal(
-            &WORLD_BUILDINGS[i], camera, reveal_world,
+            &building, camera, reveal_world,
             render_width, render_height);
         if (reset) {
             state->amount = occluded ? 1.0f : 0.0f;
@@ -14576,54 +15625,52 @@ static void DrawWorldBuildings(Color kingdom, Vector3 focus,
     /* Every structure gets an opaque footing pass before any upper-wall
        reveal. This includes the authored market replacement. */
     SetWorldForegroundReveal(0.0f, reveal_cut_height);
-    for (int32_t i = 0; i < (int32_t)(sizeof(WORLD_BUILDINGS) /
-                                      sizeof(WORLD_BUILDINGS[0])); ++i) {
-        const WorldBuilding *building = &WORLD_BUILDINGS[i];
-        if (!SceneryFootprintVisible(building->footprint, focus)) continue;
-        Color wall = BuildingWallColor(building->style, profile);
+    for (int32_t i = 0; i < ActiveWorldBuildingCount(); ++i) {
+        WorldBuilding building = ActiveWorldBuildingAt(i);
+        if (!SceneryFootprintVisible(building.footprint, focus)) continue;
+        Color wall = BuildingWallColor(building.style, profile);
         rlPushMatrix();
-        rlTranslatef(0.0f, TerrainFootprintHeight(building->footprint), 0.0f);
+        rlTranslatef(0.0f, TerrainFootprintHeight(building.footprint), 0.0f);
         DrawBuildingFoundation(
-            building->footprint.x, building->footprint.y,
-            building->footprint.width, building->footprint.height,
-            building->height, wall);
+            building.footprint.x, building.footprint.y,
+            building.footprint.width, building.footprint.height,
+            building.height, wall);
         rlPopMatrix();
     }
 
     float reveal_active = -1.0f;
-    for (int32_t i = 0; i < (int32_t)(sizeof(WORLD_BUILDINGS) /
-                                      sizeof(WORLD_BUILDINGS[0])); ++i) {
-        const WorldBuilding *building = &WORLD_BUILDINGS[i];
-        if (!SceneryFootprintVisible(building->footprint, focus)) continue;
+    for (int32_t i = 0; i < ActiveWorldBuildingCount(); ++i) {
+        WorldBuilding building = ActiveWorldBuildingAt(i);
+        if (!SceneryFootprintVisible(building.footprint, focus)) continue;
         /* The market footprint remains authoritative for collision, but its
            visible shell comes from the shared Blender library when present.
            A camera-to-hero sightline classifies the complete house at its
            current position. Rear wall, roof, and trim therefore share one
            reveal, while a house behind the hero remains entirely solid. */
-        if (i == 2 && runtime_assets[RUNTIME_ASSET_MARKET].ready) continue;
+        if (profile->function == CC_SETTLEMENT_MARKET &&
+            i == profile->primary_building &&
+            runtime_assets[RUNTIME_ASSET_MARKET].ready) continue;
         float reveal = world_building_reveals[i].amount;
         if (fabsf(reveal - reveal_active) > 0.001f) {
             SetWorldForegroundReveal(reveal, reveal_cut_height);
             reveal_active = reveal;
         }
         rlPushMatrix();
-        float building_base = TerrainFootprintHeight(building->footprint);
+        float building_base = TerrainFootprintHeight(building.footprint);
         rlTranslatef(0.0f, building_base, 0.0f);
-        DrawBuilding(building->footprint.x, building->footprint.y,
-                     building->footprint.width, building->footprint.height,
-                     building->height,
-                     BuildingWallColor(building->style, profile),
-                     BuildingRoofColor(building->style, kingdom, profile),
-                     building->door, building->style);
+        DrawSettlementBuilding(
+            &building, BuildingWallColor(building.style, profile),
+            BuildingRoofColor(building.style, kingdom, profile),
+            profile, i);
         if (reveal > 0.05f) {
             float active_cut_world = reveal_cut_height +
                                      (1.0f - reveal) * 8.0f;
             DrawBuildingRevealCap(
-                building->footprint.x, building->footprint.y,
-                building->footprint.width, building->footprint.height,
-                building->height, active_cut_world - building_base,
-                BuildingWallColor(building->style, profile),
-                BuildingRoofColor(building->style, kingdom, profile));
+                building.footprint.x, building.footprint.y,
+                building.footprint.width, building.footprint.height,
+                building.height, active_cut_world - building_base,
+                BuildingWallColor(building.style, profile),
+                BuildingRoofColor(building.style, kingdom, profile));
         }
         rlPopMatrix();
     }
@@ -14633,15 +15680,19 @@ static void DrawWorldBuildings(Color kingdom, Vector3 focus,
 static bool DrawAuthoredMarket(const CcSettlement *place)
 {
     RuntimeAsset *market = &runtime_assets[RUNTIME_ASSET_MARKET];
-    if (!market->ready) return false;
+    const CcLocalPlaceProfile *profile =
+        CcLocalPlaceProfileForSettlement(place);
+    if (!market->ready || profile->function != CC_SETTLEMENT_MARKET) {
+        return false;
+    }
     const Vector3 origin = {50.0f, 0.0f, 21.0f};
     const float scale = 1.70f;
-    const WorldBuilding *building = &WORLD_BUILDINGS[2];
+    WorldBuilding building = ActivePrimaryBuilding();
     rlPushMatrix();
-    rlTranslatef(0.0f, TerrainFootprintHeight(building->footprint), 0.0f);
-    DrawBuildingContactShadow(building->footprint.x, building->footprint.y,
-                              building->footprint.width,
-                              building->footprint.height, building->height);
+    rlTranslatef(0.0f, TerrainFootprintHeight(building.footprint), 0.0f);
+    DrawBuildingContactShadow(building.footprint.x, building.footprint.y,
+                              building.footprint.width,
+                              building.footprint.height, building.height);
     DrawModelEx(market->model, origin, (Vector3){0.0f, 1.0f, 0.0f},
                 0.0f, (Vector3){scale, scale, scale}, WHITE);
     RuntimeAssetId state = RUNTIME_ASSET_COUNT;
@@ -14662,9 +15713,10 @@ static bool DrawAuthoredMarket(const CcSettlement *place)
 }
 
 static WorldBuildingRevealState castle_structure_reveals[
-    sizeof(CASTLE_STRUCTURES) / sizeof(CASTLE_STRUCTURES[0])];
+    CC_LOCAL_PLACE_COMPOUND_CAPACITY];
 static float castle_reveal_clock = 0.0f;
 static bool castle_reveals_initialized = false;
+static CcSettlementFunction castle_reveal_function = CC_SETTLEMENT_MARKET;
 
 static void UpdateCastleStructureReveals(Camera3D camera,
                                          Vector3 reveal_world,
@@ -14672,16 +15724,17 @@ static void UpdateCastleStructureReveals(Camera3D camera,
                                          int32_t render_height,
                                          float clock)
 {
-    bool reset = !castle_reveals_initialized || clock < castle_reveal_clock;
+    bool reset = !castle_reveals_initialized || clock < castle_reveal_clock ||
+                 castle_reveal_function != active_place_function;
     float delta_time = reset ? 0.0f :
         fmaxf(0.0f, fminf(clock - castle_reveal_clock, 0.05f));
     castle_reveal_clock = clock;
     castle_reveals_initialized = true;
-    for (int32_t i = 0; i < (int32_t)(sizeof(CASTLE_STRUCTURES) /
-                                      sizeof(CASTLE_STRUCTURES[0])); ++i) {
-        const WorldStructure *structure = &CASTLE_STRUCTURES[i];
+    castle_reveal_function = active_place_function;
+    for (int32_t i = 0; i < ActiveCompoundStructureCount(); ++i) {
+        WorldStructure structure = ActiveCompoundStructureAt(i);
         WorldBuilding proxy = {
-            structure->footprint, structure->height, 0, false,
+            structure.footprint, structure.height, 0, false,
         };
         WorldBuildingRevealState *state = &castle_structure_reveals[i];
         bool occluded = WorldBuildingObscuresReveal(
@@ -14741,16 +15794,92 @@ static void DrawCastleBattlements(Rectangle footprint, float height,
     }
 }
 
-static void DrawConstructedCastleStructure(Rectangle footprint,
-                                            float height, Color stone,
-                                            Color kingdom, int32_t index)
+static bool CompoundUsesBattlements(const CcLocalPlaceProfile *profile)
 {
+    return profile != NULL &&
+           (profile->function == CC_SETTLEMENT_MARKET ||
+            profile->function == CC_SETTLEMENT_FORTRESS ||
+            profile->function == CC_SETTLEMENT_CAPITAL);
+}
+
+static void DrawConstructedCompoundStructure(
+    const WorldStructure *structure, Color stone, Color kingdom,
+    const CcLocalPlaceProfile *profile)
+{
+    if (structure == NULL) return;
+    Rectangle footprint = structure->footprint;
+    float height = structure->height;
     float center_x = footprint.x + footprint.width * 0.5f;
     float center_z = footprint.y + footprint.height * 0.5f;
-    bool wall_run = index < 5;
-    bool keep = index == 5;
-    bool tower = index >= 6;
+    bool wall_run = structure->kind == CC_LOCAL_COMPOUND_WALL;
+    bool keep = structure->kind == CC_LOCAL_COMPOUND_HALL;
+    bool tower = structure->kind == CC_LOCAL_COMPOUND_TOWER;
     Color base = ShadeColor(stone, 0.70f);
+
+    if (structure->kind == CC_LOCAL_COMPOUND_HALL ||
+        structure->kind == CC_LOCAL_COMPOUND_STOREHOUSE) {
+        int32_t style = structure->kind == CC_LOCAL_COMPOUND_HALL ?
+            (profile->function == CC_SETTLEMENT_CAPITAL ||
+             profile->function == CC_SETTLEMENT_FORTRESS ? 2 : 1) : 1;
+        Color roof = BuildingRoofColor(style, kingdom, profile);
+        WorldBuilding building = {
+            .footprint = footprint,
+            .height = height,
+            .style = style,
+            .door = true,
+        };
+        DrawSettlementBuilding(&building, stone, roof, profile,
+                               structure->kind == CC_LOCAL_COMPOUND_HALL ?
+                                   -2 : -1);
+        return;
+    }
+
+    if (structure->kind == CC_LOCAL_COMPOUND_SILO) {
+        float radius = fminf(footprint.width, footprint.height) * 0.43f;
+        DrawCylinder((Vector3){center_x, 0.0f, center_z},
+                     radius, radius * 1.05f, height, 12, stone);
+        DrawCylinder((Vector3){center_x, height, center_z},
+                     0.08f, radius * 1.18f, radius * 0.90f, 12,
+                     BuildingRoofColor(1, kingdom, profile));
+        DrawBox((Vector3){center_x, height * 0.54f,
+                          center_z + radius + 0.025f},
+                (Vector3){radius * 1.15f, 0.18f, 0.08f},
+                ShadeColor(stone, 0.68f));
+        return;
+    }
+
+    if (tower && profile != NULL &&
+        (profile->function == CC_SETTLEMENT_MARKET ||
+         profile->function == CC_SETTLEMENT_CAPITAL ||
+         profile->function == CC_SETTLEMENT_DUNGEON_TOWN)) {
+        /* Customs and palace compounds use round gate turrets; the dungeon
+           town inherits a rougher version of the same old masonry. This
+           breaks the all-square castle silhouette while keeping the exact
+           authored tower footprint solid for collision. */
+        float radius = fminf(footprint.width, footprint.height) * 0.48f;
+        Color tower_stone = profile->function ==
+                CC_SETTLEMENT_DUNGEON_TOWN ? ShadeColor(stone, 0.76f) : stone;
+        Color tower_roof = BuildingRoofColor(
+            profile->function == CC_SETTLEMENT_CAPITAL ? 2 : 1,
+            kingdom, profile);
+        DrawBox((Vector3){center_x, 0.34f, center_z},
+                (Vector3){footprint.width, 0.68f, footprint.height},
+                ShadeColor(tower_stone, 0.66f));
+        for (int32_t corner = 0; corner < 4; ++corner) {
+            float buttress_x = (corner & 1) == 0 ?
+                footprint.x + 0.24f :
+                footprint.x + footprint.width - 0.24f;
+            float buttress_z = (corner & 2) == 0 ?
+                footprint.y + 0.24f :
+                footprint.y + footprint.height - 0.24f;
+            DrawBox((Vector3){buttress_x, height * 0.30f, buttress_z},
+                    (Vector3){0.48f, height * 0.60f, 0.48f},
+                    ShadeColor(tower_stone, 0.72f));
+        }
+        DrawRoundTower(center_x, center_z, radius, height,
+                       tower_stone, tower_roof, false);
+        return;
+    }
 
     DrawBox((Vector3){center_x, 0.34f, center_z},
             (Vector3){footprint.width + 0.32f, 0.68f,
@@ -14796,13 +15925,44 @@ static void DrawConstructedCastleStructure(Rectangle footprint,
                       footprint.height + 0.30f},
             tower ? BlendColor(ShadeColor(stone, 0.76f), kingdom, 0.18f) :
                     ShadeColor(stone, 0.70f));
-    DrawCastleBattlements(footprint, height, stone);
+    if (tower || CompoundUsesBattlements(profile)) {
+        DrawCastleBattlements(footprint, height, stone);
+    }
+    if (wall_run) {
+        bool horizontal = footprint.width >= footprint.height;
+        float length = horizontal ? footprint.width : footprint.height;
+        int32_t pier_count = (int32_t)fmaxf(1.0f, floorf(length / 3.2f));
+        for (int32_t pier = 0; pier <= pier_count; ++pier) {
+            float amount = (float)pier / (float)pier_count;
+            float pier_x = horizontal ?
+                footprint.x + footprint.width * amount :
+                footprint.x + footprint.width + 0.13f;
+            float pier_z = horizontal ?
+                footprint.y + footprint.height + 0.13f :
+                footprint.y + footprint.height * amount;
+            DrawBox((Vector3){pier_x, height * 0.43f, pier_z},
+                    horizontal ?
+                        (Vector3){0.42f, height * 0.86f, 0.52f} :
+                        (Vector3){0.52f, height * 0.86f, 0.42f},
+                    ShadeColor(stone, 0.74f));
+        }
+    }
+    if (tower && profile != NULL &&
+        profile->function == CC_SETTLEMENT_FORTRESS) {
+        DrawPitchedRoof(footprint.x + footprint.width * 0.10f,
+                        footprint.y + footprint.height * 0.10f,
+                        footprint.width * 0.80f,
+                        footprint.height * 0.80f,
+                        height + 0.35f, stone,
+                        BuildingRoofColor(1, kingdom, profile));
+    }
 }
 
 static Color CompoundStoneColor(const CcLocalPlaceProfile *profile,
-                                Color kingdom, int32_t structure)
+                                Color kingdom, CcLocalCompoundKind kind)
 {
-    Color stone = structure == 5 ? WORLD_STONE_SHADOW : WORLD_STONE;
+    Color stone = kind == CC_LOCAL_COMPOUND_HALL ?
+        WORLD_STONE_SHADOW : WORLD_STONE;
     if (profile == NULL) return stone;
     switch (profile->function) {
         case CC_SETTLEMENT_FARMING:
@@ -14827,7 +15987,7 @@ static void DrawCastle(Color kingdom, const CcLocalPlaceProfile *profile,
                        int32_t render_width, int32_t render_height,
                        float clock)
 {
-    Rectangle keep_pad = {65.20f, 8.20f, 26.50f, 24.40f};
+    Rectangle keep_pad = ActiveCompoundBounds();
     if (!SceneryFootprintVisible(keep_pad, focus)) return;
     float reveal_cut_height = reveal_world.y - 0.30f;
     float castle_base = TerrainFootprintHeight(keep_pad);
@@ -14836,59 +15996,68 @@ static void DrawCastle(Color kingdom, const CcLocalPlaceProfile *profile,
     rlPushMatrix();
     rlTranslatef(0.0f, castle_base, 0.0f);
     SetWorldForegroundReveal(0.0f, reveal_cut_height);
-    for (int32_t i = 0; i < (int32_t)(sizeof(CASTLE_STRUCTURES) /
-                                      sizeof(CASTLE_STRUCTURES[0])); ++i) {
-        const WorldStructure *structure = &CASTLE_STRUCTURES[i];
-        Rectangle footprint = structure->footprint;
-        if (!SceneryFootprintVisible(footprint, focus)) continue;
-        Color stone = CompoundStoneColor(profile, kingdom, i);
+    for (int32_t i = 0; i < ActiveCompoundStructureCount(); ++i) {
+        WorldStructure structure = ActiveCompoundStructureAt(i);
+        Rectangle footprint = structure.footprint;
+        Color stone = CompoundStoneColor(profile, kingdom, structure.kind);
         DrawBuildingFoundation(
             footprint.x, footprint.y, footprint.width, footprint.height,
-            structure->height, stone);
+            structure.height, stone);
     }
     float reveal_active = -1.0f;
-    for (int32_t i = 0; i < (int32_t)(sizeof(CASTLE_STRUCTURES) /
-                                      sizeof(CASTLE_STRUCTURES[0])); ++i) {
-        const WorldStructure *structure = &CASTLE_STRUCTURES[i];
-        Rectangle footprint = structure->footprint;
-        if (!SceneryFootprintVisible(footprint, focus)) continue;
-        Color stone = CompoundStoneColor(profile, kingdom, i);
+    for (int32_t i = 0; i < ActiveCompoundStructureCount(); ++i) {
+        WorldStructure structure = ActiveCompoundStructureAt(i);
+        Color stone = CompoundStoneColor(profile, kingdom, structure.kind);
         float reveal = castle_structure_reveals[i].amount;
         if (fabsf(reveal - reveal_active) > 0.001f) {
             SetWorldForegroundReveal(reveal, reveal_cut_height);
             reveal_active = reveal;
         }
-        DrawConstructedCastleStructure(footprint, structure->height, stone,
-                                       kingdom, i);
+        DrawConstructedCompoundStructure(&structure, stone, kingdom, profile);
     }
     SetWorldForegroundReveal(0.0f, reveal_cut_height);
-    if (SceneryPointVisible(78.50f, 30.84f, focus)) {
-        DrawBox((Vector3){78.5f, 1.20f, 22.03f},
+    {
+        WorldStructure compound_hall = ActiveCompoundStructureAt(5);
+        float hall_door_x = compound_hall.footprint.x +
+                            compound_hall.footprint.width * 0.5f;
+        float hall_door_z = compound_hall.footprint.y +
+                            compound_hall.footprint.height + 0.03f;
+        float gate_x = 78.50f;
+        float gate_z = ActiveCompoundStructureAt(3).footprint.y +
+                       ActiveCompoundStructureAt(3).footprint.height * 0.5f;
+        float gate_height = profile->function == CC_SETTLEMENT_FARMING ? 3.20f :
+                            profile->function == CC_SETTLEMENT_MINING ? 5.40f :
+                            profile->function == CC_SETTLEMENT_FORTRESS ? 8.40f :
+                            profile->function == CC_SETTLEMENT_CAPITAL ? 7.60f :
+                            profile->function == CC_SETTLEMENT_DUNGEON_TOWN ?
+                                6.20f : 7.15f;
+        DrawBox((Vector3){hall_door_x, 1.20f, hall_door_z},
                 (Vector3){1.35f, 2.40f, 0.06f},
                 WORLD_WOOD_SHADOW);
-        DrawBox((Vector3){76.30f, 7.65f, 30.84f},
+        DrawBox((Vector3){76.30f, gate_height + 0.50f, gate_z},
                 (Vector3){0.78f, 2.30f, 0.06f}, kingdom);
-        DrawBox((Vector3){80.70f, 7.65f, 30.84f},
+        DrawBox((Vector3){80.70f, gate_height + 0.50f, gate_z},
                 (Vector3){0.78f, 2.30f, 0.06f}, kingdom);
 
         /* The open southern gate is the room's navigational promise. A high
            lintel and paired fire points frame the pass without putting an
            invisible portcullis across the traversable opening. */
-        Color gate_stone = CompoundStoneColor(profile, kingdom, 0);
-        DrawBox((Vector3){78.50f, 7.15f, 30.84f},
+        Color gate_stone = CompoundStoneColor(
+            profile, kingdom, CC_LOCAL_COMPOUND_WALL);
+        DrawBox((Vector3){gate_x, gate_height, gate_z},
                 (Vector3){2.30f, 1.08f, 0.72f}, gate_stone);
         for (int32_t merlon = 0; merlon < 3; ++merlon) {
-            DrawBox((Vector3){77.62f + (float)merlon * 0.88f,
-                              8.02f, 30.84f},
+            DrawBox((Vector3){gate_x - 0.88f + (float)merlon * 0.88f,
+                              gate_height + 0.87f, gate_z},
                     (Vector3){0.42f, 0.70f, 0.76f},
                     ShadeColor(gate_stone, 0.92f));
         }
         for (int32_t side = -1; side <= 1; side += 2) {
-            float torch_x = 78.50f + (float)side * 1.32f;
-            DrawBox((Vector3){torch_x, 1.82f, 31.20f},
+            float torch_x = gate_x + (float)side * 1.32f;
+            DrawBox((Vector3){torch_x, 1.82f, gate_z + 0.36f},
                     (Vector3){0.10f, 0.86f, 0.10f},
                     WORLD_WOOD_SHADOW);
-            DrawSmallSphere((Vector3){torch_x, 2.32f, 31.20f},
+            DrawSmallSphere((Vector3){torch_x, 2.32f, gate_z + 0.36f},
                             0.18f, WORLD_GOLD);
         }
     }
@@ -17459,14 +18628,14 @@ static void DrawTree(float x, float z, TreeFamily family, Color leaves,
 static void DrawWorldTrees(Vector3 focus, Color kingdom)
 {
     TreeRegionalStyle regional_style = TreeStyleForKingdom(kingdom);
-    int32_t room = StreetCameraBaseShot(street_camera_rig.shot);
+    int32_t scene = street_camera_rig.shot;
     for (int32_t i = 0;
          i < (int32_t)(sizeof(WORLD_TREES) / sizeof(WORLD_TREES[0])); ++i) {
-        /* The mine room uses rails as a leading line. Two otherwise sound
-           trees landed directly on that fixed camera axis and erased both
-           the rail head and mine entrance. The fade between room pages
-           makes this authored thinning stable and invisible in motion. */
-        if (room == 2 && (i == 4 || i == 25)) continue;
+        /* Keep the Silverwick landmark silhouette clear of two trees that
+           otherwise erase the headframe in its fixed scene. */
+        if (active_place_function == CC_SETTLEMENT_MINING &&
+            scene == CC_LOCAL_TOWN_SCENE_LANDMARK &&
+            (i == 4 || i == 25)) continue;
         Vector2 position = WORLD_TREES[i].position;
         position.x += (i & 1) != 0 ? -regional_style.cluster_pull :
                                      regional_style.cluster_pull;
@@ -19927,6 +21096,8 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     bool convoy_visible = convoy != NULL &&
         (convoy->phase == CC_LOCAL_CONVOY_DEPARTING ||
          convoy->phase == CC_LOCAL_CONVOY_ARRIVING);
+    bool arrival_pan = convoy_visible &&
+        convoy->phase == CC_LOCAL_CONVOY_ARRIVING;
     CcLocalAgent convoy_subject = agent != NULL ? *agent : (CcLocalAgent){0};
     CcLocalAgent convoy_hero = {0};
     Vector3 convoy_hero_position = {0};
@@ -19948,12 +21119,14 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         &convoy_subject : agent;
     const CcLocalPlaceProfile *profile =
         CcLocalPlaceProfileForSettlement(place);
-    Camera3D base_camera = CcLocalStreetCameraInternal(
-        camera_subject, clock, true, target.texture.height);
+    Camera3D base_camera = arrival_pan ?
+        TownArrivalCamera(convoy, target.texture.height) :
+        CcLocalStreetCameraInternal(
+            camera_subject, clock, true, target.texture.height);
     Camera3D camera = CcLocalCombatCameraInternal(
         base_camera, camera_subject, course, clock, true,
         target.texture.height);
-    if (camera_subject != NULL) {
+    if (camera_subject != NULL && !arrival_pan) {
         camera = KeepHeroInsideStreetFrame(
             camera,
             Vector3Add(camera_subject->position,
@@ -19964,8 +21137,10 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     }
     RememberPresentedCamera(CC_LOCAL_SCENE_STREET, camera, camera_subject,
                             target.texture.width, target.texture.height);
+    int32_t presented_scene = arrival_pan ?
+        CC_LOCAL_TOWN_SCENE_ARRIVAL : street_camera_rig.shot;
     const StreetCameraShot *camera_shot = StreetCameraShotAt(
-        street_camera_rig.shot);
+        presented_scene);
     ArtComposition street_art = camera_shot->art;
     street_art.light_profile = StreetLightProfile(
         place, street_art.light_profile);
@@ -20042,11 +21217,13 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     DrawWorldBuildings(kingdom, scenery_focus, profile, camera,
                        foreground_reveal_world,
                        target.texture.width, target.texture.height, clock);
-    if (SceneryFootprintVisible(WORLD_BUILDINGS[2].footprint,
-                                scenery_focus)) {
+    WorldBuilding primary_building = ActivePrimaryBuilding();
+    if (profile->function == CC_SETTLEMENT_MARKET &&
+        SceneryFootprintVisible(primary_building.footprint, scenery_focus)) {
         float reveal_cut_height = foreground_reveal_world.y - 0.30f;
-        SetWorldForegroundReveal(world_building_reveals[2].amount,
-                                 reveal_cut_height);
+        SetWorldForegroundReveal(
+            world_building_reveals[profile->primary_building].amount,
+            reveal_cut_height);
         (void)DrawAuthoredMarket(place);
         SetWorldForegroundReveal(0.0f, reveal_cut_height);
     }
@@ -20217,17 +21394,16 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     bool combat_presentation = course != NULL && course->alarm_active &&
                                camera.projection == CAMERA_PERSPECTIVE;
 
-    int32_t room_index = StreetCameraBaseShot(street_camera_rig.shot);
-    int32_t room_count = (int32_t)(sizeof(STREET_CAMERA_SHOTS) /
-                                   sizeof(STREET_CAMERA_SHOTS[0]));
-    if (!combat_presentation && room_index >= 0 && room_index < room_count) {
-        const char *room_name = profile->room_name[room_index];
-        int32_t title_width = CcOverlayMeasureText(room_name, 10);
+    int32_t scene_index = presented_scene;
+    if (!combat_presentation && scene_index >= 0 &&
+        scene_index < CC_LOCAL_PLACE_SCENE_COUNT) {
+        const char *scene_name = profile->scene[scene_index].name;
+        int32_t title_width = CcOverlayMeasureText(scene_name, 10);
         DrawRectangleRounded(
             ViewportRectangle(destination, 11.0f, 10.0f,
                               (float)title_width + 16.0f, 18.0f),
             0.24f, 4, (Color){4, 10, 14, 202});
-        DrawViewportText(room_name, destination, 19, 14, 10, WORLD_GOLD);
+        DrawViewportText(scene_name, destination, 19, 14, 10, WORLD_GOLD);
     }
     if (!combat_nearby && !convoy_visible) {
         DrawStreetTraversalPortals(agent, camera, destination,
@@ -20248,7 +21424,8 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     if (AgentNearLabel(agent, 50.0f, 21.0f, 8.0f)) {
         labels[count++] = (WorldLabel){{50.0f,
                                         TerrainFootprintHeight(
-                                            WORLD_BUILDINGS[2].footprint) + 4.75f,
+                                            primary_building.footprint) +
+                                            primary_building.height + 0.42f,
                                         21.0f},
                                        primary_hall_label, WORLD_GOLD};
     }
@@ -20281,11 +21458,16 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                                         9.72f},
                                        "Swimming trench", WORLD_TEAL};
     }
-    if (AgentNearLabel(agent, 78.50f, 17.50f, 10.0f)) {
-        labels[count++] = (WorldLabel){{78.50f,
-                                        CcLocalTerrainHeightAt(78.50f, 17.50f) +
-                                            12.10f,
-                                        17.50f},
+    Rectangle compound_bounds = ActiveCompoundBounds();
+    float compound_x = compound_bounds.x + compound_bounds.width * 0.5f;
+    float compound_z = compound_bounds.y + compound_bounds.height * 0.5f;
+    if (AgentNearLabel(agent, compound_x, compound_z, 10.0f)) {
+        labels[count++] = (WorldLabel){{compound_x,
+                                        CcLocalTerrainHeightAt(
+                                            compound_x, compound_z) +
+                                            ActiveCompoundMaximumHeight() +
+                                            0.55f,
+                                        compound_z},
                                        profile->compound, kingdom};
     }
     for (int32_t i = 0;
@@ -20801,9 +21983,9 @@ static bool StreetCanOccupy(Vector2 point)
         point.x > CC_LOCAL_WORLD_WIDTH - 0.28f - radius ||
         point.y < 0.28f + radius ||
         point.y > CC_LOCAL_WORLD_DEPTH - 0.28f - radius) return false;
-    for (int32_t i = 0; i < (int32_t)(sizeof(WORLD_BUILDINGS) /
-                                      sizeof(WORLD_BUILDINGS[0])); ++i) {
-        if (InsideExpanded(point, WORLD_BUILDINGS[i].footprint, radius)) {
+    for (int32_t i = 0; i < ActiveWorldBuildingCount(); ++i) {
+        WorldBuilding building = ActiveWorldBuildingAt(i);
+        if (InsideExpanded(point, building.footprint, radius)) {
             return false;
         }
     }
@@ -20812,9 +21994,9 @@ static bool StreetCanOccupy(Vector2 point)
                 point, PlaceLandmarkFootprint(ActivePlaceLandmarkAt(i)),
                 radius)) return false;
     }
-    for (int32_t i = 0; i < (int32_t)(sizeof(CASTLE_STRUCTURES) /
-                                      sizeof(CASTLE_STRUCTURES[0])); ++i) {
-        if (InsideExpanded(point, CASTLE_STRUCTURES[i].footprint, radius)) {
+    for (int32_t i = 0; i < ActiveCompoundStructureCount(); ++i) {
+        WorldStructure structure = ActiveCompoundStructureAt(i);
+        if (InsideExpanded(point, structure.footprint, radius)) {
             return false;
         }
     }

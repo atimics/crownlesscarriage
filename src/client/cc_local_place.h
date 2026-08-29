@@ -9,6 +9,10 @@
 #define CC_LOCAL_PLACE_ROOM_COUNT 10
 #define CC_LOCAL_PLACE_LANDMARK_COUNT 3
 #define CC_LOCAL_PLACE_ROAD_COUNT 3
+#define CC_LOCAL_PLACE_BUILDING_CAPACITY 12
+#define CC_LOCAL_PLACE_COMPOUND_CAPACITY 12
+#define CC_LOCAL_PLACE_ESTABLISHING_SCENE_COUNT 3
+#define CC_LOCAL_PLACE_SCENE_COUNT 5
 
 typedef enum CcLocalPlaceFeature {
     CC_LOCAL_PLACE_FARMLAND = UINT32_C(1) << 0,
@@ -59,6 +63,63 @@ typedef struct CcLocalPlaceRoad {
     CcLocalRoadSurface surface;
 } CcLocalPlaceRoad;
 
+typedef enum CcLocalBuildingStyle {
+    CC_LOCAL_BUILDING_DOMESTIC = 0,
+    CC_LOCAL_BUILDING_WORKSHOP,
+    CC_LOCAL_BUILDING_CIVIC,
+    CC_LOCAL_BUILDING_WORKER_ROW
+} CcLocalBuildingStyle;
+
+typedef struct CcLocalPlaceBuilding {
+    const char *name;
+    float x;
+    float z;
+    float width;
+    float depth;
+    float height;
+    CcLocalBuildingStyle style;
+    bool door;
+} CcLocalPlaceBuilding;
+
+typedef enum CcLocalCompoundKind {
+    CC_LOCAL_COMPOUND_WALL = 0,
+    CC_LOCAL_COMPOUND_HALL,
+    CC_LOCAL_COMPOUND_TOWER,
+    CC_LOCAL_COMPOUND_STOREHOUSE,
+    CC_LOCAL_COMPOUND_SILO
+} CcLocalCompoundKind;
+
+typedef struct CcLocalPlaceCompoundStructure {
+    CcLocalCompoundKind kind;
+    float x;
+    float z;
+    float width;
+    float depth;
+    float height;
+} CcLocalPlaceCompoundStructure;
+
+typedef enum CcLocalTownSceneKind {
+    CC_LOCAL_TOWN_SCENE_ARRIVAL = 0,
+    CC_LOCAL_TOWN_SCENE_HEART,
+    CC_LOCAL_TOWN_SCENE_LANDMARK,
+    CC_LOCAL_TOWN_SCENE_CLOSE_FIRST,
+    CC_LOCAL_TOWN_SCENE_CLOSE_SECOND
+} CcLocalTownSceneKind;
+
+typedef struct CcLocalTownScene {
+    CcLocalTownSceneKind kind;
+    const char *name;
+    float trigger_x;
+    float trigger_z;
+    float target_x;
+    float target_y;
+    float target_z;
+    float camera_offset_x;
+    float camera_offset_y;
+    float camera_offset_z;
+    float fovy;
+} CcLocalTownScene;
+
 typedef struct CcLocalPlaceProfile {
     CcSettlementFunction function;
     const char *identity;
@@ -69,12 +130,20 @@ typedef struct CcLocalPlaceProfile {
     const char *compound;
     const char *keeper_name;
     const char *interior_service;
+    const char *map_form;
     uint32_t keeper_seed;
     uint32_t terrain_salt;
     uint32_t feature_mask;
+    int32_t building_count;
+    int32_t primary_building;
+    int32_t compound_structure_count;
     const char *room_name[CC_LOCAL_PLACE_ROOM_COUNT];
     CcLocalPlaceLandmark landmark[CC_LOCAL_PLACE_LANDMARK_COUNT];
     CcLocalPlaceRoad road[CC_LOCAL_PLACE_ROAD_COUNT];
+    CcLocalPlaceBuilding building[CC_LOCAL_PLACE_BUILDING_CAPACITY];
+    CcLocalPlaceCompoundStructure
+        compound_structure[CC_LOCAL_PLACE_COMPOUND_CAPACITY];
+    CcLocalTownScene scene[CC_LOCAL_PLACE_SCENE_COUNT];
 } CcLocalPlaceProfile;
 
 const CcLocalPlaceProfile *CcLocalPlaceProfileForFunction(
@@ -87,6 +156,12 @@ const CcLocalPlaceLandmark *CcLocalPlaceLandmarkAt(
     CcSettlementFunction function, int32_t landmark_index);
 const CcLocalPlaceRoad *CcLocalPlaceRoadAt(
     CcSettlementFunction function, int32_t road_index);
+const CcLocalPlaceBuilding *CcLocalPlaceBuildingAt(
+    CcSettlementFunction function, int32_t building_index);
+const CcLocalPlaceCompoundStructure *CcLocalPlaceCompoundStructureAt(
+    CcSettlementFunction function, int32_t structure_index);
+const CcLocalTownScene *CcLocalTownSceneAt(
+    CcSettlementFunction function, int32_t scene_index);
 bool CcLocalPlaceHasFeature(const CcLocalPlaceProfile *profile,
                             CcLocalPlaceFeature feature);
 uint32_t CcLocalPlaceTerrainSeed(uint32_t world_seed,

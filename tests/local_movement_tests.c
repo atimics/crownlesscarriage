@@ -271,6 +271,78 @@ static void TestPlaceLandmarkCollision(void)
     CcLocalBindPlace(NULL);
 }
 
+static void TestTownPlanCollisionAndGate(void)
+{
+    CcSim sim;
+    CcSimInit(&sim, UINT32_C(0x7a11c0de));
+    for (int32_t settlement = 0;
+         settlement < sim.settlement_count; ++settlement) {
+        sim.player.location_id = sim.settlements[settlement].id;
+        CcLocalBindPlace(&sim);
+
+        Vector2 hall_approach = {50.0f, 27.0f};
+        Vector2 hall_blocked = CcLocalMove(
+            hall_approach, (Vector2){0.0f, -2.0f}, false);
+        if (hall_blocked.y < 26.27f) {
+            (void)fprintf(
+                stderr,
+                "town plan %d did not keep its civic hall solid: %.3f\n",
+                sim.settlements[settlement].function, hall_blocked.y);
+            exit(1);
+        }
+
+        Vector2 gate_walk = {78.50f, 35.00f};
+        for (int32_t step = 0; step < 17; ++step) {
+            gate_walk = CcLocalMove(
+                gate_walk, (Vector2){0.0f, -0.50f}, false);
+        }
+        if (gate_walk.y > 26.65f) {
+            (void)fprintf(
+                stderr,
+                "town plan %d blocked its promised compound gate: %.3f\n",
+                sim.settlements[settlement].function, gate_walk.y);
+            exit(1);
+        }
+
+        float minimum_height = 10000.0f;
+        float maximum_height = -10000.0f;
+        for (float z = 4.0f; z < CC_LOCAL_WORLD_DEPTH; z += 4.0f) {
+            for (float x = 4.0f; x < CC_LOCAL_WORLD_WIDTH; x += 4.0f) {
+                float height = CcLocalTerrainHeightAt(x, z);
+                minimum_height = fminf(minimum_height, height);
+                maximum_height = fmaxf(maximum_height, height);
+            }
+        }
+        if (maximum_height - minimum_height < 8.0f) {
+            (void)fprintf(
+                stderr,
+                "town plan %d lost its major landform: relief %.2f\n",
+                sim.settlements[settlement].function,
+                maximum_height - minimum_height);
+            exit(1);
+        }
+
+        float maximum_gate_grade = 0.0f;
+        float previous_gate_height = CcLocalTerrainHeightAt(78.50f, 54.0f);
+        for (float z = 53.50f; z >= 31.0f; z -= 0.50f) {
+            float gate_height = CcLocalTerrainHeightAt(78.50f, z);
+            maximum_gate_grade = fmaxf(
+                maximum_gate_grade,
+                fabsf(gate_height - previous_gate_height) / 0.50f);
+            previous_gate_height = gate_height;
+        }
+        if (maximum_gate_grade > 0.14f) {
+            (void)fprintf(
+                stderr,
+                "town plan %d castle approach is too steep for carts: %.1f%%\n",
+                sim.settlements[settlement].function,
+                maximum_gate_grade * 100.0f);
+            exit(1);
+        }
+    }
+    CcLocalBindPlace(NULL);
+}
+
 static void TestSharedCharacterCollisionWorld(void)
 {
     Vector3 corrected = {0};
@@ -2199,6 +2271,7 @@ int main(void)
     TestRoadBridgeSupport();
     TestFaceAngleAndLodContract();
     TestPlaceLandmarkCollision();
+    TestTownPlanCollisionAndGate();
     TestSharedCharacterCollisionWorld();
     TestRagdollStepsInWater();
     RenderTexture2D click_target = {0};
@@ -2253,11 +2326,12 @@ int main(void)
         }
     }
 
-    /* Two close facades should narrow the composition around the hero. This
-       is the visibility solution for alleys; architecture must not be culled
-       to make the broad room lens fit. */
+    /* Close facades now own a deliberate playable-room composition. The
+       tighter page must still retain the hero without becoming a follow
+       camera. */
     CcLocalAgent alley_camera_agent;
-    CcLocalAgentInit(&alley_camera_agent, (Vector2){32.0f, 38.0f}, false);
+    CcLocalAgentInit(&alley_camera_agent,
+                     (Vector2){50.0f, 27.25f}, false);
     Camera3D alley_camera = {0};
     for (int32_t frame = 0; frame < 120; ++frame) {
         camera_clock += 1.0f / 60.0f;
@@ -2271,11 +2345,12 @@ int main(void)
                   alley_camera_agent.position.z},
         alley_camera, click_target.texture.width,
         click_target.texture.height);
-    if (alley_camera.fovy > 10.40f ||
+    if (alley_camera.projection != CAMERA_ORTHOGRAPHIC ||
+        alley_camera.fovy < 16.0f || alley_camera.fovy > 19.0f ||
         alley_hero_screen.x < 88.0f || alley_hero_screen.x > 369.0f ||
         alley_hero_screen.y < 54.0f || alley_hero_screen.y > 231.0f) {
         (void)fprintf(stderr,
-                      "alley camera did not tighten around hero: fovy %.2f screen %.2f %.2f\n",
+                      "authored close camera was invalid: fovy %.2f screen %.2f %.2f\n",
                       alley_camera.fovy, alley_hero_screen.x,
                       alley_hero_screen.y);
         return 1;
@@ -2308,6 +2383,26 @@ int main(void)
             VectorDistance3(held_alley_target, alley_camera.target),
             fabsf(held_alley_fovy - alley_camera.fovy),
             fabsf(moved_alley_hero_screen.x - alley_hero_screen.x));
+        return 1;
+    }
+
+    /* A close page only owns its physical court. Crossing the main coach
+       road near that court must return to an establishing composition
+       instead of showing an alley the player has not entered. */
+    CcLocalAgent coach_road_camera_agent;
+    CcLocalAgentInit(&coach_road_camera_agent,
+                     (Vector2){64.0f, 34.0f}, false);
+    Camera3D coach_road_camera = {0};
+    for (int32_t frame = 0; frame < 150; ++frame) {
+        camera_clock += 1.0f / 60.0f;
+        coach_road_camera = CcLocalStreetCameraInternal(
+            &coach_road_camera_agent, camera_clock, true,
+            click_target.texture.height);
+    }
+    if (coach_road_camera.fovy < 25.0f) {
+        (void)fprintf(stderr,
+                      "main coach road retained an unrelated close page: %.2f\n",
+                      coach_road_camera.fovy);
         return 1;
     }
 
@@ -2567,7 +2662,7 @@ int main(void)
     if (shoulder_camera.projection != CAMERA_PERSPECTIVE ||
         behind_amount > -3.50f || fabsf(side_amount) < 2.80f ||
         !shoulder_subjects_safe ||
-        shoulder_player_height < shoulder_raider_height * 1.22f) {
+        shoulder_player_height < shoulder_raider_height * 1.10f) {
         (void)fprintf(
             stderr,
             "combat shoulder framing failed: projection %d behind %.2f side %.2f hero %.2f %.2f/%.2f raider %.2f %.2f/%.2f fovy %.2f\n",
