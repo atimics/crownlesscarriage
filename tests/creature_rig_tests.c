@@ -79,7 +79,13 @@ int main(void)
             "octopod rig exposes eight independently driven legs");
     Require(poses[CC_CREATURE_RIG_COW].body_width >
             poses[CC_CREATURE_RIG_HORSE].body_width,
-            "cow skeleton keeps a broader barrel than the horse");
+            "cow skeleton keeps a broader barrel than the pony");
+    Require(poses[CC_CREATURE_RIG_HORSE].body.y <
+            poses[CC_CREATURE_RIG_COW].body.y,
+            "pony skeleton stays lower than the cow");
+    Require(poses[CC_CREATURE_RIG_HORSE].body_length <
+            poses[CC_CREATURE_RIG_COW].body_length,
+            "pony skeleton keeps a short body");
     Require(poses[CC_CREATURE_RIG_DRAGON].body_length >
             poses[CC_CREATURE_RIG_COW].body_length,
             "dragon skeleton keeps the longest body plan");

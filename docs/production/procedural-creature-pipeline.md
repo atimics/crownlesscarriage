@@ -8,10 +8,11 @@ motion families, backed by reusable 2-, 4-, 6-, and 8-leg rig templates:
 - Goblins are short bipeds with oversized ears, heads, hands, and carried
   goods. Scavenger, raider, and tribute-bearer variants make the lair economy
   readable before any label appears.
-- Horses, cows, and sheep share one quadruped locomotion contract but not one
+- Ponies, cows, and sheep share one quadruped locomotion contract but not one
   body.
-  Horses use a high shoulder, arched neck, mane, long lower legs, and open leg
-  gaps. Cows use a deep barrel, low head, horns, short legs, and an udder.
+  The carriage horses use a pony build: short strong legs, a round body, a
+  thick mane, and a bushy tail. Cows use a deep barrel, low head, horns, short
+  legs, and an udder.
   Sheep use a compact fleece, dark narrow face, small ears, and a short tail.
 - The dragon starts from four planted limbs but has an authored neck, jaw,
   tail, crown horns, back spines, and wings. It is a unique world actor, not a
@@ -64,7 +65,7 @@ runtime rig, with their GLBs kept as art references.
 | Goblin scavenger | narrow, low, back-heavy | carries recovered material |
 | Goblin raider | forward armored wedge, high spear | leaves the lair to take goods |
 | Goblin tribute bearer | broad burden around a bright chest | moves offerings toward the dragon |
-| Horse | high shoulder, arched neck, long open legs | travel, carriage, speed |
+| Pony | short strong legs, round body, heavy mane and tail | travel and carriage power |
 | Cow | deep barrel, low horn line, short planted legs | food economy and livestock pressure |
 | Sheep | round fleece, dark narrow face, short legs | small settlement livestock |
 | Dragon | long grounded predator, crown horns, folded wings | singular hoard power and retaliation |
@@ -125,7 +126,7 @@ replacing the reliable baseline.
 - Judge forms at the fixed adventure camera and 35–80 art pixels, not only in
   Blender close-ups.
 - A goblin must remain distinct from a small green human in black silhouette.
-- Horse, cow, and sheep must remain distinct with materials removed.
+- Pony, cow, and sheep must remain distinct with materials removed.
 - The sheep should display at about the same height as the baby dragon.
 - Keep space between quadruped legs so foot phases survive point sampling.
 - Treat horns, ears, hooves, hands, jaw, wing tips, and carried goods as

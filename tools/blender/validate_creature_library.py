@@ -76,7 +76,7 @@ EXPECTED_GAIT = {
 }
 HEIGHT_LIMITS = {
     "goblin": (1.05, 1.70),
-    "horse": (1.40, 2.20),
+    "horse": (1.15, 1.75),
     "cow": (1.15, 1.90),
     "sheep": (0.75, 1.45),
     "dragon_whelp": (0.65, 2.80),

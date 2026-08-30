@@ -11371,6 +11371,65 @@ static void DrawFarmAnimalRig(CcCreatureVariant variant,
                        0.055f * scale, 6, palette->cloth);
         return;
     }
+    if (horse) {
+        DrawCharacterEllipsoid(
+            body, (Vector3){0.61f * scale * breathing,
+                            0.48f * scale * breathing,
+                            0.76f * scale}, palette->skin);
+        Vector3 shoulder = LocalPoint(body, 0.0f, 0.04f * scale,
+                                      0.38f * scale, yaw);
+        Vector3 rump = LocalPoint(body, 0.0f, 0.02f * scale,
+                                  -0.38f * scale, yaw);
+        DrawCharacterSphere(shoulder, 0.43f * scale, palette->skin);
+        DrawCharacterSphere(rump, 0.45f * scale, palette->skin);
+        Vector3 neck_base = LocalPoint(body, 0.0f, 0.14f * scale,
+                                       0.48f * scale, yaw);
+        Vector3 neck = LocalPoint(body, 0.0f, 0.38f * scale,
+                                  0.72f * scale, yaw);
+        Vector3 head = LocalPoint(body, 0.0f, 0.40f * scale,
+                                  0.94f * scale, yaw);
+        DrawCylinderEx(neck_base, neck, 0.25f * scale, 0.19f * scale,
+                       8, palette->skin);
+        DrawCharacterEllipsoid(
+            head, (Vector3){0.26f * scale, 0.28f * scale,
+                            0.36f * scale}, palette->skin);
+        Vector3 muzzle = LocalPoint(head, 0.0f, -0.07f * scale,
+                                    0.28f * scale, yaw);
+        DrawCharacterEllipsoid(
+            muzzle, (Vector3){0.22f * scale, 0.17f * scale,
+                              0.19f * scale}, palette->secondary);
+        const Vector3 mane_points[] = {neck_base, neck, head};
+        const float mane_sizes[] = {0.22f, 0.24f, 0.18f};
+        for (int32_t index = 0; index < 3; ++index) {
+            Vector3 mane = LocalPoint(
+                mane_points[index], -0.035f * scale, 0.13f * scale,
+                -0.04f * scale, yaw);
+            DrawCharacterSphere(mane, mane_sizes[index] * scale,
+                                palette->secondary);
+        }
+        for (int32_t side = -1; side <= 1; side += 2) {
+            Vector3 eye = LocalPoint(
+                head, (float)side * 0.17f * scale, 0.06f * scale,
+                0.17f * scale, yaw);
+            DrawCharacterSphere(eye, 0.030f * scale, palette->eye);
+            Vector3 ear_root = LocalPoint(
+                head, (float)side * 0.11f * scale, 0.20f * scale,
+                -0.02f * scale, yaw);
+            Vector3 ear_tip = LocalPoint(
+                head, (float)side * 0.13f * scale, 0.38f * scale,
+                -0.02f * scale, yaw);
+            DrawCylinderEx(ear_root, ear_tip, 0.050f * scale,
+                           0.012f * scale, 5, palette->skin);
+        }
+        for (int32_t plume = 0; plume < 3; ++plume) {
+            Vector3 tail = LocalPoint(
+                body, 0.0f, (0.03f - (float)plume * 0.17f) * scale,
+                (-0.64f - (float)plume * 0.18f) * scale, yaw);
+            DrawCharacterSphere(tail, (0.18f - (float)plume * 0.01f) * scale,
+                                palette->secondary);
+        }
+        return;
+    }
     DrawOrientedBox(body, (Vector3){0.0f, 0.02f * scale, 0.0f},
                     (Vector3){rig->body_width * breathing,
                               rig->body_depth * breathing,

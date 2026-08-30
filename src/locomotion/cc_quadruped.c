@@ -47,8 +47,8 @@ static const CcQuadrupedBoneDefinition BONE_DEFINITIONS[] = {
 
 static const CcQuadrupedProfile PROFILES[] = {
     [CC_QUADRUPED_HORSE] = {
-        1.24f, 0.31f, 1.74f, 0.87f,
-        1.74f, 1.13f, 0.08f, 1.47f, 0.48f,
+        0.98f, 0.34f, 1.32f, 0.72f,
+        1.30f, 0.96f, 0.07f, 1.25f, 0.48f,
     },
     [CC_QUADRUPED_COW] = {
         1.08f, 0.38f, 1.16f, 0.91f,

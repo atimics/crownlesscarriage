@@ -102,19 +102,19 @@ static bool DimensionsForProfile(CcCreatureRigProfile profile,
         case CC_CREATURE_RIG_HORSE:
             *dimensions = (CcCreatureRigDimensions){
                 .morphology = CC_MORPHOLOGY_QUADRUPED,
-                .body_height = 1.20f,
-                .body_width = 0.68f,
-                .body_depth = 0.70f,
-                .body_length = 1.48f,
-                .socket_half_width = 0.27f,
-                .socket_half_length = 0.50f,
-                .contact_half_width = 0.31f,
-                .contact_half_length = 0.63f,
-                .upper_length = 0.65f,
-                .lower_length = 0.68f,
-                .step_height = 0.20f,
-                .step_threshold = 0.24f,
-                .duty_factor = 0.66f,
+                .body_height = 0.94f,
+                .body_width = 0.78f,
+                .body_depth = 0.82f,
+                .body_length = 1.32f,
+                .socket_half_width = 0.31f,
+                .socket_half_length = 0.47f,
+                .contact_half_width = 0.35f,
+                .contact_half_length = 0.58f,
+                .upper_length = 0.48f,
+                .lower_length = 0.50f,
+                .step_height = 0.15f,
+                .step_threshold = 0.21f,
+                .duty_factor = 0.69f,
                 .segment_count = 2,
             };
             return true;
@@ -590,7 +590,7 @@ const char *CcCreatureRigProfileName(CcCreatureRigProfile profile)
 {
     switch (profile) {
         case CC_CREATURE_RIG_GOBLIN: return "GOBLIN";
-        case CC_CREATURE_RIG_HORSE: return "HORSE";
+        case CC_CREATURE_RIG_HORSE: return "PONY";
         case CC_CREATURE_RIG_COW: return "COW";
         case CC_CREATURE_RIG_DRAGON: return "DRAGON";
         case CC_CREATURE_RIG_HEXAPOD: return "HEXAPOD";

@@ -47,7 +47,7 @@ int main(void)
            "quadruped poses are deterministic");
     EXPECT(horse_idle.bones[CC_QUADRUPED_HEAD].head.y >
                cow_idle.bones[CC_QUADRUPED_HEAD].head.y,
-           "horse and cow keep distinct proportions");
+           "pony and cow keep distinct head lines");
     EXPECT(horse_step.bones[CC_QUADRUPED_HOOF_FL].head.z >
                horse_idle.bones[CC_QUADRUPED_HOOF_FL].head.z,
            "front-left hoof advances during its swing");
