@@ -8,6 +8,9 @@ CC_CREATURE_DEFINITIONS[CC_CREATURE_VARIANT_COUNT] = {
     [CC_CREATURE_HORSE] = {"horse", "horse", "quadruped_runtime_skin", true, true},
     [CC_CREATURE_COW] = {"cow", "cow", "quadruped_runtime_skin", true, true},
     [CC_CREATURE_DRAGON] = {"dragon", "dragon", "dragon_authored", true, false},
+    [CC_CREATURE_DRAGON_WHELP] = {"dragon_whelp", "dragon", "dragon_authored", true, false},
+    [CC_CREATURE_DRAGON_WANDERER] = {"dragon_wanderer", "dragon", "dragon_authored", true, false},
+    [CC_CREATURE_DRAGON_DEEP_WYRM] = {"dragon_deep_wyrm", "dragon", "dragon_authored", true, false},
 };
 
 static const char *const
@@ -58,5 +61,26 @@ CC_CREATURE_ASSET_PATHS[CC_CREATURE_VARIANT_COUNT]
         [CC_CREATURE_POSE_STALK_B] = "assets/exports/creatures/creature_dragon_stalk_b_v01.glb",
         [CC_CREATURE_POSE_THREAT] = "assets/exports/creatures/creature_dragon_threat_v01.glb",
         [CC_CREATURE_POSE_REST] = "assets/exports/creatures/creature_dragon_rest_v01.glb",
+    },
+    [CC_CREATURE_DRAGON_WHELP] = {
+        [CC_CREATURE_POSE_IDLE] = "assets/exports/creatures/creature_dragon_whelp_v01.glb",
+        [CC_CREATURE_POSE_STALK_A] = "assets/exports/creatures/creature_dragon_whelp_stalk_a_v01.glb",
+        [CC_CREATURE_POSE_STALK_B] = "assets/exports/creatures/creature_dragon_whelp_stalk_b_v01.glb",
+        [CC_CREATURE_POSE_THREAT] = "assets/exports/creatures/creature_dragon_whelp_threat_v01.glb",
+        [CC_CREATURE_POSE_REST] = "assets/exports/creatures/creature_dragon_whelp_rest_v01.glb",
+    },
+    [CC_CREATURE_DRAGON_WANDERER] = {
+        [CC_CREATURE_POSE_IDLE] = "assets/exports/creatures/creature_dragon_wanderer_v01.glb",
+        [CC_CREATURE_POSE_STALK_A] = "assets/exports/creatures/creature_dragon_wanderer_stalk_a_v01.glb",
+        [CC_CREATURE_POSE_STALK_B] = "assets/exports/creatures/creature_dragon_wanderer_stalk_b_v01.glb",
+        [CC_CREATURE_POSE_THREAT] = "assets/exports/creatures/creature_dragon_wanderer_threat_v01.glb",
+        [CC_CREATURE_POSE_REST] = "assets/exports/creatures/creature_dragon_wanderer_rest_v01.glb",
+    },
+    [CC_CREATURE_DRAGON_DEEP_WYRM] = {
+        [CC_CREATURE_POSE_IDLE] = "assets/exports/creatures/creature_dragon_deep_wyrm_v01.glb",
+        [CC_CREATURE_POSE_STALK_A] = "assets/exports/creatures/creature_dragon_deep_wyrm_stalk_a_v01.glb",
+        [CC_CREATURE_POSE_STALK_B] = "assets/exports/creatures/creature_dragon_deep_wyrm_stalk_b_v01.glb",
+        [CC_CREATURE_POSE_THREAT] = "assets/exports/creatures/creature_dragon_deep_wyrm_threat_v01.glb",
+        [CC_CREATURE_POSE_REST] = "assets/exports/creatures/creature_dragon_deep_wyrm_rest_v01.glb",
     },
 };

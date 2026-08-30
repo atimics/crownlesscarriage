@@ -3457,7 +3457,14 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
         legacy_version != 9U && legacy_version != 10U &&
         legacy_version != 11U && legacy_version != 12U &&
         legacy_version != 13U && legacy_version != 14U &&
-        legacy_version != 15U && legacy_version != 16U) return true;
+        legacy_version != 15U && legacy_version != 16U &&
+        legacy_version != 17U) return true;
+    if (legacy_version == 17U) {
+        CcSimUpgradeMapCollection(sim);
+        sim->schema_version = CC_SIM_SCHEMA_VERSION;
+        sim->generator_version = CC_GENERATOR_VERSION;
+        return true;
+    }
     sim->goblins.cohesion = 60;
     sim->goblins.target_warned = false;
     sim->goblins.expeditions_intercepted = 0;

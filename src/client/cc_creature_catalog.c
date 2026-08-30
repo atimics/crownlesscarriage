@@ -5,6 +5,14 @@
 
 #include "client/cc_creature_catalog.generated.inc"
 
+static bool IsDragonVariant(CcCreatureVariant variant)
+{
+    return variant == CC_CREATURE_DRAGON ||
+           variant == CC_CREATURE_DRAGON_WHELP ||
+           variant == CC_CREATURE_DRAGON_WANDERER ||
+           variant == CC_CREATURE_DRAGON_DEEP_WYRM;
+}
+
 const CcCreatureDefinition *CcCreatureDefinitionAt(CcCreatureVariant variant)
 {
     if (variant < 0 || variant >= CC_CREATURE_VARIANT_COUNT) return NULL;
@@ -37,7 +45,7 @@ int32_t CcCreaturePoseCount(CcCreatureVariant variant)
 CcCreaturePose CcCreatureSteppedPose(CcCreatureVariant variant, float phase,
                                      bool moving)
 {
-    if (!moving || variant == CC_CREATURE_DRAGON ||
+    if (!moving || IsDragonVariant(variant) ||
         variant < 0 || variant >= CC_CREATURE_VARIANT_COUNT) {
         return CC_CREATURE_POSE_IDLE;
     }

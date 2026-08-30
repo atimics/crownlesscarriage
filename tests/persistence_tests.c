@@ -678,6 +678,34 @@ static void CheckSchema16Compatibility(char *error, size_t error_capacity)
     RemoveDatabase(path);
 }
 
+static void CheckSchema17Compatibility(char *error, size_t error_capacity)
+{
+    const char *path = "persistence-legacy-v17-test.ccsave";
+    RemoveDatabase(path);
+    CcSim legacy;
+    CcSimInit(&legacy, UINT32_C(0x1e9ac17));
+    legacy.map_count = 12;
+    legacy.maps[CC_MAP_DRAGON_HOARD] = (CcMap){0};
+    legacy.goblins.cohesion = 47;
+    legacy.goblins.expeditions_intercepted = 3;
+    legacy.schema_version = 17U;
+    legacy.generator_version = 16U;
+    CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.generator_version == CC_GENERATOR_VERSION);
+    CC_CHECK(restored.map_count == CC_MAP_COLLECTION_COUNT);
+    CC_CHECK(strcmp(restored.maps[CC_MAP_DRAGON_HOARD].name,
+                    CC_DRAGON_HOARD_MAP_NAME) == 0);
+    CC_CHECK(restored.maps[CC_MAP_DRAGON_HOARD].owner_id ==
+             restored.settlements[1].id);
+    CC_CHECK(restored.goblins.cohesion == 47);
+    CC_CHECK(restored.goblins.expeditions_intercepted == 3);
+    CC_CHECK(CcSimValidate(&restored, error, error_capacity));
+    RemoveDatabase(path);
+}
+
 static void CheckJournalRecovery(char *error, size_t error_capacity)
 {
     const char *path = "persistence-journal-recovery-test.ccsave";
@@ -1045,6 +1073,7 @@ int main(void)
     CheckSchema14Compatibility(error, sizeof(error));
     CheckSchema15Compatibility(error, sizeof(error));
     CheckSchema16Compatibility(error, sizeof(error));
+    CheckSchema17Compatibility(error, sizeof(error));
     CheckDiplomacyPersistence(error, sizeof(error));
     CheckJournalRecovery(error, sizeof(error));
     CheckJournalCheckpointAndTamper(error, sizeof(error));

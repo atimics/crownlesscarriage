@@ -25,6 +25,9 @@ EXPECTED_VARIANTS = (
     "horse",
     "cow",
     "dragon",
+    "dragon_whelp",
+    "dragon_wanderer",
+    "dragon_deep_wyrm",
 )
 EXPECTED_FAMILIES = ("goblin", "dragon", "animal")
 EXPECTED_STEPPED_POSES = (
@@ -53,6 +56,9 @@ EXPECTED_MORPHOLOGY = {
     "horse": "quadruped",
     "cow": "quadruped",
     "dragon": "quadruped",
+    "dragon_whelp": "quadruped",
+    "dragon_wanderer": "quadruped",
+    "dragon_deep_wyrm": "quadruped",
 }
 EXPECTED_GAIT = {
     "goblin_scavenger": "npc_stepped",
@@ -61,12 +67,18 @@ EXPECTED_GAIT = {
     "horse": "quadruped_runtime_skin",
     "cow": "quadruped_runtime_skin",
     "dragon": "dragon_authored",
+    "dragon_whelp": "dragon_authored",
+    "dragon_wanderer": "dragon_authored",
+    "dragon_deep_wyrm": "dragon_authored",
 }
 HEIGHT_LIMITS = {
     "goblin": (1.05, 1.70),
     "horse": (1.40, 2.20),
     "cow": (1.15, 1.90),
+    "dragon_whelp": (0.65, 2.80),
+    "dragon_wanderer": (1.00, 4.10),
     "dragon": (1.50, 5.20),
+    "dragon_deep_wyrm": (2.00, 7.40),
 }
 TRIANGLE_LIMITS = {
     "goblin": 2800,
@@ -79,7 +91,7 @@ TRIANGLE_LIMITS = {
 def expected_pairs() -> tuple[tuple[str, str], ...]:
     pairs: list[tuple[str, str]] = []
     for variant in EXPECTED_VARIANTS:
-        if variant == "dragon":
+        if variant.startswith("dragon"):
             poses = EXPECTED_DRAGON_POSES
         elif variant in ("horse", "cow"):
             poses = ("idle",)
@@ -193,7 +205,8 @@ def validate() -> int:
             failures.append(f"{variant}: creature contains baked animation")
         if stats.bounds_min and stats.bounds_max:
             height = stats.bounds_max[1] - stats.bounds_min[1]
-            minimum, maximum = HEIGHT_LIMITS.get(family, (0.0, 0.0))
+            minimum, maximum = HEIGHT_LIMITS.get(
+                variant, HEIGHT_LIMITS.get(family, (0.0, 0.0)))
             if not minimum <= height <= maximum:
                 failures.append(
                     f"{variant}: implausible height {height:.3f}m")

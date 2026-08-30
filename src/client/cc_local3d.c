@@ -10930,6 +10930,45 @@ typedef struct CreatureRenderPalette {
     Color eye;
 } CreatureRenderPalette;
 
+static bool IsDragonCreatureVariant(CcCreatureVariant variant)
+{
+    return variant == CC_CREATURE_DRAGON ||
+           variant == CC_CREATURE_DRAGON_WHELP ||
+           variant == CC_CREATURE_DRAGON_WANDERER ||
+           variant == CC_CREATURE_DRAGON_DEEP_WYRM;
+}
+
+static float DragonCreatureGrowthScale(CcCreatureVariant variant)
+{
+    switch (variant) {
+        case CC_CREATURE_DRAGON_WHELP: return 0.52f;
+        case CC_CREATURE_DRAGON_WANDERER: return 0.76f;
+        case CC_CREATURE_DRAGON_DEEP_WYRM: return 1.35f;
+        case CC_CREATURE_DRAGON:
+        default:
+            return 1.0f;
+    }
+}
+
+static CcCreatureVariant DragonCreatureForLifeStage(
+    CcDragonLifeStage stage)
+{
+    switch (stage) {
+        case CC_DRAGON_STAGE_EGG:
+        case CC_DRAGON_STAGE_WHELP:
+            return CC_CREATURE_DRAGON_WHELP;
+        case CC_DRAGON_STAGE_WANDERER:
+        case CC_DRAGON_STAGE_UNCROWNED:
+            return CC_CREATURE_DRAGON_WANDERER;
+        case CC_DRAGON_STAGE_DEEP_WYRM:
+            return CC_CREATURE_DRAGON_DEEP_WYRM;
+        case CC_DRAGON_STAGE_CROWNED:
+        case CC_DRAGON_STAGE_AFTERDRAGON:
+        default:
+            return CC_CREATURE_DRAGON;
+    }
+}
+
 static CreatureRenderPalette CreaturePalette(CcCreatureVariant variant,
                                               Color primary)
 {
@@ -10974,6 +11013,33 @@ static CreatureRenderPalette CreaturePalette(CcCreatureVariant variant,
             colors[7] = (Color){137, 85, 61, 255};
             break;
         }
+        case CC_CREATURE_DRAGON_WHELP:
+            colors[0] = (Color){92, 132, 101, 255};
+            colors[1] = (Color){42, 66, 54, 255};
+            colors[2] = (Color){115, 145, 91, 255};
+            colors[3] = (Color){74, 61, 49, 255};
+            colors[5] = (Color){207, 177, 113, 255};
+            colors[7] = (Color){181, 76, 47, 255};
+            colors[8] = (Color){251, 205, 71, 255};
+            break;
+        case CC_CREATURE_DRAGON_WANDERER:
+            colors[0] = (Color){77, 112, 82, 255};
+            colors[1] = (Color){34, 55, 46, 255};
+            colors[2] = (Color){99, 129, 82, 255};
+            colors[3] = (Color){70, 57, 48, 255};
+            colors[5] = (Color){197, 163, 101, 255};
+            colors[7] = (Color){169, 65, 45, 255};
+            colors[8] = (Color){248, 196, 55, 255};
+            break;
+        case CC_CREATURE_DRAGON_DEEP_WYRM:
+            colors[0] = (Color){48, 75, 64, 255};
+            colors[1] = (Color){18, 32, 30, 255};
+            colors[2] = (Color){67, 89, 62, 255};
+            colors[3] = (Color){53, 45, 42, 255};
+            colors[5] = (Color){174, 133, 76, 255};
+            colors[7] = (Color){129, 43, 39, 255};
+            colors[8] = (Color){255, 174, 31, 255};
+            break;
         case CC_CREATURE_DRAGON:
             colors[0] = (Color){71, 100, 73, 255};
             colors[1] = (Color){30, 48, 42, 255};
@@ -10999,7 +11065,11 @@ static CcCreatureRigProfile CreatureRigProfileForVariant(
     switch (variant) {
         case CC_CREATURE_HORSE: return CC_CREATURE_RIG_HORSE;
         case CC_CREATURE_COW: return CC_CREATURE_RIG_COW;
-        case CC_CREATURE_DRAGON: return CC_CREATURE_RIG_DRAGON;
+        case CC_CREATURE_DRAGON:
+        case CC_CREATURE_DRAGON_WHELP:
+        case CC_CREATURE_DRAGON_WANDERER:
+        case CC_CREATURE_DRAGON_DEEP_WYRM:
+            return CC_CREATURE_RIG_DRAGON;
         case CC_CREATURE_GOBLIN_SCAVENGER:
         case CC_CREATURE_GOBLIN_RAIDER:
         case CC_CREATURE_GOBLIN_TRIBUTE_BEARER:
@@ -11311,10 +11381,14 @@ static void DrawDoubleSidedTriangle(Vector3 a, Vector3 b, Vector3 c,
     DrawTriangle3D(c, b, a, color);
 }
 
-static void DrawDragonRig(const CcCreatureRigPose *rig,
+static void DrawDragonRig(CcCreatureVariant variant,
+                          const CcCreatureRigPose *rig,
                           const CreatureRenderPalette *palette,
                           float yaw, float scale)
 {
+    float crown_growth = variant == CC_CREATURE_DRAGON_WHELP ? 0.52f :
+        variant == CC_CREATURE_DRAGON_WANDERER ? 0.76f :
+        variant == CC_CREATURE_DRAGON_DEEP_WYRM ? 1.24f : 1.0f;
     Vector3 body = FromLimbVector(rig->body);
     float tension = 1.0f + rig->mean_activation * 0.30f;
     DrawOrientedBox(body, (Vector3){0.0f, 0.02f * scale, 0.0f},
@@ -11349,16 +11423,20 @@ static void DrawDragonRig(const CcCreatureRigPose *rig,
         Vector3 horn_root = LocalPoint(head, (float)side * 0.18f * scale,
                                        0.17f * scale, -0.08f * scale, yaw);
         Vector3 horn_tip = LocalPoint(head, (float)side * 0.30f * scale,
-                                      0.50f * scale, -0.24f * scale, yaw);
+                                      (0.17f + 0.33f * crown_growth) * scale,
+                                      -0.24f * crown_growth * scale, yaw);
         DrawCylinderEx(horn_root, horn_tip, 0.075f * scale, 0.0f, 6,
                        palette->horn);
 
         Vector3 wing_root = LocalPoint(body, (float)side * 0.34f * scale,
                                        0.35f * scale, 0.18f * scale, yaw);
         Vector3 wing_tip = LocalPoint(body, (float)side * 1.55f * scale,
-                                      0.72f * scale, -0.18f * scale, yaw);
+                                      (0.35f + 0.37f * crown_growth) * scale,
+                                      -0.18f * scale, yaw);
         Vector3 wing_back = LocalPoint(body, (float)side * 1.02f * scale,
-                                       0.18f * scale, -0.98f * scale, yaw);
+                                       0.18f * scale,
+                                       (-0.58f - 0.40f * crown_growth) * scale,
+                                       yaw);
         DrawCylinderEx(wing_root, wing_tip, 0.075f * scale,
                        0.028f * scale, 6, palette->secondary);
         DrawDoubleSidedTriangle(wing_root, wing_tip, wing_back,
@@ -11374,7 +11452,9 @@ static void DrawDragonRig(const CcCreatureRigPose *rig,
                    palette->skin);
     DrawCylinderEx(tail_b, tail_c, 0.15f * scale, 0.025f * scale, 7,
                    palette->secondary);
-    for (int32_t spine = 0; spine < 5; ++spine) {
+    int32_t spine_count = variant == CC_CREATURE_DRAGON_WHELP ? 3 :
+        variant == CC_CREATURE_DRAGON_WANDERER ? 4 : 5;
+    for (int32_t spine = 0; spine < spine_count; ++spine) {
         float amount = (float)spine / 4.0f;
         Vector3 root = LocalPoint(body, 0.0f,
                                   (0.48f - amount * 0.20f) * scale,
@@ -11486,6 +11566,9 @@ static bool DrawCreatureGait3D(CcCreatureVariant variant,
     if (pose < 0 || pose >= CC_CREATURE_POSE_COUNT) {
         pose = CC_CREATURE_POSE_IDLE;
     }
+    if (IsDragonCreatureVariant(variant)) {
+        scale *= DragonCreatureGrowthScale(variant);
+    }
     const CcCreatureDefinition *definition = CcCreatureDefinitionAt(variant);
     bool skinned = definition != NULL && definition->skinned;
     float rig_phase = skinned ?
@@ -11508,7 +11591,7 @@ static bool DrawCreatureGait3D(CcCreatureVariant variant,
         shadow_size = (Vector2){0.58f, 0.46f};
     } else if (variant == CC_CREATURE_COW) {
         shadow_size = (Vector2){1.10f, 1.72f};
-    } else if (variant == CC_CREATURE_DRAGON) {
+    } else if (IsDragonCreatureVariant(variant)) {
         shadow_size = (Vector2){3.60f, 5.10f};
     }
     shadow_size.x *= scale;
@@ -11552,8 +11635,8 @@ static bool DrawCreatureGait3D(CcCreatureVariant variant,
     DrawCreatureMuscleLimbs(rig, &palette, yaw, scale);
     if (variant <= CC_CREATURE_GOBLIN_TRIBUTE_BEARER) {
         DrawGoblinRig(variant, rig, &palette, yaw, scale);
-    } else if (variant == CC_CREATURE_DRAGON) {
-        DrawDragonRig(rig, &palette, yaw, scale);
+    } else if (IsDragonCreatureVariant(variant)) {
+        DrawDragonRig(variant, rig, &palette, yaw, scale);
     } else {
         DrawHorseOrCowRig(variant, rig, &palette, yaw, scale);
     }
@@ -21003,8 +21086,10 @@ static void DrawRemoteSiteEntrance(const CcSim *sim, CcLocalSiteKind site,
         CcCreaturePose pose = sim->dragon.slain ? CC_CREATURE_POSE_DOWN_A :
             sim->dragon.stolen_outstanding > 0 ? CC_CREATURE_POSE_THREAT :
                                                 CC_CREATURE_POSE_REST;
+        CcCreatureVariant dragon_variant = DragonCreatureForLifeStage(
+            sim->dragon.life_stage);
         (void)DrawCreature3D(
-            CC_CREATURE_DRAGON, pose,
+            dragon_variant, pose,
             (Vector3){x - 3.8f, 0.0f, z + 3.3f}, -0.58f * PI, 0.90f,
             (Color){0});
         int32_t marks = 2 + sim->dragon.crown_strength / 20;

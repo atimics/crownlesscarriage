@@ -248,6 +248,14 @@ int main(void)
     CC_CHECK(illustrated->route_id == first.routes[1].id);
     CC_CHECK(illustrated->owner_id == first.settlements[1].id);
     CC_CHECK(illustrated->ask_price == 24);
+    const CcMap *hoard_map = &first.maps[CC_MAP_DRAGON_HOARD];
+    CC_CHECK(strcmp(hoard_map->name, CC_DRAGON_HOARD_MAP_NAME) == 0);
+    CC_CHECK(hoard_map->route_id == first.routes[5].id);
+    CC_CHECK(hoard_map->maker_settlement_id == first.settlements[5].id);
+    CC_CHECK(hoard_map->owner_id == first.settlements[1].id);
+    CC_CHECK(hoard_map->contraband);
+    CC_CHECK(hoard_map->recorded_danger >
+             CcSimRouteDanger(&first, first.routes[5].id));
     first.player.location_id = first.settlements[1].id;
     CcCommand buy_illustrated = {
         .kind = CC_COMMAND_BUY_MAP,
@@ -285,7 +293,8 @@ int main(void)
     };
     CC_CHECK(CcSimApply(&collector, &store_starting,
                         error, sizeof(error)));
-    for (int32_t i = 0; i < CC_MAP_CROWNLESS_ATLAS; ++i) {
+    for (int32_t i = 0; i < CC_MAP_COLLECTION_COUNT; ++i) {
+        if (i == CC_MAP_CROWNLESS_ATLAS) continue;
         CcMap *map = &collector.maps[i];
         if (map->owner_id == collector.player.id) continue;
         collector.player.location_id = map->owner_id;

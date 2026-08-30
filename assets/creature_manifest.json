@@ -1,5 +1,5 @@
 {
-  "library_version": "0.2.0",
+  "library_version": "0.3.0",
   "art_direction": "silhouette_first_pseudo_pixel_creatures",
   "generation": "offline_curated_procedural_geometry",
   "runtime_strategy": "held poses for goblins and dragon; runtime skins for horse and cow",
@@ -27,7 +27,10 @@
     "goblin_tribute_bearer",
     "horse",
     "cow",
-    "dragon"
+    "dragon",
+    "dragon_whelp",
+    "dragon_wanderer",
+    "dragon_deep_wyrm"
   ],
   "archetypes": [
     {
@@ -972,6 +975,441 @@
       "pose": "rest",
       "id": "creature_dragon_rest_v01",
       "export": "assets/exports/creatures/creature_dragon_rest_v01.glb",
+      "material_order": [
+        "skin",
+        "secondary",
+        "hide",
+        "cloth",
+        "leather",
+        "horn",
+        "metal",
+        "accent",
+        "eye"
+      ]
+    },
+    {
+      "family": "dragon",
+      "variant": "dragon_whelp",
+      "variant_index": 6,
+      "silhouette": "small short-winged hatchling with three soft crown spikes",
+      "runtime_morphology": "quadruped",
+      "gait_contract": "dragon_authored",
+      "equipment": [
+        "young_wings",
+        "neck",
+        "tail",
+        "jaw",
+        "spines"
+      ],
+      "pose": "idle",
+      "id": "creature_dragon_whelp_v01",
+      "export": "assets/exports/creatures/creature_dragon_whelp_v01.glb",
+      "material_order": [
+        "skin",
+        "secondary",
+        "hide",
+        "cloth",
+        "leather",
+        "horn",
+        "metal",
+        "accent",
+        "eye"
+      ]
+    },
+    {
+      "family": "dragon",
+      "variant": "dragon_whelp",
+      "variant_index": 6,
+      "silhouette": "small short-winged hatchling with three soft crown spikes",
+      "runtime_morphology": "quadruped",
+      "gait_contract": "dragon_authored",
+      "equipment": [
+        "young_wings",
+        "neck",
+        "tail",
+        "jaw",
+        "spines"
+      ],
+      "pose": "stalk_a",
+      "id": "creature_dragon_whelp_stalk_a_v01",
+      "export": "assets/exports/creatures/creature_dragon_whelp_stalk_a_v01.glb",
+      "material_order": [
+        "skin",
+        "secondary",
+        "hide",
+        "cloth",
+        "leather",
+        "horn",
+        "metal",
+        "accent",
+        "eye"
+      ]
+    },
+    {
+      "family": "dragon",
+      "variant": "dragon_whelp",
+      "variant_index": 6,
+      "silhouette": "small short-winged hatchling with three soft crown spikes",
+      "runtime_morphology": "quadruped",
+      "gait_contract": "dragon_authored",
+      "equipment": [
+        "young_wings",
+        "neck",
+        "tail",
+        "jaw",
+        "spines"
+      ],
+      "pose": "stalk_b",
+      "id": "creature_dragon_whelp_stalk_b_v01",
+      "export": "assets/exports/creatures/creature_dragon_whelp_stalk_b_v01.glb",
+      "material_order": [
+        "skin",
+        "secondary",
+        "hide",
+        "cloth",
+        "leather",
+        "horn",
+        "metal",
+        "accent",
+        "eye"
+      ]
+    },
+    {
+      "family": "dragon",
+      "variant": "dragon_whelp",
+      "variant_index": 6,
+      "silhouette": "small short-winged hatchling with three soft crown spikes",
+      "runtime_morphology": "quadruped",
+      "gait_contract": "dragon_authored",
+      "equipment": [
+        "young_wings",
+        "neck",
+        "tail",
+        "jaw",
+        "spines"
+      ],
+      "pose": "threat",
+      "id": "creature_dragon_whelp_threat_v01",
+      "export": "assets/exports/creatures/creature_dragon_whelp_threat_v01.glb",
+      "material_order": [
+        "skin",
+        "secondary",
+        "hide",
+        "cloth",
+        "leather",
+        "horn",
+        "metal",
+        "accent",
+        "eye"
+      ]
+    },
+    {
+      "family": "dragon",
+      "variant": "dragon_whelp",
+      "variant_index": 6,
+      "silhouette": "small short-winged hatchling with three soft crown spikes",
+      "runtime_morphology": "quadruped",
+      "gait_contract": "dragon_authored",
+      "equipment": [
+        "young_wings",
+        "neck",
+        "tail",
+        "jaw",
+        "spines"
+      ],
+      "pose": "rest",
+      "id": "creature_dragon_whelp_rest_v01",
+      "export": "assets/exports/creatures/creature_dragon_whelp_rest_v01.glb",
+      "material_order": [
+        "skin",
+        "secondary",
+        "hide",
+        "cloth",
+        "leather",
+        "horn",
+        "metal",
+        "accent",
+        "eye"
+      ]
+    },
+    {
+      "family": "dragon",
+      "variant": "dragon_wanderer",
+      "variant_index": 7,
+      "silhouette": "lean travelling dragon with growing wings and crown horns",
+      "runtime_morphology": "quadruped",
+      "gait_contract": "dragon_authored",
+      "equipment": [
+        "wings",
+        "neck",
+        "tail",
+        "jaw",
+        "spines"
+      ],
+      "pose": "idle",
+      "id": "creature_dragon_wanderer_v01",
+      "export": "assets/exports/creatures/creature_dragon_wanderer_v01.glb",
+      "material_order": [
+        "skin",
+        "secondary",
+        "hide",
+        "cloth",
+        "leather",
+        "horn",
+        "metal",
+        "accent",
+        "eye"
+      ]
+    },
+    {
+      "family": "dragon",
+      "variant": "dragon_wanderer",
+      "variant_index": 7,
+      "silhouette": "lean travelling dragon with growing wings and crown horns",
+      "runtime_morphology": "quadruped",
+      "gait_contract": "dragon_authored",
+      "equipment": [
+        "wings",
+        "neck",
+        "tail",
+        "jaw",
+        "spines"
+      ],
+      "pose": "stalk_a",
+      "id": "creature_dragon_wanderer_stalk_a_v01",
+      "export": "assets/exports/creatures/creature_dragon_wanderer_stalk_a_v01.glb",
+      "material_order": [
+        "skin",
+        "secondary",
+        "hide",
+        "cloth",
+        "leather",
+        "horn",
+        "metal",
+        "accent",
+        "eye"
+      ]
+    },
+    {
+      "family": "dragon",
+      "variant": "dragon_wanderer",
+      "variant_index": 7,
+      "silhouette": "lean travelling dragon with growing wings and crown horns",
+      "runtime_morphology": "quadruped",
+      "gait_contract": "dragon_authored",
+      "equipment": [
+        "wings",
+        "neck",
+        "tail",
+        "jaw",
+        "spines"
+      ],
+      "pose": "stalk_b",
+      "id": "creature_dragon_wanderer_stalk_b_v01",
+      "export": "assets/exports/creatures/creature_dragon_wanderer_stalk_b_v01.glb",
+      "material_order": [
+        "skin",
+        "secondary",
+        "hide",
+        "cloth",
+        "leather",
+        "horn",
+        "metal",
+        "accent",
+        "eye"
+      ]
+    },
+    {
+      "family": "dragon",
+      "variant": "dragon_wanderer",
+      "variant_index": 7,
+      "silhouette": "lean travelling dragon with growing wings and crown horns",
+      "runtime_morphology": "quadruped",
+      "gait_contract": "dragon_authored",
+      "equipment": [
+        "wings",
+        "neck",
+        "tail",
+        "jaw",
+        "spines"
+      ],
+      "pose": "threat",
+      "id": "creature_dragon_wanderer_threat_v01",
+      "export": "assets/exports/creatures/creature_dragon_wanderer_threat_v01.glb",
+      "material_order": [
+        "skin",
+        "secondary",
+        "hide",
+        "cloth",
+        "leather",
+        "horn",
+        "metal",
+        "accent",
+        "eye"
+      ]
+    },
+    {
+      "family": "dragon",
+      "variant": "dragon_wanderer",
+      "variant_index": 7,
+      "silhouette": "lean travelling dragon with growing wings and crown horns",
+      "runtime_morphology": "quadruped",
+      "gait_contract": "dragon_authored",
+      "equipment": [
+        "wings",
+        "neck",
+        "tail",
+        "jaw",
+        "spines"
+      ],
+      "pose": "rest",
+      "id": "creature_dragon_wanderer_rest_v01",
+      "export": "assets/exports/creatures/creature_dragon_wanderer_rest_v01.glb",
+      "material_order": [
+        "skin",
+        "secondary",
+        "hide",
+        "cloth",
+        "leather",
+        "horn",
+        "metal",
+        "accent",
+        "eye"
+      ]
+    },
+    {
+      "family": "dragon",
+      "variant": "dragon_deep_wyrm",
+      "variant_index": 8,
+      "silhouette": "vast heavy wyrm with an old horn crown and broad wings",
+      "runtime_morphology": "quadruped",
+      "gait_contract": "dragon_authored",
+      "equipment": [
+        "great_wings",
+        "neck",
+        "tail",
+        "jaw",
+        "crown_spines"
+      ],
+      "pose": "idle",
+      "id": "creature_dragon_deep_wyrm_v01",
+      "export": "assets/exports/creatures/creature_dragon_deep_wyrm_v01.glb",
+      "material_order": [
+        "skin",
+        "secondary",
+        "hide",
+        "cloth",
+        "leather",
+        "horn",
+        "metal",
+        "accent",
+        "eye"
+      ]
+    },
+    {
+      "family": "dragon",
+      "variant": "dragon_deep_wyrm",
+      "variant_index": 8,
+      "silhouette": "vast heavy wyrm with an old horn crown and broad wings",
+      "runtime_morphology": "quadruped",
+      "gait_contract": "dragon_authored",
+      "equipment": [
+        "great_wings",
+        "neck",
+        "tail",
+        "jaw",
+        "crown_spines"
+      ],
+      "pose": "stalk_a",
+      "id": "creature_dragon_deep_wyrm_stalk_a_v01",
+      "export": "assets/exports/creatures/creature_dragon_deep_wyrm_stalk_a_v01.glb",
+      "material_order": [
+        "skin",
+        "secondary",
+        "hide",
+        "cloth",
+        "leather",
+        "horn",
+        "metal",
+        "accent",
+        "eye"
+      ]
+    },
+    {
+      "family": "dragon",
+      "variant": "dragon_deep_wyrm",
+      "variant_index": 8,
+      "silhouette": "vast heavy wyrm with an old horn crown and broad wings",
+      "runtime_morphology": "quadruped",
+      "gait_contract": "dragon_authored",
+      "equipment": [
+        "great_wings",
+        "neck",
+        "tail",
+        "jaw",
+        "crown_spines"
+      ],
+      "pose": "stalk_b",
+      "id": "creature_dragon_deep_wyrm_stalk_b_v01",
+      "export": "assets/exports/creatures/creature_dragon_deep_wyrm_stalk_b_v01.glb",
+      "material_order": [
+        "skin",
+        "secondary",
+        "hide",
+        "cloth",
+        "leather",
+        "horn",
+        "metal",
+        "accent",
+        "eye"
+      ]
+    },
+    {
+      "family": "dragon",
+      "variant": "dragon_deep_wyrm",
+      "variant_index": 8,
+      "silhouette": "vast heavy wyrm with an old horn crown and broad wings",
+      "runtime_morphology": "quadruped",
+      "gait_contract": "dragon_authored",
+      "equipment": [
+        "great_wings",
+        "neck",
+        "tail",
+        "jaw",
+        "crown_spines"
+      ],
+      "pose": "threat",
+      "id": "creature_dragon_deep_wyrm_threat_v01",
+      "export": "assets/exports/creatures/creature_dragon_deep_wyrm_threat_v01.glb",
+      "material_order": [
+        "skin",
+        "secondary",
+        "hide",
+        "cloth",
+        "leather",
+        "horn",
+        "metal",
+        "accent",
+        "eye"
+      ]
+    },
+    {
+      "family": "dragon",
+      "variant": "dragon_deep_wyrm",
+      "variant_index": 8,
+      "silhouette": "vast heavy wyrm with an old horn crown and broad wings",
+      "runtime_morphology": "quadruped",
+      "gait_contract": "dragon_authored",
+      "equipment": [
+        "great_wings",
+        "neck",
+        "tail",
+        "jaw",
+        "crown_spines"
+      ],
+      "pose": "rest",
+      "id": "creature_dragon_deep_wyrm_rest_v01",
+      "export": "assets/exports/creatures/creature_dragon_deep_wyrm_rest_v01.glb",
       "material_order": [
         "skin",
         "secondary",

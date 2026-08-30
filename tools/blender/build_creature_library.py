@@ -5,7 +5,8 @@ The library expands the human cast with three body-plan families:
 
 * goblins, using the existing biped stepped-pose contract;
 * horses and cows, sharing one quadruped locomotion contract;
-* a dragon, using a quadruped base with authored neck, tail, jaw, and wings.
+* four dragon growth stages, using a quadruped base with authored neck, tail,
+  jaw, and wings.
 
 Every runtime file is one mesh with one indexed material. Goblins and the
 dragon keep held pose GLBs. Horses and cows use one rigid-weighted skin each,
@@ -35,7 +36,7 @@ BLEND_PATH = ROOT / "assets" / "blender" / "crownless_creature_library.blend"
 EXPORT_DIR = ROOT / "assets" / "exports" / "creatures"
 PREVIEW_PATH = ROOT / "assets" / "previews" / "creatures" / "creature_family_sheet.png"
 MANIFEST_PATH = ROOT / "assets" / "creature_manifest.json"
-LIBRARY_VERSION = "0.2.0"
+LIBRARY_VERSION = "0.3.0"
 
 BIPED_POSES = (
     "idle",
@@ -166,6 +167,18 @@ CREATURES = (
                  "long grounded predator with crown horns and folded wings",
                  "quadruped", "dragon_authored",
                  ("wings", "neck", "tail", "jaw", "spines")),
+    CreatureSpec("dragon", "dragon_whelp", 6,
+                 "small short-winged hatchling with three soft crown spikes",
+                 "quadruped", "dragon_authored",
+                 ("young_wings", "neck", "tail", "jaw", "spines")),
+    CreatureSpec("dragon", "dragon_wanderer", 7,
+                 "lean travelling dragon with growing wings and crown horns",
+                 "quadruped", "dragon_authored",
+                 ("wings", "neck", "tail", "jaw", "spines")),
+    CreatureSpec("dragon", "dragon_deep_wyrm", 8,
+                 "vast heavy wyrm with an old horn crown and broad wings",
+                 "quadruped", "dragon_authored",
+                 ("great_wings", "neck", "tail", "jaw", "crown_spines")),
 )
 
 
@@ -633,16 +646,48 @@ def build_quadruped(spec: CreatureSpec,
 
 def build_dragon(spec: CreatureSpec,
                  collection: bpy.types.Collection) -> None:
+    stage_scale = {
+        "dragon_whelp": 0.52,
+        "dragon_wanderer": 0.76,
+        "dragon": 1.00,
+        "dragon_deep_wyrm": 1.35,
+    }[spec.variant]
+    body_bulk = {
+        "dragon_whelp": 0.84,
+        "dragon_wanderer": 0.92,
+        "dragon": 1.00,
+        "dragon_deep_wyrm": 1.12,
+    }[spec.variant]
+    horn_length = {
+        "dragon_whelp": 0.34,
+        "dragon_wanderer": 0.48,
+        "dragon": 0.62,
+        "dragon_deep_wyrm": 0.84,
+    }[spec.variant]
+    wing_growth = {
+        "dragon_whelp": 0.60,
+        "dragon_wanderer": 0.82,
+        "dragon": 1.00,
+        "dragon_deep_wyrm": 1.16,
+    }[spec.variant]
+    spine_count = {
+        "dragon_whelp": 3,
+        "dragon_wanderer": 5,
+        "dragon": 7,
+        "dragon_deep_wyrm": 7,
+    }[spec.variant]
     phase = pose_phase(spec.pose)
     threat = spec.pose == "threat"
     resting = spec.pose == "rest"
     cycle = math.sin(phase * math.tau)
     body_z = 0.86 if resting else 1.24 - 0.035 * abs(cycle)
     add_ellipsoid("DRAGON_Body", (0.0, 0.15, body_z),
-                  (0.78, 1.34, 0.58), "skin", collection, spec, "body",
+                  (0.78 * body_bulk, 1.34, 0.58 * body_bulk), "skin",
+                  collection, spec, "body",
                   subdivisions=2)
     add_ellipsoid("DRAGON_Chest", (0.0, -0.70, body_z + 0.16),
-                  (0.72, 0.67, 0.66), "hide", collection, spec, "chest",
+                  (0.72 * body_bulk, 0.67, 0.66 * body_bulk), "hide",
+                  collection, spec, "chest",
                   subdivisions=2)
 
     leg_roots = {
@@ -703,7 +748,7 @@ def build_dragon(spec: CreatureSpec,
                       f"eye_{side.lower()}")
         add_cone(f"DRAGON_Horn_{side}",
                  head + Vector((0.25 * sign, 0.05, 0.31)),
-                 0.11, 0.62, "horn", collection, spec,
+                 0.11 * body_bulk, horn_length, "horn", collection, spec,
                  f"horn_{side.lower()}",
                  rotation=(0.25, math.pi * 0.30 * sign, 0.0), vertices=7)
 
@@ -722,7 +767,7 @@ def build_dragon(spec: CreatureSpec,
                     f"tail_{index}", sides=9)
 
     wing_height = body_z + (2.35 if threat else 0.76)
-    wing_reach = 2.70 if threat else 1.22
+    wing_reach = (2.70 if threat else 1.22) * wing_growth
     wing_back = 1.42 if threat else 1.92
     for side, sign in (("L", -1.0), ("R", 1.0)):
         shoulder = (0.50 * sign, -0.47, body_z + 0.53)
@@ -751,10 +796,26 @@ def build_dragon(spec: CreatureSpec,
         (0.0, 1.50, body_z + 0.17),
         (0.0, 2.15, body_z - 0.09),
     )
-    for index, position in enumerate(spine_positions):
+    for index, position in enumerate(spine_positions[:spine_count]):
         height = max(0.20, 0.42 - index * 0.030)
         add_cone(f"DRAGON_Spine_{index}", position, 0.12, height, "horn",
                  collection, spec, f"spine_{index}", vertices=6)
+
+    if spec.variant == "dragon_deep_wyrm":
+        for side, sign in (("L", -1.0), ("R", 1.0)):
+            add_cone(
+                f"DRAGON_OldCrown_{side}",
+                head + Vector((0.34 * sign, 0.12, 0.21)),
+                0.095, 0.58, "horn", collection, spec,
+                f"old_crown_{side.lower()}",
+                rotation=(0.45, math.pi * 0.42 * sign, 0.0), vertices=7)
+
+    for obj in collection.objects:
+        if obj.type != "MESH":
+            continue
+        obj.location *= stage_scale
+        obj.scale *= stage_scale
+        obj["cc_dragon_stage_scale"] = stage_scale
 
 
 def build_creature(spec: CreatureSpec,
@@ -1032,7 +1093,7 @@ def add_stage(collection: bpy.types.Collection) -> None:
     bpy.ops.mesh.primitive_cube_add(location=(0.0, 0.45, -0.10))
     stage = bpy.context.object
     stage.name = "STAGE_CreatureFamilySheet"
-    stage.dimensions = (13.2, 7.2, 0.16)
+    stage.dimensions = (17.2, 7.2, 0.16)
     bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
     stage.data.materials.append(material)
     move_to(stage, collection)
@@ -1043,12 +1104,15 @@ def add_preview_scene(
 ) -> None:
     preview = new_collection("90_PREVIEW")
     placements = {
-        "goblin_scavenger": (-4.65, -0.55, 1.0),
-        "goblin_raider": (-3.55, -0.35, 1.0),
-        "goblin_tribute_bearer": (-2.35, -0.15, 1.0),
-        "horse": (-0.35, 0.20, 1.0),
-        "cow": (1.85, 0.40, 1.0),
-        "dragon": (4.35, 1.25, 0.82),
+        "goblin_scavenger": (-6.65, -0.55, 1.0),
+        "goblin_raider": (-5.55, -0.35, 1.0),
+        "goblin_tribute_bearer": (-4.35, -0.15, 1.0),
+        "horse": (-2.35, 0.20, 1.0),
+        "cow": (-0.10, 0.40, 1.0),
+        "dragon_whelp": (2.05, 0.75, 1.12),
+        "dragon_wanderer": (3.45, 0.95, 0.91),
+        "dragon": (5.05, 1.25, 0.72),
+        "dragon_deep_wyrm": (6.85, 1.45, 0.56),
     }
     for spec, sources in preview_sources:
         x, y, scale = placements[spec.variant]
@@ -1078,7 +1142,7 @@ def add_preview_scene(
     camera = bpy.context.object
     camera.name = "CAM_CreatureFamilySheet"
     camera.data.type = "ORTHO"
-    camera.data.ortho_scale = 12.0
+    camera.data.ortho_scale = 15.5
     look_at(camera, (0.0, 0.55, 1.15))
     bpy.context.scene.camera = camera
     move_to(camera, preview)

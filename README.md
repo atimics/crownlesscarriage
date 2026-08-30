@@ -80,8 +80,11 @@ The architecture proof connects these parts in one running build:
   crossroads, plus a three-slot case of tradeable traveller's notes
 - Separate mine, goblin-cave, and dragon-cave maps reached by short carriage
   roads, with the carriage parked as the return point
-- A twelve-chart collectible map set with distinct physical artwork, a
-  three-slot carriage case, and a persistent storage archive in Gloamgate
+- Dragon cave visuals that grow from a small whelp through wanderer and
+  crowned forms into a massive deep wyrm
+- A thirteen-chart collectible map set with distinct physical artwork, a
+  three-slot carriage case, a smuggled dragon-hoard chart, and a persistent
+  storage archive in Gloamgate
 - Real-time carriage journeys, a dedicated road scene, and a route crisis that
   can be resolved through combat, coin, demanded cargo, or withdrawal
 - Two persistent named carriage horses whose food, health, and fatigue affect
