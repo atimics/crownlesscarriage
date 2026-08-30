@@ -35,7 +35,7 @@ BLEND_PATH = ROOT / "assets" / "blender" / "crownless_creature_library.blend"
 EXPORT_DIR = ROOT / "assets" / "exports" / "creatures"
 PREVIEW_PATH = ROOT / "assets" / "previews" / "creatures" / "creature_family_sheet.png"
 MANIFEST_PATH = ROOT / "assets" / "creature_manifest.json"
-LIBRARY_VERSION = "0.2.0"
+LIBRARY_VERSION = "0.3.0"
 
 BIPED_POSES = (
     "idle",
@@ -378,6 +378,41 @@ def add_prism(name: str, points: tuple[tuple[float, float, float], ...],
     return obj
 
 
+def add_lateral_prism(
+    name: str,
+    points: tuple[tuple[float, float, float], ...],
+    thickness: float,
+    semantic: str,
+    collection: bpy.types.Collection,
+    spec: CreatureSpec,
+    part: str,
+) -> bpy.types.Object:
+    """Build a thin shape in the vertical YZ plane.
+
+    The general prism helper adds depth on Z, which is right for wings and
+    ground-facing shapes. A horse's mane needs width across X so its jagged
+    profile stays visible from both sides.
+    """
+    count = len(points)
+    vertices = [(x - thickness * 0.5, y, z) for x, y, z in points]
+    vertices += [(x + thickness * 0.5, y, z) for x, y, z in points]
+    faces: list[tuple[int, ...]] = [
+        tuple(reversed(range(count))),
+        tuple(range(count, count * 2)),
+    ]
+    for index in range(count):
+        following = (index + 1) % count
+        faces.append((index, following, count + following, count + index))
+    mesh = bpy.data.meshes.new(name)
+    mesh.from_pydata(vertices, [], faces)
+    mesh.update()
+    obj = bpy.data.objects.new(name, mesh)
+    collection.objects.link(obj)
+    assign(obj, semantic, spec)
+    tag(obj, spec, part)
+    return obj
+
+
 def pose_phase(pose: str) -> float:
     phases = {
         "idle": 0.0,
@@ -535,6 +570,18 @@ def build_quadruped(spec: CreatureSpec,
     add_ellipsoid("CREATURE_Chest", (0.0, -0.53, body_z + 0.06),
                   (body_scale[0] * 0.91, 0.43, body_scale[2] * 1.04),
                   "skin", collection, spec, "chest", subdivisions=1)
+    if not cow:
+        # Separate shoulder and haunch masses stop the horse from reading as a
+        # barrel on sticks at the game's small art resolution.
+        add_ellipsoid("HORSE_Shoulder", (0.0, -0.50, body_z + 0.08),
+                      (0.43, 0.38, 0.45), "skin", collection, spec,
+                      "chest", subdivisions=2)
+        add_ellipsoid("HORSE_Haunch", (0.0, 0.55, body_z + 0.04),
+                      (0.45, 0.43, 0.43), "hide", collection, spec,
+                      "barrel", subdivisions=2)
+        add_ellipsoid("HORSE_Belly", (0.0, 0.02, body_z - 0.18),
+                      (0.41, 0.60, 0.23), "hide", collection, spec,
+                      "barrel")
 
     leg_roots = {
         "fl": Vector((-half_width, front_y, body_z - 0.08)),
@@ -548,16 +595,19 @@ def build_quadruped(spec: CreatureSpec,
         hoof = Vector((root.x, root.y - travel, 0.10 + lift))
         direction = -1.0 if name.startswith("f") else 1.0
         knee = (root + hoof) * 0.5 + Vector((0.0, direction * 0.10, 0.02))
-        radius = 0.105 if cow else 0.085
+        radius = 0.105 if cow else 0.120
         add_segment(f"CREATURE_UpperLeg_{name.upper()}", root, knee,
-                    radius, radius * 0.82, "skin", collection, spec,
+                    radius, radius * (0.82 if cow else 0.72), "skin",
+                    collection, spec,
                     f"upper_leg_{name}")
         add_segment(f"CREATURE_LowerLeg_{name.upper()}", knee, hoof,
-                    radius * 0.78, radius * 0.58, "secondary", collection,
-                    spec, f"lower_leg_{name}")
-        hoof_size = (0.18, 0.23, 0.12) if cow else (0.15, 0.22, 0.13)
+                    radius * (0.78 if cow else 0.70),
+                    radius * (0.58 if cow else 0.48),
+                    "secondary" if cow else "skin", collection, spec,
+                    f"lower_leg_{name}")
+        hoof_size = (0.18, 0.23, 0.12) if cow else (0.18, 0.25, 0.14)
         add_box(f"CREATURE_Hoof_{name.upper()}",
-                hoof + Vector((0.0, -0.035, -0.015)), hoof_size,
+                hoof + Vector((0.0, -0.050, -0.015)), hoof_size,
                 "secondary", collection, spec, f"hoof_{name}")
 
     if cow:
@@ -595,40 +645,69 @@ def build_quadruped(spec: CreatureSpec,
                   0.035, "secondary", collection, spec, "hide_patch")
     else:
         neck_start = Vector((0.0, -0.48, body_z + 0.20))
-        neck_end = Vector((0.0, -0.87, body_z + 0.50))
-        head = Vector((0.0, -1.13, body_z + 0.50))
-        add_segment("HORSE_Neck", neck_start, neck_end, 0.26, 0.18, "skin",
-                    collection, spec, "neck", sides=9)
-        add_ellipsoid("HORSE_Head", head, (0.22, 0.42, 0.24), "skin",
+        neck_curve = Vector((0.0, -0.68, body_z + 0.49))
+        neck_end = Vector((0.0, -0.95, body_z + 0.59))
+        head = Vector((0.0, -1.18, body_z + 0.53))
+        add_segment("HORSE_NeckLower", neck_start, neck_curve,
+                    0.30, 0.23, "skin", collection, spec, "neck", sides=9)
+        add_segment("HORSE_NeckUpper", neck_curve, neck_end,
+                    0.23, 0.15, "skin", collection, spec, "neck", sides=9)
+        add_ellipsoid("HORSE_Head", head, (0.23, 0.34, 0.25), "skin",
                       collection, spec, "head", subdivisions=2)
-        add_ellipsoid("HORSE_Muzzle", head + Vector((0.0, -0.34, -0.08)),
-                      (0.20, 0.20, 0.15), "secondary", collection, spec,
-                      "muzzle")
+        face = head + Vector((0.0, -0.25, -0.035))
+        muzzle = head + Vector((0.0, -0.48, -0.12))
+        add_segment("HORSE_Face", face, muzzle, 0.16, 0.12, "skin",
+                    collection, spec, "head", sides=7)
+        add_ellipsoid("HORSE_Muzzle", muzzle,
+                      (0.18, 0.20, 0.14), "secondary", collection, spec,
+                      "muzzle", subdivisions=2)
         for side, sign in (("L", -1.0), ("R", 1.0)):
             add_cone(f"HORSE_Ear_{side}",
-                     head + Vector((0.10 * sign, 0.02, 0.27)),
-                     0.075, 0.25, "skin", collection, spec,
+                     head + Vector((0.105 * sign, 0.015, 0.30)),
+                     0.072, 0.28, "skin", collection, spec,
                      f"ear_{side.lower()}", vertices=5)
             add_ellipsoid(f"HORSE_Eye_{side}",
-                          head + Vector((0.16 * sign, -0.19, 0.075)),
-                          (0.032, 0.023, 0.040), "eye", collection, spec,
+                          head + Vector((0.175 * sign, -0.15, 0.075)),
+                          (0.034, 0.024, 0.042), "eye", collection, spec,
                           f"eye_{side.lower()}")
+            add_ellipsoid(f"HORSE_Nostril_{side}",
+                          muzzle + Vector((0.095 * sign, -0.15, 0.025)),
+                          (0.030, 0.018, 0.020), "eye", collection, spec,
+                          f"nostril_{side.lower()}")
+        add_box("HORSE_Blaze", head + Vector((0.0, -0.315, 0.055)),
+                (0.070, 0.025, 0.24), "horn", collection, spec, "blaze",
+                rotation=(0.16, 0.0, 0.0), bevel=0.010)
+        add_cone("HORSE_Forelock", head + Vector((0.0, -0.08, 0.23)),
+                 0.095, 0.24, "secondary", collection, spec, "forelock",
+                 rotation=(math.pi, 0.0, 0.0), vertices=5)
         mane_points = (
-            (-0.035, -0.47, body_z + 0.44),
-            (-0.035, -0.88, body_z + 0.73),
-            (-0.035, -1.01, body_z + 0.55),
-            (-0.035, -0.58, body_z + 0.19),
+            (0.0, -0.38, body_z + 0.33),
+            (0.0, -0.49, body_z + 0.58),
+            (0.0, -0.65, body_z + 0.75),
+            (0.0, -0.82, body_z + 0.77),
+            (0.0, -0.98, body_z + 0.66),
+            (0.0, -0.82, body_z + 0.52),
+            (0.0, -0.64, body_z + 0.43),
+            (0.0, -0.47, body_z + 0.24),
         )
-        add_prism("HORSE_Mane", mane_points, 0.070, "secondary",
-                  collection, spec, "mane")
+        add_lateral_prism("HORSE_Mane", mane_points, 0.11, "secondary",
+                          collection, spec, "mane")
 
     tail_base = Vector((0.0, 0.82, body_z + 0.08))
     tail_mid = Vector((0.0, 1.10, body_z - 0.08))
     tail_end = Vector((0.0, 1.28, body_z - (0.62 if cow else 0.48)))
-    add_segment("CREATURE_TailRoot", tail_base, tail_mid, 0.075, 0.055,
+    add_segment("CREATURE_TailRoot", tail_base, tail_mid,
+                0.075 if cow else 0.105, 0.055 if cow else 0.095,
                 "secondary", collection, spec, "tail_root")
-    add_segment("CREATURE_Tail", tail_mid, tail_end, 0.060, 0.035,
+    add_segment("CREATURE_Tail", tail_mid, tail_end,
+                0.060 if cow else 0.135, 0.035 if cow else 0.050,
                 "secondary", collection, spec, "tail")
+    if not cow:
+        for side, sign in (("L", -1.0), ("R", 1.0)):
+            strand_end = tail_end + Vector((0.075 * sign, 0.015, 0.04))
+            add_segment(f"HORSE_TailStrand_{side}", tail_mid, strand_end,
+                        0.070, 0.028, "secondary", collection, spec, "tail",
+                        sides=7)
 
 
 def build_dragon(spec: CreatureSpec,
@@ -858,10 +937,14 @@ def quadruped_bone_for_part(part: str) -> str:
         "mane": "neck",
         "head": "head",
         "muzzle": "head",
+        "blaze": "head",
+        "forelock": "head",
         "ear_l": "head",
         "ear_r": "head",
         "eye_l": "head",
         "eye_r": "head",
+        "nostril_l": "head",
+        "nostril_r": "head",
         "horn_l": "head",
         "horn_r": "head",
         "tail_root": "tail.root",
