@@ -52,18 +52,26 @@ static int ProfileContract(void)
             CHECK(camera->trigger_z >= 0.0f && camera->trigger_z <= 72.0f);
             CHECK(camera->target_x >= 0.0f && camera->target_x <= 96.0f);
             CHECK(camera->target_z >= 0.0f && camera->target_z <= 72.0f);
-            if (scene < CC_LOCAL_PLACE_ESTABLISHING_SCENE_COUNT) {
+            if (camera->kind == CC_LOCAL_TOWN_SCENE_HEART) {
+                CHECK(camera->camera_offset_y >= 8.0f);
+                CHECK(camera->camera_offset_y <= 11.0f);
+                CHECK(camera->fovy >= 21.0f && camera->fovy <= 23.0f);
+            } else if (camera->kind < CC_LOCAL_TOWN_SCENE_CLOSE_FIRST) {
                 CHECK(camera->camera_offset_y >= 8.0f);
                 CHECK(camera->fovy >= 26.0f && camera->fovy <= 35.0f);
             } else {
                 CHECK(camera->camera_offset_y >= 6.0f);
                 CHECK(camera->fovy >= 16.0f && camera->fovy <= 19.0f);
-                for (int32_t establishing = 0;
-                     establishing < CC_LOCAL_PLACE_ESTABLISHING_SCENE_COUNT;
-                     ++establishing) {
-                    CHECK(camera->fovy <
-                          profile->scene[establishing].fovy - 7.0f);
-                }
+                CHECK(camera->fovy < profile->scene[
+                    CC_LOCAL_TOWN_SCENE_ARRIVAL].fovy - 7.0f);
+                CHECK(camera->fovy < profile->scene[
+                    CC_LOCAL_TOWN_SCENE_LANDMARK].fovy - 7.0f);
+            }
+            if (camera->kind == CC_LOCAL_TOWN_SCENE_CARRIAGE_YARD) {
+                CHECK(camera->trigger_x >= 42.0f && camera->trigger_x <= 43.0f);
+                CHECK(camera->trigger_z >= 54.5f && camera->trigger_z <= 56.0f);
+                CHECK(camera->target_x >= 38.0f && camera->target_x <= 41.0f);
+                CHECK(camera->target_z >= 51.0f && camera->target_z <= 53.0f);
             }
             for (int32_t previous = 0; previous < scene; ++previous) {
                 CHECK(strcmp(camera->name,

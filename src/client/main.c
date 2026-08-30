@@ -732,8 +732,16 @@ static void ResetLocalState(LocalState *local)
         .town_position = {CC_LOCAL_CARRIAGE_X, 0.0f,
                           CC_LOCAL_CARRIAGE_Z}
     };
-    CcLocalAgentInit(&local->agent,
-                     (Vector2){CC_LOCAL_START_X, CC_LOCAL_START_Z}, false);
+    /* Begin each town visit at the carriage, not in an aerial town-centre
+       tableau. The first playable page now introduces the hero, carriage,
+       and road together, then lets the town reveal itself through travel. */
+    CcLocalAgentInit(
+        &local->agent,
+        (Vector2){CC_LOCAL_CARRIAGE_APPROACH_X,
+                  CC_LOCAL_CARRIAGE_APPROACH_Z}, false);
+    local->agent.facing_yaw = atan2f(
+        CC_LOCAL_CARRIAGE_X - CC_LOCAL_CARRIAGE_APPROACH_X,
+        CC_LOCAL_CARRIAGE_Z - CC_LOCAL_CARRIAGE_APPROACH_Z);
     CcLocalCombatSetTeam(&local->agent, CC_COMBAT_PLAYER);
     CcLocalCourseInit(&local->course);
 }
