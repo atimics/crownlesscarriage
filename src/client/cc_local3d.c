@@ -11446,11 +11446,12 @@ static void DrawDragonRig(CcCreatureVariant variant,
         DrawCylinderEx(tail_b, tail_c, 0.10f * scale, 0.018f * scale, 6,
                        palette->secondary);
         for (int32_t crest = 0; crest < 3; ++crest) {
+            const float crest_index = (float)crest;
             Vector3 root = LocalPoint(
-                body, 0.0f, (0.52f - crest * 0.05f) * scale,
-                (0.48f - crest * 0.42f) * scale, yaw);
+                body, 0.0f, (0.52f - crest_index * 0.05f) * scale,
+                (0.48f - crest_index * 0.42f) * scale, yaw);
             Vector3 tip = root;
-            tip.y += (0.15f - crest * 0.02f) * scale;
+            tip.y += (0.15f - crest_index * 0.02f) * scale;
             DrawCylinderEx(root, tip, 0.050f * scale, 0.0f, 5,
                            palette->horn);
         }
@@ -11528,9 +11529,10 @@ static void DrawDragonRig(CcCreatureVariant variant,
         DrawCylinderEx(tail_b, tail_c, 0.10f * scale, 0.018f * scale, 7,
                        palette->secondary);
         for (int32_t blade = 0; blade < 3; ++blade) {
+            const float blade_index = (float)blade;
             Vector3 root = LocalPoint(
-                body, 0.0f, (0.50f - blade * 0.04f) * scale,
-                (0.62f - blade * 0.70f) * scale, yaw);
+                body, 0.0f, (0.50f - blade_index * 0.04f) * scale,
+                (0.62f - blade_index * 0.70f) * scale, yaw);
             Vector3 tip = root;
             tip.y += 0.34f * scale;
             DrawCylinderEx(root, tip, 0.055f * scale, 0.0f, 5,
