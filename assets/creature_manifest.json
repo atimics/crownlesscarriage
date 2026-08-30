@@ -1,5 +1,5 @@
 {
-  "library_version": "0.4.0",
+  "library_version": "0.5.0",
   "art_direction": "silhouette_first_pseudo_pixel_creatures",
   "generation": "offline_curated_procedural_geometry",
   "runtime_strategy": "held poses for goblins and dragons; runtime skins for horse and cow",
@@ -1131,7 +1131,7 @@
       "family": "dragon",
       "variant": "dragon_wanderer",
       "variant_index": 7,
-      "silhouette": "stilt-legged runner with a long neck and swept glider wings",
+      "silhouette": "giant long-bodied glider with a low chest and swept wings",
       "runtime_morphology": "quadruped",
       "gait_contract": "dragon_authored",
       "equipment": [
@@ -1159,7 +1159,7 @@
       "family": "dragon",
       "variant": "dragon_wanderer",
       "variant_index": 7,
-      "silhouette": "stilt-legged runner with a long neck and swept glider wings",
+      "silhouette": "giant long-bodied glider with a low chest and swept wings",
       "runtime_morphology": "quadruped",
       "gait_contract": "dragon_authored",
       "equipment": [
@@ -1187,7 +1187,7 @@
       "family": "dragon",
       "variant": "dragon_wanderer",
       "variant_index": 7,
-      "silhouette": "stilt-legged runner with a long neck and swept glider wings",
+      "silhouette": "giant long-bodied glider with a low chest and swept wings",
       "runtime_morphology": "quadruped",
       "gait_contract": "dragon_authored",
       "equipment": [
@@ -1215,7 +1215,7 @@
       "family": "dragon",
       "variant": "dragon_wanderer",
       "variant_index": 7,
-      "silhouette": "stilt-legged runner with a long neck and swept glider wings",
+      "silhouette": "giant long-bodied glider with a low chest and swept wings",
       "runtime_morphology": "quadruped",
       "gait_contract": "dragon_authored",
       "equipment": [
@@ -1243,7 +1243,7 @@
       "family": "dragon",
       "variant": "dragon_wanderer",
       "variant_index": 7,
-      "silhouette": "stilt-legged runner with a long neck and swept glider wings",
+      "silhouette": "giant long-bodied glider with a low chest and swept wings",
       "runtime_morphology": "quadruped",
       "gait_contract": "dragon_authored",
       "equipment": [
@@ -1271,13 +1271,13 @@
       "family": "dragon",
       "variant": "dragon_deep_wyrm",
       "variant_index": 8,
-      "silhouette": "six-legged plated wyrm with a hammer head and broken sails",
+      "silhouette": "ancient legless serpent with a narrow skull and broken sails",
       "runtime_morphology": "quadruped",
       "gait_contract": "dragon_authored",
       "equipment": [
-        "six_legs",
+        "serpent_body",
         "broken_sails",
-        "tail_club",
+        "vestigial_claws",
         "horn_crown"
       ],
       "pose": "idle",
@@ -1299,13 +1299,13 @@
       "family": "dragon",
       "variant": "dragon_deep_wyrm",
       "variant_index": 8,
-      "silhouette": "six-legged plated wyrm with a hammer head and broken sails",
+      "silhouette": "ancient legless serpent with a narrow skull and broken sails",
       "runtime_morphology": "quadruped",
       "gait_contract": "dragon_authored",
       "equipment": [
-        "six_legs",
+        "serpent_body",
         "broken_sails",
-        "tail_club",
+        "vestigial_claws",
         "horn_crown"
       ],
       "pose": "stalk_a",
@@ -1327,13 +1327,13 @@
       "family": "dragon",
       "variant": "dragon_deep_wyrm",
       "variant_index": 8,
-      "silhouette": "six-legged plated wyrm with a hammer head and broken sails",
+      "silhouette": "ancient legless serpent with a narrow skull and broken sails",
       "runtime_morphology": "quadruped",
       "gait_contract": "dragon_authored",
       "equipment": [
-        "six_legs",
+        "serpent_body",
         "broken_sails",
-        "tail_club",
+        "vestigial_claws",
         "horn_crown"
       ],
       "pose": "stalk_b",
@@ -1355,13 +1355,13 @@
       "family": "dragon",
       "variant": "dragon_deep_wyrm",
       "variant_index": 8,
-      "silhouette": "six-legged plated wyrm with a hammer head and broken sails",
+      "silhouette": "ancient legless serpent with a narrow skull and broken sails",
       "runtime_morphology": "quadruped",
       "gait_contract": "dragon_authored",
       "equipment": [
-        "six_legs",
+        "serpent_body",
         "broken_sails",
-        "tail_club",
+        "vestigial_claws",
         "horn_crown"
       ],
       "pose": "threat",
@@ -1383,13 +1383,13 @@
       "family": "dragon",
       "variant": "dragon_deep_wyrm",
       "variant_index": 8,
-      "silhouette": "six-legged plated wyrm with a hammer head and broken sails",
+      "silhouette": "ancient legless serpent with a narrow skull and broken sails",
       "runtime_morphology": "quadruped",
       "gait_contract": "dragon_authored",
       "equipment": [
-        "six_legs",
+        "serpent_body",
         "broken_sails",
-        "tail_club",
+        "vestigial_claws",
         "horn_crown"
       ],
       "pose": "rest",

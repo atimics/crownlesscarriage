@@ -76,9 +76,9 @@ HEIGHT_LIMITS = {
     "horse": (1.40, 2.20),
     "cow": (1.15, 1.90),
     "dragon_whelp": (0.65, 2.80),
-    "dragon_wanderer": (1.00, 4.70),
-    "dragon": (2.20, 6.20),
-    "dragon_deep_wyrm": (3.20, 8.60),
+    "dragon_wanderer": (2.00, 8.40),
+    "dragon": (1.80, 7.20),
+    "dragon_deep_wyrm": (1.40, 8.60),
 }
 TRIANGLE_LIMITS = {
     "goblin": 2800,
@@ -132,6 +132,8 @@ def validate() -> int:
 
     total_triangles = 0
     dragon_idle_heights: dict[str, float] = {}
+    dragon_idle_lengths: dict[str, float] = {}
+    dragon_idle_snake_ratios: dict[str, float] = {}
     dragon_idle_triangles: dict[str, int] = {}
     for entry in entries:
         variant = entry.get("variant", "unknown")
@@ -208,7 +210,10 @@ def validate() -> int:
         if stats.bounds_min and stats.bounds_max:
             height = stats.bounds_max[1] - stats.bounds_min[1]
             if variant.startswith("dragon") and pose == "idle":
+                length = stats.bounds_max[2] - stats.bounds_min[2]
                 dragon_idle_heights[variant] = height
+                dragon_idle_lengths[variant] = length
+                dragon_idle_snake_ratios[variant] = length / height
                 dragon_idle_triangles[variant] = stats.triangles
             minimum, maximum = HEIGHT_LIMITS.get(
                 variant, HEIGHT_LIMITS.get(family, (0.0, 0.0)))
@@ -220,15 +225,26 @@ def validate() -> int:
 
     growth_order = (
         "dragon_whelp", "dragon_wanderer", "dragon", "dragon_deep_wyrm")
-    growth_ratios = (1.30, 1.10, 1.30)
-    if all(variant in dragon_idle_heights for variant in growth_order):
-        for index, minimum_ratio in enumerate(growth_ratios):
-            young = dragon_idle_heights[growth_order[index]]
-            old = dragon_idle_heights[growth_order[index + 1]]
+    length_growth_ratios = (4.00, 1.15, 1.25)
+    if all(variant in dragon_idle_lengths for variant in growth_order):
+        if dragon_idle_lengths["dragon_wanderer"] < 15.0:
+            failures.append(
+                "dragon_wanderer is smaller than the former deep wyrm")
+        for index, minimum_ratio in enumerate(length_growth_ratios):
+            young = dragon_idle_lengths[growth_order[index]]
+            old = dragon_idle_lengths[growth_order[index + 1]]
             if old < young * minimum_ratio:
                 failures.append(
-                    f"dragon growth {growth_order[index]} -> "
+                    f"dragon length {growth_order[index]} -> "
                     f"{growth_order[index + 1]} is only {old / young:.2f}x")
+    if all(variant in dragon_idle_snake_ratios for variant in growth_order):
+        for index in range(len(growth_order) - 1):
+            young = dragon_idle_snake_ratios[growth_order[index]]
+            old = dragon_idle_snake_ratios[growth_order[index + 1]]
+            if old < young * 1.03:
+                failures.append(
+                    f"dragon shape {growth_order[index]} -> "
+                    f"{growth_order[index + 1]} is not more serpentine")
     if (len(dragon_idle_triangles) == len(growth_order) and
             len(set(dragon_idle_triangles.values())) != len(growth_order)):
         failures.append("dragon stages reuse the same geometry topology")
