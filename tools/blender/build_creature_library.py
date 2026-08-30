@@ -4,12 +4,12 @@
 The library expands the human cast with three body-plan families:
 
 * goblins, using the existing biped stepped-pose contract;
-* horses and cows, sharing one quadruped locomotion contract;
+* horses, cows, and sheep, sharing one quadruped locomotion contract;
 * four dragon growth stages, using a quadruped base with authored neck, tail,
   jaw, and wings.
 
-Every runtime file is one mesh with one indexed material. Goblins and the
-dragon keep held pose GLBs. Horses and cows use one rigid-weighted skin each,
+Every runtime file is one mesh with one indexed material. Goblins and dragons
+keep held pose GLBs. Horses, cows, and sheep use one rigid-weighted skin each,
 driven by the game's shared quadruped bone pose at runtime.
 """
 
@@ -36,7 +36,7 @@ BLEND_PATH = ROOT / "assets" / "blender" / "crownless_creature_library.blend"
 EXPORT_DIR = ROOT / "assets" / "exports" / "creatures"
 PREVIEW_PATH = ROOT / "assets" / "previews" / "creatures" / "creature_family_sheet.png"
 MANIFEST_PATH = ROOT / "assets" / "creature_manifest.json"
-LIBRARY_VERSION = "0.5.0"
+LIBRARY_VERSION = "0.6.0"
 
 BIPED_POSES = (
     "idle",
@@ -113,6 +113,17 @@ FAMILY_PALETTES = {
         "accent": (0.55, 0.18, 0.18, 1.0),
         "eye": (0.018, 0.016, 0.013, 1.0),
     },
+    "sheep": {
+        "skin": (0.15, 0.13, 0.11, 1.0),
+        "secondary": (0.075, 0.065, 0.060, 1.0),
+        "hide": (0.72, 0.68, 0.57, 1.0),
+        "cloth": (0.89, 0.86, 0.72, 1.0),
+        "leather": (0.10, 0.080, 0.065, 1.0),
+        "horn": (0.62, 0.54, 0.38, 1.0),
+        "metal": (0.31, 0.36, 0.36, 1.0),
+        "accent": (0.56, 0.43, 0.32, 1.0),
+        "eye": (0.012, 0.010, 0.009, 1.0),
+    },
     "dragon": {
         "skin": (0.075, 0.16, 0.16, 1.0),
         "secondary": (0.30, 0.075, 0.070, 1.0),
@@ -179,6 +190,10 @@ CREATURES = (
                  "ancient legless serpent with a narrow skull and broken sails",
                  "quadruped", "dragon_authored",
                  ("serpent_body", "broken_sails", "vestigial_claws", "horn_crown")),
+    CreatureSpec("sheep", "sheep", 9,
+                 "small round fleece with a dark narrow face and short legs",
+                 "quadruped", "quadruped_runtime_skin",
+                 ("fleece", "ears", "short_tail")),
 )
 
 
@@ -536,18 +551,36 @@ def quadruped_stride(spec: CreatureSpec) -> dict[str, float]:
 def build_quadruped(spec: CreatureSpec,
                     collection: bpy.types.Collection) -> None:
     cow = spec.family == "cow"
+    sheep = spec.family == "sheep"
     stride = quadruped_stride(spec)
-    body_z = (1.08 if cow else 1.24) + stride["bob"]
-    half_width = 0.38 if cow else 0.31
-    front_y = -0.57
-    hind_y = 0.57
-    body_scale = (0.62, 0.93, 0.45) if cow else (0.48, 0.86, 0.40)
-    body_semantic = "hide" if cow else "skin"
+    body_z = (0.76 if sheep else 1.08 if cow else 1.24) + stride["bob"]
+    half_width = 0.30 if sheep else 0.38 if cow else 0.31
+    front_y = -0.43 if sheep else -0.57
+    hind_y = 0.43 if sheep else 0.57
+    body_scale = ((0.50, 0.69, 0.43) if sheep else
+                  (0.62, 0.93, 0.45) if cow else
+                  (0.48, 0.86, 0.40))
+    body_semantic = "cloth" if sheep else "hide" if cow else "skin"
     add_ellipsoid("CREATURE_Barrel", (0.0, 0.0, body_z), body_scale,
                   body_semantic, collection, spec, "barrel", subdivisions=2)
-    add_ellipsoid("CREATURE_Chest", (0.0, -0.53, body_z + 0.06),
-                  (body_scale[0] * 0.91, 0.43, body_scale[2] * 1.04),
-                  "skin", collection, spec, "chest", subdivisions=1)
+    chest_y = -0.38 if sheep else -0.53
+    add_ellipsoid("CREATURE_Chest", (0.0, chest_y, body_z + 0.06),
+                  (body_scale[0] * 0.91,
+                   0.34 if sheep else 0.43,
+                   body_scale[2] * 1.04),
+                  body_semantic if sheep else "skin", collection, spec,
+                  "chest", subdivisions=1)
+    if sheep:
+        for index, (x, y, z, sx, sy, sz, part) in enumerate((
+            (-0.25, -0.22, 0.92, 0.34, 0.38, 0.31, "chest"),
+            (0.24, -0.18, 0.91, 0.33, 0.39, 0.32, "chest"),
+            (-0.24, 0.24, 0.91, 0.34, 0.39, 0.31, "barrel"),
+            (0.23, 0.27, 0.90, 0.34, 0.38, 0.31, "barrel"),
+            (0.0, 0.02, 1.08, 0.40, 0.48, 0.27, "barrel"),
+        )):
+            add_ellipsoid(f"SHEEP_Fleece_{index}", (x, y, z),
+                          (sx, sy, sz), "cloth", collection, spec, part,
+                          subdivisions=1)
 
     leg_roots = {
         "fl": Vector((-half_width, front_y, body_z - 0.08)),
@@ -556,24 +589,53 @@ def build_quadruped(spec: CreatureSpec,
         "hr": Vector((half_width, hind_y, body_z - 0.10)),
     }
     for name, root in leg_roots.items():
-        travel = stride[name] * (0.20 if cow else 0.27)
+        travel = stride[name] * (0.18 if sheep else 0.20 if cow else 0.27)
         lift = stride[f"lift_{name}"]
         hoof = Vector((root.x, root.y - travel, 0.10 + lift))
         direction = -1.0 if name.startswith("f") else 1.0
         knee = (root + hoof) * 0.5 + Vector((0.0, direction * 0.10, 0.02))
-        radius = 0.105 if cow else 0.085
+        radius = 0.070 if sheep else 0.105 if cow else 0.085
         add_segment(f"CREATURE_UpperLeg_{name.upper()}", root, knee,
-                    radius, radius * 0.82, "skin", collection, spec,
+                    radius, radius * 0.82,
+                    "secondary" if sheep else "skin", collection, spec,
                     f"upper_leg_{name}")
         add_segment(f"CREATURE_LowerLeg_{name.upper()}", knee, hoof,
                     radius * 0.78, radius * 0.58, "secondary", collection,
                     spec, f"lower_leg_{name}")
-        hoof_size = (0.18, 0.23, 0.12) if cow else (0.15, 0.22, 0.13)
+        hoof_size = ((0.12, 0.16, 0.09) if sheep else
+                     (0.18, 0.23, 0.12) if cow else
+                     (0.15, 0.22, 0.13))
         add_box(f"CREATURE_Hoof_{name.upper()}",
                 hoof + Vector((0.0, -0.035, -0.015)), hoof_size,
                 "secondary", collection, spec, f"hoof_{name}")
 
-    if cow:
+    if sheep:
+        neck_start = Vector((0.0, -0.36, body_z + 0.14))
+        neck_end = Vector((0.0, -0.62, body_z + 0.08))
+        head = Vector((0.0, -0.82, body_z + 0.04))
+        add_segment("SHEEP_Neck", neck_start, neck_end, 0.19, 0.15,
+                    "secondary", collection, spec, "neck", sides=8)
+        add_ellipsoid("SHEEP_Head", head, (0.20, 0.30, 0.23),
+                      "secondary", collection, spec, "head", subdivisions=2)
+        add_ellipsoid("SHEEP_Muzzle",
+                      head + Vector((0.0, -0.24, -0.06)),
+                      (0.17, 0.14, 0.12), "skin", collection, spec,
+                      "muzzle")
+        add_ellipsoid("SHEEP_WoolCap",
+                      head + Vector((0.0, 0.01, 0.20)),
+                      (0.22, 0.18, 0.16), "cloth", collection, spec,
+                      "head", subdivisions=1)
+        for side, sign in (("L", -1.0), ("R", 1.0)):
+            add_cone(f"SHEEP_Ear_{side}",
+                     head + Vector((0.20 * sign, -0.01, 0.10)),
+                     0.060, 0.24, "secondary", collection, spec,
+                     f"ear_{side.lower()}",
+                     rotation=(0.0, math.pi * 0.5 * sign, 0.0), vertices=5)
+            add_ellipsoid(f"SHEEP_Eye_{side}",
+                          head + Vector((0.15 * sign, -0.18, 0.07)),
+                          (0.030, 0.022, 0.036), "eye", collection, spec,
+                          f"eye_{side.lower()}")
+    elif cow:
         neck_start = Vector((0.0, -0.52, body_z + 0.20))
         neck_end = Vector((0.0, -0.91, body_z + 0.08))
         head = Vector((0.0, -1.15, body_z + 0.02))
@@ -635,13 +697,25 @@ def build_quadruped(spec: CreatureSpec,
         add_prism("HORSE_Mane", mane_points, 0.070, "secondary",
                   collection, spec, "mane")
 
-    tail_base = Vector((0.0, 0.82, body_z + 0.08))
-    tail_mid = Vector((0.0, 1.10, body_z - 0.08))
-    tail_end = Vector((0.0, 1.28, body_z - (0.62 if cow else 0.48)))
-    add_segment("CREATURE_TailRoot", tail_base, tail_mid, 0.075, 0.055,
-                "secondary", collection, spec, "tail_root")
-    add_segment("CREATURE_Tail", tail_mid, tail_end, 0.060, 0.035,
-                "secondary", collection, spec, "tail")
+    if sheep:
+        tail_base = Vector((0.0, 0.60, body_z + 0.14))
+        tail_mid = Vector((0.0, 0.75, body_z + 0.10))
+        tail_end = Vector((0.0, 0.86, body_z - 0.02))
+        tail_semantic = "cloth"
+        tail_radius = 0.10
+    else:
+        tail_base = Vector((0.0, 0.82, body_z + 0.08))
+        tail_mid = Vector((0.0, 1.10, body_z - 0.08))
+        tail_end = Vector((0.0, 1.28,
+                           body_z - (0.62 if cow else 0.48)))
+        tail_semantic = "secondary"
+        tail_radius = 0.075
+    add_segment("CREATURE_TailRoot", tail_base, tail_mid,
+                tail_radius, tail_radius * 0.73, tail_semantic,
+                collection, spec, "tail_root")
+    add_segment("CREATURE_Tail", tail_mid, tail_end,
+                tail_radius * 0.78, tail_radius * 0.46, tail_semantic,
+                collection, spec, "tail")
 
 
 def add_dragon_leg(spec: CreatureSpec, collection: bpy.types.Collection,
@@ -1089,7 +1163,7 @@ def build_creature(spec: CreatureSpec,
                    collection: bpy.types.Collection) -> None:
     if spec.family == "goblin":
         build_goblin(spec, collection)
-    elif spec.family in ("horse", "cow"):
+    elif spec.family in ("horse", "cow", "sheep"):
         build_quadruped(spec, collection)
     elif spec.family == "dragon":
         build_dragon(spec, collection)
@@ -1117,20 +1191,32 @@ def quadruped_bone_points(
     spec: CreatureSpec,
 ) -> dict[str, tuple[Vector, Vector]]:
     cow = spec.family == "cow"
-    body_z = 1.08 if cow else 1.24
-    half_width = 0.38 if cow else 0.31
+    sheep = spec.family == "sheep"
+    body_z = 0.76 if sheep else 1.08 if cow else 1.24
+    half_width = 0.30 if sheep else 0.38 if cow else 0.31
+    front_y = -0.43 if sheep else -0.57
+    hind_y = 0.43 if sheep else 0.57
     points: dict[str, tuple[Vector, Vector]] = {
         "root": (Vector((0.0, 0.0, 0.0)), Vector((0.0, 0.0, 0.20))),
         "body": (
-            Vector((0.0, 0.42, body_z)),
-            Vector((0.0, -0.30, body_z)),
+            Vector((0.0, 0.34 if sheep else 0.42, body_z)),
+            Vector((0.0, -0.24 if sheep else -0.30, body_z)),
         ),
         "chest": (
-            Vector((0.0, -0.16, body_z + 0.06)),
-            Vector((0.0, -0.72, body_z + 0.06)),
+            Vector((0.0, -0.12 if sheep else -0.16, body_z + 0.06)),
+            Vector((0.0, -0.52 if sheep else -0.72, body_z + 0.06)),
         ),
     }
-    if cow:
+    if sheep:
+        points["neck"] = (
+            Vector((0.0, -0.36, body_z + 0.14)),
+            Vector((0.0, -0.62, body_z + 0.08)),
+        )
+        points["head"] = (
+            Vector((0.0, -0.82, body_z + 0.04)),
+            Vector((0.0, -1.06, body_z - 0.02)),
+        )
+    elif cow:
         points["neck"] = (
             Vector((0.0, -0.50, body_z + 0.20)),
             Vector((0.0, -0.91, 1.16)),
@@ -1139,7 +1225,6 @@ def quadruped_bone_points(
             Vector((0.0, -1.15, 1.10)),
             Vector((0.0, -1.46, 1.04)),
         )
-        tail_drop = 0.62
     else:
         points["neck"] = (
             Vector((0.0, -0.50, body_z + 0.20)),
@@ -1149,13 +1234,12 @@ def quadruped_bone_points(
             Vector((0.0, -1.13, 1.74)),
             Vector((0.0, -1.47, 1.66)),
         )
-        tail_drop = 0.48
 
     for name, x, longitudinal, front in (
-        ("FL", -half_width, -0.57, True),
-        ("FR", half_width, -0.57, True),
-        ("HL", -half_width, 0.57, False),
-        ("HR", half_width, 0.57, False),
+        ("FL", -half_width, front_y, True),
+        ("FR", half_width, front_y, True),
+        ("HL", -half_width, hind_y, False),
+        ("HR", half_width, hind_y, False),
     ):
         root = Vector((x, longitudinal,
                        body_z - (0.08 if front else 0.10)))
@@ -1167,9 +1251,15 @@ def quadruped_bone_points(
         points[f"lower_leg.{name}"] = (knee, hoof)
         points[f"hoof.{name}"] = (hoof, hoof_tail)
 
-    tail_base = Vector((0.0, 0.82, body_z + 0.08))
-    tail_mid = Vector((0.0, 1.10, body_z - 0.08))
-    tail_end = Vector((0.0, 1.28, body_z - tail_drop))
+    if sheep:
+        tail_base = Vector((0.0, 0.60, body_z + 0.14))
+        tail_mid = Vector((0.0, 0.75, body_z + 0.10))
+        tail_end = Vector((0.0, 0.86, body_z - 0.02))
+    else:
+        tail_base = Vector((0.0, 0.82, body_z + 0.08))
+        tail_mid = Vector((0.0, 1.10, body_z - 0.08))
+        tail_end = Vector((0.0, 1.28,
+                           body_z - (0.62 if cow else 0.48)))
     points["tail.root"] = (tail_base, tail_mid)
     points["tail"] = (tail_mid, tail_end)
     return points
@@ -1376,10 +1466,11 @@ def add_preview_scene(
         "goblin_tribute_bearer": (-14.40, -0.15, 1.0),
         "horse": (-11.90, 0.20, 1.0),
         "cow": (-8.55, 0.40, 1.0),
-        "dragon_whelp": (-6.30, 0.70, 0.35),
-        "dragon_wanderer": (-2.65, 0.95, 0.35),
-        "dragon": (3.85, 1.20, 0.35),
-        "dragon_deep_wyrm": (13.10, 1.50, 0.35),
+        "sheep": (-7.10, 0.62, 0.38),
+        "dragon_whelp": (-5.75, 0.75, 0.35),
+        "dragon_wanderer": (-2.20, 0.95, 0.35),
+        "dragon": (4.05, 1.20, 0.35),
+        "dragon_deep_wyrm": (13.25, 1.50, 0.35),
     }
     for spec, sources in preview_sources:
         x, y, scale = placements[spec.variant]
@@ -1458,7 +1549,7 @@ def build() -> None:
                 preview_sources.append(
                     (spec, duplicate_preview_parts(collection, spec)))
             rig = skin_quadruped(collection, spec) \
-                if spec.family in ("horse", "cow") else None
+                if spec.family in ("horse", "cow", "sheep") else None
             model = consolidate(collection, spec, rig)
             path = export_model(model, spec, rig)
             model.hide_render = True
@@ -1486,7 +1577,7 @@ def build() -> None:
         "library_version": LIBRARY_VERSION,
         "art_direction": "silhouette_first_pseudo_pixel_creatures",
         "generation": "offline_curated_procedural_geometry",
-        "runtime_strategy": "held poses for goblins and dragons; runtime skins for horse and cow",
+        "runtime_strategy": "held poses for goblins and dragons; runtime skins for horse, cow, and sheep",
         "coordinate_system": "glTF +Y up, +Z forward",
         "material_contract": "single indexed material; COLOR_0 stores palette, value, and fold",
         "material_order": list(MATERIAL_ORDER),

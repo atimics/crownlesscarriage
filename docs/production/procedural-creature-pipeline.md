@@ -8,24 +8,26 @@ motion families, backed by reusable 2-, 4-, 6-, and 8-leg rig templates:
 - Goblins are short bipeds with oversized ears, heads, hands, and carried
   goods. Scavenger, raider, and tribute-bearer variants make the lair economy
   readable before any label appears.
-- Horses and cows share one quadruped locomotion contract but not one body.
+- Horses, cows, and sheep share one quadruped locomotion contract but not one
+  body.
   Horses use a high shoulder, arched neck, mane, long lower legs, and open leg
   gaps. Cows use a deep barrel, low head, horns, short legs, and an udder.
+  Sheep use a compact fleece, dark narrow face, small ears, and a short tail.
 - The dragon starts from four planted limbs but has an authored neck, jaw,
   tail, crown horns, back spines, and wings. It is a unique world actor, not a
   scaled farm animal.
 
-All forms are generated from code rather than hand-edited exports. The horse
-and cow each ship as one rigged, skinned GLB. Their four legs are driven by the
-same persistent planted contacts, joint solves, and flexor/extensor model as
-the rest of the cast. Goblins and the dragon keep their generated GLBs as
-editable shape references while the game assembles their visible forms around
-live bones.
+All forms are generated from code rather than hand-edited exports. The horse,
+cow, and sheep each ship as one rigged, skinned GLB. Their four legs are driven
+by the same persistent planted contacts, joint solves, and flexor/extensor
+model as the rest of the cast. Goblins and the dragon keep their generated GLBs
+as editable shape references while the game assembles their visible forms
+around live bones.
 
 | Runtime template | Legs | Chain | Support rule | Current use |
 | --- | ---: | --- | --- | --- |
 | Biped | 2 | thigh and lower leg | at least 1 planted | goblins and people |
-| Quadruped | 4 | upper and lower leg | at least 3 planted | horse, cow, dragon |
+| Quadruped | 4 | upper and lower leg | at least 3 planted | horse, cow, sheep, dragon |
 | Hexapod | 6 | upper and lower leg | tripod support | ready for six-leg species |
 | Octopod | 8 | upper, middle, and terminal leg | at least 6 planted | ready for eight-leg species |
 
@@ -51,9 +53,9 @@ make blender-creature-assets
 make blender-creature-assets-check
 ```
 
-The macOS application bundle keeps the manifest and GLBs. The horse and cow
-use their skins at runtime. Goblins and the dragon use the procedural runtime
-rig, with their GLBs kept as art references.
+The macOS application bundle keeps the manifest and GLBs. The horse, cow, and
+sheep use their skins at runtime. Goblins and the dragon use the procedural
+runtime rig, with their GLBs kept as art references.
 
 ## Variant grammar
 
@@ -64,12 +66,13 @@ rig, with their GLBs kept as art references.
 | Goblin tribute bearer | broad burden around a bright chest | moves offerings toward the dragon |
 | Horse | high shoulder, arched neck, long open legs | travel, carriage, speed |
 | Cow | deep barrel, low horn line, short planted legs | food economy and livestock pressure |
+| Sheep | round fleece, dark narrow face, short legs | small settlement livestock |
 | Dragon | long grounded predator, crown horns, folded wings | singular hoard power and retaliation |
 
-Goblins have idle plus eight held walk poses. The horse and cow each have one
-skinned asset with 19 shared runtime bones. The dragon has idle, two stalk
-poses, threat, and rest. It should not loop like an ambient crowd actor. Its
-smaller authored set gives each appearance a clear dramatic purpose.
+Goblins have idle plus eight held walk poses. The horse, cow, and sheep each
+have one skinned asset with 19 shared runtime bones. The dragon has idle, two
+stalk poses, threat, and rest. It should not loop like an ambient crowd actor.
+Its smaller authored set gives each appearance a clear dramatic purpose.
 
 ## Runtime contract
 
@@ -84,9 +87,9 @@ The manifest records one of three gait contracts. They now select a runtime
 skeletal profile rather than a baked mesh sequence:
 
 - `npc_stepped`: select the goblin pose with the current biped gait phase.
-- `quadruped_runtime_skin`: load one horse or cow skin and drive its 19 bones
-  from `CcQuadrupedPoseResolve`. The horse and cow share bone names and contact
-  timing while keeping different proportions.
+- `quadruped_runtime_skin`: load one horse, cow, or sheep skin and drive its 19
+  bones from `CcQuadrupedPoseResolve`. These animals share bone names and
+  contact timing while keeping different proportions.
 - `dragon_authored`: select a named dramatic state rather than treating the
   dragon as ambient livestock.
 
@@ -98,13 +101,14 @@ the remaining support shape before allowing another lift. This prevents the
 old skating motion where every foot followed the body throughout a step.
 
 `CcCreatureRigPoseResolve` remains available for held poses and previews.
-Goblins use the biped contact layout. Horses, cows, and the dragon use
+Goblins use the biped contact layout. Horses, cows, sheep, and the dragon use
 separately proportioned quadruped layouts. Hexapods use alternating tripods;
 octopods use staggered three-segment legs. Each joint has opposing flexor and
 extensor muscles, and their activation changes the visible muscle envelope.
-`CcQuadrupedPoseResolveFromRig` maps the live horse and cow results onto the 19
-exported skin bones while keeping the authored neck, head, body, and tail
-anchors. The generated C catalog keeps those assets in sync with the manifest.
+`CcQuadrupedPoseResolveFromRig` maps the live horse, cow, and sheep results onto
+the 19 exported skin bones while keeping the authored neck, head, body, and
+tail anchors. The generated C catalog keeps those assets in sync with the
+manifest.
 
 Each healthy bone link can also be converted into overlapping collision
 spheres by `CcRobotLimbPointSpace`. This gives every supported body plan one
@@ -121,7 +125,8 @@ replacing the reliable baseline.
 - Judge forms at the fixed adventure camera and 35–80 art pixels, not only in
   Blender close-ups.
 - A goblin must remain distinct from a small green human in black silhouette.
-- Horse and cow must remain distinct with materials removed.
+- Horse, cow, and sheep must remain distinct with materials removed.
+- The sheep should display at about the same height as the baby dragon.
 - Keep space between quadruped legs so foot phases survive point sampling.
 - Treat horns, ears, hooves, hands, jaw, wing tips, and carried goods as
   silhouette anchors and exaggerate them when necessary.
@@ -145,12 +150,14 @@ Runtime art checks can capture the state-driven settlement compositions:
 ./crownless_carriage --capture-creatures dragon dragon.png
 ./crownless_carriage --capture-creatures horse horse.png
 ./crownless_carriage --capture-creatures cow cow.png
+./crownless_carriage --capture-creatures sheep sheep.png
 ./crownless_carriage --capture-creature-reel goblins goblins/frame
 ./crownless_carriage --capture-creature-reel dragon dragon/frame
 ./crownless_carriage --capture-creature-reel horse horse/frame
 ./crownless_carriage --capture-creature-reel cow cow/frame
+./crownless_carriage --capture-creature-reel sheep sheep/frame
 ```
 
 Each reel command records 45 deterministic gameplay frames at 15 frames per
 second, ready to assemble into a three-second clip. The older `animals` name
-continues to capture the settlement cow for compatibility.
+continues to capture the settlement animals for compatibility.

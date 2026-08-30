@@ -29,6 +29,8 @@ int main(void)
            "horse uses one runtime-driven skin");
     EXPECT(CcCreaturePoseCount(CC_CREATURE_COW) == 1,
            "cow uses one runtime-driven skin");
+    EXPECT(CcCreaturePoseCount(CC_CREATURE_SHEEP) == 1,
+           "sheep uses one runtime-driven skin");
     EXPECT(CcCreaturePoseCount(CC_CREATURE_DRAGON) == 5,
            "dragon has its authored pose set");
     EXPECT(CcCreaturePoseCount(CC_CREATURE_DRAGON_WHELP) == 5,
@@ -50,6 +52,8 @@ int main(void)
            "horse advertises its runtime skin");
     EXPECT(CcCreatureDefinitionAt(CC_CREATURE_COW)->skinned,
            "cow advertises its runtime skin");
+    EXPECT(CcCreatureDefinitionAt(CC_CREATURE_SHEEP)->skinned,
+           "sheep advertises its runtime skin");
     EXPECT(!CcCreatureDefinitionAt(CC_CREATURE_DRAGON)->skinned,
            "the authored dragon remains a held-pose actor");
     EXPECT(strcmp(CcCreatureDefinitionAt(CC_CREATURE_DRAGON_WHELP)->family,
@@ -62,6 +66,10 @@ int main(void)
                                       CC_CREATURE_POSE_IDLE),
                   "goblin_tribute_bearer") != NULL,
            "tribute bearer resolves its own asset family");
+    EXPECT(strstr(CcCreatureAssetPath(CC_CREATURE_SHEEP,
+                                      CC_CREATURE_POSE_IDLE),
+                  "sheep") != NULL,
+           "sheep resolves its own asset family");
     EXPECT(CcCreatureDefinitionAt(CC_CREATURE_VARIANT_COUNT) == NULL,
            "invalid variants are rejected");
     EXPECT(CcCreatureAssetPath(CC_CREATURE_HORSE,

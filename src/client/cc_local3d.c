@@ -11013,6 +11013,16 @@ static CreatureRenderPalette CreaturePalette(CcCreatureVariant variant,
             colors[7] = (Color){137, 85, 61, 255};
             break;
         }
+        case CC_CREATURE_SHEEP:
+            colors[0] = (Color){58, 49, 43, 255};
+            colors[1] = (Color){31, 27, 25, 255};
+            colors[2] = (Color){192, 181, 153, 255};
+            colors[3] = primary.a > 0 ? primary :
+                                          (Color){228, 220, 185, 255};
+            colors[4] = (Color){40, 33, 29, 255};
+            colors[7] = (Color){142, 109, 82, 255};
+            colors[8] = (Color){12, 10, 9, 255};
+            break;
         case CC_CREATURE_DRAGON_WHELP:
             colors[0] = (Color){92, 132, 101, 255};
             colors[1] = (Color){42, 66, 54, 255};
@@ -11065,6 +11075,7 @@ static CcCreatureRigProfile CreatureRigProfileForVariant(
     switch (variant) {
         case CC_CREATURE_HORSE: return CC_CREATURE_RIG_HORSE;
         case CC_CREATURE_COW: return CC_CREATURE_RIG_COW;
+        case CC_CREATURE_SHEEP: return CC_CREATURE_RIG_COW;
         case CC_CREATURE_DRAGON:
         case CC_CREATURE_DRAGON_WHELP:
         case CC_CREATURE_DRAGON_WANDERER:
@@ -11300,14 +11311,66 @@ static void DrawGoblinRig(CcCreatureVariant variant,
     }
 }
 
-static void DrawHorseOrCowRig(CcCreatureVariant variant,
+static void DrawFarmAnimalRig(CcCreatureVariant variant,
                               const CcCreatureRigPose *rig,
                               const CreatureRenderPalette *palette,
                               float yaw, float scale)
 {
     Vector3 body = FromLimbVector(rig->body);
     bool horse = variant == CC_CREATURE_HORSE;
+    bool sheep = variant == CC_CREATURE_SHEEP;
     float breathing = 1.0f + rig->mean_activation * 0.22f;
+    if (sheep) {
+        DrawCharacterEllipsoid(
+            body, (Vector3){0.55f * scale * breathing,
+                            0.48f * scale * breathing,
+                            0.72f * scale}, palette->cloth);
+        const Vector3 fleece_offsets[] = {
+            {-0.28f, 0.12f, -0.24f}, {0.28f, 0.12f, -0.22f},
+            {-0.27f, 0.10f, 0.24f}, {0.27f, 0.10f, 0.24f},
+            {0.0f, 0.31f, 0.02f},
+        };
+        for (int32_t index = 0; index < 5; ++index) {
+            Vector3 fleece = LocalPoint(
+                body, fleece_offsets[index].x * scale,
+                fleece_offsets[index].y * scale,
+                fleece_offsets[index].z * scale, yaw);
+            DrawCharacterSphere(fleece, 0.27f * scale, palette->cloth);
+        }
+        Vector3 neck = LocalPoint(body, 0.0f, -0.02f * scale,
+                                  rig->body_length * 0.48f, yaw);
+        Vector3 head = LocalPoint(body, 0.0f, -0.04f * scale,
+                                  rig->body_length * 0.70f, yaw);
+        DrawCylinderEx(neck, head, 0.17f * scale, 0.14f * scale, 7,
+                       palette->secondary);
+        DrawCharacterEllipsoid(
+            head, (Vector3){0.21f * scale, 0.24f * scale,
+                            0.31f * scale}, palette->secondary);
+        Vector3 cap = LocalPoint(head, 0.0f, 0.18f * scale,
+                                 -0.02f * scale, yaw);
+        DrawCharacterSphere(cap, 0.18f * scale, palette->cloth);
+        for (int32_t side = -1; side <= 1; side += 2) {
+            Vector3 eye = LocalPoint(
+                head, (float)side * 0.14f * scale, 0.06f * scale,
+                0.18f * scale, yaw);
+            DrawCharacterSphere(eye, 0.026f * scale, palette->eye);
+            Vector3 ear_root = LocalPoint(
+                head, (float)side * 0.13f * scale, 0.12f * scale,
+                -0.02f * scale, yaw);
+            Vector3 ear_tip = LocalPoint(
+                head, (float)side * 0.32f * scale, 0.10f * scale,
+                -0.04f * scale, yaw);
+            DrawCylinderEx(ear_root, ear_tip, 0.045f * scale,
+                           0.012f * scale, 5, palette->secondary);
+        }
+        Vector3 tail_root = LocalPoint(body, 0.0f, 0.12f * scale,
+                                       -rig->body_length * 0.47f, yaw);
+        Vector3 tail_tip = LocalPoint(body, 0.0f, 0.02f * scale,
+                                      -rig->body_length * 0.62f, yaw);
+        DrawCylinderEx(tail_root, tail_tip, 0.10f * scale,
+                       0.055f * scale, 6, palette->cloth);
+        return;
+    }
     DrawOrientedBox(body, (Vector3){0.0f, 0.02f * scale, 0.0f},
                     (Vector3){rig->body_width * breathing,
                               rig->body_depth * breathing,
@@ -11805,7 +11868,9 @@ static CcQuadrupedMorphology QuadrupedMorphologyForCreature(
     CcCreatureVariant variant)
 {
     if (variant == CC_CREATURE_HORSE) return CC_QUADRUPED_HORSE;
-    if (variant == CC_CREATURE_COW) return CC_QUADRUPED_COW;
+    if (variant == CC_CREATURE_COW || variant == CC_CREATURE_SHEEP) {
+        return CC_QUADRUPED_COW;
+    }
     return CC_QUADRUPED_MORPHOLOGY_COUNT;
 }
 
@@ -11927,6 +11992,8 @@ static bool DrawCreatureGait3D(CcCreatureVariant variant,
         shadow_size = (Vector2){0.58f, 0.46f};
     } else if (variant == CC_CREATURE_COW) {
         shadow_size = (Vector2){1.10f, 1.72f};
+    } else if (variant == CC_CREATURE_SHEEP) {
+        shadow_size = (Vector2){0.80f, 1.15f};
     } else if (variant == CC_CREATURE_DRAGON_WHELP) {
         shadow_size = (Vector2){2.20f, 3.60f};
     } else if (variant == CC_CREATURE_DRAGON_WANDERER) {
@@ -11983,7 +12050,7 @@ static bool DrawCreatureGait3D(CcCreatureVariant variant,
     } else if (IsDragonCreatureVariant(variant)) {
         DrawDragonRig(variant, rig, &palette, yaw, scale);
     } else {
-        DrawHorseOrCowRig(variant, rig, &palette, yaw, scale);
+        DrawFarmAnimalRig(variant, rig, &palette, yaw, scale);
     }
     return true;
 }
@@ -21621,6 +21688,10 @@ static void DrawSettlementCreatures(const CcSim *sim,
             TerrainWorldPoint(63.0f, 38.3f), 0.72f * PI, 0.84f,
             (Color){177, 162, 132, 255}, clock * 1.25f, true,
             controlled ? &controlled_cow : NULL);
+        (void)DrawCreatureGait3D(
+            CC_CREATURE_SHEEP, CC_CREATURE_POSE_IDLE,
+            TerrainWorldPoint(61.65f, 39.15f), 0.58f * PI, 0.38f,
+            (Color){228, 220, 185, 255}, clock * 1.42f, true, NULL);
     }
 
     bool raid_at_place = goblins->tribute_target_id == place->id &&

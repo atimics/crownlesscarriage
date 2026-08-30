@@ -21,6 +21,7 @@ VARIANT_ENUMS = {
     "dragon_whelp": "CC_CREATURE_DRAGON_WHELP",
     "dragon_wanderer": "CC_CREATURE_DRAGON_WANDERER",
     "dragon_deep_wyrm": "CC_CREATURE_DRAGON_DEEP_WYRM",
+    "sheep": "CC_CREATURE_SHEEP",
 }
 POSE_ENUMS = {
     "idle": "CC_CREATURE_POSE_IDLE",

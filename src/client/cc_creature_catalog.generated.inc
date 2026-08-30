@@ -11,6 +11,7 @@ CC_CREATURE_DEFINITIONS[CC_CREATURE_VARIANT_COUNT] = {
     [CC_CREATURE_DRAGON_WHELP] = {"dragon_whelp", "dragon", "dragon_authored", true, false},
     [CC_CREATURE_DRAGON_WANDERER] = {"dragon_wanderer", "dragon", "dragon_authored", true, false},
     [CC_CREATURE_DRAGON_DEEP_WYRM] = {"dragon_deep_wyrm", "dragon", "dragon_authored", true, false},
+    [CC_CREATURE_SHEEP] = {"sheep", "sheep", "quadruped_runtime_skin", true, true},
 };
 
 static const char *const
@@ -82,5 +83,8 @@ CC_CREATURE_ASSET_PATHS[CC_CREATURE_VARIANT_COUNT]
         [CC_CREATURE_POSE_STALK_B] = "assets/exports/creatures/creature_dragon_deep_wyrm_stalk_b_v01.glb",
         [CC_CREATURE_POSE_THREAT] = "assets/exports/creatures/creature_dragon_deep_wyrm_threat_v01.glb",
         [CC_CREATURE_POSE_REST] = "assets/exports/creatures/creature_dragon_deep_wyrm_rest_v01.glb",
+    },
+    [CC_CREATURE_SHEEP] = {
+        [CC_CREATURE_POSE_IDLE] = "assets/exports/creatures/creature_sheep_v01.glb",
     },
 };

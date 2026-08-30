@@ -28,6 +28,7 @@ EXPECTED_VARIANTS = (
     "dragon_whelp",
     "dragon_wanderer",
     "dragon_deep_wyrm",
+    "sheep",
 )
 EXPECTED_FAMILIES = ("goblin", "dragon", "animal")
 EXPECTED_STEPPED_POSES = (
@@ -59,6 +60,7 @@ EXPECTED_MORPHOLOGY = {
     "dragon_whelp": "quadruped",
     "dragon_wanderer": "quadruped",
     "dragon_deep_wyrm": "quadruped",
+    "sheep": "quadruped",
 }
 EXPECTED_GAIT = {
     "goblin_scavenger": "npc_stepped",
@@ -70,11 +72,13 @@ EXPECTED_GAIT = {
     "dragon_whelp": "dragon_authored",
     "dragon_wanderer": "dragon_authored",
     "dragon_deep_wyrm": "dragon_authored",
+    "sheep": "quadruped_runtime_skin",
 }
 HEIGHT_LIMITS = {
     "goblin": (1.05, 1.70),
     "horse": (1.40, 2.20),
     "cow": (1.15, 1.90),
+    "sheep": (0.75, 1.45),
     "dragon_whelp": (0.65, 2.80),
     "dragon_wanderer": (2.00, 8.40),
     "dragon": (1.80, 7.20),
@@ -84,6 +88,7 @@ TRIANGLE_LIMITS = {
     "goblin": 2800,
     "horse": 3200,
     "cow": 3600,
+    "sheep": 3600,
     "dragon": 7500,
 }
 
@@ -93,7 +98,7 @@ def expected_pairs() -> tuple[tuple[str, str], ...]:
     for variant in EXPECTED_VARIANTS:
         if variant.startswith("dragon"):
             poses = EXPECTED_DRAGON_POSES
-        elif variant in ("horse", "cow"):
+        elif variant in ("horse", "cow", "sheep"):
             poses = ("idle",)
         else:
             poses = EXPECTED_STEPPED_POSES
@@ -131,6 +136,7 @@ def validate() -> int:
         failures.append(f"stale export is not in the manifest: {path.name}")
 
     total_triangles = 0
+    idle_heights: dict[str, float] = {}
     dragon_idle_heights: dict[str, float] = {}
     dragon_idle_lengths: dict[str, float] = {}
     dragon_idle_snake_ratios: dict[str, float] = {}
@@ -180,7 +186,7 @@ def validate() -> int:
                                    abs(sample[1] - sample[2]) < 0.01):
                 failures.append(
                     f"{variant}: COLOR_0 has no authored value/fold channels")
-        skinned = variant in ("horse", "cow")
+        skinned = variant in ("horse", "cow", "sheep")
         if bool(entry.get("skinned")) != skinned:
             failures.append(f"{variant}: wrong skinned contract")
         skins = document.get("skins", [])
@@ -209,6 +215,8 @@ def validate() -> int:
             failures.append(f"{variant}: creature contains baked animation")
         if stats.bounds_min and stats.bounds_max:
             height = stats.bounds_max[1] - stats.bounds_min[1]
+            if pose == "idle":
+                idle_heights[variant] = height
             if variant.startswith("dragon") and pose == "idle":
                 length = stats.bounds_max[2] - stats.bounds_min[2]
                 dragon_idle_heights[variant] = height
@@ -248,6 +256,13 @@ def validate() -> int:
     if (len(dragon_idle_triangles) == len(growth_order) and
             len(set(dragon_idle_triangles.values())) != len(growth_order)):
         failures.append("dragon stages reuse the same geometry topology")
+    if "dragon_whelp" in idle_heights and "sheep" in idle_heights:
+        whelp_display_height = idle_heights["dragon_whelp"] * 0.38 * 0.90
+        sheep_display_height = idle_heights["sheep"] * 0.38
+        difference = abs(sheep_display_height - whelp_display_height)
+        if difference > whelp_display_height * 0.08:
+            failures.append(
+                "sheep display height does not match the baby dragon")
 
     if failures:
         for failure in failures:

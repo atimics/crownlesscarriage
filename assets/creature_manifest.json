@@ -1,8 +1,8 @@
 {
-  "library_version": "0.5.0",
+  "library_version": "0.6.0",
   "art_direction": "silhouette_first_pseudo_pixel_creatures",
   "generation": "offline_curated_procedural_geometry",
-  "runtime_strategy": "held poses for goblins and dragons; runtime skins for horse and cow",
+  "runtime_strategy": "held poses for goblins and dragons; runtime skins for horse, cow, and sheep",
   "coordinate_system": "glTF +Y up, +Z forward",
   "material_contract": "single indexed material; COLOR_0 stores palette, value, and fold",
   "material_order": [
@@ -30,7 +30,8 @@
     "dragon",
     "dragon_whelp",
     "dragon_wanderer",
-    "dragon_deep_wyrm"
+    "dragon_deep_wyrm",
+    "sheep"
   ],
   "archetypes": [
     {
@@ -1405,6 +1406,56 @@
         "metal",
         "accent",
         "eye"
+      ]
+    },
+    {
+      "family": "sheep",
+      "variant": "sheep",
+      "variant_index": 9,
+      "silhouette": "small round fleece with a dark narrow face and short legs",
+      "runtime_morphology": "quadruped",
+      "gait_contract": "quadruped_runtime_skin",
+      "equipment": [
+        "fleece",
+        "ears",
+        "short_tail"
+      ],
+      "pose": "idle",
+      "id": "creature_sheep_v01",
+      "export": "assets/exports/creatures/creature_sheep_v01.glb",
+      "material_order": [
+        "skin",
+        "secondary",
+        "hide",
+        "cloth",
+        "leather",
+        "horn",
+        "metal",
+        "accent",
+        "eye"
+      ],
+      "skinned": true,
+      "armature": "RIG_sheep",
+      "bones": [
+        "root",
+        "body",
+        "chest",
+        "neck",
+        "head",
+        "upper_leg.FL",
+        "lower_leg.FL",
+        "hoof.FL",
+        "upper_leg.FR",
+        "lower_leg.FR",
+        "hoof.FR",
+        "upper_leg.HL",
+        "lower_leg.HL",
+        "hoof.HL",
+        "upper_leg.HR",
+        "lower_leg.HR",
+        "hoof.HR",
+        "tail.root",
+        "tail"
       ]
     }
   ]

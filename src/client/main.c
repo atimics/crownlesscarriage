@@ -5300,10 +5300,11 @@ int main(int argc, char **argv)
              strcmp(argv[2], "dragon-deep-wyrm") != 0 &&
              strcmp(argv[2], "animals") != 0 &&
              strcmp(argv[2], "horse") != 0 &&
-             strcmp(argv[2], "cow") != 0)) {
+             strcmp(argv[2], "cow") != 0 &&
+             strcmp(argv[2], "sheep") != 0)) {
             (void)fprintf(stderr,
                           "creature capture requires goblins, a dragon stage, "
-                          "horse, cow, or animals and a frame path.\n");
+                          "horse, cow, sheep, or animals and a frame path.\n");
             return 1;
         }
         capture_creature_family = argv[2];
@@ -5677,7 +5678,8 @@ int main(int argc, char **argv)
         } else {
             bool animal_view =
                 strcmp(capture_creature_family, "animals") == 0 ||
-                strcmp(capture_creature_family, "cow") == 0;
+                strcmp(capture_creature_family, "cow") == 0 ||
+                strcmp(capture_creature_family, "sheep") == 0;
             Vector2 creature_view = animal_view ?
                 (Vector2){59.5f, 40.0f} : (Vector2){24.5f, 49.5f};
             RepositionHero(&local, creature_view, false);
