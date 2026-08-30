@@ -11927,9 +11927,8 @@ static CcQuadrupedMorphology QuadrupedMorphologyForCreature(
     CcCreatureVariant variant)
 {
     if (variant == CC_CREATURE_HORSE) return CC_QUADRUPED_HORSE;
-    if (variant == CC_CREATURE_COW || variant == CC_CREATURE_SHEEP) {
-        return CC_QUADRUPED_COW;
-    }
+    if (variant == CC_CREATURE_COW) return CC_QUADRUPED_COW;
+    if (variant == CC_CREATURE_SHEEP) return CC_QUADRUPED_SHEEP;
     return CC_QUADRUPED_MORPHOLOGY_COUNT;
 }
 
@@ -12072,7 +12071,10 @@ static bool DrawCreatureGait3D(CcCreatureVariant variant,
         CreatureModelCache *creature =
             &creature_models[variant][CC_CREATURE_POSE_IDLE];
         if (creature->ready && creature->model.meshCount == 1 &&
-            PoseQuadrupedCreature(creature, variant, gait_phase, moving, rig)) {
+            PoseQuadrupedCreature(
+                creature, variant, gait_phase, moving,
+                controlled_pose != NULL && controlled_pose->valid ? rig :
+                                                                    NULL)) {
             Color colors[CC_NPC_ARCHETYPE_MATERIAL_COUNT] = {
                 palette.skin, palette.secondary, palette.hide,
                 palette.cloth, palette.leather, palette.horn,
