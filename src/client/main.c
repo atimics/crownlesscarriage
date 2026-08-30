@@ -5295,18 +5295,23 @@ int main(int argc, char **argv)
         if (argc < 4 ||
             (strcmp(argv[2], "goblins") != 0 &&
              strcmp(argv[2], "dragon") != 0 &&
+             strcmp(argv[2], "dragon-whelp") != 0 &&
+             strcmp(argv[2], "dragon-wanderer") != 0 &&
+             strcmp(argv[2], "dragon-deep-wyrm") != 0 &&
              strcmp(argv[2], "animals") != 0 &&
              strcmp(argv[2], "horse") != 0 &&
              strcmp(argv[2], "cow") != 0)) {
             (void)fprintf(stderr,
-                          "creature capture requires goblins, dragon, horse, "
-                          "cow, or animals and a frame path.\n");
+                          "creature capture requires goblins, a dragon stage, "
+                          "horse, cow, or animals and a frame path.\n");
             return 1;
         }
         capture_creature_family = argv[2];
     }
     bool capture_creature_horse = capture_creature_media &&
         strcmp(capture_creature_family, "horse") == 0;
+    bool capture_creature_dragon = capture_creature_media &&
+        strncmp(capture_creature_family, "dragon", 6) == 0;
     int32_t capture_face_view = -1;
     if (capture_face) {
         if (argc < 4) {
@@ -5475,11 +5480,19 @@ int main(int argc, char **argv)
     if (capture_creature_media &&
         strcmp(capture_creature_family, "goblins") == 0) {
         sim.player.location_id = sim.goblins.lair_settlement_id;
-    } else if (capture_creature_media &&
-               strcmp(capture_creature_family, "dragon") == 0) {
+    } else if (capture_creature_dragon) {
         sim.player.location_id = sim.dragon.lair_settlement_id;
         sim.dragon.omen_days_remaining = 2;
         sim.goblins.tribute_phase = CC_GOBLIN_TRIBUTE_TO_DRAGON;
+        if (strcmp(capture_creature_family, "dragon-whelp") == 0) {
+            sim.dragon.life_stage = CC_DRAGON_STAGE_WHELP;
+        } else if (strcmp(capture_creature_family,
+                          "dragon-wanderer") == 0) {
+            sim.dragon.life_stage = CC_DRAGON_STAGE_WANDERER;
+        } else if (strcmp(capture_creature_family,
+                          "dragon-deep-wyrm") == 0) {
+            sim.dragon.life_stage = CC_DRAGON_STAGE_DEEP_WYRM;
+        }
     } else if (capture_creature_media) {
         for (int32_t settlement = 0; settlement < sim.settlement_count;
              ++settlement) {
@@ -5650,12 +5663,10 @@ int main(int argc, char **argv)
     if (capture_creature_media) {
         if (capture_creature_horse) {
             BeginRoadTravelState(&local);
-        } else if (strcmp(capture_creature_family, "dragon") == 0 ||
+        } else if (capture_creature_dragon ||
                    strcmp(capture_creature_family, "goblins") == 0) {
-            local.site_kind =
-                strcmp(capture_creature_family, "dragon") == 0 ?
-                    CC_LOCAL_SITE_DRAGON_CAVE :
-                    CC_LOCAL_SITE_GOBLIN_CAVE;
+            local.site_kind = capture_creature_dragon ?
+                CC_LOCAL_SITE_DRAGON_CAVE : CC_LOCAL_SITE_GOBLIN_CAVE;
             RepositionHero(
                 &local,
                 (Vector2){CC_LOCAL_SITE_ENTRANCE_X - 7.0f,

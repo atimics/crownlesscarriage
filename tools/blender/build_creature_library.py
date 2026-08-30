@@ -36,7 +36,7 @@ BLEND_PATH = ROOT / "assets" / "blender" / "crownless_creature_library.blend"
 EXPORT_DIR = ROOT / "assets" / "exports" / "creatures"
 PREVIEW_PATH = ROOT / "assets" / "previews" / "creatures" / "creature_family_sheet.png"
 MANIFEST_PATH = ROOT / "assets" / "creature_manifest.json"
-LIBRARY_VERSION = "0.3.0"
+LIBRARY_VERSION = "0.4.0"
 
 BIPED_POSES = (
     "idle",
@@ -168,17 +168,17 @@ CREATURES = (
                  "quadruped", "dragon_authored",
                  ("wings", "neck", "tail", "jaw", "spines")),
     CreatureSpec("dragon", "dragon_whelp", 6,
-                 "small short-winged hatchling with three soft crown spikes",
+                 "round big-eyed hatchling with ear fins and tiny wing buds",
                  "quadruped", "dragon_authored",
-                 ("young_wings", "neck", "tail", "jaw", "spines")),
+                 ("ear_fins", "wing_buds", "snub_jaw", "crest")),
     CreatureSpec("dragon", "dragon_wanderer", 7,
-                 "lean travelling dragon with growing wings and crown horns",
+                 "stilt-legged runner with a long neck and swept glider wings",
                  "quadruped", "dragon_authored",
-                 ("wings", "neck", "tail", "jaw", "spines")),
+                 ("glider_wings", "swept_horns", "long_tail", "back_blades")),
     CreatureSpec("dragon", "dragon_deep_wyrm", 8,
-                 "vast heavy wyrm with an old horn crown and broad wings",
+                 "six-legged plated wyrm with a hammer head and broken sails",
                  "quadruped", "dragon_authored",
-                 ("great_wings", "neck", "tail", "jaw", "crown_spines")),
+                 ("six_legs", "broken_sails", "tail_club", "horn_crown")),
 )
 
 
@@ -644,178 +644,436 @@ def build_quadruped(spec: CreatureSpec,
                 "secondary", collection, spec, "tail")
 
 
+def add_dragon_leg(spec: CreatureSpec, collection: bpy.types.Collection,
+                   name: str, root: Vector, hoof: Vector, thickness: float,
+                   foot: tuple[float, float, float], claw_count: int = 3,
+                   bend: float = 0.0) -> None:
+    elbow = (root + hoof) * 0.5 + Vector((root.x * 0.20, bend, 0.10))
+    add_segment(f"DRAGON_UpperLeg_{name.upper()}", root, elbow,
+                thickness, thickness * 0.72, "skin", collection, spec,
+                f"upper_leg_{name}", sides=9)
+    add_segment(f"DRAGON_LowerLeg_{name.upper()}", elbow, hoof,
+                thickness * 0.72, thickness * 0.44, "secondary",
+                collection, spec, f"lower_leg_{name}", sides=8)
+    add_box(f"DRAGON_Foot_{name.upper()}",
+            hoof + Vector((0.0, -foot[1] * 0.16, 0.0)), foot,
+            "secondary", collection, spec, f"foot_{name}")
+    spacing = foot[0] * 0.24
+    for claw in range(claw_count):
+        offset = (float(claw) - float(claw_count - 1) * 0.5) * spacing
+        add_cone(f"DRAGON_Claw_{name.upper()}_{claw}",
+                 hoof + Vector((offset, -foot[1] * 0.68, 0.012)),
+                 max(0.022, thickness * 0.18), foot[1] * 0.42,
+                 "horn", collection, spec, f"claw_{name}_{claw}",
+                 rotation=(math.pi * 0.5, 0.0, 0.0), vertices=5)
+
+
+def add_dragon_neck(spec: CreatureSpec, collection: bpy.types.Collection,
+                    points: tuple[Vector, ...],
+                    radii: tuple[float, ...]) -> None:
+    for index in range(len(points) - 1):
+        add_segment(f"DRAGON_Neck_{index}", points[index], points[index + 1],
+                    radii[index], radii[index + 1], "skin", collection,
+                    spec, f"neck_{index}", sides=10)
+
+
+def add_dragon_tail(spec: CreatureSpec, collection: bpy.types.Collection,
+                    points: tuple[Vector, ...],
+                    radii: tuple[float, ...]) -> None:
+    for index in range(len(points) - 1):
+        add_segment(f"DRAGON_Tail_{index}", points[index], points[index + 1],
+                    radii[index], radii[index + 1], "skin", collection,
+                    spec, f"tail_{index}", sides=9)
+
+
+def build_dragon_whelp(spec: CreatureSpec,
+                       collection: bpy.types.Collection) -> None:
+    phase = pose_phase(spec.pose)
+    moving = spec.pose in ("stalk_a", "stalk_b")
+    resting = spec.pose == "rest"
+    threat = spec.pose == "threat"
+    cycle = math.sin(phase * math.tau)
+    body_z = 0.52 if resting else 0.78
+    add_ellipsoid("WHELP_RoundBody", (0.0, 0.08, body_z),
+                  (0.54, 0.70, 0.48), "skin", collection, spec, "body",
+                  subdivisions=2)
+    add_ellipsoid("WHELP_Belly", (0.0, -0.30, body_z - 0.10),
+                  (0.48, 0.42, 0.42), "hide", collection, spec, "chest",
+                  subdivisions=2)
+    for name, sign, longitudinal, offset in (
+        ("fl", -1.0, -0.36, 0.0), ("fr", 1.0, -0.36, 0.5),
+        ("hl", -1.0, 0.42, 0.5), ("hr", 1.0, 0.42, 0.0),
+    ):
+        leg_cycle = math.sin((phase + offset) * math.tau)
+        root = Vector((0.38 * sign, longitudinal, body_z - 0.12))
+        travel = leg_cycle * 0.11 if moving else 0.0
+        lift = max(0.0, leg_cycle) * 0.08 if moving else 0.0
+        hoof = Vector((0.50 * sign, longitudinal - travel,
+                       0.12 + lift if not resting else 0.11))
+        add_dragon_leg(spec, collection, name, root, hoof, 0.105,
+                       (0.26, 0.30, 0.11), claw_count=2,
+                       bend=-0.06 if longitudinal < 0.0 else 0.06)
+
+    neck = (
+        Vector((0.0, -0.42, body_z + 0.20)),
+        Vector((0.0, -0.78, body_z + 0.34)),
+    )
+    add_dragon_neck(spec, collection, neck, (0.24, 0.18))
+    head = Vector((0.0, -1.03, body_z + (0.48 if threat else 0.32)))
+    add_ellipsoid("WHELP_OversizedHead", head, (0.47, 0.49, 0.38),
+                  "skin", collection, spec, "head", subdivisions=2)
+    add_box("WHELP_SnubJaw",
+            head + Vector((0.0, -0.36, -0.15 if not threat else -0.22)),
+            (0.54, 0.40, 0.16), "secondary", collection, spec, "jaw",
+            rotation=(0.12 if threat else 0.0, 0.0, 0.0), bevel=0.035)
+    for side, sign in (("L", -1.0), ("R", 1.0)):
+        add_ellipsoid(f"WHELP_Eye_{side}",
+                      head + Vector((0.31 * sign, -0.31, 0.11)),
+                      (0.090, 0.035, 0.105), "eye", collection, spec,
+                      f"eye_{side.lower()}")
+        ear_points = (
+            (0.30 * sign, head.y + 0.01, head.z + 0.18),
+            (0.64 * sign, head.y + 0.14, head.z + 0.30),
+            (0.34 * sign, head.y + 0.18, head.z - 0.02),
+        )
+        add_prism(f"WHELP_EarFin_{side}", ear_points, 0.035, "accent",
+                  collection, spec, f"ear_fin_{side.lower()}")
+
+    add_dragon_tail(
+        spec, collection,
+        (Vector((0.0, 0.58, body_z)), Vector((0.0, 1.10, body_z - 0.12)),
+         Vector((0.24 * cycle, 1.62, body_z - 0.28)),
+         Vector((0.34 * cycle, 1.98, body_z - 0.22))),
+        (0.22, 0.15, 0.075, 0.018))
+    for side, sign in (("L", -1.0), ("R", 1.0)):
+        shoulder = (0.36 * sign, -0.12, body_z + 0.31)
+        wing = (shoulder,
+                (0.78 * sign, 0.05, body_z + 0.70),
+                (0.95 * sign, 0.72, body_z + 0.28),
+                (0.38 * sign, 0.46, body_z + 0.18))
+        add_prism(f"WHELP_WingBud_{side}", wing, 0.045, "accent",
+                  collection, spec, f"wing_bud_{side.lower()}")
+    for crest, y in enumerate((-0.74, -0.45, -0.10)):
+        add_cone(f"WHELP_Crest_{crest}", (0.0, y, body_z + 0.58),
+                 0.065, 0.15, "horn", collection, spec, f"crest_{crest}",
+                 vertices=5)
+
+
+def build_dragon_wanderer(spec: CreatureSpec,
+                           collection: bpy.types.Collection) -> None:
+    phase = pose_phase(spec.pose)
+    moving = spec.pose in ("stalk_a", "stalk_b")
+    resting = spec.pose == "rest"
+    threat = spec.pose == "threat"
+    cycle = math.sin(phase * math.tau)
+    body_z = 0.90 if resting else 1.55
+    add_ellipsoid("WANDERER_LeanBody", (0.0, 0.15, body_z),
+                  (0.52, 1.44, 0.40), "skin", collection, spec, "body",
+                  subdivisions=2)
+    add_ellipsoid("WANDERER_KeelChest", (0.0, -0.78, body_z + 0.06),
+                  (0.48, 0.64, 0.58), "hide", collection, spec, "chest",
+                  subdivisions=2)
+    for name, sign, longitudinal, offset in (
+        ("fl", -1.0, -0.76, 0.0), ("fr", 1.0, -0.76, 0.5),
+        ("hl", -1.0, 0.88, 0.5), ("hr", 1.0, 0.88, 0.0),
+    ):
+        leg_cycle = math.sin((phase + offset) * math.tau)
+        root = Vector((0.40 * sign, longitudinal, body_z - 0.08))
+        travel = leg_cycle * 0.38 if moving else 0.0
+        lift = max(0.0, leg_cycle) * 0.24 if moving else 0.0
+        hoof = Vector((0.58 * sign, longitudinal - travel,
+                       0.13 + lift if not resting else 0.15))
+        add_dragon_leg(spec, collection, name, root, hoof, 0.135,
+                       (0.27, 0.50, 0.12), claw_count=3,
+                       bend=-0.24 if longitudinal < 0.0 else 0.24)
+
+    neck = (
+        Vector((0.0, -0.88, body_z + 0.26)),
+        Vector((0.0, -1.30, body_z + 0.64)),
+        Vector((0.0, -1.78, body_z + (1.05 if threat else 0.88))),
+        Vector((0.0, -2.28, body_z + (1.26 if threat else 0.96))),
+        Vector((0.0, -2.74, body_z + (1.17 if threat else 0.85))),
+    )
+    add_dragon_neck(spec, collection, neck, (0.27, 0.22, 0.18, 0.14, 0.11))
+    head = neck[-1] + Vector((0.0, -0.20, 0.0))
+    add_ellipsoid("WANDERER_NarrowHead", head, (0.29, 0.58, 0.24),
+                  "skin", collection, spec, "head", subdivisions=2)
+    add_box("WANDERER_BeakJaw",
+            head + Vector((0.0, -0.46, -0.12 if not threat else -0.20)),
+            (0.40, 0.62, 0.13), "secondary", collection, spec, "jaw",
+            rotation=(0.12 if threat else 0.0, 0.0, 0.0), bevel=0.018)
+    for side, sign in (("L", -1.0), ("R", 1.0)):
+        add_ellipsoid(f"WANDERER_Eye_{side}",
+                      head + Vector((0.20 * sign, -0.40, 0.08)),
+                      (0.045, 0.024, 0.055), "eye", collection, spec,
+                      f"eye_{side.lower()}")
+        add_cone(f"WANDERER_SweptHorn_{side}",
+                 head + Vector((0.18 * sign, 0.02, 0.22)),
+                 0.075, 0.72, "horn", collection, spec,
+                 f"swept_horn_{side.lower()}",
+                 rotation=(-0.65, math.pi * 0.18 * sign, 0.0), vertices=6)
+
+    add_dragon_tail(
+        spec, collection,
+        (Vector((0.0, 1.30, body_z)), Vector((0.0, 2.12, body_z - 0.08)),
+         Vector((0.30 * cycle, 2.98, body_z - 0.24)),
+         Vector((0.55 * cycle, 3.88, body_z - 0.42)),
+         Vector((0.70 * cycle, 4.72, body_z - 0.48))),
+        (0.25, 0.19, 0.12, 0.065, 0.018))
+    wing_height = body_z + (2.65 if threat else 1.45)
+    wing_reach = 3.45 if threat else 2.75
+    for side, sign in (("L", -1.0), ("R", 1.0)):
+        shoulder = (0.37 * sign, -0.56, body_z + 0.38)
+        wing = (shoulder,
+                (1.62 * sign, -0.18, wing_height),
+                (wing_reach * sign, 1.12, body_z + 0.92),
+                (1.72 * sign, 1.88, body_z + 0.18),
+                (0.52 * sign, 0.72, body_z + 0.20))
+        add_prism(f"WANDERER_SweptWing_{side}", wing, 0.052,
+                  "secondary", collection, spec,
+                  f"swept_wing_{side.lower()}")
+        add_segment(f"WANDERER_WingArm_{side}", shoulder, wing[1],
+                    0.105, 0.052, "skin", collection, spec,
+                    f"wing_arm_{side.lower()}", sides=7)
+        add_segment(f"WANDERER_WingFinger_{side}", wing[1], wing[2],
+                    0.055, 0.018, "skin", collection, spec,
+                    f"wing_finger_{side.lower()}", sides=6)
+    for spine, y in enumerate((-1.15, -0.30, 0.60)):
+        add_cone(f"WANDERER_BackBlade_{spine}",
+                 (0.0, y, body_z + 0.48), 0.075, 0.34, "horn",
+                 collection, spec, f"back_blade_{spine}", vertices=5)
+
+
+def build_dragon_crowned(spec: CreatureSpec,
+                          collection: bpy.types.Collection) -> None:
+    phase = pose_phase(spec.pose)
+    moving = spec.pose in ("stalk_a", "stalk_b")
+    resting = spec.pose == "rest"
+    threat = spec.pose == "threat"
+    cycle = math.sin(phase * math.tau)
+    body_z = 0.88 if resting else 1.30
+    add_ellipsoid("CROWNED_Body", (0.0, 0.15, body_z),
+                  (0.82, 1.42, 0.62), "skin", collection, spec, "body",
+                  subdivisions=2)
+    add_ellipsoid("CROWNED_Chest", (0.0, -0.76, body_z + 0.18),
+                  (0.76, 0.70, 0.72), "hide", collection, spec, "chest",
+                  subdivisions=2)
+    for name, sign, longitudinal, offset in (
+        ("fl", -1.0, -0.76, 0.0), ("fr", 1.0, -0.76, 0.5),
+        ("hl", -1.0, 0.82, 0.5), ("hr", 1.0, 0.82, 0.0),
+    ):
+        leg_cycle = math.sin((phase + offset) * math.tau)
+        root = Vector((0.58 * sign, longitudinal, body_z - 0.06))
+        travel = leg_cycle * 0.28 if moving else 0.0
+        lift = max(0.0, leg_cycle) * 0.18 if moving else 0.0
+        hoof = Vector((0.70 * sign, longitudinal - travel,
+                       0.15 + lift if not resting else 0.17))
+        add_dragon_leg(spec, collection, name, root, hoof, 0.19,
+                       (0.34, 0.50, 0.15), claw_count=3,
+                       bend=-0.16 if longitudinal < 0.0 else 0.18)
+
+    neck = (
+        Vector((0.0, -0.84, body_z + 0.38)),
+        Vector((0.0, -1.28, body_z + (0.86 if threat else 0.62))),
+        Vector((0.0, -1.74, body_z + (1.18 if threat else 0.78))),
+        Vector((0.0, -2.22, body_z + (1.10 if threat else 0.72))),
+    )
+    add_dragon_neck(spec, collection, neck, (0.38, 0.31, 0.24, 0.18))
+    head = neck[-1] + Vector((0.0, -0.24, 0.0))
+    add_ellipsoid("CROWNED_Head", head, (0.42, 0.58, 0.33), "skin",
+                  collection, spec, "head", subdivisions=2)
+    add_box("CROWNED_Jaw",
+            head + Vector((0.0, -0.42, -0.18 if not threat else -0.29)),
+            (0.58, 0.58, 0.18), "secondary", collection, spec, "jaw",
+            rotation=(0.12 if threat else 0.0, 0.0, 0.0), bevel=0.028)
+    for side, sign in (("L", -1.0), ("R", 1.0)):
+        add_ellipsoid(f"CROWNED_Eye_{side}",
+                      head + Vector((0.29 * sign, -0.35, 0.10)),
+                      (0.057, 0.028, 0.068), "eye", collection, spec,
+                      f"eye_{side.lower()}")
+        add_cone(f"CROWNED_Horn_{side}",
+                 head + Vector((0.25 * sign, 0.06, 0.32)),
+                 0.115, 0.74, "horn", collection, spec,
+                 f"horn_{side.lower()}",
+                 rotation=(0.22, math.pi * 0.31 * sign, 0.0), vertices=7)
+        add_cone(f"CROWNED_BrowHorn_{side}",
+                 head + Vector((0.33 * sign, -0.18, 0.20)),
+                 0.070, 0.38, "horn", collection, spec,
+                 f"brow_horn_{side.lower()}",
+                 rotation=(0.46, math.pi * 0.40 * sign, 0.0), vertices=6)
+
+    add_dragon_tail(
+        spec, collection,
+        (Vector((0.0, 1.20, body_z + 0.04)),
+         Vector((0.0, 1.96, body_z - 0.10)),
+         Vector((0.30 * cycle, 2.78, body_z - 0.34)),
+         Vector((0.50 * cycle, 3.58, body_z - 0.52)),
+         Vector((0.58 * cycle, 4.30, body_z - 0.46))),
+        (0.38, 0.29, 0.19, 0.105, 0.025))
+    wing_height = body_z + (2.70 if threat else 1.02)
+    wing_reach = 3.05 if threat else 1.62
+    for side, sign in (("L", -1.0), ("R", 1.0)):
+        shoulder = (0.54 * sign, -0.48, body_z + 0.58)
+        wing = (shoulder,
+                (1.58 * sign, -0.04, wing_height),
+                (wing_reach * sign, 1.50, body_z + (0.82 if threat else 0.34)),
+                (1.28 * sign, 1.34, body_z + 0.18),
+                (0.66 * sign, 0.58, body_z + 0.30))
+        add_prism(f"CROWNED_Wing_{side}", wing, 0.074, "secondary",
+                  collection, spec, f"wing_{side.lower()}")
+        add_segment(f"CROWNED_WingArm_{side}", shoulder, wing[1],
+                    0.14, 0.078, "skin", collection, spec,
+                    f"wing_arm_{side.lower()}", sides=8)
+    for spine, position in enumerate((
+        (0.0, -1.78, body_z + 1.02), (0.0, -1.20, body_z + 0.90),
+        (0.0, -0.50, body_z + 0.82), (0.0, 0.20, body_z + 0.72),
+        (0.0, 0.88, body_z + 0.55), (0.0, 1.56, body_z + 0.18),
+    )):
+        add_cone(f"CROWNED_Spine_{spine}", position, 0.125,
+                 max(0.22, 0.46 - spine * 0.038), "horn", collection,
+                 spec, f"spine_{spine}", vertices=6)
+
+
+def build_dragon_deep_wyrm(spec: CreatureSpec,
+                            collection: bpy.types.Collection) -> None:
+    phase = pose_phase(spec.pose)
+    moving = spec.pose in ("stalk_a", "stalk_b")
+    resting = spec.pose == "rest"
+    threat = spec.pose == "threat"
+    cycle = math.sin(phase * math.tau)
+    body_z = 1.10 if resting else 1.52
+    add_ellipsoid("WYRM_ArmoredRump", (0.0, 1.20, body_z),
+                  (1.30, 1.72, 0.92), "skin", collection, spec, "rump",
+                  subdivisions=2)
+    add_ellipsoid("WYRM_MassiveBody", (0.0, -0.20, body_z + 0.08),
+                  (1.24, 1.86, 0.98), "skin", collection, spec, "body",
+                  subdivisions=2)
+    add_ellipsoid("WYRM_PlatedChest", (0.0, -1.48, body_z + 0.22),
+                  (1.10, 1.00, 1.08), "hide", collection, spec, "chest",
+                  subdivisions=2)
+    for name, sign, longitudinal, offset in (
+        ("fl", -1.0, -1.34, 0.0), ("fr", 1.0, -1.34, 0.5),
+        ("ml", -1.0, 0.10, 0.5), ("mr", 1.0, 0.10, 0.0),
+        ("hl", -1.0, 1.38, 0.0), ("hr", 1.0, 1.38, 0.5),
+    ):
+        leg_cycle = math.sin((phase + offset) * math.tau)
+        root = Vector((0.98 * sign, longitudinal, body_z - 0.16))
+        travel = leg_cycle * 0.22 if moving else 0.0
+        lift = max(0.0, leg_cycle) * 0.13 if moving else 0.0
+        hoof = Vector((1.34 * sign, longitudinal - travel,
+                       0.19 + lift if not resting else 0.20))
+        add_dragon_leg(spec, collection, name, root, hoof, 0.31,
+                       (0.52, 0.72, 0.21), claw_count=4,
+                       bend=-0.20 if longitudinal < 0.0 else 0.20)
+
+    neck = (
+        Vector((0.0, -1.60, body_z + 0.48)),
+        Vector((0.0, -2.14, body_z + 0.74)),
+        Vector((0.0, -2.72, body_z + (1.34 if threat else 0.92))),
+        Vector((0.0, -3.30, body_z + (1.58 if threat else 0.98))),
+        Vector((0.0, -3.84, body_z + (1.46 if threat else 0.80))),
+    )
+    add_dragon_neck(spec, collection, neck, (0.62, 0.53, 0.43, 0.33, 0.25))
+    head = neck[-1] + Vector((0.0, -0.32, 0.0))
+    add_ellipsoid("WYRM_HammerHead", head, (0.78, 0.84, 0.58), "skin",
+                  collection, spec, "head", subdivisions=2)
+    add_box("WYRM_CrushingJaw",
+            head + Vector((0.0, -0.60, -0.32 if not threat else -0.52)),
+            (1.18, 0.88, 0.32), "secondary", collection, spec, "jaw",
+            rotation=(0.15 if threat else 0.0, 0.0, 0.0), bevel=0.055)
+    for side, sign in (("L", -1.0), ("R", 1.0)):
+        add_ellipsoid(f"WYRM_Eye_{side}",
+                      head + Vector((0.52 * sign, -0.55, 0.16)),
+                      (0.075, 0.035, 0.090), "eye", collection, spec,
+                      f"eye_{side.lower()}")
+        for crown, (x, y, z, length, angle) in enumerate((
+            (0.35, 0.08, 0.52, 1.32, 0.22),
+            (0.53, -0.02, 0.33, 0.96, 0.42),
+            (0.62, -0.30, 0.15, 0.68, 0.58),
+        )):
+            add_cone(f"WYRM_Crown_{side}_{crown}",
+                     head + Vector((x * sign, y, z)),
+                     0.15 - crown * 0.025, length, "horn", collection,
+                     spec, f"crown_{side.lower()}_{crown}",
+                     rotation=(angle, math.pi * (0.20 + crown * 0.09) * sign,
+                               0.0), vertices=8)
+        add_cone(f"WYRM_ChinSpike_{side}",
+                 head + Vector((0.36 * sign, -0.43, -0.42)),
+                 0.09, 0.48, "horn", collection, spec,
+                 f"chin_spike_{side.lower()}",
+                 rotation=(math.pi, math.pi * 0.10 * sign, 0.0), vertices=6)
+
+    tail_points = (
+        Vector((0.0, 2.30, body_z + 0.08)),
+        Vector((0.0, 3.26, body_z - 0.04)),
+        Vector((0.32 * cycle, 4.20, body_z - 0.24)),
+        Vector((0.62 * cycle, 5.18, body_z - 0.44)),
+        Vector((0.82 * cycle, 6.10, body_z - 0.52)),
+        Vector((0.92 * cycle, 6.88, body_z - 0.42)),
+    )
+    add_dragon_tail(spec, collection, tail_points,
+                    (0.66, 0.52, 0.38, 0.25, 0.14, 0.035))
+    add_ellipsoid("WYRM_TailClub", tail_points[-1], (0.30, 0.52, 0.28),
+                  "horn", collection, spec, "tail_club", subdivisions=1)
+
+    wing_height = body_z + (4.10 if threat else 1.74)
+    wing_reach = 5.25 if threat else 3.28
+    for side, sign in (("L", -1.0), ("R", 1.0)):
+        shoulder = (0.82 * sign, -1.08, body_z + 0.88)
+        elbow = (2.30 * sign, -0.28, wing_height)
+        tip = (wing_reach * sign, 1.08, body_z + 1.12)
+        rear = (2.62 * sign, 2.28, body_z + 0.24)
+        notch = (1.46 * sign, 1.34, body_z + 0.62)
+        add_prism(f"WYRM_WingFront_{side}",
+                  (shoulder, elbow, tip, notch), 0.10, "secondary",
+                  collection, spec, f"wing_front_{side.lower()}")
+        add_prism(f"WYRM_WingRear_{side}",
+                  (elbow, tip, rear, notch), 0.10, "accent",
+                  collection, spec, f"wing_rear_{side.lower()}")
+        add_segment(f"WYRM_WingArm_{side}", shoulder, elbow,
+                    0.24, 0.12, "skin", collection, spec,
+                    f"wing_arm_{side.lower()}", sides=9)
+        add_segment(f"WYRM_WingFinger_{side}", elbow, tip,
+                    0.13, 0.035, "skin", collection, spec,
+                    f"wing_finger_{side.lower()}", sides=8)
+    for plate, position in enumerate((
+        (0.0, -2.92, body_z + 1.74), (0.0, -2.20, body_z + 1.64),
+        (0.0, -1.42, body_z + 1.54), (0.0, -0.62, body_z + 1.40),
+        (0.0, 0.22, body_z + 1.28), (0.0, 1.02, body_z + 1.18),
+        (0.0, 1.82, body_z + 0.92), (0.0, 2.72, body_z + 0.50),
+    )):
+        add_cone(f"WYRM_ArmorPlate_{plate}", position,
+                 max(0.13, 0.25 - plate * 0.012),
+                 max(0.34, 0.76 - plate * 0.050), "horn", collection,
+                 spec, f"armor_plate_{plate}", vertices=7)
+
+
 def build_dragon(spec: CreatureSpec,
                  collection: bpy.types.Collection) -> None:
-    stage_scale = {
-        "dragon_whelp": 0.52,
-        "dragon_wanderer": 0.76,
-        "dragon": 1.00,
-        "dragon_deep_wyrm": 1.35,
-    }[spec.variant]
-    body_bulk = {
-        "dragon_whelp": 0.84,
-        "dragon_wanderer": 0.92,
-        "dragon": 1.00,
-        "dragon_deep_wyrm": 1.12,
-    }[spec.variant]
-    horn_length = {
-        "dragon_whelp": 0.34,
-        "dragon_wanderer": 0.48,
-        "dragon": 0.62,
-        "dragon_deep_wyrm": 0.84,
-    }[spec.variant]
-    wing_growth = {
-        "dragon_whelp": 0.60,
-        "dragon_wanderer": 0.82,
-        "dragon": 1.00,
-        "dragon_deep_wyrm": 1.16,
-    }[spec.variant]
-    spine_count = {
-        "dragon_whelp": 3,
-        "dragon_wanderer": 5,
-        "dragon": 7,
-        "dragon_deep_wyrm": 7,
-    }[spec.variant]
-    phase = pose_phase(spec.pose)
-    threat = spec.pose == "threat"
-    resting = spec.pose == "rest"
-    cycle = math.sin(phase * math.tau)
-    body_z = 0.86 if resting else 1.24 - 0.035 * abs(cycle)
-    add_ellipsoid("DRAGON_Body", (0.0, 0.15, body_z),
-                  (0.78 * body_bulk, 1.34, 0.58 * body_bulk), "skin",
-                  collection, spec, "body",
-                  subdivisions=2)
-    add_ellipsoid("DRAGON_Chest", (0.0, -0.70, body_z + 0.16),
-                  (0.72 * body_bulk, 0.67, 0.66 * body_bulk), "hide",
-                  collection, spec, "chest",
-                  subdivisions=2)
-
-    leg_roots = {
-        "fl": Vector((-0.54, -0.70, body_z - 0.05)),
-        "fr": Vector((0.54, -0.70, body_z - 0.05)),
-        "hl": Vector((-0.58, 0.72, body_z - 0.12)),
-        "hr": Vector((0.58, 0.72, body_z - 0.12)),
+    builders = {
+        "dragon_whelp": build_dragon_whelp,
+        "dragon_wanderer": build_dragon_wanderer,
+        "dragon": build_dragon_crowned,
+        "dragon_deep_wyrm": build_dragon_deep_wyrm,
     }
-    offsets = {"fl": 0.0, "fr": 0.5, "hl": 0.5, "hr": 0.0}
-    for name, root in leg_roots.items():
-        leg_cycle = math.sin((phase + offsets[name]) * math.tau)
-        moving = spec.pose in ("stalk_a", "stalk_b")
-        travel = leg_cycle * 0.26 if moving else 0.0
-        lift = max(0.0, leg_cycle) * 0.16 if moving else 0.0
-        if resting:
-            hoof = Vector((root.x * 1.10, root.y + 0.18, 0.17))
-        else:
-            hoof = Vector((root.x * 1.18, root.y - travel, 0.14 + lift))
-        bend = -0.16 if name.startswith("f") else 0.18
-        elbow = (root + hoof) * 0.5 + Vector((root.x * 0.22, bend, 0.10))
-        add_segment(f"DRAGON_UpperLeg_{name.upper()}", root, elbow,
-                    0.17, 0.13, "skin", collection, spec,
-                    f"upper_leg_{name}", sides=9)
-        add_segment(f"DRAGON_LowerLeg_{name.upper()}", elbow, hoof,
-                    0.13, 0.085, "secondary", collection, spec,
-                    f"lower_leg_{name}", sides=8)
-        add_box(f"DRAGON_Foot_{name.upper()}",
-                hoof + Vector((0.0, -0.08, 0.0)), (0.32, 0.46, 0.14),
-                "secondary", collection, spec, f"foot_{name}")
-        for claw in (-0.09, 0.0, 0.09):
-            add_cone(f"DRAGON_Claw_{name.upper()}",
-                     hoof + Vector((claw, -0.31, 0.015)),
-                     0.035, 0.18, "horn", collection, spec, f"claw_{name}",
-                     rotation=(math.pi * 0.5, 0.0, 0.0), vertices=5)
-
-    neck_points = [
-        Vector((0.0, -0.78, body_z + 0.34)),
-        Vector((0.0, -1.20, body_z + (0.78 if threat else 0.56))),
-        Vector((0.0, -1.66, body_z + (1.05 if threat else 0.70))),
-        Vector((0.0, -2.10, body_z + (1.00 if threat else 0.67))),
-    ]
-    radii = (0.35, 0.29, 0.23, 0.18)
-    for index in range(len(neck_points) - 1):
-        add_segment(f"DRAGON_Neck_{index}", neck_points[index],
-                    neck_points[index + 1], radii[index], radii[index + 1],
-                    "skin", collection, spec, f"neck_{index}", sides=10)
-    head = neck_points[-1] + Vector((0.0, -0.20, 0.0))
-    add_ellipsoid("DRAGON_Head", head, (0.39, 0.54, 0.30), "skin",
-                  collection, spec, "head", subdivisions=2)
-    jaw_drop = 0.12 if threat else 0.02
-    add_box("DRAGON_Jaw", head + Vector((0.0, -0.38, -0.17 - jaw_drop)),
-            (0.52, 0.52, 0.16), "secondary", collection, spec, "jaw",
-            rotation=(0.10 if threat else 0.0, 0.0, 0.0), bevel=0.025)
-    for side, sign in (("L", -1.0), ("R", 1.0)):
-        add_ellipsoid(f"DRAGON_Eye_{side}",
-                      head + Vector((0.28 * sign, -0.32, 0.10)),
-                      (0.055, 0.028, 0.065), "eye", collection, spec,
-                      f"eye_{side.lower()}")
-        add_cone(f"DRAGON_Horn_{side}",
-                 head + Vector((0.25 * sign, 0.05, 0.31)),
-                 0.11 * body_bulk, horn_length, "horn", collection, spec,
-                 f"horn_{side.lower()}",
-                 rotation=(0.25, math.pi * 0.30 * sign, 0.0), vertices=7)
-
-    tail_points = [
-        Vector((0.0, 1.08, body_z + 0.05)),
-        Vector((0.0, 1.78, body_z - 0.10)),
-        Vector((0.30 * cycle, 2.48, body_z - 0.34)),
-        Vector((0.48 * cycle, 3.18, body_z - 0.52)),
-        Vector((0.56 * cycle, 3.76, body_z - 0.50)),
-    ]
-    tail_radii = (0.36, 0.27, 0.18, 0.105, 0.025)
-    for index in range(len(tail_points) - 1):
-        add_segment(f"DRAGON_Tail_{index}", tail_points[index],
-                    tail_points[index + 1], tail_radii[index],
-                    tail_radii[index + 1], "skin", collection, spec,
-                    f"tail_{index}", sides=9)
-
-    wing_height = body_z + (2.35 if threat else 0.76)
-    wing_reach = (2.70 if threat else 1.22) * wing_growth
-    wing_back = 1.42 if threat else 1.92
-    for side, sign in (("L", -1.0), ("R", 1.0)):
-        shoulder = (0.50 * sign, -0.47, body_z + 0.53)
-        points = (
-            shoulder,
-            (1.48 * sign, -0.06, wing_height),
-            (wing_reach * sign, wing_back, body_z + (0.72 if threat else 0.28)),
-            (1.16 * sign, 1.20, body_z + 0.16),
-            (0.63 * sign, 0.55, body_z + 0.30),
-        )
-        add_prism(f"DRAGON_Wing_{side}", points, 0.070, "secondary",
-                  collection, spec, f"wing_{side.lower()}")
-        add_segment(f"DRAGON_WingArm_{side}", shoulder, points[1],
-                    0.13, 0.075, "skin", collection, spec,
-                    f"wing_arm_{side.lower()}", sides=8)
-        add_segment(f"DRAGON_WingFinger_{side}", points[1], points[2],
-                    0.075, 0.028, "skin", collection, spec,
-                    f"wing_finger_{side.lower()}", sides=7)
-
-    spine_positions = (
-        (0.0, -1.70, body_z + 0.96),
-        (0.0, -1.18, body_z + 0.84),
-        (0.0, -0.48, body_z + 0.78),
-        (0.0, 0.18, body_z + 0.68),
-        (0.0, 0.82, body_z + 0.51),
-        (0.0, 1.50, body_z + 0.17),
-        (0.0, 2.15, body_z - 0.09),
-    )
-    for index, position in enumerate(spine_positions[:spine_count]):
-        height = max(0.20, 0.42 - index * 0.030)
-        add_cone(f"DRAGON_Spine_{index}", position, 0.12, height, "horn",
-                 collection, spec, f"spine_{index}", vertices=6)
-
-    if spec.variant == "dragon_deep_wyrm":
-        for side, sign in (("L", -1.0), ("R", 1.0)):
-            add_cone(
-                f"DRAGON_OldCrown_{side}",
-                head + Vector((0.34 * sign, 0.12, 0.21)),
-                0.095, 0.58, "horn", collection, spec,
-                f"old_crown_{side.lower()}",
-                rotation=(0.45, math.pi * 0.42 * sign, 0.0), vertices=7)
-
+    builders[spec.variant](spec, collection)
+    stage_size = {
+        "dragon_whelp": 1.00,
+        "dragon_wanderer": 1.00,
+        "dragon": 1.35,
+        "dragon_deep_wyrm": 1.25,
+    }[spec.variant]
+    authored_size = {
+        "dragon_whelp": 0.36,
+        "dragon_wanderer": 0.78,
+        "dragon": 1.35,
+        "dragon_deep_wyrm": 2.31,
+    }[spec.variant]
     for obj in collection.objects:
-        if obj.type != "MESH":
-            continue
-        obj.location *= stage_scale
-        obj.scale *= stage_scale
-        obj["cc_dragon_stage_scale"] = stage_scale
+        if obj.type == "MESH":
+            obj.location *= stage_size
+            obj.scale *= stage_size
+            obj["cc_dragon_authored_size"] = authored_size
 
 
 def build_creature(spec: CreatureSpec,
@@ -1093,7 +1351,7 @@ def add_stage(collection: bpy.types.Collection) -> None:
     bpy.ops.mesh.primitive_cube_add(location=(0.0, 0.45, -0.10))
     stage = bpy.context.object
     stage.name = "STAGE_CreatureFamilySheet"
-    stage.dimensions = (17.2, 7.2, 0.16)
+    stage.dimensions = (22.0, 8.0, 0.16)
     bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
     stage.data.materials.append(material)
     move_to(stage, collection)
@@ -1104,15 +1362,15 @@ def add_preview_scene(
 ) -> None:
     preview = new_collection("90_PREVIEW")
     placements = {
-        "goblin_scavenger": (-6.65, -0.55, 1.0),
-        "goblin_raider": (-5.55, -0.35, 1.0),
-        "goblin_tribute_bearer": (-4.35, -0.15, 1.0),
-        "horse": (-2.35, 0.20, 1.0),
-        "cow": (-0.10, 0.40, 1.0),
-        "dragon_whelp": (2.05, 0.75, 1.12),
-        "dragon_wanderer": (3.45, 0.95, 0.91),
-        "dragon": (5.05, 1.25, 0.72),
-        "dragon_deep_wyrm": (6.85, 1.45, 0.56),
+        "goblin_scavenger": (-8.40, -0.55, 1.0),
+        "goblin_raider": (-7.25, -0.35, 1.0),
+        "goblin_tribute_bearer": (-6.00, -0.15, 1.0),
+        "horse": (-3.90, 0.20, 1.0),
+        "cow": (-1.55, 0.40, 1.0),
+        "dragon_whelp": (0.35, 0.70, 0.58),
+        "dragon_wanderer": (2.60, 0.95, 0.58),
+        "dragon": (5.10, 1.20, 0.58),
+        "dragon_deep_wyrm": (8.35, 1.50, 0.58),
     }
     for spec, sources in preview_sources:
         x, y, scale = placements[spec.variant]
@@ -1138,11 +1396,11 @@ def add_preview_scene(
             )
     add_stage(preview)
 
-    bpy.ops.object.camera_add(location=(10.8, -18.0, 8.6))
+    bpy.ops.object.camera_add(location=(0.0, -22.0, 8.0))
     camera = bpy.context.object
     camera.name = "CAM_CreatureFamilySheet"
     camera.data.type = "ORTHO"
-    camera.data.ortho_scale = 15.5
+    camera.data.ortho_scale = 23.0
     look_at(camera, (0.0, 0.55, 1.15))
     bpy.context.scene.camera = camera
     move_to(camera, preview)
@@ -1222,7 +1480,7 @@ def build() -> None:
         "library_version": LIBRARY_VERSION,
         "art_direction": "silhouette_first_pseudo_pixel_creatures",
         "generation": "offline_curated_procedural_geometry",
-        "runtime_strategy": "held poses for goblins and dragon; runtime skins for horse and cow",
+        "runtime_strategy": "held poses for goblins and dragons; runtime skins for horse and cow",
         "coordinate_system": "glTF +Y up, +Z forward",
         "material_contract": "single indexed material; COLOR_0 stores palette, value, and fold",
         "material_order": list(MATERIAL_ORDER),

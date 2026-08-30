@@ -76,9 +76,9 @@ HEIGHT_LIMITS = {
     "horse": (1.40, 2.20),
     "cow": (1.15, 1.90),
     "dragon_whelp": (0.65, 2.80),
-    "dragon_wanderer": (1.00, 4.10),
-    "dragon": (1.50, 5.20),
-    "dragon_deep_wyrm": (2.00, 7.40),
+    "dragon_wanderer": (1.00, 4.70),
+    "dragon": (2.20, 6.20),
+    "dragon_deep_wyrm": (3.20, 8.60),
 }
 TRIANGLE_LIMITS = {
     "goblin": 2800,
@@ -131,6 +131,8 @@ def validate() -> int:
         failures.append(f"stale export is not in the manifest: {path.name}")
 
     total_triangles = 0
+    dragon_idle_heights: dict[str, float] = {}
+    dragon_idle_triangles: dict[str, int] = {}
     for entry in entries:
         variant = entry.get("variant", "unknown")
         family = entry.get("family", "unknown")
@@ -205,6 +207,9 @@ def validate() -> int:
             failures.append(f"{variant}: creature contains baked animation")
         if stats.bounds_min and stats.bounds_max:
             height = stats.bounds_max[1] - stats.bounds_min[1]
+            if variant.startswith("dragon") and pose == "idle":
+                dragon_idle_heights[variant] = height
+                dragon_idle_triangles[variant] = stats.triangles
             minimum, maximum = HEIGHT_LIMITS.get(
                 variant, HEIGHT_LIMITS.get(family, (0.0, 0.0)))
             if not minimum <= height <= maximum:
@@ -212,6 +217,21 @@ def validate() -> int:
                     f"{variant}: implausible height {height:.3f}m")
         print(f"{variant + '/' + pose:<36} {stats.triangles:>5} tris  "
               f"{stats.vertices:>5} verts  {stats.primitives} material")
+
+    growth_order = (
+        "dragon_whelp", "dragon_wanderer", "dragon", "dragon_deep_wyrm")
+    growth_ratios = (1.30, 1.10, 1.30)
+    if all(variant in dragon_idle_heights for variant in growth_order):
+        for index, minimum_ratio in enumerate(growth_ratios):
+            young = dragon_idle_heights[growth_order[index]]
+            old = dragon_idle_heights[growth_order[index + 1]]
+            if old < young * minimum_ratio:
+                failures.append(
+                    f"dragon growth {growth_order[index]} -> "
+                    f"{growth_order[index + 1]} is only {old / young:.2f}x")
+    if (len(dragon_idle_triangles) == len(growth_order) and
+            len(set(dragon_idle_triangles.values())) != len(growth_order)):
+        failures.append("dragon stages reuse the same geometry topology")
 
     if failures:
         for failure in failures:
