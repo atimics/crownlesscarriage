@@ -188,6 +188,28 @@ the browser that created them. Clearing site data also clears those campaigns.
 The GitHub Pages workflow builds pull requests and publishes `main` after the
 repository's Pages source is set to GitHub Actions.
 
+## Automated releases
+
+Versioned releases are built from tags. Update the version in the first
+`project(...)` line of `CMakeLists.txt`, merge that change to `main`, then tag
+the merged commit:
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The tag must use `vMAJOR.MINOR.PATCH`, match the CMake project version, and
+point to a commit on `main`. The release workflow then:
+
+1. builds and tests the macOS app;
+2. builds the browser version;
+3. packages both builds and writes SHA-256 checksums; and
+4. publishes a GitHub Release with generated release notes.
+
+Rerunning a release replaces its downloadable files instead of creating a
+second release. GitHub Pages continues to publish every merge to `main`.
+
 Run the storybook-style Empty Granary playtest:
 
 ```sh
