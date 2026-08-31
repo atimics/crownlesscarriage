@@ -20162,6 +20162,42 @@ float CcLocalRoadHorseLongitudinalOffsetInternal(void)
     return 5.55f;
 }
 
+static void DrawRoadHorseHarness(Vector3 base, float yaw, float gait_phase)
+{
+    Color leather = (Color){55, 35, 28, 255};
+    Color leather_edge = (Color){91, 57, 38, 255};
+    Color buckle = (Color){172, 137, 78, 255};
+    float step = sinf(gait_phase) * 0.018f;
+
+    /* A broad breast strap and split collar make the team read as working
+       carriage horses instead of loose animals standing beside the traces. */
+    DrawOrientedBox(base, (Vector3){0.0f, 1.31f + step, 0.49f},
+                    (Vector3){0.72f, 0.065f, 0.085f}, yaw, leather);
+    Vector3 collar_top = LocalPoint(
+        base, 0.0f, 1.73f + step, 0.70f, yaw);
+    for (int32_t side = -1; side <= 1; side += 2) {
+        Vector3 collar_side = LocalPoint(
+            base, (float)side * 0.28f, 1.35f + step, 0.48f, yaw);
+        Vector3 shoulder = LocalPoint(
+            base, (float)side * 0.30f, 1.27f + step, 0.04f, yaw);
+        DrawCylinderEx(collar_top, collar_side, 0.034f, 0.030f, 6,
+                       leather_edge);
+        DrawCylinderEx(collar_side, shoulder, 0.026f, 0.022f, 6, leather);
+
+        /* Cheek pieces connect the brow band to the bit. */
+        Vector3 cheek = LocalPoint(
+            base, (float)side * 0.18f, 1.76f + step, 1.30f, yaw);
+        Vector3 bit_end = LocalPoint(
+            base, (float)side * 0.18f, 1.60f + step, 1.56f, yaw);
+        DrawCylinderEx(cheek, bit_end, 0.020f, 0.017f, 6, leather);
+        DrawCharacterSphere(bit_end, 0.027f, buckle);
+    }
+    DrawOrientedBox(base, (Vector3){0.0f, 1.78f + step, 1.28f},
+                    (Vector3){0.43f, 0.035f, 0.045f}, yaw, leather);
+    DrawOrientedBox(base, (Vector3){0.0f, 1.60f + step, 1.56f},
+                    (Vector3){0.43f, 0.025f, 0.030f}, yaw, buckle);
+}
+
 static void DrawRoadHorseTeam(Vector3 base, float clock, bool moving,
                               float yaw, bool bridge_checkpoint)
 {
@@ -20198,6 +20234,7 @@ static void DrawRoadHorseTeam(Vector3 base, float clock, bool moving,
             CC_CREATURE_HORSE, pose, horse_base,
             yaw, 0.96f, coat, gait_phase, moving,
             controlled ? &controlled_pose : NULL);
+        DrawRoadHorseHarness(horse_base, yaw, gait_phase);
         Vector3 trace_start = LocalPoint(
             base, (float)horse * 0.42f, 0.77f, 3.05f, yaw);
         Vector3 trace_end = LocalPoint(horse_base, 0.0f, 0.91f, -0.52f, yaw);
