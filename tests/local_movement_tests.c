@@ -520,6 +520,50 @@ static void TestSharedCharacterCollisionWorld(void)
     }
 }
 
+static void TestStreetWaypointCornerProgress(void)
+{
+    CcLocalAgent agent;
+    Vector3 destination = {14.238795f, 0.0f, 5.173166f};
+    CcLocalAgentInit(&agent, (Vector2){5.0f, 9.0f}, false);
+    if (!CcLocalAgentSetStreetTarget(&agent, destination)) {
+        (void)fprintf(stderr, "corner-progress route was rejected\n");
+        exit(1);
+    }
+    for (int32_t frame = 0;
+         frame < 1200 && agent.navigation_active; ++frame) {
+        CcLocalAgentUpdate(&agent, 1.0f / 60.0f, false);
+    }
+    float x = agent.position.x - destination.x;
+    float z = agent.position.z - destination.z;
+    if (agent.navigation_active || x * x + z * z > 0.40f * 0.40f) {
+        (void)fprintf(
+            stderr,
+            "corner-progress route stalled at %.3f %.3f, waypoint %d/%d\n",
+            agent.position.x, agent.position.z,
+            agent.navigation_point_index, agent.navigation_point_count);
+        exit(1);
+    }
+
+    CcLocalAgent blocked;
+    CcLocalAgentInit(&blocked, (Vector2){2.0f, 7.0f}, false);
+    if (!CcLocalAgentSetExactTarget(
+            &blocked, (Vector3){12.0f, 0.0f, 7.0f}, false)) {
+        (void)fprintf(stderr, "blocked-progress target was rejected\n");
+        exit(1);
+    }
+    for (int32_t frame = 0;
+         frame < 1200 && blocked.exact_target_valid; ++frame) {
+        CcLocalAgentUpdate(&blocked, 1.0f / 60.0f, false);
+    }
+    if (blocked.exact_target_valid) {
+        (void)fprintf(
+            stderr,
+            "blocked-progress route kept shuffling at %.3f %.3f\n",
+            blocked.position.x, blocked.position.z);
+        exit(1);
+    }
+}
+
 static void TestRagdollStepsInWater(void)
 {
     CcLocalAgent agent;
@@ -2507,6 +2551,7 @@ int main(void)
     TestPlaceLandmarkCollision();
     TestTownPlanCollisionAndGate();
     TestSharedCharacterCollisionWorld();
+    TestStreetWaypointCornerProgress();
     TestRagdollStepsInWater();
     RenderTexture2D click_target = {0};
     click_target.texture.width = 457;
