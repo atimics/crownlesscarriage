@@ -157,12 +157,12 @@ static const CcStoryLineTemplate STORY_LINES[] = {
         CC_SITUATION_RELIEF_DELIVERY, "Jory Fen"),
     STORY_LINE(
         "empty_granary.nell.offer",
-        "A full grain wagon left before sunrise. These three grains fell off. It was all we got.",
+        "I'm Nell. My mother is on the morning shift. I came for her bread, but the line has stopped.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_RELIEF_DELIVERY, "Nell Varo"),
     STORY_LINE(
         "empty_granary.nell.heard",
-        "The wagon belonged to the king. It went east full and came back empty.",
+        "Jory works at the bakery. He says the newest grain was spoiled.",
         CC_STORY_BEAT_HEARD, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_RELIEF_DELIVERY, "Nell Varo"),
     STORY_LINE(
