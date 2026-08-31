@@ -161,7 +161,6 @@ typedef enum ContextActionKind {
     CONTEXT_ACTION_SKILL_CRUSHING,
     CONTEXT_ACTION_SKILL_SUNDER,
     CONTEXT_ACTION_SKILL_SECOND_WIND,
-    CONTEXT_ACTION_OPEN_DRAGON_CAVE,
     CONTEXT_ACTION_STEAL_DRAGON_CROWNS,
     CONTEXT_ACTION_RETURN_DRAGON_CROWNS,
     CONTEXT_ACTION_STEAL_DRAGON_RELIC,
@@ -1505,7 +1504,7 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
         } else if (local->site_kind == CC_LOCAL_SITE_DRAGON_CAVE) {
             CcOverlayDrawText("NO ROAD / NO CARRIAGE",
                               content_x, 151, 8, CC_GOLD);
-            CcOverlayDrawText("CLIMB TO LAIR OR RETURN THROUGH TUNNEL",
+            CcOverlayDrawText("ROOST REACHED FROM INSIDE ONLY",
                               content_x, 178, 7, MUTED);
         } else {
             CcOverlayDrawText("CARRIAGE PARKED AT THE ROAD EDGE",
@@ -2186,9 +2185,9 @@ static ContextActionSet BuildContextActions(
                 payment > 0, false);
         }
         AddDetailedContextAction(
-            &set, CONTEXT_ACTION_CLOSE_VIEW, "Leave cave", "ESC",
-            sim->dragon.slain ? "RETURN TO THE ASHEN MOUNTAIN" :
-                                "RETURN TO THE MOUNTAIN", true, false);
+            &set, CONTEXT_ACTION_CLOSE_VIEW, "Return to goblin chimney", "ESC",
+            sim->dragon.slain ? "LEAVE THE ASHEN ROOST" :
+                                "THE ONLY EXIT", true, false);
         return set;
     }
     if (view == VIEW_LEDGER) {
@@ -2381,13 +2380,10 @@ static ContextActionSet BuildContextActions(
             AddDetailedContextAction(
                 &set, CONTEXT_ACTION_TRAVEL_GOBLIN_SITE,
                 "Descend through goblin dungeon", "F",
-                "ONE DAY / DARK RETURN", true, false);
+                "RETURN THROUGH THE CAVE NETWORK", true, false);
         }
         if (GridDistance(position, entrance) < 2.25f) {
-            if (local->site_kind == CC_LOCAL_SITE_DRAGON_CAVE) {
-                AddContextAction(&set, CONTEXT_ACTION_OPEN_DRAGON_CAVE,
-                                 "Enter dragon cave");
-            } else if (local->site_kind == CC_LOCAL_SITE_DUNGEON) {
+            if (local->site_kind == CC_LOCAL_SITE_DUNGEON) {
                 AddDetailedContextAction(
                     &set, CONTEXT_ACTION_EXPEDITION,
                     "Mount expedition", "E", "COMMITS ONE DAY", true,
@@ -2524,7 +2520,7 @@ static Color ContextActionColor(ContextActionKind kind)
         kind == CONTEXT_ACTION_RETURN_DRAGON_CROWNS ||
         kind == CONTEXT_ACTION_RETURN_DRAGON_RELIC ||
         kind == CONTEXT_ACTION_INTERCEPT_DRAGON_TRIBUTE ||
-        kind == CONTEXT_ACTION_OPEN_DRAGON_CAVE) return TEAL;
+        kind == CONTEXT_ACTION_OPEN_MAP) return TEAL;
     if (kind == CONTEXT_ACTION_SELECT_TARGET) return DANGER;
     if (kind == CONTEXT_ACTION_BASIC_STRIKE ||
         kind == CONTEXT_ACTION_TOGGLE_GUARD) return CC_GOLD;
@@ -5144,8 +5140,6 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         if (interact || context_action != CONTEXT_ACTION_NONE) {
             Vector2 site_carriage = {CC_LOCAL_SITE_CARRIAGE_X,
                                      CC_LOCAL_SITE_CARRIAGE_Z};
-            Vector2 site_entrance = {CC_LOCAL_SITE_ENTRANCE_X,
-                                     CC_LOCAL_SITE_ENTRANCE_Z};
             if (interact && local->site_kind != CC_LOCAL_SITE_NONE &&
                 local->site_kind != CC_LOCAL_SITE_DRAGON_CAVE &&
                 GridDistance(position, site_carriage) < 1.75f) {
@@ -5166,9 +5160,11 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                         local, CC_LOCAL_SITE_DRAGON_CAVE,
                         (Vector2){CC_LOCAL_SITE_CARRIAGE_X + 3.0f,
                                   CC_LOCAL_SITE_CARRIAGE_Z});
+                    *return_view = VIEW_LOCAL;
+                    *view = VIEW_DRAGON_CAVE;
                     (void)snprintf(
                         message, message_capacity,
-                        "After a day in the goblin dark, you reach the dragon mountain.");
+                        "After a day in the goblin dark, a chimney opens inside the dragon roost.");
                 }
                 return;
             }
@@ -5293,17 +5289,6 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                     *selected_situation = FirstActiveSituationIndex(sim);
                 }
                 *view = VIEW_SITUATIONS;
-            } else if (!local->market_interior &&
-                       local->site_kind == CC_LOCAL_SITE_DRAGON_CAVE &&
-                       sim->player.location_id ==
-                           sim->dragon.lair_settlement_id &&
-                       CcClientInteractionActivated(
-                           interact || context_action ==
-                               CONTEXT_ACTION_OPEN_DRAGON_CAVE,
-                           GridDistance(position, site_entrance),
-                           2.25f)) {
-                *view = VIEW_DRAGON_CAVE;
-                message[0] = '\0';
             }
         }
 
@@ -6089,16 +6074,19 @@ int main(int argc, char **argv)
                        "Campaign resumed where you left off.");
     }
     if (!capture && !sim.journey.active &&
-        local.site_kind == CC_LOCAL_SITE_NONE &&
         sim.player.location_id == sim.dragon.lair_settlement_id &&
         sim.carriage.location_id == sim.goblins.lair_settlement_id) {
-        EnterSiteFromGoblinTunnel(
-            &local, CC_LOCAL_SITE_DRAGON_CAVE,
-            (Vector2){CC_LOCAL_SITE_CARRIAGE_X + 3.0f,
-                      CC_LOCAL_SITE_CARRIAGE_Z});
+        if (local.site_kind != CC_LOCAL_SITE_DRAGON_CAVE) {
+            EnterSiteFromGoblinTunnel(
+                &local, CC_LOCAL_SITE_DRAGON_CAVE,
+                (Vector2){CC_LOCAL_SITE_CARRIAGE_X + 3.0f,
+                          CC_LOCAL_SITE_CARRIAGE_Z});
+        }
+        return_view = VIEW_LOCAL;
+        view = VIEW_DRAGON_CAVE;
         (void)snprintf(
             startup_message, sizeof(startup_message),
-            "The carriage is below. The goblin tunnel is the only way back.");
+            "The goblin network opens inside the dragon roost.");
     }
     if (capture_dragon_cave) {
         local.site_kind = CC_LOCAL_SITE_DRAGON_CAVE;
@@ -6156,7 +6144,8 @@ int main(int argc, char **argv)
                 CC_LOCAL_SITE_DRAGON_CAVE : CC_LOCAL_SITE_GOBLIN_CAVE;
             RepositionHero(
                 &local,
-                (Vector2){CC_LOCAL_SITE_ENTRANCE_X - 7.0f,
+                (Vector2){CC_LOCAL_SITE_ENTRANCE_X -
+                              (capture_creature_dragon ? 12.0f : 7.0f),
                           CC_LOCAL_SITE_ENTRANCE_Z}, false);
             CcLocalAgentSetScene(&local.agent, CC_LOCAL_SCENE_ROAD);
             local.course.scene = CC_LOCAL_SCENE_ROAD;

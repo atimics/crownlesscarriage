@@ -9668,7 +9668,7 @@ static bool ApplyGoblinTunnelTraversal(CcSim *sim,
     (void)snprintf(
         text, sizeof(text),
         climbing_to_dragon ?
-            "The company leaves the carriage behind and spends a day climbing through the goblin dungeon to the dragon mountain." :
+            "The company leaves the carriage behind and spends a day crossing the goblin network to a chimney inside the dragon roost." :
             "The company descends through the goblin dungeon and returns to the hidden trailhead.");
     (void)PushEvent(sim, CC_EVENT_GOBLIN_TUNNEL_TRAVERSED,
                     sim->player.id, command->target_id, 0U, 1, text);
