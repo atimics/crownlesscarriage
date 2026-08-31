@@ -102,6 +102,12 @@ the palace. Hollowbarrow gathers around an expedition hollow below the sealed
 dungeon ridge. Retaining walls, bridges, rails, paving, water, and standing
 stones make those landforms legible at the play camera.
 
+The visible town is also the foreground of a much larger realm. Every exterior
+horizon uses deliberate depth bands: a remote landmass and a regional ridge,
+with a constructed scale cue where it improves the composition, such as the
+fortress pass wall. These horizons are scenic geometry only; they add regional
+scale without expanding navigation, collision, or camera-room count.
+
 The current 30-scene runtime review is captured in
 [`town-scene-sheet.png`](../images/town-scene-sheet.png). Its rows are the six
 towns. The first three columns are Arrival, Town Heart, and Landmark: wide
