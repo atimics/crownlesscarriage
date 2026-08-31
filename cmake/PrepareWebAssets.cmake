@@ -4,18 +4,34 @@ endif()
 
 set(asset_source "${CC_WEB_SOURCE_DIR}/assets")
 set(asset_output "${CC_WEB_OUTPUT_DIR}/assets")
+set(lazy_asset_output "${CC_WEB_OUTPUT_DIR}/lazy-assets")
 
 file(REMOVE_RECURSE "${asset_output}")
+file(REMOVE_RECURSE "${lazy_asset_output}")
 file(MAKE_DIRECTORY
     "${asset_output}/exports/hero"
+    "${asset_output}/exports/creatures"
     "${asset_output}/exports/glb"
     "${asset_output}/exports/world_kit"
     "${asset_output}/shaders"
+    "${lazy_asset_output}/maps"
 )
 
-foreach(directory IN ITEMS npc creatures)
+foreach(directory IN ITEMS npc)
     file(COPY "${asset_source}/exports/${directory}"
          DESTINATION "${asset_output}/exports")
+endforeach()
+
+foreach(asset IN ITEMS
+        creature_horse_v01.glb
+        creature_cow_v01.glb
+        creature_sheep_v01.glb
+        creature_dragon_v01.glb
+        creature_dragon_whelp_v01.glb
+        creature_dragon_wanderer_v01.glb
+        creature_dragon_deep_wyrm_v01.glb)
+    file(COPY "${asset_source}/exports/creatures/${asset}"
+         DESTINATION "${asset_output}/exports/creatures")
 endforeach()
 
 file(COPY
@@ -44,7 +60,11 @@ file(GLOB world_kit_runtime_assets
 file(COPY ${world_kit_runtime_assets}
      DESTINATION "${asset_output}/exports/world_kit")
 
-file(COPY "${asset_source}/maps" DESTINATION "${asset_output}")
+file(COPY
+    "${asset_source}/maps/gloamgate_to_alderwatch.png"
+    "${asset_source}/maps/collectible_map_atlas.png"
+    DESTINATION "${lazy_asset_output}/maps"
+)
 
 file(GLOB shader_sources
     "${asset_source}/shaders/*.vs"

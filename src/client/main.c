@@ -51,6 +51,13 @@ typedef enum ClientView {
     VIEW_DRAGON_CAVE
 } ClientView;
 
+typedef struct ClientMapTextures {
+    Texture2D illustrated;
+    Texture2D collectible_atlas;
+    bool illustrated_attempted;
+    bool collectible_atlas_attempted;
+} ClientMapTextures;
+
 static bool IsCommandOverlay(ClientView view)
 {
     return view == VIEW_LEDGER || view == VIEW_SITUATIONS;
@@ -340,6 +347,7 @@ EM_JS(int, ClientReleaseBrowserAssets, (), {
     }
 });
 EM_JS(int, ClientBrowserHeapBytes, (), {
+    document.documentElement.dataset.crownlessWasmMemory = HEAP8.length;
     return HEAP8.length;
 });
 #pragma clang diagnostic pop
@@ -1920,6 +1928,86 @@ static const CcMap *SelectedVisibleMap(const CcSim *sim, int32_t selected)
     if (sim == NULL || selected < 0 || selected >= sim->map_count ||
         !MapVisibleAtCarriage(sim, &sim->maps[selected])) return NULL;
     return &sim->maps[selected];
+}
+
+static void ReleaseMapTexture(Texture2D *texture, bool *attempted)
+{
+    if (texture == NULL || attempted == NULL) return;
+    if (texture->id != 0U) UnloadTexture(*texture);
+    *texture = (Texture2D){0};
+    *attempted = false;
+}
+
+static void ReleaseMapTextures(ClientMapTextures *textures)
+{
+    if (textures == NULL) return;
+    ReleaseMapTexture(&textures->illustrated,
+                      &textures->illustrated_attempted);
+    ReleaseMapTexture(&textures->collectible_atlas,
+                      &textures->collectible_atlas_attempted);
+}
+
+static bool LoadMapTexture(Texture2D *texture, bool *attempted,
+                           const char *relative_path, const char *label)
+{
+    if (texture == NULL || attempted == NULL || relative_path == NULL) {
+        return false;
+    }
+    if (texture->id != 0U) return true;
+    if (*attempted) return false;
+    *attempted = true;
+#if defined(PLATFORM_WEB)
+    if (!FileExists(relative_path) &&
+        emscripten_wget(relative_path, relative_path) != 0) {
+        TraceLog(LOG_WARNING, "WEB: could not fetch %s", label);
+        return false;
+    }
+#endif
+    char resolved[1024];
+    bool found = ResolveClientAssetPath(relative_path, resolved,
+                                        sizeof(resolved));
+    if (found) *texture = LoadTexture(resolved);
+#if defined(PLATFORM_WEB)
+    if (found) (void)remove(resolved);
+#endif
+    if (texture->id == 0U) {
+        TraceLog(LOG_WARNING, "MAP: could not load %s", label);
+        return false;
+    }
+    SetTextureFilter(*texture, TEXTURE_FILTER_BILINEAR);
+    return true;
+}
+
+static void PrepareMapTextures(const CcSim *sim, int32_t selected,
+                               ClientMapTextures *textures)
+{
+    if (textures == NULL) return;
+    const CcMap *map = SelectedVisibleMap(sim, selected);
+    bool needs_illustrated = IsGloamgateAlderwatchMap(map);
+    int32_t slot = map != NULL ? (int32_t)(map - sim->maps) : -1;
+    bool needs_atlas = slot >= 0 && slot < CC_MAP_COLLECTION_COUNT &&
+                       slot != CC_MAP_DRAGON_HOARD && !needs_illustrated;
+#if defined(PLATFORM_WEB)
+    if (!needs_illustrated) {
+        ReleaseMapTexture(&textures->illustrated,
+                          &textures->illustrated_attempted);
+    }
+    if (!needs_atlas) {
+        ReleaseMapTexture(&textures->collectible_atlas,
+                          &textures->collectible_atlas_attempted);
+    }
+#endif
+    if (needs_illustrated) {
+        (void)LoadMapTexture(&textures->illustrated,
+                             &textures->illustrated_attempted,
+                             CC_GLOAMGATE_ALDERWATCH_MAP_ASSET,
+                             "Gloamgate road map");
+    } else if (needs_atlas) {
+        (void)LoadMapTexture(&textures->collectible_atlas,
+                             &textures->collectible_atlas_attempted,
+                             CC_COLLECTIBLE_MAP_ATLAS_ASSET,
+                             "collectible map atlas");
+    }
 }
 
 static bool RouteLeavesCurrentPlace(const CcSim *sim, const CcRoute *route)
@@ -6636,22 +6724,7 @@ int main(int argc, char **argv)
                      normal_play ? 620 : 760);
     SetTargetFPS(render_benchmark || capture_action_reel ||
                  capture_gameplay_reel || capture_creature_reel ? 0 : 60);
-    Texture2D illustrated_map = {0};
-    Texture2D collectible_atlas = {0};
-    char illustrated_map_path[1024];
-    if (ResolveClientAssetPath(CC_GLOAMGATE_ALDERWATCH_MAP_ASSET,
-                               illustrated_map_path,
-                               sizeof(illustrated_map_path))) {
-        illustrated_map = LoadTexture(illustrated_map_path);
-        SetTextureFilter(illustrated_map, TEXTURE_FILTER_BILINEAR);
-    }
-    char collectible_atlas_path[1024];
-    if (ResolveClientAssetPath(CC_COLLECTIBLE_MAP_ATLAS_ASSET,
-                               collectible_atlas_path,
-                               sizeof(collectible_atlas_path))) {
-        collectible_atlas = LoadTexture(collectible_atlas_path);
-        SetTextureFilter(collectible_atlas, TEXTURE_FILTER_BILINEAR);
-    }
+    ClientMapTextures map_textures = {0};
     /* The playable world is authored against a fixed 2x art-pixel grid.
        Render it at half the presentation size, then enlarge with point
        sampling. Screen-space labels and HUD are drawn after presentation. */
@@ -7130,8 +7203,7 @@ int main(int argc, char **argv)
                           walk_cycle_mask);
             CcLocalRendererShutdown();
             UnloadRenderTexture(local_target);
-            if (illustrated_map.id != 0U) UnloadTexture(illustrated_map);
-            if (collectible_atlas.id != 0U) UnloadTexture(collectible_atlas);
+            ReleaseMapTextures(&map_textures);
             CloseWindow();
             return 1;
         }
@@ -7280,6 +7352,18 @@ int main(int argc, char **argv)
             capture_creature_reel ? (float)capture_frames / 15.0f :
             (float)GetTime();
 
+        bool map_visible = view == VIEW_MAP ||
+            ((view == VIEW_LEDGER || view == VIEW_SITUATIONS) &&
+             return_view == VIEW_MAP);
+        if (map_visible) {
+            PrepareMapTextures(&sim, selected, &map_textures);
+        }
+#if defined(PLATFORM_WEB)
+        else {
+            ReleaseMapTextures(&map_textures);
+        }
+#endif
+
         BeginDrawing();
         ClearBackground(BACKGROUND);
         CcOverlayBegin(1.0f);
@@ -7291,12 +7375,10 @@ int main(int argc, char **argv)
                               local_target, local_bounds);
             DrawRoadHeader(&sim);
             DrawRoadPanel(&sim, selected);
-        } else if (view == VIEW_MAP ||
-                   ((view == VIEW_LEDGER || view == VIEW_SITUATIONS) &&
-                    return_view == VIEW_MAP)) {
+        } else if (map_visible) {
             DrawMapHeader(&sim);
-            DrawMap(&sim, selected, clock, illustrated_map,
-                    collectible_atlas);
+            DrawMap(&sim, selected, clock, map_textures.illustrated,
+                    map_textures.collectible_atlas);
             DrawSettlementPanel(&sim, selected);
         } else {
             if (capture_npc_review) {
@@ -7506,8 +7588,7 @@ int main(int argc, char **argv)
         CcLocalRendererGetStats();
     CcLocalRendererShutdown();
     UnloadRenderTexture(local_target);
-    if (illustrated_map.id != 0U) UnloadTexture(illustrated_map);
-    if (collectible_atlas.id != 0U) UnloadTexture(collectible_atlas);
+    ReleaseMapTextures(&map_textures);
     CloseWindow();
     CcClientInstanceLockRelease(&instance_lock);
     if (render_benchmark) {
