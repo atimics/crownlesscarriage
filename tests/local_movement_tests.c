@@ -475,7 +475,7 @@ static void TestSharedCharacterCollisionWorld(void)
                      (Vector2){CC_LOCAL_START_X, CC_LOCAL_START_Z}, false);
     Vector2 carriage_approach = CcLocalWorldTargetApproachPoint(
         CC_LOCAL_WORLD_TARGET_CARRIAGE);
-    CcLocalRendererSetOpeningStep(CC_LOCAL_OPENING_FIND_NELL);
+    CcLocalRendererSetOpeningStep(CC_LOCAL_OPENING_FIND_JORY);
     if (CcLocalAgentApproachWorldTarget(
             &carriage_path, CC_LOCAL_WORLD_TARGET_CARRIAGE)) {
         (void)fprintf(stderr,
