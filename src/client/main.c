@@ -2223,29 +2223,20 @@ static ContextActionSet BuildContextActions(
             bool promised = CcCharacterRemembers(
                 character, CC_CHARACTER_MEMORY_PLAYER_PROMISED,
                 situation->id);
-            AddDetailedContextAction(
-                &set, CONTEXT_ACTION_LISTEN_CHARACTER,
-                listened ? "Account heard" : "Hear their account", "1",
-                listened ? "THEY REMEMBER YOU LISTENED" :
-                           "LEARN THEIR STAKE",
-                !listened, listened);
+            if (!listened && !promised) {
+                AddContextAction(&set, CONTEXT_ACTION_LISTEN_CHARACTER,
+                                 "1  I hear you.");
+            }
             const CcSituation *accepted = CcSimAcceptedSituation(sim);
             bool can_promise = situation->status == CC_SITUATION_ACTIVE &&
                 (accepted == NULL || accepted->id == situation->id) &&
                 !promised;
-            AddDetailedContextAction(
-                &set, CONTEXT_ACTION_PLEDGE_CHARACTER,
-                promised ? "Promise remembered" :
-                accepted != NULL && accepted->id == situation->id ?
-                    "Reassure them" : "Promise help",
-                "2", promised ? "THEY WILL HOLD YOU TO IT" :
-                     accepted != NULL && accepted->id != situation->id ?
-                         "ANOTHER PROMISE IS ACTIVE" : "TAKE THE QUEST",
-                can_promise, promised);
+            if (can_promise) {
+                AddContextAction(&set, CONTEXT_ACTION_PLEDGE_CHARACTER,
+                                 "2  We'll help.");
+            }
         }
-        AddDetailedContextAction(
-            &set, CONTEXT_ACTION_CLOSE_VIEW, "Step away", "ESC",
-            "RETURN TO TOWN", true, false);
+        AddContextAction(&set, CONTEXT_ACTION_CLOSE_VIEW, "Esc  Goodbye.");
         return set;
     }
     if (view == VIEW_MAP) {
@@ -3448,22 +3439,37 @@ static void DrawCarriageScreen(const CcSim *sim, const LocalState *local)
         CcSimHorseTeamReadiness(sim) < 30 ? DANGER : TEAL);
 }
 
-static const char *CharacterStakeLine(const CcSituation *situation)
+static const char *CharacterSpokenLine(const CcSituation *situation,
+                                       const CcCharacter *character)
 {
     if (situation == NULL) return "They have nothing more to ask.";
+    if (character != NULL && CcCharacterRemembers(
+            character, CC_CHARACTER_MEMORY_PLAYER_HELPED, situation->id)) {
+        return "You kept your word. I won't forget it.";
+    }
+    if (character != NULL && CcCharacterRemembers(
+            character, CC_CHARACTER_MEMORY_PLAYER_WITHDREW,
+            situation->id)) {
+        return "You said you would help. We waited for you.";
+    }
+    if (character != NULL && CcCharacterRemembers(
+            character, CC_CHARACTER_MEMORY_PLAYER_PROMISED,
+            situation->id)) {
+        return "I told them help was coming. Please don't make me a liar.";
+    }
     switch (situation->kind) {
         case CC_SITUATION_RELIEF_DELIVERY:
-            return "Food is running short. Their household cannot wait for the next convoy.";
+            return "Please. We're down to our last meal. If the convoy doesn't come, my family goes hungry.";
         case CC_SITUATION_ROUTE_REPAIR:
-            return "The broken road has cut work, medicine, and family from the town.";
+            return "The road is broken. No medicine, no work, nothing gets through until someone mends it.";
         case CC_SITUATION_MONSTER_EXPEDITION:
-            return "They saw what came out of the mine and know who is still below.";
+            return "I saw what came out of the mine. There are still people trapped below.";
         case CC_SITUATION_BLACK_MARKET_DELIVERY:
-            return "Official stores will not reach the people who are hiding from the levy.";
+            return "The official stores won't feed people hiding from the levy. I know another way in.";
         case CC_SITUATION_COURIER_DELIVERY:
-            return "The message will change lives only if it reaches the right hands intact.";
+            return "This message will change someone's life. It has to reach them unopened.";
     }
-    return "The trouble has reached their own door.";
+    return "I need your help.";
 }
 
 static void DrawCharacterConversation(const CcSim *sim,
@@ -3475,48 +3481,26 @@ static void DrawCharacterConversation(const CcSim *sim,
     const CcCharacter *character = CcSimCharacter(
         sim, local->conversation_character_id);
     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
-                  Fade(BACKGROUND, 0.72f));
-    Rectangle bounds = {292.0f, 142.0f, 696.0f, 388.0f};
+                  Fade(BACKGROUND, 0.54f));
+    Rectangle bounds = {256.0f, 168.0f, 768.0f, 338.0f};
     DrawPanel(bounds, PANEL_DEEP);
     if (situation == NULL || character == NULL) {
-        CcOverlayDrawText("NO ONE IS HERE", 330, 180, 20, MUTED);
+        CcOverlayDrawText("No one is here.", 294, 206, 18, MUTED);
         return;
     }
-    Color mood = character->player_disposition >= 12 ? TEAL :
-                 character->stress >= 65 ? DANGER : CC_GOLD;
-    CcOverlayDrawText("A PERSON, NOT A NOTICE", 330, 174, 9, MUTED);
-    CcOverlayDrawText(character->name, 330, 205, 24, mood);
-    CcOverlayDrawText(
-        TextFormat("%s  /  %s  /  TRUST %+d  /  STRESS %d",
-                   CcCharacterRoleName(character->role),
-                   CcCharacterActivityName(character->activity),
-                   character->player_disposition, character->stress),
-        330, 240, 10, INK);
-    char target[96];
-    SituationTargetLabel(sim, situation, target, sizeof(target));
-    CcOverlayDrawText(
-        TextFormat("%s  /  %s", SituationTitle(situation->kind), target),
-        330, 282, 13, CC_GOLD);
-    DrawTwoLineText(CharacterStakeLine(situation), 330, 318, 72U, 11, INK);
-    const char *memory =
-        CcCharacterRemembers(character, CC_CHARACTER_MEMORY_PLAYER_HELPED,
-                             situation->id) ?
-            "They remember that you kept your word." :
-        CcCharacterRemembers(character, CC_CHARACTER_MEMORY_PLAYER_WITHDREW,
-                             situation->id) ?
-            "They remember that your company walked away." :
-        CcCharacterRemembers(character, CC_CHARACTER_MEMORY_PLAYER_PROMISED,
-                             situation->id) ?
-            "They remember your promise and are preparing around it." :
-        CcCharacterRemembers(character, CC_CHARACTER_MEMORY_MET_PLAYER,
-                             situation->id) ?
-            "They remember that you stopped and listened." :
-            "You have not spoken before.";
-    CcOverlayDrawText("MEMORY", 330, 399, 9, MUTED);
-    CcOverlayDrawText(memory, 330, 422, 11, mood);
-    CcOverlayDrawText(
-        "Their state, trust, and memory persist when you leave town.",
-        330, 466, 9, MUTED);
+    Rectangle portrait = {280.0f, 190.0f, 248.0f, 294.0f};
+    bool has_live_portrait = local->course.situation_witness_active &&
+        local->course.situation_witness_character_id == character->id;
+    if (has_live_portrait) {
+        CcLocalDrawNpcPortrait3D(
+            &local->course.situation_witness.appearance, portrait,
+            CC_NPC_PORTRAIT_TALKING);
+    }
+    int32_t speech_x = 568;
+    CcOverlayDrawText(character->name, speech_x, 216, 18, CC_GOLD);
+    CcOverlayDrawText("\"", speech_x, 266, 28, MUTED);
+    DrawTwoLineText(CharacterSpokenLine(situation, character),
+                    speech_x + 28, 270, 42U, 16, INK);
 }
 
 static void DrawJourneyEncounter(const CcSim *sim)
@@ -6491,7 +6475,7 @@ int main(int argc, char **argv)
                                   selected_situation);
         }
         if (!capture_npc_review && view != VIEW_DRAGON_CAVE &&
-            view != VIEW_CARRIAGE) {
+            view != VIEW_CARRIAGE && view != VIEW_CHARACTER) {
             DrawCommandBar(view, &local);
         }
         if (performance_overlay) {
