@@ -15,6 +15,16 @@ static CcSituation *FindSituation(CcSim *sim, CcSituationKind kind)
 
 static void ValidateCatalogue(void)
 {
+    static const char *forbidden_phrases[] = {
+        "Something is",
+        "road will remember",
+        "road may decide",
+        "mine lies",
+        "mine sings",
+        "Flour has never answered",
+        "Both things are true",
+        "That is the trouble"
+    };
     size_t count = CcStoryAuthoredLineCount();
     CC_CHECK(count >= 30U);
     for (size_t i = 0U; i < count; ++i) {
@@ -24,6 +34,11 @@ static void ValidateCatalogue(void)
         CC_CHECK(line->text != NULL && line->text[0] != '\0');
         CC_CHECK(strlen(line->text) <= 96U);
         CC_CHECK(strcmp(CcStoryBeatName(line->beat), "unknown") != 0);
+        for (size_t phrase = 0U;
+             phrase < sizeof(forbidden_phrases) /
+                          sizeof(forbidden_phrases[0]); ++phrase) {
+            CC_CHECK(strstr(line->text, forbidden_phrases[phrase]) == NULL);
+        }
         for (size_t other = i + 1U; other < count; ++other) {
             const CcStoryLine *candidate = CcStoryAuthoredLineAt(other);
             CC_CHECK(candidate != NULL);
@@ -31,6 +46,47 @@ static void ValidateCatalogue(void)
         }
     }
     CC_CHECK(CcStoryAuthoredLineAt(count) == NULL);
+}
+
+static void ValidatePlayerChoices(void)
+{
+    for (int32_t kind = CC_SITUATION_RELIEF_DELIVERY;
+         kind <= CC_SITUATION_COURIER_DELIVERY; ++kind) {
+        const char *ask = CcStoryPlayerChoiceText(
+            (CcSituationKind)kind, CC_STORY_PLAYER_ASK);
+        const char *promise = CcStoryPlayerChoiceText(
+            (CcSituationKind)kind, CC_STORY_PLAYER_PROMISE);
+        const char *leave = CcStoryPlayerChoiceText(
+            (CcSituationKind)kind, CC_STORY_PLAYER_LEAVE);
+        CC_CHECK(ask != NULL && strncmp(ask, "1  ", 3U) == 0);
+        CC_CHECK(promise != NULL && strncmp(promise, "2  ", 3U) == 0);
+        CC_CHECK(leave != NULL && strcmp(leave, "Esc  Not now.") == 0);
+        CC_CHECK(strlen(ask) <= 36U);
+        CC_CHECK(strlen(promise) <= 36U);
+    }
+}
+
+static void ValidateRoadCompanyVoices(void)
+{
+    static const char *names[] = {
+        "The Unpaid Company",
+        "The Tallow Knives",
+        "The Broken Pennants",
+        "The Ditch Parliament"
+    };
+    const char *lines[sizeof(names) / sizeof(names[0])] = {0};
+    for (size_t i = 0U; i < sizeof(names) / sizeof(names[0]); ++i) {
+        CcBanditGroup company = {0};
+        (void)snprintf(company.name, sizeof(company.name), "%s", names[i]);
+        lines[i] = CcStoryRoadCompanyLine(&company);
+        CC_CHECK(lines[i] != NULL && lines[i][0] != '\0');
+        CC_CHECK(strlen(lines[i]) <= 96U);
+        for (size_t other = 0U; other < i; ++other) {
+            CC_CHECK(strcmp(lines[i], lines[other]) != 0);
+        }
+    }
+    CC_CHECK(strcmp(CcStoryRoadCompanyLine(NULL),
+                    "Pay for the road or turn back.") == 0);
 }
 
 static void ValidateSituationCoverage(void)
@@ -176,6 +232,8 @@ static void ValidateExpiredPromiseMemory(void)
 int main(void)
 {
     ValidateCatalogue();
+    ValidatePlayerChoices();
+    ValidateRoadCompanyVoices();
     ValidateSituationCoverage();
     ValidateConversationBeats();
     ValidateExpiredPromiseMemory();

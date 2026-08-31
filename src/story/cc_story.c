@@ -18,234 +18,234 @@ enum {
 static const CcStoryLineTemplate STORY_LINES[] = {
     STORY_LINE(
         "empty_granary.mara.offer",
-        "Every sack goes to the guild store. I will not pretend the road is open.",
+        "Eight sacks for Silverwick. The guild store gets every one. Eighteen crowns on delivery.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_RELIEF_DELIVERY, "Mara Venn"),
     STORY_LINE(
         "empty_granary.mara.heard",
-        "You heard me. Good. Now decide what your carriage is for.",
+        "Alderwatch closed the bridge. I wrote three letters. The chain is still there.",
         CC_STORY_BEAT_HEARD, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_RELIEF_DELIVERY, "Mara Venn"),
     STORY_LINE(
         "empty_granary.mara.promised",
-        "Then I will seal the load. Bring back every receipt, and everyone you can.",
+        "All right. Buy the food here and check the count before you leave.",
         CC_STORY_BEAT_PROMISED, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_RELIEF_DELIVERY, "Mara Venn"),
     STORY_LINE(
         "empty_granary.mara.helped",
-        "The receipt is complete. The bread line is not. Still, thank you.",
+        "Silverwick returned my receipt. Eight seals. None from the public ovens.",
         CC_STORY_BEAT_HELPED, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_RELIEF_DELIVERY, "Mara Venn"),
     STORY_LINE(
         "empty_granary.tomas.offer",
-        "Ask for the foxfire supper. No soldiers. No inspection. Better pay.",
+        "Ask for the foxfire supper. No soldiers, no inspection. Eight sacks. Better pay.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_BLACK_MARKET_DELIVERY, "Tomas Rill"),
     STORY_LINE(
         "empty_granary.tomas.heard",
-        "The road is secret because the need is not. Now you understand.",
+        "Take the old mine road after dark. Hood the lamps when you see the levy post.",
         CC_STORY_BEAT_HEARD, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_BLACK_MARKET_DELIVERY, "Tomas Rill"),
     STORY_LINE(
         "empty_granary.tomas.promised",
-        "Good. Follow the fox lanterns, and do not stop for anyone wearing a seal.",
+        "No passengers. No stops. At the fox lanterns, ask for the foxfire supper.",
         CC_STORY_BEAT_PROMISED, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_BLACK_MARKET_DELIVERY, "Tomas Rill"),
     STORY_LINE(
         "empty_granary.tomas.helped",
-        "They ate first. The collectors came later. Both things are true.",
+        "The flour arrived. My sister says you drive like a thief. From her, that is praise.",
         CC_STORY_BEAT_HELPED, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_BLACK_MARKET_DELIVERY, "Tomas Rill"),
     STORY_LINE(
         "treaty_bridge.ilyra.offer",
-        "The bridge is not broken. That is the trouble.",
+        "The winch works. My orders say the chain stays up.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_ROUTE_REPAIR, "Ilyra Senn"),
     STORY_LINE(
         "treaty_bridge.ilyra.heard",
-        "Then you know the chain is an order, not a broken machine.",
+        "Alderwatch is hungry too. Open that gate and I answer for every sack that crosses.",
         CC_STORY_BEAT_HEARD, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_ROUTE_REPAIR, "Ilyra Senn"),
     STORY_LINE(
         "treaty_bridge.ilyra.promised",
-        "Bring tools or coin. I will make certain the winch remembers how to move.",
+        "Bring two tool crates. My bridge keeper can make a very loud repair.",
         CC_STORY_BEAT_PROMISED, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_ROUTE_REPAIR, "Ilyra Senn"),
     STORY_LINE(
         "treaty_bridge.ilyra.helped",
-        "The chain is down. My orders still have not forgiven me.",
+        "The bridge defeated me in honourable combat. That is what my report says.",
         CC_STORY_BEAT_HELPED, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_ROUTE_REPAIR, "Ilyra Senn"),
     STORY_LINE(
         "lower_silverworks.jory.offer",
-        "If the mine sings your name, do not answer with it.",
+        "We heard three knocks below the old seal. Then all twelve pit lamps went out.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_MONSTER_EXPEDITION, "Jory Fen"),
     STORY_LINE(
         "lower_silverworks.jory.heard",
-        "Good. Keep the whistle close, and listen for breathing under the wagons.",
+        "The night crew found fresh cuts in the props. No tool marks. We locked the lower gate.",
         CC_STORY_BEAT_HEARD, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_MONSTER_EXPEDITION, "Jory Fen"),
     STORY_LINE(
         "lower_silverworks.jory.promised",
-        "Then I will mark the safe turns. The mine lies about the others.",
+        "I'll mark the safe turns. If you hear singing, don't answer with your own name.",
         CC_STORY_BEAT_PROMISED, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_MONSTER_EXPEDITION, "Jory Fen"),
     STORY_LINE(
         "lower_silverworks.jory.helped",
-        "The mine is quiet tonight. I still carry the whistle.",
+        "Morning shift brought up a full cart. The stonebacks returned three lost wedding rings.",
         CC_STORY_BEAT_HELPED, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_MONSTER_EXPEDITION, "Jory Fen"),
     STORY_LINE(
         "empty_granary.jory.offer",
-        "People keep asking which store owns the flour. Flour has never answered.",
+        "The company store stopped selling flour yesterday. My mother is on the morning shift.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_RELIEF_DELIVERY, "Jory Fen"),
     STORY_LINE(
         "empty_granary.jory.heard",
-        "If you are still listening, look at the children, not the clerk.",
+        "The foreman promises a convoy every morning. By supper, he calls it tomorrow's convoy.",
         CC_STORY_BEAT_HEARD, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_RELIEF_DELIVERY, "Jory Fen"),
     STORY_LINE(
         "empty_granary.jory.promised",
-        "Then bring the flour to the ovens. The papers can follow.",
+        "Bring it to the public ovens. The guild can count sacks after people eat.",
         CC_STORY_BEAT_PROMISED, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_RELIEF_DELIVERY, "Jory Fen"),
     STORY_LINE(
         "empty_granary.jory.helped",
-        "The first oven is warm. The clock still says breakfast.",
+        "Mam took bread to the morning shift. First time this week.",
         CC_STORY_BEAT_HELPED, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_RELIEF_DELIVERY, "Jory Fen"),
     STORY_LINE(
         "empty_granary.nell.offer",
-        "Three grains. One of them burnt. A full wagon went east before sunrise.",
+        "I have three grains. Not even enough for a mouse's sandwich. I counted.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_RELIEF_DELIVERY, "Nell Varo"),
     STORY_LINE(
         "empty_granary.nell.heard",
-        "Thank you for stopping. Grown people walk faster when they are ashamed.",
+        "They fell from a king's wagon. It went east full and came back empty.",
         CC_STORY_BEAT_HEARD, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_RELIEF_DELIVERY, "Nell Varo"),
     STORY_LINE(
         "empty_granary.nell.promised",
-        "I tied red thread to the carriage, so the road cannot make you forget.",
+        "I'll wait by the ovens. I know which bell rings before the morning shift.",
         CC_STORY_BEAT_PROMISED, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_RELIEF_DELIVERY, "Nell Varo"),
     STORY_LINE(
         "empty_granary.nell.helped",
-        "The ovens are warm. I kept one grain, so I would remember the cold.",
+        "Mama had bread this morning. I made her eat her half first.",
         CC_STORY_BEAT_HELPED, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_RELIEF_DELIVERY, "Nell Varo"),
 
     STORY_LINE(
         "situation.relief.offer.sponsor",
-        "The stores are short. One honest load could keep the ovens warm.",
+        "The town on the notice is below reserve. I can pay for one full relief load.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_RELIEF_DELIVERY, NULL),
     STORY_LINE(
         "situation.relief.offer.affected",
-        "The ovens are cold. We need the road to bring food, not another notice.",
+        "The market ran out yesterday. If you bring food, find us before the guild buyers do.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_RELIEF_DELIVERY, NULL),
     STORY_LINE(
         "situation.repair.offer.sponsor",
-        "The road can open. It needs tools, coin, and someone willing to be blamed.",
+        "The gate crew can reopen the road. They need tools for the winch, or coin for the men.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_ROUTE_REPAIR, NULL),
     STORY_LINE(
         "situation.repair.offer.affected",
-        "Nothing comes through while that road stays shut. Work has stopped with it.",
+        "We used to get two carts a week on that road. We have had none since it closed.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_ROUTE_REPAIR, NULL),
     STORY_LINE(
         "situation.monster.offer.sponsor",
-        "The lower works are lost. Bring back a road people can use.",
+        "The crews will not pass the old seal. Clear the lower route and I can put them back to work.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_MONSTER_EXPEDITION, NULL),
     STORY_LINE(
         "situation.monster.offer.affected",
-        "Something is moving below the old workings. The mine is not empty.",
+        "We heard movement behind the old seal. The shift boss sent us home and locked the gate.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_MONSTER_EXPEDITION, NULL),
     STORY_LINE(
         "situation.night_road.offer.sponsor",
-        "The public stores will not help them. I know a road that will.",
+        "The patrol is turning away everyone named in the levy rolls. I need the food taken past them.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_BLACK_MARKET_DELIVERY, NULL),
     STORY_LINE(
         "situation.night_road.offer.affected",
-        "We cannot stand in the public line. Bring the food by the road without names.",
+        "We cannot use the public store. The levy clerk waits there with two guards.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_BLACK_MARKET_DELIVERY, NULL),
     STORY_LINE(
         "situation.courier.offer.sponsor",
-        "The seal must reach the other court intact. The road may decide what follows.",
+        "These orders are sealed for the other court. If the wax is broken, they can refuse them.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_COURIER_DELIVERY, NULL),
     STORY_LINE(
         "situation.courier.offer.affected",
-        "News changes on the road. That is why the road matters.",
+        "I was due at the next court yesterday. My horse will not make another crossing.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_COURIER_DELIVERY, NULL),
 
     STORY_LINE(
         "character.heard.sponsor",
-        "You have heard the need. I have nothing honest to add to it.",
+        "That is the whole of it. Will you take the work?",
         CC_STORY_BEAT_HEARD, CC_STORY_SPEAKER_SPONSOR,
         CC_STORY_ANY_SITUATION, NULL),
     STORY_LINE(
         "character.heard.affected",
-        "Thank you for hearing me. Most people only ask what the work pays.",
+        "That is what happened. I do not know what else to tell you.",
         CC_STORY_BEAT_HEARD, CC_STORY_SPEAKER_AFFECTED,
         CC_STORY_ANY_SITUATION, NULL),
     STORY_LINE(
         "character.promised.sponsor",
-        "Then the promise is yours. I will remember who carried it.",
+        "All right. I will put your company name on the charter.",
         CC_STORY_BEAT_PROMISED, CC_STORY_SPEAKER_SPONSOR,
         CC_STORY_ANY_SITUATION, NULL),
     STORY_LINE(
         "character.promised.affected",
-        "I told them help was coming. Please do not make me a liar.",
+        "Thank you. I will tell the others you are coming.",
         CC_STORY_BEAT_PROMISED, CC_STORY_SPEAKER_AFFECTED,
         CC_STORY_ANY_SITUATION, NULL),
     STORY_LINE(
         "character.helped.sponsor",
-        "You kept the promise. The account will carry your name.",
+        "I received the report this morning. You did what you promised.",
         CC_STORY_BEAT_HELPED, CC_STORY_SPEAKER_SPONSOR,
         CC_STORY_ANY_SITUATION, NULL),
     STORY_LINE(
         "character.helped.affected",
-        "You kept your word. I will not forget it.",
+        "You came back. Thank you.",
         CC_STORY_BEAT_HELPED, CC_STORY_SPEAKER_AFFECTED,
         CC_STORY_ANY_SITUATION, NULL),
     STORY_LINE(
         "character.withdrew.sponsor",
-        "You gave your word, then took it back. The need did not leave with you.",
+        "I had your name on the charter. Now I have to find another carrier.",
         CC_STORY_BEAT_WITHDREW, CC_STORY_SPEAKER_SPONSOR,
         CC_STORY_ANY_SITUATION, NULL),
     STORY_LINE(
         "character.withdrew.affected",
-        "You said you would help. We waited for you.",
+        "We waited until dark. No one came.",
         CC_STORY_BEAT_WITHDREW, CC_STORY_SPEAKER_AFFECTED,
         CC_STORY_ANY_SITUATION, NULL),
     STORY_LINE(
         "character.resolved.sponsor",
-        "The matter is closed. The road will remember how it was done.",
+        "Another crew finished it this morning. The offer is closed.",
         CC_STORY_BEAT_RESOLVED, CC_STORY_SPEAKER_SPONSOR,
         CC_STORY_ANY_SITUATION, NULL),
     STORY_LINE(
         "character.resolved.affected",
-        "It changed before we could ask you. We are learning what that change cost.",
+        "They settled it without us. I do not know yet if that is good news.",
         CC_STORY_BEAT_RESOLVED, CC_STORY_SPEAKER_AFFECTED,
         CC_STORY_ANY_SITUATION, NULL),
     STORY_LINE(
         "character.failed.sponsor",
-        "The offer is gone. Someone else chose what would happen next.",
+        "The deadline passed. I cannot hold the offer open.",
         CC_STORY_BEAT_FAILED, CC_STORY_SPEAKER_SPONSOR,
         CC_STORY_ANY_SITUATION, NULL),
     STORY_LINE(
         "character.failed.affected",
-        "The chance passed. We are living with what came after it.",
+        "It is too late for that plan now. We have to manage what is left.",
         CC_STORY_BEAT_FAILED, CC_STORY_SPEAKER_AFFECTED,
         CC_STORY_ANY_SITUATION, NULL)
 };
@@ -348,4 +348,57 @@ const char *CcStoryBeatName(CcStoryBeat beat)
         case CC_STORY_BEAT_FAILED: return "failed";
     }
     return "unknown";
+}
+
+const char *CcStoryPlayerChoiceText(CcSituationKind kind,
+                                    CcStoryPlayerChoice choice)
+{
+    if (choice == CC_STORY_PLAYER_LEAVE) return "Esc  Not now.";
+    if (choice == CC_STORY_PLAYER_ASK) {
+        switch (kind) {
+            case CC_SITUATION_RELIEF_DELIVERY:
+                return "1  Where does the food go?";
+            case CC_SITUATION_ROUTE_REPAIR:
+                return "1  Why is the bridge closed?";
+            case CC_SITUATION_MONSTER_EXPEDITION:
+                return "1  What did the miners hear?";
+            case CC_SITUATION_BLACK_MARKET_DELIVERY:
+                return "1  Who gets the food?";
+            case CC_SITUATION_COURIER_DELIVERY:
+                return "1  Who needs the letter?";
+        }
+    }
+    if (choice == CC_STORY_PLAYER_PROMISE) {
+        switch (kind) {
+            case CC_SITUATION_RELIEF_DELIVERY:
+                return "2  I will bring the food.";
+            case CC_SITUATION_ROUTE_REPAIR:
+                return "2  I will open the road.";
+            case CC_SITUATION_MONSTER_EXPEDITION:
+                return "2  I will go below.";
+            case CC_SITUATION_BLACK_MARKET_DELIVERY:
+                return "2  I will make the delivery.";
+            case CC_SITUATION_COURIER_DELIVERY:
+                return "2  I will carry the dispatch.";
+        }
+    }
+    return "Continue.";
+}
+
+const char *CcStoryRoadCompanyLine(const CcBanditGroup *company)
+{
+    if (company == NULL) return "Pay for the road or turn back.";
+    if (strcmp(company->name, "The Unpaid Company") == 0) {
+        return "The crown owes us six months' pay. Today, you settle one day of it.";
+    }
+    if (strcmp(company->name, "The Tallow Knives") == 0) {
+        return "Food or coin. Keep the speech.";
+    }
+    if (strcmp(company->name, "The Broken Pennants") == 0) {
+        return "We guarded this road before they struck our colours. We still collect.";
+    }
+    if (strcmp(company->name, "The Ditch Parliament") == 0) {
+        return "We counted your guards. We counted your wheels. Now we're counting your coin.";
+    }
+    return "Pay for the road or turn back.";
 }

@@ -1,6 +1,7 @@
 #include "metagame/cc_metagame.h"
 
 #include "persistence/cc_save.h"
+#include "story/cc_story.h"
 
 #include <inttypes.h>
 #include <stdarg.h>
@@ -374,7 +375,7 @@ static void DescribePeople(const CcMetagame *metagame,
         shown += 1;
     } else if (IsNamedSettlement(sim, place, 3)) {
         Append(output, capacity,
-               "  Jory Fen has silver dust in his eyebrows and a bent brass whistle. He says not to answer if the mine sings your name.\n");
+               "  Jory Fen has silver dust in his eyebrows and a bent brass whistle. He says the lower tunnel carries voices, and never to answer with your name.\n");
         shown += 1;
     }
     for (int32_t i = 0; i < sim->situation_count; ++i) {
@@ -544,6 +545,8 @@ static bool TalkToSituation(CcMetagame *metagame, int32_t index,
 {
     CcSim *sim = &metagame->sim;
     CcSituation *situation = &sim->situations[index];
+    const CcCharacter *sponsor = CcSimSituationSponsorCharacter(
+        sim, situation);
     const CcCharacter *affected = CcSimSituationAffectedCharacter(
         sim, situation);
     bool sponsor_here = situation->status == CC_SITUATION_ACTIVE &&
@@ -558,6 +561,11 @@ static bool TalkToSituation(CcMetagame *metagame, int32_t index,
                "Nobody here can tell that part of the story.\n");
         return false;
     }
+    const CcCharacter *speaker = sponsor_here ? sponsor : affected;
+    const CcStoryLine *spoken = CcStoryCharacterLine(
+        sim, situation, speaker);
+    const char *spoken_text = spoken != NULL ? spoken->text :
+        "Tell me what happened, from the beginning.";
     if (affected_here &&
         !CcCharacterRemembers(affected, CC_CHARACTER_MEMORY_MET_PLAYER,
                               situation->id)) {
@@ -576,40 +584,42 @@ static bool TalkToSituation(CcMetagame *metagame, int32_t index,
     if (situation->kind == CC_SITUATION_RELIEF_DELIVERY && sponsor_here) {
         Append(output, capacity,
                "%s straightens the white-wax letter until it is exactly square with the desk.\n"
-               "\"Eight sacks to Silverwick,\" she says. \"Every sack to the guild store.\"\n"
+               "\"%s\"\n"
                "You ask why the bridge is closed. She looks at the black wax on Nell's grain.\n"
                "\"Because Alderwatch closed it.\" It is an answer in the way an empty bowl is a meal.\n",
-               situation->sponsor_name);
+               situation->sponsor_name, spoken_text);
     } else if (situation->kind == CC_SITUATION_BLACK_MARKET_DELIVERY &&
                sponsor_here) {
         Append(output, capacity,
                "%s unfolds from behind a stack of flour barrels. His green scarf is bright; his smile is brighter.\n"
-               "\"Ask for the foxfire supper. No soldiers, no inspection, better pay.\"\n"
+               "\"%s\"\n"
                "For one moment the smile slips. \"My sister works the lower mine. They boiled their seed grain.\"\n"
                "Then it returns. \"Also, better pay.\"\n",
-               situation->sponsor_name);
+               situation->sponsor_name, spoken_text);
     } else if (situation->kind == CC_SITUATION_ROUTE_REPAIR &&
                sponsor_here) {
         Append(output, capacity,
-               "%s sets an iron bridge key on the table. \"The bridge is not broken. That is the trouble.\"\n"
+               "%s sets an iron bridge key on the table. \"%s\"\n"
                "Two bundles of tools would make its keepers admit the winch works. Eighteen crowns would make them forget they ever doubted it.\n"
-               "She watches the hungry boy on the wall finish his soup before adding, \"My orders and my conscience have stopped speaking.\"\n",
-               situation->sponsor_name);
+               "She watches the hungry boy on the wall finish his soup. \"Open that gate and I answer for every sack that crosses.\"\n",
+               situation->sponsor_name, spoken_text);
     } else if (situation->kind == CC_SITUATION_MONSTER_EXPEDITION) {
         Append(output, capacity,
                "%s slides out from under a broken ore wagon. Silver dust has settled in his eyebrows.\n"
-               "\"The old freight tunnel still reaches the town,\" he says. The wagon behind him rises and falls: in, out.\n"
-               "He gives you a bent brass whistle. \"If the mine sings your name, do not answer with it.\"\n",
-               situation->affected_name);
+               "The wagon behind him rises and falls on a bad axle: in, out.\n"
+               "He gives you a bent brass whistle. \"%s\"\n",
+               situation->affected_name, spoken_text);
     } else if (situation->kind == CC_SITUATION_RELIEF_DELIVERY) {
         Append(output, capacity,
-               "%s looks from the carriage sacks to the empty oven tins. \"People keep asking which store owns the flour,\" he says. \"Flour has never answered.\"\n",
-               situation->affected_name);
+               "%s looks from the carriage sacks to the empty oven tins.\n"
+               "\"%s\"\n",
+               situation->affected_name, spoken_text);
     } else {
         Append(output, capacity,
-               "%s turns the sealed letter over without breaking it. \"News changes on the road,\" they say. \"That is why the road matters.\"\n",
+               "%s turns the sealed letter over without breaking it.\n"
+               "\"%s\"\n",
                affected_here ? situation->affected_name :
-                   situation->sponsor_name);
+                   situation->sponsor_name, spoken_text);
     }
     return true;
 }

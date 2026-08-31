@@ -130,6 +130,7 @@ int main(void)
     ExecuteNumber(&metagame, "talk", relief_number, output, sizeof(output));
     CC_CHECK(strstr(output, "empty bowl is a meal") != NULL);
     CC_CHECK(strstr(output, "Nell's grain") != NULL);
+    CC_CHECK(strstr(output, "Eight sacks for Silverwick") != NULL);
     CC_CHECK(CcMetagameExecute(&metagame, "routes", output, sizeof(output)));
     CC_CHECK(strstr(output, "Baker's Road") != NULL);
 
@@ -152,6 +153,7 @@ int main(void)
     ExecuteNumber(&metagame, "talk", quiet_number, output, sizeof(output));
     CC_CHECK(strstr(output, "green scarf") != NULL);
     CC_CHECK(strstr(output, "boiled their seed grain") != NULL);
+    CC_CHECK(strstr(output, "No soldiers, no inspection") != NULL);
     CC_CHECK(CcMetagameExecute(&metagame, "routes", output, sizeof(output)));
     CC_CHECK(strstr(output, "no notes") != NULL);
     CC_CHECK(strstr(output, "unmarked track") != NULL);
@@ -261,7 +263,8 @@ int main(void)
     CC_CHECK(strstr(output, "market clock is still waiting for breakfast") !=
              NULL);
     ExecuteNumber(&lawful, "talk", relief_number, output, sizeof(output));
-    CC_CHECK(strstr(output, "Flour has never answered") != NULL);
+    CC_CHECK(strstr(output, "company store stopped selling flour") != NULL);
+    CC_CHECK(strstr(output, "Flour has never answered") == NULL);
     CC_CHECK(CcMetagameExecute(&lawful, "sell food 8", output,
                                sizeof(output)));
     CC_CHECK(strstr(output, "No golden light declares the choice good") !=
