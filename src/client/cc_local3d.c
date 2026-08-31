@@ -22608,7 +22608,7 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
                                                "DESTINATION");
     (void)snprintf(blockade_label, sizeof(blockade_label), "%s",
                    bandits != NULL ? bandits->name : "ROAD COLLECTORS");
-    WorldLabel labels[6];
+    WorldLabel labels[6] = {0};
     int32_t count = 0;
     if (!travelling && !combat_presentation) {
         labels[count++] = (WorldLabel){{agent->position.x,
