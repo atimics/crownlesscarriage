@@ -652,7 +652,7 @@ static void StartSwing(CcLimbRig *rig, int32_t limb_index)
 static void CalculateSupport(CcLimbRig *rig, CcLimbVec3 body_position,
                              float body_yaw, bool grounded)
 {
-    CcLimbVec3 contacts[CC_LIMB_MAX_COUNT];
+    CcLimbVec3 contacts[CC_LIMB_MAX_COUNT] = {0};
     rig->planted_count = GatherContacts(rig, -1, grounded, contacts,
                                         &rig->support_center);
     rig->swinging_count = 0;
