@@ -69,6 +69,13 @@ static void ToggleCommandOverlay(ClientView requested,
     *view = requested;
 }
 
+typedef enum OpeningConversationBeat {
+    OPENING_CONVERSATION_NONE = 0,
+    OPENING_CONVERSATION_NELL_REQUEST,
+    OPENING_CONVERSATION_JORY_CLUE,
+    OPENING_CONVERSATION_MARA_PROMISE
+} OpeningConversationBeat;
+
 typedef struct LocalState {
     CcLocalAgent agent;
     CcLocalCourse course;
@@ -88,6 +95,7 @@ typedef struct LocalState {
     bool movement_reticle_valid;
     bool movement_reticle_accepted;
     CcLocalOpeningStep opening_step;
+    OpeningConversationBeat opening_conversation;
     CcId conversation_character_id;
     CcId conversation_situation_id;
 } LocalState;
@@ -173,7 +181,7 @@ typedef enum ContextActionKind {
     CONTEXT_ACTION_TRAVEL_DRAGON_SITE,
     CONTEXT_ACTION_RETURN_FROM_SITE,
     CONTEXT_ACTION_GOBLIN_TRADE,
-    CONTEXT_ACTION_TALK_NELL,
+    CONTEXT_ACTION_TALK_JORY,
     CONTEXT_ACTION_MEET_MARA,
     CONTEXT_ACTION_TALK_CHARACTER,
     CONTEXT_ACTION_LISTEN_CHARACTER,
@@ -277,8 +285,8 @@ static const Vector2 LOCAL_CARRIAGE_BAY = {
     CC_LOCAL_CARRIAGE_APPROACH_X, CC_LOCAL_CARRIAGE_APPROACH_Z
 };
 static const Vector2 LOCAL_NOTICE = {CC_LOCAL_NOTICE_X, CC_LOCAL_NOTICE_Z};
-static const Vector2 LOCAL_INTRO_NELL = {CC_LOCAL_INTRO_NELL_X,
-                                         CC_LOCAL_INTRO_NELL_Z};
+static const Vector2 LOCAL_INTRO_JORY = {CC_LOCAL_INTRO_JORY_X,
+                                         CC_LOCAL_INTRO_JORY_Z};
 static const Vector2 LOCAL_DUNGEON = {CC_LOCAL_DUNGEON_X,
                                      CC_LOCAL_DUNGEON_Z};
 static const Vector2 LOCAL_DRAGON_CAVE = {CC_LOCAL_DRAGON_CAVE_X,
@@ -762,6 +770,7 @@ static void ResetLocalState(LocalState *local)
     local->movement_reticle_accepted = false;
     local->conversation_character_id = 0U;
     local->conversation_situation_id = 0U;
+    local->opening_conversation = OPENING_CONVERSATION_NONE;
     local->opening_step = CC_LOCAL_OPENING_COMPLETE;
     local->market_interior = false;
     local->site_kind = CC_LOCAL_SITE_NONE;
@@ -797,10 +806,11 @@ static void BeginOpening(LocalState *local)
     RepositionHero(local,
                    (Vector2){CC_LOCAL_INTRO_START_X,
                              CC_LOCAL_INTRO_START_Z}, false);
-    local->opening_step = CC_LOCAL_OPENING_FIND_NELL;
+    local->opening_step = CC_LOCAL_OPENING_FIND_JORY;
+    local->opening_conversation = OPENING_CONVERSATION_NELL_REQUEST;
     local->agent.facing_yaw = atan2f(
-        CC_LOCAL_INTRO_NELL_X - CC_LOCAL_INTRO_START_X,
-        CC_LOCAL_INTRO_NELL_Z - CC_LOCAL_INTRO_START_Z);
+        CC_LOCAL_INTRO_JORY_X - CC_LOCAL_INTRO_START_X,
+        CC_LOCAL_INTRO_JORY_Z - CC_LOCAL_INTRO_START_Z);
     local->course.alarm_countdown = 1000.0f;
 }
 
@@ -910,6 +920,9 @@ static bool RestoreLocalSession(const char *path, const CcSim *sim,
     }
     local->agent.facing_yaw = session.facing_yaw;
     local->opening_step = (CcLocalOpeningStep)session.opening_step;
+    if (local->opening_step == CC_LOCAL_OPENING_FIND_JORY) {
+        local->opening_conversation = OPENING_CONVERSATION_NELL_REQUEST;
+    }
     return true;
 }
 
@@ -1274,8 +1287,8 @@ static void DrawLocalHeader(const CcSim *sim, const LocalState *local)
         CcOverlayDrawText("THORNFORD  /  THE FIRST BELL",
                           22, 18, 18, INK);
         const char *beat = local->opening_step ==
-                CC_LOCAL_OPENING_FIND_NELL ?
-            "FIND NELL  /  the girl beside the bakery" :
+                CC_LOCAL_OPENING_FIND_JORY ?
+            "FIND JORY  /  look behind the bakery" :
             "FIND MARA  /  she is waiting at the harvest board";
         CcOverlayDrawText(beat, 22, 42, 9, TEAL);
         const char *hint = "CLICK THE ROAD TO WALK";
@@ -2279,6 +2292,26 @@ static ContextActionSet BuildContextActions(
         return set;
     }
     if (view == VIEW_CHARACTER) {
+        if (local->opening_conversation != OPENING_CONVERSATION_NONE) {
+            const char *label = local->opening_conversation ==
+                    OPENING_CONVERSATION_NELL_REQUEST ?
+                "Find Jory" :
+                local->opening_conversation ==
+                        OPENING_CONVERSATION_JORY_CLUE ?
+                    "Take the grain to Mara" :
+                    "Accept Mara's promise";
+            const char *detail = local->opening_conversation ==
+                    OPENING_CONVERSATION_NELL_REQUEST ?
+                "BEHIND THE BAKERY" :
+                local->opening_conversation ==
+                        OPENING_CONVERSATION_JORY_CLUE ?
+                    "AT THE HARVEST BOARD" :
+                    "THE CARRIAGE BECOMES YOURS";
+            AddDetailedContextAction(
+                &set, CONTEXT_ACTION_LISTEN_CHARACTER,
+                label, "ENTER", detail, true, false);
+            return set;
+        }
         const CcSituation *situation = CcSimSituation(
             sim, local->conversation_situation_id);
         const CcCharacter *character = CcSimCharacter(
@@ -2405,10 +2438,10 @@ static ContextActionSet BuildContextActions(
     }
 
     Vector2 position = LocalPosition(local);
-    if (local->opening_step == CC_LOCAL_OPENING_FIND_NELL) {
-        if (GridDistance(position, LOCAL_INTRO_NELL) < 1.65f) {
-            AddContextAction(&set, CONTEXT_ACTION_TALK_NELL,
-                             "Talk to Nell");
+    if (local->opening_step == CC_LOCAL_OPENING_FIND_JORY) {
+        if (GridDistance(position, LOCAL_INTRO_JORY) < 1.65f) {
+            AddContextAction(&set, CONTEXT_ACTION_TALK_JORY,
+                             "Talk to Jory");
         }
         return set;
     }
@@ -2561,7 +2594,7 @@ static Color ContextActionColor(ContextActionKind kind)
         kind == CONTEXT_ACTION_RETURN_DRAGON_RELIC ||
         kind == CONTEXT_ACTION_INTERCEPT_DRAGON_TRIBUTE ||
         kind == CONTEXT_ACTION_OPEN_DRAGON_CAVE ||
-        kind == CONTEXT_ACTION_TALK_NELL ||
+        kind == CONTEXT_ACTION_TALK_JORY ||
         kind == CONTEXT_ACTION_MEET_MARA) return TEAL;
     if (kind == CONTEXT_ACTION_SELECT_TARGET) return DANGER;
     if (kind == CONTEXT_ACTION_BASIC_STRIKE ||
@@ -3558,10 +3591,91 @@ static const char *CharacterStakeLine(const CcSituation *situation)
     return "The trouble has reached their own door.";
 }
 
+static void DrawOpeningConversation(const CcSim *sim,
+                                    const LocalState *local)
+{
+    const char *speaker = "NELL VARO";
+    const char *place = "AT THE BAKERY DOOR  /  BEFORE THE FIRST BELL";
+    const char *first =
+        "\"Jory went round the bakery before dawn,\" Nell says. \"He always saves the heel of his breakfast for the ravens.\"";
+    const char *second =
+        "\"The bell rang, but the roof stayed still. Please find him in the back yard. Tell him I'm waiting.\"";
+    const char *next = "Find Jory behind the bakery.";
+    char first_buffer[192] = "";
+    char second_buffer[192] = "";
+    char next_buffer[128] = "";
+
+    if (local->opening_conversation == OPENING_CONVERSATION_JORY_CLUE) {
+        speaker = "JORY FEN";
+        place = "BEHIND THE BAKERY  /  FLOUR ON HIS SLEEVES";
+        first =
+            "Jory opens his fist. A grain of wheat lies in the flour on his palm, black as a spent match.";
+        second =
+            "\"It came from the newest sack. Don't taste it. Take it to Mara at the harvest board - and mind who sees you.\"";
+        next = "Find Mara at the harvest board.";
+    } else if (local->opening_conversation ==
+               OPENING_CONVERSATION_MARA_PROMISE) {
+        speaker = "MARA VENN";
+        place = "AT THE HARVEST BOARD  /  THE BELL HAS STOPPED";
+        first = first_buffer;
+        second = second_buffer;
+        next = next_buffer;
+        (void)snprintf(
+            first_buffer, sizeof(first_buffer),
+            "Mara rolls the grain beneath one thumb. \"Scorched from the heart,\" she murmurs. \"That should not be possible.\"");
+        int32_t opening_index = OpeningSituationIndex(sim);
+        const CcSituation *situation = opening_index >= 0 ?
+            &sim->situations[opening_index] : NULL;
+        char target[96] = "the next town";
+        if (situation != NULL) {
+            SituationTargetLabel(sim, situation, target, sizeof(target));
+        }
+        if (situation != NULL &&
+            (situation->kind == CC_SITUATION_RELIEF_DELIVERY ||
+             situation->kind == CC_SITUATION_BLACK_MARKET_DELIVERY)) {
+            (void)snprintf(
+                second_buffer, sizeof(second_buffer),
+                "\"Take the old carriage and its two bays. Carry %d %s to %s. On the road, keep your eyes open.\"",
+                situation->quantity, CcGoodName(situation->good), target);
+        } else if (situation != NULL) {
+            (void)snprintf(
+                second_buffer, sizeof(second_buffer),
+                "\"Take the old carriage and its two bays. See to %s at %s, and bring them home safely.\"",
+                SituationTitle(situation->kind), target);
+        } else {
+            (void)snprintf(
+                second_buffer, sizeof(second_buffer),
+                "\"Take the old carriage and its two bays. Find where that grain came from, and bring them home safely.\"");
+        }
+        (void)snprintf(next_buffer, sizeof(next_buffer),
+                       "Accept the carriage and Mara's first promise.");
+    }
+
+    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
+                  Fade(BACKGROUND, 0.76f));
+    Rectangle bounds = {292.0f, 142.0f, 696.0f, 388.0f};
+    DrawPanel(bounds, PANEL_DEEP);
+    CcOverlayDrawText("THE FIRST THREAD", 330, 174, 9, TEAL);
+    CcOverlayDrawText(speaker, 330, 205, 24, CC_GOLD);
+    CcOverlayDrawText(place, 330, 242, 9, MUTED);
+    DrawTwoLineText(first, 330, 286, 68U, 11, INK);
+    DrawTwoLineText(second, 330, 342, 68U, 11, INK);
+    Rectangle next_bounds = {322.0f, 409.0f, 636.0f, 78.0f};
+    DrawRectangleRounded(next_bounds, 0.12f, 5, Fade(TEAL, 0.10f));
+    DrawRectangleRoundedLinesEx(next_bounds, 0.12f, 5, 1.0f,
+                                Fade(TEAL, 0.52f));
+    CcOverlayDrawText("WHAT TO DO NEXT", 342, 426, 8, TEAL);
+    CcOverlayDrawText(next, 342, 451, 12, INK);
+}
+
 static void DrawCharacterConversation(const CcSim *sim,
                                       const LocalState *local)
 {
     if (sim == NULL || local == NULL) return;
+    if (local->opening_conversation != OPENING_CONVERSATION_NONE) {
+        DrawOpeningConversation(sim, local);
+        return;
+    }
     const CcSituation *situation = CcSimSituation(
         sim, local->conversation_situation_id);
     const CcCharacter *character = CcSimCharacter(
@@ -4429,6 +4543,45 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         return;
     }
     if (*view == VIEW_CHARACTER) {
+        if (local->opening_conversation != OPENING_CONVERSATION_NONE) {
+            OpeningConversationBeat beat = local->opening_conversation;
+            bool confirm = ClientKeyPressed(KEY_ENTER) ||
+                ClientKeyPressed(KEY_ONE) ||
+                context_action == CONTEXT_ACTION_LISTEN_CHARACTER;
+            bool leave = confirm ||
+                (beat != OPENING_CONVERSATION_MARA_PROMISE &&
+                 (ClientKeyPressed(KEY_ESCAPE) ||
+                  context_action == CONTEXT_ACTION_CLOSE_VIEW));
+            if (!leave) return;
+            if (beat == OPENING_CONVERSATION_MARA_PROMISE) {
+                int32_t opening_situation = OpeningSituationIndex(sim);
+                if (opening_situation >= 0 &&
+                    sim->player.accepted_situation_id == 0U) {
+                    CcCommand accept = {
+                        .kind = CC_COMMAND_ACCEPT_SITUATION,
+                        .target_id = sim->situations[opening_situation].id
+                    };
+                    if (!ApplyCommand(*journal, sim, accept, message,
+                                      message_capacity)) return;
+                    *selected_situation = opening_situation;
+                }
+                local->opening_step = CC_LOCAL_OPENING_COMPLETE;
+                (void)snprintf(
+                    message, message_capacity,
+                    "Mara puts a brass key in your hand. The old carriage and its two horses are yours for this promise.");
+            } else if (beat == OPENING_CONVERSATION_JORY_CLUE) {
+                (void)snprintf(
+                    message, message_capacity,
+                    "Jory's black grain is tucked safely in your palm. Find Mara at the harvest board.");
+            } else {
+                (void)snprintf(
+                    message, message_capacity,
+                    "Find Jory behind the bakery. He always feeds the ravens before the first bell.");
+            }
+            local->opening_conversation = OPENING_CONVERSATION_NONE;
+            *view = VIEW_LOCAL;
+            return;
+        }
         if (ClientKeyPressed(KEY_ESCAPE) ||
             context_action == CONTEXT_ACTION_CLOSE_VIEW) {
             *view = VIEW_LOCAL;
@@ -4464,35 +4617,23 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         local->opening_step != CC_LOCAL_OPENING_COMPLETE) {
         Vector2 position = LocalPosition(local);
         bool interact = ClientKeyPressed(KEY_F);
-        if (local->opening_step == CC_LOCAL_OPENING_FIND_NELL &&
+        if (local->opening_step == CC_LOCAL_OPENING_FIND_JORY &&
             CcClientInteractionActivated(
-                interact || context_action == CONTEXT_ACTION_TALK_NELL,
-                GridDistance(position, LOCAL_INTRO_NELL), 1.65f)) {
+                interact || context_action == CONTEXT_ACTION_TALK_JORY,
+                GridDistance(position, LOCAL_INTRO_JORY), 1.65f)) {
             local->opening_step = CC_LOCAL_OPENING_MEET_MARA;
-            (void)snprintf(
-                message, message_capacity,
-                "Nell opens her hand. One grain is black. Mara is waiting at the harvest board.");
+            local->opening_conversation = OPENING_CONVERSATION_JORY_CLUE;
+            *view = VIEW_CHARACTER;
+            message[0] = '\0';
             return;
         }
         if (local->opening_step == CC_LOCAL_OPENING_MEET_MARA &&
             CcClientInteractionActivated(
                 interact || context_action == CONTEXT_ACTION_MEET_MARA,
                 GridDistance(position, LOCAL_NOTICE), 1.35f)) {
-            int32_t opening_situation = OpeningSituationIndex(sim);
-            if (opening_situation >= 0 &&
-                sim->player.accepted_situation_id == 0U) {
-                CcCommand accept = {
-                    .kind = CC_COMMAND_ACCEPT_SITUATION,
-                    .target_id = sim->situations[opening_situation].id
-                };
-                if (!ApplyCommand(*journal, sim, accept, message,
-                                  message_capacity)) return;
-                *selected_situation = opening_situation;
-            }
-            local->opening_step = CC_LOCAL_OPENING_COMPLETE;
-            (void)snprintf(
-                message, message_capacity,
-                "Mara puts a brass key in your hand. The old carriage and its two horses are yours for this promise.");
+            local->opening_conversation = OPENING_CONVERSATION_MARA_PROMISE;
+            *view = VIEW_CHARACTER;
+            message[0] = '\0';
             return;
         }
         if (interact || ClientKeyPressed(KEY_TAB) ||
@@ -4502,9 +4643,9 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             command_action != COMMAND_ACTION_NONE) {
             (void)snprintf(
                 message, message_capacity,
-                local->opening_step == CC_LOCAL_OPENING_FIND_NELL ?
-                    "For now, there is only the silent bakery. Find Nell." :
-                    "For now, follow Nell's black grain to Mara.");
+                local->opening_step == CC_LOCAL_OPENING_FIND_JORY ?
+                    "Nell asked you to find Jory behind the bakery." :
+                    "For now, carry Jory's black grain to Mara.");
             return;
         }
     }
@@ -4695,7 +4836,9 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 } else {
                     (void)RestoreLocalSession(session_path, sim, local);
                 }
-                *view = VIEW_LOCAL;
+                *view = local->opening_conversation !=
+                            OPENING_CONVERSATION_NONE ?
+                    VIEW_CHARACTER : VIEW_LOCAL;
             }
         }
     }
@@ -4719,13 +4862,15 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         *selected_situation = FirstActiveSituationIndex(sim);
         CcLocalBindPlace(sim);
         ResetLocalState(local);
-        *view = VIEW_LOCAL;
         *journal = CcJournalRestart(save_path, sim, error, sizeof(error));
-        if (*journal != NULL) BeginOpening(local);
-        (void)snprintf(message, message_capacity, "%s",
-                       *journal != NULL ?
-                           "The first bell rings. No ravens leave the bakery roof." :
-                           error);
+        if (*journal != NULL) {
+            BeginOpening(local);
+            *view = VIEW_CHARACTER;
+            message[0] = '\0';
+        } else {
+            *view = VIEW_LOCAL;
+            (void)snprintf(message, message_capacity, "%s", error);
+        }
         return;
     }
     if (ClientKeyPressed(KEY_PERIOD) && !sim->journey.active) {
@@ -6141,8 +6286,12 @@ int main(int argc, char **argv)
     ResetLocalState(&local);
     if (normal_play && !resuming_campaign && journal != NULL) {
         BeginOpening(&local);
+        view = VIEW_CHARACTER;
     }
-    if (capture_opening) BeginOpening(&local);
+    if (capture_opening) {
+        BeginOpening(&local);
+        view = VIEW_CHARACTER;
+    }
     if (capture_carriage) {
         RepositionHero(&local, LOCAL_CARRIAGE_BAY, false);
         local.agent.world_target = CC_LOCAL_WORLD_TARGET_CARRIAGE;
@@ -6166,6 +6315,9 @@ int main(int argc, char **argv)
                RestoreLocalSession(session_path, &sim, &local)) {
         (void)snprintf(startup_message, sizeof(startup_message),
                        "Campaign resumed where you left off.");
+        if (local.opening_conversation != OPENING_CONVERSATION_NONE) {
+            view = VIEW_CHARACTER;
+        }
     }
     if (capture_dragon_cave) {
         local.site_kind = CC_LOCAL_SITE_DRAGON_CAVE;
@@ -6424,10 +6576,8 @@ int main(int argc, char **argv)
         }
     }
     char message[256] = "";
-    if (local.opening_step == CC_LOCAL_OPENING_FIND_NELL) {
-        (void)snprintf(
-            message, sizeof(message),
-            "The first bell rings. No ravens leave the bakery roof.");
+    if (local.opening_conversation == OPENING_CONVERSATION_NELL_REQUEST) {
+        message[0] = '\0';
     } else if (!capture && !render_benchmark && startup_message[0] != '\0') {
         (void)snprintf(message, sizeof(message), "%s", startup_message);
     }

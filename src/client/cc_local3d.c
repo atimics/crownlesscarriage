@@ -13339,7 +13339,7 @@ void CcLocalRendererSetScreenFirstHero(bool enabled)
 
 void CcLocalRendererSetOpeningStep(CcLocalOpeningStep step)
 {
-    active_opening_step = step >= CC_LOCAL_OPENING_FIND_NELL &&
+    active_opening_step = step >= CC_LOCAL_OPENING_FIND_JORY &&
                           step <= CC_LOCAL_OPENING_COMPLETE ?
         step : CC_LOCAL_OPENING_COMPLETE;
 }
@@ -22792,9 +22792,9 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
 
     DrawVisibleNpcFigure3D(
         TerrainWorldPoint(STREET_PEOPLE[0].x, STREET_PEOPLE[0].y),
-        active_opening_step == CC_LOCAL_OPENING_FIND_NELL ? 0.78f : 0.96f,
+        active_opening_step == CC_LOCAL_OPENING_FIND_JORY ? 0.78f : 0.96f,
         -0.55f, UINT32_C(0x73747201),
-        active_opening_step == CC_LOCAL_OPENING_FIND_NELL ?
+        active_opening_step == CC_LOCAL_OPENING_FIND_JORY ?
             CC_NPC_ROLE_TRAVELLER : CC_NPC_ROLE_MERCHANT,
         (Color){223, 151, 68, 255}, clock * 1.2f, CC_TRAVERSAL_IDLE,
         scenery_focus);
@@ -22956,15 +22956,15 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                                        carriage_targeted ? WORLD_TEAL :
                                                            WORLD_GOLD};
     }
-    if (active_opening_step == CC_LOCAL_OPENING_FIND_NELL &&
-        AgentNearLabel(agent, CC_LOCAL_INTRO_NELL_X,
-                       CC_LOCAL_INTRO_NELL_Z, 11.0f)) {
+    if (active_opening_step == CC_LOCAL_OPENING_FIND_JORY &&
+        AgentNearLabel(agent, CC_LOCAL_INTRO_JORY_X,
+                       CC_LOCAL_INTRO_JORY_Z, 11.0f)) {
         labels[count++] = (WorldLabel){
-            {CC_LOCAL_INTRO_NELL_X,
-             CcLocalTerrainHeightAt(CC_LOCAL_INTRO_NELL_X,
-                                    CC_LOCAL_INTRO_NELL_Z) + 1.92f,
-             CC_LOCAL_INTRO_NELL_Z},
-            "Nell  /  press F to talk", WORLD_TEAL};
+            {CC_LOCAL_INTRO_JORY_X,
+             CcLocalTerrainHeightAt(CC_LOCAL_INTRO_JORY_X,
+                                    CC_LOCAL_INTRO_JORY_Z) + 1.92f,
+             CC_LOCAL_INTRO_JORY_Z},
+            "Jory  /  press F to talk", WORLD_TEAL};
     }
     if (active_opening_step == CC_LOCAL_OPENING_MEET_MARA &&
         AgentNearLabel(agent, CC_LOCAL_NOTICE_X,
