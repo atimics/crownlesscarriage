@@ -8399,43 +8399,43 @@ static void DeliverDelayedEchoIfReady(CcSim *sim)
     if (situation != NULL &&
         situation->kind == CC_SITUATION_ROUTE_REPAIR && prior_echoes == 0) {
         (void)snprintf(text, sizeof(text),
-                       "A letter waits on the driver's seat. %.24s has enclosed a broken chain link: common carts cross the bridge again, and the hungry boy on the wall now eats before the officers do.",
+                       "A letter from %.16s holds a broken chain link. Carts cross again; the hungry boy now eats before the officers do.",
                        sim->delayed_echo.character_name);
     } else if (situation != NULL &&
                situation->kind == CC_SITUATION_ROUTE_REPAIR) {
         (void)snprintf(text, sizeof(text),
-                       "A second letter from %.24s says the bridge feeds %.24s, but its new toll keepers are growing rich enough to buy very large hats.",
+                       "A second letter from %.16s says the bridge feeds %.16s, but its toll keepers are buying very large hats.",
                        sim->delayed_echo.character_name,
                        place != NULL ? place->name : "the settlement");
     } else if (situation != NULL &&
                situation->kind == CC_SITUATION_BLACK_MARKET_DELIVERY &&
                prior_echoes == 0) {
         (void)snprintf(text, sizeof(text),
-                       "A letter from %.24s smells of onion soup. A fox is drawn beside %.24s's new public toll sign: food reached the hungry before the law could stop it.",
+                       "A letter from %.16s smells of onion soup. A fox sits beside %.16s's new toll sign. Food reached the hungry first.",
                        sim->delayed_echo.character_name,
                        place != NULL ? place->name : "the settlement");
     } else if (situation != NULL &&
                situation->kind == CC_SITUATION_BLACK_MARKET_DELIVERY) {
         (void)snprintf(text, sizeof(text),
-                       "A second letter from %.24s has no drawing. The Night Road collectors now demand a share of every load entering %.24s.",
+                       "A second letter from %.16s has no drawing. Night Road collectors now demand a share of every load entering %.16s.",
                        sim->delayed_echo.character_name,
                        place != NULL ? place->name : "the settlement");
     } else if (situation != NULL &&
                situation->kind == CC_SITUATION_MONSTER_EXPEDITION) {
         (void)snprintf(text, sizeof(text),
                        prior_echoes == 0 ?
-                       "A letter from %.24s leaves silver dust on the seat. Three lost rings came back from the mine below %.24s; the guild still calls their keepers thieves." :
-                       "A second letter from %.24s says the changed mine below %.24s has made safer crews, new debts, and enemies who now know one another's names.",
+                       "A letter from %.16s leaves silver dust. Three rings came back from %.16s's mine. The guild still calls the keepers thieves." :
+                       "A second letter from %.16s says the mine below %.16s has made safer crews, new debts, and enemies with names.",
                        sim->delayed_echo.character_name,
                        place != NULL ? place->name : "the settlement");
     } else if (prior_echoes == 0) {
         (void)snprintf(text, sizeof(text),
-                       "A letter from %.24s is tied with red thread. The ovens of %.24s are warm again, though the bread line still reaches the well.",
+                       "A letter from %.16s is tied with red thread. The ovens of %.16s are warm, though the bread line still reaches the well.",
                        sim->delayed_echo.character_name,
                        place != NULL ? place->name : "the settlement");
     } else {
         (void)snprintf(text, sizeof(text),
-                       "A second letter from %.24s says new families have followed the smell of bread to %.24s, and the old stores have found new locks.",
+                       "A second letter from %.16s says families followed the smell of bread to %.16s, and the old stores found new locks.",
                        sim->delayed_echo.character_name,
                        place != NULL ? place->name : "the settlement");
     }
