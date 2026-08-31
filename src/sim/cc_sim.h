@@ -14,6 +14,8 @@
 #define CC_MAX_BANDITS 3
 #define CC_MAX_MONSTERS 3
 #define CC_MAX_DUNGEONS 3
+#define CC_MAX_DUNGEON_ROOMS 24
+#define CC_MAX_DUNGEON_LINKS 36
 #define CC_MAX_MAPS 13
 #define CC_MAX_TREASURES 24
 #define CC_MAX_SITUATIONS 12
@@ -36,8 +38,8 @@
 #define CC_CROWNLESS_ATLAS_MAP_NAME "The Crownless Atlas"
 #define CC_DRAGON_HOARD_MAP_NAME "The Hoard Vault of Varkesh"
 
-#define CC_SIM_SCHEMA_VERSION 18
-#define CC_GENERATOR_VERSION 17
+#define CC_SIM_SCHEMA_VERSION 19
+#define CC_GENERATOR_VERSION 18
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
 #define CC_WORLD_DAY_SUBTICKS (24 * 60 * CC_WORLD_MINUTE_SUBTICKS)
@@ -234,7 +236,14 @@ typedef enum CcEventKind {
     CC_EVENT_JOURNEY_WARNING,
     CC_EVENT_AMBUSH_EVADED,
     CC_EVENT_ENCOUNTER_LOOT,
-    CC_EVENT_GOBLIN_TUNNEL_TRAVERSED
+    CC_EVENT_GOBLIN_TUNNEL_TRAVERSED,
+    CC_EVENT_DUNGEON_EXPEDITION_BEGAN,
+    CC_EVENT_DUNGEON_ROOM_ENTERED,
+    CC_EVENT_DUNGEON_ENCOUNTER,
+    CC_EVENT_DUNGEON_SHORTCUT_OPENED,
+    CC_EVENT_DUNGEON_LOOT,
+    CC_EVENT_DUNGEON_THRESHOLD_REACHED,
+    CC_EVENT_DUNGEON_EXPEDITION_ENDED
 } CcEventKind;
 
 typedef enum CcCommandKind {
@@ -270,7 +279,13 @@ typedef enum CcCommandKind {
     CC_COMMAND_GOBLIN_INTERCEPT,
     CC_COMMAND_CHARACTER_RESPONSE,
     CC_COMMAND_SET_JOURNEY_PACE,
-    CC_COMMAND_TRAVERSE_GOBLIN_TUNNEL
+    CC_COMMAND_TRAVERSE_GOBLIN_TUNNEL,
+    CC_COMMAND_BEGIN_DUNGEON_EXPEDITION,
+    CC_COMMAND_MOVE_DUNGEON,
+    CC_COMMAND_SEARCH_DUNGEON,
+    CC_COMMAND_OPEN_DUNGEON_SHORTCUT,
+    CC_COMMAND_RESOLVE_DUNGEON_ENCOUNTER,
+    CC_COMMAND_RETREAT_DUNGEON
 } CcCommandKind;
 
 typedef enum CcHorseSex {
@@ -669,6 +684,69 @@ typedef struct CcMonsterPopulation {
     int32_t hunting_pressure;
 } CcMonsterPopulation;
 
+typedef enum CcDungeonRoomKind {
+    CC_DUNGEON_ROOM_MINE_MOUTH,
+    CC_DUNGEON_ROOM_RAIL,
+    CC_DUNGEON_ROOM_FLOODWAY,
+    CC_DUNGEON_ROOM_WORKSHOP,
+    CC_DUNGEON_ROOM_BRIDGE,
+    CC_DUNGEON_ROOM_SHAFT,
+    CC_DUNGEON_ROOM_ARCHIVE,
+    CC_DUNGEON_ROOM_MARKET,
+    CC_DUNGEON_ROOM_BARRACKS,
+    CC_DUNGEON_ROOM_SHRINE,
+    CC_DUNGEON_ROOM_VAULT,
+    CC_DUNGEON_ROOM_THRESHOLD
+} CcDungeonRoomKind;
+
+typedef enum CcDungeonRoomFlag {
+    CC_DUNGEON_ROOM_SAFE = 1U << 0U,
+    CC_DUNGEON_ROOM_HAZARD = 1U << 1U,
+    CC_DUNGEON_ROOM_STONEBACK = 1U << 2U,
+    CC_DUNGEON_ROOM_GOBLIN = 1U << 3U,
+    CC_DUNGEON_ROOM_DRAGON_SIGN = 1U << 4U,
+    CC_DUNGEON_ROOM_OBJECTIVE = 1U << 5U,
+    CC_DUNGEON_ROOM_SMUGGLER = 1U << 6U
+} CcDungeonRoomFlag;
+
+typedef enum CcDungeonRoomStateFlag {
+    CC_DUNGEON_ROOM_DISCOVERED = 1U << 0U,
+    CC_DUNGEON_ROOM_SEARCHED = 1U << 1U,
+    CC_DUNGEON_ROOM_CLEARED = 1U << 2U,
+    CC_DUNGEON_ROOM_OBJECTIVE_REACHED = 1U << 3U
+} CcDungeonRoomStateFlag;
+
+typedef enum CcDungeonLinkKind {
+    CC_DUNGEON_LINK_PASSAGE,
+    CC_DUNGEON_LINK_SECRET,
+    CC_DUNGEON_LINK_SHORTCUT,
+    CC_DUNGEON_LINK_DROP
+} CcDungeonLinkKind;
+
+typedef enum CcDungeonLinkFlag {
+    CC_DUNGEON_LINK_DISCOVERED = 1U << 0U,
+    CC_DUNGEON_LINK_OPEN = 1U << 1U
+} CcDungeonLinkFlag;
+
+typedef struct CcDungeonRoom {
+    char name[CC_MAP_NAME_CAPACITY];
+    CcDungeonRoomKind kind;
+    int32_t depth;
+    int32_t map_x;
+    int32_t map_y;
+    uint32_t flags;
+    uint32_t state_flags;
+    CcGood loot_good;
+    int32_t loot_quantity;
+} CcDungeonRoom;
+
+typedef struct CcDungeonLink {
+    int32_t from_room;
+    int32_t to_room;
+    CcDungeonLinkKind kind;
+    uint32_t flags;
+} CcDungeonLink;
+
 typedef struct CcDungeon {
     CcId id;
     CcId settlement_id;
@@ -676,7 +754,43 @@ typedef struct CcDungeon {
     CcDungeonState state;
     int32_t depth;
     int32_t regional_pressure;
+    uint32_t layout_seed;
+    uint32_t encounter_random_state;
+    int32_t room_count;
+    int32_t link_count;
+    CcDungeonRoom rooms[CC_MAX_DUNGEON_ROOMS];
+    CcDungeonLink links[CC_MAX_DUNGEON_LINKS];
 } CcDungeon;
+
+typedef enum CcDungeonEncounterKind {
+    CC_DUNGEON_ENCOUNTER_NONE,
+    CC_DUNGEON_ENCOUNTER_STONEBACKS,
+    CC_DUNGEON_ENCOUNTER_TITHE_KEEPERS,
+    CC_DUNGEON_ENCOUNTER_GOBLIN_DESERTERS,
+    CC_DUNGEON_ENCOUNTER_MONSTERS,
+    CC_DUNGEON_ENCOUNTER_SMUGGLERS
+} CcDungeonEncounterKind;
+
+typedef enum CcDungeonEncounterApproach {
+    CC_DUNGEON_APPROACH_PARLEY = 1,
+    CC_DUNGEON_APPROACH_EVADE = 2,
+    CC_DUNGEON_APPROACH_FORCE = 3
+} CcDungeonEncounterApproach;
+
+typedef struct CcDungeonExpedition {
+    bool active;
+    CcId dungeon_id;
+    int32_t current_room;
+    int32_t turns_elapsed;
+    int32_t days_elapsed;
+    int32_t light_remaining;
+    int32_t noise;
+    int32_t strain;
+    int32_t maximum_depth;
+    CcDungeonEncounterKind encounter_kind;
+    int32_t encounter_reaction;
+    int32_t encounter_room;
+} CcDungeonExpedition;
 
 typedef enum CcSituationKind {
     CC_SITUATION_RELIEF_DELIVERY,
@@ -919,6 +1033,7 @@ typedef struct CcSim {
     CcHoardRaiders hoard_raiders;
     CcMonsterPopulation monsters[CC_MAX_MONSTERS];
     CcDungeon dungeons[CC_MAX_DUNGEONS];
+    CcDungeonExpedition dungeon_expedition;
     CcSituation situations[CC_MAX_SITUATIONS];
     CcCharacter characters[CC_MAX_CHARACTERS];
     CcEvent events[CC_MAX_EVENTS];
@@ -962,6 +1077,7 @@ void CcSimInitializeHoardRaiders(CcSim *sim);
 void CcSimInitializeAnimalEconomy(CcSim *sim);
 void CcSimInitializeHorseStableSystem(CcSim *sim);
 void CcSimInitializeCharacters(CcSim *sim);
+void CcSimInitializeUnderroad(CcSim *sim);
 void CcSimAdvanceDays(CcSim *sim, int32_t days);
 bool CcSettlementIsAbandoned(const CcSettlement *settlement);
 int32_t CcSimClimateFactor(const CcSim *sim);
@@ -1011,6 +1127,16 @@ const CcEvent *CcSimRecentEvent(const CcSim *sim, int32_t offset);
 const CcEvent *CcSimEvent(const CcSim *sim, CcId id);
 const CcSituation *CcSimSituation(const CcSim *sim, CcId id);
 const CcCharacter *CcSimCharacter(const CcSim *sim, CcId id);
+const CcDungeon *CcSimDungeon(const CcSim *sim, CcId id);
+const CcDungeonRoom *CcSimDungeonCurrentRoom(const CcSim *sim);
+int32_t CcSimDungeonVisibleExitCount(const CcSim *sim);
+int32_t CcSimDungeonVisibleExitAt(const CcSim *sim, int32_t ordinal);
+int32_t CcSimDungeonOpenableShortcut(const CcSim *sim);
+bool CcSimDungeonOutcomeAvailable(const CcDungeon *dungeon,
+                                  CcDungeonState outcome);
+const char *CcDungeonRoomKindName(CcDungeonRoomKind kind);
+const char *CcDungeonEncounterName(CcDungeonEncounterKind kind);
+const char *CcDungeonReactionName(int32_t reaction);
 const CcCharacter *CcSimSituationSponsorCharacter(
     const CcSim *sim, const CcSituation *situation);
 const CcCharacter *CcSimSituationAffectedCharacter(

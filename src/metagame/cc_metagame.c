@@ -1286,6 +1286,88 @@ static void DescribeDebrief(const CcMetagame *metagame,
            sim->current_day, resolved, failed);
 }
 
+static void DescribeUnderroad(const CcMetagame *metagame,
+                              char *output, size_t capacity)
+{
+    const CcSim *sim = &metagame->sim;
+    const CcDungeonExpedition *expedition = &sim->dungeon_expedition;
+    if (!expedition->active) {
+        const CcDungeon *dungeon = sim->dungeon_count > 0 ?
+            &sim->dungeons[0] : NULL;
+        if (dungeon == NULL) {
+            Append(output, capacity, "No Underroad has been found.\n");
+            return;
+        }
+        Append(output, capacity,
+               "UNDERROAD — %s\n"
+               "State: %s. Known rooms: ",
+               dungeon->name, CcDungeonStateName(dungeon->state));
+        int32_t known = 0;
+        for (int32_t room = 0; room < dungeon->room_count; ++room) {
+            if ((dungeon->rooms[room].state_flags &
+                 CC_DUNGEON_ROOM_DISCOVERED) != 0U) known += 1;
+        }
+        Append(output, capacity, "%d of %d.\n", known, dungeon->room_count);
+        if (sim->player.location_id == dungeon->settlement_id) {
+            Append(output, capacity,
+                   "The carriage is at the entrance. Carry Food, then use 'underroad enter'.\n");
+        } else {
+            Append(output, capacity,
+                   "The entrance is at Silverwick. The carriage must travel there first.\n");
+        }
+        return;
+    }
+    const CcDungeon *dungeon = CcSimDungeon(sim, expedition->dungeon_id);
+    const CcDungeonRoom *room = CcSimDungeonCurrentRoom(sim);
+    if (dungeon == NULL || room == NULL) return;
+    Append(output, capacity,
+           "UNDERROAD — %s\n"
+           "%s, depth %d — %s\n"
+           "Turn %d. Light %d. Noise %d. Strain %d.\n",
+           dungeon->name, room->name, room->depth,
+           CcDungeonRoomKindName(room->kind),
+           expedition->turns_elapsed, expedition->light_remaining,
+           expedition->noise, expedition->strain);
+    if ((room->flags & CC_DUNGEON_ROOM_HAZARD) != 0U) {
+        Append(output, capacity,
+               "The chamber itself looks dangerous.\n");
+    }
+    if ((room->flags & CC_DUNGEON_ROOM_STONEBACK) != 0U) {
+        Append(output, capacity,
+               "Tools have been arranged here in deliberate stone patterns.\n");
+    }
+    if ((room->flags & CC_DUNGEON_ROOM_DRAGON_SIGN) != 0U) {
+        Append(output, capacity,
+               "Warm air and old tribute marks lead deeper.\n");
+    }
+    if (expedition->encounter_kind != CC_DUNGEON_ENCOUNTER_NONE) {
+        Append(output, capacity,
+               "Encounter: %s. Reaction %d, %s.\n"
+               "Use 'underroad parley', 'underroad evade', 'underroad force', or 'underroad retreat'.\n",
+               CcDungeonEncounterName(expedition->encounter_kind),
+               expedition->encounter_reaction,
+               CcDungeonReactionName(expedition->encounter_reaction));
+        return;
+    }
+    int32_t exits = CcSimDungeonVisibleExitCount(sim);
+    Append(output, capacity, "Passages:\n");
+    for (int32_t i = 0; i < exits; ++i) {
+        int32_t target = CcSimDungeonVisibleExitAt(sim, i);
+        const CcDungeonRoom *next = target >= 0 ?
+            &dungeon->rooms[target] : NULL;
+        bool known = next != NULL &&
+            (next->state_flags & CC_DUNGEON_ROOM_DISCOVERED) != 0U;
+        Append(output, capacity, "  %d. %s\n", i + 1,
+               known ? next->name : "unmapped passage");
+    }
+    Append(output, capacity,
+           "Use 'underroad move NUMBER', 'underroad search', or 'underroad retreat'.\n");
+    if (CcSimDungeonOpenableShortcut(sim) >= 0) {
+        Append(output, capacity,
+               "A blocked freight shortcut can be opened with 'underroad open' and 1 Tools.\n");
+    }
+}
+
 static void DescribeHelp(char *output, size_t capacity)
 {
     Append(output, capacity,
@@ -1304,7 +1386,9 @@ static void DescribeHelp(char *output, size_t capacity)
            "Act on the road and world:\n"
            "  road fight|bargain|supper|turn-back, repair NUMBER tools|cash\n"
            "  stable breed MARE STALLION, stable team SLOT HORSE\n"
-           "  dungeon public|smuggler|seal, wait DAYS\n"
+           "  underroad enter|look|move NUMBER|search|open\n"
+           "  underroad parley|evade|force|retreat\n"
+           "  dungeon public|smuggler|seal (after reaching the threshold), wait DAYS\n"
            "  dragon steal COUNT, dragon return COUNT (at the cave)\n"
            "  dragon steal-treasure NUMBER, dragon return-treasure\n"
            "  dragon intercept (when tribute approaches the cave)\n"
@@ -1755,6 +1839,59 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
         if (!ApplyCommand(metagame, &action, output, output_capacity)) return false;
         Append(output, output_capacity,
                "The treaty bridge reopens. Other shipments can now follow.\n");
+    } else if (strcmp(command, "underroad") == 0) {
+        CcCommand action = {0};
+        if (first == NULL || strcmp(first, "look") == 0) {
+            DescribeUnderroad(metagame, output, output_capacity);
+            return true;
+        } else if (strcmp(first, "enter") == 0) {
+            if (metagame->sim.dungeon_count < 1) return false;
+            action.kind = CC_COMMAND_BEGIN_DUNGEON_EXPEDITION;
+            action.target_id = metagame->sim.dungeons[0].id;
+        } else if (strcmp(first, "move") == 0) {
+            int32_t exit_index = 0;
+            int32_t exit_count = CcSimDungeonVisibleExitCount(
+                &metagame->sim);
+            if (!ParseIndex(second, exit_count, &exit_index)) {
+                Append(output, output_capacity,
+                       "Choose a passage number from 'underroad look'.\n");
+                return false;
+            }
+            action.kind = CC_COMMAND_MOVE_DUNGEON;
+            action.amount = CcSimDungeonVisibleExitAt(
+                &metagame->sim, exit_index);
+        } else if (strcmp(first, "search") == 0) {
+            action.kind = CC_COMMAND_SEARCH_DUNGEON;
+        } else if (strcmp(first, "open") == 0) {
+            int32_t shortcut = CcSimDungeonOpenableShortcut(
+                &metagame->sim);
+            if (shortcut < 0) {
+                Append(output, output_capacity,
+                       "No discovered shortcut can be opened here.\n");
+                return false;
+            }
+            action.kind = CC_COMMAND_OPEN_DUNGEON_SHORTCUT;
+            action.amount = shortcut;
+        } else if (strcmp(first, "parley") == 0) {
+            action.kind = CC_COMMAND_RESOLVE_DUNGEON_ENCOUNTER;
+            action.amount = CC_DUNGEON_APPROACH_PARLEY;
+        } else if (strcmp(first, "evade") == 0) {
+            action.kind = CC_COMMAND_RESOLVE_DUNGEON_ENCOUNTER;
+            action.amount = CC_DUNGEON_APPROACH_EVADE;
+        } else if (strcmp(first, "force") == 0) {
+            action.kind = CC_COMMAND_RESOLVE_DUNGEON_ENCOUNTER;
+            action.amount = CC_DUNGEON_APPROACH_FORCE;
+        } else if (strcmp(first, "retreat") == 0) {
+            action.kind = CC_COMMAND_RETREAT_DUNGEON;
+        } else {
+            Append(output, output_capacity,
+                   "Use 'underroad enter', 'underroad look', 'underroad move NUMBER', 'underroad search', 'underroad open', 'underroad parley', 'underroad evade', 'underroad force', or 'underroad retreat'.\n");
+            return false;
+        }
+        if (!ApplyCommand(metagame, &action, output, output_capacity)) {
+            return false;
+        }
+        DescribeUnderroad(metagame, output, output_capacity);
     } else if (strcmp(command, "dungeon") == 0) {
         CcDungeonState state;
         if (first != NULL && strcmp(first, "public") == 0) {
@@ -1784,8 +1921,12 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
             Append(output, output_capacity, "Wait between 1 and 365 days.\n");
             return false;
         }
-        if (metagame->sim.journey.active) {
-            Append(output, output_capacity, "Resolve the road before waiting.\n");
+        if (metagame->sim.journey.active ||
+            metagame->sim.dungeon_expedition.active) {
+            Append(output, output_capacity,
+                   metagame->sim.dungeon_expedition.active ?
+                       "Return from the Underroad before waiting.\n" :
+                       "Resolve the road before waiting.\n");
             return false;
         }
         CcSimAdvanceDays(&metagame->sim, days);
