@@ -70,6 +70,13 @@ static void ValidatePlayerChoices(void)
         CC_CHECK(strlen(ask) <= 36U);
         CC_CHECK(strlen(promise) <= 36U);
     }
+    const char *report = CcStoryPlayerChoiceText(
+        CC_SITUATION_MONSTER_EXPEDITION, CC_STORY_PLAYER_REPORT);
+    const char *confide = CcStoryPlayerChoiceText(
+        CC_SITUATION_MONSTER_EXPEDITION,
+        CC_STORY_PLAYER_KEEP_CONFIDENCE);
+    CC_CHECK(report != NULL && strncmp(report, "1  ", 3U) == 0);
+    CC_CHECK(confide != NULL && strncmp(confide, "2  ", 3U) == 0);
 }
 
 static void ValidateRoadCompanyVoices(void)
@@ -101,15 +108,131 @@ static void ValidateSituationCoverage(void)
     CcSimInit(&sim, UINT32_C(0xc0a71a9e));
     for (int32_t i = 0; i < sim.situation_count; ++i) {
         CcSituation *situation = &sim.situations[i];
-        const CcCharacter *sponsor = CcSimSituationSponsorCharacter(
+        CcId conversation_place = CcSimSituationOfferSettlementId(
             &sim, situation);
+        const CcCharacter *speaker = CcSimSituationConversationCharacter(
+            &sim, situation, conversation_place);
         const CcCharacter *affected = CcSimSituationAffectedCharacter(
             &sim, situation);
-        CC_CHECK(sponsor != NULL);
+        CC_CHECK(speaker != NULL);
         CC_CHECK(affected != NULL);
-        CC_CHECK(CcStoryCharacterLine(&sim, situation, sponsor) != NULL);
-        CC_CHECK(CcStoryCharacterLine(&sim, situation, affected) != NULL);
+        CC_CHECK(CcStoryCharacterLine(&sim, situation, speaker) != NULL);
+        if (situation->kind != CC_SITUATION_MONSTER_EXPEDITION) {
+            CC_CHECK(CcStoryCharacterLine(&sim, situation, affected) != NULL);
+        }
     }
+}
+
+static void ValidateMineSocialThread(void)
+{
+    CcSim sim;
+    CcSimInit(&sim, UINT32_C(0xc0a71a9e));
+    CcSituation *mine = FindSituation(
+        &sim, CC_SITUATION_MONSTER_EXPEDITION);
+    CC_CHECK(mine != NULL);
+    CC_CHECK(mine->discovery_stage == CC_DISCOVERY_RUMOR);
+    CC_CHECK(!CcSimSituationCanAccept(&sim, mine));
+    const CcCharacter *jory = CcSimSituationAffectedCharacter(&sim, mine);
+    const CcCharacter *mara = CcSimSituationSponsorCharacter(&sim, mine);
+    const CcCharacter *bren = CcSimSituationWitnessCharacter(&sim, mine);
+    CC_CHECK(jory != NULL && mara != NULL && bren != NULL);
+    const CcRelationship *jory_to_mara = CcSimRelationship(
+        &sim, jory->id, mara->id);
+    CC_CHECK(jory_to_mara != NULL);
+    CC_CHECK(jory_to_mara->history >= CC_RELATIONSHIP_HISTORY_OLD_FRIENDS);
+    CC_CHECK(CcCharacterKnows(
+        jory, CC_KNOWLEDGE_PROBLEM_RUMOR, mine->id));
+    CC_CHECK(CcCharacterKnows(
+        bren, CC_KNOWLEDGE_WITNESS_ACCOUNT, mine->id));
+
+    sim.player.location_id = jory->current_settlement_id;
+    sim.carriage.location_id = sim.player.location_id;
+    const CcStoryLine *line = CcStoryCharacterLine(&sim, mine, jory);
+    CC_CHECK(line != NULL && line->beat == CC_STORY_BEAT_LEAD);
+    CC_CHECK(strstr(line->text, "Bren") != NULL);
+    CC_CHECK(strstr(line->text, "Picks") == NULL);
+    char error[192];
+    CcCommand accept = {
+        .kind = CC_COMMAND_ACCEPT_SITUATION,
+        .target_id = mine->id
+    };
+    CC_CHECK(!CcSimApply(&sim, &accept, error, sizeof(error)));
+    CC_CHECK(strstr(error, "still a lead") != NULL);
+
+    CcCommand listen = {
+        .kind = CC_COMMAND_CHARACTER_RESPONSE,
+        .target_id = mine->id,
+        .amount = CC_CHARACTER_RESPONSE_LISTEN
+    };
+    CC_CHECK(CcSimApply(&sim, &listen, error, sizeof(error)));
+    CC_CHECK(mine->discovery_stage == CC_DISCOVERY_WITNESS);
+    CC_CHECK(CcSimSituationConversationCharacter(
+                 &sim, mine, sim.player.location_id) == bren);
+    line = CcStoryCharacterLine(&sim, mine, bren);
+    CC_CHECK(line != NULL && line->beat == CC_STORY_BEAT_WITNESS);
+    CC_CHECK(strstr(line->text, "Picks behind the old wall") != NULL);
+
+    CC_CHECK(CcSimApply(&sim, &listen, error, sizeof(error)));
+    CC_CHECK(mine->discovery_stage == CC_DISCOVERY_DECISION);
+    line = CcStoryCharacterLine(&sim, mine, jory);
+    CC_CHECK(line != NULL && line->beat == CC_STORY_BEAT_DECISION);
+    CcSim report_path = sim;
+    CcSim confidence_path = sim;
+
+    CcSituation *reported = (CcSituation *)CcSimSituation(
+        &report_path, mine->id);
+    const CcCharacter *reported_jory = CcSimSituationAffectedCharacter(
+        &report_path, reported);
+    const CcCharacter *reported_mara = CcSimSituationSponsorCharacter(
+        &report_path, reported);
+    const CcRelationship *before_report = CcSimRelationship(
+        &report_path, reported_jory->id, reported_mara->id);
+    int32_t trust_before = before_report->trust;
+    CcCommand report = {
+        .kind = CC_COMMAND_CHARACTER_RESPONSE,
+        .target_id = reported->id,
+        .amount = CC_CHARACTER_RESPONSE_REPORT_EVIDENCE
+    };
+    CC_CHECK(CcSimApply(&report_path, &report, error, sizeof(error)));
+    CC_CHECK(reported->discovery_stage == CC_DISCOVERY_AUTHORITY);
+    CC_CHECK(!CcSimSituationCanAccept(&report_path, reported));
+    report_path.player.location_id = reported_mara->current_settlement_id;
+    report_path.carriage.location_id = report_path.player.location_id;
+    line = CcStoryCharacterLine(&report_path, reported, reported_mara);
+    CC_CHECK(line != NULL && line->beat == CC_STORY_BEAT_AUTHORITY);
+    CC_CHECK(CcSimApply(&report_path, &listen, error, sizeof(error)));
+    CC_CHECK(reported->discovery_stage == CC_DISCOVERY_OFFER);
+    CC_CHECK(CcSimSituationCanAccept(&report_path, reported));
+    CC_CHECK(CcSimRelationship(
+                 &report_path, reported_jory->id, reported_mara->id)->trust !=
+             trust_before);
+    CcCommand pledge = listen;
+    pledge.amount = CC_CHARACTER_RESPONSE_PLEDGE_HELP;
+    CC_CHECK(CcSimApply(&report_path, &pledge, error, sizeof(error)));
+    CC_CHECK(report_path.player.accepted_situation_id == reported->id);
+    CC_CHECK(CcSimValidate(&report_path, error, sizeof(error)));
+
+    CcSituation *private_lead = (CcSituation *)CcSimSituation(
+        &confidence_path, mine->id);
+    const CcCharacter *private_jory = CcSimSituationAffectedCharacter(
+        &confidence_path, private_lead);
+    CcCommand confide = report;
+    confide.target_id = private_lead->id;
+    confide.amount = CC_CHARACTER_RESPONSE_KEEP_CONFIDENCE;
+    CC_CHECK(CcSimApply(&confidence_path, &confide,
+                        error, sizeof(error)));
+    CC_CHECK(private_lead->discovery_stage == CC_DISCOVERY_OFFER);
+    CC_CHECK(private_lead->lead_path == CC_LEAD_PATH_CONFIDENCE);
+    CC_CHECK(CcCharacterKnows(
+        private_jory, CC_KNOWLEDGE_OFFER, private_lead->id));
+    CC_CHECK(CcSimSituationCanAccept(&confidence_path, private_lead));
+    CC_CHECK(CcSimCharacter(
+                 &report_path, reported_jory->id)->player_disposition >
+             private_jory->player_disposition);
+    pledge.target_id = private_lead->id;
+    CC_CHECK(CcSimApply(&confidence_path, &pledge,
+                        error, sizeof(error)));
+    CC_CHECK(CcSimValidate(&confidence_path, error, sizeof(error)));
 }
 
 static void ValidateConversationBeats(void)
@@ -242,6 +365,7 @@ int main(void)
     ValidateRoadCompanyVoices();
     ValidateSituationCoverage();
     ValidateConversationBeats();
+    ValidateMineSocialThread();
     ValidateExpiredPromiseMemory();
     puts("Authored story beat tests passed");
     return 0;

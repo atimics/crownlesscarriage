@@ -52,6 +52,15 @@ static void PrepareDungeonChoice(CcSim *sim, uint32_t seed, char *error,
     CcSituation *warrant = ActiveSituation(
         sim, CC_SITUATION_MONSTER_EXPEDITION);
     CC_CHECK(warrant != NULL);
+    CcCommand follow_lead = {
+        .kind = CC_COMMAND_CHARACTER_RESPONSE,
+        .target_id = warrant->id,
+        .amount = CC_CHARACTER_RESPONSE_LISTEN
+    };
+    CC_CHECK(CcSimApply(sim, &follow_lead, error, error_capacity));
+    CC_CHECK(CcSimApply(sim, &follow_lead, error, error_capacity));
+    follow_lead.amount = CC_CHARACTER_RESPONSE_KEEP_CONFIDENCE;
+    CC_CHECK(CcSimApply(sim, &follow_lead, error, error_capacity));
     CcCommand accept = {
         .kind = CC_COMMAND_ACCEPT_SITUATION,
         .target_id = warrant->id

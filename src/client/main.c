@@ -185,7 +185,9 @@ typedef enum ContextActionKind {
     CONTEXT_ACTION_MEET_MARA,
     CONTEXT_ACTION_TALK_CHARACTER,
     CONTEXT_ACTION_LISTEN_CHARACTER,
-    CONTEXT_ACTION_PLEDGE_CHARACTER
+    CONTEXT_ACTION_PLEDGE_CHARACTER,
+    CONTEXT_ACTION_REPORT_EVIDENCE,
+    CONTEXT_ACTION_KEEP_CONFIDENCE
 } ContextActionKind;
 
 typedef struct ContextAction {
@@ -486,6 +488,29 @@ static void SituationNextAction(const CcSim *sim,
     const CcSettlement *destination = CcSimSettlement(sim, destination_id);
     bool here = destination_id != 0U &&
                 sim->player.location_id == destination_id;
+    if (situation->kind == CC_SITUATION_MONSTER_EXPEDITION &&
+        situation->discovery_stage != CC_DISCOVERY_OFFER) {
+        const CcCharacter *contact = NULL;
+        if (situation->discovery_stage == CC_DISCOVERY_WITNESS) {
+            contact = CcSimSituationWitnessCharacter(sim, situation);
+        } else if (situation->discovery_stage == CC_DISCOVERY_AUTHORITY) {
+            contact = CcSimSituationSponsorCharacter(sim, situation);
+        } else {
+            contact = CcSimSituationAffectedCharacter(sim, situation);
+        }
+        const CcSettlement *contact_place = contact != NULL ?
+            CcSimSettlement(sim, contact->current_settlement_id) : NULL;
+        if (contact != NULL &&
+            contact->current_settlement_id == sim->player.location_id) {
+            (void)snprintf(label, capacity, "Talk to %s.", contact->name);
+        } else {
+            (void)snprintf(label, capacity, "Travel to %s and talk to %s.",
+                           contact_place != NULL ? contact_place->name :
+                               "the mining town",
+                           contact != NULL ? contact->name : "the witness");
+        }
+        return;
+    }
     if (situation->kind == CC_SITUATION_RELIEF_DELIVERY ||
         situation->kind == CC_SITUATION_BLACK_MARKET_DELIVERY) {
         int32_t remaining = situation->quantity - situation->progress;
@@ -2292,7 +2317,8 @@ static ContextActionSet BuildContextActions(
             detail->id == sim->player.accepted_situation_id) {
             AddContextAction(&set, CONTEXT_ACTION_ABANDON_PROMISE,
                              "Abandon quest");
-        } else if (detail != NULL && CcSimAcceptedSituation(sim) == NULL) {
+        } else if (detail != NULL && CcSimAcceptedSituation(sim) == NULL &&
+                   CcSimSituationCanAccept(sim, detail)) {
             bool at_notice = CcClientPromiseCanBeAccepted(
                 local->market_interior,
                 GridDistance(LocalPosition(local), LOCAL_NOTICE));
@@ -2343,7 +2369,20 @@ static ContextActionSet BuildContextActions(
             bool promised = CcCharacterRemembers(
                 character, CC_CHARACTER_MEMORY_PLAYER_PROMISED,
                 situation->id);
-            if (!listened && !promised) {
+            bool decision = situation->kind ==
+                    CC_SITUATION_MONSTER_EXPEDITION &&
+                situation->discovery_stage == CC_DISCOVERY_DECISION;
+            if (decision) {
+                AddContextAction(
+                    &set, CONTEXT_ACTION_REPORT_EVIDENCE,
+                    CcStoryPlayerChoiceText(
+                        situation->kind, CC_STORY_PLAYER_REPORT));
+                AddContextAction(
+                    &set, CONTEXT_ACTION_KEEP_CONFIDENCE,
+                    CcStoryPlayerChoiceText(
+                        situation->kind,
+                        CC_STORY_PLAYER_KEEP_CONFIDENCE));
+            } else if (!listened && !promised) {
                 AddContextAction(&set, CONTEXT_ACTION_LISTEN_CHARACTER,
                                  CcStoryPlayerChoiceText(
                                      situation->kind,
@@ -2352,7 +2391,7 @@ static ContextActionSet BuildContextActions(
             const CcSituation *accepted = CcSimAcceptedSituation(sim);
             bool can_promise = situation->status == CC_SITUATION_ACTIVE &&
                 (accepted == NULL || accepted->id == situation->id) &&
-                !promised;
+                CcSimSituationCanAccept(sim, situation) && !promised;
             if (can_promise) {
                 AddContextAction(&set, CONTEXT_ACTION_PLEDGE_CHARACTER,
                                  CcStoryPlayerChoiceText(
@@ -3427,14 +3466,20 @@ static void DrawSituationBoard(const CcSim *sim, int32_t selected)
         if (i == selected) active_ordinal = active_count;
         active_count += 1;
     }
-    CcOverlayDrawText("QUEST", 360, 216, 10, TEAL);
+    bool selected_is_lead = detail != NULL &&
+        !CcSimSituationCanAccept(sim, detail);
+    CcOverlayDrawText(selected_is_lead ? "LEAD" : "QUEST",
+                      360, 216, 10, TEAL);
     CcOverlayDrawText(active_count > 0 ?
              TextFormat("%d / %d", active_ordinal + 1, active_count) : "0 / 0",
              874, 216, 10, CC_GOLD);
     if (detail != NULL) {
         char target[96];
         SituationTargetLabel(sim, detail, target, sizeof(target));
-        CcOverlayDrawText(SituationTitle(detail->kind), 360, 250, 21,
+        const char *title = detail->kind == CC_SITUATION_MONSTER_EXPEDITION &&
+                !CcSimSituationCanAccept(sim, detail) ?
+            "Strange noises in the mine" : SituationTitle(detail->kind);
+        CcOverlayDrawText(title, 360, 250, 21,
                  SituationColor(detail->kind));
         CcOverlayDrawText(TextFormat("%s  /  %s", target,
                             detail->affected_name[0] != '\0' ?
@@ -3444,10 +3489,16 @@ static void DrawSituationBoard(const CcSim *sim, int32_t selected)
         SituationNextAction(sim, detail, next, sizeof(next));
         CcOverlayDrawText("NEXT STEP", 360, 323, 9, MUTED);
         DrawTwoLineText(next, 360, 346, 58U, 11, CC_GOLD);
-        CcOverlayDrawText(TextFormat("DUE DAY %d", detail->deadline_day),
-                 360, 408, 10, MUTED);
-        CcOverlayDrawText(TextFormat("REWARD  +%" PRId64 " CROWNS", detail->reward),
-                 714, 408, 10, TEAL);
+        if (CcSimSituationCanAccept(sim, detail)) {
+            CcOverlayDrawText(TextFormat("DUE DAY %d", detail->deadline_day),
+                     360, 408, 10, MUTED);
+            CcOverlayDrawText(
+                TextFormat("REWARD  +%" PRId64 " CROWNS", detail->reward),
+                714, 408, 10, TEAL);
+        } else {
+            CcOverlayDrawText("FOLLOW THE LEAD TO LEARN WHAT IS AT STAKE",
+                              360, 408, 10, MUTED);
+        }
     } else {
         CcOverlayDrawText("NO QUESTS", 360, 268, 17, MUTED);
     }
@@ -3737,6 +3788,20 @@ static void DrawCharacterConversation(const CcSim *sim,
     const CcStoryLine *spoken = CcStoryCharacterLine(
         sim, situation, character);
     CcOverlayDrawText(character->name, speech_x, 216, 18, CC_GOLD);
+    if (situation->kind == CC_SITUATION_MONSTER_EXPEDITION) {
+        const CcRelationship *relationship = CcSimRelationship(
+            sim, situation->affected_character_id,
+            situation->sponsor_character_id);
+        if (relationship != NULL &&
+            (character->id == situation->affected_character_id ||
+             character->id == situation->sponsor_character_id)) {
+            CcOverlayDrawText(
+                TextFormat("JORY + MARA / %s",
+                           CcRelationshipHistoryName(
+                               relationship->history)),
+                speech_x, 244, 9, MUTED);
+        }
+    }
     CcOverlayDrawText("\"", speech_x, 266, 28, MUTED);
     DrawTwoLineText(spoken != NULL ? spoken->text :
                         "They have nothing more to ask.",
@@ -4602,12 +4667,24 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             *view = VIEW_LOCAL;
             return;
         }
-        CcCharacterResponse response = ClientKeyPressed(KEY_ONE) ||
-                context_action == CONTEXT_ACTION_LISTEN_CHARACTER ?
-            CC_CHARACTER_RESPONSE_LISTEN :
-            ClientKeyPressed(KEY_TWO) ||
-                context_action == CONTEXT_ACTION_PLEDGE_CHARACTER ?
-            CC_CHARACTER_RESPONSE_PLEDGE_HELP : 0;
+        const CcSituation *conversation = CcSimSituation(
+            sim, local->conversation_situation_id);
+        bool decision = conversation != NULL &&
+            conversation->kind == CC_SITUATION_MONSTER_EXPEDITION &&
+            conversation->discovery_stage == CC_DISCOVERY_DECISION;
+        CcCharacterResponse response = decision ?
+            (ClientKeyPressed(KEY_ONE) ||
+             context_action == CONTEXT_ACTION_REPORT_EVIDENCE ?
+                CC_CHARACTER_RESPONSE_REPORT_EVIDENCE :
+             ClientKeyPressed(KEY_TWO) ||
+             context_action == CONTEXT_ACTION_KEEP_CONFIDENCE ?
+                CC_CHARACTER_RESPONSE_KEEP_CONFIDENCE : 0) :
+            (ClientKeyPressed(KEY_ONE) ||
+             context_action == CONTEXT_ACTION_LISTEN_CHARACTER ?
+                CC_CHARACTER_RESPONSE_LISTEN :
+             ClientKeyPressed(KEY_TWO) ||
+             context_action == CONTEXT_ACTION_PLEDGE_CHARACTER ?
+                CC_CHARACTER_RESPONSE_PLEDGE_HELP : 0);
         if (response != 0) {
             CcCommand reply = {
                 .kind = CC_COMMAND_CHARACTER_RESPONSE,
@@ -4616,14 +4693,26 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             };
             if (ApplyCommand(*journal, sim, reply,
                              message, message_capacity)) {
+                const CcSituation *updated = CcSimSituation(
+                    sim, local->conversation_situation_id);
                 const CcCharacter *character = CcSimCharacter(
                     sim, local->conversation_character_id);
-                (void)snprintf(
-                    message, message_capacity,
-                    response == CC_CHARACTER_RESPONSE_LISTEN ?
-                        "%.28s remembers that you listened." :
-                        "%.28s will hold the company to its promise.",
-                    character != NULL ? character->name : "They");
+                if (updated != NULL &&
+                    updated->kind == CC_SITUATION_MONSTER_EXPEDITION &&
+                    response != CC_CHARACTER_RESPONSE_PLEDGE_HELP) {
+                    char next[160] = "Follow the lead.";
+                    SituationNextAction(sim, updated, next, sizeof(next));
+                    (void)snprintf(message, message_capacity,
+                                   "Lead updated: %s", next);
+                    *view = VIEW_LOCAL;
+                } else {
+                    (void)snprintf(
+                        message, message_capacity,
+                        response == CC_CHARACTER_RESPONSE_LISTEN ?
+                            "%.28s remembers that you listened." :
+                            "%.28s will hold the company to its promise.",
+                        character != NULL ? character->name : "They");
+                }
             }
         }
         return;

@@ -232,6 +232,21 @@ int main(void)
     int32_t dungeon_number = SituationNumber(
         &metagame, CC_SITUATION_MONSTER_EXPEDITION);
     CC_CHECK(dungeon_number > 0);
+    CC_CHECK(CcMetagameExecute(&metagame, "charters", output,
+                               sizeof(output)));
+    CC_CHECK(strstr(output, "Strange noises in the mine") != NULL);
+    CC_CHECK(strstr(output, "lead, not a contract") != NULL);
+    ExecuteNumber(&metagame, "talk", dungeon_number, output, sizeof(output));
+    CC_CHECK(strstr(output, "Jory stops you at the mine gate") != NULL);
+    CC_CHECK(strstr(output, "find Bren Alder") != NULL);
+    ExecuteNumber(&metagame, "talk", dungeon_number, output, sizeof(output));
+    CC_CHECK(strstr(output, "Picks behind the old wall") != NULL);
+    CC_CHECK(strstr(output, "take Bren's account back to Jory") != NULL);
+    ExecuteNumber(&metagame, "talk", dungeon_number, output, sizeof(output));
+    CC_CHECK(strstr(output, "report") != NULL);
+    ExecuteNumber(&metagame, "confide", dungeon_number,
+                  output, sizeof(output));
+    CC_CHECK(strstr(output, "offer now") != NULL);
     CC_CHECK(CcMetagameExecute(&metagame, "buy tools 2", output,
                                sizeof(output)));
     ExecuteNumber(&metagame, "accept", dungeon_number, output, sizeof(output));
