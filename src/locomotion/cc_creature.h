@@ -21,6 +21,13 @@ typedef enum CcCreatureRigProfile {
     CC_CREATURE_RIG_PROFILE_COUNT
 } CcCreatureRigProfile;
 
+typedef enum CcCreatureRigGait {
+    CC_CREATURE_RIG_GAIT_WALK,
+    CC_CREATURE_RIG_GAIT_TROT,
+    CC_CREATURE_RIG_GAIT_CANTER,
+    CC_CREATURE_RIG_GAIT_COUNT
+} CcCreatureRigGait;
+
 typedef struct CcCreatureRigLimbPose {
     CcLimbVec3 joints[CC_CREATURE_RIG_MAX_JOINTS_PER_LIMB];
     float segment_activation[CC_CREATURE_RIG_MAX_SEGMENTS];
@@ -56,6 +63,8 @@ typedef struct CcCreatureRigController {
     CcBiomechRig muscles;
     CcLimbVec3 ground_position;
     CcCreatureRigProfile profile;
+    CcCreatureRigGait gait;
+    CcCreatureRigGait requested_gait;
     float scale;
     float movement;
     bool initialized;
@@ -68,10 +77,13 @@ bool CcCreatureRigPoseResolve(CcCreatureRigProfile profile, float phase,
 bool CcCreatureRigControllerInit(CcCreatureRigController *controller,
                                  CcCreatureRigProfile profile,
                                  float phase, float scale);
+bool CcCreatureRigControllerSetGait(CcCreatureRigController *controller,
+                                    CcCreatureRigGait gait);
 bool CcCreatureRigControllerStep(CcCreatureRigController *controller,
                                  float forward_speed, float movement,
                                  float delta_time,
                                  CcCreatureRigPose *pose);
 const char *CcCreatureRigProfileName(CcCreatureRigProfile profile);
+const char *CcCreatureRigGaitName(CcCreatureRigGait gait);
 
 #endif

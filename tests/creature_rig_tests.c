@@ -182,6 +182,100 @@ int main(void)
                 "persistent gait spends useful time on locked contacts");
     }
 
+    CcCreatureRigController horse;
+    Require(CcCreatureRigControllerInit(
+                &horse, CC_CREATURE_RIG_HORSE, 0.0f, 1.0f),
+            "horse gait controller initializes");
+    CcLimbVec3 walk_contacts[4];
+    for (int32_t limb = 0; limb < 4; ++limb) {
+        walk_contacts[limb] = horse.skeleton.limbs[limb].planted_contact;
+    }
+    Require(CcCreatureRigControllerSetGait(
+                &horse, CC_CREATURE_RIG_GAIT_TROT),
+            "horse can hand control from walk to trot");
+    Require(horse.gait == CC_CREATURE_RIG_GAIT_TROT &&
+                horse.skeleton.morphology.minimum_supports == 2 &&
+                horse.skeleton.morphology.maximum_swings == 2,
+            "trot policy exposes its two-beat support contract");
+    Require(fabsf(horse.skeleton.morphology.limbs[0].phase_offset -
+                      horse.skeleton.morphology.limbs[3].phase_offset) <
+                0.0001f &&
+                fabsf(horse.skeleton.morphology.limbs[1].phase_offset -
+                      horse.skeleton.morphology.limbs[2].phase_offset) <
+                0.0001f,
+            "trot policy couples diagonal hoof pairs");
+    for (int32_t limb = 0; limb < 4; ++limb) {
+        Require(Distance(walk_contacts[limb],
+                         horse.skeleton.limbs[limb].planted_contact) <
+                    0.00001f,
+                "gait handoff preserves planted hoof contacts");
+    }
+
+    bool saw_trot_pair = false;
+    for (int32_t frame = 0; frame < 480; ++frame) {
+        CcCreatureRigPose controlled;
+        Require(CcCreatureRigControllerStep(
+                    &horse, 1.55f, 1.0f, 1.0f / 60.0f, &controlled),
+                "trot policy advances through the shared controller");
+        Require(controlled.planted_count >=
+                    horse.skeleton.morphology.minimum_supports &&
+                    controlled.swinging_count <=
+                    horse.skeleton.morphology.maximum_swings,
+                "trot stays inside its support and swing budgets");
+        if (controlled.swinging_count == 2) {
+            saw_trot_pair = true;
+            break;
+        }
+    }
+    Require(saw_trot_pair, "trot policy lifts a diagonal hoof pair");
+    Require(!CcCreatureRigControllerSetGait(
+                &horse, CC_CREATURE_RIG_GAIT_WALK) &&
+                horse.gait == CC_CREATURE_RIG_GAIT_TROT,
+            "walk handoff waits while two hooves are airborne");
+
+    bool returned_to_walk = false;
+    for (int32_t frame = 0; frame < 180 && !returned_to_walk; ++frame) {
+        CcCreatureRigPose controlled;
+        Require(CcCreatureRigControllerStep(
+                    &horse, 1.20f, 1.0f, 1.0f / 60.0f, &controlled),
+                "trot settles while walk waits for control");
+        returned_to_walk = CcCreatureRigControllerSetGait(
+            &horse, CC_CREATURE_RIG_GAIT_WALK);
+    }
+    Require(returned_to_walk && horse.gait == CC_CREATURE_RIG_GAIT_WALK &&
+                horse.skeleton.morphology.maximum_swings == 1,
+            "walk takes control as soon as the support set is safe");
+    Require(CcCreatureRigControllerSetGait(
+                &horse, CC_CREATURE_RIG_GAIT_CANTER) &&
+                horse.gait == CC_CREATURE_RIG_GAIT_CANTER &&
+                horse.skeleton.morphology.maximum_swings == 2,
+            "horse can hand control from walk to canter");
+    bool saw_canter_pair = false;
+    for (int32_t frame = 0; frame < 480; ++frame) {
+        CcCreatureRigPose controlled;
+        Require(CcCreatureRigControllerStep(
+                    &horse, 1.95f, 1.0f, 1.0f / 60.0f, &controlled),
+                "canter policy advances through the shared controller");
+        Require(controlled.planted_count >=
+                    horse.skeleton.morphology.minimum_supports &&
+                    controlled.swinging_count <=
+                    horse.skeleton.morphology.maximum_swings,
+                "canter stays inside its support and swing budgets");
+        if (controlled.swinging_count == 2) saw_canter_pair = true;
+    }
+    Require(saw_canter_pair, "canter policy uses its paired swing budget");
+    Require(CcCreatureRigGaitName(CC_CREATURE_RIG_GAIT_WALK)[0] == 'W' &&
+                CcCreatureRigGaitName(CC_CREATURE_RIG_GAIT_TROT)[0] == 'T' &&
+                CcCreatureRigGaitName(CC_CREATURE_RIG_GAIT_CANTER)[0] == 'C',
+            "gait policies have stable player-facing names");
+
+    CcCreatureRigController cow;
+    Require(CcCreatureRigControllerInit(
+                &cow, CC_CREATURE_RIG_COW, 0.0f, 1.0f) &&
+                !CcCreatureRigControllerSetGait(
+                    &cow, CC_CREATURE_RIG_GAIT_TROT),
+            "unimplemented animal gait policies fail closed");
+
     puts("creature skeletal-muscular rig contract passed");
     return 0;
 }

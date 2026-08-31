@@ -535,8 +535,81 @@ bool CcCreatureRigControllerInit(CcCreatureRigController *controller,
     }
     controller->skeleton.gait_phase = Wrap01(phase);
     controller->profile = profile;
+    controller->gait = CC_CREATURE_RIG_GAIT_WALK;
+    controller->requested_gait = CC_CREATURE_RIG_GAIT_WALK;
     controller->scale = scale;
     controller->initialized = true;
+    return true;
+}
+
+static bool ConfigureHorseGait(CcLimbMorphology *morphology,
+                               CcCreatureRigGait gait)
+{
+    if (morphology == NULL ||
+        morphology->preset != CC_MORPHOLOGY_QUADRUPED) {
+        return false;
+    }
+    switch (gait) {
+        case CC_CREATURE_RIG_GAIT_WALK:
+            morphology->minimum_supports = 3;
+            morphology->maximum_swings = 1;
+            morphology->duty_factor = 0.69f;
+            morphology->swing_seconds = 0.24f;
+            morphology->velocity_lead = 0.12f;
+            morphology->limbs[0].phase_offset = 0.00f;
+            morphology->limbs[1].phase_offset = 0.50f;
+            morphology->limbs[2].phase_offset = 0.75f;
+            morphology->limbs[3].phase_offset = 0.25f;
+            return true;
+        case CC_CREATURE_RIG_GAIT_TROT:
+            morphology->minimum_supports = 2;
+            morphology->maximum_swings = 2;
+            morphology->duty_factor = 0.58f;
+            morphology->swing_seconds = 0.20f;
+            morphology->velocity_lead = 0.15f;
+            morphology->limbs[0].phase_offset = 0.00f;
+            morphology->limbs[1].phase_offset = 0.50f;
+            morphology->limbs[2].phase_offset = 0.50f;
+            morphology->limbs[3].phase_offset = 0.00f;
+            return true;
+        case CC_CREATURE_RIG_GAIT_CANTER:
+            morphology->minimum_supports = 2;
+            morphology->maximum_swings = 2;
+            morphology->duty_factor = 0.54f;
+            morphology->swing_seconds = 0.18f;
+            morphology->velocity_lead = 0.18f;
+            morphology->limbs[0].phase_offset = 0.50f;
+            morphology->limbs[1].phase_offset = 0.68f;
+            morphology->limbs[2].phase_offset = 0.00f;
+            morphology->limbs[3].phase_offset = 0.18f;
+            return true;
+        case CC_CREATURE_RIG_GAIT_COUNT:
+        default:
+            return false;
+    }
+}
+
+bool CcCreatureRigControllerSetGait(CcCreatureRigController *controller,
+                                    CcCreatureRigGait gait)
+{
+    if (controller == NULL || !controller->initialized || gait < 0 ||
+        gait >= CC_CREATURE_RIG_GAIT_COUNT) {
+        return false;
+    }
+    if (controller->profile != CC_CREATURE_RIG_HORSE) {
+        return gait == CC_CREATURE_RIG_GAIT_WALK;
+    }
+    controller->requested_gait = gait;
+    if (controller->gait == gait) return true;
+
+    int32_t maximum_swings = gait == CC_CREATURE_RIG_GAIT_WALK ? 1 : 2;
+    if (controller->skeleton.swinging_count > maximum_swings) {
+        return false;
+    }
+    if (!ConfigureHorseGait(&controller->skeleton.morphology, gait)) {
+        return false;
+    }
+    controller->gait = gait;
     return true;
 }
 
@@ -564,9 +637,28 @@ bool CcCreatureRigControllerStep(CcCreatureRigController *controller,
         controller->ground_position.z += speed * step;
         CcLimbVec3 body = controller->ground_position;
         body.y += controller->skeleton.morphology.body_height;
+        int32_t declared_maximum_swings =
+            controller->skeleton.morphology.maximum_swings;
+        bool walking_requested =
+            controller->profile == CC_CREATURE_RIG_HORSE &&
+            controller->gait != CC_CREATURE_RIG_GAIT_WALK &&
+            controller->requested_gait == CC_CREATURE_RIG_GAIT_WALK;
+        if (walking_requested) {
+            /* Let already-airborne hooves finish, but do not schedule a
+               replacement pair while the walking policy is waiting. */
+            controller->skeleton.morphology.maximum_swings = 1;
+        }
         CcLimbRigUpdate(&controller->skeleton, body, 0.0f,
                         (CcLimbVec3){0.0f, 0.0f, speed}, true, step,
                         NULL, NULL);
+        controller->skeleton.morphology.maximum_swings =
+            declared_maximum_swings;
+        if (walking_requested &&
+            controller->skeleton.swinging_count <= 1 &&
+            ConfigureHorseGait(&controller->skeleton.morphology,
+                               CC_CREATURE_RIG_GAIT_WALK)) {
+            controller->gait = CC_CREATURE_RIG_GAIT_WALK;
+        }
         remaining -= step;
     } while (remaining > 0.000001f);
 
@@ -596,6 +688,18 @@ const char *CcCreatureRigProfileName(CcCreatureRigProfile profile)
         case CC_CREATURE_RIG_HEXAPOD: return "HEXAPOD";
         case CC_CREATURE_RIG_OCTOPOD: return "OCTOPOD";
         case CC_CREATURE_RIG_PROFILE_COUNT:
+        default:
+            return "UNKNOWN";
+    }
+}
+
+const char *CcCreatureRigGaitName(CcCreatureRigGait gait)
+{
+    switch (gait) {
+        case CC_CREATURE_RIG_GAIT_WALK: return "WALK";
+        case CC_CREATURE_RIG_GAIT_TROT: return "TROT";
+        case CC_CREATURE_RIG_GAIT_CANTER: return "CANTER";
+        case CC_CREATURE_RIG_GAIT_COUNT:
         default:
             return "UNKNOWN";
     }

@@ -1,5 +1,6 @@
 #include "client/cc_local3d.h"
 #include "client/cc_local3d_internal.h"
+#include "client/cc_client_policy.h"
 #include "client/cc_local_place.h"
 #include "client/cc_creature_catalog.h"
 #include "client/cc_overlay.h"
@@ -11215,8 +11216,9 @@ static CcCreatureRigProfile CreatureRigProfileForVariant(
 }
 
 static bool ResolveControlledCreatureGait(
-    CreatureGaitSlot slot, CcCreatureRigProfile profile, float clock,
-    float initial_phase, float forward_speed, bool moving,
+    CreatureGaitSlot slot, CcCreatureRigProfile profile,
+    CcCreatureRigGait gait, float clock, float initial_phase,
+    float forward_speed, bool moving,
     CcCreatureRigPose *pose)
 {
     if (slot < 0 || slot >= CREATURE_GAIT_SLOT_COUNT || pose == NULL ||
@@ -11236,6 +11238,7 @@ static bool ResolveControlledCreatureGait(
         cache->profile = profile;
         cache->last_clock = clock;
         cache->ready = true;
+        (void)CcCreatureRigControllerSetGait(&cache->controller, gait);
         if (moving) {
             CcCreatureRigPose warm_pose;
             for (int32_t frame = 0; frame < 36; ++frame) {
@@ -11249,6 +11252,10 @@ static bool ResolveControlledCreatureGait(
         }
         elapsed = 0.0f;
     }
+    /* A faster gait can take control immediately. A return to walking waits
+       until at most one hoof is airborne, so policy changes never plant a
+       second hoof or snap an active stride. The caller asks again next frame. */
+    (void)CcCreatureRigControllerSetGait(&cache->controller, gait);
     cache->last_clock = clock;
     return CcCreatureRigControllerStep(
         &cache->controller, moving ? forward_speed : 0.0f,
@@ -21263,13 +21270,22 @@ static void DrawRoadHorseHarness(Vector3 base, float yaw, float gait_phase)
                     (Vector3){0.43f, 0.025f, 0.030f}, yaw, buckle);
 }
 
-static void DrawRoadHorseTeam(Vector3 base, float clock, bool moving,
+static void DrawRoadHorseTeam(Vector3 base, float clock, float pace,
                               float yaw, bool bridge_checkpoint)
 {
+    CcClientConvoyGait convoy_gait = CcClientConvoyGaitForPace(pace);
+    CcCreatureRigGait rig_gait =
+        convoy_gait == CC_CLIENT_CONVOY_GAIT_CANTER ?
+            CC_CREATURE_RIG_GAIT_CANTER :
+        convoy_gait == CC_CLIENT_CONVOY_GAIT_TROT ?
+            CC_CREATURE_RIG_GAIT_TROT : CC_CREATURE_RIG_GAIT_WALK;
+    bool moving = convoy_gait != CC_CLIENT_CONVOY_GAIT_HALT;
+    float cadence = CcClientConvoyGaitCadence(convoy_gait);
+    float forward_speed = moving ? 0.50f + pace * 1.45f : 0.0f;
     CcCreaturePose left_pose = CcCreatureSteppedPose(
-        CC_CREATURE_HORSE, clock * 4.8f, moving);
+        CC_CREATURE_HORSE, clock * cadence, moving);
     CcCreaturePose right_pose = CcCreatureSteppedPose(
-        CC_CREATURE_HORSE, clock * 4.8f + PI, moving);
+        CC_CREATURE_HORSE, clock * cadence + PI, moving);
     float lateral_spacing =
         CcLocalRoadHorseLateralSpacingInternal(bridge_checkpoint);
     for (int32_t horse = -1; horse <= 1; horse += 2) {
@@ -21288,13 +21304,14 @@ static void DrawRoadHorseTeam(Vector3 base, float clock, bool moving,
             horse_base.y += horse_support - carriage_support;
         }
         CcCreaturePose pose = horse < 0 ? left_pose : right_pose;
-        float gait_phase = clock * 4.8f + (horse < 0 ? 0.0f : PI);
+        float gait_phase = clock * cadence + (horse < 0 ? 0.0f : PI);
         CcCreatureRigPose controlled_pose;
         CreatureGaitSlot slot = horse < 0 ? CREATURE_GAIT_ROAD_HORSE_LEFT :
                                             CREATURE_GAIT_ROAD_HORSE_RIGHT;
         bool controlled = ResolveControlledCreatureGait(
-            slot, CC_CREATURE_RIG_HORSE, clock,
-            horse < 0 ? 0.0f : 0.5f, 1.35f, moving, &controlled_pose);
+            slot, CC_CREATURE_RIG_HORSE, rig_gait, clock,
+            horse < 0 ? 0.0f : 0.5f, forward_speed, moving,
+            &controlled_pose);
         (void)DrawCreatureGait3D(
             CC_CREATURE_HORSE, pose, horse_base,
             yaw, 0.96f, coat, gait_phase, moving,
@@ -21312,7 +21329,7 @@ static void DrawRoadHorseTeam(Vector3 base, float clock, bool moving,
 }
 
 static void DrawRoadCarriage(Vector3 base, int32_t cargo_used, float clock,
-                             bool moving, float yaw, bool horses_hitched,
+                             float pace, float yaw, bool horses_hitched,
                              bool bridge_checkpoint)
 {
     float asset_yaw_degrees = yaw * RAD2DEG - 90.0f;
@@ -21360,7 +21377,7 @@ static void DrawRoadCarriage(Vector3 base, int32_t cargo_used, float clock,
                        WORLD_WOOD);
     }
     if (horses_hitched) {
-        DrawRoadHorseTeam(base, clock, moving, yaw, bridge_checkpoint);
+        DrawRoadHorseTeam(base, clock, pace, yaw, bridge_checkpoint);
     }
 }
 
@@ -21632,7 +21649,7 @@ void CcLocalDrawFork3D(const CcSim *sim, int32_t selected_route,
         carriage_heading = 0.5f * PI +
             WrapAngle(branch_heading - 0.5f * PI) * SmoothStep01(amount);
     }
-    DrawRoadCarriage(carriage, cargo, clock, turn < 1.0f,
+    DrawRoadCarriage(carriage, cargo, clock, turn < 1.0f ? 0.72f : 0.0f,
                      carriage_heading, true, false);
     DrawVisibleNpcFigure3D(
         (Vector3){33.0f, 0.0f, 35.6f}, 0.90f, 1.42f,
@@ -21899,8 +21916,9 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
         15.50f + convoy->phase_progress * 4.65f :
         CcLocalRoadCarriageX(sim->carriage.progress_milli);
     float lateral_offset = convoy != NULL ? convoy->lateral_offset : 0.0f;
-    bool carriage_moving = travelling && convoy != NULL ?
-        convoy->pace > 0.02f : travelling;
+    float carriage_pace = travelling && convoy != NULL ?
+        convoy->pace : travelling ? 0.72f : 0.0f;
+    bool carriage_moving = carriage_pace > 0.02f;
     Vector3 carriage_base = {
         carriage_x,
         carriage_moving ? 0.025f + sinf(clock * 5.0f) * 0.018f : 0.0f,
@@ -21960,7 +21978,7 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     }
     if (!travelling) DrawAgentPath(agent, false);
     int32_t road_cargo = CcPlayerCargoUsed(&sim->player);
-    DrawRoadCarriage(carriage_base, road_cargo, clock, carriage_moving,
+    DrawRoadCarriage(carriage_base, road_cargo, clock, carriage_pace,
                      0.5f * PI, true, authored_checkpoint);
     int32_t roadside_cattle = 0;
     if (origin != NULL) {
@@ -21976,7 +21994,8 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
             CC_CREATURE_COW, clock * 1.55f, travelling);
         CcCreatureRigPose controlled_cow;
         bool controlled = ResolveControlledCreatureGait(
-            CREATURE_GAIT_ROAD_COW, CC_CREATURE_RIG_COW, clock,
+            CREATURE_GAIT_ROAD_COW, CC_CREATURE_RIG_COW,
+            CC_CREATURE_RIG_GAIT_WALK, clock,
             0.18f, 0.62f, travelling, &controlled_cow);
         (void)DrawCreatureGait3D(
             CC_CREATURE_COW, cow_pose, cow_position,
@@ -22284,7 +22303,8 @@ void CcLocalDrawSite3D(const CcSim *sim, const CcLocalAgent *agent,
                     camera.target);
     DrawRemoteSiteEntrance(sim, site, clock);
     DrawRoadCarriage(carriage, CcPlayerCargoUsed(&sim->player), clock,
-                     travelling, returning ? -0.5f * PI : 0.5f * PI,
+                     travelling ? 0.72f : 0.0f,
+                     returning ? -0.5f * PI : 0.5f * PI,
                      true, false);
     if (!travelling) {
         DrawAgentPath(agent, false);
@@ -22391,7 +22411,8 @@ static void DrawSettlementCreatures(const CcSim *sim,
             CC_CREATURE_COW, clock * 1.25f, true);
         CcCreatureRigPose controlled_cow;
         bool controlled = ResolveControlledCreatureGait(
-            CREATURE_GAIT_STREET_COW, CC_CREATURE_RIG_COW, clock,
+            CREATURE_GAIT_STREET_COW, CC_CREATURE_RIG_COW,
+            CC_CREATURE_RIG_GAIT_WALK, clock,
             0.34f, 0.48f, true, &controlled_cow);
         (void)DrawCreatureGait3D(
             CC_CREATURE_COW, cow_pose,
@@ -22582,7 +22603,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     if (convoy_visible) {
         DrawRoadCarriage(convoy->town_position,
                          CcPlayerCargoUsed(&sim->player), clock,
-                         convoy->pace > 0.02f,
+                         convoy->pace,
                          convoy->town_heading_yaw, true, false);
         if (agent != NULL) DrawRobotShell(&convoy_hero);
     }

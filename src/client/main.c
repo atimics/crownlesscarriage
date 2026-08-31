@@ -1541,8 +1541,11 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
                 int32_t eta_hours =
                     (CcSimJourneyEtaMinutes(sim) + 59) / 60;
                 CcOverlayDrawText(
-                    TextFormat("PACE %s  /  ETA %dD %dH",
+                    TextFormat("%s / %s / ETA %dD %dH",
                                CcJourneyPaceName(sim->journey.pace),
+                               CcClientConvoyGaitName(
+                                   CcClientConvoyGaitForPace(
+                                       local->convoy.pace)),
                                eta_hours / 24, eta_hours % 24),
                     content_x, 170, 8, CC_GOLD);
                 CcOverlayDrawText(

@@ -37,6 +37,22 @@ int main(void)
     CC_CHECK(CcClientStepConvoyPosture(1, 1) == 2);
     CC_CHECK(CcClientStepConvoyPosture(0, -1) == 0);
     CC_CHECK(CcClientStepConvoyPosture(2, 1) == 2);
+    CC_CHECK(CcClientConvoyGaitForPace(0.0f) ==
+             CC_CLIENT_CONVOY_GAIT_HALT);
+    CC_CHECK(CcClientConvoyGaitForPace(NAN) ==
+             CC_CLIENT_CONVOY_GAIT_HALT);
+    CC_CHECK(CcClientConvoyGaitForPace(0.52f) ==
+             CC_CLIENT_CONVOY_GAIT_WALK);
+    CC_CHECK(CcClientConvoyGaitForPace(0.72f) ==
+             CC_CLIENT_CONVOY_GAIT_TROT);
+    CC_CHECK(CcClientConvoyGaitForPace(1.0f) ==
+             CC_CLIENT_CONVOY_GAIT_CANTER);
+    CC_CHECK(CcClientConvoyGaitCadence(CC_CLIENT_CONVOY_GAIT_HALT) == 0.0f);
+    CC_CHECK(CcClientConvoyGaitCadence(CC_CLIENT_CONVOY_GAIT_WALK) <
+             CcClientConvoyGaitCadence(CC_CLIENT_CONVOY_GAIT_TROT));
+    CC_CHECK(CcClientConvoyGaitCadence(CC_CLIENT_CONVOY_GAIT_TROT) <
+             CcClientConvoyGaitCadence(CC_CLIENT_CONVOY_GAIT_CANTER));
+    CC_CHECK(CcClientConvoyGaitName(CC_CLIENT_CONVOY_GAIT_TROT)[0] == 'T');
     CC_CHECK(CcClientRoadHasNextBranch(0, 2));
     CC_CHECK(!CcClientRoadHasNextBranch(1, 2));
     CC_CHECK(!CcClientRoadHasNextBranch(-1, 2));
