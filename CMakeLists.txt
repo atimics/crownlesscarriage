@@ -443,6 +443,11 @@ if(BUILD_TESTING)
     cc_strict_warnings(sim_tests)
     add_test(NAME deterministic_simulation COMMAND sim_tests)
 
+    add_executable(loot_tests tests/loot_tests.c)
+    target_link_libraries(loot_tests PRIVATE crownless_sim)
+    cc_strict_warnings(loot_tests)
+    add_test(NAME encounter_loot_tables COMMAND loot_tests)
+
     add_executable(client_session_tests tests/client_session_tests.c)
     target_link_libraries(client_session_tests PRIVATE crownless_client_session)
     cc_strict_warnings(client_session_tests)
