@@ -101,6 +101,7 @@ respond to a player decision.
 - Automated simulation validation
 - Player-legibility tests
 - [Text-first metagame playtest](11-metagame-playtest.md)
+- [Authored dialogue](production/authored-dialogue.md)
 - Go/no-go gates
 - Expansion roadmap
 
