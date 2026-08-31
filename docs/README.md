@@ -19,8 +19,9 @@ respond to a player decision.
 10. [Production roadmap](10-roadmap.md)
 11. [Text-first metagame playtest](11-metagame-playtest.md)
 12. [Story, quests, and narration](12-story-quests-and-narration.md)
-13. [Glossary](glossary.md)
-14. [Decision log](decisions/README.md)
+13. [The OSR release cut](13-osr-release-cut.md)
+14. [Glossary](glossary.md)
+15. [Decision log](decisions/README.md)
 
 ## Full table of contents
 
