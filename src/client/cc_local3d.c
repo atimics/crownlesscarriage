@@ -11230,6 +11230,38 @@ static Rectangle RoadObstacleAt(int32_t index)
                                           ROAD_FALLBACK_OBSTACLES[index];
 }
 
+static void ReleaseUploadedModelCpuData(Model *model)
+{
+#if defined(PLATFORM_WEB)
+    if (model == NULL || model->meshes == NULL) return;
+    for (int32_t index = 0; index < model->meshCount; ++index) {
+        Mesh *mesh = &model->meshes[index];
+#define CC_RELEASE_UPLOADED_BUFFER(field) \
+        do { \
+            if (mesh->field != NULL) { \
+                MemFree(mesh->field); \
+                mesh->field = NULL; \
+            } \
+        } while (0)
+        CC_RELEASE_UPLOADED_BUFFER(vertices);
+        CC_RELEASE_UPLOADED_BUFFER(texcoords);
+        CC_RELEASE_UPLOADED_BUFFER(texcoords2);
+        CC_RELEASE_UPLOADED_BUFFER(normals);
+        CC_RELEASE_UPLOADED_BUFFER(tangents);
+        CC_RELEASE_UPLOADED_BUFFER(colors);
+        CC_RELEASE_UPLOADED_BUFFER(boneIndices);
+        CC_RELEASE_UPLOADED_BUFFER(boneWeights);
+        CC_RELEASE_UPLOADED_BUFFER(animVertices);
+        CC_RELEASE_UPLOADED_BUFFER(animNormals);
+#undef CC_RELEASE_UPLOADED_BUFFER
+        /* DrawMesh uses this pointer as the indexed-draw flag, even after the
+           index data has been uploaded, so it must remain allocated. */
+    }
+#else
+    (void)model;
+#endif
+}
+
 static bool LoadRuntimeAsset(RuntimeAssetId id)
 {
     if (id < 0 || id >= RUNTIME_ASSET_COUNT) return false;
@@ -11250,6 +11282,7 @@ static bool LoadRuntimeAsset(RuntimeAssetId id)
         asset->model = (Model){0};
         return false;
     }
+    ReleaseUploadedModelCpuData(&asset->model);
     asset->ready = true;
     TraceLog(LOG_INFO, "ASSET: loaded %s (%d meshes)", asset->label,
              mesh_count);
@@ -11280,6 +11313,7 @@ static void LoadNpcArchetypes(void)
                 if (model.meshCount > 0) UnloadModel(model);
                 continue;
             }
+            ReleaseUploadedModelCpuData(&model);
             npc_archetypes[role][pose].model = model;
             npc_archetypes[role][pose].ready = true;
         }
@@ -11351,6 +11385,7 @@ static void LoadCreatureModels(void)
                                sizeof(cached->animation.name),
                                "quadruped-runtime");
             }
+            ReleaseUploadedModelCpuData(&cached->model);
             cached->ready = true;
             loaded_count += 1;
         }
@@ -11382,6 +11417,7 @@ static void LoadNpcDynamicModules(void)
             if (model.meshCount > 0) UnloadModel(model);
             continue;
         }
+        ReleaseUploadedModelCpuData(&model);
         module->model = model;
         module->ready = true;
         loaded_count += 1;
@@ -11454,6 +11490,7 @@ static void LoadNpcBodySkins(void)
                 (void)snprintf(body->animation.name,
                                sizeof(body->animation.name),
                                "physics-body");
+                ReleaseUploadedModelCpuData(&body->model);
                 body->ready = true;
                 loaded_count += 1;
             }
@@ -11485,6 +11522,7 @@ static void LoadNpcHeadFamilies(void)
             if (model.meshCount > 0) UnloadModel(model);
             continue;
         }
+        ReleaseUploadedModelCpuData(&model);
         npc_head_families[family].model = model;
         npc_head_families[family].ready = true;
         loaded_count += 1;
@@ -11515,6 +11553,7 @@ static void LoadNpcHairFamilies(void)
             if (model.meshCount > 0) UnloadModel(model);
             continue;
         }
+        ReleaseUploadedModelCpuData(&model);
         npc_hair_families[family].model = model;
         npc_hair_families[family].ready = true;
         loaded_count += 1;
@@ -13561,6 +13600,7 @@ static void LoadHeroSkin(void)
     hero_skin.animation.keyframePoses = hero_skin.frames;
     (void)snprintf(hero_skin.animation.name, sizeof(hero_skin.animation.name),
                    "engine-physics");
+    ReleaseUploadedModelCpuData(&hero_skin.model);
     hero_skin.ready = true;
     TraceLog(LOG_INFO,
              "HERO: loaded %s skin with %d meshes on %d physics bones",
@@ -13905,7 +13945,9 @@ static Model BuildTreeCrownModel(TreeCrownShape shape)
         return (Model){0};
     }
     UploadMesh(&mesh, false);
-    return LoadModelFromMesh(mesh);
+    Model model = LoadModelFromMesh(mesh);
+    ReleaseUploadedModelCpuData(&model);
+    return model;
 }
 
 static void LoadTreeCrownModels(void)
@@ -13947,6 +13989,9 @@ void CcLocalRendererInit(void)
     sphere_models.small = LoadModelFromMesh(GenMeshSphere(1.0f, 6, 8));
     sphere_models.character = LoadModelFromMesh(GenMeshSphere(1.0f, 8, 8));
     sphere_models.scenery = LoadModelFromMesh(GenMeshSphere(1.0f, 10, 12));
+    ReleaseUploadedModelCpuData(&sphere_models.small);
+    ReleaseUploadedModelCpuData(&sphere_models.character);
+    ReleaseUploadedModelCpuData(&sphere_models.scenery);
     sphere_models.ready = true;
     LoadTreeCrownModels();
     LoadHeroSkin();
@@ -16197,6 +16242,7 @@ static bool TerrainRenderCacheBuild(const CcSettlement *place)
     }
     UploadMesh(&writer.mesh, false);
     terrain_render_cache.model = LoadModelFromMesh(writer.mesh);
+    ReleaseUploadedModelCpuData(&terrain_render_cache.model);
     ApplyWorldShader(&terrain_render_cache.model);
     terrain_render_cache.seed = street_terrain_seed;
     terrain_render_cache.place_id = place != NULL ? place->id : 0U;
@@ -16834,6 +16880,7 @@ static bool TerrainDetailRenderCacheBuild(const CcSettlement *place)
 
     UploadMesh(&writer.mesh, false);
     terrain_detail_render_cache.model = LoadModelFromMesh(writer.mesh);
+    ReleaseUploadedModelCpuData(&terrain_detail_render_cache.model);
     ApplyWorldShader(&terrain_detail_render_cache.model);
     terrain_detail_render_cache.seed = street_terrain_seed;
     terrain_detail_render_cache.place_id = place != NULL ? place->id : 0U;
