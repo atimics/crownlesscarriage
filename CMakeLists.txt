@@ -72,6 +72,13 @@ add_library(crownless_sim
 target_include_directories(crownless_sim PUBLIC src)
 cc_strict_warnings(crownless_sim)
 
+add_library(crownless_story
+    src/story/cc_story.c
+)
+target_include_directories(crownless_story PUBLIC src)
+target_link_libraries(crownless_story PUBLIC crownless_sim)
+cc_strict_warnings(crownless_story)
+
 add_library(crownless_creature_catalog
     src/client/cc_creature_catalog.c
 )
@@ -182,7 +189,8 @@ if(CC_BUILD_CLIENT)
     target_link_libraries(crownless_carriage PRIVATE
         crownless_persistence crownless_locomotion
         crownless_creature_catalog crownless_local_place
-        crownless_client_session crownless_client_policy raylib glfw
+        crownless_client_session crownless_client_policy crownless_story
+        raylib glfw
     )
     target_compile_definitions(crownless_carriage PRIVATE
         CC_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}"
@@ -442,6 +450,11 @@ if(BUILD_TESTING)
     target_link_libraries(sim_tests PRIVATE crownless_sim)
     cc_strict_warnings(sim_tests)
     add_test(NAME deterministic_simulation COMMAND sim_tests)
+
+    add_executable(story_tests tests/story_tests.c)
+    target_link_libraries(story_tests PRIVATE crownless_story)
+    cc_strict_warnings(story_tests)
+    add_test(NAME authored_story_beats COMMAND story_tests)
 
     add_executable(loot_tests tests/loot_tests.c)
     target_link_libraries(loot_tests PRIVATE crownless_sim)

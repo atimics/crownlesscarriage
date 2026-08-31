@@ -6,6 +6,7 @@
 #include "client/cc_visual_style.h"
 #include "persistence/cc_save.h"
 #include "sim/cc_sim.h"
+#include "story/cc_story.h"
 
 #include "raylib.h"
 #include "GLFW/glfw3.h"
@@ -473,7 +474,7 @@ static void SituationNextAction(const CcSim *sim,
             (sim->player.location_id == route->from_id ||
              sim->player.location_id == route->to_id);
         (void)snprintf(label, capacity, at_route ?
-                       "Repair this road: 3 Tools or 18 crowns." :
+                       "Repair this road: 2 Tools or 18 crowns." :
                        "Travel to either end of this road.");
         return;
     }
@@ -3439,39 +3440,6 @@ static void DrawCarriageScreen(const CcSim *sim, const LocalState *local)
         CcSimHorseTeamReadiness(sim) < 30 ? DANGER : TEAL);
 }
 
-static const char *CharacterSpokenLine(const CcSituation *situation,
-                                       const CcCharacter *character)
-{
-    if (situation == NULL) return "They have nothing more to ask.";
-    if (character != NULL && CcCharacterRemembers(
-            character, CC_CHARACTER_MEMORY_PLAYER_HELPED, situation->id)) {
-        return "You kept your word. I won't forget it.";
-    }
-    if (character != NULL && CcCharacterRemembers(
-            character, CC_CHARACTER_MEMORY_PLAYER_WITHDREW,
-            situation->id)) {
-        return "You said you would help. We waited for you.";
-    }
-    if (character != NULL && CcCharacterRemembers(
-            character, CC_CHARACTER_MEMORY_PLAYER_PROMISED,
-            situation->id)) {
-        return "I told them help was coming. Please don't make me a liar.";
-    }
-    switch (situation->kind) {
-        case CC_SITUATION_RELIEF_DELIVERY:
-            return "Please. We're down to our last meal. If the convoy doesn't come, my family goes hungry.";
-        case CC_SITUATION_ROUTE_REPAIR:
-            return "The road is broken. No medicine, no work, nothing gets through until someone mends it.";
-        case CC_SITUATION_MONSTER_EXPEDITION:
-            return "I saw what came out of the mine. There are still people trapped below.";
-        case CC_SITUATION_BLACK_MARKET_DELIVERY:
-            return "The official stores won't feed people hiding from the levy. I know another way in.";
-        case CC_SITUATION_COURIER_DELIVERY:
-            return "This message will change someone's life. It has to reach them unopened.";
-    }
-    return "I need your help.";
-}
-
 static void DrawCharacterConversation(const CcSim *sim,
                                       const LocalState *local)
 {
@@ -3497,9 +3465,12 @@ static void DrawCharacterConversation(const CcSim *sim,
             CC_NPC_PORTRAIT_TALKING);
     }
     int32_t speech_x = 568;
+    const CcStoryLine *spoken = CcStoryCharacterLine(
+        sim, situation, character);
     CcOverlayDrawText(character->name, speech_x, 216, 18, CC_GOLD);
     CcOverlayDrawText("\"", speech_x, 266, 28, MUTED);
-    DrawTwoLineText(CharacterSpokenLine(situation, character),
+    DrawTwoLineText(spoken != NULL ? spoken->text :
+                        "They have nothing more to ask.",
                     speech_x + 28, 270, 42U, 16, INK);
 }
 
