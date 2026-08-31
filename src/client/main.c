@@ -648,6 +648,44 @@ static void DrawPanel(Rectangle bounds, Color color)
                   Fade(CC_GOLD, 0.72f));
 }
 
+static void DrawCampaignUnavailable(const char *error)
+{
+    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
+                  Fade(BACKGROUND, 0.88f));
+    float width = fminf(720.0f, (float)GetScreenWidth() - 48.0f);
+    Rectangle bounds = {
+        ((float)GetScreenWidth() - width) * 0.5f,
+        ((float)GetScreenHeight() - 190.0f) * 0.5f,
+        width,
+        190.0f
+    };
+    DrawPanel(bounds, PANEL_DEEP);
+    const char *title = "CAMPAIGN COULD NOT BE OPENED";
+    int title_width = CcOverlayMeasureText(title, 20);
+    CcOverlayDrawText(title,
+                      (GetScreenWidth() - title_width) / 2,
+                      (int)bounds.y + 34, 20, DANGER);
+    const char *detail = TextFormat(
+        "%.72s",
+        error != NULL && error[0] != '\0' ? error :
+            "The campaign journal is unavailable.");
+    int detail_width = CcOverlayMeasureText(detail, 10);
+    CcOverlayDrawText(detail,
+                      (GetScreenWidth() - detail_width) / 2,
+                      (int)bounds.y + 82, 10, INK);
+    const char *safety = "Your campaign was not changed.";
+    int safety_width = CcOverlayMeasureText(safety, 11);
+    CcOverlayDrawText(safety,
+                      (GetScreenWidth() - safety_width) / 2,
+                      (int)bounds.y + 116, 11, TEAL);
+    const char *instruction =
+        "Close the game, fix the save problem, then reopen it.";
+    int instruction_width = CcOverlayMeasureText(instruction, 10);
+    CcOverlayDrawText(instruction,
+                      (GetScreenWidth() - instruction_width) / 2,
+                      (int)bounds.y + 145, 10, MUTED);
+}
+
 static void DrawPerformanceOverlay(void)
 {
     CcLocalRendererStats stats = CcLocalRendererGetStats();
@@ -4800,6 +4838,13 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                         const char *save_path, const char *session_path,
                         char *message, size_t message_capacity)
 {
+    if (journal == NULL || *journal == NULL) {
+        if (message[0] == '\0') {
+            (void)snprintf(message, message_capacity,
+                           "The campaign journal is unavailable.");
+        }
+        return;
+    }
     ContextAction pressed_action = PressedContextAction(
         sim, local, *view, *selected, *selected_situation);
     ContextActionKind context_action = pressed_action.kind;
@@ -4815,13 +4860,8 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             return;
         }
         char error[256];
-        bool saved = false;
-        if (*journal == NULL) {
-            *journal = CcJournalStart(save_path, sim, error, sizeof(error));
-            saved = *journal != NULL;
-        } else {
-            saved = CcJournalCheckpoint(*journal, sim, error, sizeof(error));
-        }
+        bool saved = CcJournalCheckpoint(*journal, sim,
+                                         error, sizeof(error));
         if (saved) {
             saved = SaveLocalSession(session_path, sim, local,
                                      error, sizeof(error));
@@ -5194,13 +5234,17 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             (void)snprintf(message, message_capacity, "%s", error);
             return;
         }
-        *journal = CcJournalResume(save_path, sim, error, sizeof(error));
-        bool loaded = *journal != NULL;
+        CcSim loaded_sim;
+        CcJournal *loaded_journal = CcJournalResume(
+            save_path, &loaded_sim, error, sizeof(error));
+        bool loaded = loaded_journal != NULL;
         (void)snprintf(message, message_capacity, "%s",
                        loaded ?
                            "Game loaded." :
                            error);
         if (loaded) {
+            *journal = loaded_journal;
+            *sim = loaded_sim;
             *selected = FirstOutgoingRouteIndex(sim);
             *selected_situation = FirstActiveSituationIndex(sim);
             CcLocalBindPlace(sim);
@@ -5221,6 +5265,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 *view = VIEW_LOCAL;
             }
         }
+        return;
     }
     if (ClientKeyPressed(KEY_N)) {
         static double confirmation_deadline = 0.0;
@@ -5237,27 +5282,31 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             (void)snprintf(message, message_capacity, "%s", error);
             return;
         }
-        CcSimInit(sim, sim->world_seed + UINT32_C(0x9e3779b9));
+        CcSim replacement;
+        CcSimInit(&replacement,
+                  sim->world_seed + UINT32_C(0x9e3779b9));
+        CcJournal *replacement_journal = CcJournalRestart(
+            save_path, &replacement, error, sizeof(error));
+        if (replacement_journal == NULL) {
+            *view = VIEW_LOCAL;
+            (void)snprintf(message, message_capacity, "%s", error);
+            return;
+        }
+        *journal = replacement_journal;
+        *sim = replacement;
         *selected = FirstOutgoingRouteIndex(sim);
         *selected_situation = FirstActiveSituationIndex(sim);
         CcLocalBindPlace(sim);
         ResetLocalState(local);
-        *journal = CcJournalRestart(save_path, sim, error, sizeof(error));
-        if (*journal != NULL) {
-            BeginOpening(local);
-            *view = VIEW_LOCAL;
-            message[0] = '\0';
-        } else {
-            *view = VIEW_LOCAL;
-            (void)snprintf(message, message_capacity, "%s", error);
-        }
+        BeginOpening(local);
+        *view = VIEW_LOCAL;
+        message[0] = '\0';
         return;
     }
     if (ClientKeyPressed(KEY_PERIOD) && !sim->journey.active) {
         char error[256];
-        bool advanced = *journal != NULL ?
-            CcJournalAdvanceDays(*journal, sim, 1, error, sizeof(error)) :
-            (CcSimAdvanceDays(sim, 1), true);
+        bool advanced = CcJournalAdvanceDays(*journal, sim, 1,
+                                             error, sizeof(error));
         (void)snprintf(message, message_capacity, "%s",
                        advanced ?
                            "One day passed." :
@@ -5265,9 +5314,8 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
     }
     if (ClientKeyPressed(KEY_K) && !sim->journey.active) {
         char error[256];
-        bool advanced = *journal != NULL ?
-            CcJournalAdvanceDays(*journal, sim, 7, error, sizeof(error)) :
-            (CcSimAdvanceDays(sim, 7), true);
+        bool advanced = CcJournalAdvanceDays(*journal, sim, 7,
+                                             error, sizeof(error));
         (void)snprintf(message, message_capacity, "%s",
                        advanced ?
                            "One week passed." :
@@ -5342,12 +5390,9 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 while (advanced && sim->journey.active &&
                        sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
                     bool warned_before = sim->journey.ambush_warned;
-                    advanced = *journal != NULL ?
-                        CcJournalAdvanceRuntimeTicks(
-                            *journal, sim, CC_WORLD_TICKS_PER_SECOND,
-                            error, sizeof(error)) :
-                        (CcSimAdvanceRuntimeTicks(
-                             sim, CC_WORLD_TICKS_PER_SECOND), true);
+                    advanced = CcJournalAdvanceRuntimeTicks(
+                        *journal, sim, CC_WORLD_TICKS_PER_SECOND,
+                        error, sizeof(error));
                     if (!warned_before && sim->journey.ambush_warned) {
                         warning_reached = true;
                         break;
@@ -5410,10 +5455,8 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             bool warned_before = sim->journey.ambush_warned;
             bool ambush_resolved_before = sim->journey.ambush_resolved;
             char error[256];
-            bool advanced = *journal != NULL ?
-                CcJournalAdvanceRuntimeTicks(*journal, sim, ticks,
-                                             error, sizeof(error)) :
-                (CcSimAdvanceRuntimeTicks(sim, ticks), true);
+            bool advanced = CcJournalAdvanceRuntimeTicks(
+                *journal, sim, ticks, error, sizeof(error));
             if (!advanced) {
                 (void)snprintf(message, message_capacity, "%s", error);
                 return;
@@ -7139,6 +7182,8 @@ int main(int argc, char **argv)
                         save_path, session_path, message, sizeof(message));
             ClientInputClearPressed();
         }
+        bool persistence_blocked = CcClientCampaignAccessFor(
+            normal_play, journal != NULL) == CC_CLIENT_CAMPAIGN_BLOCKED;
         CcLocalRendererSetOpeningStep(local.opening_step);
         CcLocalBindPlace(&sim);
         if (strcmp(previous_message, message) != 0) {
@@ -7227,7 +7272,8 @@ int main(int argc, char **argv)
             LocalCombatActive(&local)) {
             DrawCombatStatusLine(&local, message, message_age);
         }
-        if (!capture_gameplay_reel && view == VIEW_LOCAL &&
+        if (!persistence_blocked && !capture_gameplay_reel &&
+            view == VIEW_LOCAL &&
             !LocalCombatActive(&local) &&
             message_age < 2.2f &&
             message[0] != '\0' &&
@@ -7276,13 +7322,14 @@ int main(int argc, char **argv)
             DrawDragonCavePanel(&sim);
         }
         CcOverlayFlush();
-        if (!capture_npc_review &&
+        if (!persistence_blocked && !capture_npc_review &&
             (!capture_gameplay_reel ||
             gameplay_reel.stage != GAMEPLAY_REEL_QUEST_COMPLETE)) {
             DrawContextActionTray(&sim, &local, view, selected,
                                   selected_situation);
         }
-        if (!capture_npc_review && view != VIEW_DRAGON_CAVE &&
+        if (!persistence_blocked && !capture_npc_review &&
+            view != VIEW_DRAGON_CAVE &&
             view != VIEW_DUNGEON &&
             view != VIEW_CARRIAGE && view != VIEW_CHARACTER) {
             DrawCommandBar(view, &local);
@@ -7295,6 +7342,10 @@ int main(int argc, char **argv)
             CcOverlayFlush();
             DrawGameplayReelQuestComplete(&gameplay_reel);
             DrawGameplayReelTransition(&gameplay_reel);
+        }
+        if (persistence_blocked) {
+            CcOverlayFlush();
+            DrawCampaignUnavailable(message);
         }
         CcOverlayEnd();
         EndDrawing();
@@ -7365,8 +7416,10 @@ int main(int argc, char **argv)
         }
     }
 
+    bool campaign_unavailable = CcClientCampaignAccessFor(
+        normal_play, journal != NULL) == CC_CLIENT_CAMPAIGN_BLOCKED;
     char journal_error[256];
-    if (normal_play &&
+    if (normal_play && !campaign_unavailable &&
         !SaveLocalSession(session_path, &sim, &local,
                           journal_error, sizeof(journal_error))) {
         (void)fprintf(stderr, "Could not save the local session: %s\n",
@@ -7464,5 +7517,5 @@ int main(int argc, char **argv)
     } else if (capture) {
         (void)printf("captured %s\n", capture_path);
     }
-    return journal_close_failed ? 1 : 0;
+    return journal_close_failed || campaign_unavailable ? 1 : 0;
 }

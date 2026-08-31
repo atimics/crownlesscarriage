@@ -12,6 +12,12 @@ typedef enum CcClientConvoyGait {
     CC_CLIENT_CONVOY_GAIT_COUNT
 } CcClientConvoyGait;
 
+typedef enum CcClientCampaignAccess {
+    CC_CLIENT_CAMPAIGN_EPHEMERAL,
+    CC_CLIENT_CAMPAIGN_PERSISTENT,
+    CC_CLIENT_CAMPAIGN_BLOCKED
+} CcClientCampaignAccess;
+
 float CcClientConvoyPaceStep(float pace, bool road_phase,
                              bool urge, bool rein_in, bool stopped,
                              float delta_time);
@@ -30,5 +36,7 @@ bool CcClientPromiseCanBeAccepted(bool market_interior,
                                   float notice_distance);
 bool CcClientInteractionActivated(bool requested, float distance,
                                   float maximum_distance);
+CcClientCampaignAccess CcClientCampaignAccessFor(bool normal_play,
+                                                 bool journal_available);
 
 #endif

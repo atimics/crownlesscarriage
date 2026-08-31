@@ -21,6 +21,7 @@ jobs:
         run: |
           make blender-exports-check
           make blender-npc-assets-check
+          make blender-creature-assets-check
           make blender-world-kit-check
           python3 tools/blender/validate_character_paint_channels.py
       - name: Compile shipped shaders
@@ -64,10 +65,21 @@ jobs:
         run: ./build/crownless_benchmark --quick
 
   client:
-    name: Full macOS client
-    runs-on: macos-latest
+    name: Full client / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
+      - name: Install Linux client development files
+        if: runner.os == 'Linux'
+        run: >-
+          sudo apt-get update && sudo apt-get install -y
+          libasound2-dev libgl1-mesa-dev libglu1-mesa-dev
+          libsqlite3-dev libx11-dev libxcursor-dev libxext-dev
+          libxfixes-dev libxi-dev libxinerama-dev libxrandr-dev
       - name: Configure
         run: >-
           cmake -S . -B build

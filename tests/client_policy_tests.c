@@ -73,6 +73,13 @@ int main(void)
     CC_CHECK(!CcClientInteractionActivated(true, NAN, 1.25f));
     CC_CHECK(!CcClientInteractionActivated(true, 0.0f, -1.0f));
 
+    CC_CHECK(CcClientCampaignAccessFor(true, true) ==
+             CC_CLIENT_CAMPAIGN_PERSISTENT);
+    CC_CHECK(CcClientCampaignAccessFor(true, false) ==
+             CC_CLIENT_CAMPAIGN_BLOCKED);
+    CC_CHECK(CcClientCampaignAccessFor(false, false) ==
+             CC_CLIENT_CAMPAIGN_EPHEMERAL);
+
     puts("Client policy tests passed");
     return 0;
 }
