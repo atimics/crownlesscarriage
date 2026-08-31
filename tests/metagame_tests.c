@@ -52,14 +52,10 @@ int main(void)
     CcMetagameInit(&metagame, UINT32_C(42));
     CcMetagameIntro(&metagame, output, sizeof(output));
     CC_CHECK(strstr(output, "THE ROAD WITHOUT A CROWN") != NULL);
-    CC_CHECK(strstr(output,
-                    "It is never a good sign when the first bell rings") !=
-             NULL);
+    CC_CHECK(strstr(output, "Mara Venn is waiting by the town board") != NULL);
     CC_CHECK(strstr(output, "on foot") != NULL);
-    CC_CHECK(strstr(output, "no carriage") != NULL);
-    CC_CHECK(strstr(output, "Nell Varo") != NULL);
-    CC_CHECK(strstr(output, "bread to take to her mother") != NULL);
-    CC_CHECK(strstr(output, "Not a crown. A wheel.") != NULL);
+    CC_CHECK(strstr(output, "running out of food") != NULL);
+    CC_CHECK(strstr(output, "Nell Varo") == NULL);
     CC_CHECK(strstr(output, metagame.sim.settlements[0].name) != NULL);
     CC_CHECK(metagame.sim.player.location_id == metagame.sim.settlements[0].id);
     CC_CHECK(metagame.sim.player.coins == 75);
@@ -97,11 +93,11 @@ int main(void)
     CC_CHECK(CcMetagameExecute(&metagame, "causes", output, sizeof(output)));
     CC_CHECK(strstr(output, "short chain") != NULL);
     CC_CHECK(CcMetagameExecute(&metagame, "rumors", output, sizeof(output)));
-    CC_CHECK(strstr(output, "ravens") != NULL);
-    CC_CHECK(strstr(output, "black wax") != NULL);
+    CC_CHECK(strstr(output, "harvest failed") != NULL);
+    CC_CHECK(strstr(output, "treaty bridge is closed") != NULL);
     CC_CHECK(!CcMetagameExecute(&metagame, "plans", output, sizeof(output)));
     CC_CHECK(CcMetagameExecute(&metagame, "people", output, sizeof(output)));
-    CC_CHECK(strstr(output, "bread to take to her mother") != NULL);
+    CC_CHECK(strstr(output, "Talk to Mara Venn") != NULL);
     CC_CHECK(CcMetagameExecute(&metagame, "inequality", output,
                                sizeof(output)));
     CC_CHECK(strstr(output, "Social fault lines") != NULL);
@@ -118,20 +114,21 @@ int main(void)
         CC_CHECK(strstr(output, metagame.sim.kingdoms[i].name) != NULL);
     }
     CC_CHECK(CcMetagameExecute(&metagame, "look", output, sizeof(output)));
-    CC_CHECK(strstr(output, "sleeping beetles") != NULL);
+    CC_CHECK(strstr(output, "hill granaries") != NULL);
     CC_CHECK(strstr(output, "mossy milestone") != NULL);
     CC_CHECK(CcMetagameExecute(&metagame, "war", output, sizeof(output)));
     CC_CHECK(strstr(output, "Frontier roads") != NULL);
     CC_CHECK(strstr(output, "Crown Levy") != NULL);
     CC_CHECK(CcMetagameExecute(&metagame, "charters", output, sizeof(output)));
-    CC_CHECK(strstr(output, "Mara Venn's white-wax letter") != NULL);
+    CC_CHECK(strstr(output,
+                    "Deliver 8 food to Silverwick for Mara Venn") != NULL);
     CC_CHECK(strstr(output, "foxfire supper") == NULL);
     int32_t relief_number = SituationNumber(
         &metagame, CC_SITUATION_RELIEF_DELIVERY);
     ExecuteNumber(&metagame, "talk", relief_number, output, sizeof(output));
-    CC_CHECK(strstr(output, "empty bowl is a meal") != NULL);
-    CC_CHECK(strstr(output, "Nell's grain") != NULL);
-    CC_CHECK(strstr(output, "eight sacks of flour for Silverwick") != NULL);
+    CC_CHECK(strstr(output, "Silverwick is running out of food") != NULL);
+    CC_CHECK(strstr(output, "Nell") == NULL);
+    CC_CHECK(strstr(output, "spoiled") == NULL);
     CC_CHECK(CcMetagameExecute(&metagame, "routes", output, sizeof(output)));
     CC_CHECK(strstr(output, "Baker's Road") != NULL);
 
@@ -294,7 +291,7 @@ int main(void)
     CcMetagameInit(&lawful, UINT32_C(42));
     relief_number = SituationNumber(&lawful, CC_SITUATION_RELIEF_DELIVERY);
     ExecuteNumber(&lawful, "accept", relief_number, output, sizeof(output));
-    CC_CHECK(strstr(output, "Mara Venn closes the brass charter box") != NULL);
+    CC_CHECK(strstr(output, "You accept Mara Venn's job") != NULL);
     CC_CHECK(CcMetagameExecute(&lawful, "buy food 8", output,
                                sizeof(output)));
     CC_CHECK(CcMetagameExecute(&lawful, "travel 1", output,
@@ -310,7 +307,7 @@ int main(void)
     CC_CHECK(strstr(output, "market clock is still waiting for breakfast") !=
              NULL);
     ExecuteNumber(&lawful, "talk", relief_number, output, sizeof(output));
-    CC_CHECK(strstr(output, "mine owners stopped selling flour") != NULL);
+    CC_CHECK(strstr(output, "We are running out of food") != NULL);
     CC_CHECK(strstr(output, "Flour has never answered") == NULL);
     CC_CHECK(CcMetagameExecute(&lawful, "sell food 8", output,
                                sizeof(output)));

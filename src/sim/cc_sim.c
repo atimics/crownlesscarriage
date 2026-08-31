@@ -5886,6 +5886,19 @@ static void AssignSituationCast(CcSim *sim, CcSituation *situation)
     situation->sponsor_character_id = sponsor != NULL ? sponsor->id : 0U;
     situation->affected_character_id = participant != NULL ?
         participant->id : 0U;
+    if (situation->kind == CC_SITUATION_RELIEF_DELIVERY &&
+        situation->cause_event_id != 0U) {
+        RememberKnowledge(
+            sponsor, CC_KNOWLEDGE_OFFER, situation->id,
+            sponsor != NULL ? sponsor->id : 0U,
+            situation->cause_event_id, CC_KNOWLEDGE_WITNESSED,
+            false, sim->current_day);
+        RememberKnowledge(
+            participant, CC_KNOWLEDGE_IMMEDIATE_STAKE, situation->id,
+            participant != NULL ? participant->id : 0U,
+            situation->cause_event_id, CC_KNOWLEDGE_WITNESSED,
+            false, sim->current_day);
+    }
     if (situation->kind == CC_SITUATION_MONSTER_EXPEDITION) {
         CcCharacter *witness = PromoteCharacter(
             sim, "Bren Alder", affected_home, 0U, CC_CHARACTER_LABORER,
@@ -6029,6 +6042,25 @@ static void GenerateSituations(CcSim *sim)
         CcFaction *issuer = FactionFor(sim, relief_target->kingdom_id, CC_FACTION_COMMONS);
         const CcEvent *shortage = LatestEvent(sim, CC_EVENT_SHORTAGE,
                                               relief_target->id, relief_target->id);
+        if (shortage == NULL && !HasRecentSituation(
+                sim, CC_SITUATION_RELIEF_DELIVERY, relief_target->id)) {
+            char text[CC_EVENT_TEXT_CAPACITY];
+            int32_t food = relief_target->stock[CC_GOOD_FOOD] +
+                CcSimIncomingGood(sim, relief_target->id, CC_GOOD_FOOD);
+            (void)snprintf(
+                text, sizeof(text),
+                "%s has %d food in store. Its reserve target is %d.",
+                relief_target->name, food,
+                relief_target->reserve_target[CC_GOOD_FOOD]);
+            const CcEvent *harvest = LatestEvent(
+                sim, CC_EVENT_HARVEST_FAILED, 0U, 0U);
+            shortage = PushEvent(
+                sim, CC_EVENT_SHORTAGE, relief_target->id,
+                relief_target->id,
+                harvest != NULL ? harvest->id :
+                    LatestLocalCause(sim, relief_target->id),
+                relief_need, text);
+        }
         CreateSituation(sim, CC_SITUATION_RELIEF_DELIVERY, relief_target->id,
                         issuer != NULL ? issuer->id : 0U,
                         shortage != NULL ? shortage->id : LatestLocalCause(sim, relief_target->id),

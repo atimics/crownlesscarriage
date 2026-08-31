@@ -44,6 +44,9 @@ typedef struct CcStoryLine {
 const CcStoryLine *CcStoryCharacterLine(
     const CcSim *sim, const CcSituation *situation,
     const CcCharacter *character);
+bool CcStoryCharacterText(
+    const CcSim *sim, const CcSituation *situation,
+    const CcCharacter *character, char *text, size_t text_capacity);
 size_t CcStoryAuthoredLineCount(void);
 const CcStoryLine *CcStoryAuthoredLineAt(size_t index);
 const char *CcStoryBeatName(CcStoryBeat beat);

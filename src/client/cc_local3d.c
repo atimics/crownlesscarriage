@@ -4397,7 +4397,9 @@ static void CourseConfigureSituationWitness(CcLocalCourse *course,
             situation->kind == CC_SITUATION_MONSTER_EXPEDITION ?
                 (Color){128, 82, 66, 255} :
                 (Color){173, 112, 76, 255};
-        CcNpcRole witness_role = character->role == CC_CHARACTER_SCOUT ?
+        CcNpcRole witness_role = character->role == CC_CHARACTER_OFFICIAL ?
+                CC_NPC_ROLE_MERCHANT :
+            character->role == CC_CHARACTER_SCOUT ?
                 CC_NPC_ROLE_SCOUT :
             character->role == CC_CHARACTER_TRAVELLER ||
             character->role == CC_CHARACTER_COURIER ?
@@ -14046,7 +14048,7 @@ void CcLocalRendererSetScreenFirstHero(bool enabled)
 
 void CcLocalRendererSetOpeningStep(CcLocalOpeningStep step)
 {
-    active_opening_step = step >= CC_LOCAL_OPENING_FIND_JORY &&
+    active_opening_step = step >= CC_LOCAL_OPENING_LEGACY &&
                           step <= CC_LOCAL_OPENING_COMPLETE ?
         step : CC_LOCAL_OPENING_COMPLETE;
 }
@@ -23771,20 +23773,9 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
 
     DrawVisibleNpcFigure3D(
         TerrainWorldPoint(STREET_PEOPLE[0].x, STREET_PEOPLE[0].y),
-        active_opening_step == CC_LOCAL_OPENING_FIND_JORY ? 0.78f : 0.96f,
-        -0.55f, UINT32_C(0x73747201),
-        active_opening_step == CC_LOCAL_OPENING_FIND_JORY ?
-            CC_NPC_ROLE_TRAVELLER : CC_NPC_ROLE_MERCHANT,
+        0.96f, -0.55f, UINT32_C(0x73747201), CC_NPC_ROLE_MERCHANT,
         (Color){223, 151, 68, 255}, clock * 1.2f, CC_TRAVERSAL_IDLE,
         scenery_focus);
-    if (active_opening_step == CC_LOCAL_OPENING_MEET_MARA) {
-        DrawVisibleNpcFigure3D(
-            TerrainWorldPoint(CC_LOCAL_NOTICE_X + 0.82f,
-                              CC_LOCAL_NOTICE_Z + 0.18f),
-            0.96f, -1.30f, UINT32_C(0x6d617261),
-            CC_NPC_ROLE_MERCHANT, WORLD_TEAL, clock * 0.72f,
-            CC_TRAVERSAL_IDLE, scenery_focus);
-    }
     DrawVisibleNpcFigure3D(
         TerrainWorldPoint(STREET_PEOPLE[1].x, STREET_PEOPLE[1].y),
         1.02f, 1.70f, UINT32_C(0x73747202), CC_NPC_ROLE_GUARD,
@@ -23934,26 +23925,6 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                                            "Carriage / click or F",
                                        carriage_targeted ? WORLD_TEAL :
                                                            WORLD_GOLD};
-    }
-    if (active_opening_step == CC_LOCAL_OPENING_FIND_JORY &&
-        AgentNearLabel(agent, CC_LOCAL_INTRO_JORY_X,
-                       CC_LOCAL_INTRO_JORY_Z, 11.0f)) {
-        labels[count++] = (WorldLabel){
-            {CC_LOCAL_INTRO_JORY_X,
-             CcLocalTerrainHeightAt(CC_LOCAL_INTRO_JORY_X,
-                                    CC_LOCAL_INTRO_JORY_Z) + 1.92f,
-             CC_LOCAL_INTRO_JORY_Z},
-            "Jory  /  press F to talk", WORLD_TEAL};
-    }
-    if (active_opening_step == CC_LOCAL_OPENING_MEET_MARA &&
-        AgentNearLabel(agent, CC_LOCAL_NOTICE_X,
-                       CC_LOCAL_NOTICE_Z, 11.0f)) {
-        labels[count++] = (WorldLabel){
-            {CC_LOCAL_NOTICE_X + 0.82f,
-             CcLocalTerrainHeightAt(CC_LOCAL_NOTICE_X + 0.82f,
-                                    CC_LOCAL_NOTICE_Z + 0.18f) + 2.12f,
-             CC_LOCAL_NOTICE_Z + 0.18f},
-            "Mara  /  press F to speak", WORLD_TEAL};
     }
     if (AgentNearLabel(agent, CC_LOCAL_NOTICE_X, CC_LOCAL_NOTICE_Z, 6.0f)) {
         labels[count++] = (WorldLabel){{CC_LOCAL_NOTICE_X,
