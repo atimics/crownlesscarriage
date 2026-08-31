@@ -57,6 +57,39 @@ Automated fixtures require each gait to keep its support and swing budget,
 require the trot to lift a diagonal pair, and require a return to walking to
 wait for a safe support set.
 
+The same handoff rule now drives the generalized terrestrial rigs. Bipeds,
+quadrupeds, hexapods, and octopods share one limb and contact contract, while
+each body plan keeps its own timing:
+
+| Body plan | Walk | Run | Sprint |
+| --- | --- | --- | --- |
+| Biped | Alternating steps | Shorter double-support time | Longer flight time |
+| Quadruped | Four-beat walk | Diagonal pairs | Fast gathered sequence |
+| Hexapod | Six-step wave | Alternating tripods | Faster tripod cycle |
+| Octopod | Eight-step ripple | Staggered groups | Alternating four-leg groups |
+
+Movement speed requests a pace. A slower request waits until the new support
+budget is safe instead of snapping the feet to another cycle. The rig reports
+stable, marginal, controlled-air, unsupported, and recovering states. It also
+reports a support normal and how much movement control remains, so gameplay
+can reduce authority before a full fall.
+
+Creature controllers now receive a world position, yaw, velocity, grounded
+state, and terrain probe. Hooves and feet stay planted in world space while
+the body moves, follow slopes, and replant after a teleport. The renderer still
+receives the same body-local pose, so skins do not need special terrain code.
+
+Multi-legged local walkers also use their full limb reach to notice a selected
+ledge before their body capsule reaches it. Quadrupeds, hexapods, and octopods
+then scramble with staggered contacts: feet leave the ground, brace on the
+wall, cross the lip, and plant on top. Every contact is checked against level
+collision and chain reach. Losing all valid support for long enough releases
+the scripted climb into a physical drop.
+
+Tests cover every body plan and pace, safe pace reduction, sloped support,
+temporary and sustained support loss, world-locked creature contacts, and the
+same raised-platform climb for four-, six-, and eight-legged walkers.
+
 ## Already present in Crownless
 
 Crownless does not need a second recovery system. Its humanoid already moves
@@ -82,6 +115,9 @@ change.
 - The ball sandbox is excellent for a robot demo, but adding a loose toy to
   Crownless would not yet connect to a journey, situation, or persistent
   consequence.
+- Generalized walkers do not yet have a full-body ragdoll or arbitrary
+  free-climbing planner. This slice covers supported terrain movement and
+  deliberate ledge scrambling. Damage-driven collapse, wall crawling, and
+  recovery poses remain separate future work.
 - No MicroDuck code, policy, model, sound, or art asset is included. Crownless
   implements the control and handoff ideas in its existing deterministic rig.
-
