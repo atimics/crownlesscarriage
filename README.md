@@ -174,6 +174,20 @@ Run it on Linux:
 ./out/build/play/crownless_carriage
 ```
 
+Build the browser version with an installed Emscripten SDK:
+
+```sh
+emcmake cmake --preset web
+cmake --build --preset web
+emrun out/build/web/site/index.html
+```
+
+The browser build writes a static site to `out/build/web/site`. It can be
+served by GitHub Pages or any ordinary static web host. Campaigns are stored in
+the browser that created them. Clearing site data also clears those campaigns.
+The GitHub Pages workflow builds pull requests and publishes `main` after the
+repository's Pages source is set to GitHub Actions.
+
 Run the storybook-style Empty Granary playtest:
 
 ```sh

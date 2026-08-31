@@ -66,6 +66,21 @@ static void PrepareDungeonChoice(CcSim *sim, uint32_t seed, char *error,
         .target_id = warrant->id
     };
     CC_CHECK(CcSimApply(sim, &accept, error, error_capacity));
+    /* This scenario isolates the strategic outcomes after a successful delve.
+       Room-by-room expedition behavior is covered by underroad_tests. */
+    sim->dungeons[0].rooms[19].state_flags |=
+        CC_DUNGEON_ROOM_OBJECTIVE_REACHED;
+    for (int32_t i = 0; i < sim->dungeons[0].link_count; ++i) {
+        CcDungeonLink *link = &sim->dungeons[0].links[i];
+        if (link->kind == CC_DUNGEON_LINK_SHORTCUT) {
+            link->flags |= CC_DUNGEON_LINK_DISCOVERED |
+                           CC_DUNGEON_LINK_OPEN;
+        }
+    }
+    sim->dungeons[0].rooms[20].state_flags |=
+        CC_DUNGEON_ROOM_SEARCHED;
+    sim->dungeons[0].rooms[4].state_flags |=
+        CC_DUNGEON_ROOM_SEARCHED;
 }
 
 int main(void)

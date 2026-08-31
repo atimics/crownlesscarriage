@@ -47,12 +47,27 @@
         "CC_ENABLE_STRICT_WARNINGS": "ON",
         "CC_WARNINGS_AS_ERRORS": "ON"
       }
+    },
+    {
+      "name": "web",
+      "displayName": "Browser WebAssembly build",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/out/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_TESTING": "OFF",
+        "CC_BUILD_CLIENT": "ON",
+        "CC_BUILD_BENCHMARKS": "OFF",
+        "CC_ENABLE_STRICT_WARNINGS": "ON",
+        "CC_WARNINGS_AS_ERRORS": "ON"
+      }
     }
   ],
   "buildPresets": [
     { "name": "development", "configurePreset": "development", "jobs": 4 },
     { "name": "play", "configurePreset": "play", "jobs": 4 },
-    { "name": "release", "configurePreset": "release", "jobs": 4 }
+    { "name": "release", "configurePreset": "release", "jobs": 4 },
+    { "name": "web", "configurePreset": "web", "jobs": 4 }
   ],
   "testPresets": [
     {
