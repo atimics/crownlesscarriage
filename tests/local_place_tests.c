@@ -1,5 +1,6 @@
 #include "client/cc_local_place.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -52,20 +53,24 @@ static int ProfileContract(void)
             CHECK(camera->trigger_z >= 0.0f && camera->trigger_z <= 72.0f);
             CHECK(camera->target_x >= 0.0f && camera->target_x <= 96.0f);
             CHECK(camera->target_z >= 0.0f && camera->target_z <= 72.0f);
-            if (camera->kind == CC_LOCAL_TOWN_SCENE_HEART) {
-                CHECK(camera->camera_offset_y >= 8.0f);
-                CHECK(camera->camera_offset_y <= 11.0f);
-                CHECK(camera->fovy >= 21.0f && camera->fovy <= 23.0f);
-            } else if (camera->kind < CC_LOCAL_TOWN_SCENE_CLOSE_FIRST) {
-                CHECK(camera->camera_offset_y >= 8.0f);
-                CHECK(camera->fovy >= 26.0f && camera->fovy <= 35.0f);
-            } else {
-                CHECK(camera->camera_offset_y >= 6.0f);
-                CHECK(camera->fovy >= 16.0f && camera->fovy <= 19.0f);
-                CHECK(camera->fovy < profile->scene[
-                    CC_LOCAL_TOWN_SCENE_ARRIVAL].fovy - 7.0f);
-                CHECK(camera->fovy < profile->scene[
-                    CC_LOCAL_TOWN_SCENE_LANDMARK].fovy - 7.0f);
+            /* Walking shots are deliberately human-scale. The authored
+               target sits near the ground and the physical lens stays below
+               an adult character's waist, replacing the old aerial map
+               camera while preserving a slightly wider landmark page. */
+            CHECK(camera->target_y >= 0.08f);
+            CHECK(camera->target_y <= 0.25f);
+            CHECK(camera->camera_offset_y >= 0.55f);
+            CHECK(camera->camera_offset_y <= 0.70f);
+            float camera_distance = sqrtf(
+                camera->camera_offset_x * camera->camera_offset_x +
+                camera->camera_offset_z * camera->camera_offset_z);
+            CHECK(camera_distance >= 5.0f);
+            CHECK(camera_distance <= 24.0f);
+            CHECK(camera->fovy >= 5.8f && camera->fovy <= 10.0f);
+            if (camera->kind == CC_LOCAL_TOWN_SCENE_LANDMARK) {
+                CHECK(camera->fovy >= 9.0f);
+            } else if (camera->kind >= CC_LOCAL_TOWN_SCENE_CLOSE_FIRST) {
+                CHECK(camera->fovy <= 6.6f);
             }
             if (camera->kind == CC_LOCAL_TOWN_SCENE_CARRIAGE_YARD) {
                 CHECK(camera->trigger_x >= 42.0f && camera->trigger_x <= 43.0f);

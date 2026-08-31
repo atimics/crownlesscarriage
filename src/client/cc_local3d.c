@@ -9275,8 +9275,18 @@ Camera3D CcLocalStreetCameraInternal(const CcLocalAgent *agent, float clock,
     const StreetCameraShot *composition = StreetCameraShotAt(shot);
     Vector3 destination = composition->target;
     destination.y += CcLocalTerrainHeightAt(destination.x, destination.z);
+    Vector3 camera_offset = composition->camera_offset;
+    /* Walking records store lens clearance, not an aerial rise above a
+       distant target. Anchor the camera to the terrain under the physical
+       lens so a hilly town cannot bury it in a ridge or lift it back into an
+       isometric map view. */
+    float camera_x = destination.x + camera_offset.x;
+    float camera_z = destination.z + camera_offset.z;
+    float camera_ground = CcLocalTerrainHeightAt(camera_x, camera_z);
+    camera_offset.y = camera_ground + composition->camera_offset.y -
+                      destination.y;
     FixedCameraRigAim(&street_camera_rig, shot, destination,
-                      composition->camera_offset, composition->fovy,
+                      camera_offset, composition->fovy,
                       clock, advance);
     Camera3D camera = ExteriorCameraComposed(
         street_camera_rig.displayed_target,
@@ -9297,6 +9307,39 @@ Camera3D CcLocalStreetCameraInternal(const CcLocalAgent *agent, float clock,
 static Camera3D TownArrivalCamera(const CcLocalConvoyState *convoy,
                                   int32_t art_height)
 {
+    typedef struct TownTravelCamera {
+        float target_height;
+        Vector3 offset;
+    } TownTravelCamera;
+    TownTravelCamera travel = {
+        .target_height = 2.0f,
+        .offset = {-25.0f, 15.0f, 38.0f},
+    };
+    switch (active_place_function) {
+        case CC_SETTLEMENT_FARMING:
+            travel = (TownTravelCamera){
+                1.8f, {-24.0f, 15.0f, 36.0f}};
+            break;
+        case CC_SETTLEMENT_MINING:
+            travel = (TownTravelCamera){
+                2.5f, {-25.0f, 13.0f, 36.0f}};
+            break;
+        case CC_SETTLEMENT_FORTRESS:
+            travel = (TownTravelCamera){
+                2.8f, {24.0f, 14.0f, 35.0f}};
+            break;
+        case CC_SETTLEMENT_CAPITAL:
+            travel = (TownTravelCamera){
+                3.4f, {-28.0f, 18.0f, 40.0f}};
+            break;
+        case CC_SETTLEMENT_DUNGEON_TOWN:
+            travel = (TownTravelCamera){
+                1.8f, {-23.0f, 13.0f, 36.0f}};
+            break;
+        case CC_SETTLEMENT_MARKET:
+        default:
+            break;
+    }
     const CcLocalTownScene *arrival = CcLocalTownSceneAt(
         active_place_function, CC_LOCAL_TOWN_SCENE_ARRIVAL);
     if (convoy == NULL || arrival == NULL) {
@@ -9319,15 +9362,11 @@ static Camera3D TownArrivalCamera(const CcLocalConvoyState *convoy,
                               (Vector3){0.0f, 5.2f, 0.0f})));
     Vector3 wide_target = {
         arrival->target_x,
-        arrival->target_y + CcLocalTerrainHeightAt(
+        travel.target_height + CcLocalTerrainHeightAt(
             arrival->target_x, arrival->target_z),
         arrival->target_z,
     };
-    Vector3 wide_position = Vector3Add(
-        wide_target,
-        (Vector3){arrival->camera_offset_x,
-                  arrival->camera_offset_y,
-                  arrival->camera_offset_z});
+    Vector3 wide_position = Vector3Add(wide_target, travel.offset);
     float pull_out = SmoothStep01(
         (convoy->phase_progress - 0.08f) / 0.78f);
     Camera3D camera = {

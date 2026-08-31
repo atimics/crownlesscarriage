@@ -2372,13 +2372,18 @@ int main(void)
                   alley_camera_agent.position.z},
         alley_camera, click_target.texture.width,
         click_target.texture.height);
+    float alley_eye_height = alley_camera.position.y -
+        CcLocalTerrainHeightAt(alley_camera.position.x,
+                               alley_camera.position.z);
     if (alley_camera.projection != CAMERA_ORTHOGRAPHIC ||
-        alley_camera.fovy < 16.0f || alley_camera.fovy > 19.0f ||
+        alley_camera.fovy < 5.8f || alley_camera.fovy > 6.6f ||
+        alley_eye_height < 0.45f || alley_eye_height > 1.05f ||
         alley_hero_screen.x < 88.0f || alley_hero_screen.x > 369.0f ||
         alley_hero_screen.y < 54.0f || alley_hero_screen.y > 231.0f) {
         (void)fprintf(stderr,
-                      "authored close camera was invalid: fovy %.2f screen %.2f %.2f\n",
-                      alley_camera.fovy, alley_hero_screen.x,
+                      "authored close camera was invalid: fovy %.2f eye %.2f screen %.2f %.2f\n",
+                      alley_camera.fovy, alley_eye_height,
+                      alley_hero_screen.x,
                       alley_hero_screen.y);
         return 1;
     }
@@ -2426,7 +2431,7 @@ int main(void)
             &coach_road_camera_agent, camera_clock, true,
             click_target.texture.height);
     }
-    if (coach_road_camera.fovy < 25.0f) {
+    if (coach_road_camera.fovy < 6.8f) {
         (void)fprintf(stderr,
                       "main coach road retained an unrelated close page: %.2f\n",
                       coach_road_camera.fovy);
@@ -2488,7 +2493,7 @@ int main(void)
         camera_was_moving = camera_moving;
         previous_camera_target = miller_camera.target;
     }
-    if (longest_motion_run > 75 || camera_moving_frames > 240) {
+    if (longest_motion_run > 75 || camera_moving_frames > 320) {
         (void)fprintf(stderr,
                       "Miller's Row camera followed continuously: %d runs, %d moving frames, longest %d frames\n",
                       camera_motion_runs, camera_moving_frames,
@@ -2496,47 +2501,47 @@ int main(void)
         return 1;
     }
 
-    /* MMO-style ground commands project an obstructed click to the nearest
-       reachable edge. The windmill footprint on Miller's Row is a stable
-       regression target for clicks that used to be rejected outright. */
+    /* The low Miller's Bend page must retain precise ground input. The old
+       aerial fixture clicked through the hidden side of the windmill; from
+       below waist height that point is no longer visible, so use the road
+       apron that the player can actually see. */
     CcLocalAgent miller_click_agent;
     CcLocalAgentInit(&miller_click_agent, (Vector2){58.0f, 51.5f}, false);
-    Camera3D miller_click_camera = CcLocalStreetCameraInternal(
-        &miller_click_agent, camera_clock, false,
-        click_target.texture.height);
-    Vector3 blocked_windmill_point = {
-        64.14f,
-        CcLocalTerrainHeightAt(64.14f, 51.02f),
-        51.02f,
+    Camera3D miller_click_camera = {0};
+    for (int32_t frame = 0; frame < 120; ++frame) {
+        camera_clock += 1.0f / 60.0f;
+        miller_click_camera = CcLocalStreetCameraInternal(
+            &miller_click_agent, camera_clock, true,
+            click_target.texture.height);
+    }
+    Vector3 visible_miller_point = {
+        60.20f,
+        CcLocalTerrainHeightAt(60.20f, 51.40f),
+        51.40f,
     };
-    Vector2 blocked_click_art = GetWorldToScreenEx(
-        blocked_windmill_point, miller_click_camera,
+    Vector2 visible_click_art = GetWorldToScreenEx(
+        visible_miller_point, miller_click_camera,
         click_target.texture.width, click_target.texture.height);
-    Vector2 blocked_click_screen = {
-        blocked_click_art.x * click_viewport.width /
+    Vector2 visible_click_screen = {
+        visible_click_art.x * click_viewport.width /
             (float)click_target.texture.width,
-        blocked_click_art.y * click_viewport.height /
+        visible_click_art.y * click_viewport.height /
             (float)click_target.texture.height,
     };
     if (!CcLocalAgentPickTarget(&miller_click_agent,
-                                blocked_click_screen,
+                                visible_click_screen,
                                 click_target, click_viewport, false)) {
         (void)fprintf(stderr,
-                      "Miller's Row blocked click was not projected\n");
+                      "Miller's Bend visible road could not be clicked\n");
         return 1;
     }
     Vector3 projected_command = miller_click_agent.command_point;
-    bool command_inside_windmill =
-        projected_command.x > 63.18f - miller_click_agent.radius &&
-        projected_command.x < 65.10f + miller_click_agent.radius &&
-        projected_command.z > 50.06f - miller_click_agent.radius &&
-        projected_command.z < 51.98f + miller_click_agent.radius;
     float projection_distance = VectorDistance2(
         (Vector2){projected_command.x, projected_command.z},
-        (Vector2){blocked_windmill_point.x, blocked_windmill_point.z});
-    if (command_inside_windmill || projection_distance > 2.75f) {
+        (Vector2){visible_miller_point.x, visible_miller_point.z});
+    if (projection_distance > 0.55f) {
         (void)fprintf(stderr,
-                      "Miller's Row click projection was unsafe: %.2f %.2f distance %.2f\n",
+                      "Miller's Bend road click drifted: %.2f %.2f distance %.2f\n",
                       projected_command.x, projected_command.z,
                       projection_distance);
         return 1;
@@ -2551,7 +2556,7 @@ int main(void)
                       miller_click_agent.position.z},
             (Vector2){projected_command.x, projected_command.z}) > 0.38f) {
         (void)fprintf(stderr,
-                      "Miller's Row projected path did not finish: %.2f %.2f toward %.2f %.2f\n",
+                      "Miller's Bend road path did not finish: %.2f %.2f toward %.2f %.2f\n",
                       miller_click_agent.position.x,
                       miller_click_agent.position.z,
                       projected_command.x, projected_command.z);

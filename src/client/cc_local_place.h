@@ -117,6 +117,8 @@ typedef struct CcLocalTownScene {
     float target_y;
     float target_z;
     float camera_offset_x;
+    /* For walking scenes this is the lens clearance above the terrain under
+       the camera. The renderer converts it to a target-relative Y offset. */
     float camera_offset_y;
     float camera_offset_z;
     float fovy;

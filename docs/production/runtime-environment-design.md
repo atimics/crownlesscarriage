@@ -22,26 +22,28 @@ physical skeleton, so improvements to that export do reach the game.
 
 ## The view
 
-The walkable exterior uses an asymmetric three-quarter orthographic camera.
-Orthographic projection preserves reliable surface picking and a readable
-relationship between the hero and nearby contact geometry. The unequal
-horizontal offsets avoid the visual shorthand of a perfect 45-degree isometric
-grid and expose more of the camera-facing facades.
+The walkable exterior uses an asymmetric, near-horizontal orthographic camera.
+Its physical lens sits about 0.7 to 0.9 metres above the stage: below an adult
+character's waist. Orthographic projection preserves reliable surface picking
+and a readable relationship between the hero and nearby contact geometry. The
+unequal horizontal offsets expose useful facades without turning the town into
+a perfect 45-degree isometric grid.
 
 This is a street-scale view, not a whole-settlement map. Buildings may frame or
 leave the viewport as the hero moves. Roof and wall cutaways are driven by hero
 occlusion and leave a stable waist-high shell instead of making every structure
 short or opening a distracting circular reveal.
 
-Each town exposes exactly three camera scenes: Arrival, Town Heart, and
-Landmark. Arrival is a continuous perspective move that begins behind the
-carriage and pulls upward and outward as the team crosses the threshold. Town
-Heart and Landmark are fixed adventure-game stages. Each stores a focal point,
-story axis, foreground anchor, quiet area, three depth splits, and a light
-profile. The camera keeps the hero inside both the authored quiet area and the
-stable play-safe frame. Roads, rivers, walls, and building lines should lead
-toward the story focus. Navigation may use finer hidden districts, but they do
-not create additional visible camera scenes.
+Carriage arrival is a continuous perspective move that begins behind the team
+and pulls upward and outward as it crosses the threshold. Walking uses a
+different camera plan: each town exposes six close, fixed adventure-game
+stages, including its threshold, social heart, landmark approach, two local
+work or story spaces, and carriage yard. Each stores a focal point, story axis,
+foreground anchor, quiet area, three depth splits, and a light profile. The
+camera keeps the hero inside both the authored quiet area and the stable
+play-safe frame. Roads, rivers, walls, and building lines lead toward the story
+focus. Hidden navigation districts may support movement, but they do not
+replace these visible authored compositions.
 
 Five stable light profiles cover clear market morning, cold shortage overcast,
 warm recovery light, dangerous road dusk, and the ember-lit interior. A profile
@@ -108,15 +110,14 @@ with a constructed scale cue where it improves the composition, such as the
 fortress pass wall. These horizons are scenic geometry only; they add regional
 scale without expanding navigation, collision, or camera-room count.
 
-The current 30-scene runtime review is captured in
+The current runtime review is captured in
 [`town-scene-sheet.png`](../images/town-scene-sheet.png). Its rows are the six
-towns. The first three columns are Arrival, Town Heart, and Landmark: wide
-establishing pages that explain the whole place. The last two columns are
-close, playable rooms built around local work and story: a drovers' close,
-furnace alley, arcade, armourers' row, rose cloister, lantern gate, and their
-counterparts. The close lenses show roughly half as much vertical world space
-as the establishing lenses, so the actor, doors, signs, stalls, and tools can
-carry a scene without turning the outdoor game into a follow camera.
+towns. The first column is the carriage-scale arrival. The remaining columns
+are the six walking locations: low, close playable stages built around local
+work and story. A drovers' close, furnace alley, arcade, armourers' row, rose
+cloister, lantern gate, and their counterparts use different foreground wings
+and subject axes. The tighter lenses make the actor, doors, signs, stalls, and
+tools carry each scene without turning the outdoor game into a follow camera.
 
 ### Research-to-layout rules
 
@@ -259,8 +260,8 @@ scene is reset.
 
 The runtime now provides:
 
-- Five authored camera scenes per town: three establishing pages, two close
-  playable rooms, and a moving carriage follow-and-pull-out Arrival
+- Six low authored walking scenes per town, plus a separate moving carriage
+  follow-and-pull-out arrival
 - Bounded close-page triggers, so the main road keeps its establishing view
   until the player actually enters a court, alley, cloister, or gate pass
 - Clean hero and inhabitant silhouettes without default rig overlays
