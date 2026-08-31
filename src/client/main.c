@@ -500,14 +500,26 @@ static void SituationNextAction(const CcSim *sim,
         }
         const CcSettlement *contact_place = contact != NULL ?
             CcSimSettlement(sim, contact->current_settlement_id) : NULL;
-        if (contact != NULL &&
-            contact->current_settlement_id == sim->player.location_id) {
-            (void)snprintf(label, capacity, "Talk to %s.", contact->name);
+        const char *name = contact != NULL ? contact->name : "the miner";
+        const char *place = contact_place != NULL ? contact_place->name :
+            "the mining town";
+        const char *travel = contact != NULL &&
+            contact->current_settlement_id == sim->player.location_id ?
+            "" : TextFormat("Go to %s. ", place);
+        if (situation->discovery_stage == CC_DISCOVERY_RUMOR) {
+            (void)snprintf(label, capacity,
+                           "%sAsk %s about the strange noises.",
+                           travel, name);
+        } else if (situation->discovery_stage == CC_DISCOVERY_WITNESS) {
+            (void)snprintf(label, capacity,
+                           "%sAsk %s what happened in the mine.",
+                           travel, name);
+        } else if (situation->discovery_stage == CC_DISCOVERY_DECISION) {
+            (void)snprintf(label, capacity,
+                           "%sTell %s what Bren heard.", travel, name);
         } else {
-            (void)snprintf(label, capacity, "Travel to %s and talk to %s.",
-                           contact_place != NULL ? contact_place->name :
-                               "the mining town",
-                           contact != NULL ? contact->name : "the witness");
+            (void)snprintf(label, capacity,
+                           "%sTell %s what Bren heard.", travel, name);
         }
         return;
     }
@@ -3468,7 +3480,7 @@ static void DrawSituationBoard(const CcSim *sim, int32_t selected)
     }
     bool selected_is_lead = detail != NULL &&
         !CcSimSituationCanAccept(sim, detail);
-    CcOverlayDrawText(selected_is_lead ? "LEAD" : "QUEST",
+    CcOverlayDrawText(selected_is_lead ? "OBJECTIVE" : "QUEST",
                       360, 216, 10, TEAL);
     CcOverlayDrawText(active_count > 0 ?
              TextFormat("%d / %d", active_ordinal + 1, active_count) : "0 / 0",
@@ -3496,7 +3508,7 @@ static void DrawSituationBoard(const CcSim *sim, int32_t selected)
                 TextFormat("REWARD  +%" PRId64 " CROWNS", detail->reward),
                 714, 408, 10, TEAL);
         } else {
-            CcOverlayDrawText("FOLLOW THE LEAD TO LEARN WHAT IS AT STAKE",
+            CcOverlayDrawText("NO JOB HAS BEEN OFFERED YET",
                               360, 408, 10, MUTED);
         }
     } else {
@@ -3796,7 +3808,7 @@ static void DrawCharacterConversation(const CcSim *sim,
             (character->id == situation->affected_character_id ||
              character->id == situation->sponsor_character_id)) {
             CcOverlayDrawText(
-                TextFormat("JORY + MARA / %s",
+                TextFormat("Jory and Mara: %s",
                            CcRelationshipHistoryName(
                                relationship->history)),
                 speech_x, 244, 9, MUTED);
@@ -4700,10 +4712,10 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 if (updated != NULL &&
                     updated->kind == CC_SITUATION_MONSTER_EXPEDITION &&
                     response != CC_CHARACTER_RESPONSE_PLEDGE_HELP) {
-                    char next[160] = "Follow the lead.";
+                    char next[160] = "Ask what happened.";
                     SituationNextAction(sim, updated, next, sizeof(next));
                     (void)snprintf(message, message_capacity,
-                                   "Lead updated: %s", next);
+                                   "New objective: %s", next);
                     *view = VIEW_LOCAL;
                 } else {
                     (void)snprintf(

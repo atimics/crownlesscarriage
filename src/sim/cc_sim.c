@@ -5425,10 +5425,10 @@ static void InitializeMineSocialThread(CcSim *sim, CcSituation *situation,
             CC_RELATIONSHIP_HISTORY_FORMER_PARTNERS ? 1 : 0;
         const char *history_text = history ==
                 CC_RELATIONSHIP_HISTORY_OLD_FRIENDS ?
-            "Jory and Mara once ran the Silver Road together. Each still trusts the other's work." :
+            "Jory and Mara worked together for years and still trust each other." :
             history == CC_RELATIONSHIP_HISTORY_FORMER_PARTNERS ?
-            "Jory and Mara shared a freight wagon and a bed for two years. The last shortage ended both." :
-            "Jory and Mara have argued over mine loads for years. Each still checks the other's figures.";
+            "Jory and Mara used to live and work together. They separated during the last shortage." :
+            "Jory and Mara have argued about mine safety for years.";
         CcEvent *history_event = PushSocialEvent(
             sim, CC_EVENT_RELATIONSHIP_HISTORY, situation->id,
             jory->home_settlement_id, situation->cause_event_id,
@@ -5452,7 +5452,7 @@ static void InitializeMineSocialThread(CcSim *sim, CcSituation *situation,
     if (situation->lead_event_id == 0U) {
         char text[CC_EVENT_TEXT_CAPACITY];
         (void)snprintf(text, sizeof(text),
-                       "Bren left his lamp at the west gate and told Jory he heard work behind the old wall.");
+                       "Bren ran out of the west gallery and left his lamp. He told Jory something was wrong.");
         CcEvent *rumor = PushSocialEvent(
             sim, CC_EVENT_RUMOR_SHARED, situation->id,
             jory->home_settlement_id, situation->cause_event_id,
@@ -8555,7 +8555,7 @@ static bool AcceptSituation(CcSim *sim, const CcSituation *situation,
     }
     if (!CcSimSituationCanAccept(sim, situation)) {
         SetError(error, error_capacity,
-                 "This is still a lead. Follow it before making a promise.");
+                 "You do not have a job to accept yet. Ask what happened first.");
         return false;
     }
     CcId offer_settlement = CcSimSituationOfferSettlementId(sim, situation);
@@ -8783,13 +8783,13 @@ static bool ApplyCharacterResponse(CcSim *sim, const CcCommand *command,
          situation->discovery_stage != CC_DISCOVERY_DECISION ||
          character->id != situation->affected_character_id)) {
         SetError(error, error_capacity,
-                 "That choice does not answer this conversation.");
+                 "You cannot choose that here.");
         return false;
     }
     if (mine_thread && situation->discovery_stage == CC_DISCOVERY_DECISION &&
         response == CC_CHARACTER_RESPONSE_LISTEN) {
         SetError(error, error_capacity,
-                 "Jory needs a decision: tell Mara or keep his confidence.");
+                 "Choose whether to tell Mara or keep this between you and Jory.");
         return false;
     }
     CcCharacterMemoryKind memory_kind = response ==
@@ -8811,7 +8811,7 @@ static bool ApplyCharacterResponse(CcSim *sim, const CcCommand *command,
     if (response == CC_CHARACTER_RESPONSE_PLEDGE_HELP) {
         if (!CcSimSituationCanAccept(sim, situation)) {
             SetError(error, error_capacity,
-                     "This is still a lead. Follow it before promising help.");
+                     "There is no job to accept yet. Ask what happened first.");
             return false;
         }
         const CcSituation *accepted = CcSimAcceptedSituation(sim);
@@ -8832,23 +8832,23 @@ static bool ApplyCharacterResponse(CcSim *sim, const CcCommand *command,
         event_kind = CC_EVENT_RELATIONSHIP_CHANGED;
         (void)snprintf(
             text, sizeof(text), response == CC_CHARACTER_RESPONSE_REPORT_EVIDENCE ?
-                "The Crownless company decides to carry Bren's account to Mara." :
-                "The Crownless company keeps Bren's account with the miners and asks Jory to lead.");
+                "The player decides to tell Mara what Bren heard." :
+                "The player agrees not to tell Mara.");
     } else if (mine_thread && response == CC_CHARACTER_RESPONSE_LISTEN &&
                situation->discovery_stage == CC_DISCOVERY_RUMOR) {
         event_kind = CC_EVENT_RUMOR_SHARED;
         (void)snprintf(text, sizeof(text),
-                       "Jory tells the Crownless company that Bren fled the west gate without his lamp.");
+                       "Jory tells the player that Bren ran from the west gallery and left his lamp.");
     } else if (mine_thread && response == CC_CHARACTER_RESPONSE_LISTEN &&
                situation->discovery_stage == CC_DISCOVERY_WITNESS) {
         event_kind = CC_EVENT_FACT_REVEALED;
         (void)snprintf(text, sizeof(text),
-                       "Bren tells the Crownless company he heard picks behind the bricked gallery while Cera was below.");
+                       "Bren tells the player that he heard someone using a pick behind the old wall while Cera was below.");
     } else if (mine_thread && response == CC_CHARACTER_RESPONSE_LISTEN &&
                situation->discovery_stage == CC_DISCOVERY_AUTHORITY) {
         event_kind = CC_EVENT_FACT_REVEALED;
         (void)snprintf(text, sizeof(text),
-                       "Mara hears Bren's account and agrees that the west gallery must be opened carefully.");
+                       "Mara believes Bren and agrees to help find Cera.");
     } else {
         (void)snprintf(
             text, sizeof(text), response == CC_CHARACTER_RESPONSE_LISTEN ?
@@ -8918,11 +8918,11 @@ static bool ApplyCharacterResponse(CcSim *sim, const CcCommand *command,
                 situation->sponsor_character_id);
             ShiftRelationshipTrust(
                 sim, mara_to_jory, 1, event_id, situation->id,
-                "Bren's account supports Jory's warning. Mara trusts his judgment a little more.");
+                "Bren confirms Jory's warning, so Mara trusts Jory more.");
             ShiftRelationshipTrust(
                 sim, jory_to_mara, 1,
                 event_id, situation->id,
-                "Mara acts on the warning. Jory trusts her judgment a little more.");
+                "Mara acts on the warning, so Jory trusts Mara more.");
             RememberKnowledge(mara, CC_KNOWLEDGE_OFFER,
                               situation->id, mara != NULL ? mara->id : 0U,
                               event_id, CC_KNOWLEDGE_WITNESSED, false,

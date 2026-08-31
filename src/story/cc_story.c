@@ -84,50 +84,50 @@ static const CcStoryLineTemplate STORY_LINES[] = {
         CC_SITUATION_ROUTE_REPAIR, "Ilyra Senn"),
     STORY_LINE(
         "lower_silverworks.jory.lead",
-        "Bren came up before the bell. Left his lamp at the west gate. Find him for me.",
+        "Bren ran out of the west gallery and left his lamp behind. He will not tell me why.",
         CC_STORY_BEAT_LEAD, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_MONSTER_EXPEDITION, "Jory Fen"),
     STORY_LINE(
         "lower_silverworks.bren.witness",
-        "Picks behind the old wall. Slow ones. Cera was still below, so I ran for Jory.",
+        "I heard someone using a pick behind the old wall. Cera was still down there, so I ran.",
         CC_STORY_BEAT_WITNESS, CC_STORY_SPEAKER_WITNESS,
         CC_SITUATION_MONSTER_EXPEDITION, "Bren Alder"),
     STORY_RELATIONSHIP_LINE(
         "lower_silverworks.jory.decision.friend",
-        "Take Bren's account to Mara. She'll close the west gallery, not the whole mine.",
+        "Tell Mara what Bren heard. She knows the mine, and she will listen.",
         CC_STORY_BEAT_DECISION, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_MONSTER_EXPEDITION, "Jory Fen",
         CC_RELATIONSHIP_HISTORY_OLD_FRIENDS),
     STORY_RELATIONSHIP_LINE(
         "lower_silverworks.jory.decision.former",
-        "Mara needs to hear it. Tell her Bren said it, not me.",
+        "Tell Mara what Bren heard. Do not tell her it came from me.",
         CC_STORY_BEAT_DECISION, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_MONSTER_EXPEDITION, "Jory Fen",
         CC_RELATIONSHIP_HISTORY_FORMER_PARTNERS),
     STORY_RELATIONSHIP_LINE(
         "lower_silverworks.jory.decision.rival",
-        "Don't take this to Mara yet. She'll close every shaft before Cera is out.",
+        "Do not tell Mara yet. She will close the mine before we find Cera.",
         CC_STORY_BEAT_DECISION, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_MONSTER_EXPEDITION, "Jory Fen",
         CC_RELATIONSHIP_HISTORY_PROFESSIONAL_RIVALS),
     STORY_LINE(
         "lower_silverworks.mara.authority",
-        "I believe Bren. Show me the wall. We open it slowly, and Cera comes out first.",
+        "I believe Bren. Take me to the wall. We need to find Cera first.",
         CC_STORY_BEAT_AUTHORITY, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_MONSTER_EXPEDITION, "Mara Venn"),
     STORY_LINE(
         "lower_silverworks.jory.offer",
-        "We find Cera first. Then we learn who is working behind that wall.",
+        "Help me find Cera. We can deal with the old wall after she is safe.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_MONSTER_EXPEDITION, "Jory Fen"),
     STORY_LINE(
         "lower_silverworks.mara.offer",
-        "I will pay for a careful descent. Bring Cera home before you open the old gallery.",
+        "I will pay you to find Cera. Do not open the old wall until she is safe.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_MONSTER_EXPEDITION, "Mara Venn"),
     STORY_LINE(
         "lower_silverworks.jory.promised",
-        "I'll show you where the roof braces are weak. Stay behind me and keep your lamp high.",
+        "Stay close to me. Keep your lamp up and watch the roof.",
         CC_STORY_BEAT_PROMISED, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_MONSTER_EXPEDITION, "Jory Fen"),
     STORY_LINE(
@@ -423,7 +423,7 @@ const char *CcStoryPlayerChoiceText(CcSituationKind kind,
     if (choice == CC_STORY_PLAYER_LEAVE) return "Esc  Not now.";
     if (choice == CC_STORY_PLAYER_REPORT) return "1  Tell Mara.";
     if (choice == CC_STORY_PLAYER_KEEP_CONFIDENCE) {
-        return "2  Keep this with the miners.";
+        return "2  Keep it between us.";
     }
     if (choice == CC_STORY_PLAYER_ASK) {
         switch (kind) {

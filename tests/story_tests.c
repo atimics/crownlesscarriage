@@ -157,7 +157,7 @@ static void ValidateMineSocialThread(void)
         .target_id = mine->id
     };
     CC_CHECK(!CcSimApply(&sim, &accept, error, sizeof(error)));
-    CC_CHECK(strstr(error, "still a lead") != NULL);
+    CC_CHECK(strstr(error, "job to accept") != NULL);
 
     CcCommand listen = {
         .kind = CC_COMMAND_CHARACTER_RESPONSE,
@@ -170,7 +170,7 @@ static void ValidateMineSocialThread(void)
                  &sim, mine, sim.player.location_id) == bren);
     line = CcStoryCharacterLine(&sim, mine, bren);
     CC_CHECK(line != NULL && line->beat == CC_STORY_BEAT_WITNESS);
-    CC_CHECK(strstr(line->text, "Picks behind the old wall") != NULL);
+    CC_CHECK(strstr(line->text, "using a pick behind the old wall") != NULL);
 
     CC_CHECK(CcSimApply(&sim, &listen, error, sizeof(error)));
     CC_CHECK(mine->discovery_stage == CC_DISCOVERY_DECISION);
