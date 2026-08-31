@@ -10943,10 +10943,10 @@ static float DragonCreatureGrowthScale(CcCreatureVariant variant)
     switch (variant) {
         case CC_CREATURE_DRAGON_WHELP: return 0.38f;
         case CC_CREATURE_DRAGON_WANDERER: return 1.50f;
-        case CC_CREATURE_DRAGON_DEEP_WYRM: return 1.30f;
+        case CC_CREATURE_DRAGON_DEEP_WYRM: return 3.90f;
         case CC_CREATURE_DRAGON:
         default:
-            return 1.40f;
+            return 2.80f;
     }
 }
 
@@ -21561,9 +21561,11 @@ static void DrawRemoteSiteEntrance(const CcSim *sim, CcLocalSiteKind site,
                                                 CC_CREATURE_POSE_REST;
         CcCreatureVariant dragon_variant = DragonCreatureForLifeStage(
             sim->dragon.life_stage);
+        float dragon_back_offset =
+            dragon_variant == CC_CREATURE_DRAGON_DEEP_WYRM ? 23.5f :
+            dragon_variant == CC_CREATURE_DRAGON ? 12.4f : 6.0f;
         Vector3 dragon_position = {
-            x - (dragon_variant == CC_CREATURE_DRAGON_DEEP_WYRM ?
-                 7.8f : 6.0f),
+            x - dragon_back_offset,
             0.0f,
             z + (dragon_variant == CC_CREATURE_DRAGON_WHELP ? 0.2f : 0.8f)
         };

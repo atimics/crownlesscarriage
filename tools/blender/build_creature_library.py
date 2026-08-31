@@ -36,7 +36,7 @@ BLEND_PATH = ROOT / "assets" / "blender" / "crownless_creature_library.blend"
 EXPORT_DIR = ROOT / "assets" / "exports" / "creatures"
 PREVIEW_PATH = ROOT / "assets" / "previews" / "creatures" / "creature_family_sheet.png"
 MANIFEST_PATH = ROOT / "assets" / "creature_manifest.json"
-LIBRARY_VERSION = "0.8.0"
+LIBRARY_VERSION = "0.9.0"
 
 BIPED_POSES = (
     "idle",
@@ -211,8 +211,8 @@ def reset_scene() -> None:
     scene = bpy.context.scene
     scene.name = "CC_CREATURE_LIBRARY"
     scene.render.engine = "BLENDER_EEVEE"
-    scene.render.resolution_x = 1600
-    scene.render.resolution_y = 900
+    scene.render.resolution_x = 2400
+    scene.render.resolution_y = 1000
     scene.render.resolution_percentage = 100
     scene.render.image_settings.file_format = "PNG"
     scene.view_settings.look = "AgX - Medium High Contrast"
@@ -620,8 +620,8 @@ def build_quadruped(spec: CreatureSpec,
         add_ellipsoid("PONY_RoundRump", (0.0, 0.38, body_z + 0.02),
                       (0.57, 0.48, 0.46), "skin", collection, spec,
                       "barrel", subdivisions=1)
-        add_ellipsoid("PONY_RoundShoulder", (0.0, -0.38, body_z + 0.04),
-                      (0.54, 0.46, 0.47), "skin", collection, spec,
+        add_ellipsoid("PONY_RoundShoulder", (0.0, -0.38, body_z + 0.12),
+                      (0.54, 0.46, 0.49), "skin", collection, spec,
                       "chest", subdivisions=1)
 
     leg_roots = {
@@ -725,29 +725,33 @@ def build_quadruped(spec: CreatureSpec,
                       (0.035, 0.40, 0.32), "secondary", collection, spec,
                       "barrel", subdivisions=2)
     else:
-        neck_start = Vector((0.0, -0.42, body_z + 0.16))
-        neck_end = Vector((0.0, -0.72, body_z + 0.34))
-        head = Vector((0.0, -0.96, body_z + 0.32))
-        add_segment("HORSE_Neck", neck_start, neck_end, 0.29, 0.21, "skin",
+        neck_start = Vector((0.0, -0.42, body_z + 0.22))
+        neck_end = Vector((0.0, -0.70, body_z + 0.43))
+        head = Vector((0.0, -0.93, body_z + 0.43))
+        add_segment("HORSE_Neck", neck_start, neck_end, 0.30, 0.22, "skin",
                     collection, spec, "neck", sides=9)
-        add_ellipsoid("HORSE_Head", head, (0.29, 0.38, 0.31), "skin",
+        add_ellipsoid("HORSE_Head", head, (0.34, 0.36, 0.35), "skin",
                       collection, spec, "head", subdivisions=2)
-        add_ellipsoid("HORSE_Muzzle", head + Vector((0.0, -0.29, -0.07)),
-                      (0.23, 0.19, 0.17), "secondary", collection, spec,
+        add_ellipsoid("HORSE_Muzzle", head + Vector((0.0, -0.25, -0.08)),
+                      (0.25, 0.17, 0.18), "secondary", collection, spec,
                       "muzzle")
         for side, sign in (("L", -1.0), ("R", 1.0)):
             add_cone(f"HORSE_Ear_{side}",
-                     head + Vector((0.11 * sign, 0.01, 0.28)),
-                     0.075, 0.21, "skin", collection, spec,
+                     head + Vector((0.14 * sign, 0.01, 0.31)),
+                     0.085, 0.25, "skin", collection, spec,
                      f"ear_{side.lower()}", vertices=5)
             add_ellipsoid(f"HORSE_Eye_{side}",
-                          head + Vector((0.21 * sign, -0.18, 0.09)),
-                          (0.050, 0.028, 0.056), "eye", collection, spec,
+                          head + Vector((0.25 * sign, -0.17, 0.10)),
+                          (0.078, 0.032, 0.086), "eye", collection, spec,
+                          f"eye_{side.lower()}")
+            add_ellipsoid(f"PONY_EyeGlint_{side}",
+                          head + Vector((0.286 * sign, -0.199, 0.132)),
+                          (0.018, 0.009, 0.021), "horn", collection, spec,
                           f"eye_{side.lower()}")
             add_ellipsoid(
                 f"PONY_Cheek_{side}",
-                head + Vector((0.275 * sign, -0.12, -0.035)),
-                (0.020, 0.13, 0.095), "hide", collection, spec, "head")
+                head + Vector((0.322 * sign, -0.10, -0.045)),
+                (0.020, 0.14, 0.105), "hide", collection, spec, "head")
         mane_wedges = (
             (((-0.04, -0.35, body_z + 0.25),
               (-0.04, -0.45, body_z + 0.64),
@@ -1240,14 +1244,14 @@ def build_dragon(spec: CreatureSpec,
     stage_size = {
         "dragon_whelp": 1.00,
         "dragon_wanderer": 1.90,
-        "dragon": 1.25,
-        "dragon_deep_wyrm": 1.30,
+        "dragon": 2.50,
+        "dragon_deep_wyrm": 3.90,
     }[spec.variant]
     authored_size = {
         "dragon_whelp": 0.36,
         "dragon_wanderer": 2.31,
-        "dragon": 3.18,
-        "dragon_deep_wyrm": 4.64,
+        "dragon": 6.36,
+        "dragon_deep_wyrm": 13.92,
     }[spec.variant]
     for obj in collection.objects:
         if obj.type == "MESH":
@@ -1328,12 +1332,12 @@ def quadruped_bone_points(
         )
     elif pony:
         points["neck"] = (
-            Vector((0.0, -0.42, body_z + 0.16)),
-            Vector((0.0, -0.72, body_z + 0.34)),
+            Vector((0.0, -0.42, body_z + 0.22)),
+            Vector((0.0, -0.70, body_z + 0.43)),
         )
         points["head"] = (
-            Vector((0.0, -0.96, body_z + 0.32)),
-            Vector((0.0, -1.25, body_z + 0.25)),
+            Vector((0.0, -0.93, body_z + 0.43)),
+            Vector((0.0, -1.18, body_z + 0.35)),
         )
 
     for name, x, longitudinal, front in (
@@ -1545,17 +1549,18 @@ def look_at(obj: bpy.types.Object,
     obj.rotation_euler = direction.to_track_quat("-Z", "Y").to_euler()
 
 
-def add_stage(collection: bpy.types.Collection) -> None:
+def add_stage(collection: bpy.types.Collection, z: float,
+              row_name: str) -> None:
     material = bpy.data.materials.new("MAT_CREATURE_STAGE")
     material.diffuse_color = (0.060, 0.085, 0.080, 1.0)
     material.use_nodes = True
     principled = material.node_tree.nodes.get("Principled BSDF")
     principled.inputs["Base Color"].default_value = material.diffuse_color
     principled.inputs["Roughness"].default_value = 0.92
-    bpy.ops.mesh.primitive_cube_add(location=(0.0, 0.45, -0.10))
+    bpy.ops.mesh.primitive_cube_add(location=(0.0, 0.45, z - 0.10))
     stage = bpy.context.object
-    stage.name = "STAGE_CreatureFamilySheet"
-    stage.dimensions = (38.0, 12.0, 0.16)
+    stage.name = f"STAGE_CreatureFamilySheet_{row_name}"
+    stage.dimensions = (112.0, 16.0, 0.16)
     bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
     stage.data.materials.append(material)
     move_to(stage, collection)
@@ -1566,19 +1571,24 @@ def add_preview_scene(
 ) -> None:
     preview = new_collection("90_PREVIEW")
     placements = {
-        "goblin_scavenger": (-17.40, -0.55, 1.0),
-        "goblin_raider": (-15.95, -0.35, 1.0),
-        "goblin_tribute_bearer": (-14.40, -0.15, 1.0),
-        "horse": (-11.90, 0.20, 1.0),
-        "cow": (-8.55, 0.40, 1.0),
-        "sheep": (-7.10, 0.62, 0.38),
-        "dragon_whelp": (-5.75, 0.75, 0.35),
-        "dragon_wanderer": (-2.20, 0.95, 0.35),
-        "dragon": (4.05, 1.20, 0.35),
-        "dragon_deep_wyrm": (13.25, 1.50, 0.35),
+        # A close-up animal shelf keeps the farm cast readable even beside
+        # dragons that are now tens of metres long.
+        "horse": (-12.00, 0.20, 9.0, 2.4),
+        "cow": (2.00, 0.40, 9.0, 2.4),
+        "sheep": (14.00, 0.62, 9.0, 2.4),
+        # Every dragon uses the same display scale, preserving its real growth.
+        "dragon_whelp": (-43.00, 0.75, 0.0, 0.35),
+        "dragon_wanderer": (-36.50, 0.95, 0.0, 0.35),
+        "dragon": (-13.50, 1.20, 0.0, 0.35),
+        "dragon_deep_wyrm": (5.00, 1.50, 0.0, 0.35),
     }
     for spec, sources in preview_sources:
-        x, y, scale = placements[spec.variant]
+        if spec.family == "goblin":
+            for source in sources:
+                source.hide_render = True
+                source.hide_set(True)
+            continue
+        x, y, z, scale = placements[spec.variant]
         for source in sources:
             source.hide_render = True
             source.hide_set(True)
@@ -1596,36 +1606,46 @@ def add_preview_scene(
                 0.0)
             side_turn = Matrix.Rotation(preview_turn, 4, "Z")
             duplicate.matrix_world = (
-                Matrix.Translation(Vector((x, y, 0.0))) @
+                Matrix.Translation(Vector((x, y, z))) @
                 side_turn @ stage_scale @ source.matrix_world)
-    add_stage(preview)
+    add_stage(preview, 0.0, "Dragons")
+    add_stage(preview, 9.0, "Characters")
 
-    bpy.ops.object.camera_add(location=(0.0, -36.0, 12.0))
+    bpy.ops.object.camera_add(location=(0.0, -75.0, 22.0))
     camera = bpy.context.object
     camera.name = "CAM_CreatureFamilySheet"
     camera.data.type = "ORTHO"
-    camera.data.ortho_scale = 38.0
-    look_at(camera, (0.0, 0.55, 1.45))
+    camera.data.ortho_scale = 45.0
+    look_at(camera, (0.0, 0.55, 5.10))
     bpy.context.scene.camera = camera
     move_to(camera, preview)
 
-    bpy.ops.object.light_add(type="AREA", location=(-10.0, -9.0, 12.0))
+    bpy.ops.object.light_add(type="SUN", location=(-18.0, -16.0, 24.0))
+    sun = bpy.context.object
+    sun.name = "LIGHT_Sun"
+    sun.data.energy = 2.7
+    sun.data.angle = math.radians(18.0)
+    sun.rotation_euler = (math.radians(28.0), math.radians(-18.0),
+                          math.radians(-25.0))
+    move_to(sun, preview)
+
+    bpy.ops.object.light_add(type="AREA", location=(-10.0, -14.0, 21.0))
     key = bpy.context.object
     key.name = "LIGHT_Key"
-    key.data.energy = 2400.0
+    key.data.energy = 4200.0
     key.data.shape = "DISK"
-    key.data.size = 10.0
+    key.data.size = 32.0
     key.data.color = (1.0, 0.77, 0.59)
-    look_at(key, (0.0, 0.5, 1.0))
+    look_at(key, (0.0, 0.5, 4.5))
     move_to(key, preview)
 
-    bpy.ops.object.light_add(type="AREA", location=(12.0, -2.0, 9.0))
+    bpy.ops.object.light_add(type="AREA", location=(18.0, -8.0, 18.0))
     fill = bpy.context.object
     fill.name = "LIGHT_Fill"
-    fill.data.energy = 1500.0
-    fill.data.size = 12.0
+    fill.data.energy = 3000.0
+    fill.data.size = 30.0
     fill.data.color = (0.43, 0.75, 1.0)
-    look_at(fill, (0.0, 0.8, 1.4))
+    look_at(fill, (0.0, 0.8, 4.5))
     move_to(fill, preview)
 
     PREVIEW_PATH.parent.mkdir(parents=True, exist_ok=True)

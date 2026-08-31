@@ -73,7 +73,8 @@ int main(void)
                      horse_idle.bones[hooves[hoof]].head.y;
         highest_lift = fmaxf(highest_lift, lift);
     }
-    EXPECT(highest_lift > 0.03f, "a swinging hoof clears the ground");
+    EXPECT(highest_lift > 0.10f,
+           "a prancing pony lifts a swinging hoof high off the ground");
 
     CcQuadrupedPose pony_hold_a = {0};
     CcQuadrupedPose pony_hold_b = {0};

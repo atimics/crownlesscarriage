@@ -59,8 +59,8 @@ static const CcQuadrupedProfile PROFILES[] = {
     [CC_QUADRUPED_HORSE] = {
         0.98f, 0.34f,
         -0.36f, 0.28f, 0.14f, 0.60f,
-        1.14f, 0.42f, 1.32f, 0.72f,
-        1.30f, 0.96f, 0.07f, 1.25f,
+        1.20f, 0.42f, 1.41f, 0.70f,
+        1.41f, 0.93f, 0.08f, 1.18f,
         0.52f, -0.52f,
         {0.0f, 1.10f, -0.68f},
         {0.0f, 0.96f, -0.94f},
@@ -208,18 +208,22 @@ static void ResolveFromRig(CcQuadrupedMorphology morphology,
     float held_phase = floorf(rig_target->phase * 8.0f) / 8.0f;
     float held_radians = held_phase * 2.0f * 3.14159265358979323846f;
     float secondary_strength = 0.48f + movement * 0.52f;
-    float head_sway_scale = morphology == CC_QUADRUPED_HORSE ? 0.045f :
+    float head_sway_scale = morphology == CC_QUADRUPED_HORSE ? 0.065f :
                             morphology == CC_QUADRUPED_SHEEP ? 0.060f :
                                                                0.035f;
     float head_sway = sinf(held_radians - 0.70f) * head_sway_scale *
                       secondary_strength;
     float head_nod = sinf(held_radians - 1.10f) *
-                     (morphology == CC_QUADRUPED_SHEEP ? 0.030f : 0.020f) *
+                     (morphology == CC_QUADRUPED_HORSE ? 0.035f :
+                      morphology == CC_QUADRUPED_SHEEP ? 0.030f : 0.020f) *
                      secondary_strength;
     float breath = sinf(held_radians * 0.5f) * 0.012f * (1.0f - movement);
     float bob = -0.030f * fabsf(sinf(radians * 2.0f)) * movement;
-    float pitch = 0.024f * sinf(radians) * movement;
-    float body_height = profile->body_height + bob + breath;
+    float pitch_scale = morphology == CC_QUADRUPED_HORSE ? 0.045f : 0.024f;
+    float pitch = pitch_scale * sinf(radians) * movement;
+    float prance_lift = morphology == CC_QUADRUPED_HORSE ?
+        0.045f * (0.5f + 0.5f * cosf(radians * 2.0f)) * movement : 0.0f;
+    float body_height = profile->body_height + bob + breath + prance_lift;
     CcCreatureRigPose rig_rest = {0};
     bool rig_ready = CcCreatureRigPoseResolve(
         rig_profile, 0.0f, 0.0f, (CcLimbVec3){0}, 0.0f, 1.0f, &rig_rest);
@@ -261,7 +265,7 @@ static void ResolveFromRig(CcQuadrupedMorphology morphology,
                    rig_ready ? rig_target : NULL);
     }
 
-    float tail_amplitude = morphology == CC_QUADRUPED_HORSE ? 0.19f :
+    float tail_amplitude = morphology == CC_QUADRUPED_HORSE ? 0.27f :
                            morphology == CC_QUADRUPED_SHEEP ? 0.10f : 0.13f;
     float tail_sway = tail_amplitude * sinf(held_radians + 0.65f) *
                       secondary_strength;

@@ -76,13 +76,13 @@ EXPECTED_GAIT = {
 }
 HEIGHT_LIMITS = {
     "goblin": (1.05, 1.70),
-    "horse": (1.15, 1.75),
+    "horse": (1.15, 2.00),
     "cow": (1.15, 1.90),
     "sheep": (0.75, 1.45),
     "dragon_whelp": (0.65, 2.80),
     "dragon_wanderer": (2.00, 8.40),
-    "dragon": (1.80, 7.20),
-    "dragon_deep_wyrm": (1.40, 8.60),
+    "dragon": (3.60, 14.40),
+    "dragon_deep_wyrm": (4.20, 26.00),
 }
 TRIANGLE_LIMITS = {
     "goblin": 2800,
@@ -233,11 +233,15 @@ def validate() -> int:
 
     growth_order = (
         "dragon_whelp", "dragon_wanderer", "dragon", "dragon_deep_wyrm")
-    length_growth_ratios = (4.00, 1.15, 1.25)
+    length_growth_ratios = (4.00, 2.20, 2.10)
     if all(variant in dragon_idle_lengths for variant in growth_order):
         if dragon_idle_lengths["dragon_wanderer"] < 15.0:
             failures.append(
                 "dragon_wanderer is smaller than the former deep wyrm")
+        if dragon_idle_lengths["dragon"] < 38.0:
+            failures.append("crowned dragon is not at least 38m long")
+        if dragon_idle_lengths["dragon_deep_wyrm"] < 85.0:
+            failures.append("ancient dragon is not at least 85m long")
         for index, minimum_ratio in enumerate(length_growth_ratios):
             young = dragon_idle_lengths[growth_order[index]]
             old = dragon_idle_lengths[growth_order[index + 1]]

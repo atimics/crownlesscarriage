@@ -1,5 +1,5 @@
 {
-  "library_version": "0.8.0",
+  "library_version": "0.9.0",
   "art_direction": "silhouette_first_pseudo_pixel_creatures",
   "generation": "offline_curated_procedural_geometry",
   "runtime_strategy": "held poses for goblins and dragons; runtime skins for horse, cow, and sheep",
