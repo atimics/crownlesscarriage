@@ -771,6 +771,7 @@ const char *CcEventKindName(CcEventKind kind)
         case CC_EVENT_JOURNEY_WARNING: return "ROAD WARNING";
         case CC_EVENT_AMBUSH_EVADED: return "AMBUSH EVADED";
         case CC_EVENT_ENCOUNTER_LOOT: return "ROAD LOOT";
+        case CC_EVENT_GOBLIN_TUNNEL_TRAVERSED: return "MOUNTAIN TUNNEL";
     }
     return "EVENT";
 }
@@ -9632,6 +9633,49 @@ static bool ApplyAssignHorse(CcSim *sim, const CcCommand *command,
     return true;
 }
 
+static bool ApplyGoblinTunnelTraversal(CcSim *sim,
+                                       const CcCommand *command,
+                                       char *error,
+                                       size_t error_capacity)
+{
+    CcId origin_id = sim->player.location_id;
+    bool climbing_to_dragon =
+        origin_id == sim->goblins.lair_settlement_id &&
+        command->target_id == sim->dragon.lair_settlement_id;
+    bool returning_to_goblins =
+        origin_id == sim->dragon.lair_settlement_id &&
+        command->target_id == sim->goblins.lair_settlement_id;
+    if (!climbing_to_dragon && !returning_to_goblins) {
+        SetError(error, error_capacity,
+                 "The dragon mountain is reachable only through the goblin dungeon.");
+        return false;
+    }
+    if (sim->carriage.location_id != sim->goblins.lair_settlement_id) {
+        SetError(error, error_capacity,
+                 "The carriage must remain at the hidden goblin trailhead.");
+        return false;
+    }
+    const CcSettlement *destination = CcSimSettlement(
+        sim, command->target_id);
+    if (destination == NULL) {
+        SetError(error, error_capacity, "The tunnel destination is missing.");
+        return false;
+    }
+    CcSimAdvanceDays(sim, 1);
+    sim->player.location_id = command->target_id;
+    sim->carriage.location_id = sim->goblins.lair_settlement_id;
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(
+        text, sizeof(text),
+        climbing_to_dragon ?
+            "The company leaves the carriage behind and spends a day climbing through the goblin dungeon to the dragon mountain." :
+            "The company descends through the goblin dungeon and returns to the hidden trailhead.");
+    (void)PushEvent(sim, CC_EVENT_GOBLIN_TUNNEL_TRAVERSED,
+                    sim->player.id, command->target_id, 0U, 1, text);
+    SetError(error, error_capacity, "");
+    return true;
+}
+
 bool CcSimApply(CcSim *sim, const CcCommand *command,
                 char *error, size_t error_capacity)
 {
@@ -9654,7 +9698,8 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
         command->kind == CC_COMMAND_GOBLIN_TRADE ||
         command->kind == CC_COMMAND_GOBLIN_WARN ||
         command->kind == CC_COMMAND_GOBLIN_INTERCEPT ||
-        command->kind == CC_COMMAND_CHARACTER_RESPONSE;
+        command->kind == CC_COMMAND_CHARACTER_RESPONSE ||
+        command->kind == CC_COMMAND_TRAVERSE_GOBLIN_TUNNEL;
     if (sim->journey.active && settlement_action) {
         SetError(error, error_capacity,
                  "Settlement business must wait until the carriage arrives.");
@@ -9698,6 +9743,9 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
                 sim, command, error, error_capacity);
         case CC_COMMAND_SET_JOURNEY_PACE:
             return ApplyJourneyPace(sim, command, error, error_capacity);
+        case CC_COMMAND_TRAVERSE_GOBLIN_TUNNEL:
+            return ApplyGoblinTunnelTraversal(
+                sim, command, error, error_capacity);
         case CC_COMMAND_ACCEPT_SITUATION:
             return ApplyAcceptSituation(sim, command, error, error_capacity);
         case CC_COMMAND_ABANDON_SITUATION:
@@ -10073,7 +10121,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 !ValidBoundedText(event->text, sizeof(event->text)) ||
                 event->day < 1 || event->day > sim->current_day ||
                 event->kind < CC_EVENT_HARVEST_FAILED ||
-                event->kind > CC_EVENT_ENCOUNTER_LOOT ||
+                event->kind > CC_EVENT_GOBLIN_TUNNEL_TRAVERSED ||
                 event->parent_id == event->id ||
                 (event->parent_id != 0U &&
                  CcSimEvent(sim, event->parent_id) == NULL)) {
@@ -10992,15 +11040,23 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                          "Carriage journey state is invalid.");
                 return false;
             }
-        } else if (sim->journey.phase != CC_JOURNEY_PHASE_NONE ||
-                   sim->carriage.mode != CC_CARRIAGE_PARKED ||
-                   sim->carriage.location_id != sim->player.location_id ||
+        } else {
+            bool carriage_left_below_dragon =
+                sim->player.location_id == sim->dragon.lair_settlement_id &&
+                sim->carriage.location_id ==
+                    sim->goblins.lair_settlement_id;
+            if (sim->journey.phase != CC_JOURNEY_PHASE_NONE ||
+                sim->carriage.mode != CC_CARRIAGE_PARKED ||
+                (sim->carriage.location_id != sim->player.location_id &&
+                 !carriage_left_below_dragon) ||
                    sim->clock.game_minutes_per_second !=
                        CC_IDLE_GAME_MINUTES_PER_SECOND ||
                    sim->carriage.condition < 0 ||
-                   sim->carriage.condition > 100) {
-            SetError(error, error_capacity, "Parked carriage state is invalid.");
-            return false;
+                sim->carriage.condition > 100) {
+                SetError(error, error_capacity,
+                         "Parked carriage state is invalid.");
+                return false;
+            }
         }
     }
     if (sim->resolved_journey_outcome < CC_JOURNEY_OUTCOME_NONE ||

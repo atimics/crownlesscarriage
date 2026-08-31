@@ -22163,6 +22163,103 @@ static const CcRoute *SiteAnchorRoad(const CcSim *sim)
     return NULL;
 }
 
+static void DrawRemoteFootTrailSegment(Vector2 start, Vector2 end,
+                                       float width, Color color)
+{
+    float dx = end.x - start.x;
+    float dz = end.y - start.y;
+    float length = sqrtf(dx * dx + dz * dz);
+    if (length < 0.01f) return;
+    DrawTiltedBox(
+        (Vector3){(start.x + end.x) * 0.5f, 0.015f,
+                  (start.y + end.y) * 0.5f},
+        (Vector3){length + 0.25f, 0.07f, width},
+        (Vector3){0.0f, 1.0f, 0.0f},
+        -atan2f(dz, dx) * RAD2DEG, color);
+}
+
+static void DrawRemoteSiteTerrain(uint32_t world_seed,
+                                  const CcRoute *road,
+                                  CcLocalSiteKind site,
+                                  bool travelling,
+                                  Color kingdom,
+                                  int32_t progress_milli,
+                                  Vector3 focus)
+{
+    int32_t danger = site == CC_LOCAL_SITE_DRAGON_CAVE ? 72 :
+                     site == CC_LOCAL_SITE_GOBLIN_CAVE ? 48 : 38;
+    DrawRoadTerrain(world_seed, road, danger, false, kingdom,
+                    progress_milli, focus);
+    if (travelling || site == CC_LOCAL_SITE_DUNGEON) return;
+
+    bool mountain = site == CC_LOCAL_SITE_DRAGON_CAVE;
+    float cover_start = mountain ? 14.0f : 34.0f;
+    float cover_width = 82.0f - cover_start;
+    Color wild_ground = mountain ?
+        BlendColor(WORLD_STONE_SHADOW, WORLD_INK, 0.38f) :
+        BlendColor(WORLD_GRASS_SHADOW, WORLD_INK, 0.28f);
+    DrawBox((Vector3){cover_start + cover_width * 0.5f, -0.035f, 40.0f},
+            (Vector3){cover_width, 0.12f, 11.6f}, wild_ground);
+
+    static const Vector2 GOBLIN_TRAIL[] = {
+        {33.0f, 40.0f}, {39.0f, 43.6f}, {46.5f, 37.0f},
+        {54.5f, 43.8f}, {62.0f, 36.6f}, {70.0f, 40.0f}
+    };
+    static const Vector2 MOUNTAIN_TRAIL[] = {
+        {24.0f, 40.0f}, {30.5f, 45.2f}, {38.0f, 34.8f},
+        {46.5f, 45.0f}, {55.0f, 33.5f}, {63.0f, 43.8f},
+        {70.0f, 40.0f}
+    };
+    const Vector2 *trail = mountain ? MOUNTAIN_TRAIL : GOBLIN_TRAIL;
+    int32_t trail_count = mountain ?
+        (int32_t)(sizeof(MOUNTAIN_TRAIL) / sizeof(MOUNTAIN_TRAIL[0])) :
+        (int32_t)(sizeof(GOBLIN_TRAIL) / sizeof(GOBLIN_TRAIL[0]));
+    Color trail_color = mountain ?
+        BlendColor(WORLD_STONE, WORLD_EARTH_SHADOW, 0.44f) :
+        BlendColor(WORLD_EARTH_SHADOW, WORLD_VIOLET, 0.12f);
+    for (int32_t segment = 0; segment < trail_count - 1; ++segment) {
+        DrawRemoteFootTrailSegment(
+            trail[segment], trail[segment + 1],
+            mountain ? 1.10f : 0.92f,
+            ShadeColor(trail_color, segment % 2 == 0 ? 0.88f : 1.08f));
+    }
+
+    Color cliff = mountain ?
+        BlendColor(WORLD_STONE_SHADOW, WORLD_DANGER, 0.10f) :
+        BlendColor(WORLD_STONE_SHADOW, WORLD_VIOLET, 0.14f);
+    for (int32_t ridge = 0; ridge < 5; ++ridge) {
+        float x = 37.0f + (float)ridge * 10.0f;
+        float z = ridge % 2 == 0 ? 28.0f : 53.0f;
+        DrawBackdropHill(x, z, mountain ? 9.5f : 7.0f,
+                         mountain ? 3.2f : 2.6f,
+                         mountain ? 14.0f + (float)(ridge % 3) * 2.4f :
+                                    10.0f + (float)(ridge % 2) * 1.8f,
+                         8, ShadeColor(cliff, ridge % 2 == 0 ? 0.78f : 1.0f));
+    }
+    for (int32_t marker = 0; marker < 6; ++marker) {
+        float x = 37.0f + (float)marker * 6.1f;
+        float z = marker % 2 == 0 ? 34.1f : 46.0f;
+        DrawTiltedBox((Vector3){x, 0.55f, z},
+                      (Vector3){0.20f, 1.10f + (float)(marker % 3) * 0.32f,
+                                0.24f},
+                      (Vector3){0.0f, 0.0f, 1.0f},
+                      marker % 2 == 0 ? 11.0f : -13.0f,
+                      marker % 3 == 0 ? WORLD_DANGER : cliff);
+    }
+
+    if (mountain) {
+        DrawTiltedBox((Vector3){22.8f, 1.35f, 40.0f},
+                      (Vector3){1.25f, 2.75f, 2.30f},
+                      (Vector3){0.0f, 0.0f, 1.0f}, 9.0f, cliff);
+        DrawTiltedBox((Vector3){25.2f, 1.30f, 40.0f},
+                      (Vector3){1.20f, 2.65f, 2.20f},
+                      (Vector3){0.0f, 0.0f, 1.0f}, -8.0f,
+                      ShadeColor(cliff, 0.82f));
+        DrawBox((Vector3){24.0f, 1.05f, 39.72f},
+                (Vector3){1.65f, 2.10f, 0.28f}, WORLD_VOID);
+    }
+}
+
 static void DrawRemoteSiteEntrance(const CcSim *sim, CcLocalSiteKind site,
                                    float clock)
 {
@@ -22173,8 +22270,18 @@ static void DrawRemoteSiteEntrance(const CcSim *sim, CcLocalSiteKind site,
         site == CC_LOCAL_SITE_GOBLIN_CAVE ?
         BlendColor(WORLD_STONE_SHADOW, WORLD_VIOLET, 0.18f) :
         WORLD_STONE_SHADOW;
-    DrawScenerySphere((Vector3){x - 1.55f, 1.35f, z}, 1.75f, rock);
-    DrawScenerySphere((Vector3){x + 1.45f, 1.25f, z}, 1.65f, rock);
+    if (site == CC_LOCAL_SITE_DUNGEON) {
+        DrawScenerySphere((Vector3){x - 1.55f, 1.35f, z}, 1.75f, rock);
+        DrawScenerySphere((Vector3){x + 1.45f, 1.25f, z}, 1.65f, rock);
+    } else {
+        DrawTiltedBox((Vector3){x - 1.58f, 1.45f, z},
+                      (Vector3){1.55f, 2.90f, 1.48f},
+                      (Vector3){0.0f, 0.0f, 1.0f}, 10.0f, rock);
+        DrawTiltedBox((Vector3){x + 1.52f, 1.38f, z},
+                      (Vector3){1.45f, 2.76f, 1.42f},
+                      (Vector3){0.0f, 0.0f, 1.0f}, -9.0f,
+                      ShadeColor(rock, 0.82f));
+    }
     DrawBox((Vector3){x, 2.35f, z}, (Vector3){4.8f, 1.65f, 1.15f}, rock);
     DrawBox((Vector3){x, 1.20f, z - 0.58f},
             (Vector3){2.05f, 2.40f, 0.32f}, WORLD_VOID);
@@ -22270,6 +22377,10 @@ void CcLocalDrawSite3D(const CcSim *sim, const CcLocalAgent *agent,
     Color kingdom = KingdomColor3D(sim, kingdom_id);
     const CcRoute *road = SiteAnchorRoad(sim);
     ArtComposition site_art = ROAD_ART_COMPOSITION;
+    if (!travelling && (site == CC_LOCAL_SITE_GOBLIN_CAVE ||
+                        site == CC_LOCAL_SITE_DRAGON_CAVE)) {
+        site_art.light_profile = ART_LIGHT_INTERIOR_EMBER;
+    }
     site_art.focal_point = camera.target;
     site_art.foreground_anchor = carriage;
     SetFaceRenderContext(camera, target.texture.width, target.texture.height);
@@ -22277,15 +22388,15 @@ void CcLocalDrawSite3D(const CcSim *sim, const CcLocalAgent *agent,
     ClearBackground(ArtLightBackground(site_art.light_profile));
     BeginMode3D(camera);
     BeginWorldLighting(camera, &site_art);
-    DrawRoadTerrain(sim->world_seed ^ ((uint32_t)site << 24U), road,
-                    site == CC_LOCAL_SITE_DRAGON_CAVE ? 72 :
-                    site == CC_LOCAL_SITE_GOBLIN_CAVE ? 48 : 38,
-                    false, kingdom, (int32_t)lroundf(amount * 1000.0f),
-                    camera.target);
+    DrawRemoteSiteTerrain(
+        sim->world_seed ^ ((uint32_t)site << 24U), road, site, travelling,
+        kingdom, (int32_t)lroundf(amount * 1000.0f), camera.target);
     DrawRemoteSiteEntrance(sim, site, clock);
-    DrawRoadCarriage(carriage, CcPlayerCargoUsed(&sim->player), clock,
-                     travelling, returning ? -0.5f * PI : 0.5f * PI,
-                     true, false);
+    if (site != CC_LOCAL_SITE_DRAGON_CAVE) {
+        DrawRoadCarriage(carriage, CcPlayerCargoUsed(&sim->player), clock,
+                         travelling, returning ? -0.5f * PI : 0.5f * PI,
+                         true, false);
+    }
     if (!travelling) {
         DrawAgentPath(agent, false);
         DrawRobotShell(agent);
@@ -22303,16 +22414,26 @@ void CcLocalDrawSite3D(const CcSim *sim, const CcLocalAgent *agent,
          site == CC_LOCAL_SITE_DRAGON_CAVE ? WORLD_DANGER :
          site == CC_LOCAL_SITE_GOBLIN_CAVE ? WORLD_VIOLET : WORLD_GOLD},
         {{CC_LOCAL_SITE_CARRIAGE_X, 2.65f, CC_LOCAL_SITE_CARRIAGE_Z},
-         "CARRIAGE / F", WORLD_TEAL},
+         site == CC_LOCAL_SITE_DRAGON_CAVE ? "GOBLIN TUNNEL / F" :
+                                             "CARRIAGE / F",
+         site == CC_LOCAL_SITE_DRAGON_CAVE ? WORLD_VIOLET : WORLD_TEAL},
         {{agent->position.x, agent->position.y + 2.45f, agent->position.z},
          "YOU", WORLD_TEAL}
     };
     DrawLabels(labels, travelling ? 1 : 3, camera, destination);
+    const char *site_caption =
+        site == CC_LOCAL_SITE_DRAGON_CAVE ?
+            "MOUNTAIN ASCENT  /  ONLY WAY BACK IS THE GOBLIN TUNNEL" :
+        site == CC_LOCAL_SITE_GOBLIN_CAVE ?
+            "OFF-ROAD FOOT TRAIL  /  CARRIAGE LEFT AT ROAD EDGE" :
+            "SEPARATE LOCAL MAP  /  THE CARRIAGE REMAINS PARKED";
     DrawViewportText(
         travelling ?
             returning ? "CARRIAGE VIEW  /  RETURNING TO TOWN" :
-                        "CARRIAGE VIEW  /  THE SITE ROAD AHEAD" :
-            "SEPARATE LOCAL MAP  /  THE CARRIAGE REMAINS PARKED",
+                        site == CC_LOCAL_SITE_GOBLIN_CAVE ?
+                            "CARRIAGE VIEW  /  HIDDEN TRAILHEAD AHEAD" :
+                            "CARRIAGE VIEW  /  THE SITE ROAD AHEAD" :
+            site_caption,
         destination, 18, 18, 10, WORLD_INK);
 }
 
@@ -22622,14 +22743,12 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         DrawSiteRoadGate(CC_LOCAL_DUNGEON_X, CC_LOCAL_DUNGEON_Z,
                          WORLD_VIOLET);
     }
-    if ((place->id == sim->dragon.lair_settlement_id ||
-         place->id == sim->goblins.lair_settlement_id) &&
+    if (place->id == sim->goblins.lair_settlement_id &&
         SceneryPointVisible(CC_LOCAL_DRAGON_CAVE_X,
                             CC_LOCAL_DRAGON_CAVE_Z, scenery_focus)) {
         DrawSiteRoadGate(
             CC_LOCAL_DRAGON_CAVE_X, CC_LOCAL_DRAGON_CAVE_Z,
-            place->id == sim->dragon.lair_settlement_id ?
-                WORLD_DANGER : WORLD_VIOLET);
+            WORLD_VIOLET);
     }
     DrawSettlementCreatures(sim, place, clock, scenery_focus);
 
@@ -22901,8 +23020,8 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
              CcLocalTerrainHeightAt(CC_LOCAL_DRAGON_CAVE_X,
                                     CC_LOCAL_DRAGON_CAVE_Z) + 2.75f,
              CC_LOCAL_DRAGON_CAVE_Z},
-            sim->dragon.slain ? "Road to the ashen cave" :
-                                "Road to the dragon cave",
+            sim->dragon.slain ? "Ashen mountain / no road" :
+                                "Dragon mountain / no road access",
             sim->dragon.slain ? WORLD_VIOLET : WORLD_DANGER};
     }
     if (place->id == sim->goblins.lair_settlement_id &&
@@ -22913,7 +23032,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
              CcLocalTerrainHeightAt(CC_LOCAL_DRAGON_CAVE_X,
                                     CC_LOCAL_DRAGON_CAVE_Z) + 2.75f,
              CC_LOCAL_DRAGON_CAVE_Z},
-            "Road to the goblin cave", WORLD_VIOLET};
+            "Hidden trail to goblin dungeon", WORLD_VIOLET};
     }
     if (!combat_nearby) {
         DrawLabels(labels, count, camera, destination);
