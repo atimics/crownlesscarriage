@@ -4,6 +4,8 @@
 #include "client/cc_npc_appearance.h"
 #include "locomotion/cc_limb.h"
 #include "locomotion/cc_humanoid.h"
+#include "locomotion/cc_multileg.h"
+#include "locomotion/cc_robotics.h"
 #include "sim/cc_sim.h"
 
 #include "raylib.h"
@@ -261,6 +263,8 @@ typedef struct CcLocalAgent {
     float immersion;
     CcMorphologyPreset morphology;
     CcLimbRig limb_rig;
+    CcMultilegRagdoll multileg_ragdoll;
+    CcRobotClimbRoute climb_route;
     CcHumanoidGait humanoid;
     CcHumanoidPose render_pose;
     CcSteppedPoseState stepped_pose;
@@ -273,6 +277,7 @@ typedef struct CcLocalAgent {
     int32_t navigation_point_count;
     int32_t navigation_point_index;
     int32_t navigation_destination_room;
+    int32_t climb_route_index;
     bool render_pose_valid;
     bool humanoid_needs_reset;
     bool target_valid;
@@ -283,6 +288,7 @@ typedef struct CcLocalAgent {
     bool navigation_active;
     bool navigation_world_exit;
     bool world_exit_requested;
+    bool free_climbing;
     CcLocalWorldTargetKind world_target;
     Color tunic_color;
     CcNpcAppearance appearance;
@@ -426,6 +432,13 @@ void CcLocalAgentSetMorphology(CcLocalAgent *agent, CcMorphologyPreset preset,
 void CcLocalAgentSetScene(CcLocalAgent *agent, CcLocalSceneKind scene);
 void CcLocalAgentCycleMorphology(CcLocalAgent *agent, bool market_interior);
 const char *CcLocalAgentMorphologyName(const CcLocalAgent *agent);
+bool CcLocalAgentBeginFreeClimb(CcLocalAgent *agent,
+                                Vector3 surface_point,
+                                Vector3 surface_normal);
+bool CcLocalAgentApplyDamage(CcLocalAgent *agent, float health_damage,
+                             float posture_damage,
+                             Vector3 impact_direction,
+                             Vector3 impact_point, float impact_speed);
 void CcLocalCombatSetTeam(CcLocalAgent *agent, CcCombatTeam team);
 void CcLocalCombatSetFocus(CcLocalAgent *agent,
                            const CcLocalAgent *target);

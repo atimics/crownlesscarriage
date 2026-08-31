@@ -35,6 +35,13 @@ static float Wrap01(float value)
     return value < 0.0f ? value + 1.0f : value;
 }
 
+static float WrapAngle(float value)
+{
+    while (value > CC_CREATURE_PI) value -= 2.0f * CC_CREATURE_PI;
+    while (value < -CC_CREATURE_PI) value += 2.0f * CC_CREATURE_PI;
+    return value;
+}
+
 static CcLimbVec3 Subtract(CcLimbVec3 a, CcLimbVec3 b)
 {
     return (CcLimbVec3){a.x - b.x, a.y - b.y, a.z - b.z};
@@ -70,6 +77,39 @@ static CcLimbVec3 TransformPoint(CcLimbVec3 origin, CcLimbVec3 local,
     return (CcLimbVec3){origin.x + local.x * cosine + local.z * sine,
                         origin.y + local.y,
                         origin.z - local.x * sine + local.z * cosine};
+}
+
+static CcLimbVec3 LocalizePoint(CcLimbVec3 point, CcLimbVec3 origin,
+                                float yaw)
+{
+    float cosine = cosf(yaw);
+    float sine = sinf(yaw);
+    float x = point.x - origin.x;
+    float z = point.z - origin.z;
+    return (CcLimbVec3){x * cosine - z * sine,
+                        point.y - origin.y,
+                        x * sine + z * cosine};
+}
+
+static CcLimbVec3 LocalizeDirection(CcLimbVec3 direction, float yaw)
+{
+    float cosine = cosf(yaw);
+    float sine = sinf(yaw);
+    return (CcLimbVec3){direction.x * cosine - direction.z * sine,
+                        direction.y,
+                        direction.x * sine + direction.z * cosine};
+}
+
+static CcLimbVec3 Lerp(CcLimbVec3 a, CcLimbVec3 b, float amount)
+{
+    return (CcLimbVec3){a.x + (b.x - a.x) * amount,
+                        a.y + (b.y - a.y) * amount,
+                        a.z + (b.z - a.z) * amount};
+}
+
+static bool FiniteVector(CcLimbVec3 value)
+{
+    return isfinite(value.x) && isfinite(value.y) && isfinite(value.z);
 }
 
 static bool DimensionsForProfile(CcCreatureRigProfile profile,
@@ -414,12 +454,15 @@ static bool FillPose(CcCreatureRigProfile profile,
     pose->body = Add(body, offset);
     pose->forward = forward;
     pose->right = right;
+    pose->support_normal = skeleton->support_normal;
     pose->body_width = dimensions->body_width;
     pose->body_depth = dimensions->body_depth;
     pose->body_length = dimensions->body_length;
     pose->limb_count = skeleton->morphology.limb_count;
     pose->support_margin = skeleton->support_margin;
     pose->drive_scale = skeleton->drive_scale;
+    pose->control_authority = skeleton->control_authority;
+    pose->support_state = skeleton->support_state;
     pose->biomech_bone_count = muscles->morphology.bone_count;
     pose->biomech_joint_count = muscles->morphology.joint_count;
     pose->biomech_muscle_count = muscles->morphology.muscle_count;
@@ -439,6 +482,108 @@ static bool FillPose(CcCreatureRigProfile profile,
                             pose->movement, forward, delta_time);
     pose->valid = true;
     return true;
+}
+
+static void LocalizePose(CcCreatureRigPose *pose, CcLimbVec3 origin,
+                         float yaw)
+{
+    pose->body = LocalizePoint(pose->body, origin, yaw);
+    pose->forward = LocalizeDirection(pose->forward, yaw);
+    pose->right = LocalizeDirection(pose->right, yaw);
+    pose->support_normal = LocalizeDirection(pose->support_normal, yaw);
+    for (int32_t limb = 0; limb < pose->limb_count; ++limb) {
+        for (int32_t joint = 0;
+             joint <= pose->limbs[limb].segment_count; ++joint) {
+            pose->limbs[limb].joints[joint] = LocalizePoint(
+                pose->limbs[limb].joints[joint], origin, yaw);
+        }
+    }
+}
+
+static CcLimbVec3 ReframePoint(CcLimbVec3 point,
+                               CcLimbVec3 previous_origin,
+                               float previous_yaw,
+                               CcLimbVec3 next_origin, float next_yaw)
+{
+    CcLimbVec3 local = LocalizePoint(point, previous_origin, previous_yaw);
+    return TransformPoint(next_origin, local, next_yaw);
+}
+
+static void ReframeSkeleton(CcLimbRig *skeleton,
+                            CcLimbVec3 previous_origin, float previous_yaw,
+                            CcLimbVec3 next_origin, float next_yaw)
+{
+    for (int32_t limb = 0;
+         limb < skeleton->morphology.limb_count; ++limb) {
+        CcLimbRuntime *runtime = &skeleton->limbs[limb];
+        int32_t joint_count = skeleton->morphology.limbs[limb].segment_count + 1;
+        for (int32_t joint = 0; joint < joint_count; ++joint) {
+            runtime->joints[joint] = ReframePoint(
+                runtime->joints[joint], previous_origin, previous_yaw,
+                next_origin, next_yaw);
+            runtime->previous_joints[joint] = ReframePoint(
+                runtime->previous_joints[joint], previous_origin,
+                previous_yaw, next_origin, next_yaw);
+        }
+        runtime->planted_contact = ReframePoint(
+            runtime->planted_contact, previous_origin, previous_yaw,
+            next_origin, next_yaw);
+        runtime->contact_start = ReframePoint(
+            runtime->contact_start, previous_origin, previous_yaw,
+            next_origin, next_yaw);
+        runtime->contact_target = ReframePoint(
+            runtime->contact_target, previous_origin, previous_yaw,
+            next_origin, next_yaw);
+        runtime->desired_contact = ReframePoint(
+            runtime->desired_contact, previous_origin, previous_yaw,
+            next_origin, next_yaw);
+        CcLimbVec3 normal_local = LocalizeDirection(
+            runtime->contact_normal, previous_yaw);
+        float cosine = cosf(next_yaw);
+        float sine = sinf(next_yaw);
+        runtime->contact_normal = (CcLimbVec3){
+            normal_local.x * cosine + normal_local.z * sine,
+            normal_local.y,
+            -normal_local.x * sine + normal_local.z * cosine};
+    }
+    skeleton->support_center = ReframePoint(
+        skeleton->support_center, previous_origin, previous_yaw,
+        next_origin, next_yaw);
+}
+
+static void ReplantReframedSkeleton(CcLimbRig *skeleton,
+                                    CcLimbVec3 ground, float yaw,
+                                    CcLimbTerrainProbe probe,
+                                    void *probe_context)
+{
+    if (probe == NULL) return;
+    CcLimbVec3 body = ground;
+    body.y += skeleton->morphology.body_height;
+    for (int32_t limb = 0;
+         limb < skeleton->morphology.limb_count; ++limb) {
+        CcLimbRuntime *runtime = &skeleton->limbs[limb];
+        if (runtime->health <= 0.0f) continue;
+        const CcLimbSpec *spec = &skeleton->morphology.limbs[limb];
+        CcLimbVec3 contact = TransformPoint(
+            body, spec->rest_contact_local, yaw);
+        CcLimbVec3 origin = contact;
+        origin.y = body.y + skeleton->morphology.body_height;
+        CcLimbVec3 normal = {0.0f, 1.0f, 0.0f};
+        if (!probe(probe_context, origin,
+                   skeleton->morphology.body_height * 3.0f,
+                   &contact, &normal)) {
+            runtime->state = CC_LIMB_SEARCHING;
+            continue;
+        }
+        runtime->planted_contact = contact;
+        runtime->contact_start = contact;
+        runtime->contact_target = contact;
+        runtime->desired_contact = contact;
+        runtime->contact_normal = NormalizeOr(
+            normal, (CcLimbVec3){0.0f, 1.0f, 0.0f});
+        runtime->state = CC_LIMB_STANCE;
+        runtime->swing_progress = 1.0f;
+    }
 }
 
 bool CcCreatureRigPoseResolve(CcCreatureRigProfile profile, float phase,
@@ -535,8 +680,83 @@ bool CcCreatureRigControllerInit(CcCreatureRigController *controller,
     }
     controller->skeleton.gait_phase = Wrap01(phase);
     controller->profile = profile;
+    controller->gait = CC_CREATURE_RIG_GAIT_WALK;
+    controller->requested_gait = CC_CREATURE_RIG_GAIT_WALK;
     controller->scale = scale;
+    controller->body_yaw = 0.0f;
+    controller->world_bound = true;
     controller->initialized = true;
+    return true;
+}
+
+static bool ConfigureHorseGait(CcLimbMorphology *morphology,
+                               CcCreatureRigGait gait)
+{
+    if (morphology == NULL ||
+        morphology->preset != CC_MORPHOLOGY_QUADRUPED) {
+        return false;
+    }
+    switch (gait) {
+        case CC_CREATURE_RIG_GAIT_WALK:
+            morphology->minimum_supports = 3;
+            morphology->maximum_swings = 1;
+            morphology->duty_factor = 0.69f;
+            morphology->swing_seconds = 0.24f;
+            morphology->velocity_lead = 0.12f;
+            morphology->limbs[0].phase_offset = 0.00f;
+            morphology->limbs[1].phase_offset = 0.50f;
+            morphology->limbs[2].phase_offset = 0.75f;
+            morphology->limbs[3].phase_offset = 0.25f;
+            return true;
+        case CC_CREATURE_RIG_GAIT_TROT:
+            morphology->minimum_supports = 2;
+            morphology->maximum_swings = 2;
+            morphology->duty_factor = 0.58f;
+            morphology->swing_seconds = 0.20f;
+            morphology->velocity_lead = 0.15f;
+            morphology->limbs[0].phase_offset = 0.00f;
+            morphology->limbs[1].phase_offset = 0.50f;
+            morphology->limbs[2].phase_offset = 0.50f;
+            morphology->limbs[3].phase_offset = 0.00f;
+            return true;
+        case CC_CREATURE_RIG_GAIT_CANTER:
+            morphology->minimum_supports = 2;
+            morphology->maximum_swings = 2;
+            morphology->duty_factor = 0.54f;
+            morphology->swing_seconds = 0.18f;
+            morphology->velocity_lead = 0.18f;
+            morphology->limbs[0].phase_offset = 0.50f;
+            morphology->limbs[1].phase_offset = 0.68f;
+            morphology->limbs[2].phase_offset = 0.00f;
+            morphology->limbs[3].phase_offset = 0.18f;
+            return true;
+        case CC_CREATURE_RIG_GAIT_COUNT:
+        default:
+            return false;
+    }
+}
+
+bool CcCreatureRigControllerSetGait(CcCreatureRigController *controller,
+                                    CcCreatureRigGait gait)
+{
+    if (controller == NULL || !controller->initialized || gait < 0 ||
+        gait >= CC_CREATURE_RIG_GAIT_COUNT) {
+        return false;
+    }
+    if (controller->profile != CC_CREATURE_RIG_HORSE) {
+        return gait == CC_CREATURE_RIG_GAIT_WALK;
+    }
+    controller->requested_gait = gait;
+    if (controller->gait == gait) return true;
+
+    int32_t maximum_swings = gait == CC_CREATURE_RIG_GAIT_WALK ? 1 : 2;
+    if (controller->skeleton.swinging_count > maximum_swings) {
+        return false;
+    }
+    if (!ConfigureHorseGait(&controller->skeleton.morphology, gait)) {
+        return false;
+    }
+    controller->gait = gait;
     return true;
 }
 
@@ -552,38 +772,128 @@ bool CcCreatureRigControllerStep(CcCreatureRigController *controller,
     }
     movement = Clamp(movement, 0.0f, 1.0f);
     delta_time = Clamp(delta_time, 0.0f, 0.25f);
-    float response = 1.0f - expf(-12.0f * delta_time);
-    controller->movement += (movement - controller->movement) * response;
     float speed_limit = 6.0f * controller->scale;
-    float speed = Clamp(forward_speed, -speed_limit, speed_limit) *
-                  controller->movement;
+    float speed = Clamp(forward_speed, -speed_limit, speed_limit);
+    CcCreatureRigWorldCommand command = {
+        .ground_position = controller->ground_position,
+        .velocity = {sinf(controller->body_yaw) * speed, 0.0f,
+                     cosf(controller->body_yaw) * speed},
+        .yaw = controller->body_yaw,
+        .movement = movement,
+        .grounded = true,
+    };
+    command.ground_position.x += command.velocity.x * delta_time;
+    command.ground_position.z += command.velocity.z * delta_time;
+    return CcCreatureRigControllerStepWorld(
+        controller, &command, delta_time, NULL, NULL, pose);
+}
+
+bool CcCreatureRigControllerStepWorld(
+    CcCreatureRigController *controller,
+    const CcCreatureRigWorldCommand *command, float delta_time,
+    CcLimbTerrainProbe probe, void *probe_context,
+    CcCreatureRigPose *pose)
+{
+    if (controller == NULL || command == NULL || pose == NULL ||
+        !controller->initialized || !FiniteVector(command->ground_position) ||
+        !FiniteVector(command->velocity) || !isfinite(command->yaw) ||
+        !isfinite(command->movement) || !isfinite(delta_time) ||
+        delta_time < 0.0f) {
+        return false;
+    }
+    delta_time = Clamp(delta_time, 0.0f, 0.25f);
+    CcLimbVec3 start = controller->ground_position;
+    float start_yaw = controller->body_yaw;
+    float distance = Length(Subtract(command->ground_position, start));
+    float yaw_delta = WrapAngle(command->yaw - start_yaw);
+    float reframe_distance = fmaxf(
+        0.75f * controller->scale,
+        controller->skeleton.morphology.body_height * 1.5f);
+    if (!controller->world_bound || distance > reframe_distance) {
+        ReframeSkeleton(&controller->skeleton, start, start_yaw,
+                        command->ground_position, command->yaw);
+        ReplantReframedSkeleton(
+            &controller->skeleton, command->ground_position, command->yaw,
+            probe, probe_context);
+        start = command->ground_position;
+        start_yaw = command->yaw;
+        yaw_delta = 0.0f;
+        controller->world_bound = true;
+    }
+
+    float response = 1.0f - expf(-12.0f * delta_time);
+    controller->movement +=
+        (Clamp(command->movement, 0.0f, 1.0f) - controller->movement) *
+        response;
+    float speed_limit = 6.0f * controller->scale;
+    CcLimbVec3 velocity = command->velocity;
+    float planar_speed = sqrtf(
+        velocity.x * velocity.x + velocity.z * velocity.z);
+    if (planar_speed > speed_limit) {
+        float speed_scale = speed_limit / planar_speed;
+        velocity.x *= speed_scale;
+        velocity.z *= speed_scale;
+    }
+    velocity.x *= controller->movement;
+    velocity.z *= controller->movement;
+
     float remaining = delta_time;
+    float elapsed = 0.0f;
     do {
         float step = fminf(remaining, 1.0f / 60.0f);
         if (delta_time <= 0.0f) step = 0.0f;
-        controller->ground_position.z += speed * step;
-        CcLimbVec3 body = controller->ground_position;
-        body.y += controller->skeleton.morphology.body_height;
-        CcLimbRigUpdate(&controller->skeleton, body, 0.0f,
-                        (CcLimbVec3){0.0f, 0.0f, speed}, true, step,
-                        NULL, NULL);
+        elapsed += step;
+        float amount = delta_time > 0.0f ? elapsed / delta_time : 1.0f;
+        CcLimbVec3 ground = Lerp(
+            start, command->ground_position, Clamp(amount, 0.0f, 1.0f));
+        float yaw = WrapAngle(
+            start_yaw + yaw_delta * Clamp(amount, 0.0f, 1.0f));
+        CcLimbVec3 body = ground;
+        body.y += controller->skeleton.morphology.body_height +
+                  controller->skeleton.supported_height_offset;
+        int32_t declared_maximum_swings =
+            controller->skeleton.morphology.maximum_swings;
+        bool walking_requested =
+            controller->profile == CC_CREATURE_RIG_HORSE &&
+            controller->gait != CC_CREATURE_RIG_GAIT_WALK &&
+            controller->requested_gait == CC_CREATURE_RIG_GAIT_WALK;
+        if (walking_requested) {
+            controller->skeleton.morphology.maximum_swings = 1;
+        }
+        CcLimbRigUpdate(&controller->skeleton, body, yaw, velocity,
+                        command->grounded, step, probe, probe_context);
+        controller->skeleton.morphology.maximum_swings =
+            declared_maximum_swings;
+        if (walking_requested &&
+            controller->skeleton.swinging_count <= 1 &&
+            ConfigureHorseGait(&controller->skeleton.morphology,
+                               CC_CREATURE_RIG_GAIT_WALK)) {
+            controller->gait = CC_CREATURE_RIG_GAIT_WALK;
+        }
         remaining -= step;
     } while (remaining > 0.000001f);
 
+    controller->ground_position = command->ground_position;
+    controller->body_yaw = WrapAngle(command->yaw);
     CcCreatureRigDimensions dimensions;
     if (!DimensionsForProfile(controller->profile, &dimensions)) return false;
     ScaleDimensions(&dimensions, controller->scale);
     CcLimbVec3 body = controller->ground_position;
-    body.y += dimensions.body_height;
-    CcLimbVec3 offset = {-controller->ground_position.x,
-                         -controller->ground_position.y,
-                         -controller->ground_position.z};
-    return FillPose(controller->profile, &dimensions, &controller->skeleton,
-                    &controller->muscles, body, offset,
-                    (CcLimbVec3){0.0f, 0.0f, 1.0f},
-                    (CcLimbVec3){1.0f, 0.0f, 0.0f},
-                    controller->skeleton.gait_phase, controller->movement,
-                    fmaxf(delta_time, 1.0f / 240.0f), pose);
+    body.y += dimensions.body_height +
+              controller->skeleton.supported_height_offset;
+    CcLimbVec3 forward = {sinf(controller->body_yaw), 0.0f,
+                          cosf(controller->body_yaw)};
+    CcLimbVec3 right = {cosf(controller->body_yaw), 0.0f,
+                        -sinf(controller->body_yaw)};
+    if (!FillPose(controller->profile, &dimensions, &controller->skeleton,
+                  &controller->muscles, body, (CcLimbVec3){0},
+                  forward, right, controller->skeleton.gait_phase,
+                  controller->movement,
+                  fmaxf(delta_time, 1.0f / 240.0f), pose)) {
+        return false;
+    }
+    LocalizePose(pose, controller->ground_position, controller->body_yaw);
+    return true;
 }
 
 const char *CcCreatureRigProfileName(CcCreatureRigProfile profile)
@@ -596,6 +906,18 @@ const char *CcCreatureRigProfileName(CcCreatureRigProfile profile)
         case CC_CREATURE_RIG_HEXAPOD: return "HEXAPOD";
         case CC_CREATURE_RIG_OCTOPOD: return "OCTOPOD";
         case CC_CREATURE_RIG_PROFILE_COUNT:
+        default:
+            return "UNKNOWN";
+    }
+}
+
+const char *CcCreatureRigGaitName(CcCreatureRigGait gait)
+{
+    switch (gait) {
+        case CC_CREATURE_RIG_GAIT_WALK: return "WALK";
+        case CC_CREATURE_RIG_GAIT_TROT: return "TROT";
+        case CC_CREATURE_RIG_GAIT_CANTER: return "CANTER";
+        case CC_CREATURE_RIG_GAIT_COUNT:
         default:
             return "UNKNOWN";
     }

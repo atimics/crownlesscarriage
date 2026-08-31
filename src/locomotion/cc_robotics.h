@@ -7,11 +7,37 @@
 #include <stdint.h>
 
 #define CC_ROBOT_POINT_CAPACITY 128
+#define CC_ROBOT_CLIMB_ROUTE_CAPACITY 128
 
 typedef struct CcRobotCollisionPoint {
     CcLimbVec3 center;
     float radius;
 } CcRobotCollisionPoint;
+
+typedef enum CcRobotSurfaceKind {
+    CC_ROBOT_SURFACE_FLOOR = 0,
+    CC_ROBOT_SURFACE_WALL,
+    CC_ROBOT_SURFACE_CEILING,
+} CcRobotSurfaceKind;
+
+typedef struct CcRobotClimbNode {
+    CcLimbVec3 point;
+    CcLimbVec3 normal;
+    CcRobotSurfaceKind surface;
+    float cost;
+} CcRobotClimbNode;
+
+typedef struct CcRobotClimbRoute {
+    CcRobotClimbNode nodes[CC_ROBOT_CLIMB_ROUTE_CAPACITY];
+    int32_t count;
+    float length;
+} CcRobotClimbRoute;
+
+/* Find the closest climbable surface to a world-space sample. */
+typedef bool (*CcRobotSurfaceProbe)(void *context, CcLimbVec3 sample,
+                                    float search_radius,
+                                    CcLimbVec3 *point,
+                                    CcLimbVec3 *normal);
 
 /* Build an overlapping-sphere approximation of a line segment. The spacing
    never exceeds the sphere diameter, so the samples conservatively cover the
@@ -36,5 +62,18 @@ bool CcRobotPredictiveAvoidance(
    distance, preserving the admissibility of a straight-line A* heuristic. */
 float CcRobotTraversabilityCost(float distance, float height_change,
                                 float support_normal_y);
+
+/* Plan a deterministic contact-space route across floors, walls, corners,
+   and ceilings. Each edge remains within maximum_reach so the result can be
+   consumed directly by an arbitrary multi-leg contact controller. */
+bool CcRobotPlanFreeClimb(CcLimbVec3 start_point,
+                          CcLimbVec3 start_normal,
+                          CcLimbVec3 goal_point,
+                          CcLimbVec3 goal_normal,
+                          float step_length,
+                          float maximum_reach,
+                          CcRobotSurfaceProbe probe,
+                          void *context,
+                          CcRobotClimbRoute *route);
 
 #endif

@@ -1555,11 +1555,44 @@ static CcCharacter *CharacterMutable(CcSim *sim, CcId id)
     return (CcCharacter *)CcSimCharacter(sim, id);
 }
 
+const CcCharacter *CcSimSituationSponsorCharacter(
+    const CcSim *sim, const CcSituation *situation)
+{
+    return situation != NULL ?
+        CcSimCharacter(sim, situation->sponsor_character_id) : NULL;
+}
+
 const CcCharacter *CcSimSituationAffectedCharacter(
     const CcSim *sim, const CcSituation *situation)
 {
     return situation != NULL ?
         CcSimCharacter(sim, situation->affected_character_id) : NULL;
+}
+
+const CcCharacter *CcSimSituationConversationCharacter(
+    const CcSim *sim, const CcSituation *situation, CcId settlement_id)
+{
+    if (sim == NULL || situation == NULL || settlement_id == 0U) return NULL;
+    const CcCharacter *sponsor = CcSimSituationSponsorCharacter(
+        sim, situation);
+    const CcCharacter *affected = CcSimSituationAffectedCharacter(
+        sim, situation);
+    bool sponsor_here = sponsor != NULL &&
+        sponsor->current_settlement_id == settlement_id;
+    bool affected_here = affected != NULL &&
+        affected->current_settlement_id == settlement_id;
+    CcId offer_settlement = CcSimSituationOfferSettlementId(sim, situation);
+
+    if (affected_here &&
+        (situation->kind == CC_SITUATION_MONSTER_EXPEDITION ||
+         situation->kind == CC_SITUATION_COURIER_DELIVERY ||
+         !sponsor_here || settlement_id != offer_settlement)) {
+        return affected;
+    }
+    if (sponsor_here && settlement_id == offer_settlement) return sponsor;
+    if (affected_here && CcSimSituationTouchesSettlement(
+            sim, situation, settlement_id)) return affected;
+    return sponsor_here ? sponsor : NULL;
 }
 
 bool CcCharacterRemembers(const CcCharacter *character,
@@ -5416,15 +5449,26 @@ static void ResolveSituation(CcSim *sim, CcSituation *situation)
         sim, CC_EVENT_SITUATION_RESOLVED, situation->id,
         situation->target_id, situation->cause_event_id,
         accepted ? (int32_t)reward_paid : 0, text);
+    CcCharacter *sponsor = CharacterMutable(
+        sim, situation->sponsor_character_id);
     CcCharacter *affected = CharacterMutable(
         sim, situation->affected_character_id);
-    if (accepted && affected != NULL) {
-        RememberCharacter(affected, CC_CHARACTER_MEMORY_PLAYER_HELPED,
-                          situation->id,
-                          resolution != NULL ? resolution->id : 0U,
-                          sim->current_day);
-        affected->player_disposition = ClampI32(
-            affected->player_disposition + 15, -100, 100);
+    if (accepted) {
+        CcId resolution_id = resolution != NULL ? resolution->id : 0U;
+        if (sponsor != NULL) {
+            RememberCharacter(sponsor, CC_CHARACTER_MEMORY_PLAYER_HELPED,
+                              situation->id, resolution_id,
+                              sim->current_day);
+            sponsor->player_disposition = ClampI32(
+                sponsor->player_disposition + 8, -100, 100);
+        }
+        if (affected != NULL && affected != sponsor) {
+            RememberCharacter(affected, CC_CHARACTER_MEMORY_PLAYER_HELPED,
+                              situation->id, resolution_id,
+                              sim->current_day);
+            affected->player_disposition = ClampI32(
+                affected->player_disposition + 15, -100, 100);
+        }
     }
     RefreshSituationCharacterActivities(sim, situation);
     if (accepted && !sim->delayed_echo.active) {
@@ -5582,9 +5626,33 @@ static void ExpireSituations(CcSim *sim)
                        "%s expires after the company's promise; its sponsors remember." :
                        "%s expires unanswered; other powers continue without the company.",
                        CcSituationKindName(situation->kind));
-        (void)PushEvent(sim, CC_EVENT_SITUATION_FAILED, situation->id,
-                        situation->target_id, situation->cause_event_id, 0, text);
-        if (accepted) sim->player.reputation -= 1;
+        CcEvent *failure = PushEvent(
+            sim, CC_EVENT_SITUATION_FAILED, situation->id,
+            situation->target_id, situation->cause_event_id, 0, text);
+        if (accepted) {
+            CcId failure_id = failure != NULL ? failure->id : 0U;
+            CcCharacter *sponsor = CharacterMutable(
+                sim, situation->sponsor_character_id);
+            CcCharacter *affected = CharacterMutable(
+                sim, situation->affected_character_id);
+            RememberCharacter(sponsor, CC_CHARACTER_MEMORY_PLAYER_WITHDREW,
+                              situation->id, failure_id,
+                              sim->current_day);
+            if (affected != sponsor) {
+                RememberCharacter(
+                    affected, CC_CHARACTER_MEMORY_PLAYER_WITHDREW,
+                    situation->id, failure_id, sim->current_day);
+            }
+            if (sponsor != NULL) {
+                sponsor->player_disposition = ClampI32(
+                    sponsor->player_disposition - 6, -100, 100);
+            }
+            if (affected != NULL && affected != sponsor) {
+                affected->player_disposition = ClampI32(
+                    affected->player_disposition - 12, -100, 100);
+            }
+            sim->player.reputation -= 1;
+        }
         RefreshSituationCharacterActivities(sim, situation);
     }
 }
@@ -8234,6 +8302,14 @@ static bool ApplyRefuseSituation(CcSim *sim, const CcCommand *command,
                    situation->sponsor_name);
     (void)PushEvent(sim, CC_EVENT_SITUATION_FAILED, situation->id,
                     situation->target_id, situation->cause_event_id, -2, text);
+    CcCharacter *sponsor = CharacterMutable(
+        sim, situation->sponsor_character_id);
+    if (sponsor != NULL) {
+        sponsor->player_disposition = ClampI32(
+            sponsor->player_disposition - 8, -100, 100);
+        sponsor->stress = ClampI32(sponsor->stress + 4, 0, 100);
+    }
+    RefreshSituationCharacterActivities(sim, situation);
     SetError(error, error_capacity, "");
     return true;
 }
@@ -8269,14 +8345,27 @@ static bool ApplyAbandonSituation(CcSim *sim, const CcCommand *command,
         situation->progress, text);
     CcCharacter *affected = CharacterMutable(
         sim, situation->affected_character_id);
+    CcCharacter *sponsor = CharacterMutable(
+        sim, situation->sponsor_character_id);
     RememberCharacter(affected, CC_CHARACTER_MEMORY_PLAYER_WITHDREW,
                       situation->id,
                       withdrawal != NULL ? withdrawal->id : 0U,
                       sim->current_day);
+    if (sponsor != affected) {
+        RememberCharacter(sponsor, CC_CHARACTER_MEMORY_PLAYER_WITHDREW,
+                          situation->id,
+                          withdrawal != NULL ? withdrawal->id : 0U,
+                          sim->current_day);
+    }
     if (affected != NULL) {
         affected->player_disposition = ClampI32(
             affected->player_disposition - 12, -100, 100);
         affected->stress = ClampI32(affected->stress + 10, 0, 100);
+    }
+    if (sponsor != NULL && sponsor != affected) {
+        sponsor->player_disposition = ClampI32(
+            sponsor->player_disposition - 6, -100, 100);
+        sponsor->stress = ClampI32(sponsor->stress + 4, 0, 100);
     }
     RefreshSituationCharacterActivities(sim, (CcSituation *)situation);
     SetError(error, error_capacity, "");
@@ -8309,12 +8398,10 @@ static bool ApplyCharacterResponse(CcSim *sim, const CcCommand *command,
 {
     CcSituation *situation = (CcSituation *)CcSimSituation(
         sim, command->target_id);
-    CcCharacter *character = situation != NULL ? CharacterMutable(
-        sim, situation->affected_character_id) : NULL;
-    if (situation == NULL || character == NULL ||
-        character->current_settlement_id != sim->player.location_id ||
-        !CcSimSituationTouchesSettlement(sim, situation,
-                                         sim->player.location_id)) {
+    CcCharacter *character = (CcCharacter *)
+        CcSimSituationConversationCharacter(
+            sim, situation, sim->player.location_id);
+    if (situation == NULL || character == NULL) {
         SetError(error, error_capacity,
                  "That person is not here to answer.");
         return false;
