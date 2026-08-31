@@ -395,9 +395,9 @@ static void TestSharedCharacterCollisionWorld(void)
     /* These houses are faded by several low camera shots. The reveal must
        never remove their physical walls for the player, NPCs, or ragdoll. */
     RequireSolidStreetHouse("west crofts house", 20.0f, 25.0f, 37.0f);
-    RequireSolidStreetHouse("artisan row house", 34.0f, 37.5f, 39.0f);
-    RequireSolidStreetHouse("market road house", 55.0f, 58.25f, 33.25f);
-    RequireSolidStreetHouse("coach yard house", 32.0f, 36.0f, 50.5f);
+    RequireSolidStreetHouse("artisan row house", 31.0f, 33.25f, 39.0f);
+    RequireSolidStreetHouse("market road house", 57.0f, 60.25f, 27.75f);
+    RequireSolidStreetHouse("coach yard house", 50.0f, 55.0f, 61.5f);
 
     /* The visible ore station base is 1.45 x 1.05 m centered here. It must use
        one footprint for physical sweeps, click paths, ray picking, and the
@@ -2279,9 +2279,9 @@ int main(void)
     click_target.texture.height = 285;
     Rectangle click_viewport = {0.0f, 0.0f, 914.0f, 570.0f};
     static const Vector3 crown_gate_road_targets[] = {
-        {58.0f, 0.0f, 27.30f},
-        {58.4f, 0.0f, 27.80f},
-        {58.8f, 0.0f, 27.20f},
+        {53.0f, 0.0f, 27.30f},
+        {53.4f, 0.0f, 27.80f},
+        {53.8f, 0.0f, 27.20f},
     };
     static const Vector2 camera_review_points[] = {
         {10.5f, 7.5f}, {11.0f, 28.5f}, {14.0f, 52.0f},
@@ -2785,7 +2785,7 @@ int main(void)
        reported failure. Proximity starts the traversal here; the first
        authored portal waypoint must route around the gatehouse. */
     CcLocalAgent edge_walker;
-    CcLocalAgentInit(&edge_walker, (Vector2){57.0f, 27.0f}, false);
+    CcLocalAgentInit(&edge_walker, (Vector2){54.6f, 27.0f}, false);
     /* Each camera fixture owns a settled opening shot. This also keeps the
        test clock monotonic after the combat-camera transition above. */
     for (int32_t frame = 0; frame < 120; ++frame) {
@@ -2794,7 +2794,7 @@ int main(void)
             &edge_walker, camera_clock, true, 285);
     }
     if (!CcLocalAgentSetExactTarget(
-            &edge_walker, (Vector3){58.2f, 0.0f, 28.0f}, false)) {
+            &edge_walker, (Vector3){55.6f, 0.0f, 27.0f}, false)) {
         (void)fprintf(stderr, "road-edge regression target was rejected\n");
         return 1;
     }
@@ -2845,7 +2845,7 @@ int main(void)
     /* Proximity must not hijack a click that turns back into the room. The
        old edge-only trigger sent this westward command east to Crown Gate. */
     CcLocalAgent edge_turnaround;
-    CcLocalAgentInit(&edge_turnaround, (Vector2){57.0f, 27.0f}, false);
+    CcLocalAgentInit(&edge_turnaround, (Vector2){54.6f, 27.0f}, false);
     if (!CcLocalAgentSetExactTarget(
             &edge_turnaround, (Vector3){52.0f, 0.0f, 27.0f}, false)) {
         (void)fprintf(stderr, "edge turnaround target was rejected\n");
@@ -2859,7 +2859,7 @@ int main(void)
             return 1;
         }
     }
-    if (edge_turnaround.position.x >= 56.8f) {
+    if (edge_turnaround.position.x >= 54.4f) {
         (void)fprintf(stderr,
                       "edge turnaround did not move back into the room: %.2f %.2f\n",
                       edge_turnaround.position.x,
@@ -3327,9 +3327,9 @@ int main(void)
                                 (Vector2){2.00f, -1.00f}, false),
                     (Vector2){44.50f, 26.65f});
     RequirePosition("carriage blocks movement",
-                    CcLocalMove((Vector2){39.10f, 31.70f},
+                    CcLocalMove((Vector2){39.70f, 51.20f},
                                 (Vector2){-1.00f, 0.00f}, false),
-                    (Vector2){39.10f, 31.70f});
+                    (Vector2){39.70f, 51.20f});
     RequirePosition("castle wall blocks movement",
                     CcLocalMove((Vector2){65.30f, 20.00f},
                                 (Vector2){1.00f, 0.00f}, false),
@@ -3764,28 +3764,28 @@ int main(void)
         return 1;
     }
     CcLocalAgent crowd_agent;
-    CcLocalAgentInit(&crowd_agent, (Vector2){42.00f, 29.95f}, false);
+    CcLocalAgentInit(&crowd_agent, (Vector2){49.20f, 34.35f}, false);
     if (CcLocalAgentSetExactTarget(&crowd_agent,
-                                   (Vector3){42.00f, 0.0f, 30.80f}, false)) {
+                                   (Vector3){49.20f, 0.0f, 35.20f}, false)) {
         (void)fprintf(stderr, "a visible townsperson should occupy physical space\n");
         return 1;
     }
     if (!CcLocalAgentSetExactTarget(&crowd_agent,
-                                    (Vector3){42.00f, 0.0f, 31.70f}, false)) {
+                                    (Vector3){49.20f, 0.0f, 36.10f}, false)) {
         (void)fprintf(stderr, "a target beyond a townsperson should remain valid\n");
         return 1;
     }
     float closest_person_distance = 1000.0f;
     for (int32_t frame = 0; frame < 900; ++frame) {
         CcLocalAgentUpdate(&crowd_agent, 1.0f / 60.0f, false);
-        float dx = crowd_agent.position.x - 42.00f;
-        float dz = crowd_agent.position.z - 30.80f;
+        float dx = crowd_agent.position.x - 49.20f;
+        float dz = crowd_agent.position.z - 35.20f;
         closest_person_distance = fminf(closest_person_distance,
                                         sqrtf(dx * dx + dz * dz));
     }
     RequireNearPosition("agent sidesteps a townsperson",
                         CcLocalAgentPosition(&crowd_agent),
-                        (Vector2){42.00f, 31.70f}, 0.12f);
+                        (Vector2){49.20f, 36.10f}, 0.12f);
     if (closest_person_distance < 0.565f) {
         (void)fprintf(stderr, "agent clipped through a townsperson\n");
         return 1;
