@@ -29,6 +29,42 @@ int main(void)
     CcSimInit(&sim, UINT32_C(0xd12a600b));
     char error[256];
 
+    CcSim tunnel;
+    CcSimInit(&tunnel, UINT32_C(0x6f626c69));
+    CcId town_id = tunnel.player.location_id;
+    CcCommand climb = {
+        .kind = CC_COMMAND_TRAVERSE_GOBLIN_TUNNEL,
+        .target_id = tunnel.dragon.lair_settlement_id
+    };
+    CC_CHECK(!CcSimApply(&tunnel, &climb, error, sizeof(error)));
+    CC_CHECK(tunnel.player.location_id == town_id);
+    CC_CHECK(tunnel.carriage.location_id == town_id);
+
+    tunnel.player.location_id = tunnel.goblins.lair_settlement_id;
+    tunnel.carriage.location_id = tunnel.goblins.lair_settlement_id;
+    int32_t tunnel_start_day = tunnel.current_day;
+    CC_CHECK(CcSimApply(&tunnel, &climb, error, sizeof(error)));
+    CC_CHECK(tunnel.current_day == tunnel_start_day + 1);
+    CC_CHECK(tunnel.player.location_id == tunnel.dragon.lair_settlement_id);
+    CC_CHECK(tunnel.carriage.location_id == tunnel.goblins.lair_settlement_id);
+    CC_CHECK(CcSimValidate(&tunnel, error, sizeof(error)));
+    CC_CHECK(CountEvents(&tunnel, CC_EVENT_GOBLIN_TUNNEL_TRAVERSED) == 1);
+
+    CcCommand descend = {
+        .kind = CC_COMMAND_TRAVERSE_GOBLIN_TUNNEL,
+        .target_id = tunnel.goblins.lair_settlement_id
+    };
+    CC_CHECK(CcSimApply(&tunnel, &descend, error, sizeof(error)));
+    CC_CHECK(tunnel.current_day == tunnel_start_day + 2);
+    CC_CHECK(tunnel.player.location_id == tunnel.goblins.lair_settlement_id);
+    CC_CHECK(tunnel.carriage.location_id == tunnel.goblins.lair_settlement_id);
+    CC_CHECK(CountEvents(&tunnel, CC_EVENT_GOBLIN_TUNNEL_TRAVERSED) == 2);
+    if (!CcSimValidate(&tunnel, error, sizeof(error))) {
+        (void)fprintf(stderr, "%s:%d: tunnel validation failed: %s\n",
+                      __FILE__, __LINE__, error);
+        return 1;
+    }
+
     for (int32_t i = 0; i < sim.settlement_count; ++i) {
         sim.settlements[i].prosperity = 40;
     }
