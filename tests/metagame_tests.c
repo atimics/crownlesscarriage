@@ -55,8 +55,8 @@ int main(void)
     CC_CHECK(strstr(output,
                     "It is never a good sign when the first bell rings") !=
              NULL);
-    CC_CHECK(strstr(output, "Bracken") != NULL);
-    CC_CHECK(strstr(output, "Morrow") != NULL);
+    CC_CHECK(strstr(output, "on foot") != NULL);
+    CC_CHECK(strstr(output, "no carriage") != NULL);
     CC_CHECK(strstr(output, "Nell Varo") != NULL);
     CC_CHECK(strstr(output, "Not a crown. A wheel.") != NULL);
     CC_CHECK(strstr(output, metagame.sim.settlements[0].name) != NULL);

@@ -3,8 +3,8 @@
 ## Direction
 
 Crownless Carriage environments are navigable places first and illustrations
-second. The camera may be oblique, but the town must not read as a collection
-of generic isometric miniatures. Every visible mass should explain where the
+second. The town must never read as a collection of generic isometric
+miniatures. Every visible mass should explain where the
 player can walk, what the place is for, who controls it, and what has recently
 happened there.
 
@@ -27,7 +27,8 @@ Its physical lens sits about 0.7 to 0.9 metres above the stage: below an adult
 character's waist. Orthographic projection preserves reliable surface picking
 and a readable relationship between the hero and nearby contact geometry. The
 unequal horizontal offsets expose useful facades without turning the town into
-a perfect 45-degree isometric grid.
+a perfect 45-degree isometric grid. The player should see one adventure-game
+stage, not the roofs of a settlement laid out like a board.
 
 This is a street-scale view, not a whole-settlement map. Buildings may frame or
 leave the viewport as the hero moves. Roof and wall cutaways are driven by hero
@@ -41,9 +42,11 @@ stages, including its threshold, social heart, landmark approach, two local
 work or story spaces, and carriage yard. Each stores a focal point, story axis,
 foreground anchor, quiet area, three depth splits, and a light profile. The
 camera keeps the hero inside both the authored quiet area and the stable
-play-safe frame. Roads, rivers, walls, and building lines lead toward the story
-focus. Hidden navigation districts may support movement, but they do not
-replace these visible authored compositions.
+play-safe frame. Crossing a walking-scene threshold makes a quick covered cut;
+the camera does not float upward, orbit, or track beside the hero. Roads,
+rivers, walls, and building lines lead toward the story focus. Hidden
+navigation districts may support movement, but they do not replace these
+visible authored compositions.
 
 Five stable light profiles cover clear market morning, cold shortage overcast,
 warm recovery light, dangerous road dusk, and the ember-lit interior. A profile

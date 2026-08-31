@@ -79,6 +79,7 @@ static const float CARRIAGE_ASSET_SCALE = 0.92f;
    +Z, while the encounter road already runs +X. */
 static const float CARRIAGE_ASSET_STREET_YAW_DEGREES = -90.0f;
 static bool draw_hero_rig_debug = false;
+static CcLocalOpeningStep active_opening_step = CC_LOCAL_OPENING_COMPLETE;
 
 typedef enum BridgeCheckpointStatus {
     BRIDGE_CHECKPOINT_UNKNOWN,
@@ -1851,7 +1852,8 @@ static bool StaticBodyBlocked(CcLocalSceneKind scene, float x, float z,
             return true;
         }
     }
-    if (CircleTouchesFootprint(x, z, radius, CARRIAGE_FOOTPRINT) ||
+    if ((active_opening_step == CC_LOCAL_OPENING_COMPLETE &&
+         CircleTouchesFootprint(x, z, radius, CARRIAGE_FOOTPRINT)) ||
         CircleTouchesFootprint(x, z, radius, DUNGEON_FOOTPRINT)) return true;
     for (int32_t i = 0; i < (int32_t)(sizeof(ROOM_ART_OBSTACLES) /
                                       sizeof(ROOM_ART_OBSTACLES[0])); ++i) {
@@ -2313,8 +2315,11 @@ static int32_t GatherLocalCollisionBoxes(const LocalProbeContext *context,
                              place_landmark != NULL ?
                                  place_landmark->height : 0.0f);
     }
-    AddLocalCollisionBox(boxes, &count, CARRIAGE_FOOTPRINT,
-                         TerrainFootprintHeight(CARRIAGE_FOOTPRINT), 2.65f);
+    if (active_opening_step == CC_LOCAL_OPENING_COMPLETE) {
+        AddLocalCollisionBox(boxes, &count, CARRIAGE_FOOTPRINT,
+                             TerrainFootprintHeight(CARRIAGE_FOOTPRINT),
+                             2.65f);
+    }
     AddLocalCollisionBox(boxes, &count, DUNGEON_FOOTPRINT,
                          TerrainFootprintHeight(DUNGEON_FOOTPRINT), 3.10f);
     for (int32_t obstacle = 0;
@@ -5482,7 +5487,8 @@ void CcLocalAgentClearWorldTarget(CcLocalAgent *agent)
 bool CcLocalAgentApproachWorldTarget(CcLocalAgent *agent,
                                      CcLocalWorldTargetKind target)
 {
-    if (agent == NULL || target != CC_LOCAL_WORLD_TARGET_CARRIAGE) {
+    if (agent == NULL || target != CC_LOCAL_WORLD_TARGET_CARRIAGE ||
+        active_opening_step != CC_LOCAL_OPENING_COMPLETE) {
         return false;
     }
     agent->world_target = CC_LOCAL_WORLD_TARGET_NONE;
@@ -5917,6 +5923,7 @@ CcLocalWorldTargetKind CcLocalAgentPickWorldTarget(
 {
     if (agent == NULL || market_interior ||
         agent->scene != CC_LOCAL_SCENE_STREET ||
+        active_opening_step != CC_LOCAL_OPENING_COMPLETE ||
         !CombatCanAct(&agent->combat) ||
         !CheckCollisionPointRec(screen_point, destination)) {
         return CC_LOCAL_WORLD_TARGET_NONE;
@@ -6060,8 +6067,11 @@ bool CcLocalAgentPickTarget(CcLocalAgent *agent, Vector2 screen_point,
                 RayFootprintDistance(ray, PlaceLandmarkFootprint(landmark),
                                      landmark->height));
         }
-        occluder = fminf(occluder,
-                         RayFootprintDistance(ray, CARRIAGE_FOOTPRINT, 1.92f));
+        if (active_opening_step == CC_LOCAL_OPENING_COMPLETE) {
+            occluder = fminf(
+                occluder,
+                RayFootprintDistance(ray, CARRIAGE_FOOTPRINT, 1.92f));
+        }
         occluder = fminf(occluder,
                          RayFootprintDistance(ray, DUNGEON_FOOTPRINT, 2.45f));
         occluder = fminf(occluder,
@@ -9061,11 +9071,11 @@ static const StreetCameraShot *StreetCameraShotAt(int32_t shot)
         .target = {scene->target_x, scene->target_y, scene->target_z},
         .name = scene->name,
         .route_palette = (int32_t)scene->kind,
-        .camera_offset = {
-            scene->camera_offset_x,
-            scene->camera_offset_y,
-            scene->camera_offset_z,
-        },
+        /* Each authored record owns its physical lens height, street side,
+           and crop. Runtime terrain correction keeps that low lens at the
+           intended clearance without flattening every town into one view. */
+        .camera_offset = {scene->camera_offset_x, scene->camera_offset_y,
+                          scene->camera_offset_z},
         .fovy = scene->fovy,
         .art = {
             {scene->target_x, scene->target_y, scene->target_z},
@@ -9125,7 +9135,6 @@ static void FixedCameraRigAim(FixedCameraRig *rig, int32_t shot,
     delta_time = fmaxf(0.0f, fminf(delta_time, 0.05f));
     rig->delta_time = delta_time;
     if (shot != rig->shot) {
-        float distance = Vector3Distance(rig->displayed_target, destination);
         rig->transition_from = rig->displayed_target;
         rig->destination = destination;
         rig->offset_transition_from = rig->displayed_offset;
@@ -9133,8 +9142,7 @@ static void FixedCameraRigAim(FixedCameraRig *rig, int32_t shot,
         rig->fovy_transition_from = rig->displayed_fovy;
         rig->fovy_destination = fovy;
         rig->transition_elapsed = 0.0f;
-        rig->transition_duration = fmaxf(0.90f, fminf(1.25f,
-                                                     0.78f + distance * 0.018f));
+        rig->transition_duration = 0.26f;
         /* A new authored shot owns its own framing. The hard visibility
            clamp covers the short transition before the new shot settles. */
         rig->framing_offset = (Vector3){0};
@@ -9258,12 +9266,14 @@ static Camera3D FixedCameraRigFrameHero(FixedCameraRig *rig,
         Vector3Scale(screen_up, (target_y - screen.y) * pixel_world));
     rig->framing_from = rig->framing_offset;
     rig->framing_destination = Vector3Add(rig->framing_offset, adjustment);
+    rig->framing_offset = rig->framing_destination;
     rig->framing_elapsed = 0.0f;
-    /* Move to one new page and hold it. The old 12%-of-screen correction
-       could chain every few frames while the hero kept walking, which read
-       as a nervous follow camera. Centering once creates the fixed-room
-       adventure-game rhythm while still protecting long roads. */
-    rig->framing_duration = 1.05f;
+    /* Turn the page in one cut. A slow correction reads as a follow camera;
+       a fixed adventure scene should hold, cut once, then hold again. */
+    rig->framing_duration = 0.0f;
+    rig->framing_hold_seconds = 0.65f;
+    camera.target = Vector3Add(camera.target, adjustment);
+    camera.position = Vector3Add(camera.position, adjustment);
     return camera;
 }
 
@@ -13325,6 +13335,13 @@ void CcLocalRendererSetScreenFirstHero(bool enabled)
 {
     if (sphere_models.ready) return;
     screen_first_hero_requested = enabled;
+}
+
+void CcLocalRendererSetOpeningStep(CcLocalOpeningStep step)
+{
+    active_opening_step = step >= CC_LOCAL_OPENING_FIND_NELL &&
+                          step <= CC_LOCAL_OPENING_COMPLETE ?
+        step : CC_LOCAL_OPENING_COMPLETE;
 }
 
 void CcLocalRendererSetDiagnosticOverlay(bool enabled)
@@ -22709,7 +22726,8 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     DrawCastle(kingdom, profile, scenery_focus, camera,
                foreground_reveal_world,
                target.texture.width, target.texture.height, clock);
-    if (SceneryFootprintVisible(CARRIAGE_FOOTPRINT, scenery_focus)) {
+    if (active_opening_step == CC_LOCAL_OPENING_COMPLETE &&
+        SceneryFootprintVisible(CARRIAGE_FOOTPRINT, scenery_focus)) {
         if (!convoy_visible) {
             bool carriage_targeted = agent != NULL &&
                 agent->world_target == CC_LOCAL_WORLD_TARGET_CARRIAGE;
@@ -22774,9 +22792,20 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
 
     DrawVisibleNpcFigure3D(
         TerrainWorldPoint(STREET_PEOPLE[0].x, STREET_PEOPLE[0].y),
-        0.96f, -0.55f, UINT32_C(0x73747201), CC_NPC_ROLE_MERCHANT,
+        active_opening_step == CC_LOCAL_OPENING_FIND_NELL ? 0.78f : 0.96f,
+        -0.55f, UINT32_C(0x73747201),
+        active_opening_step == CC_LOCAL_OPENING_FIND_NELL ?
+            CC_NPC_ROLE_TRAVELLER : CC_NPC_ROLE_MERCHANT,
         (Color){223, 151, 68, 255}, clock * 1.2f, CC_TRAVERSAL_IDLE,
         scenery_focus);
+    if (active_opening_step == CC_LOCAL_OPENING_MEET_MARA) {
+        DrawVisibleNpcFigure3D(
+            TerrainWorldPoint(CC_LOCAL_NOTICE_X + 0.82f,
+                              CC_LOCAL_NOTICE_Z + 0.18f),
+            0.96f, -1.30f, UINT32_C(0x6d617261),
+            CC_NPC_ROLE_MERCHANT, WORLD_TEAL, clock * 0.72f,
+            CC_TRAVERSAL_IDLE, scenery_focus);
+    }
     DrawVisibleNpcFigure3D(
         TerrainWorldPoint(STREET_PEOPLE[1].x, STREET_PEOPLE[1].y),
         1.02f, 1.70f, UINT32_C(0x73747202), CC_NPC_ROLE_GUARD,
@@ -22913,9 +22942,10 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     }
     bool carriage_targeted = agent != NULL &&
         agent->world_target == CC_LOCAL_WORLD_TARGET_CARRIAGE;
-    if (carriage_targeted ||
+    if (active_opening_step == CC_LOCAL_OPENING_COMPLETE &&
+        (carriage_targeted ||
         AgentNearLabel(agent, CC_LOCAL_CARRIAGE_X,
-                       CC_LOCAL_CARRIAGE_Z, 7.0f)) {
+                       CC_LOCAL_CARRIAGE_Z, 7.0f))) {
         labels[count++] = (WorldLabel){{CC_LOCAL_CARRIAGE_X,
                                         TerrainFootprintHeight(
                                             CARRIAGE_FOOTPRINT) + 2.28f,
@@ -22926,13 +22956,37 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                                        carriage_targeted ? WORLD_TEAL :
                                                            WORLD_GOLD};
     }
+    if (active_opening_step == CC_LOCAL_OPENING_FIND_NELL &&
+        AgentNearLabel(agent, CC_LOCAL_INTRO_NELL_X,
+                       CC_LOCAL_INTRO_NELL_Z, 11.0f)) {
+        labels[count++] = (WorldLabel){
+            {CC_LOCAL_INTRO_NELL_X,
+             CcLocalTerrainHeightAt(CC_LOCAL_INTRO_NELL_X,
+                                    CC_LOCAL_INTRO_NELL_Z) + 1.92f,
+             CC_LOCAL_INTRO_NELL_Z},
+            "Nell  /  press F to talk", WORLD_TEAL};
+    }
+    if (active_opening_step == CC_LOCAL_OPENING_MEET_MARA &&
+        AgentNearLabel(agent, CC_LOCAL_NOTICE_X,
+                       CC_LOCAL_NOTICE_Z, 11.0f)) {
+        labels[count++] = (WorldLabel){
+            {CC_LOCAL_NOTICE_X + 0.82f,
+             CcLocalTerrainHeightAt(CC_LOCAL_NOTICE_X + 0.82f,
+                                    CC_LOCAL_NOTICE_Z + 0.18f) + 2.12f,
+             CC_LOCAL_NOTICE_Z + 0.18f},
+            "Mara  /  press F to speak", WORLD_TEAL};
+    }
     if (AgentNearLabel(agent, CC_LOCAL_NOTICE_X, CC_LOCAL_NOTICE_Z, 6.0f)) {
         labels[count++] = (WorldLabel){{CC_LOCAL_NOTICE_X,
                                         CcLocalTerrainHeightAt(
                                             CC_LOCAL_NOTICE_X,
                                             CC_LOCAL_NOTICE_Z) + 1.82f,
                                         CC_LOCAL_NOTICE_Z},
-                                       profile->notice_board, WORLD_INK};
+                                       active_opening_step ==
+                                               CC_LOCAL_OPENING_MEET_MARA ?
+                                           "Harvest board" :
+                                           profile->notice_board,
+                                       WORLD_INK};
     }
     if (AgentNearLabel(agent, 11.80f, 0.82f, 7.0f)) {
         labels[count++] = (WorldLabel){{11.80f,
@@ -23490,7 +23544,8 @@ static bool StreetCanOccupy(Vector2 point)
             return false;
         }
     }
-    if (InsideExpanded(point, CARRIAGE_FOOTPRINT, radius) ||
+    if ((active_opening_step == CC_LOCAL_OPENING_COMPLETE &&
+         InsideExpanded(point, CARRIAGE_FOOTPRINT, radius)) ||
         InsideExpanded(point, DUNGEON_FOOTPRINT, radius)) return false;
     for (int32_t i = 0; i < (int32_t)(sizeof(ROOM_ART_OBSTACLES) /
                                       sizeof(ROOM_ART_OBSTACLES[0])); ++i) {

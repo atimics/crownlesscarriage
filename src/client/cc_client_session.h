@@ -5,7 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define CC_CLIENT_SESSION_VERSION UINT32_C(1)
+#define CC_CLIENT_SESSION_VERSION UINT32_C(2)
 
 typedef enum CcClientSessionScene {
     CC_CLIENT_SESSION_STREET = 0,
@@ -23,6 +23,7 @@ typedef struct CcClientSession {
     float position_x;
     float position_z;
     float facing_yaw;
+    uint32_t opening_step;
 } CcClientSession;
 
 typedef struct CcClientInstanceLock {

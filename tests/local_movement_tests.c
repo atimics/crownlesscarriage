@@ -475,6 +475,14 @@ static void TestSharedCharacterCollisionWorld(void)
                      (Vector2){CC_LOCAL_START_X, CC_LOCAL_START_Z}, false);
     Vector2 carriage_approach = CcLocalWorldTargetApproachPoint(
         CC_LOCAL_WORLD_TARGET_CARRIAGE);
+    CcLocalRendererSetOpeningStep(CC_LOCAL_OPENING_FIND_NELL);
+    if (CcLocalAgentApproachWorldTarget(
+            &carriage_path, CC_LOCAL_WORLD_TARGET_CARRIAGE)) {
+        (void)fprintf(stderr,
+                      "pre-carriage opening allowed a carriage interaction\n");
+        exit(1);
+    }
+    CcLocalRendererSetOpeningStep(CC_LOCAL_OPENING_COMPLETE);
     if (!CcLocalAgentApproachWorldTarget(
             &carriage_path, CC_LOCAL_WORLD_TARGET_CARRIAGE) ||
         carriage_path.world_target != CC_LOCAL_WORLD_TARGET_CARRIAGE ||
@@ -2320,7 +2328,7 @@ int main(void)
     };
 
     /* Every authored room and the complete Market Steps-to-Crown Gate road
-       must retain the hero while the target, yaw, and lens interpolate. */
+       must retain the hero in its fixed storybook shot. */
     CcLocalAgent framing_agent;
     CcLocalAgentInit(&framing_agent, camera_review_points[0], false);
     float camera_clock = 0.0f;

@@ -31,6 +31,10 @@
 #define CC_LOCAL_CARRIAGE_APPROACH_Z 55.20f
 #define CC_LOCAL_NOTICE_X 41.0f
 #define CC_LOCAL_NOTICE_Z 27.80f
+#define CC_LOCAL_INTRO_START_X 45.20f
+#define CC_LOCAL_INTRO_START_Z 31.80f
+#define CC_LOCAL_INTRO_NELL_X 50.50f
+#define CC_LOCAL_INTRO_NELL_Z 28.80f
 #define CC_LOCAL_DUNGEON_X 29.0f
 #define CC_LOCAL_DUNGEON_Z 51.80f
 #define CC_LOCAL_DRAGON_CAVE_X 19.0f
@@ -59,6 +63,12 @@ typedef enum CcTraversalMode {
     CC_TRAVERSAL_JUMP,
     CC_TRAVERSAL_VAULT
 } CcTraversalMode;
+
+typedef enum CcLocalOpeningStep {
+    CC_LOCAL_OPENING_FIND_NELL = 0,
+    CC_LOCAL_OPENING_MEET_MARA = 1,
+    CC_LOCAL_OPENING_COMPLETE = 2
+} CcLocalOpeningStep;
 
 typedef enum CcLocalWorldTargetKind {
     CC_LOCAL_WORLD_TARGET_NONE = 0,
@@ -482,6 +492,7 @@ float CcLocalCombatSkillDuration(CcCombatSkill skill);
 
 void CcLocalRendererInit(void);
 void CcLocalRendererSetScreenFirstHero(bool enabled);
+void CcLocalRendererSetOpeningStep(CcLocalOpeningStep step);
 void CcLocalRendererBeginFrame(float delta_time);
 void CcLocalRendererResetPerformanceMetrics(void);
 CcLocalRendererStats CcLocalRendererGetStats(void);
