@@ -203,25 +203,12 @@ static void MineObjective(const CcSituation *situation,
                           char *buffer, size_t capacity)
 {
     const char *name = speaker != NULL ? speaker->name : "the miner";
-    switch (situation->discovery_stage) {
-        case CC_DISCOVERY_RUMOR:
-            (void)snprintf(buffer, capacity,
-                           "Ask %s about the strange noises.", name);
-            break;
-        case CC_DISCOVERY_WITNESS:
-            (void)snprintf(buffer, capacity,
-                           "Ask %s what happened in the mine.", name);
-            break;
-        case CC_DISCOVERY_DECISION:
-        case CC_DISCOVERY_AUTHORITY:
-            (void)snprintf(buffer, capacity,
-                           "Tell %s what Bren heard.", name);
-            break;
-        case CC_DISCOVERY_OFFER:
-            (void)snprintf(buffer, capacity,
-                           "Find Cera in the west gallery.");
-            break;
+    if (situation->discovery_stage == CC_DISCOVERY_OFFER) {
+        (void)snprintf(buffer, capacity,
+                       "Find Cera in the west gallery.");
+        return;
     }
+    (void)snprintf(buffer, capacity, "Talk to %s.", name);
 }
 
 static bool IsNamedSettlement(const CcSim *sim,
@@ -258,7 +245,7 @@ static void DescribeLook(const CcMetagame *metagame,
     if (IsNamedSettlement(sim, place, 0)) {
         Append(output, capacity,
                "Thornford's chimneys smoke and its hill granaries sit round and fat as sleeping beetles. Still, the bakery roof is empty.\n"
-               "Nell Varo waits in the bread line with one red mitten and three grains of wheat. The blackened grain in her bare hand came from a full wagon that went east before sunrise.\n"
+               "Nell Varo is a child from Thornford. She is waiting at the bakery for bread to take to her mother at the mine.\n"
                "Beside the bridge, a mossy milestone bears three little crowns and one nearly-rubbed-away wheel. You arrived on foot, with no carriage and no charter to explain it.\n");
     } else if (IsNamedSettlement(sim, place, 1)) {
         Append(output, capacity,
@@ -401,7 +388,7 @@ static void DescribePeople(const CcMetagame *metagame,
     int32_t shown = 0;
     if (IsNamedSettlement(sim, place, 0)) {
         Append(output, capacity,
-               "  Nell Varo has one red mitten, three grains of wheat, and a question she has tied around your wrist with red thread.\n");
+               "  Nell Varo is waiting at the bakery for bread to take to her mother at the mine.\n");
         shown += 1;
     } else if (IsNamedSettlement(sim, place, 1)) {
         Append(output, capacity,
@@ -423,7 +410,7 @@ static void DescribePeople(const CcMetagame *metagame,
                    objective, i + 1);
         } else {
             Append(output, capacity,
-                   "  Ask %s about job %d with 'talk %d'.\n",
+                   "  Talk to %s about job %d with 'talk %d'.\n",
                    speaker->name, i + 1, i + 1);
         }
         shown += 1;
@@ -637,12 +624,12 @@ static bool TalkToSituation(CcMetagame *metagame, int32_t index,
         if (stage_before == CC_DISCOVERY_RUMOR) {
             Append(output, capacity,
                    "Jory: \"%s\"\n"
-                   "New objective: Ask Bren what happened in the mine.\n",
+                   "New objective: Talk to Bren.\n",
                    spoken_text);
         } else if (stage_before == CC_DISCOVERY_WITNESS) {
             Append(output, capacity,
                    "Bren: \"%s\"\n"
-                   "New objective: Tell Jory what Bren heard.\n",
+                   "New objective: Talk to Jory.\n",
                    spoken_text);
         } else if (stage_before == CC_DISCOVERY_DECISION) {
             Append(output, capacity,
@@ -1741,7 +1728,7 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
                    "Jory asks you to help find Cera. You can accept the job now.\n");
         } else {
             Append(output, output_capacity,
-                   "New objective: Tell %s what Bren heard. %s is in %s.\n",
+                   "New objective: Talk to %s. %s is in %s.\n",
                    next != NULL ? next->name : situation->sponsor_name,
                    next != NULL ? next->name : situation->sponsor_name,
                    next_place != NULL ? next_place->name : "the next town");

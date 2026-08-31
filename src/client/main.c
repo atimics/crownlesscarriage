@@ -558,21 +558,7 @@ static void SituationNextAction(const CcSim *sim,
         const char *travel = contact != NULL &&
             contact->current_settlement_id == sim->player.location_id ?
             "" : TextFormat("Go to %s. ", place);
-        if (situation->discovery_stage == CC_DISCOVERY_RUMOR) {
-            (void)snprintf(label, capacity,
-                           "%sAsk %s about the strange noises.",
-                           travel, name);
-        } else if (situation->discovery_stage == CC_DISCOVERY_WITNESS) {
-            (void)snprintf(label, capacity,
-                           "%sAsk %s what happened in the mine.",
-                           travel, name);
-        } else if (situation->discovery_stage == CC_DISCOVERY_DECISION) {
-            (void)snprintf(label, capacity,
-                           "%sTell %s what Bren heard.", travel, name);
-        } else {
-            (void)snprintf(label, capacity,
-                           "%sTell %s what Bren heard.", travel, name);
-        }
+        (void)snprintf(label, capacity, "%sTalk to %s.", travel, name);
         return;
     }
     if (situation->kind == CC_SITUATION_RELIEF_DELIVERY ||
@@ -1400,8 +1386,8 @@ static void DrawLocalHeader(const CcSim *sim, const LocalState *local)
                           22, 18, 15, INK);
         const char *beat = local->opening_step ==
                 CC_LOCAL_OPENING_FIND_JORY ?
-            "FIRST THREAD  /  Find Jory behind the bakery" :
-            "FIRST THREAD  /  Find Mara at the harvest board";
+            "OBJECTIVE  /  Talk to Jory" :
+            "OBJECTIVE  /  Talk to Mara";
         int beat_width = CcOverlayMeasureText(beat, 8) + 14;
         DrawRectangleRounded((Rectangle){18.0f, 39.0f,
                                           (float)beat_width, 17.0f},
@@ -2766,7 +2752,7 @@ static ContextActionSet BuildContextActions(
     if (local->opening_step == CC_LOCAL_OPENING_MEET_MARA) {
         if (GridDistance(position, LOCAL_NOTICE) < 1.35f) {
             AddContextAction(&set, CONTEXT_ACTION_MEET_MARA,
-                             "Meet Mara");
+                             "Talk to Mara");
         }
         return set;
     }
@@ -3965,11 +3951,11 @@ static void DrawOpeningConversation(const CcSim *sim,
                                     const LocalState *local)
 {
     const char *speaker = "NELL VARO";
-    const char *place = "BAKERY DOOR  /  BEFORE THE FIRST BELL";
+    const char *place = "BAKERY LINE  /  MORNING";
     const char *first =
-        "\"Jory went behind the bakery before dawn,\" Nell says. \"He always feeds the ravens.\"";
+        "\"I'm Nell. My mother is working the morning shift. I came to get her bread.\"";
     const char *second =
-        "\"The bell rang, but the roof stayed still. Find him for me? Tell him I'm waiting.\"";
+        "\"The line has not moved since the bell. Jory went around back and has not come out. Will you talk to him?\"";
     char first_buffer[192] = "";
     char second_buffer[192] = "";
     CcNpcAppearance portrait = CcNpcAppearanceGenerate(
@@ -3982,24 +3968,24 @@ static void DrawOpeningConversation(const CcSim *sim,
 
     if (local->opening_conversation == OPENING_CONVERSATION_JORY_CLUE) {
         speaker = "JORY FEN";
-        place = "BAKERY YARD  /  FLOUR ON HIS SLEEVES";
+        place = "BEHIND THE BAKERY";
         first =
-            "Jory opens his fist. A grain of wheat lies in the flour on his palm, black as a spent match.";
+            "\"The newest sack is spoiled,\" Jory says. He shows you a black grain. \"The baker cannot use it.\"";
         second =
-            "\"It came from the newest sack. Don't taste it. Take it to Mara - and mind who sees you.\"";
+            "\"Mara arranged the delivery. Ask her where it came from. She is at the harvest board.\"";
         portrait = CcNpcAppearanceGenerate(
             UINT32_C(0x73747201), CC_NPC_ROLE_TRAVELLER,
             (Color){223, 151, 68, 255});
     } else if (local->opening_conversation ==
                OPENING_CONVERSATION_MARA_PROMISE) {
         speaker = "MARA VENN";
-        place = "HARVEST BOARD  /  THE BELL HAS STOPPED";
+        place = "HARVEST BOARD";
         first = first_buffer;
         second = second_buffer;
         portrait = CcNpcMaraAppearance();
         (void)snprintf(
             first_buffer, sizeof(first_buffer),
-            "Mara rolls the grain beneath one thumb. \"Scorched from the heart,\" she murmurs. \"That should not be possible.\"");
+            "Mara looks at the black grain. \"This came from the last shipment. I need to check the other sacks.\"");
         int32_t opening_index = OpeningSituationIndex(sim);
         const CcSituation *situation = opening_index >= 0 ?
             &sim->situations[opening_index] : NULL;
@@ -4012,17 +3998,17 @@ static void DrawOpeningConversation(const CcSim *sim,
              situation->kind == CC_SITUATION_BLACK_MARKET_DELIVERY)) {
             (void)snprintf(
                 second_buffer, sizeof(second_buffer),
-                "\"Take the old carriage and its two bays. Carry %d %s to %s. On the road, keep your eyes open.\"",
+                "\"The rest is clean. Take %d sacks of %s to %s. You can use my old carriage.\"",
                 situation->quantity, CcGoodName(situation->good), target);
         } else if (situation != NULL) {
             (void)snprintf(
                 second_buffer, sizeof(second_buffer),
-                "\"Take the old carriage and its two bays. See to %s at %s, and bring them home safely.\"",
+                "\"Take my old carriage. Deal with %s at %s, then come back.\"",
                 SituationTitle(situation->kind), target);
         } else {
             (void)snprintf(
                 second_buffer, sizeof(second_buffer),
-                "\"Take the old carriage and its two bays. Find where that grain came from, and bring them home safely.\"");
+                "\"Take my old carriage. Find out where the spoiled grain came from.\"");
         }
     }
 
@@ -4053,7 +4039,7 @@ static void DrawOpeningConversation(const CcSim *sim,
                     118U, 11, INK);
     const char *prompt = local->opening_conversation ==
             OPENING_CONVERSATION_MARA_PROMISE ?
-        "ENTER  ACCEPT PROMISE" : "ENTER  CONTINUE";
+        "ENTER  TAKE JOB" : "ENTER  CONTINUE";
     int prompt_width = CcOverlayMeasureText(prompt, 8);
     CcOverlayDrawText(prompt,
                       (int)(dialogue.x + dialogue.width) - prompt_width - 18,
@@ -5018,15 +5004,15 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             local->opening_step = CC_LOCAL_OPENING_COMPLETE;
             (void)snprintf(
                 message, message_capacity,
-                "Mara puts a brass key in your hand. The old carriage and its two horses are yours for this promise.");
+                "Mara gives you the carriage key. The old carriage and its two horses are ready.");
         } else if (beat == OPENING_CONVERSATION_JORY_CLUE) {
             (void)snprintf(
                 message, message_capacity,
-                "Jory's black grain is tucked safely in your palm. Find Mara at the harvest board.");
+                "New objective: Talk to Mara. She is at the harvest board.");
         } else {
             (void)snprintf(
                 message, message_capacity,
-                "Find Jory behind the bakery. He always feeds the ravens before the first bell.");
+                "New objective: Talk to Jory. He is behind the bakery.");
         }
         local->opening_conversation = OPENING_CONVERSATION_NONE;
         return;
@@ -5070,7 +5056,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 if (updated != NULL &&
                     updated->kind == CC_SITUATION_MONSTER_EXPEDITION &&
                     response != CC_CHARACTER_RESPONSE_PLEDGE_HELP) {
-                    char next[160] = "Ask what happened.";
+                    char next[160] = "Talk to the witness.";
                     SituationNextAction(sim, updated, next, sizeof(next));
                     (void)snprintf(message, message_capacity,
                                    "New objective: %s", next);
@@ -5116,8 +5102,8 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             (void)snprintf(
                 message, message_capacity,
                 local->opening_step == CC_LOCAL_OPENING_FIND_JORY ?
-                    "Nell asked you to find Jory behind the bakery." :
-                    "For now, carry Jory's black grain to Mara.");
+                    "Talk to Jory. He is behind the bakery." :
+                    "Talk to Mara. She is at the harvest board.");
             return;
         }
     }

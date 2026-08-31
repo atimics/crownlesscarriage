@@ -58,6 +58,7 @@ int main(void)
     CC_CHECK(strstr(output, "on foot") != NULL);
     CC_CHECK(strstr(output, "no carriage") != NULL);
     CC_CHECK(strstr(output, "Nell Varo") != NULL);
+    CC_CHECK(strstr(output, "bread to take to her mother") != NULL);
     CC_CHECK(strstr(output, "Not a crown. A wheel.") != NULL);
     CC_CHECK(strstr(output, metagame.sim.settlements[0].name) != NULL);
     CC_CHECK(metagame.sim.player.location_id == metagame.sim.settlements[0].id);
@@ -100,7 +101,7 @@ int main(void)
     CC_CHECK(strstr(output, "black wax") != NULL);
     CC_CHECK(!CcMetagameExecute(&metagame, "plans", output, sizeof(output)));
     CC_CHECK(CcMetagameExecute(&metagame, "people", output, sizeof(output)));
-    CC_CHECK(strstr(output, "one red mitten") != NULL);
+    CC_CHECK(strstr(output, "bread to take to her mother") != NULL);
     CC_CHECK(CcMetagameExecute(&metagame, "inequality", output,
                                sizeof(output)));
     CC_CHECK(strstr(output, "Social fault lines") != NULL);
@@ -234,14 +235,14 @@ int main(void)
     CC_CHECK(dungeon_number > 0);
     CC_CHECK(CcMetagameExecute(&metagame, "charters", output,
                                sizeof(output)));
-    CC_CHECK(strstr(output, "Ask Jory Fen about the strange noises") != NULL);
+    CC_CHECK(strstr(output, "Talk to Jory Fen") != NULL);
     CC_CHECK(strstr(output, "No reward has been offered yet") != NULL);
     ExecuteNumber(&metagame, "talk", dungeon_number, output, sizeof(output));
     CC_CHECK(strstr(output, "Jory: \"") != NULL);
-    CC_CHECK(strstr(output, "Ask Bren what happened in the mine") != NULL);
+    CC_CHECK(strstr(output, "Talk to Bren") != NULL);
     ExecuteNumber(&metagame, "talk", dungeon_number, output, sizeof(output));
     CC_CHECK(strstr(output, "using a pick behind the old wall") != NULL);
-    CC_CHECK(strstr(output, "Tell Jory what Bren heard") != NULL);
+    CC_CHECK(strstr(output, "Talk to Jory") != NULL);
     ExecuteNumber(&metagame, "talk", dungeon_number, output, sizeof(output));
     CC_CHECK(strstr(output, "tell") != NULL);
     ExecuteNumber(&metagame, "keep", dungeon_number,
