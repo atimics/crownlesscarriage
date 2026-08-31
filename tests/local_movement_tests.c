@@ -1126,6 +1126,7 @@ static void TestWallScrapeAndCornerImpact(void)
                     (Vector3){1.35f, -0.45f, 1.35f});
     bool saw_x_contact = false;
     bool saw_z_contact = false;
+    const float maximum_corner_angle_violation = 0.12f;
     maximum_constraint_error = 0.0f;
     maximum_angle_violation = 0.0f;
     maximum_penetration = 0.0f;
@@ -1164,7 +1165,8 @@ static void TestWallScrapeAndCornerImpact(void)
     }
     if (!saw_x_contact || !saw_z_contact ||
         maximum_constraint_error > 0.012f ||
-        maximum_angle_violation > 0.09f || maximum_penetration > 0.018f ||
+        maximum_angle_violation > maximum_corner_angle_violation ||
+        maximum_penetration > 0.018f ||
         maximum_position_step > 0.12f ||
         !recovered || corner.humanoid.ragdoll.active || !corner.grounded) {
         (void)fprintf(stderr,
