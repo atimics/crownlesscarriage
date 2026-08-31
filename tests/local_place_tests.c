@@ -1,6 +1,5 @@
 #include "client/cc_local_place.h"
 
-#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -61,11 +60,11 @@ static int ProfileContract(void)
             CHECK(camera->target_y <= 0.25f);
             CHECK(camera->camera_offset_y >= 0.55f);
             CHECK(camera->camera_offset_y <= 0.70f);
-            float camera_distance = sqrtf(
+            float camera_distance_squared =
                 camera->camera_offset_x * camera->camera_offset_x +
-                camera->camera_offset_z * camera->camera_offset_z);
-            CHECK(camera_distance >= 5.0f);
-            CHECK(camera_distance <= 24.0f);
+                camera->camera_offset_z * camera->camera_offset_z;
+            CHECK(camera_distance_squared >= 5.0f * 5.0f);
+            CHECK(camera_distance_squared <= 24.0f * 24.0f);
             CHECK(camera->fovy >= 5.8f && camera->fovy <= 10.0f);
             if (camera->kind == CC_LOCAL_TOWN_SCENE_LANDMARK) {
                 CHECK(camera->fovy >= 9.0f);
