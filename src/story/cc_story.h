@@ -21,6 +21,12 @@ typedef enum CcStorySpeakerRole {
     CC_STORY_SPEAKER_AFFECTED
 } CcStorySpeakerRole;
 
+typedef enum CcStoryPlayerChoice {
+    CC_STORY_PLAYER_ASK,
+    CC_STORY_PLAYER_PROMISE,
+    CC_STORY_PLAYER_LEAVE
+} CcStoryPlayerChoice;
+
 typedef struct CcStoryLine {
     const char *id;
     const char *text;
@@ -34,5 +40,8 @@ const CcStoryLine *CcStoryCharacterLine(
 size_t CcStoryAuthoredLineCount(void);
 const CcStoryLine *CcStoryAuthoredLineAt(size_t index);
 const char *CcStoryBeatName(CcStoryBeat beat);
+const char *CcStoryPlayerChoiceText(CcSituationKind kind,
+                                    CcStoryPlayerChoice choice);
+const char *CcStoryRoadCompanyLine(const CcBanditGroup *company);
 
 #endif

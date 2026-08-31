@@ -122,7 +122,8 @@ add_library(crownless_metagame
     src/metagame/cc_metagame.c
 )
 target_include_directories(crownless_metagame PUBLIC src)
-target_link_libraries(crownless_metagame PUBLIC crownless_persistence)
+target_link_libraries(crownless_metagame PUBLIC
+    crownless_persistence crownless_story)
 cc_strict_warnings(crownless_metagame)
 
 add_executable(crownless_sim_runner tools/sim_runner.c)
