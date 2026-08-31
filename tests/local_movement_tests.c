@@ -475,6 +475,14 @@ static void TestSharedCharacterCollisionWorld(void)
                      (Vector2){CC_LOCAL_START_X, CC_LOCAL_START_Z}, false);
     Vector2 carriage_approach = CcLocalWorldTargetApproachPoint(
         CC_LOCAL_WORLD_TARGET_CARRIAGE);
+    CcLocalRendererSetOpeningStep(CC_LOCAL_OPENING_FIND_NELL);
+    if (CcLocalAgentApproachWorldTarget(
+            &carriage_path, CC_LOCAL_WORLD_TARGET_CARRIAGE)) {
+        (void)fprintf(stderr,
+                      "pre-carriage opening allowed a carriage interaction\n");
+        exit(1);
+    }
+    CcLocalRendererSetOpeningStep(CC_LOCAL_OPENING_COMPLETE);
     if (!CcLocalAgentApproachWorldTarget(
             &carriage_path, CC_LOCAL_WORLD_TARGET_CARRIAGE) ||
         carriage_path.world_target != CC_LOCAL_WORLD_TARGET_CARRIAGE ||
@@ -2320,7 +2328,7 @@ int main(void)
     };
 
     /* Every authored room and the complete Market Steps-to-Crown Gate road
-       must retain the hero while the target, yaw, and lens interpolate. */
+       must retain the hero in a low, side-on storybook shot. */
     CcLocalAgent framing_agent;
     CcLocalAgentInit(&framing_agent, camera_review_points[0], false);
     float camera_clock = 0.0f;
@@ -2342,12 +2350,21 @@ int main(void)
                           framing_agent.position.z},
                 review_camera, click_target.texture.width,
                 click_target.texture.height);
+            float camera_height = review_camera.position.y -
+                                  review_camera.target.y;
+            float camera_run = sqrtf(
+                (review_camera.position.x - review_camera.target.x) *
+                    (review_camera.position.x - review_camera.target.x) +
+                (review_camera.position.z - review_camera.target.z) *
+                    (review_camera.position.z - review_camera.target.z));
             if (hero_screen.x < 88.0f || hero_screen.x > 369.0f ||
-                hero_screen.y < 54.0f || hero_screen.y > 231.0f) {
+                hero_screen.y < 54.0f || hero_screen.y > 231.0f ||
+                camera_height > 4.6f || camera_run < 19.0f) {
                 (void)fprintf(
                     stderr,
-                    "camera review point %d frame %d lost hero at %.2f %.2f\n",
-                    point, frame, hero_screen.x, hero_screen.y);
+                    "camera review point %d frame %d was not a low stage: screen %.2f %.2f rise %.2f run %.2f\n",
+                    point, frame, hero_screen.x, hero_screen.y,
+                    camera_height, camera_run);
                 return 1;
             }
         }
@@ -2373,7 +2390,7 @@ int main(void)
         alley_camera, click_target.texture.width,
         click_target.texture.height);
     if (alley_camera.projection != CAMERA_ORTHOGRAPHIC ||
-        alley_camera.fovy < 16.0f || alley_camera.fovy > 19.0f ||
+        alley_camera.fovy < 13.0f || alley_camera.fovy > 14.0f ||
         alley_hero_screen.x < 88.0f || alley_hero_screen.x > 369.0f ||
         alley_hero_screen.y < 54.0f || alley_hero_screen.y > 231.0f) {
         (void)fprintf(stderr,
@@ -2426,7 +2443,8 @@ int main(void)
             &coach_road_camera_agent, camera_clock, true,
             click_target.texture.height);
     }
-    if (coach_road_camera.fovy < 25.0f) {
+    if (coach_road_camera.fovy < 14.5f ||
+        coach_road_camera.fovy > 17.6f) {
         (void)fprintf(stderr,
                       "main coach road retained an unrelated close page: %.2f\n",
                       coach_road_camera.fovy);

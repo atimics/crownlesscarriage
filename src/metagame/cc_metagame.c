@@ -232,7 +232,7 @@ static void DescribeLook(const CcMetagame *metagame,
         Append(output, capacity,
                "Thornford's chimneys smoke and its hill granaries sit round and fat as sleeping beetles. Still, the bakery roof is empty.\n"
                "Nell Varo waits in the bread line with one red mitten and three grains of wheat. The blackened grain in her bare hand came from a full wagon that went east before sunrise.\n"
-               "Beside your carriage, a mossy milestone bears three little crowns and one nearly-rubbed-away wheel. The same wheel is stamped on your brass charter box.\n");
+               "Beside the bridge, a mossy milestone bears three little crowns and one nearly-rubbed-away wheel. You arrived on foot, with no carriage and no charter to explain it.\n");
     } else if (IsNamedSettlement(sim, place, 1)) {
         Append(output, capacity,
                "Every lane in Gloamgate enters the round market and leaves by another gate. No two map sellers agree where the lanes go.\n"
@@ -1386,9 +1386,8 @@ void CcMetagameIntro(const CcMetagame *metagame,
     Append(output, output_capacity,
            "CROWNLESS CARRIAGE — THE ROAD WITHOUT A CROWN\n\n"
            "It is never a good sign when the first bell rings and no ravens fly from the bakery roof.\n\n"
-           "Bracken hears it first. The old horse lifts one ear and stops in the road. Morrow stops beside him, because Morrow believes Bracken knows everything. This is not true, but it is useful.\n\n"
-           "You climb down beside a mossy milestone. Three little crowns have been cut into it. Beneath them, almost rubbed away, is a fourth mark. Not a crown. A wheel.\n\n"
-           "The same wheel is stamped on the brass charter box under your seat. When you brush the moss aside, something clicks inside the stone.\n\n"
+           "You hear it on foot, halfway across Thornford's little stone bridge. A flour cart rattles past, followed by a farmer with a better coat than yours and a dog with much better boots.\n\n"
+           "Beside the bridge stands a mossy milestone. Three little crowns have been cut into it. Beneath them, almost rubbed away, is a fourth mark. Not a crown. A wheel. When you brush the moss aside, something clicks inside the stone.\n\n"
            "Then the breakfast bell rings again. This time, a child shouts. You leave the stone unopened. For now.\n");
     DescribeLook(metagame, output, output_capacity);
 }

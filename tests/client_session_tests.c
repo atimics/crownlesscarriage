@@ -24,7 +24,8 @@ int main(void)
         .scene = CC_CLIENT_SESSION_MARKET,
         .position_x = 6.25f,
         .position_z = 2.75f,
-        .facing_yaw = -0.35f
+        .facing_yaw = -0.35f,
+        .opening_step = 1U
     };
     char error[256];
     CC_CHECK(CcClientSessionValidate(&original));
@@ -41,6 +42,7 @@ int main(void)
     CC_CHECK(fabsf(restored.position_x - original.position_x) < 0.0001f);
     CC_CHECK(fabsf(restored.position_z - original.position_z) < 0.0001f);
     CC_CHECK(fabsf(restored.facing_yaw - original.facing_yaw) < 0.0001f);
+    CC_CHECK(restored.opening_step == original.opening_step);
 
     CcClientSession invalid = original;
     invalid.version += 1U;
@@ -53,6 +55,20 @@ int main(void)
     CC_CHECK(CcClientSessionValidate(&invalid));
     invalid.scene = (CcClientSessionScene)99;
     CC_CHECK(!CcClientSessionValidate(&invalid));
+    invalid = original;
+    invalid.opening_step = 3U;
+    CC_CHECK(!CcClientSessionValidate(&invalid));
+
+    FILE *legacy = fopen(session_path, "wb");
+    CC_CHECK(legacy != NULL);
+    CC_CHECK(fputs(
+        "CROWNLESS_SESSION 1\n3232176798 42 0 3.5 4.5 -0.25\n",
+        legacy) >= 0);
+    CC_CHECK(fclose(legacy) == 0);
+    CC_CHECK(CcClientSessionRead(session_path, &restored,
+                                 error, sizeof(error)));
+    CC_CHECK(restored.version == CC_CLIENT_SESSION_VERSION);
+    CC_CHECK(restored.opening_step == 2U);
 
     FILE *corrupt = fopen(session_path, "wb");
     CC_CHECK(corrupt != NULL);

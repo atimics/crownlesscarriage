@@ -7,26 +7,23 @@ _A branching Crownless storybook_
 It is never a good sign when the first bell rings and no ravens fly from the
 bakery roof.
 
-Bracken heard it first. The old horse lifted one ear and stopped in the road.
-Morrow stopped beside him, because Morrow believed Bracken knew everything.
-This was not true, but it was useful.
+You heard it on foot, halfway across Thornford's little stone bridge.
 
-Ahead stood Thornford. Its chimneys smoked. Its river flashed. Its hill
-granaries were round and fat as sleeping beetles.
+The town's chimneys smoked. Its river flashed. Its hill granaries were round
+and fat as sleeping beetles. A flour cart rattled past you, followed by a
+farmer with a better coat than yours and a dog with much better boots.
 
 Still, no birds flew from the bakery.
 
-You climbed down from the carriage beside a mossy milestone. Three little
-crowns had been cut into it. One was square, one was sharp, and one was so tall
-that whoever carved it must have thought very highly of kings.
+Beside the bridge stood a mossy milestone. Three little crowns had been cut
+into it. One was square, one was sharp, and one was so tall that whoever
+carved it must have thought very highly of kings.
 
 Beneath them, almost rubbed away, was a fourth mark.
 
 Not a crown.
 
 A wheel.
-
-The same wheel was stamped on the brass charter box under your seat.
 
 When you brushed the moss aside, something clicked inside the stone.
 
@@ -86,8 +83,9 @@ She led you into her office. On the wall hung a road chart with a little iron
 bridge painted in the east. Someone had crossed it out in black ink.
 
 "Silverwick has sent three requests for flour," Mara said. "I can spare eight
-sacks. One carriage load. Yours, if you take my seal and deliver every sack to
-the guild store."
+sacks. I also have one old carriage, two horses, and nobody sensible enough to
+take them east. They are yours for the road, if you deliver every sack to the
+guild store."
 
 She put a white wax letter on the table.
 
@@ -112,6 +110,13 @@ important people."
 Mara looked toward the granary yard.
 
 "Those are more expensive."
+
+The old carriage waited there with one green door and one red wheel. Bracken,
+the broad horse, lifted one ear. Morrow stopped beside him, because Morrow
+believed Bracken knew everything. This was not true, but it was useful.
+
+Under the driver's seat sat a brass charter box. The nearly rubbed-away wheel
+from the milestone was stamped on its lid.
 
 ### Tomas and the door that was not there
 

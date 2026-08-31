@@ -3,8 +3,8 @@
 ## Direction
 
 Crownless Carriage environments are navigable places first and illustrations
-second. The camera may be oblique, but the town must not read as a collection
-of generic isometric miniatures. Every visible mass should explain where the
+second. The town must never read as a collection of generic isometric
+miniatures. Every visible mass should explain where the
 player can walk, what the place is for, who controls it, and what has recently
 happened there.
 
@@ -22,26 +22,22 @@ physical skeleton, so improvements to that export do reach the game.
 
 ## The view
 
-The walkable exterior uses an asymmetric three-quarter orthographic camera.
-Orthographic projection preserves reliable surface picking and a readable
-relationship between the hero and nearby contact geometry. The unequal
-horizontal offsets avoid the visual shorthand of a perfect 45-degree isometric
-grid and expose more of the camera-facing facades.
+The walkable exterior uses low, side-on orthographic shots. Orthographic
+projection preserves reliable surface picking, while a shallow pitch keeps
+the horizon, doors, faces, and street life in the frame. The player should see
+one adventure-game stage, not the roofs of a settlement laid out like a board.
 
 This is a street-scale view, not a whole-settlement map. Buildings may frame or
 leave the viewport as the hero moves. Roof and wall cutaways are driven by hero
 occlusion and leave a stable waist-high shell instead of making every structure
 short or opening a distracting circular reveal.
 
-Each town exposes exactly three camera scenes: Arrival, Town Heart, and
-Landmark. Arrival is a continuous perspective move that begins behind the
-carriage and pulls upward and outward as the team crosses the threshold. Town
-Heart and Landmark are fixed adventure-game stages. Each stores a focal point,
-story axis, foreground anchor, quiet area, three depth splits, and a light
-profile. The camera keeps the hero inside both the authored quiet area and the
-stable play-safe frame. Roads, rivers, walls, and building lines should lead
-toward the story focus. Navigation may use finer hidden districts, but they do
-not create additional visible camera scenes.
+Each town exposes six camera scenes: Arrival, Town Heart, Landmark, two close
+streets, and the carriage yard. Each is a fixed adventure-game stage with a
+focal point, story axis, foreground anchor, quiet area, three depth splits, and
+a light profile. Crossing a scene threshold makes a quick covered cut. The
+camera does not float upward, orbit, or track beside the hero. Roads, rivers,
+walls, and building lines should lead toward the story focus.
 
 Five stable light profiles cover clear market morning, cold shortage overcast,
 warm recovery light, dangerous road dusk, and the ember-lit interior. A profile
@@ -104,9 +100,10 @@ stones make those landforms legible at the play camera.
 
 The current 30-scene runtime review is captured in
 [`town-scene-sheet.png`](../images/town-scene-sheet.png). Its rows are the six
-towns. The first three columns are Arrival, Town Heart, and Landmark: wide
-establishing pages that explain the whole place. The last two columns are
-close, playable rooms built around local work and story: a drovers' close,
+towns. The first three columns are Arrival, Town Heart, and Landmark:
+establishing pages that explain one district without showing the whole town
+from above. The last two columns are close, playable rooms built around local
+work and story: a drovers' close,
 furnace alley, arcade, armourers' row, rose cloister, lantern gate, and their
 counterparts. The close lenses show roughly half as much vertical world space
 as the establishing lenses, so the actor, doors, signs, stalls, and tools can
