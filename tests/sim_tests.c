@@ -187,6 +187,106 @@ int main(void)
     CC_CHECK(realtime.current_day == realtime_departure_day + realtime_days);
     CC_CHECK(realtime.carriage.mode == CC_CARRIAGE_PARKED);
 
+    CcSim careful_pace;
+    CcSim steady_pace;
+    CcSim push_pace;
+    CcSimInit(&careful_pace, UINT32_C(0xca9e));
+    CcSimInit(&steady_pace, UINT32_C(0xca9e));
+    CcSimInit(&push_pace, UINT32_C(0xca9e));
+    CcCommand pace_travel = {
+        .kind = CC_COMMAND_TRAVEL,
+        .target_id = careful_pace.settlements[1].id
+    };
+    CC_CHECK(CcSimApply(&careful_pace, &pace_travel,
+                        error, sizeof(error)));
+    pace_travel.target_id = steady_pace.settlements[1].id;
+    CC_CHECK(CcSimApply(&steady_pace, &pace_travel,
+                        error, sizeof(error)));
+    pace_travel.target_id = push_pace.settlements[1].id;
+    CC_CHECK(CcSimApply(&push_pace, &pace_travel,
+                        error, sizeof(error)));
+    careful_pace.journey.ambush_pending = false;
+    steady_pace.journey.ambush_pending = false;
+    push_pace.journey.ambush_pending = false;
+    CcCommand set_careful = {
+        .kind = CC_COMMAND_SET_JOURNEY_PACE,
+        .amount = CC_JOURNEY_PACE_CAREFUL
+    };
+    CcCommand set_push = {
+        .kind = CC_COMMAND_SET_JOURNEY_PACE,
+        .amount = CC_JOURNEY_PACE_PUSH
+    };
+    CC_CHECK(CcSimApply(&careful_pace, &set_careful,
+                        error, sizeof(error)));
+    CC_CHECK(CcSimApply(&push_pace, &set_push,
+                        error, sizeof(error)));
+    CC_CHECK(CcSimJourneyEtaMinutes(&careful_pace) >
+             CcSimJourneyEtaMinutes(&steady_pace));
+    CC_CHECK(CcSimJourneyEtaMinutes(&steady_pace) >
+             CcSimJourneyEtaMinutes(&push_pace));
+    int32_t careful_condition = careful_pace.carriage.condition;
+    int32_t push_condition = push_pace.carriage.condition;
+    int32_t careful_fatigue = careful_pace.horse_team[0].fatigue;
+    int32_t push_fatigue = push_pace.horse_team[0].fatigue;
+    CcSimAdvanceRuntimeTicks(&careful_pace, 2880);
+    CcSimAdvanceRuntimeTicks(&steady_pace, 2880);
+    CcSimAdvanceRuntimeTicks(&push_pace, 2880);
+    CC_CHECK(careful_pace.carriage.progress_milli <
+             steady_pace.carriage.progress_milli);
+    CC_CHECK(steady_pace.carriage.progress_milli <
+             push_pace.carriage.progress_milli);
+    CC_CHECK(careful_pace.carriage.condition >= careful_condition - 1);
+    CC_CHECK(push_pace.carriage.condition < push_condition);
+    CC_CHECK(careful_pace.horse_team[0].fatigue - careful_fatigue <
+             push_pace.horse_team[0].fatigue - push_fatigue);
+
+    CcSim warned_road;
+    CcSimInit(&warned_road, UINT32_C(0x5ca17));
+    CcCommand warned_travel = {
+        .kind = CC_COMMAND_TRAVEL,
+        .target_id = warned_road.settlements[1].id
+    };
+    CC_CHECK(CcSimApply(&warned_road, &warned_travel,
+                        error, sizeof(error)));
+    warned_road.journey.ambush_pending = true;
+    warned_road.journey.ambush_warned = false;
+    warned_road.journey.ambush_resolved = false;
+    warned_road.journey.encounter_triggered = false;
+    while (!warned_road.journey.ambush_warned) {
+        CcSimAdvanceRuntimeTicks(&warned_road,
+                                 CC_WORLD_TICKS_PER_SECOND);
+    }
+    CC_CHECK(CcSimRecentEvent(&warned_road, 0)->kind ==
+             CC_EVENT_JOURNEY_WARNING);
+    CcSim careful_escape = warned_road;
+    CcSim warned_block = warned_road;
+    CcMoney warning_coins = warned_road.player.coins;
+    int32_t warning_cargo = CcPlayerCargoUsed(&warned_road.player);
+    CC_CHECK(CcSimApply(&careful_escape, &set_careful,
+                        error, sizeof(error)));
+    while (!careful_escape.journey.ambush_resolved) {
+        CcSimAdvanceRuntimeTicks(&careful_escape,
+                                 CC_WORLD_TICKS_PER_SECOND);
+    }
+    CC_CHECK(careful_escape.journey.phase == CC_JOURNEY_PHASE_TRAVELLING);
+    CC_CHECK(CcSimRecentEvent(&careful_escape, 0)->kind ==
+             CC_EVENT_AMBUSH_EVADED);
+    CC_CHECK(careful_escape.player.coins == warning_coins);
+    CC_CHECK(CcPlayerCargoUsed(&careful_escape.player) == warning_cargo);
+    CC_CHECK(CcSimApply(&warned_block, &set_push,
+                        error, sizeof(error)));
+    while (warned_block.journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
+        CcSimAdvanceRuntimeTicks(&warned_block,
+                                 CC_WORLD_TICKS_PER_SECOND);
+    }
+    CC_CHECK(warned_block.journey.phase == CC_JOURNEY_PHASE_BLOCKED);
+    CC_CHECK(CcSimRecentEvent(&warned_block, 0)->kind ==
+             CC_EVENT_JOURNEY_ENCOUNTER);
+    CC_CHECK(warned_block.player.coins == warning_coins);
+    CC_CHECK(CcPlayerCargoUsed(&warned_block.player) == warning_cargo);
+    CC_CHECK(CcSimValidate(&careful_escape, error, sizeof(error)));
+    CC_CHECK(CcSimValidate(&warned_block, error, sizeof(error)));
+
     CcSim fine_ticks;
     CcSim batched_ticks;
     CcSimInit(&fine_ticks, UINT32_C(0xf17ed));

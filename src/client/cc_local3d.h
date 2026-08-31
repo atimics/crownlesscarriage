@@ -27,6 +27,8 @@
 #define CC_LOCAL_MARKET_Z 26.75f
 #define CC_LOCAL_CARRIAGE_X 37.40f
 #define CC_LOCAL_CARRIAGE_Z 51.20f
+#define CC_LOCAL_CARRIAGE_APPROACH_X 42.40f
+#define CC_LOCAL_CARRIAGE_APPROACH_Z 55.20f
 #define CC_LOCAL_NOTICE_X 41.0f
 #define CC_LOCAL_NOTICE_Z 27.80f
 #define CC_LOCAL_DUNGEON_X 29.0f
@@ -57,6 +59,11 @@ typedef enum CcTraversalMode {
     CC_TRAVERSAL_JUMP,
     CC_TRAVERSAL_VAULT
 } CcTraversalMode;
+
+typedef enum CcLocalWorldTargetKind {
+    CC_LOCAL_WORLD_TARGET_NONE = 0,
+    CC_LOCAL_WORLD_TARGET_CARRIAGE
+} CcLocalWorldTargetKind;
 
 typedef enum CcLocalSceneKind {
     CC_LOCAL_SCENE_STREET = 0,
@@ -266,6 +273,7 @@ typedef struct CcLocalAgent {
     bool navigation_active;
     bool navigation_world_exit;
     bool world_exit_requested;
+    CcLocalWorldTargetKind world_target;
     Color tunic_color;
     CcNpcAppearance appearance;
     CcAthleticProfile athletics;
@@ -386,6 +394,14 @@ bool CcLocalAgentSetStreetTarget(CcLocalAgent *agent, Vector3 target);
 bool CcLocalAgentPickTarget(CcLocalAgent *agent, Vector2 screen_point,
                             RenderTexture2D target, Rectangle destination,
                             bool market_interior);
+CcLocalWorldTargetKind CcLocalAgentPickWorldTarget(
+    const CcLocalAgent *agent, Vector2 screen_point, RenderTexture2D target,
+    Rectangle destination, bool market_interior);
+bool CcLocalAgentApproachWorldTarget(CcLocalAgent *agent,
+                                     CcLocalWorldTargetKind target);
+void CcLocalAgentClearWorldTarget(CcLocalAgent *agent);
+Vector2 CcLocalWorldTargetApproachPoint(CcLocalWorldTargetKind target);
+const char *CcLocalWorldTargetName(CcLocalWorldTargetKind target);
 int32_t CcLocalAgentStreetPortalCount(const CcLocalAgent *agent);
 const char *CcLocalAgentStreetPortalName(const CcLocalAgent *agent,
                                          int32_t portal_index);
@@ -501,7 +517,8 @@ float CcLocalRoadCheckpointSurfaceYInternal(float x, float z);
 float CcLocalRoadHorseLateralSpacingInternal(bool bridge_checkpoint);
 float CcLocalRoadHorseLongitudinalOffsetInternal(void);
 void CcLocalDrawFork3D(const CcSim *sim, int32_t selected_route,
-                       float clock, RenderTexture2D target,
+                       float turn_progress, float clock,
+                       RenderTexture2D target,
                        Rectangle destination);
 const char *CcLocalSiteName(const CcSim *sim, CcLocalSiteKind site);
 void CcLocalDrawSite3D(const CcSim *sim, const CcLocalAgent *agent,
