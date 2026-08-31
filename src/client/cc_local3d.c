@@ -5840,6 +5840,27 @@ static bool AdvanceAgentNavigation(CcLocalAgent *agent)
     return false;
 }
 
+static bool AgentCanAdvanceNavigation(const CcLocalAgent *agent,
+                                      float target_distance)
+{
+    if (agent == NULL || !agent->navigation_active ||
+        target_distance >= 0.35f) {
+        return false;
+    }
+    int32_t next_index = agent->navigation_point_index + 1;
+    if (next_index >= agent->navigation_point_count ||
+        agent->scene != CC_LOCAL_SCENE_STREET) {
+        return true;
+    }
+    /* A path corner is safe at its planned point, not throughout the broad
+       waypoint acceptance radius. Only cut the corner when the body has a
+       clear corridor from its current position to the following node. */
+    Vector3 next = agent->navigation_point[next_index];
+    return StreetSegmentClear(
+        (Vector2){agent->position.x, agent->position.z},
+        (Vector2){next.x, next.z}, agent->radius);
+}
+
 static Vector3 StreetPortalWorldPoint(const ResolvedStreetPortal *portal)
 {
     Vector2 point = portal->destination_room >= 0 ?
@@ -8019,7 +8040,7 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
         direction.x = agent->target_point.x - agent->position.x;
         direction.z = agent->target_point.z - agent->position.z;
         target_distance = sqrtf(direction.x * direction.x + direction.z * direction.z);
-        if (agent->navigation_active && target_distance < 0.35f &&
+        if (AgentCanAdvanceNavigation(agent, target_distance) &&
             !agent->climbing && !agent->humanoid.ragdoll.active) {
             (void)AdvanceAgentNavigation(agent);
             if (agent->exact_target_valid) {
@@ -8216,12 +8237,15 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
             (agent->position.z - previous_position.z));
     bool requested_progress = agent->crowned && agent->exact_target_valid &&
         target_distance > 0.18f && maximum_speed > 0.01f;
-    if (requested_progress && training_step < 0.0015f) {
+    /* Sideways collision escape is motion, but it is not progress toward the
+       active waypoint. Give physical starts and turns time to settle, then
+       replan or cancel a command that still cannot move forward. */
+    if (requested_progress && forward_stalled) {
         agent->movement_stall_seconds += delta_time;
     } else {
         agent->movement_stall_seconds = 0.0f;
     }
-    if (agent->movement_stall_seconds > 0.42f) {
+    if (agent->movement_stall_seconds > 1.20f) {
         bool click_path = agent->scene == CC_LOCAL_SCENE_STREET &&
             agent->navigation_active &&
             agent->navigation_destination_room ==
