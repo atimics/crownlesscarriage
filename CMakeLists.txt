@@ -56,6 +56,7 @@ add_library(crownless_locomotion
     src/locomotion/cc_humanoid.c
     src/locomotion/cc_humanoid_skin.c
     src/locomotion/cc_limb.c
+    src/locomotion/cc_multileg.c
     src/locomotion/cc_motion.c
     src/locomotion/cc_quadruped.c
     src/locomotion/cc_robotics.c
