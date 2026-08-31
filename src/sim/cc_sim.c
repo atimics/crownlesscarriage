@@ -5182,7 +5182,10 @@ static void AssignSituationCast(CcSim *sim, CcSituation *situation)
         sim, situation->kind, situation->target_id);
     if (slot < 0 || slot >= CC_MAX_SETTLEMENTS) slot = 0;
     if (situation->sponsor_name[0] == '\0') {
-        CopyName(situation->sponsor_name, sponsors[slot]);
+        int32_t sponsor_slot = situation->kind ==
+                CC_SITUATION_RELIEF_DELIVERY ? 0 :
+            situation->kind == CC_SITUATION_BLACK_MARKET_DELIVERY ? 1 : slot;
+        CopyName(situation->sponsor_name, sponsors[sponsor_slot]);
     }
     if (situation->affected_name[0] == '\0') {
         CopyName(situation->affected_name, affected[slot]);
@@ -5445,9 +5448,14 @@ static void ResolveSituation(CcSim *sim, CcSituation *situation)
         }
         if (echo_settlement != 0U) {
             char witness[CC_NAME_CAPACITY];
+            const char *witness_name =
+                (situation->kind == CC_SITUATION_ROUTE_REPAIR ||
+                 situation->kind == CC_SITUATION_BLACK_MARKET_DELIVERY) &&
+                        situation->sponsor_name[0] != '\0' ?
+                    situation->sponsor_name : situation->affected_name;
             (void)snprintf(witness, sizeof(witness), "%.31s",
-                           situation->affected_name[0] != '\0' ?
-                               situation->affected_name : "A local witness");
+                           witness_name[0] != '\0' ? witness_name :
+                               "A local witness");
             sim->delayed_echo = (CcDelayedEcho){
                 .active = true,
                 .situation_id = situation->id,
@@ -8391,44 +8399,43 @@ static void DeliverDelayedEchoIfReady(CcSim *sim)
     if (situation != NULL &&
         situation->kind == CC_SITUATION_ROUTE_REPAIR && prior_echoes == 0) {
         (void)snprintf(text, sizeof(text),
-                       "%.24s returns to %.24s: common carts cross the bridge again, and the first toll dispute has begun.",
-                       sim->delayed_echo.character_name,
-                       place != NULL ? place->name : "the settlement");
+                       "A letter waits on the driver's seat. %.24s has enclosed a broken chain link: common carts cross the bridge again, and the hungry boy on the wall now eats before the officers do.",
+                       sim->delayed_echo.character_name);
     } else if (situation != NULL &&
                situation->kind == CC_SITUATION_ROUTE_REPAIR) {
         (void)snprintf(text, sizeof(text),
-                       "%.24s reports from %.24s: the reopened bridge feeds trade, while its new keepers grow rich.",
+                       "A second letter from %.24s says the bridge feeds %.24s, but its new toll keepers are growing rich enough to buy very large hats.",
                        sim->delayed_echo.character_name,
                        place != NULL ? place->name : "the settlement");
     } else if (situation != NULL &&
                situation->kind == CC_SITUATION_BLACK_MARKET_DELIVERY &&
                prior_echoes == 0) {
         (void)snprintf(text, sizeof(text),
-                       "%.24s returns to %.24s: food reached the hungry before the law could stop it.",
+                       "A letter from %.24s smells of onion soup. A fox is drawn beside %.24s's new public toll sign: food reached the hungry before the law could stop it.",
                        sim->delayed_echo.character_name,
                        place != NULL ? place->name : "the settlement");
     } else if (situation != NULL &&
                situation->kind == CC_SITUATION_BLACK_MARKET_DELIVERY) {
         (void)snprintf(text, sizeof(text),
-                       "%.24s warns %.24s: the night-road collectors now demand a share of every load.",
+                       "A second letter from %.24s has no drawing. The Night Road collectors now demand a share of every load entering %.24s.",
                        sim->delayed_echo.character_name,
                        place != NULL ? place->name : "the settlement");
     } else if (situation != NULL &&
                situation->kind == CC_SITUATION_MONSTER_EXPEDITION) {
         (void)snprintf(text, sizeof(text),
                        prior_echoes == 0 ?
-                       "%.24s returns to %.24s: fewer things hunt near the mine, but crews argue over the changed tunnels." :
-                       "%.24s reports from %.24s: the mine's new order has created winners, debts, and fresh enemies.",
+                       "A letter from %.24s leaves silver dust on the seat. Three lost rings came back from the mine below %.24s; the guild still calls their keepers thieves." :
+                       "A second letter from %.24s says the changed mine below %.24s has made safer crews, new debts, and enemies who now know one another's names.",
                        sim->delayed_echo.character_name,
                        place != NULL ? place->name : "the settlement");
     } else if (prior_echoes == 0) {
         (void)snprintf(text, sizeof(text),
-                       "%.24s returns to %.24s: the delivered food reached hungry homes, though the shortage remains.",
+                       "A letter from %.24s is tied with red thread. The ovens of %.24s are warm again, though the bread line still reaches the well.",
                        sim->delayed_echo.character_name,
                        place != NULL ? place->name : "the settlement");
     } else {
         (void)snprintf(text, sizeof(text),
-                       "%.24s reports from %.24s: new families have arrived for food, and old stores are being guarded.",
+                       "A second letter from %.24s says new families have followed the smell of bread to %.24s, and the old stores have found new locks.",
                        sim->delayed_echo.character_name,
                        place != NULL ? place->name : "the settlement");
     }
@@ -8618,10 +8625,15 @@ static void InterruptJourney(CcSim *sim)
         sim, sim->journey.destination_id);
     const CcSituation *situation = CcSimSituation(
         sim, sim->journey.situation_id);
+    const CcRoute *route = CcSimRoute(sim, sim->journey.route_id);
     const CcBanditGroup *bandits = BanditsOnRoute(
         sim, sim->journey.route_id);
     char text[CC_EVENT_TEXT_CAPACITY];
-    if (situation == NULL) {
+    if (route != NULL && route->closed && bandits == NULL) {
+        (void)snprintf(
+            text, sizeof(text),
+            "Captain Ilyra Senn lowers Alderwatch's bright chain across the road. 'Orders,' she says, while a hungry boy eats too quickly on the wall.");
+    } else if (situation == NULL) {
         (void)snprintf(
             text, sizeof(text),
             "The warned riders from %.24s close the road to %.24s. The carriage stops before anything is taken.",
