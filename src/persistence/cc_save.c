@@ -436,12 +436,20 @@ static bool ValidateDatabaseHeader(sqlite3 *database,
 static bool ConfigureWritableDatabase(sqlite3 *database,
                                       char *error, size_t error_capacity)
 {
+#if defined(__EMSCRIPTEN__)
+    return Execute(database,
+        "PRAGMA foreign_keys=ON;"
+        "PRAGMA journal_mode=DELETE;"
+        "PRAGMA synchronous=FULL;",
+        error, error_capacity);
+#else
     return Execute(database,
         "PRAGMA foreign_keys=ON;"
         "PRAGMA journal_mode=WAL;"
         "PRAGMA synchronous=FULL;"
         "PRAGMA wal_autocheckpoint=1000;",
         error, error_capacity);
+#endif
 }
 
 static bool MarkDatabaseCurrent(sqlite3 *database,

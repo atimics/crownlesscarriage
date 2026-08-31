@@ -7,7 +7,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#if defined(__APPLE__) || defined(__linux__) || defined(__unix__)
+#if !defined(__EMSCRIPTEN__) && \
+    (defined(__APPLE__) || defined(__linux__) || defined(__unix__))
 #include <fcntl.h>
 #include <unistd.h>
 #endif
@@ -62,7 +63,8 @@ bool CcClientSessionWrite(const char *path, const CcClientSession *session,
         (double)session->position_x, (double)session->position_z,
         (double)session->facing_yaw, session->opening_step);
     bool ok = written > 0 && fflush(file) == 0;
-#if defined(__APPLE__) || defined(__linux__) || defined(__unix__)
+#if !defined(__EMSCRIPTEN__) && \
+    (defined(__APPLE__) || defined(__linux__) || defined(__unix__))
     if (ok) ok = fsync(fileno(file)) == 0;
 #endif
     if (fclose(file) != 0) ok = false;
@@ -142,7 +144,8 @@ bool CcClientInstanceLockAcquire(const char *path,
         return false;
     }
     lock->descriptor = -1;
-#if defined(__APPLE__) || defined(__linux__) || defined(__unix__)
+#if !defined(__EMSCRIPTEN__) && \
+    (defined(__APPLE__) || defined(__linux__) || defined(__unix__))
     int descriptor = open(path, O_CREAT | O_RDWR, 0600);
     if (descriptor < 0) {
         SetSessionError(error, error_capacity,
@@ -174,7 +177,8 @@ bool CcClientInstanceLockAcquire(const char *path,
 void CcClientInstanceLockRelease(CcClientInstanceLock *lock)
 {
     if (lock == NULL || lock->descriptor < 0) return;
-#if defined(__APPLE__) || defined(__linux__) || defined(__unix__)
+#if !defined(__EMSCRIPTEN__) && \
+    (defined(__APPLE__) || defined(__linux__) || defined(__unix__))
     struct flock campaign_unlock = {
         .l_type = F_UNLCK,
         .l_whence = SEEK_SET,
