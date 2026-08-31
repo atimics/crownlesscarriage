@@ -10411,27 +10411,37 @@ typedef struct RuntimeAsset {
 
 static RuntimeAsset runtime_assets[RUNTIME_ASSET_COUNT] = {
     [RUNTIME_ASSET_BRIDGE] = {
-        CC_BRIDGE_CHECKPOINT_ASSET, "bridge checkpoint", 96, {0}, false},
+        .path = CC_BRIDGE_CHECKPOINT_ASSET,
+        .label = "bridge checkpoint",
+        .mesh_budget = 96},
     [RUNTIME_ASSET_CARRIAGE] = {
-        "assets/exports/glb/carriage_base_v01.glb", "carriage", 144, {0}, false},
+        .path = "assets/exports/glb/carriage_base_v01.glb",
+        .label = "carriage",
+        .mesh_budget = 144},
     [RUNTIME_ASSET_CARGO_RACK] = {
-        "assets/exports/glb/module_cargo_rack_v01.glb", "cargo rack", 48,
-        {0}, false},
+        .path = "assets/exports/glb/module_cargo_rack_v01.glb",
+        .label = "cargo rack",
+        .mesh_budget = 48},
     [RUNTIME_ASSET_MARKET] = {
-        "assets/exports/glb/environment_market_granary_v01.glb",
-        "market and granary", 80, {0}, false},
+        .path = "assets/exports/glb/environment_market_granary_v01.glb",
+        .label = "market and granary",
+        .mesh_budget = 80},
     [RUNTIME_ASSET_MINE] = {
-        "assets/exports/glb/environment_mine_entrance_v01.glb",
-        "mine entrance", 64, {0}, false},
+        .path = "assets/exports/glb/environment_mine_entrance_v01.glb",
+        .label = "mine entrance",
+        .mesh_budget = 64},
     [RUNTIME_ASSET_SHORTAGE] = {
-        "assets/exports/glb/state_food_shortage_v01.glb",
-        "food shortage dressing", 40, {0}, false},
+        .path = "assets/exports/glb/state_food_shortage_v01.glb",
+        .label = "food shortage dressing",
+        .mesh_budget = 40},
     [RUNTIME_ASSET_ENFORCEMENT] = {
-        "assets/exports/glb/state_harsh_enforcement_v01.glb",
-        "enforcement dressing", 32, {0}, false},
+        .path = "assets/exports/glb/state_harsh_enforcement_v01.glb",
+        .label = "enforcement dressing",
+        .mesh_budget = 32},
     [RUNTIME_ASSET_RECOVERY] = {
-        "assets/exports/glb/state_market_recovery_v01.glb",
-        "market recovery dressing", 40, {0}, false},
+        .path = "assets/exports/glb/state_market_recovery_v01.glb",
+        .label = "market recovery dressing",
+        .mesh_budget = 40},
 };
 
 typedef struct HeroSkinCache {
@@ -10597,65 +10607,95 @@ typedef struct NpcDynamicModuleCache {
 
 static NpcDynamicModuleCache npc_dynamic_modules[NPC_DYNAMIC_MODULE_COUNT] = {
     [NPC_DYNAMIC_TORSO] = {
-        "assets/exports/npc/npc_module_torso_v01.glb", "torso", {0}, false},
+        .path = "assets/exports/npc/npc_module_torso_v01.glb",
+        .label = "torso"},
     [NPC_DYNAMIC_PELVIS] = {
-        "assets/exports/npc/npc_module_pelvis_v01.glb", "pelvis", {0}, false},
+        .path = "assets/exports/npc/npc_module_pelvis_v01.glb",
+        .label = "pelvis"},
     [NPC_DYNAMIC_UPPER_ARM] = {
-        "assets/exports/npc/npc_module_upper_arm_v01.glb", "upper arm", {0}, false},
+        .path = "assets/exports/npc/npc_module_upper_arm_v01.glb",
+        .label = "upper arm"},
     [NPC_DYNAMIC_FOREARM] = {
-        "assets/exports/npc/npc_module_forearm_v01.glb", "forearm", {0}, false},
+        .path = "assets/exports/npc/npc_module_forearm_v01.glb",
+        .label = "forearm"},
     [NPC_DYNAMIC_THIGH] = {
-        "assets/exports/npc/npc_module_thigh_v01.glb", "thigh", {0}, false},
+        .path = "assets/exports/npc/npc_module_thigh_v01.glb",
+        .label = "thigh"},
     [NPC_DYNAMIC_SHIN] = {
-        "assets/exports/npc/npc_module_shin_v01.glb", "shin", {0}, false},
+        .path = "assets/exports/npc/npc_module_shin_v01.glb",
+        .label = "shin"},
     [NPC_DYNAMIC_HAND] = {
-        "assets/exports/npc/npc_module_hand_v01.glb", "hand", {0}, false},
+        .path = "assets/exports/npc/npc_module_hand_v01.glb",
+        .label = "hand"},
     [NPC_DYNAMIC_FOOT] = {
-        "assets/exports/npc/npc_module_foot_v01.glb", "foot", {0}, false},
+        .path = "assets/exports/npc/npc_module_foot_v01.glb",
+        .label = "foot"},
     [NPC_DYNAMIC_HEAD] = {
-        "assets/exports/npc/npc_module_head_v01.glb", "head", {0}, false},
+        .path = "assets/exports/npc/npc_module_head_v01.glb",
+        .label = "head"},
     [NPC_DYNAMIC_MANTLE] = {
-        "assets/exports/npc/npc_module_mantle_v01.glb", "mantle", {0}, false},
+        .path = "assets/exports/npc/npc_module_mantle_v01.glb",
+        .label = "mantle"},
     [NPC_DYNAMIC_COAT_TAIL] = {
-        "assets/exports/npc/npc_module_coat_tail_v01.glb", "coat tail", {0}, false},
+        .path = "assets/exports/npc/npc_module_coat_tail_v01.glb",
+        .label = "coat tail"},
     [NPC_DYNAMIC_CHEST_PLATE] = {
-        "assets/exports/npc/npc_module_chest_plate_v01.glb", "chest plate", {0}, false},
+        .path = "assets/exports/npc/npc_module_chest_plate_v01.glb",
+        .label = "chest plate"},
     [NPC_DYNAMIC_PAULDRON] = {
-        "assets/exports/npc/npc_module_pauldron_v01.glb", "pauldron", {0}, false},
+        .path = "assets/exports/npc/npc_module_pauldron_v01.glb",
+        .label = "pauldron"},
     [NPC_DYNAMIC_APRON] = {
-        "assets/exports/npc/npc_module_apron_v01.glb", "apron", {0}, false},
+        .path = "assets/exports/npc/npc_module_apron_v01.glb",
+        .label = "apron"},
     [NPC_DYNAMIC_PACK] = {
-        "assets/exports/npc/npc_module_pack_v01.glb", "pack", {0}, false},
+        .path = "assets/exports/npc/npc_module_pack_v01.glb",
+        .label = "pack"},
     [NPC_DYNAMIC_SATCHEL] = {
-        "assets/exports/npc/npc_module_satchel_v01.glb", "satchel", {0}, false},
+        .path = "assets/exports/npc/npc_module_satchel_v01.glb",
+        .label = "satchel"},
     [NPC_DYNAMIC_HELMET] = {
-        "assets/exports/npc/npc_module_helmet_v01.glb", "helmet", {0}, false},
+        .path = "assets/exports/npc/npc_module_helmet_v01.glb",
+        .label = "helmet"},
     [NPC_DYNAMIC_HAT] = {
-        "assets/exports/npc/npc_module_hat_v01.glb", "hat", {0}, false},
+        .path = "assets/exports/npc/npc_module_hat_v01.glb",
+        .label = "hat"},
     [NPC_DYNAMIC_HOOD] = {
-        "assets/exports/npc/npc_module_hood_v01.glb", "hood", {0}, false},
+        .path = "assets/exports/npc/npc_module_hood_v01.glb",
+        .label = "hood"},
     [NPC_DYNAMIC_HEADWRAP] = {
-        "assets/exports/npc/npc_module_headwrap_v01.glb", "headwrap", {0}, false},
+        .path = "assets/exports/npc/npc_module_headwrap_v01.glb",
+        .label = "headwrap"},
     [NPC_DYNAMIC_TOOL_SHAFT] = {
-        "assets/exports/npc/npc_module_tool_shaft_v01.glb", "tool shaft", {0}, false},
+        .path = "assets/exports/npc/npc_module_tool_shaft_v01.glb",
+        .label = "tool shaft"},
     [NPC_DYNAMIC_TOOL_HEAD] = {
-        "assets/exports/npc/npc_module_tool_head_v01.glb", "tool head", {0}, false},
+        .path = "assets/exports/npc/npc_module_tool_head_v01.glb",
+        .label = "tool head"},
     [NPC_DYNAMIC_HAIR_0] = {
-        "assets/exports/npc/npc_module_hair_0_v01.glb", "hair 0", {0}, false},
+        .path = "assets/exports/npc/npc_module_hair_0_v01.glb",
+        .label = "hair 0"},
     [NPC_DYNAMIC_HAIR_1] = {
-        "assets/exports/npc/npc_module_hair_1_v01.glb", "hair 1", {0}, false},
+        .path = "assets/exports/npc/npc_module_hair_1_v01.glb",
+        .label = "hair 1"},
     [NPC_DYNAMIC_HAIR_2] = {
-        "assets/exports/npc/npc_module_hair_2_v01.glb", "hair 2", {0}, false},
+        .path = "assets/exports/npc/npc_module_hair_2_v01.glb",
+        .label = "hair 2"},
     [NPC_DYNAMIC_HAIR_3] = {
-        "assets/exports/npc/npc_module_hair_3_v01.glb", "hair 3", {0}, false},
+        .path = "assets/exports/npc/npc_module_hair_3_v01.glb",
+        .label = "hair 3"},
     [NPC_DYNAMIC_HAIR_4] = {
-        "assets/exports/npc/npc_module_hair_4_v01.glb", "hair 4", {0}, false},
+        .path = "assets/exports/npc/npc_module_hair_4_v01.glb",
+        .label = "hair 4"},
     [NPC_DYNAMIC_HAIR_5] = {
-        "assets/exports/npc/npc_module_hair_5_v01.glb", "hair 5", {0}, false},
+        .path = "assets/exports/npc/npc_module_hair_5_v01.glb",
+        .label = "hair 5"},
     [NPC_DYNAMIC_HAIR_6] = {
-        "assets/exports/npc/npc_module_hair_6_v01.glb", "hair 6", {0}, false},
+        .path = "assets/exports/npc/npc_module_hair_6_v01.glb",
+        .label = "hair 6"},
     [NPC_DYNAMIC_HAIR_7] = {
-        "assets/exports/npc/npc_module_hair_7_v01.glb", "hair 7", {0}, false},
+        .path = "assets/exports/npc/npc_module_hair_7_v01.glb",
+        .label = "hair 7"},
 };
 
 static Matrix NpcModuleTransform(Vector3 origin, Vector3 right, Vector3 up,
