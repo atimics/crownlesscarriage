@@ -2079,6 +2079,8 @@ static void TestMultiLegPlatformClimb(void)
         }
 
         bool saw_climb = false;
+        bool saw_free_climb = false;
+        bool route_touched_wall = false;
         bool dropped = false;
         int32_t maximum_wall_supports = 0;
         int32_t maximum_top_supports = 0;
@@ -2086,6 +2088,13 @@ static void TestMultiLegPlatformClimb(void)
         for (int32_t frame = 0; frame < 1500; ++frame) {
             CcLocalAgentUpdate(&climber, 1.0f / 60.0f, false);
             saw_climb = saw_climb || climber.climbing;
+            saw_free_climb = saw_free_climb || climber.free_climbing;
+            for (int32_t node = 0;
+                 node < climber.climb_route.count; ++node) {
+                route_touched_wall = route_touched_wall ||
+                    climber.climb_route.nodes[node].surface ==
+                        CC_ROBOT_SURFACE_WALL;
+            }
             dropped = dropped || climber.traversal == CC_TRAVERSAL_DROP;
             int32_t wall_supports = 0;
             int32_t top_supports = 0;
@@ -2125,7 +2134,7 @@ static void TestMultiLegPlatformClimb(void)
         float target_dz = climber.position.z - 7.50f;
         int32_t required_supports =
             climber.limb_rig.walking_morphology.minimum_supports;
-        if (!saw_climb || dropped ||
+        if (!saw_climb || !saw_free_climb || !route_touched_wall || dropped ||
             target_dx * target_dx + target_dz * target_dz > 0.20f * 0.20f ||
             fabsf(climber.position.y - 1.65f) > 0.02f ||
             maximum_wall_supports < required_supports ||
@@ -2141,6 +2150,112 @@ static void TestMultiLegPlatformClimb(void)
                 required_supports, maximum_segment_error,
                 climber.limb_rig.pace, climber.limb_rig.support_state,
                 climber.limb_rig.planted_count);
+            exit(1);
+        }
+    }
+}
+
+static void TestMultiLegWallCrawl(void)
+{
+    CcLocalAgent climber;
+    CcLocalAgentInit(&climber, (Vector2){3.50f, 6.20f}, false);
+    CcLocalAgentSetMorphology(
+        &climber, CC_MORPHOLOGY_HEXAPOD, false);
+    Vector3 wall_target = {3.50f, 1.12f, 7.00f};
+    if (!CcLocalAgentBeginFreeClimb(
+            &climber, wall_target, (Vector3){0.0f, 0.0f, -1.0f})) {
+        (void)fprintf(stderr,
+                      "multi-leg rig rejected an arbitrary wall target\n");
+        exit(1);
+    }
+    for (int32_t frame = 0; frame < 900; ++frame) {
+        CcLocalAgentUpdate(&climber, 1.0f / 60.0f, false);
+        if (climber.climb_progress >= 0.99f) break;
+    }
+    const CcRobotClimbNode *last =
+        &climber.climb_route.nodes[climber.climb_route.count - 1];
+    if (!climber.climbing || !climber.free_climbing ||
+        climber.traversal != CC_TRAVERSAL_CLIMB ||
+        last->surface != CC_ROBOT_SURFACE_WALL ||
+        climber.climb_progress < 0.95f ||
+        climber.limb_rig.planted_count <
+            climber.limb_rig.morphology.minimum_supports) {
+        (void)fprintf(
+            stderr,
+            "arbitrary wall crawl failed: climb/free %d/%d progress %.2f surface %d support %d/%d\n",
+            climber.climbing, climber.free_climbing,
+            climber.climb_progress, last->surface,
+            climber.limb_rig.planted_count,
+            climber.limb_rig.morphology.minimum_supports);
+        exit(1);
+    }
+}
+
+static void TestMultiLegDamageCollapse(void)
+{
+    for (int32_t preset = CC_MORPHOLOGY_QUADRUPED;
+         preset <= CC_MORPHOLOGY_OCTOPOD; ++preset) {
+        CcLocalAgent agent;
+        CcLocalAgentInit(&agent,
+                         (Vector2){6.0f + (float)preset * 1.5f, 12.0f},
+                         false);
+        CcLocalAgentSetMorphology(
+            &agent, (CcMorphologyPreset)preset, false);
+        Vector3 impact_point = agent.position;
+        impact_point.y += agent.limb_rig.morphology.body_height;
+        if (!CcLocalAgentApplyDamage(
+                &agent, 12.0f, CC_LOCAL_COMBAT_MAX_POSTURE,
+                (Vector3){1.0f, 0.18f, 0.25f}, impact_point, 6.8f) ||
+            !agent.multileg_ragdoll.active ||
+            agent.combat.life_state != CC_LIFE_KNOCKED_DOWN) {
+            (void)fprintf(stderr,
+                          "damage did not collapse multi-leg preset %d\n",
+                          preset);
+            exit(1);
+        }
+        bool saw_contact = false;
+        bool saw_recovery = false;
+        for (int32_t frame = 0;
+             frame < 840 && agent.multileg_ragdoll.active; ++frame) {
+            CcLocalAgentUpdate(&agent, 1.0f / 60.0f, false);
+            saw_contact = saw_contact ||
+                agent.multileg_ragdoll.support_contacts > 0;
+            saw_recovery = saw_recovery ||
+                agent.multileg_ragdoll.recovering;
+        }
+        if (!saw_contact || !saw_recovery ||
+            agent.multileg_ragdoll.active || !agent.grounded ||
+            agent.combat.life_state != CC_LIFE_ALIVE) {
+            (void)fprintf(
+                stderr,
+                "multi-leg preset %d did not recover: contact/recovery %d/%d active %d grounded %d life %d\n",
+                preset, saw_contact, saw_recovery,
+                agent.multileg_ragdoll.active, agent.grounded,
+                agent.combat.life_state);
+            exit(1);
+        }
+
+        impact_point = agent.position;
+        impact_point.y += agent.limb_rig.morphology.body_height;
+        if (!CcLocalAgentApplyDamage(
+                &agent, 200.0f, 0.0f,
+                (Vector3){-0.4f, 0.1f, 1.0f}, impact_point, 7.5f) ||
+            agent.combat.life_state != CC_LIFE_DEAD ||
+            !agent.multileg_ragdoll.active ||
+            agent.multileg_ragdoll.recovery_allowed) {
+            (void)fprintf(stderr,
+                          "fatal damage did not leave preset %d collapsed\n",
+                          preset);
+            exit(1);
+        }
+        for (int32_t frame = 0; frame < 240; ++frame) {
+            CcLocalAgentUpdate(&agent, 1.0f / 60.0f, false);
+        }
+        if (!agent.multileg_ragdoll.active ||
+            agent.combat.life_state != CC_LIFE_DEAD) {
+            (void)fprintf(stderr,
+                          "fatal preset %d recovered without permission\n",
+                          preset);
             exit(1);
         }
     }
@@ -3442,6 +3557,8 @@ int main(void)
     TestHeroicAthleticism();
     TestIntentionalParkourEntry();
     TestMultiLegPlatformClimb();
+    TestMultiLegWallCrawl();
+    TestMultiLegDamageCollapse();
     TestTravellerIngress();
     RequirePosition("market wall blocks entry",
                     CcLocalMove((Vector2){50.00f, 26.65f},
