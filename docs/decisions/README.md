@@ -17,6 +17,7 @@ accidentally reintroduce rejected scope.
 - [0009 — Meet one branch at a time; let maps advise](0009-road-forks-before-maps.md) (superseded)
 - [0010 — Derive kingdom identity from material holdings](0010-material-kingdom-identities.md)
 - [0011 — One cohesive world through local maps and visible roads](0011-cohesive-carriage-world.md)
+- [0012 — Let journey pace request a physical horse gait](0012-physical-horse-gaits.md)
 
 ## Record template
 

@@ -21,6 +21,13 @@ typedef enum CcCreatureRigProfile {
     CC_CREATURE_RIG_PROFILE_COUNT
 } CcCreatureRigProfile;
 
+typedef enum CcCreatureRigGait {
+    CC_CREATURE_RIG_GAIT_WALK,
+    CC_CREATURE_RIG_GAIT_TROT,
+    CC_CREATURE_RIG_GAIT_CANTER,
+    CC_CREATURE_RIG_GAIT_COUNT
+} CcCreatureRigGait;
+
 typedef struct CcCreatureRigLimbPose {
     CcLimbVec3 joints[CC_CREATURE_RIG_MAX_JOINTS_PER_LIMB];
     float segment_activation[CC_CREATURE_RIG_MAX_SEGMENTS];
@@ -33,6 +40,7 @@ typedef struct CcCreatureRigPose {
     CcLimbVec3 body;
     CcLimbVec3 forward;
     CcLimbVec3 right;
+    CcLimbVec3 support_normal;
     float body_width;
     float body_depth;
     float body_length;
@@ -41,6 +49,7 @@ typedef struct CcCreatureRigPose {
     float movement;
     float support_margin;
     float drive_scale;
+    float control_authority;
     int32_t limb_count;
     int32_t planted_count;
     int32_t swinging_count;
@@ -48,16 +57,29 @@ typedef struct CcCreatureRigPose {
     int32_t biomech_joint_count;
     int32_t biomech_muscle_count;
     CcCreatureRigProfile profile;
+    CcLimbSupportState support_state;
     bool valid;
 } CcCreatureRigPose;
+
+typedef struct CcCreatureRigWorldCommand {
+    CcLimbVec3 ground_position;
+    CcLimbVec3 velocity;
+    float yaw;
+    float movement;
+    bool grounded;
+} CcCreatureRigWorldCommand;
 
 typedef struct CcCreatureRigController {
     CcLimbRig skeleton;
     CcBiomechRig muscles;
     CcLimbVec3 ground_position;
     CcCreatureRigProfile profile;
+    CcCreatureRigGait gait;
+    CcCreatureRigGait requested_gait;
     float scale;
     float movement;
+    float body_yaw;
+    bool world_bound;
     bool initialized;
 } CcCreatureRigController;
 
@@ -68,10 +90,18 @@ bool CcCreatureRigPoseResolve(CcCreatureRigProfile profile, float phase,
 bool CcCreatureRigControllerInit(CcCreatureRigController *controller,
                                  CcCreatureRigProfile profile,
                                  float phase, float scale);
+bool CcCreatureRigControllerSetGait(CcCreatureRigController *controller,
+                                    CcCreatureRigGait gait);
 bool CcCreatureRigControllerStep(CcCreatureRigController *controller,
                                  float forward_speed, float movement,
                                  float delta_time,
                                  CcCreatureRigPose *pose);
+bool CcCreatureRigControllerStepWorld(
+    CcCreatureRigController *controller,
+    const CcCreatureRigWorldCommand *command, float delta_time,
+    CcLimbTerrainProbe probe, void *probe_context,
+    CcCreatureRigPose *pose);
 const char *CcCreatureRigProfileName(CcCreatureRigProfile profile);
+const char *CcCreatureRigGaitName(CcCreatureRigGait gait);
 
 #endif

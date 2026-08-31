@@ -15,6 +15,18 @@ static bool PlaneProbe(void *context, CcLimbVec3 origin, float maximum_drop,
     return true;
 }
 
+static bool SlopeProbe(void *context, CcLimbVec3 origin, float maximum_drop,
+                       CcLimbVec3 *point, CcLimbVec3 *normal)
+{
+    (void)context;
+    float height = origin.z * 0.30f;
+    if (origin.y < height || origin.y - height > maximum_drop) return false;
+    *point = (CcLimbVec3){origin.x, height, origin.z};
+    float inverse_length = 1.0f / sqrtf(1.0f + 0.30f * 0.30f);
+    *normal = (CcLimbVec3){0.0f, inverse_length, -0.30f * inverse_length};
+    return true;
+}
+
 static float Distance(CcLimbVec3 a, CcLimbVec3 b)
 {
     float x = b.x - a.x;
@@ -121,6 +133,82 @@ int main(void)
         Require(saw_swing, "moving morphology never replanted a foot");
         Require(isfinite(rig.support_margin), "support margin was not finite");
     }
+
+    static const int32_t run_supports[] = {1, 2, 3, 6};
+    static const int32_t run_swings[] = {1, 2, 3, 2};
+    static const int32_t sprint_supports[] = {1, 1, 3, 4};
+    static const int32_t sprint_swings[] = {1, 3, 3, 4};
+    for (int32_t preset = 0; preset < CC_MORPHOLOGY_PRESET_COUNT; ++preset) {
+        CcLimbMorphology morphology;
+        (void)CcLimbMorphologyFromPreset(
+            &morphology, (CcMorphologyPreset)preset);
+        CcLimbRig rig;
+        CcLimbVec3 body = {0.0f, morphology.body_height, 0.0f};
+        CcLimbRigInit(&rig, &morphology, body, 0.0f, PlaneProbe, NULL);
+        CcLimbRigUpdate(&rig, body, 0.0f, (CcLimbVec3){0}, true,
+                        1.0f / 60.0f, PlaneProbe, NULL);
+        Require(CcLimbRigRequestPace(&rig, CC_LIMB_PACE_RUN) &&
+                    rig.pace == CC_LIMB_PACE_RUN &&
+                    rig.morphology.minimum_supports == run_supports[preset] &&
+                    rig.morphology.maximum_swings == run_swings[preset],
+                "run pace did not configure the body-plan support policy");
+        Require(CcLimbRigRequestPace(&rig, CC_LIMB_PACE_SPRINT) &&
+                    rig.pace == CC_LIMB_PACE_SPRINT &&
+                    rig.morphology.minimum_supports ==
+                        sprint_supports[preset] &&
+                    rig.morphology.maximum_swings == sprint_swings[preset],
+                "sprint pace did not configure the body-plan support policy");
+        Require(CcLimbPaceName(rig.pace)[0] == 'S',
+                "limb pace has no stable player-facing name");
+    }
+
+    CcLimbMorphology slope_quadruped;
+    (void)CcLimbMorphologyFromPreset(
+        &slope_quadruped, CC_MORPHOLOGY_QUADRUPED);
+    CcLimbRig supported_creature;
+    CcLimbVec3 support_body = {0.0f, slope_quadruped.body_height, 0.0f};
+    CcLimbRigInit(&supported_creature, &slope_quadruped, support_body,
+                  0.0f, SlopeProbe, NULL);
+    CcLimbRigUpdate(&supported_creature, support_body, 0.0f,
+                    (CcLimbVec3){0}, true, 1.0f / 60.0f,
+                    SlopeProbe, NULL);
+    Require(supported_creature.support_state == CC_LIMB_SUPPORT_STABLE &&
+                supported_creature.control_authority > 0.99f,
+            "grounded creature did not begin with stable support authority");
+    Require(supported_creature.support_normal.y > 0.94f &&
+                supported_creature.support_normal.z < -0.25f,
+            "creature support frame did not retain the terrain normal");
+    for (int32_t frame = 0; frame < 6; ++frame) {
+        CcLimbRigUpdate(&supported_creature, support_body, 0.0f,
+                        (CcLimbVec3){0}, false, 1.0f / 60.0f,
+                        SlopeProbe, NULL);
+    }
+    Require(supported_creature.support_state ==
+                CC_LIMB_SUPPORT_CONTROLLED_AIRBORNE &&
+                supported_creature.control_authority > 0.0f,
+            "brief support loss skipped controlled airborne authority");
+    for (int32_t frame = 0; frame < 12; ++frame) {
+        CcLimbRigUpdate(&supported_creature, support_body, 0.0f,
+                        (CcLimbVec3){0}, false, 1.0f / 60.0f,
+                        SlopeProbe, NULL);
+    }
+    Require(supported_creature.support_state ==
+                CC_LIMB_SUPPORT_UNSUPPORTED,
+            "sustained support loss did not become unsupported");
+    bool saw_recovery = false;
+    for (int32_t frame = 0; frame < 120; ++frame) {
+        CcLimbRigUpdate(&supported_creature, support_body, 0.0f,
+                        (CcLimbVec3){0}, true, 1.0f / 60.0f,
+                        SlopeProbe, NULL);
+        saw_recovery = saw_recovery || supported_creature.support_state ==
+            CC_LIMB_SUPPORT_RECOVERING;
+    }
+    Require(saw_recovery && supported_creature.support_state ==
+                CC_LIMB_SUPPORT_STABLE &&
+                supported_creature.control_authority > 0.95f,
+            "creature did not rebuild support authority after landing");
+    Require(CcLimbSupportStateName(CC_LIMB_SUPPORT_RECOVERING)[0] == 'R',
+            "support state has no stable player-facing name");
 
     CcLimbMorphology biped;
     (void)CcLimbMorphologyFromPreset(&biped, CC_MORPHOLOGY_BIPED);

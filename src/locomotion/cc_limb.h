@@ -29,6 +29,21 @@ typedef enum CcLimbState {
     CC_LIMB_DISABLED
 } CcLimbState;
 
+typedef enum CcLimbPace {
+    CC_LIMB_PACE_WALK,
+    CC_LIMB_PACE_RUN,
+    CC_LIMB_PACE_SPRINT,
+    CC_LIMB_PACE_COUNT
+} CcLimbPace;
+
+typedef enum CcLimbSupportState {
+    CC_LIMB_SUPPORT_STABLE,
+    CC_LIMB_SUPPORT_MARGINAL,
+    CC_LIMB_SUPPORT_CONTROLLED_AIRBORNE,
+    CC_LIMB_SUPPORT_UNSUPPORTED,
+    CC_LIMB_SUPPORT_RECOVERING
+} CcLimbSupportState;
+
 typedef struct CcLimbSpec {
     CcLimbVec3 socket_local;
     CcLimbVec3 rest_contact_local;
@@ -70,15 +85,23 @@ typedef struct CcLimbRuntime {
 
 typedef struct CcLimbRig {
     CcLimbMorphology morphology;
+    CcLimbMorphology walking_morphology;
     CcLimbRuntime limbs[CC_LIMB_MAX_COUNT];
     CcLimbVec3 support_center;
+    CcLimbVec3 support_normal;
     CcLimbVec3 body_acceleration;
+    CcLimbPace pace;
+    CcLimbPace requested_pace;
+    CcLimbSupportState support_state;
     float gait_phase;
     float pose_phase;
     float support_margin;
     float supported_height_offset;
     float traction;
     float drive_scale;
+    float unsupported_seconds;
+    float recovery_seconds;
+    float control_authority;
     int32_t planted_count;
     int32_t swinging_count;
     int32_t active_pose_limb;
@@ -102,7 +125,13 @@ void CcLimbRigSetHealth(CcLimbRig *rig, int32_t limb_index, float health);
 void CcLimbRigPinContact(CcLimbRig *rig, int32_t limb_index,
                          CcLimbVec3 body_position, float body_yaw,
                          CcLimbVec3 contact, CcLimbVec3 normal);
+void CcLimbRigEvaluateSupport(CcLimbRig *rig,
+                              CcLimbVec3 body_position, float body_yaw,
+                              bool grounded, float delta_time);
+bool CcLimbRigRequestPace(CcLimbRig *rig, CcLimbPace pace);
 float CcLimbChainLength(const CcLimbRig *rig, int32_t limb_index);
 const char *CcLimbStateName(CcLimbState state);
+const char *CcLimbPaceName(CcLimbPace pace);
+const char *CcLimbSupportStateName(CcLimbSupportState state);
 
 #endif

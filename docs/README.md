@@ -97,6 +97,7 @@ respond to a player decision.
 - [Procedural creature pipeline](production/procedural-creature-pipeline.md)
 - [Runtime environment design](production/runtime-environment-design.md)
 - [Robotics algorithms for character movement](production/robotics-algorithms.md)
+- [MicroDuck simulator review](production/microduck-simulator-review.md)
 - Automated simulation validation
 - Player-legibility tests
 - [Text-first metagame playtest](11-metagame-playtest.md)

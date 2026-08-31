@@ -48,6 +48,42 @@ int32_t CcClientStepConvoyPosture(int32_t posture, int32_t direction)
     return next;
 }
 
+CcClientConvoyGait CcClientConvoyGaitForPace(float pace)
+{
+    if (!isfinite(pace)) return CC_CLIENT_CONVOY_GAIT_HALT;
+    pace = ClampPace(pace);
+    if (pace <= 0.02f) return CC_CLIENT_CONVOY_GAIT_HALT;
+    if (pace < 0.62f) return CC_CLIENT_CONVOY_GAIT_WALK;
+    if (pace < 0.86f) return CC_CLIENT_CONVOY_GAIT_TROT;
+    return CC_CLIENT_CONVOY_GAIT_CANTER;
+}
+
+float CcClientConvoyGaitCadence(CcClientConvoyGait gait)
+{
+    switch (gait) {
+        case CC_CLIENT_CONVOY_GAIT_HALT: return 0.0f;
+        case CC_CLIENT_CONVOY_GAIT_WALK: return 3.6f;
+        case CC_CLIENT_CONVOY_GAIT_TROT: return 4.8f;
+        case CC_CLIENT_CONVOY_GAIT_CANTER: return 6.0f;
+        case CC_CLIENT_CONVOY_GAIT_COUNT:
+        default:
+            return 0.0f;
+    }
+}
+
+const char *CcClientConvoyGaitName(CcClientConvoyGait gait)
+{
+    switch (gait) {
+        case CC_CLIENT_CONVOY_GAIT_HALT: return "HALT";
+        case CC_CLIENT_CONVOY_GAIT_WALK: return "WALK";
+        case CC_CLIENT_CONVOY_GAIT_TROT: return "TROT";
+        case CC_CLIENT_CONVOY_GAIT_CANTER: return "CANTER";
+        case CC_CLIENT_CONVOY_GAIT_COUNT:
+        default:
+            return "UNKNOWN";
+    }
+}
+
 bool CcClientRoadHasNextBranch(int32_t branch_ordinal,
                                int32_t branch_count)
 {

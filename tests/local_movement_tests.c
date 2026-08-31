@@ -2062,6 +2062,90 @@ static void TestIntentionalParkourEntry(void)
     }
 }
 
+static void TestMultiLegPlatformClimb(void)
+{
+    for (int32_t preset = CC_MORPHOLOGY_QUADRUPED;
+         preset <= CC_MORPHOLOGY_OCTOPOD; ++preset) {
+        CcLocalAgent climber;
+        CcLocalAgentInit(&climber, (Vector2){3.50f, 6.20f}, false);
+        CcLocalAgentSetMorphology(
+            &climber, (CcMorphologyPreset)preset, false);
+        if (!CcLocalAgentSetExactTarget(
+                &climber, (Vector3){3.50f, 0.0f, 7.50f}, false)) {
+            (void)fprintf(stderr,
+                          "multi-leg preset %d rejected a raised target\n",
+                          preset);
+            exit(1);
+        }
+
+        bool saw_climb = false;
+        bool dropped = false;
+        int32_t maximum_wall_supports = 0;
+        int32_t maximum_top_supports = 0;
+        float maximum_segment_error = 0.0f;
+        for (int32_t frame = 0; frame < 1500; ++frame) {
+            CcLocalAgentUpdate(&climber, 1.0f / 60.0f, false);
+            saw_climb = saw_climb || climber.climbing;
+            dropped = dropped || climber.traversal == CC_TRAVERSAL_DROP;
+            int32_t wall_supports = 0;
+            int32_t top_supports = 0;
+            for (int32_t limb = 0;
+                 limb < climber.limb_rig.morphology.limb_count; ++limb) {
+                const CcLimbRuntime *runtime = &climber.limb_rig.limbs[limb];
+                const CcLimbSpec *spec =
+                    &climber.limb_rig.morphology.limbs[limb];
+                if (runtime->state == CC_LIMB_STANCE &&
+                    fabsf(runtime->contact_normal.y) < 0.50f) {
+                    wall_supports += 1;
+                }
+                if (runtime->state == CC_LIMB_STANCE &&
+                    runtime->contact_normal.y > 0.80f &&
+                    runtime->planted_contact.y > 1.60f) {
+                    top_supports += 1;
+                }
+                for (int32_t segment = 0;
+                     segment < spec->segment_count; ++segment) {
+                    maximum_segment_error = fmaxf(
+                        maximum_segment_error,
+                        fabsf(Distance3(runtime->joints[segment],
+                                        runtime->joints[segment + 1]) -
+                              spec->segment_length[segment]));
+                }
+            }
+            maximum_wall_supports =
+                maximum_wall_supports > wall_supports ?
+                maximum_wall_supports : wall_supports;
+            maximum_top_supports =
+                maximum_top_supports > top_supports ?
+                maximum_top_supports : top_supports;
+            if (!climber.exact_target_valid && !climber.climbing) break;
+        }
+
+        float target_dx = climber.position.x - 3.50f;
+        float target_dz = climber.position.z - 7.50f;
+        int32_t required_supports =
+            climber.limb_rig.walking_morphology.minimum_supports;
+        if (!saw_climb || dropped ||
+            target_dx * target_dx + target_dz * target_dz > 0.20f * 0.20f ||
+            fabsf(climber.position.y - 1.65f) > 0.02f ||
+            maximum_wall_supports < required_supports ||
+            maximum_top_supports < required_supports ||
+            maximum_segment_error > 0.004f ||
+            climber.limb_rig.pace != CC_LIMB_PACE_WALK) {
+            (void)fprintf(
+                stderr,
+                "multi-leg climb %d failed: pos %.2f %.2f %.2f climb/drop %d/%d wall/top %d/%d required %d bone %.4f pace %d support %d contacts %d\n",
+                preset, climber.position.x, climber.position.y,
+                climber.position.z, saw_climb, dropped,
+                maximum_wall_supports, maximum_top_supports,
+                required_supports, maximum_segment_error,
+                climber.limb_rig.pace, climber.limb_rig.support_state,
+                climber.limb_rig.planted_count);
+            exit(1);
+        }
+    }
+}
+
 static void TestTravellerIngress(void)
 {
     CcLocalCourse opening;
@@ -3357,6 +3441,7 @@ int main(void)
     TestControlledJump();
     TestHeroicAthleticism();
     TestIntentionalParkourEntry();
+    TestMultiLegPlatformClimb();
     TestTravellerIngress();
     RequirePosition("market wall blocks entry",
                     CcLocalMove((Vector2){50.00f, 26.65f},
@@ -4760,6 +4845,36 @@ int main(void)
         if (agent.limb_rig.morphology.limb_count != expected_counts[preset]) {
             (void)fprintf(stderr, "local agent rejected a supported morphology\n");
             return 1;
+        }
+        if (preset != CC_MORPHOLOGY_BIPED) {
+            agent.target_point = agent.position;
+            agent.target_point.z += 3.0f;
+            agent.exact_target_valid = true;
+            for (int32_t frame = 0; frame < 6; ++frame) {
+                CcLocalAgentUpdate(&agent, 1.0f / 60.0f, false);
+            }
+            if (agent.limb_rig.requested_pace != CC_LIMB_PACE_SPRINT) {
+                (void)fprintf(
+                    stderr,
+                    "fast local walker did not request its sprint policy\n");
+                return 1;
+            }
+            agent.exact_target_valid = false;
+            agent.target_point = agent.position;
+            bool returned_to_walk = false;
+            for (int32_t frame = 0; frame < 180; ++frame) {
+                CcLocalAgentUpdate(&agent, 1.0f / 60.0f, false);
+                if (agent.limb_rig.pace == CC_LIMB_PACE_WALK) {
+                    returned_to_walk = true;
+                    break;
+                }
+            }
+            if (!returned_to_walk) {
+                (void)fprintf(
+                    stderr,
+                    "stopped local walker did not return safely to walking\n");
+                return 1;
+            }
         }
     }
     return 0;
