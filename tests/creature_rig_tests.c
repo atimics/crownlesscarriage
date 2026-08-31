@@ -20,6 +20,26 @@ static float Distance(CcLimbVec3 a, CcLimbVec3 b)
     return sqrtf(x * x + y * y + z * z);
 }
 
+static float TerrainHeight(float x, float z)
+{
+    return x * 0.11f + z * 0.07f;
+}
+
+static bool TerrainProbe(void *context, CcLimbVec3 origin,
+                         float maximum_drop, CcLimbVec3 *point,
+                         CcLimbVec3 *normal)
+{
+    (void)context;
+    float height = TerrainHeight(origin.x, origin.z);
+    if (origin.y < height || origin.y - height > maximum_drop) return false;
+    float inverse_length = 1.0f / sqrtf(1.0f + 0.11f * 0.11f +
+                                        0.07f * 0.07f);
+    *point = (CcLimbVec3){origin.x, height, origin.z};
+    *normal = (CcLimbVec3){-0.11f * inverse_length, inverse_length,
+                           -0.07f * inverse_length};
+    return true;
+}
+
 int main(void)
 {
     static const int32_t expected_limbs[CC_CREATURE_RIG_PROFILE_COUNT] = {
@@ -275,6 +295,94 @@ int main(void)
                 !CcCreatureRigControllerSetGait(
                     &cow, CC_CREATURE_RIG_GAIT_TROT),
             "unimplemented animal gait policies fail closed");
+
+    CcCreatureRigController world_hexapod;
+    Require(CcCreatureRigControllerInit(
+                &world_hexapod, CC_CREATURE_RIG_HEXAPOD, 0.17f, 1.0f),
+            "world-aware hexapod initializes");
+    CcCreatureRigWorldCommand world_command = {
+        .ground_position = {7.0f, TerrainHeight(7.0f, 5.0f), 5.0f},
+        .velocity = {0.72f, 0.0f, 0.38f},
+        .yaw = 0.64f,
+        .movement = 1.0f,
+        .grounded = true,
+    };
+    CcCreatureRigPose world_pose;
+    Require(CcCreatureRigControllerStepWorld(
+                &world_hexapod, &world_command, 1.0f / 60.0f,
+                TerrainProbe, NULL, &world_pose),
+            "world-aware controller accepts terrain and facing commands");
+    Require(fabsf(world_pose.body.x) < 0.0001f &&
+                fabsf(world_pose.body.z) < 0.0001f &&
+                world_pose.forward.z > 0.99f && world_pose.right.x > 0.99f,
+            "world-aware pose remains local for existing creature skins");
+    Require(world_pose.support_state == CC_LIMB_SUPPORT_STABLE &&
+                world_pose.control_authority > 0.99f &&
+                world_pose.support_normal.y > 0.98f,
+            "world-aware creature exposes stable sloped support");
+    int32_t locked_world_contacts = 0;
+    for (int32_t frame = 0; frame < 360; ++frame) {
+        CcLimbState previous_state[CC_CREATURE_RIG_MAX_LIMBS];
+        CcLimbVec3 previous_contact[CC_CREATURE_RIG_MAX_LIMBS];
+        for (int32_t limb = 0;
+             limb < world_hexapod.skeleton.morphology.limb_count; ++limb) {
+            previous_state[limb] = world_hexapod.skeleton.limbs[limb].state;
+            previous_contact[limb] =
+                world_hexapod.skeleton.limbs[limb].planted_contact;
+        }
+        world_command.ground_position.x += world_command.velocity.x / 60.0f;
+        world_command.ground_position.z += world_command.velocity.z / 60.0f;
+        world_command.ground_position.y = TerrainHeight(
+            world_command.ground_position.x, world_command.ground_position.z);
+        Require(CcCreatureRigControllerStepWorld(
+                    &world_hexapod, &world_command, 1.0f / 60.0f,
+                    TerrainProbe, NULL, &world_pose),
+                "world-aware controller advances across sloped terrain");
+        for (int32_t limb = 0; limb < world_pose.limb_count; ++limb) {
+            const CcLimbRuntime *runtime =
+                &world_hexapod.skeleton.limbs[limb];
+            if (runtime->state == CC_LIMB_STANCE) {
+                Require(fabsf(runtime->planted_contact.y - TerrainHeight(
+                            runtime->planted_contact.x,
+                            runtime->planted_contact.z)) < 0.001f,
+                        "world-aware foot did not land on the terrain probe");
+            }
+            if (previous_state[limb] == CC_LIMB_STANCE &&
+                runtime->state == CC_LIMB_STANCE) {
+                Require(Distance(previous_contact[limb],
+                                 runtime->planted_contact) < 0.00001f,
+                        "world-aware stance foot slid across the terrain");
+                locked_world_contacts += 1;
+            }
+        }
+    }
+    Require(locked_world_contacts > 180,
+            "world-aware controller did not preserve useful stance contacts");
+
+    world_command.grounded = false;
+    for (int32_t frame = 0; frame < 16; ++frame) {
+        Require(CcCreatureRigControllerStepWorld(
+                    &world_hexapod, &world_command, 1.0f / 60.0f,
+                    TerrainProbe, NULL, &world_pose),
+                "airborne world command advances");
+    }
+    Require(world_pose.support_state == CC_LIMB_SUPPORT_UNSUPPORTED &&
+                world_pose.control_authority < 0.35f,
+            "sustained world support loss did not release control authority");
+    world_command.grounded = true;
+    bool world_recovered = false;
+    for (int32_t frame = 0; frame < 120; ++frame) {
+        Require(CcCreatureRigControllerStepWorld(
+                    &world_hexapod, &world_command, 1.0f / 60.0f,
+                    TerrainProbe, NULL, &world_pose),
+                "grounded recovery world command advances");
+        world_recovered = world_recovered ||
+            world_pose.support_state == CC_LIMB_SUPPORT_RECOVERING;
+    }
+    Require(world_recovered &&
+                world_pose.support_state == CC_LIMB_SUPPORT_STABLE &&
+                world_pose.control_authority > 0.95f,
+            "world-aware creature did not recover its support authority");
 
     puts("creature skeletal-muscular rig contract passed");
     return 0;
