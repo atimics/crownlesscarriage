@@ -68,6 +68,7 @@ endif()
 cc_strict_warnings(crownless_locomotion)
 
 add_library(crownless_sim
+    src/quest/cc_quest.c
     src/sim/cc_sim.c
 )
 target_include_directories(crownless_sim PUBLIC src)
@@ -456,6 +457,11 @@ if(BUILD_TESTING)
     target_link_libraries(story_tests PRIVATE crownless_story)
     cc_strict_warnings(story_tests)
     add_test(NAME authored_story_beats COMMAND story_tests)
+
+    add_executable(quest_system_tests tests/quest_system_tests.c)
+    target_link_libraries(quest_system_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(quest_system_tests)
+    add_test(NAME quest_fronts_and_clocks COMMAND quest_system_tests)
 
     add_executable(loot_tests tests/loot_tests.c)
     target_link_libraries(loot_tests PRIVATE crownless_sim)

@@ -729,6 +729,44 @@ static void CheckSchema17Compatibility(char *error, size_t error_capacity)
     RemoveDatabase(path);
 }
 
+static void CheckSchema18Compatibility(char *error, size_t error_capacity)
+{
+    const char *path = "persistence-legacy-v18-test.ccsave";
+    RemoveDatabase(path);
+    CcSim legacy;
+    CcSimInit(&legacy, UINT32_C(0x1e9ac18));
+    legacy.schema_version = 18U;
+    legacy.generator_version = 17U;
+    legacy.front_count = 0;
+    legacy.quest_outcome_count = 0;
+    legacy.pending_echo_count = 0;
+    (void)memset(legacy.fronts, 0, sizeof(legacy.fronts));
+    (void)memset(legacy.quest_outcomes, 0,
+                 sizeof(legacy.quest_outcomes));
+    (void)memset(legacy.pending_echoes, 0,
+                 sizeof(legacy.pending_echoes));
+    for (int32_t i = 0; i < legacy.situation_count; ++i) {
+        legacy.situations[i].front_id = 0U;
+        legacy.situations[i].end_reason = CC_QUEST_END_NONE;
+        legacy.situations[i].objective = (CcQuestObjective){0};
+    }
+    CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
+
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.generator_version == CC_GENERATOR_VERSION);
+    CC_CHECK(restored.front_count > 0);
+    CC_CHECK(restored.situation_count == legacy.situation_count);
+    for (int32_t i = 0; i < restored.situation_count; ++i) {
+        CC_CHECK(restored.situations[i].front_id != 0U);
+        CC_CHECK(restored.situations[i].objective.target_id != 0U);
+        CC_CHECK(restored.situations[i].objective.progress.limit > 0);
+    }
+    CC_CHECK(CcSimValidate(&restored, error, error_capacity));
+    RemoveDatabase(path);
+}
+
 static void CheckJournalRecovery(char *error, size_t error_capacity)
 {
     const char *path = "persistence-journal-recovery-test.ccsave";
@@ -1097,6 +1135,7 @@ int main(void)
     CheckSchema15Compatibility(error, sizeof(error));
     CheckSchema16Compatibility(error, sizeof(error));
     CheckSchema17Compatibility(error, sizeof(error));
+    CheckSchema18Compatibility(error, sizeof(error));
     CheckDiplomacyPersistence(error, sizeof(error));
     CheckJournalRecovery(error, sizeof(error));
     CheckJournalCheckpointAndTamper(error, sizeof(error));

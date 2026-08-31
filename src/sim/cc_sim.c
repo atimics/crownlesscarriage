@@ -1,5 +1,7 @@
 #include "sim/cc_sim.h"
 
+#include "quest/cc_quest.h"
+
 #include <inttypes.h>
 #include <limits.h>
 #include <stdio.h>
@@ -9,6 +11,7 @@
 
 static void GenerateSituations(CcSim *sim);
 static void DeliverDelayedEchoIfReady(CcSim *sim);
+static void ResolveSituation(CcSim *sim, CcSituation *situation);
 static void PlanGoblinTribute(CcSim *sim);
 static void AdvanceGoblinTribute(CcSim *sim);
 static void PlanHoardRaid(CcSim *sim);
@@ -386,11 +389,40 @@ static bool EventIsPinned(const CcSim *sim, CcId event_id,
         event_id == sim->dragon.lifecycle_event_id ||
         event_id == sim->hoard_raiders.cause_event_id ||
         event_id == sim->dragon_campaign.cause_event_id) return true;
+    for (int32_t i = 0; i < sim->pending_echo_count; ++i) {
+        if (sim->pending_echoes[i].parent_event_id == event_id) return true;
+    }
     for (int32_t i = 0; i < sim->courier_count; ++i) {
         if (sim->couriers[i].cause_event_id == event_id) return true;
     }
     for (int32_t i = 0; i < sim->situation_count; ++i) {
-        if (sim->situations[i].cause_event_id == event_id) return true;
+        const CcSituation *situation = &sim->situations[i];
+        if (situation->cause_event_id == event_id ||
+            situation->objective.progress.created_by_event_id == event_id ||
+            situation->objective.progress.resolved_by_event_id == event_id ||
+            situation->objective.danger.created_by_event_id == event_id ||
+            situation->objective.danger.resolved_by_event_id == event_id) {
+            return true;
+        }
+        for (int32_t evidence = 0;
+             evidence < situation->objective.evidence_count; ++evidence) {
+            if (situation->objective.evidence_event_ids[evidence] == event_id) {
+                return true;
+            }
+        }
+    }
+    for (int32_t i = 0; i < sim->front_count; ++i) {
+        const CcFront *front = &sim->fronts[i];
+        if (front->cause_event_id == event_id ||
+            front->created_event_id == event_id ||
+            front->resolved_event_id == event_id ||
+            front->portent.created_by_event_id == event_id ||
+            front->portent.resolved_by_event_id == event_id) return true;
+    }
+    for (int32_t i = 0; i < sim->quest_outcome_count; ++i) {
+        const CcQuestOutcomeRecord *outcome = &sim->quest_outcomes[i];
+        if (outcome->cause_event_id == event_id ||
+            outcome->resolved_event_id == event_id) return true;
     }
     for (int32_t i = 0; i < sim->character_count; ++i) {
         const CcCharacter *character = &sim->characters[i];
@@ -405,8 +437,29 @@ static void RedirectEventReference(CcSim *sim, CcId removed_id,
                                    CcId replacement_id)
 {
     for (int32_t i = 0; i < sim->situation_count; ++i) {
-        if (sim->situations[i].cause_event_id == removed_id) {
-            sim->situations[i].cause_event_id = replacement_id;
+        CcSituation *situation = &sim->situations[i];
+        if (situation->cause_event_id == removed_id) {
+            situation->cause_event_id = replacement_id;
+        }
+        if (situation->objective.progress.created_by_event_id == removed_id) {
+            situation->objective.progress.created_by_event_id = replacement_id;
+        }
+        if (situation->objective.progress.resolved_by_event_id == removed_id) {
+            situation->objective.progress.resolved_by_event_id = replacement_id;
+        }
+        if (situation->objective.danger.created_by_event_id == removed_id) {
+            situation->objective.danger.created_by_event_id = replacement_id;
+        }
+        if (situation->objective.danger.resolved_by_event_id == removed_id) {
+            situation->objective.danger.resolved_by_event_id = replacement_id;
+        }
+        for (int32_t evidence = 0;
+             evidence < situation->objective.evidence_count; ++evidence) {
+            if (situation->objective.evidence_event_ids[evidence] ==
+                removed_id) {
+                situation->objective.evidence_event_ids[evidence] =
+                    replacement_id;
+            }
         }
     }
     if (sim->journey.parent_event_id == removed_id) {
@@ -414,6 +467,38 @@ static void RedirectEventReference(CcSim *sim, CcId removed_id,
     }
     if (sim->delayed_echo.parent_event_id == removed_id) {
         sim->delayed_echo.parent_event_id = replacement_id;
+    }
+    for (int32_t i = 0; i < sim->pending_echo_count; ++i) {
+        if (sim->pending_echoes[i].parent_event_id == removed_id) {
+            sim->pending_echoes[i].parent_event_id = replacement_id;
+        }
+    }
+    for (int32_t i = 0; i < sim->front_count; ++i) {
+        CcFront *front = &sim->fronts[i];
+        if (front->cause_event_id == removed_id) {
+            front->cause_event_id = replacement_id;
+        }
+        if (front->created_event_id == removed_id) {
+            front->created_event_id = replacement_id;
+        }
+        if (front->resolved_event_id == removed_id) {
+            front->resolved_event_id = replacement_id;
+        }
+        if (front->portent.created_by_event_id == removed_id) {
+            front->portent.created_by_event_id = replacement_id;
+        }
+        if (front->portent.resolved_by_event_id == removed_id) {
+            front->portent.resolved_by_event_id = replacement_id;
+        }
+    }
+    for (int32_t i = 0; i < sim->quest_outcome_count; ++i) {
+        CcQuestOutcomeRecord *outcome = &sim->quest_outcomes[i];
+        if (outcome->cause_event_id == removed_id) {
+            outcome->cause_event_id = replacement_id;
+        }
+        if (outcome->resolved_event_id == removed_id) {
+            outcome->resolved_event_id = replacement_id;
+        }
     }
     if (sim->goblins.tribute_event_id == removed_id) {
         sim->goblins.tribute_event_id = replacement_id;
@@ -772,6 +857,10 @@ const char *CcEventKindName(CcEventKind kind)
         case CC_EVENT_AMBUSH_EVADED: return "AMBUSH EVADED";
         case CC_EVENT_ENCOUNTER_LOOT: return "ROAD LOOT";
         case CC_EVENT_GOBLIN_TUNNEL_TRAVERSED: return "MOUNTAIN TUNNEL";
+        case CC_EVENT_FRONT_CREATED: return "STORY FRONT";
+        case CC_EVENT_FRONT_RESOLVED: return "FRONT RESOLVED";
+        case CC_EVENT_FRONT_FAILED: return "FRONT FAILED";
+        case CC_EVENT_QUEST_PROGRESS: return "QUEST PROGRESS";
     }
     return "EVENT";
 }
@@ -838,6 +927,65 @@ const char *CcSituationKindName(CcSituationKind kind)
         case CC_SITUATION_COURIER_DELIVERY: return "Sealed dispatch";
     }
     return "Unknown situation";
+}
+
+const char *CcQuestObjectiveKindName(CcQuestObjectiveKind kind)
+{
+    switch (kind) {
+        case CC_QUEST_OBJECTIVE_DELIVER_GOODS: return "deliver goods";
+        case CC_QUEST_OBJECTIVE_RESTORE_ROUTE: return "restore route";
+        case CC_QUEST_OBJECTIVE_SETTLE_DUNGEON: return "settle dungeon";
+        case CC_QUEST_OBJECTIVE_ESCORT_COURIER: return "escort courier";
+    }
+    return "unknown objective";
+}
+
+const char *CcQuestEndReasonName(CcQuestEndReason reason)
+{
+    switch (reason) {
+        case CC_QUEST_END_NONE: return "open";
+        case CC_QUEST_END_COMPLETED: return "completed";
+        case CC_QUEST_END_EXPIRED: return "expired";
+        case CC_QUEST_END_REFUSED: return "refused";
+        case CC_QUEST_END_INVALIDATED: return "invalidated";
+        case CC_QUEST_END_COURIER_LOST: return "courier lost";
+    }
+    return "unknown ending";
+}
+
+const char *CcFrontKindName(CcFrontKind kind)
+{
+    switch (kind) {
+        case CC_FRONT_SUPPLY_CRISIS: return "Supply crisis";
+        case CC_FRONT_MONSTER_PRESSURE: return "Monster pressure";
+        case CC_FRONT_COURIER_DISPATCH: return "Courier dispatch";
+    }
+    return "Unknown front";
+}
+
+const char *CcFrontOutcomeName(CcFrontOutcome outcome)
+{
+    switch (outcome) {
+        case CC_FRONT_OUTCOME_NONE: return "Unanswered";
+        case CC_FRONT_OUTCOME_RELIEF_DELIVERED: return "Relief delivered";
+        case CC_FRONT_OUTCOME_ROUTE_RESTORED: return "Route restored";
+        case CC_FRONT_OUTCOME_NIGHT_ROAD: return "Night road supplied";
+        case CC_FRONT_OUTCOME_MONSTER_SETTLED: return "Depths settled";
+        case CC_FRONT_OUTCOME_DISPATCH_DELIVERED: return "Dispatch delivered";
+        case CC_FRONT_OUTCOME_PRESSURE_WON: return "Pressure won";
+    }
+    return "Unknown outcome";
+}
+
+const char *CcFrontStageName(CcFrontStage stage)
+{
+    switch (stage) {
+        case CC_FRONT_STAGE_RUMBLING: return "rumbling";
+        case CC_FRONT_STAGE_PRESSING: return "pressing";
+        case CC_FRONT_STAGE_BREAKING: return "breaking";
+        case CC_FRONT_STAGE_CLOSED: return "closed";
+    }
+    return "unknown";
 }
 
 const CcSettlement *CcSimSettlement(const CcSim *sim, CcId id)
@@ -1542,6 +1690,68 @@ const CcSituation *CcSimSituation(const CcSim *sim, CcId id)
     return NULL;
 }
 
+const CcFront *CcSimFront(const CcSim *sim, CcId id)
+{
+    if (sim == NULL || CcIdKind(id) != CC_ENTITY_FRONT) return NULL;
+    for (int32_t i = 0; i < sim->front_count; ++i) {
+        if (sim->fronts[i].id == id) return &sim->fronts[i];
+    }
+    return NULL;
+}
+
+const CcFront *CcSimSituationFront(const CcSim *sim,
+                                   const CcSituation *situation)
+{
+    return situation != NULL ? CcSimFront(sim, situation->front_id) : NULL;
+}
+
+const CcQuestOutcomeRecord *CcSimQuestOutcome(const CcSim *sim,
+                                              CcId situation_id)
+{
+    if (sim == NULL || CcIdKind(situation_id) != CC_ENTITY_SITUATION) {
+        return NULL;
+    }
+    const CcQuestOutcomeRecord *latest = NULL;
+    for (int32_t i = 0; i < sim->quest_outcome_count; ++i) {
+        const CcQuestOutcomeRecord *outcome = &sim->quest_outcomes[i];
+        if (outcome->situation_id == situation_id &&
+            (latest == NULL || outcome->resolved_day > latest->resolved_day)) {
+            latest = outcome;
+        }
+    }
+    return latest;
+}
+
+const CcQuestOutcomeRecord *CcSimLatestQuestOutcomeForCharacter(
+    const CcSim *sim, CcId character_id)
+{
+    if (sim == NULL || CcIdKind(character_id) != CC_ENTITY_CHARACTER) {
+        return NULL;
+    }
+    const CcQuestOutcomeRecord *latest = NULL;
+    for (int32_t i = 0; i < sim->quest_outcome_count; ++i) {
+        const CcQuestOutcomeRecord *outcome = &sim->quest_outcomes[i];
+        bool involved = outcome->sponsor_character_id == character_id ||
+                        outcome->affected_character_id == character_id;
+        if (involved &&
+            (latest == NULL || outcome->resolved_day > latest->resolved_day)) {
+            latest = outcome;
+        }
+    }
+    return latest;
+}
+
+CcFrontStage CcSimFrontStage(const CcFront *front)
+{
+    if (front == NULL || front->status != CC_FRONT_ACTIVE) {
+        return CC_FRONT_STAGE_CLOSED;
+    }
+    int32_t percent = CcQuestClockPercent(&front->portent);
+    if (percent >= 67) return CC_FRONT_STAGE_BREAKING;
+    if (percent >= 34) return CC_FRONT_STAGE_PRESSING;
+    return CC_FRONT_STAGE_RUMBLING;
+}
+
 const CcCharacter *CcSimCharacter(const CcSim *sim, CcId id)
 {
     if (sim == NULL || CcIdKind(id) != CC_ENTITY_CHARACTER) return NULL;
@@ -1691,6 +1901,16 @@ int32_t CcSimActiveSituationCount(const CcSim *sim)
     int32_t count = 0;
     for (int32_t i = 0; i < sim->situation_count; ++i) {
         if (sim->situations[i].status == CC_SITUATION_ACTIVE) count += 1;
+    }
+    return count;
+}
+
+int32_t CcSimActiveFrontCount(const CcSim *sim)
+{
+    if (sim == NULL) return 0;
+    int32_t count = 0;
+    for (int32_t i = 0; i < sim->front_count; ++i) {
+        if (sim->fronts[i].status == CC_FRONT_ACTIVE) count += 1;
     }
     return count;
 }
@@ -5103,6 +5323,11 @@ static CcFaction *FactionByIdMutable(CcSim *sim, CcId faction_id)
 static bool PrimaryCrisisSettled(const CcSim *sim)
 {
     if (sim == NULL) return false;
+    for (int32_t i = 0; i < sim->front_count; ++i) {
+        const CcFront *front = &sim->fronts[i];
+        if (front->kind == CC_FRONT_SUPPLY_CRISIS &&
+            front->status == CC_FRONT_RESOLVED) return true;
+    }
     for (int32_t i = 0; i < sim->situation_count; ++i) {
         const CcSituation *situation = &sim->situations[i];
         bool primary = situation->kind == CC_SITUATION_RELIEF_DELIVERY ||
@@ -5263,6 +5488,340 @@ void CcSimInitializeCharacters(CcSim *sim)
     }
 }
 
+static CcFront *FrontMutable(CcSim *sim, CcId id)
+{
+    return (CcFront *)CcSimFront((const CcSim *)sim, id);
+}
+
+static CcFront *AllocateFront(CcSim *sim)
+{
+    if (sim->front_count < CC_MAX_FRONTS) {
+        CcFront *front = &sim->fronts[sim->front_count++];
+        *front = (CcFront){0};
+        return front;
+    }
+    int32_t oldest = -1;
+    for (int32_t i = 0; i < sim->front_count; ++i) {
+        if (sim->fronts[i].status == CC_FRONT_ACTIVE) continue;
+        if (oldest < 0 || sim->fronts[i].created_day <
+                          sim->fronts[oldest].created_day) {
+            oldest = i;
+        }
+    }
+    if (oldest < 0) return NULL;
+    sim->fronts[oldest] = (CcFront){0};
+    return &sim->fronts[oldest];
+}
+
+static CcQuestOutcomeRecord *AllocateQuestOutcome(CcSim *sim)
+{
+    if (sim->quest_outcome_count < CC_MAX_QUEST_OUTCOMES) {
+        CcQuestOutcomeRecord *outcome =
+            &sim->quest_outcomes[sim->quest_outcome_count++];
+        *outcome = (CcQuestOutcomeRecord){0};
+        return outcome;
+    }
+    int32_t oldest = 0;
+    for (int32_t i = 1; i < sim->quest_outcome_count; ++i) {
+        if (sim->quest_outcomes[i].resolved_day <
+            sim->quest_outcomes[oldest].resolved_day) oldest = i;
+    }
+    sim->quest_outcomes[oldest] = (CcQuestOutcomeRecord){0};
+    return &sim->quest_outcomes[oldest];
+}
+
+static CcId FrontAnchorForSituation(const CcSim *sim,
+                                    const CcSituation *situation)
+{
+    if (situation == NULL) return 0U;
+    if (CcQuestFrontForSituationKind(situation->kind) ==
+        CC_FRONT_SUPPLY_CRISIS) {
+        CcId offer = CcSimSituationOfferSettlementId(sim, situation);
+        return offer != 0U ? offer : situation->target_id;
+    }
+    return situation->target_id;
+}
+
+static void WriteFrontPremise(CcFront *front)
+{
+    if (front == NULL) return;
+    const char *premise = "The region is choosing what happens next.";
+    switch (front->kind) {
+        case CC_FRONT_SUPPLY_CRISIS:
+            premise = "Food and passage are failing together; every remedy will choose who holds the road.";
+            break;
+        case CC_FRONT_MONSTER_PRESSURE:
+            premise = "Pressure below the workings is making the road, mine, and settlement answer one another.";
+            break;
+        case CC_FRONT_COURIER_DISPATCH:
+            premise = "A sealed message is crossing a road that can still change its meaning.";
+            break;
+    }
+    (void)snprintf(front->premise, sizeof(front->premise), "%s", premise);
+}
+
+static CcFront *FindOpenFrontForSituation(CcSim *sim,
+                                         const CcSituation *situation)
+{
+    CcFrontKind kind = CcQuestFrontForSituationKind(situation->kind);
+    CcId anchor = FrontAnchorForSituation(sim, situation);
+    for (int32_t i = 0; i < sim->front_count; ++i) {
+        CcFront *front = &sim->fronts[i];
+        bool same_crisis = kind == CC_FRONT_SUPPLY_CRISIS ||
+                           front->anchor_id == anchor;
+        if (front->status == CC_FRONT_ACTIVE && front->kind == kind &&
+            same_crisis &&
+            front->situation_count < CC_MAX_FRONT_SITUATIONS) return front;
+    }
+    return NULL;
+}
+
+static CcFront *CreateFrontForSituation(CcSim *sim,
+                                       const CcSituation *situation,
+                                       bool emit_event)
+{
+    CcFront *front = AllocateFront(sim);
+    if (front == NULL) return NULL;
+    front->id = NextId(sim, CC_ENTITY_FRONT);
+    front->kind = CcQuestFrontForSituationKind(situation->kind);
+    front->status = CC_FRONT_ACTIVE;
+    front->anchor_id = FrontAnchorForSituation(sim, situation);
+    front->cause_event_id = situation->cause_event_id;
+    front->created_day = situation->created_day;
+    CcQuestClockBegin(&front->portent,
+                      situation->objective.danger.limit,
+                      situation->objective.progress.created_by_event_id);
+    WriteFrontPremise(front);
+    if (emit_event) {
+        char text[CC_EVENT_TEXT_CAPACITY];
+        (void)snprintf(text, sizeof(text), "%s begins: %.96s",
+                       CcFrontKindName(front->kind), front->premise);
+        CcEvent *event = PushEvent(
+            sim, CC_EVENT_FRONT_CREATED, front->id,
+            CcSimSituationOfferSettlementId(sim, situation),
+            situation->cause_event_id, front->portent.limit, text);
+        front->created_event_id = event != NULL ? event->id : 0U;
+        front->portent.created_by_event_id = front->created_event_id;
+    }
+    return front;
+}
+
+static void AttachSituationToFront(CcSim *sim, CcSituation *situation,
+                                   bool emit_event)
+{
+    if (sim == NULL || situation == NULL || situation->front_id != 0U) {
+        return;
+    }
+    CcFront *front = FindOpenFrontForSituation(sim, situation);
+    if (front == NULL) {
+        front = CreateFrontForSituation(sim, situation, emit_event);
+    }
+    if (front == NULL || front->situation_count >=
+                         CC_MAX_FRONT_SITUATIONS) return;
+    front->situation_ids[front->situation_count++] = situation->id;
+    front->portent.limit = MaximumI32(
+        front->portent.limit, situation->objective.danger.limit);
+    situation->front_id = front->id;
+}
+
+static void InitializeSituationObjective(CcSituation *situation,
+                                         CcId created_event_id)
+{
+    if (situation == NULL) return;
+    int32_t required = situation->quantity > 0 ? situation->quantity : 1;
+    int32_t danger_limit = MaximumI32(
+        1, situation->deadline_day - situation->created_day + 1);
+    situation->objective = (CcQuestObjective){
+        .kind = CcQuestObjectiveForSituationKind(situation->kind),
+        .target_id = situation->target_id,
+        .good = situation->good,
+        .required = required
+    };
+    CcQuestClockBegin(&situation->objective.progress, required,
+                      created_event_id);
+    CcQuestClockBegin(&situation->objective.danger, danger_limit,
+                      created_event_id);
+    situation->objective.progress.value = MinimumI32(
+        required, situation->progress);
+    situation->end_reason = CC_QUEST_END_NONE;
+}
+
+static void SyncSituationObjectiveDefinition(CcSituation *situation)
+{
+    if (situation == NULL) return;
+    int32_t required = situation->quantity > 0 ? situation->quantity : 1;
+    int32_t danger_limit = MaximumI32(
+        1, situation->deadline_day - situation->created_day + 1);
+    situation->objective.kind =
+        CcQuestObjectiveForSituationKind(situation->kind);
+    situation->objective.target_id = situation->target_id;
+    situation->objective.good = situation->good;
+    situation->objective.required = required;
+    situation->objective.progress.limit = required;
+    situation->objective.progress.value = MinimumI32(
+        required, MaximumI32(0, situation->progress));
+    situation->objective.danger.limit = danger_limit;
+    situation->objective.danger.value = MinimumI32(
+        danger_limit, MaximumI32(0, situation->objective.danger.value));
+}
+
+static bool RecordSituationEvidence(CcSituation *situation,
+                                    CcId event_id, int32_t amount)
+{
+    if (situation == NULL || situation->status != CC_SITUATION_ACTIVE) {
+        return false;
+    }
+    SyncSituationObjectiveDefinition(situation);
+    bool recorded = CcQuestRecordEvidence(
+        &situation->objective, event_id, amount);
+    if (recorded && situation->quantity > 0) {
+        situation->progress = situation->objective.progress.value;
+    }
+    return recorded;
+}
+
+static void ArchiveSituationOutcome(CcSim *sim,
+                                    const CcSituation *situation,
+                                    CcId resolved_event_id)
+{
+    if (sim == NULL || situation == NULL ||
+        CcSimQuestOutcome(sim, situation->id) != NULL) return;
+    CcQuestOutcomeRecord *record = AllocateQuestOutcome(sim);
+    if (record == NULL) return;
+    const CcFront *front = CcSimSituationFront(sim, situation);
+    *record = (CcQuestOutcomeRecord){
+        .id = NextId(sim, CC_ENTITY_QUEST_OUTCOME),
+        .situation_id = situation->id,
+        .front_id = situation->front_id,
+        .situation_kind = situation->kind,
+        .front_kind = front != NULL ? front->kind :
+            CcQuestFrontForSituationKind(situation->kind),
+        .situation_status = situation->status,
+        .end_reason = situation->end_reason,
+        .front_outcome = front != NULL ? front->outcome :
+            CC_FRONT_OUTCOME_NONE,
+        .target_id = situation->target_id,
+        .sponsor_character_id = situation->sponsor_character_id,
+        .affected_character_id = situation->affected_character_id,
+        .cause_event_id = situation->cause_event_id,
+        .resolved_event_id = resolved_event_id,
+        .resolved_day = sim->current_day,
+        .progress_value = situation->objective.progress.value,
+        .progress_limit = situation->objective.progress.limit,
+        .danger_value = situation->objective.danger.value,
+        .danger_limit = situation->objective.danger.limit
+    };
+}
+
+static bool FrontHasActiveSituation(const CcSim *sim,
+                                    const CcFront *front)
+{
+    if (sim == NULL || front == NULL) return false;
+    for (int32_t i = 0; i < front->situation_count; ++i) {
+        const CcSituation *situation = CcSimSituation(
+            sim, front->situation_ids[i]);
+        if (situation != NULL && situation->status == CC_SITUATION_ACTIVE) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void FinishFrontAfterSituation(CcSim *sim,
+                                      const CcSituation *situation,
+                                      CcId situation_event_id)
+{
+    CcFront *front = FrontMutable(sim, situation->front_id);
+    if (front == NULL || front->status != CC_FRONT_ACTIVE) return;
+    CcEventKind event_kind;
+    const char *verb;
+    if (situation->status == CC_SITUATION_RESOLVED) {
+        front->status = CC_FRONT_RESOLVED;
+        front->outcome = CcQuestOutcomeForSituationKind(situation->kind);
+        event_kind = CC_EVENT_FRONT_RESOLVED;
+        verb = "resolves";
+    } else if (!FrontHasActiveSituation(sim, front)) {
+        front->status = CC_FRONT_FAILED;
+        front->outcome = CC_FRONT_OUTCOME_PRESSURE_WON;
+        event_kind = CC_EVENT_FRONT_FAILED;
+        verb = "closes without an answer";
+    } else {
+        return;
+    }
+    front->resolved_day = sim->current_day;
+    front->portent.resolved_by_event_id = situation_event_id;
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text), "%s %s: %s.",
+                   CcFrontKindName(front->kind), verb,
+                   CcFrontOutcomeName(front->outcome));
+    CcEvent *event = PushEvent(sim, event_kind, front->id, front->anchor_id,
+                               situation_event_id,
+                               (int32_t)front->outcome, text);
+    front->resolved_event_id = event != NULL ? event->id :
+                               situation_event_id;
+    front->portent.resolved_by_event_id = front->resolved_event_id;
+}
+
+static void AdvanceQuestDangerClocks(CcSim *sim)
+{
+    if (sim == NULL) return;
+    for (int32_t i = 0; i < sim->situation_count; ++i) {
+        CcSituation *situation = &sim->situations[i];
+        if (situation->status != CC_SITUATION_ACTIVE) continue;
+        int32_t elapsed = sim->current_day - situation->created_day;
+        situation->objective.danger.value = MinimumI32(
+            situation->objective.danger.limit, MaximumI32(0, elapsed));
+    }
+    for (int32_t i = 0; i < sim->front_count; ++i) {
+        CcFront *front = &sim->fronts[i];
+        if (front->status != CC_FRONT_ACTIVE) continue;
+        int32_t elapsed = sim->current_day - front->created_day;
+        front->portent.value = MinimumI32(
+            front->portent.limit, MaximumI32(0, elapsed));
+    }
+}
+
+void CcSimUpgradeQuestArchitecture(CcSim *sim)
+{
+    if (sim == NULL) return;
+    sim->front_count = 0;
+    sim->quest_outcome_count = 0;
+    sim->pending_echo_count = 0;
+    for (int32_t i = 0; i < sim->situation_count; ++i) {
+        CcSituation *situation = &sim->situations[i];
+        const CcEvent *created = LatestEvent(
+            sim, CC_EVENT_SITUATION_CREATED, situation->id, 0U);
+        InitializeSituationObjective(
+            situation, created != NULL ? created->id :
+                       situation->cause_event_id);
+        AttachSituationToFront(sim, situation, false);
+        if (situation->status == CC_SITUATION_RESOLVED) {
+            situation->end_reason = CC_QUEST_END_COMPLETED;
+            situation->objective.progress.value =
+                situation->objective.progress.limit;
+            const CcEvent *resolved = LatestEvent(
+                sim, CC_EVENT_SITUATION_RESOLVED, situation->id, 0U);
+            situation->objective.progress.resolved_by_event_id =
+                resolved != NULL ? resolved->id : situation->cause_event_id;
+            FinishFrontAfterSituation(
+                sim, situation,
+                situation->objective.progress.resolved_by_event_id);
+            ArchiveSituationOutcome(
+                sim, situation,
+                situation->objective.progress.resolved_by_event_id);
+        } else if (situation->status == CC_SITUATION_FAILED) {
+            situation->end_reason = CC_QUEST_END_INVALIDATED;
+            const CcEvent *failed = LatestEvent(
+                sim, CC_EVENT_SITUATION_FAILED, situation->id, 0U);
+            CcId failed_id = failed != NULL ? failed->id :
+                             situation->cause_event_id;
+            FinishFrontAfterSituation(sim, situation, failed_id);
+            ArchiveSituationOutcome(sim, situation, failed_id);
+        }
+    }
+    AdvanceQuestDangerClocks(sim);
+}
+
 static CcSituation *AllocateSituation(CcSim *sim)
 {
     if (sim->situation_count < CC_MAX_SITUATIONS) {
@@ -5317,8 +5876,12 @@ static CcSituation *CreateSituation(
     (void)snprintf(text, sizeof(text), "%s issued; reward %" PRId64
                    " crowns before day %d.", CcSituationKindName(kind), reward,
                    situation->deadline_day);
-    (void)PushEvent(sim, CC_EVENT_SITUATION_CREATED, situation->id, target,
-                    cause, quantity, text);
+    CcEvent *created = PushEvent(
+        sim, CC_EVENT_SITUATION_CREATED, situation->id, target,
+        cause, quantity, text);
+    InitializeSituationObjective(
+        situation, created != NULL ? created->id : cause);
+    AttachSituationToFront(sim, situation, true);
     return situation;
 }
 
@@ -5412,13 +5975,51 @@ static void RememberCharacter(CcCharacter *character,
                               CcCharacterMemoryKind kind,
                               CcId subject_id, CcId event_id, int32_t day);
 
+static bool ScheduleDelayedEcho(CcSim *sim, const CcDelayedEcho *echo)
+{
+    if (sim == NULL || echo == NULL || !echo->active) return false;
+    if (!sim->delayed_echo.active) {
+        sim->delayed_echo = *echo;
+        return true;
+    }
+    if (sim->pending_echo_count >= CC_MAX_PENDING_ECHOES) return false;
+    sim->pending_echoes[sim->pending_echo_count++] = *echo;
+    return true;
+}
+
+static void PromotePendingEcho(CcSim *sim)
+{
+    if (sim == NULL || sim->delayed_echo.active ||
+        sim->pending_echo_count <= 0) return;
+    sim->delayed_echo = sim->pending_echoes[0];
+    for (int32_t i = 1; i < sim->pending_echo_count; ++i) {
+        sim->pending_echoes[i - 1] = sim->pending_echoes[i];
+    }
+    sim->pending_echo_count -= 1;
+    sim->pending_echoes[sim->pending_echo_count] = (CcDelayedEcho){0};
+}
+
 static void ResolveSituation(CcSim *sim, CcSituation *situation)
 {
     if (situation == NULL || situation->status != CC_SITUATION_ACTIVE) return;
+    if (situation->objective.progress.value <
+        situation->objective.progress.limit) {
+        const CcEvent *evidence = CcSimRecentEvent(sim, 0);
+        CcId evidence_id = evidence != NULL ? evidence->id :
+                           situation->cause_event_id;
+        int32_t remaining = situation->objective.progress.limit -
+                            situation->objective.progress.value;
+        if (!RecordSituationEvidence(situation, evidence_id, remaining)) {
+            return;
+        }
+    }
+    if (situation->objective.progress.value <
+        situation->objective.progress.limit) return;
     bool accepted = sim->player.accepted_situation_id == situation->id;
     CcFaction *issuer = FactionByIdMutable(
         sim, situation->issuer_faction_id);
     situation->status = CC_SITUATION_RESOLVED;
+    situation->end_reason = CC_QUEST_END_COMPLETED;
     CcMoney reward_paid = 0;
     if (accepted) {
         CcKingdom *kingdom = issuer != NULL ?
@@ -5450,12 +6051,13 @@ static void ResolveSituation(CcSim *sim, CcSituation *situation)
         sim, CC_EVENT_SITUATION_RESOLVED, situation->id,
         situation->target_id, situation->cause_event_id,
         accepted ? (int32_t)reward_paid : 0, text);
+    CcId resolution_id = resolution != NULL ? resolution->id :
+                           situation->objective.progress.resolved_by_event_id;
     CcCharacter *sponsor = CharacterMutable(
         sim, situation->sponsor_character_id);
     CcCharacter *affected = CharacterMutable(
         sim, situation->affected_character_id);
     if (accepted) {
-        CcId resolution_id = resolution != NULL ? resolution->id : 0U;
         if (sponsor != NULL) {
             RememberCharacter(sponsor, CC_CHARACTER_MEMORY_PLAYER_HELPED,
                               situation->id, resolution_id,
@@ -5472,7 +6074,9 @@ static void ResolveSituation(CcSim *sim, CcSituation *situation)
         }
     }
     RefreshSituationCharacterActivities(sim, situation);
-    if (accepted && !sim->delayed_echo.active) {
+    FinishFrontAfterSituation(sim, situation, resolution_id);
+    ArchiveSituationOutcome(sim, situation, resolution_id);
+    if (accepted) {
         CcId echo_settlement = 0U;
         if (situation->kind == CC_SITUATION_RELIEF_DELIVERY ||
             situation->kind == CC_SITUATION_BLACK_MARKET_DELIVERY) {
@@ -5501,7 +6105,7 @@ static void ResolveSituation(CcSim *sim, CcSituation *situation)
             (void)snprintf(witness, sizeof(witness), "%.31s",
                            witness_name[0] != '\0' ? witness_name :
                                "A local witness");
-            sim->delayed_echo = (CcDelayedEcho){
+            CcDelayedEcho echo = (CcDelayedEcho){
                 .active = true,
                 .situation_id = situation->id,
                 .settlement_id = echo_settlement,
@@ -5512,16 +6116,18 @@ static void ResolveSituation(CcSim *sim, CcSituation *situation)
                     CC_JOURNEY_OUTCOME_NEGOTIATED,
                 .due_day = sim->current_day + 30
             };
-            (void)snprintf(sim->delayed_echo.character_name,
-                           sizeof(sim->delayed_echo.character_name), "%s",
+            (void)snprintf(echo.character_name,
+                           sizeof(echo.character_name), "%s",
                            witness);
+            (void)ScheduleDelayedEcho(sim, &echo);
         }
     }
     SupersedeCompetingCrisisSituations(sim, situation);
 }
 
 static void ProgressDeliverySituations(CcSim *sim, CcId settlement_id,
-                                       CcGood good, int32_t quantity)
+                                       CcGood good, int32_t quantity,
+                                       CcId evidence_event_id)
 {
     for (int32_t i = 0; i < sim->situation_count; ++i) {
         CcSituation *situation = &sim->situations[i];
@@ -5532,9 +6138,10 @@ static void ProgressDeliverySituations(CcSim *sim, CcId settlement_id,
             situation->kind != CC_SITUATION_BLACK_MARKET_DELIVERY) continue;
         if (sim->resolved_journey_situation_id != situation->id ||
             quantity < situation->quantity - situation->progress) continue;
-        situation->progress = MinimumI32(situation->quantity,
-                                         situation->progress + quantity);
-        if (situation->progress >= situation->quantity) ResolveSituation(sim, situation);
+        if (!RecordSituationEvidence(
+                situation, evidence_event_id, quantity)) continue;
+        if (situation->objective.progress.value >=
+            situation->objective.progress.limit) ResolveSituation(sim, situation);
     }
 }
 
@@ -5554,14 +6161,20 @@ static void SupersedeTargetSituations(CcSim *sim, CcSituationKind kind, CcId tar
         if (situation->status != CC_SITUATION_ACTIVE || situation->kind != kind ||
             situation->target_id != target) continue;
         situation->status = CC_SITUATION_FAILED;
+        situation->end_reason = CC_QUEST_END_INVALIDATED;
         if (sim->player.accepted_situation_id == situation->id) {
             sim->player.accepted_situation_id = 0U;
         }
         char text[CC_EVENT_TEXT_CAPACITY];
         (void)snprintf(text, sizeof(text), "%s withdrawn after another power intervenes.",
                        CcSituationKindName(situation->kind));
-        (void)PushEvent(sim, CC_EVENT_SITUATION_FAILED, situation->id,
-                        situation->target_id, situation->cause_event_id, 0, text);
+        CcEvent *failure = PushEvent(
+            sim, CC_EVENT_SITUATION_FAILED, situation->id,
+            situation->target_id, situation->cause_event_id, 0, text);
+        CcId failure_id = failure != NULL ? failure->id :
+                          situation->cause_event_id;
+        FinishFrontAfterSituation(sim, situation, failure_id);
+        ArchiveSituationOutcome(sim, situation, failure_id);
         RefreshSituationCharacterActivities(sim, situation);
     }
 }
@@ -5582,8 +6195,10 @@ static void SupersedeCompetingCrisisSituations(CcSim *sim,
             other->kind == CC_SITUATION_ROUTE_REPAIR ||
             other->kind == CC_SITUATION_BLACK_MARKET_DELIVERY;
         if (!other_is_primary || other->id == chosen->id ||
+            other->front_id != chosen->front_id ||
             other->status != CC_SITUATION_ACTIVE) continue;
         other->status = CC_SITUATION_FAILED;
+        other->end_reason = CC_QUEST_END_INVALIDATED;
         if (sim->player.accepted_situation_id == other->id) {
             sim->player.accepted_situation_id = 0U;
         }
@@ -5596,8 +6211,12 @@ static void SupersedeCompetingCrisisSituations(CcSim *sim,
         (void)snprintf(text, sizeof(text),
                        "%s is withdrawn after the company backs a rival answer.",
                        CcSituationKindName(other->kind));
-        (void)PushEvent(sim, CC_EVENT_SITUATION_FAILED, other->id,
-                        other->target_id, other->cause_event_id, -3, text);
+        CcEvent *failure = PushEvent(
+            sim, CC_EVENT_SITUATION_FAILED, other->id,
+            other->target_id, other->cause_event_id, -3, text);
+        CcId failure_id = failure != NULL ? failure->id :
+                          other->cause_event_id;
+        ArchiveSituationOutcome(sim, other, failure_id);
         RefreshSituationCharacterActivities(sim, other);
     }
 }
@@ -5609,6 +6228,7 @@ static void ExpireSituations(CcSim *sim)
         if (situation->status != CC_SITUATION_ACTIVE ||
             situation->deadline_day >= sim->current_day) continue;
         situation->status = CC_SITUATION_FAILED;
+        situation->end_reason = CC_QUEST_END_EXPIRED;
         bool accepted = sim->player.accepted_situation_id == situation->id;
         if (situation->kind == CC_SITUATION_COURIER_DELIVERY) {
             CcCourier *courier = CourierMutable(sim, situation->target_id);
@@ -5630,8 +6250,10 @@ static void ExpireSituations(CcSim *sim)
         CcEvent *failure = PushEvent(
             sim, CC_EVENT_SITUATION_FAILED, situation->id,
             situation->target_id, situation->cause_event_id, 0, text);
+        CcId failure_id = failure != NULL ? failure->id :
+                          situation->cause_event_id;
+        situation->objective.danger.resolved_by_event_id = failure_id;
         if (accepted) {
-            CcId failure_id = failure != NULL ? failure->id : 0U;
             CcCharacter *sponsor = CharacterMutable(
                 sim, situation->sponsor_character_id);
             CcCharacter *affected = CharacterMutable(
@@ -5654,6 +6276,8 @@ static void ExpireSituations(CcSim *sim)
             }
             sim->player.reputation -= 1;
         }
+        FinishFrontAfterSituation(sim, situation, failure_id);
+        ArchiveSituationOutcome(sim, situation, failure_id);
         RefreshSituationCharacterActivities(sim, situation);
     }
 }
@@ -5875,6 +6499,14 @@ static void FailCourierSituation(CcSim *sim, CcCourier *courier)
         sim->player.reputation -= 1;
     }
     situation->status = CC_SITUATION_FAILED;
+    situation->end_reason = courier->status == CC_COURIER_LOST ?
+        CC_QUEST_END_COURIER_LOST : CC_QUEST_END_INVALIDATED;
+    const CcEvent *failure = CcSimRecentEvent(sim, 0);
+    CcId failure_id = failure != NULL ? failure->id :
+                      situation->cause_event_id;
+    FinishFrontAfterSituation(sim, situation, failure_id);
+    ArchiveSituationOutcome(sim, situation, failure_id);
+    RefreshSituationCharacterActivities(sim, situation);
 }
 
 static void ApplyCourierMessage(CcSim *sim, CcCourier *courier,
@@ -7491,6 +8123,7 @@ void CcSimAdvanceDays(CcSim *sim, int32_t days)
     for (int32_t day = 0; day < days; ++day) {
         sim->current_day += 1;
         AdvanceHorseTeam(sim);
+        AdvanceQuestDangerClocks(sim);
         if (sim->current_day > next_situation_expiry) {
             ExpireSituations(sim);
             next_situation_expiry = NextSituationExpiryDay(sim);
@@ -7606,12 +8239,15 @@ static bool ApplyTrade(CcSim *sim, const CcCommand *command,
     (void)snprintf(text, sizeof(text), "The Crownless company %s %d %s at %s.",
                    amount > 0 ? "loads" : "delivers", amount > 0 ? amount : -amount,
                    CcGoodName(command->good), settlement->name);
-    (void)PushEvent(sim, command->good == CC_GOOD_FOOD && amount < 0 ?
-                    CC_EVENT_RELIEF : CC_EVENT_PLAYER_TRADE,
-                    sim->player.id, settlement->id, 0,
-                    amount > 0 ? amount : -amount, text);
+    CcEvent *trade = PushEvent(
+        sim, command->good == CC_GOOD_FOOD && amount < 0 ?
+            CC_EVENT_RELIEF : CC_EVENT_PLAYER_TRADE,
+        sim->player.id, settlement->id, 0,
+        amount > 0 ? amount : -amount, text);
     if (amount < 0) {
-        ProgressDeliverySituations(sim, settlement->id, command->good, -amount);
+        ProgressDeliverySituations(
+            sim, settlement->id, command->good, -amount,
+            trade != NULL ? trade->id : 0U);
     }
     SetError(error, error_capacity, "");
     return true;
@@ -8208,6 +8844,7 @@ static bool AcceptSituation(CcSim *sim, const CcSituation *situation,
         SetError(error, error_capacity, "That charter is no longer available.");
         return false;
     }
+    SyncSituationObjectiveDefinition((CcSituation *)situation);
     CcId offer_settlement = CcSimSituationOfferSettlementId(sim, situation);
     bool affected_here = from_affected_character &&
         CcSimSituationTouchesSettlement(sim, situation,
@@ -8288,6 +8925,7 @@ static bool ApplyRefuseSituation(CcSim *sim, const CcCommand *command,
         return false;
     }
     situation->status = CC_SITUATION_FAILED;
+    situation->end_reason = CC_QUEST_END_REFUSED;
     if (situation->kind == CC_SITUATION_COURIER_DELIVERY) {
         CcCourier *courier = CourierMutable(sim, situation->target_id);
         if (courier != NULL && courier->status == CC_COURIER_WAITING) {
@@ -8301,8 +8939,11 @@ static bool ApplyRefuseSituation(CcSim *sim, const CcCommand *command,
                    "The Crownless company refuses %s to %s's face.",
                    CcSituationKindName(situation->kind),
                    situation->sponsor_name);
-    (void)PushEvent(sim, CC_EVENT_SITUATION_FAILED, situation->id,
-                    situation->target_id, situation->cause_event_id, -2, text);
+    CcEvent *failure = PushEvent(
+        sim, CC_EVENT_SITUATION_FAILED, situation->id,
+        situation->target_id, situation->cause_event_id, -2, text);
+    CcId failure_id = failure != NULL ? failure->id :
+                      situation->cause_event_id;
     CcCharacter *sponsor = CharacterMutable(
         sim, situation->sponsor_character_id);
     if (sponsor != NULL) {
@@ -8310,6 +8951,8 @@ static bool ApplyRefuseSituation(CcSim *sim, const CcCommand *command,
             sponsor->player_disposition - 8, -100, 100);
         sponsor->stress = ClampI32(sponsor->stress + 4, 0, 100);
     }
+    FinishFrontAfterSituation(sim, situation, failure_id);
+    ArchiveSituationOutcome(sim, situation, failure_id);
     RefreshSituationCharacterActivities(sim, situation);
     SetError(error, error_capacity, "");
     return true;
@@ -8539,6 +9182,7 @@ static void DeliverDelayedEchoIfReady(CcSim *sim)
         sim->delayed_echo.due_day = sim->current_day + 30;
     } else {
         sim->delayed_echo.active = false;
+        PromotePendingEcho(sim);
     }
 }
 
@@ -9990,7 +10634,8 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
     (CC_MAX_KINGDOMS + CC_MAX_SETTLEMENTS + CC_MAX_ROUTES + CC_MAX_MAPS + \
      CC_MAX_TREASURES + CC_MAX_FACTIONS + CC_MAX_SHIPMENTS + \
      CC_MAX_COURIERS + CC_MAX_BANDITS + CC_MAX_MONSTERS + CC_MAX_DUNGEONS + \
-     CC_MAX_SITUATIONS + CC_MAX_CHARACTERS + CC_MAX_EVENTS + \
+     CC_MAX_SITUATIONS + CC_MAX_FRONTS + CC_MAX_QUEST_OUTCOMES + \
+     CC_MAX_CHARACTERS + CC_MAX_EVENTS + \
      CC_CARRIAGE_HORSE_COUNT + \
      CC_MAX_STABLE_HORSES + 4)
 
@@ -10059,6 +10704,12 @@ static bool ValidateIdentityState(const CcSim *sim,
         TRACK_ID(sim->dungeons[i].id, CC_ENTITY_DUNGEON);
     for (int32_t i = 0; i < sim->situation_count; ++i)
         TRACK_ID(sim->situations[i].id, CC_ENTITY_SITUATION);
+    if (sim->schema_version >= 19U) {
+        for (int32_t i = 0; i < sim->front_count; ++i)
+            TRACK_ID(sim->fronts[i].id, CC_ENTITY_FRONT);
+        for (int32_t i = 0; i < sim->quest_outcome_count; ++i)
+            TRACK_ID(sim->quest_outcomes[i].id, CC_ENTITY_QUEST_OUTCOME);
+    }
     if (sim->schema_version >= 17U) {
         for (int32_t i = 0; i < sim->character_count; ++i)
             TRACK_ID(sim->characters[i].id, CC_ENTITY_CHARACTER);
@@ -10116,7 +10767,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                          sim->schema_version == 14U ||
                          sim->schema_version == 15U ||
                          sim->schema_version == 16U ||
-                         sim->schema_version == 17U;
+                         sim->schema_version == 17U ||
+                         sim->schema_version == 18U;
     bool supported_generator = sim->generator_version == CC_GENERATOR_VERSION ||
         (legacy_schema && (sim->generator_version == 3U ||
                            sim->generator_version == 5U ||
@@ -10130,7 +10782,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                            sim->generator_version == 13U ||
                            sim->generator_version == 14U ||
                            sim->generator_version == 15U ||
-                           sim->generator_version == 16U));
+                           sim->generator_version == 16U ||
+                           sim->generator_version == 17U));
     if ((!legacy_schema && sim->schema_version != CC_SIM_SCHEMA_VERSION) ||
         !supported_generator) {
         SetError(error, error_capacity, "Simulation version is unsupported.");
@@ -10165,6 +10818,11 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         sim->monster_count < 0 || sim->monster_count > CC_MAX_MONSTERS ||
         sim->dungeon_count < 0 || sim->dungeon_count > CC_MAX_DUNGEONS ||
         sim->situation_count < 0 || sim->situation_count > CC_MAX_SITUATIONS ||
+        sim->front_count < 0 || sim->front_count > CC_MAX_FRONTS ||
+        sim->quest_outcome_count < 0 ||
+        sim->quest_outcome_count > CC_MAX_QUEST_OUTCOMES ||
+        sim->pending_echo_count < 0 ||
+        sim->pending_echo_count > CC_MAX_PENDING_ECHOES ||
         sim->character_count < 0 ||
         sim->character_count > CC_MAX_CHARACTERS ||
         sim->stable_horse_count < 0 ||
@@ -10220,7 +10878,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 !ValidBoundedText(event->text, sizeof(event->text)) ||
                 event->day < 1 || event->day > sim->current_day ||
                 event->kind < CC_EVENT_HARVEST_FAILED ||
-                event->kind > CC_EVENT_GOBLIN_TUNNEL_TRAVERSED ||
+                event->kind > CC_EVENT_QUEST_PROGRESS ||
                 event->parent_id == event->id ||
                 (event->parent_id != 0U &&
                  CcSimEvent(sim, event->parent_id) == NULL)) {
@@ -10879,9 +11537,13 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                  memory < character->memory_count; ++memory) {
                 const CcCharacterMemory *item =
                     &character->memories[memory];
+                bool subject_exists =
+                    CcSimSituation(sim, item->subject_id) != NULL ||
+                    (sim->schema_version >= 19U &&
+                     CcSimQuestOutcome(sim, item->subject_id) != NULL);
                 if (item->kind <= CC_CHARACTER_MEMORY_NONE ||
                     item->kind > CC_CHARACTER_MEMORY_PLAYER_WITHDREW ||
-                    CcSimSituation(sim, item->subject_id) == NULL ||
+                    !subject_exists ||
                     CcSimEvent(sim, item->event_id) == NULL ||
                     item->day < 1 || item->day > sim->current_day) {
                     SetError(error, error_capacity,
@@ -10928,6 +11590,87 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             issuer_exists = sim->factions[faction].id ==
                             situation->issuer_faction_id;
         }
+        bool quest_valid = true;
+        if (sim->schema_version >= 19U) {
+            const CcQuestObjective *objective = &situation->objective;
+            const CcFront *front = CcSimSituationFront(sim, situation);
+            const CcQuestOutcomeRecord *archived_outcome =
+                CcSimQuestOutcome(sim, situation->id);
+            int32_t required = situation->quantity > 0 ?
+                               situation->quantity : 1;
+            int32_t danger_limit = MaximumI32(
+                1, situation->deadline_day - situation->created_day + 1);
+            bool front_contains_situation = false;
+            if (front != NULL) {
+                for (int32_t member = 0;
+                     member < front->situation_count; ++member) {
+                    if (front->situation_ids[member] == situation->id) {
+                        front_contains_situation = true;
+                    }
+                }
+            }
+            bool front_history_exists = front_contains_situation ||
+                (situation->status != CC_SITUATION_ACTIVE &&
+                 archived_outcome != NULL &&
+                 archived_outcome->front_id == situation->front_id);
+            bool ending_matches =
+                (situation->status == CC_SITUATION_ACTIVE &&
+                 situation->end_reason == CC_QUEST_END_NONE) ||
+                (situation->status == CC_SITUATION_RESOLVED &&
+                 situation->end_reason == CC_QUEST_END_COMPLETED) ||
+                (situation->status == CC_SITUATION_FAILED &&
+                 situation->end_reason > CC_QUEST_END_COMPLETED &&
+                 situation->end_reason <= CC_QUEST_END_COURIER_LOST);
+            quest_valid = front_history_exists &&
+                objective->kind ==
+                    CcQuestObjectiveForSituationKind(situation->kind) &&
+                objective->target_id == situation->target_id &&
+                objective->good == situation->good &&
+                objective->required == required &&
+                objective->progress.limit == required &&
+                objective->progress.value >= 0 &&
+                objective->progress.value <= required &&
+                objective->danger.limit == danger_limit &&
+                objective->danger.value >= 0 &&
+                objective->danger.value <= danger_limit &&
+                objective->evidence_count >= 0 &&
+                objective->evidence_count <= CC_MAX_QUEST_EVIDENCE &&
+                ending_matches;
+            for (int32_t evidence = 0;
+                 quest_valid && evidence < objective->evidence_count;
+                 ++evidence) {
+                if (CcSimEvent(
+                        sim, objective->evidence_event_ids[evidence]) == NULL) {
+                    quest_valid = false;
+                }
+                for (int32_t earlier = 0; earlier < evidence; ++earlier) {
+                    if (objective->evidence_event_ids[earlier] ==
+                        objective->evidence_event_ids[evidence]) {
+                        quest_valid = false;
+                    }
+                }
+            }
+            if (objective->progress.created_by_event_id != 0U &&
+                CcSimEvent(sim,
+                    objective->progress.created_by_event_id) == NULL) {
+                quest_valid = false;
+            }
+            if (objective->progress.resolved_by_event_id != 0U &&
+                CcSimEvent(sim,
+                    objective->progress.resolved_by_event_id) == NULL) {
+                quest_valid = false;
+            }
+            if (objective->danger.created_by_event_id != 0U &&
+                CcSimEvent(sim,
+                    objective->danger.created_by_event_id) == NULL) {
+                quest_valid = false;
+            }
+            if (objective->danger.resolved_by_event_id != 0U &&
+                CcSimEvent(sim,
+                    objective->danger.resolved_by_event_id) == NULL) {
+                quest_valid = false;
+            }
+        }
         if (CcIdKind(situation->id) != CC_ENTITY_SITUATION ||
             !ValidOptionalBoundedText(situation->sponsor_name,
                                       sizeof(situation->sponsor_name)) ||
@@ -10956,11 +11699,116 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             situation->created_day < 1 ||
             situation->created_day > sim->current_day ||
             situation->deadline_day < situation->created_day ||
+            !quest_valid ||
             (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
              situation->cause_event_id != 0U &&
              CcSimEvent(sim, situation->cause_event_id) == NULL)) {
             SetError(error, error_capacity, "Situation data is invalid.");
             return false;
+        }
+    }
+    if (sim->schema_version >= 19U) {
+        for (int32_t i = 0; i < sim->front_count; ++i) {
+            const CcFront *front = &sim->fronts[i];
+            bool outcome_matches =
+                (front->status == CC_FRONT_ACTIVE &&
+                 front->outcome == CC_FRONT_OUTCOME_NONE &&
+                 front->resolved_day == 0) ||
+                (front->status == CC_FRONT_RESOLVED &&
+                 front->outcome > CC_FRONT_OUTCOME_NONE &&
+                 front->outcome < CC_FRONT_OUTCOME_PRESSURE_WON &&
+                 front->resolved_day >= front->created_day) ||
+                ((front->status == CC_FRONT_FAILED ||
+                  front->status == CC_FRONT_INVALIDATED) &&
+                 front->outcome == CC_FRONT_OUTCOME_PRESSURE_WON &&
+                 front->resolved_day >= front->created_day);
+            bool members_valid = front->situation_count > 0 &&
+                front->situation_count <= CC_MAX_FRONT_SITUATIONS;
+            for (int32_t member = 0;
+                 members_valid && member < front->situation_count;
+                 ++member) {
+                CcId situation_id = front->situation_ids[member];
+                const CcSituation *situation = CcSimSituation(
+                    sim, situation_id);
+                if (CcIdKind(situation_id) != CC_ENTITY_SITUATION ||
+                    (situation != NULL && situation->front_id != front->id)) {
+                    members_valid = false;
+                }
+                for (int32_t earlier = 0; earlier < member; ++earlier) {
+                    if (front->situation_ids[earlier] == situation_id) {
+                        members_valid = false;
+                    }
+                }
+            }
+            bool event_refs_valid =
+                (front->cause_event_id == 0U ||
+                 CcSimEvent(sim, front->cause_event_id) != NULL) &&
+                (front->created_event_id == 0U ||
+                 CcSimEvent(sim, front->created_event_id) != NULL) &&
+                (front->resolved_event_id == 0U ||
+                 CcSimEvent(sim, front->resolved_event_id) != NULL) &&
+                (front->portent.created_by_event_id == 0U ||
+                 CcSimEvent(sim,
+                    front->portent.created_by_event_id) != NULL) &&
+                (front->portent.resolved_by_event_id == 0U ||
+                 CcSimEvent(sim,
+                    front->portent.resolved_by_event_id) != NULL);
+            if (CcIdKind(front->id) != CC_ENTITY_FRONT ||
+                front->kind < CC_FRONT_SUPPLY_CRISIS ||
+                front->kind > CC_FRONT_COURIER_DISPATCH ||
+                front->status < CC_FRONT_ACTIVE ||
+                front->status > CC_FRONT_INVALIDATED ||
+                !outcome_matches || front->anchor_id == 0U ||
+                front->created_day < 1 ||
+                front->created_day > sim->current_day ||
+                front->portent.limit < 1 ||
+                front->portent.value < 0 ||
+                front->portent.value > front->portent.limit ||
+                !ValidBoundedText(front->premise,
+                                  sizeof(front->premise)) ||
+                !members_valid || !event_refs_valid ||
+                (front->status == CC_FRONT_ACTIVE &&
+                 !FrontHasActiveSituation(sim, front))) {
+                SetError(error, error_capacity, "Story front data is invalid.");
+                return false;
+            }
+        }
+        for (int32_t i = 0; i < sim->quest_outcome_count; ++i) {
+            const CcQuestOutcomeRecord *outcome = &sim->quest_outcomes[i];
+            bool events_valid =
+                (outcome->cause_event_id == 0U ||
+                 CcSimEvent(sim, outcome->cause_event_id) != NULL) &&
+                (outcome->resolved_event_id == 0U ||
+                 CcSimEvent(sim, outcome->resolved_event_id) != NULL);
+            if (CcIdKind(outcome->id) != CC_ENTITY_QUEST_OUTCOME ||
+                CcIdKind(outcome->situation_id) != CC_ENTITY_SITUATION ||
+                CcIdKind(outcome->front_id) != CC_ENTITY_FRONT ||
+                outcome->situation_kind < CC_SITUATION_RELIEF_DELIVERY ||
+                outcome->situation_kind > CC_SITUATION_COURIER_DELIVERY ||
+                outcome->front_kind < CC_FRONT_SUPPLY_CRISIS ||
+                outcome->front_kind > CC_FRONT_COURIER_DISPATCH ||
+                outcome->situation_status <= CC_SITUATION_ACTIVE ||
+                outcome->situation_status > CC_SITUATION_FAILED ||
+                outcome->end_reason <= CC_QUEST_END_NONE ||
+                outcome->end_reason > CC_QUEST_END_COURIER_LOST ||
+                CcIdKind(outcome->target_id) == CC_ENTITY_NONE ||
+                CcSimCharacter(sim,
+                    outcome->sponsor_character_id) == NULL ||
+                CcSimCharacter(sim,
+                    outcome->affected_character_id) == NULL ||
+                outcome->resolved_day < 1 ||
+                outcome->resolved_day > sim->current_day ||
+                outcome->progress_limit < 1 ||
+                outcome->progress_value < 0 ||
+                outcome->progress_value > outcome->progress_limit ||
+                outcome->danger_limit < 1 ||
+                outcome->danger_value < 0 ||
+                outcome->danger_value > outcome->danger_limit ||
+                !events_valid) {
+                SetError(error, error_capacity,
+                         "Permanent quest outcome is invalid.");
+                return false;
+            }
         }
     }
     const CcSituation *accepted = CcSimAcceptedSituation(sim);
@@ -11167,19 +12015,41 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         SetError(error, error_capacity, "Journey outcome state is invalid.");
         return false;
     }
+    bool echo_subject_exists =
+        CcSimSituation(sim, sim->delayed_echo.situation_id) != NULL ||
+        CcSimQuestOutcome(sim, sim->delayed_echo.situation_id) != NULL;
+    bool active_echo_valid = !sim->delayed_echo.active ||
+        (echo_subject_exists &&
+         CcSimSettlement(sim, sim->delayed_echo.settlement_id) != NULL &&
+         sim->delayed_echo.outcome > CC_JOURNEY_OUTCOME_NONE &&
+         sim->delayed_echo.outcome <= CC_JOURNEY_OUTCOME_NEGOTIATED &&
+         sim->delayed_echo.due_day >= 0 &&
+         (sim->delayed_echo.parent_event_id == 0U ||
+          CcSimEvent(sim, sim->delayed_echo.parent_event_id) != NULL) &&
+         sim->delayed_echo.character_name[0] != '\0');
     if (!ValidOptionalBoundedText(sim->delayed_echo.character_name,
                                   sizeof(sim->delayed_echo.character_name)) ||
-        (sim->delayed_echo.active &&
-        (CcSimSituation(sim, sim->delayed_echo.situation_id) == NULL ||
-         CcSimSettlement(sim, sim->delayed_echo.settlement_id) == NULL ||
-         sim->delayed_echo.outcome <= CC_JOURNEY_OUTCOME_NONE ||
-         sim->delayed_echo.outcome > CC_JOURNEY_OUTCOME_NEGOTIATED ||
-         sim->delayed_echo.due_day < 0 ||
-         (sim->delayed_echo.parent_event_id != 0U &&
-          CcSimEvent(sim, sim->delayed_echo.parent_event_id) == NULL) ||
-         sim->delayed_echo.character_name[0] == '\0'))) {
+        !active_echo_valid) {
         SetError(error, error_capacity, "Delayed journey echo is invalid.");
         return false;
+    }
+    for (int32_t i = 0; i < sim->pending_echo_count; ++i) {
+        const CcDelayedEcho *echo = &sim->pending_echoes[i];
+        if (!echo->active ||
+            !ValidBoundedText(echo->character_name,
+                              sizeof(echo->character_name)) ||
+            (CcSimSituation(sim, echo->situation_id) == NULL &&
+             CcSimQuestOutcome(sim, echo->situation_id) == NULL) ||
+            CcSimSettlement(sim, echo->settlement_id) == NULL ||
+            echo->outcome <= CC_JOURNEY_OUTCOME_NONE ||
+            echo->outcome > CC_JOURNEY_OUTCOME_NEGOTIATED ||
+            echo->due_day < 0 ||
+            (echo->parent_event_id != 0U &&
+             CcSimEvent(sim, echo->parent_event_id) == NULL)) {
+            SetError(error, error_capacity,
+                     "Queued journey echo is invalid.");
+            return false;
+        }
     }
     SetError(error, error_capacity, "");
     return true;
@@ -11491,9 +12361,78 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(item->sponsor_character_id);
             HASH_VALUE(item->affected_character_id);
         }
+        if (sim->schema_version >= 19U) {
+            HASH_VALUE(item->front_id);
+            HASH_VALUE(item->end_reason);
+            HASH_VALUE(item->objective.kind);
+            HASH_VALUE(item->objective.target_id);
+            HASH_VALUE(item->objective.good);
+            HASH_VALUE(item->objective.required);
+            HASH_VALUE(item->objective.progress.value);
+            HASH_VALUE(item->objective.progress.limit);
+            HASH_VALUE(item->objective.progress.created_by_event_id);
+            HASH_VALUE(item->objective.progress.resolved_by_event_id);
+            HASH_VALUE(item->objective.danger.value);
+            HASH_VALUE(item->objective.danger.limit);
+            HASH_VALUE(item->objective.danger.created_by_event_id);
+            HASH_VALUE(item->objective.danger.resolved_by_event_id);
+            HASH_VALUE(item->objective.evidence_count);
+            for (int32_t evidence = 0;
+                 evidence < CC_MAX_QUEST_EVIDENCE; ++evidence) {
+                HASH_VALUE(item->objective.evidence_event_ids[evidence]);
+            }
+        }
         if (item->sponsor_name[0] != '\0' || item->affected_name[0] != '\0') {
             hash = HashString(hash, item->sponsor_name);
             hash = HashString(hash, item->affected_name);
+        }
+    }
+    if (sim->schema_version >= 19U) {
+        HASH_VALUE(sim->front_count);
+        for (int32_t i = 0; i < sim->front_count; ++i) {
+            const CcFront *front = &sim->fronts[i];
+            HASH_VALUE(front->id);
+            HASH_VALUE(front->kind);
+            HASH_VALUE(front->status);
+            HASH_VALUE(front->outcome);
+            HASH_VALUE(front->anchor_id);
+            HASH_VALUE(front->cause_event_id);
+            HASH_VALUE(front->created_event_id);
+            HASH_VALUE(front->resolved_event_id);
+            HASH_VALUE(front->created_day);
+            HASH_VALUE(front->resolved_day);
+            HASH_VALUE(front->portent.value);
+            HASH_VALUE(front->portent.limit);
+            HASH_VALUE(front->portent.created_by_event_id);
+            HASH_VALUE(front->portent.resolved_by_event_id);
+            HASH_VALUE(front->situation_count);
+            for (int32_t member = 0;
+                 member < CC_MAX_FRONT_SITUATIONS; ++member) {
+                HASH_VALUE(front->situation_ids[member]);
+            }
+            hash = HashString(hash, front->premise);
+        }
+        HASH_VALUE(sim->quest_outcome_count);
+        for (int32_t i = 0; i < sim->quest_outcome_count; ++i) {
+            const CcQuestOutcomeRecord *outcome = &sim->quest_outcomes[i];
+            HASH_VALUE(outcome->id);
+            HASH_VALUE(outcome->situation_id);
+            HASH_VALUE(outcome->front_id);
+            HASH_VALUE(outcome->situation_kind);
+            HASH_VALUE(outcome->front_kind);
+            HASH_VALUE(outcome->situation_status);
+            HASH_VALUE(outcome->end_reason);
+            HASH_VALUE(outcome->front_outcome);
+            HASH_VALUE(outcome->target_id);
+            HASH_VALUE(outcome->sponsor_character_id);
+            HASH_VALUE(outcome->affected_character_id);
+            HASH_VALUE(outcome->cause_event_id);
+            HASH_VALUE(outcome->resolved_event_id);
+            HASH_VALUE(outcome->resolved_day);
+            HASH_VALUE(outcome->progress_value);
+            HASH_VALUE(outcome->progress_limit);
+            HASH_VALUE(outcome->danger_value);
+            HASH_VALUE(outcome->danger_limit);
         }
     }
     if (sim->schema_version >= 17U) {
@@ -11655,6 +12594,19 @@ uint64_t CcSimHash(const CcSim *sim)
         HASH_VALUE(sim->delayed_echo.outcome);
         HASH_VALUE(sim->delayed_echo.due_day);
         hash = HashString(hash, sim->delayed_echo.character_name);
+        if (sim->schema_version >= 19U) {
+            HASH_VALUE(sim->pending_echo_count);
+            for (int32_t i = 0; i < CC_MAX_PENDING_ECHOES; ++i) {
+                const CcDelayedEcho *echo = &sim->pending_echoes[i];
+                HASH_VALUE(echo->active);
+                HASH_VALUE(echo->situation_id);
+                HASH_VALUE(echo->settlement_id);
+                HASH_VALUE(echo->parent_event_id);
+                HASH_VALUE(echo->outcome);
+                HASH_VALUE(echo->due_day);
+                hash = HashString(hash, echo->character_name);
+            }
+        }
     }
     int32_t player_good_count = sim->schema_version >= 9U ? CC_GOOD_COUNT : 3;
     for (int32_t good = 0; good < player_good_count; ++good) {
