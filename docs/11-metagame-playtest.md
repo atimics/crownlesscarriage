@@ -24,8 +24,15 @@ cmake --build --preset play
 
 Use `--seed NUMBER` to repeat a specific world.
 
-The test begins at the hungry waystation with 75 crowns. The player has enough
-to commit to one answer, but not enough to ignore price, time, and road costs.
+The test begins outside Thornford with 75 crowns, two horses, a strange wheel
+mark, and a breakfast bell that does not bring the ravens. The player has
+enough to commit to one answer, but not enough to ignore price, time, and road
+costs.
+
+The opening now reveals the Empty Granary through scenes and people. `look`
+shows what the character can notice. `people`, `talk NUMBER`, and `rumors`
+reveal motives and contradictions. `status`, `causes`, and the economy views
+keep the plain simulation facts available when a player wants them.
 
 ## Facilitation
 
@@ -34,7 +41,7 @@ Only say that `help` lists commands.
 
 Watch for:
 
-- Whether the player uses `look`, `causes`, and `people` before choosing
+- Whether the player uses `look`, `people`, `talk`, and `rumors` before choosing
 - Which promise they accept
 - Which cargo loses space to that promise
 - Whether maps feel like useful but old information
@@ -43,12 +50,20 @@ Watch for:
 - Whether both delayed outcomes make sense 30 and 60 days later
 - Where the player becomes bored, lost, or surprised for the wrong reason
 
-Do not give the player a solution list. The `rumors` command gives local clues:
+Do not give the player a solution list. The `rumors` command gives local clues
+as overheard fragments:
 
 - The western farms have grain
 - Anyone may pay to pass the restricted bridge, but relief papers do not make
   its guards friendly
 - An old night road reaches the mine
+
+The first trip now has four possible attitudes: take Mara Venn's white-wax
+relief letter in Thornford, continue to Gloamgate and take Tomas Rill's foxfire
+commission, answer Ilyra Senn's closed bridge, or carry something else. On a
+blocked road the carriage may bargain, share supper, fight, or turn back. At
+Silverwick, a completed food promise plays out at the ovens instead of ending
+as a bare ledger notice.
 
 Offers are local. A player must meet the sponsor to accept or refuse one. A
 delivery only counts if the full load first leaves town in the carriage. Maps
@@ -122,9 +137,10 @@ not to war.
 
 ## End
 
-End after the first main intervention and its two delayed echoes. The echoes
+End after the first main intervention and its two delayed letters. The letters
 arrive 30 and 60 days after the intervention, while the player is in the place
-that changed. Use `wait 30` when a short test needs to reach them quickly.
+that changed. Their writer and details depend on the chosen answer. Use
+`wait 30`, then `history`, when a short test needs to reach them quickly.
 
 Ask the player to type `debrief`. They should answer the five open questions
 without opening `history`.

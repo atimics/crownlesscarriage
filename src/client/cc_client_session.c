@@ -30,7 +30,8 @@ bool CcClientSessionValidate(const CcClientSession *session)
            isfinite(session->facing_yaw) &&
            fabsf(session->position_x) <= 100000.0f &&
            fabsf(session->position_z) <= 100000.0f &&
-           fabsf(session->facing_yaw) <= 100000.0f;
+           fabsf(session->facing_yaw) <= 100000.0f &&
+           session->opening_step <= 2U;
 }
 
 bool CcClientSessionWrite(const char *path, const CcClientSession *session,
@@ -55,11 +56,11 @@ bool CcClientSessionWrite(const char *path, const CcClientSession *session,
         return false;
     }
     int written = fprintf(
-        file, "CROWNLESS_SESSION %u\n%u %llu %d %.9g %.9g %.9g\n",
+        file, "CROWNLESS_SESSION %u\n%u %llu %d %.9g %.9g %.9g %u\n",
         session->version, session->world_seed,
         (unsigned long long)session->location_id, (int)session->scene,
         (double)session->position_x, (double)session->position_z,
-        (double)session->facing_yaw);
+        (double)session->facing_yaw, session->opening_step);
     bool ok = written > 0 && fflush(file) == 0;
 #if defined(__APPLE__) || defined(__linux__) || defined(__unix__)
     if (ok) ok = fsync(fileno(file)) == 0;
@@ -98,9 +99,11 @@ bool CcClientSessionRead(const char *path, CcClientSession *session,
     float position_x = 0.0f;
     float position_z = 0.0f;
     float facing_yaw = 0.0f;
-    int fields = fscanf(file, "%31s %u\n%u %llu %d %f %f %f",
+    unsigned int opening_step = 2U;
+    int fields = fscanf(file, "%31s %u\n%u %llu %d %f %f %f %u",
                         marker, &version, &world_seed, &location_id, &scene,
-                        &position_x, &position_z, &facing_yaw);
+                        &position_x, &position_z, &facing_yaw,
+                        &opening_step);
     bool closed = fclose(file) == 0;
     CcClientSession loaded = {
         .version = (uint32_t)version,
@@ -109,9 +112,15 @@ bool CcClientSessionRead(const char *path, CcClientSession *session,
         .scene = (CcClientSessionScene)scene,
         .position_x = position_x,
         .position_z = position_z,
-        .facing_yaw = facing_yaw
+        .facing_yaw = facing_yaw,
+        .opening_step = (uint32_t)opening_step
     };
-    if (fields != 8 || !closed ||
+    bool legacy = version == 1U && fields == 8;
+    if (legacy) {
+        loaded.version = CC_CLIENT_SESSION_VERSION;
+        loaded.opening_step = 2U;
+    }
+    if ((!legacy && fields != 9) || !closed ||
         strcmp(marker, "CROWNLESS_SESSION") != 0 ||
         !CcClientSessionValidate(&loaded)) {
         SetSessionError(error, error_capacity,

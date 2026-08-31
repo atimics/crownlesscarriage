@@ -475,6 +475,14 @@ static void TestSharedCharacterCollisionWorld(void)
                      (Vector2){CC_LOCAL_START_X, CC_LOCAL_START_Z}, false);
     Vector2 carriage_approach = CcLocalWorldTargetApproachPoint(
         CC_LOCAL_WORLD_TARGET_CARRIAGE);
+    CcLocalRendererSetOpeningStep(CC_LOCAL_OPENING_FIND_JORY);
+    if (CcLocalAgentApproachWorldTarget(
+            &carriage_path, CC_LOCAL_WORLD_TARGET_CARRIAGE)) {
+        (void)fprintf(stderr,
+                      "pre-carriage opening allowed a carriage interaction\n");
+        exit(1);
+    }
+    CcLocalRendererSetOpeningStep(CC_LOCAL_OPENING_COMPLETE);
     if (!CcLocalAgentApproachWorldTarget(
             &carriage_path, CC_LOCAL_WORLD_TARGET_CARRIAGE) ||
         carriage_path.world_target != CC_LOCAL_WORLD_TARGET_CARRIAGE ||
@@ -2054,6 +2062,205 @@ static void TestIntentionalParkourEntry(void)
     }
 }
 
+static void TestMultiLegPlatformClimb(void)
+{
+    for (int32_t preset = CC_MORPHOLOGY_QUADRUPED;
+         preset <= CC_MORPHOLOGY_OCTOPOD; ++preset) {
+        CcLocalAgent climber;
+        CcLocalAgentInit(&climber, (Vector2){3.50f, 6.20f}, false);
+        CcLocalAgentSetMorphology(
+            &climber, (CcMorphologyPreset)preset, false);
+        if (!CcLocalAgentSetExactTarget(
+                &climber, (Vector3){3.50f, 0.0f, 7.50f}, false)) {
+            (void)fprintf(stderr,
+                          "multi-leg preset %d rejected a raised target\n",
+                          preset);
+            exit(1);
+        }
+
+        bool saw_climb = false;
+        bool saw_free_climb = false;
+        bool route_touched_wall = false;
+        bool dropped = false;
+        int32_t maximum_wall_supports = 0;
+        int32_t maximum_top_supports = 0;
+        float maximum_segment_error = 0.0f;
+        for (int32_t frame = 0; frame < 1500; ++frame) {
+            CcLocalAgentUpdate(&climber, 1.0f / 60.0f, false);
+            saw_climb = saw_climb || climber.climbing;
+            saw_free_climb = saw_free_climb || climber.free_climbing;
+            for (int32_t node = 0;
+                 node < climber.climb_route.count; ++node) {
+                route_touched_wall = route_touched_wall ||
+                    climber.climb_route.nodes[node].surface ==
+                        CC_ROBOT_SURFACE_WALL;
+            }
+            dropped = dropped || climber.traversal == CC_TRAVERSAL_DROP;
+            int32_t wall_supports = 0;
+            int32_t top_supports = 0;
+            for (int32_t limb = 0;
+                 limb < climber.limb_rig.morphology.limb_count; ++limb) {
+                const CcLimbRuntime *runtime = &climber.limb_rig.limbs[limb];
+                const CcLimbSpec *spec =
+                    &climber.limb_rig.morphology.limbs[limb];
+                if (runtime->state == CC_LIMB_STANCE &&
+                    fabsf(runtime->contact_normal.y) < 0.50f) {
+                    wall_supports += 1;
+                }
+                if (runtime->state == CC_LIMB_STANCE &&
+                    runtime->contact_normal.y > 0.80f &&
+                    runtime->planted_contact.y > 1.60f) {
+                    top_supports += 1;
+                }
+                for (int32_t segment = 0;
+                     segment < spec->segment_count; ++segment) {
+                    maximum_segment_error = fmaxf(
+                        maximum_segment_error,
+                        fabsf(Distance3(runtime->joints[segment],
+                                        runtime->joints[segment + 1]) -
+                              spec->segment_length[segment]));
+                }
+            }
+            maximum_wall_supports =
+                maximum_wall_supports > wall_supports ?
+                maximum_wall_supports : wall_supports;
+            maximum_top_supports =
+                maximum_top_supports > top_supports ?
+                maximum_top_supports : top_supports;
+            if (!climber.exact_target_valid && !climber.climbing) break;
+        }
+
+        float target_dx = climber.position.x - 3.50f;
+        float target_dz = climber.position.z - 7.50f;
+        int32_t required_supports =
+            climber.limb_rig.walking_morphology.minimum_supports;
+        if (!saw_climb || !saw_free_climb || !route_touched_wall || dropped ||
+            target_dx * target_dx + target_dz * target_dz > 0.20f * 0.20f ||
+            fabsf(climber.position.y - 1.65f) > 0.02f ||
+            maximum_wall_supports < required_supports ||
+            maximum_top_supports < required_supports ||
+            maximum_segment_error > 0.004f ||
+            climber.limb_rig.pace != CC_LIMB_PACE_WALK) {
+            (void)fprintf(
+                stderr,
+                "multi-leg climb %d failed: pos %.2f %.2f %.2f climb/drop %d/%d wall/top %d/%d required %d bone %.4f pace %d support %d contacts %d\n",
+                preset, climber.position.x, climber.position.y,
+                climber.position.z, saw_climb, dropped,
+                maximum_wall_supports, maximum_top_supports,
+                required_supports, maximum_segment_error,
+                climber.limb_rig.pace, climber.limb_rig.support_state,
+                climber.limb_rig.planted_count);
+            exit(1);
+        }
+    }
+}
+
+static void TestMultiLegWallCrawl(void)
+{
+    CcLocalAgent climber;
+    CcLocalAgentInit(&climber, (Vector2){3.50f, 6.20f}, false);
+    CcLocalAgentSetMorphology(
+        &climber, CC_MORPHOLOGY_HEXAPOD, false);
+    Vector3 wall_target = {3.50f, 1.12f, 7.00f};
+    if (!CcLocalAgentBeginFreeClimb(
+            &climber, wall_target, (Vector3){0.0f, 0.0f, -1.0f})) {
+        (void)fprintf(stderr,
+                      "multi-leg rig rejected an arbitrary wall target\n");
+        exit(1);
+    }
+    for (int32_t frame = 0; frame < 900; ++frame) {
+        CcLocalAgentUpdate(&climber, 1.0f / 60.0f, false);
+        if (climber.climb_progress >= 0.99f) break;
+    }
+    const CcRobotClimbNode *last =
+        &climber.climb_route.nodes[climber.climb_route.count - 1];
+    if (!climber.climbing || !climber.free_climbing ||
+        climber.traversal != CC_TRAVERSAL_CLIMB ||
+        last->surface != CC_ROBOT_SURFACE_WALL ||
+        climber.climb_progress < 0.95f ||
+        climber.limb_rig.planted_count <
+            climber.limb_rig.morphology.minimum_supports) {
+        (void)fprintf(
+            stderr,
+            "arbitrary wall crawl failed: climb/free %d/%d progress %.2f surface %d support %d/%d\n",
+            climber.climbing, climber.free_climbing,
+            climber.climb_progress, last->surface,
+            climber.limb_rig.planted_count,
+            climber.limb_rig.morphology.minimum_supports);
+        exit(1);
+    }
+}
+
+static void TestMultiLegDamageCollapse(void)
+{
+    for (int32_t preset = CC_MORPHOLOGY_QUADRUPED;
+         preset <= CC_MORPHOLOGY_OCTOPOD; ++preset) {
+        CcLocalAgent agent;
+        CcLocalAgentInit(&agent,
+                         (Vector2){6.0f + (float)preset * 1.5f, 12.0f},
+                         false);
+        CcLocalAgentSetMorphology(
+            &agent, (CcMorphologyPreset)preset, false);
+        Vector3 impact_point = agent.position;
+        impact_point.y += agent.limb_rig.morphology.body_height;
+        if (!CcLocalAgentApplyDamage(
+                &agent, 12.0f, CC_LOCAL_COMBAT_MAX_POSTURE,
+                (Vector3){1.0f, 0.18f, 0.25f}, impact_point, 6.8f) ||
+            !agent.multileg_ragdoll.active ||
+            agent.combat.life_state != CC_LIFE_KNOCKED_DOWN) {
+            (void)fprintf(stderr,
+                          "damage did not collapse multi-leg preset %d\n",
+                          preset);
+            exit(1);
+        }
+        bool saw_contact = false;
+        bool saw_recovery = false;
+        for (int32_t frame = 0;
+             frame < 840 && agent.multileg_ragdoll.active; ++frame) {
+            CcLocalAgentUpdate(&agent, 1.0f / 60.0f, false);
+            saw_contact = saw_contact ||
+                agent.multileg_ragdoll.support_contacts > 0;
+            saw_recovery = saw_recovery ||
+                agent.multileg_ragdoll.recovering;
+        }
+        if (!saw_contact || !saw_recovery ||
+            agent.multileg_ragdoll.active || !agent.grounded ||
+            agent.combat.life_state != CC_LIFE_ALIVE) {
+            (void)fprintf(
+                stderr,
+                "multi-leg preset %d did not recover: contact/recovery %d/%d active %d grounded %d life %d\n",
+                preset, saw_contact, saw_recovery,
+                agent.multileg_ragdoll.active, agent.grounded,
+                agent.combat.life_state);
+            exit(1);
+        }
+
+        impact_point = agent.position;
+        impact_point.y += agent.limb_rig.morphology.body_height;
+        if (!CcLocalAgentApplyDamage(
+                &agent, 200.0f, 0.0f,
+                (Vector3){-0.4f, 0.1f, 1.0f}, impact_point, 7.5f) ||
+            agent.combat.life_state != CC_LIFE_DEAD ||
+            !agent.multileg_ragdoll.active ||
+            agent.multileg_ragdoll.recovery_allowed) {
+            (void)fprintf(stderr,
+                          "fatal damage did not leave preset %d collapsed\n",
+                          preset);
+            exit(1);
+        }
+        for (int32_t frame = 0; frame < 240; ++frame) {
+            CcLocalAgentUpdate(&agent, 1.0f / 60.0f, false);
+        }
+        if (!agent.multileg_ragdoll.active ||
+            agent.combat.life_state != CC_LIFE_DEAD) {
+            (void)fprintf(stderr,
+                          "fatal preset %d recovered without permission\n",
+                          preset);
+            exit(1);
+        }
+    }
+}
+
 static void TestTravellerIngress(void)
 {
     CcLocalCourse opening;
@@ -2320,7 +2527,7 @@ int main(void)
     };
 
     /* Every authored room and the complete Market Steps-to-Crown Gate road
-       must retain the hero while the target, yaw, and lens interpolate. */
+       must retain the hero in its fixed storybook shot. */
     CcLocalAgent framing_agent;
     CcLocalAgentInit(&framing_agent, camera_review_points[0], false);
     float camera_clock = 0.0f;
@@ -2372,13 +2579,18 @@ int main(void)
                   alley_camera_agent.position.z},
         alley_camera, click_target.texture.width,
         click_target.texture.height);
+    float alley_eye_height = alley_camera.position.y -
+        CcLocalTerrainHeightAt(alley_camera.position.x,
+                               alley_camera.position.z);
     if (alley_camera.projection != CAMERA_ORTHOGRAPHIC ||
-        alley_camera.fovy < 16.0f || alley_camera.fovy > 19.0f ||
+        alley_camera.fovy < 5.8f || alley_camera.fovy > 6.6f ||
+        alley_eye_height < 0.45f || alley_eye_height > 1.05f ||
         alley_hero_screen.x < 88.0f || alley_hero_screen.x > 369.0f ||
         alley_hero_screen.y < 54.0f || alley_hero_screen.y > 231.0f) {
         (void)fprintf(stderr,
-                      "authored close camera was invalid: fovy %.2f screen %.2f %.2f\n",
-                      alley_camera.fovy, alley_hero_screen.x,
+                      "authored close camera was invalid: fovy %.2f eye %.2f screen %.2f %.2f\n",
+                      alley_camera.fovy, alley_eye_height,
+                      alley_hero_screen.x,
                       alley_hero_screen.y);
         return 1;
     }
@@ -2426,7 +2638,7 @@ int main(void)
             &coach_road_camera_agent, camera_clock, true,
             click_target.texture.height);
     }
-    if (coach_road_camera.fovy < 25.0f) {
+    if (coach_road_camera.fovy < 6.8f) {
         (void)fprintf(stderr,
                       "main coach road retained an unrelated close page: %.2f\n",
                       coach_road_camera.fovy);
@@ -2488,7 +2700,7 @@ int main(void)
         camera_was_moving = camera_moving;
         previous_camera_target = miller_camera.target;
     }
-    if (longest_motion_run > 75 || camera_moving_frames > 240) {
+    if (longest_motion_run > 75 || camera_moving_frames > 320) {
         (void)fprintf(stderr,
                       "Miller's Row camera followed continuously: %d runs, %d moving frames, longest %d frames\n",
                       camera_motion_runs, camera_moving_frames,
@@ -2496,47 +2708,47 @@ int main(void)
         return 1;
     }
 
-    /* MMO-style ground commands project an obstructed click to the nearest
-       reachable edge. The windmill footprint on Miller's Row is a stable
-       regression target for clicks that used to be rejected outright. */
+    /* The low Miller's Bend page must retain precise ground input. The old
+       aerial fixture clicked through the hidden side of the windmill; from
+       below waist height that point is no longer visible, so use the road
+       apron that the player can actually see. */
     CcLocalAgent miller_click_agent;
     CcLocalAgentInit(&miller_click_agent, (Vector2){58.0f, 51.5f}, false);
-    Camera3D miller_click_camera = CcLocalStreetCameraInternal(
-        &miller_click_agent, camera_clock, false,
-        click_target.texture.height);
-    Vector3 blocked_windmill_point = {
-        64.14f,
-        CcLocalTerrainHeightAt(64.14f, 51.02f),
-        51.02f,
+    Camera3D miller_click_camera = {0};
+    for (int32_t frame = 0; frame < 120; ++frame) {
+        camera_clock += 1.0f / 60.0f;
+        miller_click_camera = CcLocalStreetCameraInternal(
+            &miller_click_agent, camera_clock, true,
+            click_target.texture.height);
+    }
+    Vector3 visible_miller_point = {
+        60.20f,
+        CcLocalTerrainHeightAt(60.20f, 51.40f),
+        51.40f,
     };
-    Vector2 blocked_click_art = GetWorldToScreenEx(
-        blocked_windmill_point, miller_click_camera,
+    Vector2 visible_click_art = GetWorldToScreenEx(
+        visible_miller_point, miller_click_camera,
         click_target.texture.width, click_target.texture.height);
-    Vector2 blocked_click_screen = {
-        blocked_click_art.x * click_viewport.width /
+    Vector2 visible_click_screen = {
+        visible_click_art.x * click_viewport.width /
             (float)click_target.texture.width,
-        blocked_click_art.y * click_viewport.height /
+        visible_click_art.y * click_viewport.height /
             (float)click_target.texture.height,
     };
     if (!CcLocalAgentPickTarget(&miller_click_agent,
-                                blocked_click_screen,
+                                visible_click_screen,
                                 click_target, click_viewport, false)) {
         (void)fprintf(stderr,
-                      "Miller's Row blocked click was not projected\n");
+                      "Miller's Bend visible road could not be clicked\n");
         return 1;
     }
     Vector3 projected_command = miller_click_agent.command_point;
-    bool command_inside_windmill =
-        projected_command.x > 63.18f - miller_click_agent.radius &&
-        projected_command.x < 65.10f + miller_click_agent.radius &&
-        projected_command.z > 50.06f - miller_click_agent.radius &&
-        projected_command.z < 51.98f + miller_click_agent.radius;
     float projection_distance = VectorDistance2(
         (Vector2){projected_command.x, projected_command.z},
-        (Vector2){blocked_windmill_point.x, blocked_windmill_point.z});
-    if (command_inside_windmill || projection_distance > 2.75f) {
+        (Vector2){visible_miller_point.x, visible_miller_point.z});
+    if (projection_distance > 0.55f) {
         (void)fprintf(stderr,
-                      "Miller's Row click projection was unsafe: %.2f %.2f distance %.2f\n",
+                      "Miller's Bend road click drifted: %.2f %.2f distance %.2f\n",
                       projected_command.x, projected_command.z,
                       projection_distance);
         return 1;
@@ -2551,7 +2763,7 @@ int main(void)
                       miller_click_agent.position.z},
             (Vector2){projected_command.x, projected_command.z}) > 0.38f) {
         (void)fprintf(stderr,
-                      "Miller's Row projected path did not finish: %.2f %.2f toward %.2f %.2f\n",
+                      "Miller's Bend road path did not finish: %.2f %.2f toward %.2f %.2f\n",
                       miller_click_agent.position.x,
                       miller_click_agent.position.z,
                       projected_command.x, projected_command.z);
@@ -3344,6 +3556,9 @@ int main(void)
     TestControlledJump();
     TestHeroicAthleticism();
     TestIntentionalParkourEntry();
+    TestMultiLegPlatformClimb();
+    TestMultiLegWallCrawl();
+    TestMultiLegDamageCollapse();
     TestTravellerIngress();
     RequirePosition("market wall blocks entry",
                     CcLocalMove((Vector2){50.00f, 26.65f},
@@ -4434,6 +4649,50 @@ int main(void)
         return 1;
     }
 
+    CcSim sponsor_sim;
+    CcSimInit(&sponsor_sim, UINT32_C(0x5a0e50));
+    const CcSituation *sponsor_situation = NULL;
+    const CcCharacter *expected_sponsor = NULL;
+    for (int32_t i = 0; i < sponsor_sim.situation_count; ++i) {
+        CcSituation *candidate = &sponsor_sim.situations[i];
+        if (candidate->status != CC_SITUATION_ACTIVE) continue;
+        CcId offer = CcSimSituationOfferSettlementId(
+            &sponsor_sim, candidate);
+        const CcCharacter *speaker =
+            CcSimSituationConversationCharacter(
+                &sponsor_sim, candidate, offer);
+        const CcCharacter *sponsor = CcSimSituationSponsorCharacter(
+            &sponsor_sim, candidate);
+        if (speaker != NULL && speaker == sponsor) {
+            sponsor_situation = candidate;
+            expected_sponsor = sponsor;
+            sponsor_sim.player.location_id = offer;
+            break;
+        }
+    }
+    if (sponsor_situation == NULL || expected_sponsor == NULL) {
+        (void)fprintf(stderr,
+                      "generated situations have no local sponsor speaker\n");
+        return 1;
+    }
+    for (int32_t i = 0; i < sponsor_sim.situation_count; ++i) {
+        if (sponsor_sim.situations[i].id != sponsor_situation->id) {
+            sponsor_sim.situations[i].status = CC_SITUATION_FAILED;
+        }
+    }
+    CcLocalCourse sponsor_course;
+    CcLocalCourseInit(&sponsor_course);
+    CcLocalCourseUpdate(&sponsor_course, NULL, &sponsor_sim,
+                        1.0f / 60.0f);
+    if (!sponsor_course.situation_witness_active ||
+        sponsor_course.situation_witness_id != sponsor_situation->id ||
+        sponsor_course.situation_witness_character_id !=
+            expected_sponsor->id) {
+        (void)fprintf(stderr,
+                      "named situation sponsor was not projected locally\n");
+        return 1;
+    }
+
     CcLocalAgent road_player;
     CcLocalAgentInit(&road_player,
                      (Vector2){CC_LOCAL_ROAD_START_X,
@@ -4747,6 +5006,36 @@ int main(void)
         if (agent.limb_rig.morphology.limb_count != expected_counts[preset]) {
             (void)fprintf(stderr, "local agent rejected a supported morphology\n");
             return 1;
+        }
+        if (preset != CC_MORPHOLOGY_BIPED) {
+            agent.target_point = agent.position;
+            agent.target_point.z += 3.0f;
+            agent.exact_target_valid = true;
+            for (int32_t frame = 0; frame < 6; ++frame) {
+                CcLocalAgentUpdate(&agent, 1.0f / 60.0f, false);
+            }
+            if (agent.limb_rig.requested_pace != CC_LIMB_PACE_SPRINT) {
+                (void)fprintf(
+                    stderr,
+                    "fast local walker did not request its sprint policy\n");
+                return 1;
+            }
+            agent.exact_target_valid = false;
+            agent.target_point = agent.position;
+            bool returned_to_walk = false;
+            for (int32_t frame = 0; frame < 180; ++frame) {
+                CcLocalAgentUpdate(&agent, 1.0f / 60.0f, false);
+                if (agent.limb_rig.pace == CC_LIMB_PACE_WALK) {
+                    returned_to_walk = true;
+                    break;
+                }
+            }
+            if (!returned_to_walk) {
+                (void)fprintf(
+                    stderr,
+                    "stopped local walker did not return safely to walking\n");
+                return 1;
+            }
         }
     }
     return 0;

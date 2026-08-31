@@ -93,15 +93,6 @@ static const char *CourierPurpose(CcCourierKind kind)
     return "sealed news";
 }
 
-static const CcKingdom *KingdomById(const CcSim *sim, CcId id)
-{
-    if (sim == NULL) return NULL;
-    for (int32_t i = 0; i < sim->kingdom_count; ++i) {
-        if (sim->kingdoms[i].id == id) return &sim->kingdoms[i];
-    }
-    return NULL;
-}
-
 static const char *KingdomPressureName(CcKingdomCalling calling)
 {
     switch (calling) {
@@ -206,6 +197,26 @@ static const char *SituationTarget(const CcSim *sim,
     return "an unknown target";
 }
 
+static bool IsNamedSettlement(const CcSim *sim,
+                              const CcSettlement *place, int32_t slot)
+{
+    return sim != NULL && place != NULL && slot >= 0 &&
+        slot < sim->settlement_count && place->id == sim->settlements[slot].id;
+}
+
+static const char *StoryRoadName(const CcSim *sim, const CcRoute *route)
+{
+    if (sim == NULL || route == NULL) return "the unknown road";
+    if (route->id == sim->routes[1].id ||
+        route->id == sim->routes[2].id) return "the King's Road";
+    if (route->id == sim->routes[6].id) return "the Night Road";
+    if (route->id == sim->routes[0].id) return "the Baker's Road";
+    if (route->id == sim->routes[3].id) return "the Silver Road";
+    if (route->id == sim->routes[4].id) return "the Pilgrim Road";
+    if (route->id == sim->routes[5].id) return "the Barrow Road";
+    return "the Crown Road";
+}
+
 static void DescribeLook(const CcMetagame *metagame,
                          char *output, size_t capacity)
 {
@@ -215,29 +226,41 @@ static void DescribeLook(const CcMetagame *metagame,
         Append(output, capacity, "The carriage is between known places.\n");
         return;
     }
-    Append(output, capacity, "\n%s — %s, day %d\n",
-           place->name, CcSettlementFunctionName(place->function),
+    Append(output, capacity, "\n%s, day %d\n", place->name,
            sim->current_day);
-    const CcKingdom *kingdom = KingdomById(sim, place->kingdom_id);
-    if (kingdom != NULL) {
-        CcKingdomCalling calling = CcSimKingdomCalling(sim, kingdom->id);
-        int32_t pressure = CcSimKingdomPressure(sim, kingdom->id);
+    if (IsNamedSettlement(sim, place, 0)) {
         Append(output, capacity,
-               "%s signs mark this as a %s realm. Its %s stands at %d/100: %s.\n",
-               kingdom->name, CcKingdomCallingName(calling),
-               KingdomPressureName(calling), pressure,
-               KingdomPressureWord(pressure));
+               "Thornford's chimneys smoke and its hill granaries sit round and fat as sleeping beetles. Still, the bakery roof is empty.\n"
+               "Nell Varo waits in the bread line with one red mitten and three grains of wheat. The blackened grain in her bare hand came from a full wagon that went east before sunrise.\n"
+               "Beside the bridge, a mossy milestone bears three little crowns and one nearly-rubbed-away wheel. You arrived on foot, with no carriage and no charter to explain it.\n");
+    } else if (IsNamedSettlement(sim, place, 1)) {
+        Append(output, capacity,
+               "Every lane in Gloamgate enters the round market and leaves by another gate. No two map sellers agree where the lanes go.\n"
+               "At the fountain, a stone queen has lost her head. Someone has put a wooden bowl where her crown should be, and scratched a tiny wheel beneath it.\n");
+    } else if (IsNamedSettlement(sim, place, 2)) {
+        Append(output, capacity,
+               "Alderwatch stands over the ravine in iron, red cloth, and strict handwriting. The bridge is sound. A chain, polished by many gloves, keeps its gate shut.\n");
+    } else if (IsNamedSettlement(sim, place, 3)) {
+        Append(output, capacity,
+               "Silverwick climbs the hill in black stone steps. Its chimneys cough silver dust, and the market clock has stopped at breakfast.\n"
+               "Children wait at the public ovens with empty tins. Below them, somewhere under the street, the mine takes a long cold breath.\n");
+    } else if (IsNamedSettlement(sim, place, 4)) {
+        Append(output, capacity,
+               "Rosespire's roofs rise like red petals around the palace. Servants use the small doors. Important people prefer doors tall enough for banners.\n");
+    } else if (IsNamedSettlement(sim, place, 5)) {
+        Append(output, capacity,
+               "Hollowbarrow is built where the road ends and the old hill begins. Little offerings hang from the eaves, though nobody agrees who they are meant to please.\n");
     }
     if (place->stock[CC_GOOD_FOOD] < place->reserve_target[CC_GOOD_FOOD] / 2) {
         Append(output, capacity,
-               "Empty baskets line the market. A guard keeps people back from the granary door.\n");
+               "The baker has flour in his hair but none on his apron. Empty baskets wait outside the guarded store.\n");
     } else if (place->stock[CC_GOOD_FOOD] <
                place->reserve_target[CC_GOOD_FOOD]) {
         Append(output, capacity,
-               "Bread is still sold, but each queue is longer than the last.\n");
+               "Bread is sold today, in loaves small enough to make the price look embarrassed.\n");
     } else {
         Append(output, capacity,
-               "The market has food today, though road news keeps every bargain tense.\n");
+               "There is food in the market today. People still glance at the road before buying it.\n");
     }
     if (place->hunger >= 40) {
         Append(output, capacity,
@@ -277,11 +300,12 @@ static void DescribeLook(const CcMetagame *metagame,
         if (situation->status != CC_SITUATION_ACTIVE ||
             CcSimSituationOfferSettlementId(sim, situation) != place->id) continue;
         Append(output, capacity,
-               "%s is asking carriers to act. %s will live with the result.\n",
-               situation->sponsor_name, situation->affected_name);
+               "%s has left an offer in the charter house. The paper is tidy. The worry behind it is not.\n",
+               situation->sponsor_name);
     }
     Append(output, capacity,
-           "Type 'causes' to trace the trouble, or 'help' for all actions.\n");
+           "You may 'talk NUMBER' from the charter list, listen to 'rumors', or inspect the 'roads'.\n"
+           "Type 'status' when you want the plain numbers, or 'help' for every action.\n");
 }
 
 static void DescribeCauses(const CcMetagame *metagame,
@@ -310,6 +334,16 @@ static void DescribeCauses(const CcMetagame *metagame,
         }
     }
     if (event_id == 0U && chosen != NULL) event_id = chosen->cause_event_id;
+    if (event_id == 0U && IsNamedSettlement(sim, place, 0)) {
+        for (int32_t offset = 0; offset < sim->event_count; ++offset) {
+            const CcEvent *event = CcSimRecentEvent(sim, offset);
+            if (event != NULL && event->kind == CC_EVENT_HARVEST_FAILED &&
+                event->location_id == place->id) {
+                event_id = event->id;
+                break;
+            }
+        }
+    }
     if (event_id == 0U) {
         Append(output, capacity, "No clear local cause has been recorded yet.\n");
         return;
@@ -328,19 +362,28 @@ static void DescribePeople(const CcMetagame *metagame,
 {
     const CcSim *sim = &metagame->sim;
     const CcSettlement *place = CurrentPlace(metagame);
-    Append(output, capacity, "People you can meet here:\n");
+    Append(output, capacity, "People who have stopped pretending not to watch the carriage:\n");
     int32_t shown = 0;
+    if (IsNamedSettlement(sim, place, 0)) {
+        Append(output, capacity,
+               "  Nell Varo has one red mitten, three grains of wheat, and a question she has tied around your wrist with red thread.\n");
+        shown += 1;
+    } else if (IsNamedSettlement(sim, place, 1)) {
+        Append(output, capacity,
+               "  A map seller guards three disagreeing road notes and claims the wheel scratched on her fountain is 'old carriage nonsense.'\n");
+        shown += 1;
+    } else if (IsNamedSettlement(sim, place, 3)) {
+        Append(output, capacity,
+               "  Jory Fen has silver dust in his eyebrows and a bent brass whistle. He says not to answer if the mine sings your name.\n");
+        shown += 1;
+    }
     for (int32_t i = 0; i < sim->situation_count; ++i) {
         const CcSituation *situation = &sim->situations[i];
         if (situation->status != CC_SITUATION_ACTIVE || place == NULL ||
             CcSimSituationOfferSettlementId(sim, situation) != place->id) continue;
-        char target[96];
-        const char *target_name = SituationTarget(
-            sim, situation, target, sizeof(target));
-        Append(output, capacity, "  %s backs %s at %s. %s bears the cost.\n",
-               situation->sponsor_name,
-               CcSituationKindName(situation->kind), target_name,
-               situation->affected_name);
+        Append(output, capacity,
+               "  %s keeps offer %d close at hand. Ask about it with 'talk %d'.\n",
+               situation->sponsor_name, i + 1, i + 1);
         shown += 1;
     }
     for (int32_t i = 0; i < sim->bandit_count; ++i) {
@@ -348,7 +391,7 @@ static void DescribePeople(const CcMetagame *metagame,
         if (place != NULL && route != NULL &&
             (route->from_id == place->id || route->to_id == place->id)) {
             Append(output, capacity,
-                   "  %s offers movement outside the law, and grows stronger when paid.\n",
+                   "  People call the old-road camp %s. They collect a road price and remember who paid it.\n",
                    sim->bandits[i].name);
             shown += 1;
         }
@@ -386,17 +429,18 @@ static void DescribeRumors(const CcMetagame *metagame,
            place != NULL ? place->name : "the road");
     if (place != NULL && place->id == sim->settlements[1].id) {
         Append(output, capacity,
-               "  A miller says the western farms still have grain.\n"
-               "  A clerk says the sanctioned bridge still passes carts for a toll.\n"
-               "  A night driver says an older road reaches the mine without a gate.\n");
+               "  The miller swears the western fields still whisper with grain. He lowers his voice before saying where the wagons went.\n"
+               "  A clerk says the bridge is closed, then admits it opens for the right paper, the right purse, or the wrong reason.\n"
+               "  A night driver folds a scrap of paper into a fox. Held over a candle, its pinholes look rather like a road.\n");
     } else if (place != NULL && place->id == sim->settlements[0].id) {
         Append(output, capacity,
-               "  Carters say eastern workers are being turned away from empty stores.\n"
-               "  The fortress has sanctioned the treaty bridge; relief papers lower the trouble, not the toll.\n");
+               "  The baker says ravens always know when breakfast is coming. Today they have gone east.\n"
+               "  A carter saw a king's wagon leave full and return empty. There was black wax on its axle and no crest on its door.\n"
+               "  Someone has crossed the eastern bridge off Mara's chart so hard the pen tore the paper.\n");
     } else if (place != NULL && place->id == sim->settlements[3].id) {
         Append(output, capacity,
-               "  Miners blame the reopened deep works for the creatures below.\n"
-               "  Officials, smugglers, and wardens each want a different future for the tunnel.\n");
+               "  Miners say the lower works breathe in at dusk. Their lamps lean toward the dark even when there is no wind.\n"
+               "  Lost spoons have begun turning up in careful silver circles. The guild calls it theft and refuses to count what came back.\n");
     } else {
         Append(output, capacity,
                "  Road talk points back toward the hungry market and the tolled bridge.\n");
@@ -431,7 +475,7 @@ static void DescribeCharters(const CcMetagame *metagame,
 {
     const CcSim *sim = &metagame->sim;
     const CcSituation *accepted = CcSimAcceptedSituation(sim);
-    Append(output, capacity, "Offers made here:\n");
+    Append(output, capacity, "Promises waiting here:\n");
     int32_t shown = 0;
     for (int32_t i = 0; i < sim->situation_count; ++i) {
         const CcSituation *situation = &sim->situations[i];
@@ -442,13 +486,34 @@ static void DescribeCharters(const CcMetagame *metagame,
         char target[96];
         const char *target_name = SituationTarget(
             sim, situation, target, sizeof(target));
+        Append(output, capacity, "  %d. ", i + 1);
+        if (situation->kind == CC_SITUATION_RELIEF_DELIVERY) {
+            Append(output, capacity,
+                   "%s's white-wax letter: eight sacks for the hungry ovens of %s.\n",
+                   situation->sponsor_name, target_name);
+        } else if (situation->kind == CC_SITUATION_BLACK_MARKET_DELIVERY) {
+            Append(output, capacity,
+                   "%s's foxfire supper: eight sacks by the road no soldier admits exists.\n",
+                   situation->sponsor_name);
+        } else if (situation->kind == CC_SITUATION_ROUTE_REPAIR) {
+            Append(output, capacity,
+                   "%s's iron chain: find out why a sound bridge will not open between %s.\n",
+                   situation->sponsor_name, target_name);
+        } else if (situation->kind == CC_SITUATION_MONSTER_EXPEDITION) {
+            Append(output, capacity,
+                   "%s's bent whistle: choose what the old mine road will become.\n",
+                   situation->affected_name);
+        } else {
+            Append(output, capacity,
+                   "%s's sealed letter: carry %s before its news grows old.\n",
+                   situation->sponsor_name, target_name);
+        }
         Append(output, capacity,
-               "  %d. %s — %s; reward %" PRId64
-               ", deadline day %d%s\n",
-               i + 1, CcSituationKindName(situation->kind), target_name,
+               "     The small print promises %" PRId64
+               " crowns before day %d%s.\n",
                situation->reward, situation->deadline_day,
                accepted != NULL && accepted->id == situation->id ?
-                   " [accepted]" : "");
+                   " [your promise]" : "");
         shown += 1;
         if (situation->kind == CC_SITUATION_RELIEF_DELIVERY ||
             situation->kind == CC_SITUATION_BLACK_MARKET_DELIVERY) {
@@ -466,9 +531,87 @@ static void DescribeCharters(const CcMetagame *metagame,
                    "     Carry the sealed dispatch in the carriage. Its news takes effect only when it reaches the named court.\n");
         }
     }
-    if (shown == 0) Append(output, capacity, "  No open offer can be made here.\n");
+    if (shown == 0) {
+        Append(output, capacity,
+               "  No fresh paper waits here. That does not mean nobody needs help.\n");
+    }
     Append(output, capacity,
-           "Use 'accept NUMBER' or 'refuse NUMBER'. Only one promise fits at a time.\n");
+           "Use 'talk NUMBER' to hear the person, then 'accept NUMBER' or 'refuse NUMBER'. Only one sealed promise fits the brass box.\n");
+}
+
+static bool TalkToSituation(CcMetagame *metagame, int32_t index,
+                            char *output, size_t capacity)
+{
+    CcSim *sim = &metagame->sim;
+    CcSituation *situation = &sim->situations[index];
+    const CcCharacter *affected = CcSimSituationAffectedCharacter(
+        sim, situation);
+    bool sponsor_here = situation->status == CC_SITUATION_ACTIVE &&
+        CcSimSituationOfferSettlementId(sim, situation) ==
+            sim->player.location_id;
+    bool affected_here = affected != NULL &&
+        affected->current_settlement_id == sim->player.location_id &&
+        CcSimSituationTouchesSettlement(sim, situation,
+                                        sim->player.location_id);
+    if (!sponsor_here && !affected_here) {
+        Append(output, capacity,
+               "Nobody here can tell that part of the story.\n");
+        return false;
+    }
+    if (affected_here &&
+        !CcCharacterRemembers(affected, CC_CHARACTER_MEMORY_MET_PLAYER,
+                              situation->id)) {
+        CcCommand listen = {
+            .kind = CC_COMMAND_CHARACTER_RESPONSE,
+            .target_id = situation->id,
+            .amount = CC_CHARACTER_RESPONSE_LISTEN
+        };
+        char error[192];
+        if (!CcSimApply(sim, &listen, error, sizeof(error))) {
+            Append(output, capacity, "%s\n", error);
+            return false;
+        }
+    }
+
+    if (situation->kind == CC_SITUATION_RELIEF_DELIVERY && sponsor_here) {
+        Append(output, capacity,
+               "%s straightens the white-wax letter until it is exactly square with the desk.\n"
+               "\"Eight sacks to Silverwick,\" she says. \"Every sack to the guild store.\"\n"
+               "You ask why the bridge is closed. She looks at the black wax on Nell's grain.\n"
+               "\"Because Alderwatch closed it.\" It is an answer in the way an empty bowl is a meal.\n",
+               situation->sponsor_name);
+    } else if (situation->kind == CC_SITUATION_BLACK_MARKET_DELIVERY &&
+               sponsor_here) {
+        Append(output, capacity,
+               "%s unfolds from behind a stack of flour barrels. His green scarf is bright; his smile is brighter.\n"
+               "\"Ask for the foxfire supper. No soldiers, no inspection, better pay.\"\n"
+               "For one moment the smile slips. \"My sister works the lower mine. They boiled their seed grain.\"\n"
+               "Then it returns. \"Also, better pay.\"\n",
+               situation->sponsor_name);
+    } else if (situation->kind == CC_SITUATION_ROUTE_REPAIR &&
+               sponsor_here) {
+        Append(output, capacity,
+               "%s sets an iron bridge key on the table. \"The bridge is not broken. That is the trouble.\"\n"
+               "Two bundles of tools would make its keepers admit the winch works. Eighteen crowns would make them forget they ever doubted it.\n"
+               "She watches the hungry boy on the wall finish his soup before adding, \"My orders and my conscience have stopped speaking.\"\n",
+               situation->sponsor_name);
+    } else if (situation->kind == CC_SITUATION_MONSTER_EXPEDITION) {
+        Append(output, capacity,
+               "%s slides out from under a broken ore wagon. Silver dust has settled in his eyebrows.\n"
+               "\"The old freight tunnel still reaches the town,\" he says. The wagon behind him rises and falls: in, out.\n"
+               "He gives you a bent brass whistle. \"If the mine sings your name, do not answer with it.\"\n",
+               situation->affected_name);
+    } else if (situation->kind == CC_SITUATION_RELIEF_DELIVERY) {
+        Append(output, capacity,
+               "%s looks from the carriage sacks to the empty oven tins. \"People keep asking which store owns the flour,\" he says. \"Flour has never answered.\"\n",
+               situation->affected_name);
+    } else {
+        Append(output, capacity,
+               "%s turns the sealed letter over without breaking it. \"News changes on the road,\" they say. \"That is why the road matters.\"\n",
+               affected_here ? situation->affected_name :
+                   situation->sponsor_name);
+    }
+    return true;
 }
 
 static const char *DangerWord(int32_t danger)
@@ -490,7 +633,7 @@ static void DescribeRoutes(const CcMetagame *metagame,
                            char *output, size_t capacity)
 {
     const CcSim *sim = &metagame->sim;
-    Append(output, capacity, "Branches found along the road out:\n");
+    Append(output, capacity, "Roads waiting beyond the last house:\n");
     for (int32_t i = 0; i < sim->route_count; ++i) {
         const CcRoute *route = &sim->routes[i];
         if (route->from_id != sim->player.location_id &&
@@ -506,8 +649,8 @@ static void DescribeRoutes(const CcMetagame *metagame,
                                 destination != NULL ?
             destination->name : "unmarked track";
         Append(output, capacity,
-               "  %d. %s — %d days, %" PRId64 " crowns, %d fodder, horse team %d%%, %s",
-               i + 1, road_name, preview.travel_days,
+               "  %d. %s toward %s — %d days, %" PRId64 " crowns, %d fodder, horse team %d%%, %s",
+               i + 1, StoryRoadName(sim, route), road_name, preview.travel_days,
                preview.provision_cost, preview.horse_feed_required,
                preview.horse_readiness,
                route->closed ? "restricted and tolled" : "open");
@@ -1147,7 +1290,8 @@ static void DescribeHelp(char *output, size_t capacity)
 {
     Append(output, capacity,
            "See the world:\n"
-           "  look, causes, people, rumors, charters, roads, notes, cargo, animals, economy, treasures, inequality, kingdoms, war, dragon, goblins, status, history [COUNT]\n"
+           "  look, people, talk NUMBER, rumors, charters, roads\n"
+           "  causes, notes, cargo, animals, economy, treasures, inequality, kingdoms, war, dragon, goblins, status, history [COUNT]\n"
            "Make commitments:\n"
            "  accept NUMBER, refuse NUMBER, abandon\n"
            "Move goods and people:\n"
@@ -1158,7 +1302,7 @@ static void DescribeHelp(char *output, size_t capacity)
            "  archive-map NUMBER, retrieve-map NUMBER (in Gloamgate)\n"
            "  buy-treasure NUMBER, sell-treasure NUMBER, travel NUMBER\n"
            "Act on the road and world:\n"
-           "  road fight|bargain, repair NUMBER tools|cash\n"
+           "  road fight|bargain|supper|turn-back, repair NUMBER tools|cash\n"
            "  stable breed MARE STALLION, stable team SLOT HORSE\n"
            "  dungeon public|smuggler|seal, wait DAYS\n"
            "  dragon steal COUNT, dragon return COUNT (at the cave)\n"
@@ -1184,12 +1328,23 @@ static void FinishTravel(CcMetagame *metagame,
         Append(output, capacity, "%s\n",
                event != NULL ? event->text : "The road is blocked.");
         Append(output, capacity,
-               "Choose 'road fight' or 'road bargain'.\n");
+               "Choose 'road bargain', 'road supper', 'road fight', or 'road turn-back'.\n");
     } else {
         const CcSettlement *place = CurrentPlace(metagame);
-        Append(output, capacity, "The carriage arrives at %s on day %d.\n",
-               place != NULL ? place->name : "an unknown place",
-               sim->current_day);
+        if (IsNamedSettlement(sim, place, 1)) {
+            Append(output, capacity,
+                   "Gloamgate appears around its headless fountain on day %d. Bracken stops because the road does. Morrow stops because Bracken did.\n",
+                   sim->current_day);
+        } else if (IsNamedSettlement(sim, place, 3)) {
+            Append(output, capacity,
+                   "Silverwick climbs into view on day %d, all black steps and silver smoke. Its market clock is still waiting for breakfast.\n",
+                   sim->current_day);
+        } else {
+            Append(output, capacity,
+                   "The carriage reaches %s on day %d. Bracken looks pleased with himself. Morrow looks pleased with Bracken.\n",
+                   place != NULL ? place->name : "an unknown place",
+                   sim->current_day);
+        }
     }
 }
 
@@ -1218,7 +1373,7 @@ void CcMetagameInit(CcMetagame *metagame, uint32_t seed)
     if (metagame == NULL) return;
     *metagame = (CcMetagame){0};
     CcSimInit(&metagame->sim, seed);
-    metagame->sim.player.location_id = metagame->sim.settlements[1].id;
+    metagame->sim.player.location_id = metagame->sim.settlements[0].id;
     metagame->sim.carriage.location_id = metagame->sim.player.location_id;
     metagame->sim.player.coins = 75;
 }
@@ -1229,10 +1384,11 @@ void CcMetagameIntro(const CcMetagame *metagame,
     if (output == NULL || output_capacity == 0U) return;
     output[0] = '\0';
     Append(output, output_capacity,
-           "CROWNLESS CARRIAGE — THE EMPTY GRANARY\n"
-           "You decide what people, goods, and news fit in one carriage.\n"
-           "The world will continue after every promise and refusal.\n"
-           "You start in the hungry waystation with 75 crowns and no given plan.\n");
+           "CROWNLESS CARRIAGE — THE ROAD WITHOUT A CROWN\n\n"
+           "It is never a good sign when the first bell rings and no ravens fly from the bakery roof.\n\n"
+           "You hear it on foot, halfway across Thornford's little stone bridge. A flour cart rattles past, followed by a farmer with a better coat than yours and a dog with much better boots.\n\n"
+           "Beside the bridge stands a mossy milestone. Three little crowns have been cut into it. Beneath them, almost rubbed away, is a fourth mark. Not a crown. A wheel. When you brush the moss aside, something clicks inside the stone.\n\n"
+           "Then the breakfast bell rings again. This time, a child shouts. You leave the stone unopened. For now.\n");
     DescribeLook(metagame, output, output_capacity);
 }
 
@@ -1262,6 +1418,16 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
         DescribeCauses(metagame, output, output_capacity);
     } else if (strcmp(command, "people") == 0) {
         DescribePeople(metagame, output, output_capacity);
+    } else if (strcmp(command, "talk") == 0) {
+        int32_t index;
+        if (!ParseIndex(first, metagame->sim.situation_count, &index)) {
+            Append(output, output_capacity,
+                   "Choose a number from 'charters'.\n");
+            return false;
+        }
+        if (!TalkToSituation(metagame, index, output, output_capacity)) {
+            return false;
+        }
     } else if (strcmp(command, "rumors") == 0) {
         DescribeRumors(metagame, output, output_capacity);
     } else if (strcmp(command, "charters") == 0) {
@@ -1388,7 +1554,10 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
             .target_id = metagame->sim.situations[index].id
         };
         if (!ApplyCommand(metagame, &action, output, output_capacity)) return false;
-        Append(output, output_capacity, "Promise accepted. Cargo space and time now have a purpose.\n");
+        const CcSituation *situation = &metagame->sim.situations[index];
+        Append(output, output_capacity,
+               "%s closes the brass charter box. The seal fits; no second promise will.\n",
+               situation->sponsor_name);
     } else if (strcmp(command, "abandon") == 0) {
         CcCommand action = {.kind = CC_COMMAND_ABANDON_SITUATION};
         if (!ApplyCommand(metagame, &action, output, output_capacity)) return false;
@@ -1405,7 +1574,8 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
         };
         if (!ApplyCommand(metagame, &action, output, output_capacity)) return false;
         Append(output, output_capacity,
-               "The refusal is spoken aloud. That sponsor will remember it.\n");
+               "%s hears the refusal without interrupting. Outside, the road goes on waiting.\n",
+               metagame->sim.situations[index].sponsor_name);
     } else if (strcmp(command, "buy") == 0 ||
                strcmp(command, "sell") == 0) {
         CcGood good;
@@ -1417,15 +1587,35 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
             return false;
         }
         if (strcmp(command, "sell") == 0) amount = -amount;
+        const CcSituation *delivery = CcSimAcceptedSituation(
+            &metagame->sim);
+        bool story_delivery = amount < 0 && good == CC_GOOD_FOOD &&
+            delivery != NULL &&
+            delivery->target_id == metagame->sim.player.location_id &&
+            (delivery->kind == CC_SITUATION_RELIEF_DELIVERY ||
+             delivery->kind == CC_SITUATION_BLACK_MARKET_DELIVERY);
         CcCommand action = {
             .kind = CC_COMMAND_TRADE,
             .good = good,
             .amount = amount
         };
         if (!ApplyCommand(metagame, &action, output, output_capacity)) return false;
-        Append(output, output_capacity, "%s %d %s.\n",
-               amount > 0 ? "Loaded" : "Unloaded",
-               amount > 0 ? amount : -amount, CcGoodName(good));
+        if (story_delivery &&
+            delivery->status == CC_SITUATION_RESOLVED &&
+            delivery->kind == CC_SITUATION_RELIEF_DELIVERY) {
+            Append(output, output_capacity,
+                   "The carriage doors open beneath Silverwick's stopped clock. The guild clerk reaches for Mara's receipt; children at the public ovens reach for the smell of flour. Jory watches both.\n"
+                   "All eight sacks leave the carriage. No golden light declares the choice good. The first oven simply grows warm.\n");
+        } else if (story_delivery &&
+                   delivery->status == CC_SITUATION_RESOLVED) {
+            Append(output, output_capacity,
+                   "A woman in a fox mask rolls her cart from the side alley. Eight sacks vanish beneath patched blankets and reappear, one by one, beside family ovens.\n"
+                   "The guild clerk keeps his receipt. The children get bread. Far away, somebody begins painting a new toll sign.\n");
+        } else {
+            Append(output, output_capacity, "%s %d %s.\n",
+                   amount > 0 ? "Loaded" : "Unloaded",
+                   amount > 0 ? amount : -amount, CcGoodName(good));
+        }
     } else if (strcmp(command, "buy-map") == 0 ||
                strcmp(command, "sell-map") == 0 ||
                strcmp(command, "buy-notes") == 0 ||
@@ -1491,16 +1681,41 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
     } else if (strcmp(command, "road") == 0) {
         int32_t condition_before = metagame->sim.carriage.condition;
         CcMoney coins_before = metagame->sim.player.coins;
+        int32_t food_before = metagame->sim.player.cargo[CC_GOOD_FOOD];
+        const CcRoute *blocked_route = CcSimRoute(
+            &metagame->sim, metagame->sim.journey.route_id);
+        bool king_chain = blocked_route != NULL && blocked_route->closed &&
+            !blocked_route->smuggler_route;
+        bool night_road = blocked_route != NULL &&
+            blocked_route->smuggler_route;
         CcCommand action = {0};
         if (first != NULL && strcmp(first, "fight") == 0) {
             action.kind = CC_COMMAND_RESOLVE_ENCOUNTER_COMBAT;
         } else if (first != NULL && strcmp(first, "bargain") == 0) {
             action.kind = CC_COMMAND_RESOLVE_ENCOUNTER_NEGOTIATE;
+        } else if (first != NULL && strcmp(first, "supper") == 0) {
+            action.kind = CC_COMMAND_RESOLVE_ENCOUNTER_PROVISIONS;
+        } else if (first != NULL && strcmp(first, "turn-back") == 0) {
+            action.kind = CC_COMMAND_WITHDRAW_ENCOUNTER;
         } else {
-            Append(output, output_capacity, "Choose 'road fight' or 'road bargain'.\n");
+            Append(output, output_capacity,
+                   "Choose 'road bargain', 'road supper', 'road fight', or 'road turn-back'.\n");
             return false;
         }
         if (!ApplyCommand(metagame, &action, output, output_capacity)) return false;
+        if (king_chain && strcmp(first, "bargain") == 0) {
+            Append(output, output_capacity,
+                   "Ilyra lifts the chain herself. She calls it a defeat in honourable combat and asks you to describe the battle as extremely fierce.\n");
+        } else if (night_road && strcmp(first, "supper") == 0) {
+            Append(output, output_capacity,
+                   "The camp pot began with one onion and a great deal of hope. When the bowls are empty, the fox masks move aside.\n");
+        } else if (night_road && strcmp(first, "bargain") == 0) {
+            Append(output, output_capacity,
+                   "Coins pass beneath the fox lantern. The road opens, and its collectors count what the road is teaching them.\n");
+        } else if (strcmp(first, "turn-back") == 0) {
+            Append(output, output_capacity,
+                   "You turn the team around before anyone draws blood. A road refused is still a choice.\n");
+        }
         if (metagame->sim.journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
             for (int32_t i = 0; i < 8; ++i) {
                 const CcEvent *event = CcSimRecentEvent(&metagame->sim, i);
@@ -1508,12 +1723,20 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
                 Append(output, output_capacity, "%s\n", event->text);
             }
         }
-        Append(output, output_capacity,
-               "The road choice costs %" PRId64
-               " crowns and %d carriage condition.\n",
-               coins_before - metagame->sim.player.coins,
-               condition_before - metagame->sim.carriage.condition);
-        FinishTravel(metagame, output, output_capacity);
+        if (food_before != metagame->sim.player.cargo[CC_GOOD_FOOD]) {
+            Append(output, output_capacity,
+                   "The road choice shares %d Food.\n",
+                   food_before - metagame->sim.player.cargo[CC_GOOD_FOOD]);
+        } else {
+            Append(output, output_capacity,
+                   "The road choice costs %" PRId64
+                   " crowns and %d carriage condition.\n",
+                   coins_before - metagame->sim.player.coins,
+                   condition_before - metagame->sim.carriage.condition);
+        }
+        if (action.kind != CC_COMMAND_WITHDRAW_ENCOUNTER) {
+            FinishTravel(metagame, output, output_capacity);
+        }
     } else if (strcmp(command, "repair") == 0) {
         int32_t index;
         int32_t method = second != NULL && strcmp(second, "tools") == 0 ? 1 :
@@ -1567,7 +1790,7 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
         }
         CcSimAdvanceDays(&metagame->sim, days);
         Append(output, output_capacity,
-               "%d days pass. Markets, factions, roads, and threats continue without you.\n",
+               "%d days pass. Bread rises, letters travel, and people make plans in rooms where your chair is empty.\n",
                days);
         DescribeLook(metagame, output, output_capacity);
     } else if (strcmp(command, "save") == 0) {

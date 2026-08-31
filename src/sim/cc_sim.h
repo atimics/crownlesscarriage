@@ -1011,8 +1011,12 @@ const CcEvent *CcSimRecentEvent(const CcSim *sim, int32_t offset);
 const CcEvent *CcSimEvent(const CcSim *sim, CcId id);
 const CcSituation *CcSimSituation(const CcSim *sim, CcId id);
 const CcCharacter *CcSimCharacter(const CcSim *sim, CcId id);
+const CcCharacter *CcSimSituationSponsorCharacter(
+    const CcSim *sim, const CcSituation *situation);
 const CcCharacter *CcSimSituationAffectedCharacter(
     const CcSim *sim, const CcSituation *situation);
+const CcCharacter *CcSimSituationConversationCharacter(
+    const CcSim *sim, const CcSituation *situation, CcId settlement_id);
 bool CcCharacterRemembers(const CcCharacter *character,
                           CcCharacterMemoryKind kind, CcId subject_id);
 const char *CcCharacterRoleName(CcCharacterRole role);

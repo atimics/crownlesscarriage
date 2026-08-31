@@ -32,12 +32,13 @@ Crownless Carriage is not built around a conventional isometric grid. The
 current client is a fully 3D, street-scale adventure stage viewed through
 authored three-quarter shots.
 
-- Every town has exactly three visible camera scenes: Arrival, Town Heart, and
-  Landmark. Hidden navigation districts do not invent extra camera cuts.
-- Arrival begins in perspective behind the moving carriage, then pans up and
-  out until the road and town threshold become one readable composition.
-- Town Heart and Landmark are stable King's Quest-style orthographic stages
-  with their own focus, foreground, quiet area, depth bands, and light profile.
+- Carriage arrival begins in perspective behind the moving team, then pans up
+  and out until the road and town threshold become one readable composition.
+- On foot, every town has six fixed, close camera locations. Their lenses sit
+  about 0.7 to 0.9 metres above the stage, so people, doors, work, and street
+  furniture read at character scale instead of as an isometric town map.
+- Each on-foot location is a stable King's Quest-style orthographic stage with
+  its own focus, foreground, quiet area, depth bands, and light profile.
 - Camera angles are deliberately uneven. They show useful facades and avoid
   the perfect 45-degree look of a classic isometric map.
 - The world renders at 457 by 285 art pixels and is enlarged with nearest-
@@ -60,8 +61,8 @@ The architecture proof connects these parts in one running build:
 - Six authored 96 by 72 metre town plans: dispersed farm crofts, dense mining
   terraces, a radial crossroads market, a bridge garrison, tall capital wards,
   and a sparse lantern-lit expedition town
-- Eighteen authored town compositions—three per location—with a moving
-  carriage reveal, a social heart, and a purpose-built landmark stage
+- Thirty-six fixed walking compositions—six per location—plus a separate
+  moving carriage reveal for each town threshold
 - Settlement profiles that own each town's building footprints and heights,
   civic hall, compound or keep, stable terrain seed, district names, material
   palette, plaza mark, physical landmarks, and secondary roads, with matched
@@ -173,7 +174,7 @@ Run it on Linux:
 ./out/build/play/crownless_carriage
 ```
 
-Run the presentation-free Empty Granary playtest:
+Run the storybook-style Empty Granary playtest:
 
 ```sh
 ./out/build/play/crownless_metagame_playtest
@@ -182,8 +183,9 @@ Run the presentation-free Empty Granary playtest:
 This text-first build uses the same simulation, commands, journeys, situations,
 and SQLite save format as the 3D client. It exists so carriage choices and delayed
 consequences can be tested while camera, movement, and art work continue. Type
-`rumors` for local clues, `kingdoms` for the three realms, `treasures` for
-unique cargo, `help` for commands, and `debrief` at the end of a session.
+`people` and `talk NUMBER` to meet the cast, `rumors` for local clues,
+`kingdoms` for the three realms, `treasures` for unique cargo, `help` for
+commands, and `debrief` at the end of a session.
 
 The headless build and tests run in CI on macOS and Linux. The full graphical
 client is also built in macOS CI.
@@ -269,7 +271,7 @@ before every opponent falls; the Crownless company can also withdraw.
 | --- | --- |
 | `src/sim/` | Deterministic strategic world and validated commands |
 | `src/persistence/` | SQLite snapshots, action journal, replay, and hashing |
-| `src/metagame/` | Presentation-free Empty Granary player loop |
+| `src/metagame/` | Storybook text presentation for the Empty Granary player loop |
 | `src/locomotion/` | Renderer-free biomechanical and robotic movement systems |
 | `src/client/` | raylib input, local world, cameras, art, UI, and projections |
 | `tests/` | Simulation, persistence, terrain, movement, and rendering contracts |

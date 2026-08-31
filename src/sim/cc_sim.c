@@ -1556,11 +1556,44 @@ static CcCharacter *CharacterMutable(CcSim *sim, CcId id)
     return (CcCharacter *)CcSimCharacter(sim, id);
 }
 
+const CcCharacter *CcSimSituationSponsorCharacter(
+    const CcSim *sim, const CcSituation *situation)
+{
+    return situation != NULL ?
+        CcSimCharacter(sim, situation->sponsor_character_id) : NULL;
+}
+
 const CcCharacter *CcSimSituationAffectedCharacter(
     const CcSim *sim, const CcSituation *situation)
 {
     return situation != NULL ?
         CcSimCharacter(sim, situation->affected_character_id) : NULL;
+}
+
+const CcCharacter *CcSimSituationConversationCharacter(
+    const CcSim *sim, const CcSituation *situation, CcId settlement_id)
+{
+    if (sim == NULL || situation == NULL || settlement_id == 0U) return NULL;
+    const CcCharacter *sponsor = CcSimSituationSponsorCharacter(
+        sim, situation);
+    const CcCharacter *affected = CcSimSituationAffectedCharacter(
+        sim, situation);
+    bool sponsor_here = sponsor != NULL &&
+        sponsor->current_settlement_id == settlement_id;
+    bool affected_here = affected != NULL &&
+        affected->current_settlement_id == settlement_id;
+    CcId offer_settlement = CcSimSituationOfferSettlementId(sim, situation);
+
+    if (affected_here &&
+        (situation->kind == CC_SITUATION_MONSTER_EXPEDITION ||
+         situation->kind == CC_SITUATION_COURIER_DELIVERY ||
+         !sponsor_here || settlement_id != offer_settlement)) {
+        return affected;
+    }
+    if (sponsor_here && settlement_id == offer_settlement) return sponsor;
+    if (affected_here && CcSimSituationTouchesSettlement(
+            sim, situation, settlement_id)) return affected;
+    return sponsor_here ? sponsor : NULL;
 }
 
 bool CcCharacterRemembers(const CcCharacter *character,
@@ -5183,7 +5216,10 @@ static void AssignSituationCast(CcSim *sim, CcSituation *situation)
         sim, situation->kind, situation->target_id);
     if (slot < 0 || slot >= CC_MAX_SETTLEMENTS) slot = 0;
     if (situation->sponsor_name[0] == '\0') {
-        CopyName(situation->sponsor_name, sponsors[slot]);
+        int32_t sponsor_slot = situation->kind ==
+                CC_SITUATION_RELIEF_DELIVERY ? 0 :
+            situation->kind == CC_SITUATION_BLACK_MARKET_DELIVERY ? 1 : slot;
+        CopyName(situation->sponsor_name, sponsors[sponsor_slot]);
     }
     if (situation->affected_name[0] == '\0') {
         CopyName(situation->affected_name, affected[slot]);
@@ -5414,15 +5450,26 @@ static void ResolveSituation(CcSim *sim, CcSituation *situation)
         sim, CC_EVENT_SITUATION_RESOLVED, situation->id,
         situation->target_id, situation->cause_event_id,
         accepted ? (int32_t)reward_paid : 0, text);
+    CcCharacter *sponsor = CharacterMutable(
+        sim, situation->sponsor_character_id);
     CcCharacter *affected = CharacterMutable(
         sim, situation->affected_character_id);
-    if (accepted && affected != NULL) {
-        RememberCharacter(affected, CC_CHARACTER_MEMORY_PLAYER_HELPED,
-                          situation->id,
-                          resolution != NULL ? resolution->id : 0U,
-                          sim->current_day);
-        affected->player_disposition = ClampI32(
-            affected->player_disposition + 15, -100, 100);
+    if (accepted) {
+        CcId resolution_id = resolution != NULL ? resolution->id : 0U;
+        if (sponsor != NULL) {
+            RememberCharacter(sponsor, CC_CHARACTER_MEMORY_PLAYER_HELPED,
+                              situation->id, resolution_id,
+                              sim->current_day);
+            sponsor->player_disposition = ClampI32(
+                sponsor->player_disposition + 8, -100, 100);
+        }
+        if (affected != NULL && affected != sponsor) {
+            RememberCharacter(affected, CC_CHARACTER_MEMORY_PLAYER_HELPED,
+                              situation->id, resolution_id,
+                              sim->current_day);
+            affected->player_disposition = ClampI32(
+                affected->player_disposition + 15, -100, 100);
+        }
     }
     RefreshSituationCharacterActivities(sim, situation);
     if (accepted && !sim->delayed_echo.active) {
@@ -5446,9 +5493,14 @@ static void ResolveSituation(CcSim *sim, CcSituation *situation)
         }
         if (echo_settlement != 0U) {
             char witness[CC_NAME_CAPACITY];
+            const char *witness_name =
+                (situation->kind == CC_SITUATION_ROUTE_REPAIR ||
+                 situation->kind == CC_SITUATION_BLACK_MARKET_DELIVERY) &&
+                        situation->sponsor_name[0] != '\0' ?
+                    situation->sponsor_name : situation->affected_name;
             (void)snprintf(witness, sizeof(witness), "%.31s",
-                           situation->affected_name[0] != '\0' ?
-                               situation->affected_name : "A local witness");
+                           witness_name[0] != '\0' ? witness_name :
+                               "A local witness");
             sim->delayed_echo = (CcDelayedEcho){
                 .active = true,
                 .situation_id = situation->id,
@@ -5575,9 +5627,33 @@ static void ExpireSituations(CcSim *sim)
                        "%s expires after the company's promise; its sponsors remember." :
                        "%s expires unanswered; other powers continue without the company.",
                        CcSituationKindName(situation->kind));
-        (void)PushEvent(sim, CC_EVENT_SITUATION_FAILED, situation->id,
-                        situation->target_id, situation->cause_event_id, 0, text);
-        if (accepted) sim->player.reputation -= 1;
+        CcEvent *failure = PushEvent(
+            sim, CC_EVENT_SITUATION_FAILED, situation->id,
+            situation->target_id, situation->cause_event_id, 0, text);
+        if (accepted) {
+            CcId failure_id = failure != NULL ? failure->id : 0U;
+            CcCharacter *sponsor = CharacterMutable(
+                sim, situation->sponsor_character_id);
+            CcCharacter *affected = CharacterMutable(
+                sim, situation->affected_character_id);
+            RememberCharacter(sponsor, CC_CHARACTER_MEMORY_PLAYER_WITHDREW,
+                              situation->id, failure_id,
+                              sim->current_day);
+            if (affected != sponsor) {
+                RememberCharacter(
+                    affected, CC_CHARACTER_MEMORY_PLAYER_WITHDREW,
+                    situation->id, failure_id, sim->current_day);
+            }
+            if (sponsor != NULL) {
+                sponsor->player_disposition = ClampI32(
+                    sponsor->player_disposition - 6, -100, 100);
+            }
+            if (affected != NULL && affected != sponsor) {
+                affected->player_disposition = ClampI32(
+                    affected->player_disposition - 12, -100, 100);
+            }
+            sim->player.reputation -= 1;
+        }
         RefreshSituationCharacterActivities(sim, situation);
     }
 }
@@ -8227,6 +8303,14 @@ static bool ApplyRefuseSituation(CcSim *sim, const CcCommand *command,
                    situation->sponsor_name);
     (void)PushEvent(sim, CC_EVENT_SITUATION_FAILED, situation->id,
                     situation->target_id, situation->cause_event_id, -2, text);
+    CcCharacter *sponsor = CharacterMutable(
+        sim, situation->sponsor_character_id);
+    if (sponsor != NULL) {
+        sponsor->player_disposition = ClampI32(
+            sponsor->player_disposition - 8, -100, 100);
+        sponsor->stress = ClampI32(sponsor->stress + 4, 0, 100);
+    }
+    RefreshSituationCharacterActivities(sim, situation);
     SetError(error, error_capacity, "");
     return true;
 }
@@ -8262,14 +8346,27 @@ static bool ApplyAbandonSituation(CcSim *sim, const CcCommand *command,
         situation->progress, text);
     CcCharacter *affected = CharacterMutable(
         sim, situation->affected_character_id);
+    CcCharacter *sponsor = CharacterMutable(
+        sim, situation->sponsor_character_id);
     RememberCharacter(affected, CC_CHARACTER_MEMORY_PLAYER_WITHDREW,
                       situation->id,
                       withdrawal != NULL ? withdrawal->id : 0U,
                       sim->current_day);
+    if (sponsor != affected) {
+        RememberCharacter(sponsor, CC_CHARACTER_MEMORY_PLAYER_WITHDREW,
+                          situation->id,
+                          withdrawal != NULL ? withdrawal->id : 0U,
+                          sim->current_day);
+    }
     if (affected != NULL) {
         affected->player_disposition = ClampI32(
             affected->player_disposition - 12, -100, 100);
         affected->stress = ClampI32(affected->stress + 10, 0, 100);
+    }
+    if (sponsor != NULL && sponsor != affected) {
+        sponsor->player_disposition = ClampI32(
+            sponsor->player_disposition - 6, -100, 100);
+        sponsor->stress = ClampI32(sponsor->stress + 4, 0, 100);
     }
     RefreshSituationCharacterActivities(sim, (CcSituation *)situation);
     SetError(error, error_capacity, "");
@@ -8302,12 +8399,10 @@ static bool ApplyCharacterResponse(CcSim *sim, const CcCommand *command,
 {
     CcSituation *situation = (CcSituation *)CcSimSituation(
         sim, command->target_id);
-    CcCharacter *character = situation != NULL ? CharacterMutable(
-        sim, situation->affected_character_id) : NULL;
-    if (situation == NULL || character == NULL ||
-        character->current_settlement_id != sim->player.location_id ||
-        !CcSimSituationTouchesSettlement(sim, situation,
-                                         sim->player.location_id)) {
+    CcCharacter *character = (CcCharacter *)
+        CcSimSituationConversationCharacter(
+            sim, situation, sim->player.location_id);
+    if (situation == NULL || character == NULL) {
         SetError(error, error_capacity,
                  "That person is not here to answer.");
         return false;
@@ -8392,44 +8487,43 @@ static void DeliverDelayedEchoIfReady(CcSim *sim)
     if (situation != NULL &&
         situation->kind == CC_SITUATION_ROUTE_REPAIR && prior_echoes == 0) {
         (void)snprintf(text, sizeof(text),
-                       "%.24s returns to %.24s: common carts cross the bridge again, and the first toll dispute has begun.",
-                       sim->delayed_echo.character_name,
-                       place != NULL ? place->name : "the settlement");
+                       "A letter from %.16s holds a broken chain link. Carts cross again; the hungry boy now eats before the officers do.",
+                       sim->delayed_echo.character_name);
     } else if (situation != NULL &&
                situation->kind == CC_SITUATION_ROUTE_REPAIR) {
         (void)snprintf(text, sizeof(text),
-                       "%.24s reports from %.24s: the reopened bridge feeds trade, while its new keepers grow rich.",
+                       "A second letter from %.16s says the bridge feeds %.16s, but its toll keepers are buying very large hats.",
                        sim->delayed_echo.character_name,
                        place != NULL ? place->name : "the settlement");
     } else if (situation != NULL &&
                situation->kind == CC_SITUATION_BLACK_MARKET_DELIVERY &&
                prior_echoes == 0) {
         (void)snprintf(text, sizeof(text),
-                       "%.24s returns to %.24s: food reached the hungry before the law could stop it.",
+                       "A letter from %.16s smells of onion soup. A fox sits beside %.16s's new toll sign. Food reached the hungry first.",
                        sim->delayed_echo.character_name,
                        place != NULL ? place->name : "the settlement");
     } else if (situation != NULL &&
                situation->kind == CC_SITUATION_BLACK_MARKET_DELIVERY) {
         (void)snprintf(text, sizeof(text),
-                       "%.24s warns %.24s: the night-road collectors now demand a share of every load.",
+                       "A second letter from %.16s has no drawing. Night Road collectors now demand a share of every load entering %.16s.",
                        sim->delayed_echo.character_name,
                        place != NULL ? place->name : "the settlement");
     } else if (situation != NULL &&
                situation->kind == CC_SITUATION_MONSTER_EXPEDITION) {
         (void)snprintf(text, sizeof(text),
                        prior_echoes == 0 ?
-                       "%.24s returns to %.24s: fewer things hunt near the mine, but crews argue over the changed tunnels." :
-                       "%.24s reports from %.24s: the mine's new order has created winners, debts, and fresh enemies.",
+                       "A letter from %.16s leaves silver dust. Three rings came back from %.16s's mine. The guild still calls the keepers thieves." :
+                       "A second letter from %.16s says the mine below %.16s has made safer crews, new debts, and enemies with names.",
                        sim->delayed_echo.character_name,
                        place != NULL ? place->name : "the settlement");
     } else if (prior_echoes == 0) {
         (void)snprintf(text, sizeof(text),
-                       "%.24s returns to %.24s: the delivered food reached hungry homes, though the shortage remains.",
+                       "A letter from %.16s is tied with red thread. The ovens of %.16s are warm, though the bread line still reaches the well.",
                        sim->delayed_echo.character_name,
                        place != NULL ? place->name : "the settlement");
     } else {
         (void)snprintf(text, sizeof(text),
-                       "%.24s reports from %.24s: new families have arrived for food, and old stores are being guarded.",
+                       "A second letter from %.16s says families followed the smell of bread to %.16s, and the old stores found new locks.",
                        sim->delayed_echo.character_name,
                        place != NULL ? place->name : "the settlement");
     }
@@ -8619,10 +8713,15 @@ static void InterruptJourney(CcSim *sim)
         sim, sim->journey.destination_id);
     const CcSituation *situation = CcSimSituation(
         sim, sim->journey.situation_id);
+    const CcRoute *route = CcSimRoute(sim, sim->journey.route_id);
     const CcBanditGroup *bandits = BanditsOnRoute(
         sim, sim->journey.route_id);
     char text[CC_EVENT_TEXT_CAPACITY];
-    if (situation == NULL) {
+    if (route != NULL && route->closed && bandits == NULL) {
+        (void)snprintf(
+            text, sizeof(text),
+            "Captain Ilyra Senn lowers Alderwatch's bright chain across the road. 'Orders,' she says, while a hungry boy eats too quickly on the wall.");
+    } else if (situation == NULL) {
         (void)snprintf(
             text, sizeof(text),
             "The warned riders from %.24s close the road to %.24s. The carriage stops before anything is taken.",

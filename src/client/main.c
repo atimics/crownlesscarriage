@@ -6,6 +6,7 @@
 #include "client/cc_visual_style.h"
 #include "persistence/cc_save.h"
 #include "sim/cc_sim.h"
+#include "story/cc_story.h"
 
 #include "raylib.h"
 #include "GLFW/glfw3.h"
@@ -69,6 +70,13 @@ static void ToggleCommandOverlay(ClientView requested,
     *view = requested;
 }
 
+typedef enum OpeningConversationBeat {
+    OPENING_CONVERSATION_NONE = 0,
+    OPENING_CONVERSATION_NELL_REQUEST,
+    OPENING_CONVERSATION_JORY_CLUE,
+    OPENING_CONVERSATION_MARA_PROMISE
+} OpeningConversationBeat;
+
 typedef struct LocalState {
     CcLocalAgent agent;
     CcLocalCourse course;
@@ -87,6 +95,8 @@ typedef struct LocalState {
     bool journey_parley_active;
     bool movement_reticle_valid;
     bool movement_reticle_accepted;
+    CcLocalOpeningStep opening_step;
+    OpeningConversationBeat opening_conversation;
     CcId conversation_character_id;
     CcId conversation_situation_id;
 } LocalState;
@@ -171,6 +181,8 @@ typedef enum ContextActionKind {
     CONTEXT_ACTION_TRAVEL_DRAGON_SITE,
     CONTEXT_ACTION_RETURN_FROM_SITE,
     CONTEXT_ACTION_GOBLIN_TRADE,
+    CONTEXT_ACTION_TALK_JORY,
+    CONTEXT_ACTION_MEET_MARA,
     CONTEXT_ACTION_TALK_CHARACTER,
     CONTEXT_ACTION_LISTEN_CHARACTER,
     CONTEXT_ACTION_PLEDGE_CHARACTER
@@ -273,6 +285,8 @@ static const Vector2 LOCAL_CARRIAGE_BAY = {
     CC_LOCAL_CARRIAGE_APPROACH_X, CC_LOCAL_CARRIAGE_APPROACH_Z
 };
 static const Vector2 LOCAL_NOTICE = {CC_LOCAL_NOTICE_X, CC_LOCAL_NOTICE_Z};
+static const Vector2 LOCAL_INTRO_JORY = {CC_LOCAL_INTRO_JORY_X,
+                                         CC_LOCAL_INTRO_JORY_Z};
 static const Vector2 LOCAL_DUNGEON = {CC_LOCAL_DUNGEON_X,
                                      CC_LOCAL_DUNGEON_Z};
 static const Vector2 LOCAL_DRAGON_CAVE = {CC_LOCAL_DRAGON_CAVE_X,
@@ -362,11 +376,41 @@ static void SituationTargetLabel(const CcSim *sim, const CcSituation *situation,
     (void)snprintf(label, capacity, "unknown target");
 }
 
+static int32_t OpeningSituationIndex(const CcSim *sim)
+{
+    if (sim == NULL) return -1;
+    for (int32_t i = 0; i < sim->situation_count; ++i) {
+        if (sim->situations[i].status == CC_SITUATION_ACTIVE &&
+            sim->situations[i].kind == CC_SITUATION_RELIEF_DELIVERY) {
+            return i;
+        }
+    }
+    for (int32_t i = 0; i < sim->situation_count; ++i) {
+        if (sim->situations[i].status == CC_SITUATION_ACTIVE) return i;
+    }
+    return -1;
+}
+
+static bool SituationVisibleToPlayer(const CcSim *sim, int32_t index)
+{
+    if (sim == NULL || index < 0 || index >= sim->situation_count ||
+        sim->situations[index].status != CC_SITUATION_ACTIVE) return false;
+    /* The world may already contain many problems, but a new player only
+       receives Mara's first promise. More notices become available after
+       the company earns its first point of reputation. */
+    if (sim->player.reputation > 0) return true;
+    if (sim->player.accepted_situation_id != 0U) {
+        return sim->situations[index].id ==
+               sim->player.accepted_situation_id;
+    }
+    return index == OpeningSituationIndex(sim);
+}
+
 static int32_t FirstActiveSituationIndex(const CcSim *sim)
 {
     if (sim == NULL) return -1;
     for (int32_t i = 0; i < sim->situation_count; ++i) {
-        if (sim->situations[i].status == CC_SITUATION_ACTIVE) return i;
+        if (SituationVisibleToPlayer(sim, i)) return i;
     }
     return -1;
 }
@@ -394,7 +438,7 @@ static int32_t StepActiveSituationIndex(const CcSim *sim, int32_t selected,
         index += direction < 0 ? -1 : 1;
         if (index < 0) index = sim->situation_count - 1;
         if (index >= sim->situation_count) index = 0;
-        if (sim->situations[index].status == CC_SITUATION_ACTIVE) return index;
+        if (SituationVisibleToPlayer(sim, index)) return index;
     }
     return -1;
 }
@@ -402,8 +446,7 @@ static int32_t StepActiveSituationIndex(const CcSim *sim, int32_t selected,
 static const CcSituation *SelectedActiveSituation(const CcSim *sim,
                                                   int32_t selected)
 {
-    if (sim == NULL || selected < 0 || selected >= sim->situation_count ||
-        sim->situations[selected].status != CC_SITUATION_ACTIVE) {
+    if (!SituationVisibleToPlayer(sim, selected)) {
         return NULL;
     }
     return &sim->situations[selected];
@@ -472,7 +515,7 @@ static void SituationNextAction(const CcSim *sim,
             (sim->player.location_id == route->from_id ||
              sim->player.location_id == route->to_id);
         (void)snprintf(label, capacity, at_route ?
-                       "Repair this road: 3 Tools or 18 crowns." :
+                       "Repair this road: 2 Tools or 18 crowns." :
                        "Travel to either end of this road.");
         return;
     }
@@ -716,6 +759,9 @@ static ConvoyUpdateResult UpdateDrivenConvoy(LocalState *local,
     return CONVOY_UPDATE_NONE;
 }
 
+static void RepositionHero(LocalState *local, Vector2 position,
+                           bool market_interior);
+
 static void ResetLocalState(LocalState *local)
 {
     local->movement_reticle = (Vector2){0};
@@ -724,6 +770,8 @@ static void ResetLocalState(LocalState *local)
     local->movement_reticle_accepted = false;
     local->conversation_character_id = 0U;
     local->conversation_situation_id = 0U;
+    local->opening_conversation = OPENING_CONVERSATION_NONE;
+    local->opening_step = CC_LOCAL_OPENING_COMPLETE;
     local->market_interior = false;
     local->site_kind = CC_LOCAL_SITE_NONE;
     local->site_travel_progress = 0.0f;
@@ -739,9 +787,8 @@ static void ResetLocalState(LocalState *local)
         .town_position = {CC_LOCAL_CARRIAGE_X, 0.0f,
                           CC_LOCAL_CARRIAGE_Z}
     };
-    /* Begin each town visit at the carriage, not in an aerial town-centre
-       tableau. The first playable page now introduces the hero, carriage,
-       and road together, then lets the town reveal itself through travel. */
+    /* Established companies return to their parked carriage. A brand-new
+       campaign is moved to the bakery separately, before any company exists. */
     CcLocalAgentInit(
         &local->agent,
         (Vector2){CC_LOCAL_CARRIAGE_APPROACH_X,
@@ -751,6 +798,20 @@ static void ResetLocalState(LocalState *local)
         CC_LOCAL_CARRIAGE_Z - CC_LOCAL_CARRIAGE_APPROACH_Z);
     CcLocalCombatSetTeam(&local->agent, CC_COMBAT_PLAYER);
     CcLocalCourseInit(&local->course);
+}
+
+static void BeginOpening(LocalState *local)
+{
+    if (local == NULL) return;
+    RepositionHero(local,
+                   (Vector2){CC_LOCAL_INTRO_START_X,
+                             CC_LOCAL_INTRO_START_Z}, false);
+    local->opening_step = CC_LOCAL_OPENING_FIND_JORY;
+    local->opening_conversation = OPENING_CONVERSATION_NELL_REQUEST;
+    local->agent.facing_yaw = atan2f(
+        CC_LOCAL_INTRO_JORY_X - CC_LOCAL_INTRO_START_X,
+        CC_LOCAL_INTRO_JORY_Z - CC_LOCAL_INTRO_START_Z);
+    local->course.alarm_countdown = 1000.0f;
 }
 
 static void RepositionHero(LocalState *local, Vector2 position,
@@ -822,7 +883,8 @@ static bool SaveLocalSession(const char *path, const CcSim *sim,
         .scene = ClientSceneForLocalState(local),
         .position_x = local->agent.position.x,
         .position_z = local->agent.position.z,
-        .facing_yaw = local->agent.facing_yaw
+        .facing_yaw = local->agent.facing_yaw,
+        .opening_step = (uint32_t)local->opening_step
     };
     return CcClientSessionWrite(path, &session, error, error_capacity);
 }
@@ -857,6 +919,10 @@ static bool RestoreLocalSession(const char *path, const CcSim *sim,
         local->course.alarm_countdown = 1000.0f;
     }
     local->agent.facing_yaw = session.facing_yaw;
+    local->opening_step = (CcLocalOpeningStep)session.opening_step;
+    if (local->opening_step == CC_LOCAL_OPENING_FIND_JORY) {
+        local->opening_conversation = OPENING_CONVERSATION_NELL_REQUEST;
+    }
     return true;
 }
 
@@ -1240,6 +1306,26 @@ static void DrawLocalHeader(const CcSim *sim, const LocalState *local)
         CcSimSettlement(sim, sim->journey.origin_id) : NULL;
     const CcSettlement *destination = road && !finding_road && !site ?
         CcSimSettlement(sim, sim->journey.destination_id) : NULL;
+    if (local->opening_step != CC_LOCAL_OPENING_COMPLETE) {
+        CcOverlayDrawText("THORNFORD  /  THE FIRST BELL",
+                          22, 18, 15, INK);
+        const char *beat = local->opening_step ==
+                CC_LOCAL_OPENING_FIND_JORY ?
+            "FIRST THREAD  /  Find Jory behind the bakery" :
+            "FIRST THREAD  /  Find Mara at the harvest board";
+        int beat_width = CcOverlayMeasureText(beat, 8) + 14;
+        DrawRectangleRounded((Rectangle){18.0f, 39.0f,
+                                          (float)beat_width, 17.0f},
+                             0.24f, 4, Fade(PANEL_DEEP, 0.84f));
+        CcOverlayDrawText(beat, 25, 44, 8, TEAL);
+        if (local->opening_conversation == OPENING_CONVERSATION_NONE) {
+            const char *hint = "CLICK THE ROAD TO WALK";
+            int hint_width = CcOverlayMeasureText(hint, 8);
+            CcOverlayDrawText(hint, GetScreenWidth() - hint_width - 22,
+                              23, 8, MUTED);
+        }
+        return;
+    }
     CcOverlayDrawText(site ?
              local->site_travel_active ?
                  TextFormat("%s  ->  %s",
@@ -1572,8 +1658,11 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
                 int32_t eta_hours =
                     (CcSimJourneyEtaMinutes(sim) + 59) / 60;
                 CcOverlayDrawText(
-                    TextFormat("PACE %s  /  ETA %dD %dH",
+                    TextFormat("%s / %s / ETA %dD %dH",
                                CcJourneyPaceName(sim->journey.pace),
+                               CcClientConvoyGaitName(
+                                   CcClientConvoyGaitForPace(
+                                       local->convoy.pace)),
                                eta_hours / 24, eta_hours % 24),
                     content_x, 170, 8, CC_GOLD);
                 CcOverlayDrawText(
@@ -1975,7 +2064,7 @@ static int32_t ActiveSituationCount(const CcSim *sim)
     int32_t count = 0;
     if (sim == NULL) return count;
     for (int32_t i = 0; i < sim->situation_count; ++i) {
-        if (sim->situations[i].status == CC_SITUATION_ACTIVE) count += 1;
+        if (SituationVisibleToPlayer(sim, i)) count += 1;
     }
     return count;
 }
@@ -2254,29 +2343,20 @@ static ContextActionSet BuildContextActions(
             bool promised = CcCharacterRemembers(
                 character, CC_CHARACTER_MEMORY_PLAYER_PROMISED,
                 situation->id);
-            AddDetailedContextAction(
-                &set, CONTEXT_ACTION_LISTEN_CHARACTER,
-                listened ? "Account heard" : "Hear their account", "1",
-                listened ? "THEY REMEMBER YOU LISTENED" :
-                           "LEARN THEIR STAKE",
-                !listened, listened);
+            if (!listened && !promised) {
+                AddContextAction(&set, CONTEXT_ACTION_LISTEN_CHARACTER,
+                                 "1  I hear you.");
+            }
             const CcSituation *accepted = CcSimAcceptedSituation(sim);
             bool can_promise = situation->status == CC_SITUATION_ACTIVE &&
                 (accepted == NULL || accepted->id == situation->id) &&
                 !promised;
-            AddDetailedContextAction(
-                &set, CONTEXT_ACTION_PLEDGE_CHARACTER,
-                promised ? "Promise remembered" :
-                accepted != NULL && accepted->id == situation->id ?
-                    "Reassure them" : "Promise help",
-                "2", promised ? "THEY WILL HOLD YOU TO IT" :
-                     accepted != NULL && accepted->id != situation->id ?
-                         "ANOTHER PROMISE IS ACTIVE" : "TAKE THE QUEST",
-                can_promise, promised);
+            if (can_promise) {
+                AddContextAction(&set, CONTEXT_ACTION_PLEDGE_CHARACTER,
+                                 "2  We'll help.");
+            }
         }
-        AddDetailedContextAction(
-            &set, CONTEXT_ACTION_CLOSE_VIEW, "Step away", "ESC",
-            "RETURN TO TOWN", true, false);
+        AddContextAction(&set, CONTEXT_ACTION_CLOSE_VIEW, "Esc  Goodbye.");
         return set;
     }
     if (view == VIEW_MAP) {
@@ -2370,6 +2450,20 @@ static ContextActionSet BuildContextActions(
     }
 
     Vector2 position = LocalPosition(local);
+    if (local->opening_step == CC_LOCAL_OPENING_FIND_JORY) {
+        if (GridDistance(position, LOCAL_INTRO_JORY) < 1.65f) {
+            AddContextAction(&set, CONTEXT_ACTION_TALK_JORY,
+                             "Talk to Jory");
+        }
+        return set;
+    }
+    if (local->opening_step == CC_LOCAL_OPENING_MEET_MARA) {
+        if (GridDistance(position, LOCAL_NOTICE) < 1.35f) {
+            AddContextAction(&set, CONTEXT_ACTION_MEET_MARA,
+                             "Meet Mara");
+        }
+        return set;
+    }
     if (local->site_kind != CC_LOCAL_SITE_NONE) {
         Vector2 entrance = {CC_LOCAL_SITE_ENTRANCE_X,
                             CC_LOCAL_SITE_ENTRANCE_Z};
@@ -2520,7 +2614,10 @@ static Color ContextActionColor(ContextActionKind kind)
         kind == CONTEXT_ACTION_RETURN_DRAGON_CROWNS ||
         kind == CONTEXT_ACTION_RETURN_DRAGON_RELIC ||
         kind == CONTEXT_ACTION_INTERCEPT_DRAGON_TRIBUTE ||
-        kind == CONTEXT_ACTION_OPEN_MAP) return TEAL;
+        kind == CONTEXT_ACTION_OPEN_MAP ||
+        kind == CONTEXT_ACTION_TRAVEL_DRAGON_SITE ||
+        kind == CONTEXT_ACTION_TALK_JORY ||
+        kind == CONTEXT_ACTION_MEET_MARA) return TEAL;
     if (kind == CONTEXT_ACTION_SELECT_TARGET) return DANGER;
     if (kind == CONTEXT_ACTION_BASIC_STRIKE ||
         kind == CONTEXT_ACTION_TOGGLE_GUARD) return CC_GOLD;
@@ -2721,6 +2818,10 @@ static bool CommandActionEnabled(CommandActionKind action,
                                  const LocalState *local,
                                  ClientView view)
 {
+    if (local != NULL &&
+        local->opening_step != CC_LOCAL_OPENING_COMPLETE) {
+        return action == COMMAND_ACTION_SAVE;
+    }
     bool road_local = local != NULL &&
         (local->road_choice_active || local->journey_travel_active ||
          local->site_travel_active ||
@@ -2748,6 +2849,8 @@ static bool CommandActionEnabled(CommandActionKind action,
 
 static void DrawCommandBar(ClientView view, const LocalState *local)
 {
+    if (local != NULL &&
+        local->opening_step != CC_LOCAL_OPENING_COMPLETE) return;
     Vector2 mouse = GetMousePosition();
     for (int32_t value = COMMAND_ACTION_QUESTS;
          value < COMMAND_ACTION_COUNT; ++value) {
@@ -2779,6 +2882,10 @@ static void DrawCommandBar(ClientView view, const LocalState *local)
 static CommandActionKind PressedCommandAction(const LocalState *local,
                                               ClientView view)
 {
+    if (local != NULL &&
+        local->opening_step != CC_LOCAL_OPENING_COMPLETE) {
+        return COMMAND_ACTION_NONE;
+    }
     if (!ClientMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         return COMMAND_ACTION_NONE;
     }
@@ -3308,7 +3415,7 @@ static void DrawSituationBoard(const CcSim *sim, int32_t selected)
     int32_t active_count = 0;
     int32_t active_ordinal = 0;
     for (int32_t i = 0; i < sim->situation_count; ++i) {
-        if (sim->situations[i].status != CC_SITUATION_ACTIVE) continue;
+        if (!SituationVisibleToPlayer(sim, i)) continue;
         if (i == selected) active_ordinal = active_count;
         active_count += 1;
     }
@@ -3488,22 +3595,110 @@ static void DrawCarriageScreen(const CcSim *sim, const LocalState *local)
         CcSimHorseTeamReadiness(sim) < 30 ? DANGER : TEAL);
 }
 
-static const char *CharacterStakeLine(const CcSituation *situation)
+static Rectangle OpeningDialogueBounds(void)
 {
-    if (situation == NULL) return "They have nothing more to ask.";
-    switch (situation->kind) {
-        case CC_SITUATION_RELIEF_DELIVERY:
-            return "Food is running short. Their household cannot wait for the next convoy.";
-        case CC_SITUATION_ROUTE_REPAIR:
-            return "The broken road has cut work, medicine, and family from the town.";
-        case CC_SITUATION_MONSTER_EXPEDITION:
-            return "They saw what came out of the mine and know who is still below.";
-        case CC_SITUATION_BLACK_MARKET_DELIVERY:
-            return "Official stores will not reach the people who are hiding from the levy.";
-        case CC_SITUATION_COURIER_DELIVERY:
-            return "The message will change lives only if it reaches the right hands intact.";
+    return (Rectangle){116.0f, (float)GetScreenHeight() - 168.0f,
+                       (float)GetScreenWidth() - 146.0f, 118.0f};
+}
+
+static void DrawOpeningConversation(const CcSim *sim,
+                                    const LocalState *local)
+{
+    const char *speaker = "NELL VARO";
+    const char *place = "BAKERY DOOR  /  BEFORE THE FIRST BELL";
+    const char *first =
+        "\"Jory went behind the bakery before dawn,\" Nell says. \"He always feeds the ravens.\"";
+    const char *second =
+        "\"The bell rang, but the roof stayed still. Find him for me? Tell him I'm waiting.\"";
+    char first_buffer[192] = "";
+    char second_buffer[192] = "";
+    CcNpcAppearance portrait = CcNpcAppearanceGenerate(
+        UINT32_C(0x4e454c4c), CC_NPC_ROLE_TRAVELLER,
+        (Color){194, 87, 103, 255});
+    portrait.stature = 0.82f;
+    portrait.body_mass = 0.94f;
+    portrait.head_width = 1.08f;
+    portrait.hair_family = CC_NPC_HAIR_FAMILY_BRAIDED;
+
+    if (local->opening_conversation == OPENING_CONVERSATION_JORY_CLUE) {
+        speaker = "JORY FEN";
+        place = "BAKERY YARD  /  FLOUR ON HIS SLEEVES";
+        first =
+            "Jory opens his fist. A grain of wheat lies in the flour on his palm, black as a spent match.";
+        second =
+            "\"It came from the newest sack. Don't taste it. Take it to Mara - and mind who sees you.\"";
+        portrait = CcNpcAppearanceGenerate(
+            UINT32_C(0x73747201), CC_NPC_ROLE_TRAVELLER,
+            (Color){223, 151, 68, 255});
+    } else if (local->opening_conversation ==
+               OPENING_CONVERSATION_MARA_PROMISE) {
+        speaker = "MARA VENN";
+        place = "HARVEST BOARD  /  THE BELL HAS STOPPED";
+        first = first_buffer;
+        second = second_buffer;
+        portrait = CcNpcMaraAppearance();
+        (void)snprintf(
+            first_buffer, sizeof(first_buffer),
+            "Mara rolls the grain beneath one thumb. \"Scorched from the heart,\" she murmurs. \"That should not be possible.\"");
+        int32_t opening_index = OpeningSituationIndex(sim);
+        const CcSituation *situation = opening_index >= 0 ?
+            &sim->situations[opening_index] : NULL;
+        char target[96] = "the next town";
+        if (situation != NULL) {
+            SituationTargetLabel(sim, situation, target, sizeof(target));
+        }
+        if (situation != NULL &&
+            (situation->kind == CC_SITUATION_RELIEF_DELIVERY ||
+             situation->kind == CC_SITUATION_BLACK_MARKET_DELIVERY)) {
+            (void)snprintf(
+                second_buffer, sizeof(second_buffer),
+                "\"Take the old carriage and its two bays. Carry %d %s to %s. On the road, keep your eyes open.\"",
+                situation->quantity, CcGoodName(situation->good), target);
+        } else if (situation != NULL) {
+            (void)snprintf(
+                second_buffer, sizeof(second_buffer),
+                "\"Take the old carriage and its two bays. See to %s at %s, and bring them home safely.\"",
+                SituationTitle(situation->kind), target);
+        } else {
+            (void)snprintf(
+                second_buffer, sizeof(second_buffer),
+                "\"Take the old carriage and its two bays. Find where that grain came from, and bring them home safely.\"");
+        }
     }
-    return "The trouble has reached their own door.";
+
+    Rectangle dialogue = OpeningDialogueBounds();
+    float panel_y = dialogue.y;
+    Rectangle portrait_bounds = {28.0f, panel_y - 10.0f, 104.0f, 126.0f};
+    DrawRectangleRounded(dialogue, 0.08f, 5, Fade(PANEL_DEEP, 0.97f));
+    DrawRectangleRoundedLinesEx(dialogue, 0.08f, 5, 2.0f,
+                                Fade(CC_GOLD, 0.82f));
+    DrawRectangleRounded(
+        (Rectangle){dialogue.x + 18.0f, dialogue.y - 14.0f,
+                    188.0f, 28.0f},
+        0.18f, 5, PANEL_DEEP);
+    DrawRectangleRoundedLinesEx(
+        (Rectangle){dialogue.x + 18.0f, dialogue.y - 14.0f,
+                    188.0f, 28.0f},
+        0.18f, 5, 1.0f, Fade(CC_GOLD, 0.72f));
+    CcLocalDrawNpcPortrait3D(&portrait, portrait_bounds,
+                             CC_NPC_PORTRAIT_TALKING);
+    int text_x = (int)dialogue.x + 28;
+    CcOverlayDrawText(speaker, text_x, (int)dialogue.y - 6,
+                      12, CC_GOLD);
+    CcOverlayDrawText(place, text_x + 214, (int)dialogue.y + 7,
+                      8, MUTED);
+    DrawTwoLineText(first, text_x, (int)dialogue.y + 32,
+                    118U, 11, INK);
+    DrawTwoLineText(second, text_x, (int)dialogue.y + 62,
+                    118U, 11, INK);
+    const char *prompt = local->opening_conversation ==
+            OPENING_CONVERSATION_MARA_PROMISE ?
+        "ENTER  ACCEPT PROMISE" : "ENTER  CONTINUE";
+    int prompt_width = CcOverlayMeasureText(prompt, 8);
+    CcOverlayDrawText(prompt,
+                      (int)(dialogue.x + dialogue.width) - prompt_width - 18,
+                      (int)(dialogue.y + dialogue.height) - 18,
+                      8, TEAL);
 }
 
 static void DrawCharacterConversation(const CcSim *sim,
@@ -3515,48 +3710,29 @@ static void DrawCharacterConversation(const CcSim *sim,
     const CcCharacter *character = CcSimCharacter(
         sim, local->conversation_character_id);
     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
-                  Fade(BACKGROUND, 0.72f));
-    Rectangle bounds = {292.0f, 142.0f, 696.0f, 388.0f};
+                  Fade(BACKGROUND, 0.54f));
+    Rectangle bounds = {256.0f, 168.0f, 768.0f, 338.0f};
     DrawPanel(bounds, PANEL_DEEP);
     if (situation == NULL || character == NULL) {
-        CcOverlayDrawText("NO ONE IS HERE", 330, 180, 20, MUTED);
+        CcOverlayDrawText("No one is here.", 294, 206, 18, MUTED);
         return;
     }
-    Color mood = character->player_disposition >= 12 ? TEAL :
-                 character->stress >= 65 ? DANGER : CC_GOLD;
-    CcOverlayDrawText("A PERSON, NOT A NOTICE", 330, 174, 9, MUTED);
-    CcOverlayDrawText(character->name, 330, 205, 24, mood);
-    CcOverlayDrawText(
-        TextFormat("%s  /  %s  /  TRUST %+d  /  STRESS %d",
-                   CcCharacterRoleName(character->role),
-                   CcCharacterActivityName(character->activity),
-                   character->player_disposition, character->stress),
-        330, 240, 10, INK);
-    char target[96];
-    SituationTargetLabel(sim, situation, target, sizeof(target));
-    CcOverlayDrawText(
-        TextFormat("%s  /  %s", SituationTitle(situation->kind), target),
-        330, 282, 13, CC_GOLD);
-    DrawTwoLineText(CharacterStakeLine(situation), 330, 318, 72U, 11, INK);
-    const char *memory =
-        CcCharacterRemembers(character, CC_CHARACTER_MEMORY_PLAYER_HELPED,
-                             situation->id) ?
-            "They remember that you kept your word." :
-        CcCharacterRemembers(character, CC_CHARACTER_MEMORY_PLAYER_WITHDREW,
-                             situation->id) ?
-            "They remember that your company walked away." :
-        CcCharacterRemembers(character, CC_CHARACTER_MEMORY_PLAYER_PROMISED,
-                             situation->id) ?
-            "They remember your promise and are preparing around it." :
-        CcCharacterRemembers(character, CC_CHARACTER_MEMORY_MET_PLAYER,
-                             situation->id) ?
-            "They remember that you stopped and listened." :
-            "You have not spoken before.";
-    CcOverlayDrawText("MEMORY", 330, 399, 9, MUTED);
-    CcOverlayDrawText(memory, 330, 422, 11, mood);
-    CcOverlayDrawText(
-        "Their state, trust, and memory persist when you leave town.",
-        330, 466, 9, MUTED);
+    Rectangle portrait = {280.0f, 190.0f, 248.0f, 294.0f};
+    bool has_live_portrait = local->course.situation_witness_active &&
+        local->course.situation_witness_character_id == character->id;
+    if (has_live_portrait) {
+        CcLocalDrawNpcPortrait3D(
+            &local->course.situation_witness.appearance, portrait,
+            CC_NPC_PORTRAIT_TALKING);
+    }
+    int32_t speech_x = 568;
+    const CcStoryLine *spoken = CcStoryCharacterLine(
+        sim, situation, character);
+    CcOverlayDrawText(character->name, speech_x, 216, 18, CC_GOLD);
+    CcOverlayDrawText("\"", speech_x, 266, 28, MUTED);
+    DrawTwoLineText(spoken != NULL ? spoken->text :
+                        "They have nothing more to ask.",
+                    speech_x + 28, 270, 42U, 16, INK);
 }
 
 static void DrawJourneyEncounter(const CcSim *sim)
@@ -4379,6 +4555,46 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         }
         return;
     }
+    if (*view == VIEW_LOCAL &&
+        local->opening_conversation != OPENING_CONVERSATION_NONE) {
+        OpeningConversationBeat beat = local->opening_conversation;
+        bool clicked = ClientMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
+            CheckCollisionPointRec(GetMousePosition(),
+                                   OpeningDialogueBounds());
+        bool confirm = ClientKeyPressed(KEY_ENTER) ||
+            ClientKeyPressed(KEY_SPACE) || ClientKeyPressed(KEY_F) || clicked;
+        bool leave = confirm ||
+            (beat != OPENING_CONVERSATION_MARA_PROMISE &&
+             ClientKeyPressed(KEY_ESCAPE));
+        if (!leave) return;
+        if (beat == OPENING_CONVERSATION_MARA_PROMISE) {
+            int32_t opening_situation = OpeningSituationIndex(sim);
+            if (opening_situation >= 0 &&
+                sim->player.accepted_situation_id == 0U) {
+                CcCommand accept = {
+                    .kind = CC_COMMAND_ACCEPT_SITUATION,
+                    .target_id = sim->situations[opening_situation].id
+                };
+                if (!ApplyCommand(*journal, sim, accept, message,
+                                  message_capacity)) return;
+                *selected_situation = opening_situation;
+            }
+            local->opening_step = CC_LOCAL_OPENING_COMPLETE;
+            (void)snprintf(
+                message, message_capacity,
+                "Mara puts a brass key in your hand. The old carriage and its two horses are yours for this promise.");
+        } else if (beat == OPENING_CONVERSATION_JORY_CLUE) {
+            (void)snprintf(
+                message, message_capacity,
+                "Jory's black grain is tucked safely in your palm. Find Mara at the harvest board.");
+        } else {
+            (void)snprintf(
+                message, message_capacity,
+                "Find Jory behind the bakery. He always feeds the ravens before the first bell.");
+        }
+        local->opening_conversation = OPENING_CONVERSATION_NONE;
+        return;
+    }
     if (*view == VIEW_CHARACTER) {
         if (ClientKeyPressed(KEY_ESCAPE) ||
             context_action == CONTEXT_ACTION_CLOSE_VIEW) {
@@ -4410,6 +4626,40 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             }
         }
         return;
+    }
+    if (*view == VIEW_LOCAL &&
+        local->opening_step != CC_LOCAL_OPENING_COMPLETE) {
+        Vector2 position = LocalPosition(local);
+        bool interact = ClientKeyPressed(KEY_F);
+        if (local->opening_step == CC_LOCAL_OPENING_FIND_JORY &&
+            CcClientInteractionActivated(
+                interact || context_action == CONTEXT_ACTION_TALK_JORY,
+                GridDistance(position, LOCAL_INTRO_JORY), 1.65f)) {
+            local->opening_step = CC_LOCAL_OPENING_MEET_MARA;
+            local->opening_conversation = OPENING_CONVERSATION_JORY_CLUE;
+            message[0] = '\0';
+            return;
+        }
+        if (local->opening_step == CC_LOCAL_OPENING_MEET_MARA &&
+            CcClientInteractionActivated(
+                interact || context_action == CONTEXT_ACTION_MEET_MARA,
+                GridDistance(position, LOCAL_NOTICE), 1.35f)) {
+            local->opening_conversation = OPENING_CONVERSATION_MARA_PROMISE;
+            message[0] = '\0';
+            return;
+        }
+        if (interact || ClientKeyPressed(KEY_TAB) ||
+            ClientKeyPressed(KEY_Q) || ClientKeyPressed(KEY_M) ||
+            ClientKeyPressed(KEY_G) || ClientKeyPressed(KEY_PERIOD) ||
+            ClientKeyPressed(KEY_K) ||
+            command_action != COMMAND_ACTION_NONE) {
+            (void)snprintf(
+                message, message_capacity,
+                local->opening_step == CC_LOCAL_OPENING_FIND_JORY ?
+                    "Nell asked you to find Jory behind the bakery." :
+                    "For now, carry Jory's black grain to Mara.");
+            return;
+        }
     }
     if (IsCommandOverlay(*view) &&
         (ClientKeyPressed(KEY_ESCAPE) ||
@@ -4595,6 +4845,8 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             } else {
                 if (sim->journey.active) {
                     BeginRoadTravelState(sim, local);
+                } else {
+                    (void)RestoreLocalSession(session_path, sim, local);
                 }
                 *view = VIEW_LOCAL;
             }
@@ -4620,10 +4872,15 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         *selected_situation = FirstActiveSituationIndex(sim);
         CcLocalBindPlace(sim);
         ResetLocalState(local);
-        *view = VIEW_LOCAL;
         *journal = CcJournalRestart(save_path, sim, error, sizeof(error));
-        (void)snprintf(message, message_capacity, "%s",
-                       *journal != NULL ? "New campaign started." : error);
+        if (*journal != NULL) {
+            BeginOpening(local);
+            *view = VIEW_LOCAL;
+            message[0] = '\0';
+        } else {
+            *view = VIEW_LOCAL;
+            (void)snprintf(message, message_capacity, "%s", error);
+        }
         return;
     }
     if (ClientKeyPressed(KEY_PERIOD) && !sim->journey.active) {
@@ -5577,6 +5834,8 @@ int main(int argc, char **argv)
         }
     }
     bool capture_board = argc >= 2 && strcmp(argv[1], "--capture-board") == 0;
+    bool capture_opening = argc >= 2 &&
+        strcmp(argv[1], "--capture-opening") == 0;
     bool capture_interior = argc >= 2 && strcmp(argv[1], "--capture-interior") == 0;
     bool capture_navigation = argc >= 2 && strcmp(argv[1], "--capture-nav") == 0;
     bool capture_defense = argc >= 2 &&
@@ -5806,6 +6065,7 @@ int main(int argc, char **argv)
     }
     bool capture = argc >= 2 &&
                    (strcmp(argv[1], "--capture") == 0 || capture_board ||
+                    capture_opening ||
                     capture_interior || capture_navigation || capture_limbs ||
                     capture_walk_cycle || capture_defense ||
                     capture_downclimb || capture_road_fork ||
@@ -6049,6 +6309,14 @@ int main(int argc, char **argv)
     ActionReelState action_reel = {0};
     GameplayReelState gameplay_reel = {0};
     ResetLocalState(&local);
+    if (normal_play && !resuming_campaign && journal != NULL) {
+        BeginOpening(&local);
+        view = VIEW_LOCAL;
+    }
+    if (capture_opening) {
+        BeginOpening(&local);
+        view = VIEW_LOCAL;
+    }
     if (capture_carriage) {
         RepositionHero(&local, LOCAL_CARRIAGE_BAY, false);
         local.agent.world_target = CC_LOCAL_WORLD_TARGET_CARRIAGE;
@@ -6072,6 +6340,7 @@ int main(int argc, char **argv)
                RestoreLocalSession(session_path, &sim, &local)) {
         (void)snprintf(startup_message, sizeof(startup_message),
                        "Campaign resumed where you left off.");
+        view = VIEW_LOCAL;
     }
     if (!capture && !sim.journey.active &&
         sim.player.location_id == sim.dragon.lair_settlement_id &&
@@ -6346,7 +6615,9 @@ int main(int argc, char **argv)
         }
     }
     char message[256] = "";
-    if (!capture && !render_benchmark && startup_message[0] != '\0') {
+    if (local.opening_conversation == OPENING_CONVERSATION_NELL_REQUEST) {
+        message[0] = '\0';
+    } else if (!capture && !render_benchmark && startup_message[0] != '\0') {
         (void)snprintf(message, sizeof(message), "%s", startup_message);
     }
     if (capture_golden) {
@@ -6391,6 +6662,7 @@ int main(int argc, char **argv)
     while (render_benchmark || !WindowShouldClose()) {
         local_bounds = LocalViewportBounds();
         float frame_delta_time = GetFrameTime();
+        CcLocalRendererSetOpeningStep(local.opening_step);
         if (view == VIEW_ROADS) {
             local.fork_turn_progress = fminf(
                 1.0f, local.fork_turn_progress + frame_delta_time * 0.78f);
@@ -6437,6 +6709,7 @@ int main(int argc, char **argv)
                         save_path, session_path, message, sizeof(message));
             ClientInputClearPressed();
         }
+        CcLocalRendererSetOpeningStep(local.opening_step);
         CcLocalBindPlace(&sim);
         if (strcmp(previous_message, message) != 0) {
             message_age = 0.0f;
@@ -6516,6 +6789,7 @@ int main(int argc, char **argv)
         }
         if (!capture_gameplay_reel && view == VIEW_LOCAL &&
             !LocalCombatActive(&local) &&
+            local.opening_conversation == OPENING_CONVERSATION_NONE &&
             message_age < 2.2f &&
             message[0] != '\0' &&
             !local.journey_travel_active) {
@@ -6533,6 +6807,11 @@ int main(int argc, char **argv)
             CcOverlayDrawText(toast, (int)x + 13,
                               (int)toast_y + 8, 10,
                               Fade(INK, opacity));
+        }
+        if (view == VIEW_LOCAL &&
+            local.opening_conversation != OPENING_CONVERSATION_NONE) {
+            CcOverlayFlush();
+            DrawOpeningConversation(&sim, &local);
         }
         if (view == VIEW_LEDGER) {
             CcOverlayFlush();
@@ -6559,13 +6838,15 @@ int main(int argc, char **argv)
             DrawDragonCavePanel(&sim);
         }
         CcOverlayFlush();
-        if (!capture_npc_review && (!capture_gameplay_reel ||
+        if (!capture_npc_review &&
+            local.opening_conversation == OPENING_CONVERSATION_NONE &&
+            (!capture_gameplay_reel ||
             gameplay_reel.stage != GAMEPLAY_REEL_QUEST_COMPLETE)) {
             DrawContextActionTray(&sim, &local, view, selected,
                                   selected_situation);
         }
         if (!capture_npc_review && view != VIEW_DRAGON_CAVE &&
-            view != VIEW_CARRIAGE) {
+            view != VIEW_CARRIAGE && view != VIEW_CHARACTER) {
             DrawCommandBar(view, &local);
         }
         if (performance_overlay) {

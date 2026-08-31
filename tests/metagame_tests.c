@@ -51,9 +51,16 @@ int main(void)
     CcMetagame metagame;
     CcMetagameInit(&metagame, UINT32_C(42));
     CcMetagameIntro(&metagame, output, sizeof(output));
-    CC_CHECK(strstr(output, "THE EMPTY GRANARY") != NULL);
-    CC_CHECK(strstr(output, metagame.sim.settlements[1].name) != NULL);
-    CC_CHECK(metagame.sim.player.location_id == metagame.sim.settlements[1].id);
+    CC_CHECK(strstr(output, "THE ROAD WITHOUT A CROWN") != NULL);
+    CC_CHECK(strstr(output,
+                    "It is never a good sign when the first bell rings") !=
+             NULL);
+    CC_CHECK(strstr(output, "on foot") != NULL);
+    CC_CHECK(strstr(output, "no carriage") != NULL);
+    CC_CHECK(strstr(output, "Nell Varo") != NULL);
+    CC_CHECK(strstr(output, "Not a crown. A wheel.") != NULL);
+    CC_CHECK(strstr(output, metagame.sim.settlements[0].name) != NULL);
+    CC_CHECK(metagame.sim.player.location_id == metagame.sim.settlements[0].id);
     CC_CHECK(metagame.sim.player.coins == 75);
 
     CcMetagame goblin_ui;
@@ -89,10 +96,11 @@ int main(void)
     CC_CHECK(CcMetagameExecute(&metagame, "causes", output, sizeof(output)));
     CC_CHECK(strstr(output, "short chain") != NULL);
     CC_CHECK(CcMetagameExecute(&metagame, "rumors", output, sizeof(output)));
-    CC_CHECK(strstr(output, "miller") != NULL);
+    CC_CHECK(strstr(output, "ravens") != NULL);
+    CC_CHECK(strstr(output, "black wax") != NULL);
     CC_CHECK(!CcMetagameExecute(&metagame, "plans", output, sizeof(output)));
     CC_CHECK(CcMetagameExecute(&metagame, "people", output, sizeof(output)));
-    CC_CHECK(strstr(output, metagame.sim.bandits[0].name) != NULL);
+    CC_CHECK(strstr(output, "one red mitten") != NULL);
     CC_CHECK(CcMetagameExecute(&metagame, "inequality", output,
                                sizeof(output)));
     CC_CHECK(strstr(output, "Social fault lines") != NULL);
@@ -109,28 +117,45 @@ int main(void)
         CC_CHECK(strstr(output, metagame.sim.kingdoms[i].name) != NULL);
     }
     CC_CHECK(CcMetagameExecute(&metagame, "look", output, sizeof(output)));
-    CC_CHECK(strstr(output, metagame.sim.kingdoms[0].name) != NULL);
-    CC_CHECK(strstr(output, "Road and Granary realm") != NULL);
+    CC_CHECK(strstr(output, "sleeping beetles") != NULL);
+    CC_CHECK(strstr(output, "mossy milestone") != NULL);
     CC_CHECK(CcMetagameExecute(&metagame, "war", output, sizeof(output)));
     CC_CHECK(strstr(output, "Frontier roads") != NULL);
     CC_CHECK(strstr(output, "Crown Levy") != NULL);
     CC_CHECK(CcMetagameExecute(&metagame, "charters", output, sizeof(output)));
-    CC_CHECK(strstr(output, "Road compact") != NULL);
-    CC_CHECK(strstr(output, "Quiet commission") != NULL);
-    CC_CHECK(strstr(output, "Relief charter") == NULL);
+    CC_CHECK(strstr(output, "Mara Venn's white-wax letter") != NULL);
+    CC_CHECK(strstr(output, "foxfire supper") == NULL);
+    int32_t relief_number = SituationNumber(
+        &metagame, CC_SITUATION_RELIEF_DELIVERY);
+    ExecuteNumber(&metagame, "talk", relief_number, output, sizeof(output));
+    CC_CHECK(strstr(output, "empty bowl is a meal") != NULL);
+    CC_CHECK(strstr(output, "Nell's grain") != NULL);
+    CC_CHECK(CcMetagameExecute(&metagame, "routes", output, sizeof(output)));
+    CC_CHECK(strstr(output, "Baker's Road") != NULL);
+
+    int32_t quiet_number = SituationNumber(
+        &metagame, CC_SITUATION_BLACK_MARKET_DELIVERY);
+    char command[64];
+    (void)snprintf(command, sizeof(command), "accept %d", quiet_number);
+    CC_CHECK(!CcMetagameExecute(&metagame, command, output, sizeof(output)));
+    CC_CHECK(strstr(output, "sponsor is not here") != NULL);
+
+    CC_CHECK(CcMetagameExecute(&metagame, "travel 1", output,
+                               sizeof(output)));
+    CC_CHECK(strstr(output, "headless fountain") != NULL);
+    CC_CHECK(metagame.sim.player.location_id ==
+             metagame.sim.settlements[1].id);
+    CC_CHECK(CcMetagameExecute(&metagame, "charters", output,
+                               sizeof(output)));
+    CC_CHECK(strstr(output, "Ilyra Senn's iron chain") != NULL);
+    CC_CHECK(strstr(output, "Tomas Rill's foxfire supper") != NULL);
+    ExecuteNumber(&metagame, "talk", quiet_number, output, sizeof(output));
+    CC_CHECK(strstr(output, "green scarf") != NULL);
+    CC_CHECK(strstr(output, "boiled their seed grain") != NULL);
     CC_CHECK(CcMetagameExecute(&metagame, "routes", output, sizeof(output)));
     CC_CHECK(strstr(output, "no notes") != NULL);
     CC_CHECK(strstr(output, "unmarked track") != NULL);
 
-    int32_t relief_number = SituationNumber(
-        &metagame, CC_SITUATION_RELIEF_DELIVERY);
-    char command[64];
-    (void)snprintf(command, sizeof(command), "accept %d", relief_number);
-    CC_CHECK(!CcMetagameExecute(&metagame, command, output, sizeof(output)));
-    CC_CHECK(strstr(output, "sponsor is not here") != NULL);
-
-    int32_t quiet_number = SituationNumber(
-        &metagame, CC_SITUATION_BLACK_MARKET_DELIVERY);
     int32_t maps_before_commission = CcPlayerMapCount(&metagame.sim);
     ExecuteNumber(&metagame, "accept", quiet_number, output, sizeof(output));
     CC_CHECK(CcPlayerMapCount(&metagame.sim) == maps_before_commission);
@@ -174,6 +199,10 @@ int main(void)
     CC_CHECK(CcMetagameExecute(&metagame, "wait 30", output, sizeof(output)));
     CC_CHECK(EventCount(&metagame, CC_EVENT_DELAYED_ECHO) == 1);
     CC_CHECK(metagame.sim.delayed_echo.active);
+    CC_CHECK(CcMetagameExecute(&metagame, "history 3", output,
+                               sizeof(output)));
+    CC_CHECK(strstr(output, "A letter from Tomas Rill") != NULL);
+    CC_CHECK(strstr(output, "onion soup") != NULL);
     const char *echo_path = "/tmp/crownless-metagame-echo-tests.ccsave";
     (void)remove(echo_path);
     (void)snprintf(command, sizeof(command), "save %s", echo_path);
@@ -181,6 +210,10 @@ int main(void)
     CC_CHECK(CcMetagameExecute(&metagame, "wait 30", output, sizeof(output)));
     CC_CHECK(EventCount(&metagame, CC_EVENT_DELAYED_ECHO) == 2);
     CC_CHECK(!metagame.sim.delayed_echo.active);
+    CC_CHECK(CcMetagameExecute(&metagame, "history 3", output,
+                               sizeof(output)));
+    CC_CHECK(strstr(output, "A second letter from Tomas Rill") != NULL);
+    CC_CHECK(strstr(output, "Night Road collectors") != NULL);
     (void)snprintf(command, sizeof(command), "load %s", echo_path);
     CC_CHECK(CcMetagameExecute(&metagame, command, output, sizeof(output)));
     CC_CHECK(EventCount(&metagame, CC_EVENT_DELAYED_ECHO) == 1);
@@ -208,8 +241,81 @@ int main(void)
     CC_CHECK(strstr(output, "Tell the story") != NULL);
     CC_CHECK(CcSimValidate(&metagame.sim, error, sizeof(error)));
 
+    CcMetagame lawful;
+    CcMetagameInit(&lawful, UINT32_C(42));
+    relief_number = SituationNumber(&lawful, CC_SITUATION_RELIEF_DELIVERY);
+    ExecuteNumber(&lawful, "accept", relief_number, output, sizeof(output));
+    CC_CHECK(strstr(output, "Mara Venn closes the brass charter box") != NULL);
+    CC_CHECK(CcMetagameExecute(&lawful, "buy food 8", output,
+                               sizeof(output)));
+    CC_CHECK(CcMetagameExecute(&lawful, "travel 1", output,
+                               sizeof(output)));
+    CC_CHECK(CcMetagameExecute(&lawful, "travel 2", output,
+                               sizeof(output)));
+    CC_CHECK(strstr(output, "Captain Ilyra Senn") != NULL);
+    CC_CHECK(CcMetagameExecute(&lawful, "road bargain", output,
+                               sizeof(output)));
+    CC_CHECK(strstr(output, "defeat in honourable combat") != NULL);
+    CC_CHECK(CcMetagameExecute(&lawful, "travel 3", output,
+                               sizeof(output)));
+    CC_CHECK(strstr(output, "market clock is still waiting for breakfast") !=
+             NULL);
+    ExecuteNumber(&lawful, "talk", relief_number, output, sizeof(output));
+    CC_CHECK(strstr(output, "Flour has never answered") != NULL);
+    CC_CHECK(CcMetagameExecute(&lawful, "sell food 8", output,
+                               sizeof(output)));
+    CC_CHECK(strstr(output, "No golden light declares the choice good") !=
+             NULL);
+    CC_CHECK(lawful.sim.delayed_echo.active);
+    CC_CHECK(CcMetagameExecute(&lawful, "wait 30", output,
+                               sizeof(output)));
+    CC_CHECK(CcMetagameExecute(&lawful, "history 5", output,
+                               sizeof(output)));
+    CC_CHECK(strstr(output, "A letter from Jory Fen") != NULL);
+    CC_CHECK(strstr(output, "tied with red thread") != NULL);
+    CC_CHECK(CcSimValidate(&lawful.sim, error, sizeof(error)));
+
+    CcMetagame supper;
+    CcMetagameInit(&supper, UINT32_C(42));
+    CC_CHECK(CcMetagameExecute(&supper, "travel 1", output,
+                               sizeof(output)));
+    quiet_number = SituationNumber(
+        &supper, CC_SITUATION_BLACK_MARKET_DELIVERY);
+    ExecuteNumber(&supper, "accept", quiet_number, output, sizeof(output));
+    CC_CHECK(CcMetagameExecute(&supper, "buy food 12", output,
+                               sizeof(output)));
+    CC_CHECK(CcMetagameExecute(&supper, "travel 7", output,
+                               sizeof(output)));
+    int32_t supper_food = supper.sim.player.cargo[CC_GOOD_FOOD];
+    CC_CHECK(CcMetagameExecute(&supper, "road supper", output,
+                               sizeof(output)));
+    CC_CHECK(strstr(output, "one onion and a great deal of hope") != NULL);
+    CC_CHECK(supper.sim.player.cargo[CC_GOOD_FOOD] < supper_food);
+    CC_CHECK(CcSimValidate(&supper.sim, error, sizeof(error)));
+
+    CcMetagame turn_back;
+    CcMetagameInit(&turn_back, UINT32_C(42));
+    turn_back.sim.player.location_id = turn_back.sim.settlements[1].id;
+    turn_back.sim.carriage.location_id = turn_back.sim.player.location_id;
+    quiet_number = SituationNumber(
+        &turn_back, CC_SITUATION_BLACK_MARKET_DELIVERY);
+    ExecuteNumber(&turn_back, "accept", quiet_number, output, sizeof(output));
+    CC_CHECK(CcMetagameExecute(&turn_back, "buy food 8", output,
+                               sizeof(output)));
+    CC_CHECK(CcMetagameExecute(&turn_back, "travel 7", output,
+                               sizeof(output)));
+    CC_CHECK(CcMetagameExecute(&turn_back, "road turn-back", output,
+                               sizeof(output)));
+    CC_CHECK(strstr(output, "A road refused is still a choice") != NULL);
+    CC_CHECK(turn_back.sim.player.location_id ==
+             turn_back.sim.settlements[1].id);
+    CC_CHECK(!turn_back.sim.journey.active);
+    CC_CHECK(CcSimValidate(&turn_back.sim, error, sizeof(error)));
+
     CcMetagame refusal;
     CcMetagameInit(&refusal, UINT32_C(77));
+    refusal.sim.player.location_id = refusal.sim.settlements[1].id;
+    refusal.sim.carriage.location_id = refusal.sim.player.location_id;
     int32_t repair_number = SituationNumber(
         &refusal, CC_SITUATION_ROUTE_REPAIR);
     CcSituation *repair = Situation(&refusal, CC_SITUATION_ROUTE_REPAIR);
@@ -230,6 +336,8 @@ int main(void)
 
     CcMetagame fight;
     CcMetagameInit(&fight, UINT32_C(99));
+    fight.sim.player.location_id = fight.sim.settlements[1].id;
+    fight.sim.carriage.location_id = fight.sim.player.location_id;
     quiet_number = SituationNumber(&fight, CC_SITUATION_BLACK_MARKET_DELIVERY);
     ExecuteNumber(&fight, "accept", quiet_number, output, sizeof(output));
     CC_CHECK(CcMetagameExecute(&fight, "buy food 8", output, sizeof(output)));

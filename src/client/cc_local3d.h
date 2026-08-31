@@ -4,6 +4,8 @@
 #include "client/cc_npc_appearance.h"
 #include "locomotion/cc_limb.h"
 #include "locomotion/cc_humanoid.h"
+#include "locomotion/cc_multileg.h"
+#include "locomotion/cc_robotics.h"
 #include "sim/cc_sim.h"
 
 #include "raylib.h"
@@ -31,6 +33,10 @@
 #define CC_LOCAL_CARRIAGE_APPROACH_Z 55.20f
 #define CC_LOCAL_NOTICE_X 41.0f
 #define CC_LOCAL_NOTICE_Z 27.80f
+#define CC_LOCAL_INTRO_START_X 45.20f
+#define CC_LOCAL_INTRO_START_Z 31.80f
+#define CC_LOCAL_INTRO_JORY_X 50.50f
+#define CC_LOCAL_INTRO_JORY_Z 28.80f
 #define CC_LOCAL_DUNGEON_X 29.0f
 #define CC_LOCAL_DUNGEON_Z 51.80f
 #define CC_LOCAL_DRAGON_CAVE_X 19.0f
@@ -59,6 +65,12 @@ typedef enum CcTraversalMode {
     CC_TRAVERSAL_JUMP,
     CC_TRAVERSAL_VAULT
 } CcTraversalMode;
+
+typedef enum CcLocalOpeningStep {
+    CC_LOCAL_OPENING_FIND_JORY = 0,
+    CC_LOCAL_OPENING_MEET_MARA = 1,
+    CC_LOCAL_OPENING_COMPLETE = 2
+} CcLocalOpeningStep;
 
 typedef enum CcLocalWorldTargetKind {
     CC_LOCAL_WORLD_TARGET_NONE = 0,
@@ -251,6 +263,8 @@ typedef struct CcLocalAgent {
     float immersion;
     CcMorphologyPreset morphology;
     CcLimbRig limb_rig;
+    CcMultilegRagdoll multileg_ragdoll;
+    CcRobotClimbRoute climb_route;
     CcHumanoidGait humanoid;
     CcHumanoidPose render_pose;
     CcSteppedPoseState stepped_pose;
@@ -263,6 +277,7 @@ typedef struct CcLocalAgent {
     int32_t navigation_point_count;
     int32_t navigation_point_index;
     int32_t navigation_destination_room;
+    int32_t climb_route_index;
     bool render_pose_valid;
     bool humanoid_needs_reset;
     bool target_valid;
@@ -273,6 +288,7 @@ typedef struct CcLocalAgent {
     bool navigation_active;
     bool navigation_world_exit;
     bool world_exit_requested;
+    bool free_climbing;
     CcLocalWorldTargetKind world_target;
     Color tunic_color;
     CcNpcAppearance appearance;
@@ -416,6 +432,13 @@ void CcLocalAgentSetMorphology(CcLocalAgent *agent, CcMorphologyPreset preset,
 void CcLocalAgentSetScene(CcLocalAgent *agent, CcLocalSceneKind scene);
 void CcLocalAgentCycleMorphology(CcLocalAgent *agent, bool market_interior);
 const char *CcLocalAgentMorphologyName(const CcLocalAgent *agent);
+bool CcLocalAgentBeginFreeClimb(CcLocalAgent *agent,
+                                Vector3 surface_point,
+                                Vector3 surface_normal);
+bool CcLocalAgentApplyDamage(CcLocalAgent *agent, float health_damage,
+                             float posture_damage,
+                             Vector3 impact_direction,
+                             Vector3 impact_point, float impact_speed);
 void CcLocalCombatSetTeam(CcLocalAgent *agent, CcCombatTeam team);
 void CcLocalCombatSetFocus(CcLocalAgent *agent,
                            const CcLocalAgent *target);
@@ -482,6 +505,7 @@ float CcLocalCombatSkillDuration(CcCombatSkill skill);
 
 void CcLocalRendererInit(void);
 void CcLocalRendererSetScreenFirstHero(bool enabled);
+void CcLocalRendererSetOpeningStep(CcLocalOpeningStep step);
 void CcLocalRendererBeginFrame(float delta_time);
 void CcLocalRendererResetPerformanceMetrics(void);
 CcLocalRendererStats CcLocalRendererGetStats(void);
