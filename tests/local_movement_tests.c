@@ -4532,6 +4532,50 @@ int main(void)
         return 1;
     }
 
+    CcSim sponsor_sim;
+    CcSimInit(&sponsor_sim, UINT32_C(0x5a0e50));
+    const CcSituation *sponsor_situation = NULL;
+    const CcCharacter *expected_sponsor = NULL;
+    for (int32_t i = 0; i < sponsor_sim.situation_count; ++i) {
+        CcSituation *candidate = &sponsor_sim.situations[i];
+        if (candidate->status != CC_SITUATION_ACTIVE) continue;
+        CcId offer = CcSimSituationOfferSettlementId(
+            &sponsor_sim, candidate);
+        const CcCharacter *speaker =
+            CcSimSituationConversationCharacter(
+                &sponsor_sim, candidate, offer);
+        const CcCharacter *sponsor = CcSimSituationSponsorCharacter(
+            &sponsor_sim, candidate);
+        if (speaker != NULL && speaker == sponsor) {
+            sponsor_situation = candidate;
+            expected_sponsor = sponsor;
+            sponsor_sim.player.location_id = offer;
+            break;
+        }
+    }
+    if (sponsor_situation == NULL || expected_sponsor == NULL) {
+        (void)fprintf(stderr,
+                      "generated situations have no local sponsor speaker\n");
+        return 1;
+    }
+    for (int32_t i = 0; i < sponsor_sim.situation_count; ++i) {
+        if (sponsor_sim.situations[i].id != sponsor_situation->id) {
+            sponsor_sim.situations[i].status = CC_SITUATION_FAILED;
+        }
+    }
+    CcLocalCourse sponsor_course;
+    CcLocalCourseInit(&sponsor_course);
+    CcLocalCourseUpdate(&sponsor_course, NULL, &sponsor_sim,
+                        1.0f / 60.0f);
+    if (!sponsor_course.situation_witness_active ||
+        sponsor_course.situation_witness_id != sponsor_situation->id ||
+        sponsor_course.situation_witness_character_id !=
+            expected_sponsor->id) {
+        (void)fprintf(stderr,
+                      "named situation sponsor was not projected locally\n");
+        return 1;
+    }
+
     CcLocalAgent road_player;
     CcLocalAgentInit(&road_player,
                      (Vector2){CC_LOCAL_ROAD_START_X,

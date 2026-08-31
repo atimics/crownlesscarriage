@@ -4120,20 +4120,18 @@ static void CourseConfigureSituationWitness(CcLocalCourse *course,
         return;
     }
     const CcSituation *situation = CcSimAcceptedSituation(sim);
-    const CcCharacter *character = CcSimSituationAffectedCharacter(
-        sim, situation);
-    if (situation == NULL || character == NULL ||
-        character->current_settlement_id != sim->player.location_id) {
+    const CcCharacter *character = CcSimSituationConversationCharacter(
+        sim, situation, sim->player.location_id);
+    if (situation == NULL || character == NULL) {
         situation = NULL;
         character = NULL;
         for (int32_t i = 0; i < sim->situation_count; ++i) {
             const CcSituation *candidate = &sim->situations[i];
             if (candidate->status != CC_SITUATION_ACTIVE) continue;
             const CcCharacter *participant =
-                CcSimSituationAffectedCharacter(sim, candidate);
-            if (participant != NULL &&
-                participant->current_settlement_id ==
-                    sim->player.location_id) {
+                CcSimSituationConversationCharacter(
+                    sim, candidate, sim->player.location_id);
+            if (participant != NULL) {
                 situation = candidate;
                 character = participant;
                 break;
@@ -4146,10 +4144,9 @@ static void CourseConfigureSituationWitness(CcLocalCourse *course,
             if (candidate->status == CC_SITUATION_ACTIVE ||
                 candidate->created_day < sim->current_day - 56) continue;
             const CcCharacter *participant =
-                CcSimSituationAffectedCharacter(sim, candidate);
-            if (participant == NULL ||
-                participant->current_settlement_id !=
-                    sim->player.location_id) continue;
+                CcSimSituationConversationCharacter(
+                    sim, candidate, sim->player.location_id);
+            if (participant == NULL) continue;
             if (situation == NULL ||
                 candidate->created_day > situation->created_day) {
                 situation = candidate;
@@ -4163,10 +4160,9 @@ static void CourseConfigureSituationWitness(CcLocalCourse *course,
             if (event == NULL || event->kind != CC_EVENT_DELAYED_ECHO ||
                 event->location_id != sim->player.location_id) continue;
             situation = CcSimSituation(sim, event->subject_id);
-            character = CcSimSituationAffectedCharacter(sim, situation);
-            if (situation != NULL && character != NULL &&
-                character->current_settlement_id ==
-                    sim->player.location_id) break;
+            character = CcSimSituationConversationCharacter(
+                sim, situation, sim->player.location_id);
+            if (situation != NULL && character != NULL) break;
             situation = NULL;
             character = NULL;
         }
