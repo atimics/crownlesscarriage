@@ -11328,8 +11328,16 @@ static void LoadCreatureModels(void)
          ++variant) {
         const CcCreatureDefinition *definition = CcCreatureDefinitionAt(
             (CcCreatureVariant)variant);
+        if (definition == NULL || !definition->skinned) {
+            TraceLog(LOG_INFO, "CREATURE: %s uses procedural rendering",
+                     definition != NULL ? definition->name : "unknown");
+            continue;
+        }
         int32_t loaded_count = 0;
         for (int32_t pose = 0; pose < CC_CREATURE_POSE_COUNT; ++pose) {
+            /* Runtime-skinned creatures animate one uploaded rest mesh. Their
+               authored pose files are reference outputs, not draw inputs. */
+            if (pose != CC_CREATURE_POSE_IDLE) continue;
             const char *path = CcCreatureAssetPath(
                 (CcCreatureVariant)variant, (CcCreaturePose)pose);
             if (path == NULL) continue;
@@ -11339,8 +11347,7 @@ static void LoadCreatureModels(void)
                 continue;
             }
             Model model = LoadModel(resolved);
-            int32_t expected_bones = definition != NULL && definition->skinned ?
-                                     CC_QUADRUPED_BONE_COUNT : 0;
+            int32_t expected_bones = CC_QUADRUPED_BONE_COUNT;
             if (model.meshCount != 1 || model.materialCount < 1 ||
                 model.skeleton.boneCount != expected_bones) {
                 TraceLog(LOG_WARNING,
@@ -11390,9 +11397,7 @@ static void LoadCreatureModels(void)
             loaded_count += 1;
         }
         TraceLog(LOG_INFO, "CREATURE: loaded %s (%d/%d poses)",
-                 definition != NULL ? definition->name : "unknown",
-                 loaded_count,
-                 CcCreaturePoseCount((CcCreatureVariant)variant));
+                 definition->name, loaded_count, 1);
     }
 }
 

@@ -247,8 +247,8 @@ if(CC_BUILD_CLIENT)
         target_link_options(crownless_carriage PRIVATE
             "-sASYNCIFY=1"
             "-sALLOW_MEMORY_GROWTH=1"
-            "-sINITIAL_MEMORY=67108864"
-            "-sSTACK_SIZE=8388608"
+            "-sINITIAL_MEMORY=33554432"
+            "-sSTACK_SIZE=4194304"
             "-sFORCE_FILESYSTEM=1"
             "-sMIN_WEBGL_VERSION=2"
             "-sMAX_WEBGL_VERSION=2"
@@ -257,6 +257,9 @@ if(CC_BUILD_CLIENT)
             "SHELL:--preload-file ${CC_WEB_ASSET_DIR}/assets@/assets"
         )
         add_custom_command(TARGET crownless_carriage POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${CC_WEB_ASSET_DIR}/lazy-assets"
+                "${CMAKE_CURRENT_BINARY_DIR}/site/assets"
             COMMAND ${CMAKE_COMMAND} -E touch
                 "${CMAKE_CURRENT_BINARY_DIR}/site/.nojekyll"
             VERBATIM
