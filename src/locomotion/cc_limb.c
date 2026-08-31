@@ -63,6 +63,12 @@ static float Wrap01(float value)
     return value < 0.0f ? value + 1.0f : value;
 }
 
+static float Approach(float current, float target, float maximum_change)
+{
+    if (current < target) return fminf(target, current + maximum_change);
+    return fmaxf(target, current - maximum_change);
+}
+
 static CcLimbVec3 TransformPoint(CcLimbVec3 body, CcLimbVec3 local, float yaw)
 {
     float cosine = cosf(yaw);
@@ -94,6 +100,120 @@ static void ConfigureLimb(CcLimbSpec *limb, float side, float socket_z,
             limb->segment_length[segment] = 0.45f;
         }
     }
+}
+
+static void ConfigurePacePhases(CcLimbMorphology *morphology,
+                                CcLimbPace pace)
+{
+    if (morphology->preset == CC_MORPHOLOGY_BIPED) {
+        morphology->limbs[0].phase_offset = 0.0f;
+        morphology->limbs[1].phase_offset = 0.5f;
+        return;
+    }
+    if (morphology->preset == CC_MORPHOLOGY_QUADRUPED) {
+        if (pace == CC_LIMB_PACE_WALK) {
+            morphology->limbs[0].phase_offset = 0.00f;
+            morphology->limbs[1].phase_offset = 0.50f;
+            morphology->limbs[2].phase_offset = 0.75f;
+            morphology->limbs[3].phase_offset = 0.25f;
+        } else if (pace == CC_LIMB_PACE_RUN) {
+            morphology->limbs[0].phase_offset = 0.00f;
+            morphology->limbs[1].phase_offset = 0.50f;
+            morphology->limbs[2].phase_offset = 0.50f;
+            morphology->limbs[3].phase_offset = 0.00f;
+        } else {
+            morphology->limbs[0].phase_offset = 0.50f;
+            morphology->limbs[1].phase_offset = 0.68f;
+            morphology->limbs[2].phase_offset = 0.00f;
+            morphology->limbs[3].phase_offset = 0.18f;
+        }
+        return;
+    }
+    if (morphology->preset == CC_MORPHOLOGY_HEXAPOD) {
+        for (int32_t limb = 0; limb < morphology->limb_count; ++limb) {
+            morphology->limbs[limb].phase_offset =
+                pace == CC_LIMB_PACE_WALK ? (float)limb / 6.0f :
+                ((limb / 2 + limb) & 1) != 0 ? 0.5f : 0.0f;
+        }
+        return;
+    }
+    for (int32_t limb = 0; limb < morphology->limb_count; ++limb) {
+        morphology->limbs[limb].phase_offset =
+            pace == CC_LIMB_PACE_WALK ? (float)limb / 8.0f :
+            pace == CC_LIMB_PACE_RUN ? (float)(limb % 4) / 4.0f :
+            ((limb / 2 + limb) & 1) != 0 ? 0.5f : 0.0f;
+    }
+}
+
+static void ConfigurePacePolicy(CcLimbRig *rig, CcLimbPace pace,
+                                CcLimbMorphology *result)
+{
+    *result = rig->walking_morphology;
+    ConfigurePacePhases(result, pace);
+    switch (result->preset) {
+        case CC_MORPHOLOGY_BIPED:
+            result->minimum_supports = 1;
+            result->maximum_swings = 1;
+            result->duty_factor = pace == CC_LIMB_PACE_WALK ? 0.60f :
+                                  pace == CC_LIMB_PACE_RUN ? 0.52f : 0.46f;
+            result->swing_seconds *= pace == CC_LIMB_PACE_WALK ? 1.0f :
+                                     pace == CC_LIMB_PACE_RUN ? 0.82f : 0.70f;
+            result->velocity_lead *= pace == CC_LIMB_PACE_WALK ? 1.0f :
+                                    pace == CC_LIMB_PACE_RUN ? 1.24f : 1.46f;
+            break;
+        case CC_MORPHOLOGY_QUADRUPED:
+            result->minimum_supports = pace == CC_LIMB_PACE_WALK ? 3 :
+                                       pace == CC_LIMB_PACE_RUN ? 2 : 1;
+            result->maximum_swings = pace == CC_LIMB_PACE_WALK ? 1 :
+                                      pace == CC_LIMB_PACE_RUN ? 2 : 3;
+            result->duty_factor = pace == CC_LIMB_PACE_WALK ? 0.72f :
+                                  pace == CC_LIMB_PACE_RUN ? 0.58f : 0.52f;
+            result->swing_seconds *= pace == CC_LIMB_PACE_WALK ? 1.0f :
+                                     pace == CC_LIMB_PACE_RUN ? 0.82f : 0.72f;
+            result->velocity_lead *= pace == CC_LIMB_PACE_WALK ? 1.0f :
+                                    pace == CC_LIMB_PACE_RUN ? 1.28f : 1.52f;
+            break;
+        case CC_MORPHOLOGY_HEXAPOD:
+            result->minimum_supports = pace == CC_LIMB_PACE_WALK ? 5 : 3;
+            result->maximum_swings = pace == CC_LIMB_PACE_WALK ? 1 : 3;
+            result->duty_factor = pace == CC_LIMB_PACE_WALK ? 0.78f :
+                                  pace == CC_LIMB_PACE_RUN ? 0.56f : 0.50f;
+            result->swing_seconds *= pace == CC_LIMB_PACE_WALK ? 1.10f :
+                                     pace == CC_LIMB_PACE_RUN ? 0.84f : 0.72f;
+            result->velocity_lead *= pace == CC_LIMB_PACE_WALK ? 0.86f :
+                                    pace == CC_LIMB_PACE_RUN ? 1.18f : 1.42f;
+            break;
+        case CC_MORPHOLOGY_OCTOPOD:
+            result->minimum_supports = pace == CC_LIMB_PACE_WALK ? 7 :
+                                       pace == CC_LIMB_PACE_RUN ? 6 : 4;
+            result->maximum_swings = pace == CC_LIMB_PACE_WALK ? 1 :
+                                      pace == CC_LIMB_PACE_RUN ? 2 : 4;
+            result->duty_factor = pace == CC_LIMB_PACE_WALK ? 0.82f :
+                                  pace == CC_LIMB_PACE_RUN ? 0.70f : 0.56f;
+            result->swing_seconds *= pace == CC_LIMB_PACE_WALK ? 1.12f :
+                                     pace == CC_LIMB_PACE_RUN ? 0.88f : 0.74f;
+            result->velocity_lead *= pace == CC_LIMB_PACE_WALK ? 0.82f :
+                                    pace == CC_LIMB_PACE_RUN ? 1.14f : 1.38f;
+            break;
+        case CC_MORPHOLOGY_PRESET_COUNT:
+        default:
+            break;
+    }
+}
+
+static bool TryApplyRequestedPace(CcLimbRig *rig)
+{
+    if (rig->pace == rig->requested_pace) return true;
+    CcLimbMorphology requested;
+    ConfigurePacePolicy(rig, rig->requested_pace, &requested);
+    if (rig->swinging_count > requested.maximum_swings ||
+        (rig->planted_count > 0 &&
+         rig->planted_count < requested.minimum_supports)) {
+        return false;
+    }
+    rig->morphology = requested;
+    rig->pace = rig->requested_pace;
+    return true;
 }
 
 bool CcLimbMorphologyFromPreset(CcLimbMorphology *morphology,
@@ -466,6 +586,12 @@ void CcLimbRigInit(CcLimbRig *rig, const CcLimbMorphology *morphology,
         }
     }
     rig->morphology = *morphology;
+    rig->walking_morphology = *morphology;
+    rig->pace = CC_LIMB_PACE_WALK;
+    rig->requested_pace = CC_LIMB_PACE_WALK;
+    rig->support_state = CC_LIMB_SUPPORT_STABLE;
+    rig->support_normal = (CcLimbVec3){0.0f, 1.0f, 0.0f};
+    rig->control_authority = 1.0f;
     rig->traction = 1.0f;
     rig->drive_scale = 1.0f;
     rig->active_pose_limb = -1;
@@ -539,7 +665,17 @@ static void CalculateSupport(CcLimbRig *rig, CcLimbVec3 body_position,
                                               rig->planted_count);
     rig->body_acceleration = (CcLimbVec3){0};
     rig->drive_scale = grounded ? 1.0f : 0.18f;
+    rig->support_normal = (CcLimbVec3){0.0f, 1.0f, 0.0f};
     if (rig->planted_count > 0) {
+        CcLimbVec3 normal_sum = {0};
+        for (int32_t limb = 0; limb < rig->morphology.limb_count; ++limb) {
+            const CcLimbRuntime *runtime = &rig->limbs[limb];
+            if (runtime->state == CC_LIMB_STANCE && runtime->health > 0.0f) {
+                normal_sum = Add(normal_sum, runtime->contact_normal);
+            }
+        }
+        rig->support_normal = NormalizeOr(
+            normal_sum, (CcLimbVec3){0.0f, 1.0f, 0.0f});
         float urgency = Clamp((rig->morphology.support_margin - rig->support_margin) *
                               5.0f, 0.0f, 1.0f);
         CcLimbVec3 correction = Subtract(rig->support_center, body_position);
@@ -588,6 +724,59 @@ static void CalculateSupport(CcLimbRig *rig, CcLimbVec3 body_position,
                                      0.12f, 1.0f) : 0.12f;
 }
 
+static void UpdateSupportState(CcLimbRig *rig, bool grounded,
+                               float delta_time)
+{
+    CcLimbSupportState previous = rig->support_state;
+    if (!grounded || rig->planted_count <= 0) {
+        rig->unsupported_seconds += delta_time;
+        rig->recovery_seconds = 0.0f;
+        if (rig->unsupported_seconds <= 0.18f) {
+            rig->support_state = CC_LIMB_SUPPORT_CONTROLLED_AIRBORNE;
+            rig->control_authority = Approach(
+                rig->control_authority, 0.35f, delta_time * 3.6f);
+        } else {
+            rig->support_state = CC_LIMB_SUPPORT_UNSUPPORTED;
+            rig->control_authority = Approach(
+                rig->control_authority, 0.0f, delta_time * 4.8f);
+        }
+        return;
+    }
+
+    bool full_support = rig->planted_count >= rig->morphology.minimum_supports;
+    if (previous == CC_LIMB_SUPPORT_UNSUPPORTED ||
+        previous == CC_LIMB_SUPPORT_RECOVERING) {
+        rig->unsupported_seconds = 0.0f;
+        rig->recovery_seconds += delta_time;
+        rig->support_state = CC_LIMB_SUPPORT_RECOVERING;
+        rig->control_authority = Approach(
+            rig->control_authority, full_support ? 1.0f : 0.55f,
+            delta_time * 2.6f);
+        if (full_support && rig->recovery_seconds >= 0.28f) {
+            rig->support_state = CC_LIMB_SUPPORT_STABLE;
+            rig->recovery_seconds = 0.0f;
+        }
+        return;
+    }
+
+    rig->unsupported_seconds = 0.0f;
+    rig->recovery_seconds = 0.0f;
+    if (full_support && rig->support_margin >= -0.045f) {
+        rig->support_state = CC_LIMB_SUPPORT_STABLE;
+        rig->control_authority = Approach(
+            rig->control_authority, 1.0f, delta_time * 5.0f);
+    } else {
+        float contact_ratio = rig->morphology.minimum_supports > 0 ?
+            (float)rig->planted_count /
+                (float)rig->morphology.minimum_supports : 1.0f;
+        rig->support_state = CC_LIMB_SUPPORT_MARGINAL;
+        rig->control_authority = Approach(
+            rig->control_authority,
+            Clamp(0.30f + contact_ratio * 0.50f, 0.30f, 0.80f),
+            delta_time * 4.0f);
+    }
+}
+
 void CcLimbRigUpdate(CcLimbRig *rig, CcLimbVec3 body_position, float body_yaw,
                      CcLimbVec3 body_velocity, bool body_grounded,
                      float delta_time, CcLimbTerrainProbe probe,
@@ -595,6 +784,15 @@ void CcLimbRigUpdate(CcLimbRig *rig, CcLimbVec3 body_position, float body_yaw,
 {
     if (rig == NULL || !rig->initialized) return;
     delta_time = Clamp(delta_time, 0.0f, 1.0f / 30.0f);
+    (void)TryApplyRequestedPace(rig);
+    int32_t scheduling_swings = rig->morphology.maximum_swings;
+    if (rig->pace != rig->requested_pace) {
+        CcLimbMorphology requested;
+        ConfigurePacePolicy(rig, rig->requested_pace, &requested);
+        scheduling_swings =
+            scheduling_swings < requested.maximum_swings ?
+            scheduling_swings : requested.maximum_swings;
+    }
     float speed = sqrtf(body_velocity.x * body_velocity.x +
                         body_velocity.z * body_velocity.z);
     if (speed > 0.025f) {
@@ -641,7 +839,7 @@ void CcLimbRigUpdate(CcLimbRig *rig, CcLimbVec3 body_position, float body_yaw,
     for (int32_t limb = 0; limb < rig->morphology.limb_count; ++limb) {
         if (rig->limbs[limb].state == CC_LIMB_SWING) active_swings += 1;
     }
-    for (int32_t slot = active_swings; slot < rig->morphology.maximum_swings; ++slot) {
+    for (int32_t slot = active_swings; slot < scheduling_swings; ++slot) {
         int32_t candidate = -1;
         float candidate_score = 0.0f;
         for (int32_t index = 0; index < rig->morphology.limb_count; ++index) {
@@ -690,6 +888,18 @@ void CcLimbRigUpdate(CcLimbRig *rig, CcLimbVec3 body_position, float body_yaw,
                           Wrap01(0.5f + progress * 0.5f);
     }
     CalculateSupport(rig, body_position, body_yaw, body_grounded);
+    UpdateSupportState(rig, body_grounded, delta_time);
+    (void)TryApplyRequestedPace(rig);
+}
+
+bool CcLimbRigRequestPace(CcLimbRig *rig, CcLimbPace pace)
+{
+    if (rig == NULL || !rig->initialized || pace < 0 ||
+        pace >= CC_LIMB_PACE_COUNT) {
+        return false;
+    }
+    rig->requested_pace = pace;
+    return TryApplyRequestedPace(rig);
 }
 
 void CcLimbRigPinContact(CcLimbRig *rig, int32_t limb_index,
@@ -739,5 +949,31 @@ const char *CcLimbStateName(CcLimbState state)
         case CC_LIMB_SEARCHING: return "SEARCH";
         case CC_LIMB_DISABLED: return "DISABLED";
         default: return "UNKNOWN";
+    }
+}
+
+const char *CcLimbPaceName(CcLimbPace pace)
+{
+    switch (pace) {
+        case CC_LIMB_PACE_WALK: return "WALK";
+        case CC_LIMB_PACE_RUN: return "RUN";
+        case CC_LIMB_PACE_SPRINT: return "SPRINT";
+        case CC_LIMB_PACE_COUNT:
+        default:
+            return "UNKNOWN";
+    }
+}
+
+const char *CcLimbSupportStateName(CcLimbSupportState state)
+{
+    switch (state) {
+        case CC_LIMB_SUPPORT_STABLE: return "STABLE";
+        case CC_LIMB_SUPPORT_MARGINAL: return "MARGINAL";
+        case CC_LIMB_SUPPORT_CONTROLLED_AIRBORNE:
+            return "CONTROLLED AIRBORNE";
+        case CC_LIMB_SUPPORT_UNSUPPORTED: return "UNSUPPORTED";
+        case CC_LIMB_SUPPORT_RECOVERING: return "RECOVERING";
+        default:
+            return "UNKNOWN";
     }
 }
