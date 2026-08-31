@@ -314,6 +314,34 @@ EM_ASYNC_JS(int, ClientFlushBrowserSaves,
         return 0;
     }
 });
+EM_JS(int, ClientReleaseBrowserAssets, (), {
+    let releasedBytes = 0;
+    const removeTree = (path) => {
+        for (const name of FS.readdir(path)) {
+            if (name === "." || name === "..") continue;
+            const child = path + "/" + name;
+            const stat = FS.stat(child);
+            if (FS.isDir(stat.mode)) {
+                removeTree(child);
+                FS.rmdir(child);
+            } else {
+                releasedBytes += stat.size;
+                FS.unlink(child);
+            }
+        }
+    };
+    try {
+        removeTree("/assets");
+        FS.rmdir("/assets");
+        return releasedBytes;
+    } catch (error) {
+        console.warn("Could not release Crownless Carriage startup files", error);
+        return -1;
+    }
+});
+EM_JS(int, ClientBrowserHeapBytes, (), {
+    return HEAP8.length;
+});
 #pragma clang diagnostic pop
 #endif
 
@@ -6645,6 +6673,13 @@ int main(int argc, char **argv)
     SetTextureFilter(local_target.texture, TEXTURE_FILTER_POINT);
     CcLocalRendererSetScreenFirstHero(screen_first_hero);
     CcLocalRendererInit();
+#if defined(PLATFORM_WEB)
+    int32_t released_asset_bytes = ClientReleaseBrowserAssets();
+    if (released_asset_bytes >= 0) {
+        TraceLog(LOG_INFO, "WEB: released %.1f MiB of startup files",
+                 (double)released_asset_bytes / (1024.0 * 1024.0));
+    }
+#endif
     CcLocalRendererSetDiagnosticOverlay(capture_limbs);
 
     CcSim sim;
@@ -7180,6 +7215,9 @@ int main(int argc, char **argv)
     double render_benchmark_started = 0.0;
     bool performance_overlay = false;
     float message_age = 0.0f;
+#if defined(PLATFORM_WEB)
+    bool browser_memory_reported = false;
+#endif
 
     CcLocalRendererSetAtmosphere(
         capture_atmosphere ? capture_atmosphere_preset :
@@ -7396,6 +7434,13 @@ int main(int argc, char **argv)
         }
         CcOverlayEnd();
         EndDrawing();
+#if defined(PLATFORM_WEB)
+        if (!browser_memory_reported) {
+            TraceLog(LOG_INFO, "WEB: using %.1f MiB of linear memory",
+                     (double)ClientBrowserHeapBytes() / (1024.0 * 1024.0));
+            browser_memory_reported = true;
+        }
+#endif
 
         if (render_benchmark) {
             if (render_benchmark_warmup_count <

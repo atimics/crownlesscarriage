@@ -247,8 +247,8 @@ if(CC_BUILD_CLIENT)
         target_link_options(crownless_carriage PRIVATE
             "-sASYNCIFY=1"
             "-sALLOW_MEMORY_GROWTH=1"
-            "-sINITIAL_MEMORY=134217728"
-            "-sSTACK_SIZE=16777216"
+            "-sINITIAL_MEMORY=67108864"
+            "-sSTACK_SIZE=8388608"
             "-sFORCE_FILESYSTEM=1"
             "-sMIN_WEBGL_VERSION=2"
             "-sMAX_WEBGL_VERSION=2"
