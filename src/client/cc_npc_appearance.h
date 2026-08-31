@@ -55,9 +55,7 @@ typedef enum CcNpcHairFamily {
     CC_NPC_HAIR_FAMILY_COUNT
 } CcNpcHairFamily;
 
-/* A stable, inexpensive visual identity for background and simulated people.
-   Values are deliberately bounded around the shared humanoid skeleton so
-   animation, hit volumes, and crowd navigation remain authoritative. */
+
 typedef struct CcNpcAppearance {
     uint32_t seed;
     CcNpcRole role;
@@ -93,16 +91,13 @@ typedef struct CcNpcAppearance {
     Color accent;
 } CcNpcAppearance;
 
-/* The single identity source used by both the close portrait and the small
-   world head. Renderers may simplify it for distance, but may not invent a
-   second set of facial traits. */
+
 typedef struct CcFaceRecipe {
     uint32_t seed;
     float width;
     float depth;
     float age;
-    /* A small measured proportion sheet, shared by the 3D head and every
-       portrait. These are identity traits, not expression state. */
+
     uint8_t face_shape;
     uint8_t eye_spacing;
     uint8_t brow_style;
@@ -121,16 +116,14 @@ typedef struct CcFaceRecipe {
     Color accent;
 } CcFaceRecipe;
 
-/* Facial graphics are authored once on the portrait's 20 x 24 grid. Screen
-   portraits and world heads project these same blocks onto their own canvas. */
+
 typedef void (*CcNpcFaceBlockPainter)(void *context, int32_t grid_x,
                                       int32_t grid_y, int32_t grid_width,
                                       int32_t grid_height, Color color);
 
 CcNpcAppearance CcNpcAppearanceGenerate(uint32_t seed, CcNpcRole role,
                                         Color accent);
-/* Named people use fixed recipes. The same value must be sent to the world
-   renderer and the portrait renderer so identity cannot drift by context. */
+
 CcNpcAppearance CcNpcCrownlessAppearance(void);
 CcNpcAppearance CcNpcMaraAppearance(void);
 const char *CcNpcRoleName(CcNpcRole role);

@@ -392,16 +392,13 @@ static void TestSharedCharacterCollisionWorld(void)
         exit(1);
     }
 
-    /* These houses are faded by several low camera shots. The reveal must
-       never remove their physical walls for the player, NPCs, or ragdoll. */
+
     RequireSolidStreetHouse("west crofts house", 20.0f, 25.0f, 37.0f);
     RequireSolidStreetHouse("artisan row house", 31.0f, 33.25f, 39.0f);
     RequireSolidStreetHouse("market road house", 57.0f, 60.25f, 27.75f);
     RequireSolidStreetHouse("coach yard house", 50.0f, 55.0f, 61.5f);
 
-    /* The visible ore station base is 1.45 x 1.05 m centered here. It must use
-       one footprint for physical sweeps, click paths, ray picking, and the
-       legacy movement helper. */
+
     const Rectangle ore_station = {25.725f, 53.825f, 1.45f, 1.05f};
     float ore_y = CcLocalTerrainHeightAt(26.45f, 54.35f) + 0.58f;
     corrected = (Vector3){27.70f, ore_y, 54.35f};
@@ -1208,8 +1205,7 @@ static void TestShoulderLanding(void)
     PlaceFallenBody(&agent, shoulder_first_roll,
                     (Vector3){0.0f, 2.0f, 0.0f},
                     (Vector3){0.0f, -1.40f, 0.0f});
-    /* Tuck the lower arm across the body so this is a shoulder landing,
-       instead of turning into a hand-first brace before impact. */
+
     CcBiomechRagdoll *placed = &agent.humanoid.ragdoll;
     float vertical_adjustment = 0.12f - FallenBodyLowestPoint(placed);
     for (int32_t particle = 0;
@@ -2571,8 +2567,7 @@ int main(void)
         {58.0f, 50.0f}, {78.0f, 50.0f}, {50.0f, 27.25f},
     };
 
-    /* Every authored room and the complete Market Steps-to-Crown Gate road
-       must retain the hero in its fixed storybook shot. */
+
     CcLocalAgent framing_agent;
     CcLocalAgentInit(&framing_agent, camera_review_points[0], false);
     float camera_clock = 0.0f;
@@ -2605,9 +2600,7 @@ int main(void)
         }
     }
 
-    /* Close facades now own a deliberate playable-room composition. The
-       tighter page must still retain the hero without becoming a follow
-       camera. */
+
     CcLocalAgent alley_camera_agent;
     CcLocalAgentInit(&alley_camera_agent,
                      (Vector2){50.0f, 27.25f}, false);
@@ -2640,9 +2633,7 @@ int main(void)
         return 1;
     }
 
-    /* Once a shot has settled, ordinary movement inside its safe area must
-       move the actor across the stage instead of dragging the camera along.
-       This is the core King's Quest-style framing contract. */
+
     Vector3 held_alley_target = alley_camera.target;
     float held_alley_fovy = alley_camera.fovy;
     alley_camera_agent.position.x += 0.55f;
@@ -2670,9 +2661,7 @@ int main(void)
         return 1;
     }
 
-    /* A close page only owns its physical court. Crossing the main coach
-       road near that court must return to an establishing composition
-       instead of showing an alley the player has not entered. */
+
     CcLocalAgent coach_road_camera_agent;
     CcLocalAgentInit(&coach_road_camera_agent,
                      (Vector2){64.0f, 34.0f}, false);
@@ -2690,10 +2679,7 @@ int main(void)
         return 1;
     }
 
-    /* Miller's Row is long enough to expose follow-camera creep. Walk the
-       whole road at gameplay speed: the hero must stay in the safe frame,
-       and the camera may only make a few authored page changes rather than
-       moving continuously beside the actor. */
+
     CcLocalAgent miller_camera_agent;
     CcLocalAgentInit(&miller_camera_agent, (Vector2){54.6f, 51.4f}, false);
     Camera3D miller_camera = {0};
@@ -2753,10 +2739,7 @@ int main(void)
         return 1;
     }
 
-    /* The low Miller's Bend page must retain precise ground input. The old
-       aerial fixture clicked through the hidden side of the windmill; from
-       below waist height that point is no longer visible, so use the road
-       apron that the player can actually see. */
+
     CcLocalAgent miller_click_agent;
     CcLocalAgentInit(&miller_click_agent, (Vector2){58.0f, 51.5f}, false);
     Camera3D miller_click_camera = {0};
@@ -2815,10 +2798,7 @@ int main(void)
         return 1;
     }
 
-    /* A nearby duel changes only the presentation: blend from the fixed
-       room into a perspective lock-on view behind one shoulder. Keep the
-       hero as the larger foreground anchor, retain both fighters, then
-       return to the exact fixed-camera projection after combat. */
+
     CcLocalAgent shoulder_player;
     CcLocalAgentInit(&shoulder_player, (Vector2){15.40f, 9.65f}, false);
     CcLocalCourse shoulder_course;
@@ -2850,9 +2830,7 @@ int main(void)
         return 1;
     }
 
-    /* The portrait-sized physical box can become a thin target in a wide
-       room shot. A click just outside that box still selects the visible
-       body through the small screen-space target halo. */
+
     Vector2 raider_center_art = GetWorldToScreenEx(
         (Vector3){shoulder_course.raiders[0].position.x,
                   shoulder_course.raiders[0].position.y + 1.10f,
@@ -2975,9 +2953,7 @@ int main(void)
         return 1;
     }
 
-    /* The market-side street fight used to lock its camera behind the east
-       workshop wall. The combat composer must choose another nearby stage
-       angle before either fighter is hidden by that complete building. */
+
     CcLocalAgent workshop_player;
     CcLocalAgentInit(&workshop_player, (Vector2){47.10f, 32.08f}, false);
     CcLocalCourse workshop_course;
@@ -3035,9 +3011,7 @@ int main(void)
             camera_clock, true, click_target.texture.height);
     }
 
-    /* The Wayfarer Yard tree used to sit across both fighters in the combat
-       reel. The visibility pass must find a nearby angle that clears both
-       bodies without moving or hiding the tree. */
+
     Vector3 sightline_target = {16.74f, 0.98f, 9.65f};
     Camera3D blocked_combat_camera = {
         .position = {18.91f, 7.10f, 21.84f},
@@ -3065,13 +3039,10 @@ int main(void)
         return 1;
     }
 
-    /* Regression from an off-center road-edge position that reproduced the
-       reported failure. Proximity starts the traversal here; the first
-       authored portal waypoint must route around the gatehouse. */
+
     CcLocalAgent edge_walker;
     CcLocalAgentInit(&edge_walker, (Vector2){54.6f, 27.0f}, false);
-    /* Each camera fixture owns a settled opening shot. This also keeps the
-       test clock monotonic after the combat-camera transition above. */
+
     for (int32_t frame = 0; frame < 120; ++frame) {
         camera_clock += 1.0f / 60.0f;
         (void)CcLocalStreetCameraInternal(
@@ -3126,8 +3097,7 @@ int main(void)
         return 1;
     }
 
-    /* Proximity must not hijack a click that turns back into the room. The
-       old edge-only trigger sent this westward command east to Crown Gate. */
+
     CcLocalAgent edge_turnaround;
     CcLocalAgentInit(&edge_turnaround, (Vector2){54.6f, 27.0f}, false);
     if (!CcLocalAgentSetExactTarget(
@@ -3172,9 +3142,7 @@ int main(void)
             intended_art.y * click_viewport.height /
                 (float)click_target.texture.height,
         };
-        /* These are ordinary ground clicks across the right-hand road mouth,
-           well below and inward from the label. Foreground architecture can
-           occlude the ray, but no label may activate navigation directly. */
+
         if (!CcLocalAgentPickTarget(&crown_gate_walker,
                                     road_click,
                                     click_target, click_viewport, false) ||
@@ -3265,9 +3233,7 @@ int main(void)
         }
     }
 
-    /* A rejected replacement click must cancel the old command. Otherwise
-       the hero keeps walking toward a stale marker after the new click gives
-       no movement feedback—the exact failure reported from the market road. */
+
     CcLocalAgent rejected_click_walker;
     CcLocalAgentInit(&rejected_click_walker,
                      (Vector2){50.0f, 27.25f}, false);
@@ -3310,8 +3276,7 @@ int main(void)
         return 1;
     }
 
-    /* A new ground command must be able to cancel a named traversal without
-       proximity immediately restarting the route from the same edge. */
+
     CcLocalAgent cancelled_traversal;
     CcLocalAgentInit(&cancelled_traversal,
                      (Vector2){50.0f, 27.25f}, false);
@@ -3450,9 +3415,7 @@ int main(void)
         }
     }
 
-    /* Authored centers are the easy case. Exercise every connection again
-       from walkable offsets around each room so no route can assume the hero
-       begins on the designer's centerline. */
+
     static const Vector2 room_start_offsets[] = {
         {1.5f, 0.0f}, {-1.5f, 0.0f}, {0.0f, 1.5f}, {0.0f, -1.5f},
         {1.0f, 1.0f}, {-1.0f, -1.0f},

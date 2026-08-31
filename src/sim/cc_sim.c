@@ -148,7 +148,7 @@ void CcSimInitializeDragonCycle(CcSim *sim)
     CopyName(sim->dragon.name, "Varkesh the Unappeased");
     sim->dragon.lair_settlement_id =
         sim->settlements[sim->settlement_count - 1].id;
-    /* Old offerings make the cave worth robbing before the first live tithe. */
+
     sim->dragon.hoard = 30;
     CcSimInitializeDragonEcology(sim);
 }
@@ -2489,9 +2489,7 @@ void CcSimUpgradeMapCollection(CcSim *sim)
 
 static void InitMaps(CcSim *sim)
 {
-    /* Keep the world generator's later random sequence stable. The original
-       eight route sheets consumed these draws before collectible maps gained
-       authored properties. Save upgrades deliberately do not consume them. */
+
     for (int32_t i = 0; i < CC_MAX_ROUTES; ++i) {
         (void)NextRandom(sim);
         if (i != 0) (void)NextRandom(sim);
@@ -3752,9 +3750,7 @@ static void PlanGoblinTribute(CcSim *sim)
                goblins->lair_stock[CC_GOOD_WEAPONS] < 3) {
         goblins->raid_motive = CC_GOBLIN_RAID_EQUIPMENT;
     } else if (sim->dragon.slain) {
-        /* A dead dragon has no hidden replacement clutch to provision.
-           The cult may still raid when hungry or under-equipped, but it
-           cannot manufacture a successor from stolen relics. */
+
         goblins->tribute_cooldown_days = 14;
         return;
     } else {
@@ -6655,7 +6651,7 @@ static void ApplyCourierMessage(CcSim *sim, CcCourier *courier,
         courier->destination_settlement_id, arrival_event_id,
         courier->reliability, text);
     (void)effect;
-    /* Keep the delivered seal pinned. The political effect remains its child. */
+
     courier->cause_event_id = arrival_event_id;
 }
 
@@ -9883,12 +9879,7 @@ static int32_t RollD6(CcSim *sim)
     return 1 + (int32_t)(NextRandom(sim) % 6U);
 }
 
-/* OSR encounter loot: the ledger decides what exists (the group's real
- * supplies stock), the 2d6 table decides what the company recovers. Loot is
- * carried, never minted: every recovered good is deducted from the defeated
- * group's supplies at a fixed ten-supplies-per-good rate, bounded by free
- * cargo slots. A natural 12 takes a trophy: a named curio with provenance
- * that occupies one carriage slot and sells at markets like any treasure. */
+
 static void RollEncounterLoot(CcSim *sim, CcBanditGroup *bandits,
                               const CcJourneyEncounter *journey,
                               const CcEvent *combat_event)
@@ -11458,6 +11449,9 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         SetError(error, error_capacity, "Simulation is missing.");
         return false;
     }
+    /* Save compatibility: every schema version ever shipped stays
+       loadable. Adding a schema bump means extending this table and the
+       per-version branches below, verified by persistence_tests. */
     bool legacy_schema = sim->schema_version == 3U ||
                          sim->schema_version == 4U ||
                          sim->schema_version == 5U ||
@@ -13227,14 +13221,12 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(horse->hardiness);
         }
     }
-    /* Optional schema-v3 extension: omitting zero preserves hashes written by
-       saves created before explicit charter commitments existed. */
+
     if (sim->player.accepted_situation_id != 0U) {
         HASH_VALUE(sim->player.accepted_situation_id);
     }
     if (sim->schema_version == 3U) {
-        /* Sparse schema-v3 fields preserve the hashes written before journey
-           encounters and explicit charter commitments existed. */
+
         if (sim->journey.active) {
             HASH_VALUE(sim->journey.active);
             HASH_VALUE(sim->journey.situation_id);

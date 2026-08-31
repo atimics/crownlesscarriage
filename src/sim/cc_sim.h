@@ -40,6 +40,9 @@
 #define CC_CROWNLESS_ATLAS_MAP_NAME "The Crownless Atlas"
 #define CC_DRAGON_HOARD_MAP_NAME "The Hoard Vault of Varkesh"
 
+/* Save and journal compatibility contract: every schema/generator version
+   listed in the legacy tables in cc_sim.c remains loadable. Bump these only
+   with matching migration branches and persistence_tests coverage. */
 #define CC_SIM_SCHEMA_VERSION 20
 #define CC_GENERATOR_VERSION 19
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -77,7 +80,8 @@ typedef enum CcEntityKind {
 typedef enum CcGood {
     CC_GOOD_FOOD = 0,
     CC_GOOD_IRON = 1,
-    /* Source compatibility for older callers and save migrations. */
+
+    /* Legacy alias: MATERIAL names IRON in older saves and callers. */
     CC_GOOD_MATERIAL = CC_GOOD_IRON,
     CC_GOOD_TOOLS = 2,
     CC_GOOD_WEAPONS = 3,
@@ -273,8 +277,9 @@ typedef enum CcCommandKind {
     CC_COMMAND_RETRIEVE_MAP,
     CC_COMMAND_STEAL_DRAGON_NAMED_TREASURE,
     CC_COMMAND_RETURN_DRAGON_NAMED_TREASURE,
-    /* Appended so command journals written by earlier schema versions keep
-       their stable numeric meanings. */
+
+    /* New commands are appended only: command journals persist these
+       numeric values, so existing entries must keep their meaning. */
     CC_COMMAND_RESOLVE_ENCOUNTER_PROVISIONS,
     CC_COMMAND_WITHDRAW_ENCOUNTER,
     CC_COMMAND_BREED_HORSES,
@@ -312,7 +317,7 @@ typedef enum CcCollectibleMapSlot {
     CC_MAP_LOWER_SILVERWORKS,
     CC_MAP_ASH_POOR_SKIN,
     CC_MAP_CROWNLESS_ATLAS,
-    /* Appended so older campaign catalogue bits keep their meaning. */
+
     CC_MAP_DRAGON_HOARD
 } CcCollectibleMapSlot;
 
@@ -515,11 +520,11 @@ typedef struct CcBanditGroup {
 
 typedef enum CcGoblinTributePhase {
     CC_GOBLIN_TRIBUTE_IDLE,
-    /* The old names remain stable in saved games. They now describe a raid. */
+
     CC_GOBLIN_TRIBUTE_OUTBOUND,
     CC_GOBLIN_TRIBUTE_RETURNING,
     CC_GOBLIN_TRIBUTE_TO_DRAGON,
-    /* Added last so older save values remain stable. */
+
     CC_GOBLIN_TRIBUTE_PREPARING
 } CcGoblinTributePhase;
 
@@ -540,7 +545,7 @@ typedef struct CcGoblinCult {
     CcId id;
     char name[CC_NAME_CAPACITY];
     int32_t members;
-    /* Devotion is the saved legacy name for commitment to the covenant. */
+
     int32_t devotion;
     int32_t cohesion;
     CcId lair_settlement_id;
@@ -1147,7 +1152,7 @@ typedef struct CcSim {
 } CcSim;
 
 void CcSimInit(CcSim *sim, uint32_t seed);
-/* Used by both new worlds and save migrations. Safe to call more than once. */
+
 void CcSimInitializeDragonCycle(CcSim *sim);
 void CcSimInitializeDragonEcology(CcSim *sim);
 void CcSimInitializeHoardRaiders(CcSim *sim);
@@ -1159,7 +1164,7 @@ void CcSimAdvanceDays(CcSim *sim, int32_t days);
 bool CcSettlementIsAbandoned(const CcSettlement *settlement);
 int32_t CcSimClimateFactor(const CcSim *sim);
 int32_t CcDragonCampaignExperience(const CcSim *sim);
-/* Consumes exact 60 Hz ticks only while a committed journey is travelling. */
+
 void CcSimAdvanceRuntimeTicks(CcSim *sim, int32_t ticks);
 bool CcSimApply(CcSim *sim, const CcCommand *command,
                 char *error, size_t error_capacity);

@@ -82,12 +82,12 @@ def ensure_hair_bones(rig: bpy.types.Object) -> None:
 def build_materials() -> dict[str, bpy.types.Material]:
     materials: dict[str, bpy.types.Material] = {}
     palette = dict(character.PALETTE)
-    # Use exact members of the engine's shared palette. The earlier painter
-    # colors could quantize warm skin into gold after the final scene grade.
+
+
     engine_colors = {
-        # The warm hero light removes blue before the final palette lookup.
-        # These compensated source colors land on the skin ramp instead of
-        # the nearby gold ramp after that full engine treatment.
+
+
+
         "skin": (126, 78, 75),
         "skin_light": (172, 108, 105),
         "hair": (24, 15, 14),
@@ -113,9 +113,9 @@ def build_materials() -> dict[str, bpy.types.Material]:
         if material is None:
             material = character.make_material(f"screen_first_{name}", color)
         else:
-            # The action source may already contain an older material with the
-            # same name.  Always refresh it so preview and engine exports use
-            # the palette authored above.
+
+
+
             material.diffuse_color = color
             material.use_nodes = True
             principled = material.node_tree.nodes.get("Principled BSDF")
@@ -319,9 +319,9 @@ def add_hair_highlight(material: bpy.types.Material) -> bpy.types.Object:
 
 def add_faceted_head(skin_material: bpy.types.Material) -> bpy.types.Object:
     """Build a clean anime face plane with a rounded rear skull."""
-    # The front is one broad plane, so toon lighting cannot break the face
-    # into mask-like wedges.  The middle and smaller rear profiles round the
-    # skull in depth while the x/z outline keeps a soft jaw and chin.
+
+
+
     profile = (
         (-0.095, 2.150), (-0.165, 2.115), (-0.195, 2.045),
         (-0.198, 1.940), (-0.170, 1.840), (-0.115, 1.780),

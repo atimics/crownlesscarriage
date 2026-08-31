@@ -49,12 +49,12 @@ MAX_WORLD_EXTENT_M = 100.0
 DEFAULT_MAX_TRIANGLES = 40000
 
 COMPONENT_SIZES = {
-    5120: 1,  # BYTE
-    5121: 1,  # UNSIGNED_BYTE
-    5122: 2,  # SHORT
-    5123: 2,  # UNSIGNED_SHORT
-    5125: 4,  # UNSIGNED_INT
-    5126: 4,  # FLOAT
+    5120: 1,
+    5121: 1,
+    5122: 2,
+    5123: 2,
+    5125: 4,
+    5126: 4,
 }
 ACCESSOR_SHAPES = {
     "SCALAR": (1, 1),
@@ -305,7 +305,7 @@ def quat_to_matrix3(x: float, y: float, z: float, w: float) -> list[list[float]]
 def node_matrix(node: dict) -> list[list[float]]:
     """Column-vector 4x4 world transform for one node (row-major storage)."""
     if "matrix" in node:
-        m = node["matrix"]  # glTF is column-major
+        m = node["matrix"]
         return [
             [m[0], m[4], m[8], m[12]],
             [m[1], m[5], m[9], m[13]],

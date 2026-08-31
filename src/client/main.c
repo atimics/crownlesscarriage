@@ -228,9 +228,6 @@ typedef enum CommandActionKind {
 
 static bool queued_save_shortcut = false;
 
-/* Accessibility tools can post a complete press/release pair between two
-   raylib frames. Keep the GLFW press edge so fast synthetic input is handled
-   on the next gameplay update instead of disappearing between polls. */
 static GLFWkeyfun previous_key_callback = NULL;
 static GLFWmousebuttonfun previous_mouse_button_callback = NULL;
 static bool queued_key_press[GLFW_KEY_LAST + 1] = {0};
@@ -482,9 +479,7 @@ static bool SituationVisibleToPlayer(const CcSim *sim, int32_t index)
 {
     if (sim == NULL || index < 0 || index >= sim->situation_count ||
         sim->situations[index].status != CC_SITUATION_ACTIVE) return false;
-    /* The world may already contain many problems, but a new player only
-       receives Mara's first promise. More notices become available after
-       the company earns its first point of reputation. */
+
     if (sim->player.reputation > 0) return true;
     if (sim->player.accepted_situation_id != 0U) {
         return sim->situations[index].id ==
@@ -894,8 +889,7 @@ static void ResetLocalState(LocalState *local)
         .town_position = {CC_LOCAL_CARRIAGE_X, 0.0f,
                           CC_LOCAL_CARRIAGE_Z}
     };
-    /* Established companies return to their parked carriage. A brand-new
-       campaign is moved to the bakery separately, before any company exists. */
+
     CcLocalAgentInit(
         &local->agent,
         (Vector2){CC_LOCAL_CARRIAGE_APPROACH_X,
@@ -1374,9 +1368,7 @@ static void UpdateActionReel(LocalState *local, ActionReelState *reel,
             CcLocalAgentUpdate(opponent, delta_time, false);
             RecordActionReelImpact(&local->course, hero, opponent);
             RecordActionReelImpact(&local->course, opponent, hero);
-            /* The reel is scripted, but it should exercise the same explicit
-               target contract as live play. A focus point alone must never
-               be enough to move the camera. */
+
             hero->combat.target_index =
                 opponent->combat.life_state == CC_LIFE_ALIVE ? 0 : -1;
             if (reel->stage_frame > 390) reel->complete = true;
@@ -2475,7 +2467,7 @@ static void AddCombatActions(ContextActionSet *set,
             set->items[set->count - 1].amount = i;
         }
     }
-    /* Target-bound cards only exist when they name an exact legal target. */
+
     if (has_target) {
         AddDetailedContextAction(
             set, CONTEXT_ACTION_BASIC_STRIKE, "Attack", "SPACE",
@@ -4331,9 +4323,7 @@ static void PrepareTownRaidReel(CcSim *sim, LocalState *local)
     }
     (void)CcLocalCourseSelectPlayerTarget(
         &local->course, &local->agent, 0);
-    /* This is still the live raid simulation. Fast-forward only the long
-       ingress so the reel opens when the selected raider reaches the same
-       local combat radius used by normal play. */
+
     for (int32_t frame = 0; frame < 6000; ++frame) {
         (void)CcLocalWorldUpdate(&local->course, &local->agent, sim,
                                  1.0f / 60.0f, false, true);
@@ -4355,8 +4345,7 @@ static void PrepareRoadCombatReel(CcSim *sim, LocalState *local)
     BeginRoadLocalState(sim, local, true);
     (void)CcLocalCourseSelectPlayerTarget(
         &local->course, &local->agent, 0);
-    /* Keep the real road fight, but skip most of the uneventful run-in. The
-       shown shot now starts just outside weapon range, before the first hit. */
+
     for (int32_t frame = 0; frame < 900; ++frame) {
         float x = local->course.raiders[0].position.x -
                   local->agent.position.x;
@@ -6178,9 +6167,7 @@ static Rectangle LocalViewportBounds(void)
     float available_scale = fminf(available_width / art_width,
                                   available_height / art_height);
     float scale = floorf(available_scale);
-    /* Small laptop desktops cannot fit a 1280 x 760 content area below the
-       macOS title bar. Fit the complete stage at a fractional scale there;
-       larger windows retain whole-pixel enlargement. */
+
     if (scale < 2.0f) scale = available_scale;
     if (scale < 0.50f) scale = 0.50f;
     float width = art_width * scale;
@@ -6520,10 +6507,7 @@ int main(int argc, char **argv)
 
     if (render_benchmark) SetTraceLogLevel(LOG_ERROR);
     else if (capture) SetTraceLogLevel(LOG_WARNING);
-    /* The world is deliberately rasterized at its final art-pixel
-       resolution. Multisample coverage before that raster step makes thin
-       edges change blend weights as actors move and reads as temporal
-       flicker after nearest-neighbor enlargement. */
+
     SetConfigFlags(FLAG_WINDOW_RESIZABLE |
                    (capture ? FLAG_WINDOW_HIDDEN : 0U));
     int32_t initial_width = normal_play ? 1200 : 1280;
@@ -6537,8 +6521,7 @@ int main(int argc, char **argv)
         return 1;
     }
     ClientInputInstall();
-    /* Normal play fits below a laptop title bar. Capture and benchmark modes
-       keep the stable 1280 x 760 presentation used by visual contracts. */
+
     SetWindowMinSize(normal_play ? 1040 : 1280,
                      normal_play ? 620 : 760);
     SetTargetFPS(render_benchmark || capture_action_reel ||

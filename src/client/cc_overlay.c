@@ -22,9 +22,7 @@ static bool overlay_active = false;
 
 static float ScaledFontSize(int font_size)
 {
-    /* Raylib's built-in glyphs lose their counters and stroke separation
-       below nine screen pixels. HUD call sites still use relative sizes for
-       hierarchy, but never shrink functional text into an unreadable mark. */
+
     return fmaxf(9.0f, (float)font_size * overlay_text_scale);
 }
 

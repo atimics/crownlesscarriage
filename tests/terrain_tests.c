@@ -60,10 +60,7 @@ static int TestCountryHasRelief(void)
             maximum = fmaxf(maximum, height);
             Vector3 normal = CcLocalTerrainNormalAt(x, z);
             if (normal.y < 0.985f) sloped_samples += 1;
-            /* Raised keeps, quarries, and ravines deliberately use steep
-               retaining banks beside solid walls. Reject broken near-
-               vertical spikes, but do not flatten those authored silhouettes
-               back into the old featureless town plane. */
+
             if (normal.y < 0.18f) {
                 (void)fprintf(stderr,
                               "terrain is too steep at %.1f %.1f (normal %.4f; L %.2f R %.2f N %.2f F %.2f)\n",
@@ -81,8 +78,7 @@ static int TestCountryHasRelief(void)
         road_minimum = fminf(road_minimum, height);
         road_maximum = fmaxf(road_maximum, height);
     }
-    /* Broad authored stages need clear relief without covering every quiet
-       walking area in small procedural bumps. */
+
     if (maximum - minimum < 5.0f || sloped_samples < 180 ||
         road_maximum - road_minimum < 0.60f) {
         (void)fprintf(stderr,
