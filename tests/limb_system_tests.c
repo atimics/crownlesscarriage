@@ -43,6 +43,48 @@ static bool PlaneCollision(void *context,
     return true;
 }
 
+static void ConsiderClimbSurface(CcLimbVec3 sample, CcLimbVec3 candidate,
+                                 CcLimbVec3 normal, float search_radius,
+                                 bool *found, float *best_distance,
+                                 CcLimbVec3 *point,
+                                 CcLimbVec3 *surface_normal)
+{
+    float x = candidate.x - sample.x;
+    float y = candidate.y - sample.y;
+    float z = candidate.z - sample.z;
+    float distance = sqrtf(x * x + y * y + z * z);
+    if (distance > search_radius || (*found && distance >= *best_distance)) {
+        return;
+    }
+    *found = true;
+    *best_distance = distance;
+    *point = candidate;
+    *surface_normal = normal;
+}
+
+static bool CornerSurfaceProbe(void *context, CcLimbVec3 sample,
+                               float search_radius, CcLimbVec3 *point,
+                               CcLimbVec3 *normal)
+{
+    (void)context;
+    bool found = false;
+    float best_distance = INFINITY;
+    ConsiderClimbSurface(
+        sample, (CcLimbVec3){sample.x, 0.0f, fminf(sample.z, 0.0f)},
+        (CcLimbVec3){0.0f, 1.0f, 0.0f}, search_radius,
+        &found, &best_distance, point, normal);
+    ConsiderClimbSurface(
+        sample, (CcLimbVec3){sample.x, fmaxf(0.0f, fminf(sample.y, 2.0f)),
+                             0.0f},
+        (CcLimbVec3){0.0f, 0.0f, -1.0f}, search_radius,
+        &found, &best_distance, point, normal);
+    ConsiderClimbSurface(
+        sample, (CcLimbVec3){sample.x, 2.0f, fmaxf(sample.z, 0.0f)},
+        (CcLimbVec3){0.0f, 1.0f, 0.0f}, search_radius,
+        &found, &best_distance, point, normal);
+    return found;
+}
+
 static float Distance(CcLimbVec3 a, CcLimbVec3 b)
 {
     float x = b.x - a.x;
@@ -375,6 +417,43 @@ int main(void)
     Require(CcRobotTraversabilityCost(1.0f, 0.25f, 0.82f) >
                 CcRobotTraversabilityCost(1.0f, 0.01f, 0.99f),
             "terrain cost did not prefer the more traversable edge");
+
+    CcRobotClimbRoute corner_route;
+    Require(CcRobotPlanFreeClimb(
+                (CcLimbVec3){0.0f, 0.0f, -0.70f},
+                (CcLimbVec3){0.0f, 1.0f, 0.0f},
+                (CcLimbVec3){0.0f, 2.0f, 0.70f},
+                (CcLimbVec3){0.0f, 1.0f, 0.0f},
+                0.42f, 0.68f, CornerSurfaceProbe, NULL, &corner_route),
+            "free-climb planner did not find a route over a wall lip");
+    Require(corner_route.count >= 6 && corner_route.length > 2.5f,
+            "free-climb planner returned an incomplete corner route");
+    bool touched_wall = false;
+    for (int32_t node = 0; node < corner_route.count; ++node) {
+        touched_wall = touched_wall ||
+            corner_route.nodes[node].surface == CC_ROBOT_SURFACE_WALL;
+        if (node > 0) {
+            Require(Distance(corner_route.nodes[node - 1].point,
+                             corner_route.nodes[node].point) <= 0.681f,
+                    "free-climb route exceeded the rig reach envelope");
+        }
+    }
+    Require(touched_wall &&
+                corner_route.nodes[corner_route.count - 1].surface ==
+                    CC_ROBOT_SURFACE_FLOOR,
+            "free-climb route did not transition from wall to the top");
+
+    CcRobotClimbRoute wall_route;
+    Require(CcRobotPlanFreeClimb(
+                (CcLimbVec3){-0.55f, 0.35f, 0.0f},
+                (CcLimbVec3){0.0f, 0.0f, -1.0f},
+                (CcLimbVec3){0.65f, 1.65f, 0.0f},
+                (CcLimbVec3){0.0f, 0.0f, -1.0f},
+                0.38f, 0.62f, CornerSurfaceProbe, NULL, &wall_route),
+            "free-climb planner did not crawl across an arbitrary wall");
+    Require(wall_route.count >= 4 &&
+                wall_route.nodes[wall_route.count - 1].point.y > 1.60f,
+            "wall-crawl route did not reach its requested contact");
 
     CcLimbVec3 wall_contact = {biped_body.x - 0.17f, biped_body.y - 0.71f,
                                biped_body.z + 0.30f};
