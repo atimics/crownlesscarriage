@@ -691,6 +691,27 @@ static void CheckSchema17Compatibility(char *error, size_t error_capacity)
     legacy.schema_version = 17U;
     legacy.generator_version = 16U;
     CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
+
+    sqlite3 *database = NULL;
+    RequireSqlite(sqlite3_open_v2(path, &database,
+                                  SQLITE_OPEN_READWRITE, NULL),
+                  database, "could not open schema 17 fixture");
+    char *sqlite_error = NULL;
+    int result = sqlite3_exec(
+        database,
+        "ALTER TABLE runtime_state DROP COLUMN journey_pace;"
+        "ALTER TABLE runtime_state DROP COLUMN ambush_warned;",
+        NULL, NULL, &sqlite_error);
+    if (result != SQLITE_OK) {
+        (void)fprintf(stderr, "could not create schema 17 fixture: %s\n",
+                      sqlite_error != NULL ? sqlite_error :
+                      sqlite3_errmsg(database));
+        sqlite3_free(sqlite_error);
+        sqlite3_close(database);
+        exit(EXIT_FAILURE);
+    }
+    sqlite3_close(database);
+
     CcSim restored;
     CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
@@ -702,6 +723,8 @@ static void CheckSchema17Compatibility(char *error, size_t error_capacity)
              restored.settlements[1].id);
     CC_CHECK(restored.goblins.cohesion == 47);
     CC_CHECK(restored.goblins.expeditions_intercepted == 3);
+    CC_CHECK(restored.journey.pace == CC_JOURNEY_PACE_STEADY);
+    CC_CHECK(!restored.journey.ambush_warned);
     CC_CHECK(CcSimValidate(&restored, error, error_capacity));
     RemoveDatabase(path);
 }
@@ -1110,6 +1133,11 @@ int main(void)
     CC_CHECK(CcSimApply(&original, &prepare_journey, error, sizeof(error)));
     CC_CHECK(original.journey.active);
     CC_CHECK(original.journey.phase == CC_JOURNEY_PHASE_TRAVELLING);
+    CcCommand push_pace = {
+        .kind = CC_COMMAND_SET_JOURNEY_PACE,
+        .amount = CC_JOURNEY_PACE_PUSH
+    };
+    CC_CHECK(CcSimApply(&original, &push_pace, error, sizeof(error)));
     CcSimAdvanceRuntimeTicks(&original, 480);
     CC_CHECK(original.journey.phase == CC_JOURNEY_PHASE_TRAVELLING);
     CC_CHECK(original.carriage.progress_milli > 0);
@@ -1169,6 +1197,7 @@ int main(void)
     CC_CHECK(restored.journey.bargain_cost == original.journey.bargain_cost);
     CC_CHECK(restored.journey.elapsed_subticks ==
              original.journey.elapsed_subticks);
+    CC_CHECK(restored.journey.pace == CC_JOURNEY_PACE_PUSH);
     CC_CHECK(restored.clock.tick == original.clock.tick);
     CC_CHECK(restored.clock.minute_subticks ==
              original.clock.minute_subticks);

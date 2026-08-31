@@ -63,6 +63,7 @@ int main(void)
     CC_CHECK(CcSimApply(&travel, &depart, error, sizeof(error)));
     CC_CHECK(travel.settlements[0].stock[CC_GOOD_FOOD] ==
              original_food - preview.horse_feed_required);
+    travel.journey.ambush_pending = false;
     AdvanceJourney(&travel);
     CC_CHECK(!travel.journey.active);
     CC_CHECK(travel.horse_team[0].fatigue > 0);

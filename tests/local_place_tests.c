@@ -52,18 +52,26 @@ static int ProfileContract(void)
             CHECK(camera->trigger_z >= 0.0f && camera->trigger_z <= 72.0f);
             CHECK(camera->target_x >= 0.0f && camera->target_x <= 96.0f);
             CHECK(camera->target_z >= 0.0f && camera->target_z <= 72.0f);
-            if (scene < CC_LOCAL_PLACE_ESTABLISHING_SCENE_COUNT) {
+            if (camera->kind == CC_LOCAL_TOWN_SCENE_HEART) {
+                CHECK(camera->camera_offset_y >= 8.0f);
+                CHECK(camera->camera_offset_y <= 11.0f);
+                CHECK(camera->fovy >= 21.0f && camera->fovy <= 23.0f);
+            } else if (camera->kind < CC_LOCAL_TOWN_SCENE_CLOSE_FIRST) {
                 CHECK(camera->camera_offset_y >= 8.0f);
                 CHECK(camera->fovy >= 26.0f && camera->fovy <= 35.0f);
             } else {
                 CHECK(camera->camera_offset_y >= 6.0f);
                 CHECK(camera->fovy >= 16.0f && camera->fovy <= 19.0f);
-                for (int32_t establishing = 0;
-                     establishing < CC_LOCAL_PLACE_ESTABLISHING_SCENE_COUNT;
-                     ++establishing) {
-                    CHECK(camera->fovy <
-                          profile->scene[establishing].fovy - 7.0f);
-                }
+                CHECK(camera->fovy < profile->scene[
+                    CC_LOCAL_TOWN_SCENE_ARRIVAL].fovy - 7.0f);
+                CHECK(camera->fovy < profile->scene[
+                    CC_LOCAL_TOWN_SCENE_LANDMARK].fovy - 7.0f);
+            }
+            if (camera->kind == CC_LOCAL_TOWN_SCENE_CARRIAGE_YARD) {
+                CHECK(camera->trigger_x >= 42.0f && camera->trigger_x <= 43.0f);
+                CHECK(camera->trigger_z >= 54.5f && camera->trigger_z <= 56.0f);
+                CHECK(camera->target_x >= 38.0f && camera->target_x <= 41.0f);
+                CHECK(camera->target_z >= 51.0f && camera->target_z <= 53.0f);
             }
             for (int32_t previous = 0; previous < scene; ++previous) {
                 CHECK(strcmp(camera->name,
@@ -99,6 +107,18 @@ static int ProfileContract(void)
             CHECK(route->surface == (CcLocalRoadSurface)function);
             CHECK(route->width >= 2.5f);
             CHECK(route->depth >= 2.5f);
+            CHECK(route->x >= 0.0f && route->x + route->width <= 96.0f);
+            CHECK(route->z >= 0.0f && route->z + route->depth <= 72.0f);
+        }
+        for (int32_t road = 0;
+             road < CC_LOCAL_CARRIAGE_ROUTE_COUNT; ++road) {
+            const CcLocalPlaceRoad *route = CcLocalPlaceCarriageRouteAt(
+                (CcSettlementFunction)function, road);
+            CHECK(route != NULL);
+            CHECK(route->name != NULL && route->name[0] != '\0');
+            CHECK(route->surface == (CcLocalRoadSurface)function);
+            CHECK(route->width >= 5.2f);
+            CHECK(route->depth >= 5.2f);
             CHECK(route->x >= 0.0f && route->x + route->width <= 96.0f);
             CHECK(route->z >= 0.0f && route->z + route->depth <= 72.0f);
         }
@@ -146,6 +166,10 @@ static int ProfileContract(void)
     CHECK(CcLocalPlaceRoadAt(CC_SETTLEMENT_MARKET, -1) == NULL);
     CHECK(CcLocalPlaceRoadAt(
               CC_SETTLEMENT_MARKET, CC_LOCAL_PLACE_ROAD_COUNT) == NULL);
+    CHECK(CcLocalPlaceCarriageRouteAt(CC_SETTLEMENT_MARKET, -1) == NULL);
+    CHECK(CcLocalPlaceCarriageRouteAt(
+              CC_SETTLEMENT_MARKET,
+              CC_LOCAL_CARRIAGE_ROUTE_COUNT) == NULL);
     CHECK(CcLocalPlaceBuildingAt(CC_SETTLEMENT_MARKET, -1) == NULL);
     CHECK(CcLocalPlaceBuildingAt(
               CC_SETTLEMENT_MARKET,
@@ -235,10 +259,10 @@ static bool BuildingTouchesCompound(
 static bool CompoundTouchesGateLane(
     const CcLocalPlaceCompoundStructure *structure)
 {
-    const float gate_left = 77.55f;
-    const float gate_right = 79.45f;
+    const float gate_left = 75.80f;
+    const float gate_right = 81.00f;
     const float gate_near = 27.00f;
-    const float gate_far = 32.80f;
+    const float gate_far = 38.50f;
     return structure->x < gate_right &&
            structure->x + structure->width > gate_left &&
            structure->z < gate_far &&
@@ -252,6 +276,25 @@ static bool RoadsOverlap(const CcLocalPlaceRoad *left,
            left->x + left->width > right->x &&
            left->z < right->z + right->depth &&
            left->z + left->depth > right->z;
+}
+
+static bool RoadTouchesBuilding(const CcLocalPlaceRoad *road,
+                                const CcLocalPlaceBuilding *building)
+{
+    return road->x < building->x + building->width &&
+           road->x + road->width > building->x &&
+           road->z < building->z + building->depth &&
+           road->z + road->depth > building->z;
+}
+
+static bool RoadTouchesCompound(
+    const CcLocalPlaceRoad *road,
+    const CcLocalPlaceCompoundStructure *structure)
+{
+    return road->x < structure->x + structure->width &&
+           road->x + road->width > structure->x &&
+           road->z < structure->z + structure->depth &&
+           road->z + road->depth > structure->z;
 }
 
 static bool RoadTouchesSharedSpine(const CcLocalPlaceRoad *road)
@@ -406,6 +449,52 @@ static int AuthoredTownMaps(void)
     return 0;
 }
 
+static int CarriageRoutePlans(void)
+{
+    for (int32_t function = CC_SETTLEMENT_FARMING;
+         function <= CC_SETTLEMENT_DUNGEON_TOWN; ++function) {
+        const CcLocalPlaceProfile *profile =
+            CcLocalPlaceProfileForFunction((CcSettlementFunction)function);
+        const CcLocalPlaceRoad *gate = &profile->carriage_route[0];
+        const CcLocalPlaceRoad *arrival = &profile->carriage_route[1];
+        const CcLocalPlaceRoad *spine = &profile->carriage_route[2];
+        const CcLocalPlaceRoad *turn = &profile->carriage_route[3];
+        const CcLocalPlaceRoad *yard = &profile->carriage_route[4];
+
+        CHECK(!gate->runs_east_west && gate->width >= 5.2f);
+        CHECK(arrival->runs_east_west && arrival->depth >= 5.2f);
+        CHECK(!spine->runs_east_west && spine->width >= 5.2f);
+        CHECK(turn->width >= 12.0f && turn->depth >= 12.0f);
+        CHECK(yard->width >= 13.0f && yard->depth >= 13.0f);
+        CHECK(arrival->x + arrival->width == 96.0f);
+        CHECK(RoadsOverlap(gate, arrival));
+        CHECK(RoadsOverlap(arrival, spine));
+        CHECK(RoadsOverlap(arrival, turn));
+        CHECK(RoadsOverlap(spine, turn));
+        CHECK(RoadsOverlap(spine, yard));
+
+        for (int32_t route = 0;
+             route < CC_LOCAL_CARRIAGE_ROUTE_COUNT; ++route) {
+            for (int32_t previous = 0; previous < route; ++previous) {
+                CHECK(strcmp(profile->carriage_route[route].name,
+                             profile->carriage_route[previous].name) != 0);
+            }
+            for (int32_t building = 0;
+                 building < profile->building_count; ++building) {
+                CHECK(!RoadTouchesBuilding(
+                    &profile->carriage_route[route],
+                    &profile->building[building]));
+            }
+        }
+        for (int32_t structure = 0;
+             structure < profile->compound_structure_count; ++structure) {
+            CHECK(!RoadTouchesCompound(
+                gate, &profile->compound_structure[structure]));
+        }
+    }
+    return 0;
+}
+
 static int CanonicalRegionProfiles(void)
 {
     CcSim sim;
@@ -461,6 +550,7 @@ int main(void)
     if (ProfileContract() != 0) return 1;
     if (AuthoredLandmarkLayouts() != 0) return 1;
     if (AuthoredTownMaps() != 0) return 1;
+    if (CarriageRoutePlans() != 0) return 1;
     if (CanonicalRegionProfiles() != 0) return 1;
     if (StableDistinctTerrain() != 0) return 1;
     (void)puts("local place profile tests passed");

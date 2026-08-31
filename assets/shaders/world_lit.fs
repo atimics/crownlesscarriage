@@ -74,6 +74,12 @@ float orderedDither4x4(vec2 pixel)
     return (threshold[index] + 0.5) / 16.0;
 }
 
+float centeredStripe(float coordinate, float frequency, float halfWidth)
+{
+    float phase = fract(coordinate * frequency);
+    return 1.0 - step(halfWidth, min(phase, 1.0 - phase));
+}
+
 void main()
 {
     vec4 albedo = texture(texture0, fragTexCoord) * fragColor * colDiffuse;
@@ -173,6 +179,92 @@ void main()
     terrainTint += vec3(0.034, 0.026, -0.010) * terrainLightChip;
     color *= mix(vec3(1.0), terrainTint,
                  isTerrain * detailPresence);
+
+    /* Add one more authored-looking pixel layer after the broad form reads.
+       These marks stay in world space, gather into short clusters, and fade
+       with depth. They suggest laid shingles, worked wall courses, and small
+       ground marks without relying on a screen-space noise texture. */
+    if (isTerrain > 0.5) {
+        vec2 groundMarkPoint = crossedTerrainPoint * 2.08 +
+                               vec2(5.0, 17.0);
+        vec2 groundMarkCenter = abs(fract(groundMarkPoint) - 0.5);
+        float groundMarkShape = 1.0 - step(
+            0.29, groundMarkCenter.x + groundMarkCenter.y * 1.34);
+        float groundMark = detailPresence * groundMarkShape *
+            step(0.90,
+                 hash21(floor(groundMarkPoint) + vec2(37.0, 61.0)));
+        color = mix(color, color * vec3(0.82, 0.86, 0.84),
+                    groundMark * 0.18);
+    } else {
+        float albedoValue = perceivedGray(albedo.rgb);
+        float normalAxis = step(abs(normal.z), abs(normal.x));
+        float pitchedSurface =
+            smoothstep(0.24, 0.58, normal.y) *
+            (1.0 - smoothstep(0.94, 0.995, normal.y)) *
+            (1.0 - smoothstep(0.50, 0.64, albedoValue));
+        float roofAcross = mix(fragPosition.z, fragPosition.x, normalAxis);
+        float roofAlong = mix(fragPosition.x, fragPosition.z, normalAxis);
+        float roofCourseCoordinate = abs(roofAcross) * 1.38;
+        float roofCourseIndex = floor(roofCourseCoordinate);
+        float roofCoursePhase = fract(roofCourseCoordinate);
+        float roofCourse = centeredStripe(abs(roofAcross), 1.38, 0.085);
+        float roofCourseBreak = step(
+            0.24, hash21(vec2(floor(roofAlong * 0.78),
+                              roofCourseIndex + 17.0)));
+        float roofJointPhase = fract(roofAlong * 0.78 +
+                                     mod(roofCourseIndex, 2.0) * 0.5);
+        float roofJoint = (1.0 - step(0.065,
+                                      min(roofJointPhase,
+                                          1.0 - roofJointPhase))) *
+                          (1.0 - roofCourse);
+        float roofJointBreak = step(
+            0.34, hash21(vec2(roofCourseIndex + 53.0,
+                              floor(roofAlong * 0.78))));
+        float roofInk = pitchedSurface * detailPresence *
+            max(roofCourse * roofCourseBreak * 0.72,
+                roofJoint * roofJointBreak * 0.52);
+        float roofLip = pitchedSurface * detailPresence * roofCourseBreak *
+            step(0.09, roofCoursePhase) *
+            (1.0 - step(0.18, roofCoursePhase));
+
+        float wallSurface = structureVertical *
+                            smoothstep(0.12, 0.34, albedoValue);
+        float wallAlong = mix(fragPosition.x, fragPosition.z, normalAxis);
+        float wallCourseCoordinate = max(fragPosition.y, 0.0) * 1.08;
+        float wallCourseIndex = floor(wallCourseCoordinate);
+        float wallCourse = centeredStripe(fragPosition.y, 1.08, 0.052);
+        float wallCell = floor(wallAlong * 0.48 +
+                               mod(wallCourseIndex, 2.0) * 0.5);
+        float wallCourseBreak = step(
+            0.49, hash21(vec2(wallCell, wallCourseIndex + 71.0)));
+        float wallJointPhase = fract(wallAlong * 0.48 +
+                                     mod(wallCourseIndex, 2.0) * 0.5);
+        float wallJoint = 1.0 - step(
+            0.052, min(wallJointPhase, 1.0 - wallJointPhase));
+        float wallJointBreak = step(
+            0.70,
+            hash21(vec2(wallCourseIndex + 31.0, wallCell + 11.0)));
+        float wallInk = wallSurface * detailPresence *
+            max(wallCourse * wallCourseBreak * 0.46,
+                wallJoint * wallJointBreak * 0.34);
+
+        vec2 wallChipPoint = vec2(wallAlong, fragPosition.y) * 1.72;
+        vec2 wallChipCenter = abs(fract(wallChipPoint) - 0.5);
+        float wallChipShape = 1.0 - step(
+            0.42, wallChipCenter.x + wallChipCenter.y * 1.22);
+        float wallChip = wallSurface * detailPresence * wallChipShape *
+            step(0.88,
+                 hash21(floor(wallChipPoint) + vec2(89.0, 13.0)));
+
+        vec3 materialInk = mix(vec3(0.020, 0.031, 0.034),
+                               albedo.rgb * 0.24, 0.38);
+        color = mix(color, materialInk,
+                    clamp(roofInk * 0.34 + wallInk * 0.24 +
+                          wallChip * 0.18, 0.0, 0.44));
+        color += albedo.rgb * vec3(1.14, 1.08, 0.88) *
+                 roofLip * 0.040;
+    }
+
     color += lightColor * specular * mix(1.0, 0.12, isTerrain) *
              detailPresence;
     float wetSurface = weatherWetness * smoothstep(0.58, 0.94, normal.y);
