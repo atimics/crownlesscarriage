@@ -125,6 +125,9 @@ void CcLimbRigSetHealth(CcLimbRig *rig, int32_t limb_index, float health);
 void CcLimbRigPinContact(CcLimbRig *rig, int32_t limb_index,
                          CcLimbVec3 body_position, float body_yaw,
                          CcLimbVec3 contact, CcLimbVec3 normal);
+void CcLimbRigEvaluateSupport(CcLimbRig *rig,
+                              CcLimbVec3 body_position, float body_yaw,
+                              bool grounded, float delta_time);
 bool CcLimbRigRequestPace(CcLimbRig *rig, CcLimbPace pace);
 float CcLimbChainLength(const CcLimbRig *rig, int32_t limb_index);
 const char *CcLimbStateName(CcLimbState state);

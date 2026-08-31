@@ -902,6 +902,16 @@ bool CcLimbRigRequestPace(CcLimbRig *rig, CcLimbPace pace)
     return TryApplyRequestedPace(rig);
 }
 
+void CcLimbRigEvaluateSupport(CcLimbRig *rig,
+                              CcLimbVec3 body_position, float body_yaw,
+                              bool grounded, float delta_time)
+{
+    if (rig == NULL || !rig->initialized || !isfinite(delta_time)) return;
+    delta_time = Clamp(delta_time, 0.0f, 1.0f / 30.0f);
+    CalculateSupport(rig, body_position, body_yaw, grounded);
+    UpdateSupportState(rig, grounded, delta_time);
+}
+
 void CcLimbRigPinContact(CcLimbRig *rig, int32_t limb_index,
                          CcLimbVec3 body_position, float body_yaw,
                          CcLimbVec3 contact, CcLimbVec3 normal)
