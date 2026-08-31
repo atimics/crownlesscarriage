@@ -1,4 +1,5 @@
 #include "locomotion/cc_limb.h"
+#include "locomotion/cc_multileg.h"
 #include "locomotion/cc_robotics.h"
 
 #include <math.h>
@@ -24,6 +25,21 @@ static bool SlopeProbe(void *context, CcLimbVec3 origin, float maximum_drop,
     *point = (CcLimbVec3){origin.x, height, origin.z};
     float inverse_length = 1.0f / sqrtf(1.0f + 0.30f * 0.30f);
     *normal = (CcLimbVec3){0.0f, inverse_length, -0.30f * inverse_length};
+    return true;
+}
+
+static bool PlaneCollision(void *context,
+                           CcBiomechVec3 previous_position,
+                           CcBiomechVec3 position, float radius,
+                           CcBiomechVec3 *corrected_position,
+                           CcBiomechVec3 *surface_normal)
+{
+    (void)context;
+    (void)previous_position;
+    if (position.y - radius >= 0.0f) return false;
+    *corrected_position = position;
+    corrected_position->y = radius;
+    *surface_normal = (CcBiomechVec3){0.0f, 1.0f, 0.0f};
     return true;
 }
 
@@ -160,6 +176,49 @@ int main(void)
                 "sprint pace did not configure the body-plan support policy");
         Require(CcLimbPaceName(rig.pace)[0] == 'S',
                 "limb pace has no stable player-facing name");
+    }
+
+    for (int32_t preset = CC_MORPHOLOGY_QUADRUPED;
+         preset <= CC_MORPHOLOGY_OCTOPOD; ++preset) {
+        CcLimbMorphology morphology;
+        (void)CcLimbMorphologyFromPreset(
+            &morphology, (CcMorphologyPreset)preset);
+        CcLimbRig rig;
+        CcLimbVec3 center = {0.0f, morphology.body_height, 0.0f};
+        CcLimbRigInit(&rig, &morphology, center, 0.0f,
+                      PlaneProbe, NULL);
+        CcMultilegRagdoll ragdoll;
+        Require(CcMultilegRagdollCollapse(
+                    &ragdoll, &rig, center, 0.0f,
+                    (CcLimbVec3){0.8f, 0.0f, 0.2f},
+                    (CcLimbVec3){1.0f, 0.2f, 0.0f}, center,
+                    5.0f, true),
+                "multi-leg body rejected a physical collapse");
+        Require(ragdoll.active && ragdoll.physics.active &&
+                    ragdoll.control_authority == 0.0f,
+                "multi-leg collapse did not transfer body authority");
+        if (preset == CC_MORPHOLOGY_OCTOPOD) {
+            Require(ragdoll.physics.particle_count > 32,
+                    "octopod ragdoll did not include every articulated joint");
+        }
+        bool saw_contact = false;
+        bool saw_recovery = false;
+        for (int32_t frame = 0; frame < 720 && ragdoll.active; ++frame) {
+            (void)CcMultilegRagdollStep(
+                &ragdoll, &rig, 1.0f / 60.0f,
+                PlaneProbe, PlaneCollision, NULL);
+            saw_contact = saw_contact ||
+                CcMultilegRagdollSupportContactCount(&ragdoll) > 0;
+            saw_recovery = saw_recovery || ragdoll.recovering;
+            VerifySegments(&rig);
+        }
+        Require(saw_contact,
+                "multi-leg ragdoll never collided with the physical floor");
+        Require(saw_recovery && !ragdoll.active && rig.initialized &&
+                    rig.support_state == CC_LIMB_SUPPORT_STABLE,
+                "multi-leg ragdoll did not recover into its gait rig");
+        Require(CcMultilegRagdollStateName(&ragdoll)[0] == 'C',
+                "recovered multi-leg body kept the wrong authority name");
     }
 
     CcLimbMorphology slope_quadruped;
