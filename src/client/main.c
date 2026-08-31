@@ -10,6 +10,9 @@
 
 #include "raylib.h"
 #include "GLFW/glfw3.h"
+#if defined(PLATFORM_WEB)
+#include <emscripten.h>
+#endif
 
 #include <inttypes.h>
 #include <math.h>
@@ -213,6 +216,8 @@ typedef enum CommandActionKind {
     COMMAND_ACTION_COUNT
 } CommandActionKind;
 
+static bool queued_save_shortcut = false;
+
 /* Accessibility tools can post a complete press/release pair between two
    raylib frames. Keep the GLFW press edge so fast synthetic input is handled
    on the next gameplay update instead of disappearing between polls. */
@@ -220,7 +225,6 @@ static GLFWkeyfun previous_key_callback = NULL;
 static GLFWmousebuttonfun previous_mouse_button_callback = NULL;
 static bool queued_key_press[GLFW_KEY_LAST + 1] = {0};
 static bool queued_mouse_button_press[GLFW_MOUSE_BUTTON_LAST + 1] = {0};
-static bool queued_save_shortcut = false;
 
 static void ClientKeyCallback(GLFWwindow *window, int key, int scancode,
                               int action, int mods)
@@ -278,6 +282,28 @@ static void ClientInputClearPressed(void)
     queued_save_shortcut = false;
 }
 
+#if defined(PLATFORM_WEB)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wstrict-prototypes"
+#pragma clang diagnostic ignored "-Wextra-semi"
+EM_ASYNC_JS(void, ClientWaitForAnimationFrame, (), {
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+});
+EM_ASYNC_JS(int, ClientFlushBrowserSaves,
+            (const char *campaign_path, const char *session_path), {
+    try {
+        await Module.persistCrownlessSave(
+            UTF8ToString(campaign_path), UTF8ToString(session_path));
+        console.info("Crownless Carriage campaign stored.");
+        return 1;
+    } catch (error) {
+        console.error("Could not store Crownless Carriage saves", error);
+        return 0;
+    }
+});
+#pragma clang diagnostic pop
+#endif
+
 static const Vector2 LOCAL_MARKET = {CC_LOCAL_MARKET_X, CC_LOCAL_MARKET_Z};
 static const Vector2 LOCAL_CARRIAGE = {CC_LOCAL_CARRIAGE_X,
                                       CC_LOCAL_CARRIAGE_Z};
@@ -296,7 +322,10 @@ static const Vector2 INTERIOR_EXIT = {1.55f, 5.55f};
 
 static void CampaignSavePath(char *path, size_t capacity)
 {
-#if defined(__APPLE__)
+#if defined(PLATFORM_WEB)
+    (void)snprintf(path, capacity,
+                   "/crownless-save/crownless_campaign.ccsave");
+#elif defined(__APPLE__)
     const char *user_home = getenv("HOME");
     if (user_home != NULL && user_home[0] != '\0') {
         char directory[512];
@@ -308,6 +337,18 @@ static void CampaignSavePath(char *path, size_t capacity)
     }
 #endif
     (void)snprintf(path, capacity, "crownless_campaign.ccsave");
+}
+
+static bool CampaignSaveExists(const char *path)
+{
+#if defined(PLATFORM_WEB)
+    FILE *file = fopen(path, "rb");
+    if (file == NULL) return false;
+    (void)fclose(file);
+    return true;
+#else
+    return FileExists(path);
+#endif
 }
 
 static bool CampaignCompanionPath(const char *save_path, const char *suffix,
@@ -4484,6 +4525,14 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             saved = SaveLocalSession(session_path, sim, local,
                                      error, sizeof(error));
         }
+#if defined(PLATFORM_WEB)
+        if (saved &&
+            ClientFlushBrowserSaves(save_path, session_path) == 0) {
+            saved = false;
+            (void)snprintf(error, sizeof(error),
+                           "The browser could not store this campaign.");
+        }
+#endif
         (void)snprintf(message, message_capacity, "%s",
                        saved ? "Game saved." : error);
         return;
@@ -6169,12 +6218,12 @@ int main(int argc, char **argv)
     CcSimInit(&sim, UINT32_C(0xc0a71a9e));
     CcJournal *journal = NULL;
     char startup_message[256] = "";
-    bool resuming_campaign = normal_play && FileExists(save_path);
+    bool resuming_campaign = normal_play && CampaignSaveExists(save_path);
     if (capture || render_benchmark) {
         CcSimAdvanceDays(&sim, 28);
     } else {
         char error[256];
-        if (FileExists(save_path)) {
+        if (CampaignSaveExists(save_path)) {
             journal = CcJournalResume(save_path, &sim, error, sizeof(error));
             (void)snprintf(startup_message, sizeof(startup_message), "%s",
                            journal != NULL ? "Campaign resumed." : error);
@@ -6661,6 +6710,9 @@ int main(int argc, char **argv)
 
     Rectangle local_bounds = LocalViewportBounds();
     while (render_benchmark || !WindowShouldClose()) {
+#if defined(PLATFORM_WEB)
+        ClientWaitForAnimationFrame();
+#endif
         local_bounds = LocalViewportBounds();
         float frame_delta_time = GetFrameTime();
         CcLocalRendererSetOpeningStep(local.opening_step);

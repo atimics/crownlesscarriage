@@ -11,7 +11,8 @@
 	blender-character-engine \
 	art-check \
 	configure-play build-play test-play \
-	configure-release build-release test-release
+	configure-release build-release test-release \
+	configure-web build-web
 
 BLENDER ?= blender
 
@@ -32,6 +33,12 @@ build-release: configure-release
 
 test-release: build-release
 	ctest --preset release
+
+configure-web:
+	emcmake cmake --preset web
+
+build-web: configure-web
+	cmake --build --preset web
 
 blender-assets:
 	$(BLENDER) --background --factory-startup --python tools/blender/build_asset_library.py
