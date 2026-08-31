@@ -198,6 +198,32 @@ static const char *SituationTarget(const CcSim *sim,
     return "an unknown target";
 }
 
+static void MineObjective(const CcSituation *situation,
+                          const CcCharacter *speaker,
+                          char *buffer, size_t capacity)
+{
+    const char *name = speaker != NULL ? speaker->name : "the miner";
+    switch (situation->discovery_stage) {
+        case CC_DISCOVERY_RUMOR:
+            (void)snprintf(buffer, capacity,
+                           "Ask %s about the strange noises.", name);
+            break;
+        case CC_DISCOVERY_WITNESS:
+            (void)snprintf(buffer, capacity,
+                           "Ask %s what happened in the mine.", name);
+            break;
+        case CC_DISCOVERY_DECISION:
+        case CC_DISCOVERY_AUTHORITY:
+            (void)snprintf(buffer, capacity,
+                           "Tell %s what Bren heard.", name);
+            break;
+        case CC_DISCOVERY_OFFER:
+            (void)snprintf(buffer, capacity,
+                           "Find Cera in the west gallery.");
+            break;
+    }
+}
+
 static bool IsNamedSettlement(const CcSim *sim,
                               const CcSettlement *place, int32_t slot)
 {
@@ -300,9 +326,17 @@ static void DescribeLook(const CcMetagame *metagame,
         const CcSituation *situation = &sim->situations[i];
         if (situation->status != CC_SITUATION_ACTIVE ||
             CcSimSituationOfferSettlementId(sim, situation) != place->id) continue;
-        Append(output, capacity,
-               "%s has left an offer in the charter house. The paper is tidy. The worry behind it is not.\n",
-               situation->sponsor_name);
+        const CcCharacter *speaker = CcSimSituationConversationCharacter(
+            sim, situation, place->id);
+        if (speaker != NULL && !CcSimSituationCanAccept(sim, situation)) {
+            char objective[128];
+            MineObjective(situation, speaker, objective, sizeof(objective));
+            Append(output, capacity, "%s\n", objective);
+        } else {
+            Append(output, capacity,
+                   "%s has left an offer in the charter house.\n",
+                   situation->sponsor_name);
+        }
     }
     Append(output, capacity,
            "You may 'talk NUMBER' from the charter list, listen to 'rumors', or inspect the 'roads'.\n"
@@ -373,18 +407,25 @@ static void DescribePeople(const CcMetagame *metagame,
         Append(output, capacity,
                "  A map seller guards three disagreeing road notes and claims the wheel scratched on her fountain is 'old carriage nonsense.'\n");
         shown += 1;
-    } else if (IsNamedSettlement(sim, place, 3)) {
-        Append(output, capacity,
-               "  Jory Fen has silver dust in his eyebrows and a bent brass whistle. He says the lower tunnel carries voices, and never to answer with your name.\n");
-        shown += 1;
     }
     for (int32_t i = 0; i < sim->situation_count; ++i) {
         const CcSituation *situation = &sim->situations[i];
         if (situation->status != CC_SITUATION_ACTIVE || place == NULL ||
             CcSimSituationOfferSettlementId(sim, situation) != place->id) continue;
-        Append(output, capacity,
-               "  %s keeps offer %d close at hand. Ask about it with 'talk %d'.\n",
-               situation->sponsor_name, i + 1, i + 1);
+        const CcCharacter *speaker = CcSimSituationConversationCharacter(
+            sim, situation, place->id);
+        if (speaker == NULL) continue;
+        if (situation->kind == CC_SITUATION_MONSTER_EXPEDITION &&
+            !CcSimSituationCanAccept(sim, situation)) {
+            char objective[128];
+            MineObjective(situation, speaker, objective, sizeof(objective));
+            Append(output, capacity, "  %s Use 'talk %d'.\n",
+                   objective, i + 1);
+        } else {
+            Append(output, capacity,
+                   "  Ask %s about job %d with 'talk %d'.\n",
+                   speaker->name, i + 1, i + 1);
+        }
         shown += 1;
     }
     for (int32_t i = 0; i < sim->bandit_count; ++i) {
@@ -440,8 +481,7 @@ static void DescribeRumors(const CcMetagame *metagame,
                "  Someone has crossed the eastern bridge off Mara's chart so hard the pen tore the paper.\n");
     } else if (place != NULL && place->id == sim->settlements[3].id) {
         Append(output, capacity,
-               "  Miners say the lower works breathe in at dusk. Their lamps lean toward the dark even when there is no wind.\n"
-               "  Lost spoons have begun turning up in careful silver circles. The mine owners call it theft and refuse to count what came back.\n");
+               "  Bren Alder ran out of the west gallery and left his lamp behind. Jory is looking for him.\n");
     } else {
         Append(output, capacity,
                "  Road talk points back toward the hungry market and the tolled bridge.\n");
@@ -476,7 +516,7 @@ static void DescribeCharters(const CcMetagame *metagame,
 {
     const CcSim *sim = &metagame->sim;
     const CcSituation *accepted = CcSimAcceptedSituation(sim);
-    Append(output, capacity, "Promises waiting here:\n");
+    Append(output, capacity, "Current objectives:\n");
     int32_t shown = 0;
     for (int32_t i = 0; i < sim->situation_count; ++i) {
         const CcSituation *situation = &sim->situations[i];
@@ -484,6 +524,8 @@ static void DescribeCharters(const CcMetagame *metagame,
             (CcSimSituationOfferSettlementId(sim, situation) !=
                  sim->player.location_id &&
              (accepted == NULL || accepted->id != situation->id))) continue;
+        const CcCharacter *speaker = CcSimSituationConversationCharacter(
+            sim, situation, sim->player.location_id);
         char target[96];
         const char *target_name = SituationTarget(
             sim, situation, target, sizeof(target));
@@ -501,20 +543,28 @@ static void DescribeCharters(const CcMetagame *metagame,
                    "%s's iron chain: find out why a sound bridge will not open between %s.\n",
                    situation->sponsor_name, target_name);
         } else if (situation->kind == CC_SITUATION_MONSTER_EXPEDITION) {
-            Append(output, capacity,
-                   "%s's bent whistle: choose what the old mine road will become.\n",
-                   situation->affected_name);
+            if (!CcSimSituationCanAccept(sim, situation)) {
+                char objective[128];
+                MineObjective(situation, speaker, objective,
+                              sizeof(objective));
+                Append(output, capacity, "%s\n", objective);
+            } else {
+                Append(output, capacity,
+                       "Find Cera in the west gallery.\n");
+            }
         } else {
             Append(output, capacity,
                    "%s's unopened letter: carry %s before its news grows old.\n",
                    situation->sponsor_name, target_name);
         }
-        Append(output, capacity,
-               "     The small print promises %" PRId64
-               " crowns before day %d%s.\n",
-               situation->reward, situation->deadline_day,
-               accepted != NULL && accepted->id == situation->id ?
-                   " [your promise]" : "");
+        if (CcSimSituationCanAccept(sim, situation)) {
+            Append(output, capacity,
+                   "     The small print promises %" PRId64
+                   " crowns before day %d%s.\n",
+                   situation->reward, situation->deadline_day,
+                   accepted != NULL && accepted->id == situation->id ?
+                       " [your promise]" : "");
+        }
         shown += 1;
         if (situation->kind == CC_SITUATION_RELIEF_DELIVERY ||
             situation->kind == CC_SITUATION_BLACK_MARKET_DELIVERY) {
@@ -525,8 +575,13 @@ static void DescribeCharters(const CcMetagame *metagame,
             Append(output, capacity,
                    "     Reopen the road with 2 tools or 18 crowns. Tools are faster and last longer.\n");
         } else if (situation->kind == CC_SITUATION_MONSTER_EXPEDITION) {
-            Append(output, capacity,
-                   "     Public road costs 2 tools + 12 crowns; smuggler road costs 1 tool + 6; closing the tunnel costs 3 tools.\n");
+            if (CcSimSituationCanAccept(sim, situation)) {
+                Append(output, capacity,
+                       "     Bring tools to the west gallery.\n");
+            } else {
+                Append(output, capacity,
+                       "     No reward has been offered yet.\n");
+            }
         } else {
             Append(output, capacity,
                    "     Carry the unopened letter in the carriage. Its orders take effect when it reaches the named court.\n");
@@ -537,7 +592,7 @@ static void DescribeCharters(const CcMetagame *metagame,
                "  No fresh paper waits here. That does not mean nobody needs help.\n");
     }
     Append(output, capacity,
-           "Use 'talk NUMBER' to hear the person, then 'accept NUMBER' or 'refuse NUMBER'. The brass box holds one accepted job.\n");
+           "Use 'talk NUMBER' to ask about an objective. Use 'tell NUMBER' to tell Mara, or 'keep NUMBER' to keep it between you and Jory.\n");
 }
 
 static bool TalkToSituation(CcMetagame *metagame, int32_t index,
@@ -545,29 +600,26 @@ static bool TalkToSituation(CcMetagame *metagame, int32_t index,
 {
     CcSim *sim = &metagame->sim;
     CcSituation *situation = &sim->situations[index];
-    const CcCharacter *sponsor = CcSimSituationSponsorCharacter(
-        sim, situation);
-    const CcCharacter *affected = CcSimSituationAffectedCharacter(
-        sim, situation);
-    bool sponsor_here = situation->status == CC_SITUATION_ACTIVE &&
-        CcSimSituationOfferSettlementId(sim, situation) ==
-            sim->player.location_id;
-    bool affected_here = affected != NULL &&
-        affected->current_settlement_id == sim->player.location_id &&
-        CcSimSituationTouchesSettlement(sim, situation,
-                                        sim->player.location_id);
-    if (!sponsor_here && !affected_here) {
+    const CcCharacter *speaker = CcSimSituationConversationCharacter(
+        sim, situation, sim->player.location_id);
+    if (situation->status != CC_SITUATION_ACTIVE || speaker == NULL) {
         Append(output, capacity,
                "Nobody here can tell that part of the story.\n");
         return false;
     }
-    const CcCharacter *speaker = sponsor_here ? sponsor : affected;
+    bool sponsor_here = speaker->id == situation->sponsor_character_id;
+    bool affected_here = speaker->id == situation->affected_character_id;
+    CcSituationDiscoveryStage stage_before = situation->discovery_stage;
     const CcStoryLine *spoken = CcStoryCharacterLine(
         sim, situation, speaker);
     const char *spoken_text = spoken != NULL ? spoken->text :
         "Tell me what happened, from the beginning.";
-    if (affected_here &&
-        !CcCharacterRemembers(affected, CC_CHARACTER_MEMORY_MET_PLAYER,
+    bool advances_mine_lead =
+        situation->kind == CC_SITUATION_MONSTER_EXPEDITION &&
+        stage_before != CC_DISCOVERY_DECISION &&
+        stage_before != CC_DISCOVERY_OFFER;
+    if (advances_mine_lead &&
+        !CcCharacterRemembers(speaker, CC_CHARACTER_MEMORY_MET_PLAYER,
                               situation->id)) {
         CcCommand listen = {
             .kind = CC_COMMAND_CHARACTER_RESPONSE,
@@ -581,7 +633,33 @@ static bool TalkToSituation(CcMetagame *metagame, int32_t index,
         }
     }
 
-    if (situation->kind == CC_SITUATION_RELIEF_DELIVERY && sponsor_here) {
+    if (situation->kind == CC_SITUATION_MONSTER_EXPEDITION) {
+        if (stage_before == CC_DISCOVERY_RUMOR) {
+            Append(output, capacity,
+                   "Jory: \"%s\"\n"
+                   "New objective: Ask Bren what happened in the mine.\n",
+                   spoken_text);
+        } else if (stage_before == CC_DISCOVERY_WITNESS) {
+            Append(output, capacity,
+                   "Bren: \"%s\"\n"
+                   "New objective: Tell Jory what Bren heard.\n",
+                   spoken_text);
+        } else if (stage_before == CC_DISCOVERY_DECISION) {
+            Append(output, capacity,
+                   "Jory: \"%s\"\n"
+                   "Choose: 'tell %d' to tell Mara, or 'keep %d' to keep it between you and Jory.\n",
+                   spoken_text, index + 1, index + 1);
+        } else if (stage_before == CC_DISCOVERY_AUTHORITY) {
+            Append(output, capacity,
+                   "Mara: \"%s\"\n"
+                   "New job: Find Cera in the west gallery. Use 'accept %d' to take the job.\n",
+                   spoken_text, index + 1);
+        } else {
+            Append(output, capacity, "%s says, \"%s\"\n",
+                   speaker->name, spoken_text);
+        }
+    } else if (situation->kind == CC_SITUATION_RELIEF_DELIVERY &&
+               sponsor_here) {
         Append(output, capacity,
                "%s straightens the white-wax letter until it is exactly square with the desk.\n"
                "\"%s\"\n"
@@ -603,12 +681,6 @@ static bool TalkToSituation(CcMetagame *metagame, int32_t index,
                "Two crates of tools would let her crew call the closed gate a repair. Eighteen crowns would buy the guards' silence.\n"
                "She watches the hungry boy on the wall finish his soup. \"If I open the gate, I am responsible for every sack that crosses.\"\n",
                situation->sponsor_name, spoken_text);
-    } else if (situation->kind == CC_SITUATION_MONSTER_EXPEDITION) {
-        Append(output, capacity,
-               "%s slides out from under a broken ore wagon. Silver dust has settled in his eyebrows.\n"
-               "The wagon behind him rises and falls on a bad axle: in, out.\n"
-               "He gives you a bent brass whistle. \"%s\"\n",
-               situation->affected_name, spoken_text);
     } else if (situation->kind == CC_SITUATION_RELIEF_DELIVERY) {
         Append(output, capacity,
                "%s looks from the carriage sacks to the empty oven tins.\n"
@@ -1385,7 +1457,7 @@ static void DescribeHelp(char *output, size_t capacity)
            "  look, people, talk NUMBER, rumors, charters, roads\n"
            "  causes, notes, cargo, animals, economy, treasures, inequality, kingdoms, war, dragon, goblins, status, history [COUNT]\n"
            "Make commitments:\n"
-           "  accept NUMBER, refuse NUMBER, abandon\n"
+           "  tell NUMBER, keep NUMBER, accept NUMBER, refuse NUMBER, abandon\n"
            "Move goods and people:\n"
            "  buy food|iron|tools|weapons|gold|gems COUNT\n"
            "  sell food|iron|tools|weapons|gold|gems COUNT\n"
@@ -1637,6 +1709,43 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
         DescribeHistory(metagame, count, output, output_capacity);
     } else if (strcmp(command, "debrief") == 0) {
         DescribeDebrief(metagame, output, output_capacity);
+    } else if (strcmp(command, "tell") == 0 ||
+               strcmp(command, "keep") == 0 ||
+               strcmp(command, "report") == 0 ||
+               strcmp(command, "confide") == 0) {
+        int32_t index;
+        if (!ParseIndex(first, metagame->sim.situation_count, &index)) {
+            Append(output, output_capacity, "Choose a lead number.\n");
+            return false;
+        }
+        CcCommand action = {
+            .kind = CC_COMMAND_CHARACTER_RESPONSE,
+            .target_id = metagame->sim.situations[index].id,
+            .amount = strcmp(command, "tell") == 0 ||
+                    strcmp(command, "report") == 0 ?
+                CC_CHARACTER_RESPONSE_REPORT_EVIDENCE :
+                CC_CHARACTER_RESPONSE_KEEP_CONFIDENCE
+        };
+        if (!ApplyCommand(metagame, &action, output, output_capacity)) {
+            return false;
+        }
+        const CcSituation *situation = &metagame->sim.situations[index];
+        CcId next_location = CcSimSituationOfferSettlementId(
+            &metagame->sim, situation);
+        const CcSettlement *next_place = CcSimSettlement(
+            &metagame->sim, next_location);
+        const CcCharacter *next = CcSimSituationConversationCharacter(
+            &metagame->sim, situation, next_location);
+        if (CcSimSituationCanAccept(&metagame->sim, situation)) {
+            Append(output, output_capacity,
+                   "Jory asks you to help find Cera. You can accept the job now.\n");
+        } else {
+            Append(output, output_capacity,
+                   "New objective: Tell %s what Bren heard. %s is in %s.\n",
+                   next != NULL ? next->name : situation->sponsor_name,
+                   next != NULL ? next->name : situation->sponsor_name,
+                   next_place != NULL ? next_place->name : "the next town");
+        }
     } else if (strcmp(command, "accept") == 0) {
         int32_t index;
         if (!ParseIndex(first, metagame->sim.situation_count, &index)) {

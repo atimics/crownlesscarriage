@@ -21,6 +21,8 @@
 #define CC_MAX_SITUATIONS 12
 #define CC_MAX_CHARACTERS 24
 #define CC_CHARACTER_MEMORY_CAPACITY 4
+#define CC_CHARACTER_KNOWLEDGE_CAPACITY 8
+#define CC_MAX_RELATIONSHIPS 48
 #define CC_MAX_EVENTS 256
 #define CC_CARRIAGE_HORSE_COUNT 2
 #define CC_MAX_STABLE_HORSES 6
@@ -38,8 +40,8 @@
 #define CC_CROWNLESS_ATLAS_MAP_NAME "The Crownless Atlas"
 #define CC_DRAGON_HOARD_MAP_NAME "The Hoard Vault of Varkesh"
 
-#define CC_SIM_SCHEMA_VERSION 19
-#define CC_GENERATOR_VERSION 18
+#define CC_SIM_SCHEMA_VERSION 20
+#define CC_GENERATOR_VERSION 19
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
 #define CC_WORLD_DAY_SUBTICKS (24 * 60 * CC_WORLD_MINUTE_SUBTICKS)
@@ -243,7 +245,11 @@ typedef enum CcEventKind {
     CC_EVENT_DUNGEON_SHORTCUT_OPENED,
     CC_EVENT_DUNGEON_LOOT,
     CC_EVENT_DUNGEON_THRESHOLD_REACHED,
-    CC_EVENT_DUNGEON_EXPEDITION_ENDED
+    CC_EVENT_DUNGEON_EXPEDITION_ENDED,
+    CC_EVENT_RELATIONSHIP_HISTORY,
+    CC_EVENT_RUMOR_SHARED,
+    CC_EVENT_FACT_REVEALED,
+    CC_EVENT_RELATIONSHIP_CHANGED
 } CcEventKind;
 
 typedef enum CcCommandKind {
@@ -841,8 +847,46 @@ typedef enum CcCharacterMemoryKind {
 
 typedef enum CcCharacterResponse {
     CC_CHARACTER_RESPONSE_LISTEN = 1,
-    CC_CHARACTER_RESPONSE_PLEDGE_HELP = 2
+    CC_CHARACTER_RESPONSE_PLEDGE_HELP = 2,
+    CC_CHARACTER_RESPONSE_REPORT_EVIDENCE = 3,
+    CC_CHARACTER_RESPONSE_KEEP_CONFIDENCE = 4
 } CcCharacterResponse;
+
+typedef enum CcKnowledgeKind {
+    CC_KNOWLEDGE_NONE,
+    CC_KNOWLEDGE_PROBLEM_RUMOR,
+    CC_KNOWLEDGE_WITNESS_ACCOUNT,
+    CC_KNOWLEDGE_IMMEDIATE_STAKE,
+    CC_KNOWLEDGE_OFFER
+} CcKnowledgeKind;
+
+typedef enum CcKnowledgeCertainty {
+    CC_KNOWLEDGE_DOUBTFUL = 1,
+    CC_KNOWLEDGE_TOLD = 2,
+    CC_KNOWLEDGE_WITNESSED = 3
+} CcKnowledgeCertainty;
+
+typedef enum CcRelationshipHistory {
+    CC_RELATIONSHIP_HISTORY_NONE,
+    CC_RELATIONSHIP_HISTORY_OLD_FRIENDS,
+    CC_RELATIONSHIP_HISTORY_FORMER_PARTNERS,
+    CC_RELATIONSHIP_HISTORY_PROFESSIONAL_RIVALS,
+    CC_RELATIONSHIP_HISTORY_COWORKERS
+} CcRelationshipHistory;
+
+typedef enum CcSituationDiscoveryStage {
+    CC_DISCOVERY_OFFER,
+    CC_DISCOVERY_RUMOR,
+    CC_DISCOVERY_WITNESS,
+    CC_DISCOVERY_DECISION,
+    CC_DISCOVERY_AUTHORITY
+} CcSituationDiscoveryStage;
+
+typedef enum CcSituationLeadPath {
+    CC_LEAD_PATH_UNDECIDED,
+    CC_LEAD_PATH_REPORT,
+    CC_LEAD_PATH_CONFIDENCE
+} CcSituationLeadPath;
 
 typedef struct CcCharacterMemory {
     CcCharacterMemoryKind kind;
@@ -850,6 +894,16 @@ typedef struct CcCharacterMemory {
     CcId event_id;
     int32_t day;
 } CcCharacterMemory;
+
+typedef struct CcCharacterKnowledge {
+    CcKnowledgeKind kind;
+    CcId subject_id;
+    CcId source_character_id;
+    CcId event_id;
+    CcKnowledgeCertainty certainty;
+    bool private_knowledge;
+    int32_t day;
+} CcCharacterKnowledge;
 
 typedef struct CcCharacter {
     CcId id;
@@ -867,7 +921,20 @@ typedef struct CcCharacter {
     CcCharacterMemory memories[CC_CHARACTER_MEMORY_CAPACITY];
     int32_t memory_count;
     int32_t memory_write_index;
+    CcCharacterKnowledge knowledge[CC_CHARACTER_KNOWLEDGE_CAPACITY];
+    int32_t knowledge_count;
+    int32_t knowledge_write_index;
 } CcCharacter;
+
+typedef struct CcRelationship {
+    CcId from_character_id;
+    CcId to_character_id;
+    int32_t affinity;
+    int32_t trust;
+    int32_t obligation;
+    CcRelationshipHistory history;
+    CcId cause_event_id;
+} CcRelationship;
 
 typedef struct CcSituation {
     CcId id;
@@ -884,6 +951,10 @@ typedef struct CcSituation {
     int32_t deadline_day;
     CcId sponsor_character_id;
     CcId affected_character_id;
+    CcId witness_character_id;
+    CcSituationDiscoveryStage discovery_stage;
+    CcSituationLeadPath lead_path;
+    CcId lead_event_id;
     char sponsor_name[CC_NAME_CAPACITY];
     char affected_name[CC_NAME_CAPACITY];
 } CcSituation;
@@ -983,6 +1054,10 @@ typedef struct CcEvent {
     CcId subject_id;
     CcId location_id;
     CcId parent_id;
+    CcId actor_id;
+    CcId target_id;
+    CcId beneficiary_id;
+    CcId witness_id;
     int32_t magnitude;
     char text[CC_EVENT_TEXT_CAPACITY];
 } CcEvent;
@@ -1036,6 +1111,8 @@ typedef struct CcSim {
     CcDungeonExpedition dungeon_expedition;
     CcSituation situations[CC_MAX_SITUATIONS];
     CcCharacter characters[CC_MAX_CHARACTERS];
+    CcRelationship relationships[CC_MAX_RELATIONSHIPS];
+    int32_t relationship_count;
     CcEvent events[CC_MAX_EVENTS];
     CcPlayerCompany player;
     CcHorse horse_team[CC_CARRIAGE_HORSE_COUNT];
@@ -1141,10 +1218,20 @@ const CcCharacter *CcSimSituationSponsorCharacter(
     const CcSim *sim, const CcSituation *situation);
 const CcCharacter *CcSimSituationAffectedCharacter(
     const CcSim *sim, const CcSituation *situation);
+const CcCharacter *CcSimSituationWitnessCharacter(
+    const CcSim *sim, const CcSituation *situation);
 const CcCharacter *CcSimSituationConversationCharacter(
     const CcSim *sim, const CcSituation *situation, CcId settlement_id);
 bool CcCharacterRemembers(const CcCharacter *character,
                           CcCharacterMemoryKind kind, CcId subject_id);
+bool CcCharacterKnows(const CcCharacter *character,
+                      CcKnowledgeKind kind, CcId subject_id);
+const CcRelationship *CcSimRelationship(const CcSim *sim,
+                                        CcId from_character_id,
+                                        CcId to_character_id);
+bool CcSimSituationCanAccept(const CcSim *sim,
+                             const CcSituation *situation);
+const char *CcRelationshipHistoryName(CcRelationshipHistory history);
 const char *CcCharacterRoleName(CcCharacterRole role);
 const char *CcCharacterActivityName(CcCharacterActivity activity);
 const CcSituation *CcSimAcceptedSituation(const CcSim *sim);

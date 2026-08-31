@@ -6,14 +6,20 @@ typedef struct CcStoryLineTemplate {
     CcStoryLine line;
     int32_t situation_kind;
     const char *character_name;
+    int32_t relationship_history;
 } CcStoryLineTemplate;
 
 enum {
-    CC_STORY_ANY_SITUATION = -1
+    CC_STORY_ANY_SITUATION = -1,
+    CC_STORY_ANY_RELATIONSHIP = -1
 };
 
 #define STORY_LINE(line_id, spoken_text, story_beat, speaker, kind, name) \
-    {{line_id, spoken_text, story_beat, speaker}, kind, name}
+    {{line_id, spoken_text, story_beat, speaker}, kind, name, \
+     CC_STORY_ANY_RELATIONSHIP}
+#define STORY_RELATIONSHIP_LINE(line_id, spoken_text, story_beat, speaker, \
+                                kind, name, history) \
+    {{line_id, spoken_text, story_beat, speaker}, kind, name, history}
 
 static const CcStoryLineTemplate STORY_LINES[] = {
     STORY_LINE(
@@ -77,23 +83,56 @@ static const CcStoryLineTemplate STORY_LINES[] = {
         CC_STORY_BEAT_HELPED, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_ROUTE_REPAIR, "Ilyra Senn"),
     STORY_LINE(
+        "lower_silverworks.jory.lead",
+        "Bren ran out of the west gallery and left his lamp behind. He will not tell me why.",
+        CC_STORY_BEAT_LEAD, CC_STORY_SPEAKER_AFFECTED,
+        CC_SITUATION_MONSTER_EXPEDITION, "Jory Fen"),
+    STORY_LINE(
+        "lower_silverworks.bren.witness",
+        "I heard someone using a pick behind the old wall. Cera was still down there, so I ran.",
+        CC_STORY_BEAT_WITNESS, CC_STORY_SPEAKER_WITNESS,
+        CC_SITUATION_MONSTER_EXPEDITION, "Bren Alder"),
+    STORY_RELATIONSHIP_LINE(
+        "lower_silverworks.jory.decision.friend",
+        "Tell Mara what Bren heard. She knows the mine, and she will listen.",
+        CC_STORY_BEAT_DECISION, CC_STORY_SPEAKER_AFFECTED,
+        CC_SITUATION_MONSTER_EXPEDITION, "Jory Fen",
+        CC_RELATIONSHIP_HISTORY_OLD_FRIENDS),
+    STORY_RELATIONSHIP_LINE(
+        "lower_silverworks.jory.decision.former",
+        "Tell Mara what Bren heard. Do not tell her it came from me.",
+        CC_STORY_BEAT_DECISION, CC_STORY_SPEAKER_AFFECTED,
+        CC_SITUATION_MONSTER_EXPEDITION, "Jory Fen",
+        CC_RELATIONSHIP_HISTORY_FORMER_PARTNERS),
+    STORY_RELATIONSHIP_LINE(
+        "lower_silverworks.jory.decision.rival",
+        "Do not tell Mara yet. She will close the mine before we find Cera.",
+        CC_STORY_BEAT_DECISION, CC_STORY_SPEAKER_AFFECTED,
+        CC_SITUATION_MONSTER_EXPEDITION, "Jory Fen",
+        CC_RELATIONSHIP_HISTORY_PROFESSIONAL_RIVALS),
+    STORY_LINE(
+        "lower_silverworks.mara.authority",
+        "I believe Bren. Take me to the wall. We need to find Cera first.",
+        CC_STORY_BEAT_AUTHORITY, CC_STORY_SPEAKER_SPONSOR,
+        CC_SITUATION_MONSTER_EXPEDITION, "Mara Venn"),
+    STORY_LINE(
         "lower_silverworks.jory.offer",
-        "We heard three knocks behind the bricked-up tunnel. Then every lamp went out.",
+        "Help me find Cera. We can deal with the old wall after she is safe.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_MONSTER_EXPEDITION, "Jory Fen"),
     STORY_LINE(
-        "lower_silverworks.jory.heard",
-        "The night crew found cuts in the wooden supports. No axe or saw marks. We locked the gate.",
-        CC_STORY_BEAT_HEARD, CC_STORY_SPEAKER_AFFECTED,
-        CC_SITUATION_MONSTER_EXPEDITION, "Jory Fen"),
+        "lower_silverworks.mara.offer",
+        "I will pay you to find Cera. Do not open the old wall until she is safe.",
+        CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_SPONSOR,
+        CC_SITUATION_MONSTER_EXPEDITION, "Mara Venn"),
     STORY_LINE(
         "lower_silverworks.jory.promised",
-        "I'll show you the safe tunnels. If you hear a voice in the dark, don't tell it your name.",
+        "Stay close to me. Keep your lamp up and watch the roof.",
         CC_STORY_BEAT_PROMISED, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_MONSTER_EXPEDITION, "Jory Fen"),
     STORY_LINE(
         "lower_silverworks.jory.helped",
-        "The morning shift came back with a full ore cart. Three missing wedding rings lay on top.",
+        "Cera came up with the morning shift. She won't work the west gallery again.",
         CC_STORY_BEAT_HELPED, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_MONSTER_EXPEDITION, "Jory Fen"),
     STORY_LINE(
@@ -251,6 +290,7 @@ static const CcStoryLineTemplate STORY_LINES[] = {
 };
 
 #undef STORY_LINE
+#undef STORY_RELATIONSHIP_LINE
 
 static CcStorySpeakerRole CharacterRole(const CcSituation *situation,
                                         const CcCharacter *character)
@@ -261,6 +301,9 @@ static CcStorySpeakerRole CharacterRole(const CcSituation *situation,
     }
     if (situation->affected_character_id == character->id) {
         return CC_STORY_SPEAKER_AFFECTED;
+    }
+    if (situation->witness_character_id == character->id) {
+        return CC_STORY_SPEAKER_WITNESS;
     }
     return CC_STORY_SPEAKER_ANY;
 }
@@ -287,6 +330,15 @@ static CcStoryBeat CharacterBeat(const CcSituation *situation,
             character, CC_CHARACTER_MEMORY_PLAYER_PROMISED, situation->id)) {
         return CC_STORY_BEAT_PROMISED;
     }
+    if (situation->kind == CC_SITUATION_MONSTER_EXPEDITION) {
+        switch (situation->discovery_stage) {
+            case CC_DISCOVERY_RUMOR: return CC_STORY_BEAT_LEAD;
+            case CC_DISCOVERY_WITNESS: return CC_STORY_BEAT_WITNESS;
+            case CC_DISCOVERY_DECISION: return CC_STORY_BEAT_DECISION;
+            case CC_DISCOVERY_AUTHORITY: return CC_STORY_BEAT_AUTHORITY;
+            case CC_DISCOVERY_OFFER: return CC_STORY_BEAT_OFFER;
+        }
+    }
     if (character != NULL && CcCharacterRemembers(
             character, CC_CHARACTER_MEMORY_MET_PLAYER, situation->id)) {
         return CC_STORY_BEAT_HEARD;
@@ -294,7 +346,8 @@ static CcStoryBeat CharacterBeat(const CcSituation *situation,
     return CC_STORY_BEAT_OFFER;
 }
 
-static bool TemplateMatches(const CcStoryLineTemplate *entry,
+static bool TemplateMatches(const CcSim *sim,
+                            const CcStoryLineTemplate *entry,
                             const CcSituation *situation,
                             const CcCharacter *character,
                             CcStoryBeat beat,
@@ -306,21 +359,31 @@ static bool TemplateMatches(const CcStoryLineTemplate *entry,
         entry->line.speaker_role != role) return false;
     if (entry->situation_kind != CC_STORY_ANY_SITUATION &&
         entry->situation_kind != (int32_t)situation->kind) return false;
-    return entry->character_name == NULL ||
-           strcmp(entry->character_name, character->name) == 0;
+    if (entry->character_name != NULL &&
+        strcmp(entry->character_name, character->name) != 0) return false;
+    if (entry->relationship_history != CC_STORY_ANY_RELATIONSHIP) {
+        const CcRelationship *relationship = CcSimRelationship(
+            sim, situation->affected_character_id,
+            situation->sponsor_character_id);
+        if (relationship == NULL ||
+            (int32_t)relationship->history !=
+                entry->relationship_history) {
+            return false;
+        }
+    }
+    return true;
 }
 
 const CcStoryLine *CcStoryCharacterLine(
     const CcSim *sim, const CcSituation *situation,
     const CcCharacter *character)
 {
-    (void)sim;
     if (situation == NULL || character == NULL) return NULL;
     CcStoryBeat beat = CharacterBeat(situation, character);
     CcStorySpeakerRole role = CharacterRole(situation, character);
     size_t count = sizeof(STORY_LINES) / sizeof(STORY_LINES[0]);
     for (size_t i = 0U; i < count; ++i) {
-        if (TemplateMatches(&STORY_LINES[i], situation, character,
+        if (TemplateMatches(sim, &STORY_LINES[i], situation, character,
                             beat, role)) return &STORY_LINES[i].line;
     }
     return NULL;
@@ -340,6 +403,10 @@ const char *CcStoryBeatName(CcStoryBeat beat)
 {
     switch (beat) {
         case CC_STORY_BEAT_OFFER: return "offer";
+        case CC_STORY_BEAT_LEAD: return "lead";
+        case CC_STORY_BEAT_WITNESS: return "witness";
+        case CC_STORY_BEAT_DECISION: return "decision";
+        case CC_STORY_BEAT_AUTHORITY: return "authority";
         case CC_STORY_BEAT_HEARD: return "heard";
         case CC_STORY_BEAT_PROMISED: return "promised";
         case CC_STORY_BEAT_HELPED: return "helped";
@@ -354,6 +421,10 @@ const char *CcStoryPlayerChoiceText(CcSituationKind kind,
                                     CcStoryPlayerChoice choice)
 {
     if (choice == CC_STORY_PLAYER_LEAVE) return "Esc  Not now.";
+    if (choice == CC_STORY_PLAYER_REPORT) return "1  Tell Mara.";
+    if (choice == CC_STORY_PLAYER_KEEP_CONFIDENCE) {
+        return "2  Keep it between us.";
+    }
     if (choice == CC_STORY_PLAYER_ASK) {
         switch (kind) {
             case CC_SITUATION_RELIEF_DELIVERY:

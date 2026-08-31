@@ -390,13 +390,21 @@ static bool EventIsPinned(const CcSim *sim, CcId event_id,
         if (sim->couriers[i].cause_event_id == event_id) return true;
     }
     for (int32_t i = 0; i < sim->situation_count; ++i) {
-        if (sim->situations[i].cause_event_id == event_id) return true;
+        if (sim->situations[i].cause_event_id == event_id ||
+            sim->situations[i].lead_event_id == event_id) return true;
     }
     for (int32_t i = 0; i < sim->character_count; ++i) {
         const CcCharacter *character = &sim->characters[i];
         for (int32_t memory = 0; memory < character->memory_count; ++memory) {
             if (character->memories[memory].event_id == event_id) return true;
         }
+        for (int32_t knowledge = 0;
+             knowledge < character->knowledge_count; ++knowledge) {
+            if (character->knowledge[knowledge].event_id == event_id) return true;
+        }
+    }
+    for (int32_t i = 0; i < sim->relationship_count; ++i) {
+        if (sim->relationships[i].cause_event_id == event_id) return true;
     }
     return false;
 }
@@ -407,6 +415,9 @@ static void RedirectEventReference(CcSim *sim, CcId removed_id,
     for (int32_t i = 0; i < sim->situation_count; ++i) {
         if (sim->situations[i].cause_event_id == removed_id) {
             sim->situations[i].cause_event_id = replacement_id;
+        }
+        if (sim->situations[i].lead_event_id == removed_id) {
+            sim->situations[i].lead_event_id = replacement_id;
         }
     }
     if (sim->journey.parent_event_id == removed_id) {
@@ -444,6 +455,17 @@ static void RedirectEventReference(CcSim *sim, CcId removed_id,
             if (character->memories[memory].event_id == removed_id) {
                 character->memories[memory].event_id = replacement_id;
             }
+        }
+        for (int32_t knowledge = 0;
+             knowledge < character->knowledge_count; ++knowledge) {
+            if (character->knowledge[knowledge].event_id == removed_id) {
+                character->knowledge[knowledge].event_id = replacement_id;
+            }
+        }
+    }
+    for (int32_t i = 0; i < sim->relationship_count; ++i) {
+        if (sim->relationships[i].cause_event_id == removed_id) {
+            sim->relationships[i].cause_event_id = replacement_id;
         }
     }
 }
@@ -511,6 +533,22 @@ static CcEvent *PushEvent(CcSim *sim, CcEventKind kind, CcId subject,
     (void)snprintf(event->text, sizeof(event->text), "%s", text);
     sim->event_write_index = (slot + 1) % CC_MAX_EVENTS;
     if (sim->event_count < CC_MAX_EVENTS) sim->event_count += 1;
+    return event;
+}
+
+static CcEvent *PushSocialEvent(CcSim *sim, CcEventKind kind, CcId subject,
+                                CcId location, CcId parent,
+                                CcId actor, CcId target,
+                                CcId beneficiary, CcId witness,
+                                int32_t magnitude, const char *text)
+{
+    CcEvent *event = PushEvent(sim, kind, subject, location, parent,
+                               magnitude, text);
+    if (event == NULL) return NULL;
+    event->actor_id = actor;
+    event->target_id = target;
+    event->beneficiary_id = beneficiary;
+    event->witness_id = witness;
     return event;
 }
 
@@ -779,8 +817,26 @@ const char *CcEventKindName(CcEventKind kind)
         case CC_EVENT_DUNGEON_LOOT: return "UNDERROAD RECOVERY";
         case CC_EVENT_DUNGEON_THRESHOLD_REACHED: return "HOARD THRESHOLD";
         case CC_EVENT_DUNGEON_EXPEDITION_ENDED: return "UNDERROAD RETURN";
+        case CC_EVENT_RELATIONSHIP_HISTORY: return "SHARED HISTORY";
+        case CC_EVENT_RUMOR_SHARED: return "RUMOR";
+        case CC_EVENT_FACT_REVEALED: return "DISCOVERY";
+        case CC_EVENT_RELATIONSHIP_CHANGED: return "RELATIONSHIP";
     }
     return "EVENT";
+}
+
+const char *CcRelationshipHistoryName(CcRelationshipHistory history)
+{
+    switch (history) {
+        case CC_RELATIONSHIP_HISTORY_NONE: return "acquaintances";
+        case CC_RELATIONSHIP_HISTORY_OLD_FRIENDS: return "old friends";
+        case CC_RELATIONSHIP_HISTORY_FORMER_PARTNERS:
+            return "former partners";
+        case CC_RELATIONSHIP_HISTORY_PROFESSIONAL_RIVALS:
+            return "professional rivals";
+        case CC_RELATIONSHIP_HISTORY_COWORKERS: return "coworkers";
+    }
+    return "acquaintances";
 }
 
 const char *CcCharacterRoleName(CcCharacterRole role)
@@ -1909,6 +1965,54 @@ const CcCharacter *CcSimSituationAffectedCharacter(
         CcSimCharacter(sim, situation->affected_character_id) : NULL;
 }
 
+const CcCharacter *CcSimSituationWitnessCharacter(
+    const CcSim *sim, const CcSituation *situation)
+{
+    return situation != NULL ?
+        CcSimCharacter(sim, situation->witness_character_id) : NULL;
+}
+
+const CcRelationship *CcSimRelationship(const CcSim *sim,
+                                        CcId from_character_id,
+                                        CcId to_character_id)
+{
+    if (sim == NULL || from_character_id == 0U || to_character_id == 0U) {
+        return NULL;
+    }
+    for (int32_t i = 0; i < sim->relationship_count; ++i) {
+        const CcRelationship *relationship = &sim->relationships[i];
+        if (relationship->from_character_id == from_character_id &&
+            relationship->to_character_id == to_character_id) {
+            return relationship;
+        }
+    }
+    return NULL;
+}
+
+bool CcCharacterKnows(const CcCharacter *character,
+                      CcKnowledgeKind kind, CcId subject_id)
+{
+    if (character == NULL || kind == CC_KNOWLEDGE_NONE) return false;
+    for (int32_t i = 0; i < character->knowledge_count; ++i) {
+        const CcCharacterKnowledge *knowledge = &character->knowledge[i];
+        if (knowledge->kind == kind && knowledge->subject_id == subject_id) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool CcSimSituationCanAccept(const CcSim *sim,
+                             const CcSituation *situation)
+{
+    (void)sim;
+    if (situation == NULL || situation->status != CC_SITUATION_ACTIVE) {
+        return false;
+    }
+    return situation->kind != CC_SITUATION_MONSTER_EXPEDITION ||
+           situation->discovery_stage == CC_DISCOVERY_OFFER;
+}
+
 const CcCharacter *CcSimSituationConversationCharacter(
     const CcSim *sim, const CcSituation *situation, CcId settlement_id)
 {
@@ -1917,6 +2021,29 @@ const CcCharacter *CcSimSituationConversationCharacter(
         sim, situation);
     const CcCharacter *affected = CcSimSituationAffectedCharacter(
         sim, situation);
+    const CcCharacter *witness = CcSimSituationWitnessCharacter(
+        sim, situation);
+    if (situation->kind == CC_SITUATION_MONSTER_EXPEDITION) {
+        const CcCharacter *lead = NULL;
+        switch (situation->discovery_stage) {
+            case CC_DISCOVERY_RUMOR:
+            case CC_DISCOVERY_DECISION:
+                lead = affected;
+                break;
+            case CC_DISCOVERY_WITNESS:
+                lead = witness;
+                break;
+            case CC_DISCOVERY_AUTHORITY:
+                lead = sponsor;
+                break;
+            case CC_DISCOVERY_OFFER:
+                lead = situation->lead_path == CC_LEAD_PATH_CONFIDENCE ?
+                    affected : sponsor;
+                break;
+        }
+        return lead != NULL && lead->current_settlement_id == settlement_id ?
+            lead : NULL;
+    }
     bool sponsor_here = sponsor != NULL &&
         sponsor->current_settlement_id == settlement_id;
     bool affected_here = affected != NULL &&
@@ -1969,6 +2096,19 @@ CcId CcSimSituationOfferSettlementId(const CcSim *sim,
         return route != NULL ? route->from_id : 0U;
     }
     if (situation->kind == CC_SITUATION_MONSTER_EXPEDITION) {
+        if (situation->discovery_stage == CC_DISCOVERY_AUTHORITY ||
+            (situation->discovery_stage == CC_DISCOVERY_OFFER &&
+             situation->lead_path == CC_LEAD_PATH_REPORT)) {
+            const CcCharacter *sponsor = CcSimSituationSponsorCharacter(
+                sim, situation);
+            if (sponsor != NULL) return sponsor->current_settlement_id;
+        }
+        if (situation->discovery_stage == CC_DISCOVERY_OFFER &&
+            situation->lead_path == CC_LEAD_PATH_CONFIDENCE) {
+            const CcCharacter *affected = CcSimSituationAffectedCharacter(
+                sim, situation);
+            if (affected != NULL) return affected->current_settlement_id;
+        }
         for (int32_t i = 0; i < sim->dungeon_count; ++i) {
             if (sim->dungeons[i].id == situation->target_id) {
                 return sim->dungeons[i].settlement_id;
@@ -2056,6 +2196,9 @@ bool CcSimSituationTouchesSettlement(const CcSim *sim,
              courier->destination_settlement_id == settlement_id);
     }
     if (situation->kind == CC_SITUATION_MONSTER_EXPEDITION) {
+        const CcCharacter *lead = CcSimSituationConversationCharacter(
+            sim, situation, settlement_id);
+        if (lead != NULL) return true;
         for (int32_t i = 0; i < sim->dungeon_count; ++i) {
             if (sim->dungeons[i].id == situation->target_id) {
                 return sim->dungeons[i].settlement_id == settlement_id;
@@ -5519,6 +5662,152 @@ static CcCharacter *PromoteCharacter(CcSim *sim, const char *name,
     return character;
 }
 
+static void RememberKnowledge(CcCharacter *character, CcKnowledgeKind kind,
+                              CcId subject_id, CcId source_character_id,
+                              CcId event_id, CcKnowledgeCertainty certainty,
+                              bool private_knowledge, int32_t day)
+{
+    if (character == NULL || kind == CC_KNOWLEDGE_NONE) return;
+    for (int32_t i = 0; i < character->knowledge_count; ++i) {
+        CcCharacterKnowledge *existing = &character->knowledge[i];
+        if (existing->kind != kind || existing->subject_id != subject_id) {
+            continue;
+        }
+        if (certainty >= existing->certainty) {
+            existing->source_character_id = source_character_id;
+            existing->event_id = event_id;
+            existing->certainty = certainty;
+            existing->private_knowledge = private_knowledge;
+            existing->day = day;
+        }
+        return;
+    }
+    int32_t slot = character->knowledge_write_index;
+    character->knowledge[slot] = (CcCharacterKnowledge){
+        .kind = kind,
+        .subject_id = subject_id,
+        .source_character_id = source_character_id,
+        .event_id = event_id,
+        .certainty = certainty,
+        .private_knowledge = private_knowledge,
+        .day = day
+    };
+    character->knowledge_write_index =
+        (slot + 1) % CC_CHARACTER_KNOWLEDGE_CAPACITY;
+    if (character->knowledge_count < CC_CHARACTER_KNOWLEDGE_CAPACITY) {
+        character->knowledge_count += 1;
+    }
+}
+
+static CcRelationship *RelationshipMutable(CcSim *sim,
+                                           CcId from_character_id,
+                                           CcId to_character_id)
+{
+    return (CcRelationship *)CcSimRelationship(
+        sim, from_character_id, to_character_id);
+}
+
+static CcRelationship *EnsureRelationship(
+    CcSim *sim, CcId from_character_id, CcId to_character_id,
+    CcRelationshipHistory history, int32_t affinity, int32_t trust,
+    int32_t obligation, CcId cause_event_id)
+{
+    CcRelationship *relationship = RelationshipMutable(
+        sim, from_character_id, to_character_id);
+    if (relationship != NULL) return relationship;
+    if (sim == NULL || sim->relationship_count >= CC_MAX_RELATIONSHIPS ||
+        CcSimCharacter(sim, from_character_id) == NULL ||
+        CcSimCharacter(sim, to_character_id) == NULL ||
+        from_character_id == to_character_id) return NULL;
+    relationship = &sim->relationships[sim->relationship_count++];
+    *relationship = (CcRelationship){
+        .from_character_id = from_character_id,
+        .to_character_id = to_character_id,
+        .affinity = ClampI32(affinity, -3, 3),
+        .trust = ClampI32(trust, -3, 3),
+        .obligation = ClampI32(obligation, -3, 3),
+        .history = history,
+        .cause_event_id = cause_event_id
+    };
+    return relationship;
+}
+
+static void InitializeMineSocialThread(CcSim *sim, CcSituation *situation,
+                                       CcCharacter *jory,
+                                       CcCharacter *mara,
+                                       CcCharacter *bren)
+{
+    if (sim == NULL || situation == NULL || jory == NULL || mara == NULL ||
+        bren == NULL || situation->kind != CC_SITUATION_MONSTER_EXPEDITION) {
+        return;
+    }
+    situation->witness_character_id = bren->id;
+    if (situation->discovery_stage == CC_DISCOVERY_OFFER &&
+        situation->lead_event_id == 0U) {
+        situation->discovery_stage = CC_DISCOVERY_RUMOR;
+        situation->lead_path = CC_LEAD_PATH_UNDECIDED;
+    }
+
+    const CcRelationship *existing = CcSimRelationship(sim, jory->id,
+                                                        mara->id);
+    if (existing == NULL) {
+        uint32_t choice = (sim->world_seed ^
+                           (uint32_t)(situation->id >> 8)) % 3U;
+        CcRelationshipHistory history = choice == 0U ?
+            CC_RELATIONSHIP_HISTORY_OLD_FRIENDS : choice == 1U ?
+            CC_RELATIONSHIP_HISTORY_FORMER_PARTNERS :
+            CC_RELATIONSHIP_HISTORY_PROFESSIONAL_RIVALS;
+        int32_t affinity = history == CC_RELATIONSHIP_HISTORY_OLD_FRIENDS ?
+            2 : history == CC_RELATIONSHIP_HISTORY_FORMER_PARTNERS ? 1 : -1;
+        int32_t trust = history == CC_RELATIONSHIP_HISTORY_OLD_FRIENDS ?
+            2 : history == CC_RELATIONSHIP_HISTORY_FORMER_PARTNERS ? -1 : 0;
+        int32_t obligation = history ==
+            CC_RELATIONSHIP_HISTORY_FORMER_PARTNERS ? 1 : 0;
+        const char *history_text = history ==
+                CC_RELATIONSHIP_HISTORY_OLD_FRIENDS ?
+            "Jory and Mara worked together for years and still trust each other." :
+            history == CC_RELATIONSHIP_HISTORY_FORMER_PARTNERS ?
+            "Jory and Mara used to live and work together. They separated during the last shortage." :
+            "Jory and Mara have argued about mine safety for years.";
+        CcEvent *history_event = PushSocialEvent(
+            sim, CC_EVENT_RELATIONSHIP_HISTORY, situation->id,
+            jory->home_settlement_id, situation->cause_event_id,
+            jory->id, mara->id, 0U, 0U, 0, history_text);
+        CcId history_event_id = history_event != NULL ? history_event->id : 0U;
+        (void)EnsureRelationship(
+            sim, jory->id, mara->id, history, affinity, trust,
+            obligation, history_event_id);
+        (void)EnsureRelationship(
+            sim, mara->id, jory->id, history,
+            affinity > 0 ? affinity - 1 : affinity,
+            trust == 2 ? 1 : trust, -obligation, history_event_id);
+    }
+    (void)EnsureRelationship(
+        sim, jory->id, bren->id, CC_RELATIONSHIP_HISTORY_COWORKERS,
+        1, 2, 0, situation->cause_event_id);
+    (void)EnsureRelationship(
+        sim, bren->id, jory->id, CC_RELATIONSHIP_HISTORY_COWORKERS,
+        1, 2, 0, situation->cause_event_id);
+
+    if (situation->lead_event_id == 0U) {
+        char text[CC_EVENT_TEXT_CAPACITY];
+        (void)snprintf(text, sizeof(text),
+                       "Bren ran out of the west gallery and left his lamp. He told Jory something was wrong.");
+        CcEvent *rumor = PushSocialEvent(
+            sim, CC_EVENT_RUMOR_SHARED, situation->id,
+            jory->home_settlement_id, situation->cause_event_id,
+            bren->id, jory->id, jory->id, bren->id, 1, text);
+        situation->lead_event_id = rumor != NULL ? rumor->id :
+            situation->cause_event_id;
+    }
+    RememberKnowledge(bren, CC_KNOWLEDGE_WITNESS_ACCOUNT, situation->id,
+                      bren->id, situation->cause_event_id,
+                      CC_KNOWLEDGE_WITNESSED, true, sim->current_day);
+    RememberKnowledge(jory, CC_KNOWLEDGE_PROBLEM_RUMOR, situation->id,
+                      bren->id, situation->lead_event_id,
+                      CC_KNOWLEDGE_TOLD, true, sim->current_day);
+}
+
 static void RefreshSituationCharacterActivities(CcSim *sim,
                                                 CcSituation *situation)
 {
@@ -5555,7 +5844,9 @@ static void AssignSituationCast(CcSim *sim, CcSituation *situation)
     int32_t slot = SituationSettlementSlot(
         sim, situation->kind, situation->target_id);
     if (slot < 0 || slot >= CC_MAX_SETTLEMENTS) slot = 0;
-    if (situation->sponsor_name[0] == '\0') {
+    if (situation->kind == CC_SITUATION_MONSTER_EXPEDITION) {
+        CopyName(situation->sponsor_name, "Mara Venn");
+    } else if (situation->sponsor_name[0] == '\0') {
         int32_t sponsor_slot = situation->kind ==
                 CC_SITUATION_RELIEF_DELIVERY ? 0 :
             situation->kind == CC_SITUATION_BLACK_MARKET_DELIVERY ? 1 : slot;
@@ -5565,7 +5856,10 @@ static void AssignSituationCast(CcSim *sim, CcSituation *situation)
         CopyName(situation->affected_name, affected[slot]);
     }
     CcId affected_home = sim->settlements[slot].id;
-    CcId sponsor_home = CcSimSituationOfferSettlementId(sim, situation);
+    CcId sponsor_home = situation->kind ==
+            CC_SITUATION_MONSTER_EXPEDITION && sim->settlement_count > 0 ?
+        sim->settlements[0].id :
+        CcSimSituationOfferSettlementId(sim, situation);
     if (sponsor_home == 0U) sponsor_home = affected_home;
     CcCharacter *sponsor = PromoteCharacter(
         sim, situation->sponsor_name, sponsor_home,
@@ -5592,6 +5886,18 @@ static void AssignSituationCast(CcSim *sim, CcSituation *situation)
     situation->sponsor_character_id = sponsor != NULL ? sponsor->id : 0U;
     situation->affected_character_id = participant != NULL ?
         participant->id : 0U;
+    if (situation->kind == CC_SITUATION_MONSTER_EXPEDITION) {
+        CcCharacter *witness = PromoteCharacter(
+            sim, "Bren Alder", affected_home, 0U, CC_CHARACTER_LABORER,
+            CC_CHARACTER_GOAL_SECURE_LIVELIHOOD,
+            CC_CHARACTER_ACTIVITY_WORKING);
+        InitializeMineSocialThread(sim, situation, participant, sponsor,
+                                   witness);
+        if (situation->status != CC_SITUATION_ACTIVE ||
+            sim->player.accepted_situation_id == situation->id) {
+            situation->discovery_stage = CC_DISCOVERY_OFFER;
+        }
+    }
     RefreshSituationCharacterActivities(sim, situation);
 }
 
@@ -5600,6 +5906,44 @@ void CcSimInitializeCharacters(CcSim *sim)
     if (sim == NULL) return;
     for (int32_t i = 0; i < sim->situation_count; ++i) {
         AssignSituationCast(sim, &sim->situations[i]);
+    }
+}
+
+static void ForgetRetiredSituation(CcSim *sim, CcId situation_id)
+{
+    if (sim == NULL || situation_id == 0U) return;
+    for (int32_t i = 0; i < sim->character_count; ++i) {
+        CcCharacter *character = &sim->characters[i];
+        CcCharacterMemory kept_memories[CC_CHARACTER_MEMORY_CAPACITY] = {0};
+        int32_t memory_count = 0;
+        for (int32_t slot = 0; slot < CC_CHARACTER_MEMORY_CAPACITY; ++slot) {
+            if (character->memories[slot].kind != CC_CHARACTER_MEMORY_NONE &&
+                character->memories[slot].subject_id != situation_id) {
+                kept_memories[memory_count++] = character->memories[slot];
+            }
+        }
+        memcpy(character->memories, kept_memories,
+               sizeof(character->memories));
+        character->memory_count = memory_count;
+        character->memory_write_index =
+            memory_count % CC_CHARACTER_MEMORY_CAPACITY;
+
+        CcCharacterKnowledge kept_knowledge[
+            CC_CHARACTER_KNOWLEDGE_CAPACITY] = {0};
+        int32_t knowledge_count = 0;
+        for (int32_t slot = 0;
+             slot < CC_CHARACTER_KNOWLEDGE_CAPACITY; ++slot) {
+            if (character->knowledge[slot].kind != CC_KNOWLEDGE_NONE &&
+                character->knowledge[slot].subject_id != situation_id) {
+                kept_knowledge[knowledge_count++] =
+                    character->knowledge[slot];
+            }
+        }
+        memcpy(character->knowledge, kept_knowledge,
+               sizeof(character->knowledge));
+        character->knowledge_count = knowledge_count;
+        character->knowledge_write_index =
+            knowledge_count % CC_CHARACTER_KNOWLEDGE_CAPACITY;
     }
 }
 
@@ -5619,6 +5963,7 @@ static CcSituation *AllocateSituation(CcSim *sim)
         }
     }
     if (oldest < 0) return NULL;
+    ForgetRetiredSituation(sim, sim->situations[oldest].id);
     sim->situations[oldest] = (CcSituation){0};
     return &sim->situations[oldest];
 }
@@ -8548,6 +8893,11 @@ static bool AcceptSituation(CcSim *sim, const CcSituation *situation,
         SetError(error, error_capacity, "That charter is no longer available.");
         return false;
     }
+    if (!CcSimSituationCanAccept(sim, situation)) {
+        SetError(error, error_capacity,
+                 "You do not have a job to accept yet. Ask what happened first.");
+        return false;
+    }
     CcId offer_settlement = CcSimSituationOfferSettlementId(sim, situation);
     bool affected_here = from_affected_character &&
         CcSimSituationTouchesSettlement(sim, situation,
@@ -8734,6 +9084,22 @@ static void RememberCharacter(CcCharacter *character,
     }
 }
 
+static void ShiftRelationshipTrust(CcSim *sim, CcRelationship *relationship,
+                                   int32_t amount, CcId parent_event_id,
+                                   CcId situation_id, const char *text)
+{
+    if (sim == NULL || relationship == NULL || amount == 0) return;
+    relationship->trust = ClampI32(relationship->trust + amount, -3, 3);
+    const CcCharacter *from = CcSimCharacter(
+        sim, relationship->from_character_id);
+    CcEvent *event = PushSocialEvent(
+        sim, CC_EVENT_RELATIONSHIP_CHANGED, situation_id,
+        from != NULL ? from->current_settlement_id : 0U,
+        parent_event_id, relationship->from_character_id,
+        relationship->to_character_id, 0U, sim->player.id, amount, text);
+    if (event != NULL) relationship->cause_event_id = event->id;
+}
+
 static bool ApplyCharacterResponse(CcSim *sim, const CcCommand *command,
                                    char *error, size_t error_capacity)
 {
@@ -8748,24 +9114,44 @@ static bool ApplyCharacterResponse(CcSim *sim, const CcCommand *command,
         return false;
     }
     CcCharacterResponse response = (CcCharacterResponse)command->amount;
+    bool mine_thread = situation->kind == CC_SITUATION_MONSTER_EXPEDITION;
+    bool relationship_choice =
+        response == CC_CHARACTER_RESPONSE_REPORT_EVIDENCE ||
+        response == CC_CHARACTER_RESPONSE_KEEP_CONFIDENCE;
+    if (relationship_choice &&
+        (!mine_thread ||
+         situation->discovery_stage != CC_DISCOVERY_DECISION ||
+         character->id != situation->affected_character_id)) {
+        SetError(error, error_capacity,
+                 "You cannot choose that here.");
+        return false;
+    }
+    if (mine_thread && situation->discovery_stage == CC_DISCOVERY_DECISION &&
+        response == CC_CHARACTER_RESPONSE_LISTEN) {
+        SetError(error, error_capacity,
+                 "Choose whether to tell Mara or keep this between you and Jory.");
+        return false;
+    }
     CcCharacterMemoryKind memory_kind = response ==
         CC_CHARACTER_RESPONSE_LISTEN ? CC_CHARACTER_MEMORY_MET_PLAYER :
         response == CC_CHARACTER_RESPONSE_PLEDGE_HELP ?
             CC_CHARACTER_MEMORY_PLAYER_PROMISED : CC_CHARACTER_MEMORY_NONE;
-    if (memory_kind == CC_CHARACTER_MEMORY_NONE) {
+    if (memory_kind == CC_CHARACTER_MEMORY_NONE && !relationship_choice) {
         SetError(error, error_capacity, "Choose a clear response.");
         return false;
     }
-    if (CcCharacterRemembers(character, memory_kind, situation->id)) {
+    if (memory_kind != CC_CHARACTER_MEMORY_NONE &&
+        CcCharacterRemembers(character, memory_kind, situation->id)) {
         SetError(error, error_capacity,
                  "This conversation has already changed their view of you.");
         return false;
     }
-    CcId parent = situation->cause_event_id;
+    CcId parent = situation->lead_event_id != 0U ?
+        situation->lead_event_id : situation->cause_event_id;
     if (response == CC_CHARACTER_RESPONSE_PLEDGE_HELP) {
-        if (situation->status != CC_SITUATION_ACTIVE) {
+        if (!CcSimSituationCanAccept(sim, situation)) {
             SetError(error, error_capacity,
-                     "That crisis is no longer open to a promise.");
+                     "There is no job to accept yet. Ask what happened first.");
             return false;
         }
         const CcSituation *accepted = CcSimAcceptedSituation(sim);
@@ -8781,25 +9167,121 @@ static bool ApplyCharacterResponse(CcSim *sim, const CcCommand *command,
         if (promise != NULL) parent = promise->id;
     }
     char text[CC_EVENT_TEXT_CAPACITY];
-    (void)snprintf(
-        text, sizeof(text), response == CC_CHARACTER_RESPONSE_LISTEN ?
-            "The Crownless company hears %.24s's account of %s." :
-            "The Crownless company promises %.24s that it will answer %s.",
-        character->name, CcSituationKindName(situation->kind));
-    CcEvent *event = PushEvent(
-        sim, CC_EVENT_CHARACTER_INTERACTION, character->id,
+    CcEventKind event_kind = CC_EVENT_CHARACTER_INTERACTION;
+    if (relationship_choice) {
+        event_kind = CC_EVENT_RELATIONSHIP_CHANGED;
+        (void)snprintf(
+            text, sizeof(text), response == CC_CHARACTER_RESPONSE_REPORT_EVIDENCE ?
+                "The player decides to tell Mara what Bren heard." :
+                "The player agrees not to tell Mara.");
+    } else if (mine_thread && response == CC_CHARACTER_RESPONSE_LISTEN &&
+               situation->discovery_stage == CC_DISCOVERY_RUMOR) {
+        event_kind = CC_EVENT_RUMOR_SHARED;
+        (void)snprintf(text, sizeof(text),
+                       "Jory tells the player that Bren ran from the west gallery and left his lamp.");
+    } else if (mine_thread && response == CC_CHARACTER_RESPONSE_LISTEN &&
+               situation->discovery_stage == CC_DISCOVERY_WITNESS) {
+        event_kind = CC_EVENT_FACT_REVEALED;
+        (void)snprintf(text, sizeof(text),
+                       "Bren tells the player that he heard someone using a pick behind the old wall while Cera was below.");
+    } else if (mine_thread && response == CC_CHARACTER_RESPONSE_LISTEN &&
+               situation->discovery_stage == CC_DISCOVERY_AUTHORITY) {
+        event_kind = CC_EVENT_FACT_REVEALED;
+        (void)snprintf(text, sizeof(text),
+                       "Mara believes Bren and agrees to help find Cera.");
+    } else {
+        (void)snprintf(
+            text, sizeof(text), response == CC_CHARACTER_RESPONSE_LISTEN ?
+                "The Crownless company hears %.24s's account of %s." :
+                "The Crownless company promises %.24s that it will answer %s.",
+            character->name, CcSituationKindName(situation->kind));
+    }
+    CcEvent *event = PushSocialEvent(
+        sim, event_kind, situation->id,
         character->current_settlement_id, parent,
-        response == CC_CHARACTER_RESPONSE_LISTEN ? 2 : 8, text);
-    RememberCharacter(character, memory_kind, situation->id,
-                      event != NULL ? event->id : 0U, sim->current_day);
+        character->id, sim->player.id, situation->affected_character_id,
+        character->id,
+        relationship_choice ?
+            (response == CC_CHARACTER_RESPONSE_REPORT_EVIDENCE ? 1 : -1) :
+        response == CC_CHARACTER_RESPONSE_LISTEN ? 2 : 8,
+        text);
+    CcId event_id = event != NULL ? event->id : 0U;
+    if (memory_kind != CC_CHARACTER_MEMORY_NONE) {
+        RememberCharacter(character, memory_kind, situation->id,
+                          event_id, sim->current_day);
+    }
+
+    int32_t disposition_change = response ==
+        CC_CHARACTER_RESPONSE_LISTEN ? 2 :
+        response == CC_CHARACTER_RESPONSE_PLEDGE_HELP ? 8 : 0;
+    if (relationship_choice) {
+        const CcRelationship *jory_to_mara = CcSimRelationship(
+            sim, situation->affected_character_id,
+            situation->sponsor_character_id);
+        bool jory_wanted_report = jory_to_mara == NULL ||
+            jory_to_mara->history !=
+                CC_RELATIONSHIP_HISTORY_PROFESSIONAL_RIVALS;
+        bool reported = response == CC_CHARACTER_RESPONSE_REPORT_EVIDENCE;
+        disposition_change = reported == jory_wanted_report ? 3 : -5;
+    }
     character->player_disposition = ClampI32(
-        character->player_disposition +
-            (response == CC_CHARACTER_RESPONSE_LISTEN ? 2 : 8),
+        character->player_disposition + disposition_change,
         -100, 100);
     character->stress = ClampI32(
         character->stress -
-            (response == CC_CHARACTER_RESPONSE_LISTEN ? 5 : 12),
+            (response == CC_CHARACTER_RESPONSE_LISTEN ? 5 :
+             response == CC_CHARACTER_RESPONSE_PLEDGE_HELP ? 12 : 2),
         0, 100);
+
+    if (mine_thread && response == CC_CHARACTER_RESPONSE_LISTEN) {
+        if (situation->discovery_stage == CC_DISCOVERY_RUMOR) {
+            situation->discovery_stage = CC_DISCOVERY_WITNESS;
+        } else if (situation->discovery_stage == CC_DISCOVERY_WITNESS) {
+            situation->discovery_stage = CC_DISCOVERY_DECISION;
+            CcCharacter *jory = CharacterMutable(
+                sim, situation->affected_character_id);
+            RememberKnowledge(jory, CC_KNOWLEDGE_IMMEDIATE_STAKE,
+                              situation->id, character->id, event_id,
+                              CC_KNOWLEDGE_TOLD, true, sim->current_day);
+        } else if (situation->discovery_stage == CC_DISCOVERY_AUTHORITY) {
+            situation->discovery_stage = CC_DISCOVERY_OFFER;
+            CcCharacter *mara = CharacterMutable(
+                sim, situation->sponsor_character_id);
+            RememberKnowledge(mara, CC_KNOWLEDGE_WITNESS_ACCOUNT,
+                              situation->id, sim->player.id, event_id,
+                              CC_KNOWLEDGE_TOLD, false, sim->current_day);
+            CcRelationship *mara_to_jory = RelationshipMutable(
+                sim, situation->sponsor_character_id,
+                situation->affected_character_id);
+            CcRelationship *jory_to_mara = RelationshipMutable(
+                sim, situation->affected_character_id,
+                situation->sponsor_character_id);
+            ShiftRelationshipTrust(
+                sim, mara_to_jory, 1, event_id, situation->id,
+                "Bren confirms Jory's warning, so Mara trusts Jory more.");
+            ShiftRelationshipTrust(
+                sim, jory_to_mara, 1,
+                event_id, situation->id,
+                "Mara acts on the warning, so Jory trusts Mara more.");
+            RememberKnowledge(mara, CC_KNOWLEDGE_OFFER,
+                              situation->id, mara != NULL ? mara->id : 0U,
+                              event_id, CC_KNOWLEDGE_WITNESSED, false,
+                              sim->current_day);
+        }
+    } else if (mine_thread && relationship_choice) {
+        if (response == CC_CHARACTER_RESPONSE_REPORT_EVIDENCE) {
+            situation->lead_path = CC_LEAD_PATH_REPORT;
+            situation->discovery_stage = CC_DISCOVERY_AUTHORITY;
+        } else {
+            situation->lead_path = CC_LEAD_PATH_CONFIDENCE;
+            situation->discovery_stage = CC_DISCOVERY_OFFER;
+            RememberKnowledge(character, CC_KNOWLEDGE_OFFER,
+                              situation->id, character->id, event_id,
+                              CC_KNOWLEDGE_WITNESSED, true,
+                              sim->current_day);
+        }
+    }
+    if (mine_thread && event_id != 0U) situation->lead_event_id = event_id;
     RefreshSituationCharacterActivities(sim, situation);
     SetError(error, error_capacity, "");
     return true;
@@ -10959,7 +11441,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                          sim->schema_version == 15U ||
                          sim->schema_version == 16U ||
                          sim->schema_version == 17U ||
-                         sim->schema_version == 18U;
+                         sim->schema_version == 18U ||
+                         sim->schema_version == 19U;
     bool supported_generator = sim->generator_version == CC_GENERATOR_VERSION ||
         (legacy_schema && (sim->generator_version == 3U ||
                            sim->generator_version == 5U ||
@@ -10974,7 +11457,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                            sim->generator_version == 14U ||
                            sim->generator_version == 15U ||
                            sim->generator_version == 16U ||
-                           sim->generator_version == 17U));
+                           sim->generator_version == 17U ||
+                           sim->generator_version == 18U));
     if ((!legacy_schema && sim->schema_version != CC_SIM_SCHEMA_VERSION) ||
         !supported_generator) {
         SetError(error, error_capacity, "Simulation version is unsupported.");
@@ -11011,6 +11495,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         sim->situation_count < 0 || sim->situation_count > CC_MAX_SITUATIONS ||
         sim->character_count < 0 ||
         sim->character_count > CC_MAX_CHARACTERS ||
+        sim->relationship_count < 0 ||
+        sim->relationship_count > CC_MAX_RELATIONSHIPS ||
         sim->stable_horse_count < 0 ||
         sim->stable_horse_count > CC_MAX_STABLE_HORSES ||
         sim->event_count < 0 || sim->event_count > CC_MAX_EVENTS ||
@@ -11064,10 +11550,22 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 !ValidBoundedText(event->text, sizeof(event->text)) ||
                 event->day < 1 || event->day > sim->current_day ||
                 event->kind < CC_EVENT_HARVEST_FAILED ||
-                event->kind > CC_EVENT_DUNGEON_EXPEDITION_ENDED ||
+                event->kind > CC_EVENT_RELATIONSHIP_CHANGED ||
                 event->parent_id == event->id ||
                 (event->parent_id != 0U &&
-                 CcSimEvent(sim, event->parent_id) == NULL)) {
+                 CcSimEvent(sim, event->parent_id) == NULL) ||
+                (event->actor_id != 0U &&
+                 event->actor_id != sim->player.id &&
+                 CcSimCharacter(sim, event->actor_id) == NULL) ||
+                (event->target_id != 0U &&
+                 event->target_id != sim->player.id &&
+                 CcSimCharacter(sim, event->target_id) == NULL) ||
+                (event->beneficiary_id != 0U &&
+                 event->beneficiary_id != sim->player.id &&
+                 CcSimCharacter(sim, event->beneficiary_id) == NULL) ||
+                (event->witness_id != 0U &&
+                 event->witness_id != sim->player.id &&
+                 CcSimCharacter(sim, event->witness_id) == NULL)) {
                 if (error != NULL && error_capacity > 0U) {
                     (void)snprintf(
                         error, error_capacity,
@@ -11813,7 +12311,14 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 character->memory_count > CC_CHARACTER_MEMORY_CAPACITY ||
                 character->memory_write_index < 0 ||
                 character->memory_write_index >=
-                    CC_CHARACTER_MEMORY_CAPACITY) {
+                    CC_CHARACTER_MEMORY_CAPACITY ||
+                (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
+                 (character->knowledge_count < 0 ||
+                  character->knowledge_count >
+                      CC_CHARACTER_KNOWLEDGE_CAPACITY ||
+                  character->knowledge_write_index < 0 ||
+                  character->knowledge_write_index >=
+                      CC_CHARACTER_KNOWLEDGE_CAPACITY))) {
                 SetError(error, error_capacity,
                          "Character state is invalid.");
                 return false;
@@ -11829,6 +12334,61 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                     item->day < 1 || item->day > sim->current_day) {
                     SetError(error, error_capacity,
                              "Character memory is invalid.");
+                    return false;
+                }
+            }
+            if (sim->schema_version == CC_SIM_SCHEMA_VERSION) {
+                for (int32_t knowledge = 0;
+                     knowledge < character->knowledge_count; ++knowledge) {
+                    const CcCharacterKnowledge *item =
+                        &character->knowledge[knowledge];
+                    bool source_exists = item->source_character_id ==
+                            sim->player.id ||
+                        CcSimCharacter(sim,
+                                       item->source_character_id) != NULL;
+                    if (item->kind <= CC_KNOWLEDGE_NONE ||
+                        item->kind > CC_KNOWLEDGE_OFFER ||
+                        CcSimSituation(sim, item->subject_id) == NULL ||
+                        !source_exists ||
+                        CcSimEvent(sim, item->event_id) == NULL ||
+                        item->certainty < CC_KNOWLEDGE_DOUBTFUL ||
+                        item->certainty > CC_KNOWLEDGE_WITNESSED ||
+                        item->day < 1 || item->day > sim->current_day) {
+                        SetError(error, error_capacity,
+                                 "Character knowledge is invalid.");
+                        return false;
+                    }
+                }
+            }
+        }
+    }
+    if (sim->schema_version == CC_SIM_SCHEMA_VERSION) {
+        for (int32_t i = 0; i < sim->relationship_count; ++i) {
+            const CcRelationship *relationship = &sim->relationships[i];
+            if (relationship->from_character_id ==
+                    relationship->to_character_id ||
+                CcSimCharacter(sim,
+                               relationship->from_character_id) == NULL ||
+                CcSimCharacter(sim,
+                               relationship->to_character_id) == NULL ||
+                relationship->affinity < -3 || relationship->affinity > 3 ||
+                relationship->trust < -3 || relationship->trust > 3 ||
+                relationship->obligation < -3 ||
+                relationship->obligation > 3 ||
+                relationship->history <= CC_RELATIONSHIP_HISTORY_NONE ||
+                relationship->history > CC_RELATIONSHIP_HISTORY_COWORKERS ||
+                CcSimEvent(sim, relationship->cause_event_id) == NULL) {
+                SetError(error, error_capacity,
+                         "Character relationship is invalid.");
+                return false;
+            }
+            for (int32_t earlier = 0; earlier < i; ++earlier) {
+                if (sim->relationships[earlier].from_character_id ==
+                        relationship->from_character_id &&
+                    sim->relationships[earlier].to_character_id ==
+                        relationship->to_character_id) {
+                    SetError(error, error_capacity,
+                             "Character relationships are duplicated.");
                     return false;
                 }
             }
@@ -11871,6 +12431,35 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             issuer_exists = sim->factions[faction].id ==
                             situation->issuer_faction_id;
         }
+        bool social_thread_valid = true;
+        if (sim->schema_version == CC_SIM_SCHEMA_VERSION) {
+            if (situation->kind == CC_SITUATION_MONSTER_EXPEDITION) {
+                bool undecided_stage =
+                    situation->discovery_stage == CC_DISCOVERY_RUMOR ||
+                    situation->discovery_stage == CC_DISCOVERY_WITNESS ||
+                    situation->discovery_stage == CC_DISCOVERY_DECISION;
+                social_thread_valid =
+                    CcSimCharacter(sim,
+                                   situation->witness_character_id) != NULL &&
+                    situation->discovery_stage >= CC_DISCOVERY_OFFER &&
+                    situation->discovery_stage <= CC_DISCOVERY_AUTHORITY &&
+                    situation->lead_path >= CC_LEAD_PATH_UNDECIDED &&
+                    situation->lead_path <= CC_LEAD_PATH_CONFIDENCE &&
+                    CcSimEvent(sim, situation->lead_event_id) != NULL &&
+                    (!undecided_stage ||
+                     situation->lead_path == CC_LEAD_PATH_UNDECIDED) &&
+                    (situation->discovery_stage != CC_DISCOVERY_AUTHORITY ||
+                     situation->lead_path == CC_LEAD_PATH_REPORT) &&
+                    (situation->lead_path != CC_LEAD_PATH_CONFIDENCE ||
+                     situation->discovery_stage == CC_DISCOVERY_OFFER);
+            } else {
+                social_thread_valid =
+                    situation->witness_character_id == 0U &&
+                    situation->discovery_stage == CC_DISCOVERY_OFFER &&
+                    situation->lead_path == CC_LEAD_PATH_UNDECIDED &&
+                    situation->lead_event_id == 0U;
+            }
+        }
         if (CcIdKind(situation->id) != CC_ENTITY_SITUATION ||
             !ValidOptionalBoundedText(situation->sponsor_name,
                                       sizeof(situation->sponsor_name)) ||
@@ -11899,6 +12488,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             situation->created_day < 1 ||
             situation->created_day > sim->current_day ||
             situation->deadline_day < situation->created_day ||
+            !social_thread_valid ||
             (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
              situation->cause_event_id != 0U &&
              CcSimEvent(sim, situation->cause_event_id) == NULL)) {
@@ -12151,6 +12741,11 @@ static uint64_t HashString(uint64_t hash, const char *text)
 uint64_t CcSimHash(const CcSim *sim)
 {
     if (sim == NULL) return 0U;
+    bool hash_underroad = sim->schema_version >= 20U ||
+        (sim->schema_version == 19U && sim->dungeon_count > 0 &&
+         sim->dungeons[0].room_count > 0);
+    bool hash_social = sim->schema_version >= 20U ||
+        (sim->schema_version == 19U && sim->relationship_count > 0);
     uint64_t hash = UINT64_C(1469598103934665603);
 #define HASH_VALUE(value) hash = HashU64(hash, (uint64_t)(value))
     HASH_VALUE(sim->schema_version);
@@ -12422,7 +13017,7 @@ uint64_t CcSimHash(const CcSim *sim)
         const CcDungeon *item = &sim->dungeons[i];
         HASH_VALUE(item->id); HASH_VALUE(item->settlement_id); hash = HashString(hash, item->name);
         HASH_VALUE(item->state); HASH_VALUE(item->depth); HASH_VALUE(item->regional_pressure);
-        if (sim->schema_version >= 19U) {
+        if (hash_underroad) {
             HASH_VALUE(item->layout_seed);
             HASH_VALUE(item->encounter_random_state);
             HASH_VALUE(item->room_count);
@@ -12448,7 +13043,7 @@ uint64_t CcSimHash(const CcSim *sim)
             }
         }
     }
-    if (sim->schema_version >= 19U) {
+    if (hash_underroad) {
         const CcDungeonExpedition *expedition = &sim->dungeon_expedition;
         HASH_VALUE(expedition->active);
         HASH_VALUE(expedition->dungeon_id);
@@ -12473,6 +13068,12 @@ uint64_t CcSimHash(const CcSim *sim)
         if (sim->schema_version >= 17U) {
             HASH_VALUE(item->sponsor_character_id);
             HASH_VALUE(item->affected_character_id);
+        }
+        if (hash_social) {
+            HASH_VALUE(item->witness_character_id);
+            HASH_VALUE(item->discovery_stage);
+            HASH_VALUE(item->lead_path);
+            HASH_VALUE(item->lead_event_id);
         }
         if (item->sponsor_name[0] != '\0' || item->affected_name[0] != '\0') {
             hash = HashString(hash, item->sponsor_name);
@@ -12506,6 +13107,36 @@ uint64_t CcSimHash(const CcSim *sim)
                 HASH_VALUE(item->event_id);
                 HASH_VALUE(item->day);
             }
+            if (hash_social) {
+                HASH_VALUE(character->knowledge_count);
+                HASH_VALUE(character->knowledge_write_index);
+                for (int32_t knowledge = 0;
+                     knowledge < CC_CHARACTER_KNOWLEDGE_CAPACITY;
+                     ++knowledge) {
+                    const CcCharacterKnowledge *item =
+                        &character->knowledge[knowledge];
+                    HASH_VALUE(item->kind);
+                    HASH_VALUE(item->subject_id);
+                    HASH_VALUE(item->source_character_id);
+                    HASH_VALUE(item->event_id);
+                    HASH_VALUE(item->certainty);
+                    HASH_VALUE(item->private_knowledge);
+                    HASH_VALUE(item->day);
+                }
+            }
+        }
+    }
+    if (hash_social) {
+        HASH_VALUE(sim->relationship_count);
+        for (int32_t i = 0; i < sim->relationship_count; ++i) {
+            const CcRelationship *relationship = &sim->relationships[i];
+            HASH_VALUE(relationship->from_character_id);
+            HASH_VALUE(relationship->to_character_id);
+            HASH_VALUE(relationship->affinity);
+            HASH_VALUE(relationship->trust);
+            HASH_VALUE(relationship->obligation);
+            HASH_VALUE(relationship->history);
+            HASH_VALUE(relationship->cause_event_id);
         }
     }
     HASH_VALUE(sim->player.id); HASH_VALUE(sim->player.location_id);
@@ -12647,6 +13278,12 @@ uint64_t CcSimHash(const CcSim *sim)
         const CcEvent *item = &sim->events[i];
         HASH_VALUE(item->id); HASH_VALUE(item->day); HASH_VALUE(item->kind);
         HASH_VALUE(item->subject_id); HASH_VALUE(item->location_id); HASH_VALUE(item->parent_id);
+        if (hash_social) {
+            HASH_VALUE(item->actor_id);
+            HASH_VALUE(item->target_id);
+            HASH_VALUE(item->beneficiary_id);
+            HASH_VALUE(item->witness_id);
+        }
         HASH_VALUE(item->magnitude); hash = HashString(hash, item->text);
     }
 #undef HASH_VALUE
