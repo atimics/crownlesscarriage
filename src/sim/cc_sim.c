@@ -1925,7 +1925,8 @@ static const CcCollectibleMapSeed COLLECTIBLE_MAPS[CC_MAP_COLLECTION_COUNT] = {
     {"Treaty Bridge Survey", 1, 2, 2, 1, 94, 8, -4, 38, false},
     {"The Lower Silverworks", 2, 3, 3, 120, 63, -18, 28, 34, true},
     {"The Ash-Poor's Skin Map", 6, 1, 1, 6, 38, -12, 31, 48, true},
-    {CC_CROWNLESS_ATLAS_MAP_NAME, 5, 1, -1, 0, 88, 0, 0, 90, false}
+    {CC_CROWNLESS_ATLAS_MAP_NAME, 5, 1, -1, 0, 88, 0, 0, 90, false},
+    {CC_DRAGON_HOARD_MAP_NAME, 5, 5, 1, 146, 36, -18, 39, 72, true}
 };
 
 void CcSimUpgradeMapCollection(CcSim *sim)
@@ -7689,8 +7690,9 @@ static bool ApplyGoblinIntercept(CcSim *sim,
 
 static void UnlockCrownlessAtlas(CcSim *sim)
 {
-    uint32_t required = (UINT32_C(1) << CC_MAP_CROWNLESS_ATLAS) - 1U;
     uint32_t atlas_bit = MapSlotBit(CC_MAP_CROWNLESS_ATLAS);
+    uint32_t required =
+        ((UINT32_C(1) << CC_MAP_COLLECTION_COUNT) - 1U) & ~atlas_bit;
     if ((sim->player.map_catalogue_mask & required) != required ||
         (sim->player.map_catalogue_mask & atlas_bit) != 0U) return;
     CcMap *atlas = &sim->maps[CC_MAP_CROWNLESS_ATLAS];
@@ -7699,7 +7701,7 @@ static void UnlockCrownlessAtlas(CcSim *sim)
     sim->player.map_archive_mask |= atlas_bit;
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(text, sizeof(text),
-                   "The Gloamgate archive binds eleven collected charts into %s.",
+                   "The Gloamgate archive binds twelve collected charts into %s.",
                    atlas->name);
     (void)PushEvent(sim, CC_EVENT_MAP_BOUGHT, atlas->id,
                     sim->settlements[1].id, 0U,
@@ -9980,7 +9982,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                            sim->generator_version == 12U ||
                            sim->generator_version == 13U ||
                            sim->generator_version == 14U ||
-                           sim->generator_version == 15U));
+                           sim->generator_version == 15U ||
+                           sim->generator_version == 16U));
     if ((!legacy_schema && sim->schema_version != CC_SIM_SCHEMA_VERSION) ||
         !supported_generator) {
         SetError(error, error_capacity, "Simulation version is unsupported.");

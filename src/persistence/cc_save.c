@@ -3489,13 +3489,8 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
         legacy_version != 13U && legacy_version != 14U &&
         legacy_version != 15U && legacy_version != 16U &&
         legacy_version != 17U) return true;
-    sim->goblins.cohesion = 60;
-    sim->goblins.target_warned = false;
-    sim->goblins.expeditions_intercepted = 0;
-    sim->goblins.dragon_seed_phase = CC_GOBLIN_DRAGON_SEED_NONE;
-    sim->goblins.dragon_seed_days_remaining = 0;
-    CcSimUpgradeMapCollection(sim);
     if (legacy_version == 17U) {
+        CcSimUpgradeMapCollection(sim);
         sim->journey.pace = CC_JOURNEY_PACE_STEADY;
         sim->journey.ambush_warned = false;
         CcSimInitializeCharacters(sim);
@@ -3503,6 +3498,12 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
         sim->generator_version = CC_GENERATOR_VERSION;
         return true;
     }
+    sim->goblins.cohesion = 60;
+    sim->goblins.target_warned = false;
+    sim->goblins.expeditions_intercepted = 0;
+    sim->goblins.dragon_seed_phase = CC_GOBLIN_DRAGON_SEED_NONE;
+    sim->goblins.dragon_seed_days_remaining = 0;
+    CcSimUpgradeMapCollection(sim);
     if (legacy_version == 16U) {
         CcSimInitializeCharacters(sim);
         sim->schema_version = CC_SIM_SCHEMA_VERSION;

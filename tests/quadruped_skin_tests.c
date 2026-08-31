@@ -34,20 +34,29 @@ int main(void)
     CcQuadrupedPose horse_idle = {0};
     CcQuadrupedPose horse_step = {0};
     CcQuadrupedPose cow_idle = {0};
+    CcQuadrupedPose sheep_idle = {0};
     CcQuadrupedPose repeated = {0};
     CcQuadrupedPose horse_swing = {0};
     CcQuadrupedPoseResolve(CC_QUADRUPED_HORSE, 0.0f, false, &horse_idle);
     CcQuadrupedPoseResolve(CC_QUADRUPED_HORSE, 0.5f, true, &horse_step);
     CcQuadrupedPoseResolve(CC_QUADRUPED_COW, 0.0f, false, &cow_idle);
+    CcQuadrupedPoseResolve(CC_QUADRUPED_SHEEP, 0.0f, false, &sheep_idle);
     CcQuadrupedPoseResolve(CC_QUADRUPED_HORSE, 0.5f, true, &repeated);
     CcQuadrupedPoseResolve(CC_QUADRUPED_HORSE, 5.15f, true, &horse_swing);
-    EXPECT(horse_idle.valid && horse_step.valid && cow_idle.valid,
+    EXPECT(horse_idle.valid && horse_step.valid && cow_idle.valid &&
+               sheep_idle.valid,
            "supported animal poses resolve");
     EXPECT(memcmp(&horse_step, &repeated, sizeof(horse_step)) == 0,
            "quadruped poses are deterministic");
     EXPECT(horse_idle.bones[CC_QUADRUPED_HEAD].head.y >
                cow_idle.bones[CC_QUADRUPED_HEAD].head.y,
-           "horse and cow keep distinct proportions");
+           "pony and cow keep distinct head lines");
+    EXPECT(cow_idle.bones[CC_QUADRUPED_HEAD].head.y >
+               sheep_idle.bones[CC_QUADRUPED_HEAD].head.y,
+           "sheep keeps its small low head line");
+    EXPECT(sheep_idle.bones[CC_QUADRUPED_TAIL].tail.z >
+               cow_idle.bones[CC_QUADRUPED_TAIL].tail.z,
+           "sheep keeps a short readable tail");
     EXPECT(horse_step.bones[CC_QUADRUPED_HOOF_FL].head.z >
                horse_idle.bones[CC_QUADRUPED_HOOF_FL].head.z,
            "front-left hoof advances during its swing");
@@ -64,7 +73,24 @@ int main(void)
                      horse_idle.bones[hooves[hoof]].head.y;
         highest_lift = fmaxf(highest_lift, lift);
     }
-    EXPECT(highest_lift > 0.03f, "a swinging hoof clears the ground");
+    EXPECT(highest_lift > 0.10f,
+           "a prancing pony lifts a swinging hoof high off the ground");
+
+    CcQuadrupedPose pony_hold_a = {0};
+    CcQuadrupedPose pony_hold_b = {0};
+    CcQuadrupedPose pony_next_hold = {0};
+    CcQuadrupedPoseResolve(CC_QUADRUPED_HORSE, 0.10f * 2.0f * 3.14159265f,
+                           false, &pony_hold_a);
+    CcQuadrupedPoseResolve(CC_QUADRUPED_HORSE, 0.11f * 2.0f * 3.14159265f,
+                           false, &pony_hold_b);
+    CcQuadrupedPoseResolve(CC_QUADRUPED_HORSE, 0.18f * 2.0f * 3.14159265f,
+                           false, &pony_next_hold);
+    EXPECT(Distance(pony_hold_a.bones[CC_QUADRUPED_TAIL].tail,
+                    pony_hold_b.bones[CC_QUADRUPED_TAIL].tail) < 0.00001f,
+           "secondary motion holds between anime-style pose steps");
+    EXPECT(Distance(pony_hold_a.bones[CC_QUADRUPED_TAIL].tail,
+                    pony_next_hold.bones[CC_QUADRUPED_TAIL].tail) > 0.01f,
+           "pony tail follows through on the next held pose");
     for (int32_t bone = 0; bone < CC_QUADRUPED_BONE_COUNT; ++bone) {
         EXPECT(Distance(horse_step.bones[bone].head,
                         horse_step.bones[bone].tail) > 0.01f,

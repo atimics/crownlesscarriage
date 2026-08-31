@@ -2900,6 +2900,82 @@ static void MapRouteTitle(const CcSim *sim, const CcMap *map,
                    to != NULL ? to->name : "Unknown");
 }
 
+static void DrawDragonHoardMapArt(const CcSim *sim, const CcMap *map)
+{
+    Color ink = (Color){67, 45, 39, 255};
+    Color faint = Fade(ink, 0.34f);
+    Color gold = (Color){155, 105, 38, 255};
+    Rectangle chart = {306.0f, 163.0f, 572.0f, 398.0f};
+    DrawRectangleRounded(chart, 0.035f, 5,
+                         (Color){207, 174, 139, 255});
+    DrawRectangleRoundedLinesEx(chart, 0.035f, 5, 2.0f, faint);
+
+    int32_t title_width = CcOverlayMeasureText(map->name, 20);
+    CcOverlayDrawText(map->name, 592 - title_width / 2, 124, 20, ink);
+    CcOverlayDrawText(
+        TextFormat("Smuggled copy  /  %d%% trusted  /  surveyed day %d",
+                   map->accuracy, map->surveyed_day),
+        330, 178, 10, Fade(ink, 0.76f));
+
+    const Vector2 tunnel[] = {
+        {340.0f, 264.0f}, {408.0f, 250.0f}, {457.0f, 292.0f},
+        {512.0f, 276.0f}, {555.0f, 336.0f}, {622.0f, 318.0f},
+        {663.0f, 382.0f}, {731.0f, 370.0f}
+    };
+    for (int32_t i = 0; i + 1 < (int32_t)(sizeof(tunnel) /
+                                           sizeof(tunnel[0])); ++i) {
+        DrawLineEx(tunnel[i], tunnel[i + 1], 13.0f, Fade(ink, 0.17f));
+        DrawLineEx(tunnel[i], tunnel[i + 1], 2.4f, ink);
+    }
+    DrawCircleLines(340, 264, 27.0f, ink);
+    DrawCircleLines(555, 336, 48.0f, ink);
+    DrawCircleLines(751, 383, 76.0f, ink);
+    DrawCircleLines(751, 383, 61.0f, faint);
+    CcOverlayDrawText("LOW GATE", 314, 301, 10, ink);
+    CcOverlayDrawText("FALSE VAULT", 514, 398, 10, ink);
+    CcOverlayDrawText("CROWN CHAMBER", 699, 476, 10, ink);
+
+    for (int32_t coin = 0; coin < 14; ++coin) {
+        int32_t column = coin % 5;
+        int32_t row = coin / 5;
+        DrawCircle(715 + column * 15 + row * 3,
+                   416 + row * 11, 6.0f, gold);
+    }
+    DrawPoly((Vector2){785.0f, 431.0f}, 4, 10.0f, 45.0f,
+             (Color){116, 54, 59, 255});
+    DrawPoly((Vector2){810.0f, 421.0f}, 4, 8.0f, 45.0f,
+             (Color){76, 91, 102, 255});
+    CcOverlayDrawText("NAMED RELICS", 730, 452, 9, ink);
+
+    Vector2 dragon_body = {738.0f, 350.0f};
+    DrawEllipse((int)dragon_body.x, (int)dragon_body.y, 30.0f, 15.0f,
+                Fade(ink, 0.82f));
+    DrawTriangle((Vector2){720.0f, 347.0f},
+                 (Vector2){681.0f, 319.0f},
+                 (Vector2){710.0f, 361.0f}, Fade(ink, 0.72f));
+    DrawTriangle((Vector2){748.0f, 344.0f},
+                 (Vector2){780.0f, 311.0f},
+                 (Vector2){756.0f, 359.0f}, Fade(ink, 0.72f));
+    DrawLineEx((Vector2){762.0f, 352.0f}, (Vector2){799.0f, 369.0f},
+               7.0f, Fade(ink, 0.82f));
+    DrawCircle(708, 348, 9.0f, ink);
+
+    CcOverlayDrawText("DO NOT WAKE IT", 622, 211, 13,
+                      (Color){126, 47, 43, 255});
+    CcOverlayDrawText(
+        TextFormat("LATEST REPORT: %s  /  HOARD %" PRId64 " CROWNS",
+                   CcDragonLifeStageName(sim->dragon.life_stage),
+                   sim->dragon.hoard),
+        330, 520, 10, ink);
+    CcOverlayDrawText("Three turns after the false vault. Keep left at ash.",
+                      330, 539, 9, Fade(ink, 0.76f));
+
+    Vector2 compass = {841.0f, 213.0f};
+    DrawCircleLinesV(compass, 19.0f, faint);
+    DrawLineEx(compass, (Vector2){841.0f, 191.0f}, 2.0f, ink);
+    CcOverlayDrawText("N", 836, 235, 9, ink);
+}
+
 static bool DrawCollectibleMapArt(const CcSim *sim, const CcMap *map,
                                   Texture2D illustrated_map,
                                   Texture2D collectible_atlas)
@@ -2912,14 +2988,19 @@ static bool DrawCollectibleMapArt(const CcSim *sim, const CcMap *map,
                        (Vector2){0.0f, 0.0f}, 0.0f, WHITE);
         return true;
     }
-    if (sim == NULL || map == NULL || collectible_atlas.id == 0U) {
+    if (sim == NULL || map == NULL) {
         return false;
     }
     static const int32_t art_cell[CC_MAP_COLLECTION_COUNT] = {
-        2, 0, 4, 5, 8, 9, 1, 3, 6, 7, 10, 11
+        2, 0, 4, 5, 8, 9, 1, 3, 6, 7, 10, 11, 0
     };
     int32_t slot = (int32_t)(map - sim->maps);
     if (slot < 0 || slot >= CC_MAP_COLLECTION_COUNT) return false;
+    if (slot == CC_MAP_DRAGON_HOARD) {
+        DrawDragonHoardMapArt(sim, map);
+        return true;
+    }
+    if (collectible_atlas.id == 0U) return false;
     int32_t cell = art_cell[slot];
     float cell_width = (float)collectible_atlas.width / 4.0f;
     float cell_height = (float)collectible_atlas.height / 3.0f;
@@ -5451,6 +5532,8 @@ int main(int argc, char **argv)
         strcmp(argv[1], "--capture-road-fork") == 0;
     bool capture_map_case = argc >= 2 &&
         strcmp(argv[1], "--capture-map-case") == 0;
+    bool capture_dragon_hoard_map = argc >= 2 &&
+        strcmp(argv[1], "--capture-dragon-hoard-map") == 0;
     bool capture_carriage = argc >= 2 &&
         strcmp(argv[1], "--capture-carriage") == 0;
     bool capture_carriage_target = argc >= 2 &&
@@ -5599,18 +5682,24 @@ int main(int argc, char **argv)
         if (argc < 4 ||
             (strcmp(argv[2], "goblins") != 0 &&
              strcmp(argv[2], "dragon") != 0 &&
+             strcmp(argv[2], "dragon-whelp") != 0 &&
+             strcmp(argv[2], "dragon-wanderer") != 0 &&
+             strcmp(argv[2], "dragon-deep-wyrm") != 0 &&
              strcmp(argv[2], "animals") != 0 &&
              strcmp(argv[2], "horse") != 0 &&
-             strcmp(argv[2], "cow") != 0)) {
+             strcmp(argv[2], "cow") != 0 &&
+             strcmp(argv[2], "sheep") != 0)) {
             (void)fprintf(stderr,
-                          "creature capture requires goblins, dragon, horse, "
-                          "cow, or animals and a frame path.\n");
+                          "creature capture requires goblins, a dragon stage, "
+                          "horse, cow, sheep, or animals and a frame path.\n");
             return 1;
         }
         capture_creature_family = argv[2];
     }
     bool capture_creature_horse = capture_creature_media &&
         strcmp(capture_creature_family, "horse") == 0;
+    bool capture_creature_dragon = capture_creature_media &&
+        strncmp(capture_creature_family, "dragon", 6) == 0;
     int32_t capture_face_view = -1;
     if (capture_face) {
         if (argc < 4) {
@@ -5662,8 +5751,9 @@ int main(int argc, char **argv)
                     capture_interior || capture_navigation || capture_limbs ||
                     capture_walk_cycle || capture_defense ||
                     capture_downclimb || capture_road_fork ||
-                    capture_map_case || capture_carriage ||
+                    capture_map_case || capture_dragon_hoard_map ||
                     capture_carriage_target || capture_dojo ||
+                    capture_carriage ||
                     capture_jump || capture_action_reel ||
                     capture_gameplay_reel || capture_encounter ||
                     capture_witness || capture_character ||
@@ -5779,11 +5869,19 @@ int main(int argc, char **argv)
     if (capture_creature_media &&
         strcmp(capture_creature_family, "goblins") == 0) {
         sim.player.location_id = sim.goblins.lair_settlement_id;
-    } else if (capture_creature_media &&
-               strcmp(capture_creature_family, "dragon") == 0) {
+    } else if (capture_creature_dragon) {
         sim.player.location_id = sim.dragon.lair_settlement_id;
         sim.dragon.omen_days_remaining = 2;
         sim.goblins.tribute_phase = CC_GOBLIN_TRIBUTE_TO_DRAGON;
+        if (strcmp(capture_creature_family, "dragon-whelp") == 0) {
+            sim.dragon.life_stage = CC_DRAGON_STAGE_WHELP;
+        } else if (strcmp(capture_creature_family,
+                          "dragon-wanderer") == 0) {
+            sim.dragon.life_stage = CC_DRAGON_STAGE_WANDERER;
+        } else if (strcmp(capture_creature_family,
+                          "dragon-deep-wyrm") == 0) {
+            sim.dragon.life_stage = CC_DRAGON_STAGE_DEEP_WYRM;
+        }
     } else if (capture_creature_media) {
         for (int32_t settlement = 0; settlement < sim.settlement_count;
              ++settlement) {
@@ -5800,7 +5898,7 @@ int main(int argc, char **argv)
         sim.goblins.tribute_target_id = sim.dragon.lair_settlement_id;
         sim.goblins.tribute_days_remaining = 2;
     }
-    if (capture_road_fork || capture_map_case) {
+    if (capture_road_fork || capture_map_case || capture_dragon_hoard_map) {
         sim.player.location_id = sim.settlements[1].id;
     }
     if (capture_town || capture_town_arrival) {
@@ -5874,15 +5972,17 @@ int main(int argc, char **argv)
             }
         }
     }
-    int32_t selected = capture_map_case ?
-        CC_MAP_GLOAMGATE_NIGHT_ROAD : FirstOutgoingRouteIndex(&sim);
+    int32_t selected = capture_dragon_hoard_map ? CC_MAP_DRAGON_HOARD :
+        capture_map_case ? CC_MAP_GLOAMGATE_NIGHT_ROAD :
+        FirstOutgoingRouteIndex(&sim);
     int32_t selected_situation = FirstActiveSituationIndex(&sim);
     ClientView view = capture_board ? VIEW_SITUATIONS :
                       capture_character ? VIEW_CHARACTER :
                       capture_encounter ? VIEW_ENCOUNTER :
                       capture_dragon_cave ? VIEW_DRAGON_CAVE :
                       capture_road_fork ? VIEW_ROADS :
-                      capture_map_case ? VIEW_MAP :
+                      (capture_map_case || capture_dragon_hoard_map) ?
+                          VIEW_MAP :
                       capture_carriage ? VIEW_CARRIAGE : VIEW_LOCAL;
     ClientView return_view = VIEW_LOCAL;
     LocalState local;
@@ -5965,12 +6065,10 @@ int main(int argc, char **argv)
     if (capture_creature_media) {
         if (capture_creature_horse) {
             BeginRoadTravelState(&sim, &local);
-        } else if (strcmp(capture_creature_family, "dragon") == 0 ||
+        } else if (capture_creature_dragon ||
                    strcmp(capture_creature_family, "goblins") == 0) {
-            local.site_kind =
-                strcmp(capture_creature_family, "dragon") == 0 ?
-                    CC_LOCAL_SITE_DRAGON_CAVE :
-                    CC_LOCAL_SITE_GOBLIN_CAVE;
+            local.site_kind = capture_creature_dragon ?
+                CC_LOCAL_SITE_DRAGON_CAVE : CC_LOCAL_SITE_GOBLIN_CAVE;
             RepositionHero(
                 &local,
                 (Vector2){CC_LOCAL_SITE_ENTRANCE_X - 7.0f,
@@ -5981,7 +6079,8 @@ int main(int argc, char **argv)
         } else {
             bool animal_view =
                 strcmp(capture_creature_family, "animals") == 0 ||
-                strcmp(capture_creature_family, "cow") == 0;
+                strcmp(capture_creature_family, "cow") == 0 ||
+                strcmp(capture_creature_family, "sheep") == 0;
             Vector2 creature_view = animal_view ?
                 (Vector2){59.5f, 40.0f} : (Vector2){24.5f, 49.5f};
             RepositionHero(&local, creature_view, false);
