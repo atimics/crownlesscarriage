@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-/* Unlike assert(), this check remains active in Release builds. */
+
 #define CC_CHECK(expression)                                                   \
     do {                                                                       \
         if (!(expression)) {                                                   \

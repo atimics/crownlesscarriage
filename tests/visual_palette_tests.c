@@ -141,9 +141,7 @@ int main(void)
     passed &= RequireOrderedRamp("people skin",
                                  CC_VISUAL_PALETTE.people_skin, 0.07);
 
-    /* Lock the art direction anchors separately from the hero contract.
-       Scene lighting may vary later, but the base world must remain the
-       Blackthorn & Brass family. */
+
     if (!SameRgb(CC_VISUAL_PALETTE.cool_ink, 17, 16, 25) ||
         !SameRgb(CC_STYLE_STONE, 85, 74, 97) ||
         !SameRgb(CC_STYLE_EARTH, 112, 72, 56) ||

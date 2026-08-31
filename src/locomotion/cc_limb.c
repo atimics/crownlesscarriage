@@ -932,8 +932,7 @@ void CcLimbRigPinContact(CcLimbRig *rig, int32_t limb_index,
     CcLimbSpec contact_spec = *spec;
     if (rig->morphology.preset == CC_MORPHOLOGY_BIPED &&
         fabsf(limb->contact_normal.y) < 0.5f) {
-        /* A climber faces into the wall, so the ordinary forward knee pole would
-           put the knee through it. Wall contacts deliberately bend away. */
+
         contact_spec.bend_local.z = -fabsf(contact_spec.bend_local.z);
     }
     SolveChain(limb, &contact_spec, root, contact, body_yaw, 0.0f);

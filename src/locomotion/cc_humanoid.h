@@ -62,9 +62,7 @@ typedef enum CcHumanoidStrikeStyle {
     CC_HUMANOID_STRIKE_SWEEP
 } CcHumanoidStrikeStyle;
 
-/* One owner writes the base pose during a simulation tick. Layers such as
-   skinning, sockets, cloth and render interpolation only consume the finalized
-   snapshots and never become pose owners. */
+
 typedef enum CcHumanoidPoseOwner {
     CC_HUMANOID_POSE_OWNER_NONE,
     CC_HUMANOID_POSE_OWNER_PROCEDURAL,

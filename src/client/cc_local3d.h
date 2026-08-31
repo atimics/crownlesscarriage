@@ -18,8 +18,7 @@
 #define CC_LOCAL_TRAVELLER_COUNT 4
 #define CC_ATHLETIC_MAX_LEVEL 5
 
-/* Exterior coordinates are metres. These landmarks are shared by input,
-   collision, rendering, and tests so the continuous world cannot drift apart. */
+
 #define CC_LOCAL_WORLD_WIDTH 96.0f
 #define CC_LOCAL_WORLD_DEPTH 72.0f
 #define CC_LOCAL_NAVIGATION_POINT_CAPACITY 48
@@ -96,9 +95,7 @@ typedef enum CcLocalConvoyPhase {
     CC_LOCAL_CONVOY_ARRIVING
 } CcLocalConvoyPhase;
 
-/* The strategic simulation owns the durable route and progress. This small
-   presentation state keeps the same carriage under the camera while it
-   leaves a stable, crosses a gate, travels, and enters the next town. */
+
 typedef struct CcLocalConvoyState {
     CcLocalConvoyPhase phase;
     Vector3 town_position;
@@ -118,9 +115,7 @@ typedef enum CcLocalAtmospherePreset {
     CC_LOCAL_ATMOSPHERE_COUNT
 } CcLocalAtmospherePreset;
 
-/* A day is one authored lighting beat, not a continuously rotating clock.
-   Clear weather remains most common; travel and explicit day advances are
-   the moments when the world may move to another mood. */
+
 static inline CcLocalAtmospherePreset CcLocalAtmosphereForDay(int32_t day)
 {
     int32_t beat = day % 8;
@@ -385,14 +380,10 @@ typedef struct CcLocalRendererStats {
     int32_t creature_skinned_meshes;
 } CcLocalRendererStats;
 
-/* Keep the player skin comfortably below raylib's CPU skinning/upload cliff.
-   The authored Blender asset may contain many editable pieces, but the runtime
-   export must consolidate them into no more than this many material
-   primitives. */
+
 #define CC_LOCAL_HERO_RUNTIME_MESH_BUDGET 32
 
-/* The exterior land is deterministic for a world seed. Rendering, movement,
-   picking, roads, and building foundations all use these same samples. */
+
 void CcLocalTerrainSetSeed(uint32_t seed);
 void CcLocalBindPlace(const CcSim *sim);
 float CcLocalTerrainHeightAt(float x, float z);

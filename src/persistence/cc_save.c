@@ -3651,8 +3651,7 @@ static bool ReadPlayerCommitment(sqlite3 *database, CcSim *sim,
         sim->player.accepted_situation_id =
             (CcId)sqlite3_column_int64(statement, 0);
     } else if (result == SQLITE_DONE) {
-        /* Saves written before this optional schema-v3 extension had no
-           commitment row and therefore load with no accepted charter. */
+
         sim->player.accepted_situation_id = 0U;
     } else {
         SetSqlError(error, error_capacity, database,

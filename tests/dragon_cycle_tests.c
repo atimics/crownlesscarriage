@@ -93,7 +93,7 @@ int main(void)
         &sim, CC_EVENT_GOBLIN_TRIBUTE_DELIVERED);
     CC_CHECK(delivery != NULL && delivery->parent_id != 0U);
 
-    /* Wealth without hunger or weak commoners never launches a hoard raid. */
+
     for (int32_t i = 0; i < sim.settlement_count; ++i) {
         sim.settlements[i].hunger = 0;
         sim.settlements[i].stock[CC_GOOD_FOOD] = 500;

@@ -50,9 +50,9 @@ def render_thumbnail(
     for collection_name in all_asset_collections:
         bpy.data.collections[collection_name].hide_render = collection_name not in visible_collections
 
-    # Most collections are excluded from the saved startup view layer. Update
-    # the all-assets layer before reading matrix_world so Blender evaluates the
-    # transforms instead of returning the identity matrix for dormant objects.
+
+
+
     render_layer.update()
     minimum, maximum = asset_bounds(visible_collections)
     center = (minimum + maximum) * 0.5

@@ -56,7 +56,7 @@ for asset in manifest["assets"]:
         elif obj.type != "EMPTY":
             fail(f"unexpected {obj.type} object {obj.name} in exportable {collection.name}")
 
-# Carriage modules must advertise sockets that the base actually exports.
+
 socket_types = {socket["type"] for socket in manifest["sockets"].values()}
 for asset in manifest["assets"]:
     if asset["kind"] != "carriage_module":
@@ -68,8 +68,8 @@ for asset in manifest["assets"]:
     if unknown:
         fail(f"module {asset['id']} declares unknown sockets {sorted(unknown)}")
 
-# Every GLB in the export directory must be referenced by the manifest, so
-# renamed or removed assets cannot linger as stale runtime content.
+
+
 for glb in sorted(EXPORT_DIR.glob("*.glb")):
     if glb.stem not in asset_ids:
         fail(f"stale export {glb.name} is not referenced by the manifest")

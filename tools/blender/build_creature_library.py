@@ -1571,12 +1571,12 @@ def add_preview_scene(
 ) -> None:
     preview = new_collection("90_PREVIEW")
     placements = {
-        # A close-up animal shelf keeps the farm cast readable even beside
-        # dragons that are now tens of metres long.
+
+
         "horse": (-12.00, 0.20, 9.0, 2.4),
         "cow": (2.00, 0.40, 9.0, 2.4),
         "sheep": (14.00, 0.62, 9.0, 2.4),
-        # Every dragon uses the same display scale, preserving its real growth.
+
         "dragon_whelp": (-43.00, 0.75, 0.0, 0.35),
         "dragon_wanderer": (-36.50, 0.95, 0.0, 0.35),
         "dragon": (-13.50, 1.20, 0.0, 0.35),

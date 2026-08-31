@@ -167,9 +167,9 @@ def add_prism(
 
 
 def add_head(prefix: str, x: float, materials: dict[str, bpy.types.Material]) -> None:
-    # Start from a large warm face, then wrap it with a few asymmetric hair
-    # masses.  This is closer to the concept and avoids the helmet-like inset
-    # face used by the first proxy.
+
+
+
     add_beveled_box(
         f"{prefix}_Head", (x, -0.015, 2.29), (0.46, 0.48, 0.48),
         materials["skin_light"], 0.055,
@@ -200,7 +200,7 @@ def add_head(prefix: str, x: float, materials: dict[str, bpy.types.Material]) ->
             materials["eye"], 0.008,
         )
     add_box(f"{prefix}_Mouth", (x, -0.269, 2.195), (0.070, 0.018, 0.026), materials["skin"])
-    # Keep the crown as a small broken accent sitting to one side of the hair.
+
     crown_x = x + 0.115
     add_box(f"{prefix}_CrownBand", (crown_x, 0.005, 2.625), (0.22, 0.17, 0.042), materials["gold"])
     for index, (offset, height) in enumerate(((-0.070, 0.080), (0.0, 0.115), (0.070, 0.075))):
@@ -222,7 +222,7 @@ def add_body(prefix: str, x: float, materials: dict[str, bpy.types.Material]) ->
         0.50,
         materials["teal"],
     )
-    # Two broad pieces read as a wrapped scarf rather than a flat shoulder plate.
+
     add_prism(
         f"{prefix}_ScarfShoulderWrap",
         ((-0.55, 1.77), (-0.46, 1.95), (-0.21, 2.05), (0.0, 1.97),
@@ -296,7 +296,7 @@ def add_belt_and_satchel(prefix: str, x: float, materials: dict[str, bpy.types.M
 
 
 def add_cape(prefix: str, x: float, materials: dict[str, bpy.types.Material]) -> None:
-    # The cape is one broad asymmetrical silhouette shape behind the torso.
+
     add_prism(
         f"{prefix}_CapeMass",
         ((0.08, 1.92), (0.52, 1.88), (0.70, 1.67), (0.74, 0.96),
@@ -398,9 +398,9 @@ def setup_scene(materials: dict[str, bpy.types.Material]) -> None:
     bpy.context.scene.collection.objects.link(camera)
     camera.location = (0.0, -12.0, 4.05)
     camera.data.type = "ORTHO"
-    # Blender's orthographic scale covers the horizontal field.  At 480 x 270
-    # this makes the 2.75-unit figure about 60 pixels tall: the top end of the
-    # production 35--60 art-pixel distance contract.
+
+
+
     camera.data.ortho_scale = 21.70
     point_at(camera, Vector((0.0, 0.0, 1.35)))
     scene.camera = camera

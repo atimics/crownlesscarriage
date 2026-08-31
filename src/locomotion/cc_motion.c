@@ -310,9 +310,7 @@ typedef struct CcMotionMantleKey {
     CcMotionMantleSample sample;
 } CcMotionMantleKey;
 
-/* This is an authored high-mantle performance, not a generated gait cycle.
-   The pauses at catch, wall plant, press, and top-foot loading are deliberate:
-   they make the body prepare, place, and stabilize before its next move. */
+
 static const CcMotionMantleKey MANTLE_KEYS[] = {
     {0.00f, {.root_progress = 0.00f, .root_depth_progress = 0.00f,
              .pelvis_height = 0.90f,
