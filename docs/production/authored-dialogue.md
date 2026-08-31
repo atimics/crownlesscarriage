@@ -4,9 +4,9 @@
 
 Characters speak clearly, but not flatly. The setting enters through their
 work, loyalties, habits, and ordinary vocabulary. A miner talks about shifts,
-props, seals, and pit lamps. A clerk talks about counts, manifests, receipts,
-and named destinations. A smuggler talks about patrols, cover, timing, and who
-can be trusted.
+wooden supports, blocked tunnels, and lamps. A clerk talks about counts,
+delivery papers, receipts, and named destinations. A smuggler talks about tax
+patrols, cover, timing, and who can be trusted.
 
 Most lines should sound natural when read aloud. The vivid part comes from a
 precise observation, a concealed motive, or the speaker's sense of humour.
@@ -24,6 +24,20 @@ Every line needs these answers before it is written:
 
 If another character could say the line unchanged, the line needs another
 pass.
+
+## First-use clarity
+
+Every spoken line must make sense without a glossary or quest log. Name an
+unfamiliar object by what it does before using its local name. State the plain
+fact before adding a joke, threat, or strange detail.
+
+Do not use one word for different objects in the same scene. For example,
+`seal` could mean a blocked tunnel, wax on a letter, or an official stamp.
+Write `bricked-up tunnel`, `unopened letter`, or `receipt` instead.
+
+A setting name can add flavour after the line establishes the basic action.
+`Take the food past the tax patrol` works on first reading. A secret name such
+as `foxfire supper` does not, unless the scene has already explained it.
 
 ## Dialogue and interface
 
@@ -48,6 +62,7 @@ authority.
 - Closing aphorisms such as `both things are true`.
 - Lines that explain the theme instead of pursuing a goal.
 - Fantasy synonyms added only to make a sentence sound old.
+- Unexplained work jargon, secret names, and local titles on their first use.
 
 ## Revision pass
 

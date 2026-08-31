@@ -23,7 +23,13 @@ static void ValidateCatalogue(void)
         "mine sings",
         "Flour has never answered",
         "Both things are true",
-        "That is the trouble"
+        "That is the trouble",
+        "seal",
+        "guild",
+        "levy",
+        "props",
+        "stonebacks",
+        "charter"
     };
     size_t count = CcStoryAuthoredLineCount();
     CC_CHECK(count >= 30U);
