@@ -22316,8 +22316,14 @@ static void DrawDragonCliffRoost(const CcSim *sim)
     Color rock = BlendColor(WORLD_STONE_SHADOW, WORLD_DANGER, 0.18f);
     Color deep_rock = BlendColor(rock, WORLD_INK, 0.34f);
     Color ledge = ShadeColor(rock, 0.82f);
+    CcCreatureVariant dragon_variant = DragonCreatureForLifeStage(
+        sim->dragon.life_stage);
+    float perch_width =
+        dragon_variant == CC_CREATURE_DRAGON_DEEP_WYRM ? 31.0f :
+        dragon_variant == CC_CREATURE_DRAGON ? 21.0f :
+        dragon_variant == CC_CREATURE_DRAGON_WANDERER ? 15.0f : 9.0f;
 
-    DrawBackdropHill(x + 3.2f, z, 17.5f, 4.8f, 31.0f, 9, deep_rock);
+    DrawBackdropHill(x + 19.0f, z, 18.5f, 4.8f, 31.0f, 9, deep_rock);
     for (int32_t slab = -2; slab <= 2; ++slab) {
         DrawTiltedBox(
             (Vector3){x - 0.15f, 6.1f + (float)(abs(slab) % 2) * 0.7f,
@@ -22339,10 +22345,11 @@ static void DrawDragonCliffRoost(const CcSim *sim)
     DrawTiltedBox((Vector3){x - 17.1f, 5.18f, z - 0.55f},
                   (Vector3){7.2f, 1.86f, 6.8f},
                   (Vector3){0.0f, 0.0f, 1.0f}, -3.4f, deep_rock);
-    DrawTiltedBox((Vector3){x - 11.0f, 5.88f, z + 4.35f},
-                  (Vector3){19.0f, 1.30f, 4.1f},
+    DrawTiltedBox((Vector3){x - 1.5f - perch_width * 0.5f,
+                            5.88f, z + 4.35f},
+                  (Vector3){perch_width, 1.30f, 4.1f},
                   (Vector3){0.0f, 0.0f, 1.0f}, 1.8f,
-                  ShadeColor(ledge, 0.78f));
+                  ShadeColor(rock, 1.05f));
     for (int32_t tooth = 0; tooth < 6; ++tooth) {
         float tooth_x = x - 20.0f + (float)tooth * 3.7f;
         DrawTiltedBox((Vector3){tooth_x, 4.65f, z + 4.3f},
@@ -22368,14 +22375,15 @@ static void DrawDragonCliffRoost(const CcSim *sim)
     CcCreaturePose pose = sim->dragon.slain ? CC_CREATURE_POSE_DOWN_A :
         sim->dragon.stolen_outstanding > 0 ? CC_CREATURE_POSE_THREAT :
                                             CC_CREATURE_POSE_REST;
-    CcCreatureVariant dragon_variant = DragonCreatureForLifeStage(
-        sim->dragon.life_stage);
     float dragon_back_offset =
         dragon_variant == CC_CREATURE_DRAGON_DEEP_WYRM ? 19.2f :
         dragon_variant == CC_CREATURE_DRAGON ? 10.4f : 3.9f;
+    if (dragon_variant == CC_CREATURE_DRAGON_WANDERER) {
+        dragon_back_offset = 7.8f;
+    }
     Vector3 dragon_position = {
         x - dragon_back_offset,
-        6.76f,
+        7.58f,
         z + 4.85f
     };
     float dragon_yaw = dragon_variant == CC_CREATURE_DRAGON_WHELP ?
