@@ -20,8 +20,9 @@ respond to a player decision.
 11. [Text-first metagame playtest](11-metagame-playtest.md)
 12. [Story, quests, and narration](12-story-quests-and-narration.md)
 13. [The OSR release cut](13-osr-release-cut.md)
-14. [Glossary](glossary.md)
-15. [Decision log](decisions/README.md)
+14. [King's Quest branching storyboard](14-kings-quest-branching-storyboard.md)
+15. [Glossary](glossary.md)
+16. [Decision log](decisions/README.md)
 
 ## Full table of contents
 
