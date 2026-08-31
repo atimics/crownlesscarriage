@@ -235,10 +235,41 @@ int main(void)
     CC_CHECK(CcMetagameExecute(&metagame, "buy tools 2", output,
                                sizeof(output)));
     ExecuteNumber(&metagame, "accept", dungeon_number, output, sizeof(output));
+    /* The text-client suite checks the strategic choice after a completed
+       delve; underroad_tests covers navigation and threshold discovery. */
+    metagame.sim.dungeons[0].rooms[19].state_flags |=
+        CC_DUNGEON_ROOM_OBJECTIVE_REACHED;
+    for (int32_t i = 0; i < metagame.sim.dungeons[0].link_count; ++i) {
+        CcDungeonLink *link = &metagame.sim.dungeons[0].links[i];
+        if (link->kind == CC_DUNGEON_LINK_SHORTCUT) {
+            link->flags |= CC_DUNGEON_LINK_DISCOVERED |
+                           CC_DUNGEON_LINK_OPEN;
+        }
+    }
     CC_CHECK(CcMetagameExecute(&metagame, "dungeon public", output,
                                sizeof(output)));
     CC_CHECK(metagame.sim.dungeons[0].state == CC_DUNGEON_PUBLIC_ROUTE);
     CC_CHECK(!metagame.sim.routes[6].smuggler_route);
+
+    CcMetagame underroad;
+    CcMetagameInit(&underroad, UINT32_C(0x71a7e5));
+    underroad.sim.player.location_id =
+        underroad.sim.dungeons[0].settlement_id;
+    underroad.sim.carriage.location_id = underroad.sim.player.location_id;
+    underroad.sim.player.cargo[CC_GOOD_FOOD] = 2;
+    CC_CHECK(CcMetagameExecute(&underroad, "underroad look", output,
+                               sizeof(output)));
+    CC_CHECK(strstr(output, "Known rooms: 1 of 24") != NULL);
+    CC_CHECK(CcMetagameExecute(&underroad, "underroad enter", output,
+                               sizeof(output)));
+    CC_CHECK(strstr(output, "Mine Mouth") != NULL);
+    CC_CHECK(CcMetagameExecute(&underroad, "underroad move 1", output,
+                               sizeof(output)));
+    CC_CHECK(strstr(output, "Lamp Hall") != NULL);
+    CC_CHECK(CcMetagameExecute(&underroad, "underroad retreat", output,
+                               sizeof(output)));
+    CC_CHECK(!underroad.sim.dungeon_expedition.active);
+
     CC_CHECK(CcMetagameExecute(&metagame, "debrief", output, sizeof(output)));
     CC_CHECK(strstr(output, "Tell the story") != NULL);
     CC_CHECK(CcSimValidate(&metagame.sim, error, sizeof(error)));

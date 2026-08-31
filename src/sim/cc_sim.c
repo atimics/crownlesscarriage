@@ -772,6 +772,13 @@ const char *CcEventKindName(CcEventKind kind)
         case CC_EVENT_AMBUSH_EVADED: return "AMBUSH EVADED";
         case CC_EVENT_ENCOUNTER_LOOT: return "ROAD LOOT";
         case CC_EVENT_GOBLIN_TUNNEL_TRAVERSED: return "MOUNTAIN TUNNEL";
+        case CC_EVENT_DUNGEON_EXPEDITION_BEGAN: return "UNDERROAD DELVE";
+        case CC_EVENT_DUNGEON_ROOM_ENTERED: return "UNDERROAD MAPPED";
+        case CC_EVENT_DUNGEON_ENCOUNTER: return "UNDERROAD ENCOUNTER";
+        case CC_EVENT_DUNGEON_SHORTCUT_OPENED: return "SHORTCUT OPENED";
+        case CC_EVENT_DUNGEON_LOOT: return "UNDERROAD RECOVERY";
+        case CC_EVENT_DUNGEON_THRESHOLD_REACHED: return "HOARD THRESHOLD";
+        case CC_EVENT_DUNGEON_EXPEDITION_ENDED: return "UNDERROAD RETURN";
     }
     return "EVENT";
 }
@@ -939,6 +946,328 @@ static CcDungeonEffects DungeonEffects(CcDungeonState state)
         default:
             return (CcDungeonEffects){0};
     }
+}
+
+static uint32_t NextDungeonRandom(CcDungeon *dungeon)
+{
+    uint32_t value = dungeon->encounter_random_state;
+    value ^= value << 13U;
+    value ^= value >> 17U;
+    value ^= value << 5U;
+    dungeon->encounter_random_state = value == 0U ?
+        UINT32_C(0x6d2b79f5) : value;
+    return dungeon->encounter_random_state;
+}
+
+static void InitDungeonRoom(CcDungeon *dungeon, int32_t slot,
+                            const char *name, CcDungeonRoomKind kind,
+                            int32_t depth, int32_t map_x, int32_t map_y,
+                            uint32_t flags, CcGood loot_good,
+                            int32_t loot_quantity)
+{
+    if (dungeon == NULL || slot < 0 || slot >= CC_MAX_DUNGEON_ROOMS) return;
+    CcDungeonRoom *room = &dungeon->rooms[slot];
+    *room = (CcDungeonRoom){0};
+    (void)snprintf(room->name, sizeof(room->name), "%s", name);
+    room->kind = kind;
+    room->depth = depth;
+    room->map_x = map_x;
+    room->map_y = map_y;
+    room->flags = flags;
+    room->loot_good = loot_good;
+    room->loot_quantity = loot_quantity;
+}
+
+static void AddDungeonLink(CcDungeon *dungeon, int32_t from_room,
+                           int32_t to_room, CcDungeonLinkKind kind)
+{
+    if (dungeon == NULL || dungeon->link_count >= CC_MAX_DUNGEON_LINKS) return;
+    CcDungeonLink *link = &dungeon->links[dungeon->link_count++];
+    *link = (CcDungeonLink){
+        .from_room = from_room,
+        .to_room = to_room,
+        .kind = kind,
+        .flags = kind == CC_DUNGEON_LINK_SHORTCUT ? 0U :
+                 CC_DUNGEON_LINK_OPEN
+    };
+}
+
+static void GenerateUnderroad(CcSim *sim, CcDungeon *dungeon)
+{
+    if (sim == NULL || dungeon == NULL) return;
+    memset(dungeon->rooms, 0, sizeof(dungeon->rooms));
+    memset(dungeon->links, 0, sizeof(dungeon->links));
+    dungeon->layout_seed = sim->world_seed ^
+        (uint32_t)(dungeon->id & UINT64_C(0xffffffff)) ^
+        UINT32_C(0x71a7e5ed);
+    if (dungeon->layout_seed == 0U) dungeon->layout_seed = UINT32_C(0x51ed270b);
+    dungeon->encounter_random_state = dungeon->layout_seed;
+    dungeon->room_count = CC_MAX_DUNGEON_ROOMS;
+    dungeon->link_count = 0;
+
+    InitDungeonRoom(dungeon, 0, "Mine Mouth", CC_DUNGEON_ROOM_MINE_MOUTH,
+                    0, 0, 0, CC_DUNGEON_ROOM_SAFE, CC_GOOD_FOOD, 0);
+    InitDungeonRoom(dungeon, 1, "Lamp Hall", CC_DUNGEON_ROOM_RAIL,
+                    0, 1, 0, 0U, CC_GOOD_FOOD, 0);
+    InitDungeonRoom(dungeon, 2, "Broken Weighhouse", CC_DUNGEON_ROOM_WORKSHOP,
+                    0, 2, -1, CC_DUNGEON_ROOM_HAZARD,
+                    CC_GOOD_TOOLS, 1);
+    InitDungeonRoom(dungeon, 3, "Sump Gallery", CC_DUNGEON_ROOM_FLOODWAY,
+                    0, 2, 1, CC_DUNGEON_ROOM_STONEBACK,
+                    CC_GOOD_IRON, 0);
+    InitDungeonRoom(dungeon, 4, "Chain Bridge", CC_DUNGEON_ROOM_BRIDGE,
+                    1, 3, 0, CC_DUNGEON_ROOM_HAZARD,
+                    CC_GOOD_IRON, 0);
+    InitDungeonRoom(dungeon, 5, "Foreman's Lockroom",
+                    CC_DUNGEON_ROOM_WORKSHOP, 1, 3, -2,
+                    CC_DUNGEON_ROOM_SAFE, CC_GOOD_TOOLS, 2);
+    InitDungeonRoom(dungeon, 6, "Flooded Turntable",
+                    CC_DUNGEON_ROOM_FLOODWAY, 1, 4, 1,
+                    CC_DUNGEON_ROOM_STONEBACK, CC_GOOD_IRON, 0);
+    InitDungeonRoom(dungeon, 7, "Lost Cargo Spur", CC_DUNGEON_ROOM_RAIL,
+                    1, 4, 3, 0U, CC_GOOD_IRON, 4);
+    InitDungeonRoom(dungeon, 8, "Bell Shaft", CC_DUNGEON_ROOM_SHAFT,
+                    1, 5, 0, CC_DUNGEON_ROOM_DRAGON_SIGN,
+                    CC_GOOD_FOOD, 0);
+    InitDungeonRoom(dungeon, 9, "Archive Gate", CC_DUNGEON_ROOM_ARCHIVE,
+                    2, 6, 0, CC_DUNGEON_ROOM_GOBLIN,
+                    CC_GOOD_FOOD, 0);
+    InitDungeonRoom(dungeon, 10, "Hall of Ash Clerks",
+                    CC_DUNGEON_ROOM_ARCHIVE, 2, 7, -1,
+                    CC_DUNGEON_ROOM_GOBLIN, CC_GOOD_FOOD, 0);
+    InitDungeonRoom(dungeon, 11, "Cinder Market",
+                    CC_DUNGEON_ROOM_MARKET, 2, 7, 1,
+                    CC_DUNGEON_ROOM_SAFE | CC_DUNGEON_ROOM_GOBLIN,
+                    CC_GOOD_FOOD, 2);
+    InitDungeonRoom(dungeon, 12, "Red Cap Barracks",
+                    CC_DUNGEON_ROOM_BARRACKS, 2, 8, -2,
+                    CC_DUNGEON_ROOM_GOBLIN | CC_DUNGEON_ROOM_HAZARD,
+                    CC_GOOD_WEAPONS, 1);
+    InitDungeonRoom(dungeon, 13, "Ledger Vault",
+                    CC_DUNGEON_ROOM_VAULT, 2, 8, 0,
+                    CC_DUNGEON_ROOM_GOBLIN, CC_GOOD_GOLD, 2);
+    InitDungeonRoom(dungeon, 14, "Tribute Lift",
+                    CC_DUNGEON_ROOM_SHAFT, 2, 8, 2,
+                    CC_DUNGEON_ROOM_GOBLIN | CC_DUNGEON_ROOM_DRAGON_SIGN,
+                    CC_GOOD_FOOD, 0);
+    InitDungeonRoom(dungeon, 15, "Blind Aqueduct",
+                    CC_DUNGEON_ROOM_FLOODWAY, 3, 9, 3,
+                    CC_DUNGEON_ROOM_HAZARD, CC_GOOD_GEMS, 0);
+    InitDungeonRoom(dungeon, 16, "The Tithe Road",
+                    CC_DUNGEON_ROOM_RAIL, 3, 9, 1,
+                    CC_DUNGEON_ROOM_GOBLIN | CC_DUNGEON_ROOM_DRAGON_SIGN,
+                    CC_GOOD_FOOD, 0);
+    InitDungeonRoom(dungeon, 17, "Furnace Shrine",
+                    CC_DUNGEON_ROOM_SHRINE, 3, 10, -1,
+                    CC_DUNGEON_ROOM_HAZARD | CC_DUNGEON_ROOM_DRAGON_SIGN,
+                    CC_GOOD_GOLD, 0);
+    InitDungeonRoom(dungeon, 18, "Porters' Grave",
+                    CC_DUNGEON_ROOM_VAULT, 3, 10, 2,
+                    CC_DUNGEON_ROOM_HAZARD, CC_GOOD_GEMS, 1);
+    InitDungeonRoom(dungeon, 19, "Hoard Threshold",
+                    CC_DUNGEON_ROOM_THRESHOLD, 4, 11, 0,
+                    CC_DUNGEON_ROOM_OBJECTIVE | CC_DUNGEON_ROOM_DRAGON_SIGN,
+                    CC_GOOD_FOOD, 0);
+    InitDungeonRoom(dungeon, 20, "Old Smuggler Cut",
+                    CC_DUNGEON_ROOM_RAIL, 2, 6, 3,
+                    CC_DUNGEON_ROOM_SMUGGLER,
+                    CC_GOOD_GOLD, 1);
+    InitDungeonRoom(dungeon, 21, "Stoneback Nursery",
+                    CC_DUNGEON_ROOM_FLOODWAY, 1, 5, 3,
+                    CC_DUNGEON_ROOM_STONEBACK, CC_GOOD_IRON, 0);
+    InitDungeonRoom(dungeon, 22, "Collapsed Freight Lift",
+                    CC_DUNGEON_ROOM_SHAFT, 1, 2, 3,
+                    CC_DUNGEON_ROOM_HAZARD, CC_GOOD_TOOLS, 0);
+    InitDungeonRoom(dungeon, 23, "King's Survey Room",
+                    CC_DUNGEON_ROOM_ARCHIVE, 1, 4, -2,
+                    CC_DUNGEON_ROOM_SAFE, CC_GOOD_IRON, 3);
+
+    static const int32_t passages[][2] = {
+        {0, 1}, {1, 2}, {1, 3}, {2, 4}, {2, 5}, {3, 4}, {3, 6},
+        {4, 8}, {5, 23}, {23, 8}, {6, 7}, {6, 21}, {21, 22},
+        {8, 9}, {9, 10}, {9, 11}, {10, 12}, {10, 13}, {11, 13},
+        {11, 14}, {12, 17}, {13, 16}, {14, 15}, {14, 20},
+        {15, 16}, {16, 17}, {16, 18}, {17, 19}, {18, 19}
+    };
+    for (size_t i = 0; i < sizeof(passages) / sizeof(passages[0]); ++i) {
+        AddDungeonLink(dungeon, passages[i][0], passages[i][1],
+                       CC_DUNGEON_LINK_PASSAGE);
+    }
+    AddDungeonLink(dungeon, 7, 20, CC_DUNGEON_LINK_SECRET);
+    AddDungeonLink(dungeon, 20, 11, CC_DUNGEON_LINK_SECRET);
+    AddDungeonLink(dungeon, 22, 1, CC_DUNGEON_LINK_SHORTCUT);
+    AddDungeonLink(dungeon, 15, 18, CC_DUNGEON_LINK_SECRET);
+
+    static const int32_t optional_links[][2] = {
+        {5, 6}, {7, 22}, {12, 13}, {10, 17}, {14, 18}, {20, 21}
+    };
+    uint32_t choices = NextDungeonRandom(dungeon);
+    for (int32_t i = 0; i < 2; ++i) {
+        int32_t option = (int32_t)((choices >> (uint32_t)(i * 5)) % 3U) +
+                         i * 3;
+        AddDungeonLink(dungeon, optional_links[option][0],
+                       optional_links[option][1],
+                       (choices & (UINT32_C(1) << (uint32_t)(20 + i))) != 0U ?
+                           CC_DUNGEON_LINK_SECRET :
+                           CC_DUNGEON_LINK_PASSAGE);
+    }
+    dungeon->rooms[0].state_flags |= CC_DUNGEON_ROOM_DISCOVERED;
+}
+
+void CcSimInitializeUnderroad(CcSim *sim)
+{
+    if (sim == NULL) return;
+    for (int32_t i = 0; i < sim->dungeon_count; ++i) {
+        CcDungeon *dungeon = &sim->dungeons[i];
+        if (dungeon->room_count == 0) GenerateUnderroad(sim, dungeon);
+    }
+    if (!sim->dungeon_expedition.active) {
+        sim->dungeon_expedition = (CcDungeonExpedition){0};
+        sim->dungeon_expedition.current_room = -1;
+        sim->dungeon_expedition.encounter_room = -1;
+    }
+}
+
+const CcDungeon *CcSimDungeon(const CcSim *sim, CcId id)
+{
+    if (sim == NULL || CcIdKind(id) != CC_ENTITY_DUNGEON) return NULL;
+    for (int32_t i = 0; i < sim->dungeon_count; ++i) {
+        if (sim->dungeons[i].id == id) return &sim->dungeons[i];
+    }
+    return NULL;
+}
+
+static CcDungeon *DungeonMutable(CcSim *sim, CcId id)
+{
+    return (CcDungeon *)CcSimDungeon((const CcSim *)sim, id);
+}
+
+static bool DungeonLinkAllowsTravel(const CcDungeonLink *link,
+                                    int32_t from_room)
+{
+    if (link == NULL || (link->flags & CC_DUNGEON_LINK_OPEN) == 0U) {
+        return false;
+    }
+    if (link->kind == CC_DUNGEON_LINK_SECRET &&
+        (link->flags & CC_DUNGEON_LINK_DISCOVERED) == 0U) return false;
+    if (link->kind == CC_DUNGEON_LINK_DROP) return link->from_room == from_room;
+    return link->from_room == from_room || link->to_room == from_room;
+}
+
+static int32_t DungeonLinkOtherRoom(const CcDungeonLink *link,
+                                    int32_t from_room)
+{
+    if (link == NULL) return -1;
+    if (link->from_room == from_room) return link->to_room;
+    if (link->to_room == from_room && link->kind != CC_DUNGEON_LINK_DROP) {
+        return link->from_room;
+    }
+    return -1;
+}
+
+const CcDungeonRoom *CcSimDungeonCurrentRoom(const CcSim *sim)
+{
+    if (sim == NULL || !sim->dungeon_expedition.active) return NULL;
+    const CcDungeon *dungeon = CcSimDungeon(
+        sim, sim->dungeon_expedition.dungeon_id);
+    int32_t room = sim->dungeon_expedition.current_room;
+    return dungeon != NULL && room >= 0 && room < dungeon->room_count ?
+        &dungeon->rooms[room] : NULL;
+}
+
+int32_t CcSimDungeonVisibleExitCount(const CcSim *sim)
+{
+    if (sim == NULL || !sim->dungeon_expedition.active) return 0;
+    const CcDungeon *dungeon = CcSimDungeon(
+        sim, sim->dungeon_expedition.dungeon_id);
+    if (dungeon == NULL) return 0;
+    int32_t count = 0;
+    for (int32_t i = 0; i < dungeon->link_count; ++i) {
+        if (DungeonLinkAllowsTravel(&dungeon->links[i],
+                                    sim->dungeon_expedition.current_room)) {
+            count += 1;
+        }
+    }
+    return count;
+}
+
+int32_t CcSimDungeonVisibleExitAt(const CcSim *sim, int32_t ordinal)
+{
+    if (sim == NULL || ordinal < 0 || !sim->dungeon_expedition.active) {
+        return -1;
+    }
+    const CcDungeon *dungeon = CcSimDungeon(
+        sim, sim->dungeon_expedition.dungeon_id);
+    if (dungeon == NULL) return -1;
+    int32_t found = 0;
+    for (int32_t i = 0; i < dungeon->link_count; ++i) {
+        const CcDungeonLink *link = &dungeon->links[i];
+        if (!DungeonLinkAllowsTravel(
+                link, sim->dungeon_expedition.current_room)) continue;
+        if (found++ == ordinal) {
+            return DungeonLinkOtherRoom(
+                link, sim->dungeon_expedition.current_room);
+        }
+    }
+    return -1;
+}
+
+int32_t CcSimDungeonOpenableShortcut(const CcSim *sim)
+{
+    if (sim == NULL || !sim->dungeon_expedition.active) return -1;
+    const CcDungeon *dungeon = CcSimDungeon(
+        sim, sim->dungeon_expedition.dungeon_id);
+    if (dungeon == NULL) return -1;
+    int32_t room = sim->dungeon_expedition.current_room;
+    for (int32_t i = 0; i < dungeon->link_count; ++i) {
+        const CcDungeonLink *link = &dungeon->links[i];
+        if (link->kind == CC_DUNGEON_LINK_SHORTCUT &&
+            (link->flags & CC_DUNGEON_LINK_DISCOVERED) != 0U &&
+            (link->flags & CC_DUNGEON_LINK_OPEN) == 0U &&
+            (link->from_room == room || link->to_room == room)) return i;
+    }
+    return -1;
+}
+
+const char *CcDungeonRoomKindName(CcDungeonRoomKind kind)
+{
+    switch (kind) {
+        case CC_DUNGEON_ROOM_MINE_MOUTH: return "mine mouth";
+        case CC_DUNGEON_ROOM_RAIL: return "old freight road";
+        case CC_DUNGEON_ROOM_FLOODWAY: return "floodway";
+        case CC_DUNGEON_ROOM_WORKSHOP: return "workshop";
+        case CC_DUNGEON_ROOM_BRIDGE: return "bridge";
+        case CC_DUNGEON_ROOM_SHAFT: return "shaft";
+        case CC_DUNGEON_ROOM_ARCHIVE: return "archive";
+        case CC_DUNGEON_ROOM_MARKET: return "goblin market";
+        case CC_DUNGEON_ROOM_BARRACKS: return "barracks";
+        case CC_DUNGEON_ROOM_SHRINE: return "furnace shrine";
+        case CC_DUNGEON_ROOM_VAULT: return "vault";
+        case CC_DUNGEON_ROOM_THRESHOLD: return "hoard threshold";
+    }
+    return "unknown chamber";
+}
+
+const char *CcDungeonEncounterName(CcDungeonEncounterKind kind)
+{
+    switch (kind) {
+        case CC_DUNGEON_ENCOUNTER_STONEBACKS: return "stoneback procession";
+        case CC_DUNGEON_ENCOUNTER_TITHE_KEEPERS: return "Tithe Keeper patrol";
+        case CC_DUNGEON_ENCOUNTER_GOBLIN_DESERTERS: return "goblin deserters";
+        case CC_DUNGEON_ENCOUNTER_MONSTERS: return "deep-dwelling monsters";
+        case CC_DUNGEON_ENCOUNTER_SMUGGLERS: return "underroad smugglers";
+        case CC_DUNGEON_ENCOUNTER_NONE: break;
+    }
+    return "no encounter";
+}
+
+const char *CcDungeonReactionName(int32_t reaction)
+{
+    if (reaction <= 3) return "immediately hostile";
+    if (reaction <= 5) return "threatening";
+    if (reaction <= 8) return "uncertain";
+    if (reaction <= 10) return "willing to talk";
+    return "helpful for now";
 }
 
 const CcRoute *CcSimRouteBetween(const CcSim *sim, CcId a, CcId b)
@@ -1294,6 +1623,16 @@ int32_t CcSimTrackedGood(const CcSim *sim, CcGood good)
     for (int32_t i = 0; i < sim->shipment_count; ++i) {
         if (sim->shipments[i].status == CC_SHIPMENT_TRAVELLING &&
             sim->shipments[i].good == good) total += sim->shipments[i].quantity;
+    }
+    if (sim->schema_version >= 19U) {
+        for (int32_t dungeon = 0; dungeon < sim->dungeon_count; ++dungeon) {
+            for (int32_t room = 0;
+                 room < sim->dungeons[dungeon].room_count; ++room) {
+                const CcDungeonRoom *cache =
+                    &sim->dungeons[dungeon].rooms[room];
+                if (cache->loot_good == good) total += cache->loot_quantity;
+            }
+        }
     }
     if (good == CC_GOOD_GOLD || good == CC_GOOD_GEMS) {
         for (int32_t i = 0; i < sim->treasure_count; ++i) {
@@ -2282,6 +2621,7 @@ void CcSimInit(CcSim *sim, uint32_t seed)
     sim->dungeons[0].depth = 4;
     sim->dungeons[0].regional_pressure = 48;
     sim->dungeon_count = 1;
+    CcSimInitializeUnderroad(sim);
 
     sim->monsters[0].id = NextId(sim, CC_ENTITY_MONSTER_POPULATION);
     sim->monsters[0].dungeon_id = sim->dungeons[0].id;
@@ -9441,6 +9781,466 @@ static bool ApplyRepair(CcSim *sim, const CcCommand *command,
     return true;
 }
 
+static bool DungeonObjectiveReached(const CcDungeon *dungeon)
+{
+    if (dungeon == NULL) return false;
+    for (int32_t i = 0; i < dungeon->room_count; ++i) {
+        if ((dungeon->rooms[i].state_flags &
+             CC_DUNGEON_ROOM_OBJECTIVE_REACHED) != 0U) return true;
+    }
+    return false;
+}
+
+bool CcSimDungeonOutcomeAvailable(const CcDungeon *dungeon,
+                                  CcDungeonState outcome)
+{
+    if (dungeon == NULL || !DungeonObjectiveReached(dungeon)) return false;
+    if (outcome == CC_DUNGEON_EXPLORED) return true;
+    if (outcome == CC_DUNGEON_PUBLIC_ROUTE) {
+        for (int32_t i = 0; i < dungeon->link_count; ++i) {
+            const CcDungeonLink *link = &dungeon->links[i];
+            if (link->kind == CC_DUNGEON_LINK_SHORTCUT &&
+                (link->flags & CC_DUNGEON_LINK_OPEN) != 0U) return true;
+        }
+        return false;
+    }
+    if (outcome == CC_DUNGEON_SMUGGLER_ROUTE) {
+        for (int32_t i = 0; i < dungeon->room_count; ++i) {
+            const CcDungeonRoom *room = &dungeon->rooms[i];
+            if ((room->flags & CC_DUNGEON_ROOM_SMUGGLER) != 0U &&
+                (room->state_flags & CC_DUNGEON_ROOM_SEARCHED) != 0U) {
+                return true;
+            }
+        }
+        return false;
+    }
+    if (outcome == CC_DUNGEON_RESEALED) {
+        for (int32_t i = 0; i < dungeon->room_count; ++i) {
+            const CcDungeonRoom *room = &dungeon->rooms[i];
+            if (room->kind == CC_DUNGEON_ROOM_BRIDGE &&
+                (room->state_flags & CC_DUNGEON_ROOM_SEARCHED) != 0U) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+static void ClearDungeonEncounter(CcDungeonExpedition *expedition)
+{
+    if (expedition == NULL) return;
+    expedition->encounter_kind = CC_DUNGEON_ENCOUNTER_NONE;
+    expedition->encounter_reaction = 0;
+    expedition->encounter_room = -1;
+}
+
+static void RollDungeonEncounter(CcSim *sim, CcDungeon *dungeon)
+{
+    if (sim == NULL || dungeon == NULL ||
+        !sim->dungeon_expedition.active ||
+        sim->dungeon_expedition.encounter_kind !=
+            CC_DUNGEON_ENCOUNTER_NONE) return;
+    CcDungeonExpedition *expedition = &sim->dungeon_expedition;
+    CcDungeonRoom *room = &dungeon->rooms[expedition->current_room];
+    if ((room->flags & CC_DUNGEON_ROOM_SAFE) != 0U) return;
+    int32_t threshold = 1 + expedition->noise / 4 +
+                        (expedition->light_remaining <= 0 ? 1 : 0);
+    if ((room->state_flags & CC_DUNGEON_ROOM_CLEARED) != 0U) threshold -= 1;
+    threshold = ClampI32(threshold, 1, 4);
+    if ((int32_t)(NextDungeonRandom(dungeon) % 6U) >= threshold) return;
+
+    uint32_t roll = NextDungeonRandom(dungeon);
+    if ((room->flags & CC_DUNGEON_ROOM_STONEBACK) != 0U) {
+        expedition->encounter_kind = CC_DUNGEON_ENCOUNTER_STONEBACKS;
+    } else if ((room->flags & CC_DUNGEON_ROOM_GOBLIN) != 0U) {
+        expedition->encounter_kind = sim->goblins.cohesion >= 50 ?
+            CC_DUNGEON_ENCOUNTER_TITHE_KEEPERS :
+            CC_DUNGEON_ENCOUNTER_GOBLIN_DESERTERS;
+    } else if (dungeon->state == CC_DUNGEON_SMUGGLER_ROUTE &&
+               (roll & 1U) != 0U) {
+        expedition->encounter_kind = CC_DUNGEON_ENCOUNTER_SMUGGLERS;
+    } else {
+        expedition->encounter_kind = CC_DUNGEON_ENCOUNTER_MONSTERS;
+    }
+    int32_t reaction = 2 + (int32_t)(NextDungeonRandom(dungeon) % 6U) +
+                       (int32_t)(NextDungeonRandom(dungeon) % 6U);
+    if (expedition->encounter_kind == CC_DUNGEON_ENCOUNTER_TITHE_KEEPERS) {
+        reaction += (sim->goblins.cohesion - 50) / 20;
+    }
+    if (expedition->noise >= 6) reaction -= 1;
+    expedition->encounter_reaction = ClampI32(reaction, 2, 12);
+    expedition->encounter_room = expedition->current_room;
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text),
+                   "A %s finds the company in %s; its reaction is %s.",
+                   CcDungeonEncounterName(expedition->encounter_kind),
+                   room->name,
+                   CcDungeonReactionName(expedition->encounter_reaction));
+    (void)PushEvent(sim, CC_EVENT_DUNGEON_ENCOUNTER, dungeon->id,
+                    dungeon->id, 0U, expedition->encounter_reaction, text);
+}
+
+static void SpendDungeonTurn(CcSim *sim, CcDungeon *dungeon,
+                             int32_t noise, bool check_encounter)
+{
+    CcDungeonExpedition *expedition = &sim->dungeon_expedition;
+    expedition->turns_elapsed += 1;
+    expedition->light_remaining = MaximumI32(
+        0, expedition->light_remaining - 1);
+    expedition->noise = ClampI32(expedition->noise + noise - 1, 0, 10);
+    if (expedition->light_remaining == 0) {
+        expedition->strain = ClampI32(expedition->strain + 4, 0, 100);
+    }
+    if ((expedition->turns_elapsed % 6) == 0) {
+        if (sim->player.cargo[CC_GOOD_FOOD] > 0) {
+            sim->player.cargo[CC_GOOD_FOOD] -= 1;
+        } else {
+            expedition->strain = ClampI32(
+                expedition->strain + 15, 0, 100);
+        }
+        CcSimAdvanceDays(sim, 1);
+        expedition->days_elapsed += 1;
+    }
+    if (check_encounter) RollDungeonEncounter(sim, dungeon);
+}
+
+static bool ApplyBeginDungeonExpedition(CcSim *sim,
+                                        const CcCommand *command,
+                                        char *error, size_t error_capacity)
+{
+    CcDungeon *dungeon = DungeonMutable(sim, command->target_id);
+    if (dungeon == NULL || sim->player.location_id != dungeon->settlement_id) {
+        SetError(error, error_capacity,
+                 "The carriage must be parked at the dungeon entrance.");
+        return false;
+    }
+    if (sim->journey.active || sim->dungeon_expedition.active) {
+        SetError(error, error_capacity,
+                 "The company is already committed to a journey.");
+        return false;
+    }
+    if (dungeon->state == CC_DUNGEON_SEALED ||
+        dungeon->state == CC_DUNGEON_RESEALED) {
+        SetError(error, error_capacity, "The Underroad is sealed.");
+        return false;
+    }
+    if (sim->player.cargo[CC_GOOD_FOOD] < 1) {
+        SetError(error, error_capacity,
+                 "Carry at least 1 Food before entering the Underroad.");
+        return false;
+    }
+    sim->dungeon_expedition = (CcDungeonExpedition){
+        .active = true,
+        .dungeon_id = dungeon->id,
+        .current_room = 0,
+        .light_remaining = 18,
+        .maximum_depth = 0,
+        .encounter_room = -1
+    };
+    dungeon->rooms[0].state_flags |= CC_DUNGEON_ROOM_DISCOVERED;
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text),
+                   "The company leaves the carriage at %s and enters %s.",
+                   dungeon->rooms[0].name, dungeon->name);
+    (void)PushEvent(sim, CC_EVENT_DUNGEON_EXPEDITION_BEGAN,
+                    sim->player.id, dungeon->id, 0U, 0, text);
+    SetError(error, error_capacity, "");
+    return true;
+}
+
+static CcDungeonLink *DungeonTravelLink(CcDungeon *dungeon,
+                                        int32_t from_room,
+                                        int32_t to_room)
+{
+    if (dungeon == NULL) return NULL;
+    for (int32_t i = 0; i < dungeon->link_count; ++i) {
+        CcDungeonLink *link = &dungeon->links[i];
+        if (DungeonLinkAllowsTravel(link, from_room) &&
+            DungeonLinkOtherRoom(link, from_room) == to_room) return link;
+    }
+    return NULL;
+}
+
+static void MarkDungeonThresholdReached(CcSim *sim, CcDungeon *dungeon,
+                                        CcDungeonRoom *room)
+{
+    if (sim == NULL || dungeon == NULL || room == NULL ||
+        (room->flags & CC_DUNGEON_ROOM_OBJECTIVE) == 0U ||
+        (room->state_flags & CC_DUNGEON_ROOM_OBJECTIVE_REACHED) != 0U) {
+        return;
+    }
+    room->state_flags |= CC_DUNGEON_ROOM_OBJECTIVE_REACHED;
+    if (dungeon->state == CC_DUNGEON_DISTURBED) {
+        CcDungeonEffects explored = DungeonEffects(CC_DUNGEON_EXPLORED);
+        dungeon->state = CC_DUNGEON_EXPLORED;
+        dungeon->regional_pressure = 40;
+        for (int32_t i = 0; i < sim->monster_count; ++i) {
+            CcMonsterPopulation *monster = &sim->monsters[i];
+            if (monster->dungeon_id != dungeon->id) continue;
+            monster->hunting_pressure = ClampI32(
+                monster->hunting_pressure + explored.hunting_pressure,
+                0, 100);
+            monster->population = MaximumI32(
+                0, monster->population - explored.population_loss);
+            monster->pressure = MaximumI32(
+                0, monster->pressure - explored.monster_pressure_loss);
+        }
+    }
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text),
+                   "The company reaches %s. Heat and tribute tracks continue toward Hollowbarrow.",
+                   room->name);
+    (void)PushEvent(sim, CC_EVENT_DUNGEON_THRESHOLD_REACHED,
+                    sim->player.id, dungeon->id, 0U, room->depth, text);
+}
+
+static bool ApplyMoveDungeon(CcSim *sim, const CcCommand *command,
+                             char *error, size_t error_capacity)
+{
+    CcDungeonExpedition *expedition = &sim->dungeon_expedition;
+    CcDungeon *dungeon = DungeonMutable(sim, expedition->dungeon_id);
+    if (!expedition->active || dungeon == NULL) {
+        SetError(error, error_capacity, "No dungeon expedition is active.");
+        return false;
+    }
+    if (expedition->encounter_kind != CC_DUNGEON_ENCOUNTER_NONE) {
+        SetError(error, error_capacity,
+                 "The encounter blocks the passage. Parley, evade, force it, or retreat.");
+        return false;
+    }
+    if (expedition->strain >= 100) {
+        SetError(error, error_capacity,
+                 "The company is spent and must retreat.");
+        return false;
+    }
+    int32_t target = command->amount;
+    if (target < 0 || target >= dungeon->room_count ||
+        DungeonTravelLink(dungeon, expedition->current_room, target) == NULL) {
+        SetError(error, error_capacity,
+                 "That passage is not open from this chamber.");
+        return false;
+    }
+    expedition->current_room = target;
+    CcDungeonRoom *room = &dungeon->rooms[target];
+    room->state_flags |= CC_DUNGEON_ROOM_DISCOVERED;
+    expedition->maximum_depth = MaximumI32(
+        expedition->maximum_depth, room->depth);
+    if ((room->flags & CC_DUNGEON_ROOM_HAZARD) != 0U) {
+        expedition->strain = ClampI32(expedition->strain + 4, 0, 100);
+    }
+    SpendDungeonTurn(sim, dungeon, 0, true);
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text), "The company enters %s.", room->name);
+    (void)PushEvent(sim, CC_EVENT_DUNGEON_ROOM_ENTERED,
+                    sim->player.id, dungeon->id, 0U, target, text);
+    MarkDungeonThresholdReached(sim, dungeon, room);
+    SetError(error, error_capacity, "");
+    return true;
+}
+
+static bool ApplySearchDungeon(CcSim *sim, char *error,
+                               size_t error_capacity)
+{
+    CcDungeonExpedition *expedition = &sim->dungeon_expedition;
+    CcDungeon *dungeon = DungeonMutable(sim, expedition->dungeon_id);
+    if (!expedition->active || dungeon == NULL) {
+        SetError(error, error_capacity, "No dungeon expedition is active.");
+        return false;
+    }
+    if (expedition->encounter_kind != CC_DUNGEON_ENCOUNTER_NONE) {
+        SetError(error, error_capacity,
+                 "The encounter must be dealt with before searching.");
+        return false;
+    }
+    CcDungeonRoom *room = &dungeon->rooms[expedition->current_room];
+    if ((room->state_flags & CC_DUNGEON_ROOM_SEARCHED) != 0U) {
+        SetError(error, error_capacity, "This chamber has already been searched.");
+        return false;
+    }
+    room->state_flags |= CC_DUNGEON_ROOM_SEARCHED;
+    for (int32_t i = 0; i < dungeon->link_count; ++i) {
+        CcDungeonLink *link = &dungeon->links[i];
+        if ((link->kind == CC_DUNGEON_LINK_SECRET ||
+             link->kind == CC_DUNGEON_LINK_SHORTCUT) &&
+            (link->from_room == expedition->current_room ||
+             link->to_room == expedition->current_room)) {
+            link->flags |= CC_DUNGEON_LINK_DISCOVERED;
+        }
+    }
+    int32_t cargo_space = sim->player.cargo_capacity -
+                          CcPlayerCargoUsed(&sim->player);
+    int32_t taken = MinimumI32(MaximumI32(cargo_space, 0),
+                               room->loot_quantity);
+    if (taken > 0) {
+        sim->player.cargo[room->loot_good] += taken;
+        room->loot_quantity -= taken;
+        char text[CC_EVENT_TEXT_CAPACITY];
+        (void)snprintf(text, sizeof(text),
+                       "The company recovers %d %s from %s.", taken,
+                       CcGoodName(room->loot_good), room->name);
+        (void)PushEvent(sim, CC_EVENT_DUNGEON_LOOT,
+                        sim->player.id, dungeon->id, 0U, taken, text);
+    }
+    SpendDungeonTurn(sim, dungeon, 2, true);
+    SetError(error, error_capacity, "");
+    return true;
+}
+
+static bool ApplyOpenDungeonShortcut(CcSim *sim,
+                                     const CcCommand *command,
+                                     char *error, size_t error_capacity)
+{
+    CcDungeonExpedition *expedition = &sim->dungeon_expedition;
+    CcDungeon *dungeon = DungeonMutable(sim, expedition->dungeon_id);
+    if (!expedition->active || dungeon == NULL) {
+        SetError(error, error_capacity, "No dungeon expedition is active.");
+        return false;
+    }
+    if (expedition->encounter_kind != CC_DUNGEON_ENCOUNTER_NONE) {
+        SetError(error, error_capacity,
+                 "The encounter must be dealt with before working.");
+        return false;
+    }
+    int32_t slot = command->amount;
+    if (slot < 0 || slot >= dungeon->link_count) {
+        SetError(error, error_capacity, "That shortcut does not exist.");
+        return false;
+    }
+    CcDungeonLink *link = &dungeon->links[slot];
+    if (link->kind != CC_DUNGEON_LINK_SHORTCUT ||
+        (link->flags & CC_DUNGEON_LINK_DISCOVERED) == 0U ||
+        (link->flags & CC_DUNGEON_LINK_OPEN) != 0U ||
+        (link->from_room != expedition->current_room &&
+         link->to_room != expedition->current_room)) {
+        SetError(error, error_capacity,
+                 "There is no closed, discovered shortcut here.");
+        return false;
+    }
+    if (sim->player.cargo[CC_GOOD_TOOLS] < 1) {
+        SetError(error, error_capacity,
+                 "Opening the freight lift requires 1 Tools.");
+        return false;
+    }
+    sim->player.cargo[CC_GOOD_TOOLS] -= 1;
+    link->flags |= CC_DUNGEON_LINK_OPEN;
+    SpendDungeonTurn(sim, dungeon, 4, false);
+    SpendDungeonTurn(sim, dungeon, 3, true);
+    (void)PushEvent(sim, CC_EVENT_DUNGEON_SHORTCUT_OPENED,
+                    sim->player.id, dungeon->id, 0U, slot,
+                    "The company braces the old freight lift and opens a lasting shortcut.");
+    SetError(error, error_capacity, "");
+    return true;
+}
+
+static bool ApplyResolveDungeonEncounter(CcSim *sim,
+                                         const CcCommand *command,
+                                         char *error,
+                                         size_t error_capacity)
+{
+    CcDungeonExpedition *expedition = &sim->dungeon_expedition;
+    CcDungeon *dungeon = DungeonMutable(sim, expedition->dungeon_id);
+    if (!expedition->active || dungeon == NULL ||
+        expedition->encounter_kind == CC_DUNGEON_ENCOUNTER_NONE) {
+        SetError(error, error_capacity, "There is no dungeon encounter to resolve.");
+        return false;
+    }
+    bool resolved = false;
+    if (command->amount == CC_DUNGEON_APPROACH_PARLEY) {
+        int32_t score = expedition->encounter_reaction;
+        if (score < 7 && sim->player.cargo[CC_GOOD_FOOD] > 0) {
+            sim->player.cargo[CC_GOOD_FOOD] -= 1;
+            score += 3;
+        }
+        if (expedition->encounter_kind == CC_DUNGEON_ENCOUNTER_STONEBACKS &&
+            sim->player.cargo[CC_GOOD_TOOLS] > 0) score += 1;
+        resolved = score >= 7;
+        if (!resolved) {
+            expedition->strain = ClampI32(expedition->strain + 5, 0, 100);
+            expedition->encounter_reaction = ClampI32(
+                expedition->encounter_reaction + 1, 2, 12);
+        }
+        SpendDungeonTurn(sim, dungeon, resolved ? 0 : 2, false);
+    } else if (command->amount == CC_DUNGEON_APPROACH_EVADE) {
+        int32_t score = 1 + (int32_t)(NextDungeonRandom(dungeon) % 6U);
+        if (expedition->light_remaining > 0) score += 1;
+        if (expedition->noise <= 2) score += 1;
+        if (CcPlayerCargoUsed(&sim->player) >=
+            sim->player.cargo_capacity - 2) score -= 1;
+        resolved = score >= 4;
+        if (!resolved) {
+            expedition->strain = ClampI32(expedition->strain + 12, 0, 100);
+        }
+        SpendDungeonTurn(sim, dungeon, resolved ? 0 : 3, false);
+    } else if (command->amount == CC_DUNGEON_APPROACH_FORCE) {
+        int32_t score = 1 + (int32_t)(NextDungeonRandom(dungeon) % 6U) +
+                        (sim->player.cargo[CC_GOOD_WEAPONS] > 0 ? 2 : 0);
+        resolved = score >= 4;
+        expedition->strain = ClampI32(
+            expedition->strain + (resolved ? 8 : 22), 0, 100);
+        if (resolved) {
+            dungeon->rooms[expedition->current_room].state_flags |=
+                CC_DUNGEON_ROOM_CLEARED;
+        }
+        SpendDungeonTurn(sim, dungeon, 4, false);
+    } else {
+        SetError(error, error_capacity,
+                 "Choose parley, evade, or force passage.");
+        return false;
+    }
+    if (resolved) ClearDungeonEncounter(expedition);
+    SetError(error, error_capacity, "");
+    return true;
+}
+
+static bool ApplyRetreatDungeon(CcSim *sim, char *error,
+                                size_t error_capacity)
+{
+    CcDungeonExpedition *expedition = &sim->dungeon_expedition;
+    CcDungeon *dungeon = DungeonMutable(sim, expedition->dungeon_id);
+    if (!expedition->active || dungeon == NULL) {
+        SetError(error, error_capacity, "No dungeon expedition is active.");
+        return false;
+    }
+    int32_t depth = dungeon->rooms[expedition->current_room].depth;
+    bool flight = expedition->current_room != 0;
+    if (flight) {
+        expedition->strain = ClampI32(
+            expedition->strain + 8 + depth * 6, 0, 100);
+        int32_t cargo_used = CcPlayerCargoUsed(&sim->player);
+        if ((expedition->encounter_kind != CC_DUNGEON_ENCOUNTER_NONE ||
+             expedition->strain >= 75) && cargo_used > 0) {
+            CcDungeonRoom *room =
+                &dungeon->rooms[expedition->current_room];
+            for (int32_t good = CC_GOOD_COUNT - 1; good >= 0; --good) {
+                if (sim->player.cargo[good] <= 0) continue;
+                if (room->loot_quantity > 0 &&
+                    room->loot_good != (CcGood)good) {
+                    continue;
+                }
+                sim->player.cargo[good] -= 1;
+                room->loot_good = (CcGood)good;
+                room->loot_quantity += 1;
+                break;
+            }
+        }
+    }
+    if (expedition->days_elapsed == 0) CcSimAdvanceDays(sim, 1);
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text),
+                   flight ?
+                   "The company abandons its position and fights back to the carriage after %d turns." :
+                   "The company returns to the carriage after %d turns.",
+                   expedition->turns_elapsed);
+    (void)PushEvent(sim, CC_EVENT_DUNGEON_EXPEDITION_ENDED,
+                    sim->player.id, dungeon->id, 0U,
+                    expedition->maximum_depth, text);
+    *expedition = (CcDungeonExpedition){0};
+    expedition->current_room = -1;
+    expedition->encounter_room = -1;
+    SetError(error, error_capacity, "");
+    return true;
+}
+
 static bool ApplyDungeonChange(CcSim *sim, const CcCommand *command,
                                char *error, size_t error_capacity)
 {
@@ -9452,11 +10252,26 @@ static bool ApplyDungeonChange(CcSim *sim, const CcCommand *command,
         SetError(error, error_capacity, "The company must prepare at the dungeon settlement.");
         return false;
     }
+    if (sim->dungeon_expedition.active) {
+        SetError(error, error_capacity,
+                 "Return to the carriage before changing the Underroad.");
+        return false;
+    }
     if (command->dungeon_state != CC_DUNGEON_EXPLORED &&
         command->dungeon_state != CC_DUNGEON_PUBLIC_ROUTE &&
         command->dungeon_state != CC_DUNGEON_SMUGGLER_ROUTE &&
         command->dungeon_state != CC_DUNGEON_RESEALED) {
         SetError(error, error_capacity, "That dungeon outcome is invalid.");
+        return false;
+    }
+    if (command->dungeon_state != CC_DUNGEON_EXPLORED &&
+        !CcSimDungeonOutcomeAvailable(dungeon, command->dungeon_state)) {
+        SetError(error, error_capacity,
+                 command->dungeon_state == CC_DUNGEON_PUBLIC_ROUTE ?
+                 "Reach the Hoard Threshold and open the freight shortcut first." :
+                 command->dungeon_state == CC_DUNGEON_SMUGGLER_ROUTE ?
+                 "Reach the Hoard Threshold and search the Old Smuggler Cut first." :
+                 "Reach the Hoard Threshold and study the Chain Bridge supports first.");
         return false;
     }
     if (dungeon->state == command->dungeon_state) {
@@ -9782,6 +10597,17 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
         SetError(error, error_capacity, "Command target is missing.");
         return false;
     }
+    bool dungeon_action =
+        command->kind == CC_COMMAND_MOVE_DUNGEON ||
+        command->kind == CC_COMMAND_SEARCH_DUNGEON ||
+        command->kind == CC_COMMAND_OPEN_DUNGEON_SHORTCUT ||
+        command->kind == CC_COMMAND_RESOLVE_DUNGEON_ENCOUNTER ||
+        command->kind == CC_COMMAND_RETREAT_DUNGEON;
+    if (sim->dungeon_expedition.active && !dungeon_action) {
+        SetError(error, error_capacity,
+                 "Return to the carriage before taking an outside action.");
+        return false;
+    }
     bool settlement_action = command->kind == CC_COMMAND_TRADE ||
         command->kind == CC_COMMAND_REPAIR_ROUTE ||
         command->kind == CC_COMMAND_CHANGE_DUNGEON ||
@@ -9798,7 +10624,8 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
         command->kind == CC_COMMAND_GOBLIN_WARN ||
         command->kind == CC_COMMAND_GOBLIN_INTERCEPT ||
         command->kind == CC_COMMAND_CHARACTER_RESPONSE ||
-        command->kind == CC_COMMAND_TRAVERSE_GOBLIN_TUNNEL;
+        command->kind == CC_COMMAND_TRAVERSE_GOBLIN_TUNNEL ||
+        command->kind == CC_COMMAND_BEGIN_DUNGEON_EXPEDITION;
     if (sim->journey.active && settlement_action) {
         SetError(error, error_capacity,
                  "Settlement business must wait until the carriage arrives.");
@@ -9813,6 +10640,21 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
             return ApplyRepair(sim, command, error, error_capacity);
         case CC_COMMAND_CHANGE_DUNGEON:
             return ApplyDungeonChange(sim, command, error, error_capacity);
+        case CC_COMMAND_BEGIN_DUNGEON_EXPEDITION:
+            return ApplyBeginDungeonExpedition(
+                sim, command, error, error_capacity);
+        case CC_COMMAND_MOVE_DUNGEON:
+            return ApplyMoveDungeon(sim, command, error, error_capacity);
+        case CC_COMMAND_SEARCH_DUNGEON:
+            return ApplySearchDungeon(sim, error, error_capacity);
+        case CC_COMMAND_OPEN_DUNGEON_SHORTCUT:
+            return ApplyOpenDungeonShortcut(
+                sim, command, error, error_capacity);
+        case CC_COMMAND_RESOLVE_DUNGEON_ENCOUNTER:
+            return ApplyResolveDungeonEncounter(
+                sim, command, error, error_capacity);
+        case CC_COMMAND_RETREAT_DUNGEON:
+            return ApplyRetreatDungeon(sim, error, error_capacity);
         case CC_COMMAND_BUY_MAP:
             return ApplyBuyMap(sim, command, error, error_capacity);
         case CC_COMMAND_SELL_MAP:
@@ -10116,7 +10958,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                          sim->schema_version == 14U ||
                          sim->schema_version == 15U ||
                          sim->schema_version == 16U ||
-                         sim->schema_version == 17U;
+                         sim->schema_version == 17U ||
+                         sim->schema_version == 18U;
     bool supported_generator = sim->generator_version == CC_GENERATOR_VERSION ||
         (legacy_schema && (sim->generator_version == 3U ||
                            sim->generator_version == 5U ||
@@ -10130,7 +10973,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                            sim->generator_version == 13U ||
                            sim->generator_version == 14U ||
                            sim->generator_version == 15U ||
-                           sim->generator_version == 16U));
+                           sim->generator_version == 16U ||
+                           sim->generator_version == 17U));
     if ((!legacy_schema && sim->schema_version != CC_SIM_SCHEMA_VERSION) ||
         !supported_generator) {
         SetError(error, error_capacity, "Simulation version is unsupported.");
@@ -10220,7 +11064,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 !ValidBoundedText(event->text, sizeof(event->text)) ||
                 event->day < 1 || event->day > sim->current_day ||
                 event->kind < CC_EVENT_HARVEST_FAILED ||
-                event->kind > CC_EVENT_GOBLIN_TUNNEL_TRAVERSED ||
+                event->kind > CC_EVENT_DUNGEON_EXPEDITION_ENDED ||
                 event->parent_id == event->id ||
                 (event->parent_id != 0U &&
                  CcSimEvent(sim, event->parent_id) == NULL)) {
@@ -10589,12 +11433,111 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             SetError(error, error_capacity, "Dungeon state is invalid.");
             return false;
         }
+        if (sim->schema_version == CC_SIM_SCHEMA_VERSION) {
+            uint32_t known_room_flags =
+                CC_DUNGEON_ROOM_SAFE | CC_DUNGEON_ROOM_HAZARD |
+                CC_DUNGEON_ROOM_STONEBACK | CC_DUNGEON_ROOM_GOBLIN |
+                CC_DUNGEON_ROOM_DRAGON_SIGN | CC_DUNGEON_ROOM_OBJECTIVE |
+                CC_DUNGEON_ROOM_SMUGGLER;
+            uint32_t known_room_state =
+                CC_DUNGEON_ROOM_DISCOVERED | CC_DUNGEON_ROOM_SEARCHED |
+                CC_DUNGEON_ROOM_CLEARED |
+                CC_DUNGEON_ROOM_OBJECTIVE_REACHED;
+            uint32_t known_link_flags =
+                CC_DUNGEON_LINK_DISCOVERED | CC_DUNGEON_LINK_OPEN;
+            if (dungeon->layout_seed == 0U ||
+                dungeon->encounter_random_state == 0U ||
+                dungeon->room_count < 1 ||
+                dungeon->room_count > CC_MAX_DUNGEON_ROOMS ||
+                dungeon->link_count < 0 ||
+                dungeon->link_count > CC_MAX_DUNGEON_LINKS) {
+                SetError(error, error_capacity,
+                         "Dungeon layout state is invalid.");
+                return false;
+            }
+            for (int32_t room = 0; room < dungeon->room_count; ++room) {
+                const CcDungeonRoom *item = &dungeon->rooms[room];
+                if (!ValidBoundedText(item->name, sizeof(item->name)) ||
+                    item->kind < CC_DUNGEON_ROOM_MINE_MOUTH ||
+                    item->kind > CC_DUNGEON_ROOM_THRESHOLD ||
+                    item->depth < 0 || item->depth > dungeon->depth ||
+                    item->map_x < -100 || item->map_x > 100 ||
+                    item->map_y < -100 || item->map_y > 100 ||
+                    (item->flags & ~known_room_flags) != 0U ||
+                    (item->state_flags & ~known_room_state) != 0U ||
+                    item->loot_good < 0 || item->loot_good >= CC_GOOD_COUNT ||
+                    item->loot_quantity < 0 ||
+                    item->loot_quantity > CC_SIM_MAX_UNITS) {
+                    SetError(error, error_capacity,
+                             "Dungeon room state is invalid.");
+                    return false;
+                }
+            }
+            for (int32_t link = 0; link < dungeon->link_count; ++link) {
+                const CcDungeonLink *item = &dungeon->links[link];
+                if (item->from_room < 0 ||
+                    item->from_room >= dungeon->room_count ||
+                    item->to_room < 0 ||
+                    item->to_room >= dungeon->room_count ||
+                    item->from_room == item->to_room ||
+                    item->kind < CC_DUNGEON_LINK_PASSAGE ||
+                    item->kind > CC_DUNGEON_LINK_DROP ||
+                    (item->flags & ~known_link_flags) != 0U) {
+                    SetError(error, error_capacity,
+                             "Dungeon passage state is invalid.");
+                    return false;
+                }
+            }
+        }
         for (int32_t earlier = 0; earlier < i; ++earlier) {
             if (sim->dungeons[earlier].id == dungeon->id) {
                 SetError(error, error_capacity,
                          "Dungeon identities are not unique.");
                 return false;
             }
+        }
+    }
+    if (sim->schema_version == CC_SIM_SCHEMA_VERSION) {
+        const CcDungeonExpedition *expedition = &sim->dungeon_expedition;
+        const CcDungeon *dungeon = CcSimDungeon(sim, expedition->dungeon_id);
+        bool idle_valid = !expedition->active &&
+            expedition->dungeon_id == 0U &&
+            expedition->current_room == -1 &&
+            expedition->turns_elapsed == 0 &&
+            expedition->days_elapsed == 0 &&
+            expedition->light_remaining == 0 &&
+            expedition->noise == 0 &&
+            expedition->strain == 0 &&
+            expedition->maximum_depth == 0 &&
+            expedition->encounter_kind == CC_DUNGEON_ENCOUNTER_NONE &&
+            expedition->encounter_reaction == 0 &&
+            expedition->encounter_room == -1;
+        bool encounter_valid = expedition->encounter_kind ==
+                CC_DUNGEON_ENCOUNTER_NONE ?
+            expedition->encounter_reaction == 0 &&
+                expedition->encounter_room == -1 :
+            expedition->encounter_kind >= CC_DUNGEON_ENCOUNTER_STONEBACKS &&
+                expedition->encounter_kind <=
+                    CC_DUNGEON_ENCOUNTER_SMUGGLERS &&
+                expedition->encounter_reaction >= 2 &&
+                expedition->encounter_reaction <= 12 &&
+                expedition->encounter_room == expedition->current_room;
+        bool active_valid = expedition->active && dungeon != NULL &&
+            expedition->current_room >= 0 &&
+            expedition->current_room < dungeon->room_count &&
+            expedition->turns_elapsed >= 0 &&
+            expedition->days_elapsed >= 0 &&
+            expedition->light_remaining >= 0 &&
+            expedition->light_remaining <= 18 &&
+            expedition->noise >= 0 && expedition->noise <= 10 &&
+            expedition->strain >= 0 && expedition->strain <= 100 &&
+            expedition->maximum_depth >= 0 &&
+            expedition->maximum_depth <= dungeon->depth &&
+            encounter_valid;
+        if (!idle_valid && !active_valid) {
+            SetError(error, error_capacity,
+                     "Dungeon expedition state is invalid.");
+            return false;
         }
     }
     for (int32_t i = 0; i < sim->monster_count; ++i) {
@@ -11479,6 +12422,46 @@ uint64_t CcSimHash(const CcSim *sim)
         const CcDungeon *item = &sim->dungeons[i];
         HASH_VALUE(item->id); HASH_VALUE(item->settlement_id); hash = HashString(hash, item->name);
         HASH_VALUE(item->state); HASH_VALUE(item->depth); HASH_VALUE(item->regional_pressure);
+        if (sim->schema_version >= 19U) {
+            HASH_VALUE(item->layout_seed);
+            HASH_VALUE(item->encounter_random_state);
+            HASH_VALUE(item->room_count);
+            HASH_VALUE(item->link_count);
+            for (int32_t room = 0; room < item->room_count; ++room) {
+                const CcDungeonRoom *room_item = &item->rooms[room];
+                hash = HashString(hash, room_item->name);
+                HASH_VALUE(room_item->kind);
+                HASH_VALUE(room_item->depth);
+                HASH_VALUE(room_item->map_x);
+                HASH_VALUE(room_item->map_y);
+                HASH_VALUE(room_item->flags);
+                HASH_VALUE(room_item->state_flags);
+                HASH_VALUE(room_item->loot_good);
+                HASH_VALUE(room_item->loot_quantity);
+            }
+            for (int32_t link = 0; link < item->link_count; ++link) {
+                const CcDungeonLink *link_item = &item->links[link];
+                HASH_VALUE(link_item->from_room);
+                HASH_VALUE(link_item->to_room);
+                HASH_VALUE(link_item->kind);
+                HASH_VALUE(link_item->flags);
+            }
+        }
+    }
+    if (sim->schema_version >= 19U) {
+        const CcDungeonExpedition *expedition = &sim->dungeon_expedition;
+        HASH_VALUE(expedition->active);
+        HASH_VALUE(expedition->dungeon_id);
+        HASH_VALUE(expedition->current_room);
+        HASH_VALUE(expedition->turns_elapsed);
+        HASH_VALUE(expedition->days_elapsed);
+        HASH_VALUE(expedition->light_remaining);
+        HASH_VALUE(expedition->noise);
+        HASH_VALUE(expedition->strain);
+        HASH_VALUE(expedition->maximum_depth);
+        HASH_VALUE(expedition->encounter_kind);
+        HASH_VALUE(expedition->encounter_reaction);
+        HASH_VALUE(expedition->encounter_room);
     }
     for (int32_t i = 0; i < sim->situation_count; ++i) {
         const CcSituation *item = &sim->situations[i];

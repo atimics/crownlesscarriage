@@ -44,6 +44,7 @@ typedef enum ClientView {
     VIEW_SITUATIONS,
     VIEW_CHARACTER,
     VIEW_ENCOUNTER,
+    VIEW_DUNGEON,
     VIEW_DRAGON_CAVE
 } ClientView;
 
@@ -185,7 +186,17 @@ typedef enum ContextActionKind {
     CONTEXT_ACTION_MEET_MARA,
     CONTEXT_ACTION_TALK_CHARACTER,
     CONTEXT_ACTION_LISTEN_CHARACTER,
-    CONTEXT_ACTION_PLEDGE_CHARACTER
+    CONTEXT_ACTION_PLEDGE_CHARACTER,
+    CONTEXT_ACTION_DUNGEON_MOVE,
+    CONTEXT_ACTION_DUNGEON_SEARCH,
+    CONTEXT_ACTION_DUNGEON_OPEN_SHORTCUT,
+    CONTEXT_ACTION_DUNGEON_PARLEY,
+    CONTEXT_ACTION_DUNGEON_EVADE,
+    CONTEXT_ACTION_DUNGEON_FORCE,
+    CONTEXT_ACTION_DUNGEON_RETREAT,
+    CONTEXT_ACTION_DUNGEON_PUBLIC_ROUTE,
+    CONTEXT_ACTION_DUNGEON_SMUGGLER_ROUTE,
+    CONTEXT_ACTION_DUNGEON_RESEAL
 } ContextActionKind;
 
 typedef struct ContextAction {
@@ -2015,6 +2026,133 @@ static void DrawDragonCavePanel(const CcSim *sim)
         x, (int)(bounds.y + bounds.height) - 31, 9, MUTED);
 }
 
+static Vector2 DungeonMapPoint(const CcDungeonRoom *room)
+{
+    return room == NULL ? (Vector2){0.0f, 0.0f} :
+        (Vector2){105.0f + (float)room->map_x * 68.0f,
+                  305.0f + (float)room->map_y * 58.0f};
+}
+
+static void DrawDungeonPanel(const CcSim *sim)
+{
+    if (sim == NULL || !sim->dungeon_expedition.active) return;
+    const CcDungeonExpedition *expedition = &sim->dungeon_expedition;
+    const CcDungeon *dungeon = CcSimDungeon(sim, expedition->dungeon_id);
+    const CcDungeonRoom *current = CcSimDungeonCurrentRoom(sim);
+    if (dungeon == NULL || current == NULL) return;
+
+    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
+                  Fade(BACKGROUND, 0.92f));
+    DrawPanel((Rectangle){42.0f, 64.0f, 870.0f, 535.0f},
+              Fade(PANEL_DEEP, 0.98f));
+    DrawPanel((Rectangle){934.0f, 64.0f, 304.0f, 535.0f},
+              Fade(PANEL_DEEP, 0.98f));
+    CcOverlayDrawText("THE UNDERROAD", 66, 82, 10, TEAL);
+    CcOverlayDrawText(dungeon->name, 66, 104, 23, INK);
+    CcOverlayDrawText(
+        "The map records only passages the company has walked or found.",
+        66, 136, 9, MUTED);
+
+    for (int32_t i = 0; i < dungeon->link_count; ++i) {
+        const CcDungeonLink *link = &dungeon->links[i];
+        const CcDungeonRoom *from = &dungeon->rooms[link->from_room];
+        const CcDungeonRoom *to = &dungeon->rooms[link->to_room];
+        bool from_known = (from->state_flags &
+                           CC_DUNGEON_ROOM_DISCOVERED) != 0U;
+        bool to_known = (to->state_flags &
+                         CC_DUNGEON_ROOM_DISCOVERED) != 0U;
+        bool hidden = (link->kind == CC_DUNGEON_LINK_SECRET ||
+                       link->kind == CC_DUNGEON_LINK_SHORTCUT) &&
+                      (link->flags & CC_DUNGEON_LINK_DISCOVERED) == 0U;
+        if (!from_known || !to_known || hidden) continue;
+        Color color = link->kind == CC_DUNGEON_LINK_SHORTCUT ? CC_GOLD :
+                      link->kind == CC_DUNGEON_LINK_SECRET ? CC_VIOLET :
+                      Fade(TEAL, 0.66f);
+        if ((link->flags & CC_DUNGEON_LINK_OPEN) == 0U) color = DANGER;
+        DrawLineEx(DungeonMapPoint(from), DungeonMapPoint(to),
+                   link->kind == CC_DUNGEON_LINK_SHORTCUT ? 4.0f : 2.0f,
+                   color);
+    }
+    for (int32_t i = 0; i < dungeon->room_count; ++i) {
+        const CcDungeonRoom *room = &dungeon->rooms[i];
+        if ((room->state_flags & CC_DUNGEON_ROOM_DISCOVERED) == 0U) continue;
+        Vector2 point = DungeonMapPoint(room);
+        bool here = i == expedition->current_room;
+        Color accent = here ? CC_GOLD :
+            (room->flags & CC_DUNGEON_ROOM_GOBLIN) != 0U ? CC_VIOLET :
+            (room->flags & CC_DUNGEON_ROOM_STONEBACK) != 0U ? TEAL : INK;
+        float radius = here ? 12.0f : 7.0f;
+        DrawCircleV(point, radius + 4.0f, Fade(accent, 0.18f));
+        DrawCircleV(point, radius, accent);
+        if ((room->flags & CC_DUNGEON_ROOM_HAZARD) != 0U) {
+            DrawCircleLinesV(point, radius + 7.0f, Fade(DANGER, 0.75f));
+        }
+        CcOverlayDrawText(TextFormat("%.18s", room->name),
+                          (int)point.x - 22, (int)point.y + 16, 7,
+                          here ? INK : MUTED);
+    }
+
+    int x = 958;
+    CcOverlayDrawText("CURRENT CHAMBER", x, 86, 9, TEAL);
+    CcOverlayDrawText(current->name, x, 110, 18, INK);
+    CcOverlayDrawText(
+        TextFormat("DEPTH %d  /  %s", current->depth,
+                   CcDungeonRoomKindName(current->kind)),
+        x, 139, 9, MUTED);
+    DrawBar(x, 177, 146, "LIGHT", expedition->light_remaining * 100 / 18,
+            expedition->light_remaining <= 4 ? DANGER : CC_GOLD);
+    DrawBar(x, 209, 146, "STRAIN", expedition->strain,
+            expedition->strain >= 70 ? DANGER : TEAL);
+    DrawBar(x, 241, 146, "NOISE", expedition->noise * 10,
+            expedition->noise >= 6 ? DANGER : CC_VIOLET);
+    CcOverlayDrawText(
+        TextFormat("TURN %d  /  %d DAY%s BELOW",
+                   expedition->turns_elapsed, expedition->days_elapsed,
+                   expedition->days_elapsed == 1 ? "" : "S"),
+        x, 278, 9, MUTED);
+    CcOverlayDrawText(
+        TextFormat("CARGO %d/%d  FOOD %d  TOOLS %d",
+                   CcPlayerCargoUsed(&sim->player),
+                   sim->player.cargo_capacity,
+                   sim->player.cargo[CC_GOOD_FOOD],
+                   sim->player.cargo[CC_GOOD_TOOLS]),
+        x, 302, 9, INK);
+
+    int detail_y = 341;
+    if (expedition->encounter_kind != CC_DUNGEON_ENCOUNTER_NONE) {
+        CcOverlayDrawText("ENCOUNTER", x, detail_y, 10, DANGER);
+        CcOverlayDrawText(
+            CcDungeonEncounterName(expedition->encounter_kind),
+            x, detail_y + 25, 13, INK);
+        CcOverlayDrawText(
+            TextFormat("REACTION %d  /  %s",
+                       expedition->encounter_reaction,
+                       CcDungeonReactionName(
+                           expedition->encounter_reaction)),
+            x, detail_y + 51, 8,
+            expedition->encounter_reaction <= 5 ? DANGER : TEAL);
+        DrawTwoLineText(
+            "Parley tests the reaction. Evading favors light loads. Force is loud and dangerous.",
+            x, detail_y + 80, 42, 9, MUTED);
+    } else {
+        const char *sign = (current->flags &
+                            CC_DUNGEON_ROOM_STONEBACK) != 0U ?
+            "Stone shapes hold tools and lost objects in patterns." :
+            (current->flags & CC_DUNGEON_ROOM_GOBLIN) != 0U ?
+            "Ash marks name debts, tolls, and tribute roads." :
+            (current->flags & CC_DUNGEON_ROOM_DRAGON_SIGN) != 0U ?
+            "Warm air and worn tribute tracks lead deeper." :
+            (current->flags & CC_DUNGEON_ROOM_HAZARD) != 0U ?
+            "The chamber itself is dangerous. Slow work may draw company." :
+            "Old freight marks survive beneath soot and mineral bloom.";
+        CcOverlayDrawText("SIGNS", x, detail_y, 10, CC_GOLD);
+        DrawTwoLineText(sign, x, detail_y + 28, 42, 9, MUTED);
+    }
+    CcOverlayDrawText(
+        "Each move or search spends a turn. Six turns consume Food and a day.",
+        66, 569, 9, MUTED);
+}
+
 static void AddContextAction(ContextActionSet *set, ContextActionKind kind,
                              const char *label)
 {
@@ -2218,6 +2356,74 @@ static ContextActionSet BuildContextActions(
         AddDetailedContextAction(&set, CONTEXT_ACTION_PAY,
                                  "Hear them out", "2",
                                  "ENTER PARLEY", true, false);
+        return set;
+    }
+    if (view == VIEW_DUNGEON) {
+        const CcDungeonExpedition *expedition = &sim->dungeon_expedition;
+        const CcDungeon *dungeon = CcSimDungeon(sim, expedition->dungeon_id);
+        const CcDungeonRoom *room = CcSimDungeonCurrentRoom(sim);
+        if (!expedition->active || dungeon == NULL || room == NULL) return set;
+        if (expedition->encounter_kind != CC_DUNGEON_ENCOUNTER_NONE) {
+            AddDetailedContextAction(
+                &set, CONTEXT_ACTION_DUNGEON_PARLEY, "Parley",
+                TextFormat("%d", set.count + 1), "OFFER FOOD / TEST REACTION",
+                true, false);
+            AddDetailedContextAction(
+                &set, CONTEXT_ACTION_DUNGEON_EVADE, "Evade",
+                TextFormat("%d", set.count + 1), "LIGHT + LOW LOAD HELP",
+                true, false);
+            AddDetailedContextAction(
+                &set, CONTEXT_ACTION_DUNGEON_FORCE, "Force passage",
+                TextFormat("%d", set.count + 1), "WEAPONS HELP / LOUD",
+                true, false);
+        } else {
+            int32_t exits = CcSimDungeonVisibleExitCount(sim);
+            for (int32_t i = 0; i < exits; ++i) {
+                int32_t target = CcSimDungeonVisibleExitAt(sim, i);
+                if (target < 0 || target >= dungeon->room_count) continue;
+                const CcDungeonRoom *next = &dungeon->rooms[target];
+                bool known = (next->state_flags &
+                              CC_DUNGEON_ROOM_DISCOVERED) != 0U;
+                int32_t action_index = set.count;
+                AddDetailedContextAction(
+                    &set, CONTEXT_ACTION_DUNGEON_MOVE,
+                    known ? next->name : "Unmapped passage",
+                    TextFormat("%d", set.count + 1),
+                    known ? TextFormat("DEPTH %d / %s", next->depth,
+                                       CcDungeonRoomKindName(next->kind)) :
+                            "ONE DUNGEON TURN",
+                    expedition->strain < 100, false);
+                if (set.count > action_index) {
+                    set.items[action_index].amount = target;
+                }
+            }
+            if ((room->state_flags & CC_DUNGEON_ROOM_SEARCHED) == 0U) {
+                AddDetailedContextAction(
+                    &set, CONTEXT_ACTION_DUNGEON_SEARCH, "Search chamber",
+                    TextFormat("%d", set.count + 1),
+                    "NOISY / MAY REVEAL PASSAGES", true, false);
+            }
+            int32_t shortcut = CcSimDungeonOpenableShortcut(sim);
+            if (shortcut >= 0) {
+                int32_t action_index = set.count;
+                AddDetailedContextAction(
+                    &set, CONTEXT_ACTION_DUNGEON_OPEN_SHORTCUT,
+                    "Open freight shortcut",
+                    TextFormat("%d", set.count + 1),
+                    sim->player.cargo[CC_GOOD_TOOLS] > 0 ?
+                        "1 TOOLS / TWO TURNS / LOUD" : "NEEDS 1 TOOLS",
+                    sim->player.cargo[CC_GOOD_TOOLS] > 0, false);
+                if (set.count > action_index) {
+                    set.items[action_index].amount = shortcut;
+                }
+            }
+        }
+        AddDetailedContextAction(
+            &set, CONTEXT_ACTION_DUNGEON_RETREAT,
+            room->depth == 0 ? "Return to carriage" : "Flee to carriage",
+            "ESC", room->depth == 0 ? "SAFE WITHDRAWAL" :
+                                       "RISK CARGO + STRAIN",
+            true, false);
         return set;
     }
     if (view == VIEW_DRAGON_CAVE) {
@@ -2488,8 +2694,43 @@ static ContextActionSet BuildContextActions(
             if (local->site_kind == CC_LOCAL_SITE_DUNGEON) {
                 AddDetailedContextAction(
                     &set, CONTEXT_ACTION_EXPEDITION,
-                    "Mount expedition", "E", "COMMITS ONE DAY", true,
-                    false);
+                    "Enter the Underroad", "E", "BRING FOOD / LIGHT 18",
+                    sim->player.cargo[CC_GOOD_FOOD] > 0, false);
+                const CcDungeon *dungeon = DungeonAtSettlement(
+                    sim, sim->player.location_id);
+                if (dungeon != NULL &&
+                    CcSimDungeonOutcomeAvailable(
+                        dungeon, CC_DUNGEON_PUBLIC_ROUTE) &&
+                    dungeon->state != CC_DUNGEON_PUBLIC_ROUTE) {
+                    AddDetailedContextAction(
+                        &set, CONTEXT_ACTION_DUNGEON_PUBLIC_ROUTE,
+                        "Publish freight road", "",
+                        "2 TOOLS / 12 CROWNS",
+                        sim->player.cargo[CC_GOOD_TOOLS] >= 2 &&
+                            sim->player.coins >= 12,
+                        false);
+                }
+                if (dungeon != NULL &&
+                    CcSimDungeonOutcomeAvailable(
+                        dungeon, CC_DUNGEON_SMUGGLER_ROUTE) &&
+                    dungeon->state != CC_DUNGEON_SMUGGLER_ROUTE) {
+                    AddDetailedContextAction(
+                        &set, CONTEXT_ACTION_DUNGEON_SMUGGLER_ROUTE,
+                        "Sell the Night Road", "",
+                        "1 TOOLS / 6 CROWNS",
+                        sim->player.cargo[CC_GOOD_TOOLS] >= 1 &&
+                            sim->player.coins >= 6,
+                        false);
+                }
+                if (dungeon != NULL &&
+                    CcSimDungeonOutcomeAvailable(
+                        dungeon, CC_DUNGEON_RESEALED) &&
+                    dungeon->state != CC_DUNGEON_RESEALED) {
+                    AddDetailedContextAction(
+                        &set, CONTEXT_ACTION_DUNGEON_RESEAL,
+                        "Reseal the Underroad", "", "3 TOOLS",
+                        sim->player.cargo[CC_GOOD_TOOLS] >= 3, false);
+                }
             } else if (local->site_kind == CC_LOCAL_SITE_GOBLIN_CAVE) {
                 AddDetailedContextAction(
                     &set, CONTEXT_ACTION_TRAVEL_DRAGON_SITE,
@@ -2609,7 +2850,10 @@ static Color ContextActionColor(ContextActionKind kind)
         kind == CONTEXT_ACTION_RAISE_ALARM ||
         kind == CONTEXT_ACTION_WITHDRAW ||
         kind == CONTEXT_ACTION_STEAL_DRAGON_CROWNS ||
-        kind == CONTEXT_ACTION_STEAL_DRAGON_RELIC) return DANGER;
+        kind == CONTEXT_ACTION_STEAL_DRAGON_RELIC ||
+        kind == CONTEXT_ACTION_DUNGEON_FORCE ||
+        kind == CONTEXT_ACTION_DUNGEON_RETREAT ||
+        kind == CONTEXT_ACTION_DUNGEON_RESEAL) return DANGER;
     if (kind == CONTEXT_ACTION_ACCEPT_PROMISE ||
         kind == CONTEXT_ACTION_TRAVEL ||
         kind == CONTEXT_ACTION_SKIP_TRAVEL ||
@@ -2625,7 +2869,11 @@ static Color ContextActionColor(ContextActionKind kind)
         kind == CONTEXT_ACTION_OPEN_MAP ||
         kind == CONTEXT_ACTION_TRAVEL_DRAGON_SITE ||
         kind == CONTEXT_ACTION_TALK_JORY ||
-        kind == CONTEXT_ACTION_MEET_MARA) return TEAL;
+        kind == CONTEXT_ACTION_MEET_MARA ||
+        kind == CONTEXT_ACTION_DUNGEON_MOVE ||
+        kind == CONTEXT_ACTION_DUNGEON_PARLEY ||
+        kind == CONTEXT_ACTION_DUNGEON_OPEN_SHORTCUT ||
+        kind == CONTEXT_ACTION_DUNGEON_PUBLIC_ROUTE) return TEAL;
     if (kind == CONTEXT_ACTION_SELECT_TARGET) return DANGER;
     if (kind == CONTEXT_ACTION_BASIC_STRIKE ||
         kind == CONTEXT_ACTION_TOGGLE_GUARD) return CC_GOLD;
@@ -3853,6 +4101,26 @@ static bool ApplyCommand(CcJournal *journal, CcSim *sim, CcCommand command,
         case CC_COMMAND_TRAVERSE_GOBLIN_TUNNEL:
             confirmation = "The goblin tunnel is behind you.";
             break;
+        case CC_COMMAND_BEGIN_DUNGEON_EXPEDITION:
+            confirmation = "The company enters the Underroad.";
+            break;
+        case CC_COMMAND_MOVE_DUNGEON:
+            confirmation = "One dungeon turn passes.";
+            break;
+        case CC_COMMAND_SEARCH_DUNGEON:
+            confirmation = "The chamber is searched.";
+            break;
+        case CC_COMMAND_OPEN_DUNGEON_SHORTCUT:
+            confirmation = "The shortcut will remain open.";
+            break;
+        case CC_COMMAND_RESOLVE_DUNGEON_ENCOUNTER:
+            confirmation = sim->dungeon_expedition.encounter_kind ==
+                    CC_DUNGEON_ENCOUNTER_NONE ?
+                "The way is clear." : "The encounter is not settled.";
+            break;
+        case CC_COMMAND_RETREAT_DUNGEON:
+            confirmation = "The company reaches the carriage.";
+            break;
         default: break;
     }
     (void)snprintf(message, message_capacity, "%s", confirmation);
@@ -4424,30 +4692,21 @@ static void DrawGameplayReelQuestComplete(const GameplayReelState *reel)
                       Fade(INK, opacity));
 }
 
-static void HandleExpedition(CcJournal *journal, CcSim *sim,
+static bool HandleExpedition(CcJournal *journal, CcSim *sim,
                              const CcDungeon *dungeon,
                              char *message, size_t message_capacity)
 {
-    if (dungeon == NULL) return;
-    CcDungeonState next = dungeon->state == CC_DUNGEON_DISTURBED ?
-                          CC_DUNGEON_EXPLORED :
-                          dungeon->state == CC_DUNGEON_EXPLORED ?
-                          CC_DUNGEON_PUBLIC_ROUTE : CC_DUNGEON_RESEALED;
+    if (dungeon == NULL) return false;
     CcCommand expedition = {
-        .kind = CC_COMMAND_CHANGE_DUNGEON,
-        .target_id = dungeon->id,
-        .dungeon_state = next
+        .kind = CC_COMMAND_BEGIN_DUNGEON_EXPEDITION,
+        .target_id = dungeon->id
     };
     if (!ApplyCommand(journal, sim, expedition, message, message_capacity)) {
-        return;
+        return false;
     }
-    char error[256];
-    bool advanced = journal != NULL ?
-        CcJournalAdvanceDays(journal, sim, 1, error, sizeof(error)) :
-        (CcSimAdvanceDays(sim, 1), true);
-    (void)snprintf(message, message_capacity, "%s",
-                   advanced ? "Expedition completed. One day passed." :
-                              error);
+    (void)snprintf(message, message_capacity,
+                   "The company enters the Underroad. Light is burning.");
+    return true;
 }
 
 static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
@@ -4506,6 +4765,56 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             *view = VIEW_LOCAL;
             (void)snprintf(message, message_capacity,
                            "Walk to the captain and hear the demand.");
+        }
+        return;
+    }
+    if (*view == VIEW_DUNGEON) {
+        if (!sim->dungeon_expedition.active) {
+            *view = VIEW_LOCAL;
+            return;
+        }
+        ContextActionSet dungeon_actions = BuildContextActions(
+            sim, local, *view, *selected, *selected_situation);
+        if (context_action == CONTEXT_ACTION_NONE) {
+            for (int32_t i = 0; i < dungeon_actions.count && i < 8; ++i) {
+                if (dungeon_actions.items[i].enabled &&
+                    ClientKeyPressed(KEY_ONE + i)) {
+                    pressed_action = dungeon_actions.items[i];
+                    context_action = pressed_action.kind;
+                    break;
+                }
+            }
+        }
+        if (ClientKeyPressed(KEY_ESCAPE)) {
+            context_action = CONTEXT_ACTION_DUNGEON_RETREAT;
+        }
+        CcCommand dungeon_command = {0};
+        if (context_action == CONTEXT_ACTION_DUNGEON_MOVE) {
+            dungeon_command.kind = CC_COMMAND_MOVE_DUNGEON;
+            dungeon_command.amount = pressed_action.amount;
+        } else if (context_action == CONTEXT_ACTION_DUNGEON_SEARCH) {
+            dungeon_command.kind = CC_COMMAND_SEARCH_DUNGEON;
+        } else if (context_action ==
+                   CONTEXT_ACTION_DUNGEON_OPEN_SHORTCUT) {
+            dungeon_command.kind = CC_COMMAND_OPEN_DUNGEON_SHORTCUT;
+            dungeon_command.amount = pressed_action.amount;
+        } else if (context_action == CONTEXT_ACTION_DUNGEON_PARLEY) {
+            dungeon_command.kind = CC_COMMAND_RESOLVE_DUNGEON_ENCOUNTER;
+            dungeon_command.amount = CC_DUNGEON_APPROACH_PARLEY;
+        } else if (context_action == CONTEXT_ACTION_DUNGEON_EVADE) {
+            dungeon_command.kind = CC_COMMAND_RESOLVE_DUNGEON_ENCOUNTER;
+            dungeon_command.amount = CC_DUNGEON_APPROACH_EVADE;
+        } else if (context_action == CONTEXT_ACTION_DUNGEON_FORCE) {
+            dungeon_command.kind = CC_COMMAND_RESOLVE_DUNGEON_ENCOUNTER;
+            dungeon_command.amount = CC_DUNGEON_APPROACH_FORCE;
+        } else if (context_action == CONTEXT_ACTION_DUNGEON_RETREAT) {
+            dungeon_command.kind = CC_COMMAND_RETREAT_DUNGEON;
+        }
+        if (dungeon_command.kind != CC_COMMAND_NONE &&
+            ApplyCommand(*journal, sim, dungeon_command,
+                         message, message_capacity)) {
+            *selected = 0;
+            if (!sim->dungeon_expedition.active) *view = VIEW_LOCAL;
         }
         return;
     }
@@ -5603,17 +5912,38 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             return;
         }
         const CcDungeon *dungeon = DungeonAtSettlement(sim, sim->player.location_id);
-        if (!local->market_interior &&
-            local->site_kind == CC_LOCAL_SITE_DUNGEON && dungeon != NULL &&
-            CcClientInteractionActivated(
-                ClientKeyPressed(KEY_E) ||
-                    context_action == CONTEXT_ACTION_EXPEDITION,
-                GridDistance(position,
-                             (Vector2){CC_LOCAL_SITE_ENTRANCE_X,
-                                       CC_LOCAL_SITE_ENTRANCE_Z}),
-                2.25f)) {
-            HandleExpedition(*journal, sim, dungeon, message,
-                             message_capacity);
+        if (!local->market_interior && dungeon != NULL &&
+            local->site_kind == CC_LOCAL_SITE_DUNGEON &&
+            GridDistance(position,
+                         (Vector2){CC_LOCAL_SITE_ENTRANCE_X,
+                                   CC_LOCAL_SITE_ENTRANCE_Z}) < 2.25f) {
+            CcDungeonState outcome = CC_DUNGEON_DISTURBED;
+            if (context_action == CONTEXT_ACTION_DUNGEON_PUBLIC_ROUTE) {
+                outcome = CC_DUNGEON_PUBLIC_ROUTE;
+            } else if (context_action ==
+                       CONTEXT_ACTION_DUNGEON_SMUGGLER_ROUTE) {
+                outcome = CC_DUNGEON_SMUGGLER_ROUTE;
+            } else if (context_action == CONTEXT_ACTION_DUNGEON_RESEAL) {
+                outcome = CC_DUNGEON_RESEALED;
+            }
+            if (outcome != CC_DUNGEON_DISTURBED) {
+                CcCommand decide = {
+                    .kind = CC_COMMAND_CHANGE_DUNGEON,
+                    .target_id = dungeon->id,
+                    .dungeon_state = outcome
+                };
+                (void)ApplyCommand(*journal, sim, decide, message,
+                                   message_capacity);
+                return;
+            }
+            if (ClientKeyPressed(KEY_E) ||
+                context_action == CONTEXT_ACTION_EXPEDITION) {
+                if (HandleExpedition(*journal, sim, dungeon, message,
+                                     message_capacity)) {
+                    *selected = 0;
+                    *view = VIEW_DUNGEON;
+                }
+            }
         }
         return;
     }
@@ -5940,6 +6270,8 @@ int main(int argc, char **argv)
     }
     bool capture_dragon_cave = argc >= 2 &&
         strcmp(argv[1], "--capture-dragon-cave") == 0;
+    bool capture_underroad = argc >= 2 &&
+        strcmp(argv[1], "--capture-underroad") == 0;
     bool capture_atmosphere = argc >= 2 &&
         strcmp(argv[1], "--capture-atmosphere") == 0;
     CcLocalAtmospherePreset capture_atmosphere_preset =
@@ -6080,7 +6412,7 @@ int main(int argc, char **argv)
                     capture_parley ||
                     capture_aftermath || capture_golden || capture_town ||
                     capture_town_arrival ||
-                    capture_dragon_cave ||
+                    capture_dragon_cave || capture_underroad ||
                     capture_atmosphere || capture_face ||
                     capture_room || capture_npc_review ||
                     capture_creature_media);
@@ -6291,6 +6623,35 @@ int main(int argc, char **argv)
             }
         }
     }
+    if (capture_underroad && sim.dungeon_count > 0) {
+        sim.player.location_id = sim.dungeons[0].settlement_id;
+        sim.carriage.location_id = sim.player.location_id;
+        sim.player.cargo[CC_GOOD_FOOD] = 6;
+        sim.player.cargo[CC_GOOD_TOOLS] = 2;
+        sim.player.cargo[CC_GOOD_WEAPONS] = 1;
+        CcCommand enter = {
+            .kind = CC_COMMAND_BEGIN_DUNGEON_EXPEDITION,
+            .target_id = sim.dungeons[0].id
+        };
+        char setup_error[192];
+        (void)CcSimApply(&sim, &enter, setup_error, sizeof(setup_error));
+        for (int32_t room = 0; room <= 11; ++room) {
+            sim.dungeons[0].rooms[room].state_flags |=
+                CC_DUNGEON_ROOM_DISCOVERED;
+        }
+        sim.dungeons[0].links[29].flags |= CC_DUNGEON_LINK_DISCOVERED;
+        sim.dungeon_expedition.current_room = 9;
+        sim.dungeon_expedition.turns_elapsed = 8;
+        sim.dungeon_expedition.days_elapsed = 1;
+        sim.dungeon_expedition.light_remaining = 10;
+        sim.dungeon_expedition.noise = 3;
+        sim.dungeon_expedition.strain = 28;
+        sim.dungeon_expedition.maximum_depth = 2;
+        sim.dungeon_expedition.encounter_kind =
+            CC_DUNGEON_ENCOUNTER_TITHE_KEEPERS;
+        sim.dungeon_expedition.encounter_reaction = 6;
+        sim.dungeon_expedition.encounter_room = 9;
+    }
     int32_t selected = capture_dragon_hoard_map ? CC_MAP_DRAGON_HOARD :
         capture_map_case ? CC_MAP_GLOAMGATE_NIGHT_ROAD :
         FirstOutgoingRouteIndex(&sim);
@@ -6298,6 +6659,7 @@ int main(int argc, char **argv)
     ClientView view = capture_board ? VIEW_SITUATIONS :
                       capture_character ? VIEW_CHARACTER :
                       capture_encounter ? VIEW_ENCOUNTER :
+                      capture_underroad ? VIEW_DUNGEON :
                       capture_dragon_cave ? VIEW_DRAGON_CAVE :
                       capture_road_fork ? VIEW_ROADS :
                       (capture_map_case || capture_dragon_hoard_map) ?
@@ -6323,6 +6685,13 @@ int main(int argc, char **argv)
         local.agent.world_target = CC_LOCAL_WORLD_TARGET_CARRIAGE;
         local.course.alarm_countdown = 1000.0f;
     }
+    if (capture_underroad) {
+        local.site_kind = CC_LOCAL_SITE_DUNGEON;
+        RepositionHero(
+            &local,
+            (Vector2){CC_LOCAL_SITE_ENTRANCE_X - 3.0f,
+                      CC_LOCAL_SITE_ENTRANCE_Z}, false);
+    }
     if (capture_carriage_target) {
         (void)CcLocalAgentApproachWorldTarget(
             &local.agent, CC_LOCAL_WORLD_TARGET_CARRIAGE);
@@ -6343,7 +6712,15 @@ int main(int argc, char **argv)
                        "Campaign resumed where you left off.");
         view = VIEW_LOCAL;
     }
+    if (!capture && sim.dungeon_expedition.active) {
+        local.site_kind = CC_LOCAL_SITE_DUNGEON;
+        return_view = VIEW_LOCAL;
+        view = VIEW_DUNGEON;
+        (void)snprintf(startup_message, sizeof(startup_message),
+                       "The saved expedition resumes below the mine.");
+    }
     if (!capture && !sim.journey.active &&
+        !sim.dungeon_expedition.active &&
         sim.player.location_id == sim.dragon.lair_settlement_id &&
         sim.carriage.location_id == sim.goblins.lair_settlement_id) {
         if (local.site_kind != CC_LOCAL_SITE_DRAGON_CAVE) {
@@ -6834,6 +7211,10 @@ int main(int argc, char **argv)
             CcOverlayFlush();
             DrawJourneyEncounter(&sim);
         }
+        if (view == VIEW_DUNGEON) {
+            CcOverlayFlush();
+            DrawDungeonPanel(&sim);
+        }
         if (view == VIEW_DRAGON_CAVE) {
             CcOverlayFlush();
             DrawDragonCavePanel(&sim);
@@ -6847,6 +7228,7 @@ int main(int argc, char **argv)
                                   selected_situation);
         }
         if (!capture_npc_review && view != VIEW_DRAGON_CAVE &&
+            view != VIEW_DUNGEON &&
             view != VIEW_CARRIAGE && view != VIEW_CHARACTER) {
             DrawCommandBar(view, &local);
         }
