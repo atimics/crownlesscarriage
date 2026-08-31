@@ -18,97 +18,97 @@ enum {
 static const CcStoryLineTemplate STORY_LINES[] = {
     STORY_LINE(
         "empty_granary.mara.offer",
-        "Eight sacks for Silverwick. The guild store gets every one. Eighteen crowns on delivery.",
+        "I can spare eight sacks of flour for Silverwick. Deliver them to the merchants' storehouse.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_RELIEF_DELIVERY, "Mara Venn"),
     STORY_LINE(
         "empty_granary.mara.heard",
-        "Alderwatch closed the bridge. I wrote three letters. The chain is still there.",
+        "Alderwatch closed the bridge. I sent three letters. They never answered.",
         CC_STORY_BEAT_HEARD, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_RELIEF_DELIVERY, "Mara Venn"),
     STORY_LINE(
         "empty_granary.mara.promised",
-        "All right. Buy the food here and check the count before you leave.",
+        "Good. Count all eight sacks before you leave. I will prepare the delivery papers.",
         CC_STORY_BEAT_PROMISED, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_RELIEF_DELIVERY, "Mara Venn"),
     STORY_LINE(
         "empty_granary.mara.helped",
-        "Silverwick returned my receipt. Eight seals. None from the public ovens.",
+        "Silverwick sent back the receipt. All eight sacks reached the merchants. The bakery got none.",
         CC_STORY_BEAT_HELPED, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_RELIEF_DELIVERY, "Mara Venn"),
     STORY_LINE(
         "empty_granary.tomas.offer",
-        "Ask for the foxfire supper. No soldiers, no inspection. Eight sacks. Better pay.",
+        "Take eight sacks to the hungry miners by the old road. No soldiers. No inspections. Better pay.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_BLACK_MARKET_DELIVERY, "Tomas Rill"),
     STORY_LINE(
         "empty_granary.tomas.heard",
-        "Take the old mine road after dark. Hood the lamps when you see the levy post.",
+        "Leave after dark. Cover the lamps when you pass the tax patrol.",
         CC_STORY_BEAT_HEARD, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_BLACK_MARKET_DELIVERY, "Tomas Rill"),
     STORY_LINE(
         "empty_granary.tomas.promised",
-        "No passengers. No stops. At the fox lanterns, ask for the foxfire supper.",
+        "No passengers. No stops. My sister will meet you under the fox lanterns.",
         CC_STORY_BEAT_PROMISED, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_BLACK_MARKET_DELIVERY, "Tomas Rill"),
     STORY_LINE(
         "empty_granary.tomas.helped",
-        "The flour arrived. My sister says you drive like a thief. From her, that is praise.",
+        "The flour arrived. My sister says you drive like a thief. She meant it kindly.",
         CC_STORY_BEAT_HELPED, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_BLACK_MARKET_DELIVERY, "Tomas Rill"),
     STORY_LINE(
         "treaty_bridge.ilyra.offer",
-        "The winch works. My orders say the chain stays up.",
+        "The bridge works. I was ordered to keep the gate closed.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_ROUTE_REPAIR, "Ilyra Senn"),
     STORY_LINE(
         "treaty_bridge.ilyra.heard",
-        "Alderwatch is hungry too. Open that gate and I answer for every sack that crosses.",
+        "Alderwatch is hungry too. If I open the gate, I am responsible for every sack that crosses.",
         CC_STORY_BEAT_HEARD, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_ROUTE_REPAIR, "Ilyra Senn"),
     STORY_LINE(
         "treaty_bridge.ilyra.promised",
-        "Bring two tool crates. My bridge keeper can make a very loud repair.",
+        "Bring two crates of tools. My crew will pretend the bridge needs repairs.",
         CC_STORY_BEAT_PROMISED, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_ROUTE_REPAIR, "Ilyra Senn"),
     STORY_LINE(
         "treaty_bridge.ilyra.helped",
-        "The bridge defeated me in honourable combat. That is what my report says.",
+        "I cut the gate chain myself. My report says the bridge machinery failed.",
         CC_STORY_BEAT_HELPED, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_ROUTE_REPAIR, "Ilyra Senn"),
     STORY_LINE(
         "lower_silverworks.jory.offer",
-        "We heard three knocks below the old seal. Then all twelve pit lamps went out.",
+        "We heard three knocks behind the bricked-up tunnel. Then every lamp went out.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_MONSTER_EXPEDITION, "Jory Fen"),
     STORY_LINE(
         "lower_silverworks.jory.heard",
-        "The night crew found fresh cuts in the props. No tool marks. We locked the lower gate.",
+        "The night crew found cuts in the wooden supports. No axe or saw marks. We locked the gate.",
         CC_STORY_BEAT_HEARD, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_MONSTER_EXPEDITION, "Jory Fen"),
     STORY_LINE(
         "lower_silverworks.jory.promised",
-        "I'll mark the safe turns. If you hear singing, don't answer with your own name.",
+        "I'll show you the safe tunnels. If you hear a voice in the dark, don't tell it your name.",
         CC_STORY_BEAT_PROMISED, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_MONSTER_EXPEDITION, "Jory Fen"),
     STORY_LINE(
         "lower_silverworks.jory.helped",
-        "Morning shift brought up a full cart. The stonebacks returned three lost wedding rings.",
+        "The morning shift came back with a full ore cart. Three missing wedding rings lay on top.",
         CC_STORY_BEAT_HELPED, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_MONSTER_EXPEDITION, "Jory Fen"),
     STORY_LINE(
         "empty_granary.jory.offer",
-        "The company store stopped selling flour yesterday. My mother is on the morning shift.",
+        "The mine owners stopped selling flour yesterday. My mother went to work without breakfast.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_RELIEF_DELIVERY, "Jory Fen"),
     STORY_LINE(
         "empty_granary.jory.heard",
-        "The foreman promises a convoy every morning. By supper, he calls it tomorrow's convoy.",
+        "The foreman promises a food wagon every morning. By supper, he calls it tomorrow's wagon.",
         CC_STORY_BEAT_HEARD, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_RELIEF_DELIVERY, "Jory Fen"),
     STORY_LINE(
         "empty_granary.jory.promised",
-        "Bring it to the public ovens. The guild can count sacks after people eat.",
+        "Take the flour to the town ovens. Feed people before the merchants count the sacks.",
         CC_STORY_BEAT_PROMISED, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_RELIEF_DELIVERY, "Jory Fen"),
     STORY_LINE(
@@ -118,38 +118,38 @@ static const CcStoryLineTemplate STORY_LINES[] = {
         CC_SITUATION_RELIEF_DELIVERY, "Jory Fen"),
     STORY_LINE(
         "empty_granary.nell.offer",
-        "I have three grains. Not even enough for a mouse's sandwich. I counted.",
+        "A full grain wagon left before sunrise. These three grains fell off. It was all we got.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_RELIEF_DELIVERY, "Nell Varo"),
     STORY_LINE(
         "empty_granary.nell.heard",
-        "They fell from a king's wagon. It went east full and came back empty.",
+        "The wagon belonged to the king. It went east full and came back empty.",
         CC_STORY_BEAT_HEARD, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_RELIEF_DELIVERY, "Nell Varo"),
     STORY_LINE(
         "empty_granary.nell.promised",
-        "I'll wait by the ovens. I know which bell rings before the morning shift.",
+        "I'll wait outside the bakery. The first bell rings before my mother's shift.",
         CC_STORY_BEAT_PROMISED, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_RELIEF_DELIVERY, "Nell Varo"),
     STORY_LINE(
         "empty_granary.nell.helped",
-        "Mama had bread this morning. I made her eat her half first.",
+        "Mama ate bread this morning. I made her eat her half first.",
         CC_STORY_BEAT_HELPED, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_RELIEF_DELIVERY, "Nell Varo"),
 
     STORY_LINE(
         "situation.relief.offer.sponsor",
-        "The town on the notice is below reserve. I can pay for one full relief load.",
+        "The town has less than a week's food left. I can pay for one full wagon.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_RELIEF_DELIVERY, NULL),
     STORY_LINE(
         "situation.relief.offer.affected",
-        "The market ran out yesterday. If you bring food, find us before the guild buyers do.",
+        "The market ran out of food yesterday. Bring it to us before the merchants buy it all.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_RELIEF_DELIVERY, NULL),
     STORY_LINE(
         "situation.repair.offer.sponsor",
-        "The gate crew can reopen the road. They need tools for the winch, or coin for the men.",
+        "The road crew can open the gate. They need tools for the bridge, or coin for the guards.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_ROUTE_REPAIR, NULL),
     STORY_LINE(
@@ -159,32 +159,32 @@ static const CcStoryLineTemplate STORY_LINES[] = {
         CC_SITUATION_ROUTE_REPAIR, NULL),
     STORY_LINE(
         "situation.monster.offer.sponsor",
-        "The crews will not pass the old seal. Clear the lower route and I can put them back to work.",
+        "The workers will not pass the bricked-up tunnel. Clear the lower road and they can work again.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_MONSTER_EXPEDITION, NULL),
     STORY_LINE(
         "situation.monster.offer.affected",
-        "We heard movement behind the old seal. The shift boss sent us home and locked the gate.",
+        "We heard movement behind the bricked-up tunnel. The foreman sent us home and locked the gate.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_MONSTER_EXPEDITION, NULL),
     STORY_LINE(
         "situation.night_road.offer.sponsor",
-        "The patrol is turning away everyone named in the levy rolls. I need the food taken past them.",
+        "The tax patrol is turning away hungry families. I need you to take food past the guards.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_BLACK_MARKET_DELIVERY, NULL),
     STORY_LINE(
         "situation.night_road.offer.affected",
-        "We cannot use the public store. The levy clerk waits there with two guards.",
+        "We cannot use the town store. The tax collector waits there with two guards.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_BLACK_MARKET_DELIVERY, NULL),
     STORY_LINE(
         "situation.courier.offer.sponsor",
-        "These orders are sealed for the other court. If the wax is broken, they can refuse them.",
+        "This letter is for the king's court. If anyone opens it, the court can refuse it.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_COURIER_DELIVERY, NULL),
     STORY_LINE(
         "situation.courier.offer.affected",
-        "I was due at the next court yesterday. My horse will not make another crossing.",
+        "I should have reached the king's court yesterday. My horse cannot cross another mountain.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_COURIER_DELIVERY, NULL),
 
@@ -200,7 +200,7 @@ static const CcStoryLineTemplate STORY_LINES[] = {
         CC_STORY_ANY_SITUATION, NULL),
     STORY_LINE(
         "character.promised.sponsor",
-        "All right. I will put your company name on the charter.",
+        "All right. I will put your company name on the job papers.",
         CC_STORY_BEAT_PROMISED, CC_STORY_SPEAKER_SPONSOR,
         CC_STORY_ANY_SITUATION, NULL),
     STORY_LINE(
@@ -220,7 +220,7 @@ static const CcStoryLineTemplate STORY_LINES[] = {
         CC_STORY_ANY_SITUATION, NULL),
     STORY_LINE(
         "character.withdrew.sponsor",
-        "I had your name on the charter. Now I have to find another carrier.",
+        "I put your name on the job. Now I have to find another carrier.",
         CC_STORY_BEAT_WITHDREW, CC_STORY_SPEAKER_SPONSOR,
         CC_STORY_ANY_SITUATION, NULL),
     STORY_LINE(
@@ -379,7 +379,7 @@ const char *CcStoryPlayerChoiceText(CcSituationKind kind,
             case CC_SITUATION_BLACK_MARKET_DELIVERY:
                 return "2  I will make the delivery.";
             case CC_SITUATION_COURIER_DELIVERY:
-                return "2  I will carry the dispatch.";
+                return "2  I will carry the letter.";
         }
     }
     return "Continue.";
@@ -389,13 +389,13 @@ const char *CcStoryRoadCompanyLine(const CcBanditGroup *company)
 {
     if (company == NULL) return "Pay for the road or turn back.";
     if (strcmp(company->name, "The Unpaid Company") == 0) {
-        return "The crown owes us six months' pay. Today, you settle one day of it.";
+        return "The crown owes us six months' pay. Until it pays, travellers pay us.";
     }
     if (strcmp(company->name, "The Tallow Knives") == 0) {
-        return "Food or coin. Keep the speech.";
+        return "Food or coin. We have no use for speeches.";
     }
     if (strcmp(company->name, "The Broken Pennants") == 0) {
-        return "We guarded this road before they struck our colours. We still collect.";
+        return "We guarded this road until the crown dismissed us. We still collect.";
     }
     if (strcmp(company->name, "The Ditch Parliament") == 0) {
         return "We counted your guards. We counted your wheels. Now we're counting your coin.";
