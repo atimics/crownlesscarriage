@@ -4,8 +4,8 @@ _A branching Crownless storybook_
 
 ## The milestone with four faces
 
-It is never a good sign when the breakfast bell rings and no birds fly from
-the bakery roof.
+It is never a good sign when the first bell rings and no ravens fly from the
+bakery roof.
 
 Bracken heard it first. The old horse lifted one ear and stopped in the road.
 Morrow stopped beside him, because Morrow believed Bracken knew everything.
