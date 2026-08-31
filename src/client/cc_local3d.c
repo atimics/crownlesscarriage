@@ -9066,35 +9066,17 @@ static const StreetCameraShot *StreetCameraShotAt(int32_t shot)
                 active_place_function == CC_SETTLEMENT_CAPITAL)) {
         light = ART_LIGHT_RECOVERY_WARM;
     }
-    float offset_length = sqrtf(
-        scene->camera_offset_x * scene->camera_offset_x +
-        scene->camera_offset_z * scene->camera_offset_z);
-    if (offset_length < 0.01f) offset_length = 1.0f;
-    float stage_distance = close_scene ? 20.0f :
-        scene->kind == CC_LOCAL_TOWN_SCENE_LANDMARK ? 28.0f :
-        scene->kind == CC_LOCAL_TOWN_SCENE_ARRIVAL ? 26.0f : 24.0f;
-    float stage_height = close_scene ? 3.0f :
-        scene->kind == CC_LOCAL_TOWN_SCENE_LANDMARK ? 4.5f :
-        scene->kind == CC_LOCAL_TOWN_SCENE_ARRIVAL ? 3.8f : 3.4f;
-    Vector3 stage_offset = {
-        scene->camera_offset_x / offset_length * stage_distance,
-        stage_height,
-        scene->camera_offset_z / offset_length * stage_distance,
-    };
-    float stage_fovy = close_scene ? 13.5f :
-        scene->kind == CC_LOCAL_TOWN_SCENE_LANDMARK ? 17.0f :
-        scene->kind == CC_LOCAL_TOWN_SCENE_ARRIVAL ? 17.5f : 15.0f;
     composition = (StreetCameraShot){
         .trigger = {scene->trigger_x, scene->trigger_z},
         .target = {scene->target_x, scene->target_y, scene->target_z},
         .name = scene->name,
         .route_palette = (int32_t)scene->kind,
-        /* The authored records choose the side of each street. Runtime
-           framing lowers every shot to eye level and narrows it into one
-           playable storybook stage. Distance does not become a zoom in the
-           orthographic lens; it only keeps roofs out of the camera pitch. */
-        .camera_offset = stage_offset,
-        .fovy = stage_fovy,
+        /* Each authored record owns its physical lens height, street side,
+           and crop. Runtime terrain correction keeps that low lens at the
+           intended clearance without flattening every town into one view. */
+        .camera_offset = {scene->camera_offset_x, scene->camera_offset_y,
+                          scene->camera_offset_z},
+        .fovy = scene->fovy,
         .art = {
             {scene->target_x, scene->target_y, scene->target_z},
             {scene->kind == CC_LOCAL_TOWN_SCENE_ARRIVAL ? -1.0f :
@@ -9303,8 +9285,18 @@ Camera3D CcLocalStreetCameraInternal(const CcLocalAgent *agent, float clock,
     const StreetCameraShot *composition = StreetCameraShotAt(shot);
     Vector3 destination = composition->target;
     destination.y += CcLocalTerrainHeightAt(destination.x, destination.z);
+    Vector3 camera_offset = composition->camera_offset;
+    /* Walking records store lens clearance, not an aerial rise above a
+       distant target. Anchor the camera to the terrain under the physical
+       lens so a hilly town cannot bury it in a ridge or lift it back into an
+       isometric map view. */
+    float camera_x = destination.x + camera_offset.x;
+    float camera_z = destination.z + camera_offset.z;
+    float camera_ground = CcLocalTerrainHeightAt(camera_x, camera_z);
+    camera_offset.y = camera_ground + composition->camera_offset.y -
+                      destination.y;
     FixedCameraRigAim(&street_camera_rig, shot, destination,
-                      composition->camera_offset, composition->fovy,
+                      camera_offset, composition->fovy,
                       clock, advance);
     Camera3D camera = ExteriorCameraComposed(
         street_camera_rig.displayed_target,
@@ -9325,6 +9317,39 @@ Camera3D CcLocalStreetCameraInternal(const CcLocalAgent *agent, float clock,
 static Camera3D TownArrivalCamera(const CcLocalConvoyState *convoy,
                                   int32_t art_height)
 {
+    typedef struct TownTravelCamera {
+        float target_height;
+        Vector3 offset;
+    } TownTravelCamera;
+    TownTravelCamera travel = {
+        .target_height = 2.0f,
+        .offset = {-25.0f, 15.0f, 38.0f},
+    };
+    switch (active_place_function) {
+        case CC_SETTLEMENT_FARMING:
+            travel = (TownTravelCamera){
+                1.8f, {-24.0f, 15.0f, 36.0f}};
+            break;
+        case CC_SETTLEMENT_MINING:
+            travel = (TownTravelCamera){
+                2.5f, {-25.0f, 13.0f, 36.0f}};
+            break;
+        case CC_SETTLEMENT_FORTRESS:
+            travel = (TownTravelCamera){
+                2.8f, {24.0f, 14.0f, 35.0f}};
+            break;
+        case CC_SETTLEMENT_CAPITAL:
+            travel = (TownTravelCamera){
+                3.4f, {-28.0f, 18.0f, 40.0f}};
+            break;
+        case CC_SETTLEMENT_DUNGEON_TOWN:
+            travel = (TownTravelCamera){
+                1.8f, {-23.0f, 13.0f, 36.0f}};
+            break;
+        case CC_SETTLEMENT_MARKET:
+        default:
+            break;
+    }
     const CcLocalTownScene *arrival = CcLocalTownSceneAt(
         active_place_function, CC_LOCAL_TOWN_SCENE_ARRIVAL);
     if (convoy == NULL || arrival == NULL) {
@@ -9347,15 +9372,11 @@ static Camera3D TownArrivalCamera(const CcLocalConvoyState *convoy,
                               (Vector3){0.0f, 5.2f, 0.0f})));
     Vector3 wide_target = {
         arrival->target_x,
-        arrival->target_y + CcLocalTerrainHeightAt(
+        travel.target_height + CcLocalTerrainHeightAt(
             arrival->target_x, arrival->target_z),
         arrival->target_z,
     };
-    Vector3 wide_position = Vector3Add(
-        wide_target,
-        (Vector3){arrival->camera_offset_x,
-                  arrival->camera_offset_y,
-                  arrival->camera_offset_z});
+    Vector3 wide_position = Vector3Add(wide_target, travel.offset);
     float pull_out = SmoothStep01(
         (convoy->phase_progress - 0.08f) / 0.78f);
     Camera3D camera = {
@@ -16425,127 +16446,227 @@ static void DrawDungeonTerrainStage(Vector3 focus)
     }
 }
 
-static void DrawBackdropHill(float x, float z, float lower_radius,
-                             float upper_radius, float height,
+static void DrawBackdropMass(float x, float base_y, float z,
+                             float radius_x, float radius_z,
+                             float upper_ratio, float height,
                              int32_t sides, Color color)
 {
-    DrawCylinder((Vector3){x, -3.4f, z}, upper_radius, lower_radius,
+    /* A scaled low-poly cone gives the horizon long shoulders instead of a
+       row of equal round hills. Backdrop geometry is deliberately outside
+       navigation and collision; its size is purely compositional. */
+    rlPushMatrix();
+    rlTranslatef(x, base_y, z);
+    rlScalef(radius_x, 1.0f, radius_z);
+    DrawCylinder((Vector3){0.0f, 0.0f, 0.0f}, upper_ratio, 1.0f,
                  height, sides, color);
+    rlPopMatrix();
+}
+
+static void DrawBackdropPeak(float x, float base_y, float z,
+                             float radius_x, float radius_z,
+                             float height, int32_t sides,
+                             Color body, Color face)
+{
+    DrawBackdropMass(x, base_y, z, radius_x, radius_z, 0.24f,
+                     height, sides, body);
+    DrawBackdropMass(x - radius_x * 0.10f,
+                     base_y + height * 0.47f,
+                     z + radius_z * 0.02f,
+                     radius_x * 0.54f, radius_z * 0.58f, 0.05f,
+                     height * 0.56f, sides > 5 ? sides - 1 : sides,
+                     face);
+}
+
+static void DrawBackdropTower(float x, float base_y, float z,
+                              float width, float height,
+                              Color stone, Color roof)
+{
+    DrawCubeV((Vector3){x, base_y + height * 0.5f, z},
+              (Vector3){width, height, width}, stone);
+    DrawCylinder((Vector3){x, base_y + height, z},
+                 0.04f, width * 0.82f, width * 0.72f, 6, roof);
+}
+
+static void DrawBackdropWall(float start_x, float finish_x, float base_y,
+                             float z, float height, int32_t tower_count,
+                             Color stone, Color roof)
+{
+    float width = finish_x - start_x;
+    DrawCubeV((Vector3){start_x + width * 0.5f,
+                        base_y + height * 0.42f, z},
+              (Vector3){width, height * 0.84f, 0.72f}, stone);
+    for (int32_t tower = 0; tower < tower_count; ++tower) {
+        float amount = tower_count > 1 ?
+            (float)tower / (float)(tower_count - 1) : 0.5f;
+        DrawBackdropTower(start_x + width * amount, base_y, z,
+                          1.35f, height * 1.46f, stone, roof);
+    }
+}
+
+static void DrawFarmingBackdrop(void)
+{
+    Color far = BlendColor(WORLD_GRASS_SHADOW, WORLD_INK, 0.62f);
+    Color far_face = BlendColor(far, WORLD_STONE_SHADOW, 0.20f);
+    Color middle = BlendColor(WORLD_GRASS, WORLD_STONE_SHADOW, 0.58f);
+    for (int32_t peak = 0; peak < 7; ++peak) {
+        float height = 31.0f + (float)((peak * 7) % 13);
+        DrawBackdropPeak(-72.0f + (float)peak * 46.0f,
+                         -48.0f - height,
+                         -132.0f + (float)(peak % 2) * 9.0f,
+                         45.0f, 31.0f, height, 11,
+                         far, far_face);
+    }
+    for (int32_t shoulder = 0; shoulder < 7; ++shoulder) {
+        float height = 17.0f + (float)(shoulder % 3) * 3.0f;
+        DrawBackdropMass(-48.0f + (float)shoulder * 37.0f,
+                         -25.0f - height,
+                         -68.0f + (float)(shoulder % 2) * 4.0f,
+                         31.0f, 18.0f, 0.56f, height,
+                         12, middle);
+    }
+}
+
+static void DrawMiningBackdrop(void)
+{
+    Color far = BlendColor(WORLD_METAL_SHADOW, WORLD_INK, 0.52f);
+    Color far_face = BlendColor(WORLD_STONE, WORLD_INK, 0.56f);
+    Color middle = BlendColor(WORLD_STONE_SHADOW,
+                              WORLD_METAL_SHADOW, 0.48f);
+    for (int32_t peak = 0; peak < 8; ++peak) {
+        float height = 61.0f + (float)((peak * 13) % 31);
+        DrawBackdropPeak(-70.0f + (float)peak * 39.0f,
+                         -49.0f - height,
+                         -138.0f + (float)(peak % 3) * 8.0f,
+                         35.0f, 25.0f, height, 6,
+                         far, far_face);
+    }
+    for (int32_t shelf = 0; shelf < 6; ++shelf) {
+        float height = 27.0f + (float)(shelf % 3) * 4.0f;
+        DrawBackdropMass(-45.0f + (float)shelf * 45.0f,
+                         -26.0f - height,
+                         -76.0f + (float)(shelf % 2) * 5.0f,
+                         40.0f, 19.0f, 0.64f, height,
+                         7, middle);
+    }
+}
+
+static void DrawMarketBackdrop(void)
+{
+    Color far = BlendColor(WORLD_VIOLET, WORLD_INK, 0.76f);
+    Color far_face = BlendColor(far, WORLD_STONE_SHADOW, 0.24f);
+    Color middle = BlendColor(WORLD_STONE, WORLD_INK, 0.54f);
+    for (int32_t peak = 0; peak < 7; ++peak) {
+        float height = 38.0f + (float)((peak * 5) % 16);
+        DrawBackdropPeak(-68.0f + (float)peak * 46.0f,
+                         -48.0f - height,
+                         -136.0f + (float)(peak % 2) * 7.0f,
+                         43.0f, 27.0f,
+                         height, 9,
+                         far, far_face);
+    }
+    for (int32_t basin = 0; basin < 6; ++basin) {
+        float height = 22.0f + (float)(basin % 3) * 3.0f;
+        DrawBackdropMass(-42.0f + (float)basin * 44.0f,
+                         -25.0f - height,
+                         -72.0f + (float)(basin % 2) * 4.0f,
+                         38.0f, 20.0f, 0.62f, height,
+                         10, middle);
+    }
+}
+
+static void DrawFortressBackdrop(void)
+{
+    Color far = BlendColor(WORLD_STONE_SHADOW, WORLD_INK, 0.42f);
+    Color far_face = BlendColor(WORLD_STONE, WORLD_INK, 0.45f);
+    Color middle = BlendColor(WORLD_STONE_SHADOW, WORLD_INK, 0.24f);
+    Color wall = BlendColor(WORLD_STONE, WORLD_METAL_SHADOW, 0.30f);
+    for (int32_t peak = 0; peak < 8; ++peak) {
+        float height = 69.0f + (float)((peak * 17) % 35);
+        DrawBackdropPeak(-72.0f + (float)peak * 40.0f,
+                         -52.0f - height,
+                         -142.0f + (float)(peak % 2) * 7.0f,
+                         35.0f, 25.0f, height, 5,
+                         far, far_face);
+    }
+    for (int32_t spur = 0; spur < 7; ++spur) {
+        float height = 37.0f + (float)((spur * 7) % 15);
+        DrawBackdropPeak(-55.0f + (float)spur * 38.0f,
+                         -27.0f - height,
+                         -78.0f + (float)(spur % 2) * 5.0f,
+                         29.0f, 18.0f, height, 6,
+                         middle, ShadeColor(middle, 1.10f));
+    }
+    Color roof = ShadeColor(WORLD_DANGER, 0.56f);
+    float pass_z = -10.0f;
+    float pass_ground = TerrainVisualHeightAt(62.0f, pass_z) + 0.12f;
+    DrawBackdropWall(-1.0f, 130.0f, pass_ground, pass_z, 2.0f, 8,
+                     wall, roof);
+    DrawBackdropTower(64.0f, pass_ground, pass_z, 1.25f, 4.8f,
+                      ShadeColor(wall, 1.06f), roof);
+}
+
+static void DrawCapitalBackdrop(void)
+{
+    Color far = BlendColor(WORLD_VIOLET, WORLD_STONE_SHADOW, 0.70f);
+    Color far_face = BlendColor(WORLD_STONE_SHADOW, WORLD_INK, 0.40f);
+    Color plateau = BlendColor(WORLD_STONE, WORLD_INK, 0.47f);
+    for (int32_t peak = 0; peak < 7; ++peak) {
+        float height = 46.0f + (float)((peak * 11) % 20);
+        DrawBackdropPeak(-75.0f + (float)peak * 48.0f,
+                         -48.0f - height,
+                         -144.0f + (float)(peak % 2) * 8.0f,
+                         46.0f, 30.0f, height, 9,
+                         far, far_face);
+    }
+    for (int32_t shelf = 0; shelf < 6; ++shelf) {
+        float height = 25.0f + (float)(shelf % 3) * 2.8f;
+        DrawBackdropMass(-43.0f + (float)shelf * 45.0f,
+                         -25.0f - height,
+                         -76.0f + (float)(shelf % 2) * 4.0f,
+                         41.0f, 20.0f, 0.72f, height,
+                         10, plateau);
+    }
+}
+
+static void DrawDungeonBackdrop(void)
+{
+    Color far = BlendColor(WORLD_VIOLET, WORLD_INK, 0.84f);
+    Color far_face = BlendColor(WORLD_STONE_SHADOW, WORLD_INK, 0.68f);
+    Color middle = BlendColor(WORLD_STONE_SHADOW, WORLD_INK, 0.50f);
+    for (int32_t peak = 0; peak < 9; ++peak) {
+        float height = 67.0f + (float)((peak * 19) % 41);
+        DrawBackdropPeak(-70.0f + (float)peak * 36.0f,
+                         -53.0f - height,
+                         -142.0f + (float)(peak % 3) * 6.0f,
+                         31.0f, 23.0f, height, 5,
+                         far, far_face);
+    }
+    for (int32_t tooth = 0; tooth < 8; ++tooth) {
+        float height = 38.0f + (float)((tooth * 11) % 23);
+        DrawBackdropPeak(-50.0f + (float)tooth * 35.0f,
+                         -28.0f - height,
+                         -77.0f + (float)(tooth % 2) * 4.0f,
+                         25.0f, 17.0f, height, 5,
+                         middle, ShadeColor(middle, 1.08f));
+    }
 }
 
 static void DrawTownBackdrop(const CcSettlement *place)
 {
     if (place == NULL) return;
 
-    /* Every town looks north toward a composed horizon. These broad, low
-       polygon forms replace the empty edge of the terrain with a readable
-       regional silhouette. They sit outside the playable space, so they can
-       carry visual drama without changing collision or road gradients. */
-    Color far_color = BlendColor(WORLD_INK, WORLD_STONE_SHADOW, 0.26f);
-    Color near_color = BlendColor(WORLD_STONE_SHADOW, WORLD_INK, 0.38f);
+    /* The playable town is the foreground of a much larger realm. Each
+       horizon now has a remote range and a regional shoulder; the fortress
+       also carries a constructed pass wall as its scale cue. These remain
+       scenic geometry, so navigation, collision, and the fixed camera-room
+       contract stay intact. */
     switch (place->function) {
-        case CC_SETTLEMENT_FARMING:
-            far_color = BlendColor(WORLD_GRASS_SHADOW, WORLD_INK, 0.48f);
-            near_color = BlendColor(WORLD_GRASS, WORLD_STONE_SHADOW, 0.56f);
-            for (int32_t hill = 0; hill < 6; ++hill) {
-                DrawBackdropHill(-8.0f + (float)hill * 22.0f,
-                                 -6.0f + (float)(hill % 2) * 2.2f,
-                                 18.0f, 7.8f, 8.0f + (float)(hill % 3),
-                                 12, far_color);
-            }
-            for (int32_t hill = 0; hill < 5; ++hill) {
-                DrawBackdropHill(4.0f + (float)hill * 24.0f, 2.0f,
-                                 14.0f, 5.5f,
-                                 5.8f + (float)((hill + 1) % 3),
-                                 12, near_color);
-            }
-            break;
-        case CC_SETTLEMENT_MINING:
-            far_color = BlendColor(WORLD_METAL_SHADOW, WORLD_INK, 0.34f);
-            near_color = BlendColor(WORLD_STONE_SHADOW,
-                                    WORLD_METAL_SHADOW, 0.52f);
-            for (int32_t peak = 0; peak < 8; ++peak) {
-                float height = 12.0f + (float)((peak * 5) % 9);
-                DrawBackdropHill(-10.0f + (float)peak * 16.5f,
-                                 -5.0f + (float)(peak % 2) * 2.0f,
-                                 13.0f, 1.2f, height, 6, far_color);
-            }
-            for (int32_t shelf = 0; shelf < 5; ++shelf) {
-                DrawBackdropHill((float)shelf * 25.0f, 3.0f,
-                                 15.0f, 7.0f,
-                                 7.0f + (float)(shelf % 2) * 2.0f,
-                                 7, near_color);
-            }
-            break;
-        case CC_SETTLEMENT_MARKET:
-            far_color = BlendColor(WORLD_VIOLET, WORLD_INK, 0.72f);
-            near_color = BlendColor(WORLD_STONE, WORLD_INK, 0.52f);
-            for (int32_t hill = 0; hill < 7; ++hill) {
-                DrawBackdropHill(-12.0f + (float)hill * 19.0f,
-                                 -6.0f + (float)(hill % 2),
-                                 15.0f, 4.0f,
-                                 8.0f + (float)((hill + 2) % 4),
-                                 9, far_color);
-            }
-            for (int32_t hill = 0; hill < 5; ++hill) {
-                DrawBackdropHill(2.0f + (float)hill * 24.0f, 2.0f,
-                                 13.0f, 6.5f,
-                                 6.2f + (float)(hill % 2),
-                                 10, near_color);
-            }
-            break;
-        case CC_SETTLEMENT_FORTRESS:
-            far_color = BlendColor(WORLD_STONE_SHADOW, WORLD_INK, 0.24f);
-            near_color = BlendColor(WORLD_STONE, WORLD_INK, 0.38f);
-            for (int32_t peak = 0; peak < 9; ++peak) {
-                float height = 15.0f + (float)((peak * 7) % 12);
-                DrawBackdropHill(-14.0f + (float)peak * 15.5f,
-                                 -6.0f + (float)(peak % 3),
-                                 14.5f, 0.45f, height, 5, far_color);
-            }
-            for (int32_t spur = 0; spur < 6; ++spur) {
-                DrawBackdropHill(-3.0f + (float)spur * 22.0f, 3.0f,
-                                 12.0f, 2.5f,
-                                 9.0f + (float)(spur % 3) * 2.0f,
-                                 6, near_color);
-            }
-            break;
-        case CC_SETTLEMENT_CAPITAL:
-            far_color = BlendColor(WORLD_VIOLET, WORLD_STONE_SHADOW, 0.72f);
-            near_color = BlendColor(WORLD_STONE_LIGHT, WORLD_INK, 0.48f);
-            for (int32_t hill = 0; hill < 6; ++hill) {
-                DrawBackdropHill(-10.0f + (float)hill * 23.0f,
-                                 -6.0f + (float)(hill % 2) * 1.4f,
-                                 18.0f, 6.0f,
-                                 9.0f + (float)((hill + 1) % 3),
-                                 11, far_color);
-            }
-            for (int32_t tower = 0; tower < 5; ++tower) {
-                float x = 8.0f + (float)tower * 23.0f;
-                float height = 7.0f + (float)(tower % 3) * 1.8f;
-                DrawCylinder((Vector3){x, -1.0f, 1.5f},
-                             1.0f, 1.35f, height, 8, near_color);
-                DrawCylinder((Vector3){x, height - 1.0f, 1.5f},
-                             0.08f, 1.9f, 3.4f, 8,
-                             BlendColor(WORLD_DANGER, WORLD_INK, 0.55f));
-            }
-            break;
-        case CC_SETTLEMENT_DUNGEON_TOWN:
-            far_color = BlendColor(WORLD_VIOLET, WORLD_INK, 0.82f);
-            near_color = BlendColor(WORLD_STONE_SHADOW, WORLD_INK, 0.58f);
-            for (int32_t peak = 0; peak < 10; ++peak) {
-                float height = 10.0f + (float)((peak * 9) % 13);
-                DrawBackdropHill(-13.0f + (float)peak * 14.5f,
-                                 -6.0f + (float)(peak % 2) * 2.0f,
-                                 10.5f, 0.25f, height, 5, far_color);
-            }
-            for (int32_t tooth = 0; tooth < 7; ++tooth) {
-                DrawBackdropHill(-2.0f + (float)tooth * 18.0f, 3.0f,
-                                 8.0f, 0.18f,
-                                 8.0f + (float)((tooth + 2) % 4) * 2.0f,
-                                 5, near_color);
-            }
-            break;
+        case CC_SETTLEMENT_FARMING: DrawFarmingBackdrop(); break;
+        case CC_SETTLEMENT_MINING: DrawMiningBackdrop(); break;
+        case CC_SETTLEMENT_MARKET: DrawMarketBackdrop(); break;
+        case CC_SETTLEMENT_FORTRESS: DrawFortressBackdrop(); break;
+        case CC_SETTLEMENT_CAPITAL: DrawCapitalBackdrop(); break;
+        case CC_SETTLEMENT_DUNGEON_TOWN: DrawDungeonBackdrop(); break;
     }
 }
 
