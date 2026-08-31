@@ -2,6 +2,7 @@
 build/
 build-*/
 out/
+.worktrees/
 *.tmp
 
 # Blender recovery and cache files
