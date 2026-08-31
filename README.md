@@ -173,7 +173,7 @@ Run it on Linux:
 ./out/build/play/crownless_carriage
 ```
 
-Run the presentation-free Empty Granary playtest:
+Run the storybook-style Empty Granary playtest:
 
 ```sh
 ./out/build/play/crownless_metagame_playtest
@@ -182,8 +182,9 @@ Run the presentation-free Empty Granary playtest:
 This text-first build uses the same simulation, commands, journeys, situations,
 and SQLite save format as the 3D client. It exists so carriage choices and delayed
 consequences can be tested while camera, movement, and art work continue. Type
-`rumors` for local clues, `kingdoms` for the three realms, `treasures` for
-unique cargo, `help` for commands, and `debrief` at the end of a session.
+`people` and `talk NUMBER` to meet the cast, `rumors` for local clues,
+`kingdoms` for the three realms, `treasures` for unique cargo, `help` for
+commands, and `debrief` at the end of a session.
 
 The headless build and tests run in CI on macOS and Linux. The full graphical
 client is also built in macOS CI.
@@ -269,7 +270,7 @@ before every opponent falls; the Crownless company can also withdraw.
 | --- | --- |
 | `src/sim/` | Deterministic strategic world and validated commands |
 | `src/persistence/` | SQLite snapshots, action journal, replay, and hashing |
-| `src/metagame/` | Presentation-free Empty Granary player loop |
+| `src/metagame/` | Storybook text presentation for the Empty Granary player loop |
 | `src/locomotion/` | Renderer-free biomechanical and robotic movement systems |
 | `src/client/` | raylib input, local world, cameras, art, UI, and projections |
 | `tests/` | Simulation, persistence, terrain, movement, and rendering contracts |
