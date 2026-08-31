@@ -2345,7 +2345,9 @@ static ContextActionSet BuildContextActions(
                 situation->id);
             if (!listened && !promised) {
                 AddContextAction(&set, CONTEXT_ACTION_LISTEN_CHARACTER,
-                                 "1  I hear you.");
+                                 CcStoryPlayerChoiceText(
+                                     situation->kind,
+                                     CC_STORY_PLAYER_ASK));
             }
             const CcSituation *accepted = CcSimAcceptedSituation(sim);
             bool can_promise = situation->status == CC_SITUATION_ACTIVE &&
@@ -2353,10 +2355,16 @@ static ContextActionSet BuildContextActions(
                 !promised;
             if (can_promise) {
                 AddContextAction(&set, CONTEXT_ACTION_PLEDGE_CHARACTER,
-                                 "2  We'll help.");
+                                 CcStoryPlayerChoiceText(
+                                     situation->kind,
+                                     CC_STORY_PLAYER_PROMISE));
             }
         }
-        AddContextAction(&set, CONTEXT_ACTION_CLOSE_VIEW, "Esc  Goodbye.");
+        AddContextAction(&set, CONTEXT_ACTION_CLOSE_VIEW,
+                         CcStoryPlayerChoiceText(
+                             situation != NULL ? situation->kind :
+                                 CC_SITUATION_RELIEF_DELIVERY,
+                             CC_STORY_PLAYER_LEAVE));
         return set;
     }
     if (view == VIEW_MAP) {
@@ -3776,15 +3784,8 @@ static void DrawJourneyEncounter(const CcSim *sim)
             TextFormat("REACTION %d  /  %s", reaction,
                        CcBanditReactionName(reaction)),
             386, 329, 10, reaction <= 5 ? DANGER : TEAL);
-        const char *pressure = bandits->raid_phase != CC_BANDIT_RAID_IDLE ?
-            TextFormat("%s FOR %s",
-                       CcBanditRaidPhaseName(bandits->raid_phase),
-                       CcGoodName(bandits->raid_good)) :
-            bandits->supplies < 30 ? "SHORT STORES. THE CAMP IS HUNGRY." :
-            bandits->influence >= 70 ?
-                "THEY CLAIM THIS BORDER AS THEIR OWN." :
-                "THEIR NO-MAN'S-LAND CAMP NEEDS SUPPLY.";
-        CcOverlayDrawText(pressure, 386, 354, 10, INK);
+        DrawTwoLineText(CcStoryRoadCompanyLine(bandits),
+                        386, 352, 56U, 10, INK);
     }
     if (has_demand) {
         CcOverlayDrawText(

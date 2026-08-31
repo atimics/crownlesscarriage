@@ -1,6 +1,7 @@
 #include "metagame/cc_metagame.h"
 
 #include "persistence/cc_save.h"
+#include "story/cc_story.h"
 
 #include <inttypes.h>
 #include <stdarg.h>
@@ -90,7 +91,7 @@ static const char *CourierPurpose(CcCourierKind kind)
         case CC_COURIER_DRAGON_ALLIANCE: return "a call for dragon alliance";
         case CC_COURIER_DRAGON_MUSTER: return "orders to muster against the dragon";
     }
-    return "sealed news";
+    return "a private letter";
 }
 
 static const char *KingdomPressureName(CcKingdomCalling calling)
@@ -374,7 +375,7 @@ static void DescribePeople(const CcMetagame *metagame,
         shown += 1;
     } else if (IsNamedSettlement(sim, place, 3)) {
         Append(output, capacity,
-               "  Jory Fen has silver dust in his eyebrows and a bent brass whistle. He says not to answer if the mine sings your name.\n");
+               "  Jory Fen has silver dust in his eyebrows and a bent brass whistle. He says the lower tunnel carries voices, and never to answer with your name.\n");
         shown += 1;
     }
     for (int32_t i = 0; i < sim->situation_count; ++i) {
@@ -408,7 +409,7 @@ static void DescribePeople(const CcMetagame *metagame,
             sim->hoard_raiders.origin_settlement_id) {
         if (sim->hoard_raiders.motive == CC_HOARD_RAID_WAR_FINANCE) {
             Append(output, capacity,
-                   "  %s carries sealed orders to fund the border war with the dragon's gold.\n",
+                   "  %s carries unopened orders to fund the border war with the dragon's gold.\n",
                    sim->hoard_raiders.name);
         } else {
             Append(output, capacity,
@@ -440,7 +441,7 @@ static void DescribeRumors(const CcMetagame *metagame,
     } else if (place != NULL && place->id == sim->settlements[3].id) {
         Append(output, capacity,
                "  Miners say the lower works breathe in at dusk. Their lamps lean toward the dark even when there is no wind.\n"
-               "  Lost spoons have begun turning up in careful silver circles. The guild calls it theft and refuses to count what came back.\n");
+               "  Lost spoons have begun turning up in careful silver circles. The mine owners call it theft and refuse to count what came back.\n");
     } else {
         Append(output, capacity,
                "  Road talk points back toward the hungry market and the tolled bridge.\n");
@@ -505,7 +506,7 @@ static void DescribeCharters(const CcMetagame *metagame,
                    situation->affected_name);
         } else {
             Append(output, capacity,
-                   "%s's sealed letter: carry %s before its news grows old.\n",
+                   "%s's unopened letter: carry %s before its news grows old.\n",
                    situation->sponsor_name, target_name);
         }
         Append(output, capacity,
@@ -525,10 +526,10 @@ static void DescribeCharters(const CcMetagame *metagame,
                    "     Reopen the road with 2 tools or 18 crowns. Tools are faster and last longer.\n");
         } else if (situation->kind == CC_SITUATION_MONSTER_EXPEDITION) {
             Append(output, capacity,
-                   "     Public costs 2 tools + 12 crowns; smuggler costs 1 tool + 6; seal costs 3 tools.\n");
+                   "     Public road costs 2 tools + 12 crowns; smuggler road costs 1 tool + 6; closing the tunnel costs 3 tools.\n");
         } else {
             Append(output, capacity,
-                   "     Carry the sealed dispatch in the carriage. Its news takes effect only when it reaches the named court.\n");
+                   "     Carry the unopened letter in the carriage. Its orders take effect when it reaches the named court.\n");
         }
     }
     if (shown == 0) {
@@ -536,7 +537,7 @@ static void DescribeCharters(const CcMetagame *metagame,
                "  No fresh paper waits here. That does not mean nobody needs help.\n");
     }
     Append(output, capacity,
-           "Use 'talk NUMBER' to hear the person, then 'accept NUMBER' or 'refuse NUMBER'. Only one sealed promise fits the brass box.\n");
+           "Use 'talk NUMBER' to hear the person, then 'accept NUMBER' or 'refuse NUMBER'. The brass box holds one accepted job.\n");
 }
 
 static bool TalkToSituation(CcMetagame *metagame, int32_t index,
@@ -544,6 +545,8 @@ static bool TalkToSituation(CcMetagame *metagame, int32_t index,
 {
     CcSim *sim = &metagame->sim;
     CcSituation *situation = &sim->situations[index];
+    const CcCharacter *sponsor = CcSimSituationSponsorCharacter(
+        sim, situation);
     const CcCharacter *affected = CcSimSituationAffectedCharacter(
         sim, situation);
     bool sponsor_here = situation->status == CC_SITUATION_ACTIVE &&
@@ -558,6 +561,11 @@ static bool TalkToSituation(CcMetagame *metagame, int32_t index,
                "Nobody here can tell that part of the story.\n");
         return false;
     }
+    const CcCharacter *speaker = sponsor_here ? sponsor : affected;
+    const CcStoryLine *spoken = CcStoryCharacterLine(
+        sim, situation, speaker);
+    const char *spoken_text = spoken != NULL ? spoken->text :
+        "Tell me what happened, from the beginning.";
     if (affected_here &&
         !CcCharacterRemembers(affected, CC_CHARACTER_MEMORY_MET_PLAYER,
                               situation->id)) {
@@ -576,40 +584,42 @@ static bool TalkToSituation(CcMetagame *metagame, int32_t index,
     if (situation->kind == CC_SITUATION_RELIEF_DELIVERY && sponsor_here) {
         Append(output, capacity,
                "%s straightens the white-wax letter until it is exactly square with the desk.\n"
-               "\"Eight sacks to Silverwick,\" she says. \"Every sack to the guild store.\"\n"
+               "\"%s\"\n"
                "You ask why the bridge is closed. She looks at the black wax on Nell's grain.\n"
                "\"Because Alderwatch closed it.\" It is an answer in the way an empty bowl is a meal.\n",
-               situation->sponsor_name);
+               situation->sponsor_name, spoken_text);
     } else if (situation->kind == CC_SITUATION_BLACK_MARKET_DELIVERY &&
                sponsor_here) {
         Append(output, capacity,
                "%s unfolds from behind a stack of flour barrels. His green scarf is bright; his smile is brighter.\n"
-               "\"Ask for the foxfire supper. No soldiers, no inspection, better pay.\"\n"
+               "\"%s\"\n"
                "For one moment the smile slips. \"My sister works the lower mine. They boiled their seed grain.\"\n"
                "Then it returns. \"Also, better pay.\"\n",
-               situation->sponsor_name);
+               situation->sponsor_name, spoken_text);
     } else if (situation->kind == CC_SITUATION_ROUTE_REPAIR &&
                sponsor_here) {
         Append(output, capacity,
-               "%s sets an iron bridge key on the table. \"The bridge is not broken. That is the trouble.\"\n"
-               "Two bundles of tools would make its keepers admit the winch works. Eighteen crowns would make them forget they ever doubted it.\n"
-               "She watches the hungry boy on the wall finish his soup before adding, \"My orders and my conscience have stopped speaking.\"\n",
-               situation->sponsor_name);
+               "%s sets an iron bridge key on the table. \"%s\"\n"
+               "Two crates of tools would let her crew call the closed gate a repair. Eighteen crowns would buy the guards' silence.\n"
+               "She watches the hungry boy on the wall finish his soup. \"If I open the gate, I am responsible for every sack that crosses.\"\n",
+               situation->sponsor_name, spoken_text);
     } else if (situation->kind == CC_SITUATION_MONSTER_EXPEDITION) {
         Append(output, capacity,
                "%s slides out from under a broken ore wagon. Silver dust has settled in his eyebrows.\n"
-               "\"The old freight tunnel still reaches the town,\" he says. The wagon behind him rises and falls: in, out.\n"
-               "He gives you a bent brass whistle. \"If the mine sings your name, do not answer with it.\"\n",
-               situation->affected_name);
+               "The wagon behind him rises and falls on a bad axle: in, out.\n"
+               "He gives you a bent brass whistle. \"%s\"\n",
+               situation->affected_name, spoken_text);
     } else if (situation->kind == CC_SITUATION_RELIEF_DELIVERY) {
         Append(output, capacity,
-               "%s looks from the carriage sacks to the empty oven tins. \"People keep asking which store owns the flour,\" he says. \"Flour has never answered.\"\n",
-               situation->affected_name);
+               "%s looks from the carriage sacks to the empty oven tins.\n"
+               "\"%s\"\n",
+               situation->affected_name, spoken_text);
     } else {
         Append(output, capacity,
-               "%s turns the sealed letter over without breaking it. \"News changes on the road,\" they say. \"That is why the road matters.\"\n",
+               "%s turns the unopened letter over in both hands.\n"
+               "\"%s\"\n",
                affected_here ? situation->affected_name :
-                   situation->sponsor_name);
+                   situation->sponsor_name, spoken_text);
     }
     return true;
 }
@@ -1150,7 +1160,7 @@ static void DescribeKingdoms(const CcMetagame *metagame,
         Append(output, capacity, ".\n");
     }
     Append(output, capacity,
-           "\nThe Crownless Carriage serves no realm. Moving food, tools, weapons, maps, and sealed dispatches changes which of these claims can survive.\n");
+           "\nThe Crownless Carriage serves no realm. Moving food, tools, weapons, maps, and unopened letters changes which of these claims can survive.\n");
 }
 
 static void DescribeWar(const CcMetagame *metagame,
@@ -1304,7 +1314,7 @@ static void DescribeHelp(char *output, size_t capacity)
            "Act on the road and world:\n"
            "  road fight|bargain|supper|turn-back, repair NUMBER tools|cash\n"
            "  stable breed MARE STALLION, stable team SLOT HORSE\n"
-           "  dungeon public|smuggler|seal, wait DAYS\n"
+           "  dungeon public|smuggler|close, wait DAYS\n"
            "  dragon steal COUNT, dragon return COUNT (at the cave)\n"
            "  dragon steal-treasure NUMBER, dragon return-treasure\n"
            "  dragon intercept (when tribute approaches the cave)\n"
@@ -1556,7 +1566,7 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
         if (!ApplyCommand(metagame, &action, output, output_capacity)) return false;
         const CcSituation *situation = &metagame->sim.situations[index];
         Append(output, output_capacity,
-               "%s closes the brass charter box. The seal fits; no second promise will.\n",
+               "%s closes the brass charter box. It holds only one accepted job.\n",
                situation->sponsor_name);
     } else if (strcmp(command, "abandon") == 0) {
         CcCommand action = {.kind = CC_COMMAND_ABANDON_SITUATION};
@@ -1604,13 +1614,13 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
             delivery->status == CC_SITUATION_RESOLVED &&
             delivery->kind == CC_SITUATION_RELIEF_DELIVERY) {
             Append(output, output_capacity,
-                   "The carriage doors open beneath Silverwick's stopped clock. The guild clerk reaches for Mara's receipt; children at the public ovens reach for the smell of flour. Jory watches both.\n"
+                   "The carriage doors open beneath Silverwick's stopped clock. A merchant's clerk reaches for Mara's receipt; children at the town ovens reach for the smell of flour. Jory watches both.\n"
                    "All eight sacks leave the carriage. No golden light declares the choice good. The first oven simply grows warm.\n");
         } else if (story_delivery &&
                    delivery->status == CC_SITUATION_RESOLVED) {
             Append(output, output_capacity,
                    "A woman in a fox mask rolls her cart from the side alley. Eight sacks vanish beneath patched blankets and reappear, one by one, beside family ovens.\n"
-                   "The guild clerk keeps his receipt. The children get bread. Far away, somebody begins painting a new toll sign.\n");
+                   "The merchant's clerk keeps his receipt. The children get bread. Far away, somebody begins painting a new toll sign.\n");
         } else {
             Append(output, output_capacity, "%s %d %s.\n",
                    amount > 0 ? "Loaded" : "Unloaded",
@@ -1705,7 +1715,7 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
         if (!ApplyCommand(metagame, &action, output, output_capacity)) return false;
         if (king_chain && strcmp(first, "bargain") == 0) {
             Append(output, output_capacity,
-                   "Ilyra lifts the chain herself. She calls it a defeat in honourable combat and asks you to describe the battle as extremely fierce.\n");
+                   "Ilyra cuts the chain herself. She says her report will blame the bridge machinery.\n");
         } else if (night_road && strcmp(first, "supper") == 0) {
             Append(output, output_capacity,
                    "The camp pot began with one onion and a great deal of hope. When the bowls are empty, the fox masks move aside.\n");
@@ -1761,11 +1771,13 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
             state = CC_DUNGEON_PUBLIC_ROUTE;
         } else if (first != NULL && strcmp(first, "smuggler") == 0) {
             state = CC_DUNGEON_SMUGGLER_ROUTE;
-        } else if (first != NULL && strcmp(first, "seal") == 0) {
+        } else if (first != NULL &&
+                   (strcmp(first, "close") == 0 ||
+                    strcmp(first, "seal") == 0)) {
             state = CC_DUNGEON_RESEALED;
         } else {
             Append(output, output_capacity,
-                   "Choose 'dungeon public', 'dungeon smuggler', or 'dungeon seal'.\n");
+                   "Choose 'dungeon public', 'dungeon smuggler', or 'dungeon close'.\n");
             return false;
         }
         if (metagame->sim.dungeon_count < 1) return false;
