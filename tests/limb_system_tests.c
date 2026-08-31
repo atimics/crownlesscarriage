@@ -1,4 +1,5 @@
 #include "locomotion/cc_limb.h"
+#include "locomotion/cc_multileg.h"
 #include "locomotion/cc_robotics.h"
 
 #include <math.h>
@@ -25,6 +26,63 @@ static bool SlopeProbe(void *context, CcLimbVec3 origin, float maximum_drop,
     float inverse_length = 1.0f / sqrtf(1.0f + 0.30f * 0.30f);
     *normal = (CcLimbVec3){0.0f, inverse_length, -0.30f * inverse_length};
     return true;
+}
+
+static bool PlaneCollision(void *context,
+                           CcBiomechVec3 previous_position,
+                           CcBiomechVec3 position, float radius,
+                           CcBiomechVec3 *corrected_position,
+                           CcBiomechVec3 *surface_normal)
+{
+    (void)context;
+    (void)previous_position;
+    if (position.y - radius >= 0.0f) return false;
+    *corrected_position = position;
+    corrected_position->y = radius;
+    *surface_normal = (CcBiomechVec3){0.0f, 1.0f, 0.0f};
+    return true;
+}
+
+static void ConsiderClimbSurface(CcLimbVec3 sample, CcLimbVec3 candidate,
+                                 CcLimbVec3 normal, float search_radius,
+                                 bool *found, float *best_distance,
+                                 CcLimbVec3 *point,
+                                 CcLimbVec3 *surface_normal)
+{
+    float x = candidate.x - sample.x;
+    float y = candidate.y - sample.y;
+    float z = candidate.z - sample.z;
+    float distance = sqrtf(x * x + y * y + z * z);
+    if (distance > search_radius || (*found && distance >= *best_distance)) {
+        return;
+    }
+    *found = true;
+    *best_distance = distance;
+    *point = candidate;
+    *surface_normal = normal;
+}
+
+static bool CornerSurfaceProbe(void *context, CcLimbVec3 sample,
+                               float search_radius, CcLimbVec3 *point,
+                               CcLimbVec3 *normal)
+{
+    (void)context;
+    bool found = false;
+    float best_distance = INFINITY;
+    ConsiderClimbSurface(
+        sample, (CcLimbVec3){sample.x, 0.0f, fminf(sample.z, 0.0f)},
+        (CcLimbVec3){0.0f, 1.0f, 0.0f}, search_radius,
+        &found, &best_distance, point, normal);
+    ConsiderClimbSurface(
+        sample, (CcLimbVec3){sample.x, fmaxf(0.0f, fminf(sample.y, 2.0f)),
+                             0.0f},
+        (CcLimbVec3){0.0f, 0.0f, -1.0f}, search_radius,
+        &found, &best_distance, point, normal);
+    ConsiderClimbSurface(
+        sample, (CcLimbVec3){sample.x, 2.0f, fmaxf(sample.z, 0.0f)},
+        (CcLimbVec3){0.0f, 1.0f, 0.0f}, search_radius,
+        &found, &best_distance, point, normal);
+    return found;
 }
 
 static float Distance(CcLimbVec3 a, CcLimbVec3 b)
@@ -160,6 +218,49 @@ int main(void)
                 "sprint pace did not configure the body-plan support policy");
         Require(CcLimbPaceName(rig.pace)[0] == 'S',
                 "limb pace has no stable player-facing name");
+    }
+
+    for (int32_t preset = CC_MORPHOLOGY_QUADRUPED;
+         preset <= CC_MORPHOLOGY_OCTOPOD; ++preset) {
+        CcLimbMorphology morphology;
+        (void)CcLimbMorphologyFromPreset(
+            &morphology, (CcMorphologyPreset)preset);
+        CcLimbRig rig;
+        CcLimbVec3 center = {0.0f, morphology.body_height, 0.0f};
+        CcLimbRigInit(&rig, &morphology, center, 0.0f,
+                      PlaneProbe, NULL);
+        CcMultilegRagdoll ragdoll;
+        Require(CcMultilegRagdollCollapse(
+                    &ragdoll, &rig, center, 0.0f,
+                    (CcLimbVec3){0.8f, 0.0f, 0.2f},
+                    (CcLimbVec3){1.0f, 0.2f, 0.0f}, center,
+                    5.0f, true),
+                "multi-leg body rejected a physical collapse");
+        Require(ragdoll.active && ragdoll.physics.active &&
+                    ragdoll.control_authority == 0.0f,
+                "multi-leg collapse did not transfer body authority");
+        if (preset == CC_MORPHOLOGY_OCTOPOD) {
+            Require(ragdoll.physics.particle_count > 32,
+                    "octopod ragdoll did not include every articulated joint");
+        }
+        bool saw_contact = false;
+        bool saw_recovery = false;
+        for (int32_t frame = 0; frame < 720 && ragdoll.active; ++frame) {
+            (void)CcMultilegRagdollStep(
+                &ragdoll, &rig, 1.0f / 60.0f,
+                PlaneProbe, PlaneCollision, NULL);
+            saw_contact = saw_contact ||
+                CcMultilegRagdollSupportContactCount(&ragdoll) > 0;
+            saw_recovery = saw_recovery || ragdoll.recovering;
+            VerifySegments(&rig);
+        }
+        Require(saw_contact,
+                "multi-leg ragdoll never collided with the physical floor");
+        Require(saw_recovery && !ragdoll.active && rig.initialized &&
+                    rig.support_state == CC_LIMB_SUPPORT_STABLE,
+                "multi-leg ragdoll did not recover into its gait rig");
+        Require(CcMultilegRagdollStateName(&ragdoll)[0] == 'C',
+                "recovered multi-leg body kept the wrong authority name");
     }
 
     CcLimbMorphology slope_quadruped;
@@ -316,6 +417,43 @@ int main(void)
     Require(CcRobotTraversabilityCost(1.0f, 0.25f, 0.82f) >
                 CcRobotTraversabilityCost(1.0f, 0.01f, 0.99f),
             "terrain cost did not prefer the more traversable edge");
+
+    CcRobotClimbRoute corner_route;
+    Require(CcRobotPlanFreeClimb(
+                (CcLimbVec3){0.0f, 0.0f, -0.70f},
+                (CcLimbVec3){0.0f, 1.0f, 0.0f},
+                (CcLimbVec3){0.0f, 2.0f, 0.70f},
+                (CcLimbVec3){0.0f, 1.0f, 0.0f},
+                0.42f, 0.68f, CornerSurfaceProbe, NULL, &corner_route),
+            "free-climb planner did not find a route over a wall lip");
+    Require(corner_route.count >= 6 && corner_route.length > 2.5f,
+            "free-climb planner returned an incomplete corner route");
+    bool touched_wall = false;
+    for (int32_t node = 0; node < corner_route.count; ++node) {
+        touched_wall = touched_wall ||
+            corner_route.nodes[node].surface == CC_ROBOT_SURFACE_WALL;
+        if (node > 0) {
+            Require(Distance(corner_route.nodes[node - 1].point,
+                             corner_route.nodes[node].point) <= 0.681f,
+                    "free-climb route exceeded the rig reach envelope");
+        }
+    }
+    Require(touched_wall &&
+                corner_route.nodes[corner_route.count - 1].surface ==
+                    CC_ROBOT_SURFACE_FLOOR,
+            "free-climb route did not transition from wall to the top");
+
+    CcRobotClimbRoute wall_route;
+    Require(CcRobotPlanFreeClimb(
+                (CcLimbVec3){-0.55f, 0.35f, 0.0f},
+                (CcLimbVec3){0.0f, 0.0f, -1.0f},
+                (CcLimbVec3){0.65f, 1.65f, 0.0f},
+                (CcLimbVec3){0.0f, 0.0f, -1.0f},
+                0.38f, 0.62f, CornerSurfaceProbe, NULL, &wall_route),
+            "free-climb planner did not crawl across an arbitrary wall");
+    Require(wall_route.count >= 4 &&
+                wall_route.nodes[wall_route.count - 1].point.y > 1.60f,
+            "wall-crawl route did not reach its requested contact");
 
     CcLimbVec3 wall_contact = {biped_body.x - 0.17f, biped_body.y - 0.71f,
                                biped_body.z + 0.30f};

@@ -8,6 +8,7 @@
 
 #include "locomotion/cc_creature.h"
 #include "locomotion/cc_humanoid_skin.h"
+#include "locomotion/cc_multileg.h"
 #include "locomotion/cc_quadruped.h"
 #include "locomotion/cc_robotics.h"
 
@@ -98,6 +99,11 @@ static void DrawCharacterEllipsoid(Vector3 center, Vector3 radius, Color color);
 static Vector3 LocalPoint(Vector3 base, float x, float y, float z, float yaw);
 static void DrawOrientedBox(Vector3 base, Vector3 local_center, Vector3 size,
                             float yaw, Color color);
+static Vector3 PhysicsAdd(Vector3 a, Vector3 b);
+static Vector3 PhysicsSubtract(Vector3 a, Vector3 b);
+static Vector3 PhysicsScale(Vector3 value, float scale);
+static float PhysicsLength(Vector3 value);
+static Vector3 PhysicsNormalizeOr(Vector3 value, Vector3 fallback);
 static Color ShadeColor(Color color, float scale);
 static Color BlendColor(Color from, Color to, float amount);
 typedef struct WorldLabel {
@@ -2776,6 +2782,70 @@ static bool ProbeLocalSurface(void *raw_context, CcLimbVec3 origin,
     return true;
 }
 
+static bool ProbeLocalClimbSurface(void *raw_context, CcLimbVec3 sample,
+                                   float search_radius, CcLimbVec3 *point,
+                                   CcLimbVec3 *normal)
+{
+    const LocalProbeContext *context = raw_context;
+    CcLocalSceneKind scene = context != NULL ? context->scene :
+                                               CC_LOCAL_SCENE_STREET;
+    if (point == NULL || normal == NULL || search_radius <= 0.0f) {
+        return false;
+    }
+    static const Vector3 directions[] = {
+        {1.0f, 0.0f, 0.0f}, {-1.0f, 0.0f, 0.0f},
+        {0.0f, 1.0f, 0.0f}, {0.0f, -1.0f, 0.0f},
+        {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f, -1.0f},
+    };
+    Vector3 origin = FromLimbVector(sample);
+    bool found = false;
+    float best_distance = FLT_MAX;
+    for (int32_t direction = 0;
+         direction < (int32_t)(sizeof(directions) / sizeof(directions[0]));
+         ++direction) {
+        Vector3 outside = PhysicsAdd(
+            origin, PhysicsScale(directions[direction], search_radius));
+        Vector3 inside = PhysicsAdd(
+            origin, PhysicsScale(directions[direction], -search_radius));
+        Vector3 resolved = inside;
+        Vector3 contact_normal = {0};
+        if (!LocalWorldSphereSweep(scene, outside, inside, 0.035f,
+                                   &resolved, &contact_normal)) {
+            continue;
+        }
+        float normal_length = PhysicsLength(contact_normal);
+        if (normal_length <= 0.50f) continue;
+        contact_normal = PhysicsScale(contact_normal, 1.0f / normal_length);
+        Vector3 contact = PhysicsSubtract(
+            resolved, PhysicsScale(contact_normal, 0.035f));
+        float distance = PhysicsLength(PhysicsSubtract(contact, origin));
+        if (distance > search_radius * 1.12f || distance >= best_distance) {
+            continue;
+        }
+        found = true;
+        best_distance = distance;
+        *point = ToLimbVector(contact);
+        *normal = ToLimbVector(contact_normal);
+    }
+
+    CcLimbVec3 terrain_point = {0};
+    CcLimbVec3 terrain_normal = {0};
+    CcLimbVec3 terrain_origin = sample;
+    terrain_origin.y += search_radius * 0.50f;
+    if (ProbeLocalSurface(raw_context, terrain_origin,
+                          search_radius * 1.55f,
+                          &terrain_point, &terrain_normal)) {
+        float distance = PhysicsLength(PhysicsSubtract(
+            FromLimbVector(terrain_point), origin));
+        if (distance <= search_radius * 1.12f && distance < best_distance) {
+            found = true;
+            *point = terrain_point;
+            *normal = terrain_normal;
+        }
+    }
+    return found;
+}
+
 static Vector3 ShellPodBaseCenter(const CcLocalAgent *agent)
 {
     return (Vector3){agent->position.x,
@@ -3021,6 +3091,10 @@ void CcLocalAgentSetMorphology(CcLocalAgent *agent, CcMorphologyPreset preset,
     if (!CcLimbMorphologyFromPreset(&morphology, preset)) return;
     agent->morphology = preset;
     agent->ragdoll_visual_blend = 0.0f;
+    agent->multileg_ragdoll = (CcMultilegRagdoll){0};
+    agent->climb_route = (CcRobotClimbRoute){0};
+    agent->climb_route_index = 0;
+    agent->free_climbing = false;
     agent->scene = AgentSceneForCall(agent, market_interior);
     LocalProbeContext context = {.scene = agent->scene};
     Vector3 body = {agent->position.x,
@@ -3348,6 +3422,61 @@ static bool CombatTeamsHostile(CcCombatTeam first, CcCombatTeam second)
     return first_raider != second_raider;
 }
 
+static bool AgentPhysicalRagdollActive(const CcLocalAgent *agent)
+{
+    if (agent == NULL) return false;
+    return agent->morphology == CC_MORPHOLOGY_BIPED ?
+           agent->humanoid.ragdoll.active :
+           agent->multileg_ragdoll.active;
+}
+
+static bool AgentPhysicalRecovering(const CcLocalAgent *agent)
+{
+    if (agent == NULL) return false;
+    return agent->morphology == CC_MORPHOLOGY_BIPED ?
+           agent->humanoid.recovering :
+           agent->multileg_ragdoll.recovering;
+}
+
+static bool BeginMultiLegCollapse(CcLocalAgent *agent,
+                                  Vector3 impact_direction,
+                                  Vector3 impact_point,
+                                  float impact_speed,
+                                  bool recovery_allowed)
+{
+    if (agent == NULL ||
+        agent->morphology == CC_MORPHOLOGY_BIPED ||
+        agent->multileg_ragdoll.active) {
+        return false;
+    }
+    Vector3 velocity = agent->velocity;
+    Vector3 direction = PhysicsNormalizeOr(
+        impact_direction, (Vector3){0.0f, 0.25f, 1.0f});
+    velocity = PhysicsAdd(
+        velocity, PhysicsScale(direction, impact_speed * 0.38f));
+    bool collapsed = CcMultilegRagdollCollapse(
+        &agent->multileg_ragdoll, &agent->limb_rig,
+        ToLimbVector(ShellPodBaseCenter(agent)), agent->facing_yaw,
+        ToLimbVector(velocity), ToLimbVector(direction),
+        ToLimbVector(impact_point), impact_speed, recovery_allowed);
+    if (!collapsed) return false;
+    agent->climbing = false;
+    agent->free_climbing = false;
+    agent->climbing_down = false;
+    agent->vaulting = false;
+    agent->climb_training_pending = false;
+    agent->exact_target_valid = false;
+    agent->grounded = false;
+    agent->traversal = CC_TRAVERSAL_RAGDOLL;
+    if (recovery_allowed && agent->combat.life_state == CC_LIFE_ALIVE) {
+        agent->combat.life_state = CC_LIFE_KNOCKED_DOWN;
+    }
+    if (agent->combat.weapon_mode == CC_WEAPON_HELD) {
+        agent->combat.weapon_mode = CC_WEAPON_RAGDOLL_ATTACHED;
+    }
+    return true;
+}
+
 static void CombatApplyKnockback(CcLocalAgent *attacker,
                                  CcLocalAgent *defender,
                                  Vector3 direction, float speed)
@@ -3393,10 +3522,69 @@ static void CombatDefeat(CcLocalAgent *agent, Vector3 impact_direction,
     agent->combat.respawn_seconds = agent->combat.team == CC_COMBAT_PLAYER ?
                                     2.75f : 0.0f;
     agent->combat.knockback_velocity = (Vector3){0};
-    CcHumanoidGaitSetGuarded(&agent->humanoid, false);
-    (void)CcHumanoidGaitDie(&agent->humanoid,
-                            ToLimbVector(impact_direction),
-                            ToLimbVector(impact_point), impact_speed);
+    if (agent->morphology == CC_MORPHOLOGY_BIPED) {
+        CcHumanoidGaitSetGuarded(&agent->humanoid, false);
+        (void)CcHumanoidGaitDie(&agent->humanoid,
+                                ToLimbVector(impact_direction),
+                                ToLimbVector(impact_point), impact_speed);
+    } else {
+        if (agent->multileg_ragdoll.active) {
+            agent->multileg_ragdoll.recovery_allowed = false;
+            agent->multileg_ragdoll.recovering = false;
+        } else {
+            (void)BeginMultiLegCollapse(agent, impact_direction, impact_point,
+                                        impact_speed, false);
+        }
+    }
+}
+
+bool CcLocalAgentApplyDamage(CcLocalAgent *agent, float health_damage,
+                             float posture_damage,
+                             Vector3 impact_direction,
+                             Vector3 impact_point, float impact_speed)
+{
+    if (agent == NULL || !CombatCanAct(&agent->combat) ||
+        health_damage < 0.0f || posture_damage < 0.0f ||
+        !isfinite(impact_speed)) {
+        return false;
+    }
+    impact_speed = fmaxf(0.0f, impact_speed);
+    agent->combat.health = fmaxf(
+        0.0f, agent->combat.health - health_damage);
+    agent->combat.posture = fmaxf(
+        0.0f, agent->combat.posture - posture_damage);
+    agent->combat.impact_point = impact_point;
+    agent->combat.impact_direction = impact_direction;
+    agent->combat.impact_speed = impact_speed;
+    agent->combat.impact_valid = true;
+    agent->combat.hit_flash_seconds = fmaxf(
+        agent->combat.hit_flash_seconds, 0.14f);
+    agent->combat.stagger_seconds = fmaxf(
+        agent->combat.stagger_seconds, 0.34f);
+
+    if (agent->combat.health <= 0.0f) {
+        CombatDefeat(agent, impact_direction, impact_point, impact_speed);
+        return true;
+    }
+    bool should_collapse = agent->combat.posture <= 0.0f ||
+        (impact_speed >= 6.20f && agent->combat.health <= 55.0f);
+    if (!should_collapse) {
+        if (agent->morphology == CC_MORPHOLOGY_BIPED) {
+            CcHumanoidGaitApplyImpact(
+                &agent->humanoid, ToLimbVector(impact_direction),
+                CombatClamp(impact_speed / 9.0f, 0.0f, 1.0f));
+        }
+        return true;
+    }
+    if (agent->morphology == CC_MORPHOLOGY_BIPED) {
+        CcHumanoidGaitApplyImpact(
+            &agent->humanoid, ToLimbVector(impact_direction), 1.0f);
+        (void)CcHumanoidGaitKnockDown(&agent->humanoid);
+    } else {
+        (void)BeginMultiLegCollapse(agent, impact_direction, impact_point,
+                                    impact_speed, true);
+    }
+    return true;
 }
 
 void CcLocalCombatSetTeam(CcLocalAgent *agent, CcCombatTeam team)
@@ -3490,11 +3678,14 @@ CcCombatOutcome CcLocalCombatResolveStrike(CcLocalAgent *attacker,
     attacker->combat.strike_posture_scale = 0.0f;
     attacker->combat.strike_knockback_scale = 0.0f;
     if (defender == NULL || attacker == defender ||
+        attacker->morphology != CC_MORPHOLOGY_BIPED ||
         !CombatCanAct(&attacker->combat) ||
         !CombatCanAct(&defender->combat) ||
         !CombatTeamsHostile(attacker->combat.team, defender->combat.team) ||
-        attacker->humanoid.ragdoll.active || attacker->humanoid.recovering ||
-        defender->humanoid.ragdoll.active || defender->humanoid.recovering ||
+        AgentPhysicalRagdollActive(attacker) ||
+        AgentPhysicalRecovering(attacker) ||
+        AgentPhysicalRagdollActive(defender) ||
+        AgentPhysicalRecovering(defender) ||
         defender->climbing || defender->swimming) {
         return CC_COMBAT_OUTCOME_MISS;
     }
@@ -3510,9 +3701,9 @@ CcCombatOutcome CcLocalCombatResolveStrike(CcLocalAgent *attacker,
     Vector3 attack_center = {
         attacker->position.x, attacker->position.y + 0.94f,
         attacker->position.z};
-    Vector3 defense_center = {
-        defender->position.x, defender->position.y + 0.94f,
-        defender->position.z};
+    Vector3 defense_center = defender->morphology == CC_MORPHOLOGY_BIPED ?
+        (Vector3){defender->position.x, defender->position.y + 0.94f,
+                  defender->position.z} : ShellPodCenter(defender);
     if (LocalWorldSphereSweep(attacker->scene, attack_center, defense_center,
                               0.045f, &world_contact, &world_normal)) {
         attacker->combat.impact_point = world_contact;
@@ -3551,12 +3742,22 @@ CcCombatOutcome CcLocalCombatResolveStrike(CcLocalAgent *attacker,
         attacker->combat.impact_valid = true;
         return CC_COMBAT_OUTCOME_MISS;
     }
-    Vector3 body_bottom = {defender->position.x,
-                           defender->position.y + 0.38f,
-                           defender->position.z};
-    Vector3 body_top = {defender->position.x,
-                        defender->position.y + 1.52f,
-                        defender->position.z};
+    Vector3 body_bottom;
+    Vector3 body_top;
+    if (defender->morphology == CC_MORPHOLOGY_BIPED) {
+        body_bottom = (Vector3){defender->position.x,
+                                defender->position.y + 0.38f,
+                                defender->position.z};
+        body_top = (Vector3){defender->position.x,
+                             defender->position.y + 1.52f,
+                             defender->position.z};
+    } else {
+        Vector3 body = ShellPodCenter(defender);
+        body_bottom = body;
+        body_top = body;
+        body_bottom.y -= 0.24f;
+        body_top.y += 0.24f;
+    }
     float collision_distance = CombatSegmentDistanceSquared(
         current_hand, current_tip, body_bottom, body_top);
     collision_distance = fminf(collision_distance,
@@ -3595,7 +3796,8 @@ CcCombatOutcome CcLocalCombatResolveStrike(CcLocalAgent *attacker,
         previous_hand, previous_tip, guard_left, guard_right));
     guard_distance = fminf(guard_distance, CombatSegmentDistanceSquared(
         previous_tip, current_tip, guard_left, guard_right));
-    bool guarded = defender->humanoid.action == CC_HUMANOID_ACTION_GUARD &&
+    bool guarded = defender->morphology == CC_MORPHOLOGY_BIPED &&
+                   defender->humanoid.action == CC_HUMANOID_ACTION_GUARD &&
                    defender->combat.posture > 0.0f &&
                    CombatFacingDot(defender, attacker->position) >= 0.28f &&
                    guard_distance <= 0.58f * 0.58f;
@@ -3607,9 +3809,12 @@ CcCombatOutcome CcLocalCombatResolveStrike(CcLocalAgent *attacker,
     defender->combat.impact_direction = impact_direction;
     defender->combat.impact_speed = impact_speed;
     defender->combat.impact_valid = true;
-    CcHumanoidGaitApplyImpact(
-        &defender->humanoid, ToLimbVector(impact_direction),
-        guarded ? 0.24f : CombatClamp(impact_scale * 0.72f, 0.0f, 1.0f));
+    if (defender->morphology == CC_MORPHOLOGY_BIPED) {
+        CcHumanoidGaitApplyImpact(
+            &defender->humanoid, ToLimbVector(impact_direction),
+            guarded ? 0.24f :
+            CombatClamp(impact_scale * 0.72f, 0.0f, 1.0f));
+    }
     attacker->combat.hitstop_seconds = fmaxf(
         attacker->combat.hitstop_seconds, guarded ? 0.040f : 0.055f);
     defender->combat.hitstop_seconds = fmaxf(
@@ -3653,18 +3858,16 @@ CcCombatOutcome CcLocalCombatResolveStrike(CcLocalAgent *attacker,
         return CC_COMBAT_OUTCOME_GUARD_BROKEN;
     }
 
-    defender->combat.health = fmaxf(
-        0.0f, defender->combat.health -
-        CombatStrikeDamage(attacker) * impact_scale * damage_scale);
-    defender->combat.posture = fmaxf(
-        0.0f, defender->combat.posture -
-        12.0f * impact_scale * posture_scale);
+    float health_damage = CombatStrikeDamage(attacker) *
+                          impact_scale * damage_scale;
+    float posture_damage = 12.0f * impact_scale * posture_scale;
+    (void)CcLocalAgentApplyDamage(
+        defender, health_damage, posture_damage, impact_direction,
+        impact_point, impact_speed);
     defender->combat.stagger_seconds = 0.34f;
     CcLocalAgentTrainAthleticism(attacker, CC_ATHLETIC_POWER, 12.0f);
     if (defender->combat.health <= 0.0f) {
         CcLocalAgentTrainAthleticism(attacker, CC_ATHLETIC_POWER, 12.0f);
-        CombatDefeat(defender, impact_direction, impact_point,
-                     1.06f * impact_scale * knockback_scale);
         return CC_COMBAT_OUTCOME_DEFEATED;
     }
     CombatApplyKnockback(attacker, defender, impact_direction,
@@ -6301,6 +6504,75 @@ static Vector3 FramePoint(Vector3 base, float x, float y, float z, float yaw)
                      base.z - x * sine + z * cosine};
 }
 
+bool CcLocalAgentBeginFreeClimb(CcLocalAgent *agent,
+                                Vector3 surface_point,
+                                Vector3 surface_normal)
+{
+    if (agent == NULL ||
+        agent->morphology == CC_MORPHOLOGY_BIPED ||
+        !agent->limb_rig.initialized ||
+        agent->multileg_ragdoll.active ||
+        !CombatCanAct(&agent->combat)) {
+        return false;
+    }
+    float normal_length = PhysicsLength(surface_normal);
+    if (normal_length <= 0.50f) return false;
+    surface_normal = PhysicsScale(surface_normal, 1.0f / normal_length);
+
+    float maximum_reach = FLT_MAX;
+    for (int32_t limb = 0;
+         limb < agent->limb_rig.morphology.limb_count; ++limb) {
+        if (agent->limb_rig.limbs[limb].health <= 0.0f) continue;
+        maximum_reach = fminf(
+            maximum_reach,
+            CcLimbChainLength(&agent->limb_rig, limb) * 0.92f);
+    }
+    if (maximum_reach == FLT_MAX) return false;
+    maximum_reach = fmaxf(maximum_reach, 0.38f);
+    float step_length = fminf(0.44f, maximum_reach * 0.62f);
+
+    CcLimbVec3 start_point = ToLimbVector(agent->position);
+    CcLimbVec3 start_normal = {0.0f, 1.0f, 0.0f};
+    if (agent->free_climbing && agent->climb_route.count > 0) {
+        int32_t index = agent->climb_route_index;
+        if (index < 0) index = 0;
+        if (index >= agent->climb_route.count) {
+            index = agent->climb_route.count - 1;
+        }
+        start_point = agent->climb_route.nodes[index].point;
+        start_normal = agent->climb_route.nodes[index].normal;
+    }
+    LocalProbeContext context = {.scene = agent->scene};
+    CcRobotClimbRoute route;
+    if (!CcRobotPlanFreeClimb(
+            start_point, start_normal, ToLimbVector(surface_point),
+            ToLimbVector(surface_normal), step_length, maximum_reach,
+            ProbeLocalClimbSurface, &context, &route)) {
+        return false;
+    }
+
+    agent->climb_route = route;
+    agent->climb_route_index = route.count > 1 ? 1 : 0;
+    agent->climb_start = agent->position;
+    agent->climb_end = surface_point;
+    agent->climb_face = FromLimbVector(route.nodes[0].point);
+    agent->climb_normal = FromLimbVector(route.nodes[0].normal);
+    agent->climb_progress = 0.0f;
+    agent->climb_settle = 0.0f;
+    agent->climb_duration = fmaxf(0.60f, route.length / 0.82f);
+    agent->climbing = true;
+    agent->free_climbing = true;
+    agent->climbing_down = false;
+    agent->vaulting = false;
+    agent->climb_training_pending = true;
+    agent->grounded = route.nodes[0].surface == CC_ROBOT_SURFACE_FLOOR;
+    agent->velocity = (Vector3){0};
+    agent->traversal = CC_TRAVERSAL_CLIMB;
+    agent->support_state = CC_HUMANOID_SUPPORT_HANDS;
+    (void)CcLimbRigRequestPace(&agent->limb_rig, CC_LIMB_PACE_WALK);
+    return true;
+}
+
 static bool BeginClimb(CcLocalAgent *agent, const NavPlatform *platform)
 {
     if (agent->morphology == CC_MORPHOLOGY_BIPED &&
@@ -6396,6 +6668,11 @@ static bool BeginClimb(CcLocalAgent *agent, const NavPlatform *platform)
     agent->climb_normal = normal;
     agent->climb_hand_left = hand_left;
     agent->climb_hand_right = hand_right;
+    if (agent->morphology != CC_MORPHOLOGY_BIPED) {
+        agent->facing_yaw = facing;
+        return CcLocalAgentBeginFreeClimb(
+            agent, agent->climb_end, (Vector3){0.0f, 1.0f, 0.0f});
+    }
     if (agent->morphology == CC_MORPHOLOGY_BIPED &&
         agent->humanoid.initialized) {
         agent->climb_foot_left = FromLimbVector(
@@ -6874,6 +7151,195 @@ static int32_t UpdateMultiLegClimbContacts(
     return supported_count;
 }
 
+static Vector3 FreeClimbRootTarget(const CcLocalAgent *agent,
+                                   const CcRobotClimbNode *node)
+{
+    Vector3 point = FromLimbVector(node->point);
+    Vector3 normal = FromLimbVector(node->normal);
+    float upward = fmaxf(0.0f, normal.y);
+    float clearance = agent->radius + 0.14f;
+    clearance += (agent->limb_rig.morphology.body_height - clearance) *
+                 upward;
+    Vector3 center = PhysicsAdd(point, PhysicsScale(normal, clearance));
+    Vector3 root = center;
+    root.y -= agent->limb_rig.morphology.body_height;
+    if (node->surface == CC_ROBOT_SURFACE_WALL) {
+        float floor = BodySurfaceHeightAt(agent->scene, root.x, root.z);
+        root.y = fmaxf(root.y, floor);
+    }
+    return root;
+}
+
+static int32_t UpdateFreeClimbContacts(
+    CcLocalAgent *agent, const CcRobotClimbNode *node,
+    float delta_time, const LocalProbeContext *context)
+{
+    CcLimbRig *rig = &agent->limb_rig;
+    CcLimbVec3 root = ToLimbVector(ShellPodBaseCenter(agent));
+    Vector3 normal = FromLimbVector(node->normal);
+    int32_t current = agent->climb_route_index;
+    int32_t previous = current > 0 ? current - 1 : current;
+    int32_t next = current + 1 < agent->climb_route.count ?
+                   current + 1 : current;
+    Vector3 tangent = PhysicsSubtract(
+        FromLimbVector(agent->climb_route.nodes[next].point),
+        FromLimbVector(agent->climb_route.nodes[previous].point));
+    tangent = PhysicsSubtract(tangent,
+                              PhysicsScale(normal,
+                                           PhysicsDot(tangent, normal)));
+    Vector3 fallback = fabsf(normal.y) < 0.82f ?
+        (Vector3){0.0f, 1.0f, 0.0f} :
+        (Vector3){0.0f, 0.0f, 1.0f};
+    tangent = PhysicsNormalizeOr(tangent, fallback);
+    Vector3 right = PhysicsNormalizeOr(
+        Vector3CrossProduct(tangent, normal),
+        (Vector3){cosf(agent->facing_yaw), 0.0f,
+                  -sinf(agent->facing_yaw)});
+    float maximum_longitudinal = 0.001f;
+    for (int32_t limb = 0; limb < rig->morphology.limb_count; ++limb) {
+        maximum_longitudinal = fmaxf(
+            maximum_longitudinal,
+            fabsf(rig->morphology.limbs[limb].rest_contact_local.z));
+    }
+    float route_phase = agent->climb_progress *
+                        (float)fmaxf((float)agent->climb_route.count, 2.0f);
+    int32_t swing_limb = ((int32_t)floorf(route_phase * 1.7f)) %
+                         rig->morphology.limb_count;
+    float swing_phase = fmodf(route_phase * 1.7f, 1.0f);
+
+    int32_t supported_count = 0;
+    for (int32_t limb = 0; limb < rig->morphology.limb_count; ++limb) {
+        CcLimbRuntime *runtime = &rig->limbs[limb];
+        const CcLimbSpec *spec = &rig->morphology.limbs[limb];
+        if (runtime->health <= 0.0f) continue;
+        float lateral = fmaxf(-0.30f, fminf(
+            spec->rest_contact_local.x * 0.48f, 0.30f));
+        float longitudinal = spec->rest_contact_local.z /
+                             maximum_longitudinal * 0.16f;
+        Vector3 sample = FromLimbVector(node->point);
+        sample = PhysicsAdd(sample, PhysicsScale(right, lateral));
+        sample = PhysicsAdd(sample, PhysicsScale(tangent, longitudinal));
+        sample = PhysicsAdd(sample, PhysicsScale(normal, 0.025f));
+        CcLimbVec3 contact_point = {0};
+        CcLimbVec3 contact_normal = {0};
+        bool contact_found = ProbeLocalClimbSurface(
+            (void *)context, ToLimbVector(sample), 0.24f,
+            &contact_point, &contact_normal);
+        bool swinging = limb == swing_limb &&
+                        swing_phase > 0.20f && swing_phase < 0.72f;
+        Vector3 socket = FramePoint(
+            ShellPodBaseCenter(agent), spec->socket_local.x,
+            spec->socket_local.y, spec->socket_local.z,
+            agent->facing_yaw);
+        bool within_reach = contact_found &&
+            PhysicsLength(PhysicsSubtract(
+                FromLimbVector(contact_point), socket)) <=
+            CcLimbChainLength(rig, limb) * 1.08f;
+        float support = within_reach && !swinging ?
+            LocalClimbContactSupport(
+                context->scene, FromLimbVector(contact_point),
+                FromLimbVector(contact_normal), 1.0f) : 0.0f;
+        if (support >= 0.58f) {
+            CcLimbRigPinContact(rig, limb, root, agent->facing_yaw,
+                                contact_point, contact_normal);
+            supported_count += 1;
+        } else {
+            runtime->state = CC_LIMB_SEARCHING;
+        }
+    }
+    CcLimbRigEvaluateSupport(rig, root, agent->facing_yaw,
+                             supported_count > 0, delta_time);
+    (void)CcLimbRigRequestPace(rig, CC_LIMB_PACE_WALK);
+    return supported_count;
+}
+
+static void UpdateFreeClimb(CcLocalAgent *agent, float delta_time,
+                            bool market_interior)
+{
+    if (agent->climb_route.count <= 0 || agent->climb_route_index < 0 ||
+        agent->climb_route_index >= agent->climb_route.count) {
+        agent->climbing = false;
+        agent->free_climbing = false;
+        agent->grounded = false;
+        agent->traversal = CC_TRAVERSAL_DROP;
+        return;
+    }
+    agent->scene = AgentSceneForCall(agent, market_interior);
+    const CcRobotClimbNode *node =
+        &agent->climb_route.nodes[agent->climb_route_index];
+    agent->climb_face = FromLimbVector(node->point);
+    agent->climb_normal = FromLimbVector(node->normal);
+    if (node->surface == CC_ROBOT_SURFACE_WALL) {
+        agent->facing_yaw = atan2f(-node->normal.x, -node->normal.z);
+    }
+    Vector3 desired = FreeClimbRootTarget(agent, node);
+    Vector3 previous = agent->position;
+    Vector3 offset = PhysicsSubtract(desired, agent->position);
+    float distance = PhysicsLength(offset);
+    float speed = 0.82f * AthleticBonus(
+        agent, CC_ATHLETIC_GRIP, 0.055f);
+    float step = fminf(distance, speed * delta_time);
+    if (distance > 0.0001f) {
+        agent->position = PhysicsAdd(
+            agent->position, PhysicsScale(offset, step / distance));
+    }
+    agent->velocity = delta_time > 0.00001f ?
+        PhysicsScale(PhysicsSubtract(agent->position, previous),
+                     1.0f / delta_time) : (Vector3){0};
+    agent->grounded = node->surface == CC_ROBOT_SURFACE_FLOOR &&
+                      fabsf(agent->position.y - desired.y) < 0.08f;
+    int32_t edge_count = agent->climb_route.count > 1 ?
+                         agent->climb_route.count - 1 : 1;
+    float edge_fraction = distance > 0.0001f ?
+        1.0f - fminf(distance / fmaxf(step + distance, 0.001f), 1.0f) : 1.0f;
+    agent->climb_progress = fminf(
+        1.0f, ((float)agent->climb_route_index - 1.0f + edge_fraction) /
+                  (float)edge_count);
+
+    LocalProbeContext context = {.scene = agent->scene};
+    int32_t contacts = UpdateFreeClimbContacts(
+        agent, node, delta_time, &context);
+    if (contacts < agent->limb_rig.morphology.minimum_supports) {
+        agent->climb_settle += delta_time;
+        if (agent->climb_settle > 0.34f) {
+            agent->climbing = false;
+            agent->free_climbing = false;
+            agent->climb_training_pending = false;
+            agent->grounded = false;
+            agent->velocity.y = fminf(agent->velocity.y, -0.20f);
+            agent->traversal = CC_TRAVERSAL_DROP;
+            return;
+        }
+    } else {
+        agent->climb_settle = 0.0f;
+    }
+
+    if (distance < 0.075f &&
+        agent->climb_route_index + 1 < agent->climb_route.count) {
+        agent->climb_route_index += 1;
+        agent->climb_settle = 0.0f;
+    } else if (distance < 0.035f &&
+               agent->climb_route_index + 1 == agent->climb_route.count) {
+        if (node->surface == CC_ROBOT_SURFACE_FLOOR) {
+            agent->position = desired;
+            agent->velocity = (Vector3){0};
+            agent->grounded = true;
+            agent->climbing = false;
+            agent->free_climbing = false;
+            agent->traversal = CC_TRAVERSAL_IDLE;
+            if (agent->climb_training_pending) {
+                CcLocalAgentTrainAthleticism(
+                    agent, CC_ATHLETIC_GRIP, 22.0f);
+                agent->climb_training_pending = false;
+            }
+        } else {
+            agent->velocity = (Vector3){0};
+            agent->grounded = false;
+        }
+    }
+    if (agent->climbing) agent->traversal = CC_TRAVERSAL_CLIMB;
+}
+
 static void UpdateHighMantle(CcLocalAgent *agent, float delta_time,
                              bool market_interior)
 {
@@ -6973,6 +7439,11 @@ static void UpdateHighMantle(CcLocalAgent *agent, float delta_time,
 static void UpdateClimb(CcLocalAgent *agent, float delta_time,
                         bool market_interior)
 {
+    if (agent->free_climbing &&
+        agent->morphology != CC_MORPHOLOGY_BIPED) {
+        UpdateFreeClimb(agent, delta_time, market_interior);
+        return;
+    }
     if (agent->climbing_down) {
         UpdateDownClimb(agent, delta_time, market_interior);
         return;
@@ -7365,11 +7836,17 @@ static bool UpdateCombatClock(CcLocalAgent *agent, float delta_time)
                                         combat->respawn_seconds - delta_time);
         if (combat->respawn_seconds <= 0.0f) {
             combat->life_state = CC_LIFE_RESPAWNING;
-            CcHumanoidGaitBeginResurrection(&agent->humanoid);
+            if (agent->morphology == CC_MORPHOLOGY_BIPED) {
+                CcHumanoidGaitBeginResurrection(&agent->humanoid);
+            } else {
+                CcMultilegRagdollAllowRecovery(
+                    &agent->multileg_ragdoll);
+            }
         }
     }
     if (combat->life_state == CC_LIFE_RESPAWNING &&
-        !agent->humanoid.ragdoll.active && !agent->humanoid.recovering) {
+        !AgentPhysicalRagdollActive(agent) &&
+        !AgentPhysicalRecovering(agent)) {
         combat->life_state = CC_LIFE_ALIVE;
         combat->health = 45.0f;
         combat->posture = 72.0f;
@@ -7380,8 +7857,9 @@ static bool UpdateCombatClock(CcLocalAgent *agent, float delta_time)
                               CC_WEAPON_HELD : CC_WEAPON_NONE;
     }
     if (CombatCanAct(combat) && combat->stagger_seconds <= 0.0f) {
-        float regeneration = agent->humanoid.action ==
-                             CC_HUMANOID_ACTION_GUARD ? 4.0f : 15.0f;
+        float regeneration = agent->morphology == CC_MORPHOLOGY_BIPED &&
+                             agent->humanoid.action ==
+                                 CC_HUMANOID_ACTION_GUARD ? 4.0f : 15.0f;
         combat->posture = fminf(CC_LOCAL_COMBAT_MAX_POSTURE,
                                 combat->posture + regeneration * delta_time);
     }
@@ -7392,13 +7870,13 @@ static void SyncPhysicalLifeState(CcLocalAgent *agent)
 {
     CcCombatState *combat = &agent->combat;
     if (combat->life_state == CC_LIFE_ALIVE &&
-        agent->humanoid.ragdoll.active) {
+        AgentPhysicalRagdollActive(agent)) {
         combat->life_state = CC_LIFE_KNOCKED_DOWN;
         if (combat->weapon_mode == CC_WEAPON_HELD) {
             combat->weapon_mode = CC_WEAPON_RAGDOLL_ATTACHED;
         }
     } else if (combat->life_state == CC_LIFE_KNOCKED_DOWN &&
-               !agent->humanoid.ragdoll.active) {
+               !AgentPhysicalRagdollActive(agent)) {
         combat->life_state = CC_LIFE_ALIVE;
         combat->weapon_mode = combat->team == CC_COMBAT_PLAYER ||
                               combat->team == CC_COMBAT_RAIDER ?
@@ -7467,6 +7945,37 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
                             agent->facing_yaw, ProbeLocalSurface, &context);
         ApplyAgentWalkingProfile(agent);
         agent->humanoid_needs_reset = false;
+    }
+    if (!biped && agent->multileg_ragdoll.active) {
+        bool active = CcMultilegRagdollStep(
+            &agent->multileg_ragdoll, &agent->limb_rig, delta_time,
+            ProbeLocalSurface, ProbeLocalCollision, &context);
+        CcLimbVec3 center = agent->multileg_ragdoll.body_center;
+        agent->position = (Vector3){
+            center.x,
+            center.y - agent->limb_rig.morphology.body_height,
+            center.z,
+        };
+        agent->velocity = FromLimbVector(
+            agent->multileg_ragdoll.body_velocity);
+        agent->facing_yaw = agent->multileg_ragdoll.body_yaw;
+        agent->grounded =
+            CcMultilegRagdollSupportContactCount(
+                &agent->multileg_ragdoll) > 0;
+        agent->traversal = agent->multileg_ragdoll.recovering ?
+                           CC_TRAVERSAL_GET_UP : CC_TRAVERSAL_RAGDOLL;
+        if (!active) {
+            agent->position = FromLimbVector(
+                agent->multileg_ragdoll.recovery_ground);
+            agent->velocity = (Vector3){0};
+            agent->grounded = true;
+            agent->traversal = CC_TRAVERSAL_IDLE;
+        }
+        SyncPhysicalLifeState(agent);
+        agent->cape = (CcLocalCapeState){0};
+        agent->previous_cape = (CcLocalCapeState){0};
+        agent->render_cape = (CcLocalCapeState){0};
+        return;
     }
     bool was_swimming = agent->swimming;
     bool in_water = biped &&
@@ -13463,7 +13972,7 @@ void CcLocalRendererSetScreenFirstHero(bool enabled)
 
 void CcLocalRendererSetOpeningStep(CcLocalOpeningStep step)
 {
-    active_opening_step = step >= CC_LOCAL_OPENING_FIND_NELL &&
+    active_opening_step = step >= CC_LOCAL_OPENING_FIND_JORY &&
                           step <= CC_LOCAL_OPENING_COMPLETE ?
         step : CC_LOCAL_OPENING_COMPLETE;
 }
@@ -19439,7 +19948,9 @@ static void DrawCharacterContactEffects(const CcLocalAgent *agent)
 static void DrawRobotShell(const CcLocalAgent *agent)
 {
     DrawCharacterContactEffects(agent);
-    Vector3 body = ShellPodCenter(agent);
+    Vector3 body = agent->multileg_ragdoll.active ?
+        FromLimbVector(agent->multileg_ragdoll.body_center) :
+        ShellPodCenter(agent);
     const CcLimbRig *rig = &agent->limb_rig;
     bool biped = rig->morphology.preset == CC_MORPHOLOGY_BIPED;
     if (biped && agent->humanoid.initialized) {
@@ -22457,18 +22968,275 @@ static const CcRoute *SiteAnchorRoad(const CcSim *sim)
     return NULL;
 }
 
+static void DrawRemoteFootTrailSegment(Vector2 start, Vector2 end,
+                                       float width, Color color)
+{
+    float dx = end.x - start.x;
+    float dz = end.y - start.y;
+    float length = sqrtf(dx * dx + dz * dz);
+    if (length < 0.01f) return;
+    DrawTiltedBox(
+        (Vector3){(start.x + end.x) * 0.5f, 0.015f,
+                  (start.y + end.y) * 0.5f},
+        (Vector3){length + 0.25f, 0.07f, width},
+        (Vector3){0.0f, 1.0f, 0.0f},
+        -atan2f(dz, dx) * RAD2DEG, color);
+}
+
+static void DrawGoblinCaveStream(void)
+{
+    static const Vector2 STREAM[] = {
+        {69.0f, 40.2f}, {63.0f, 42.4f}, {57.0f, 40.8f},
+        {51.0f, 44.7f}, {45.0f, 42.6f}, {39.2f, 45.8f},
+        {33.8f, 44.2f}
+    };
+    Color channel = BlendColor(WORLD_EARTH_SHADOW, WORLD_INK, 0.42f);
+    Color water = BlendColor(WORLD_TEAL, (Color){38, 74, 88, 255}, 0.46f);
+    Color glint = BlendColor(WORLD_TEAL, WORLD_STONE, 0.20f);
+    DrawCylinder((Vector3){68.2f, 0.045f, 40.45f},
+                 2.05f, 1.55f, 0.07f, 12, water);
+    int32_t count = (int32_t)(sizeof(STREAM) / sizeof(STREAM[0]));
+    for (int32_t segment = 0; segment < count - 1; ++segment) {
+        DrawRemoteFootTrailSegment(STREAM[segment], STREAM[segment + 1],
+                                   2.05f, channel);
+        DrawRemoteFootTrailSegment(STREAM[segment], STREAM[segment + 1],
+                                   1.18f, ShadeColor(
+                                       water, segment % 2 == 0 ? 0.90f : 1.08f));
+        DrawRemoteFootTrailSegment(STREAM[segment], STREAM[segment + 1],
+                                   0.16f, Fade(glint, 0.78f));
+    }
+    for (int32_t stone = 0; stone < 6; ++stone) {
+        float x = 37.0f + (float)stone * 5.35f;
+        float z = stone % 2 == 0 ? 43.0f : 45.1f;
+        DrawTiltedBox((Vector3){x, 0.22f, z},
+                      (Vector3){0.48f, 0.44f, 0.62f},
+                      (Vector3){0.0f, 0.0f, 1.0f},
+                      stone % 2 == 0 ? 11.0f : -8.0f,
+                      WORLD_STONE_SHADOW);
+    }
+}
+
+static void DrawRemoteSiteTerrain(uint32_t world_seed,
+                                  const CcRoute *road,
+                                  CcLocalSiteKind site,
+                                  bool travelling,
+                                  Color kingdom,
+                                  int32_t progress_milli,
+                                  Vector3 focus)
+{
+    int32_t danger = site == CC_LOCAL_SITE_DRAGON_CAVE ? 72 :
+                     site == CC_LOCAL_SITE_GOBLIN_CAVE ? 48 : 38;
+    if (!travelling && site == CC_LOCAL_SITE_DRAGON_CAVE) {
+        DrawPlane((Vector3){CC_LOCAL_WORLD_WIDTH * 0.5f, -0.09f,
+                            CC_LOCAL_WORLD_DEPTH * 0.5f},
+                  (Vector2){CC_LOCAL_WORLD_WIDTH + 8.0f,
+                            CC_LOCAL_WORLD_DEPTH + 8.0f},
+                  BlendColor(WORLD_STONE_SHADOW, WORLD_INK, 0.46f));
+    } else {
+        DrawRoadTerrain(world_seed, road, danger, false, kingdom,
+                        progress_milli, focus);
+    }
+    if (travelling || site == CC_LOCAL_SITE_DUNGEON) return;
+
+    bool mountain = site == CC_LOCAL_SITE_DRAGON_CAVE;
+    float cover_start = mountain ? 14.0f : 34.0f;
+    float cover_width = 82.0f - cover_start;
+    Color wild_ground = mountain ?
+        BlendColor(WORLD_STONE_SHADOW, WORLD_INK, 0.38f) :
+        BlendColor(WORLD_GRASS_SHADOW, WORLD_INK, 0.28f);
+    DrawBox((Vector3){cover_start + cover_width * 0.5f, -0.035f, 40.0f},
+            (Vector3){cover_width, 0.12f, 11.6f}, wild_ground);
+
+    static const Vector2 GOBLIN_TRAIL[] = {
+        {33.0f, 40.0f}, {39.0f, 43.6f}, {46.5f, 37.0f},
+        {54.5f, 43.8f}, {62.0f, 36.6f}, {70.0f, 40.0f}
+    };
+    if (!mountain) {
+        int32_t trail_count =
+            (int32_t)(sizeof(GOBLIN_TRAIL) / sizeof(GOBLIN_TRAIL[0]));
+        Color trail_color = BlendColor(
+            WORLD_EARTH_SHADOW, WORLD_VIOLET, 0.12f);
+        for (int32_t segment = 0; segment < trail_count - 1; ++segment) {
+            DrawRemoteFootTrailSegment(
+                GOBLIN_TRAIL[segment], GOBLIN_TRAIL[segment + 1], 0.92f,
+                ShadeColor(trail_color,
+                           segment % 2 == 0 ? 0.88f : 1.08f));
+        }
+        DrawGoblinCaveStream();
+    } else {
+        for (int32_t shelf = 0; shelf < 5; ++shelf) {
+            float x = 31.0f + (float)shelf * 7.2f;
+            float z = shelf % 2 == 0 ? 35.0f : 45.2f;
+            DrawTiltedBox(
+                (Vector3){x, 0.12f + (float)(shelf % 2) * 0.22f, z},
+                (Vector3){4.6f, 0.34f, 2.8f},
+                (Vector3){0.0f, 1.0f, 0.0f},
+                shelf % 2 == 0 ? 17.0f : -21.0f,
+                ShadeColor(WORLD_STONE_SHADOW,
+                           shelf % 3 == 0 ? 0.72f : 0.92f));
+        }
+    }
+
+    Color cliff = mountain ?
+        BlendColor(WORLD_STONE_SHADOW, WORLD_DANGER, 0.10f) :
+        BlendColor(WORLD_STONE_SHADOW, WORLD_VIOLET, 0.14f);
+    for (int32_t ridge = 0; ridge < 5; ++ridge) {
+        float x = 37.0f + (float)ridge * 10.0f;
+        float z = mountain ? 23.0f + (float)(ridge % 2) * 3.2f :
+                             ridge % 2 == 0 ? 28.0f : 53.0f;
+        float lower_radius = mountain ? 9.5f : 7.0f;
+        float upper_radius = mountain ? 3.2f : 2.6f;
+        DrawBackdropMass(
+            x, -3.4f, z, lower_radius, lower_radius,
+            upper_radius / lower_radius,
+            mountain ? 14.0f + (float)(ridge % 3) * 2.4f :
+                       10.0f + (float)(ridge % 2) * 1.8f,
+            8, ShadeColor(cliff, ridge % 2 == 0 ? 0.78f : 1.0f));
+    }
+    for (int32_t marker = 0; marker < 6; ++marker) {
+        float x = 37.0f + (float)marker * 6.1f;
+        float z = marker % 2 == 0 ? 34.1f : 46.0f;
+        DrawTiltedBox((Vector3){x, 0.55f, z},
+                      (Vector3){0.20f, 1.10f + (float)(marker % 3) * 0.32f,
+                                0.24f},
+                      (Vector3){0.0f, 0.0f, 1.0f},
+                      marker % 2 == 0 ? 11.0f : -13.0f,
+                      marker % 3 == 0 ? WORLD_DANGER : cliff);
+    }
+
+    if (mountain) {
+        DrawTiltedBox((Vector3){22.8f, 1.35f, 40.0f},
+                      (Vector3){1.25f, 2.75f, 2.30f},
+                      (Vector3){0.0f, 0.0f, 1.0f}, 9.0f, cliff);
+        DrawTiltedBox((Vector3){25.2f, 1.30f, 40.0f},
+                      (Vector3){1.20f, 2.65f, 2.20f},
+                      (Vector3){0.0f, 0.0f, 1.0f}, -8.0f,
+                      ShadeColor(cliff, 0.82f));
+        DrawBox((Vector3){24.0f, 1.05f, 39.72f},
+                (Vector3){1.65f, 2.10f, 0.28f}, WORLD_VOID);
+    }
+}
+
+static void DrawDragonCliffRoost(const CcSim *sim)
+{
+    const float x = CC_LOCAL_SITE_ENTRANCE_X;
+    const float z = CC_LOCAL_SITE_ENTRANCE_Z;
+    Color rock = BlendColor(WORLD_STONE_SHADOW, WORLD_DANGER, 0.18f);
+    Color deep_rock = BlendColor(rock, WORLD_INK, 0.34f);
+    Color ledge = ShadeColor(rock, 0.82f);
+    CcCreatureVariant dragon_variant = DragonCreatureForLifeStage(
+        sim->dragon.life_stage);
+    float perch_width =
+        dragon_variant == CC_CREATURE_DRAGON_DEEP_WYRM ? 31.0f :
+        dragon_variant == CC_CREATURE_DRAGON ? 21.0f :
+        dragon_variant == CC_CREATURE_DRAGON_WANDERER ? 15.0f : 9.0f;
+
+    DrawBackdropMass(x + 19.0f, -3.4f, z, 18.5f, 18.5f,
+                     4.8f / 18.5f, 31.0f, 9, deep_rock);
+    for (int32_t slab = -2; slab <= 2; ++slab) {
+        DrawTiltedBox(
+            (Vector3){x - 0.15f, 6.1f + (float)(abs(slab) % 2) * 0.7f,
+                      z + (float)slab * 3.0f},
+            (Vector3){2.6f,
+                      12.8f + (float)(abs(slab) % 2) * 1.2f, 3.25f},
+            (Vector3){0.0f, 0.0f, 1.0f},
+            slab % 2 == 0 ? 3.5f : -4.5f,
+            ShadeColor(rock, 0.76f + (float)(slab + 2) * 0.045f));
+    }
+
+    DrawTiltedBox((Vector3){x - 4.4f, 5.92f, z - 0.2f},
+                  (Vector3){7.6f, 1.45f, 7.9f},
+                  (Vector3){0.0f, 0.0f, 1.0f}, -2.6f, ledge);
+    DrawTiltedBox((Vector3){x - 10.8f, 5.58f, z + 0.35f},
+                  (Vector3){6.7f, 1.68f, 8.5f},
+                  (Vector3){0.0f, 0.0f, 1.0f}, 2.2f,
+                  ShadeColor(ledge, 0.86f));
+    DrawTiltedBox((Vector3){x - 17.1f, 5.18f, z - 0.55f},
+                  (Vector3){7.2f, 1.86f, 6.8f},
+                  (Vector3){0.0f, 0.0f, 1.0f}, -3.4f, deep_rock);
+    DrawTiltedBox((Vector3){x - 1.5f - perch_width * 0.5f,
+                            5.88f, z + 4.35f},
+                  (Vector3){perch_width, 1.30f, 4.1f},
+                  (Vector3){0.0f, 0.0f, 1.0f}, 1.8f,
+                  ShadeColor(rock, 1.05f));
+    for (int32_t tooth = 0; tooth < 6; ++tooth) {
+        float tooth_x = x - 20.0f + (float)tooth * 3.7f;
+        DrawTiltedBox((Vector3){tooth_x, 4.65f, z + 4.3f},
+                      (Vector3){1.4f, 3.4f + (float)(tooth % 2), 1.2f},
+                      (Vector3){0.0f, 0.0f, 1.0f},
+                      tooth % 2 == 0 ? 12.0f : -9.0f,
+                      ShadeColor(deep_rock, tooth % 3 == 0 ? 0.72f : 0.92f));
+    }
+
+    DrawBox((Vector3){x - 1.48f, 10.35f, z - 0.28f},
+            (Vector3){0.38f, 5.10f, 5.90f}, WORLD_VOID);
+    DrawTiltedBox((Vector3){x - 1.10f, 13.12f, z},
+                  (Vector3){1.0f, 1.55f, 7.35f},
+                  (Vector3){0.0f, 0.0f, 1.0f}, -5.0f, rock);
+    DrawTiltedBox((Vector3){x - 1.05f, 9.9f, z - 3.25f},
+                  (Vector3){0.95f, 6.7f, 1.3f},
+                  (Vector3){0.0f, 0.0f, 1.0f}, 5.0f, rock);
+    DrawTiltedBox((Vector3){x - 1.05f, 9.7f, z + 3.20f},
+                  (Vector3){0.95f, 6.4f, 1.25f},
+                  (Vector3){0.0f, 0.0f, 1.0f}, -4.0f,
+                  ShadeColor(rock, 0.86f));
+
+    CcCreaturePose pose = sim->dragon.slain ? CC_CREATURE_POSE_DOWN_A :
+        sim->dragon.stolen_outstanding > 0 ? CC_CREATURE_POSE_THREAT :
+                                            CC_CREATURE_POSE_REST;
+    float dragon_back_offset =
+        dragon_variant == CC_CREATURE_DRAGON_DEEP_WYRM ? 19.2f :
+        dragon_variant == CC_CREATURE_DRAGON ? 10.4f : 3.9f;
+    if (dragon_variant == CC_CREATURE_DRAGON_WANDERER) {
+        dragon_back_offset = 7.8f;
+    }
+    Vector3 dragon_position = {
+        x - dragon_back_offset,
+        7.58f,
+        z + 4.85f
+    };
+    float dragon_yaw = dragon_variant == CC_CREATURE_DRAGON_WHELP ?
+        -0.48f * PI : 0.48f * PI;
+    float dragon_scale = dragon_variant == CC_CREATURE_DRAGON_WHELP ?
+        1.24f : 0.90f;
+    (void)DrawCreature3D(dragon_variant, pose, dragon_position,
+                         dragon_yaw, dragon_scale, (Color){0});
+
+    int32_t marks = 2 + sim->dragon.crown_strength / 20;
+    for (int32_t i = 0; i < marks && i < 6; ++i) {
+        DrawSmallSphere(
+            (Vector3){x - 4.1f + (float)(i % 3) * 0.40f,
+                      6.78f, z - 1.2f + (float)(i / 3) * 0.36f},
+            0.14f, WORLD_GOLD);
+    }
+}
+
 static void DrawRemoteSiteEntrance(const CcSim *sim, CcLocalSiteKind site,
                                    float clock)
 {
     const float x = CC_LOCAL_SITE_ENTRANCE_X;
     const float z = CC_LOCAL_SITE_ENTRANCE_Z;
+    if (site == CC_LOCAL_SITE_DRAGON_CAVE) {
+        DrawDragonCliffRoost(sim);
+        return;
+    }
     Color rock = site == CC_LOCAL_SITE_DRAGON_CAVE ?
         BlendColor(WORLD_STONE_SHADOW, WORLD_DANGER, 0.20f) :
         site == CC_LOCAL_SITE_GOBLIN_CAVE ?
         BlendColor(WORLD_STONE_SHADOW, WORLD_VIOLET, 0.18f) :
         WORLD_STONE_SHADOW;
-    DrawScenerySphere((Vector3){x - 1.55f, 1.35f, z}, 1.75f, rock);
-    DrawScenerySphere((Vector3){x + 1.45f, 1.25f, z}, 1.65f, rock);
+    if (site == CC_LOCAL_SITE_DUNGEON) {
+        DrawScenerySphere((Vector3){x - 1.55f, 1.35f, z}, 1.75f, rock);
+        DrawScenerySphere((Vector3){x + 1.45f, 1.25f, z}, 1.65f, rock);
+    } else {
+        DrawTiltedBox((Vector3){x - 1.58f, 1.45f, z},
+                      (Vector3){1.55f, 2.90f, 1.48f},
+                      (Vector3){0.0f, 0.0f, 1.0f}, 10.0f, rock);
+        DrawTiltedBox((Vector3){x + 1.52f, 1.38f, z},
+                      (Vector3){1.45f, 2.76f, 1.42f},
+                      (Vector3){0.0f, 0.0f, 1.0f}, -9.0f,
+                      ShadeColor(rock, 0.82f));
+    }
     DrawBox((Vector3){x, 2.35f, z}, (Vector3){4.8f, 1.65f, 1.15f}, rock);
     DrawBox((Vector3){x, 1.20f, z - 0.58f},
             (Vector3){2.05f, 2.40f, 0.32f}, WORLD_VOID);
@@ -22495,34 +23263,6 @@ static void DrawRemoteSiteEntrance(const CcSim *sim, CcLocalSiteKind site,
             (Color){0});
         DrawBox((Vector3){x - 5.0f, 0.42f, z + 0.6f},
                 (Vector3){1.0f, 0.84f, 1.0f}, WORLD_WOOD);
-    } else if (site == CC_LOCAL_SITE_DRAGON_CAVE) {
-        CcCreaturePose pose = sim->dragon.slain ? CC_CREATURE_POSE_DOWN_A :
-            sim->dragon.stolen_outstanding > 0 ? CC_CREATURE_POSE_THREAT :
-                                                CC_CREATURE_POSE_REST;
-        CcCreatureVariant dragon_variant = DragonCreatureForLifeStage(
-            sim->dragon.life_stage);
-        float dragon_back_offset =
-            dragon_variant == CC_CREATURE_DRAGON_DEEP_WYRM ? 23.5f :
-            dragon_variant == CC_CREATURE_DRAGON ? 12.4f : 6.0f;
-        Vector3 dragon_position = {
-            x - dragon_back_offset,
-            0.0f,
-            z + (dragon_variant == CC_CREATURE_DRAGON_WHELP ? 0.2f : 0.8f)
-        };
-        float dragon_yaw =
-            dragon_variant == CC_CREATURE_DRAGON_WHELP ?
-                -0.48f * PI : 0.48f * PI;
-        (void)DrawCreature3D(
-            dragon_variant, pose,
-            dragon_position, dragon_yaw, 0.90f,
-            (Color){0});
-        int32_t marks = 2 + sim->dragon.crown_strength / 20;
-        for (int32_t i = 0; i < marks && i < 6; ++i) {
-            DrawSmallSphere(
-                (Vector3){x - 1.8f + (float)(i % 3) * 0.38f,
-                          0.12f, z - 1.2f + (float)(i / 3) * 0.34f},
-                0.14f, WORLD_GOLD);
-        }
     }
 }
 
@@ -22549,6 +23289,13 @@ void CcLocalDrawSite3D(const CcSim *sim, const CcLocalAgent *agent,
     } else if (travelling) {
         camera = RoadCamera(carriage, true, clock, true,
                             target.texture.height);
+    } else if (site == CC_LOCAL_SITE_DRAGON_CAVE &&
+               agent->position.x > 45.0f) {
+        camera = SnapCameraToArtPixels(
+            PerspectiveCameraComposed(
+                Vector3Add(agent->position, (Vector3){7.5f, 5.2f, 0.0f}),
+                (Vector3){-24.0f, 9.5f, 19.0f}, 50.0f),
+            target.texture.height);
     } else {
         camera = SnapCameraToArtPixels(
             PerspectiveCameraComposed(
@@ -22564,6 +23311,10 @@ void CcLocalDrawSite3D(const CcSim *sim, const CcLocalAgent *agent,
     Color kingdom = KingdomColor3D(sim, kingdom_id);
     const CcRoute *road = SiteAnchorRoad(sim);
     ArtComposition site_art = ROAD_ART_COMPOSITION;
+    if (!travelling && (site == CC_LOCAL_SITE_GOBLIN_CAVE ||
+                        site == CC_LOCAL_SITE_DRAGON_CAVE)) {
+        site_art.light_profile = ART_LIGHT_INTERIOR_EMBER;
+    }
     site_art.focal_point = camera.target;
     site_art.foreground_anchor = carriage;
     SetFaceRenderContext(camera, target.texture.width, target.texture.height);
@@ -22571,16 +23322,16 @@ void CcLocalDrawSite3D(const CcSim *sim, const CcLocalAgent *agent,
     ClearBackground(ArtLightBackground(site_art.light_profile));
     BeginMode3D(camera);
     BeginWorldLighting(camera, &site_art);
-    DrawRoadTerrain(sim->world_seed ^ ((uint32_t)site << 24U), road,
-                    site == CC_LOCAL_SITE_DRAGON_CAVE ? 72 :
-                    site == CC_LOCAL_SITE_GOBLIN_CAVE ? 48 : 38,
-                    false, kingdom, (int32_t)lroundf(amount * 1000.0f),
-                    camera.target);
+    DrawRemoteSiteTerrain(
+        sim->world_seed ^ ((uint32_t)site << 24U), road, site, travelling,
+        kingdom, (int32_t)lroundf(amount * 1000.0f), camera.target);
     DrawRemoteSiteEntrance(sim, site, clock);
-    DrawRoadCarriage(carriage, CcPlayerCargoUsed(&sim->player), clock,
-                     travelling ? 0.72f : 0.0f,
-                     returning ? -0.5f * PI : 0.5f * PI,
-                     true, false);
+    if (site != CC_LOCAL_SITE_DRAGON_CAVE) {
+        DrawRoadCarriage(carriage, CcPlayerCargoUsed(&sim->player), clock,
+                         travelling ? 0.72f : 0.0f,
+                         returning ? -0.5f * PI : 0.5f * PI,
+                         true, false);
+    }
     if (!travelling) {
         DrawAgentPath(agent, false);
         DrawRobotShell(agent);
@@ -22593,21 +23344,34 @@ void CcLocalDrawSite3D(const CcSim *sim, const CcLocalAgent *agent,
     PresentTarget(target, destination);
 
     WorldLabel labels[3] = {
-        {{CC_LOCAL_SITE_ENTRANCE_X, 3.55f, CC_LOCAL_SITE_ENTRANCE_Z},
+        {{CC_LOCAL_SITE_ENTRANCE_X -
+              (site == CC_LOCAL_SITE_DRAGON_CAVE ? 4.5f : 0.0f),
+          site == CC_LOCAL_SITE_DRAGON_CAVE ? 10.2f : 3.55f,
+          CC_LOCAL_SITE_ENTRANCE_Z},
          CcLocalSiteName(sim, site),
          site == CC_LOCAL_SITE_DRAGON_CAVE ? WORLD_DANGER :
          site == CC_LOCAL_SITE_GOBLIN_CAVE ? WORLD_VIOLET : WORLD_GOLD},
         {{CC_LOCAL_SITE_CARRIAGE_X, 2.65f, CC_LOCAL_SITE_CARRIAGE_Z},
-         "CARRIAGE / F", WORLD_TEAL},
+         site == CC_LOCAL_SITE_DRAGON_CAVE ? "GOBLIN NETWORK / F" :
+                                             "CARRIAGE / F",
+         site == CC_LOCAL_SITE_DRAGON_CAVE ? WORLD_VIOLET : WORLD_TEAL},
         {{agent->position.x, agent->position.y + 2.45f, agent->position.z},
          "YOU", WORLD_TEAL}
     };
     DrawLabels(labels, travelling ? 1 : 3, camera, destination);
+    const char *site_caption =
+        site == CC_LOCAL_SITE_DRAGON_CAVE ?
+            "SHEER ROOST CLIFF  /  NO EXTERNAL APPROACH" :
+        site == CC_LOCAL_SITE_GOBLIN_CAVE ?
+            "OFF-ROAD FOOT TRAIL  /  CARRIAGE LEFT AT ROAD EDGE" :
+            "SEPARATE LOCAL MAP  /  THE CARRIAGE REMAINS PARKED";
     DrawViewportText(
         travelling ?
             returning ? "CARRIAGE VIEW  /  RETURNING TO TOWN" :
-                        "CARRIAGE VIEW  /  THE SITE ROAD AHEAD" :
-            "SEPARATE LOCAL MAP  /  THE CARRIAGE REMAINS PARKED",
+                        site == CC_LOCAL_SITE_GOBLIN_CAVE ?
+                            "CARRIAGE VIEW  /  HIDDEN TRAILHEAD AHEAD" :
+                            "CARRIAGE VIEW  /  THE SITE ROAD AHEAD" :
+            site_caption,
         destination, 18, 18, 10, WORLD_INK);
 }
 
@@ -22920,22 +23684,20 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         DrawSiteRoadGate(CC_LOCAL_DUNGEON_X, CC_LOCAL_DUNGEON_Z,
                          WORLD_VIOLET);
     }
-    if ((place->id == sim->dragon.lair_settlement_id ||
-         place->id == sim->goblins.lair_settlement_id) &&
+    if (place->id == sim->goblins.lair_settlement_id &&
         SceneryPointVisible(CC_LOCAL_DRAGON_CAVE_X,
                             CC_LOCAL_DRAGON_CAVE_Z, scenery_focus)) {
         DrawSiteRoadGate(
             CC_LOCAL_DRAGON_CAVE_X, CC_LOCAL_DRAGON_CAVE_Z,
-            place->id == sim->dragon.lair_settlement_id ?
-                WORLD_DANGER : WORLD_VIOLET);
+            WORLD_VIOLET);
     }
     DrawSettlementCreatures(sim, place, clock, scenery_focus);
 
     DrawVisibleNpcFigure3D(
         TerrainWorldPoint(STREET_PEOPLE[0].x, STREET_PEOPLE[0].y),
-        active_opening_step == CC_LOCAL_OPENING_FIND_NELL ? 0.78f : 0.96f,
+        active_opening_step == CC_LOCAL_OPENING_FIND_JORY ? 0.78f : 0.96f,
         -0.55f, UINT32_C(0x73747201),
-        active_opening_step == CC_LOCAL_OPENING_FIND_NELL ?
+        active_opening_step == CC_LOCAL_OPENING_FIND_JORY ?
             CC_NPC_ROLE_TRAVELLER : CC_NPC_ROLE_MERCHANT,
         (Color){223, 151, 68, 255}, clock * 1.2f, CC_TRAVERSAL_IDLE,
         scenery_focus);
@@ -23097,15 +23859,15 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                                        carriage_targeted ? WORLD_TEAL :
                                                            WORLD_GOLD};
     }
-    if (active_opening_step == CC_LOCAL_OPENING_FIND_NELL &&
-        AgentNearLabel(agent, CC_LOCAL_INTRO_NELL_X,
-                       CC_LOCAL_INTRO_NELL_Z, 11.0f)) {
+    if (active_opening_step == CC_LOCAL_OPENING_FIND_JORY &&
+        AgentNearLabel(agent, CC_LOCAL_INTRO_JORY_X,
+                       CC_LOCAL_INTRO_JORY_Z, 11.0f)) {
         labels[count++] = (WorldLabel){
-            {CC_LOCAL_INTRO_NELL_X,
-             CcLocalTerrainHeightAt(CC_LOCAL_INTRO_NELL_X,
-                                    CC_LOCAL_INTRO_NELL_Z) + 1.92f,
-             CC_LOCAL_INTRO_NELL_Z},
-            "Nell  /  press F to talk", WORLD_TEAL};
+            {CC_LOCAL_INTRO_JORY_X,
+             CcLocalTerrainHeightAt(CC_LOCAL_INTRO_JORY_X,
+                                    CC_LOCAL_INTRO_JORY_Z) + 1.92f,
+             CC_LOCAL_INTRO_JORY_Z},
+            "Jory  /  press F to talk", WORLD_TEAL};
     }
     if (active_opening_step == CC_LOCAL_OPENING_MEET_MARA &&
         AgentNearLabel(agent, CC_LOCAL_NOTICE_X,
@@ -23235,8 +23997,8 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
              CcLocalTerrainHeightAt(CC_LOCAL_DRAGON_CAVE_X,
                                     CC_LOCAL_DRAGON_CAVE_Z) + 2.75f,
              CC_LOCAL_DRAGON_CAVE_Z},
-            sim->dragon.slain ? "Road to the ashen cave" :
-                                "Road to the dragon cave",
+            sim->dragon.slain ? "Ashen roost / sheer cliff" :
+                                "Dragon roost / sheer cliff / no road",
             sim->dragon.slain ? WORLD_VIOLET : WORLD_DANGER};
     }
     if (place->id == sim->goblins.lair_settlement_id &&
@@ -23247,7 +24009,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
              CcLocalTerrainHeightAt(CC_LOCAL_DRAGON_CAVE_X,
                                     CC_LOCAL_DRAGON_CAVE_Z) + 2.75f,
              CC_LOCAL_DRAGON_CAVE_Z},
-            "Road to the goblin cave", WORLD_VIOLET};
+            "Hidden trail to goblin dungeon", WORLD_VIOLET};
     }
     if (!combat_nearby) {
         DrawLabels(labels, count, camera, destination);
