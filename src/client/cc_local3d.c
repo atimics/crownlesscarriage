@@ -11176,6 +11176,12 @@ static void LoadNpcArchetypes(void)
 {
     for (int32_t role = 0; role < CC_NPC_ROLE_COUNT; ++role) {
         for (int32_t pose = 0; pose < CC_NPC_ARCHETYPE_POSE_COUNT; ++pose) {
+#if defined(PLATFORM_WEB)
+            /* Browser actors share the idle silhouette for stepped motion.
+               Keeping 90 additional uploaded poses made combat exceed the
+               browser's page-memory budget on constrained devices. */
+            if (pose != 0) continue;
+#endif
             char path[256];
             (void)snprintf(path, sizeof(path),
                            "assets/exports/npc/npc_%s%s_v01.glb",
@@ -11322,6 +11328,11 @@ static void LoadNpcBodySkins(void)
         for (int32_t muscle = 0; muscle < CC_NPC_BODY_MUSCLE_COUNT; ++muscle) {
             for (int32_t tissue = 0; tissue < CC_NPC_BODY_TISSUE_COUNT;
                  ++tissue) {
+#if defined(PLATFORM_WEB)
+                /* A shared body retains skinned combat motion without keeping
+                   all 36 body recipes resident in browser GPU memory. */
+                if (frame != 1 || muscle != 1 || tissue != 1) continue;
+#endif
                 NpcBodySkinCache *body =
                     &npc_body_skins[frame][muscle][tissue];
                 char path[256];
@@ -13611,7 +13622,11 @@ static NpcBodySkinCache *NpcBodyForAppearance(
     int32_t frame = NpcBodyFrameForAppearance(appearance);
     int32_t muscle = NpcBodyMuscleForAppearance(appearance);
     int32_t tissue = NpcBodyTissueForAppearance(appearance);
-    return &npc_body_skins[frame][muscle][tissue];
+    NpcBodySkinCache *body = &npc_body_skins[frame][muscle][tissue];
+#if defined(PLATFORM_WEB)
+    if (!body->ready) return &npc_body_skins[1][1][1];
+#endif
+    return body;
 }
 
 static bool DrawNpcBodySkin(const CcHumanoidSkinPose *skin,
