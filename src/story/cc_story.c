@@ -44,6 +44,16 @@ static const CcStoryLineTemplate STORY_LINES[] = {
         CC_STORY_BEAT_HELPED, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_RELIEF_DELIVERY, "Mara Venn"),
     STORY_LINE(
+        "empty_granary.mara.pressing",
+        "The flour ledger lost another page this week. The bread line did not.",
+        CC_STORY_BEAT_PRESSING, CC_STORY_SPEAKER_SPONSOR,
+        CC_SITUATION_RELIEF_DELIVERY, "Mara Venn"),
+    STORY_LINE(
+        "empty_granary.mara.breaking",
+        "There is seed grain left. If they eat it, spring becomes the next famine.",
+        CC_STORY_BEAT_BREAKING, CC_STORY_SPEAKER_SPONSOR,
+        CC_SITUATION_RELIEF_DELIVERY, "Mara Venn"),
+    STORY_LINE(
         "empty_granary.tomas.offer",
         "Take eight food boxes to the miners by the old road. No soldiers. No inspections. Better pay.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_SPONSOR,
@@ -82,6 +92,16 @@ static const CcStoryLineTemplate STORY_LINES[] = {
         "treaty_bridge.ilyra.helped",
         "I cut the gate chain myself. My report says the bridge machinery failed.",
         CC_STORY_BEAT_HELPED, CC_STORY_SPEAKER_SPONSOR,
+        CC_SITUATION_ROUTE_REPAIR, "Ilyra Senn"),
+    STORY_LINE(
+        "treaty_bridge.ilyra.pressing",
+        "The chain still holds. The wagons behind it have started turning back.",
+        CC_STORY_BEAT_PRESSING, CC_STORY_SPEAKER_SPONSOR,
+        CC_SITUATION_ROUTE_REPAIR, "Ilyra Senn"),
+    STORY_LINE(
+        "treaty_bridge.ilyra.breaking",
+        "Open the bridge now, or the road will belong to whoever feeds it at night.",
+        CC_STORY_BEAT_BREAKING, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_ROUTE_REPAIR, "Ilyra Senn"),
     STORY_LINE(
         "lower_silverworks.jory.lead",
@@ -137,6 +157,16 @@ static const CcStoryLineTemplate STORY_LINES[] = {
         CC_STORY_BEAT_HELPED, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_MONSTER_EXPEDITION, "Jory Fen"),
     STORY_LINE(
+        "lower_silverworks.jory.pressing",
+        "The breathing is closer to the lifts now. Even the foreman heard it.",
+        CC_STORY_BEAT_PRESSING, CC_STORY_SPEAKER_AFFECTED,
+        CC_SITUATION_MONSTER_EXPEDITION, "Jory Fen"),
+    STORY_LINE(
+        "lower_silverworks.jory.breaking",
+        "Nobody whistles below now. Something learned to whistle back.",
+        CC_STORY_BEAT_BREAKING, CC_STORY_SPEAKER_AFFECTED,
+        CC_SITUATION_MONSTER_EXPEDITION, "Jory Fen"),
+    STORY_LINE(
         "empty_granary.jory.offer",
         "We are running out of food.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_AFFECTED,
@@ -156,6 +186,27 @@ static const CcStoryLineTemplate STORY_LINES[] = {
         "The food arrived. Thank you.",
         CC_STORY_BEAT_HELPED, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_RELIEF_DELIVERY, "Jory Fen"),
+
+    STORY_LINE(
+        "character.pressing.sponsor",
+        "The need is growing faster than the answer. There is still time, but less of it.",
+        CC_STORY_BEAT_PRESSING, CC_STORY_SPEAKER_SPONSOR,
+        CC_STORY_ANY_SITUATION, NULL),
+    STORY_LINE(
+        "character.pressing.affected",
+        "It is worse than when we last spoke. People have started making quieter plans.",
+        CC_STORY_BEAT_PRESSING, CC_STORY_SPEAKER_AFFECTED,
+        CC_STORY_ANY_SITUATION, NULL),
+    STORY_LINE(
+        "character.breaking.sponsor",
+        "This is the last honest chance to choose the outcome. After this, the pressure chooses.",
+        CC_STORY_BEAT_BREAKING, CC_STORY_SPEAKER_SPONSOR,
+        CC_STORY_ANY_SITUATION, NULL),
+    STORY_LINE(
+        "character.breaking.affected",
+        "We are past waiting calmly. Whatever you do now will be what we remember.",
+        CC_STORY_BEAT_BREAKING, CC_STORY_SPEAKER_AFFECTED,
+        CC_STORY_ANY_SITUATION, NULL),
 
     STORY_LINE(
         "situation.relief.offer.sponsor",
@@ -289,7 +340,8 @@ static CcStorySpeakerRole CharacterRole(const CcSituation *situation,
     return CC_STORY_SPEAKER_ANY;
 }
 
-static CcStoryBeat CharacterBeat(const CcSituation *situation,
+static CcStoryBeat CharacterBeat(const CcSim *sim,
+                                 const CcSituation *situation,
                                  const CcCharacter *character)
 {
     if (situation == NULL) return CC_STORY_BEAT_FAILED;
@@ -310,6 +362,14 @@ static CcStoryBeat CharacterBeat(const CcSituation *situation,
     if (character != NULL && CcCharacterRemembers(
             character, CC_CHARACTER_MEMORY_PLAYER_PROMISED, situation->id)) {
         return CC_STORY_BEAT_PROMISED;
+    }
+    const CcFront *front = CcSimSituationFront(sim, situation);
+    CcFrontStage stage = CcSimFrontStage(front);
+    if (stage == CC_FRONT_STAGE_BREAKING) {
+        return CC_STORY_BEAT_BREAKING;
+    }
+    if (stage == CC_FRONT_STAGE_PRESSING) {
+        return CC_STORY_BEAT_PRESSING;
     }
     if (situation->kind == CC_SITUATION_MONSTER_EXPEDITION) {
         switch (situation->discovery_stage) {
@@ -360,7 +420,7 @@ const CcStoryLine *CcStoryCharacterLine(
     const CcCharacter *character)
 {
     if (situation == NULL || character == NULL) return NULL;
-    CcStoryBeat beat = CharacterBeat(situation, character);
+    CcStoryBeat beat = CharacterBeat(sim, situation, character);
     CcStorySpeakerRole role = CharacterRole(situation, character);
     size_t count = sizeof(STORY_LINES) / sizeof(STORY_LINES[0]);
     for (size_t i = 0U; i < count; ++i) {
@@ -377,7 +437,7 @@ bool CcStoryCharacterText(
     if (sim == NULL || situation == NULL || character == NULL ||
         text == NULL || text_capacity == 0U) return false;
     text[0] = '\0';
-    CcStoryBeat beat = CharacterBeat(situation, character);
+    CcStoryBeat beat = CharacterBeat(sim, situation, character);
     CcStorySpeakerRole role = CharacterRole(situation, character);
     if (situation->kind == CC_SITUATION_RELIEF_DELIVERY &&
         (role == CC_STORY_SPEAKER_SPONSOR ||
@@ -484,6 +544,8 @@ const char *CcStoryBeatName(CcStoryBeat beat)
         case CC_STORY_BEAT_WITHDREW: return "withdrew";
         case CC_STORY_BEAT_RESOLVED: return "resolved";
         case CC_STORY_BEAT_FAILED: return "failed";
+        case CC_STORY_BEAT_PRESSING: return "pressing";
+        case CC_STORY_BEAT_BREAKING: return "breaking";
     }
     return "unknown";
 }

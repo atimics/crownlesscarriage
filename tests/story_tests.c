@@ -369,6 +369,40 @@ static void ValidateConversationBeats(void)
     CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
 }
 
+static void ValidateFrontUrgencyBeats(void)
+{
+    CcSim sim;
+    CcSimInit(&sim, UINT32_C(0xc0a71a9e));
+    CcSituation *relief = FindSituation(
+        &sim, CC_SITUATION_RELIEF_DELIVERY);
+    CC_CHECK(relief != NULL);
+    const CcCharacter *sponsor = CcSimSituationSponsorCharacter(
+        &sim, relief);
+    CC_CHECK(sponsor != NULL);
+    CcFront *front = NULL;
+    for (int32_t i = 0; i < sim.front_count; ++i) {
+        if (sim.fronts[i].id == relief->front_id) {
+            front = &sim.fronts[i];
+            break;
+        }
+    }
+    CC_CHECK(front != NULL);
+
+    front->portent.value = (front->portent.limit * 40) / 100;
+    const CcStoryLine *pressing = CcStoryCharacterLine(
+        &sim, relief, sponsor);
+    CC_CHECK(pressing != NULL);
+    CC_CHECK(pressing->beat == CC_STORY_BEAT_PRESSING);
+    CC_CHECK(strcmp(pressing->id, "empty_granary.mara.pressing") == 0);
+
+    front->portent.value = (front->portent.limit * 70) / 100;
+    const CcStoryLine *breaking = CcStoryCharacterLine(
+        &sim, relief, sponsor);
+    CC_CHECK(breaking != NULL);
+    CC_CHECK(breaking->beat == CC_STORY_BEAT_BREAKING);
+    CC_CHECK(strcmp(breaking->id, "empty_granary.mara.breaking") == 0);
+}
+
 static void ValidateExpiredPromiseMemory(void)
 {
     CcSim sim;
@@ -418,6 +452,7 @@ int main(void)
     ValidateRoadCompanyVoices();
     ValidateSituationCoverage();
     ValidateConversationBeats();
+    ValidateFrontUrgencyBeats();
     ValidateMineSocialThread();
     ValidateExpiredPromiseMemory();
     puts("Authored story beat tests passed");

@@ -19,6 +19,11 @@
 #define CC_MAX_MAPS 13
 #define CC_MAX_TREASURES 24
 #define CC_MAX_SITUATIONS 12
+#define CC_MAX_FRONTS 12
+#define CC_MAX_FRONT_SITUATIONS 4
+#define CC_MAX_QUEST_OUTCOMES 24
+#define CC_MAX_QUEST_EVIDENCE 8
+#define CC_MAX_PENDING_ECHOES 3
 #define CC_MAX_CHARACTERS 24
 #define CC_CHARACTER_MEMORY_CAPACITY 4
 #define CC_CHARACTER_KNOWLEDGE_CAPACITY 8
@@ -43,8 +48,8 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 20
-#define CC_GENERATOR_VERSION 19
+#define CC_SIM_SCHEMA_VERSION 21
+#define CC_GENERATOR_VERSION 20
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
 #define CC_WORLD_DAY_SUBTICKS (24 * 60 * CC_WORLD_MINUTE_SUBTICKS)
@@ -74,7 +79,9 @@ typedef enum CcEntityKind {
     CC_ENTITY_TREASURE = 16,
     CC_ENTITY_COURIER = 17,
     CC_ENTITY_HORSE = 18,
-    CC_ENTITY_CHARACTER = 19
+    CC_ENTITY_CHARACTER = 19,
+    CC_ENTITY_FRONT = 20,
+    CC_ENTITY_QUEST_OUTCOME = 21
 } CcEntityKind;
 
 typedef enum CcGood {
@@ -253,7 +260,11 @@ typedef enum CcEventKind {
     CC_EVENT_RELATIONSHIP_HISTORY,
     CC_EVENT_RUMOR_SHARED,
     CC_EVENT_FACT_REVEALED,
-    CC_EVENT_RELATIONSHIP_CHANGED
+    CC_EVENT_RELATIONSHIP_CHANGED,
+    CC_EVENT_FRONT_CREATED,
+    CC_EVENT_FRONT_RESOLVED,
+    CC_EVENT_FRONT_FAILED,
+    CC_EVENT_QUEST_PROGRESS
 } CcEventKind;
 
 typedef enum CcCommandKind {
@@ -828,6 +839,70 @@ typedef enum CcSituationStatus {
     CC_SITUATION_FAILED
 } CcSituationStatus;
 
+typedef enum CcQuestObjectiveKind {
+    CC_QUEST_OBJECTIVE_DELIVER_GOODS,
+    CC_QUEST_OBJECTIVE_RESTORE_ROUTE,
+    CC_QUEST_OBJECTIVE_SETTLE_DUNGEON,
+    CC_QUEST_OBJECTIVE_ESCORT_COURIER
+} CcQuestObjectiveKind;
+
+typedef enum CcQuestEndReason {
+    CC_QUEST_END_NONE,
+    CC_QUEST_END_COMPLETED,
+    CC_QUEST_END_EXPIRED,
+    CC_QUEST_END_REFUSED,
+    CC_QUEST_END_INVALIDATED,
+    CC_QUEST_END_COURIER_LOST
+} CcQuestEndReason;
+
+typedef enum CcFrontKind {
+    CC_FRONT_SUPPLY_CRISIS,
+    CC_FRONT_MONSTER_PRESSURE,
+    CC_FRONT_COURIER_DISPATCH
+} CcFrontKind;
+
+typedef enum CcFrontStatus {
+    CC_FRONT_ACTIVE,
+    CC_FRONT_RESOLVED,
+    CC_FRONT_FAILED,
+    CC_FRONT_INVALIDATED
+} CcFrontStatus;
+
+typedef enum CcFrontOutcome {
+    CC_FRONT_OUTCOME_NONE,
+    CC_FRONT_OUTCOME_RELIEF_DELIVERED,
+    CC_FRONT_OUTCOME_ROUTE_RESTORED,
+    CC_FRONT_OUTCOME_NIGHT_ROAD,
+    CC_FRONT_OUTCOME_MONSTER_SETTLED,
+    CC_FRONT_OUTCOME_DISPATCH_DELIVERED,
+    CC_FRONT_OUTCOME_PRESSURE_WON
+} CcFrontOutcome;
+
+typedef enum CcFrontStage {
+    CC_FRONT_STAGE_RUMBLING,
+    CC_FRONT_STAGE_PRESSING,
+    CC_FRONT_STAGE_BREAKING,
+    CC_FRONT_STAGE_CLOSED
+} CcFrontStage;
+
+typedef struct CcQuestClock {
+    int32_t value;
+    int32_t limit;
+    CcId created_by_event_id;
+    CcId resolved_by_event_id;
+} CcQuestClock;
+
+typedef struct CcQuestObjective {
+    CcQuestObjectiveKind kind;
+    CcId target_id;
+    CcGood good;
+    int32_t required;
+    CcQuestClock progress;
+    CcQuestClock danger;
+    CcId evidence_event_ids[CC_MAX_QUEST_EVIDENCE];
+    int32_t evidence_count;
+} CcQuestObjective;
+
 typedef enum CcCharacterRole {
     CC_CHARACTER_OFFICIAL,
     CC_CHARACTER_LABORER,
@@ -967,6 +1042,9 @@ typedef struct CcSituation {
     int32_t deadline_day;
     CcId sponsor_character_id;
     CcId affected_character_id;
+    CcId front_id;
+    CcQuestEndReason end_reason;
+    CcQuestObjective objective;
     CcId witness_character_id;
     CcSituationDiscoveryStage discovery_stage;
     CcSituationLeadPath lead_path;
@@ -974,6 +1052,44 @@ typedef struct CcSituation {
     char sponsor_name[CC_NAME_CAPACITY];
     char affected_name[CC_NAME_CAPACITY];
 } CcSituation;
+
+typedef struct CcFront {
+    CcId id;
+    CcFrontKind kind;
+    CcFrontStatus status;
+    CcFrontOutcome outcome;
+    CcId anchor_id;
+    CcId cause_event_id;
+    CcId created_event_id;
+    CcId resolved_event_id;
+    int32_t created_day;
+    int32_t resolved_day;
+    CcQuestClock portent;
+    CcId situation_ids[CC_MAX_FRONT_SITUATIONS];
+    int32_t situation_count;
+    char premise[CC_EVENT_TEXT_CAPACITY];
+} CcFront;
+
+typedef struct CcQuestOutcomeRecord {
+    CcId id;
+    CcId situation_id;
+    CcId front_id;
+    CcSituationKind situation_kind;
+    CcFrontKind front_kind;
+    CcSituationStatus situation_status;
+    CcQuestEndReason end_reason;
+    CcFrontOutcome front_outcome;
+    CcId target_id;
+    CcId sponsor_character_id;
+    CcId affected_character_id;
+    CcId cause_event_id;
+    CcId resolved_event_id;
+    int32_t resolved_day;
+    int32_t progress_value;
+    int32_t progress_limit;
+    int32_t danger_value;
+    int32_t danger_limit;
+} CcQuestOutcomeRecord;
 
 typedef enum CcJourneyOutcome {
     CC_JOURNEY_OUTCOME_NONE,
@@ -1126,6 +1242,8 @@ typedef struct CcSim {
     CcDungeon dungeons[CC_MAX_DUNGEONS];
     CcDungeonExpedition dungeon_expedition;
     CcSituation situations[CC_MAX_SITUATIONS];
+    CcFront fronts[CC_MAX_FRONTS];
+    CcQuestOutcomeRecord quest_outcomes[CC_MAX_QUEST_OUTCOMES];
     CcCharacter characters[CC_MAX_CHARACTERS];
     CcRelationship relationships[CC_MAX_RELATIONSHIPS];
     int32_t relationship_count;
@@ -1138,6 +1256,8 @@ typedef struct CcSim {
     CcJourneyEncounter journey;
     CcCarriageState carriage;
     CcDelayedEcho delayed_echo;
+    CcDelayedEcho pending_echoes[CC_MAX_PENDING_ECHOES];
+    int32_t pending_echo_count;
     CcId resolved_journey_situation_id;
     CcJourneyOutcome resolved_journey_outcome;
     int32_t kingdom_count;
@@ -1151,6 +1271,8 @@ typedef struct CcSim {
     int32_t monster_count;
     int32_t dungeon_count;
     int32_t situation_count;
+    int32_t front_count;
+    int32_t quest_outcome_count;
     int32_t character_count;
     int32_t event_count;
     int32_t event_write_index;
@@ -1170,6 +1292,7 @@ void CcSimInitializeHoardRaiders(CcSim *sim);
 void CcSimInitializeAnimalEconomy(CcSim *sim);
 void CcSimInitializeHorseStableSystem(CcSim *sim);
 void CcSimInitializeCharacters(CcSim *sim);
+void CcSimUpgradeQuestArchitecture(CcSim *sim);
 void CcSimInitializeUnderroad(CcSim *sim);
 void CcSimAdvanceDays(CcSim *sim, int32_t days);
 bool CcSettlementIsAbandoned(const CcSettlement *settlement);
@@ -1206,6 +1329,11 @@ const char *CcEventKindName(CcEventKind kind);
 const char *CcDragonLifeStageName(CcDragonLifeStage stage);
 const char *CcDragonActivityName(CcDragonActivity activity);
 const char *CcSituationKindName(CcSituationKind kind);
+const char *CcQuestObjectiveKindName(CcQuestObjectiveKind kind);
+const char *CcQuestEndReasonName(CcQuestEndReason reason);
+const char *CcFrontKindName(CcFrontKind kind);
+const char *CcFrontOutcomeName(CcFrontOutcome outcome);
+const char *CcFrontStageName(CcFrontStage stage);
 
 const CcSettlement *CcSimSettlement(const CcSim *sim, CcId id);
 CcSettlement *CcSimSettlementMutable(CcSim *sim, CcId id);
@@ -1219,6 +1347,14 @@ bool CcSimTravelPreview(const CcSim *sim, CcId destination_id,
 const CcEvent *CcSimRecentEvent(const CcSim *sim, int32_t offset);
 const CcEvent *CcSimEvent(const CcSim *sim, CcId id);
 const CcSituation *CcSimSituation(const CcSim *sim, CcId id);
+const CcFront *CcSimFront(const CcSim *sim, CcId id);
+const CcFront *CcSimSituationFront(const CcSim *sim,
+                                   const CcSituation *situation);
+const CcQuestOutcomeRecord *CcSimQuestOutcome(const CcSim *sim,
+                                              CcId situation_id);
+const CcQuestOutcomeRecord *CcSimLatestQuestOutcomeForCharacter(
+    const CcSim *sim, CcId character_id);
+CcFrontStage CcSimFrontStage(const CcFront *front);
 const CcCharacter *CcSimCharacter(const CcSim *sim, CcId id);
 const CcDungeon *CcSimDungeon(const CcSim *sim, CcId id);
 const CcDungeonRoom *CcSimDungeonCurrentRoom(const CcSim *sim);
@@ -1264,6 +1400,7 @@ bool CcSimBanditProvisionDemand(const CcSim *sim, CcId route_id,
 int32_t CcSimBanditReactionRoll(const CcSim *sim, CcId route_id);
 const char *CcBanditReactionName(int32_t roll);
 int32_t CcSimActiveSituationCount(const CcSim *sim);
+int32_t CcSimActiveFrontCount(const CcSim *sim);
 int32_t CcSimIncomingGood(const CcSim *sim, CcId settlement_id, CcGood good);
 bool CcSimFoodEconomyAtSettlement(const CcSim *sim, CcId settlement_id,
                                   CcFoodEconomy *economy);

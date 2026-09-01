@@ -16,7 +16,9 @@ typedef enum CcStoryBeat {
     CC_STORY_BEAT_HELPED,
     CC_STORY_BEAT_WITHDREW,
     CC_STORY_BEAT_RESOLVED,
-    CC_STORY_BEAT_FAILED
+    CC_STORY_BEAT_FAILED,
+    CC_STORY_BEAT_PRESSING,
+    CC_STORY_BEAT_BREAKING
 } CcStoryBeat;
 
 typedef enum CcStorySpeakerRole {
