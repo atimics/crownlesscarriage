@@ -1436,6 +1436,7 @@ static void DescribeHelp(char *output, size_t capacity)
            "See the world:\n"
            "  look, people, talk NUMBER, rumors, charters, roads\n"
            "  causes, notes, cargo, animals, economy, treasures, inequality, kingdoms, war, dragon, goblins, status, history [COUNT]\n"
+           "  mark — compare this campaign against a no-action control of the same seed\n"
            "Make commitments:\n"
            "  tell NUMBER, keep NUMBER, accept NUMBER, refuse NUMBER, abandon\n"
            "Move goods and people:\n"
@@ -1778,6 +1779,12 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
         DescribeGoblins(metagame, output, output_capacity);
     } else if (strcmp(command, "status") == 0) {
         DescribeStatus(metagame, output, output_capacity);
+    } else if (strcmp(command, "mark") == 0) {
+        uint64_t control_hash = 0U;
+        if (!CcMetagameAgentCounterfactual(metagame, output,
+                                           output_capacity, &control_hash)) {
+            return false;
+        }
     } else if (strcmp(command, "history") == 0) {
         int32_t count = 8;
         if (first != NULL && (!ParseDays(first, &count) || count > 20)) {

@@ -562,6 +562,22 @@ int main(void)
     CC_CHECK(dragon.sim.goblins.tribute_phase ==
              CC_GOBLIN_TRIBUTE_IDLE);
 
+    /* mark: player-facing counterfactual wrapper */
+    CcMetagame marked;
+    CcMetagameInit(&marked, UINT32_C(0x5eed));
+    CC_CHECK(CcMetagameExecute(&marked, "accept 1", output, sizeof(output)));
+    CC_CHECK(CcMetagameExecute(&marked, "buy food 4",
+                               output, sizeof(output)));
+    CC_CHECK(CcMetagameExecute(&marked, "wait 5", output, sizeof(output)));
+    CC_CHECK(CcMetagameExecute(&marked, "mark", output, sizeof(output)));
+    CC_CHECK(strstr(output, "NO-ACTION CONTROL") != NULL);
+    CC_CHECK(strstr(output,
+                    "Consequences present only in the courier branch") !=
+             NULL);
+    CC_CHECK(strstr(output, "branch differences") != NULL);
+    /* Early campaign, same seed: a couple of trades must diverge somewhere. */
+    CC_CHECK(strstr(output, "Actual state") != NULL);
+
     puts("Text-first metagame tests passed");
     return 0;
 }

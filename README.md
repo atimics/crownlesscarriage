@@ -83,6 +83,13 @@ record after the session closes. It advances the same seed to the same day
 with the company taking no actions, then reports settlement, commitment,
 faction, and event-ledger differences between the two branches.
 
+The interactive REPL exposes the same comparison through the `mark` command:
+it runs the no-action control on demand and prints the branch differences
+(settlements, commitments, factions, and events present in only one branch)
+alongside the actual and control state hashes. The agent-courier protocol
+remains the automation boundary; `mark` is the player-facing view of the
+identical report.
+
 ## Automated releases
 
 Versioned releases are built from tags. Update the version in the first
