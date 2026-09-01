@@ -144,6 +144,51 @@ CcWorldPoint CcWorldRoutePoint(const CcWorldRoutePlacement *route, float amount)
     };
 }
 
+bool CcWorldRoutePose(const CcWorldRoutePlacement *route, CcId origin_id,
+                      float journey_amount, CcWorldPoint *position,
+                      float *heading_yaw)
+{
+    if (route == NULL || position == NULL || heading_yaw == NULL ||
+        (origin_id != route->from_id && origin_id != route->to_id)) {
+        return false;
+    }
+    journey_amount = ClampUnit(journey_amount);
+    bool reverse = origin_id == route->to_id;
+    float route_amount = reverse ? 1.0f - journey_amount : journey_amount;
+    *position = CcWorldRoutePoint(route, route_amount);
+
+    CcWorldPoint first = route->samples[0];
+    CcWorldPoint last = route->samples[CC_WORLD_ROUTE_SAMPLE_COUNT - 1];
+    float dx = 2.0f * (1.0f - route_amount) *
+                   (route->control.x - first.x) +
+               2.0f * route_amount * (last.x - route->control.x);
+    float dz = 2.0f * (1.0f - route_amount) *
+                   (route->control.z - first.z) +
+               2.0f * route_amount * (last.z - route->control.z);
+    if (reverse) {
+        dx = -dx;
+        dz = -dz;
+    }
+    if (dx * dx + dz * dz < 0.000001f) {
+        dx = reverse ? first.x - last.x : last.x - first.x;
+        dz = reverse ? first.z - last.z : last.z - first.z;
+    }
+    *heading_yaw = atan2f(dx, dz);
+    return true;
+}
+
+float CcWorldRouteLength(const CcWorldRoutePlacement *route)
+{
+    if (route == NULL) return 0.0f;
+    float length = 0.0f;
+    for (int32_t sample = 0;
+         sample < CC_WORLD_ROUTE_SAMPLE_COUNT - 1; ++sample) {
+        length += PointDistance(route->samples[sample],
+                                route->samples[sample + 1]);
+    }
+    return length;
+}
+
 const CcWorldSettlementPlacement *CcWorldSettlementPlacementForId(
     const CcWorldManifest *manifest, CcId settlement_id)
 {

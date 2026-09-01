@@ -42,7 +42,12 @@ scene-local sessions are converted relative to their saved settlement.
 - Normal play presents towns and roads in one continuous coordinate space.
 - The world is finite and deterministic for a campaign seed.
 - CPU terrain memory and GPU terrain meshes have fixed upper bounds.
-- Carriage travel follows the same curved route shown in the world.
+- The wide open-world view is carriage mode. The carriage, horses, cargo,
+  heading, and terrain support follow the same curved route used by the
+  simulation.
+- Town play stays in the same map at a closer camera scale. Choosing a road
+  eases the camera out toward the carriage; arrival eases it back into the
+  destination town instead of cutting to another road scene.
 - Existing captures and focused scene tests can continue using the legacy
   local layouts while the remaining interiors and sites move into the world.
 - Changing the generator requires a deliberate generator-version migration.

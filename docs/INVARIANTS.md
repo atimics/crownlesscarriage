@@ -29,6 +29,9 @@ chunk meshes on the GPU. A chunk outside the 5 by 5 focus ring is disposable;
 the manifest and coordinate are enough to recreate it. Do not move generated
 height arrays into authoritative save state.
 
+Open-world carriage presentation must use the generated route pose. Its
+position and heading cannot be maintained by a separate visual road path.
+
 ## Save compatibility
 
 `CC_SIM_SCHEMA_VERSION` (21) and `CC_GENERATOR_VERSION` (20) version every

@@ -25158,19 +25158,31 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
                             const CcWorldStream *stream,
                             const CcLocalAgent *agent,
                             const CcLocalCourse *course,
+                            const CcLocalWorldCarriageState *carriage,
                             float clock, RenderTexture2D target,
                             Rectangle destination)
 {
     if (sim == NULL || stream == NULL || agent == NULL) return;
     CcLocalBindOpenWorld(stream);
     OpenWorldSyncRenderChunks(stream);
-    Vector3 focus = agent->position;
-    focus.y += 0.85f;
+    float camera_weight = carriage != NULL ?
+        fmaxf(0.0f, fminf(1.0f, carriage->camera_weight)) : 0.0f;
+    camera_weight = SmoothStep01(camera_weight);
+    Vector3 foot_focus = agent->position;
+    foot_focus.y += 0.85f;
+    Vector3 carriage_focus = carriage != NULL && carriage->visible ?
+        Vector3Add(carriage->position, (Vector3){0.0f, 1.05f, 0.0f}) :
+        foot_focus;
+    Vector3 focus = Vector3Lerp(foot_focus, carriage_focus, camera_weight);
+    Vector3 close_offset = {18.0f, 22.0f, 25.0f};
+    Vector3 road_offset = {30.0f, 35.0f, 41.0f};
+    Vector3 camera_offset = Vector3Lerp(
+        close_offset, road_offset, camera_weight);
     Camera3D camera = {
-        .position = {focus.x + 24.0f, focus.y + 27.0f, focus.z + 31.0f},
+        .position = Vector3Add(focus, camera_offset),
         .target = focus,
         .up = {0.0f, 1.0f, 0.0f},
-        .fovy = 38.0f,
+        .fovy = 31.0f + 19.0f * camera_weight,
         .projection = CAMERA_ORTHOGRAPHIC,
     };
     camera = SnapCameraToArtPixels(camera, target.texture.height);
@@ -25194,13 +25206,25 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
         DrawOpenWorldSettlement(sim, &stream->manifest.settlements[i], focus);
     }
     DrawOpenWorldSites(&stream->manifest, focus, clock);
-    DrawAgentPath(agent, false);
+    bool hero_embarked = carriage != NULL && carriage->hero_embarked;
+    if (!hero_embarked) DrawAgentPath(agent, false);
     if (course != NULL &&
         (course->alarm_active || course->road_encounter)) {
         DrawCourseRunners(course, focus);
     }
-    DrawRobotShell(agent);
-    DrawCombatSword(agent);
+    if (carriage != NULL && carriage->visible) {
+        Vector3 carriage_base = carriage->position;
+        if (carriage->pace > 0.02f) {
+            carriage_base.y += 0.025f + sinf(clock * 5.0f) * 0.018f;
+        }
+        DrawRoadCarriage(carriage_base, &sim->player, clock,
+                         carriage->pace, carriage->heading_yaw,
+                         true, false);
+    }
+    if (!hero_embarked) {
+        DrawRobotShell(agent);
+        DrawCombatSword(agent);
+    }
     EndWorldLighting();
     EndMode3D();
     DrawTargetAtmosphere(target, clock);
@@ -25209,9 +25233,15 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
 
     WorldLabel labels[24] = {0};
     int32_t label_count = 0;
-    labels[label_count++] = (WorldLabel){
-        {agent->position.x, agent->position.y + 2.50f, agent->position.z},
-        "YOU", WORLD_TEAL};
+    if (hero_embarked && carriage != NULL) {
+        labels[label_count++] = (WorldLabel){
+            {carriage->position.x, carriage->position.y + 3.20f,
+             carriage->position.z}, "YOUR CARRIAGE", WORLD_TEAL};
+    } else {
+        labels[label_count++] = (WorldLabel){
+            {agent->position.x, agent->position.y + 2.50f,
+             agent->position.z}, "YOU", WORLD_TEAL};
+    }
     for (int32_t i = 0;
          i < stream->manifest.settlement_count && label_count < 24; ++i) {
         const CcWorldSettlementPlacement *place =
@@ -25228,7 +25258,8 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
     }
     DrawLabels(labels, label_count, camera, destination);
     DrawViewportText(
-        TextFormat("WORLD STREAM  CPU %d/%d  GPU %d  %zu KB",
+        TextFormat("%s  ·  WORLD STREAM  CPU %d/%d  GPU %d  %zu KB",
+                   camera_weight > 0.55f ? "CARRIAGE MODE" : "TOWN MODE",
                    CcWorldStreamResidentCount(stream),
                    CC_WORLD_STREAM_CAPACITY, OpenWorldGpuChunkCount(),
                    CcWorldStreamResidentBytes(stream) / 1024U),

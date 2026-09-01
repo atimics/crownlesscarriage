@@ -122,6 +122,17 @@ typedef struct CcLocalConvoyState {
     float runtime_tick_accumulator;
 } CcLocalConvoyState;
 
+typedef struct CcLocalWorldCarriageState {
+    Vector3 position;
+    float heading_yaw;
+    float pace;
+    float camera_weight;
+    float camera_target;
+    CcId route_id;
+    bool visible;
+    bool hero_embarked;
+} CcLocalWorldCarriageState;
+
 typedef enum CcLocalAtmospherePreset {
     CC_LOCAL_ATMOSPHERE_CLEAR_DAY = 0,
     CC_LOCAL_ATMOSPHERE_RAINY_OVERCAST,
@@ -546,6 +557,7 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
                             const CcWorldStream *stream,
                             const CcLocalAgent *agent,
                             const CcLocalCourse *course,
+                            const CcLocalWorldCarriageState *carriage,
                             float clock, RenderTexture2D target,
                             Rectangle destination);
 void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,

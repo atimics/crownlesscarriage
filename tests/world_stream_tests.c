@@ -115,12 +115,50 @@ static int TestRoadAndSettlementSurface(void)
     return 0;
 }
 
+static int TestCarriagePoseFollowsRouteDirection(void)
+{
+    CcSim sim;
+    CcWorldManifest manifest;
+    CcSimInit(&sim, UINT32_C(0xca771a9e));
+    CHECK(CcWorldManifestBuild(&manifest, &sim));
+    CHECK(manifest.route_count > 0);
+    const CcWorldRoutePlacement *route = &manifest.routes[0];
+    CcWorldPoint forward_start;
+    CcWorldPoint forward_end;
+    CcWorldPoint reverse_start;
+    float forward_yaw = 0.0f;
+    float end_yaw = 0.0f;
+    float reverse_yaw = 0.0f;
+    CHECK(CcWorldRoutePose(route, route->from_id, 0.0f,
+                           &forward_start, &forward_yaw));
+    CHECK(CcWorldRoutePose(route, route->from_id, 1.0f,
+                           &forward_end, &end_yaw));
+    CHECK(CcWorldRoutePose(route, route->to_id, 0.0f,
+                           &reverse_start, &reverse_yaw));
+    CHECK(fabsf(forward_start.x - route->samples[0].x) < 0.0001f);
+    CHECK(fabsf(forward_start.z - route->samples[0].z) < 0.0001f);
+    CHECK(fabsf(forward_end.x -
+                route->samples[CC_WORLD_ROUTE_SAMPLE_COUNT - 1].x) <
+          0.0001f);
+    CHECK(fabsf(forward_end.z -
+                route->samples[CC_WORLD_ROUTE_SAMPLE_COUNT - 1].z) <
+          0.0001f);
+    CHECK(fabsf(reverse_start.x - forward_end.x) < 0.0001f);
+    CHECK(fabsf(reverse_start.z - forward_end.z) < 0.0001f);
+    float opposite_x = sinf(end_yaw) + sinf(reverse_yaw);
+    float opposite_z = cosf(end_yaw) + cosf(reverse_yaw);
+    CHECK(opposite_x * opposite_x + opposite_z * opposite_z < 0.08f);
+    CHECK(CcWorldRouteLength(route) > 1.0f);
+    return 0;
+}
+
 int main(void)
 {
     if (TestManifestIsStableAndFinite() != 0) return 1;
     if (TestChunkSeamsMatch() != 0) return 1;
     if (TestStreamingEvictsOldChunks() != 0) return 1;
     if (TestRoadAndSettlementSurface() != 0) return 1;
+    if (TestCarriagePoseFollowsRouteDirection() != 0) return 1;
     puts("Finite world streaming tests passed");
     return 0;
 }

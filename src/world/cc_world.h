@@ -113,6 +113,10 @@ const CcWorldSitePlacement *CcWorldSitePlacementForKind(
 const CcWorldSettlementPlacement *CcWorldNearestSettlement(
     const CcWorldManifest *manifest, float x, float z, float *distance);
 CcWorldPoint CcWorldRoutePoint(const CcWorldRoutePlacement *route, float amount);
+bool CcWorldRoutePose(const CcWorldRoutePlacement *route, CcId origin_id,
+                      float journey_amount, CcWorldPoint *position,
+                      float *heading_yaw);
+float CcWorldRouteLength(const CcWorldRoutePlacement *route);
 CcWorldPoint CcWorldSettlementLocalPoint(
     const CcWorldManifest *manifest, CcId settlement_id,
     float local_x, float local_z);
