@@ -30,12 +30,12 @@ static const CcStoryLineTemplate STORY_LINES[] = {
         CC_SITUATION_RELIEF_DELIVERY, "Mara Venn"),
     STORY_LINE(
         "empty_granary.mara.heard",
-        "They need food. I can spare it.",
+        "They need food. I have the boxes ready.",
         CC_STORY_BEAT_HEARD, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_RELIEF_DELIVERY, "Mara Venn"),
     STORY_LINE(
         "empty_granary.mara.promised",
-        "Take my carriage. They are waiting for you.",
+        "The food boxes are loaded. Take my carriage.",
         CC_STORY_BEAT_PROMISED, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_RELIEF_DELIVERY, "Mara Venn"),
     STORY_LINE(
@@ -45,7 +45,7 @@ static const CcStoryLineTemplate STORY_LINES[] = {
         CC_SITUATION_RELIEF_DELIVERY, "Mara Venn"),
     STORY_LINE(
         "empty_granary.tomas.offer",
-        "Take eight sacks to the hungry miners by the old road. No soldiers. No inspections. Better pay.",
+        "Take eight food boxes to the miners by the old road. No soldiers. No inspections. Better pay.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_BLACK_MARKET_DELIVERY, "Tomas Rill"),
     STORY_LINE(
@@ -70,7 +70,7 @@ static const CcStoryLineTemplate STORY_LINES[] = {
         CC_SITUATION_ROUTE_REPAIR, "Ilyra Senn"),
     STORY_LINE(
         "treaty_bridge.ilyra.heard",
-        "Alderwatch is hungry too. If I open the gate, I am responsible for every sack that crosses.",
+        "Alderwatch is hungry. If I open the gate, I answer for every food box that crosses.",
         CC_STORY_BEAT_HEARD, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_ROUTE_REPAIR, "Ilyra Senn"),
     STORY_LINE(
@@ -400,18 +400,19 @@ bool CcStoryCharacterText(
                     return true;
                 case CC_STORY_BEAT_HEARD:
                     (void)snprintf(text, text_capacity,
-                                   "%d sacks of food.", situation->quantity);
+                                   "%d boxes of food. I will load them.",
+                                   situation->quantity);
                     return true;
                 case CC_STORY_BEAT_PROMISED:
                     (void)snprintf(
                         text, text_capacity,
-                        "Take my carriage. %s will meet you in %s.",
-                        affected_name, target_name);
+                        "All %d food boxes are aboard. %s will meet you in %s.",
+                        situation->quantity, affected_name, target_name);
                     return true;
                 case CC_STORY_BEAT_HELPED:
                 case CC_STORY_BEAT_RESOLVED:
                     (void)snprintf(text, text_capacity,
-                                   "%s received all %d sacks.", target_name,
+                                   "%s received all %d food boxes.", target_name,
                                    situation->quantity);
                     return true;
                 case CC_STORY_BEAT_WITHDREW:
@@ -430,7 +431,7 @@ bool CcStoryCharacterText(
                     return true;
                 case CC_STORY_BEAT_HEARD:
                     (void)snprintf(text, text_capacity,
-                                   "We need all %d sacks.",
+                                   "We need all %d food boxes.",
                                    situation->quantity);
                     return true;
                 case CC_STORY_BEAT_PROMISED:

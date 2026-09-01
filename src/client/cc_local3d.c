@@ -10495,7 +10495,6 @@ static TreeCrownModelCache tree_crown_models = {0};
 typedef enum RuntimeAssetId {
     RUNTIME_ASSET_BRIDGE,
     RUNTIME_ASSET_CARRIAGE,
-    RUNTIME_ASSET_CARGO_RACK,
     RUNTIME_ASSET_MARKET,
     RUNTIME_ASSET_MINE,
     RUNTIME_ASSET_SHORTAGE,
@@ -10521,10 +10520,6 @@ static RuntimeAsset runtime_assets[RUNTIME_ASSET_COUNT] = {
         .path = "assets/exports/glb/carriage_base_v01.glb",
         .label = "carriage",
         .mesh_budget = 144},
-    [RUNTIME_ASSET_CARGO_RACK] = {
-        .path = "assets/exports/glb/module_cargo_rack_v01.glb",
-        .label = "cargo rack",
-        .mesh_budget = 48},
     [RUNTIME_ASSET_MARKET] = {
         .path = "assets/exports/glb/environment_market_granary_v01.glb",
         .label = "market and granary",
@@ -15422,14 +15417,15 @@ static void DrawEastRoomFocus(float hunger, Color kingdom,
             (Vector3){0.58f, 1.20f, 0.08f}, timber);
     DrawBox((Vector3){x, 1.45f, z + 0.98f},
             (Vector3){0.72f, 0.10f, 0.12f}, WORLD_GOLD);
-    int32_t sacks = hunger > 0.45f ? 2 : 5;
-    for (int32_t sack = 0; sack < sacks; ++sack) {
-        float sack_x = x - 1.28f + (float)(sack % 3) * 0.48f;
-        float sack_z = z + 0.64f + (float)(sack / 3) * 0.40f;
-        DrawCharacterEllipsoid((Vector3){sack_x, 0.26f, sack_z},
-                               (Vector3){0.25f, 0.32f, 0.20f},
-                               BlendColor(WORLD_CROP_LIGHT,
-                                          WORLD_ROAD_LIGHT, 0.42f));
+    int32_t boxes = hunger > 0.45f ? 2 : 5;
+    for (int32_t box = 0; box < boxes; ++box) {
+        float box_x = x - 1.28f + (float)(box % 3) * 0.48f;
+        float box_z = z + 0.64f + (float)(box / 3) * 0.40f;
+        DrawBox((Vector3){box_x, 0.24f, box_z},
+                (Vector3){0.40f, 0.42f, 0.36f},
+                (Color){177, 116, 55, 255});
+        DrawBox((Vector3){box_x, 0.46f, box_z},
+                (Vector3){0.42f, 0.05f, 0.38f}, WORLD_CROP_LIGHT);
     }
 }
 
@@ -20090,7 +20086,92 @@ static void PrepareHeroDisplayAt(const CcLocalAgent *source,
     CcLocalAgentSetMorphology(display, source->morphology, false);
 }
 
-static void DrawCarriage3D(const CcSettlement *place, bool targeted,
+int32_t CcLocalCargoBoxCountInternal(const CcPlayerCompany *player)
+{
+    if (player == NULL) return 0;
+    int32_t count = 0;
+    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        if (player->cargo[good] > 0) count += player->cargo[good];
+        if (count >= 24) return 24;
+    }
+    return count;
+}
+
+static Color CargoBoxColor(CcGood good)
+{
+    switch (good) {
+        case CC_GOOD_FOOD: return (Color){177, 116, 55, 255};
+        case CC_GOOD_IRON: return WORLD_METAL_SHADOW;
+        case CC_GOOD_TOOLS: return WORLD_TEAL;
+        case CC_GOOD_WEAPONS: return WORLD_DANGER;
+        case CC_GOOD_GOLD: return WORLD_GOLD;
+        case CC_GOOD_GEMS: return WORLD_VIOLET;
+        case CC_GOOD_COUNT: break;
+    }
+    return WORLD_WOOD;
+}
+
+static Color CargoBoxBandColor(CcGood good)
+{
+    if (good == CC_GOOD_FOOD) return WORLD_CROP_LIGHT;
+    if (good == CC_GOOD_IRON) return WORLD_METAL_LIGHT;
+    return WORLD_INK;
+}
+
+static void DrawCarriedCargoBoxes(const CcPlayerCompany *player,
+                                  Vector3 base, float yaw)
+{
+    int32_t limit = CcLocalCargoBoxCountInternal(player);
+    if (limit <= 0) return;
+    const Vector3 rack_center = {-0.30f, 2.21f, 0.0f};
+    DrawOrientedBox(base, rack_center,
+                    (Vector3){2.92f, 0.10f, 1.42f}, yaw,
+                    WORLD_WOOD_LIGHT);
+    DrawOrientedBox(base, (Vector3){rack_center.x, 2.42f, -0.73f},
+                    (Vector3){2.98f, 0.42f, 0.07f}, yaw,
+                    WORLD_WOOD_SHADOW);
+    DrawOrientedBox(base, (Vector3){rack_center.x, 2.42f, 0.73f},
+                    (Vector3){2.98f, 0.42f, 0.07f}, yaw,
+                    WORLD_WOOD_SHADOW);
+    DrawOrientedBox(base, (Vector3){-1.78f, 2.42f, 0.0f},
+                    (Vector3){0.07f, 0.42f, 1.52f}, yaw,
+                    WORLD_WOOD_SHADOW);
+    DrawOrientedBox(base, (Vector3){1.18f, 2.42f, 0.0f},
+                    (Vector3){0.07f, 0.42f, 1.52f}, yaw,
+                    WORLD_WOOD_SHADOW);
+    int32_t drawn = 0;
+    for (int32_t good = 0;
+         good < CC_GOOD_COUNT && drawn < limit; ++good) {
+        int32_t quantity = player != NULL ? player->cargo[good] : 0;
+        for (int32_t unit = 0; unit < quantity && drawn < limit;
+             ++unit, ++drawn) {
+            int32_t layer = drawn / 8;
+            int32_t spot = drawn % 8;
+            int32_t column = spot % 4;
+            int32_t row = spot / 4;
+            Vector3 center = {
+                -1.26f + (float)column * 0.64f,
+                2.49f + (float)layer * 0.49f,
+                -0.34f + (float)row * 0.68f
+            };
+            Color box = CargoBoxColor((CcGood)good);
+            Color band = CargoBoxBandColor((CcGood)good);
+            DrawOrientedBox(base, center,
+                            (Vector3){0.58f, 0.44f, 0.59f}, yaw, box);
+            DrawOrientedBox(
+                base,
+                (Vector3){center.x, center.y + 0.23f, center.z},
+                (Vector3){0.60f, 0.055f, 0.61f}, yaw, band);
+            DrawOrientedBox(
+                base,
+                (Vector3){center.x, center.y, center.z - 0.302f},
+                (Vector3){0.15f, 0.32f, 0.022f}, yaw,
+                Fade(band, 0.92f));
+        }
+    }
+}
+
+static void DrawCarriage3D(const CcPlayerCompany *player, bool targeted,
                            float clock)
 {
     float x = CARRIAGE_FOOTPRINT.x + CARRIAGE_FOOTPRINT.width * 0.5f;
@@ -20109,18 +20190,8 @@ static void DrawCarriage3D(const CcSettlement *place, bool targeted,
                     (Vector3){CARRIAGE_ASSET_SCALE,
                               CARRIAGE_ASSET_SCALE,
                               CARRIAGE_ASSET_SCALE}, tint);
-        int32_t cargo = place != NULL ?
-            place->stock[CC_GOOD_FOOD] + place->stock[CC_GOOD_MATERIAL] +
-            place->stock[CC_GOOD_TOOLS] : 0;
-        RuntimeAsset *rack = &runtime_assets[RUNTIME_ASSET_CARGO_RACK];
-        if (cargo >= 36 && rack->ready) {
-            DrawModelEx(rack->model, origin,
-                        (Vector3){0.0f, 1.0f, 0.0f},
-                        CARRIAGE_ASSET_STREET_YAW_DEGREES,
-                        (Vector3){CARRIAGE_ASSET_SCALE,
-                                  CARRIAGE_ASSET_SCALE,
-                                  CARRIAGE_ASSET_SCALE}, WHITE);
-        }
+        DrawCarriedCargoBoxes(
+            player, origin, CARRIAGE_ASSET_STREET_YAW_DEGREES * DEG2RAD);
         rlPopMatrix();
         return;
     }
@@ -20153,6 +20224,9 @@ static void DrawCarriage3D(const CcSettlement *place, bool targeted,
         DrawSphereWires(wheels[i], 0.55f, 7, 7,
                         Fade(WORLD_GOLD, 0.62f));
     }
+    DrawCarriedCargoBoxes(
+        player, (Vector3){x, 0.0f, z},
+        CARRIAGE_ASSET_STREET_YAW_DEGREES * DEG2RAD);
     rlPopMatrix();
 }
 
@@ -22025,9 +22099,9 @@ static void DrawRoadHorseTeam(Vector3 base, float clock, float pace,
     }
 }
 
-static void DrawRoadCarriage(Vector3 base, int32_t cargo_used, float clock,
-                             float pace, float yaw, bool horses_hitched,
-                             bool bridge_checkpoint)
+static void DrawRoadCarriage(Vector3 base, const CcPlayerCompany *player,
+                             float clock, float pace, float yaw,
+                             bool horses_hitched, bool bridge_checkpoint)
 {
     float asset_yaw_degrees = yaw * RAD2DEG - 90.0f;
     RuntimeAsset *carriage = &runtime_assets[RUNTIME_ASSET_CARRIAGE];
@@ -22037,14 +22111,6 @@ static void DrawRoadCarriage(Vector3 base, int32_t cargo_used, float clock,
                     (Vector3){CARRIAGE_ASSET_SCALE,
                               CARRIAGE_ASSET_SCALE,
                               CARRIAGE_ASSET_SCALE}, WHITE);
-        RuntimeAsset *rack = &runtime_assets[RUNTIME_ASSET_CARGO_RACK];
-        if (cargo_used > 0 && rack->ready) {
-            DrawModelEx(rack->model, base, (Vector3){0.0f, 1.0f, 0.0f},
-                        asset_yaw_degrees,
-                        (Vector3){CARRIAGE_ASSET_SCALE,
-                                  CARRIAGE_ASSET_SCALE,
-                                  CARRIAGE_ASSET_SCALE}, WHITE);
-        }
     } else {
         DrawOrientedBox(base, (Vector3){0.0f, 1.10f, 0.0f},
                         (Vector3){2.55f, 1.58f, 4.15f}, yaw,
@@ -22073,6 +22139,7 @@ static void DrawRoadCarriage(Vector3 base, int32_t cargo_used, float clock,
         DrawCylinderEx(pole_right, pole_right_end, 0.045f, 0.035f, 7,
                        WORLD_WOOD);
     }
+    DrawCarriedCargoBoxes(player, base, yaw);
     if (horses_hitched) {
         DrawRoadHorseTeam(base, clock, pace, yaw, bridge_checkpoint);
     }
@@ -22325,7 +22392,6 @@ void CcLocalDrawFork3D(const CcSim *sim, int32_t selected_route,
                  family, leaves, tree_style);
     }
 
-    int32_t cargo = CcPlayerCargoUsed(&sim->player);
     Vector3 carriage_start = {29.0f, 0.0f, 41.0f};
     float turn = SmoothStep01(turn_progress);
     float branch_heading = 0.5f * PI;
@@ -22346,7 +22412,8 @@ void CcLocalDrawFork3D(const CcSim *sim, int32_t selected_route,
         carriage_heading = 0.5f * PI +
             WrapAngle(branch_heading - 0.5f * PI) * SmoothStep01(amount);
     }
-    DrawRoadCarriage(carriage, cargo, clock, turn < 1.0f ? 0.72f : 0.0f,
+    DrawRoadCarriage(carriage, &sim->player, clock,
+                     turn < 1.0f ? 0.72f : 0.0f,
                      carriage_heading, true, false);
     DrawVisibleNpcFigure3D(
         (Vector3){33.0f, 0.0f, 35.6f}, 0.90f, 1.42f,
@@ -22674,8 +22741,7 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
         DrawRoadBarricade(route);
     }
     if (!travelling) DrawAgentPath(agent, false);
-    int32_t road_cargo = CcPlayerCargoUsed(&sim->player);
-    DrawRoadCarriage(carriage_base, road_cargo, clock, carriage_pace,
+    DrawRoadCarriage(carriage_base, &sim->player, clock, carriage_pace,
                      0.5f * PI, true, authored_checkpoint);
     int32_t roadside_cattle = 0;
     if (origin != NULL) {
@@ -23239,7 +23305,7 @@ void CcLocalDrawSite3D(const CcSim *sim, const CcLocalAgent *agent,
         kingdom, (int32_t)lroundf(amount * 1000.0f), camera.target);
     DrawRemoteSiteEntrance(sim, site, clock);
     if (site != CC_LOCAL_SITE_DRAGON_CAVE) {
-        DrawRoadCarriage(carriage, CcPlayerCargoUsed(&sim->player), clock,
+        DrawRoadCarriage(carriage, &sim->player, clock,
                          travelling ? 0.72f : 0.0f,
                          returning ? -0.5f * PI : 0.5f * PI,
                          true, false);
@@ -23552,14 +23618,13 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         if (!convoy_visible) {
             bool carriage_targeted = agent != NULL &&
                 agent->world_target == CC_LOCAL_WORLD_TARGET_CARRIAGE;
-            DrawCarriage3D(place, carriage_targeted, clock);
+            DrawCarriage3D(&sim->player, carriage_targeted, clock);
             DrawStableHorseTeam(clock);
             if (carriage_targeted) DrawCarriageTargetMarker3D(clock);
         }
     }
     if (convoy_visible) {
-        DrawRoadCarriage(convoy->town_position,
-                         CcPlayerCargoUsed(&sim->player), clock,
+        DrawRoadCarriage(convoy->town_position, &sim->player, clock,
                          convoy->pace,
                          convoy->town_heading_yaw, true, false);
         if (agent != NULL) DrawRobotShell(&convoy_hero);
@@ -24188,13 +24253,18 @@ void CcLocalDrawInterior3D(const CcSim *sim, const CcLocalAgent *agent,
                         (Color){170, 139, 112, 255} : WORLD_TEAL;
         float display_x = 2.55f + (float)good * 1.08f;
         if (good == CC_GOOD_FOOD) {
-            int32_t sacks = stock > 0.66f ? 3 : stock > 0.30f ? 2 : 1;
-            for (int32_t sack = 0; sack < sacks; ++sack) {
-                float side = (float)sack - (float)(sacks - 1) * 0.5f;
-                DrawCharacterEllipsoid(
-                    (Vector3){display_x + side * 0.25f,
-                              0.22f + (sack == 2 ? 0.14f : 0.0f), 1.18f},
-                    (Vector3){0.18f, 0.29f, 0.17f}, color);
+            int32_t boxes = stock > 0.66f ? 3 : stock > 0.30f ? 2 : 1;
+            for (int32_t box = 0; box < boxes; ++box) {
+                float side = (float)box - (float)(boxes - 1) * 0.5f;
+                float box_y = 0.20f + (box == 2 ? 0.19f : 0.0f);
+                DrawBox(
+                    (Vector3){display_x + side * 0.28f,
+                              box_y, 1.18f},
+                    (Vector3){0.24f, 0.34f, 0.26f}, color);
+                DrawBox(
+                    (Vector3){display_x + side * 0.28f,
+                              box_y + 0.18f, 1.18f},
+                    (Vector3){0.26f, 0.04f, 0.28f}, WORLD_CROP_LIGHT);
             }
             DrawBox((Vector3){display_x, 0.55f, 1.18f},
                     (Vector3){0.48f, 0.07f, 0.28f},

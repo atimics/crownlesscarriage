@@ -513,12 +513,12 @@ static void DescribeCharters(const CcMetagame *metagame,
         Append(output, capacity, "  %d. ", i + 1);
         if (situation->kind == CC_SITUATION_RELIEF_DELIVERY) {
             Append(output, capacity,
-                   "Deliver %d food to %s for %s.\n",
+                   "Deliver %d food boxes to %s for %s.\n",
                    situation->quantity, target_name,
                    situation->sponsor_name);
         } else if (situation->kind == CC_SITUATION_BLACK_MARKET_DELIVERY) {
             Append(output, capacity,
-                   "%s's foxfire supper: eight sacks by the road no soldier admits exists.\n",
+                   "%s's foxfire supper: eight food boxes by the road no soldier admits exists.\n",
                    situation->sponsor_name);
         } else if (situation->kind == CC_SITUATION_ROUTE_REPAIR) {
             Append(output, capacity,
@@ -658,11 +658,11 @@ static bool TalkToSituation(CcMetagame *metagame, int32_t index,
         Append(output, capacity,
                "%s sets an iron bridge key on the table. \"%s\"\n"
                "Two crates of tools would let her crew call the closed gate a repair. Eighteen crowns would buy the guards' silence.\n"
-               "She watches the hungry boy on the wall finish his soup. \"If I open the gate, I am responsible for every sack that crosses.\"\n",
+               "She watches the hungry boy on the wall finish his soup. \"If I open the gate, I am responsible for every food box that crosses.\"\n",
                situation->sponsor_name, spoken_text);
     } else if (situation->kind == CC_SITUATION_RELIEF_DELIVERY) {
         Append(output, capacity,
-               "%s looks from the carriage sacks to the empty oven tins.\n"
+               "%s looks from the carriage boxes to the empty oven tins.\n"
                "\"%s\"\n",
                situation->affected_name, spoken_text);
     } else {
@@ -1751,9 +1751,15 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
         };
         if (!ApplyCommand(metagame, &action, output, output_capacity)) return false;
         const CcSituation *situation = &metagame->sim.situations[index];
-        Append(output, output_capacity,
-               "You accept %s's job. You can only carry one job at a time.\n",
-               situation->sponsor_name);
+        if (situation->kind == CC_SITUATION_RELIEF_DELIVERY) {
+            Append(output, output_capacity,
+                   "You accept %s's job. Mara loads all %d food boxes into the carriage at no charge.\n",
+                   situation->sponsor_name, situation->quantity);
+        } else {
+            Append(output, output_capacity,
+                   "You accept %s's job. You can only carry one job at a time.\n",
+                   situation->sponsor_name);
+        }
     } else if (strcmp(command, "abandon") == 0) {
         CcCommand action = {.kind = CC_COMMAND_ABANDON_SITUATION};
         if (!ApplyCommand(metagame, &action, output, output_capacity)) return false;
@@ -1801,11 +1807,11 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
             delivery->kind == CC_SITUATION_RELIEF_DELIVERY) {
             Append(output, output_capacity,
                    "The carriage doors open beneath Silverwick's stopped clock. A merchant's clerk reaches for Mara's receipt; children at the town ovens reach for the smell of flour. Jory watches both.\n"
-                   "All eight sacks leave the carriage. No golden light declares the choice good. The first oven simply grows warm.\n");
+                   "All eight food boxes leave the carriage. No golden light declares the choice good. The first oven simply grows warm.\n");
         } else if (story_delivery &&
                    delivery->status == CC_SITUATION_RESOLVED) {
             Append(output, output_capacity,
-                   "A woman in a fox mask rolls her cart from the side alley. Eight sacks vanish beneath patched blankets and reappear, one by one, beside family ovens.\n"
+                   "A woman in a fox mask rolls her cart from the side alley. Eight food boxes vanish beneath patched blankets and reappear, one by one, beside family ovens.\n"
                    "The merchant's clerk keeps his receipt. The children get bread. Far away, somebody begins painting a new toll sign.\n");
         } else {
             Append(output, output_capacity, "%s %d %s.\n",

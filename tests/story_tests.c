@@ -310,12 +310,33 @@ static void ValidateConversationBeats(void)
     CC_CHECK(CcStoryCharacterText(
         &sim, relief, sponsor, spoken, sizeof(spoken)));
     char quantity[32];
-    (void)snprintf(quantity, sizeof(quantity), "%d sacks", relief->quantity);
+    (void)snprintf(quantity, sizeof(quantity), "%d boxes", relief->quantity);
     CC_CHECK(strstr(spoken, quantity) != NULL);
+    CC_CHECK(strstr(spoken, "load") != NULL);
 
+    const CcSettlement *offer_place = CcSimSettlement(&sim, offer);
+    CC_CHECK(offer_place != NULL);
+    int32_t offer_food_before = offer_place->stock[CC_GOOD_FOOD];
+    int32_t carriage_food_before = sim.player.cargo[CC_GOOD_FOOD];
+    CcMoney company_coins_before = sim.player.coins;
+    CcFoodEconomy food_before = {0};
+    CC_CHECK(CcSimFoodEconomyAtSettlement(
+        &sim, offer, &food_before));
     CcCommand pledge = listen;
     pledge.amount = CC_CHARACTER_RESPONSE_PLEDGE_HELP;
     CC_CHECK(CcSimApply(&sim, &pledge, error, sizeof(error)));
+    offer_place = CcSimSettlement(&sim, offer);
+    CC_CHECK(offer_place != NULL);
+    CC_CHECK(sim.player.cargo[CC_GOOD_FOOD] ==
+             carriage_food_before + relief->quantity);
+    CC_CHECK(offer_place->stock[CC_GOOD_FOOD] ==
+             offer_food_before - relief->quantity);
+    CC_CHECK(sim.player.coins == company_coins_before);
+    CcFoodEconomy food_after = {0};
+    CC_CHECK(CcSimFoodEconomyAtSettlement(
+        &sim, offer, &food_after));
+    CC_CHECK(food_after.stock == food_before.stock - relief->quantity);
+    CC_CHECK(food_after.unit_price >= food_before.unit_price);
     sponsor = CcSimSituationSponsorCharacter(&sim, relief);
     CC_CHECK(sponsor != NULL);
     const CcStoryLine *promised_line = CcStoryCharacterLine(
@@ -326,6 +347,7 @@ static void ValidateConversationBeats(void)
         &sim, relief, sponsor, spoken, sizeof(spoken)));
     CC_CHECK(strstr(spoken, affected->name) != NULL);
     CC_CHECK(strstr(spoken, target->name) != NULL);
+    CC_CHECK(strstr(spoken, "food boxes are aboard") != NULL);
 
     CcCommand abandon = {
         .kind = CC_COMMAND_ABANDON_SITUATION,
