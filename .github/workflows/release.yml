@@ -1,0 +1,130 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate release tag
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check tag, version, and branch
+        id: version
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release tags must use vMAJOR.MINOR.PATCH." >&2
+            exit 1
+          fi
+
+          project_version="$(sed -nE 's/^project\(crownless_carriage VERSION ([0-9]+\.[0-9]+\.[0-9]+) LANGUAGES C\)$/\1/p' CMakeLists.txt)"
+          if [[ "$project_version" != "$version" ]]; then
+            echo "Tag $GITHUB_REF_NAME does not match CMake version $project_version." >&2
+            exit 1
+          fi
+
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "Release tags must point to a commit on main." >&2
+            exit 1
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  macos:
+    name: Build and test macOS game
+    needs: validate
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake --preset release
+      - name: Build
+        run: cmake --build --preset release
+      - name: Test
+        run: ctest --preset release
+      - name: Package app
+        run: |
+          mkdir -p dist
+          ditto -c -k --sequesterRsrc --keepParent \
+            out/build/release/crownless_carriage.app \
+            "dist/Crownless-Carriage-${{ needs.validate.outputs.version }}-macOS.zip"
+      - name: Upload macOS package
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-release
+          path: dist/*.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  web:
+    name: Build browser package
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: emscripten-core/setup-emsdk@v15
+        with:
+          version: 5.0.4
+          actions-cache-folder: emsdk-cache
+      - name: Configure
+        run: emcmake cmake --preset web
+      - name: Build
+        run: cmake --build --preset web
+      - name: Check site output
+        run: test -f out/build/web/site/index.html && test -f out/build/web/site/index.wasm
+      - name: Package browser build
+        working-directory: out/build/web/site
+        run: >-
+          cmake -E tar cf
+          "$GITHUB_WORKSPACE/Crownless-Carriage-${{ needs.validate.outputs.version }}-Web.zip"
+          --format=zip .
+      - name: Upload browser package
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-release
+          path: Crownless-Carriage-*-Web.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish GitHub release
+    needs: [validate, macos, web]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Create checksums
+        working-directory: dist
+        run: sha256sum -- ./*.zip > SHA256SUMS.txt
+      - name: Create or update release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/* \
+              --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* \
+              --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes \
+              --title "Crownless Carriage $GITHUB_REF_NAME"
+          fi
