@@ -44,6 +44,15 @@ If a legitimate change breaks a budget: change the constant in the same
 commit, with the reason in the commit message. Do not quietly delete the
 assertion.
 
+## Windows stack reserve
+
+The deterministic simulation test and headless REPL keep several complete
+simulation states in stack storage. Windows executables reserve less stack by
+default than the simulation requires, so these two targets must reserve at
+least 16 MiB at link time. `cc_large_sim_stack` is the CMake guardrail for
+both MinGW and MSVC builds. A Windows stack overflow here is a build
+configuration regression, not evidence of nondeterministic simulation logic.
+
 ## Art contract
 
 `tools/art/run_art_check.py` encodes the painterly look as thresholds
