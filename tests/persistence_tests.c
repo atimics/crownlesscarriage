@@ -354,7 +354,7 @@ static void CheckLegacyJournalMigration(char *error,
              legacy_generation);
     CC_CHECK(ReadSqliteInteger(
                  path, "SELECT journal_cursor FROM meta WHERE id=1;") == 0);
-    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 18);
+    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 19);
     CC_CHECK(CcJournalAdvanceDays(journal, &resumed, 2,
                                   error, error_capacity));
     uint64_t expected_hash = CcSimHash(&resumed);
