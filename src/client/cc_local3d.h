@@ -80,6 +80,21 @@ typedef enum CcLocalSceneKind {
     CC_LOCAL_SCENE_ROAD
 } CcLocalSceneKind;
 
+typedef struct CcLocalMovementPreview {
+    Vector2 screen_point;
+    Vector3 origin;
+    Vector3 requested_point;
+    Vector3 resolved_point;
+    Vector3 path[CC_LOCAL_NAVIGATION_POINT_CAPACITY];
+    int32_t path_count;
+    CcLocalSceneKind scene;
+    CcLocalWorldTargetKind world_target;
+    bool valid;
+    bool accepted;
+    bool adjusted;
+    bool navigation;
+} CcLocalMovementPreview;
+
 typedef enum CcLocalSiteKind {
     CC_LOCAL_SITE_NONE = 0,
     CC_LOCAL_SITE_DUNGEON,
@@ -399,6 +414,13 @@ bool CcLocalAgentSetStreetTarget(CcLocalAgent *agent, Vector3 target);
 bool CcLocalAgentPickTarget(CcLocalAgent *agent, Vector2 screen_point,
                             RenderTexture2D target, Rectangle destination,
                             bool market_interior);
+bool CcLocalAgentProbeTarget(
+    const CcLocalAgent *agent, Vector2 screen_point, RenderTexture2D target,
+    Rectangle destination, bool market_interior,
+    CcLocalMovementPreview *preview);
+bool CcLocalAgentApplyMovementPreview(
+    CcLocalAgent *agent, const CcLocalMovementPreview *preview,
+    bool market_interior);
 CcLocalWorldTargetKind CcLocalAgentPickWorldTarget(
     const CcLocalAgent *agent, Vector2 screen_point, RenderTexture2D target,
     Rectangle destination, bool market_interior);
@@ -499,6 +521,8 @@ void CcLocalRendererBeginFrame(float delta_time);
 void CcLocalRendererResetPerformanceMetrics(void);
 CcLocalRendererStats CcLocalRendererGetStats(void);
 void CcLocalRendererSetDiagnosticOverlay(bool enabled);
+void CcLocalRendererSetMovementPreview(
+    const CcLocalMovementPreview *preview);
 void CcLocalRendererSetAtmosphere(CcLocalAtmospherePreset preset,
                                   float transition_seconds);
 void CcLocalRendererUpdateAtmosphere(float delta_time);

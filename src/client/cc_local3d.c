@@ -80,6 +80,8 @@ static const float CARRIAGE_ASSET_SCALE = 0.92f;
 static const float CARRIAGE_ASSET_STREET_YAW_DEGREES = -90.0f;
 static bool draw_hero_rig_debug = false;
 static CcLocalOpeningStep active_opening_step = CC_LOCAL_OPENING_COMPLETE;
+static CcLocalMovementPreview renderer_movement_preview = {0};
+static CcLocalAgent movement_probe_agent_scratch = {0};
 
 typedef enum BridgeCheckpointStatus {
     BRIDGE_CHECKPOINT_UNKNOWN,
@@ -1847,6 +1849,8 @@ static bool StaticBodyBlocked(CcLocalSceneKind scene, float x, float z,
 #define STREET_PATH_COLUMNS 192
 #define STREET_PATH_ROWS 144
 #define STREET_PATH_NODE_COUNT (STREET_PATH_COLUMNS * STREET_PATH_ROWS)
+#define STREET_CLICK_MAX_PROJECTION 1.10f
+#define STREET_SCRIPTED_MAX_PROJECTION 6.25f
 
 typedef struct StreetPathSearch {
     float distance[STREET_PATH_NODE_COUNT];
@@ -2041,8 +2045,11 @@ static int32_t StreetPathHeapPop(StreetPathSearch *search, int32_t goal)
 }
 
 static int32_t FindStreetPath(Vector2 from, Vector2 to, float radius,
-                              Vector2 *points, int32_t capacity)
+                              Vector2 *points, int32_t capacity,
+                              float maximum_projection,
+                              bool *target_projected_out)
 {
+    if (target_projected_out != NULL) *target_projected_out = false;
     if (points == NULL || capacity <= 0) return 0;
     bool target_blocked = StreetPathBodyBlocked(to.x, to.y, radius);
     bool target_projected = target_blocked;
@@ -2054,6 +2061,15 @@ static int32_t FindStreetPath(Vector2 from, Vector2 to, float radius,
     int32_t start = StreetPathNearestNode(from, radius, true);
     int32_t goal = StreetPathNearestNode(to, radius, !target_blocked);
     if (start < 0 || goal < 0) return 0;
+    if (target_blocked) {
+        Vector2 projected = StreetPathNodePoint(goal);
+        float projected_x = projected.x - to.x;
+        float projected_z = projected.y - to.y;
+        if (projected_x * projected_x + projected_z * projected_z >
+            maximum_projection * maximum_projection) {
+            return 0;
+        }
+    }
     StreetPathSearch *search = &street_path_search;
     search->heap_count = 0;
     for (int32_t node = 0; node < STREET_PATH_NODE_COUNT; ++node) {
@@ -2123,7 +2139,7 @@ static int32_t FindStreetPath(Vector2 from, Vector2 to, float radius,
     if (start != goal && search->parent[goal] < 0) {
 
         int32_t closest = -1;
-        float closest_distance = 2.75f * 2.75f;
+        float closest_distance = maximum_projection * maximum_projection;
         for (int32_t node = 0; node < STREET_PATH_NODE_COUNT; ++node) {
             if (!search->closed[node]) continue;
             Vector2 candidate = StreetPathNodePoint(node);
@@ -2168,6 +2184,9 @@ static int32_t FindStreetPath(Vector2 from, Vector2 to, float radius,
     }
     Vector2 resolved_target = target_projected ?
         StreetPathNodePoint(goal) : to;
+    if (target_projected_out != NULL) {
+        *target_projected_out = target_projected;
+    }
     while (cursor < ordered_count - 1) {
         if (StreetSegmentClear(current_point, resolved_target, radius)) {
             if (point_count >= capacity) return 0;
@@ -5549,7 +5568,9 @@ static bool AppendStreetNavigationPoint(CcLocalAgent *agent, Vector2 point)
     return true;
 }
 
-static bool QueueStreetNavigationPoint(CcLocalAgent *agent, Vector2 point)
+static bool QueueStreetNavigationPointWithProjection(
+    CcLocalAgent *agent, Vector2 point, float maximum_projection,
+    bool *target_projected_out)
 {
     if (agent == NULL) return false;
     Vector3 previous = agent->navigation_point_count > 0 ?
@@ -5559,13 +5580,20 @@ static bool QueueStreetNavigationPoint(CcLocalAgent *agent, Vector2 point)
     Vector2 path[CC_LOCAL_NAVIGATION_POINT_CAPACITY];
     int32_t remaining = CC_LOCAL_NAVIGATION_POINT_CAPACITY -
                         agent->navigation_point_count;
-    int32_t path_count = FindStreetPath(from, point, agent->radius,
-                                        path, remaining);
+    int32_t path_count = FindStreetPath(
+        from, point, agent->radius, path, remaining, maximum_projection,
+        target_projected_out);
     if (path_count <= 0) return false;
     for (int32_t index = 0; index < path_count; ++index) {
         if (!AppendStreetNavigationPoint(agent, path[index])) return false;
     }
     return true;
+}
+
+static bool QueueStreetNavigationPoint(CcLocalAgent *agent, Vector2 point)
+{
+    return QueueStreetNavigationPointWithProjection(
+        agent, point, STREET_SCRIPTED_MAX_PROJECTION, NULL);
 }
 
 static bool SetStreetClickTarget(CcLocalAgent *agent, Vector3 target)
@@ -5588,8 +5616,9 @@ static bool SetStreetClickTarget(CcLocalAgent *agent, Vector3 target)
         return true;
     }
     agent->scene = CC_LOCAL_SCENE_STREET;
-    if (!QueueStreetNavigationPoint(
-            agent, (Vector2){target.x, target.z}) ||
+    if (!QueueStreetNavigationPointWithProjection(
+            agent, (Vector2){target.x, target.z},
+            STREET_CLICK_MAX_PROJECTION, NULL) ||
         agent->navigation_point_count <= 0) {
         ClearAgentNavigation(agent);
         return false;
@@ -5794,6 +5823,34 @@ static bool AgentCanAdvanceNavigation(const CcLocalAgent *agent,
     return StreetSegmentClear(
         (Vector2){agent->position.x, agent->position.z},
         (Vector2){next.x, next.z}, agent->radius);
+}
+
+static float AgentCornerSpeedScale(const CcLocalAgent *agent,
+                                   float target_distance)
+{
+    if (agent == NULL || !agent->navigation_active ||
+        agent->navigation_point_index + 1 >= agent->navigation_point_count ||
+        target_distance >= 1.25f) {
+        return 1.0f;
+    }
+    Vector3 corner = agent->navigation_point[agent->navigation_point_index];
+    Vector3 next = agent->navigation_point[agent->navigation_point_index + 1];
+    Vector3 incoming = PhysicsSubtract(corner, agent->position);
+    Vector3 outgoing = PhysicsSubtract(next, corner);
+    float incoming_length = sqrtf(
+        incoming.x * incoming.x + incoming.z * incoming.z);
+    float outgoing_length = sqrtf(
+        outgoing.x * outgoing.x + outgoing.z * outgoing.z);
+    if (incoming_length < 0.001f || outgoing_length < 0.001f) return 1.0f;
+    float alignment =
+        (incoming.x * outgoing.x + incoming.z * outgoing.z) /
+        (incoming_length * outgoing_length);
+    alignment = fmaxf(-1.0f, fminf(1.0f, alignment));
+    float severity = (1.0f - alignment) * 0.5f;
+    float proximity = fmaxf(
+        0.0f, fminf(1.0f, (1.25f - target_distance) / 1.25f));
+    proximity = proximity * proximity * (3.0f - 2.0f * proximity);
+    return fmaxf(0.34f, 1.0f - severity * proximity * 0.72f);
 }
 
 static Vector3 StreetPortalWorldPoint(const ResolvedStreetPortal *portal)
@@ -6114,10 +6171,13 @@ CcLocalWorldTargetKind CcLocalAgentPickWorldTarget(
                                 CC_LOCAL_WORLD_TARGET_NONE;
 }
 
-bool CcLocalAgentPickTarget(CcLocalAgent *agent, Vector2 screen_point,
-                            RenderTexture2D target, Rectangle destination,
-                            bool market_interior)
+static bool PickAgentTargetInternal(
+    CcLocalAgent *agent, Vector2 screen_point, RenderTexture2D target,
+    Rectangle destination, bool market_interior,
+    Vector3 *requested_point_out, bool *picked_point_valid_out)
 {
+    if (requested_point_out != NULL) *requested_point_out = (Vector3){0};
+    if (picked_point_valid_out != NULL) *picked_point_valid_out = false;
     if (agent == NULL || !CombatCanAct(&agent->combat) ||
         !CheckCollisionPointRec(screen_point, destination)) return false;
     agent->world_target = CC_LOCAL_WORLD_TARGET_NONE;
@@ -6192,6 +6252,8 @@ bool CcLocalAgentPickTarget(CcLocalAgent *agent, Vector2 screen_point,
             fminf(picked_point.z,
                   picked_platform->z + picked_platform->depth - inset));
         picked_point.y = PlatformTopHeight(picked_platform);
+        if (requested_point_out != NULL) *requested_point_out = picked_point;
+        if (picked_point_valid_out != NULL) *picked_point_valid_out = true;
         return SetStreetClickTarget(agent, picked_point);
     }
     float occluder = FLT_MAX;
@@ -6248,7 +6310,136 @@ bool CcLocalAgentPickTarget(CcLocalAgent *agent, Vector2 screen_point,
     bool street_fixed_room = scene == CC_LOCAL_SCENE_STREET &&
                              camera.projection == CAMERA_ORTHOGRAPHIC;
     if (!street_fixed_room && occluder < nearest) return false;
+    if (requested_point_out != NULL) *requested_point_out = picked_point;
+    if (picked_point_valid_out != NULL) *picked_point_valid_out = true;
     return SetNearestClickTarget(agent, picked_point, market_interior);
+}
+
+bool CcLocalAgentPickTarget(CcLocalAgent *agent, Vector2 screen_point,
+                            RenderTexture2D target, Rectangle destination,
+                            bool market_interior)
+{
+    return PickAgentTargetInternal(
+        agent, screen_point, target, destination, market_interior, NULL, NULL);
+}
+
+static CcLocalAgent *MovementPreviewAgent(const CcLocalAgent *agent)
+{
+    CcLocalAgent *preview = &movement_probe_agent_scratch;
+    *preview = (CcLocalAgent){0};
+    if (agent == NULL) return preview;
+    preview->position = agent->position;
+    preview->velocity = agent->velocity;
+    preview->facing_yaw = agent->facing_yaw;
+    preview->radius = agent->radius;
+    preview->scene = agent->scene;
+    preview->crowned = agent->crowned;
+    preview->combat = agent->combat;
+    return preview;
+}
+
+static void MovementPreviewFromAgent(
+    const CcLocalAgent *preview_agent, Vector2 screen_point,
+    Vector3 requested_point, bool picked_point_valid,
+    CcLocalMovementPreview *preview)
+{
+    if (preview == NULL || preview_agent == NULL) return;
+    preview->screen_point = screen_point;
+    preview->origin = preview_agent->position;
+    preview->requested_point = requested_point;
+    preview->resolved_point = picked_point_valid ? requested_point :
+                                                    preview_agent->position;
+    preview->scene = preview_agent->scene;
+    preview->valid = picked_point_valid;
+    preview->accepted = preview_agent->command_point_valid;
+    preview->navigation = preview_agent->navigation_active;
+    if (!preview->accepted) return;
+
+    preview->origin = preview_agent->command_origin;
+    preview->resolved_point = preview_agent->command_point;
+    float adjusted_x = preview->resolved_point.x - requested_point.x;
+    float adjusted_z = preview->resolved_point.z - requested_point.z;
+    preview->adjusted = adjusted_x * adjusted_x + adjusted_z * adjusted_z >
+                        0.18f * 0.18f;
+    if (preview_agent->navigation_active) {
+        for (int32_t index = preview_agent->navigation_point_index;
+             index < preview_agent->navigation_point_count &&
+             preview->path_count < CC_LOCAL_NAVIGATION_POINT_CAPACITY;
+             ++index) {
+            preview->path[preview->path_count++] =
+                preview_agent->navigation_point[index];
+        }
+    } else {
+        preview->path[preview->path_count++] = preview->resolved_point;
+    }
+}
+
+bool CcLocalAgentProbeTarget(
+    const CcLocalAgent *agent, Vector2 screen_point, RenderTexture2D target,
+    Rectangle destination, bool market_interior,
+    CcLocalMovementPreview *preview)
+{
+    if (preview == NULL) return false;
+    *preview = (CcLocalMovementPreview){0};
+    if (agent == NULL) return false;
+
+    CcLocalAgent *preview_agent = MovementPreviewAgent(agent);
+    Vector3 requested_point = {0};
+    bool picked_point_valid = false;
+    (void)PickAgentTargetInternal(
+        preview_agent, screen_point, target, destination, market_interior,
+        &requested_point, &picked_point_valid);
+    MovementPreviewFromAgent(
+        preview_agent, screen_point, requested_point, picked_point_valid,
+        preview);
+    return preview->accepted;
+}
+
+bool CcLocalAgentApplyMovementPreview(
+    CcLocalAgent *agent, const CcLocalMovementPreview *preview,
+    bool market_interior)
+{
+    if (agent == NULL || preview == NULL || !preview->valid ||
+        !preview->accepted || !CombatCanAct(&agent->combat) ||
+        preview->scene != AgentSceneForCall(agent, market_interior)) {
+        return false;
+    }
+    float origin_x = agent->position.x - preview->origin.x;
+    float origin_z = agent->position.z - preview->origin.z;
+    if (origin_x * origin_x + origin_z * origin_z > 0.65f * 0.65f) {
+        return false;
+    }
+
+    agent->world_target = CC_LOCAL_WORLD_TARGET_NONE;
+    ClearAgentNavigation(agent);
+    agent->exact_target_valid = false;
+    agent->target_valid = false;
+    agent->command_point_valid = false;
+    if (preview->navigation) {
+        if (preview->path_count <= 0 ||
+            preview->path_count > CC_LOCAL_NAVIGATION_POINT_CAPACITY) {
+            return false;
+        }
+        for (int32_t index = 0; index < preview->path_count; ++index) {
+            agent->navigation_point[index] = preview->path[index];
+        }
+        agent->navigation_point_count = preview->path_count;
+        agent->navigation_point_index = 0;
+        agent->navigation_destination_room =
+            STREET_CLICK_NAVIGATION_DESTINATION;
+        agent->navigation_active = true;
+        if (!SetAgentExactTarget(agent, agent->navigation_point[0], false)) {
+            ClearAgentNavigation(agent);
+            return false;
+        }
+    } else if (!SetAgentExactTarget(
+                   agent, preview->resolved_point, market_interior)) {
+        return false;
+    }
+    agent->command_origin = agent->position;
+    agent->command_point = preview->resolved_point;
+    agent->command_point_valid = true;
+    return true;
 }
 
 static float WrapAngle(float angle)
@@ -7975,6 +8166,21 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
     float desired_z = 0.0f;
     if (target_distance > 0.001f) {
         float desired_speed = fminf(maximum_speed, target_distance * 3.2f);
+        if (biped) {
+            desired_speed *= AgentCornerSpeedScale(agent, target_distance);
+            if (!agent->combat.focus_valid) {
+                float target_x = direction.x / target_distance;
+                float target_z = direction.z / target_distance;
+                float facing_x = sinf(agent->facing_yaw);
+                float facing_z = cosf(agent->facing_yaw);
+                float alignment = fmaxf(
+                    -1.0f, fminf(1.0f,
+                        target_x * facing_x + target_z * facing_z));
+                float turn_amount = SmoothStep01(
+                    (alignment + 0.12f) / 1.12f);
+                desired_speed *= 0.18f + turn_amount * 0.82f;
+            }
+        }
         desired_x = direction.x / target_distance * desired_speed;
         desired_z = direction.z / target_distance * desired_speed;
     }
@@ -8110,7 +8316,10 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
         (!moved_x || !moved_z)) {
         Vector3 forward = {direction.x / target_distance, 0.0f,
                            direction.z / target_distance};
-        Vector3 side = {-forward.z, 0.0f, forward.x};
+        float side_sign = (agent->navigation_repath_count & 1) != 0 ?
+                          -1.0f : 1.0f;
+        Vector3 side = {-forward.z * side_sign, 0.0f,
+                        forward.x * side_sign};
         float sidestep = maximum_speed * 0.72f * delta_time;
         bool side_x = TryHorizontalAxis(agent, market_interior, true,
                                         side.x * sidestep);
@@ -8147,7 +8356,7 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
     } else {
         agent->movement_stall_seconds = 0.0f;
     }
-    if (agent->movement_stall_seconds > 1.20f) {
+    if (agent->movement_stall_seconds > 0.72f) {
         bool click_path = agent->scene == CC_LOCAL_SCENE_STREET &&
             agent->navigation_active &&
             agent->navigation_destination_room ==
@@ -8155,7 +8364,7 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
             agent->command_point_valid;
         Vector3 retry_target = agent->command_point;
         int32_t retry_count = agent->navigation_repath_count;
-        if (click_path && retry_count < 1 &&
+        if (click_path && retry_count < 3 &&
             SetStreetClickTarget(agent, retry_target)) {
 
             agent->navigation_repath_count = retry_count + 1;
@@ -14009,6 +14218,13 @@ void CcLocalRendererSetOpeningStep(CcLocalOpeningStep step)
 void CcLocalRendererSetDiagnosticOverlay(bool enabled)
 {
     draw_hero_rig_debug = enabled;
+}
+
+void CcLocalRendererSetMovementPreview(
+    const CcLocalMovementPreview *preview)
+{
+    renderer_movement_preview = preview != NULL ?
+        *preview : (CcLocalMovementPreview){0};
 }
 
 void CcLocalRendererShutdown(void)
@@ -21703,38 +21919,123 @@ void CcLocalDrawAgentPortrait3D(const CcLocalAgent *agent,
     }
 }
 
+static void DrawMovementPathSegments(
+    Vector3 origin, const Vector3 *points, int32_t point_count,
+    CcLocalSceneKind scene, Color color, float width, bool dashed)
+{
+    Vector3 previous = origin;
+    for (int32_t index = 0; index < point_count; ++index) {
+        Vector3 waypoint = points[index];
+        Vector3 along = PhysicsSubtract(waypoint, previous);
+        float length = sqrtf(along.x * along.x + along.z * along.z);
+        if (length <= 0.08f) {
+            previous = waypoint;
+            continue;
+        }
+        if (!dashed) {
+            Vector3 center = PhysicsScale(
+                PhysicsAdd(previous, waypoint), 0.5f);
+            center.y = SurfaceHeightAt(scene, center.x, center.z) + 0.070f;
+            DrawGroundBrushStroke(center, along, length, width, color);
+        } else {
+            const float dash_length = 0.26f;
+            const float dash_stride = 0.43f;
+            float inverse_length = 1.0f / length;
+            for (float distance = 0.0f; distance < length;
+                 distance += dash_stride) {
+                float end_distance = fminf(length, distance + dash_length);
+                float center_distance = (distance + end_distance) * 0.5f;
+                float amount = center_distance * inverse_length;
+                Vector3 center = {
+                    previous.x + along.x * amount,
+                    0.0f,
+                    previous.z + along.z * amount,
+                };
+                center.y = SurfaceHeightAt(scene, center.x, center.z) + 0.120f;
+                DrawGroundBrushStroke(
+                    center, along, end_distance - distance, width, color);
+            }
+        }
+        previous = waypoint;
+    }
+}
+
+static void DrawMovementGroundReticle(Vector3 point, bool accepted,
+                                       bool adjusted, bool active)
+{
+    float pulse = 1.0f + 0.08f * sinf((float)GetTime() * 8.0f);
+    float radius = (active ? 0.36f : 0.32f) * pulse;
+    Color color = !accepted ? WORLD_DANGER :
+                  adjusted ? WORLD_VIOLET :
+                  active ? WORLD_GOLD : WORLD_TEAL;
+    point.y += active ? 0.090f : 0.150f;
+    DrawCylinder(point, radius, radius, 0.025f, 24,
+                 Fade(color, active ? 0.32f : 0.22f));
+    rlSetLineWidth(active ? 3.0f : 2.0f);
+    DrawCircle3D(point, radius, (Vector3){1.0f, 0.0f, 0.0f}, 90.0f,
+                 Fade(color, active ? 1.0f : 0.92f));
+    DrawCircle3D(point, radius * 0.70f,
+                 (Vector3){1.0f, 0.0f, 0.0f}, 90.0f,
+                 Fade(color, active ? 0.74f : 0.60f));
+    rlSetLineWidth(1.0f);
+    DrawSphere(point, active ? 0.105f : 0.085f, color);
+    if (!accepted) {
+        const Vector3 slash_a = {0.55f, 0.0f, 0.55f};
+        const Vector3 slash_b = {0.55f, 0.0f, -0.55f};
+        DrawGroundBrushStroke(point, slash_a, 0.55f, 0.065f, color);
+        DrawGroundBrushStroke(point, slash_b, 0.55f, 0.065f, color);
+    } else {
+        const float tick_offset = radius + 0.09f;
+        const Vector3 tick_x = {0.20f, 0.0f, 0.0f};
+        const Vector3 tick_z = {0.0f, 0.0f, 0.20f};
+        DrawGroundBrushStroke(
+            (Vector3){point.x - tick_offset, point.y, point.z},
+            tick_x, 0.20f, 0.050f, color);
+        DrawGroundBrushStroke(
+            (Vector3){point.x + tick_offset, point.y, point.z},
+            tick_x, 0.20f, 0.050f, color);
+        DrawGroundBrushStroke(
+            (Vector3){point.x, point.y, point.z - tick_offset},
+            tick_z, 0.20f, 0.050f, color);
+        DrawGroundBrushStroke(
+            (Vector3){point.x, point.y, point.z + tick_offset},
+            tick_z, 0.20f, 0.050f, color);
+    }
+}
+
 static void DrawAgentPath(const CcLocalAgent *agent, bool market_interior)
 {
-    (void)market_interior;
+    if (agent == NULL) return;
+    CcLocalSceneKind scene = AgentSceneForCall(agent, market_interior);
+    const CcLocalMovementPreview *preview = &renderer_movement_preview;
+    if (preview->valid && preview->scene == scene &&
+        preview->world_target == CC_LOCAL_WORLD_TARGET_NONE) {
+        Vector3 hover_target = preview->accepted ? preview->resolved_point :
+                                                   preview->requested_point;
+        if (preview->accepted && preview->path_count > 0) {
+            DrawMovementPathSegments(
+                agent->position, preview->path, preview->path_count, scene,
+                Fade(preview->adjusted ? WORLD_VIOLET : WORLD_TEAL, 0.82f),
+                0.085f, true);
+        }
+        DrawMovementGroundReticle(
+            hover_target, preview->accepted, preview->adjusted, false);
+    }
+
     if (!agent->command_point_valid ||
         (!agent->exact_target_valid && !agent->navigation_active)) return;
-    Vector3 target = agent->command_point;
-    Vector3 previous = agent->position;
     if (agent->navigation_active) {
-        for (int32_t index = agent->navigation_point_index;
-             index < agent->navigation_point_count; ++index) {
-            Vector3 waypoint = agent->navigation_point[index];
-            Vector3 along = PhysicsSubtract(waypoint, previous);
-            float length = sqrtf(along.x * along.x + along.z * along.z);
-            if (length > 0.08f) {
-                Vector3 center = PhysicsScale(
-                    PhysicsAdd(previous, waypoint), 0.5f);
-                center.y = CcLocalTerrainHeightAt(center.x, center.z) + 0.025f;
-                DrawGroundBrushStroke(center, along, length, 0.075f,
-                                      Fade(WORLD_GOLD, 0.62f));
-            }
-            waypoint.y += 0.022f;
-            DrawCylinder(waypoint, 0.12f, 0.12f, 0.030f, 12,
-                         Fade(WORLD_GOLD, 0.78f));
-            previous = waypoint;
-        }
+        DrawMovementPathSegments(
+            agent->position,
+            &agent->navigation_point[agent->navigation_point_index],
+            agent->navigation_point_count - agent->navigation_point_index,
+            scene, Fade(WORLD_GOLD, 0.72f), 0.082f, false);
+    } else {
+        DrawMovementPathSegments(
+            agent->position, &agent->command_point, 1, scene,
+            Fade(WORLD_GOLD, 0.64f), 0.075f, false);
     }
-    DrawCylinder((Vector3){target.x, target.y + 0.018f, target.z},
-                 0.24f, 0.24f, 0.036f, 24, Fade(WORLD_GOLD, 0.42f));
-    Vector3 facing = PhysicsSubtract(target, agent->position);
-    DrawGroundBrushStroke(
-        (Vector3){target.x, target.y + 0.040f, target.z}, facing,
-        0.52f, 0.085f, WORLD_GOLD);
+    DrawMovementGroundReticle(agent->command_point, true, false, true);
 }
 
 static Color CoursePlatformColor(int32_t style)
@@ -23526,7 +23827,6 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                          Fade(WORLD_GOLD, 0.70f));
     }
     DrawObstacleCourse(scenery_focus);
-    if (!convoy_visible) DrawAgentPath(agent, false);
     Vector3 foreground_reveal_world = {
         camera_subject->position.x, camera_subject->position.y + 1.05f,
         camera_subject->position.z,
@@ -23552,6 +23852,10 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         if (!convoy_visible) {
             bool carriage_targeted = agent != NULL &&
                 agent->world_target == CC_LOCAL_WORLD_TARGET_CARRIAGE;
+            carriage_targeted = carriage_targeted ||
+                (renderer_movement_preview.valid &&
+                 renderer_movement_preview.world_target ==
+                     CC_LOCAL_WORLD_TARGET_CARRIAGE);
             DrawCarriage3D(place, carriage_targeted, clock);
             DrawStableHorseTeam(clock);
             if (carriage_targeted) DrawCarriageTargetMarker3D(clock);
@@ -23697,6 +24001,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
             &course->raiders[agent->combat.target_index]);
     }
     if (!convoy_visible) {
+        DrawAgentPath(agent, false);
         DrawRobotShell(agent);
         DrawCombatSword(agent);
         DrawCombatSkillTell(agent);

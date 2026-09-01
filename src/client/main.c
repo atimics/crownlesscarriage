@@ -85,9 +85,11 @@ typedef struct LocalState {
     CcLocalAgent agent;
     CcLocalCourse course;
     CcLocalConvoyState convoy;
+    CcLocalMovementPreview movement_preview;
     CcLocalSiteKind site_kind;
     Vector2 movement_reticle;
     float movement_reticle_age;
+    float movement_preview_cooldown;
     float site_travel_progress;
     float fork_turn_progress;
     bool market_interior;
@@ -905,6 +907,8 @@ static void RepositionHero(LocalState *local, Vector2 position,
 
 static void ResetLocalState(LocalState *local)
 {
+    local->movement_preview = (CcLocalMovementPreview){0};
+    local->movement_preview_cooldown = 0.0f;
     local->movement_reticle = (Vector2){0};
     local->movement_reticle_age = 0.0f;
     local->movement_reticle_valid = false;
@@ -3215,6 +3219,66 @@ static ContextAction PressedContextAction(
     return none;
 }
 
+static bool PointerOverContextAction(
+    const CcSim *sim, const LocalState *local, ClientView view,
+    int32_t selected, int32_t selected_situation, Vector2 mouse)
+{
+    ContextActionSet actions = BuildContextActions(
+        sim, local, view, selected, selected_situation);
+    for (int32_t index = 0; index < actions.count; ++index) {
+        if (CheckCollisionPointRec(
+                mouse, ContextActionBounds(index, actions.count))) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void UpdateMovementPreview(
+    const CcSim *sim, LocalState *local, ClientView view,
+    int32_t selected, int32_t selected_situation,
+    RenderTexture2D local_target, Rectangle local_bounds, float delta_time)
+{
+    if (local == NULL) return;
+    Vector2 mouse = GetMousePosition();
+    bool unavailable = view != VIEW_LOCAL || local->site_travel_active ||
+        local->road_choice_active || local->journey_travel_active ||
+        local->journey_parley_active ||
+        !CheckCollisionPointRec(mouse, local_bounds) ||
+        PointerOverContextAction(
+            sim, local, view, selected, selected_situation, mouse);
+    if (unavailable) {
+        local->movement_preview = (CcLocalMovementPreview){0};
+        local->movement_preview_cooldown = 0.0f;
+        return;
+    }
+
+    local->movement_preview_cooldown = fmaxf(
+        0.0f, local->movement_preview_cooldown - delta_time);
+    if (local->movement_preview_cooldown > 0.0f) return;
+    local->movement_preview_cooldown = 0.08f;
+
+    if (!LocalCombatActive(local)) {
+        CcLocalWorldTargetKind world_target = CcLocalAgentPickWorldTarget(
+            &local->agent, mouse, local_target, local_bounds,
+            local->market_interior);
+        if (world_target != CC_LOCAL_WORLD_TARGET_NONE) {
+            local->movement_preview = (CcLocalMovementPreview){
+                .screen_point = mouse,
+                .origin = local->agent.position,
+                .scene = local->agent.scene,
+                .world_target = world_target,
+                .valid = true,
+                .accepted = true,
+            };
+            return;
+        }
+    }
+    (void)CcLocalAgentProbeTarget(
+        &local->agent, mouse, local_target, local_bounds,
+        local->market_interior, &local->movement_preview);
+}
+
 static void DrawCombatStatusLine(const LocalState *local,
                                  const char *message, float message_age)
 {
@@ -5508,6 +5572,9 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             }
             return;
         }
+        UpdateMovementPreview(
+            sim, local, *view, *selected, *selected_situation,
+            local_target, local_bounds, delta_time);
         if (LocalCombatActive(local) &&
             (context_action == CONTEXT_ACTION_SELECT_TARGET ||
              ClientKeyPressed(KEY_T))) {
@@ -5648,7 +5715,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                     &local->agent, world_target);
                 local->movement_reticle = mouse;
                 local->movement_reticle_age = 0.0f;
-                local->movement_reticle_valid = true;
+                local->movement_reticle_valid = !approach_started;
                 local->movement_reticle_accepted = approach_started;
                 if (approach_started) {
                     CcLocalCourseClearPlayerTarget(&local->agent);
@@ -5680,15 +5747,21 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                         CcLocalRaiderRoleName(
                             local->course.raider_roles[combat_target]));
                 } else {
-                    bool movement_accepted = CcLocalAgentPickTarget(
+                    CcLocalMovementPreview click_preview = {0};
+                    (void)CcLocalAgentProbeTarget(
                         &local->agent, mouse, local_target, local_bounds,
+                        local->market_interior, &click_preview);
+                    bool movement_accepted = CcLocalAgentApplyMovementPreview(
+                        &local->agent, &click_preview,
                         local->market_interior);
+                    local->movement_preview = click_preview;
+                    local->movement_preview_cooldown = 0.08f;
                     bool in_local_view = CheckCollisionPointRec(
                         mouse, local_bounds);
                     if (in_local_view) {
                         local->movement_reticle = mouse;
                         local->movement_reticle_age = 0.0f;
-                        local->movement_reticle_valid = true;
+                        local->movement_reticle_valid = !movement_accepted;
                         local->movement_reticle_accepted = movement_accepted;
                     }
                     if (movement_accepted) {
@@ -5698,7 +5771,11 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                         }
                         const char *navigation =
                             CcLocalAgentNavigationName(&local->agent);
-                        if (navigation != NULL) {
+                        if (click_preview.adjusted) {
+                            (void)snprintf(
+                                message, message_capacity,
+                                "Walking to the nearest clear ground.");
+                        } else if (navigation != NULL) {
                             (void)snprintf(
                                 message, message_capacity,
                                 "Going to %s.",
@@ -7234,6 +7311,11 @@ int main(int argc, char **argv)
             normal_play, journal != NULL) == CC_CLIENT_CAMPAIGN_BLOCKED;
         CcLocalRendererSetOpeningStep(local.opening_step);
         CcLocalBindPlace(&sim);
+        bool movement_preview_visible = view == VIEW_LOCAL &&
+            !local.site_travel_active && !local.road_choice_active &&
+            !local.journey_travel_active && !local.journey_parley_active;
+        CcLocalRendererSetMovementPreview(
+            movement_preview_visible ? &local.movement_preview : NULL);
         if (strcmp(previous_message, message) != 0) {
             message_age = 0.0f;
         } else {
