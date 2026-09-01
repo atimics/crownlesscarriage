@@ -18292,6 +18292,20 @@ CcLocalFaceViewInternal CcLocalFaceViewForFrontAmountInternal(
     return CC_LOCAL_FACE_VIEW_PROFILE;
 }
 
+CcLocalFaceAnchorInternal CcLocalFaceAnchorForCameraInternal(
+    float front_amount, float side_amount)
+{
+    CcLocalFaceViewInternal view =
+        CcLocalFaceViewForFrontAmountInternal(front_amount);
+    float turn = view == CC_LOCAL_FACE_VIEW_FRONT ? 0.0f :
+                 view == CC_LOCAL_FACE_VIEW_THREE_QUARTER ? 0.52f : 1.22f;
+    float side = side_amount < 0.0f ? -1.0f : 1.0f;
+    return (CcLocalFaceAnchorInternal){
+        .forward = cosf(turn),
+        .right = side * sinf(turn),
+    };
+}
+
 static void DrawFaceQuad(Vector3 origin, Vector3 right, Vector3 up,
                          Vector3 normal, float x, float y, float width,
                          float height, float lift, Color color)
@@ -18391,16 +18405,23 @@ static void DrawWorldFace(Vector3 eye_center, Vector3 head_right,
                                Vector3DotProduct(to_camera, head_up)));
     to_camera = PhysicsNormalizeOr(to_camera, head_forward);
     float front_amount = Vector3DotProduct(head_forward, to_camera);
+    float side_amount = Vector3DotProduct(head_right, to_camera);
 
     float hidden_face_cutoff = priority_face ? -0.08f : -0.12f;
     if (front_amount < hidden_face_cutoff) return;
 
-
-    Vector3 normal = to_camera;
+    CcLocalFaceAnchorInternal anchor =
+        CcLocalFaceAnchorForCameraInternal(front_amount, side_amount);
+    Vector3 normal = PhysicsNormalizeOr(
+        Vector3Add(Vector3Scale(head_forward, anchor.forward),
+                   Vector3Scale(head_right, anchor.right)),
+        head_forward);
     Vector3 feature_right = PhysicsNormalizeOr(
-        PhysicsCross(head_up, normal), head_right);
-    float surface_cosine = Vector3DotProduct(normal, head_forward);
-    float surface_sine = Vector3DotProduct(normal, head_right);
+        Vector3Subtract(Vector3Scale(head_right, anchor.forward),
+                        Vector3Scale(head_forward, anchor.right)),
+        head_right);
+    float surface_cosine = anchor.forward;
+    float surface_sine = anchor.right;
     float surface_radius = 1.0f / sqrtf(
         (surface_cosine * surface_cosine) / (half_depth * half_depth) +
         (surface_sine * surface_sine) / (half_width * half_width));
