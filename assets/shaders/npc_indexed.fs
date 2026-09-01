@@ -19,6 +19,8 @@ uniform float inkStrength;
 uniform float heroEmphasis;
 uniform vec3 heroHeadPosition;
 uniform float bodySkinRemap;
+uniform vec3 characterRimTint;
+uniform float characterRimStrength;
 
 out vec4 finalColor;
 
@@ -87,9 +89,12 @@ void main()
        Its head bias protects identity at the tiny gameplay scale without
        outlining every internal polygon. */
     float silhouette = smoothstep(0.70, 0.94, 1.0 - viewFacing);
-    float heroRim = silhouette * heroEmphasis *
-                    (0.035 + headFocus * 0.080);
-    color += mix(vec3(0.12, 0.31, 0.30), paint.rgb, 0.34) * heroRim;
+    float castRim = silhouette * (0.020 + heroEmphasis * 0.050) *
+                    (0.58 + skyExposure * 0.42) * characterRimStrength;
+    float heroRim = silhouette * heroEmphasis * headFocus * 0.070 *
+                    characterRimStrength;
+    vec3 castRimColor = mix(characterRimTint, paint.rgb, 0.22);
+    color += castRimColor * (castRim + heroRim);
     color *= 1.0 + headFocus * 0.075;
 
     float distanceToCamera = length(cameraPosition - fragPosition);
