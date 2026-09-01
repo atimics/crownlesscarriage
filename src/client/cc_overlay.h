@@ -3,9 +3,7 @@
 
 #include "raylib.h"
 
-/* Screen-space text is collected separately from the pixel-art world pass.
-   The scale affects glyphs and their measurements without resampling the
-   low-resolution scene texture. */
+
 void CcOverlayBegin(float text_scale);
 void CcOverlayFlush(void);
 void CcOverlayEnd(void);

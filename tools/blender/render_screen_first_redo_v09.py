@@ -144,7 +144,7 @@ def add_hair(material: bpy.types.Material) -> None:
 
 
 def add_body(material: bpy.types.Material) -> None:
-    # One narrow torso mass.  The shoulder wrap stays inside the arm roots.
+
     shapes.add_prism(
         f"{PREFIX}Torso",
         ((-0.195, 1.625), (-0.225, 1.475), (-0.200, 1.030),

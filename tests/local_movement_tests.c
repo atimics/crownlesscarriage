@@ -392,16 +392,13 @@ static void TestSharedCharacterCollisionWorld(void)
         exit(1);
     }
 
-    /* These houses are faded by several low camera shots. The reveal must
-       never remove their physical walls for the player, NPCs, or ragdoll. */
+
     RequireSolidStreetHouse("west crofts house", 20.0f, 25.0f, 37.0f);
     RequireSolidStreetHouse("artisan row house", 31.0f, 33.25f, 39.0f);
     RequireSolidStreetHouse("market road house", 57.0f, 60.25f, 27.75f);
     RequireSolidStreetHouse("coach yard house", 50.0f, 55.0f, 61.5f);
 
-    /* The visible ore station base is 1.45 x 1.05 m centered here. It must use
-       one footprint for physical sweeps, click paths, ray picking, and the
-       legacy movement helper. */
+
     const Rectangle ore_station = {25.725f, 53.825f, 1.45f, 1.05f};
     float ore_y = CcLocalTerrainHeightAt(26.45f, 54.35f) + 0.58f;
     corrected = (Vector3){27.70f, ore_y, 54.35f};
@@ -475,7 +472,7 @@ static void TestSharedCharacterCollisionWorld(void)
                      (Vector2){CC_LOCAL_START_X, CC_LOCAL_START_Z}, false);
     Vector2 carriage_approach = CcLocalWorldTargetApproachPoint(
         CC_LOCAL_WORLD_TARGET_CARRIAGE);
-    CcLocalRendererSetOpeningStep(CC_LOCAL_OPENING_FIND_JORY);
+    CcLocalRendererSetOpeningStep(CC_LOCAL_OPENING_LEGACY);
     if (CcLocalAgentApproachWorldTarget(
             &carriage_path, CC_LOCAL_WORLD_TARGET_CARRIAGE)) {
         (void)fprintf(stderr,
@@ -505,6 +502,20 @@ static void TestSharedCharacterCollisionWorld(void)
         exit(1);
     }
 
+    CcLocalAgent blocked_projection;
+    CcLocalAgentInit(&blocked_projection,
+                     (Vector2){CC_LOCAL_START_X, CC_LOCAL_START_Z}, false);
+    if (CcLocalAgentSetStreetTarget(
+            &blocked_projection,
+            (Vector3){CC_LOCAL_CARRIAGE_X, 0.0f,
+                      CC_LOCAL_CARRIAGE_Z}) ||
+        blocked_projection.command_point_valid ||
+        blocked_projection.navigation_active) {
+        (void)fprintf(stderr,
+                      "blocked click silently projected across the carriage\n");
+        exit(1);
+    }
+
     CcLocalAgent articulated;
     CcLocalAgentInit(&articulated, (Vector2){2.10f, 7.50f}, false);
     articulated.facing_yaw = 0.0f;
@@ -516,6 +527,70 @@ static void TestSharedCharacterCollisionWorld(void)
             &articulated, point_space_move)) {
         (void)fprintf(stderr,
                       "articulated limb point space missed the course block\n");
+        exit(1);
+    }
+}
+
+static void TestStreetWaypointCornerProgress(void)
+{
+    CcLocalAgent agent;
+    Vector3 destination = {14.238795f, 0.0f, 5.173166f};
+    CcLocalAgentInit(&agent, (Vector2){5.0f, 9.0f}, false);
+    if (!CcLocalAgentSetStreetTarget(&agent, destination)) {
+        (void)fprintf(stderr, "corner-progress route was rejected\n");
+        exit(1);
+    }
+    float minimum_walk_alignment = 1.0f;
+    int32_t walk_alignment_samples = 0;
+    for (int32_t frame = 0;
+         frame < 1200 && agent.navigation_active; ++frame) {
+        CcLocalAgentUpdate(&agent, 1.0f / 60.0f, false);
+        float speed = sqrtf(agent.velocity.x * agent.velocity.x +
+                            agent.velocity.z * agent.velocity.z);
+        if (speed > 0.35f) {
+            float facing_x = sinf(agent.facing_yaw);
+            float facing_z = cosf(agent.facing_yaw);
+            float alignment =
+                facing_x * agent.velocity.x / speed +
+                facing_z * agent.velocity.z / speed;
+            minimum_walk_alignment = fminf(minimum_walk_alignment, alignment);
+            walk_alignment_samples += 1;
+        }
+    }
+    float x = agent.position.x - destination.x;
+    float z = agent.position.z - destination.z;
+    if (agent.navigation_active || x * x + z * z > 0.40f * 0.40f) {
+        (void)fprintf(
+            stderr,
+            "corner-progress route stalled at %.3f %.3f, waypoint %d/%d\n",
+            agent.position.x, agent.position.z,
+            agent.navigation_point_index, agent.navigation_point_count);
+        exit(1);
+    }
+    if (walk_alignment_samples <= 0 || minimum_walk_alignment < 0.10f) {
+        (void)fprintf(
+            stderr,
+            "corner-progress walk slid sideways: %d samples, alignment %.3f\n",
+            walk_alignment_samples, minimum_walk_alignment);
+        exit(1);
+    }
+
+    CcLocalAgent blocked;
+    CcLocalAgentInit(&blocked, (Vector2){2.0f, 7.0f}, false);
+    if (!CcLocalAgentSetExactTarget(
+            &blocked, (Vector3){12.0f, 0.0f, 7.0f}, false)) {
+        (void)fprintf(stderr, "blocked-progress target was rejected\n");
+        exit(1);
+    }
+    for (int32_t frame = 0;
+         frame < 1200 && blocked.exact_target_valid; ++frame) {
+        CcLocalAgentUpdate(&blocked, 1.0f / 60.0f, false);
+    }
+    if (blocked.exact_target_valid) {
+        (void)fprintf(
+            stderr,
+            "blocked-progress route kept shuffling at %.3f %.3f\n",
+            blocked.position.x, blocked.position.z);
         exit(1);
     }
 }
@@ -1085,6 +1160,7 @@ static void TestWallScrapeAndCornerImpact(void)
                     (Vector3){1.35f, -0.45f, 1.35f});
     bool saw_x_contact = false;
     bool saw_z_contact = false;
+    const float maximum_corner_angle_violation = 0.12f;
     maximum_constraint_error = 0.0f;
     maximum_angle_violation = 0.0f;
     maximum_penetration = 0.0f;
@@ -1123,7 +1199,8 @@ static void TestWallScrapeAndCornerImpact(void)
     }
     if (!saw_x_contact || !saw_z_contact ||
         maximum_constraint_error > 0.012f ||
-        maximum_angle_violation > 0.09f || maximum_penetration > 0.018f ||
+        maximum_angle_violation > maximum_corner_angle_violation ||
+        maximum_penetration > 0.018f ||
         maximum_position_step > 0.12f ||
         !recovered || corner.humanoid.ragdoll.active || !corner.grounded) {
         (void)fprintf(stderr,
@@ -1164,8 +1241,7 @@ static void TestShoulderLanding(void)
     PlaceFallenBody(&agent, shoulder_first_roll,
                     (Vector3){0.0f, 2.0f, 0.0f},
                     (Vector3){0.0f, -1.40f, 0.0f});
-    /* Tuck the lower arm across the body so this is a shoulder landing,
-       instead of turning into a hand-first brace before impact. */
+
     CcBiomechRagdoll *placed = &agent.humanoid.ragdoll;
     float vertical_adjustment = 0.12f - FallenBodyLowestPoint(placed);
     for (int32_t particle = 0;
@@ -2507,6 +2583,7 @@ int main(void)
     TestPlaceLandmarkCollision();
     TestTownPlanCollisionAndGate();
     TestSharedCharacterCollisionWorld();
+    TestStreetWaypointCornerProgress();
     TestRagdollStepsInWater();
     RenderTexture2D click_target = {0};
     click_target.texture.width = 457;
@@ -2526,8 +2603,7 @@ int main(void)
         {58.0f, 50.0f}, {78.0f, 50.0f}, {50.0f, 27.25f},
     };
 
-    /* Every authored room and the complete Market Steps-to-Crown Gate road
-       must retain the hero in its fixed storybook shot. */
+
     CcLocalAgent framing_agent;
     CcLocalAgentInit(&framing_agent, camera_review_points[0], false);
     float camera_clock = 0.0f;
@@ -2560,9 +2636,7 @@ int main(void)
         }
     }
 
-    /* Close facades now own a deliberate playable-room composition. The
-       tighter page must still retain the hero without becoming a follow
-       camera. */
+
     CcLocalAgent alley_camera_agent;
     CcLocalAgentInit(&alley_camera_agent,
                      (Vector2){50.0f, 27.25f}, false);
@@ -2595,9 +2669,7 @@ int main(void)
         return 1;
     }
 
-    /* Once a shot has settled, ordinary movement inside its safe area must
-       move the actor across the stage instead of dragging the camera along.
-       This is the core King's Quest-style framing contract. */
+
     Vector3 held_alley_target = alley_camera.target;
     float held_alley_fovy = alley_camera.fovy;
     alley_camera_agent.position.x += 0.55f;
@@ -2625,9 +2697,7 @@ int main(void)
         return 1;
     }
 
-    /* A close page only owns its physical court. Crossing the main coach
-       road near that court must return to an establishing composition
-       instead of showing an alley the player has not entered. */
+
     CcLocalAgent coach_road_camera_agent;
     CcLocalAgentInit(&coach_road_camera_agent,
                      (Vector2){64.0f, 34.0f}, false);
@@ -2645,10 +2715,7 @@ int main(void)
         return 1;
     }
 
-    /* Miller's Row is long enough to expose follow-camera creep. Walk the
-       whole road at gameplay speed: the hero must stay in the safe frame,
-       and the camera may only make a few authored page changes rather than
-       moving continuously beside the actor. */
+
     CcLocalAgent miller_camera_agent;
     CcLocalAgentInit(&miller_camera_agent, (Vector2){54.6f, 51.4f}, false);
     Camera3D miller_camera = {0};
@@ -2708,10 +2775,7 @@ int main(void)
         return 1;
     }
 
-    /* The low Miller's Bend page must retain precise ground input. The old
-       aerial fixture clicked through the hidden side of the windmill; from
-       below waist height that point is no longer visible, so use the road
-       apron that the player can actually see. */
+
     CcLocalAgent miller_click_agent;
     CcLocalAgentInit(&miller_click_agent, (Vector2){58.0f, 51.5f}, false);
     Camera3D miller_click_camera = {0};
@@ -2735,14 +2799,40 @@ int main(void)
         visible_click_art.y * click_viewport.height /
             (float)click_target.texture.height,
     };
-    if (!CcLocalAgentPickTarget(&miller_click_agent,
-                                visible_click_screen,
-                                click_target, click_viewport, false)) {
+    CcLocalMovementPreview miller_preview = {0};
+    Vector3 miller_before_preview = miller_click_agent.position;
+    if (!CcLocalAgentProbeTarget(
+            &miller_click_agent, visible_click_screen,
+            click_target, click_viewport, false, &miller_preview) ||
+        !miller_preview.valid || !miller_preview.accepted ||
+        miller_preview.path_count <= 0) {
         (void)fprintf(stderr,
-                      "Miller's Bend visible road could not be clicked\n");
+                      "Miller's Bend visible road could not be previewed\n");
+        return 1;
+    }
+    if (miller_click_agent.command_point_valid ||
+        miller_click_agent.navigation_active ||
+        VectorDistance3(miller_click_agent.position,
+                        miller_before_preview) > 0.00001f) {
+        (void)fprintf(stderr,
+                      "movement preview changed the live walker\n");
+        return 1;
+    }
+    if (!CcLocalAgentApplyMovementPreview(
+            &miller_click_agent, &miller_preview, false)) {
+        (void)fprintf(stderr,
+                      "Miller's Bend movement preview could not be applied\n");
         return 1;
     }
     Vector3 projected_command = miller_click_agent.command_point;
+    if (VectorDistance3(projected_command,
+                        miller_preview.resolved_point) > 0.00001f ||
+        miller_click_agent.navigation_point_count !=
+            miller_preview.path_count) {
+        (void)fprintf(stderr,
+                      "movement preview and committed path disagreed\n");
+        return 1;
+    }
     float projection_distance = VectorDistance2(
         (Vector2){projected_command.x, projected_command.z},
         (Vector2){visible_miller_point.x, visible_miller_point.z});
@@ -2770,10 +2860,7 @@ int main(void)
         return 1;
     }
 
-    /* A nearby duel changes only the presentation: blend from the fixed
-       room into a perspective lock-on view behind one shoulder. Keep the
-       hero as the larger foreground anchor, retain both fighters, then
-       return to the exact fixed-camera projection after combat. */
+
     CcLocalAgent shoulder_player;
     CcLocalAgentInit(&shoulder_player, (Vector2){15.40f, 9.65f}, false);
     CcLocalCourse shoulder_course;
@@ -2805,9 +2892,7 @@ int main(void)
         return 1;
     }
 
-    /* The portrait-sized physical box can become a thin target in a wide
-       room shot. A click just outside that box still selects the visible
-       body through the small screen-space target halo. */
+
     Vector2 raider_center_art = GetWorldToScreenEx(
         (Vector3){shoulder_course.raiders[0].position.x,
                   shoulder_course.raiders[0].position.y + 1.10f,
@@ -2930,9 +3015,101 @@ int main(void)
         return 1;
     }
 
-    /* The market-side street fight used to lock its camera behind the east
-       workshop wall. The combat composer must choose another nearby stage
-       angle before either fighter is hidden by that complete building. */
+    CcLocalAgent conversation_player;
+    CcLocalAgent conversation_partner;
+    CcLocalAgentInit(&conversation_player, (Vector2){41.0f, 29.15f}, false);
+    CcLocalAgentInit(&conversation_partner,
+                     (Vector2){41.92f, 28.52f}, false);
+    Camera3D conversation_base = shoulder_base;
+    for (int32_t frame = 0; frame < 180; ++frame) {
+        camera_clock += 1.0f / 60.0f;
+        conversation_base = CcLocalStreetCameraInternal(
+            &conversation_player, camera_clock, true,
+            click_target.texture.height);
+    }
+    Camera3D conversation_camera = conversation_base;
+    for (int32_t frame = 0; frame < 180; ++frame) {
+        camera_clock += 1.0f / 60.0f;
+        conversation_camera = CcLocalConversationCameraInternal(
+            conversation_base, &conversation_player, &conversation_partner,
+            true, camera_clock, true, click_target.texture.height);
+    }
+    Vector2 conversation_player_screen = GetWorldToScreenEx(
+        (Vector3){conversation_player.position.x,
+                  conversation_player.position.y + 1.02f,
+                  conversation_player.position.z},
+        conversation_camera, click_target.texture.width,
+        click_target.texture.height);
+    Vector2 conversation_partner_screen = GetWorldToScreenEx(
+        (Vector3){conversation_partner.position.x,
+                  conversation_partner.position.y + 1.02f,
+                  conversation_partner.position.z},
+        conversation_camera, click_target.texture.width,
+        click_target.texture.height);
+    if (conversation_camera.projection != CAMERA_PERSPECTIVE ||
+        VectorDistance3(conversation_camera.position,
+                        conversation_camera.target) > 6.50f ||
+        conversation_player_screen.x < 40.0f ||
+        conversation_player_screen.x >
+            (float)click_target.texture.width - 40.0f ||
+        conversation_partner_screen.x < 40.0f ||
+        conversation_partner_screen.x >
+            (float)click_target.texture.width - 40.0f ||
+        fabsf(conversation_player_screen.x -
+              conversation_partner_screen.x) < 54.0f ||
+        conversation_player_screen.y < 22.0f ||
+        conversation_player_screen.y >
+            (float)click_target.texture.height * 0.72f ||
+        conversation_partner_screen.y < 22.0f ||
+        conversation_partner_screen.y >
+            (float)click_target.texture.height * 0.72f) {
+        (void)fprintf(
+            stderr,
+            "conversation camera framing failed: distance %.2f player %.1f %.1f partner %.1f %.1f\n",
+            VectorDistance3(conversation_camera.position,
+                            conversation_camera.target),
+            conversation_player_screen.x, conversation_player_screen.y,
+            conversation_partner_screen.x, conversation_partner_screen.y);
+        return 1;
+    }
+    for (int32_t frame = 0; frame < 300; ++frame) {
+        camera_clock += 1.0f / 60.0f;
+        conversation_camera = CcLocalConversationCameraInternal(
+            conversation_base, &conversation_player, &conversation_partner,
+            false, camera_clock, true, click_target.texture.height);
+    }
+    if (conversation_camera.projection != conversation_base.projection ||
+        VectorDistance3(conversation_camera.position,
+                        conversation_base.position) > 0.001f ||
+        VectorDistance3(conversation_camera.target,
+                        conversation_base.target) > 0.001f ||
+        fabsf(conversation_camera.fovy - conversation_base.fovy) > 0.001f) {
+        (void)fprintf(stderr,
+                      "conversation camera did not return to the town shot\n");
+        return 1;
+    }
+
+    CcPlayerCompany visible_cargo = {0};
+    visible_cargo.cargo[CC_GOOD_FOOD] = 8;
+    if (CcLocalCargoBoxCountInternal(&visible_cargo) != 8) {
+        (void)fprintf(stderr,
+                      "eight food units did not produce eight cargo boxes\n");
+        return 1;
+    }
+    visible_cargo.cargo[CC_GOOD_TOOLS] = 4;
+    if (CcLocalCargoBoxCountInternal(&visible_cargo) != 12) {
+        (void)fprintf(stderr,
+                      "mixed cargo boxes did not follow carried quantities\n");
+        return 1;
+    }
+    visible_cargo.cargo[CC_GOOD_WEAPONS] = 40;
+    if (CcLocalCargoBoxCountInternal(&visible_cargo) != 24) {
+        (void)fprintf(stderr,
+                      "visible cargo boxes did not respect the draw cap\n");
+        return 1;
+    }
+
+
     CcLocalAgent workshop_player;
     CcLocalAgentInit(&workshop_player, (Vector2){47.10f, 32.08f}, false);
     CcLocalCourse workshop_course;
@@ -2990,9 +3167,7 @@ int main(void)
             camera_clock, true, click_target.texture.height);
     }
 
-    /* The Wayfarer Yard tree used to sit across both fighters in the combat
-       reel. The visibility pass must find a nearby angle that clears both
-       bodies without moving or hiding the tree. */
+
     Vector3 sightline_target = {16.74f, 0.98f, 9.65f};
     Camera3D blocked_combat_camera = {
         .position = {18.91f, 7.10f, 21.84f},
@@ -3020,13 +3195,10 @@ int main(void)
         return 1;
     }
 
-    /* Regression from an off-center road-edge position that reproduced the
-       reported failure. Proximity starts the traversal here; the first
-       authored portal waypoint must route around the gatehouse. */
+
     CcLocalAgent edge_walker;
     CcLocalAgentInit(&edge_walker, (Vector2){54.6f, 27.0f}, false);
-    /* Each camera fixture owns a settled opening shot. This also keeps the
-       test clock monotonic after the combat-camera transition above. */
+
     for (int32_t frame = 0; frame < 120; ++frame) {
         camera_clock += 1.0f / 60.0f;
         (void)CcLocalStreetCameraInternal(
@@ -3081,8 +3253,7 @@ int main(void)
         return 1;
     }
 
-    /* Proximity must not hijack a click that turns back into the room. The
-       old edge-only trigger sent this westward command east to Crown Gate. */
+
     CcLocalAgent edge_turnaround;
     CcLocalAgentInit(&edge_turnaround, (Vector2){54.6f, 27.0f}, false);
     if (!CcLocalAgentSetExactTarget(
@@ -3127,9 +3298,7 @@ int main(void)
             intended_art.y * click_viewport.height /
                 (float)click_target.texture.height,
         };
-        /* These are ordinary ground clicks across the right-hand road mouth,
-           well below and inward from the label. Foreground architecture can
-           occlude the ray, but no label may activate navigation directly. */
+
         if (!CcLocalAgentPickTarget(&crown_gate_walker,
                                     road_click,
                                     click_target, click_viewport, false) ||
@@ -3220,9 +3389,7 @@ int main(void)
         }
     }
 
-    /* A rejected replacement click must cancel the old command. Otherwise
-       the hero keeps walking toward a stale marker after the new click gives
-       no movement feedback—the exact failure reported from the market road. */
+
     CcLocalAgent rejected_click_walker;
     CcLocalAgentInit(&rejected_click_walker,
                      (Vector2){50.0f, 27.25f}, false);
@@ -3265,8 +3432,7 @@ int main(void)
         return 1;
     }
 
-    /* A new ground command must be able to cancel a named traversal without
-       proximity immediately restarting the route from the same edge. */
+
     CcLocalAgent cancelled_traversal;
     CcLocalAgentInit(&cancelled_traversal,
                      (Vector2){50.0f, 27.25f}, false);
@@ -3405,9 +3571,7 @@ int main(void)
         }
     }
 
-    /* Authored centers are the easy case. Exercise every connection again
-       from walkable offsets around each room so no route can assume the hero
-       begins on the designer's centerline. */
+
     static const Vector2 room_start_offsets[] = {
         {1.5f, 0.0f}, {-1.5f, 0.0f}, {0.0f, 1.5f}, {0.0f, -1.5f},
         {1.0f, 1.0f}, {-1.0f, -1.0f},

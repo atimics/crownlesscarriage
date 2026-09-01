@@ -4,8 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 
-/* Forces the same BLOCKED road encounter the sim tests use: a relief
- * charter over a closed route guarded by the first bandit group. */
+
 static CcBanditGroup *PrepareBlockedEncounter(CcSim *sim, uint32_t seed,
                                               char *error,
                                               size_t error_capacity)
@@ -79,9 +78,7 @@ int main(void)
 {
     char error[192];
 
-    /* Conservation: recovered goods leave the defeated group's real
-     * supplies (four consumed by the fight itself, ten per good taken),
-     * land in the player's cargo, and journl an encounter loot event. */
+
     CcSim conserved;
     CcBanditGroup *guards = PrepareBlockedEncounter(
         &conserved, UINT32_C(0x100dca1e), error, sizeof(error));
@@ -135,7 +132,7 @@ int main(void)
         CC_CHECK(loot_event->location_id == conserved.journey.route_id);
     }
 
-    /* Trophies sell like any treasure: banked at a real market. */
+
     if (trophies > 0) {
         CcSettlement *market = &conserved.settlements[0];
         market->market_coins = 200;
@@ -157,9 +154,7 @@ int main(void)
                  trophy_slots_before);
     }
 
-    /* Statistical: across many seeds, natural 12s produce trophies with
-     * provenance, and no fight ever removes cargo. Deterministic seeds
-     * make this stable: P(no double six in 500 fights) is about 6e-8. */
+
     int32_t blocked = 0;
     int32_t trophies_total = 0;
     for (uint32_t seed = 1U; seed <= 500U; ++seed) {
@@ -183,7 +178,7 @@ int main(void)
     CC_CHECK(trophies_total >= 1);
     printf("loot_tests: %d fights, %d trophies\n", blocked, trophies_total);
 
-    /* No bandits on the road: nothing is carried, nothing is minted. */
+
     CcSim empty_road;
     CcBanditGroup *collectors = PrepareBlockedEncounter(
         &empty_road, UINT32_C(0x700b100d), error, sizeof(error));

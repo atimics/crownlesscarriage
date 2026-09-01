@@ -52,17 +52,80 @@ int main(void)
     CcMetagameInit(&metagame, UINT32_C(42));
     CcMetagameIntro(&metagame, output, sizeof(output));
     CC_CHECK(strstr(output, "THE ROAD WITHOUT A CROWN") != NULL);
-    CC_CHECK(strstr(output,
-                    "It is never a good sign when the first bell rings") !=
-             NULL);
+    CC_CHECK(strstr(output, "Mara Venn is waiting by the town board") != NULL);
     CC_CHECK(strstr(output, "on foot") != NULL);
-    CC_CHECK(strstr(output, "no carriage") != NULL);
-    CC_CHECK(strstr(output, "Nell Varo") != NULL);
-    CC_CHECK(strstr(output, "bread to take to her mother") != NULL);
-    CC_CHECK(strstr(output, "Not a crown. A wheel.") != NULL);
+    CC_CHECK(strstr(output, "running out of food") != NULL);
+    CC_CHECK(strstr(output, "Nell Varo") == NULL);
     CC_CHECK(strstr(output, metagame.sim.settlements[0].name) != NULL);
     CC_CHECK(metagame.sim.player.location_id == metagame.sim.settlements[0].id);
     CC_CHECK(metagame.sim.player.coins == 75);
+
+    CcMetagame agent_view;
+    CcMetagameInit(&agent_view, UINT32_C(42));
+    CcMetagameAgentObserve(&agent_view, output, sizeof(output));
+    CC_CHECK(strstr(output, "You are the Crownless Company courier") != NULL);
+    CC_CHECK(strstr(output, "what people at your present place") != NULL);
+    CC_CHECK(strstr(output, "Mara Venn") != NULL);
+    CC_CHECK(strstr(output, "Global ledgers") != NULL);
+    CC_CHECK(strstr(output, "THE KINGDOMS OF MEN") == NULL);
+    CC_CHECK(strstr(output, "Crown strength") == NULL);
+    CC_CHECK(strstr(output, "covenant") == NULL);
+    uint64_t bounded_hash = CcSimHash(&agent_view.sim);
+    CC_CHECK(!CcMetagameAgentExecute(
+        &agent_view, "kingdoms", output, sizeof(output)));
+    CC_CHECK(strstr(output, "courier boundary rejects") != NULL);
+    CC_CHECK(CcSimHash(&agent_view.sim) == bounded_hash);
+    CC_CHECK(!CcMetagameAgentExecute(
+        &agent_view, "dragon steal 1", output, sizeof(output)));
+    CC_CHECK(!CcMetagameAgentExecute(
+        &agent_view, "underroad look", output, sizeof(output)));
+    CC_CHECK(!CcMetagameAgentExecute(
+        &agent_view, "travel 6", output, sizeof(output)));
+    CC_CHECK(CcSimHash(&agent_view.sim) == bounded_hash);
+    CC_CHECK(!CcMetagameAgentExecute(
+        &agent_view, "save hidden.ccsave", output, sizeof(output)));
+    CC_CHECK(CcMetagameAgentExecute(
+        &agent_view, "help", output, sizeof(output)));
+    CC_CHECK(strstr(output, "Send exactly one command") != NULL);
+
+    const char *agent_journal_path =
+        "/tmp/crownless-agent-courier-tests.ccsave";
+    (void)remove(agent_journal_path);
+    CcMetagameInit(&agent_view, UINT32_C(42));
+    CC_CHECK(CcMetagameStartJournal(
+        &agent_view, agent_journal_path, error, sizeof(error)));
+    int32_t journaled_relief = SituationNumber(
+        &agent_view, CC_SITUATION_RELIEF_DELIVERY);
+    char agent_action[64];
+    (void)snprintf(agent_action, sizeof(agent_action),
+                   "accept %d", journaled_relief);
+    CC_CHECK(CcMetagameAgentExecute(
+        &agent_view, agent_action, output, sizeof(output)));
+    CC_CHECK(CcMetagameAgentExecute(
+        &agent_view, "travel 1", output, sizeof(output)));
+    uint64_t journaled_hash = CcSimHash(&agent_view.sim);
+    uint64_t control_hash = 0U;
+    CC_CHECK(CcMetagameAgentCounterfactual(
+        &agent_view, output, sizeof(output), &control_hash));
+    CC_CHECK(strstr(output, "NO-ACTION CONTROL") != NULL);
+    CC_CHECK(strstr(output, "same seed and elapsed days") != NULL);
+    CC_CHECK(strstr(output, "Consequences present only") != NULL);
+    CC_CHECK(control_hash != journaled_hash);
+    CC_CHECK(CcMetagameCloseJournal(
+        &agent_view, error, sizeof(error)));
+    CcMetagameInit(&agent_view, UINT32_C(99));
+    uint64_t replacement_hash = CcSimHash(&agent_view.sim);
+    CC_CHECK(!CcMetagameStartJournal(
+        &agent_view, agent_journal_path, error, sizeof(error)));
+    CC_CHECK(CcSimHash(&agent_view.sim) == replacement_hash);
+    CC_CHECK(CcMetagameResumeJournal(
+        &agent_view, agent_journal_path, error, sizeof(error)));
+    CC_CHECK(CcSimHash(&agent_view.sim) == journaled_hash);
+    CC_CHECK(CcMetagameAgentExecute(
+        &agent_view, "wait 1", output, sizeof(output)));
+    CC_CHECK(CcMetagameCloseJournal(
+        &agent_view, error, sizeof(error)));
+    CC_CHECK(remove(agent_journal_path) == 0);
 
     CcMetagame goblin_ui;
     CcMetagameInit(&goblin_ui, UINT32_C(0x60b11d));
@@ -97,11 +160,11 @@ int main(void)
     CC_CHECK(CcMetagameExecute(&metagame, "causes", output, sizeof(output)));
     CC_CHECK(strstr(output, "short chain") != NULL);
     CC_CHECK(CcMetagameExecute(&metagame, "rumors", output, sizeof(output)));
-    CC_CHECK(strstr(output, "ravens") != NULL);
-    CC_CHECK(strstr(output, "black wax") != NULL);
+    CC_CHECK(strstr(output, "harvest failed") != NULL);
+    CC_CHECK(strstr(output, "treaty bridge is closed") != NULL);
     CC_CHECK(!CcMetagameExecute(&metagame, "plans", output, sizeof(output)));
     CC_CHECK(CcMetagameExecute(&metagame, "people", output, sizeof(output)));
-    CC_CHECK(strstr(output, "bread to take to her mother") != NULL);
+    CC_CHECK(strstr(output, "Talk to Mara Venn") != NULL);
     CC_CHECK(CcMetagameExecute(&metagame, "inequality", output,
                                sizeof(output)));
     CC_CHECK(strstr(output, "Social fault lines") != NULL);
@@ -118,20 +181,21 @@ int main(void)
         CC_CHECK(strstr(output, metagame.sim.kingdoms[i].name) != NULL);
     }
     CC_CHECK(CcMetagameExecute(&metagame, "look", output, sizeof(output)));
-    CC_CHECK(strstr(output, "sleeping beetles") != NULL);
+    CC_CHECK(strstr(output, "hill granaries") != NULL);
     CC_CHECK(strstr(output, "mossy milestone") != NULL);
     CC_CHECK(CcMetagameExecute(&metagame, "war", output, sizeof(output)));
     CC_CHECK(strstr(output, "Frontier roads") != NULL);
     CC_CHECK(strstr(output, "Crown Levy") != NULL);
     CC_CHECK(CcMetagameExecute(&metagame, "charters", output, sizeof(output)));
-    CC_CHECK(strstr(output, "Mara Venn's white-wax letter") != NULL);
+    CC_CHECK(strstr(output,
+                    "Deliver 8 food boxes to Silverwick for Mara Venn") != NULL);
     CC_CHECK(strstr(output, "foxfire supper") == NULL);
     int32_t relief_number = SituationNumber(
         &metagame, CC_SITUATION_RELIEF_DELIVERY);
     ExecuteNumber(&metagame, "talk", relief_number, output, sizeof(output));
-    CC_CHECK(strstr(output, "empty bowl is a meal") != NULL);
-    CC_CHECK(strstr(output, "Nell's grain") != NULL);
-    CC_CHECK(strstr(output, "eight sacks of flour for Silverwick") != NULL);
+    CC_CHECK(strstr(output, "Silverwick is running out of food") != NULL);
+    CC_CHECK(strstr(output, "Nell") == NULL);
+    CC_CHECK(strstr(output, "spoiled") == NULL);
     CC_CHECK(CcMetagameExecute(&metagame, "routes", output, sizeof(output)));
     CC_CHECK(strstr(output, "Baker's Road") != NULL);
 
@@ -175,6 +239,7 @@ int main(void)
     CC_CHECK(metagame.sim.player.coins < coins_before_launder);
     CC_CHECK(quiet->progress == 0);
 
+    metagame.sim.player.coins += 20;
     CC_CHECK(CcMetagameExecute(&metagame, "buy food 8", output, sizeof(output)));
     CC_CHECK(CcMetagameExecute(&metagame, "travel 7", output, sizeof(output)));
     CC_CHECK(metagame.sim.journey.active);
@@ -294,9 +359,8 @@ int main(void)
     CcMetagameInit(&lawful, UINT32_C(42));
     relief_number = SituationNumber(&lawful, CC_SITUATION_RELIEF_DELIVERY);
     ExecuteNumber(&lawful, "accept", relief_number, output, sizeof(output));
-    CC_CHECK(strstr(output, "Mara Venn closes the brass charter box") != NULL);
-    CC_CHECK(CcMetagameExecute(&lawful, "buy food 8", output,
-                               sizeof(output)));
+    CC_CHECK(strstr(output, "You accept Mara Venn's job") != NULL);
+    CC_CHECK(lawful.sim.player.cargo[CC_GOOD_FOOD] == 8);
     CC_CHECK(CcMetagameExecute(&lawful, "travel 1", output,
                                sizeof(output)));
     CC_CHECK(CcMetagameExecute(&lawful, "travel 2", output,
@@ -310,7 +374,7 @@ int main(void)
     CC_CHECK(strstr(output, "market clock is still waiting for breakfast") !=
              NULL);
     ExecuteNumber(&lawful, "talk", relief_number, output, sizeof(output));
-    CC_CHECK(strstr(output, "mine owners stopped selling flour") != NULL);
+    CC_CHECK(strstr(output, "We are running out of food") != NULL);
     CC_CHECK(strstr(output, "Flour has never answered") == NULL);
     CC_CHECK(CcMetagameExecute(&lawful, "sell food 8", output,
                                sizeof(output)));
@@ -332,6 +396,7 @@ int main(void)
     quiet_number = SituationNumber(
         &supper, CC_SITUATION_BLACK_MARKET_DELIVERY);
     ExecuteNumber(&supper, "accept", quiet_number, output, sizeof(output));
+    supper.sim.player.coins += 20;
     CC_CHECK(CcMetagameExecute(&supper, "buy food 12", output,
                                sizeof(output)));
     CC_CHECK(CcMetagameExecute(&supper, "travel 7", output,

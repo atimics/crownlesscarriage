@@ -29,7 +29,10 @@ static void ValidateCatalogue(void)
         "levy",
         "props",
         "stonebacks",
-        "charter"
+        "charter",
+        "spoiled",
+        "black grain",
+        "newest sack"
     };
     size_t count = CcStoryAuthoredLineCount();
     CC_CHECK(count >= 30U);
@@ -117,8 +120,13 @@ static void ValidateSituationCoverage(void)
         CC_CHECK(speaker != NULL);
         CC_CHECK(affected != NULL);
         CC_CHECK(CcStoryCharacterLine(&sim, situation, speaker) != NULL);
+        char spoken[192];
+        CC_CHECK(CcStoryCharacterText(
+            &sim, situation, speaker, spoken, sizeof(spoken)));
         if (situation->kind != CC_SITUATION_MONSTER_EXPEDITION) {
             CC_CHECK(CcStoryCharacterLine(&sim, situation, affected) != NULL);
+            CC_CHECK(CcStoryCharacterText(
+                &sim, situation, affected, spoken, sizeof(spoken)));
         }
     }
 }
@@ -249,6 +257,14 @@ static void ValidateConversationBeats(void)
         &sim, relief);
     CC_CHECK(sponsor != NULL);
     CC_CHECK(affected != NULL);
+    const CcSettlement *target = CcSimSettlement(&sim, relief->target_id);
+    const CcEvent *cause = CcSimEvent(&sim, relief->cause_event_id);
+    CC_CHECK(target != NULL);
+    CC_CHECK(cause != NULL && cause->kind == CC_EVENT_SHORTAGE);
+    CC_CHECK(CcCharacterKnows(
+        sponsor, CC_KNOWLEDGE_OFFER, relief->id));
+    CC_CHECK(CcCharacterKnows(
+        affected, CC_KNOWLEDGE_IMMEDIATE_STAKE, relief->id));
     CC_CHECK(CcSimSituationConversationCharacter(&sim, relief, offer) ==
              sponsor);
     if (affected->current_settlement_id != offer) {
@@ -262,6 +278,12 @@ static void ValidateConversationBeats(void)
     CC_CHECK(offer_line != NULL);
     CC_CHECK(offer_line->beat == CC_STORY_BEAT_OFFER);
     CC_CHECK(strcmp(offer_line->id, "empty_granary.mara.offer") == 0);
+    char spoken[192];
+    CC_CHECK(CcStoryCharacterText(
+        &sim, relief, sponsor, spoken, sizeof(spoken)));
+    CC_CHECK(strstr(spoken, target->name) != NULL);
+    CC_CHECK(strstr(spoken, "running out of food") != NULL);
+    CC_CHECK(strstr(spoken, "spoiled") == NULL);
 
     sim.player.location_id = offer;
     sim.carriage.location_id = offer;
@@ -285,16 +307,47 @@ static void ValidateConversationBeats(void)
     CC_CHECK(heard_line != NULL);
     CC_CHECK(heard_line->beat == CC_STORY_BEAT_HEARD);
     CC_CHECK(strcmp(offer_line->id, heard_line->id) != 0);
+    CC_CHECK(CcStoryCharacterText(
+        &sim, relief, sponsor, spoken, sizeof(spoken)));
+    char quantity[32];
+    (void)snprintf(quantity, sizeof(quantity), "%d boxes", relief->quantity);
+    CC_CHECK(strstr(spoken, quantity) != NULL);
+    CC_CHECK(strstr(spoken, "load") != NULL);
 
+    const CcSettlement *offer_place = CcSimSettlement(&sim, offer);
+    CC_CHECK(offer_place != NULL);
+    int32_t offer_food_before = offer_place->stock[CC_GOOD_FOOD];
+    int32_t carriage_food_before = sim.player.cargo[CC_GOOD_FOOD];
+    CcMoney company_coins_before = sim.player.coins;
+    CcFoodEconomy food_before = {0};
+    CC_CHECK(CcSimFoodEconomyAtSettlement(
+        &sim, offer, &food_before));
     CcCommand pledge = listen;
     pledge.amount = CC_CHARACTER_RESPONSE_PLEDGE_HELP;
     CC_CHECK(CcSimApply(&sim, &pledge, error, sizeof(error)));
+    offer_place = CcSimSettlement(&sim, offer);
+    CC_CHECK(offer_place != NULL);
+    CC_CHECK(sim.player.cargo[CC_GOOD_FOOD] ==
+             carriage_food_before + relief->quantity);
+    CC_CHECK(offer_place->stock[CC_GOOD_FOOD] ==
+             offer_food_before - relief->quantity);
+    CC_CHECK(sim.player.coins == company_coins_before);
+    CcFoodEconomy food_after = {0};
+    CC_CHECK(CcSimFoodEconomyAtSettlement(
+        &sim, offer, &food_after));
+    CC_CHECK(food_after.stock == food_before.stock - relief->quantity);
+    CC_CHECK(food_after.unit_price >= food_before.unit_price);
     sponsor = CcSimSituationSponsorCharacter(&sim, relief);
     CC_CHECK(sponsor != NULL);
     const CcStoryLine *promised_line = CcStoryCharacterLine(
         &sim, relief, sponsor);
     CC_CHECK(promised_line != NULL);
     CC_CHECK(promised_line->beat == CC_STORY_BEAT_PROMISED);
+    CC_CHECK(CcStoryCharacterText(
+        &sim, relief, sponsor, spoken, sizeof(spoken)));
+    CC_CHECK(strstr(spoken, affected->name) != NULL);
+    CC_CHECK(strstr(spoken, target->name) != NULL);
+    CC_CHECK(strstr(spoken, "food boxes are aboard") != NULL);
 
     CcCommand abandon = {
         .kind = CC_COMMAND_ABANDON_SITUATION,

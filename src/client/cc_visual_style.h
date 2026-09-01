@@ -51,11 +51,7 @@ typedef struct CcVisualPalette {
     CcCharacterPalette crownless;
 } CcVisualPalette;
 
-/* Blackthorn & Brass: violet-slate shadows, bottle-green land, tarnished
-   brass routes, and oxblood character accents. Each material has three
-   hand-authored bands so shadows change hue as well as value. UI neutrals
-   use warm lampblack and leather instead of cool terminal blue; they live
-   beside the world colors, but are not part of the world lookup. */
+
 static const CcVisualPalette CC_VISUAL_PALETTE = {
     .cool_ink = {17, 16, 25, 255},
     .warm_ink = {33, 23, 26, 255},
@@ -66,8 +62,7 @@ static const CcVisualPalette CC_VISUAL_PALETTE = {
     .bar_track = {62, 52, 49, 255},
     .ink = {226, 216, 193, 255},
     .muted = {164, 154, 137, 255},
-    /* Signal ramps own the brightest chroma. Their light bands are used by
-       the UI; the darker bands keep lit world markers in the same family. */
+
     .teal = {{32, 75, 74, 255}, {63, 132, 125, 255},
              {98, 180, 168, 255}},
     .gold = {{93, 67, 31, 255}, {154, 113, 48, 255},
@@ -76,9 +71,7 @@ static const CcVisualPalette CC_VISUAL_PALETTE = {
                {209, 93, 81, 255}},
     .violet = {{38, 31, 49, 255}, {89, 74, 104, 255},
                {166, 132, 173, 255}},
-    /* Material ramps use perceptually spaced lightness bands. Navigation
-       surfaces sit above soil, timber sits below it, and reflective metal
-       sits above stone so those pairs survive the final art-pixel scale. */
+
     .earth = {{60, 41, 48, 255}, {112, 72, 56, 255},
               {167, 111, 79, 255}},
     .road = {{81, 72, 63, 255}, {173, 143, 80, 255},
@@ -99,12 +92,10 @@ static const CcVisualPalette CC_VISUAL_PALETTE = {
                   {201, 182, 132, 255}},
     .contraband = {{53, 35, 63, 255}, {107, 69, 111, 255},
                    {172, 124, 172, 255}},
-    /* The full cast may vary in complexion, but final shading resolves to a
-       small protected skin family rather than drifting into wood or soil. */
+
     .people_skin = {{86, 53, 44, 255}, {154, 120, 96, 255},
                     {229, 184, 148, 255}},
-    /* Identity colors are contracts shared by the model, portrait, and PFP.
-       They are named here instead of being approximated from world ramps. */
+
     .crownless = {
         .skin_shadow = {111, 75, 57, 255},
         .skin = {177, 131, 93, 255},
@@ -120,8 +111,7 @@ static const CcVisualPalette CC_VISUAL_PALETTE = {
     },
 };
 
-/* Stable names keep existing callers small while all values remain owned by
-   the palette above. */
+
 #define CC_STYLE_BACKGROUND (CC_VISUAL_PALETTE.background)
 #define CC_STYLE_PANEL (CC_VISUAL_PALETTE.panel)
 #define CC_STYLE_PANEL_DEEP (CC_VISUAL_PALETTE.panel_deep)

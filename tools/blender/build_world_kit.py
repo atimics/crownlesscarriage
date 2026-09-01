@@ -40,9 +40,9 @@ BODY_PAINT_SEMANTICS = (
     "leather", "metal", "accent", "eye",
 )
 
-# These names and rest frames are shared with CcHumanoidSkinPose.  Body shape
-# recipes change the molded surface around the frame; they never invent a
-# second animation skeleton.
+
+
+
 BODY_RIG_BONES = (
     ("root", None, (0.0, 0.0, 0.0), (0.0, 0.0, 0.18)),
     ("pelvis", "root", (0.0, 0.0, 0.90), (0.0, 0.0, 1.10)),
@@ -120,8 +120,8 @@ BUCKS = {
                   (0.108, 0.066, 0.165), (0.128, 0.280, 0.145)),
 }
 
-# Skeleton families control bone-frame width and joint placement. Muscle
-# profiles control local cross-sections independently. Neither one owns clothes.
+
+
 MUSCLE_PROFILES = {
     "slight": {
         "chest": 0.88, "waist": 0.92, "pelvis": 0.92,
@@ -140,9 +140,9 @@ MUSCLE_PROFILES = {
     },
 }
 
-# Soft tissue is additive padding in metres. It is evaluated after muscle and
-# before skin. Regions may be mixed independently; these profiles are safe
-# starting recipes, not locked body types.
+
+
+
 SOFT_TISSUE_PROFILES = {
     "low": {
         "chest": 0.000, "abdomen": 0.000, "waist": 0.000,
@@ -188,8 +188,8 @@ def body_envelope(frame: str, muscle_profile: str,
 
 HEADS = {
     "square": (0.225, 0.205, 0.305, 0.172),
-    # At game scale a truly long skull collapses into a thin vertical wedge.
-    # Keep the family tapered, but use an action-figure-sized cranium and jaw.
+
+
     "long": (0.248, 0.218, 0.250, 0.180),
     "broad": (0.238, 0.215, 0.295, 0.185),
     "veteran": (0.220, 0.205, 0.310, 0.165),
@@ -588,8 +588,8 @@ def add_head_geometry(family: str, center: tuple[float, float, float],
                       skin: str = "skin") -> None:
     width, depth, height, jaw = HEADS[family]
     x, y, z = center
-    # One continuous molded shell avoids the visible cranium/jaw seam and the
-    # square lower block produced by stacking two primitive shapes.
+
+
     add_loft(f"GEO_Head_{family}_Shell", (
         (-height * 0.50, jaw * 0.36, depth * 0.34),
         (-height * 0.34, jaw * 0.50, depth * 0.44),
@@ -597,15 +597,15 @@ def add_head_geometry(family: str, center: tuple[float, float, float],
         ( height * 0.30, width * 0.48, depth * 0.48),
         ( height * 0.48, width * 0.38, depth * 0.39),
     ), collection, skin, "tapered_head_shell", center=(x, y, z), sides=10)
-    # Keep just enough volume for a profile break. The runtime nose mark owns
-    # the front-view read, so this wedge must not become a second large block.
+
+
     nose_width = 0.026 if family != "veteran" else 0.032
     add_wedge(f"GEO_Head_{family}_Nose", (x, y - depth * 0.52, z - 0.008),
               (nose_width * 0.65, 0.018), (nose_width, 0.026),
               0.045, collection, skin, "nose_plane")
-    # The runtime owns eyes, brows, mouth, scars, and held expressions.  Keep
-    # the published head neutral so those depth-tested marks never stack over
-    # a second baked face at the final art-pixel size.
+
+
+
     if family == "veteran":
         add_box("GEO_Head_veteran_Brow", (x, y - depth * 0.49, z + 0.055),
                 (width * 0.78, 0.024, 0.026), collection,
@@ -631,9 +631,9 @@ def hair_paths(style: str, center: tuple[float, float, float]
     back_r = (shifted(((0.055, 0.055, 0.135), (0.105, 0.095, 0.075),
                        (0.115, 0.105, -0.035), (0.075, 0.095, -0.125))),
               (0.17, 0.16, 0.105, 0.018), (0.13, 0.12, 0.08, 0.018))
-    # Close the small scalp channel between the mirrored rear clumps.  It was
-    # almost invisible from the front, but became a bright vertical stripe in
-    # the over-the-shoulder combat camera.
+
+
+
     back_center = (shifted(((0.0, 0.065, 0.145), (0.0, 0.112, 0.075),
                             (0.0, 0.122, -0.035), (0.0, 0.100, -0.130))),
                    (0.145, 0.145, 0.105, 0.018),
@@ -1366,9 +1366,9 @@ def add_body_raw_geometry(collection: bpy.types.Collection, frame: str,
     shoulder = max(envelope["chest"] * 0.92,
                    buck.shoulder * muscle["shoulder"] * 0.94)
 
-    # One torso mass owns the pelvis-to-neck transition.  The extra chest,
-    # abdomen, shoulder and glute masses are unioned into it before skinning;
-    # they are controls, never visible snap-on anatomy.
+
+
+
     add_loft(
         "RAW_BodyCore",
         ((0.00, envelope["hip"] * 0.82, envelope["pelvis_depth"] * 0.88),
@@ -1380,9 +1380,9 @@ def add_body_raw_geometry(collection: bpy.types.Collection, frame: str,
          (0.70, shoulder, envelope["chest_depth"] * 0.86)),
         collection, "skin", "runtime_body_raw", center=(0.0, 0.0, 0.90),
         sides=12)
-    # Broad planes read as molded action-figure anatomy at 60 pixels.  Avoid
-    # paired chest spheres and one round belly: those made every body look
-    # swollen even when its muscle and tissue recipe was lean.
+
+
+
     add_box("RAW_ChestPlane", (0.0, -0.045, 1.43),
             (envelope["chest"] * 1.72,
              envelope["chest_depth"] * 1.48, 0.22),
@@ -1489,8 +1489,8 @@ def consolidate_body_skin(collection: bpy.types.Collection,
     body.name = f"SKIN_{asset_id}"
     body.data.name = body.name
 
-    # Voxel union turns the overlapping construction masses into one closed,
-    # continuous molded surface.  Decimation restores the low-poly planes.
+
+
     remesh = body.modifiers.new("CC_ContinuousSkinUnion", "REMESH")
     remesh.mode = "VOXEL"
     remesh.voxel_size = 0.032
@@ -1709,7 +1709,7 @@ def add_figure(collection: bpy.types.Collection, x: float, buck_name: str,
     else:
         elbow_out, elbow_z, hand_out = 0.05, 1.20, 0.045
 
-    # Boots and legs.
+
     for side in (-1.0, 1.0):
         side_x = x + side * foot_x
         foot_y = -0.075 if (pose == "walking" and side < 0) else -0.02
@@ -1728,7 +1728,7 @@ def add_figure(collection: bpy.types.Collection, x: float, buck_name: str,
                     thigh_radius * 0.72, thigh_radius * 1.12,
                     collection, "skin", "skin_surface_thigh")
 
-    # Pelvis and torso use molded tapered masses.
+
     add_loft(f"GEO_{label}_Pelvis", ((0.00, hip * 0.82,
                                       envelope["pelvis_depth"] * 0.88),
                                      (0.10, hip, envelope["pelvis_depth"]),
@@ -1743,7 +1743,7 @@ def add_figure(collection: bpy.types.Collection, x: float, buck_name: str,
                                      envelope["chest_depth"] * 0.84)),
              collection, "skin", "skin_surface_torso", center=(x, 0.0, 1.08), sides=10)
 
-    # Arms keep a clear hinge plane without ball-joint shapes.
+
     for side in (-1.0, 1.0):
         shoulder = Vector((x + side * shoulder_x, 0.0, shoulder_z))
         elbow = Vector((x + side * (shoulder_x + elbow_out), -0.005, elbow_z))
@@ -1768,7 +1768,7 @@ def add_figure(collection: bpy.types.Collection, x: float, buck_name: str,
     add_eye_marks(collection, head_center, HEADS[head_family][0])
     add_hair_style(hair_style, head_center, collection)
 
-    # Fitted shells use natural garment and armour seams.
+
     if "tunic" in shells:
         add_loft(f"GEO_{label}_TunicShell",
                  ((0.00, waist + 0.018, envelope["abdomen_depth"] + 0.015),
@@ -2016,7 +2016,7 @@ def build_parts_board(collection: bpy.types.Collection) -> None:
         add_hair_style(style, center, collection)
         add_text(collection, style.upper().replace("_", " "),
                  (center[0], -0.24, 1.38), 0.085)
-    # A fitted standard figure shows shell coverage and strong equipment.
+
     add_figure(collection, 4.8, "standard", "veteran", "rear_lock",
                shells=("tunic", "trousers", "boots", "belt", "pauldron_left",
                        "bracers", "greaves", "pack"),
@@ -2398,7 +2398,7 @@ def add_facade_run(collection: bpy.types.Collection, x: float, y: float,
     add_box(f"GEO_{label}_PostEnd", (center_x + width * 0.5, y - 1.57, 1.53),
             (0.14, 0.15, 2.72), collection,
             "wood_dark", "frame_post", width=0.015)
-    # Roof planes join modules into one playset silhouette.
+
     left, right = center_x - width * 0.5 - 0.18, center_x + width * 0.5 + 0.18
     add_panel(f"GEO_{label}_RoofFront", ((left, y - 1.72, 2.88),
                                          (right, y - 1.72, 2.88),

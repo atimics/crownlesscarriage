@@ -171,12 +171,7 @@ int main(void)
         .target_id = relief->id
     };
     CC_CHECK(CcSimApply(&official, &accept_relief, error, sizeof(error)));
-    CcCommand food = {
-        .kind = CC_COMMAND_TRADE,
-        .good = CC_GOOD_FOOD,
-        .amount = relief->quantity
-    };
-    CC_CHECK(CcSimApply(&official, &food, error, sizeof(error)));
+    CC_CHECK(official.player.cargo[CC_GOOD_FOOD] == relief->quantity);
     TravelAndArrive(&official, official.settlements[1].id,
                     error, sizeof(error));
 

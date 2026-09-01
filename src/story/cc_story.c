@@ -1,5 +1,6 @@
 #include "story/cc_story.h"
 
+#include <stdio.h>
 #include <string.h>
 
 typedef struct CcStoryLineTemplate {
@@ -24,27 +25,27 @@ enum {
 static const CcStoryLineTemplate STORY_LINES[] = {
     STORY_LINE(
         "empty_granary.mara.offer",
-        "I can spare eight sacks of flour for Silverwick. Deliver them to the merchants' storehouse.",
+        "Another town is running out of food.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_RELIEF_DELIVERY, "Mara Venn"),
     STORY_LINE(
         "empty_granary.mara.heard",
-        "Alderwatch closed the bridge. I sent three letters. They never answered.",
+        "They need food. I have the boxes ready.",
         CC_STORY_BEAT_HEARD, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_RELIEF_DELIVERY, "Mara Venn"),
     STORY_LINE(
         "empty_granary.mara.promised",
-        "Good. Count all eight sacks before you leave. I will prepare the delivery papers.",
+        "The food boxes are loaded. Take my carriage.",
         CC_STORY_BEAT_PROMISED, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_RELIEF_DELIVERY, "Mara Venn"),
     STORY_LINE(
         "empty_granary.mara.helped",
-        "Silverwick sent back the receipt. All eight sacks reached the merchants. The bakery got none.",
+        "The food arrived. You kept your word.",
         CC_STORY_BEAT_HELPED, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_RELIEF_DELIVERY, "Mara Venn"),
     STORY_LINE(
         "empty_granary.tomas.offer",
-        "Take eight sacks to the hungry miners by the old road. No soldiers. No inspections. Better pay.",
+        "Take eight food boxes to the miners by the old road. No soldiers. No inspections. Better pay.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_BLACK_MARKET_DELIVERY, "Tomas Rill"),
     STORY_LINE(
@@ -69,7 +70,7 @@ static const CcStoryLineTemplate STORY_LINES[] = {
         CC_SITUATION_ROUTE_REPAIR, "Ilyra Senn"),
     STORY_LINE(
         "treaty_bridge.ilyra.heard",
-        "Alderwatch is hungry too. If I open the gate, I am responsible for every sack that crosses.",
+        "Alderwatch is hungry. If I open the gate, I answer for every food box that crosses.",
         CC_STORY_BEAT_HEARD, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_ROUTE_REPAIR, "Ilyra Senn"),
     STORY_LINE(
@@ -137,53 +138,33 @@ static const CcStoryLineTemplate STORY_LINES[] = {
         CC_SITUATION_MONSTER_EXPEDITION, "Jory Fen"),
     STORY_LINE(
         "empty_granary.jory.offer",
-        "The mine owners stopped selling flour yesterday. My mother went to work without breakfast.",
+        "We are running out of food.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_RELIEF_DELIVERY, "Jory Fen"),
     STORY_LINE(
         "empty_granary.jory.heard",
-        "The foreman promises a food wagon every morning. By supper, he calls it tomorrow's wagon.",
+        "We need the whole delivery.",
         CC_STORY_BEAT_HEARD, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_RELIEF_DELIVERY, "Jory Fen"),
     STORY_LINE(
         "empty_granary.jory.promised",
-        "Take the flour to the town ovens. Feed people before the merchants count the sacks.",
+        "Bring the food here. People are waiting.",
         CC_STORY_BEAT_PROMISED, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_RELIEF_DELIVERY, "Jory Fen"),
     STORY_LINE(
         "empty_granary.jory.helped",
-        "Mam took bread to the morning shift. First time this week.",
+        "The food arrived. Thank you.",
         CC_STORY_BEAT_HELPED, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_RELIEF_DELIVERY, "Jory Fen"),
-    STORY_LINE(
-        "empty_granary.nell.offer",
-        "I'm Nell. My mother is on the morning shift. I came for her bread, but the line has stopped.",
-        CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_AFFECTED,
-        CC_SITUATION_RELIEF_DELIVERY, "Nell Varo"),
-    STORY_LINE(
-        "empty_granary.nell.heard",
-        "Jory works at the bakery. He says the newest grain was spoiled.",
-        CC_STORY_BEAT_HEARD, CC_STORY_SPEAKER_AFFECTED,
-        CC_SITUATION_RELIEF_DELIVERY, "Nell Varo"),
-    STORY_LINE(
-        "empty_granary.nell.promised",
-        "I'll wait outside the bakery. The first bell rings before my mother's shift.",
-        CC_STORY_BEAT_PROMISED, CC_STORY_SPEAKER_AFFECTED,
-        CC_SITUATION_RELIEF_DELIVERY, "Nell Varo"),
-    STORY_LINE(
-        "empty_granary.nell.helped",
-        "Mama ate bread this morning. I made her eat her half first.",
-        CC_STORY_BEAT_HELPED, CC_STORY_SPEAKER_AFFECTED,
-        CC_SITUATION_RELIEF_DELIVERY, "Nell Varo"),
 
     STORY_LINE(
         "situation.relief.offer.sponsor",
-        "The town has less than a week's food left. I can pay for one full wagon.",
+        "Another town needs food. I can pay for the delivery.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_RELIEF_DELIVERY, NULL),
     STORY_LINE(
         "situation.relief.offer.affected",
-        "The market ran out of food yesterday. Bring it to us before the merchants buy it all.",
+        "We are running out of food.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_AFFECTED,
         CC_SITUATION_RELIEF_DELIVERY, NULL),
     STORY_LINE(
@@ -389,6 +370,96 @@ const CcStoryLine *CcStoryCharacterLine(
     return NULL;
 }
 
+bool CcStoryCharacterText(
+    const CcSim *sim, const CcSituation *situation,
+    const CcCharacter *character, char *text, size_t text_capacity)
+{
+    if (sim == NULL || situation == NULL || character == NULL ||
+        text == NULL || text_capacity == 0U) return false;
+    text[0] = '\0';
+    CcStoryBeat beat = CharacterBeat(situation, character);
+    CcStorySpeakerRole role = CharacterRole(situation, character);
+    if (situation->kind == CC_SITUATION_RELIEF_DELIVERY &&
+        (role == CC_STORY_SPEAKER_SPONSOR ||
+         role == CC_STORY_SPEAKER_AFFECTED)) {
+        CcKnowledgeKind needed = role == CC_STORY_SPEAKER_SPONSOR ?
+            CC_KNOWLEDGE_OFFER : CC_KNOWLEDGE_IMMEDIATE_STAKE;
+        if (!CcCharacterKnows(character, needed, situation->id)) return false;
+        const CcSettlement *target = CcSimSettlement(
+            sim, situation->target_id);
+        const CcCharacter *affected = CcSimSituationAffectedCharacter(
+            sim, situation);
+        const char *target_name = target != NULL ? target->name : "the town";
+        const char *affected_name = affected != NULL ?
+            affected->name : "someone there";
+        if (role == CC_STORY_SPEAKER_SPONSOR) {
+            switch (beat) {
+                case CC_STORY_BEAT_OFFER:
+                    (void)snprintf(text, text_capacity,
+                                   "%s is running out of food.", target_name);
+                    return true;
+                case CC_STORY_BEAT_HEARD:
+                    (void)snprintf(text, text_capacity,
+                                   "%d boxes of food. I will load them.",
+                                   situation->quantity);
+                    return true;
+                case CC_STORY_BEAT_PROMISED:
+                    (void)snprintf(
+                        text, text_capacity,
+                        "All %d food boxes are aboard. %s will meet you in %s.",
+                        situation->quantity, affected_name, target_name);
+                    return true;
+                case CC_STORY_BEAT_HELPED:
+                case CC_STORY_BEAT_RESOLVED:
+                    (void)snprintf(text, text_capacity,
+                                   "%s received all %d food boxes.", target_name,
+                                   situation->quantity);
+                    return true;
+                case CC_STORY_BEAT_WITHDREW:
+                case CC_STORY_BEAT_FAILED:
+                    (void)snprintf(text, text_capacity,
+                                   "The food did not reach %s.", target_name);
+                    return true;
+                default:
+                    break;
+            }
+        } else {
+            switch (beat) {
+                case CC_STORY_BEAT_OFFER:
+                    (void)snprintf(text, text_capacity,
+                                   "We are running out of food.");
+                    return true;
+                case CC_STORY_BEAT_HEARD:
+                    (void)snprintf(text, text_capacity,
+                                   "We need all %d food boxes.",
+                                   situation->quantity);
+                    return true;
+                case CC_STORY_BEAT_PROMISED:
+                    (void)snprintf(text, text_capacity,
+                                   "Bring the food to %s.", target_name);
+                    return true;
+                case CC_STORY_BEAT_HELPED:
+                case CC_STORY_BEAT_RESOLVED:
+                    (void)snprintf(text, text_capacity,
+                                   "The food arrived. Thank you.");
+                    return true;
+                case CC_STORY_BEAT_WITHDREW:
+                case CC_STORY_BEAT_FAILED:
+                    (void)snprintf(text, text_capacity,
+                                   "The food never came.");
+                    return true;
+                default:
+                    break;
+            }
+        }
+    }
+    const CcStoryLine *line = CcStoryCharacterLine(
+        sim, situation, character);
+    if (line == NULL) return false;
+    (void)snprintf(text, text_capacity, "%s", line->text);
+    return true;
+}
+
 size_t CcStoryAuthoredLineCount(void)
 {
     return sizeof(STORY_LINES) / sizeof(STORY_LINES[0]);
@@ -428,7 +499,7 @@ const char *CcStoryPlayerChoiceText(CcSituationKind kind,
     if (choice == CC_STORY_PLAYER_ASK) {
         switch (kind) {
             case CC_SITUATION_RELIEF_DELIVERY:
-                return "1  Where does the food go?";
+                return "1  What do they need?";
             case CC_SITUATION_ROUTE_REPAIR:
                 return "1  Why is the bridge closed?";
             case CC_SITUATION_MONSTER_EXPEDITION:
@@ -442,7 +513,7 @@ const char *CcStoryPlayerChoiceText(CcSituationKind kind,
     if (choice == CC_STORY_PLAYER_PROMISE) {
         switch (kind) {
             case CC_SITUATION_RELIEF_DELIVERY:
-                return "2  I will bring the food.";
+                return "2  I'll take the job.";
             case CC_SITUATION_ROUTE_REPAIR:
                 return "2  I will open the road.";
             case CC_SITUATION_MONSTER_EXPEDITION:

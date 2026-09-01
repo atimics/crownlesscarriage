@@ -180,6 +180,19 @@ void main()
     color *= mix(vec3(1.0), terrainTint,
                  isTerrain * detailPresence);
 
+    /* Near ground occupies a large part of the close authored shots. Give it
+       two broad scumbled values so it frames the action as painted earth
+       instead of collapsing into one empty dark polygon after palette
+       lookup. The pattern is world-locked and therefore does not shimmer. */
+    float foregroundTerrain = foreground * isTerrain * detailPresence;
+    float foregroundScumble = cellNoise(
+        crossedTerrainPoint * 0.17 + vec2(73.0, 29.0));
+    float foregroundShade = 1.0 - step(0.34, foregroundScumble);
+    float foregroundLift = step(0.72, foregroundScumble);
+    color *= 1.0 - foregroundTerrain * foregroundShade * 0.065;
+    color += albedo.rgb * vec3(0.12, 0.14, 0.12) *
+             foregroundTerrain * foregroundLift * 0.16;
+
     /* Add one more authored-looking pixel layer after the broad form reads.
        These marks stay in world space, gather into short clusters, and fade
        with depth. They suggest laid shingles, worked wall courses, and small
@@ -316,7 +329,8 @@ void main()
     vec3 quietBackground = mix(vec3(luminance) * vec3(0.84, 0.94, 1.06),
                                fogColor + vec3(0.055), 0.42);
     color = mix(color, quietBackground, backgroundWeight * 0.48);
-    color *= 1.0 - foreground * depthStrength * 0.16;
+    float foregroundDarkening = mix(0.16, 0.10, isTerrain);
+    color *= 1.0 - foreground * depthStrength * foregroundDarkening;
 
     vec2 axis = length(storyAxis) > 0.001 ? normalize(storyAxis) :
                                             vec2(1.0, 0.0);

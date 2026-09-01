@@ -755,7 +755,7 @@ static void CheckJournalRecovery(char *error, size_t error_capacity)
     CC_CHECK(CcJournalClose(&journal, &sim, error, error_capacity));
     CC_CHECK(journal == NULL);
 
-    /* The snapshot is still the epoch base; recovery must replay the suffix. */
+
     CC_CHECK(ReadSqliteInteger(
                  path, "SELECT journal_cursor FROM meta WHERE id=1;") == 0);
     CC_CHECK(ReadSqliteInteger(
@@ -780,7 +780,7 @@ static void CheckJournalRecovery(char *error, size_t error_capacity)
     CC_CHECK(ReadSqliteInteger(
                  path, "SELECT COUNT(*) FROM action_journal;") == 5);
 
-    /* SQL clients cannot revise or remove committed input records. */
+
     sqlite3 *database = NULL;
     RequireSqlite(sqlite3_open_v2(path, &database,
                                   SQLITE_OPEN_READWRITE, NULL),
@@ -832,7 +832,7 @@ static void CheckJournalCheckpointAndTamper(char *error,
     CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
     CC_CHECK(CcSimHash(&restored) == expected_hash);
 
-    /* Simulate privileged corruption: replay must reject the broken hash chain. */
+
     sqlite3 *database = NULL;
     RequireSqlite(sqlite3_open_v2(path, &database,
                                   SQLITE_OPEN_READWRITE, NULL),
@@ -953,7 +953,7 @@ static void CheckPreJourneySchema3Compatibility(char *error,
             &restored, &restored.situations[i]) != NULL);
     }
 
-    /* The migrated file must remain stable after the new writer adopts it. */
+
     uint64_t migrated_hash = CcSimHash(&restored);
     CC_CHECK(CcSaveWrite(path, &restored, error, error_capacity));
     CcSim rewritten;
@@ -973,7 +973,7 @@ static void CheckPreJourneySchema3Compatibility(char *error,
         }
     }
     CC_CHECK(situation != NULL);
-    legacy_journey.player.cargo[CC_GOOD_FOOD] = situation->quantity;
+    legacy_journey.player.cargo[CC_GOOD_FOOD] = 0;
     CcCommand accept = {
         .kind = CC_COMMAND_ACCEPT_SITUATION,
         .target_id = situation->id

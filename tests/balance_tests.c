@@ -63,7 +63,7 @@ int main(void)
     survivors->production[CC_GOOD_FOOD] = 0;
     survivors->consumption[CC_GOOD_FOOD] = 7;
     CcSimAdvanceDays(&contracted, 7);
-    /* The settlement's stable also feeds the Crownless horse team. */
+
     CC_CHECK(survivors->stock[CC_GOOD_FOOD] == 5);
 
     survivors->hunger = 20;
@@ -290,7 +290,7 @@ int main(void)
     CC_CHECK(collapse_samples > 0);
     CC_CHECK(collapse_samples < samples / 5);
     CC_CHECK(crisis_samples > samples / 10);
-    /* Strong cult openings still need a meaningful share of quiet years. */
+
     CC_CHECK(quiet_samples >= samples / 5);
     CC_CHECK(scarred_samples > 0);
     CC_CHECK(war_samples > 0);

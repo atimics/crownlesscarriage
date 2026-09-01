@@ -6,10 +6,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/*
- * Stable runtime skeleton shared by the simulation, renderer, and Blender.
- * Bone names deliberately match the armature in crownless_hero_actions.blend.
- */
+
 typedef enum CcHumanoidSkinBone {
     CC_HUMANOID_SKIN_ROOT,
     CC_HUMANOID_SKIN_PELVIS,

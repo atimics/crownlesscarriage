@@ -419,9 +419,9 @@ def pose_points(spec: Archetype) -> dict[str, Vector]:
         points["elbow_r"].y -= 0.055 * stride
         points["hand_r"].y -= 0.125 * stride
 
-        # Contact, down, passing, and up are deliberately discrete rather
-        # than evenly sampled smooth animation.  The opposite leg swings
-        # through the first half-cycle, then the pattern mirrors.
+
+
+
         lift_l = (0.0, 0.0, 0.0, 0.0, 0.0, 0.025, 0.135, 0.075)[pose_index]
         lift_r = (0.0, 0.025, 0.135, 0.075, 0.0, 0.0, 0.0, 0.0)[pose_index]
         points["ankle_l"].z += lift_l
@@ -435,8 +435,8 @@ def pose_points(spec: Archetype) -> dict[str, Vector]:
             points["knee_l"].z += 0.024
             points["knee_r"].z += 0.024
     elif spec.motion_pose == "work":
-        # Each role gets a readable task silhouette. These poses are used at
-        # route work points, not only in the asset review scene.
+
+
         if spec.role == "laborer":
             points["elbow_r"] = Vector((0.42, -0.06, 1.34))
             points["hand_r"] = Vector((0.59, -0.04, 1.22))
@@ -464,14 +464,14 @@ def pose_points(spec: Archetype) -> dict[str, Vector]:
             points["elbow_r"] = Vector((0.31, -0.10, 1.21))
             points["hand_l"] = Vector((-0.13, -0.20, 1.04))
             points["hand_r"] = Vector((0.13, -0.20, 1.04))
-        else:  # Merchant arranging or counting wares.
+        else:
             points["elbow_l"] = Vector((-0.35, -0.10, 1.24))
             points["elbow_r"] = Vector((0.35, -0.10, 1.24))
             points["hand_l"] = Vector((-0.18, -0.24, 1.07))
             points["hand_r"] = Vector((0.18, -0.24, 1.07))
     elif spec.motion_pose == "react":
-        # A compact recoil/alert pose reads at gameplay scale and lets the
-        # same role respond differently when settlement pressure rises.
+
+
         points["knee_l"].y += 0.06
         points["ankle_l"].y += 0.12
         points["knee_r"].y -= 0.04
@@ -509,25 +509,25 @@ def build_head(spec: Archetype, collection: bpy.types.Collection) -> None:
                 "skin", collection, spec, "neck")
     add_ellipsoid(f"GEO_{spec.role}_head", tuple(center),
                   (width, depth, height), "skin", collection, spec, "head")
-    # A narrower, slightly forward jaw breaks the toy-ball head silhouette
-    # without baking facial identity into the role mesh.  Eyes, scars, age,
-    # and expression remain exclusively owned by the shared face recipe.
+
+
+
     add_ellipsoid(f"GEO_{spec.role}_jaw",
                   (0.0, -0.034, center.z - height * 0.52),
                   (width * 0.80, depth * 0.90, height * 0.48), "skin",
                   collection, spec, "jaw", subdivisions=1)
-    # Eyes, brows, nose, mouth, beard, age marks, and scars are drawn from the
-    # shared runtime face recipe so the UI portrait cannot drift from the
-    # gameplay head.
+
+
+
     for side in (-1.0, 1.0):
         add_ellipsoid(f"GEO_{spec.role}_ear_{side:+.0f}",
                       (side * width * 0.99, -0.004, center.z - 0.005),
                       (0.022, 0.018, 0.036), "skin", collection, spec, "ear",
                       subdivisions=1)
 
-    # Runtime identity modules own the eight hair silhouettes and four
-    # headwear families.  The baked role body keeps only a close scalp cap so
-    # the same deterministic recipe can be used for world heads and portraits.
+
+
+
     add_ellipsoid(f"GEO_{spec.role}_runtime_scalp",
                   (0.0, 0.016, center.z + height * 0.48),
                   (width * 0.98, depth * 0.98, height * 0.34), "hair",
@@ -612,11 +612,11 @@ def build_body(spec: Archetype, collection: bpy.types.Collection) -> None:
                 bevel=0.018)
 
     if "armor" in spec.equipment or "half_armor" in spec.equipment:
-        # Armor must read as clothing around a body from every camera angle.
-        # A thin front box becomes a floating signboard at the final pixel
-        # scale, so guards get a closed cuirass and raiders get a smaller,
-        # off-centre half cuirass. Both follow the same torso rings as the
-        # garment below them and keep enough depth for a clear side view.
+
+
+
+
+
         full_armor = "armor" in spec.equipment
         plate_x = 0.0 if full_armor else -0.08
         width_scale = 1.0 if full_armor else 0.73
@@ -642,9 +642,9 @@ def build_body(spec: Archetype, collection: bpy.types.Collection) -> None:
                           "armor", subdivisions=1)
 
     if "apron" in spec.equipment:
-        # A short fitted bib plus split skirt panels reads as clothing around
-        # a person. It keeps the waist and leg motion visible instead of
-        # turning the NPC into a single flat rectangle.
+
+
+
         apron_y = -0.170 * mass * body_depth
         add_box(f"GEO_{spec.role}_apron_bib", (0.0, apron_y, 1.27),
                 (0.275 * mass, 0.050, 0.235), "underlayer", collection,

@@ -110,3 +110,11 @@ bool CcClientInteractionActivated(bool requested, float distance,
     return requested && isfinite(distance) && isfinite(maximum_distance) &&
            maximum_distance >= 0.0f && distance < maximum_distance;
 }
+
+CcClientCampaignAccess CcClientCampaignAccessFor(bool normal_play,
+                                                 bool journal_available)
+{
+    if (!normal_play) return CC_CLIENT_CAMPAIGN_EPHEMERAL;
+    return journal_available ? CC_CLIENT_CAMPAIGN_PERSISTENT :
+                               CC_CLIENT_CAMPAIGN_BLOCKED;
+}

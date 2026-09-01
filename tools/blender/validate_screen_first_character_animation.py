@@ -38,8 +38,8 @@ def is_character_color(pixel: tuple[int, int, int]) -> bool:
 def subject_measurements(image: Image.Image) -> tuple[int, tuple[int, int, int, int] | None]:
     rgb = image.convert("RGB")
     points: list[tuple[int, int]] = []
-    # This region contains the full upper character while excluding the ground
-    # horizon and the outer presentation area.
+
+
     for y in range(25, 245):
         for x in range(70, 290):
             if is_character_color(rgb.getpixel((x, y))):

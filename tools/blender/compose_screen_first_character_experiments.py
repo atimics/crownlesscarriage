@@ -102,13 +102,13 @@ def main() -> None:
     high = Image.open(HIGH_PATH).convert("RGBA")
     low = Image.open(LOW_PATH).convert("RGBA")
 
-    # The runtime performs a final shared-palette lookup before the point
-    # upscale.  A small no-dither palette gives this offline test the same hard
-    # color decisions and prevents Blender's edge samples from looking soft.
+
+
+
     low_indexed = apply_pipeline_palette(low)
 
-    # Matching camera crops: the low crop is enlarged only with nearest-neighbor
-    # sampling, exactly like the game's final world upscale.
+
+
     high_strip = high.crop((0, 240, 1440, 555))
     low_strip = low_indexed.crop((0, 80, 480, 185)).resize((1440, 315), Image.Resampling.NEAREST)
     value_strip = ImageOps.grayscale(low_indexed.crop((0, 80, 480, 185)))

@@ -30,6 +30,14 @@ function(cc_strict_warnings target)
     endif()
 endfunction()
 
+function(cc_large_sim_stack target)
+    if(MSVC)
+        target_link_options(${target} PRIVATE "/STACK:16777216")
+    elseif(MINGW)
+        target_link_options(${target} PRIVATE "LINKER:--stack,16777216")
+    endif()
+endfunction()
+
 function(cc_manifest_export_paths output manifest section)
     file(READ "${manifest}" manifest_json)
     string(JSON export_count LENGTH "${manifest_json}" "${section}")
@@ -147,6 +155,11 @@ cc_strict_warnings(crownless_sim_runner)
 add_executable(crownless_metagame_playtest tools/metagame.c)
 target_link_libraries(crownless_metagame_playtest PRIVATE crownless_metagame)
 cc_strict_warnings(crownless_metagame_playtest)
+cc_large_sim_stack(crownless_metagame_playtest)
+
+add_executable(crownless_agent_courier tools/agent_courier.c)
+target_link_libraries(crownless_agent_courier PRIVATE crownless_metagame)
+cc_strict_warnings(crownless_agent_courier)
 
 if(CC_BUILD_BENCHMARKS)
     add_executable(crownless_benchmark tools/benchmark.c)
@@ -247,8 +260,8 @@ if(CC_BUILD_CLIENT)
         target_link_options(crownless_carriage PRIVATE
             "-sASYNCIFY=1"
             "-sALLOW_MEMORY_GROWTH=1"
-            "-sINITIAL_MEMORY=67108864"
-            "-sSTACK_SIZE=8388608"
+            "-sINITIAL_MEMORY=33554432"
+            "-sSTACK_SIZE=4194304"
             "-sFORCE_FILESYSTEM=1"
             "-sMIN_WEBGL_VERSION=2"
             "-sMAX_WEBGL_VERSION=2"
@@ -257,6 +270,9 @@ if(CC_BUILD_CLIENT)
             "SHELL:--preload-file ${CC_WEB_ASSET_DIR}/assets@/assets"
         )
         add_custom_command(TARGET crownless_carriage POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${CC_WEB_ASSET_DIR}/lazy-assets"
+                "${CMAKE_CURRENT_BINARY_DIR}/site/assets"
             COMMAND ${CMAKE_COMMAND} -E touch
                 "${CMAKE_CURRENT_BINARY_DIR}/site/.nojekyll"
             VERBATIM
@@ -306,9 +322,6 @@ if(CC_BUILD_CLIENT)
         )
         set(CC_CARRIAGE_ASSET
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/glb/carriage_base_v01.glb"
-        )
-        set(CC_CARGO_RACK_ASSET
-            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/glb/module_cargo_rack_v01.glb"
         )
         set(CC_MARKET_ASSET
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/glb/environment_market_granary_v01.glb"
@@ -413,9 +426,6 @@ if(CC_BUILD_CLIENT)
                 "${CC_CARRIAGE_ASSET}"
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/glb/carriage_base_v01.glb"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${CC_CARGO_RACK_ASSET}"
-                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/glb/module_cargo_rack_v01.glb"
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${CC_MARKET_ASSET}"
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/glb/environment_market_granary_v01.glb"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -465,7 +475,7 @@ if(CC_BUILD_CLIENT)
                     "${CC_NPC_DYNAMIC_MODULE_MANIFEST}"
                     ${CC_CREATURE_ASSETS} "${CC_CREATURE_MANIFEST}"
                     "${CC_BRIDGE_CHECKPOINT_ASSET}" "${CC_CARRIAGE_ASSET}"
-                    "${CC_CARGO_RACK_ASSET}" "${CC_MARKET_ASSET}"
+                    "${CC_MARKET_ASSET}"
                     "${CC_MINE_ASSET}" "${CC_SHORTAGE_ASSET}"
                     "${CC_ENFORCEMENT_ASSET}" "${CC_RECOVERY_ASSET}"
                     "${CC_STYLE_GRADE_SHADER}"
@@ -515,6 +525,7 @@ if(BUILD_TESTING)
     add_executable(sim_tests tests/sim_tests.c)
     target_link_libraries(sim_tests PRIVATE crownless_sim)
     cc_strict_warnings(sim_tests)
+    cc_large_sim_stack(sim_tests)
     add_test(NAME deterministic_simulation COMMAND sim_tests)
 
     add_executable(story_tests tests/story_tests.c)
