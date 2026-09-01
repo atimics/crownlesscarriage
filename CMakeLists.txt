@@ -310,9 +310,6 @@ if(CC_BUILD_CLIENT)
         set(CC_CARRIAGE_ASSET
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/glb/carriage_base_v01.glb"
         )
-        set(CC_CARGO_RACK_ASSET
-            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/glb/module_cargo_rack_v01.glb"
-        )
         set(CC_MARKET_ASSET
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/glb/environment_market_granary_v01.glb"
         )
@@ -416,9 +413,6 @@ if(CC_BUILD_CLIENT)
                 "${CC_CARRIAGE_ASSET}"
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/glb/carriage_base_v01.glb"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${CC_CARGO_RACK_ASSET}"
-                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/glb/module_cargo_rack_v01.glb"
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${CC_MARKET_ASSET}"
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/glb/environment_market_granary_v01.glb"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -468,7 +462,7 @@ if(CC_BUILD_CLIENT)
                     "${CC_NPC_DYNAMIC_MODULE_MANIFEST}"
                     ${CC_CREATURE_ASSETS} "${CC_CREATURE_MANIFEST}"
                     "${CC_BRIDGE_CHECKPOINT_ASSET}" "${CC_CARRIAGE_ASSET}"
-                    "${CC_CARGO_RACK_ASSET}" "${CC_MARKET_ASSET}"
+                    "${CC_MARKET_ASSET}"
                     "${CC_MINE_ASSET}" "${CC_SHORTAGE_ASSET}"
                     "${CC_ENFORCEMENT_ASSET}" "${CC_RECOVERY_ASSET}"
                     "${CC_STYLE_GRADE_SHADER}"

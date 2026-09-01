@@ -40,6 +40,7 @@ Camera3D CcLocalCombatCameraInternal(Camera3D base,
 Camera3D CcLocalConversationCameraInternal(
     Camera3D base, const CcLocalAgent *player, const CcLocalAgent *partner,
     bool active, float clock, bool advance, int32_t art_height);
+int32_t CcLocalCargoBoxCountInternal(const CcPlayerCompany *player);
 float CcLocalCameraTreeOcclusionScoreInternal(Camera3D camera,
                                                Vector3 first_subject,
                                                Vector3 second_subject);

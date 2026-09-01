@@ -121,7 +121,7 @@ int main(void)
     CC_CHECK(strstr(output, "Crown Levy") != NULL);
     CC_CHECK(CcMetagameExecute(&metagame, "charters", output, sizeof(output)));
     CC_CHECK(strstr(output,
-                    "Deliver 8 food to Silverwick for Mara Venn") != NULL);
+                    "Deliver 8 food boxes to Silverwick for Mara Venn") != NULL);
     CC_CHECK(strstr(output, "foxfire supper") == NULL);
     int32_t relief_number = SituationNumber(
         &metagame, CC_SITUATION_RELIEF_DELIVERY);
@@ -172,6 +172,7 @@ int main(void)
     CC_CHECK(metagame.sim.player.coins < coins_before_launder);
     CC_CHECK(quiet->progress == 0);
 
+    metagame.sim.player.coins += 20;
     CC_CHECK(CcMetagameExecute(&metagame, "buy food 8", output, sizeof(output)));
     CC_CHECK(CcMetagameExecute(&metagame, "travel 7", output, sizeof(output)));
     CC_CHECK(metagame.sim.journey.active);
@@ -292,8 +293,7 @@ int main(void)
     relief_number = SituationNumber(&lawful, CC_SITUATION_RELIEF_DELIVERY);
     ExecuteNumber(&lawful, "accept", relief_number, output, sizeof(output));
     CC_CHECK(strstr(output, "You accept Mara Venn's job") != NULL);
-    CC_CHECK(CcMetagameExecute(&lawful, "buy food 8", output,
-                               sizeof(output)));
+    CC_CHECK(lawful.sim.player.cargo[CC_GOOD_FOOD] == 8);
     CC_CHECK(CcMetagameExecute(&lawful, "travel 1", output,
                                sizeof(output)));
     CC_CHECK(CcMetagameExecute(&lawful, "travel 2", output,
@@ -329,6 +329,7 @@ int main(void)
     quiet_number = SituationNumber(
         &supper, CC_SITUATION_BLACK_MARKET_DELIVERY);
     ExecuteNumber(&supper, "accept", quiet_number, output, sizeof(output));
+    supper.sim.player.coins += 20;
     CC_CHECK(CcMetagameExecute(&supper, "buy food 12", output,
                                sizeof(output)));
     CC_CHECK(CcMetagameExecute(&supper, "travel 7", output,

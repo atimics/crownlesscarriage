@@ -281,14 +281,14 @@ int main(void)
     char trade_error[192];
     treasure_sim.player.coins = 500;
     treasure_sim.player.cargo[CC_GOOD_FOOD] =
-        treasure_sim.player.cargo_capacity * 8;
+        treasure_sim.player.cargo_capacity;
     CcCommand buy_treasure = {
         .kind = CC_COMMAND_BUY_TREASURE,
         .target_id = treasure->id
     };
     CC_CHECK(!CcSimApply(&treasure_sim, &buy_treasure,
                          trade_error, sizeof(trade_error)));
-    treasure_sim.player.cargo[CC_GOOD_FOOD] -= 8;
+    treasure_sim.player.cargo[CC_GOOD_FOOD] -= 1;
     CC_CHECK(CcSimApply(&treasure_sim, &buy_treasure,
                         trade_error, sizeof(trade_error)));
     CC_CHECK(treasure_sim.player.treasure_cargo_slots == 1);
@@ -312,7 +312,7 @@ int main(void)
     cargo.cargo[CC_GOOD_GOLD] = 1;
     cargo.cargo[CC_GOOD_GEMS] = 1;
     cargo.treasure_cargo_slots = 1;
-    CC_CHECK(CcPlayerCargoUsed(&cargo) == 9);
+    CC_CHECK(CcPlayerCargoUsed(&cargo) == 20);
 
     puts("Material economy tests passed");
     return 0;

@@ -593,15 +593,23 @@ static void SituationNextAction(const CcSim *sim,
         situation->kind == CC_SITUATION_BLACK_MARKET_DELIVERY) {
         int32_t remaining = situation->quantity - situation->progress;
         if (here && sim->player.cargo[situation->good] > 0) {
-            (void)snprintf(label, capacity,
-                           "Deliver %d %s at the market.",
-                           remaining, CcGoodName(situation->good));
+            if (situation->good == CC_GOOD_FOOD) {
+                (void)snprintf(label, capacity,
+                               "Deliver %d food boxes at the market.",
+                               remaining);
+            } else {
+                (void)snprintf(label, capacity,
+                               "Deliver %d %s at the market.",
+                               remaining, CcGoodName(situation->good));
+            }
         } else if (here) {
             (void)snprintf(label, capacity,
                            "Bring %d %s here.",
                            remaining, CcGoodName(situation->good));
         } else if (sim->player.cargo[situation->good] >= remaining) {
             (void)snprintf(label, capacity,
+                           situation->good == CC_GOOD_FOOD ?
+                           "The food boxes are aboard. Travel to %s." :
                            "Travel to %s.",
                            destination != NULL ? destination->name : "the target");
         } else {
@@ -2978,8 +2986,10 @@ static ContextActionSet BuildContextActions(
                 if (remaining < 1) remaining = 1;
                 AddContextAction(
                     &set, CONTEXT_ACTION_DELIVER_CARGO,
-                    TextFormat("Deliver %d %s", remaining,
-                               CcGoodName(good)));
+                    good == CC_GOOD_FOOD ?
+                        TextFormat("Deliver %d food boxes", remaining) :
+                        TextFormat("Deliver %d %s", remaining,
+                                   CcGoodName(good)));
             }
             const CcSettlement *place = CcSimSettlement(
                 sim, sim->player.location_id);
@@ -2990,10 +3000,15 @@ static ContextActionSet BuildContextActions(
                         sim->player.cargo[cargo_good] <= 0) continue;
                     AddCargoContextAction(
                         &set, (CcGood)cargo_good,
-                        TextFormat("%s %dc · %d held",
-                                   CcGoodName((CcGood)cargo_good),
-                                   place->price[cargo_good],
-                                   sim->player.cargo[cargo_good]));
+                        (CcGood)cargo_good == CC_GOOD_FOOD ?
+                            TextFormat("Food boxes %dc · %d local · %d aboard",
+                                       place->price[cargo_good],
+                                       place->stock[cargo_good],
+                                       sim->player.cargo[cargo_good]) :
+                            TextFormat("%s %dc · %d held",
+                                       CcGoodName((CcGood)cargo_good),
+                                       place->price[cargo_good],
+                                       sim->player.cargo[cargo_good]));
                 }
             }
         }
@@ -3975,7 +3990,8 @@ static void DrawCarriageScreen(const CcSim *sim, const LocalState *local)
                                           Fade(MUTED, 0.24f));
         CcOverlayDrawText(TextFormat("SLOT %d", good + 1),
                           84, y + 8, 7, MUTED);
-        CcOverlayDrawText(CcGoodName((CcGood)good),
+        CcOverlayDrawText((CcGood)good == CC_GOOD_FOOD ?
+                              "FOOD BOXES" : CcGoodName((CcGood)good),
                           144, y + 12, 10, INK);
         const char *quantity = TextFormat("x%d", sim->player.cargo[good]);
         int32_t quantity_width = CcOverlayMeasureText(quantity, 11);
@@ -4014,9 +4030,11 @@ static void DrawCarriageScreen(const CcSim *sim, const LocalState *local)
                 sim->player.cargo[quest->good] : remaining;
             CcOverlayDrawText("COMMITTED LOAD", 444, 462, 8, MUTED);
             CcOverlayDrawText(
-                TextFormat("%d / %d %s aboard",
-                           aboard,
-                           remaining, CcGoodName(quest->good)),
+                quest->good == CC_GOOD_FOOD ?
+                    TextFormat("%d / %d food boxes aboard",
+                               aboard, remaining) :
+                    TextFormat("%d / %d %s aboard", aboard, remaining,
+                               CcGoodName(quest->good)),
                 444, 485, 11,
                 sim->player.cargo[quest->good] >= remaining ? TEAL : DANGER);
         }
@@ -4025,6 +4043,20 @@ static void DrawCarriageScreen(const CcSim *sim, const LocalState *local)
         DrawTwoLineText(
             "The quest papers are empty. Review the town notices before committing the carriage.",
             444, 282, 55U, 11, INK);
+    }
+    CcFoodEconomy food = {0};
+    if (place != NULL && CcSimFoodEconomyAtSettlement(
+            sim, place->id, &food)) {
+        const char *food_state = food.stock < food.weekly_consumption * 2 ?
+            "SHORTAGE" : food.stock < food.reserve_target ? "TIGHT" :
+            "SURPLUS";
+        CcOverlayDrawText("LOCAL FOOD ECONOMY", 444, 526, 8, MUTED);
+        CcOverlayDrawText(
+            TextFormat("%s  %d boxes  +%d/-%d weekly  %dc each",
+                       food_state, food.stock, food.weekly_production,
+                       food.weekly_consumption, food.unit_price),
+            444, 549, 9,
+            strcmp(food_state, "SHORTAGE") == 0 ? DANGER : TEAL);
     }
     CcOverlayDrawText("Q  REVIEW ALL AVAILABLE QUESTS",
                       444, 584, 8, MUTED);
@@ -4519,8 +4551,11 @@ static void UpdateGameplayReel(CcSim *sim, LocalState *local,
             if (reel->stage_frame >= 180) {
                 *view = VIEW_LOCAL;
                 (void)CcLocalAgentSetExactTarget(
-                    &local->agent, (Vector3){49.20f, 0.0f, 27.15f}, false);
-                GameplayReelSetStage(reel, GAMEPLAY_REEL_WALK_TO_MARKET);
+                    &local->agent,
+                    (Vector3){LOCAL_CARRIAGE.x, 0.0f, LOCAL_CARRIAGE.y},
+                    false);
+                GameplayReelSetStage(reel,
+                                     GAMEPLAY_REEL_WALK_TO_CARRIAGE);
             }
             break;
         case GAMEPLAY_REEL_WALK_TO_MARKET:
@@ -4572,7 +4607,7 @@ static void UpdateGameplayReel(CcSim *sim, LocalState *local,
             break;
         case GAMEPLAY_REEL_WALK_TO_CARRIAGE:
             (void)snprintf(message, message_capacity,
-                           "Bring the cargo to the carriage.");
+                           "The food boxes are aboard. Go to the carriage.");
             (void)CcLocalWorldUpdate(&local->course, &local->agent, sim,
                                      delta_time, false, true);
             if ((reel->stage_frame >= 60 &&
@@ -5075,7 +5110,8 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                     if (accepted_opening) {
                         (void)snprintf(
                             message, message_capacity,
-                            "Mara gives you the carriage key. The carriage is ready.");
+                            "Mara loads %d food boxes and gives you the carriage key.",
+                            updated->quantity - updated->progress);
                     } else {
                         (void)snprintf(
                             message, message_capacity,
@@ -6701,7 +6737,7 @@ int main(int argc, char **argv)
             capture_charter->good = CC_GOOD_FOOD;
             capture_charter->quantity = 1;
             capture_charter->progress = 0;
-            sim.player.cargo[CC_GOOD_FOOD] = 1;
+            sim.player.cargo[CC_GOOD_FOOD] = 0;
             sim.routes[0].closed = true;
             if (sim.bandit_count > 0) {
                 sim.bandits[0].route_id = sim.routes[0].id;
