@@ -653,6 +653,15 @@ typedef struct CombatCameraRig {
     bool road_encounter;
 } CombatCameraRig;
 
+typedef struct ConversationCameraRig {
+    Vector3 displayed_target;
+    Vector3 displayed_offset;
+    float displayed_fovy;
+    float focus_weight;
+    float last_clock;
+    bool initialized;
+} ConversationCameraRig;
+
 typedef struct PresentedCameraState {
     Camera3D camera;
     Vector3 hero_position;
@@ -709,6 +718,7 @@ static const WorldTreePlacement WORLD_TREES[] = {
 static FixedCameraRig street_camera_rig = {0};
 static FixedCameraRig road_camera_rig = {0};
 static CombatCameraRig combat_camera_rig = {0};
+static ConversationCameraRig conversation_camera_rig = {0};
 static PresentedCameraState presented_camera[3] = {0};
 
 static void RememberPresentedCamera(CcLocalSceneKind scene, Camera3D camera,
@@ -10285,6 +10295,99 @@ Camera3D CcLocalCombatCameraInternal(Camera3D base,
     return SnapCameraToArtPixels(camera, art_height);
 }
 
+Camera3D CcLocalConversationCameraInternal(
+    Camera3D base, const CcLocalAgent *player, const CcLocalAgent *partner,
+    bool active, float clock, bool advance, int32_t art_height)
+{
+    bool available = active && player != NULL && partner != NULL;
+    Vector3 base_offset = Vector3Subtract(base.position, base.target);
+    float base_fovy = PerspectiveFovyForOrthographic(base);
+    if (!conversation_camera_rig.initialized) {
+        conversation_camera_rig.displayed_target = base.target;
+        conversation_camera_rig.displayed_offset = base_offset;
+        conversation_camera_rig.displayed_fovy = base_fovy;
+        conversation_camera_rig.last_clock = clock;
+        conversation_camera_rig.initialized = true;
+    }
+
+    if (advance) {
+        float delta_time = clock - conversation_camera_rig.last_clock;
+        if (delta_time < 0.0f || delta_time > 0.12f) delta_time = 0.0f;
+        delta_time = fminf(delta_time, 0.050f);
+        conversation_camera_rig.last_clock = clock;
+        float direction = available ? 2.8f : -2.0f;
+        conversation_camera_rig.focus_weight = CombatClamp(
+            conversation_camera_rig.focus_weight + delta_time * direction,
+            0.0f, 1.0f);
+
+        Vector3 close_target = base.target;
+        Vector3 close_offset = base_offset;
+        float close_fovy = base_fovy;
+        if (available) {
+            Vector3 first = Vector3Add(
+                player->position, (Vector3){0.0f, 1.02f, 0.0f});
+            Vector3 second = Vector3Add(
+                partner->position, (Vector3){0.0f, 1.02f, 0.0f});
+            Vector3 talk_line = Vector3Subtract(second, first);
+            talk_line.y = 0.0f;
+            float span = fmaxf(0.85f, Vector3Length(talk_line));
+            talk_line = PhysicsNormalizeOr(
+                talk_line, (Vector3){1.0f, 0.0f, 0.0f});
+            Vector3 shoulder = {-talk_line.z, 0.0f, talk_line.x};
+            Vector3 base_view = Vector3Subtract(base.position, base.target);
+            base_view.y = 0.0f;
+            base_view = PhysicsNormalizeOr(
+                base_view, (Vector3){0.0f, 0.0f, 1.0f});
+            if (Vector3DotProduct(shoulder, base_view) < 0.0f) {
+                shoulder = Vector3Negate(shoulder);
+            }
+
+            close_target = Vector3Lerp(first, second, 0.56f);
+            close_target.y = (first.y + second.y) * 0.5f - 0.18f;
+            close_offset = Vector3Add(
+                Vector3Scale(shoulder,
+                             5.05f + fminf(span, 3.0f) * 0.18f),
+                Vector3Add(Vector3Scale(talk_line, -0.55f),
+                           (Vector3){0.0f, 1.88f, 0.0f}));
+            close_fovy = CombatClamp(38.0f + span * 0.8f, 39.0f, 43.0f);
+            Camera3D close = PerspectiveCameraComposed(
+                close_target, close_offset, close_fovy);
+            close = CcLocalCameraClearSightlinesInternal(
+                close, first, second, 0.0f, NULL);
+            close_offset = Vector3Subtract(close.position, close.target);
+        }
+
+        float weight = SmoothStep01(conversation_camera_rig.focus_weight);
+        Vector3 desired_target = Vector3Lerp(base.target, close_target, weight);
+        Vector3 desired_offset = Vector3Lerp(base_offset, close_offset, weight);
+        float desired_fovy = base_fovy + (close_fovy - base_fovy) * weight;
+        float ease = 1.0f - expf(-delta_time * 5.2f);
+        conversation_camera_rig.displayed_target = Vector3Lerp(
+            conversation_camera_rig.displayed_target, desired_target, ease);
+        conversation_camera_rig.displayed_offset = Vector3Lerp(
+            conversation_camera_rig.displayed_offset, desired_offset, ease);
+        conversation_camera_rig.displayed_fovy +=
+            (desired_fovy - conversation_camera_rig.displayed_fovy) * ease;
+
+        if (!available &&
+            conversation_camera_rig.focus_weight <= 0.0001f) {
+            conversation_camera_rig.displayed_target = base.target;
+            conversation_camera_rig.displayed_offset = base_offset;
+            conversation_camera_rig.displayed_fovy = base_fovy;
+        }
+    }
+
+    Camera3D camera = base;
+    camera.target = conversation_camera_rig.displayed_target;
+    camera.position = Vector3Add(
+        camera.target, conversation_camera_rig.displayed_offset);
+    bool focused = available ||
+        conversation_camera_rig.focus_weight > 0.0001f;
+    camera.fovy = focused ? conversation_camera_rig.displayed_fovy : base.fovy;
+    camera.projection = focused ? CAMERA_PERSPECTIVE : base.projection;
+    return SnapCameraToArtPixels(camera, art_height);
+}
+
 static Camera3D LocalCamera(bool interior, Vector3 focus)
 {
     if (!interior) {
@@ -13864,6 +13967,7 @@ void CcLocalRendererInit(void)
     street_camera_rig = (FixedCameraRig){0};
     road_camera_rig = (FixedCameraRig){0};
     combat_camera_rig = (CombatCameraRig){0};
+    conversation_camera_rig = (ConversationCameraRig){0};
     face_render_context = (FaceRenderContext){0};
     (void)memset(creature_gaits, 0, sizeof(creature_gaits));
     sphere_models.small = LoadModelFromMesh(GenMeshSphere(1.0f, 6, 8));
@@ -13998,6 +14102,7 @@ void CcLocalRendererShutdown(void)
     street_camera_rig = (FixedCameraRig){0};
     road_camera_rig = (FixedCameraRig){0};
     combat_camera_rig = (CombatCameraRig){0};
+    conversation_camera_rig = (ConversationCameraRig){0};
     face_render_context = (FaceRenderContext){0};
     bridge_checkpoint_status = BRIDGE_CHECKPOINT_UNKNOWN;
 }
@@ -23293,6 +23398,7 @@ static void DrawSettlementCreatures(const CcSim *sim,
 
 void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                          const CcLocalCourse *course,
+                         bool conversation,
                          const CcLocalConvoyState *convoy, float clock,
                          RenderTexture2D target, Rectangle destination)
 {
@@ -23332,7 +23438,14 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     Camera3D camera = CcLocalCombatCameraInternal(
         base_camera, camera_subject, course, clock, true,
         target.texture.height);
-    if (camera_subject != NULL && !arrival_pan) {
+    const CcLocalAgent *conversation_partner =
+        conversation && course != NULL && course->situation_witness_active ?
+            &course->situation_witness : NULL;
+    camera = CcLocalConversationCameraInternal(
+        camera, camera_subject, conversation_partner,
+        conversation_partner != NULL, clock, true, target.texture.height);
+    if (camera_subject != NULL && !arrival_pan &&
+        conversation_partner == NULL) {
         camera = KeepHeroInsideStreetFrame(
             camera,
             Vector3Add(camera_subject->position,
@@ -23363,12 +23476,13 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
 
     DrawExteriorTerrain(place, scenery_focus);
     DrawTownRaidStaging(course, scenery_focus);
-    const CcLocalAgent *sightline_opponent =
-        CombatCameraOpponent(course, agent);
+    const CcLocalAgent *sightline_opponent = conversation_partner != NULL ?
+        conversation_partner : CombatCameraOpponent(course, agent);
     bool close_combat_sightline = course != NULL && agent != NULL &&
         sightline_opponent != NULL && course->alarm_active &&
         CombatHorizontalDistanceSquared(agent, sightline_opponent) <=
             7.0f * 7.0f;
+    bool close_conversation_sightline = conversation_partner != NULL;
     Vector3 player_sightline = agent != NULL ?
         Vector3Add(agent->position, (Vector3){0.0f, 1.02f, 0.0f}) :
         (Vector3){0};
@@ -23385,7 +23499,8 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         if (!SceneryFootprintVisible(footprint, scenery_focus)) {
             continue;
         }
-        float overlap = close_combat_sightline ?
+        float overlap = close_combat_sightline ||
+                        close_conversation_sightline ?
             CameraStreetPlatformSubjectOverlap(
                 camera, platform, player_sightline, opponent_sightline) :
             0.0f;
@@ -23597,7 +23712,8 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                                camera.projection == CAMERA_PERSPECTIVE;
 
     int32_t scene_index = presented_scene;
-    if (!combat_presentation && scene_index >= 0 &&
+    if (!combat_presentation && conversation_partner == NULL &&
+        scene_index >= 0 &&
         scene_index < CC_LOCAL_PLACE_SCENE_COUNT) {
         const char *scene_name = profile->scene[scene_index].name;
         int32_t title_width = CcOverlayMeasureText(scene_name, 10);
@@ -23607,7 +23723,8 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
             0.24f, 4, (Color){4, 10, 14, 202});
         DrawViewportText(scene_name, destination, 19, 14, 10, WORLD_GOLD);
     }
-    if (!combat_nearby && !convoy_visible) {
+    if (!combat_nearby && !convoy_visible &&
+        conversation_partner == NULL) {
         DrawStreetTraversalPortals(agent, camera, destination,
                                    target.texture.width,
                                    target.texture.height);
@@ -23779,7 +23896,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
              CC_LOCAL_DRAGON_CAVE_Z},
             "Hidden trail to goblin dungeon", WORLD_VIOLET};
     }
-    if (!combat_nearby) {
+    if (!combat_nearby && conversation_partner == NULL) {
         DrawLabels(labels, count, camera, destination);
     }
     if (combat_nearby) {

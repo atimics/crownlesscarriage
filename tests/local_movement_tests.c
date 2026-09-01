@@ -2955,6 +2955,80 @@ int main(void)
         return 1;
     }
 
+    CcLocalAgent conversation_player;
+    CcLocalAgent conversation_partner;
+    CcLocalAgentInit(&conversation_player, (Vector2){41.0f, 29.15f}, false);
+    CcLocalAgentInit(&conversation_partner,
+                     (Vector2){41.92f, 28.52f}, false);
+    Camera3D conversation_base = shoulder_base;
+    for (int32_t frame = 0; frame < 180; ++frame) {
+        camera_clock += 1.0f / 60.0f;
+        conversation_base = CcLocalStreetCameraInternal(
+            &conversation_player, camera_clock, true,
+            click_target.texture.height);
+    }
+    Camera3D conversation_camera = conversation_base;
+    for (int32_t frame = 0; frame < 180; ++frame) {
+        camera_clock += 1.0f / 60.0f;
+        conversation_camera = CcLocalConversationCameraInternal(
+            conversation_base, &conversation_player, &conversation_partner,
+            true, camera_clock, true, click_target.texture.height);
+    }
+    Vector2 conversation_player_screen = GetWorldToScreenEx(
+        (Vector3){conversation_player.position.x,
+                  conversation_player.position.y + 1.02f,
+                  conversation_player.position.z},
+        conversation_camera, click_target.texture.width,
+        click_target.texture.height);
+    Vector2 conversation_partner_screen = GetWorldToScreenEx(
+        (Vector3){conversation_partner.position.x,
+                  conversation_partner.position.y + 1.02f,
+                  conversation_partner.position.z},
+        conversation_camera, click_target.texture.width,
+        click_target.texture.height);
+    if (conversation_camera.projection != CAMERA_PERSPECTIVE ||
+        VectorDistance3(conversation_camera.position,
+                        conversation_camera.target) > 6.50f ||
+        conversation_player_screen.x < 40.0f ||
+        conversation_player_screen.x >
+            (float)click_target.texture.width - 40.0f ||
+        conversation_partner_screen.x < 40.0f ||
+        conversation_partner_screen.x >
+            (float)click_target.texture.width - 40.0f ||
+        fabsf(conversation_player_screen.x -
+              conversation_partner_screen.x) < 54.0f ||
+        conversation_player_screen.y < 22.0f ||
+        conversation_player_screen.y >
+            (float)click_target.texture.height * 0.72f ||
+        conversation_partner_screen.y < 22.0f ||
+        conversation_partner_screen.y >
+            (float)click_target.texture.height * 0.72f) {
+        (void)fprintf(
+            stderr,
+            "conversation camera framing failed: distance %.2f player %.1f %.1f partner %.1f %.1f\n",
+            VectorDistance3(conversation_camera.position,
+                            conversation_camera.target),
+            conversation_player_screen.x, conversation_player_screen.y,
+            conversation_partner_screen.x, conversation_partner_screen.y);
+        return 1;
+    }
+    for (int32_t frame = 0; frame < 300; ++frame) {
+        camera_clock += 1.0f / 60.0f;
+        conversation_camera = CcLocalConversationCameraInternal(
+            conversation_base, &conversation_player, &conversation_partner,
+            false, camera_clock, true, click_target.texture.height);
+    }
+    if (conversation_camera.projection != conversation_base.projection ||
+        VectorDistance3(conversation_camera.position,
+                        conversation_base.position) > 0.001f ||
+        VectorDistance3(conversation_camera.target,
+                        conversation_base.target) > 0.001f ||
+        fabsf(conversation_camera.fovy - conversation_base.fovy) > 0.001f) {
+        (void)fprintf(stderr,
+                      "conversation camera did not return to the town shot\n");
+        return 1;
+    }
+
 
     CcLocalAgent workshop_player;
     CcLocalAgentInit(&workshop_player, (Vector2){47.10f, 32.08f}, false);

@@ -1431,7 +1431,8 @@ static const CcDungeon *DungeonAtSettlement(const CcSim *sim, CcId settlement_id
 }
 
 
-static void DrawLocalHeader(const CcSim *sim, const LocalState *local)
+static void DrawLocalHeader(const CcSim *sim, const LocalState *local,
+                            bool conversation)
 {
     const CcSettlement *place = CcSimSettlement(sim, sim->player.location_id);
     const CcLocalPlaceProfile *profile =
@@ -1455,7 +1456,8 @@ static void DrawLocalHeader(const CcSim *sim, const LocalState *local)
                                           (float)beat_width, 17.0f},
                              0.24f, 4, Fade(PANEL_DEEP, 0.84f));
         CcOverlayDrawText(beat, 25, 44, 8, TEAL);
-        const char *hint = "CLICK THE ROAD TO WALK";
+        const char *hint = conversation ? "CHOOSE A REPLY BELOW" :
+                                          "CLICK THE ROAD TO WALK";
         int hint_width = CcOverlayMeasureText(hint, 8);
         CcOverlayDrawText(hint, GetScreenWidth() - hint_width - 22,
                           23, 8, MUTED);
@@ -4075,26 +4077,38 @@ static void DrawCharacterConversation(const CcSim *sim,
     const CcCharacter *character = CcSimCharacter(
         sim, local->conversation_character_id);
     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
-                  Fade(BACKGROUND, 0.54f));
-    Rectangle bounds = {256.0f, 168.0f, 768.0f, 338.0f};
+                  Fade(BACKGROUND, 0.14f));
+    float panel_y = (float)GetScreenHeight() - 268.0f;
+    Rectangle bounds = {18.0f, panel_y,
+                        (float)GetScreenWidth() - 36.0f, 174.0f};
     DrawPanel(bounds, PANEL_DEEP);
     if (situation == NULL || character == NULL) {
-        CcOverlayDrawText("No one is here.", 294, 206, 18, MUTED);
+        CcOverlayDrawText("No one is here.", 44, (int)panel_y + 42,
+                          18, MUTED);
         return;
     }
-    Rectangle portrait = {280.0f, 190.0f, 248.0f, 294.0f};
-    bool has_live_portrait = local->course.situation_witness_active &&
-        local->course.situation_witness_character_id == character->id;
-    if (has_live_portrait) {
-        CcLocalDrawNpcPortrait3D(
-            &local->course.situation_witness.appearance, portrait,
-            CC_NPC_PORTRAIT_TALKING);
-    }
-    int32_t speech_x = 568;
+    float speaker_width = fminf(260.0f, fmaxf(210.0f, bounds.width * 0.23f));
+    int32_t speaker_x = (int)bounds.x + 24;
+    int32_t speech_x = (int)(bounds.x + speaker_width + 34.0f);
+    int32_t text_right = (int)(bounds.x + bounds.width - 26.0f);
+    DrawRectangleRounded(
+        (Rectangle){bounds.x + 10.0f, bounds.y + 18.0f, 4.0f,
+                    bounds.height - 36.0f},
+        0.9f, 3, CC_GOLD);
+    DrawLine((int)(bounds.x + speaker_width + 17.0f),
+             (int)bounds.y + 20,
+             (int)(bounds.x + speaker_width + 17.0f),
+             (int)(bounds.y + bounds.height) - 20, Fade(MUTED, 0.42f));
+    CcOverlayDrawText("CONVERSATION", speaker_x, (int)panel_y + 20,
+                      8, TEAL);
+    CcOverlayDrawText(character->name, speaker_x, (int)panel_y + 43,
+                      19, CC_GOLD);
+    CcOverlayDrawText(SituationTitle(situation->kind), speaker_x,
+                      (int)panel_y + 76, 10, MUTED);
     char spoken[192];
     bool has_spoken = CcStoryCharacterText(
         sim, situation, character, spoken, sizeof(spoken));
-    CcOverlayDrawText(character->name, speech_x, 216, 18, CC_GOLD);
+    CcOverlayDrawText("SPEAKS", speech_x, (int)panel_y + 20, 8, TEAL);
     if (situation->kind == CC_SITUATION_MONSTER_EXPEDITION) {
         const CcRelationship *relationship = CcSimRelationship(
             sim, situation->affected_character_id,
@@ -4106,13 +4120,20 @@ static void DrawCharacterConversation(const CcSim *sim,
                 TextFormat("Jory and Mara: %s",
                            CcRelationshipHistoryName(
                                relationship->history)),
-                speech_x, 244, 9, MUTED);
+                speaker_x, (int)panel_y + 105, 8, MUTED);
         }
     }
-    CcOverlayDrawText("\"", speech_x, 266, 28, MUTED);
+    CcOverlayDrawText("\"", speech_x, (int)panel_y + 42, 24, MUTED);
+    int32_t available_width = text_right - speech_x - 30;
+    size_t line_capacity = (size_t)(available_width / 9);
+    if (line_capacity < 48U) line_capacity = 48U;
+    if (line_capacity > 104U) line_capacity = 104U;
     DrawTwoLineText(has_spoken ? spoken :
                         "They have nothing more to ask.",
-                    speech_x + 28, 270, 42U, 16, INK);
+                    speech_x + 26, (int)panel_y + 48,
+                    line_capacity, 17, INK);
+    CcOverlayDrawText("CHOOSE A REPLY BELOW", speech_x,
+                      (int)(panel_y + bounds.height) - 24, 8, MUTED);
 }
 
 static void DrawJourneyEncounter(const CcSim *sim)
@@ -5903,6 +5924,17 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                     local->course.situation_witness_character_id;
                 local->conversation_situation_id =
                     local->course.situation_witness_id;
+                Vector3 toward_witness = {
+                    local->course.situation_witness.position.x -
+                        local->agent.position.x,
+                    0.0f,
+                    local->course.situation_witness.position.z -
+                        local->agent.position.z,
+                };
+                local->agent.facing_yaw = atan2f(
+                    toward_witness.x, toward_witness.z);
+                local->course.situation_witness.facing_yaw = atan2f(
+                    -toward_witness.x, -toward_witness.z);
                 *view = VIEW_CHARACTER;
                 message[0] = '\0';
                 return;
@@ -6924,10 +6956,26 @@ int main(int argc, char **argv)
         }
     }
     if (capture_character && local.course.situation_witness_active) {
+        RepositionHero(
+            &local,
+            (Vector2){local.course.situation_witness.position.x + 1.15f,
+                      local.course.situation_witness.position.z + 0.88f},
+            false);
         local.conversation_character_id =
             local.course.situation_witness_character_id;
         local.conversation_situation_id =
             local.course.situation_witness_id;
+        Vector3 toward_witness = {
+            local.course.situation_witness.position.x -
+                local.agent.position.x,
+            0.0f,
+            local.course.situation_witness.position.z -
+                local.agent.position.z,
+        };
+        local.agent.facing_yaw = atan2f(
+            toward_witness.x, toward_witness.z);
+        local.course.situation_witness.facing_yaw = atan2f(
+            -toward_witness.x, -toward_witness.z);
     }
     if (capture_jump) {
         local.course.alarm_countdown = 1000.0f;
@@ -7259,12 +7307,15 @@ int main(int argc, char **argv)
                                       local_target, local_bounds);
             } else {
                 CcLocalDrawStreet3D(&sim, &local.agent, &local.course,
+                                    view == VIEW_CHARACTER,
                                     &local.convoy, clock,
                                     local_target, local_bounds);
             }
             if (!capture_npc_review && view != VIEW_ENCOUNTER) {
-                DrawLocalMovementReticle(&local, local_bounds);
-                DrawLocalHeader(&sim, &local);
+                if (view == VIEW_LOCAL) {
+                    DrawLocalMovementReticle(&local, local_bounds);
+                }
+                DrawLocalHeader(&sim, &local, view == VIEW_CHARACTER);
                 DrawLocalPanel(&sim, &local);
             }
         }
@@ -7408,7 +7459,8 @@ int main(int argc, char **argv)
             if (creature_frame >= 44) break;
         } else if (capture) {
             capture_frames += 1;
-            int32_t settled_frames = capture_road ? 45 : 3;
+            int32_t settled_frames = capture_road ? 45 :
+                                     capture_character ? 120 : 3;
             if (capture_frames >= settled_frames) {
                 TakeScreenshot(capture_path);
                 break;
