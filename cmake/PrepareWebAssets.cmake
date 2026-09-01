@@ -9,18 +9,31 @@ set(lazy_asset_output "${CC_WEB_OUTPUT_DIR}/lazy-assets")
 file(REMOVE_RECURSE "${asset_output}")
 file(REMOVE_RECURSE "${lazy_asset_output}")
 file(MAKE_DIRECTORY
-    "${asset_output}/exports/hero"
     "${asset_output}/exports/creatures"
     "${asset_output}/exports/glb"
+    "${asset_output}/exports/npc"
     "${asset_output}/exports/world_kit"
     "${asset_output}/shaders"
     "${lazy_asset_output}/maps"
 )
 
-foreach(directory IN ITEMS npc)
-    file(COPY "${asset_source}/exports/${directory}"
-         DESTINATION "${asset_output}/exports")
-endforeach()
+# The desktop renderer keeps authored stepped poses for every ambient role.
+# The browser keeps one idle silhouette per role and falls back to it while
+# walking. Combatants use the shared skinned body and modular pieces below.
+file(GLOB npc_runtime_assets
+    "${asset_source}/exports/npc/npc_module_*.glb"
+    "${asset_source}/exports/npc/npc_wayfarer_v01.glb"
+    "${asset_source}/exports/npc/npc_guard_v01.glb"
+    "${asset_source}/exports/npc/npc_raider_v01.glb"
+    "${asset_source}/exports/npc/npc_merchant_v01.glb"
+    "${asset_source}/exports/npc/npc_laborer_v01.glb"
+    "${asset_source}/exports/npc/npc_traveller_v01.glb"
+    "${asset_source}/exports/npc/npc_refugee_v01.glb"
+    "${asset_source}/exports/npc/npc_scout_v01.glb"
+    "${asset_source}/exports/npc/npc_healer_v01.glb"
+)
+file(COPY ${npc_runtime_assets}
+     DESTINATION "${asset_output}/exports/npc")
 
 foreach(asset IN ITEMS
         creature_horse_v01.glb
@@ -33,11 +46,6 @@ foreach(asset IN ITEMS
     file(COPY "${asset_source}/exports/creatures/${asset}"
          DESTINATION "${asset_output}/exports/creatures")
 endforeach()
-
-file(COPY
-    "${asset_source}/exports/hero/crownless_hero_engine_rig_v01.glb"
-    DESTINATION "${asset_output}/exports/hero"
-)
 
 foreach(asset IN ITEMS
         environment_bridge_checkpoint_v01.glb
@@ -53,7 +61,7 @@ foreach(asset IN ITEMS
 endforeach()
 
 file(GLOB world_kit_runtime_assets
-    "${asset_source}/exports/world_kit/wk_body_skin_*.glb"
+    "${asset_source}/exports/world_kit/wk_body_skin_standard_athletic_balanced_v01.glb"
     "${asset_source}/exports/world_kit/wk_head_*.glb"
     "${asset_source}/exports/world_kit/wk_hair_*.glb"
 )
