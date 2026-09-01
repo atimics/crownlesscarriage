@@ -11471,6 +11471,7 @@ static void ReleaseUploadedModelCpuData(Model *model)
 #endif
 }
 
+#if !defined(PLATFORM_WEB)
 static bool LoadRuntimeAsset(RuntimeAssetId id)
 {
     if (id < 0 || id >= RUNTIME_ASSET_COUNT) return false;
@@ -11497,6 +11498,7 @@ static bool LoadRuntimeAsset(RuntimeAssetId id)
              mesh_count);
     return true;
 }
+#endif
 
 static void LoadNpcArchetypes(void)
 {
@@ -11789,6 +11791,13 @@ static void LoadNpcHairFamilies(void)
 
 static void LoadRuntimeAssets(void)
 {
+#if defined(PLATFORM_WEB)
+    /* The browser uses the procedural scenery paths below. Loading every
+       authored environment up front retained hundreds of meshes, including
+       models for scenes that were never visited. */
+    bridge_checkpoint_status = BRIDGE_CHECKPOINT_UNAVAILABLE;
+    TraceLog(LOG_INFO, "ASSET: browser uses procedural environment scenery");
+#else
     for (int32_t id = 0; id < RUNTIME_ASSET_COUNT; ++id) {
         bool loaded = LoadRuntimeAsset((RuntimeAssetId)id);
         if (id == RUNTIME_ASSET_BRIDGE) {
@@ -11796,6 +11805,7 @@ static void LoadRuntimeAssets(void)
                                                 BRIDGE_CHECKPOINT_UNAVAILABLE;
         }
     }
+#endif
 }
 
 static void ApplyWorldShader(Model *model)
