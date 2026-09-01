@@ -10,6 +10,7 @@ file(REMOVE_RECURSE "${asset_output}")
 file(REMOVE_RECURSE "${lazy_asset_output}")
 file(MAKE_DIRECTORY
     "${asset_output}/exports/creatures"
+    "${asset_output}/exports/glb"
     "${asset_output}/exports/npc"
     "${asset_output}/exports/world_kit"
     "${asset_output}/shaders"
@@ -46,10 +47,17 @@ foreach(asset IN ITEMS
          DESTINATION "${asset_output}/exports/creatures")
 endforeach()
 
-# Authored environment models are desktop-only. Together they upload almost
-# 400 meshes before the opening scene and stay resident for the whole browser
-# session. The web renderer already has complete procedural versions of these
-# props, so excluding the GLBs lowers both the preload peak and GPU memory.
+foreach(asset IN ITEMS
+        environment_bridge_checkpoint_v01.glb
+        carriage_base_v01.glb
+        environment_market_granary_v01.glb
+        environment_mine_entrance_v01.glb
+        state_food_shortage_v01.glb
+        state_harsh_enforcement_v01.glb
+        state_market_recovery_v01.glb)
+    file(COPY "${asset_source}/exports/glb/${asset}"
+         DESTINATION "${asset_output}/exports/glb")
+endforeach()
 
 file(GLOB world_kit_runtime_assets
     "${asset_source}/exports/world_kit/wk_body_skin_standard_athletic_balanced_v01.glb"
