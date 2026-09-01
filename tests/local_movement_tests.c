@@ -3089,6 +3089,26 @@ int main(void)
         return 1;
     }
 
+    CcPlayerCompany visible_cargo = {0};
+    visible_cargo.cargo[CC_GOOD_FOOD] = 8;
+    if (CcLocalCargoBoxCountInternal(&visible_cargo) != 8) {
+        (void)fprintf(stderr,
+                      "eight food units did not produce eight cargo boxes\n");
+        return 1;
+    }
+    visible_cargo.cargo[CC_GOOD_TOOLS] = 4;
+    if (CcLocalCargoBoxCountInternal(&visible_cargo) != 12) {
+        (void)fprintf(stderr,
+                      "mixed cargo boxes did not follow carried quantities\n");
+        return 1;
+    }
+    visible_cargo.cargo[CC_GOOD_WEAPONS] = 40;
+    if (CcLocalCargoBoxCountInternal(&visible_cargo) != 24) {
+        (void)fprintf(stderr,
+                      "visible cargo boxes did not respect the draw cap\n");
+        return 1;
+    }
+
 
     CcLocalAgent workshop_player;
     CcLocalAgentInit(&workshop_player, (Vector2){47.10f, 32.08f}, false);

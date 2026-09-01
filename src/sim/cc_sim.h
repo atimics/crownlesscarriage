@@ -378,6 +378,17 @@ typedef struct CcSettlement {
     int32_t cow_hunger;
 } CcSettlement;
 
+typedef struct CcFoodEconomy {
+    int32_t stock;
+    int32_t incoming;
+    int32_t weekly_production;
+    int32_t weekly_consumption;
+    int32_t reserve_target;
+    int32_t storage_capacity;
+    int32_t unit_price;
+    int32_t hunger;
+} CcFoodEconomy;
+
 typedef struct CcHorse {
     CcId id;
     char name[CC_NAME_CAPACITY];
@@ -1254,6 +1265,8 @@ int32_t CcSimBanditReactionRoll(const CcSim *sim, CcId route_id);
 const char *CcBanditReactionName(int32_t roll);
 int32_t CcSimActiveSituationCount(const CcSim *sim);
 int32_t CcSimIncomingGood(const CcSim *sim, CcId settlement_id, CcGood good);
+bool CcSimFoodEconomyAtSettlement(const CcSim *sim, CcId settlement_id,
+                                  CcFoodEconomy *economy);
 int32_t CcSimRouteDanger(const CcSim *sim, CcId route_id);
 int32_t CcSimDragonBattleStrength(const CcSim *sim);
 int32_t CcSimInequalityAtSettlement(const CcSim *sim, CcId settlement_id);

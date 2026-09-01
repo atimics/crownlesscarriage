@@ -14,6 +14,8 @@ uniform vec3 fogColor;
 uniform float fogNear;
 uniform float fogFar;
 uniform float inkStrength;
+uniform vec3 characterRimTint;
+uniform float characterRimStrength;
 
 out vec4 finalColor;
 
@@ -80,9 +82,10 @@ void main()
        the crown, shoulders, and weapon at the 35-pixel gameplay size without
        giving every internal polygon a noisy outline. */
     float silhouette = smoothstep(0.70, 0.94, 1.0 - viewFacing);
-    float heroRim = silhouette * (0.045 + skyExposure * 0.085);
-    vec3 heroRimColor = mix(vec3(0.12, 0.30, 0.29),
-                            vec3(0.58, 0.42, 0.19), lightBand);
+    float heroRim = silhouette * (0.065 + skyExposure * 0.105) *
+                    characterRimStrength;
+    vec3 heroRimColor = mix(characterRimTint,
+                            vec3(0.70, 0.52, 0.24), lightBand * 0.32);
     color += heroRimColor * heroRim;
 
     float distanceToCamera = length(cameraPosition - fragPosition);

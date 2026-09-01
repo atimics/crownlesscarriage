@@ -973,7 +973,7 @@ static void CheckPreJourneySchema3Compatibility(char *error,
         }
     }
     CC_CHECK(situation != NULL);
-    legacy_journey.player.cargo[CC_GOOD_FOOD] = situation->quantity;
+    legacy_journey.player.cargo[CC_GOOD_FOOD] = 0;
     CcCommand accept = {
         .kind = CC_COMMAND_ACCEPT_SITUATION,
         .target_id = situation->id

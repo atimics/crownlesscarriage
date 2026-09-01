@@ -21,6 +21,7 @@ static void AdvanceDragonCampaign(CcSim *sim);
 static void AdvanceHorseTeam(CcSim *sim);
 static void AdvanceRuins(CcSim *sim);
 static int32_t BasePrice(CcGood good);
+static int32_t SettlementSlotById(const CcSim *sim, CcId id);
 static int32_t CalculateDragonCrownStrength(const CcSim *sim);
 
 static int32_t ClampI32(int32_t value, int32_t minimum, int32_t maximum)
@@ -1516,6 +1517,23 @@ static int32_t FoodStorageCapacity(const CcSim *sim,
     return WeeklyFoodUse(sim, place) * storage_weeks;
 }
 
+static void RefreshSettlementGoodPrice(const CcSim *sim,
+                                       CcSettlement *settlement,
+                                       CcGood good)
+{
+    if (sim == NULL || settlement == NULL ||
+        good < 0 || good >= CC_GOOD_COUNT) return;
+    int32_t target = EffectiveReserveTarget(sim, settlement, good);
+    int32_t incoming = CcSimIncomingGood(sim, settlement->id, good);
+    int32_t expected_stock = settlement->stock[good] + incoming / 2;
+    int32_t shortage = target > 0 ?
+        (target - expected_stock) * 100 / target : 0;
+    int32_t pressure = ClampI32(shortage, -35, 220);
+    settlement->price[good] = MinimumI32(
+        99, BasePrice(good) * (100 + pressure) / 100);
+    if (settlement->price[good] < 1) settlement->price[good] = 1;
+}
+
 static int32_t SpoilStoredFood(const CcSim *sim, CcSettlement *place)
 {
     int32_t stored = place->stock[CC_GOOD_FOOD];
@@ -2241,24 +2259,27 @@ int32_t CcSimIncomingGood(const CcSim *sim, CcId settlement_id, CcGood good)
 int32_t CcPlayerCargoUsed(const CcPlayerCompany *player)
 {
     if (player == NULL) return 0;
-    static const int32_t per_slot[CC_GOOD_COUNT] = {8, 4, 2, 2, 1, 1};
     int32_t used = player->treasure_cargo_slots;
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
-        int32_t quantity = player->cargo[good];
-        used += quantity > 0 ?
-            (quantity + per_slot[good] - 1) / per_slot[good] : 0;
+        if (player->cargo[good] > 0) used += player->cargo[good];
     }
     return used;
 }
 
-static int32_t GoodCargoSlots(CcGood good, int32_t quantity)
+static int32_t PlayerCargoBoxes(CcGood good, int32_t quantity)
+{
+    if (good < 0 || good >= CC_GOOD_COUNT || quantity <= 0) return 0;
+    return quantity;
+}
+
+static int32_t FreightCargoSlots(CcGood good, int32_t quantity)
 {
     static const int32_t per_slot[CC_GOOD_COUNT] = {8, 4, 2, 2, 1, 1};
     if (good < 0 || good >= CC_GOOD_COUNT || quantity <= 0) return 0;
     return (quantity + per_slot[good] - 1) / per_slot[good];
 }
 
-static int32_t GoodUnitsPerCargoSlot(CcGood good)
+static int32_t FreightUnitsPerCargoSlot(CcGood good)
 {
     static const int32_t per_slot[CC_GOOD_COUNT] = {8, 4, 2, 2, 1, 1};
     return good >= 0 && good < CC_GOOD_COUNT ? per_slot[good] : 1;
@@ -2633,6 +2654,7 @@ static void ConfigureSettlementEconomies(CcSim *sim)
             settlement->production[good] = MaximumI32(0, settlement->production[good] +
                 (settlement->production[good] > 0 ? (int32_t)(NextRandom(sim) % 3U) - 1 : 0));
         }
+        RefreshSettlementGoodPrice(sim, settlement, CC_GOOD_FOOD);
     }
 }
 
@@ -2868,7 +2890,8 @@ static int32_t FoodSeasonFactor(const CcSim *sim)
     return 58;
 }
 
-static int32_t EffectiveProduction(CcSim *sim, CcSettlement *settlement,
+static int32_t EffectiveProduction(const CcSim *sim,
+                                   const CcSettlement *settlement,
                                    int32_t index, CcGood good)
 {
     if (CcSettlementIsAbandoned(settlement)) return 0;
@@ -2913,6 +2936,38 @@ static int32_t EffectiveProduction(CcSim *sim, CcSettlement *settlement,
     }
     if (good >= CC_GOOD_TOOLS) return 0;
     return MaximumI32(0, production);
+}
+
+bool CcSimFoodEconomyAtSettlement(const CcSim *sim, CcId settlement_id,
+                                  CcFoodEconomy *economy)
+{
+    if (sim == NULL || economy == NULL) return false;
+    const CcSettlement *settlement = CcSimSettlement(sim, settlement_id);
+    if (settlement == NULL) return false;
+    int32_t slot = SettlementSlotById(sim, settlement_id);
+    if (slot < 0) return false;
+    int32_t weekly_production = EffectiveProduction(
+        sim, settlement, slot, CC_GOOD_FOOD);
+    int32_t herd_food = weekly_production > 0 &&
+        sim->schema_version >= 14U &&
+        CcSettlementHasService(settlement, CC_SERVICE_FARM) &&
+        (settlement->cow_adults + settlement->cow_calves) > 0 ?
+        MaximumI32(
+            1, settlement->cow_adults * settlement->cow_condition / 1200) :
+        0;
+    *economy = (CcFoodEconomy){
+        .stock = settlement->stock[CC_GOOD_FOOD],
+        .incoming = CcSimIncomingGood(
+            sim, settlement_id, CC_GOOD_FOOD),
+        .weekly_production = weekly_production + herd_food,
+        .weekly_consumption = WeeklyFoodUse(sim, settlement),
+        .reserve_target = EffectiveReserveTarget(
+            sim, settlement, CC_GOOD_FOOD),
+        .storage_capacity = FoodStorageCapacity(sim, settlement),
+        .unit_price = settlement->price[CC_GOOD_FOOD],
+        .hunger = settlement->hunger
+    };
+    return true;
 }
 
 static void WearOneTool(CcSettlement *settlement, int32_t *wear,
@@ -3185,15 +3240,7 @@ static void UpdateSettlement(CcSim *sim, int32_t index)
             food_eaten = consumed;
             (void)SpoilStoredFood(sim, settlement);
         }
-        int32_t target = EffectiveReserveTarget(
-            sim, settlement, (CcGood)good);
-        int32_t incoming = CcSimIncomingGood(sim, settlement->id, (CcGood)good);
-        int32_t expected_stock = settlement->stock[good] + incoming / 2;
-        int32_t shortage = target > 0 ? (target - expected_stock) * 100 / target : 0;
-        int32_t pressure = ClampI32(shortage, -35, 220);
-        settlement->price[good] = MinimumI32(99,
-            BasePrice((CcGood)good) * (100 + pressure) / 100);
-        if (settlement->price[good] < 1) settlement->price[good] = 1;
+        RefreshSettlementGoodPrice(sim, settlement, (CcGood)good);
     }
     if (produced[CC_GOOD_FOOD] > 0 &&
         CcSettlementHasService(settlement, CC_SERVICE_FARM) &&
@@ -5393,9 +5440,9 @@ static void CreateTradeShipment(CcSim *sim, int32_t route_slot, CcId next_hop_id
                    final_destination->stock[good] - incoming;
     int32_t effective_capacity = TradeRouteCapacity(sim, route);
     int32_t available_capacity = effective_capacity - route_used[route_slot];
-    int32_t cargo_capacity = available_capacity * GoodUnitsPerCargoSlot(good);
+    int32_t cargo_capacity = available_capacity * FreightUnitsPerCargoSlot(good);
     int32_t quantity = MinimumI32(
-        5 * GoodUnitsPerCargoSlot(good), MinimumI32(cargo_capacity,
+        5 * FreightUnitsPerCargoSlot(good), MinimumI32(cargo_capacity,
                                                  MinimumI32(surplus, need)));
     bool military_supply = WarWeeklyNeed(
         sim, final_destination, good) > 0;
@@ -5458,7 +5505,7 @@ static void CreateTradeShipment(CcSim *sim, int32_t route_slot, CcId next_hop_id
     shipment->departure_day = sim->current_day;
     shipment->arrival_day = sim->current_day + route->travel_days;
     shipment->status = CC_SHIPMENT_TRAVELLING;
-    route_used[route_slot] += GoodCargoSlots(good, quantity);
+    route_used[route_slot] += FreightCargoSlots(good, quantity);
     if (route->smuggler_route || sim->current_day % 21 == 0) {
         route->condition = ClampI32(route->condition - 1, 0, 100);
     }
@@ -8274,9 +8321,9 @@ static bool ApplyTrade(CcSim *sim, const CcCommand *command,
             SetError(error, error_capacity, "The local market lacks that stock.");
             return false;
         }
-        int32_t old_slots = GoodCargoSlots(
+        int32_t old_slots = PlayerCargoBoxes(
             command->good, sim->player.cargo[command->good]);
-        int32_t new_slots = GoodCargoSlots(
+        int32_t new_slots = PlayerCargoBoxes(
             command->good, sim->player.cargo[command->good] + amount);
         if (CcPlayerCargoUsed(&sim->player) - old_slots + new_slots >
             sim->player.cargo_capacity) {
@@ -8326,6 +8373,7 @@ static bool ApplyTrade(CcSim *sim, const CcCommand *command,
     if (amount < 0) {
         ProgressDeliverySituations(sim, settlement->id, command->good, -amount);
     }
+    RefreshSettlementGoodPrice(sim, settlement, command->good);
     SetError(error, error_capacity, "");
     return true;
 }
@@ -8945,6 +8993,35 @@ static bool AcceptSituation(CcSim *sim, const CcSituation *situation,
                  "The company must fulfill or withdraw from its current charter first.");
         return false;
     }
+    CcSettlement *relief_origin = NULL;
+    int32_t relief_load = 0;
+    if (situation->kind == CC_SITUATION_RELIEF_DELIVERY) {
+        if (sim->player.location_id != offer_settlement) {
+            SetError(error, error_capacity,
+                     "Return to Mara so she can load the food boxes.");
+            return false;
+        }
+        relief_load = MaximumI32(
+            0, situation->quantity - situation->progress);
+        relief_origin = CcSimSettlementMutable(sim, offer_settlement);
+        if (relief_origin == NULL ||
+            relief_origin->stock[CC_GOOD_FOOD] < relief_load) {
+            SetError(error, error_capacity,
+                     "Mara's granary cannot cover the promised food load.");
+            return false;
+        }
+        int32_t old_slots = PlayerCargoBoxes(
+            CC_GOOD_FOOD, sim->player.cargo[CC_GOOD_FOOD]);
+        int32_t new_slots = PlayerCargoBoxes(
+            CC_GOOD_FOOD,
+            sim->player.cargo[CC_GOOD_FOOD] + relief_load);
+        if (CcPlayerCargoUsed(&sim->player) - old_slots + new_slots >
+            sim->player.cargo_capacity) {
+            SetError(error, error_capacity,
+                     "Clear cargo space so Mara can load the food boxes.");
+            return false;
+        }
+    }
     if (situation->kind == CC_SITUATION_COURIER_DELIVERY) {
         CcCourier *courier = CourierMutable(sim, situation->target_id);
         if (courier == NULL || courier->status != CC_COURIER_WAITING ||
@@ -8965,9 +9042,23 @@ static bool AcceptSituation(CcSim *sim, const CcSituation *situation,
                    "The Crownless company accepts %s before day %d.",
                    CcSituationKindName(situation->kind),
                    situation->deadline_day);
-    (void)PushEvent(sim, CC_EVENT_CHARTER_ACCEPTED, situation->id,
-                    situation->target_id, situation->cause_event_id,
-                    situation->deadline_day - sim->current_day, text);
+    CcEvent *accepted = PushEvent(
+        sim, CC_EVENT_CHARTER_ACCEPTED, situation->id,
+        situation->target_id, situation->cause_event_id,
+        situation->deadline_day - sim->current_day, text);
+    if (relief_load > 0 && relief_origin != NULL) {
+        relief_origin->stock[CC_GOOD_FOOD] -= relief_load;
+        sim->player.cargo[CC_GOOD_FOOD] += relief_load;
+        RefreshSettlementGoodPrice(sim, relief_origin, CC_GOOD_FOOD);
+        (void)snprintf(
+            text, sizeof(text),
+            "%s loads %d food boxes from %s's granary into the Crownless carriage.",
+            situation->sponsor_name, relief_load, relief_origin->name);
+        (void)PushEvent(
+            sim, CC_EVENT_PLAYER_TRADE, sim->player.id,
+            relief_origin->id, accepted != NULL ? accepted->id : 0U,
+            relief_load, text);
+    }
     RefreshSituationCharacterActivities(sim, (CcSituation *)situation);
     SetError(error, error_capacity, "");
     return true;
@@ -9905,7 +9996,7 @@ static void RollEncounterLoot(CcSim *sim, CcBanditGroup *bandits,
     int32_t free_slots = sim->player.cargo_capacity -
                          CcPlayerCargoUsed(&sim->player);
     if (free_slots < 0) free_slots = 0;
-    const int32_t cap = free_slots * GoodUnitsPerCargoSlot(good);
+    const int32_t cap = free_slots;
     if (take > cap) take = cap;
 
     char text[CC_EVENT_TEXT_CAPACITY];
@@ -11827,7 +11918,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             shipment->good >= 0 && shipment->good < CC_GOOD_COUNT &&
             shipment->quantity >= 1 &&
             shipment->quantity <= CC_SIM_MAX_UNITS &&
-            GoodCargoSlots(shipment->good, shipment->quantity) <=
+            FreightCargoSlots(shipment->good, shipment->quantity) <=
                 shipment_route->capacity;
         if (CcIdKind(shipment->id) != CC_ENTITY_SHIPMENT ||
             CcSimSettlement(sim, shipment->origin_id) == NULL ||

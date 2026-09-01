@@ -50,7 +50,6 @@ endforeach()
 foreach(asset IN ITEMS
         environment_bridge_checkpoint_v01.glb
         carriage_base_v01.glb
-        module_cargo_rack_v01.glb
         environment_market_granary_v01.glb
         environment_mine_entrance_v01.glb
         state_food_shortage_v01.glb
