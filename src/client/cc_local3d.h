@@ -513,6 +513,7 @@ void CcLocalDrawNpcReview3D(int32_t view, float clock,
                             RenderTexture2D target, Rectangle destination);
 void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                          const CcLocalCourse *course,
+                         bool conversation,
                          const CcLocalConvoyState *convoy, float clock,
                          RenderTexture2D target, Rectangle destination);
 void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
