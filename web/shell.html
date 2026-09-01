@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#171512">
+    <title>Crownless Carriage</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: Georgia, "Times New Roman", serif;
+        background: #171512;
+        color: #e8dfc9;
+      }
+      * { box-sizing: border-box; }
+      body {
+        min-height: 100vh;
+        margin: 0;
+        display: grid;
+        place-items: center;
+        background:
+          radial-gradient(circle at 50% 10%, #353027 0, #171512 52%),
+          #171512;
+      }
+      main {
+        width: min(100%, 1240px);
+        padding: 18px 20px 28px;
+      }
+      header {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 18px;
+        margin-bottom: 12px;
+      }
+      h1 {
+        margin: 0;
+        font-size: clamp(1.2rem, 3vw, 2rem);
+        font-weight: 500;
+        letter-spacing: 0.05em;
+      }
+      p { margin: 4px 0 0; color: #aaa18e; }
+      button {
+        border: 1px solid #8e8168;
+        border-radius: 3px;
+        padding: 9px 13px;
+        background: #24211c;
+        color: #e8dfc9;
+        font: inherit;
+        cursor: pointer;
+      }
+      button:hover { background: #302b24; }
+      #stage {
+        position: relative;
+        overflow: hidden;
+        border: 1px solid #514a3d;
+        border-radius: 4px;
+        background: #0b0a09;
+        box-shadow: 0 24px 70px rgb(0 0 0 / 45%);
+      }
+      canvas {
+        width: 100%;
+        height: auto;
+        display: block;
+        border: 0;
+        outline: none;
+        background: #0b0a09;
+      }
+      #loading {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background: #171512;
+        color: #c9bea6;
+        letter-spacing: 0.04em;
+      }
+      #loading[hidden] { display: none; }
+      #progress {
+        display: block;
+        width: min(280px, 70vw);
+        margin-top: 12px;
+        accent-color: #9f8657;
+      }
+      #hint {
+        margin-top: 10px;
+        text-align: center;
+        font: 0.82rem system-ui, sans-serif;
+      }
+      @media (max-width: 680px) {
+        main { padding: 10px; }
+        header { align-items: start; }
+        header p { display: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>Crownless Carriage</h1>
+          <p>A causal political action-RPG</p>
+        </div>
+        <button id="fullscreen" type="button">Full screen</button>
+      </header>
+      <div id="stage">
+        <canvas id="canvas" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
+        <div id="loading">
+          <div>
+            <span id="status">Downloading the world…</span>
+            <progress id="progress" value="0" max="100" hidden></progress>
+          </div>
+        </div>
+      </div>
+      <p id="hint">Click the game, then use the mouse and keyboard. Saves stay in this browser.</p>
+    </main>
+    <script>
+      const canvas = document.querySelector("#canvas");
+      const loading = document.querySelector("#loading");
+      const statusElement = document.querySelector("#status");
+      const progressElement = document.querySelector("#progress");
+
+      var Module = {
+        preRun: [],
+        postRun: [function () {
+          loading.hidden = true;
+          if (Module.crownlessCampaignRestored) {
+            document.querySelector("#hint").textContent =
+              "Saved campaign restored from this browser.";
+          }
+          canvas.focus();
+        }],
+        canvas,
+        print: console.log.bind(console),
+        printErr: console.error.bind(console),
+        setStatus(text) {
+          if (!text) {
+            loading.hidden = true;
+            return;
+          }
+          statusElement.textContent = text;
+          const match = text.match(/\((\d+(?:\.\d+)?)\/(\d+)\)/);
+          if (match) {
+            progressElement.hidden = false;
+            progressElement.value = Number(match[1]);
+            progressElement.max = Number(match[2]);
+          }
+        },
+        totalDependencies: 0,
+        monitorRunDependencies(left) {
+          this.totalDependencies = Math.max(this.totalDependencies, left);
+          this.setStatus(left
+            ? `Preparing… (${this.totalDependencies - left}/${this.totalDependencies})`
+            : "Starting…");
+        }
+      };
+
+      Module.setStatus("Downloading the world…");
+      window.addEventListener("error", function () {
+        Module.setStatus("The game could not start. Check the browser console.");
+      });
+      window.addEventListener("keydown", function (event) {
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+          event.preventDefault();
+        }
+      });
+      canvas.addEventListener("pointerdown", function () { canvas.focus(); });
+      canvas.addEventListener("webglcontextlost", function (event) {
+        event.preventDefault();
+        Module.setStatus("The graphics context was lost. Reload the page to continue.");
+      });
+      document.querySelector("#fullscreen").addEventListener("click", function () {
+        if (document.fullscreenElement) document.exitFullscreen();
+        else document.querySelector("#stage").requestFullscreen();
+      });
+    </script>
+    {{{ SCRIPT }}}
+  </body>
+</html>

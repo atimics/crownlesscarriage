@@ -48,10 +48,7 @@ typedef struct CcMotionQuaternion {
     float w;
 } CcMotionQuaternion;
 
-/* Canonical runtime clip samples are local to the parent bone. The built-in
-   clips currently provide timelines and markers while the procedural rig
-   provides poses; imported authored clips can populate samples without
-   changing the player or gameplay event contract. */
+
 typedef struct CcMotionTransform {
     CcLimbVec3 translation;
     CcMotionQuaternion rotation;
@@ -85,11 +82,7 @@ typedef struct CcMotionPlayer {
     bool finished;
 } CcMotionPlayer;
 
-/* Authored ledge-space performance controls for a high mantle. Root motion is
-   normalized between the detected start and end transforms; the remaining
-   offsets are in metres in the character's right/up/wall-outward frame. This
-   lets gameplay warp one performance to different ledges without asking IK to
-   invent the timing, weight shift, or torso shape. */
+
 typedef struct CcMotionMantleSample {
     float root_progress;
     float root_depth_progress;

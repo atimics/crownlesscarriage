@@ -117,8 +117,7 @@ typedef struct CcLocalTownScene {
     float target_y;
     float target_z;
     float camera_offset_x;
-    /* For walking scenes this is the lens clearance above the terrain under
-       the camera. The renderer converts it to a target-relative Y offset. */
+
     float camera_offset_y;
     float camera_offset_z;
     float fovy;
@@ -144,9 +143,7 @@ typedef struct CcLocalPlaceProfile {
     const char *room_name[CC_LOCAL_PLACE_ROOM_COUNT];
     CcLocalPlaceLandmark landmark[CC_LOCAL_PLACE_LANDMARK_COUNT];
     CcLocalPlaceRoad road[CC_LOCAL_PLACE_ROAD_COUNT];
-    /* Every settlement gives the carriage a complete public route. The first
-       three records are travel lanes; the last two are the turning court and
-       service yard where a full team can reverse without blocking traffic. */
+
     CcLocalPlaceRoad carriage_route[CC_LOCAL_CARRIAGE_ROUTE_COUNT];
     CcLocalPlaceBuilding building[CC_LOCAL_PLACE_BUILDING_CAPACITY];
     CcLocalPlaceCompoundStructure

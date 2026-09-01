@@ -1,0 +1,58 @@
+name: Web game
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build WebAssembly game
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: emscripten-core/setup-emsdk@v15
+        with:
+          version: 5.0.4
+          actions-cache-folder: emsdk-cache
+      - name: Configure
+        run: emcmake cmake --preset web
+      - name: Build
+        run: cmake --build --preset web
+      - name: Check site output
+        run: >-
+          test -f out/build/web/site/index.html &&
+          test -f out/build/web/site/index.wasm &&
+          test -f out/build/web/site/index.data &&
+          test "$(stat -c%s out/build/web/site/index.data)" -le 10485760 &&
+          test -f out/build/web/site/assets/maps/gloamgate_to_alderwatch.png &&
+          test -f out/build/web/site/assets/maps/collectible_map_atlas.png
+      - name: Upload Pages site
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: out/build/web/site
+
+  deploy:
+    name: Deploy GitHub Pages
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v5

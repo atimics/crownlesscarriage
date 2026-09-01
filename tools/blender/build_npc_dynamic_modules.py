@@ -305,7 +305,7 @@ def build_geometry(slot: str, collection: bpy.types.Collection,
         add_ico("GEO_ModuleHand", (0.0, 0.0, 0.0),
                 (0.50, 0.42, 0.58), collection, material, subdivisions=1)
     elif slot == "foot":
-        # The runtime maps local +Y to ankle->toe, making this a rigid boot.
+
         add_box("GEO_ModuleFoot", (0.0, -0.02, 0.48),
                 (0.78, 0.74, 1.08), collection, material, width=0.10)
         add_box("GEO_ModuleFootSole", (0.0, -0.22, 0.53),
@@ -326,8 +326,8 @@ def build_geometry(slot: str, collection: bpy.types.Collection,
                 (0.78, 0.20, 1.0), collection, material, width=0.08,
                 rotation=(0.05, 0.0, 0.0))
     elif slot == "chest_plate":
-        # This is a closed, torso-shaped volume. The old solidified front
-        # panel crossed the body like a signboard after bone-frame scaling.
+
+
         add_loft("GEO_ModuleChestPlate", (
             (-0.50, 0.36, 0.34),
             (-0.24, 0.46, 0.39),
@@ -415,9 +415,9 @@ def build_geometry(slot: str, collection: bpy.types.Collection,
     elif slot.startswith("hair_"):
         style = int(slot.removeprefix("hair_"))
         if style == 3:
-            # Six opaque clumps make the silhouette.  Their roots overlap only
-            # around a tiny hidden scalp core; unequal crowns and split rear
-            # wedges stop the back view becoming a flat helmet.
+
+
+
             core = add_ico("GEO_ModuleHairCore", (0.0, 0.10, 0.16),
                            (0.46, 0.36, 0.38), collection, material,
                            subdivisions=1)
@@ -458,8 +458,8 @@ def build_geometry(slot: str, collection: bpy.types.Collection,
                  (0.23, 0.59, -0.10), (0.14, 0.71, -0.65)),
                 (0.31, 0.33, 0.22, 0.020),
                 (0.20, 0.18, 0.12, 0.020), collection, material)
-            # A single broad highlight tells the eye which rear wedge sits in
-            # front without adding strand noise at the 60-pixel game size.
+
+
             add_panel("GEO_ModuleHairRearHighlight", (
                 (-0.15, 0.665, 0.30), (-0.04, 0.662, 0.25),
                 (-0.06, 0.665, -0.18), (-0.13, 0.669, -0.03),

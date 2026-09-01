@@ -9,7 +9,7 @@
 #include <string.h>
 
 #define CC_SQLITE_APPLICATION_ID 1128481362
-#define CC_SQLITE_USER_VERSION 17
+#define CC_SQLITE_USER_VERSION 18
 #define CC_JOURNAL_RECORD_VERSION 1
 #define CC_JOURNAL_RUNTIME_FLUSH_TICKS 6
 #define CC_JOURNAL_MAX_DAY_ADVANCE 3650
@@ -345,6 +345,41 @@ static bool EnsureLegendColumns(sqlite3 *database,
             error, error_capacity);
 }
 
+static bool EnsureSocialColumns(sqlite3 *database,
+                                char *error, size_t error_capacity)
+{
+    return EnsureColumn(database, "causal_event", "actor_id",
+            "ALTER TABLE causal_event ADD COLUMN actor_id INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "causal_event", "target_id",
+            "ALTER TABLE causal_event ADD COLUMN target_id INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "causal_event", "beneficiary_id",
+            "ALTER TABLE causal_event ADD COLUMN beneficiary_id INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "causal_event", "witness_id",
+            "ALTER TABLE causal_event ADD COLUMN witness_id INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "situation", "discovery_stage",
+            "ALTER TABLE situation ADD COLUMN discovery_stage INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "situation", "lead_path",
+            "ALTER TABLE situation ADD COLUMN lead_path INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "situation", "lead_event_id",
+            "ALTER TABLE situation ADD COLUMN lead_event_id INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "npc_character", "knowledge_count",
+            "ALTER TABLE npc_character ADD COLUMN knowledge_count INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "npc_character", "knowledge_write_index",
+            "ALTER TABLE npc_character ADD COLUMN knowledge_write_index INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "situation_character", "witness_character_id",
+            "ALTER TABLE situation_character ADD COLUMN witness_character_id INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity);
+}
+
 static bool Prepare(sqlite3 *database, const char *sql, sqlite3_stmt **statement,
                     char *error, size_t error_capacity)
 {
@@ -436,12 +471,20 @@ static bool ValidateDatabaseHeader(sqlite3 *database,
 static bool ConfigureWritableDatabase(sqlite3 *database,
                                       char *error, size_t error_capacity)
 {
+#if defined(__EMSCRIPTEN__)
+    return Execute(database,
+        "PRAGMA foreign_keys=ON;"
+        "PRAGMA journal_mode=DELETE;"
+        "PRAGMA synchronous=FULL;",
+        error, error_capacity);
+#else
     return Execute(database,
         "PRAGMA foreign_keys=ON;"
         "PRAGMA journal_mode=WAL;"
         "PRAGMA synchronous=FULL;"
         "PRAGMA wal_autocheckpoint=1000;",
         error, error_capacity);
+#endif
 }
 
 static bool MarkDatabaseCurrent(sqlite3 *database,
@@ -715,7 +758,9 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         "CREATE TABLE IF NOT EXISTS causal_event ("
         " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL UNIQUE, day INTEGER NOT NULL,"
         " kind INTEGER NOT NULL, subject_id INTEGER NOT NULL, location_id INTEGER NOT NULL,"
-        " parent_id INTEGER NOT NULL, magnitude INTEGER NOT NULL, text TEXT NOT NULL);"
+        " parent_id INTEGER NOT NULL, magnitude INTEGER NOT NULL, text TEXT NOT NULL,"
+        " actor_id INTEGER NOT NULL DEFAULT 0, target_id INTEGER NOT NULL DEFAULT 0,"
+        " beneficiary_id INTEGER NOT NULL DEFAULT 0, witness_id INTEGER NOT NULL DEFAULT 0);"
         "CREATE TABLE IF NOT EXISTS player_company ("
         " id INTEGER PRIMARY KEY, location_id INTEGER NOT NULL, coins INTEGER NOT NULL,"
         " food_cargo INTEGER NOT NULL, material_cargo INTEGER NOT NULL, tools_cargo INTEGER NOT NULL,"
@@ -779,7 +824,8 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " status INTEGER NOT NULL, issuer_faction_id INTEGER NOT NULL, target_id INTEGER NOT NULL,"
         " cause_event_id INTEGER NOT NULL, good INTEGER NOT NULL, quantity INTEGER NOT NULL,"
         " progress INTEGER NOT NULL, reward INTEGER NOT NULL, created_day INTEGER NOT NULL,"
-        " deadline_day INTEGER NOT NULL);"
+        " deadline_day INTEGER NOT NULL, discovery_stage INTEGER NOT NULL DEFAULT 0,"
+        " lead_path INTEGER NOT NULL DEFAULT 0, lead_event_id INTEGER NOT NULL DEFAULT 0);"
         "CREATE TABLE IF NOT EXISTS shipment_intent ("
         " slot INTEGER PRIMARY KEY, final_destination_id INTEGER NOT NULL);";
     const char *quest_schema =
@@ -880,7 +926,9 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " role INTEGER NOT NULL, goal INTEGER NOT NULL, activity INTEGER NOT NULL,"
         " appearance_seed INTEGER NOT NULL, player_disposition INTEGER NOT NULL,"
         " stress INTEGER NOT NULL, courage INTEGER NOT NULL,"
-        " memory_count INTEGER NOT NULL, memory_write_index INTEGER NOT NULL);"
+        " memory_count INTEGER NOT NULL, memory_write_index INTEGER NOT NULL,"
+        " knowledge_count INTEGER NOT NULL DEFAULT 0,"
+        " knowledge_write_index INTEGER NOT NULL DEFAULT 0);"
         "CREATE TABLE IF NOT EXISTS character_memory ("
         " character_slot INTEGER NOT NULL, memory_slot INTEGER NOT NULL,"
         " kind INTEGER NOT NULL, subject_id INTEGER NOT NULL,"
@@ -889,7 +937,19 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         "CREATE TABLE IF NOT EXISTS situation_character ("
         " slot INTEGER PRIMARY KEY, situation_id INTEGER NOT NULL UNIQUE,"
         " sponsor_character_id INTEGER NOT NULL,"
-        " affected_character_id INTEGER NOT NULL);";
+        " affected_character_id INTEGER NOT NULL,"
+        " witness_character_id INTEGER NOT NULL DEFAULT 0);"
+        "CREATE TABLE IF NOT EXISTS character_knowledge ("
+        " character_slot INTEGER NOT NULL, knowledge_slot INTEGER NOT NULL,"
+        " kind INTEGER NOT NULL, subject_id INTEGER NOT NULL,"
+        " source_character_id INTEGER NOT NULL, event_id INTEGER NOT NULL,"
+        " certainty INTEGER NOT NULL, private_knowledge INTEGER NOT NULL,"
+        " day INTEGER NOT NULL, PRIMARY KEY(character_slot,knowledge_slot));"
+        "CREATE TABLE IF NOT EXISTS character_relationship ("
+        " slot INTEGER PRIMARY KEY, from_character_id INTEGER NOT NULL,"
+        " to_character_id INTEGER NOT NULL, affinity INTEGER NOT NULL,"
+        " trust INTEGER NOT NULL, obligation INTEGER NOT NULL,"
+        " history INTEGER NOT NULL, cause_event_id INTEGER NOT NULL);";
     const char *legend_schema =
         "CREATE TABLE IF NOT EXISTS goblin_cult ("
         " slot INTEGER PRIMARY KEY CHECK(slot=1), id INTEGER NOT NULL UNIQUE,"
@@ -1002,6 +1062,31 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         "CREATE TRIGGER IF NOT EXISTS journal_epoch_no_delete "
         "BEFORE DELETE ON journal_epoch BEGIN "
         "SELECT RAISE(ABORT, 'journal epoch is append-only'); END;";
+    const char *underroad_schema =
+        "CREATE TABLE IF NOT EXISTS dungeon_detail ("
+        " dungeon_slot INTEGER PRIMARY KEY, layout_seed INTEGER NOT NULL,"
+        " encounter_random_state INTEGER NOT NULL, room_count INTEGER NOT NULL,"
+        " link_count INTEGER NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS dungeon_room ("
+        " dungeon_slot INTEGER NOT NULL, room_slot INTEGER NOT NULL,"
+        " name TEXT NOT NULL, kind INTEGER NOT NULL, depth INTEGER NOT NULL,"
+        " map_x INTEGER NOT NULL, map_y INTEGER NOT NULL, flags INTEGER NOT NULL,"
+        " state_flags INTEGER NOT NULL, loot_good INTEGER NOT NULL,"
+        " loot_quantity INTEGER NOT NULL,"
+        " PRIMARY KEY(dungeon_slot,room_slot));"
+        "CREATE TABLE IF NOT EXISTS dungeon_link ("
+        " dungeon_slot INTEGER NOT NULL, link_slot INTEGER NOT NULL,"
+        " from_room INTEGER NOT NULL, to_room INTEGER NOT NULL,"
+        " kind INTEGER NOT NULL, flags INTEGER NOT NULL,"
+        " PRIMARY KEY(dungeon_slot,link_slot));"
+        "CREATE TABLE IF NOT EXISTS dungeon_expedition ("
+        " slot INTEGER PRIMARY KEY CHECK(slot=1), active INTEGER NOT NULL,"
+        " dungeon_id INTEGER NOT NULL, current_room INTEGER NOT NULL,"
+        " turns_elapsed INTEGER NOT NULL, days_elapsed INTEGER NOT NULL,"
+        " light_remaining INTEGER NOT NULL, noise INTEGER NOT NULL,"
+        " strain INTEGER NOT NULL, maximum_depth INTEGER NOT NULL,"
+        " encounter_kind INTEGER NOT NULL, encounter_reaction INTEGER NOT NULL,"
+        " encounter_room INTEGER NOT NULL);";
     return Execute(database, schema, error, error_capacity) &&
            Execute(database, realm_schema, error, error_capacity) &&
            Execute(database, situation_schema, error, error_capacity) &&
@@ -1012,7 +1097,9 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
            Execute(database, legend_schema, error, error_capacity) &&
            Execute(database, material_schema, error, error_capacity) &&
            Execute(database, journal_schema, error, error_capacity) &&
+           Execute(database, underroad_schema, error, error_capacity) &&
            EnsureJourneyColumns(database, error, error_capacity) &&
+           EnsureSocialColumns(database, error, error_capacity) &&
            EnsureJournalMetaColumns(database, error, error_capacity);
 }
 
@@ -1555,7 +1642,89 @@ static bool SaveDungeons(sqlite3 *database, const CcSim *sim,
         }
     }
     sqlite3_finalize(statement);
-    return true;
+    if (sim->schema_version < 19U) return true;
+
+    if (!Prepare(database,
+                 "INSERT INTO dungeon_detail VALUES(?,?,?,?,?);",
+                 &statement, error, error_capacity)) return false;
+    for (int32_t i = 0; i < sim->dungeon_count; ++i) {
+        const CcDungeon *d = &sim->dungeons[i];
+        BindInt(statement, 1, i);
+        BindInt(statement, 2, (int32_t)d->layout_seed);
+        BindInt(statement, 3, (int32_t)d->encounter_random_state);
+        BindInt(statement, 4, d->room_count);
+        BindInt(statement, 5, d->link_count);
+        if (!StepDone(database, statement, error, error_capacity) ||
+            !ResetStatement(database, statement, error, error_capacity)) {
+            sqlite3_finalize(statement); return false;
+        }
+    }
+    sqlite3_finalize(statement);
+
+    if (!Prepare(database,
+                 "INSERT INTO dungeon_room VALUES(?,?,?,?,?,?,?,?,?,?,?);",
+                 &statement, error, error_capacity)) return false;
+    for (int32_t i = 0; i < sim->dungeon_count; ++i) {
+        const CcDungeon *d = &sim->dungeons[i];
+        for (int32_t room = 0; room < d->room_count; ++room) {
+            const CcDungeonRoom *item = &d->rooms[room];
+            BindInt(statement, 1, i); BindInt(statement, 2, room);
+            BindText(statement, 3, item->name);
+            BindInt(statement, 4, (int32_t)item->kind);
+            BindInt(statement, 5, item->depth);
+            BindInt(statement, 6, item->map_x);
+            BindInt(statement, 7, item->map_y);
+            BindInt(statement, 8, (int32_t)item->flags);
+            BindInt(statement, 9, (int32_t)item->state_flags);
+            BindInt(statement, 10, (int32_t)item->loot_good);
+            BindInt(statement, 11, item->loot_quantity);
+            if (!StepDone(database, statement, error, error_capacity) ||
+                !ResetStatement(database, statement, error, error_capacity)) {
+                sqlite3_finalize(statement); return false;
+            }
+        }
+    }
+    sqlite3_finalize(statement);
+
+    if (!Prepare(database,
+                 "INSERT INTO dungeon_link VALUES(?,?,?,?,?,?);",
+                 &statement, error, error_capacity)) return false;
+    for (int32_t i = 0; i < sim->dungeon_count; ++i) {
+        const CcDungeon *d = &sim->dungeons[i];
+        for (int32_t link = 0; link < d->link_count; ++link) {
+            const CcDungeonLink *item = &d->links[link];
+            BindInt(statement, 1, i); BindInt(statement, 2, link);
+            BindInt(statement, 3, item->from_room);
+            BindInt(statement, 4, item->to_room);
+            BindInt(statement, 5, (int32_t)item->kind);
+            BindInt(statement, 6, (int32_t)item->flags);
+            if (!StepDone(database, statement, error, error_capacity) ||
+                !ResetStatement(database, statement, error, error_capacity)) {
+                sqlite3_finalize(statement); return false;
+            }
+        }
+    }
+    sqlite3_finalize(statement);
+
+    if (!Prepare(database,
+                 "INSERT INTO dungeon_expedition VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?);",
+                 &statement, error, error_capacity)) return false;
+    const CcDungeonExpedition *expedition = &sim->dungeon_expedition;
+    BindInt(statement, 1, expedition->active ? 1 : 0);
+    BindId(statement, 2, expedition->dungeon_id);
+    BindInt(statement, 3, expedition->current_room);
+    BindInt(statement, 4, expedition->turns_elapsed);
+    BindInt(statement, 5, expedition->days_elapsed);
+    BindInt(statement, 6, expedition->light_remaining);
+    BindInt(statement, 7, expedition->noise);
+    BindInt(statement, 8, expedition->strain);
+    BindInt(statement, 9, expedition->maximum_depth);
+    BindInt(statement, 10, (int32_t)expedition->encounter_kind);
+    BindInt(statement, 11, expedition->encounter_reaction);
+    BindInt(statement, 12, expedition->encounter_room);
+    bool result = StepDone(database, statement, error, error_capacity);
+    sqlite3_finalize(statement);
+    return result;
 }
 
 static bool SaveLegends(sqlite3 *database, const CcSim *sim,
@@ -1707,7 +1876,11 @@ static bool SaveEvents(sqlite3 *database, const CcSim *sim,
                        char *error, size_t error_capacity)
 {
     sqlite3_stmt *statement = NULL;
-    if (!Prepare(database, "INSERT INTO causal_event VALUES(?,?,?,?,?,?,?,?,?);",
+    if (!Prepare(database,
+                 "INSERT INTO causal_event "
+                 "(slot,id,day,kind,subject_id,location_id,parent_id,magnitude,text,"
+                 "actor_id,target_id,beneficiary_id,witness_id) "
+                 "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?);",
                  &statement, error, error_capacity)) return false;
     for (int32_t i = 0; i < CC_MAX_EVENTS; ++i) {
         const CcEvent *e = &sim->events[i];
@@ -1716,6 +1889,10 @@ static bool SaveEvents(sqlite3 *database, const CcSim *sim,
         BindInt(statement, 4, (int32_t)e->kind); BindId(statement, 5, e->subject_id);
         BindId(statement, 6, e->location_id); BindId(statement, 7, e->parent_id);
         BindInt(statement, 8, e->magnitude); BindText(statement, 9, e->text);
+        BindId(statement, 10, e->actor_id);
+        BindId(statement, 11, e->target_id);
+        BindId(statement, 12, e->beneficiary_id);
+        BindId(statement, 13, e->witness_id);
         if (!StepDone(database, statement, error, error_capacity) ||
             !ResetStatement(database, statement, error, error_capacity)) {
             sqlite3_finalize(statement); return false;
@@ -1729,7 +1906,12 @@ static bool SaveSituations(sqlite3 *database, const CcSim *sim,
                            char *error, size_t error_capacity)
 {
     sqlite3_stmt *statement = NULL;
-    if (!Prepare(database, "INSERT INTO situation VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?);",
+    if (!Prepare(database,
+                 "INSERT INTO situation "
+                 "(slot,id,kind,status,issuer_faction_id,target_id,cause_event_id,"
+                 "good,quantity,progress,reward,created_day,deadline_day,"
+                 "discovery_stage,lead_path,lead_event_id) "
+                 "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
                  &statement, error, error_capacity)) return false;
     for (int32_t i = 0; i < sim->situation_count; ++i) {
         const CcSituation *s = &sim->situations[i];
@@ -1746,6 +1928,9 @@ static bool SaveSituations(sqlite3 *database, const CcSim *sim,
         BindMoney(statement, column++, s->reward);
         BindInt(statement, column++, s->created_day);
         BindInt(statement, column++, s->deadline_day);
+        BindInt(statement, column++, (int32_t)s->discovery_stage);
+        BindInt(statement, column++, (int32_t)s->lead_path);
+        BindId(statement, column++, s->lead_event_id);
         if (!StepDone(database, statement, error, error_capacity) ||
             !ResetStatement(database, statement, error, error_capacity)) {
             sqlite3_finalize(statement); return false;
@@ -1946,19 +2131,35 @@ static bool SaveCharacters(sqlite3 *database, const CcSim *sim,
 {
     sqlite3_stmt *character_statement = NULL;
     sqlite3_stmt *memory_statement = NULL;
+    sqlite3_stmt *knowledge_statement = NULL;
     sqlite3_stmt *situation_statement = NULL;
+    sqlite3_stmt *relationship_statement = NULL;
     if (!Prepare(database,
-                 "INSERT INTO npc_character VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
+                 "INSERT INTO npc_character "
+                 "(slot,id,name,home_settlement_id,current_settlement_id,faction_id,"
+                 "role,goal,activity,appearance_seed,player_disposition,stress,courage,"
+                 "memory_count,memory_write_index,knowledge_count,"
+                 "knowledge_write_index) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
                  &character_statement, error, error_capacity) ||
         !Prepare(database,
                  "INSERT INTO character_memory VALUES(?,?,?,?,?,?);",
                  &memory_statement, error, error_capacity) ||
         !Prepare(database,
-                 "INSERT INTO situation_character VALUES(?,?,?,?);",
-                 &situation_statement, error, error_capacity)) {
+                 "INSERT INTO character_knowledge VALUES(?,?,?,?,?,?,?,?,?);",
+                 &knowledge_statement, error, error_capacity) ||
+        !Prepare(database,
+                 "INSERT INTO situation_character "
+                 "(slot,situation_id,sponsor_character_id,affected_character_id,"
+                 "witness_character_id) VALUES(?,?,?,?,?);",
+                 &situation_statement, error, error_capacity) ||
+        !Prepare(database,
+                 "INSERT INTO character_relationship VALUES(?,?,?,?,?,?,?,?);",
+                 &relationship_statement, error, error_capacity)) {
         sqlite3_finalize(character_statement);
         sqlite3_finalize(memory_statement);
+        sqlite3_finalize(knowledge_statement);
         sqlite3_finalize(situation_statement);
+        sqlite3_finalize(relationship_statement);
         return false;
     }
     for (int32_t i = 0; i < sim->character_count; ++i) {
@@ -1980,6 +2181,8 @@ static bool SaveCharacters(sqlite3 *database, const CcSim *sim,
         BindInt(character_statement, column++, character->courage);
         BindInt(character_statement, column++, character->memory_count);
         BindInt(character_statement, column++, character->memory_write_index);
+        BindInt(character_statement, column++, character->knowledge_count);
+        BindInt(character_statement, column++, character->knowledge_write_index);
         if (!StepDone(database, character_statement, error, error_capacity) ||
             !ResetStatement(database, character_statement,
                             error, error_capacity)) goto failed;
@@ -1997,6 +2200,25 @@ static bool SaveCharacters(sqlite3 *database, const CcSim *sim,
                 !ResetStatement(database, memory_statement,
                                 error, error_capacity)) goto failed;
         }
+        for (int32_t knowledge = 0;
+             knowledge < CC_CHARACTER_KNOWLEDGE_CAPACITY; ++knowledge) {
+            const CcCharacterKnowledge *item =
+                &character->knowledge[knowledge];
+            BindInt(knowledge_statement, 1, i);
+            BindInt(knowledge_statement, 2, knowledge);
+            BindInt(knowledge_statement, 3, (int32_t)item->kind);
+            BindId(knowledge_statement, 4, item->subject_id);
+            BindId(knowledge_statement, 5, item->source_character_id);
+            BindId(knowledge_statement, 6, item->event_id);
+            BindInt(knowledge_statement, 7, (int32_t)item->certainty);
+            BindInt(knowledge_statement, 8,
+                    item->private_knowledge ? 1 : 0);
+            BindInt(knowledge_statement, 9, item->day);
+            if (!StepDone(database, knowledge_statement,
+                          error, error_capacity) ||
+                !ResetStatement(database, knowledge_statement,
+                                error, error_capacity)) goto failed;
+        }
     }
     for (int32_t i = 0; i < sim->situation_count; ++i) {
         const CcSituation *situation = &sim->situations[i];
@@ -2004,20 +2226,40 @@ static bool SaveCharacters(sqlite3 *database, const CcSim *sim,
         BindId(situation_statement, 2, situation->id);
         BindId(situation_statement, 3, situation->sponsor_character_id);
         BindId(situation_statement, 4, situation->affected_character_id);
+        BindId(situation_statement, 5, situation->witness_character_id);
         if (!StepDone(database, situation_statement,
                       error, error_capacity) ||
             !ResetStatement(database, situation_statement,
                             error, error_capacity)) goto failed;
     }
+    for (int32_t i = 0; i < sim->relationship_count; ++i) {
+        const CcRelationship *relationship = &sim->relationships[i];
+        BindInt(relationship_statement, 1, i);
+        BindId(relationship_statement, 2, relationship->from_character_id);
+        BindId(relationship_statement, 3, relationship->to_character_id);
+        BindInt(relationship_statement, 4, relationship->affinity);
+        BindInt(relationship_statement, 5, relationship->trust);
+        BindInt(relationship_statement, 6, relationship->obligation);
+        BindInt(relationship_statement, 7, (int32_t)relationship->history);
+        BindId(relationship_statement, 8, relationship->cause_event_id);
+        if (!StepDone(database, relationship_statement,
+                      error, error_capacity) ||
+            !ResetStatement(database, relationship_statement,
+                            error, error_capacity)) goto failed;
+    }
     sqlite3_finalize(character_statement);
     sqlite3_finalize(memory_statement);
+    sqlite3_finalize(knowledge_statement);
     sqlite3_finalize(situation_statement);
+    sqlite3_finalize(relationship_statement);
     return true;
 
 failed:
     sqlite3_finalize(character_statement);
     sqlite3_finalize(memory_statement);
+    sqlite3_finalize(knowledge_statement);
     sqlite3_finalize(situation_statement);
+    sqlite3_finalize(relationship_statement);
     return false;
 }
 
@@ -2147,11 +2389,15 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
             "DELETE FROM bandit_group; DELETE FROM monster_population;"
             "DELETE FROM goblin_cult; DELETE FROM dragon_state;"
             "DELETE FROM dragon_campaign; DELETE FROM hoard_raiders;"
-            "DELETE FROM dungeon; DELETE FROM situation; DELETE FROM situation_cast;"
+            "DELETE FROM dungeon; DELETE FROM dungeon_detail;"
+            "DELETE FROM dungeon_room; DELETE FROM dungeon_link;"
+            "DELETE FROM dungeon_expedition;"
+            "DELETE FROM situation; DELETE FROM situation_cast;"
             "DELETE FROM situation_quest; DELETE FROM situation_evidence;"
             "DELETE FROM story_front; DELETE FROM front_situation;"
             "DELETE FROM quest_outcome; DELETE FROM delayed_echo_queue;"
             "DELETE FROM situation_character; DELETE FROM character_memory;"
+            "DELETE FROM character_knowledge; DELETE FROM character_relationship;"
             "DELETE FROM npc_character;"
             "DELETE FROM causal_event;"
             "DELETE FROM player_company; DELETE FROM player_commitment;"
@@ -2197,6 +2443,7 @@ static bool SaveSnapshot(sqlite3 *database, const CcSim *sim,
         EnsureHorseStableColumns(database, error, error_capacity) &&
         EnsureJourneyColumns(database, error, error_capacity) &&
         EnsureLegendColumns(database, error, error_capacity) &&
+        EnsureSocialColumns(database, error, error_capacity) &&
         Execute(database, "BEGIN IMMEDIATE;", error, error_capacity);
     if (ok) {
         ok = SaveSnapshotContents(database, sim, journal_generation,
@@ -2918,6 +3165,150 @@ static bool ReadDungeons(sqlite3 *database, CcSim *sim,
     return true;
 }
 
+static bool ReadUnderroad(sqlite3 *database, CcSim *sim,
+                          char *error, size_t error_capacity)
+{
+    if (sim->schema_version < 19U) return true;
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database,
+                 "SELECT dungeon_slot,layout_seed,encounter_random_state,"
+                 "room_count,link_count FROM dungeon_detail "
+                 "ORDER BY dungeon_slot;",
+                 &statement, error, error_capacity)) return false;
+    int32_t rows = 0;
+    while (sqlite3_step(statement) == SQLITE_ROW) {
+        int32_t slot = sqlite3_column_int(statement, 0);
+        if (slot < 0 || slot >= sim->dungeon_count) {
+            sqlite3_finalize(statement);
+            SetError(error, error_capacity, "Dungeon detail rows are invalid.");
+            return false;
+        }
+        CcDungeon *dungeon = &sim->dungeons[slot];
+        dungeon->layout_seed = (uint32_t)sqlite3_column_int(statement, 1);
+        dungeon->encounter_random_state =
+            (uint32_t)sqlite3_column_int(statement, 2);
+        dungeon->room_count = sqlite3_column_int(statement, 3);
+        dungeon->link_count = sqlite3_column_int(statement, 4);
+        rows += 1;
+    }
+    sqlite3_finalize(statement);
+    if (rows == 0 && sim->schema_version == 19U) {
+        sim->dungeon_expedition.current_room = -1;
+        sim->dungeon_expedition.encounter_room = -1;
+        return true;
+    }
+    if (rows != sim->dungeon_count) {
+        SetError(error, error_capacity, "Dungeon detail rows are incomplete.");
+        return false;
+    }
+
+    if (!Prepare(database,
+                 "SELECT dungeon_slot,room_slot,name,kind,depth,map_x,map_y,"
+                 "flags,state_flags,loot_good,loot_quantity FROM dungeon_room "
+                 "ORDER BY dungeon_slot,room_slot;",
+                 &statement, error, error_capacity)) return false;
+    int32_t expected_rooms = 0;
+    int32_t room_rows = 0;
+    for (int32_t i = 0; i < sim->dungeon_count; ++i) {
+        expected_rooms += sim->dungeons[i].room_count;
+    }
+    while (sqlite3_step(statement) == SQLITE_ROW) {
+        int32_t dungeon_slot = sqlite3_column_int(statement, 0);
+        int32_t room_slot = sqlite3_column_int(statement, 1);
+        if (dungeon_slot < 0 || dungeon_slot >= sim->dungeon_count ||
+            room_slot < 0 ||
+            room_slot >= sim->dungeons[dungeon_slot].room_count ||
+            room_slot >= CC_MAX_DUNGEON_ROOMS) {
+            sqlite3_finalize(statement);
+            SetError(error, error_capacity, "Dungeon room rows are invalid.");
+            return false;
+        }
+        CcDungeonRoom *room =
+            &sim->dungeons[dungeon_slot].rooms[room_slot];
+        if (!ReadTextColumn(statement, 2, room->name, sizeof(room->name),
+                            "dungeon room name", error, error_capacity)) {
+            sqlite3_finalize(statement);
+            return false;
+        }
+        room->kind = (CcDungeonRoomKind)sqlite3_column_int(statement, 3);
+        room->depth = sqlite3_column_int(statement, 4);
+        room->map_x = sqlite3_column_int(statement, 5);
+        room->map_y = sqlite3_column_int(statement, 6);
+        room->flags = (uint32_t)sqlite3_column_int(statement, 7);
+        room->state_flags = (uint32_t)sqlite3_column_int(statement, 8);
+        room->loot_good = (CcGood)sqlite3_column_int(statement, 9);
+        room->loot_quantity = sqlite3_column_int(statement, 10);
+        room_rows += 1;
+    }
+    sqlite3_finalize(statement);
+    if (room_rows != expected_rooms) {
+        SetError(error, error_capacity, "Dungeon room rows are incomplete.");
+        return false;
+    }
+
+    if (!Prepare(database,
+                 "SELECT dungeon_slot,link_slot,from_room,to_room,kind,flags "
+                 "FROM dungeon_link ORDER BY dungeon_slot,link_slot;",
+                 &statement, error, error_capacity)) return false;
+    int32_t expected_links = 0;
+    int32_t link_rows = 0;
+    for (int32_t i = 0; i < sim->dungeon_count; ++i) {
+        expected_links += sim->dungeons[i].link_count;
+    }
+    while (sqlite3_step(statement) == SQLITE_ROW) {
+        int32_t dungeon_slot = sqlite3_column_int(statement, 0);
+        int32_t link_slot = sqlite3_column_int(statement, 1);
+        if (dungeon_slot < 0 || dungeon_slot >= sim->dungeon_count ||
+            link_slot < 0 ||
+            link_slot >= sim->dungeons[dungeon_slot].link_count ||
+            link_slot >= CC_MAX_DUNGEON_LINKS) {
+            sqlite3_finalize(statement);
+            SetError(error, error_capacity, "Dungeon passage rows are invalid.");
+            return false;
+        }
+        CcDungeonLink *link =
+            &sim->dungeons[dungeon_slot].links[link_slot];
+        link->from_room = sqlite3_column_int(statement, 2);
+        link->to_room = sqlite3_column_int(statement, 3);
+        link->kind = (CcDungeonLinkKind)sqlite3_column_int(statement, 4);
+        link->flags = (uint32_t)sqlite3_column_int(statement, 5);
+        link_rows += 1;
+    }
+    sqlite3_finalize(statement);
+    if (link_rows != expected_links) {
+        SetError(error, error_capacity, "Dungeon passage rows are incomplete.");
+        return false;
+    }
+
+    if (!Prepare(database,
+                 "SELECT active,dungeon_id,current_room,turns_elapsed,"
+                 "days_elapsed,light_remaining,noise,strain,maximum_depth,"
+                 "encounter_kind,encounter_reaction,encounter_room "
+                 "FROM dungeon_expedition WHERE slot=1;",
+                 &statement, error, error_capacity)) return false;
+    if (sqlite3_step(statement) != SQLITE_ROW) {
+        sqlite3_finalize(statement);
+        SetError(error, error_capacity, "Dungeon expedition state is missing.");
+        return false;
+    }
+    CcDungeonExpedition *expedition = &sim->dungeon_expedition;
+    expedition->active = sqlite3_column_int(statement, 0) != 0;
+    expedition->dungeon_id = (CcId)sqlite3_column_int64(statement, 1);
+    expedition->current_room = sqlite3_column_int(statement, 2);
+    expedition->turns_elapsed = sqlite3_column_int(statement, 3);
+    expedition->days_elapsed = sqlite3_column_int(statement, 4);
+    expedition->light_remaining = sqlite3_column_int(statement, 5);
+    expedition->noise = sqlite3_column_int(statement, 6);
+    expedition->strain = sqlite3_column_int(statement, 7);
+    expedition->maximum_depth = sqlite3_column_int(statement, 8);
+    expedition->encounter_kind =
+        (CcDungeonEncounterKind)sqlite3_column_int(statement, 9);
+    expedition->encounter_reaction = sqlite3_column_int(statement, 10);
+    expedition->encounter_room = sqlite3_column_int(statement, 11);
+    sqlite3_finalize(statement);
+    return true;
+}
+
 static bool ReadLegends(sqlite3 *database, CcSim *sim,
                         char *error, size_t error_capacity)
 {
@@ -3148,6 +3539,12 @@ static bool ReadEvents(sqlite3 *database, CcSim *sim,
             sqlite3_finalize(statement);
             return false;
         }
+        if (sim->schema_version >= 19U) {
+            e->actor_id = (CcId)sqlite3_column_int64(statement, 9);
+            e->target_id = (CcId)sqlite3_column_int64(statement, 10);
+            e->beneficiary_id = (CcId)sqlite3_column_int64(statement, 11);
+            e->witness_id = (CcId)sqlite3_column_int64(statement, 12);
+        }
         rows += 1;
     }
     sqlite3_finalize(statement);
@@ -3183,6 +3580,15 @@ static bool ReadSituations(sqlite3 *database, CcSim *sim,
         s->reward = (CcMoney)sqlite3_column_int64(statement, column++);
         s->created_day = sqlite3_column_int(statement, column++);
         s->deadline_day = sqlite3_column_int(statement, column++);
+        if (sim->schema_version >= 19U) {
+            s->discovery_stage =
+                (CcSituationDiscoveryStage)sqlite3_column_int(statement,
+                                                               column++);
+            s->lead_path =
+                (CcSituationLeadPath)sqlite3_column_int(statement, column++);
+            s->lead_event_id =
+                (CcId)sqlite3_column_int64(statement, column++);
+        }
         rows += 1;
     }
     sqlite3_finalize(statement);
@@ -3268,6 +3674,9 @@ static bool ReadQuestArchitecture(sqlite3 *database, CcSim *sim,
         rows += 1;
     }
     sqlite3_finalize(statement);
+    if (rows == 0 && sim->schema_version < CC_SIM_SCHEMA_VERSION) {
+        return true;
+    }
     if (rows != sim->situation_count) {
         SetError(error, error_capacity,
                  "Quest objectives are missing from the save.");
@@ -3498,6 +3907,10 @@ static bool ReadCharacters(sqlite3 *database, CcSim *sim,
         character->courage = sqlite3_column_int(statement, 12);
         character->memory_count = sqlite3_column_int(statement, 13);
         character->memory_write_index = sqlite3_column_int(statement, 14);
+        if (sim->schema_version >= 19U) {
+            character->knowledge_count = sqlite3_column_int(statement, 15);
+            character->knowledge_write_index = sqlite3_column_int(statement, 16);
+        }
         rows += 1;
     }
     sqlite3_finalize(statement);
@@ -3536,9 +3949,60 @@ static bool ReadCharacters(sqlite3 *database, CcSim *sim,
         return false;
     }
 
+    if (sim->schema_version >= 19U) {
+        if (!Prepare(database,
+                     "SELECT character_slot,knowledge_slot,kind,subject_id,"
+                     "source_character_id,event_id,certainty,private_knowledge,day "
+                     "FROM character_knowledge "
+                     "ORDER BY character_slot,knowledge_slot;",
+                     &statement, error, error_capacity)) return false;
+        int32_t knowledge_rows = 0;
+        while (sqlite3_step(statement) == SQLITE_ROW) {
+            int32_t character_slot = sqlite3_column_int(statement, 0);
+            int32_t knowledge_slot = sqlite3_column_int(statement, 1);
+            if (character_slot < 0 ||
+                character_slot >= sim->character_count ||
+                knowledge_slot < 0 ||
+                knowledge_slot >= CC_CHARACTER_KNOWLEDGE_CAPACITY) {
+                SetError(error, error_capacity,
+                         "Character knowledge rows exceed save limits.");
+                sqlite3_finalize(statement);
+                return false;
+            }
+            CcCharacterKnowledge *knowledge =
+                &sim->characters[character_slot].knowledge[knowledge_slot];
+            knowledge->kind =
+                (CcKnowledgeKind)sqlite3_column_int(statement, 2);
+            knowledge->subject_id =
+                (CcId)sqlite3_column_int64(statement, 3);
+            knowledge->source_character_id =
+                (CcId)sqlite3_column_int64(statement, 4);
+            knowledge->event_id =
+                (CcId)sqlite3_column_int64(statement, 5);
+            knowledge->certainty =
+                (CcKnowledgeCertainty)sqlite3_column_int(statement, 6);
+            knowledge->private_knowledge =
+                sqlite3_column_int(statement, 7) != 0;
+            knowledge->day = sqlite3_column_int(statement, 8);
+            knowledge_rows += 1;
+        }
+        sqlite3_finalize(statement);
+        int32_t expected_knowledge_rows = sim->character_count *
+            CC_CHARACTER_KNOWLEDGE_CAPACITY;
+        bool empty_legacy_social_data = sim->schema_version == 19U &&
+            knowledge_rows == 0;
+        if (knowledge_rows != expected_knowledge_rows &&
+            !empty_legacy_social_data) {
+            SetError(error, error_capacity,
+                     "Character knowledge rows are incomplete.");
+            return false;
+        }
+    }
+
     if (!Prepare(database,
                  "SELECT slot,situation_id,sponsor_character_id,"
-                 "affected_character_id FROM situation_character "
+                 "affected_character_id,witness_character_id "
+                 "FROM situation_character "
                  "ORDER BY slot;",
                  &statement, error, error_capacity)) return false;
     int32_t situation_rows = 0;
@@ -3556,6 +4020,10 @@ static bool ReadCharacters(sqlite3 *database, CcSim *sim,
             (CcId)sqlite3_column_int64(statement, 2);
         sim->situations[slot].affected_character_id =
             (CcId)sqlite3_column_int64(statement, 3);
+        if (sim->schema_version >= 19U) {
+            sim->situations[slot].witness_character_id =
+                (CcId)sqlite3_column_int64(statement, 4);
+        }
         situation_rows += 1;
     }
     sqlite3_finalize(statement);
@@ -3563,6 +4031,39 @@ static bool ReadCharacters(sqlite3 *database, CcSim *sim,
         SetError(error, error_capacity,
                  "Situation character rows are incomplete.");
         return false;
+    }
+    if (sim->schema_version >= 19U) {
+        if (!Prepare(database,
+                     "SELECT slot,from_character_id,to_character_id,affinity,"
+                     "trust,obligation,history,cause_event_id "
+                     "FROM character_relationship ORDER BY slot;",
+                     &statement, error, error_capacity)) return false;
+        int32_t relationship_rows = 0;
+        while (sqlite3_step(statement) == SQLITE_ROW) {
+            int32_t slot = sqlite3_column_int(statement, 0);
+            if (slot != relationship_rows || slot < 0 ||
+                slot >= CC_MAX_RELATIONSHIPS) {
+                SetError(error, error_capacity,
+                         "Relationship rows exceed save limits.");
+                sqlite3_finalize(statement);
+                return false;
+            }
+            CcRelationship *relationship = &sim->relationships[slot];
+            relationship->from_character_id =
+                (CcId)sqlite3_column_int64(statement, 1);
+            relationship->to_character_id =
+                (CcId)sqlite3_column_int64(statement, 2);
+            relationship->affinity = sqlite3_column_int(statement, 3);
+            relationship->trust = sqlite3_column_int(statement, 4);
+            relationship->obligation = sqlite3_column_int(statement, 5);
+            relationship->history =
+                (CcRelationshipHistory)sqlite3_column_int(statement, 6);
+            relationship->cause_event_id =
+                (CcId)sqlite3_column_int64(statement, 7);
+            relationship_rows += 1;
+        }
+        sqlite3_finalize(statement);
+        sim->relationship_count = relationship_rows;
     }
     return true;
 }
@@ -3602,8 +4103,7 @@ static bool ReadPlayerCommitment(sqlite3 *database, CcSim *sim,
         sim->player.accepted_situation_id =
             (CcId)sqlite3_column_int64(statement, 0);
     } else if (result == SQLITE_DONE) {
-        /* Saves written before this optional schema-v3 extension had no
-           commitment row and therefore load with no accepted charter. */
+
         sim->player.accepted_situation_id = 0U;
     } else {
         SetSqlError(error, error_capacity, database,
@@ -3926,9 +4426,21 @@ static void TunePhysicalReserveTargets(CcSim *sim)
     }
 }
 
+static bool HasQuestArchitecture(const CcSim *sim)
+{
+    if (sim->front_count > 0 || sim->quest_outcome_count > 0 ||
+        sim->pending_echo_count > 0) return true;
+    for (int32_t i = 0; i < sim->situation_count; ++i) {
+        const CcSituation *situation = &sim->situations[i];
+        if (situation->front_id != 0U ||
+            situation->objective.progress.limit > 0) return true;
+    }
+    return false;
+}
+
 static void FinishLegacyRuntimeUpgrade(CcSim *sim)
 {
-    CcSimUpgradeQuestArchitecture(sim);
+    if (!HasQuestArchitecture(sim)) CcSimUpgradeQuestArchitecture(sim);
     sim->schema_version = CC_SIM_SCHEMA_VERSION;
     sim->generator_version = CC_GENERATOR_VERSION;
 }
@@ -3944,8 +4456,47 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
         legacy_version != 11U && legacy_version != 12U &&
         legacy_version != 13U && legacy_version != 14U &&
         legacy_version != 15U && legacy_version != 16U &&
-        legacy_version != 17U && legacy_version != 18U) return true;
+        legacy_version != 17U && legacy_version != 18U &&
+        legacy_version != 19U && legacy_version != 20U) return true;
+    bool social_schema_19 = legacy_version == 19U &&
+        sim->relationship_count > 0;
+    bool quest_schema_19 = legacy_version == 19U &&
+        HasQuestArchitecture(sim);
+    if (social_schema_19) {
+        int32_t old_first = (int32_t)CC_EVENT_GOBLIN_TUNNEL_TRAVERSED + 1;
+        int32_t old_last = old_first + 3;
+        for (int32_t i = 0; i < CC_MAX_EVENTS; ++i) {
+            int32_t kind = (int32_t)sim->events[i].kind;
+            if (kind >= old_first && kind <= old_last) {
+                sim->events[i].kind = (CcEventKind)(
+                    (int32_t)CC_EVENT_RELATIONSHIP_HISTORY +
+                    kind - old_first);
+            }
+        }
+    }
+    if (quest_schema_19) {
+        int32_t old_first = (int32_t)CC_EVENT_GOBLIN_TUNNEL_TRAVERSED + 1;
+        int32_t old_last = old_first + 3;
+        for (int32_t i = 0; i < CC_MAX_EVENTS; ++i) {
+            int32_t kind = (int32_t)sim->events[i].kind;
+            if (kind >= old_first && kind <= old_last) {
+                sim->events[i].kind = (CcEventKind)(
+                    (int32_t)CC_EVENT_FRONT_CREATED + kind - old_first);
+            }
+        }
+    }
+    CcSimInitializeUnderroad(sim);
+    if (legacy_version == 20U) {
+        FinishLegacyRuntimeUpgrade(sim);
+        return true;
+    }
+    if (legacy_version == 19U) {
+        CcSimInitializeCharacters(sim);
+        FinishLegacyRuntimeUpgrade(sim);
+        return true;
+    }
     if (legacy_version == 18U) {
+        CcSimInitializeCharacters(sim);
         FinishLegacyRuntimeUpgrade(sim);
         return true;
     }
@@ -4231,6 +4782,7 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
               EnsureHorseStableColumns(database, error, error_capacity) &&
               EnsureJourneyColumns(database, error, error_capacity) &&
               EnsureLegendColumns(database, error, error_capacity) &&
+              EnsureSocialColumns(database, error, error_capacity) &&
               ReadMeta(database, sim, &expected_hash,
                        &journal_generation, &journal_cursor,
                        error, error_capacity) &&
@@ -4246,6 +4798,7 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
               ReadShipments(database, sim, error, error_capacity) &&
               ReadThreats(database, sim, error, error_capacity) &&
               ReadDungeons(database, sim, error, error_capacity) &&
+              ReadUnderroad(database, sim, error, error_capacity) &&
               ReadSituations(database, sim, error, error_capacity) &&
               ReadSituationCasts(database, sim, error, error_capacity) &&
               ReadCharacters(database, sim, error, error_capacity) &&

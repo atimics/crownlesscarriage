@@ -23,6 +23,20 @@ static CcSituation *FindSituation(CcSim *sim, CcSituationKind kind)
     return NULL;
 }
 
+static bool DiscoverMonsterOffer(CcSim *sim, CcId situation_id,
+                                 char *error, size_t error_capacity)
+{
+    CcCommand discover = {
+        .kind = CC_COMMAND_CHARACTER_RESPONSE,
+        .target_id = situation_id,
+        .amount = CC_CHARACTER_RESPONSE_LISTEN
+    };
+    if (!CcSimApply(sim, &discover, error, error_capacity) ||
+        !CcSimApply(sim, &discover, error, error_capacity)) return false;
+    discover.amount = CC_CHARACTER_RESPONSE_KEEP_CONFIDENCE;
+    return CcSimApply(sim, &discover, error, error_capacity);
+}
+
 static int TestClockIdempotency(void)
 {
     CcQuestObjective objective = {0};
@@ -131,8 +145,26 @@ static int TestResolutionEvidenceOutcomesAndEchoQueue(void)
     sim.carriage.location_id = sim.player.location_id;
     sim.player.cargo[CC_GOOD_TOOLS] = 2;
     sim.player.coins = 500;
+    CC_CHECK(DiscoverMonsterOffer(
+        &sim, monster_id, error, sizeof(error)));
+    CC_CHECK(CcSimSituationCanAccept(&sim, monster));
     accept.target_id = monster_id;
     CC_CHECK(CcSimApply(&sim, &accept, error, sizeof(error)));
+    CcDungeon *dungeon = &sim.dungeons[0];
+    for (int32_t room = 0; room < dungeon->room_count; ++room) {
+        if ((dungeon->rooms[room].flags &
+             CC_DUNGEON_ROOM_OBJECTIVE) != 0U) {
+            dungeon->rooms[room].state_flags |=
+                CC_DUNGEON_ROOM_DISCOVERED |
+                CC_DUNGEON_ROOM_OBJECTIVE_REACHED;
+        }
+    }
+    for (int32_t link = 0; link < dungeon->link_count; ++link) {
+        if (dungeon->links[link].kind == CC_DUNGEON_LINK_SHORTCUT) {
+            dungeon->links[link].flags |=
+                CC_DUNGEON_LINK_DISCOVERED | CC_DUNGEON_LINK_OPEN;
+        }
+    }
     CcCommand settle_depths = {
         .kind = CC_COMMAND_CHANGE_DUNGEON,
         .target_id = monster_target,
@@ -169,6 +201,8 @@ static int TestDangerFailure(void)
     sim.player.location_id = CcSimSituationOfferSettlementId(&sim, monster);
     sim.carriage.location_id = sim.player.location_id;
     monster->deadline_day = sim.current_day + 1;
+    CC_CHECK(DiscoverMonsterOffer(
+        &sim, monster_id, error, sizeof(error)));
     CcCommand accept = {
         .kind = CC_COMMAND_ACCEPT_SITUATION,
         .target_id = monster_id

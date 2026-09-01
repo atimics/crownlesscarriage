@@ -115,7 +115,7 @@ void CcNpcPaintFaceFeatures(const CcFaceRecipe *face,
     int32_t brow_y = 6;
     uint8_t brow_style = face->brow_style % 4U;
     if (expression == CC_NPC_PORTRAIT_FOCUSED) {
-        /* Downward inner ends create intent without changing the identity. */
+
         paint(context, eye_left - 1, brow_y, 2, 1, ink);
         paint(context, eye_left + 1, brow_y + 1, 1, 1, ink);
         paint(context, eye_right - 1, brow_y + 1, 1, 1, ink);

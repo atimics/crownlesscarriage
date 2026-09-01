@@ -30,6 +30,14 @@ function(cc_strict_warnings target)
     endif()
 endfunction()
 
+function(cc_large_sim_stack target)
+    if(MSVC)
+        target_link_options(${target} PRIVATE "/STACK:16777216")
+    elseif(MINGW)
+        target_link_options(${target} PRIVATE "LINKER:--stack,16777216")
+    endif()
+endfunction()
+
 function(cc_manifest_export_paths output manifest section)
     file(READ "${manifest}" manifest_json)
     string(JSON export_count LENGTH "${manifest_json}" "${section}")
@@ -111,12 +119,26 @@ if(NOT MSVC)
 endif()
 cc_strict_warnings(crownless_client_policy)
 
-find_package(SQLite3 REQUIRED)
+if(EMSCRIPTEN)
+    add_library(crownless_sqlite_web INTERFACE)
+    target_compile_options(crownless_sqlite_web INTERFACE
+        "--use-port=sqlite3"
+    )
+    target_link_options(crownless_sqlite_web INTERFACE
+        "--use-port=sqlite3"
+    )
+    set(CC_SQLITE_TARGET crownless_sqlite_web)
+else()
+    find_package(SQLite3 REQUIRED)
+    set(CC_SQLITE_TARGET SQLite::SQLite3)
+endif()
 add_library(crownless_persistence
     src/persistence/cc_save.c
 )
 target_include_directories(crownless_persistence PUBLIC src)
-target_link_libraries(crownless_persistence PUBLIC crownless_sim SQLite::SQLite3)
+target_link_libraries(crownless_persistence PUBLIC
+    crownless_sim ${CC_SQLITE_TARGET}
+)
 cc_strict_warnings(crownless_persistence)
 
 add_library(crownless_metagame
@@ -134,6 +156,11 @@ cc_strict_warnings(crownless_sim_runner)
 add_executable(crownless_metagame_playtest tools/metagame.c)
 target_link_libraries(crownless_metagame_playtest PRIVATE crownless_metagame)
 cc_strict_warnings(crownless_metagame_playtest)
+cc_large_sim_stack(crownless_metagame_playtest)
+
+add_executable(crownless_agent_courier tools/agent_courier.c)
+target_link_libraries(crownless_agent_courier PRIVATE crownless_metagame)
+cc_strict_warnings(crownless_agent_courier)
 
 if(CC_BUILD_BENCHMARKS)
     add_executable(crownless_benchmark tools/benchmark.c)
@@ -157,6 +184,10 @@ if(CC_BUILD_CLIENT)
     set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
     set(BUILD_GAMES OFF CACHE BOOL "" FORCE)
     set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+    if(EMSCRIPTEN)
+        set(PLATFORM Web CACHE STRING "" FORCE)
+        set(OPENGL_VERSION "ES 3.0" CACHE STRING "" FORCE)
+    endif()
     FetchContent_Declare(
         raylib
         GIT_REPOSITORY https://github.com/raysan5/raylib.git
@@ -169,6 +200,9 @@ if(CC_BUILD_CLIENT)
         get_target_property(CC_RAYLIB_IMPORTED raylib IMPORTED)
         if(NOT CC_RAYLIB_IMPORTED)
             target_compile_definitions(raylib PRIVATE SUPPORT_GPU_SKINNING=1)
+            if(EMSCRIPTEN)
+                set_property(TARGET raylib PROPERTY C_EXTENSIONS ON)
+            endif()
         endif()
     endif()
 
@@ -193,12 +227,58 @@ if(CC_BUILD_CLIENT)
         crownless_persistence crownless_locomotion
         crownless_creature_catalog crownless_local_place
         crownless_client_session crownless_client_policy crownless_story
-        raylib glfw
+        raylib
     )
+    if(NOT EMSCRIPTEN)
+        target_link_libraries(crownless_carriage PRIVATE glfw)
+    endif()
     target_compile_definitions(crownless_carriage PRIVATE
         CC_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}"
     )
-    if(APPLE)
+    if(EMSCRIPTEN)
+        set(CC_WEB_ASSET_DIR "${CMAKE_CURRENT_BINARY_DIR}/web-runtime")
+        add_custom_target(crownless_web_assets ALL
+            COMMAND ${CMAKE_COMMAND}
+                -DCC_WEB_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+                -DCC_WEB_OUTPUT_DIR=${CC_WEB_ASSET_DIR}
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/PrepareWebAssets.cmake
+            DEPENDS
+                ${CMAKE_CURRENT_SOURCE_DIR}/cmake/PrepareWebAssets.cmake
+                ${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html
+                ${CMAKE_CURRENT_SOURCE_DIR}/web/persistence.js
+            VERBATIM
+        )
+        add_dependencies(crownless_carriage crownless_web_assets)
+        set_target_properties(crownless_carriage PROPERTIES
+            OUTPUT_NAME index
+            SUFFIX ".html"
+            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/site"
+            LINK_DEPENDS
+                "${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html;${CMAKE_CURRENT_SOURCE_DIR}/web/persistence.js"
+        )
+        target_compile_definitions(crownless_carriage PRIVATE PLATFORM_WEB)
+        set_property(TARGET crownless_carriage PROPERTY C_EXTENSIONS ON)
+        target_link_options(crownless_carriage PRIVATE
+            "-sASYNCIFY=1"
+            "-sALLOW_MEMORY_GROWTH=1"
+            "-sINITIAL_MEMORY=33554432"
+            "-sSTACK_SIZE=4194304"
+            "-sFORCE_FILESYSTEM=1"
+            "-sMIN_WEBGL_VERSION=2"
+            "-sMAX_WEBGL_VERSION=2"
+            "--shell-file=${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html"
+            "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/persistence.js"
+            "SHELL:--preload-file ${CC_WEB_ASSET_DIR}/assets@/assets"
+        )
+        add_custom_command(TARGET crownless_carriage POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${CC_WEB_ASSET_DIR}/lazy-assets"
+                "${CMAKE_CURRENT_BINARY_DIR}/site/assets"
+            COMMAND ${CMAKE_COMMAND} -E touch
+                "${CMAKE_CURRENT_BINARY_DIR}/site/.nojekyll"
+            VERBATIM
+        )
+    elseif(APPLE)
         set(CC_HERO_ENGINE_ASSET
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/hero/crownless_hero_engine_rig_v01.glb"
         )
@@ -243,9 +323,6 @@ if(CC_BUILD_CLIENT)
         )
         set(CC_CARRIAGE_ASSET
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/glb/carriage_base_v01.glb"
-        )
-        set(CC_CARGO_RACK_ASSET
-            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/glb/module_cargo_rack_v01.glb"
         )
         set(CC_MARKET_ASSET
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/glb/environment_market_granary_v01.glb"
@@ -350,9 +427,6 @@ if(CC_BUILD_CLIENT)
                 "${CC_CARRIAGE_ASSET}"
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/glb/carriage_base_v01.glb"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${CC_CARGO_RACK_ASSET}"
-                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/glb/module_cargo_rack_v01.glb"
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${CC_MARKET_ASSET}"
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/glb/environment_market_granary_v01.glb"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -402,7 +476,7 @@ if(CC_BUILD_CLIENT)
                     "${CC_NPC_DYNAMIC_MODULE_MANIFEST}"
                     ${CC_CREATURE_ASSETS} "${CC_CREATURE_MANIFEST}"
                     "${CC_BRIDGE_CHECKPOINT_ASSET}" "${CC_CARRIAGE_ASSET}"
-                    "${CC_CARGO_RACK_ASSET}" "${CC_MARKET_ASSET}"
+                    "${CC_MARKET_ASSET}"
                     "${CC_MINE_ASSET}" "${CC_SHORTAGE_ASSET}"
                     "${CC_ENFORCEMENT_ASSET}" "${CC_RECOVERY_ASSET}"
                     "${CC_STYLE_GRADE_SHADER}"
@@ -452,6 +526,7 @@ if(BUILD_TESTING)
     add_executable(sim_tests tests/sim_tests.c)
     target_link_libraries(sim_tests PRIVATE crownless_sim)
     cc_strict_warnings(sim_tests)
+    cc_large_sim_stack(sim_tests)
     add_test(NAME deterministic_simulation COMMAND sim_tests)
 
     add_executable(story_tests tests/story_tests.c)
@@ -498,6 +573,11 @@ if(BUILD_TESTING)
     target_link_libraries(persistence_tests PRIVATE crownless_persistence)
     cc_strict_warnings(persistence_tests)
     add_test(NAME sqlite_round_trip COMMAND persistence_tests)
+
+    add_executable(underroad_tests tests/underroad_tests.c)
+    target_link_libraries(underroad_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(underroad_tests)
+    add_test(NAME persistent_underroad_expeditions COMMAND underroad_tests)
 
     add_executable(scenario_tests tests/scenario_tests.c)
     target_link_libraries(scenario_tests PRIVATE crownless_sim)

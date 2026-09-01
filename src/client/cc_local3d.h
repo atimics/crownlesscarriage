@@ -18,8 +18,7 @@
 #define CC_LOCAL_TRAVELLER_COUNT 4
 #define CC_ATHLETIC_MAX_LEVEL 5
 
-/* Exterior coordinates are metres. These landmarks are shared by input,
-   collision, rendering, and tests so the continuous world cannot drift apart. */
+
 #define CC_LOCAL_WORLD_WIDTH 96.0f
 #define CC_LOCAL_WORLD_DEPTH 72.0f
 #define CC_LOCAL_NAVIGATION_POINT_CAPACITY 48
@@ -35,8 +34,6 @@
 #define CC_LOCAL_NOTICE_Z 27.80f
 #define CC_LOCAL_INTRO_START_X 45.20f
 #define CC_LOCAL_INTRO_START_Z 31.80f
-#define CC_LOCAL_INTRO_JORY_X 50.50f
-#define CC_LOCAL_INTRO_JORY_Z 28.80f
 #define CC_LOCAL_DUNGEON_X 29.0f
 #define CC_LOCAL_DUNGEON_Z 51.80f
 #define CC_LOCAL_DRAGON_CAVE_X 19.0f
@@ -67,7 +64,7 @@ typedef enum CcTraversalMode {
 } CcTraversalMode;
 
 typedef enum CcLocalOpeningStep {
-    CC_LOCAL_OPENING_FIND_JORY = 0,
+    CC_LOCAL_OPENING_LEGACY = 0,
     CC_LOCAL_OPENING_MEET_MARA = 1,
     CC_LOCAL_OPENING_COMPLETE = 2
 } CcLocalOpeningStep;
@@ -82,6 +79,21 @@ typedef enum CcLocalSceneKind {
     CC_LOCAL_SCENE_MARKET,
     CC_LOCAL_SCENE_ROAD
 } CcLocalSceneKind;
+
+typedef struct CcLocalMovementPreview {
+    Vector2 screen_point;
+    Vector3 origin;
+    Vector3 requested_point;
+    Vector3 resolved_point;
+    Vector3 path[CC_LOCAL_NAVIGATION_POINT_CAPACITY];
+    int32_t path_count;
+    CcLocalSceneKind scene;
+    CcLocalWorldTargetKind world_target;
+    bool valid;
+    bool accepted;
+    bool adjusted;
+    bool navigation;
+} CcLocalMovementPreview;
 
 typedef enum CcLocalSiteKind {
     CC_LOCAL_SITE_NONE = 0,
@@ -98,9 +110,7 @@ typedef enum CcLocalConvoyPhase {
     CC_LOCAL_CONVOY_ARRIVING
 } CcLocalConvoyPhase;
 
-/* The strategic simulation owns the durable route and progress. This small
-   presentation state keeps the same carriage under the camera while it
-   leaves a stable, crosses a gate, travels, and enters the next town. */
+
 typedef struct CcLocalConvoyState {
     CcLocalConvoyPhase phase;
     Vector3 town_position;
@@ -120,9 +130,7 @@ typedef enum CcLocalAtmospherePreset {
     CC_LOCAL_ATMOSPHERE_COUNT
 } CcLocalAtmospherePreset;
 
-/* A day is one authored lighting beat, not a continuously rotating clock.
-   Clear weather remains most common; travel and explicit day advances are
-   the moments when the world may move to another mood. */
+
 static inline CcLocalAtmospherePreset CcLocalAtmosphereForDay(int32_t day)
 {
     int32_t beat = day % 8;
@@ -387,14 +395,10 @@ typedef struct CcLocalRendererStats {
     int32_t creature_skinned_meshes;
 } CcLocalRendererStats;
 
-/* Keep the player skin comfortably below raylib's CPU skinning/upload cliff.
-   The authored Blender asset may contain many editable pieces, but the runtime
-   export must consolidate them into no more than this many material
-   primitives. */
+
 #define CC_LOCAL_HERO_RUNTIME_MESH_BUDGET 32
 
-/* The exterior land is deterministic for a world seed. Rendering, movement,
-   picking, roads, and building foundations all use these same samples. */
+
 void CcLocalTerrainSetSeed(uint32_t seed);
 void CcLocalBindPlace(const CcSim *sim);
 float CcLocalTerrainHeightAt(float x, float z);
@@ -410,6 +414,13 @@ bool CcLocalAgentSetStreetTarget(CcLocalAgent *agent, Vector3 target);
 bool CcLocalAgentPickTarget(CcLocalAgent *agent, Vector2 screen_point,
                             RenderTexture2D target, Rectangle destination,
                             bool market_interior);
+bool CcLocalAgentProbeTarget(
+    const CcLocalAgent *agent, Vector2 screen_point, RenderTexture2D target,
+    Rectangle destination, bool market_interior,
+    CcLocalMovementPreview *preview);
+bool CcLocalAgentApplyMovementPreview(
+    CcLocalAgent *agent, const CcLocalMovementPreview *preview,
+    bool market_interior);
 CcLocalWorldTargetKind CcLocalAgentPickWorldTarget(
     const CcLocalAgent *agent, Vector2 screen_point, RenderTexture2D target,
     Rectangle destination, bool market_interior);
@@ -510,6 +521,8 @@ void CcLocalRendererBeginFrame(float delta_time);
 void CcLocalRendererResetPerformanceMetrics(void);
 CcLocalRendererStats CcLocalRendererGetStats(void);
 void CcLocalRendererSetDiagnosticOverlay(bool enabled);
+void CcLocalRendererSetMovementPreview(
+    const CcLocalMovementPreview *preview);
 void CcLocalRendererSetAtmosphere(CcLocalAtmospherePreset preset,
                                   float transition_seconds);
 void CcLocalRendererUpdateAtmosphere(float delta_time);
@@ -524,6 +537,7 @@ void CcLocalDrawNpcReview3D(int32_t view, float clock,
                             RenderTexture2D target, Rectangle destination);
 void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                          const CcLocalCourse *course,
+                         bool conversation,
                          const CcLocalConvoyState *convoy, float clock,
                          RenderTexture2D target, Rectangle destination);
 void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,

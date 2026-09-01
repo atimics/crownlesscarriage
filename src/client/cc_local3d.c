@@ -65,8 +65,7 @@ static const float COMBAT_PLAYER_STANDOFF = 1.30f;
 static const float COMBAT_NPC_STANDOFF = 1.30f;
 static const float COMBAT_PLAYER_ENGAGEMENT_RADIUS = 7.50f;
 static const float ROAD_BARRICADE_X = 51.85f;
-/* Walkable tops from environment_bridge_checkpoint_v01. These must stay in
-   lockstep with the exported deck and its two short causeways. */
+
 static const Rectangle ROAD_BRIDGE_DECK_SUPPORT = {
     48.05f, 38.725f, 7.60f, 2.55f
 };
@@ -77,11 +76,12 @@ static const Rectangle ROAD_BRIDGE_EAST_CAUSEWAY_SUPPORT = {
     55.59f, 38.81f, 0.96f, 2.38f
 };
 static const float CARRIAGE_ASSET_SCALE = 0.92f;
-/* The exported carriage's hitch points along local +X. The street bay runs
-   +Z, while the encounter road already runs +X. */
+
 static const float CARRIAGE_ASSET_STREET_YAW_DEGREES = -90.0f;
 static bool draw_hero_rig_debug = false;
 static CcLocalOpeningStep active_opening_step = CC_LOCAL_OPENING_COMPLETE;
+static CcLocalMovementPreview renderer_movement_preview = {0};
+static CcLocalAgent movement_probe_agent_scratch = {0};
 
 typedef enum BridgeCheckpointStatus {
     BRIDGE_CHECKPOINT_UNKNOWN,
@@ -133,13 +133,10 @@ typedef struct WorldStructure {
     float height;
     CcLocalCompoundKind kind;
 } WorldStructure;
-/* The carriage parks in a side bay inside the coach yard. Its east edge
-   touches the public spine without occupying the through lane. */
+
 static const Rectangle CARRIAGE_FOOTPRINT = {35.80f, 48.50f, 3.20f, 5.40f};
 static const Rectangle DUNGEON_FOOTPRINT = {27.40f, 49.70f, 3.20f, 1.60f};
-/* Set-dressing with a grounded footprint participates in the same collision
-   contract as authored buildings. Route markers remain at the edges of the
-   walkable composition instead of becoming ghost geometry. */
+
 static const Rectangle ROOM_ART_OBSTACLES[] = {
     {8.48f, 10.38f, 0.36f, 0.36f},
     {14.16f, 10.38f, 0.36f, 0.36f},
@@ -149,7 +146,7 @@ static const Rectangle ROOM_ART_OBSTACLES[] = {
     {35.08f, 55.10f, 3.34f, 0.50f},
     {63.18f, 50.06f, 1.92f, 1.92f},
     {80.22f, 45.82f, 2.36f, 2.36f},
-    /* Grounded base of the mine ore station drawn at (26.45, 54.35). */
+
     {25.725f, 53.825f, 1.45f, 1.05f},
 };
 static const Rectangle COURSE_POOL = {10.00f, 9.05f, 2.55f, 1.38f};
@@ -160,12 +157,12 @@ static const float COURSE_WATER_SURFACE = 0.82f;
 static const Rectangle MARKET_COUNTER_FOOTPRINT = {6.05f, 1.84f, 2.10f, 0.72f};
 static const Rectangle MARKET_SHELF_FOOTPRINT = {1.10f, 1.175f, 0.72f, 3.45f};
 static const Rectangle ROAD_OBSTACLES[] = {
-    /* Authored carriage body and its hitched horse team. */
+
     {36.20f, 38.68f, 4.30f, 2.64f},
     {40.48f, 38.48f, 3.62f, 3.04f},
     {33.70f, 42.08f, 0.80f, 0.76f},
     {34.58f, 42.10f, 0.88f, 0.68f},
-    /* Authored bridge checkpoint: parapets leave a 2.5 m travel lane. */
+
     {47.94f, 38.45f, 7.82f, 0.38f},
     {47.94f, 41.17f, 7.82f, 0.38f},
     {49.54f, 37.20f, 1.72f, 1.36f},
@@ -174,7 +171,7 @@ static const Rectangle ROAD_OBSTACLES[] = {
     {52.36f, 40.86f, 0.28f, 0.28f}
 };
 static const Rectangle ROAD_FALLBACK_OBSTACLES[] = {
-    /* Procedural carriage fallback uses the same physical convoy envelope. */
+
     {36.20f, 38.68f, 4.30f, 2.64f},
     {40.48f, 38.48f, 3.62f, 3.04f},
     {33.70f, 42.08f, 0.80f, 0.76f},
@@ -190,10 +187,7 @@ static const Vector2 STREET_PEOPLE[] = {
 };
 static const Vector2 MARKET_PEOPLE[] = {{6.55f, 1.60f}};
 
-/* Outdoor play is staged as a sequence of composed rooms. Trigger points live
-   on reachable paths; camera targets may instead favor a landmark such as the
-   market hall or keep. Keeping those roles separate prevents a composition
-   point inside architecture from becoming an unreachable shot transition. */
+
 typedef enum ArtLightProfileId {
     ART_LIGHT_CLEAR_MARKET = 0,
     ART_LIGHT_SHORTAGE_OVERCAST,
@@ -244,6 +238,10 @@ typedef struct ArtAtmosphereDefinition {
     float wetness;
     float omen;
     float practical_glow;
+    Vector3 character_rim_tint;
+    float character_rim_strength;
+    float horizon_warmth;
+    float moonlight;
 } ArtAtmosphereDefinition;
 
 typedef struct ArtAtmosphereState {
@@ -281,44 +279,42 @@ static const ArtLightProfileDefinition ART_LIGHT_PROFILES[] = {
     },
 };
 
-/* These are complete art recipes rather than physical sky simulations.
-   Their job is to keep gameplay shapes readable while giving travel and day
-   changes a strong emotional beat. */
+
 static const ArtAtmosphereDefinition ART_ATMOSPHERES[] = {
     [CC_LOCAL_ATMOSPHERE_CLEAR_DAY] = {
         {-0.42f, 0.84f, 0.34f}, {1.00f, 1.00f, 1.00f},
         {1.00f, 1.00f, 1.00f}, {1.00f, 1.00f, 1.00f},
         {47, 44, 61, 255}, 0.10f, 0.10f, 1.00f, 1.00f, 1.00f,
         0.000f, 1.00f, 1.00f, 1.00f, 0.00f, 0.00f, 0.00f, 0.00f,
-        0.05f,
+        0.05f, {0.30f, 0.52f, 0.50f}, 0.76f, 0.16f, 0.00f,
     },
     [CC_LOCAL_ATMOSPHERE_RAINY_OVERCAST] = {
         {-0.20f, 0.92f, 0.22f}, {0.78f, 0.86f, 0.98f},
         {0.90f, 0.97f, 1.07f}, {0.96f, 0.90f, 1.10f},
         {48, 52, 63, 255}, 0.70f, 0.74f, 0.70f, 1.14f, 0.88f,
         -0.035f, 1.34f, 0.38f, 0.84f, 0.82f, 0.36f, 0.82f, 0.00f,
-        0.18f,
+        0.18f, {0.36f, 0.55f, 0.68f}, 0.88f, 0.00f, 0.12f,
     },
     [CC_LOCAL_ATMOSPHERE_AMBER_DUSK] = {
         {-0.70f, 0.36f, 0.30f}, {1.24f, 0.72f, 0.46f},
         {0.84f, 0.78f, 0.92f}, {1.05f, 0.82f, 1.12f},
         {53, 35, 63, 255}, 0.82f, 0.48f, 0.82f, 1.08f, 1.08f,
         -0.020f, 1.36f, 1.58f, 1.05f, 0.00f, 0.10f, 0.00f, 0.00f,
-        0.52f,
+        0.52f, {0.94f, 0.54f, 0.28f}, 1.04f, 0.90f, 0.00f,
     },
     [CC_LOCAL_ATMOSPHERE_MOONLIT_NIGHT] = {
         {-0.30f, 0.48f, -0.82f}, {0.82f, 0.90f, 1.10f},
         {0.90f, 0.94f, 1.06f}, {0.92f, 0.92f, 1.07f},
         {47, 44, 61, 255}, 0.76f, 0.50f, 0.90f, 1.06f, 1.18f,
         -0.015f, 1.20f, 0.78f, 0.92f, 0.00f, 0.12f, 0.04f, 0.00f,
-        0.88f,
+        0.88f, {0.40f, 0.54f, 0.90f}, 1.12f, 0.00f, 0.82f,
     },
     [CC_LOCAL_ATMOSPHERE_DRAGON_OMEN] = {
         {-0.58f, 0.42f, 0.18f}, {0.96f, 0.75f, 0.76f},
         {0.82f, 0.84f, 0.94f}, {0.94f, 0.84f, 1.08f},
         {48, 44, 57, 255}, 0.74f, 0.58f, 0.82f, 1.10f, 1.20f,
         -0.012f, 1.26f, 1.00f, 0.86f, 0.30f, 0.54f, 0.36f, 1.00f,
-        0.46f,
+        0.46f, {0.82f, 0.42f, 0.36f}, 1.02f, 0.22f, 0.18f,
     },
 };
 
@@ -400,6 +396,15 @@ static ArtAtmosphereDefinition ArtAtmosphereMix(
         .omen = ArtAtmosphereMixFloat(from.omen, to.omen, amount),
         .practical_glow = ArtAtmosphereMixFloat(
             from.practical_glow, to.practical_glow, amount),
+        .character_rim_tint = ArtAtmosphereMixVector(
+            from.character_rim_tint, to.character_rim_tint, amount),
+        .character_rim_strength = ArtAtmosphereMixFloat(
+            from.character_rim_strength, to.character_rim_strength,
+            amount),
+        .horizon_warmth = ArtAtmosphereMixFloat(
+            from.horizon_warmth, to.horizon_warmth, amount),
+        .moonlight = ArtAtmosphereMixFloat(
+            from.moonlight, to.moonlight, amount),
     };
 }
 
@@ -591,9 +596,7 @@ typedef struct StreetBoundaryExit {
     const char *name;
 } StreetBoundaryExit;
 
-/* Camera rooms are connected by physical corridors. Via points keep travel
-   on authored roads and through the keep gate instead of asking the local
-   collision solver to invent a route around whole buildings. */
+
 static const StreetTraversalLink STREET_TRAVERSAL_LINKS[] = {
     {0, 3, {{9.2f, 7.5f}, {9.2f, 11.6f},
             {42.0f, 11.6f}, {42.0f, 25.0f}}, 4},
@@ -665,6 +668,15 @@ typedef struct CombatCameraRig {
     bool road_encounter;
 } CombatCameraRig;
 
+typedef struct ConversationCameraRig {
+    Vector3 displayed_target;
+    Vector3 displayed_offset;
+    float displayed_fovy;
+    float focus_weight;
+    float last_clock;
+    bool initialized;
+} ConversationCameraRig;
+
 typedef struct PresentedCameraState {
     Camera3D camera;
     Vector3 hero_position;
@@ -684,9 +696,7 @@ typedef struct WorldTreePlacement {
     TreeFamily family;
 } WorldTreePlacement;
 
-/* Camera visibility and scenery drawing share this one authored tree list.
-   Keeping the roots in one place prevents a clear shot from drifting out of
-   sync with what the renderer actually puts in front of the cast. */
+
 static const WorldTreePlacement WORLD_TREES[] = {
     {{2.5f, 58.0f}, TREE_FAMILY_ALDER},
     {{6.0f, 62.0f}, TREE_FAMILY_ALDER},
@@ -723,6 +733,7 @@ static const WorldTreePlacement WORLD_TREES[] = {
 static FixedCameraRig street_camera_rig = {0};
 static FixedCameraRig road_camera_rig = {0};
 static CombatCameraRig combat_camera_rig = {0};
+static ConversationCameraRig conversation_camera_rig = {0};
 static PresentedCameraState presented_camera[3] = {0};
 
 static void RememberPresentedCamera(CcLocalSceneKind scene, Camera3D camera,
@@ -788,9 +799,7 @@ static const NavPlatform STREET_PLATFORMS[] = {
     {13.10f, 8.65f, 0.95f, 0.95f, 1.60f, 3}
 };
 
-/* Market stock is rendered as 0.62 m crates. Give the same boxes real top
-   surfaces so a click climbs onto them instead of allowing the body to phase
-   through purely visual inventory. */
+
 static const NavPlatform STREET_CRATE_PLATFORMS[] = {
     {44.09f, 26.44f, 0.62f, 0.62f, 0.60f, 1},
     {44.81f, 26.44f, 0.62f, 0.62f, 0.60f, 1},
@@ -822,10 +831,7 @@ static const NavPlatform *StreetPhysicsPlatformAt(int32_t index)
     return &STREET_CRATE_PLATFORMS[index];
 }
 
-/* The exterior is one deterministic continuous land surface. Society only
-   grades narrow roads and local foundations into it; it does not replace the
-   country with a settlement-sized plane. Half-metre samples keep collision,
-   foot placement, picking, and rendering on the exact same height field. */
+
 #define CC_TERRAIN_CELL_SIZE 0.50f
 #define CC_TERRAIN_COLUMNS 193
 #define CC_TERRAIN_ROWS 145
@@ -851,9 +857,7 @@ static const TerrainRoad TERRAIN_ROADS[] = {
     {{62.80f, 27.00f, 2.60f, 11.50f}, false},
     {{63.80f, 32.40f, 17.50f, 3.20f}, true},
     {{39.50f, 53.50f, 16.20f, 3.00f}, true},
-    /* A broad but unpaved ingress keeps the eastern raid route traversable.
-       TerrainPointOnRoad deliberately leaves this final record grass-colored
-       so it reads as open rolling land instead of another civic plaza. */
+
     {{51.00f, 37.00f, 45.00f, 5.60f}, true},
 };
 
@@ -1016,10 +1020,7 @@ static float TerrainSmooth01(float amount)
     return amount * amount * (3.0f - 2.0f * amount);
 }
 
-/* Roads need a short eased join at each end, but ordinary smoothstep makes
-   the middle of a ramp fifty per cent steeper than its average grade. This
-   profile spends most of its length at an almost constant cart-friendly
-   slope while still meeting each landing without a sharp crease. */
+
 static float TerrainGentleRamp01(float amount)
 {
     const float ease = 0.14f;
@@ -1455,10 +1456,7 @@ static void TerrainGenerate(void)
     }
     TerrainGradeActivePlaceRoads();
     TerrainGradeActiveCarriageLanes();
-    /* The east road is the opening composition for every town. Give it an
-       authored, readable grade through the large landform rather than
-       letting a smoothed terrain road sag into a quarry or gorge. Farming
-       and fortress towns use the same strip as a level bridge deck. */
+
     float arrival_west_height = TerrainSampleGrid(
         street_terrain_height, 83.5f, 34.0f);
     float arrival_east_height = TerrainSampleGrid(
@@ -1478,8 +1476,7 @@ static void TerrainGenerate(void)
                                  arrival_east_height);
     }
 
-    /* Foundations are small human changes to the generated land. Each pad
-       takes its elevation from the land and nearby road before construction. */
+
     for (int32_t i = 0; i < ActiveWorldBuildingCount(); ++i) {
         Rectangle footprint = ActiveWorldBuildingAt(i).footprint;
         TerrainGradePad(footprint, TerrainRectangleAverage(footprint), 1.45f);
@@ -1493,10 +1490,7 @@ static void TerrainGenerate(void)
     float keep_approach_height = TerrainSampleGrid(
         street_terrain_height, 78.5f, 54.0f);
     float natural_keep_elevation = TerrainRectangleAverage(keep_pad) + 0.45f;
-    /* A keep can crown the regional landform without putting its public gate
-       on top of the whole mountain. The wider hill and ravine still carry
-       the skyline; the constructed court rises only as far as a long cart
-       approach can honestly climb. */
+
     float keep_elevation = fminf(
         natural_keep_elevation,
         keep_approach_height + TerrainKeepRise());
@@ -1512,14 +1506,11 @@ static void TerrainGenerate(void)
     TerrainGradePad(DUNGEON_FOOTPRINT,
                     TerrainRectangleAverage(DUNGEON_FOOTPRINT), 1.35f);
 
-    /* The Wayfarer yard is deliberately engineered level ground. Keeping
-       this one training pad flat also preserves its fixed waterline. */
+
     TerrainGradePad((Rectangle){1.00f, 0.00f, 14.60f, 11.10f},
                     0.0f, 2.20f);
 
-    /* Two worn approaches connect the training yard to the public road.
-       Their long, gentle grade keeps guards and players on a readable path
-       even when the surrounding town occupies a strong landform. */
+
     float west_course_road_height = TerrainSampleGrid(
         street_terrain_height, 8.35f, 26.50f);
     TerrainGradeNorthSouthRamp((Rectangle){7.45f, 10.50f, 1.80f, 16.25f},
@@ -1529,9 +1520,7 @@ static void TerrainGenerate(void)
     TerrainGradeNorthSouthRamp((Rectangle){14.65f, 10.50f, 3.50f, 16.60f},
                                0.0f, east_course_road_height);
 
-    /* Re-establish the public ways after all foundation banks are cut. Pads
-       stay level inside actual structures, while streets and open squares
-       retain a continuous walking grade around them. */
+
     for (int32_t road = 0;
          road < (int32_t)(sizeof(TERRAIN_ROADS) /
                           sizeof(TERRAIN_ROADS[0])); ++road) {
@@ -1553,12 +1542,9 @@ static void TerrainGenerate(void)
     TerrainGradeNorthSouthRamp((Rectangle){39.40f, 11.60f, 4.20f, 13.40f},
                                commons_south_height,
                                commons_north_height);
-    /* Restore the compound terrace after the street grading. Only the
-       authored gate ramp below should climb onto this raised civic stage. */
+
     TerrainGradePad(keep_pad, keep_elevation, 4.00f);
-    /* Preserve the lower road that circles the terrace before it reaches the
-       gate. This route is how a player approaches a dramatic raised keep
-       without being asked to walk straight up its retaining bank. */
+
     TerrainGradeRoad(&TERRAIN_ROADS[
         (int32_t)(sizeof(TERRAIN_ROADS) / sizeof(TERRAIN_ROADS[0])) - 1]);
     float west_gate_height = TerrainSampleGrid(street_terrain_height,
@@ -1572,9 +1558,7 @@ static void TerrainGenerate(void)
                                west_gate_north_height);
     float gate_causeway_height = fmaxf(
         west_gate_north_height, keep_elevation - 0.90f);
-    /* Keep both raid lanes on the authored causeway. The upper lane sits at
-       z=40.4, so the graded deck must extend past that line rather than put
-       an NPC exactly on the retaining-bank edge. */
+
     TerrainGradeEastWestRamp((Rectangle){63.80f, 36.20f, 15.20f, 6.00f},
                              west_gate_north_height,
                              gate_causeway_height);
@@ -1605,9 +1589,7 @@ static void TerrainGenerate(void)
     TerrainGradePad((Rectangle){39.00f, 27.00f, 15.00f, 6.00f},
                     plaza_elevation, 2.50f);
     TerrainGradeActiveCarriageCourts();
-    /* Public road grading crosses the two yard approaches near z=11. Recut
-       their gentle ramps last so a high regional road never leaves a single
-       half-metre cliff at the training-yard threshold. */
+
     TerrainGradeNorthSouthRamp((Rectangle){7.45f, 10.50f, 1.80f, 16.25f},
                                0.0f, west_course_road_height);
     TerrainGradeNorthSouthRamp((Rectangle){14.65f, 10.50f, 3.50f, 16.60f},
@@ -1841,9 +1823,7 @@ static bool StaticBodyBlocked(CcLocalSceneKind scene, float x, float z,
     }
     for (int32_t i = 0; i < ActiveWorldBuildingCount(); ++i) {
         WorldBuilding building = ActiveWorldBuildingAt(i);
-        /* Foreground reveal is only a drawing rule. A house remains solid in
-           every camera shot, including while its roof and facade are faded
-           so the player can see the character behind it. */
+
         if (CircleTouchesFootprint(x, z, radius,
                                    building.footprint)) return true;
     }
@@ -1882,6 +1862,8 @@ static bool StaticBodyBlocked(CcLocalSceneKind scene, float x, float z,
 #define STREET_PATH_COLUMNS 192
 #define STREET_PATH_ROWS 144
 #define STREET_PATH_NODE_COUNT (STREET_PATH_COLUMNS * STREET_PATH_ROWS)
+#define STREET_CLICK_MAX_PROJECTION 1.10f
+#define STREET_SCRIPTED_MAX_PROJECTION 6.25f
 
 typedef struct StreetPathSearch {
     float distance[STREET_PATH_NODE_COUNT];
@@ -1902,9 +1884,7 @@ static bool StreetPathBodyBlocked(float x, float z, float radius)
         if (platform == NULL) continue;
         Rectangle footprint = {platform->x, platform->z,
                                platform->width, platform->depth};
-        /* Movement allows exact tangency at a platform edge. The path
-           sampler passes a small general safety margin, so remove it here
-           to avoid declaring authored edge triggers unreachable. */
+
         float platform_radius = fmaxf(0.0f, radius - 0.026f);
         if (CircleTouchesFootprint(x, z, platform_radius, footprint)) {
             return true;
@@ -1942,9 +1922,7 @@ static bool StreetSegmentClear(Vector2 from, Vector2 to, float radius)
         float step_z = sample_z - previous.y;
         float step_length = sqrtf(step_x * step_x + step_z * step_z);
         float height_change = sample_height - previous_height;
-        /* The path graph must obey the same grade that the physical body can
-           actually walk. Otherwise A* returns a straight line across a steep
-           foundation skirt and the character correctly stalls at its foot. */
+
         if (height_change > step_length * 1.25f + 0.025f ||
             height_change < -step_length * 1.65f - 0.060f ||
             sample_normal.y < 0.60f) {
@@ -2080,8 +2058,11 @@ static int32_t StreetPathHeapPop(StreetPathSearch *search, int32_t goal)
 }
 
 static int32_t FindStreetPath(Vector2 from, Vector2 to, float radius,
-                              Vector2 *points, int32_t capacity)
+                              Vector2 *points, int32_t capacity,
+                              float maximum_projection,
+                              bool *target_projected_out)
 {
+    if (target_projected_out != NULL) *target_projected_out = false;
     if (points == NULL || capacity <= 0) return 0;
     bool target_blocked = StreetPathBodyBlocked(to.x, to.y, radius);
     bool target_projected = target_blocked;
@@ -2093,6 +2074,15 @@ static int32_t FindStreetPath(Vector2 from, Vector2 to, float radius,
     int32_t start = StreetPathNearestNode(from, radius, true);
     int32_t goal = StreetPathNearestNode(to, radius, !target_blocked);
     if (start < 0 || goal < 0) return 0;
+    if (target_blocked) {
+        Vector2 projected = StreetPathNodePoint(goal);
+        float projected_x = projected.x - to.x;
+        float projected_z = projected.y - to.y;
+        if (projected_x * projected_x + projected_z * projected_z >
+            maximum_projection * maximum_projection) {
+            return 0;
+        }
+    }
     StreetPathSearch *search = &street_path_search;
     search->heap_count = 0;
     for (int32_t node = 0; node < STREET_PATH_NODE_COUNT; ++node) {
@@ -2160,12 +2150,9 @@ static int32_t FindStreetPath(Vector2 from, Vector2 to, float radius,
         }
     }
     if (start != goal && search->parent[goal] < 0) {
-        /* Detour-style partial path: if the exact goal island is not
-           connected, finish at the reachable node closest to the click.
-           Limit the projection so a click never sends the hero somewhere
-           unrelated on the far side of a building. */
+
         int32_t closest = -1;
-        float closest_distance = 2.75f * 2.75f;
+        float closest_distance = maximum_projection * maximum_projection;
         for (int32_t node = 0; node < STREET_PATH_NODE_COUNT; ++node) {
             if (!search->closed[node]) continue;
             Vector2 candidate = StreetPathNodePoint(node);
@@ -2210,6 +2197,9 @@ static int32_t FindStreetPath(Vector2 from, Vector2 to, float radius,
     }
     Vector2 resolved_target = target_projected ?
         StreetPathNodePoint(goal) : to;
+    if (target_projected_out != NULL) {
+        *target_projected_out = target_projected;
+    }
     while (cursor < ordered_count - 1) {
         if (StreetSegmentClear(current_point, resolved_target, radius)) {
             if (point_count >= capacity) return 0;
@@ -2576,10 +2566,7 @@ static int32_t LocalAgentPointSpace(const CcLocalAgent *agent,
                                     CcRobotCollisionPoint *points)
 {
     if (agent == NULL || points == NULL) return 0;
-    /* The humanoid already has a tuned standing capsule, swept ragdoll
-       particles, and separate weapon contacts. The point-space proxy belongs
-       to the generalized multi-leg rigs whose reach extends well beyond that
-       root capsule. */
+
     if (agent->morphology == CC_MORPHOLOGY_BIPED) return 0;
     return CcRobotLimbPointSpace(
         &agent->limb_rig, 0.085f, points, CC_ROBOT_POINT_CAPACITY);
@@ -2674,18 +2661,11 @@ static bool ResolveLocalAgentCapsuleMove(CcLocalSceneKind scene,
                 candidate.y >= passable_support_height - 0.001f &&
                 sample_normal.y > 0.90f;
             if (crossing_passable_support) {
-                /* During a mantle the ledge box is passable once contacts
-                   support the body. Its top is still a valid floor query,
-                   but snapping the root to that floor would skip the swept
-                   arc. Let the authored root reach the support height before
-                   normal grounding resumes. */
+
                 candidate.y = result.y;
             }
             Vector3 correction = Vector3Subtract(candidate, result);
-            /* Traversal deliberately releases the platform's side wall while
-               the authored root crosses the lip. Do not turn the resulting
-               ground-height query into an early vertical teleport: the
-               authored root will reach the support height at montage end. */
+
             if (below_passable_support && sample_normal.y > 0.50f &&
                 correction.y > 0.0f && fabsf(correction.x) <= 0.00001f &&
                 fabsf(correction.z) <= 0.00001f) {
@@ -3766,9 +3746,7 @@ CcCombatOutcome CcLocalCombatResolveStrike(CcLocalAgent *attacker,
     collision_distance = fminf(collision_distance,
         CombatSegmentDistanceSquared(previous_tip, current_tip,
                                      body_bottom, body_top));
-    /* The broad reach check is the gameplay contract; this swept capsule
-       accounts for torso breadth and the small visual offsets introduced by
-       bent-arm IK so presentation changes cannot silently shorten attacks. */
+
     const float combined_radius = 0.62f;
     if (collision_distance > combined_radius * combined_radius) {
         return CC_COMBAT_OUTCOME_MISS;
@@ -4022,8 +4000,7 @@ void CcLocalCourseInit(CcLocalCourse *course)
         &course->situation_witness, UINT32_C(0x57495400),
         CC_NPC_ROLE_LABORER, (Color){173, 112, 76, 255});
     course->situation_witness_active = false;
-    /* Let a first-time player read the street, move, and discover the
-       carriage before the simulation asks them to parse a full melee. */
+
     course->alarm_countdown = 24.0f;
     course->raider_attack_cooldown[0] = 0.52f;
     course->raider_attack_cooldown[1] = 0.78f;
@@ -4397,7 +4374,9 @@ static void CourseConfigureSituationWitness(CcLocalCourse *course,
             situation->kind == CC_SITUATION_MONSTER_EXPEDITION ?
                 (Color){128, 82, 66, 255} :
                 (Color){173, 112, 76, 255};
-        CcNpcRole witness_role = character->role == CC_CHARACTER_SCOUT ?
+        CcNpcRole witness_role = character->role == CC_CHARACTER_OFFICIAL ?
+                CC_NPC_ROLE_MERCHANT :
+            character->role == CC_CHARACTER_SCOUT ?
                 CC_NPC_ROLE_SCOUT :
             character->role == CC_CHARACTER_TRAVELLER ||
             character->role == CC_CHARACTER_COURIER ?
@@ -4579,8 +4558,7 @@ static bool CourseGuardIngressWaypoint(const CcLocalCourse *course,
         if (stage == 0) {
             *waypoint = (Vector3){44.75f, 0.0f, lane_z};
         } else if (stage == 1) {
-            /* Leave the player a clean center lane instead of routing the
-               middle guard through the hero's exact starting point. */
+
             *waypoint = (Vector3){45.35f, 0.0f, lane_z};
         } else if (stage == 2) {
             *waypoint = (Vector3){47.70f, 0.0f, lane_z};
@@ -4612,9 +4590,7 @@ static bool CourseAgentReachedWaypoint(const CcLocalAgent *agent,
     if (agent == NULL) return false;
     float x = agent->position.x - waypoint.x;
     float z = agent->position.z - waypoint.z;
-    /* Route nodes describe a corridor, not a pin-sized animation target.
-       Accepting body-radius proximity prevents an otherwise successful
-       response from waiting forever on collision-constrained centimetres. */
+
     return !agent->exact_target_valid || x * x + z * z <= 0.20f * 0.20f;
 }
 
@@ -4892,9 +4868,7 @@ void CcLocalCourseClearPlayerTarget(CcLocalAgent *player)
     if (player == NULL) return;
     player->combat.queued_skill = -1;
     CcLocalCombatSetGuarded(player, NULL, false);
-    /* Course-level disengagement is authoritative even while a strike is
-       finishing.  The generic guard helper deliberately retains focus during
-       a live strike so its hit can still resolve against the selected target. */
+
     CcLocalCombatClearFocus(player);
 }
 
@@ -4963,10 +4937,7 @@ int32_t CcLocalCoursePickPlayerTarget(CcLocalCourse *course,
         picked = i;
         nearest = collision.distance;
     }
-    /* The fixed room shots make a distant raider narrower than a comfortable
-       mouse target. Keep the physical ray test authoritative, then add a
-       small screen-space halo around the visible body. This is only a click
-       aid; it never changes combat range or movement. */
+
     if (picked < 0) {
         float best_score = FLT_MAX;
         for (int32_t i = 0; i < CC_LOCAL_RAIDER_COUNT; ++i) {
@@ -5095,9 +5066,7 @@ static void CourseUpdatePlayerCombat(CcLocalCourse *course,
     if ((distance > COMBAT_PLAYER_STANDOFF + 0.10f ||
          distance < COMBAT_MIN_STRIKE_DISTANCE) &&
         can_reposition) {
-        /* Back out of body overlap before attacking, just as deliberately as
-           closing excess distance.  Repositioning must not pass through the
-           guard helper: lowering guard is allowed to clear combat focus. */
+
         Vector3 approach = CourseCombatApproachPoint(
             player, target, COMBAT_PLAYER_STANDOFF, 0.0f);
         (void)CcLocalAgentSetExactTarget(player, approach, false);
@@ -5612,7 +5581,9 @@ static bool AppendStreetNavigationPoint(CcLocalAgent *agent, Vector2 point)
     return true;
 }
 
-static bool QueueStreetNavigationPoint(CcLocalAgent *agent, Vector2 point)
+static bool QueueStreetNavigationPointWithProjection(
+    CcLocalAgent *agent, Vector2 point, float maximum_projection,
+    bool *target_projected_out)
 {
     if (agent == NULL) return false;
     Vector3 previous = agent->navigation_point_count > 0 ?
@@ -5622,13 +5593,20 @@ static bool QueueStreetNavigationPoint(CcLocalAgent *agent, Vector2 point)
     Vector2 path[CC_LOCAL_NAVIGATION_POINT_CAPACITY];
     int32_t remaining = CC_LOCAL_NAVIGATION_POINT_CAPACITY -
                         agent->navigation_point_count;
-    int32_t path_count = FindStreetPath(from, point, agent->radius,
-                                        path, remaining);
+    int32_t path_count = FindStreetPath(
+        from, point, agent->radius, path, remaining, maximum_projection,
+        target_projected_out);
     if (path_count <= 0) return false;
     for (int32_t index = 0; index < path_count; ++index) {
         if (!AppendStreetNavigationPoint(agent, path[index])) return false;
     }
     return true;
+}
+
+static bool QueueStreetNavigationPoint(CcLocalAgent *agent, Vector2 point)
+{
+    return QueueStreetNavigationPointWithProjection(
+        agent, point, STREET_SCRIPTED_MAX_PROJECTION, NULL);
 }
 
 static bool SetStreetClickTarget(CcLocalAgent *agent, Vector3 target)
@@ -5651,8 +5629,9 @@ static bool SetStreetClickTarget(CcLocalAgent *agent, Vector3 target)
         return true;
     }
     agent->scene = CC_LOCAL_SCENE_STREET;
-    if (!QueueStreetNavigationPoint(
-            agent, (Vector2){target.x, target.z}) ||
+    if (!QueueStreetNavigationPointWithProjection(
+            agent, (Vector2){target.x, target.z},
+            STREET_CLICK_MAX_PROJECTION, NULL) ||
         agent->navigation_point_count <= 0) {
         ClearAgentNavigation(agent);
         return false;
@@ -5664,9 +5643,7 @@ static bool SetStreetClickTarget(CcLocalAgent *agent, Vector3 target)
         ClearAgentNavigation(agent);
         return false;
     }
-    /* The requested point may have been projected off a wall, prop, or
-       disconnected sliver. Expose the actual reachable endpoint as the
-       command so the path marker and the body agree. */
+
     target = agent->navigation_point[agent->navigation_point_count - 1];
     agent->command_origin = agent->position;
     agent->command_point = target;
@@ -5840,6 +5817,55 @@ static bool AdvanceAgentNavigation(CcLocalAgent *agent)
     return false;
 }
 
+static bool AgentCanAdvanceNavigation(const CcLocalAgent *agent,
+                                      float target_distance)
+{
+    if (agent == NULL || !agent->navigation_active ||
+        target_distance >= 0.35f) {
+        return false;
+    }
+    int32_t next_index = agent->navigation_point_index + 1;
+    if (next_index >= agent->navigation_point_count ||
+        agent->scene != CC_LOCAL_SCENE_STREET) {
+        return true;
+    }
+    /* A path corner is safe at its planned point, not throughout the broad
+       waypoint acceptance radius. Only cut the corner when the body has a
+       clear corridor from its current position to the following node. */
+    Vector3 next = agent->navigation_point[next_index];
+    return StreetSegmentClear(
+        (Vector2){agent->position.x, agent->position.z},
+        (Vector2){next.x, next.z}, agent->radius);
+}
+
+static float AgentCornerSpeedScale(const CcLocalAgent *agent,
+                                   float target_distance)
+{
+    if (agent == NULL || !agent->navigation_active ||
+        agent->navigation_point_index + 1 >= agent->navigation_point_count ||
+        target_distance >= 1.25f) {
+        return 1.0f;
+    }
+    Vector3 corner = agent->navigation_point[agent->navigation_point_index];
+    Vector3 next = agent->navigation_point[agent->navigation_point_index + 1];
+    Vector3 incoming = PhysicsSubtract(corner, agent->position);
+    Vector3 outgoing = PhysicsSubtract(next, corner);
+    float incoming_length = sqrtf(
+        incoming.x * incoming.x + incoming.z * incoming.z);
+    float outgoing_length = sqrtf(
+        outgoing.x * outgoing.x + outgoing.z * outgoing.z);
+    if (incoming_length < 0.001f || outgoing_length < 0.001f) return 1.0f;
+    float alignment =
+        (incoming.x * outgoing.x + incoming.z * outgoing.z) /
+        (incoming_length * outgoing_length);
+    alignment = fmaxf(-1.0f, fminf(1.0f, alignment));
+    float severity = (1.0f - alignment) * 0.5f;
+    float proximity = fmaxf(
+        0.0f, fminf(1.0f, (1.25f - target_distance) / 1.25f));
+    proximity = proximity * proximity * (3.0f - 2.0f * proximity);
+    return fmaxf(0.34f, 1.0f - severity * proximity * 0.72f);
+}
+
 static Vector3 StreetPortalWorldPoint(const ResolvedStreetPortal *portal)
 {
     Vector2 point = portal->destination_room >= 0 ?
@@ -5959,9 +5985,7 @@ static float StreetPortalProximityScore(const CcLocalAgent *agent,
                   agent->position.z}, camera,
         ART_WIDTH, ART_HEIGHT);
 
-    /* A room exit is both a screen-edge strip and the mouth of a physical
-       road. Wider compositions can keep that mouth away from the screen edge,
-       so accept an aligned approach within a lens-scaled world radius too. */
+
     float edge_score = StreetEdgeStripScore(
         player, marker, ART_WIDTH, ART_HEIGHT, 82.0f, 64.0f);
     Vector3 approach = StreetPortalApproachWorldPoint(portal);
@@ -6025,9 +6049,7 @@ static void UpdateStreetPortalProximity(CcLocalAgent *agent)
         nearest_score = score;
     }
     if (nearest >= 0) {
-        /* The player reached the physical edge of this camera room. Continue
-           along the authored road without requiring a UI click or sending
-           them back through the room center. */
+
         (void)StartStreetPortalTraversal(agent, nearest, false);
     }
 }
@@ -6074,9 +6096,7 @@ static bool SetNearestClickTarget(CcLocalAgent *agent, Vector3 picked_point,
         return true;
     }
 
-    /* A ground click beside a person, prop, or collision boundary should
-       still produce useful movement. Search the near half-circle facing back
-       toward the hero so the fallback remains on the approachable side. */
+
     float toward_x = agent->position.x - picked_point.x;
     float toward_z = agent->position.z - picked_point.z;
     float toward_length = sqrtf(toward_x * toward_x + toward_z * toward_z);
@@ -6164,10 +6184,13 @@ CcLocalWorldTargetKind CcLocalAgentPickWorldTarget(
                                 CC_LOCAL_WORLD_TARGET_NONE;
 }
 
-bool CcLocalAgentPickTarget(CcLocalAgent *agent, Vector2 screen_point,
-                            RenderTexture2D target, Rectangle destination,
-                            bool market_interior)
+static bool PickAgentTargetInternal(
+    CcLocalAgent *agent, Vector2 screen_point, RenderTexture2D target,
+    Rectangle destination, bool market_interior,
+    Vector3 *requested_point_out, bool *picked_point_valid_out)
 {
+    if (requested_point_out != NULL) *requested_point_out = (Vector3){0};
+    if (picked_point_valid_out != NULL) *picked_point_valid_out = false;
     if (agent == NULL || !CombatCanAct(&agent->combat) ||
         !CheckCollisionPointRec(screen_point, destination)) return false;
     agent->world_target = CC_LOCAL_WORLD_TARGET_NONE;
@@ -6228,12 +6251,7 @@ bool CcLocalAgentPickTarget(CcLocalAgent *agent, Vector2 screen_point,
     }
     if (nearest == FLT_MAX) return false;
     if (picked_platform != NULL) {
-        /* Physical surfaces win over the broad road-mouth intent zone. This
-           keeps a crate, stair, or training obstacle clickable even when it
-           is composed near the edge of a room. A camera ray commonly reaches
-           the leading vertical face before the top plane; snap that hit into
-           the usable top so it cannot turn into a ground-level walk command
-           that stalls against the same obstacle. */
+
         float half_extent = fminf(picked_platform->width,
                                   picked_platform->depth) * 0.5f;
         float inset = fminf(agent->radius + 0.035f,
@@ -6247,6 +6265,8 @@ bool CcLocalAgentPickTarget(CcLocalAgent *agent, Vector2 screen_point,
             fminf(picked_point.z,
                   picked_platform->z + picked_platform->depth - inset));
         picked_point.y = PlatformTopHeight(picked_platform);
+        if (requested_point_out != NULL) *requested_point_out = picked_point;
+        if (picked_point_valid_out != NULL) *picked_point_valid_out = true;
         return SetStreetClickTarget(agent, picked_point);
     }
     float occluder = FLT_MAX;
@@ -6299,14 +6319,140 @@ bool CcLocalAgentPickTarget(CcLocalAgent *agent, Vector2 screen_point,
                 RayFootprintDistance(ray, RoadObstacleAt(i), 2.20f));
         }
     }
-    /* In the fixed street rooms, foreground architecture often lies between
-       the camera and a perfectly walkable road point. Rejecting that ray made
-       the last strip of visible ground impossible to click, so street input
-       is decided by ground walkability instead. */
+
     bool street_fixed_room = scene == CC_LOCAL_SCENE_STREET &&
                              camera.projection == CAMERA_ORTHOGRAPHIC;
     if (!street_fixed_room && occluder < nearest) return false;
+    if (requested_point_out != NULL) *requested_point_out = picked_point;
+    if (picked_point_valid_out != NULL) *picked_point_valid_out = true;
     return SetNearestClickTarget(agent, picked_point, market_interior);
+}
+
+bool CcLocalAgentPickTarget(CcLocalAgent *agent, Vector2 screen_point,
+                            RenderTexture2D target, Rectangle destination,
+                            bool market_interior)
+{
+    return PickAgentTargetInternal(
+        agent, screen_point, target, destination, market_interior, NULL, NULL);
+}
+
+static CcLocalAgent *MovementPreviewAgent(const CcLocalAgent *agent)
+{
+    CcLocalAgent *preview = &movement_probe_agent_scratch;
+    *preview = (CcLocalAgent){0};
+    if (agent == NULL) return preview;
+    preview->position = agent->position;
+    preview->velocity = agent->velocity;
+    preview->facing_yaw = agent->facing_yaw;
+    preview->radius = agent->radius;
+    preview->scene = agent->scene;
+    preview->crowned = agent->crowned;
+    preview->combat = agent->combat;
+    return preview;
+}
+
+static void MovementPreviewFromAgent(
+    const CcLocalAgent *preview_agent, Vector2 screen_point,
+    Vector3 requested_point, bool picked_point_valid,
+    CcLocalMovementPreview *preview)
+{
+    if (preview == NULL || preview_agent == NULL) return;
+    preview->screen_point = screen_point;
+    preview->origin = preview_agent->position;
+    preview->requested_point = requested_point;
+    preview->resolved_point = picked_point_valid ? requested_point :
+                                                    preview_agent->position;
+    preview->scene = preview_agent->scene;
+    preview->valid = picked_point_valid;
+    preview->accepted = preview_agent->command_point_valid;
+    preview->navigation = preview_agent->navigation_active;
+    if (!preview->accepted) return;
+
+    preview->origin = preview_agent->command_origin;
+    preview->resolved_point = preview_agent->command_point;
+    float adjusted_x = preview->resolved_point.x - requested_point.x;
+    float adjusted_z = preview->resolved_point.z - requested_point.z;
+    preview->adjusted = adjusted_x * adjusted_x + adjusted_z * adjusted_z >
+                        0.18f * 0.18f;
+    if (preview_agent->navigation_active) {
+        for (int32_t index = preview_agent->navigation_point_index;
+             index < preview_agent->navigation_point_count &&
+             preview->path_count < CC_LOCAL_NAVIGATION_POINT_CAPACITY;
+             ++index) {
+            preview->path[preview->path_count++] =
+                preview_agent->navigation_point[index];
+        }
+    } else {
+        preview->path[preview->path_count++] = preview->resolved_point;
+    }
+}
+
+bool CcLocalAgentProbeTarget(
+    const CcLocalAgent *agent, Vector2 screen_point, RenderTexture2D target,
+    Rectangle destination, bool market_interior,
+    CcLocalMovementPreview *preview)
+{
+    if (preview == NULL) return false;
+    *preview = (CcLocalMovementPreview){0};
+    if (agent == NULL) return false;
+
+    CcLocalAgent *preview_agent = MovementPreviewAgent(agent);
+    Vector3 requested_point = {0};
+    bool picked_point_valid = false;
+    (void)PickAgentTargetInternal(
+        preview_agent, screen_point, target, destination, market_interior,
+        &requested_point, &picked_point_valid);
+    MovementPreviewFromAgent(
+        preview_agent, screen_point, requested_point, picked_point_valid,
+        preview);
+    return preview->accepted;
+}
+
+bool CcLocalAgentApplyMovementPreview(
+    CcLocalAgent *agent, const CcLocalMovementPreview *preview,
+    bool market_interior)
+{
+    if (agent == NULL || preview == NULL || !preview->valid ||
+        !preview->accepted || !CombatCanAct(&agent->combat) ||
+        preview->scene != AgentSceneForCall(agent, market_interior)) {
+        return false;
+    }
+    float origin_x = agent->position.x - preview->origin.x;
+    float origin_z = agent->position.z - preview->origin.z;
+    if (origin_x * origin_x + origin_z * origin_z > 0.65f * 0.65f) {
+        return false;
+    }
+
+    agent->world_target = CC_LOCAL_WORLD_TARGET_NONE;
+    ClearAgentNavigation(agent);
+    agent->exact_target_valid = false;
+    agent->target_valid = false;
+    agent->command_point_valid = false;
+    if (preview->navigation) {
+        if (preview->path_count <= 0 ||
+            preview->path_count > CC_LOCAL_NAVIGATION_POINT_CAPACITY) {
+            return false;
+        }
+        for (int32_t index = 0; index < preview->path_count; ++index) {
+            agent->navigation_point[index] = preview->path[index];
+        }
+        agent->navigation_point_count = preview->path_count;
+        agent->navigation_point_index = 0;
+        agent->navigation_destination_room =
+            STREET_CLICK_NAVIGATION_DESTINATION;
+        agent->navigation_active = true;
+        if (!SetAgentExactTarget(agent, agent->navigation_point[0], false)) {
+            ClearAgentNavigation(agent);
+            return false;
+        }
+    } else if (!SetAgentExactTarget(
+                   agent, preview->resolved_point, market_interior)) {
+        return false;
+    }
+    agent->command_origin = agent->position;
+    agent->command_point = preview->resolved_point;
+    agent->command_point_valid = true;
+    return true;
 }
 
 static float WrapAngle(float angle)
@@ -6694,9 +6840,7 @@ static bool BeginClimb(CcLocalAgent *agent, const NavPlatform *platform)
         agent->climb_duration = fmaxf(0.56f,
                                       base_duration / athletic_rate);
     } else {
-        /* A high mantle has four readable support changes. Athleticism can
-           make it decisive, but must not collapse it into a half-second blur
-           where catch, wall plant, and top-out happen on adjacent frames. */
+
         float mantle_rate = fminf(athletic_rate, 1.35f);
         agent->climb_duration = fmaxf(1.35f,
                                       base_duration / mantle_rate);
@@ -6910,9 +7054,7 @@ static void UpdateDownClimb(CcLocalAgent *agent, float delta_time,
         PhysicsScale(frame_right, 0.13f));
     top_left.y = agent->climb_face.y + 0.035f;
     top_right.y = agent->climb_face.y + 0.035f;
-    /* Contacts are world anchors, not offsets from the moving root. Stagger
-       the feet so the descent reads as two deliberate placements rather than
-       a pair of boots sliding down the wall together. */
+
     Vector3 wall_left = PhysicsAdd(
         PhysicsAdd(agent->climb_face,
                    PhysicsScale(agent->climb_normal, 0.018f)),
@@ -7028,9 +7170,7 @@ static Vector3 ClimbWallStepArc(Vector3 takeoff, Vector3 wall_contact,
 {
     amount = SmoothStep01(amount);
     Vector3 control = PhysicsLerp(takeoff, wall_contact, 0.50f);
-    /* Clear the wall with the knee and shin, but do not throw the boot out to
-       the side. A broad lateral arc reads as a kick from the isometric camera;
-       the contact itself already supplies the alternating step width. */
+
     control = PhysicsAdd(control, PhysicsScale(wall_normal, 0.11f));
     control = PhysicsAdd(control, PhysicsScale(frame_right, side * 0.035f));
     control.y += 0.17f;
@@ -7363,9 +7503,7 @@ static void UpdateHighMantle(CcLocalAgent *agent, float delta_time,
                         PhysicsScale(frame_right, motion.root_lateral));
     target.y += motion.root_vertical;
 
-    /* The authored root remains outside until the lead boot and both hands
-       have established the support triangle. Collision is released only for
-       the chest-over-lip portion of the montage. */
+
     if (amount < 0.90f) {
         float outside_distance = PhysicsDot(
             PhysicsSubtract(target, agent->climb_face),
@@ -7591,10 +7729,7 @@ static void UpdateClimb(CcLocalAgent *agent, float delta_time,
             PhysicsScale(frame_right, 0.14f));
         top_left.y = agent->climb_face.y + 0.035f;
         top_right.y = agent->climb_face.y + 0.035f;
-        /* Each boot now has a real takeoff-to-contact swing. The quadratic
-           wall steps move outward and sideways before planting, so the root
-           rises from the opposite planted leg instead of towing both ankles
-           vertically. */
+
         float left_wall_step = (amount - 0.08f) / 0.18f;
         float right_wall_step = (amount - 0.28f) / 0.18f;
         float left_top_step = (amount - 0.50f) / 0.18f;
@@ -7613,9 +7748,7 @@ static void UpdateClimb(CcLocalAgent *agent, float delta_time,
             (left_top_step - 0.42f) / 0.58f);
         float right_to_top = SmoothStep01(
             (right_top_step - 0.42f) / 0.58f);
-        /* A boot leaves the ground sole-down, then turns onto the wall only
-           as it arrives. Rotating both soles vertical at climb start made the
-           lower legs look rigid even when their contacts were staggered. */
+
         float left_to_wall = SmoothStep01(
             (left_wall_step - 0.52f) / 0.48f);
         float right_to_wall = SmoothStep01(
@@ -7901,10 +8034,7 @@ static void ApplyRagdollWaterResponse(CcHumanoidGait *gait,
             1.0f)) * water_amount;
         if (submerged <= 0.0f) continue;
 
-        /* A fully submerged particle receives twice gravity, so the whole
-           body settles near the surface instead of resting on the pool bed.
-           The clamped submersion and exponential damping keep both the force
-           and the retained Verlet velocity bounded. */
+
         particle->acceleration.y += 19.62f * submerged;
         float retained_velocity = expf(-4.8f * submerged * delta_time);
         CcBiomechVec3 velocity = {
@@ -8019,7 +8149,7 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
         direction.x = agent->target_point.x - agent->position.x;
         direction.z = agent->target_point.z - agent->position.z;
         target_distance = sqrtf(direction.x * direction.x + direction.z * direction.z);
-        if (agent->navigation_active && target_distance < 0.35f &&
+        if (AgentCanAdvanceNavigation(agent, target_distance) &&
             !agent->climbing && !agent->humanoid.ragdoll.active) {
             (void)AdvanceAgentNavigation(agent);
             if (agent->exact_target_valid) {
@@ -8049,12 +8179,26 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
     float desired_z = 0.0f;
     if (target_distance > 0.001f) {
         float desired_speed = fminf(maximum_speed, target_distance * 3.2f);
+        if (biped) {
+            desired_speed *= AgentCornerSpeedScale(agent, target_distance);
+            if (!agent->combat.focus_valid) {
+                float target_x = direction.x / target_distance;
+                float target_z = direction.z / target_distance;
+                float facing_x = sinf(agent->facing_yaw);
+                float facing_z = cosf(agent->facing_yaw);
+                float alignment = fmaxf(
+                    -1.0f, fminf(1.0f,
+                        target_x * facing_x + target_z * facing_z));
+                float turn_amount = SmoothStep01(
+                    (alignment + 0.12f) / 1.12f);
+                desired_speed *= 0.18f + turn_amount * 0.82f;
+            }
+        }
         desired_x = direction.x / target_distance * desired_speed;
         desired_z = direction.z / target_distance * desired_speed;
     }
     if (biped && agent->humanoid.action == CC_HUMANOID_ACTION_STRIKE) {
-        /* Weapon reach owns the strike distance. Root-motion lunges from both
-           combatants used to collapse the silhouettes into one another. */
+
         desired_x = 0.0f;
         desired_z = 0.0f;
     } else if (biped && agent->combat.focus_valid &&
@@ -8073,9 +8217,7 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
     }
     if (CombatCanAct(&agent->combat) && agent->grounded &&
         !agent->climbing && !agent->swimming) {
-        /* Course-level reciprocal avoidance keeps crowds and fights readable.
-           It moves the root only enough to restore body spacing and never
-           becomes part of weapon timing or authored hand motion. */
+
         desired_x += agent->separation_velocity.x;
         desired_z += agent->separation_velocity.z;
     }
@@ -8187,7 +8329,10 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
         (!moved_x || !moved_z)) {
         Vector3 forward = {direction.x / target_distance, 0.0f,
                            direction.z / target_distance};
-        Vector3 side = {-forward.z, 0.0f, forward.x};
+        float side_sign = (agent->navigation_repath_count & 1) != 0 ?
+                          -1.0f : 1.0f;
+        Vector3 side = {-forward.z * side_sign, 0.0f,
+                        forward.x * side_sign};
         float sidestep = maximum_speed * 0.72f * delta_time;
         bool side_x = TryHorizontalAxis(agent, market_interior, true,
                                         side.x * sidestep);
@@ -8216,12 +8361,15 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
             (agent->position.z - previous_position.z));
     bool requested_progress = agent->crowned && agent->exact_target_valid &&
         target_distance > 0.18f && maximum_speed > 0.01f;
-    if (requested_progress && training_step < 0.0015f) {
+    /* Sideways collision escape is motion, but it is not progress toward the
+       active waypoint. Give physical starts and turns time to settle, then
+       replan or cancel a command that still cannot move forward. */
+    if (requested_progress && forward_stalled) {
         agent->movement_stall_seconds += delta_time;
     } else {
         agent->movement_stall_seconds = 0.0f;
     }
-    if (agent->movement_stall_seconds > 0.42f) {
+    if (agent->movement_stall_seconds > 0.72f) {
         bool click_path = agent->scene == CC_LOCAL_SCENE_STREET &&
             agent->navigation_active &&
             agent->navigation_destination_room ==
@@ -8229,18 +8377,14 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
             agent->command_point_valid;
         Vector3 retry_target = agent->command_point;
         int32_t retry_count = agent->navigation_repath_count;
-        if (click_path && retry_count < 1 &&
+        if (click_path && retry_count < 3 &&
             SetStreetClickTarget(agent, retry_target)) {
-            /* Moving actors and edge contacts can invalidate one corridor.
-               MMO path followers request a fresh corridor instead of
-               abandoning the command on the first stall. One retry avoids
-               hiding a genuinely bad destination behind an endless loop. */
+
             agent->navigation_repath_count = retry_count + 1;
             agent->movement_stall_seconds = 0.0f;
             goto local_navigation_recovered;
         }
-        /* A target that remains unreachable after projection and one replan
-           is a real failure. Stop the walk cycle cleanly. */
+
         agent->exact_target_valid = false;
         agent->target_valid = false;
         agent->command_point_valid = false;
@@ -8309,9 +8453,7 @@ local_navigation_recovered:
             agent->grounded = true;
         } else if (followed_ground && agent->velocity.y <= 0.0f &&
                    agent->position.y - surface <= 0.12f) {
-            /* A walking root follows ordinary downhill grade. Treat only a
-               real ledge as airborne; otherwise the ragdoll system sees each
-               centimetre of descending terrain as a fall. */
+
             agent->position.y = surface;
             agent->velocity.y = 0.0f;
             agent->grounded = true;
@@ -8665,10 +8807,7 @@ static bool ApplyLocomotionPostureCorrection(const CcLocalAgent *agent,
     float weight = SmoothStep01((momentum_speed - 0.06f) / 0.34f);
     float depth = 0.058f * weight;
 
-    /* Preserve the planted feet while carrying the visible upper body at its
-       actual momentum. A forward-facing walk keeps the stable stepped-pose
-       axis; retreating follows the body's travel instead of leaning backward
-       just because the face remains on an opponent. */
+
     pose->spine = OffsetPosePoint(pose->spine, right, up, forward,
                                   0.0f, 0.0f, depth * 0.24f);
     pose->chest = OffsetPosePoint(pose->chest, right, up, forward,
@@ -8817,11 +8956,7 @@ static bool ApplyRoleIdleGesture(const CcLocalAgent *agent,
     return true;
 }
 
-/* A fully physical fall is useful to gameplay, but at the fixed combat camera
-   its overlapping joints can turn the crowned hero into one unreadable knot.
-   Keep the physical pelvis and ground height, then bias only the rendered pose
-   toward a clear, braced recovery silhouette. The simulation, contacts, and
-   hit logic continue to use the untouched ragdoll. */
+
 static bool ApplyHeroKnockdownPresentationPose(const CcLocalAgent *agent,
                                                CcHumanoidPose *pose)
 {
@@ -8971,9 +9106,7 @@ static Camera3D ExteriorCameraComposed(Vector3 target, Vector3 offset,
 {
     Camera3D camera = {0};
     camera.target = target;
-    /* Shot-specific offsets act as a restrained stage rotation. Keeping the
-       camera well outside the room geometry prevents near-plane slices even
-       when a house is retained as a foreground wing. */
+
     camera.position = Vector3Add(target, offset);
     camera.up = (Vector3){0.0f, 1.0f, 0.0f};
     camera.fovy = fovy;
@@ -9007,9 +9140,7 @@ static Camera3D KeepHeroInsideStreetFrame(Camera3D camera, Vector3 hero,
     }
     int32_t art_width = (int32_t)lroundf(
         (float)art_height * 457.0f / 285.0f);
-    /* This is an emergency guard, not a follow camera. Keep it wider than
-       the authored dead zone so the smooth shot transition does the visible
-       work and the guard only prevents a body from reaching the bezel. */
+
     float safe_left = fmaxf((float)art_width * 0.195f,
                             (float)art_width * safe_area.x);
     float safe_right = fminf((float)art_width * 0.805f,
@@ -9025,10 +9156,7 @@ static Camera3D KeepHeroInsideStreetFrame(Camera3D camera, Vector3 hero,
     Vector3 right = Vector3Normalize(Vector3CrossProduct(forward, camera.up));
     Vector3 screen_up = Vector3Normalize(
         Vector3CrossProduct(right, forward));
-    /* This is only the last safety net during a transition. It may translate
-       the finished image enough to keep the actor visible, but it never
-       changes the authored lens. Normal framing is handled in discrete
-       steps by the rig below. */
+
     Vector2 screen = GetWorldToScreenEx(hero, camera, art_width, art_height);
     float clamped_x = fmaxf(safe_left, fminf(screen.x, safe_right));
     float clamped_y = fmaxf(safe_top, fminf(screen.y, safe_bottom));
@@ -9118,8 +9246,7 @@ static CameraProjectedVolume CameraProjectVolume(Camera3D camera,
 static float CameraVolumeOverlap(CameraProjectedVolume subject,
                                  CameraProjectedVolume occluder)
 {
-    /* Depth grows away from the camera. Only scenery in front of the actor
-       can take away a sightline. */
+
     if (occluder.depth >= subject.depth - 0.18f) return 0.0f;
     float left = fmaxf(subject.x - subject.half_width,
                        occluder.x - occluder.half_width);
@@ -9193,9 +9320,7 @@ static float CameraStreetCourseClutterScore(Camera3D camera,
                                              Vector3 first_subject,
                                              Vector3 second_subject)
 {
-    /* A fighter can disappear against a wall or post even when that piece is
-       technically behind them. Reserve a clean screen-space silhouette, not
-       merely an unobstructed ray. */
+
     CameraProjectedVolume subjects[] = {
         CameraProjectVolume(camera, first_subject, 0.52f, 1.05f),
         CameraProjectVolume(camera, second_subject, 0.52f, 1.05f),
@@ -9359,8 +9484,7 @@ static float CombatCameraPositionClutter(Vector3 position)
     }
     score += CameraPositionRectangleClutter(
         position, COURSE_POOL, 1.25f) * 1.5f;
-    /* The Wayfarer gate is open to actors but its banner rail is a strong
-       foreground shape. Do not park the close camera beside that rail. */
+
     score += CameraPositionRectangleClutter(
         position, (Rectangle){8.44f, 10.40f, 6.12f, 0.32f}, 2.20f) * 4.0f;
     return score;
@@ -9568,8 +9692,7 @@ Camera3D CcLocalCameraClearSightlinesInternal(Camera3D camera,
             option, first_subject, second_subject);
         float course_clutter = CameraStreetCourseClutterScore(
             option, first_subject, second_subject);
-        /* Prefer the authored angle, then the angle already in use. This
-           makes a clear choice stable while the fighters move. */
+
         float cost = tree_occlusion * 12.0f + course_clutter * 1.80f +
                      fabsf(angle) * 0.20f +
                      fabsf(WrapAngle(angle - preferred_angle)) * 0.08f;
@@ -9625,10 +9748,7 @@ static int32_t TownCameraSceneFor(Vector3 focus, int32_t current_scene)
         float x = focus.x - candidate->trigger_x;
         float z = focus.z - candidate->trigger_z;
         float distance = x * x + z * z;
-        /* Close pages belong to small authored rooms. Without a boundary,
-           their trigger can win by simple proximity from the main road and
-           cut to an alley the player has not entered. Establishing pages
-           remain available everywhere between those rooms. */
+
         if (candidate->kind >= CC_LOCAL_TOWN_SCENE_CLOSE_FIRST &&
             distance > close_activation_radius * close_activation_radius) {
             continue;
@@ -9688,9 +9808,7 @@ static const StreetCameraShot *StreetCameraShotAt(int32_t shot)
         .target = {scene->target_x, scene->target_y, scene->target_z},
         .name = scene->name,
         .route_palette = (int32_t)scene->kind,
-        /* Each authored record owns its physical lens height, street side,
-           and crop. Runtime terrain correction keeps that low lens at the
-           intended clearance without flattening every town into one view. */
+
         .camera_offset = {scene->camera_offset_x, scene->camera_offset_y,
                           scene->camera_offset_z},
         .fovy = scene->fovy,
@@ -9760,8 +9878,7 @@ static void FixedCameraRigAim(FixedCameraRig *rig, int32_t shot,
         rig->fovy_destination = fovy;
         rig->transition_elapsed = 0.0f;
         rig->transition_duration = 0.26f;
-        /* A new authored shot owns its own framing. The hard visibility
-           clamp covers the short transition before the new shot settles. */
+
         rig->framing_offset = (Vector3){0};
         rig->framing_from = (Vector3){0};
         rig->framing_destination = (Vector3){0};
@@ -9779,9 +9896,7 @@ static void FixedCameraRigAim(FixedCameraRig *rig, int32_t shot,
     }
     rig->transition_elapsed = fminf(rig->transition_duration,
                                     rig->transition_elapsed + delta_time);
-    /* Fixed adventure-game shots should not drift beside the actor. Hold the
-       old page while it fades down, switch at full darkness, then reveal the
-       new page. The fade hides the single-frame camera change. */
+
     bool reveal_destination =
         rig->transition_elapsed >= rig->transition_duration * 0.5f;
     rig->displayed_target = reveal_destination ? rig->destination :
@@ -9885,8 +10000,7 @@ static Camera3D FixedCameraRigFrameHero(FixedCameraRig *rig,
     rig->framing_destination = Vector3Add(rig->framing_offset, adjustment);
     rig->framing_offset = rig->framing_destination;
     rig->framing_elapsed = 0.0f;
-    /* Turn the page in one cut. A slow correction reads as a follow camera;
-       a fixed adventure scene should hold, cut once, then hold again. */
+
     rig->framing_duration = 0.0f;
     rig->framing_hold_seconds = 0.65f;
     camera.target = Vector3Add(camera.target, adjustment);
@@ -9903,10 +10017,7 @@ Camera3D CcLocalStreetCameraInternal(const CcLocalAgent *agent, float clock,
     Vector3 destination = composition->target;
     destination.y += CcLocalTerrainHeightAt(destination.x, destination.z);
     Vector3 camera_offset = composition->camera_offset;
-    /* Walking records store lens clearance, not an aerial rise above a
-       distant target. Anchor the camera to the terrain under the physical
-       lens so a hilly town cannot bury it in a ridge or lift it back into an
-       isometric map view. */
+
     float camera_x = destination.x + camera_offset.x;
     float camera_z = destination.z + camera_offset.z;
     float camera_ground = CcLocalTerrainHeightAt(camera_x, camera_z);
@@ -9972,9 +10083,7 @@ static Camera3D TownArrivalCamera(const CcLocalConvoyState *convoy,
     if (convoy == NULL || arrival == NULL) {
         return ExteriorCameraAt((Vector3){81.0f, 2.0f, 34.0f}, 21.0f);
     }
-    /* Start close behind the moving carriage, then pull up and away until
-       the whole arrival stage is readable. This is one continuous camera
-       move: the road remains the subject while the town becomes the reveal. */
+
     float heading = convoy->town_heading_yaw;
     Vector3 forward = {sinf(heading), 0.0f, cosf(heading)};
     Vector3 right = {cosf(heading), 0.0f, -sinf(heading)};
@@ -10003,8 +10112,7 @@ static Camera3D TownArrivalCamera(const CcLocalConvoyState *convoy,
         .fovy = 43.0f + (32.0f - 43.0f) * pull_out,
         .projection = CAMERA_PERSPECTIVE,
     };
-    /* The fixed rig starts fresh after parking, avoiding a residual camera
-       page from the town that the player just left. */
+
     street_camera_rig = (FixedCameraRig){
         .shot = CC_LOCAL_TOWN_SCENE_ARRIVAL,
     };
@@ -10047,9 +10155,7 @@ static const CcLocalAgent *CombatCameraOpponent(
          course->combat_event_seconds > 0.0f)) {
         return &course->raiders[selected];
     }
-    /* A resolved strike clears the actor focus. Keep only that same selected
-       opponent for the short impact beat; never replace it with a nearby
-       raider the player did not choose. */
+
     int32_t held = combat_camera_rig.opponent_index;
     if (combat_camera_rig.composition_locked &&
         course->combat_event_seconds > 0.0f && held >= 0 &&
@@ -10095,16 +10201,12 @@ static void CombatCameraLockComposition(Camera3D base,
         fight_side = Vector3Negate(fight_side);
     }
 
-    /* Third-person lock-on composition: put the lens behind the hero and
-       aim toward the opponent. A wider shoulder offset gives the two bodies
-       separate silhouettes instead of stacking them on the same line. */
+
     float look_ahead = fminf(span * 0.72f, 3.30f);
     Vector3 target = Vector3Add(
         player->position, Vector3Scale(fight_line, look_ahead));
     float duel_ground_y = (player->position.y + opponent_position.y) * 0.50f;
-    /* On the new terraces one fighter may be several metres uphill. Aim and
-       place the shoulder camera around their shared elevation so the higher
-       body does not leave the fixed scene's safe frame. */
+
     target.y = duel_ground_y + 1.32f;
     bool road_duel = course->scene == CC_LOCAL_SCENE_ROAD;
     float follow_distance = road_duel ?
@@ -10113,9 +10215,7 @@ static void CombatCameraLockComposition(Camera3D base,
     float fovy = road_duel ?
         CombatClamp(40.0f + span * 0.50f, 42.0f, 46.0f) :
         CombatClamp(44.0f + span * 0.75f, 45.0f, 50.0f);
-    /* Close melee needs a stronger diagonal than a long lock-on. Without
-       this contact adjustment, the opponent disappears directly behind the
-       hero at the moment the attack lands. */
+
     float contact_amount = CombatClamp(2.80f - span, 0.0f, 2.0f);
     float shoulder_distance = road_duel ?
         2.05f + contact_amount * 0.45f :
@@ -10139,10 +10239,7 @@ static void CombatCameraLockComposition(Camera3D base,
         36.0f * DEG2RAD, -36.0f * DEG2RAD,
     };
     float chosen_angle = 0.0f;
-    /* Try both shoulders and nearby stage angles. The current side receives
-       a real hysteresis advantage, so a small movement or equal clutter
-       score cannot flip the whole shot. A badly blocked side can still lose
-       decisively. */
+
     for (int32_t shoulder = 0; shoulder < 2; ++shoulder) {
         Vector3 candidate_side = shoulder == 0 ? fight_side :
                                                 Vector3Negate(fight_side);
@@ -10180,9 +10277,7 @@ static void CombatCameraLockComposition(Camera3D base,
             float visible_shoulder = fabsf(Vector3DotProduct(
                 player_to_camera, fight_side));
             if (visible_shoulder < 2.80f) cost += 1000.0f;
-            /* The hero remains the foreground anchor of the duel shot.
-               Rotating around a wall must not make the opponent appear as
-               large as, or larger than, the player. */
+
             if (art_height > 0) {
                 int32_t art_width = (int32_t)lroundf(
                     (float)art_height * 457.0f / 285.0f);
@@ -10302,9 +10397,7 @@ static bool CombatCameraSubjectsNeedReframe(const CcLocalAgent *player,
     return false;
 }
 
-/* Combat moves into a perspective over-the-shoulder lock-on view. The duel
-   composition is chosen once and held like a stage shot; it is recomposed
-   only when a fighter crosses the safe frame or the opponent changes. */
+
 Camera3D CcLocalCombatCameraInternal(Camera3D base,
                                      const CcLocalAgent *player,
                                      const CcLocalCourse *course,
@@ -10314,9 +10407,7 @@ Camera3D CcLocalCombatCameraInternal(Camera3D base,
     const CcLocalAgent *opponent = CombatCameraOpponent(course, player);
     float opponent_distance_squared = opponent != NULL && player != NULL ?
         CombatHorizontalDistanceSquared(player, opponent) : FLT_MAX;
-    /* An alarm may cover the whole settlement, but the duel camera may not.
-       Hold the room shot while a raider is still approaching and enter the
-       two-subject composition only when the fight is locally readable. */
+
     bool active = player != NULL && course != NULL && opponent != NULL &&
                   course->alarm_active && !course->raiders_retreating &&
                   opponent_distance_squared <= 9.0f * 9.0f;
@@ -10353,10 +10444,7 @@ Camera3D CcLocalCombatCameraInternal(Camera3D base,
         if (delta_time < 0.0f || delta_time > 0.12f) delta_time = 0.0f;
         delta_time = fminf(delta_time, 0.050f);
         combat_camera_rig.last_clock = clock;
-        /* Road ambushes begin inside a narrow authored bridge shot. Enter
-           their shoulder camera promptly so the parapets do not hold the
-           player at the edge of the wide establishing frame. Settlement
-           fights keep the calmer transition used by the gameplay reel. */
+
         bool quick_road_entry = active && course != NULL &&
                                 course->scene == CC_LOCAL_SCENE_ROAD;
         float direction = active ? (quick_road_entry ? 4.2f : 1.65f) :
@@ -10429,6 +10517,99 @@ Camera3D CcLocalCombatCameraInternal(Camera3D base,
     return SnapCameraToArtPixels(camera, art_height);
 }
 
+Camera3D CcLocalConversationCameraInternal(
+    Camera3D base, const CcLocalAgent *player, const CcLocalAgent *partner,
+    bool active, float clock, bool advance, int32_t art_height)
+{
+    bool available = active && player != NULL && partner != NULL;
+    Vector3 base_offset = Vector3Subtract(base.position, base.target);
+    float base_fovy = PerspectiveFovyForOrthographic(base);
+    if (!conversation_camera_rig.initialized) {
+        conversation_camera_rig.displayed_target = base.target;
+        conversation_camera_rig.displayed_offset = base_offset;
+        conversation_camera_rig.displayed_fovy = base_fovy;
+        conversation_camera_rig.last_clock = clock;
+        conversation_camera_rig.initialized = true;
+    }
+
+    if (advance) {
+        float delta_time = clock - conversation_camera_rig.last_clock;
+        if (delta_time < 0.0f || delta_time > 0.12f) delta_time = 0.0f;
+        delta_time = fminf(delta_time, 0.050f);
+        conversation_camera_rig.last_clock = clock;
+        float direction = available ? 2.8f : -2.0f;
+        conversation_camera_rig.focus_weight = CombatClamp(
+            conversation_camera_rig.focus_weight + delta_time * direction,
+            0.0f, 1.0f);
+
+        Vector3 close_target = base.target;
+        Vector3 close_offset = base_offset;
+        float close_fovy = base_fovy;
+        if (available) {
+            Vector3 first = Vector3Add(
+                player->position, (Vector3){0.0f, 1.02f, 0.0f});
+            Vector3 second = Vector3Add(
+                partner->position, (Vector3){0.0f, 1.02f, 0.0f});
+            Vector3 talk_line = Vector3Subtract(second, first);
+            talk_line.y = 0.0f;
+            float span = fmaxf(0.85f, Vector3Length(talk_line));
+            talk_line = PhysicsNormalizeOr(
+                talk_line, (Vector3){1.0f, 0.0f, 0.0f});
+            Vector3 shoulder = {-talk_line.z, 0.0f, talk_line.x};
+            Vector3 base_view = Vector3Subtract(base.position, base.target);
+            base_view.y = 0.0f;
+            base_view = PhysicsNormalizeOr(
+                base_view, (Vector3){0.0f, 0.0f, 1.0f});
+            if (Vector3DotProduct(shoulder, base_view) < 0.0f) {
+                shoulder = Vector3Negate(shoulder);
+            }
+
+            close_target = Vector3Lerp(first, second, 0.56f);
+            close_target.y = (first.y + second.y) * 0.5f - 0.18f;
+            close_offset = Vector3Add(
+                Vector3Scale(shoulder,
+                             5.05f + fminf(span, 3.0f) * 0.18f),
+                Vector3Add(Vector3Scale(talk_line, -0.55f),
+                           (Vector3){0.0f, 1.88f, 0.0f}));
+            close_fovy = CombatClamp(38.0f + span * 0.8f, 39.0f, 43.0f);
+            Camera3D close = PerspectiveCameraComposed(
+                close_target, close_offset, close_fovy);
+            close = CcLocalCameraClearSightlinesInternal(
+                close, first, second, 0.0f, NULL);
+            close_offset = Vector3Subtract(close.position, close.target);
+        }
+
+        float weight = SmoothStep01(conversation_camera_rig.focus_weight);
+        Vector3 desired_target = Vector3Lerp(base.target, close_target, weight);
+        Vector3 desired_offset = Vector3Lerp(base_offset, close_offset, weight);
+        float desired_fovy = base_fovy + (close_fovy - base_fovy) * weight;
+        float ease = 1.0f - expf(-delta_time * 5.2f);
+        conversation_camera_rig.displayed_target = Vector3Lerp(
+            conversation_camera_rig.displayed_target, desired_target, ease);
+        conversation_camera_rig.displayed_offset = Vector3Lerp(
+            conversation_camera_rig.displayed_offset, desired_offset, ease);
+        conversation_camera_rig.displayed_fovy +=
+            (desired_fovy - conversation_camera_rig.displayed_fovy) * ease;
+
+        if (!available &&
+            conversation_camera_rig.focus_weight <= 0.0001f) {
+            conversation_camera_rig.displayed_target = base.target;
+            conversation_camera_rig.displayed_offset = base_offset;
+            conversation_camera_rig.displayed_fovy = base_fovy;
+        }
+    }
+
+    Camera3D camera = base;
+    camera.target = conversation_camera_rig.displayed_target;
+    camera.position = Vector3Add(
+        camera.target, conversation_camera_rig.displayed_offset);
+    bool focused = available ||
+        conversation_camera_rig.focus_weight > 0.0001f;
+    camera.fovy = focused ? conversation_camera_rig.displayed_fovy : base.fovy;
+    camera.projection = focused ? CAMERA_PERSPECTIVE : base.projection;
+    return SnapCameraToArtPixels(camera, art_height);
+}
+
 static Camera3D LocalCamera(bool interior, Vector3 focus)
 {
     if (!interior) {
@@ -10441,9 +10622,7 @@ static Camera3D LocalCamera(bool interior, Vector3 focus)
     }
     Camera3D camera = {0};
     (void)focus;
-    /* The counter, actors, and street door form back/middle/foreground layers.
-       The tighter frame gives the compact room the same visual weight as an
-       exterior stage and keeps faces readable on the art-pixel grid. */
+
     camera.target = (Vector3){4.70f, 0.90f, 3.30f};
     camera.position = (Vector3){camera.target.x + 1.5f,
                                 camera.target.y + 3.7f,
@@ -10538,7 +10717,6 @@ static TreeCrownModelCache tree_crown_models = {0};
 typedef enum RuntimeAssetId {
     RUNTIME_ASSET_BRIDGE,
     RUNTIME_ASSET_CARRIAGE,
-    RUNTIME_ASSET_CARGO_RACK,
     RUNTIME_ASSET_MARKET,
     RUNTIME_ASSET_MINE,
     RUNTIME_ASSET_SHORTAGE,
@@ -10557,27 +10735,33 @@ typedef struct RuntimeAsset {
 
 static RuntimeAsset runtime_assets[RUNTIME_ASSET_COUNT] = {
     [RUNTIME_ASSET_BRIDGE] = {
-        CC_BRIDGE_CHECKPOINT_ASSET, "bridge checkpoint", 96, {0}, false},
+        .path = CC_BRIDGE_CHECKPOINT_ASSET,
+        .label = "bridge checkpoint",
+        .mesh_budget = 96},
     [RUNTIME_ASSET_CARRIAGE] = {
-        "assets/exports/glb/carriage_base_v01.glb", "carriage", 144, {0}, false},
-    [RUNTIME_ASSET_CARGO_RACK] = {
-        "assets/exports/glb/module_cargo_rack_v01.glb", "cargo rack", 48,
-        {0}, false},
+        .path = "assets/exports/glb/carriage_base_v01.glb",
+        .label = "carriage",
+        .mesh_budget = 144},
     [RUNTIME_ASSET_MARKET] = {
-        "assets/exports/glb/environment_market_granary_v01.glb",
-        "market and granary", 80, {0}, false},
+        .path = "assets/exports/glb/environment_market_granary_v01.glb",
+        .label = "market and granary",
+        .mesh_budget = 80},
     [RUNTIME_ASSET_MINE] = {
-        "assets/exports/glb/environment_mine_entrance_v01.glb",
-        "mine entrance", 64, {0}, false},
+        .path = "assets/exports/glb/environment_mine_entrance_v01.glb",
+        .label = "mine entrance",
+        .mesh_budget = 64},
     [RUNTIME_ASSET_SHORTAGE] = {
-        "assets/exports/glb/state_food_shortage_v01.glb",
-        "food shortage dressing", 40, {0}, false},
+        .path = "assets/exports/glb/state_food_shortage_v01.glb",
+        .label = "food shortage dressing",
+        .mesh_budget = 40},
     [RUNTIME_ASSET_ENFORCEMENT] = {
-        "assets/exports/glb/state_harsh_enforcement_v01.glb",
-        "enforcement dressing", 32, {0}, false},
+        .path = "assets/exports/glb/state_harsh_enforcement_v01.glb",
+        .label = "enforcement dressing",
+        .mesh_budget = 32},
     [RUNTIME_ASSET_RECOVERY] = {
-        "assets/exports/glb/state_market_recovery_v01.glb",
-        "market recovery dressing", 40, {0}, false},
+        .path = "assets/exports/glb/state_market_recovery_v01.glb",
+        .label = "market recovery dressing",
+        .mesh_budget = 40},
 };
 
 typedef struct HeroSkinCache {
@@ -10699,9 +10883,7 @@ typedef struct CreatureGaitCache {
 
 static CreatureGaitCache creature_gaits[CREATURE_GAIT_SLOT_COUNT] = {0};
 
-/* Physics-driven people use unskinned, offline-generated rigid modules.  Each
-   model is instanced against a resolved bone frame, so contact IK and ragdoll
-   poses remain authoritative without a per-character vertex upload. */
+
 typedef enum NpcDynamicModuleId {
     NPC_DYNAMIC_TORSO,
     NPC_DYNAMIC_PELVIS,
@@ -10745,65 +10927,95 @@ typedef struct NpcDynamicModuleCache {
 
 static NpcDynamicModuleCache npc_dynamic_modules[NPC_DYNAMIC_MODULE_COUNT] = {
     [NPC_DYNAMIC_TORSO] = {
-        "assets/exports/npc/npc_module_torso_v01.glb", "torso", {0}, false},
+        .path = "assets/exports/npc/npc_module_torso_v01.glb",
+        .label = "torso"},
     [NPC_DYNAMIC_PELVIS] = {
-        "assets/exports/npc/npc_module_pelvis_v01.glb", "pelvis", {0}, false},
+        .path = "assets/exports/npc/npc_module_pelvis_v01.glb",
+        .label = "pelvis"},
     [NPC_DYNAMIC_UPPER_ARM] = {
-        "assets/exports/npc/npc_module_upper_arm_v01.glb", "upper arm", {0}, false},
+        .path = "assets/exports/npc/npc_module_upper_arm_v01.glb",
+        .label = "upper arm"},
     [NPC_DYNAMIC_FOREARM] = {
-        "assets/exports/npc/npc_module_forearm_v01.glb", "forearm", {0}, false},
+        .path = "assets/exports/npc/npc_module_forearm_v01.glb",
+        .label = "forearm"},
     [NPC_DYNAMIC_THIGH] = {
-        "assets/exports/npc/npc_module_thigh_v01.glb", "thigh", {0}, false},
+        .path = "assets/exports/npc/npc_module_thigh_v01.glb",
+        .label = "thigh"},
     [NPC_DYNAMIC_SHIN] = {
-        "assets/exports/npc/npc_module_shin_v01.glb", "shin", {0}, false},
+        .path = "assets/exports/npc/npc_module_shin_v01.glb",
+        .label = "shin"},
     [NPC_DYNAMIC_HAND] = {
-        "assets/exports/npc/npc_module_hand_v01.glb", "hand", {0}, false},
+        .path = "assets/exports/npc/npc_module_hand_v01.glb",
+        .label = "hand"},
     [NPC_DYNAMIC_FOOT] = {
-        "assets/exports/npc/npc_module_foot_v01.glb", "foot", {0}, false},
+        .path = "assets/exports/npc/npc_module_foot_v01.glb",
+        .label = "foot"},
     [NPC_DYNAMIC_HEAD] = {
-        "assets/exports/npc/npc_module_head_v01.glb", "head", {0}, false},
+        .path = "assets/exports/npc/npc_module_head_v01.glb",
+        .label = "head"},
     [NPC_DYNAMIC_MANTLE] = {
-        "assets/exports/npc/npc_module_mantle_v01.glb", "mantle", {0}, false},
+        .path = "assets/exports/npc/npc_module_mantle_v01.glb",
+        .label = "mantle"},
     [NPC_DYNAMIC_COAT_TAIL] = {
-        "assets/exports/npc/npc_module_coat_tail_v01.glb", "coat tail", {0}, false},
+        .path = "assets/exports/npc/npc_module_coat_tail_v01.glb",
+        .label = "coat tail"},
     [NPC_DYNAMIC_CHEST_PLATE] = {
-        "assets/exports/npc/npc_module_chest_plate_v01.glb", "chest plate", {0}, false},
+        .path = "assets/exports/npc/npc_module_chest_plate_v01.glb",
+        .label = "chest plate"},
     [NPC_DYNAMIC_PAULDRON] = {
-        "assets/exports/npc/npc_module_pauldron_v01.glb", "pauldron", {0}, false},
+        .path = "assets/exports/npc/npc_module_pauldron_v01.glb",
+        .label = "pauldron"},
     [NPC_DYNAMIC_APRON] = {
-        "assets/exports/npc/npc_module_apron_v01.glb", "apron", {0}, false},
+        .path = "assets/exports/npc/npc_module_apron_v01.glb",
+        .label = "apron"},
     [NPC_DYNAMIC_PACK] = {
-        "assets/exports/npc/npc_module_pack_v01.glb", "pack", {0}, false},
+        .path = "assets/exports/npc/npc_module_pack_v01.glb",
+        .label = "pack"},
     [NPC_DYNAMIC_SATCHEL] = {
-        "assets/exports/npc/npc_module_satchel_v01.glb", "satchel", {0}, false},
+        .path = "assets/exports/npc/npc_module_satchel_v01.glb",
+        .label = "satchel"},
     [NPC_DYNAMIC_HELMET] = {
-        "assets/exports/npc/npc_module_helmet_v01.glb", "helmet", {0}, false},
+        .path = "assets/exports/npc/npc_module_helmet_v01.glb",
+        .label = "helmet"},
     [NPC_DYNAMIC_HAT] = {
-        "assets/exports/npc/npc_module_hat_v01.glb", "hat", {0}, false},
+        .path = "assets/exports/npc/npc_module_hat_v01.glb",
+        .label = "hat"},
     [NPC_DYNAMIC_HOOD] = {
-        "assets/exports/npc/npc_module_hood_v01.glb", "hood", {0}, false},
+        .path = "assets/exports/npc/npc_module_hood_v01.glb",
+        .label = "hood"},
     [NPC_DYNAMIC_HEADWRAP] = {
-        "assets/exports/npc/npc_module_headwrap_v01.glb", "headwrap", {0}, false},
+        .path = "assets/exports/npc/npc_module_headwrap_v01.glb",
+        .label = "headwrap"},
     [NPC_DYNAMIC_TOOL_SHAFT] = {
-        "assets/exports/npc/npc_module_tool_shaft_v01.glb", "tool shaft", {0}, false},
+        .path = "assets/exports/npc/npc_module_tool_shaft_v01.glb",
+        .label = "tool shaft"},
     [NPC_DYNAMIC_TOOL_HEAD] = {
-        "assets/exports/npc/npc_module_tool_head_v01.glb", "tool head", {0}, false},
+        .path = "assets/exports/npc/npc_module_tool_head_v01.glb",
+        .label = "tool head"},
     [NPC_DYNAMIC_HAIR_0] = {
-        "assets/exports/npc/npc_module_hair_0_v01.glb", "hair 0", {0}, false},
+        .path = "assets/exports/npc/npc_module_hair_0_v01.glb",
+        .label = "hair 0"},
     [NPC_DYNAMIC_HAIR_1] = {
-        "assets/exports/npc/npc_module_hair_1_v01.glb", "hair 1", {0}, false},
+        .path = "assets/exports/npc/npc_module_hair_1_v01.glb",
+        .label = "hair 1"},
     [NPC_DYNAMIC_HAIR_2] = {
-        "assets/exports/npc/npc_module_hair_2_v01.glb", "hair 2", {0}, false},
+        .path = "assets/exports/npc/npc_module_hair_2_v01.glb",
+        .label = "hair 2"},
     [NPC_DYNAMIC_HAIR_3] = {
-        "assets/exports/npc/npc_module_hair_3_v01.glb", "hair 3", {0}, false},
+        .path = "assets/exports/npc/npc_module_hair_3_v01.glb",
+        .label = "hair 3"},
     [NPC_DYNAMIC_HAIR_4] = {
-        "assets/exports/npc/npc_module_hair_4_v01.glb", "hair 4", {0}, false},
+        .path = "assets/exports/npc/npc_module_hair_4_v01.glb",
+        .label = "hair 4"},
     [NPC_DYNAMIC_HAIR_5] = {
-        "assets/exports/npc/npc_module_hair_5_v01.glb", "hair 5", {0}, false},
+        .path = "assets/exports/npc/npc_module_hair_5_v01.glb",
+        .label = "hair 5"},
     [NPC_DYNAMIC_HAIR_6] = {
-        "assets/exports/npc/npc_module_hair_6_v01.glb", "hair 6", {0}, false},
+        .path = "assets/exports/npc/npc_module_hair_6_v01.glb",
+        .label = "hair 6"},
     [NPC_DYNAMIC_HAIR_7] = {
-        "assets/exports/npc/npc_module_hair_7_v01.glb", "hair 7", {0}, false},
+        .path = "assets/exports/npc/npc_module_hair_7_v01.glb",
+        .label = "hair 7"},
 };
 
 static Matrix NpcModuleTransform(Vector3 origin, Vector3 right, Vector3 up,
@@ -10897,6 +11109,8 @@ typedef struct VisualStyleCache {
     int32_t hero_fog_near_location;
     int32_t hero_fog_far_location;
     int32_t hero_ink_strength_location;
+    int32_t hero_rim_tint_location;
+    int32_t hero_rim_strength_location;
     bool hero_ready;
     Shader npc;
     int32_t npc_light_direction_location;
@@ -10910,6 +11124,8 @@ typedef struct VisualStyleCache {
     int32_t npc_palette_ink_location;
     int32_t npc_hero_emphasis_location;
     int32_t npc_hero_head_position_location;
+    int32_t npc_rim_tint_location;
+    int32_t npc_rim_strength_location;
     bool npc_ready;
     Shader npc_skinned;
     int32_t npc_skinned_light_direction_location;
@@ -10924,6 +11140,8 @@ typedef struct VisualStyleCache {
     int32_t npc_skinned_hero_emphasis_location;
     int32_t npc_skinned_hero_head_position_location;
     int32_t npc_skinned_body_skin_remap_location;
+    int32_t npc_skinned_rim_tint_location;
+    int32_t npc_skinned_rim_strength_location;
     bool npc_skinned_ready;
     ArtAtmosphereDefinition presentation_atmosphere;
     float presentation_practical_glow;
@@ -10946,10 +11164,7 @@ typedef struct FinalPaletteEntry {
     FinalPaletteOwnership ownership;
 } FinalPaletteEntry;
 
-/* Color values live only in cc_visual_style.h. This list owns semantic
-   membership: broad materials may fill the world, while character and signal
-   pigments receive smaller lookup regions so scenery cannot casually steal
-   the colors that identify the hero, combat, or an interaction. */
+
 static void AddFinalPaletteColor(FinalPaletteEntry *entries, int32_t capacity,
                                  int32_t *count, Color color,
                                  FinalPaletteOwnership ownership)
@@ -10981,10 +11196,7 @@ static void AddFinalPaletteRamp(FinalPaletteEntry *entries, int32_t capacity,
 static int32_t BuildFinalPalette(FinalPaletteEntry *entries, int32_t capacity)
 {
     int32_t count = 0;
-    /* The grade is applied before the HUD is drawn. Keep interface neutrals
-       out of this lookup so stone and fog cannot snap to panel or text
-       colors. Two authored inks give the world cool outdoor and warm indoor
-       shadow anchors. */
+
     AddFinalPaletteColor(entries, capacity, &count,
                          CC_VISUAL_PALETTE.cool_ink,
                          FINAL_PALETTE_ENVIRONMENT);
@@ -11052,9 +11264,7 @@ static int32_t BuildFinalPalette(FinalPaletteEntry *entries, int32_t capacity)
     return count;
 }
 
-/* Material order is part of the engine-hero export contract. The fallback
-   renderer resolves each slot from named roles instead of owning another
-   independent list of RGB values. */
+
 static Color HeroRetroMaterialColor(int32_t material)
 {
     switch (material) {
@@ -11117,8 +11327,7 @@ static const char *HERO_HAIR_BONE_NAMES[CC_HERO_HAIR_BONE_COUNT] = {
     "hair.long", "hair.rear",
 };
 
-/* Blender exports +Y as engine -Z. These offsets start at the head bone and
-   place each control at the broad root of its clump. */
+
 static const Vector3 HERO_HAIR_ROOT_OFFSETS[CC_HERO_HAIR_BONE_COUNT] = {
     {-0.18f, 0.39f, 0.08f},
     {0.00f, 0.38f, -0.12f},
@@ -11230,6 +11439,38 @@ static Rectangle RoadObstacleAt(int32_t index)
                                           ROAD_FALLBACK_OBSTACLES[index];
 }
 
+static void ReleaseUploadedModelCpuData(Model *model)
+{
+#if defined(PLATFORM_WEB)
+    if (model == NULL || model->meshes == NULL) return;
+    for (int32_t index = 0; index < model->meshCount; ++index) {
+        Mesh *mesh = &model->meshes[index];
+#define CC_RELEASE_UPLOADED_BUFFER(field) \
+        do { \
+            if (mesh->field != NULL) { \
+                MemFree(mesh->field); \
+                mesh->field = NULL; \
+            } \
+        } while (0)
+        CC_RELEASE_UPLOADED_BUFFER(vertices);
+        CC_RELEASE_UPLOADED_BUFFER(texcoords);
+        CC_RELEASE_UPLOADED_BUFFER(texcoords2);
+        CC_RELEASE_UPLOADED_BUFFER(normals);
+        CC_RELEASE_UPLOADED_BUFFER(tangents);
+        CC_RELEASE_UPLOADED_BUFFER(colors);
+        CC_RELEASE_UPLOADED_BUFFER(boneIndices);
+        CC_RELEASE_UPLOADED_BUFFER(boneWeights);
+        CC_RELEASE_UPLOADED_BUFFER(animVertices);
+        CC_RELEASE_UPLOADED_BUFFER(animNormals);
+#undef CC_RELEASE_UPLOADED_BUFFER
+        /* DrawMesh uses this pointer as the indexed-draw flag, even after the
+           index data has been uploaded, so it must remain allocated. */
+    }
+#else
+    (void)model;
+#endif
+}
+
 static bool LoadRuntimeAsset(RuntimeAssetId id)
 {
     if (id < 0 || id >= RUNTIME_ASSET_COUNT) return false;
@@ -11250,6 +11491,7 @@ static bool LoadRuntimeAsset(RuntimeAssetId id)
         asset->model = (Model){0};
         return false;
     }
+    ReleaseUploadedModelCpuData(&asset->model);
     asset->ready = true;
     TraceLog(LOG_INFO, "ASSET: loaded %s (%d meshes)", asset->label,
              mesh_count);
@@ -11260,6 +11502,12 @@ static void LoadNpcArchetypes(void)
 {
     for (int32_t role = 0; role < CC_NPC_ROLE_COUNT; ++role) {
         for (int32_t pose = 0; pose < CC_NPC_ARCHETYPE_POSE_COUNT; ++pose) {
+#if defined(PLATFORM_WEB)
+            /* Browser actors share the idle silhouette for stepped motion.
+               Keeping 90 additional uploaded poses made combat exceed the
+               browser's page-memory budget on constrained devices. */
+            if (pose != 0) continue;
+#endif
             char path[256];
             (void)snprintf(path, sizeof(path),
                            "assets/exports/npc/npc_%s%s_v01.glb",
@@ -11280,6 +11528,7 @@ static void LoadNpcArchetypes(void)
                 if (model.meshCount > 0) UnloadModel(model);
                 continue;
             }
+            ReleaseUploadedModelCpuData(&model);
             npc_archetypes[role][pose].model = model;
             npc_archetypes[role][pose].ready = true;
         }
@@ -11294,8 +11543,16 @@ static void LoadCreatureModels(void)
          ++variant) {
         const CcCreatureDefinition *definition = CcCreatureDefinitionAt(
             (CcCreatureVariant)variant);
+        if (definition == NULL || !definition->skinned) {
+            TraceLog(LOG_INFO, "CREATURE: %s uses procedural rendering",
+                     definition != NULL ? definition->name : "unknown");
+            continue;
+        }
         int32_t loaded_count = 0;
         for (int32_t pose = 0; pose < CC_CREATURE_POSE_COUNT; ++pose) {
+            /* Runtime-skinned creatures animate one uploaded rest mesh. Their
+               authored pose files are reference outputs, not draw inputs. */
+            if (pose != CC_CREATURE_POSE_IDLE) continue;
             const char *path = CcCreatureAssetPath(
                 (CcCreatureVariant)variant, (CcCreaturePose)pose);
             if (path == NULL) continue;
@@ -11305,8 +11562,7 @@ static void LoadCreatureModels(void)
                 continue;
             }
             Model model = LoadModel(resolved);
-            int32_t expected_bones = definition != NULL && definition->skinned ?
-                                     CC_QUADRUPED_BONE_COUNT : 0;
+            int32_t expected_bones = CC_QUADRUPED_BONE_COUNT;
             if (model.meshCount != 1 || model.materialCount < 1 ||
                 model.skeleton.boneCount != expected_bones) {
                 TraceLog(LOG_WARNING,
@@ -11351,13 +11607,12 @@ static void LoadCreatureModels(void)
                                sizeof(cached->animation.name),
                                "quadruped-runtime");
             }
+            ReleaseUploadedModelCpuData(&cached->model);
             cached->ready = true;
             loaded_count += 1;
         }
         TraceLog(LOG_INFO, "CREATURE: loaded %s (%d/%d poses)",
-                 definition != NULL ? definition->name : "unknown",
-                 loaded_count,
-                 CcCreaturePoseCount((CcCreatureVariant)variant));
+                 definition->name, loaded_count, 1);
     }
 }
 
@@ -11382,6 +11637,7 @@ static void LoadNpcDynamicModules(void)
             if (model.meshCount > 0) UnloadModel(model);
             continue;
         }
+        ReleaseUploadedModelCpuData(&model);
         module->model = model;
         module->ready = true;
         loaded_count += 1;
@@ -11398,6 +11654,11 @@ static void LoadNpcBodySkins(void)
         for (int32_t muscle = 0; muscle < CC_NPC_BODY_MUSCLE_COUNT; ++muscle) {
             for (int32_t tissue = 0; tissue < CC_NPC_BODY_TISSUE_COUNT;
                  ++tissue) {
+#if defined(PLATFORM_WEB)
+                /* A shared body retains skinned combat motion without keeping
+                   all 36 body recipes resident in browser GPU memory. */
+                if (frame != 1 || muscle != 1 || tissue != 1) continue;
+#endif
                 NpcBodySkinCache *body =
                     &npc_body_skins[frame][muscle][tissue];
                 char path[256];
@@ -11454,6 +11715,7 @@ static void LoadNpcBodySkins(void)
                 (void)snprintf(body->animation.name,
                                sizeof(body->animation.name),
                                "physics-body");
+                ReleaseUploadedModelCpuData(&body->model);
                 body->ready = true;
                 loaded_count += 1;
             }
@@ -11485,6 +11747,7 @@ static void LoadNpcHeadFamilies(void)
             if (model.meshCount > 0) UnloadModel(model);
             continue;
         }
+        ReleaseUploadedModelCpuData(&model);
         npc_head_families[family].model = model;
         npc_head_families[family].ready = true;
         loaded_count += 1;
@@ -11515,6 +11778,7 @@ static void LoadNpcHairFamilies(void)
             if (model.meshCount > 0) UnloadModel(model);
             continue;
         }
+        ReleaseUploadedModelCpuData(&model);
         npc_hair_families[family].model = model;
         npc_hair_families[family].ready = true;
         loaded_count += 1;
@@ -11616,9 +11880,7 @@ static void ApplyNeutralNpcStyle(Model *model)
 {
     ApplyNpcStyle(model);
     if (model == NULL || model->materials == NULL) return;
-    /* COLOR_0 stores the semantic palette slot. The shader supplies runtime
-       color variation, so these rigid pieces stay neutral for their lifetime
-       instead of rewriting raylib material state for every body part. */
+
     for (int32_t material = 0; material < model->materialCount; ++material) {
         model->materials[material].maps[MATERIAL_MAP_DIFFUSE].color = WHITE;
     }
@@ -11927,9 +12189,7 @@ static bool ResolveControlledCreatureGait(
         }
         elapsed = 0.0f;
     }
-    /* A faster gait can take control immediately. A return to walking waits
-       until at most one hoof is airborne, so policy changes never plant a
-       second hoof or snap an active stride. The caller asks again next frame. */
+
     (void)CcCreatureRigControllerSetGait(&cache->controller, gait);
     cache->last_clock = clock;
     return CcCreatureRigControllerStepWorld(
@@ -12783,9 +13043,7 @@ static void DrawContactShadow(Vector3 center, float width, float depth,
 {
     if (width <= 0.0f || depth <= 0.0f || color.a == 0) return;
 
-    /* Contact shadows are paint on the ground, not thin solid objects. A flat
-       twelve-sided oval keeps the low-resolution silhouette deliberate while
-       avoiding the square top and dark vertical edge produced by DrawBox. */
+
     const int32_t segment_count = 12;
     const float half_width = width * 0.5f;
     const float half_depth = depth * 0.5f;
@@ -12931,9 +13189,7 @@ static bool DrawCreature3D(CcCreatureVariant variant, CcCreaturePose pose,
                               0.0f, false, NULL);
 }
 
-/* Procedural people use the same graphic lighting contract as the authored
-   hero.  Their geometry is intentionally simple; a shared two-band treatment
-   is what makes those forms read as one cast at the final art resolution. */
+
 static void UseCharacterLighting(void)
 {
     if (visual_style.hero_ready) BeginShaderMode(visual_style.hero);
@@ -12949,9 +13205,7 @@ static void RestoreWorldLighting(void)
 static void SetWorldForegroundReveal(float amount, float cut_height)
 {
     if (!visual_style.world_ready) return;
-    /* Uniform changes do not split raylib's active geometry batch. Flush at
-       the reveal boundary so houses are submitted with the state that was
-       active when they were authored, rather than the state of a later draw. */
+
     rlDrawRenderBatchActive();
     float active = fmaxf(0.0f, fminf(amount, 1.0f));
     SetShaderValue(visual_style.world,
@@ -12975,9 +13229,7 @@ static void SetWorldForegroundReveal(float amount, float cut_height)
 static void SetWorldTerrainSurface(bool enabled)
 {
     if (!visual_style.world_ready) return;
-    /* Terrain and buildings share the world shader. Flush at the boundary so
-       the broad land gets its hard-edged material layers while structures
-       retain their own painted edges. */
+
     rlDrawRenderBatchActive();
     float active = enabled ? 1.0f : 0.0f;
     SetShaderValue(visual_style.world,
@@ -13024,9 +13276,7 @@ static OklabColor ColorToOklab(Color color)
 
 static float OklabDistanceSquared(OklabColor source, OklabColor candidate)
 {
-    /* Small art pixels need especially clear value separation. OKLab keeps
-       the comparison perceptual; the lightness weight slightly favors a
-       stable grayscale read over a merely nearby hue. */
+
     float lightness = (source.lightness - candidate.lightness) * 1.24f;
     float green_red = source.green_red - candidate.green_red;
     float blue_yellow = source.blue_yellow - candidate.blue_yellow;
@@ -13088,9 +13338,7 @@ static bool LoadSharedPaletteLookup(void)
                         environment_index = index;
                     }
                 }
-                /* Protected colors own only a tight perceptual neighborhood.
-                   Exact character and signal pigments survive, while broad
-                   terrain is pulled toward its material family instead. */
+
                 const float protected_radius_squared = 0.003025f;
                 bool choose_protected = protected_index >= 0 &&
                     protected_distance <= protected_radius_squared &&
@@ -13333,6 +13581,10 @@ static void LoadVisualStyle(void)
                 visual_style.hero, "fogFar");
             visual_style.hero_ink_strength_location = GetShaderLocation(
                 visual_style.hero, "inkStrength");
+            visual_style.hero_rim_tint_location = GetShaderLocation(
+                visual_style.hero, "characterRimTint");
+            visual_style.hero_rim_strength_location = GetShaderLocation(
+                visual_style.hero, "characterRimStrength");
             float ink_strength = CC_HERO_INK_STRENGTH;
             SetShaderValue(visual_style.hero,
                            visual_style.hero_ink_strength_location,
@@ -13374,6 +13626,10 @@ static void LoadVisualStyle(void)
                 visual_style.npc, "heroEmphasis");
             visual_style.npc_hero_head_position_location = GetShaderLocation(
                 visual_style.npc, "heroHeadPosition");
+            visual_style.npc_rim_tint_location = GetShaderLocation(
+                visual_style.npc, "characterRimTint");
+            visual_style.npc_rim_strength_location = GetShaderLocation(
+                visual_style.npc, "characterRimStrength");
             visual_style.npc_ready = true;
         } else {
             visual_style.npc = (Shader){0};
@@ -13417,6 +13673,12 @@ static void LoadVisualStyle(void)
                 visual_style.npc_skinned_body_skin_remap_location =
                     GetShaderLocation(visual_style.npc_skinned,
                                       "bodySkinRemap");
+                visual_style.npc_skinned_rim_tint_location =
+                    GetShaderLocation(visual_style.npc_skinned,
+                                      "characterRimTint");
+                visual_style.npc_skinned_rim_strength_location =
+                    GetShaderLocation(visual_style.npc_skinned,
+                                      "characterRimStrength");
                 visual_style.npc_skinned_ready = true;
             } else {
                 visual_style.npc_skinned = (Shader){0};
@@ -13561,6 +13823,7 @@ static void LoadHeroSkin(void)
     hero_skin.animation.keyframePoses = hero_skin.frames;
     (void)snprintf(hero_skin.animation.name, sizeof(hero_skin.animation.name),
                    "engine-physics");
+    ReleaseUploadedModelCpuData(&hero_skin.model);
     hero_skin.ready = true;
     TraceLog(LOG_INFO,
              "HERO: loaded %s skin with %d meshes on %d physics bones",
@@ -13627,10 +13890,7 @@ static bool DrawHeroSkin(const CcHumanoidSkinPose *skin,
         Quaternion delta = HeroRotationBetween(
             rest_direction, target_direction);
         if (skin_bone == CC_HUMANOID_SKIN_HEAD) {
-            /* Aligning only the head bone's long axis loses yaw because that
-               axis is almost vertical. Use its complete biomechanical frame
-               so the authored face really turns front, three-quarter, and
-               profile with the actor. */
+
             const CcHumanoidSkinBonePose *head =
                 &skin->bones[CC_HUMANOID_SKIN_HEAD];
             delta = (Quaternion){head->world_rotation.x,
@@ -13702,7 +13962,11 @@ static NpcBodySkinCache *NpcBodyForAppearance(
     int32_t frame = NpcBodyFrameForAppearance(appearance);
     int32_t muscle = NpcBodyMuscleForAppearance(appearance);
     int32_t tissue = NpcBodyTissueForAppearance(appearance);
-    return &npc_body_skins[frame][muscle][tissue];
+    NpcBodySkinCache *body = &npc_body_skins[frame][muscle][tissue];
+#if defined(PLATFORM_WEB)
+    if (!body->ready) return &npc_body_skins[1][1][1];
+#endif
+    return body;
 }
 
 static bool DrawNpcBodySkin(const CcHumanoidSkinPose *skin,
@@ -13745,11 +14009,7 @@ static bool DrawNpcBodySkin(const CcHumanoidSkinPose *skin,
         body->model.materials[material].maps[MATERIAL_MAP_DIFFUSE].color =
             WHITE;
     }
-    /* The continuous skin asset closes joints under every fitted module. Its
-       source color is skin everywhere, so remap that hidden foundation to
-       underclothes here; the separate head and hand modules restore exposed
-       skin. Without this pass, flesh-colored torso and leg gaps dominate the
-       tiny combat silhouette. */
+
     rlDrawRenderBatchActive();
     float body_skin_remap = 1.0f;
     SetShaderValue(visual_style.npc_skinned,
@@ -13787,7 +14047,7 @@ typedef struct TreeCrownProfile {
 } TreeCrownProfile;
 
 static const TreeCrownProfile TREE_CROWN_PROFILES[] = {
-    /* Alder: a tall shard with a broken, conifer-like outline. */
+
     {
         1.12f, 0.28f, -0.34f, -0.88f,
         {0.18f, -0.08f}, {-0.05f, 0.04f},
@@ -13796,7 +14056,7 @@ static const TreeCrownProfile TREE_CROWN_PROFILES[] = {
         {0.82f, 0.98f, 0.76f, 0.92f, 0.72f, 0.88f},
         {0.92f, 0.74f, 0.96f, 0.78f, 0.88f, 0.70f}
     },
-    /* Oak: shallow caps make overlapping masses read as broad leaf plates. */
+
     {
         0.58f, 0.22f, -0.30f, -0.54f,
         {-0.12f, 0.08f}, {0.02f, -0.03f},
@@ -13805,7 +14065,7 @@ static const TreeCrownProfile TREE_CROWN_PROFILES[] = {
         {0.94f, 0.78f, 1.00f, 0.84f, 0.96f, 0.74f},
         {0.82f, 1.00f, 0.80f, 0.94f, 0.72f, 0.90f}
     },
-    /* Pollard: a short top and long lower taper suggest hanging regrowth. */
+
     {
         0.72f, 0.30f, -0.20f, -1.12f,
         {0.12f, 0.02f}, {-0.06f, -0.04f},
@@ -13905,7 +14165,9 @@ static Model BuildTreeCrownModel(TreeCrownShape shape)
         return (Model){0};
     }
     UploadMesh(&mesh, false);
-    return LoadModelFromMesh(mesh);
+    Model model = LoadModelFromMesh(mesh);
+    ReleaseUploadedModelCpuData(&model);
+    return model;
 }
 
 static void LoadTreeCrownModels(void)
@@ -13942,11 +14204,15 @@ void CcLocalRendererInit(void)
     street_camera_rig = (FixedCameraRig){0};
     road_camera_rig = (FixedCameraRig){0};
     combat_camera_rig = (CombatCameraRig){0};
+    conversation_camera_rig = (ConversationCameraRig){0};
     face_render_context = (FaceRenderContext){0};
     (void)memset(creature_gaits, 0, sizeof(creature_gaits));
     sphere_models.small = LoadModelFromMesh(GenMeshSphere(1.0f, 6, 8));
     sphere_models.character = LoadModelFromMesh(GenMeshSphere(1.0f, 8, 8));
     sphere_models.scenery = LoadModelFromMesh(GenMeshSphere(1.0f, 10, 12));
+    ReleaseUploadedModelCpuData(&sphere_models.small);
+    ReleaseUploadedModelCpuData(&sphere_models.character);
+    ReleaseUploadedModelCpuData(&sphere_models.scenery);
     sphere_models.ready = true;
     LoadTreeCrownModels();
     LoadHeroSkin();
@@ -13972,7 +14238,7 @@ void CcLocalRendererSetScreenFirstHero(bool enabled)
 
 void CcLocalRendererSetOpeningStep(CcLocalOpeningStep step)
 {
-    active_opening_step = step >= CC_LOCAL_OPENING_FIND_JORY &&
+    active_opening_step = step >= CC_LOCAL_OPENING_LEGACY &&
                           step <= CC_LOCAL_OPENING_COMPLETE ?
         step : CC_LOCAL_OPENING_COMPLETE;
 }
@@ -13980,6 +14246,13 @@ void CcLocalRendererSetOpeningStep(CcLocalOpeningStep step)
 void CcLocalRendererSetDiagnosticOverlay(bool enabled)
 {
     draw_hero_rig_debug = enabled;
+}
+
+void CcLocalRendererSetMovementPreview(
+    const CcLocalMovementPreview *preview)
+{
+    renderer_movement_preview = preview != NULL ?
+        *preview : (CcLocalMovementPreview){0};
 }
 
 void CcLocalRendererShutdown(void)
@@ -14073,6 +14346,7 @@ void CcLocalRendererShutdown(void)
     street_camera_rig = (FixedCameraRig){0};
     road_camera_rig = (FixedCameraRig){0};
     combat_camera_rig = (CombatCameraRig){0};
+    conversation_camera_rig = (ConversationCameraRig){0};
     face_render_context = (FaceRenderContext){0};
     bridge_checkpoint_status = BRIDGE_CHECKPOINT_UNKNOWN;
 }
@@ -14083,7 +14357,7 @@ static void DrawSphereModel(Model model, Vector3 center, float radius, Color col
                 (Vector3){radius, radius, radius}, color);
 }
 
-/* Raylib's default 16x16 sphere is excessive for this fixed isometric camera. */
+
 static void DrawSmallSphere(Vector3 center, float radius, Color color)
 {
     DrawSphereModel(sphere_models.small, center, radius, color);
@@ -14144,10 +14418,7 @@ static float DrawPitchedRoof(float x, float z, float width, float depth,
     bool ridge_along_x = width >= depth;
     Color shadow = ShadeColor(roof, 0.72f);
 
-    /* Real pitched planes make the roof change the building silhouette. The
-       old stack of flat courses still read as a decorated box, especially in
-       close pages. Thick timber-edged slopes keep the pixel-art weight while
-       producing a clear medieval gable. */
+
     DrawBox((Vector3){x + width * 0.5f, wall_height - 0.06f,
                       z + depth * 0.5f},
             (Vector3){width + overhang * 2.18f, 0.24f,
@@ -14174,8 +14445,7 @@ static float DrawPitchedRoof(float x, float z, float width, float depth,
         DrawTiltedBox(center, size, axis, plane_angle,
                       side > 0 ? roof : shadow);
 
-        /* Three raised shingle battens make each slope catch light without
-           turning it back into a stack of horizontal terraces. */
+
         for (int32_t batten = 1; batten <= 3; ++batten) {
             float amount = (float)batten / 4.0f;
             float run = half_span * amount;
@@ -14215,10 +14485,7 @@ static void DrawConstructedWallShell(float x, float z, float width,
     Color lower = ShadeColor(wall, 0.78f);
     Color side = ShadeColor(wall, 0.90f);
 
-    /* The shell is built in layers. A deep lower block carries a smaller
-       wall core; projecting bays and corner piers then restore the complete
-       collision-sized silhouette. This gives the camera real parallax at
-       every edge instead of one flat facade with lines painted on it. */
+
     DrawBox((Vector3){x + width * 0.5f, base_height * 0.5f,
                       z + depth * 0.5f},
             (Vector3){width, base_height, depth}, lower);
@@ -14278,8 +14545,7 @@ static void DrawConstructedWallShell(float x, float z, float width,
                                            ShadeColor(side, 0.92f));
     }
 
-    /* Timber houses gain a visibly cantilevered upper storey. Stone and
-       civic buildings keep their weight closer to the foundation. */
+
     if (style == 0 || style == 3) {
         float storey = fminf(2.18f, height * 0.43f);
         DrawBox((Vector3){x + width * 0.5f, storey,
@@ -14366,8 +14632,7 @@ static void DrawBuildingArchetypeDetails(float x, float z, float width,
     float front_z = z + depth + 0.105f;
     float side_x = x + width + 0.105f;
     if (style == 1) {
-        /* Workshops and storehouses use broad stone corner blocks. Their
-           alternating rhythm reads as masonry at the final art-pixel size. */
+
         Color stone = ShadeColor(wall, 1.16f);
         for (int32_t course = 0; course < 5; ++course) {
             float y = 0.47f + (float)course * (height - 0.56f) / 4.0f;
@@ -14384,8 +14649,7 @@ static void DrawBuildingArchetypeDetails(float x, float z, float width,
     }
 
     if (style == 2) {
-        /* Civic halls carry a stronger two-storey order than the cottages:
-           tall pilasters, a balcony course, and a bright authority line. */
+
         Color pilaster = BlendColor(ShadeColor(wall, 0.62f), trim, 0.18f);
         for (int32_t bay = 0; bay < 3; ++bay) {
             float post_x = x + width * (0.18f + (float)bay * 0.32f);
@@ -14403,8 +14667,7 @@ static void DrawBuildingArchetypeDetails(float x, float z, float width,
         return;
     }
 
-    /* Cottages and mine-row houses expose their timber skeleton. The mine
-       family is darker and denser; the domestic family keeps wider bays. */
+
     Color timber = style == 3 ? ShadeColor(trim, 0.76f) : trim;
     int32_t bay_count = style == 3 ? 3 : 2;
     for (int32_t bay = 1; bay <= bay_count; ++bay) {
@@ -14463,8 +14726,7 @@ static void DrawFacadeWindow(Vector3 center, int32_t side, Color trim,
     DrawBox(sill_center, sill, ShadeColor(trim, 1.08f));
     DrawBox(lintel_center, lintel, ShadeColor(trim, 0.82f));
 
-    /* Deep jambs make the window a cavity in the wall. At gameplay scale the
-       visible side faces matter more than another line on the glass. */
+
     float outward = 0.10f;
     Vector3 jamb_a = center;
     Vector3 jamb_b = center;
@@ -14502,9 +14764,7 @@ static void DrawBuildingFoundation(float x, float z, float width,
     DrawBuildingContactShadow(x, z, width, depth, height);
     Color footing = ShadeColor(wall, 0.48f);
     Color cap = ShadeColor(wall, 0.63f);
-    /* Sink the footing slightly into the terrain, then carry a wider cap
-       around the wall. This layer is drawn without foreground reveal, so a
-       cutaway can never turn a solid house into a patch of bare ground. */
+
     DrawBox((Vector3){x + width * 0.5f, 0.18f,
                       z + depth * 0.5f},
             (Vector3){width + 0.20f, 0.52f, depth + 0.20f}, footing);
@@ -14512,9 +14772,7 @@ static void DrawBuildingFoundation(float x, float z, float width,
                       z + depth * 0.5f},
             (Vector3){width + 0.30f, 0.12f, depth + 0.30f}, cap);
 
-    /* Two visible block courses turn the footing into laid masonry. The
-       alternating joints continue around the corner so it reads as one
-       weight-bearing construct from every street shot. */
+
     for (int32_t course = 0; course < 2; ++course) {
         float y = 0.13f + (float)course * 0.25f;
         float block_width = 0.92f;
@@ -14571,9 +14829,7 @@ static void DrawBuilding(float x, float z, float width, float depth,
                                Fade(WORLD_TEAL, 0.78f);
     DrawConstructedWallShell(x, z, width, depth, height, wall, trim, style);
 
-    /* The front and both side facades can face a close runtime camera. Depth
-       here is not decoration pasted onto a diorama: it follows the same
-       authoritative footprint used by collision. */
+
     for (int32_t corner = 0; corner < 2; ++corner) {
         float post_x = corner == 0 ? x + 0.18f : x + width - 0.18f;
         DrawBox((Vector3){post_x, height * 0.50f, z + depth + 0.045f},
@@ -14587,9 +14843,7 @@ static void DrawBuilding(float x, float z, float width, float depth,
             (Vector3){0.09f, 0.18f, depth - 0.18f},
             ShadeColor(trim, 0.86f));
 
-    /* Camera rooms can approach a house from either side. Give the rear and
-       left elevations the same large construction rhythm as the nominal
-       front so a camera turn never reveals an undecorated cuboid. */
+
     for (int32_t corner = 0; corner < 2; ++corner) {
         float post_x = corner == 0 ? x + 0.18f : x + width - 0.18f;
         DrawBox((Vector3){post_x, height * 0.50f, z - 0.045f},
@@ -14600,9 +14854,7 @@ static void DrawBuilding(float x, float z, float width, float depth,
     DrawBox((Vector3){x - 0.045f, height - 0.24f, center.z},
             (Vector3){0.09f, 0.18f, depth - 0.18f}, trim);
 
-    /* Strong horizontal courses keep the low camera from reading each house
-       as one unscaled slab. They also carry the trim language around the
-       visible corner, so the facade remains coherent from adjacent rooms. */
+
     Color plinth = ShadeColor(wall, 0.50f);
     float story_course = fminf(2.16f, height * 0.42f);
     DrawBox((Vector3){center.x, 0.46f, z + depth + 0.052f},
@@ -14746,10 +14998,7 @@ static void DrawRoundTower(float center_x, float center_z, float radius,
     }
 }
 
-/* A building footprint is the stable gameplay contract. Its visible shell
-   can still be a believable collection of wings, aisles, upper floors, and
-   towers. Each settlement gets a kit derived from its work and landscape so
-   the skyline communicates place before banners or labels are read. */
+
 static void DrawSettlementBuilding(const WorldBuilding *building,
                                    Color wall, Color roof,
                                    const CcLocalPlaceProfile *profile,
@@ -14767,8 +15016,7 @@ static void DrawSettlementBuilding(const WorldBuilding *building,
         case CC_SETTLEMENT_FARMING:
             if (building->style == CC_LOCAL_BUILDING_WORKSHOP ||
                 building_index < 0) {
-                /* Barns have a tall working nave and genuinely open side
-                   sheds, rather than a house facade painted onto a box. */
+
                 float aisle = width * 0.20f;
                 DrawBuilding(x + aisle, z, width - aisle * 2.0f, depth,
                              height, wall, roof, building->door,
@@ -14794,8 +15042,7 @@ static void DrawSettlementBuilding(const WorldBuilding *building,
             }
             break;
         case CC_SETTLEMENT_MINING: {
-            /* Stone lower storeys carry inset timber lodgings. Their stepped
-               sections echo the worker terraces cut into the quarry. */
+
             float lower_height = height * 0.48f;
             DrawBuilding(x, z, width, depth, lower_height,
                          ShadeColor(wall, 0.82f), ShadeColor(roof, 0.78f),
@@ -14819,8 +15066,7 @@ static void DrawSettlementBuilding(const WorldBuilding *building,
             break;
         }
         case CC_SETTLEMENT_MARKET: {
-            /* Trading houses wrap an open central bay. The arcade and three
-               rooflines make a public hall rather than another residence. */
+
             float wing_width = width * 0.34f;
             DrawBuilding(x, z, wing_width, depth, height * 0.72f,
                          wall, roof, building->door, building->style);
@@ -14856,9 +15102,7 @@ static void DrawSettlementBuilding(const WorldBuilding *building,
             break;
         }
         case CC_SETTLEMENT_CAPITAL:
-            /* Palace-front buildings use a tall central pavilion and two
-               lower wings, creating the formal stepped silhouette visible
-               in the reference's long axial views. */
+
             DrawBuilding(x, z + depth * 0.10f, width * 0.31f,
                          depth * 0.90f, height * 0.62f,
                          wall, ShadeColor(roof, 0.92f), false,
@@ -14901,11 +15145,7 @@ static void DrawTerrainPatchAtTop(float x, float z, float width, float depth,
               (Vector3){width, thickness, depth}, color);
 }
 
-/* The orthographic street camera shows roughly 22 metres across. This larger
-   radius preserves tall silhouettes beyond the screen edge while avoiding
-   hundreds of immediate-mode calls for distant scenery. Culling uses the
-   clamped camera target rather than the player so it remains stable at the
-   world boundary. */
+
 static bool SceneryFootprintVisibleWithin(Rectangle footprint, Vector3 focus,
                                           float visibility_radius)
 {
@@ -15033,8 +15273,7 @@ static void DrawCroftScarecrow(float hunger)
     DrawCylinderEx(post_base, post_top, 0.060f, 0.045f, 7, wood);
     DrawCylinderEx(arm_left, arm_right, 0.052f, 0.045f, 7, wood);
 
-    /* Uneven hanging rags and exposed straw make this read as a field prop,
-       not another motionless person sharing the road. */
+
     DrawTiltedBox((Vector3){x - 0.18f, 1.17f, z - 0.01f},
                   (Vector3){0.34f, 0.58f, 0.09f},
                   (Vector3){0.0f, 0.0f, 1.0f}, 10.0f, cloth);
@@ -15081,8 +15320,7 @@ static void DrawMineWaystone(void)
             ShadeColor(stone, 1.12f));
     DrawSmallSphere((Vector3){x, 1.03f, z + 0.27f}, 0.10f, WORLD_VIOLET);
 
-    /* Two rails and broad sleepers turn the colored road into an explicit
-       visual sentence: this way leads to the mine beyond the next room. */
+
     Color rail = WORLD_METAL_SHADOW;
     Color sleeper = WORLD_WOOD;
     DrawBox((Vector3){22.65f, 0.055f, 54.92f},
@@ -15094,8 +15332,7 @@ static void DrawMineWaystone(void)
                           0.035f, 55.32f},
                 (Vector3){0.14f, 0.055f, 1.18f}, sleeper);
     }
-    /* The rail head ends in a working ore station, so the mine reads before
-       the entrance itself comes into view. */
+
     DrawBox((Vector3){26.45f, 0.44f, 54.35f},
             (Vector3){1.45f, 0.88f, 1.05f},
             WORLD_WOOD_SHADOW);
@@ -15157,8 +15394,7 @@ static void DrawWorkshopForge(Color kingdom,
     }
     if (profile == NULL) return;
     if (profile->function == CC_SETTLEMENT_MINING) {
-        /* A low ore tram and its rails make this a lampwright's working
-           alley, rather than the same village smithy in darker colors. */
+
         for (int32_t rail = -1; rail <= 1; rail += 2) {
             DrawBox((Vector3){x - 0.65f, 0.07f,
                               z + (float)rail * 0.52f},
@@ -15173,7 +15409,7 @@ static void DrawWorkshopForge(Color kingdom,
                             0.22f, ShadeColor(WORLD_STONE, 0.66f));
         }
     } else if (profile->function == CC_SETTLEMENT_FORTRESS) {
-        /* The armourer displays polearms against a red muster rail. */
+
         DrawBox((Vector3){x - 1.55f, 1.05f, z},
                 (Vector3){0.16f, 1.95f, 1.55f}, WORLD_WOOD_SHADOW);
         DrawBox((Vector3){x - 1.48f, 1.62f, z},
@@ -15188,7 +15424,7 @@ static void DrawWorkshopForge(Color kingdom,
                           WORLD_METAL_LIGHT);
         }
     } else if (profile->function == CC_SETTLEMENT_CAPITAL) {
-        /* The royal ward turns the forge into a goldsmith's open counter. */
+
         DrawBox((Vector3){x - 1.48f, 0.58f, z},
                 (Vector3){1.55f, 0.92f, 1.25f},
                 ShadeColor(WORLD_WOOD_LIGHT, 0.86f));
@@ -15230,8 +15466,7 @@ static void DrawTownSquareFocus(Color kingdom,
     const float z = CC_LOCAL_NOTICE_Z;
     Color stone = WORLD_STONE_LIGHT;
     Color accent = PlaceIdentityAccent(profile, kingdom);
-    /* A low civic seal gathers the plaza around the notice board without
-       creating a new collision step or blocking click movement. */
+
     DrawCylinder((Vector3){x, 0.015f, z}, 2.65f, 2.65f, 0.045f, 20,
                  ShadeColor(stone, 0.78f));
     DrawCylinder((Vector3){x, 0.052f, z}, 2.22f, 2.22f, 0.035f, 20,
@@ -15360,9 +15595,7 @@ static void DrawEastRoomFocus(float hunger, Color kingdom,
     const float z = 51.02f;
     Color timber = WORLD_WOOD_LIGHT;
     if (profile != NULL && profile->function == CC_SETTLEMENT_CAPITAL) {
-        /* Four slim columns and a clipped hedge turn the east room into a
-           rose cloister. The old generic grain silo was especially obvious
-           once this room received its close camera. */
+
         DrawCylinder((Vector3){x, 0.07f, z}, 0.90f, 0.90f, 0.14f, 14,
                      WORLD_STONE_LIGHT);
         for (int32_t corner = 0; corner < 4; ++corner) {
@@ -15433,14 +15666,15 @@ static void DrawEastRoomFocus(float hunger, Color kingdom,
             (Vector3){0.58f, 1.20f, 0.08f}, timber);
     DrawBox((Vector3){x, 1.45f, z + 0.98f},
             (Vector3){0.72f, 0.10f, 0.12f}, WORLD_GOLD);
-    int32_t sacks = hunger > 0.45f ? 2 : 5;
-    for (int32_t sack = 0; sack < sacks; ++sack) {
-        float sack_x = x - 1.28f + (float)(sack % 3) * 0.48f;
-        float sack_z = z + 0.64f + (float)(sack / 3) * 0.40f;
-        DrawCharacterEllipsoid((Vector3){sack_x, 0.26f, sack_z},
-                               (Vector3){0.25f, 0.32f, 0.20f},
-                               BlendColor(WORLD_CROP_LIGHT,
-                                          WORLD_ROAD_LIGHT, 0.42f));
+    int32_t boxes = hunger > 0.45f ? 2 : 5;
+    for (int32_t box = 0; box < boxes; ++box) {
+        float box_x = x - 1.28f + (float)(box % 3) * 0.48f;
+        float box_z = z + 0.64f + (float)(box / 3) * 0.40f;
+        DrawBox((Vector3){box_x, 0.24f, box_z},
+                (Vector3){0.40f, 0.42f, 0.36f},
+                (Color){177, 116, 55, 255});
+        DrawBox((Vector3){box_x, 0.46f, box_z},
+                (Vector3){0.42f, 0.05f, 0.38f}, WORLD_CROP_LIGHT);
     }
 }
 
@@ -15565,9 +15799,7 @@ static void DrawPlaceLandmark(const CcLocalPlaceLandmark *landmark,
         .style = building_style,
         .door = true,
     };
-    /* Secondary landmarks occupy real building footprints, so they should
-       use the same massing language as the rest of their town. This removes
-       the old foreground cubes without inventing separate collision shapes. */
+
     DrawSettlementBuilding(&shell, wall, roof, ActivePlaceProfile(),
                            landmark->variant);
 
@@ -15737,9 +15969,7 @@ static float TerrainRoadCenterline(const TerrainRoad *road,
         road->footprint.x + road->footprint.width * 0.5f;
     float cross_width = road->runs_east_west ? road->footprint.height :
                                                road->footprint.width;
-    /* Main carriage lanes are surveyed public ways. Keeping their centerline
-       straight protects the long gate and yard sightlines; smaller local
-       roads retain the hand-made wander that gives each district texture. */
+
     if (TerrainRoadIndexIsCarriageLane(road_index)) return cross;
     float bend = sinf(amount * PI) *
                  sinf(amount * 2.35f + (float)road_index * 1.71f) *
@@ -15767,9 +15997,7 @@ static float TerrainRoadSignedInset(const TerrainRoad *road,
     float width_noise = TerrainValueNoise(
         along - (float)road_index * 4.0f,
         (float)road_index * 9.0f, 5.5f, 72U);
-    /* The grading footprint includes drainage and a safe movement shoulder;
-       it is not all paved road. Keeping the visible wheel surface narrower
-       restores the scale of doors, carts, houses, and gate openings. */
+
     float visible_scale = TerrainRoadIndexIsCarriageLane(road_index) ? 0.94f :
                           cross_width >= 4.50f ? 0.72f :
                           cross_width >= 3.40f ? 0.80f : 0.90f;
@@ -15778,14 +16006,14 @@ static float TerrainRoadSignedInset(const TerrainRoad *road,
     float cross_inset = half_width - fabsf(
         cross - TerrainRoadCenterline(road, road_index, along));
     float end_inset = fminf(along - start, start + length - along);
-    /* Soften square caps but leave enough overlap for road junctions. */
+
     end_inset += sinf(amount * PI) * 0.16f;
     return fminf(cross_inset, end_inset);
 }
 
 static int32_t TerrainVisibleRoadCount(void)
 {
-    /* The final terrain road is an unpaved raid ingress. */
+
     return (int32_t)(sizeof(TERRAIN_ROADS) / sizeof(TERRAIN_ROADS[0])) - 1;
 }
 
@@ -15921,9 +16149,7 @@ static bool TerrainPointInPlayableWorld(float x, float z)
            z >= 0.0f && z <= CC_LOCAL_WORLD_DEPTH;
 }
 
-/* The collision world has a hard gameplay boundary, but the rendered country
-   continues beyond it. Matching the generated height at the boundary keeps
-   the extension seamless while a small natural delta prevents a flat skirt. */
+
 static float TerrainVisualHeightAt(float x, float z)
 {
     if (TerrainPointInPlayableWorld(x, z)) {
@@ -16079,9 +16305,7 @@ static void TerrainMeshWriteVertexWithNormal(TerrainMeshWriter *writer,
     }
     if (writer->cursor >= writer->mesh.vertexCount) return;
     int32_t vertex = writer->cursor;
-    /* Keep the true face direction on steep landforms. The old clamp made
-       quarry walls and ravines light like gentle grass slopes, which erased
-       their height in the fixed storybook camera. */
+
     normal.y = fmaxf(normal.y, 0.24f);
     normal = Vector3Normalize(normal);
     writer->mesh.vertices[vertex * 3 + 0] = point.x;
@@ -16197,6 +16421,7 @@ static bool TerrainRenderCacheBuild(const CcSettlement *place)
     }
     UploadMesh(&writer.mesh, false);
     terrain_render_cache.model = LoadModelFromMesh(writer.mesh);
+    ReleaseUploadedModelCpuData(&terrain_render_cache.model);
     ApplyWorldShader(&terrain_render_cache.model);
     terrain_render_cache.seed = street_terrain_seed;
     terrain_render_cache.place_id = place != NULL ? place->id : 0U;
@@ -16491,9 +16716,7 @@ static void DrawTerrainRoadRuts(const CcSettlement *place, Vector3 focus)
             }
         }
     }
-    /* The two wheel lines make the carriage route readable through every
-       district material. Courts stay unmarked so they read as turning and
-       loading space rather than a second narrow lane. */
+
     for (int32_t i = 0; i < 3; ++i) {
         const CcLocalPlaceRoad *carriage_road = ActiveCarriageRouteAt(i);
         if (carriage_road == NULL) continue;
@@ -16640,7 +16863,7 @@ static void TerrainTuft(float x, float z, float height, float width,
         TerrainCoverVertex(left, bottom);
         TerrainCoverVertex(right, bottom);
         TerrainCoverVertex(peak, top);
-        /* The crossed blades are deliberately two-sided. */
+
         TerrainCoverVertex(peak, top);
         TerrainCoverVertex(right, bottom);
         TerrainCoverVertex(left, bottom);
@@ -16834,6 +17057,7 @@ static bool TerrainDetailRenderCacheBuild(const CcSettlement *place)
 
     UploadMesh(&writer.mesh, false);
     terrain_detail_render_cache.model = LoadModelFromMesh(writer.mesh);
+    ReleaseUploadedModelCpuData(&terrain_detail_render_cache.model);
     ApplyWorldShader(&terrain_detail_render_cache.model);
     terrain_detail_render_cache.seed = street_terrain_seed;
     terrain_detail_render_cache.place_id = place != NULL ? place->id : 0U;
@@ -16920,8 +17144,7 @@ static void DrawFarmTerrainStage(Vector3 focus)
         if (!SceneryPointVisible(river_x, z, focus)) continue;
         float next_x = 91.0f + sinf((z + 4.0f) * 0.082f) * 1.7f;
         float angle = -atan2f(next_x - river_x, 4.0f) * RAD2DEG;
-        /* The playable bridge uses a graded terrain strip for collision, but
-           the water must remain down in the authored river gorge. */
+
         float ground = TerrainSampleGrid(street_terrain_natural,
                                          river_x, z);
         DrawTiltedBox((Vector3){(river_x + next_x) * 0.5f,
@@ -17084,9 +17307,7 @@ static void DrawBackdropMass(float x, float base_y, float z,
                              float upper_ratio, float height,
                              int32_t sides, Color color)
 {
-    /* A scaled low-poly cone gives the horizon long shoulders instead of a
-       row of equal round hills. Backdrop geometry is deliberately outside
-       navigation and collision; its size is purely compositional. */
+
     rlPushMatrix();
     rlTranslatef(x, base_y, z);
     rlScalef(radius_x, 1.0f, radius_z);
@@ -17288,11 +17509,7 @@ static void DrawTownBackdrop(const CcSettlement *place)
 {
     if (place == NULL) return;
 
-    /* The playable town is the foreground of a much larger realm. Each
-       horizon now has a remote range and a regional shoulder; the fortress
-       also carries a constructed pass wall as its scale cue. These remain
-       scenic geometry, so navigation, collision, and the fixed camera-room
-       contract stay intact. */
+
     switch (place->function) {
         case CC_SETTLEMENT_FARMING: DrawFarmingBackdrop(); break;
         case CC_SETTLEMENT_MINING: DrawMiningBackdrop(); break;
@@ -17431,11 +17648,7 @@ bool CcLocalBuildingObscuresHeroInternal(Rectangle footprint, float height,
                              Vector3Scale(camera_right, -0.38f)),
                    (Vector3){0.0f, 0.16f, 0.0f}),
     };
-    /* Test the hero's readable silhouette, not one exact torso pixel. A roof
-       edge can hide the head or both shoulders while missing that center
-       ray, especially when combat changes to a perspective camera. The box
-       is still the owning building's physical footprint, so an overlapping
-       neighboring house cannot be selected by accident. */
+
     for (int32_t sample = 0;
          sample < (int32_t)(sizeof(samples) / sizeof(samples[0])); ++sample) {
         Vector2 screen = GetWorldToScreenEx(
@@ -17516,9 +17729,7 @@ static void UpdateWorldBuildingReveals(Camera3D camera,
                 0.30f, state->clear_seconds + delta_time);
             state->occluded_seconds = 0.0f;
         }
-        /* Brief edge crossings do nothing. Once a reveal is established,
-           keep it through a short clear interval and ease both directions.
-           This avoids one-frame cutaway changes at wall corners. */
+
         bool held_reveal = occluded ? state->occluded_seconds >= 0.06f :
                            state->clear_seconds < 0.14f &&
                            state->amount > 0.002f;
@@ -17542,8 +17753,7 @@ static void DrawWorldBuildings(Color kingdom, Vector3 focus,
     UpdateWorldBuildingReveals(camera, reveal_world,
                                render_width, render_height, clock);
 
-    /* Every structure gets an opaque footing pass before any upper-wall
-       reveal. This includes the authored market replacement. */
+
     SetWorldForegroundReveal(0.0f, reveal_cut_height);
     for (int32_t i = 0; i < ActiveWorldBuildingCount(); ++i) {
         WorldBuilding building = ActiveWorldBuildingAt(i);
@@ -17562,11 +17772,7 @@ static void DrawWorldBuildings(Color kingdom, Vector3 focus,
     for (int32_t i = 0; i < ActiveWorldBuildingCount(); ++i) {
         WorldBuilding building = ActiveWorldBuildingAt(i);
         if (!SceneryFootprintVisible(building.footprint, focus)) continue;
-        /* The market footprint remains authoritative for collision, but its
-           visible shell comes from the shared Blender library when present.
-           A camera-to-hero sightline classifies the complete house at its
-           current position. Rear wall, roof, and trim therefore share one
-           reveal, while a house behind the hero remains entirely solid. */
+
         if (profile->function == CC_SETTLEMENT_MARKET &&
             i == profile->primary_building &&
             runtime_assets[RUNTIME_ASSET_MARKET].ready) continue;
@@ -17772,10 +17978,7 @@ static void DrawConstructedCompoundStructure(
         (profile->function == CC_SETTLEMENT_MARKET ||
          profile->function == CC_SETTLEMENT_CAPITAL ||
          profile->function == CC_SETTLEMENT_DUNGEON_TOWN)) {
-        /* Customs and palace compounds use round gate turrets; the dungeon
-           town inherits a rougher version of the same old masonry. This
-           breaks the all-square castle silhouette while keeping the exact
-           authored tower footprint solid for collision. */
+
         float radius = fminf(footprint.width, footprint.height) * 0.48f;
         Color tower_stone = profile->function ==
                 CC_SETTLEMENT_DUNGEON_TOWN ? ShadeColor(stone, 0.76f) : stone;
@@ -17807,8 +18010,7 @@ static void DrawConstructedCompoundStructure(
     DrawBox((Vector3){center_x, height * 0.50f, center_z},
             (Vector3){footprint.width, height, footprint.height}, stone);
 
-    /* Broad courses and buttresses make the fortification feel load-bearing.
-       The bands wrap the two visible sides; towers also get corner mass. */
+
     int32_t courses = wall_run ? 2 : 3;
     for (int32_t course = 1; course <= courses; ++course) {
         float y = height * (float)course / (float)(courses + 1);
@@ -17959,9 +18161,7 @@ static void DrawCastle(Color kingdom, const CcLocalPlaceProfile *profile,
         DrawBox((Vector3){80.70f, gate_height + 0.50f, gate_z},
                 (Vector3){0.78f, 2.30f, 0.06f}, kingdom);
 
-        /* The open southern gate is the room's navigational promise. A high
-           lintel and paired fire points frame the pass without putting an
-           invisible portcullis across the traversable opening. */
+
         Color gate_stone = CompoundStoneColor(
             profile, kingdom, CC_LOCAL_COMPOUND_WALL);
         DrawBox((Vector3){gate_x, gate_height, gate_z},
@@ -18066,9 +18266,7 @@ static float FaceProjectedSpan(Vector3 center, Vector3 axis,
 CcLocalFaceLodInternal CcLocalFaceLodForProjectedHeightInternal(
     float projected_face_height)
 {
-    /* The sculpted head and molded hair own the silhouette. At medium range
-       keep only marks that survive as separate pixels; close views add the
-       beard without laying a second flat skin or hair shell over the model. */
+
     if (projected_face_height < 4.0f) {
         return CC_LOCAL_FACE_LOD_SILHOUETTE;
     }
@@ -18099,8 +18297,7 @@ static void DrawFaceQuad(Vector3 origin, Vector3 right, Vector3 up,
     Vector3 upper_left = Vector3Add(Vector3Subtract(center, across), rise);
     DrawTriangle3D(lower_left, lower_right, upper_right, color);
     DrawTriangle3D(lower_left, upper_right, upper_left, color);
-    /* Character-local right appears screen-left in a front view, so the tiny
-       plane can reverse its apparent winding. Draw the back winding too. */
+
     DrawTriangle3D(lower_left, upper_right, lower_right, color);
     DrawTriangle3D(lower_left, upper_left, upper_right, color);
 }
@@ -18150,8 +18347,7 @@ static void PaintWorldFaceBlock(void *context, int32_t grid_x,
 
     float grid_center_x = (float)grid_x + (float)grid_width * 0.5f;
     float grid_center_y = (float)grid_y + (float)grid_height * 0.5f;
-    /* The world canvas right vector is camera-right, so portrait x can map
-       directly without mirroring the fringe or scars. */
+
     float x = (grid_center_x - 10.0f) * canvas->cell_width;
     float width = (float)grid_width * canvas->cell_width;
     x *= canvas->horizontal_scale;
@@ -18185,14 +18381,11 @@ static void DrawWorldFace(Vector3 eye_center, Vector3 head_right,
                                Vector3DotProduct(to_camera, head_up)));
     to_camera = PhysicsNormalizeOr(to_camera, head_forward);
     float front_amount = Vector3DotProduct(head_forward, to_camera);
-    /* The fixed combat view often catches the hero just beyond profile while
-       they face a target. Let the priority face wrap onto that visible cheek;
-       ordinary actors still hide their features when genuinely turned away. */
+
     float hidden_face_cutoff = priority_face ? -0.08f : -0.12f;
     if (front_amount < hidden_face_cutoff) return;
 
-    /* Keep the graphic on the visible head surface but face its tiny pixel
-       grid toward the camera. The 3D skull, hair, and hat still carry turn. */
+
     Vector3 normal = to_camera;
     Vector3 feature_right = PhysicsNormalizeOr(
         PhysicsCross(head_up, normal), head_right);
@@ -18211,9 +18404,7 @@ static void DrawWorldFace(Vector3 eye_center, Vector3 head_right,
         projected_face_height);
     if (lod == CC_LOCAL_FACE_LOD_SILHOUETTE) return;
 
-    /* Indexed character shaders use vertex color as material metadata. Face
-       cards need their literal ink colors, so draw this tiny graphic layer
-       with raylib's color shader and let the caller restore scene lighting. */
+
     EndShaderMode();
     float projected_face_width = FaceProjectedSpan(
         eye_center, feature_right, half_width);
@@ -18221,8 +18412,7 @@ static void DrawWorldFace(Vector3 eye_center, Vector3 head_right,
                                        fmaxf(half_width * 2.0f, 0.0001f);
     float vertical_pixels_per_unit = projected_face_height /
                                      fmaxf(half_height * 2.0f, 0.0001f);
-    /* The portrait is built from square art pixels. Fit one square cell inside
-       both head spans instead of stretching x and y independently. */
+
     float cell_pixels = fminf(projected_face_width / 10.0f,
                               projected_face_height / 15.0f);
     WorldFaceCanvas canvas = {
@@ -18230,7 +18420,7 @@ static void DrawWorldFace(Vector3 eye_center, Vector3 head_right,
         .right = feature_right,
         .up = head_up,
         .normal = normal,
-        /* The portrait face is ten cells wide; hair-to-chin is fifteen. */
+
         .cell_width = cell_pixels /
                       fmaxf(horizontal_pixels_per_unit, 0.0001f),
         .cell_height = cell_pixels /
@@ -18359,9 +18549,7 @@ static void DrawNpcEquipment(const CcNpcAppearance *appearance,
                         ShadeColor(appearance->outer, 0.68f));
     }
     if ((appearance->equipment & CC_NPC_EQUIPMENT_ARMOR) != 0U) {
-        /* Shoulder pieces keep armor readable without laying a broad flat
-           slab across the torso. The torso volume supplies the breastplate
-           mass in this low-detail fallback. */
+
         DrawCharacterSphere(shoulder_l, 0.098f * scale, appearance->metal);
         DrawCharacterSphere(shoulder_r, 0.098f * scale, appearance->metal);
     }
@@ -18414,13 +18602,13 @@ static void DrawNpcGarmentCut(const CcNpcAppearance *appearance,
     Color shadow = ShadeColor(appearance->outer, 0.72f);
     switch (appearance->garment_style) {
         case 0:
-            /* A short belted coat gives the neutral recipe a shaped hem. */
+
             DrawOrientedBox(hip, (Vector3){0.0f, -0.10f * scale, 0.0f},
                             (Vector3){0.38f * scale, 0.28f * scale,
                                       0.28f * scale}, yaw, shadow);
             break;
         case 1:
-            /* Long split tails retain leg readability at the play camera. */
+
             for (int32_t side = -1; side <= 1; side += 2) {
                 DrawOrientedBox(hip,
                     (Vector3){(float)side * 0.105f * scale,
@@ -18430,7 +18618,7 @@ static void DrawNpcGarmentCut(const CcNpcAppearance *appearance,
             }
             break;
         case 2: {
-            /* A broad leather sash reads as travel support, not body mass. */
+
             Vector3 sash_end = LocalPoint(hip, 0.14f * scale,
                                            0.08f * scale, 0.17f * scale, yaw);
             DrawCylinderEx(shoulder_l, sash_end, 0.025f * scale,
@@ -18438,7 +18626,7 @@ static void DrawNpcGarmentCut(const CcNpcAppearance *appearance,
             break;
         }
         case 3:
-            /* A sleeveless over-vest breaks the tubular torso silhouette. */
+
             DrawOrientedBox(chest,
                             (Vector3){0.0f, -0.035f * scale,
                                       0.16f * scale},
@@ -18448,7 +18636,7 @@ static void DrawNpcGarmentCut(const CcNpcAppearance *appearance,
             break;
         case 4:
         default:
-            /* A layered waist wrap supports laborer and refugee recipes. */
+
             DrawCylinder(PhysicsAdd(hip,
                          (Vector3){0.0f, -0.03f * scale, 0.0f}),
                          0.22f * scale, 0.205f * scale, 0.15f * scale, 10,
@@ -18497,9 +18685,7 @@ static bool DrawNpcArchetypePose3D(
     position.y += fabsf(pulse) * 0.010f * movement *
                   appearance->bob_scale;
     float presentation_yaw = WrapAngle(yaw + pulse * 0.012f * movement);
-    /* Ambient people are stage actors, not navigation arrows. Bias them toward
-       the fixed adventure-game camera so a broad face/torso read survives even
-       when their simulated travel heading would present a one-pixel profile. */
+
     if (!npc_review_exact_yaw) {
         const float camera_read_yaw = 0.20f;
         presentation_yaw = WrapAngle(
@@ -18980,10 +19166,7 @@ static Matrix NpcModuleTransform(Vector3 origin, Vector3 right, Vector3 up,
     };
 }
 
-/* Large, bone-driven marks survive the final art-pixel grid better than the
-   small decorative pieces in the source mesh.  The dark clasp separates cape
-   from armor, while the broken gold chevron gives the hero a unique chest
-   read even when the face is only a few pixels tall. */
+
 static void DrawWayfarerHeroDetails(const CcHumanoidSkinPose *skin)
 {
     if (skin == NULL || !skin->valid) return;
@@ -19000,9 +19183,7 @@ static void DrawWayfarerHeroDetails(const CcHumanoidSkinPose *skin)
     Color portrait_burgundy = CC_STYLE_HERO_OUTER;
     Color broken_gold = CC_STYLE_HERO_ACCENT;
     Vector3 panel = PhysicsAdd(chest, PhysicsScale(up, -0.018f));
-    /* The fitted torso owns the chest silhouette. Keep only the raised
-       shoulder tabs and emblem here; the former stacked quads read as a
-       camera-facing board whenever the body turned. */
+
 
     static const CcHumanoidSkinBone shoulder_bones[] = {
         CC_HUMANOID_SKIN_UPPER_ARM_LEFT,
@@ -19209,9 +19390,7 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
     SetNpcPalette(&palette_appearance, featured_hero ? 0.56f : 0.68f,
                   featured_hero, presentation_head);
 
-    /* The skeleton, muscle controls, and soft tissue are construction data.
-       The visible body is one baked skin; the rigid pieces below are fitted
-       clothing, boots, head identity, hair, armor, and equipment. */
+
     bool drew = DrawNpcBodySkin(skin, appearance, featured_hero);
     if (!drew) return false;
 
@@ -19502,8 +19681,7 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
                agent->humanoid.action == CC_HUMANOID_ACTION_STRIKE) {
         expression = CC_NPC_PORTRAIT_FOCUSED;
     }
-    /* The projected marks and molded head both read the same identity recipe.
-       Only held expression may change between the world and the portrait. */
+
     CcFaceRecipe face = CcNpcFaceRecipe(appearance);
     float face_half_width = featured_hero ?
         0.138f * appearance->head_width :
@@ -19559,9 +19737,7 @@ static void DrawBiomechanicalBiped(const CcLocalAgent *agent)
         UseCharacterLighting();
         DrawWayfarerHeroDetails(&skin);
         RestoreWorldLighting();
-        /* The high-detail hero asset already owns its eyes, brows, nose,
-           mouth, hair, and broken crown as head-weighted 3D geometry. Never
-           layer procedural marks or a second crown over that authored face. */
+
         return;
     } else {
         CcLocalRendererRecordBiped(false);
@@ -19888,8 +20064,7 @@ static void DrawCharacterContactEffects(const CcLocalAgent *agent)
     float base_opacity = fallen ? 102.0f / 255.0f :
                          agent->crowned ? 108.0f / 255.0f :
                                           82.0f / 255.0f;
-    /* A bad terrain sample must never place the contact mark through the
-       character. It is safer to omit the shadow until the sample is valid. */
+
     if (surface <= agent->position.y + 0.12f) {
         DrawContactShadow(shadow, shadow_size.x * shadow_scale,
                           shadow_size.y * shadow_scale, agent->facing_yaw,
@@ -20160,7 +20335,92 @@ static void PrepareHeroDisplayAt(const CcLocalAgent *source,
     CcLocalAgentSetMorphology(display, source->morphology, false);
 }
 
-static void DrawCarriage3D(const CcSettlement *place, bool targeted,
+int32_t CcLocalCargoBoxCountInternal(const CcPlayerCompany *player)
+{
+    if (player == NULL) return 0;
+    int32_t count = 0;
+    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        if (player->cargo[good] > 0) count += player->cargo[good];
+        if (count >= 24) return 24;
+    }
+    return count;
+}
+
+static Color CargoBoxColor(CcGood good)
+{
+    switch (good) {
+        case CC_GOOD_FOOD: return (Color){177, 116, 55, 255};
+        case CC_GOOD_IRON: return WORLD_METAL_SHADOW;
+        case CC_GOOD_TOOLS: return WORLD_TEAL;
+        case CC_GOOD_WEAPONS: return WORLD_DANGER;
+        case CC_GOOD_GOLD: return WORLD_GOLD;
+        case CC_GOOD_GEMS: return WORLD_VIOLET;
+        case CC_GOOD_COUNT: break;
+    }
+    return WORLD_WOOD;
+}
+
+static Color CargoBoxBandColor(CcGood good)
+{
+    if (good == CC_GOOD_FOOD) return WORLD_CROP_LIGHT;
+    if (good == CC_GOOD_IRON) return WORLD_METAL_LIGHT;
+    return WORLD_INK;
+}
+
+static void DrawCarriedCargoBoxes(const CcPlayerCompany *player,
+                                  Vector3 base, float yaw)
+{
+    int32_t limit = CcLocalCargoBoxCountInternal(player);
+    if (limit <= 0) return;
+    const Vector3 rack_center = {-0.30f, 2.21f, 0.0f};
+    DrawOrientedBox(base, rack_center,
+                    (Vector3){2.92f, 0.10f, 1.42f}, yaw,
+                    WORLD_WOOD_LIGHT);
+    DrawOrientedBox(base, (Vector3){rack_center.x, 2.42f, -0.73f},
+                    (Vector3){2.98f, 0.42f, 0.07f}, yaw,
+                    WORLD_WOOD_SHADOW);
+    DrawOrientedBox(base, (Vector3){rack_center.x, 2.42f, 0.73f},
+                    (Vector3){2.98f, 0.42f, 0.07f}, yaw,
+                    WORLD_WOOD_SHADOW);
+    DrawOrientedBox(base, (Vector3){-1.78f, 2.42f, 0.0f},
+                    (Vector3){0.07f, 0.42f, 1.52f}, yaw,
+                    WORLD_WOOD_SHADOW);
+    DrawOrientedBox(base, (Vector3){1.18f, 2.42f, 0.0f},
+                    (Vector3){0.07f, 0.42f, 1.52f}, yaw,
+                    WORLD_WOOD_SHADOW);
+    int32_t drawn = 0;
+    for (int32_t good = 0;
+         good < CC_GOOD_COUNT && drawn < limit; ++good) {
+        int32_t quantity = player != NULL ? player->cargo[good] : 0;
+        for (int32_t unit = 0; unit < quantity && drawn < limit;
+             ++unit, ++drawn) {
+            int32_t layer = drawn / 8;
+            int32_t spot = drawn % 8;
+            int32_t column = spot % 4;
+            int32_t row = spot / 4;
+            Vector3 center = {
+                -1.26f + (float)column * 0.64f,
+                2.49f + (float)layer * 0.49f,
+                -0.34f + (float)row * 0.68f
+            };
+            Color box = CargoBoxColor((CcGood)good);
+            Color band = CargoBoxBandColor((CcGood)good);
+            DrawOrientedBox(base, center,
+                            (Vector3){0.58f, 0.44f, 0.59f}, yaw, box);
+            DrawOrientedBox(
+                base,
+                (Vector3){center.x, center.y + 0.23f, center.z},
+                (Vector3){0.60f, 0.055f, 0.61f}, yaw, band);
+            DrawOrientedBox(
+                base,
+                (Vector3){center.x, center.y, center.z - 0.302f},
+                (Vector3){0.15f, 0.32f, 0.022f}, yaw,
+                Fade(band, 0.92f));
+        }
+    }
+}
+
+static void DrawCarriage3D(const CcPlayerCompany *player, bool targeted,
                            float clock)
 {
     float x = CARRIAGE_FOOTPRINT.x + CARRIAGE_FOOTPRINT.width * 0.5f;
@@ -20179,18 +20439,8 @@ static void DrawCarriage3D(const CcSettlement *place, bool targeted,
                     (Vector3){CARRIAGE_ASSET_SCALE,
                               CARRIAGE_ASSET_SCALE,
                               CARRIAGE_ASSET_SCALE}, tint);
-        int32_t cargo = place != NULL ?
-            place->stock[CC_GOOD_FOOD] + place->stock[CC_GOOD_MATERIAL] +
-            place->stock[CC_GOOD_TOOLS] : 0;
-        RuntimeAsset *rack = &runtime_assets[RUNTIME_ASSET_CARGO_RACK];
-        if (cargo >= 36 && rack->ready) {
-            DrawModelEx(rack->model, origin,
-                        (Vector3){0.0f, 1.0f, 0.0f},
-                        CARRIAGE_ASSET_STREET_YAW_DEGREES,
-                        (Vector3){CARRIAGE_ASSET_SCALE,
-                                  CARRIAGE_ASSET_SCALE,
-                                  CARRIAGE_ASSET_SCALE}, WHITE);
-        }
+        DrawCarriedCargoBoxes(
+            player, origin, CARRIAGE_ASSET_STREET_YAW_DEGREES * DEG2RAD);
         rlPopMatrix();
         return;
     }
@@ -20223,6 +20473,9 @@ static void DrawCarriage3D(const CcSettlement *place, bool targeted,
         DrawSphereWires(wheels[i], 0.55f, 7, 7,
                         Fade(WORLD_GOLD, 0.62f));
     }
+    DrawCarriedCargoBoxes(
+        player, (Vector3){x, 0.0f, z},
+        CARRIAGE_ASSET_STREET_YAW_DEGREES * DEG2RAD);
     rlPopMatrix();
 }
 
@@ -20557,8 +20810,7 @@ static void DrawTree(float x, float z, TreeFamily family, Color leaves,
     leaves = BlendColor(leaves, regional_style.foliage_bias,
                         regional_style.foliage_mix);
 
-    /* Scale around the root, so regional calligraphy never changes terrain,
-       collision, or authored placement contracts. */
+
     rlPushMatrix();
     rlTranslatef(root.x, root.y, root.z);
     rlScalef(regional_style.proportions.x,
@@ -20587,8 +20839,7 @@ static void DrawWorldTrees(Vector3 focus, Color kingdom)
     int32_t scene = street_camera_rig.shot;
     for (int32_t i = 0;
          i < (int32_t)(sizeof(WORLD_TREES) / sizeof(WORLD_TREES[0])); ++i) {
-        /* Keep the Silverwick landmark silhouette clear of two trees that
-           otherwise erase the headframe in its fixed scene. */
+
         if (active_place_function == CC_SETTLEMENT_MINING &&
             scene == CC_LOCAL_TOWN_SCENE_LANDMARK &&
             (i == 4 || i == 25)) continue;
@@ -20701,8 +20952,7 @@ static void DrawLabels(const WorldLabel *labels, int32_t count, Camera3D camera,
         int text_width = CcOverlayMeasureText(labels[i].text, 10);
         float bubble_width = (float)text_width + 16.0f;
         float bubble_x = viewport.x + screen.x - bubble_width * 0.5f;
-        /* The projected point is the top of the subject. Keep the complete
-           nameplate above it so the plate never paints across a face. */
+
         float bubble_y = viewport.y + screen.y - bubble_height -
                          head_clearance;
         bubble_x = fmaxf(viewport.x + 4.0f,
@@ -20734,7 +20984,7 @@ static void DrawCombatBar(const CcLocalAgent *agent, Camera3D camera,
                           Rectangle viewport, Color accent)
 {
     if (agent == NULL) return;
-    /* Keep combat state in the clear air above the portrait billboard. */
+
     Vector3 anchor = {agent->position.x, agent->position.y + 2.82f,
                       agent->position.z};
     if (!CameraPointInFront(camera, anchor)) return;
@@ -21086,9 +21336,7 @@ static void DrawDragonOmenSilhouette(int32_t width, int32_t height,
     Color shadow = Fade(CC_VISUAL_PALETTE.cool_ink, omen * 0.60f);
     Color thin_shadow = Fade(CC_VISUAL_PALETTE.violet.shadow, omen * 0.46f);
 
-    /* Long tail and the two wings sit behind the body. Broad triangles keep
-       the omen readable at the fixed art-pixel scale; small notches at the
-       trailing edges suggest a dragon without tracing a detailed mascot. */
+
     DrawTriangle(ArtAtmospherePoint(278, 72, scale_x, scale_y, drift_y),
                  ArtAtmospherePoint(474, 54, scale_x, scale_y, drift_y),
                  ArtAtmospherePoint(330, 86, scale_x, scale_y, drift_y),
@@ -21162,6 +21410,41 @@ static void DrawTargetAtmosphere(RenderTexture2D target, float clock)
     int32_t width = target.texture.width;
     int32_t height = target.texture.height;
 
+    /* These broad transparent washes are painted into the low-resolution
+       world target before the palette pass. They behave like a traditional
+       animation background: dusk warms the horizon while moonlight cools
+       the upper planes, without adding a smooth full-resolution effect. */
+    if (atmosphere.horizon_warmth > 0.01f) {
+        float warmth = atmosphere.horizon_warmth;
+        int32_t horizon_y = height * 2 / 5;
+        int32_t horizon_height = height * 2 / 5;
+        Color clear = Fade(WORLD_GOLD, 0.0f);
+        Color warm = Fade(WORLD_GOLD, warmth * 0.065f);
+        DrawRectangleGradientV(0, horizon_y, width, horizon_height,
+                               clear, warm);
+        DrawRectangleGradientV(0, horizon_y + horizon_height,
+                               width, height - horizon_y - horizon_height,
+                               warm, clear);
+        DrawTriangle((Vector2){0.0f, (float)height * 0.36f},
+                     (Vector2){(float)width * 0.62f,
+                               (float)height * 0.58f},
+                     (Vector2){(float)width * 0.18f,
+                               (float)height * 0.70f},
+                     Fade(CC_STYLE_DANGER, warmth * 0.026f));
+    }
+    if (atmosphere.moonlight > 0.01f) {
+        float moonlight = atmosphere.moonlight;
+        Color clear = Fade(WORLD_TEAL, 0.0f);
+        Color cool = Fade(WORLD_TEAL, moonlight * 0.050f);
+        DrawRectangleGradientV(0, 0, width, height * 3 / 4,
+                               cool, clear);
+        DrawTriangle((Vector2){(float)width * 0.58f, 0.0f},
+                     (Vector2){(float)width * 0.94f, 0.0f},
+                     (Vector2){(float)width * 0.70f,
+                               (float)height * 0.76f},
+                     Fade(CC_STYLE_VIOLET, moonlight * 0.030f));
+    }
+
     if (atmosphere.omen > 0.01f) {
         Color cloud = Fade(CC_VISUAL_PALETTE.stone.shadow,
                            atmosphere.omen * 0.20f);
@@ -21190,9 +21473,7 @@ static void DrawTargetAtmosphere(RenderTexture2D target, float clock)
         DrawDragonOmenSilhouette(width, height, clock, atmosphere.omen);
     }
 
-    /* Mist uses a few broad, slow bands. It is depth atmosphere, not a noisy
-       smoke texture, and the final palette lookup resolves it back to the
-       authored slate and violet families. */
+
     if (atmosphere.mist > 0.01f) {
         Color fog = atmosphere.fog_color;
         for (int32_t band = 0; band < 3; ++band) {
@@ -21212,9 +21493,7 @@ static void DrawTargetAtmosphere(RenderTexture2D target, float clock)
         }
     }
 
-    /* Rain is drawn on the fixed art-pixel target so every drop keeps the
-       same chunky shape after enlargement. Movement is steady and diagonal;
-       there is no random per-frame sparkle. */
+
     int32_t drop_count = (int32_t)roundf(atmosphere.rain * 88.0f);
     for (int32_t drop = 0; drop < drop_count; ++drop) {
         float seed_x = ArtAtmosphereHash(
@@ -21352,6 +21631,12 @@ static void BeginWorldLighting(Camera3D camera,
     float fog_far = profile->fog_far * atmosphere.fog_distance_scale;
     float depth_strength = profile->depth_strength * atmosphere.depth_scale;
     float focal_contrast = profile->focal_contrast * atmosphere.focal_scale;
+    float character_rim_tint[3] = {
+        atmosphere.character_rim_tint.x,
+        atmosphere.character_rim_tint.y,
+        atmosphere.character_rim_tint.z,
+    };
+    float character_rim_strength = atmosphere.character_rim_strength;
     float focal_point[3] = {composition->focal_point.x,
                             composition->focal_point.y,
                             composition->focal_point.z};
@@ -21504,6 +21789,12 @@ static void BeginWorldLighting(Camera3D camera,
                        visual_style.hero_fog_far_location,
                        &fog_far,
                        SHADER_UNIFORM_FLOAT);
+        SetShaderValue(visual_style.hero,
+                       visual_style.hero_rim_tint_location,
+                       character_rim_tint, SHADER_UNIFORM_VEC3);
+        SetShaderValue(visual_style.hero,
+                       visual_style.hero_rim_strength_location,
+                       &character_rim_strength, SHADER_UNIFORM_FLOAT);
     }
     if (visual_style.npc_ready) {
         SetShaderValue(visual_style.npc,
@@ -21526,6 +21817,12 @@ static void BeginWorldLighting(Camera3D camera,
                        visual_style.npc_fog_far_location,
                        &fog_far,
                        SHADER_UNIFORM_FLOAT);
+        SetShaderValue(visual_style.npc,
+                       visual_style.npc_rim_tint_location,
+                       character_rim_tint, SHADER_UNIFORM_VEC3);
+        SetShaderValue(visual_style.npc,
+                       visual_style.npc_rim_strength_location,
+                       &character_rim_strength, SHADER_UNIFORM_FLOAT);
     }
     if (visual_style.npc_skinned_ready) {
         SetShaderValue(visual_style.npc_skinned,
@@ -21546,6 +21843,12 @@ static void BeginWorldLighting(Camera3D camera,
         SetShaderValue(visual_style.npc_skinned,
                        visual_style.npc_skinned_fog_far_location,
                        &fog_far, SHADER_UNIFORM_FLOAT);
+        SetShaderValue(visual_style.npc_skinned,
+                       visual_style.npc_skinned_rim_tint_location,
+                       character_rim_tint, SHADER_UNIFORM_VEC3);
+        SetShaderValue(visual_style.npc_skinned,
+                       visual_style.npc_skinned_rim_strength_location,
+                       &character_rim_strength, SHADER_UNIFORM_FLOAT);
     }
     BeginShaderMode(visual_style.world);
 }
@@ -21735,9 +22038,7 @@ void CcLocalDrawAgentPortrait3D(const CcLocalAgent *agent,
         Vector3Add(Vector3Scale(head_forward, 4.0f),
                    (Vector3){0.0f, 0.11f, 0.0f}));
     camera.up = (Vector3){0.0f, 1.0f, 0.0f};
-    /* The hero PFP is an identity card, so favor the face and shoulder marks
-       over empty torso space. The larger face also keeps one-cell eyes and
-       mouth intact when the portrait target is reduced into the HUD. */
+
     camera.fovy = agent->crowned ? 0.84f : 0.98f;
     camera.projection = CAMERA_ORTHOGRAPHIC;
 
@@ -21784,38 +22085,123 @@ void CcLocalDrawAgentPortrait3D(const CcLocalAgent *agent,
     }
 }
 
+static void DrawMovementPathSegments(
+    Vector3 origin, const Vector3 *points, int32_t point_count,
+    CcLocalSceneKind scene, Color color, float width, bool dashed)
+{
+    Vector3 previous = origin;
+    for (int32_t index = 0; index < point_count; ++index) {
+        Vector3 waypoint = points[index];
+        Vector3 along = PhysicsSubtract(waypoint, previous);
+        float length = sqrtf(along.x * along.x + along.z * along.z);
+        if (length <= 0.08f) {
+            previous = waypoint;
+            continue;
+        }
+        if (!dashed) {
+            Vector3 center = PhysicsScale(
+                PhysicsAdd(previous, waypoint), 0.5f);
+            center.y = SurfaceHeightAt(scene, center.x, center.z) + 0.070f;
+            DrawGroundBrushStroke(center, along, length, width, color);
+        } else {
+            const float dash_length = 0.26f;
+            const float dash_stride = 0.43f;
+            float inverse_length = 1.0f / length;
+            for (float distance = 0.0f; distance < length;
+                 distance += dash_stride) {
+                float end_distance = fminf(length, distance + dash_length);
+                float center_distance = (distance + end_distance) * 0.5f;
+                float amount = center_distance * inverse_length;
+                Vector3 center = {
+                    previous.x + along.x * amount,
+                    0.0f,
+                    previous.z + along.z * amount,
+                };
+                center.y = SurfaceHeightAt(scene, center.x, center.z) + 0.120f;
+                DrawGroundBrushStroke(
+                    center, along, end_distance - distance, width, color);
+            }
+        }
+        previous = waypoint;
+    }
+}
+
+static void DrawMovementGroundReticle(Vector3 point, bool accepted,
+                                       bool adjusted, bool active)
+{
+    float pulse = 1.0f + 0.08f * sinf((float)GetTime() * 8.0f);
+    float radius = (active ? 0.36f : 0.32f) * pulse;
+    Color color = !accepted ? WORLD_DANGER :
+                  adjusted ? WORLD_VIOLET :
+                  active ? WORLD_GOLD : WORLD_TEAL;
+    point.y += active ? 0.090f : 0.150f;
+    DrawCylinder(point, radius, radius, 0.025f, 24,
+                 Fade(color, active ? 0.32f : 0.22f));
+    rlSetLineWidth(active ? 3.0f : 2.0f);
+    DrawCircle3D(point, radius, (Vector3){1.0f, 0.0f, 0.0f}, 90.0f,
+                 Fade(color, active ? 1.0f : 0.92f));
+    DrawCircle3D(point, radius * 0.70f,
+                 (Vector3){1.0f, 0.0f, 0.0f}, 90.0f,
+                 Fade(color, active ? 0.74f : 0.60f));
+    rlSetLineWidth(1.0f);
+    DrawSphere(point, active ? 0.105f : 0.085f, color);
+    if (!accepted) {
+        const Vector3 slash_a = {0.55f, 0.0f, 0.55f};
+        const Vector3 slash_b = {0.55f, 0.0f, -0.55f};
+        DrawGroundBrushStroke(point, slash_a, 0.55f, 0.065f, color);
+        DrawGroundBrushStroke(point, slash_b, 0.55f, 0.065f, color);
+    } else {
+        const float tick_offset = radius + 0.09f;
+        const Vector3 tick_x = {0.20f, 0.0f, 0.0f};
+        const Vector3 tick_z = {0.0f, 0.0f, 0.20f};
+        DrawGroundBrushStroke(
+            (Vector3){point.x - tick_offset, point.y, point.z},
+            tick_x, 0.20f, 0.050f, color);
+        DrawGroundBrushStroke(
+            (Vector3){point.x + tick_offset, point.y, point.z},
+            tick_x, 0.20f, 0.050f, color);
+        DrawGroundBrushStroke(
+            (Vector3){point.x, point.y, point.z - tick_offset},
+            tick_z, 0.20f, 0.050f, color);
+        DrawGroundBrushStroke(
+            (Vector3){point.x, point.y, point.z + tick_offset},
+            tick_z, 0.20f, 0.050f, color);
+    }
+}
+
 static void DrawAgentPath(const CcLocalAgent *agent, bool market_interior)
 {
-    (void)market_interior;
+    if (agent == NULL) return;
+    CcLocalSceneKind scene = AgentSceneForCall(agent, market_interior);
+    const CcLocalMovementPreview *preview = &renderer_movement_preview;
+    if (preview->valid && preview->scene == scene &&
+        preview->world_target == CC_LOCAL_WORLD_TARGET_NONE) {
+        Vector3 hover_target = preview->accepted ? preview->resolved_point :
+                                                   preview->requested_point;
+        if (preview->accepted && preview->path_count > 0) {
+            DrawMovementPathSegments(
+                agent->position, preview->path, preview->path_count, scene,
+                Fade(preview->adjusted ? WORLD_VIOLET : WORLD_TEAL, 0.82f),
+                0.085f, true);
+        }
+        DrawMovementGroundReticle(
+            hover_target, preview->accepted, preview->adjusted, false);
+    }
+
     if (!agent->command_point_valid ||
         (!agent->exact_target_valid && !agent->navigation_active)) return;
-    Vector3 target = agent->command_point;
-    Vector3 previous = agent->position;
     if (agent->navigation_active) {
-        for (int32_t index = agent->navigation_point_index;
-             index < agent->navigation_point_count; ++index) {
-            Vector3 waypoint = agent->navigation_point[index];
-            Vector3 along = PhysicsSubtract(waypoint, previous);
-            float length = sqrtf(along.x * along.x + along.z * along.z);
-            if (length > 0.08f) {
-                Vector3 center = PhysicsScale(
-                    PhysicsAdd(previous, waypoint), 0.5f);
-                center.y = CcLocalTerrainHeightAt(center.x, center.z) + 0.025f;
-                DrawGroundBrushStroke(center, along, length, 0.075f,
-                                      Fade(WORLD_GOLD, 0.62f));
-            }
-            waypoint.y += 0.022f;
-            DrawCylinder(waypoint, 0.12f, 0.12f, 0.030f, 12,
-                         Fade(WORLD_GOLD, 0.78f));
-            previous = waypoint;
-        }
+        DrawMovementPathSegments(
+            agent->position,
+            &agent->navigation_point[agent->navigation_point_index],
+            agent->navigation_point_count - agent->navigation_point_index,
+            scene, Fade(WORLD_GOLD, 0.72f), 0.082f, false);
+    } else {
+        DrawMovementPathSegments(
+            agent->position, &agent->command_point, 1, scene,
+            Fade(WORLD_GOLD, 0.64f), 0.075f, false);
     }
-    DrawCylinder((Vector3){target.x, target.y + 0.018f, target.z},
-                 0.24f, 0.24f, 0.036f, 24, Fade(WORLD_GOLD, 0.42f));
-    Vector3 facing = PhysicsSubtract(target, agent->position);
-    DrawGroundBrushStroke(
-        (Vector3){target.x, target.y + 0.040f, target.z}, facing,
-        0.52f, 0.085f, WORLD_GOLD);
+    DrawMovementGroundReticle(agent->command_point, true, false, true);
 }
 
 static Color CoursePlatformColor(int32_t style)
@@ -21986,9 +22372,7 @@ static const char *RoadArchetypeName(const CcRoute *route)
 
 float CcLocalRoadCheckpointSurfaceYInternal(float x, float z)
 {
-    /* Match the exported bridge exactly: two 10 cm causeways lead onto
-       a 52 cm deck centered 30 cm above the asset origin. Convoy art uses
-       this same support contract as physical actors. */
+
     Vector2 point = {x, z};
     if (CheckCollisionPointRec(point, ROAD_BRIDGE_DECK_SUPPORT)) {
         return 0.56f;
@@ -22004,17 +22388,13 @@ float CcLocalRoadCheckpointSurfaceYInternal(float x, float z)
 
 float CcLocalRoadHorseLateralSpacingInternal(bool bridge_checkpoint)
 {
-    /* The authored checkpoint leaves a 2.5 m lane. Pull the paired horses
-       inside its parapets instead of letting their outer flanks intersect
-       the foreground walls. */
+
     return bridge_checkpoint ? 0.78f : 1.05f;
 }
 
 float CcLocalRoadHorseLongitudinalOffsetInternal(void)
 {
-    /* Leave a full horse-length read between the wagon shell and the team.
-       The older 4.6 m placement let the carriage hide their hindquarters in
-       the close combat camera, making both animals look cut in half. */
+
     return 5.55f;
 }
 
@@ -22025,8 +22405,7 @@ static void DrawRoadHorseHarness(Vector3 base, float yaw, float gait_phase)
     Color buckle = (Color){172, 137, 78, 255};
     float step = sinf(gait_phase) * 0.018f;
 
-    /* A broad breast strap and split collar make the team read as working
-       carriage horses instead of loose animals standing beside the traces. */
+
     DrawOrientedBox(base, (Vector3){0.0f, 1.31f + step, 0.49f},
                     (Vector3){0.72f, 0.065f, 0.085f}, yaw, leather);
     Vector3 collar_top = LocalPoint(
@@ -22040,7 +22419,7 @@ static void DrawRoadHorseHarness(Vector3 base, float yaw, float gait_phase)
                        leather_edge);
         DrawCylinderEx(collar_side, shoulder, 0.026f, 0.022f, 6, leather);
 
-        /* Cheek pieces connect the brow band to the bit. */
+
         Vector3 cheek = LocalPoint(
             base, (float)side * 0.18f, 1.76f + step, 1.30f, yaw);
         Vector3 bit_end = LocalPoint(
@@ -22113,9 +22492,9 @@ static void DrawRoadHorseTeam(Vector3 base, float clock, float pace,
     }
 }
 
-static void DrawRoadCarriage(Vector3 base, int32_t cargo_used, float clock,
-                             float pace, float yaw, bool horses_hitched,
-                             bool bridge_checkpoint)
+static void DrawRoadCarriage(Vector3 base, const CcPlayerCompany *player,
+                             float clock, float pace, float yaw,
+                             bool horses_hitched, bool bridge_checkpoint)
 {
     float asset_yaw_degrees = yaw * RAD2DEG - 90.0f;
     RuntimeAsset *carriage = &runtime_assets[RUNTIME_ASSET_CARRIAGE];
@@ -22125,14 +22504,6 @@ static void DrawRoadCarriage(Vector3 base, int32_t cargo_used, float clock,
                     (Vector3){CARRIAGE_ASSET_SCALE,
                               CARRIAGE_ASSET_SCALE,
                               CARRIAGE_ASSET_SCALE}, WHITE);
-        RuntimeAsset *rack = &runtime_assets[RUNTIME_ASSET_CARGO_RACK];
-        if (cargo_used > 0 && rack->ready) {
-            DrawModelEx(rack->model, base, (Vector3){0.0f, 1.0f, 0.0f},
-                        asset_yaw_degrees,
-                        (Vector3){CARRIAGE_ASSET_SCALE,
-                                  CARRIAGE_ASSET_SCALE,
-                                  CARRIAGE_ASSET_SCALE}, WHITE);
-        }
     } else {
         DrawOrientedBox(base, (Vector3){0.0f, 1.10f, 0.0f},
                         (Vector3){2.55f, 1.58f, 4.15f}, yaw,
@@ -22161,6 +22532,7 @@ static void DrawRoadCarriage(Vector3 base, int32_t cargo_used, float clock,
         DrawCylinderEx(pole_right, pole_right_end, 0.045f, 0.035f, 7,
                        WORLD_WOOD);
     }
+    DrawCarriedCargoBoxes(player, base, yaw);
     if (horses_hitched) {
         DrawRoadHorseTeam(base, clock, pace, yaw, bridge_checkpoint);
     }
@@ -22413,7 +22785,6 @@ void CcLocalDrawFork3D(const CcSim *sim, int32_t selected_route,
                  family, leaves, tree_style);
     }
 
-    int32_t cargo = CcPlayerCargoUsed(&sim->player);
     Vector3 carriage_start = {29.0f, 0.0f, 41.0f};
     float turn = SmoothStep01(turn_progress);
     float branch_heading = 0.5f * PI;
@@ -22434,7 +22805,8 @@ void CcLocalDrawFork3D(const CcSim *sim, int32_t selected_route,
         carriage_heading = 0.5f * PI +
             WrapAngle(branch_heading - 0.5f * PI) * SmoothStep01(amount);
     }
-    DrawRoadCarriage(carriage, cargo, clock, turn < 1.0f ? 0.72f : 0.0f,
+    DrawRoadCarriage(carriage, &sim->player, clock,
+                     turn < 1.0f ? 0.72f : 0.0f,
                      carriage_heading, true, false);
     DrawVisibleNpcFigure3D(
         (Vector3){33.0f, 0.0f, 35.6f}, 0.90f, 1.42f,
@@ -22544,7 +22916,7 @@ static void DrawRoadTerrain(uint32_t world_seed, const CcRoute *route,
               (Vector2){CC_LOCAL_WORLD_WIDTH + 8.0f,
                         CC_LOCAL_WORLD_DEPTH + 8.0f}, ground);
     if (bridge_checkpoint) {
-        /* Leave an 8.8 m opening for the authored river, banks, and span. */
+
         DrawRoadSurface(15.0f, ROAD_BARRICADE_X - 4.40f - 15.0f, road);
         DrawRoadSurface(ROAD_BARRICADE_X + 4.40f,
                         81.0f - (ROAD_BARRICADE_X + 4.40f), road);
@@ -22762,8 +23134,7 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
         DrawRoadBarricade(route);
     }
     if (!travelling) DrawAgentPath(agent, false);
-    int32_t road_cargo = CcPlayerCargoUsed(&sim->player);
-    DrawRoadCarriage(carriage_base, road_cargo, clock, carriage_pace,
+    DrawRoadCarriage(carriage_base, &sim->player, clock, carriage_pace,
                      0.5f * PI, true, authored_checkpoint);
     int32_t roadside_cattle = 0;
     if (origin != NULL) {
@@ -22856,7 +23227,7 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
                                                "DESTINATION");
     (void)snprintf(blockade_label, sizeof(blockade_label), "%s",
                    bandits != NULL ? bandits->name : "ROAD COLLECTORS");
-    WorldLabel labels[6];
+    WorldLabel labels[6] = {0};
     int32_t count = 0;
     if (!travelling && !combat_presentation) {
         labels[count++] = (WorldLabel){{agent->position.x,
@@ -23327,7 +23698,7 @@ void CcLocalDrawSite3D(const CcSim *sim, const CcLocalAgent *agent,
         kingdom, (int32_t)lroundf(amount * 1000.0f), camera.target);
     DrawRemoteSiteEntrance(sim, site, clock);
     if (site != CC_LOCAL_SITE_DRAGON_CAVE) {
-        DrawRoadCarriage(carriage, CcPlayerCargoUsed(&sim->player), clock,
+        DrawRoadCarriage(carriage, &sim->player, clock,
                          travelling ? 0.72f : 0.0f,
                          returning ? -0.5f * PI : 0.5f * PI,
                          true, false);
@@ -23417,9 +23788,7 @@ static void DrawTownRaidStaging(const CcLocalCourse *course, Vector3 focus)
     Vector3 origin = course->combat_origin;
     if (!TerrainPointInPlayableWorld(origin.x, origin.z) ||
         !SceneryPointVisible(origin.x, origin.z, focus)) return;
-    /* A broken muster line turns the broad road into an authored defence
-       point. It remains flush with the ground, so combat physics and click
-       paths stay exactly the same. */
+
     for (int32_t mark = -2; mark <= 2; ++mark) {
         float z = origin.z + (float)mark * 0.82f;
         float x = origin.x + ((mark & 1) != 0 ? 0.12f : -0.05f);
@@ -23488,6 +23857,7 @@ static void DrawSettlementCreatures(const CcSim *sim,
 
 void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                          const CcLocalCourse *course,
+                         bool conversation,
                          const CcLocalConvoyState *convoy, float clock,
                          RenderTexture2D target, Rectangle destination)
 {
@@ -23527,7 +23897,14 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     Camera3D camera = CcLocalCombatCameraInternal(
         base_camera, camera_subject, course, clock, true,
         target.texture.height);
-    if (camera_subject != NULL && !arrival_pan) {
+    const CcLocalAgent *conversation_partner =
+        conversation && course != NULL && course->situation_witness_active ?
+            &course->situation_witness : NULL;
+    camera = CcLocalConversationCameraInternal(
+        camera, camera_subject, conversation_partner,
+        conversation_partner != NULL, clock, true, target.texture.height);
+    if (camera_subject != NULL && !arrival_pan &&
+        conversation_partner == NULL) {
         camera = KeepHeroInsideStreetFrame(
             camera,
             Vector3Add(camera_subject->position,
@@ -23558,12 +23935,13 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
 
     DrawExteriorTerrain(place, scenery_focus);
     DrawTownRaidStaging(course, scenery_focus);
-    const CcLocalAgent *sightline_opponent =
-        CombatCameraOpponent(course, agent);
+    const CcLocalAgent *sightline_opponent = conversation_partner != NULL ?
+        conversation_partner : CombatCameraOpponent(course, agent);
     bool close_combat_sightline = course != NULL && agent != NULL &&
         sightline_opponent != NULL && course->alarm_active &&
         CombatHorizontalDistanceSquared(agent, sightline_opponent) <=
             7.0f * 7.0f;
+    bool close_conversation_sightline = conversation_partner != NULL;
     Vector3 player_sightline = agent != NULL ?
         Vector3Add(agent->position, (Vector3){0.0f, 1.02f, 0.0f}) :
         (Vector3){0};
@@ -23580,15 +23958,12 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         if (!SceneryFootprintVisible(footprint, scenery_focus)) {
             continue;
         }
-        float overlap = close_combat_sightline ?
+        float overlap = close_combat_sightline ||
+                        close_conversation_sightline ?
             CameraStreetPlatformSubjectOverlap(
                 camera, platform, player_sightline, opponent_sightline) :
             0.0f;
-        /* The camera chooses the clearest available angle first. When a
-           fighter is standing directly against a course block and no angle
-           can create clean negative space, render only a low ground marker.
-           Using the geometry itself means rails and caps cannot remain over
-           the fighter's silhouette. */
+
         bool sightline_cut = overlap > 0.001f;
         Color color = CoursePlatformColor(platform->style);
         float base = PlatformBaseHeight(platform);
@@ -23610,7 +23985,6 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                          Fade(WORLD_GOLD, 0.70f));
     }
     DrawObstacleCourse(scenery_focus);
-    if (!convoy_visible) DrawAgentPath(agent, false);
     Vector3 foreground_reveal_world = {
         camera_subject->position.x, camera_subject->position.y + 1.05f,
         camera_subject->position.z,
@@ -23636,14 +24010,17 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         if (!convoy_visible) {
             bool carriage_targeted = agent != NULL &&
                 agent->world_target == CC_LOCAL_WORLD_TARGET_CARRIAGE;
-            DrawCarriage3D(place, carriage_targeted, clock);
+            carriage_targeted = carriage_targeted ||
+                (renderer_movement_preview.valid &&
+                 renderer_movement_preview.world_target ==
+                     CC_LOCAL_WORLD_TARGET_CARRIAGE);
+            DrawCarriage3D(&sim->player, carriage_targeted, clock);
             DrawStableHorseTeam(clock);
             if (carriage_targeted) DrawCarriageTargetMarker3D(clock);
         }
     }
     if (convoy_visible) {
-        DrawRoadCarriage(convoy->town_position,
-                         CcPlayerCargoUsed(&sim->player), clock,
+        DrawRoadCarriage(convoy->town_position, &sim->player, clock,
                          convoy->pace,
                          convoy->town_heading_yaw, true, false);
         if (agent != NULL) DrawRobotShell(&convoy_hero);
@@ -23695,20 +24072,9 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
 
     DrawVisibleNpcFigure3D(
         TerrainWorldPoint(STREET_PEOPLE[0].x, STREET_PEOPLE[0].y),
-        active_opening_step == CC_LOCAL_OPENING_FIND_JORY ? 0.78f : 0.96f,
-        -0.55f, UINT32_C(0x73747201),
-        active_opening_step == CC_LOCAL_OPENING_FIND_JORY ?
-            CC_NPC_ROLE_TRAVELLER : CC_NPC_ROLE_MERCHANT,
+        0.96f, -0.55f, UINT32_C(0x73747201), CC_NPC_ROLE_MERCHANT,
         (Color){223, 151, 68, 255}, clock * 1.2f, CC_TRAVERSAL_IDLE,
         scenery_focus);
-    if (active_opening_step == CC_LOCAL_OPENING_MEET_MARA) {
-        DrawVisibleNpcFigure3D(
-            TerrainWorldPoint(CC_LOCAL_NOTICE_X + 0.82f,
-                              CC_LOCAL_NOTICE_Z + 0.18f),
-            0.96f, -1.30f, UINT32_C(0x6d617261),
-            CC_NPC_ROLE_MERCHANT, WORLD_TEAL, clock * 0.72f,
-            CC_TRAVERSAL_IDLE, scenery_focus);
-    }
     DrawVisibleNpcFigure3D(
         TerrainWorldPoint(STREET_PEOPLE[1].x, STREET_PEOPLE[1].y),
         1.02f, 1.70f, UINT32_C(0x73747202), CC_NPC_ROLE_GUARD,
@@ -23742,9 +24108,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         Clamp((float)place->hunger / 100.0f, 0.0f, 1.0f),
         Clamp((50.0f - (float)place->security) / 50.0f, 0.0f, 1.0f));
     if (course != NULL && course->alarm_active) settlement_pressure = 1.0f;
-    /* Each outer room has one resident whose job explains the place at a
-       glance. At the work point they perform their job; hunger, insecurity,
-       or an alarm makes the return pause an alert reaction instead. */
+
     DrawAmbientNpcRoute3D(
         (Vector2){13.60f, 25.80f}, (Vector2){14.80f, 26.60f}, 0.88f,
         UINT32_C(0x64697301), CC_NPC_ROLE_LABORER,
@@ -23794,6 +24158,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
             &course->raiders[agent->combat.target_index]);
     }
     if (!convoy_visible) {
+        DrawAgentPath(agent, false);
         DrawRobotShell(agent);
         DrawCombatSword(agent);
         DrawCombatSkillTell(agent);
@@ -23809,7 +24174,8 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                                camera.projection == CAMERA_PERSPECTIVE;
 
     int32_t scene_index = presented_scene;
-    if (!combat_presentation && scene_index >= 0 &&
+    if (!combat_presentation && conversation_partner == NULL &&
+        scene_index >= 0 &&
         scene_index < CC_LOCAL_PLACE_SCENE_COUNT) {
         const char *scene_name = profile->scene[scene_index].name;
         int32_t title_width = CcOverlayMeasureText(scene_name, 10);
@@ -23819,7 +24185,8 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
             0.24f, 4, (Color){4, 10, 14, 202});
         DrawViewportText(scene_name, destination, 19, 14, 10, WORLD_GOLD);
     }
-    if (!combat_nearby && !convoy_visible) {
+    if (!combat_nearby && !convoy_visible &&
+        conversation_partner == NULL) {
         DrawStreetTraversalPortals(agent, camera, destination,
                                    target.texture.width,
                                    target.texture.height);
@@ -23858,26 +24225,6 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                                            "Carriage / click or F",
                                        carriage_targeted ? WORLD_TEAL :
                                                            WORLD_GOLD};
-    }
-    if (active_opening_step == CC_LOCAL_OPENING_FIND_JORY &&
-        AgentNearLabel(agent, CC_LOCAL_INTRO_JORY_X,
-                       CC_LOCAL_INTRO_JORY_Z, 11.0f)) {
-        labels[count++] = (WorldLabel){
-            {CC_LOCAL_INTRO_JORY_X,
-             CcLocalTerrainHeightAt(CC_LOCAL_INTRO_JORY_X,
-                                    CC_LOCAL_INTRO_JORY_Z) + 1.92f,
-             CC_LOCAL_INTRO_JORY_Z},
-            "Jory  /  press F to talk", WORLD_TEAL};
-    }
-    if (active_opening_step == CC_LOCAL_OPENING_MEET_MARA &&
-        AgentNearLabel(agent, CC_LOCAL_NOTICE_X,
-                       CC_LOCAL_NOTICE_Z, 11.0f)) {
-        labels[count++] = (WorldLabel){
-            {CC_LOCAL_NOTICE_X + 0.82f,
-             CcLocalTerrainHeightAt(CC_LOCAL_NOTICE_X + 0.82f,
-                                    CC_LOCAL_NOTICE_Z + 0.18f) + 2.12f,
-             CC_LOCAL_NOTICE_Z + 0.18f},
-            "Mara  /  press F to speak", WORLD_TEAL};
     }
     if (AgentNearLabel(agent, CC_LOCAL_NOTICE_X, CC_LOCAL_NOTICE_Z, 6.0f)) {
         labels[count++] = (WorldLabel){{CC_LOCAL_NOTICE_X,
@@ -24011,7 +24358,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
              CC_LOCAL_DRAGON_CAVE_Z},
             "Hidden trail to goblin dungeon", WORLD_VIOLET};
     }
-    if (!combat_nearby) {
+    if (!combat_nearby && conversation_partner == NULL) {
         DrawLabels(labels, count, camera, destination);
     }
     if (combat_nearby) {
@@ -24175,8 +24522,7 @@ void CcLocalDrawInterior3D(const CcSim *sim, const CcLocalAgent *agent,
     ClearBackground(background);
     BeginMode3D(camera);
     BeginWorldLighting(camera, &INTERIOR_ART_COMPOSITION);
-    /* Six broad floor flags replace the old 63-box checkerboard. Their quiet
-       value rhythm leaves the actor silhouettes and goods as the room detail. */
+
     Color floor_dark = BlendColor(WORLD_EARTH_SHADOW, identity, 0.12f);
     Color floor_light = BlendColor(WORLD_EARTH, identity, 0.14f);
     DrawBox((Vector3){4.50f, -0.055f, 3.50f}, (Vector3){9.0f, 0.11f, 7.0f},
@@ -24256,9 +24602,7 @@ void CcLocalDrawInterior3D(const CcSim *sim, const CcLocalAgent *agent,
             (Vector3){MARKET_COUNTER_FOOTPRINT.width + 0.12f, 0.10f,
                       MARKET_COUNTER_FOOTPRINT.height + 0.12f},
             BlendColor(WORLD_WOOD_LIGHT, identity, 0.18f));
-    /* A real open shelf replaces the former solid obstacle block. The same
-       collision footprint remains authoritative, but the visible model now
-       has legs, boards, gaps, and stock silhouettes. */
+
     float shelf_x = MARKET_SHELF_FOOTPRINT.x +
                     MARKET_SHELF_FOOTPRINT.width * 0.5f;
     float shelf_z = MARKET_SHELF_FOOTPRINT.y +
@@ -24282,8 +24626,7 @@ void CcLocalDrawInterior3D(const CcSim *sim, const CcLocalAgent *agent,
     DrawBox((Vector3){1.55f, 1.05f, 6.54f}, (Vector3){0.82f, 2.10f, 0.08f},
             (Color){37, 28, 30, 255});
 
-    /* Warm wall lamps shape the room into foreground, trade counter, and
-       stock-wall zones without adding a second lighting system. */
+
     const float lamp_x[] = {3.05f, 8.10f};
     for (int32_t lamp = 0; lamp < 2; ++lamp) {
         DrawBox((Vector3){lamp_x[lamp], 1.76f, 0.62f},
@@ -24307,13 +24650,18 @@ void CcLocalDrawInterior3D(const CcSim *sim, const CcLocalAgent *agent,
                         (Color){170, 139, 112, 255} : WORLD_TEAL;
         float display_x = 2.55f + (float)good * 1.08f;
         if (good == CC_GOOD_FOOD) {
-            int32_t sacks = stock > 0.66f ? 3 : stock > 0.30f ? 2 : 1;
-            for (int32_t sack = 0; sack < sacks; ++sack) {
-                float side = (float)sack - (float)(sacks - 1) * 0.5f;
-                DrawCharacterEllipsoid(
-                    (Vector3){display_x + side * 0.25f,
-                              0.22f + (sack == 2 ? 0.14f : 0.0f), 1.18f},
-                    (Vector3){0.18f, 0.29f, 0.17f}, color);
+            int32_t boxes = stock > 0.66f ? 3 : stock > 0.30f ? 2 : 1;
+            for (int32_t box = 0; box < boxes; ++box) {
+                float side = (float)box - (float)(boxes - 1) * 0.5f;
+                float box_y = 0.20f + (box == 2 ? 0.19f : 0.0f);
+                DrawBox(
+                    (Vector3){display_x + side * 0.28f,
+                              box_y, 1.18f},
+                    (Vector3){0.24f, 0.34f, 0.26f}, color);
+                DrawBox(
+                    (Vector3){display_x + side * 0.28f,
+                              box_y + 0.18f, 1.18f},
+                    (Vector3){0.26f, 0.04f, 0.28f}, WORLD_CROP_LIGHT);
             }
             DrawBox((Vector3){display_x, 0.55f, 1.18f},
                     (Vector3){0.48f, 0.07f, 0.28f},

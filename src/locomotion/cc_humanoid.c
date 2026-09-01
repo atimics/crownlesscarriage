@@ -244,8 +244,7 @@ static void AdvanceAction(CcHumanoidGait *gait, float delta_time)
     uint32_t markers = CcMotionPlayerConsumeMarkers(&gait->motion);
     if (gait->motion.clip != NULL &&
         gait->motion.clip->id == CC_MOTION_CLIP_WALK) {
-        /* Procedural feet run on a speed-dependent gait clock. Walk contacts
-           are emitted from heel strikes instead of this fixed clip. */
+
         markers &= ~(uint32_t)(CC_MOTION_MARKER_LEFT_CONTACT |
                                CC_MOTION_MARKER_RIGHT_CONTACT);
     }
@@ -265,8 +264,7 @@ static void AdvanceAction(CcHumanoidGait *gait, float delta_time)
                        CC_HUMANOID_ACTION_GUARD :
                        CC_HUMANOID_ACTION_LOCOMOTION);
             if (gait->guard_requested) {
-                /* The cut ends in the guard pose, so no neutral frame is
-                   introduced when the player still requests guard. */
+
                 gait->action_blend = 1.0f;
             }
         }
@@ -710,10 +708,7 @@ static bool ActivateRagdoll(CcHumanoidGait *gait,
     gait->recovery_speed = 0.0f;
     gait->recovering = false;
     gait->ragdoll_recovery_allowed = recovery_allowed;
-    /* Establish center-of-mass authority at the handoff itself. Waiting for
-       the next simulation step allowed the navigation root to spend one
-       frame at a different point than the released body, which was visible
-       as a small snap when a character lost a ledge. */
+
     CcLimbVec3 center = FromBiomech(
         CcBiomechRagdollCenterOfMass(&gait->ragdoll));
     gait->ragdoll_body_offset = Subtract(gait->authoritative_position,
@@ -2208,12 +2203,7 @@ void CcHumanoidGaitAdvanceMantle(
     gait->motion_markers |= CcMotionPlayerConsumeMarkers(&gait->motion);
 
     CcHumanoidGait standing;
-    /* During the ledge crossing the traversal root is between two walkable
-       surfaces. Probing a normal standing pose here makes its feet snap from
-       the lower floor to the upper floor as soon as the root clears the lip,
-       and that discontinuity leaks through the exit blend. The authored root
-       is already warped to the correct surface, so derive the exit pose from
-       that root and only resume terrain probing after the mantle completes. */
+
     CcLimbTerrainProbe exit_probe = mantle_progress >= 0.90f ? probe : NULL;
     void *exit_context = exit_probe != NULL ? probe_context : NULL;
     CcHumanoidGaitInit(&standing, body_position, body_yaw,
@@ -2512,9 +2502,7 @@ void CcHumanoidGaitAdvanceClimb(
     climb_progress = Clamp(climb_progress, 0.0f, 1.0f);
     CcLimbVec3 traversal_root_step = Subtract(
         body_position, gait->authoritative_position);
-    /* Contact loss can activate the passive body before the traversal pose is
-       advanced below. Record this frame's root first so the handoff cannot
-       fall back to the previous ledge position. */
+
     gait->authoritative_position = body_position;
     float hand_weight[CC_HUMANOID_ARM_COUNT] = {
         Clamp(hand_support[0], 0.0f, 1.0f),
@@ -2550,10 +2538,7 @@ void CcHumanoidGaitAdvanceClimb(
         climb_control_authority = support_contact_count == 1 ? 0.30f : 0.16f;
         if (gait->unsupported_seconds >=
             (support_contact_count == 1 ? 0.22f : 0.12f)) {
-            /* The traversal root moves before this call. Carry that final
-               root step into the live pose while leaving previous_pose in
-               place, so the passive body inherits both position and momentum
-               without one last authored limb warp. */
+
             TranslateHumanoidPose(&gait->pose, traversal_root_step);
             gait->climbing = false;
             (void)ActivateRagdoll(gait, true);
@@ -2701,10 +2686,7 @@ void CcHumanoidGaitAdvanceClimb(
             gait->previous_pose.toe[leg], pose.toe[leg],
             1.80f, delta_time);
 
-        /* Keep the knee folding away from the wall throughout takeoff. The
-           sole normal deliberately remains upward for the first half of a
-           swing, so using it as the pole direction made the knee rise nearly
-           straight above the hip before the boot turned onto the wall. */
+
         CcLimbVec3 climbing_pole = Add(
             Add(Scale(forward, -0.98f), Scale(right, side * 0.16f)),
             Scale(up, 0.08f));
@@ -3234,11 +3216,7 @@ void CcHumanoidGaitAdvancePhysical(
         CcLimbVec3 support = Scale(support_normal, support_force);
         CcLimbVec3 drive_force = Scale(desired_acceleration,
                                        gait->body.total_mass);
-        /* A sloped contact normal contains a horizontal force. Active balance
-           must cancel that component before adding travel acceleration, or a
-           character commanded uphill is steadily pushed downhill by its own
-           support reaction. The friction limit below still lets genuinely
-           steep or slippery ground win. */
+
         drive_force.x -= support.x;
         drive_force.z -= support.z;
         float drive_length = Length(drive_force);

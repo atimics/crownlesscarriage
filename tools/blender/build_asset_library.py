@@ -65,8 +65,8 @@ PALETTE = {
     "black": (0.012, 0.014, 0.015, 1.0),
 }
 
-# Palette additions live in an extension map merged after the base dict so
-# parallel art branches can introduce colors without editing shared lines.
+
+
 PALETTE_EXTRA = {
     "earth_dark": (0.20, 0.145, 0.085, 1.0),
     "ember": (0.93, 0.48, 0.13, 1.0),
@@ -425,9 +425,9 @@ def add_wheel(
     asset_id: str,
     radius: float = 0.72,
 ) -> None:
-    # A narrow forged tire gives the wheel a crisp outer value and makes the
-    # driven/steering wheel silhouette survive the gameplay camera. Keep the
-    # timber rim beneath it so damage still reads as a repairable wooden wheel.
+
+
+
     add_torus(
         f"GEO_{prefix}_Tyre",
         (x, y, z),
@@ -489,16 +489,16 @@ def build_carriage_base(parent: bpy.types.Collection) -> bpy.types.Collection:
         sockets=("roof", "rear", "side_left", "side_right", "underbody", "interior"),
     )
 
-    # Chassis is a proper timber frame with iron cross members; the hidden
-    # compartment module still tucks between the members at the same envelope.
+
+
     for y in (-0.63, 0.63):
         add_cube("GEO_ChassisBeam", (0.0, y, 0.88), (3.9, 0.14, 0.16), "wood_dark", col, asset_id, "chassis", bevel_width=0.03)
     for x in (-1.60, -0.50, 0.60, 1.50):
         add_cube("GEO_ChassisCross", (x, 0.0, 0.88), (0.14, 1.40, 0.14), "iron", col, asset_id, "chassis", bevel_width=0.02)
 
-    # Carriage stance: large driven rear wheels, smaller steering front wheels.
-    # The front axle hangs below the frame on drop links and leaf-spring
-    # stacks; the rear axle bolts to the frame through bolster blocks.
+
+
+
     add_cube("GEO_RearAxle", (-1.22, 0.0, 0.80), (0.16, 2.05, 0.16), "iron", col, asset_id, "axle")
     add_cube("GEO_FrontAxle", (1.05, 0.0, 0.62), (0.16, 2.05, 0.16), "iron", col, asset_id, "axle")
     for y in (-0.55, 0.55):
@@ -511,7 +511,7 @@ def build_carriage_base(parent: bpy.types.Collection) -> bpy.types.Collection:
     for x, radius in ((-1.22, 0.80), (1.05, 0.62)):
         for y in (-0.94, 0.94):
             add_wheel(f"Wheel_{x:+.0f}_{y:+.0f}", x, y, radius, col, asset_id, radius=radius)
-            # Three-segment mudguard arc over each wheel.
+
             fender_radius = radius + 0.12
             for degrees in (-40, 0, 40):
                 angle = math.radians(degrees)
@@ -530,13 +530,13 @@ def build_carriage_base(parent: bpy.types.Collection) -> bpy.types.Collection:
     add_cube("GEO_Deck", (-0.15, 0.0, 1.06), (3.35, 1.72, 0.18), "wood_dark", col, asset_id, "deck")
     for y in (-0.85, 0.85):
         add_cube("GEO_DeckRubRail", (-0.15, y, 1.02), (3.35, 0.06, 0.10), "wood_light", col, asset_id, "deck_trim", bevel_width=0.02)
-    # Side lockers fill the between-wheel void and read as travel storage.
+
     for y in (-0.80, 0.80):
         add_cube("GEO_SideLocker", (-0.10, y, 0.72), (1.10, 0.10, 0.34), "wood", col, asset_id, "side_locker", bevel_width=0.03)
         add_cube("GEO_SideLockerLid", (-0.10, y, 0.88), (1.12, 0.11, 0.04), "wood_dark", col, asset_id, "side_locker", bevel_width=0.01)
 
-    # Cabin shell keeps the exact envelope the side, rear, and interior
-    # modules mount on; framing, rails, and glazing add the readability.
+
+
     add_cube("GEO_Cabin", (-0.3, 0.0, 1.55), (2.75, 1.68, 0.95), "wood", col, asset_id, "body", bevel_width=0.12)
     for x in (-1.62, 1.02):
         for y in (-0.80, 0.80):
@@ -544,8 +544,8 @@ def build_carriage_base(parent: bpy.types.Collection) -> bpy.types.Collection:
     for y in (-0.845, 0.845):
         add_cube("GEO_WaistRail", (-0.3, y, 1.28), (2.60, 0.04, 0.10), "wood_dark", col, asset_id, "body_frame", bevel_width=0.015)
 
-    # Barrel canvas roof: flat crown plus two sloped eaves. Crown top stays at
-    # the original roof height so roof-socket modules keep their fit.
+
+
     add_cube("GEO_Roof", (-0.3, 0.0, 2.26), (2.98, 0.95, 0.16), "canvas", col, asset_id, "roof", bevel_width=0.10)
     for y, pitch in ((-0.72, math.radians(-22)), (0.72, math.radians(22))):
         add_cube("GEO_RoofEave", (-0.3, y, 2.16), (2.98, 0.72, 0.14), "canvas", col, asset_id, "roof", rotation=(pitch, 0.0, 0.0), bevel_width=0.08)
@@ -577,13 +577,13 @@ def build_carriage_base(parent: bpy.types.Collection) -> bpy.types.Collection:
         add_cube(f"GEO_WindowHeader_{side}", (-0.35, y * 0.99, 1.94), (1.40, 0.05, 0.06), "wood_dark", col, asset_id, "window_frame", bevel_width=0.01)
         add_cube(f"GEO_WindowMullion_{side}", (-0.35, y * 1.012, 1.69), (0.055, 0.045, 0.48), "brass", col, asset_id, "window_frame", bevel_width=0.01)
 
-    # Front cab window sits above the armour module's front plate zone.
+
     add_cube("GEO_FrontWindow", (1.085, 0.0, 1.86), (0.04, 0.85, 0.34), "glass", col, asset_id, "window", bevel_width=0.02)
     for z in (1.70, 2.04):
         add_cube("GEO_FrontWindowFrame", (1.09, 0.0, z), (0.05, 0.95, 0.05), "brass", col, asset_id, "window_frame", bevel_width=0.01)
 
-    # Rear door: frame plus a leaf with strap hinges and a pull ring. The
-    # relic and medical modules overlay this face exactly as before.
+
+
     for y in (-0.66, 0.66):
         add_cube("GEO_RearDoorPost", (-1.70, y, 1.55), (0.10, 0.12, 0.95), "wood_dark", col, asset_id, "rear_door", bevel_width=0.02)
     add_cube("GEO_RearDoorLintel", (-1.70, 0.0, 2.00), (0.10, 1.44, 0.12), "wood_dark", col, asset_id, "rear_door", bevel_width=0.02)
@@ -594,8 +594,8 @@ def build_carriage_base(parent: bpy.types.Collection) -> bpy.types.Collection:
     add_beam_between("GEO_RearDoorBrace_B", (-1.72, 0.48, 1.25), (-1.72, -0.48, 1.84), 0.055, "wood_light", col, asset_id, "rear_door")
     add_torus("GEO_RearDoorRing", (-1.72, 0.32, 1.55), 0.06, 0.014, "brass", col, asset_id, "rear_door", rotation=(0.0, math.radians(90), 0.0))
 
-    # Driver station: footboard on brackets, dashboard, footrest, cushioned
-    # bench, and a hand brake within reach.
+
+
     add_cube("GEO_DriverDeck", (1.55, 0.0, 1.12), (0.85, 1.62, 0.18), "wood_dark", col, asset_id, "driver_deck")
     for y in (-0.62, 0.62):
         add_beam_between("GEO_DriverDeckBrace", (1.30, y, 0.95), (1.85, y, 1.06), 0.08, "wood_dark", col, asset_id, "driver_deck")
@@ -610,7 +610,7 @@ def build_carriage_base(parent: bpy.types.Collection) -> bpy.types.Collection:
     add_beam_between("GEO_BrakeLever", (1.15, -0.70, 1.30), (1.02, -0.70, 1.72), 0.05, "iron", col, asset_id, "brake")
     add_uv_sphere("GEO_BrakeKnob", (1.02, -0.70, 1.72), (0.05, 0.05, 0.05), "brass", col, asset_id, "brake")
 
-    # Rear step for cabin access; sits clear of the monster-cage envelope.
+
     add_cube("GEO_RearStep", (-1.90, 0.0, 0.96), (0.24, 1.20, 0.08), "wood_dark", col, asset_id, "rear_step", bevel_width=0.02)
     for y in (-0.45, 0.45):
         add_beam_between("GEO_RearStepBrace", (-1.75, y, 0.80), (-1.95, y, 0.94), 0.06, "iron", col, asset_id, "rear_step")
@@ -743,8 +743,8 @@ def build_road_kit(parent: bpy.types.Collection) -> bpy.types.Collection:
     add_cube("GEO_RoadGround", (0.0, 0.0, -0.12), (7.0, 6.0, 0.22), "grass", col, asset_id, "terrain", bevel_width=0.10)
     add_cube("GEO_RoadBed", (0.0, 0.0, 0.01), (7.0, 2.45, 0.16), "road", col, asset_id, "road", bevel_width=0.12)
 
-    # Worn wheel ruts and grass shoulders make the segment read as a traveled
-    # route rather than a painted stripe, matching the carriage wheel gauge.
+
+
     for y in (-0.58, 0.58):
         add_cube("GEO_WheelRut", (0.0, y, 0.096), (6.9, 0.30, 0.024), "earth_dark", col, asset_id, "road_rut", bevel_width=0.008)
     for y in (-1.42, 1.42):
@@ -755,7 +755,7 @@ def build_road_kit(parent: bpy.types.Collection) -> bpy.types.Collection:
     for index, (x, y, height, lean) in enumerate(((-2.9, 1.95, 0.30, 6), (-0.4, 2.35, 0.24, -8), (2.7, 1.75, 0.34, 4), (-1.8, -2.30, 0.26, -5), (0.9, -2.42, 0.30, 7), (3.0, -2.05, 0.22, -6))):
         add_cube(f"GEO_VergeTuft_{index:02d}", (x, y, height * 0.5 - 0.01), (0.07, 0.07, height), "grass" if index % 2 else "dry_grass", col, asset_id, "verge_growth", rotation=(math.radians(lean), math.radians(lean * 0.6), 0.0), bevel_width=0.012)
 
-    # A milestone and a two-way signpost mark the route as a managed road.
+
     add_cube("GEO_Milestone", (-2.62, -1.72, 0.33), (0.30, 0.24, 0.68), "stone", col, asset_id, "milestone", bevel_width=0.06)
     add_cube("GEO_MilestoneCap", (-2.62, -1.72, 0.69), (0.34, 0.28, 0.10), "stone_dark", col, asset_id, "milestone", bevel_width=0.04)
     add_cube("GEO_MilestoneMark", (-2.62, -1.845, 0.40), (0.16, 0.02, 0.10), "cream", col, asset_id, "milestone", bevel_width=0.006)
@@ -770,9 +770,9 @@ def build_bridge_checkpoint(parent: bpy.types.Collection) -> bpy.types.Collectio
     asset_id = "environment_bridge_checkpoint_v01"
     col = new_collection("CC_ENV_BRIDGE_CHECKPOINT", parent, asset_id=asset_id, kind="environment_kit", layer_group="environment_base")
 
-    # Establish the crossing before adding checkpoint furniture. The water and
-    # raised banks make the bridge legible from an isometric gameplay camera
-    # instead of reading as an isolated stone tray.
+
+
+
     add_cube("GEO_River", (0.0, 0.0, -0.15), (8.8, 6.6, 0.10), "water", col, asset_id, "water", bevel_width=0.04)
     for index, (x, y, length, angle) in enumerate(((-2.45, -2.42, 1.35, 4), (1.48, -2.68, 1.75, -3), (-1.25, 2.62, 1.25, -5), (2.62, 2.30, 1.48, 3))):
         add_cube(f"GEO_WaterRipple_{index:02d}", (x, y, -0.092), (length, 0.045, 0.018), "water_light", col, asset_id, "water_ripple", rotation=(0.0, 0.0, math.radians(angle)), bevel_width=0.012)
@@ -793,16 +793,16 @@ def build_bridge_checkpoint(parent: bpy.types.Collection) -> bpy.types.Collectio
         for x in (-3.15, -1.60, 0.0, 1.60, 3.15):
             add_cube("GEO_ParapetButtress", (x, y * 1.075, 0.66), (0.24, 0.22, 0.84), "stone_dark", col, asset_id, "bridge_buttress", bevel_width=0.035)
 
-    # Bridge supports remain visible through the river from the presentation
-    # angle and give the span useful vertical rhythm.
+
+
     for x in (-2.45, 0.0, 2.45):
         for y in (-0.88, 0.88):
             add_cylinder("GEO_BridgePier", (x, y, -0.02), 0.30, 0.72, "stone_dark", col, asset_id, "bridge_support", vertices=8, bevel_width=0.04)
         for y in (-1.10, 1.10):
             add_cube("GEO_PierCutwater", (x, y, 0.04), (0.44, 0.52, 0.64), "stone", col, asset_id, "bridge_cutwater", rotation=(0.0, 0.0, math.radians(45)), bevel_width=0.045)
 
-    # A compact timber toll house with a pitched roof, foundation, door, and
-    # glazed side window. It intentionally sits outside the travel lane.
+
+
     add_cube("GEO_CheckpointFoundation", (-1.45, 2.12, 0.25), (1.72, 1.36, 0.50), "stone_dark", col, asset_id, "guard_hut_foundation", bevel_width=0.06)
     add_cube("GEO_CheckpointHut", (-1.45, 2.12, 1.34), (1.50, 1.18, 1.72), "wood", col, asset_id, "guard_hut", bevel_width=0.08)
     for x in (-2.13, -0.77):
@@ -820,8 +820,8 @@ def build_bridge_checkpoint(parent: bpy.types.Collection) -> bpy.types.Collectio
     add_cube("GEO_CheckpointChimney", (-1.88, 2.39, 2.65), (0.24, 0.24, 0.62), "stone_dark", col, asset_id, "guard_hut_chimney", bevel_width=0.035)
     add_cube("GEO_CheckpointChimneyCap", (-1.88, 2.39, 2.97), (0.32, 0.32, 0.12), "stone_light", col, asset_id, "guard_hut_chimney", bevel_width=0.03)
 
-    # The gate is a high-contrast read from a distance. Alternating pale bands
-    # preserve the visual language of a controlled crossing without textures.
+
+
     for y in (-1.0, 1.0):
         add_cube("GEO_GatePost", (0.65, y, 1.14), (0.28, 0.28, 2.28), "iron", col, asset_id, "gate", bevel_width=0.035)
         add_cube("GEO_GatePostCap", (0.65, y, 2.32), (0.40, 0.40, 0.18), "brass", col, asset_id, "gate", bevel_width=0.045)
@@ -834,8 +834,8 @@ def build_bridge_checkpoint(parent: bpy.types.Collection) -> bpy.types.Collectio
     add_cube("GEO_GateChain", (0.65, 0.82, 1.56), (0.045, 0.045, 0.78), "steel", col, asset_id, "gate_mechanism", bevel_width=0.008)
     add_cube("GEO_GateCounterweight", (0.65, 0.82, 1.12), (0.18, 0.18, 0.30), "iron", col, asset_id, "gate_mechanism", bevel_width=0.035)
 
-    # Inspection furniture and road-side detail support the simulation role of
-    # this asset: cargo is stopped, checked, documented, and sometimes seized.
+
+
     add_cube("GEO_InspectionTable", (-0.55, -0.72, 0.78), (1.05, 0.55, 0.12), "wood_light", col, asset_id, "inspection_table")
     for x in (-0.98, -0.12):
         for y in (-0.94, -0.50):
@@ -872,8 +872,8 @@ def build_mine_entrance(parent: bpy.types.Collection) -> bpy.types.Collection:
     col = new_collection("CC_ENV_MINE_ENTRANCE", parent, asset_id=asset_id, kind="environment_kit", layer_group="environment_base")
     add_cube("GEO_MineGround", (0.0, 0.0, -0.11), (6.4, 5.4, 0.20), "stone_dark", col, asset_id, "terrain", bevel_width=0.10)
 
-    # Layered cliff: main face, set-back upper tier, exposed strata, and a
-    # scrub cap keep the rock readable instead of a single slab.
+
+
     add_cube("GEO_MineCliff", (0.0, 1.70, 1.35), (6.1, 1.30, 2.70), "stone", col, asset_id, "cliff", bevel_width=0.20)
     add_cube("GEO_MineCliffUpper", (0.0, 1.90, 2.90), (5.3, 0.95, 0.60), "stone", col, asset_id, "cliff", bevel_width=0.16)
     add_cube("GEO_CliffTopGrowth", (0.0, 2.02, 3.24), (4.4, 0.72, 0.16), "dry_grass", col, asset_id, "cliff_top_growth", bevel_width=0.06)
@@ -881,8 +881,8 @@ def build_mine_entrance(parent: bpy.types.Collection) -> bpy.types.Collection:
         add_cube("GEO_CliffStrata", (0.0, 1.02, z), (5.9, 0.05, 0.10), "stone_dark", col, asset_id, "cliff_strata", bevel_width=0.02)
     for x, y, sx, sy, sz in ((-2.55, 0.80, 0.42, 0.34, 0.26), (2.45, 0.72, 0.50, 0.40, 0.32), (2.95, 0.35, 0.30, 0.26, 0.20)):
         add_uv_sphere("GEO_TalusRock", (x, y, sz * 0.55), (sx, sy, sz), "stone_dark", col, asset_id, "talus")
-    # Timber portal set: posts and lintel gain a sill, diagonal braces, and a
-    # sloped hood so the entrance reads as engineered, not a hole in a wall.
+
+
     add_cube("GEO_MineVoid", (0.0, 1.00, 1.00), (1.75, 0.24, 1.90), "black", col, asset_id, "entrance_void", bevel_width=0.18)
     for x in (-1.02, 1.02):
         add_cube("GEO_MineSupport", (x, 0.78, 1.02), (0.22, 0.28, 2.04), "wood_dark", col, asset_id, "timber_support")
@@ -897,7 +897,7 @@ def build_mine_entrance(parent: bpy.types.Collection) -> bpy.types.Collection:
         for z in (0.52, 1.48):
             add_cylinder("GEO_PortalBolt", (x, 0.625, z), 0.047, 0.045, "iron", col, asset_id, "timber_hardware", rotation=(math.radians(90), 0.0, 0.0), vertices=8, bevel_width=0.008)
 
-    # A lantern and warning sign mark the portal as an active working site.
+
     add_cube("GEO_LanternHook", (0.62, 0.64, 1.80), (0.03, 0.03, 0.16), "iron", col, asset_id, "lantern")
     add_cylinder("GEO_LanternCage", (0.62, 0.62, 1.66), 0.085, 0.20, "brass", col, asset_id, "lantern", vertices=10, bevel_width=0.015)
     add_cylinder("GEO_LanternGlow", (0.62, 0.62, 1.66), 0.045, 0.14, "ember", col, asset_id, "lantern", vertices=10, bevel_width=0.01)
@@ -906,9 +906,9 @@ def build_mine_entrance(parent: bpy.types.Collection) -> bpy.types.Collection:
     add_cube("GEO_WarningMark", (1.95, -0.985, 1.09), (0.08, 0.02, 0.20), "cream", col, asset_id, "warning_sign", bevel_width=0.005)
     add_cube("GEO_WarningDot", (1.95, -0.985, 0.93), (0.08, 0.02, 0.06), "cream", col, asset_id, "warning_sign", bevel_width=0.005)
 
-    # The siding runs along the cliff face: rails and ties, a buffer stop at
-    # the dead end, and an ore cart that now sits squarely on the track with
-    # wheels on both sides, axles, a top rim, and a visible ore load.
+
+
+
     for y in (-0.28, 0.28):
         add_cube("GEO_Rail", (0.0, y, 0.08), (4.5, 0.075, 0.075), "steel", col, asset_id, "mine_rail")
     for x in (-1.8, -0.9, 0.0, 0.9, 1.8):
@@ -928,7 +928,7 @@ def build_mine_entrance(parent: bpy.types.Collection) -> bpy.types.Collection:
         add_uv_sphere("GEO_OreChunk", (x, y, 0.92), (size, size * 0.8, size * 0.7), "stone_dark", col, asset_id, "ore")
     add_uv_sphere("GEO_OreFleck", (-1.16, 0.02, 1.00), (0.06, 0.05, 0.045), "brass", col, asset_id, "ore")
 
-    # Spoil heap beside the track sells ongoing excavation.
+
     for x, y, sx, sy, sz, mat in ((2.05, -1.30, 0.55, 0.45, 0.30, "stone_dark"), (2.48, -1.02, 0.34, 0.30, 0.22, "stone"), (1.68, -1.02, 0.27, 0.24, 0.18, "stone_dark")):
         add_uv_sphere("GEO_SpoilRock", (x, y, sz * 0.55), (sx, sy, sz), mat, col, asset_id, "spoil_heap")
     return col
@@ -939,8 +939,8 @@ def build_market(parent: bpy.types.Collection) -> bpy.types.Collection:
     col = new_collection("CC_ENV_MARKET_GRANARY", parent, asset_id=asset_id, kind="environment_kit", layer_group="environment_base")
     add_cube("GEO_MarketGround", (0.0, 0.0, -0.10), (7.0, 6.0, 0.20), "stone", col, asset_id, "market_ground", bevel_width=0.10)
 
-    # Plaza paving: a low curb and joint lines stop the ground reading as a
-    # bare slab. Joint lines stay in the open half where queues form.
+
+
     for y in (-2.92, 2.92):
         add_cube("GEO_PlazaCurb", (0.0, y, 0.015), (6.9, 0.16, 0.05), "stone_dark", col, asset_id, "plaza_paving", bevel_width=0.02)
     for x in (-3.42, 3.42):
@@ -948,9 +948,9 @@ def build_market(parent: bpy.types.Collection) -> bpy.types.Collection:
     for x in (-1.75, 0.0, 1.75):
         add_cube("GEO_PlazaJoint", (x, -1.45, 0.006), (0.045, 2.9, 0.018), "stone_dark", col, asset_id, "plaza_paving", bevel_width=0.0)
 
-    # Granary: stone plinth, plank framing, door hardware, and a gabled roof
-    # over the original eave slab. The body footprint, door, stall, and well
-    # positions are state-layer anchors and must not move.
+
+
+
     add_cube("GEO_GranaryFoundation", (1.55, 1.63, 0.14), (3.35, 1.92, 0.28), "stone_dark", col, asset_id, "granary_foundation", bevel_width=0.05)
     add_cube("GEO_GranaryStep", (1.55, 0.50, 0.09), (1.10, 0.36, 0.18), "stone_dark", col, asset_id, "granary_foundation", bevel_width=0.04)
     add_cube("GEO_Granary", (1.55, 1.63, 1.15), (3.15, 1.72, 2.30), "wood", col, asset_id, "granary", bevel_width=0.10)
@@ -978,15 +978,15 @@ def build_market(parent: bpy.types.Collection) -> bpy.types.Collection:
     for x in (-0.15, 3.25):
         add_cube("GEO_RoofGable", (x, 1.63, 2.70), (0.12, 1.30, 0.40), "wood", col, asset_id, "granary_roof", bevel_width=0.03)
 
-    # Grain hoist: beam through the eave, diagonal brace, rope, and a hanging
-    # sack make the building's storage role legible at a glance.
+
+
     add_cube("GEO_HoistBeam", (0.45, 0.45, 2.48), (0.14, 0.85, 0.14), "wood_dark", col, asset_id, "hoist", bevel_width=0.02)
     add_beam_between("GEO_HoistBrace", (0.45, 0.75, 2.10), (0.45, 0.12, 2.41), 0.08, "wood_dark", col, asset_id, "hoist")
     add_cube("GEO_HoistRope", (0.45, 0.09, 2.18), (0.035, 0.035, 0.55), "leather", col, asset_id, "hoist", bevel_width=0.008)
     add_cube("GEO_HoistSack", (0.45, 0.09, 1.74), (0.30, 0.26, 0.38), "canvas", col, asset_id, "hoist", bevel_width=0.10)
 
-    # Stalls: keep the state-layer counter and awning anchors, add counter
-    # fronts, legs, and awning stripes for a dressed-market read.
+
+
     for x in (-2.25, -0.55):
         add_cube("GEO_StallCounter", (x, -0.35, 0.76), (1.28, 0.72, 0.18), "wood_light", col, asset_id, "market_stall")
         add_cube("GEO_StallFront", (x, -0.71, 0.40), (1.20, 0.06, 0.62), "wood", col, asset_id, "market_stall", bevel_width=0.02)
@@ -999,7 +999,7 @@ def build_market(parent: bpy.types.Collection) -> bpy.types.Collection:
         for dx in (-0.38, 0.38):
             add_cube("GEO_AwningStripe", (x + dx, -0.35, 2.04), (0.32, 0.99, 0.15), "red", col, asset_id, "market_stall", rotation=(0.0, math.radians(-4), 0.0), bevel_width=0.07)
 
-    # Well: posts, crank axle, pitched canopy, rope, and a bucket on the rim.
+
     add_cube("GEO_WellBase", (-1.15, 1.55, 0.30), (1.18, 1.18, 0.60), "stone_dark", col, asset_id, "well", bevel_width=0.18)
     add_cylinder("GEO_WellOpening", (-1.15, 1.55, 0.63), 0.38, 0.10, "black", col, asset_id, "well", vertices=16, bevel_width=0.02)
     for x in (-1.63, -0.67):
@@ -1012,8 +1012,8 @@ def build_market(parent: bpy.types.Collection) -> bpy.types.Collection:
     add_cube("GEO_WellRidge", (-1.15, 1.55, 2.13), (1.36, 0.10, 0.10), "wood_dark", col, asset_id, "well", bevel_width=0.02)
     add_cylinder("GEO_WellBucket", (-0.80, 1.12, 0.70), 0.13, 0.22, "wood_dark", col, asset_id, "well", vertices=12, bevel_width=0.02)
 
-    # Neutral storage: barrels and crates that read as market logistics in
-    # every state, including shortage.
+
+
     for y in (0.55, 1.15):
         add_cylinder("GEO_StorageBarrel", (-0.42, y, 0.31), 0.26, 0.62, "wood", col, asset_id, "storage", vertices=14, bevel_width=0.05)
         add_cylinder("GEO_BarrelBand", (-0.42, y, 0.31), 0.265, 0.06, "iron", col, asset_id, "storage", vertices=14, bevel_width=0.01)
@@ -1094,8 +1094,8 @@ def build_assets(groups: dict[str, bpy.types.Collection]) -> None:
     build_security_layer(groups["states"])
     build_recovery_layer(groups["states"])
 
-    # Socket objects live in the base asset for export, and are cross-linked to
-    # the guides collection for quick authoring visibility control.
+
+
     for obj in base.objects:
         if obj.name.startswith("SOCKET_"):
             groups["guides"].objects.link(obj)
@@ -1216,9 +1216,9 @@ def export_collection(collection: bpy.types.Collection, filepath: Path) -> None:
         export_apply=True,
         export_extras=True,
         export_yup=True,
-        # The library uses flat palette materials only. UVs carry no signal,
-        # and primitive UV generation introduces last-bit float noise between
-        # processes, so dropping them keeps exports byte-reproducible.
+
+
+
         export_texcoords=False,
         export_materials="EXPORT",
         export_vertex_color="ACTIVE",

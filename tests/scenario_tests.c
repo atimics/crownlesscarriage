@@ -52,11 +52,35 @@ static void PrepareDungeonChoice(CcSim *sim, uint32_t seed, char *error,
     CcSituation *warrant = ActiveSituation(
         sim, CC_SITUATION_MONSTER_EXPEDITION);
     CC_CHECK(warrant != NULL);
+    CcCommand follow_lead = {
+        .kind = CC_COMMAND_CHARACTER_RESPONSE,
+        .target_id = warrant->id,
+        .amount = CC_CHARACTER_RESPONSE_LISTEN
+    };
+    CC_CHECK(CcSimApply(sim, &follow_lead, error, error_capacity));
+    CC_CHECK(CcSimApply(sim, &follow_lead, error, error_capacity));
+    follow_lead.amount = CC_CHARACTER_RESPONSE_KEEP_CONFIDENCE;
+    CC_CHECK(CcSimApply(sim, &follow_lead, error, error_capacity));
     CcCommand accept = {
         .kind = CC_COMMAND_ACCEPT_SITUATION,
         .target_id = warrant->id
     };
     CC_CHECK(CcSimApply(sim, &accept, error, error_capacity));
+    /* This scenario isolates the strategic outcomes after a successful delve.
+       Room-by-room expedition behavior is covered by underroad_tests. */
+    sim->dungeons[0].rooms[19].state_flags |=
+        CC_DUNGEON_ROOM_OBJECTIVE_REACHED;
+    for (int32_t i = 0; i < sim->dungeons[0].link_count; ++i) {
+        CcDungeonLink *link = &sim->dungeons[0].links[i];
+        if (link->kind == CC_DUNGEON_LINK_SHORTCUT) {
+            link->flags |= CC_DUNGEON_LINK_DISCOVERED |
+                           CC_DUNGEON_LINK_OPEN;
+        }
+    }
+    sim->dungeons[0].rooms[20].state_flags |=
+        CC_DUNGEON_ROOM_SEARCHED;
+    sim->dungeons[0].rooms[4].state_flags |=
+        CC_DUNGEON_ROOM_SEARCHED;
 }
 
 int main(void)
@@ -147,12 +171,7 @@ int main(void)
         .target_id = relief->id
     };
     CC_CHECK(CcSimApply(&official, &accept_relief, error, sizeof(error)));
-    CcCommand food = {
-        .kind = CC_COMMAND_TRADE,
-        .good = CC_GOOD_FOOD,
-        .amount = relief->quantity
-    };
-    CC_CHECK(CcSimApply(&official, &food, error, sizeof(error)));
+    CC_CHECK(official.player.cargo[CC_GOOD_FOOD] == relief->quantity);
     TravelAndArrive(&official, official.settlements[1].id,
                     error, sizeof(error));
 

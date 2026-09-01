@@ -24,6 +24,7 @@ static void AdvanceDragonCampaign(CcSim *sim);
 static void AdvanceHorseTeam(CcSim *sim);
 static void AdvanceRuins(CcSim *sim);
 static int32_t BasePrice(CcGood good);
+static int32_t SettlementSlotById(const CcSim *sim, CcId id);
 static int32_t CalculateDragonCrownStrength(const CcSim *sim);
 
 static int32_t ClampI32(int32_t value, int32_t minimum, int32_t maximum)
@@ -151,7 +152,7 @@ void CcSimInitializeDragonCycle(CcSim *sim)
     CopyName(sim->dragon.name, "Varkesh the Unappeased");
     sim->dragon.lair_settlement_id =
         sim->settlements[sim->settlement_count - 1].id;
-    /* Old offerings make the cave worth robbing before the first live tithe. */
+
     sim->dragon.hoard = 30;
     CcSimInitializeDragonEcology(sim);
 }
@@ -398,6 +399,7 @@ static bool EventIsPinned(const CcSim *sim, CcId event_id,
     for (int32_t i = 0; i < sim->situation_count; ++i) {
         const CcSituation *situation = &sim->situations[i];
         if (situation->cause_event_id == event_id ||
+            situation->lead_event_id == event_id ||
             situation->objective.progress.created_by_event_id == event_id ||
             situation->objective.progress.resolved_by_event_id == event_id ||
             situation->objective.danger.created_by_event_id == event_id ||
@@ -429,6 +431,13 @@ static bool EventIsPinned(const CcSim *sim, CcId event_id,
         for (int32_t memory = 0; memory < character->memory_count; ++memory) {
             if (character->memories[memory].event_id == event_id) return true;
         }
+        for (int32_t knowledge = 0;
+             knowledge < character->knowledge_count; ++knowledge) {
+            if (character->knowledge[knowledge].event_id == event_id) return true;
+        }
+    }
+    for (int32_t i = 0; i < sim->relationship_count; ++i) {
+        if (sim->relationships[i].cause_event_id == event_id) return true;
     }
     return false;
 }
@@ -460,6 +469,9 @@ static void RedirectEventReference(CcSim *sim, CcId removed_id,
                 situation->objective.evidence_event_ids[evidence] =
                     replacement_id;
             }
+        }
+        if (sim->situations[i].lead_event_id == removed_id) {
+            sim->situations[i].lead_event_id = replacement_id;
         }
     }
     if (sim->journey.parent_event_id == removed_id) {
@@ -530,6 +542,17 @@ static void RedirectEventReference(CcSim *sim, CcId removed_id,
                 character->memories[memory].event_id = replacement_id;
             }
         }
+        for (int32_t knowledge = 0;
+             knowledge < character->knowledge_count; ++knowledge) {
+            if (character->knowledge[knowledge].event_id == removed_id) {
+                character->knowledge[knowledge].event_id = replacement_id;
+            }
+        }
+    }
+    for (int32_t i = 0; i < sim->relationship_count; ++i) {
+        if (sim->relationships[i].cause_event_id == removed_id) {
+            sim->relationships[i].cause_event_id = replacement_id;
+        }
     }
 }
 
@@ -596,6 +619,22 @@ static CcEvent *PushEvent(CcSim *sim, CcEventKind kind, CcId subject,
     (void)snprintf(event->text, sizeof(event->text), "%s", text);
     sim->event_write_index = (slot + 1) % CC_MAX_EVENTS;
     if (sim->event_count < CC_MAX_EVENTS) sim->event_count += 1;
+    return event;
+}
+
+static CcEvent *PushSocialEvent(CcSim *sim, CcEventKind kind, CcId subject,
+                                CcId location, CcId parent,
+                                CcId actor, CcId target,
+                                CcId beneficiary, CcId witness,
+                                int32_t magnitude, const char *text)
+{
+    CcEvent *event = PushEvent(sim, kind, subject, location, parent,
+                               magnitude, text);
+    if (event == NULL) return NULL;
+    event->actor_id = actor;
+    event->target_id = target;
+    event->beneficiary_id = beneficiary;
+    event->witness_id = witness;
     return event;
 }
 
@@ -857,12 +896,37 @@ const char *CcEventKindName(CcEventKind kind)
         case CC_EVENT_AMBUSH_EVADED: return "AMBUSH EVADED";
         case CC_EVENT_ENCOUNTER_LOOT: return "ROAD LOOT";
         case CC_EVENT_GOBLIN_TUNNEL_TRAVERSED: return "MOUNTAIN TUNNEL";
+        case CC_EVENT_DUNGEON_EXPEDITION_BEGAN: return "UNDERROAD DELVE";
+        case CC_EVENT_DUNGEON_ROOM_ENTERED: return "UNDERROAD MAPPED";
+        case CC_EVENT_DUNGEON_ENCOUNTER: return "UNDERROAD ENCOUNTER";
+        case CC_EVENT_DUNGEON_SHORTCUT_OPENED: return "SHORTCUT OPENED";
+        case CC_EVENT_DUNGEON_LOOT: return "UNDERROAD RECOVERY";
+        case CC_EVENT_DUNGEON_THRESHOLD_REACHED: return "HOARD THRESHOLD";
+        case CC_EVENT_DUNGEON_EXPEDITION_ENDED: return "UNDERROAD RETURN";
+        case CC_EVENT_RELATIONSHIP_HISTORY: return "SHARED HISTORY";
+        case CC_EVENT_RUMOR_SHARED: return "RUMOR";
+        case CC_EVENT_FACT_REVEALED: return "DISCOVERY";
+        case CC_EVENT_RELATIONSHIP_CHANGED: return "RELATIONSHIP";
         case CC_EVENT_FRONT_CREATED: return "STORY FRONT";
         case CC_EVENT_FRONT_RESOLVED: return "FRONT RESOLVED";
         case CC_EVENT_FRONT_FAILED: return "FRONT FAILED";
         case CC_EVENT_QUEST_PROGRESS: return "QUEST PROGRESS";
     }
     return "EVENT";
+}
+
+const char *CcRelationshipHistoryName(CcRelationshipHistory history)
+{
+    switch (history) {
+        case CC_RELATIONSHIP_HISTORY_NONE: return "acquaintances";
+        case CC_RELATIONSHIP_HISTORY_OLD_FRIENDS: return "old friends";
+        case CC_RELATIONSHIP_HISTORY_FORMER_PARTNERS:
+            return "former partners";
+        case CC_RELATIONSHIP_HISTORY_PROFESSIONAL_RIVALS:
+            return "professional rivals";
+        case CC_RELATIONSHIP_HISTORY_COWORKERS: return "coworkers";
+    }
+    return "acquaintances";
 }
 
 const char *CcCharacterRoleName(CcCharacterRole role)
@@ -1089,6 +1153,328 @@ static CcDungeonEffects DungeonEffects(CcDungeonState state)
     }
 }
 
+static uint32_t NextDungeonRandom(CcDungeon *dungeon)
+{
+    uint32_t value = dungeon->encounter_random_state;
+    value ^= value << 13U;
+    value ^= value >> 17U;
+    value ^= value << 5U;
+    dungeon->encounter_random_state = value == 0U ?
+        UINT32_C(0x6d2b79f5) : value;
+    return dungeon->encounter_random_state;
+}
+
+static void InitDungeonRoom(CcDungeon *dungeon, int32_t slot,
+                            const char *name, CcDungeonRoomKind kind,
+                            int32_t depth, int32_t map_x, int32_t map_y,
+                            uint32_t flags, CcGood loot_good,
+                            int32_t loot_quantity)
+{
+    if (dungeon == NULL || slot < 0 || slot >= CC_MAX_DUNGEON_ROOMS) return;
+    CcDungeonRoom *room = &dungeon->rooms[slot];
+    *room = (CcDungeonRoom){0};
+    (void)snprintf(room->name, sizeof(room->name), "%s", name);
+    room->kind = kind;
+    room->depth = depth;
+    room->map_x = map_x;
+    room->map_y = map_y;
+    room->flags = flags;
+    room->loot_good = loot_good;
+    room->loot_quantity = loot_quantity;
+}
+
+static void AddDungeonLink(CcDungeon *dungeon, int32_t from_room,
+                           int32_t to_room, CcDungeonLinkKind kind)
+{
+    if (dungeon == NULL || dungeon->link_count >= CC_MAX_DUNGEON_LINKS) return;
+    CcDungeonLink *link = &dungeon->links[dungeon->link_count++];
+    *link = (CcDungeonLink){
+        .from_room = from_room,
+        .to_room = to_room,
+        .kind = kind,
+        .flags = kind == CC_DUNGEON_LINK_SHORTCUT ? 0U :
+                 CC_DUNGEON_LINK_OPEN
+    };
+}
+
+static void GenerateUnderroad(CcSim *sim, CcDungeon *dungeon)
+{
+    if (sim == NULL || dungeon == NULL) return;
+    memset(dungeon->rooms, 0, sizeof(dungeon->rooms));
+    memset(dungeon->links, 0, sizeof(dungeon->links));
+    dungeon->layout_seed = sim->world_seed ^
+        (uint32_t)(dungeon->id & UINT64_C(0xffffffff)) ^
+        UINT32_C(0x71a7e5ed);
+    if (dungeon->layout_seed == 0U) dungeon->layout_seed = UINT32_C(0x51ed270b);
+    dungeon->encounter_random_state = dungeon->layout_seed;
+    dungeon->room_count = CC_MAX_DUNGEON_ROOMS;
+    dungeon->link_count = 0;
+
+    InitDungeonRoom(dungeon, 0, "Mine Mouth", CC_DUNGEON_ROOM_MINE_MOUTH,
+                    0, 0, 0, CC_DUNGEON_ROOM_SAFE, CC_GOOD_FOOD, 0);
+    InitDungeonRoom(dungeon, 1, "Lamp Hall", CC_DUNGEON_ROOM_RAIL,
+                    0, 1, 0, 0U, CC_GOOD_FOOD, 0);
+    InitDungeonRoom(dungeon, 2, "Broken Weighhouse", CC_DUNGEON_ROOM_WORKSHOP,
+                    0, 2, -1, CC_DUNGEON_ROOM_HAZARD,
+                    CC_GOOD_TOOLS, 1);
+    InitDungeonRoom(dungeon, 3, "Sump Gallery", CC_DUNGEON_ROOM_FLOODWAY,
+                    0, 2, 1, CC_DUNGEON_ROOM_STONEBACK,
+                    CC_GOOD_IRON, 0);
+    InitDungeonRoom(dungeon, 4, "Chain Bridge", CC_DUNGEON_ROOM_BRIDGE,
+                    1, 3, 0, CC_DUNGEON_ROOM_HAZARD,
+                    CC_GOOD_IRON, 0);
+    InitDungeonRoom(dungeon, 5, "Foreman's Lockroom",
+                    CC_DUNGEON_ROOM_WORKSHOP, 1, 3, -2,
+                    CC_DUNGEON_ROOM_SAFE, CC_GOOD_TOOLS, 2);
+    InitDungeonRoom(dungeon, 6, "Flooded Turntable",
+                    CC_DUNGEON_ROOM_FLOODWAY, 1, 4, 1,
+                    CC_DUNGEON_ROOM_STONEBACK, CC_GOOD_IRON, 0);
+    InitDungeonRoom(dungeon, 7, "Lost Cargo Spur", CC_DUNGEON_ROOM_RAIL,
+                    1, 4, 3, 0U, CC_GOOD_IRON, 4);
+    InitDungeonRoom(dungeon, 8, "Bell Shaft", CC_DUNGEON_ROOM_SHAFT,
+                    1, 5, 0, CC_DUNGEON_ROOM_DRAGON_SIGN,
+                    CC_GOOD_FOOD, 0);
+    InitDungeonRoom(dungeon, 9, "Archive Gate", CC_DUNGEON_ROOM_ARCHIVE,
+                    2, 6, 0, CC_DUNGEON_ROOM_GOBLIN,
+                    CC_GOOD_FOOD, 0);
+    InitDungeonRoom(dungeon, 10, "Hall of Ash Clerks",
+                    CC_DUNGEON_ROOM_ARCHIVE, 2, 7, -1,
+                    CC_DUNGEON_ROOM_GOBLIN, CC_GOOD_FOOD, 0);
+    InitDungeonRoom(dungeon, 11, "Cinder Market",
+                    CC_DUNGEON_ROOM_MARKET, 2, 7, 1,
+                    CC_DUNGEON_ROOM_SAFE | CC_DUNGEON_ROOM_GOBLIN,
+                    CC_GOOD_FOOD, 2);
+    InitDungeonRoom(dungeon, 12, "Red Cap Barracks",
+                    CC_DUNGEON_ROOM_BARRACKS, 2, 8, -2,
+                    CC_DUNGEON_ROOM_GOBLIN | CC_DUNGEON_ROOM_HAZARD,
+                    CC_GOOD_WEAPONS, 1);
+    InitDungeonRoom(dungeon, 13, "Ledger Vault",
+                    CC_DUNGEON_ROOM_VAULT, 2, 8, 0,
+                    CC_DUNGEON_ROOM_GOBLIN, CC_GOOD_GOLD, 2);
+    InitDungeonRoom(dungeon, 14, "Tribute Lift",
+                    CC_DUNGEON_ROOM_SHAFT, 2, 8, 2,
+                    CC_DUNGEON_ROOM_GOBLIN | CC_DUNGEON_ROOM_DRAGON_SIGN,
+                    CC_GOOD_FOOD, 0);
+    InitDungeonRoom(dungeon, 15, "Blind Aqueduct",
+                    CC_DUNGEON_ROOM_FLOODWAY, 3, 9, 3,
+                    CC_DUNGEON_ROOM_HAZARD, CC_GOOD_GEMS, 0);
+    InitDungeonRoom(dungeon, 16, "The Tithe Road",
+                    CC_DUNGEON_ROOM_RAIL, 3, 9, 1,
+                    CC_DUNGEON_ROOM_GOBLIN | CC_DUNGEON_ROOM_DRAGON_SIGN,
+                    CC_GOOD_FOOD, 0);
+    InitDungeonRoom(dungeon, 17, "Furnace Shrine",
+                    CC_DUNGEON_ROOM_SHRINE, 3, 10, -1,
+                    CC_DUNGEON_ROOM_HAZARD | CC_DUNGEON_ROOM_DRAGON_SIGN,
+                    CC_GOOD_GOLD, 0);
+    InitDungeonRoom(dungeon, 18, "Porters' Grave",
+                    CC_DUNGEON_ROOM_VAULT, 3, 10, 2,
+                    CC_DUNGEON_ROOM_HAZARD, CC_GOOD_GEMS, 1);
+    InitDungeonRoom(dungeon, 19, "Hoard Threshold",
+                    CC_DUNGEON_ROOM_THRESHOLD, 4, 11, 0,
+                    CC_DUNGEON_ROOM_OBJECTIVE | CC_DUNGEON_ROOM_DRAGON_SIGN,
+                    CC_GOOD_FOOD, 0);
+    InitDungeonRoom(dungeon, 20, "Old Smuggler Cut",
+                    CC_DUNGEON_ROOM_RAIL, 2, 6, 3,
+                    CC_DUNGEON_ROOM_SMUGGLER,
+                    CC_GOOD_GOLD, 1);
+    InitDungeonRoom(dungeon, 21, "Stoneback Nursery",
+                    CC_DUNGEON_ROOM_FLOODWAY, 1, 5, 3,
+                    CC_DUNGEON_ROOM_STONEBACK, CC_GOOD_IRON, 0);
+    InitDungeonRoom(dungeon, 22, "Collapsed Freight Lift",
+                    CC_DUNGEON_ROOM_SHAFT, 1, 2, 3,
+                    CC_DUNGEON_ROOM_HAZARD, CC_GOOD_TOOLS, 0);
+    InitDungeonRoom(dungeon, 23, "King's Survey Room",
+                    CC_DUNGEON_ROOM_ARCHIVE, 1, 4, -2,
+                    CC_DUNGEON_ROOM_SAFE, CC_GOOD_IRON, 3);
+
+    static const int32_t passages[][2] = {
+        {0, 1}, {1, 2}, {1, 3}, {2, 4}, {2, 5}, {3, 4}, {3, 6},
+        {4, 8}, {5, 23}, {23, 8}, {6, 7}, {6, 21}, {21, 22},
+        {8, 9}, {9, 10}, {9, 11}, {10, 12}, {10, 13}, {11, 13},
+        {11, 14}, {12, 17}, {13, 16}, {14, 15}, {14, 20},
+        {15, 16}, {16, 17}, {16, 18}, {17, 19}, {18, 19}
+    };
+    for (size_t i = 0; i < sizeof(passages) / sizeof(passages[0]); ++i) {
+        AddDungeonLink(dungeon, passages[i][0], passages[i][1],
+                       CC_DUNGEON_LINK_PASSAGE);
+    }
+    AddDungeonLink(dungeon, 7, 20, CC_DUNGEON_LINK_SECRET);
+    AddDungeonLink(dungeon, 20, 11, CC_DUNGEON_LINK_SECRET);
+    AddDungeonLink(dungeon, 22, 1, CC_DUNGEON_LINK_SHORTCUT);
+    AddDungeonLink(dungeon, 15, 18, CC_DUNGEON_LINK_SECRET);
+
+    static const int32_t optional_links[][2] = {
+        {5, 6}, {7, 22}, {12, 13}, {10, 17}, {14, 18}, {20, 21}
+    };
+    uint32_t choices = NextDungeonRandom(dungeon);
+    for (int32_t i = 0; i < 2; ++i) {
+        int32_t option = (int32_t)((choices >> (uint32_t)(i * 5)) % 3U) +
+                         i * 3;
+        AddDungeonLink(dungeon, optional_links[option][0],
+                       optional_links[option][1],
+                       (choices & (UINT32_C(1) << (uint32_t)(20 + i))) != 0U ?
+                           CC_DUNGEON_LINK_SECRET :
+                           CC_DUNGEON_LINK_PASSAGE);
+    }
+    dungeon->rooms[0].state_flags |= CC_DUNGEON_ROOM_DISCOVERED;
+}
+
+void CcSimInitializeUnderroad(CcSim *sim)
+{
+    if (sim == NULL) return;
+    for (int32_t i = 0; i < sim->dungeon_count; ++i) {
+        CcDungeon *dungeon = &sim->dungeons[i];
+        if (dungeon->room_count == 0) GenerateUnderroad(sim, dungeon);
+    }
+    if (!sim->dungeon_expedition.active) {
+        sim->dungeon_expedition = (CcDungeonExpedition){0};
+        sim->dungeon_expedition.current_room = -1;
+        sim->dungeon_expedition.encounter_room = -1;
+    }
+}
+
+const CcDungeon *CcSimDungeon(const CcSim *sim, CcId id)
+{
+    if (sim == NULL || CcIdKind(id) != CC_ENTITY_DUNGEON) return NULL;
+    for (int32_t i = 0; i < sim->dungeon_count; ++i) {
+        if (sim->dungeons[i].id == id) return &sim->dungeons[i];
+    }
+    return NULL;
+}
+
+static CcDungeon *DungeonMutable(CcSim *sim, CcId id)
+{
+    return (CcDungeon *)CcSimDungeon((const CcSim *)sim, id);
+}
+
+static bool DungeonLinkAllowsTravel(const CcDungeonLink *link,
+                                    int32_t from_room)
+{
+    if (link == NULL || (link->flags & CC_DUNGEON_LINK_OPEN) == 0U) {
+        return false;
+    }
+    if (link->kind == CC_DUNGEON_LINK_SECRET &&
+        (link->flags & CC_DUNGEON_LINK_DISCOVERED) == 0U) return false;
+    if (link->kind == CC_DUNGEON_LINK_DROP) return link->from_room == from_room;
+    return link->from_room == from_room || link->to_room == from_room;
+}
+
+static int32_t DungeonLinkOtherRoom(const CcDungeonLink *link,
+                                    int32_t from_room)
+{
+    if (link == NULL) return -1;
+    if (link->from_room == from_room) return link->to_room;
+    if (link->to_room == from_room && link->kind != CC_DUNGEON_LINK_DROP) {
+        return link->from_room;
+    }
+    return -1;
+}
+
+const CcDungeonRoom *CcSimDungeonCurrentRoom(const CcSim *sim)
+{
+    if (sim == NULL || !sim->dungeon_expedition.active) return NULL;
+    const CcDungeon *dungeon = CcSimDungeon(
+        sim, sim->dungeon_expedition.dungeon_id);
+    int32_t room = sim->dungeon_expedition.current_room;
+    return dungeon != NULL && room >= 0 && room < dungeon->room_count ?
+        &dungeon->rooms[room] : NULL;
+}
+
+int32_t CcSimDungeonVisibleExitCount(const CcSim *sim)
+{
+    if (sim == NULL || !sim->dungeon_expedition.active) return 0;
+    const CcDungeon *dungeon = CcSimDungeon(
+        sim, sim->dungeon_expedition.dungeon_id);
+    if (dungeon == NULL) return 0;
+    int32_t count = 0;
+    for (int32_t i = 0; i < dungeon->link_count; ++i) {
+        if (DungeonLinkAllowsTravel(&dungeon->links[i],
+                                    sim->dungeon_expedition.current_room)) {
+            count += 1;
+        }
+    }
+    return count;
+}
+
+int32_t CcSimDungeonVisibleExitAt(const CcSim *sim, int32_t ordinal)
+{
+    if (sim == NULL || ordinal < 0 || !sim->dungeon_expedition.active) {
+        return -1;
+    }
+    const CcDungeon *dungeon = CcSimDungeon(
+        sim, sim->dungeon_expedition.dungeon_id);
+    if (dungeon == NULL) return -1;
+    int32_t found = 0;
+    for (int32_t i = 0; i < dungeon->link_count; ++i) {
+        const CcDungeonLink *link = &dungeon->links[i];
+        if (!DungeonLinkAllowsTravel(
+                link, sim->dungeon_expedition.current_room)) continue;
+        if (found++ == ordinal) {
+            return DungeonLinkOtherRoom(
+                link, sim->dungeon_expedition.current_room);
+        }
+    }
+    return -1;
+}
+
+int32_t CcSimDungeonOpenableShortcut(const CcSim *sim)
+{
+    if (sim == NULL || !sim->dungeon_expedition.active) return -1;
+    const CcDungeon *dungeon = CcSimDungeon(
+        sim, sim->dungeon_expedition.dungeon_id);
+    if (dungeon == NULL) return -1;
+    int32_t room = sim->dungeon_expedition.current_room;
+    for (int32_t i = 0; i < dungeon->link_count; ++i) {
+        const CcDungeonLink *link = &dungeon->links[i];
+        if (link->kind == CC_DUNGEON_LINK_SHORTCUT &&
+            (link->flags & CC_DUNGEON_LINK_DISCOVERED) != 0U &&
+            (link->flags & CC_DUNGEON_LINK_OPEN) == 0U &&
+            (link->from_room == room || link->to_room == room)) return i;
+    }
+    return -1;
+}
+
+const char *CcDungeonRoomKindName(CcDungeonRoomKind kind)
+{
+    switch (kind) {
+        case CC_DUNGEON_ROOM_MINE_MOUTH: return "mine mouth";
+        case CC_DUNGEON_ROOM_RAIL: return "old freight road";
+        case CC_DUNGEON_ROOM_FLOODWAY: return "floodway";
+        case CC_DUNGEON_ROOM_WORKSHOP: return "workshop";
+        case CC_DUNGEON_ROOM_BRIDGE: return "bridge";
+        case CC_DUNGEON_ROOM_SHAFT: return "shaft";
+        case CC_DUNGEON_ROOM_ARCHIVE: return "archive";
+        case CC_DUNGEON_ROOM_MARKET: return "goblin market";
+        case CC_DUNGEON_ROOM_BARRACKS: return "barracks";
+        case CC_DUNGEON_ROOM_SHRINE: return "furnace shrine";
+        case CC_DUNGEON_ROOM_VAULT: return "vault";
+        case CC_DUNGEON_ROOM_THRESHOLD: return "hoard threshold";
+    }
+    return "unknown chamber";
+}
+
+const char *CcDungeonEncounterName(CcDungeonEncounterKind kind)
+{
+    switch (kind) {
+        case CC_DUNGEON_ENCOUNTER_STONEBACKS: return "stoneback procession";
+        case CC_DUNGEON_ENCOUNTER_TITHE_KEEPERS: return "Tithe Keeper patrol";
+        case CC_DUNGEON_ENCOUNTER_GOBLIN_DESERTERS: return "goblin deserters";
+        case CC_DUNGEON_ENCOUNTER_MONSTERS: return "deep-dwelling monsters";
+        case CC_DUNGEON_ENCOUNTER_SMUGGLERS: return "underroad smugglers";
+        case CC_DUNGEON_ENCOUNTER_NONE: break;
+    }
+    return "no encounter";
+}
+
+const char *CcDungeonReactionName(int32_t reaction)
+{
+    if (reaction <= 3) return "immediately hostile";
+    if (reaction <= 5) return "threatening";
+    if (reaction <= 8) return "uncertain";
+    if (reaction <= 10) return "willing to talk";
+    return "helpful for now";
+}
+
 const CcRoute *CcSimRouteBetween(const CcSim *sim, CcId a, CcId b)
 {
     if (sim == NULL) return NULL;
@@ -1279,6 +1665,23 @@ static int32_t FoodStorageCapacity(const CcSim *sim,
     return WeeklyFoodUse(sim, place) * storage_weeks;
 }
 
+static void RefreshSettlementGoodPrice(const CcSim *sim,
+                                       CcSettlement *settlement,
+                                       CcGood good)
+{
+    if (sim == NULL || settlement == NULL ||
+        good < 0 || good >= CC_GOOD_COUNT) return;
+    int32_t target = EffectiveReserveTarget(sim, settlement, good);
+    int32_t incoming = CcSimIncomingGood(sim, settlement->id, good);
+    int32_t expected_stock = settlement->stock[good] + incoming / 2;
+    int32_t shortage = target > 0 ?
+        (target - expected_stock) * 100 / target : 0;
+    int32_t pressure = ClampI32(shortage, -35, 220);
+    settlement->price[good] = MinimumI32(
+        99, BasePrice(good) * (100 + pressure) / 100);
+    if (settlement->price[good] < 1) settlement->price[good] = 1;
+}
+
 static int32_t SpoilStoredFood(const CcSim *sim, CcSettlement *place)
 {
     int32_t stored = place->stock[CC_GOOD_FOOD];
@@ -1442,6 +1845,16 @@ int32_t CcSimTrackedGood(const CcSim *sim, CcGood good)
     for (int32_t i = 0; i < sim->shipment_count; ++i) {
         if (sim->shipments[i].status == CC_SHIPMENT_TRAVELLING &&
             sim->shipments[i].good == good) total += sim->shipments[i].quantity;
+    }
+    if (sim->schema_version >= 19U) {
+        for (int32_t dungeon = 0; dungeon < sim->dungeon_count; ++dungeon) {
+            for (int32_t room = 0;
+                 room < sim->dungeons[dungeon].room_count; ++room) {
+                const CcDungeonRoom *cache =
+                    &sim->dungeons[dungeon].rooms[room];
+                if (cache->loot_good == good) total += cache->loot_quantity;
+            }
+        }
     }
     if (good == CC_GOOD_GOLD || good == CC_GOOD_GEMS) {
         for (int32_t i = 0; i < sim->treasure_count; ++i) {
@@ -1780,6 +2193,54 @@ const CcCharacter *CcSimSituationAffectedCharacter(
         CcSimCharacter(sim, situation->affected_character_id) : NULL;
 }
 
+const CcCharacter *CcSimSituationWitnessCharacter(
+    const CcSim *sim, const CcSituation *situation)
+{
+    return situation != NULL ?
+        CcSimCharacter(sim, situation->witness_character_id) : NULL;
+}
+
+const CcRelationship *CcSimRelationship(const CcSim *sim,
+                                        CcId from_character_id,
+                                        CcId to_character_id)
+{
+    if (sim == NULL || from_character_id == 0U || to_character_id == 0U) {
+        return NULL;
+    }
+    for (int32_t i = 0; i < sim->relationship_count; ++i) {
+        const CcRelationship *relationship = &sim->relationships[i];
+        if (relationship->from_character_id == from_character_id &&
+            relationship->to_character_id == to_character_id) {
+            return relationship;
+        }
+    }
+    return NULL;
+}
+
+bool CcCharacterKnows(const CcCharacter *character,
+                      CcKnowledgeKind kind, CcId subject_id)
+{
+    if (character == NULL || kind == CC_KNOWLEDGE_NONE) return false;
+    for (int32_t i = 0; i < character->knowledge_count; ++i) {
+        const CcCharacterKnowledge *knowledge = &character->knowledge[i];
+        if (knowledge->kind == kind && knowledge->subject_id == subject_id) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool CcSimSituationCanAccept(const CcSim *sim,
+                             const CcSituation *situation)
+{
+    (void)sim;
+    if (situation == NULL || situation->status != CC_SITUATION_ACTIVE) {
+        return false;
+    }
+    return situation->kind != CC_SITUATION_MONSTER_EXPEDITION ||
+           situation->discovery_stage == CC_DISCOVERY_OFFER;
+}
+
 const CcCharacter *CcSimSituationConversationCharacter(
     const CcSim *sim, const CcSituation *situation, CcId settlement_id)
 {
@@ -1788,6 +2249,29 @@ const CcCharacter *CcSimSituationConversationCharacter(
         sim, situation);
     const CcCharacter *affected = CcSimSituationAffectedCharacter(
         sim, situation);
+    const CcCharacter *witness = CcSimSituationWitnessCharacter(
+        sim, situation);
+    if (situation->kind == CC_SITUATION_MONSTER_EXPEDITION) {
+        const CcCharacter *lead = NULL;
+        switch (situation->discovery_stage) {
+            case CC_DISCOVERY_RUMOR:
+            case CC_DISCOVERY_DECISION:
+                lead = affected;
+                break;
+            case CC_DISCOVERY_WITNESS:
+                lead = witness;
+                break;
+            case CC_DISCOVERY_AUTHORITY:
+                lead = sponsor;
+                break;
+            case CC_DISCOVERY_OFFER:
+                lead = situation->lead_path == CC_LEAD_PATH_CONFIDENCE ?
+                    affected : sponsor;
+                break;
+        }
+        return lead != NULL && lead->current_settlement_id == settlement_id ?
+            lead : NULL;
+    }
     bool sponsor_here = sponsor != NULL &&
         sponsor->current_settlement_id == settlement_id;
     bool affected_here = affected != NULL &&
@@ -1840,6 +2324,19 @@ CcId CcSimSituationOfferSettlementId(const CcSim *sim,
         return route != NULL ? route->from_id : 0U;
     }
     if (situation->kind == CC_SITUATION_MONSTER_EXPEDITION) {
+        if (situation->discovery_stage == CC_DISCOVERY_AUTHORITY ||
+            (situation->discovery_stage == CC_DISCOVERY_OFFER &&
+             situation->lead_path == CC_LEAD_PATH_REPORT)) {
+            const CcCharacter *sponsor = CcSimSituationSponsorCharacter(
+                sim, situation);
+            if (sponsor != NULL) return sponsor->current_settlement_id;
+        }
+        if (situation->discovery_stage == CC_DISCOVERY_OFFER &&
+            situation->lead_path == CC_LEAD_PATH_CONFIDENCE) {
+            const CcCharacter *affected = CcSimSituationAffectedCharacter(
+                sim, situation);
+            if (affected != NULL) return affected->current_settlement_id;
+        }
         for (int32_t i = 0; i < sim->dungeon_count; ++i) {
             if (sim->dungeons[i].id == situation->target_id) {
                 return sim->dungeons[i].settlement_id;
@@ -1937,6 +2434,9 @@ bool CcSimSituationTouchesSettlement(const CcSim *sim,
              courier->destination_settlement_id == settlement_id);
     }
     if (situation->kind == CC_SITUATION_MONSTER_EXPEDITION) {
+        const CcCharacter *lead = CcSimSituationConversationCharacter(
+            sim, situation, settlement_id);
+        if (lead != NULL) return true;
         for (int32_t i = 0; i < sim->dungeon_count; ++i) {
             if (sim->dungeons[i].id == situation->target_id) {
                 return sim->dungeons[i].settlement_id == settlement_id;
@@ -1979,24 +2479,27 @@ int32_t CcSimIncomingGood(const CcSim *sim, CcId settlement_id, CcGood good)
 int32_t CcPlayerCargoUsed(const CcPlayerCompany *player)
 {
     if (player == NULL) return 0;
-    static const int32_t per_slot[CC_GOOD_COUNT] = {8, 4, 2, 2, 1, 1};
     int32_t used = player->treasure_cargo_slots;
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
-        int32_t quantity = player->cargo[good];
-        used += quantity > 0 ?
-            (quantity + per_slot[good] - 1) / per_slot[good] : 0;
+        if (player->cargo[good] > 0) used += player->cargo[good];
     }
     return used;
 }
 
-static int32_t GoodCargoSlots(CcGood good, int32_t quantity)
+static int32_t PlayerCargoBoxes(CcGood good, int32_t quantity)
+{
+    if (good < 0 || good >= CC_GOOD_COUNT || quantity <= 0) return 0;
+    return quantity;
+}
+
+static int32_t FreightCargoSlots(CcGood good, int32_t quantity)
 {
     static const int32_t per_slot[CC_GOOD_COUNT] = {8, 4, 2, 2, 1, 1};
     if (good < 0 || good >= CC_GOOD_COUNT || quantity <= 0) return 0;
     return (quantity + per_slot[good] - 1) / per_slot[good];
 }
 
-static int32_t GoodUnitsPerCargoSlot(CcGood good)
+static int32_t FreightUnitsPerCargoSlot(CcGood good)
 {
     static const int32_t per_slot[CC_GOOD_COUNT] = {8, 4, 2, 2, 1, 1};
     return good >= 0 && good < CC_GOOD_COUNT ? per_slot[good] : 1;
@@ -2227,9 +2730,7 @@ void CcSimUpgradeMapCollection(CcSim *sim)
 
 static void InitMaps(CcSim *sim)
 {
-    /* Keep the world generator's later random sequence stable. The original
-       eight route sheets consumed these draws before collectible maps gained
-       authored properties. Save upgrades deliberately do not consume them. */
+
     for (int32_t i = 0; i < CC_MAX_ROUTES; ++i) {
         (void)NextRandom(sim);
         if (i != 0) (void)NextRandom(sim);
@@ -2373,6 +2874,7 @@ static void ConfigureSettlementEconomies(CcSim *sim)
             settlement->production[good] = MaximumI32(0, settlement->production[good] +
                 (settlement->production[good] > 0 ? (int32_t)(NextRandom(sim) % 3U) - 1 : 0));
         }
+        RefreshSettlementGoodPrice(sim, settlement, CC_GOOD_FOOD);
     }
 }
 
@@ -2502,6 +3004,7 @@ void CcSimInit(CcSim *sim, uint32_t seed)
     sim->dungeons[0].depth = 4;
     sim->dungeons[0].regional_pressure = 48;
     sim->dungeon_count = 1;
+    CcSimInitializeUnderroad(sim);
 
     sim->monsters[0].id = NextId(sim, CC_ENTITY_MONSTER_POPULATION);
     sim->monsters[0].dungeon_id = sim->dungeons[0].id;
@@ -2607,7 +3110,8 @@ static int32_t FoodSeasonFactor(const CcSim *sim)
     return 58;
 }
 
-static int32_t EffectiveProduction(CcSim *sim, CcSettlement *settlement,
+static int32_t EffectiveProduction(const CcSim *sim,
+                                   const CcSettlement *settlement,
                                    int32_t index, CcGood good)
 {
     if (CcSettlementIsAbandoned(settlement)) return 0;
@@ -2652,6 +3156,38 @@ static int32_t EffectiveProduction(CcSim *sim, CcSettlement *settlement,
     }
     if (good >= CC_GOOD_TOOLS) return 0;
     return MaximumI32(0, production);
+}
+
+bool CcSimFoodEconomyAtSettlement(const CcSim *sim, CcId settlement_id,
+                                  CcFoodEconomy *economy)
+{
+    if (sim == NULL || economy == NULL) return false;
+    const CcSettlement *settlement = CcSimSettlement(sim, settlement_id);
+    if (settlement == NULL) return false;
+    int32_t slot = SettlementSlotById(sim, settlement_id);
+    if (slot < 0) return false;
+    int32_t weekly_production = EffectiveProduction(
+        sim, settlement, slot, CC_GOOD_FOOD);
+    int32_t herd_food = weekly_production > 0 &&
+        sim->schema_version >= 14U &&
+        CcSettlementHasService(settlement, CC_SERVICE_FARM) &&
+        (settlement->cow_adults + settlement->cow_calves) > 0 ?
+        MaximumI32(
+            1, settlement->cow_adults * settlement->cow_condition / 1200) :
+        0;
+    *economy = (CcFoodEconomy){
+        .stock = settlement->stock[CC_GOOD_FOOD],
+        .incoming = CcSimIncomingGood(
+            sim, settlement_id, CC_GOOD_FOOD),
+        .weekly_production = weekly_production + herd_food,
+        .weekly_consumption = WeeklyFoodUse(sim, settlement),
+        .reserve_target = EffectiveReserveTarget(
+            sim, settlement, CC_GOOD_FOOD),
+        .storage_capacity = FoodStorageCapacity(sim, settlement),
+        .unit_price = settlement->price[CC_GOOD_FOOD],
+        .hunger = settlement->hunger
+    };
+    return true;
 }
 
 static void WearOneTool(CcSettlement *settlement, int32_t *wear,
@@ -2924,15 +3460,7 @@ static void UpdateSettlement(CcSim *sim, int32_t index)
             food_eaten = consumed;
             (void)SpoilStoredFood(sim, settlement);
         }
-        int32_t target = EffectiveReserveTarget(
-            sim, settlement, (CcGood)good);
-        int32_t incoming = CcSimIncomingGood(sim, settlement->id, (CcGood)good);
-        int32_t expected_stock = settlement->stock[good] + incoming / 2;
-        int32_t shortage = target > 0 ? (target - expected_stock) * 100 / target : 0;
-        int32_t pressure = ClampI32(shortage, -35, 220);
-        settlement->price[good] = MinimumI32(99,
-            BasePrice((CcGood)good) * (100 + pressure) / 100);
-        if (settlement->price[good] < 1) settlement->price[good] = 1;
+        RefreshSettlementGoodPrice(sim, settlement, (CcGood)good);
     }
     if (produced[CC_GOOD_FOOD] > 0 &&
         CcSettlementHasService(settlement, CC_SERVICE_FARM) &&
@@ -3489,9 +4017,7 @@ static void PlanGoblinTribute(CcSim *sim)
                goblins->lair_stock[CC_GOOD_WEAPONS] < 3) {
         goblins->raid_motive = CC_GOBLIN_RAID_EQUIPMENT;
     } else if (sim->dragon.slain) {
-        /* A dead dragon has no hidden replacement clutch to provision.
-           The cult may still raid when hungry or under-equipped, but it
-           cannot manufacture a successor from stolen relics. */
+
         goblins->tribute_cooldown_days = 14;
         return;
     } else {
@@ -5134,9 +5660,9 @@ static void CreateTradeShipment(CcSim *sim, int32_t route_slot, CcId next_hop_id
                    final_destination->stock[good] - incoming;
     int32_t effective_capacity = TradeRouteCapacity(sim, route);
     int32_t available_capacity = effective_capacity - route_used[route_slot];
-    int32_t cargo_capacity = available_capacity * GoodUnitsPerCargoSlot(good);
+    int32_t cargo_capacity = available_capacity * FreightUnitsPerCargoSlot(good);
     int32_t quantity = MinimumI32(
-        5 * GoodUnitsPerCargoSlot(good), MinimumI32(cargo_capacity,
+        5 * FreightUnitsPerCargoSlot(good), MinimumI32(cargo_capacity,
                                                  MinimumI32(surplus, need)));
     bool military_supply = WarWeeklyNeed(
         sim, final_destination, good) > 0;
@@ -5199,7 +5725,7 @@ static void CreateTradeShipment(CcSim *sim, int32_t route_slot, CcId next_hop_id
     shipment->departure_day = sim->current_day;
     shipment->arrival_day = sim->current_day + route->travel_days;
     shipment->status = CC_SHIPMENT_TRAVELLING;
-    route_used[route_slot] += GoodCargoSlots(good, quantity);
+    route_used[route_slot] += FreightCargoSlots(good, quantity);
     if (route->smuggler_route || sim->current_day % 21 == 0) {
         route->condition = ClampI32(route->condition - 1, 0, 100);
     }
@@ -5404,6 +5930,152 @@ static CcCharacter *PromoteCharacter(CcSim *sim, const char *name,
     return character;
 }
 
+static void RememberKnowledge(CcCharacter *character, CcKnowledgeKind kind,
+                              CcId subject_id, CcId source_character_id,
+                              CcId event_id, CcKnowledgeCertainty certainty,
+                              bool private_knowledge, int32_t day)
+{
+    if (character == NULL || kind == CC_KNOWLEDGE_NONE) return;
+    for (int32_t i = 0; i < character->knowledge_count; ++i) {
+        CcCharacterKnowledge *existing = &character->knowledge[i];
+        if (existing->kind != kind || existing->subject_id != subject_id) {
+            continue;
+        }
+        if (certainty >= existing->certainty) {
+            existing->source_character_id = source_character_id;
+            existing->event_id = event_id;
+            existing->certainty = certainty;
+            existing->private_knowledge = private_knowledge;
+            existing->day = day;
+        }
+        return;
+    }
+    int32_t slot = character->knowledge_write_index;
+    character->knowledge[slot] = (CcCharacterKnowledge){
+        .kind = kind,
+        .subject_id = subject_id,
+        .source_character_id = source_character_id,
+        .event_id = event_id,
+        .certainty = certainty,
+        .private_knowledge = private_knowledge,
+        .day = day
+    };
+    character->knowledge_write_index =
+        (slot + 1) % CC_CHARACTER_KNOWLEDGE_CAPACITY;
+    if (character->knowledge_count < CC_CHARACTER_KNOWLEDGE_CAPACITY) {
+        character->knowledge_count += 1;
+    }
+}
+
+static CcRelationship *RelationshipMutable(CcSim *sim,
+                                           CcId from_character_id,
+                                           CcId to_character_id)
+{
+    return (CcRelationship *)CcSimRelationship(
+        sim, from_character_id, to_character_id);
+}
+
+static CcRelationship *EnsureRelationship(
+    CcSim *sim, CcId from_character_id, CcId to_character_id,
+    CcRelationshipHistory history, int32_t affinity, int32_t trust,
+    int32_t obligation, CcId cause_event_id)
+{
+    CcRelationship *relationship = RelationshipMutable(
+        sim, from_character_id, to_character_id);
+    if (relationship != NULL) return relationship;
+    if (sim == NULL || sim->relationship_count >= CC_MAX_RELATIONSHIPS ||
+        CcSimCharacter(sim, from_character_id) == NULL ||
+        CcSimCharacter(sim, to_character_id) == NULL ||
+        from_character_id == to_character_id) return NULL;
+    relationship = &sim->relationships[sim->relationship_count++];
+    *relationship = (CcRelationship){
+        .from_character_id = from_character_id,
+        .to_character_id = to_character_id,
+        .affinity = ClampI32(affinity, -3, 3),
+        .trust = ClampI32(trust, -3, 3),
+        .obligation = ClampI32(obligation, -3, 3),
+        .history = history,
+        .cause_event_id = cause_event_id
+    };
+    return relationship;
+}
+
+static void InitializeMineSocialThread(CcSim *sim, CcSituation *situation,
+                                       CcCharacter *jory,
+                                       CcCharacter *mara,
+                                       CcCharacter *bren)
+{
+    if (sim == NULL || situation == NULL || jory == NULL || mara == NULL ||
+        bren == NULL || situation->kind != CC_SITUATION_MONSTER_EXPEDITION) {
+        return;
+    }
+    situation->witness_character_id = bren->id;
+    if (situation->discovery_stage == CC_DISCOVERY_OFFER &&
+        situation->lead_event_id == 0U) {
+        situation->discovery_stage = CC_DISCOVERY_RUMOR;
+        situation->lead_path = CC_LEAD_PATH_UNDECIDED;
+    }
+
+    const CcRelationship *existing = CcSimRelationship(sim, jory->id,
+                                                        mara->id);
+    if (existing == NULL) {
+        uint32_t choice = (sim->world_seed ^
+                           (uint32_t)(situation->id >> 8)) % 3U;
+        CcRelationshipHistory history = choice == 0U ?
+            CC_RELATIONSHIP_HISTORY_OLD_FRIENDS : choice == 1U ?
+            CC_RELATIONSHIP_HISTORY_FORMER_PARTNERS :
+            CC_RELATIONSHIP_HISTORY_PROFESSIONAL_RIVALS;
+        int32_t affinity = history == CC_RELATIONSHIP_HISTORY_OLD_FRIENDS ?
+            2 : history == CC_RELATIONSHIP_HISTORY_FORMER_PARTNERS ? 1 : -1;
+        int32_t trust = history == CC_RELATIONSHIP_HISTORY_OLD_FRIENDS ?
+            2 : history == CC_RELATIONSHIP_HISTORY_FORMER_PARTNERS ? -1 : 0;
+        int32_t obligation = history ==
+            CC_RELATIONSHIP_HISTORY_FORMER_PARTNERS ? 1 : 0;
+        const char *history_text = history ==
+                CC_RELATIONSHIP_HISTORY_OLD_FRIENDS ?
+            "Jory and Mara worked together for years and still trust each other." :
+            history == CC_RELATIONSHIP_HISTORY_FORMER_PARTNERS ?
+            "Jory and Mara used to live and work together. They separated during the last shortage." :
+            "Jory and Mara have argued about mine safety for years.";
+        CcEvent *history_event = PushSocialEvent(
+            sim, CC_EVENT_RELATIONSHIP_HISTORY, situation->id,
+            jory->home_settlement_id, situation->cause_event_id,
+            jory->id, mara->id, 0U, 0U, 0, history_text);
+        CcId history_event_id = history_event != NULL ? history_event->id : 0U;
+        (void)EnsureRelationship(
+            sim, jory->id, mara->id, history, affinity, trust,
+            obligation, history_event_id);
+        (void)EnsureRelationship(
+            sim, mara->id, jory->id, history,
+            affinity > 0 ? affinity - 1 : affinity,
+            trust == 2 ? 1 : trust, -obligation, history_event_id);
+    }
+    (void)EnsureRelationship(
+        sim, jory->id, bren->id, CC_RELATIONSHIP_HISTORY_COWORKERS,
+        1, 2, 0, situation->cause_event_id);
+    (void)EnsureRelationship(
+        sim, bren->id, jory->id, CC_RELATIONSHIP_HISTORY_COWORKERS,
+        1, 2, 0, situation->cause_event_id);
+
+    if (situation->lead_event_id == 0U) {
+        char text[CC_EVENT_TEXT_CAPACITY];
+        (void)snprintf(text, sizeof(text),
+                       "Bren ran out of the west gallery and left his lamp. He told Jory something was wrong.");
+        CcEvent *rumor = PushSocialEvent(
+            sim, CC_EVENT_RUMOR_SHARED, situation->id,
+            jory->home_settlement_id, situation->cause_event_id,
+            bren->id, jory->id, jory->id, bren->id, 1, text);
+        situation->lead_event_id = rumor != NULL ? rumor->id :
+            situation->cause_event_id;
+    }
+    RememberKnowledge(bren, CC_KNOWLEDGE_WITNESS_ACCOUNT, situation->id,
+                      bren->id, situation->cause_event_id,
+                      CC_KNOWLEDGE_WITNESSED, true, sim->current_day);
+    RememberKnowledge(jory, CC_KNOWLEDGE_PROBLEM_RUMOR, situation->id,
+                      bren->id, situation->lead_event_id,
+                      CC_KNOWLEDGE_TOLD, true, sim->current_day);
+}
+
 static void RefreshSituationCharacterActivities(CcSim *sim,
                                                 CcSituation *situation)
 {
@@ -5440,7 +6112,9 @@ static void AssignSituationCast(CcSim *sim, CcSituation *situation)
     int32_t slot = SituationSettlementSlot(
         sim, situation->kind, situation->target_id);
     if (slot < 0 || slot >= CC_MAX_SETTLEMENTS) slot = 0;
-    if (situation->sponsor_name[0] == '\0') {
+    if (situation->kind == CC_SITUATION_MONSTER_EXPEDITION) {
+        CopyName(situation->sponsor_name, "Mara Venn");
+    } else if (situation->sponsor_name[0] == '\0') {
         int32_t sponsor_slot = situation->kind ==
                 CC_SITUATION_RELIEF_DELIVERY ? 0 :
             situation->kind == CC_SITUATION_BLACK_MARKET_DELIVERY ? 1 : slot;
@@ -5450,7 +6124,10 @@ static void AssignSituationCast(CcSim *sim, CcSituation *situation)
         CopyName(situation->affected_name, affected[slot]);
     }
     CcId affected_home = sim->settlements[slot].id;
-    CcId sponsor_home = CcSimSituationOfferSettlementId(sim, situation);
+    CcId sponsor_home = situation->kind ==
+            CC_SITUATION_MONSTER_EXPEDITION && sim->settlement_count > 0 ?
+        sim->settlements[0].id :
+        CcSimSituationOfferSettlementId(sim, situation);
     if (sponsor_home == 0U) sponsor_home = affected_home;
     CcCharacter *sponsor = PromoteCharacter(
         sim, situation->sponsor_name, sponsor_home,
@@ -5477,6 +6154,31 @@ static void AssignSituationCast(CcSim *sim, CcSituation *situation)
     situation->sponsor_character_id = sponsor != NULL ? sponsor->id : 0U;
     situation->affected_character_id = participant != NULL ?
         participant->id : 0U;
+    if (situation->kind == CC_SITUATION_RELIEF_DELIVERY &&
+        situation->cause_event_id != 0U) {
+        RememberKnowledge(
+            sponsor, CC_KNOWLEDGE_OFFER, situation->id,
+            sponsor != NULL ? sponsor->id : 0U,
+            situation->cause_event_id, CC_KNOWLEDGE_WITNESSED,
+            false, sim->current_day);
+        RememberKnowledge(
+            participant, CC_KNOWLEDGE_IMMEDIATE_STAKE, situation->id,
+            participant != NULL ? participant->id : 0U,
+            situation->cause_event_id, CC_KNOWLEDGE_WITNESSED,
+            false, sim->current_day);
+    }
+    if (situation->kind == CC_SITUATION_MONSTER_EXPEDITION) {
+        CcCharacter *witness = PromoteCharacter(
+            sim, "Bren Alder", affected_home, 0U, CC_CHARACTER_LABORER,
+            CC_CHARACTER_GOAL_SECURE_LIVELIHOOD,
+            CC_CHARACTER_ACTIVITY_WORKING);
+        InitializeMineSocialThread(sim, situation, participant, sponsor,
+                                   witness);
+        if (situation->status != CC_SITUATION_ACTIVE ||
+            sim->player.accepted_situation_id == situation->id) {
+            situation->discovery_stage = CC_DISCOVERY_OFFER;
+        }
+    }
     RefreshSituationCharacterActivities(sim, situation);
 }
 
@@ -5822,6 +6524,44 @@ void CcSimUpgradeQuestArchitecture(CcSim *sim)
     AdvanceQuestDangerClocks(sim);
 }
 
+static void ForgetRetiredSituation(CcSim *sim, CcId situation_id)
+{
+    if (sim == NULL || situation_id == 0U) return;
+    for (int32_t i = 0; i < sim->character_count; ++i) {
+        CcCharacter *character = &sim->characters[i];
+        CcCharacterMemory kept_memories[CC_CHARACTER_MEMORY_CAPACITY] = {0};
+        int32_t memory_count = 0;
+        for (int32_t slot = 0; slot < CC_CHARACTER_MEMORY_CAPACITY; ++slot) {
+            if (character->memories[slot].kind != CC_CHARACTER_MEMORY_NONE &&
+                character->memories[slot].subject_id != situation_id) {
+                kept_memories[memory_count++] = character->memories[slot];
+            }
+        }
+        memcpy(character->memories, kept_memories,
+               sizeof(character->memories));
+        character->memory_count = memory_count;
+        character->memory_write_index =
+            memory_count % CC_CHARACTER_MEMORY_CAPACITY;
+
+        CcCharacterKnowledge kept_knowledge[
+            CC_CHARACTER_KNOWLEDGE_CAPACITY] = {0};
+        int32_t knowledge_count = 0;
+        for (int32_t slot = 0;
+             slot < CC_CHARACTER_KNOWLEDGE_CAPACITY; ++slot) {
+            if (character->knowledge[slot].kind != CC_KNOWLEDGE_NONE &&
+                character->knowledge[slot].subject_id != situation_id) {
+                kept_knowledge[knowledge_count++] =
+                    character->knowledge[slot];
+            }
+        }
+        memcpy(character->knowledge, kept_knowledge,
+               sizeof(character->knowledge));
+        character->knowledge_count = knowledge_count;
+        character->knowledge_write_index =
+            knowledge_count % CC_CHARACTER_KNOWLEDGE_CAPACITY;
+    }
+}
+
 static CcSituation *AllocateSituation(CcSim *sim)
 {
     if (sim->situation_count < CC_MAX_SITUATIONS) {
@@ -5838,6 +6578,7 @@ static CcSituation *AllocateSituation(CcSim *sim)
         }
     }
     if (oldest < 0) return NULL;
+    ForgetRetiredSituation(sim, sim->situations[oldest].id);
     sim->situations[oldest] = (CcSituation){0};
     return &sim->situations[oldest];
 }
@@ -5907,6 +6648,25 @@ static void GenerateSituations(CcSim *sim)
         CcFaction *issuer = FactionFor(sim, relief_target->kingdom_id, CC_FACTION_COMMONS);
         const CcEvent *shortage = LatestEvent(sim, CC_EVENT_SHORTAGE,
                                               relief_target->id, relief_target->id);
+        if (shortage == NULL && !HasRecentSituation(
+                sim, CC_SITUATION_RELIEF_DELIVERY, relief_target->id)) {
+            char text[CC_EVENT_TEXT_CAPACITY];
+            int32_t food = relief_target->stock[CC_GOOD_FOOD] +
+                CcSimIncomingGood(sim, relief_target->id, CC_GOOD_FOOD);
+            (void)snprintf(
+                text, sizeof(text),
+                "%s has %d food in store. Its reserve target is %d.",
+                relief_target->name, food,
+                relief_target->reserve_target[CC_GOOD_FOOD]);
+            const CcEvent *harvest = LatestEvent(
+                sim, CC_EVENT_HARVEST_FAILED, 0U, 0U);
+            shortage = PushEvent(
+                sim, CC_EVENT_SHORTAGE, relief_target->id,
+                relief_target->id,
+                harvest != NULL ? harvest->id :
+                    LatestLocalCause(sim, relief_target->id),
+                relief_need, text);
+        }
         CreateSituation(sim, CC_SITUATION_RELIEF_DELIVERY, relief_target->id,
                         issuer != NULL ? issuer->id : 0U,
                         shortage != NULL ? shortage->id : LatestLocalCause(sim, relief_target->id),
@@ -6570,7 +7330,7 @@ static void ApplyCourierMessage(CcSim *sim, CcCourier *courier,
         courier->destination_settlement_id, arrival_event_id,
         courier->reliability, text);
     (void)effect;
-    /* Keep the delivered seal pinned. The political effect remains its child. */
+
     courier->cause_event_id = arrival_event_id;
 }
 
@@ -8194,9 +8954,9 @@ static bool ApplyTrade(CcSim *sim, const CcCommand *command,
             SetError(error, error_capacity, "The local market lacks that stock.");
             return false;
         }
-        int32_t old_slots = GoodCargoSlots(
+        int32_t old_slots = PlayerCargoBoxes(
             command->good, sim->player.cargo[command->good]);
-        int32_t new_slots = GoodCargoSlots(
+        int32_t new_slots = PlayerCargoBoxes(
             command->good, sim->player.cargo[command->good] + amount);
         if (CcPlayerCargoUsed(&sim->player) - old_slots + new_slots >
             sim->player.cargo_capacity) {
@@ -8249,6 +9009,7 @@ static bool ApplyTrade(CcSim *sim, const CcCommand *command,
             sim, settlement->id, command->good, -amount,
             trade != NULL ? trade->id : 0U);
     }
+    RefreshSettlementGoodPrice(sim, settlement, command->good);
     SetError(error, error_capacity, "");
     return true;
 }
@@ -8845,6 +9606,11 @@ static bool AcceptSituation(CcSim *sim, const CcSituation *situation,
         return false;
     }
     SyncSituationObjectiveDefinition((CcSituation *)situation);
+    if (!CcSimSituationCanAccept(sim, situation)) {
+        SetError(error, error_capacity,
+                 "You do not have a job to accept yet. Ask what happened first.");
+        return false;
+    }
     CcId offer_settlement = CcSimSituationOfferSettlementId(sim, situation);
     bool affected_here = from_affected_character &&
         CcSimSituationTouchesSettlement(sim, situation,
@@ -8863,6 +9629,35 @@ static bool AcceptSituation(CcSim *sim, const CcSituation *situation,
         SetError(error, error_capacity,
                  "The company must fulfill or withdraw from its current charter first.");
         return false;
+    }
+    CcSettlement *relief_origin = NULL;
+    int32_t relief_load = 0;
+    if (situation->kind == CC_SITUATION_RELIEF_DELIVERY) {
+        if (sim->player.location_id != offer_settlement) {
+            SetError(error, error_capacity,
+                     "Return to Mara so she can load the food boxes.");
+            return false;
+        }
+        relief_load = MaximumI32(
+            0, situation->quantity - situation->progress);
+        relief_origin = CcSimSettlementMutable(sim, offer_settlement);
+        if (relief_origin == NULL ||
+            relief_origin->stock[CC_GOOD_FOOD] < relief_load) {
+            SetError(error, error_capacity,
+                     "Mara's granary cannot cover the promised food load.");
+            return false;
+        }
+        int32_t old_slots = PlayerCargoBoxes(
+            CC_GOOD_FOOD, sim->player.cargo[CC_GOOD_FOOD]);
+        int32_t new_slots = PlayerCargoBoxes(
+            CC_GOOD_FOOD,
+            sim->player.cargo[CC_GOOD_FOOD] + relief_load);
+        if (CcPlayerCargoUsed(&sim->player) - old_slots + new_slots >
+            sim->player.cargo_capacity) {
+            SetError(error, error_capacity,
+                     "Clear cargo space so Mara can load the food boxes.");
+            return false;
+        }
     }
     if (situation->kind == CC_SITUATION_COURIER_DELIVERY) {
         CcCourier *courier = CourierMutable(sim, situation->target_id);
@@ -8884,9 +9679,23 @@ static bool AcceptSituation(CcSim *sim, const CcSituation *situation,
                    "The Crownless company accepts %s before day %d.",
                    CcSituationKindName(situation->kind),
                    situation->deadline_day);
-    (void)PushEvent(sim, CC_EVENT_CHARTER_ACCEPTED, situation->id,
-                    situation->target_id, situation->cause_event_id,
-                    situation->deadline_day - sim->current_day, text);
+    CcEvent *accepted = PushEvent(
+        sim, CC_EVENT_CHARTER_ACCEPTED, situation->id,
+        situation->target_id, situation->cause_event_id,
+        situation->deadline_day - sim->current_day, text);
+    if (relief_load > 0 && relief_origin != NULL) {
+        relief_origin->stock[CC_GOOD_FOOD] -= relief_load;
+        sim->player.cargo[CC_GOOD_FOOD] += relief_load;
+        RefreshSettlementGoodPrice(sim, relief_origin, CC_GOOD_FOOD);
+        (void)snprintf(
+            text, sizeof(text),
+            "%s loads %d food boxes from %s's granary into the Crownless carriage.",
+            situation->sponsor_name, relief_load, relief_origin->name);
+        (void)PushEvent(
+            sim, CC_EVENT_PLAYER_TRADE, sim->player.id,
+            relief_origin->id, accepted != NULL ? accepted->id : 0U,
+            relief_load, text);
+    }
     RefreshSituationCharacterActivities(sim, (CcSituation *)situation);
     SetError(error, error_capacity, "");
     return true;
@@ -9037,6 +9846,22 @@ static void RememberCharacter(CcCharacter *character,
     }
 }
 
+static void ShiftRelationshipTrust(CcSim *sim, CcRelationship *relationship,
+                                   int32_t amount, CcId parent_event_id,
+                                   CcId situation_id, const char *text)
+{
+    if (sim == NULL || relationship == NULL || amount == 0) return;
+    relationship->trust = ClampI32(relationship->trust + amount, -3, 3);
+    const CcCharacter *from = CcSimCharacter(
+        sim, relationship->from_character_id);
+    CcEvent *event = PushSocialEvent(
+        sim, CC_EVENT_RELATIONSHIP_CHANGED, situation_id,
+        from != NULL ? from->current_settlement_id : 0U,
+        parent_event_id, relationship->from_character_id,
+        relationship->to_character_id, 0U, sim->player.id, amount, text);
+    if (event != NULL) relationship->cause_event_id = event->id;
+}
+
 static bool ApplyCharacterResponse(CcSim *sim, const CcCommand *command,
                                    char *error, size_t error_capacity)
 {
@@ -9051,24 +9876,44 @@ static bool ApplyCharacterResponse(CcSim *sim, const CcCommand *command,
         return false;
     }
     CcCharacterResponse response = (CcCharacterResponse)command->amount;
+    bool mine_thread = situation->kind == CC_SITUATION_MONSTER_EXPEDITION;
+    bool relationship_choice =
+        response == CC_CHARACTER_RESPONSE_REPORT_EVIDENCE ||
+        response == CC_CHARACTER_RESPONSE_KEEP_CONFIDENCE;
+    if (relationship_choice &&
+        (!mine_thread ||
+         situation->discovery_stage != CC_DISCOVERY_DECISION ||
+         character->id != situation->affected_character_id)) {
+        SetError(error, error_capacity,
+                 "You cannot choose that here.");
+        return false;
+    }
+    if (mine_thread && situation->discovery_stage == CC_DISCOVERY_DECISION &&
+        response == CC_CHARACTER_RESPONSE_LISTEN) {
+        SetError(error, error_capacity,
+                 "Choose whether to tell Mara or keep this between you and Jory.");
+        return false;
+    }
     CcCharacterMemoryKind memory_kind = response ==
         CC_CHARACTER_RESPONSE_LISTEN ? CC_CHARACTER_MEMORY_MET_PLAYER :
         response == CC_CHARACTER_RESPONSE_PLEDGE_HELP ?
             CC_CHARACTER_MEMORY_PLAYER_PROMISED : CC_CHARACTER_MEMORY_NONE;
-    if (memory_kind == CC_CHARACTER_MEMORY_NONE) {
+    if (memory_kind == CC_CHARACTER_MEMORY_NONE && !relationship_choice) {
         SetError(error, error_capacity, "Choose a clear response.");
         return false;
     }
-    if (CcCharacterRemembers(character, memory_kind, situation->id)) {
+    if (memory_kind != CC_CHARACTER_MEMORY_NONE &&
+        CcCharacterRemembers(character, memory_kind, situation->id)) {
         SetError(error, error_capacity,
                  "This conversation has already changed their view of you.");
         return false;
     }
-    CcId parent = situation->cause_event_id;
+    CcId parent = situation->lead_event_id != 0U ?
+        situation->lead_event_id : situation->cause_event_id;
     if (response == CC_CHARACTER_RESPONSE_PLEDGE_HELP) {
-        if (situation->status != CC_SITUATION_ACTIVE) {
+        if (!CcSimSituationCanAccept(sim, situation)) {
             SetError(error, error_capacity,
-                     "That crisis is no longer open to a promise.");
+                     "There is no job to accept yet. Ask what happened first.");
             return false;
         }
         const CcSituation *accepted = CcSimAcceptedSituation(sim);
@@ -9084,25 +9929,121 @@ static bool ApplyCharacterResponse(CcSim *sim, const CcCommand *command,
         if (promise != NULL) parent = promise->id;
     }
     char text[CC_EVENT_TEXT_CAPACITY];
-    (void)snprintf(
-        text, sizeof(text), response == CC_CHARACTER_RESPONSE_LISTEN ?
-            "The Crownless company hears %.24s's account of %s." :
-            "The Crownless company promises %.24s that it will answer %s.",
-        character->name, CcSituationKindName(situation->kind));
-    CcEvent *event = PushEvent(
-        sim, CC_EVENT_CHARACTER_INTERACTION, character->id,
+    CcEventKind event_kind = CC_EVENT_CHARACTER_INTERACTION;
+    if (relationship_choice) {
+        event_kind = CC_EVENT_RELATIONSHIP_CHANGED;
+        (void)snprintf(
+            text, sizeof(text), response == CC_CHARACTER_RESPONSE_REPORT_EVIDENCE ?
+                "The player decides to tell Mara what Bren heard." :
+                "The player agrees not to tell Mara.");
+    } else if (mine_thread && response == CC_CHARACTER_RESPONSE_LISTEN &&
+               situation->discovery_stage == CC_DISCOVERY_RUMOR) {
+        event_kind = CC_EVENT_RUMOR_SHARED;
+        (void)snprintf(text, sizeof(text),
+                       "Jory tells the player that Bren ran from the west gallery and left his lamp.");
+    } else if (mine_thread && response == CC_CHARACTER_RESPONSE_LISTEN &&
+               situation->discovery_stage == CC_DISCOVERY_WITNESS) {
+        event_kind = CC_EVENT_FACT_REVEALED;
+        (void)snprintf(text, sizeof(text),
+                       "Bren tells the player that he heard someone using a pick behind the old wall while Cera was below.");
+    } else if (mine_thread && response == CC_CHARACTER_RESPONSE_LISTEN &&
+               situation->discovery_stage == CC_DISCOVERY_AUTHORITY) {
+        event_kind = CC_EVENT_FACT_REVEALED;
+        (void)snprintf(text, sizeof(text),
+                       "Mara believes Bren and agrees to help find Cera.");
+    } else {
+        (void)snprintf(
+            text, sizeof(text), response == CC_CHARACTER_RESPONSE_LISTEN ?
+                "The Crownless company hears %.24s's account of %s." :
+                "The Crownless company promises %.24s that it will answer %s.",
+            character->name, CcSituationKindName(situation->kind));
+    }
+    CcEvent *event = PushSocialEvent(
+        sim, event_kind, situation->id,
         character->current_settlement_id, parent,
-        response == CC_CHARACTER_RESPONSE_LISTEN ? 2 : 8, text);
-    RememberCharacter(character, memory_kind, situation->id,
-                      event != NULL ? event->id : 0U, sim->current_day);
+        character->id, sim->player.id, situation->affected_character_id,
+        character->id,
+        relationship_choice ?
+            (response == CC_CHARACTER_RESPONSE_REPORT_EVIDENCE ? 1 : -1) :
+        response == CC_CHARACTER_RESPONSE_LISTEN ? 2 : 8,
+        text);
+    CcId event_id = event != NULL ? event->id : 0U;
+    if (memory_kind != CC_CHARACTER_MEMORY_NONE) {
+        RememberCharacter(character, memory_kind, situation->id,
+                          event_id, sim->current_day);
+    }
+
+    int32_t disposition_change = response ==
+        CC_CHARACTER_RESPONSE_LISTEN ? 2 :
+        response == CC_CHARACTER_RESPONSE_PLEDGE_HELP ? 8 : 0;
+    if (relationship_choice) {
+        const CcRelationship *jory_to_mara = CcSimRelationship(
+            sim, situation->affected_character_id,
+            situation->sponsor_character_id);
+        bool jory_wanted_report = jory_to_mara == NULL ||
+            jory_to_mara->history !=
+                CC_RELATIONSHIP_HISTORY_PROFESSIONAL_RIVALS;
+        bool reported = response == CC_CHARACTER_RESPONSE_REPORT_EVIDENCE;
+        disposition_change = reported == jory_wanted_report ? 3 : -5;
+    }
     character->player_disposition = ClampI32(
-        character->player_disposition +
-            (response == CC_CHARACTER_RESPONSE_LISTEN ? 2 : 8),
+        character->player_disposition + disposition_change,
         -100, 100);
     character->stress = ClampI32(
         character->stress -
-            (response == CC_CHARACTER_RESPONSE_LISTEN ? 5 : 12),
+            (response == CC_CHARACTER_RESPONSE_LISTEN ? 5 :
+             response == CC_CHARACTER_RESPONSE_PLEDGE_HELP ? 12 : 2),
         0, 100);
+
+    if (mine_thread && response == CC_CHARACTER_RESPONSE_LISTEN) {
+        if (situation->discovery_stage == CC_DISCOVERY_RUMOR) {
+            situation->discovery_stage = CC_DISCOVERY_WITNESS;
+        } else if (situation->discovery_stage == CC_DISCOVERY_WITNESS) {
+            situation->discovery_stage = CC_DISCOVERY_DECISION;
+            CcCharacter *jory = CharacterMutable(
+                sim, situation->affected_character_id);
+            RememberKnowledge(jory, CC_KNOWLEDGE_IMMEDIATE_STAKE,
+                              situation->id, character->id, event_id,
+                              CC_KNOWLEDGE_TOLD, true, sim->current_day);
+        } else if (situation->discovery_stage == CC_DISCOVERY_AUTHORITY) {
+            situation->discovery_stage = CC_DISCOVERY_OFFER;
+            CcCharacter *mara = CharacterMutable(
+                sim, situation->sponsor_character_id);
+            RememberKnowledge(mara, CC_KNOWLEDGE_WITNESS_ACCOUNT,
+                              situation->id, sim->player.id, event_id,
+                              CC_KNOWLEDGE_TOLD, false, sim->current_day);
+            CcRelationship *mara_to_jory = RelationshipMutable(
+                sim, situation->sponsor_character_id,
+                situation->affected_character_id);
+            CcRelationship *jory_to_mara = RelationshipMutable(
+                sim, situation->affected_character_id,
+                situation->sponsor_character_id);
+            ShiftRelationshipTrust(
+                sim, mara_to_jory, 1, event_id, situation->id,
+                "Bren confirms Jory's warning, so Mara trusts Jory more.");
+            ShiftRelationshipTrust(
+                sim, jory_to_mara, 1,
+                event_id, situation->id,
+                "Mara acts on the warning, so Jory trusts Mara more.");
+            RememberKnowledge(mara, CC_KNOWLEDGE_OFFER,
+                              situation->id, mara != NULL ? mara->id : 0U,
+                              event_id, CC_KNOWLEDGE_WITNESSED, false,
+                              sim->current_day);
+        }
+    } else if (mine_thread && relationship_choice) {
+        if (response == CC_CHARACTER_RESPONSE_REPORT_EVIDENCE) {
+            situation->lead_path = CC_LEAD_PATH_REPORT;
+            situation->discovery_stage = CC_DISCOVERY_AUTHORITY;
+        } else {
+            situation->lead_path = CC_LEAD_PATH_CONFIDENCE;
+            situation->discovery_stage = CC_DISCOVERY_OFFER;
+            RememberKnowledge(character, CC_KNOWLEDGE_OFFER,
+                              situation->id, character->id, event_id,
+                              CC_KNOWLEDGE_WITNESSED, true,
+                              sim->current_day);
+        }
+    }
+    if (mine_thread && event_id != 0U) situation->lead_event_id = event_id;
     RefreshSituationCharacterActivities(sim, situation);
     SetError(error, error_capacity, "");
     return true;
@@ -9673,12 +10614,7 @@ static int32_t RollD6(CcSim *sim)
     return 1 + (int32_t)(NextRandom(sim) % 6U);
 }
 
-/* OSR encounter loot: the ledger decides what exists (the group's real
- * supplies stock), the 2d6 table decides what the company recovers. Loot is
- * carried, never minted: every recovered good is deducted from the defeated
- * group's supplies at a fixed ten-supplies-per-good rate, bounded by free
- * cargo slots. A natural 12 takes a trophy: a named curio with provenance
- * that occupies one carriage slot and sells at markets like any treasure. */
+
 static void RollEncounterLoot(CcSim *sim, CcBanditGroup *bandits,
                               const CcJourneyEncounter *journey,
                               const CcEvent *combat_event)
@@ -9704,7 +10640,7 @@ static void RollEncounterLoot(CcSim *sim, CcBanditGroup *bandits,
     int32_t free_slots = sim->player.cargo_capacity -
                          CcPlayerCargoUsed(&sim->player);
     if (free_slots < 0) free_slots = 0;
-    const int32_t cap = free_slots * GoodUnitsPerCargoSlot(good);
+    const int32_t cap = free_slots;
     if (take > cap) take = cap;
 
     char text[CC_EVENT_TEXT_CAPACITY];
@@ -10085,6 +11021,466 @@ static bool ApplyRepair(CcSim *sim, const CcCommand *command,
     return true;
 }
 
+static bool DungeonObjectiveReached(const CcDungeon *dungeon)
+{
+    if (dungeon == NULL) return false;
+    for (int32_t i = 0; i < dungeon->room_count; ++i) {
+        if ((dungeon->rooms[i].state_flags &
+             CC_DUNGEON_ROOM_OBJECTIVE_REACHED) != 0U) return true;
+    }
+    return false;
+}
+
+bool CcSimDungeonOutcomeAvailable(const CcDungeon *dungeon,
+                                  CcDungeonState outcome)
+{
+    if (dungeon == NULL || !DungeonObjectiveReached(dungeon)) return false;
+    if (outcome == CC_DUNGEON_EXPLORED) return true;
+    if (outcome == CC_DUNGEON_PUBLIC_ROUTE) {
+        for (int32_t i = 0; i < dungeon->link_count; ++i) {
+            const CcDungeonLink *link = &dungeon->links[i];
+            if (link->kind == CC_DUNGEON_LINK_SHORTCUT &&
+                (link->flags & CC_DUNGEON_LINK_OPEN) != 0U) return true;
+        }
+        return false;
+    }
+    if (outcome == CC_DUNGEON_SMUGGLER_ROUTE) {
+        for (int32_t i = 0; i < dungeon->room_count; ++i) {
+            const CcDungeonRoom *room = &dungeon->rooms[i];
+            if ((room->flags & CC_DUNGEON_ROOM_SMUGGLER) != 0U &&
+                (room->state_flags & CC_DUNGEON_ROOM_SEARCHED) != 0U) {
+                return true;
+            }
+        }
+        return false;
+    }
+    if (outcome == CC_DUNGEON_RESEALED) {
+        for (int32_t i = 0; i < dungeon->room_count; ++i) {
+            const CcDungeonRoom *room = &dungeon->rooms[i];
+            if (room->kind == CC_DUNGEON_ROOM_BRIDGE &&
+                (room->state_flags & CC_DUNGEON_ROOM_SEARCHED) != 0U) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+static void ClearDungeonEncounter(CcDungeonExpedition *expedition)
+{
+    if (expedition == NULL) return;
+    expedition->encounter_kind = CC_DUNGEON_ENCOUNTER_NONE;
+    expedition->encounter_reaction = 0;
+    expedition->encounter_room = -1;
+}
+
+static void RollDungeonEncounter(CcSim *sim, CcDungeon *dungeon)
+{
+    if (sim == NULL || dungeon == NULL ||
+        !sim->dungeon_expedition.active ||
+        sim->dungeon_expedition.encounter_kind !=
+            CC_DUNGEON_ENCOUNTER_NONE) return;
+    CcDungeonExpedition *expedition = &sim->dungeon_expedition;
+    CcDungeonRoom *room = &dungeon->rooms[expedition->current_room];
+    if ((room->flags & CC_DUNGEON_ROOM_SAFE) != 0U) return;
+    int32_t threshold = 1 + expedition->noise / 4 +
+                        (expedition->light_remaining <= 0 ? 1 : 0);
+    if ((room->state_flags & CC_DUNGEON_ROOM_CLEARED) != 0U) threshold -= 1;
+    threshold = ClampI32(threshold, 1, 4);
+    if ((int32_t)(NextDungeonRandom(dungeon) % 6U) >= threshold) return;
+
+    uint32_t roll = NextDungeonRandom(dungeon);
+    if ((room->flags & CC_DUNGEON_ROOM_STONEBACK) != 0U) {
+        expedition->encounter_kind = CC_DUNGEON_ENCOUNTER_STONEBACKS;
+    } else if ((room->flags & CC_DUNGEON_ROOM_GOBLIN) != 0U) {
+        expedition->encounter_kind = sim->goblins.cohesion >= 50 ?
+            CC_DUNGEON_ENCOUNTER_TITHE_KEEPERS :
+            CC_DUNGEON_ENCOUNTER_GOBLIN_DESERTERS;
+    } else if (dungeon->state == CC_DUNGEON_SMUGGLER_ROUTE &&
+               (roll & 1U) != 0U) {
+        expedition->encounter_kind = CC_DUNGEON_ENCOUNTER_SMUGGLERS;
+    } else {
+        expedition->encounter_kind = CC_DUNGEON_ENCOUNTER_MONSTERS;
+    }
+    int32_t reaction = 2 + (int32_t)(NextDungeonRandom(dungeon) % 6U) +
+                       (int32_t)(NextDungeonRandom(dungeon) % 6U);
+    if (expedition->encounter_kind == CC_DUNGEON_ENCOUNTER_TITHE_KEEPERS) {
+        reaction += (sim->goblins.cohesion - 50) / 20;
+    }
+    if (expedition->noise >= 6) reaction -= 1;
+    expedition->encounter_reaction = ClampI32(reaction, 2, 12);
+    expedition->encounter_room = expedition->current_room;
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text),
+                   "A %s finds the company in %s; its reaction is %s.",
+                   CcDungeonEncounterName(expedition->encounter_kind),
+                   room->name,
+                   CcDungeonReactionName(expedition->encounter_reaction));
+    (void)PushEvent(sim, CC_EVENT_DUNGEON_ENCOUNTER, dungeon->id,
+                    dungeon->id, 0U, expedition->encounter_reaction, text);
+}
+
+static void SpendDungeonTurn(CcSim *sim, CcDungeon *dungeon,
+                             int32_t noise, bool check_encounter)
+{
+    CcDungeonExpedition *expedition = &sim->dungeon_expedition;
+    expedition->turns_elapsed += 1;
+    expedition->light_remaining = MaximumI32(
+        0, expedition->light_remaining - 1);
+    expedition->noise = ClampI32(expedition->noise + noise - 1, 0, 10);
+    if (expedition->light_remaining == 0) {
+        expedition->strain = ClampI32(expedition->strain + 4, 0, 100);
+    }
+    if ((expedition->turns_elapsed % 6) == 0) {
+        if (sim->player.cargo[CC_GOOD_FOOD] > 0) {
+            sim->player.cargo[CC_GOOD_FOOD] -= 1;
+        } else {
+            expedition->strain = ClampI32(
+                expedition->strain + 15, 0, 100);
+        }
+        CcSimAdvanceDays(sim, 1);
+        expedition->days_elapsed += 1;
+    }
+    if (check_encounter) RollDungeonEncounter(sim, dungeon);
+}
+
+static bool ApplyBeginDungeonExpedition(CcSim *sim,
+                                        const CcCommand *command,
+                                        char *error, size_t error_capacity)
+{
+    CcDungeon *dungeon = DungeonMutable(sim, command->target_id);
+    if (dungeon == NULL || sim->player.location_id != dungeon->settlement_id) {
+        SetError(error, error_capacity,
+                 "The carriage must be parked at the dungeon entrance.");
+        return false;
+    }
+    if (sim->journey.active || sim->dungeon_expedition.active) {
+        SetError(error, error_capacity,
+                 "The company is already committed to a journey.");
+        return false;
+    }
+    if (dungeon->state == CC_DUNGEON_SEALED ||
+        dungeon->state == CC_DUNGEON_RESEALED) {
+        SetError(error, error_capacity, "The Underroad is sealed.");
+        return false;
+    }
+    if (sim->player.cargo[CC_GOOD_FOOD] < 1) {
+        SetError(error, error_capacity,
+                 "Carry at least 1 Food before entering the Underroad.");
+        return false;
+    }
+    sim->dungeon_expedition = (CcDungeonExpedition){
+        .active = true,
+        .dungeon_id = dungeon->id,
+        .current_room = 0,
+        .light_remaining = 18,
+        .maximum_depth = 0,
+        .encounter_room = -1
+    };
+    dungeon->rooms[0].state_flags |= CC_DUNGEON_ROOM_DISCOVERED;
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text),
+                   "The company leaves the carriage at %s and enters %s.",
+                   dungeon->rooms[0].name, dungeon->name);
+    (void)PushEvent(sim, CC_EVENT_DUNGEON_EXPEDITION_BEGAN,
+                    sim->player.id, dungeon->id, 0U, 0, text);
+    SetError(error, error_capacity, "");
+    return true;
+}
+
+static CcDungeonLink *DungeonTravelLink(CcDungeon *dungeon,
+                                        int32_t from_room,
+                                        int32_t to_room)
+{
+    if (dungeon == NULL) return NULL;
+    for (int32_t i = 0; i < dungeon->link_count; ++i) {
+        CcDungeonLink *link = &dungeon->links[i];
+        if (DungeonLinkAllowsTravel(link, from_room) &&
+            DungeonLinkOtherRoom(link, from_room) == to_room) return link;
+    }
+    return NULL;
+}
+
+static void MarkDungeonThresholdReached(CcSim *sim, CcDungeon *dungeon,
+                                        CcDungeonRoom *room)
+{
+    if (sim == NULL || dungeon == NULL || room == NULL ||
+        (room->flags & CC_DUNGEON_ROOM_OBJECTIVE) == 0U ||
+        (room->state_flags & CC_DUNGEON_ROOM_OBJECTIVE_REACHED) != 0U) {
+        return;
+    }
+    room->state_flags |= CC_DUNGEON_ROOM_OBJECTIVE_REACHED;
+    if (dungeon->state == CC_DUNGEON_DISTURBED) {
+        CcDungeonEffects explored = DungeonEffects(CC_DUNGEON_EXPLORED);
+        dungeon->state = CC_DUNGEON_EXPLORED;
+        dungeon->regional_pressure = 40;
+        for (int32_t i = 0; i < sim->monster_count; ++i) {
+            CcMonsterPopulation *monster = &sim->monsters[i];
+            if (monster->dungeon_id != dungeon->id) continue;
+            monster->hunting_pressure = ClampI32(
+                monster->hunting_pressure + explored.hunting_pressure,
+                0, 100);
+            monster->population = MaximumI32(
+                0, monster->population - explored.population_loss);
+            monster->pressure = MaximumI32(
+                0, monster->pressure - explored.monster_pressure_loss);
+        }
+    }
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text),
+                   "The company reaches %s. Heat and tribute tracks continue toward Hollowbarrow.",
+                   room->name);
+    (void)PushEvent(sim, CC_EVENT_DUNGEON_THRESHOLD_REACHED,
+                    sim->player.id, dungeon->id, 0U, room->depth, text);
+}
+
+static bool ApplyMoveDungeon(CcSim *sim, const CcCommand *command,
+                             char *error, size_t error_capacity)
+{
+    CcDungeonExpedition *expedition = &sim->dungeon_expedition;
+    CcDungeon *dungeon = DungeonMutable(sim, expedition->dungeon_id);
+    if (!expedition->active || dungeon == NULL) {
+        SetError(error, error_capacity, "No dungeon expedition is active.");
+        return false;
+    }
+    if (expedition->encounter_kind != CC_DUNGEON_ENCOUNTER_NONE) {
+        SetError(error, error_capacity,
+                 "The encounter blocks the passage. Parley, evade, force it, or retreat.");
+        return false;
+    }
+    if (expedition->strain >= 100) {
+        SetError(error, error_capacity,
+                 "The company is spent and must retreat.");
+        return false;
+    }
+    int32_t target = command->amount;
+    if (target < 0 || target >= dungeon->room_count ||
+        DungeonTravelLink(dungeon, expedition->current_room, target) == NULL) {
+        SetError(error, error_capacity,
+                 "That passage is not open from this chamber.");
+        return false;
+    }
+    expedition->current_room = target;
+    CcDungeonRoom *room = &dungeon->rooms[target];
+    room->state_flags |= CC_DUNGEON_ROOM_DISCOVERED;
+    expedition->maximum_depth = MaximumI32(
+        expedition->maximum_depth, room->depth);
+    if ((room->flags & CC_DUNGEON_ROOM_HAZARD) != 0U) {
+        expedition->strain = ClampI32(expedition->strain + 4, 0, 100);
+    }
+    SpendDungeonTurn(sim, dungeon, 0, true);
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text), "The company enters %s.", room->name);
+    (void)PushEvent(sim, CC_EVENT_DUNGEON_ROOM_ENTERED,
+                    sim->player.id, dungeon->id, 0U, target, text);
+    MarkDungeonThresholdReached(sim, dungeon, room);
+    SetError(error, error_capacity, "");
+    return true;
+}
+
+static bool ApplySearchDungeon(CcSim *sim, char *error,
+                               size_t error_capacity)
+{
+    CcDungeonExpedition *expedition = &sim->dungeon_expedition;
+    CcDungeon *dungeon = DungeonMutable(sim, expedition->dungeon_id);
+    if (!expedition->active || dungeon == NULL) {
+        SetError(error, error_capacity, "No dungeon expedition is active.");
+        return false;
+    }
+    if (expedition->encounter_kind != CC_DUNGEON_ENCOUNTER_NONE) {
+        SetError(error, error_capacity,
+                 "The encounter must be dealt with before searching.");
+        return false;
+    }
+    CcDungeonRoom *room = &dungeon->rooms[expedition->current_room];
+    if ((room->state_flags & CC_DUNGEON_ROOM_SEARCHED) != 0U) {
+        SetError(error, error_capacity, "This chamber has already been searched.");
+        return false;
+    }
+    room->state_flags |= CC_DUNGEON_ROOM_SEARCHED;
+    for (int32_t i = 0; i < dungeon->link_count; ++i) {
+        CcDungeonLink *link = &dungeon->links[i];
+        if ((link->kind == CC_DUNGEON_LINK_SECRET ||
+             link->kind == CC_DUNGEON_LINK_SHORTCUT) &&
+            (link->from_room == expedition->current_room ||
+             link->to_room == expedition->current_room)) {
+            link->flags |= CC_DUNGEON_LINK_DISCOVERED;
+        }
+    }
+    int32_t cargo_space = sim->player.cargo_capacity -
+                          CcPlayerCargoUsed(&sim->player);
+    int32_t taken = MinimumI32(MaximumI32(cargo_space, 0),
+                               room->loot_quantity);
+    if (taken > 0) {
+        sim->player.cargo[room->loot_good] += taken;
+        room->loot_quantity -= taken;
+        char text[CC_EVENT_TEXT_CAPACITY];
+        (void)snprintf(text, sizeof(text),
+                       "The company recovers %d %s from %s.", taken,
+                       CcGoodName(room->loot_good), room->name);
+        (void)PushEvent(sim, CC_EVENT_DUNGEON_LOOT,
+                        sim->player.id, dungeon->id, 0U, taken, text);
+    }
+    SpendDungeonTurn(sim, dungeon, 2, true);
+    SetError(error, error_capacity, "");
+    return true;
+}
+
+static bool ApplyOpenDungeonShortcut(CcSim *sim,
+                                     const CcCommand *command,
+                                     char *error, size_t error_capacity)
+{
+    CcDungeonExpedition *expedition = &sim->dungeon_expedition;
+    CcDungeon *dungeon = DungeonMutable(sim, expedition->dungeon_id);
+    if (!expedition->active || dungeon == NULL) {
+        SetError(error, error_capacity, "No dungeon expedition is active.");
+        return false;
+    }
+    if (expedition->encounter_kind != CC_DUNGEON_ENCOUNTER_NONE) {
+        SetError(error, error_capacity,
+                 "The encounter must be dealt with before working.");
+        return false;
+    }
+    int32_t slot = command->amount;
+    if (slot < 0 || slot >= dungeon->link_count) {
+        SetError(error, error_capacity, "That shortcut does not exist.");
+        return false;
+    }
+    CcDungeonLink *link = &dungeon->links[slot];
+    if (link->kind != CC_DUNGEON_LINK_SHORTCUT ||
+        (link->flags & CC_DUNGEON_LINK_DISCOVERED) == 0U ||
+        (link->flags & CC_DUNGEON_LINK_OPEN) != 0U ||
+        (link->from_room != expedition->current_room &&
+         link->to_room != expedition->current_room)) {
+        SetError(error, error_capacity,
+                 "There is no closed, discovered shortcut here.");
+        return false;
+    }
+    if (sim->player.cargo[CC_GOOD_TOOLS] < 1) {
+        SetError(error, error_capacity,
+                 "Opening the freight lift requires 1 Tools.");
+        return false;
+    }
+    sim->player.cargo[CC_GOOD_TOOLS] -= 1;
+    link->flags |= CC_DUNGEON_LINK_OPEN;
+    SpendDungeonTurn(sim, dungeon, 4, false);
+    SpendDungeonTurn(sim, dungeon, 3, true);
+    (void)PushEvent(sim, CC_EVENT_DUNGEON_SHORTCUT_OPENED,
+                    sim->player.id, dungeon->id, 0U, slot,
+                    "The company braces the old freight lift and opens a lasting shortcut.");
+    SetError(error, error_capacity, "");
+    return true;
+}
+
+static bool ApplyResolveDungeonEncounter(CcSim *sim,
+                                         const CcCommand *command,
+                                         char *error,
+                                         size_t error_capacity)
+{
+    CcDungeonExpedition *expedition = &sim->dungeon_expedition;
+    CcDungeon *dungeon = DungeonMutable(sim, expedition->dungeon_id);
+    if (!expedition->active || dungeon == NULL ||
+        expedition->encounter_kind == CC_DUNGEON_ENCOUNTER_NONE) {
+        SetError(error, error_capacity, "There is no dungeon encounter to resolve.");
+        return false;
+    }
+    bool resolved = false;
+    if (command->amount == CC_DUNGEON_APPROACH_PARLEY) {
+        int32_t score = expedition->encounter_reaction;
+        if (score < 7 && sim->player.cargo[CC_GOOD_FOOD] > 0) {
+            sim->player.cargo[CC_GOOD_FOOD] -= 1;
+            score += 3;
+        }
+        if (expedition->encounter_kind == CC_DUNGEON_ENCOUNTER_STONEBACKS &&
+            sim->player.cargo[CC_GOOD_TOOLS] > 0) score += 1;
+        resolved = score >= 7;
+        if (!resolved) {
+            expedition->strain = ClampI32(expedition->strain + 5, 0, 100);
+            expedition->encounter_reaction = ClampI32(
+                expedition->encounter_reaction + 1, 2, 12);
+        }
+        SpendDungeonTurn(sim, dungeon, resolved ? 0 : 2, false);
+    } else if (command->amount == CC_DUNGEON_APPROACH_EVADE) {
+        int32_t score = 1 + (int32_t)(NextDungeonRandom(dungeon) % 6U);
+        if (expedition->light_remaining > 0) score += 1;
+        if (expedition->noise <= 2) score += 1;
+        if (CcPlayerCargoUsed(&sim->player) >=
+            sim->player.cargo_capacity - 2) score -= 1;
+        resolved = score >= 4;
+        if (!resolved) {
+            expedition->strain = ClampI32(expedition->strain + 12, 0, 100);
+        }
+        SpendDungeonTurn(sim, dungeon, resolved ? 0 : 3, false);
+    } else if (command->amount == CC_DUNGEON_APPROACH_FORCE) {
+        int32_t score = 1 + (int32_t)(NextDungeonRandom(dungeon) % 6U) +
+                        (sim->player.cargo[CC_GOOD_WEAPONS] > 0 ? 2 : 0);
+        resolved = score >= 4;
+        expedition->strain = ClampI32(
+            expedition->strain + (resolved ? 8 : 22), 0, 100);
+        if (resolved) {
+            dungeon->rooms[expedition->current_room].state_flags |=
+                CC_DUNGEON_ROOM_CLEARED;
+        }
+        SpendDungeonTurn(sim, dungeon, 4, false);
+    } else {
+        SetError(error, error_capacity,
+                 "Choose parley, evade, or force passage.");
+        return false;
+    }
+    if (resolved) ClearDungeonEncounter(expedition);
+    SetError(error, error_capacity, "");
+    return true;
+}
+
+static bool ApplyRetreatDungeon(CcSim *sim, char *error,
+                                size_t error_capacity)
+{
+    CcDungeonExpedition *expedition = &sim->dungeon_expedition;
+    CcDungeon *dungeon = DungeonMutable(sim, expedition->dungeon_id);
+    if (!expedition->active || dungeon == NULL) {
+        SetError(error, error_capacity, "No dungeon expedition is active.");
+        return false;
+    }
+    int32_t depth = dungeon->rooms[expedition->current_room].depth;
+    bool flight = expedition->current_room != 0;
+    if (flight) {
+        expedition->strain = ClampI32(
+            expedition->strain + 8 + depth * 6, 0, 100);
+        int32_t cargo_used = CcPlayerCargoUsed(&sim->player);
+        if ((expedition->encounter_kind != CC_DUNGEON_ENCOUNTER_NONE ||
+             expedition->strain >= 75) && cargo_used > 0) {
+            CcDungeonRoom *room =
+                &dungeon->rooms[expedition->current_room];
+            for (int32_t good = CC_GOOD_COUNT - 1; good >= 0; --good) {
+                if (sim->player.cargo[good] <= 0) continue;
+                if (room->loot_quantity > 0 &&
+                    room->loot_good != (CcGood)good) {
+                    continue;
+                }
+                sim->player.cargo[good] -= 1;
+                room->loot_good = (CcGood)good;
+                room->loot_quantity += 1;
+                break;
+            }
+        }
+    }
+    if (expedition->days_elapsed == 0) CcSimAdvanceDays(sim, 1);
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text),
+                   flight ?
+                   "The company abandons its position and fights back to the carriage after %d turns." :
+                   "The company returns to the carriage after %d turns.",
+                   expedition->turns_elapsed);
+    (void)PushEvent(sim, CC_EVENT_DUNGEON_EXPEDITION_ENDED,
+                    sim->player.id, dungeon->id, 0U,
+                    expedition->maximum_depth, text);
+    *expedition = (CcDungeonExpedition){0};
+    expedition->current_room = -1;
+    expedition->encounter_room = -1;
+    SetError(error, error_capacity, "");
+    return true;
+}
+
 static bool ApplyDungeonChange(CcSim *sim, const CcCommand *command,
                                char *error, size_t error_capacity)
 {
@@ -10096,11 +11492,26 @@ static bool ApplyDungeonChange(CcSim *sim, const CcCommand *command,
         SetError(error, error_capacity, "The company must prepare at the dungeon settlement.");
         return false;
     }
+    if (sim->dungeon_expedition.active) {
+        SetError(error, error_capacity,
+                 "Return to the carriage before changing the Underroad.");
+        return false;
+    }
     if (command->dungeon_state != CC_DUNGEON_EXPLORED &&
         command->dungeon_state != CC_DUNGEON_PUBLIC_ROUTE &&
         command->dungeon_state != CC_DUNGEON_SMUGGLER_ROUTE &&
         command->dungeon_state != CC_DUNGEON_RESEALED) {
         SetError(error, error_capacity, "That dungeon outcome is invalid.");
+        return false;
+    }
+    if (command->dungeon_state != CC_DUNGEON_EXPLORED &&
+        !CcSimDungeonOutcomeAvailable(dungeon, command->dungeon_state)) {
+        SetError(error, error_capacity,
+                 command->dungeon_state == CC_DUNGEON_PUBLIC_ROUTE ?
+                 "Reach the Hoard Threshold and open the freight shortcut first." :
+                 command->dungeon_state == CC_DUNGEON_SMUGGLER_ROUTE ?
+                 "Reach the Hoard Threshold and search the Old Smuggler Cut first." :
+                 "Reach the Hoard Threshold and study the Chain Bridge supports first.");
         return false;
     }
     if (dungeon->state == command->dungeon_state) {
@@ -10426,6 +11837,17 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
         SetError(error, error_capacity, "Command target is missing.");
         return false;
     }
+    bool dungeon_action =
+        command->kind == CC_COMMAND_MOVE_DUNGEON ||
+        command->kind == CC_COMMAND_SEARCH_DUNGEON ||
+        command->kind == CC_COMMAND_OPEN_DUNGEON_SHORTCUT ||
+        command->kind == CC_COMMAND_RESOLVE_DUNGEON_ENCOUNTER ||
+        command->kind == CC_COMMAND_RETREAT_DUNGEON;
+    if (sim->dungeon_expedition.active && !dungeon_action) {
+        SetError(error, error_capacity,
+                 "Return to the carriage before taking an outside action.");
+        return false;
+    }
     bool settlement_action = command->kind == CC_COMMAND_TRADE ||
         command->kind == CC_COMMAND_REPAIR_ROUTE ||
         command->kind == CC_COMMAND_CHANGE_DUNGEON ||
@@ -10442,7 +11864,8 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
         command->kind == CC_COMMAND_GOBLIN_WARN ||
         command->kind == CC_COMMAND_GOBLIN_INTERCEPT ||
         command->kind == CC_COMMAND_CHARACTER_RESPONSE ||
-        command->kind == CC_COMMAND_TRAVERSE_GOBLIN_TUNNEL;
+        command->kind == CC_COMMAND_TRAVERSE_GOBLIN_TUNNEL ||
+        command->kind == CC_COMMAND_BEGIN_DUNGEON_EXPEDITION;
     if (sim->journey.active && settlement_action) {
         SetError(error, error_capacity,
                  "Settlement business must wait until the carriage arrives.");
@@ -10457,6 +11880,21 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
             return ApplyRepair(sim, command, error, error_capacity);
         case CC_COMMAND_CHANGE_DUNGEON:
             return ApplyDungeonChange(sim, command, error, error_capacity);
+        case CC_COMMAND_BEGIN_DUNGEON_EXPEDITION:
+            return ApplyBeginDungeonExpedition(
+                sim, command, error, error_capacity);
+        case CC_COMMAND_MOVE_DUNGEON:
+            return ApplyMoveDungeon(sim, command, error, error_capacity);
+        case CC_COMMAND_SEARCH_DUNGEON:
+            return ApplySearchDungeon(sim, error, error_capacity);
+        case CC_COMMAND_OPEN_DUNGEON_SHORTCUT:
+            return ApplyOpenDungeonShortcut(
+                sim, command, error, error_capacity);
+        case CC_COMMAND_RESOLVE_DUNGEON_ENCOUNTER:
+            return ApplyResolveDungeonEncounter(
+                sim, command, error, error_capacity);
+        case CC_COMMAND_RETREAT_DUNGEON:
+            return ApplyRetreatDungeon(sim, error, error_capacity);
         case CC_COMMAND_BUY_MAP:
             return ApplyBuyMap(sim, command, error, error_capacity);
         case CC_COMMAND_SELL_MAP:
@@ -10753,6 +12191,9 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         SetError(error, error_capacity, "Simulation is missing.");
         return false;
     }
+    /* Save compatibility: every schema version ever shipped stays
+       loadable. Adding a schema bump means extending this table and the
+       per-version branches below, verified by persistence_tests. */
     bool legacy_schema = sim->schema_version == 3U ||
                          sim->schema_version == 4U ||
                          sim->schema_version == 5U ||
@@ -10768,7 +12209,9 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                          sim->schema_version == 15U ||
                          sim->schema_version == 16U ||
                          sim->schema_version == 17U ||
-                         sim->schema_version == 18U;
+                         sim->schema_version == 18U ||
+                         sim->schema_version == 19U ||
+                         sim->schema_version == 20U;
     bool supported_generator = sim->generator_version == CC_GENERATOR_VERSION ||
         (legacy_schema && (sim->generator_version == 3U ||
                            sim->generator_version == 5U ||
@@ -10783,7 +12226,9 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                            sim->generator_version == 14U ||
                            sim->generator_version == 15U ||
                            sim->generator_version == 16U ||
-                           sim->generator_version == 17U));
+                           sim->generator_version == 17U ||
+                           sim->generator_version == 18U ||
+                           sim->generator_version == 19U));
     if ((!legacy_schema && sim->schema_version != CC_SIM_SCHEMA_VERSION) ||
         !supported_generator) {
         SetError(error, error_capacity, "Simulation version is unsupported.");
@@ -10825,6 +12270,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         sim->pending_echo_count > CC_MAX_PENDING_ECHOES ||
         sim->character_count < 0 ||
         sim->character_count > CC_MAX_CHARACTERS ||
+        sim->relationship_count < 0 ||
+        sim->relationship_count > CC_MAX_RELATIONSHIPS ||
         sim->stable_horse_count < 0 ||
         sim->stable_horse_count > CC_MAX_STABLE_HORSES ||
         sim->event_count < 0 || sim->event_count > CC_MAX_EVENTS ||
@@ -10881,7 +12328,19 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 event->kind > CC_EVENT_QUEST_PROGRESS ||
                 event->parent_id == event->id ||
                 (event->parent_id != 0U &&
-                 CcSimEvent(sim, event->parent_id) == NULL)) {
+                 CcSimEvent(sim, event->parent_id) == NULL) ||
+                (event->actor_id != 0U &&
+                 event->actor_id != sim->player.id &&
+                 CcSimCharacter(sim, event->actor_id) == NULL) ||
+                (event->target_id != 0U &&
+                 event->target_id != sim->player.id &&
+                 CcSimCharacter(sim, event->target_id) == NULL) ||
+                (event->beneficiary_id != 0U &&
+                 event->beneficiary_id != sim->player.id &&
+                 CcSimCharacter(sim, event->beneficiary_id) == NULL) ||
+                (event->witness_id != 0U &&
+                 event->witness_id != sim->player.id &&
+                 CcSimCharacter(sim, event->witness_id) == NULL)) {
                 if (error != NULL && error_capacity > 0U) {
                     (void)snprintf(
                         error, error_capacity,
@@ -11117,7 +12576,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             shipment->good >= 0 && shipment->good < CC_GOOD_COUNT &&
             shipment->quantity >= 1 &&
             shipment->quantity <= CC_SIM_MAX_UNITS &&
-            GoodCargoSlots(shipment->good, shipment->quantity) <=
+            FreightCargoSlots(shipment->good, shipment->quantity) <=
                 shipment_route->capacity;
         if (CcIdKind(shipment->id) != CC_ENTITY_SHIPMENT ||
             CcSimSettlement(sim, shipment->origin_id) == NULL ||
@@ -11247,12 +12706,111 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             SetError(error, error_capacity, "Dungeon state is invalid.");
             return false;
         }
+        if (sim->schema_version == CC_SIM_SCHEMA_VERSION) {
+            uint32_t known_room_flags =
+                CC_DUNGEON_ROOM_SAFE | CC_DUNGEON_ROOM_HAZARD |
+                CC_DUNGEON_ROOM_STONEBACK | CC_DUNGEON_ROOM_GOBLIN |
+                CC_DUNGEON_ROOM_DRAGON_SIGN | CC_DUNGEON_ROOM_OBJECTIVE |
+                CC_DUNGEON_ROOM_SMUGGLER;
+            uint32_t known_room_state =
+                CC_DUNGEON_ROOM_DISCOVERED | CC_DUNGEON_ROOM_SEARCHED |
+                CC_DUNGEON_ROOM_CLEARED |
+                CC_DUNGEON_ROOM_OBJECTIVE_REACHED;
+            uint32_t known_link_flags =
+                CC_DUNGEON_LINK_DISCOVERED | CC_DUNGEON_LINK_OPEN;
+            if (dungeon->layout_seed == 0U ||
+                dungeon->encounter_random_state == 0U ||
+                dungeon->room_count < 1 ||
+                dungeon->room_count > CC_MAX_DUNGEON_ROOMS ||
+                dungeon->link_count < 0 ||
+                dungeon->link_count > CC_MAX_DUNGEON_LINKS) {
+                SetError(error, error_capacity,
+                         "Dungeon layout state is invalid.");
+                return false;
+            }
+            for (int32_t room = 0; room < dungeon->room_count; ++room) {
+                const CcDungeonRoom *item = &dungeon->rooms[room];
+                if (!ValidBoundedText(item->name, sizeof(item->name)) ||
+                    item->kind < CC_DUNGEON_ROOM_MINE_MOUTH ||
+                    item->kind > CC_DUNGEON_ROOM_THRESHOLD ||
+                    item->depth < 0 || item->depth > dungeon->depth ||
+                    item->map_x < -100 || item->map_x > 100 ||
+                    item->map_y < -100 || item->map_y > 100 ||
+                    (item->flags & ~known_room_flags) != 0U ||
+                    (item->state_flags & ~known_room_state) != 0U ||
+                    item->loot_good < 0 || item->loot_good >= CC_GOOD_COUNT ||
+                    item->loot_quantity < 0 ||
+                    item->loot_quantity > CC_SIM_MAX_UNITS) {
+                    SetError(error, error_capacity,
+                             "Dungeon room state is invalid.");
+                    return false;
+                }
+            }
+            for (int32_t link = 0; link < dungeon->link_count; ++link) {
+                const CcDungeonLink *item = &dungeon->links[link];
+                if (item->from_room < 0 ||
+                    item->from_room >= dungeon->room_count ||
+                    item->to_room < 0 ||
+                    item->to_room >= dungeon->room_count ||
+                    item->from_room == item->to_room ||
+                    item->kind < CC_DUNGEON_LINK_PASSAGE ||
+                    item->kind > CC_DUNGEON_LINK_DROP ||
+                    (item->flags & ~known_link_flags) != 0U) {
+                    SetError(error, error_capacity,
+                             "Dungeon passage state is invalid.");
+                    return false;
+                }
+            }
+        }
         for (int32_t earlier = 0; earlier < i; ++earlier) {
             if (sim->dungeons[earlier].id == dungeon->id) {
                 SetError(error, error_capacity,
                          "Dungeon identities are not unique.");
                 return false;
             }
+        }
+    }
+    if (sim->schema_version == CC_SIM_SCHEMA_VERSION) {
+        const CcDungeonExpedition *expedition = &sim->dungeon_expedition;
+        const CcDungeon *dungeon = CcSimDungeon(sim, expedition->dungeon_id);
+        bool idle_valid = !expedition->active &&
+            expedition->dungeon_id == 0U &&
+            expedition->current_room == -1 &&
+            expedition->turns_elapsed == 0 &&
+            expedition->days_elapsed == 0 &&
+            expedition->light_remaining == 0 &&
+            expedition->noise == 0 &&
+            expedition->strain == 0 &&
+            expedition->maximum_depth == 0 &&
+            expedition->encounter_kind == CC_DUNGEON_ENCOUNTER_NONE &&
+            expedition->encounter_reaction == 0 &&
+            expedition->encounter_room == -1;
+        bool encounter_valid = expedition->encounter_kind ==
+                CC_DUNGEON_ENCOUNTER_NONE ?
+            expedition->encounter_reaction == 0 &&
+                expedition->encounter_room == -1 :
+            expedition->encounter_kind >= CC_DUNGEON_ENCOUNTER_STONEBACKS &&
+                expedition->encounter_kind <=
+                    CC_DUNGEON_ENCOUNTER_SMUGGLERS &&
+                expedition->encounter_reaction >= 2 &&
+                expedition->encounter_reaction <= 12 &&
+                expedition->encounter_room == expedition->current_room;
+        bool active_valid = expedition->active && dungeon != NULL &&
+            expedition->current_room >= 0 &&
+            expedition->current_room < dungeon->room_count &&
+            expedition->turns_elapsed >= 0 &&
+            expedition->days_elapsed >= 0 &&
+            expedition->light_remaining >= 0 &&
+            expedition->light_remaining <= 18 &&
+            expedition->noise >= 0 && expedition->noise <= 10 &&
+            expedition->strain >= 0 && expedition->strain <= 100 &&
+            expedition->maximum_depth >= 0 &&
+            expedition->maximum_depth <= dungeon->depth &&
+            encounter_valid;
+        if (!idle_valid && !active_valid) {
+            SetError(error, error_capacity,
+                     "Dungeon expedition state is invalid.");
+            return false;
         }
     }
     for (int32_t i = 0; i < sim->monster_count; ++i) {
@@ -11528,7 +13086,14 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 character->memory_count > CC_CHARACTER_MEMORY_CAPACITY ||
                 character->memory_write_index < 0 ||
                 character->memory_write_index >=
-                    CC_CHARACTER_MEMORY_CAPACITY) {
+                    CC_CHARACTER_MEMORY_CAPACITY ||
+                (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
+                 (character->knowledge_count < 0 ||
+                  character->knowledge_count >
+                      CC_CHARACTER_KNOWLEDGE_CAPACITY ||
+                  character->knowledge_write_index < 0 ||
+                  character->knowledge_write_index >=
+                      CC_CHARACTER_KNOWLEDGE_CAPACITY))) {
                 SetError(error, error_capacity,
                          "Character state is invalid.");
                 return false;
@@ -11548,6 +13113,61 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                     item->day < 1 || item->day > sim->current_day) {
                     SetError(error, error_capacity,
                              "Character memory is invalid.");
+                    return false;
+                }
+            }
+            if (sim->schema_version == CC_SIM_SCHEMA_VERSION) {
+                for (int32_t knowledge = 0;
+                     knowledge < character->knowledge_count; ++knowledge) {
+                    const CcCharacterKnowledge *item =
+                        &character->knowledge[knowledge];
+                    bool source_exists = item->source_character_id ==
+                            sim->player.id ||
+                        CcSimCharacter(sim,
+                                       item->source_character_id) != NULL;
+                    if (item->kind <= CC_KNOWLEDGE_NONE ||
+                        item->kind > CC_KNOWLEDGE_OFFER ||
+                        CcSimSituation(sim, item->subject_id) == NULL ||
+                        !source_exists ||
+                        CcSimEvent(sim, item->event_id) == NULL ||
+                        item->certainty < CC_KNOWLEDGE_DOUBTFUL ||
+                        item->certainty > CC_KNOWLEDGE_WITNESSED ||
+                        item->day < 1 || item->day > sim->current_day) {
+                        SetError(error, error_capacity,
+                                 "Character knowledge is invalid.");
+                        return false;
+                    }
+                }
+            }
+        }
+    }
+    if (sim->schema_version == CC_SIM_SCHEMA_VERSION) {
+        for (int32_t i = 0; i < sim->relationship_count; ++i) {
+            const CcRelationship *relationship = &sim->relationships[i];
+            if (relationship->from_character_id ==
+                    relationship->to_character_id ||
+                CcSimCharacter(sim,
+                               relationship->from_character_id) == NULL ||
+                CcSimCharacter(sim,
+                               relationship->to_character_id) == NULL ||
+                relationship->affinity < -3 || relationship->affinity > 3 ||
+                relationship->trust < -3 || relationship->trust > 3 ||
+                relationship->obligation < -3 ||
+                relationship->obligation > 3 ||
+                relationship->history <= CC_RELATIONSHIP_HISTORY_NONE ||
+                relationship->history > CC_RELATIONSHIP_HISTORY_COWORKERS ||
+                CcSimEvent(sim, relationship->cause_event_id) == NULL) {
+                SetError(error, error_capacity,
+                         "Character relationship is invalid.");
+                return false;
+            }
+            for (int32_t earlier = 0; earlier < i; ++earlier) {
+                if (sim->relationships[earlier].from_character_id ==
+                        relationship->from_character_id &&
+                    sim->relationships[earlier].to_character_id ==
+                        relationship->to_character_id) {
+                    SetError(error, error_capacity,
+                             "Character relationships are duplicated.");
                     return false;
                 }
             }
@@ -11591,7 +13211,10 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                             situation->issuer_faction_id;
         }
         bool quest_valid = true;
-        if (sim->schema_version >= 19U) {
+        bool quest_schema = sim->schema_version == CC_SIM_SCHEMA_VERSION ||
+            (sim->schema_version == 19U &&
+             (sim->front_count > 0 || sim->quest_outcome_count > 0));
+        if (quest_schema) {
             const CcQuestObjective *objective = &situation->objective;
             const CcFront *front = CcSimSituationFront(sim, situation);
             const CcQuestOutcomeRecord *archived_outcome =
@@ -11671,6 +13294,35 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 quest_valid = false;
             }
         }
+        bool social_thread_valid = true;
+        if (sim->schema_version == CC_SIM_SCHEMA_VERSION) {
+            if (situation->kind == CC_SITUATION_MONSTER_EXPEDITION) {
+                bool undecided_stage =
+                    situation->discovery_stage == CC_DISCOVERY_RUMOR ||
+                    situation->discovery_stage == CC_DISCOVERY_WITNESS ||
+                    situation->discovery_stage == CC_DISCOVERY_DECISION;
+                social_thread_valid =
+                    CcSimCharacter(sim,
+                                   situation->witness_character_id) != NULL &&
+                    situation->discovery_stage >= CC_DISCOVERY_OFFER &&
+                    situation->discovery_stage <= CC_DISCOVERY_AUTHORITY &&
+                    situation->lead_path >= CC_LEAD_PATH_UNDECIDED &&
+                    situation->lead_path <= CC_LEAD_PATH_CONFIDENCE &&
+                    CcSimEvent(sim, situation->lead_event_id) != NULL &&
+                    (!undecided_stage ||
+                     situation->lead_path == CC_LEAD_PATH_UNDECIDED) &&
+                    (situation->discovery_stage != CC_DISCOVERY_AUTHORITY ||
+                     situation->lead_path == CC_LEAD_PATH_REPORT) &&
+                    (situation->lead_path != CC_LEAD_PATH_CONFIDENCE ||
+                     situation->discovery_stage == CC_DISCOVERY_OFFER);
+            } else {
+                social_thread_valid =
+                    situation->witness_character_id == 0U &&
+                    situation->discovery_stage == CC_DISCOVERY_OFFER &&
+                    situation->lead_path == CC_LEAD_PATH_UNDECIDED &&
+                    situation->lead_event_id == 0U;
+            }
+        }
         if (CcIdKind(situation->id) != CC_ENTITY_SITUATION ||
             !ValidOptionalBoundedText(situation->sponsor_name,
                                       sizeof(situation->sponsor_name)) ||
@@ -11700,6 +13352,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             situation->created_day > sim->current_day ||
             situation->deadline_day < situation->created_day ||
             !quest_valid ||
+            !social_thread_valid ||
             (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
              situation->cause_event_id != 0U &&
              CcSimEvent(sim, situation->cause_event_id) == NULL)) {
@@ -11707,7 +13360,10 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             return false;
         }
     }
-    if (sim->schema_version >= 19U) {
+    bool quest_schema = sim->schema_version == CC_SIM_SCHEMA_VERSION ||
+        (sim->schema_version == 19U &&
+         (sim->front_count > 0 || sim->quest_outcome_count > 0));
+    if (quest_schema) {
         for (int32_t i = 0; i < sim->front_count; ++i) {
             const CcFront *front = &sim->fronts[i];
             bool outcome_matches =
@@ -12078,6 +13734,14 @@ static uint64_t HashString(uint64_t hash, const char *text)
 uint64_t CcSimHash(const CcSim *sim)
 {
     if (sim == NULL) return 0U;
+    bool hash_underroad = sim->schema_version >= 20U ||
+        (sim->schema_version == 19U && sim->dungeon_count > 0 &&
+         sim->dungeons[0].room_count > 0);
+    bool hash_social = sim->schema_version >= 20U ||
+        (sim->schema_version == 19U && sim->relationship_count > 0);
+    bool hash_quest = sim->schema_version >= 21U ||
+        (sim->schema_version == 19U &&
+         (sim->front_count > 0 || sim->quest_outcome_count > 0));
     uint64_t hash = UINT64_C(1469598103934665603);
 #define HASH_VALUE(value) hash = HashU64(hash, (uint64_t)(value))
     HASH_VALUE(sim->schema_version);
@@ -12349,6 +14013,46 @@ uint64_t CcSimHash(const CcSim *sim)
         const CcDungeon *item = &sim->dungeons[i];
         HASH_VALUE(item->id); HASH_VALUE(item->settlement_id); hash = HashString(hash, item->name);
         HASH_VALUE(item->state); HASH_VALUE(item->depth); HASH_VALUE(item->regional_pressure);
+        if (hash_underroad) {
+            HASH_VALUE(item->layout_seed);
+            HASH_VALUE(item->encounter_random_state);
+            HASH_VALUE(item->room_count);
+            HASH_VALUE(item->link_count);
+            for (int32_t room = 0; room < item->room_count; ++room) {
+                const CcDungeonRoom *room_item = &item->rooms[room];
+                hash = HashString(hash, room_item->name);
+                HASH_VALUE(room_item->kind);
+                HASH_VALUE(room_item->depth);
+                HASH_VALUE(room_item->map_x);
+                HASH_VALUE(room_item->map_y);
+                HASH_VALUE(room_item->flags);
+                HASH_VALUE(room_item->state_flags);
+                HASH_VALUE(room_item->loot_good);
+                HASH_VALUE(room_item->loot_quantity);
+            }
+            for (int32_t link = 0; link < item->link_count; ++link) {
+                const CcDungeonLink *link_item = &item->links[link];
+                HASH_VALUE(link_item->from_room);
+                HASH_VALUE(link_item->to_room);
+                HASH_VALUE(link_item->kind);
+                HASH_VALUE(link_item->flags);
+            }
+        }
+    }
+    if (hash_underroad) {
+        const CcDungeonExpedition *expedition = &sim->dungeon_expedition;
+        HASH_VALUE(expedition->active);
+        HASH_VALUE(expedition->dungeon_id);
+        HASH_VALUE(expedition->current_room);
+        HASH_VALUE(expedition->turns_elapsed);
+        HASH_VALUE(expedition->days_elapsed);
+        HASH_VALUE(expedition->light_remaining);
+        HASH_VALUE(expedition->noise);
+        HASH_VALUE(expedition->strain);
+        HASH_VALUE(expedition->maximum_depth);
+        HASH_VALUE(expedition->encounter_kind);
+        HASH_VALUE(expedition->encounter_reaction);
+        HASH_VALUE(expedition->encounter_room);
     }
     for (int32_t i = 0; i < sim->situation_count; ++i) {
         const CcSituation *item = &sim->situations[i];
@@ -12361,7 +14065,7 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(item->sponsor_character_id);
             HASH_VALUE(item->affected_character_id);
         }
-        if (sim->schema_version >= 19U) {
+        if (hash_quest) {
             HASH_VALUE(item->front_id);
             HASH_VALUE(item->end_reason);
             HASH_VALUE(item->objective.kind);
@@ -12382,12 +14086,18 @@ uint64_t CcSimHash(const CcSim *sim)
                 HASH_VALUE(item->objective.evidence_event_ids[evidence]);
             }
         }
+        if (hash_social) {
+            HASH_VALUE(item->witness_character_id);
+            HASH_VALUE(item->discovery_stage);
+            HASH_VALUE(item->lead_path);
+            HASH_VALUE(item->lead_event_id);
+        }
         if (item->sponsor_name[0] != '\0' || item->affected_name[0] != '\0') {
             hash = HashString(hash, item->sponsor_name);
             hash = HashString(hash, item->affected_name);
         }
     }
-    if (sim->schema_version >= 19U) {
+    if (hash_quest) {
         HASH_VALUE(sim->front_count);
         for (int32_t i = 0; i < sim->front_count; ++i) {
             const CcFront *front = &sim->fronts[i];
@@ -12462,6 +14172,36 @@ uint64_t CcSimHash(const CcSim *sim)
                 HASH_VALUE(item->event_id);
                 HASH_VALUE(item->day);
             }
+            if (hash_social) {
+                HASH_VALUE(character->knowledge_count);
+                HASH_VALUE(character->knowledge_write_index);
+                for (int32_t knowledge = 0;
+                     knowledge < CC_CHARACTER_KNOWLEDGE_CAPACITY;
+                     ++knowledge) {
+                    const CcCharacterKnowledge *item =
+                        &character->knowledge[knowledge];
+                    HASH_VALUE(item->kind);
+                    HASH_VALUE(item->subject_id);
+                    HASH_VALUE(item->source_character_id);
+                    HASH_VALUE(item->event_id);
+                    HASH_VALUE(item->certainty);
+                    HASH_VALUE(item->private_knowledge);
+                    HASH_VALUE(item->day);
+                }
+            }
+        }
+    }
+    if (hash_social) {
+        HASH_VALUE(sim->relationship_count);
+        for (int32_t i = 0; i < sim->relationship_count; ++i) {
+            const CcRelationship *relationship = &sim->relationships[i];
+            HASH_VALUE(relationship->from_character_id);
+            HASH_VALUE(relationship->to_character_id);
+            HASH_VALUE(relationship->affinity);
+            HASH_VALUE(relationship->trust);
+            HASH_VALUE(relationship->obligation);
+            HASH_VALUE(relationship->history);
+            HASH_VALUE(relationship->cause_event_id);
         }
     }
     HASH_VALUE(sim->player.id); HASH_VALUE(sim->player.location_id);
@@ -12520,14 +14260,12 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(horse->hardiness);
         }
     }
-    /* Optional schema-v3 extension: omitting zero preserves hashes written by
-       saves created before explicit charter commitments existed. */
+
     if (sim->player.accepted_situation_id != 0U) {
         HASH_VALUE(sim->player.accepted_situation_id);
     }
     if (sim->schema_version == 3U) {
-        /* Sparse schema-v3 fields preserve the hashes written before journey
-           encounters and explicit charter commitments existed. */
+
         if (sim->journey.active) {
             HASH_VALUE(sim->journey.active);
             HASH_VALUE(sim->journey.situation_id);
@@ -12594,7 +14332,7 @@ uint64_t CcSimHash(const CcSim *sim)
         HASH_VALUE(sim->delayed_echo.outcome);
         HASH_VALUE(sim->delayed_echo.due_day);
         hash = HashString(hash, sim->delayed_echo.character_name);
-        if (sim->schema_version >= 19U) {
+        if (hash_quest) {
             HASH_VALUE(sim->pending_echo_count);
             for (int32_t i = 0; i < CC_MAX_PENDING_ECHOES; ++i) {
                 const CcDelayedEcho *echo = &sim->pending_echoes[i];
@@ -12616,6 +14354,12 @@ uint64_t CcSimHash(const CcSim *sim)
         const CcEvent *item = &sim->events[i];
         HASH_VALUE(item->id); HASH_VALUE(item->day); HASH_VALUE(item->kind);
         HASH_VALUE(item->subject_id); HASH_VALUE(item->location_id); HASH_VALUE(item->parent_id);
+        if (hash_social) {
+            HASH_VALUE(item->actor_id);
+            HASH_VALUE(item->target_id);
+            HASH_VALUE(item->beneficiary_id);
+            HASH_VALUE(item->witness_id);
+        }
         HASH_VALUE(item->magnitude); hash = HashString(hash, item->text);
     }
 #undef HASH_VALUE

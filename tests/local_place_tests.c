@@ -52,10 +52,7 @@ static int ProfileContract(void)
             CHECK(camera->trigger_z >= 0.0f && camera->trigger_z <= 72.0f);
             CHECK(camera->target_x >= 0.0f && camera->target_x <= 96.0f);
             CHECK(camera->target_z >= 0.0f && camera->target_z <= 72.0f);
-            /* Walking shots are deliberately human-scale. The authored
-               target sits near the ground and the physical lens stays below
-               an adult character's waist, replacing the old aerial map
-               camera while preserving a slightly wider landmark page. */
+
             CHECK(camera->target_y >= 0.08f);
             CHECK(camera->target_y <= 0.25f);
             CHECK(camera->camera_offset_y >= 0.55f);

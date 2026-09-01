@@ -14,6 +14,8 @@
 #define CC_MAX_BANDITS 3
 #define CC_MAX_MONSTERS 3
 #define CC_MAX_DUNGEONS 3
+#define CC_MAX_DUNGEON_ROOMS 24
+#define CC_MAX_DUNGEON_LINKS 36
 #define CC_MAX_MAPS 13
 #define CC_MAX_TREASURES 24
 #define CC_MAX_SITUATIONS 12
@@ -24,6 +26,8 @@
 #define CC_MAX_PENDING_ECHOES 3
 #define CC_MAX_CHARACTERS 24
 #define CC_CHARACTER_MEMORY_CAPACITY 4
+#define CC_CHARACTER_KNOWLEDGE_CAPACITY 8
+#define CC_MAX_RELATIONSHIPS 48
 #define CC_MAX_EVENTS 256
 #define CC_CARRIAGE_HORSE_COUNT 2
 #define CC_MAX_STABLE_HORSES 6
@@ -41,8 +45,11 @@
 #define CC_CROWNLESS_ATLAS_MAP_NAME "The Crownless Atlas"
 #define CC_DRAGON_HOARD_MAP_NAME "The Hoard Vault of Varkesh"
 
-#define CC_SIM_SCHEMA_VERSION 19
-#define CC_GENERATOR_VERSION 18
+/* Save and journal compatibility contract: every schema/generator version
+   listed in the legacy tables in cc_sim.c remains loadable. Bump these only
+   with matching migration branches and persistence_tests coverage. */
+#define CC_SIM_SCHEMA_VERSION 21
+#define CC_GENERATOR_VERSION 20
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
 #define CC_WORLD_DAY_SUBTICKS (24 * 60 * CC_WORLD_MINUTE_SUBTICKS)
@@ -80,7 +87,8 @@ typedef enum CcEntityKind {
 typedef enum CcGood {
     CC_GOOD_FOOD = 0,
     CC_GOOD_IRON = 1,
-    /* Source compatibility for older callers and save migrations. */
+
+    /* Legacy alias: MATERIAL names IRON in older saves and callers. */
     CC_GOOD_MATERIAL = CC_GOOD_IRON,
     CC_GOOD_TOOLS = 2,
     CC_GOOD_WEAPONS = 3,
@@ -242,6 +250,17 @@ typedef enum CcEventKind {
     CC_EVENT_AMBUSH_EVADED,
     CC_EVENT_ENCOUNTER_LOOT,
     CC_EVENT_GOBLIN_TUNNEL_TRAVERSED,
+    CC_EVENT_DUNGEON_EXPEDITION_BEGAN,
+    CC_EVENT_DUNGEON_ROOM_ENTERED,
+    CC_EVENT_DUNGEON_ENCOUNTER,
+    CC_EVENT_DUNGEON_SHORTCUT_OPENED,
+    CC_EVENT_DUNGEON_LOOT,
+    CC_EVENT_DUNGEON_THRESHOLD_REACHED,
+    CC_EVENT_DUNGEON_EXPEDITION_ENDED,
+    CC_EVENT_RELATIONSHIP_HISTORY,
+    CC_EVENT_RUMOR_SHARED,
+    CC_EVENT_FACT_REVEALED,
+    CC_EVENT_RELATIONSHIP_CHANGED,
     CC_EVENT_FRONT_CREATED,
     CC_EVENT_FRONT_RESOLVED,
     CC_EVENT_FRONT_FAILED,
@@ -269,8 +288,9 @@ typedef enum CcCommandKind {
     CC_COMMAND_RETRIEVE_MAP,
     CC_COMMAND_STEAL_DRAGON_NAMED_TREASURE,
     CC_COMMAND_RETURN_DRAGON_NAMED_TREASURE,
-    /* Appended so command journals written by earlier schema versions keep
-       their stable numeric meanings. */
+
+    /* New commands are appended only: command journals persist these
+       numeric values, so existing entries must keep their meaning. */
     CC_COMMAND_RESOLVE_ENCOUNTER_PROVISIONS,
     CC_COMMAND_WITHDRAW_ENCOUNTER,
     CC_COMMAND_BREED_HORSES,
@@ -281,7 +301,13 @@ typedef enum CcCommandKind {
     CC_COMMAND_GOBLIN_INTERCEPT,
     CC_COMMAND_CHARACTER_RESPONSE,
     CC_COMMAND_SET_JOURNEY_PACE,
-    CC_COMMAND_TRAVERSE_GOBLIN_TUNNEL
+    CC_COMMAND_TRAVERSE_GOBLIN_TUNNEL,
+    CC_COMMAND_BEGIN_DUNGEON_EXPEDITION,
+    CC_COMMAND_MOVE_DUNGEON,
+    CC_COMMAND_SEARCH_DUNGEON,
+    CC_COMMAND_OPEN_DUNGEON_SHORTCUT,
+    CC_COMMAND_RESOLVE_DUNGEON_ENCOUNTER,
+    CC_COMMAND_RETREAT_DUNGEON
 } CcCommandKind;
 
 typedef enum CcHorseSex {
@@ -302,7 +328,7 @@ typedef enum CcCollectibleMapSlot {
     CC_MAP_LOWER_SILVERWORKS,
     CC_MAP_ASH_POOR_SKIN,
     CC_MAP_CROWNLESS_ATLAS,
-    /* Appended so older campaign catalogue bits keep their meaning. */
+
     CC_MAP_DRAGON_HOARD
 } CcCollectibleMapSlot;
 
@@ -362,6 +388,17 @@ typedef struct CcSettlement {
     int32_t cow_condition;
     int32_t cow_hunger;
 } CcSettlement;
+
+typedef struct CcFoodEconomy {
+    int32_t stock;
+    int32_t incoming;
+    int32_t weekly_production;
+    int32_t weekly_consumption;
+    int32_t reserve_target;
+    int32_t storage_capacity;
+    int32_t unit_price;
+    int32_t hunger;
+} CcFoodEconomy;
 
 typedef struct CcHorse {
     CcId id;
@@ -505,11 +542,11 @@ typedef struct CcBanditGroup {
 
 typedef enum CcGoblinTributePhase {
     CC_GOBLIN_TRIBUTE_IDLE,
-    /* The old names remain stable in saved games. They now describe a raid. */
+
     CC_GOBLIN_TRIBUTE_OUTBOUND,
     CC_GOBLIN_TRIBUTE_RETURNING,
     CC_GOBLIN_TRIBUTE_TO_DRAGON,
-    /* Added last so older save values remain stable. */
+
     CC_GOBLIN_TRIBUTE_PREPARING
 } CcGoblinTributePhase;
 
@@ -530,7 +567,7 @@ typedef struct CcGoblinCult {
     CcId id;
     char name[CC_NAME_CAPACITY];
     int32_t members;
-    /* Devotion is the saved legacy name for commitment to the covenant. */
+
     int32_t devotion;
     int32_t cohesion;
     CcId lair_settlement_id;
@@ -680,6 +717,69 @@ typedef struct CcMonsterPopulation {
     int32_t hunting_pressure;
 } CcMonsterPopulation;
 
+typedef enum CcDungeonRoomKind {
+    CC_DUNGEON_ROOM_MINE_MOUTH,
+    CC_DUNGEON_ROOM_RAIL,
+    CC_DUNGEON_ROOM_FLOODWAY,
+    CC_DUNGEON_ROOM_WORKSHOP,
+    CC_DUNGEON_ROOM_BRIDGE,
+    CC_DUNGEON_ROOM_SHAFT,
+    CC_DUNGEON_ROOM_ARCHIVE,
+    CC_DUNGEON_ROOM_MARKET,
+    CC_DUNGEON_ROOM_BARRACKS,
+    CC_DUNGEON_ROOM_SHRINE,
+    CC_DUNGEON_ROOM_VAULT,
+    CC_DUNGEON_ROOM_THRESHOLD
+} CcDungeonRoomKind;
+
+typedef enum CcDungeonRoomFlag {
+    CC_DUNGEON_ROOM_SAFE = 1U << 0U,
+    CC_DUNGEON_ROOM_HAZARD = 1U << 1U,
+    CC_DUNGEON_ROOM_STONEBACK = 1U << 2U,
+    CC_DUNGEON_ROOM_GOBLIN = 1U << 3U,
+    CC_DUNGEON_ROOM_DRAGON_SIGN = 1U << 4U,
+    CC_DUNGEON_ROOM_OBJECTIVE = 1U << 5U,
+    CC_DUNGEON_ROOM_SMUGGLER = 1U << 6U
+} CcDungeonRoomFlag;
+
+typedef enum CcDungeonRoomStateFlag {
+    CC_DUNGEON_ROOM_DISCOVERED = 1U << 0U,
+    CC_DUNGEON_ROOM_SEARCHED = 1U << 1U,
+    CC_DUNGEON_ROOM_CLEARED = 1U << 2U,
+    CC_DUNGEON_ROOM_OBJECTIVE_REACHED = 1U << 3U
+} CcDungeonRoomStateFlag;
+
+typedef enum CcDungeonLinkKind {
+    CC_DUNGEON_LINK_PASSAGE,
+    CC_DUNGEON_LINK_SECRET,
+    CC_DUNGEON_LINK_SHORTCUT,
+    CC_DUNGEON_LINK_DROP
+} CcDungeonLinkKind;
+
+typedef enum CcDungeonLinkFlag {
+    CC_DUNGEON_LINK_DISCOVERED = 1U << 0U,
+    CC_DUNGEON_LINK_OPEN = 1U << 1U
+} CcDungeonLinkFlag;
+
+typedef struct CcDungeonRoom {
+    char name[CC_MAP_NAME_CAPACITY];
+    CcDungeonRoomKind kind;
+    int32_t depth;
+    int32_t map_x;
+    int32_t map_y;
+    uint32_t flags;
+    uint32_t state_flags;
+    CcGood loot_good;
+    int32_t loot_quantity;
+} CcDungeonRoom;
+
+typedef struct CcDungeonLink {
+    int32_t from_room;
+    int32_t to_room;
+    CcDungeonLinkKind kind;
+    uint32_t flags;
+} CcDungeonLink;
+
 typedef struct CcDungeon {
     CcId id;
     CcId settlement_id;
@@ -687,7 +787,43 @@ typedef struct CcDungeon {
     CcDungeonState state;
     int32_t depth;
     int32_t regional_pressure;
+    uint32_t layout_seed;
+    uint32_t encounter_random_state;
+    int32_t room_count;
+    int32_t link_count;
+    CcDungeonRoom rooms[CC_MAX_DUNGEON_ROOMS];
+    CcDungeonLink links[CC_MAX_DUNGEON_LINKS];
 } CcDungeon;
+
+typedef enum CcDungeonEncounterKind {
+    CC_DUNGEON_ENCOUNTER_NONE,
+    CC_DUNGEON_ENCOUNTER_STONEBACKS,
+    CC_DUNGEON_ENCOUNTER_TITHE_KEEPERS,
+    CC_DUNGEON_ENCOUNTER_GOBLIN_DESERTERS,
+    CC_DUNGEON_ENCOUNTER_MONSTERS,
+    CC_DUNGEON_ENCOUNTER_SMUGGLERS
+} CcDungeonEncounterKind;
+
+typedef enum CcDungeonEncounterApproach {
+    CC_DUNGEON_APPROACH_PARLEY = 1,
+    CC_DUNGEON_APPROACH_EVADE = 2,
+    CC_DUNGEON_APPROACH_FORCE = 3
+} CcDungeonEncounterApproach;
+
+typedef struct CcDungeonExpedition {
+    bool active;
+    CcId dungeon_id;
+    int32_t current_room;
+    int32_t turns_elapsed;
+    int32_t days_elapsed;
+    int32_t light_remaining;
+    int32_t noise;
+    int32_t strain;
+    int32_t maximum_depth;
+    CcDungeonEncounterKind encounter_kind;
+    int32_t encounter_reaction;
+    int32_t encounter_room;
+} CcDungeonExpedition;
 
 typedef enum CcSituationKind {
     CC_SITUATION_RELIEF_DELIVERY,
@@ -802,8 +938,46 @@ typedef enum CcCharacterMemoryKind {
 
 typedef enum CcCharacterResponse {
     CC_CHARACTER_RESPONSE_LISTEN = 1,
-    CC_CHARACTER_RESPONSE_PLEDGE_HELP = 2
+    CC_CHARACTER_RESPONSE_PLEDGE_HELP = 2,
+    CC_CHARACTER_RESPONSE_REPORT_EVIDENCE = 3,
+    CC_CHARACTER_RESPONSE_KEEP_CONFIDENCE = 4
 } CcCharacterResponse;
+
+typedef enum CcKnowledgeKind {
+    CC_KNOWLEDGE_NONE,
+    CC_KNOWLEDGE_PROBLEM_RUMOR,
+    CC_KNOWLEDGE_WITNESS_ACCOUNT,
+    CC_KNOWLEDGE_IMMEDIATE_STAKE,
+    CC_KNOWLEDGE_OFFER
+} CcKnowledgeKind;
+
+typedef enum CcKnowledgeCertainty {
+    CC_KNOWLEDGE_DOUBTFUL = 1,
+    CC_KNOWLEDGE_TOLD = 2,
+    CC_KNOWLEDGE_WITNESSED = 3
+} CcKnowledgeCertainty;
+
+typedef enum CcRelationshipHistory {
+    CC_RELATIONSHIP_HISTORY_NONE,
+    CC_RELATIONSHIP_HISTORY_OLD_FRIENDS,
+    CC_RELATIONSHIP_HISTORY_FORMER_PARTNERS,
+    CC_RELATIONSHIP_HISTORY_PROFESSIONAL_RIVALS,
+    CC_RELATIONSHIP_HISTORY_COWORKERS
+} CcRelationshipHistory;
+
+typedef enum CcSituationDiscoveryStage {
+    CC_DISCOVERY_OFFER,
+    CC_DISCOVERY_RUMOR,
+    CC_DISCOVERY_WITNESS,
+    CC_DISCOVERY_DECISION,
+    CC_DISCOVERY_AUTHORITY
+} CcSituationDiscoveryStage;
+
+typedef enum CcSituationLeadPath {
+    CC_LEAD_PATH_UNDECIDED,
+    CC_LEAD_PATH_REPORT,
+    CC_LEAD_PATH_CONFIDENCE
+} CcSituationLeadPath;
 
 typedef struct CcCharacterMemory {
     CcCharacterMemoryKind kind;
@@ -811,6 +985,16 @@ typedef struct CcCharacterMemory {
     CcId event_id;
     int32_t day;
 } CcCharacterMemory;
+
+typedef struct CcCharacterKnowledge {
+    CcKnowledgeKind kind;
+    CcId subject_id;
+    CcId source_character_id;
+    CcId event_id;
+    CcKnowledgeCertainty certainty;
+    bool private_knowledge;
+    int32_t day;
+} CcCharacterKnowledge;
 
 typedef struct CcCharacter {
     CcId id;
@@ -828,7 +1012,20 @@ typedef struct CcCharacter {
     CcCharacterMemory memories[CC_CHARACTER_MEMORY_CAPACITY];
     int32_t memory_count;
     int32_t memory_write_index;
+    CcCharacterKnowledge knowledge[CC_CHARACTER_KNOWLEDGE_CAPACITY];
+    int32_t knowledge_count;
+    int32_t knowledge_write_index;
 } CcCharacter;
+
+typedef struct CcRelationship {
+    CcId from_character_id;
+    CcId to_character_id;
+    int32_t affinity;
+    int32_t trust;
+    int32_t obligation;
+    CcRelationshipHistory history;
+    CcId cause_event_id;
+} CcRelationship;
 
 typedef struct CcSituation {
     CcId id;
@@ -848,6 +1045,10 @@ typedef struct CcSituation {
     CcId front_id;
     CcQuestEndReason end_reason;
     CcQuestObjective objective;
+    CcId witness_character_id;
+    CcSituationDiscoveryStage discovery_stage;
+    CcSituationLeadPath lead_path;
+    CcId lead_event_id;
     char sponsor_name[CC_NAME_CAPACITY];
     char affected_name[CC_NAME_CAPACITY];
 } CcSituation;
@@ -985,6 +1186,10 @@ typedef struct CcEvent {
     CcId subject_id;
     CcId location_id;
     CcId parent_id;
+    CcId actor_id;
+    CcId target_id;
+    CcId beneficiary_id;
+    CcId witness_id;
     int32_t magnitude;
     char text[CC_EVENT_TEXT_CAPACITY];
 } CcEvent;
@@ -1035,10 +1240,13 @@ typedef struct CcSim {
     CcHoardRaiders hoard_raiders;
     CcMonsterPopulation monsters[CC_MAX_MONSTERS];
     CcDungeon dungeons[CC_MAX_DUNGEONS];
+    CcDungeonExpedition dungeon_expedition;
     CcSituation situations[CC_MAX_SITUATIONS];
     CcFront fronts[CC_MAX_FRONTS];
     CcQuestOutcomeRecord quest_outcomes[CC_MAX_QUEST_OUTCOMES];
     CcCharacter characters[CC_MAX_CHARACTERS];
+    CcRelationship relationships[CC_MAX_RELATIONSHIPS];
+    int32_t relationship_count;
     CcEvent events[CC_MAX_EVENTS];
     CcPlayerCompany player;
     CcHorse horse_team[CC_CARRIAGE_HORSE_COUNT];
@@ -1077,7 +1285,7 @@ typedef struct CcSim {
 } CcSim;
 
 void CcSimInit(CcSim *sim, uint32_t seed);
-/* Used by both new worlds and save migrations. Safe to call more than once. */
+
 void CcSimInitializeDragonCycle(CcSim *sim);
 void CcSimInitializeDragonEcology(CcSim *sim);
 void CcSimInitializeHoardRaiders(CcSim *sim);
@@ -1085,11 +1293,12 @@ void CcSimInitializeAnimalEconomy(CcSim *sim);
 void CcSimInitializeHorseStableSystem(CcSim *sim);
 void CcSimInitializeCharacters(CcSim *sim);
 void CcSimUpgradeQuestArchitecture(CcSim *sim);
+void CcSimInitializeUnderroad(CcSim *sim);
 void CcSimAdvanceDays(CcSim *sim, int32_t days);
 bool CcSettlementIsAbandoned(const CcSettlement *settlement);
 int32_t CcSimClimateFactor(const CcSim *sim);
 int32_t CcDragonCampaignExperience(const CcSim *sim);
-/* Consumes exact 60 Hz ticks only while a committed journey is travelling. */
+
 void CcSimAdvanceRuntimeTicks(CcSim *sim, int32_t ticks);
 bool CcSimApply(CcSim *sim, const CcCommand *command,
                 char *error, size_t error_capacity);
@@ -1147,14 +1356,34 @@ const CcQuestOutcomeRecord *CcSimLatestQuestOutcomeForCharacter(
     const CcSim *sim, CcId character_id);
 CcFrontStage CcSimFrontStage(const CcFront *front);
 const CcCharacter *CcSimCharacter(const CcSim *sim, CcId id);
+const CcDungeon *CcSimDungeon(const CcSim *sim, CcId id);
+const CcDungeonRoom *CcSimDungeonCurrentRoom(const CcSim *sim);
+int32_t CcSimDungeonVisibleExitCount(const CcSim *sim);
+int32_t CcSimDungeonVisibleExitAt(const CcSim *sim, int32_t ordinal);
+int32_t CcSimDungeonOpenableShortcut(const CcSim *sim);
+bool CcSimDungeonOutcomeAvailable(const CcDungeon *dungeon,
+                                  CcDungeonState outcome);
+const char *CcDungeonRoomKindName(CcDungeonRoomKind kind);
+const char *CcDungeonEncounterName(CcDungeonEncounterKind kind);
+const char *CcDungeonReactionName(int32_t reaction);
 const CcCharacter *CcSimSituationSponsorCharacter(
     const CcSim *sim, const CcSituation *situation);
 const CcCharacter *CcSimSituationAffectedCharacter(
+    const CcSim *sim, const CcSituation *situation);
+const CcCharacter *CcSimSituationWitnessCharacter(
     const CcSim *sim, const CcSituation *situation);
 const CcCharacter *CcSimSituationConversationCharacter(
     const CcSim *sim, const CcSituation *situation, CcId settlement_id);
 bool CcCharacterRemembers(const CcCharacter *character,
                           CcCharacterMemoryKind kind, CcId subject_id);
+bool CcCharacterKnows(const CcCharacter *character,
+                      CcKnowledgeKind kind, CcId subject_id);
+const CcRelationship *CcSimRelationship(const CcSim *sim,
+                                        CcId from_character_id,
+                                        CcId to_character_id);
+bool CcSimSituationCanAccept(const CcSim *sim,
+                             const CcSituation *situation);
+const char *CcRelationshipHistoryName(CcRelationshipHistory history);
 const char *CcCharacterRoleName(CcCharacterRole role);
 const char *CcCharacterActivityName(CcCharacterActivity activity);
 const CcSituation *CcSimAcceptedSituation(const CcSim *sim);
@@ -1173,6 +1402,8 @@ const char *CcBanditReactionName(int32_t roll);
 int32_t CcSimActiveSituationCount(const CcSim *sim);
 int32_t CcSimActiveFrontCount(const CcSim *sim);
 int32_t CcSimIncomingGood(const CcSim *sim, CcId settlement_id, CcGood good);
+bool CcSimFoodEconomyAtSettlement(const CcSim *sim, CcId settlement_id,
+                                  CcFoodEconomy *economy);
 int32_t CcSimRouteDanger(const CcSim *sim, CcId route_id);
 int32_t CcSimDragonBattleStrength(const CcSim *sim);
 int32_t CcSimInequalityAtSettlement(const CcSim *sim, CcId settlement_id);

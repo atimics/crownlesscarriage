@@ -824,9 +824,9 @@ def build_body(parent: bpy.types.Collection, armature: bpy.types.Object) -> bpy.
                          sweep_rows(HERO_BODY_PROFILES["neck"]),
                          "skin", collection, "neck", segments=12)
     parent_to_bone(neck, armature, "neck")
-    # Keep one continuous low-poly head surface. Separate jaw and chin shells
-    # created dark internal outlines on the coarse game target and made the
-    # lower face look like a second mask.
+
+
+
     head = add_ico("GEO_BodyHead", (0.0, 0.0, 1.92), (0.132, 0.116, 0.172),
                    "skin", collection, "head")
     parent_to_bone(head, armature, "head")
@@ -834,8 +834,8 @@ def build_body(parent: bpy.types.Collection, armature: bpy.types.Object) -> bpy.
                    "skin_light", collection, "face", subdivisions=1)
     parent_to_bone(nose, armature, "head")
     for side, x in (("L", -0.040), ("R", 0.040)):
-        # Each eye resolves to about one art pixel in the close gameplay shot.
-        # Larger marks merged with the brows into a black visor.
+
+
         eye = add_ico(f"GEO_BodyEye{side}", (x, -0.116, 1.950),
                       (0.015, 0.008, 0.010), "eye", collection, "face", subdivisions=1)
         parent_to_bone(eye, armature, "head")
@@ -870,8 +870,8 @@ def build_hair(parent: bpy.types.Collection, armature: bpy.types.Object) -> bpy.
     bun = add_ico("GEO_HairBun", (0.050, 0.128, 1.970), (0.065, 0.058, 0.062),
                   "hair", collection, "hair_bun", subdivisions=1)
     parent_to_bone(bun, armature, "head")
-    # Two broad planar locks read as a side part from the game camera. Thin,
-    # repeated locks collapsed into a helmet-like fringe at runtime scale.
+
+
     for suffix, vertices in (
         ("L", [(-0.118, -0.124, 2.055), (0.010, -0.128, 2.100),
                (-0.020, -0.133, 2.015), (-0.108, -0.132, 1.998)]),
@@ -890,10 +890,10 @@ def build_hair(parent: bpy.types.Collection, armature: bpy.types.Object) -> bpy.
         )
         parent_to_bone(temple, armature, "head")
 
-    # Crownless' hero still carries the broken three-prong circlet that makes
-    # her readable against the NPC cast.  Keep the pieces broad and separated:
-    # at the target 35-50 px height they resolve as a gold crown silhouette,
-    # while the shortened right tine supplies the "broken" story beat.
+
+
+
+
     circlet = add_torus(
         "GEO_BrokenCrownCirclet", (0.0, -0.002, 2.058), 0.143, 0.014,
         "brass", collection, "broken_crown", scale=(1.0, 0.88, 1.0),
@@ -1161,8 +1161,8 @@ def create_cape_mesh(
     vertices: list[tuple[float, float, float]] = []
     for row in range(rows):
         v = row / (rows - 1)
-        # The cape is a strong asymmetric hero anchor: the left edge carries
-        # the silhouette while the right edge stays close to the body.
+
+
         half_width = 0.25 + math.sin(v * math.pi) * 0.060 + v * 0.020
         for column in range(columns):
             u = column / (columns - 1)
@@ -1299,8 +1299,8 @@ def build_cuirass(parent: bpy.types.Collection, armature: bpy.types.Object) -> b
         "brigandine_edge", collection, "brigandine_facing", thickness=0.026,
     )
     parent_to_bone(chest_plate, armature, "chest")
-    # One broad lower plate survives the pixel grid; stacked lames and rivets
-    # only turned the torso into confetti at play scale.
+
+
     fauld = add_panel(
         "GEO_CuirassFauld",
         [(-0.170, -0.257, 1.380), (0.170, -0.257, 1.380),
@@ -1340,7 +1340,7 @@ def build_pauldron(parent: bpy.types.Collection, armature: bpy.types.Object,
         layer="rigid_armor", anchor=f"upper_arm.{suffix}",
         coverage=(f"shoulder_{suffix.lower()}",),
     )
-    # The shoulder mismatch is a primary gameplay-scale identity cue.
+
     scale = 1.12 if suffix == "L" else 0.62
     plate = add_ico(f"GEO_Pauldron{suffix}", (sign * 0.330, 0.0, 1.565),
                     (0.150 * scale, 0.128 * scale, 0.085 * scale), "steel", collection,

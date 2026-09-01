@@ -112,8 +112,8 @@ def reset_pose(controls: dict[str, bpy.types.Object]) -> None:
     controls["root"].location = (CHARACTER_X, 0.0, 0.0)
     for name, control in controls.items():
         if name != "root":
-            # Parenting preserved the world position; keep the stored local
-            # pivot and reset only rotations during animation.
+
+
             pass
         control.rotation_mode = "XYZ"
         control.rotation_euler = (0.0, 0.0, 0.0)

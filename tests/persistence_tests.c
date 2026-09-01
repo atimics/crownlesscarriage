@@ -354,7 +354,7 @@ static void CheckLegacyJournalMigration(char *error,
              legacy_generation);
     CC_CHECK(ReadSqliteInteger(
                  path, "SELECT journal_cursor FROM meta WHERE id=1;") == 0);
-    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 17);
+    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 18);
     CC_CHECK(CcJournalAdvanceDays(journal, &resumed, 2,
                                   error, error_capacity));
     uint64_t expected_hash = CcSimHash(&resumed);
@@ -729,7 +729,8 @@ static void CheckSchema17Compatibility(char *error, size_t error_capacity)
     RemoveDatabase(path);
 }
 
-static void CheckSchema18Compatibility(char *error, size_t error_capacity)
+static void CheckSchema18QuestCompatibility(char *error,
+                                            size_t error_capacity)
 {
     const char *path = "persistence-legacy-v18-test.ccsave";
     RemoveDatabase(path);
@@ -793,7 +794,7 @@ static void CheckJournalRecovery(char *error, size_t error_capacity)
     CC_CHECK(CcJournalClose(&journal, &sim, error, error_capacity));
     CC_CHECK(journal == NULL);
 
-    /* The snapshot is still the epoch base; recovery must replay the suffix. */
+
     CC_CHECK(ReadSqliteInteger(
                  path, "SELECT journal_cursor FROM meta WHERE id=1;") == 0);
     CC_CHECK(ReadSqliteInteger(
@@ -818,7 +819,7 @@ static void CheckJournalRecovery(char *error, size_t error_capacity)
     CC_CHECK(ReadSqliteInteger(
                  path, "SELECT COUNT(*) FROM action_journal;") == 5);
 
-    /* SQL clients cannot revise or remove committed input records. */
+
     sqlite3 *database = NULL;
     RequireSqlite(sqlite3_open_v2(path, &database,
                                   SQLITE_OPEN_READWRITE, NULL),
@@ -870,7 +871,7 @@ static void CheckJournalCheckpointAndTamper(char *error,
     CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
     CC_CHECK(CcSimHash(&restored) == expected_hash);
 
-    /* Simulate privileged corruption: replay must reject the broken hash chain. */
+
     sqlite3 *database = NULL;
     RequireSqlite(sqlite3_open_v2(path, &database,
                                   SQLITE_OPEN_READWRITE, NULL),
@@ -991,7 +992,7 @@ static void CheckPreJourneySchema3Compatibility(char *error,
             &restored, &restored.situations[i]) != NULL);
     }
 
-    /* The migrated file must remain stable after the new writer adopts it. */
+
     uint64_t migrated_hash = CcSimHash(&restored);
     CC_CHECK(CcSaveWrite(path, &restored, error, error_capacity));
     CcSim rewritten;
@@ -1011,7 +1012,7 @@ static void CheckPreJourneySchema3Compatibility(char *error,
         }
     }
     CC_CHECK(situation != NULL);
-    legacy_journey.player.cargo[CC_GOOD_FOOD] = situation->quantity;
+    legacy_journey.player.cargo[CC_GOOD_FOOD] = 0;
     CcCommand accept = {
         .kind = CC_COMMAND_ACCEPT_SITUATION,
         .target_id = situation->id
@@ -1089,6 +1090,100 @@ static void CheckCharacterPersistence(char *error, size_t error_capacity)
     RemoveDatabase(path);
 }
 
+static void CheckSocialThreadPersistence(char *error, size_t error_capacity)
+{
+    const char *path = "persistence-social-thread-test.ccsave";
+    RemoveDatabase(path);
+    CcSim original;
+    CcSimInit(&original, UINT32_C(0x50c1a1));
+    CcSituation *mine = NULL;
+    for (int32_t i = 0; i < original.situation_count; ++i) {
+        if (original.situations[i].kind ==
+            CC_SITUATION_MONSTER_EXPEDITION) {
+            mine = &original.situations[i];
+            break;
+        }
+    }
+    CC_CHECK(mine != NULL);
+    const CcCharacter *jory = CcSimSituationAffectedCharacter(
+        &original, mine);
+    const CcCharacter *mara = CcSimSituationSponsorCharacter(
+        &original, mine);
+    CC_CHECK(jory != NULL && mara != NULL);
+    original.player.location_id = jory->current_settlement_id;
+    original.carriage.location_id = original.player.location_id;
+    CcCommand response = {
+        .kind = CC_COMMAND_CHARACTER_RESPONSE,
+        .target_id = mine->id,
+        .amount = CC_CHARACTER_RESPONSE_LISTEN
+    };
+    CC_CHECK(CcSimApply(&original, &response, error, error_capacity));
+    CC_CHECK(CcSimApply(&original, &response, error, error_capacity));
+    response.amount = CC_CHARACTER_RESPONSE_KEEP_CONFIDENCE;
+    CC_CHECK(CcSimApply(&original, &response, error, error_capacity));
+    CC_CHECK(mine->lead_path == CC_LEAD_PATH_CONFIDENCE);
+    uint64_t expected_hash = CcSimHash(&original);
+    CC_CHECK(CcSaveWrite(path, &original, error, error_capacity));
+    CC_CHECK(ReadSqliteInteger(
+                 path, "SELECT COUNT(*) FROM character_relationship;") ==
+             original.relationship_count);
+
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(CcSimHash(&restored) == expected_hash);
+    const CcSituation *restored_mine = CcSimSituation(&restored, mine->id);
+    CC_CHECK(restored_mine != NULL);
+    CC_CHECK(restored_mine->discovery_stage == CC_DISCOVERY_OFFER);
+    CC_CHECK(restored_mine->lead_path == CC_LEAD_PATH_CONFIDENCE);
+    CC_CHECK(restored_mine->witness_character_id ==
+             mine->witness_character_id);
+    const CcCharacter *restored_jory = CcSimCharacter(&restored, jory->id);
+    CC_CHECK(CcCharacterKnows(
+        restored_jory, CC_KNOWLEDGE_OFFER, restored_mine->id));
+    const CcRelationship *restored_relationship = CcSimRelationship(
+        &restored, jory->id, mara->id);
+    CC_CHECK(restored_relationship != NULL);
+    CC_CHECK(restored_relationship->history ==
+             CcSimRelationship(&original, jory->id, mara->id)->history);
+    const CcEvent *lead_event = CcSimEvent(
+        &restored, restored_mine->lead_event_id);
+    CC_CHECK(lead_event != NULL);
+    CC_CHECK(lead_event->actor_id == jory->id);
+    CC_CHECK(lead_event->target_id == restored.player.id);
+    RemoveDatabase(path);
+}
+
+static void CheckSchema18Compatibility(char *error, size_t error_capacity)
+{
+    const char *path = "persistence-legacy-v18-test.ccsave";
+    RemoveDatabase(path);
+    CcSim legacy;
+    CcSimInit(&legacy, UINT32_C(0x1e9ac18));
+    CcSituation *mine = NULL;
+    for (int32_t i = 0; i < legacy.situation_count; ++i) {
+        if (legacy.situations[i].kind ==
+            CC_SITUATION_MONSTER_EXPEDITION) {
+            mine = &legacy.situations[i];
+            break;
+        }
+    }
+    CC_CHECK(mine != NULL);
+    legacy.player.accepted_situation_id = mine->id;
+    legacy.schema_version = 18U;
+    legacy.generator_version = 17U;
+    CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    const CcSituation *restored_mine = CcSimSituation(&restored, mine->id);
+    CC_CHECK(restored_mine != NULL);
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored_mine->discovery_stage == CC_DISCOVERY_OFFER);
+    CC_CHECK(restored.player.accepted_situation_id == restored_mine->id);
+    CC_CHECK(restored.relationship_count >= 4);
+    CC_CHECK(CcSimValidate(&restored, error, error_capacity));
+    RemoveDatabase(path);
+}
+
 int main(void)
 {
     const char *path = "persistence-test.ccsave";
@@ -1135,12 +1230,14 @@ int main(void)
     CheckSchema15Compatibility(error, sizeof(error));
     CheckSchema16Compatibility(error, sizeof(error));
     CheckSchema17Compatibility(error, sizeof(error));
+    CheckSchema18QuestCompatibility(error, sizeof(error));
     CheckSchema18Compatibility(error, sizeof(error));
     CheckDiplomacyPersistence(error, sizeof(error));
     CheckJournalRecovery(error, sizeof(error));
     CheckJournalCheckpointAndTamper(error, sizeof(error));
     CheckLegacyJournalMigration(error, sizeof(error));
     CheckCharacterPersistence(error, sizeof(error));
+    CheckSocialThreadPersistence(error, sizeof(error));
     CcCommand command = {
         .kind = CC_COMMAND_TRAVEL,
         .target_id = original.settlements[1].id

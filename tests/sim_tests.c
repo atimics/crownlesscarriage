@@ -54,7 +54,7 @@ static CcSituation *PreparePromisedJourney(CcSim *sim, char *error,
     situation->progress = 0;
     situation->reward = 20;
     situation->deadline_day = sim->current_day + 40;
-    sim->player.cargo[CC_GOOD_FOOD] = 1;
+    sim->player.cargo[CC_GOOD_FOOD] = 0;
     CcCommand accept = {
         .kind = CC_COMMAND_ACCEPT_SITUATION,
         .target_id = situation->id
@@ -92,8 +92,15 @@ int main(void)
 
     CcSim character_sim;
     CcSimInit(&character_sim, UINT32_C(0xc4a4ac7e));
-    CcSituation *personal_situation = FirstActiveSituation(
-        &character_sim, -1);
+    CcSituation *personal_situation = NULL;
+    for (int32_t i = 0; i < character_sim.situation_count; ++i) {
+        if (character_sim.situations[i].status == CC_SITUATION_ACTIVE &&
+            character_sim.situations[i].kind !=
+                CC_SITUATION_RELIEF_DELIVERY) {
+            personal_situation = &character_sim.situations[i];
+            break;
+        }
+    }
     CC_CHECK(personal_situation != NULL);
     const CcCharacter *personal_character =
         CcSimSituationAffectedCharacter(&character_sim, personal_situation);
@@ -501,6 +508,110 @@ int main(void)
     CC_CHECK(CcSimAcceptedSituation(&commitment) == NULL &&
              first_charter->status == CC_SITUATION_ACTIVE);
 
+    CcSim blocked_loading;
+    CcSimInit(&blocked_loading, UINT32_C(0xb0ced));
+    CcSituation *blocked_relief = NULL;
+    for (int32_t i = 0; i < blocked_loading.situation_count; ++i) {
+        if (blocked_loading.situations[i].kind ==
+            CC_SITUATION_RELIEF_DELIVERY) {
+            blocked_relief = &blocked_loading.situations[i];
+            break;
+        }
+    }
+    CC_CHECK(blocked_relief != NULL);
+    blocked_loading.player.cargo[CC_GOOD_TOOLS] =
+        blocked_loading.player.cargo_capacity;
+    CC_CHECK(CcPlayerCargoUsed(&blocked_loading.player) ==
+             blocked_loading.player.cargo_capacity);
+    CcSettlement *blocked_origin = CcSimSettlementMutable(
+        &blocked_loading,
+        CcSimSituationOfferSettlementId(&blocked_loading, blocked_relief));
+    CC_CHECK(blocked_origin != NULL);
+    int32_t blocked_origin_food = blocked_origin->stock[CC_GOOD_FOOD];
+    CcCommand blocked_accept = {
+        .kind = CC_COMMAND_ACCEPT_SITUATION,
+        .target_id = blocked_relief->id
+    };
+    CC_CHECK(!CcSimApply(&blocked_loading, &blocked_accept,
+                         error, sizeof(error)));
+    CC_CHECK(strstr(error, "Clear cargo space") != NULL);
+    CC_CHECK(blocked_loading.player.accepted_situation_id == 0U);
+    CC_CHECK(blocked_loading.player.cargo[CC_GOOD_FOOD] == 0);
+    CC_CHECK(blocked_origin->stock[CC_GOOD_FOOD] == blocked_origin_food);
+
+    CcSim empty_granary;
+    CcSimInit(&empty_granary, UINT32_C(0x6a6a));
+    CcSituation *unfunded_relief = NULL;
+    for (int32_t i = 0; i < empty_granary.situation_count; ++i) {
+        if (empty_granary.situations[i].kind ==
+            CC_SITUATION_RELIEF_DELIVERY) {
+            unfunded_relief = &empty_granary.situations[i];
+            break;
+        }
+    }
+    CC_CHECK(unfunded_relief != NULL);
+    CcSettlement *unfunded_origin = CcSimSettlementMutable(
+        &empty_granary,
+        CcSimSituationOfferSettlementId(&empty_granary, unfunded_relief));
+    CC_CHECK(unfunded_origin != NULL);
+    unfunded_origin->stock[CC_GOOD_FOOD] = unfunded_relief->quantity - 1;
+    CcCommand unfunded_accept = {
+        .kind = CC_COMMAND_ACCEPT_SITUATION,
+        .target_id = unfunded_relief->id
+    };
+    CC_CHECK(!CcSimApply(&empty_granary, &unfunded_accept,
+                         error, sizeof(error)));
+    CC_CHECK(strstr(error, "granary") != NULL);
+    CC_CHECK(empty_granary.player.accepted_situation_id == 0U);
+    CC_CHECK(empty_granary.player.cargo[CC_GOOD_FOOD] == 0);
+
+    CcSim remote_relief;
+    CcSimInit(&remote_relief, UINT32_C(0x4e6f7465));
+    CcSituation *remote_offer = NULL;
+    for (int32_t i = 0; i < remote_relief.situation_count; ++i) {
+        if (remote_relief.situations[i].kind ==
+            CC_SITUATION_RELIEF_DELIVERY) {
+            remote_offer = &remote_relief.situations[i];
+            break;
+        }
+    }
+    CC_CHECK(remote_offer != NULL);
+    const CcCharacter *remote_affected =
+        CcSimSituationAffectedCharacter(&remote_relief, remote_offer);
+    CC_CHECK(remote_affected != NULL);
+    remote_relief.player.location_id =
+        remote_affected->current_settlement_id;
+    remote_relief.carriage.location_id =
+        remote_relief.player.location_id;
+    int32_t remote_origin_slot = -1;
+    CcId remote_origin_id = CcSimSituationOfferSettlementId(
+        &remote_relief, remote_offer);
+    for (int32_t i = 0; i < remote_relief.settlement_count; ++i) {
+        if (remote_relief.settlements[i].id == remote_origin_id) {
+            remote_origin_slot = i;
+            break;
+        }
+    }
+    CC_CHECK(remote_origin_slot >= 0);
+    int32_t remote_origin_food =
+        remote_relief.settlements[remote_origin_slot].stock[CC_GOOD_FOOD];
+    CcCommand remote_listen = {
+        .kind = CC_COMMAND_CHARACTER_RESPONSE,
+        .target_id = remote_offer->id,
+        .amount = CC_CHARACTER_RESPONSE_LISTEN
+    };
+    CC_CHECK(CcSimApply(&remote_relief, &remote_listen,
+                        error, sizeof(error)));
+    CcCommand remote_pledge = remote_listen;
+    remote_pledge.amount = CC_CHARACTER_RESPONSE_PLEDGE_HELP;
+    CC_CHECK(!CcSimApply(&remote_relief, &remote_pledge,
+                         error, sizeof(error)));
+    CC_CHECK(strstr(error, "Return to Mara") != NULL);
+    CC_CHECK(remote_relief.player.accepted_situation_id == 0U);
+    CC_CHECK(remote_relief.player.cargo[CC_GOOD_FOOD] == 0);
+    CC_CHECK(remote_relief.settlements[remote_origin_slot]
+                 .stock[CC_GOOD_FOOD] == remote_origin_food);
+
     CcSim laundering;
     CcSimInit(&laundering, UINT32_C(0x1a0d3e));
     CcSituation *delivery = NULL;
@@ -520,6 +631,7 @@ int main(void)
     laundering.player.location_id = delivery->target_id;
     laundering.carriage.location_id = delivery->target_id;
     laundering.player.coins = 500;
+    laundering.player.cargo[CC_GOOD_FOOD] = 0;
     CcCommand local_food = {
         .kind = CC_COMMAND_TRADE,
         .good = CC_GOOD_FOOD,
@@ -553,7 +665,7 @@ int main(void)
     washed_delivery->progress = 0;
     washed_delivery->deadline_day = washed_load.current_day + 60;
     washed_load.player.coins = 500;
-    washed_load.player.cargo[CC_GOOD_FOOD] = 1;
+    washed_load.player.cargo[CC_GOOD_FOOD] = 0;
     washed_load.routes[0].security = 100;
     washed_load.routes[0].condition = 100;
     washed_load.routes[6].security = 100;
