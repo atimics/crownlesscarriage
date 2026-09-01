@@ -45,10 +45,43 @@ pull requests and publishes `main` via GitHub Pages.
 | --- | --- | --- |
 | `crownless_carriage` | 3D client (macOS bundle on Apple; WASM site on the web preset) | `--screen-first-hero` / `--old-hero` |
 | `crownless_metagame_playtest` | Headless world REPL | `--seed N` |
+| `crownless_agent_courier` | Bounded, journaled interface for an external agent | `--journal PATH [--seed N \| --resume] [--counterfactual]` |
 | `crownless_sim_runner` | Run a world for N years, print summary, optionally save | `--seed N --years N --save PATH --detail` |
 | `crownless_sim_metrics` | Aggregate multi-seed, multi-year statistics | `--seeds N --years N` |
 | `crownless_benchmark` | Performance benchmarks with hard budgets | `--quick --assert-budget --sim-seeds N --sim-years N --agents N --frames N` |
 | `make run_benchmarks` | Build and run the benchmark suite | — |
+
+## Agent courier protocol
+
+`crownless_agent_courier` lets an LLM or another process occupy the same
+courier role as a human REPL player. It does not expose the simulation
+struct. Each turn it writes one JSON object containing the sequence number,
+game day, simulation hash, and a bounded observation: the current place,
+local talk and rumors, the carried promise and cargo, reachable roads, and
+consequences witnessed there. The controller replies with one normal REPL
+command on standard input.
+
+Every accepted world action and every time advance goes through the existing
+append-only SQLite journal. The journal path must be new unless `--resume` is
+used, so a controller cannot silently replace an earlier run.
+
+```sh
+printf 'talk 1\naccept 1\ntravel 1\nquit\n' |
+  ./out/build/play/crownless_agent_courier \
+    --seed 42 --journal /tmp/courier-42.ccsave --counterfactual
+
+./out/build/play/crownless_agent_courier \
+  --journal /tmp/courier-42.ccsave --resume
+```
+
+Output uses JSON Lines with alternating `observation` and `result` records.
+Each result says whether the command was accepted and carries the resulting
+state hash. Global economy, kingdom, war, faction, history, and save-control
+commands are rejected at this boundary; the courier must act from what could
+be known in the fiction. With `--counterfactual`, the process emits one final
+record after the session closes. It advances the same seed to the same day
+with the company taking no actions, then reports settlement, commitment,
+faction, and event-ledger differences between the two branches.
 
 ## Layout
 

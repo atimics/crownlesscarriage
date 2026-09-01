@@ -60,6 +60,73 @@ int main(void)
     CC_CHECK(metagame.sim.player.location_id == metagame.sim.settlements[0].id);
     CC_CHECK(metagame.sim.player.coins == 75);
 
+    CcMetagame agent_view;
+    CcMetagameInit(&agent_view, UINT32_C(42));
+    CcMetagameAgentObserve(&agent_view, output, sizeof(output));
+    CC_CHECK(strstr(output, "You are the Crownless Company courier") != NULL);
+    CC_CHECK(strstr(output, "what people at your present place") != NULL);
+    CC_CHECK(strstr(output, "Mara Venn") != NULL);
+    CC_CHECK(strstr(output, "Global ledgers") != NULL);
+    CC_CHECK(strstr(output, "THE KINGDOMS OF MEN") == NULL);
+    CC_CHECK(strstr(output, "Crown strength") == NULL);
+    CC_CHECK(strstr(output, "covenant") == NULL);
+    uint64_t bounded_hash = CcSimHash(&agent_view.sim);
+    CC_CHECK(!CcMetagameAgentExecute(
+        &agent_view, "kingdoms", output, sizeof(output)));
+    CC_CHECK(strstr(output, "courier boundary rejects") != NULL);
+    CC_CHECK(CcSimHash(&agent_view.sim) == bounded_hash);
+    CC_CHECK(!CcMetagameAgentExecute(
+        &agent_view, "dragon steal 1", output, sizeof(output)));
+    CC_CHECK(!CcMetagameAgentExecute(
+        &agent_view, "underroad look", output, sizeof(output)));
+    CC_CHECK(!CcMetagameAgentExecute(
+        &agent_view, "travel 6", output, sizeof(output)));
+    CC_CHECK(CcSimHash(&agent_view.sim) == bounded_hash);
+    CC_CHECK(!CcMetagameAgentExecute(
+        &agent_view, "save hidden.ccsave", output, sizeof(output)));
+    CC_CHECK(CcMetagameAgentExecute(
+        &agent_view, "help", output, sizeof(output)));
+    CC_CHECK(strstr(output, "Send exactly one command") != NULL);
+
+    const char *agent_journal_path =
+        "/tmp/crownless-agent-courier-tests.ccsave";
+    (void)remove(agent_journal_path);
+    CcMetagameInit(&agent_view, UINT32_C(42));
+    CC_CHECK(CcMetagameStartJournal(
+        &agent_view, agent_journal_path, error, sizeof(error)));
+    int32_t journaled_relief = SituationNumber(
+        &agent_view, CC_SITUATION_RELIEF_DELIVERY);
+    char agent_action[64];
+    (void)snprintf(agent_action, sizeof(agent_action),
+                   "accept %d", journaled_relief);
+    CC_CHECK(CcMetagameAgentExecute(
+        &agent_view, agent_action, output, sizeof(output)));
+    CC_CHECK(CcMetagameAgentExecute(
+        &agent_view, "travel 1", output, sizeof(output)));
+    uint64_t journaled_hash = CcSimHash(&agent_view.sim);
+    uint64_t control_hash = 0U;
+    CC_CHECK(CcMetagameAgentCounterfactual(
+        &agent_view, output, sizeof(output), &control_hash));
+    CC_CHECK(strstr(output, "NO-ACTION CONTROL") != NULL);
+    CC_CHECK(strstr(output, "same seed and elapsed days") != NULL);
+    CC_CHECK(strstr(output, "Consequences present only") != NULL);
+    CC_CHECK(control_hash != journaled_hash);
+    CC_CHECK(CcMetagameCloseJournal(
+        &agent_view, error, sizeof(error)));
+    CcMetagameInit(&agent_view, UINT32_C(99));
+    uint64_t replacement_hash = CcSimHash(&agent_view.sim);
+    CC_CHECK(!CcMetagameStartJournal(
+        &agent_view, agent_journal_path, error, sizeof(error)));
+    CC_CHECK(CcSimHash(&agent_view.sim) == replacement_hash);
+    CC_CHECK(CcMetagameResumeJournal(
+        &agent_view, agent_journal_path, error, sizeof(error)));
+    CC_CHECK(CcSimHash(&agent_view.sim) == journaled_hash);
+    CC_CHECK(CcMetagameAgentExecute(
+        &agent_view, "wait 1", output, sizeof(output)));
+    CC_CHECK(CcMetagameCloseJournal(
+        &agent_view, error, sizeof(error)));
+    CC_CHECK(remove(agent_journal_path) == 0);
+
     CcMetagame goblin_ui;
     CcMetagameInit(&goblin_ui, UINT32_C(0x60b11d));
     CC_CHECK(CcMetagameExecute(
