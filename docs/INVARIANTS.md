@@ -19,7 +19,7 @@ minute; travel advances 30 game-minutes per real second, idling advances
 
 ## Save compatibility
 
-`CC_SIM_SCHEMA_VERSION` (20) and `CC_GENERATOR_VERSION` (19) version every
+`CC_SIM_SCHEMA_VERSION` (21) and `CC_GENERATOR_VERSION` (20) version every
 save file and command journal. The policy: **every schema version ever
 shipped stays loadable**. The legacy table in `cc_sim.c` (`legacy_schema`,
 with the per-version branches below it) is the implementation, and
