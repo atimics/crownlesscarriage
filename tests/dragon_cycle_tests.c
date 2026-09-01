@@ -433,6 +433,10 @@ int main(void)
     dragon_host.goblins.members = 12;
     dragon_host.goblins.devotion = 0;
     dragon_host.goblins.hoard_defenses = 0;
+    dragon_host.dragon.body_condition = 10;
+    dragon_host.dragon.crown_strength = 0;
+    dragon_host.dragon.territory_stability = 0;
+    dragon_host.dragon.memory_integrity = 0;
     for (int32_t i = 0; i < dragon_host.settlement_count; ++i) {
         dragon_host.settlements[i].stock[CC_GOOD_FOOD] += 32;
         dragon_host.settlements[i].stock[CC_GOOD_TOOLS] += 8;

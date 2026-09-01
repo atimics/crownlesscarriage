@@ -1426,6 +1426,7 @@ bool CcSimKingdomsAllied(const CcSim *sim, CcId first, CcId second);
 CcKingdomCalling CcSimKingdomCalling(const CcSim *sim, CcId kingdom_id);
 int32_t CcSimKingdomPressure(const CcSim *sim, CcId kingdom_id);
 const char *CcDiplomaticStateName(CcDiplomaticState state);
+bool CcSimRouteCrossesKingdomBorder(const CcSim *sim, CcId route_id);
 bool CcSimRouteCrossesWarBorder(const CcSim *sim, CcId route_id);
 int32_t CcBanditCampServiceCapacity(CcBanditCampSize size);
 bool CcSimLaunchBanditRaid(CcSim *sim, CcId bandit_id,
