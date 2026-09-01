@@ -236,6 +236,10 @@ typedef struct ArtAtmosphereDefinition {
     float wetness;
     float omen;
     float practical_glow;
+    Vector3 character_rim_tint;
+    float character_rim_strength;
+    float horizon_warmth;
+    float moonlight;
 } ArtAtmosphereDefinition;
 
 typedef struct ArtAtmosphereState {
@@ -280,35 +284,35 @@ static const ArtAtmosphereDefinition ART_ATMOSPHERES[] = {
         {1.00f, 1.00f, 1.00f}, {1.00f, 1.00f, 1.00f},
         {47, 44, 61, 255}, 0.10f, 0.10f, 1.00f, 1.00f, 1.00f,
         0.000f, 1.00f, 1.00f, 1.00f, 0.00f, 0.00f, 0.00f, 0.00f,
-        0.05f,
+        0.05f, {0.30f, 0.52f, 0.50f}, 0.76f, 0.16f, 0.00f,
     },
     [CC_LOCAL_ATMOSPHERE_RAINY_OVERCAST] = {
         {-0.20f, 0.92f, 0.22f}, {0.78f, 0.86f, 0.98f},
         {0.90f, 0.97f, 1.07f}, {0.96f, 0.90f, 1.10f},
         {48, 52, 63, 255}, 0.70f, 0.74f, 0.70f, 1.14f, 0.88f,
         -0.035f, 1.34f, 0.38f, 0.84f, 0.82f, 0.36f, 0.82f, 0.00f,
-        0.18f,
+        0.18f, {0.36f, 0.55f, 0.68f}, 0.88f, 0.00f, 0.12f,
     },
     [CC_LOCAL_ATMOSPHERE_AMBER_DUSK] = {
         {-0.70f, 0.36f, 0.30f}, {1.24f, 0.72f, 0.46f},
         {0.84f, 0.78f, 0.92f}, {1.05f, 0.82f, 1.12f},
         {53, 35, 63, 255}, 0.82f, 0.48f, 0.82f, 1.08f, 1.08f,
         -0.020f, 1.36f, 1.58f, 1.05f, 0.00f, 0.10f, 0.00f, 0.00f,
-        0.52f,
+        0.52f, {0.94f, 0.54f, 0.28f}, 1.04f, 0.90f, 0.00f,
     },
     [CC_LOCAL_ATMOSPHERE_MOONLIT_NIGHT] = {
         {-0.30f, 0.48f, -0.82f}, {0.82f, 0.90f, 1.10f},
         {0.90f, 0.94f, 1.06f}, {0.92f, 0.92f, 1.07f},
         {47, 44, 61, 255}, 0.76f, 0.50f, 0.90f, 1.06f, 1.18f,
         -0.015f, 1.20f, 0.78f, 0.92f, 0.00f, 0.12f, 0.04f, 0.00f,
-        0.88f,
+        0.88f, {0.40f, 0.54f, 0.90f}, 1.12f, 0.00f, 0.82f,
     },
     [CC_LOCAL_ATMOSPHERE_DRAGON_OMEN] = {
         {-0.58f, 0.42f, 0.18f}, {0.96f, 0.75f, 0.76f},
         {0.82f, 0.84f, 0.94f}, {0.94f, 0.84f, 1.08f},
         {48, 44, 57, 255}, 0.74f, 0.58f, 0.82f, 1.10f, 1.20f,
         -0.012f, 1.26f, 1.00f, 0.86f, 0.30f, 0.54f, 0.36f, 1.00f,
-        0.46f,
+        0.46f, {0.82f, 0.42f, 0.36f}, 1.02f, 0.22f, 0.18f,
     },
 };
 
@@ -390,6 +394,15 @@ static ArtAtmosphereDefinition ArtAtmosphereMix(
         .omen = ArtAtmosphereMixFloat(from.omen, to.omen, amount),
         .practical_glow = ArtAtmosphereMixFloat(
             from.practical_glow, to.practical_glow, amount),
+        .character_rim_tint = ArtAtmosphereMixVector(
+            from.character_rim_tint, to.character_rim_tint, amount),
+        .character_rim_strength = ArtAtmosphereMixFloat(
+            from.character_rim_strength, to.character_rim_strength,
+            amount),
+        .horizon_warmth = ArtAtmosphereMixFloat(
+            from.horizon_warmth, to.horizon_warmth, amount),
+        .moonlight = ArtAtmosphereMixFloat(
+            from.moonlight, to.moonlight, amount),
     };
 }
 
@@ -10892,6 +10905,8 @@ typedef struct VisualStyleCache {
     int32_t hero_fog_near_location;
     int32_t hero_fog_far_location;
     int32_t hero_ink_strength_location;
+    int32_t hero_rim_tint_location;
+    int32_t hero_rim_strength_location;
     bool hero_ready;
     Shader npc;
     int32_t npc_light_direction_location;
@@ -10905,6 +10920,8 @@ typedef struct VisualStyleCache {
     int32_t npc_palette_ink_location;
     int32_t npc_hero_emphasis_location;
     int32_t npc_hero_head_position_location;
+    int32_t npc_rim_tint_location;
+    int32_t npc_rim_strength_location;
     bool npc_ready;
     Shader npc_skinned;
     int32_t npc_skinned_light_direction_location;
@@ -10919,6 +10936,8 @@ typedef struct VisualStyleCache {
     int32_t npc_skinned_hero_emphasis_location;
     int32_t npc_skinned_hero_head_position_location;
     int32_t npc_skinned_body_skin_remap_location;
+    int32_t npc_skinned_rim_tint_location;
+    int32_t npc_skinned_rim_strength_location;
     bool npc_skinned_ready;
     ArtAtmosphereDefinition presentation_atmosphere;
     float presentation_practical_glow;
@@ -13358,6 +13377,10 @@ static void LoadVisualStyle(void)
                 visual_style.hero, "fogFar");
             visual_style.hero_ink_strength_location = GetShaderLocation(
                 visual_style.hero, "inkStrength");
+            visual_style.hero_rim_tint_location = GetShaderLocation(
+                visual_style.hero, "characterRimTint");
+            visual_style.hero_rim_strength_location = GetShaderLocation(
+                visual_style.hero, "characterRimStrength");
             float ink_strength = CC_HERO_INK_STRENGTH;
             SetShaderValue(visual_style.hero,
                            visual_style.hero_ink_strength_location,
@@ -13399,6 +13422,10 @@ static void LoadVisualStyle(void)
                 visual_style.npc, "heroEmphasis");
             visual_style.npc_hero_head_position_location = GetShaderLocation(
                 visual_style.npc, "heroHeadPosition");
+            visual_style.npc_rim_tint_location = GetShaderLocation(
+                visual_style.npc, "characterRimTint");
+            visual_style.npc_rim_strength_location = GetShaderLocation(
+                visual_style.npc, "characterRimStrength");
             visual_style.npc_ready = true;
         } else {
             visual_style.npc = (Shader){0};
@@ -13442,6 +13469,12 @@ static void LoadVisualStyle(void)
                 visual_style.npc_skinned_body_skin_remap_location =
                     GetShaderLocation(visual_style.npc_skinned,
                                       "bodySkinRemap");
+                visual_style.npc_skinned_rim_tint_location =
+                    GetShaderLocation(visual_style.npc_skinned,
+                                      "characterRimTint");
+                visual_style.npc_skinned_rim_strength_location =
+                    GetShaderLocation(visual_style.npc_skinned,
+                                      "characterRimStrength");
                 visual_style.npc_skinned_ready = true;
             } else {
                 visual_style.npc_skinned = (Shader){0};
@@ -21087,6 +21120,41 @@ static void DrawTargetAtmosphere(RenderTexture2D target, float clock)
     int32_t width = target.texture.width;
     int32_t height = target.texture.height;
 
+    /* These broad transparent washes are painted into the low-resolution
+       world target before the palette pass. They behave like a traditional
+       animation background: dusk warms the horizon while moonlight cools
+       the upper planes, without adding a smooth full-resolution effect. */
+    if (atmosphere.horizon_warmth > 0.01f) {
+        float warmth = atmosphere.horizon_warmth;
+        int32_t horizon_y = height * 2 / 5;
+        int32_t horizon_height = height * 2 / 5;
+        Color clear = Fade(WORLD_GOLD, 0.0f);
+        Color warm = Fade(WORLD_GOLD, warmth * 0.065f);
+        DrawRectangleGradientV(0, horizon_y, width, horizon_height,
+                               clear, warm);
+        DrawRectangleGradientV(0, horizon_y + horizon_height,
+                               width, height - horizon_y - horizon_height,
+                               warm, clear);
+        DrawTriangle((Vector2){0.0f, (float)height * 0.36f},
+                     (Vector2){(float)width * 0.62f,
+                               (float)height * 0.58f},
+                     (Vector2){(float)width * 0.18f,
+                               (float)height * 0.70f},
+                     Fade(CC_STYLE_DANGER, warmth * 0.026f));
+    }
+    if (atmosphere.moonlight > 0.01f) {
+        float moonlight = atmosphere.moonlight;
+        Color clear = Fade(WORLD_TEAL, 0.0f);
+        Color cool = Fade(WORLD_TEAL, moonlight * 0.050f);
+        DrawRectangleGradientV(0, 0, width, height * 3 / 4,
+                               cool, clear);
+        DrawTriangle((Vector2){(float)width * 0.58f, 0.0f},
+                     (Vector2){(float)width * 0.94f, 0.0f},
+                     (Vector2){(float)width * 0.70f,
+                               (float)height * 0.76f},
+                     Fade(CC_STYLE_VIOLET, moonlight * 0.030f));
+    }
+
     if (atmosphere.omen > 0.01f) {
         Color cloud = Fade(CC_VISUAL_PALETTE.stone.shadow,
                            atmosphere.omen * 0.20f);
@@ -21273,6 +21341,12 @@ static void BeginWorldLighting(Camera3D camera,
     float fog_far = profile->fog_far * atmosphere.fog_distance_scale;
     float depth_strength = profile->depth_strength * atmosphere.depth_scale;
     float focal_contrast = profile->focal_contrast * atmosphere.focal_scale;
+    float character_rim_tint[3] = {
+        atmosphere.character_rim_tint.x,
+        atmosphere.character_rim_tint.y,
+        atmosphere.character_rim_tint.z,
+    };
+    float character_rim_strength = atmosphere.character_rim_strength;
     float focal_point[3] = {composition->focal_point.x,
                             composition->focal_point.y,
                             composition->focal_point.z};
@@ -21425,6 +21499,12 @@ static void BeginWorldLighting(Camera3D camera,
                        visual_style.hero_fog_far_location,
                        &fog_far,
                        SHADER_UNIFORM_FLOAT);
+        SetShaderValue(visual_style.hero,
+                       visual_style.hero_rim_tint_location,
+                       character_rim_tint, SHADER_UNIFORM_VEC3);
+        SetShaderValue(visual_style.hero,
+                       visual_style.hero_rim_strength_location,
+                       &character_rim_strength, SHADER_UNIFORM_FLOAT);
     }
     if (visual_style.npc_ready) {
         SetShaderValue(visual_style.npc,
@@ -21447,6 +21527,12 @@ static void BeginWorldLighting(Camera3D camera,
                        visual_style.npc_fog_far_location,
                        &fog_far,
                        SHADER_UNIFORM_FLOAT);
+        SetShaderValue(visual_style.npc,
+                       visual_style.npc_rim_tint_location,
+                       character_rim_tint, SHADER_UNIFORM_VEC3);
+        SetShaderValue(visual_style.npc,
+                       visual_style.npc_rim_strength_location,
+                       &character_rim_strength, SHADER_UNIFORM_FLOAT);
     }
     if (visual_style.npc_skinned_ready) {
         SetShaderValue(visual_style.npc_skinned,
@@ -21467,6 +21553,12 @@ static void BeginWorldLighting(Camera3D camera,
         SetShaderValue(visual_style.npc_skinned,
                        visual_style.npc_skinned_fog_far_location,
                        &fog_far, SHADER_UNIFORM_FLOAT);
+        SetShaderValue(visual_style.npc_skinned,
+                       visual_style.npc_skinned_rim_tint_location,
+                       character_rim_tint, SHADER_UNIFORM_VEC3);
+        SetShaderValue(visual_style.npc_skinned,
+                       visual_style.npc_skinned_rim_strength_location,
+                       &character_rim_strength, SHADER_UNIFORM_FLOAT);
     }
     BeginShaderMode(visual_style.world);
 }
