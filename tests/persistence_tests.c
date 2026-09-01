@@ -1290,6 +1290,11 @@ int main(void)
                    charter->affected_name);
     original.goblins.cohesion = 77;
     original.goblins.expeditions_intercepted = 3;
+    if (original.bandits[0].raid_phase == CC_BANDIT_RAID_IDLE) {
+        CC_CHECK(CcSimLaunchBanditRaid(&original, original.bandits[0].id,
+                                       error, sizeof(error)));
+    }
+    CC_CHECK(original.bandits[0].raid_phase != CC_BANDIT_RAID_IDLE);
     uint64_t expected = CcSimHash(&original);
     CC_CHECK(CcSaveWrite(path, &original, error, sizeof(error)));
 
@@ -1321,9 +1326,16 @@ int main(void)
     CC_CHECK(restored.settlements[4].service_project_days ==
              original.settlements[4].service_project_days);
     CC_CHECK(restored.bandits[0].camp_size == original.bandits[0].camp_size);
+    CC_CHECK(restored.bandits[0].service_mask ==
+             original.bandits[0].service_mask);
     CC_CHECK(restored.bandits[0].raid_phase == original.bandits[0].raid_phase);
     CC_CHECK(restored.bandits[0].raid_target_id ==
              original.bandits[0].raid_target_id);
+    CC_CHECK(restored.bandits[0].raid_good == original.bandits[0].raid_good);
+    CC_CHECK(restored.bandits[0].raid_quantity ==
+             original.bandits[0].raid_quantity);
+    CC_CHECK(restored.bandits[0].raid_days_remaining ==
+             original.bandits[0].raid_days_remaining);
     CC_CHECK(restored.bandits[0].raids_completed ==
              original.bandits[0].raids_completed);
     CC_CHECK(CcSimAcceptedSituation(&restored) != NULL);

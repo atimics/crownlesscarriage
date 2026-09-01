@@ -1560,6 +1560,17 @@ bool CcSimRouteCrossesWarBorder(const CcSim *sim, CcId route_id)
         CcSimKingdomsAtWar(sim, from->kingdom_id, to->kingdom_id);
 }
 
+bool CcSimRouteCrossesKingdomBorder(const CcSim *sim, CcId route_id)
+{
+    const CcRoute *route = CcSimRoute(sim, route_id);
+    const CcSettlement *from = route != NULL ?
+        CcSimSettlement(sim, route->from_id) : NULL;
+    const CcSettlement *to = route != NULL ?
+        CcSimSettlement(sim, route->to_id) : NULL;
+    return from != NULL && to != NULL &&
+        from->kingdom_id != to->kingdom_id;
+}
+
 int32_t CcSimWarBurdenAtSettlement(const CcSim *sim, CcId settlement_id)
 {
     const CcSettlement *place = CcSimSettlement(sim, settlement_id);
@@ -5436,7 +5447,8 @@ static bool FindTradePath(const CcSim *sim, CcId from_id, CcId to_id,
                           CcGood good,
                           int32_t *first_route_slot, CcId *first_hop_id,
                           int32_t *total_cost,
-                          const int32_t route_used[CC_MAX_ROUTES])
+                          const int32_t route_used[CC_MAX_ROUTES],
+                          bool allow_kingdom_borders)
 {
     int32_t source = SettlementSlotById(sim, from_id);
     int32_t target = SettlementSlotById(sim, to_id);
@@ -5467,8 +5479,10 @@ static bool FindTradePath(const CcSim *sim, CcId from_id, CcId to_id,
         CcId current_id = sim->settlements[current].id;
         for (int32_t route_slot = 0; route_slot < sim->route_count; ++route_slot) {
             const CcRoute *route = &sim->routes[route_slot];
-            bool war_blockade = CcSimRouteCrossesWarBorder(sim, route->id) &&
-                                !route->smuggler_route;
+            if (!allow_kingdom_borders &&
+                CcSimRouteCrossesKingdomBorder(sim, route->id)) continue;
+            bool war_border = CcSimRouteCrossesWarBorder(sim, route->id) &&
+                              !route->smuggler_route;
             int32_t effective_capacity = TradeRouteCapacity(sim, route);
             if (route_used != NULL && route_used[route_slot] >= effective_capacity) continue;
             CcId neighbor_id = route->from_id == current_id ? route->to_id :
@@ -5478,7 +5492,7 @@ static bool FindTradePath(const CcSim *sim, CcId from_id, CcId to_id,
                 CcSettlementIsAbandoned(&sim->settlements[neighbor])) continue;
             int32_t edge_cost = route->travel_days * 10 +
                                 CcSimRouteDanger(sim, route->id) +
-                                (war_blockade ? 25 : 0);
+                                (war_border ? 25 : 0);
             if (distance[current] > INT_MAX - edge_cost) continue;
             int32_t candidate = distance[current] + edge_cost;
             if (candidate >= distance[neighbor]) continue;
@@ -5563,7 +5577,7 @@ static void UpdateShipments(CcSim *sim)
             CcId next_hop_id = 0U;
             if (FindTradePath(sim, hop->id, final_id, shipment_good,
                               &next_route_slot,
-                              &next_hop_id, NULL, NULL)) {
+                              &next_hop_id, NULL, NULL, false)) {
                 CcRoute *next_route = &sim->routes[next_route_slot];
                 shipment->origin_id = hop->id;
                 shipment->destination_id = next_hop_id;
@@ -5653,6 +5667,8 @@ static void CreateTradeShipment(CcSim *sim, int32_t route_slot, CcId next_hop_id
                                 int32_t route_used[CC_MAX_ROUTES])
 {
     CcRoute *route = &sim->routes[route_slot];
+    if (CcSimRouteCrossesKingdomBorder(sim, route->id) ||
+        origin->kingdom_id != final_destination->kingdom_id) return;
     int32_t surplus = TradeSurplus(
         sim, origin, final_destination, good);
     int32_t incoming = CcSimIncomingGood(sim, final_destination->id, good);
@@ -5792,7 +5808,8 @@ static void PlanTrade(CcSim *sim)
                     int32_t path_cost = 0;
                     if (!FindTradePath(sim, from->id, to->id,
                                        (CcGood)good, &route_slot,
-                                       &next_hop, &path_cost, route_used)) continue;
+                                       &next_hop, &path_cost, route_used,
+                                       false)) continue;
                     bool military_supply = WarWeeklyNeed(
                         sim, to, (CcGood)good) > 0;
                     CcMoney buyer_coins = military_supply ?
@@ -7420,7 +7437,7 @@ static void StartCourierLeg(CcSim *sim, CcCourier *courier)
     CcId next_hop = 0U;
     if (!FindTradePath(sim, courier->current_settlement_id,
                        courier->destination_settlement_id, CC_GOOD_FOOD,
-                       &route_slot, &next_hop, NULL, NULL)) {
+                       &route_slot, &next_hop, NULL, NULL, true)) {
         courier->status = CC_COURIER_LOST;
         char text[CC_EVENT_TEXT_CAPACITY];
         (void)snprintf(text, sizeof(text),
@@ -10137,7 +10154,7 @@ static void CreateJourneyTraffic(CcSim *sim,
         sim, journey->destination_id);
     const CcRoute *route = CcSimRoute(sim, journey->route_id);
     if (origin == NULL || destination == NULL || route == NULL ||
-        CcSimRouteCrossesWarBorder(sim, route->id)) return;
+        CcSimRouteCrossesKingdomBorder(sim, route->id)) return;
     CcGood good = CC_GOOD_FOOD;
     for (int32_t candidate = 1; candidate < CC_GOOD_COUNT; ++candidate) {
         if (origin->stock[candidate] > origin->stock[good]) {

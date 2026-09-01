@@ -172,7 +172,6 @@ int main(void)
     famine_convoy.hoard_raiders.cooldown_days = 1000;
     CcSettlement *source = &famine_convoy.settlements[0];
     CcSettlement *hungry = &famine_convoy.settlements[1];
-    hungry->kingdom_id = famine_convoy.kingdoms[1].id;
     for (int32_t kingdom = 0;
          kingdom < famine_convoy.kingdom_count; ++kingdom) {
         famine_convoy.kingdoms[kingdom].treasury = 0;
@@ -200,6 +199,15 @@ int main(void)
     famine_convoy.routes[0].condition = 10;
     famine_convoy.routes[0].security = 100;
     famine_convoy.routes[0].smuggler_route = false;
+    CcSim blocked_famine = famine_convoy;
+    blocked_famine.settlements[1].kingdom_id =
+        blocked_famine.kingdoms[1].id;
+    CcSimAdvanceDays(&blocked_famine, 6);
+    CC_CHECK(blocked_famine.shipment_count == 0);
+    CcSimAdvanceDays(&blocked_famine, 21);
+    CC_CHECK(blocked_famine.routes[0].smuggler_route);
+    CC_CHECK(!blocked_famine.routes[0].closed);
+    CC_CHECK(blocked_famine.shipment_count == 0);
     CcMoney gold_before_credit = CcSimTrackedGold(&famine_convoy);
     CcMoney reserve_before_credit = famine_convoy.iron_ledger_reserve;
     CcSimAdvanceDays(&famine_convoy, 6);
@@ -207,7 +215,7 @@ int main(void)
     CC_CHECK(famine_convoy.shipments[0].good == CC_GOOD_FOOD);
     CC_CHECK(famine_convoy.shipments[0].status == CC_SHIPMENT_TRAVELLING);
     CC_CHECK(famine_convoy.routes[0].closed);
-    CC_CHECK(famine_convoy.kingdoms[1].iron_ledger_debt > 0);
+    CC_CHECK(famine_convoy.kingdoms[0].iron_ledger_debt > 0);
     CC_CHECK(famine_convoy.iron_ledger_reserve < reserve_before_credit);
     CC_CHECK(CcSimTrackedGold(&famine_convoy) == gold_before_credit);
     bool loan_recorded = false;
@@ -218,10 +226,6 @@ int main(void)
         }
     }
     CC_CHECK(loan_recorded);
-    CcSimAdvanceDays(&famine_convoy, 21);
-    CC_CHECK(famine_convoy.routes[0].smuggler_route);
-    CC_CHECK(!famine_convoy.routes[0].closed);
-
     CcSim mine;
     place = IsolatedSettlement(&mine);
     place->service_mask |= Service(CC_SERVICE_MINE);

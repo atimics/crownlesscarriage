@@ -14,6 +14,25 @@ static int32_t CountEvents(const CcSim *sim, CcEventKind kind)
     return count;
 }
 
+static bool ShipmentsStayInsideKingdoms(const CcSim *sim)
+{
+    for (int32_t i = 0; i < sim->shipment_count; ++i) {
+        const CcShipment *shipment = &sim->shipments[i];
+        const CcSettlement *origin = CcSimSettlement(sim, shipment->origin_id);
+        const CcSettlement *destination = CcSimSettlement(
+            sim, shipment->destination_id);
+        const CcSettlement *final = CcSimSettlement(
+            sim, shipment->final_destination_id);
+        if (origin == NULL || destination == NULL || final == NULL ||
+            origin->kingdom_id != destination->kingdom_id ||
+            origin->kingdom_id != final->kingdom_id ||
+            CcSimRouteCrossesKingdomBorder(sim, shipment->route_id)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 int main(void)
 {
     CcSim first;
@@ -66,6 +85,8 @@ int main(void)
     }
     CC_CHECK(CcSimRouteCrossesWarBorder(&first, first.routes[6].id));
     CC_CHECK(!CcSimRouteCrossesWarBorder(&first, first.routes[0].id));
+    CC_CHECK(CcSimRouteCrossesKingdomBorder(&first, first.routes[6].id));
+    CC_CHECK(!CcSimRouteCrossesKingdomBorder(&first, first.routes[0].id));
     CC_CHECK(CcSettlementHasService(&first.settlements[4],
                                     CC_SERVICE_GUILDHALL));
     CC_CHECK(!CcSettlementHasService(&first.settlements[4],
@@ -145,6 +166,8 @@ int main(void)
     CC_CHECK(CcSimApply(&carriage, &cross_border, error, sizeof(error)));
 
     CcSimAdvanceDays(&first, 55);
+    CC_CHECK(first.shipment_count > 0);
+    CC_CHECK(ShipmentsStayInsideKingdoms(&first));
     for (int32_t i = 0; i < first.shipment_count; ++i) {
         const CcShipment *shipment = &first.shipments[i];
         const CcSettlement *origin = CcSimSettlement(&first, shipment->origin_id);
@@ -161,6 +184,38 @@ int main(void)
         CC_CHECK(shipment_route->from_id == destination->id ||
                  shipment_route->to_id == destination->id);
     }
+
+    CcSim peaceful_smuggling;
+    CcSimInit(&peaceful_smuggling, UINT32_C(0x15b04de7));
+    CcRoute *foreign_route = &peaceful_smuggling.routes[6];
+    const CcSettlement *foreign_from = CcSimSettlement(
+        &peaceful_smuggling, foreign_route->from_id);
+    const CcSettlement *foreign_to = CcSimSettlement(
+        &peaceful_smuggling, foreign_route->to_id);
+    CC_CHECK(foreign_from != NULL && foreign_to != NULL);
+    int32_t foreign_from_kingdom = -1;
+    int32_t foreign_to_kingdom = -1;
+    for (int32_t i = 0; i < peaceful_smuggling.kingdom_count; ++i) {
+        if (peaceful_smuggling.kingdoms[i].id == foreign_from->kingdom_id) {
+            foreign_from_kingdom = i;
+        }
+        if (peaceful_smuggling.kingdoms[i].id == foreign_to->kingdom_id) {
+            foreign_to_kingdom = i;
+        }
+    }
+    CC_CHECK(foreign_from_kingdom >= 0 && foreign_to_kingdom >= 0);
+    peaceful_smuggling.diplomacy[foreign_from_kingdom][foreign_to_kingdom] =
+        CC_DIPLOMACY_PEACE;
+    peaceful_smuggling.diplomacy[foreign_to_kingdom][foreign_from_kingdom] =
+        CC_DIPLOMACY_PEACE;
+    foreign_route->smuggler_route = true;
+    CC_CHECK(!CcSimRouteCrossesWarBorder(&peaceful_smuggling,
+                                         foreign_route->id));
+    CC_CHECK(CcSimRouteCrossesKingdomBorder(&peaceful_smuggling,
+                                            foreign_route->id));
+    CcSimAdvanceDays(&peaceful_smuggling, 55);
+    CC_CHECK(peaceful_smuggling.shipment_count > 0);
+    CC_CHECK(ShipmentsStayInsideKingdoms(&peaceful_smuggling));
 
     int32_t initial_support[CC_MAX_FACTIONS];
     for (int32_t i = 0; i < first.faction_count; ++i) {
