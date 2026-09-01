@@ -7,6 +7,7 @@
 #include "locomotion/cc_multileg.h"
 #include "locomotion/cc_robotics.h"
 #include "sim/cc_sim.h"
+#include "world/cc_world.h"
 
 #include "raylib.h"
 
@@ -401,6 +402,7 @@ typedef struct CcLocalRendererStats {
 
 void CcLocalTerrainSetSeed(uint32_t seed);
 void CcLocalBindPlace(const CcSim *sim);
+void CcLocalBindOpenWorld(const CcWorldStream *stream);
 float CcLocalTerrainHeightAt(float x, float z);
 Vector3 CcLocalTerrainNormalAt(float x, float z);
 
@@ -540,6 +542,12 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                          bool conversation,
                          const CcLocalConvoyState *convoy, float clock,
                          RenderTexture2D target, Rectangle destination);
+void CcLocalDrawOpenWorld3D(const CcSim *sim,
+                            const CcWorldStream *stream,
+                            const CcLocalAgent *agent,
+                            const CcLocalCourse *course,
+                            float clock, RenderTexture2D target,
+                            Rectangle destination);
 void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
                        const CcLocalCourse *course, bool travelling,
                        bool parley, const CcLocalConvoyState *convoy,

@@ -5,6 +5,7 @@
 #include "client/cc_creature_catalog.h"
 #include "client/cc_overlay.h"
 #include "client/cc_visual_style.h"
+#include "world/cc_world.h"
 
 #include "locomotion/cc_creature.h"
 #include "locomotion/cc_humanoid_skin.h"
@@ -82,6 +83,7 @@ static bool draw_hero_rig_debug = false;
 static CcLocalOpeningStep active_opening_step = CC_LOCAL_OPENING_COMPLETE;
 static CcLocalMovementPreview renderer_movement_preview = {0};
 static CcLocalAgent movement_probe_agent_scratch = {0};
+static const CcWorldStream *active_world_stream = NULL;
 
 typedef enum BridgeCheckpointStatus {
     BRIDGE_CHECKPOINT_UNKNOWN,
@@ -93,6 +95,7 @@ static BridgeCheckpointStatus bridge_checkpoint_status =
     BRIDGE_CHECKPOINT_UNKNOWN;
 
 static bool RoadUsesAuthoredCheckpoint(void);
+static void OpenWorldRenderCacheClear(void);
 static void DrawBox(Vector3 center, Vector3 size, Color color);
 static void DrawCharacterSphere(Vector3 center, float radius, Color color);
 static void DrawCharacterEllipsoid(Vector3 center, Vector3 radius, Color color);
@@ -1625,8 +1628,16 @@ void CcLocalBindPlace(const CcSim *sim)
         UINT32_C(0xc0a71a9e));
 }
 
+void CcLocalBindOpenWorld(const CcWorldStream *stream)
+{
+    active_world_stream = stream;
+}
+
 float CcLocalTerrainHeightAt(float x, float z)
 {
+    if (active_world_stream != NULL) {
+        return CcWorldStreamHeightAt(active_world_stream, x, z);
+    }
     TerrainEnsureReady();
     return TerrainSampleGrid(street_terrain_height, x, z);
 }
@@ -1715,6 +1726,7 @@ static bool RoomDetailPointVisible(float x, float z, Vector3 focus);
 
 static bool CourseWaterContains(CcLocalSceneKind scene, float x, float z)
 {
+    if (active_world_stream != NULL) return false;
     if (scene != CC_LOCAL_SCENE_STREET) return false;
     return x >= COURSE_POOL.x && x <= COURSE_POOL.x + COURSE_POOL.width &&
            z >= COURSE_POOL.y && z <= COURSE_POOL.y + COURSE_POOL.height;
@@ -1722,6 +1734,9 @@ static bool CourseWaterContains(CcLocalSceneKind scene, float x, float z)
 
 static float SurfaceHeightAt(CcLocalSceneKind scene, float x, float z)
 {
+    if (active_world_stream != NULL && scene != CC_LOCAL_SCENE_MARKET) {
+        return CcLocalTerrainHeightAt(x, z);
+    }
     if (scene == CC_LOCAL_SCENE_ROAD) {
         if (!RoadUsesAuthoredCheckpoint()) return 0.0f;
         return CcLocalRoadCheckpointSurfaceYInternal(x, z);
@@ -1743,6 +1758,9 @@ static float SurfaceHeightAt(CcLocalSceneKind scene, float x, float z)
 
 static float BodySurfaceHeightAt(CcLocalSceneKind scene, float x, float z)
 {
+    if (active_world_stream != NULL && scene != CC_LOCAL_SCENE_MARKET) {
+        return CcLocalTerrainHeightAt(x, z);
+    }
     if (scene == CC_LOCAL_SCENE_ROAD) {
         return SurfaceHeightAt(scene, x, z);
     }
@@ -1766,6 +1784,9 @@ static float BodySurfaceHeightAt(CcLocalSceneKind scene, float x, float z)
 
 static Vector3 SurfaceNormalAt(CcLocalSceneKind scene, float x, float z)
 {
+    if (active_world_stream != NULL && scene != CC_LOCAL_SCENE_MARKET) {
+        return CcLocalTerrainNormalAt(x, z);
+    }
     if (scene != CC_LOCAL_SCENE_STREET) return (Vector3){0.0f, 1.0f, 0.0f};
     float terrain = CcLocalTerrainHeightAt(x, z);
     if (SurfaceHeightAt(scene, x, z) > terrain + 0.08f) {
@@ -1794,6 +1815,13 @@ static bool CircleTouchesFootprint(float x, float z, float radius,
 static bool StaticBodyBlocked(CcLocalSceneKind scene, float x, float z,
                               float radius)
 {
+    if (active_world_stream != NULL && scene != CC_LOCAL_SCENE_MARKET) {
+        const CcWorldManifest *manifest = &active_world_stream->manifest;
+        return x < manifest->minimum_x + radius ||
+               x > manifest->maximum_x - radius ||
+               z < manifest->minimum_z + radius ||
+               z > manifest->maximum_z - radius;
+    }
     bool market_interior = scene == CC_LOCAL_SCENE_MARKET;
     float maximum_x = market_interior ? 8.72f : CC_LOCAL_WORLD_WIDTH - 0.28f;
     float maximum_z = market_interior ? 6.72f : CC_LOCAL_WORLD_DEPTH - 0.28f;
@@ -2438,7 +2466,9 @@ static bool ProbeLocalCollision(void *raw_context,
     Vector3 proposed = {proposed_position.x, proposed_position.y,
                         proposed_position.z};
     LocalCollisionBox boxes[CC_LOCAL_COLLISION_BOX_CAPACITY];
-    int32_t box_count = GatherLocalCollisionBoxes(context, proposed, boxes);
+    int32_t box_count = active_world_stream != NULL &&
+                        scene != CC_LOCAL_SCENE_MARKET ? 0 :
+        GatherLocalCollisionBoxes(context, proposed, boxes);
     if (context != NULL && context->root_capsule) {
         int32_t retained = 0;
         for (int32_t box = 0; box < box_count; ++box) {
@@ -2522,6 +2552,9 @@ static bool LocalAgentCapsuleBlocked(CcLocalSceneKind scene,
                                      Vector3 previous, Vector3 proposed,
                                      float radius)
 {
+    if (active_world_stream != NULL && scene != CC_LOCAL_SCENE_MARKET) {
+        return false;
+    }
     LocalProbeContext context = {
         .scene = scene,
         .root_base_y = previous.y,
@@ -2576,6 +2609,8 @@ bool CcLocalAgentPointSpaceBlockedInternal(const CcLocalAgent *agent,
                                             Vector3 proposed)
 {
     if (agent == NULL) return false;
+    if (active_world_stream != NULL &&
+        agent->scene != CC_LOCAL_SCENE_MARKET) return false;
     CcRobotCollisionPoint points[CC_ROBOT_POINT_CAPACITY];
     int32_t point_count = LocalAgentPointSpace(agent, points);
     Vector3 movement = Vector3Subtract(proposed, agent->position);
@@ -6025,6 +6060,7 @@ static float StreetPortalCommandAlignment(
 
 static void UpdateStreetPortalProximity(CcLocalAgent *agent)
 {
+    if (active_world_stream != NULL) return;
     bool following_click_path = agent != NULL && agent->navigation_active &&
         agent->navigation_destination_room ==
             STREET_CLICK_NAVIGATION_DESTINATION;
@@ -6089,7 +6125,8 @@ static bool SetNearestClickTarget(CcLocalAgent *agent, Vector3 picked_point,
                                   bool market_interior)
 {
     CcLocalSceneKind scene = AgentSceneForCall(agent, market_interior);
-    bool targeted = scene == CC_LOCAL_SCENE_STREET ?
+    bool targeted = scene == CC_LOCAL_SCENE_STREET &&
+                    active_world_stream == NULL ?
         SetStreetClickTarget(agent, picked_point) :
         CcLocalAgentSetExactTarget(agent, picked_point, market_interior);
     if (targeted) {
@@ -6118,7 +6155,8 @@ static bool SetNearestClickTarget(CcLocalAgent *agent, Vector3 picked_point,
             Vector3 candidate = picked_point;
             candidate.x += (toward_x * cosine - toward_z * sine) * radius;
             candidate.z += (toward_x * sine + toward_z * cosine) * radius;
-            targeted = scene == CC_LOCAL_SCENE_STREET ?
+            targeted = scene == CC_LOCAL_SCENE_STREET &&
+                       active_world_stream == NULL ?
                 SetStreetClickTarget(agent, candidate) :
                 CcLocalAgentSetExactTarget(agent, candidate,
                                            market_interior);
@@ -6134,6 +6172,56 @@ static RayCollision RayTerrainCollision(Ray ray)
 {
     RayCollision nearest = {0};
     nearest.distance = FLT_MAX;
+    if (active_world_stream != NULL) {
+        float previous_distance = 0.0f;
+        float previous_delta = FLT_MAX;
+        bool saw_world = false;
+        for (float distance = 0.0f; distance <= 1800.0f; distance += 0.75f) {
+            Vector3 point = {
+                ray.position.x + ray.direction.x * distance,
+                ray.position.y + ray.direction.y * distance,
+                ray.position.z + ray.direction.z * distance,
+            };
+            if (!CcWorldManifestContains(&active_world_stream->manifest,
+                                         point.x, point.z)) {
+                if (saw_world) break;
+                continue;
+            }
+            saw_world = true;
+            float delta = point.y - CcLocalTerrainHeightAt(point.x, point.z);
+            if (previous_delta > 0.0f && delta <= 0.0f) {
+                float low = previous_distance;
+                float high = distance;
+                for (int32_t iteration = 0; iteration < 8; ++iteration) {
+                    float middle = (low + high) * 0.5f;
+                    Vector3 sample = {
+                        ray.position.x + ray.direction.x * middle,
+                        ray.position.y + ray.direction.y * middle,
+                        ray.position.z + ray.direction.z * middle,
+                    };
+                    float sample_delta = sample.y -
+                        CcLocalTerrainHeightAt(sample.x, sample.z);
+                    if (sample_delta > 0.0f) low = middle;
+                    else high = middle;
+                }
+                nearest.hit = true;
+                nearest.distance = high;
+                nearest.point = (Vector3){
+                    ray.position.x + ray.direction.x * high,
+                    ray.position.y + ray.direction.y * high,
+                    ray.position.z + ray.direction.z * high,
+                };
+                nearest.point.y = CcLocalTerrainHeightAt(
+                    nearest.point.x, nearest.point.z);
+                nearest.normal = CcLocalTerrainNormalAt(
+                    nearest.point.x, nearest.point.z);
+                return nearest;
+            }
+            previous_distance = distance;
+            previous_delta = delta;
+        }
+        return nearest;
+    }
     const float step = 1.0f;
     for (float z = 0.0f; z < CC_LOCAL_WORLD_DEPTH; z += step) {
         float far_z = fminf(z + step, CC_LOCAL_WORLD_DEPTH);
@@ -6157,6 +6245,7 @@ CcLocalWorldTargetKind CcLocalAgentPickWorldTarget(
     const CcLocalAgent *agent, Vector2 screen_point, RenderTexture2D target,
     Rectangle destination, bool market_interior)
 {
+    if (active_world_stream != NULL) return CC_LOCAL_WORLD_TARGET_NONE;
     if (agent == NULL || market_interior ||
         agent->scene != CC_LOCAL_SCENE_STREET ||
         active_opening_step != CC_LOCAL_OPENING_COMPLETE ||
@@ -6230,7 +6319,7 @@ static bool PickAgentTargetInternal(
         nearest = collision.distance;
         picked_point = collision.point;
     }
-    if (scene == CC_LOCAL_SCENE_STREET) {
+    if (scene == CC_LOCAL_SCENE_STREET && active_world_stream == NULL) {
         for (int32_t i = 0; i < StreetPhysicsPlatformCount(); ++i) {
             const NavPlatform *platform = StreetPhysicsPlatformAt(i);
             if (platform == NULL) continue;
@@ -6279,7 +6368,8 @@ static bool PickAgentTargetInternal(
             ray, (Rectangle){0.0f, 0.0f, 9.0f, 0.50f}, 2.60f));
         occluder = fminf(occluder, RayFootprintDistance(
             ray, (Rectangle){0.0f, 0.0f, 0.50f, 7.0f}, 2.60f));
-    } else if (scene == CC_LOCAL_SCENE_STREET) {
+    } else if (scene == CC_LOCAL_SCENE_STREET &&
+               active_world_stream == NULL) {
         for (int32_t i = 0; i < ActiveWorldBuildingCount(); ++i) {
             WorldBuilding building = ActiveWorldBuildingAt(i);
             occluder = fminf(occluder,
@@ -7884,7 +7974,7 @@ static bool TryHorizontalAxis(CcLocalAgent *agent, bool market_interior,
     float candidate_x = agent->position.x + (move_x ? amount : 0.0f);
     float candidate_z = agent->position.z + (move_x ? 0.0f : amount);
     CcLocalSceneKind scene = AgentSceneForCall(agent, market_interior);
-    if (scene == CC_LOCAL_SCENE_STREET) {
+    if (scene == CC_LOCAL_SCENE_STREET && active_world_stream == NULL) {
         const NavPlatform *support = SupportingPlatformAt(
             agent->position.x, agent->position.z, agent->position.y);
         float candidate_surface = BodySurfaceHeightAt(
@@ -14258,6 +14348,7 @@ void CcLocalRendererSetMovementPreview(
 void CcLocalRendererShutdown(void)
 {
     if (!sphere_models.ready) return;
+    OpenWorldRenderCacheClear();
     TerrainRenderCacheClear();
     TerrainDetailRenderCacheClear();
     UnloadModel(sphere_models.small);
@@ -24831,4 +24922,315 @@ Vector2 CcLocalMove(Vector2 current, Vector2 delta, bool market_interior)
     candidate = (Vector2){current.x, current.y + delta.y};
     if (can_occupy(candidate)) current.y = candidate.y;
     return current;
+}
+
+typedef struct OpenWorldRenderChunk {
+    int32_t x;
+    int32_t z;
+    uint64_t generation;
+    Model model;
+    bool ready;
+} OpenWorldRenderChunk;
+
+static OpenWorldRenderChunk
+    open_world_render_chunks[CC_WORLD_STREAM_CAPACITY] = {0};
+
+static void OpenWorldRenderCacheClear(void)
+{
+    for (int32_t i = 0; i < CC_WORLD_STREAM_CAPACITY; ++i) {
+        if (open_world_render_chunks[i].ready) {
+            UnloadModel(open_world_render_chunks[i].model);
+        }
+        open_world_render_chunks[i] = (OpenWorldRenderChunk){0};
+    }
+}
+
+static Color OpenWorldTerrainColor(const CcWorldManifest *manifest,
+                                   float x, float z, Vector3 normal)
+{
+    CcWorldSurfaceKind surface = CcWorldSurfaceAt(manifest, x, z);
+    Color color = surface == CC_WORLD_SURFACE_ROAD ? WORLD_ROAD_LIGHT :
+                  surface == CC_WORLD_SURFACE_SETTLEMENT ? WORLD_EARTH_LIGHT :
+                  WORLD_GRASS;
+    if (normal.y < 0.78f) {
+        color = BlendColor(color, WORLD_STONE, (0.78f - normal.y) * 2.8f);
+    }
+    float variation = sinf(x * 0.071f + z * 0.113f) * 0.035f;
+    return ShadeColor(color, 1.0f + variation);
+}
+
+static bool OpenWorldRenderChunkMatches(const OpenWorldRenderChunk *render,
+                                        const CcWorldChunk *chunk)
+{
+    return render != NULL && chunk != NULL && render->ready &&
+           render->x == chunk->x && render->z == chunk->z &&
+           render->generation == chunk->generation;
+}
+
+static Model OpenWorldBuildChunkModel(const CcWorldStream *stream,
+                                      const CcWorldChunk *chunk)
+{
+    const int32_t vertex_count = CC_WORLD_CHUNK_CELLS *
+        CC_WORLD_CHUNK_CELLS * 6;
+    TerrainMeshWriter writer;
+    if (!TerrainMeshWriterAllocate(&writer, vertex_count)) return (Model){0};
+    float step = CC_WORLD_CHUNK_SIZE / (float)CC_WORLD_CHUNK_CELLS;
+    float origin_x = (float)chunk->x * CC_WORLD_CHUNK_SIZE;
+    float origin_z = (float)chunk->z * CC_WORLD_CHUNK_SIZE;
+    for (int32_t row = 0; row < CC_WORLD_CHUNK_CELLS; ++row) {
+        for (int32_t column = 0; column < CC_WORLD_CHUNK_CELLS; ++column) {
+            int32_t near_left = row * CC_WORLD_CHUNK_SAMPLES + column;
+            int32_t near_right = near_left + 1;
+            int32_t far_left = near_left + CC_WORLD_CHUNK_SAMPLES;
+            int32_t far_right = far_left + 1;
+            float x = origin_x + (float)column * step;
+            float z = origin_z + (float)row * step;
+            Vector3 points[4] = {
+                {x, chunk->heights[near_left], z},
+                {x + step, chunk->heights[near_right], z},
+                {x, chunk->heights[far_left], z + step},
+                {x + step, chunk->heights[far_right], z + step},
+            };
+            Vector3 normal = {
+                ((points[0].y + points[2].y) -
+                 (points[1].y + points[3].y)) * 0.5f,
+                step,
+                ((points[0].y + points[1].y) -
+                 (points[2].y + points[3].y)) * 0.5f,
+            };
+            normal = Vector3Normalize(normal);
+            Color color = OpenWorldTerrainColor(
+                &stream->manifest, x + step * 0.5f, z + step * 0.5f,
+                normal);
+            int32_t order[6] = {0, 3, 1, 0, 2, 3};
+            for (int32_t vertex = 0; vertex < 6; ++vertex) {
+                Vector3 point = points[order[vertex]];
+                TerrainMeshWriteVertexWithNormal(
+                    &writer, point, normal, color);
+            }
+        }
+    }
+    if (writer.cursor != vertex_count) {
+        UnloadMesh(writer.mesh);
+        return (Model){0};
+    }
+    UploadMesh(&writer.mesh, false);
+    Model model = LoadModelFromMesh(writer.mesh);
+    ReleaseUploadedModelCpuData(&model);
+    ApplyWorldShader(&model);
+    return model;
+}
+
+static int32_t OpenWorldGpuChunkCount(void)
+{
+    int32_t count = 0;
+    for (int32_t i = 0; i < CC_WORLD_STREAM_CAPACITY; ++i) {
+        if (open_world_render_chunks[i].ready) count += 1;
+    }
+    return count;
+}
+
+static void OpenWorldSyncRenderChunks(const CcWorldStream *stream)
+{
+    if (stream == NULL) return;
+    for (int32_t i = 0; i < CC_WORLD_STREAM_CAPACITY; ++i) {
+        OpenWorldRenderChunk *render = &open_world_render_chunks[i];
+        if (!render->ready) continue;
+        const CcWorldChunk *chunk = CcWorldStreamChunkAt(
+            stream, render->x, render->z);
+        if (OpenWorldRenderChunkMatches(render, chunk)) continue;
+        UnloadModel(render->model);
+        *render = (OpenWorldRenderChunk){0};
+    }
+
+    for (int32_t built = 0; built < CC_WORLD_STREAM_CAPACITY; ++built) {
+        const CcWorldChunk *candidate = NULL;
+        int32_t nearest_distance = INT32_MAX;
+        for (int32_t i = 0; i < CC_WORLD_STREAM_CAPACITY; ++i) {
+            const CcWorldChunk *chunk = &stream->chunks[i];
+            if (chunk->state != CC_WORLD_CHUNK_READY) continue;
+            bool found = false;
+            for (int32_t render_index = 0;
+                 render_index < CC_WORLD_STREAM_CAPACITY; ++render_index) {
+                if (OpenWorldRenderChunkMatches(
+                        &open_world_render_chunks[render_index], chunk)) {
+                    found = true;
+                    break;
+                }
+            }
+            if (found) continue;
+            int32_t distance = abs(chunk->x - stream->focus_chunk_x) +
+                               abs(chunk->z - stream->focus_chunk_z);
+            if (distance >= nearest_distance) continue;
+            candidate = chunk;
+            nearest_distance = distance;
+        }
+        if (candidate == NULL) break;
+        OpenWorldRenderChunk *slot = NULL;
+        for (int32_t i = 0; i < CC_WORLD_STREAM_CAPACITY; ++i) {
+            if (!open_world_render_chunks[i].ready) {
+                slot = &open_world_render_chunks[i];
+                break;
+            }
+        }
+        if (slot == NULL) break;
+        Model model = OpenWorldBuildChunkModel(stream, candidate);
+        if (!IsModelValid(model)) break;
+        *slot = (OpenWorldRenderChunk){
+            .x = candidate->x,
+            .z = candidate->z,
+            .generation = candidate->generation,
+            .model = model,
+            .ready = true,
+        };
+    }
+}
+
+static void DrawOpenWorldSettlement(const CcSim *sim,
+                                    const CcWorldSettlementPlacement *place,
+                                    Vector3 focus)
+{
+    float dx = place->center.x - focus.x;
+    float dz = place->center.z - focus.z;
+    if (dx * dx + dz * dz > 78.0f * 78.0f) return;
+    const CcSettlement *settlement = CcSimSettlement(
+        sim, place->settlement_id);
+    Color kingdom = settlement != NULL ?
+        KingdomColor3D(sim, settlement->kingdom_id) : WORLD_TEAL;
+    for (int32_t building = 0; building < 12; ++building) {
+        int32_t column = building % 4;
+        int32_t row = building / 4;
+        float x = place->center.x + ((float)column - 1.5f) * 6.4f +
+            ((row & 1) != 0 ? 1.1f : -0.8f);
+        float z = place->center.z + ((float)row - 1.0f) * 7.2f;
+        if (fabsf(x - place->center.x) < 2.5f &&
+            fabsf(z - place->center.z) < 2.5f) continue;
+        float height = 2.2f + (float)((building + (int32_t)place->seed) % 4) *
+            0.42f;
+        float ground = CcLocalTerrainHeightAt(x, z);
+        Color wall = (building & 1) != 0 ? WORLD_STONE_LIGHT :
+                                             WORLD_WOOD_LIGHT;
+        DrawBox((Vector3){x, ground + height * 0.5f, z},
+                (Vector3){3.8f, height, 3.1f}, wall);
+        DrawBox((Vector3){x, ground + height + 0.20f, z},
+                (Vector3){4.3f, 0.40f, 3.6f},
+                BlendColor(WORLD_WOOD_SHADOW, kingdom, 0.25f));
+    }
+    float center_y = CcLocalTerrainHeightAt(place->center.x, place->center.z);
+    DrawBox((Vector3){place->center.x, center_y + 0.90f,
+                      place->center.z},
+            (Vector3){0.18f, 1.80f, 0.18f}, WORLD_WOOD_SHADOW);
+    DrawBox((Vector3){place->center.x, center_y + 1.45f,
+                      place->center.z + 0.05f},
+            (Vector3){1.80f, 0.82f, 0.12f}, kingdom);
+}
+
+static void DrawOpenWorldSites(const CcWorldManifest *manifest,
+                               Vector3 focus, float clock)
+{
+    for (int32_t i = 0; i < manifest->site_count; ++i) {
+        const CcWorldSitePlacement *site = &manifest->sites[i];
+        float dx = site->position.x - focus.x;
+        float dz = site->position.z - focus.z;
+        if (dx * dx + dz * dz > 74.0f * 74.0f) continue;
+        float ground = CcLocalTerrainHeightAt(site->position.x,
+                                               site->position.z);
+        float pulse = 0.06f + sinf(clock * 1.7f + (float)i) * 0.025f;
+        Color color = i == CC_WORLD_SITE_UNDERROAD ? WORLD_GOLD :
+                      i == CC_WORLD_SITE_GOBLIN_TRAIL ? WORLD_TEAL :
+                                                            WORLD_VIOLET;
+        DrawBox((Vector3){site->position.x - 1.25f, ground + 1.0f,
+                          site->position.z},
+                (Vector3){0.50f, 2.0f, 0.70f}, WORLD_STONE);
+        DrawBox((Vector3){site->position.x + 1.25f, ground + 1.0f,
+                          site->position.z},
+                (Vector3){0.50f, 2.0f, 0.70f}, WORLD_STONE);
+        DrawBox((Vector3){site->position.x, ground + 2.0f,
+                          site->position.z},
+                (Vector3){3.0f, 0.45f, 0.75f}, color);
+        DrawSmallSphere((Vector3){site->position.x, ground + 2.65f,
+                                  site->position.z},
+                        0.16f + pulse, color);
+    }
+}
+
+void CcLocalDrawOpenWorld3D(const CcSim *sim,
+                            const CcWorldStream *stream,
+                            const CcLocalAgent *agent,
+                            const CcLocalCourse *course,
+                            float clock, RenderTexture2D target,
+                            Rectangle destination)
+{
+    if (sim == NULL || stream == NULL || agent == NULL) return;
+    CcLocalBindOpenWorld(stream);
+    OpenWorldSyncRenderChunks(stream);
+    Vector3 focus = agent->position;
+    focus.y += 0.85f;
+    Camera3D camera = {
+        .position = {focus.x + 24.0f, focus.y + 27.0f, focus.z + 31.0f},
+        .target = focus,
+        .up = {0.0f, 1.0f, 0.0f},
+        .fovy = 38.0f,
+        .projection = CAMERA_ORTHOGRAPHIC,
+    };
+    camera = SnapCameraToArtPixels(camera, target.texture.height);
+    RememberPresentedCamera(CC_LOCAL_SCENE_STREET, camera, agent,
+                            target.texture.width, target.texture.height);
+    ArtComposition art = ROAD_ART_COMPOSITION;
+    art.focal_point = focus;
+    art.foreground_anchor = focus;
+    art.light_profile = ART_LIGHT_CLEAR_MARKET;
+    SetFaceRenderContext(camera, target.texture.width, target.texture.height);
+    BeginTextureMode(target);
+    ClearBackground(ArtLightBackground(art.light_profile));
+    BeginMode3D(camera);
+    BeginWorldLighting(camera, &art);
+    for (int32_t i = 0; i < CC_WORLD_STREAM_CAPACITY; ++i) {
+        if (!open_world_render_chunks[i].ready) continue;
+        DrawModel(open_world_render_chunks[i].model,
+                  (Vector3){0.0f, 0.0f, 0.0f}, 1.0f, WHITE);
+    }
+    for (int32_t i = 0; i < stream->manifest.settlement_count; ++i) {
+        DrawOpenWorldSettlement(sim, &stream->manifest.settlements[i], focus);
+    }
+    DrawOpenWorldSites(&stream->manifest, focus, clock);
+    DrawAgentPath(agent, false);
+    if (course != NULL &&
+        (course->alarm_active || course->road_encounter)) {
+        DrawCourseRunners(course, focus);
+    }
+    DrawRobotShell(agent);
+    DrawCombatSword(agent);
+    EndWorldLighting();
+    EndMode3D();
+    DrawTargetAtmosphere(target, clock);
+    EndTextureMode();
+    PresentTarget(target, destination);
+
+    WorldLabel labels[24] = {0};
+    int32_t label_count = 0;
+    labels[label_count++] = (WorldLabel){
+        {agent->position.x, agent->position.y + 2.50f, agent->position.z},
+        "YOU", WORLD_TEAL};
+    for (int32_t i = 0;
+         i < stream->manifest.settlement_count && label_count < 24; ++i) {
+        const CcWorldSettlementPlacement *place =
+            &stream->manifest.settlements[i];
+        float dx = place->center.x - focus.x;
+        float dz = place->center.z - focus.z;
+        if (dx * dx + dz * dz > 78.0f * 78.0f) continue;
+        const CcSettlement *settlement = CcSimSettlement(
+            sim, place->settlement_id);
+        if (settlement == NULL) continue;
+        labels[label_count++] = (WorldLabel){
+            {place->center.x, place->plateau_height + 4.2f,
+             place->center.z}, settlement->name, WORLD_GOLD};
+    }
+    DrawLabels(labels, label_count, camera, destination);
+    DrawViewportText(
+        TextFormat("WORLD STREAM  CPU %d/%d  GPU %d  %zu KB",
+                   CcWorldStreamResidentCount(stream),
+                   CC_WORLD_STREAM_CAPACITY, OpenWorldGpuChunkCount(),
+                   CcWorldStreamResidentBytes(stream) / 1024U),
+        destination, 18, 18, 10, WORLD_MUTED);
 }
