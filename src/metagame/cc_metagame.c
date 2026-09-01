@@ -1435,7 +1435,7 @@ static void DescribeHelp(char *output, size_t capacity)
     Append(output, capacity,
            "See the world:\n"
            "  look, people, talk NUMBER, rumors, charters, roads\n"
-           "  causes, notes, cargo, animals, economy, treasures, inequality, kingdoms, war, dragon, goblins, status, history [COUNT]\n"
+           "  causes, notes, cargo, animals, economy, treasures, inequality, kingdoms, war, dragon, goblins, archives, status, history [COUNT]\n"
            "  mark — compare this campaign against a no-action control of the same seed\n"
            "Make commitments:\n"
            "  tell NUMBER, keep NUMBER, accept NUMBER, refuse NUMBER, abandon\n"
@@ -1779,6 +1779,19 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
         DescribeGoblins(metagame, output, output_capacity);
     } else if (strcmp(command, "status") == 0) {
         DescribeStatus(metagame, output, output_capacity);
+    } else if (strcmp(command, "archives") == 0) {
+        const CcArchives *a = &metagame->sim.archives;
+        Append(output, output_capacity,
+               "The archive holds %d pieces of lore, kept by %d scribe%s.\n"
+               "Lost to decay: %d. Last record: day %d.\n"
+               "The monastery reserve funds the scriptorium: %d crowns.\n",
+               a->lore_stored, a->scribes, a->scribes == 1 ? "" : "s",
+               a->lore_lost_total, a->last_recorded_day,
+               (int)metagame->sim.iron_ledger_reserve);
+        if (a->scribes == 0 && a->lore_stored > 0) {
+            Append(output, output_capacity,
+                   "No scribe remains. The archive is unwatched.\n");
+        }
     } else if (strcmp(command, "mark") == 0) {
         uint64_t control_hash = 0U;
         if (!CcMetagameAgentCounterfactual(metagame, output,

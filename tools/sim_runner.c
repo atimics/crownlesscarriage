@@ -65,7 +65,8 @@ static void PrintSummary(const CcSim *sim, bool detail)
                  " dragon_stage=%s activity=%s age=%d crown=%d body=%d"
                  " memory=%d territory=%d shadow=%d eggs=%d hunts=%d"
                  " broods=%d whelps=%d afterdeath=%d ruins=%d climate=%d"
-                 " campaign_experience=%d\n",
+                 " campaign_experience=%d"
+                 " lore=%d lore_lost=%d scribes=%d\n",
                  sim->current_day, CcSimHash(sim),
                  total_hunger / sim->settlement_count, maximum_hunger,
                  travelling, sim->event_count,
@@ -96,7 +97,10 @@ static void PrintSummary(const CcSim *sim, bool detail)
                  sim->dragon.whelps_dispersed,
                  sim->dragon.afterdeath_days,
                  abandoned_settlements, CcSimClimateFactor(sim),
-                 CcDragonCampaignExperience(sim));
+                 CcDragonCampaignExperience(sim),
+                 sim->archives.lore_stored,
+                 sim->archives.lore_lost_total,
+                 sim->archives.scribes);
     if (detail) {
         for (int32_t i = 0; i < sim->settlement_count; ++i) {
             const CcSettlement *place = &sim->settlements[i];

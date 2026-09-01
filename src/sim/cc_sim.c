@@ -2899,6 +2899,7 @@ void CcSimInit(CcSim *sim, uint32_t seed)
     sim->random_state = sim->world_seed;
     sim->current_day = 1;
     sim->next_entity_serial = 1U;
+    sim->archives.scribes = 2; /* the scriptorium opens with the world */
 
     static const char *kingdom_sets[][3] = {
         {"Alder Concord", "Ember Crown", "Star Oath"},
@@ -3601,6 +3602,74 @@ static uint32_t RecolonizedServiceMask(const CcSettlement *settlement)
         return mask | ServiceBit(CC_SERVICE_MINE);
     }
     return mask | ServiceBit(CC_SERVICE_MARKET);
+}
+
+/* Archive law: the scriptorium records notable events as durable lore.
+   Funding follows the monastery reserve; unfunded lore decays.
+   This is the world's memory of itself - without it, the ledger
+   is a drawer no one opens. */
+static void AdvanceArchives(CcSim *sim)
+{
+    if (sim == NULL || sim->current_day % 7 != 0) return;
+    CcArchives *archives = &sim->archives;
+
+    /* Funding: the monastery hires scribes when it can pay them. */
+    int32_t target_scribes = sim->iron_ledger_reserve >= 300 ? CC_MAX_SCRIBES :
+        sim->iron_ledger_reserve >= 150 ? 2 :
+        sim->iron_ledger_reserve >= 50 ? 1 : 0;
+    if (target_scribes > archives->scribes) {
+        archives->scribes = target_scribes;
+    } else if (target_scribes < archives->scribes) {
+        archives->scribes -= 1; /* scribes leave gradually, not all at once */
+    }
+
+    /* Record: each scribe preserves one notable recent event per week.
+       Scan first, push after: PushEvent mutates the ledger ring while
+       we iterate it, which would orphan parents mid-scan. */
+    CcId noted[CC_MAX_SCRIBES];
+    CcId noted_location[CC_MAX_SCRIBES];
+    char noted_text[CC_MAX_SCRIBES][CC_EVENT_TEXT_CAPACITY];
+    int32_t recorded = 0;
+    for (int32_t offset = 0;
+         offset < sim->event_count && recorded < CC_MAX_SCRIBES;
+         ++offset) {
+        const CcEvent *event = CcSimRecentEvent(sim, offset);
+        if (event == NULL || event->magnitude < 20) continue;
+        bool notable =
+            event->kind == CC_EVENT_WAR_DECLARED ||
+            event->kind == CC_EVENT_PEACE_DECLARED ||
+            event->kind == CC_EVENT_DRAGON_SLAIN ||
+            event->kind == CC_EVENT_DRAGON_CROWNED ||
+            event->kind == CC_EVENT_DRAGON_BROOD ||
+            event->kind == CC_EVENT_TREASURE_CRAFTED ||
+            event->kind == CC_EVENT_KINGDOM_ACTION ||
+            event->kind == CC_EVENT_SETTLEMENT_RAIDED;
+        if (!notable) continue;
+        noted[recorded] = event->id;
+        noted_location[recorded] = event->location_id;
+        (void)snprintf(noted_text[recorded],
+                       sizeof(noted_text[recorded]),
+                       "The scriptorium records the lore of: %.90s",
+                       event->text);
+        recorded += 1;
+    }
+    for (int32_t i = 0; i < recorded; ++i) {
+        archives->lore_stored += 1;
+        archives->last_recorded_day = sim->current_day;
+        (void)PushEvent(sim, CC_EVENT_LORE_RECORDED, noted[i],
+                        noted_location[i], noted[i], 1, noted_text[i]);
+    }
+
+    /* Decay: unfunded archives lose lore. Memory is load-bearing. */
+    if (archives->scribes == 0 && archives->lore_stored > 0) {
+        archives->lore_stored -= 1;
+        archives->lore_lost_total += 1;
+        char text[CC_EVENT_TEXT_CAPACITY];
+        (void)snprintf(text, sizeof(text),
+                       "Unfunded and unwatched, part of the archive crumbles; "
+                       "a name is forgotten.");
+        (void)PushEvent(sim, CC_EVENT_LORE_LOST, 0U, 0U, 0U, 1, text);
+    }
 }
 
 static void AdvanceRuins(CcSim *sim)
@@ -8919,6 +8988,7 @@ void CcSimAdvanceDays(CcSim *sim, int32_t days)
                 UpdateSettlement(sim, settlement);
             }
             AdvanceRuins(sim);
+            AdvanceArchives(sim);
             UpdateThreats(sim);
             UpdateRoutesAndGovernments(sim);
             UpdateRoyalDiplomacy(sim);
@@ -12266,6 +12336,17 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                  "The monastery reserve is invalid.");
         return false;
     }
+    if (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
+        (sim->archives.scribes < 0 ||
+         sim->archives.scribes > CC_MAX_SCRIBES ||
+         sim->archives.lore_stored < 0 ||
+         sim->archives.lore_lost_total < 0 ||
+         sim->archives.last_recorded_day < 0 ||
+         sim->archives.last_recorded_day > sim->current_day)) {
+        SetError(error, error_capacity,
+                 "The archive state is invalid.");
+        return false;
+    }
     if (sim->kingdom_count < 1 || sim->kingdom_count > CC_MAX_KINGDOMS ||
         sim->settlement_count < 1 || sim->settlement_count > CC_MAX_SETTLEMENTS ||
         sim->route_count < 0 || sim->route_count > CC_MAX_ROUTES ||
@@ -12342,7 +12423,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 !ValidBoundedText(event->text, sizeof(event->text)) ||
                 event->day < 1 || event->day > sim->current_day ||
                 event->kind < CC_EVENT_HARVEST_FAILED ||
-                event->kind > CC_EVENT_QUEST_PROGRESS ||
+                event->kind > CC_EVENT_LORE_LOST ||
                 event->parent_id == event->id ||
                 (event->parent_id != 0U &&
                  CcSimEvent(sim, event->parent_id) == NULL) ||
@@ -13759,6 +13840,7 @@ uint64_t CcSimHash(const CcSim *sim)
     bool hash_quest = sim->schema_version >= 21U ||
         (sim->schema_version == 19U &&
          (sim->front_count > 0 || sim->quest_outcome_count > 0));
+    bool hash_archives = sim->schema_version >= 22U;
     uint64_t hash = UINT64_C(1469598103934665603);
 #define HASH_VALUE(value) hash = HashU64(hash, (uint64_t)(value))
     HASH_VALUE(sim->schema_version);
@@ -14378,6 +14460,12 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(item->witness_id);
         }
         HASH_VALUE(item->magnitude); hash = HashString(hash, item->text);
+    }
+    if (hash_archives) {
+        HASH_VALUE(sim->archives.scribes);
+        HASH_VALUE(sim->archives.lore_stored);
+        HASH_VALUE(sim->archives.lore_lost_total);
+        HASH_VALUE(sim->archives.last_recorded_day);
     }
 #undef HASH_VALUE
     return hash;
