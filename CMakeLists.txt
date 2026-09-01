@@ -157,6 +157,10 @@ target_link_libraries(crownless_metagame_playtest PRIVATE crownless_metagame)
 cc_strict_warnings(crownless_metagame_playtest)
 cc_large_sim_stack(crownless_metagame_playtest)
 
+add_executable(crownless_agent_courier tools/agent_courier.c)
+target_link_libraries(crownless_agent_courier PRIVATE crownless_metagame)
+cc_strict_warnings(crownless_agent_courier)
+
 if(CC_BUILD_BENCHMARKS)
     add_executable(crownless_benchmark tools/benchmark.c)
     target_link_libraries(crownless_benchmark PRIVATE

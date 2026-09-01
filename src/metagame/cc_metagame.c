@@ -9,6 +9,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+static bool ApplyCommand(CcMetagame *metagame, const CcCommand *command,
+                         char *output, size_t capacity);
+
 static void Append(char *output, size_t capacity, const char *format, ...)
 {
     if (output == NULL || capacity == 0U) return;
@@ -608,9 +611,7 @@ static bool TalkToSituation(CcMetagame *metagame, int32_t index,
             .target_id = situation->id,
             .amount = CC_CHARACTER_RESPONSE_LISTEN
         };
-        char error[192];
-        if (!CcSimApply(sim, &listen, error, sizeof(error))) {
-            Append(output, capacity, "%s\n", error);
+        if (!ApplyCommand(metagame, &listen, output, capacity)) {
             return false;
         }
     }
@@ -1459,13 +1460,46 @@ static void DescribeHelp(char *output, size_t capacity)
            "  save PATH, load PATH, debrief, quit\n");
 }
 
-static void FinishTravel(CcMetagame *metagame,
+static bool AdvanceRuntimeTicks(CcMetagame *metagame, int32_t ticks,
+                                char *output, size_t capacity)
+{
+    if (metagame->journal == NULL) {
+        CcSimAdvanceRuntimeTicks(&metagame->sim, ticks);
+        return true;
+    }
+    char error[192];
+    if (CcJournalAdvanceRuntimeTicks(metagame->journal, &metagame->sim,
+                                     ticks, error, sizeof(error))) {
+        return true;
+    }
+    Append(output, capacity, "%s\n", error);
+    return false;
+}
+
+static bool AdvanceDays(CcMetagame *metagame, int32_t days,
+                        char *output, size_t capacity)
+{
+    if (metagame->journal == NULL) {
+        CcSimAdvanceDays(&metagame->sim, days);
+        return true;
+    }
+    char error[192];
+    if (CcJournalAdvanceDays(metagame->journal, &metagame->sim,
+                             days, error, sizeof(error))) {
+        return true;
+    }
+    Append(output, capacity, "%s\n", error);
+    return false;
+}
+
+static bool FinishTravel(CcMetagame *metagame,
                          char *output, size_t capacity)
 {
     CcSim *sim = &metagame->sim;
     while (sim->journey.active &&
            sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
-        CcSimAdvanceRuntimeTicks(sim, CC_WORLD_TICKS_PER_SECOND);
+        if (!AdvanceRuntimeTicks(metagame, CC_WORLD_TICKS_PER_SECOND,
+                                 output, capacity)) return false;
     }
     if (sim->journey.active &&
         sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED) {
@@ -1491,13 +1525,18 @@ static void FinishTravel(CcMetagame *metagame,
                    sim->current_day);
         }
     }
+    return true;
 }
 
 static bool ApplyCommand(CcMetagame *metagame, const CcCommand *command,
                          char *output, size_t capacity)
 {
     char error[192];
-    if (!CcSimApply(&metagame->sim, command, error, sizeof(error))) {
+    bool applied = metagame->journal != NULL ?
+        CcJournalApply(metagame->journal, &metagame->sim, command,
+                       error, sizeof(error)) :
+        CcSimApply(&metagame->sim, command, error, sizeof(error));
+    if (!applied) {
         Append(output, capacity, "%s\n", error);
         return false;
     }
@@ -1521,6 +1560,52 @@ void CcMetagameInit(CcMetagame *metagame, uint32_t seed)
     metagame->sim.player.location_id = metagame->sim.settlements[0].id;
     metagame->sim.carriage.location_id = metagame->sim.player.location_id;
     metagame->sim.player.coins = 75;
+}
+
+bool CcMetagameStartJournal(CcMetagame *metagame, const char *path,
+                            char *error, size_t error_capacity)
+{
+    if (metagame == NULL || metagame->journal != NULL) {
+        if (error != NULL && error_capacity > 0U) {
+            (void)snprintf(error, error_capacity,
+                           "Metagame already has an action journal.");
+        }
+        return false;
+    }
+    metagame->journal = CcJournalStart(
+        path, &metagame->sim, error, error_capacity);
+    return metagame->journal != NULL;
+}
+
+bool CcMetagameResumeJournal(CcMetagame *metagame, const char *path,
+                             char *error, size_t error_capacity)
+{
+    if (metagame == NULL || metagame->journal != NULL) {
+        if (error != NULL && error_capacity > 0U) {
+            (void)snprintf(error, error_capacity,
+                           "Metagame already has an action journal.");
+        }
+        return false;
+    }
+    CcJournal *journal = CcJournalResume(
+        path, &metagame->sim, error, error_capacity);
+    if (journal == NULL) return false;
+    metagame->quit_requested = false;
+    metagame->journal = journal;
+    return true;
+}
+
+bool CcMetagameCloseJournal(CcMetagame *metagame,
+                            char *error, size_t error_capacity)
+{
+    if (metagame == NULL) {
+        if (error != NULL && error_capacity > 0U) {
+            (void)snprintf(error, error_capacity, "Metagame is missing.");
+        }
+        return false;
+    }
+    return CcJournalClose(&metagame->journal, &metagame->sim,
+                          error, error_capacity);
 }
 
 void CcMetagameIntro(const CcMetagame *metagame,
@@ -1879,7 +1964,7 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
             .target_id = destination
         };
         if (!ApplyCommand(metagame, &action, output, output_capacity)) return false;
-        FinishTravel(metagame, output, output_capacity);
+        if (!FinishTravel(metagame, output, output_capacity)) return false;
     } else if (strcmp(command, "road") == 0) {
         int32_t condition_before = metagame->sim.carriage.condition;
         CcMoney coins_before = metagame->sim.player.coins;
@@ -1937,7 +2022,7 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
                    condition_before - metagame->sim.carriage.condition);
         }
         if (action.kind != CC_COMMAND_WITHDRAW_ENCOUNTER) {
-            FinishTravel(metagame, output, output_capacity);
+            if (!FinishTravel(metagame, output, output_capacity)) return false;
         }
     } else if (strcmp(command, "repair") == 0) {
         int32_t index;
@@ -2049,13 +2134,18 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
                        "Resolve the road before waiting.\n");
             return false;
         }
-        CcSimAdvanceDays(&metagame->sim, days);
+        if (!AdvanceDays(metagame, days, output, output_capacity)) return false;
         Append(output, output_capacity,
                "%d days pass. Bread rises, letters travel, and people make plans in rooms where your chair is empty.\n",
                days);
         DescribeLook(metagame, output, output_capacity);
     } else if (strcmp(command, "save") == 0) {
         char error[192];
+        if (metagame->journal != NULL) {
+            Append(output, output_capacity,
+                   "This campaign already has a live action journal.\n");
+            return false;
+        }
         if (first == NULL || !CcSaveWrite(first, &metagame->sim,
                                           error, sizeof(error))) {
             Append(output, output_capacity, "%s\n",
@@ -2066,6 +2156,11 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
     } else if (strcmp(command, "load") == 0) {
         char error[192];
         CcSim loaded;
+        if (metagame->journal != NULL) {
+            Append(output, output_capacity,
+                   "Close the live action journal before loading another campaign.\n");
+            return false;
+        }
         if (first == NULL || !CcSaveRead(first, &loaded,
                                          error, sizeof(error))) {
             Append(output, output_capacity, "%s\n",
@@ -2086,4 +2181,375 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
         return false;
     }
     return ValidateAfterAction(metagame, output, output_capacity);
+}
+
+static void DescribeAgentPossessions(const CcMetagame *metagame,
+                                     char *output, size_t capacity)
+{
+    const CcSim *sim = &metagame->sim;
+    Append(output, capacity,
+           "Your carriage condition is %d/100. Horse-team readiness is %d%%.\n",
+           sim->carriage.condition, CcSimHorseTeamReadiness(sim));
+    DescribeCargo(metagame, output, capacity);
+    DescribeMaps(metagame, output, capacity);
+    Append(output, capacity, "Named treasures you can reach here:\n");
+    int32_t shown = 0;
+    for (int32_t i = 0; i < sim->treasure_count; ++i) {
+        const CcTreasure *treasure = &sim->treasures[i];
+        bool carried = treasure->owner_id == sim->player.id;
+        bool for_sale = treasure->owner_id == sim->player.location_id;
+        if (treasure->destroyed || (!carried && !for_sale)) continue;
+        Append(output, capacity,
+               "  %d. %s — value %d crowns [%s]\n",
+               i + 1, treasure->name, treasure->appraised_value,
+               carried ? "carried" : "for sale here");
+        shown += 1;
+    }
+    if (shown == 0) Append(output, capacity, "  None.\n");
+}
+
+static void DescribeAgentConsequences(const CcMetagame *metagame,
+                                      char *output, size_t capacity)
+{
+    const CcSim *sim = &metagame->sim;
+    Append(output, capacity, "Consequences witnessed or heard here:\n");
+    int32_t shown = 0;
+    for (int32_t i = 0; i < sim->event_count && shown < 6; ++i) {
+        const CcEvent *event = CcSimRecentEvent(sim, i);
+        if (event == NULL || event->location_id != sim->player.location_id) {
+            continue;
+        }
+        Append(output, capacity, "  day %d: %s\n", event->day, event->text);
+        shown += 1;
+    }
+    if (shown == 0) Append(output, capacity, "  Nothing has reached you yet.\n");
+}
+
+static void DescribeAgentActions(char *output, size_t capacity)
+{
+    Append(output, capacity,
+           "Send exactly one command on the next line. Available command families:\n"
+           "  look, people, talk NUMBER, rumors, charters, roads, causes, notes, cargo, status\n"
+           "  tell NUMBER, keep NUMBER, accept NUMBER, refuse NUMBER, abandon\n"
+           "  buy GOOD COUNT, sell GOOD COUNT, buy-map NUMBER, sell-map NUMBER\n"
+           "  archive-map NUMBER, retrieve-map NUMBER\n"
+           "  buy-treasure NUMBER, sell-treasure NUMBER, travel NUMBER\n"
+           "  road fight|bargain|supper|turn-back, repair NUMBER tools|cash\n"
+           "  underroad enter|look|move NUMBER|search|open|parley|evade|force|retreat\n"
+           "  dungeon public|smuggler|close, wait DAYS\n"
+           "  dragon steal COUNT, dragon return COUNT, dragon steal-treasure NUMBER\n"
+           "  dragon return-treasure, dragon intercept\n"
+           "  goblins trade GOOD COUNT, goblins warn, goblins intercept\n"
+           "  debrief, quit\n"
+           "Global ledgers, hidden faction state, and save control are outside your reach.\n");
+}
+
+void CcMetagameAgentObserve(const CcMetagame *metagame,
+                            char *output, size_t output_capacity)
+{
+    if (output == NULL || output_capacity == 0U) return;
+    output[0] = '\0';
+    if (metagame == NULL) {
+        Append(output, output_capacity, "No courier is present.\n");
+        return;
+    }
+    Append(output, output_capacity,
+           "You are the Crownless Company courier. You know what you carry, what you have witnessed, and what people at your present place can tell you. You do not know hidden world state.\n");
+    if (metagame->sim.dungeon_expedition.active) {
+        DescribeUnderroad(metagame, output, output_capacity);
+    } else {
+        DescribeLook(metagame, output, output_capacity);
+        if (metagame->sim.journey.active &&
+            metagame->sim.journey.phase == CC_JOURNEY_PHASE_BLOCKED) {
+            const CcEvent *event = CcSimRecentEvent(&metagame->sim, 0);
+            Append(output, output_capacity, "The road has stopped you: %s\n",
+                   event != NULL ? event->text : "The way is blocked.");
+        }
+        DescribePeople(metagame, output, output_capacity);
+        DescribeRumors(metagame, output, output_capacity);
+        DescribeCharters(metagame, output, output_capacity);
+        DescribeRoutes(metagame, output, output_capacity);
+        DescribeCauses(metagame, output, output_capacity);
+    }
+    DescribeAgentPossessions(metagame, output, output_capacity);
+    DescribeAgentConsequences(metagame, output, output_capacity);
+    DescribeAgentActions(output, output_capacity);
+}
+
+static bool AgentSituationVisible(const CcMetagame *metagame,
+                                  const char *number)
+{
+    int32_t index = 0;
+    if (!ParseIndex(number, metagame->sim.situation_count, &index)) {
+        return false;
+    }
+    const CcSituation *situation = &metagame->sim.situations[index];
+    return situation->status == CC_SITUATION_ACTIVE &&
+        (CcSimSituationOfferSettlementId(&metagame->sim, situation) ==
+             metagame->sim.player.location_id ||
+         CcSimSituationConversationCharacter(
+             &metagame->sim, situation,
+             metagame->sim.player.location_id) != NULL);
+}
+
+static bool AgentRouteVisible(const CcMetagame *metagame,
+                              const char *number)
+{
+    int32_t index = 0;
+    if (!ParseIndex(number, metagame->sim.route_count, &index)) return false;
+    const CcRoute *route = &metagame->sim.routes[index];
+    return route->from_id == metagame->sim.player.location_id ||
+        route->to_id == metagame->sim.player.location_id;
+}
+
+static bool AgentMapVisible(const CcMetagame *metagame,
+                            const char *number)
+{
+    int32_t index = 0;
+    if (!ParseIndex(number, metagame->sim.map_count, &index)) return false;
+    const CcMap *map = &metagame->sim.maps[index];
+    return map->owner_id == metagame->sim.player.id ||
+        map->owner_id == metagame->sim.player.location_id;
+}
+
+static bool AgentTreasureVisible(const CcMetagame *metagame,
+                                 const char *number)
+{
+    int32_t index = 0;
+    if (!ParseIndex(number, metagame->sim.treasure_count, &index)) {
+        return false;
+    }
+    const CcTreasure *treasure = &metagame->sim.treasures[index];
+    return !treasure->destroyed &&
+        (treasure->owner_id == metagame->sim.player.id ||
+         treasure->owner_id == metagame->sim.player.location_id);
+}
+
+static bool AgentCommandAllowed(const CcMetagame *metagame,
+                                const char *line)
+{
+    if (metagame == NULL || line == NULL || strlen(line) >= 256U) {
+        return false;
+    }
+    char copy[256];
+    (void)snprintf(copy, sizeof(copy), "%s", line);
+    char *command = strtok(copy, " \t\r\n");
+    char *first = strtok(NULL, " \t\r\n");
+    char *second = strtok(NULL, " \t\r\n");
+    if (command == NULL) return false;
+    if (strcmp(command, "help") == 0 || strcmp(command, "look") == 0 ||
+        strcmp(command, "people") == 0 ||
+        strcmp(command, "rumors") == 0 ||
+        strcmp(command, "charters") == 0 ||
+        strcmp(command, "roads") == 0 || strcmp(command, "routes") == 0 ||
+        strcmp(command, "causes") == 0 || strcmp(command, "notes") == 0 ||
+        strcmp(command, "maps") == 0 || strcmp(command, "cargo") == 0 ||
+        strcmp(command, "status") == 0 ||
+        strcmp(command, "abandon") == 0 || strcmp(command, "buy") == 0 ||
+        strcmp(command, "sell") == 0 || strcmp(command, "wait") == 0 ||
+        strcmp(command, "debrief") == 0 || strcmp(command, "quit") == 0) {
+        return true;
+    }
+    if (strcmp(command, "talk") == 0 || strcmp(command, "tell") == 0 ||
+        strcmp(command, "keep") == 0 || strcmp(command, "report") == 0 ||
+        strcmp(command, "confide") == 0 ||
+        strcmp(command, "accept") == 0 ||
+        strcmp(command, "refuse") == 0) {
+        return AgentSituationVisible(metagame, first);
+    }
+    if (strcmp(command, "travel") == 0 ||
+        strcmp(command, "repair") == 0) {
+        return AgentRouteVisible(metagame, first);
+    }
+    if (strcmp(command, "buy-map") == 0 ||
+        strcmp(command, "sell-map") == 0 ||
+        strcmp(command, "buy-notes") == 0 ||
+        strcmp(command, "sell-notes") == 0 ||
+        strcmp(command, "archive-map") == 0 ||
+        strcmp(command, "retrieve-map") == 0) {
+        return AgentMapVisible(metagame, first);
+    }
+    if (strcmp(command, "buy-treasure") == 0 ||
+        strcmp(command, "sell-treasure") == 0) {
+        return AgentTreasureVisible(metagame, first);
+    }
+    if (strcmp(command, "road") == 0) {
+        return metagame->sim.journey.active &&
+            metagame->sim.journey.phase == CC_JOURNEY_PHASE_BLOCKED;
+    }
+    if (strcmp(command, "underroad") == 0 ||
+        strcmp(command, "dungeon") == 0) {
+        return metagame->sim.dungeon_expedition.active ||
+            (metagame->sim.dungeon_count > 0 &&
+             metagame->sim.player.location_id ==
+                 metagame->sim.dungeons[0].settlement_id);
+    }
+    if (strcmp(command, "dragon") == 0 && first != NULL) {
+        return metagame->sim.player.location_id ==
+            metagame->sim.dragon.lair_settlement_id;
+    }
+    if (strcmp(command, "goblins") == 0 && first != NULL) {
+        if (strcmp(first, "trade") == 0) {
+            return metagame->sim.player.location_id ==
+                metagame->sim.goblins.lair_settlement_id;
+        }
+        bool intervention = strcmp(first, "warn") == 0 ||
+            strcmp(first, "intercept") == 0;
+        bool active = metagame->sim.goblins.tribute_phase ==
+                CC_GOBLIN_TRIBUTE_PREPARING ||
+            metagame->sim.goblins.tribute_phase ==
+                CC_GOBLIN_TRIBUTE_OUTBOUND;
+        return intervention && second == NULL && active &&
+            metagame->sim.player.location_id ==
+                metagame->sim.goblins.tribute_target_id;
+    }
+    return false;
+}
+
+bool CcMetagameAgentExecute(CcMetagame *metagame, const char *line,
+                            char *output, size_t output_capacity)
+{
+    if (output == NULL || output_capacity == 0U) return false;
+    output[0] = '\0';
+    if (!AgentCommandAllowed(metagame, line)) {
+        Append(output, output_capacity,
+               "The courier boundary rejects that command. Act from local observations; hidden world reports and save control are not available.\n");
+        return false;
+    }
+    char copy[256];
+    (void)snprintf(copy, sizeof(copy), "%s", line);
+    char *command = strtok(copy, " \t\r\n");
+    if (command != NULL && strcmp(command, "help") == 0) {
+        DescribeAgentActions(output, output_capacity);
+        return true;
+    }
+    return CcMetagameExecute(metagame, line, output, output_capacity);
+}
+
+static bool AgentEventsMatch(const CcEvent *left, const CcEvent *right)
+{
+    return left != NULL && right != NULL && left->kind == right->kind &&
+        left->day == right->day && left->location_id == right->location_id &&
+        strcmp(left->text, right->text) == 0;
+}
+
+static bool AgentEventAppearsIn(const CcEvent *event, const CcSim *sim)
+{
+    for (int32_t i = 0; i < sim->event_count; ++i) {
+        if (AgentEventsMatch(event, CcSimRecentEvent(sim, i))) return true;
+    }
+    return false;
+}
+
+static void DescribeCounterfactualEvents(const CcSim *actual,
+                                         const CcSim *control,
+                                         char *output, size_t capacity)
+{
+    Append(output, capacity,
+           "Consequences present only in the courier branch:\n");
+    int32_t shown = 0;
+    for (int32_t i = 0; i < actual->event_count && shown < 8; ++i) {
+        const CcEvent *event = CcSimRecentEvent(actual, i);
+        if (event == NULL || AgentEventAppearsIn(event, control)) continue;
+        Append(output, capacity, "  day %d: %s\n", event->day, event->text);
+        shown += 1;
+    }
+    if (shown == 0) Append(output, capacity, "  None recorded.\n");
+
+    Append(output, capacity,
+           "Consequences present only when the company took no action:\n");
+    shown = 0;
+    for (int32_t i = 0; i < control->event_count && shown < 8; ++i) {
+        const CcEvent *event = CcSimRecentEvent(control, i);
+        if (event == NULL || AgentEventAppearsIn(event, actual)) continue;
+        Append(output, capacity, "  day %d: %s\n", event->day, event->text);
+        shown += 1;
+    }
+    if (shown == 0) Append(output, capacity, "  None recorded.\n");
+}
+
+bool CcMetagameAgentCounterfactual(const CcMetagame *metagame,
+                                   char *output, size_t output_capacity,
+                                   uint64_t *control_hash)
+{
+    if (output == NULL || output_capacity == 0U) return false;
+    output[0] = '\0';
+    if (metagame == NULL || control_hash == NULL ||
+        metagame->sim.current_day < 1) {
+        Append(output, output_capacity,
+               "The no-action control could not be constructed.\n");
+        return false;
+    }
+    CcMetagame *control = calloc(1U, sizeof(*control));
+    if (control == NULL) {
+        Append(output, output_capacity,
+               "The no-action control could not be allocated.\n");
+        return false;
+    }
+    CcMetagameInit(control, metagame->sim.world_seed);
+    int32_t elapsed_days = metagame->sim.current_day - control->sim.current_day;
+    if (elapsed_days > 0) CcSimAdvanceDays(&control->sim, elapsed_days);
+    *control_hash = CcSimHash(&control->sim);
+
+    Append(output, output_capacity,
+           "NO-ACTION CONTROL — seed %" PRIu32 ", day %d\n"
+           "The control world used the same seed and elapsed days while the company took no actions.\n"
+           "Actual state %016" PRIx64 "; control state %016" PRIx64 ".\n",
+           metagame->sim.world_seed, metagame->sim.current_day,
+           CcSimHash(&metagame->sim), *control_hash);
+    Append(output, output_capacity,
+           "Settlement differences (actual / control):\n");
+    int32_t changed = 0;
+    int32_t settlement_count = metagame->sim.settlement_count <
+            control->sim.settlement_count ?
+        metagame->sim.settlement_count : control->sim.settlement_count;
+    for (int32_t i = 0; i < settlement_count; ++i) {
+        const CcSettlement *actual = &metagame->sim.settlements[i];
+        const CcSettlement *idle = &control->sim.settlements[i];
+        if (actual->stock[CC_GOOD_FOOD] == idle->stock[CC_GOOD_FOOD] &&
+            actual->hunger == idle->hunger &&
+            actual->security == idle->security) continue;
+        Append(output, output_capacity,
+               "  %s: Food %d/%d, hunger %d/%d, security %d/%d\n",
+               actual->name, actual->stock[CC_GOOD_FOOD],
+               idle->stock[CC_GOOD_FOOD], actual->hunger, idle->hunger,
+               actual->security, idle->security);
+        changed += 1;
+    }
+    if (changed == 0) Append(output, output_capacity, "  None.\n");
+
+    int32_t actual_resolved = 0;
+    int32_t actual_failed = 0;
+    int32_t control_resolved = 0;
+    int32_t control_failed = 0;
+    for (int32_t i = 0; i < metagame->sim.situation_count; ++i) {
+        if (metagame->sim.situations[i].status == CC_SITUATION_RESOLVED) {
+            actual_resolved += 1;
+        }
+        if (metagame->sim.situations[i].status == CC_SITUATION_FAILED) {
+            actual_failed += 1;
+        }
+    }
+    for (int32_t i = 0; i < control->sim.situation_count; ++i) {
+        if (control->sim.situations[i].status == CC_SITUATION_RESOLVED) {
+            control_resolved += 1;
+        }
+        if (control->sim.situations[i].status == CC_SITUATION_FAILED) {
+            control_failed += 1;
+        }
+    }
+    Append(output, output_capacity,
+           "Commitments resolved %d/%d; failed %d/%d (actual / control).\n"
+           "Goblin cohesion %d/%d and covenant %d/%d. Dragon shadow %d/%d.\n",
+           actual_resolved, control_resolved, actual_failed, control_failed,
+           metagame->sim.goblins.cohesion, control->sim.goblins.cohesion,
+           metagame->sim.goblins.devotion, control->sim.goblins.devotion,
+           metagame->sim.dragon.regional_influence,
+           control->sim.dragon.regional_influence);
+    DescribeCounterfactualEvents(&metagame->sim, &control->sim,
+                                 output, output_capacity);
+    Append(output, output_capacity,
+           "These are branch differences, not claims that one action had only one cause; later events can inherit earlier divergence.\n");
+    free(control);
+    return true;
 }
