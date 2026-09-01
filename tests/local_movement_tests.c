@@ -502,6 +502,20 @@ static void TestSharedCharacterCollisionWorld(void)
         exit(1);
     }
 
+    CcLocalAgent blocked_projection;
+    CcLocalAgentInit(&blocked_projection,
+                     (Vector2){CC_LOCAL_START_X, CC_LOCAL_START_Z}, false);
+    if (CcLocalAgentSetStreetTarget(
+            &blocked_projection,
+            (Vector3){CC_LOCAL_CARRIAGE_X, 0.0f,
+                      CC_LOCAL_CARRIAGE_Z}) ||
+        blocked_projection.command_point_valid ||
+        blocked_projection.navigation_active) {
+        (void)fprintf(stderr,
+                      "blocked click silently projected across the carriage\n");
+        exit(1);
+    }
+
     CcLocalAgent articulated;
     CcLocalAgentInit(&articulated, (Vector2){2.10f, 7.50f}, false);
     articulated.facing_yaw = 0.0f;
@@ -526,9 +540,22 @@ static void TestStreetWaypointCornerProgress(void)
         (void)fprintf(stderr, "corner-progress route was rejected\n");
         exit(1);
     }
+    float minimum_walk_alignment = 1.0f;
+    int32_t walk_alignment_samples = 0;
     for (int32_t frame = 0;
          frame < 1200 && agent.navigation_active; ++frame) {
         CcLocalAgentUpdate(&agent, 1.0f / 60.0f, false);
+        float speed = sqrtf(agent.velocity.x * agent.velocity.x +
+                            agent.velocity.z * agent.velocity.z);
+        if (speed > 0.35f) {
+            float facing_x = sinf(agent.facing_yaw);
+            float facing_z = cosf(agent.facing_yaw);
+            float alignment =
+                facing_x * agent.velocity.x / speed +
+                facing_z * agent.velocity.z / speed;
+            minimum_walk_alignment = fminf(minimum_walk_alignment, alignment);
+            walk_alignment_samples += 1;
+        }
     }
     float x = agent.position.x - destination.x;
     float z = agent.position.z - destination.z;
@@ -538,6 +565,13 @@ static void TestStreetWaypointCornerProgress(void)
             "corner-progress route stalled at %.3f %.3f, waypoint %d/%d\n",
             agent.position.x, agent.position.z,
             agent.navigation_point_index, agent.navigation_point_count);
+        exit(1);
+    }
+    if (walk_alignment_samples <= 0 || minimum_walk_alignment < 0.10f) {
+        (void)fprintf(
+            stderr,
+            "corner-progress walk slid sideways: %d samples, alignment %.3f\n",
+            walk_alignment_samples, minimum_walk_alignment);
         exit(1);
     }
 
@@ -2765,14 +2799,40 @@ int main(void)
         visible_click_art.y * click_viewport.height /
             (float)click_target.texture.height,
     };
-    if (!CcLocalAgentPickTarget(&miller_click_agent,
-                                visible_click_screen,
-                                click_target, click_viewport, false)) {
+    CcLocalMovementPreview miller_preview = {0};
+    Vector3 miller_before_preview = miller_click_agent.position;
+    if (!CcLocalAgentProbeTarget(
+            &miller_click_agent, visible_click_screen,
+            click_target, click_viewport, false, &miller_preview) ||
+        !miller_preview.valid || !miller_preview.accepted ||
+        miller_preview.path_count <= 0) {
         (void)fprintf(stderr,
-                      "Miller's Bend visible road could not be clicked\n");
+                      "Miller's Bend visible road could not be previewed\n");
+        return 1;
+    }
+    if (miller_click_agent.command_point_valid ||
+        miller_click_agent.navigation_active ||
+        VectorDistance3(miller_click_agent.position,
+                        miller_before_preview) > 0.00001f) {
+        (void)fprintf(stderr,
+                      "movement preview changed the live walker\n");
+        return 1;
+    }
+    if (!CcLocalAgentApplyMovementPreview(
+            &miller_click_agent, &miller_preview, false)) {
+        (void)fprintf(stderr,
+                      "Miller's Bend movement preview could not be applied\n");
         return 1;
     }
     Vector3 projected_command = miller_click_agent.command_point;
+    if (VectorDistance3(projected_command,
+                        miller_preview.resolved_point) > 0.00001f ||
+        miller_click_agent.navigation_point_count !=
+            miller_preview.path_count) {
+        (void)fprintf(stderr,
+                      "movement preview and committed path disagreed\n");
+        return 1;
+    }
     float projection_distance = VectorDistance2(
         (Vector2){projected_command.x, projected_command.z},
         (Vector2){visible_miller_point.x, visible_miller_point.z});
