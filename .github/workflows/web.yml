@@ -33,13 +33,13 @@ jobs:
           test -f out/build/web/site/index.wasm &&
           test -f out/build/web/site/index.data &&
           test "$(stat -c%s out/build/web/site/index.data)" -le 10485760 &&
-          test -f out/build/web/web-runtime/assets/exports/glb/environment_bridge_checkpoint_v01.glb &&
           test -f out/build/web/web-runtime/assets/exports/glb/carriage_base_v01.glb &&
-          test -f out/build/web/web-runtime/assets/exports/glb/environment_market_granary_v01.glb &&
-          test -f out/build/web/web-runtime/assets/exports/glb/environment_mine_entrance_v01.glb &&
-          test -f out/build/web/web-runtime/assets/exports/glb/state_food_shortage_v01.glb &&
-          test -f out/build/web/web-runtime/assets/exports/glb/state_harsh_enforcement_v01.glb &&
-          test -f out/build/web/web-runtime/assets/exports/glb/state_market_recovery_v01.glb &&
+          test -f out/build/web/site/assets/exports/glb/environment_bridge_checkpoint_v01.glb &&
+          test -f out/build/web/site/assets/exports/glb/environment_market_granary_v01.glb &&
+          test -f out/build/web/site/assets/exports/glb/environment_mine_entrance_v01.glb &&
+          test -f out/build/web/site/assets/exports/glb/state_food_shortage_v01.glb &&
+          test -f out/build/web/site/assets/exports/glb/state_harsh_enforcement_v01.glb &&
+          test -f out/build/web/site/assets/exports/glb/state_market_recovery_v01.glb &&
           test -f out/build/web/site/assets/maps/gloamgate_to_alderwatch.png &&
           test -f out/build/web/site/assets/maps/collectible_map_atlas.png
       - name: Upload Pages site
