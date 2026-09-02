@@ -3214,6 +3214,16 @@ static void WearOneTool(CcSettlement *settlement, int32_t *wear,
 
 static CcTreasure *AllocateTreasure(CcSim *sim)
 {
+    /* Reuse a destroyed slot first: destroyed treasures keep their row
+       for save-schema stability but their physical slot is free. */
+    for (int32_t i = 0; i < sim->treasure_count; ++i) {
+        if (sim->treasures[i].destroyed) {
+            CcTreasure *treasure = &sim->treasures[i];
+            *treasure = (CcTreasure){0};
+            treasure->id = NextId(sim, CC_ENTITY_TREASURE);
+            return treasure;
+        }
+    }
     if (sim->treasure_count >= CC_MAX_TREASURES) return NULL;
     CcTreasure *treasure = &sim->treasures[sim->treasure_count++];
     *treasure = (CcTreasure){0};
@@ -3700,7 +3710,7 @@ static void AdvanceArchives(CcSim *sim)
        capacity, scribes consolidate the oldest tomes into a codex - four
        chronicles bound into one, carrying their combined lore. Archives
        in the real world weed and rebind; so does this one. */
-    if (sim->treasure_count >= CC_MAX_TREASURES - 1) {
+    if (sim->treasure_count >= CC_MAX_TREASURES - 4) {
         int32_t tome_slots[4];
         int32_t found = 0;
         for (int32_t i = 0; i < sim->treasure_count && found < 4; ++i) {
@@ -5380,6 +5390,29 @@ static void AdvanceDragonEcology(CcSim *sim)
         ChangeDragonStage(sim, CC_DRAGON_STAGE_DEEP_WYRM,
                           CC_EVENT_DRAGON_CROWNED,
                           "centuries of possession bind wyrm, hoard, and mountain");
+        /* Relic law, dark mirror: five centuries of hoarding leaves an
+           artifact of the wyrm itself - the mountain's own crown-gem,
+           owned by the dragon, waiting in the lair for a thief. */
+        CcTreasure *gem = AllocateTreasure(sim);
+        if (gem != NULL) {
+            CcSettlement *lair = CcSimSettlementMutable(
+                sim, dragon->lair_settlement_id);
+            if (lair != NULL) {
+                (void)snprintf(gem->name, sizeof(gem->name),
+                               "Wyrmheart of %.20s", dragon->name);
+                gem->maker_settlement_id = lair->id;
+                gem->owner_id = dragon->id;
+                gem->location_id = lair->id;
+                gem->gold_content = 2;
+                gem->gem_content = 12;
+                gem->craft_work = 50;
+                gem->appraised_value = gem->gold_content * 40 +
+                    gem->gem_content * 70 + gem->craft_work * 10;
+                gem->created_day = sim->current_day;
+            } else {
+                sim->treasure_count -= 1;
+            }
+        }
     }
 
     if (dragon->brood_cooldown_days == 0 && dragon->egg_count == 0 &&
@@ -8040,6 +8073,41 @@ static void AdvanceDragonCampaign(CcSim *sim)
         sim, CC_EVENT_DRAGON_SLAIN, sim->dragon.id,
         sim->dragon.lair_settlement_id, campaign->cause_event_id,
         attack - defense, text);
+    /* Relic law: a world-historical deed leaves a named artifact whose
+       provenance IS the event that made it. The bane-blade is forged in
+       the moment of the slaying, held at the campaign's origin - the
+       OSR principle that unique treasures carry unique history. */
+    {
+        CcTreasure *relic = AllocateTreasure(sim);
+        if (relic != NULL && battle != NULL) {
+            CcSettlement *origin = CcSimSettlementMutable(
+                sim, campaign->origin_settlement_id);
+            if (origin != NULL) {
+                (void)snprintf(relic->name, sizeof(relic->name),
+                               "Bane of %.24s", sim->dragon.name);
+                relic->maker_settlement_id = origin->id;
+                relic->owner_id = origin->id;
+                relic->location_id = origin->id;
+                relic->gold_content = 3;
+                relic->gem_content = 2;
+                relic->craft_work = MaximumI32(1, attack - defense);
+                relic->appraised_value = relic->gold_content * 40 +
+                    relic->gem_content * 70 + relic->craft_work * 10;
+                relic->created_day = sim->current_day;
+                char relic_text[CC_EVENT_TEXT_CAPACITY];
+                (void)snprintf(relic_text, sizeof(relic_text),
+                               "From the hoard-fire the host raises "
+                               "%.24s, bane of %.24s, day %d.",
+                               relic->name, sim->dragon.name,
+                               sim->current_day);
+                (void)PushEvent(sim, CC_EVENT_TREASURE_CRAFTED,
+                                relic->id, origin->id, battle->id,
+                                relic->appraised_value, relic_text);
+            } else {
+                sim->treasure_count -= 1;
+            }
+        }
+    }
     campaign->cause_event_id = battle != NULL ? battle->id : 0U;
     sim->dragon.lifecycle_event_id = battle != NULL ? battle->id :
                                       sim->dragon.lifecycle_event_id;
