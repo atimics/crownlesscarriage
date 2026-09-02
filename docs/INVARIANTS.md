@@ -29,16 +29,17 @@ chunk meshes on the GPU. A chunk outside the 5 by 5 focus ring is disposable;
 the manifest and coordinate are enough to recreate it. Do not move generated
 height arrays into authoritative save state.
 
-The carriage camera may also keep one fixed 48 by 48 cell overview mesh. It
-is regenerated from the manifest, contains no authoritative state, and never
-grows with play time. Nearby streamed chunks replace its coarse detail.
-
 Open-world carriage presentation must use the generated route pose. Its
 position and heading cannot be maintained by a separate visual road path.
-Each settlement must render from its `CcLocalPlaceProfile`; the profile is
-scaled onto its plateau and rotated so its carriage gate meets the generated
-route. The same transformed building, compound, and landmark footprints must
-drive open-world collision.
+The wide view renders generated corridors along revealed routes; it must not
+render a square world floor. Fog is derived from chart knowledge, current
+location, and current journey progress.
+
+Authored town play uses `CcLocalPlaceProfile` in legacy-local coordinates.
+The open world is carriage-only. Entering an authored town must leave the
+world coordinate space before local movement, collision, or session saving.
+Road-book events may use authored close road scenes, but returning to travel
+must restore the same generated route pose and simulation progress.
 
 ## Save compatibility
 

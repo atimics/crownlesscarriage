@@ -1,6 +1,6 @@
 # 0014 — Use one finite, streamed world map
 
-**Status:** Accepted
+**Status:** Superseded by 0015
 
 ## Context
 

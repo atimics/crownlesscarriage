@@ -920,13 +920,6 @@ static void RepositionHero(LocalState *local, Vector2 position,
 
 static void ResetLocalState(LocalState *local)
 {
-    bool preserve_world_position = local->open_world &&
-        CcWorldManifestContains(&local->world_stream.manifest,
-                                local->agent.position.x,
-                                local->agent.position.z);
-    Vector2 world_position = {local->agent.position.x,
-                              local->agent.position.z};
-    CcLocalWorldCarriageState world_carriage = local->world_carriage;
     local->movement_preview = (CcLocalMovementPreview){0};
     local->movement_preview_cooldown = 0.0f;
     local->movement_reticle = (Vector2){0};
@@ -962,13 +955,6 @@ static void ResetLocalState(LocalState *local)
         CC_LOCAL_CARRIAGE_Z - CC_LOCAL_CARRIAGE_APPROACH_Z);
     CcLocalCombatSetTeam(&local->agent, CC_COMBAT_PLAYER);
     CcLocalCourseInit(&local->course);
-    if (preserve_world_position) {
-        local->world_carriage = world_carriage;
-        CcLocalBindOpenWorld(&local->world_stream);
-        RepositionHero(local, world_position, false);
-        CcLocalAgentSetScene(&local->agent, CC_LOCAL_SCENE_STREET);
-        local->course.scene = CC_LOCAL_SCENE_STREET;
-    }
 }
 
 static void BeginOpening(LocalState *local)
@@ -1104,39 +1090,55 @@ static void UpdateOpenWorldCamera(LocalState *local, float delta_time)
         local->world_carriage.camera_weight + change);
 }
 
+static void PositionOpenWorldJourney(const CcSim *sim, LocalState *local);
+
 static bool InitializeOpenWorld(const CcSim *sim, LocalState *local,
                                 bool preserve_position)
 {
     if (sim == NULL || local == NULL) return false;
-    Vector2 previous = {local->agent.position.x, local->agent.position.z};
+    (void)preserve_position;
     CcLocalBindOpenWorld(NULL);
     local->open_world = false;
     if (!CcWorldStreamInit(&local->world_stream, sim)) return false;
+    local->world_carriage = (CcLocalWorldCarriageState){0};
+    return true;
+}
+
+static void LeaveOpenWorld(LocalState *local)
+{
+    if (local == NULL) return;
+    local->open_world = false;
+    local->open_world_market = false;
+    local->world_carriage.visible = false;
+    local->world_carriage.hero_embarked = false;
+    local->world_carriage.camera_weight = 0.0f;
+    local->world_carriage.camera_target = 0.0f;
+    CcLocalBindOpenWorld(NULL);
+}
+
+static bool EnterOpenWorldAtRoadGate(const CcSim *sim, LocalState *local,
+                                     CcId route_id)
+{
+    if (sim == NULL || local == NULL ||
+        local->world_stream.manifest.route_count <= 0) return false;
     local->open_world = true;
     CcLocalBindOpenWorld(&local->world_stream);
-    const CcWorldSettlementPlacement *place =
-        CcWorldSettlementPlacementForId(
-            &local->world_stream.manifest, sim->player.location_id);
-    CcWorldPoint spawn = place != NULL ?
-        CcWorldSettlementFeaturePoint(
-            &local->world_stream.manifest, place->settlement_id,
-            0.0f, 10.0f) :
-        (CcWorldPoint){local->world_stream.manifest.minimum_x + 8.0f,
-                       local->world_stream.manifest.minimum_z + 8.0f};
-    if (preserve_position && CcWorldManifestContains(
-            &local->world_stream.manifest, previous.x, previous.y)) {
-        spawn = (CcWorldPoint){previous.x, previous.y};
-    }
-    RepositionHero(local, (Vector2){spawn.x, spawn.z}, false);
-    CcLocalAgentSetScene(&local->agent, CC_LOCAL_SCENE_STREET);
-    local->course.scene = CC_LOCAL_SCENE_STREET;
-    local->course.alarm_countdown = 1000.0f;
-    local->opening_step = CC_LOCAL_OPENING_COMPLETE;
-    CcWorldStreamUpdate(&local->world_stream, spawn.x, spawn.z,
-                        CC_WORLD_STREAM_CAPACITY);
-    if (!preserve_position) local->world_carriage.camera_weight = 0.0f;
-    SetOpenWorldCarriageAtSettlement(sim, local);
-    return true;
+    local->world_carriage.camera_weight = 0.0f;
+    SetOpenWorldCarriageAtRoadGate(sim, local, route_id);
+    local->agent.position = local->world_carriage.position;
+    local->agent.facing_yaw = local->world_carriage.heading_yaw;
+    return local->world_carriage.visible;
+}
+
+static bool EnterOpenWorldJourney(const CcSim *sim, LocalState *local)
+{
+    if (sim == NULL || local == NULL || !sim->journey.active ||
+        local->world_stream.manifest.route_count <= 0) return false;
+    local->open_world = true;
+    CcLocalBindOpenWorld(&local->world_stream);
+    PositionOpenWorldJourney(sim, local);
+    local->world_carriage.camera_target = 1.0f;
+    return local->world_carriage.visible;
 }
 
 static void BindOpenWorldForLocalState(const LocalState *local)
@@ -1201,7 +1203,6 @@ static void PositionOpenWorldJourney(const CcSim *sim, LocalState *local)
     local->world_carriage.route_id = sim->journey.route_id;
     local->world_carriage.visible = true;
     local->world_carriage.hero_embarked = true;
-    CcWorldStreamUpdate(&local->world_stream, point.x, point.z, 3);
 }
 
 static float OpenWorldSettlementDistance(const CcSim *sim,
@@ -1346,6 +1347,7 @@ static void BeginRoadLocalState(const CcSim *sim, LocalState *local,
     CcAthleticProfile athletics = local->agent.athletics;
     float lateral_offset = local->convoy.lateral_offset;
     float pace = local->convoy.pace;
+    LeaveOpenWorld(local);
     ResetLocalState(local);
     local->agent.athletics = athletics;
     local->convoy.phase = CC_LOCAL_CONVOY_ROAD;
@@ -1413,8 +1415,7 @@ static void BeginRoadTravelState(const CcSim *sim, LocalState *local)
     local->convoy.pace = sim != NULL && sim->journey.active ?
         CcClientConvoyPosturePace((int32_t)sim->journey.pace) :
         (pace > 0.05f ? pace : 0.72f);
-    if (local->open_world) {
-        PositionOpenWorldJourney(sim, local);
+    if (EnterOpenWorldJourney(sim, local)) {
         CcLocalAgentSetScene(&local->agent, CC_LOCAL_SCENE_STREET);
         local->course.scene = CC_LOCAL_SCENE_STREET;
     } else {
@@ -1477,6 +1478,7 @@ static void BeginTownArrivalState(LocalState *local)
 {
     CcAthleticProfile athletics = local->agent.athletics;
     float pace = local->convoy.pace;
+    LeaveOpenWorld(local);
     ResetLocalState(local);
     local->agent.athletics = athletics;
     local->convoy.phase = CC_LOCAL_CONVOY_ARRIVING;
@@ -2015,10 +2017,10 @@ static void DrawCombatPanel(const LocalState *local)
 
 static const char *JourneyRoadBeatName(int32_t progress_milli)
 {
-    if (progress_milli < 250) return "OUTER FARMS";
-    if (progress_milli < 500) return "DEEP ROAD";
-    if (progress_milli < 750) return "WAYFARER STOP";
-    return "DESTINATION MARCH";
+    if (progress_milli < 250) return "MORNING WATCH · OUTER FARMS";
+    if (progress_milli < 500) return "AFTERNOON WATCH · ROAD SIGNS";
+    if (progress_milli < 750) return "NIGHT WATCH · CAMP OR PRESS ON";
+    return "LAST MILES · THE FAR GATE";
 }
 
 static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
@@ -5720,11 +5722,9 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             *selected = FirstOutgoingRouteIndex(sim);
             *selected_situation = FirstActiveSituationIndex(sim);
             CcLocalBindPlace(sim);
-            bool reopen_world = local->open_world;
+            LeaveOpenWorld(local);
             ResetLocalState(local);
-            if (reopen_world) {
-                (void)InitializeOpenWorld(sim, local, false);
-            }
+            (void)InitializeOpenWorld(sim, local, false);
             if (sim->journey.active &&
                 sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED) {
                 BeginRoadLocalState(sim, local, false);
@@ -5773,13 +5773,10 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         *selected = FirstOutgoingRouteIndex(sim);
         *selected_situation = FirstActiveSituationIndex(sim);
         CcLocalBindPlace(sim);
-        bool reopen_world = local->open_world;
+        LeaveOpenWorld(local);
         ResetLocalState(local);
-        if (reopen_world) {
-            (void)InitializeOpenWorld(sim, local, false);
-        } else {
-            BeginOpening(local);
-        }
+        (void)InitializeOpenWorld(sim, local, false);
+        BeginOpening(local);
         *view = VIEW_LOCAL;
         message[0] = '\0';
         return;
@@ -5827,6 +5824,12 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 local->convoy.phase_progress >= 1.0f;
             bool ready = UpdateRoadChoiceApproach(local, delta_time);
             if (ready && ClientKeyPressed(KEY_ENTER)) {
+                const CcRoute *route = SelectedOutgoingRoute(
+                    sim, *selected);
+                if (route != NULL) {
+                    (void)EnterOpenWorldAtRoadGate(
+                        sim, local, route->id);
+                }
                 *view = VIEW_ROADS;
                 message[0] = '\0';
             } else if (ready && !was_ready) {
@@ -5902,10 +5905,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 } else {
                     *selected = FirstOutgoingRouteIndex(sim);
                     CcLocalBindPlace(sim);
-                    ResetLocalState(local);
-                    if (local->open_world) {
-                        PositionOpenWorldAtSettlement(sim, local);
-                    }
+                    BeginTownArrivalState(local);
                     (void)snprintf(message, message_capacity,
                                    "The team is watered and stabled.");
                 }
@@ -5964,12 +5964,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             } else if (!sim->journey.active) {
                 *selected = FirstOutgoingRouteIndex(sim);
                 CcLocalBindPlace(sim);
-                if (local->open_world) {
-                    ResetLocalState(local);
-                    PositionOpenWorldAtSettlement(sim, local);
-                } else {
-                    BeginTownArrivalState(local);
-                }
+                BeginTownArrivalState(local);
                 const CcEvent *event = CcSimRecentEvent(sim, 0);
                 (void)snprintf(message, message_capacity, "%s",
                                event != NULL ? event->text :
@@ -6683,10 +6678,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
 
     if (ClientKeyPressed(KEY_ESCAPE) ||
         context_action == CONTEXT_ACTION_CLOSE_VIEW) {
-        ResetLocalState(local);
-        if (local->open_world) {
-            PositionOpenWorldAtSettlement(sim, local);
-        }
+        BeginTownArrivalState(local);
         *view = VIEW_LOCAL;
         (void)snprintf(message, message_capacity,
                        "The carriage turns back into town.");
@@ -7341,11 +7333,11 @@ int main(int argc, char **argv)
         (void)snprintf(startup_message, sizeof(startup_message),
                        "Could not generate the finite world.");
     }
-    if (capture_world && local.open_world) {
+    if (capture_world) {
         const CcRoute *route = OpenWorldRouteFromSettlement(
             &sim, sim.player.location_id);
         if (route != NULL) {
-            SetOpenWorldCarriageAtRoadGate(&sim, &local, route->id);
+            (void)EnterOpenWorldAtRoadGate(&sim, &local, route->id);
             local.world_carriage.camera_weight = 1.0f;
         }
     }
@@ -7750,11 +7742,6 @@ int main(int argc, char **argv)
         CcLocalRendererBeginFrame(frame_delta_time);
         CcLocalBindPlace(&sim);
         BindOpenWorldForLocalState(&local);
-        if (local.open_world && !local.market_interior) {
-            CcWorldStreamUpdate(&local.world_stream,
-                                local.agent.position.x,
-                                local.agent.position.z, 3);
-        }
         CcLocalRendererSetAtmosphere(
             capture_atmosphere ? capture_atmosphere_preset :
                 LocalAtmosphereForSimulation(&sim),

@@ -1,9 +1,10 @@
 # Crownless Carriage
 
 A seed-driven carriage-courier fantasy world simulation with a raylib
-fixed-pixel, three-quarter 3D client. Normal play uses one finite procedural
-map with streamed terrain, settlements, and roads. The core is a deterministic headless
-simulation in C17 with SQLite-persisted saves; the desktop and browser
+fixed-pixel, three-quarter 3D client. Authored storybook towns are joined by
+a finite carriage road book whose generated corridors and fog reflect what
+the player has learned. The core is a deterministic headless simulation in
+C17 with SQLite-persisted saves; the desktop and browser
 clients, locomotion, and asset pipeline are all built on top of that
 simulation.
 

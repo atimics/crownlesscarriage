@@ -24990,6 +24990,7 @@ Vector2 CcLocalMove(Vector2 current, Vector2 delta, bool market_interior)
     return current;
 }
 
+#if 0
 typedef struct OpenWorldRenderChunk {
     int32_t x;
     int32_t z;
@@ -25191,15 +25192,6 @@ static Model OpenWorldBuildChunkModel(const CcWorldStream *stream,
     return model;
 }
 
-static int32_t OpenWorldGpuChunkCount(void)
-{
-    int32_t count = 0;
-    for (int32_t i = 0; i < CC_WORLD_STREAM_CAPACITY; ++i) {
-        if (open_world_render_chunks[i].ready) count += 1;
-    }
-    return count;
-}
-
 static void OpenWorldSyncRenderChunks(const CcWorldStream *stream)
 {
     if (stream == NULL) return;
@@ -25255,6 +25247,11 @@ static void OpenWorldSyncRenderChunks(const CcWorldStream *stream)
         };
     }
 }
+#endif
+
+static void OpenWorldRenderCacheClear(void)
+{
+}
 
 static void DrawOpenWorldSettlement(const CcSim *sim,
                                     const CcWorldSettlementPlacement *place,
@@ -25270,6 +25267,44 @@ static void DrawOpenWorldSettlement(const CcSim *sim,
         CcLocalPlaceProfileForSettlement(settlement);
     if (profile == NULL) return;
     Color kingdom = KingdomColor3D(sim, settlement->kingdom_id);
+    if (kingdom_view) {
+        float ground = CcWorldTerrainHeight(
+            active_world_stream != NULL ? &active_world_stream->manifest : NULL,
+            place->center.x, place->center.z);
+        float scale = settlement->size == CC_SETTLEMENT_CAPITAL_SIZE ? 1.25f :
+                      settlement->size == CC_SETTLEMENT_TOWN ? 1.05f : 0.88f;
+        Vector3 center = {place->center.x, ground, place->center.z};
+        DrawCylinder((Vector3){center.x, center.y + 0.06f, center.z},
+                     7.8f * scale, 7.8f * scale, 0.12f, 24,
+                     Fade(WORLD_EARTH_LIGHT, 0.92f));
+        DrawCylinderWires((Vector3){center.x, center.y + 0.14f, center.z},
+                          8.2f * scale, 8.2f * scale, 0.16f, 24,
+                          Fade(kingdom, 0.82f));
+        DrawBox((Vector3){center.x - 2.25f * scale,
+                          center.y + 1.25f * scale, center.z},
+                (Vector3){1.25f * scale, 2.5f * scale, 1.45f * scale},
+                BlendColor(WORLD_STONE, kingdom, 0.16f));
+        DrawBox((Vector3){center.x + 2.25f * scale,
+                          center.y + 1.25f * scale, center.z},
+                (Vector3){1.25f * scale, 2.5f * scale, 1.45f * scale},
+                BlendColor(WORLD_STONE, kingdom, 0.16f));
+        DrawBox((Vector3){center.x, center.y + 2.32f * scale, center.z},
+                (Vector3){5.7f * scale, 0.42f * scale, 1.55f * scale},
+                kingdom);
+        DrawBox((Vector3){center.x, center.y + 1.12f * scale, center.z},
+                (Vector3){1.95f * scale, 2.25f * scale, 0.24f * scale},
+                WORLD_ROAD_SHADOW);
+        DrawBox((Vector3){center.x, center.y + 4.25f * scale, center.z},
+                (Vector3){0.16f * scale, 3.5f * scale, 0.16f * scale},
+                WORLD_WOOD_SHADOW);
+        DrawTriangle3D(
+            (Vector3){center.x, center.y + 5.80f * scale, center.z},
+            (Vector3){center.x + 2.15f * scale,
+                      center.y + 5.15f * scale, center.z},
+            (Vector3){center.x, center.y + 4.48f * scale, center.z},
+            kingdom);
+        return;
+    }
     float rotation = place->entrance_heading_yaw - 0.5f * PI;
     CcSettlementFunction previous_function = active_place_function;
     active_place_function = profile->function;
@@ -25366,22 +25401,157 @@ static void DrawOpenWorldSettlement(const CcSim *sim,
     active_place_function = previous_function;
 }
 
+static bool OpenWorldPlayerKnowsRoute(const CcSim *sim, CcId route_id)
+{
+    if (sim == NULL || route_id == 0U) return false;
+    for (int32_t i = 0; i < sim->map_count; ++i) {
+        const CcMap *map = &sim->maps[i];
+        if (map->route_id == route_id && map->owner_id == sim->player.id &&
+            CcSimMapIsCatalogued(sim, map)) return true;
+    }
+    return false;
+}
+
+static bool OpenWorldRouteReveal(const CcSim *sim, const CcRoute *route,
+                                 float *minimum, float *maximum,
+                                 bool *charted)
+{
+    if (minimum != NULL) *minimum = 0.0f;
+    if (maximum != NULL) *maximum = 0.0f;
+    if (charted != NULL) *charted = false;
+    if (sim == NULL || route == NULL) return false;
+    bool known = OpenWorldPlayerKnowsRoute(sim, route->id);
+    if (charted != NULL) *charted = known;
+    if (known) {
+        if (maximum != NULL) *maximum = 1.0f;
+        return true;
+    }
+    if (sim->journey.active && sim->journey.route_id == route->id) {
+        float progress = Clamp(
+            (float)sim->carriage.progress_milli / 1000.0f, 0.0f, 1.0f);
+        float ahead = fminf(1.0f, progress + 0.14f);
+        if (sim->journey.origin_id == route->to_id) {
+            if (minimum != NULL) *minimum = 1.0f - ahead;
+            if (maximum != NULL) *maximum = 1.0f;
+        } else if (maximum != NULL) {
+            *maximum = ahead;
+        }
+        return true;
+    }
+    if (route->from_id == sim->player.location_id) {
+        if (maximum != NULL) *maximum = 0.28f;
+        return true;
+    }
+    if (route->to_id == sim->player.location_id) {
+        if (minimum != NULL) *minimum = 0.72f;
+        if (maximum != NULL) *maximum = 1.0f;
+        return true;
+    }
+    return false;
+}
+
+static bool OpenWorldSettlementRevealed(const CcSim *sim, CcId settlement_id)
+{
+    if (sim == NULL || settlement_id == 0U) return false;
+    if (settlement_id == sim->player.location_id) return true;
+    if (sim->journey.active &&
+        (settlement_id == sim->journey.origin_id ||
+         (settlement_id == sim->journey.destination_id &&
+          OpenWorldPlayerKnowsRoute(sim, sim->journey.route_id)))) return true;
+    for (int32_t i = 0; i < sim->route_count; ++i) {
+        const CcRoute *route = &sim->routes[i];
+        if ((route->from_id == settlement_id ||
+             route->to_id == settlement_id) &&
+            OpenWorldPlayerKnowsRoute(sim, route->id)) return true;
+    }
+    return false;
+}
+
+static void DrawOpenWorldFogEdge(const CcWorldManifest *manifest,
+                                 const CcWorldRoutePlacement *route,
+                                 float amount, uint32_t seed)
+{
+    CcWorldPoint point = CcWorldRoutePoint(route, amount);
+    float ground = CcWorldTerrainHeight(manifest, point.x, point.z);
+    for (int32_t i = 0; i < 7; ++i) {
+        float angle = (float)i * 2.39996323f + (float)(seed & 255U) * 0.01f;
+        float radius = 2.2f + (float)(i % 3) * 1.45f;
+        Vector3 center = {
+            point.x + cosf(angle) * radius,
+            ground + 0.65f + (float)(i & 1) * 0.42f,
+            point.z + sinf(angle) * radius,
+        };
+        DrawSmallSphere(center, 2.5f + (float)(i % 2) * 0.75f,
+                        Fade(WORLD_VOID, 0.82f));
+    }
+    DrawCylinderWires((Vector3){point.x, ground + 0.12f, point.z},
+                      5.5f, 5.5f, 0.18f, 24, Fade(WORLD_GOLD, 0.55f));
+}
+
+static void DrawOpenWorldRibbonSegment(const CcWorldManifest *manifest,
+                                       CcWorldPoint first,
+                                       CcWorldPoint second, float width,
+                                       float lift, Color color)
+{
+    float dx = second.x - first.x;
+    float dz = second.z - first.z;
+    float length = sqrtf(dx * dx + dz * dz);
+    if (manifest == NULL || length < 0.01f) return;
+    float extension = fminf(3.6f, width * 0.16f);
+    first.x -= dx / length * extension;
+    first.z -= dz / length * extension;
+    second.x += dx / length * extension;
+    second.z += dz / length * extension;
+    float side_x = -dz / length * width * 0.5f;
+    float side_z = dx / length * width * 0.5f;
+    Vector3 points[4] = {
+        {first.x + side_x,
+         CcWorldTerrainHeight(manifest, first.x + side_x,
+                              first.z + side_z) + lift,
+         first.z + side_z},
+        {first.x - side_x,
+         CcWorldTerrainHeight(manifest, first.x - side_x,
+                              first.z - side_z) + lift,
+         first.z - side_z},
+        {second.x - side_x,
+         CcWorldTerrainHeight(manifest, second.x - side_x,
+                              second.z - side_z) + lift,
+         second.z - side_z},
+        {second.x + side_x,
+         CcWorldTerrainHeight(manifest, second.x + side_x,
+                              second.z + side_z) + lift,
+         second.z + side_z},
+    };
+    DrawTriangle3D(points[0], points[2], points[1], color);
+    DrawTriangle3D(points[0], points[3], points[2], color);
+}
+
 static void DrawOpenWorldRouteNetwork(const CcSim *sim,
                                       const CcWorldManifest *manifest,
                                       bool kingdom_view)
 {
     if (sim == NULL || manifest == NULL) return;
+    (void)kingdom_view;
     for (int32_t route_index = 0;
          route_index < manifest->route_count; ++route_index) {
         const CcWorldRoutePlacement *placement =
             &manifest->routes[route_index];
         const CcRoute *route = CcSimRoute(sim, placement->route_id);
-        Color color = route != NULL && route->closed ? WORLD_DANGER :
-                      route != NULL && route->smuggler_route ? WORLD_VIOLET :
-                                                               WORLD_ROAD_LIGHT;
-        float width = kingdom_view ? 4.8f : 3.8f;
+        float reveal_minimum = 0.0f;
+        float reveal_maximum = 0.0f;
+        bool charted = false;
+        if (!OpenWorldRouteReveal(sim, route, &reveal_minimum,
+                                  &reveal_maximum, &charted)) continue;
+        Color road = route != NULL && route->closed ? WORLD_DANGER :
+                     route != NULL && route->smuggler_route ? WORLD_VIOLET :
+                                                              WORLD_ROAD_LIGHT;
         for (int32_t sample = 0;
              sample < CC_WORLD_ROUTE_SAMPLE_COUNT - 1; ++sample) {
+            float midpoint = ((float)sample + 0.5f) /
+                (float)(CC_WORLD_ROUTE_SAMPLE_COUNT - 1);
+            if (midpoint < reveal_minimum || midpoint > reveal_maximum) {
+                continue;
+            }
             if (route != NULL && route->smuggler_route &&
                 (sample & 1) != 0) continue;
             CcWorldPoint first = placement->samples[sample];
@@ -25396,17 +25566,48 @@ static void DrawOpenWorldRouteNetwork(const CcSim *sim,
                     0.08f,
                 (first.z + second.z) * 0.5f,
             };
-            DrawGroundBrushStroke(center, along, length + 0.7f,
-                                  width, color);
+            float variation = 1.0f +
+                0.08f * sinf((float)sample * 1.7f +
+                              (float)(placement->seed & 31U));
+            DrawOpenWorldRibbonSegment(
+                manifest, first, second, 30.0f * variation, 0.04f,
+                Fade(WORLD_EARTH_LIGHT, 0.96f));
+            DrawOpenWorldRibbonSegment(
+                manifest, first, second, 22.0f * variation, 0.08f,
+                Fade(WORLD_GRASS_LIGHT, 0.98f));
+            DrawOpenWorldRibbonSegment(
+                manifest, first, second,
+                (charted ? 6.2f : 5.2f) * variation, 0.13f, road);
+            if ((sample & 1) == 0 && length > 0.01f) {
+                float inverse = 1.0f / length;
+                Vector3 side = {-along.z * inverse, 0.0f,
+                                 along.x * inverse};
+                float side_amount = (sample & 2) == 0 ? 12.5f : -12.5f;
+                Vector3 tree = Vector3Add(
+                    center, Vector3Scale(side, side_amount));
+                tree.y = CcWorldTerrainHeight(manifest, tree.x, tree.z);
+                DrawBox((Vector3){tree.x, tree.y + 1.05f, tree.z},
+                        (Vector3){0.34f, 2.1f, 0.34f}, WORLD_WOOD_SHADOW);
+                DrawSmallSphere((Vector3){tree.x, tree.y + 2.85f, tree.z},
+                                2.25f, WORLD_FOLIAGE_LIGHT);
+            }
+        }
+        if (!charted) {
+            float edge = reveal_minimum > 0.0f ? reveal_minimum :
+                         reveal_maximum;
+            DrawOpenWorldFogEdge(manifest, placement, edge,
+                                 placement->seed);
         }
     }
 }
 
-static void DrawOpenWorldSites(const CcWorldManifest *manifest,
+static void DrawOpenWorldSites(const CcSim *sim,
+                               const CcWorldManifest *manifest,
                                Vector3 focus, float clock, bool kingdom_view)
 {
     for (int32_t i = 0; i < manifest->site_count; ++i) {
         const CcWorldSitePlacement *site = &manifest->sites[i];
+        if (!OpenWorldSettlementRevealed(sim, site->settlement_id)) continue;
         float dx = site->position.x - focus.x;
         float dz = site->position.z - focus.z;
         if (!kingdom_view && dx * dx + dz * dz > 74.0f * 74.0f) continue;
@@ -25431,6 +25632,60 @@ static void DrawOpenWorldSites(const CcWorldManifest *manifest,
     }
 }
 
+static void OpenWorldRevealedBounds(const CcSim *sim,
+                                    const CcWorldManifest *manifest,
+                                    float *minimum_x, float *minimum_z,
+                                    float *maximum_x, float *maximum_z)
+{
+    float left = FLT_MAX;
+    float near = FLT_MAX;
+    float right = -FLT_MAX;
+    float far = -FLT_MAX;
+    for (int32_t route_index = 0;
+         sim != NULL && manifest != NULL &&
+         route_index < manifest->route_count; ++route_index) {
+        const CcWorldRoutePlacement *placement =
+            &manifest->routes[route_index];
+        const CcRoute *route = CcSimRoute(sim, placement->route_id);
+        float reveal_minimum = 0.0f;
+        float reveal_maximum = 0.0f;
+        if (!OpenWorldRouteReveal(sim, route, &reveal_minimum,
+                                  &reveal_maximum, NULL)) continue;
+        for (int32_t sample = 0;
+             sample < CC_WORLD_ROUTE_SAMPLE_COUNT; ++sample) {
+            float amount = (float)sample /
+                (float)(CC_WORLD_ROUTE_SAMPLE_COUNT - 1);
+            if (amount < reveal_minimum || amount > reveal_maximum) continue;
+            CcWorldPoint point = placement->samples[sample];
+            left = fminf(left, point.x);
+            near = fminf(near, point.z);
+            right = fmaxf(right, point.x);
+            far = fmaxf(far, point.z);
+        }
+        CcWorldPoint first = CcWorldRoutePoint(placement, reveal_minimum);
+        CcWorldPoint last = CcWorldRoutePoint(placement, reveal_maximum);
+        left = fminf(left, fminf(first.x, last.x));
+        near = fminf(near, fminf(first.z, last.z));
+        right = fmaxf(right, fmaxf(first.x, last.x));
+        far = fmaxf(far, fmaxf(first.z, last.z));
+    }
+    const CcWorldSettlementPlacement *current = sim != NULL &&
+        manifest != NULL ? CcWorldSettlementPlacementForId(
+            manifest, sim->player.location_id) : NULL;
+    if (left == FLT_MAX && current != NULL) {
+        left = right = current->center.x;
+        near = far = current->center.z;
+    } else if (left == FLT_MAX) {
+        left = near = -24.0f;
+        right = far = 24.0f;
+    }
+    float margin = 24.0f;
+    *minimum_x = left - margin;
+    *minimum_z = near - margin;
+    *maximum_x = right + margin;
+    *maximum_z = far + margin;
+}
+
 void CcLocalDrawOpenWorld3D(const CcSim *sim,
                             const CcWorldStream *stream,
                             const CcLocalAgent *agent,
@@ -25441,24 +25696,28 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
 {
     if (sim == NULL || stream == NULL || agent == NULL) return;
     CcLocalBindOpenWorld(stream);
-    OpenWorldSyncOverview(&stream->manifest);
-    OpenWorldSyncRenderChunks(stream);
     float camera_weight = carriage != NULL ?
         fmaxf(0.0f, fminf(1.0f, carriage->camera_weight)) : 0.0f;
     camera_weight = SmoothStep01(camera_weight);
     bool kingdom_view = camera_weight > 0.55f;
     Vector3 foot_focus = agent->position;
     foot_focus.y += 0.85f;
-    float world_width = stream->manifest.maximum_x -
-                        stream->manifest.minimum_x;
-    float world_depth = stream->manifest.maximum_z -
-                        stream->manifest.minimum_z;
+    float revealed_minimum_x = 0.0f;
+    float revealed_minimum_z = 0.0f;
+    float revealed_maximum_x = 0.0f;
+    float revealed_maximum_z = 0.0f;
+    OpenWorldRevealedBounds(
+        sim, &stream->manifest,
+        &revealed_minimum_x, &revealed_minimum_z,
+        &revealed_maximum_x, &revealed_maximum_z);
+    float world_width = revealed_maximum_x - revealed_minimum_x;
+    float world_depth = revealed_maximum_z - revealed_minimum_z;
     float kingdom_span = sqrtf(world_width * world_width +
                                world_depth * world_depth);
     Vector3 kingdom_focus = {
-        (stream->manifest.minimum_x + stream->manifest.maximum_x) * 0.5f,
+        (revealed_minimum_x + revealed_maximum_x) * 0.5f,
         1.25f,
-        (stream->manifest.minimum_z + stream->manifest.maximum_z) * 0.5f,
+        (revealed_minimum_z + revealed_maximum_z) * 0.5f,
     };
     kingdom_focus.y += CcWorldTerrainHeight(
         &stream->manifest, kingdom_focus.x, kingdom_focus.z);
@@ -25470,7 +25729,7 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
     Vector3 camera_offset = Vector3Lerp(
         close_offset, road_offset, camera_weight);
     float kingdom_fovy = fmaxf(
-        150.0f, fmaxf(world_width * 0.96f, world_depth * 1.18f));
+        54.0f, fmaxf(world_width * 0.82f, world_depth * 1.10f));
     Camera3D camera = {
         .position = Vector3Add(focus, camera_offset),
         .target = focus,
@@ -25490,21 +25749,16 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
     ClearBackground(ArtLightBackground(art.light_profile));
     BeginMode3D(camera);
     BeginWorldLighting(camera, &art);
-    if (open_world_overview.ready) {
-        DrawModel(open_world_overview.model,
-                  (Vector3){0.0f, 0.0f, 0.0f}, 1.0f, WHITE);
-    }
-    for (int32_t i = 0; i < CC_WORLD_STREAM_CAPACITY; ++i) {
-        if (!open_world_render_chunks[i].ready) continue;
-        DrawModel(open_world_render_chunks[i].model,
-                  (Vector3){0.0f, 0.0f, 0.0f}, 1.0f, WHITE);
-    }
     DrawOpenWorldRouteNetwork(sim, &stream->manifest, kingdom_view);
     for (int32_t i = 0; i < stream->manifest.settlement_count; ++i) {
+        if (!OpenWorldSettlementRevealed(
+                sim, stream->manifest.settlements[i].settlement_id)) {
+            continue;
+        }
         DrawOpenWorldSettlement(sim, &stream->manifest.settlements[i], focus,
-                                kingdom_view);
+                                true);
     }
-    DrawOpenWorldSites(&stream->manifest, focus, clock, kingdom_view);
+    DrawOpenWorldSites(sim, &stream->manifest, focus, clock, kingdom_view);
     bool hero_embarked = carriage != NULL && carriage->hero_embarked;
     if (!hero_embarked) DrawAgentPath(agent, false);
     if (course != NULL &&
@@ -25559,6 +25813,7 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
          i < stream->manifest.settlement_count && label_count < 32; ++i) {
         const CcWorldSettlementPlacement *place =
             &stream->manifest.settlements[i];
+        if (!OpenWorldSettlementRevealed(sim, place->settlement_id)) continue;
         float dx = place->center.x - focus.x;
         float dz = place->center.z - focus.z;
         if (!kingdom_view && dx * dx + dz * dz > 78.0f * 78.0f) continue;
@@ -25571,10 +25826,8 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
     }
     DrawLabels(labels, label_count, camera, destination);
     DrawViewportText(
-        TextFormat("%s  ·  ONE MAP  CPU %d/%d  DETAIL %d  %zu KB",
-                   kingdom_view ? "KINGDOM VIEW · CARRIAGE" : "TOWN VIEW",
-                   CcWorldStreamResidentCount(stream),
-                   CC_WORLD_STREAM_CAPACITY, OpenWorldGpuChunkCount(),
-                   CcWorldStreamResidentBytes(stream) / 1024U),
+        TextFormat("%s  ·  KNOWN ROADS ONLY  ·  FOG HIDES THE REST",
+                   kingdom_view ? "THE CROWNLESS ROAD BOOK" :
+                                  "LEAVING THE TOWN GATE"),
         destination, 18, 18, 10, WORLD_MUTED);
 }
