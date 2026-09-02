@@ -255,9 +255,16 @@ CcWorldPoint CcWorldSettlementLocalPoint(
     const CcWorldSettlementPlacement *placement =
         CcWorldSettlementPlacementForId(manifest, settlement_id);
     if (placement == NULL) return (CcWorldPoint){0};
+    float local_offset_x = (local_x - 48.0f) * placement->profile_scale;
+    float local_offset_z = (local_z - 36.0f) * placement->profile_scale;
+    float rotation = placement->entrance_heading_yaw - 0.5f * 3.14159265359f;
+    float cosine = cosf(rotation);
+    float sine = sinf(rotation);
     return (CcWorldPoint){
-        placement->center.x + local_x - 48.0f,
-        placement->center.z + local_z - 36.0f,
+        placement->center.x + cosine * local_offset_x +
+            sine * local_offset_z,
+        placement->center.z - sine * local_offset_x +
+            cosine * local_offset_z,
     };
 }
 
@@ -268,8 +275,13 @@ CcWorldPoint CcWorldSettlementFeaturePoint(
     const CcWorldSettlementPlacement *placement =
         CcWorldSettlementPlacementForId(manifest, settlement_id);
     if (placement == NULL) return (CcWorldPoint){0};
-    return (CcWorldPoint){placement->center.x + offset_x,
-                          placement->center.z + offset_z};
+    float rotation = placement->entrance_heading_yaw - 0.5f * 3.14159265359f;
+    float cosine = cosf(rotation);
+    float sine = sinf(rotation);
+    return (CcWorldPoint){placement->center.x + cosine * offset_x +
+                              sine * offset_z,
+                          placement->center.z - sine * offset_x +
+                              cosine * offset_z};
 }
 
 bool CcWorldManifestBuild(CcWorldManifest *manifest, const CcSim *sim)
@@ -313,6 +325,7 @@ bool CcWorldManifestBuild(CcWorldManifest *manifest, const CcSim *sim)
         placement->radius = CC_WORLD_SETTLEMENT_RADIUS +
             (settlement->size == CC_SETTLEMENT_CAPITAL_SIZE ? 8.0f :
              settlement->size == CC_SETTLEMENT_TOWN ? 4.0f : 0.0f);
+        placement->profile_scale = (placement->radius - 3.0f) / 60.0f;
         placement->seed = MixBits(
             sim->world_seed ^ (uint32_t)settlement->id ^
             (uint32_t)(settlement->id >> 32U));
@@ -351,6 +364,27 @@ bool CcWorldManifestBuild(CcWorldManifest *manifest, const CcSim *sim)
             float amount = (float)sample /
                 (float)(CC_WORLD_ROUTE_SAMPLE_COUNT - 1);
             placement->samples[sample] = CcWorldRoutePoint(placement, amount);
+        }
+    }
+
+    for (int32_t settlement_index = 0;
+         settlement_index < manifest->settlement_count; ++settlement_index) {
+        CcWorldSettlementPlacement *settlement =
+            &manifest->settlements[settlement_index];
+        settlement->entrance_heading_yaw = 0.5f * 3.14159265359f;
+        for (int32_t route_index = 0;
+             route_index < manifest->route_count; ++route_index) {
+            const CcWorldRoutePlacement *route =
+                &manifest->routes[route_index];
+            if (route->from_id != settlement->settlement_id &&
+                route->to_id != settlement->settlement_id) continue;
+            CcWorldPoint position;
+            float heading = 0.0f;
+            if (CcWorldRoutePose(route, settlement->settlement_id, 0.0f,
+                                 &position, &heading)) {
+                settlement->entrance_heading_yaw = heading;
+            }
+            break;
         }
     }
 

@@ -36,6 +36,8 @@ typedef struct CcWorldSettlementPlacement {
     CcWorldPoint center;
     float plateau_height;
     float radius;
+    float profile_scale;
+    float entrance_heading_yaw;
     uint32_t seed;
 } CcWorldSettlementPlacement;
 

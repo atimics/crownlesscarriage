@@ -1812,6 +1812,64 @@ static bool CircleTouchesFootprint(float x, float z, float radius,
     return FootprintDistanceSquared(x, z, footprint) < radius * radius;
 }
 
+static bool OpenWorldTownBodyBlocked(const CcWorldManifest *manifest,
+                                     float x, float z, float radius)
+{
+    if (manifest == NULL) return false;
+    for (int32_t settlement_index = 0;
+         settlement_index < manifest->settlement_count;
+         ++settlement_index) {
+        const CcWorldSettlementPlacement *place =
+            &manifest->settlements[settlement_index];
+        float offset_x = x - place->center.x;
+        float offset_z = z - place->center.z;
+        float reach = place->radius * 1.25f + radius;
+        if (offset_x * offset_x + offset_z * offset_z > reach * reach ||
+            place->profile_scale <= 0.0001f) continue;
+        const CcLocalPlaceProfile *profile =
+            CcLocalPlaceProfileForFunction(place->function);
+        if (profile == NULL) continue;
+        float rotation = place->entrance_heading_yaw - 0.5f * PI;
+        float cosine = cosf(rotation);
+        float sine = sinf(rotation);
+        float local_x = 48.0f +
+            (cosine * offset_x - sine * offset_z) / place->profile_scale;
+        float local_z = 36.0f +
+            (sine * offset_x + cosine * offset_z) / place->profile_scale;
+        float local_radius = radius / place->profile_scale;
+        for (int32_t building_index = 0;
+             building_index < profile->building_count; ++building_index) {
+            const CcLocalPlaceBuilding *building =
+                &profile->building[building_index];
+            Rectangle footprint = {building->x, building->z,
+                                   building->width, building->depth};
+            if (CircleTouchesFootprint(local_x, local_z, local_radius,
+                                       footprint)) return true;
+        }
+        for (int32_t structure_index = 0;
+             structure_index < profile->compound_structure_count;
+             ++structure_index) {
+            const CcLocalPlaceCompoundStructure *structure =
+                &profile->compound_structure[structure_index];
+            Rectangle footprint = {structure->x, structure->z,
+                                   structure->width, structure->depth};
+            if (CircleTouchesFootprint(local_x, local_z, local_radius,
+                                       footprint)) return true;
+        }
+        for (int32_t landmark_index = 0;
+             landmark_index < CC_LOCAL_PLACE_LANDMARK_COUNT;
+             ++landmark_index) {
+            const CcLocalPlaceLandmark *landmark =
+                &profile->landmark[landmark_index];
+            Rectangle footprint = {landmark->x, landmark->z,
+                                   landmark->width, landmark->depth};
+            if (CircleTouchesFootprint(local_x, local_z, local_radius,
+                                       footprint)) return true;
+        }
+    }
+    return false;
+}
+
 static bool StaticBodyBlocked(CcLocalSceneKind scene, float x, float z,
                               float radius)
 {
@@ -1820,7 +1878,8 @@ static bool StaticBodyBlocked(CcLocalSceneKind scene, float x, float z,
         return x < manifest->minimum_x + radius ||
                x > manifest->maximum_x - radius ||
                z < manifest->minimum_z + radius ||
-               z > manifest->maximum_z - radius;
+               z > manifest->maximum_z - radius ||
+               OpenWorldTownBodyBlocked(manifest, x, z, radius);
     }
     bool market_interior = scene == CC_LOCAL_SCENE_MARKET;
     float maximum_x = market_interior ? 8.72f : CC_LOCAL_WORLD_WIDTH - 0.28f;
@@ -5657,6 +5716,13 @@ static bool SetStreetClickTarget(CcLocalAgent *agent, Vector3 target)
     bool target_on_platform = target.y > target_land + 0.24f;
     bool agent_on_platform = agent->position.y > agent_land + 0.24f;
     if (target_on_platform || agent_on_platform) {
+        if (!SetAgentExactTarget(agent, target, false)) return false;
+        agent->command_origin = agent->position;
+        agent->command_point = agent->target_point;
+        agent->command_point_valid = true;
+        return true;
+    }
+    if (active_world_stream != NULL) {
         if (!SetAgentExactTarget(agent, target, false)) return false;
         agent->command_origin = agent->position;
         agent->command_point = agent->target_point;
@@ -24932,8 +24998,22 @@ typedef struct OpenWorldRenderChunk {
     bool ready;
 } OpenWorldRenderChunk;
 
+#define CC_WORLD_OVERVIEW_CELLS 48
+
+typedef struct OpenWorldOverviewCache {
+    Model model;
+    uint32_t world_seed;
+    uint32_t generator_version;
+    float minimum_x;
+    float minimum_z;
+    float maximum_x;
+    float maximum_z;
+    bool ready;
+} OpenWorldOverviewCache;
+
 static OpenWorldRenderChunk
     open_world_render_chunks[CC_WORLD_STREAM_CAPACITY] = {0};
+static OpenWorldOverviewCache open_world_overview = {0};
 
 static void OpenWorldRenderCacheClear(void)
 {
@@ -24943,6 +25023,10 @@ static void OpenWorldRenderCacheClear(void)
         }
         open_world_render_chunks[i] = (OpenWorldRenderChunk){0};
     }
+    if (open_world_overview.ready) {
+        UnloadModel(open_world_overview.model);
+    }
+    open_world_overview = (OpenWorldOverviewCache){0};
 }
 
 static Color OpenWorldTerrainColor(const CcWorldManifest *manifest,
@@ -24957,6 +25041,92 @@ static Color OpenWorldTerrainColor(const CcWorldManifest *manifest,
     }
     float variation = sinf(x * 0.071f + z * 0.113f) * 0.035f;
     return ShadeColor(color, 1.0f + variation);
+}
+
+static bool OpenWorldOverviewMatches(const CcWorldManifest *manifest)
+{
+    return manifest != NULL && open_world_overview.ready &&
+           open_world_overview.world_seed == manifest->world_seed &&
+           open_world_overview.generator_version ==
+               manifest->generator_version &&
+           open_world_overview.minimum_x == manifest->minimum_x &&
+           open_world_overview.minimum_z == manifest->minimum_z &&
+           open_world_overview.maximum_x == manifest->maximum_x &&
+           open_world_overview.maximum_z == manifest->maximum_z;
+}
+
+static Model OpenWorldBuildOverviewModel(const CcWorldManifest *manifest)
+{
+    const int32_t vertex_count = CC_WORLD_OVERVIEW_CELLS *
+        CC_WORLD_OVERVIEW_CELLS * 6;
+    TerrainMeshWriter writer;
+    if (manifest == NULL ||
+        !TerrainMeshWriterAllocate(&writer, vertex_count)) return (Model){0};
+    float step_x = (manifest->maximum_x - manifest->minimum_x) /
+                   (float)CC_WORLD_OVERVIEW_CELLS;
+    float step_z = (manifest->maximum_z - manifest->minimum_z) /
+                   (float)CC_WORLD_OVERVIEW_CELLS;
+    for (int32_t row = 0; row < CC_WORLD_OVERVIEW_CELLS; ++row) {
+        for (int32_t column = 0;
+             column < CC_WORLD_OVERVIEW_CELLS; ++column) {
+            float x = manifest->minimum_x + (float)column * step_x;
+            float z = manifest->minimum_z + (float)row * step_z;
+            Vector3 points[4] = {
+                {x, CcWorldTerrainHeight(manifest, x, z) - 0.10f, z},
+                {x + step_x,
+                 CcWorldTerrainHeight(manifest, x + step_x, z) - 0.10f, z},
+                {x, CcWorldTerrainHeight(manifest, x, z + step_z) - 0.10f,
+                 z + step_z},
+                {x + step_x,
+                 CcWorldTerrainHeight(manifest, x + step_x, z + step_z) -
+                     0.10f,
+                 z + step_z},
+            };
+            Vector3 normal = {
+                ((points[0].y + points[2].y) -
+                 (points[1].y + points[3].y)) * 0.5f * step_z,
+                step_x * step_z,
+                ((points[0].y + points[1].y) -
+                 (points[2].y + points[3].y)) * 0.5f * step_x,
+            };
+            normal = Vector3Normalize(normal);
+            Color color = OpenWorldTerrainColor(
+                manifest, x + step_x * 0.5f, z + step_z * 0.5f, normal);
+            static const int32_t order[6] = {0, 3, 1, 0, 2, 3};
+            for (int32_t vertex = 0; vertex < 6; ++vertex) {
+                TerrainMeshWriteVertexWithNormal(
+                    &writer, points[order[vertex]], normal, color);
+            }
+        }
+    }
+    if (writer.cursor != vertex_count) {
+        UnloadMesh(writer.mesh);
+        return (Model){0};
+    }
+    UploadMesh(&writer.mesh, false);
+    Model model = LoadModelFromMesh(writer.mesh);
+    ReleaseUploadedModelCpuData(&model);
+    ApplyWorldShader(&model);
+    return model;
+}
+
+static void OpenWorldSyncOverview(const CcWorldManifest *manifest)
+{
+    if (manifest == NULL || OpenWorldOverviewMatches(manifest)) return;
+    if (open_world_overview.ready) UnloadModel(open_world_overview.model);
+    open_world_overview = (OpenWorldOverviewCache){0};
+    Model model = OpenWorldBuildOverviewModel(manifest);
+    if (!IsModelValid(model)) return;
+    open_world_overview = (OpenWorldOverviewCache){
+        .model = model,
+        .world_seed = manifest->world_seed,
+        .generator_version = manifest->generator_version,
+        .minimum_x = manifest->minimum_x,
+        .minimum_z = manifest->minimum_z,
+        .maximum_x = manifest->maximum_x,
+        .maximum_z = manifest->maximum_z,
+        .ready = true,
+    };
 }
 
 static bool OpenWorldRenderChunkMatches(const OpenWorldRenderChunk *render,
@@ -25088,51 +25258,158 @@ static void OpenWorldSyncRenderChunks(const CcWorldStream *stream)
 
 static void DrawOpenWorldSettlement(const CcSim *sim,
                                     const CcWorldSettlementPlacement *place,
-                                    Vector3 focus)
+                                    Vector3 focus, bool kingdom_view)
 {
     float dx = place->center.x - focus.x;
     float dz = place->center.z - focus.z;
-    if (dx * dx + dz * dz > 78.0f * 78.0f) return;
+    if (!kingdom_view && dx * dx + dz * dz > 92.0f * 92.0f) return;
     const CcSettlement *settlement = CcSimSettlement(
         sim, place->settlement_id);
-    Color kingdom = settlement != NULL ?
-        KingdomColor3D(sim, settlement->kingdom_id) : WORLD_TEAL;
-    for (int32_t building = 0; building < 12; ++building) {
-        int32_t column = building % 4;
-        int32_t row = building / 4;
-        float x = place->center.x + ((float)column - 1.5f) * 6.4f +
-            ((row & 1) != 0 ? 1.1f : -0.8f);
-        float z = place->center.z + ((float)row - 1.0f) * 7.2f;
-        if (fabsf(x - place->center.x) < 2.5f &&
-            fabsf(z - place->center.z) < 2.5f) continue;
-        float height = 2.2f + (float)((building + (int32_t)place->seed) % 4) *
-            0.42f;
-        float ground = CcLocalTerrainHeightAt(x, z);
-        Color wall = (building & 1) != 0 ? WORLD_STONE_LIGHT :
-                                             WORLD_WOOD_LIGHT;
-        DrawBox((Vector3){x, ground + height * 0.5f, z},
-                (Vector3){3.8f, height, 3.1f}, wall);
-        DrawBox((Vector3){x, ground + height + 0.20f, z},
-                (Vector3){4.3f, 0.40f, 3.6f},
-                BlendColor(WORLD_WOOD_SHADOW, kingdom, 0.25f));
+    if (settlement == NULL) return;
+    const CcLocalPlaceProfile *profile =
+        CcLocalPlaceProfileForSettlement(settlement);
+    if (profile == NULL) return;
+    Color kingdom = KingdomColor3D(sim, settlement->kingdom_id);
+    float rotation = place->entrance_heading_yaw - 0.5f * PI;
+    CcSettlementFunction previous_function = active_place_function;
+    active_place_function = profile->function;
+
+    rlPushMatrix();
+    rlTranslatef(place->center.x, place->plateau_height + 0.03f,
+                 place->center.z);
+    rlRotatef(rotation * RAD2DEG, 0.0f, 1.0f, 0.0f);
+    rlScalef(place->profile_scale, place->profile_scale,
+             place->profile_scale);
+    rlTranslatef(-48.0f, 0.0f, -36.0f);
+
+    for (int32_t road_index = 0;
+         road_index < CC_LOCAL_PLACE_ROAD_COUNT; ++road_index) {
+        const CcLocalPlaceRoad *road = &profile->road[road_index];
+        DrawBox((Vector3){road->x + road->width * 0.5f, 0.045f,
+                          road->z + road->depth * 0.5f},
+                (Vector3){road->width, 0.09f, road->depth},
+                TerrainBrightRoadColor(
+                    road->surface, (float)settlement->prosperity / 100.0f));
     }
-    float center_y = CcLocalTerrainHeightAt(place->center.x, place->center.z);
-    DrawBox((Vector3){place->center.x, center_y + 0.90f,
-                      place->center.z},
+    for (int32_t road_index = 0;
+         road_index < CC_LOCAL_CARRIAGE_ROUTE_COUNT; ++road_index) {
+        const CcLocalPlaceRoad *road = &profile->carriage_route[road_index];
+        DrawBox((Vector3){road->x + road->width * 0.5f, 0.055f,
+                          road->z + road->depth * 0.5f},
+                (Vector3){road->width, 0.11f, road->depth},
+                TerrainPlaceRoadColor(road->surface));
+    }
+
+    for (int32_t building_index = 0;
+         building_index < profile->building_count; ++building_index) {
+        const CcLocalPlaceBuilding *source =
+            &profile->building[building_index];
+        WorldBuilding building = {
+            .footprint = {source->x, source->z,
+                          source->width, source->depth},
+            .height = source->height,
+            .style = (int32_t)source->style,
+            .door = source->door,
+        };
+        DrawSettlementBuilding(
+            &building, BuildingWallColor(building.style, profile),
+            BuildingRoofColor(building.style, kingdom, profile),
+            profile, building_index);
+    }
+
+    for (int32_t landmark_index = 0;
+         landmark_index < CC_LOCAL_PLACE_LANDMARK_COUNT; ++landmark_index) {
+        DrawPlaceLandmark(&profile->landmark[landmark_index], kingdom);
+    }
+
+    for (int32_t structure_index = 0;
+         structure_index < profile->compound_structure_count;
+         ++structure_index) {
+        const CcLocalPlaceCompoundStructure *structure =
+            &profile->compound_structure[structure_index];
+        float center_x = structure->x + structure->width * 0.5f;
+        float center_z = structure->z + structure->depth * 0.5f;
+        Color stone = BlendColor(
+            WORLD_STONE, kingdom,
+            structure->kind == CC_LOCAL_COMPOUND_WALL ? 0.08f : 0.18f);
+        if (structure->kind == CC_LOCAL_COMPOUND_TOWER ||
+            structure->kind == CC_LOCAL_COMPOUND_SILO) {
+            float radius = fminf(structure->width, structure->depth) * 0.5f;
+            DrawCylinder((Vector3){center_x, 0.0f, center_z},
+                         radius * 0.92f, radius,
+                         structure->height, 12, stone);
+            DrawCylinder((Vector3){center_x, structure->height, center_z},
+                         0.08f, radius * 1.12f,
+                         fmaxf(0.35f, structure->height * 0.12f),
+                         12, BuildingRoofColor(1, kingdom, profile));
+        } else {
+            DrawBox((Vector3){center_x, structure->height * 0.5f, center_z},
+                    (Vector3){structure->width, structure->height,
+                              structure->depth}, stone);
+            if (structure->kind != CC_LOCAL_COMPOUND_WALL) {
+                DrawBox((Vector3){center_x, structure->height + 0.16f,
+                                  center_z},
+                        (Vector3){structure->width + 0.22f, 0.32f,
+                                  structure->depth + 0.22f},
+                        BuildingRoofColor(1, kingdom, profile));
+            }
+        }
+    }
+
+    DrawBox((Vector3){CC_LOCAL_NOTICE_X, 0.90f, CC_LOCAL_NOTICE_Z},
             (Vector3){0.18f, 1.80f, 0.18f}, WORLD_WOOD_SHADOW);
-    DrawBox((Vector3){place->center.x, center_y + 1.45f,
-                      place->center.z + 0.05f},
-            (Vector3){1.80f, 0.82f, 0.12f}, kingdom);
+    DrawBox((Vector3){CC_LOCAL_NOTICE_X, 1.45f,
+                      CC_LOCAL_NOTICE_Z + 0.05f},
+            (Vector3){1.80f, 0.82f, 0.12f},
+            PlaceIdentityAccent(profile, kingdom));
+    rlPopMatrix();
+    active_place_function = previous_function;
+}
+
+static void DrawOpenWorldRouteNetwork(const CcSim *sim,
+                                      const CcWorldManifest *manifest,
+                                      bool kingdom_view)
+{
+    if (sim == NULL || manifest == NULL) return;
+    for (int32_t route_index = 0;
+         route_index < manifest->route_count; ++route_index) {
+        const CcWorldRoutePlacement *placement =
+            &manifest->routes[route_index];
+        const CcRoute *route = CcSimRoute(sim, placement->route_id);
+        Color color = route != NULL && route->closed ? WORLD_DANGER :
+                      route != NULL && route->smuggler_route ? WORLD_VIOLET :
+                                                               WORLD_ROAD_LIGHT;
+        float width = kingdom_view ? 4.8f : 3.8f;
+        for (int32_t sample = 0;
+             sample < CC_WORLD_ROUTE_SAMPLE_COUNT - 1; ++sample) {
+            if (route != NULL && route->smuggler_route &&
+                (sample & 1) != 0) continue;
+            CcWorldPoint first = placement->samples[sample];
+            CcWorldPoint second = placement->samples[sample + 1];
+            Vector3 along = {second.x - first.x, 0.0f,
+                             second.z - first.z};
+            float length = sqrtf(along.x * along.x + along.z * along.z);
+            Vector3 center = {
+                (first.x + second.x) * 0.5f,
+                (CcWorldTerrainHeight(manifest, first.x, first.z) +
+                 CcWorldTerrainHeight(manifest, second.x, second.z)) * 0.5f +
+                    0.08f,
+                (first.z + second.z) * 0.5f,
+            };
+            DrawGroundBrushStroke(center, along, length + 0.7f,
+                                  width, color);
+        }
+    }
 }
 
 static void DrawOpenWorldSites(const CcWorldManifest *manifest,
-                               Vector3 focus, float clock)
+                               Vector3 focus, float clock, bool kingdom_view)
 {
     for (int32_t i = 0; i < manifest->site_count; ++i) {
         const CcWorldSitePlacement *site = &manifest->sites[i];
         float dx = site->position.x - focus.x;
         float dz = site->position.z - focus.z;
-        if (dx * dx + dz * dz > 74.0f * 74.0f) continue;
+        if (!kingdom_view && dx * dx + dz * dz > 74.0f * 74.0f) continue;
         float ground = CcLocalTerrainHeightAt(site->position.x,
                                                site->position.z);
         float pulse = 0.06f + sinf(clock * 1.7f + (float)i) * 0.025f;
@@ -25164,25 +25441,41 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
 {
     if (sim == NULL || stream == NULL || agent == NULL) return;
     CcLocalBindOpenWorld(stream);
+    OpenWorldSyncOverview(&stream->manifest);
     OpenWorldSyncRenderChunks(stream);
     float camera_weight = carriage != NULL ?
         fmaxf(0.0f, fminf(1.0f, carriage->camera_weight)) : 0.0f;
     camera_weight = SmoothStep01(camera_weight);
+    bool kingdom_view = camera_weight > 0.55f;
     Vector3 foot_focus = agent->position;
     foot_focus.y += 0.85f;
-    Vector3 carriage_focus = carriage != NULL && carriage->visible ?
-        Vector3Add(carriage->position, (Vector3){0.0f, 1.05f, 0.0f}) :
-        foot_focus;
-    Vector3 focus = Vector3Lerp(foot_focus, carriage_focus, camera_weight);
+    float world_width = stream->manifest.maximum_x -
+                        stream->manifest.minimum_x;
+    float world_depth = stream->manifest.maximum_z -
+                        stream->manifest.minimum_z;
+    float kingdom_span = sqrtf(world_width * world_width +
+                               world_depth * world_depth);
+    Vector3 kingdom_focus = {
+        (stream->manifest.minimum_x + stream->manifest.maximum_x) * 0.5f,
+        1.25f,
+        (stream->manifest.minimum_z + stream->manifest.maximum_z) * 0.5f,
+    };
+    kingdom_focus.y += CcWorldTerrainHeight(
+        &stream->manifest, kingdom_focus.x, kingdom_focus.z);
+    Vector3 focus = Vector3Lerp(foot_focus, kingdom_focus, camera_weight);
     Vector3 close_offset = {18.0f, 22.0f, 25.0f};
-    Vector3 road_offset = {30.0f, 35.0f, 41.0f};
+    Vector3 road_offset = {kingdom_span * 0.22f,
+                           kingdom_span * 0.29f,
+                           kingdom_span * 0.34f};
     Vector3 camera_offset = Vector3Lerp(
         close_offset, road_offset, camera_weight);
+    float kingdom_fovy = fmaxf(
+        150.0f, fmaxf(world_width * 0.96f, world_depth * 1.18f));
     Camera3D camera = {
         .position = Vector3Add(focus, camera_offset),
         .target = focus,
         .up = {0.0f, 1.0f, 0.0f},
-        .fovy = 31.0f + 19.0f * camera_weight,
+        .fovy = 31.0f + (kingdom_fovy - 31.0f) * camera_weight,
         .projection = CAMERA_ORTHOGRAPHIC,
     };
     camera = SnapCameraToArtPixels(camera, target.texture.height);
@@ -25197,15 +25490,21 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
     ClearBackground(ArtLightBackground(art.light_profile));
     BeginMode3D(camera);
     BeginWorldLighting(camera, &art);
+    if (open_world_overview.ready) {
+        DrawModel(open_world_overview.model,
+                  (Vector3){0.0f, 0.0f, 0.0f}, 1.0f, WHITE);
+    }
     for (int32_t i = 0; i < CC_WORLD_STREAM_CAPACITY; ++i) {
         if (!open_world_render_chunks[i].ready) continue;
         DrawModel(open_world_render_chunks[i].model,
                   (Vector3){0.0f, 0.0f, 0.0f}, 1.0f, WHITE);
     }
+    DrawOpenWorldRouteNetwork(sim, &stream->manifest, kingdom_view);
     for (int32_t i = 0; i < stream->manifest.settlement_count; ++i) {
-        DrawOpenWorldSettlement(sim, &stream->manifest.settlements[i], focus);
+        DrawOpenWorldSettlement(sim, &stream->manifest.settlements[i], focus,
+                                kingdom_view);
     }
-    DrawOpenWorldSites(&stream->manifest, focus, clock);
+    DrawOpenWorldSites(&stream->manifest, focus, clock, kingdom_view);
     bool hero_embarked = carriage != NULL && carriage->hero_embarked;
     if (!hero_embarked) DrawAgentPath(agent, false);
     if (course != NULL &&
@@ -25220,6 +25519,20 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
         DrawRoadCarriage(carriage_base, &sim->player, clock,
                          carriage->pace, carriage->heading_yaw,
                          true, false);
+        if (kingdom_view) {
+            float marker_radius = fmaxf(2.8f, kingdom_span * 0.0055f);
+            DrawCylinder((Vector3){carriage_base.x,
+                                   carriage_base.y + 0.04f,
+                                   carriage_base.z},
+                         marker_radius, marker_radius, 0.10f, 24,
+                         Fade(WORLD_TEAL, 0.78f));
+            DrawCylinderWires((Vector3){carriage_base.x,
+                                        carriage_base.y + 0.10f,
+                                        carriage_base.z},
+                              marker_radius * 1.35f,
+                              marker_radius * 1.35f, 0.12f, 24,
+                              Fade(WORLD_GOLD, 0.90f));
+        }
     }
     if (!hero_embarked) {
         DrawRobotShell(agent);
@@ -25231,24 +25544,24 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
     EndTextureMode();
     PresentTarget(target, destination);
 
-    WorldLabel labels[24] = {0};
+    WorldLabel labels[32] = {0};
     int32_t label_count = 0;
-    if (hero_embarked && carriage != NULL) {
+    if (hero_embarked && carriage != NULL && !kingdom_view) {
         labels[label_count++] = (WorldLabel){
             {carriage->position.x, carriage->position.y + 3.20f,
              carriage->position.z}, "YOUR CARRIAGE", WORLD_TEAL};
-    } else {
+    } else if (!hero_embarked) {
         labels[label_count++] = (WorldLabel){
             {agent->position.x, agent->position.y + 2.50f,
              agent->position.z}, "YOU", WORLD_TEAL};
     }
     for (int32_t i = 0;
-         i < stream->manifest.settlement_count && label_count < 24; ++i) {
+         i < stream->manifest.settlement_count && label_count < 32; ++i) {
         const CcWorldSettlementPlacement *place =
             &stream->manifest.settlements[i];
         float dx = place->center.x - focus.x;
         float dz = place->center.z - focus.z;
-        if (dx * dx + dz * dz > 78.0f * 78.0f) continue;
+        if (!kingdom_view && dx * dx + dz * dz > 78.0f * 78.0f) continue;
         const CcSettlement *settlement = CcSimSettlement(
             sim, place->settlement_id);
         if (settlement == NULL) continue;
@@ -25258,8 +25571,8 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
     }
     DrawLabels(labels, label_count, camera, destination);
     DrawViewportText(
-        TextFormat("%s  ·  WORLD STREAM  CPU %d/%d  GPU %d  %zu KB",
-                   camera_weight > 0.55f ? "CARRIAGE MODE" : "TOWN MODE",
+        TextFormat("%s  ·  ONE MAP  CPU %d/%d  DETAIL %d  %zu KB",
+                   kingdom_view ? "KINGDOM VIEW · CARRIAGE" : "TOWN VIEW",
                    CcWorldStreamResidentCount(stream),
                    CC_WORLD_STREAM_CAPACITY, OpenWorldGpuChunkCount(),
                    CcWorldStreamResidentBytes(stream) / 1024U),

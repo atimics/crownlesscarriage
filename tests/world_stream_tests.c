@@ -34,6 +34,10 @@ static int TestManifestIsStableAndFinite(void)
               second.settlements[i].settlement_id);
         CHECK(first.settlements[i].center.x == second.settlements[i].center.x);
         CHECK(first.settlements[i].center.z == second.settlements[i].center.z);
+        CHECK(first.settlements[i].profile_scale ==
+              second.settlements[i].profile_scale);
+        CHECK(first.settlements[i].entrance_heading_yaw ==
+              second.settlements[i].entrance_heading_yaw);
         CHECK(CcWorldManifestContains(
             &first, first.settlements[i].center.x,
             first.settlements[i].center.z));
@@ -149,6 +153,19 @@ static int TestCarriagePoseFollowsRouteDirection(void)
     float opposite_z = cosf(end_yaw) + cosf(reverse_yaw);
     CHECK(opposite_x * opposite_x + opposite_z * opposite_z < 0.08f);
     CHECK(CcWorldRouteLength(route) > 1.0f);
+
+    const CcWorldSettlementPlacement *town =
+        CcWorldSettlementPlacementForId(&manifest, route->from_id);
+    CHECK(town != NULL);
+    CcWorldPoint town_center = CcWorldSettlementLocalPoint(
+        &manifest, town->settlement_id, 48.0f, 36.0f);
+    CcWorldPoint town_gate = CcWorldSettlementLocalPoint(
+        &manifest, town->settlement_id, 96.0f, 36.0f);
+    CHECK(fabsf(town_center.x - town->center.x) < 0.0001f);
+    CHECK(fabsf(town_center.z - town->center.z) < 0.0001f);
+    float gate_x = town_gate.x - town_center.x;
+    float gate_z = town_gate.z - town_center.z;
+    CHECK(gate_x * sinf(forward_yaw) + gate_z * cosf(forward_yaw) > 0.0f);
     return 0;
 }
 

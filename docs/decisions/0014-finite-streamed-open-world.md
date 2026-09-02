@@ -26,6 +26,9 @@ height samples. A stream owns at most a 5 by 5 ring around the player. Moving
 the focus marks new chunks as pending, generates a small number per frame, and
 evicts the least recently used chunk outside the ring. The renderer mirrors
 the same ring on the GPU and drops a mesh when its source chunk is evicted.
+Carriage mode adds one fixed 48 by 48 cell overview mesh so the camera can
+show the entire kingdom. This mesh is coarse, bounded, and derived from the
+same terrain function; the streamed ring supplies the nearby detail.
 
 Terrain is a pure function of the world manifest and coordinate. A missing or
 pending chunk can therefore use the direct generator without changing the
@@ -45,8 +48,14 @@ scene-local sessions are converted relative to their saved settlement.
 - The wide open-world view is carriage mode. The carriage, horses, cargo,
   heading, and terrain support follow the same curved route used by the
   simulation.
+- Each open-world settlement reuses its handcrafted local place profile for
+  roads, buildings, compounds, landmarks, materials, and identity. The town
+  is scaled to its procedural plateau and its carriage gate is rotated onto
+  the generated road network. Those transformed footprints also drive local
+  collision, and open-world movement targets use manifest coordinates rather
+  than the old fixed town navigation grid.
 - Town play stays in the same map at a closer camera scale. Choosing a road
-  eases the camera out toward the carriage; arrival eases it back into the
+  raises the camera to the whole kingdom; arrival eases it back into the
   destination town instead of cutting to another road scene.
 - Existing captures and focused scene tests can continue using the legacy
   local layouts while the remaining interiors and sites move into the world.
@@ -54,7 +63,7 @@ scene-local sessions are converted relative to their saved settlement.
 
 ## Rejected alternatives
 
-- Keeping one complete terrain mesh resident for the whole map
+- Keeping one full-detail terrain mesh resident for the whole map
 - Generating an endless world unrelated to the strategic map
 - Saving every generated height sample
 - Loading a separate 3D scene for every settlement and road segment
