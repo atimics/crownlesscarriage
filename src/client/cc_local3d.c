@@ -16,6 +16,7 @@
 #include "rlgl.h"
 
 #if defined(PLATFORM_WEB)
+#include <emscripten.h>
 #include <emscripten/wget.h>
 #endif
 
@@ -11471,6 +11472,11 @@ static void ReleaseUploadedModelCpuData(Model *model)
         /* DrawMesh uses this pointer as the indexed-draw flag, even after the
            index data has been uploaded, so it must remain allocated. */
     }
+    /* Loading every model in one uninterrupted browser task keeps temporary
+       decoder arrays and graphics-driver staging allocations alive together.
+       Yield after each upload so a reload does not approach the renderer's
+       page-memory limit before those temporary allocations can be reclaimed. */
+    emscripten_sleep(0);
 #else
     (void)model;
 #endif
