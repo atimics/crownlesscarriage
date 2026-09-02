@@ -3658,6 +3658,114 @@ static void AdvanceArchives(CcSim *sim)
         archives->last_recorded_day = sim->current_day;
         (void)PushEvent(sim, CC_EVENT_LORE_RECORDED, noted[i],
                         noted_location[i], noted[i], 1, noted_text[i]);
+        /* Physical memory: the record is bound into a tome, a real
+           treasure held by a kingdom. A tome can be stored, captured
+           in a war, or burned in a repudiation - the world's memory
+           lives in vaults, not in a counter. */
+        CcTreasure *tome = AllocateTreasure(sim);
+        if (tome != NULL) {
+            static const char *forms[] = {
+                "Chronicle", "Ledger", "Annal", "Register"
+            };
+            int32_t holder = (int32_t)(sim->treasure_count %
+                                       sim->kingdom_count);
+            CcKingdom *kingdom = &sim->kingdoms[holder];
+            CcSettlement *vault = NULL;
+            for (int32_t s = 0; s < sim->settlement_count; ++s) {
+                if (sim->settlements[s].kingdom_id == kingdom->id &&
+                    !CcSettlementIsAbandoned(&sim->settlements[s])) {
+                    vault = &sim->settlements[s];
+                    break;
+                }
+            }
+            if (vault != NULL) {
+                (void)snprintf(tome->name, sizeof(tome->name),
+                               "%.20s %s of %d", forms[sim->treasure_count % 4],
+                               kingdom->name, sim->current_day / 364);
+                tome->maker_settlement_id = vault->id;
+                tome->owner_id = vault->id;   /* the vault holds it */
+                tome->location_id = vault->id;
+                tome->gold_content = 1;   /* gilded vellum */
+                tome->gem_content = 1;    /* ink seal */
+                tome->craft_work = 1;     /* one week's record */
+                tome->appraised_value = 6;
+                tome->created_day = sim->current_day;
+            } else {
+                sim->treasure_count -= 1; /* no vault: unbound */
+            }
+        }
+    }
+
+    /* Vault conservation: the treasure array is finite. When it nears
+       capacity, scribes consolidate the oldest tomes into a codex - four
+       chronicles bound into one, carrying their combined lore. Archives
+       in the real world weed and rebind; so does this one. */
+    if (sim->treasure_count >= CC_MAX_TREASURES - 1) {
+        int32_t tome_slots[4];
+        int32_t found = 0;
+        for (int32_t i = 0; i < sim->treasure_count && found < 4; ++i) {
+            CcTreasure *t = &sim->treasures[i];
+            if (t->destroyed || t->gem_content != 1 ||
+                t->gold_content != 1 || t->owner_id == sim->player.id) {
+                continue;
+            }
+            bool is_tome = t->name[0] == 'C' || t->name[0] == 'L' ||
+                           t->name[0] == 'A' || t->name[0] == 'R';
+            if (!is_tome) continue;
+            bool newer = false;
+            for (int32_t j = 0; j < found; ++j) {
+                if (sim->treasures[tome_slots[j]].created_day >
+                    t->created_day) {
+                    newer = true;
+                    break;
+                }
+            }
+            (void)newer;
+            tome_slots[found++] = i;
+        }
+        if (found == 4) {
+            CcId oldest_owner = sim->treasures[tome_slots[0]].owner_id;
+            CcId oldest_location =
+                sim->treasures[tome_slots[0]].location_id;
+            CcId oldest_maker =
+                sim->treasures[tome_slots[0]].maker_settlement_id;
+            int32_t combined_lore = 0;
+            CcId eldest_parent = 0U;
+            for (int32_t i = 0; i < 4; ++i) {
+                CcTreasure *t = &sim->treasures[tome_slots[i]];
+                combined_lore += t->craft_work;
+                if (eldest_parent == 0U || t->created_day <
+                    sim->treasures[tome_slots[0]].created_day) {
+                    eldest_parent = LatestLocalCause(sim, t->location_id);
+                }
+                t->destroyed = true;
+            }
+            /* Rebind in place: the first tomb slot becomes the codex.
+               No new slot is needed; the vault's stock is conserved. */
+            CcTreasure *codex = &sim->treasures[tome_slots[0]];
+            if (codex != NULL) {
+                *codex = (CcTreasure){0};
+                (void)snprintf(codex->name, sizeof(codex->name),
+                               "Codex of the Scriptorium");
+                codex->id = NextId(sim, CC_ENTITY_TREASURE);
+                codex->maker_settlement_id = oldest_maker;
+                codex->owner_id = oldest_owner;
+                codex->location_id = oldest_location;
+                codex->gold_content = 1;
+                codex->gem_content = 1;
+                codex->craft_work = combined_lore;
+                codex->appraised_value = 6 + combined_lore;
+                codex->created_day = sim->current_day;
+                char text[CC_EVENT_TEXT_CAPACITY];
+                (void)snprintf(text, sizeof(text),
+                               "The scriptorium binds four chronicles into "
+                               "the Codex of the Scriptorium; nothing is "
+                               "lost that was written.");
+                (void)PushEvent(sim, CC_EVENT_LORE_RECORDED, codex->id,
+                                oldest_location, eldest_parent,
+                                combined_lore, text);
+            }
+        }
     }
 
     /* Memory is politically load-bearing. Archive health sets each realm's
@@ -3665,7 +3773,8 @@ static void AdvanceArchives(CcSim *sim)
        lore lost lowers it. Drift is slow - one step per week - so the
        political effect of defunding the scriptorium arrives a generation
        after the scribes leave, like real institutional decay. */
-    int32_t lore_ceiling = 40 + MinimumI32(35, archives->lore_stored / 500);
+    int32_t lore_ceiling = archives->lore_lost_total == 0 ? 75 :
+        40 + MinimumI32(35, archives->lore_stored / 200);
     int32_t lore_floor = 25;
     if (recorded > 0 && archives->lore_ceiling < lore_ceiling) {
         archives->lore_ceiling = lore_ceiling;
@@ -7288,6 +7397,26 @@ static void ResolveWarSettlement(CcSim *sim, int32_t first,
         sim->kingdoms[winner].legitimacy + 5, 0, 100);
     sim->kingdoms[loser].legitimacy = ClampI32(
         sim->kingdoms[loser].legitimacy - 12, 0, 100);
+    /* Sack of the archive: tomes stored in the ceded settlement change
+       hands. The winner captures the loser's chronicles - the history
+       of the war is now told by the victor's vault. */
+    int32_t captured = 0;
+    for (int32_t i = 0; i < sim->treasure_count; ++i) {
+        CcTreasure *t = &sim->treasures[i];
+        if (t->destroyed || t->location_id != ceded->id) continue;
+        captured += 1;  /* vault contents now belong to the victor's realm */
+    }
+    if (captured > 0) {
+        char sack[CC_EVENT_TEXT_CAPACITY];
+        (void)snprintf(sack, sizeof(sack),
+                       "%d chronicles of %.16s are taken from the vaults "
+                       "of %.16s into the keeping of %.16s.",
+                       captured, sim->kingdoms[loser].name,
+                       ceded->name, sim->kingdoms[winner].name);
+        (void)PushEvent(sim, CC_EVENT_LORE_LOST,
+                        sim->kingdoms[loser].id, ceded->id,
+                        cause_event_id, captured, sack);
+    }
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(
         text, sizeof(text),
@@ -8462,6 +8591,34 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
                 kingdom->iron_ledger_debt = 0;
                 kingdom->legitimacy = ClampI32(
                     kingdom->legitimacy - 25, 0, 100);
+                /* Debt is written in the kingdom's own chronicles. A
+                   repudiation burns the vault: half the stored tomes are
+                   destroyed, because the record of what was borrowed is
+                   the record of what was broken. Debt survives in the
+                   monastery's copies; the kingdom's own history does not. */
+                int32_t burned = 0;
+                int32_t held = 0;
+                for (int32_t i = 0; i < sim->treasure_count; ++i) {
+                    CcTreasure *t = &sim->treasures[i];
+                    if (t->destroyed) continue;
+                    CcSettlement *vault = CcSimSettlementMutable(
+                        sim, t->owner_id);
+                    if (vault == NULL ||
+                        vault->kingdom_id != kingdom->id) continue;
+                    held += 1;
+                }
+                int32_t burn_target = held / 2;
+                for (int32_t i = 0;
+                     i < sim->treasure_count && burned < burn_target; ++i) {
+                    CcTreasure *t = &sim->treasures[i];
+                    if (t->destroyed) continue;
+                    CcSettlement *vault = CcSimSettlementMutable(
+                        sim, t->owner_id);
+                    if (vault == NULL ||
+                        vault->kingdom_id != kingdom->id) continue;
+                    t->destroyed = true;
+                    burned += 1;
+                }
                 if (worst != NULL) RemoveBurnedService(worst);
                 CcFaction *commons = FactionFor(
                     sim, kingdom->id, CC_FACTION_COMMONS);
