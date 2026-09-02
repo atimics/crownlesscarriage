@@ -262,6 +262,8 @@ if(CC_BUILD_CLIENT)
             "-sASYNCIFY=1"
             "-sALLOW_MEMORY_GROWTH=1"
             "-sINITIAL_MEMORY=33554432"
+            "-sMAXIMUM_MEMORY=268435456"
+            "-sMEMORY_GROWTH_LINEAR_STEP=16777216"
             "-sSTACK_SIZE=4194304"
             "-sFORCE_FILESYSTEM=1"
             "-sMIN_WEBGL_VERSION=2"

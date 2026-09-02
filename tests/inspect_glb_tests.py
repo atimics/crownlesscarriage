@@ -13,7 +13,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools" / "blender"))
 
-from inspect_glb import CHUNK_BIN, CHUNK_JSON, GLB_MAGIC, GlbError, parse_glb
+from batch_static_glb import batch_static_glb
+from inspect_glb import (
+    CHUNK_BIN,
+    CHUNK_JSON,
+    GLB_MAGIC,
+    GlbError,
+    collect_stats,
+    parse_glb,
+)
 
 
 def write_glb(path: Path, document: dict, binary: bytes) -> None:
@@ -64,6 +72,44 @@ class InspectGlbTests(unittest.TestCase):
         write_glb(self.path, minimal_document(accessor_count=2), b"\0" * 12)
         with self.assertRaisesRegex(GlbError, "beyond bufferView"):
             parse_glb(self.path)
+
+    def test_static_batcher_preserves_carriage_geometry(self) -> None:
+        source = (ROOT / "assets" / "exports" / "glb" /
+                  "carriage_base_v01.glb")
+        output = Path(self.temporary.name) / source.name
+        before_document, _ = parse_glb(source)
+        before = collect_stats(source, before_document)
+
+        original_primitives, batched_primitives = batch_static_glb(
+            source, output)
+        after_document, _ = parse_glb(output)
+        after = collect_stats(output, after_document)
+
+        self.assertGreater(original_primitives, batched_primitives)
+        self.assertEqual(batched_primitives, len(before_document["materials"]))
+        self.assertEqual(after.meshes, 1)
+        self.assertEqual(after.primitives, batched_primitives)
+        self.assertEqual(after.triangles, before.triangles)
+        for actual, expected in zip(after.bounds_min, before.bounds_min):
+            self.assertAlmostEqual(actual, expected, delta=0.02)
+        for actual, expected in zip(after.bounds_max, before.bounds_max):
+            self.assertAlmostEqual(actual, expected, delta=0.02)
+
+    def test_static_batcher_keeps_painted_market_channels(self) -> None:
+        source = (ROOT / "assets" / "exports" / "glb" /
+                  "environment_market_granary_v01.glb")
+        output = Path(self.temporary.name) / source.name
+        original_primitives, batched_primitives = batch_static_glb(
+            source, output)
+        document, _ = parse_glb(output)
+
+        self.assertGreater(original_primitives, batched_primitives)
+        self.assertEqual(batched_primitives, len(document["materials"]))
+        primitives = document["meshes"][0]["primitives"]
+        self.assertTrue(primitives)
+        for primitive in primitives:
+            self.assertIn("COLOR_0", primitive["attributes"])
+            self.assertIn("COLOR_1", primitive["attributes"])
 
 
 if __name__ == "__main__":
