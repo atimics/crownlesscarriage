@@ -342,6 +342,17 @@ EM_JS(int, ClientBrowserHeapBytes, (), {
 #pragma clang diagnostic pop
 #endif
 
+static void ClientTakeScreenshot(const char *path)
+{
+    TakeScreenshot(path);
+#if defined(PLATFORM_WEB)
+    /* Browser capture files live in MEMFS and cannot be collected by the
+       desktop art pipeline. Discard each one after raylib has encoded it so
+       long diagnostic reels do not grow the page until it is killed. */
+    (void)remove(path);
+#endif
+}
+
 static const Vector2 LOCAL_MARKET = {CC_LOCAL_MARKET_X, CC_LOCAL_MARKET_Z};
 static const Vector2 LOCAL_CARRIAGE = {CC_LOCAL_CARRIAGE_X,
                                       CC_LOCAL_CARRIAGE_Z};
@@ -7545,7 +7556,7 @@ int main(int argc, char **argv)
             char frame_path[768];
             (void)snprintf(frame_path, sizeof(frame_path), "%s-%03d.png",
                            capture_path, gameplay_reel.captured_frames);
-            TakeScreenshot(frame_path);
+            ClientTakeScreenshot(frame_path);
             gameplay_reel.captured_frames += 1;
             if (gameplay_reel.complete) break;
         } else if (capture_action_reel) {
@@ -7554,7 +7565,7 @@ int main(int argc, char **argv)
             char frame_path[768];
             (void)snprintf(frame_path, sizeof(frame_path), "%s-%03d.png",
                            capture_path, action_reel.captured_frames);
-            TakeScreenshot(frame_path);
+            ClientTakeScreenshot(frame_path);
             action_reel.captured_frames += 1;
             if (action_reel.complete) break;
         } else if (capture_walk_cycle) {
@@ -7563,7 +7574,7 @@ int main(int argc, char **argv)
             char frame_path[768];
             (void)snprintf(frame_path, sizeof(frame_path), "%s-%02d.png",
                            capture_path, walk_frame_count);
-            TakeScreenshot(frame_path);
+            ClientTakeScreenshot(frame_path);
             walk_frame_count += 1;
             if (walk_frame_count >= 8) break;
         } else if (capture_creature_reel) {
@@ -7573,14 +7584,14 @@ int main(int argc, char **argv)
             char frame_path[768];
             (void)snprintf(frame_path, sizeof(frame_path), "%s-%03d.png",
                            capture_path, creature_frame);
-            TakeScreenshot(frame_path);
+            ClientTakeScreenshot(frame_path);
             if (creature_frame >= 44) break;
         } else if (capture) {
             capture_frames += 1;
             int32_t settled_frames = capture_road ? 45 :
                                      capture_character ? 120 : 3;
             if (capture_frames >= settled_frames) {
-                TakeScreenshot(capture_path);
+                ClientTakeScreenshot(capture_path);
                 break;
             }
         }

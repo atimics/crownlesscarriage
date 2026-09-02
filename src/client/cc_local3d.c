@@ -15,6 +15,10 @@
 #include "raymath.h"
 #include "rlgl.h"
 
+#if defined(PLATFORM_WEB)
+#include <emscripten/wget.h>
+#endif
+
 #include <float.h>
 #include <math.h>
 #include <stdint.h>
@@ -10731,6 +10735,7 @@ typedef struct RuntimeAsset {
     int32_t mesh_budget;
     Model model;
     bool ready;
+    bool attempted;
 } RuntimeAsset;
 
 static RuntimeAsset runtime_assets[RUNTIME_ASSET_COUNT] = {
@@ -11471,17 +11476,54 @@ static void ReleaseUploadedModelCpuData(Model *model)
 #endif
 }
 
+static void ApplyWorldShader(Model *model);
+static void ApplyPaintedEnvironmentShader(Model *model);
+
+static void ApplyRuntimeAssetShader(RuntimeAssetId id)
+{
+    if (id < 0 || id >= RUNTIME_ASSET_COUNT ||
+        !runtime_assets[id].ready) return;
+    if (id == RUNTIME_ASSET_MARKET) {
+        ApplyPaintedEnvironmentShader(&runtime_assets[id].model);
+    } else {
+        ApplyWorldShader(&runtime_assets[id].model);
+    }
+}
+
 static bool LoadRuntimeAsset(RuntimeAssetId id)
 {
     if (id < 0 || id >= RUNTIME_ASSET_COUNT) return false;
     RuntimeAsset *asset = &runtime_assets[id];
+    if (asset->ready) return true;
+    if (asset->attempted) return false;
+    asset->attempted = true;
     char resolved[1024];
+#if defined(PLATFORM_WEB)
+    bool remove_resolved = false;
+    if (FileExists(asset->path)) {
+        (void)snprintf(resolved, sizeof(resolved), "%s", asset->path);
+    } else {
+        (void)snprintf(resolved, sizeof(resolved),
+                       "/tmp/crownless-runtime-%d.glb", (int32_t)id);
+        if (emscripten_wget(asset->path, resolved) != 0) {
+            TraceLog(LOG_WARNING,
+                     "ASSET: could not download %s; using fallback",
+                     asset->label);
+            return false;
+        }
+        remove_resolved = true;
+    }
+#else
     if (!ResolveAssetPath(asset->path, resolved, sizeof(resolved))) {
         TraceLog(LOG_WARNING, "ASSET: %s was not found; using fallback",
                  asset->label);
         return false;
     }
+#endif
     asset->model = LoadModel(resolved);
+#if defined(PLATFORM_WEB)
+    if (remove_resolved) (void)remove(resolved);
+#endif
     int32_t mesh_count = asset->model.meshCount;
     if (mesh_count <= 0 || mesh_count > asset->mesh_budget) {
         TraceLog(LOG_WARNING,
@@ -11493,9 +11535,64 @@ static bool LoadRuntimeAsset(RuntimeAssetId id)
     }
     ReleaseUploadedModelCpuData(&asset->model);
     asset->ready = true;
+    ApplyRuntimeAssetShader(id);
     TraceLog(LOG_INFO, "ASSET: loaded %s (%d meshes)", asset->label,
              mesh_count);
     return true;
+}
+
+static void UnloadRuntimeAsset(RuntimeAssetId id)
+{
+    if (id < 0 || id >= RUNTIME_ASSET_COUNT) return;
+    RuntimeAsset *asset = &runtime_assets[id];
+    if (asset->ready) UnloadModel(asset->model);
+    asset->model = (Model){0};
+    asset->ready = false;
+    asset->attempted = false;
+    if (id == RUNTIME_ASSET_BRIDGE) {
+        bridge_checkpoint_status = BRIDGE_CHECKPOINT_UNKNOWN;
+    }
+}
+
+static void PrepareRuntimeAssets(uint32_t requested)
+{
+#if defined(PLATFORM_WEB)
+    requested |= UINT32_C(1) << RUNTIME_ASSET_CARRIAGE;
+    for (int32_t id = 0; id < RUNTIME_ASSET_COUNT; ++id) {
+        bool wanted = (requested & (UINT32_C(1) << id)) != 0;
+        if (wanted) {
+            bool loaded = LoadRuntimeAsset((RuntimeAssetId)id);
+            if (id == RUNTIME_ASSET_BRIDGE) {
+                bridge_checkpoint_status = loaded ?
+                    BRIDGE_CHECKPOINT_AVAILABLE :
+                    BRIDGE_CHECKPOINT_UNAVAILABLE;
+            }
+        } else if (runtime_assets[id].ready ||
+                   runtime_assets[id].attempted) {
+            UnloadRuntimeAsset((RuntimeAssetId)id);
+        }
+    }
+#else
+    (void)requested;
+#endif
+}
+
+static uint32_t StreetRuntimeAssetMask(const CcSettlement *place)
+{
+    const CcLocalPlaceProfile *profile =
+        CcLocalPlaceProfileForSettlement(place);
+    if (profile == NULL || profile->function != CC_SETTLEMENT_MARKET) {
+        return 0U;
+    }
+    uint32_t requested = UINT32_C(1) << RUNTIME_ASSET_MARKET;
+    if (place != NULL && place->hunger >= 30) {
+        requested |= UINT32_C(1) << RUNTIME_ASSET_SHORTAGE;
+    } else if (place != NULL && place->security >= 70) {
+        requested |= UINT32_C(1) << RUNTIME_ASSET_ENFORCEMENT;
+    } else if (place != NULL && place->prosperity >= 60) {
+        requested |= UINT32_C(1) << RUNTIME_ASSET_RECOVERY;
+    }
+    return requested;
 }
 
 static void LoadNpcArchetypes(void)
@@ -11739,7 +11836,7 @@ static void LoadNpcHeadFamilies(void)
             continue;
         }
         Model model = LoadModel(resolved);
-        if (model.meshCount < 2 || model.meshCount > 7 ||
+        if (model.meshCount < 1 || model.meshCount > 7 ||
             model.materialCount < 1 || model.skeleton.boneCount != 0) {
             TraceLog(LOG_WARNING,
                      "NPC HEAD: invalid %s (%d meshes, %d bones)",
@@ -11770,7 +11867,7 @@ static void LoadNpcHairFamilies(void)
             continue;
         }
         Model model = LoadModel(resolved);
-        if (model.meshCount < 4 || model.meshCount > 8 ||
+        if (model.meshCount < 1 || model.meshCount > 8 ||
             model.materialCount < 1 || model.skeleton.boneCount != 0) {
             TraceLog(LOG_WARNING,
                      "NPC HAIR: invalid %s (%d meshes, %d bones)", path,
@@ -11789,6 +11886,9 @@ static void LoadNpcHairFamilies(void)
 
 static void LoadRuntimeAssets(void)
 {
+#if defined(PLATFORM_WEB)
+    (void)LoadRuntimeAsset(RUNTIME_ASSET_CARRIAGE);
+#else
     for (int32_t id = 0; id < RUNTIME_ASSET_COUNT; ++id) {
         bool loaded = LoadRuntimeAsset((RuntimeAssetId)id);
         if (id == RUNTIME_ASSET_BRIDGE) {
@@ -11796,6 +11896,7 @@ static void LoadRuntimeAssets(void)
                                                 BRIDGE_CHECKPOINT_UNAVAILABLE;
         }
     }
+#endif
 }
 
 static void ApplyWorldShader(Model *model)
@@ -14317,9 +14418,7 @@ void CcLocalRendererShutdown(void)
         npc_hair_families[family] = (NpcHairFamilyCache){0};
     }
     for (int32_t id = 0; id < RUNTIME_ASSET_COUNT; ++id) {
-        if (runtime_assets[id].ready) UnloadModel(runtime_assets[id].model);
-        runtime_assets[id].model = (Model){0};
-        runtime_assets[id].ready = false;
+        UnloadRuntimeAsset((RuntimeAssetId)id);
     }
     if (visual_style.npc_skinned_ready) {
         UnloadShader(visual_style.npc_skinned);
@@ -22684,6 +22783,7 @@ void CcLocalDrawFork3D(const CcSim *sim, int32_t selected_route,
                        Rectangle destination)
 {
     if (sim == NULL) return;
+    PrepareRuntimeAssets(0U);
     const CcSettlement *here = CcSimSettlement(
         sim, sim->player.location_id);
     CcId kingdom_id = here != NULL ? here->kingdom_id : 0U;
@@ -23053,6 +23153,8 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     Rectangle destination)
 {
     if (sim == NULL || agent == NULL || course == NULL) return;
+    PrepareRuntimeAssets(
+        travelling ? 0U : UINT32_C(1) << RUNTIME_ASSET_BRIDGE);
     const CcRoute *route = CcSimRoute(sim, sim->journey.route_id);
     const CcSettlement *origin = CcSimSettlement(
         sim, sim->journey.origin_id);
@@ -23643,6 +23745,7 @@ void CcLocalDrawSite3D(const CcSim *sim, const CcLocalAgent *agent,
                        RenderTexture2D target, Rectangle destination)
 {
     if (sim == NULL || agent == NULL || site == CC_LOCAL_SITE_NONE) return;
+    PrepareRuntimeAssets(0U);
     float amount = fmaxf(0.0f, fminf(1.0f, progress));
     float carriage_x = travelling ?
         returning ? 62.0f - amount * 40.0f : 22.0f + amount * 40.0f :
@@ -23864,6 +23967,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     CcLocalBindPlace(sim);
     const CcSettlement *place = CcSimSettlement(sim, sim->player.location_id);
     if (place == NULL) return;
+    PrepareRuntimeAssets(StreetRuntimeAssetMask(place));
     bool convoy_visible = convoy != NULL &&
         (convoy->phase == CC_LOCAL_CONVOY_DEPARTING ||
          convoy->phase == CC_LOCAL_CONVOY_ARRIVING);
@@ -24507,6 +24611,7 @@ void CcLocalDrawInterior3D(const CcSim *sim, const CcLocalAgent *agent,
     CcLocalBindPlace(sim);
     const CcSettlement *place = CcSimSettlement(sim, sim->player.location_id);
     if (place == NULL) return;
+    PrepareRuntimeAssets(0U);
     const CcLocalPlaceProfile *profile =
         CcLocalPlaceProfileForSettlement(place);
     Color kingdom = KingdomColor3D(sim, place->kingdom_id);
