@@ -9,7 +9,7 @@
 #include <string.h>
 
 #define CC_SQLITE_APPLICATION_ID 1128481362
-#define CC_SQLITE_USER_VERSION 19
+#define CC_SQLITE_USER_VERSION 20
 #define CC_JOURNAL_RECORD_VERSION 1
 #define CC_JOURNAL_RUNTIME_FLUSH_TICKS 6
 #define CC_JOURNAL_MAX_DAY_ADVANCE 3650
@@ -713,6 +713,10 @@ static bool EnsureJournalMetaColumns(sqlite3 *database,
         EnsureColumn(database, "meta", "archive_last_recorded_day",
             "ALTER TABLE meta ADD COLUMN archive_last_recorded_day "
             "INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "meta", "archive_lore_ceiling",
+            "ALTER TABLE meta ADD COLUMN archive_lore_ceiling "
+            "INTEGER NOT NULL DEFAULT 40;",
             error, error_capacity);
 }
 
@@ -735,7 +739,8 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " archive_scribes INTEGER NOT NULL DEFAULT 2,"
         " archive_lore_stored INTEGER NOT NULL DEFAULT 0,"
         " archive_lore_lost_total INTEGER NOT NULL DEFAULT 0,"
-        " archive_last_recorded_day INTEGER NOT NULL DEFAULT 0);"
+        " archive_last_recorded_day INTEGER NOT NULL DEFAULT 0,"
+        " archive_lore_ceiling INTEGER NOT NULL DEFAULT 40);"
         "CREATE TABLE IF NOT EXISTS kingdom ("
         " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL UNIQUE, name TEXT NOT NULL,"
         " color_r INTEGER NOT NULL, color_g INTEGER NOT NULL, color_b INTEGER NOT NULL,"
@@ -1135,8 +1140,8 @@ static bool SaveMeta(sqlite3 *database, const CcSim *sim,
         "bandit_count,monster_count,dungeon_count,event_count,"
         "event_write_index,state_hash,journal_generation,journal_cursor,"
         "iron_ledger_reserve,archive_scribes,archive_lore_stored,"
-        "archive_lore_lost_total,archive_last_recorded_day) "
-        "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);";
+        "archive_lore_lost_total,archive_last_recorded_day,archive_lore_ceiling) "
+        "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);";
     if (!Prepare(database, sql, &statement, error, error_capacity)) return false;
     char hash[24];
     (void)snprintf(hash, sizeof(hash), "%016" PRIx64, CcSimHash(sim));
@@ -1164,6 +1169,7 @@ static bool SaveMeta(sqlite3 *database, const CcSim *sim,
     BindInt(statement, 22, sim->archives.lore_stored);
     BindInt(statement, 23, sim->archives.lore_lost_total);
     BindInt(statement, 24, sim->archives.last_recorded_day);
+    BindInt(statement, 25, sim->archives.lore_ceiling);
     bool result = StepDone(database, statement, error, error_capacity);
     sqlite3_finalize(statement);
     return result;
@@ -2513,7 +2519,7 @@ static bool ReadMeta(sqlite3 *database, CcSim *sim, uint64_t *expected_hash,
         "shipment_count,bandit_count,monster_count,dungeon_count,event_count,"
         "event_write_index,state_hash,journal_generation,journal_cursor,"
         "iron_ledger_reserve,archive_scribes,archive_lore_stored,"
-        "archive_lore_lost_total,archive_last_recorded_day "
+        "archive_lore_lost_total,archive_last_recorded_day,archive_lore_ceiling "
         "FROM meta WHERE id=1;", &statement, error, error_capacity)) return false;
     if (sqlite3_step(statement) != SQLITE_ROW) {
         SetError(error, error_capacity, "Campaign metadata is missing.");
@@ -2548,6 +2554,7 @@ static bool ReadMeta(sqlite3 *database, CcSim *sim, uint64_t *expected_hash,
     sim->archives.lore_stored = sqlite3_column_int(statement, 21);
     sim->archives.lore_lost_total = sqlite3_column_int(statement, 22);
     sim->archives.last_recorded_day = sqlite3_column_int(statement, 23);
+    sim->archives.lore_ceiling = sqlite3_column_int(statement, 24);
     sqlite3_finalize(statement);
     return true;
 }

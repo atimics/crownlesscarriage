@@ -3660,6 +3660,30 @@ static void AdvanceArchives(CcSim *sim)
                         noted_location[i], noted[i], 1, noted_text[i]);
     }
 
+    /* Memory is politically load-bearing. Archive health sets each realm's
+       trust ceiling: lore remembered raises what the realm can sustain,
+       lore lost lowers it. Drift is slow - one step per week - so the
+       political effect of defunding the scriptorium arrives a generation
+       after the scribes leave, like real institutional decay. */
+    int32_t lore_ceiling = 40 + MinimumI32(35, archives->lore_stored / 500);
+    int32_t lore_floor = 25;
+    if (recorded > 0 && archives->lore_ceiling < lore_ceiling) {
+        archives->lore_ceiling = lore_ceiling;
+    }
+    if (archives->lore_ceiling > lore_ceiling) {
+        archives->lore_ceiling -= 1;
+    }
+    for (int32_t i = 0; i < sim->kingdom_count; ++i) {
+        CcKingdom *kingdom = &sim->kingdoms[i];
+        int32_t target = archives->scribes > 0 ?
+            lore_ceiling : lore_floor;
+        if (kingdom->legitimacy < target) {
+            kingdom->legitimacy += 1;
+        } else if (kingdom->legitimacy > target) {
+            kingdom->legitimacy -= 1;
+        }
+    }
+
     /* Decay: unfunded archives lose lore. Memory is load-bearing. */
     if (archives->scribes == 0 && archives->lore_stored > 0) {
         archives->lore_stored -= 1;
@@ -12341,6 +12365,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
          sim->archives.scribes > CC_MAX_SCRIBES ||
          sim->archives.lore_stored < 0 ||
          sim->archives.lore_lost_total < 0 ||
+         sim->archives.lore_ceiling < 0 ||
+         sim->archives.lore_ceiling > 100 ||
          sim->archives.last_recorded_day < 0 ||
          sim->archives.last_recorded_day > sim->current_day)) {
         SetError(error, error_capacity,
@@ -14466,6 +14492,7 @@ uint64_t CcSimHash(const CcSim *sim)
         HASH_VALUE(sim->archives.lore_stored);
         HASH_VALUE(sim->archives.lore_lost_total);
         HASH_VALUE(sim->archives.last_recorded_day);
+        HASH_VALUE(sim->archives.lore_ceiling);
     }
 #undef HASH_VALUE
     return hash;
