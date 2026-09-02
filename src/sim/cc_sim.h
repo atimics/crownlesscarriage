@@ -275,6 +275,7 @@ typedef struct CcArchives {
     int32_t lore_stored;        /* notable events preserved in the archive */
     int32_t lore_lost_total;    /* notable events that decayed unrecorded */
     int32_t last_recorded_day;  /* day of the most recent archive write */
+    int32_t lore_ceiling;       /* sustained trust ceiling from remembered lore */
 } CcArchives;
 
 typedef enum CcCommandKind {
