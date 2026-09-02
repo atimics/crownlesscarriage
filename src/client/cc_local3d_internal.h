@@ -15,6 +15,11 @@ typedef enum CcLocalFaceViewInternal {
     CC_LOCAL_FACE_VIEW_PROFILE
 } CcLocalFaceViewInternal;
 
+typedef struct CcLocalFaceAnchorInternal {
+    float forward;
+    float right;
+} CcLocalFaceAnchorInternal;
+
 void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
                                    bool market_interior);
 void CcLocalCourseFixedStepInternal(CcLocalCourse *course,
@@ -59,6 +64,8 @@ CcLocalFaceLodInternal CcLocalFaceLodForProjectedHeightInternal(
     float projected_face_height);
 CcLocalFaceViewInternal CcLocalFaceViewForFrontAmountInternal(
     float front_amount);
+CcLocalFaceAnchorInternal CcLocalFaceAnchorForCameraInternal(
+    float front_amount, float side_amount);
 
 void CcLocalRendererRecordBiped(bool high_detail);
 void CcLocalRendererRecordSkinUpdate(int32_t mesh_count);

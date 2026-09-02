@@ -2420,6 +2420,29 @@ static void TestFaceAngleAndLodContract(void)
         (void)fprintf(stderr, "head-local face view thresholds changed\n");
         exit(1);
     }
+    const float camera_angles[][2] = {
+        {1.00f, 0.00f},
+        {0.81f, 0.59f},
+        {0.27f, 0.96f},
+        {-0.08f, 1.00f},
+        {0.27f, -0.96f},
+    };
+    for (size_t angle = 0;
+         angle < sizeof(camera_angles) / sizeof(camera_angles[0]); ++angle) {
+        CcLocalFaceAnchorInternal anchor =
+            CcLocalFaceAnchorForCameraInternal(camera_angles[angle][0],
+                                               camera_angles[angle][1]);
+        float length = sqrtf(anchor.forward * anchor.forward +
+                             anchor.right * anchor.right);
+        bool side_matches = fabsf(anchor.right) < 0.0001f ||
+            (anchor.right < 0.0f) == (camera_angles[angle][1] < 0.0f);
+        if (fabsf(length - 1.0f) > 0.0001f ||
+            anchor.forward <= 0.30f || !side_matches) {
+            (void)fprintf(stderr,
+                          "visible face anchor moved behind the head\n");
+            exit(1);
+        }
+    }
     if (CcLocalFaceLodForProjectedHeightInternal(3.99f) !=
             CC_LOCAL_FACE_LOD_SILHOUETTE ||
         CcLocalFaceLodForProjectedHeightInternal(4.00f) !=
