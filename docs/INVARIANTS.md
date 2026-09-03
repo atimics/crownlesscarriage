@@ -17,6 +17,30 @@ Time model: the world runs at 60 ticks/second with 60 subticks per game
 minute; travel advances 30 game-minutes per real second, idling advances
 0. These constants (`cc_sim.h`) are pacing choices, not tunables.
 
+The 3D world is also derived from that seed. Settlement anchors, curved
+routes, site positions, and terrain heights must match for the same
+simulation state. Adjacent chunks must share exact edge samples.
+
+## World streaming
+
+The client may keep no more than `CC_WORLD_STREAM_CAPACITY` terrain chunks
+resident on the CPU. The renderer may keep no more than the same number of
+chunk meshes on the GPU. A chunk outside the 5 by 5 focus ring is disposable;
+the manifest and coordinate are enough to recreate it. Do not move generated
+height arrays into authoritative save state.
+
+Open-world carriage presentation must use the generated route pose. Its
+position and heading cannot be maintained by a separate visual road path.
+The wide view renders generated corridors along revealed routes; it must not
+render a square world floor. Fog is derived from chart knowledge, current
+location, and current journey progress.
+
+Authored town play uses `CcLocalPlaceProfile` in legacy-local coordinates.
+The open world is carriage-only. Entering an authored town must leave the
+world coordinate space before local movement, collision, or session saving.
+Road-book events may use authored close road scenes, but returning to travel
+must restore the same generated route pose and simulation progress.
+
 ## Save compatibility
 
 `CC_SIM_SCHEMA_VERSION` (21) and `CC_GENERATOR_VERSION` (20) version every
@@ -27,6 +51,10 @@ with the per-version branches below it) is the implementation, and
 
 1. Extend the legacy table and add the migration branch for the previous
    version.
+
+The client session has its own small version. Version 3 stores whether a
+position is in the shared world or an old scene-local space. Versions 1 and 2
+remain readable and are converted at load time.
 2. Keep the `CcCommand` enum append-only — command journals persist the
    numeric values (same for `CcCollectibleMapSlot` and the good aliases).
 3. Add a persistence test that loads a save written by the prior version.
