@@ -3829,7 +3829,7 @@ static void AdvanceArchives(CcSim *sim)
        after the scribes leave, like real institutional decay. */
     int32_t lore_ceiling = archives->lore_lost_total == 0 ? 75 :
         40 + MinimumI32(35, archives->lore_stored / 200);
-    int32_t lore_floor = 28;
+    int32_t lore_floor = 25;
     if (recorded > 0 && archives->lore_ceiling < lore_ceiling) {
         archives->lore_ceiling = lore_ceiling;
     }
