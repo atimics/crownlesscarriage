@@ -9,7 +9,7 @@
 #include <string.h>
 
 #define CC_SQLITE_APPLICATION_ID 1128481362
-#define CC_SQLITE_USER_VERSION 18
+#define CC_SQLITE_USER_VERSION 20
 #define CC_JOURNAL_RECORD_VERSION 1
 #define CC_JOURNAL_RUNTIME_FLUSH_TICKS 6
 #define CC_JOURNAL_MAX_DAY_ADVANCE 3650
@@ -697,6 +697,26 @@ static bool EnsureJournalMetaColumns(sqlite3 *database,
     return EnsureColumn(database, "meta", "iron_ledger_reserve",
             "ALTER TABLE meta ADD COLUMN iron_ledger_reserve "
             "INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "meta", "archive_scribes",
+            "ALTER TABLE meta ADD COLUMN archive_scribes "
+            "INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "meta", "archive_lore_stored",
+            "ALTER TABLE meta ADD COLUMN archive_lore_stored "
+            "INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "meta", "archive_lore_lost_total",
+            "ALTER TABLE meta ADD COLUMN archive_lore_lost_total "
+            "INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "meta", "archive_last_recorded_day",
+            "ALTER TABLE meta ADD COLUMN archive_last_recorded_day "
+            "INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "meta", "archive_lore_ceiling",
+            "ALTER TABLE meta ADD COLUMN archive_lore_ceiling "
+            "INTEGER NOT NULL DEFAULT 40;",
             error, error_capacity);
 }
 
@@ -713,9 +733,14 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " bandit_count INTEGER NOT NULL, monster_count INTEGER NOT NULL,"
         " dungeon_count INTEGER NOT NULL, event_count INTEGER NOT NULL,"
         " event_write_index INTEGER NOT NULL, state_hash TEXT NOT NULL,"
-        " journal_generation INTEGER NOT NULL DEFAULT 0,"
+        "journal_generation INTEGER NOT NULL DEFAULT 0,"
         " journal_cursor INTEGER NOT NULL DEFAULT 0,"
-        " iron_ledger_reserve INTEGER NOT NULL DEFAULT 0);"
+        " iron_ledger_reserve INTEGER NOT NULL DEFAULT 0,"
+        " archive_scribes INTEGER NOT NULL DEFAULT 2,"
+        " archive_lore_stored INTEGER NOT NULL DEFAULT 0,"
+        " archive_lore_lost_total INTEGER NOT NULL DEFAULT 0,"
+        " archive_last_recorded_day INTEGER NOT NULL DEFAULT 0,"
+        " archive_lore_ceiling INTEGER NOT NULL DEFAULT 40);"
         "CREATE TABLE IF NOT EXISTS kingdom ("
         " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL UNIQUE, name TEXT NOT NULL,"
         " color_r INTEGER NOT NULL, color_g INTEGER NOT NULL, color_b INTEGER NOT NULL,"
@@ -1114,8 +1139,9 @@ static bool SaveMeta(sqlite3 *database, const CcSim *sim,
         "settlement_count,route_count,faction_count,shipment_count,"
         "bandit_count,monster_count,dungeon_count,event_count,"
         "event_write_index,state_hash,journal_generation,journal_cursor,"
-        "iron_ledger_reserve) "
-        "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);";
+        "iron_ledger_reserve,archive_scribes,archive_lore_stored,"
+        "archive_lore_lost_total,archive_last_recorded_day,archive_lore_ceiling) "
+        "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);";
     if (!Prepare(database, sql, &statement, error, error_capacity)) return false;
     char hash[24];
     (void)snprintf(hash, sizeof(hash), "%016" PRIx64, CcSimHash(sim));
@@ -1139,6 +1165,11 @@ static bool SaveMeta(sqlite3 *database, const CcSim *sim,
     BindId(statement, 18, journal_generation);
     BindId(statement, 19, journal_cursor);
     BindMoney(statement, 20, sim->iron_ledger_reserve);
+    BindInt(statement, 21, sim->archives.scribes);
+    BindInt(statement, 22, sim->archives.lore_stored);
+    BindInt(statement, 23, sim->archives.lore_lost_total);
+    BindInt(statement, 24, sim->archives.last_recorded_day);
+    BindInt(statement, 25, sim->archives.lore_ceiling);
     bool result = StepDone(database, statement, error, error_capacity);
     sqlite3_finalize(statement);
     return result;
@@ -2487,7 +2518,8 @@ static bool ReadMeta(sqlite3 *database, CcSim *sim, uint64_t *expected_hash,
         "current_day,next_entity_serial,kingdom_count,settlement_count,route_count,faction_count,"
         "shipment_count,bandit_count,monster_count,dungeon_count,event_count,"
         "event_write_index,state_hash,journal_generation,journal_cursor,"
-        "iron_ledger_reserve "
+        "iron_ledger_reserve,archive_scribes,archive_lore_stored,"
+        "archive_lore_lost_total,archive_last_recorded_day,archive_lore_ceiling "
         "FROM meta WHERE id=1;", &statement, error, error_capacity)) return false;
     if (sqlite3_step(statement) != SQLITE_ROW) {
         SetError(error, error_capacity, "Campaign metadata is missing.");
@@ -2518,6 +2550,11 @@ static bool ReadMeta(sqlite3 *database, CcSim *sim, uint64_t *expected_hash,
     *journal_cursor = (uint64_t)sqlite3_column_int64(statement, 18);
     sim->iron_ledger_reserve =
         (CcMoney)sqlite3_column_int64(statement, 19);
+    sim->archives.scribes = sqlite3_column_int(statement, 20);
+    sim->archives.lore_stored = sqlite3_column_int(statement, 21);
+    sim->archives.lore_lost_total = sqlite3_column_int(statement, 22);
+    sim->archives.last_recorded_day = sqlite3_column_int(statement, 23);
+    sim->archives.lore_ceiling = sqlite3_column_int(statement, 24);
     sqlite3_finalize(statement);
     return true;
 }
@@ -4457,7 +4494,8 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
         legacy_version != 13U && legacy_version != 14U &&
         legacy_version != 15U && legacy_version != 16U &&
         legacy_version != 17U && legacy_version != 18U &&
-        legacy_version != 19U && legacy_version != 20U) return true;
+        legacy_version != 19U && legacy_version != 20U &&
+        legacy_version != 21U) return true;
     bool social_schema_19 = legacy_version == 19U &&
         sim->relationship_count > 0;
     bool quest_schema_19 = legacy_version == 19U &&
@@ -4484,6 +4522,13 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
                     (int32_t)CC_EVENT_FRONT_CREATED + kind - old_first);
             }
         }
+    }
+    if (legacy_version == 21U) {
+        sim->archives = (CcArchives){
+            .lore_ceiling = 40
+        };
+        FinishLegacyRuntimeUpgrade(sim);
+        return true;
     }
     CcSimInitializeUnderroad(sim);
     if (legacy_version == 20U) {

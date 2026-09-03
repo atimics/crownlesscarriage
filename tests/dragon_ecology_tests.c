@@ -3,6 +3,7 @@
 
 #include "test_support.h"
 #include <stdio.h>
+#include <string.h>
 
 static int32_t CountEvents(const CcSim *sim, CcEventKind kind)
 {
@@ -123,6 +124,32 @@ int main(void)
     CC_CHECK(deep_wyrm.dragon.crown_strength >= 60);
     CC_CHECK(deep_wyrm.dragon.life_stage == CC_DRAGON_STAGE_DEEP_WYRM);
 
+    /* Relic: Deep Wyrm ascension leaves the Wyrmheart in the lair. */
+    CcSim wyrm;
+    CcSimInit(&wyrm, UINT32_C(0xdee00002));
+    wyrm.dragon.hoard = 5000;
+    wyrm.dragon.hoard_goods[CC_GOOD_GOLD] = 10;
+    wyrm.dragon.hoard_goods[CC_GOOD_GEMS] = 10;
+    wyrm.dragon.age_days = 500 * 365 - 1;
+    wyrm.dragon.body_condition = 50;
+    wyrm.dragon.memory_integrity = 100;
+    wyrm.dragon.territory_stability = 100;
+    wyrm.dragon.crown_continuity_days = 250 * 365;
+    wyrm.dragon.crown_strength = 60;
+    wyrm.goblins.devotion = 100;
+    CcSimAdvanceDays(&wyrm, 1);
+    CC_CHECK(wyrm.dragon.life_stage == CC_DRAGON_STAGE_DEEP_WYRM);
+    bool wyrmheart_found = false;
+    for (int32_t i = 0; i < wyrm.treasure_count; ++i) {
+        if (strncmp(wyrm.treasures[i].name, "Wyrmheart", 9) == 0 &&
+            !wyrm.treasures[i].destroyed) {
+            wyrmheart_found = true;
+            CC_CHECK(wyrm.treasures[i].owner_id == wyrm.dragon.id);
+            CC_CHECK(wyrm.treasures[i].gem_content == 12);
+        }
+    }
+    CC_CHECK(wyrmheart_found);
+
     CcSim brood;
     CcSimInit(&brood, UINT32_C(0xb200dc0d));
     brood.dragon.hoard = 5000;
@@ -142,6 +169,35 @@ int main(void)
     CC_CHECK(brood.dragon.activity == CC_DRAGON_ACTIVITY_BROODING);
     CC_CHECK(brood.dragon.broods_laid == 1);
     CC_CHECK(CountEvents(&brood, CC_EVENT_DRAGON_BROOD) == 1);
+
+    /* Relic: slaying the dragon in a campaign forges the Bane blade with
+       provenance chained to the slaying event, held at the origin. */
+    CcSim bane;
+    CcSimInit(&bane, UINT32_C(0xba4e0001));
+    CcSettlement *origin = CcSimSettlementMutable(&bane,
+        bane.dragon_campaign.origin_settlement_id);
+    if (origin == NULL) origin = &bane.settlements[0];
+    bane.dragon_campaign.origin_settlement_id = origin->id;
+    bane.dragon_campaign.phase = CC_DRAGON_CAMPAIGN_OUTBOUND;
+    bane.dragon_campaign.days_remaining = 0;
+    bane.dragon_campaign.pledged_kingdom_mask = 1U;
+    bane.dragon_campaign.alliance_kingdom_mask = 7U;
+    bane.dragon_campaign.cause_event_id = 0U;
+    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        bane.dragon_campaign.supplies[good] = 400;
+    }
+    CcSimAdvanceDays(&bane, 1);
+    CC_CHECK(bane.dragon.slain);
+    bool bane_found = false;
+    for (int32_t i = 0; i < bane.treasure_count; ++i) {
+        const CcTreasure *t = &bane.treasures[i];
+        if (strncmp(t->name, "Bane of ", 8) == 0 && !t->destroyed) {
+            bane_found = true;
+            CC_CHECK(t->gold_content == 3);
+            CC_CHECK(t->owner_id == origin->id);
+        }
+    }
+    CC_CHECK(bane_found);
 
     const char *path = "/tmp/crownless-dragon-ecology-tests.ccsave";
     (void)remove(path);

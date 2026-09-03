@@ -25,6 +25,7 @@
 #define CC_MAX_QUEST_EVIDENCE 8
 #define CC_MAX_PENDING_ECHOES 3
 #define CC_MAX_CHARACTERS 24
+#define CC_MAX_SCRIBES 4
 #define CC_CHARACTER_MEMORY_CAPACITY 4
 #define CC_CHARACTER_KNOWLEDGE_CAPACITY 8
 #define CC_MAX_RELATIONSHIPS 48
@@ -48,7 +49,7 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 21
+#define CC_SIM_SCHEMA_VERSION 22
 #define CC_GENERATOR_VERSION 20
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
@@ -264,8 +265,18 @@ typedef enum CcEventKind {
     CC_EVENT_FRONT_CREATED,
     CC_EVENT_FRONT_RESOLVED,
     CC_EVENT_FRONT_FAILED,
-    CC_EVENT_QUEST_PROGRESS
+    CC_EVENT_QUEST_PROGRESS,
+    CC_EVENT_LORE_RECORDED,
+    CC_EVENT_LORE_LOST
 } CcEventKind;
+
+typedef struct CcArchives {
+    int32_t scribes;            /* 0..CC_MAX_SCRIBES, funded by the monastery */
+    int32_t lore_stored;        /* notable events preserved in the archive */
+    int32_t lore_lost_total;    /* notable events that decayed unrecorded */
+    int32_t last_recorded_day;  /* day of the most recent archive write */
+    int32_t lore_ceiling;       /* sustained trust ceiling from remembered lore */
+} CcArchives;
 
 typedef enum CcCommandKind {
     CC_COMMAND_NONE,
@@ -1253,6 +1264,7 @@ typedef struct CcSim {
     CcHorse stable_horses[CC_MAX_STABLE_HORSES];
     int32_t stable_horse_count;
     CcWorldClock clock;
+    CcArchives archives;
     CcJourneyEncounter journey;
     CcCarriageState carriage;
     CcDelayedEcho delayed_echo;

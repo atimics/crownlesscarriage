@@ -911,6 +911,8 @@ const char *CcEventKindName(CcEventKind kind)
         case CC_EVENT_FRONT_RESOLVED: return "FRONT RESOLVED";
         case CC_EVENT_FRONT_FAILED: return "FRONT FAILED";
         case CC_EVENT_QUEST_PROGRESS: return "QUEST PROGRESS";
+        case CC_EVENT_LORE_RECORDED: return "LORE RECORDED";
+        case CC_EVENT_LORE_LOST: return "LORE LOST";
     }
     return "EVENT";
 }
@@ -2899,6 +2901,8 @@ void CcSimInit(CcSim *sim, uint32_t seed)
     sim->random_state = sim->world_seed;
     sim->current_day = 1;
     sim->next_entity_serial = 1U;
+    sim->archives.scribes = 2; /* the scriptorium opens with the world */
+    sim->archives.lore_ceiling = 75;
 
     static const char *kingdom_sets[][3] = {
         {"Alder Concord", "Ember Crown", "Star Oath"},
@@ -3213,11 +3217,77 @@ static void WearOneTool(CcSettlement *settlement, int32_t *wear,
 
 static CcTreasure *AllocateTreasure(CcSim *sim)
 {
+    /* Reuse a destroyed slot first: destroyed treasures keep their row
+       for save-schema stability but their physical slot is free. */
+    for (int32_t i = 0; i < sim->treasure_count; ++i) {
+        if (sim->treasures[i].destroyed) {
+            CcTreasure *treasure = &sim->treasures[i];
+            *treasure = (CcTreasure){0};
+            treasure->id = NextId(sim, CC_ENTITY_TREASURE);
+            return treasure;
+        }
+    }
     if (sim->treasure_count >= CC_MAX_TREASURES) return NULL;
     CcTreasure *treasure = &sim->treasures[sim->treasure_count++];
     *treasure = (CcTreasure){0};
     treasure->id = NextId(sim, CC_ENTITY_TREASURE);
     return treasure;
+}
+
+static bool TreasureIsArchiveVolume(const CcTreasure *treasure)
+{
+    if (treasure == NULL || treasure->destroyed) return false;
+    return strncmp(treasure->name, "Chronicle ", 10) == 0 ||
+           strncmp(treasure->name, "Ledger ", 7) == 0 ||
+           strncmp(treasure->name, "Annal ", 6) == 0 ||
+           strncmp(treasure->name, "Register ", 9) == 0 ||
+           strncmp(treasure->name, "Codex of ", 9) == 0;
+}
+
+static bool EarlierArchiveVolume(const CcSim *sim, int32_t first,
+                                 int32_t second)
+{
+    if (second < 0) return true;
+    const CcTreasure *a = &sim->treasures[first];
+    const CcTreasure *b = &sim->treasures[second];
+    return a->created_day < b->created_day ||
+        (a->created_day == b->created_day && first < second);
+}
+
+static bool FindArchiveVolumesToBind(const CcSim *sim, int32_t slots[4])
+{
+    int32_t best[4] = {-1, -1, -1, -1};
+    for (int32_t anchor = 0; anchor < sim->treasure_count; ++anchor) {
+        const CcTreasure *volume = &sim->treasures[anchor];
+        if (!TreasureIsArchiveVolume(volume) ||
+            volume->owner_id == sim->player.id) continue;
+
+        int32_t candidate[4] = {-1, -1, -1, -1};
+        for (int32_t i = 0; i < sim->treasure_count; ++i) {
+            const CcTreasure *other = &sim->treasures[i];
+            if (!TreasureIsArchiveVolume(other) ||
+                other->owner_id == sim->player.id ||
+                other->location_id != volume->location_id) continue;
+            for (int32_t position = 0; position < 4; ++position) {
+                if (!EarlierArchiveVolume(sim, i, candidate[position])) {
+                    continue;
+                }
+                for (int32_t move = 3; move > position; --move) {
+                    candidate[move] = candidate[move - 1];
+                }
+                candidate[position] = i;
+                break;
+            }
+        }
+        if (candidate[3] < 0) continue;
+        if (best[0] < 0 ||
+            EarlierArchiveVolume(sim, candidate[0], best[0])) {
+            for (int32_t i = 0; i < 4; ++i) best[i] = candidate[i];
+        }
+    }
+    if (best[0] < 0) return false;
+    for (int32_t i = 0; i < 4; ++i) slots[i] = best[i];
+    return true;
 }
 
 static void CompleteTreasure(CcSim *sim, CcSettlement *settlement)
@@ -3601,6 +3671,192 @@ static uint32_t RecolonizedServiceMask(const CcSettlement *settlement)
         return mask | ServiceBit(CC_SERVICE_MINE);
     }
     return mask | ServiceBit(CC_SERVICE_MARKET);
+}
+
+static bool EventWasArchived(const CcSim *sim, CcId event_id)
+{
+    for (int32_t i = 0; i < sim->event_count; ++i) {
+        const CcEvent *event = CcSimRecentEvent(sim, i);
+        if (event != NULL && event->kind == CC_EVENT_LORE_RECORDED &&
+            event->parent_id == event_id) return true;
+    }
+    return false;
+}
+
+/* Archive law: the scriptorium records notable events as durable lore.
+   Funding follows the monastery reserve; unfunded lore decays.
+   This is the world's memory of itself - without it, the ledger
+   is a drawer no one opens. */
+static void AdvanceArchives(CcSim *sim)
+{
+    if (sim == NULL || sim->current_day % 7 != 0) return;
+    CcArchives *archives = &sim->archives;
+
+    /* Funding: the monastery hires scribes when it can pay them. */
+    int32_t target_scribes = sim->iron_ledger_reserve >= 300 ? CC_MAX_SCRIBES :
+        sim->iron_ledger_reserve >= 150 ? 2 :
+        sim->iron_ledger_reserve >= 50 ? 1 : 0;
+    if (target_scribes > archives->scribes) {
+        archives->scribes = target_scribes;
+    } else if (target_scribes < archives->scribes) {
+        archives->scribes -= 1; /* scribes leave gradually, not all at once */
+    }
+
+    /* Record: each scribe preserves one notable recent event per week.
+       Scan first, push after: PushEvent mutates the ledger ring while
+       we iterate it, which would orphan parents mid-scan. */
+    CcId noted[CC_MAX_SCRIBES];
+    CcId noted_location[CC_MAX_SCRIBES];
+    char noted_text[CC_MAX_SCRIBES][CC_EVENT_TEXT_CAPACITY];
+    int32_t recorded = 0;
+    int32_t first_day = MaximumI32(1, sim->current_day - 7);
+    for (int32_t offset = 0;
+         offset < sim->event_count && recorded < archives->scribes;
+         ++offset) {
+        const CcEvent *event = CcSimRecentEvent(sim, offset);
+        if (event == NULL || event->day < first_day ||
+            event->day > sim->current_day || event->magnitude < 20 ||
+            EventWasArchived(sim, event->id)) continue;
+        bool notable =
+            event->kind == CC_EVENT_WAR_DECLARED ||
+            event->kind == CC_EVENT_PEACE_DECLARED ||
+            event->kind == CC_EVENT_DRAGON_SLAIN ||
+            event->kind == CC_EVENT_DRAGON_CROWNED ||
+            event->kind == CC_EVENT_DRAGON_BROOD ||
+            event->kind == CC_EVENT_TREASURE_CRAFTED ||
+            event->kind == CC_EVENT_KINGDOM_ACTION ||
+            event->kind == CC_EVENT_SETTLEMENT_RAIDED;
+        if (!notable) continue;
+        noted[recorded] = event->id;
+        noted_location[recorded] = event->location_id;
+        (void)snprintf(noted_text[recorded],
+                       sizeof(noted_text[recorded]),
+                       "The scriptorium records the lore of: %.90s",
+                       event->text);
+        recorded += 1;
+    }
+    for (int32_t i = 0; i < recorded; ++i) {
+        archives->lore_stored += 1;
+        archives->last_recorded_day = sim->current_day;
+        (void)PushEvent(sim, CC_EVENT_LORE_RECORDED, noted[i],
+                        noted_location[i], noted[i], 1, noted_text[i]);
+        /* Physical memory: the record is bound into a tome, a real
+           treasure held by a kingdom. A tome can be stored, captured
+           in a war, or burned in a repudiation - the world's memory
+           lives in vaults, not in a counter. */
+        static const char *forms[] = {
+            "Chronicle", "Ledger", "Annal", "Register"
+        };
+        int32_t holder = (int32_t)(sim->treasure_count %
+                                   sim->kingdom_count);
+        CcKingdom *kingdom = &sim->kingdoms[holder];
+        CcSettlement *vault = NULL;
+        for (int32_t s = 0; s < sim->settlement_count; ++s) {
+            if (sim->settlements[s].kingdom_id == kingdom->id &&
+                !CcSettlementIsAbandoned(&sim->settlements[s])) {
+                vault = &sim->settlements[s];
+                break;
+            }
+        }
+        CcTreasure *tome = vault != NULL ? AllocateTreasure(sim) : NULL;
+        if (tome != NULL) {
+            (void)snprintf(tome->name, sizeof(tome->name),
+                           "%.12s %.18s of %d",
+                           forms[sim->treasure_count % 4],
+                           kingdom->name, sim->current_day / 364);
+            tome->maker_settlement_id = vault->id;
+            tome->owner_id = vault->id;   /* the vault holds it */
+            tome->location_id = vault->id;
+            tome->gold_content = 1;   /* gilded vellum */
+            tome->gem_content = 1;    /* ink seal */
+            tome->craft_work = 1;     /* one week's record */
+            tome->appraised_value = 6;
+            tome->created_day = sim->current_day;
+        }
+    }
+
+    /* Vault conservation: the treasure array is finite. When it nears
+       capacity, scribes consolidate the oldest tomes into a codex - four
+       chronicles bound into one, carrying their combined lore. Archives
+       in the real world weed and rebind; so does this one. */
+    if (sim->treasure_count >= CC_MAX_TREASURES - 4) {
+        int32_t tome_slots[4];
+        if (FindArchiveVolumesToBind(sim, tome_slots)) {
+            CcId oldest_owner = sim->treasures[tome_slots[0]].owner_id;
+            CcId oldest_location =
+                sim->treasures[tome_slots[0]].location_id;
+            CcId oldest_maker =
+                sim->treasures[tome_slots[0]].maker_settlement_id;
+            int32_t combined_lore = 0;
+            CcId eldest_parent = LatestLocalCause(sim, oldest_location);
+            for (int32_t i = 0; i < 4; ++i) {
+                CcTreasure *t = &sim->treasures[tome_slots[i]];
+                combined_lore += t->craft_work;
+                t->destroyed = true;
+            }
+            /* Rebind in place: the first tome slot becomes the codex.
+               No new slot is needed; the vault's stock is conserved. */
+            CcTreasure *codex = &sim->treasures[tome_slots[0]];
+            if (codex != NULL) {
+                *codex = (CcTreasure){0};
+                (void)snprintf(codex->name, sizeof(codex->name),
+                               "Codex of the Scriptorium");
+                codex->id = NextId(sim, CC_ENTITY_TREASURE);
+                codex->maker_settlement_id = oldest_maker;
+                codex->owner_id = oldest_owner;
+                codex->location_id = oldest_location;
+                codex->gold_content = 1;
+                codex->gem_content = 1;
+                codex->craft_work = combined_lore;
+                codex->appraised_value = 6 + combined_lore;
+                codex->created_day = sim->current_day;
+                char text[CC_EVENT_TEXT_CAPACITY];
+                (void)snprintf(text, sizeof(text),
+                               "The scriptorium binds four chronicles into "
+                               "the Codex of the Scriptorium; nothing is "
+                               "lost that was written.");
+                (void)PushEvent(sim, CC_EVENT_LORE_RECORDED, codex->id,
+                                oldest_location, eldest_parent,
+                                combined_lore, text);
+            }
+        }
+    }
+
+    /* Memory is politically load-bearing. Archive health sets each realm's
+       trust ceiling: lore remembered raises what the realm can sustain,
+       lore lost lowers it. Drift is slow - one step per week - so the
+       political effect of defunding the scriptorium arrives a generation
+       after the scribes leave, like real institutional decay. */
+    int32_t lore_ceiling = archives->lore_lost_total == 0 ? 75 :
+        40 + MinimumI32(35, archives->lore_stored / 200);
+    int32_t lore_floor = 25;
+    if (recorded > 0 && archives->lore_ceiling < lore_ceiling) {
+        archives->lore_ceiling = lore_ceiling;
+    }
+    if (archives->lore_ceiling > lore_ceiling) {
+        archives->lore_ceiling -= 1;
+    }
+    for (int32_t i = 0; i < sim->kingdom_count; ++i) {
+        CcKingdom *kingdom = &sim->kingdoms[i];
+        int32_t target = archives->scribes > 0 ?
+            archives->lore_ceiling : lore_floor;
+        if (kingdom->legitimacy < target) {
+            kingdom->legitimacy += 1;
+        } else if (kingdom->legitimacy > target) {
+            kingdom->legitimacy -= 1;
+        }
+    }
+
+    /* Decay: unfunded archives lose lore. Memory is load-bearing. */
+    if (archives->scribes == 0 && archives->lore_stored > 0) {
+        archives->lore_stored -= 1;
+        archives->lore_lost_total += 1;
+        char text[CC_EVENT_TEXT_CAPACITY];
+        (void)snprintf(text, sizeof(text),
+                       "Unfunded and unwatched, part of the archive crumbles; "
+                       "a name is forgotten.");
+        (void)PushEvent(sim, CC_EVENT_LORE_LOST, 0U, 0U, 0U, 1, text);
+    }
 }
 
 static void AdvanceRuins(CcSim *sim)
@@ -5178,6 +5434,25 @@ static void AdvanceDragonEcology(CcSim *sim)
         ChangeDragonStage(sim, CC_DRAGON_STAGE_DEEP_WYRM,
                           CC_EVENT_DRAGON_CROWNED,
                           "centuries of possession bind wyrm, hoard, and mountain");
+        /* Relic law, dark mirror: five centuries of hoarding leaves an
+           artifact of the wyrm itself - the mountain's own crown-gem,
+           owned by the dragon, waiting in the lair for a thief. */
+        CcSettlement *lair = CcSimSettlementMutable(
+            sim, dragon->lair_settlement_id);
+        CcTreasure *gem = lair != NULL ? AllocateTreasure(sim) : NULL;
+        if (gem != NULL) {
+            (void)snprintf(gem->name, sizeof(gem->name),
+                           "Wyrmheart of %.20s", dragon->name);
+            gem->maker_settlement_id = lair->id;
+            gem->owner_id = dragon->id;
+            gem->location_id = lair->id;
+            gem->gold_content = 2;
+            gem->gem_content = 12;
+            gem->craft_work = 50;
+            gem->appraised_value = gem->gold_content * 40 +
+                gem->gem_content * 70 + gem->craft_work * 10;
+            gem->created_day = sim->current_day;
+        }
     }
 
     if (dragon->brood_cooldown_days == 0 && dragon->egg_count == 0 &&
@@ -7195,6 +7470,27 @@ static void ResolveWarSettlement(CcSim *sim, int32_t first,
         sim->kingdoms[winner].legitimacy + 5, 0, 100);
     sim->kingdoms[loser].legitimacy = ClampI32(
         sim->kingdoms[loser].legitimacy - 12, 0, 100);
+    /* Sack of the archive: tomes stored in the ceded settlement change
+       hands. The winner captures the loser's chronicles - the history
+       of the war is now told by the victor's vault. */
+    int32_t captured = 0;
+    for (int32_t i = 0; i < sim->treasure_count; ++i) {
+        CcTreasure *t = &sim->treasures[i];
+        if (!TreasureIsArchiveVolume(t) ||
+            t->location_id != ceded->id) continue;
+        captured += 1;  /* vault contents now belong to the victor's realm */
+    }
+    if (captured > 0) {
+        char sack[CC_EVENT_TEXT_CAPACITY];
+        (void)snprintf(sack, sizeof(sack),
+                       "%d chronicles of %.16s are taken from the vaults "
+                       "of %.16s into the keeping of %.16s.",
+                       captured, sim->kingdoms[loser].name,
+                       ceded->name, sim->kingdoms[winner].name);
+        (void)PushEvent(sim, CC_EVENT_KINGDOM_ACTION,
+                        sim->kingdoms[loser].id, ceded->id,
+                        cause_event_id, captured, sack);
+    }
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(
         text, sizeof(text),
@@ -7818,6 +8114,38 @@ static void AdvanceDragonCampaign(CcSim *sim)
         sim, CC_EVENT_DRAGON_SLAIN, sim->dragon.id,
         sim->dragon.lair_settlement_id, campaign->cause_event_id,
         attack - defense, text);
+    /* Relic law: a world-historical deed leaves a named artifact whose
+       provenance IS the event that made it. The bane-blade is forged in
+       the moment of the slaying, held at the campaign's origin - the
+       OSR principle that unique treasures carry unique history. */
+    {
+        CcSettlement *origin = CcSimSettlementMutable(
+            sim, campaign->origin_settlement_id);
+        CcTreasure *relic = origin != NULL && battle != NULL ?
+            AllocateTreasure(sim) : NULL;
+        if (relic != NULL) {
+            (void)snprintf(relic->name, sizeof(relic->name),
+                           "Bane of %.24s", sim->dragon.name);
+            relic->maker_settlement_id = origin->id;
+            relic->owner_id = origin->id;
+            relic->location_id = origin->id;
+            relic->gold_content = 3;
+            relic->gem_content = 2;
+            relic->craft_work = MaximumI32(1, attack - defense);
+            relic->appraised_value = relic->gold_content * 40 +
+                relic->gem_content * 70 + relic->craft_work * 10;
+            relic->created_day = sim->current_day;
+            char relic_text[CC_EVENT_TEXT_CAPACITY];
+            (void)snprintf(relic_text, sizeof(relic_text),
+                           "From the hoard-fire the host raises "
+                           "%.24s, bane of %.24s, day %d.",
+                           relic->name, sim->dragon.name,
+                           sim->current_day);
+            (void)PushEvent(sim, CC_EVENT_TREASURE_CRAFTED,
+                            relic->id, origin->id, battle->id,
+                            relic->appraised_value, relic_text);
+        }
+    }
     campaign->cause_event_id = battle != NULL ? battle->id : 0U;
     sim->dragon.lifecycle_event_id = battle != NULL ? battle->id :
                                       sim->dragon.lifecycle_event_id;
@@ -8369,6 +8697,36 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
                 kingdom->iron_ledger_debt = 0;
                 kingdom->legitimacy = ClampI32(
                     kingdom->legitimacy - 25, 0, 100);
+                /* Debt is written in the kingdom's own chronicles. A
+                   repudiation burns the vault: half the stored tomes are
+                   destroyed, because the record of what was borrowed is
+                   the record of what was broken. Debt survives in the
+                   monastery's copies; the kingdom's own history does not. */
+                int32_t burned = 0;
+                int32_t held = 0;
+                int32_t lore_burned = 0;
+                for (int32_t i = 0; i < sim->treasure_count; ++i) {
+                    CcTreasure *t = &sim->treasures[i];
+                    if (!TreasureIsArchiveVolume(t)) continue;
+                    CcSettlement *vault = CcSimSettlementMutable(
+                        sim, t->owner_id);
+                    if (vault == NULL ||
+                        vault->kingdom_id != kingdom->id) continue;
+                    held += 1;
+                }
+                int32_t burn_target = (held + 1) / 2;
+                for (int32_t i = 0;
+                     i < sim->treasure_count && burned < burn_target; ++i) {
+                    CcTreasure *t = &sim->treasures[i];
+                    if (!TreasureIsArchiveVolume(t)) continue;
+                    CcSettlement *vault = CcSimSettlementMutable(
+                        sim, t->owner_id);
+                    if (vault == NULL ||
+                        vault->kingdom_id != kingdom->id) continue;
+                    lore_burned += MaximumI32(1, t->craft_work);
+                    t->destroyed = true;
+                    burned += 1;
+                }
                 if (worst != NULL) RemoveBurnedService(worst);
                 CcFaction *commons = FactionFor(
                     sim, kingdom->id, CC_FACTION_COMMONS);
@@ -8385,12 +8743,29 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
                     kingdom->name,
                     repudiated > INT32_MAX ? INT32_MAX :
                         (int32_t)repudiated);
-                (void)PushEvent(
+                CcEvent *repudiation = PushEvent(
                     sim, CC_EVENT_KINGDOM_ACTION, kingdom->id,
                     worst != NULL ? worst->id : kingdom->id,
                     LatestLocalCause(sim, kingdom->id),
                     repudiated > INT32_MAX ? INT32_MAX :
                         (int32_t)repudiated, text);
+                if (lore_burned > 0) {
+                    int32_t newly_lost = MinimumI32(
+                        lore_burned, sim->archives.lore_stored);
+                    sim->archives.lore_stored -= newly_lost;
+                    sim->archives.lore_lost_total += newly_lost;
+                    char lore_text[CC_EVENT_TEXT_CAPACITY];
+                    (void)snprintf(
+                        lore_text, sizeof(lore_text),
+                        "%s burns %d archive volume%s; %d pieces of lore are lost.",
+                        kingdom->name, burned, burned == 1 ? "" : "s",
+                        newly_lost);
+                    (void)PushEvent(
+                        sim, CC_EVENT_LORE_LOST, kingdom->id,
+                        worst != NULL ? worst->id : kingdom->id,
+                        repudiation != NULL ? repudiation->id : 0U,
+                        newly_lost, lore_text);
+                }
             }
         }
         if (sim->current_day % 28 == 0 &&
@@ -8919,6 +9294,7 @@ void CcSimAdvanceDays(CcSim *sim, int32_t days)
                 UpdateSettlement(sim, settlement);
             }
             AdvanceRuins(sim);
+            AdvanceArchives(sim);
             UpdateThreats(sim);
             UpdateRoutesAndGovernments(sim);
             UpdateRoyalDiplomacy(sim);
@@ -12228,7 +12604,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                          sim->schema_version == 17U ||
                          sim->schema_version == 18U ||
                          sim->schema_version == 19U ||
-                         sim->schema_version == 20U;
+                         sim->schema_version == 20U ||
+                         sim->schema_version == 21U;
     bool supported_generator = sim->generator_version == CC_GENERATOR_VERSION ||
         (legacy_schema && (sim->generator_version == 3U ||
                            sim->generator_version == 5U ||
@@ -12264,6 +12641,19 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
          sim->iron_ledger_reserve > CC_SIM_MAX_MONEY)) {
         SetError(error, error_capacity,
                  "The monastery reserve is invalid.");
+        return false;
+    }
+    if (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
+        (sim->archives.scribes < 0 ||
+         sim->archives.scribes > CC_MAX_SCRIBES ||
+         sim->archives.lore_stored < 0 ||
+         sim->archives.lore_lost_total < 0 ||
+         sim->archives.lore_ceiling < 0 ||
+         sim->archives.lore_ceiling > 100 ||
+         sim->archives.last_recorded_day < 0 ||
+         sim->archives.last_recorded_day > sim->current_day)) {
+        SetError(error, error_capacity,
+                 "The archive state is invalid.");
         return false;
     }
     if (sim->kingdom_count < 1 || sim->kingdom_count > CC_MAX_KINGDOMS ||
@@ -12342,7 +12732,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 !ValidBoundedText(event->text, sizeof(event->text)) ||
                 event->day < 1 || event->day > sim->current_day ||
                 event->kind < CC_EVENT_HARVEST_FAILED ||
-                event->kind > CC_EVENT_QUEST_PROGRESS ||
+                event->kind > CC_EVENT_LORE_LOST ||
                 event->parent_id == event->id ||
                 (event->parent_id != 0U &&
                  CcSimEvent(sim, event->parent_id) == NULL) ||
@@ -13759,6 +14149,7 @@ uint64_t CcSimHash(const CcSim *sim)
     bool hash_quest = sim->schema_version >= 21U ||
         (sim->schema_version == 19U &&
          (sim->front_count > 0 || sim->quest_outcome_count > 0));
+    bool hash_archives = sim->schema_version >= 22U;
     uint64_t hash = UINT64_C(1469598103934665603);
 #define HASH_VALUE(value) hash = HashU64(hash, (uint64_t)(value))
     HASH_VALUE(sim->schema_version);
@@ -14378,6 +14769,13 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(item->witness_id);
         }
         HASH_VALUE(item->magnitude); hash = HashString(hash, item->text);
+    }
+    if (hash_archives) {
+        HASH_VALUE(sim->archives.scribes);
+        HASH_VALUE(sim->archives.lore_stored);
+        HASH_VALUE(sim->archives.lore_lost_total);
+        HASH_VALUE(sim->archives.last_recorded_day);
+        HASH_VALUE(sim->archives.lore_ceiling);
     }
 #undef HASH_VALUE
     return hash;

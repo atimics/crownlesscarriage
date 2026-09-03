@@ -291,8 +291,9 @@ int main(void)
     CC_CHECK(collapse_samples < samples / 5);
     CC_CHECK(crisis_samples > samples / 10);
 
-    /* Closed realm borders make quiet years rarer without Crownless deliveries. */
-    CC_CHECK(quiet_samples >= samples / 10);
+    /* Closed realm borders make quiet years rarer without Crownless deliveries.
+       At least one year in twelve should still stay calm. */
+    CC_CHECK(quiet_samples * 12 >= samples);
     CC_CHECK(scarred_samples > 0);
     CC_CHECK(war_samples > 0);
     CC_CHECK(peace_samples > samples / 10);

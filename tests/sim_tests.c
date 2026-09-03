@@ -76,6 +76,87 @@ static CcSituation *PreparePromisedJourney(CcSim *sim, char *error,
     return situation;
 }
 
+static int32_t CountLoreRecordsForParent(const CcSim *sim, CcId parent)
+{
+    int32_t count = 0;
+    for (int32_t i = 0; i < sim->event_count; ++i) {
+        const CcEvent *event = CcSimRecentEvent(sim, i);
+        if (event != NULL && event->kind == CC_EVENT_LORE_RECORDED &&
+            event->parent_id == parent) count += 1;
+    }
+    return count;
+}
+
+static bool IsArchiveVolumeName(const char *name)
+{
+    return strncmp(name, "Chronicle ", 10) == 0 ||
+           strncmp(name, "Ledger ", 7) == 0 ||
+           strncmp(name, "Annal ", 6) == 0 ||
+           strncmp(name, "Register ", 9) == 0 ||
+           strncmp(name, "Codex of ", 9) == 0;
+}
+
+static void PrepareArchiveWeek(CcSim *sim, CcMoney reserve,
+                               int32_t scribes)
+{
+    CcSimInit(sim, UINT32_C(0xa4c417e));
+    sim->current_day = 6;
+    sim->iron_ledger_reserve = reserve;
+    sim->archives.scribes = scribes;
+    sim->archives.lore_stored = 0;
+    sim->archives.lore_lost_total = 0;
+    sim->archives.last_recorded_day = 0;
+    for (int32_t i = 0; i < sim->event_count; ++i) {
+        sim->events[i].magnitude = 0;
+    }
+    int32_t notable = sim->event_count < 3 ? sim->event_count : 3;
+    for (int32_t i = 0; i < notable; ++i) {
+        sim->events[i].day = 6;
+        sim->events[i].kind = CC_EVENT_KINGDOM_ACTION;
+        sim->events[i].magnitude = 40 + i;
+    }
+}
+
+static void CheckArchiveRecording(void)
+{
+    CcSim unfunded;
+    PrepareArchiveWeek(&unfunded, 0, 0);
+    CcSimAdvanceDays(&unfunded, 1);
+    CC_CHECK(unfunded.archives.scribes == 0);
+    CC_CHECK(unfunded.archives.lore_stored == 0);
+
+    CcSim funded;
+    PrepareArchiveWeek(&funded, 50, 1);
+    CcSimAdvanceDays(&funded, 1);
+    CC_CHECK(funded.archives.scribes == 1);
+    CC_CHECK(funded.archives.lore_stored == 1);
+    CC_CHECK(funded.archives.last_recorded_day == 7);
+
+    CcId recorded_parent = 0U;
+    for (int32_t i = 0; i < funded.event_count; ++i) {
+        const CcEvent *event = CcSimRecentEvent(&funded, i);
+        if (event != NULL && event->kind == CC_EVENT_LORE_RECORDED &&
+            event->day == 7) {
+            recorded_parent = event->parent_id;
+            break;
+        }
+    }
+    CC_CHECK(recorded_parent != 0U);
+    CC_CHECK(CountLoreRecordsForParent(&funded, recorded_parent) == 1);
+
+    bool physical_record = false;
+    for (int32_t i = 0; i < funded.treasure_count; ++i) {
+        if (!funded.treasures[i].destroyed &&
+            IsArchiveVolumeName(funded.treasures[i].name)) {
+            physical_record = true;
+        }
+    }
+    CC_CHECK(physical_record);
+
+    CcSimAdvanceDays(&funded, 7);
+    CC_CHECK(CountLoreRecordsForParent(&funded, recorded_parent) == 1);
+}
+
 int main(void)
 {
     CcSim first;
@@ -84,6 +165,7 @@ int main(void)
     CcSimInit(&first, UINT32_C(0x12345678));
     CcSimInit(&second, UINT32_C(0x12345678));
     CC_CHECK(CcSimHash(&first) == CcSimHash(&second));
+    CheckArchiveRecording();
     CC_CHECK(first.character_count > 0);
     CC_CHECK(first.character_count == second.character_count);
     CC_CHECK(first.characters[0].id == second.characters[0].id);
