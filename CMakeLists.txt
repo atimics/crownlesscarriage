@@ -104,6 +104,16 @@ add_library(crownless_local_place
 target_include_directories(crownless_local_place PUBLIC src)
 cc_strict_warnings(crownless_local_place)
 
+add_library(crownless_world
+    src/world/cc_world.c
+)
+target_include_directories(crownless_world PUBLIC src)
+target_link_libraries(crownless_world PUBLIC crownless_sim)
+if(NOT MSVC)
+    target_link_libraries(crownless_world PUBLIC m)
+endif()
+cc_strict_warnings(crownless_world)
+
 add_library(crownless_client_session
     src/client/cc_client_session.c
 )
@@ -227,6 +237,7 @@ if(CC_BUILD_CLIENT)
         crownless_persistence crownless_locomotion
         crownless_creature_catalog crownless_local_place
         crownless_client_session crownless_client_policy crownless_story
+        crownless_world
         raylib
     )
     if(NOT EMSCRIPTEN)
@@ -628,6 +639,11 @@ if(BUILD_TESTING)
     cc_strict_warnings(local_place_tests)
     add_test(NAME distinct_local_places COMMAND local_place_tests)
 
+    add_executable(world_stream_tests tests/world_stream_tests.c)
+    target_link_libraries(world_stream_tests PRIVATE crownless_world)
+    cc_strict_warnings(world_stream_tests)
+    add_test(NAME finite_world_streaming COMMAND world_stream_tests)
+
     if(CC_BUILD_BENCHMARKS)
         add_test(NAME simulation_shape_metrics
                  COMMAND crownless_sim_metrics --seeds 8 --years 3)
@@ -697,7 +713,7 @@ if(BUILD_TESTING)
         target_link_libraries(local_movement_tests PRIVATE
             crownless_sim crownless_locomotion
             crownless_creature_catalog crownless_local_place
-            crownless_client_policy raylib
+            crownless_client_policy crownless_world raylib
         )
         target_compile_definitions(local_movement_tests PRIVATE
             CC_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}"
@@ -716,7 +732,7 @@ if(BUILD_TESTING)
         target_link_libraries(terrain_tests PRIVATE
             crownless_sim crownless_locomotion
             crownless_creature_catalog crownless_local_place
-            crownless_client_policy raylib
+            crownless_client_policy crownless_world raylib
         )
         target_compile_definitions(terrain_tests PRIVATE
             CC_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}"

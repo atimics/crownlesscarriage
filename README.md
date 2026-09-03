@@ -1,8 +1,10 @@
 # Crownless Carriage
 
 A seed-driven carriage-courier fantasy world simulation with a raylib
-fixed-pixel, three-quarter 3D client. The core is a deterministic headless
-simulation in C17 with SQLite-persisted saves; the desktop and browser
+fixed-pixel, three-quarter 3D client. Authored storybook towns are joined by
+a finite carriage road book whose generated corridors and fog reflect what
+the player has learned. The core is a deterministic headless simulation in
+C17 with SQLite-persisted saves; the desktop and browser
 clients, locomotion, and asset pipeline are all built on top of that
 simulation.
 
@@ -120,6 +122,7 @@ second release. GitHub Pages continues to publish every merge to `main`.
 - `src/persistence` — save files and the journaled command log (SQLite)
 - `src/locomotion` — biomechanics: bones, joints, muscles, gaits, ragdoll
 - `src/client` — raylib client, NPC appearance, local places
+- `src/world` — finite world manifest, procedural terrain, and bounded chunks
 - `web` — browser shell and IndexedDB persistence shim
 - `tools` — headless runners, benchmark, and the Blender asset pipeline
 - `tests` — one CTest executable per feature area; tests are the executable

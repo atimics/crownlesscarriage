@@ -2535,6 +2535,47 @@ static void TestBuildingCutawaySelection(void)
     }
 }
 
+static void TestOpenWorldTownNavigation(void)
+{
+    CcSim sim;
+    CcSimInit(&sim, UINT32_C(0x5e771e));
+    CcWorldStream stream;
+    if (!CcWorldStreamInit(&stream, &sim)) {
+        (void)fprintf(stderr, "open world stream did not initialize\n");
+        exit(1);
+    }
+    CcLocalBindOpenWorld(&stream);
+    Vector2 open_ground = {stream.manifest.maximum_x - 12.0f,
+                           stream.manifest.minimum_z + 12.0f};
+    CcLocalAgent agent;
+    CcLocalAgentInit(&agent, open_ground, false);
+    Vector3 distant_target = {open_ground.x - 3.0f, 0.0f,
+                              open_ground.y + 3.0f};
+    if (distant_target.x <= CC_LOCAL_WORLD_WIDTH ||
+        !CcLocalAgentSetStreetTarget(&agent, distant_target)) {
+        (void)fprintf(stderr,
+                      "open world navigation still used the local town grid\n");
+        exit(1);
+    }
+
+    const CcWorldSettlementPlacement *place = &stream.manifest.settlements[0];
+    const CcLocalPlaceProfile *profile =
+        CcLocalPlaceProfileForFunction(place->function);
+    const CcLocalPlaceBuilding *building = &profile->building[0];
+    CcWorldPoint building_center = CcWorldSettlementLocalPoint(
+        &stream.manifest, place->settlement_id,
+        building->x + building->width * 0.5f,
+        building->z + building->depth * 0.5f);
+    if (CcLocalAgentSetExactTarget(
+            &agent,
+            (Vector3){building_center.x, 0.0f, building_center.z}, false)) {
+        (void)fprintf(stderr,
+                      "open world town building lost its collision footprint\n");
+        exit(1);
+    }
+    CcLocalBindOpenWorld(NULL);
+}
+
 int main(void)
 {
     for (int32_t frame = 0; frame < 239; ++frame) {
@@ -2569,6 +2610,7 @@ int main(void)
     }
 
     TestBuildingCutawaySelection();
+    TestOpenWorldTownNavigation();
     if (fabsf(CcLocalRoadCarriageX(0) - 20.15f) > 0.001f ||
         fabsf(CcLocalRoadCarriageX(350) - 38.35f) > 0.001f ||
         fabsf(CcLocalRoadCarriageX(1000) - 72.15f) > 0.001f) {

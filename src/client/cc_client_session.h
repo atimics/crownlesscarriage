@@ -5,7 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define CC_CLIENT_SESSION_VERSION UINT32_C(2)
+#define CC_CLIENT_SESSION_VERSION UINT32_C(3)
 
 typedef enum CcClientSessionScene {
     CC_CLIENT_SESSION_STREET = 0,
@@ -15,11 +15,17 @@ typedef enum CcClientSessionScene {
     CC_CLIENT_SESSION_DRAGON_SITE = 4
 } CcClientSessionScene;
 
+typedef enum CcClientSessionCoordinateSpace {
+    CC_CLIENT_SESSION_LEGACY_LOCAL = 0,
+    CC_CLIENT_SESSION_WORLD = 1
+} CcClientSessionCoordinateSpace;
+
 typedef struct CcClientSession {
     uint32_t version;
     uint32_t world_seed;
     uint64_t location_id;
     CcClientSessionScene scene;
+    CcClientSessionCoordinateSpace coordinate_space;
     float position_x;
     float position_z;
     float facing_yaw;

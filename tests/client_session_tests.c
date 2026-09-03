@@ -22,6 +22,7 @@ int main(void)
         .world_seed = UINT32_C(0xc0a71a9e),
         .location_id = UINT64_C(42),
         .scene = CC_CLIENT_SESSION_MARKET,
+        .coordinate_space = CC_CLIENT_SESSION_WORLD,
         .position_x = 6.25f,
         .position_z = 2.75f,
         .facing_yaw = -0.35f,
@@ -39,6 +40,7 @@ int main(void)
     CC_CHECK(restored.world_seed == original.world_seed);
     CC_CHECK(restored.location_id == original.location_id);
     CC_CHECK(restored.scene == original.scene);
+    CC_CHECK(restored.coordinate_space == original.coordinate_space);
     CC_CHECK(fabsf(restored.position_x - original.position_x) < 0.0001f);
     CC_CHECK(fabsf(restored.position_z - original.position_z) < 0.0001f);
     CC_CHECK(fabsf(restored.facing_yaw - original.facing_yaw) < 0.0001f);
@@ -46,6 +48,9 @@ int main(void)
 
     CcClientSession invalid = original;
     invalid.version += 1U;
+    CC_CHECK(!CcClientSessionValidate(&invalid));
+    invalid = original;
+    invalid.coordinate_space = (CcClientSessionCoordinateSpace)99;
     CC_CHECK(!CcClientSessionValidate(&invalid));
     invalid = original;
     invalid.position_x = INFINITY;
@@ -69,6 +74,19 @@ int main(void)
                                  error, sizeof(error)));
     CC_CHECK(restored.version == CC_CLIENT_SESSION_VERSION);
     CC_CHECK(restored.opening_step == 2U);
+    CC_CHECK(restored.coordinate_space == CC_CLIENT_SESSION_LEGACY_LOCAL);
+
+    FILE *version_two = fopen(session_path, "wb");
+    CC_CHECK(version_two != NULL);
+    CC_CHECK(fputs(
+        "CROWNLESS_SESSION 2\n3232176798 42 0 8.5 9.5 0.25 1\n",
+        version_two) >= 0);
+    CC_CHECK(fclose(version_two) == 0);
+    CC_CHECK(CcClientSessionRead(session_path, &restored,
+                                 error, sizeof(error)));
+    CC_CHECK(restored.version == CC_CLIENT_SESSION_VERSION);
+    CC_CHECK(restored.opening_step == 1U);
+    CC_CHECK(restored.coordinate_space == CC_CLIENT_SESSION_LEGACY_LOCAL);
 
     FILE *corrupt = fopen(session_path, "wb");
     CC_CHECK(corrupt != NULL);
