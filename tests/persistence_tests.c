@@ -1184,6 +1184,29 @@ static void CheckSchema18Compatibility(char *error, size_t error_capacity)
     RemoveDatabase(path);
 }
 
+static void CheckSchema21Compatibility(char *error, size_t error_capacity)
+{
+    const char *path = "persistence-legacy-v21-test.ccsave";
+    RemoveDatabase(path);
+    CcSim legacy;
+    CcSimInit(&legacy, UINT32_C(0x1e9ac21));
+    legacy.schema_version = 21U;
+    legacy.archives = (CcArchives){0};
+    CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
+
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.generator_version == CC_GENERATOR_VERSION);
+    CC_CHECK(restored.current_day == legacy.current_day);
+    CC_CHECK(restored.archives.scribes == 0);
+    CC_CHECK(restored.archives.lore_stored == 0);
+    CC_CHECK(restored.archives.lore_lost_total == 0);
+    CC_CHECK(restored.archives.lore_ceiling == 40);
+    CC_CHECK(CcSimValidate(&restored, error, error_capacity));
+    RemoveDatabase(path);
+}
+
 int main(void)
 {
     const char *path = "persistence-test.ccsave";
@@ -1232,6 +1255,7 @@ int main(void)
     CheckSchema17Compatibility(error, sizeof(error));
     CheckSchema18QuestCompatibility(error, sizeof(error));
     CheckSchema18Compatibility(error, sizeof(error));
+    CheckSchema21Compatibility(error, sizeof(error));
     CheckDiplomacyPersistence(error, sizeof(error));
     CheckJournalRecovery(error, sizeof(error));
     CheckJournalCheckpointAndTamper(error, sizeof(error));

@@ -4494,7 +4494,8 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
         legacy_version != 13U && legacy_version != 14U &&
         legacy_version != 15U && legacy_version != 16U &&
         legacy_version != 17U && legacy_version != 18U &&
-        legacy_version != 19U && legacy_version != 20U) return true;
+        legacy_version != 19U && legacy_version != 20U &&
+        legacy_version != 21U) return true;
     bool social_schema_19 = legacy_version == 19U &&
         sim->relationship_count > 0;
     bool quest_schema_19 = legacy_version == 19U &&
@@ -4521,6 +4522,13 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
                     (int32_t)CC_EVENT_FRONT_CREATED + kind - old_first);
             }
         }
+    }
+    if (legacy_version == 21U) {
+        sim->archives = (CcArchives){
+            .lore_ceiling = 40
+        };
+        FinishLegacyRuntimeUpgrade(sim);
+        return true;
     }
     CcSimInitializeUnderroad(sim);
     if (legacy_version == 20U) {
