@@ -1867,6 +1867,35 @@ static void CheckSchema28GrainMigration(char *error,
     RemoveDatabase(path);
 }
 
+static void CheckSchema30RoadDistrictMigration(char *error,
+                                                size_t error_capacity)
+{
+    const char *path = "persistence-schema30-road-district-test.ccsave";
+    RemoveDatabase(path);
+    CcSim legacy;
+    CcSimInit(&legacy, UINT32_C(0xc0a7119e));
+    legacy.schema_version = 30U;
+    legacy.generator_version = 23U;
+    legacy.road_site_count = 0;
+    memset(legacy.road_sites, 0, sizeof(legacy.road_sites));
+    CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
+
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.generator_version == CC_GENERATOR_VERSION);
+    CC_CHECK(restored.road_site_count == CC_MAX_ROAD_SITES);
+    for (int32_t route_slot = 0;
+         route_slot < restored.route_count; ++route_slot) {
+        const CcRoadSite *road_house = CcSimRoadHouseSite(
+            &restored, restored.routes[route_slot].id);
+        CC_CHECK(road_house != NULL);
+        CC_CHECK(!road_house->accessible);
+    }
+    CC_CHECK(CcSimValidate(&restored, error, error_capacity));
+    RemoveDatabase(path);
+}
+
 static void CheckSchema27WoodCompatibility(char *error,
                                            size_t error_capacity)
 {
@@ -2104,6 +2133,7 @@ int main(void)
     CheckSchema27WoodCompatibility(error, sizeof(error));
     CheckSchema28GrainMigration(error, sizeof(error));
     CheckSchema29StoneMigration(error, sizeof(error));
+    CheckSchema30RoadDistrictMigration(error, sizeof(error));
     CheckJourneyStopPersistence(error, sizeof(error));
     CheckLegacyLifecycleJournalCompatibility(24U, error, sizeof(error));
     CheckLegacyLifecycleJournalCompatibility(25U, error, sizeof(error));
@@ -2277,6 +2307,18 @@ int main(void)
     CC_CHECK(restored.maps[0].recorded_danger ==
              original.maps[0].recorded_danger);
     CC_CHECK(restored.event_count == original.event_count);
+    CC_CHECK(restored.road_site_count == original.road_site_count);
+    for (int32_t site = 0; site < original.road_site_count; ++site) {
+        CC_CHECK(restored.road_sites[site].id ==
+                 original.road_sites[site].id);
+        CC_CHECK(restored.road_sites[site].route_id ==
+                 original.road_sites[site].route_id);
+        CC_CHECK(strcmp(restored.road_sites[site].name,
+                        original.road_sites[site].name) == 0);
+        CC_CHECK(restored.road_sites[site].blocker ==
+                 original.road_sites[site].blocker);
+        CC_CHECK(!restored.road_sites[site].accessible);
+    }
     for (int32_t good = CC_LEGACY_GOOD_COUNT;
          good < CC_GOOD_COUNT; ++good) {
         CC_CHECK(restored.player.cargo[good] ==

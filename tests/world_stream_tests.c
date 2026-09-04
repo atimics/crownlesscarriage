@@ -81,6 +81,7 @@ static int TestManifestIsStableAndFinite(void)
     CHECK(CcWorldManifestBuild(&other, &other_sim));
     CHECK(first.settlement_count == first_sim.settlement_count);
     CHECK(first.route_count == first_sim.route_count);
+    CHECK(first.road_site_count == first_sim.road_site_count);
     CHECK(first.maximum_x > first.minimum_x);
     CHECK(first.maximum_z > first.minimum_z);
     for (int32_t i = 0; i < first.settlement_count; ++i) {
@@ -118,11 +119,76 @@ static int TestManifestIsStableAndFinite(void)
                   second.routes[i].samples[sample].z);
         }
     }
+    for (int32_t i = 0; i < first.road_site_count; ++i) {
+        CHECK(first.road_sites[i].road_site_id ==
+              second.road_sites[i].road_site_id);
+        CHECK(first.road_sites[i].junction.x ==
+              second.road_sites[i].junction.x);
+        CHECK(first.road_sites[i].junction.z ==
+              second.road_sites[i].junction.z);
+        CHECK(first.road_sites[i].blocker_position.x ==
+              second.road_sites[i].blocker_position.x);
+        CHECK(first.road_sites[i].blocker_position.z ==
+              second.road_sites[i].blocker_position.z);
+        CHECK(first.road_sites[i].destination.x ==
+              second.road_sites[i].destination.x);
+        CHECK(first.road_sites[i].destination.z ==
+              second.road_sites[i].destination.z);
+    }
     bool changed = first.settlements[0].center.x != other.settlements[0].center.x ||
                    first.settlements[0].center.z != other.settlements[0].center.z ||
                    first.settlements[0].plateau_height !=
                        other.settlements[0].plateau_height;
     CHECK(changed);
+    return 0;
+}
+
+static int TestRoadDistrictSites(void)
+{
+    CcSim sim;
+    CcWorldManifest manifest;
+    CcSimInit(&sim, UINT32_C(0x51de40ad));
+    CHECK(CcWorldManifestBuild(&manifest, &sim));
+    CHECK(sim.road_site_count == CC_MAX_ROAD_SITES);
+    CHECK(manifest.road_site_count == sim.road_site_count);
+    for (int32_t route_slot = 0; route_slot < sim.route_count; ++route_slot) {
+        int32_t route_sites = 0;
+        int32_t road_houses = 0;
+        for (int32_t site_slot = 0;
+             site_slot < sim.road_site_count; ++site_slot) {
+            const CcRoadSite *site = &sim.road_sites[site_slot];
+            if (site->route_id != sim.routes[route_slot].id) continue;
+            route_sites += 1;
+            if (site->kind == CC_ROAD_SITE_ROAD_HOUSE) road_houses += 1;
+        }
+        CHECK(route_sites == 3);
+        CHECK(road_houses == 1);
+    }
+    for (int32_t i = 0; i < sim.road_site_count; ++i) {
+        const CcRoadSite *site = &sim.road_sites[i];
+        const CcWorldRoadSitePlacement *placement =
+            CcWorldRoadSitePlacementForId(&manifest, site->id);
+        const CcWorldRoutePlacement *route =
+            CcWorldRoutePlacementForId(&manifest, site->route_id);
+        CHECK(placement != NULL);
+        CHECK(route != NULL);
+        CcWorldPoint expected_junction = CcWorldRoutePoint(
+            route, (float)site->progress_milli / 1000.0f);
+        CHECK(PointDistance(expected_junction, placement->junction) < 0.001f);
+        float blocker_distance = PointDistance(
+            placement->junction, placement->blocker_position);
+        float destination_distance = PointDistance(
+            placement->junction, placement->destination);
+        CHECK(blocker_distance > 8.0f);
+        CHECK(blocker_distance < destination_distance);
+        CHECK(isfinite(placement->blocker_heading_yaw));
+        CHECK(CcWorldManifestContains(
+            &manifest, placement->destination.x,
+            placement->destination.z));
+        CHECK(site->blocker == CC_ROAD_SITE_BLOCKER_TREE ||
+              site->blocker == CC_ROAD_SITE_BLOCKER_ROCKS);
+        CHECK(!site->accessible);
+    }
     return 0;
 }
 
@@ -412,6 +478,7 @@ int main(void)
 {
     if (TestCanonicalRoadManifest() != 0) return 1;
     if (TestManifestIsStableAndFinite() != 0) return 1;
+    if (TestRoadDistrictSites() != 0) return 1;
     if (TestChunkSeamsMatch() != 0) return 1;
     if (TestStreamingEvictsOldChunks() != 0) return 1;
     if (TestRoadAndSettlementSurface() != 0) return 1;

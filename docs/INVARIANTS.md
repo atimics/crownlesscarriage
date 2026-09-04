@@ -34,6 +34,11 @@ position and heading cannot be maintained by a separate visual road path.
 Every strategic route incident to a settlement must share that settlement's
 authored gate connector and exterior junction. Route dressing begins at the
 junction, outside the authored town footprint.
+Every strategic route has three saved road-district sites, including one
+road house. Side-road geometry is derived from each site's saved route,
+position, side, and length. A side road appears only when its main-road point
+is revealed. While a site is closed, its tree or rock barrier must remain in
+place and its local map stays outside the playable world.
 The wide view renders generated corridors along revealed routes; it must not
 render a square world floor. Fog is derived from chart knowledge, current
 location, and current journey progress.
@@ -46,7 +51,7 @@ must restore the same generated route pose and simulation progress.
 
 ## Save compatibility
 
-`CC_SIM_SCHEMA_VERSION` (21) and `CC_GENERATOR_VERSION` (20) version every
+`CC_SIM_SCHEMA_VERSION` (31) and `CC_GENERATOR_VERSION` (24) version every
 save file and command journal. The policy: **every schema version ever
 shipped stays loadable**. The legacy table in `cc_sim.c` (`legacy_schema`,
 with the per-version branches below it) is the implementation, and

@@ -711,6 +711,95 @@ static void DrawOpenWorldRouteNetwork(const CcSim *sim,
     }
 }
 
+static void DrawOpenWorldRoadSiteBlocker(
+    const CcWorldManifest *manifest,
+    const CcWorldRoadSitePlacement *placement)
+{
+    if (manifest == NULL || placement == NULL) return;
+    float heading = placement->blocker_heading_yaw;
+    Vector3 across = {cosf(heading), 0.0f, -sinf(heading)};
+    float ground = CcWorldTerrainHeight(
+        manifest, placement->blocker_position.x,
+        placement->blocker_position.z);
+    Vector3 center = {placement->blocker_position.x, ground,
+                      placement->blocker_position.z};
+    if (placement->blocker == CC_ROAD_SITE_BLOCKER_TREE) {
+        Vector3 first = Vector3Add(
+            center, Vector3Scale(across, -3.2f));
+        Vector3 second = Vector3Add(
+            center, Vector3Scale(across, 3.2f));
+        first.y += 0.42f;
+        second.y += 0.42f;
+        DrawCylinderEx(first, second, 0.46f, 0.34f, 8,
+                       WORLD_WOOD_SHADOW);
+        Vector3 crown = Vector3Add(
+            second, Vector3Scale(across, 0.40f));
+        DrawSmallSphere(Vector3Add(crown, (Vector3){0.0f, 0.35f, 0.0f}),
+                        1.45f, WORLD_FOLIAGE_LIGHT);
+        DrawSmallSphere(Vector3Add(crown, (Vector3){0.6f, 0.08f, 0.4f}),
+                        1.05f, WORLD_FOLIAGE_SHADOW);
+    } else {
+        for (int32_t stone = -2; stone <= 2; ++stone) {
+            Vector3 rock = Vector3Add(
+                center, Vector3Scale(across, (float)stone * 1.15f));
+            float radius = 0.72f + 0.12f * (float)((stone + 2) & 1);
+            rock.y += radius * 0.62f;
+            DrawSmallSphere(rock, radius,
+                            stone == 0 ? WORLD_STONE_LIGHT : WORLD_STONE);
+        }
+    }
+}
+
+static void DrawOpenWorldRoadSites(
+    const CcSim *sim, const CcWorldManifest *manifest,
+    const CcLocalWorldCarriageState *carriage, Vector3 focus,
+    bool kingdom_view)
+{
+    if (sim == NULL || manifest == NULL) return;
+    for (int32_t i = 0; i < manifest->road_site_count; ++i) {
+        const CcWorldRoadSitePlacement *placement =
+            &manifest->road_sites[i];
+        const CcRoadSite *site = CcSimRoadSite(
+            sim, placement->road_site_id);
+        const CcWorldRoutePlacement *route =
+            CcWorldRoutePlacementForId(manifest, placement->route_id);
+        CcRoadBookRouteView visibility = {0};
+        if (site == NULL || route == NULL ||
+            !OpenWorldReadRouteView(
+                sim, route, carriage, &visibility) ||
+            !CcRoadBookShowsRouteAmount(
+                &visibility, (float)site->progress_milli / 1000.0f)) {
+            continue;
+        }
+        float dx = placement->junction.x - focus.x;
+        float dz = placement->junction.z - focus.z;
+        if (!kingdom_view && dx * dx + dz * dz > 112.0f * 112.0f)
+            continue;
+        float heading = placement->blocker_heading_yaw;
+        CcWorldPoint end = {
+            placement->blocker_position.x + sinf(heading) * 1.4f,
+            placement->blocker_position.z + cosf(heading) * 1.4f,
+        };
+        Color verge = Fade(WORLD_GRASS_LIGHT, kingdom_view ? 0.82f : 0.96f);
+        Color track = site->kind == CC_ROAD_SITE_ROAD_HOUSE ?
+            Fade(WORLD_GOLD, kingdom_view ? 0.58f : 0.72f) :
+            Fade(WORLD_ROAD_LIGHT, kingdom_view ? 0.74f : 0.90f);
+        DrawOpenWorldRibbonSegment(
+            manifest, placement->junction, placement->bend,
+            7.2f, 0.07f, verge, true, true);
+        DrawOpenWorldRibbonSegment(
+            manifest, placement->bend, end,
+            7.2f, 0.07f, verge, true, true);
+        DrawOpenWorldRibbonSegment(
+            manifest, placement->junction, placement->bend,
+            4.2f, 0.12f, track, true, true);
+        DrawOpenWorldRibbonSegment(
+            manifest, placement->bend, end,
+            4.2f, 0.12f, track, true, true);
+        DrawOpenWorldRoadSiteBlocker(manifest, placement);
+    }
+}
+
 static void DrawOpenWorldSites(const CcSim *sim,
                                const CcWorldManifest *manifest,
                                Vector3 focus, float clock, bool kingdom_view)
@@ -789,6 +878,29 @@ static void OpenWorldRevealedBounds(const CcSim *sim,
             right = fmaxf(right, edge.x);
             far = fmaxf(far, edge.z);
         }
+    }
+    for (int32_t site_index = 0;
+         sim != NULL && manifest != NULL &&
+         site_index < manifest->road_site_count; ++site_index) {
+        const CcWorldRoadSitePlacement *site_placement =
+            &manifest->road_sites[site_index];
+        const CcRoadSite *site = CcSimRoadSite(
+            sim, site_placement->road_site_id);
+        const CcWorldRoutePlacement *route =
+            CcWorldRoutePlacementForId(
+                manifest, site_placement->route_id);
+        CcRoadBookRouteView visibility = {0};
+        if (site == NULL || route == NULL ||
+            !OpenWorldReadRouteView(
+                sim, route, carriage, &visibility) ||
+            !CcRoadBookShowsRouteAmount(
+                &visibility,
+                (float)site->progress_milli / 1000.0f)) continue;
+        CcWorldPoint edge = site_placement->destination;
+        left = fminf(left, edge.x);
+        near = fminf(near, edge.z);
+        right = fmaxf(right, edge.x);
+        far = fmaxf(far, edge.z);
     }
     const CcWorldSettlementPlacement *current = sim != NULL &&
         manifest != NULL ? CcWorldSettlementPlacementForId(
@@ -907,6 +1019,8 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
     BeginWorldLighting(camera, &art);
     DrawOpenWorldRouteNetwork(
         sim, &stream->manifest, carriage, kingdom_view);
+    DrawOpenWorldRoadSites(
+        sim, &stream->manifest, carriage, focus, kingdom_view);
     for (int32_t i = 0; i < stream->manifest.settlement_count; ++i) {
         if (!OpenWorldSettlementRevealed(
                 sim, stream->manifest.settlements[i].settlement_id)) {
@@ -965,7 +1079,7 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
     EndTextureMode();
     PresentTarget(target, destination);
 
-    WorldLabel labels[32] = {0};
+    WorldLabel labels[64] = {0};
     int32_t label_count = 0;
     if (hero_embarked && carriage != NULL && !kingdom_view) {
         labels[label_count++] = (WorldLabel){
@@ -977,7 +1091,7 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
              agent->position.z}, "YOU", WORLD_TEAL};
     }
     for (int32_t i = 0;
-         i < stream->manifest.settlement_count && label_count < 32; ++i) {
+         i < stream->manifest.settlement_count && label_count < 64; ++i) {
         const CcWorldSettlementPlacement *place =
             &stream->manifest.settlements[i];
         if (!OpenWorldSettlementRevealed(sim, place->settlement_id)) continue;
@@ -991,9 +1105,38 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
             {place->center.x, place->plateau_height + 4.2f,
              place->center.z}, settlement->name, WORLD_GOLD};
     }
+    if (!kingdom_view) {
+        for (int32_t i = 0;
+             i < stream->manifest.road_site_count && label_count < 64; ++i) {
+            const CcWorldRoadSitePlacement *placement =
+                &stream->manifest.road_sites[i];
+            const CcRoadSite *site = CcSimRoadSite(
+                sim, placement->road_site_id);
+            const CcWorldRoutePlacement *route =
+                CcWorldRoutePlacementForId(
+                    &stream->manifest, placement->route_id);
+            CcRoadBookRouteView visibility = {0};
+            float dx = placement->blocker_position.x - focus.x;
+            float dz = placement->blocker_position.z - focus.z;
+            if (site == NULL || route == NULL ||
+                dx * dx + dz * dz > 88.0f * 88.0f ||
+                !OpenWorldReadRouteView(
+                    sim, route, carriage, &visibility) ||
+                !CcRoadBookShowsRouteAmount(
+                    &visibility,
+                    (float)site->progress_milli / 1000.0f)) continue;
+            float ground = CcWorldTerrainHeight(
+                &stream->manifest, placement->blocker_position.x,
+                placement->blocker_position.z);
+            labels[label_count++] = (WorldLabel){
+                {placement->blocker_position.x, ground + 2.8f,
+                 placement->blocker_position.z},
+                site->name, WORLD_MUTED};
+        }
+    }
     DrawLabels(labels, label_count, camera, destination);
     DrawViewportText(
-        TextFormat("%s  ·  KNOWN ROADS ONLY  ·  FOG HIDES THE REST",
+        TextFormat("%s  ·  ROAD DISTRICTS  ·  SIDE ROADS ARE CLOSED",
                    kingdom_view ? "THE CROWNLESS ROAD BOOK" :
                    town_arrival ? "ARRIVING AT THE TOWN GATE" :
                                   "LEAVING THE TOWN GATE"),

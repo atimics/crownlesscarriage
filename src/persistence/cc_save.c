@@ -1181,6 +1181,15 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " strain INTEGER NOT NULL, maximum_depth INTEGER NOT NULL,"
         " encounter_kind INTEGER NOT NULL, encounter_reaction INTEGER NOT NULL,"
         " encounter_room INTEGER NOT NULL);";
+    const char *road_site_schema =
+        "CREATE TABLE IF NOT EXISTS road_site ("
+        " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL UNIQUE,"
+        " route_id INTEGER NOT NULL, home_settlement_id INTEGER NOT NULL,"
+        " name TEXT NOT NULL, kind INTEGER NOT NULL, input_good INTEGER NOT NULL,"
+        " output_good INTEGER NOT NULL, progress_milli INTEGER NOT NULL,"
+        " side INTEGER NOT NULL, spur_length INTEGER NOT NULL,"
+        " condition INTEGER NOT NULL, blocker INTEGER NOT NULL,"
+        " accessible INTEGER NOT NULL);";
     return Execute(database, schema, error, error_capacity) &&
            Execute(database, realm_schema, error, error_capacity) &&
            Execute(database, situation_schema, error, error_capacity) &&
@@ -1193,6 +1202,7 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
            Execute(database, goods_schema, error, error_capacity) &&
            Execute(database, journal_schema, error, error_capacity) &&
            Execute(database, underroad_schema, error, error_capacity) &&
+           Execute(database, road_site_schema, error, error_capacity) &&
            EnsureJourneyColumns(database, error, error_capacity) &&
            EnsureSocialColumns(database, error, error_capacity) &&
            EnsureJournalMetaColumns(database, error, error_capacity) &&
@@ -1614,6 +1624,39 @@ static bool SaveRoutes(sqlite3 *database, const CcSim *sim,
         if (!StepDone(database, statement, error, error_capacity) ||
             !ResetStatement(database, statement, error, error_capacity)) {
             sqlite3_finalize(statement); return false;
+        }
+    }
+    sqlite3_finalize(statement);
+    return true;
+}
+
+static bool SaveRoadSites(sqlite3 *database, const CcSim *sim,
+                          char *error, size_t error_capacity)
+{
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database,
+                 "INSERT INTO road_site VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
+                 &statement, error, error_capacity)) return false;
+    for (int32_t i = 0; i < sim->road_site_count; ++i) {
+        const CcRoadSite *site = &sim->road_sites[i];
+        BindInt(statement, 1, i);
+        BindId(statement, 2, site->id);
+        BindId(statement, 3, site->route_id);
+        BindId(statement, 4, site->home_settlement_id);
+        BindText(statement, 5, site->name);
+        BindInt(statement, 6, (int32_t)site->kind);
+        BindInt(statement, 7, (int32_t)site->input_good);
+        BindInt(statement, 8, (int32_t)site->output_good);
+        BindInt(statement, 9, site->progress_milli);
+        BindInt(statement, 10, site->side);
+        BindInt(statement, 11, site->spur_length);
+        BindInt(statement, 12, site->condition);
+        BindInt(statement, 13, (int32_t)site->blocker);
+        BindInt(statement, 14, site->accessible ? 1 : 0);
+        if (!StepDone(database, statement, error, error_capacity) ||
+            !ResetStatement(database, statement, error, error_capacity)) {
+            sqlite3_finalize(statement);
+            return false;
         }
     }
     sqlite3_finalize(statement);
@@ -2608,7 +2651,8 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
     return Execute(database,
             "DELETE FROM meta; DELETE FROM kingdom; DELETE FROM settlement;"
             "DELETE FROM horse_team; DELETE FROM stable_horse;"
-            "DELETE FROM route; DELETE FROM map_object; DELETE FROM map_collection;"
+            "DELETE FROM route; DELETE FROM road_site;"
+            "DELETE FROM map_object; DELETE FROM map_collection;"
             "DELETE FROM player_route_knowledge;"
             "DELETE FROM faction; DELETE FROM shipment;"
             "DELETE FROM shipment_intent; DELETE FROM diplomacy; DELETE FROM courier;"
@@ -2645,6 +2689,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
         SaveMaterialEconomy(database, sim, error, error_capacity) &&
         SaveGoods(database, sim, error, error_capacity) &&
         SaveRoutes(database, sim, error, error_capacity) &&
+        SaveRoadSites(database, sim, error, error_capacity) &&
         SaveMaps(database, sim, error, error_capacity) &&
         SaveMapCollection(database, sim, error, error_capacity) &&
         SavePlayerRouteKnowledge(database, sim, error, error_capacity) &&
@@ -3320,6 +3365,54 @@ static bool ReadRoutes(sqlite3 *database, CcSim *sim,
     }
     sqlite3_finalize(statement);
     if (rows != sim->route_count) { SetError(error, error_capacity, "Route rows are incomplete."); return false; }
+    return true;
+}
+
+static bool ReadRoadSites(sqlite3 *database, CcSim *sim,
+                          char *error, size_t error_capacity)
+{
+    sim->road_site_count = 0;
+    if (sim->schema_version < 31U) return true;
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database, "SELECT * FROM road_site ORDER BY slot;",
+                 &statement, error, error_capacity)) return false;
+    int32_t rows = 0;
+    while (sqlite3_step(statement) == SQLITE_ROW) {
+        int32_t slot = sqlite3_column_int(statement, 0);
+        if (slot != rows || slot < 0 || slot >= CC_MAX_ROAD_SITES) {
+            sqlite3_finalize(statement);
+            SetError(error, error_capacity,
+                     "Road site rows exceed save limits.");
+            return false;
+        }
+        CcRoadSite *site = &sim->road_sites[slot];
+        site->id = (CcId)sqlite3_column_int64(statement, 1);
+        site->route_id = (CcId)sqlite3_column_int64(statement, 2);
+        site->home_settlement_id =
+            (CcId)sqlite3_column_int64(statement, 3);
+        if (!ReadTextColumn(statement, 4, site->name, sizeof(site->name),
+                            "road site name", error, error_capacity)) {
+            sqlite3_finalize(statement);
+            return false;
+        }
+        site->kind = (CcRoadSiteKind)sqlite3_column_int(statement, 5);
+        site->input_good = (CcGood)sqlite3_column_int(statement, 6);
+        site->output_good = (CcGood)sqlite3_column_int(statement, 7);
+        site->progress_milli = sqlite3_column_int(statement, 8);
+        site->side = sqlite3_column_int(statement, 9);
+        site->spur_length = sqlite3_column_int(statement, 10);
+        site->condition = sqlite3_column_int(statement, 11);
+        site->blocker = (CcRoadSiteBlocker)sqlite3_column_int(statement, 12);
+        site->accessible = sqlite3_column_int(statement, 13) != 0;
+        rows += 1;
+    }
+    sqlite3_finalize(statement);
+    sim->road_site_count = rows;
+    if (rows != CC_MAX_ROAD_SITES) {
+        SetError(error, error_capacity,
+                 "Road site rows are incomplete.");
+        return false;
+    }
     return true;
 }
 
@@ -4895,6 +4988,7 @@ static void FinishLegacyRuntimeUpgrade(CcSim *sim)
     UpgradeLegacyJourneyRhythm(sim);
     CcSimUpgradeCharacterLifecycles(sim);
     CcSimUpgradeGrainEconomy(sim);
+    CcSimInitializeRoadSites(sim);
     sim->schema_version = CC_SIM_SCHEMA_VERSION;
     sim->generator_version = CC_GENERATOR_VERSION;
 }
@@ -4918,8 +5012,23 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
                                  char *error, size_t error_capacity)
 {
     uint32_t legacy_version = sim->schema_version;
+    if (legacy_version == 30U && sim->generator_version == 23U) {
+        CcSimInitializeRoadSites(sim);
+        sim->schema_version = CC_SIM_SCHEMA_VERSION;
+        sim->generator_version = CC_GENERATOR_VERSION;
+        return true;
+    }
     if (legacy_version == 29U) {
         CcSimInitializeStoneEconomy(sim);
+        CcSimInitializeRoadSites(sim);
+        sim->schema_version = CC_SIM_SCHEMA_VERSION;
+        sim->generator_version = CC_GENERATOR_VERSION;
+        return true;
+    }
+    if (legacy_version == 28U) {
+        CcSimUpgradeGrainEconomy(sim);
+        CcSimInitializeStoneEconomy(sim);
+        CcSimInitializeRoadSites(sim);
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         sim->generator_version = CC_GENERATOR_VERSION;
         return true;
@@ -4937,18 +5046,12 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
         legacy_version != 23U && legacy_version != 24U &&
         legacy_version != 25U && legacy_version != 26U &&
         legacy_version != 27U && legacy_version != 28U &&
-        legacy_version != 29U) return true;
-    if (legacy_version == 28U) {
-        CcSimUpgradeGrainEconomy(sim);
-        CcSimInitializeStoneEconomy(sim);
-        sim->schema_version = CC_SIM_SCHEMA_VERSION;
-        sim->generator_version = CC_GENERATOR_VERSION;
-        return true;
-    }
+        legacy_version != 29U && legacy_version != 30U) return true;
     if (legacy_version == 27U) {
         CcSimInitializeWoodEconomy(sim);
         CcSimUpgradeGrainEconomy(sim);
         CcSimInitializeStoneEconomy(sim);
+        CcSimInitializeRoadSites(sim);
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         sim->generator_version = CC_GENERATOR_VERSION;
         return true;
@@ -4991,6 +5094,7 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
     }
     if (legacy_version == 26U) {
         CcSimUpgradeGrainEconomy(sim);
+        CcSimInitializeRoadSites(sim);
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         sim->generator_version = CC_GENERATOR_VERSION;
         return true;
@@ -4998,6 +5102,7 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
     if (legacy_version == 25U) {
         CcSimUpgradeCharacterLifecycles(sim);
         CcSimUpgradeGrainEconomy(sim);
+        CcSimInitializeRoadSites(sim);
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         sim->generator_version = CC_GENERATOR_VERSION;
         return true;
@@ -5331,6 +5436,7 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
               ReadHorseTeam(database, sim, error, error_capacity) &&
               ReadStableHorses(database, sim, error, error_capacity) &&
               ReadRoutes(database, sim, error, error_capacity) &&
+              ReadRoadSites(database, sim, error, error_capacity) &&
               ReadMaps(database, sim, error, error_capacity) &&
               ReadFactions(database, sim, error, error_capacity) &&
               ReadShipments(database, sim, error, error_capacity) &&
