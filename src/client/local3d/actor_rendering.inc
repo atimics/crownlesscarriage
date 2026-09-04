@@ -4471,6 +4471,65 @@ void CcLocalDrawNpcReview3D(int32_t view, float clock,
     PresentTarget(target, destination);
 }
 
+void CcLocalDrawHeraldryReview3D(const CcSim *sim, float clock,
+                                 RenderTexture2D target,
+                                 Rectangle destination)
+{
+    if (sim == NULL || sim->kingdom_count < 3) return;
+    Camera3D camera = {0};
+    camera.target = (Vector3){0.0f, 1.55f, 0.0f};
+    camera.position = (Vector3){0.0f, 7.2f, 15.0f};
+    camera.up = (Vector3){0.0f, 1.0f, 0.0f};
+    camera.fovy = 8.7f;
+    camera.projection = CAMERA_ORTHOGRAPHIC;
+
+    BeginTextureMode(target);
+    ClearBackground(CC_VISUAL_PALETTE.cool_ink);
+    BeginMode3D(camera);
+    BeginWorldLighting(camera, &INTERIOR_ART_COMPOSITION);
+    DrawBox((Vector3){0.0f, -0.10f, -1.25f},
+            (Vector3){15.8f, 0.20f, 2.35f}, WORLD_STONE_SHADOW);
+    DrawBox((Vector3){0.0f, -0.12f, 1.85f},
+            (Vector3){12.6f, 0.18f, 2.25f}, WORLD_EARTH_SHADOW);
+    DrawBox((Vector3){0.0f, 1.75f, -3.00f},
+            (Vector3){16.0f, 3.70f, 0.12f},
+            BlendColor(WORLD_STONE_SHADOW, WORLD_INK, 0.34f));
+
+    for (int32_t kingdom = 0; kingdom < 3; ++kingdom) {
+        float x = -6.15f + (float)kingdom * 2.45f;
+        DrawHeraldryBanner3D(
+            CcHeraldryForKingdom(sim, sim->kingdoms[kingdom].id),
+            (Vector3){x, 0.0f, -1.28f}, 0.0f, 0.68f,
+            clock + (float)kingdom * 0.4f);
+    }
+    for (int32_t faction = 0; faction < 3; ++faction) {
+        float x = 1.18f + (float)faction * 2.45f;
+        DrawHeraldryBanner3D(
+            CcHeraldryForFaction(
+                sim, sim->kingdoms[0].id, (CcFactionKind)faction),
+            (Vector3){x, 0.0f, -1.28f}, 0.0f, 0.68f,
+            clock + (float)faction * 0.45f);
+    }
+
+    const CcSpecialBanner powers[4] = {
+        CC_SPECIAL_BANNER_CINDER_TITHE,
+        CC_SPECIAL_BANNER_BANDITS,
+        CC_SPECIAL_BANNER_IRON_LEDGER,
+        CC_SPECIAL_BANNER_VARKESH,
+    };
+    for (int32_t power = 0; power < 4; ++power) {
+        float x = -4.65f + (float)power * 3.10f;
+        DrawHeraldryBanner3D(
+            CcHeraldryForSpecial(powers[power]),
+            (Vector3){x, 0.0f, 1.82f}, 0.0f, 0.72f,
+            clock + (float)power * 0.52f);
+    }
+    EndWorldLighting();
+    EndMode3D();
+    EndTextureMode();
+    PresentTarget(target, destination);
+}
+
 static void PresentCharacterPortrait(Rectangle bounds, Color accent)
 {
     DrawRectangle((int32_t)bounds.x, (int32_t)bounds.y,

@@ -311,15 +311,9 @@ static void DrawOpenWorldSettlement(const CcSim *sim,
         DrawBox((Vector3){center.x, center.y + 1.12f * scale, center.z},
                 (Vector3){1.95f * scale, 2.25f * scale, 0.24f * scale},
                 WORLD_ROAD_SHADOW);
-        DrawBox((Vector3){center.x, center.y + 4.25f * scale, center.z},
-                (Vector3){0.16f * scale, 3.5f * scale, 0.16f * scale},
-                WORLD_WOOD_SHADOW);
-        DrawTriangle3D(
-            (Vector3){center.x, center.y + 5.80f * scale, center.z},
-            (Vector3){center.x + 2.15f * scale,
-                      center.y + 5.15f * scale, center.z},
-            (Vector3){center.x, center.y + 4.48f * scale, center.z},
-            kingdom);
+        DrawHeraldryBanner3D(
+            CcHeraldryForKingdom(sim, settlement->kingdom_id), center,
+            0.0f, 1.48f * scale, 0.0f);
         return;
     }
     float rotation = place->entrance_heading_yaw - 0.5f * PI;

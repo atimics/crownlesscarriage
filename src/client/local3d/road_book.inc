@@ -796,9 +796,20 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
                     sim->carriage.progress_milli, camera.target,
                     road_house_nearby);
     if (!travelling &&
-        SceneryPointVisible(ROAD_BARRICADE_X, 40.0f, camera.target) &&
-        !DrawBridgeCheckpoint()) {
-        DrawRoadBarricade(route);
+        SceneryPointVisible(ROAD_BARRICADE_X, 40.0f, camera.target)) {
+        bool checkpoint = DrawBridgeCheckpoint();
+        if (!checkpoint) {
+            DrawRoadBarricade(route);
+        }
+        float banner_z = checkpoint ? 39.10f : 37.15f;
+        DrawHeraldryBanner3D(
+            CcHeraldryForSpecial(CC_SPECIAL_BANNER_BANDITS),
+            (Vector3){ROAD_BARRICADE_X - 2.55f,
+                      checkpoint ?
+                          CcLocalRoadCheckpointSurfaceYInternal(
+                              ROAD_BARRICADE_X - 2.55f, banner_z) : 0.0f,
+                      banner_z},
+            0.0f, 0.78f, clock);
     }
     if (!travelling) DrawAgentPath(agent, false);
     DrawRoadCarriage(carriage_base, &sim->player, clock, carriage_pace,
@@ -1249,6 +1260,14 @@ static void DrawDragonCliffRoost(const CcSim *sim)
                       6.78f, z - 1.2f + (float)(i / 3) * 0.36f},
             0.14f, WORLD_GOLD);
     }
+    CcHeraldryStyle varkesh = CcHeraldryForSpecial(
+        CC_SPECIAL_BANNER_VARKESH);
+    DrawHeraldryBanner3D(
+        varkesh, (Vector3){x - 7.2f, 5.95f, z - 2.65f},
+        0.0f, 0.78f, 0.0f);
+    DrawHeraldryBanner3D(
+        varkesh, (Vector3){x - 13.4f, 5.62f, z + 2.45f},
+        180.0f, 0.64f, 0.6f);
 }
 
 static void DrawRemoteSiteEntrance(const CcSim *sim, CcLocalSiteKind site,
@@ -1286,6 +1305,10 @@ static void DrawRemoteSiteEntrance(const CcSim *sim, CcLocalSiteKind site,
         }
         DrawBox((Vector3){x - 2.9f, 0.55f, z + 2.2f},
                 (Vector3){1.9f, 1.1f, 1.25f}, WORLD_WOOD);
+        DrawHeraldryBanner3D(
+            CcHeraldryForSpecial(CC_SPECIAL_BANNER_IRON_LEDGER),
+            (Vector3){x - 5.1f, 0.0f, z - 1.75f},
+            0.0f, 0.68f, clock);
     } else if (site == CC_LOCAL_SITE_GOBLIN_CAVE) {
         CcCreaturePose scavenger = CcCreatureSteppedPose(
             CC_CREATURE_GOBLIN_SCAVENGER, clock * 2.1f, true);
@@ -1301,6 +1324,10 @@ static void DrawRemoteSiteEntrance(const CcSim *sim, CcLocalSiteKind site,
             (Color){0});
         DrawBox((Vector3){x - 5.0f, 0.42f, z + 0.6f},
                 (Vector3){1.0f, 0.84f, 1.0f}, WORLD_WOOD);
+        DrawHeraldryBanner3D(
+            CcHeraldryForSpecial(CC_SPECIAL_BANNER_CINDER_TITHE),
+            (Vector3){x - 6.7f, 0.0f, z - 0.4f},
+            0.0f, 0.74f, clock);
     }
 }
 
@@ -1472,6 +1499,13 @@ static void DrawTownRaidStaging(const CcLocalCourse *course, Vector3 focus)
                 (Vector3){1.05f, 0.11f, 0.42f},
                 ShadeColor((Color){87, 76, 63, 255}, 0.84f));
     }
+    DrawHeraldryBanner3D(
+        CcHeraldryForSpecial(CC_SPECIAL_BANNER_BANDITS),
+        (Vector3){origin.x - 1.15f,
+                  CcLocalTerrainHeightAt(origin.x - 1.15f,
+                                         origin.z - 1.55f),
+                  origin.z - 1.55f},
+        0.0f, 0.66f, 0.0f);
 }
 
 static void DrawSettlementCreatures(const CcSim *sim,
@@ -1671,7 +1705,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         (void)DrawAuthoredMarket(place);
         SetWorldForegroundReveal(0.0f, reveal_cut_height);
     }
-    DrawCastle(kingdom, profile, scenery_focus, camera,
+    DrawCastle(sim, place, kingdom, profile, scenery_focus, camera,
                foreground_reveal_world,
                target.texture.width, target.texture.height, clock);
     if (active_opening_step == CC_LOCAL_OPENING_COMPLETE &&
@@ -1697,6 +1731,15 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     if (SceneryPointVisible(CC_LOCAL_NOTICE_X, CC_LOCAL_NOTICE_Z,
                             scenery_focus)) {
         DrawNotice3D(sim);
+        if (sim->iron_ledger_reserve > 0) {
+            DrawHeraldryBanner3D(
+                CcHeraldryForSpecial(CC_SPECIAL_BANNER_IRON_LEDGER),
+                (Vector3){CC_LOCAL_NOTICE_X - 1.35f,
+                          CcLocalTerrainHeightAt(CC_LOCAL_NOTICE_X - 1.35f,
+                                                 CC_LOCAL_NOTICE_Z + 0.35f),
+                          CC_LOCAL_NOTICE_Z + 0.35f},
+                0.0f, 0.45f, clock);
+        }
     }
     DrawWorldTrees(scenery_focus, kingdom);
     bool wayfarer_gate_sightline_cut = close_combat_sightline &&

@@ -569,6 +569,9 @@ void CcLocalDrawAgentPortrait3D(const CcLocalAgent *agent,
                                 Rectangle bounds);
 void CcLocalDrawNpcReview3D(int32_t view, float clock,
                             RenderTexture2D target, Rectangle destination);
+void CcLocalDrawHeraldryReview3D(const CcSim *sim, float clock,
+                                 RenderTexture2D target,
+                                 Rectangle destination);
 void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                          const CcLocalCourse *course,
                          bool conversation,
