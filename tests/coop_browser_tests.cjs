@@ -61,7 +61,8 @@ async function main() {
     for (const page of [owner, game]) await page.waitForFunction(hash => document.body.dataset.companyHash === hash, atTown.state.hash);
     const start = await game.locator('body').getAttribute('data-player-position');
     const canvas = await game.locator('#canvas').boundingBox();
-    await game.mouse.click(canvas.x + canvas.width * 0.62, canvas.y + canvas.height * 0.62);
+    // The road crosses the middle of this view; the lower edge is a cliff.
+    await game.mouse.click(canvas.x + canvas.width * 0.68, canvas.y + canvas.height * 0.50);
     await game.waitForFunction(position => document.body.dataset.playerPosition !== position, start);
     await game.reload();
     await game.waitForFunction(() => document.body.dataset.companyReady === 'ready' && document.body.dataset.playerPosition, undefined, {timeout:120000});
