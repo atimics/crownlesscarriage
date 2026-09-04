@@ -165,6 +165,7 @@ typedef enum CcServiceKind {
     CC_SERVICE_BLACK_MARKET,
     CC_SERVICE_DUNGEON_WARD,
     CC_SERVICE_BAKERY,
+    CC_SERVICE_MILL,
     CC_SERVICE_COUNT
 } CcServiceKind;
 
@@ -314,7 +315,10 @@ typedef enum CcEventKind {
     CC_EVENT_MASONRY_REPAIR = 119,
     CC_EVENT_SHEEP_BRED = 120,
     CC_EVENT_SHEEP_SHEARED = 121,
-    CC_EVENT_SHEEP_SLAUGHTERED = 122
+    CC_EVENT_SHEEP_SLAUGHTERED = 122,
+    CC_EVENT_PAPER_MILLED = 123,
+    CC_EVENT_KING_ANOINTED = 124,
+    CC_EVENT_PRETENDER_CRISIS = 125
 } CcEventKind;
 
 typedef struct CcArchives {
@@ -323,7 +327,31 @@ typedef struct CcArchives {
     int32_t lore_lost_total;    /* notable events that decayed unrecorded */
     int32_t last_recorded_day;  /* day of the most recent archive write */
     int32_t lore_ceiling;       /* sustained trust ceiling from remembered lore */
+    int32_t kit_tool_wear;      /* one Tools bundle per eight writing weeks */
 } CcArchives;
+
+typedef enum CcMaterialChainBlocker {
+    CC_MATERIAL_CHAIN_READY = 0,
+    CC_MATERIAL_CHAIN_NO_SCRIBES,
+    CC_MATERIAL_CHAIN_GRAIN,
+    CC_MATERIAL_CHAIN_PAPER,
+    CC_MATERIAL_CHAIN_TOOLS,
+    CC_MATERIAL_CHAIN_BINDING
+} CcMaterialChainBlocker;
+
+typedef struct CcMaterialChainSnapshot {
+    CcId scriptorium_id;
+    CcMaterialChainBlocker blocker;
+    int32_t scribes;
+    int32_t wheat;
+    int32_t paper;
+    int32_t tools;
+    int32_t iron;
+    int32_t gold;
+    int32_t gems;
+    int32_t incoming_tools;
+    int32_t incoming_iron;
+} CcMaterialChainSnapshot;
 
 typedef enum CcCommandKind {
     /* These ids are stored in action journals. Keep each value stable. */
@@ -401,6 +429,10 @@ typedef struct CcKingdom {
     CcMoney treasury;
     CcMoney iron_ledger_debt;
     int32_t legitimacy;
+    int32_t sanction;
+    int32_t unsanctioned_weeks;
+    int32_t pretender_crises;
+    bool anointed;
 } CcKingdom;
 
 typedef enum CcDiplomaticState {
@@ -440,6 +472,7 @@ typedef struct CcSettlement {
     int32_t farm_tool_wear;
     int32_t mine_tool_wear;
     int32_t smith_tool_wear;
+    int32_t paper_tool_wear;
     int32_t treasure_gold_committed;
     int32_t treasure_gems_committed;
     int32_t treasure_work;
@@ -1462,6 +1495,7 @@ void CcSimInitializeStoneEconomy(CcSim *sim);
 void CcSimInitializeRoadSites(CcSim *sim);
 void CcSimUpgradeFlockEconomy(CcSim *sim);
 void CcSimInitializePaperEconomy(CcSim *sim);
+void CcSimInitializeMaterialChain(CcSim *sim);
 void CcSimInitializeHorseStableSystem(CcSim *sim);
 void CcSimInitializeCharacters(CcSim *sim);
 void CcSimUpgradeCharacterLifecycles(CcSim *sim);
@@ -1616,6 +1650,8 @@ const char *CcBanditReactionName(int32_t roll);
 int32_t CcSimActiveSituationCount(const CcSim *sim);
 int32_t CcSimActiveFrontCount(const CcSim *sim);
 int32_t CcSimIncomingGood(const CcSim *sim, CcId settlement_id, CcGood good);
+CcMaterialChainSnapshot CcSimMaterialChainSnapshot(const CcSim *sim);
+const char *CcMaterialChainBlockerName(CcMaterialChainBlocker blocker);
 bool CcSimFoodEconomyAtSettlement(const CcSim *sim, CcId settlement_id,
                                   CcFoodEconomy *economy);
 int32_t CcSimRouteDanger(const CcSim *sim, CcId route_id);

@@ -1930,13 +1930,29 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
         }
     } else if (strcmp(command, "archives") == 0) {
         const CcArchives *a = &metagame->sim.archives;
+        CcMaterialChainSnapshot chain = CcSimMaterialChainSnapshot(
+            &metagame->sim);
         Append(output, output_capacity,
                "The archive holds %d pieces of lore, kept by %d scribe%s.\n"
                "Lost to decay: %d. Last record: day %d.\n"
-               "The monastery reserve funds the scriptorium: %d crowns.\n",
+               "The monastery reserve funds the scriptorium: %d crowns.\n"
+               "Material chain: %s. Wheat %d, Paper %d, Tools %d, Iron %d, "
+               "Gold %d, Gems %d.\n",
                a->lore_stored, a->scribes, a->scribes == 1 ? "" : "s",
                a->lore_lost_total, a->last_recorded_day,
-               (int)metagame->sim.iron_ledger_reserve);
+               (int)metagame->sim.iron_ledger_reserve,
+               CcMaterialChainBlockerName(chain.blocker),
+               chain.wheat, chain.paper, chain.tools, chain.iron,
+               chain.gold, chain.gems);
+        for (int32_t i = 0; i < metagame->sim.kingdom_count; ++i) {
+            const CcKingdom *kingdom = &metagame->sim.kingdoms[i];
+            Append(output, output_capacity,
+                   "  %s: sanction %d, %s, silence %d weeks, pretenders %d.\n",
+                   kingdom->name, kingdom->sanction,
+                   kingdom->anointed ? "anointed" : "awaiting anointment",
+                   kingdom->unsanctioned_weeks,
+                   kingdom->pretender_crises);
+        }
         if (a->scribes == 0 && a->lore_stored > 0) {
             Append(output, output_capacity,
                    "No scribe remains. The archive is unwatched.\n");

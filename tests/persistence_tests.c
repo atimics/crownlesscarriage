@@ -1891,7 +1891,7 @@ static void CheckSchema28GrainMigration(char *error,
     CC_CHECK(restored.situations[0].quantity == quest_quantity);
     CC_CHECK(restored.situations[0].progress == quest_progress);
     CC_CHECK(restored.settlements[0].production[CC_GOOD_BREAD] == 0);
-    CC_CHECK(restored.settlements[0].production[CC_GOOD_WHEAT] == 28);
+    CC_CHECK(restored.settlements[0].production[CC_GOOD_WHEAT] == 60);
     CC_CHECK(CcSettlementHasService(
         &restored.settlements[1], CC_SERVICE_BAKERY));
     CC_CHECK(restored.settlements[1].production[CC_GOOD_BREAD] == 35);
@@ -2194,6 +2194,115 @@ static void CheckPaperCompatibility(uint32_t schema_version,
     RemoveDatabase(path);
 }
 
+static void CheckMaterialChainMigration(char *error, size_t error_capacity)
+{
+    const char *path = "persistence-schema33-material-chain-test.ccsave";
+    RemoveDatabase(path);
+    CcSim legacy;
+    CcSimInit(&legacy, UINT32_C(0x33a7e211));
+    legacy.schema_version = 33U;
+    legacy.generator_version = 25U;
+    legacy.current_day = 6;
+    CcSimInitializePaperEconomy(&legacy);
+    legacy.archives.kit_tool_wear = 0;
+    for (int32_t kingdom = 0; kingdom < legacy.kingdom_count; ++kingdom) {
+        legacy.kingdoms[kingdom].sanction = 0;
+        legacy.kingdoms[kingdom].unsanctioned_weeks = 0;
+        legacy.kingdoms[kingdom].pretender_crises = 0;
+        legacy.kingdoms[kingdom].anointed = false;
+    }
+    for (int32_t settlement = 0;
+         settlement < legacy.settlement_count; ++settlement) {
+        CcSettlement *place = &legacy.settlements[settlement];
+        place->service_mask &=
+            ~(UINT32_C(1) << (uint32_t)CC_SERVICE_MILL);
+        place->paper_tool_wear = 0;
+        if (place->function == CC_SETTLEMENT_FARMING) {
+            place->production[CC_GOOD_WHEAT] = 28;
+        }
+    }
+    CcSettlement *legacy_mill = &legacy.settlements[1];
+    legacy_mill->stock[CC_GOOD_PAPER] = 0;
+    legacy_mill->stock[CC_GOOD_WOOD] =
+        legacy_mill->reserve_target[CC_GOOD_WOOD] + 2;
+    legacy_mill->stock[CC_GOOD_GOLD] = 100;
+    legacy_mill->stock[CC_GOOD_GEMS] = 100;
+    legacy_mill->consumption[CC_GOOD_GOLD] = 0;
+    legacy_mill->consumption[CC_GOOD_GEMS] = 0;
+    int32_t event_slot = legacy.event_write_index;
+    legacy.events[event_slot] = (CcEvent){
+        .id = CcMakeId(CC_ENTITY_EVENT, legacy.next_entity_serial++),
+        .day = legacy.current_day,
+        .kind = CC_EVENT_KINGDOM_ACTION,
+        .subject_id = legacy.kingdoms[0].id,
+        .location_id = legacy_mill->id,
+        .magnitude = 40
+    };
+    (void)snprintf(legacy.events[event_slot].text,
+                   sizeof(legacy.events[event_slot].text),
+                   "A ruler makes a lasting public vow.");
+    legacy.event_write_index = (event_slot + 1) % CC_MAX_EVENTS;
+    if (legacy.event_count < CC_MAX_EVENTS) legacy.event_count += 1;
+    CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
+    CcSim suffix = legacy;
+    CcSimAdvanceDays(&suffix, 1);
+    CC_CHECK(suffix.current_day == 7);
+    CC_CHECK(suffix.settlements[1].stock[CC_GOOD_PAPER] > 0);
+    CC_CHECK(suffix.archives.lore_stored > legacy.archives.lore_stored);
+    CC_CHECK(suffix.treasure_count > legacy.treasure_count);
+    AddLegacyDayJournalSuffix(path, &legacy, &suffix, 33U, 25U);
+
+    sqlite3 *database = NULL;
+    RequireSqlite(sqlite3_open_v2(
+                      path, &database, SQLITE_OPEN_READWRITE, NULL),
+                  database, "could not open material chain fixture");
+    ExecuteFixtureSql(
+        database,
+        "ALTER TABLE meta DROP COLUMN archive_kit_tool_wear;"
+        "ALTER TABLE kingdom DROP COLUMN sanction;"
+        "ALTER TABLE kingdom DROP COLUMN unsanctioned_weeks;"
+        "ALTER TABLE kingdom DROP COLUMN pretender_crises;"
+        "ALTER TABLE kingdom DROP COLUMN anointed;"
+        "ALTER TABLE material_economy DROP COLUMN paper_tool_wear;"
+        "PRAGMA user_version=23;",
+        "could not strip material chain columns");
+    sqlite3_close(database);
+
+    CcSim restored;
+    bool loaded = CcSaveRead(path, &restored, error, error_capacity);
+    if (!loaded) {
+        (void)fprintf(stderr, "material chain migration: %s\n", error);
+    }
+    CC_CHECK(loaded);
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.generator_version == CC_GENERATOR_VERSION);
+    CC_CHECK(restored.current_day == suffix.current_day);
+    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 23);
+    CC_CHECK(restored.archives.kit_tool_wear == 0);
+    for (int32_t kingdom = 0;
+         kingdom < restored.kingdom_count; ++kingdom) {
+        CC_CHECK(restored.kingdoms[kingdom].sanction ==
+                 restored.kingdoms[kingdom].legitimacy);
+        CC_CHECK(restored.kingdoms[kingdom].unsanctioned_weeks == 0);
+        CC_CHECK(restored.kingdoms[kingdom].pretender_crises == 0);
+        CC_CHECK(!restored.kingdoms[kingdom].anointed);
+    }
+    for (int32_t settlement = 0;
+         settlement < restored.settlement_count; ++settlement) {
+        const CcSettlement *place = &restored.settlements[settlement];
+        bool paper_town = place->function == CC_SETTLEMENT_MARKET ||
+                          place->function == CC_SETTLEMENT_CAPITAL;
+        CC_CHECK(CcSettlementHasService(place, CC_SERVICE_MILL) ==
+                 paper_town);
+        CC_CHECK(place->production[CC_GOOD_PAPER] ==
+                 (place->function == CC_SETTLEMENT_MARKET ? 3 :
+                  place->function == CC_SETTLEMENT_CAPITAL ? 4 : 0));
+        CC_CHECK(place->paper_tool_wear == 0);
+    }
+    CC_CHECK(CcSimValidate(&restored, error, error_capacity));
+    RemoveDatabase(path);
+}
+
 static void CheckJourneyStopPersistence(char *error, size_t error_capacity)
 {
     const char *path = "persistence-journey-stop-test.ccsave";
@@ -2441,6 +2550,7 @@ int main(void)
     CheckPaperCompatibility(32U, 25U,
                             "persistence-schema32-paper-test.ccsave",
                             error, sizeof(error));
+    CheckMaterialChainMigration(error, sizeof(error));
     CheckJourneyStopPersistence(error, sizeof(error));
     CheckLegacyLifecycleJournalCompatibility(24U, error, sizeof(error));
     CheckLegacyLifecycleJournalCompatibility(25U, error, sizeof(error));
@@ -2529,6 +2639,12 @@ int main(void)
                 CcGoodDefinitionFor((CcGood)good)->base_price + settlement;
         }
     }
+    original.archives.kit_tool_wear = 3;
+    original.kingdoms[0].sanction = 67;
+    original.kingdoms[0].unsanctioned_weeks = 9;
+    original.kingdoms[0].pretender_crises = 2;
+    original.kingdoms[0].anointed = true;
+    original.settlements[0].paper_tool_wear = 4;
     uint64_t expected = CcSimHash(&original);
     CC_CHECK(CcSaveWrite(path, &original, error, sizeof(error)));
     CC_CHECK(ReadSqliteInteger(
@@ -2555,6 +2671,12 @@ int main(void)
              original.iron_ledger_reserve);
     CC_CHECK(restored.kingdoms[0].iron_ledger_debt ==
              original.kingdoms[0].iron_ledger_debt);
+    CC_CHECK(restored.archives.kit_tool_wear == 3);
+    CC_CHECK(restored.kingdoms[0].sanction == 67);
+    CC_CHECK(restored.kingdoms[0].unsanctioned_weeks == 9);
+    CC_CHECK(restored.kingdoms[0].pretender_crises == 2);
+    CC_CHECK(restored.kingdoms[0].anointed);
+    CC_CHECK(restored.settlements[0].paper_tool_wear == 4);
     CC_CHECK(restored.goblins.hoard_defenses == 4);
     CC_CHECK(restored.goblins.cohesion == 77);
     CC_CHECK(restored.goblins.expeditions_intercepted == 3);

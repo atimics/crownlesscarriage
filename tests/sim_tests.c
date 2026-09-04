@@ -116,6 +116,12 @@ static void PrepareArchiveWeek(CcSim *sim, CcMoney reserve,
     sim->archives.lore_stored = 0;
     sim->archives.lore_lost_total = 0;
     sim->archives.last_recorded_day = 0;
+    CcSettlement *scriptorium = &sim->settlements[1];
+    scriptorium->stock[CC_GOOD_WHEAT] = 100;
+    scriptorium->stock[CC_GOOD_PAPER] = CC_MAX_SCRIBES;
+    scriptorium->stock[CC_GOOD_TOOLS] = CC_MAX_SCRIBES;
+    scriptorium->production[CC_GOOD_PAPER] = 0;
+    scriptorium->consumption[CC_GOOD_PAPER] = 0;
     for (int32_t i = 0; i < sim->event_count; ++i) {
         sim->events[i].magnitude = 0;
     }
