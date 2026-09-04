@@ -46,7 +46,13 @@ static inline const char *CcCoopActionName(CcCommandKind kind)
         "press_on",
         "camp",
         "lodge",
+        "camp_road_site",
+        "pass_road_site",
+        "meet_pony",
+        "help_pony",
+        "swap_pony",
+        "leave_pony",
     };
-    return kind > CC_COMMAND_NONE && kind <= CC_COMMAND_LODGE_ROAD_HOUSE ? names[(int)kind] : "";
+    return kind > CC_COMMAND_NONE && kind <= CC_COMMAND_LEAVE_PONY ? names[(int)kind] : "";
 }
 #endif
