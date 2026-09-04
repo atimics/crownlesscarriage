@@ -50,7 +50,7 @@
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
 #define CC_SIM_SCHEMA_VERSION 27
-#define CC_GENERATOR_VERSION 21
+#define CC_GENERATOR_VERSION 22
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
 #define CC_WORLD_DAY_SUBTICKS (24 * 60 * CC_WORLD_MINUTE_SUBTICKS)
