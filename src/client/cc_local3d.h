@@ -553,6 +553,7 @@ float CcLocalCombatSkillCooldown(const CcLocalAgent *player,
 float CcLocalCombatSkillDuration(CcCombatSkill skill);
 
 void CcLocalRendererInit(void);
+void CcLocalDrawPonyPortrait(int32_t pony, bool known, Rectangle bounds);
 void CcLocalRendererSetScreenFirstHero(bool enabled);
 void CcLocalRendererSetReducedMotion(bool enabled);
 void CcLocalRendererSetOpeningStep(CcLocalOpeningStep step);

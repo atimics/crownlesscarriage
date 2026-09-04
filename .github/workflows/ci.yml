@@ -152,6 +152,24 @@ jobs:
         run: >-
           xvfb-run --auto-servernum
           cmake --build build --target run_roadbook_qa
+      - name: Check pony encounters and swap controls
+        if: runner.os == 'Linux'
+        env:
+          LIBGL_ALWAYS_SOFTWARE: 1
+        run: |
+          for scene in encounter swap book; do
+            xvfb-run --auto-servernum ./build/crownless_carriage \
+              --capture-pony-$scene build/pony-$scene.png
+          done
+      - name: Save pony companion review
+        if: runner.os == 'Linux' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pony-companion-review
+          path: build/pony-*.png
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Save animal model review
         if: runner.os == 'Linux' && always()
         uses: actions/upload-artifact@v4
