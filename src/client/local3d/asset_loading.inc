@@ -7,6 +7,7 @@ typedef struct SphereModelCache {
 
 static SphereModelCache sphere_models = {0};
 static RenderTexture2D npc_portrait_target = {0};
+static RenderTexture2D art_grade_target = {0};
 
 typedef enum TreeCrownShape {
     TREE_CROWN_ALDER = 0,
@@ -3889,6 +3890,10 @@ void CcLocalRendererShutdown(void)
     if (IsRenderTextureValid(npc_portrait_target)) {
         UnloadRenderTexture(npc_portrait_target);
     }
+    if (IsRenderTextureValid(art_grade_target)) {
+        UnloadRenderTexture(art_grade_target);
+    }
+    art_grade_target = (RenderTexture2D){0};
     if (visual_style.grade_ready) UnloadShader(visual_style.grade);
     sphere_models = (SphereModelCache){0};
     npc_portrait_target = (RenderTexture2D){0};

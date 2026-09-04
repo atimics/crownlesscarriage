@@ -3835,7 +3835,22 @@ static void PresentTarget(RenderTexture2D target, Rectangle destination)
 {
     Rectangle source = {0.0f, 0.0f, (float)target.texture.width,
                         -(float)target.texture.height};
+    bool grade_at_source = false;
     if (visual_style.grade_ready) {
+        if (art_grade_target.texture.width != target.texture.width ||
+            art_grade_target.texture.height != target.texture.height) {
+            if (IsRenderTextureValid(art_grade_target)) {
+                UnloadRenderTexture(art_grade_target);
+            }
+            art_grade_target = LoadRenderTexture(
+                target.texture.width, target.texture.height);
+            if (IsRenderTextureValid(art_grade_target)) {
+                SetTextureFilter(art_grade_target.texture, TEXTURE_FILTER_POINT);
+            }
+        }
+        grade_at_source = IsRenderTextureValid(art_grade_target);
+        // Paint each art pixel once before enlarging it for the window.
+        if (grade_at_source) BeginTextureMode(art_grade_target);
         BeginShaderMode(visual_style.grade);
         SetShaderValueTexture(visual_style.grade,
                               visual_style.palette_lut_location,
@@ -3861,9 +3876,17 @@ static void PresentTarget(RenderTexture2D target, Rectangle destination)
                        &visual_style.presentation_practical_glow,
                        SHADER_UNIFORM_FLOAT);
     }
-    DrawTexturePro(target.texture, source, destination, (Vector2){0.0f, 0.0f},
+    Rectangle paint_bounds = grade_at_source ?
+        (Rectangle){0.0f, 0.0f, (float)target.texture.width,
+                     (float)target.texture.height} : destination;
+    DrawTexturePro(target.texture, source, paint_bounds, (Vector2){0.0f, 0.0f},
                    0.0f, WHITE);
     if (visual_style.grade_ready) EndShaderMode();
+    if (grade_at_source) {
+        EndTextureMode();
+        DrawTexturePro(art_grade_target.texture, source, destination,
+                       (Vector2){0.0f, 0.0f}, 0.0f, WHITE);
+    }
 }
 
 static Color ArtLightBackground(ArtLightProfileId profile_id)
