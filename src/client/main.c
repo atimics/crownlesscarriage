@@ -1527,9 +1527,20 @@ static float OpenWorldSettlementDistance(const CcSim *sim,
     return sqrtf(dx * dx + dz * dz);
 }
 
+static bool StableWorldRoadChoice(const LocalState *local)
+{
+    return local != NULL && local->open_world &&
+           local->road_choice_active &&
+           local->departure.phase == CC_CLIENT_DEPARTURE_READY &&
+           local->departure.road_book_progress >= 1.0f &&
+           local->world_carriage.visible &&
+           local->world_carriage.route_id != 0U;
+}
+
 static bool LocalSessionEligible(const LocalState *local)
 {
-    return local != NULL && !local->road_choice_active &&
+    return local != NULL &&
+           (!local->road_choice_active || StableWorldRoadChoice(local)) &&
            !local->journey_travel_active &&
            !local->site_travel_active &&
            !local->journey_combat_active && !local->journey_parley_active &&
@@ -4142,7 +4153,9 @@ static bool CommandActionEnabled(CommandActionKind action,
     if (action == COMMAND_ACTION_QUESTS) {
         return !road_local && !choosing_road;
     }
-    if (action == COMMAND_ACTION_SAVE) return !choosing_road;
+    if (action == COMMAND_ACTION_SAVE) {
+        return !choosing_road || StableWorldRoadChoice(local);
+    }
     if (action == COMMAND_ACTION_MAP) {
         float carriage_distance = 1000.0f;
         if (local != NULL) {
@@ -6250,38 +6263,43 @@ static int RunWorldSessionStartupRegression(void)
             break;
         }
     }
-    if (route == NULL ||
-        !EnterOpenWorldAtRoadGate(&sim, &saved, route->id)) {
+    if (route == NULL) {
         return SessionStartupTestFailed(
             session_path, "World session needs a second road branch.");
+    }
+    BeginRoadChoiceApproachState(&saved, true);
+    saved.convoy.pace = 1.0f;
+    bool reached_road_book = false;
+    for (int32_t step = 0; step < 80 && !reached_road_book; ++step) {
+        reached_road_book = UpdateRoadChoiceApproach(&saved, 0.25f);
+    }
+    if (!reached_road_book ||
+        !EnterRoadBookFromTownGate(&sim, &saved, route->id)) {
+        return SessionStartupTestFailed(
+            session_path, "World session departure setup failed.");
+    }
+    if (LocalSessionEligible(&saved) ||
+        CommandActionEnabled(COMMAND_ACTION_SAVE, &saved, VIEW_ROADS)) {
+        return SessionStartupTestFailed(
+            session_path, "A moving road-book transition was saveable.");
+    }
+    for (int32_t step = 0;
+         step < 40 && RoadBookDepartureInProgress(&saved); ++step) {
+        UpdateOpenWorldCamera(&sim, &saved, 0.10f);
+    }
+    if (!StableWorldRoadChoice(&saved) ||
+        !LocalSessionEligible(&saved) ||
+        !CommandActionEnabled(COMMAND_ACTION_SAVE, &saved, VIEW_ROADS)) {
+        return SessionStartupTestFailed(
+            session_path, "The ready road-book state was not saveable.");
     }
     const CcWorldRoutePlacement *route_placement =
         CcWorldRoutePlacementForId(
             &saved.world_stream.manifest, route->id);
-    CcWorldPoint saved_position;
-    float saved_heading = 0.0f;
-    const float saved_journey_amount = 0.34f;
-    if (route_placement == NULL ||
-        !CcWorldRoutePose(
-            route_placement, sim.player.location_id,
-            saved_journey_amount, &saved_position, &saved_heading)) {
+    if (route_placement == NULL) {
         return SessionStartupTestFailed(
-            session_path, "World session road pose setup failed.");
+            session_path, "World session road placement was missing.");
     }
-    saved.world_carriage.position = (Vector3){
-        saved_position.x,
-        CcWorldStreamHeightAt(
-            &saved.world_stream, saved_position.x, saved_position.z),
-        saved_position.z
-    };
-    saved.world_carriage.heading_yaw = saved_heading;
-    saved.world_carriage.route_amount =
-        route->from_id == sim.player.location_id ?
-            saved_journey_amount : 1.0f - saved_journey_amount;
-    saved.agent.position = saved.world_carriage.position;
-    saved.agent.facing_yaw = saved_heading;
-    saved.world_carriage.camera_weight = 1.0f;
-    saved.world_carriage.camera_target = 1.0f;
     const float saved_x = saved.agent.position.x;
     const float saved_z = saved.agent.position.z;
     const float saved_yaw = saved.agent.facing_yaw;
@@ -6670,7 +6688,8 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                    IsKeyDown(KEY_LEFT_SUPER) || IsKeyDown(KEY_RIGHT_SUPER);
     if (command_action == COMMAND_ACTION_SAVE || ClientKeyPressed(KEY_F5) ||
         queued_save_shortcut || (control && ClientKeyPressed(KEY_S))) {
-        if (local->road_choice_active) {
+        if (local->road_choice_active &&
+            !StableWorldRoadChoice(local)) {
             (void)snprintf(
                 message, message_capacity,
                 "Choose a road or turn back before saving.");
