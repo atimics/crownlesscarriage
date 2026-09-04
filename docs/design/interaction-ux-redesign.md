@@ -196,3 +196,10 @@ Build each slice through a small PR with captures and a real input check. A broa
 Existing coverage includes movement and camera tests, viewport tests, policy range tests, travel/session tests, persistence tests, and browser save checks. Extend those where they own the behavior. Add planner tests in #221 and a real native and browser input journey for the complete slice. Capture reels help review presentation; acceptance must also drive the actual input path.
 
 Observe at least three fresh players after the first full slice. Ask them to find the speaker, accept the job, buy the right amount, leave town, handle a road choice, deliver, and explain the result. Record first-click success, help needed, repeated inputs, missed feedback, remembered names, and recovery after returning to play. Treat these as observations; tune numeric targets after that baseline. #268 owns the longer mill adventure playtest.
+
+
+## Validation of this design PR
+
+Browser checks exercised the prototype's talk, board acceptance, shop entry, purchase, exit, departure, fast-forward stop, arrival, delivery, and journal recall. The sample delivery finished with 42 crowns and zero cargo after buying eight boxes for 16 crowns and earning the 18-crown reward. A double click on Buy committed one trade. A separate sale returned two crowns for one box. F opened Talk, Enter chose a reply or trade, and Escape returned to the scene. Book return and focus assistance were also checked.
+
+The prototype was inspected at 1024, 736, 360, and 320 pixels wide. Narrow layouts fit the document width. Browser inspection reported zero script errors. These are prototype checks; the acceptance matrix above defines the game implementation checks.

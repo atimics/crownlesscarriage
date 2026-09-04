@@ -1,4 +1,6 @@
 <div id="crownless-ux" aria-label="Crownless interaction design">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
     #crownless-ux { --paper:light-dark(#f1e6ce,#262822); --ink:light-dark(#302e27,#f4e8cc); --edge:light-dark(#b8a47d,#706448); --accent:light-dark(#32675c,#97c7a9); color:var(--ink); font:400 16px/1.5 Georgia,serif; }
     #crownless-ux * { box-sizing:border-box; }
@@ -86,7 +88,7 @@
   (() => {
     const root = document.getElementById('crownless-ux');
     const $ = selector => root.querySelector(selector);
-    const state = {mode:'explore',scene:'town',focus:'person',pending:null,coins:40,cargo:0,stock:20,promised:false,delivered:false,arrived:false,quantity:8,trade:'buy',line:0,book:'Promises',receipt:'',history:[],progress:0,fast:false,warned:false,returnMode:'explore',returnFocus:'person'};
+    const state = {mode:'explore',scene:'town',focus:'person',pending:null,coins:40,cargo:0,stock:20,promised:false,delivered:false,arrived:false,quantity:8,trade:'buy',tradeReady:true,line:0,book:'Promises',receipt:'',history:[],progress:0,fast:false,warned:false,returnMode:'explore',returnFocus:'person'};
     const design = {focusAssist:false,reducedMotion:false};
     let walking = null;
     const person = () => state.arrived ? 'Jory Fen' : 'Ilyra Senn';
@@ -96,8 +98,13 @@
     const record = text => {state.receipt=text;state.history.unshift(text);};
     const paused = () => ['book','menu','talk','offer','trade','departure','warning','arrival'].includes(state.mode);
     function render() {
+      const active = document.activeElement;
+      const restoreWorkFocus = $('.work').contains(active);
+      const activeAction = active && active.getAttribute('data-action');
+      const activePage = active && active.getAttribute('data-page');
       root.classList.toggle('assisted',design.focusAssist);root.classList.toggle('still',design.reducedMotion);
       $('.stage').className='stage '+(state.scene==='road'?'road':state.scene==='inside'?'inside':'');
+      $('.stage').setAttribute('aria-label',state.scene==='road'?'Carriage on the storybook road':state.scene==='inside'?'Shop interior with keeper and exit':'Town with person, board, shop door, and carriage');
       $('.land').style.transform=state.fast?'scale(.8)':'scale(1)';
       $('[data-place]').textContent=state.scene==='road'?'Gloamgate → Silverwick':state.arrived?'Silverwick · Market square':state.scene==='inside'?'Gloamgate · Provisions':'Gloamgate · Crossroads Bazaar';
       $('[data-wallet]').textContent=`${state.coins} crowns · ${state.cargo} / 12 cargo`;
@@ -105,7 +112,7 @@
       $('[data-objective]').textContent=state.delivered?'Completed · Jory received eight boxes of bread.':state.promised?(state.cargo<8?`Promise to Jory · Buy ${8-state.cargo} more boxes of bread.`:state.arrived?'Promise to Jory · Deliver eight boxes at the shop.':'Promise to Jory · Bring eight boxes of bread to Silverwick.'):'Meet the people of Gloamgate.';
       root.querySelectorAll('[data-target]').forEach(el=>{el.classList.toggle('chosen',el.dataset.target===state.focus);el.disabled=!['explore','walking'].includes(state.mode);el.setAttribute('aria-label',names()[el.dataset.target]+', '+verbs()[el.dataset.target]);});
       $('.speech').hidden=state.mode!=='talk';
-      $('.speech').textContent=state.arrived?'You brought the bread. This will keep our ovens working.':state.line?'Eight boxes for Jory at Silverwick. The reward is eighteen crowns.':'Jory needs bread in Silverwick. Will you hear what happened?';
+      $('.speech').textContent=state.arrived?(state.delivered?'You brought the bread. This will keep our ovens working.':'I am Jory. The keeper can receive the bread for me.'):state.line?'Eight boxes for Jory at Silverwick. The reward is eighteen crowns.':'Jory needs bread in Silverwick. Will you hear what happened?';
       const rows=[];
       if(state.mode==='explore') rows.push(`<h3>${names()[state.focus]}</h3><p>${state.scene==='inside'?'The keeper is ready. The door leads back to the square.':'Choose a useful object. The hero will walk beside it.'}</p><div class="choices">${button('act',verbs()[state.focus],true)}</div>`);
       if(state.mode==='walking') rows.push(`<h3>Walking to ${names()[state.pending]}</h3><p>${verbs()[state.pending]} when you arrive.</p>${button('cancel','Cancel approach')}`);
@@ -113,9 +120,9 @@
       if(state.mode==='offer') rows.push(`<h3>Offer · Bread for Silverwick</h3><p>Bring Jory eight boxes of bread. Reward: 18 crowns. Due: day 35.</p><p>${state.promised?'Your promise is recorded.':'Accept here with Ilyra or at the board. Then choose how to prepare.'}</p><div class="choices">${state.promised?button('leave','Return to the square',true):button('pledge','I will deliver the bread',true)}${button('leave','Leave')}</div>`);
       if(state.mode==='trade') {
         const max=state.trade==='buy'?Math.min(state.stock,12-state.cargo,Math.floor(state.coins/2)):state.cargo;
-        state.quantity=Math.min(Math.max(1,state.quantity),Math.max(1,max));
+        if(state.tradeReady)state.quantity=Math.min(Math.max(1,state.quantity),Math.max(1,max));
         const total=state.quantity*2, after=state.coins+(state.trade==='buy'?-total:total), aboard=state.cargo+(state.trade==='buy'?state.quantity:-state.quantity);
-        rows.push(`<h3>Provisions · Bread boxes</h3><div class="choices">${button('buy','Buy')}${button('sell','Sell')}${state.arrived&&state.promised&&!state.delivered?button('deliver','Deliver 8 for Jory',state.cargo>=8):''}</div><div class="quote"><label>Quantity <input data-quantity type="number" min="1" max="${Math.max(1,max)}" value="${state.quantity}" aria-label="Bread quantity"></label><span>2 crowns each<br>${state.trade==='buy'?'Cost':'Receive'}: ${total} crowns</span><span>Purse after: ${max?after:state.coins}<br>Cargo after: ${max?aboard:state.cargo} / 12</span></div><div class="choices"><button data-action="commit" data-primary ${max?'':'disabled'}>${state.trade==='buy'?'Buy':'Sell'} ${state.quantity} for ${total} crowns</button>${button('leave','Leave counter')}</div>${max?'':'<p>Choose Buy to restock, or return to the square.</p>'}`);
+        rows.push(`<h3>Provisions · Bread boxes</h3><div class="choices">${button('buy','Buy')}${button('sell','Sell')}${state.arrived&&state.promised&&!state.delivered?button('deliver','Deliver 8 for Jory',state.cargo>=8):''}</div><div class="quote" ${state.tradeReady?'':'style="display:none"'}><label>Quantity <input data-quantity type="number" min="1" max="${Math.max(1,max)}" value="${state.quantity}" aria-label="Bread quantity"></label><span>2 crowns each<br>${state.trade==='buy'?'Cost':'Receive'}: ${total} crowns</span><span>Purse after: ${max?after:state.coins}<br>Cargo after: ${max?aboard:state.cargo} / 12</span></div><div class="choices"><button data-action="commit" data-primary ${max&&state.tradeReady?'':'disabled'}>${state.tradeReady?`${state.trade==='buy'?'Buy':'Sell'} ${state.quantity} for ${total} crowns`:'Trade recorded'}</button>${button('leave','Leave counter')}</div>${!state.tradeReady?`<p>Purse now: ${state.coins} crowns. Cargo now: ${state.cargo} / 12. Choose Buy or Sell for another trade.</p>`:max?'':'<p>Choose Buy to restock, or return to the square.</p>'}`);
       }
       if(state.mode==='departure') rows.push(`<h3>Road to Silverwick</h3><p>The first stretch follows the old trade road. Your bread aboard: ${state.cargo} / 8.</p><div class="choices">${button('depart','Take the road',true)}${button('leave','Step away')}</div>`);
       if(state.mode==='travel') rows.push(`<h3>On the road</h3><p>The carriage crests the hill. Journey: ${Math.round(state.progress*100)}%.</p>${button('fast',state.fast?'Normal time':'Let time pass',true)}`);
@@ -128,12 +135,13 @@
       if(state.mode==='menu') rows.push(`<h3>Paused</h3><div class="choices">${button('back','Resume',true)}${button('motion',design.reducedMotion?'Reduced motion: on':'Reduced motion: off')}${button('assist',design.focusAssist?'Focus assistance: on':'Focus assistance: off')}</div>`);
       if(state.receipt&&state.mode!=='book') rows.push(`<div class="receipt" role="status">${state.receipt}</div>`);
       $('.work').innerHTML=rows.join('');
+      if(restoreWorkFocus){const next=activePage?$('.work [data-page="'+activePage+'"]'):activeAction?$('.work [data-action="'+activeAction+'"]'):null;const fallback=$('.work [data-primary]:not(:disabled)')||$('.work button:not(:disabled)');if(next&&!next.disabled)next.focus();else if(fallback)fallback.focus();}
       $('[data-status]').textContent=state.mode==='walking'?'Escape cancels this approach.':state.mode==='explore'?'Click a target · F acts · Escape opens the menu':paused()?'Read at your pace. Back returns to the scene.':'The road pauses at choices and arrival.';
     }
     function cancel() { clearTimeout(walking);state.pending=null;state.mode='explore'; }
     function activate() {
       const target=state.focus;state.pending=null;state.receipt='';
-      if(target==='person'){state.mode=state.scene==='inside'?'trade':'talk';}
+      if(target==='person'){state.tradeReady=true;state.mode=state.scene==='inside'?'trade':'talk';}
       if(target==='board')state.mode='offer';
       if(target==='carriage')state.mode='departure';
       if(target==='door'){state.scene=state.scene==='inside'?'town':'inside';state.mode='explore';state.focus='person';$('.hero').style.left=state.scene==='inside'?'45%':'68%';$('.hero').style.bottom='35px';}
@@ -154,9 +162,9 @@
       if(name==='listen')state.line=1;
       if(name==='offer')state.mode='offer';
       if(name==='pledge'){state.promised=true;state.mode='explore';record('Promise accepted · Bring 8 bread boxes to Jory in Silverwick.');}
-      if(name==='buy'||name==='sell'){state.trade=name;state.quantity=name==='buy'?Math.max(1,8-state.cargo):1;}
-      if(name==='commit') {const q=state.quantity;if(state.trade==='buy'&&q<=state.stock&&state.cargo+q<=12&&state.coins>=q*2){state.coins-=q*2;state.cargo+=q;state.stock-=q;record(`Bought ${q} bread boxes · Paid ${q*2} crowns.`);}else if(state.trade==='sell'&&q<=state.cargo){state.coins+=q*2;state.cargo-=q;state.stock+=q;record(`Sold ${q} bread boxes · Received ${q*2} crowns.`);}else record('Review the available stock, purse, and cargo space.');}
-      if(name==='deliver'){if(state.cargo>=8&&state.promised&&!state.delivered&&state.arrived){state.cargo-=8;state.coins+=18;state.delivered=true;record('Delivered 8 bread boxes to Jory · Reward: 18 crowns · Promise completed.');}else record('Jory needs 8 boxes of bread to complete this delivery.');}
+      if(name==='buy'||name==='sell'){state.trade=name;state.tradeReady=true;state.quantity=name==='buy'?Math.max(1,8-state.cargo):1;}
+      if(name==='commit'&&state.tradeReady) {state.tradeReady=false;const q=state.quantity;if(state.trade==='buy'&&q<=state.stock&&state.cargo+q<=12&&state.coins>=q*2){state.coins-=q*2;state.cargo+=q;state.stock-=q;record(`Bought ${q} bread ${q===1?'box':'boxes'} · Paid ${q*2} crowns.`);}else if(state.trade==='sell'&&q<=state.cargo){state.coins+=q*2;state.cargo-=q;state.stock+=q;record(`Sold ${q} bread ${q===1?'box':'boxes'} · Received ${q*2} crowns.`);}else record('Review the available stock, purse, and cargo space.');}
+      if(name==='deliver'){if(state.cargo>=8&&state.promised&&!state.delivered&&state.arrived){state.cargo-=8;state.coins+=18;state.delivered=true;state.tradeReady=false;record('Delivered 8 bread boxes to Jory · Reward: 18 crowns · Promise completed.');}else record('Jory needs 8 boxes of bread to complete this delivery.');}
       if(name==='depart'){state.scene='road';state.mode='travel';state.fast=false;state.progress=0;state.warned=false;}
       if(name==='fast')state.fast=!state.fast;
       if(name==='continue'){state.mode='travel';state.fast=false;}
@@ -168,7 +176,7 @@
     root.addEventListener('click',event=>{const target=event.target.closest('[data-target]');if(target&&!target.disabled)return approach(target.dataset.target);const page=event.target.closest('[data-page]');if(page){state.book=page.dataset.page;render();return;}const control=event.target.closest('[data-action]');if(control&&!control.disabled)action(control.dataset.action);});
     root.addEventListener('pointerover',event=>{const target=event.target.closest('[data-target]');if(target&&state.mode==='explore'&&state.focus!==target.dataset.target){state.focus=target.dataset.target;render();}});
     root.addEventListener('focusin',event=>{const target=event.target.closest('[data-target]');if(target&&state.mode==='explore'){state.focus=target.dataset.target;render();}});
-    root.addEventListener('change',event=>{if(event.target.matches('[data-quantity]')){state.quantity=Number.isFinite(event.target.valueAsNumber)?Math.max(1,Math.floor(event.target.valueAsNumber)):1;render();}});
+    root.addEventListener('change',event=>{if(event.target.matches('[data-quantity]')){state.tradeReady=true;state.quantity=Number.isFinite(event.target.valueAsNumber)?Math.max(1,Math.floor(event.target.valueAsNumber)):1;render();}});
     root.addEventListener('keydown',event=>{if(event.target.tagName==='INPUT')return;if(event.key==='Escape'){event.preventDefault();action('back');}if(event.key.toLowerCase()==='f'&&state.mode==='explore'){event.preventDefault();action('act');}});
     const travelTimer=setInterval(()=>{if(!root.isConnected){clearInterval(travelTimer);clearTimeout(walking);return;}if(state.mode!=='travel')return;state.progress=Math.min(1,state.progress+(state.fast?.08:.02));if(state.progress>=.48&&!state.warned){state.warned=true;state.progress=.48;state.fast=false;state.mode='warning';}else if(state.progress>=1){state.fast=false;state.mode='arrival';}render();},500);
     render();
