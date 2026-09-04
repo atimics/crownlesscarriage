@@ -2164,7 +2164,9 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
         if (local->road_choice_active) {
             bool town_departure =
                 local->convoy.phase == CC_LOCAL_CONVOY_DEPARTING;
-            bool raising_road_book = RoadBookDepartureInProgress(local);
+            bool raising_road_book = RoadBookDepartureInProgress(local) ||
+                (local->open_world &&
+                 local->world_carriage.camera_weight < 1.0f);
             int32_t progress = (int32_t)lroundf(
                 (town_departure ? local->convoy.phase_progress :
                  local->world_carriage.camera_weight) * 100.0f);
@@ -7770,6 +7772,10 @@ int main(int argc, char **argv)
             local.convoy.pace = 0.0f;
             if (capture_road_departure) {
                 PositionOpenWorldDeparture(&sim, &local);
+                if (capture_road_zoom_weight < 1.0f) {
+                    local.convoy.pace = 0.72f;
+                    local.world_carriage.pace = local.convoy.pace;
+                }
             }
         }
         local.fork_turn_progress = 1.0f;
@@ -8338,6 +8344,7 @@ int main(int argc, char **argv)
             DrawCombatStatusLine(&local, message, message_age);
         }
         if (!persistence_blocked && !capture_gameplay_reel &&
+            !capture_road_departure &&
             view == VIEW_LOCAL &&
             !LocalCombatActive(&local) &&
             message_age < 2.2f &&
