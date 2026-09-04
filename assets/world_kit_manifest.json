@@ -2298,20 +2298,20 @@
         ],
         "max": [
           0.2033,
-          0.064,
-          0.241
+          0.0635,
+          0.2383
         ],
         "size": [
           0.4065,
-          0.2121,
-          0.4339
+          0.2116,
+          0.4312
         ]
       },
       "material_roles": [
         "hair"
       ],
       "mesh_objects": 6,
-      "bytes": 18032
+      "bytes": 18036
     },
     {
       "id": "wk_hair_braided_v01",
@@ -2352,19 +2352,19 @@
         "max": [
           0.1804,
           0.1528,
-          0.241
+          0.2383
         ],
         "size": [
           0.3609,
           0.3009,
-          0.6027
+          0.6
         ]
       },
       "material_roles": [
         "hair"
       ],
       "mesh_objects": 6,
-      "bytes": 18080
+      "bytes": 18084
     },
     {
       "id": "wk_hair_crest_v01",
@@ -2399,7 +2399,7 @@
       "bounds": {
         "min": [
           -0.1804,
-          -0.0947,
+          -0.0948,
           -0.1287
         ],
         "max": [
@@ -2417,7 +2417,7 @@
         "hair"
       ],
       "mesh_objects": 5,
-      "bytes": 15136
+      "bytes": 15140
     },
     {
       "id": "wk_hair_cropped_v01",
@@ -2452,25 +2452,25 @@
       "bounds": {
         "min": [
           -0.1804,
-          -0.0947,
+          -0.0948,
           -0.132
         ],
         "max": [
           0.1804,
           0.1716,
-          0.241
+          0.2383
         ],
         "size": [
           0.3609,
-          0.2663,
-          0.3731
+          0.2664,
+          0.3704
         ]
       },
       "material_roles": [
         "hair"
       ],
       "mesh_objects": 5,
-      "bytes": 15156
+      "bytes": 15160
     },
     {
       "id": "wk_hair_rear_lock_v01",
@@ -2504,26 +2504,26 @@
       "export": "assets/exports/world_kit/wk_hair_rear_lock_v01.glb",
       "bounds": {
         "min": [
-          -0.1742,
+          -0.1781,
           -0.1481,
           -0.3423
         ],
         "max": [
-          0.1742,
+          0.1781,
           0.1885,
-          0.241
+          0.2383
         ],
         "size": [
-          0.3485,
+          0.3562,
           0.3366,
-          0.5833
+          0.5807
         ]
       },
       "material_roles": [
         "hair"
       ],
       "mesh_objects": 5,
-      "bytes": 15176
+      "bytes": 15180
     },
     {
       "id": "wk_hair_swept_v01",
@@ -2564,19 +2564,19 @@
         "max": [
           0.1804,
           0.1528,
-          0.241
+          0.2383
         ],
         "size": [
           0.3693,
           0.3009,
-          0.429
+          0.4263
         ]
       },
       "material_roles": [
         "hair"
       ],
       "mesh_objects": 6,
-      "bytes": 18056
+      "bytes": 18060
     },
     {
       "id": "wk_head_broad_v01",

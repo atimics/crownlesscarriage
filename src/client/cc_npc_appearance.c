@@ -569,17 +569,18 @@ CcNpcAppearance CcNpcCrownlessAppearance(void)
         UINT32_C(0xc04e1e55), CC_NPC_ROLE_WAYFARER,
         CC_STYLE_HERO_ACCENT);
     result.equipment = CC_NPC_EQUIPMENT_MANTLE |
-                       CC_NPC_EQUIPMENT_ARMOR;
+                       CC_NPC_EQUIPMENT_ARMOR |
+                       CC_NPC_EQUIPMENT_SATCHEL;
     result.stature = 1.0f;
-    result.body_mass = 0.98f;
-    result.muscularity = 0.66f;
-    result.shoulder_scale = 1.02f;
-    result.head_width = 1.03f;
-    result.head_depth = 1.0f;
+    result.body_mass = 1.02f;
+    result.muscularity = 0.78f;
+    result.shoulder_scale = 1.06f;
+    result.head_width = 1.0f;
+    result.head_depth = 1.03f;
     result.age = 0.30f;
     result.head_family = CC_NPC_HEAD_FAMILY_SQUARE;
     result.hair_family = CC_NPC_HAIR_FAMILY_CROPPED;
-    result.hair_style = 0U;
+    result.hair_style = 5U;
     result.beard_style = 0U;
     result.nose_style = 2U;
     result.scar_style = 0U;
