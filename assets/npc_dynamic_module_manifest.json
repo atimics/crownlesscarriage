@@ -1,9 +1,27 @@
 {
-  "library_version": "0.6.0",
+  "library_version": "0.7.0",
   "generation": "offline procedural rigid character modules",
   "runtime_strategy": "bone-frame instancing without skins or animations",
   "coordinate_system": "glTF +Y up, +Z forward",
   "material_contract": "single indexed material; COLOR_0 stores palette, value, and fold",
+  "surface_contract": "COLOR_0:palette,value,fold,surface; surface=(id+0.5)/8",
+  "surface_classes": [
+    "skin",
+    "cloth",
+    "leather",
+    "hair",
+    "metal",
+    "eye"
+  ],
+  "surface_modules": [
+    "chest_plate",
+    "chest_plate_hero",
+    "foot",
+    "mantle",
+    "pauldron",
+    "pauldron_hero",
+    "torso"
+  ],
   "modules": [
     {
       "id": "npc_module_torso_v01",

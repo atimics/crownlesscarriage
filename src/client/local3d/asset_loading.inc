@@ -567,6 +567,7 @@ typedef struct VisualStyleCache {
     int32_t npc_hero_head_position_location;
     int32_t npc_rim_tint_location;
     int32_t npc_rim_strength_location;
+    int32_t npc_material_style_location;
     bool npc_ready;
     Shader npc_skinned;
     int32_t npc_skinned_light_direction_location;
@@ -583,6 +584,7 @@ typedef struct VisualStyleCache {
     int32_t npc_skinned_body_skin_remap_location;
     int32_t npc_skinned_rim_tint_location;
     int32_t npc_skinned_rim_strength_location;
+    int32_t npc_skinned_material_style_location;
     bool npc_skinned_ready;
     ArtAtmosphereDefinition presentation_atmosphere;
     float presentation_practical_glow;
@@ -1491,7 +1493,8 @@ static void ApplyNpcBodyStyle(Model *model)
 
 static void SetIndexedPalette(
     const Color colors[CC_NPC_ARCHETYPE_MATERIAL_COUNT],
-    float ink_strength, bool hero_emphasis, Vector3 hero_head_position)
+    float ink_strength, bool hero_emphasis, Vector3 hero_head_position,
+    bool material_style)
 {
     if (!visual_style.npc_ready || colors == NULL) return;
     float palette[CC_NPC_ARCHETYPE_MATERIAL_COUNT * 4];
@@ -1517,6 +1520,9 @@ static void SetIndexedPalette(
                    visual_style.npc_ink_strength_location,
                    &ink_strength, SHADER_UNIFORM_FLOAT);
     float hero = hero_emphasis ? 1.0f : 0.0f;
+    float surface_style = material_style ? 1.0f : 0.0f;
+    SetShaderValue(visual_style.npc, visual_style.npc_material_style_location,
+                   &surface_style, SHADER_UNIFORM_FLOAT);
     SetShaderValue(visual_style.npc,
                    visual_style.npc_hero_emphasis_location,
                    &hero, SHADER_UNIFORM_FLOAT);
@@ -1524,6 +1530,9 @@ static void SetIndexedPalette(
                    visual_style.npc_hero_head_position_location,
                    &hero_head_position, SHADER_UNIFORM_VEC3);
     if (visual_style.npc_skinned_ready) {
+        SetShaderValue(visual_style.npc_skinned,
+                        visual_style.npc_skinned_material_style_location,
+                        &surface_style, SHADER_UNIFORM_FLOAT);
         SetShaderValueV(visual_style.npc_skinned,
                         visual_style.npc_skinned_palette_location,
                         palette, SHADER_UNIFORM_VEC4,
@@ -1561,7 +1570,8 @@ static void SetNpcPalette(const CcNpcAppearance *appearance,
         ShadeColor(appearance->hair, 0.62f),
     };
     SetIndexedPalette(colors, ink_strength, hero_emphasis,
-                      hero_head_position);
+                      hero_head_position,
+                      hero_emphasis || appearance->role == CC_NPC_ROLE_GUARD);
 }
 
 typedef struct CreatureRenderPalette {
@@ -2752,7 +2762,7 @@ static bool DrawCreatureGait3D(CcCreatureVariant variant,
                 palette.cloth, palette.leather, palette.horn,
                 palette.metal, palette.accent, palette.eye,
             };
-            SetIndexedPalette(colors, 0.54f, false, (Vector3){0});
+            SetIndexedPalette(colors, 0.54f, false, (Vector3){0}, false);
             if (visual_style.npc_skinned_ready) {
                 float body_skin_remap = 0.0f;
                 SetShaderValue(
@@ -3261,6 +3271,8 @@ static void LoadVisualStyle(void)
             visual_style.npc_rim_strength_location = GetShaderLocation(
                 visual_style.npc, "characterRimStrength");
             visual_style.npc_ready = true;
+            visual_style.npc_material_style_location = GetShaderLocation(
+                visual_style.npc, "materialStyle");
         } else {
             visual_style.npc = (Shader){0};
             TraceLog(LOG_WARNING,
@@ -3310,6 +3322,8 @@ static void LoadVisualStyle(void)
                     GetShaderLocation(visual_style.npc_skinned,
                                       "characterRimStrength");
                 visual_style.npc_skinned_ready = true;
+                visual_style.npc_skinned_material_style_location =
+                    GetShaderLocation(visual_style.npc_skinned, "materialStyle");
             } else {
                 visual_style.npc_skinned = (Shader){0};
                 TraceLog(LOG_WARNING,
