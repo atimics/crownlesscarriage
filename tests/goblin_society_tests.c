@@ -118,6 +118,7 @@ int main(void)
     CcSim seed;
     CcSimInit(&seed, UINT32_C(0x60b11f));
     seed.current_day = 100 * 365;
+    seed.royal_trade_week = seed.current_day / 7;
     seed.dragon.slain = true;
     seed.dragon.slain_day = 2;
     seed.dragon.life_stage = CC_DRAGON_STAGE_AFTERDRAGON;

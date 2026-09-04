@@ -7,6 +7,7 @@
 
 #include <math.h>
 #include <stdio.h>
+#include <string.h>
 
 static void RemoveDatabase(const char *path)
 {
@@ -367,6 +368,9 @@ static void CheckAgedChartKeepsItsRoadSnapshot(void)
     route->closed = true;
     route->condition = 12;
     sim.current_day += 5;
+    sim.royal_trade_week = sim.current_day / 7;
+    memset(sim.royal_route_slots_used, 0,
+           sizeof(sim.royal_route_slots_used));
     CC_CHECK(CcRoadBookReadRoute(&sim, route->id, &view));
     CC_CHECK(!view.recorded_closed);
     CC_CHECK(view.recorded_condition == 73);
@@ -375,6 +379,9 @@ static void CheckAgedChartKeepsItsRoadSnapshot(void)
     route->smuggler_route = true;
     route->condition = 48;
     sim.current_day += 5;
+    sim.royal_trade_week = sim.current_day / 7;
+    memset(sim.royal_route_slots_used, 0,
+           sizeof(sim.royal_route_slots_used));
     CC_CHECK(CcRoadBookReadRoute(&sim, route->id, &view));
     CC_CHECK(!view.recorded_closed);
     CC_CHECK(!view.recorded_smuggler_route);
@@ -418,6 +425,9 @@ static void CheckSiteDiscoveryAndPoliticalKnowledge(void)
         sim.kingdoms[1].id : sim.kingdoms[0].id;
     remote->kingdom_id = ceded_to;
     sim.current_day += 7;
+    sim.royal_trade_week = sim.current_day / 7;
+    memset(sim.royal_route_slots_used, 0,
+           sizeof(sim.royal_route_slots_used));
     CC_CHECK(CcRoadBookSettlementKingdom(
         &sim, underroad_settlement) == known_kingdom);
 

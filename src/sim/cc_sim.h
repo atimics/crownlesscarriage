@@ -667,7 +667,8 @@ typedef enum CcRoyalCarriageMode {
     CC_ROYAL_CARRIAGE_IDLE = 0,
     CC_ROYAL_CARRIAGE_REPOSITIONING,
     CC_ROYAL_CARRIAGE_DELIVERING,
-    CC_ROYAL_CARRIAGE_BLOCKED
+    CC_ROYAL_CARRIAGE_BLOCKED,
+    CC_ROYAL_CARRIAGE_WAITING_CAPACITY
 } CcRoyalCarriageMode;
 
 typedef struct CcRoyalCarriage {
@@ -682,6 +683,7 @@ typedef struct CcRoyalCarriage {
     int32_t departure_day;
     int32_t arrival_day;
     int32_t blocked_since_day;
+    int32_t next_dispatch_day;
     int32_t condition;
     int32_t trips_completed;
     int32_t cargo_losses;
@@ -1471,6 +1473,8 @@ typedef struct CcSim {
     CcFaction factions[CC_MAX_FACTIONS];
     CcShipment shipments[CC_MAX_SHIPMENTS];
     CcRoyalCarriage royal_carriages[CC_MAX_KINGDOMS];
+    int32_t royal_trade_week;
+    int32_t royal_route_slots_used[CC_MAX_ROUTES];
     CcCourier couriers[CC_MAX_COURIERS];
     CcBanditGroup bandits[CC_MAX_BANDITS];
     CcGoblinCult goblins;

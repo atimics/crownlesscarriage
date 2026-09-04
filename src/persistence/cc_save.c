@@ -950,8 +950,13 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " target_id INTEGER NOT NULL, active_shipment_id INTEGER NOT NULL,"
         " mode INTEGER NOT NULL, departure_day INTEGER NOT NULL,"
         " arrival_day INTEGER NOT NULL, blocked_since_day INTEGER NOT NULL,"
+        " next_dispatch_day INTEGER NOT NULL,"
         " condition INTEGER NOT NULL, trips_completed INTEGER NOT NULL,"
         " cargo_losses INTEGER NOT NULL);";
+    const char *royal_route_usage_schema =
+        "CREATE TABLE IF NOT EXISTS royal_route_usage ("
+        " slot INTEGER PRIMARY KEY, route_id INTEGER NOT NULL UNIQUE,"
+        " trade_week INTEGER NOT NULL, slots_used INTEGER NOT NULL);";
     const char *kingdom_schema =
         "CREATE TABLE IF NOT EXISTS kingdom ("
         " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL UNIQUE, name TEXT NOT NULL,"
@@ -1341,6 +1346,8 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " accessible INTEGER NOT NULL);";
     return Execute(database, schema, error, error_capacity) &&
            Execute(database, royal_carriage_schema, error, error_capacity) &&
+           Execute(database, royal_route_usage_schema,
+                   error, error_capacity) &&
            Execute(database, kingdom_schema, error, error_capacity) &&
            Execute(database, realm_schema, error, error_capacity) &&
            Execute(database, situation_schema, error, error_capacity) &&
@@ -2011,7 +2018,7 @@ static bool SaveRoyalCarriages(sqlite3 *database, const CcSim *sim,
     if (sim->schema_version < 36U) return true;
     sqlite3_stmt *statement = NULL;
     if (!Prepare(database,
-                 "INSERT INTO royal_carriage VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
+                 "INSERT INTO royal_carriage VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
                  &statement, error, error_capacity)) return false;
     for (int32_t i = 0; i < sim->royal_carriage_count; ++i) {
         const CcRoyalCarriage *carriage = &sim->royal_carriages[i];
@@ -2027,9 +2034,33 @@ static bool SaveRoyalCarriages(sqlite3 *database, const CcSim *sim,
         BindInt(statement, 10, carriage->departure_day);
         BindInt(statement, 11, carriage->arrival_day);
         BindInt(statement, 12, carriage->blocked_since_day);
-        BindInt(statement, 13, carriage->condition);
-        BindInt(statement, 14, carriage->trips_completed);
-        BindInt(statement, 15, carriage->cargo_losses);
+        BindInt(statement, 13, carriage->next_dispatch_day);
+        BindInt(statement, 14, carriage->condition);
+        BindInt(statement, 15, carriage->trips_completed);
+        BindInt(statement, 16, carriage->cargo_losses);
+        if (!StepDone(database, statement, error, error_capacity) ||
+            !ResetStatement(database, statement, error, error_capacity)) {
+            sqlite3_finalize(statement);
+            return false;
+        }
+    }
+    sqlite3_finalize(statement);
+    return true;
+}
+
+static bool SaveRoyalRouteUsage(sqlite3 *database, const CcSim *sim,
+                                char *error, size_t error_capacity)
+{
+    if (sim->schema_version < 36U) return true;
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database,
+                 "INSERT INTO royal_route_usage VALUES(?,?,?,?);",
+                 &statement, error, error_capacity)) return false;
+    for (int32_t i = 0; i < sim->route_count; ++i) {
+        BindInt(statement, 1, i);
+        BindId(statement, 2, sim->routes[i].id);
+        BindInt(statement, 3, sim->royal_trade_week);
+        BindInt(statement, 4, sim->royal_route_slots_used[i]);
         if (!StepDone(database, statement, error, error_capacity) ||
             !ResetStatement(database, statement, error, error_capacity)) {
             sqlite3_finalize(statement);
@@ -2921,6 +2952,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
             "DELETE FROM player_site_knowledge;"
             "DELETE FROM faction; DELETE FROM shipment;"
             "DELETE FROM royal_carriage;"
+            "DELETE FROM royal_route_usage;"
             "DELETE FROM shipment_intent; DELETE FROM diplomacy; DELETE FROM courier;"
             "DELETE FROM bandit_group; DELETE FROM monster_population;"
             "DELETE FROM goblin_cult; DELETE FROM dragon_state;"
@@ -2964,6 +2996,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
         SaveFactions(database, sim, error, error_capacity) &&
         SaveShipments(database, sim, error, error_capacity) &&
         SaveRoyalCarriages(database, sim, error, error_capacity) &&
+        SaveRoyalRouteUsage(database, sim, error, error_capacity) &&
         SaveDiplomacyAndCouriers(database, sim, error, error_capacity) &&
         SaveThreats(database, sim, error, error_capacity) &&
         SaveDungeons(database, sim, error, error_capacity) &&
@@ -3975,7 +4008,8 @@ static bool ReadRoyalCarriages(sqlite3 *database, CcSim *sim,
     if (!Prepare(database,
                  "SELECT slot,id,kingdom_id,location_id,route_id,destination_id,"
                  "target_id,active_shipment_id,mode,departure_day,arrival_day,"
-                 "blocked_since_day,condition,trips_completed,cargo_losses "
+                 "blocked_since_day,next_dispatch_day,condition,trips_completed,"
+                 "cargo_losses "
                  "FROM royal_carriage ORDER BY slot;",
                  &statement, error, error_capacity)) return false;
     int32_t rows = 0;
@@ -4001,9 +4035,10 @@ static bool ReadRoyalCarriages(sqlite3 *database, CcSim *sim,
         carriage->departure_day = sqlite3_column_int(statement, 9);
         carriage->arrival_day = sqlite3_column_int(statement, 10);
         carriage->blocked_since_day = sqlite3_column_int(statement, 11);
-        carriage->condition = sqlite3_column_int(statement, 12);
-        carriage->trips_completed = sqlite3_column_int(statement, 13);
-        carriage->cargo_losses = sqlite3_column_int(statement, 14);
+        carriage->next_dispatch_day = sqlite3_column_int(statement, 12);
+        carriage->condition = sqlite3_column_int(statement, 13);
+        carriage->trips_completed = sqlite3_column_int(statement, 14);
+        carriage->cargo_losses = sqlite3_column_int(statement, 15);
         rows += 1;
     }
     sqlite3_finalize(statement);
@@ -4011,6 +4046,46 @@ static bool ReadRoyalCarriages(sqlite3 *database, CcSim *sim,
     if (rows != sim->kingdom_count) {
         SetError(error, error_capacity,
                  "Royal carriage rows are incomplete.");
+        return false;
+    }
+    return true;
+}
+
+static bool ReadRoyalRouteUsage(sqlite3 *database, CcSim *sim,
+                                char *error, size_t error_capacity)
+{
+    sim->royal_trade_week = sim->current_day / 7;
+    for (int32_t i = 0; i < CC_MAX_ROUTES; ++i) {
+        sim->royal_route_slots_used[i] = 0;
+    }
+    if (sim->schema_version < 36U) return true;
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database,
+                 "SELECT slot,route_id,trade_week,slots_used "
+                 "FROM royal_route_usage ORDER BY slot;",
+                 &statement, error, error_capacity)) return false;
+    int32_t rows = 0;
+    while (sqlite3_step(statement) == SQLITE_ROW) {
+        int32_t slot = sqlite3_column_int(statement, 0);
+        CcId route_id = (CcId)sqlite3_column_int64(statement, 1);
+        int32_t trade_week = sqlite3_column_int(statement, 2);
+        if (slot != rows || slot < 0 || slot >= sim->route_count ||
+            route_id != sim->routes[slot].id ||
+            (rows > 0 && trade_week != sim->royal_trade_week)) {
+            sqlite3_finalize(statement);
+            SetError(error, error_capacity,
+                     "Royal route usage rows are invalid.");
+            return false;
+        }
+        sim->royal_trade_week = trade_week;
+        sim->royal_route_slots_used[slot] =
+            sqlite3_column_int(statement, 3);
+        rows += 1;
+    }
+    sqlite3_finalize(statement);
+    if (rows != sim->route_count) {
+        SetError(error, error_capacity,
+                 "Royal route usage rows are incomplete.");
         return false;
     }
     return true;
@@ -5985,6 +6060,7 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
               ReadFactions(database, sim, error, error_capacity) &&
               ReadShipments(database, sim, error, error_capacity) &&
               ReadRoyalCarriages(database, sim, error, error_capacity) &&
+              ReadRoyalRouteUsage(database, sim, error, error_capacity) &&
               ReadThreats(database, sim, error, error_capacity) &&
               ReadDungeons(database, sim, error, error_capacity) &&
               ReadUnderroad(database, sim, error, error_capacity) &&
