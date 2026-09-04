@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#171512">
+    <meta name="description" content="Licenses and credits for Crownless Carriage and its components.">
+    <title>Licenses &amp; Credits · Crownless Carriage</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: Georgia, "Times New Roman", serif;
+        background: #171512;
+        color: #e8dfc9;
+        --ink-soft: #bcb19b;
+        --line: #514a3d;
+        --paper: #201d18;
+        --paper-raised: #28231c;
+        --gold: #c7a96b;
+      }
+      * { box-sizing: border-box; }
+      body {
+        min-height: 100vh;
+        margin: 0;
+        background:
+          radial-gradient(circle at 50% -10%, #3a3328 0, #171512 48%),
+          #171512;
+      }
+      a { color: #dec38d; text-underline-offset: 0.2em; }
+      a:hover { color: #f3ddb0; }
+      a:focus-visible {
+        outline: 2px solid var(--gold);
+        outline-offset: 4px;
+        border-radius: 2px;
+      }
+      .page {
+        width: min(100% - 32px, 980px);
+        margin: 0 auto;
+        padding: 28px 0 64px;
+      }
+      .topline {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        margin-bottom: 74px;
+        font: 0.78rem system-ui, sans-serif;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .wordmark { color: #e8dfc9; text-decoration: none; }
+      .eyebrow {
+        margin: 0 0 14px;
+        color: var(--gold);
+        font: 0.74rem system-ui, sans-serif;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+      h1 {
+        max-width: 780px;
+        margin: 0;
+        font-size: clamp(2.65rem, 8vw, 5.8rem);
+        font-weight: 400;
+        letter-spacing: -0.045em;
+        line-height: 0.92;
+      }
+      .lede {
+        max-width: 650px;
+        margin: 30px 0 0;
+        color: var(--ink-soft);
+        font-size: clamp(1.08rem, 2.5vw, 1.35rem);
+        line-height: 1.55;
+      }
+      .status {
+        display: grid;
+        grid-template-columns: 0.75fr 1.25fr;
+        gap: 32px;
+        margin: 58px 0 72px;
+        padding: 30px;
+        border: 1px solid #776a51;
+        background: linear-gradient(135deg, #2b261e, #211e19);
+      }
+      .status h2 { margin: 0; font-size: 1.45rem; font-weight: 500; }
+      .status strong {
+        display: block;
+        margin-top: 8px;
+        color: #f0d9a9;
+        font: 1rem system-ui, sans-serif;
+      }
+      .status p { margin: 0; color: var(--ink-soft); line-height: 1.65; }
+      section { margin-top: 66px; }
+      h2 {
+        margin: 0 0 20px;
+        font-size: clamp(1.7rem, 4vw, 2.4rem);
+        font-weight: 400;
+      }
+      h3 { margin: 0 0 8px; font-size: 1.08rem; font-weight: 600; }
+      p { line-height: 1.65; }
+      .scope-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+      }
+      .scope-card {
+        padding: 22px;
+        border: 1px solid var(--line);
+        background: var(--paper);
+      }
+      .scope-card p { margin: 0; color: var(--ink-soft); font-size: 0.95rem; }
+      .table-wrap {
+        overflow-x: auto;
+        border: 1px solid var(--line);
+        background: var(--paper);
+      }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { padding: 16px 18px; text-align: left; vertical-align: top; }
+      th {
+        color: var(--gold);
+        font: 0.72rem system-ui, sans-serif;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+      td { border-top: 1px solid #413b31; line-height: 1.5; }
+      td:last-child { color: var(--ink-soft); }
+      .note {
+        margin-top: 18px;
+        padding: 20px 22px;
+        border-left: 2px solid var(--gold);
+        background: var(--paper);
+      }
+      .note p { margin: 0; color: var(--ink-soft); }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 28px;
+      }
+      .button {
+        display: inline-block;
+        padding: 11px 15px;
+        border: 1px solid #8e8168;
+        border-radius: 3px;
+        background: var(--paper-raised);
+        color: #e8dfc9;
+        font: 0.86rem system-ui, sans-serif;
+        text-decoration: none;
+      }
+      .button:hover { background: #342e25; color: #fff2d6; }
+      footer {
+        margin-top: 76px;
+        padding-top: 20px;
+        border-top: 1px solid var(--line);
+        color: #8f8674;
+        font: 0.78rem system-ui, sans-serif;
+      }
+      @media (max-width: 700px) {
+        .page { width: min(100% - 24px, 980px); padding-top: 20px; }
+        .topline { margin-bottom: 50px; }
+        .status { grid-template-columns: 1fr; gap: 18px; padding: 24px; }
+        .scope-grid { grid-template-columns: 1fr; }
+        th, td { padding: 14px; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <nav class="topline" aria-label="Project">
+        <a class="wordmark" href="index.html">Crownless Carriage</a>
+        <a href="index.html">Back to the game</a>
+      </nav>
+
+      <header>
+        <p class="eyebrow">Project terms · reviewed 3 September 2026</p>
+        <h1>Licenses<br>&amp; credits</h1>
+        <p class="lede">
+          Crownless combines original game work with a small set of permissive
+          open-source components. This page states the terms for each part.
+        </p>
+      </header>
+
+      <section class="status" aria-labelledby="project-status">
+        <div>
+          <h2 id="project-status">Crownless original work</h2>
+          <strong>All rights reserved</strong>
+        </div>
+        <p>
+          Public access allows people to read the source. Copying, changing,
+          sharing, selling, or using original Crownless material needs
+          permission from the relevant rights holder, apart from rights already
+          provided by law.
+        </p>
+      </section>
+
+      <section aria-labelledby="scope">
+        <p class="eyebrow">Project scope</p>
+        <h2 id="scope">What the Crownless terms cover</h2>
+        <div class="scope-grid">
+          <article class="scope-card">
+            <h3>Code &amp; writing</h3>
+            <p>Game code, tools, tests, web code, story, dialogue, and project documents.</p>
+          </article>
+          <article class="scope-card">
+            <h3>Visual work</h3>
+            <p>Original 3D models, maps, textures, shaders, animation, and presentation.</p>
+          </article>
+          <article class="scope-card">
+            <h3>Media</h3>
+            <p>Original video and audio, with supplied items kept under their own terms.</p>
+          </article>
+        </div>
+      </section>
+
+      <section aria-labelledby="components">
+        <p class="eyebrow">Shipped components</p>
+        <h2 id="components">Software license map</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Component</th><th>Role</th><th>Terms</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Crownless Carriage</td>
+                <td>Game, story, tools, and original assets</td>
+                <td>All rights reserved</td>
+              </tr>
+              <tr>
+                <td>raylib 6.0</td>
+                <td>Graphics, input, models, and audio</td>
+                <td>zlib/libpng</td>
+              </tr>
+              <tr>
+                <td>GLFW 3.4.0</td>
+                <td>Desktop windows and input</td>
+                <td>zlib/libpng</td>
+              </tr>
+              <tr>
+                <td>SQLite</td>
+                <td>Campaign saves and command journal</td>
+                <td>Public domain</td>
+              </tr>
+              <tr>
+                <td>raylib support libraries</td>
+                <td>File loading, audio, compression, and geometry</td>
+                <td>MIT, MIT-0, zlib/libpng, CC0, public domain, or WTFPL v2</td>
+              </tr>
+              <tr>
+                <td>Emscripten 5.0.4</td>
+                <td>Browser runtime and system libraries</td>
+                <td>MIT, University of Illinois/NCSA, and component terms</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="actions">
+          <a class="button" href="LICENSE.txt">Read Crownless terms</a>
+          <a class="button" href="THIRD_PARTY_NOTICES.txt">Read detailed third-party notices</a>
+        </div>
+      </section>
+
+      <section aria-labelledby="media">
+        <p class="eyebrow">Media record</p>
+        <h2 id="media">The Predator Clause</h2>
+        <div class="note">
+          <p>
+            The introduction track is credited in its file metadata to ratimics
+            and says it was made with Suno on 27 August 2026. Suno rights depend
+            on the creator's plan at the time of creation. Keep that plan record
+            with commercial release records. See the
+            <a href="https://help.suno.com/en/articles/2416769">current Suno rights guide</a>.
+          </p>
+        </div>
+      </section>
+
+      <footer>
+        License inventory for Crownless Carriage 0.1.0 · Last reviewed 3 September 2026
+      </footer>
+    </main>
+  </body>
+</html>

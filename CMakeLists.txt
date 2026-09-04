@@ -253,10 +253,24 @@ if(CC_BUILD_CLIENT)
                 -DCC_WEB_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
                 -DCC_WEB_OUTPUT_DIR=${CC_WEB_ASSET_DIR}
                 -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/PrepareWebAssets.cmake
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+                "${CMAKE_CURRENT_BINARY_DIR}/site"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_CURRENT_SOURCE_DIR}/web/licenses.html"
+                "${CMAKE_CURRENT_BINARY_DIR}/site/licenses.html"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
+                "${CMAKE_CURRENT_BINARY_DIR}/site/LICENSE.txt"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_CURRENT_SOURCE_DIR}/THIRD_PARTY_NOTICES.md"
+                "${CMAKE_CURRENT_BINARY_DIR}/site/THIRD_PARTY_NOTICES.txt"
             DEPENDS
                 ${CMAKE_CURRENT_SOURCE_DIR}/cmake/PrepareWebAssets.cmake
                 ${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html
+                ${CMAKE_CURRENT_SOURCE_DIR}/web/licenses.html
                 ${CMAKE_CURRENT_SOURCE_DIR}/web/persistence.js
+                ${CMAKE_CURRENT_SOURCE_DIR}/LICENSE
+                ${CMAKE_CURRENT_SOURCE_DIR}/THIRD_PARTY_NOTICES.md
             VERBATIM
         )
         add_dependencies(crownless_carriage crownless_web_assets)
@@ -398,6 +412,12 @@ if(CC_BUILD_CLIENT)
             COMMAND ${CMAKE_COMMAND} -E make_directory
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/maps"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/LICENSE.txt"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_CURRENT_SOURCE_DIR}/THIRD_PARTY_NOTICES.md"
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/THIRD_PARTY_NOTICES.txt"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${CC_HERO_ENGINE_ASSET}"
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/hero/crownless_hero_engine_rig_v01.glb"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -500,6 +520,8 @@ if(CC_BUILD_CLIENT)
                     "${CC_HERO_PIXEL_FRAGMENT_SHADER}"
                     "${CC_GLOAMGATE_ALDERWATCH_MAP_ASSET}"
                     "${CC_COLLECTIBLE_MAP_ATLAS_ASSET}"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/THIRD_PARTY_NOTICES.md"
             VERBATIM
         )
         add_dependencies(crownless_carriage crownless_hero_assets)
@@ -521,6 +543,13 @@ endif()
 
 include(CTest)
 if(BUILD_TESTING)
+    add_test(
+        NAME license_page_contract
+        COMMAND ${CMAKE_COMMAND}
+            -DCC_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/license_page_tests.cmake
+    )
+
     if(CC_BUILD_BENCHMARKS)
         set(CC_BENCHMARK_TEST_ARGUMENTS --quick)
         # Debug builds keep the benchmark as a functional smoke test, but
