@@ -111,10 +111,10 @@ State layers project simulation conditions without rebuilding those shells:
 This directly supports the design rule that strategic variables affect visible
 places while keeping the number of authored city grammars bounded.
 
-Economic props pair seven production sources with the eleven stable `CcGood`
+Economic props pair eight production sources with the fourteen stable `CcGood`
 values. `assets/asset_manifest.json` records the source links, cargo asset IDs,
 and fixed 32-pixel atlas frames. Run `make blender-economic-assets` to rebuild
-the general library, eighteen economic GLBs, icon atlas, and production review
+the general library, twenty-two economic GLBs, icon atlas, and production review
 sheet.
 
 ## Rebuild and validate

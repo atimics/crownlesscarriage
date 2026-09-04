@@ -1735,6 +1735,10 @@ static void CheckSchema25Compatibility(char *error, size_t error_capacity)
                 } else {
                     CC_CHECK(restored.settlements[settlement].stock[good] == 0);
                 }
+            } else if (good == CC_GOOD_PAPER) {
+                CC_CHECK(restored.settlements[settlement].stock[good] > 0);
+                CC_CHECK(restored.settlements[settlement]
+                             .reserve_target[good] > 0);
             } else {
                 CC_CHECK(restored.settlements[settlement].stock[good] == 0);
                 CC_CHECK(restored.settlements[settlement]
@@ -1742,7 +1746,10 @@ static void CheckSchema25Compatibility(char *error, size_t error_capacity)
                 CC_CHECK(restored.settlements[settlement]
                              .production[good] == 0);
             }
-            CC_CHECK(restored.settlements[settlement].consumption[good] == 0);
+            if (good != CC_GOOD_PAPER) {
+                CC_CHECK(restored.settlements[settlement]
+                             .consumption[good] == 0);
+            }
             CC_CHECK(restored.settlements[settlement].price[good] ==
                      CcGoodDefinitionFor((CcGood)good)->base_price);
         }
@@ -1814,6 +1821,10 @@ static void CheckSchema26Compatibility(char *error, size_t error_capacity)
                 } else {
                     CC_CHECK(restored.settlements[settlement].stock[good] == 0);
                 }
+            } else if (good == CC_GOOD_PAPER) {
+                CC_CHECK(restored.settlements[settlement].stock[good] > 0);
+                CC_CHECK(restored.settlements[settlement]
+                             .reserve_target[good] > 0);
             } else {
                 CC_CHECK(restored.settlements[settlement].stock[good] == 0);
             }
@@ -2134,6 +2145,50 @@ static void CheckSchema29StoneMigration(char *error,
         CC_CHECK(place->price[CC_GOOD_WHEAT] == wheat_price[settlement]);
         CC_CHECK(place->map_x == map_x[settlement]);
         CC_CHECK(place->map_y == map_y[settlement]);
+        CC_CHECK(place->stock[CC_GOOD_PAPER] > 0);
+        CC_CHECK(place->reserve_target[CC_GOOD_PAPER] > 0);
+        CC_CHECK(place->price[CC_GOOD_PAPER] ==
+                 CcGoodDefinitionFor(CC_GOOD_PAPER)->base_price);
+    }
+    CC_CHECK(CcSimValidate(&restored, error, error_capacity));
+    RemoveDatabase(path);
+}
+
+static void CheckPaperCompatibility(uint32_t schema_version,
+                                    uint32_t generator_version,
+                                    const char *path,
+                                    char *error, size_t error_capacity)
+{
+    RemoveDatabase(path);
+    CcSim legacy;
+    CcSimInit(&legacy, UINT32_C(0x1e9ac30));
+    legacy.schema_version = schema_version;
+    legacy.generator_version = generator_version;
+    for (int32_t settlement = 0;
+         settlement < legacy.settlement_count; ++settlement) {
+        CcSettlement *place = &legacy.settlements[settlement];
+        place->stock[CC_GOOD_PAPER] = 0;
+        place->reserve_target[CC_GOOD_PAPER] = 0;
+        place->production[CC_GOOD_PAPER] = 0;
+        place->consumption[CC_GOOD_PAPER] = 0;
+        place->price[CC_GOOD_PAPER] = 0;
+    }
+    CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
+    CC_CHECK(ReadSqliteInteger(
+                 path, "SELECT COUNT(*) FROM player_good;") == 11);
+
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    for (int32_t settlement = 0;
+         settlement < restored.settlement_count; ++settlement) {
+        const CcSettlement *place = &restored.settlements[settlement];
+        CC_CHECK(place->stock[CC_GOOD_PAPER] > 0);
+        CC_CHECK(place->reserve_target[CC_GOOD_PAPER] > 0);
+        CC_CHECK(place->price[CC_GOOD_PAPER] ==
+                 CcGoodDefinitionFor(CC_GOOD_PAPER)->base_price);
+        CC_CHECK(place->stock[CC_GOOD_ROTTEN_MEAT] == 0);
+        CC_CHECK(place->stock[CC_GOOD_ROTTEN_GRAIN] == 0);
     }
     CC_CHECK(CcSimValidate(&restored, error, error_capacity));
     RemoveDatabase(path);
@@ -2284,6 +2339,12 @@ int main(void)
                         "persistence-schema31-flock-test.ccsave",
                         error, sizeof(error));
     CheckSchema30JournalMigration(error, sizeof(error));
+    CheckPaperCompatibility(30U, 23U,
+                            "persistence-schema30-paper-test.ccsave",
+                            error, sizeof(error));
+    CheckPaperCompatibility(32U, 25U,
+                            "persistence-schema32-paper-test.ccsave",
+                            error, sizeof(error));
     CheckJourneyStopPersistence(error, sizeof(error));
     CheckLegacyLifecycleJournalCompatibility(24U, error, sizeof(error));
     CheckLegacyLifecycleJournalCompatibility(25U, error, sizeof(error));

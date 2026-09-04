@@ -23,6 +23,7 @@ SOURCES = (
     ("economy_source_sheep_v01", "Sheep"),
     ("economy_source_gem_seam_v01", "Gem seam"),
     ("economy_source_stone_quarry_v01", "Stone quarry"),
+    ("economy_source_paper_mill_v01", "Paper mill"),
 )
 CARGO = (
     ("economy_cargo_food_v01", "Food"),
@@ -36,6 +37,9 @@ CARGO = (
     ("economy_cargo_meat_v01", "Meat"),
     ("economy_cargo_wool_v01", "Wool"),
     ("economy_cargo_stone_v01", "Stone"),
+    ("economy_cargo_paper_v01", "Paper"),
+    ("economy_cargo_rotten_meat_v01", "Rotten meat"),
+    ("economy_cargo_rotten_grain_v01", "Rotten grain"),
 )
 
 

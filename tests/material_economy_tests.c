@@ -63,7 +63,10 @@ int main(void)
     CC_CHECK(CC_GOOD_MEAT == 8);
     CC_CHECK(CC_GOOD_WOOL == 9);
     CC_CHECK(CC_GOOD_STONE == 10);
-    CC_CHECK(CC_GOOD_COUNT == 11);
+    CC_CHECK(CC_GOOD_PAPER == 11);
+    CC_CHECK(CC_GOOD_ROTTEN_MEAT == 12);
+    CC_CHECK(CC_GOOD_ROTTEN_GRAIN == 13);
+    CC_CHECK(CC_GOOD_COUNT == 14);
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
         const CcGoodDefinition *definition = CcGoodDefinitionFor(
             (CcGood)good);
@@ -93,6 +96,78 @@ int main(void)
     CC_CHECK(stone_definition->minimum_trade_units == 4);
     CC_CHECK(stone_definition->raid_capacity == 8);
 
+    const CcGoodDefinition *paper_definition = CcGoodDefinitionFor(
+        CC_GOOD_PAPER);
+    CC_CHECK(strcmp(paper_definition->name, "Paper") == 0);
+    CC_CHECK(paper_definition->base_price == 12);
+
+    CcSim paper_mill;
+    CcSettlement *place = IsolatedSettlement(&paper_mill);
+    place->stock[CC_GOOD_WOOD] = 3;
+    place->reserve_target[CC_GOOD_PAPER] = 10;
+    place->production[CC_GOOD_PAPER] = 8;
+    CcSimAdvanceDays(&paper_mill, 6);
+    CC_CHECK(place->stock[CC_GOOD_PAPER] == 8);
+    CC_CHECK(place->stock[CC_GOOD_WOOD] == 1);
+
+    CcSim wet_journey;
+    CcSimInit(&wet_journey, UINT32_C(0x5a11a9e));
+    CcTravelPreview wet_preview = {0};
+    for (int32_t day = 1; day <= 100; ++day) {
+        wet_journey.current_day = day;
+        CC_CHECK(CcSimTravelPreview(
+            &wet_journey, wet_journey.settlements[1].id, &wet_preview,
+            NULL, 0U));
+        if (wet_preview.rain_expected) break;
+    }
+    CC_CHECK(wet_preview.rain_expected);
+    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        wet_journey.player.cargo[good] = 0;
+    }
+    wet_journey.player.cargo[CC_GOOD_MEAT] = 3;
+    wet_journey.player.cargo[CC_GOOD_WHEAT] = 5;
+    CcCommand wet_departure = {
+        .kind = CC_COMMAND_TRAVEL,
+        .target_id = wet_journey.settlements[1].id
+    };
+    char travel_error[192];
+    CC_CHECK(CcSimApply(
+        &wet_journey, &wet_departure, travel_error,
+        sizeof(travel_error)));
+    CC_CHECK(wet_journey.player.cargo[CC_GOOD_MEAT] == 0);
+    CC_CHECK(wet_journey.player.cargo[CC_GOOD_ROTTEN_MEAT] == 3);
+    CC_CHECK(wet_journey.player.cargo[CC_GOOD_WHEAT] == 0);
+    CC_CHECK(wet_journey.player.cargo[CC_GOOD_ROTTEN_GRAIN] == 5);
+    const CcEvent *wet_event = CcSimRecentEvent(&wet_journey, 0);
+    CC_CHECK(wet_event != NULL);
+    CC_CHECK(strstr(wet_event->text, "Rotten Meat") != NULL);
+    CC_CHECK(strstr(wet_event->text, "Rotten Grain") != NULL);
+
+    CcSim dry_journey;
+    CcSimInit(&dry_journey, UINT32_C(0xd271a9e));
+    CcTravelPreview dry_preview = {0};
+    for (int32_t day = 1; day <= 100; ++day) {
+        dry_journey.current_day = day;
+        CC_CHECK(CcSimTravelPreview(
+            &dry_journey, dry_journey.settlements[1].id, &dry_preview,
+            NULL, 0U));
+        if (!dry_preview.rain_expected) break;
+    }
+    CC_CHECK(!dry_preview.rain_expected);
+    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        dry_journey.player.cargo[good] = 0;
+    }
+    dry_journey.player.cargo[CC_GOOD_WHEAT] = 4;
+    CcCommand dry_departure = {
+        .kind = CC_COMMAND_TRAVEL,
+        .target_id = dry_journey.settlements[1].id
+    };
+    CC_CHECK(CcSimApply(
+        &dry_journey, &dry_departure, travel_error,
+        sizeof(travel_error)));
+    CC_CHECK(dry_journey.player.cargo[CC_GOOD_WHEAT] == 4);
+    CC_CHECK(dry_journey.player.cargo[CC_GOOD_ROTTEN_GRAIN] == 0);
+
     CcSim wood_world;
     CcSimInit(&wood_world, UINT32_C(0x700d100d));
     CC_CHECK(wood_world.settlements[0].stock[CC_GOOD_WOOD] == 28);
@@ -112,7 +187,7 @@ int main(void)
     CC_CHECK(!CcSimValidate(&wood_world, wood_error, sizeof(wood_error)));
 
     CcSim woodlot;
-    CcSettlement *place = IsolatedSettlement(&woodlot);
+    place = IsolatedSettlement(&woodlot);
     place->service_mask |= Service(CC_SERVICE_GRANARY);
     place->production[CC_GOOD_WOOD] = 8;
     place->stock[CC_GOOD_TOOLS] = 2;

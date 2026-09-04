@@ -2225,6 +2225,9 @@ static Color CargoBoxColor(CcGood good)
         case CC_GOOD_MEAT: return (Color){142, 67, 62, 255};
         case CC_GOOD_WOOL: return (Color){218, 211, 190, 255};
         case CC_GOOD_STONE: return (Color){123, 126, 130, 255};
+        case CC_GOOD_PAPER: return (Color){214, 200, 159, 255};
+        case CC_GOOD_ROTTEN_MEAT: return (Color){83, 91, 61, 255};
+        case CC_GOOD_ROTTEN_GRAIN: return (Color){91, 82, 52, 255};
         case CC_GOOD_COUNT: break;
     }
     return WORLD_WOOD;
@@ -2307,15 +2310,16 @@ static void DrawCarriedCargoBoxes(const CcPlayerCompany *player,
     static const float scales[CC_GOOD_COUNT] = {
         0.46f, 0.52f, 0.44f, 0.40f, 0.54f, 0.49f,
         0.46f, 0.43f, 0.48f, 0.46f, 0.48f,
+        0.47f, 0.48f, 0.47f,
     };
     int32_t shown = 0;
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
         if (player == NULL || player->cargo[good] <= 0) continue;
-        int32_t column = shown % 4;
-        int32_t row = shown / 4;
+        int32_t column = shown % 5;
+        int32_t row = shown / 5;
         Vector3 position = LocalPoint(
             base,
-            -1.38f + (float)column * 0.72f,
+            -1.42f + (float)column * 0.60f,
             2.25f,
             -0.46f + (float)row * 0.46f,
             yaw);
