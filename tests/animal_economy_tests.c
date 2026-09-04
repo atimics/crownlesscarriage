@@ -51,18 +51,18 @@ int main(void)
         &travel, travel.settlements[1].id, &preview,
         error, sizeof(error)));
     CC_CHECK(preview.horse_feed_required > 0);
-    int32_t original_food = travel.settlements[0].stock[CC_GOOD_FOOD];
-    travel.settlements[0].stock[CC_GOOD_FOOD] = 0;
+    int32_t original_wheat = travel.settlements[0].stock[CC_GOOD_WHEAT];
+    travel.settlements[0].stock[CC_GOOD_WHEAT] = 0;
     CcCommand depart = {
         .kind = CC_COMMAND_TRAVEL,
         .target_id = travel.settlements[1].id
     };
     CC_CHECK(!CcSimApply(&travel, &depart, error, sizeof(error)));
     CC_CHECK(strstr(error, "fodder") != NULL);
-    travel.settlements[0].stock[CC_GOOD_FOOD] = original_food;
+    travel.settlements[0].stock[CC_GOOD_WHEAT] = original_wheat;
     CC_CHECK(CcSimApply(&travel, &depart, error, sizeof(error)));
-    CC_CHECK(travel.settlements[0].stock[CC_GOOD_FOOD] ==
-             original_food - preview.horse_feed_required);
+    CC_CHECK(travel.settlements[0].stock[CC_GOOD_WHEAT] ==
+             original_wheat - preview.horse_feed_required);
     travel.journey.ambush_pending = false;
     AdvanceJourney(&travel);
     CC_CHECK(!travel.journey.active);
@@ -91,7 +91,7 @@ int main(void)
     CC_CHECK(cow_food_before == plain_food_before);
     CcSimAdvanceDays(&with_cows, 1);
     CcSimAdvanceDays(&without_cows, 1);
-    CC_CHECK(with_cows.settlements[0].stock[CC_GOOD_FOOD] ==
+    CC_CHECK(with_cows.settlements[0].stock[CC_GOOD_FOOD] >
              without_cows.settlements[0].stock[CC_GOOD_FOOD]);
 
     CcSim famine;
@@ -104,6 +104,7 @@ int main(void)
     hungry_herd->cow_condition = 50;
     hungry_herd->cow_hunger = 64;
     hungry_herd->stock[CC_GOOD_FOOD] = 0;
+    hungry_herd->stock[CC_GOOD_WHEAT] = 0;
     CcSimAdvanceDays(&famine, 1);
     CC_CHECK(hungry_herd->cow_adults == 2);
     CC_CHECK(CountEvents(&famine, CC_EVENT_COW_SLAUGHTERED) == 1);

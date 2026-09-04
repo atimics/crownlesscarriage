@@ -1560,6 +1560,7 @@ static void CheckSchema23Compatibility(char *error, size_t error_capacity)
     }
     CcSimInitializePlayerRouteKnowledge(&legacy);
     legacy.schema_version = 23U;
+    legacy.generator_version = 20U;
     route->closed = false;
     route->security = 100;
     route->condition = 100;
@@ -1693,12 +1694,14 @@ static void CheckSchema25Compatibility(char *error, size_t error_capacity)
          settlement < restored.settlement_count; ++settlement) {
         for (int32_t good = CC_LEGACY_GOOD_COUNT;
              good < CC_GOOD_COUNT; ++good) {
-            if (good == CC_GOOD_WOOD) {
+            if (good == CC_GOOD_WOOD || good == CC_GOOD_WHEAT) {
                 CC_CHECK(restored.settlements[settlement].stock[good] > 0);
                 CC_CHECK(restored.settlements[settlement]
                              .reserve_target[good] > 0);
-                CC_CHECK(restored.settlements[settlement]
-                             .production[good] > 0);
+                if (good == CC_GOOD_WOOD) {
+                    CC_CHECK(restored.settlements[settlement]
+                                 .production[good] > 0);
+                }
             } else {
                 CC_CHECK(restored.settlements[settlement].stock[good] == 0);
                 CC_CHECK(restored.settlements[settlement]

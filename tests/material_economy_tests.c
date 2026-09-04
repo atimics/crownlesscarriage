@@ -132,7 +132,7 @@ int main(void)
     CcSim no_farm;
     place = IsolatedSettlement(&no_farm);
     place->field_yield = 100;
-    place->production[CC_GOOD_FOOD] = 8;
+    place->production[CC_GOOD_WHEAT] = 8;
     CcSimAdvanceDays(&no_farm, 7);
     CC_CHECK(place->stock[CC_GOOD_FOOD] == 0);
 
@@ -140,10 +140,10 @@ int main(void)
     place = IsolatedSettlement(&farm);
     place->service_mask |= Service(CC_SERVICE_FARM);
     place->field_yield = 100;
-    place->production[CC_GOOD_FOOD] = 8;
+    place->production[CC_GOOD_WHEAT] = 8;
     place->stock[CC_GOOD_TOOLS] = 1;
     CcSimAdvanceDays(&farm, 7);
-    CC_CHECK(place->stock[CC_GOOD_FOOD] > 0);
+    CC_CHECK(place->stock[CC_GOOD_WHEAT] > 0);
     CC_CHECK(place->farm_tool_wear == 1);
 
     CcSim pantry;
