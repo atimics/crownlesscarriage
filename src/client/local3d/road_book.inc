@@ -103,6 +103,9 @@ static void DrawRoadHorseTeam(Vector3 base, float clock, float pace,
                 CcLocalRoadCheckpointSurfaceYInternal(
                     horse_base.x, horse_base.z);
             horse_base.y += horse_support - carriage_support;
+        } else if (active_world_stream != NULL) {
+            horse_base.y += CcLocalTerrainHeightAt(horse_base.x, horse_base.z) -
+                             CcLocalTerrainHeightAt(base.x, base.z);
         }
         CcCreaturePose pose = horse < 0 ? left_pose : right_pose;
         float gait_phase = clock * cadence + (horse < 0 ? 0.0f : PI);
@@ -135,13 +138,47 @@ static void DrawRoadCarriage(Vector3 base, const CcPlayerCompany *player,
                              bool horses_hitched, bool bridge_checkpoint)
 {
     float asset_yaw_degrees = yaw * RAD2DEG - 90.0f;
+    bool follow_ground = active_world_stream != NULL && !bridge_checkpoint;
+    if (follow_ground) {
+        Vector3 front = LocalPoint(base, 0.0f, 0.0f, 1.38f, yaw);
+        Vector3 rear = LocalPoint(base, 0.0f, 0.0f, -1.38f, yaw);
+        float pitch = atan2f(
+            CcLocalTerrainHeightAt(rear.x, rear.z) -
+            CcLocalTerrainHeightAt(front.x, front.z), 2.76f);
+        float sway = pace > 0.02f ? sinf(clock * 2.4f) * 0.7f : 0.0f;
+        rlPushMatrix();
+        rlTranslatef(base.x, base.y, base.z);
+        rlRotatef(pitch * RAD2DEG, cosf(yaw), 0.0f, -sinf(yaw));
+        rlRotatef(sway, sinf(yaw), 0.0f, cosf(yaw));
+        rlTranslatef(-base.x, -base.y, -base.z);
+    }
     RuntimeAsset *carriage = &runtime_assets[RUNTIME_ASSET_CARRIAGE];
     if (carriage->ready) {
-        DrawModelEx(carriage->model, base, (Vector3){0.0f, 1.0f, 0.0f},
-                    asset_yaw_degrees,
-                    (Vector3){CARRIAGE_ASSET_SCALE,
-                              CARRIAGE_ASSET_SCALE,
-                              CARRIAGE_ASSET_SCALE}, WHITE);
+        static float wheel_phase[2] = {0};
+        static float last_wheel_clock = 0.0f;
+        float step = fmaxf(0.0f, fminf(0.1f, clock - last_wheel_clock));
+        wheel_phase[0] = fmodf(wheel_phase[0] + step * pace * 2.2f / 0.80f, 2.0f * PI);
+        wheel_phase[1] = fmodf(wheel_phase[1] + step * pace * 2.2f / 0.62f, 2.0f * PI);
+        last_wheel_clock = clock;
+        for (int mesh = 0; mesh < carriage->model.meshCount; ++mesh) {
+            Model part = carriage->model;
+            part.meshCount = 1;
+            part.meshes = &carriage->model.meshes[mesh];
+            part.meshMaterial = &carriage->model.meshMaterial[mesh];
+            int wheel = mesh < 144 ? (int)carriage_wheel_mesh[mesh] - 1 : -1;
+            if (wheel >= 0) {
+                Vector3 center = carriage_wheel_centers[wheel];
+                Matrix spin = MatrixMultiply(
+                    MatrixTranslate(-center.x, -center.y, -center.z),
+                    MatrixRotateZ(-wheel_phase[wheel < 2 ? 0 : 1]));
+                spin = MatrixMultiply(spin, MatrixTranslate(center.x, center.y, center.z));
+                part.transform = MatrixMultiply(spin, part.transform);
+            }
+            DrawModelEx(part, base, (Vector3){0.0f, 1.0f, 0.0f},
+                        asset_yaw_degrees,
+                        (Vector3){CARRIAGE_ASSET_SCALE, CARRIAGE_ASSET_SCALE,
+                                  CARRIAGE_ASSET_SCALE}, WHITE);
+        }
     } else {
         DrawOrientedBox(base, (Vector3){0.0f, 1.10f, 0.0f},
                         (Vector3){2.55f, 1.58f, 4.15f}, yaw,
@@ -171,6 +208,7 @@ static void DrawRoadCarriage(Vector3 base, const CcPlayerCompany *player,
                        WORLD_WOOD);
     }
     DrawCarriedCargoBoxes(player, base, yaw);
+    if (follow_ground) rlPopMatrix();
     if (horses_hitched) {
         DrawRoadHorseTeam(base, clock, pace, yaw, bridge_checkpoint);
     }

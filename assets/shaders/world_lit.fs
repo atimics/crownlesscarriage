@@ -26,6 +26,7 @@ uniform float foregroundReveal;
 uniform float revealCutHeight;
 uniform float terrainSurface;
 uniform float weatherWetness;
+uniform float horizonFog;
 
 out vec4 finalColor;
 
@@ -92,6 +93,16 @@ void main()
     float isTerrain = step(0.5, terrainSurface);
     float viewDepth = max(0.0, dot(fragPosition - cameraPosition,
                                    normalize(cameraForward)));
+    if (isTerrain > 0.5 && horizonFog > 0.5) {
+        // The travel landscape uses broad paint and distance haze.
+        float brush = cellNoise(fragPosition.xz * 0.8) - 0.5;
+        vec3 light = ambientColor * 0.90 + lightColor * (key * 0.44 + 0.12);
+        vec3 paint = albedo.rgb * light * (1.0 + brush * 0.07);
+        paint *= mix(shadowColor, vec3(1.0), smoothstep(-0.08, 0.58, facing));
+        float haze = smoothstep(fogNear, fogFar, viewDepth);
+        finalColor = vec4(mix(clamp(paint, 0.0, 1.0), fogColor, haze), albedo.a);
+        return;
+    }
     float foregroundBand = 1.0 - smoothstep(depthSplits.x,
                                              depthSplits.y, viewDepth);
     float backgroundBand = smoothstep(depthSplits.y,
@@ -315,7 +326,7 @@ void main()
             (1.0 + focusWeight * focalContrast) + vec3(0.42);
 
     float fog = smoothstep(fogNear, fogFar, fragmentCameraDistance) *
-                mix(0.22, 0.42, depthStrength);
+                mix(mix(0.22, 0.42, depthStrength), 1.0, horizonFog);
     color = mix(color, fogColor, fog);
     finalColor = vec4(clamp(color, 0.0, 1.0), albedo.a);
 }

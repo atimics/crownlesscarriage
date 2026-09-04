@@ -725,6 +725,14 @@ if(CC_BUILD_CLIENT)
         COMMAND ${CMAKE_COMMAND} -E make_directory
                 "${CC_ROADBOOK_REVIEW_DIR}"
         COMMAND $<TARGET_FILE:crownless_carriage>
+                --capture-storybook 0.25 0.0 "roadbook-review/storybook-close.png"
+        COMMAND $<TARGET_FILE:crownless_carriage>
+                --capture-storybook 0.25 0.5 "roadbook-review/storybook-pullback.png"
+        COMMAND $<TARGET_FILE:crownless_carriage>
+                --capture-storybook 0.25 1.0 "roadbook-review/storybook-wide.png"
+        COMMAND $<TARGET_FILE:crownless_carriage>
+                --capture-storybook-arrival 0.5 "roadbook-review/storybook-arrival.png"
+        COMMAND $<TARGET_FILE:crownless_carriage>
                 --capture-travel
                 "roadbook-review/travel.png"
         COMMAND ${CMAKE_COMMAND}
@@ -1065,6 +1073,8 @@ if(BUILD_TESTING)
         target_compile_definitions(crownless_carriage PRIVATE
             CC_CLIENT_SELF_TESTS=1
         )
+        add_test(NAME storybook_travel_boundaries
+                 COMMAND crownless_carriage --test-storybook-travel)
         add_test(NAME map_sale_input
                  COMMAND crownless_carriage --test-map-sale-input)
         add_test(NAME town_arrival_parking

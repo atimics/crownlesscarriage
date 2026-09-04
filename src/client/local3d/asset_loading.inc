@@ -7,6 +7,7 @@ typedef struct SphereModelCache {
 
 static SphereModelCache sphere_models = {0};
 static RenderTexture2D npc_portrait_target = {0};
+static RenderTexture2D art_grade_target = {0};
 
 typedef enum TreeCrownShape {
     TREE_CROWN_ALDER = 0,
@@ -70,6 +71,34 @@ typedef struct RuntimeAsset {
     bool ready;
     bool attempted;
 } RuntimeAsset;
+
+/* Bounds are in the shipped carriage model's local frame, before CPU release. */
+static unsigned char carriage_wheel_mesh[144] = {0};
+static const Vector3 carriage_wheel_centers[4] = {
+    {-1.22f, 0.80f, 0.94f}, {-1.22f, 0.80f, -0.94f},
+    {1.05f, 0.62f, 0.94f}, {1.05f, 0.62f, -0.94f},
+};
+
+static void ClassifyCarriageWheels(const Model *model)
+{
+    memset(carriage_wheel_mesh, 0, sizeof(carriage_wheel_mesh));
+    for (int mesh = 0; mesh < model->meshCount && mesh < 144; ++mesh) {
+        BoundingBox bounds = GetMeshBoundingBox(model->meshes[mesh]);
+        for (int wheel = 0; wheel < 4; ++wheel) {
+            Vector3 center = carriage_wheel_centers[wheel];
+            float radius = wheel < 2 ? 0.81f : 0.63f;
+            if (bounds.min.x >= center.x - radius &&
+                bounds.max.x <= center.x + radius &&
+                bounds.min.y >= center.y - radius &&
+                bounds.max.y <= center.y + radius &&
+                bounds.min.z >= center.z - 0.18f &&
+                bounds.max.z <= center.z + 0.18f) {
+                carriage_wheel_mesh[mesh] = (unsigned char)(wheel + 1);
+                break;
+            }
+        }
+    }
+}
 
 static RuntimeAsset runtime_assets[RUNTIME_ASSET_COUNT] = {
     [RUNTIME_ASSET_BRIDGE] = {
@@ -505,6 +534,7 @@ typedef struct VisualStyleCache {
     int32_t reveal_cut_height_location;
     int32_t foreground_reveal_location;
     int32_t terrain_surface_location;
+    int32_t horizon_fog_location;
     int32_t weather_wetness_location;
     bool world_ready;
     PaintedEnvironmentStyle painted_environment;
@@ -968,6 +998,7 @@ static bool LoadRuntimeAsset(RuntimeAssetId id)
         asset->model = (Model){0};
         return false;
     }
+    if (id == RUNTIME_ASSET_CARRIAGE) ClassifyCarriageWheels(&asset->model);
     ReleaseUploadedModelCpuData(&asset->model);
     asset->ready = true;
     ApplyRuntimeAssetShader(id);
@@ -3050,6 +3081,8 @@ static void LoadVisualStyle(void)
         visual_style.world, "foregroundReveal");
     visual_style.terrain_surface_location = GetShaderLocation(
         visual_style.world, "terrainSurface");
+    visual_style.horizon_fog_location = GetShaderLocation(
+        visual_style.world, "horizonFog");
     visual_style.weather_wetness_location = GetShaderLocation(
         visual_style.world, "weatherWetness");
     visual_style.world_ready = true;
@@ -3904,6 +3937,10 @@ void CcLocalRendererShutdown(void)
     if (IsRenderTextureValid(npc_portrait_target)) {
         UnloadRenderTexture(npc_portrait_target);
     }
+    if (IsRenderTextureValid(art_grade_target)) {
+        UnloadRenderTexture(art_grade_target);
+    }
+    art_grade_target = (RenderTexture2D){0};
     if (visual_style.grade_ready) UnloadShader(visual_style.grade);
     sphere_models = (SphereModelCache){0};
     npc_portrait_target = (RenderTexture2D){0};
