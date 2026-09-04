@@ -10,7 +10,7 @@ in vec4 vertexBoneWeights;
 uniform mat4 mvp;
 uniform mat4 matModel;
 uniform mat4 matNormal;
-uniform mat4 boneMatrices[64];
+uniform mat4 boneMatrices[32];
 
 out vec3 fragPosition;
 out vec2 fragTexCoord;

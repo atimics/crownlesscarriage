@@ -47,7 +47,7 @@
 #define CC_CROWNLESS_ATLAS_MAP_NAME "The Crownless Atlas"
 #define CC_DRAGON_HOARD_MAP_NAME "The Hoard Vault of Varkesh"
 
-#define CC_SIM_SCHEMA_VERSION 35
+#define CC_SIM_SCHEMA_VERSION 36
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
@@ -1505,12 +1505,14 @@ void CcSimInitializeHorseStableSystem(CcSim *sim);
 void CcSimInitializeCharacters(CcSim *sim);
 void CcSimUpgradeCharacterLifecycles(CcSim *sim);
 void CcSimUpgradeHistoryOffices(CcSim *sim);
+void CcSimUpgradeArchivePhysicalLore(CcSim *sim);
 void CcSimUpgradeQuestArchitecture(CcSim *sim);
 void CcSimInitializeUnderroad(CcSim *sim);
 void CcSimUpgradeGrainEconomy(CcSim *sim);
 void CcSimAdvanceDays(CcSim *sim, int32_t days);
 bool CcSettlementIsAbandoned(const CcSettlement *settlement);
 int32_t CcSimClimateFactor(const CcSim *sim);
+int32_t CcSimArchivePhysicalLore(const CcSim *sim);
 int32_t CcDragonCampaignExperience(const CcSim *sim);
 int32_t CcCharacterAgeYears(const CcSim *sim,
                             const CcCharacter *character);

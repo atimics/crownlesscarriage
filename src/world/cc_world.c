@@ -888,6 +888,36 @@ void CcWorldStreamUpdate(CcWorldStream *stream, float focus_x, float focus_z,
     }
 }
 
+void CcWorldStreamFollowRoute(CcWorldStream *stream,
+                              const CcWorldRoutePlacement *route,
+                              CcId origin_id, float amount,
+                              int32_t generation_budget)
+{
+    CcWorldPoint point;
+    float heading;
+    if (stream == NULL || !isfinite(amount) || !CcWorldRoutePose(route, origin_id, amount,
+                                           &point, &heading)) return;
+    CcWorldStreamUpdate(stream, point.x, point.z, 0);
+    float length = CcWorldRouteLength(route);
+    float ahead_amount = fminf(1.0f, amount +
+        (length > 0.001f ? CC_WORLD_CHUNK_SIZE / length : 0.0f));
+    CcWorldPoint ahead = point;
+    (void)CcWorldRoutePose(route, origin_id, ahead_amount, &ahead, &heading);
+    CcWorldPoint priority[] = {point, ahead};
+    for (int32_t i = 0; i < 2 && generation_budget > 0; ++i) {
+        CcWorldChunk *chunk = FindChunk(
+            stream, ChunkCoordinate(priority[i].x), ChunkCoordinate(priority[i].z));
+        if (chunk != NULL && chunk->state == CC_WORLD_CHUNK_PENDING &&
+            ChunkDesired(stream, chunk->x, chunk->z)) {
+            GenerateChunk(stream, chunk);
+            generation_budget -= 1;
+        }
+    }
+    if (generation_budget > 0) {
+        CcWorldStreamUpdate(stream, point.x, point.z, generation_budget);
+    }
+}
+
 static float ChunkHeightAt(const CcWorldChunk *chunk, float x, float z)
 {
     float origin_x = (float)chunk->x * CC_WORLD_CHUNK_SIZE;

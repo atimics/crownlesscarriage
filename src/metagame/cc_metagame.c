@@ -253,10 +253,58 @@ static const char *StoryRoadName(const CcSim *sim, const CcRoute *route)
     return "the Crown Road";
 }
 
+static bool JourneyActionAllowed(const CcSim *sim, const char *action)
+{
+    if (!sim->journey.active || action == NULL) return false;
+    if (sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
+        return strcmp(action, "continue") == 0;
+    }
+    if (sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED) {
+        return strcmp(action, "bargain") == 0 || strcmp(action, "fight") == 0 ||
+            strcmp(action, "supper") == 0 || strcmp(action, "turn-back") == 0;
+    }
+    if (CcSimJourneyStop(sim) == CC_JOURNEY_STOP_MIDDAY) {
+        return strcmp(action, "break") == 0 || strcmp(action, "press-on") == 0;
+    }
+    return strcmp(action, "camp") == 0 ||
+        (strcmp(action, "lodge") == 0 && CcSimJourneyRoadHouseAvailable(sim));
+}
+
+static void DescribeJourney(const CcMetagame *metagame,
+                            char *output, size_t capacity)
+{
+    const CcSim *sim = &metagame->sim;
+    const CcRoute *route = CcSimRoute(sim, sim->journey.route_id);
+    const CcSettlement *destination = CcSimSettlement(sim, sim->journey.destination_id);
+    const char *phase = sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING ?
+        "travelling" : sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED ?
+        "checkpoint encounter" : CcSimJourneyStop(sim) == CC_JOURNEY_STOP_MIDDAY ?
+        "midday road stop" : "overnight road stop";
+    Append(output, capacity, "\n%s toward %s, day %d, watch %d of %d: %s.\n",
+           StoryRoadName(sim, route), destination != NULL ? destination->name : "unmarked track",
+           sim->current_day, CcSimJourneyWatchNumber(sim),
+           CcSimJourneyWatchCount(sim), phase);
+    Append(output, capacity, "Journey choices:");
+    static const char *actions[] = {
+        "continue", "break", "press-on", "camp", "lodge",
+        "bargain", "supper", "fight", "turn-back"
+    };
+    for (size_t i = 0; i < sizeof(actions) / sizeof(actions[0]); ++i) {
+        if (JourneyActionAllowed(sim, actions[i])) {
+            Append(output, capacity, " road %s;", actions[i]);
+        }
+    }
+    Append(output, capacity, "\n");
+}
+
 static void DescribeLook(const CcMetagame *metagame,
                          char *output, size_t capacity)
 {
     const CcSim *sim = &metagame->sim;
+    if (sim->journey.active) {
+        DescribeJourney(metagame, output, capacity);
+        return;
+    }
     const CcSettlement *place = CurrentPlace(metagame);
     if (place == NULL) {
         Append(output, capacity, "The carriage is between known places.\n");
@@ -751,6 +799,10 @@ static void DescribeRoutes(const CcMetagame *metagame,
                            char *output, size_t capacity)
 {
     const CcSim *sim = &metagame->sim;
+    if (sim->journey.active) {
+        DescribeJourney(metagame, output, capacity);
+        return;
+    }
     Append(output, capacity, "Roads waiting beyond the last house:\n");
     for (int32_t i = 0; i < sim->route_count; ++i) {
         const CcRoute *route = &sim->routes[i];
@@ -823,7 +875,7 @@ static void DescribeMaps(const CcMetagame *metagame,
             Append(output, capacity, "  %d. %s [%s]\n", i + 1,
                    map->name, CcSimMapIsArchived(sim, map) ?
                    "Gloamgate archive" : "carried");
-        } else if (map->owner_id == sim->player.location_id) {
+        } else if (!sim->journey.active && map->owner_id == sim->player.location_id) {
             Append(output, capacity, "  %d. %s [for sale: %d crowns]%s\n",
                    i + 1, map->name, map->ask_price,
                    map->contraband ? " [contraband]" : "");
@@ -835,7 +887,7 @@ static void DescribeCargo(const CcMetagame *metagame,
                           char *output, size_t capacity)
 {
     const CcSim *sim = &metagame->sim;
-    const CcSettlement *place = CurrentPlace(metagame);
+    const CcSettlement *place = sim->journey.active ? NULL : CurrentPlace(metagame);
     Append(output, capacity,
            "Carriage: %d/%d cargo, %" PRId64 " crowns, reputation %d\n",
            CcPlayerCargoUsed(&sim->player), sim->player.cargo_capacity,
@@ -1395,6 +1447,11 @@ static void DescribeStatus(const CcMetagame *metagame,
                            char *output, size_t capacity)
 {
     const CcSim *sim = &metagame->sim;
+    if (sim->journey.active) {
+        DescribeJourney(metagame, output, capacity);
+        DescribeCargo(metagame, output, capacity);
+        return;
+    }
     const CcSettlement *place = CurrentPlace(metagame);
     CcFoodEconomy nutrition = {0};
     if (place != NULL) {
@@ -1978,7 +2035,8 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
                strcmp(command, "confide") == 0) {
         int32_t index;
         if (!ParseIndex(first, metagame->sim.situation_count, &index)) {
-            Append(output, output_capacity, "Choose a lead number.\n");
+            Append(output, output_capacity, "Choose a lead number (1-%d); got '%s'.\n",
+                   metagame->sim.situation_count, first != NULL ? first : "");
             return false;
         }
         CcCommand action = {
@@ -2012,7 +2070,8 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
     } else if (strcmp(command, "accept") == 0) {
         int32_t index;
         if (!ParseIndex(first, metagame->sim.situation_count, &index)) {
-            Append(output, output_capacity, "Choose a charter number.\n");
+            Append(output, output_capacity, "Choose a charter number (1-%d); got '%s'.\n",
+                   metagame->sim.situation_count, first != NULL ? first : "");
             return false;
         }
         CcCommand action = {
@@ -2052,10 +2111,17 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
                strcmp(command, "sell") == 0) {
         CcGood good;
         int32_t amount;
-        if (!ParseGood(first, &good) || !ParseDays(second, &amount) ||
-            amount > CC_CARGO_CAPACITY * 8) {
+        if (!ParseGood(first, &good)) {
             Append(output, output_capacity,
-                   "Use 'buy bread 8' or 'sell weapons 2'; count must fit the carriage.\n");
+                   "Choose a cargo good, such as bread or tools; got '%s'.\n",
+                   first != NULL ? first : "");
+            return false;
+        }
+        if (!ParseDays(second, &amount) || amount > CC_CARGO_CAPACITY * 8) {
+            Append(output, output_capacity,
+                   "Choose a cargo count (1-%d); got '%s'.\n",
+                   CC_CARGO_CAPACITY * 8 < 365 ? CC_CARGO_CAPACITY * 8 : 365,
+                   second != NULL ? second : "");
             return false;
         }
         if (strcmp(command, "sell") == 0) amount = -amount;
@@ -2096,7 +2162,8 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
                strcmp(command, "retrieve-map") == 0) {
         int32_t index;
         if (!ParseIndex(first, metagame->sim.map_count, &index)) {
-            Append(output, output_capacity, "Choose a map number.\n");
+            Append(output, output_capacity, "Choose a map number (1-%d); got '%s'.\n",
+                   metagame->sim.map_count, first != NULL ? first : "");
             return false;
         }
         bool buying = strcmp(command, "buy-map") == 0 ||
@@ -2133,7 +2200,8 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
     } else if (strcmp(command, "travel") == 0) {
         int32_t index;
         if (!ParseIndex(first, metagame->sim.route_count, &index)) {
-            Append(output, output_capacity, "Choose a road number.\n");
+            Append(output, output_capacity, "Choose a road number (1-%d); got '%s'.\n",
+                   metagame->sim.route_count, first != NULL ? first : "");
             return false;
         }
         const CcRoute *route = &metagame->sim.routes[index];
@@ -2151,6 +2219,11 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
         if (!ApplyCommand(metagame, &action, output, output_capacity)) return false;
         if (!FinishTravel(metagame, output, output_capacity)) return false;
     } else if (strcmp(command, "road") == 0) {
+        if (metagame->sim.journey.active &&
+            metagame->sim.journey.phase == CC_JOURNEY_PHASE_TRAVELLING &&
+            first != NULL && strcmp(first, "continue") == 0) {
+            return FinishTravel(metagame, output, output_capacity);
+        }
         if (metagame->sim.journey.active &&
             metagame->sim.journey.phase == CC_JOURNEY_PHASE_RESTING) {
             CcCommand stop_action = {0};
@@ -2332,7 +2405,8 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
     } else if (strcmp(command, "wait") == 0) {
         int32_t days;
         if (!ParseDays(first, &days)) {
-            Append(output, output_capacity, "Wait between 1 and 365 days.\n");
+            Append(output, output_capacity, "Choose days (1-365); got '%s'.\n",
+                   first != NULL ? first : "");
             return false;
         }
         if (metagame->sim.journey.active ||
@@ -2406,7 +2480,7 @@ static void DescribeAgentPossessions(const CcMetagame *metagame,
     for (int32_t i = 0; i < sim->treasure_count; ++i) {
         const CcTreasure *treasure = &sim->treasures[i];
         bool carried = treasure->owner_id == sim->player.id;
-        bool for_sale = treasure->owner_id == sim->player.location_id;
+        bool for_sale = !sim->journey.active && treasure->owner_id == sim->player.location_id;
         if (treasure->destroyed || (!carried && !for_sale)) continue;
         Append(output, capacity,
                "  %d. %s — value %d crowns [%s]\n",
@@ -2425,7 +2499,7 @@ static void DescribeAgentConsequences(const CcMetagame *metagame,
     int32_t shown = 0;
     for (int32_t i = 0; i < sim->event_count && shown < 6; ++i) {
         const CcEvent *event = CcSimRecentEvent(sim, i);
-        if (event == NULL || event->location_id != sim->player.location_id) {
+        if (event == NULL || event->location_id != (sim->journey.active ? sim->journey.route_id : sim->player.location_id)) {
             continue;
         }
         Append(output, capacity, "  day %d: %s\n", event->day, event->text);
@@ -2434,8 +2508,15 @@ static void DescribeAgentConsequences(const CcMetagame *metagame,
     if (shown == 0) Append(output, capacity, "  Nothing has reached you yet.\n");
 }
 
-static void DescribeAgentActions(char *output, size_t capacity)
+static void DescribeAgentActions(const CcMetagame *metagame,
+                                  char *output, size_t capacity)
 {
+    if (metagame->sim.journey.active) {
+        Append(output, capacity,
+               "Send one command: look, roads, cargo, status, debrief, quit, "
+               "or a journey choice shown above.\n");
+        return;
+    }
     Append(output, capacity,
            "Send exactly one command on the next line. Available command families:\n"
            "  look, people, talk NUMBER, rumors, charters, roads, causes, notes, cargo, status\n"
@@ -2469,29 +2550,17 @@ void CcMetagameAgentObserve(const CcMetagame *metagame,
         DescribeUnderroad(metagame, output, output_capacity);
     } else {
         DescribeLook(metagame, output, output_capacity);
-        if (metagame->sim.journey.active &&
-            metagame->sim.journey.phase == CC_JOURNEY_PHASE_BLOCKED) {
-            const CcEvent *event = CcSimRecentEvent(&metagame->sim, 0);
-            Append(output, output_capacity, "The road has stopped you: %s\n",
-                   event != NULL ? event->text : "The way is blocked.");
-        } else if (metagame->sim.journey.active &&
-                   metagame->sim.journey.phase ==
-                       CC_JOURNEY_PHASE_RESTING) {
-            Append(output, output_capacity,
-                   CcSimJourneyStop(&metagame->sim) ==
-                           CC_JOURNEY_STOP_MIDDAY ?
-                       "The morning watch has ended. The team waits for your break choice.\n" :
-                       "The afternoon watch has ended. The team waits for camp or lodging.\n");
-        }
+        if (!metagame->sim.journey.active) {
         DescribePeople(metagame, output, output_capacity);
         DescribeRumors(metagame, output, output_capacity);
         DescribeCharters(metagame, output, output_capacity);
         DescribeRoutes(metagame, output, output_capacity);
         DescribeCauses(metagame, output, output_capacity);
+        }
     }
     DescribeAgentPossessions(metagame, output, output_capacity);
     DescribeAgentConsequences(metagame, output, output_capacity);
-    DescribeAgentActions(output, output_capacity);
+    DescribeAgentActions(metagame, output, output_capacity);
 }
 
 static bool AgentSituationVisible(const CcMetagame *metagame,
@@ -2555,6 +2624,13 @@ static bool AgentCommandAllowed(const CcMetagame *metagame,
     char *first = strtok(NULL, " \t\r\n");
     char *second = strtok(NULL, " \t\r\n");
     if (command == NULL) return false;
+    if (metagame->sim.journey.active) {
+        return strcmp(command, "look") == 0 || strcmp(command, "roads") == 0 ||
+            strcmp(command, "routes") == 0 || strcmp(command, "cargo") == 0 ||
+            strcmp(command, "status") == 0 || strcmp(command, "debrief") == 0 ||
+            strcmp(command, "help") == 0 || strcmp(command, "quit") == 0 ||
+            (strcmp(command, "road") == 0 && JourneyActionAllowed(&metagame->sim, first));
+    }
     if (strcmp(command, "help") == 0 || strcmp(command, "look") == 0 ||
         strcmp(command, "people") == 0 ||
         strcmp(command, "rumors") == 0 ||
@@ -2639,7 +2715,8 @@ bool CcMetagameAgentExecute(CcMetagame *metagame, const char *line,
     (void)snprintf(copy, sizeof(copy), "%s", line);
     char *command = strtok(copy, " \t\r\n");
     if (command != NULL && strcmp(command, "help") == 0) {
-        DescribeAgentActions(output, output_capacity);
+        if (metagame->sim.journey.active) DescribeJourney(metagame, output, output_capacity);
+        DescribeAgentActions(metagame, output, output_capacity);
         return true;
     }
     return CcMetagameExecute(metagame, line, output, output_capacity);

@@ -48,7 +48,7 @@ jobs:
   macos:
     name: Build and test macOS game
     needs: validate
-    runs-on: macos-latest
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
       - name: Configure
@@ -57,6 +57,10 @@ jobs:
         run: cmake --build --preset release
       - name: Test
         run: ctest --preset release
+      - name: Launch app smoke
+        run: >-
+          out/build/release/crownless_carriage.app/Contents/MacOS/crownless_carriage
+          --test-town-arrival-parking
       - name: Package app
         run: |
           mkdir -p dist

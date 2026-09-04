@@ -91,6 +91,7 @@ static const float CARRIAGE_ASSET_SCALE = 0.92f;
 
 static const float CARRIAGE_ASSET_STREET_YAW_DEGREES = -90.0f;
 static bool draw_hero_rig_debug = false;
+static bool reduced_motion_enabled = false;
 static CcLocalOpeningStep active_opening_step = CC_LOCAL_OPENING_COMPLETE;
 static CcLocalMovementPreview renderer_movement_preview = {0};
 static CcLocalAgent movement_probe_agent_scratch = {0};
