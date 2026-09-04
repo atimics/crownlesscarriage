@@ -694,6 +694,11 @@ if(BUILD_TESTING)
     cc_strict_warnings(persistence_tests)
     add_test(NAME sqlite_round_trip COMMAND persistence_tests)
 
+    add_executable(route_knowledge_tests tests/route_knowledge_tests.c)
+    target_link_libraries(route_knowledge_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(route_knowledge_tests)
+    add_test(NAME persistent_route_knowledge COMMAND route_knowledge_tests)
+
     add_executable(underroad_tests tests/underroad_tests.c)
     target_link_libraries(underroad_tests PRIVATE crownless_persistence)
     cc_strict_warnings(underroad_tests)

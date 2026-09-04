@@ -414,7 +414,7 @@ static void CheckLegacyJournalMigration(char *error,
              legacy_generation);
     CC_CHECK(ReadSqliteInteger(
                  path, "SELECT journal_cursor FROM meta WHERE id=1;") == 0);
-    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 20);
+    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 21);
     CC_CHECK(CcJournalAdvanceDays(journal, &resumed, 2,
                                   error, error_capacity));
     uint64_t expected_hash = CcSimHash(&resumed);
@@ -1362,6 +1362,47 @@ static void CheckSchema21Compatibility(char *error, size_t error_capacity)
     RemoveDatabase(path);
 }
 
+static void CheckSchema22Compatibility(char *error, size_t error_capacity)
+{
+    const char *path = "persistence-legacy-v22-test.ccsave";
+    RemoveDatabase(path);
+    CcSim legacy;
+    CcSimInit(&legacy, UINT32_C(0x1e9ac22));
+    CcCommand travel = {
+        .kind = CC_COMMAND_TRAVEL,
+        .target_id = legacy.settlements[1].id
+    };
+    CC_CHECK(CcSimApply(&legacy, &travel, error, error_capacity));
+    CcSimAdvanceRuntimeTicks(&legacy, 2400);
+    CC_CHECK(legacy.journey.active);
+    CC_CHECK(legacy.carriage.progress_milli > 0);
+    legacy.schema_version = 22U;
+    CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
+
+    sqlite3 *database = NULL;
+    RequireSqlite(sqlite3_open_v2(path, &database,
+                                  SQLITE_OPEN_READWRITE, NULL),
+                  database, "could not open schema 22 fixture");
+    ExecuteFixtureSql(database,
+                      "DROP TABLE player_route_knowledge;"
+                      "PRAGMA user_version=20;",
+                      "could not create schema 22 fixture");
+    sqlite3_close(database);
+
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.generator_version == CC_GENERATOR_VERSION);
+    CC_CHECK(restored.journey.active);
+    const CcRouteKnowledge *knowledge = CcSimPlayerRouteKnowledge(
+        &restored, restored.journey.route_id);
+    CC_CHECK(knowledge != NULL);
+    CC_CHECK(knowledge->from_reveal_milli > 280);
+    CC_CHECK(knowledge->to_reveal_milli == 0);
+    CC_CHECK(CcSimValidate(&restored, error, error_capacity));
+    RemoveDatabase(path);
+}
+
 int main(void)
 {
     const char *path = "persistence-test.ccsave";
@@ -1412,6 +1453,7 @@ int main(void)
     CheckSchema18QuestCompatibility(error, sizeof(error));
     CheckSchema18Compatibility(error, sizeof(error));
     CheckSchema21Compatibility(error, sizeof(error));
+    CheckSchema22Compatibility(error, sizeof(error));
     CheckDiplomacyPersistence(error, sizeof(error));
     CheckJournalRecovery(error, sizeof(error));
     CheckJournalCheckpointAndTamper(error, sizeof(error));
