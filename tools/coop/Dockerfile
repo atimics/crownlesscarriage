@@ -5,6 +5,7 @@ WORKDIR /source
 COPY CMakeLists.txt CMakePresets.json LICENSE THIRD_PARTY_NOTICES.txt ./
 COPY src ./src
 COPY tests ./tests
+COPY tools/*.c ./tools/
 COPY tools/coop ./tools/coop
 RUN cmake -S . -B build -DCC_BUILD_CLIENT=OFF -DCC_BUILD_BENCHMARKS=OFF -DCMAKE_BUILD_TYPE=Release \
     && cmake --build build --target coop_bridge_tests --parallel 2 \

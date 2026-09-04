@@ -8,6 +8,7 @@
 !tests/
 !tests/**
 !tools/
+!tools/*.c
 !tools/coop/
 !tools/coop/**
 !web/
