@@ -6270,6 +6270,11 @@ static void AdvanceGoblinTribute(CcSim *sim)
                     goblins->cohesion - hunger_loss * 3, 0, 100);
             }
         }
+        if (sim->schema_version >= 36U && sim->current_day % 28 == 0 &&
+            NutritionRations(goblins->lair_stock, CC_NUTRITION_CIVILIAN) >= 4 &&
+            goblins->lair_stock[CC_GOOD_TOOLS] >= 1) {
+            goblins->cohesion = MinimumI32(100, goblins->cohesion + 1);
+        }
         goblins->tribute_cooldown_days = MaximumI32(
             0, goblins->tribute_cooldown_days - 1);
         return;
@@ -7947,6 +7952,12 @@ static void UpdateShipments(CcSim *sim)
                             departure != NULL ? departure->id : 0U,
                             shipment->quantity, text);
             continue;
+        }
+        if (sim->schema_version >= 36U) {
+            CcRoute *used_route = RouteMutable(sim, shipment->route_id);
+            if (used_route != NULL) {
+                used_route->condition = MinimumI32(100, used_route->condition + 1);
+            }
         }
         CcSettlement *hop = CcSimSettlementMutable(sim, shipment->destination_id);
         if (shipment->destination_id != final_id && hop != NULL) {
@@ -11783,29 +11794,43 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
         }
 
         if (sim->current_day % 28 == 0 && kingdom->treasury >= 12) {
+            CcRoute *upkeep_route = NULL;
+            CcSettlement *upkeep_base = NULL;
             for (int32_t route_index = 0; route_index < sim->route_count; ++route_index) {
                 CcRoute *route = &sim->routes[route_index];
-                CcSettlement *to = CcSimSettlementMutable(sim, route->to_id);
-                if (route->closed || route->condition >= 58 || to == NULL ||
-                    CcSettlementIsAbandoned(to) ||
-                    to->kingdom_id != kingdom->id ||
-                    to->stock[CC_GOOD_WOOD] < 1 ||
-                    to->stock[CC_GOOD_STONE] < 1) continue;
+                if (route->closed || route->condition >= 58) continue;
+                CcSettlement *base = CcSimSettlementMutable(sim, route->to_id);
+                bool supplied = base != NULL && !CcSettlementIsAbandoned(base) &&
+                    base->kingdom_id == kingdom->id &&
+                    base->stock[CC_GOOD_WOOD] >= 1 && base->stock[CC_GOOD_STONE] >= 1;
+                if (!supplied && sim->schema_version >= 36U) {
+                    base = CcSimSettlementMutable(sim, route->from_id);
+                    supplied = base != NULL && !CcSettlementIsAbandoned(base) &&
+                        base->kingdom_id == kingdom->id &&
+                        base->stock[CC_GOOD_WOOD] >= 1 && base->stock[CC_GOOD_STONE] >= 1;
+                }
+                if (!supplied) continue;
+                if (upkeep_route == NULL || route->condition < upkeep_route->condition) {
+                    upkeep_route = route;
+                    upkeep_base = base;
+                }
+                if (sim->schema_version < 36U) break;
+            }
+            if (upkeep_route != NULL) {
                 kingdom->treasury -= 12;
-                to->market_coins += 12;
-                to->stock[CC_GOOD_WOOD] -= 1;
-                to->stock[CC_GOOD_STONE] -= 1;
-                route->condition = ClampI32(route->condition + 16, 0, 100);
-                route->security = ClampI32(route->security + 2, 0, 100);
-                if (route->condition < 45) {
+                upkeep_base->market_coins += 12;
+                upkeep_base->stock[CC_GOOD_WOOD] -= 1;
+                upkeep_base->stock[CC_GOOD_STONE] -= 1;
+                upkeep_route->condition = ClampI32(upkeep_route->condition + 16, 0, 100);
+                upkeep_route->security = ClampI32(upkeep_route->security + 2, 0, 100);
+                if (upkeep_route->condition < 45) {
                     char text[CC_EVENT_TEXT_CAPACITY];
                     (void)snprintf(text, sizeof(text),
                                    "%s maintains a strategic road before it fails.",
                                    kingdom->name);
-                    (void)PushEvent(sim, CC_EVENT_KINGDOM_ACTION, kingdom->id, route->id,
-                                    0U, route->condition, text);
+                    (void)PushEvent(sim, CC_EVENT_KINGDOM_ACTION, kingdom->id, upkeep_route->id,
+                                    0U, upkeep_route->condition, text);
                 }
-                break;
             }
         }
 

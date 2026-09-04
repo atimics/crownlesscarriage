@@ -74,7 +74,9 @@ async function main() {
       });
       await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
       const pointer = await page.evaluate(() => window.lastCanvasPointer);
-      assert(Math.abs(pointer[0] - 640) < 2 && Math.abs(pointer[1] - 360) < 2);
+      const intrinsic = await page.locator('#canvas').evaluate(canvas => [canvas.width, canvas.height]);
+      assert(Math.abs(intrinsic[0] / intrinsic[1] - 16 / 9) < 0.01, JSON.stringify(intrinsic));
+      assert(Math.abs(pointer[0] - intrinsic[0] / 2) < 2 && Math.abs(pointer[1] - intrinsic[1] / 2) < 2, JSON.stringify({pointer, intrinsic, bounds}));
       await page.screenshot({path: path.join(output, `fullscreen-${width}x${height}.png`)});
       await page.evaluate(() => document.exitFullscreen());
       await page.waitForFunction(() => document.fullscreenElement === null);

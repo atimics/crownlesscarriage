@@ -49,8 +49,110 @@ static CcSettlement *IsolatedSettlement(CcSim *sim)
     return place;
 }
 
+static void CheckRoadUseRecovery(void)
+{
+    static CcSim sim;
+    CcSimInit(&sim, 42U);
+    sim.current_day = 11;
+    for (int32_t i = 0; i < sim.kingdom_count; ++i) {
+        for (int32_t j = 0; j < sim.kingdom_count; ++j) sim.diplomacy[i][j] = CC_DIPLOMACY_PEACE;
+    }
+    sim.shipment_count = 1;
+    sim.bandit_count = 0;
+    sim.monster_count = 0;
+    for (int32_t i = 0; i < sim.route_count; ++i) {
+        sim.routes[i].closed = false;
+        sim.routes[i].security = 100;
+        sim.routes[i].condition = 100;
+        sim.routes[i].travel_days = 1;
+    }
+    sim.routes[0].condition = 50;
+    sim.routes[1].condition = 60;
+    sim.settlements[2].kingdom_id = sim.settlements[1].kingdom_id;
+    sim.shipments[0] = (CcShipment){
+        .id = CcMakeId(CC_ENTITY_SHIPMENT, sim.next_entity_serial++),
+        .origin_id = sim.routes[0].from_id,
+        .destination_id = sim.routes[0].to_id,
+        .final_destination_id = sim.routes[1].to_id,
+        .route_id = sim.routes[0].id,
+        .good = CC_GOOD_TOOLS,
+        .quantity = 8,
+        .departure_day = 11,
+        .arrival_day = 12,
+        .status = CC_SHIPMENT_TRAVELLING
+    };
+    CcSimAdvanceDays(&sim, 1);
+    CC_CHECK(sim.routes[0].condition == 51);
+    CC_CHECK(sim.shipments[0].route_id == sim.routes[1].id);
+    CcSimAdvanceDays(&sim, 1);
+    CC_CHECK(sim.routes[1].condition == 61);
+    CC_CHECK(sim.shipments[0].status == CC_SHIPMENT_ARRIVED);
+    CcSimInit(&sim, 42U);
+    sim.current_day = 11;
+    for (int32_t i = 0; i < sim.kingdom_count; ++i) {
+        for (int32_t j = 0; j < sim.kingdom_count; ++j) sim.diplomacy[i][j] = CC_DIPLOMACY_PEACE;
+    }
+    sim.routes[0].condition = 100;
+    sim.routes[0].security = 100;
+    sim.shipment_count = 1;
+    sim.shipments[0] = (CcShipment){
+        .id = CcMakeId(CC_ENTITY_SHIPMENT, sim.next_entity_serial++),
+        .origin_id = sim.routes[0].from_id,
+        .destination_id = sim.routes[0].to_id,
+        .final_destination_id = sim.routes[0].to_id,
+        .route_id = sim.routes[0].id,
+        .good = CC_GOOD_TOOLS,
+        .quantity = 8,
+        .departure_day = 11,
+        .arrival_day = 12,
+        .status = CC_SHIPMENT_TRAVELLING
+    };
+    CcSimAdvanceDays(&sim, 1);
+    CC_CHECK(sim.shipments[0].status == CC_SHIPMENT_ARRIVED);
+    CC_CHECK(sim.routes[0].condition == 100);
+}
+
+static void CheckWeakestRouteUpkeep(void)
+{
+    static CcSim sim, control;
+    CcSimInit(&sim, 42U);
+    sim.current_day = 27;
+    sim.shipment_count = 0;
+    sim.bandit_count = 0;
+    sim.monster_count = 0;
+    for (int32_t i = 0; i < sim.route_count; ++i) {
+        sim.routes[i].closed = false;
+        sim.routes[i].condition = 100;
+    }
+    sim.routes[0].condition = 50;
+    sim.routes[5].condition = 35;
+    for (int32_t i = 0; i < sim.settlement_count; ++i) {
+        sim.settlements[i].hunger = 0;
+        sim.settlements[i].security = 100;
+        sim.settlements[i].stock[CC_GOOD_FOOD] = 100;
+        sim.settlements[i].stock[CC_GOOD_WOOD] = 0;
+        sim.settlements[i].stock[CC_GOOD_STONE] = 0;
+        sim.settlements[i].production[CC_GOOD_WOOD] = 0;
+        sim.settlements[i].production[CC_GOOD_STONE] = 0;
+    }
+    sim.settlements[1].stock[CC_GOOD_WOOD] = 1000;
+    sim.settlements[1].stock[CC_GOOD_STONE] = 1000;
+    sim.kingdoms[0].treasury = 1000;
+    control = sim;
+    control.schema_version = 35U;
+    CcSimAdvanceDays(&sim, 1);
+    CcSimAdvanceDays(&control, 1);
+    CC_CHECK(sim.routes[5].condition == control.routes[5].condition + 16);
+    CC_CHECK(control.routes[0].condition == sim.routes[0].condition + 16);
+    CC_CHECK(sim.settlements[1].stock[CC_GOOD_WOOD] == control.settlements[1].stock[CC_GOOD_WOOD]);
+    CC_CHECK(sim.settlements[1].stock[CC_GOOD_STONE] == control.settlements[1].stock[CC_GOOD_STONE]);
+    CC_CHECK(sim.kingdoms[0].treasury == control.kingdoms[0].treasury);
+}
+
 int main(void)
 {
+    CheckRoadUseRecovery();
+    CheckWeakestRouteUpkeep();
     CC_CHECK(CC_GOOD_BREAD == 0);
     CC_CHECK(CC_GOOD_FOOD == CC_GOOD_BREAD);
     CC_CHECK(CC_GOOD_IRON == 1);

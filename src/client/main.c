@@ -9701,8 +9701,11 @@ int main(int argc, char **argv)
     if (render_benchmark) SetTraceLogLevel(LOG_ERROR);
     else if (capture) SetTraceLogLevel(LOG_WARNING);
 
-    SetConfigFlags(FLAG_WINDOW_RESIZABLE |
-                   (capture ? FLAG_WINDOW_HIDDEN : 0U));
+    unsigned int window_flags = capture ? FLAG_WINDOW_HIDDEN : 0U;
+#if !defined(PLATFORM_WEB)
+    window_flags |= FLAG_WINDOW_RESIZABLE;
+#endif
+    SetConfigFlags(window_flags);
     int32_t initial_width = normal_play ? 1200 : 1280;
     int32_t initial_height = normal_play ? 700 : 760;
 #if defined(PLATFORM_WEB)
