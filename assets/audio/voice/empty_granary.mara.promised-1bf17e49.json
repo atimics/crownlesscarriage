@@ -6,5 +6,12 @@
   "seed": 1393874667,
   "sample_rate": 24000,
   "reference_sha256": null,
-  "wav_sha256": "50d89457f58a82d85a8af85e95091ae456b42b4a4675f74a00a7fbd15b9b66be"
+  "wav_sha256": "0f5d27ccab58341b0c22564d1d80ef80cc23c252aadc0f95a9d5128a6479fca0",
+  "master_sha256": "50d89457f58a82d85a8af85e95091ae456b42b4a4675f74a00a7fbd15b9b66be",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
 }

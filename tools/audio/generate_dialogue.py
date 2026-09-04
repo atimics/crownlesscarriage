@@ -9,6 +9,8 @@ from pathlib import Path
 import re
 import wave
 
+from voice_style import render_voice
+
 
 def voice_path(line):
     if not re.fullmatch(r"[a-z0-9_.]+", line["id"]):
@@ -59,7 +61,8 @@ def main():
     model = ChatterboxTTS.from_pretrained(device=args.device)
     for line in selected:
         destination = args.root / line["path"]
-        destination.parent.mkdir(parents=True, exist_ok=True)
+        master = args.root / "tools/audio/masters" / destination.name
+        master.parent.mkdir(parents=True, exist_ok=True)
         reference = cast.get(line["speaker"])
         seed = int(hashlib.sha256(line["id"].encode()).hexdigest()[:8], 16)
         torch.manual_seed(seed)
@@ -77,20 +80,19 @@ def main():
         samples[:fade] *= torch.linspace(0, 1, fade)
         samples[-fade:] *= torch.linspace(1, 0, fade)
         pcm = (samples * 32767).round().to(torch.int16).numpy().astype("<i2").tobytes()
-        temporary = destination.with_suffix(".wav.tmp")
+        temporary = master.with_suffix(".wav.tmp")
         with wave.open(str(temporary), "wb") as output:
             output.setnchannels(1)
             output.setsampwidth(2)
             output.setframerate(model.sr)
             output.writeframes(pcm)
-        temporary.replace(destination)
+        temporary.replace(master)
         receipt = {
             "id": line["id"], "text": line["text"], "speaker": line["speaker"],
             "model": "ChatterboxTTS", "seed": seed, "sample_rate": model.sr,
             "reference_sha256": hashlib.sha256(Path(reference).read_bytes()).hexdigest() if reference else None,
-            "wav_sha256": hashlib.sha256(destination.read_bytes()).hexdigest(),
         }
-        destination.with_suffix(".json").write_text(json.dumps(receipt, indent=2) + "\n")
+        render_voice(master, destination, receipt)
         print(f"Baked {line['id']} ({samples.numel() / model.sr:.1f}s)")
 
 

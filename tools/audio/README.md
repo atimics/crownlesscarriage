@@ -1,10 +1,11 @@
 # Crownless sound design
 
-Use small, close sounds with space between them. Boots use stone, wood, or dirt.
-Water adds a soft splash. Travel has paired hoof beats and a low wooden rattle.
-Combat uses a cloth swing, a dull impact, and a short iron ring for a block.
-Menus rustle like paper. Trade has two small coin strikes. A promise has a soft
-two-note bell.
+Use small, close sounds with a light pixel-game texture and space between them.
+Boots use stone, wood, or dirt. Water adds a soft splash. Travel has paired hoof
+beats and a low wooden rattle. Combat uses a cloth swing, a dull impact, and a
+short iron ring for a block. Menus have a quick paper tick. Jumps rise through
+three short notes. Trade and promises use two-note triangle and pulse tones.
+Effects have short tails and a quiet 8-bit, 7.35 kHz layer at 35% of the mix.
 
 The client makes 14 effects at startup after the first play input. Each has
 three variations. Footsteps follow distance travelled. Hooves and wheels use
@@ -61,7 +62,20 @@ catalogue entries, set the speaker to the intended character and use the
 select a new filename. Subtitles remain available throughout the conversation.
 
 Generated voices are mono 16-bit PCM with short edge fades and peak headroom.
-Chatterbox applies its built-in audio watermark. The build includes WAV files
+Chatterbox applies its built-in audio watermark. Clean masters are saved in
+`tools/audio/masters`. The game uses a blend of 60% clean speech and 40% softened
+8-bit speech at 12 kHz for the current 24 kHz masters. Pitch and duration stay
+the same. The texture is filtered before reducing its sample rate. Each receipt
+records the master fingerprint and processing settings.
+
+Render the shipped voices again from their clean masters with Python alone:
+
+```sh
+python tools/audio/voice_style.py
+```
+
+This always reads the clean masters, so repeated runs produce the same clips.
+The build includes the rendered WAV files
 in the macOS bundle and browser startup files. The browser keeps the voice
 folder after releasing uploaded graphics. Keep voice packs small: four short
 opening clips are the initial scope.
