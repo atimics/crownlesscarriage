@@ -2273,6 +2273,101 @@ static void CheckLegacyLifecycleJournalCompatibility(
     RemoveDatabase(path);
 }
 
+typedef struct ShippedSaveFixture {
+    uint32_t schema_version;
+    uint32_t generator_version;
+} ShippedSaveFixture;
+
+static void CheckShippedSaveCompatibility(char *error,
+                                          size_t error_capacity)
+{
+    static const ShippedSaveFixture fixtures[] = {
+        {2U, 2U}, {3U, 3U}, {4U, 3U}, {5U, 4U}, {9U, 9U},
+        {11U, 11U}, {12U, 12U}, {13U, 13U}, {14U, 14U},
+        {15U, 15U}, {16U, 15U}, {17U, 16U}, {18U, 16U},
+        {18U, 17U}, {19U, 18U}, {20U, 19U}, {21U, 20U},
+        {22U, 20U}, {23U, 20U}, {24U, 20U}, {25U, 20U},
+        {26U, 21U}, {27U, 21U}, {27U, 22U}, {28U, 22U},
+        {29U, 23U}, {30U, 23U}, {31U, 24U}, {32U, 25U},
+        {33U, 25U}
+    };
+    for (size_t i = 0; i < sizeof(fixtures) / sizeof(fixtures[0]); ++i) {
+        const ShippedSaveFixture *fixture = &fixtures[i];
+        char file[512];
+        (void)snprintf(
+            file, sizeof(file),
+            "%s/tests/fixtures/shipped/schema-%u-generator-%u.ccsave",
+            CC_TEST_SOURCE_DIR, fixture->schema_version,
+            fixture->generator_version);
+        CC_CHECK(ReadSqliteInteger(
+                     file, "SELECT schema_version FROM meta WHERE id=1;") ==
+                 (int64_t)fixture->schema_version);
+        CC_CHECK(ReadSqliteInteger(
+                     file, "SELECT generator_version FROM meta WHERE id=1;") ==
+                 (int64_t)fixture->generator_version);
+        int64_t kingdom_count = ReadSqliteInteger(
+            file, "SELECT kingdom_count FROM meta WHERE id=1;");
+        int64_t settlement_count = ReadSqliteInteger(
+            file, "SELECT settlement_count FROM meta WHERE id=1;");
+        int64_t route_count = ReadSqliteInteger(
+            file, "SELECT route_count FROM meta WHERE id=1;");
+        int64_t player_location = ReadSqliteInteger(
+            file, "SELECT location_id FROM player_company LIMIT 1;");
+
+        CcSim restored;
+        if (!CcSaveRead(file, &restored, error, error_capacity)) {
+            (void)fprintf(stderr,
+                          "could not load shipped schema %u / generator %u: %s\n",
+                          fixture->schema_version, fixture->generator_version,
+                          error);
+            CC_CHECK(false);
+        }
+        CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+        CC_CHECK(restored.generator_version == CC_GENERATOR_VERSION);
+        CC_CHECK(restored.world_seed == 42U);
+        CC_CHECK(restored.current_day == 366);
+        CC_CHECK(restored.kingdom_count == kingdom_count);
+        CC_CHECK(restored.settlement_count == settlement_count);
+        CC_CHECK(restored.route_count == route_count);
+        CC_CHECK(restored.player.location_id == (CcId)player_location);
+        CC_CHECK(CcSimValidate(&restored, error, error_capacity));
+    }
+
+    char journal_file[512];
+    (void)snprintf(
+        journal_file, sizeof(journal_file),
+        "%s/tests/fixtures/shipped/"
+        "schema-21-generator-20-weekly-journal.ccsave",
+        CC_TEST_SOURCE_DIR);
+    CcSim replayed;
+    if (!CcSaveRead(journal_file, &replayed, error, error_capacity)) {
+        (void)fprintf(stderr, "could not replay shipped weekly journal: %s\n",
+                      error);
+        CC_CHECK(false);
+    }
+    CC_CHECK(replayed.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(replayed.generator_version == CC_GENERATOR_VERSION);
+    CC_CHECK(replayed.current_day == 7);
+    CC_CHECK(CcSimValidate(&replayed, error, error_capacity));
+
+    (void)snprintf(
+        journal_file, sizeof(journal_file),
+        "%s/tests/fixtures/shipped/"
+        "schema-21-generator-20-weekly-runtime-journal.ccsave",
+        CC_TEST_SOURCE_DIR);
+    if (!CcSaveRead(journal_file, &replayed, error, error_capacity)) {
+        (void)fprintf(stderr,
+                      "could not replay shipped weekly runtime journal: %s\n",
+                      error);
+        CC_CHECK(false);
+    }
+    CC_CHECK(replayed.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(replayed.generator_version == CC_GENERATOR_VERSION);
+    CC_CHECK(replayed.current_day == 7);
+    CC_CHECK(replayed.clock.tick == 6U);
+    CC_CHECK(CcSimValidate(&replayed, error, error_capacity));
+}
+
 int main(void)
 {
     const char *path = "persistence-test.ccsave";
@@ -2295,6 +2390,7 @@ int main(void)
     capital->stock[CC_GOOD_GEMS] = 1;
     CcSimAdvanceDays(&original, 21);
     CC_CHECK(original.treasure_count >= 1);
+    CheckShippedSaveCompatibility(error, sizeof(error));
     capital->stock[CC_GOOD_MATERIAL] += 20;
     capital->stock[CC_GOOD_TOOLS] += 10;
     original.kingdoms[2].treasury += 100;

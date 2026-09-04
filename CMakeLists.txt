@@ -777,6 +777,8 @@ if(BUILD_TESTING)
 
     add_executable(persistence_tests tests/persistence_tests.c)
     target_link_libraries(persistence_tests PRIVATE crownless_persistence)
+    target_compile_definitions(persistence_tests PRIVATE
+        CC_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     cc_strict_warnings(persistence_tests)
     add_test(NAME sqlite_round_trip COMMAND persistence_tests)
 
