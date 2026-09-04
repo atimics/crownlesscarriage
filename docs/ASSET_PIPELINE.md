@@ -5,6 +5,9 @@ meshes plus JSON manifests, and the client is compiled against the
 manifests. This doc covers the parts that are not visible from any single
 file: the make-target ordering and the manifest contract.
 
+See `docs/production/blender-asset-system.md` for the detailed asset library,
+layer, socket, and authoring contracts.
+
 ## Target ordering (the part that matters)
 
 The `blender-*` targets in `Makefile` have real dependency ordering.

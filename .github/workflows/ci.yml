@@ -15,6 +15,13 @@ jobs:
       - uses: actions/checkout@v4
       - name: Check tracked art inventory
         run: make art-assets-check
+      - name: Check repository hygiene
+        run: |
+          scratch_files="$(find . -maxdepth 1 -type f -name '.merge_file_*' -print)"
+          if [ -n "$scratch_files" ]; then
+            printf 'Unexpected merge scratch files:\n%s\n' "$scratch_files"
+            exit 1
+          fi
       - name: Install shader compiler
         run: sudo apt-get update && sudo apt-get install -y glslc
       - name: Test GLB corruption checks
