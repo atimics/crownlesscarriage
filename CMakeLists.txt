@@ -576,6 +576,12 @@ if(CC_BUILD_CLIENT)
                 -DCC_FILE=${CC_ROADBOOK_REVIEW_DIR}/departure.png
                 -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/require_nonempty_file.cmake
         COMMAND $<TARGET_FILE:crownless_carriage>
+                --capture-road-departure 0.60
+                "roadbook-review/kingdom-marker.png"
+        COMMAND ${CMAKE_COMMAND}
+                -DCC_FILE=${CC_ROADBOOK_REVIEW_DIR}/kingdom-marker.png
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/require_nonempty_file.cmake
+        COMMAND $<TARGET_FILE:crownless_carriage>
                 --capture-road-arrival 0.50
                 "roadbook-review/arrival.png"
         COMMAND ${CMAKE_COMMAND}
