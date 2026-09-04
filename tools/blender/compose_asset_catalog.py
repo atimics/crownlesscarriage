@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Compose Blender review thumbnails into readable category sheets."""
 
 from __future__ import annotations
 

@@ -1,4 +1,3 @@
-/* Hero, NPC, creature, carriage, and combat presentation. */
 static Vector3 Add3(Vector3 a, Vector3 b)
 {
     return (Vector3){a.x + b.x, a.y + b.y, a.z + b.z};
@@ -584,10 +583,10 @@ static bool DrawNpcArchetypePose3D(
                       silhouette_gain,
                   &face, expression, false);
     RestoreWorldLighting();
-    if (visual_style.hero_ready) {
+    if (visual_style.hero.ready) {
         float ink_strength = CC_HERO_INK_STRENGTH;
-        SetShaderValue(visual_style.hero,
-                       visual_style.hero_ink_strength_location,
+        SetShaderValue(visual_style.hero.shader,
+                       visual_style.hero.ink_strength_location,
                        &ink_strength, SHADER_UNIFORM_FLOAT);
     }
     return true;
@@ -1006,6 +1005,7 @@ static Matrix NpcModuleTransform(Vector3 origin, Vector3 right, Vector3 up,
 static void DrawWayfarerHeroDetails(const CcHumanoidSkinPose *skin)
 {
     if (skin == NULL || !skin->valid) return;
+    UseCharacterLighting();
     Vector3 up = PhysicsNormalizeOr(FromLimbVector(skin->body_up),
                                     (Vector3){0.0f, 1.0f, 0.0f});
     Vector3 right = PhysicsNormalizeOr(FromLimbVector(skin->body_right),
@@ -1238,7 +1238,9 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
         outer = BlendColor(outer, (Color){50, 49, 52, 255}, defeat_drain);
         trousers = BlendColor(trousers, (Color){42, 42, 44, 255},
                                defeat_drain);
-    } else if (agent->combat.hit_flash_seconds > 0.0f) {
+    } else if (CcClientHitEffectVisible(
+                   reduced_motion_enabled,
+                   agent->combat.hit_flash_seconds)) {
         outer = BlendColor(outer, WORLD_INK, 0.72f);
     }
     CcNpcAppearance palette_appearance = *appearance;
@@ -1666,7 +1668,9 @@ static void DrawBiomechanicalBiped(const CcLocalAgent *agent)
     cape_center = PhysicsAdd(cape_center, posture_offset);
     Color tunic = appearance->outer;
     if (CombatIsDefeated(&agent->combat)) tunic = (Color){61, 57, 62, 255};
-    else if (agent->combat.hit_flash_seconds > 0.0f) tunic = WORLD_INK;
+    else if (CcClientHitEffectVisible(
+                 reduced_motion_enabled,
+                 agent->combat.hit_flash_seconds)) tunic = WORLD_INK;
     Color trousers = CombatIsDefeated(&agent->combat) ?
                       (Color){50, 49, 51, 255} : appearance->trousers;
     Color leather = appearance->leather;
@@ -3619,7 +3623,8 @@ static void DrawPaintedOverheadDiamond(Vector3 center, float radius,
 
 static void DrawCombatImpact(const CcLocalAgent *agent)
 {
-    if (agent->combat.hit_flash_seconds <= 0.0f) return;
+    if (!CcClientHitEffectVisible(
+            reduced_motion_enabled, agent->combat.hit_flash_seconds)) return;
     float pulse = 0.13f + agent->combat.hit_flash_seconds * 1.05f;
     Vector3 point = agent->combat.impact_valid ? agent->combat.impact_point :
         (Vector3){agent->position.x, agent->position.y + 1.02f,
@@ -3831,7 +3836,22 @@ static void PresentTarget(RenderTexture2D target, Rectangle destination)
 {
     Rectangle source = {0.0f, 0.0f, (float)target.texture.width,
                         -(float)target.texture.height};
+    bool grade_at_source = false;
     if (visual_style.grade_ready) {
+        if (art_grade_target.texture.width != target.texture.width ||
+            art_grade_target.texture.height != target.texture.height) {
+            if (IsRenderTextureValid(art_grade_target)) {
+                UnloadRenderTexture(art_grade_target);
+            }
+            art_grade_target = LoadRenderTexture(
+                target.texture.width, target.texture.height);
+            if (IsRenderTextureValid(art_grade_target)) {
+                SetTextureFilter(art_grade_target.texture, TEXTURE_FILTER_POINT);
+            }
+        }
+        grade_at_source = IsRenderTextureValid(art_grade_target);
+        // Paint each art pixel once before enlarging it for the window.
+        if (grade_at_source) BeginTextureMode(art_grade_target);
         BeginShaderMode(visual_style.grade);
         SetShaderValueTexture(visual_style.grade,
                               visual_style.palette_lut_location,
@@ -3857,9 +3877,17 @@ static void PresentTarget(RenderTexture2D target, Rectangle destination)
                        &visual_style.presentation_practical_glow,
                        SHADER_UNIFORM_FLOAT);
     }
-    DrawTexturePro(target.texture, source, destination, (Vector2){0.0f, 0.0f},
+    Rectangle paint_bounds = grade_at_source ?
+        (Rectangle){0.0f, 0.0f, (float)target.texture.width,
+                     (float)target.texture.height} : destination;
+    DrawTexturePro(target.texture, source, paint_bounds, (Vector2){0.0f, 0.0f},
                    0.0f, WHITE);
     if (visual_style.grade_ready) EndShaderMode();
+    if (grade_at_source) {
+        EndTextureMode();
+        DrawTexturePro(art_grade_target.texture, source, destination,
+                       (Vector2){0.0f, 0.0f}, 0.0f, WHITE);
+    }
 }
 
 static Color ArtLightBackground(ArtLightProfileId profile_id)
@@ -3976,10 +4004,6 @@ static void DrawTargetAtmosphere(RenderTexture2D target, float clock)
     int32_t width = target.texture.width;
     int32_t height = target.texture.height;
 
-    /* These broad transparent washes are painted into the low-resolution
-       world target before the palette pass. They behave like a traditional
-       animation background: dusk warms the horizon while moonlight cools
-       the upper planes, without adding a smooth full-resolution effect. */
     if (atmosphere.horizon_warmth > 0.01f) {
         float warmth = atmosphere.horizon_warmth;
         int32_t horizon_size = height * 2 / 5;
@@ -4194,6 +4218,9 @@ static void BeginWorldLighting(Camera3D camera,
                           (float)atmosphere_fog.b / 255.0f};
     float fog_near = profile->fog_near * atmosphere.fog_distance_scale;
     float fog_far = profile->fog_far * atmosphere.fog_distance_scale;
+    float horizon_fog = profile_id == ART_LIGHT_STORYBOOK ? 1.0f : 0.0f;
+    SetShaderValue(visual_style.world, visual_style.horizon_fog_location,
+                   &horizon_fog, SHADER_UNIFORM_FLOAT);
     float depth_strength = profile->depth_strength * atmosphere.depth_scale;
     float focal_contrast = profile->focal_contrast * atmosphere.focal_scale;
     float character_rim_tint[3] = {
@@ -4333,32 +4360,37 @@ static void BeginWorldLighting(Camera3D camera,
                        visual_style.foliage_depth_strength_location,
                        &depth_strength, SHADER_UNIFORM_FLOAT);
     }
-    if (visual_style.hero_ready) {
-        SetShaderValue(visual_style.hero,
-                       visual_style.hero_light_direction_location, direction,
+    CharacterLightingStyle *character_styles[] = {
+        &visual_style.hero, &visual_style.character,
+    };
+    for (int32_t index = 0; index < 2; ++index) {
+        const CharacterLightingStyle *style = character_styles[index];
+        if (!style->ready) continue;
+        SetShaderValue(style->shader,
+                       style->light_direction_location, direction,
                        SHADER_UNIFORM_VEC3);
-        SetShaderValue(visual_style.hero,
-                       visual_style.hero_camera_position_location,
+        SetShaderValue(style->shader,
+                       style->camera_position_location,
                        camera_position, SHADER_UNIFORM_VEC3);
-        SetShaderValue(visual_style.hero,
-                       visual_style.hero_shadow_color_location,
+        SetShaderValue(style->shader,
+                       style->shadow_color_location,
                        shadow_color, SHADER_UNIFORM_VEC3);
-        SetShaderValue(visual_style.hero,
-                       visual_style.hero_fog_color_location, fog_color,
+        SetShaderValue(style->shader,
+                       style->fog_color_location, fog_color,
                        SHADER_UNIFORM_VEC3);
-        SetShaderValue(visual_style.hero,
-                       visual_style.hero_fog_near_location,
+        SetShaderValue(style->shader,
+                       style->fog_near_location,
                        &fog_near,
                        SHADER_UNIFORM_FLOAT);
-        SetShaderValue(visual_style.hero,
-                       visual_style.hero_fog_far_location,
+        SetShaderValue(style->shader,
+                       style->fog_far_location,
                        &fog_far,
                        SHADER_UNIFORM_FLOAT);
-        SetShaderValue(visual_style.hero,
-                       visual_style.hero_rim_tint_location,
+        SetShaderValue(style->shader,
+                       style->rim_tint_location,
                        character_rim_tint, SHADER_UNIFORM_VEC3);
-        SetShaderValue(visual_style.hero,
-                       visual_style.hero_rim_strength_location,
+        SetShaderValue(style->shader,
+                       style->rim_strength_location,
                        &character_rim_strength, SHADER_UNIFORM_FLOAT);
     }
     if (visual_style.npc_ready) {

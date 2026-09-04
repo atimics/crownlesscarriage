@@ -474,8 +474,49 @@ static int TestCarriagePoseFollowsRouteDirection(void)
     return 0;
 }
 
+static int TestStreamFollowsCarriage(void)
+{
+    CcSim sim;
+    CcWorldStream stream;
+    CcSimInit(&sim, 42U);
+    CHECK(CcWorldStreamInit(&stream, &sim));
+    const CcWorldRoutePlacement *route = &stream.manifest.routes[2];
+    int32_t start_x = stream.focus_chunk_x;
+    int32_t start_z = stream.focus_chunk_z;
+    for (int32_t direction = 0; direction < 2; ++direction) {
+        CcId origin = direction == 0 ? route->from_id : route->to_id;
+        for (int32_t step = 0; step <= 100; ++step) {
+            float amount = (float)step / 100.0f;
+            CcWorldPoint point, ahead;
+            float heading;
+            CHECK(CcWorldRoutePose(route, origin, amount, &point, &heading));
+            CHECK(CcWorldRoutePose(route, origin,
+                fminf(1.0f, amount + CC_WORLD_CHUNK_SIZE / CcWorldRouteLength(route)),
+                &ahead, &heading));
+            uint64_t generated = stream.generated_chunks;
+            CcWorldStreamFollowRoute(&stream, route, origin, amount, 4);
+            CHECK(stream.generated_chunks - generated <= 4U);
+            CHECK(stream.focus_chunk_x == (int32_t)floorf(point.x / CC_WORLD_CHUNK_SIZE));
+            CHECK(stream.focus_chunk_z == (int32_t)floorf(point.z / CC_WORLD_CHUNK_SIZE));
+            const CcWorldPoint points[] = {point, ahead};
+            for (int32_t i = 0; i < 2; ++i) {
+                const CcWorldChunk *chunk = CcWorldStreamChunkAt(&stream,
+                    (int32_t)floorf(points[i].x / CC_WORLD_CHUNK_SIZE),
+                    (int32_t)floorf(points[i].z / CC_WORLD_CHUNK_SIZE));
+                CHECK(chunk != NULL && chunk->state == CC_WORLD_CHUNK_READY);
+            }
+            CHECK(CcWorldStreamResidentCount(&stream) + CcWorldStreamPendingCount(&stream) <=
+                  CC_WORLD_STREAM_CAPACITY);
+        }
+    }
+    CHECK(stream.focus_chunk_x != start_x || stream.focus_chunk_z != start_z);
+    CHECK(stream.evicted_chunks > CC_WORLD_STREAM_CAPACITY);
+    return 0;
+}
+
 int main(void)
 {
+    if (TestStreamFollowsCarriage() != 0) return 1;
     if (TestCanonicalRoadManifest() != 0) return 1;
     if (TestManifestIsStableAndFinite() != 0) return 1;
     if (TestRoadDistrictSites() != 0) return 1;

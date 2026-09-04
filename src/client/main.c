@@ -1,3 +1,4 @@
+#include "client/cc_audio.h"
 #include "client/cc_client_policy.h"
 #include "client/cc_client_session.h"
 #include "client/cc_local3d.h"
@@ -95,6 +96,9 @@ typedef struct LocalState {
     CcLocalWorldCarriageState world_carriage;
     CcClientDepartureTransition departure;
     CcClientArrivalTransition arrival;
+    float travel_time_blend;
+    bool travel_fast_forward;
+    bool travel_attention;
     CcLocalMovementPreview movement_preview;
     CcLocalSiteKind site_kind;
     Vector2 movement_reticle;
@@ -114,6 +118,7 @@ typedef struct LocalState {
     bool open_world;
     bool open_world_market;
     CcLocalOpeningStep opening_step;
+    CcId pending_map_sale_id;
     CcId conversation_character_id;
     CcId conversation_situation_id;
 } LocalState;
@@ -174,6 +179,8 @@ typedef enum ContextActionKind {
     CONTEXT_ACTION_TRAVEL,
     CONTEXT_ACTION_NEXT_BRANCH,
     CONTEXT_ACTION_BUY_MAP,
+    CONTEXT_ACTION_SELL_MAP,
+    CONTEXT_ACTION_CONFIRM_MAP_SALE,
     CONTEXT_ACTION_REPAIR_ROUTE,
     CONTEXT_ACTION_PAY_COLLECTOR,
     CONTEXT_ACTION_OFFER_PROVISIONS,
@@ -339,6 +346,19 @@ EM_ASYNC_JS(int, ClientFlushNewBrowserCampaign,
         return 0;
     }
 });
+EM_ASYNC_JS(int, ClientFlushBrowserPreferences,
+            (const char *preferences_path), {
+    try {
+        await Module.persistCrownlessPreferences(
+            UTF8ToString(preferences_path));
+        console.info("Crownless Carriage preferences stored.");
+        return 1;
+    } catch (error) {
+        console.error("Could not store Crownless Carriage preferences",
+                      error);
+        return 0;
+    }
+});
 EM_JS(int, ClientBrowserCampaignAccess, (), {
     return Number.isInteger(Module.crownlessCampaignAccess)
         ? Module.crownlessCampaignAccess : 1;
@@ -356,6 +376,7 @@ EM_JS(int, ClientReleaseBrowserAssets, (), {
         for (const name of FS.readdir(path)) {
             if (name === "." || name === "..") continue;
             const child = path + "/" + name;
+            if (child === "/assets/audio") continue;
             const stat = FS.stat(child);
             if (FS.isDir(stat.mode)) {
                 removeTree(child);
@@ -368,7 +389,7 @@ EM_JS(int, ClientReleaseBrowserAssets, (), {
     };
     try {
         removeTree("/assets");
-        FS.rmdir("/assets");
+        if (FS.readdir("/assets").length === 2) FS.rmdir("/assets");
         return releasedBytes;
     } catch (error) {
         console.warn("Could not release Crownless Carriage startup files", error);
@@ -386,9 +407,6 @@ static void ClientTakeScreenshot(const char *path)
 {
     TakeScreenshot(path);
 #if defined(PLATFORM_WEB)
-    /* Browser capture files live in MEMFS and cannot be collected by the
-       desktop art pipeline. Discard each one after raylib has encoded it so
-       long diagnostic reels do not grow the page until it is killed. */
     (void)remove(path);
 #endif
 }
@@ -412,6 +430,7 @@ static void CampaignSavePath(char *path, size_t capacity)
 #if defined(PLATFORM_WEB)
     (void)snprintf(path, capacity,
                    "/crownless-save/crownless_campaign.ccsave");
+    return;
 #elif defined(__APPLE__)
     const char *user_home = getenv("HOME");
     if (user_home != NULL && user_home[0] != '\0') {
@@ -991,6 +1010,10 @@ static void ResetLocalState(LocalState *local)
     local->site_returning = false;
     local->road_choice_active = false;
     local->journey_travel_active = false;
+    local->travel_time_blend = 0.0f;
+    local->travel_fast_forward = false;
+    local->travel_attention = false;
+    local->world_carriage.storybook_travel = false;
     local->journey_combat_active = false;
     local->journey_parley_active = false;
     local->departure = (CcClientDepartureTransition){
@@ -1017,6 +1040,43 @@ static void ResetLocalState(LocalState *local)
     CcLocalCombatSetTeam(&local->agent, CC_COMBAT_PLAYER);
     CcLocalCourseInit(&local->course);
 }
+
+static void ResetLocalStatePreservingAthletics(LocalState *local)
+{
+    CcAthleticProfile athletics = local->agent.athletics;
+    ResetLocalState(local);
+    local->agent.athletics = athletics;
+}
+
+#if defined(CC_CLIENT_SELF_TESTS)
+static bool AthleticProfilesMatch(const CcAthleticProfile *first,
+                                  const CcAthleticProfile *second)
+{
+    if (first == NULL || second == NULL ||
+        fabsf(first->travel_training_distance -
+              second->travel_training_distance) >= 0.0001f) {
+        return false;
+    }
+    for (int32_t discipline = 0;
+         discipline < CC_ATHLETIC_DISCIPLINE_COUNT; ++discipline) {
+        if (first->level[discipline] != second->level[discipline] ||
+            fabsf(first->experience[discipline] -
+                  second->experience[discipline]) >= 0.0001f) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static CcAthleticProfile NonDefaultAthleticProfile(void)
+{
+    return (CcAthleticProfile){
+        .experience = {12.5f, 23.5f, 34.5f},
+        .travel_training_distance = 8.25f,
+        .level = {2, 3, 4}
+    };
+}
+#endif
 
 static void BeginOpening(LocalState *local)
 {
@@ -1344,6 +1404,7 @@ static bool SetOpenWorldCarriageOnRoute(
     if (!CcWorldRoutePose(route, origin_id, amount, &point, &heading)) {
         return false;
     }
+    CcWorldStreamFollowRoute(&local->world_stream, route, origin_id, amount, 4);
     local->world_carriage.position = (Vector3){
         point.x,
         CcWorldStreamHeightAt(&local->world_stream, point.x, point.z),
@@ -1440,6 +1501,7 @@ static void PositionOpenWorldDeparture(const CcSim *sim, LocalState *local)
             &point, &heading)) {
         return;
     }
+    CcWorldStreamFollowRoute(&local->world_stream, route, sim->player.location_id, journey_amount, 4);
     local->world_carriage.position = (Vector3){
         point.x,
         CcWorldStreamHeightAt(&local->world_stream, point.x, point.z),
@@ -1489,6 +1551,7 @@ static bool PositionOpenWorldArrival(const CcSim *sim, LocalState *local)
                           &point, &heading)) {
         return false;
     }
+    CcWorldStreamFollowRoute(&local->world_stream, route, origin_id, journey_amount, 4);
     local->world_carriage.position = (Vector3){
         point.x,
         CcWorldStreamHeightAt(&local->world_stream, point.x, point.z),
@@ -1510,6 +1573,16 @@ static void UpdateOpenWorldCamera(const CcSim *sim, LocalState *local,
                                   float delta_time)
 {
     if (local == NULL || !local->open_world) return;
+    if (local->world_carriage.storybook_travel &&
+        !RoadBookArrivalInProgress(local)) {
+        local->world_carriage.camera_weight = local->travel_time_blend;
+        local->world_carriage.camera_target = local->travel_time_blend;
+        float turn = remainderf(local->world_carriage.heading_yaw -
+            local->world_carriage.camera_heading_yaw, 2.0f * PI);
+        local->world_carriage.camera_heading_yaw +=
+            turn * (1.0f - expf(-4.0f * fmaxf(0.0f, delta_time)));
+        return;
+    }
     if (RoadBookDepartureInProgress(local)) {
         CcClientDepartureAdvance(
             &local->departure, local->convoy.pace, delta_time);
@@ -1610,7 +1683,7 @@ static bool EnterOpenWorldJourney(const CcSim *sim, LocalState *local)
     local->open_world = true;
     CcLocalBindOpenWorld(&local->world_stream);
     PositionOpenWorldJourney(sim, local);
-    local->world_carriage.camera_target = 1.0f;
+    local->world_carriage.camera_target = 0.0f;
     return local->world_carriage.visible;
 }
 
@@ -1643,14 +1716,16 @@ static void PositionOpenWorldJourney(const CcSim *sim, LocalState *local)
     const CcWorldRoutePlacement *route = CcWorldRoutePlacementForId(
         &local->world_stream.manifest, sim->journey.route_id);
     if (route == NULL) return;
-    float progress = ClampUnit(
-        (float)sim->carriage.progress_milli / 1000.0f);
+    float progress = sim->journey.total_subticks > 0 ? ClampUnit(
+        (float)sim->journey.elapsed_subticks /
+        (float)sim->journey.total_subticks) : 0.0f;
     float amount = CcWorldRouteJourneyAmount(
         route, sim->journey.origin_id, progress);
     CcWorldPoint point;
     float heading = 0.0f;
     if (!CcWorldRoutePose(route, sim->journey.origin_id, amount,
                           &point, &heading)) return;
+    CcWorldStreamFollowRoute(&local->world_stream, route, sim->journey.origin_id, amount, 4);
     local->agent.position.x = point.x;
     local->agent.position.z = point.z;
     local->agent.position.y = CcWorldStreamHeightAt(
@@ -1662,11 +1737,14 @@ static void PositionOpenWorldJourney(const CcSim *sim, LocalState *local)
     local->world_carriage.heading_yaw = heading;
     local->world_carriage.route_amount =
         route->from_id == sim->journey.origin_id ? amount : 1.0f - amount;
-    local->world_carriage.pace = local->convoy.pace;
-    local->world_carriage.camera_target = 1.0f;
+    local->world_carriage.pace =
+        sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING ?
+            local->convoy.pace : 0.0f;
+    local->world_carriage.camera_target = local->travel_time_blend;
     local->world_carriage.route_id = sim->journey.route_id;
     local->world_carriage.visible = true;
     local->world_carriage.hero_embarked = true;
+    local->world_carriage.storybook_travel = true;
 }
 
 static float OpenWorldSettlementDistance(const CcSim *sim,
@@ -1698,6 +1776,36 @@ _Static_assert(CC_CLIENT_SESSION_RAIDER_COUNT == CC_LOCAL_RAIDER_COUNT,
                "session raider count must match the local encounter");
 _Static_assert(CC_CLIENT_SESSION_SKILL_COUNT == CC_COMBAT_SKILL_COUNT,
                "session skill count must match local combat");
+_Static_assert(CC_CLIENT_SESSION_ATHLETIC_COUNT ==
+                   CC_ATHLETIC_DISCIPLINE_COUNT,
+               "session athletic count must match local athletics");
+_Static_assert(CC_CLIENT_SESSION_ATHLETIC_MAX_LEVEL ==
+                   CC_ATHLETIC_MAX_LEVEL,
+               "session athletic maximum must match local athletics");
+
+static void CaptureAthleticProfile(CcClientAthleticProfile *saved,
+                                   const CcAthleticProfile *profile)
+{
+    if (saved == NULL || profile == NULL) return;
+    saved->travel_training_distance = profile->travel_training_distance;
+    for (int32_t discipline = 0;
+         discipline < CC_ATHLETIC_DISCIPLINE_COUNT; ++discipline) {
+        saved->level[discipline] = profile->level[discipline];
+        saved->experience[discipline] = profile->experience[discipline];
+    }
+}
+
+static void RestoreAthleticProfile(CcAthleticProfile *profile,
+                                   const CcClientAthleticProfile *saved)
+{
+    if (profile == NULL || saved == NULL) return;
+    profile->travel_training_distance = saved->travel_training_distance;
+    for (int32_t discipline = 0;
+         discipline < CC_ATHLETIC_DISCIPLINE_COUNT; ++discipline) {
+        profile->level[discipline] = saved->level[discipline];
+        profile->experience[discipline] = saved->experience[discipline];
+    }
+}
 
 static CcClientRoadEncounterMode RoadEncounterMode(
     const LocalState *local)
@@ -1856,6 +1964,7 @@ static bool SaveLocalSession(const char *path, const CcSim *sim,
         .facing_yaw = local->agent.facing_yaw,
         .opening_step = (uint32_t)local->opening_step
     };
+    CaptureAthleticProfile(&session.athletics, &local->agent.athletics);
     CaptureRoadEncounter(&session.road_encounter, local);
     return CcClientSessionWrite(path, &session, error, error_capacity);
 }
@@ -2079,14 +2188,22 @@ static bool RestoreLocalSession(const char *path, const CcSim *sim,
             sim, local,
             session.road_encounter.mode == CC_CLIENT_ROAD_ENCOUNTER_FIGHT);
         RestoreRoadEncounter(local, &session.road_encounter);
+        RestoreAthleticProfile(&local->agent.athletics,
+                               &session.athletics);
         return true;
     }
     if (session.coordinate_space == CC_CLIENT_SESSION_WORLD) {
-        return RestoreWorldSession(sim, local, &session);
+        bool restored = RestoreWorldSession(sim, local, &session);
+        if (restored) {
+            RestoreAthleticProfile(&local->agent.athletics,
+                                   &session.athletics);
+        }
+        return restored;
     }
 
     LeaveOpenWorld(local);
     ResetLocalState(local);
+    RestoreAthleticProfile(&local->agent.athletics, &session.athletics);
     bool market = session.scene == CC_CLIENT_SESSION_MARKET;
     CcLocalSiteKind site = LocalSiteForClientScene(session.scene);
     bool in_bounds = market ?
@@ -2112,7 +2229,6 @@ static bool RestoreLocalSession(const char *path, const CcSim *sim,
         sim->player.reputation != 0) {
         local->opening_step = CC_LOCAL_OPENING_COMPLETE;
     } else if (local->opening_step != CC_LOCAL_OPENING_COMPLETE) {
-        /* Old saves may still contain the removed Jory tutorial step. */
         local->opening_step = CC_LOCAL_OPENING_MEET_MARA;
     }
     return true;
@@ -2134,12 +2250,10 @@ static bool RestoreClientStartupSession(const char *path, const CcSim *sim,
 static void BeginRoadLocalState(const CcSim *sim, LocalState *local,
                                 bool hostile)
 {
-    CcAthleticProfile athletics = local->agent.athletics;
     float lateral_offset = local->convoy.lateral_offset;
     float pace = local->convoy.pace;
     LeaveOpenWorld(local);
-    ResetLocalState(local);
-    local->agent.athletics = athletics;
+    ResetLocalStatePreservingAthletics(local);
     local->convoy.phase = CC_LOCAL_CONVOY_ROAD;
     local->convoy.lateral_offset = lateral_offset;
     local->convoy.pace = pace;
@@ -2195,11 +2309,9 @@ static void BeginRoadLocalState(const CcSim *sim, LocalState *local,
 
 static void BeginRoadTravelState(const CcSim *sim, LocalState *local)
 {
-    CcAthleticProfile athletics = local->agent.athletics;
     float lateral_offset = local->convoy.lateral_offset;
     float pace = local->convoy.pace;
-    ResetLocalState(local);
-    local->agent.athletics = athletics;
+    ResetLocalStatePreservingAthletics(local);
     local->convoy.phase = CC_LOCAL_CONVOY_ROAD;
     local->convoy.lateral_offset = lateral_offset;
     local->convoy.pace = sim != NULL && sim->journey.active ?
@@ -2218,17 +2330,48 @@ static void BeginRoadTravelState(const CcSim *sim, LocalState *local)
     local->course.alarm_countdown = 1000.0f;
     if (local->open_world) {
         local->world_carriage.hero_embarked = true;
-        local->world_carriage.camera_target = 1.0f;
+        local->world_carriage.camera_weight = 0.0f;
+        local->world_carriage.camera_target = 0.0f;
+        local->world_carriage.camera_heading_yaw =
+            local->world_carriage.heading_yaw;
     }
     local->journey_travel_active = true;
 }
 
+/* Advance one tick at a time so a warning remains a visible travel beat. */
+static bool AdvanceStorybookTravel(CcJournal *journal, CcSim *sim,
+                                   LocalState *local, int32_t ticks,
+                                   char *error, size_t error_capacity)
+{
+    bool warned = sim->journey.ambush_warned;
+    bool resolved = sim->journey.ambush_resolved;
+    for (int32_t tick = 0; tick < ticks; ++tick) {
+        if (!CcJournalAdvanceRuntimeTicks(journal, sim, 1,
+                                          error, error_capacity)) {
+            local->travel_fast_forward = false;
+            local->travel_attention = true;
+            return false;
+        }
+        if (!sim->journey.active ||
+            sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING ||
+            sim->journey.ambush_warned != warned ||
+            sim->journey.ambush_resolved != resolved) {
+            local->travel_fast_forward = false;
+            local->travel_attention = true;
+            local->convoy.runtime_tick_accumulator = 0.0f;
+            break;
+        }
+    }
+    if (sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING) {
+        local->world_carriage.pace = 0.0f;
+    }
+    return true;
+}
+
 static void BeginRoadChoiceApproachState(LocalState *local, bool from_town)
 {
-    CcAthleticProfile athletics = local->agent.athletics;
     float pace = local->convoy.pace;
-    ResetLocalState(local);
-    local->agent.athletics = athletics;
+    ResetLocalStatePreservingAthletics(local);
     local->road_choice_active = true;
     local->convoy.phase = from_town ? CC_LOCAL_CONVOY_DEPARTING :
                                       CC_LOCAL_CONVOY_ROAD;
@@ -2261,7 +2404,6 @@ static bool UpdateRoadChoiceApproach(LocalState *local, float delta_time)
 
 static void BeginTownArrivalState(LocalState *local)
 {
-    CcAthleticProfile athletics = local->agent.athletics;
     float pace = local->convoy.pace;
     CcClientArrivalTransition arrival = local->arrival;
     if (arrival.phase != CC_CLIENT_ARRIVAL_TOWN) {
@@ -2271,8 +2413,7 @@ static void BeginTownArrivalState(LocalState *local)
         };
     }
     LeaveOpenWorld(local);
-    ResetLocalState(local);
-    local->agent.athletics = athletics;
+    ResetLocalStatePreservingAthletics(local);
     local->arrival = arrival;
     local->convoy.phase = CC_LOCAL_CONVOY_ARRIVING;
     local->convoy.pace = pace > 0.05f ? pace : 0.48f;
@@ -2285,6 +2426,9 @@ static void BeginTownArrivalState(LocalState *local)
 static void BeginRoadBookArrivalState(const CcSim *sim, LocalState *local)
 {
     if (local == NULL) return;
+    local->world_carriage.arrival_travel_weight = local->travel_time_blend;
+    local->travel_fast_forward = false;
+    local->travel_time_blend = 0.0f;
     if (sim == NULL || !local->open_world || sim->journey.route_id == 0U) {
         BeginTownArrivalState(local);
         return;
@@ -2312,13 +2456,11 @@ typedef enum SiteTravelResult {
 static void BeginSiteTravelState(LocalState *local, CcLocalSiteKind site,
                                  bool returning)
 {
-    CcAthleticProfile athletics = local->agent.athletics;
     CcNpcAppearance appearance = local->agent.appearance;
     CcMorphologyPreset morphology = local->agent.morphology;
     Color tunic_color = local->agent.tunic_color;
     bool crowned = local->agent.crowned;
-    ResetLocalState(local);
-    local->agent.athletics = athletics;
+    ResetLocalStatePreservingAthletics(local);
     local->agent.appearance = appearance;
     local->agent.morphology = morphology;
     local->agent.tunic_color = tunic_color;
@@ -2349,9 +2491,7 @@ static SiteTravelResult UpdateSiteTravelState(LocalState *local,
         delta_time * 0.18f * local->convoy.pace);
     if (local->site_travel_progress < 1.0f) return SITE_TRAVEL_NONE;
     if (local->site_returning) {
-        CcAthleticProfile athletics = local->agent.athletics;
-        ResetLocalState(local);
-        local->agent.athletics = athletics;
+        ResetLocalStatePreservingAthletics(local);
         return SITE_TRAVEL_RETURNED;
     }
     local->site_travel_active = false;
@@ -2371,13 +2511,11 @@ static void EnterSiteFromGoblinTunnel(LocalState *local,
                                       CcLocalSiteKind site,
                                       Vector2 position)
 {
-    CcAthleticProfile athletics = local->agent.athletics;
     CcNpcAppearance appearance = local->agent.appearance;
     CcMorphologyPreset morphology = local->agent.morphology;
     Color tunic_color = local->agent.tunic_color;
     bool crowned = local->agent.crowned;
-    ResetLocalState(local);
-    local->agent.athletics = athletics;
+    ResetLocalStatePreservingAthletics(local);
     local->agent.appearance = appearance;
     local->agent.morphology = morphology;
     local->agent.tunic_color = tunic_color;
@@ -3984,6 +4122,14 @@ static ContextActionSet BuildContextActions(
                              TextFormat("Buy map — %d crowns",
                                         map->ask_price));
         }
+        if (map != NULL && map->owner_id == sim->player.id) {
+            bool confirming = local->pending_map_sale_id == map->id;
+            AddDetailedContextAction(
+                &set, confirming ? CONTEXT_ACTION_CONFIRM_MAP_SALE : CONTEXT_ACTION_SELL_MAP,
+                confirming ? "Confirm chart sale" : "Sell chart",
+                confirming ? "ENTER" : "S",
+                "GIVE UP THIS CHART'S ROUTE GUIDANCE", true, confirming);
+        }
         AddDetailedContextAction(
             &set, CONTEXT_ACTION_CLOSE_VIEW, "Close map case", "ESC",
             "RETURN TO THE CARRIAGE", true, false);
@@ -4055,7 +4201,6 @@ static ContextActionSet BuildContextActions(
             }
             return set;
         }
-        bool safe_journey = sim->journey.active && sim->journey.danger <= 30;
         bool parking = !sim->journey.active &&
             (RoadBookArrivalInProgress(local) ||
              local->convoy.phase == CC_LOCAL_CONVOY_ARRIVING);
@@ -4063,12 +4208,12 @@ static ContextActionSet BuildContextActions(
             AddDetailedContextAction(
                 &set, CONTEXT_ACTION_SKIP_TRAVEL,
                 parking ? "Park carriage" :
-                safe_journey ? "Finish safe trip" : "Advance to next event",
+                local->travel_fast_forward ? "Normal time" : "Let time pass",
                 "ENTER",
                 parking ? "END ARRIVAL" :
-                safe_journey ? "COMPLETE ROUTINE ROAD" :
-                               "STOP AT THE NEXT DECISION",
-                true, false);
+                local->travel_fast_forward ? "RETURN TO THE CARAVAN" :
+                                            "WATCH THE JOURNEY / 8X TIME",
+                true, local->travel_fast_forward && !parking);
         }
         return set;
     }
@@ -4470,6 +4615,11 @@ static ContextAction PressedContextAction(
     return none;
 }
 
+static Rectangle AudioControlBounds(void)
+{
+    return (Rectangle){(float)GetScreenWidth() * 0.5f + 228.0f, 11.0f, 104.0f, 30.0f};
+}
+
 static bool PointerOverContextAction(
     const CcSim *sim, const LocalState *local, ClientView view,
     int32_t selected, int32_t selected_situation, Vector2 mouse)
@@ -4558,6 +4708,33 @@ static void DrawCombatStatusLine(const LocalState *local,
     DrawRectangleRoundedLinesEx((Rectangle){x, y, (float)width, 27.0f},
                                 0.20f, 5, 1.0f, Fade(accent, 0.62f));
     CcOverlayDrawText(shown, (int)x + 15, (int)y + 8, 9, INK);
+}
+
+static const float SAVE_FEEDBACK_VISIBLE_SECONDS = 5.0f;
+
+static void DrawSaveFeedbackToast(const char *message, float message_age)
+{
+    const float fade_seconds = 0.8f;
+    if (message == NULL || message[0] == '\0' ||
+        message_age >= SAVE_FEEDBACK_VISIBLE_SECONDS) {
+        return;
+    }
+    const char *toast = TextFormat("%.96s", message);
+    int width = CcOverlayMeasureText(toast, 10) + 30;
+    if (width > 760) width = 760;
+    float opacity =
+        message_age > SAVE_FEEDBACK_VISIBLE_SECONDS - fade_seconds ?
+            (SAVE_FEEDBACK_VISIBLE_SECONDS - message_age) /
+                fade_seconds : 1.0f;
+    float x = ((float)GetScreenWidth() - (float)width) * 0.5f;
+    float y = (float)GetScreenHeight() - 107.0f;
+    DrawRectangleRounded((Rectangle){x, y, (float)width, 30.0f},
+                         0.22f, 5, Fade(PANEL_DEEP, opacity));
+    DrawRectangleRoundedLinesEx(
+        (Rectangle){x, y, (float)width, 30.0f},
+        0.22f, 5, 1.0f, Fade(TEAL, opacity * 0.72f));
+    CcOverlayDrawText(toast, (int)x + 15, (int)y + 9, 10,
+                      Fade(INK, opacity));
 }
 
 static Rectangle CommandActionBounds(CommandActionKind action)
@@ -4698,7 +4875,8 @@ static void RoadChoiceLabel(const CcSim *sim, const CcRoute *route,
 
 static void DrawRoadPanel(const CcSim *sim, int32_t selected)
 {
-    Rectangle panel = {978.0f, 82.0f, 282.0f, 322.0f};
+    Rectangle panel = {(float)GetScreenWidth() - 302.0f, 82.0f, 282.0f, 322.0f};
+    int32_t content_x = (int32_t)panel.x + 20;
     DrawPanel(panel, (Color){8, 16, 20, 226});
     const CcRoute *route = SelectedOutgoingRoute(sim, selected);
     int32_t ordinal = OutgoingRouteOrdinal(sim, selected);
@@ -4707,9 +4885,9 @@ static void DrawRoadPanel(const CcSim *sim, int32_t selected)
             TextFormat("VISIBLE BRANCH %d OF %d", ordinal + 1,
                        OutgoingRouteCount(sim)) :
             "VISIBLE BRANCH",
-        998, 102, 9, TEAL);
+        content_x, 102, 9, TEAL);
     if (route == NULL) {
-        CcOverlayDrawText("NO ROAD", 998, 128, 15, MUTED);
+        CcOverlayDrawText("NO ROAD", content_x, 128, 15, MUTED);
         return;
     }
     CcId destination_id = RouteOtherEnd(route, sim->player.location_id);
@@ -4717,60 +4895,60 @@ static void DrawRoadPanel(const CcSim *sim, int32_t selected)
     (void)CcSimTravelPreview(sim, destination_id, &preview, NULL, 0U);
     char road_label[64];
     RoadChoiceLabel(sim, route, road_label, sizeof(road_label));
-    CcOverlayDrawText(road_label, 998, 126, 18,
+    CcOverlayDrawText(road_label, content_x, 126, 18,
                       preview.destination_known ? INK : CC_VIOLET);
     CcOverlayDrawText(route->smuggler_route ? "FAINT WHEEL RUTS" :
                       route->closed ? "GUARDED CROSSING" : "SIGNED ROAD",
-                      998, 151, 8, MUTED);
+                      content_x, 151, 8, MUTED);
     CcOverlayDrawText(
         TextFormat("%.22s / %d MI / %d CROWNS",
                    preview.road_house_name,
                    preview.road_house_distance_miles,
                    (int32_t)preview.road_house_cost),
-        998, 166, 7, TEAL);
+        content_x, 166, 7, TEAL);
 
     CcOverlayDrawText(
         preview.opening_half_day ? "OPENING HALF-DAY" :
             TextFormat("%d WATCHES / %d NIGHTS",
                        preview.travel_watches, preview.overnight_stops),
-        998, 185, 12, CC_GOLD);
+        content_x, 185, 12, CC_GOLD);
     CcOverlayDrawText(TextFormat("%" PRId64 " CROWNS",
                                  preview.provision_cost),
-                      1152, 185, 11, CC_GOLD);
+                      content_x + 154, 185, 11, CC_GOLD);
     CcOverlayDrawText(preview.rain_expected ?
                           "RAIN ON ROUTE / WHEAT WILL ROT" :
                           preview.departure_wait_minutes > 0 ?
                               "DEPARTS NEXT MORNING / DAILY WATCHES" :
                               "MORNING / BREAK / AFTERNOON / NIGHT STOP",
-                      998, 208, 8,
+                      content_x, 208, 8,
                       preview.rain_expected ? DANGER : TEAL);
-    DrawBar(998, 358, 92, "TEAM", preview.horse_readiness, TEAL);
+    DrawBar(content_x, 358, 92, "TEAM", preview.horse_readiness, TEAL);
     CcOverlayDrawText(TextFormat("%d FODDER",
                                  preview.horse_feed_required),
-                      1105, 362, 9, INK);
+                      content_x + 160, 383, 9, INK);
     CcOverlayDrawText(TextFormat("%.10s + %.10s",
                                  sim->horse_team[0].name,
                                  sim->horse_team[1].name),
-                      998, 383, 8, MUTED);
+                      content_x, 383, 8, MUTED);
 
     const CcMap *map = VisibleMapForRoute(sim, route->id);
-    CcOverlayDrawText("NOTES", 998, 225, 9, TEAL);
+    CcOverlayDrawText("NOTES", content_x, 225, 9, TEAL);
     if (map != NULL && map->owner_id == sim->player.id) {
         CcOverlayDrawText(TextFormat("SURVEY %d DAYS OLD",
                                      sim->current_day - map->surveyed_day),
-                          998, 246, 9, INK);
-        DrawBar(998, 273, 92, "ROAD", map->recorded_condition, CC_GOLD);
-        DrawBar(998, 300, 92, "DANGER", map->recorded_danger, DANGER);
-        DrawBar(998, 327, 92, "TRUST", map->accuracy, TEAL);
+                          content_x, 246, 9, INK);
+        DrawBar(content_x, 273, 92, "ROAD", map->recorded_condition, CC_GOLD);
+        DrawBar(content_x, 300, 92, "DANGER", map->recorded_danger, DANGER);
+        DrawBar(content_x, 327, 92, "TRUST", map->accuracy, TEAL);
     } else if (preview.sponsored_guide) {
-        CcOverlayDrawText("LOCAL GUIDE", 998, 250, 11, INK);
+        CcOverlayDrawText("LOCAL GUIDE", content_x, 250, 11, INK);
     } else if (map != NULL) {
         CcOverlayDrawText(TextFormat("FOR SALE  %d CROWNS",
                                      map->ask_price),
-                          998, 250, 10, CC_GOLD);
+                          content_x, 250, 10, CC_GOLD);
     } else {
-        CcOverlayDrawText("NONE", 998, 250, 11, MUTED);
-        CcOverlayDrawText("+2 DAYS   +20 RISK", 998, 274, 9, DANGER);
+        CcOverlayDrawText("NONE", content_x, 250, 11, MUTED);
+        CcOverlayDrawText("+2 DAYS   +20 RISK", content_x, 274, 9, DANGER);
     }
 }
 
@@ -5580,6 +5758,19 @@ static bool ApplyCommand(CcJournal *journal, CcSim *sim, CcCommand command,
         (void)snprintf(message, message_capacity, "%s", error);
         return false;
     }
+    if (journal != NULL) {
+        switch (command.kind) {
+            case CC_COMMAND_TRADE:
+            case CC_COMMAND_BUY_MAP:
+            case CC_COMMAND_SELL_MAP:
+            case CC_COMMAND_RESOLVE_ENCOUNTER_NEGOTIATE:
+                CcAudioPlay(CC_SOUND_COINS); break;
+            case CC_COMMAND_ACCEPT_SITUATION:
+            case CC_COMMAND_CHARACTER_RESPONSE:
+                CcAudioPlay(CC_SOUND_PROMISE); break;
+            default: break;
+        }
+    }
     const char *confirmation = "Done.";
     switch (command.kind) {
         case CC_COMMAND_TRADE:
@@ -6027,7 +6218,7 @@ static void UpdateGameplayReel(CcSim *sim, LocalState *local,
                 const CcSituation *accepted = CcSimAcceptedSituation(sim);
                 CcId target = SituationSettlementId(sim, accepted);
                 CcLocalBindPlace(sim);
-                ResetLocalState(local);
+                ResetLocalStatePreservingAthletics(local);
                 local->course.alarm_countdown = 1000.0f;
                 if (target != 0U && target != sim->player.location_id &&
                     reel->journey_legs < sim->settlement_count) {
@@ -6094,7 +6285,7 @@ static void UpdateGameplayReel(CcSim *sim, LocalState *local,
                 const CcSituation *accepted = CcSimAcceptedSituation(sim);
                 CcId target = SituationSettlementId(sim, accepted);
                 CcLocalBindPlace(sim);
-                ResetLocalState(local);
+                ResetLocalStatePreservingAthletics(local);
                 local->course.alarm_countdown = 1000.0f;
                 if (target != 0U && target != sim->player.location_id &&
                     reel->journey_legs < sim->settlement_count) {
@@ -6254,7 +6445,7 @@ static void FinishTownArrivalState(const CcSim *sim, LocalState *local,
 {
     *selected = FirstOutgoingRouteIndex(sim);
     LeaveOpenWorld(local);
-    ResetLocalState(local);
+    ResetLocalStatePreservingAthletics(local);
     (void)snprintf(message, message_capacity,
                    "The team is watered and stabled.");
 }
@@ -6279,6 +6470,105 @@ static bool HandleTownArrivalAction(
 }
 
 #if defined(CC_CLIENT_SELF_TESTS)
+static int RunStorybookTravelRegression(void)
+{
+    static CcSim sim;
+    static CcSim expected;
+    static CcSim restored;
+    static LocalState local;
+    for (int scenario = 0; scenario < 4; ++scenario) {
+        char path[96];
+        char error[256] = "";
+        (void)snprintf(path, sizeof(path), "storybook-travel-%d.sqlite", scenario);
+        (void)remove(path);
+        CcSimInit(&sim, UINT32_C(0xc0a71a9e));
+        CcRoute *route = &sim.routes[0];
+        route->closed = false;
+        route->security = 100;
+        sim.player.location_id = route->from_id;
+        sim.carriage.location_id = route->from_id;
+        CcCommand travel = {.kind = CC_COMMAND_TRAVEL, .target_id = route->to_id};
+        if (!CcSimApply(&sim, &travel, error, sizeof(error))) {
+            (void)fprintf(stderr, "Storybook setup: %s\n", error);
+            return 1;
+        }
+        sim.journey.situation_id = 0U;
+        sim.journey.encounter_subticks = 0;
+        sim.journey.encounter_triggered = true;
+        sim.journey.ambush_pending = scenario == 1;
+        sim.journey.ambush_warned = false;
+        sim.journey.ambush_resolved = false;
+        sim.journey.total_subticks = CC_WORLD_WATCH_SUBTICKS * 2;
+        sim.journey.elapsed_subticks = scenario == 1 ?
+            sim.journey.total_subticks * 45 / 100 - 1 :
+            scenario == 2 ? CC_WORLD_WATCH_SUBTICKS - 1 :
+            scenario == 3 ? sim.journey.total_subticks - 1 : 0;
+        sim.carriage.progress_milli = (int32_t)(
+            (int64_t)sim.journey.elapsed_subticks * 1000 /
+            sim.journey.total_subticks);
+        CcCommand pace = {.kind = CC_COMMAND_SET_JOURNEY_PACE,
+                           .amount = (int32_t)sim.journey.pace};
+        if (!CcSimApply(&sim, &pace, error, sizeof(error))) return 1;
+        expected = sim;
+        CcSimAdvanceRuntimeTicks(&expected, scenario == 0 ? 120 : 1);
+        CcJournal *journal = CcJournalStart(path, &sim, error, sizeof(error));
+        if (journal == NULL) {
+            (void)fprintf(stderr, "Storybook journal: %s\n", error);
+            return 1;
+        }
+        local = (LocalState){0};
+        ResetLocalState(&local);
+        if (scenario == 3) {
+            if (!InitializeOpenWorld(&sim, &local, false)) return 1;
+            BeginRoadTravelState(&sim, &local);
+        }
+        local.travel_fast_forward = true;
+        local.travel_time_blend = 1.0f;
+        local.convoy.runtime_tick_accumulator = 0.75f;
+        bool passed = AdvanceStorybookTravel(journal, &sim, &local,
+                                             120, error, sizeof(error));
+        passed = passed && CcSimHash(&sim) == CcSimHash(&expected);
+        if (scenario > 0) {
+            passed = passed && !local.travel_fast_forward &&
+                local.travel_attention && local.convoy.runtime_tick_accumulator == 0.0f;
+        }
+        if (scenario == 3) {
+            Vector3 before_arrival = local.world_carriage.position;
+            BeginRoadBookArrivalState(&sim, &local);
+            float arrival_distance = hypotf(
+                before_arrival.x - local.world_carriage.position.x,
+                before_arrival.z - local.world_carriage.position.z);
+            passed = passed && local.world_carriage.storybook_travel &&
+                local.world_carriage.town_arrival &&
+                local.world_carriage.arrival_travel_weight == 1.0f &&
+                arrival_distance < 0.1f;
+            for (int frame = 0; frame < 180 && RoadBookArrivalInProgress(&local); ++frame) {
+                UpdateOpenWorldCamera(&sim, &local, 1.0f / 60.0f);
+            }
+            passed = passed && local.arrival.phase == CC_CLIENT_ARRIVAL_TOWN;
+            LeaveOpenWorld(&local);
+        }
+        if (!CcJournalClose(&journal, &sim, error, sizeof(error))) passed = false;
+        journal = CcJournalResume(path, &restored, error, sizeof(error));
+        passed = passed && journal != NULL &&
+            CcSimHash(&sim) == CcSimHash(&restored);
+        if (journal != NULL &&
+            !CcJournalClose(&journal, &restored, error, sizeof(error))) passed = false;
+        (void)remove(path);
+        char sidecar[104];
+        (void)snprintf(sidecar, sizeof(sidecar), "%s-wal", path);
+        (void)remove(sidecar);
+        (void)snprintf(sidecar, sizeof(sidecar), "%s-shm", path);
+        (void)remove(sidecar);
+        if (!passed) {
+            (void)fprintf(stderr, "Storybook scenario %d failed: %s\n", scenario, error);
+            return 1;
+        }
+    }
+    (void)puts("Storybook travel: time, warning, rest, arrival and journal replay passed");
+    return 0;
+}
+
 static int RunTownArrivalParkingRegression(void)
 {
     CcSim sim;
@@ -6590,6 +6880,8 @@ static int RunRoadBookArrivalRegression(void)
         (void)fprintf(stderr, "Arrival world setup failed.\n");
         return 1;
     }
+    CcAthleticProfile expected_athletics = NonDefaultAthleticProfile();
+    natural.agent.athletics = expected_athletics;
     natural.convoy.pace = 0.72f;
     BeginRoadBookArrivalState(&sim, &natural);
     const CcWorldSettlementPlacement *destination =
@@ -6630,6 +6922,8 @@ static int RunRoadBookArrivalRegression(void)
         natural.world_carriage.town_arrival ||
         natural.convoy.phase != CC_LOCAL_CONVOY_ARRIVING ||
         natural.arrival.phase != CC_CLIENT_ARRIVAL_TOWN ||
+        !AthleticProfilesMatch(&natural.agent.athletics,
+                               &expected_athletics) ||
         fabsf(local_gate.x - world_gate.x) > 0.01f ||
         fabsf(local_gate.z - world_gate.z) > 0.01f ||
         fabsf(WrapLocalAngle(transformed_heading - world_heading)) > 0.01f) {
@@ -6653,6 +6947,12 @@ static int RunRoadBookArrivalRegression(void)
     FinishTownArrivalState(
         &sim, &natural, &natural_selection,
         natural_message, sizeof(natural_message));
+    if (!AthleticProfilesMatch(&natural.agent.athletics,
+                               &expected_athletics)) {
+        (void)fprintf(stderr,
+                      "Town parking changed the athletics profile.\n");
+        return 1;
+    }
 
     LocalState reduced_motion = {0};
     ResetLocalState(&reduced_motion);
@@ -6661,6 +6961,7 @@ static int RunRoadBookArrivalRegression(void)
         (void)fprintf(stderr, "Reduced-motion arrival setup failed.\n");
         return 1;
     }
+    reduced_motion.agent.athletics = expected_athletics;
     reduced_motion.convoy.pace = 0.72f;
     BeginRoadBookArrivalState(&sim, &reduced_motion);
     int32_t reduced_selection = -1;
@@ -6678,6 +6979,8 @@ static int RunRoadBookArrivalRegression(void)
             natural.world_carriage.visible ||
         reduced_motion.world_carriage.town_arrival !=
             natural.world_carriage.town_arrival ||
+        !AthleticProfilesMatch(&reduced_motion.agent.athletics,
+                               &expected_athletics) ||
         reduced_selection != natural_selection ||
         strcmp(reduced_message, natural_message) != 0) {
         (void)fprintf(stderr,
@@ -7174,6 +7477,8 @@ static int RunTownSessionStartupRegression(void)
 
     LocalState saved = {0};
     ResetLocalState(&saved);
+    CcAthleticProfile expected_athletics = NonDefaultAthleticProfile();
+    saved.agent.athletics = expected_athletics;
     RepositionHero(&saved, (Vector2){31.25f, 22.75f}, false);
     saved.agent.facing_yaw = -0.45f;
     saved.opening_step = CC_LOCAL_OPENING_COMPLETE;
@@ -7209,6 +7514,8 @@ static int RunTownSessionStartupRegression(void)
             restored.agent.position.z, stored.position_z) ||
         !SessionTestFloatMatches(
             restored.agent.facing_yaw, stored.facing_yaw) ||
+        !AthleticProfilesMatch(&restored.agent.athletics,
+                               &expected_athletics) ||
         restored.agent.scene != CC_LOCAL_SCENE_STREET ||
         restored.course.scene != CC_LOCAL_SCENE_STREET ||
         restored.road_choice_active) {
@@ -7347,6 +7654,8 @@ static int RunRoadEncounterSessionRegression(void)
         LocalState saved = {0};
         ResetLocalState(&saved);
         BeginRoadLocalState(&sim, &saved, hostile);
+        CcAthleticProfile expected_athletics = NonDefaultAthleticProfile();
+        saved.agent.athletics = expected_athletics;
         saved.agent.position.x += 0.75f;
         saved.agent.position.z -= 0.35f;
         saved.agent.velocity.x = 0.42f;
@@ -7396,6 +7705,8 @@ static int RunRoadEncounterSessionRegression(void)
             !restored.course.road_encounter ||
             restored.journey_combat_active != hostile ||
             restored.journey_parley_active == hostile ||
+            !AthleticProfilesMatch(&restored.agent.athletics,
+                                   &expected_athletics) ||
             !RoadEncounterTestMatches(&expected, &actual)) {
             return SessionStartupTestFailed(
                 session_path,
@@ -7415,7 +7726,10 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                         RenderTexture2D local_target, Rectangle local_bounds,
                         float delta_time,
                         const char *save_path, const char *session_path,
-                        char *message, size_t message_capacity)
+                        char *message, size_t message_capacity,
+                        char *save_feedback,
+                        size_t save_feedback_capacity,
+                        float *save_feedback_age)
 {
     if (journal == NULL || *journal == NULL) {
         if (message[0] == '\0') {
@@ -7424,6 +7738,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         }
         return;
     }
+    if (*view != VIEW_MAP) local->pending_map_sale_id = 0U;
     ContextAction pressed_action = PressedContextAction(
         sim, local, *view, *selected, *selected_situation);
     ContextActionKind context_action = pressed_action.kind;
@@ -7432,11 +7747,12 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                    IsKeyDown(KEY_LEFT_SUPER) || IsKeyDown(KEY_RIGHT_SUPER);
     if (command_action == COMMAND_ACTION_SAVE || ClientKeyPressed(KEY_F5) ||
         queued_save_shortcut || (control && ClientKeyPressed(KEY_S))) {
+        *save_feedback_age = 0.0f;
 #if defined(PLATFORM_WEB)
         int32_t browser_access = ClientBrowserCampaignAccess();
         if (browser_access != 0) {
             (void)snprintf(
-                message, message_capacity, "%s",
+                save_feedback, save_feedback_capacity, "Save blocked. %s",
                 ClientBrowserCampaignAccessMessage(browser_access));
             return;
         }
@@ -7444,37 +7760,58 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         if (local->road_choice_active &&
             !StableWorldRoadChoice(local)) {
             (void)snprintf(
-                message, message_capacity,
-                "Choose a road or turn back before saving.");
+                save_feedback, save_feedback_capacity,
+                "Save paused. Choose a road or turn back first.");
             return;
         }
         if (!LocalSessionEligible(local)) {
             (void)snprintf(
-                message, message_capacity,
-                "Finish the current movement before saving.");
+                save_feedback, save_feedback_capacity,
+                "Save paused. Finish the current movement first.");
             return;
         }
         char error[256];
-        bool saved = CcJournalCheckpoint(*journal, sim,
-                                         error, sizeof(error));
-        if (saved) {
-            saved = SaveLocalSession(session_path, sim, local,
-                                     error, sizeof(error));
+        if (!CcJournalCheckpoint(*journal, sim, error, sizeof(error))) {
+            (void)snprintf(save_feedback, save_feedback_capacity,
+                           "Journal save failed: %.72s", error);
+            return;
+        }
+        if (!SaveLocalSession(session_path, sim, local,
+                              error, sizeof(error))) {
+#if defined(PLATFORM_WEB)
+            (void)snprintf(
+                save_feedback, save_feedback_capacity,
+                "Journal is ready in this tab. "
+                "Local scene checkpoint failed: %.44s",
+                error);
+#else
+            (void)snprintf(
+                save_feedback, save_feedback_capacity,
+                "Journal saved. Local scene checkpoint failed: %.52s",
+                error);
+#endif
+            return;
         }
 #if defined(PLATFORM_WEB)
-        if (saved &&
-            ClientFlushBrowserSaves(save_path, session_path) == 0) {
-            saved = false;
+        if (ClientFlushBrowserSaves(save_path, session_path) == 0) {
             int32_t save_access = ClientBrowserCampaignAccess();
-            (void)snprintf(
-                error, sizeof(error), "%s",
-                save_access == 0 ?
-                    "The browser could not store this campaign." :
+            if (save_access == 0) {
+                (void)snprintf(
+                    save_feedback, save_feedback_capacity,
+                    "Browser storage failed. Journal and local scene "
+                    "remain in this tab.");
+            } else {
+                (void)snprintf(
+                    save_feedback, save_feedback_capacity,
+                    "Save blocked. %s",
                     ClientBrowserCampaignAccessMessage(save_access));
+            }
+            return;
         }
 #endif
-        (void)snprintf(message, message_capacity, "%s",
-                       saved ? "Game saved." : error);
+        (void)snprintf(
+            save_feedback, save_feedback_capacity,
+            "Journal saved. Local scene checkpoint saved.");
         return;
     }
     if (*view == VIEW_ENCOUNTER) {
@@ -7719,6 +8056,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
     }
     if (map_requested) {
         if (*view == VIEW_MAP) {
+            local->pending_map_sale_id = 0U;
             *view = *return_view == VIEW_CARRIAGE ?
                 VIEW_CARRIAGE : VIEW_LOCAL;
             *selected = FirstOutgoingRouteIndex(sim);
@@ -8030,6 +8368,9 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             return;
         }
         if (local->journey_travel_active) {
+            local->travel_time_blend = CcClientTravelBlendStep(
+                local->travel_time_blend, local->travel_fast_forward,
+                delta_time);
             if (sim->journey.active &&
                 sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
                 int32_t pace_direction =
@@ -8107,53 +8448,8 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             if (sim->journey.active &&
                 (context_action == CONTEXT_ACTION_SKIP_TRAVEL ||
                  enter_pressed)) {
-                char error[256];
-                bool advanced = true;
-                bool warning_reached = false;
-                while (advanced && sim->journey.active &&
-                       sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
-                    bool warned_before = sim->journey.ambush_warned;
-                    advanced = CcJournalAdvanceRuntimeTicks(
-                        *journal, sim, CC_WORLD_TICKS_PER_SECOND,
-                        error, sizeof(error));
-                    if (!warned_before && sim->journey.ambush_warned) {
-                        warning_reached = true;
-                        break;
-                    }
-                }
-                if (!advanced) {
-                    (void)snprintf(message, message_capacity, "%s", error);
-                    return;
-                }
-                if (sim->journey.active &&
-                    sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED) {
-                    BeginRoadLocalState(sim, local, false);
-                    *view = VIEW_LOCAL;
-                    (void)snprintf(message, message_capacity,
-                                   "The road is blocked. Walk to the captain or return to the carriage.");
-                } else if (sim->journey.active &&
-                           sim->journey.phase ==
-                               CC_JOURNEY_PHASE_RESTING) {
-                    (void)snprintf(
-                        message, message_capacity, "%s",
-                        CcSimJourneyStop(sim) == CC_JOURNEY_STOP_MIDDAY ?
-                            "The morning watch ends. Water the team or press on." :
-                        CcSimJourneyRoadHouseAvailable(sim) ?
-                            "The afternoon watch ends at the road house. Lodge or make camp." :
-                            "The afternoon watch ends. Make camp and set a watch.");
-                } else if (sim->journey.active && warning_reached) {
-                    const CcEvent *event = CcSimRecentEvent(sim, 0);
-                    (void)snprintf(message, message_capacity, "%s",
-                                   event != NULL ? event->text :
-                                   "Scouts spot riders shadowing the road.");
-                } else {
-                    *selected = FirstOutgoingRouteIndex(sim);
-                    CcLocalBindPlace(sim);
-                    BeginRoadBookArrivalState(sim, local);
-                    (void)snprintf(message, message_capacity,
-                                   "The road book closes on the destination gate.");
-                }
-                return;
+                local->travel_fast_forward = !local->travel_fast_forward;
+                local->travel_attention = false;
             }
             ConvoyUpdateResult convoy_update = UpdateDrivenConvoy(
                 local, sim, delta_time);
@@ -8173,15 +8469,17 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 fmaxf(0.0f, fminf(1.0f,
                     local->convoy.pace / posture_pace)) : 0.0f;
             local->convoy.runtime_tick_accumulator +=
-                (float)fixed_steps * road_motion;
+                (float)fixed_steps * road_motion *
+                (local->travel_attention ? 1.0f :
+                    CcClientTravelTimeScale(local->travel_time_blend));
             int32_t ticks = (int32_t)floorf(
                 local->convoy.runtime_tick_accumulator);
             local->convoy.runtime_tick_accumulator -= (float)ticks;
             bool warned_before = sim->journey.ambush_warned;
             bool ambush_resolved_before = sim->journey.ambush_resolved;
             char error[256];
-            bool advanced = CcJournalAdvanceRuntimeTicks(
-                *journal, sim, ticks, error, sizeof(error));
+            bool advanced = AdvanceStorybookTravel(
+                *journal, sim, local, ticks, error, sizeof(error));
             if (!advanced) {
                 (void)snprintf(message, message_capacity, "%s", error);
                 return;
@@ -8247,9 +8545,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             };
             if (ApplyCommand(*journal, sim, withdraw, message,
                              message_capacity)) {
-                CcAthleticProfile athletics = local->agent.athletics;
-                ResetLocalState(local);
-                local->agent.athletics = athletics;
+                ResetLocalStatePreservingAthletics(local);
                 *selected = FirstVisibleMapIndex(sim);
                 *view = VIEW_LOCAL;
             }
@@ -8464,9 +8760,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             };
             if (ApplyCommand(*journal, sim, defeated, message,
                              message_capacity)) {
-                CcAthleticProfile athletics = local->agent.athletics;
-                ResetLocalState(local);
-                local->agent.athletics = athletics;
+                ResetLocalStatePreservingAthletics(local);
                 *selected = FirstVisibleMapIndex(sim);
                 *view = VIEW_LOCAL;
                 (void)snprintf(message, message_capacity,
@@ -8479,7 +8773,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                                  CC_LOCAL_ROAD_PARLEY_Z};
             if (ClientKeyPressed(KEY_BACKSPACE) ||
                 context_action == CONTEXT_ACTION_RETURN_TO_CHOICE) {
-                ResetLocalState(local);
+                ResetLocalStatePreservingAthletics(local);
                 *view = VIEW_ENCOUNTER;
                 (void)snprintf(message, message_capacity,
                                "Back at the carriage.");
@@ -8877,8 +9171,12 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         }
 
         const CcMap *selected_map = SelectedVisibleMap(sim, *selected);
-        if (selected_map == NULL) return;
+        if (selected_map == NULL) {
+            local->pending_map_sale_id = 0U;
+            return;
+        }
         CcId map_id = selected_map->id;
+        if (local->pending_map_sale_id != map_id) local->pending_map_sale_id = 0U;
         if ((ClientKeyPressed(KEY_B) ||
              context_action == CONTEXT_ACTION_BUY_MAP) &&
             selected_map->owner_id == sim->player.location_id) {
@@ -8890,14 +9188,19 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                                message_capacity);
             return;
         }
-        if (ClientKeyPressed(KEY_S) &&
-            selected_map->owner_id == sim->player.id) {
-            CcCommand sell = {
-                .kind = CC_COMMAND_SELL_MAP,
-                .target_id = map_id
-            };
-            (void)ApplyCommand(*journal, sim, sell, message,
-                               message_capacity);
+        if (selected_map->owner_id == sim->player.id &&
+            local->pending_map_sale_id == map_id &&
+            (ClientKeyPressed(KEY_ENTER) || context_action == CONTEXT_ACTION_CONFIRM_MAP_SALE)) {
+            CcCommand sell = {.kind = CC_COMMAND_SELL_MAP, .target_id = map_id};
+            (void)ApplyCommand(*journal, sim, sell, message, message_capacity);
+            local->pending_map_sale_id = 0U;
+            return;
+        }
+        if (selected_map->owner_id == sim->player.id &&
+            (ClientKeyPressed(KEY_S) || context_action == CONTEXT_ACTION_SELL_MAP)) {
+            local->pending_map_sale_id = map_id;
+            (void)snprintf(message, message_capacity,
+                           "Sell this chart and give up its route guidance? Enter confirms; Esc closes the case.");
             return;
         }
         if (ClientKeyPressed(KEY_A) &&
@@ -8956,12 +9259,6 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         (void)ApplyCommand(*journal, sim, buy, message, message_capacity);
         return;
     }
-    if (map != NULL && ClientKeyPressed(KEY_S) &&
-        map->owner_id == sim->player.id) {
-        CcCommand sell = {.kind = CC_COMMAND_SELL_MAP, .target_id = map->id};
-        (void)ApplyCommand(*journal, sim, sell, message, message_capacity);
-        return;
-    }
     CcId destination_id = RouteOtherEnd(route, sim->player.location_id);
     if ((ClientKeyPressed(KEY_ENTER) ||
          context_action == CONTEXT_ACTION_TRAVEL) &&
@@ -9004,30 +9301,130 @@ static CcLocalAtmospherePreset LocalAtmosphereForSimulation(
 
 static Rectangle LocalViewportBounds(void)
 {
-    const float art_width = 630.0f;
-    const float art_height = 320.0f;
-    const float side_margin = 10.0f;
-    const float top_margin = 54.0f;
-    const float bottom_margin = 66.0f;
-    float available_width = (float)GetScreenWidth() - side_margin * 2.0f;
-    float available_height =
-        (float)GetScreenHeight() - top_margin - bottom_margin;
-    float available_scale = fminf(available_width / art_width,
-                                  available_height / art_height);
-    float scale = floorf(available_scale);
+    return CcLocalViewportBounds(GetScreenWidth(), GetScreenHeight());
+}
 
-    if (scale < 2.0f) scale = available_scale;
-    if (scale < 0.50f) scale = 0.50f;
-    float width = art_width * scale;
-    float height = art_height * scale;
-    return (Rectangle){((float)GetScreenWidth() - width) * 0.5f,
-                       top_margin + (available_height - height) * 0.5f,
-                       width, height};
+#if defined(CC_CLIENT_SELF_TESTS)
+static int ClientRegressionFailure(const char *message)
+{
+    (void)fprintf(stderr, "%s\n", message);
+    return 1;
+}
+
+static int RunMapSaleInputRegression(void)
+{
+    static CcSim sim;
+    static LocalState local;
+    const char *path = "map-sale-input.ccsave";
+    char message[256] = {0}, feedback[256] = {0}, error[192];
+    float feedback_age = 0.0f;
+    int32_t selected = 0, selected_situation = 0;
+    ClientView view = VIEW_ROADS, return_view = VIEW_LOCAL;
+    CcSimInit(&sim, 42U);
+    ResetLocalState(&local);
+    sim.maps[0].owner_id = sim.player.id;
+    for (int32_t i = 0; i < sim.route_count; ++i) {
+        if (sim.routes[i].id == sim.maps[0].route_id) selected = i;
+    }
+    (void)remove(path);
+    CcJournal *journal = CcJournalStart(path, &sim, error, sizeof(error));
+    if (journal == NULL) return ClientRegressionFailure(error);
+    uint64_t before = CcSimHash(&sim);
+    queued_key_press[KEY_S] = true;
+    HandleInput(&journal, &sim, &selected, &selected_situation, &view, &return_view,
+                &local, (RenderTexture2D){0}, (Rectangle){0}, 0.0f, path, "",
+                message, sizeof(message), feedback, sizeof(feedback), &feedback_age);
+    ClientInputClearPressed();
+    if (CcSimHash(&sim) != before) return ClientRegressionFailure("Road S changed the campaign.");
+    view = VIEW_MAP;
+    selected = 0;
+    ContextActionSet actions = BuildContextActions(&sim, &local, view, selected, 0);
+    if (actions.count < 1 || actions.items[0].kind != CONTEXT_ACTION_SELL_MAP) {
+        return ClientRegressionFailure("The map case needs a labelled sale action.");
+    }
+    queued_key_press[KEY_S] = true;
+    HandleInput(&journal, &sim, &selected, &selected_situation, &view, &return_view,
+                &local, (RenderTexture2D){0}, (Rectangle){0}, 0.0f, path, "",
+                message, sizeof(message), feedback, sizeof(feedback), &feedback_age);
+    ClientInputClearPressed();
+    if (CcSimHash(&sim) != before || local.pending_map_sale_id != sim.maps[0].id) {
+        return ClientRegressionFailure("Chart sale must wait for confirmation.");
+    }
+    actions = BuildContextActions(&sim, &local, view, selected, 0);
+    if (actions.items[0].kind != CONTEXT_ACTION_CONFIRM_MAP_SALE ||
+        strstr(actions.items[0].detail, "ROUTE GUIDANCE") == NULL) {
+        return ClientRegressionFailure("Chart confirmation needs its navigation cost.");
+    }
+    CcMoney coins = sim.player.coins;
+    queued_key_press[KEY_ENTER] = true;
+    HandleInput(&journal, &sim, &selected, &selected_situation, &view, &return_view,
+                &local, (RenderTexture2D){0}, (Rectangle){0}, 0.0f, path, "",
+                message, sizeof(message), feedback, sizeof(feedback), &feedback_age);
+    ClientInputClearPressed();
+    if (sim.maps[0].owner_id != sim.player.location_id || sim.player.coins <= coins) {
+        return ClientRegressionFailure("Confirmed chart sale must transfer the chart and coins.");
+    }
+    if (!CcJournalClose(&journal, &sim, error, sizeof(error))) return ClientRegressionFailure(error);
+    (void)remove(path);
+    (void)puts("Chart sale input regression passed");
+    return 0;
+}
+#endif
+
+static void UpdatePlayAudio(CcSoundscape *soundscape, const CcSim *sim,
+                             const LocalState *local, ClientView view,
+                             float dt)
+{
+    bool travel = local->journey_travel_active &&
+        ((sim->journey.active && sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING) ||
+         local->arrival.phase == CC_CLIENT_ARRIVAL_ROAD_BOOK);
+    const CcLocalAgent *agent = &local->agent;
+    CcSoundFrame frame = {
+        .x = agent->position.x, .z = agent->position.z,
+        .place = sim->player.location_id, .scene = (int)agent->scene,
+        .walking = view == VIEW_LOCAL && !travel && !local->site_travel_active,
+        .grounded = agent->grounded || agent->swimming,
+        .jumping = !agent->grounded && agent->velocity.y > 1.0f,
+        .striking = agent->humanoid.action == CC_HUMANOID_ACTION_STRIKE,
+        .strike_time = agent->humanoid.action_time,
+        .impact_time = local->course.last_outcome >= CC_COMBAT_OUTCOME_HIT ?
+            local->course.combat_event_seconds : 0.0f,
+        .blocked = local->course.last_outcome == CC_COMBAT_OUTCOME_BLOCKED ||
+                   local->course.last_outcome == CC_COMBAT_OUTCOME_GUARD_BROKEN,
+        .surface = agent->swimming ? CC_SOUND_SPLASH :
+                   agent->scene == CC_LOCAL_SCENE_MARKET ? CC_SOUND_STEP_WOOD :
+                   agent->scene == CC_LOCAL_SCENE_ROAD ? CC_SOUND_STEP_DIRT : CC_SOUND_STEP_STONE,
+        .travel_pace = travel && view == VIEW_LOCAL ? local->convoy.pace : 0.0f
+    };
+    uint32_t cues = CcSoundscapeStep(soundscape, frame, dt);
+    for (int cue = 0; cue < CC_SOUND_COUNT; ++cue) {
+        if ((cues & (UINT32_C(1) << (unsigned int)cue)) != 0U) CcAudioPlay((CcSoundCue)cue);
+    }
+    char voice_path[768] = "";
+    if (view == VIEW_CHARACTER) {
+        const CcSituation *situation = CcSimSituation(sim, local->conversation_situation_id);
+        const CcCharacter *character = CcSimCharacter(sim, local->conversation_character_id);
+        const CcStoryLine *line = CcStoryCharacterLine(sim, situation, character);
+        char spoken[192];
+        char relative[256];
+        if (line != NULL && CcStoryCharacterText(sim, situation, character, spoken, sizeof(spoken)) &&
+            CcSoundVoicePath(line->id, character->name, spoken, relative, sizeof(relative))) {
+            (void)ResolveClientAssetPath(relative, voice_path, sizeof(voice_path));
+        }
+    }
+    CcAudioVoice(voice_path);
+    CcAudioUpdate();
 }
 
 int main(int argc, char **argv)
 {
 #if defined(CC_CLIENT_SELF_TESTS)
+    if (argc == 2 && strcmp(argv[1], "--test-storybook-travel") == 0) {
+        return RunStorybookTravelRegression();
+    }
+    if (argc == 2 && strcmp(argv[1], "--test-map-sale-input") == 0) {
+        return RunMapSaleInputRegression();
+    }
     if (argc == 2 &&
         strcmp(argv[1], "--test-town-arrival-parking") == 0) {
         return RunTownArrivalParkingRegression();
@@ -9133,8 +9530,10 @@ int main(int argc, char **argv)
         strcmp(argv[1], "--capture-road-fork") == 0;
     bool capture_road_departure = argc >= 2 &&
         strcmp(argv[1], "--capture-road-departure") == 0;
-    bool capture_road_arrival = argc >= 2 &&
-        strcmp(argv[1], "--capture-road-arrival") == 0;
+    bool capture_storybook_arrival = argc >= 2 &&
+        strcmp(argv[1], "--capture-storybook-arrival") == 0;
+    bool capture_road_arrival = capture_storybook_arrival || (argc >= 2 &&
+        strcmp(argv[1], "--capture-road-arrival") == 0);
     bool capture_road_zoom = capture_road_departure || capture_road_arrival;
     float capture_road_zoom_weight = 0.5f;
     if (capture_road_zoom) {
@@ -9174,8 +9573,28 @@ int main(int argc, char **argv)
         strcmp(argv[1], "--capture-witness") == 0;
     bool capture_character = argc >= 2 &&
         strcmp(argv[1], "--capture-character") == 0;
-    bool capture_travel = argc >= 2 &&
-        strcmp(argv[1], "--capture-travel") == 0;
+    bool capture_storybook = argc >= 2 &&
+        strcmp(argv[1], "--capture-storybook") == 0;
+    float storybook_progress = 0.25f;
+    float storybook_blend = 0.0f;
+    if (capture_storybook) {
+        char *progress_end = NULL;
+        char *blend_end = NULL;
+        if (argc == 5) {
+            storybook_progress = strtof(argv[2], &progress_end);
+            storybook_blend = strtof(argv[3], &blend_end);
+        }
+        if (argc != 5 || progress_end == argv[2] || *progress_end != '\0' ||
+            blend_end == argv[3] || *blend_end != '\0' ||
+            !isfinite(storybook_progress) || !isfinite(storybook_blend) ||
+            storybook_progress < 0.0f || storybook_progress >= 1.0f ||
+            storybook_blend < 0.0f || storybook_blend > 1.0f) {
+            (void)fprintf(stderr, "Use --capture-storybook progress[0,1) zoom[0,1] path.\n");
+            return 1;
+        }
+    }
+    bool capture_travel = capture_storybook || (argc >= 2 &&
+        strcmp(argv[1], "--capture-travel") == 0);
     bool capture_route_sight = argc >= 2 &&
         strcmp(argv[1], "--capture-route-sight") == 0;
     float capture_route_sight_progress = 0.0f;
@@ -9421,7 +9840,8 @@ int main(int argc, char **argv)
                     capture_atmosphere || capture_face ||
                     capture_room || capture_npc_review || capture_heraldry ||
                     capture_creature_media);
-    const char *capture_path = capture_creature_media ? argv[3] :
+    const char *capture_path = capture_storybook ? argv[4] :
+                               capture_creature_media ? argv[3] :
                                capture_room ? argv[4] :
                                capture_face ? argv[3] :
                                capture_atmosphere ? argv[3] :
@@ -9436,14 +9856,27 @@ int main(int argc, char **argv)
     CampaignSavePath(save_path, sizeof(save_path));
     char session_path[704];
     char lock_path[704];
+    char preferences_path[704];
     if (!CampaignCompanionPath(save_path, ".session", session_path,
                                sizeof(session_path)) ||
         !CampaignCompanionPath(save_path, ".lock", lock_path,
-                               sizeof(lock_path))) {
+                               sizeof(lock_path)) ||
+        !CampaignCompanionPath(save_path, ".preferences", preferences_path,
+                               sizeof(preferences_path))) {
         (void)fprintf(stderr, "Campaign companion path is too long.\n");
         return 1;
     }
     bool normal_play = !capture && !render_benchmark;
+    CcClientPreferences preferences;
+    CcClientPreferencesDefault(&preferences);
+    if (normal_play) {
+        char preferences_error[192];
+        if (!CcClientPreferencesLoad(
+                preferences_path, &preferences,
+                preferences_error, sizeof(preferences_error))) {
+            (void)fprintf(stderr, "%s\n", preferences_error);
+        }
+    }
     CcClientInstanceLock instance_lock = {.descriptor = -1};
     if (normal_play) {
         char lock_error[192];
@@ -9457,10 +9890,27 @@ int main(int argc, char **argv)
     if (render_benchmark) SetTraceLogLevel(LOG_ERROR);
     else if (capture) SetTraceLogLevel(LOG_WARNING);
 
-    SetConfigFlags(FLAG_WINDOW_RESIZABLE |
-                   (capture ? FLAG_WINDOW_HIDDEN : 0U));
+    unsigned int window_flags = capture ? FLAG_WINDOW_HIDDEN : 0U;
+#if !defined(PLATFORM_WEB)
+    window_flags |= FLAG_WINDOW_RESIZABLE;
+#endif
+    SetConfigFlags(window_flags);
     int32_t initial_width = normal_play ? 1200 : 1280;
     int32_t initial_height = normal_play ? 700 : 760;
+#if defined(PLATFORM_WEB)
+    initial_width = 1280;
+    initial_height = 720;
+#endif
+    if (capture_road_fork && argc >= 4) {
+        char *end = NULL;
+        long width = strtol(argv[3], &end, 10);
+        if (*end != '\0' || (width != 1040 && width != 1200 && width != 1280)) {
+            (void)fprintf(stderr, "Choose capture width 1040, 1200, or 1280.\n");
+            return 1;
+        }
+        initial_width = (int32_t)width;
+        initial_height = 700;
+    }
     InitWindow(initial_width, initial_height,
                "Crownless Carriage — living world spine");
     if (!IsWindowReady()) {
@@ -9471,8 +9921,8 @@ int main(int argc, char **argv)
     }
     ClientInputInstall();
 
-    SetWindowMinSize(normal_play ? 1040 : 1280,
-                     normal_play ? 620 : 760);
+    SetWindowMinSize(normal_play || capture_road_fork ? 1040 : 1280,
+                     normal_play || capture_road_fork ? 620 : 760);
     SetTargetFPS(render_benchmark || capture_action_reel ||
                  capture_gameplay_reel || capture_creature_reel ? 0 : 60);
     ClientMapTextures map_textures = {0};
@@ -9483,12 +9933,10 @@ int main(int argc, char **argv)
     if (map_textures.economic_goods.id != 0U) {
         SetTextureFilter(map_textures.economic_goods, TEXTURE_FILTER_POINT);
     }
-    /* The playable world is authored against a fixed 2x art-pixel grid.
-       Render it at half the presentation size, then enlarge with point
-       sampling. Screen-space labels and HUD are drawn after presentation. */
-    RenderTexture2D local_target = LoadRenderTexture(630, 320);
+    RenderTexture2D local_target = LoadRenderTexture(CC_LOCAL_ART_WIDTH, CC_LOCAL_ART_HEIGHT);
     SetTextureFilter(local_target.texture, TEXTURE_FILTER_POINT);
     CcLocalRendererSetScreenFirstHero(screen_first_hero);
+    CcLocalRendererSetReducedMotion(preferences.reduced_motion);
     CcLocalRendererInit();
 #if defined(PLATFORM_WEB)
     int32_t released_asset_bytes = ClientReleaseBrowserAssets();
@@ -9643,6 +10091,7 @@ int main(int argc, char **argv)
                 render_benchmark_roadbook) {
                 int32_t target_progress = capture_road_arrival ? 850 :
                     render_benchmark_roadbook ? 420 :
+                    capture_storybook ? (int32_t)(storybook_progress * 1000.0f + 0.5f) :
                     capture_route_sight ? (int32_t)(
                         capture_route_sight_progress * 1000.0f + 0.5f) :
                     200;
@@ -9941,8 +10390,12 @@ int main(int argc, char **argv)
     }
     if (capture_travel || capture_route_sight) {
         BeginRoadTravelState(&sim, &local);
-        local.world_carriage.camera_weight = 1.0f;
-        local.world_carriage.camera_target = 1.0f;
+        local.travel_time_blend = capture_storybook ? storybook_blend :
+                                   capture_route_sight ? 1.0f : 0.0f;
+        local.travel_fast_forward = local.travel_time_blend > 0.5f;
+        local.world_carriage.storybook_travel = !capture_route_sight;
+        local.world_carriage.camera_weight = local.travel_time_blend;
+        local.world_carriage.camera_target = local.travel_time_blend;
     }
     if (capture_road_arrival) {
         if (EnterOpenWorldAtRoadGate(
@@ -9955,6 +10408,9 @@ int main(int argc, char **argv)
             local.world_carriage.camera_weight = capture_road_zoom_weight;
             local.world_carriage.camera_target = capture_road_zoom_weight;
             (void)PositionOpenWorldArrival(&sim, &local);
+            local.world_carriage.storybook_travel = capture_storybook_arrival;
+            local.world_carriage.arrival_travel_weight = 1.0f;
+            local.world_carriage.camera_heading_yaw = local.world_carriage.heading_yaw;
         }
     }
     if (capture && !capture_world && !capture_interior &&
@@ -10152,6 +10608,8 @@ int main(int argc, char **argv)
             local.world_carriage.pace = 0.0f;
             local.world_carriage.camera_weight = 1.0f;
             local.world_carriage.camera_target = 1.0f;
+            local.world_carriage.storybook_travel = !render_benchmark_roadbook_network;
+            local.travel_time_blend = 1.0f;
         } else if (strcmp(render_benchmark_scene, "combat") == 0) {
             PrepareRoadCombatReel(&sim, &local);
         } else {
@@ -10189,6 +10647,7 @@ int main(int argc, char **argv)
         return 1;
     }
     char message[256] = "";
+    char save_feedback[128] = "";
     if (!capture && !render_benchmark && startup_message[0] != '\0') {
         (void)snprintf(message, sizeof(message), "%s", startup_message);
     }
@@ -10224,6 +10683,7 @@ int main(int argc, char **argv)
     double render_benchmark_started = 0.0;
     bool performance_overlay = false;
     float message_age = 0.0f;
+    float save_feedback_age = SAVE_FEEDBACK_VISIBLE_SECONDS;
 #if defined(PLATFORM_WEB)
     bool browser_memory_reported = false;
 #endif
@@ -10233,6 +10693,8 @@ int main(int argc, char **argv)
             LocalAtmosphereForSimulation(&sim),
         0.0f);
 
+    CcSoundscape soundscape = {0};
+    CcAudioSetMode(preferences.audio_mode);
     Rectangle local_bounds;
     while (render_benchmark || !WindowShouldClose()) {
 #if defined(PLATFORM_WEB)
@@ -10240,6 +10702,9 @@ int main(int argc, char **argv)
 #endif
         local_bounds = LocalViewportBounds();
         float frame_delta_time = GetFrameTime();
+        save_feedback_age = fminf(
+            SAVE_FEEDBACK_VISIBLE_SECONDS,
+            save_feedback_age + frame_delta_time);
         CcLocalRendererSetOpeningStep(local.opening_step);
         if (view == VIEW_ROADS) {
             local.fork_turn_progress = fminf(
@@ -10248,6 +10713,48 @@ int main(int argc, char **argv)
         char previous_message[sizeof(message)];
         (void)snprintf(previous_message, sizeof(previous_message), "%s",
                        message);
+        ClientView audio_previous_view = view;
+        bool audio_clicked = normal_play && ClientMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
+            CheckCollisionPointRec(GetMousePosition(), AudioControlBounds());
+        if (normal_play) {
+            bool input = ClientMouseButtonPressed(MOUSE_BUTTON_LEFT) ||
+                         ClientMouseButtonPressed(MOUSE_BUTTON_RIGHT);
+            for (int key = 32; key < 349 && !input; ++key) input = ClientKeyPressed(key);
+            if (input) CcAudioInit();
+            CcAudioSetFocused(IsWindowFocused());
+        }
+        bool change_audio = normal_play && (ClientKeyPressed(KEY_F6) || audio_clicked);
+        if (change_audio) {
+            preferences.audio_mode = (preferences.audio_mode + 1) % 3;
+            CcAudioSetMode(preferences.audio_mode);
+        }
+        if (change_audio || (normal_play && ClientKeyPressed(KEY_F4))) {
+            if (!change_audio) preferences.reduced_motion = !preferences.reduced_motion;
+            CcLocalRendererSetReducedMotion(preferences.reduced_motion);
+            char preferences_error[192];
+            bool preferences_saved = CcClientPreferencesSave(
+                preferences_path, &preferences,
+                preferences_error, sizeof(preferences_error));
+#if defined(PLATFORM_WEB)
+            if (preferences_saved &&
+                ClientFlushBrowserPreferences(preferences_path) == 0) {
+                preferences_saved = false;
+                (void)snprintf(
+                    preferences_error, sizeof(preferences_error),
+                    "The browser could not store client preferences.");
+            }
+#endif
+            (void)snprintf(
+                message, sizeof(message), "%s",
+                preferences_saved ?
+                    (change_audio ?
+                        (preferences.audio_mode == 0 ? "Sound: voices and effects. Saved." :
+                         preferences.audio_mode == 1 ? "Sound: effects. Saved." : "Sound: muted. Saved.") :
+                    (preferences.reduced_motion ?
+                        "Reduced motion enabled and saved." :
+                        "Reduced motion disabled and saved.")) :
+                    preferences_error);
+        }
         CcLocalRendererSetAtmosphere(
             capture_atmosphere ? capture_atmosphere_preset :
                 LocalAtmosphereForSimulation(&sim),
@@ -10280,15 +10787,21 @@ int main(int argc, char **argv)
         } else if (render_benchmark) {
             ClientInputClearPressed();
         } else {
-            HandleInput(&journal, &sim, &selected, &selected_situation,
+            if (!audio_clicked) HandleInput(&journal, &sim, &selected, &selected_situation,
                         &view, &return_view, &local,
                         local_target, local_bounds,
                         frame_delta_time,
-                        save_path, session_path, message, sizeof(message));
+                        save_path, session_path, message, sizeof(message),
+                        save_feedback, sizeof(save_feedback),
+                        &save_feedback_age);
             ClientInputClearPressed();
         }
-        if (!capture_road_arrival) {
+        if (!capture_road_arrival && !capture_storybook) {
             UpdateOpenWorldCamera(&sim, &local, frame_delta_time);
+        }
+        if (normal_play) {
+            if (view != audio_previous_view) CcAudioPlay(CC_SOUND_PAGE);
+            UpdatePlayAudio(&soundscape, &sim, &local, view, frame_delta_time);
         }
         bool persistence_blocked = CcClientCampaignAccessFor(
             normal_play, journal != NULL) == CC_CLIENT_CAMPAIGN_BLOCKED;
@@ -10313,6 +10826,10 @@ int main(int argc, char **argv)
             (float)gameplay_reel.captured_frames / 15.0f :
             capture_creature_reel ? (float)capture_frames / 15.0f :
             (float)GetTime();
+        if (local.world_carriage.storybook_travel) {
+            clock = (float)fmod((double)sim.clock.tick /
+                                (double)CC_WORLD_TICKS_PER_SECOND, 3600.0);
+        }
 
         bool map_visible = view == VIEW_MAP ||
             ((view == VIEW_LEDGER || view == VIEW_SITUATIONS) &&
@@ -10457,6 +10974,10 @@ int main(int argc, char **argv)
             DrawDragonCavePanel(&sim);
         }
         CcOverlayFlush();
+        if (!persistence_blocked && !capture_gameplay_reel &&
+            !capture_npc_review) {
+            DrawSaveFeedbackToast(save_feedback, save_feedback_age);
+        }
         if (!persistence_blocked && !capture_npc_review &&
             (!capture_gameplay_reel ||
             gameplay_reel.stage != GAMEPLAY_REEL_QUEST_COMPLETE)) {
@@ -10483,6 +11004,14 @@ int main(int argc, char **argv)
             DrawCampaignUnavailable(message);
         }
         CcOverlayEnd();
+        if (normal_play) {
+            Rectangle audio_bounds = AudioControlBounds();
+            DrawRectangleRounded(audio_bounds, 0.25f, 4, PANEL_DEEP);
+            DrawRectangleRoundedLinesEx(audio_bounds, 0.25f, 4, 1.0f, Fade(TEAL, 0.62f));
+            const char *audio_label = preferences.audio_mode == 0 ? "Sound full F6" :
+                preferences.audio_mode == 1 ? "Effects F6" : "Muted F6";
+            DrawText(audio_label, (int)audio_bounds.x + 10, (int)audio_bounds.y + 10, 10, INK);
+        }
         EndDrawing();
 #if defined(PLATFORM_WEB)
         if (!browser_memory_reported) {
@@ -10571,6 +11100,7 @@ int main(int argc, char **argv)
         GetTime() - render_benchmark_started : 0.0;
     CcLocalRendererStats final_renderer_stats =
         CcLocalRendererGetStats();
+    CcAudioShutdown();
     CcLocalRendererShutdown();
     UnloadRenderTexture(local_target);
     ReleaseMapTextures(&map_textures);

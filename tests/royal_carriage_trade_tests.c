@@ -44,7 +44,7 @@ static void ClearTradeNeeds(CcSim *sim)
     }
 }
 
-static void MakeSchema35Database(const char *path)
+static void MakeLegacyRoyalDatabase(const char *path)
 {
     sqlite3 *database = NULL;
     CC_CHECK(sqlite3_open_v2(path, &database, SQLITE_OPEN_READWRITE,
@@ -445,26 +445,34 @@ int main(void)
     CC_CHECK(priority.settlements[4].stock[CC_GOOD_IRON] == 16);
     CC_CHECK(CcSimValidate(&priority, error, sizeof(error)));
 
-    CcSim legacy;
-    CcSimInit(&legacy, UINT32_C(0x35ca771a));
-    legacy.schema_version = 35U;
-    legacy.generator_version = 25U;
-    legacy.royal_carriage_count = 0;
-    for (int32_t i = 0; i < CC_MAX_KINGDOMS; ++i) {
-        legacy.royal_carriages[i] = (CcRoyalCarriage){0};
+    for (uint32_t schema = 35U; schema <= 37U; ++schema) {
+        CcSim legacy;
+        CcSimInit(&legacy, UINT32_C(0x35ca771a));
+        legacy.schema_version = schema;
+        legacy.generator_version = 25U;
+        legacy.royal_carriage_count = 0;
+        for (int32_t i = 0; i < CC_MAX_KINGDOMS; ++i) {
+            legacy.royal_carriages[i] = (CcRoyalCarriage){0};
+        }
+        const char *legacy_path =
+            "royal-carriage-legacy-migration.ccsave";
+        (void)remove(legacy_path);
+        CC_CHECK(CcSaveWrite(legacy_path, &legacy, error, sizeof(error)));
+        MakeLegacyRoyalDatabase(legacy_path);
+        CcSim upgraded;
+        CC_CHECK(CcSaveRead(legacy_path, &upgraded, error, sizeof(error)));
+        CC_CHECK(upgraded.schema_version == CC_SIM_SCHEMA_VERSION);
+        CC_CHECK(upgraded.generator_version == CC_GENERATOR_VERSION);
+        CC_CHECK(upgraded.royal_carriage_count == upgraded.kingdom_count);
+        CC_CHECK(upgraded.next_entity_serial == legacy.next_entity_serial +
+                 (uint64_t)upgraded.kingdom_count);
+        CC_CHECK(CcSimValidate(&upgraded, error, sizeof(error)));
+        CC_CHECK(CcSaveWrite(legacy_path, &upgraded, error, sizeof(error)));
+        CcSim again;
+        CC_CHECK(CcSaveRead(legacy_path, &again, error, sizeof(error)));
+        CC_CHECK(CcSimHash(&again) == CcSimHash(&upgraded));
+        CC_CHECK(remove(legacy_path) == 0);
     }
-    const char *legacy_path =
-        "/tmp/crownless-schema-35-royal-carriage.ccsave";
-    (void)remove(legacy_path);
-    CC_CHECK(CcSaveWrite(legacy_path, &legacy, error, sizeof(error)));
-    MakeSchema35Database(legacy_path);
-    CcSim upgraded;
-    CC_CHECK(CcSaveRead(legacy_path, &upgraded, error, sizeof(error)));
-    CC_CHECK(upgraded.schema_version == CC_SIM_SCHEMA_VERSION);
-    CC_CHECK(upgraded.generator_version == CC_GENERATOR_VERSION);
-    CC_CHECK(upgraded.royal_carriage_count == upgraded.kingdom_count);
-    CC_CHECK(CcSimValidate(&upgraded, error, sizeof(error)));
-    CC_CHECK(remove(legacy_path) == 0);
 
     puts("Royal carriage trade tests passed");
     return 0;

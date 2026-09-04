@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Build source-versus-pixel GIFs for the screen-first character animation."""
 
 from __future__ import annotations
 

@@ -236,6 +236,8 @@ int main(int argc, char **argv)
     uint32_t seed = UINT32_C(0xc0a71a9e);
     int32_t years = 10;
     int32_t report_every = 1;
+    int32_t checkpoint_every = 0;
+    const char *load_path = NULL;
     const char *save_path = NULL;
     bool detail = false;
     for (int argument = 1; argument < argc; ++argument) {
@@ -251,14 +253,35 @@ int main(int argc, char **argv)
             report_every = (int32_t)strtol(argv[++argument], NULL, 10);
         } else if (strcmp(argv[argument], "--save") == 0 && argument + 1 < argc) {
             save_path = argv[++argument];
+        } else if (strcmp(argv[argument], "--load") == 0 && argument + 1 < argc) {
+            load_path = argv[++argument];
+        } else if (strcmp(argv[argument], "--checkpoint-every") == 0 &&
+                   argument + 1 < argc) {
+            checkpoint_every = (int32_t)strtol(argv[++argument], NULL, 10);
         } else if (strcmp(argv[argument], "--detail") == 0) {
             detail = true;
         }
     }
 
     CcSim sim;
-    CcSimInit(&sim, seed);
     char error[256];
+    if (checkpoint_every < 0 || (checkpoint_every > 0 && save_path == NULL)) {
+        (void)fprintf(stderr, "checkpoint interval requires --save and a positive year count\n");
+        return 1;
+    }
+    if (load_path != NULL) {
+        if (!CcSaveRead(load_path, &sim, error, sizeof(error))) {
+            (void)fprintf(stderr, "load failed: %s\n", error);
+            return 1;
+        }
+    } else {
+        CcSimInit(&sim, seed);
+    }
+    /* --years counts further years when resuming a saved world. */
+    if (years < 0 || years > (INT32_MAX - sim.current_day) / 365) {
+        (void)fprintf(stderr, "year count exceeds the simulation day range\n");
+        return 1;
+    }
     if (report_every < 1) report_every = 1;
     for (int32_t year = 0; year < years; ++year) {
         CcSimAdvanceDays(&sim, 365);
@@ -267,9 +290,15 @@ int main(int argc, char **argv)
             if (detail) PrintSummary(&sim, true);
             return 1;
         }
+        if (checkpoint_every > 0 && (year + 1) % checkpoint_every == 0 &&
+            !CcSaveWrite(save_path, &sim, error, sizeof(error))) {
+            (void)fprintf(stderr, "checkpoint failed: %s\n", error);
+            return 1;
+        }
         if (year == 0 || year + 1 == years ||
             (year + 1) % report_every == 0) {
             PrintSummary(&sim, detail);
+            (void)fflush(stdout);
         }
     }
     if (save_path != NULL && !CcSaveWrite(save_path, &sim, error, sizeof(error))) {

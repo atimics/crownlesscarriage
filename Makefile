@@ -22,6 +22,7 @@ art-assets-check:
 	python3 tools/art/check_asset_inventory.py
 
 static-analysis:
+	python3 tests/static_analysis_tests.py
 	python3 tools/static_analysis.py
 
 configure-play:

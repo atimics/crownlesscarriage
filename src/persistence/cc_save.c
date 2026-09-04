@@ -2015,7 +2015,7 @@ static bool SaveShipments(sqlite3 *database, const CcSim *sim,
 static bool SaveRoyalCarriages(sqlite3 *database, const CcSim *sim,
                                char *error, size_t error_capacity)
 {
-    if (sim->schema_version < 36U) return true;
+    if (sim->schema_version < 38U) return true;
     sqlite3_stmt *statement = NULL;
     if (!Prepare(database,
                  "INSERT INTO royal_carriage VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
@@ -2051,7 +2051,7 @@ static bool SaveRoyalCarriages(sqlite3 *database, const CcSim *sim,
 static bool SaveRoyalRouteUsage(sqlite3 *database, const CcSim *sim,
                                 char *error, size_t error_capacity)
 {
-    if (sim->schema_version < 36U) return true;
+    if (sim->schema_version < 38U) return true;
     sqlite3_stmt *statement = NULL;
     if (!Prepare(database,
                  "INSERT INTO royal_route_usage VALUES(?,?,?,?);",
@@ -4003,7 +4003,7 @@ static bool ReadRoyalCarriages(sqlite3 *database, CcSim *sim,
                                char *error, size_t error_capacity)
 {
     sim->royal_carriage_count = 0;
-    if (sim->schema_version < 36U) return true;
+    if (sim->schema_version < 38U) return true;
     sqlite3_stmt *statement = NULL;
     if (!Prepare(database,
                  "SELECT slot,id,kingdom_id,location_id,route_id,destination_id,"
@@ -4058,7 +4058,7 @@ static bool ReadRoyalRouteUsage(sqlite3 *database, CcSim *sim,
     for (int32_t i = 0; i < CC_MAX_ROUTES; ++i) {
         sim->royal_route_slots_used[i] = 0;
     }
-    if (sim->schema_version < 36U) return true;
+    if (sim->schema_version < 38U) return true;
     sqlite3_stmt *statement = NULL;
     if (!Prepare(database,
                  "SELECT slot,route_id,trade_week,slots_used "
@@ -5544,6 +5544,7 @@ static void FinishMaterialChainUpgrade(CcSim *sim)
 {
     CcSimInitializeMaterialChain(sim);
     CcSimUpgradeHistoryOffices(sim);
+    CcSimUpgradeArchivePhysicalLore(sim);
     CcSimInitializeRoyalCarriages(sim);
     sim->schema_version = CC_SIM_SCHEMA_VERSION;
     sim->generator_version = CC_GENERATOR_VERSION;
@@ -5582,9 +5583,17 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
                                  char *error, size_t error_capacity)
 {
     uint32_t legacy_version = sim->schema_version;
+    if ((legacy_version == 36U || legacy_version == 37U) &&
+        sim->generator_version == 25U) {
+        CcSimInitializeRoyalCarriages(sim);
+        sim->schema_version = CC_SIM_SCHEMA_VERSION;
+        return true;
+    }
     ClearMissingLegacyEventReferences(sim);
     MakeLegacyCharacterNamesUnique(sim);
     if (legacy_version == 35U && sim->generator_version == 25U) {
+        CcSimUpgradeHistoryOffices(sim);
+        CcSimUpgradeArchivePhysicalLore(sim);
         CcSimInitializeRoyalCarriages(sim);
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         sim->generator_version = CC_GENERATOR_VERSION;
@@ -5592,6 +5601,7 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
     }
     if (legacy_version == 34U && sim->generator_version == 25U) {
         CcSimUpgradeHistoryOffices(sim);
+        CcSimUpgradeArchivePhysicalLore(sim);
         CcSimInitializeRoyalCarriages(sim);
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         sim->generator_version = CC_GENERATOR_VERSION;

@@ -1,4 +1,3 @@
-/* Terrain presentation and authored settlement structures. */
 static void DrawSphereModel(Model model, Vector3 center, float radius, Color color)
 {
     DrawModelEx(model, center, (Vector3){0.0f, 1.0f, 0.0f}, 0.0f,
@@ -471,6 +470,12 @@ static void DrawBuilding(float x, float z, float width, float depth,
                          int32_t style)
 {
     Vector3 center = {x + width * 0.5f, height * 0.5f, z + depth * 0.5f};
+    if (distant_building_view) {
+        // Keep the authored walls and roofline legible from the road.
+        DrawCubeV(center, (Vector3){width, height, depth}, wall);
+        (void)DrawPitchedRoof(x, z, width, depth, height, wall, roof);
+        return;
+    }
     Color trim = style == 2 ? WORLD_GOLD : ShadeColor(wall, 0.60f);
     Color glass = style == 1 ? (Color){148, 103, 55, 255} :
                   style == 3 ? Fade(WORLD_VIOLET, 0.84f) :
@@ -3380,6 +3385,16 @@ static Color BuildingRoofColor(int32_t style, Color kingdom,
     return roof;
 }
 
+bool CcLocalRayMissesBoxParallelSlabInternal(Ray ray, BoundingBox box)
+{
+    return (fabsf(ray.direction.x) <= FLT_EPSILON &&
+            (ray.position.x < box.min.x || ray.position.x > box.max.x)) ||
+           (fabsf(ray.direction.y) <= FLT_EPSILON &&
+            (ray.position.y < box.min.y || ray.position.y > box.max.y)) ||
+           (fabsf(ray.direction.z) <= FLT_EPSILON &&
+            (ray.position.z < box.min.z || ray.position.z > box.max.z));
+}
+
 bool CcLocalBuildingObscuresHeroInternal(Rectangle footprint, float height,
                                          Camera3D camera,
                                          Vector3 hero_center,
@@ -3418,6 +3433,9 @@ bool CcLocalBuildingObscuresHeroInternal(Rectangle footprint, float height,
             samples[sample], camera, render_width, render_height);
         Ray ray = GetScreenToWorldRayEx(screen, camera,
                                         render_width, render_height);
+        if (CcLocalRayMissesBoxParallelSlabInternal(ray, visible_walls)) {
+            continue;
+        }
         RayCollision collision = GetRayCollisionBox(ray, visible_walls);
         if (!collision.hit) continue;
         float hero_depth = Vector3DotProduct(

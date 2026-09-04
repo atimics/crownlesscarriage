@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Compose the runtime economic icon atlas and production review sheet."""
 
 from __future__ import annotations
 

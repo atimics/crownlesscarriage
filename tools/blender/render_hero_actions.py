@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Author and render five gameplay-readable actions for the modular hero."""
 
 from __future__ import annotations
 

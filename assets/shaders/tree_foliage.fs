@@ -75,8 +75,6 @@ void main()
                                       depthSplits.z, viewDepth);
     float detailPresence = 1.0 - backgroundBand * depthStrength * 0.92;
 
-    /* Keep each polygon as one clear painted value. The crown mesh supplies
-       flat normals, so these bands never turn into curved rubber highlights. */
     float diffuse = facing < 0.08 ? 0.02 :
                     facing < 0.58 ? 0.24 : 0.50;
     float sky = normal.y < -0.24 ? 0.66 :
@@ -86,8 +84,6 @@ void main()
     light += vec3(0.06, 0.15, 0.13) * max(normal.y, 0.0) * 0.08;
     light += vec3(0.12, 0.07, 0.035) * max(-normal.y, 0.0) * 0.05;
 
-    /* Hard world-space chips suggest leaf clumps without a texture, UV seam,
-       or animated noise. Their size is broad enough to survive the art grid. */
     vec2 plane = foliagePlane(fragPosition, normal);
     float faceSeed = hash31(floor(normal * 17.0 + vec3(23.0)));
     vec2 chipPoint = plane * 3.85 + vec2(faceSeed * 13.0,
@@ -110,8 +106,6 @@ void main()
                     vec3(0.035, 0.026, 0.004);
     color = mix(color, warmLeaf, lightChip * 0.56 * detailPresence);
 
-    /* Foliage has no glossy specular. A small cool rim and restrained ink
-       retain the crown silhouette without outlining every mass in black. */
     vec3 viewDirection = normalize(cameraPosition - fragPosition);
     float rim = pow(1.0 - max(dot(normal, viewDirection), 0.0), 3.0);
     color += vec3(0.10, 0.23, 0.18) * rim * 0.025 * detailPresence;
@@ -120,8 +114,6 @@ void main()
     color = mix(color, albedo.rgb * 0.24,
                 edgeInk * 0.42 * detailPresence);
 
-    /* Distant crowns become one quiet silhouette group. Chip calligraphy is
-       reserved for the foreground where it survives the fixed pixel grid. */
     float backgroundWeight = backgroundBand * depthStrength;
     float luminance = perceivedGray(color);
     vec3 quietCrown = mix(vec3(luminance) * vec3(0.80, 0.96, 1.02),

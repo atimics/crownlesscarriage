@@ -1,0 +1,10 @@
+{
+  "id": "empty_granary.mara.heard",
+  "text": "8 boxes of food. I will load them.",
+  "speaker": "Mara Venn",
+  "model": "ChatterboxTTS",
+  "seed": 3099866863,
+  "sample_rate": 24000,
+  "reference_sha256": null,
+  "wav_sha256": "b4b57670ed46bd24b8bc9b747ad4d6efae2fd26c35b02a9b99299c2373e857c3"
+}

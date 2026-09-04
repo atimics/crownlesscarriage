@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Render the procedural body, garment, and equipment grammar as a contact sheet."""
 
 from __future__ import annotations
 

@@ -1,8 +1,6 @@
 #ifndef CROWNLESS_LOCAL3D_INTERNAL_H
 #define CROWNLESS_LOCAL3D_INTERNAL_H
 
-/* Narrow test and cross-source seams for crownless_local_renderer. */
-
 #include "client/cc_local3d.h"
 
 typedef enum CcLocalFaceLodInternal {
@@ -62,6 +60,7 @@ Camera3D CcLocalCameraClearSightlinesInternal(Camera3D camera,
                                               Vector3 second_subject,
                                               float preferred_angle,
                                               float *chosen_angle);
+bool CcLocalRayMissesBoxParallelSlabInternal(Ray ray, BoundingBox box);
 bool CcLocalBuildingObscuresHeroInternal(Rectangle footprint, float height,
                                          Camera3D camera,
                                          Vector3 hero_center,

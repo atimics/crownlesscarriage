@@ -1,4 +1,3 @@
-/* Terrain generation, collision probes, and route finding. */
 typedef struct NavPlatform {
     float x;
     float z;

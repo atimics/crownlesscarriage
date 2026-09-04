@@ -1,34 +1,4 @@
 #!/usr/bin/env python3
-"""Inspect and validate exported Crownless GLB assets without Blender.
-
-The Blender validators reopen the generated .blend files. This tool is the
-other half of the export contract: it checks the shipped GLB bytes themselves,
-so structural regressions are caught in environments where Blender is not
-installed (CI runners, review tooling, runtime packaging).
-
-Checks performed:
-
-- GLB container structure: magic, version, declared length, chunk layout,
-  chunk padding, and trailing data.
-- glTF document sanity: asset version, scene graph, accessor bounds.
-- Geometry statistics: nodes, meshes, primitives, vertices, triangles, and a
-  world-space bounding box composed from node transforms.
-- Library profile contract: every mesh node carries ``cc_asset_id`` matching
-  the file name, a non-empty ``cc_role``, and ``cc_library_version``; mesh
-  nodes are named ``GEO_*``; materials use the shared ``MAT_*`` palette;
-  geometry stays inside plausible world extents and triangle budgets.
-- Optional manifest cross-check: every manifest asset has an export and every
-  export on disk is referenced by the manifest (stale-export detection).
-
-Usage:
-    python3 tools/blender/inspect_glb.py assets/exports/glb/*.glb
-    python3 tools/blender/inspect_glb.py --profile library \
-        --manifest assets/asset_manifest.json --export-dir assets/exports/glb \
-        assets/exports/glb/*.glb
-    python3 tools/blender/inspect_glb.py --report /tmp/glb_report.json ...
-
-Exit code is non-zero when any check fails.
-"""
 
 from __future__ import annotations
 
@@ -68,7 +38,7 @@ ACCESSOR_SHAPES = {
 
 
 class GlbError(Exception):
-    """Structural or contract failure for one GLB file."""
+    pass
 
 
 @dataclass
@@ -105,7 +75,6 @@ def accessor_element_size(component_size: int,
 
 
 def validate_binary_layout(document: dict, binary: bytes) -> None:
-    """Validate every buffer view and accessor against the shipped BIN bytes."""
     buffers = document.get("buffers", [])
     views = document.get("bufferViews", [])
     accessors = document.get("accessors", [])
@@ -243,7 +212,6 @@ def validate_binary_layout(document: dict, binary: bytes) -> None:
 
 
 def parse_glb(path: Path) -> tuple[dict, bytes]:
-    """Return (json document, binary chunk) or raise GlbError."""
     data = path.read_bytes()
     if len(data) < 12:
         raise GlbError("file too small for a GLB header")
@@ -303,7 +271,6 @@ def quat_to_matrix3(x: float, y: float, z: float, w: float) -> list[list[float]]
 
 
 def node_matrix(node: dict) -> list[list[float]]:
-    """Column-vector 4x4 world transform for one node (row-major storage)."""
     if "matrix" in node:
         m = node["matrix"]
         return [
@@ -423,7 +390,6 @@ def accessor_first_values(document: dict, binary: bytes,
 
 def accessor_values(document: dict, binary: bytes,
                     accessor_index: int) -> list[tuple[float, ...]]:
-    """Decode every value in a simple, non-sparse numeric accessor."""
     accessor = document["accessors"][accessor_index]
     view = document["bufferViews"][accessor["bufferView"]]
     component_type = accessor["componentType"]
@@ -456,7 +422,6 @@ def accessor_values(document: dict, binary: bytes,
 
 def check_library_contract(stats: GlbStats, document: dict, binary: bytes,
                            max_triangles: int) -> None:
-    """Enforce the crownless_asset_library export contract on one GLB."""
     stem = stats.path.stem
     nodes = document.get("nodes", [])
     meshes = document.get("meshes", [])
@@ -506,7 +471,6 @@ def check_library_contract(stats: GlbStats, document: dict, binary: bytes,
 
 
 def check_manifest(manifest_path: Path, export_dir: Path) -> list[str]:
-    """Cross-check manifest assets against exports on disk."""
     failures: list[str] = []
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     referenced = {asset["id"]: asset["export"] for asset in manifest.get("assets", [])}
@@ -536,7 +500,7 @@ def format_row(stats: GlbStats) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(description='Inspect and validate exported Crownless GLB assets.', formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("files", nargs="+", type=Path, help="GLB files to inspect")
     parser.add_argument("--profile", choices=("generic", "library"), default="generic",
                         help="contract profile; 'library' enforces the asset-library naming/metadata rules")

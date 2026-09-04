@@ -9,7 +9,6 @@ out/
 assets/previews/
 /.merge_file_*
 
-# Blender recovery and cache files
 *.blend1
 *.blend2
 __pycache__/

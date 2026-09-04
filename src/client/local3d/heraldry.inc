@@ -1,4 +1,3 @@
-/* Procedural banners for kingdoms, factions, and other powers. */
 static void DrawHeraldryTriangle(Vector3 first, Vector3 second,
                                  Vector3 third, Color color)
 {

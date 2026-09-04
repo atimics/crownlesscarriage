@@ -26,8 +26,52 @@ static void StartPreparedExpedition(CcSim *sim)
     CC_CHECK(CountEvents(sim, CC_EVENT_GOBLIN_RAID_DEPARTED) == 0);
 }
 
+static void CheckCivicCohesionRecovery(void)
+{
+    static CcSim sim;
+    for (int32_t variant = 0; variant < 4; ++variant) {
+        CcSimInit(&sim, 42U);
+        sim.current_day = 27;
+        sim.goblins.tribute_phase = CC_GOBLIN_TRIBUTE_IDLE;
+        sim.goblins.tribute_cooldown_days = 100;
+        sim.goblins.members = 12;
+        sim.goblins.cohesion = variant == 3 ? 100 : 49;
+        sim.goblins.devotion = 60;
+        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) sim.goblins.lair_stock[good] = 0;
+        sim.goblins.lair_stock[CC_GOOD_FOOD] = variant == 1 ? 0 : 20;
+        sim.goblins.lair_stock[CC_GOOD_TOOLS] = variant == 2 ? 0 : 1;
+        sim.dragon.territory_stability = 0;
+        for (int32_t i = 0; i < sim.kingdom_count; ++i) {
+            for (int32_t j = 0; j < sim.kingdom_count; ++j) sim.diplomacy[i][j] = CC_DIPLOMACY_PEACE;
+        }
+        CcSimAdvanceDays(&sim, 1);
+        if (variant == 0) {
+            CC_CHECK(sim.goblins.cohesion == 50);
+            CC_CHECK(sim.dragon.territory_stability > 0);
+        } else if (variant == 1 || variant == 2) {
+            CC_CHECK(sim.goblins.cohesion <= 49);
+            CC_CHECK(sim.dragon.territory_stability == 0);
+        } else {
+            CC_CHECK(sim.goblins.cohesion == 100);
+        }
+    }
+    CcSimInit(&sim, 42U);
+    sim.goblins.cohesion = 1;
+    for (int32_t month = 0; month < 50; ++month) {
+        sim.current_day = month * 28 + 27;
+        sim.goblins.tribute_phase = CC_GOBLIN_TRIBUTE_IDLE;
+        sim.goblins.tribute_cooldown_days = 100;
+        sim.goblins.members = 12;
+        sim.goblins.lair_stock[CC_GOOD_FOOD] = 20;
+        sim.goblins.lair_stock[CC_GOOD_TOOLS] = 1;
+        CcSimAdvanceDays(&sim, 1);
+    }
+    CC_CHECK(sim.goblins.cohesion >= 50);
+}
+
 int main(void)
 {
+    CheckCivicCohesionRecovery();
     char error[256];
 
     CcSim trade;

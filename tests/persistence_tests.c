@@ -2323,6 +2323,89 @@ static void CheckMaterialChainMigration(char *error, size_t error_capacity)
     RemoveDatabase(path);
 }
 
+static void CheckArchivePhysicalLoreMigration(char *error,
+                                              size_t error_capacity)
+{
+    const char *path = "persistence-schema35-archive-lore-test.ccsave";
+    RemoveDatabase(path);
+    CcSim legacy;
+    CcSimInit(&legacy, UINT32_C(0xa4c417e));
+    legacy.current_day = 6;
+    legacy.iron_ledger_reserve = 50;
+    legacy.archives.scribes = 1;
+    CcSettlement *scriptorium = &legacy.settlements[1];
+    scriptorium->stock[CC_GOOD_WHEAT] = 100;
+    scriptorium->stock[CC_GOOD_PAPER] = 1;
+    scriptorium->stock[CC_GOOD_TOOLS] = 1;
+    for (int32_t i = 0; i < legacy.event_count; ++i) {
+        legacy.events[i].magnitude = 0;
+    }
+    legacy.events[0].day = 6;
+    legacy.events[0].kind = CC_EVENT_KINGDOM_ACTION;
+    legacy.events[0].magnitude = 40;
+    CcSimAdvanceDays(&legacy, 1);
+    CC_CHECK(CcSimArchivePhysicalLore(&legacy) == 1);
+
+    legacy.schema_version = 35U;
+    legacy.generator_version = 25U;
+    legacy.archives.lore_stored = 0;
+    CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
+
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.archives.lore_stored == 1);
+    CC_CHECK(CcSimArchivePhysicalLore(&restored) == 1);
+    CC_CHECK(CcSimValidate(&restored, error, error_capacity));
+    RemoveDatabase(path);
+}
+
+static void CheckWoodPaperJournalMigration(char *error,
+                                           size_t error_capacity)
+{
+    char fixture[512];
+    (void)snprintf(
+        fixture, sizeof(fixture),
+        "%s/tests/fixtures/shipped/schema-36-generator-25-paper-journal.ccsave",
+        CC_TEST_SOURCE_DIR);
+    CC_CHECK(ReadSqliteInteger(
+        fixture, "SELECT schema_version FROM meta WHERE id=1;") == 36);
+    CC_CHECK(ReadSqliteInteger(
+        fixture, "SELECT COUNT(*) FROM action_journal;") == 1);
+
+    CcSim restored;
+    CC_CHECK(CcSaveRead(fixture, &restored, error, error_capacity));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.current_day == 7);
+    CC_CHECK(restored.settlements[1].stock[CC_GOOD_WHEAT] == 98);
+    /* The replay produces 22 wood in transit. Migration completes this
+       extra load because the Crown carriage already holds its food load. */
+    CC_CHECK(restored.settlements[1].stock[CC_GOOD_WOOD] == 22);
+    CC_CHECK(restored.shipments[1].good == CC_GOOD_WOOD);
+    CC_CHECK(restored.shipments[1].quantity == 22);
+    CC_CHECK(restored.shipments[1].status == CC_SHIPMENT_ARRIVED);
+    CC_CHECK(restored.settlements[1].stock[CC_GOOD_PAPER] == 8);
+    CC_CHECK(CcSimValidate(&restored, error, error_capacity));
+
+    /* Captured with main 9ab3a56 before changing the paper recipe. */
+    CcSim legacy_view = restored;
+    legacy_view.schema_version = 36U;
+    legacy_view.next_entity_serial -= (uint64_t)restored.kingdom_count;
+    legacy_view.settlements[1].stock[CC_GOOD_WOOD] -= 22;
+    legacy_view.shipments[1].status = CC_SHIPMENT_TRAVELLING;
+    CC_CHECK(CcSimHash(&legacy_view) == UINT64_C(0x8e390ecaf46cc546));
+    CC_CHECK(ReadSqliteInteger(
+        fixture, "SELECT schema_version FROM meta WHERE id=1;") == 36);
+
+    const char *path = "persistence-wood-paper-upgrade-test.ccsave";
+    RemoveDatabase(path);
+    CC_CHECK(CcSaveWrite(path, &restored, error, error_capacity));
+    CcSim round_trip;
+    CC_CHECK(CcSaveRead(path, &round_trip, error, error_capacity));
+    CC_CHECK(CcSimHash(&round_trip) == CcSimHash(&restored));
+    RemoveDatabase(path);
+}
+
 static void CheckJourneyStopPersistence(char *error, size_t error_capacity)
 {
     const char *path = "persistence-journey-stop-test.ccsave";
@@ -2419,7 +2502,7 @@ static void CheckShippedSaveCompatibility(char *error,
         {22U, 20U}, {23U, 20U}, {24U, 20U}, {25U, 20U},
         {26U, 21U}, {27U, 21U}, {27U, 22U}, {28U, 22U},
         {29U, 23U}, {30U, 23U}, {31U, 24U}, {32U, 25U},
-        {33U, 25U}, {34U, 25U}
+        {33U, 25U}, {34U, 25U}, {35U, 25U}
     };
     for (size_t i = 0; i < sizeof(fixtures) / sizeof(fixtures[0]); ++i) {
         const ShippedSaveFixture *fixture = &fixtures[i];
@@ -2462,6 +2545,16 @@ static void CheckShippedSaveCompatibility(char *error,
         CC_CHECK(restored.player.location_id == (CcId)player_location);
         CC_CHECK(CcSimValidate(&restored, error, error_capacity));
     }
+
+    char decay_file[512];
+    (void)snprintf(decay_file, sizeof(decay_file),
+                   "%s/tests/fixtures/shipped/schema-35-generator-25-decay-journal.ccsave",
+                   CC_TEST_SOURCE_DIR);
+    CcSim decayed;
+    CC_CHECK(CcSaveRead(decay_file, &decayed, error, error_capacity));
+    CC_CHECK(decayed.current_day == 373);
+    CC_CHECK(decayed.archives.lore_stored == CcSimArchivePhysicalLore(&decayed));
+    CC_CHECK(CcSimValidate(&decayed, error, error_capacity));
 
     char journal_file[512];
     (void)snprintf(
@@ -2572,6 +2665,8 @@ int main(void)
                             "persistence-schema32-paper-test.ccsave",
                             error, sizeof(error));
     CheckMaterialChainMigration(error, sizeof(error));
+    CheckArchivePhysicalLoreMigration(error, sizeof(error));
+    CheckWoodPaperJournalMigration(error, sizeof(error));
     CheckJourneyStopPersistence(error, sizeof(error));
     CheckLegacyLifecycleJournalCompatibility(24U, error, sizeof(error));
     CheckLegacyLifecycleJournalCompatibility(25U, error, sizeof(error));

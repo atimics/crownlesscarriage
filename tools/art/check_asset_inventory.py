@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Report tracked art size and reject unreferenced binary assets."""
 
 from __future__ import annotations
 

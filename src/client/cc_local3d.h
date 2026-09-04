@@ -2,6 +2,7 @@
 #define CROWNLESS_LOCAL3D_H
 
 #include "client/cc_npc_appearance.h"
+#include "client/cc_local_viewport.h"
 #include "locomotion/cc_limb.h"
 #include "locomotion/cc_humanoid.h"
 #include "locomotion/cc_multileg.h"
@@ -131,10 +132,13 @@ typedef struct CcLocalWorldCarriageState {
     float pace;
     float camera_weight;
     float camera_target;
+    float camera_heading_yaw;
+    float arrival_travel_weight;
     CcId route_id;
     bool visible;
     bool hero_embarked;
     bool town_arrival;
+    bool storybook_travel;
 } CcLocalWorldCarriageState;
 
 typedef enum CcLocalAtmospherePreset {
@@ -548,9 +552,9 @@ float CcLocalCombatSkillCooldown(const CcLocalAgent *player,
                                  CcCombatSkill skill);
 float CcLocalCombatSkillDuration(CcCombatSkill skill);
 
-/* Renderer lifecycle: configure, init, begin frame, bind, draw, shutdown. */
 void CcLocalRendererInit(void);
 void CcLocalRendererSetScreenFirstHero(bool enabled);
+void CcLocalRendererSetReducedMotion(bool enabled);
 void CcLocalRendererSetOpeningStep(CcLocalOpeningStep step);
 void CcLocalRendererBeginFrame(float delta_time);
 void CcLocalRendererResetPerformanceMetrics(void);

@@ -92,16 +92,9 @@ vec3 paintedSource(vec2 coordinate)
 
 void main()
 {
-    /* Spatial pixelation is structural: the world is rendered into a true
-       half-resolution target and enlarged with nearest-neighbor sampling.
-       This pass only grades those already-stable art pixels. */
     vec4 source = texture(texture0, fragTexCoord) * fragColor * colDiffuse;
     vec2 texel = 1.0 / vec2(textureSize(texture0, 0));
 
-    /* The reference look gets much of its richness from hand-placed dark
-       joins and bright chips. A restrained cross-shaped unsharp pass brings
-       that separation back after the 3D scene has been rasterized onto the
-       stable art-pixel grid. */
     vec3 nearAverage = (
         paintedSource(fragTexCoord + vec2(texel.x, 0.0)) +
         paintedSource(fragTexCoord - vec2(texel.x, 0.0)) +
@@ -110,10 +103,6 @@ void main()
     source.rgb = clamp(source.rgb + (source.rgb - nearAverage) * 0.085,
                        0.0, 1.0);
 
-    /* Bright warm pixels act as authored torches, lamps, windows, and fire.
-       Sampling only the fixed world target keeps the glow blocky and stable;
-       the strength comes from the scene recipe, so daylight does not bloom
-       like a modern HDR render. */
     float ember = warmEmitter(source.rgb) * 0.14;
     const float radii[3] = float[3](2.0, 5.0, 9.0);
     const float weights[3] = float[3](0.52, 0.31, 0.17);
@@ -142,9 +131,6 @@ void main()
         srgbToLinear(clamp(source.rgb, 0.0, 1.0)));
     float originalLightness = perceptual.x;
 
-    /* Work in a perceptual space. Shadows lose a little pigment, while the
-       readable mid bands keep their authored hue. This avoids the old RGB
-       contrast pass bending every material toward brown or green. */
     float pigment = mix(0.84, 1.02,
                          smoothstep(0.18, 0.58, originalLightness)) *
                      atmosphereChroma;
@@ -153,9 +139,6 @@ void main()
                          0.0, 1.0);
     perceptual.x = clamp(perceptual.x + atmosphereExposure, 0.0, 1.0);
 
-    /* The core signature is a cool violet shadow and a restrained brass
-       shoulder. The shift is intentionally small; material ramps still own
-       the visible colors after lookup. */
     float shadowWeight = 1.0 - smoothstep(0.22, 0.50,
                                           originalLightness);
     float highlightWeight = smoothstep(0.58, 0.88, originalLightness);
@@ -172,12 +155,8 @@ void main()
     vec3 color = linearToSrgb(clamp(oklabToLinearSrgb(perceptual),
                                     0.0, 1.0));
 
-    /* Fog has already been applied by the material shaders. Grading and the
-       vignette happen above; this shared lookup is the final color operation
-       so no blend or random grain can create off-palette pixels afterward. */
-    color = nearestPaletteColor(clamp(color, 0.0, 1.0));
-    /* The world target is always cleared to an opaque scene. Weather layers
-       may use alpha while composing into it, but the presented world must be
-       opaque or exact palette colors blend with the page background here. */
+    // Retain painted shading between the shared palette's anchor colours.
+    color = mix(clamp(color, 0.0, 1.0),
+                nearestPaletteColor(clamp(color, 0.0, 1.0)), 0.30);
     finalColor = vec4(color, 1.0);
 }

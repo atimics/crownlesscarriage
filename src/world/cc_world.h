@@ -161,6 +161,10 @@ CcWorldSurfaceKind CcWorldSurfaceAt(
 bool CcWorldStreamInit(CcWorldStream *stream, const CcSim *sim);
 void CcWorldStreamUpdate(CcWorldStream *stream, float focus_x, float focus_z,
                          int32_t generation_budget);
+void CcWorldStreamFollowRoute(CcWorldStream *stream,
+                              const CcWorldRoutePlacement *route,
+                              CcId origin_id, float amount,
+                              int32_t generation_budget);
 const CcWorldChunk *CcWorldStreamChunkAt(
     const CcWorldStream *stream, int32_t chunk_x, int32_t chunk_z);
 float CcWorldStreamHeightAt(const CcWorldStream *stream, float x, float z);

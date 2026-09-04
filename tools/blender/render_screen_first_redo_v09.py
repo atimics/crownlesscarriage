@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Render a clean V09 adult-proportion silhouette blockout."""
 
 from __future__ import annotations
 
@@ -46,7 +45,6 @@ def make_silhouette_material() -> bpy.types.Material:
 
 
 def add_head(material: bpy.types.Material) -> None:
-    """A small six-head adult skull with a broad face plane."""
     profile = (
         (-0.068, 2.095), (-0.117, 2.072), (-0.138, 2.020),
         (-0.140, 1.935), (-0.122, 1.855), (-0.081, 1.805),
@@ -87,7 +85,6 @@ def add_head(material: bpy.types.Material) -> None:
 
 
 def add_hair(material: bpy.types.Material) -> None:
-    """Six full-root clumps; no cap, crown, fringe strip, or loose strands."""
     bpy.ops.mesh.primitive_ico_sphere_add(
         subdivisions=1, radius=1.0, location=(0.0, 0.025, 2.075))
     core = bpy.context.object

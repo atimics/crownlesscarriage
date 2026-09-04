@@ -55,8 +55,72 @@ static void ResolveRoadRhythm(CcMetagame *metagame,
     }
 }
 
+static void CheckJourneyContext(void)
+{
+    static CcMetagame game;
+    static CcMetagame restored;
+    char output[16384], loaded[16384], error[192];
+    const char *path = "metagame-journey-context.ccsave";
+    CcMetagameInit(&game, 42U);
+    CC_CHECK(CcMetagameExecute(&game, "accept 1", output, sizeof(output)));
+    CC_CHECK(CcMetagameExecute(&game, "travel 1", output, sizeof(output)));
+    const char *commands[] = {"travel 2", "road press-on", "road camp"};
+    const char *phases[] = {"midday road stop", "overnight road stop", "checkpoint encounter"};
+    for (int32_t i = 0; i < 3; ++i) {
+        CC_CHECK(CcMetagameExecute(&game, commands[i], output, sizeof(output)));
+        CC_CHECK(CcMetagameExecute(&game, "look", output, sizeof(output)));
+        CC_CHECK(strstr(output, "King's Road toward Alderwatch") != NULL);
+        CC_CHECK(strstr(output, phases[i]) != NULL);
+        CC_CHECK(strstr(output, "Every lane in Gloamgate") == NULL);
+        CC_CHECK(CcMetagameExecute(&game, "roads", loaded, sizeof(loaded)));
+        CC_CHECK(strcmp(output, loaded) == 0);
+        (void)remove(path);
+        CC_CHECK(CcMetagameStartJournal(&game, path, error, sizeof(error)));
+        CC_CHECK(CcMetagameCloseJournal(&game, error, sizeof(error)));
+        CcMetagameInit(&restored, 1U);
+        CC_CHECK(CcMetagameResumeJournal(&restored, path, error, sizeof(error)));
+        CC_CHECK(CcMetagameExecute(&restored, "look", loaded, sizeof(loaded)));
+        CC_CHECK(strcmp(output, loaded) == 0);
+        CC_CHECK(CcSimHash(&game.sim) == CcSimHash(&restored.sim));
+        CC_CHECK(CcMetagameCloseJournal(&restored, error, sizeof(error)));
+        CcMetagameAgentObserve(&game, output, sizeof(output));
+        CC_CHECK(strstr(output, phases[i]) != NULL);
+        CC_CHECK(strstr(output, "travel NUMBER") == NULL);
+        CC_CHECK(strstr(output, "for sale") == NULL);
+        CC_CHECK(strstr(output, "market stock") == NULL);
+        CC_CHECK(CcMetagameAgentExecute(&game, "help", loaded, sizeof(loaded)));
+        CC_CHECK(strstr(loaded, phases[i]) != NULL);
+        CC_CHECK(CcMetagameAgentExecute(&game, "status", loaded, sizeof(loaded)));
+        CC_CHECK(strstr(loaded, phases[i]) != NULL);
+        CC_CHECK(strstr(loaded, "market stock") == NULL);
+        CC_CHECK(!CcMetagameAgentExecute(&game, "people", loaded, sizeof(loaded)));
+        CC_CHECK(!CcMetagameAgentExecute(&game, "travel 1", loaded, sizeof(loaded)));
+    }
+    CC_CHECK(CcMetagameAgentExecute(&game, "road bargain", output, sizeof(output)));
+    ResolveRoadRhythm(&game, output, sizeof(output));
+    CC_CHECK(!game.sim.journey.active);
+    CC_CHECK(CcMetagameExecute(&game, "look", output, sizeof(output)));
+    CC_CHECK(strstr(output, "Alderwatch stands over") != NULL);
+    (void)remove(path);
+    CcMetagameInit(&game, 42U);
+    CC_CHECK(!CcMetagameExecute(&game, "travel 99", output, sizeof(output)));
+    CC_CHECK(strstr(output, "(1-8); got '99'") != NULL);
+    CC_CHECK(!CcMetagameExecute(&game, "buy bread bad", output, sizeof(output)));
+    CC_CHECK(strstr(output, "cargo count (1-") != NULL);
+    CC_CHECK(strstr(output, "got 'bad'") != NULL);
+    CC_CHECK(!CcMetagameExecute(&game, "wait 999", output, sizeof(output)));
+    CC_CHECK(strstr(output, "(1-365); got '999'") != NULL);
+    CcCommand travel = {.kind = CC_COMMAND_TRAVEL, .target_id = game.sim.settlements[1].id};
+    CC_CHECK(CcSimApply(&game.sim, &travel, error, sizeof(error)));
+    CcMetagameAgentObserve(&game, output, sizeof(output));
+    CC_CHECK(strstr(output, "travelling") != NULL);
+    CC_CHECK(strstr(output, "road continue") != NULL);
+    CC_CHECK(CcMetagameAgentExecute(&game, "road continue", output, sizeof(output)));
+}
+
 int main(void)
 {
+    CheckJourneyContext();
     char output[16384];
     char error[192];
 
@@ -330,8 +394,6 @@ int main(void)
     CC_CHECK(CcMetagameExecute(&metagame, "buy tools 2", output,
                                sizeof(output)));
     ExecuteNumber(&metagame, "accept", dungeon_number, output, sizeof(output));
-    /* The text-client suite checks the strategic choice after a completed
-       delve; underroad_tests covers navigation and threshold discovery. */
     metagame.sim.dungeons[0].rooms[19].state_flags |=
         CC_DUNGEON_ROOM_OBJECTIVE_REACHED;
     for (int32_t i = 0; i < metagame.sim.dungeons[0].link_count; ++i) {
@@ -602,7 +664,6 @@ int main(void)
     CC_CHECK(dragon.sim.goblins.tribute_phase ==
              CC_GOBLIN_TRIBUTE_IDLE);
 
-    /* mark: player-facing counterfactual wrapper */
     CcMetagame marked;
     CcMetagameInit(&marked, UINT32_C(0x5eed));
     CC_CHECK(CcMetagameExecute(&marked, "accept 1", output, sizeof(output)));
@@ -615,7 +676,6 @@ int main(void)
                     "Consequences present only in the courier branch") !=
              NULL);
     CC_CHECK(strstr(output, "branch differences") != NULL);
-    /* Early campaign, same seed: a couple of trades must diverge somewhere. */
     CC_CHECK(strstr(output, "Actual state") != NULL);
 
     puts("Text-first metagame tests passed");

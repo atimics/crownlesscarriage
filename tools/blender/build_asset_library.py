@@ -1,12 +1,4 @@
 #!/usr/bin/env python3
-"""Build the Crownless Carriage modular Blender asset starter library.
-
-Run with:
-    blender --background --factory-startup --python tools/blender/build_asset_library.py
-
-The script is intentionally self-contained. It creates source collections, view
-layer presets, GLB exports, a machine-readable manifest, and preview renders.
-"""
 
 from __future__ import annotations
 
@@ -205,7 +197,6 @@ def painted_material_class(material_name: str) -> tuple[str, float]:
 
 
 def add_painted_environment_channels(obj: bpy.types.Object, role: str) -> None:
-    """Author broad value, material, and accent channels on one pilot mesh."""
     mesh = obj.data
     if not mesh.materials:
         raise RuntimeError(f"{obj.name} has no material for its paint mask")

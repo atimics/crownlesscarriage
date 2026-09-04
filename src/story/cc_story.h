@@ -51,6 +51,7 @@ bool CcStoryCharacterText(
     const CcCharacter *character, char *text, size_t text_capacity);
 size_t CcStoryAuthoredLineCount(void);
 const CcStoryLine *CcStoryAuthoredLineAt(size_t index);
+const char *CcStoryAuthoredSpeakerAt(size_t index);
 const char *CcStoryBeatName(CcStoryBeat beat);
 const char *CcStoryPlayerChoiceText(CcSituationKind kind,
                                     CcStoryPlayerChoice choice);

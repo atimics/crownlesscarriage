@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Package rendered hero frames as a compact looping GIF."""
 
 from pathlib import Path
 

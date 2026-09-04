@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Build the shared Crownless action-figure world kit and review sheets."""
 
 from __future__ import annotations
 

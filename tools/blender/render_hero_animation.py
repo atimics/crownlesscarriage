@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Author and render a looping turntable for the modular Crownless hero."""
 
 from __future__ import annotations
 

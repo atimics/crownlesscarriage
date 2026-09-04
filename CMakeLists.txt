@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 3.24)
 
+if(APPLE AND NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "14.0" CACHE STRING
+        "Oldest supported macOS version")
+endif()
+
 project(crownless_carriage VERSION 0.1.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 17)
@@ -120,6 +125,13 @@ add_library(crownless_client_session
 target_include_directories(crownless_client_session PUBLIC src)
 cc_strict_warnings(crownless_client_session)
 
+add_library(crownless_soundscape src/client/cc_soundscape.c)
+target_include_directories(crownless_soundscape PUBLIC src)
+if(NOT MSVC)
+    target_link_libraries(crownless_soundscape PUBLIC m)
+endif()
+cc_strict_warnings(crownless_soundscape)
+
 add_library(crownless_client_policy
     src/client/cc_client_policy.c
 )
@@ -135,6 +147,12 @@ add_library(crownless_road_book
 target_include_directories(crownless_road_book PUBLIC src)
 target_link_libraries(crownless_road_book PUBLIC crownless_sim)
 cc_strict_warnings(crownless_road_book)
+
+if(NOT EMSCRIPTEN)
+    add_executable(crownless_audio_export tools/audio_export.c)
+    target_link_libraries(crownless_audio_export PRIVATE crownless_story crownless_soundscape)
+    cc_strict_warnings(crownless_audio_export)
+endif()
 
 if(EMSCRIPTEN)
     add_library(crownless_sqlite_web INTERFACE)
@@ -208,7 +226,6 @@ if(CC_BUILD_CLIENT)
     FetchContent_Declare(
         raylib
         GIT_REPOSITORY https://github.com/raysan5/raylib.git
-        # Exact commit for the signed raylib 6.0 release tag.
         GIT_TAG dbc56a87da87d973a9c5baa4e7438a9d20121d28
         GIT_SHALLOW TRUE
     )
@@ -253,7 +270,8 @@ if(CC_BUILD_CLIENT)
     )
     cc_strict_warnings(crownless_local_renderer)
 
-    add_executable(crownless_carriage src/client/main.c)
+    file(GLOB CC_VOICE_ASSETS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/assets/audio/voice/*.wav")
+    add_executable(crownless_carriage src/client/main.c src/client/cc_audio.c)
     if(APPLE)
         set_target_properties(crownless_carriage PROPERTIES
             MACOSX_BUNDLE TRUE
@@ -263,11 +281,20 @@ if(CC_BUILD_CLIENT)
             MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
         )
     endif()
+    if(APPLE AND NOT EMSCRIPTEN)
+        add_custom_target(crownless_voice_assets ALL
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${CMAKE_CURRENT_SOURCE_DIR}/assets/audio/voice"
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/audio/voice"
+            DEPENDS ${CC_VOICE_ASSETS}
+            VERBATIM)
+        add_dependencies(crownless_voice_assets crownless_carriage)
+    endif()
     target_link_libraries(crownless_carriage PRIVATE
         crownless_local_renderer
         crownless_persistence crownless_locomotion
         crownless_creature_catalog crownless_local_place
-        crownless_client_session crownless_client_policy crownless_story
+        crownless_client_session crownless_client_policy crownless_story crownless_soundscape
         crownless_world
         raylib
     )
@@ -278,11 +305,127 @@ if(CC_BUILD_CLIENT)
         target_compile_definitions(crownless_local_renderer PRIVATE PLATFORM_WEB)
         set_property(TARGET crownless_local_renderer PROPERTY C_EXTENSIONS ON)
         set(CC_WEB_ASSET_DIR "${CMAKE_CURRENT_BINARY_DIR}/web-runtime")
-        add_custom_target(crownless_web_assets ALL
+        file(GLOB CC_WEB_NPC_ASSET_SOURCES CONFIGURE_DEPENDS
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/npc/npc_module_*.glb"
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/npc/npc_wayfarer_v01.glb"
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/npc/npc_guard_v01.glb"
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/npc/npc_raider_v01.glb"
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/npc/npc_merchant_v01.glb"
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/npc/npc_laborer_v01.glb"
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/npc/npc_traveller_v01.glb"
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/npc/npc_refugee_v01.glb"
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/npc/npc_scout_v01.glb"
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/npc/npc_healer_v01.glb"
+        )
+        file(GLOB CC_WEB_WORLD_KIT_ASSET_SOURCES CONFIGURE_DEPENDS
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/world_kit/wk_body_skin_standard_athletic_balanced_v01.glb"
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/world_kit/wk_head_*.glb"
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/world_kit/wk_hair_*.glb"
+        )
+        file(GLOB CC_WEB_SHADER_ASSET_SOURCES CONFIGURE_DEPENDS
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/*.vs"
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/*.fs"
+        )
+        file(GLOB CC_WEB_ECONOMIC_CARGO_ASSET_SOURCES CONFIGURE_DEPENDS
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/glb/economy_cargo_*.glb"
+        )
+        set(CC_WEB_STARTUP_ASSET_SOURCES
+            ${CC_VOICE_ASSETS}
+            ${CC_WEB_NPC_ASSET_SOURCES}
+            ${CC_WEB_WORLD_KIT_ASSET_SOURCES}
+            ${CC_WEB_SHADER_ASSET_SOURCES}
+            ${CC_WEB_ECONOMIC_CARGO_ASSET_SOURCES}
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/glb/carriage_base_v01.glb"
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/economic_goods_v01.png"
+        )
+        foreach(asset IN ITEMS
+                creature_horse_v01.glb
+                creature_cow_v01.glb
+                creature_sheep_v01.glb
+                creature_dragon_v01.glb
+                creature_dragon_whelp_v01.glb
+                creature_dragon_wanderer_v01.glb
+                creature_dragon_deep_wyrm_v01.glb)
+            list(APPEND CC_WEB_STARTUP_ASSET_SOURCES
+                "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/creatures/${asset}")
+        endforeach()
+        set(CC_WEB_LAZY_ASSET_SOURCES)
+        foreach(asset IN ITEMS
+                environment_bridge_checkpoint_v01.glb
+                environment_market_granary_v01.glb
+                environment_mine_entrance_v01.glb
+                state_food_shortage_v01.glb
+                state_harsh_enforcement_v01.glb
+                state_market_recovery_v01.glb)
+            list(APPEND CC_WEB_LAZY_ASSET_SOURCES
+                "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/glb/${asset}")
+        endforeach()
+        list(APPEND CC_WEB_LAZY_ASSET_SOURCES
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/maps/gloamgate_to_alderwatch.png"
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/maps/collectible_map_atlas.png"
+        )
+        set(CC_WEB_STARTUP_ASSET_OUTPUTS)
+        foreach(asset IN LISTS CC_WEB_STARTUP_ASSET_SOURCES)
+            file(RELATIVE_PATH relative_asset
+                "${CMAKE_CURRENT_SOURCE_DIR}/assets" "${asset}")
+            list(APPEND CC_WEB_STARTUP_ASSET_OUTPUTS
+                "${CC_WEB_ASSET_DIR}/assets/${relative_asset}")
+        endforeach()
+        set(CC_WEB_LAZY_ASSET_OUTPUTS)
+        set(CC_WEB_SITE_LAZY_ASSET_OUTPUTS)
+        foreach(asset IN LISTS CC_WEB_LAZY_ASSET_SOURCES)
+            file(RELATIVE_PATH relative_asset
+                "${CMAKE_CURRENT_SOURCE_DIR}/assets" "${asset}")
+            list(APPEND CC_WEB_LAZY_ASSET_OUTPUTS
+                "${CC_WEB_ASSET_DIR}/lazy-assets/${relative_asset}")
+            list(APPEND CC_WEB_SITE_LAZY_ASSET_OUTPUTS
+                "${CMAKE_CURRENT_BINARY_DIR}/site/assets/${relative_asset}")
+        endforeach()
+        set(CC_WEB_STARTUP_ASSET_STAMP
+            "${CC_WEB_ASSET_DIR}/.startup-prepared")
+        set(CC_WEB_LAZY_ASSET_STAMP
+            "${CC_WEB_ASSET_DIR}/.lazy-prepared")
+        set(CC_WEB_LICENSE_OUTPUTS
+            "${CMAKE_CURRENT_BINARY_DIR}/site/licenses.html"
+            "${CMAKE_CURRENT_BINARY_DIR}/site/LICENSE.txt"
+            "${CMAKE_CURRENT_BINARY_DIR}/site/THIRD_PARTY_NOTICES.txt"
+        )
+        add_custom_command(
+            OUTPUT
+                "${CC_WEB_STARTUP_ASSET_STAMP}"
+                ${CC_WEB_STARTUP_ASSET_OUTPUTS}
             COMMAND ${CMAKE_COMMAND}
                 -DCC_WEB_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
                 -DCC_WEB_OUTPUT_DIR=${CC_WEB_ASSET_DIR}
+                -DCC_WEB_ASSET_GROUP=startup
                 -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/PrepareWebAssets.cmake
+            COMMAND ${CMAKE_COMMAND} -E touch
+                "${CC_WEB_STARTUP_ASSET_STAMP}"
+            DEPENDS
+                ${CC_WEB_STARTUP_ASSET_SOURCES}
+                ${CMAKE_CURRENT_SOURCE_DIR}/cmake/PrepareWebAssets.cmake
+                ${CMAKE_CURRENT_SOURCE_DIR}/tools/blender/batch_static_glb.py
+            VERBATIM
+        )
+        add_custom_command(
+            OUTPUT
+                "${CC_WEB_LAZY_ASSET_STAMP}"
+                ${CC_WEB_LAZY_ASSET_OUTPUTS}
+            COMMAND ${CMAKE_COMMAND}
+                -DCC_WEB_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+                -DCC_WEB_OUTPUT_DIR=${CC_WEB_ASSET_DIR}
+                -DCC_WEB_ASSET_GROUP=lazy
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/PrepareWebAssets.cmake
+            COMMAND ${CMAKE_COMMAND} -E touch
+                "${CC_WEB_LAZY_ASSET_STAMP}"
+            DEPENDS
+                ${CC_WEB_LAZY_ASSET_SOURCES}
+                ${CMAKE_CURRENT_SOURCE_DIR}/cmake/PrepareWebAssets.cmake
+                ${CMAKE_CURRENT_SOURCE_DIR}/tools/blender/batch_static_glb.py
+            VERBATIM
+        )
+        add_custom_command(
+            OUTPUT ${CC_WEB_LICENSE_OUTPUTS}
             COMMAND ${CMAKE_COMMAND} -E make_directory
                 "${CMAKE_CURRENT_BINARY_DIR}/site"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -292,24 +435,55 @@ if(CC_BUILD_CLIENT)
                 "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
                 "${CMAKE_CURRENT_BINARY_DIR}/site/LICENSE.txt"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${CMAKE_CURRENT_SOURCE_DIR}/THIRD_PARTY_NOTICES.md"
+                "${CMAKE_CURRENT_SOURCE_DIR}/THIRD_PARTY_NOTICES.txt"
                 "${CMAKE_CURRENT_BINARY_DIR}/site/THIRD_PARTY_NOTICES.txt"
             DEPENDS
-                ${CMAKE_CURRENT_SOURCE_DIR}/cmake/PrepareWebAssets.cmake
-                ${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html
                 ${CMAKE_CURRENT_SOURCE_DIR}/web/licenses.html
-                ${CMAKE_CURRENT_SOURCE_DIR}/web/persistence.js
                 ${CMAKE_CURRENT_SOURCE_DIR}/LICENSE
-                ${CMAKE_CURRENT_SOURCE_DIR}/THIRD_PARTY_NOTICES.md
+                ${CMAKE_CURRENT_SOURCE_DIR}/THIRD_PARTY_NOTICES.txt
             VERBATIM
         )
-        add_dependencies(crownless_carriage crownless_web_assets)
+        add_custom_target(crownless_web_assets ALL DEPENDS
+            "${CC_WEB_STARTUP_ASSET_STAMP}"
+            "${CC_WEB_LAZY_ASSET_STAMP}"
+            ${CC_WEB_STARTUP_ASSET_OUTPUTS}
+            ${CC_WEB_LAZY_ASSET_OUTPUTS}
+            ${CC_WEB_LICENSE_OUTPUTS}
+        )
+        set(CC_WEB_LAZY_SITE_STAMP
+            "${CMAKE_CURRENT_BINARY_DIR}/site/.lazy-assets")
+        add_custom_command(
+            OUTPUT
+                "${CC_WEB_LAZY_SITE_STAMP}"
+                "${CMAKE_CURRENT_BINARY_DIR}/site/.nojekyll"
+                ${CC_WEB_SITE_LAZY_ASSET_OUTPUTS}
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+                "${CMAKE_CURRENT_BINARY_DIR}/site"
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${CC_WEB_ASSET_DIR}/lazy-assets"
+                "${CMAKE_CURRENT_BINARY_DIR}/site/assets"
+            COMMAND ${CMAKE_COMMAND} -E touch
+                "${CMAKE_CURRENT_BINARY_DIR}/site/.nojekyll"
+            COMMAND ${CMAKE_COMMAND} -E touch
+                "${CC_WEB_LAZY_SITE_STAMP}"
+            DEPENDS
+                "${CC_WEB_LAZY_ASSET_STAMP}"
+                ${CC_WEB_LAZY_ASSET_OUTPUTS}
+            VERBATIM
+        )
+        add_custom_target(crownless_web_lazy_assets ALL DEPENDS
+            "${CC_WEB_LAZY_SITE_STAMP}"
+            "${CMAKE_CURRENT_BINARY_DIR}/site/.nojekyll"
+            ${CC_WEB_SITE_LAZY_ASSET_OUTPUTS}
+        )
+        add_dependencies(crownless_web_lazy_assets crownless_web_assets)
+        add_dependencies(crownless_carriage crownless_web_lazy_assets)
         set_target_properties(crownless_carriage PROPERTIES
             OUTPUT_NAME index
             SUFFIX ".html"
             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/site"
             LINK_DEPENDS
-                "${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html;${CMAKE_CURRENT_SOURCE_DIR}/web/persistence.js"
+                "${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html;${CMAKE_CURRENT_SOURCE_DIR}/web/persistence.js;${CC_WEB_STARTUP_ASSET_STAMP};${CC_WEB_STARTUP_ASSET_OUTPUTS}"
         )
         target_compile_definitions(crownless_carriage PRIVATE PLATFORM_WEB)
         set_property(TARGET crownless_carriage PROPERTY C_EXTENSIONS ON)
@@ -326,14 +500,6 @@ if(CC_BUILD_CLIENT)
             "--shell-file=${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html"
             "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/persistence.js"
             "SHELL:--preload-file ${CC_WEB_ASSET_DIR}/assets@/assets"
-        )
-        add_custom_command(TARGET crownless_carriage POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_directory
-                "${CC_WEB_ASSET_DIR}/lazy-assets"
-                "${CMAKE_CURRENT_BINARY_DIR}/site/assets"
-            COMMAND ${CMAKE_COMMAND} -E touch
-                "${CMAKE_CURRENT_BINARY_DIR}/site/.nojekyll"
-            VERBATIM
         )
     elseif(APPLE)
         set(CC_HERO_ENGINE_ASSET
@@ -453,7 +619,7 @@ if(CC_BUILD_CLIENT)
                 "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/LICENSE.txt"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${CMAKE_CURRENT_SOURCE_DIR}/THIRD_PARTY_NOTICES.md"
+                "${CMAKE_CURRENT_SOURCE_DIR}/THIRD_PARTY_NOTICES.txt"
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/THIRD_PARTY_NOTICES.txt"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${CC_HERO_ENGINE_ASSET}"
@@ -567,7 +733,7 @@ if(CC_BUILD_CLIENT)
                     "${CC_COLLECTIBLE_MAP_ATLAS_ASSET}"
                     "${CC_ECONOMIC_GOODS_ATLAS_ASSET}"
                     "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
-                    "${CMAKE_CURRENT_SOURCE_DIR}/THIRD_PARTY_NOTICES.md"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/THIRD_PARTY_NOTICES.txt"
             VERBATIM
         )
         add_dependencies(crownless_carriage crownless_hero_assets)
@@ -575,7 +741,6 @@ if(CC_BUILD_CLIENT)
     cc_strict_warnings(crownless_carriage)
     set(CC_ROADBOOK_REVIEW_DIR
         "${CMAKE_CURRENT_BINARY_DIR}/roadbook-review")
-    # These limits include headroom for the Linux CI software renderer.
     set(CC_ROADBOOK_ROUTE_MINIMUM_FPS 25)
     set(CC_ROADBOOK_ROUTE_P95_BUDGET_MS 40)
     set(CC_ROADBOOK_NETWORK_MINIMUM_FPS 21)
@@ -583,6 +748,14 @@ if(CC_BUILD_CLIENT)
     add_custom_target(run_roadbook_qa
         COMMAND ${CMAKE_COMMAND} -E make_directory
                 "${CC_ROADBOOK_REVIEW_DIR}"
+        COMMAND $<TARGET_FILE:crownless_carriage>
+                --capture-storybook 0.25 0.0 "roadbook-review/storybook-close.png"
+        COMMAND $<TARGET_FILE:crownless_carriage>
+                --capture-storybook 0.25 0.5 "roadbook-review/storybook-pullback.png"
+        COMMAND $<TARGET_FILE:crownless_carriage>
+                --capture-storybook 0.25 1.0 "roadbook-review/storybook-wide.png"
+        COMMAND $<TARGET_FILE:crownless_carriage>
+                --capture-storybook-arrival 0.5 "roadbook-review/storybook-arrival.png"
         COMMAND $<TARGET_FILE:crownless_carriage>
                 --capture-travel
                 "roadbook-review/travel.png"
@@ -707,6 +880,26 @@ endif()
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(soundscape_tests tests/soundscape_tests.c)
+    target_link_libraries(soundscape_tests PRIVATE crownless_soundscape)
+    cc_strict_warnings(soundscape_tests)
+    add_test(NAME soundscape_timing_and_samples COMMAND soundscape_tests)
+    if(CC_BUILD_CLIENT)
+        add_executable(audio_playback_tests tests/audio_playback_tests.c src/client/cc_audio.c)
+        target_include_directories(audio_playback_tests PRIVATE $<TARGET_PROPERTY:raylib,INTERFACE_INCLUDE_DIRECTORIES>)
+        target_link_libraries(audio_playback_tests PRIVATE crownless_soundscape)
+        cc_strict_warnings(audio_playback_tests)
+        add_test(NAME audio_playback_lifetime COMMAND audio_playback_tests)
+    endif()
+    if(NOT EMSCRIPTEN)
+        find_package(Python3 COMPONENTS Interpreter)
+        if(Python3_Interpreter_FOUND)
+            add_test(NAME audio_exports_and_voice_assets
+                COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/audio_export_tests.py
+                    $<TARGET_FILE:crownless_audio_export>)
+        endif()
+    endif()
+
     add_test(
         NAME license_page_contract
         COMMAND ${CMAKE_COMMAND}
@@ -714,10 +907,18 @@ if(BUILD_TESTING)
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/license_page_tests.cmake
     )
 
+    if(APPLE AND CC_BUILD_CLIENT)
+        add_test(
+            NAME macos_deployment_target
+            COMMAND ${CMAKE_COMMAND}
+                -DCC_BINARY=$<TARGET_FILE:crownless_carriage>
+                -DCC_EXPECTED_MINOS=14.0
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/macos_deployment_target_tests.cmake
+        )
+    endif()
+
     if(CC_BUILD_BENCHMARKS)
         set(CC_BENCHMARK_TEST_ARGUMENTS --quick)
-        # Debug builds keep the benchmark as a functional smoke test, but
-        # compiler instrumentation makes a release timing budget unreliable.
         if(CMAKE_BUILD_TYPE MATCHES "^(Release|RelWithDebInfo|MinSizeRel)$")
             list(APPEND CC_BENCHMARK_TEST_ARGUMENTS --assert-budget)
         endif()
@@ -760,6 +961,18 @@ if(BUILD_TESTING)
         add_test(NAME browser_persistence_contract
                  COMMAND ${CC_NODE_EXECUTABLE}
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/web_persistence_tests.mjs)
+    endif()
+
+    find_program(CC_PYTHON3_EXECUTABLE python3)
+    if(CC_PYTHON3_EXECUTABLE)
+        add_test(NAME webgl2_skinning_uniform_budget
+                 COMMAND ${CC_PYTHON3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/shader_uniform_budget_tests.py)
+        add_test(NAME simulation_runner_resume
+                 COMMAND ${CC_PYTHON3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/sim_runner_tests.py
+                         $<TARGET_FILE:crownless_sim_runner>)
+        set_tests_properties(simulation_runner_resume PROPERTIES TIMEOUT 60)
     endif()
 
     add_executable(client_policy_tests tests/client_policy_tests.c)
@@ -917,6 +1130,10 @@ if(BUILD_TESTING)
         target_compile_definitions(crownless_carriage PRIVATE
             CC_CLIENT_SELF_TESTS=1
         )
+        add_test(NAME storybook_travel_boundaries
+                 COMMAND crownless_carriage --test-storybook-travel)
+        add_test(NAME map_sale_input
+                 COMMAND crownless_carriage --test-map-sale-input)
         add_test(NAME town_arrival_parking
                  COMMAND crownless_carriage --test-town-arrival-parking)
         add_test(NAME town_departure_to_road_book
@@ -929,6 +1146,20 @@ if(BUILD_TESTING)
                  COMMAND crownless_carriage --test-town-session-startup)
         add_test(NAME road_encounter_session_restore
                  COMMAND crownless_carriage --test-road-encounter-session)
+
+        add_executable(renderer_regression_tests tests/renderer_regression_tests.c)
+        target_link_libraries(renderer_regression_tests PRIVATE crownless_local_renderer)
+        target_compile_definitions(renderer_regression_tests PRIVATE
+            CC_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
+        cc_strict_warnings(renderer_regression_tests)
+        add_test(NAME renderer_skin_rotation COMMAND renderer_regression_tests)
+        add_custom_target(run_renderer_graphics_tests
+            COMMAND renderer_regression_tests --graphics
+                "${CMAKE_CURRENT_BINARY_DIR}/renderer-viewport.png"
+            DEPENDS renderer_regression_tests
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+            USES_TERMINAL
+        )
 
         add_executable(npc_appearance_tests
             tests/npc_appearance_tests.c

@@ -75,8 +75,6 @@ void main()
     vec3 toCamera = normalize(cameraPosition - fragPosition);
     float facing = dot(normal, toLight);
 
-    /* COLOR_0 is an art contract, not a tint: red is broad value, green is
-       material class, and blue reserves one story accent. */
     float authoredValue = clamp(fragColor.r, 0.0, 1.0);
     float materialClass = clamp(fragColor.g, 0.0, 1.0);
     float accent = clamp(fragColor.b, 0.0, 1.0);
@@ -98,7 +96,6 @@ void main()
                   (1.0 - step(0.80, materialClass));
     float water = step(0.80, materialClass);
 
-    /* Each material gets one large, readable paint gesture. */
     float broadCloth = step(0.20, normal.y) * cloth;
     color *= mix(vec3(1.0), vec3(1.035, 1.015, 0.96), broadCloth * 0.22);
 

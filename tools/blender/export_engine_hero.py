@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Export the modular Crownless hero as a rigid-weighted engine skin."""
 
 from __future__ import annotations
 
@@ -88,7 +87,6 @@ def duplicate_component(source: bpy.types.Object, rig: bpy.types.Object,
 
 def consolidate_components(components: list[bpy.types.Object],
                            rig: bpy.types.Object) -> bpy.types.Object:
-    """Join authored pieces into one runtime skin without losing weights."""
     bpy.ops.object.select_all(action="DESELECT")
     for component in components:
         component.hide_set(False)

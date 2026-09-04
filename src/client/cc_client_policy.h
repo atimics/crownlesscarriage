@@ -2,7 +2,13 @@
 #define CROWNLESS_CLIENT_POLICY_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
+
+typedef struct CcClientPreferences {
+    bool reduced_motion;
+    int32_t audio_mode; /* 0: full, 1: effects, 2: muted */
+} CcClientPreferences;
 
 typedef enum CcClientConvoyGait {
     CC_CLIENT_CONVOY_GAIT_HALT,
@@ -45,6 +51,8 @@ typedef struct CcClientArrivalTransition {
 float CcClientConvoyPaceStep(float pace, bool road_phase,
                              bool urge, bool rein_in, bool stopped,
                              float delta_time);
+float CcClientTravelBlendStep(float blend, bool fast_forward, float delta_time);
+float CcClientTravelTimeScale(float blend);
 float CcClientRoadApproachStep(float progress, float pace, float delta_time);
 float CcClientConvoyPosturePace(int32_t posture);
 int32_t CcClientStepConvoyPosture(int32_t posture, int32_t direction);
@@ -62,6 +70,15 @@ bool CcClientInteractionActivated(bool requested, float distance,
                                   float maximum_distance);
 CcClientCampaignAccess CcClientCampaignAccessFor(bool normal_play,
                                                  bool journal_available);
+void CcClientPreferencesDefault(CcClientPreferences *preferences);
+bool CcClientPreferencesLoad(const char *path,
+                             CcClientPreferences *preferences,
+                             char *error, size_t error_capacity);
+bool CcClientPreferencesSave(const char *path,
+                             const CcClientPreferences *preferences,
+                             char *error, size_t error_capacity);
+bool CcClientHitEffectVisible(bool reduced_motion,
+                              float hit_flash_seconds);
 void CcClientDepartureBegin(CcClientDepartureTransition *transition);
 void CcClientDepartureAdvance(CcClientDepartureTransition *transition,
                               float pace, float delta_time);
