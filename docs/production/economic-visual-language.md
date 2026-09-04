@@ -17,9 +17,10 @@ carried and traded.
 The icons use the same shapes as the 3D goods. This lets a player connect a
 mine, a market stall, a carriage load, and a ledger entry at a glance.
 
-## Current goods
+## Visual set
 
-`CcGood` has six goods. Each good gets one main cargo shape.
+The production pass covers all eleven current `CcGood` values. Each gets one
+main cargo shape.
 
 | Good | UI shape | 3D cargo prop | Main colors |
 | --- | --- | --- | --- |
@@ -29,11 +30,18 @@ mine, a market stall, a carriage load, and a ledger entry at a glance.
 | Weapons | shield, sword, spear | short weapon rack | metal, wood, danger accent |
 | Raw Gold | pouch and rough nuggets | sealed raw-gold pouch | gold, leather |
 | Gems | casket with one crystal | reinforced gem casket | violet, metal, wood |
+| Wood | four tied logs | compact log bundle | wood, rope |
+| Wheat | upright tied sheaf | bound wheat sheaf | crop, parchment, rope |
+| Meat | three marked cuts | butcher tray | danger accent, parchment, wood |
+| Wool | soft square with two bands | tied wool bale | parchment, rope |
+| Stone | four offset blocks | strapped masonry bundle | stone, leather |
 
 Food uses the crate as its main shape. The loaf and wheat act as small detail.
 Iron uses flat bars. Tools use several short handles. Weapons use one tall
 spear and a round shield. Raw gold uses irregular nuggets. Gems use one sharp
-violet crystal. These shapes stay distinct when color is reduced.
+violet crystal. Wood stays horizontal. Wheat stays upright. Meat uses rounded
+cuts. Wool uses a pale bale. Stone uses square blocks. These shapes stay
+distinct when color is reduced.
 
 ## Production sources
 
@@ -46,11 +54,9 @@ market. They are place props and state dressing.
 | Iron ore | tall dark rock with broad rust-red faces | iron extraction |
 | Gold ore | lower grey rock with one warm gold seam | gold extraction |
 | Timber | five split logs tied with rope | building and tool supply |
-| Sheep | compact pale body with a dark face and legs | food and wool supply |
+| Sheep | compact pale body with a dark face and legs | meat and wool supply |
 | Gem seam | dark rock with two modest violet crystals | gem extraction |
-
-This layer can grow later. A traded wood or wool good would add a saved
-`CcGood` value, a cargo prop, and an icon as one schema change.
+| Stone quarry | cut face with loose masonry blocks | stone extraction |
 
 ## 3D rules
 
@@ -80,6 +86,11 @@ Suggested footprints:
 | Weapon rack | 1.0 x 0.55 x 1.25 |
 | Coin purse | 0.35 x 0.28 x 0.32 |
 | Gem casket | 0.65 x 0.48 x 0.48 |
+| Log bundle | 1.0 x 0.7 x 0.7 |
+| Wheat sheaf | 0.7 x 0.6 x 0.9 |
+| Butcher tray | 0.9 x 0.7 x 0.7 |
+| Wool bale | 0.9 x 0.7 x 0.8 |
+| Stone bundle | 1.0 x 0.7 x 0.7 |
 
 ## Icon rules
 
@@ -127,8 +138,8 @@ icon frame. The icon atlas comes from an orthographic render of the same cargo
 models, followed by a fixed 32-pixel reduction.
 
 The client draws one model for every good present on the carriage rack. The
-cargo screen draws the matching atlas frame beside its quantity. Desktop and
-web packages carry the six cargo models and the atlas.
+cargo screen draws the matching atlas frame beside each quantity. Desktop and
+web packages carry all eleven cargo models and the atlas.
 
 The concept boards set shape, material, camera, and light direction. The
 production board shows the generated Blender assets used by the game.

@@ -954,6 +954,31 @@ def build_economy_source_gems(
     return col
 
 
+def build_economy_source_stone(
+    parent: bpy.types.Collection,
+) -> bpy.types.Collection:
+    asset_id = "economy_source_stone_quarry_v01"
+    col = new_economy_collection(
+        parent, "CC_ECONOMY_SOURCE_STONE_QUARRY", asset_id,
+        "economy_source")
+    add_cube(
+        "GEO_StoneQuarryFace", (0.0, 0.22, 0.43), (1.42, 0.54, 0.86),
+        "stone", col, asset_id, "quarry_face", bevel_width=0.10)
+    for index, (x, y, z, scale) in enumerate((
+        (-0.48, -0.30, 0.18, (0.44, 0.38, 0.34)),
+        (0.02, -0.38, 0.22, (0.50, 0.42, 0.42)),
+        (0.48, -0.26, 0.15, (0.38, 0.34, 0.28)),
+    )):
+        add_cube(
+            f"GEO_QuarriedBlock_{index}", (x, y, z), scale,
+            "stone_light" if index == 1 else "stone_dark",
+            col, asset_id, "quarried_block", bevel_width=0.065)
+    add_beam_between(
+        "GEO_QuarryCut", (-0.42, -0.065, 0.18), (0.42, -0.065, 0.66),
+        0.035, "cream", col, asset_id, "cut_mark")
+    return col
+
+
 def add_small_grain_detail(
     col: bpy.types.Collection, asset_id: str,
 ) -> None:
@@ -1140,6 +1165,136 @@ def build_economy_cargo_gems(
     add_cone(
         "GEO_GemCargoCrystal", (0.02, -0.06, 0.57), 0.15, 0.42, "gem",
         col, asset_id, "gem", rotation=(0.04, -0.10, 0.08), vertices=6)
+    return col
+
+
+def build_economy_cargo_wood(
+    parent: bpy.types.Collection,
+) -> bpy.types.Collection:
+    asset_id = "economy_cargo_wood_v01"
+    col = new_economy_collection(
+        parent, "CC_ECONOMY_CARGO_WOOD", asset_id, "economy_cargo")
+    for index, (y, z, x) in enumerate((
+        (-0.16, 0.18, -0.04), (0.18, 0.18, 0.04),
+        (-0.16, 0.48, 0.05), (0.18, 0.48, -0.03),
+    )):
+        add_cylinder(
+            f"GEO_WoodCargoLog_{index}", (x, y, z), 0.17, 0.92,
+            "wood", col, asset_id, "log",
+            rotation=(0.0, math.radians(90), 0.0), vertices=10,
+            bevel_width=0.02)
+        for side in (-1.0, 1.0):
+            add_cylinder(
+                f"GEO_WoodCargoEnd_{index}_{'L' if side < 0 else 'R'}",
+                (x + side * 0.47, y, z), 0.14, 0.025,
+                "wood_light", col, asset_id, "cut_end",
+                rotation=(0.0, math.radians(90), 0.0), vertices=10,
+                bevel_width=0.0)
+    for x in (-0.25, 0.25):
+        add_torus(
+            "GEO_WoodCargoBinding", (x, 0.0, 0.34), 0.33, 0.026,
+            "rope", col, asset_id, "binding",
+            rotation=(0.0, math.radians(90), 0.0))
+    return col
+
+
+def build_economy_cargo_wheat(
+    parent: bpy.types.Collection,
+) -> bpy.types.Collection:
+    asset_id = "economy_cargo_wheat_v01"
+    col = new_economy_collection(
+        parent, "CC_ECONOMY_CARGO_WHEAT", asset_id, "economy_cargo")
+    stalks = (
+        (-0.24, -0.14, 0.75), (-0.08, -0.18, 0.88),
+        (0.10, -0.13, 0.81), (0.25, -0.08, 0.72),
+        (-0.19, 0.10, 0.82), (-0.02, 0.14, 0.74),
+        (0.15, 0.13, 0.91), (0.28, 0.14, 0.78),
+    )
+    for index, (x, y, height) in enumerate(stalks):
+        add_cylinder(
+            f"GEO_WheatStalk_{index}", (x, y, height * 0.45),
+            0.018, height * 0.78, "dry_grass", col, asset_id,
+            "wheat_stalk", vertices=6, bevel_width=0.0)
+        add_cone(
+            f"GEO_WheatHead_{index}", (x, y, height * 0.88),
+            0.065, height * 0.24, "cream", col, asset_id,
+            "wheat_head", vertices=5)
+    add_torus(
+        "GEO_WheatTie", (0.0, 0.0, 0.34), 0.31, 0.035,
+        "rope", col, asset_id, "binding")
+    return col
+
+
+def build_economy_cargo_meat(
+    parent: bpy.types.Collection,
+) -> bpy.types.Collection:
+    asset_id = "economy_cargo_meat_v01"
+    col = new_economy_collection(
+        parent, "CC_ECONOMY_CARGO_MEAT", asset_id, "economy_cargo")
+    add_cube(
+        "GEO_MeatTray", (0.0, 0.0, 0.08), (0.86, 0.62, 0.16),
+        "wood_dark", col, asset_id, "butcher_tray", bevel_width=0.04)
+    cuts = (
+        (-0.22, -0.10, 0.25, (0.30, 0.23, 0.17)),
+        (0.20, 0.10, 0.27, (0.32, 0.22, 0.18)),
+        (0.02, -0.02, 0.46, (0.28, 0.20, 0.16)),
+    )
+    for index, (x, y, z, scale) in enumerate(cuts):
+        add_uv_sphere(
+            f"GEO_MeatCut_{index}", (x, y, z), scale, "red",
+            col, asset_id, "meat_cut")
+        add_torus(
+            f"GEO_MeatFat_{index}", (x, y, z + 0.02), scale[0] * 0.72,
+            0.022, "cream", col, asset_id, "fat_line",
+            rotation=(math.radians(90), 0.0, 0.0))
+    return col
+
+
+def build_economy_cargo_wool(
+    parent: bpy.types.Collection,
+) -> bpy.types.Collection:
+    asset_id = "economy_cargo_wool_v01"
+    col = new_economy_collection(
+        parent, "CC_ECONOMY_CARGO_WOOL", asset_id, "economy_cargo")
+    add_cube(
+        "GEO_WoolBale", (0.0, 0.0, 0.34), (0.88, 0.64, 0.68),
+        "wool", col, asset_id, "wool_bale", bevel_width=0.14)
+    for x in (-0.25, 0.25):
+        add_cube(
+            "GEO_WoolBinding", (x, 0.0, 0.34), (0.055, 0.68, 0.72),
+            "rope", col, asset_id, "binding", bevel_width=0.012)
+    for index, (x, y, z) in enumerate((
+        (-0.30, -0.30, 0.68), (0.04, -0.31, 0.70),
+        (0.31, -0.27, 0.64),
+    )):
+        add_uv_sphere(
+            f"GEO_WoolTuft_{index}", (x, y, z),
+            (0.16, 0.10, 0.12), "cloth_white", col, asset_id, "wool_tuft")
+    return col
+
+
+def build_economy_cargo_stone(
+    parent: bpy.types.Collection,
+) -> bpy.types.Collection:
+    asset_id = "economy_cargo_stone_v01"
+    col = new_economy_collection(
+        parent, "CC_ECONOMY_CARGO_STONE", asset_id, "economy_cargo")
+    blocks = (
+        (-0.24, -0.16, 0.15, (0.48, 0.34, 0.30)),
+        (0.25, -0.12, 0.14, (0.44, 0.32, 0.28)),
+        (-0.18, 0.17, 0.43, (0.42, 0.32, 0.28)),
+        (0.24, 0.16, 0.41, (0.40, 0.30, 0.26)),
+    )
+    for index, (x, y, z, scale) in enumerate(blocks):
+        add_cube(
+            f"GEO_StoneCargoBlock_{index}", (x, y, z), scale,
+            "stone_light" if index == 2 else "stone",
+            col, asset_id, "stone_block", bevel_width=0.06)
+    for x in (-0.25, 0.25):
+        add_cube(
+            "GEO_StoneCargoBinding", (x, 0.0, 0.30),
+            (0.055, 0.72, 0.62), "leather", col, asset_id, "binding",
+            bevel_width=0.012)
     return col
 
 
@@ -1507,12 +1662,18 @@ def build_assets(groups: dict[str, bpy.types.Collection]) -> None:
     build_economy_source_timber(groups["economy"])
     build_economy_source_sheep(groups["economy"])
     build_economy_source_gems(groups["economy"])
+    build_economy_source_stone(groups["economy"])
     build_economy_cargo_food(groups["economy"])
     build_economy_cargo_iron(groups["economy"])
     build_economy_cargo_tools(groups["economy"])
     build_economy_cargo_weapons(groups["economy"])
     build_economy_cargo_gold(groups["economy"])
     build_economy_cargo_gems(groups["economy"])
+    build_economy_cargo_wood(groups["economy"])
+    build_economy_cargo_wheat(groups["economy"])
+    build_economy_cargo_meat(groups["economy"])
+    build_economy_cargo_wool(groups["economy"])
+    build_economy_cargo_stone(groups["economy"])
     build_road_kit(groups["environments"])
     build_bridge_checkpoint(groups["environments"])
     build_mine_entrance(groups["environments"])
@@ -1597,6 +1758,11 @@ def create_view_layers() -> None:
             "CC_ECONOMY_CARGO_WEAPONS",
             "CC_ECONOMY_CARGO_GOLD",
             "CC_ECONOMY_CARGO_GEMS",
+            "CC_ECONOMY_CARGO_WOOD",
+            "CC_ECONOMY_CARGO_WHEAT",
+            "CC_ECONOMY_CARGO_MEAT",
+            "CC_ECONOMY_CARGO_WOOL",
+            "CC_ECONOMY_CARGO_STONE",
         },
     }
     for name in presets:
@@ -1730,20 +1896,56 @@ def write_manifest() -> None:
                 "cargo_asset": "economy_cargo_gems_v01",
                 "icon_frame": 5,
             },
+            {
+                "good": "wood",
+                "sim_id": 6,
+                "enum": "CC_GOOD_WOOD",
+                "cargo_asset": "economy_cargo_wood_v01",
+                "icon_frame": 6,
+            },
+            {
+                "good": "wheat",
+                "sim_id": 7,
+                "enum": "CC_GOOD_WHEAT",
+                "cargo_asset": "economy_cargo_wheat_v01",
+                "icon_frame": 7,
+            },
+            {
+                "good": "meat",
+                "sim_id": 8,
+                "enum": "CC_GOOD_MEAT",
+                "cargo_asset": "economy_cargo_meat_v01",
+                "icon_frame": 8,
+            },
+            {
+                "good": "wool",
+                "sim_id": 9,
+                "enum": "CC_GOOD_WOOL",
+                "cargo_asset": "economy_cargo_wool_v01",
+                "icon_frame": 9,
+            },
+            {
+                "good": "stone",
+                "sim_id": 10,
+                "enum": "CC_GOOD_STONE",
+                "cargo_asset": "economy_cargo_stone_v01",
+                "icon_frame": 10,
+            },
         ],
         "economic_sources": [
-            {"source": "grain", "asset": "economy_source_grain_v01", "supports_good": "food"},
-            {"source": "iron_ore", "asset": "economy_source_iron_ore_v01", "supports_good": "iron"},
-            {"source": "gold_ore", "asset": "economy_source_gold_ore_v01", "supports_good": "raw_gold"},
-            {"source": "timber", "asset": "economy_source_timber_v01", "supports_good": "tools"},
-            {"source": "sheep", "asset": "economy_source_sheep_v01", "supports_good": "food"},
-            {"source": "gem_seam", "asset": "economy_source_gem_seam_v01", "supports_good": "gems"},
+            {"source": "grain", "asset": "economy_source_grain_v01", "supports_goods": ["wheat", "food"]},
+            {"source": "iron_ore", "asset": "economy_source_iron_ore_v01", "supports_goods": ["iron", "tools", "weapons"]},
+            {"source": "gold_ore", "asset": "economy_source_gold_ore_v01", "supports_goods": ["raw_gold"]},
+            {"source": "timber", "asset": "economy_source_timber_v01", "supports_goods": ["wood", "tools", "weapons"]},
+            {"source": "sheep", "asset": "economy_source_sheep_v01", "supports_goods": ["meat", "wool"]},
+            {"source": "gem_seam", "asset": "economy_source_gem_seam_v01", "supports_goods": ["gems"]},
+            {"source": "stone_quarry", "asset": "economy_source_stone_quarry_v01", "supports_goods": ["stone"]},
         ],
         "economic_icon_atlas": {
             "path": "ui/economic_goods_v01.png",
             "frame_width": 32,
             "frame_height": 32,
-            "columns": 6,
+            "columns": 11,
             "rows": 1,
         },
     }
@@ -1769,12 +1971,18 @@ def validate() -> None:
         "CC_ECONOMY_SOURCE_TIMBER",
         "CC_ECONOMY_SOURCE_SHEEP",
         "CC_ECONOMY_SOURCE_GEM_SEAM",
+        "CC_ECONOMY_SOURCE_STONE_QUARRY",
         "CC_ECONOMY_CARGO_FOOD",
         "CC_ECONOMY_CARGO_IRON",
         "CC_ECONOMY_CARGO_TOOLS",
         "CC_ECONOMY_CARGO_WEAPONS",
         "CC_ECONOMY_CARGO_GOLD",
         "CC_ECONOMY_CARGO_GEMS",
+        "CC_ECONOMY_CARGO_WOOD",
+        "CC_ECONOMY_CARGO_WHEAT",
+        "CC_ECONOMY_CARGO_MEAT",
+        "CC_ECONOMY_CARGO_WOOL",
+        "CC_ECONOMY_CARGO_STONE",
     }
     missing = required - set(LEAF_COLLECTIONS)
     if missing:

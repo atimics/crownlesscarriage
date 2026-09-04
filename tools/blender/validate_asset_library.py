@@ -58,19 +58,19 @@ for asset in manifest["assets"]:
 
 
 economic_goods = manifest.get("economic_goods", [])
-if len(economic_goods) != 6:
-    fail("economic goods must map all six CcGood values")
-if [entry.get("sim_id") for entry in economic_goods] != list(range(6)):
+if len(economic_goods) != 11:
+    fail("economic goods must map all eleven CcGood values")
+if [entry.get("sim_id") for entry in economic_goods] != list(range(11)):
     fail("economic goods must follow stable CcGood order")
-if [entry.get("icon_frame") for entry in economic_goods] != list(range(6)):
+if [entry.get("icon_frame") for entry in economic_goods] != list(range(11)):
     fail("economic icon frames must follow stable CcGood order")
 for entry in economic_goods:
     if entry.get("cargo_asset") not in asset_ids:
         fail(f"missing economic cargo asset {entry.get('cargo_asset')}")
 
 economic_sources = manifest.get("economic_sources", [])
-if len(economic_sources) != 6:
-    fail("economic sources must contain six production source assets")
+if len(economic_sources) != 7:
+    fail("economic sources must contain seven production source assets")
 for entry in economic_sources:
     if entry.get("asset") not in asset_ids:
         fail(f"missing economic source asset {entry.get('asset')}")
@@ -80,10 +80,10 @@ atlas_path = ROOT / "assets" / str(atlas.get("path", ""))
 if not atlas_path.exists():
     fail("economic icon atlas is missing")
 atlas_image = bpy.data.images.load(str(atlas_path), check_existing=False)
-if tuple(atlas_image.size) != (192, 32):
+if tuple(atlas_image.size) != (352, 32):
     fail(
         f"economic icon atlas has size {tuple(atlas_image.size)}, "
-        "expected 192x32")
+        "expected 352x32")
 bpy.data.images.remove(atlas_image)
 
 

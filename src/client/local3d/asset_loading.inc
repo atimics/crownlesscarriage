@@ -129,6 +129,21 @@ static EconomicCargoAsset economic_cargo_assets[CC_GOOD_COUNT] = {
     [CC_GOOD_GEMS] = {
         .path = "assets/exports/glb/economy_cargo_gems_v01.glb",
         .label = "gem cargo"},
+    [CC_GOOD_WOOD] = {
+        .path = "assets/exports/glb/economy_cargo_wood_v01.glb",
+        .label = "wood cargo"},
+    [CC_GOOD_WHEAT] = {
+        .path = "assets/exports/glb/economy_cargo_wheat_v01.glb",
+        .label = "wheat cargo"},
+    [CC_GOOD_MEAT] = {
+        .path = "assets/exports/glb/economy_cargo_meat_v01.glb",
+        .label = "meat cargo"},
+    [CC_GOOD_WOOL] = {
+        .path = "assets/exports/glb/economy_cargo_wool_v01.glb",
+        .label = "wool cargo"},
+    [CC_GOOD_STONE] = {
+        .path = "assets/exports/glb/economy_cargo_stone_v01.glb",
+        .label = "stone cargo"},
 };
 
 typedef struct HeroSkinCache {

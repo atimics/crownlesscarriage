@@ -5028,13 +5028,17 @@ static int32_t CarriagePassengerCount(const CcSim *sim)
     return passengers;
 }
 
-static void DrawEconomicGoodIcon(Texture2D atlas, CcGood good,
+static bool DrawEconomicGoodIcon(Texture2D atlas, CcGood good,
                                  Rectangle destination, Color tint)
 {
-    if (atlas.id == 0U || good < 0 || good >= CC_GOOD_COUNT) return;
+    if (atlas.id == 0U || good < 0 || good >= CC_GOOD_COUNT ||
+        atlas.width < ((int32_t)good + 1) * 32 || atlas.height < 32) {
+        return false;
+    }
     Rectangle source = {(float)good * 32.0f, 0.0f, 32.0f, 32.0f};
     DrawTexturePro(atlas, source, destination, (Vector2){0.0f, 0.0f},
                    0.0f, tint);
+    return true;
 }
 
 static void DrawCarriageScreen(const CcSim *sim, const LocalState *local,
@@ -5087,10 +5091,13 @@ static void DrawCarriageScreen(const CcSim *sim, const LocalState *local,
         DrawRectangleRounded((Rectangle){(float)x + 7.0f, (float)y + 5.0f,
                                           33.0f, 33.0f},
                              0.16f, 4, Fade(BACKGROUND, 0.66f));
-        DrawEconomicGoodIcon(
-            economic_goods, (CcGood)good,
-            (Rectangle){(float)x + 8.0f, (float)y + 6.0f, 32.0f, 32.0f},
-            sim->player.cargo[good] > 0 ? WHITE : Fade(WHITE, 0.38f));
+        if (!DrawEconomicGoodIcon(
+                economic_goods, (CcGood)good,
+                (Rectangle){(float)x + 8.0f, (float)y + 6.0f, 32.0f, 32.0f},
+                sim->player.cargo[good] > 0 ? WHITE : Fade(WHITE, 0.38f))) {
+            CcOverlayDrawText(TextFormat("%d", good + 1),
+                              x + 20, y + 17, 7, MUTED);
+        }
         CcOverlayDrawText((CcGood)good == CC_GOOD_FOOD ?
                               "FOOD BOXES" : CcGoodName((CcGood)good),
                           x + 45, y + 12, 9, INK);

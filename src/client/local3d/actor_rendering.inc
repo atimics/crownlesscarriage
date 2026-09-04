@@ -2304,18 +2304,19 @@ static void DrawCarriedCargoBoxes(const CcPlayerCompany *player,
     }
 
     static const float scales[CC_GOOD_COUNT] = {
-        0.58f, 0.66f, 0.56f, 0.53f, 0.70f, 0.62f,
+        0.46f, 0.52f, 0.44f, 0.40f, 0.54f, 0.49f,
+        0.46f, 0.43f, 0.48f, 0.46f, 0.48f,
     };
     int32_t shown = 0;
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
         if (player == NULL || player->cargo[good] <= 0) continue;
-        int32_t column = shown % 3;
-        int32_t row = shown / 3;
+        int32_t column = shown % 4;
+        int32_t row = shown / 4;
         Vector3 position = LocalPoint(
             base,
-            -1.12f + (float)column * 0.82f,
+            -1.38f + (float)column * 0.72f,
             2.25f,
-            -0.34f + (float)row * 0.68f,
+            -0.46f + (float)row * 0.46f,
             yaw);
         float scale = scales[good];
         DrawModelEx(economic_cargo_assets[good].model, position,

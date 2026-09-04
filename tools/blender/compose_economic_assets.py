@@ -22,6 +22,7 @@ SOURCES = (
     ("economy_source_timber_v01", "Timber"),
     ("economy_source_sheep_v01", "Sheep"),
     ("economy_source_gem_seam_v01", "Gem seam"),
+    ("economy_source_stone_quarry_v01", "Stone quarry"),
 )
 CARGO = (
     ("economy_cargo_food_v01", "Food"),
@@ -30,6 +31,11 @@ CARGO = (
     ("economy_cargo_weapons_v01", "Weapons"),
     ("economy_cargo_gold_v01", "Raw gold"),
     ("economy_cargo_gems_v01", "Gems"),
+    ("economy_cargo_wood_v01", "Wood"),
+    ("economy_cargo_wheat_v01", "Wheat"),
+    ("economy_cargo_meat_v01", "Meat"),
+    ("economy_cargo_wool_v01", "Wool"),
+    ("economy_cargo_stone_v01", "Stone"),
 )
 
 
@@ -66,31 +72,48 @@ def compose_atlas() -> None:
 
 
 def compose_review_sheet() -> None:
-    cell_width = 300
-    image_height = 260
-    label_height = 42
+    columns = 6
+    cell_width = 280
+    image_height = 230
+    label_height = 40
     title_height = 70
+    section_height = 42
     row_height = image_height + label_height
+    sections = (("WORLD SOURCES", SOURCES), ("CARRIED GOODS", CARGO))
+    section_rows = [
+        (len(entries) + columns - 1) // columns
+        for _, entries in sections
+    ]
+    canvas_height = title_height + sum(
+        section_height + rows * row_height for rows in section_rows)
     canvas = Image.new(
-        "RGB", (cell_width * 6, title_height + row_height * 2), "#111019")
+        "RGB", (cell_width * columns, canvas_height), "#111019")
     draw = ImageDraw.Draw(canvas)
     title_font = load_font(28)
+    section_font = load_font(18)
     label_font = load_font(20)
     draw.text((24, 20), "Crownless economic sources and carried goods",
               fill="#e2d8c1", font=title_font)
-    for row, entries in enumerate((SOURCES, CARGO)):
-        for column, (asset_id, label) in enumerate(entries):
+    section_y = title_height
+    for (section_name, entries), rows in zip(sections, section_rows):
+        draw.text((24, section_y + 8), section_name,
+                  fill="#79c8c3", font=section_font)
+        grid_y = section_y + section_height
+        for index, (asset_id, label) in enumerate(entries):
+            row = index // columns
+            column = index % columns
             source = Image.open(THUMB_DIR / f"{asset_id}.png").convert("RGB")
             source = source.resize((image_height, image_height),
                                    Image.Resampling.LANCZOS)
             x = column * cell_width + (cell_width - image_height) // 2
-            y = title_height + row * row_height
+            y = grid_y + row * row_height
             canvas.paste(source, (x, y))
             bounds = draw.textbbox((0, 0), label, font=label_font)
             label_width = bounds[2] - bounds[0]
             draw.text((column * cell_width + (cell_width - label_width) // 2,
                        y + image_height + 8), label,
                       fill="#c9b684", font=label_font)
+        section_y = grid_y + rows * row_height
     REVIEW_PATH.parent.mkdir(parents=True, exist_ok=True)
     canvas.save(REVIEW_PATH, optimize=True)
 
