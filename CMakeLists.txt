@@ -129,6 +129,13 @@ if(NOT MSVC)
 endif()
 cc_strict_warnings(crownless_client_policy)
 
+add_library(crownless_road_book
+    src/client/cc_road_book.c
+)
+target_include_directories(crownless_road_book PUBLIC src)
+target_link_libraries(crownless_road_book PUBLIC crownless_sim)
+cc_strict_warnings(crownless_road_book)
+
 if(EMSCRIPTEN)
     add_library(crownless_sqlite_web INTERFACE)
     target_compile_options(crownless_sqlite_web INTERFACE
@@ -236,7 +243,7 @@ if(CC_BUILD_CLIENT)
     target_link_libraries(crownless_local_renderer PUBLIC
         crownless_sim crownless_locomotion
         crownless_creature_catalog crownless_local_place
-        crownless_client_policy crownless_world raylib
+        crownless_client_policy crownless_road_book crownless_world raylib
     )
     target_compile_definitions(crownless_local_renderer PRIVATE
         CC_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}"
@@ -693,6 +700,12 @@ if(BUILD_TESTING)
     target_link_libraries(persistence_tests PRIVATE crownless_persistence)
     cc_strict_warnings(persistence_tests)
     add_test(NAME sqlite_round_trip COMMAND persistence_tests)
+
+    add_executable(route_knowledge_tests tests/route_knowledge_tests.c)
+    target_link_libraries(route_knowledge_tests PRIVATE
+        crownless_persistence crownless_road_book)
+    cc_strict_warnings(route_knowledge_tests)
+    add_test(NAME persistent_route_knowledge COMMAND route_knowledge_tests)
 
     add_executable(underroad_tests tests/underroad_tests.c)
     target_link_libraries(underroad_tests PRIVATE crownless_persistence)

@@ -2089,6 +2089,179 @@ const CcMap *CcSimMapForRoute(const CcSim *sim, CcId route_id, CcId owner_id)
     return NULL;
 }
 
+enum {
+    CC_ROUTE_ANCHOR_REVEAL_MILLI = 280,
+    CC_ROUTE_SIGHT_REVEAL_MILLI = 140,
+    CC_ROUTE_FULL_REVEAL_MILLI = 1000
+};
+
+static CcRouteKnowledge *PlayerRouteKnowledgeMutable(CcSim *sim,
+                                                      CcId route_id)
+{
+    if (sim == NULL || route_id == 0U) return NULL;
+    for (int32_t i = 0; i < sim->route_count; ++i) {
+        if (sim->routes[i].id != route_id) continue;
+        CcRouteKnowledge *knowledge = &sim->player.route_knowledge[i];
+        if (knowledge->route_id == 0U) knowledge->route_id = route_id;
+        return knowledge->route_id == route_id ? knowledge : NULL;
+    }
+    return NULL;
+}
+
+const CcRouteKnowledge *CcSimPlayerRouteKnowledge(const CcSim *sim,
+                                                  CcId route_id)
+{
+    if (sim == NULL || route_id == 0U) return NULL;
+    for (int32_t i = 0; i < sim->route_count; ++i) {
+        const CcRouteKnowledge *knowledge =
+            &sim->player.route_knowledge[i];
+        if (sim->routes[i].id == route_id &&
+            knowledge->route_id == route_id) return knowledge;
+    }
+    return NULL;
+}
+
+static void NormalizeRouteKnowledge(CcRouteKnowledge *knowledge)
+{
+    if (knowledge == NULL) return;
+    knowledge->from_reveal_milli = ClampI32(
+        knowledge->from_reveal_milli, 0, CC_ROUTE_FULL_REVEAL_MILLI);
+    knowledge->to_reveal_milli = ClampI32(
+        knowledge->to_reveal_milli, 0, CC_ROUTE_FULL_REVEAL_MILLI);
+    if (knowledge->from_reveal_milli >= CC_ROUTE_FULL_REVEAL_MILLI ||
+        knowledge->to_reveal_milli >= CC_ROUTE_FULL_REVEAL_MILLI ||
+        knowledge->from_reveal_milli + knowledge->to_reveal_milli >=
+            CC_ROUTE_FULL_REVEAL_MILLI) {
+        knowledge->from_reveal_milli = CC_ROUTE_FULL_REVEAL_MILLI;
+        knowledge->to_reveal_milli = CC_ROUTE_FULL_REVEAL_MILLI;
+    }
+}
+
+static void RevealRouteFromAnchor(CcSim *sim, const CcRoute *route,
+                                  CcId anchor_id, int32_t amount_milli)
+{
+    CcRouteKnowledge *knowledge = route != NULL ?
+        PlayerRouteKnowledgeMutable(sim, route->id) : NULL;
+    if (knowledge == NULL) return;
+    if (route->from_id == anchor_id) {
+        knowledge->from_reveal_milli = MaximumI32(
+            knowledge->from_reveal_milli, amount_milli);
+    } else if (route->to_id == anchor_id) {
+        knowledge->to_reveal_milli = MaximumI32(
+            knowledge->to_reveal_milli, amount_milli);
+    }
+    NormalizeRouteKnowledge(knowledge);
+}
+
+static void RevealSettlementRoadAnchors(CcSim *sim, CcId settlement_id)
+{
+    if (sim == NULL || settlement_id == 0U) return;
+    for (int32_t i = 0; i < sim->route_count; ++i) {
+        CcRoute *route = &sim->routes[i];
+        if (route->from_id == settlement_id ||
+            route->to_id == settlement_id) {
+            RevealRouteFromAnchor(
+                sim, route, settlement_id, CC_ROUTE_ANCHOR_REVEAL_MILLI);
+        }
+    }
+}
+
+static void RevealJourneyRoad(CcSim *sim)
+{
+    if (sim == NULL || !sim->journey.active) return;
+    const CcRoute *route = CcSimRoute(sim, sim->journey.route_id);
+    int32_t visible_milli = ClampI32(
+        sim->carriage.progress_milli + CC_ROUTE_SIGHT_REVEAL_MILLI,
+        CC_ROUTE_ANCHOR_REVEAL_MILLI, CC_ROUTE_FULL_REVEAL_MILLI);
+    RevealRouteFromAnchor(
+        sim, route, sim->journey.origin_id, visible_milli);
+}
+
+static void RevealCompleteRoute(CcSim *sim, CcId route_id)
+{
+    CcRouteKnowledge *knowledge = PlayerRouteKnowledgeMutable(sim, route_id);
+    if (knowledge == NULL) return;
+    knowledge->from_reveal_milli = CC_ROUTE_FULL_REVEAL_MILLI;
+    knowledge->to_reveal_milli = CC_ROUTE_FULL_REVEAL_MILLI;
+}
+
+static bool PlayerOwnsCataloguedRouteMap(const CcSim *sim, CcId route_id)
+{
+    if (sim == NULL || route_id == 0U) return false;
+    for (int32_t i = 0; i < sim->map_count; ++i) {
+        const CcMap *map = &sim->maps[i];
+        if (map->route_id == route_id &&
+            map->owner_id == sim->player.id &&
+            CcSimMapIsCatalogued(sim, map)) return true;
+    }
+    return false;
+}
+
+bool CcSimPlayerRouteReveal(const CcSim *sim, CcId route_id,
+                            int32_t *from_reveal_milli,
+                            int32_t *to_reveal_milli,
+                            bool *charted)
+{
+    if (from_reveal_milli != NULL) *from_reveal_milli = 0;
+    if (to_reveal_milli != NULL) *to_reveal_milli = 0;
+    if (charted != NULL) *charted = false;
+    const CcRoute *route = CcSimRoute(sim, route_id);
+    if (route == NULL) return false;
+    bool has_chart = PlayerOwnsCataloguedRouteMap(sim, route_id);
+    if (charted != NULL) *charted = has_chart;
+    int32_t from = 0;
+    int32_t to = 0;
+    const CcRouteKnowledge *knowledge =
+        CcSimPlayerRouteKnowledge(sim, route_id);
+    if (knowledge != NULL) {
+        from = knowledge->from_reveal_milli;
+        to = knowledge->to_reveal_milli;
+    }
+    if (route->from_id == sim->player.location_id) {
+        from = MaximumI32(from, CC_ROUTE_ANCHOR_REVEAL_MILLI);
+    }
+    if (route->to_id == sim->player.location_id) {
+        to = MaximumI32(to, CC_ROUTE_ANCHOR_REVEAL_MILLI);
+    }
+    if (has_chart) from = to = CC_ROUTE_FULL_REVEAL_MILLI;
+    if (from_reveal_milli != NULL) *from_reveal_milli = from;
+    if (to_reveal_milli != NULL) *to_reveal_milli = to;
+    return from > 0 || to > 0;
+}
+
+bool CcSimPlayerKnowsSettlement(const CcSim *sim, CcId settlement_id)
+{
+    if (CcSimSettlement(sim, settlement_id) == NULL) return false;
+    if (settlement_id == sim->player.location_id) return true;
+    for (int32_t i = 0; i < sim->route_count; ++i) {
+        const CcRoute *route = &sim->routes[i];
+        int32_t from = 0;
+        int32_t to = 0;
+        if (!CcSimPlayerRouteReveal(
+                sim, route->id, &from, &to, NULL)) continue;
+        if (route->from_id == settlement_id &&
+            (from > 0 || to >= CC_ROUTE_FULL_REVEAL_MILLI)) return true;
+        if (route->to_id == settlement_id &&
+            (to > 0 || from >= CC_ROUTE_FULL_REVEAL_MILLI)) return true;
+    }
+    return false;
+}
+
+void CcSimInitializePlayerRouteKnowledge(CcSim *sim)
+{
+    if (sim == NULL) return;
+    (void)memset(sim->player.route_knowledge, 0,
+                 sizeof(sim->player.route_knowledge));
+    for (int32_t i = 0; i < sim->route_count; ++i) {
+        sim->player.route_knowledge[i].route_id = sim->routes[i].id;
+    }
+    RevealSettlementRoadAnchors(sim, sim->player.location_id);
+    if (sim->journey.active) {
+        RevealSettlementRoadAnchors(sim, sim->journey.origin_id);
+        RevealJourneyRoad(sim);
+    }
+}
+
 const CcEvent *CcSimRecentEvent(const CcSim *sim, int32_t offset)
 {
     if (sim == NULL || offset < 0 || offset >= sim->event_count) return NULL;
@@ -3047,6 +3220,7 @@ void CcSimInit(CcSim *sim, uint32_t seed)
         .condition = 100
     };
     InitMaps(sim);
+    CcSimInitializePlayerRouteKnowledge(sim);
     CcSimInitializeDragonCycle(sim);
     CcSimInitializeHoardRaiders(sim);
 
@@ -10609,6 +10783,8 @@ static void FinishJourneyArrival(CcSim *sim)
         }
     }
     sim->player.location_id = destination->id;
+    RevealCompleteRoute(sim, route->id);
+    RevealSettlementRoadAnchors(sim, destination->id);
     for (int32_t i = 0; i < sim->treasure_count; ++i) {
         CcTreasure *treasure = &sim->treasures[i];
         if (!treasure->destroyed &&
@@ -10945,6 +11121,8 @@ static bool ApplyTravel(CcSim *sim, const CcCommand *command,
                 total_subticks, CC_JOURNEY_PACE_STEADY),
         .condition = sim->carriage.condition
     };
+    RevealSettlementRoadAnchors(sim, sim->journey.origin_id);
+    RevealJourneyRoad(sim);
     char text[CC_EVENT_TEXT_CAPACITY];
     if (sim->schema_version >= 14U) {
         (void)snprintf(
@@ -11292,6 +11470,7 @@ void CcSimAdvanceRuntimeTicks(CcSim *sim, int32_t ticks)
         sim->carriage.progress_milli = sim->journey.total_subticks > 0 ?
             (int32_t)(((int64_t)sim->journey.elapsed_subticks * 1000) /
                       sim->journey.total_subticks) : 0;
+        RevealJourneyRoad(sim);
         if (sim->journey.ambush_pending &&
             !sim->journey.ambush_warned &&
             sim->journey.elapsed_subticks >=
@@ -12173,6 +12352,7 @@ static bool ApplyGoblinTunnelTraversal(CcSim *sim,
     }
     CcSimAdvanceDays(sim, 1);
     sim->player.location_id = command->target_id;
+    RevealSettlementRoadAnchors(sim, sim->player.location_id);
     sim->carriage.location_id = sim->goblins.lair_settlement_id;
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(
@@ -12567,7 +12747,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                          sim->schema_version == 18U ||
                          sim->schema_version == 19U ||
                          sim->schema_version == 20U ||
-                         sim->schema_version == 21U;
+                         sim->schema_version == 21U ||
+                         sim->schema_version == 22U;
     bool supported_generator = sim->generator_version == CC_GENERATOR_VERSION ||
         (legacy_schema && (sim->generator_version == 3U ||
                            sim->generator_version == 5U ||
@@ -12849,6 +13030,30 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             route->condition < 0 || route->condition > 100) {
             SetError(error, error_capacity, "Route data is invalid.");
             return false;
+        }
+        if (sim->schema_version == CC_SIM_SCHEMA_VERSION) {
+            const CcRouteKnowledge *knowledge =
+                &sim->player.route_knowledge[i];
+            bool overlapping_fragments =
+                knowledge->from_reveal_milli +
+                    knowledge->to_reveal_milli >=
+                    CC_ROUTE_FULL_REVEAL_MILLI &&
+                (knowledge->from_reveal_milli !=
+                     CC_ROUTE_FULL_REVEAL_MILLI ||
+                 knowledge->to_reveal_milli !=
+                     CC_ROUTE_FULL_REVEAL_MILLI);
+            if (knowledge->route_id != route->id ||
+                knowledge->from_reveal_milli < 0 ||
+                knowledge->from_reveal_milli >
+                    CC_ROUTE_FULL_REVEAL_MILLI ||
+                knowledge->to_reveal_milli < 0 ||
+                knowledge->to_reveal_milli >
+                    CC_ROUTE_FULL_REVEAL_MILLI ||
+                overlapping_fragments) {
+                SetError(error, error_capacity,
+                         "Player route knowledge is invalid.");
+                return false;
+            }
         }
     }
     for (int32_t i = 0; i < sim->map_count; ++i) {
@@ -14580,6 +14785,15 @@ uint64_t CcSimHash(const CcSim *sim)
     if (sim->schema_version >= 13U) {
         HASH_VALUE(sim->player.map_catalogue_mask);
         HASH_VALUE(sim->player.map_archive_mask);
+    }
+    if (sim->schema_version >= 23U) {
+        for (int32_t i = 0; i < sim->route_count; ++i) {
+            const CcRouteKnowledge *knowledge =
+                &sim->player.route_knowledge[i];
+            HASH_VALUE(knowledge->route_id);
+            HASH_VALUE(knowledge->from_reveal_milli);
+            HASH_VALUE(knowledge->to_reveal_milli);
+        }
     }
     if (sim->schema_version >= 14U) {
         for (int32_t i = 0; i < CC_CARRIAGE_HORSE_COUNT; ++i) {

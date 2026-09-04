@@ -6,6 +6,7 @@
 #include "client/cc_local3d.h"
 #include "client/cc_local3d_internal.h"
 #include "client/cc_client_policy.h"
+#include "client/cc_road_book.h"
 #include "client/cc_local_place.h"
 #include "client/cc_creature_catalog.h"
 #include "client/cc_overlay.h"

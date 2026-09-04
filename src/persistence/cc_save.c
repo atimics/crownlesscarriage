@@ -9,7 +9,7 @@
 #include <string.h>
 
 #define CC_SQLITE_APPLICATION_ID 1128481362
-#define CC_SQLITE_USER_VERSION 20
+#define CC_SQLITE_USER_VERSION 21
 #define CC_JOURNAL_RECORD_VERSION 1
 #define CC_JOURNAL_RUNTIME_FLUSH_TICKS 6
 #define CC_JOURNAL_MAX_DAY_ADVANCE 3650
@@ -933,7 +933,11 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " ask_price INTEGER NOT NULL, contraband INTEGER NOT NULL);"
         "CREATE TABLE IF NOT EXISTS map_collection ("
         " id INTEGER PRIMARY KEY CHECK(id=1),"
-        " catalogue_mask INTEGER NOT NULL, archive_mask INTEGER NOT NULL);";
+        " catalogue_mask INTEGER NOT NULL, archive_mask INTEGER NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS player_route_knowledge ("
+        " slot INTEGER PRIMARY KEY, route_id INTEGER NOT NULL UNIQUE,"
+        " from_reveal_milli INTEGER NOT NULL,"
+        " to_reveal_milli INTEGER NOT NULL);";
     const char *commitment_schema =
         "CREATE TABLE IF NOT EXISTS player_commitment ("
         " id INTEGER PRIMARY KEY CHECK(id=1), situation_id INTEGER NOT NULL);"
@@ -1516,6 +1520,31 @@ static bool SaveMapCollection(sqlite3 *database, const CcSim *sim,
     bool result = StepDone(database, statement, error, error_capacity);
     sqlite3_finalize(statement);
     return result;
+}
+
+static bool SavePlayerRouteKnowledge(sqlite3 *database, const CcSim *sim,
+                                     char *error, size_t error_capacity)
+{
+    if (sim->schema_version < 23U) return true;
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database,
+                 "INSERT INTO player_route_knowledge VALUES(?,?,?,?);",
+                 &statement, error, error_capacity)) return false;
+    for (int32_t i = 0; i < sim->route_count; ++i) {
+        const CcRouteKnowledge *knowledge =
+            &sim->player.route_knowledge[i];
+        BindInt(statement, 1, i);
+        BindId(statement, 2, knowledge->route_id);
+        BindInt(statement, 3, knowledge->from_reveal_milli);
+        BindInt(statement, 4, knowledge->to_reveal_milli);
+        if (!StepDone(database, statement, error, error_capacity) ||
+            !ResetStatement(database, statement, error, error_capacity)) {
+            sqlite3_finalize(statement);
+            return false;
+        }
+    }
+    sqlite3_finalize(statement);
+    return true;
 }
 
 static bool SaveFactions(sqlite3 *database, const CcSim *sim,
@@ -2437,6 +2466,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
             "DELETE FROM meta; DELETE FROM kingdom; DELETE FROM settlement;"
             "DELETE FROM horse_team; DELETE FROM stable_horse;"
             "DELETE FROM route; DELETE FROM map_object; DELETE FROM map_collection;"
+            "DELETE FROM player_route_knowledge;"
             "DELETE FROM faction; DELETE FROM shipment;"
             "DELETE FROM shipment_intent; DELETE FROM diplomacy; DELETE FROM courier;"
             "DELETE FROM bandit_group; DELETE FROM monster_population;"
@@ -2470,6 +2500,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
         SaveRoutes(database, sim, error, error_capacity) &&
         SaveMaps(database, sim, error, error_capacity) &&
         SaveMapCollection(database, sim, error, error_capacity) &&
+        SavePlayerRouteKnowledge(database, sim, error, error_capacity) &&
         SaveFactions(database, sim, error, error_capacity) &&
         SaveShipments(database, sim, error, error_capacity) &&
         SaveDiplomacyAndCouriers(database, sim, error, error_capacity) &&
@@ -3070,6 +3101,49 @@ static bool ReadMapCollection(sqlite3 *database, CcSim *sim,
         return false;
     }
     sqlite3_finalize(statement);
+    return true;
+}
+
+static bool ReadPlayerRouteKnowledge(sqlite3 *database, CcSim *sim,
+                                     char *error, size_t error_capacity)
+{
+    if (sim->schema_version < 23U) return true;
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database,
+                 "SELECT slot,route_id,from_reveal_milli,to_reveal_milli "
+                 "FROM player_route_knowledge ORDER BY slot;",
+                 &statement, error, error_capacity)) return false;
+    int32_t rows = 0;
+    int result = SQLITE_ROW;
+    while ((result = sqlite3_step(statement)) == SQLITE_ROW) {
+        int32_t slot = sqlite3_column_int(statement, 0);
+        if (slot != rows || slot < 0 || slot >= sim->route_count) {
+            SetError(error, error_capacity,
+                     "Player route knowledge rows are invalid.");
+            sqlite3_finalize(statement);
+            return false;
+        }
+        CcRouteKnowledge *knowledge =
+            &sim->player.route_knowledge[slot];
+        knowledge->route_id =
+            (CcId)sqlite3_column_int64(statement, 1);
+        knowledge->from_reveal_milli =
+            sqlite3_column_int(statement, 2);
+        knowledge->to_reveal_milli =
+            sqlite3_column_int(statement, 3);
+        rows += 1;
+    }
+    sqlite3_finalize(statement);
+    if (result != SQLITE_DONE) {
+        SetSqlError(error, error_capacity, database,
+                    "Could not read player route knowledge");
+        return false;
+    }
+    if (rows != sim->route_count) {
+        SetError(error, error_capacity,
+                 "Player route knowledge rows are incomplete.");
+        return false;
+    }
     return true;
 }
 
@@ -4501,6 +4575,7 @@ static bool HasQuestArchitecture(const CcSim *sim)
 static void FinishLegacyRuntimeUpgrade(CcSim *sim)
 {
     if (!HasQuestArchitecture(sim)) CcSimUpgradeQuestArchitecture(sim);
+    CcSimInitializePlayerRouteKnowledge(sim);
     sim->schema_version = CC_SIM_SCHEMA_VERSION;
     sim->generator_version = CC_GENERATOR_VERSION;
 }
@@ -4518,7 +4593,7 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
         legacy_version != 15U && legacy_version != 16U &&
         legacy_version != 17U && legacy_version != 18U &&
         legacy_version != 19U && legacy_version != 20U &&
-        legacy_version != 21U) return true;
+        legacy_version != 21U && legacy_version != 22U) return true;
     if (legacy_version == 17U) {
         for (int32_t i = 0; i < CC_MAX_EVENTS; ++i) {
             if ((int32_t)sim->events[i].kind ==
@@ -4553,6 +4628,10 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
                     (int32_t)CC_EVENT_FRONT_CREATED + kind - old_first);
             }
         }
+    }
+    if (legacy_version == 22U) {
+        FinishLegacyRuntimeUpgrade(sim);
+        return true;
     }
     if (legacy_version == 21U) {
         sim->archives = (CcArchives){
@@ -4883,6 +4962,8 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
               ReadLegends(database, sim, error, error_capacity) &&
               ReadPlayer(database, sim, error, error_capacity) &&
               ReadMapCollection(database, sim, error, error_capacity) &&
+              ReadPlayerRouteKnowledge(database, sim,
+                                       error, error_capacity) &&
               ReadMaterialEconomy(database, sim, error, error_capacity) &&
               ReadPlayerCommitment(database, sim, error, error_capacity) &&
               ReadJourneyState(database, sim, error, error_capacity);
