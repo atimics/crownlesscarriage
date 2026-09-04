@@ -1668,9 +1668,37 @@ static bool StableWorldRoadChoice(const LocalState *local)
            local->world_carriage.route_id != 0U;
 }
 
+_Static_assert(CC_CLIENT_SESSION_GUARD_COUNT == CC_LOCAL_COURSE_RUNNER_COUNT,
+               "session guard count must match the local encounter");
+_Static_assert(CC_CLIENT_SESSION_RAIDER_COUNT == CC_LOCAL_RAIDER_COUNT,
+               "session raider count must match the local encounter");
+_Static_assert(CC_CLIENT_SESSION_SKILL_COUNT == CC_COMBAT_SKILL_COUNT,
+               "session skill count must match local combat");
+
+static CcClientRoadEncounterMode RoadEncounterMode(
+    const LocalState *local)
+{
+    if (local == NULL || !local->course.road_encounter) {
+        return CC_CLIENT_ROAD_ENCOUNTER_NONE;
+    }
+    if (local->journey_combat_active && !local->journey_parley_active) {
+        return CC_CLIENT_ROAD_ENCOUNTER_FIGHT;
+    }
+    if (local->journey_parley_active && !local->journey_combat_active) {
+        return CC_CLIENT_ROAD_ENCOUNTER_PARLEY;
+    }
+    return CC_CLIENT_ROAD_ENCOUNTER_NONE;
+}
+
 static bool LocalSessionEligible(const LocalState *local)
 {
-    return local != NULL &&
+    if (local == NULL) return false;
+    if (RoadEncounterMode(local) != CC_CLIENT_ROAD_ENCOUNTER_NONE) {
+        return !local->open_world && !local->market_interior &&
+               !local->site_travel_active &&
+               !local->journey_travel_active;
+    }
+    return
            (!local->road_choice_active || StableWorldRoadChoice(local)) &&
            !local->journey_travel_active &&
            !local->site_travel_active &&
@@ -1678,6 +1706,77 @@ static bool LocalSessionEligible(const LocalState *local)
            !CcLocalCourseHasNearbyHostile(&local->course, &local->agent) &&
            (!local->open_world || !local->market_interior) &&
            local->agent.combat.life_state == CC_LIFE_ALIVE;
+}
+
+static void CaptureEncounterActor(CcClientEncounterActor *saved,
+                                  const CcLocalAgent *actor)
+{
+    *saved = (CcClientEncounterActor){
+        .position_x = actor->position.x,
+        .position_y = actor->position.y,
+        .position_z = actor->position.z,
+        .velocity_x = actor->velocity.x,
+        .velocity_y = actor->velocity.y,
+        .velocity_z = actor->velocity.z,
+        .facing_yaw = actor->facing_yaw,
+        .focus_x = actor->combat.focus_point.x,
+        .focus_y = actor->combat.focus_point.y,
+        .focus_z = actor->combat.focus_point.z,
+        .knockback_x = actor->combat.knockback_velocity.x,
+        .knockback_y = actor->combat.knockback_velocity.y,
+        .knockback_z = actor->combat.knockback_velocity.z,
+        .health = actor->combat.health,
+        .posture = actor->combat.posture,
+        .stagger_seconds = actor->combat.stagger_seconds,
+        .hit_flash_seconds = actor->combat.hit_flash_seconds,
+        .hitstop_seconds = actor->combat.hitstop_seconds,
+        .respawn_seconds = actor->combat.respawn_seconds,
+        .auto_attack_cooldown = actor->combat.auto_attack_cooldown,
+        .target_index = actor->combat.target_index,
+        .queued_skill = actor->combat.queued_skill,
+        .active_skill = actor->combat.active_skill,
+        .life_state = (int32_t)actor->combat.life_state,
+        .weapon_mode = (int32_t)actor->combat.weapon_mode,
+        .focus_valid = actor->combat.focus_valid,
+        .strike_resolved = actor->combat.strike_resolved,
+    };
+    for (int32_t skill = 0; skill < CC_COMBAT_SKILL_COUNT; ++skill) {
+        saved->skill_cooldown[skill] = actor->combat.skill_cooldown[skill];
+    }
+}
+
+static void CaptureRoadEncounter(CcClientRoadEncounter *saved,
+                                 const LocalState *local)
+{
+    saved->mode = RoadEncounterMode(local);
+    if (saved->mode == CC_CLIENT_ROAD_ENCOUNTER_NONE) return;
+    CaptureEncounterActor(&saved->player, &local->agent);
+    saved->engagement_time = local->course.engagement_time;
+    saved->alarm_countdown = local->course.alarm_countdown;
+    saved->combat_event_seconds = local->course.combat_event_seconds;
+    saved->raider_initial_resolve = local->course.raider_initial_resolve;
+    saved->raider_resolve = local->course.raider_resolve;
+    saved->defenses_completed = local->course.defenses_completed;
+    saved->alarm_active = local->course.alarm_active;
+    saved->raiders_retreating = local->course.raiders_retreating;
+    for (int32_t guard = 0;
+         guard < CC_LOCAL_COURSE_RUNNER_COUNT; ++guard) {
+        const CcLocalCourseRunner *runner = &local->course.runners[guard];
+        CaptureEncounterActor(&saved->guards[guard], &runner->agent);
+        saved->guard_pause_seconds[guard] = runner->pause_seconds;
+        saved->guard_attack_cooldown[guard] = runner->attack_cooldown;
+        saved->guard_duty[guard] = (int32_t)runner->duty;
+        saved->guard_response_stage[guard] = runner->response_stage;
+    }
+    for (int32_t raider = 0;
+         raider < CC_LOCAL_RAIDER_COUNT; ++raider) {
+        CaptureEncounterActor(&saved->raiders[raider],
+                              &local->course.raiders[raider]);
+        saved->raider_attack_cooldown[raider] =
+            local->course.raider_attack_cooldown[raider];
+        saved->raider_response_stage[raider] =
+            local->course.raider_response_stage[raider];
+    }
 }
 
 static CcClientSessionScene ClientSceneForLocalState(const LocalState *local)
@@ -1712,7 +1811,13 @@ static bool SaveLocalSession(const char *path, const CcSim *sim,
                              const LocalState *local,
                              char *error, size_t error_capacity)
 {
-    if (!LocalSessionEligible(local)) return true;
+    if (!LocalSessionEligible(local)) {
+        if (error != NULL && error_capacity > 0U) {
+            (void)snprintf(error, error_capacity,
+                           "Finish the current movement before saving.");
+        }
+        return false;
+    }
     CcClientSession session = {
         .version = CC_CLIENT_SESSION_VERSION,
         .world_seed = sim->world_seed,
@@ -1727,6 +1832,7 @@ static bool SaveLocalSession(const char *path, const CcSim *sim,
         .facing_yaw = local->agent.facing_yaw,
         .opening_step = (uint32_t)local->opening_step
     };
+    CaptureRoadEncounter(&session.road_encounter, local);
     return CcClientSessionWrite(path, &session, error, error_capacity);
 }
 
@@ -1841,6 +1947,95 @@ static bool RestoreWorldSession(const CcSim *sim, LocalState *local,
     return true;
 }
 
+static void BeginRoadLocalState(const CcSim *sim, LocalState *local,
+                                bool hostile);
+
+static void RestoreEncounterActor(CcLocalAgent *actor,
+                                  const CcClientEncounterActor *saved)
+{
+    actor->position = (Vector3){saved->position_x, saved->position_y,
+                                saved->position_z};
+    actor->velocity = (Vector3){saved->velocity_x, saved->velocity_y,
+                                saved->velocity_z};
+    actor->facing_yaw = saved->facing_yaw;
+    actor->combat.focus_point = (Vector3){saved->focus_x, saved->focus_y,
+                                          saved->focus_z};
+    actor->combat.knockback_velocity = (Vector3){
+        saved->knockback_x, saved->knockback_y, saved->knockback_z
+    };
+    actor->combat.health = saved->health;
+    actor->combat.posture = saved->posture;
+    actor->combat.stagger_seconds = saved->stagger_seconds;
+    actor->combat.hit_flash_seconds = saved->hit_flash_seconds;
+    actor->combat.hitstop_seconds = saved->hitstop_seconds;
+    actor->combat.respawn_seconds = saved->respawn_seconds;
+    actor->combat.auto_attack_cooldown = saved->auto_attack_cooldown;
+    for (int32_t skill = 0; skill < CC_COMBAT_SKILL_COUNT; ++skill) {
+        actor->combat.skill_cooldown[skill] = saved->skill_cooldown[skill];
+    }
+    actor->combat.target_index = saved->target_index;
+    actor->combat.queued_skill = saved->queued_skill;
+    actor->combat.active_skill = saved->active_skill;
+    actor->combat.life_state = (CcLifeState)saved->life_state;
+    actor->combat.weapon_mode = (CcWeaponMode)saved->weapon_mode;
+    actor->combat.focus_valid = saved->focus_valid;
+    actor->combat.strike_resolved = saved->strike_resolved;
+    actor->humanoid_needs_reset = true;
+    if (actor->combat.life_state != CC_LIFE_ALIVE &&
+        actor->morphology == CC_MORPHOLOGY_BIPED) {
+        CcLimbVec3 position = {actor->position.x, actor->position.y,
+                               actor->position.z};
+        CcLimbVec3 direction = {saved->knockback_x, saved->knockback_y,
+                                saved->knockback_z};
+        CcLimbVec3 impact = {saved->focus_x, saved->focus_y,
+                             saved->focus_z};
+        CcHumanoidGaitInit(&actor->humanoid, position,
+                           actor->facing_yaw, NULL, NULL);
+        actor->humanoid_needs_reset = false;
+        if (actor->combat.life_state == CC_LIFE_KNOCKED_DOWN) {
+            (void)CcHumanoidGaitKnockDown(&actor->humanoid);
+        } else {
+            (void)CcHumanoidGaitDie(&actor->humanoid, direction,
+                                    impact, 4.0f);
+            if (actor->combat.life_state == CC_LIFE_RESPAWNING) {
+                CcHumanoidGaitBeginResurrection(&actor->humanoid);
+            }
+        }
+    }
+}
+
+static void RestoreRoadEncounter(LocalState *local,
+                                 const CcClientRoadEncounter *saved)
+{
+    RestoreEncounterActor(&local->agent, &saved->player);
+    local->course.engagement_time = saved->engagement_time;
+    local->course.alarm_countdown = saved->alarm_countdown;
+    local->course.combat_event_seconds = saved->combat_event_seconds;
+    local->course.raider_initial_resolve = saved->raider_initial_resolve;
+    local->course.raider_resolve = saved->raider_resolve;
+    local->course.defenses_completed = saved->defenses_completed;
+    local->course.alarm_active = saved->alarm_active;
+    local->course.raiders_retreating = saved->raiders_retreating;
+    for (int32_t guard = 0;
+         guard < CC_LOCAL_COURSE_RUNNER_COUNT; ++guard) {
+        CcLocalCourseRunner *runner = &local->course.runners[guard];
+        RestoreEncounterActor(&runner->agent, &saved->guards[guard]);
+        runner->pause_seconds = saved->guard_pause_seconds[guard];
+        runner->attack_cooldown = saved->guard_attack_cooldown[guard];
+        runner->duty = (CcGuardDuty)saved->guard_duty[guard];
+        runner->response_stage = saved->guard_response_stage[guard];
+    }
+    for (int32_t raider = 0;
+         raider < CC_LOCAL_RAIDER_COUNT; ++raider) {
+        RestoreEncounterActor(&local->course.raiders[raider],
+                              &saved->raiders[raider]);
+        local->course.raider_attack_cooldown[raider] =
+            saved->raider_attack_cooldown[raider];
+        local->course.raider_response_stage[raider] =
+            saved->raider_response_stage[raider];
+    }
+}
+
 static bool RestoreLocalSession(const char *path, const CcSim *sim,
                                 LocalState *local)
 {
@@ -1850,6 +2045,17 @@ static bool RestoreLocalSession(const char *path, const CcSim *sim,
         session.world_seed != sim->world_seed ||
         session.location_id != sim->player.location_id) {
         return false;
+    }
+    if (session.road_encounter.mode != CC_CLIENT_ROAD_ENCOUNTER_NONE) {
+        if (!sim->journey.active ||
+            sim->journey.phase != CC_JOURNEY_PHASE_BLOCKED) {
+            return false;
+        }
+        BeginRoadLocalState(
+            sim, local,
+            session.road_encounter.mode == CC_CLIENT_ROAD_ENCOUNTER_FIGHT);
+        RestoreRoadEncounter(local, &session.road_encounter);
+        return true;
     }
     if (session.coordinate_space == CC_CLIENT_SESSION_WORLD) {
         return RestoreWorldSession(sim, local, &session);
@@ -7030,6 +7236,153 @@ static int RunTownSessionStartupRegression(void)
     (void)puts("Town session startup regression passed");
     return 0;
 }
+
+static bool EncounterActorTestMatches(
+    const CcClientEncounterActor *first,
+    const CcClientEncounterActor *second)
+{
+    if (!SessionTestFloatMatches(first->position_x, second->position_x) ||
+        !SessionTestFloatMatches(first->position_y, second->position_y) ||
+        !SessionTestFloatMatches(first->position_z, second->position_z) ||
+        !SessionTestFloatMatches(first->velocity_x, second->velocity_x) ||
+        !SessionTestFloatMatches(first->velocity_y, second->velocity_y) ||
+        !SessionTestFloatMatches(first->velocity_z, second->velocity_z) ||
+        !SessionTestFloatMatches(first->facing_yaw, second->facing_yaw) ||
+        !SessionTestFloatMatches(first->health, second->health) ||
+        !SessionTestFloatMatches(first->posture, second->posture) ||
+        !SessionTestFloatMatches(first->stagger_seconds,
+                                 second->stagger_seconds) ||
+        !SessionTestFloatMatches(first->respawn_seconds,
+                                 second->respawn_seconds) ||
+        !SessionTestFloatMatches(first->auto_attack_cooldown,
+                                 second->auto_attack_cooldown) ||
+        first->target_index != second->target_index ||
+        first->queued_skill != second->queued_skill ||
+        first->active_skill != second->active_skill ||
+        first->life_state != second->life_state ||
+        first->weapon_mode != second->weapon_mode) {
+        return false;
+    }
+    for (int32_t skill = 0;
+         skill < CC_CLIENT_SESSION_SKILL_COUNT; ++skill) {
+        if (!SessionTestFloatMatches(first->skill_cooldown[skill],
+                                     second->skill_cooldown[skill])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool RoadEncounterTestMatches(
+    const CcClientRoadEncounter *first,
+    const CcClientRoadEncounter *second)
+{
+    if (first->mode != second->mode ||
+        !EncounterActorTestMatches(&first->player, &second->player) ||
+        !SessionTestFloatMatches(first->engagement_time,
+                                 second->engagement_time) ||
+        first->raider_resolve != second->raider_resolve ||
+        first->alarm_active != second->alarm_active ||
+        first->raiders_retreating != second->raiders_retreating) {
+        return false;
+    }
+    for (int32_t guard = 0;
+         guard < CC_CLIENT_SESSION_GUARD_COUNT; ++guard) {
+        if (!EncounterActorTestMatches(&first->guards[guard],
+                                       &second->guards[guard]) ||
+            first->guard_duty[guard] != second->guard_duty[guard] ||
+            first->guard_response_stage[guard] !=
+                second->guard_response_stage[guard]) {
+            return false;
+        }
+    }
+    for (int32_t raider = 0;
+         raider < CC_CLIENT_SESSION_RAIDER_COUNT; ++raider) {
+        if (!EncounterActorTestMatches(&first->raiders[raider],
+                                       &second->raiders[raider]) ||
+            first->raider_response_stage[raider] !=
+                second->raider_response_stage[raider]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static int RunRoadEncounterSessionRegression(void)
+{
+    const char *session_path = "road-encounter-session-test.state";
+    (void)remove(session_path);
+    for (int32_t path = 0; path < 2; ++path) {
+        bool hostile = path == 0;
+        CcSim sim;
+        CcSimInit(&sim, UINT32_C(0xc0a71360) + (uint32_t)path);
+        sim.journey.active = true;
+        sim.journey.phase = CC_JOURNEY_PHASE_BLOCKED;
+        sim.journey.origin_id = sim.player.location_id;
+
+        LocalState saved = {0};
+        ResetLocalState(&saved);
+        BeginRoadLocalState(&sim, &saved, hostile);
+        saved.agent.position.x += 0.75f;
+        saved.agent.position.z -= 0.35f;
+        saved.agent.velocity.x = 0.42f;
+        saved.agent.facing_yaw = -0.72f;
+        saved.agent.combat.health = hostile ? 63.5f : 88.0f;
+        saved.agent.combat.posture = hostile ? 41.25f : 76.0f;
+        saved.agent.combat.stagger_seconds = hostile ? 0.28f : 0.0f;
+        saved.agent.combat.auto_attack_cooldown = hostile ? 0.44f : 0.0f;
+        saved.agent.combat.skill_cooldown[CC_COMBAT_SKILL_SUNDER] = 1.25f;
+        saved.course.engagement_time = hostile ? 7.5f : 0.0f;
+        saved.course.raider_resolve = hostile ? 52 :
+                                               saved.course.raider_resolve;
+        saved.course.runners[1].agent.position.z += 0.66f;
+        saved.course.runners[1].agent.combat.health = 54.0f;
+        saved.course.runners[1].agent.combat.posture = 32.0f;
+        saved.course.runners[1].response_stage = hostile ? 2 : 1;
+        saved.course.raiders[0].position.x -= 0.48f;
+        saved.course.raiders[0].combat.health = hostile ? 38.0f : 93.0f;
+        saved.course.raiders[0].combat.posture = hostile ? 17.0f : 81.0f;
+        saved.course.raider_response_stage[0] = hostile ? 3 : 1;
+        saved.course.raiders[1].combat.health = 0.0f;
+        saved.course.raiders[1].combat.posture = 0.0f;
+        saved.course.raiders[1].combat.life_state = CC_LIFE_DEAD;
+        saved.course.raiders[1].combat.weapon_mode =
+            CC_WEAPON_RAGDOLL_ATTACHED;
+
+        CcClientRoadEncounter expected = {0};
+        CaptureRoadEncounter(&expected, &saved);
+        char error[192];
+        if (!SaveLocalSession(session_path, &sim, &saved,
+                              error, sizeof(error))) {
+            return SessionStartupTestFailed(session_path, error);
+        }
+
+        LocalState restored = {0};
+        ResetLocalState(&restored);
+        ClientView view = VIEW_ROADS;
+        int32_t selected = -1;
+        if (!RestoreClientStartupSession(
+                session_path, &sim, &restored, &view, &selected)) {
+            return SessionStartupTestFailed(
+                session_path, "Road encounter did not resume.");
+        }
+        CcClientRoadEncounter actual = {0};
+        CaptureRoadEncounter(&actual, &restored);
+        if (view != VIEW_LOCAL || restored.open_world ||
+            !restored.course.road_encounter ||
+            restored.journey_combat_active != hostile ||
+            restored.journey_parley_active == hostile ||
+            !RoadEncounterTestMatches(&expected, &actual)) {
+            return SessionStartupTestFailed(
+                session_path,
+                hostile ? "Fight state changed after resume." :
+                          "Parley state changed after resume.");
+        }
+    }
+    (void)remove(session_path);
+    (void)puts("Road encounter session regression passed");
+    return 0;
+}
 #endif
 
 static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
@@ -7060,6 +7413,12 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             (void)snprintf(
                 message, message_capacity,
                 "Choose a road or turn back before saving.");
+            return;
+        }
+        if (!LocalSessionEligible(local)) {
+            (void)snprintf(
+                message, message_capacity,
+                "Finish the current movement before saving.");
             return;
         }
         char error[256];
@@ -8597,6 +8956,10 @@ int main(int argc, char **argv)
     if (argc == 2 &&
         strcmp(argv[1], "--test-town-session-startup") == 0) {
         return RunTownSessionStartupRegression();
+    }
+    if (argc == 2 &&
+        strcmp(argv[1], "--test-road-encounter-session") == 0) {
+        return RunRoadEncounterSessionRegression();
     }
 #endif
     bool screen_first_hero = true;

@@ -48,6 +48,47 @@ int main(void)
     CC_CHECK(fabsf(restored.facing_yaw - original.facing_yaw) < 0.0001f);
     CC_CHECK(restored.opening_step == original.opening_step);
 
+    CcClientSession encounter = original;
+    encounter.scene = CC_CLIENT_SESSION_STREET;
+    encounter.coordinate_space = CC_CLIENT_SESSION_LEGACY_LOCAL;
+    encounter.route_id = 0U;
+    encounter.road_encounter.mode = CC_CLIENT_ROAD_ENCOUNTER_FIGHT;
+    encounter.road_encounter.player.position_x = 46.25f;
+    encounter.road_encounter.player.position_z = 40.5f;
+    encounter.road_encounter.player.health = 62.0f;
+    encounter.road_encounter.player.posture = 38.0f;
+    encounter.road_encounter.player.target_index = -1;
+    encounter.road_encounter.player.queued_skill = -1;
+    encounter.road_encounter.player.active_skill = -1;
+    encounter.road_encounter.player.life_state = 0;
+    encounter.road_encounter.player.weapon_mode = 1;
+    for (int actor = 0; actor < CC_CLIENT_SESSION_GUARD_COUNT; ++actor) {
+        encounter.road_encounter.guards[actor] =
+            encounter.road_encounter.player;
+        encounter.road_encounter.guards[actor].position_x += (float)actor;
+    }
+    for (int actor = 0; actor < CC_CLIENT_SESSION_RAIDER_COUNT; ++actor) {
+        encounter.road_encounter.raiders[actor] =
+            encounter.road_encounter.player;
+        encounter.road_encounter.raiders[actor].position_z += (float)actor;
+    }
+    encounter.road_encounter.engagement_time = 4.5f;
+    encounter.road_encounter.alarm_countdown = 1.25f;
+    encounter.road_encounter.raider_initial_resolve = 80;
+    encounter.road_encounter.raider_resolve = 51;
+    encounter.road_encounter.alarm_active = true;
+    CC_CHECK(CcClientSessionValidate(&encounter));
+    CC_CHECK(CcClientSessionWrite(session_path, &encounter,
+                                  error, sizeof(error)));
+    CC_CHECK(CcClientSessionRead(session_path, &restored,
+                                 error, sizeof(error)));
+    CC_CHECK(restored.road_encounter.mode ==
+             CC_CLIENT_ROAD_ENCOUNTER_FIGHT);
+    CC_CHECK(fabsf(restored.road_encounter.player.health - 62.0f) < 0.0001f);
+    CC_CHECK(fabsf(restored.road_encounter.player.posture - 38.0f) < 0.0001f);
+    CC_CHECK(restored.road_encounter.raider_resolve == 51);
+    CC_CHECK(restored.road_encounter.alarm_active);
+
     CcClientSession invalid = original;
     invalid.version += 1U;
     CC_CHECK(!CcClientSessionValidate(&invalid));
@@ -79,6 +120,19 @@ int main(void)
     CC_CHECK(fclose(version_four_without_route) == 0);
     CC_CHECK(!CcClientSessionRead(session_path, &restored,
                                   error, sizeof(error)));
+
+    FILE *version_four = fopen(session_path, "wb");
+    CC_CHECK(version_four != NULL);
+    CC_CHECK(fputs(
+        "CROWNLESS_SESSION 4\n3232176798 42 0 1 77 17.5 12.5 -0.5 2\n",
+        version_four) >= 0);
+    CC_CHECK(fclose(version_four) == 0);
+    CC_CHECK(CcClientSessionRead(session_path, &restored,
+                                 error, sizeof(error)));
+    CC_CHECK(restored.version == CC_CLIENT_SESSION_VERSION);
+    CC_CHECK(restored.route_id == 77U);
+    CC_CHECK(restored.road_encounter.mode ==
+             CC_CLIENT_ROAD_ENCOUNTER_NONE);
 
     FILE *legacy = fopen(session_path, "wb");
     CC_CHECK(legacy != NULL);
