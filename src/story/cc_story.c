@@ -85,7 +85,7 @@ static const CcStoryLineTemplate STORY_LINES[] = {
         CC_SITUATION_ROUTE_REPAIR, "Ilyra Senn"),
     STORY_LINE(
         "treaty_bridge.ilyra.promised",
-        "Bring two crates of tools. My crew will pretend the bridge needs repairs.",
+        "Bring two crates each of tools and wood. My crew will call it bridge repair.",
         CC_STORY_BEAT_PROMISED, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_ROUTE_REPAIR, "Ilyra Senn"),
     STORY_LINE(
@@ -220,7 +220,7 @@ static const CcStoryLineTemplate STORY_LINES[] = {
         CC_SITUATION_RELIEF_DELIVERY, NULL),
     STORY_LINE(
         "situation.repair.offer.sponsor",
-        "The road crew can open the gate. They need tools for the bridge, or coin for the guards.",
+        "The road crew can open the gate. They need tools and wood, or coin for the guards.",
         CC_STORY_BEAT_OFFER, CC_STORY_SPEAKER_SPONSOR,
         CC_SITUATION_ROUTE_REPAIR, NULL),
     STORY_LINE(

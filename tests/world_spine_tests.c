@@ -105,14 +105,29 @@ int main(void)
     CcSimInit(&builder, UINT32_C(0xb017de12));
     CcSettlement *capital = &builder.settlements[4];
     CcMoney treasury_before = builder.kingdoms[2].treasury;
+    int32_t wood_before = capital->stock[CC_GOOD_WOOD];
     int32_t material_before = capital->stock[CC_GOOD_MATERIAL];
     int32_t tools_before = capital->stock[CC_GOOD_TOOLS];
     char error[192];
+    CcSim short_wood = builder;
+    CcSettlement *short_wood_capital = &short_wood.settlements[4];
+    short_wood_capital->stock[CC_GOOD_WOOD] = 7;
+    CcMoney short_wood_treasury = short_wood.kingdoms[2].treasury;
+    int32_t short_wood_iron = short_wood_capital->stock[CC_GOOD_IRON];
+    int32_t short_wood_tools = short_wood_capital->stock[CC_GOOD_TOOLS];
+    CC_CHECK(!CcSimStartServiceProject(
+        &short_wood, short_wood_capital->id, CC_SERVICE_GRANARY,
+        error, sizeof(error)));
+    CC_CHECK(strstr(error, "8 Wood") != NULL);
+    CC_CHECK(short_wood.kingdoms[2].treasury == short_wood_treasury);
+    CC_CHECK(short_wood_capital->stock[CC_GOOD_IRON] == short_wood_iron);
+    CC_CHECK(short_wood_capital->stock[CC_GOOD_TOOLS] == short_wood_tools);
     CC_CHECK(CcSimStartServiceProject(&builder, capital->id,
                                       CC_SERVICE_GRANARY,
                                       error, sizeof(error)));
     CC_CHECK(builder.kingdoms[2].treasury == treasury_before - 80);
-    CC_CHECK(capital->stock[CC_GOOD_MATERIAL] == material_before - 12);
+    CC_CHECK(capital->stock[CC_GOOD_WOOD] == wood_before - 8);
+    CC_CHECK(capital->stock[CC_GOOD_MATERIAL] == material_before - 6);
     CC_CHECK(capital->stock[CC_GOOD_TOOLS] == tools_before - 5);
     CcSimAdvanceDays(&builder, 6);
     CC_CHECK(!CcSettlementHasService(capital, CC_SERVICE_GRANARY));

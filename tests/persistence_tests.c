@@ -1693,9 +1693,19 @@ static void CheckSchema25Compatibility(char *error, size_t error_capacity)
          settlement < restored.settlement_count; ++settlement) {
         for (int32_t good = CC_LEGACY_GOOD_COUNT;
              good < CC_GOOD_COUNT; ++good) {
-            CC_CHECK(restored.settlements[settlement].stock[good] == 0);
-            CC_CHECK(restored.settlements[settlement].reserve_target[good] == 0);
-            CC_CHECK(restored.settlements[settlement].production[good] == 0);
+            if (good == CC_GOOD_WOOD) {
+                CC_CHECK(restored.settlements[settlement].stock[good] > 0);
+                CC_CHECK(restored.settlements[settlement]
+                             .reserve_target[good] > 0);
+                CC_CHECK(restored.settlements[settlement]
+                             .production[good] > 0);
+            } else {
+                CC_CHECK(restored.settlements[settlement].stock[good] == 0);
+                CC_CHECK(restored.settlements[settlement]
+                             .reserve_target[good] == 0);
+                CC_CHECK(restored.settlements[settlement]
+                             .production[good] == 0);
+            }
             CC_CHECK(restored.settlements[settlement].consumption[good] == 0);
             CC_CHECK(restored.settlements[settlement].price[good] ==
                      CcGoodDefinitionFor((CcGood)good)->base_price);
@@ -1753,7 +1763,15 @@ static void CheckSchema26Compatibility(char *error, size_t error_capacity)
          settlement < restored.settlement_count; ++settlement) {
         for (int32_t good = CC_LEGACY_GOOD_COUNT;
              good < CC_GOOD_COUNT; ++good) {
-            CC_CHECK(restored.settlements[settlement].stock[good] == 0);
+            if (good == CC_GOOD_WOOD) {
+                CC_CHECK(restored.settlements[settlement].stock[good] > 0);
+                CC_CHECK(restored.settlements[settlement]
+                             .reserve_target[good] > 0);
+                CC_CHECK(restored.settlements[settlement]
+                             .production[good] > 0);
+            } else {
+                CC_CHECK(restored.settlements[settlement].stock[good] == 0);
+            }
             CC_CHECK(restored.settlements[settlement].price[good] ==
                      CcGoodDefinitionFor((CcGood)good)->base_price);
         }
@@ -1768,6 +1786,7 @@ static void CheckGenerator21Compatibility(char *error, size_t error_capacity)
     RemoveDatabase(path);
     CcSim legacy;
     CcSimInit(&legacy, UINT32_C(0xc0a7118e));
+    legacy.schema_version = 27U;
     legacy.generator_version = 21U;
     int32_t map_x[CC_MAX_SETTLEMENTS];
     int32_t map_y[CC_MAX_SETTLEMENTS];
@@ -1779,11 +1798,56 @@ static void CheckGenerator21Compatibility(char *error, size_t error_capacity)
 
     CcSim restored;
     CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
-    CC_CHECK(restored.schema_version == 27U);
-    CC_CHECK(restored.generator_version == 21U);
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.generator_version == CC_GENERATOR_VERSION);
     for (int32_t index = 0; index < restored.settlement_count; ++index) {
         CC_CHECK(restored.settlements[index].map_x == map_x[index]);
         CC_CHECK(restored.settlements[index].map_y == map_y[index]);
+    }
+    CC_CHECK(CcSimValidate(&restored, error, error_capacity));
+    RemoveDatabase(path);
+}
+
+static void CheckSchema27WoodCompatibility(char *error,
+                                           size_t error_capacity)
+{
+    const char *path = "persistence-legacy-v27-test.ccsave";
+    RemoveDatabase(path);
+    CcSim legacy;
+    CcSimInit(&legacy, UINT32_C(0x1e9ac27));
+    legacy.schema_version = 27U;
+    legacy.generator_version = 21U;
+    int32_t wheat_stock[CC_MAX_SETTLEMENTS];
+    int32_t wheat_price[CC_MAX_SETTLEMENTS];
+    for (int32_t settlement = 0;
+         settlement < legacy.settlement_count; ++settlement) {
+        CcSettlement *place = &legacy.settlements[settlement];
+        place->stock[CC_GOOD_WOOD] = 0;
+        place->reserve_target[CC_GOOD_WOOD] = 0;
+        place->production[CC_GOOD_WOOD] = 0;
+        place->price[CC_GOOD_WOOD] =
+            CcGoodDefinitionFor(CC_GOOD_WOOD)->base_price;
+        place->stock[CC_GOOD_WHEAT] = 100 + settlement;
+        place->price[CC_GOOD_WHEAT] = 20 + settlement;
+        wheat_stock[settlement] = place->stock[CC_GOOD_WHEAT];
+        wheat_price[settlement] = place->price[CC_GOOD_WHEAT];
+    }
+    CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
+
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.generator_version == CC_GENERATOR_VERSION);
+    for (int32_t settlement = 0;
+         settlement < restored.settlement_count; ++settlement) {
+        const CcSettlement *place = &restored.settlements[settlement];
+        CC_CHECK(place->stock[CC_GOOD_WOOD] > 0);
+        CC_CHECK(place->reserve_target[CC_GOOD_WOOD] > 0);
+        CC_CHECK(place->production[CC_GOOD_WOOD] > 0);
+        CC_CHECK(place->price[CC_GOOD_WOOD] ==
+                 CcGoodDefinitionFor(CC_GOOD_WOOD)->base_price);
+        CC_CHECK(place->stock[CC_GOOD_WHEAT] == wheat_stock[settlement]);
+        CC_CHECK(place->price[CC_GOOD_WHEAT] == wheat_price[settlement]);
     }
     CC_CHECK(CcSimValidate(&restored, error, error_capacity));
     RemoveDatabase(path);
@@ -1924,6 +1988,7 @@ int main(void)
     CheckSchema25Compatibility(error, sizeof(error));
     CheckSchema26Compatibility(error, sizeof(error));
     CheckGenerator21Compatibility(error, sizeof(error));
+    CheckSchema27WoodCompatibility(error, sizeof(error));
     CheckJourneyStopPersistence(error, sizeof(error));
     CheckLegacyLifecycleJournalCompatibility(24U, error, sizeof(error));
     CheckLegacyLifecycleJournalCompatibility(25U, error, sizeof(error));

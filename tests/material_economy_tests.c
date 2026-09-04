@@ -78,9 +78,59 @@ int main(void)
     CC_CHECK(!CcGoodIsValid((CcGood)-1));
     CC_CHECK(!CcGoodIsValid(CC_GOOD_COUNT));
     CC_CHECK(CcGoodDefinitionFor(CC_GOOD_COUNT) == NULL);
+    const CcGoodDefinition *wood_definition = CcGoodDefinitionFor(
+        CC_GOOD_WOOD);
+    CC_CHECK(strcmp(wood_definition->name, "Wood") == 0);
+    CC_CHECK(wood_definition->base_price == 6);
+    CC_CHECK(wood_definition->freight_units_per_slot == 6);
+    CC_CHECK(wood_definition->minimum_trade_units == 4);
+    CC_CHECK(wood_definition->raid_capacity == 12);
+
+    CcSim wood_world;
+    CcSimInit(&wood_world, UINT32_C(0x700d100d));
+    CC_CHECK(wood_world.settlements[0].stock[CC_GOOD_WOOD] == 28);
+    CC_CHECK(wood_world.settlements[0].reserve_target[CC_GOOD_WOOD] == 18);
+    CC_CHECK(wood_world.settlements[0].production[CC_GOOD_WOOD] == 12);
+    CC_CHECK(wood_world.settlements[5].stock[CC_GOOD_WOOD] == 36);
+    CC_CHECK(wood_world.settlements[5].production[CC_GOOD_WOOD] == 14);
+    uint64_t wood_hash = CcSimHash(&wood_world);
+    wood_world.settlements[0].stock[CC_GOOD_WOOD] += 1;
+    CC_CHECK(CcSimHash(&wood_world) != wood_hash);
+    char wood_error[192];
+    wood_world.settlements[0].stock[CC_GOOD_WOOD] = -1;
+    CC_CHECK(!CcSimValidate(&wood_world, wood_error, sizeof(wood_error)));
+
+    CcSim woodlot;
+    CcSettlement *place = IsolatedSettlement(&woodlot);
+    place->service_mask |= Service(CC_SERVICE_GRANARY);
+    place->production[CC_GOOD_WOOD] = 8;
+    place->stock[CC_GOOD_TOOLS] = 2;
+    place->stock[CC_GOOD_FOOD] = 100;
+    place->consumption[CC_GOOD_FOOD] = 1;
+    place->cow_adults = 0;
+    place->cow_calves = 0;
+    int32_t tracked_wood = CcSimTrackedGood(&woodlot, CC_GOOD_WOOD);
+    CcSimAdvanceDays(&woodlot, 83);
+    CC_CHECK(place->stock[CC_GOOD_WOOD] == 96);
+    CC_CHECK(place->stock[CC_GOOD_TOOLS] == 1);
+    CC_CHECK(CcSimTrackedGood(&woodlot, CC_GOOD_WOOD) == tracked_wood + 96);
+    bool harvest_recorded = false;
+    for (int32_t event = 0; event < woodlot.event_count; ++event) {
+        const CcEvent *item = CcSimRecentEvent(&woodlot, event);
+        if (item != NULL && item->kind == CC_EVENT_WOODLOT_HARVEST) {
+            harvest_recorded = true;
+        }
+    }
+    CC_CHECK(harvest_recorded);
+
+    CcSim hand_woodlot;
+    place = IsolatedSettlement(&hand_woodlot);
+    place->production[CC_GOOD_WOOD] = 8;
+    CcSimAdvanceDays(&hand_woodlot, 6);
+    CC_CHECK(place->stock[CC_GOOD_WOOD] == 2);
 
     CcSim no_farm;
-    CcSettlement *place = IsolatedSettlement(&no_farm);
+    place = IsolatedSettlement(&no_farm);
     place->field_yield = 100;
     place->production[CC_GOOD_FOOD] = 8;
     CcSimAdvanceDays(&no_farm, 7);
@@ -188,6 +238,39 @@ int main(void)
              tool_convoy.kingdoms[0].treasury == 0);
     CC_CHECK(CcSimTrackedGold(&tool_convoy) == tool_gold_before);
 
+    CcSim wood_convoy = tool_convoy;
+    wood_convoy.shipment_count = 0;
+    for (int32_t kingdom = 0;
+         kingdom < wood_convoy.kingdom_count; ++kingdom) {
+        wood_convoy.kingdoms[kingdom].treasury = 0;
+    }
+    CcSettlement *wood_source = &wood_convoy.settlements[0];
+    CcSettlement *wood_buyer = &wood_convoy.settlements[1];
+    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        wood_source->production[good] = 0;
+        wood_buyer->production[good] = 0;
+        wood_source->consumption[good] = 0;
+        wood_buyer->consumption[good] = 0;
+        wood_source->stock[good] = 0;
+        wood_buyer->stock[good] = 0;
+        wood_source->reserve_target[good] = 0;
+        wood_buyer->reserve_target[good] = 0;
+    }
+    wood_source->stock[CC_GOOD_WOOD] = 24;
+    wood_source->reserve_target[CC_GOOD_WOOD] = 4;
+    wood_buyer->reserve_target[CC_GOOD_WOOD] = 12;
+    wood_source->market_coins = 100;
+    wood_buyer->market_coins = 100;
+    int32_t wood_before_trade = CcSimTrackedGood(
+        &wood_convoy, CC_GOOD_WOOD);
+    CcSimAdvanceDays(&wood_convoy, 7);
+    CC_CHECK(wood_convoy.shipment_count > 0);
+    CC_CHECK(wood_convoy.shipments[0].good == CC_GOOD_WOOD);
+    CC_CHECK(wood_convoy.shipments[0].quantity >= 4);
+    CC_CHECK(wood_convoy.shipments[0].status == CC_SHIPMENT_TRAVELLING);
+    CC_CHECK(CcSimTrackedGood(&wood_convoy, CC_GOOD_WOOD) ==
+             wood_before_trade);
+
     CcSim famine_convoy;
     CcSimInit(&famine_convoy, UINT32_C(0xfa61ce01));
     famine_convoy.settlement_count = 2;
@@ -284,6 +367,7 @@ int main(void)
     place->service_mask |= Service(CC_SERVICE_SMITHY);
     place->function = CC_SETTLEMENT_FORTRESS;
     place->stock[CC_GOOD_IRON] = 10;
+    place->stock[CC_GOOD_WOOD] = 3;
     place->stock[CC_GOOD_TOOLS] = 10;
     place->reserve_target[CC_GOOD_TOOLS] = 10;
     place->reserve_target[CC_GOOD_WEAPONS] = 10;
@@ -291,9 +375,24 @@ int main(void)
     place->production[CC_GOOD_WEAPONS] = 1;
     CcSimAdvanceDays(&smithy, 7);
     CC_CHECK(place->stock[CC_GOOD_IRON] == 5);
+    CC_CHECK(place->stock[CC_GOOD_WOOD] == 0);
     CC_CHECK(place->stock[CC_GOOD_TOOLS] == 11);
     CC_CHECK(place->stock[CC_GOOD_WEAPONS] == 1);
     CC_CHECK(place->smith_tool_wear == 2);
+
+    CcSim woodless_smithy;
+    place = IsolatedSettlement(&woodless_smithy);
+    place->service_mask |= Service(CC_SERVICE_SMITHY);
+    place->stock[CC_GOOD_IRON] = 10;
+    place->stock[CC_GOOD_TOOLS] = 10;
+    place->reserve_target[CC_GOOD_TOOLS] = 10;
+    place->reserve_target[CC_GOOD_WEAPONS] = 10;
+    place->production[CC_GOOD_TOOLS] = 1;
+    place->production[CC_GOOD_WEAPONS] = 1;
+    CcSimAdvanceDays(&woodless_smithy, 7);
+    CC_CHECK(place->stock[CC_GOOD_IRON] == 10);
+    CC_CHECK(place->stock[CC_GOOD_TOOLS] == 10);
+    CC_CHECK(place->stock[CC_GOOD_WEAPONS] == 0);
 
     CcSim treasure_sim;
     place = IsolatedSettlement(&treasure_sim);

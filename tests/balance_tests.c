@@ -150,6 +150,7 @@ int main(void)
     CC_CHECK(road_work.routes[0].closed);
     road_work.settlements[1].stock[CC_GOOD_FOOD] = 40;
     road_work.settlements[1].stock[CC_GOOD_TOOLS] = 10;
+    road_work.settlements[1].stock[CC_GOOD_WOOD] = 20;
     CcSimAdvanceDays(&road_work, 560);
     CC_CHECK(!road_work.routes[0].closed);
     CC_CHECK(road_work.settlements[1].population < road_population);
