@@ -1762,6 +1762,33 @@ static void CheckSchema26Compatibility(char *error, size_t error_capacity)
     RemoveDatabase(path);
 }
 
+static void CheckGenerator21Compatibility(char *error, size_t error_capacity)
+{
+    const char *path = "persistence-generator-v21-test.ccsave";
+    RemoveDatabase(path);
+    CcSim legacy;
+    CcSimInit(&legacy, UINT32_C(0xc0a7118e));
+    legacy.generator_version = 21U;
+    int32_t map_x[CC_MAX_SETTLEMENTS];
+    int32_t map_y[CC_MAX_SETTLEMENTS];
+    for (int32_t index = 0; index < legacy.settlement_count; ++index) {
+        map_x[index] = legacy.settlements[index].map_x;
+        map_y[index] = legacy.settlements[index].map_y;
+    }
+    CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
+
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(restored.schema_version == 27U);
+    CC_CHECK(restored.generator_version == 21U);
+    for (int32_t index = 0; index < restored.settlement_count; ++index) {
+        CC_CHECK(restored.settlements[index].map_x == map_x[index]);
+        CC_CHECK(restored.settlements[index].map_y == map_y[index]);
+    }
+    CC_CHECK(CcSimValidate(&restored, error, error_capacity));
+    RemoveDatabase(path);
+}
+
 static void CheckJourneyStopPersistence(char *error, size_t error_capacity)
 {
     const char *path = "persistence-journey-stop-test.ccsave";
@@ -1896,6 +1923,7 @@ int main(void)
     CheckSchema24Compatibility(error, sizeof(error));
     CheckSchema25Compatibility(error, sizeof(error));
     CheckSchema26Compatibility(error, sizeof(error));
+    CheckGenerator21Compatibility(error, sizeof(error));
     CheckJourneyStopPersistence(error, sizeof(error));
     CheckLegacyLifecycleJournalCompatibility(24U, error, sizeof(error));
     CheckLegacyLifecycleJournalCompatibility(25U, error, sizeof(error));

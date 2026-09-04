@@ -35,6 +35,36 @@ static float DistanceToSegment(CcWorldPoint point, CcWorldPoint first,
     return PointDistance(point, nearest);
 }
 
+static int TestCanonicalRoadManifest(void)
+{
+    static const int32_t expected_map[][2] = {
+        {124, 489}, {353, 449}, {529, 337},
+        {759, 463}, {785, 158}, {316, 141},
+    };
+    CcSim sim;
+    CcWorldManifest manifest;
+    CcSimInit(&sim, UINT32_C(0xc0a7118e));
+    CHECK(sim.generator_version == 22U);
+    CHECK(sim.settlement_count == 6);
+    for (int32_t index = 0; index < sim.settlement_count; ++index) {
+        CHECK(sim.settlements[index].map_x == expected_map[index][0]);
+        CHECK(sim.settlements[index].map_y == expected_map[index][1]);
+    }
+    CHECK(CcWorldManifestBuild(&manifest, &sim));
+    CHECK(manifest.generator_version == 22U);
+    CHECK(fabsf(manifest.settlements[1].junction.x - 264.997284f) < 0.0001f);
+    CHECK(fabsf(manifest.settlements[1].junction.z - 242.611099f) < 0.0001f);
+    CHECK(fabsf(manifest.routes[0].control.x - 147.306854f) < 0.0001f);
+    CHECK(fabsf(manifest.routes[0].control.z - 306.920654f) < 0.0001f);
+    CHECK(fabsf(manifest.routes[0]
+                    .samples[CC_WORLD_ROUTE_FROM_JUNCTION_SAMPLE].x -
+                119.164772f) < 0.0001f);
+    CHECK(fabsf(manifest.routes[0]
+                    .samples[CC_WORLD_ROUTE_TO_JUNCTION_SAMPLE].x -
+                264.997284f) < 0.0001f);
+    return 0;
+}
+
 static int TestManifestIsStableAndFinite(void)
 {
     CcSim first_sim;
@@ -380,6 +410,7 @@ static int TestCarriagePoseFollowsRouteDirection(void)
 
 int main(void)
 {
+    if (TestCanonicalRoadManifest() != 0) return 1;
     if (TestManifestIsStableAndFinite() != 0) return 1;
     if (TestChunkSeamsMatch() != 0) return 1;
     if (TestStreamingEvictsOldChunks() != 0) return 1;

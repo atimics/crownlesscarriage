@@ -3209,24 +3209,39 @@ void CcSimInit(CcSim *sim, uint32_t seed)
     for (int32_t i = 0; i < CC_MAX_SETTLEMENTS; ++i) {
         GeneratePlaceName(sim, place_names[i], (CcSettlementFunction)i);
     }
+    /* Generator 22 fixes the random draw order. Apple Clang historically
+       evaluated the x argument first, so that order is now the shared
+       canonical layout for native and WebAssembly builds. */
+    int32_t map_x = Jitter(sim, 125, 22);
+    int32_t map_y = Jitter(sim, 500, 20);
     InitSettlement(sim, 0, 0, "Thornford", CC_SETTLEMENT_FARMING,
                    CC_SETTLEMENT_VILLAGE,
-                   Jitter(sim, 125, 22), Jitter(sim, 500, 20), 1460, 58, 54);
+                   map_x, map_y, 1460, 58, 54);
+    map_x = Jitter(sim, 355, 22);
+    map_y = Jitter(sim, 445, 20);
     InitSettlement(sim, 1, 0, "Gloamgate", CC_SETTLEMENT_MARKET,
                    CC_SETTLEMENT_TOWN,
-                   Jitter(sim, 355, 22), Jitter(sim, 445, 20), 2180, 62, 67);
+                   map_x, map_y, 2180, 62, 67);
+    map_x = Jitter(sim, 535, 18);
+    map_y = Jitter(sim, 325, 18);
     InitSettlement(sim, 2, 1, "Alderwatch", CC_SETTLEMENT_FORTRESS,
                    CC_SETTLEMENT_TOWN,
-                   Jitter(sim, 535, 18), Jitter(sim, 325, 18), 1720, 82, 49);
+                   map_x, map_y, 1720, 82, 49);
+    map_x = Jitter(sim, 755, 22);
+    map_y = Jitter(sim, 455, 20);
     InitSettlement(sim, 3, 1, "Silverwick", CC_SETTLEMENT_MINING,
                    CC_SETTLEMENT_TOWN,
-                   Jitter(sim, 755, 22), Jitter(sim, 455, 20), 2350, 43, 61);
+                   map_x, map_y, 2350, 43, 61);
+    map_x = Jitter(sim, 770, 18);
+    map_y = Jitter(sim, 145, 18);
     InitSettlement(sim, 4, 2, "Rosespire", CC_SETTLEMENT_CAPITAL,
                    CC_SETTLEMENT_CAPITAL_SIZE,
-                   Jitter(sim, 770, 18), Jitter(sim, 145, 18), 3180, 71, 72);
+                   map_x, map_y, 3180, 71, 72);
+    map_x = Jitter(sim, 335, 22);
+    map_y = Jitter(sim, 155, 20);
     InitSettlement(sim, 5, 2, "Hollowbarrow", CC_SETTLEMENT_DUNGEON_TOWN,
                    CC_SETTLEMENT_VILLAGE,
-                   Jitter(sim, 335, 22), Jitter(sim, 155, 20), 1280, 46, 45);
+                   map_x, map_y, 1280, 46, 45);
     sim->settlement_count = CC_MAX_SETTLEMENTS;
     ConfigureSettlementEconomies(sim);
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
@@ -13468,7 +13483,10 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                          sim->schema_version == 24U ||
                          sim->schema_version == 25U ||
                          sim->schema_version == 26U;
+    /* Schema 27 generator 21 saves carry their authoritative settlement
+       coordinates. Keep them valid without rebuilding their road layout. */
     bool supported_generator = sim->generator_version == CC_GENERATOR_VERSION ||
+        (sim->schema_version == 27U && sim->generator_version == 21U) ||
         (legacy_schema && (sim->generator_version == 3U ||
                            sim->generator_version == 5U ||
                            sim->generator_version == 6U ||
@@ -13485,7 +13503,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                            sim->generator_version == 17U ||
                            sim->generator_version == 18U ||
                            sim->generator_version == 19U ||
-                           sim->generator_version == 20U));
+                           sim->generator_version == 20U ||
+                           sim->generator_version == 21U));
     if ((!legacy_schema && sim->schema_version != CC_SIM_SCHEMA_VERSION) ||
         !supported_generator) {
         SetError(error, error_capacity, "Simulation version is unsupported.");
