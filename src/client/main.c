@@ -6834,12 +6834,20 @@ int main(int argc, char **argv)
         if (strcmp(render_benchmark_scene, "street") != 0 &&
             strcmp(render_benchmark_scene, "market") != 0 &&
             strcmp(render_benchmark_scene, "road") != 0 &&
+            strcmp(render_benchmark_scene, "roadbook-route") != 0 &&
+            strcmp(render_benchmark_scene, "roadbook-network") != 0 &&
             strcmp(render_benchmark_scene, "combat") != 0) {
             (void)fprintf(stderr,
-                          "Render benchmark scene must be street, market, road, or combat.\n");
+                          "Render benchmark scene must be street, market, road, roadbook-route, roadbook-network, or combat.\n");
             return 1;
         }
     }
+    bool render_benchmark_roadbook_route = render_benchmark &&
+        strcmp(render_benchmark_scene, "roadbook-route") == 0;
+    bool render_benchmark_roadbook_network = render_benchmark &&
+        strcmp(render_benchmark_scene, "roadbook-network") == 0;
+    bool render_benchmark_roadbook = render_benchmark_roadbook_route ||
+        render_benchmark_roadbook_network;
     bool capture_board = argc >= 2 && strcmp(argv[1], "--capture-board") == 0;
     bool capture_world = argc >= 2 && strcmp(argv[1], "--capture-world") == 0;
     bool capture_opening = argc >= 2 &&
@@ -6855,6 +6863,29 @@ int main(int argc, char **argv)
                               strcmp(argv[1], "--capture-walk-cycle") == 0;
     bool capture_road_fork = argc >= 2 &&
         strcmp(argv[1], "--capture-road-fork") == 0;
+    bool capture_road_departure = argc >= 2 &&
+        strcmp(argv[1], "--capture-road-departure") == 0;
+    bool capture_road_arrival = argc >= 2 &&
+        strcmp(argv[1], "--capture-road-arrival") == 0;
+    bool capture_road_zoom = capture_road_departure || capture_road_arrival;
+    float capture_road_zoom_weight = 0.5f;
+    if (capture_road_zoom) {
+        if (argc < 4) {
+            (void)fprintf(
+                stderr,
+                "capture road departure and arrival require a weight from 0 to 1 and a frame path.\n");
+            return 1;
+        }
+        char *end = NULL;
+        capture_road_zoom_weight = strtof(argv[2], &end);
+        if (end == argv[2] || *end != '\0' ||
+            capture_road_zoom_weight < 0.0f ||
+            capture_road_zoom_weight > 1.0f) {
+            (void)fprintf(stderr,
+                          "capture road zoom weight must be from 0 to 1.\n");
+            return 1;
+        }
+    }
     bool capture_map_case = argc >= 2 &&
         strcmp(argv[1], "--capture-map-case") == 0;
     bool capture_dragon_hoard_map = argc >= 2 &&
@@ -7080,6 +7111,7 @@ int main(int argc, char **argv)
                     capture_interior || capture_navigation || capture_limbs ||
                     capture_walk_cycle || capture_defense ||
                     capture_downclimb || capture_road_fork ||
+                    capture_road_zoom ||
                     capture_map_case || capture_dragon_hoard_map ||
                     capture_carriage_target || capture_dojo ||
                     capture_carriage ||
@@ -7101,6 +7133,7 @@ int main(int argc, char **argv)
                                capture_town_arrival ? argv[4] :
                                capture_town ? (argc >= 6 ? argv[5] : argv[3]) :
                                capture_npc_review ? argv[3] :
+                               capture_road_zoom ? argv[3] :
                                argc >= 3 ? argv[2] :
                                "architecture-proof.png";
     char save_path[640];
@@ -7236,7 +7269,8 @@ int main(int argc, char **argv)
     }
     CcLocalBindPlace(&sim);
     if (capture_encounter || capture_travel || capture_road || capture_parley ||
-        capture_aftermath || capture_creature_horse) {
+        capture_aftermath || capture_creature_horse || capture_road_arrival ||
+        render_benchmark_roadbook) {
         int32_t charter_index = FirstActiveSituationIndex(&sim);
         if (charter_index >= 0) {
             char setup_error[192];
@@ -7263,11 +7297,26 @@ int main(int argc, char **argv)
             };
             (void)CcSimApply(&sim, &travel, setup_error,
                              sizeof(setup_error));
-            if (capture_travel || capture_creature_horse) {
+            if ((render_benchmark_roadbook || capture_road_arrival) &&
+                sim.journey.active) {
+                sim.journey.situation_id = 0U;
+                sim.journey.encounter_subticks = 0;
+                sim.journey.ambush_pending = false;
+                sim.journey.encounter_triggered = true;
+            }
+            if (capture_travel || capture_creature_horse ||
+                capture_road_arrival ||
+                render_benchmark_roadbook) {
+                int32_t target_progress = capture_road_arrival ? 850 :
+                    render_benchmark_roadbook ? 420 : 200;
+                int32_t setup_ticks = 0;
                 while (sim.journey.active &&
-                       sim.carriage.progress_milli < 200) {
+                       sim.journey.phase == CC_JOURNEY_PHASE_TRAVELLING &&
+                       sim.carriage.progress_milli < target_progress &&
+                       setup_ticks < 10000) {
                     CcSimAdvanceRuntimeTicks(
                         &sim, CC_WORLD_TICKS_PER_SECOND);
+                    setup_ticks += 1;
                 }
             } else {
                 while (sim.journey.active &&
@@ -7288,6 +7337,16 @@ int main(int argc, char **argv)
                 }
             }
         }
+    }
+    if (render_benchmark_roadbook_network) {
+        uint32_t catalogue_mask = 0U;
+        for (int32_t map_index = 0;
+             map_index < sim.map_count && map_index < 32; ++map_index) {
+            sim.maps[map_index].owner_id = sim.player.id;
+            catalogue_mask |= UINT32_C(1) << (uint32_t)map_index;
+        }
+        sim.player.map_catalogue_mask = catalogue_mask;
+        sim.player.map_archive_mask = 0U;
     }
     if (capture_underroad && sim.dungeon_count > 0) {
         sim.player.location_id = sim.dungeons[0].settlement_id;
@@ -7338,7 +7397,9 @@ int main(int argc, char **argv)
     ActionReelState action_reel = {0};
     GameplayReelState gameplay_reel = {0};
     ResetLocalState(&local);
-    if ((normal_play || capture_world) &&
+    bool roadbook_world_requested = capture_world || capture_travel ||
+        capture_road_fork || capture_road_zoom || render_benchmark_roadbook;
+    if ((normal_play || roadbook_world_requested) &&
         !InitializeOpenWorld(&sim, &local, false)) {
         (void)snprintf(startup_message, sizeof(startup_message),
                        "Could not generate the finite world.");
@@ -7375,8 +7436,22 @@ int main(int argc, char **argv)
             &local.agent, CC_LOCAL_WORLD_TARGET_CARRIAGE);
         local.course.alarm_countdown = 1000.0f;
     }
-    if (capture_road_fork) local.fork_turn_progress = 1.0f;
-    if (!capture && sim.journey.active) {
+    if (capture_road_fork || capture_road_departure) {
+        const CcRoute *route = SelectedOutgoingRoute(&sim, selected);
+        if (route != NULL) {
+            (void)EnterOpenWorldAtRoadGate(&sim, &local, route->id);
+            local.world_carriage.camera_weight = capture_road_departure ?
+                capture_road_zoom_weight : 1.0f;
+            local.world_carriage.camera_target =
+                local.world_carriage.camera_weight;
+            local.road_choice_active = true;
+            local.convoy.phase = CC_LOCAL_CONVOY_ROAD;
+            local.convoy.phase_progress = 1.0f;
+            local.convoy.pace = 0.0f;
+        }
+        local.fork_turn_progress = 1.0f;
+    }
+    if (normal_play && sim.journey.active) {
         if (sim.journey.phase == CC_JOURNEY_PHASE_BLOCKED) {
             BeginRoadLocalState(&sim, &local, false);
             view = VIEW_LOCAL;
@@ -7493,13 +7568,20 @@ int main(int argc, char **argv)
     if (capture_road || capture_parley) {
         BeginRoadLocalState(&sim, &local, capture_road);
     }
-    if (capture_travel) BeginRoadTravelState(&sim, &local);
+    if (capture_travel || capture_road_arrival) {
+        BeginRoadTravelState(&sim, &local);
+        local.world_carriage.camera_weight = capture_road_arrival ?
+            capture_road_zoom_weight : 1.0f;
+        local.world_carriage.camera_target = capture_road_arrival ? 0.0f :
+            1.0f;
+    }
     if (capture && !capture_world && !capture_interior &&
         !capture_walk_cycle &&
         !capture_jump && !capture_defense && !capture_downclimb &&
         !capture_navigation && !capture_limbs && !capture_dojo &&
         !capture_action_reel && !capture_gameplay_reel &&
-        !capture_encounter && !capture_travel &&
+        !capture_encounter && !capture_travel && !capture_road_fork &&
+        !capture_road_zoom &&
         !capture_road &&
         !capture_parley && !capture_carriage &&
         !capture_carriage_target &&
@@ -7681,6 +7763,12 @@ int main(int argc, char **argv)
         } else if (strcmp(render_benchmark_scene, "road") == 0) {
             BeginRoadTravelState(&sim, &local);
             local.convoy.pace = 0.0f;
+        } else if (render_benchmark_roadbook) {
+            BeginRoadTravelState(&sim, &local);
+            local.convoy.pace = 0.0f;
+            local.world_carriage.pace = 0.0f;
+            local.world_carriage.camera_weight = 1.0f;
+            local.world_carriage.camera_target = 1.0f;
         } else if (strcmp(render_benchmark_scene, "combat") == 0) {
             PrepareRoadCombatReel(&sim, &local);
         } else {
@@ -7688,6 +7776,32 @@ int main(int argc, char **argv)
             local.agent.facing_yaw = -0.35f;
             local.course.alarm_countdown = 1000.0f;
         }
+    }
+    bool roadbook_state_ready = !roadbook_world_requested ||
+        (local.open_world && local.world_stream.manifest.route_count > 0 &&
+         local.world_carriage.visible);
+    bool journey_state_ready =
+        !(capture_travel || capture_road_arrival ||
+          render_benchmark_roadbook) ||
+        (sim.journey.active &&
+         sim.journey.phase == CC_JOURNEY_PHASE_TRAVELLING &&
+         local.journey_travel_active);
+    if (!roadbook_state_ready || !journey_state_ready) {
+        (void)fprintf(
+            stderr,
+            "Road-book review setup failed: world=%d routes=%d carriage=%d journey=%d phase=%d travel=%d.\n",
+            local.open_world ? 1 : 0,
+            local.world_stream.manifest.route_count,
+            local.world_carriage.visible ? 1 : 0,
+            sim.journey.active ? 1 : 0,
+            (int32_t)sim.journey.phase,
+            local.journey_travel_active ? 1 : 0);
+        CcLocalRendererShutdown();
+        UnloadRenderTexture(local_target);
+        ReleaseMapTextures(&map_textures);
+        CloseWindow();
+        CcClientInstanceLockRelease(&instance_lock);
+        return 1;
     }
     char message[256] = "";
     if (!capture && !render_benchmark && startup_message[0] != '\0') {
@@ -8102,16 +8216,21 @@ int main(int argc, char **argv)
             final_renderer_stats.p95_frame_milliseconds > p95_budget;
         bool scene_expects_lod =
             strcmp(render_benchmark_scene, "combat") == 0;
-        bool hero_layout_failed =
-            final_renderer_stats.high_detail_characters != 1 ||
-            (scene_expects_lod &&
-             final_renderer_stats.low_detail_characters <= 0);
-        bool skin_layout_failed =
-            final_renderer_stats.hero_skin_updates != 1 ||
-            final_renderer_stats.hero_skinned_meshes <= 0 ||
-            final_renderer_stats.hero_skinned_meshes >
-                CC_LOCAL_HERO_RUNTIME_MESH_BUDGET ||
-            hero_layout_failed;
+        bool hero_is_embarked = render_benchmark_roadbook;
+        bool hero_layout_failed = hero_is_embarked ?
+            final_renderer_stats.high_detail_characters != 0 :
+            (final_renderer_stats.high_detail_characters != 1 ||
+             (scene_expects_lod &&
+              final_renderer_stats.low_detail_characters <= 0));
+        bool skin_layout_failed = hero_is_embarked ?
+            (final_renderer_stats.hero_skin_updates != 0 ||
+             final_renderer_stats.hero_skinned_meshes != 0 ||
+             hero_layout_failed) :
+            (final_renderer_stats.hero_skin_updates != 1 ||
+             final_renderer_stats.hero_skinned_meshes <= 0 ||
+             final_renderer_stats.hero_skinned_meshes >
+                 CC_LOCAL_HERO_RUNTIME_MESH_BUDGET ||
+             hero_layout_failed);
         if (performance_failed) {
             (void)fprintf(stderr,
                           "render performance budget failed: %.1f FPS < %.1f FPS\n",
