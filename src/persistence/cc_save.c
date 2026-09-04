@@ -4572,10 +4572,42 @@ static bool HasQuestArchitecture(const CcSim *sim)
     return false;
 }
 
+static void UpgradeLegacyJourneyRhythm(CcSim *sim)
+{
+    if (sim == NULL || !sim->journey.active ||
+        sim->journey.total_subticks <= 0) return;
+    int32_t old_total = sim->journey.total_subticks;
+    int32_t old_days = old_total / CC_WORLD_DAY_SUBTICKS;
+    if (old_days < 1) old_days = 1;
+    int32_t watches = old_days * 2;
+    if (watches < 3) watches = 3;
+    int32_t new_total = watches * CC_WORLD_WATCH_SUBTICKS;
+    sim->journey.elapsed_subticks = (int32_t)(
+        (int64_t)sim->journey.elapsed_subticks * new_total / old_total);
+    sim->journey.encounter_subticks = (int32_t)(
+        (int64_t)sim->journey.encounter_subticks * new_total / old_total);
+    sim->journey.total_subticks = new_total;
+    sim->carriage.progress_milli = (int32_t)(
+        (int64_t)sim->journey.elapsed_subticks * 1000 / new_total);
+    if (sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
+        int32_t pace_rate = sim->journey.pace == CC_JOURNEY_PACE_CAREFUL ?
+            24 : sim->journey.pace == CC_JOURNEY_PACE_PUSH ? 38 :
+            CC_TRAVEL_GAME_MINUTES_PER_SECOND;
+        int32_t base_speed = (int32_t)(
+            (INT64_C(52000) * CC_TRAVEL_GAME_MINUTES_PER_SECOND *
+             CC_WORLD_TICKS_PER_SECOND) / new_total);
+        sim->carriage.speed_milli_per_second =
+            base_speed * pace_rate / CC_TRAVEL_GAME_MINUTES_PER_SECOND;
+    } else {
+        sim->carriage.speed_milli_per_second = 0;
+    }
+}
+
 static void FinishLegacyRuntimeUpgrade(CcSim *sim)
 {
     if (!HasQuestArchitecture(sim)) CcSimUpgradeQuestArchitecture(sim);
     CcSimInitializePlayerRouteKnowledge(sim);
+    UpgradeLegacyJourneyRhythm(sim);
     sim->schema_version = CC_SIM_SCHEMA_VERSION;
     sim->generator_version = CC_GENERATOR_VERSION;
 }
@@ -4594,7 +4626,7 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
         legacy_version != 17U && legacy_version != 18U &&
         legacy_version != 19U && legacy_version != 20U &&
         legacy_version != 21U && legacy_version != 22U &&
-        legacy_version != 23U) return true;
+        legacy_version != 23U && legacy_version != 24U) return true;
     if (legacy_version == 17U) {
         for (int32_t i = 0; i < CC_MAX_EVENTS; ++i) {
             if ((int32_t)sim->events[i].kind ==
@@ -4630,7 +4662,8 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
             }
         }
     }
-    if (legacy_version == 23U) {
+    if (legacy_version == 24U || legacy_version == 23U) {
+        UpgradeLegacyJourneyRhythm(sim);
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         sim->generator_version = CC_GENERATOR_VERSION;
         return true;

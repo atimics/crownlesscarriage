@@ -43,6 +43,18 @@ static void ExecuteNumber(CcMetagame *metagame, const char *verb,
     CC_CHECK(CcMetagameExecute(metagame, command, output, capacity));
 }
 
+static void ResolveRoadRhythm(CcMetagame *metagame,
+                              char *output, size_t capacity)
+{
+    while (metagame->sim.journey.active &&
+           metagame->sim.journey.phase == CC_JOURNEY_PHASE_RESTING) {
+        const char *command =
+            CcSimJourneyStop(&metagame->sim) == CC_JOURNEY_STOP_MIDDAY ?
+                "road break" : "road camp";
+        CC_CHECK(CcMetagameExecute(metagame, command, output, capacity));
+    }
+}
+
 int main(void)
 {
     char output[16384];
@@ -243,10 +255,12 @@ int main(void)
     CC_CHECK(CcMetagameExecute(&metagame, "buy food 8", output, sizeof(output)));
     CC_CHECK(CcMetagameExecute(&metagame, "travel 7", output, sizeof(output)));
     CC_CHECK(metagame.sim.journey.active);
+    ResolveRoadRhythm(&metagame, output, sizeof(output));
     CC_CHECK(metagame.sim.journey.phase == CC_JOURNEY_PHASE_BLOCKED);
     CcMoney coins_before_bargain = metagame.sim.player.coins;
     CC_CHECK(CcMetagameExecute(&metagame, "road bargain", output,
                                sizeof(output)));
+    ResolveRoadRhythm(&metagame, output, sizeof(output));
     CC_CHECK(metagame.sim.player.location_id ==
              metagame.sim.settlements[3].id);
     CC_CHECK(metagame.sim.player.coins < coins_before_bargain);
@@ -365,12 +379,15 @@ int main(void)
                                sizeof(output)));
     CC_CHECK(CcMetagameExecute(&lawful, "travel 2", output,
                                sizeof(output)));
+    ResolveRoadRhythm(&lawful, output, sizeof(output));
     CC_CHECK(strstr(output, "Captain Ilyra Senn") != NULL);
     CC_CHECK(CcMetagameExecute(&lawful, "road bargain", output,
                                sizeof(output)));
     CC_CHECK(strstr(output, "report will blame the bridge machinery") != NULL);
+    ResolveRoadRhythm(&lawful, output, sizeof(output));
     CC_CHECK(CcMetagameExecute(&lawful, "travel 3", output,
                                sizeof(output)));
+    ResolveRoadRhythm(&lawful, output, sizeof(output));
     CC_CHECK(strstr(output, "market clock is still waiting for breakfast") !=
              NULL);
     ExecuteNumber(&lawful, "talk", relief_number, output, sizeof(output));
@@ -401,6 +418,7 @@ int main(void)
                                sizeof(output)));
     CC_CHECK(CcMetagameExecute(&supper, "travel 7", output,
                                sizeof(output)));
+    ResolveRoadRhythm(&supper, output, sizeof(output));
     int32_t supper_food = supper.sim.player.cargo[CC_GOOD_FOOD];
     CC_CHECK(CcMetagameExecute(&supper, "road supper", output,
                                sizeof(output)));

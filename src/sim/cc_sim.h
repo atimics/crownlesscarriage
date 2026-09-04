@@ -49,11 +49,12 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 24
+#define CC_SIM_SCHEMA_VERSION 25
 #define CC_GENERATOR_VERSION 20
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
 #define CC_WORLD_DAY_SUBTICKS (24 * 60 * CC_WORLD_MINUTE_SUBTICKS)
+#define CC_WORLD_WATCH_SUBTICKS (8 * 60 * CC_WORLD_MINUTE_SUBTICKS)
 #define CC_IDLE_GAME_MINUTES_PER_SECOND 0
 #define CC_TRAVEL_GAME_MINUTES_PER_SECOND 30
 
@@ -268,7 +269,10 @@ typedef enum CcEventKind {
     CC_EVENT_FRONT_FAILED = 107,
     CC_EVENT_QUEST_PROGRESS = 108,
     CC_EVENT_LORE_RECORDED = 109,
-    CC_EVENT_LORE_LOST = 110
+    CC_EVENT_LORE_LOST = 110,
+    CC_EVENT_JOURNEY_BREAK = 111,
+    CC_EVENT_JOURNEY_CAMP = 112,
+    CC_EVENT_ROAD_HOUSE_LODGING = 113
 } CcEventKind;
 
 typedef struct CcArchives {
@@ -317,7 +321,11 @@ typedef enum CcCommandKind {
     CC_COMMAND_SEARCH_DUNGEON = 33,
     CC_COMMAND_OPEN_DUNGEON_SHORTCUT = 34,
     CC_COMMAND_RESOLVE_DUNGEON_ENCOUNTER = 35,
-    CC_COMMAND_RETREAT_DUNGEON = 36
+    CC_COMMAND_RETREAT_DUNGEON = 36,
+    CC_COMMAND_TAKE_JOURNEY_BREAK = 37,
+    CC_COMMAND_PRESS_ON = 38,
+    CC_COMMAND_MAKE_CAMP = 39,
+    CC_COMMAND_LODGE_ROAD_HOUSE = 40
 } CcCommandKind;
 
 typedef enum CcHorseSex {
@@ -1116,8 +1124,15 @@ typedef enum CcJourneyOutcome {
 typedef enum CcJourneyPhase {
     CC_JOURNEY_PHASE_NONE,
     CC_JOURNEY_PHASE_TRAVELLING,
-    CC_JOURNEY_PHASE_BLOCKED
+    CC_JOURNEY_PHASE_BLOCKED,
+    CC_JOURNEY_PHASE_RESTING
 } CcJourneyPhase;
+
+typedef enum CcJourneyStopKind {
+    CC_JOURNEY_STOP_NONE = 0,
+    CC_JOURNEY_STOP_MIDDAY,
+    CC_JOURNEY_STOP_OVERNIGHT
+} CcJourneyStopKind;
 
 typedef enum CcJourneyPace {
     CC_JOURNEY_PACE_CAREFUL = 0,
@@ -1169,6 +1184,13 @@ typedef struct CcTravelPreview {
     int32_t chart_accuracy;
     int32_t horse_feed_required;
     int32_t horse_readiness;
+    int32_t travel_watches;
+    int32_t overnight_stops;
+    int32_t departure_wait_minutes;
+    int32_t road_house_distance_miles;
+    CcMoney road_house_cost;
+    const char *road_house_name;
+    bool opening_half_day;
     bool charted;
     bool destination_known;
     bool sponsored_guide;
@@ -1325,6 +1347,15 @@ uint64_t CcSimHash(const CcSim *sim);
 int32_t CcSimHorseTeamReadiness(const CcSim *sim);
 const char *CcJourneyPaceName(CcJourneyPace pace);
 int32_t CcSimJourneyEtaMinutes(const CcSim *sim);
+CcJourneyStopKind CcSimJourneyStop(const CcSim *sim);
+int32_t CcSimJourneyWatchNumber(const CcSim *sim);
+int32_t CcSimJourneyWatchCount(const CcSim *sim);
+const char *CcSimRoadHouseName(const CcSim *sim, CcId route_id);
+int32_t CcSimRoadHouseDistanceMiles(const CcSim *sim, CcId route_id);
+int32_t CcSimRoadHouseProgressMilli(const CcSim *sim, CcId route_id,
+                                    int32_t journey_watch_count);
+CcMoney CcSimRoadHouseCost(const CcSim *sim, CcId route_id);
+bool CcSimJourneyRoadHouseAvailable(const CcSim *sim);
 int32_t CcSimHorseCount(const CcSim *sim);
 const CcHorse *CcSimHorseAt(const CcSim *sim, int32_t index);
 const CcHorse *CcSimHorse(const CcSim *sim, CcId horse_id);

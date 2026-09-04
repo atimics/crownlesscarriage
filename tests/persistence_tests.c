@@ -1402,18 +1402,47 @@ static void CheckSchema21Compatibility(char *error, size_t error_capacity)
     RemoveDatabase(path);
 }
 
+static void PrepareLegacyJourneyTiming(CcSim *sim, int32_t travel_days,
+                                       char *error, size_t error_capacity)
+{
+    int32_t new_total = sim->journey.total_subticks;
+    int32_t old_total = travel_days * CC_WORLD_DAY_SUBTICKS;
+    CC_CHECK(new_total > 0);
+    CC_CHECK(old_total > 0);
+    sim->journey.encounter_subticks = (int32_t)(
+        (int64_t)sim->journey.encounter_subticks * old_total / new_total);
+    sim->journey.total_subticks = old_total;
+    sim->journey.elapsed_subticks = 0;
+    sim->carriage.progress_milli = 0;
+    CcCommand refresh_pace = {
+        .kind = CC_COMMAND_SET_JOURNEY_PACE,
+        .amount = (int32_t)sim->journey.pace
+    };
+    CC_CHECK(CcSimApply(sim, &refresh_pace, error, error_capacity));
+}
+
 static void CheckSchema22Compatibility(char *error, size_t error_capacity)
 {
     const char *path = "persistence-legacy-v22-test.ccsave";
     RemoveDatabase(path);
     CcSim legacy;
     CcSimInit(&legacy, UINT32_C(0x1e9ac22));
+    CcTravelPreview preview = {0};
+    CC_CHECK(CcSimTravelPreview(
+        &legacy, legacy.settlements[1].id, &preview,
+        error, error_capacity));
     CcCommand travel = {
         .kind = CC_COMMAND_TRAVEL,
         .target_id = legacy.settlements[1].id
     };
     CC_CHECK(CcSimApply(&legacy, &travel, error, error_capacity));
-    CcSimAdvanceRuntimeTicks(&legacy, 2400);
+    PrepareLegacyJourneyTiming(
+        &legacy, preview.travel_days, error, error_capacity);
+    legacy.journey.elapsed_subticks =
+        legacy.journey.total_subticks * 3 / 10;
+    legacy.carriage.progress_milli = 300;
+    legacy.clock.minute_subticks =
+        legacy.journey.elapsed_subticks % CC_WORLD_DAY_SUBTICKS;
     CC_CHECK(legacy.journey.active);
     CC_CHECK(legacy.carriage.progress_milli > 0);
     legacy.schema_version = 22U;
@@ -1465,14 +1494,19 @@ static void CheckSchema23Compatibility(char *error, size_t error_capacity)
     route->closed = false;
     route->security = 100;
     route->condition = 100;
+    CcTravelPreview preview = {0};
+    CC_CHECK(CcSimTravelPreview(
+        &legacy, route->to_id, &preview, error, error_capacity));
     CcCommand travel = {
         .kind = CC_COMMAND_TRAVEL,
         .target_id = route->to_id
     };
     CC_CHECK(CcSimApply(&legacy, &travel, error, error_capacity));
+    PrepareLegacyJourneyTiming(
+        &legacy, preview.travel_days, error, error_capacity);
     legacy.journey.ambush_pending = false;
     CcSim suffix = legacy;
-    CcSimAdvanceRuntimeTicks(&suffix, 2400);
+    CcSimAdvanceRuntimeTicks(&suffix, 480);
     const CcRouteKnowledge *knowledge = CcSimPlayerRouteKnowledge(
         &suffix, route->id);
     CC_CHECK(knowledge != NULL);
@@ -1481,7 +1515,7 @@ static void CheckSchema23Compatibility(char *error, size_t error_capacity)
     if (expected_reveal > 1000) expected_reveal = 1000;
     CC_CHECK(knowledge->from_reveal_milli == expected_reveal);
     CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
-    AddSchema23RuntimeJournalSuffix(path, &legacy, &suffix, 2400);
+    AddSchema23RuntimeJournalSuffix(path, &legacy, &suffix, 480);
     int64_t legacy_generation = ReadSqliteInteger(
         path, "SELECT journal_generation FROM meta WHERE id=1;");
 
@@ -1509,6 +1543,76 @@ static void CheckSchema23Compatibility(char *error, size_t error_capacity)
     CC_CHECK(ReadSqliteInteger(
                  path, "SELECT COUNT(*) FROM action_journal;") == 0);
     CC_CHECK(CcJournalClose(&journal, &resumed, error, error_capacity));
+    RemoveDatabase(path);
+}
+
+static void CheckSchema24Compatibility(char *error, size_t error_capacity)
+{
+    const char *path = "persistence-legacy-v24-test.ccsave";
+    RemoveDatabase(path);
+    CcSim legacy;
+    CcSimInit(&legacy, UINT32_C(0x1e9ac24));
+    CcTravelPreview preview = {0};
+    CC_CHECK(CcSimTravelPreview(
+        &legacy, legacy.settlements[1].id, &preview,
+        error, error_capacity));
+    CcCommand travel = {
+        .kind = CC_COMMAND_TRAVEL,
+        .target_id = legacy.settlements[1].id
+    };
+    CC_CHECK(CcSimApply(&legacy, &travel, error, error_capacity));
+    PrepareLegacyJourneyTiming(
+        &legacy, preview.travel_days, error, error_capacity);
+    legacy.journey.ambush_pending = false;
+    CcSimAdvanceRuntimeTicks(&legacy, 480);
+    int32_t legacy_progress = legacy.carriage.progress_milli;
+    legacy.schema_version = 24U;
+    CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
+
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.generator_version == CC_GENERATOR_VERSION);
+    CC_CHECK(restored.journey.active);
+    CC_CHECK(restored.journey.total_subticks ==
+             (preview.travel_days * 2 < 3 ? 3 : preview.travel_days * 2) *
+                 CC_WORLD_WATCH_SUBTICKS);
+    CC_CHECK(restored.carriage.progress_milli == legacy_progress);
+    CC_CHECK(CcSimValidate(&restored, error, error_capacity));
+    RemoveDatabase(path);
+}
+
+static void CheckJourneyStopPersistence(char *error, size_t error_capacity)
+{
+    const char *path = "persistence-journey-stop-test.ccsave";
+    RemoveDatabase(path);
+    CcSim sim;
+    CcSimInit(&sim, UINT32_C(0x570900));
+    CcCommand travel = {
+        .kind = CC_COMMAND_TRAVEL,
+        .target_id = sim.settlements[1].id
+    };
+    CC_CHECK(CcSimApply(&sim, &travel, error, error_capacity));
+    sim.journey.ambush_pending = false;
+    while (sim.journey.active) {
+        CcSimAdvanceRuntimeTicks(&sim, CC_WORLD_TICKS_PER_SECOND);
+    }
+    travel.target_id = sim.settlements[0].id;
+    CC_CHECK(CcSimApply(&sim, &travel, error, error_capacity));
+    sim.journey.ambush_pending = false;
+    while (sim.journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
+        CcSimAdvanceRuntimeTicks(&sim, CC_WORLD_TICKS_PER_SECOND);
+    }
+    CC_CHECK(CcSimJourneyStop(&sim) == CC_JOURNEY_STOP_MIDDAY);
+    CC_CHECK(CcSaveWrite(path, &sim, error, error_capacity));
+
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.journey.active);
+    CC_CHECK(restored.journey.phase == CC_JOURNEY_PHASE_RESTING);
+    CC_CHECK(CcSimJourneyStop(&restored) == CC_JOURNEY_STOP_MIDDAY);
+    CC_CHECK(CcSimValidate(&restored, error, error_capacity));
     RemoveDatabase(path);
 }
 
@@ -1564,6 +1668,8 @@ int main(void)
     CheckSchema21Compatibility(error, sizeof(error));
     CheckSchema22Compatibility(error, sizeof(error));
     CheckSchema23Compatibility(error, sizeof(error));
+    CheckSchema24Compatibility(error, sizeof(error));
+    CheckJourneyStopPersistence(error, sizeof(error));
     CheckDiplomacyPersistence(error, sizeof(error));
     CheckJournalRecovery(error, sizeof(error));
     CheckJournalCheckpointAndTamper(error, sizeof(error));

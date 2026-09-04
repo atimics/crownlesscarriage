@@ -31,7 +31,13 @@ Sources:
 
 - https://cairnrpg.com/second-edition/players-guide/procedures/
 - https://cairnrpg.com/second-edition/players-guide/overview-and-principles/
+- https://cairnrpg.com/second-edition/players-guide/core-rules/
+- https://cairnrpg.com/second-edition/players-guide/marketplace/
+- https://cairnrpg.com/second-edition/wardens-guide/setting-seeds/
+- https://cairnrpg.com/second-edition/wardens-guide/wilderness-exploration/
+- https://cairnrpg.com/second-edition/wardens-guide/pointcrawls/
 - https://osesrd.opengamingnetwork.com/adventuring/
+- https://www.bastionland.com/2018/09/the-ici-doctrine-information-choice.html
 - https://thealexandrian.net/wordpress/48666/roleplaying-games/pointcrawls
 
 ## Decision
@@ -77,6 +83,55 @@ The complete carriage loop is:
    site. An anchor gives a safe return chain and can change later journeys.
 7. Arrive and settle: enter the authored destination, unload, fulfil promises,
    update road knowledge, and let consequences enter world memory.
+
+The road uses this daily procedure:
+
+1. The opening journey is one eight-hour watch. It teaches the road book and
+   reaches Gloamgate in half a day.
+2. Later journeys contain at least three travel watches. This guarantees one
+   night stop, even on a short road.
+   A journey chosen after midday is prepared overnight and leaves at first
+   light, which keeps the watch names tied to the world clock.
+3. The morning watch ends at a midday halt. Watering the team and reading the
+   signs lowers risk. Pressing on adds fatigue and danger.
+4. The afternoon watch ends at an overnight halt. Camp uses the reserved
+   fodder and raises road risk. A road house gives stronger rest, stable feed,
+   and a small wagon repair for a visible price.
+5. Every route has a named road house. Its mile mark, place in the route, and
+   price are stable for that world. Longer roads may place it at a later night
+   stop.
+6. Travel strain is paid when a watch ends. This keeps the pace choice for the
+   whole watch authoritative. An eight-hour night stop advances the world
+   clock and all deadline clocks.
+
+The interface shows the current day, time, watch number, next stop, team
+readiness, wagon condition, and arrival estimate. Route choice shows the full
+watch plan and the known road house before departure. These details turn time
+and supplies into planning information.
+
+The procedure follows these OSR play principles:
+
+- Information comes before choice. The road book shows distance, danger,
+  lodging, price, fodder, team readiness, and wagon condition before the
+  player commits. Road signs warn of many threats before they become attacks.
+- Choices create clear trade-offs. A break exchanges momentum for recovery
+  and safer reading of the road. Pressing on protects momentum while adding
+  fatigue and danger. Camp saves crowns while accepting exposure. Lodging
+  spends crowns for safety, feed, and repair.
+- Time is a material cost. Travel, overnight rest, promise deadlines, markets,
+  faction plans, horse needs, and world events share one clock. The world can
+  change while the company rests.
+- Logistics create play. Fodder, money, cargo weight, horse traits, road
+  condition, pace, and wagon wear shape the journey. These values stay visible
+  enough for the player to make plans.
+- Encounters allow several answers. Warnings, reaction, parley, bargaining,
+  evasion, fighting, and retreat keep danger open to judgement.
+- The world remembers action. Route knowledge, road events, spent supplies,
+  animal strain, wagon damage, faction changes, and missed deadlines persist
+  after arrival.
+- The procedure stays easy to run. One travel choice and one event belong to
+  each watch. The system handles the small measures while the player makes
+  the decisions that change risk and resources.
 
 ## Consequences
 
