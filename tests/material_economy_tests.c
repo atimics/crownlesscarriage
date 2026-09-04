@@ -103,12 +103,20 @@ int main(void)
 
     CcSim paper_mill;
     CcSettlement *place = IsolatedSettlement(&paper_mill);
-    place->stock[CC_GOOD_WOOD] = 3;
+    paper_mill.iron_ledger_reserve = 0;
+    paper_mill.archives.scribes = 0;
+    place->service_mask |= Service(CC_SERVICE_MILL);
+    place->population = 100;
+    place->stock[CC_GOOD_BREAD] = 10;
+    place->stock[CC_GOOD_WHEAT] = 7;
+    place->reserve_target[CC_GOOD_WHEAT] = 1;
+    place->stock[CC_GOOD_TOOLS] = 1;
     place->reserve_target[CC_GOOD_PAPER] = 10;
     place->production[CC_GOOD_PAPER] = 8;
     CcSimAdvanceDays(&paper_mill, 6);
     CC_CHECK(place->stock[CC_GOOD_PAPER] == 8);
-    CC_CHECK(place->stock[CC_GOOD_WOOD] == 1);
+    CC_CHECK(place->stock[CC_GOOD_WHEAT] == 5);
+    CC_CHECK(place->paper_tool_wear == 1);
 
     CcSim wet_journey;
     CcSimInit(&wet_journey, UINT32_C(0x5a11a9e));

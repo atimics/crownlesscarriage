@@ -19,6 +19,10 @@ static void PrintSummary(const CcSim *sim, bool detail)
     int32_t active_couriers = 0;
     int32_t abandoned_settlements = 0;
     int32_t maximum_generation = 0;
+    int32_t sanction = 0;
+    int32_t anointed = 0;
+    int32_t unsanctioned_weeks = 0;
+    int32_t pretender_crises = 0;
     CcMoney debt = 0;
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         if (CcSettlementIsAbandoned(&sim->settlements[i])) {
@@ -38,6 +42,12 @@ static void PrintSummary(const CcSim *sim, bool detail)
     }
     for (int32_t i = 0; i < sim->kingdom_count; ++i) {
         legitimacy += sim->kingdoms[i].legitimacy;
+        sanction += sim->kingdoms[i].sanction;
+        if (sim->kingdoms[i].anointed) anointed += 1;
+        if (sim->kingdoms[i].unsanctioned_weeks > unsanctioned_weeks) {
+            unsanctioned_weeks = sim->kingdoms[i].unsanctioned_weeks;
+        }
+        pretender_crises += sim->kingdoms[i].pretender_crises;
         debt += sim->kingdoms[i].iron_ledger_debt;
         for (int32_t second = i + 1;
              second < sim->kingdom_count; ++second) {
@@ -58,6 +68,7 @@ static void PrintSummary(const CcSim *sim, bool detail)
             maximum_generation = sim->characters[i].generation;
         }
     }
+    CcMaterialChainSnapshot chain = CcSimMaterialChainSnapshot(sim);
     (void)printf("day=%d hash=%016" PRIx64
                  " average_hunger=%d maximum_hunger=%d shipments=%d events=%d"
                  " open_routes=%d/%d legitimacy=%d live_situations=%d"
@@ -73,6 +84,11 @@ static void PrintSummary(const CcSim *sim, bool detail)
                  " broods=%d whelps=%d afterdeath=%d ruins=%d climate=%d"
                  " campaign_experience=%d"
                  " lore=%d lore_lost=%d scribes=%d"
+                 " archive_chain=%s wheat=%d paper=%d tools=%d iron=%d"
+                 " gold=%d gems=%d"
+                 " inbound_tools=%d inbound_iron=%d"
+                 " sanction=%d anointed=%d/%d unsanctioned_weeks=%d"
+                 " pretender_crises=%d"
                  " people=%d births=%d deaths=%d generation=%d\n",
                  sim->current_day, CcSimHash(sim),
                  total_hunger / sim->settlement_count, maximum_hunger,
@@ -108,24 +124,33 @@ static void PrintSummary(const CcSim *sim, bool detail)
                  sim->archives.lore_stored,
                  sim->archives.lore_lost_total,
                  sim->archives.scribes,
+                 CcMaterialChainBlockerName(chain.blocker),
+                 chain.wheat, chain.paper, chain.tools, chain.iron,
+                 chain.gold, chain.gems,
+                 chain.incoming_tools, chain.incoming_iron,
+                 sanction / sim->kingdom_count, anointed,
+                 sim->kingdom_count, unsanctioned_weeks,
+                 pretender_crises,
                  sim->character_count, sim->character_births,
                  sim->character_deaths, maximum_generation);
     if (detail) {
         for (int32_t i = 0; i < sim->settlement_count; ++i) {
             const CcSettlement *place = &sim->settlements[i];
             (void)printf("  %-16s hunger=%3d prosperity=%3d security=%3d"
-                         " stock=[%3d,%3d,%3d,%3d,%3d,%3d]"
-                         " price=[%2d,%2d,%2d,%2d,%2d,%2d]\n",
+                         " stock=[bread:%3d iron:%3d tools:%3d weapons:%3d"
+                         " gold:%3d gems:%3d wood:%3d wheat:%3d meat:%3d"
+                         " wool:%3d stone:%3d paper:%3d]\n",
                          place->name, place->hunger, place->prosperity, place->security,
                          place->stock[CC_GOOD_FOOD], place->stock[CC_GOOD_MATERIAL],
                          place->stock[CC_GOOD_TOOLS],
                          place->stock[CC_GOOD_WEAPONS],
                          place->stock[CC_GOOD_GOLD], place->stock[CC_GOOD_GEMS],
-                         place->price[CC_GOOD_FOOD],
-                         place->price[CC_GOOD_MATERIAL],
-                         place->price[CC_GOOD_TOOLS],
-                         place->price[CC_GOOD_WEAPONS],
-                         place->price[CC_GOOD_GOLD], place->price[CC_GOOD_GEMS]);
+                         place->stock[CC_GOOD_WOOD],
+                         place->stock[CC_GOOD_WHEAT],
+                         place->stock[CC_GOOD_MEAT],
+                         place->stock[CC_GOOD_WOOL],
+                         place->stock[CC_GOOD_STONE],
+                         place->stock[CC_GOOD_PAPER]);
         }
         for (int32_t i = 0; i < sim->character_count; ++i) {
             const CcCharacter *person = &sim->characters[i];
@@ -142,6 +167,7 @@ int main(int argc, char **argv)
 {
     uint32_t seed = UINT32_C(0xc0a71a9e);
     int32_t years = 10;
+    int32_t report_every = 1;
     const char *save_path = NULL;
     bool detail = false;
     for (int argument = 1; argument < argc; ++argument) {
@@ -149,6 +175,9 @@ int main(int argc, char **argv)
             seed = (uint32_t)strtoul(argv[++argument], NULL, 0);
         } else if (strcmp(argv[argument], "--years") == 0 && argument + 1 < argc) {
             years = (int32_t)strtol(argv[++argument], NULL, 10);
+        } else if (strcmp(argv[argument], "--report-every") == 0 &&
+                   argument + 1 < argc) {
+            report_every = (int32_t)strtol(argv[++argument], NULL, 10);
         } else if (strcmp(argv[argument], "--save") == 0 && argument + 1 < argc) {
             save_path = argv[++argument];
         } else if (strcmp(argv[argument], "--detail") == 0) {
@@ -159,13 +188,17 @@ int main(int argc, char **argv)
     CcSim sim;
     CcSimInit(&sim, seed);
     char error[256];
+    if (report_every < 1) report_every = 1;
     for (int32_t year = 0; year < years; ++year) {
         CcSimAdvanceDays(&sim, 365);
         if (!CcSimValidate(&sim, error, sizeof(error))) {
             (void)fprintf(stderr, "validation failed in year %d: %s\n", year + 1, error);
             return 1;
         }
-        PrintSummary(&sim, detail);
+        if (year == 0 || year + 1 == years ||
+            (year + 1) % report_every == 0) {
+            PrintSummary(&sim, detail);
+        }
     }
     if (save_path != NULL && !CcSaveWrite(save_path, &sim, error, sizeof(error))) {
         (void)fprintf(stderr, "save failed: %s\n", error);

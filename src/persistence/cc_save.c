@@ -268,6 +268,29 @@ static bool EnsureAnimalColumns(sqlite3 *database,
             error, error_capacity);
 }
 
+static bool EnsureMaterialChainColumns(sqlite3 *database,
+                                       char *error, size_t error_capacity)
+{
+    return EnsureColumn(database, "meta", "archive_kit_tool_wear",
+            "ALTER TABLE meta ADD COLUMN archive_kit_tool_wear INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "kingdom", "sanction",
+            "ALTER TABLE kingdom ADD COLUMN sanction INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "kingdom", "unsanctioned_weeks",
+            "ALTER TABLE kingdom ADD COLUMN unsanctioned_weeks INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "kingdom", "pretender_crises",
+            "ALTER TABLE kingdom ADD COLUMN pretender_crises INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "kingdom", "anointed",
+            "ALTER TABLE kingdom ADD COLUMN anointed INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "material_economy", "paper_tool_wear",
+            "ALTER TABLE material_economy ADD COLUMN paper_tool_wear INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity);
+}
+
 static bool EnsureHorseStableColumns(sqlite3 *database,
                                      char *error, size_t error_capacity)
 {
@@ -834,12 +857,8 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " archive_lore_stored INTEGER NOT NULL DEFAULT 0,"
         " archive_lore_lost_total INTEGER NOT NULL DEFAULT 0,"
         " archive_last_recorded_day INTEGER NOT NULL DEFAULT 0,"
-        " archive_lore_ceiling INTEGER NOT NULL DEFAULT 40);"
-        "CREATE TABLE IF NOT EXISTS kingdom ("
-        " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL UNIQUE, name TEXT NOT NULL,"
-        " color_r INTEGER NOT NULL, color_g INTEGER NOT NULL, color_b INTEGER NOT NULL,"
-        " treasury INTEGER NOT NULL, legitimacy INTEGER NOT NULL,"
-        " iron_ledger_debt INTEGER NOT NULL DEFAULT 0);"
+        " archive_lore_ceiling INTEGER NOT NULL DEFAULT 40,"
+        " archive_kit_tool_wear INTEGER NOT NULL DEFAULT 0);"
         "CREATE TABLE IF NOT EXISTS route ("
         " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL UNIQUE, from_id INTEGER NOT NULL,"
         " to_id INTEGER NOT NULL, travel_days INTEGER NOT NULL, capacity INTEGER NOT NULL,"
@@ -885,6 +904,16 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " food_cargo INTEGER NOT NULL, material_cargo INTEGER NOT NULL, tools_cargo INTEGER NOT NULL,"
         " cargo_capacity INTEGER NOT NULL, passenger_capacity INTEGER NOT NULL,"
         " reputation INTEGER NOT NULL);";
+    const char *kingdom_schema =
+        "CREATE TABLE IF NOT EXISTS kingdom ("
+        " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL UNIQUE, name TEXT NOT NULL,"
+        " color_r INTEGER NOT NULL, color_g INTEGER NOT NULL, color_b INTEGER NOT NULL,"
+        " treasury INTEGER NOT NULL, legitimacy INTEGER NOT NULL,"
+        " iron_ledger_debt INTEGER NOT NULL DEFAULT 0,"
+        " sanction INTEGER NOT NULL DEFAULT 0,"
+        " unsanctioned_weeks INTEGER NOT NULL DEFAULT 0,"
+        " pretender_crises INTEGER NOT NULL DEFAULT 0,"
+        " anointed INTEGER NOT NULL DEFAULT 0);";
     const char *realm_schema =
         "CREATE TABLE IF NOT EXISTS settlement ("
         " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL UNIQUE, kingdom_id INTEGER NOT NULL,"
@@ -1151,7 +1180,8 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " gold_progress INTEGER NOT NULL, gem_progress INTEGER NOT NULL,"
         " farm_tool_wear INTEGER NOT NULL, mine_tool_wear INTEGER NOT NULL,"
         " smith_tool_wear INTEGER NOT NULL, treasure_gold_committed INTEGER NOT NULL,"
-        " treasure_gems_committed INTEGER NOT NULL, treasure_work INTEGER NOT NULL);"
+        " treasure_gems_committed INTEGER NOT NULL, treasure_work INTEGER NOT NULL,"
+        " paper_tool_wear INTEGER NOT NULL DEFAULT 0);"
         "CREATE TABLE IF NOT EXISTS player_material_economy ("
         " id INTEGER PRIMARY KEY CHECK(id=1), weapons_cargo INTEGER NOT NULL,"
         " gold_cargo INTEGER NOT NULL, gems_cargo INTEGER NOT NULL,"
@@ -1259,6 +1289,7 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " condition INTEGER NOT NULL, blocker INTEGER NOT NULL,"
         " accessible INTEGER NOT NULL);";
     return Execute(database, schema, error, error_capacity) &&
+           Execute(database, kingdom_schema, error, error_capacity) &&
            Execute(database, realm_schema, error, error_capacity) &&
            Execute(database, situation_schema, error, error_capacity) &&
            Execute(database, quest_schema, error, error_capacity) &&
@@ -1275,7 +1306,8 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
            EnsureJourneyColumns(database, error, error_capacity) &&
            EnsureSocialColumns(database, error, error_capacity) &&
            EnsureJournalMetaColumns(database, error, error_capacity) &&
-           EnsureCharacterLifecycleColumns(database, error, error_capacity);
+           EnsureCharacterLifecycleColumns(database, error, error_capacity) &&
+           EnsureMaterialChainColumns(database, error, error_capacity);
 }
 
 static bool SaveMeta(sqlite3 *database, const CcSim *sim,
@@ -1291,8 +1323,8 @@ static bool SaveMeta(sqlite3 *database, const CcSim *sim,
         "event_write_index,state_hash,journal_generation,journal_cursor,"
         "iron_ledger_reserve,archive_scribes,archive_lore_stored,"
         "archive_lore_lost_total,archive_last_recorded_day,archive_lore_ceiling,"
-        "character_births,character_deaths) "
-        "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);";
+        "character_births,character_deaths,archive_kit_tool_wear) "
+        "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);";
     if (!Prepare(database, sql, &statement, error, error_capacity)) return false;
     char hash[24];
     (void)snprintf(hash, sizeof(hash), "%016" PRIx64, CcSimHash(sim));
@@ -1323,6 +1355,7 @@ static bool SaveMeta(sqlite3 *database, const CcSim *sim,
     BindInt(statement, 25, sim->archives.lore_ceiling);
     BindInt(statement, 26, sim->character_births);
     BindInt(statement, 27, sim->character_deaths);
+    BindInt(statement, 28, sim->archives.kit_tool_wear);
     bool result = StepDone(database, statement, error, error_capacity);
     sqlite3_finalize(statement);
     return result;
@@ -1335,7 +1368,9 @@ static bool SaveKingdoms(sqlite3 *database, const CcSim *sim,
     if (!Prepare(database,
                  "INSERT INTO kingdom "
                  "(slot,id,name,color_r,color_g,color_b,treasury,legitimacy,"
-                 "iron_ledger_debt) VALUES(?,?,?,?,?,?,?,?,?);",
+                 "iron_ledger_debt,sanction,unsanctioned_weeks,"
+                 "pretender_crises,anointed) "
+                 "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?);",
                  &statement, error, error_capacity)) return false;
     for (int32_t i = 0; i < sim->kingdom_count; ++i) {
         const CcKingdom *item = &sim->kingdoms[i];
@@ -1344,6 +1379,10 @@ static bool SaveKingdoms(sqlite3 *database, const CcSim *sim,
         BindInt(statement, 5, item->color_g); BindInt(statement, 6, item->color_b);
         BindMoney(statement, 7, item->treasury); BindInt(statement, 8, item->legitimacy);
         BindMoney(statement, 9, item->iron_ledger_debt);
+        BindInt(statement, 10, item->sanction);
+        BindInt(statement, 11, item->unsanctioned_weeks);
+        BindInt(statement, 12, item->pretender_crises);
+        BindInt(statement, 13, item->anointed ? 1 : 0);
         if (!StepDone(database, statement, error, error_capacity) ||
             !ResetStatement(database, statement, error, error_capacity)) {
             sqlite3_finalize(statement); return false;
@@ -1483,7 +1522,7 @@ static bool SaveMaterialEconomy(sqlite3 *database, const CcSim *sim,
 {
     sqlite3_stmt *statement = NULL;
     if (!Prepare(database,
-            "INSERT INTO material_economy VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
+            "INSERT INTO material_economy VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
             &statement, error, error_capacity)) return false;
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         const CcSettlement *s = &sim->settlements[i];
@@ -1521,6 +1560,7 @@ static bool SaveMaterialEconomy(sqlite3 *database, const CcSim *sim,
         BindInt(statement, column++, s->treasure_gold_committed);
         BindInt(statement, column++, s->treasure_gems_committed);
         BindInt(statement, column++, s->treasure_work);
+        BindInt(statement, column++, s->paper_tool_wear);
         if (!StepDone(database, statement, error, error_capacity) ||
             !ResetStatement(database, statement, error, error_capacity)) {
             sqlite3_finalize(statement);
@@ -2849,6 +2889,7 @@ static bool SaveSnapshot(sqlite3 *database, const CcSim *sim,
         EnsureSocialColumns(database, error, error_capacity) &&
         EnsureCharacterLifecycleColumns(database, error, error_capacity) &&
         EnsurePlayerKnowledgeColumns(database, error, error_capacity) &&
+        EnsureMaterialChainColumns(database, error, error_capacity) &&
         Execute(database, "BEGIN IMMEDIATE;", error, error_capacity);
     if (ok) {
         ok = SaveSnapshotContents(database, sim, journal_generation,
@@ -2894,7 +2935,7 @@ static bool ReadMeta(sqlite3 *database, CcSim *sim, uint64_t *expected_hash,
         "event_write_index,state_hash,journal_generation,journal_cursor,"
         "iron_ledger_reserve,archive_scribes,archive_lore_stored,"
         "archive_lore_lost_total,archive_last_recorded_day,archive_lore_ceiling,"
-        "character_births,character_deaths "
+        "character_births,character_deaths,archive_kit_tool_wear "
         "FROM meta WHERE id=1;", &statement, error, error_capacity)) return false;
     if (sqlite3_step(statement) != SQLITE_ROW) {
         SetError(error, error_capacity, "Campaign metadata is missing.");
@@ -2932,6 +2973,7 @@ static bool ReadMeta(sqlite3 *database, CcSim *sim, uint64_t *expected_hash,
     sim->archives.lore_ceiling = sqlite3_column_int(statement, 24);
     sim->character_births = sqlite3_column_int(statement, 25);
     sim->character_deaths = sqlite3_column_int(statement, 26);
+    sim->archives.kit_tool_wear = sqlite3_column_int(statement, 27);
     sqlite3_finalize(statement);
     return true;
 }
@@ -2942,7 +2984,8 @@ static bool ReadKingdoms(sqlite3 *database, CcSim *sim,
     sqlite3_stmt *statement = NULL;
     if (!Prepare(database,
                  "SELECT slot,id,name,color_r,color_g,color_b,treasury,"
-                 "legitimacy,iron_ledger_debt FROM kingdom ORDER BY slot;",
+                 "legitimacy,iron_ledger_debt,sanction,unsanctioned_weeks,"
+                 "pretender_crises,anointed FROM kingdom ORDER BY slot;",
                  &statement, error, error_capacity)) return false;
     int32_t rows = 0;
     while (sqlite3_step(statement) == SQLITE_ROW) {
@@ -2962,6 +3005,10 @@ static bool ReadKingdoms(sqlite3 *database, CcSim *sim,
         k->legitimacy = sqlite3_column_int(statement, 7);
         k->iron_ledger_debt =
             (CcMoney)sqlite3_column_int64(statement, 8);
+        k->sanction = sqlite3_column_int(statement, 9);
+        k->unsanctioned_weeks = sqlite3_column_int(statement, 10);
+        k->pretender_crises = sqlite3_column_int(statement, 11);
+        k->anointed = sqlite3_column_int(statement, 12) != 0;
         rows += 1;
     }
     sqlite3_finalize(statement);
@@ -3253,6 +3300,7 @@ static bool ReadMaterialEconomy(sqlite3 *database, CcSim *sim,
         s->treasure_gold_committed = sqlite3_column_int(statement, column++);
         s->treasure_gems_committed = sqlite3_column_int(statement, column++);
         s->treasure_work = sqlite3_column_int(statement, column++);
+        s->paper_tool_wear = sqlite3_column_int(statement, column++);
         rows += 1;
     }
     sqlite3_finalize(statement);
@@ -5246,6 +5294,13 @@ static void MakeLegacyCharacterNamesUnique(CcSim *sim)
     }
 }
 
+static void FinishMaterialChainUpgrade(CcSim *sim)
+{
+    CcSimInitializeMaterialChain(sim);
+    sim->schema_version = CC_SIM_SCHEMA_VERSION;
+    sim->generator_version = CC_GENERATOR_VERSION;
+}
+
 static void FinishLegacyRuntimeUpgrade(CcSim *sim)
 {
     if (!HasQuestArchitecture(sim)) CcSimUpgradeQuestArchitecture(sim);
@@ -5256,8 +5311,7 @@ static void FinishLegacyRuntimeUpgrade(CcSim *sim)
     CcSimInitializeRoadSites(sim);
     CcSimUpgradeFlockEconomy(sim);
     ClearMissingLegacyEventReferences(sim);
-    sim->schema_version = CC_SIM_SCHEMA_VERSION;
-    sim->generator_version = CC_GENERATOR_VERSION;
+    FinishMaterialChainUpgrade(sim);
 }
 
 static void InitializeExtendedGoods(CcSim *sim)
@@ -5283,29 +5337,25 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
     ClearMissingLegacyEventReferences(sim);
     MakeLegacyCharacterNamesUnique(sim);
     if (legacy_version == 33U && sim->generator_version == 25U) {
-        sim->schema_version = CC_SIM_SCHEMA_VERSION;
-        sim->generator_version = CC_GENERATOR_VERSION;
+        FinishMaterialChainUpgrade(sim);
         return true;
     }
     if (legacy_version == 32U && sim->generator_version == 25U) {
         CcSimInitializePaperEconomy(sim);
-        sim->schema_version = CC_SIM_SCHEMA_VERSION;
-        sim->generator_version = CC_GENERATOR_VERSION;
+        FinishMaterialChainUpgrade(sim);
         return true;
     }
     if (legacy_version == 31U && sim->generator_version == 24U) {
         CcSimUpgradeFlockEconomy(sim);
         CcSimInitializePaperEconomy(sim);
-        sim->schema_version = CC_SIM_SCHEMA_VERSION;
-        sim->generator_version = CC_GENERATOR_VERSION;
+        FinishMaterialChainUpgrade(sim);
         return true;
     }
     if (legacy_version == 30U && sim->generator_version == 23U) {
         CcSimInitializeRoadSites(sim);
         CcSimUpgradeFlockEconomy(sim);
         CcSimInitializePaperEconomy(sim);
-        sim->schema_version = CC_SIM_SCHEMA_VERSION;
-        sim->generator_version = CC_GENERATOR_VERSION;
+        FinishMaterialChainUpgrade(sim);
         return true;
     }
     if (legacy_version == 29U) {
@@ -5313,8 +5363,7 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
         CcSimInitializeRoadSites(sim);
         CcSimUpgradeFlockEconomy(sim);
         CcSimInitializePaperEconomy(sim);
-        sim->schema_version = CC_SIM_SCHEMA_VERSION;
-        sim->generator_version = CC_GENERATOR_VERSION;
+        FinishMaterialChainUpgrade(sim);
         return true;
     }
     if (legacy_version == 28U) {
@@ -5323,8 +5372,7 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
         CcSimInitializeRoadSites(sim);
         CcSimUpgradeFlockEconomy(sim);
         CcSimInitializePaperEconomy(sim);
-        sim->schema_version = CC_SIM_SCHEMA_VERSION;
-        sim->generator_version = CC_GENERATOR_VERSION;
+        FinishMaterialChainUpgrade(sim);
         return true;
     }
     if (legacy_version != 2U && legacy_version != 3U &&
@@ -5353,8 +5401,7 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
         CcSimInitializeRoadSites(sim);
         CcSimUpgradeFlockEconomy(sim);
         CcSimInitializePaperEconomy(sim);
-        sim->schema_version = CC_SIM_SCHEMA_VERSION;
-        sim->generator_version = CC_GENERATOR_VERSION;
+        FinishMaterialChainUpgrade(sim);
         return true;
     }
     InitializeExtendedGoods(sim);
@@ -5362,8 +5409,7 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
         CcSimUpgradeGrainEconomy(sim);
         CcSimInitializeRoadSites(sim);
         CcSimUpgradeFlockEconomy(sim);
-        sim->schema_version = CC_SIM_SCHEMA_VERSION;
-        sim->generator_version = CC_GENERATOR_VERSION;
+        FinishMaterialChainUpgrade(sim);
         return true;
     }
     if (legacy_version == 17U) {
@@ -5406,8 +5452,7 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
         CcSimUpgradeGrainEconomy(sim);
         CcSimInitializeRoadSites(sim);
         CcSimUpgradeFlockEconomy(sim);
-        sim->schema_version = CC_SIM_SCHEMA_VERSION;
-        sim->generator_version = CC_GENERATOR_VERSION;
+        FinishMaterialChainUpgrade(sim);
         return true;
     }
     if (legacy_version == 24U) {
@@ -5734,6 +5779,8 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
                                               error, error_capacity) &&
               EnsurePlayerKnowledgeColumns(database,
                                            error, error_capacity) &&
+              EnsureMaterialChainColumns(database,
+                                         error, error_capacity) &&
               ReadMeta(database, sim, &expected_hash,
                        &journal_generation, &journal_cursor,
                        error, error_capacity) &&

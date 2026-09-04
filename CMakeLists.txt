@@ -828,6 +828,12 @@ if(BUILD_TESTING)
     cc_strict_warnings(material_economy_tests)
     add_test(NAME physical_material_economy COMMAND material_economy_tests)
 
+    add_executable(material_chain_tests tests/material_chain_tests.c)
+    target_link_libraries(material_chain_tests PRIVATE crownless_sim)
+    cc_strict_warnings(material_chain_tests)
+    cc_large_sim_stack(material_chain_tests)
+    add_test(NAME material_chain_proofs COMMAND material_chain_tests)
+
     add_executable(grain_economy_tests tests/grain_economy_tests.c)
     target_link_libraries(grain_economy_tests PRIVATE crownless_sim)
     cc_strict_warnings(grain_economy_tests)

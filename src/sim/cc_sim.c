@@ -28,6 +28,7 @@ static int32_t CalculateDragonCrownStrength(const CcSim *sim);
 static CcId LatestLocalCause(const CcSim *sim, CcId location);
 static uint32_t RoadHouseSeed(const CcSim *sim, CcId route_id);
 static const char *GeneratedRoadHouseName(const CcSim *sim, CcId route_id);
+static const CcSettlement *Scriptorium(const CcSim *sim);
 
 static int32_t ClampI32(int32_t value, int32_t minimum, int32_t maximum)
 {
@@ -913,6 +914,7 @@ const char *CcServiceName(CcServiceKind service)
         case CC_SERVICE_BLACK_MARKET: return "Black market";
         case CC_SERVICE_DUNGEON_WARD: return "Dungeon ward";
         case CC_SERVICE_BAKERY: return "Bakery";
+        case CC_SERVICE_MILL: return "Mill";
         case CC_SERVICE_NONE:
         case CC_SERVICE_COUNT: break;
     }
@@ -968,9 +970,9 @@ int32_t CcSettlementServiceCapacity(CcSettlementSize size)
     switch (size) {
         case CC_SETTLEMENT_HAMLET: return 2;
         case CC_SETTLEMENT_VILLAGE: return 4;
-        case CC_SETTLEMENT_TOWN: return 6;
+        case CC_SETTLEMENT_TOWN: return 7;
         case CC_SETTLEMENT_CITY: return 9;
-        case CC_SETTLEMENT_CAPITAL_SIZE: return 12;
+        case CC_SETTLEMENT_CAPITAL_SIZE: return 13;
     }
     return 0;
 }
@@ -1144,6 +1146,9 @@ const char *CcEventKindName(CcEventKind kind)
         case CC_EVENT_SHEEP_BRED: return "LAMBING";
         case CC_EVENT_SHEEP_SHEARED: return "SHEARING";
         case CC_EVENT_SHEEP_SLAUGHTERED: return "FLOCK CULL";
+        case CC_EVENT_PAPER_MILLED: return "PAPER MILL";
+        case CC_EVENT_KING_ANOINTED: return "CORONATION";
+        case CC_EVENT_PRETENDER_CRISIS: return "PRETENDER";
     }
     return "EVENT";
 }
@@ -2052,13 +2057,25 @@ static int32_t BakeryCapacity(const CcSettlement *place)
     return MaximumI32(0, place->production[CC_GOOD_BREAD]);
 }
 
-static int32_t RunBakery(CcSim *sim, CcSettlement *place)
+static int32_t RunBakery(CcSim *sim, CcSettlement *place,
+                         CcId scriptorium_id)
 {
     int32_t capacity = BakeryCapacity(place);
     if (capacity <= 0 || place->stock[CC_GOOD_WHEAT] <= 0) return 0;
     if (place->hunger > 65) capacity = capacity * 72 / 100;
     else if (place->hunger > 35) capacity = capacity * 86 / 100;
-    int32_t baked = MinimumI32(capacity, place->stock[CC_GOOD_WHEAT]);
+    int32_t grain_floor = 0;
+    if (scriptorium_id != 0U && place->id == scriptorium_id &&
+        place->hunger == 0 &&
+        place->stock[CC_GOOD_TOOLS] > 0 &&
+        CcSettlementHasService(place, CC_SERVICE_MILL)) {
+        grain_floor = MaximumI32(
+            place->reserve_target[CC_GOOD_WHEAT],
+            WeeklyFoodUse(sim, place) * 2 + sim->archives.scribes * 2);
+    }
+    int32_t baked = MinimumI32(
+        capacity, MaximumI32(
+            0, place->stock[CC_GOOD_WHEAT] - grain_floor));
     baked = MinimumI32(baked,
                        CC_SIM_MAX_UNITS - place->stock[CC_GOOD_BREAD]);
     if (baked <= 0) return 0;
@@ -3297,6 +3314,83 @@ int32_t CcSimIncomingGood(const CcSim *sim, CcId settlement_id, CcGood good)
            incoming < 0 ? 0 : (int32_t)incoming;
 }
 
+static const CcSettlement *Scriptorium(const CcSim *sim)
+{
+    if (sim == NULL) return NULL;
+    const CcSettlement *fallback = NULL;
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        const CcSettlement *place = &sim->settlements[i];
+        if (CcSettlementIsAbandoned(place)) continue;
+        if (strcmp(place->name, "Gloamgate") == 0) return place;
+        if (fallback == NULL &&
+            (place->function == CC_SETTLEMENT_MARKET ||
+             place->function == CC_SETTLEMENT_CAPITAL)) {
+            fallback = place;
+        }
+    }
+    return fallback;
+}
+
+CcMaterialChainSnapshot CcSimMaterialChainSnapshot(const CcSim *sim)
+{
+    CcMaterialChainSnapshot snapshot = {0};
+    const CcSettlement *place = Scriptorium(sim);
+    if (sim == NULL || place == NULL) {
+        snapshot.blocker = CC_MATERIAL_CHAIN_NO_SCRIBES;
+        return snapshot;
+    }
+    snapshot.scriptorium_id = place->id;
+    snapshot.scribes = sim->archives.scribes;
+    snapshot.wheat = place->stock[CC_GOOD_WHEAT];
+    snapshot.paper = place->stock[CC_GOOD_PAPER];
+    snapshot.tools = place->stock[CC_GOOD_TOOLS];
+    snapshot.iron = place->stock[CC_GOOD_IRON];
+    snapshot.incoming_tools = CcSimIncomingGood(
+        sim, place->id, CC_GOOD_TOOLS);
+    snapshot.incoming_iron = CcSimIncomingGood(
+        sim, place->id, CC_GOOD_IRON);
+    bool binding_available = false;
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        const CcSettlement *vault = &sim->settlements[i];
+        if (CcSettlementIsAbandoned(vault)) continue;
+        int64_t gold = (int64_t)snapshot.gold +
+            vault->stock[CC_GOOD_GOLD];
+        int64_t gems = (int64_t)snapshot.gems +
+            vault->stock[CC_GOOD_GEMS];
+        snapshot.gold = gold > CC_SIM_MAX_UNITS ?
+            CC_SIM_MAX_UNITS : (int32_t)gold;
+        snapshot.gems = gems > CC_SIM_MAX_UNITS ?
+            CC_SIM_MAX_UNITS : (int32_t)gems;
+        if (vault->stock[CC_GOOD_GOLD] > 0 &&
+            vault->stock[CC_GOOD_GEMS] > 0) {
+            binding_available = true;
+        }
+    }
+    int32_t scribe_grain = MaximumI32(
+        0, snapshot.wheat - WeeklyFoodUse(sim, place) * 2);
+    snapshot.blocker = snapshot.scribes <= 0 ?
+        CC_MATERIAL_CHAIN_NO_SCRIBES :
+        !binding_available ? CC_MATERIAL_CHAIN_BINDING :
+        snapshot.tools <= 0 ? CC_MATERIAL_CHAIN_TOOLS :
+        scribe_grain < 2 ? CC_MATERIAL_CHAIN_GRAIN :
+        snapshot.paper <= 0 ? CC_MATERIAL_CHAIN_PAPER :
+        CC_MATERIAL_CHAIN_READY;
+    return snapshot;
+}
+
+const char *CcMaterialChainBlockerName(CcMaterialChainBlocker blocker)
+{
+    switch (blocker) {
+        case CC_MATERIAL_CHAIN_READY: return "ready";
+        case CC_MATERIAL_CHAIN_NO_SCRIBES: return "scribes";
+        case CC_MATERIAL_CHAIN_GRAIN: return "grain";
+        case CC_MATERIAL_CHAIN_PAPER: return "paper";
+        case CC_MATERIAL_CHAIN_TOOLS: return "tools";
+        case CC_MATERIAL_CHAIN_BINDING: return "binding";
+    }
+    return "unknown";
+}
+
 int32_t CcPlayerCargoUsed(const CcPlayerCompany *player)
 {
     if (player == NULL) return 0;
@@ -3393,6 +3487,7 @@ static void InitKingdom(CcSim *sim, int32_t slot, const char *name,
     kingdom->color_b = blue;
     kingdom->treasury = treasury;
     kingdom->legitimacy = legitimacy;
+    kingdom->sanction = legitimacy;
 }
 
 static void InitSettlement(CcSim *sim, int32_t slot, int32_t kingdom_slot,
@@ -3437,7 +3532,8 @@ static void SeedSettlementServices(CcSettlement *settlement)
                     ServiceBit(CC_SERVICE_SMITHY) |
                     ServiceBit(CC_SERVICE_STABLE) |
                     ServiceBit(CC_SERVICE_CARTOGRAPHER) |
-                    ServiceBit(CC_SERVICE_BAKERY);
+                    ServiceBit(CC_SERVICE_BAKERY) |
+                    ServiceBit(CC_SERVICE_MILL);
             break;
         case CC_SETTLEMENT_FORTRESS:
             mask |= ServiceBit(CC_SERVICE_BARRACKS) |
@@ -3463,7 +3559,8 @@ static void SeedSettlementServices(CcSettlement *settlement)
                     ServiceBit(CC_SERVICE_CARTOGRAPHER) |
                     ServiceBit(CC_SERVICE_GUILDHALL) |
                     ServiceBit(CC_SERVICE_FARM) |
-                    ServiceBit(CC_SERVICE_BAKERY);
+                    ServiceBit(CC_SERVICE_BAKERY) |
+                    ServiceBit(CC_SERVICE_MILL);
             break;
         case CC_SETTLEMENT_DUNGEON_TOWN:
             mask |= ServiceBit(CC_SERVICE_HEALER) |
@@ -4033,6 +4130,37 @@ void CcSimInitializePaperEconomy(CcSim *sim)
     }
 }
 
+void CcSimInitializeMaterialChain(CcSim *sim)
+{
+    if (sim == NULL) return;
+    sim->archives.kit_tool_wear = 0;
+    for (int32_t i = 0; i < sim->kingdom_count; ++i) {
+        CcKingdom *kingdom = &sim->kingdoms[i];
+        kingdom->sanction = ClampI32(kingdom->legitimacy, 0, 100);
+        kingdom->unsanctioned_weeks = 0;
+        kingdom->pretender_crises = 0;
+        kingdom->anointed = false;
+    }
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        CcSettlement *place = &sim->settlements[i];
+        place->paper_tool_wear = 0;
+        place->production[CC_GOOD_PAPER] = 0;
+        if (CcSettlementIsAbandoned(place)) continue;
+        if (place->function == CC_SETTLEMENT_FARMING) {
+            /* Cover the paper-era grain demand while preserving civilian food. */
+            place->production[CC_GOOD_WHEAT] = MaximumI32(
+                place->production[CC_GOOD_WHEAT], 60);
+        } else if (place->function == CC_SETTLEMENT_MARKET) {
+            place->service_mask |= ServiceBit(CC_SERVICE_MILL);
+            place->production[CC_GOOD_PAPER] = 3;
+            place->consumption[CC_GOOD_PAPER] = 0;
+        } else if (place->function == CC_SETTLEMENT_CAPITAL) {
+            place->service_mask |= ServiceBit(CC_SERVICE_MILL);
+            place->production[CC_GOOD_PAPER] = 4;
+        }
+    }
+}
+
 void CcSimInit(CcSim *sim, uint32_t seed)
 {
     if (sim == NULL) return;
@@ -4126,6 +4254,7 @@ void CcSimInit(CcSim *sim, uint32_t seed)
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         SeedSettlementServices(&sim->settlements[i]);
     }
+    CcSimInitializeMaterialChain(sim);
 
     InitRoute(sim, 0, 0, 1, 2, 40, 64, false, false);
     InitRoute(sim, 1, 1, 2, 2, 34, 78, true, false);
@@ -4608,22 +4737,55 @@ static void RunSmithy(CcSim *sim, CcSettlement *settlement)
 static void RunPaperMill(CcSim *sim, CcSettlement *settlement)
 {
     if (sim == NULL || sim->schema_version < 33U) return;
+    if (sim->schema_version < 34U) {
+        int32_t capacity = MaximumI32(
+            0, settlement->production[CC_GOOD_PAPER]);
+        int32_t gap = MaximumI32(
+            0, settlement->reserve_target[CC_GOOD_PAPER] * 2 -
+               settlement->stock[CC_GOOD_PAPER]);
+        int32_t wood_available = MaximumI32(
+            0, settlement->stock[CC_GOOD_WOOD] -
+               settlement->reserve_target[CC_GOOD_WOOD]);
+        int32_t paper_made = MinimumI32(
+            capacity, MinimumI32(gap, wood_available * 4));
+        if (paper_made <= 0) return;
+        int32_t wood_used = (paper_made + 3) / 4;
+        settlement->stock[CC_GOOD_WOOD] -= wood_used;
+        settlement->stock[CC_GOOD_PAPER] += paper_made;
+        RefreshSettlementGoodPrice(sim, settlement, CC_GOOD_WOOD);
+        RefreshSettlementGoodPrice(sim, settlement, CC_GOOD_PAPER);
+        return;
+    }
+    if (!CcSettlementHasService(settlement, CC_SERVICE_MILL) ||
+        settlement->hunger > 0 ||
+        settlement->stock[CC_GOOD_TOOLS] <= 0) return;
     int32_t capacity = MaximumI32(
         0, settlement->production[CC_GOOD_PAPER]);
     int32_t gap = MaximumI32(
         0, settlement->reserve_target[CC_GOOD_PAPER] * 2 -
            settlement->stock[CC_GOOD_PAPER]);
-    int32_t wood_available = MaximumI32(
-        0, settlement->stock[CC_GOOD_WOOD] -
-           settlement->reserve_target[CC_GOOD_WOOD]);
+    int32_t protected_wheat = settlement->reserve_target[CC_GOOD_WHEAT] +
+        WeeklyFoodUse(sim, settlement) * 4;
+    int32_t wheat_available = MaximumI32(
+        0, settlement->stock[CC_GOOD_WHEAT] - protected_wheat);
     int32_t paper_made = MinimumI32(
-        capacity, MinimumI32(gap, wood_available * 4));
+        capacity, MinimumI32(gap, wheat_available * 4));
     if (paper_made <= 0) return;
-    int32_t wood_used = (paper_made + 3) / 4;
-    settlement->stock[CC_GOOD_WOOD] -= wood_used;
+    int32_t wheat_used = (paper_made + 3) / 4;
+    settlement->stock[CC_GOOD_WHEAT] -= wheat_used;
     settlement->stock[CC_GOOD_PAPER] += paper_made;
-    RefreshSettlementGoodPrice(sim, settlement, CC_GOOD_WOOD);
+    WearOneTool(settlement, &settlement->paper_tool_wear, 8);
+    RefreshSettlementGoodPrice(sim, settlement, CC_GOOD_WHEAT);
     RefreshSettlementGoodPrice(sim, settlement, CC_GOOD_PAPER);
+    RefreshSettlementGoodPrice(sim, settlement, CC_GOOD_TOOLS);
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(
+        text, sizeof(text),
+        "%s's mill uses %d Wheat to make %d Paper.",
+        settlement->name, wheat_used, paper_made);
+    (void)PushEvent(
+        sim, CC_EVENT_PAPER_MILLED, settlement->id, settlement->id,
+        LatestLocalCause(sim, settlement->id), paper_made, text);
 }
 
 static void AdvanceRareMineWork(CcSim *sim, CcSettlement *settlement,
@@ -4926,7 +5088,8 @@ static void MaintainSettlementStonework(CcSim *sim,
         text);
 }
 
-static void UpdateSettlement(CcSim *sim, int32_t index)
+static void UpdateSettlement(CcSim *sim, int32_t index,
+                             CcId scriptorium_id)
 {
     CcSettlement *settlement = &sim->settlements[index];
     if (CcSettlementIsAbandoned(settlement)) return;
@@ -4953,7 +5116,8 @@ static void UpdateSettlement(CcSim *sim, int32_t index)
         settlement->stock[CC_GOOD_BREAD] += cow_bread;
         produced[CC_GOOD_BREAD] += cow_bread;
     }
-    produced[CC_GOOD_BREAD] += RunBakery(sim, settlement);
+    produced[CC_GOOD_BREAD] += RunBakery(
+        sim, settlement, scriptorium_id);
 
     int32_t food_required = MaximumI32(
         1, WeeklyFoodUse(sim, settlement)) * CC_NUTRITION_PER_RATION;
@@ -5175,6 +5339,81 @@ static CcSettlement *ArchiveVaultWithBindingMaterials(CcSim *sim,
     return NULL;
 }
 
+static bool BindArchiveTome(CcSim *sim)
+{
+    if (sim == NULL || sim->kingdom_count <= 0) return false;
+    static const char *forms[] = {
+        "Chronicle", "Ledger", "Annal", "Register"
+    };
+    int32_t holder = (int32_t)(sim->treasure_count % sim->kingdom_count);
+    CcSettlement *vault = ArchiveVaultWithBindingMaterials(sim, holder);
+    CcKingdom *kingdom = vault != NULL ?
+        KingdomMutable(sim, vault->kingdom_id) : NULL;
+    CcTreasure *tome = kingdom != NULL ? AllocateTreasure(sim) : NULL;
+    if (tome == NULL || vault == NULL) return false;
+    vault->stock[CC_GOOD_GOLD] -= 1;
+    vault->stock[CC_GOOD_GEMS] -= 1;
+    (void)snprintf(tome->name, sizeof(tome->name),
+                   "%.12s %.18s of %d",
+                   forms[sim->treasure_count % 4],
+                   kingdom->name, sim->current_day / 364);
+    tome->maker_settlement_id = vault->id;
+    tome->owner_id = vault->id;
+    tome->location_id = vault->id;
+    tome->gold_content = 1;
+    tome->gem_content = 1;
+    tome->craft_work = 1;
+    tome->appraised_value = 6;
+    tome->created_day = sim->current_day;
+    return true;
+}
+
+static void AdvanceCoronationLaw(CcSim *sim, bool scriptorium_ready,
+                                 CcId scriptorium_id)
+{
+    if (sim == NULL || sim->schema_version < 34U) return;
+    for (int32_t i = 0; i < sim->kingdom_count; ++i) {
+        CcKingdom *kingdom = &sim->kingdoms[i];
+        if (scriptorium_ready) {
+            kingdom->sanction = ClampI32(kingdom->sanction + 2, 0, 100);
+            kingdom->unsanctioned_weeks = 0;
+            if (kingdom->anointed || kingdom->sanction < 60) continue;
+            kingdom->anointed = true;
+            char text[CC_EVENT_TEXT_CAPACITY];
+            (void)snprintf(
+                text, sizeof(text),
+                "Fed and papered scribes anoint the true ruler of %.72s.",
+                kingdom->name);
+            (void)PushEvent(
+                sim, CC_EVENT_KING_ANOINTED, kingdom->id,
+                scriptorium_id, LatestLocalCause(sim, scriptorium_id),
+                kingdom->sanction, text);
+            continue;
+        }
+        kingdom->sanction = MaximumI32(40, kingdom->sanction - 1);
+        kingdom->unsanctioned_weeks += 1;
+        if (kingdom->unsanctioned_weeks < 52) continue;
+        if (!kingdom->anointed) {
+            /* A new pretender needs a ruler to be anointed again first. */
+            kingdom->unsanctioned_weeks = 51;
+            continue;
+        }
+        kingdom->unsanctioned_weeks = 0;
+        kingdom->anointed = false;
+        kingdom->legitimacy = MaximumI32(0, kingdom->legitimacy - 15);
+        kingdom->pretender_crises += 1;
+        char text[CC_EVENT_TEXT_CAPACITY];
+        (void)snprintf(
+            text, sizeof(text),
+            "A year of abbey silence breeds a pretender in %.72s.",
+            kingdom->name);
+        (void)PushEvent(
+            sim, CC_EVENT_PRETENDER_CRISIS, kingdom->id,
+            scriptorium_id, LatestLocalCause(sim, scriptorium_id),
+            -15, text);
+    }
+}
+
 /* Archive law: the scriptorium records notable events as durable lore.
    Funding follows the monastery reserve; unfunded lore decays.
    This is the world's memory of itself - without it, the ledger
@@ -5194,6 +5433,27 @@ static void AdvanceArchives(CcSim *sim)
         archives->scribes -= 1; /* scribes leave gradually, not all at once */
     }
 
+    CcSettlement *scriptorium = NULL;
+    int32_t active_scribes = archives->scribes;
+    bool scriptorium_ready = archives->scribes > 0;
+    if (sim->schema_version >= 34U) {
+        const CcSettlement *place = Scriptorium(sim);
+        if (place != NULL) {
+            scriptorium = CcSimSettlementMutable(sim, place->id);
+        }
+        int32_t scribe_grain = scriptorium == NULL ? 0 : MaximumI32(
+            0, scriptorium->stock[CC_GOOD_WHEAT] -
+               WeeklyFoodUse(sim, scriptorium) * 2);
+        active_scribes = MinimumI32(archives->scribes, scribe_grain / 2);
+        if (active_scribes > 0) {
+            scriptorium->stock[CC_GOOD_WHEAT] -= active_scribes * 2;
+            RefreshSettlementGoodPrice(sim, scriptorium, CC_GOOD_WHEAT);
+        }
+        scriptorium_ready = active_scribes > 0 &&
+            scriptorium->stock[CC_GOOD_PAPER] > 0 &&
+            scriptorium->stock[CC_GOOD_TOOLS] > 0;
+    }
+
     /* Record: each scribe preserves one notable recent event per week.
        Scan first, push after: PushEvent mutates the ledger ring while
        we iterate it, which would orphan parents mid-scan. */
@@ -5203,7 +5463,7 @@ static void AdvanceArchives(CcSim *sim)
     int32_t noted_count = 0;
     int32_t first_day = MaximumI32(1, sim->current_day - 7);
     for (int32_t offset = 0;
-         offset < sim->event_count && noted_count < archives->scribes;
+         offset < sim->event_count && noted_count < active_scribes;
          ++offset) {
         const CcEvent *event = CcSimRecentEvent(sim, offset);
         if (event == NULL || event->day < first_day ||
@@ -5228,41 +5488,28 @@ static void AdvanceArchives(CcSim *sim)
                        event->text);
         noted_count += 1;
     }
-    int32_t recorded = 0;
+    int32_t tomes_written = 0;
     for (int32_t i = 0; i < noted_count; ++i) {
-        /* Physical memory: the record is bound into a tome, a real
-           treasure held by a kingdom. A tome can be stored, captured
-           in a war, or burned in a repudiation - the world's memory
-           lives in vaults, not in a counter. Binding waits when no
-           vault can supply both gilding and a gem seal. */
-        static const char *forms[] = {
-            "Chronicle", "Ledger", "Annal", "Register"
-        };
-        int32_t holder = sim->treasure_count % sim->kingdom_count;
-        CcSettlement *vault = ArchiveVaultWithBindingMaterials(sim, holder);
-        CcKingdom *kingdom = vault != NULL ?
-            KingdomMutable(sim, vault->kingdom_id) : NULL;
-        CcTreasure *tome = kingdom != NULL ? AllocateTreasure(sim) : NULL;
-        if (tome == NULL) continue;
-        vault->stock[CC_GOOD_GOLD] -= 1;
-        vault->stock[CC_GOOD_GEMS] -= 1;
-        (void)snprintf(tome->name, sizeof(tome->name),
-                       "%.12s %.18s of %d",
-                       forms[sim->treasure_count % 4],
-                       kingdom->name, sim->current_day / 364);
-        tome->maker_settlement_id = vault->id;
-        tome->owner_id = vault->id;
-        tome->location_id = vault->id;
-        tome->gold_content = 1;
-        tome->gem_content = 1;
-        tome->craft_work = 1;
-        tome->appraised_value = 6;
-        tome->created_day = sim->current_day;
+        if (sim->schema_version >= 34U &&
+            (scriptorium == NULL ||
+             scriptorium->stock[CC_GOOD_PAPER] <= 0 ||
+             scriptorium->stock[CC_GOOD_TOOLS] <= 0)) break;
+        /* Physical memory is bound into a tome. The vault supplies its
+           gold and gem seal. The scriptorium supplies Paper and kit. */
+        if (!BindArchiveTome(sim)) break;
         archives->lore_stored += 1;
         archives->last_recorded_day = sim->current_day;
         (void)PushEvent(sim, CC_EVENT_LORE_RECORDED, noted[i],
                         noted_location[i], noted[i], 1, noted_text[i]);
-        recorded += 1;
+        if (sim->schema_version >= 34U) {
+            scriptorium->stock[CC_GOOD_PAPER] -= 1;
+            RefreshSettlementGoodPrice(sim, scriptorium, CC_GOOD_PAPER);
+        }
+        tomes_written += 1;
+    }
+    if (sim->schema_version >= 34U && tomes_written > 0) {
+        WearOneTool(scriptorium, &archives->kit_tool_wear, 8);
+        RefreshSettlementGoodPrice(sim, scriptorium, CC_GOOD_TOOLS);
     }
 
     /* Vault conservation: the treasure array is finite. When it nears
@@ -5324,7 +5571,7 @@ static void AdvanceArchives(CcSim *sim)
     int32_t lore_ceiling = archives->lore_lost_total == 0 ? 75 :
         40 + MinimumI32(35, archives->lore_stored / 200);
     int32_t lore_floor = 25;
-    if (recorded > 0 && archives->lore_ceiling < lore_ceiling) {
+    if (tomes_written > 0 && archives->lore_ceiling < lore_ceiling) {
         archives->lore_ceiling = lore_ceiling;
     }
     if (archives->lore_ceiling > lore_ceiling) {
@@ -5340,6 +5587,9 @@ static void AdvanceArchives(CcSim *sim)
             kingdom->legitimacy -= 1;
         }
     }
+    AdvanceCoronationLaw(
+        sim, scriptorium_ready,
+        scriptorium != NULL ? scriptorium->id : 0U);
 
     /* Decay: unfunded archives lose lore. Memory is load-bearing. */
     if (archives->scribes == 0 && archives->lore_stored > 0) {
@@ -11334,8 +11584,11 @@ void CcSimAdvanceDays(CcSim *sim, int32_t days)
         AdvanceHoardRaid(sim);
         AdvanceDragonCampaign(sim);
         if (sim->current_day % 7 == 0) {
+            const CcSettlement *scriptorium = Scriptorium(sim);
+            CcId scriptorium_id = scriptorium != NULL ?
+                scriptorium->id : 0U;
             for (int32_t settlement = 0; settlement < sim->settlement_count; ++settlement) {
-                UpdateSettlement(sim, settlement);
+                UpdateSettlement(sim, settlement, scriptorium_id);
             }
             AdvanceRuins(sim);
             if (sim->schema_version >= 22U) AdvanceArchives(sim);
@@ -15120,6 +15373,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
          sim->generator_version == CC_GENERATOR_VERSION) ||
         (sim->schema_version == 33U && sim->generator_version == 25U) ||
         (sim->schema_version == 32U && sim->generator_version == 25U) ||
+        (sim->schema_version == 33U && sim->generator_version == 25U) ||
         (sim->schema_version == 31U && sim->generator_version == 24U) ||
         (sim->schema_version == 27U && sim->generator_version == 21U) ||
         (sim->schema_version == 27U && sim->generator_version == 22U) ||
@@ -15174,6 +15428,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
          sim->archives.lore_lost_total < 0 ||
          sim->archives.lore_ceiling < 0 ||
          sim->archives.lore_ceiling > 100 ||
+         sim->archives.kit_tool_wear < 0 ||
+         sim->archives.kit_tool_wear >= 8 ||
          sim->archives.last_recorded_day < 0 ||
          sim->archives.last_recorded_day > sim->current_day)) {
         SetError(error, error_capacity,
@@ -15233,7 +15489,12 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             kingdom->legitimacy > 100 ||
             (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
              (kingdom->iron_ledger_debt < 0 ||
-              kingdom->iron_ledger_debt > CC_SIM_MAX_MONEY))) {
+              kingdom->iron_ledger_debt > CC_SIM_MAX_MONEY ||
+              kingdom->sanction < 0 || kingdom->sanction > 100 ||
+              kingdom->unsanctioned_weeks < 0 ||
+              kingdom->unsanctioned_weeks >= 52 ||
+              kingdom->pretender_crises < 0 ||
+              kingdom->pretender_crises > CC_SIM_MAX_UNITS))) {
             SetError(error, error_capacity, "Kingdom accounts are invalid.");
             return false;
         }
@@ -15265,7 +15526,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 !ValidBoundedText(event->text, sizeof(event->text)) ||
                 event->day < 1 || event->day > sim->current_day ||
                 event->kind < CC_EVENT_HARVEST_FAILED ||
-                event->kind > CC_EVENT_SHEEP_SLAUGHTERED ||
+                event->kind > CC_EVENT_PRETENDER_CRISIS ||
                 event->parent_id == event->id ||
                 (event->parent_id != 0U &&
                  CcSimEvent(sim, event->parent_id) == NULL) ||
@@ -15384,6 +15645,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 settlement->mine_tool_wear >= 3 ||
                 settlement->smith_tool_wear < 0 ||
                 settlement->smith_tool_wear >= 4 ||
+                settlement->paper_tool_wear < 0 ||
+                settlement->paper_tool_wear >= 8 ||
                 settlement->treasure_gold_committed < 0 ||
                 settlement->treasure_gold_committed > CC_SIM_MAX_UNITS ||
                 settlement->treasure_gems_committed < 0 ||
@@ -16903,6 +17166,12 @@ uint64_t CcSimHash(const CcSim *sim)
         if (sim->schema_version >= 10U) {
             HASH_VALUE(item->iron_ledger_debt);
         }
+        if (sim->schema_version >= 34U) {
+            HASH_VALUE(item->sanction);
+            HASH_VALUE(item->unsanctioned_weeks);
+            HASH_VALUE(item->pretender_crises);
+            HASH_VALUE(item->anointed);
+        }
     }
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         const CcSettlement *item = &sim->settlements[i];
@@ -16950,6 +17219,9 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(item->sheep_lambs);
             HASH_VALUE(item->sheep_condition);
             HASH_VALUE(item->sheep_hunger);
+        }
+        if (sim->schema_version >= 34U) {
+            HASH_VALUE(item->paper_tool_wear);
         }
         HASH_VALUE(sim->last_shortage_level[i]);
     }
@@ -17554,6 +17826,9 @@ uint64_t CcSimHash(const CcSim *sim)
         HASH_VALUE(sim->archives.lore_lost_total);
         HASH_VALUE(sim->archives.last_recorded_day);
         HASH_VALUE(sim->archives.lore_ceiling);
+        if (sim->schema_version >= 34U) {
+            HASH_VALUE(sim->archives.kit_tool_wear);
+        }
     }
 #undef HASH_VALUE
     return hash;
