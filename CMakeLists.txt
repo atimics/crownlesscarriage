@@ -216,14 +216,34 @@ if(CC_BUILD_CLIENT)
         endif()
     endif()
 
-    add_executable(crownless_carriage
-        src/client/main.c
+    add_library(crownless_local_renderer STATIC
         src/client/cc_overlay.c
         src/client/cc_npc_appearance.c
         src/client/cc_local3d.c
         src/client/cc_local_runtime.c
         src/client/cc_local_renderer_stats.c
+        src/client/local3d/context_state.inc
+        src/client/local3d/terrain_navigation.inc
+        src/client/local3d/actor_simulation.inc
+        src/client/local3d/camera_composition.inc
+        src/client/local3d/asset_loading.inc
+        src/client/local3d/authored_places.inc
+        src/client/local3d/actor_rendering.inc
+        src/client/local3d/road_book.inc
+        src/client/local3d/open_world.inc
     )
+    target_include_directories(crownless_local_renderer PUBLIC src)
+    target_link_libraries(crownless_local_renderer PUBLIC
+        crownless_sim crownless_locomotion
+        crownless_creature_catalog crownless_local_place
+        crownless_client_policy crownless_world raylib
+    )
+    target_compile_definitions(crownless_local_renderer PRIVATE
+        CC_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}"
+    )
+    cc_strict_warnings(crownless_local_renderer)
+
+    add_executable(crownless_carriage src/client/main.c)
     if(APPLE)
         set_target_properties(crownless_carriage PROPERTIES
             MACOSX_BUNDLE TRUE
@@ -234,6 +254,7 @@ if(CC_BUILD_CLIENT)
         )
     endif()
     target_link_libraries(crownless_carriage PRIVATE
+        crownless_local_renderer
         crownless_persistence crownless_locomotion
         crownless_creature_catalog crownless_local_place
         crownless_client_session crownless_client_policy crownless_story
@@ -243,10 +264,9 @@ if(CC_BUILD_CLIENT)
     if(NOT EMSCRIPTEN)
         target_link_libraries(crownless_carriage PRIVATE glfw)
     endif()
-    target_compile_definitions(crownless_carriage PRIVATE
-        CC_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}"
-    )
     if(EMSCRIPTEN)
+        target_compile_definitions(crownless_local_renderer PRIVATE PLATFORM_WEB)
+        set_property(TARGET crownless_local_renderer PROPERTY C_EXTENSIONS ON)
         set(CC_WEB_ASSET_DIR "${CMAKE_CURRENT_BINARY_DIR}/web-runtime")
         add_custom_target(crownless_web_assets ALL
             COMMAND ${CMAKE_COMMAND}
@@ -718,9 +738,10 @@ if(BUILD_TESTING)
     if(CC_BUILD_CLIENT)
         add_executable(npc_appearance_tests
             tests/npc_appearance_tests.c
-            src/client/cc_npc_appearance.c
         )
-        target_link_libraries(npc_appearance_tests PRIVATE raylib)
+        target_link_libraries(npc_appearance_tests PRIVATE
+            crownless_local_renderer raylib
+        )
         target_include_directories(npc_appearance_tests PRIVATE src)
         cc_strict_warnings(npc_appearance_tests)
         add_test(NAME deterministic_npc_population COMMAND npc_appearance_tests)
@@ -731,40 +752,22 @@ if(BUILD_TESTING)
         cc_strict_warnings(visual_palette_tests)
         add_test(NAME perceptual_visual_palette COMMAND visual_palette_tests)
 
-        add_executable(local_movement_tests
-            tests/local_movement_tests.c
-            src/client/cc_overlay.c
-            src/client/cc_npc_appearance.c
-            src/client/cc_local3d.c
-            src/client/cc_local_runtime.c
-            src/client/cc_local_renderer_stats.c
-        )
+        add_executable(local_movement_tests tests/local_movement_tests.c)
         target_link_libraries(local_movement_tests PRIVATE
+            crownless_local_renderer
             crownless_sim crownless_locomotion
             crownless_creature_catalog crownless_local_place
             crownless_client_policy crownless_world raylib
-        )
-        target_compile_definitions(local_movement_tests PRIVATE
-            CC_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}"
         )
         cc_strict_warnings(local_movement_tests)
         add_test(NAME local_collision_space COMMAND local_movement_tests)
 
-        add_executable(terrain_tests
-            tests/terrain_tests.c
-            src/client/cc_overlay.c
-            src/client/cc_npc_appearance.c
-            src/client/cc_local3d.c
-            src/client/cc_local_runtime.c
-            src/client/cc_local_renderer_stats.c
-        )
+        add_executable(terrain_tests tests/terrain_tests.c)
         target_link_libraries(terrain_tests PRIVATE
+            crownless_local_renderer
             crownless_sim crownless_locomotion
             crownless_creature_catalog crownless_local_place
             crownless_client_policy crownless_world raylib
-        )
-        target_compile_definitions(terrain_tests PRIVATE
-            CC_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}"
         )
         cc_strict_warnings(terrain_tests)
         add_test(NAME seeded_hilly_terrain COMMAND terrain_tests)

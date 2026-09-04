@@ -49,6 +49,7 @@ static void RefreshFramePercentiles(void)
 
 void CcLocalRendererBeginFrame(float delta_time)
 {
+    CcLocalRendererUpdateAtmosphereInternal(delta_time);
     float milliseconds = fmaxf(0.0f, delta_time) * 1000.0f;
     UpdateFramePercentiles(milliseconds);
     renderer_stats.frame_milliseconds = milliseconds;
