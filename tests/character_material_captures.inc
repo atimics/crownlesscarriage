@@ -10,8 +10,7 @@ static void CaptureCharacterMaterials(const char *directory)
     (void)fprintf(metrics, "actor,light,height,frame,measured_height,visible_pixels\n");
     const int heights[] = {35, 48, 60};
     RenderTexture2D scene = LoadRenderTexture(96, 96);
-    RenderTexture2D graded = LoadRenderTexture(96, 96);
-    RequireRenderer(IsRenderTextureValid(scene) && IsRenderTextureValid(graded),
+    RequireRenderer(IsRenderTextureValid(scene),
                     "character capture targets must load");
     for (int actor = 0; actor < 2; ++actor) {
         for (int light = 0; light < 2; ++light) {
@@ -86,12 +85,13 @@ static void CaptureCharacterMaterials(const char *directory)
                     }
                     RequireRenderer(abs(measured_height - heights[size]) <= 2,
                                     "character captures must match the requested art height");
-                    BeginTextureMode(graded);
+                    BeginDrawing();
                     ClearBackground(BLACK);
                     PresentTarget(scene, (Rectangle){0, 0, 96, 96});
-                    EndTextureMode();
-                    Image shot = LoadImageFromTexture(graded.texture);
-                    ImageFlipVertical(&shot);
+                    rlDrawRenderBatchActive();
+                    Image shot = LoadImageFromScreen();
+                    EndDrawing();
+                    ImageCrop(&shot, (Rectangle){0, 0, 96, 96});
                     char path[1024];
                     (void)snprintf(path, sizeof(path), "%s/%s-%s-%d-%d.png",
                         directory, actor == 0 ? "hero" : "guard",
@@ -107,7 +107,6 @@ static void CaptureCharacterMaterials(const char *directory)
         }
     }
     UnloadRenderTexture(scene);
-    UnloadRenderTexture(graded);
     (void)fclose(metrics);
     (void)puts("PASS character captures: hero and guard, two lights, three sizes, eight walking turns");
 }

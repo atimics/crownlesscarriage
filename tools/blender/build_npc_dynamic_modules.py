@@ -868,7 +868,7 @@ def build(selected_slots: set[str] | None = None) -> None:
     if selected_slots is None:
         BLEND_PATH.parent.mkdir(parents=True, exist_ok=True)
         bpy.ops.wm.save_as_mainfile(filepath=str(BLEND_PATH))
-    print(f"built {len(records)} rigid NPC modules")
+    print(f"built {len(selected_slots) if selected_slots is not None else len(records)} rigid NPC modules")
     print(f"manifest: {MANIFEST_PATH}")
 
 

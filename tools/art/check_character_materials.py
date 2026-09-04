@@ -32,6 +32,9 @@ def main() -> None:
         with Image.open(path) as image:
             if image.size != (96, 96):
                 raise ValueError(f"unexpected capture size: {path}")
+            colors = image.convert("RGB").getcolors(96 * 96)
+            if len(colors) < 8 or max(max(color) for _count, color in colors) < 64:
+                raise ValueError(f"the saved character image must contain lit detail: {path}")
     if found != expected:
         raise ValueError(f"missing captures: {expected - found}")
 
