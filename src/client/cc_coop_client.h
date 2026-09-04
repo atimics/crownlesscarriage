@@ -3,6 +3,10 @@
 #include "sim/cc_sim.h"
 
 bool CcCoopClientActive(void);
+bool CcCoopClientOwner(void);
+bool CcCoopClientDelete(char *error, size_t capacity);
+void CcCoopClientOpenLobby(void);
+void CcCoopClientReturnToTitle(void);
 void CcCoopClientReady(const char *error);
 bool CcCoopClientConnect(CcSim *sim, char *error, size_t capacity);
 bool CcCoopClientApply(CcSim *sim, const CcCommand *command, char *error, size_t capacity);

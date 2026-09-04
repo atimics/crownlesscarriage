@@ -4,6 +4,7 @@
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include "raylib.h"
 
 #if defined(PLATFORM_WEB)
 #include <emscripten.h>
@@ -14,6 +15,13 @@
 #endif
 
 EM_JS(int, CoopEnabled, (), { return Module.ccCoop && Module.ccCoop.enabled ? 1 : 0; });
+EM_JS(int, CoopOwner, (), { return Module.ccCoop.owner() ? 1 : 0; });
+EM_JS(void, CoopLobby, (), { Module.ccCoop.openLobby(); });
+EM_JS(void, CoopTitle, (), { location.assign(location.pathname); });
+EM_ASYNC_JS(int, CoopDelete, (char *error, int capacity), {
+    try { await Module.ccCoop.deleteWorld(); return 1; }
+    catch (failure) { stringToUTF8(failure.message, error, capacity); return 0; }
+});
 EM_JS(void, CoopReady, (const char *error), { Module.ccCoop.ready(UTF8ToString(error)); });
 EM_JS(void, CoopSynced, (const char *hash), { document.body.dataset.companyHash = UTF8ToString(hash); });
 EM_ASYNC_JS(int, CoopConnect, (char *error, int capacity), {
@@ -47,6 +55,10 @@ EM_JS(unsigned char *, CoopTake, (int *length), {
 #endif
 
 bool CcCoopClientActive(void) { return CoopEnabled() != 0; }
+bool CcCoopClientOwner(void) { return CoopOwner() != 0; }
+bool CcCoopClientDelete(char *error, size_t capacity) { return CoopDelete(error, (int)capacity) != 0; }
+void CcCoopClientOpenLobby(void) { CoopLobby(); }
+void CcCoopClientReturnToTitle(void) { CoopTitle(); }
 void CcCoopClientReady(const char *error) { CoopReady(error); }
 
 bool CcCoopClientPoll(CcSim *sim, char *error, size_t capacity)
@@ -97,6 +109,10 @@ bool CcCoopClientSkip(CcSim *sim, char *error, size_t capacity)
     (void)sim; (void)error; (void)capacity; return false;
 }
 bool CcCoopClientActive(void) { return false; }
+bool CcCoopClientOwner(void) { return false; }
+bool CcCoopClientDelete(char *error, size_t capacity) { (void)error; (void)capacity; return false; }
+void CcCoopClientOpenLobby(void) { OpenURL("https://crownless.ratimics.com/"); }
+void CcCoopClientReturnToTitle(void) {}
 void CcCoopClientReady(const char *error) { (void)error; }
 bool CcCoopClientConnect(CcSim *sim, char *error, size_t capacity)
 {

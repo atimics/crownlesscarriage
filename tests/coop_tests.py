@@ -162,6 +162,35 @@ class CoopTests(unittest.TestCase):
         data = b''.join(Application(self.worlds)(env, lambda status, headers: statuses.append(status)))
         return int(statuses[0].split()[0]), json.loads(data)
 
+    def test_owner_deletes_only_their_world(self):
+        self.worlds.command(self.id, self.a, self.command(self.a, amount=1, good=0))
+        other = '2' * 32
+        self.worlds.create(self.a, {'id': other, 'name': 'Other Road', 'player': 'Mara'})
+        path = f'/api/worlds/{self.id}/host'
+        self.assertEqual(self.request(path, {'action': 'delete'}, token=self.b)[0], 403)
+        self.assertEqual(self.request(path, {'action': 'delete'}, token='c' * 64)[0], 403)
+        self.assertEqual(self.worlds.view(self.id, self.a)['id'], self.id)
+        status, result = self.request(path, {'action': 'delete'})
+        self.assertEqual(status, 200)
+        self.assertEqual(result, {'deleted': True})
+        for table, column in [('worlds', 'id'), ('members', 'world'), ('receipts', 'world')]:
+            self.assertEqual(self.worlds.db.execute(f'SELECT count(*) FROM {table} WHERE {column}=?', (self.id,)).fetchone()[0], 0)
+        self.assertFalse(any(key[0] == self.id for key in self.worlds.seen))
+        self.assertNotIn(self.id, self.worlds.last_tick)
+        self.assertEqual(self.worlds.view(other, self.a)['id'], other)
+        self.worlds.close()
+        self.worlds = Worlds(self.path, self.engine)
+        with self.assertRaises(ApiError):
+            self.worlds.view(self.id, self.a)
+
+    def test_delete_failure_rolls_back_world_and_crew(self):
+        self.worlds.command(self.id, self.a, self.command(self.a, amount=1, good=0))
+        self.worlds.db.execute("CREATE TRIGGER block_delete BEFORE DELETE ON worlds BEGIN SELECT RAISE(ABORT, 'test failure'); END")
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.worlds.owner_action(self.id, self.a, 'delete')
+        self.assertEqual(len(self.worlds.view(self.id, self.a)['crew']), 2)
+        self.assertEqual(self.worlds.db.execute('SELECT count(*) FROM receipts WHERE world=?', (self.id,)).fetchone()[0], 1)
+
     def test_protocol_auth_and_clock_boundary(self):
         path = f'/api/worlds/{self.id}/command'
         self.assertEqual(self.request(path, self.command(self.a, 'advance'))[0], 400)

@@ -4,10 +4,11 @@
   let state = null, pending = null, lastPoll = 0, inFlight = false, applying = false;
   const token = enabled ? localStorage.getItem('cc-coop-token') : '';
   const key = `cc-coop-pending-${worldId}`;
+  let deleted = false;
   let status, startupError = '';
   function say(message) { if (status) status.textContent = startupError || message; }
   function accept(next, forceSnapshot = false) {
-    if (state && next.revision < state.revision) return;
+    if (deleted || (state && next.revision < state.revision)) return;
     if (!state || next.revision !== state.revision || forceSnapshot) pending = next.campaign;
     state = next;
     say(next.paused ? 'Company paused' : `${next.crew.filter(p => p.online).length} aboard · shared carriage · saved`);
@@ -47,11 +48,23 @@
     return navigator.locks ? navigator.locks.request(`cc-coop-command-${worldId}`, run) : run();
   }
   function poll() {
-    if (!enabled || inFlight || applying || performance.now() - lastPoll < 750) return;
+    if (deleted || !enabled || inFlight || applying || performance.now() - lastPoll < 750) return;
     lastPoll = performance.now(); inFlight = true;
     request(`state?campaign=1&after=${state ? state.revision : -1}`).then(accept).catch(error => say(error.message)).finally(() => { inFlight = false; });
   }
-  Module.ccCoop = { enabled, connect, apply, poll,
+  async function deleteWorld() {
+    if (!state?.owner) throw new Error('The host can delete this world.');
+    if (applying || localStorage.getItem(key)) throw new Error('Finish the pending company action first.');
+    const result = await request('host', {action: 'delete'});
+    if (result.deleted !== true) throw new Error('Check the company road book and try again.');
+    deleted = true; pending = null;
+    localStorage.removeItem(key);
+  }
+  function openLobby() {
+    location.assign(location.pathname.startsWith('/game/') ? '/' : 'https://crownless.ratimics.com/');
+  }
+  Module.ccCoop = { enabled, connect, apply, poll, deleteWorld, openLobby,
+    owner() { return Boolean(state?.owner); },
     ready(error) { startupError = error; document.body.dataset.companyReady = error ? 'error' : 'ready'; if (error) say(error); },
     take() { const value = pending; pending = null; return value; } };
   if (enabled && typeof document !== 'undefined') {

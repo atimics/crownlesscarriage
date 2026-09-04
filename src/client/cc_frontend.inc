@@ -57,7 +57,7 @@ static int FrontendItems(const FrontendState *state, FrontendItem *items)
         items[1] = (FrontendItem){FRONTEND_ACTION_ONLINE,
             {x + 189.0f, y + 20.0f, 179.0f, 44.0f}, "Online", true};
         items[2] = (FrontendItem){FRONTEND_ACTION_PLAY,
-            {x, y + 138.0f, 368.0f, 52.0f}, "Play", !state->online};
+            {x, y + 138.0f, 368.0f, 52.0f}, "Play", true};
         items[3] = (FrontendItem){FRONTEND_ACTION_QUIT,
             {x, y + 246.0f, 368.0f, 40.0f}, "Quit game", true};
 #if defined(PLATFORM_WEB)
@@ -89,6 +89,11 @@ static int FrontendItems(const FrontendState *state, FrontendItem *items)
     for (int i = 0; i < count; ++i) {
         items[i] = (FrontendItem){actions[i],
             {x, y + (float)i * 45.0f, 368.0f, 36.0f}, labels[i], true};
+    }
+    if (CcCoopClientActive()) {
+        items[4].label = "Leave to title";
+        items[5].enabled = CcCoopClientOwner();
+        if (!items[5].enabled) items[5].label = "Host can delete world";
     }
     return count;
 }
@@ -187,7 +192,10 @@ static void HandleFrontendAction(FrontendState *state, FrontendAction action,
         state->online = action == FRONTEND_ACTION_ONLINE;
         state->focus = state->online ? 1 : 2;
         state->feedback[0] = '\0';
-    } else if (action == FRONTEND_ACTION_PLAY && !state->online) {
+    } else if (action == FRONTEND_ACTION_PLAY && state->online) {
+        CcCoopClientOpenLobby();
+        (void)snprintf(state->feedback, sizeof(state->feedback), "The online lobby opens in your browser.");
+    } else if (action == FRONTEND_ACTION_PLAY) {
 #if defined(PLATFORM_WEB)
         if (ClientBrowserCampaignAccess() != 0) {
             (void)snprintf(state->feedback, sizeof(state->feedback), "%s",
@@ -229,6 +237,12 @@ static void HandleFrontendAction(FrontendState *state, FrontendAction action,
     } else if (action == FRONTEND_ACTION_CANCEL) {
         FrontendOpen(state, FRONTEND_PAUSED);
     } else if (action == FRONTEND_ACTION_CONFIRM_DELETE) {
+        if (CcCoopClientActive()) {
+            if (CcCoopClientDelete(state->feedback, sizeof(state->feedback))) {
+                CcCoopClientReturnToTitle();
+            }
+            return;
+        }
         if (DeleteClientWorld(journal, sim, save_path, session_path,
                                state->feedback, sizeof(state->feedback))) {
             state->has_world = false;
@@ -248,6 +262,10 @@ static void HandleFrontendAction(FrontendState *state, FrontendAction action,
         }
     } else if (action == FRONTEND_ACTION_SAVE ||
                action == FRONTEND_ACTION_TITLE || action == FRONTEND_ACTION_QUIT) {
+        if (action == FRONTEND_ACTION_TITLE && CcCoopClientActive()) {
+            CcCoopClientReturnToTitle();
+            return;
+        }
         /* The title already holds a saved or freshly loaded world. */
         bool saved = state->screen == FRONTEND_TITLE ||
             (*journal != NULL && SaveClientWorld(*journal, sim, local,
@@ -275,21 +293,25 @@ static void DrawFrontend(const FrontendState *state,
     int top = (int)panel.y;
     FrontendCenteredText("CROWNLESS CARRIAGE", top + 38, 14, CC_GOLD);
     const char *title = state->screen == FRONTEND_TITLE ? "The road awaits" :
-        state->screen == FRONTEND_DELETE ? "Delete this world?" : "Journey paused";
+        state->screen == FRONTEND_DELETE ? "Delete this world?" :
+        CcCoopClientActive() ? "Company menu" : "Journey paused";
     FrontendCenteredText(title, top + 76, 28, INK);
     if (state->screen == FRONTEND_TITLE) {
         FrontendCenteredText("Choose how to play", top + 126, 14, MUTED);
-        FrontendCenteredText(state->online ? "Online play is coming soon." :
+        FrontendCenteredText(state->online ? "Share a carriage with your company." :
             "Your world is saved on this device.", top + 232, 14, MUTED);
-        FrontendCenteredText(state->online ? "Choose Offline to begin your journey." :
+        FrontendCenteredText(state->online ? "Play opens the online lobby." :
             state->has_world ? "Continue your saved journey." : "Begin a new world.",
             top + 354, 14, MUTED);
     } else if (state->screen == FRONTEND_DELETE) {
-        FrontendCenteredText("This removes your world and its progress", top + 165, 16, INK);
-        FrontendCenteredText("from this device.", top + 189, 16, INK);
+        FrontendCenteredText(CcCoopClientActive() ? "This removes the shared world and progress" :
+            "This removes your world and its progress", top + 165, 16, INK);
+        FrontendCenteredText(CcCoopClientActive() ? "for everyone in the company." :
+            "from this device.", top + 189, 16, INK);
         FrontendCenteredText("Your next Play begins a new world.", top + 224, 14, MUTED);
     } else {
-        FrontendCenteredText(TextFormat("OFFLINE  /  DAY %d", sim->current_day),
+        FrontendCenteredText(CcCoopClientActive() ? "ONLINE  /  THE COMPANY KEEPS PLAYING" :
+            TextFormat("OFFLINE  /  DAY %d", sim->current_day),
                              top + 120, 12, MUTED);
     }
     FrontendItem items[7];
@@ -366,7 +388,9 @@ static int RunFrontendRegression(void)
     &local, &view, &return_view, &selected, &selected_situation, save_path, session_path)
     FRONTEND_CHECK(!CampaignSaveExists(save_path));
     FRONTEND_ACT(FRONTEND_ACTION_ONLINE);
-    FRONTEND_ACT(FRONTEND_ACTION_PLAY);
+    FrontendItem items[7];
+    (void)FrontendItems(&state, items);
+    FRONTEND_CHECK(items[2].enabled && items[2].action == FRONTEND_ACTION_PLAY);
     FRONTEND_CHECK(state.screen == FRONTEND_TITLE && journal == NULL);
     FRONTEND_CHECK(!CampaignSaveExists(save_path));
     FRONTEND_ACT(FRONTEND_ACTION_OFFLINE);

@@ -54,6 +54,12 @@ async function main() {
   try {
     await page.goto(`http://127.0.0.1:${server.address().port}/`);
     await page.waitForFunction(() => window.Module && Module.crownlessCampaignAccess === 0 && document.querySelector('#loading').hidden && window.shaderLinks.some(link => link.skinned), {timeout: 120000});
+    await page.waitForFunction(() => Module.crownlessScreen === 'title');
+    assert.equal(await page.evaluate(() => Module.crownlessSaveRevision), 0);
+    await page.screenshot({path: path.join(output, 'title.png')});
+    await page.locator('#canvas').focus();
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => Module.crownlessScreen === 'playing' && Module.crownlessSaveRevision > 0);
     await page.screenshot({path: path.join(output, 'opening.png')});
     const shaders = await page.evaluate(() => window.shaderLinks);
     assert(shaders.every(shader => shader.linked), JSON.stringify(shaders));
@@ -122,9 +128,14 @@ async function main() {
     await page.reload();
     await page.waitForFunction(() => window.Module && Module.crownlessCampaignRestored && document.querySelector('#loading').hidden);
     assert.equal(await page.evaluate(() => Module.crownlessSaveRevision), revision);
+    await page.waitForFunction(() => Module.crownlessScreen === 'title');
+    await page.locator('#canvas').focus();
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => Module.crownlessScreen === 'playing');
     rejectedWrite = true;
     await page.evaluate(() => {
       const transaction = IDBDatabase.prototype.transaction;
+      window.originalSaveTransaction = transaction;
       IDBDatabase.prototype.transaction = function(names, mode, ...rest) {
         if (mode === 'readwrite') throw new DOMException('Injected storage failure', 'QuotaExceededError');
         return transaction.call(this, names, mode, ...rest);
@@ -141,8 +152,38 @@ async function main() {
     await page.waitForTimeout(250);
     assert.equal(await page.evaluate(() => Module.crownlessSaveRevision), revision);
     await page.screenshot({path: path.join(output, 'rejected-save.png')});
+    await page.evaluate(() => { IDBDatabase.prototype.transaction = window.originalSaveTransaction; });
+    rejectedWrite = false;
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => Module.crownlessScreen === 'paused');
+    await page.screenshot({path: path.join(output, 'pause-menu.png')});
+    for (let i = 0; i < 5; i++) { await page.keyboard.press('ArrowDown'); await page.waitForTimeout(80); }
+    await page.locator('#canvas').focus();
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => Module.crownlessScreen === 'delete');
+    await page.screenshot({path: path.join(output, 'delete-confirmation.png')});
+    await page.locator('#canvas').focus();
+    await page.keyboard.press('Enter'); // Keep world is selected first.
+    await page.waitForFunction(() => Module.crownlessScreen === 'paused');
+    assert.equal(await page.evaluate(() => Module.crownlessSaveRevision), revision);
+    for (let i = 0; i < 5; i++) { await page.keyboard.press('ArrowDown'); await page.waitForTimeout(80); }
+    await page.locator('#canvas').focus();
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => Module.crownlessScreen === 'delete');
+    await page.keyboard.press('ArrowDown');
+    await page.locator('#canvas').focus();
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => Module.crownlessScreen === 'title' && Module.crownlessSaveRevision > 0);
+    assert.equal(await page.evaluate(() => Module.crownlessSaveRevision), revision + 1);
+    await page.reload();
+    await page.waitForFunction(() => window.Module && Module.crownlessScreen === 'title');
+    assert.equal(await page.evaluate(() => Module.crownlessCampaignRestored), false);
+    await page.locator('#canvas').focus();
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => Module.crownlessScreen === 'playing');
+    assert.equal(await page.evaluate(() => Module.crownlessSaveRevision), revision + 2);
     assert.deepEqual(errors, []);
-    console.log('Browser startup, shader budget, fullscreen, reload, and rejected save checks passed');
+    console.log('Browser title, menus, deletion, shaders, fullscreen, reload, and rejected save checks passed');
   } finally {
     await context.close();
     await browser.close();

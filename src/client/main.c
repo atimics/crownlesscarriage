@@ -360,6 +360,9 @@ EM_ASYNC_JS(int, ClientFlushBrowserPreferences,
         return 0;
     }
 });
+EM_JS(void, ClientBrowserFrontend, (const char *screen), {
+    Module.crownlessScreen = UTF8ToString(screen);
+});
 EM_JS(int, ClientBrowserCampaignAccess, (), {
     return Number.isInteger(Module.crownlessCampaignAccess)
         ? Module.crownlessCampaignAccess : 1;
@@ -11142,6 +11145,11 @@ int main(int argc, char **argv)
         if (frontend.screen != FRONTEND_PLAYING) {
             DrawFrontend(&frontend, &preferences, &sim);
         }
+#if defined(PLATFORM_WEB)
+        ClientBrowserFrontend(frontend.screen == FRONTEND_TITLE ? "title" :
+            frontend.screen == FRONTEND_PAUSED ? "paused" :
+            frontend.screen == FRONTEND_DELETE ? "delete" : "playing");
+#endif
         EndDrawing();
 #if defined(PLATFORM_WEB)
         if (!browser_memory_reported) {
