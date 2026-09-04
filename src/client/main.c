@@ -16,7 +16,6 @@
 #include <emscripten.h>
 #endif
 
-#include <float.h>
 #include <inttypes.h>
 #include <math.h>
 #include <stdbool.h>
@@ -1074,8 +1073,8 @@ static bool WorldSessionRouteScore(
     }
     float total_length = CcWorldRouteLength(route);
     if (total_length <= 0.0001f) return false;
-    float best_distance = FLT_MAX;
-    float best_heading = FLT_MAX;
+    float best_distance = INFINITY;
+    float best_heading = INFINITY;
     float travelled = 0.0f;
     for (int32_t sample = 0;
          sample < CC_WORLD_ROUTE_SAMPLE_COUNT - 1; ++sample) {
@@ -1097,7 +1096,7 @@ static bool WorldSessionRouteScore(
             route, settlement_id, journey_amount,
             &ignored_position, &heading);
         float candidate_heading = has_pose ?
-            SessionAngleDistance(heading, facing_yaw) : FLT_MAX;
+            SessionAngleDistance(heading, facing_yaw) : INFINITY;
         if (candidate_distance < best_distance - 0.0001f ||
             (fabsf(candidate_distance - best_distance) <= 0.0001f &&
              candidate_heading < best_heading)) {
@@ -1130,7 +1129,7 @@ static bool WorldSessionRouteScore(
     }
     *distance_squared = best_distance;
     *heading_distance = best_heading;
-    return best_distance < FLT_MAX;
+    return isfinite(best_distance);
 }
 
 static const CcRoute *InferWorldSessionRoute(
@@ -1139,8 +1138,8 @@ static const CcRoute *InferWorldSessionRoute(
 {
     if (sim == NULL || manifest == NULL || session == NULL) return NULL;
     const CcRoute *best_route = NULL;
-    float best_distance = FLT_MAX;
-    float best_heading = FLT_MAX;
+    float best_distance = INFINITY;
+    float best_heading = INFINITY;
     CcWorldPoint position = {session->position_x, session->position_z};
     for (int32_t i = 0; i < sim->route_count; ++i) {
         const CcRoute *route = &sim->routes[i];
@@ -1150,8 +1149,8 @@ static const CcRoute *InferWorldSessionRoute(
         }
         const CcWorldRoutePlacement *placement =
             CcWorldRoutePlacementForId(manifest, route->id);
-        float distance = FLT_MAX;
-        float heading = FLT_MAX;
+        float distance = INFINITY;
+        float heading = INFINITY;
         if (!WorldSessionRouteScore(
                 placement, session->location_id, position,
                 session->facing_yaw, &distance, &heading)) {
@@ -1611,8 +1610,8 @@ static bool WorldStreamCanRestoreSession(
     }
     const CcWorldRoutePlacement *placement = CcWorldRoutePlacementForId(
         &local->world_stream.manifest, restored_route->id);
-    float road_distance = FLT_MAX;
-    float heading_distance = FLT_MAX;
+    float road_distance = INFINITY;
+    float heading_distance = INFINITY;
     if (!WorldSessionRouteScore(
             placement, session->location_id,
             (CcWorldPoint){session->position_x, session->position_z},
