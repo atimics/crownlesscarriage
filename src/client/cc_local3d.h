@@ -553,6 +553,7 @@ float CcLocalCombatSkillDuration(CcCombatSkill skill);
 
 void CcLocalRendererInit(void);
 void CcLocalRendererSetScreenFirstHero(bool enabled);
+void CcLocalRendererSetReducedMotion(bool enabled);
 void CcLocalRendererSetOpeningStep(CcLocalOpeningStep step);
 void CcLocalRendererBeginFrame(float delta_time);
 void CcLocalRendererResetPerformanceMetrics(void);

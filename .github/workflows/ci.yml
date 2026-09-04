@@ -104,7 +104,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-14]
     steps:
       - uses: actions/checkout@v4
       - name: Install Linux client development files
@@ -123,6 +123,11 @@ jobs:
         run: cmake --build build --parallel
       - name: Test
         run: ctest --test-dir build --output-on-failure
+      - name: Launch macOS app smoke
+        if: runner.os == 'macOS'
+        run: >-
+          ./build/crownless_carriage.app/Contents/MacOS/crownless_carriage
+          --test-town-arrival-parking
       - name: Check road-book captures and render budgets
         if: runner.os == 'Linux'
         env:
@@ -139,29 +144,90 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      - name: Capture supported road-panel widths
+        if: runner.os == 'Linux'
+        env:
+          LIBGL_ALWAYS_SOFTWARE: 1
+        run: |
+          for width in 1040 1200 1280; do
+            xvfb-run --auto-servernum ./build/crownless_carriage \
+              --capture-road-fork "road-fork-$width.png" "$width"
+            test -s "road-fork-$width.png"
+          done
+      - name: Upload road-panel captures
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: road-panel-widths
+          path: road-fork-*.png
+
   sanitizers:
     name: Address and undefined behavior sanitizers
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y clang libsqlite3-dev
+        run: >-
+          sudo apt-get update && sudo apt-get install -y
+          clang libsqlite3-dev libasound2-dev libgl1-mesa-dev libglu1-mesa-dev
+          libx11-dev libxcursor-dev libxext-dev libxfixes-dev libxi-dev
+          libxinerama-dev libxrandr-dev xvfb
       - name: Configure
         env:
           CC: clang
         run: >-
           cmake -S . -B build
           -DCMAKE_BUILD_TYPE=Debug
-          -DCC_BUILD_CLIENT=OFF
+          -DCC_BUILD_CLIENT=ON
           -DCC_WARNINGS_AS_ERRORS=ON
-          -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
-          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+          -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=undefined"
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=undefined"
       - name: Build
         run: cmake --build build --parallel
+      - name: Check undefined behavior exits with failure
+        env:
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: |
+          clang \
+            -fsanitize=undefined \
+            -fno-sanitize-recover=undefined \
+            tests/sanitizer_ub_fixture.c \
+            -o "$RUNNER_TEMP/sanitizer_ub_fixture"
+          set +e
+          "$RUNNER_TEMP/sanitizer_ub_fixture" \
+            > sanitizer-self-check.log 2>&1
+          fixture_status=$?
+          set -e
+          cat sanitizer-self-check.log
+          test "$fixture_status" -ne 0
+          grep -q "runtime error: signed integer overflow" \
+            sanitizer-self-check.log
       - name: Test
         env:
-          ASAN_OPTIONS: detect_leaks=1
-          UBSAN_OPTIONS: print_stacktrace=1
-        run: >-
-          ctest --test-dir build --output-on-failure
-          -E '^headless_performance_budget$'
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: |
+          ctest --test-dir build --output-on-failure \
+            -E '^headless_performance_budget$' \
+            2>&1 | tee sanitizer-tests.log
+      - name: Capture the client under sanitizers
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+          LIBGL_ALWAYS_SOFTWARE: 1
+        run: |
+          xvfb-run --auto-servernum ./build/crownless_carriage \
+            --capture-opening sanitizer-opening.png \
+            2>&1 | tee sanitizer-client.log
+          test -s sanitizer-opening.png
+      - name: Upload sanitizer logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sanitizer-logs
+          path: |
+            sanitizer-self-check.log
+            sanitizer-tests.log
+            sanitizer-client.log
+            sanitizer-opening.png
+          if-no-files-found: error

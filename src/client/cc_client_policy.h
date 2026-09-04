@@ -2,7 +2,12 @@
 #define CROWNLESS_CLIENT_POLICY_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
+
+typedef struct CcClientPreferences {
+    bool reduced_motion;
+} CcClientPreferences;
 
 typedef enum CcClientConvoyGait {
     CC_CLIENT_CONVOY_GAIT_HALT,
@@ -64,6 +69,15 @@ bool CcClientInteractionActivated(bool requested, float distance,
                                   float maximum_distance);
 CcClientCampaignAccess CcClientCampaignAccessFor(bool normal_play,
                                                  bool journal_available);
+void CcClientPreferencesDefault(CcClientPreferences *preferences);
+bool CcClientPreferencesLoad(const char *path,
+                             CcClientPreferences *preferences,
+                             char *error, size_t error_capacity);
+bool CcClientPreferencesSave(const char *path,
+                             const CcClientPreferences *preferences,
+                             char *error, size_t error_capacity);
+bool CcClientHitEffectVisible(bool reduced_motion,
+                              float hit_flash_seconds);
 void CcClientDepartureBegin(CcClientDepartureTransition *transition);
 void CcClientDepartureAdvance(CcClientDepartureTransition *transition,
                               float pace, float delta_time);

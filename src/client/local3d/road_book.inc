@@ -1976,6 +1976,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                                    target.texture.height);
     }
 
+    char witness_label[96];
     WorldLabel labels[20];
     int32_t count = 0;
     if (convoy_visible && agent != NULL) {
@@ -2092,7 +2093,6 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
             sim, course->situation_witness_id);
         const CcCharacter *character = CcSimCharacter(
             sim, course->situation_witness_character_id);
-        char witness_label[96];
         if (situation != NULL && character != NULL &&
             AgentNearLabel(agent, course->situation_witness.position.x,
                            course->situation_witness.position.z, 6.0f)) {

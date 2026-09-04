@@ -4,6 +4,7 @@ import vm from "node:vm";
 
 const campaignPath = "/crownless-save/crownless_campaign.ccsave";
 const sessionPath = campaignPath + ".session";
+const preferencesPath = campaignPath + ".preferences";
 const revisionPath = campaignPath + ".revision";
 const persistenceSource = await readFile(
   new URL("../web/persistence.js", import.meta.url), "utf8");
@@ -168,8 +169,10 @@ const oldSession = new Uint8Array([4, 5, 6]);
 const ownerCampaign = new Uint8Array([7, 8, 9]);
 const staleCampaign = new Uint8Array([10, 11, 12]);
 const replacementCampaign = new Uint8Array([13, 14, 15]);
+const reducedMotionPreferences = new Uint8Array([16, 17, 18]);
 storedFiles.set(campaignPath, oldCampaign);
 storedFiles.set(sessionPath, oldSession);
+storedFiles.set(preferencesPath, reducedMotionPreferences);
 storedFiles.set(revisionPath, 0);
 
 const owner = await createPage();
@@ -178,6 +181,7 @@ assert.equal(owner.Module.crownlessCampaignAccess, 0);
 assert.equal(second.Module.crownlessCampaignAccess, 1);
 assert.deepEqual(owner.files.get(campaignPath), oldCampaign);
 assert.deepEqual(second.files.get(campaignPath), oldCampaign);
+assert.deepEqual(owner.files.get(preferencesPath), reducedMotionPreferences);
 
 second.files.set(campaignPath, staleCampaign);
 await assert.rejects(
@@ -195,6 +199,14 @@ assert.deepEqual(storedFiles.get(sessionPath), oldSession);
 
 owner.files.set(campaignPath, ownerCampaign);
 owner.files.set(sessionPath, oldSession);
+failNextWrite = true;
+await assert.rejects(
+  owner.Module.persistCrownlessSave(campaignPath, sessionPath),
+  /injected transaction failure/);
+assert.deepEqual(storedFiles.get(campaignPath), oldCampaign);
+assert.deepEqual(storedFiles.get(sessionPath), oldSession);
+assert.equal(storedFiles.get(revisionPath), 0);
+
 await owner.Module.persistCrownlessSave(campaignPath, sessionPath);
 assert.deepEqual(storedFiles.get(campaignPath), ownerCampaign);
 assert.equal(storedFiles.get(revisionPath), 1);
@@ -218,6 +230,10 @@ recovered.files.set(campaignPath, replacementCampaign);
 await recovered.Module.persistCrownlessNewCampaign(campaignPath);
 assert.deepEqual(storedFiles.get(campaignPath), replacementCampaign);
 assert.equal(storedFiles.has(sessionPath), false);
+recovered.files.set(preferencesPath, new Uint8Array([19, 20, 21]));
+await recovered.Module.persistCrownlessPreferences(preferencesPath);
+assert.deepEqual(storedFiles.get(preferencesPath),
+  new Uint8Array([19, 20, 21]));
 assert.equal(storedFiles.get(revisionPath), 2);
 
 await recovered.close();
@@ -225,6 +241,8 @@ const reloaded = await createPage();
 assert.equal(reloaded.Module.crownlessCampaignAccess, 0);
 assert.equal(reloaded.Module.crownlessSaveRevision, 2);
 assert.deepEqual(reloaded.files.get(campaignPath), replacementCampaign);
+assert.deepEqual(reloaded.files.get(preferencesPath),
+  new Uint8Array([19, 20, 21]));
 assert.equal(reloaded.files.has(sessionPath), false);
 await reloaded.close();
 

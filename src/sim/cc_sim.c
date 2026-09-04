@@ -4563,6 +4563,23 @@ static bool TreasureIsArchiveVolume(const CcTreasure *treasure)
            strncmp(treasure->name, "Codex of ", 9) == 0;
 }
 
+int32_t CcSimArchivePhysicalLore(const CcSim *sim)
+{
+    if (sim == NULL) return 0;
+    int64_t lore = 0;
+    for (int32_t i = 0; i < sim->treasure_count; ++i) {
+        const CcTreasure *volume = &sim->treasures[i];
+        if (TreasureIsArchiveVolume(volume)) lore += volume->craft_work;
+    }
+    return lore > INT32_MAX ? INT32_MAX : (int32_t)lore;
+}
+
+void CcSimUpgradeArchivePhysicalLore(CcSim *sim)
+{
+    if (sim == NULL) return;
+    sim->archives.lore_stored = CcSimArchivePhysicalLore(sim);
+}
+
 static bool EarlierArchiveVolume(const CcSim *sim, int32_t first,
                                  int32_t second)
 {
@@ -5699,7 +5716,8 @@ static void AdvanceArchives(CcSim *sim)
         sim, scriptorium_ready,
         scriptorium != NULL ? scriptorium->id : 0U);
 
-    if (archives->scribes == 0 && archives->lore_stored > 0) {
+    if (archives->scribes == 0 && archives->lore_stored > 0 &&
+        sim->schema_version < 36U) {
         archives->lore_stored -= 1;
         archives->lore_lost_total += 1;
         char text[CC_EVENT_TEXT_CAPACITY];
@@ -5707,6 +5725,39 @@ static void AdvanceArchives(CcSim *sim)
                        "Unfunded and unwatched, part of the archive crumbles; "
                        "a name is forgotten.");
         (void)PushEvent(sim, CC_EVENT_LORE_LOST, 0U, 0U, 0U, 1, text);
+    } else if (archives->scribes == 0 && archives->lore_stored > 0) {
+        int32_t oldest = -1;
+        for (int32_t i = 0; i < sim->treasure_count; ++i) {
+            if (TreasureIsArchiveVolume(&sim->treasures[i]) &&
+                EarlierArchiveVolume(sim, i, oldest)) {
+                oldest = i;
+            }
+        }
+        if (oldest >= 0) {
+            CcTreasure *volume = &sim->treasures[oldest];
+            char former_name[CC_MAP_NAME_CAPACITY];
+            (void)snprintf(former_name, sizeof(former_name), "%s",
+                           volume->name);
+            bool ruined = volume->craft_work == 1;
+            if (ruined) {
+                (void)snprintf(volume->name, sizeof(volume->name),
+                               "Ruined %.40s", former_name);
+            } else {
+                volume->craft_work -= 1;
+            }
+            archives->lore_stored -= 1;
+            archives->lore_lost_total += 1;
+            char text[CC_EVENT_TEXT_CAPACITY];
+            (void)snprintf(
+                text, sizeof(text),
+                ruined ?
+                    "Unfunded and unwatched, %.48s falls into ruin; its lore is lost." :
+                    "Unfunded and unwatched, a page of %.48s crumbles; part of its lore is lost.",
+                former_name);
+            CcId parent = LatestLocalCause(sim, volume->location_id);
+            (void)PushEvent(sim, CC_EVENT_LORE_LOST, volume->id,
+                            volume->location_id, parent, 1, text);
+        }
     }
 }
 
@@ -5751,6 +5802,7 @@ static void AdvanceRuins(CcSim *sim)
         donor->stock[CC_GOOD_TOOLS] -= 2;
         donor->market_coins -= 12;
         ruin->kingdom_id = donor->kingdom_id;
+        if (sim->schema_version >= 36U) AssignHistoryOffices(sim, true);
         ruin->population = 180;
         ruin->security = 15;
         ruin->prosperity = 20;
@@ -6217,6 +6269,11 @@ static void AdvanceGoblinTribute(CcSim *sim)
                 goblins->cohesion = ClampI32(
                     goblins->cohesion - hunger_loss * 3, 0, 100);
             }
+        }
+        if (sim->schema_version >= 36U && sim->current_day % 28 == 0 &&
+            NutritionRations(goblins->lair_stock, CC_NUTRITION_CIVILIAN) >= 4 &&
+            goblins->lair_stock[CC_GOOD_TOOLS] >= 1) {
+            goblins->cohesion = MinimumI32(100, goblins->cohesion + 1);
         }
         goblins->tribute_cooldown_days = MaximumI32(
             0, goblins->tribute_cooldown_days - 1);
@@ -7895,6 +7952,12 @@ static void UpdateShipments(CcSim *sim)
                             departure != NULL ? departure->id : 0U,
                             shipment->quantity, text);
             continue;
+        }
+        if (sim->schema_version >= 36U) {
+            CcRoute *used_route = RouteMutable(sim, shipment->route_id);
+            if (used_route != NULL) {
+                used_route->condition = MinimumI32(100, used_route->condition + 1);
+            }
         }
         CcSettlement *hop = CcSimSettlementMutable(sim, shipment->destination_id);
         if (shipment->destination_id != final_id && hop != NULL) {
@@ -9905,6 +9968,7 @@ static void ResolveWarSettlement(CcSim *sim, int32_t first,
     if (ceded == NULL) return;
 
     ceded->kingdom_id = sim->kingdoms[winner].id;
+    if (sim->schema_version >= 36U) AssignHistoryOffices(sim, true);
     ceded->security = MaximumI32(10, ceded->security - 12);
     ceded->prosperity = MaximumI32(0, ceded->prosperity - 8);
     ceded->hunger = ClampI32(ceded->hunger + 8, 0, 100);
@@ -11730,29 +11794,43 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
         }
 
         if (sim->current_day % 28 == 0 && kingdom->treasury >= 12) {
+            CcRoute *upkeep_route = NULL;
+            CcSettlement *upkeep_base = NULL;
             for (int32_t route_index = 0; route_index < sim->route_count; ++route_index) {
                 CcRoute *route = &sim->routes[route_index];
-                CcSettlement *to = CcSimSettlementMutable(sim, route->to_id);
-                if (route->closed || route->condition >= 58 || to == NULL ||
-                    CcSettlementIsAbandoned(to) ||
-                    to->kingdom_id != kingdom->id ||
-                    to->stock[CC_GOOD_WOOD] < 1 ||
-                    to->stock[CC_GOOD_STONE] < 1) continue;
+                if (route->closed || route->condition >= 58) continue;
+                CcSettlement *base = CcSimSettlementMutable(sim, route->to_id);
+                bool supplied = base != NULL && !CcSettlementIsAbandoned(base) &&
+                    base->kingdom_id == kingdom->id &&
+                    base->stock[CC_GOOD_WOOD] >= 1 && base->stock[CC_GOOD_STONE] >= 1;
+                if (!supplied && sim->schema_version >= 36U) {
+                    base = CcSimSettlementMutable(sim, route->from_id);
+                    supplied = base != NULL && !CcSettlementIsAbandoned(base) &&
+                        base->kingdom_id == kingdom->id &&
+                        base->stock[CC_GOOD_WOOD] >= 1 && base->stock[CC_GOOD_STONE] >= 1;
+                }
+                if (!supplied) continue;
+                if (upkeep_route == NULL || route->condition < upkeep_route->condition) {
+                    upkeep_route = route;
+                    upkeep_base = base;
+                }
+                if (sim->schema_version < 36U) break;
+            }
+            if (upkeep_route != NULL) {
                 kingdom->treasury -= 12;
-                to->market_coins += 12;
-                to->stock[CC_GOOD_WOOD] -= 1;
-                to->stock[CC_GOOD_STONE] -= 1;
-                route->condition = ClampI32(route->condition + 16, 0, 100);
-                route->security = ClampI32(route->security + 2, 0, 100);
-                if (route->condition < 45) {
+                upkeep_base->market_coins += 12;
+                upkeep_base->stock[CC_GOOD_WOOD] -= 1;
+                upkeep_base->stock[CC_GOOD_STONE] -= 1;
+                upkeep_route->condition = ClampI32(upkeep_route->condition + 16, 0, 100);
+                upkeep_route->security = ClampI32(upkeep_route->security + 2, 0, 100);
+                if (upkeep_route->condition < 45) {
                     char text[CC_EVENT_TEXT_CAPACITY];
                     (void)snprintf(text, sizeof(text),
                                    "%s maintains a strategic road before it fails.",
                                    kingdom->name);
-                    (void)PushEvent(sim, CC_EVENT_KINGDOM_ACTION, kingdom->id, route->id,
-                                    0U, route->condition, text);
+                    (void)PushEvent(sim, CC_EVENT_KINGDOM_ACTION, kingdom->id, upkeep_route->id,
+                                    0U, upkeep_route->condition, text);
                 }
-                break;
             }
         }
 
@@ -15908,12 +15986,14 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                          sim->schema_version == 31U ||
                          sim->schema_version == 32U ||
                          sim->schema_version == 33U ||
-                         sim->schema_version == 34U;
+                         sim->schema_version == 34U ||
+                         sim->schema_version == 35U;
     bool supported_generator =
         (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
          sim->generator_version == CC_GENERATOR_VERSION) ||
         (legacy_schema && sim->schema_version <= 27U &&
          sim->generator_version == CC_GENERATOR_VERSION) ||
+        (sim->schema_version == 35U && sim->generator_version == 25U) ||
         (sim->schema_version == 34U && sim->generator_version == 25U) ||
         (sim->schema_version == 33U && sim->generator_version == 25U) ||
         (sim->schema_version == 32U && sim->generator_version == 25U) ||
@@ -16031,6 +16111,18 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             sim, kingdom->ruler_character_id);
         const CcCharacter *patron = CcSimCharacter(
             sim, kingdom->monastery_patron_id);
+        if (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
+            (ruler == NULL || CharacterKingdomSlot(sim, ruler) != i ||
+             patron == NULL || CharacterKingdomSlot(sim, patron) != i)) {
+            if (error != NULL && error_capacity > 0U) {
+                (void)snprintf(error, error_capacity,
+                               "Kingdom %.48s has an invalid %s home allegiance.",
+                               kingdom->name,
+                               ruler == NULL || CharacterKingdomSlot(sim, ruler) != i ?
+                                   "ruler" : "monastery patron");
+            }
+            return false;
+        }
         if (CcIdKind(kingdom->id) != CC_ENTITY_KINGDOM ||
             !ValidBoundedText(kingdom->name, sizeof(kingdom->name)) ||
             kingdom->treasury < 0 ||
@@ -16045,9 +16137,6 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
               kingdom->unsanctioned_weeks >= 52 ||
               kingdom->pretender_crises < 0 ||
               kingdom->pretender_crises > CC_SIM_MAX_UNITS ||
-              ruler == NULL || patron == NULL ||
-              CharacterKingdomSlot(sim, ruler) != i ||
-              CharacterKingdomSlot(sim, patron) != i ||
               (kingdom->anointed &&
                kingdom->anointed_by_character_id !=
                    sim->archives.abbot_character_id) ||
@@ -16439,6 +16528,12 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             }
             player_treasure_count += 1;
         }
+    }
+    if (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
+        sim->archives.lore_stored != CcSimArchivePhysicalLore(sim)) {
+        SetError(error, error_capacity,
+                 "Archive lore and physical volumes disagree.");
+        return false;
     }
     for (int32_t i = 0; i < sim->shipment_count; ++i) {
         const CcShipment *shipment = &sim->shipments[i];
