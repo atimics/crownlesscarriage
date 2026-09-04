@@ -36,6 +36,7 @@ int main(void)
         preferences_error, sizeof(preferences_error)));
     CC_CHECK(!preferences.reduced_motion);
     preferences.reduced_motion = true;
+    preferences.audio_mode = 2;
     CC_CHECK(CcClientPreferencesSave(
         preferences_path, &preferences,
         preferences_error, sizeof(preferences_error)));
@@ -44,6 +45,7 @@ int main(void)
         preferences_path, &preferences,
         preferences_error, sizeof(preferences_error)));
     CC_CHECK(preferences.reduced_motion);
+    CC_CHECK(preferences.audio_mode == 2);
     FILE *invalid_preferences = fopen(preferences_path, "wb");
     CC_CHECK(invalid_preferences != NULL);
     CC_CHECK(fputs("CROWNLESS_PREFERENCES 1\nreduced_motion 7\n",
@@ -58,6 +60,16 @@ int main(void)
     CC_CHECK(CcClientHitEffectVisible(false, 0.22f));
     CC_CHECK(!CcClientHitEffectVisible(false, 0.0f));
     CC_CHECK(!CcClientHitEffectVisible(false, NAN));
+    FILE *legacy_preferences = fopen(preferences_path, "wb");
+    CC_CHECK(legacy_preferences != NULL);
+    CC_CHECK(fputs("CROWNLESS_PREFERENCES 1\nreduced_motion 1\n", legacy_preferences) >= 0);
+    CC_CHECK(fclose(legacy_preferences) == 0);
+    CC_CHECK(CcClientPreferencesLoad(preferences_path, &preferences,
+                                    preferences_error, sizeof(preferences_error)));
+    CC_CHECK(preferences.reduced_motion && preferences.audio_mode == 0);
+    preferences.audio_mode = 3;
+    CC_CHECK(!CcClientPreferencesSave(preferences_path, &preferences,
+                                     preferences_error, sizeof(preferences_error)));
     (void)remove(preferences_path);
 
     CcClientDepartureTransition town_exit;

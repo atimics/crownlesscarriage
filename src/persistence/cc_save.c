@@ -5409,6 +5409,10 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
                                  char *error, size_t error_capacity)
 {
     uint32_t legacy_version = sim->schema_version;
+    if (legacy_version == 36U && sim->generator_version == 25U) {
+        sim->schema_version = CC_SIM_SCHEMA_VERSION;
+        return true;
+    }
     ClearMissingLegacyEventReferences(sim);
     MakeLegacyCharacterNamesUnique(sim);
     if (legacy_version == 35U && sim->generator_version == 25U) {

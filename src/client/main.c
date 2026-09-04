@@ -1,3 +1,4 @@
+#include "client/cc_audio.h"
 #include "client/cc_client_policy.h"
 #include "client/cc_coop_client.h"
 #include "client/cc_client_session.h"
@@ -376,6 +377,7 @@ EM_JS(int, ClientReleaseBrowserAssets, (), {
         for (const name of FS.readdir(path)) {
             if (name === "." || name === "..") continue;
             const child = path + "/" + name;
+            if (child === "/assets/audio") continue;
             const stat = FS.stat(child);
             if (FS.isDir(stat.mode)) {
                 removeTree(child);
@@ -388,7 +390,7 @@ EM_JS(int, ClientReleaseBrowserAssets, (), {
     };
     try {
         removeTree("/assets");
-        FS.rmdir("/assets");
+        if (FS.readdir("/assets").length === 2) FS.rmdir("/assets");
         return releasedBytes;
     } catch (error) {
         console.warn("Could not release Crownless Carriage startup files", error);
@@ -429,6 +431,7 @@ static void CampaignSavePath(char *path, size_t capacity)
 #if defined(PLATFORM_WEB)
     (void)snprintf(path, capacity,
                    "/crownless-save/crownless_campaign.ccsave");
+    return;
 #elif defined(__APPLE__)
     const char *user_home = getenv("HOME");
     if (user_home != NULL && user_home[0] != '\0') {
@@ -4613,6 +4616,11 @@ static ContextAction PressedContextAction(
     return none;
 }
 
+static Rectangle AudioControlBounds(void)
+{
+    return (Rectangle){(float)GetScreenWidth() * 0.5f + 228.0f, 11.0f, 104.0f, 30.0f};
+}
+
 static bool PointerOverContextAction(
     const CcSim *sim, const LocalState *local, ClientView view,
     int32_t selected, int32_t selected_situation, Vector2 mouse)
@@ -5751,6 +5759,19 @@ static bool ApplyCommand(CcJournal *journal, CcSim *sim, CcCommand command,
     if (!applied) {
         (void)snprintf(message, message_capacity, "%s", error);
         return false;
+    }
+    if (journal != NULL) {
+        switch (command.kind) {
+            case CC_COMMAND_TRADE:
+            case CC_COMMAND_BUY_MAP:
+            case CC_COMMAND_SELL_MAP:
+            case CC_COMMAND_RESOLVE_ENCOUNTER_NEGOTIATE:
+                CcAudioPlay(CC_SOUND_COINS); break;
+            case CC_COMMAND_ACCEPT_SITUATION:
+            case CC_COMMAND_CHARACTER_RESPONSE:
+                CcAudioPlay(CC_SOUND_PROMISE); break;
+            default: break;
+        }
     }
     const char *confirmation = "Done.";
     switch (command.kind) {
@@ -9406,6 +9427,51 @@ static int RunMapSaleInputRegression(void)
 }
 #endif
 
+static void UpdatePlayAudio(CcSoundscape *soundscape, const CcSim *sim,
+                             const LocalState *local, ClientView view,
+                             float dt)
+{
+    bool travel = local->journey_travel_active &&
+        ((sim->journey.active && sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING) ||
+         local->arrival.phase == CC_CLIENT_ARRIVAL_ROAD_BOOK);
+    const CcLocalAgent *agent = &local->agent;
+    CcSoundFrame frame = {
+        .x = agent->position.x, .z = agent->position.z,
+        .place = sim->player.location_id, .scene = (int)agent->scene,
+        .walking = view == VIEW_LOCAL && !travel && !local->site_travel_active,
+        .grounded = agent->grounded || agent->swimming,
+        .jumping = !agent->grounded && agent->velocity.y > 1.0f,
+        .striking = agent->humanoid.action == CC_HUMANOID_ACTION_STRIKE,
+        .strike_time = agent->humanoid.action_time,
+        .impact_time = local->course.last_outcome >= CC_COMBAT_OUTCOME_HIT ?
+            local->course.combat_event_seconds : 0.0f,
+        .blocked = local->course.last_outcome == CC_COMBAT_OUTCOME_BLOCKED ||
+                   local->course.last_outcome == CC_COMBAT_OUTCOME_GUARD_BROKEN,
+        .surface = agent->swimming ? CC_SOUND_SPLASH :
+                   agent->scene == CC_LOCAL_SCENE_MARKET ? CC_SOUND_STEP_WOOD :
+                   agent->scene == CC_LOCAL_SCENE_ROAD ? CC_SOUND_STEP_DIRT : CC_SOUND_STEP_STONE,
+        .travel_pace = travel && view == VIEW_LOCAL ? local->convoy.pace : 0.0f
+    };
+    uint32_t cues = CcSoundscapeStep(soundscape, frame, dt);
+    for (int cue = 0; cue < CC_SOUND_COUNT; ++cue) {
+        if ((cues & (UINT32_C(1) << (unsigned int)cue)) != 0U) CcAudioPlay((CcSoundCue)cue);
+    }
+    char voice_path[768] = "";
+    if (view == VIEW_CHARACTER) {
+        const CcSituation *situation = CcSimSituation(sim, local->conversation_situation_id);
+        const CcCharacter *character = CcSimCharacter(sim, local->conversation_character_id);
+        const CcStoryLine *line = CcStoryCharacterLine(sim, situation, character);
+        char spoken[192];
+        char relative[256];
+        if (line != NULL && CcStoryCharacterText(sim, situation, character, spoken, sizeof(spoken)) &&
+            CcSoundVoicePath(line->id, character->name, spoken, relative, sizeof(relative))) {
+            (void)ResolveClientAssetPath(relative, voice_path, sizeof(voice_path));
+        }
+    }
+    CcAudioVoice(voice_path);
+    CcAudioUpdate();
+}
+
 int main(int argc, char **argv)
 {
 #if defined(CC_CLIENT_SELF_TESTS)
@@ -10693,6 +10759,8 @@ int main(int argc, char **argv)
             LocalAtmosphereForSimulation(&sim),
         0.0f);
 
+    CcSoundscape soundscape = {0};
+    CcAudioSetMode(preferences.audio_mode);
     Rectangle local_bounds;
     while (render_benchmark || !WindowShouldClose()) {
 #if defined(PLATFORM_WEB)
@@ -10736,8 +10804,23 @@ int main(int argc, char **argv)
         char previous_message[sizeof(message)];
         (void)snprintf(previous_message, sizeof(previous_message), "%s",
                        message);
-        if (normal_play && ClientKeyPressed(KEY_F4)) {
-            preferences.reduced_motion = !preferences.reduced_motion;
+        ClientView audio_previous_view = view;
+        bool audio_clicked = normal_play && ClientMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
+            CheckCollisionPointRec(GetMousePosition(), AudioControlBounds());
+        if (normal_play) {
+            bool input = ClientMouseButtonPressed(MOUSE_BUTTON_LEFT) ||
+                         ClientMouseButtonPressed(MOUSE_BUTTON_RIGHT);
+            for (int key = 32; key < 349 && !input; ++key) input = ClientKeyPressed(key);
+            if (input) CcAudioInit();
+            CcAudioSetFocused(IsWindowFocused());
+        }
+        bool change_audio = normal_play && (ClientKeyPressed(KEY_F6) || audio_clicked);
+        if (change_audio) {
+            preferences.audio_mode = (preferences.audio_mode + 1) % 3;
+            CcAudioSetMode(preferences.audio_mode);
+        }
+        if (change_audio || (normal_play && ClientKeyPressed(KEY_F4))) {
+            if (!change_audio) preferences.reduced_motion = !preferences.reduced_motion;
             CcLocalRendererSetReducedMotion(preferences.reduced_motion);
             char preferences_error[192];
             bool preferences_saved = CcClientPreferencesSave(
@@ -10755,9 +10838,12 @@ int main(int argc, char **argv)
             (void)snprintf(
                 message, sizeof(message), "%s",
                 preferences_saved ?
+                    (change_audio ?
+                        (preferences.audio_mode == 0 ? "Sound: voices and effects. Saved." :
+                         preferences.audio_mode == 1 ? "Sound: effects. Saved." : "Sound: muted. Saved.") :
                     (preferences.reduced_motion ?
                         "Reduced motion enabled and saved." :
-                        "Reduced motion disabled and saved.") :
+                        "Reduced motion disabled and saved.")) :
                     preferences_error);
         }
         CcLocalRendererSetAtmosphere(
@@ -10792,7 +10878,7 @@ int main(int argc, char **argv)
         } else if (render_benchmark) {
             ClientInputClearPressed();
         } else {
-            HandleInput(&journal, &sim, &selected, &selected_situation,
+            if (!audio_clicked) HandleInput(&journal, &sim, &selected, &selected_situation,
                         &view, &return_view, &local,
                         local_target, local_bounds,
                         frame_delta_time,
@@ -10803,6 +10889,10 @@ int main(int argc, char **argv)
         }
         if (!capture_road_arrival && !capture_storybook) {
             UpdateOpenWorldCamera(&sim, &local, frame_delta_time);
+        }
+        if (normal_play) {
+            if (view != audio_previous_view) CcAudioPlay(CC_SOUND_PAGE);
+            UpdatePlayAudio(&soundscape, &sim, &local, view, frame_delta_time);
         }
         bool persistence_blocked = CcClientCampaignAccessFor(
             normal_play, journal != NULL) == CC_CLIENT_CAMPAIGN_BLOCKED;
@@ -11005,6 +11095,14 @@ int main(int argc, char **argv)
             DrawCampaignUnavailable(message);
         }
         CcOverlayEnd();
+        if (normal_play) {
+            Rectangle audio_bounds = AudioControlBounds();
+            DrawRectangleRounded(audio_bounds, 0.25f, 4, PANEL_DEEP);
+            DrawRectangleRoundedLinesEx(audio_bounds, 0.25f, 4, 1.0f, Fade(TEAL, 0.62f));
+            const char *audio_label = preferences.audio_mode == 0 ? "Sound full F6" :
+                preferences.audio_mode == 1 ? "Effects F6" : "Muted F6";
+            DrawText(audio_label, (int)audio_bounds.x + 10, (int)audio_bounds.y + 10, 10, INK);
+        }
         EndDrawing();
 #if defined(PLATFORM_WEB)
         if (!browser_memory_reported) {
@@ -11093,6 +11191,7 @@ int main(int argc, char **argv)
         GetTime() - render_benchmark_started : 0.0;
     CcLocalRendererStats final_renderer_stats =
         CcLocalRendererGetStats();
+    CcAudioShutdown();
     CcLocalRendererShutdown();
     UnloadRenderTexture(local_target);
     ReleaseMapTextures(&map_textures);

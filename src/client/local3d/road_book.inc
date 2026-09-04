@@ -90,9 +90,8 @@ static void DrawRoadHorseTeam(Vector3 base, float clock, float pace,
     float lateral_spacing =
         CcLocalRoadHorseLateralSpacingInternal(bridge_checkpoint);
     for (int32_t horse = -1; horse <= 1; horse += 2) {
-        Color coat = horse < 0 ? BlendColor(WORLD_WOOD, WORLD_ROAD, 0.42f) :
-                                 BlendColor(WORLD_WOOD_LIGHT,
-                                            WORLD_ROAD, 0.36f);
+        Color coat = horse < 0 ? PONY_COLORS[1][0] :
+                                 PONY_COLORS[2][0];
         Vector3 horse_base = LocalPoint(
             base, (float)horse * lateral_spacing, 0.0f,
             CcLocalRoadHorseLongitudinalOffsetInternal(), yaw);
@@ -245,8 +244,8 @@ static void DrawStableHorseTeam(float clock)
     for (int32_t horse = 0; horse < 2; ++horse) {
         Vector3 base = TerrainWorldPoint(stalls[horse].x, stalls[horse].y);
         Color coat = horse == 0 ?
-            BlendColor(WORLD_WOOD, WORLD_ROAD, 0.42f) :
-            BlendColor(WORLD_WOOD_LIGHT, WORLD_ROAD, 0.36f);
+            PONY_COLORS[1][0] :
+            PONY_COLORS[2][0];
         CcCreaturePose pose = CcCreatureSteppedPose(
             CC_CREATURE_HORSE, clock * 0.35f + (float)horse * PI, false);
         (void)DrawCreatureGait3D(

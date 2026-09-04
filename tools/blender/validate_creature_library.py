@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 import sys
 
@@ -10,7 +11,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from inspect_glb import accessor_first_values, collect_stats, parse_glb
+from inspect_glb import accessor_first_values, accessor_values, collect_stats, parse_glb
 from generate_creature_catalog import OUTPUT_PATH, render_catalog
 
 
@@ -208,6 +209,22 @@ def validate() -> int:
                    "WEIGHTS_0" not in primitive.get("attributes", {})
                    for primitive in primitives):
                 failures.append(f"{variant}: skin weights are missing")
+            for primitive in primitives:
+                attributes = primitive.get("attributes", {})
+                if "JOINTS_0" not in attributes or "WEIGHTS_0" not in attributes:
+                    continue
+                joints = accessor_values(document, binary, attributes["JOINTS_0"])
+                weights = accessor_values(document, binary, attributes["WEIGHTS_0"])
+                positions = accessor_values(document, binary, attributes["POSITION"])
+                if len(joints) != len(positions) or len(weights) != len(positions):
+                    failures.append(f"{variant}: every vertex needs skin data")
+                for joint, weight in zip(joints, weights):
+                    if (any(not math.isfinite(w) or w < 0.0 for w in weight)
+                            or abs(sum(weight) - 1.0) > 0.001
+                            or any(w > 0.0 and not 0 <= j < len(EXPECTED_QUADRUPED_BONES)
+                                   for j, w in zip(joint, weight))):
+                        failures.append(f"{variant}: invalid vertex skin weights")
+                        break
         elif skins:
             failures.append(f"{variant}: held-pose creature contains a skin")
         if document.get("animations"):

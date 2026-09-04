@@ -1615,6 +1615,32 @@ static CcCreatureVariant DragonCreatureForLifeStage(
     }
 }
 
+/* Coat, mane, and ribbon colors stay paired across travel and stable scenes. */
+static const Color PONY_COLORS[4][3] = {
+    {{246, 151, 206, 255}, {186, 48, 139, 255}, {113, 231, 226, 255}},
+    {{183, 156, 247, 255}, {78, 71, 185, 255}, {248, 125, 205, 255}},
+    {{112, 224, 215, 255}, {237, 101, 155, 255}, {255, 222, 130, 255}},
+    {{255, 207, 125, 255}, {153, 76, 207, 255}, {116, 224, 237, 255}},
+};
+
+static int32_t PonyColorIndex(Color coat)
+{
+    if (coat.a == 0) return 0;
+    int32_t best = 0;
+    int32_t distance = INT32_MAX;
+    for (int32_t index = 0; index < 4; ++index) {
+        int32_t r = (int32_t)coat.r - PONY_COLORS[index][0].r;
+        int32_t g = (int32_t)coat.g - PONY_COLORS[index][0].g;
+        int32_t b = (int32_t)coat.b - PONY_COLORS[index][0].b;
+        int32_t candidate = r * r + g * g + b * b;
+        if (candidate < distance) {
+            distance = candidate;
+            best = index;
+        }
+    }
+    return best;
+}
+
 static CreatureRenderPalette CreaturePalette(CcCreatureVariant variant,
                                               Color primary)
 {
@@ -1638,14 +1664,16 @@ static CreatureRenderPalette CreaturePalette(CcCreatureVariant variant,
             colors[7] = (Color){220, 158, 54, 255};
             break;
         case CC_CREATURE_HORSE: {
-            Color coat = primary.a > 0 ? primary :
-                                         (Color){104, 78, 59, 255};
-            colors[0] = coat;
-            colors[1] = ShadeColor(coat, 0.54f);
-            colors[2] = ShadeColor(coat, 0.82f);
-            colors[3] = (Color){72, 48, 38, 255};
-            colors[4] = (Color){50, 37, 32, 255};
-            colors[7] = (Color){128, 88, 52, 255};
+            const Color *pony = PONY_COLORS[PonyColorIndex(primary)];
+            colors[0] = pony[0];
+            colors[1] = pony[1];
+            colors[2] = BlendColor(pony[0], (Color){255, 244, 250, 255}, 0.32f);
+            colors[3] = pony[2];
+            colors[4] = (Color){58, 37, 81, 255};
+            colors[5] = (Color){255, 251, 244, 255};
+            colors[6] = (Color){81, 139, 216, 255};
+            colors[7] = pony[2];
+            colors[8] = (Color){23, 17, 45, 255};
             break;
         }
         case CC_CREATURE_COW: {
@@ -1657,6 +1685,7 @@ static CreatureRenderPalette CreaturePalette(CcCreatureVariant variant,
             colors[3] = (Color){88, 70, 59, 255};
             colors[5] = (Color){205, 186, 143, 255};
             colors[7] = (Color){137, 85, 61, 255};
+            colors[8] = (Color){12, 10, 9, 255};
             break;
         }
         case CC_CREATURE_SHEEP:

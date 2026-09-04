@@ -4775,30 +4775,38 @@ static void RunPaperMill(CcSim *sim, CcSettlement *settlement)
     if (!CcSettlementHasService(settlement, CC_SERVICE_MILL) ||
         settlement->hunger > 0 ||
         settlement->stock[CC_GOOD_TOOLS] <= 0) return;
+    /* Keep mill work behind the town's food buffer, across all edible goods. */
+    if (sim->schema_version >= 37U &&
+        NutritionRations(settlement->stock, CC_NUTRITION_CIVILIAN) <
+            WeeklyFoodUse(sim, settlement) * 4) return;
     int32_t capacity = MaximumI32(
         0, settlement->production[CC_GOOD_PAPER]);
     int32_t gap = MaximumI32(
         0, settlement->reserve_target[CC_GOOD_PAPER] * 2 -
            settlement->stock[CC_GOOD_PAPER]);
-    int32_t protected_wheat = settlement->reserve_target[CC_GOOD_WHEAT] +
-        WeeklyFoodUse(sim, settlement) * 4;
-    int32_t wheat_available = MaximumI32(
-        0, settlement->stock[CC_GOOD_WHEAT] - protected_wheat);
+    CcGood input = sim->schema_version < 37U ?
+        CC_GOOD_WHEAT : CC_GOOD_WOOD;
+    int32_t protected_input = settlement->reserve_target[input];
+    if (input == CC_GOOD_WHEAT) {
+        protected_input += WeeklyFoodUse(sim, settlement) * 4;
+    }
+    int32_t input_available = MaximumI32(
+        0, settlement->stock[input] - protected_input);
     int32_t paper_made = MinimumI32(
-        capacity, MinimumI32(gap, wheat_available * 4));
+        capacity, MinimumI32(gap, input_available * 4));
     if (paper_made <= 0) return;
-    int32_t wheat_used = (paper_made + 3) / 4;
-    settlement->stock[CC_GOOD_WHEAT] -= wheat_used;
+    int32_t input_used = (paper_made + 3) / 4;
+    settlement->stock[input] -= input_used;
     settlement->stock[CC_GOOD_PAPER] += paper_made;
     WearOneTool(settlement, &settlement->paper_tool_wear, 8);
-    RefreshSettlementGoodPrice(sim, settlement, CC_GOOD_WHEAT);
+    RefreshSettlementGoodPrice(sim, settlement, input);
     RefreshSettlementGoodPrice(sim, settlement, CC_GOOD_PAPER);
     RefreshSettlementGoodPrice(sim, settlement, CC_GOOD_TOOLS);
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(
         text, sizeof(text),
-        "%s's mill uses %d Wheat to make %d Paper.",
-        settlement->name, wheat_used, paper_made);
+        "%s's mill uses %d %s to make %d Paper.",
+        settlement->name, input_used, CcGoodName(input), paper_made);
     (void)PushEvent(
         sim, CC_EVENT_PAPER_MILLED, settlement->id, settlement->id,
         LatestLocalCause(sim, settlement->id), paper_made, text);
@@ -15987,12 +15995,14 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                          sim->schema_version == 32U ||
                          sim->schema_version == 33U ||
                          sim->schema_version == 34U ||
-                         sim->schema_version == 35U;
+                         sim->schema_version == 35U ||
+                         sim->schema_version == 36U;
     bool supported_generator =
         (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
          sim->generator_version == CC_GENERATOR_VERSION) ||
         (legacy_schema && sim->schema_version <= 27U &&
          sim->generator_version == CC_GENERATOR_VERSION) ||
+        (sim->schema_version == 36U && sim->generator_version == 25U) ||
         (sim->schema_version == 35U && sim->generator_version == 25U) ||
         (sim->schema_version == 34U && sim->generator_version == 25U) ||
         (sim->schema_version == 33U && sim->generator_version == 25U) ||
