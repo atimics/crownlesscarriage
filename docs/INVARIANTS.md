@@ -55,8 +55,9 @@ with the per-version branches below it) is the implementation, and
 The client session has its own small version. Version 3 stores whether a
 position is in the shared world or an old scene-local space. Versions 1 and 2
 remain readable and are converted at load time.
-2. Keep the `CcCommand` enum append-only — command journals persist the
-   numeric values (same for `CcCollectibleMapSlot` and the good aliases).
+2. Keep the assigned `CcCommandKind` and `CcEventKind` values stable. Command
+   journals and causal events persist these numeric ids. The same rule applies
+   to `CcCollectibleMapSlot` and the good aliases.
 3. Add a persistence test that loads a save written by the prior version.
 
 ## Performance budgets
