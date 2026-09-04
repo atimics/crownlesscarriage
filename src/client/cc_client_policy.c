@@ -8,6 +8,22 @@ static float ClampPace(float pace)
     return fmaxf(0.0f, fminf(1.0f, pace));
 }
 
+float CcClientTravelBlendStep(float blend, bool fast_forward, float delta_time)
+{
+    if (!isfinite(blend)) blend = 0.0f;
+    blend = ClampPace(blend);
+    if (!isfinite(delta_time) || delta_time <= 0.0f) return blend;
+    float step = fminf(delta_time, 0.1f) / 1.4f;
+    return ClampPace(blend + (fast_forward ? step : -step));
+}
+
+float CcClientTravelTimeScale(float blend)
+{
+    if (!isfinite(blend)) return 1.0f;
+    blend = ClampPace(blend);
+    return 1.0f + 7.0f * blend * blend * (3.0f - 2.0f * blend);
+}
+
 static float ClampUnit(float value)
 {
     return fmaxf(0.0f, fminf(1.0f, value));

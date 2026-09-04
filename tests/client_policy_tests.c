@@ -6,6 +6,26 @@
 
 int main(void)
 {
+    float travel_blend = 0.0f;
+    CC_CHECK(CcClientTravelTimeScale(travel_blend) == 1.0f);
+    for (int frame = 0; frame < 90; ++frame) {
+        float previous = travel_blend;
+        travel_blend = CcClientTravelBlendStep(
+            travel_blend, true, 1.0f / 60.0f);
+        CC_CHECK(travel_blend >= previous && travel_blend <= 1.0f);
+    }
+    CC_CHECK(CcClientTravelTimeScale(travel_blend) == 8.0f);
+    for (int frame = 0; frame < 90; ++frame) {
+        travel_blend = CcClientTravelBlendStep(
+            travel_blend, false, 1.0f / 60.0f);
+    }
+    CC_CHECK(travel_blend == 0.0f);
+    CC_CHECK(CcClientTravelBlendStep(0.0f, true, 10.0f) < 0.1f);
+    CC_CHECK(CcClientTravelBlendStep(0.5f, true, NAN) == 0.5f);
+    CC_CHECK(CcClientTravelBlendStep(0.5f, true, -1.0f) == 0.5f);
+    CC_CHECK(CcClientTravelTimeScale(NAN) == 1.0f);
+    CC_CHECK(CcClientTravelTimeScale(-2.0f) == 1.0f);
+    CC_CHECK(CcClientTravelTimeScale(2.0f) == 8.0f);
     CcClientDepartureTransition town_exit;
     CcClientDepartureBegin(&town_exit);
     CC_CHECK(town_exit.phase == CC_CLIENT_DEPARTURE_TOWN);

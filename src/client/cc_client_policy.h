@@ -45,6 +45,8 @@ typedef struct CcClientArrivalTransition {
 float CcClientConvoyPaceStep(float pace, bool road_phase,
                              bool urge, bool rein_in, bool stopped,
                              float delta_time);
+float CcClientTravelBlendStep(float blend, bool fast_forward, float delta_time);
+float CcClientTravelTimeScale(float blend);
 float CcClientRoadApproachStep(float progress, float pace, float delta_time);
 float CcClientConvoyPosturePace(int32_t posture);
 int32_t CcClientStepConvoyPosture(int32_t posture, int32_t direction);
