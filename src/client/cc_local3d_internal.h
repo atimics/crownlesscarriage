@@ -22,6 +22,12 @@ typedef struct CcLocalFaceAnchorInternal {
     float right;
 } CcLocalFaceAnchorInternal;
 
+typedef struct CcLocalTerrainMeshStatsInternal {
+    int32_t vertex_count;
+    int32_t index_count;
+    int32_t storage_bytes;
+} CcLocalTerrainMeshStatsInternal;
+
 void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
                                    bool market_interior);
 void CcLocalCourseFixedStepInternal(CcLocalCourse *course,
@@ -68,6 +74,7 @@ CcLocalFaceViewInternal CcLocalFaceViewForFrontAmountInternal(
     float front_amount);
 CcLocalFaceAnchorInternal CcLocalFaceAnchorForCameraInternal(
     float front_amount, float side_amount);
+CcLocalTerrainMeshStatsInternal CcLocalTerrainMeshStatsInternalGet(void);
 
 void CcLocalRendererRecordBiped(bool high_detail);
 void CcLocalRendererUpdateAtmosphereInternal(float delta_time);

@@ -313,7 +313,7 @@ if(CC_BUILD_CLIENT)
         target_link_options(crownless_carriage PRIVATE
             "-sASYNCIFY=1"
             "-sALLOW_MEMORY_GROWTH=1"
-            "-sINITIAL_MEMORY=33554432"
+            "-sINITIAL_HEAP=16777216"
             "-sMAXIMUM_MEMORY=268435456"
             "-sMEMORY_GROWTH_LINEAR_STEP=16777216"
             "-sSTACK_SIZE=4194304"

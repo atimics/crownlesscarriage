@@ -1899,6 +1899,17 @@ typedef struct TerrainMeshWriter {
     bool count_only;
 } TerrainMeshWriter;
 
+typedef struct TerrainIndexedMeshWriter {
+    Mesh mesh;
+    int32_t vertex_cursor;
+    int32_t index_cursor;
+    bool failed;
+} TerrainIndexedMeshWriter;
+
+#define CC_TERRAIN_RENDER_MARGIN 28
+#define CC_TERRAIN_RENDER_INNER_STEP 0.50f
+#define CC_TERRAIN_RENDER_OUTER_STEP 1.0f
+
 static TerrainMeshWriter *terrain_detail_mesh_writer = NULL;
 static bool terrain_detail_cache_building = false;
 
@@ -1969,101 +1980,202 @@ static void TerrainMeshWriteVertexWithNormal(TerrainMeshWriter *writer,
     writer->cursor += 1;
 }
 
-static void TerrainMeshWriteVertex(TerrainMeshWriter *writer,
-                                   Vector3 point, Color color)
+static int32_t TerrainGridVertexCount(int32_t columns, int32_t rows)
 {
-    TerrainMeshWriteVertexWithNormal(
-        writer, point, TerrainVisualNormalAt(point.x, point.z), color);
+    return (columns + 1) * (rows + 1);
 }
 
-static void TerrainMeshWriteCell(TerrainMeshWriter *writer,
-                                 const CcSettlement *place,
-                                 Vector3 p00, Vector3 p10,
-                                 Vector3 p01, Vector3 p11)
+static int32_t TerrainGridIndexCount(int32_t columns, int32_t rows)
 {
-    Color c00 = TerrainSurfaceColor(
-        place, p00.x, p00.z, TerrainVisualNormalAt(p00.x, p00.z));
-    Color c10 = TerrainSurfaceColor(
-        place, p10.x, p10.z, TerrainVisualNormalAt(p10.x, p10.z));
-    Color c01 = TerrainSurfaceColor(
-        place, p01.x, p01.z, TerrainVisualNormalAt(p01.x, p01.z));
-    Color c11 = TerrainSurfaceColor(
-        place, p11.x, p11.z, TerrainVisualNormalAt(p11.x, p11.z));
-    TerrainMeshWriteVertex(writer, p00, c00);
-    TerrainMeshWriteVertex(writer, p11, c11);
-    TerrainMeshWriteVertex(writer, p10, c10);
-    TerrainMeshWriteVertex(writer, p00, c00);
-    TerrainMeshWriteVertex(writer, p01, c01);
-    TerrainMeshWriteVertex(writer, p11, c11);
+    return columns * rows * 6;
 }
 
-static int32_t TerrainMeshVertexCount(void)
+static CcLocalTerrainMeshStatsInternal TerrainMeshStats(void)
 {
-    const float margin = 28.0f;
-    int32_t cells = 0;
-    for (float z = -margin; z < CC_LOCAL_WORLD_DEPTH + margin; z += 1.0f) {
-        for (float x = -margin; x < CC_LOCAL_WORLD_WIDTH + margin;
-             x += 1.0f) {
-            if (x >= 0.0f && x + 1.0f <= CC_LOCAL_WORLD_WIDTH &&
-                z >= 0.0f && z + 1.0f <= CC_LOCAL_WORLD_DEPTH) {
-                continue;
-            }
-            cells += 1;
+    const int32_t inner_columns =
+        (int32_t)(CC_LOCAL_WORLD_WIDTH / CC_TERRAIN_RENDER_INNER_STEP);
+    const int32_t inner_rows =
+        (int32_t)(CC_LOCAL_WORLD_DEPTH / CC_TERRAIN_RENDER_INNER_STEP);
+    const int32_t outer_columns =
+        (int32_t)(CC_LOCAL_WORLD_WIDTH / CC_TERRAIN_RENDER_OUTER_STEP) +
+        CC_TERRAIN_RENDER_MARGIN * 2;
+    const int32_t outer_rows =
+        (int32_t)(CC_LOCAL_WORLD_DEPTH / CC_TERRAIN_RENDER_OUTER_STEP);
+    int32_t vertex_count =
+        TerrainGridVertexCount(inner_columns, inner_rows) +
+        TerrainGridVertexCount(outer_columns, CC_TERRAIN_RENDER_MARGIN) * 2 +
+        TerrainGridVertexCount(CC_TERRAIN_RENDER_MARGIN, outer_rows) * 2;
+    int32_t index_count =
+        TerrainGridIndexCount(inner_columns, inner_rows) +
+        TerrainGridIndexCount(outer_columns, CC_TERRAIN_RENDER_MARGIN) * 2 +
+        TerrainGridIndexCount(CC_TERRAIN_RENDER_MARGIN, outer_rows) * 2;
+    int32_t vertex_bytes = vertex_count *
+        (int32_t)(6U * sizeof(float) + 4U * sizeof(unsigned char));
+    int32_t index_bytes = index_count * (int32_t)sizeof(unsigned short);
+    return (CcLocalTerrainMeshStatsInternal){
+        .vertex_count = vertex_count,
+        .index_count = index_count,
+        .storage_bytes = vertex_bytes + index_bytes,
+    };
+}
+
+CcLocalTerrainMeshStatsInternal CcLocalTerrainMeshStatsInternalGet(void)
+{
+    return TerrainMeshStats();
+}
+
+static bool TerrainIndexedMeshWriterAllocate(
+    TerrainIndexedMeshWriter *writer,
+    CcLocalTerrainMeshStatsInternal stats)
+{
+    if (writer == NULL || stats.vertex_count <= 0 ||
+        stats.vertex_count > UINT16_MAX || stats.index_count <= 0 ||
+        stats.index_count % 3 != 0) {
+        return false;
+    }
+    *writer = (TerrainIndexedMeshWriter){0};
+    writer->mesh.vertexCount = stats.vertex_count;
+    writer->mesh.triangleCount = stats.index_count / 3;
+    writer->mesh.vertices = MemAlloc(
+        (unsigned int)((size_t)stats.vertex_count * 3U * sizeof(float)));
+    writer->mesh.normals = MemAlloc(
+        (unsigned int)((size_t)stats.vertex_count * 3U * sizeof(float)));
+    writer->mesh.colors = MemAlloc(
+        (unsigned int)((size_t)stats.vertex_count * 4U *
+                       sizeof(unsigned char)));
+    writer->mesh.indices = MemAlloc(
+        (unsigned int)((size_t)stats.index_count * sizeof(unsigned short)));
+    if (writer->mesh.vertices != NULL && writer->mesh.normals != NULL &&
+        writer->mesh.colors != NULL && writer->mesh.indices != NULL) {
+        return true;
+    }
+    if (writer->mesh.vertices != NULL) MemFree(writer->mesh.vertices);
+    if (writer->mesh.normals != NULL) MemFree(writer->mesh.normals);
+    if (writer->mesh.colors != NULL) MemFree(writer->mesh.colors);
+    if (writer->mesh.indices != NULL) MemFree(writer->mesh.indices);
+    *writer = (TerrainIndexedMeshWriter){0};
+    return false;
+}
+
+static void TerrainIndexedMeshWriteVertex(
+    TerrainIndexedMeshWriter *writer, const CcSettlement *place,
+    float x, float z)
+{
+    if (writer == NULL || writer->failed ||
+        writer->vertex_cursor >= writer->mesh.vertexCount) {
+        if (writer != NULL) writer->failed = true;
+        return;
+    }
+    Vector3 normal = TerrainVisualNormalAt(x, z);
+    normal.y = fmaxf(normal.y, 0.24f);
+    normal = Vector3Normalize(normal);
+    Color color = TerrainSurfaceColor(place, x, z, normal);
+    int32_t vertex = writer->vertex_cursor++;
+    writer->mesh.vertices[vertex * 3 + 0] = x;
+    writer->mesh.vertices[vertex * 3 + 1] = TerrainVisualHeightAt(x, z);
+    writer->mesh.vertices[vertex * 3 + 2] = z;
+    writer->mesh.normals[vertex * 3 + 0] = normal.x;
+    writer->mesh.normals[vertex * 3 + 1] = normal.y;
+    writer->mesh.normals[vertex * 3 + 2] = normal.z;
+    writer->mesh.colors[vertex * 4 + 0] = color.r;
+    writer->mesh.colors[vertex * 4 + 1] = color.g;
+    writer->mesh.colors[vertex * 4 + 2] = color.b;
+    writer->mesh.colors[vertex * 4 + 3] = color.a;
+}
+
+static void TerrainIndexedMeshWriteIndex(TerrainIndexedMeshWriter *writer,
+                                         int32_t vertex)
+{
+    int32_t index_count = writer != NULL ?
+        writer->mesh.triangleCount * 3 : 0;
+    if (writer == NULL || writer->failed || vertex < 0 ||
+        vertex > UINT16_MAX || writer->index_cursor >= index_count) {
+        if (writer != NULL) writer->failed = true;
+        return;
+    }
+    writer->mesh.indices[writer->index_cursor++] = (unsigned short)vertex;
+}
+
+static void TerrainIndexedMeshWriteGrid(
+    TerrainIndexedMeshWriter *writer, const CcSettlement *place,
+    float start_x, float start_z, float step,
+    int32_t columns, int32_t rows)
+{
+    if (writer == NULL || columns <= 0 || rows <= 0 || step <= 0.0f) {
+        if (writer != NULL) writer->failed = true;
+        return;
+    }
+    int32_t base_vertex = writer->vertex_cursor;
+    int32_t row_stride = columns + 1;
+    for (int32_t row = 0; row <= rows; ++row) {
+        float z = start_z + (float)row * step;
+        for (int32_t column = 0; column <= columns; ++column) {
+            float x = start_x + (float)column * step;
+            TerrainIndexedMeshWriteVertex(writer, place, x, z);
         }
     }
-    cells += (int32_t)(CC_LOCAL_WORLD_WIDTH / 0.50f) *
-             (int32_t)(CC_LOCAL_WORLD_DEPTH / 0.50f);
-    return cells * 6;
+    for (int32_t row = 0; row < rows; ++row) {
+        for (int32_t column = 0; column < columns; ++column) {
+            int32_t p00 = base_vertex + row * row_stride + column;
+            int32_t p10 = p00 + 1;
+            int32_t p01 = p00 + row_stride;
+            int32_t p11 = p01 + 1;
+            TerrainIndexedMeshWriteIndex(writer, p00);
+            TerrainIndexedMeshWriteIndex(writer, p11);
+            TerrainIndexedMeshWriteIndex(writer, p10);
+            TerrainIndexedMeshWriteIndex(writer, p00);
+            TerrainIndexedMeshWriteIndex(writer, p01);
+            TerrainIndexedMeshWriteIndex(writer, p11);
+        }
+    }
 }
 
 static bool TerrainRenderCacheBuild(const CcSettlement *place)
 {
     TerrainRenderCacheClear();
     TerrainEnsureReady();
-    int32_t vertex_count = TerrainMeshVertexCount();
-    TerrainMeshWriter writer;
-    if (!TerrainMeshWriterAllocate(&writer, vertex_count)) {
+    CcLocalTerrainMeshStatsInternal stats = TerrainMeshStats();
+    TerrainIndexedMeshWriter writer;
+    if (!TerrainIndexedMeshWriterAllocate(&writer, stats)) {
         TraceLog(LOG_WARNING,
-                 "TERRAIN: could not allocate cached mesh (%d vertices)",
-                 vertex_count);
+                 "TERRAIN: could not allocate indexed cache (%d vertices)",
+                 stats.vertex_count);
         return false;
     }
 
-    const float margin = 28.0f;
-    for (float z = -margin; z < CC_LOCAL_WORLD_DEPTH + margin; z += 1.0f) {
-        float far_z = z + 1.0f;
-        for (float x = -margin; x < CC_LOCAL_WORLD_WIDTH + margin;
-             x += 1.0f) {
-            float far_x = x + 1.0f;
-            if (x >= 0.0f && far_x <= CC_LOCAL_WORLD_WIDTH &&
-                z >= 0.0f && far_z <= CC_LOCAL_WORLD_DEPTH) {
-                continue;
-            }
-            TerrainMeshWriteCell(
-                &writer, place,
-                (Vector3){x, TerrainVisualHeightAt(x, z), z},
-                (Vector3){far_x, TerrainVisualHeightAt(far_x, z), z},
-                (Vector3){x, TerrainVisualHeightAt(x, far_z), far_z},
-                (Vector3){far_x, TerrainVisualHeightAt(far_x, far_z), far_z});
-        }
-    }
-    const float step = 0.50f;
-    for (float z = 0.0f; z < CC_LOCAL_WORLD_DEPTH; z += step) {
-        float far_z = fminf(z + step, CC_LOCAL_WORLD_DEPTH);
-        for (float x = 0.0f; x < CC_LOCAL_WORLD_WIDTH; x += step) {
-            float far_x = fminf(x + step, CC_LOCAL_WORLD_WIDTH);
-            TerrainMeshWriteCell(
-                &writer, place,
-                (Vector3){x, CcLocalTerrainHeightAt(x, z), z},
-                (Vector3){far_x, CcLocalTerrainHeightAt(far_x, z), z},
-                (Vector3){x, CcLocalTerrainHeightAt(x, far_z), far_z},
-                (Vector3){far_x, CcLocalTerrainHeightAt(far_x, far_z), far_z});
-        }
-    }
-    if (writer.cursor != vertex_count) {
+    const int32_t inner_columns =
+        (int32_t)(CC_LOCAL_WORLD_WIDTH / CC_TERRAIN_RENDER_INNER_STEP);
+    const int32_t inner_rows =
+        (int32_t)(CC_LOCAL_WORLD_DEPTH / CC_TERRAIN_RENDER_INNER_STEP);
+    const int32_t outer_columns =
+        (int32_t)(CC_LOCAL_WORLD_WIDTH / CC_TERRAIN_RENDER_OUTER_STEP) +
+        CC_TERRAIN_RENDER_MARGIN * 2;
+    const int32_t outer_rows =
+        (int32_t)(CC_LOCAL_WORLD_DEPTH / CC_TERRAIN_RENDER_OUTER_STEP);
+    const float margin = (float)CC_TERRAIN_RENDER_MARGIN;
+    TerrainIndexedMeshWriteGrid(
+        &writer, place, -margin, -margin, CC_TERRAIN_RENDER_OUTER_STEP,
+        outer_columns, CC_TERRAIN_RENDER_MARGIN);
+    TerrainIndexedMeshWriteGrid(
+        &writer, place, -margin, CC_LOCAL_WORLD_DEPTH,
+        CC_TERRAIN_RENDER_OUTER_STEP,
+        outer_columns, CC_TERRAIN_RENDER_MARGIN);
+    TerrainIndexedMeshWriteGrid(
+        &writer, place, -margin, 0.0f, CC_TERRAIN_RENDER_OUTER_STEP,
+        CC_TERRAIN_RENDER_MARGIN, outer_rows);
+    TerrainIndexedMeshWriteGrid(
+        &writer, place, CC_LOCAL_WORLD_WIDTH, 0.0f,
+        CC_TERRAIN_RENDER_OUTER_STEP,
+        CC_TERRAIN_RENDER_MARGIN, outer_rows);
+    TerrainIndexedMeshWriteGrid(
+        &writer, place, 0.0f, 0.0f, CC_TERRAIN_RENDER_INNER_STEP,
+        inner_columns, inner_rows);
+    if (writer.failed || writer.vertex_cursor != stats.vertex_count ||
+        writer.index_cursor != stats.index_count) {
         TraceLog(LOG_WARNING,
-                 "TERRAIN: cached mesh count mismatch (%d/%d)",
-                 writer.cursor, vertex_count);
+                 "TERRAIN: indexed cache count mismatch (%d/%d, %d/%d)",
+                 writer.vertex_cursor, stats.vertex_count,
+                 writer.index_cursor, stats.index_count);
         UnloadMesh(writer.mesh);
         return false;
     }
@@ -2076,9 +2188,12 @@ static bool TerrainRenderCacheBuild(const CcSettlement *place)
     terrain_render_cache.hunger_band = place != NULL ? place->hunger / 5 : 0;
     terrain_render_cache.prosperity_band =
         place != NULL ? place->prosperity / 5 : 10;
-    terrain_render_cache.vertex_count = vertex_count;
+    terrain_render_cache.vertex_count = stats.vertex_count;
     terrain_render_cache.ready = true;
-    TraceLog(LOG_INFO, "TERRAIN: cached %d vertices on the GPU", vertex_count);
+    TraceLog(LOG_INFO,
+             "TERRAIN: cached %d vertices and %d indices (%.1f MiB)",
+             stats.vertex_count, stats.index_count,
+             (double)stats.storage_bytes / (1024.0 * 1024.0));
     return true;
 }
 

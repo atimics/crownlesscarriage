@@ -47,6 +47,18 @@ color, or tree visibility changes.
 The wood batch uses 16-bit indices so cylinder rings and repeated source
 vertices share storage. Renderer benchmarks report the total static batch
 vertex count with the draw count.
+The town terrain cache also uses 16-bit indices. Its 241,152 triangle indices
+refer to 41,093 shared vertices. The CPU upload and GPU storage budget is below
+2 MiB, including positions, normals, colors, and retained indices.
+
+## Backend direction
+
+Raylib remains the renderer while memory work is measured at the resource
+level. A Sokol pilot should use Metal on macOS and WebGL2 on the browser. It
+earns a wider migration when the same scene uses less peak memory, keeps the
+fixed-pixel look, and passes the native and browser checks. Metal is the macOS
+backend; the browser backend remains WebGL2 until a WebGPU build reaches the
+same coverage.
 
 ## Test interfaces
 
