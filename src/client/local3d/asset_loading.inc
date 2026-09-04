@@ -103,6 +103,49 @@ static RuntimeAsset runtime_assets[RUNTIME_ASSET_COUNT] = {
         .mesh_budget = 40},
 };
 
+typedef struct EconomicCargoAsset {
+    const char *path;
+    const char *label;
+    Model model;
+    bool ready;
+} EconomicCargoAsset;
+
+static EconomicCargoAsset economic_cargo_assets[CC_GOOD_COUNT] = {
+    [CC_GOOD_FOOD] = {
+        .path = "assets/exports/glb/economy_cargo_food_v01.glb",
+        .label = "food cargo"},
+    [CC_GOOD_IRON] = {
+        .path = "assets/exports/glb/economy_cargo_iron_v01.glb",
+        .label = "iron cargo"},
+    [CC_GOOD_TOOLS] = {
+        .path = "assets/exports/glb/economy_cargo_tools_v01.glb",
+        .label = "tool cargo"},
+    [CC_GOOD_WEAPONS] = {
+        .path = "assets/exports/glb/economy_cargo_weapons_v01.glb",
+        .label = "weapon cargo"},
+    [CC_GOOD_GOLD] = {
+        .path = "assets/exports/glb/economy_cargo_gold_v01.glb",
+        .label = "raw gold cargo"},
+    [CC_GOOD_GEMS] = {
+        .path = "assets/exports/glb/economy_cargo_gems_v01.glb",
+        .label = "gem cargo"},
+    [CC_GOOD_WOOD] = {
+        .path = "assets/exports/glb/economy_cargo_wood_v01.glb",
+        .label = "wood cargo"},
+    [CC_GOOD_WHEAT] = {
+        .path = "assets/exports/glb/economy_cargo_wheat_v01.glb",
+        .label = "wheat cargo"},
+    [CC_GOOD_MEAT] = {
+        .path = "assets/exports/glb/economy_cargo_meat_v01.glb",
+        .label = "meat cargo"},
+    [CC_GOOD_WOOL] = {
+        .path = "assets/exports/glb/economy_cargo_wool_v01.glb",
+        .label = "wool cargo"},
+    [CC_GOOD_STONE] = {
+        .path = "assets/exports/glb/economy_cargo_stone_v01.glb",
+        .label = "stone cargo"},
+};
+
 typedef struct HeroSkinCache {
     Model model;
     ModelAnimation animation;
@@ -906,6 +949,43 @@ static void UnloadRuntimeAsset(RuntimeAssetId id)
     asset->attempted = false;
     if (id == RUNTIME_ASSET_BRIDGE) {
         bridge_checkpoint_status = BRIDGE_CHECKPOINT_UNKNOWN;
+    }
+}
+
+static void LoadEconomicCargoAssets(void)
+{
+    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        EconomicCargoAsset *asset = &economic_cargo_assets[good];
+        char resolved[1024];
+        if (!ResolveAssetPath(asset->path, resolved, sizeof(resolved))) {
+            TraceLog(LOG_WARNING, "ASSET: %s was not found", asset->label);
+            continue;
+        }
+        asset->model = LoadModel(resolved);
+        int32_t mesh_count = asset->model.meshCount;
+        if (mesh_count <= 0 || mesh_count > 32 ||
+            asset->model.skeleton.boneCount > 0) {
+            TraceLog(LOG_WARNING,
+                     "ASSET: invalid %s (%d meshes)",
+                     asset->label, mesh_count);
+            if (mesh_count > 0) UnloadModel(asset->model);
+            asset->model = (Model){0};
+            continue;
+        }
+        ReleaseUploadedModelCpuData(&asset->model);
+        asset->ready = true;
+        TraceLog(LOG_INFO, "ASSET: loaded %s (%d meshes)",
+                 asset->label, mesh_count);
+    }
+}
+
+static void UnloadEconomicCargoAssets(void)
+{
+    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        EconomicCargoAsset *asset = &economic_cargo_assets[good];
+        if (asset->ready) UnloadModel(asset->model);
+        asset->model = (Model){0};
+        asset->ready = false;
     }
 }
 
@@ -3190,6 +3270,11 @@ static void LoadVisualStyle(void)
             ApplyWorldShader(&runtime_assets[id].model);
         }
     }
+    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        if (economic_cargo_assets[good].ready) {
+            ApplyWorldShader(&economic_cargo_assets[good].model);
+        }
+    }
 }
 
 static void LoadHeroSkin(void)
@@ -3658,6 +3743,7 @@ void CcLocalRendererInit(void)
     LoadNpcHeadFamilies();
     LoadNpcHairFamilies();
     LoadRuntimeAssets();
+    LoadEconomicCargoAssets();
     LoadVisualStyle();
     npc_portrait_target = LoadRenderTexture(72, 88);
     if (IsRenderTextureValid(npc_portrait_target)) {
@@ -3756,6 +3842,7 @@ void CcLocalRendererShutdown(void)
     for (int32_t id = 0; id < RUNTIME_ASSET_COUNT; ++id) {
         UnloadRuntimeAsset((RuntimeAssetId)id);
     }
+    UnloadEconomicCargoAssets();
     if (visual_style.npc_skinned_ready) {
         UnloadShader(visual_style.npc_skinned);
     }

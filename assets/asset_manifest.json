@@ -24,6 +24,150 @@
       "export": "exports/glb/carriage_base_v01.glb"
     },
     {
+      "id": "economy_cargo_food_v01",
+      "collection": "CC_ECONOMY_CARGO_FOOD",
+      "kind": "economy_cargo",
+      "layer_group": "economy_cargo",
+      "compatible_sockets": [],
+      "export": "exports/glb/economy_cargo_food_v01.glb"
+    },
+    {
+      "id": "economy_cargo_gems_v01",
+      "collection": "CC_ECONOMY_CARGO_GEMS",
+      "kind": "economy_cargo",
+      "layer_group": "economy_cargo",
+      "compatible_sockets": [],
+      "export": "exports/glb/economy_cargo_gems_v01.glb"
+    },
+    {
+      "id": "economy_cargo_gold_v01",
+      "collection": "CC_ECONOMY_CARGO_GOLD",
+      "kind": "economy_cargo",
+      "layer_group": "economy_cargo",
+      "compatible_sockets": [],
+      "export": "exports/glb/economy_cargo_gold_v01.glb"
+    },
+    {
+      "id": "economy_cargo_iron_v01",
+      "collection": "CC_ECONOMY_CARGO_IRON",
+      "kind": "economy_cargo",
+      "layer_group": "economy_cargo",
+      "compatible_sockets": [],
+      "export": "exports/glb/economy_cargo_iron_v01.glb"
+    },
+    {
+      "id": "economy_cargo_meat_v01",
+      "collection": "CC_ECONOMY_CARGO_MEAT",
+      "kind": "economy_cargo",
+      "layer_group": "economy_cargo",
+      "compatible_sockets": [],
+      "export": "exports/glb/economy_cargo_meat_v01.glb"
+    },
+    {
+      "id": "economy_cargo_stone_v01",
+      "collection": "CC_ECONOMY_CARGO_STONE",
+      "kind": "economy_cargo",
+      "layer_group": "economy_cargo",
+      "compatible_sockets": [],
+      "export": "exports/glb/economy_cargo_stone_v01.glb"
+    },
+    {
+      "id": "economy_cargo_tools_v01",
+      "collection": "CC_ECONOMY_CARGO_TOOLS",
+      "kind": "economy_cargo",
+      "layer_group": "economy_cargo",
+      "compatible_sockets": [],
+      "export": "exports/glb/economy_cargo_tools_v01.glb"
+    },
+    {
+      "id": "economy_cargo_weapons_v01",
+      "collection": "CC_ECONOMY_CARGO_WEAPONS",
+      "kind": "economy_cargo",
+      "layer_group": "economy_cargo",
+      "compatible_sockets": [],
+      "export": "exports/glb/economy_cargo_weapons_v01.glb"
+    },
+    {
+      "id": "economy_cargo_wheat_v01",
+      "collection": "CC_ECONOMY_CARGO_WHEAT",
+      "kind": "economy_cargo",
+      "layer_group": "economy_cargo",
+      "compatible_sockets": [],
+      "export": "exports/glb/economy_cargo_wheat_v01.glb"
+    },
+    {
+      "id": "economy_cargo_wood_v01",
+      "collection": "CC_ECONOMY_CARGO_WOOD",
+      "kind": "economy_cargo",
+      "layer_group": "economy_cargo",
+      "compatible_sockets": [],
+      "export": "exports/glb/economy_cargo_wood_v01.glb"
+    },
+    {
+      "id": "economy_cargo_wool_v01",
+      "collection": "CC_ECONOMY_CARGO_WOOL",
+      "kind": "economy_cargo",
+      "layer_group": "economy_cargo",
+      "compatible_sockets": [],
+      "export": "exports/glb/economy_cargo_wool_v01.glb"
+    },
+    {
+      "id": "economy_source_gem_seam_v01",
+      "collection": "CC_ECONOMY_SOURCE_GEM_SEAM",
+      "kind": "economy_source",
+      "layer_group": "economy_source",
+      "compatible_sockets": [],
+      "export": "exports/glb/economy_source_gem_seam_v01.glb"
+    },
+    {
+      "id": "economy_source_gold_ore_v01",
+      "collection": "CC_ECONOMY_SOURCE_GOLD_ORE",
+      "kind": "economy_source",
+      "layer_group": "economy_source",
+      "compatible_sockets": [],
+      "export": "exports/glb/economy_source_gold_ore_v01.glb"
+    },
+    {
+      "id": "economy_source_grain_v01",
+      "collection": "CC_ECONOMY_SOURCE_GRAIN",
+      "kind": "economy_source",
+      "layer_group": "economy_source",
+      "compatible_sockets": [],
+      "export": "exports/glb/economy_source_grain_v01.glb"
+    },
+    {
+      "id": "economy_source_iron_ore_v01",
+      "collection": "CC_ECONOMY_SOURCE_IRON_ORE",
+      "kind": "economy_source",
+      "layer_group": "economy_source",
+      "compatible_sockets": [],
+      "export": "exports/glb/economy_source_iron_ore_v01.glb"
+    },
+    {
+      "id": "economy_source_sheep_v01",
+      "collection": "CC_ECONOMY_SOURCE_SHEEP",
+      "kind": "economy_source",
+      "layer_group": "economy_source",
+      "compatible_sockets": [],
+      "export": "exports/glb/economy_source_sheep_v01.glb"
+    },
+    {
+      "id": "economy_source_stone_quarry_v01",
+      "collection": "CC_ECONOMY_SOURCE_STONE_QUARRY",
+      "kind": "economy_source",
+      "layer_group": "economy_source",
+      "compatible_sockets": [],
+      "export": "exports/glb/economy_source_stone_quarry_v01.glb"
+    },
+    {
+      "id": "economy_source_timber_v01",
+      "collection": "CC_ECONOMY_SOURCE_TIMBER",
+      "kind": "economy_source",
+      "layer_group": "economy_source",
+      "compatible_sockets": [],
+      "export": "exports/glb/economy_source_timber_v01.glb"
+    },
+    {
       "id": "environment_bridge_checkpoint_v01",
       "collection": "CC_ENV_BRIDGE_CHECKPOINT",
       "kind": "environment_kit",
@@ -263,5 +407,148 @@
       "carriage_base_v01",
       "module_medical_bunk_v01"
     ]
+  },
+  "economic_goods": [
+    {
+      "good": "food",
+      "sim_id": 0,
+      "enum": "CC_GOOD_FOOD",
+      "cargo_asset": "economy_cargo_food_v01",
+      "icon_frame": 0
+    },
+    {
+      "good": "iron",
+      "sim_id": 1,
+      "enum": "CC_GOOD_IRON",
+      "cargo_asset": "economy_cargo_iron_v01",
+      "icon_frame": 1
+    },
+    {
+      "good": "tools",
+      "sim_id": 2,
+      "enum": "CC_GOOD_TOOLS",
+      "cargo_asset": "economy_cargo_tools_v01",
+      "icon_frame": 2
+    },
+    {
+      "good": "weapons",
+      "sim_id": 3,
+      "enum": "CC_GOOD_WEAPONS",
+      "cargo_asset": "economy_cargo_weapons_v01",
+      "icon_frame": 3
+    },
+    {
+      "good": "raw_gold",
+      "sim_id": 4,
+      "enum": "CC_GOOD_GOLD",
+      "cargo_asset": "economy_cargo_gold_v01",
+      "icon_frame": 4
+    },
+    {
+      "good": "gems",
+      "sim_id": 5,
+      "enum": "CC_GOOD_GEMS",
+      "cargo_asset": "economy_cargo_gems_v01",
+      "icon_frame": 5
+    },
+    {
+      "good": "wood",
+      "sim_id": 6,
+      "enum": "CC_GOOD_WOOD",
+      "cargo_asset": "economy_cargo_wood_v01",
+      "icon_frame": 6
+    },
+    {
+      "good": "wheat",
+      "sim_id": 7,
+      "enum": "CC_GOOD_WHEAT",
+      "cargo_asset": "economy_cargo_wheat_v01",
+      "icon_frame": 7
+    },
+    {
+      "good": "meat",
+      "sim_id": 8,
+      "enum": "CC_GOOD_MEAT",
+      "cargo_asset": "economy_cargo_meat_v01",
+      "icon_frame": 8
+    },
+    {
+      "good": "wool",
+      "sim_id": 9,
+      "enum": "CC_GOOD_WOOL",
+      "cargo_asset": "economy_cargo_wool_v01",
+      "icon_frame": 9
+    },
+    {
+      "good": "stone",
+      "sim_id": 10,
+      "enum": "CC_GOOD_STONE",
+      "cargo_asset": "economy_cargo_stone_v01",
+      "icon_frame": 10
+    }
+  ],
+  "economic_sources": [
+    {
+      "source": "grain",
+      "asset": "economy_source_grain_v01",
+      "supports_goods": [
+        "wheat",
+        "food"
+      ]
+    },
+    {
+      "source": "iron_ore",
+      "asset": "economy_source_iron_ore_v01",
+      "supports_goods": [
+        "iron",
+        "tools",
+        "weapons"
+      ]
+    },
+    {
+      "source": "gold_ore",
+      "asset": "economy_source_gold_ore_v01",
+      "supports_goods": [
+        "raw_gold"
+      ]
+    },
+    {
+      "source": "timber",
+      "asset": "economy_source_timber_v01",
+      "supports_goods": [
+        "wood",
+        "tools",
+        "weapons"
+      ]
+    },
+    {
+      "source": "sheep",
+      "asset": "economy_source_sheep_v01",
+      "supports_goods": [
+        "meat",
+        "wool"
+      ]
+    },
+    {
+      "source": "gem_seam",
+      "asset": "economy_source_gem_seam_v01",
+      "supports_goods": [
+        "gems"
+      ]
+    },
+    {
+      "source": "stone_quarry",
+      "asset": "economy_source_stone_quarry_v01",
+      "supports_goods": [
+        "stone"
+      ]
+    }
+  ],
+  "economic_icon_atlas": {
+    "path": "ui/economic_goods_v01.png",
+    "frame_width": 32,
+    "frame_height": 32,
+    "columns": 11,
+    "rows": 1
   }
 }

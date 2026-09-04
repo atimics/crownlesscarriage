@@ -25,6 +25,8 @@ request or release when they help review an art change.
 
 ## Economic props
 
+![Production economic sources and carried goods](images/economic-assets-v01.png)
+
 ![Economic world sources and carried goods](images/economic-props-concept-v01.png)
 
 ![Trade good icon concepts](images/economic-icons-concept-v01.png)

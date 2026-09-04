@@ -381,6 +381,12 @@ if(CC_BUILD_CLIENT)
         set(CC_CARRIAGE_ASSET
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/glb/carriage_base_v01.glb"
         )
+        file(GLOB CC_ECONOMIC_CARGO_ASSETS CONFIGURE_DEPENDS
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/glb/economy_cargo_*.glb"
+        )
+        set(CC_ECONOMIC_GOODS_ATLAS_ASSET
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/economic_goods_v01.png"
+        )
         set(CC_MARKET_ASSET
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/glb/environment_market_granary_v01.glb"
         )
@@ -441,6 +447,8 @@ if(CC_BUILD_CLIENT)
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/shaders"
             COMMAND ${CMAKE_COMMAND} -E make_directory
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/maps"
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/ui"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/LICENSE.txt"
@@ -490,6 +498,9 @@ if(CC_BUILD_CLIENT)
                 "${CC_CARRIAGE_ASSET}"
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/glb/carriage_base_v01.glb"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${CC_ECONOMIC_CARGO_ASSETS}
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/glb"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${CC_MARKET_ASSET}"
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/exports/glb/environment_market_granary_v01.glb"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -534,11 +545,15 @@ if(CC_BUILD_CLIENT)
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${CC_COLLECTIBLE_MAP_ATLAS_ASSET}"
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/maps/collectible_map_atlas.png"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CC_ECONOMIC_GOODS_ATLAS_ASSET}"
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/ui/economic_goods_v01.png"
             DEPENDS "${CC_HERO_ENGINE_ASSET}" "${CC_HERO_ENGINE_MANIFEST}"
                     ${CC_NPC_ARCHETYPE_ASSETS} "${CC_NPC_ARCHETYPE_MANIFEST}"
                     "${CC_NPC_DYNAMIC_MODULE_MANIFEST}"
                     ${CC_CREATURE_ASSETS} "${CC_CREATURE_MANIFEST}"
                     "${CC_BRIDGE_CHECKPOINT_ASSET}" "${CC_CARRIAGE_ASSET}"
+                    ${CC_ECONOMIC_CARGO_ASSETS}
                     "${CC_MARKET_ASSET}"
                     "${CC_MINE_ASSET}" "${CC_SHORTAGE_ASSET}"
                     "${CC_ENFORCEMENT_ASSET}" "${CC_RECOVERY_ASSET}"
@@ -550,6 +565,7 @@ if(CC_BUILD_CLIENT)
                     "${CC_HERO_PIXEL_FRAGMENT_SHADER}"
                     "${CC_GLOAMGATE_ALDERWATCH_MAP_ASSET}"
                     "${CC_COLLECTIBLE_MAP_ATLAS_ASSET}"
+                    "${CC_ECONOMIC_GOODS_ATLAS_ASSET}"
                     "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
                     "${CMAKE_CURRENT_SOURCE_DIR}/THIRD_PARTY_NOTICES.md"
             VERBATIM

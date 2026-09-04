@@ -38,6 +38,8 @@
     "assets/maps/gloamgate_to_alderwatch.png"
 #define CC_COLLECTIBLE_MAP_ATLAS_ASSET \
     "assets/maps/collectible_map_atlas.png"
+#define CC_ECONOMIC_GOODS_ATLAS_ASSET \
+    "assets/ui/economic_goods_v01.png"
 #define CC_MAP_LIST_ROWS 8
 
 typedef enum ClientView {
@@ -56,8 +58,10 @@ typedef enum ClientView {
 typedef struct ClientMapTextures {
     Texture2D illustrated;
     Texture2D collectible_atlas;
+    Texture2D economic_goods;
     bool illustrated_attempted;
     bool collectible_atlas_attempted;
+    bool economic_goods_attempted;
 } ClientMapTextures;
 
 static bool IsCommandOverlay(ClientView view)
@@ -2914,6 +2918,8 @@ static void ReleaseMapTextures(ClientMapTextures *textures)
                       &textures->illustrated_attempted);
     ReleaseMapTexture(&textures->collectible_atlas,
                       &textures->collectible_atlas_attempted);
+    ReleaseMapTexture(&textures->economic_goods,
+                      &textures->economic_goods_attempted);
 }
 
 static bool LoadMapTexture(Texture2D *texture, bool *attempted,
@@ -5022,7 +5028,21 @@ static int32_t CarriagePassengerCount(const CcSim *sim)
     return passengers;
 }
 
-static void DrawCarriageScreen(const CcSim *sim, const LocalState *local)
+static bool DrawEconomicGoodIcon(Texture2D atlas, CcGood good,
+                                 Rectangle destination, Color tint)
+{
+    if (atlas.id == 0U || good < 0 || good >= CC_GOOD_COUNT ||
+        atlas.width < ((int32_t)good + 1) * 32 || atlas.height < 32) {
+        return false;
+    }
+    Rectangle source = {(float)good * 32.0f, 0.0f, 32.0f, 32.0f};
+    DrawTexturePro(atlas, source, destination, (Vector2){0.0f, 0.0f},
+                   0.0f, tint);
+    return true;
+}
+
+static void DrawCarriageScreen(const CcSim *sim, const LocalState *local,
+                               Texture2D economic_goods)
 {
     if (sim == NULL || local == NULL) return;
     const CcSettlement *place = CcSimSettlement(
@@ -5068,11 +5088,19 @@ static void DrawCarriageScreen(const CcSim *sim, const LocalState *local)
             slot, 0.14f, 4, 1.0f,
             sim->player.cargo[good] > 0 ? Fade(TEAL, 0.72f) :
                                           Fade(MUTED, 0.24f));
-        CcOverlayDrawText(TextFormat("%d", good + 1),
-                          x + 9, y + 8, 7, MUTED);
+        DrawRectangleRounded((Rectangle){(float)x + 7.0f, (float)y + 5.0f,
+                                          33.0f, 33.0f},
+                             0.16f, 4, Fade(BACKGROUND, 0.66f));
+        if (!DrawEconomicGoodIcon(
+                economic_goods, (CcGood)good,
+                (Rectangle){(float)x + 8.0f, (float)y + 6.0f, 32.0f, 32.0f},
+                sim->player.cargo[good] > 0 ? WHITE : Fade(WHITE, 0.38f))) {
+            CcOverlayDrawText(TextFormat("%d", good + 1),
+                              x + 20, y + 17, 7, MUTED);
+        }
         CcOverlayDrawText((CcGood)good == CC_GOOD_FOOD ?
                               "FOOD BOXES" : CcGoodName((CcGood)good),
-                          x + 27, y + 12, 9, INK);
+                          x + 45, y + 12, 9, INK);
         const char *quantity = TextFormat("x%d", sim->player.cargo[good]);
         int32_t quantity_width = CcOverlayMeasureText(quantity, 9);
         CcOverlayDrawText(quantity, x + 140 - quantity_width,
@@ -8991,6 +9019,13 @@ int main(int argc, char **argv)
     SetTargetFPS(render_benchmark || capture_action_reel ||
                  capture_gameplay_reel || capture_creature_reel ? 0 : 60);
     ClientMapTextures map_textures = {0};
+    (void)LoadMapTexture(&map_textures.economic_goods,
+                         &map_textures.economic_goods_attempted,
+                         CC_ECONOMIC_GOODS_ATLAS_ASSET,
+                         "economic goods atlas");
+    if (map_textures.economic_goods.id != 0U) {
+        SetTextureFilter(map_textures.economic_goods, TEXTURE_FILTER_POINT);
+    }
     /* The playable world is authored against a fixed 2x art-pixel grid.
        Render it at half the presentation size, then enlarge with point
        sampling. Screen-space labels and HUD are drawn after presentation. */
@@ -9267,6 +9302,11 @@ int main(int argc, char **argv)
     if (capture_opening) {
         BeginOpening(&local);
         view = VIEW_LOCAL;
+    }
+    if (capture_carriage || capture_carriage_target) {
+        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+            sim.player.cargo[good] = 1;
+        }
     }
     if (capture_carriage) {
         RepositionHero(&local, LOCAL_CARRIAGE_BAY, false);
@@ -9927,7 +9967,8 @@ int main(int argc, char **argv)
         }
         if (view == VIEW_CARRIAGE) {
             CcOverlayFlush();
-            DrawCarriageScreen(&sim, &local);
+            DrawCarriageScreen(&sim, &local,
+                               map_textures.economic_goods);
         }
         if (view == VIEW_SITUATIONS) {
             CcOverlayFlush();
