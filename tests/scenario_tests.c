@@ -281,6 +281,7 @@ int main(void)
                         error, sizeof(error)));
     tool_repair.player.cargo[CC_GOOD_TOOLS] = 2;
     tool_repair.player.cargo[CC_GOOD_WOOD] = 0;
+    tool_repair.player.cargo[CC_GOOD_STONE] = 0;
     int32_t tool_start_day = tool_repair.current_day;
     CcCommand crew_repair = {
         .kind = CC_COMMAND_REPAIR_ROUTE,
@@ -292,11 +293,18 @@ int main(void)
     CC_CHECK(tool_repair.player.cargo[CC_GOOD_TOOLS] == 2);
     CC_CHECK(tool_repair.routes[1].closed);
     tool_repair.player.cargo[CC_GOOD_WOOD] = 2;
+    CC_CHECK(!CcSimApply(&tool_repair, &crew_repair,
+                         error, sizeof(error)));
+    CC_CHECK(tool_repair.player.cargo[CC_GOOD_TOOLS] == 2);
+    CC_CHECK(tool_repair.player.cargo[CC_GOOD_WOOD] == 2);
+    CC_CHECK(tool_repair.routes[1].closed);
+    tool_repair.player.cargo[CC_GOOD_STONE] = 2;
     CC_CHECK(CcSimApply(&tool_repair, &crew_repair, error, sizeof(error)));
     CC_CHECK(tool_repair.current_day == tool_start_day + 1);
     CC_CHECK(tool_repair.routes[1].condition == 92);
     CC_CHECK(tool_repair.player.cargo[CC_GOOD_TOOLS] == 0);
     CC_CHECK(tool_repair.player.cargo[CC_GOOD_WOOD] == 0);
+    CC_CHECK(tool_repair.player.cargo[CC_GOOD_STONE] == 0);
 
     CcSim public_mine;
     CcSim hidden_mine;

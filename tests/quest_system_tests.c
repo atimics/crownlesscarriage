@@ -97,6 +97,7 @@ static int TestResolutionEvidenceOutcomesAndEchoQueue(void)
     sim.carriage.location_id = sim.player.location_id;
     sim.player.cargo[CC_GOOD_TOOLS] = 2;
     sim.player.cargo[CC_GOOD_WOOD] = 2;
+    sim.player.cargo[CC_GOOD_STONE] = 2;
     CcCommand accept = {
         .kind = CC_COMMAND_ACCEPT_SITUATION,
         .target_id = repair_id

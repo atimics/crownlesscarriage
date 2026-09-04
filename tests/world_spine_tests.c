@@ -106,6 +106,7 @@ int main(void)
     CcSettlement *capital = &builder.settlements[4];
     CcMoney treasury_before = builder.kingdoms[2].treasury;
     int32_t wood_before = capital->stock[CC_GOOD_WOOD];
+    int32_t stone_before = capital->stock[CC_GOOD_STONE];
     int32_t material_before = capital->stock[CC_GOOD_MATERIAL];
     int32_t tools_before = capital->stock[CC_GOOD_TOOLS];
     char error[192];
@@ -122,11 +123,27 @@ int main(void)
     CC_CHECK(short_wood.kingdoms[2].treasury == short_wood_treasury);
     CC_CHECK(short_wood_capital->stock[CC_GOOD_IRON] == short_wood_iron);
     CC_CHECK(short_wood_capital->stock[CC_GOOD_TOOLS] == short_wood_tools);
+    CcSim short_stone = builder;
+    CcSettlement *short_stone_capital = &short_stone.settlements[4];
+    short_stone_capital->stock[CC_GOOD_STONE] = 5;
+    CcMoney short_stone_treasury = short_stone.kingdoms[2].treasury;
+    int32_t short_stone_wood = short_stone_capital->stock[CC_GOOD_WOOD];
+    int32_t short_stone_iron = short_stone_capital->stock[CC_GOOD_IRON];
+    int32_t short_stone_tools = short_stone_capital->stock[CC_GOOD_TOOLS];
+    CC_CHECK(!CcSimStartServiceProject(
+        &short_stone, short_stone_capital->id, CC_SERVICE_GRANARY,
+        error, sizeof(error)));
+    CC_CHECK(strstr(error, "6 Stone") != NULL);
+    CC_CHECK(short_stone.kingdoms[2].treasury == short_stone_treasury);
+    CC_CHECK(short_stone_capital->stock[CC_GOOD_WOOD] == short_stone_wood);
+    CC_CHECK(short_stone_capital->stock[CC_GOOD_IRON] == short_stone_iron);
+    CC_CHECK(short_stone_capital->stock[CC_GOOD_TOOLS] == short_stone_tools);
     CC_CHECK(CcSimStartServiceProject(&builder, capital->id,
                                       CC_SERVICE_GRANARY,
                                       error, sizeof(error)));
     CC_CHECK(builder.kingdoms[2].treasury == treasury_before - 80);
     CC_CHECK(capital->stock[CC_GOOD_WOOD] == wood_before - 8);
+    CC_CHECK(capital->stock[CC_GOOD_STONE] == stone_before - 6);
     CC_CHECK(capital->stock[CC_GOOD_MATERIAL] == material_before - 6);
     CC_CHECK(capital->stock[CC_GOOD_TOOLS] == tools_before - 5);
     CcSimAdvanceDays(&builder, 6);

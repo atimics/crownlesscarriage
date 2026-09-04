@@ -49,7 +49,7 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 29
+#define CC_SIM_SCHEMA_VERSION 30
 #define CC_GENERATOR_VERSION 23
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
@@ -304,7 +304,9 @@ typedef enum CcEventKind {
     CC_EVENT_CHARACTER_BORN = 114,
     CC_EVENT_CHARACTER_DIED = 115,
     CC_EVENT_WOODLOT_HARVEST = 116,
-    CC_EVENT_BAKERY_PRODUCTION = 117
+    CC_EVENT_BAKERY_PRODUCTION = 117,
+    CC_EVENT_QUARRY_OUTPUT = 118,
+    CC_EVENT_MASONRY_REPAIR = 119
 } CcEventKind;
 
 typedef struct CcArchives {
@@ -1369,6 +1371,7 @@ void CcSimInitializeDragonEcology(CcSim *sim);
 void CcSimInitializeHoardRaiders(CcSim *sim);
 void CcSimInitializeAnimalEconomy(CcSim *sim);
 void CcSimInitializeWoodEconomy(CcSim *sim);
+void CcSimInitializeStoneEconomy(CcSim *sim);
 void CcSimInitializeHorseStableSystem(CcSim *sim);
 void CcSimInitializeCharacters(CcSim *sim);
 void CcSimUpgradeCharacterLifecycles(CcSim *sim);

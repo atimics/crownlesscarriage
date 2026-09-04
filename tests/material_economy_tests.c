@@ -85,6 +85,13 @@ int main(void)
     CC_CHECK(wood_definition->freight_units_per_slot == 6);
     CC_CHECK(wood_definition->minimum_trade_units == 4);
     CC_CHECK(wood_definition->raid_capacity == 12);
+    const CcGoodDefinition *stone_definition = CcGoodDefinitionFor(
+        CC_GOOD_STONE);
+    CC_CHECK(strcmp(stone_definition->name, "Stone") == 0);
+    CC_CHECK(stone_definition->base_price == 7);
+    CC_CHECK(stone_definition->freight_units_per_slot == 4);
+    CC_CHECK(stone_definition->minimum_trade_units == 4);
+    CC_CHECK(stone_definition->raid_capacity == 8);
 
     CcSim wood_world;
     CcSimInit(&wood_world, UINT32_C(0x700d100d));
@@ -93,6 +100,10 @@ int main(void)
     CC_CHECK(wood_world.settlements[0].production[CC_GOOD_WOOD] == 12);
     CC_CHECK(wood_world.settlements[5].stock[CC_GOOD_WOOD] == 36);
     CC_CHECK(wood_world.settlements[5].production[CC_GOOD_WOOD] == 14);
+    CC_CHECK(wood_world.settlements[3].stock[CC_GOOD_STONE] == 36);
+    CC_CHECK(wood_world.settlements[3].reserve_target[CC_GOOD_STONE] == 16);
+    CC_CHECK(wood_world.settlements[3].production[CC_GOOD_STONE] == 12);
+    CC_CHECK(wood_world.settlements[0].production[CC_GOOD_STONE] == 0);
     uint64_t wood_hash = CcSimHash(&wood_world);
     wood_world.settlements[0].stock[CC_GOOD_WOOD] += 1;
     CC_CHECK(CcSimHash(&wood_world) != wood_hash);
@@ -128,6 +139,59 @@ int main(void)
     place->production[CC_GOOD_WOOD] = 8;
     CcSimAdvanceDays(&hand_woodlot, 6);
     CC_CHECK(place->stock[CC_GOOD_WOOD] == 2);
+
+    CcSim quarry;
+    place = IsolatedSettlement(&quarry);
+    place->function = CC_SETTLEMENT_MINING;
+    place->service_mask |= Service(CC_SERVICE_MINE) |
+                           Service(CC_SERVICE_GRANARY);
+    place->production[CC_GOOD_STONE] = 8;
+    place->stock[CC_GOOD_TOOLS] = 1;
+    place->stock[CC_GOOD_FOOD] = 100;
+    place->consumption[CC_GOOD_FOOD] = 1;
+    int32_t tracked_stone = CcSimTrackedGood(&quarry, CC_GOOD_STONE);
+    CcSimAdvanceDays(&quarry, 27);
+    CC_CHECK(place->stock[CC_GOOD_STONE] == 32);
+    CC_CHECK(CcSimTrackedGood(&quarry, CC_GOOD_STONE) ==
+             tracked_stone + 32);
+    bool quarry_recorded = false;
+    for (int32_t event = 0; event < quarry.event_count; ++event) {
+        const CcEvent *item = CcSimRecentEvent(&quarry, event);
+        if (item != NULL && item->kind == CC_EVENT_QUARRY_OUTPUT) {
+            quarry_recorded = true;
+        }
+    }
+    CC_CHECK(quarry_recorded);
+
+    CcSim hand_quarry;
+    place = IsolatedSettlement(&hand_quarry);
+    place->function = CC_SETTLEMENT_MINING;
+    place->service_mask |= Service(CC_SERVICE_MINE);
+    place->production[CC_GOOD_STONE] = 8;
+    CcSimAdvanceDays(&hand_quarry, 6);
+    CC_CHECK(place->stock[CC_GOOD_STONE] == 2);
+
+    CcSim masonry;
+    place = IsolatedSettlement(&masonry);
+    place->population = 100;
+    place->service_mask |= Service(CC_SERVICE_GRANARY) |
+                           Service(CC_SERVICE_FARM);
+    place->field_yield = 100;
+    place->production[CC_GOOD_FOOD] = 20;
+    place->stock[CC_GOOD_TOOLS] = 10;
+    place->stock[CC_GOOD_FOOD] = 50;
+    place->stock[CC_GOOD_STONE] = 1;
+    CcSimAdvanceDays(&masonry, 111);
+    CC_CHECK(place->stock[CC_GOOD_STONE] == 0);
+    bool masonry_recorded = false;
+    for (int32_t event = 0; event < masonry.event_count; ++event) {
+        const CcEvent *item = CcSimRecentEvent(&masonry, event);
+        if (item != NULL && item->kind == CC_EVENT_MASONRY_REPAIR &&
+            item->magnitude == 1) {
+            masonry_recorded = true;
+        }
+    }
+    CC_CHECK(masonry_recorded);
 
     CcSim no_farm;
     place = IsolatedSettlement(&no_farm);
@@ -270,6 +334,39 @@ int main(void)
     CC_CHECK(wood_convoy.shipments[0].status == CC_SHIPMENT_TRAVELLING);
     CC_CHECK(CcSimTrackedGood(&wood_convoy, CC_GOOD_WOOD) ==
              wood_before_trade);
+
+    CcSim stone_convoy = tool_convoy;
+    stone_convoy.shipment_count = 0;
+    for (int32_t kingdom = 0;
+         kingdom < stone_convoy.kingdom_count; ++kingdom) {
+        stone_convoy.kingdoms[kingdom].treasury = 0;
+    }
+    CcSettlement *stone_source = &stone_convoy.settlements[0];
+    CcSettlement *stone_buyer = &stone_convoy.settlements[1];
+    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        stone_source->production[good] = 0;
+        stone_buyer->production[good] = 0;
+        stone_source->consumption[good] = 0;
+        stone_buyer->consumption[good] = 0;
+        stone_source->stock[good] = 0;
+        stone_buyer->stock[good] = 0;
+        stone_source->reserve_target[good] = 0;
+        stone_buyer->reserve_target[good] = 0;
+    }
+    stone_source->stock[CC_GOOD_STONE] = 24;
+    stone_source->reserve_target[CC_GOOD_STONE] = 4;
+    stone_buyer->reserve_target[CC_GOOD_STONE] = 12;
+    stone_source->market_coins = 100;
+    stone_buyer->market_coins = 100;
+    int32_t stone_before_trade = CcSimTrackedGood(
+        &stone_convoy, CC_GOOD_STONE);
+    CcSimAdvanceDays(&stone_convoy, 7);
+    CC_CHECK(stone_convoy.shipment_count > 0);
+    CC_CHECK(stone_convoy.shipments[0].good == CC_GOOD_STONE);
+    CC_CHECK(stone_convoy.shipments[0].quantity >= 4);
+    CC_CHECK(stone_convoy.shipments[0].status == CC_SHIPMENT_TRAVELLING);
+    CC_CHECK(CcSimTrackedGood(&stone_convoy, CC_GOOD_STONE) ==
+             stone_before_trade);
 
     CcSim famine_convoy;
     CcSimInit(&famine_convoy, UINT32_C(0xfa61ce01));
