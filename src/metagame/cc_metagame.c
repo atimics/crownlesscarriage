@@ -710,12 +710,31 @@ static void DescribeRoutes(const CcMetagame *metagame,
         const char *road_name = preview.destination_known &&
                                 destination != NULL ?
             destination->name : "unmarked track";
+        if (preview.opening_half_day) {
+            Append(output, capacity,
+                   "  %d. %s toward %s — opening half-day, %" PRId64 " crowns, %d fodder, horse team %d%%, %s",
+                   i + 1, StoryRoadName(sim, route), road_name,
+                   preview.provision_cost, preview.horse_feed_required,
+                   preview.horse_readiness,
+                   route->closed ? "restricted and tolled" : "open");
+        } else {
+            Append(output, capacity,
+                   "  %d. %s toward %s — %d watches with %d overnight stop%s, %" PRId64 " crowns, %d fodder, horse team %d%%, %s",
+                   i + 1, StoryRoadName(sim, route), road_name,
+                   preview.travel_watches, preview.overnight_stops,
+                   preview.overnight_stops == 1 ? "" : "s",
+                   preview.provision_cost, preview.horse_feed_required,
+                   preview.horse_readiness,
+                   route->closed ? "restricted and tolled" : "open");
+        }
         Append(output, capacity,
-               "  %d. %s toward %s — %d days, %" PRId64 " crowns, %d fodder, horse team %d%%, %s",
-               i + 1, StoryRoadName(sim, route), road_name, preview.travel_days,
-               preview.provision_cost, preview.horse_feed_required,
-               preview.horse_readiness,
-               route->closed ? "restricted and tolled" : "open");
+               "; %s stands %d miles out and charges %" PRId64 " crowns",
+               preview.road_house_name,
+               preview.road_house_distance_miles,
+               preview.road_house_cost);
+        if (preview.departure_wait_minutes > 0) {
+            Append(output, capacity, ", departure is next morning");
+        }
         if (map != NULL) {
             Append(output, capacity,
                    ", %s notes say %s (%d days old)%s\n",
@@ -1448,6 +1467,7 @@ static void DescribeHelp(char *output, size_t capacity)
            "  archive-map NUMBER, retrieve-map NUMBER (in Gloamgate)\n"
            "  buy-treasure NUMBER, sell-treasure NUMBER, travel NUMBER\n"
            "Act on the road and world:\n"
+           "  road break|press-on|camp|lodge\n"
            "  road fight|bargain|supper|turn-back, repair NUMBER tools|cash\n"
            "  stable breed MARE STALLION, stable team SLOT HORSE\n"
            "  underroad enter|look|move NUMBER|search|open\n"
@@ -1510,6 +1530,22 @@ static bool FinishTravel(CcMetagame *metagame,
                event != NULL ? event->text : "The road is blocked.");
         Append(output, capacity,
                "Choose 'road bargain', 'road supper', 'road fight', or 'road turn-back'.\n");
+    } else if (sim->journey.active &&
+               sim->journey.phase == CC_JOURNEY_PHASE_RESTING) {
+        CcJourneyStopKind stop = CcSimJourneyStop(sim);
+        if (stop == CC_JOURNEY_STOP_MIDDAY) {
+            Append(output, capacity,
+                   "The morning watch ends. Choose 'road break' to water the team and read the signs, or 'road press-on' to skip the halt at a cost.\n");
+        } else if (CcSimJourneyRoadHouseAvailable(sim)) {
+            Append(output, capacity,
+                   "The afternoon watch ends at %s, %d miles from the last town. Choose 'road lodge' for %" PRId64 " crowns or 'road camp'.\n",
+                   CcSimRoadHouseName(sim, sim->journey.route_id),
+                   CcSimRoadHouseDistanceMiles(sim, sim->journey.route_id),
+                   CcSimRoadHouseCost(sim, sim->journey.route_id));
+        } else {
+            Append(output, capacity,
+                   "The afternoon watch ends beyond the road houses. Choose 'road camp' and set a lantern watch.\n");
+        }
     } else {
         const CcSettlement *place = CurrentPlace(metagame);
         if (IsNamedSettlement(sim, place, 1)) {
@@ -2016,6 +2052,30 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
         if (!ApplyCommand(metagame, &action, output, output_capacity)) return false;
         if (!FinishTravel(metagame, output, output_capacity)) return false;
     } else if (strcmp(command, "road") == 0) {
+        if (metagame->sim.journey.active &&
+            metagame->sim.journey.phase == CC_JOURNEY_PHASE_RESTING) {
+            CcCommand stop_action = {0};
+            if (first != NULL && strcmp(first, "break") == 0) {
+                stop_action.kind = CC_COMMAND_TAKE_JOURNEY_BREAK;
+            } else if (first != NULL && strcmp(first, "press-on") == 0) {
+                stop_action.kind = CC_COMMAND_PRESS_ON;
+            } else if (first != NULL && strcmp(first, "camp") == 0) {
+                stop_action.kind = CC_COMMAND_MAKE_CAMP;
+            } else if (first != NULL && strcmp(first, "lodge") == 0) {
+                stop_action.kind = CC_COMMAND_LODGE_ROAD_HOUSE;
+            } else {
+                Append(output, output_capacity,
+                       "Choose 'road break', 'road press-on', 'road camp', or 'road lodge'.\n");
+                return false;
+            }
+            if (!ApplyCommand(metagame, &stop_action,
+                              output, output_capacity)) return false;
+            const CcEvent *event = CcSimRecentEvent(&metagame->sim, 0);
+            if (event != NULL) {
+                Append(output, output_capacity, "%s\n", event->text);
+            }
+            return FinishTravel(metagame, output, output_capacity);
+        }
         int32_t condition_before = metagame->sim.carriage.condition;
         CcMoney coins_before = metagame->sim.player.coins;
         int32_t food_before = metagame->sim.player.cargo[CC_GOOD_FOOD];
@@ -2284,6 +2344,7 @@ static void DescribeAgentActions(char *output, size_t capacity)
            "  buy GOOD COUNT, sell GOOD COUNT, buy-map NUMBER, sell-map NUMBER\n"
            "  archive-map NUMBER, retrieve-map NUMBER\n"
            "  buy-treasure NUMBER, sell-treasure NUMBER, travel NUMBER\n"
+           "  road break|press-on|camp|lodge\n"
            "  road fight|bargain|supper|turn-back, repair NUMBER tools|cash\n"
            "  underroad enter|look|move NUMBER|search|open|parley|evade|force|retreat\n"
            "  dungeon public|smuggler|close, wait DAYS\n"
@@ -2314,6 +2375,14 @@ void CcMetagameAgentObserve(const CcMetagame *metagame,
             const CcEvent *event = CcSimRecentEvent(&metagame->sim, 0);
             Append(output, output_capacity, "The road has stopped you: %s\n",
                    event != NULL ? event->text : "The way is blocked.");
+        } else if (metagame->sim.journey.active &&
+                   metagame->sim.journey.phase ==
+                       CC_JOURNEY_PHASE_RESTING) {
+            Append(output, output_capacity,
+                   CcSimJourneyStop(&metagame->sim) ==
+                           CC_JOURNEY_STOP_MIDDAY ?
+                       "The morning watch has ended. The team waits for your break choice.\n" :
+                       "The afternoon watch has ended. The team waits for camp or lodging.\n");
         }
         DescribePeople(metagame, output, output_capacity);
         DescribeRumors(metagame, output, output_capacity);
@@ -2425,7 +2494,8 @@ static bool AgentCommandAllowed(const CcMetagame *metagame,
     }
     if (strcmp(command, "road") == 0) {
         return metagame->sim.journey.active &&
-            metagame->sim.journey.phase == CC_JOURNEY_PHASE_BLOCKED;
+            (metagame->sim.journey.phase == CC_JOURNEY_PHASE_BLOCKED ||
+             metagame->sim.journey.phase == CC_JOURNEY_PHASE_RESTING);
     }
     if (strcmp(command, "underroad") == 0 ||
         strcmp(command, "dungeon") == 0) {

@@ -175,6 +175,10 @@ typedef enum ContextActionKind {
     CONTEXT_ACTION_OFFER_PROVISIONS,
     CONTEXT_ACTION_RETURN_TO_CHOICE,
     CONTEXT_ACTION_SKIP_TRAVEL,
+    CONTEXT_ACTION_TAKE_BREAK,
+    CONTEXT_ACTION_PRESS_ON,
+    CONTEXT_ACTION_MAKE_CAMP,
+    CONTEXT_ACTION_LODGE_ROAD_HOUSE,
     CONTEXT_ACTION_JUMP,
     CONTEXT_ACTION_RAISE_ALARM,
     CONTEXT_ACTION_SELECT_TARGET,
@@ -882,9 +886,16 @@ static ConvoyUpdateResult UpdateDrivenConvoy(LocalState *local,
 {
     CcLocalConvoyState *convoy = &local->convoy;
     bool stopped = IsKeyDown(KEY_SPACE);
+    bool journey_halt = local->journey_travel_active && sim != NULL &&
+        sim->journey.active &&
+        sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING &&
+        convoy->phase == CC_LOCAL_CONVOY_ROAD;
     bool captain_pace = local->journey_travel_active && sim != NULL &&
-        sim->journey.active && convoy->phase == CC_LOCAL_CONVOY_ROAD;
-    if (captain_pace) {
+        sim->journey.active &&
+        sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING &&
+        convoy->phase == CC_LOCAL_CONVOY_ROAD;
+    if (journey_halt || captain_pace) {
+        if (journey_halt) stopped = true;
         float target = stopped ? 0.0f : CcClientConvoyPosturePace(
             (int32_t)sim->journey.pace);
         float change = target - convoy->pace;
@@ -2200,12 +2211,21 @@ static void DrawCombatPanel(const LocalState *local)
     DrawCombatImpactBanner(local);
 }
 
-static const char *JourneyRoadBeatName(int32_t progress_milli)
+static const char *JourneyRoadBeatName(const CcSim *sim)
 {
-    if (progress_milli < 250) return "MORNING WATCH · OUTER FARMS";
-    if (progress_milli < 500) return "AFTERNOON WATCH · ROAD SIGNS";
-    if (progress_milli < 750) return "NIGHT WATCH · CAMP OR PRESS ON";
-    return "LAST MILES · THE FAR GATE";
+    CcJourneyStopKind stop = CcSimJourneyStop(sim);
+    if (stop == CC_JOURNEY_STOP_MIDDAY) {
+        return "MIDDAY HALT · WATER, SCOUT, OR PRESS ON";
+    }
+    if (stop == CC_JOURNEY_STOP_OVERNIGHT) {
+        return CcSimJourneyRoadHouseAvailable(sim) ?
+            "EVENING · ROAD HOUSE OR CAMP" :
+            "EVENING · SET CAMP AND LANTERN WATCH";
+    }
+    int32_t watch = CcSimJourneyWatchNumber(sim);
+    return watch % 2 == 1 ?
+        "MORNING ROAD · WATCH FOR SIGNS" :
+        "AFTERNOON ROAD · FIND THE NIGHT STOP";
 }
 
 static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
@@ -2288,6 +2308,7 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
             return;
         }
         if (local->journey_travel_active) {
+            CcJourneyStopKind journey_stop = CcSimJourneyStop(sim);
             bool town_departure =
                 local->convoy.phase == CC_LOCAL_CONVOY_DEPARTING;
             bool arrival = local->convoy.phase == CC_LOCAL_CONVOY_ARRIVING;
@@ -2301,6 +2322,10 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
             CcOverlayDrawText(closing_road_book ? "CLOSING THE ROAD BOOK" :
                               arrival ? "ENTERING TOWN" :
                               town_departure ? "LEAVING THE STABLE" :
+                              journey_stop == CC_JOURNEY_STOP_MIDDAY ?
+                                  "MIDDAY HALT" :
+                              journey_stop == CC_JOURNEY_STOP_OVERNIGHT ?
+                                  "EVENING STOP" :
                               "ON THE ROAD",
                               content_x, 91, 9, TEAL);
             CcOverlayDrawText(destination != NULL ? destination->name : "THE FAR GATE",
@@ -2309,29 +2334,45 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
             if (sim->journey.active) {
                 int32_t eta_hours =
                     (CcSimJourneyEtaMinutes(sim) + 59) / 60;
+                int32_t clock_minutes =
+                    sim->clock.minute_subticks /
+                        CC_WORLD_MINUTE_SUBTICKS + 6 * 60;
                 CcOverlayDrawText(
-                    TextFormat("%s / %s / ETA %dD %dH",
-                               CcJourneyPaceName(sim->journey.pace),
-                               CcClientConvoyGaitName(
-                                   CcClientConvoyGaitForPace(
-                                       local->convoy.pace)),
-                               eta_hours / 24, eta_hours % 24),
+                    TextFormat("DAY %d  %02d:%02d  /  WATCH %d OF %d",
+                               sim->current_day,
+                               (clock_minutes / 60) % 24,
+                               clock_minutes % 60,
+                               CcSimJourneyWatchNumber(sim),
+                               CcSimJourneyWatchCount(sim)),
                     content_x, 170, 8, CC_GOLD);
                 CcOverlayDrawText(
-                    TextFormat("TEAM %d%%  /  WAGON %d%%",
+                    TextFormat("TEAM %d%%  /  WAGON %d%%  /  ETA %dH",
                                CcSimHorseTeamReadiness(sim),
-                               sim->carriage.condition),
+                               sim->carriage.condition, eta_hours),
                     content_x, 189, 8, INK);
                 CcOverlayDrawText(
                     sim->journey.ambush_warned &&
                     sim->journey.ambush_pending ?
                         "SCOUTS: RIDERS SHADOWING THE ROAD" :
-                        JourneyRoadBeatName(sim->carriage.progress_milli),
+                    journey_stop == CC_JOURNEY_STOP_OVERNIGHT &&
+                    CcSimJourneyRoadHouseAvailable(sim) ?
+                        TextFormat("%s · %d MILES OUT",
+                                   CcSimRoadHouseName(
+                                       sim, sim->journey.route_id),
+                                   CcSimRoadHouseDistanceMiles(
+                                       sim, sim->journey.route_id)) :
+                        JourneyRoadBeatName(sim),
                     content_x, 208, 7,
                     sim->journey.ambush_warned &&
                     sim->journey.ambush_pending ? DANGER : TEAL);
                 CcOverlayDrawText(
-                    "W PUSH  /  S CAREFUL  /  SPACE HOLD",
+                    journey_stop == CC_JOURNEY_STOP_MIDDAY ?
+                        "ENTER BREAK  /  P PRESS ON" :
+                    journey_stop == CC_JOURNEY_STOP_OVERNIGHT ?
+                        CcSimJourneyRoadHouseAvailable(sim) ?
+                            "ENTER CAMP  /  L LODGE" :
+                            "ENTER MAKE CAMP" :
+                        "W PUSH  /  S CAREFUL  /  SPACE HOLD",
                     content_x, 238, 7, MUTED);
             } else {
                 CcOverlayDrawText(closing_road_book ?
@@ -3361,6 +3402,38 @@ static ContextActionSet BuildContextActions(
     if (local->site_travel_active) return set;
 
     if (local->journey_travel_active) {
+        if (sim->journey.active &&
+            sim->journey.phase == CC_JOURNEY_PHASE_RESTING) {
+            CcJourneyStopKind stop = CcSimJourneyStop(sim);
+            if (stop == CC_JOURNEY_STOP_MIDDAY) {
+                AddDetailedContextAction(
+                    &set, CONTEXT_ACTION_TAKE_BREAK,
+                    "Water team and read signs", "ENTER",
+                    "RECOVER TEAM / LOWER RISK", true, false);
+                AddDetailedContextAction(
+                    &set, CONTEXT_ACTION_PRESS_ON,
+                    "Press on", "P",
+                    "MORE FATIGUE / MORE DANGER", true, false);
+            } else if (stop == CC_JOURNEY_STOP_OVERNIGHT) {
+                AddDetailedContextAction(
+                    &set, CONTEXT_ACTION_MAKE_CAMP,
+                    "Make camp and set watch", "ENTER",
+                    "REST TEAM / CAMP RISK", true, false);
+                if (CcSimJourneyRoadHouseAvailable(sim)) {
+                    CcMoney cost = CcSimRoadHouseCost(
+                        sim, sim->journey.route_id);
+                    AddDetailedContextAction(
+                        &set, CONTEXT_ACTION_LODGE_ROAD_HOUSE,
+                        TextFormat("Lodge at %.28s — %d crowns",
+                                   CcSimRoadHouseName(
+                                       sim, sim->journey.route_id),
+                                   (int32_t)cost),
+                        "L", "SAFE REST / FEED / REPAIR",
+                        sim->player.coins >= cost, false);
+                }
+            }
+            return set;
+        }
         bool safe_journey = sim->journey.active && sim->journey.danger <= 30;
         bool parking = !sim->journey.active &&
             (RoadBookArrivalInProgress(local) ||
@@ -3614,6 +3687,9 @@ static Color ContextActionColor(ContextActionKind kind)
     if (kind == CONTEXT_ACTION_ACCEPT_PROMISE ||
         kind == CONTEXT_ACTION_TRAVEL ||
         kind == CONTEXT_ACTION_SKIP_TRAVEL ||
+        kind == CONTEXT_ACTION_TAKE_BREAK ||
+        kind == CONTEXT_ACTION_MAKE_CAMP ||
+        kind == CONTEXT_ACTION_LODGE_ROAD_HOUSE ||
         kind == CONTEXT_ACTION_DELIVER_CARGO ||
         kind == CONTEXT_ACTION_PLEDGE_CHARACTER ||
         kind == CONTEXT_ACTION_TALK_CHARACTER ||
@@ -4015,13 +4091,24 @@ static void DrawRoadPanel(const CcSim *sim, int32_t selected)
     CcOverlayDrawText(route->smuggler_route ? "FAINT WHEEL RUTS" :
                       route->closed ? "GUARDED CROSSING" : "SIGNED ROAD",
                       998, 151, 8, MUTED);
+    CcOverlayDrawText(
+        TextFormat("%.22s / %d MI / %d CROWNS",
+                   preview.road_house_name,
+                   preview.road_house_distance_miles,
+                   (int32_t)preview.road_house_cost),
+        998, 166, 7, TEAL);
 
-    CcOverlayDrawText(TextFormat("%d DAYS", preview.travel_days),
-                      998, 185, 14, CC_GOLD);
+    CcOverlayDrawText(
+        preview.opening_half_day ? "OPENING HALF-DAY" :
+            TextFormat("%d WATCHES / %d NIGHTS",
+                       preview.travel_watches, preview.overnight_stops),
+        998, 185, 12, CC_GOLD);
     CcOverlayDrawText(TextFormat("%" PRId64 " CROWNS",
                                  preview.provision_cost),
-                      1105, 185, 14, CC_GOLD);
-    CcOverlayDrawText("STEADY PLAN  /  W-S CHANGE PACE ON ROAD",
+                      1152, 185, 11, CC_GOLD);
+    CcOverlayDrawText(preview.departure_wait_minutes > 0 ?
+                          "DEPARTS NEXT MORNING / DAILY WATCHES" :
+                          "MORNING / BREAK / AFTERNOON / NIGHT STOP",
                       998, 208, 8, TEAL);
     DrawBar(998, 358, 92, "TEAM", preview.horse_readiness, TEAL);
     CcOverlayDrawText(TextFormat("%d FODDER",
@@ -5107,6 +5194,18 @@ static void GameplayReelTrade(CcSim *sim, bool delivery,
     (void)ApplyCommand(NULL, sim, trade, message, message_capacity);
 }
 
+static void GameplayReelResolveJourneyStop(
+    CcSim *sim, char *message, size_t message_capacity)
+{
+    if (sim == NULL || !sim->journey.active ||
+        sim->journey.phase != CC_JOURNEY_PHASE_RESTING) return;
+    CcCommand rest = {
+        .kind = CcSimJourneyStop(sim) == CC_JOURNEY_STOP_MIDDAY ?
+            CC_COMMAND_TAKE_JOURNEY_BREAK : CC_COMMAND_MAKE_CAMP
+    };
+    (void)ApplyCommand(NULL, sim, rest, message, message_capacity);
+}
+
 static void UpdateGameplayReel(CcSim *sim, LocalState *local,
                                GameplayReelState *reel,
                                int32_t *selected,
@@ -5258,6 +5357,8 @@ static void UpdateGameplayReel(CcSim *sim, LocalState *local,
             (void)CcLocalWorldUpdate(&local->course, &local->agent, sim,
                                      delta_time, false, false);
             CcSimAdvanceRuntimeTicks(sim, 16);
+            GameplayReelResolveJourneyStop(
+                sim, message, message_capacity);
             if (sim->journey.active &&
                 sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED) {
                 local->journey_travel_active = false;
@@ -5328,6 +5429,8 @@ static void UpdateGameplayReel(CcSim *sim, LocalState *local,
             (void)CcLocalWorldUpdate(&local->course, &local->agent, sim,
                                      delta_time, false, false);
             CcSimAdvanceRuntimeTicks(sim, 32);
+            GameplayReelResolveJourneyStop(
+                sim, message, message_capacity);
             if (!sim->journey.active) {
                 const CcSituation *accepted = CcSimAcceptedSituation(sim);
                 CcId target = SituationSettlementId(sim, accepted);
@@ -6504,6 +6607,37 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                     return;
                 }
             }
+            if (sim->journey.active &&
+                sim->journey.phase == CC_JOURNEY_PHASE_RESTING) {
+                CcJourneyStopKind stop = CcSimJourneyStop(sim);
+                CcCommand stop_action = {0};
+                if (context_action == CONTEXT_ACTION_TAKE_BREAK ||
+                    (stop == CC_JOURNEY_STOP_MIDDAY &&
+                     ClientKeyPressed(KEY_ENTER))) {
+                    stop_action.kind = CC_COMMAND_TAKE_JOURNEY_BREAK;
+                } else if (context_action == CONTEXT_ACTION_PRESS_ON ||
+                           ClientKeyPressed(KEY_P)) {
+                    stop_action.kind = CC_COMMAND_PRESS_ON;
+                } else if (context_action == CONTEXT_ACTION_MAKE_CAMP ||
+                           (stop == CC_JOURNEY_STOP_OVERNIGHT &&
+                            ClientKeyPressed(KEY_ENTER))) {
+                    stop_action.kind = CC_COMMAND_MAKE_CAMP;
+                } else if (context_action ==
+                               CONTEXT_ACTION_LODGE_ROAD_HOUSE ||
+                           ClientKeyPressed(KEY_L)) {
+                    stop_action.kind = CC_COMMAND_LODGE_ROAD_HOUSE;
+                }
+                if (stop_action.kind != CC_COMMAND_NONE &&
+                    ApplyCommand(*journal, sim, stop_action, message,
+                                 message_capacity)) {
+                    const CcEvent *event = CcSimRecentEvent(sim, 0);
+                    if (event != NULL) {
+                        (void)snprintf(message, message_capacity,
+                                       "%s", event->text);
+                    }
+                }
+                return;
+            }
             if (!sim->journey.active && local->open_world &&
                 local->arrival.phase == CC_CLIENT_ARRIVAL_TOWN) {
                 BeginTownArrivalState(local);
@@ -6542,6 +6676,16 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                     *view = VIEW_LOCAL;
                     (void)snprintf(message, message_capacity,
                                    "The road is blocked. Walk to the captain or return to the carriage.");
+                } else if (sim->journey.active &&
+                           sim->journey.phase ==
+                               CC_JOURNEY_PHASE_RESTING) {
+                    (void)snprintf(
+                        message, message_capacity, "%s",
+                        CcSimJourneyStop(sim) == CC_JOURNEY_STOP_MIDDAY ?
+                            "The morning watch ends. Water the team or press on." :
+                        CcSimJourneyRoadHouseAvailable(sim) ?
+                            "The afternoon watch ends at the road house. Lodge or make camp." :
+                            "The afternoon watch ends. Make camp and set a watch.");
                 } else if (sim->journey.active && warning_reached) {
                     const CcEvent *event = CcSimRecentEvent(sim, 0);
                     (void)snprintf(message, message_capacity, "%s",
@@ -7397,7 +7541,9 @@ static CcLocalAtmospherePreset LocalAtmosphereForSimulation(
         sim->dragon.retaliation_target_id == sim->player.location_id) {
         return CC_LOCAL_ATMOSPHERE_DRAGON_OMEN;
     }
-    return CcLocalAtmosphereForDay(sim != NULL ? sim->current_day : 0);
+    return CcLocalAtmosphereForClock(
+        sim != NULL ? sim->current_day : 0,
+        sim != NULL ? sim->clock.minute_subticks : 0);
 }
 
 static Rectangle LocalViewportBounds(void)

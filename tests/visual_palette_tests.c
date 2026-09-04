@@ -175,6 +175,17 @@ int main(void)
         (void)fprintf(stderr, "authored atmosphere sequence changed\n");
         passed = false;
     }
+    if (CcLocalAtmosphereForClock(1, 0) !=
+            CC_LOCAL_ATMOSPHERE_CLEAR_DAY ||
+        CcLocalAtmosphereForClock(1, 12 * 60 *
+                CC_WORLD_MINUTE_SUBTICKS) !=
+            CC_LOCAL_ATMOSPHERE_AMBER_DUSK ||
+        CcLocalAtmosphereForClock(1, 18 * 60 *
+                CC_WORLD_MINUTE_SUBTICKS) !=
+            CC_LOCAL_ATMOSPHERE_MOONLIT_NIGHT) {
+        (void)fprintf(stderr, "world clock atmosphere changed\n");
+        passed = false;
+    }
     if (!passed) return 1;
     (void)printf("visual palette contrast and hierarchy passed\n");
     return 0;

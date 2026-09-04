@@ -913,6 +913,9 @@ const char *CcEventKindName(CcEventKind kind)
         case CC_EVENT_QUEST_PROGRESS: return "QUEST PROGRESS";
         case CC_EVENT_LORE_RECORDED: return "LORE RECORDED";
         case CC_EVENT_LORE_LOST: return "LORE LOST";
+        case CC_EVENT_JOURNEY_BREAK: return "ROAD BREAK";
+        case CC_EVENT_JOURNEY_CAMP: return "CAMP";
+        case CC_EVENT_ROAD_HOUSE_LODGING: return "ROAD HOUSE";
     }
     return "EVENT";
 }
@@ -9322,33 +9325,11 @@ static void AdvanceHorseLifecycle(CcSim *sim, CcHorse *horse)
 static void AdvanceHorseTeam(CcSim *sim)
 {
     if (sim->schema_version < 14U) return;
-    bool travelling = sim->journey.active;
-    const CcRoute *route = travelling ?
-        CcSimRoute(sim, sim->journey.route_id) : NULL;
-    const CcSettlement *place = !travelling ?
+    bool on_journey = sim->journey.active;
+    const CcSettlement *place = !on_journey ?
         CcSimSettlement(sim, sim->player.location_id) : NULL;
     bool stable_care = CcSettlementHasService(place, CC_SERVICE_STABLE);
-    int32_t cargo_strain = sim->player.cargo_capacity > 0 ?
-        CcPlayerCargoUsed(&sim->player) * 4 /
-            sim->player.cargo_capacity : 0;
-    int32_t road_strain = route != NULL ?
-        MaximumI32(0, 60 - route->condition) / 12 : 0;
-    int32_t pace_strain = travelling ?
-        sim->journey.pace == CC_JOURNEY_PACE_PUSH ? 5 :
-        sim->journey.pace == CC_JOURNEY_PACE_CAREFUL ? -3 : 0 : 0;
-
-    if (travelling && route != NULL) {
-        int32_t road_wear = MaximumI32(0, 70 - route->condition) / 28;
-        int32_t pace_wear =
-            sim->journey.pace == CC_JOURNEY_PACE_PUSH ? 3 :
-            sim->journey.pace == CC_JOURNEY_PACE_STEADY ? 1 : -1;
-        sim->carriage.condition = ClampI32(
-            sim->carriage.condition -
-                MaximumI32(0, pace_wear + road_wear),
-            0, 100);
-    }
-
-    bool weekly_feed = !travelling && sim->current_day % 7 == 0;
+    bool weekly_feed = !on_journey && sim->current_day % 7 == 0;
     bool feed_available = weekly_feed && stable_care && place != NULL &&
         place->stock[CC_GOOD_FOOD] > 0;
     if (feed_available) {
@@ -9361,17 +9342,7 @@ static void AdvanceHorseTeam(CcSim *sim)
     for (int32_t i = 0; i < CC_CARRIAGE_HORSE_COUNT; ++i) {
         CcHorse *horse = &sim->horse_team[i];
         AdvanceHorseLifecycle(sim, horse);
-        if (travelling) {
-            int32_t horse_cargo_strain = sim->schema_version >= 15U ?
-                cargo_strain * MaximumI32(50, 150 - horse->strength) / 100 :
-                cargo_strain;
-            int32_t strain = 7 + horse_cargo_strain + road_strain +
-                             pace_strain -
-                             horse->hardiness / 25;
-            horse->fatigue = ClampI32(
-                horse->fatigue + MaximumI32(3, strain), 0, 100);
-            horse->hunger = ClampI32(horse->hunger + 2, 0, 100);
-        } else {
+        if (!on_journey) {
             horse->fatigue = ClampI32(
                 horse->fatigue - (stable_care ? 10 : 4), 0, 100);
             if (weekly_feed) {
@@ -9381,7 +9352,7 @@ static void AdvanceHorseTeam(CcSim *sim)
         }
         if (horse->fatigue >= 88 || horse->hunger >= 80) {
             horse->health = ClampI32(horse->health - 2, 1, 100);
-        } else if (!travelling && stable_care && horse->hunger < 45) {
+        } else if (!on_journey && stable_care && horse->hunger < 45) {
             horse->health = ClampI32(horse->health + 1, 1, 100);
         }
     }
@@ -10815,16 +10786,18 @@ static void FinishJourneyArrival(CcSim *sim)
         }
     }
     char text[CC_EVENT_TEXT_CAPACITY];
+    int32_t journey_watches =
+        sim->journey.total_subticks / CC_WORLD_WATCH_SUBTICKS;
     (void)snprintf(text, sizeof(text),
-                   "The carriage reaches %.24s from %.24s along a %d-day road at %s pace (%d%% danger).",
+                   "The carriage reaches %.24s from %.24s after %d road watches at %s pace (%d%% danger).",
                    destination->name,
                    origin != NULL ? origin->name : "the road",
-                   sim->journey.total_subticks / CC_WORLD_DAY_SUBTICKS,
+                   journey_watches,
                    CcJourneyPaceName(sim->journey.pace),
                    sim->journey.danger);
     (void)PushEvent(sim, CC_EVENT_PLAYER_TRAVEL, sim->player.id,
                     destination->id, sim->journey.parent_event_id,
-                    sim->journey.total_subticks / CC_WORLD_DAY_SUBTICKS,
+                    (journey_watches + 1) / 2,
                     text);
     DeliverDelayedEchoIfReady(sim);
 }
@@ -10905,6 +10878,124 @@ static int32_t JourneyCarriageSpeedForPace(int32_t total_subticks,
         CC_TRAVEL_GAME_MINUTES_PER_SECOND;
 }
 
+static uint32_t RoadHouseSeed(const CcSim *sim, CcId route_id)
+{
+    uint32_t seed = sim != NULL ? sim->world_seed : 0U;
+    seed ^= (uint32_t)route_id;
+    seed ^= (uint32_t)(route_id >> 32U);
+    seed ^= seed >> 16U;
+    seed *= UINT32_C(0x7feb352d);
+    seed ^= seed >> 15U;
+    return seed;
+}
+
+const char *CcSimRoadHouseName(const CcSim *sim, CcId route_id)
+{
+    static const char *const names[] = {
+        "The Lantern and Pike",
+        "The Three Wheels",
+        "Ash Tree House",
+        "The Red Mile",
+        "Pilgrim's Rest",
+        "The Barrow Lantern",
+        "The Fox and Fir",
+        "The Broken Crown"
+    };
+    uint32_t seed = RoadHouseSeed(sim, route_id);
+    return names[seed % (sizeof(names) / sizeof(names[0]))];
+}
+
+static int32_t RoadHouseTargetProgress(const CcSim *sim, CcId route_id)
+{
+    int32_t progress = 300 + (int32_t)(RoadHouseSeed(sim, route_id) % 401U);
+    const CcRoute *route = CcSimRoute(sim, route_id);
+    CcId origin_id = sim != NULL && sim->journey.active ?
+        sim->journey.origin_id : sim != NULL ? sim->player.location_id : 0U;
+    if (route != NULL && origin_id == route->to_id) progress = 1000 - progress;
+    return progress;
+}
+
+int32_t CcSimRoadHouseProgressMilli(const CcSim *sim, CcId route_id,
+                                    int32_t journey_watch_count)
+{
+    if (journey_watch_count < 3) return 0;
+    int32_t target = RoadHouseTargetProgress(sim, route_id);
+    int32_t best_watch = 2;
+    int32_t best_distance = INT32_MAX;
+    for (int32_t watch = 2; watch < journey_watch_count; watch += 2) {
+        int32_t progress = watch * 1000 / journey_watch_count;
+        int32_t distance = progress > target ? progress - target :
+                                                target - progress;
+        if (distance < best_distance) {
+            best_watch = watch;
+            best_distance = distance;
+        }
+    }
+    return best_watch * 1000 / journey_watch_count;
+}
+
+int32_t CcSimRoadHouseDistanceMiles(const CcSim *sim, CcId route_id)
+{
+    const CcRoute *route = CcSimRoute(sim, route_id);
+    if (route == NULL) return 0;
+    int32_t route_miles = route->travel_days * 18 +
+        4 + (int32_t)(RoadHouseSeed(sim, route_id) % 9U);
+    int32_t progress = RoadHouseTargetProgress(sim, route_id);
+    return MaximumI32(1, (route_miles * progress + 500) / 1000);
+}
+
+CcMoney CcSimRoadHouseCost(const CcSim *sim, CcId route_id)
+{
+    return 4 + (CcMoney)(RoadHouseSeed(sim, route_id) % 5U);
+}
+
+int32_t CcSimJourneyWatchCount(const CcSim *sim)
+{
+    if (sim == NULL || !sim->journey.active ||
+        sim->journey.total_subticks <= 0) return 0;
+    return sim->journey.total_subticks / CC_WORLD_WATCH_SUBTICKS;
+}
+
+int32_t CcSimJourneyWatchNumber(const CcSim *sim)
+{
+    int32_t watch_count = CcSimJourneyWatchCount(sim);
+    if (watch_count <= 0) return 0;
+    if (sim->journey.phase == CC_JOURNEY_PHASE_RESTING) {
+        return MinimumI32(
+            watch_count,
+            sim->journey.elapsed_subticks / CC_WORLD_WATCH_SUBTICKS);
+    }
+    return MinimumI32(
+        watch_count,
+        sim->journey.elapsed_subticks / CC_WORLD_WATCH_SUBTICKS + 1);
+}
+
+CcJourneyStopKind CcSimJourneyStop(const CcSim *sim)
+{
+    if (sim == NULL || !sim->journey.active ||
+        sim->journey.phase != CC_JOURNEY_PHASE_RESTING ||
+        sim->journey.elapsed_subticks <= 0 ||
+        sim->journey.elapsed_subticks >= sim->journey.total_subticks ||
+        sim->journey.elapsed_subticks % CC_WORLD_WATCH_SUBTICKS != 0) {
+        return CC_JOURNEY_STOP_NONE;
+    }
+    int32_t completed_watch =
+        sim->journey.elapsed_subticks / CC_WORLD_WATCH_SUBTICKS;
+    return completed_watch % 2 == 0 ? CC_JOURNEY_STOP_OVERNIGHT :
+                                      CC_JOURNEY_STOP_MIDDAY;
+}
+
+bool CcSimJourneyRoadHouseAvailable(const CcSim *sim)
+{
+    if (CcSimJourneyStop(sim) != CC_JOURNEY_STOP_OVERNIGHT) return false;
+    int32_t watch_count = CcSimJourneyWatchCount(sim);
+    int32_t house_progress = CcSimRoadHouseProgressMilli(
+        sim, sim->journey.route_id, watch_count);
+    int32_t completed_watch =
+        sim->journey.elapsed_subticks / CC_WORLD_WATCH_SUBTICKS;
+    return completed_watch * 1000 / watch_count == house_progress;
+}
+
 int32_t CcSimJourneyEtaMinutes(const CcSim *sim)
 {
     if (sim == NULL || !sim->journey.active ||
@@ -10915,6 +11006,16 @@ int32_t CcSimJourneyEtaMinutes(const CcSim *sim)
     int64_t world_subticks =
         ((int64_t)remaining * CC_TRAVEL_GAME_MINUTES_PER_SECOND +
          pace_rate - 1) / pace_rate;
+    int32_t first_boundary = sim->journey.elapsed_subticks /
+        CC_WORLD_WATCH_SUBTICKS + 1;
+    if (sim->journey.phase == CC_JOURNEY_PHASE_RESTING &&
+        CcSimJourneyStop(sim) == CC_JOURNEY_STOP_OVERNIGHT) {
+        world_subticks += CC_WORLD_WATCH_SUBTICKS;
+    }
+    int32_t watch_count = CcSimJourneyWatchCount(sim);
+    for (int32_t watch = first_boundary; watch < watch_count; ++watch) {
+        if (watch % 2 == 0) world_subticks += CC_WORLD_WATCH_SUBTICKS;
+    }
     return (int32_t)((world_subticks + CC_WORLD_MINUTE_SUBTICKS - 1) /
                      CC_WORLD_MINUTE_SUBTICKS);
 }
@@ -10956,6 +11057,9 @@ bool CcSimTravelPreview(const CcSim *sim, CcId destination_id,
     int32_t days = route->travel_days + (uncharted ? 2 : 0) +
                    (readiness < 70 ? 1 : 0) +
                    (readiness < 45 ? 1 : 0);
+    bool opening_half_day = sim->journey.total_subticks == 0;
+    int32_t travel_watches = opening_half_day ? 1 :
+        MaximumI32(3, days * 2);
     int32_t base_fare = days + (route->smuggler_route ? 3 : 0);
     int32_t shadow_danger = DragonRouteShadowDanger(sim, route);
     *preview = (CcTravelPreview){
@@ -10969,6 +11073,17 @@ bool CcSimTravelPreview(const CcSim *sim, CcId destination_id,
         .chart_accuracy = map != NULL ? map->accuracy : 0,
         .horse_feed_required = HorseFeedRequired(days),
         .horse_readiness = readiness,
+        .travel_watches = travel_watches,
+        .overnight_stops = (travel_watches - 1) / 2,
+        .departure_wait_minutes = !opening_half_day &&
+                sim->clock.minute_subticks > 0 ?
+            (CC_WORLD_DAY_SUBTICKS - sim->clock.minute_subticks) /
+                CC_WORLD_MINUTE_SUBTICKS : 0,
+        .road_house_distance_miles = CcSimRoadHouseDistanceMiles(
+            sim, route->id),
+        .road_house_cost = CcSimRoadHouseCost(sim, route->id),
+        .road_house_name = CcSimRoadHouseName(sim, route->id),
+        .opening_half_day = opening_half_day,
         .charted = map != NULL,
         .destination_known = !route->smuggler_route || map != NULL ||
                              sponsored_night_passage,
@@ -11067,8 +11182,8 @@ static bool ApplyTravel(CcSim *sim, const CcCommand *command,
     int32_t bargain_cost = ClampI32(
         4 + danger / 7 + (reaction <= 5 ? 3 : reaction >= 10 ? -2 : 0),
         3, 21);
-    int32_t total_subticks = days * CC_WORLD_DAY_SUBTICKS;
-    CcId parent_event_id = LatestLocalCause(sim, destination->id);
+    int32_t total_subticks = preview.travel_watches *
+        CC_WORLD_WATCH_SUBTICKS;
     bool ambush_pending = !encounter_planned &&
         (int32_t)(NextRandom(sim) % 100U) < danger / 2;
     sim->resolved_journey_situation_id = 0U;
@@ -11092,6 +11207,12 @@ static bool ApplyTravel(CcSim *sim, const CcCommand *command,
     }
     CcKingdom *toll_kingdom = KingdomMutable(sim, destination->kingdom_id);
     if (toll_kingdom != NULL) toll_kingdom->treasury += toll;
+    bool waited_for_morning = preview.departure_wait_minutes > 0;
+    if (waited_for_morning) {
+        sim->clock.minute_subticks = 0;
+        CcSimAdvanceDays(sim, 1);
+    }
+    CcId parent_event_id = LatestLocalCause(sim, destination->id);
     sim->journey = (CcJourneyEncounter){
         .active = true,
         .phase = CC_JOURNEY_PHASE_TRAVELLING,
@@ -11129,16 +11250,19 @@ static bool ApplyTravel(CcSim *sim, const CcCommand *command,
     if (sim->schema_version >= 14U) {
         (void)snprintf(
             text, sizeof(text),
-            "%.16s and %.16s pull from %.16s toward %.16s for %d days with %d fodder.",
+            "%.16s and %.16s pull from %.16s toward %.16s %sfor %d watches with %d fodder.",
             sim->horse_team[0].name, sim->horse_team[1].name,
             origin != NULL ? origin->name : "the waystation",
-            destination->name, days, preview.horse_feed_required);
+            destination->name,
+            waited_for_morning ? "at first light " : "",
+            preview.travel_watches,
+            preview.horse_feed_required);
     } else {
         (void)snprintf(
             text, sizeof(text),
-            "The Crownless carriage leaves %s for %s with %d days of provisions reserved.",
+            "The Crownless carriage leaves %s for %s with %d travel watches reserved.",
             origin != NULL ? origin->name : "the waystation",
-            destination->name, days);
+            destination->name, preview.travel_watches);
     }
     CcEvent *departure = PushEvent(
         sim, CC_EVENT_JOURNEY_DEPARTED, sim->player.id, route->id,
@@ -11449,6 +11573,166 @@ static bool ApplyJourneyPace(CcSim *sim, const CcCommand *command,
     return true;
 }
 
+static void ApplyTravelWatchStrain(CcSim *sim)
+{
+    const CcRoute *route = CcSimRoute(sim, sim->journey.route_id);
+    if (route == NULL || sim->schema_version < 14U) return;
+    int32_t cargo_strain = sim->player.cargo_capacity > 0 ?
+        CcPlayerCargoUsed(&sim->player) * 3 /
+            sim->player.cargo_capacity : 0;
+    int32_t road_strain = MaximumI32(0, 60 - route->condition) / 18;
+    int32_t pace_strain =
+        sim->journey.pace == CC_JOURNEY_PACE_PUSH ? 4 :
+        sim->journey.pace == CC_JOURNEY_PACE_CAREFUL ? -2 : 0;
+    int32_t road_wear = MaximumI32(0, 70 - route->condition) / 35;
+    int32_t pace_wear =
+        sim->journey.pace == CC_JOURNEY_PACE_PUSH ? 2 :
+        sim->journey.pace == CC_JOURNEY_PACE_STEADY ? 1 : 0;
+    sim->carriage.condition = ClampI32(
+        sim->carriage.condition - road_wear - pace_wear, 0, 100);
+    for (int32_t i = 0; i < CC_CARRIAGE_HORSE_COUNT; ++i) {
+        CcHorse *horse = &sim->horse_team[i];
+        int32_t strength_strain = sim->schema_version >= 15U ?
+            cargo_strain * MaximumI32(50, 150 - horse->strength) / 100 :
+            cargo_strain;
+        int32_t strain = 4 + strength_strain + road_strain + pace_strain -
+            horse->hardiness / 35;
+        horse->fatigue = ClampI32(
+            horse->fatigue + MaximumI32(1, strain), 0, 100);
+        horse->hunger = ClampI32(horse->hunger + 1, 0, 100);
+        if (horse->fatigue >= 88 || horse->hunger >= 80) {
+            horse->health = ClampI32(horse->health - 1, 1, 100);
+        }
+    }
+}
+
+static void RecoverJourneyTeam(CcSim *sim, int32_t fatigue_recovery,
+                               int32_t hunger_recovery)
+{
+    if (sim->schema_version < 14U) return;
+    for (int32_t i = 0; i < CC_CARRIAGE_HORSE_COUNT; ++i) {
+        CcHorse *horse = &sim->horse_team[i];
+        horse->fatigue = ClampI32(
+            horse->fatigue - fatigue_recovery, 0, 100);
+        horse->hunger = ClampI32(
+            horse->hunger - hunger_recovery, 0, 100);
+    }
+}
+
+static void ResumeJourney(CcSim *sim)
+{
+    sim->journey.phase = CC_JOURNEY_PHASE_TRAVELLING;
+    sim->clock.game_minutes_per_second =
+        CC_TRAVEL_GAME_MINUTES_PER_SECOND;
+    sim->carriage.mode = CC_CARRIAGE_MOVING;
+    sim->carriage.speed_milli_per_second = JourneyCarriageSpeedForPace(
+        sim->journey.total_subticks, sim->journey.pace);
+}
+
+static void AdvanceJourneyRestWatch(CcSim *sim)
+{
+    sim->clock.minute_subticks += CC_WORLD_WATCH_SUBTICKS;
+    while (sim->clock.minute_subticks >= CC_WORLD_DAY_SUBTICKS) {
+        sim->clock.minute_subticks -= CC_WORLD_DAY_SUBTICKS;
+        CcSimAdvanceDays(sim, 1);
+    }
+}
+
+static bool ApplyJourneyStopAction(CcSim *sim, const CcCommand *command,
+                                   char *error, size_t error_capacity)
+{
+    CcJourneyStopKind stop = CcSimJourneyStop(sim);
+    if (sim == NULL || command == NULL || stop == CC_JOURNEY_STOP_NONE) {
+        SetError(error, error_capacity,
+                 "The carriage is not waiting at a travel stop.");
+        return false;
+    }
+    bool midday = stop == CC_JOURNEY_STOP_MIDDAY;
+    bool overnight = stop == CC_JOURNEY_STOP_OVERNIGHT;
+    bool road_house = CcSimJourneyRoadHouseAvailable(sim);
+    char text[CC_EVENT_TEXT_CAPACITY];
+    CcEventKind event_kind = CC_EVENT_JOURNEY_BREAK;
+    int32_t magnitude = 0;
+
+    if (command->kind == CC_COMMAND_TAKE_JOURNEY_BREAK && midday) {
+        RecoverJourneyTeam(sim, 2, 0);
+        sim->journey.danger = ClampI32(sim->journey.danger - 2, 0, 95);
+        (void)snprintf(
+            text, sizeof(text),
+            "The company waters the team, checks the wheels, and reads the road before the afternoon watch.");
+    } else if (command->kind == CC_COMMAND_PRESS_ON && midday) {
+        for (int32_t i = 0; i < CC_CARRIAGE_HORSE_COUNT; ++i) {
+            sim->horse_team[i].fatigue = ClampI32(
+                sim->horse_team[i].fatigue + 4, 0, 100);
+        }
+        sim->journey.danger = ClampI32(sim->journey.danger + 5, 0, 95);
+        magnitude = 5;
+        (void)snprintf(
+            text, sizeof(text),
+            "The company presses through the midday stop. The team tires and the road grows harder to read.");
+    } else if (command->kind == CC_COMMAND_MAKE_CAMP && overnight) {
+        RecoverJourneyTeam(sim, 8, 5);
+        sim->journey.danger = ClampI32(sim->journey.danger + 3, 0, 95);
+        AdvanceJourneyRestWatch(sim);
+        event_kind = CC_EVENT_JOURNEY_CAMP;
+        magnitude = 3;
+        (void)snprintf(
+            text, sizeof(text),
+            "The company makes camp, feeds the team from its reserved fodder, and keeps a lantern watch until morning.");
+    } else if (command->kind == CC_COMMAND_LODGE_ROAD_HOUSE &&
+               overnight && road_house) {
+        CcMoney cost = CcSimRoadHouseCost(sim, sim->journey.route_id);
+        if (sim->player.coins < cost) {
+            SetError(error, error_capacity,
+                     "The company cannot afford beds and stable feed here.");
+            return false;
+        }
+        sim->player.coins -= cost;
+        CcSettlement *origin = CcSimSettlementMutable(
+            sim, sim->journey.origin_id);
+        if (origin != NULL) origin->market_coins += cost;
+        RecoverJourneyTeam(sim, 15, 10);
+        sim->carriage.condition = ClampI32(
+            sim->carriage.condition + 2, 0, 100);
+        sim->journey.danger = ClampI32(sim->journey.danger - 5, 0, 95);
+        sim->journey.ambush_pending = false;
+        sim->journey.ambush_resolved = true;
+        AdvanceJourneyRestWatch(sim);
+        event_kind = CC_EVENT_ROAD_HOUSE_LODGING;
+        magnitude = (int32_t)cost;
+        (void)snprintf(
+            text, sizeof(text),
+            "The company pays %d crowns at %.32s. Warm beds, stable feed, and a wheelwright make the morning safer.",
+            (int32_t)cost,
+            CcSimRoadHouseName(sim, sim->journey.route_id));
+    } else {
+        SetError(error, error_capacity, midday ?
+                 "Choose a midday break or press on." :
+                 road_house ? "Choose camp or the road house." :
+                              "Choose camp before the next watch.");
+        return false;
+    }
+
+    CcEvent *event = PushEvent(
+        sim, event_kind, sim->player.id, sim->journey.route_id,
+        sim->journey.parent_event_id, magnitude, text);
+    sim->journey.parent_event_id = event->id;
+    ResumeJourney(sim);
+    SetError(error, error_capacity, "");
+    return true;
+}
+
+static void PauseJourneyForWatchStop(CcSim *sim)
+{
+    if (sim->journey.ambush_pending && !sim->journey.ambush_warned) {
+        WarnJourneyAmbush(sim);
+    }
+    sim->journey.phase = CC_JOURNEY_PHASE_RESTING;
+    sim->clock.game_minutes_per_second = CC_IDLE_GAME_MINUTES_PER_SECOND;
+    sim->carriage.mode = CC_CARRIAGE_STOPPED;
+    sim->carriage.speed_milli_per_second = 0;
+}
+
 void CcSimAdvanceRuntimeTicks(CcSim *sim, int32_t ticks)
 {
     if (sim == NULL || ticks <= 0 || !sim->journey.active ||
@@ -11466,13 +11750,27 @@ void CcSimAdvanceRuntimeTicks(CcSim *sim, int32_t ticks)
             sim->clock.minute_subticks -= CC_WORLD_DAY_SUBTICKS;
             CcSimAdvanceDays(sim, 1);
         }
+        int32_t next_watch =
+            (sim->journey.elapsed_subticks / CC_WORLD_WATCH_SUBTICKS + 1) *
+            CC_WORLD_WATCH_SUBTICKS;
+        int32_t next_limit = MinimumI32(
+            sim->journey.total_subticks, next_watch);
         sim->journey.elapsed_subticks = MinimumI32(
-            sim->journey.total_subticks,
-            sim->journey.elapsed_subticks + journey_rate);
+            next_limit, sim->journey.elapsed_subticks + journey_rate);
         sim->carriage.progress_milli = sim->journey.total_subticks > 0 ?
             (int32_t)(((int64_t)sim->journey.elapsed_subticks * 1000) /
                       sim->journey.total_subticks) : 0;
         RevealJourneyRoad(sim);
+        if (sim->journey.elapsed_subticks >= sim->journey.total_subticks) {
+            ApplyTravelWatchStrain(sim);
+            FinishJourneyArrival(sim);
+            continue;
+        }
+        if (sim->journey.elapsed_subticks == next_watch) {
+            ApplyTravelWatchStrain(sim);
+            PauseJourneyForWatchStop(sim);
+            continue;
+        }
         if (sim->journey.ambush_pending &&
             !sim->journey.ambush_warned &&
             sim->journey.elapsed_subticks >=
@@ -11491,9 +11789,6 @@ void CcSimAdvanceRuntimeTicks(CcSim *sim, int32_t ticks)
                 sim->journey.encounter_subticks) {
             InterruptJourney(sim);
             continue;
-        }
-        if (sim->journey.elapsed_subticks >= sim->journey.total_subticks) {
-            FinishJourneyArrival(sim);
         }
     }
 }
@@ -12462,6 +12757,12 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
                 sim, command, error, error_capacity);
         case CC_COMMAND_SET_JOURNEY_PACE:
             return ApplyJourneyPace(sim, command, error, error_capacity);
+        case CC_COMMAND_TAKE_JOURNEY_BREAK:
+        case CC_COMMAND_PRESS_ON:
+        case CC_COMMAND_MAKE_CAMP:
+        case CC_COMMAND_LODGE_ROAD_HOUSE:
+            return ApplyJourneyStopAction(
+                sim, command, error, error_capacity);
         case CC_COMMAND_TRAVERSE_GOBLIN_TUNNEL:
             return ApplyGoblinTunnelTraversal(
                 sim, command, error, error_capacity);
@@ -12751,7 +13052,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                          sim->schema_version == 20U ||
                          sim->schema_version == 21U ||
                          sim->schema_version == 22U ||
-                         sim->schema_version == 23U;
+                         sim->schema_version == 23U ||
+                         sim->schema_version == 24U;
     bool supported_generator = sim->generator_version == CC_GENERATOR_VERSION ||
         (legacy_schema && (sim->generator_version == 3U ||
                            sim->generator_version == 5U ||
@@ -12876,7 +13178,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 !ValidBoundedText(event->text, sizeof(event->text)) ||
                 event->day < 1 || event->day > sim->current_day ||
                 event->kind < CC_EVENT_HARVEST_FAILED ||
-                event->kind > CC_EVENT_LORE_LOST ||
+                event->kind > CC_EVENT_ROAD_HOUSE_LODGING ||
                 event->parent_id == event->id ||
                 (event->parent_id != 0U &&
                  CcSimEvent(sim, event->parent_id) == NULL) ||
@@ -14152,15 +14454,20 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 CcSimSituation(sim, sim->journey.situation_id) != NULL;
             bool phase_valid =
                 sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING ||
-                sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED;
+                sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED ||
+                sim->journey.phase == CC_JOURNEY_PHASE_RESTING;
             bool encounter_valid =
                 sim->journey.phase != CC_JOURNEY_PHASE_BLOCKED ||
                 sim->journey.encounter_triggered;
+            bool stop_valid =
+                sim->journey.phase != CC_JOURNEY_PHASE_RESTING ||
+                CcSimJourneyStop(sim) != CC_JOURNEY_STOP_NONE;
             int32_t expected_rate =
                 sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING ?
                     CC_TRAVEL_GAME_MINUTES_PER_SECOND :
                     CC_IDLE_GAME_MINUTES_PER_SECOND;
             if (!situation_valid || !phase_valid || !encounter_valid ||
+                !stop_valid ||
                 CcSimSettlement(sim, sim->journey.origin_id) == NULL ||
                 CcSimSettlement(sim, sim->journey.destination_id) == NULL ||
                 CcSimRoute(sim, sim->journey.route_id) == NULL ||
@@ -14170,9 +14477,9 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 sim->journey.departure_day < 1 ||
                 sim->journey.departure_day > sim->current_day ||
                 sim->journey.elapsed_subticks < 0 ||
-                sim->journey.total_subticks < CC_WORLD_DAY_SUBTICKS ||
+                sim->journey.total_subticks < CC_WORLD_WATCH_SUBTICKS ||
                 sim->journey.total_subticks >
-                    CC_SIM_MAX_ROUTE_DAYS * CC_WORLD_DAY_SUBTICKS ||
+                    CC_SIM_MAX_ROUTE_DAYS * 2 * CC_WORLD_WATCH_SUBTICKS ||
                 sim->journey.elapsed_subticks >
                     sim->journey.total_subticks ||
                 sim->journey.encounter_subticks < 0 ||
@@ -14192,8 +14499,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 return false;
             }
             CcCarriageMode expected_mode =
-                sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED ?
-                    CC_CARRIAGE_STOPPED : CC_CARRIAGE_MOVING;
+                sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING ?
+                    CC_CARRIAGE_MOVING : CC_CARRIAGE_STOPPED;
             int32_t expected_progress = (int32_t)(
                 ((int64_t)sim->journey.elapsed_subticks * 1000) /
                 sim->journey.total_subticks);

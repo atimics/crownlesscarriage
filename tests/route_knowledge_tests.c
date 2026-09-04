@@ -34,9 +34,19 @@ static void RemovePlayerChartForRoute(CcSim *sim, CcId route_id)
 
 static void AdvanceJourneyToArrival(CcSim *sim)
 {
-    while (sim->journey.active &&
-           sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
-        CcSimAdvanceRuntimeTicks(sim, CC_WORLD_TICKS_PER_SECOND);
+    char error[192];
+    while (sim->journey.active) {
+        if (sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
+            CcSimAdvanceRuntimeTicks(sim, CC_WORLD_TICKS_PER_SECOND);
+        } else if (sim->journey.phase == CC_JOURNEY_PHASE_RESTING) {
+            CcCommand rest = {
+                .kind = CcSimJourneyStop(sim) == CC_JOURNEY_STOP_MIDDAY ?
+                    CC_COMMAND_TAKE_JOURNEY_BREAK : CC_COMMAND_MAKE_CAMP
+            };
+            CC_CHECK(CcSimApply(sim, &rest, error, sizeof(error)));
+        } else {
+            break;
+        }
     }
 }
 

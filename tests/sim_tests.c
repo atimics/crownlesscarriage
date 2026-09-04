@@ -6,9 +6,19 @@
 
 static void AdvanceTravellingJourney(CcSim *sim)
 {
-    while (sim->journey.active &&
-           sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
-        CcSimAdvanceRuntimeTicks(sim, CC_WORLD_TICKS_PER_SECOND);
+    char error[160];
+    while (sim->journey.active) {
+        if (sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
+            CcSimAdvanceRuntimeTicks(sim, CC_WORLD_TICKS_PER_SECOND);
+        } else if (sim->journey.phase == CC_JOURNEY_PHASE_RESTING) {
+            CcCommand rest = {
+                .kind = CcSimJourneyStop(sim) == CC_JOURNEY_STOP_MIDDAY ?
+                    CC_COMMAND_TAKE_JOURNEY_BREAK : CC_COMMAND_MAKE_CAMP
+            };
+            CC_CHECK(CcSimApply(sim, &rest, error, sizeof(error)));
+        } else {
+            break;
+        }
     }
 }
 
@@ -240,6 +250,13 @@ int main(void)
     CcId realtime_destination = realtime.settlements[1].id;
     int32_t realtime_departure_day = realtime.current_day;
     CcMoney realtime_coins = realtime.player.coins;
+    CcTravelPreview opening_preview = {0};
+    CC_CHECK(CcSimTravelPreview(
+        &realtime, realtime_destination, &opening_preview,
+        error, sizeof(error)));
+    CC_CHECK(opening_preview.opening_half_day);
+    CC_CHECK(opening_preview.travel_watches == 1);
+    CC_CHECK(opening_preview.overnight_stops == 0);
     CcCommand realtime_travel = {
         .kind = CC_COMMAND_TRAVEL,
         .target_id = realtime_destination
@@ -269,12 +286,92 @@ int main(void)
     CC_CHECK(realtime.clock.minute_subticks ==
              CC_TRAVEL_GAME_MINUTES_PER_SECOND * 12);
     CC_CHECK(realtime.carriage.progress_milli > 0);
-    int32_t realtime_days = realtime.routes[0].travel_days;
     AdvanceTravellingJourney(&realtime);
     CC_CHECK(!realtime.journey.active);
     CC_CHECK(realtime.player.location_id == realtime_destination);
-    CC_CHECK(realtime.current_day == realtime_departure_day + realtime_days);
+    CC_CHECK(realtime.current_day == realtime_departure_day);
+    CC_CHECK(realtime.clock.minute_subticks == CC_WORLD_WATCH_SUBTICKS);
     CC_CHECK(realtime.carriage.mode == CC_CARRIAGE_PARKED);
+
+    CcTravelPreview return_preview = {0};
+    CC_CHECK(CcSimTravelPreview(
+        &realtime, realtime_origin, &return_preview,
+        error, sizeof(error)));
+    CC_CHECK(!return_preview.opening_half_day);
+    CC_CHECK(return_preview.travel_watches >= 3);
+    CC_CHECK(return_preview.overnight_stops >= 1);
+    CC_CHECK(return_preview.departure_wait_minutes == 16 * 60);
+    CC_CHECK(return_preview.road_house_name != NULL);
+    CC_CHECK(return_preview.road_house_distance_miles > 0);
+    CC_CHECK(return_preview.road_house_cost > 0);
+
+    int32_t first_house_distance = CcSimRoadHouseDistanceMiles(
+        &realtime, realtime.routes[0].id);
+    bool varied_house_distance = false;
+    for (int32_t route_index = 1;
+         route_index < realtime.route_count; ++route_index) {
+        if (CcSimRoadHouseDistanceMiles(
+                &realtime, realtime.routes[route_index].id) !=
+            first_house_distance) {
+            varied_house_distance = true;
+        }
+    }
+    CC_CHECK(varied_house_distance);
+
+    CcCommand return_travel = {
+        .kind = CC_COMMAND_TRAVEL,
+        .target_id = realtime_origin
+    };
+    int32_t return_preparation_day = realtime.current_day;
+    CC_CHECK(CcSimApply(&realtime, &return_travel,
+                        error, sizeof(error)));
+    CC_CHECK(realtime.journey.departure_day == return_preparation_day + 1);
+    CC_CHECK(realtime.clock.minute_subticks == 0);
+    realtime.journey.ambush_pending = false;
+    while (realtime.journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
+        CcSimAdvanceRuntimeTicks(&realtime, CC_WORLD_TICKS_PER_SECOND);
+    }
+    CC_CHECK(CcSimJourneyStop(&realtime) == CC_JOURNEY_STOP_MIDDAY);
+    int32_t break_danger = realtime.journey.danger;
+    int32_t break_fatigue = realtime.horse_team[0].fatigue;
+    CcSim pressed_on = realtime;
+    CcCommand take_break = {.kind = CC_COMMAND_TAKE_JOURNEY_BREAK};
+    CcCommand press_on = {.kind = CC_COMMAND_PRESS_ON};
+    CC_CHECK(CcSimApply(&realtime, &take_break, error, sizeof(error)));
+    CC_CHECK(CcSimApply(&pressed_on, &press_on, error, sizeof(error)));
+    CC_CHECK(realtime.journey.danger < break_danger);
+    CC_CHECK(realtime.horse_team[0].fatigue < break_fatigue);
+    CC_CHECK(pressed_on.journey.danger > break_danger);
+    CC_CHECK(pressed_on.horse_team[0].fatigue > break_fatigue);
+    while (realtime.journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
+        CcSimAdvanceRuntimeTicks(&realtime, CC_WORLD_TICKS_PER_SECOND);
+    }
+    CC_CHECK(CcSimJourneyStop(&realtime) == CC_JOURNEY_STOP_OVERNIGHT);
+    CC_CHECK(CcSimJourneyRoadHouseAvailable(&realtime));
+    realtime.horse_team[0].fatigue = 30;
+    CcSim camped = realtime;
+    CcSim lodged = realtime;
+    int32_t camp_day = camped.current_day;
+    int32_t camp_clock = camped.clock.minute_subticks;
+    int32_t stop_fatigue = camped.horse_team[0].fatigue;
+    CcMoney lodging_coins = lodged.player.coins;
+    CcMoney lodging_cost = CcSimRoadHouseCost(
+        &lodged, lodged.journey.route_id);
+    CcCommand make_camp = {.kind = CC_COMMAND_MAKE_CAMP};
+    CcCommand lodge = {.kind = CC_COMMAND_LODGE_ROAD_HOUSE};
+    CC_CHECK(CcSimApply(&camped, &make_camp, error, sizeof(error)));
+    CC_CHECK(CcSimApply(&lodged, &lodge, error, sizeof(error)));
+    CC_CHECK(camped.current_day > camp_day ||
+             camped.clock.minute_subticks > camp_clock);
+    CC_CHECK(camped.horse_team[0].fatigue < stop_fatigue);
+    CC_CHECK(lodged.horse_team[0].fatigue <
+             camped.horse_team[0].fatigue);
+    CC_CHECK(lodged.player.coins == lodging_coins - lodging_cost);
+    CC_CHECK(CcSimRecentEvent(&camped, 0)->kind == CC_EVENT_JOURNEY_CAMP);
+    CC_CHECK(CcSimRecentEvent(&lodged, 0)->kind ==
+             CC_EVENT_ROAD_HOUSE_LODGING);
+    CC_CHECK(CcSimValidate(&camped, error, sizeof(error)));
+    CC_CHECK(CcSimValidate(&lodged, error, sizeof(error)));
 
     CcSim careful_pace;
     CcSim steady_pace;
@@ -288,6 +385,7 @@ int main(void)
     };
     CC_CHECK(CcSimApply(&careful_pace, &pace_travel,
                         error, sizeof(error)));
+    CC_CHECK(CcSimJourneyWatchNumber(&careful_pace) == 1);
     pace_travel.target_id = steady_pace.settlements[1].id;
     CC_CHECK(CcSimApply(&steady_pace, &pace_travel,
                         error, sizeof(error)));
@@ -317,13 +415,17 @@ int main(void)
     int32_t push_condition = push_pace.carriage.condition;
     int32_t careful_fatigue = careful_pace.horse_team[0].fatigue;
     int32_t push_fatigue = push_pace.horse_team[0].fatigue;
-    CcSimAdvanceRuntimeTicks(&careful_pace, 2880);
-    CcSimAdvanceRuntimeTicks(&steady_pace, 2880);
-    CcSimAdvanceRuntimeTicks(&push_pace, 2880);
+    CcSimAdvanceRuntimeTicks(&careful_pace, 480);
+    CcSimAdvanceRuntimeTicks(&steady_pace, 480);
+    CcSimAdvanceRuntimeTicks(&push_pace, 480);
     CC_CHECK(careful_pace.carriage.progress_milli <
              steady_pace.carriage.progress_milli);
     CC_CHECK(steady_pace.carriage.progress_milli <
              push_pace.carriage.progress_milli);
+    CC_CHECK(careful_pace.carriage.condition == careful_condition);
+    AdvanceTravellingJourney(&careful_pace);
+    AdvanceTravellingJourney(&steady_pace);
+    AdvanceTravellingJourney(&push_pace);
     CC_CHECK(careful_pace.carriage.condition >= careful_condition - 1);
     CC_CHECK(push_pace.carriage.condition < push_condition);
     CC_CHECK(careful_pace.horse_team[0].fatigue - careful_fatigue <
@@ -536,8 +638,8 @@ int main(void)
     CC_CHECK(CcSimApply(&uncharted, &uncharted_travel,
                         error, sizeof(error)));
     CC_CHECK(uncharted.journey.total_subticks ==
-             (uncharted.routes[5].travel_days + 2) *
-                 CC_WORLD_DAY_SUBTICKS);
+             uncharted_preview.travel_watches *
+                 CC_WORLD_WATCH_SUBTICKS);
 
     CcSim hidden_fork;
     CcSimInit(&hidden_fork, UINT32_C(0xf04c));

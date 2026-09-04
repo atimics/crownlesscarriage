@@ -510,12 +510,16 @@ static void DrawRoadSurface(float x, float width, Color road)
     }
 }
 
-static const char *RoadJourneyBeatName(int32_t progress_milli)
+static const char *RoadJourneyBeatName(const CcSim *sim)
 {
-    if (progress_milli < 250) return "OUTER FARMS";
-    if (progress_milli < 500) return "DEEP ROAD";
-    if (progress_milli < 750) return "WAYFARER STOP";
-    return "DESTINATION MARCH";
+    CcJourneyStopKind stop = CcSimJourneyStop(sim);
+    if (stop == CC_JOURNEY_STOP_MIDDAY) return "MIDDAY BREAK";
+    if (stop == CC_JOURNEY_STOP_OVERNIGHT) {
+        return CcSimJourneyRoadHouseAvailable(sim) ?
+            "ROAD HOUSE STOP" : "CAMP STOP";
+    }
+    return CcSimJourneyWatchNumber(sim) % 2 == 1 ?
+        "MORNING ROAD" : "AFTERNOON ROAD";
 }
 
 uint32_t CcLocalRoadWildernessSeedInternal(uint32_t world_seed,
@@ -536,7 +540,7 @@ uint32_t CcLocalRoadWildernessSeedInternal(uint32_t world_seed,
 static void DrawRoadTerrain(uint32_t world_seed, const CcRoute *route,
                             int32_t danger, bool bridge_checkpoint,
                             Color kingdom, int32_t progress_milli,
-                            Vector3 focus)
+                            Vector3 focus, bool road_house_nearby)
 {
     int32_t road_beat = progress_milli < 250 ? 0 :
                         progress_milli < 500 ? 1 :
@@ -609,6 +613,22 @@ static void DrawRoadTerrain(uint32_t world_seed, const CcRoute *route,
                 0.38f + (float)((seed >> 20U) % 4U) * 0.08f,
                 ShadeColor(WORLD_STONE, 0.78f));
         }
+    }
+    if (road_house_nearby &&
+        SceneryFootprintVisible((Rectangle){48.0f, 27.0f, 12.0f, 8.0f},
+                                focus)) {
+        DrawBox((Vector3){54.0f, 1.25f, 31.0f},
+                (Vector3){6.8f, 2.5f, 4.2f}, WORLD_WOOD_LIGHT);
+        DrawBox((Vector3){54.0f, 2.75f, 31.0f},
+                (Vector3){7.6f, 0.55f, 4.8f}, WORLD_EARTH_SHADOW);
+        DrawBox((Vector3){54.0f, 0.82f, 33.12f},
+                (Vector3){1.05f, 1.64f, 0.12f}, WORLD_WOOD_SHADOW);
+        DrawSmallSphere((Vector3){51.2f, 1.72f, 33.25f}, 0.18f,
+                        WORLD_GOLD);
+        DrawBox((Vector3){50.0f, 1.18f, 34.2f},
+                (Vector3){0.12f, 2.36f, 0.12f}, WORLD_WOOD_SHADOW);
+        DrawBox((Vector3){51.0f, 2.10f, 34.2f},
+                (Vector3){2.0f, 0.72f, 0.12f}, WORLD_GOLD);
     }
     if (road_beat == 0) {
         for (int32_t post = 0; post < 5; ++post) {
@@ -763,9 +783,18 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     CcId road_kingdom_id = origin != NULL ? origin->kingdom_id :
         destination_place != NULL ? destination_place->kingdom_id : 0;
     Color road_kingdom = KingdomColor3D(sim, road_kingdom_id);
+    int32_t house_progress = route != NULL ?
+        CcSimRoadHouseProgressMilli(
+            sim, route->id, CcSimJourneyWatchCount(sim)) : 0;
+    int32_t house_distance = sim->carriage.progress_milli > house_progress ?
+        sim->carriage.progress_milli - house_progress :
+        house_progress - sim->carriage.progress_milli;
+    bool road_house_nearby = house_progress > 0 &&
+        (house_distance <= 80 || CcSimJourneyRoadHouseAvailable(sim));
     DrawRoadTerrain(sim->world_seed, route, sim->journey.danger,
                     authored_checkpoint, road_kingdom,
-                    sim->carriage.progress_milli, camera.target);
+                    sim->carriage.progress_milli, camera.target,
+                    road_house_nearby);
     if (!travelling &&
         SceneryPointVisible(ROAD_BARRICADE_X, 40.0f, camera.target) &&
         !DrawBridgeCheckpoint()) {
@@ -886,6 +915,11 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
             {travelling ? carriage_x + 8.0f : 57.0f, 1.18f, 40.0f},
             route_label, WORLD_GOLD};
     }
+    if (travelling && road_house_nearby) {
+        labels[count++] = (WorldLabel){
+            {54.0f, 3.35f, 31.0f},
+            CcSimRoadHouseName(sim, sim->journey.route_id), WORLD_TEAL};
+    }
     if (parley && !combat_presentation) {
         labels[count++] = (WorldLabel){
             {course->raiders[0].position.x,
@@ -934,7 +968,7 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     DrawViewportText(
         travelling ?
             TextFormat("%s / %d%% COMPLETE / %s PACE / ETA %dH",
-                       RoadJourneyBeatName(sim->carriage.progress_milli),
+                       RoadJourneyBeatName(sim),
                        sim->carriage.progress_milli / 10,
                        CcJourneyPaceName(sim->journey.pace),
                        (CcSimJourneyEtaMinutes(sim) + 59) / 60) : parley ?
@@ -1040,7 +1074,7 @@ static void DrawRemoteSiteTerrain(uint32_t world_seed,
                   BlendColor(WORLD_STONE_SHADOW, WORLD_INK, 0.46f));
     } else {
         DrawRoadTerrain(world_seed, road, danger, false, kingdom,
-                        progress_milli, focus);
+                        progress_milli, focus, false);
     }
     if (travelling || site == CC_LOCAL_SITE_DUNGEON) return;
 
