@@ -1240,10 +1240,10 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
     drew = DrawNpcDynamicModule(
         NPC_DYNAMIC_TORSO,
         NpcModuleTransform(torso_base, body_right, body_up, body_forward,
-                           (Vector3){(featured_hero ? 0.52f : 0.62f) * mass *
+                           (Vector3){(featured_hero ? 0.56f : 0.62f) * mass *
                                          appearance->shoulder_scale,
                                      torso_length,
-                                     (featured_hero ? 0.58f : 0.55f) * mass}),
+                                     (featured_hero ? 0.54f : 0.55f) * mass}),
         outer);
 
     const CcHumanoidSkinBonePose *pelvis =
@@ -1257,9 +1257,9 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
                            FromLimbVector(pelvis->right),
                            FromLimbVector(pelvis->up),
                            FromLimbVector(pelvis->forward),
-                           (Vector3){(featured_hero ? 0.48f : 0.55f) * mass,
+                           (Vector3){(featured_hero ? 0.46f : 0.55f) * mass,
                                      pelvis_length,
-                                     (featured_hero ? 0.44f : 0.54f) * mass}),
+                                     (featured_hero ? 0.42f : 0.54f) * mass}),
         trousers) && drew;
 
     static const CcHumanoidSkinBone upper_arms[] = {
@@ -1282,20 +1282,20 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
         CC_HUMANOID_SKIN_FOOT_LEFT,
         CC_HUMANOID_SKIN_FOOT_RIGHT,
     };
-    float arm_width = featured_hero ? 0.165f * mass :
+    float arm_width = featured_hero ? 0.152f * mass :
         (0.135f + muscle * 0.020f) * mass;
     float leg_width = featured_hero ? 0.215f * mass :
         (0.175f + muscle * 0.025f) * mass;
     for (int32_t side = 0; side < 2; ++side) {
         drew = DrawNpcDynamicBoneModule(
             NPC_DYNAMIC_UPPER_ARM, &skin->bones[upper_arms[side]],
-            featured_hero ? 0.158f * mass : arm_width,
-            featured_hero ? 0.170f * mass : arm_width * 0.92f,
+            featured_hero ? 0.150f * mass : arm_width,
+            featured_hero ? 0.158f * mass : arm_width * 0.92f,
             outer) && drew;
         drew = DrawNpcDynamicBoneModule(
             NPC_DYNAMIC_FOREARM, &skin->bones[forearms[side]],
-            featured_hero ? 0.152f * mass : arm_width * 0.86f,
-            featured_hero ? 0.165f * mass : arm_width * 0.80f,
+            featured_hero ? 0.136f * mass : arm_width * 0.86f,
+            featured_hero ? 0.146f * mass : arm_width * 0.80f,
             appearance->underlayer) && drew;
         drew = DrawNpcDynamicBoneModule(
             NPC_DYNAMIC_THIGH, &skin->bones[thighs[side]],
@@ -1314,10 +1314,10 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
             NpcModuleTransform(foot_head, FromLimbVector(foot->right),
                                FromLimbVector(foot->up),
                                FromLimbVector(foot->forward),
-                               (Vector3){(featured_hero ? 0.180f : 0.23f) *
+                               (Vector3){(featured_hero ? 0.195f : 0.23f) *
                                              mass,
                                          foot_length,
-                                         (featured_hero ? 0.16f : 0.20f) *
+                                         (featured_hero ? 0.175f : 0.20f) *
                                              mass}),
             appearance->leather) && drew;
     }
@@ -1329,7 +1329,7 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
     Vector3 head_right = FromLimbVector(head_bone->right);
     Vector3 head_up = FromLimbVector(head_bone->up);
     Vector3 head_forward = FromLimbVector(head_bone->forward);
-    float hero_head_scale = featured_hero ? 1.07f : 1.0f;
+    float hero_head_scale = featured_hero ? 1.04f : 1.0f;
     Vector3 head_scale = {appearance->head_width * hero_head_scale,
                           hero_head_scale,
                           appearance->head_depth * hero_head_scale};
@@ -1358,18 +1358,18 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
         npc_dynamic_modules[NPC_DYNAMIC_MANTLE].ready) {
         Vector3 mantle_root = NpcModuleLocalPoint(
             back, body_right, body_up, body_forward,
-            (Vector3){-0.03f + secondary_wave * 0.020f * movement_weight,
-                      0.14f + fabsf(secondary_wave) * 0.010f *
+            (Vector3){-0.06f + secondary_wave * 0.020f * movement_weight,
+                      0.12f + fabsf(secondary_wave) * 0.010f *
                                   movement_weight,
                       -0.015f - 0.018f * movement_weight});
         (void)DrawNpcDynamicModule(
             NPC_DYNAMIC_MANTLE,
             NpcModuleTransform(mantle_root, gear_right, gear_up,
                                gear_forward,
-                               (Vector3){(featured_hero ? 0.47f : 0.62f) *
+                               (Vector3){(featured_hero ? 0.43f : 0.62f) *
                                              mass,
-                                         featured_hero ? 0.55f : 0.64f,
-                                         featured_hero ? 0.40f : 0.50f}),
+                                         featured_hero ? 0.50f : 0.64f,
+                                         featured_hero ? 0.34f : 0.50f}),
             ShadeColor(appearance->outer, 0.68f));
     }
     if ((appearance->equipment & CC_NPC_EQUIPMENT_ARMOR) != 0U) {
@@ -1394,10 +1394,10 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
                                    FromLimbVector(shoulder->right),
                                    FromLimbVector(shoulder->up),
                                    FromLimbVector(shoulder->forward),
-                                   (Vector3){(featured_hero ? 0.12f : 0.22f) *
+                                   (Vector3){(featured_hero ? 0.15f : 0.22f) *
                                                  mass,
-                                             featured_hero ? 0.13f : 0.20f,
-                                             (featured_hero ? 0.12f : 0.21f) *
+                                             featured_hero ? 0.15f : 0.20f,
+                                             (featured_hero ? 0.14f : 0.21f) *
                                                  mass}),
                 appearance->metal);
         }
