@@ -30,6 +30,18 @@ typedef struct CcClientDepartureTransition {
     float road_book_progress;
 } CcClientDepartureTransition;
 
+typedef enum CcClientArrivalPhase {
+    CC_CLIENT_ARRIVAL_ROAD_BOOK = 0,
+    CC_CLIENT_ARRIVAL_TOWN,
+    CC_CLIENT_ARRIVAL_PARKED
+} CcClientArrivalPhase;
+
+typedef struct CcClientArrivalTransition {
+    CcClientArrivalPhase phase;
+    float road_book_progress;
+    float town_progress;
+} CcClientArrivalTransition;
+
 float CcClientConvoyPaceStep(float pace, bool road_phase,
                              bool urge, bool rein_in, bool stopped,
                              float delta_time);
@@ -53,5 +65,11 @@ CcClientCampaignAccess CcClientCampaignAccessFor(bool normal_play,
 void CcClientDepartureBegin(CcClientDepartureTransition *transition);
 void CcClientDepartureAdvance(CcClientDepartureTransition *transition,
                               float pace, float delta_time);
+void CcClientArrivalBegin(CcClientArrivalTransition *transition);
+void CcClientArrivalAdvance(CcClientArrivalTransition *transition,
+                            float pace, float delta_time);
+void CcClientArrivalComplete(CcClientArrivalTransition *transition);
+float CcClientArrivalCameraWeight(
+    const CcClientArrivalTransition *transition);
 
 #endif

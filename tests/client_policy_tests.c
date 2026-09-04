@@ -43,6 +43,50 @@ int main(void)
     CC_CHECK(paused_exit.phase == CC_CLIENT_DEPARTURE_TOWN);
     CC_CHECK(paused_exit.town_progress == 0.0f);
 
+    CcClientArrivalTransition arrival;
+    CcClientArrivalBegin(&arrival);
+    CC_CHECK(arrival.phase == CC_CLIENT_ARRIVAL_ROAD_BOOK);
+    CC_CHECK(arrival.road_book_progress == 0.0f);
+    CC_CHECK(arrival.town_progress == 0.0f);
+    CC_CHECK(CcClientArrivalCameraWeight(&arrival) == 1.0f);
+    int arrival_camera_updates = 0;
+    while (arrival.phase == CC_CLIENT_ARRIVAL_ROAD_BOOK &&
+           arrival_camera_updates < 120) {
+        float previous = arrival.road_book_progress;
+        CcClientArrivalAdvance(&arrival, 1.0f, 1.0f / 60.0f);
+        CC_CHECK(arrival.road_book_progress >= previous);
+        CC_CHECK(CcClientArrivalCameraWeight(&arrival) <=
+                 1.0f - previous);
+        arrival_camera_updates += 1;
+    }
+    CC_CHECK(arrival.phase == CC_CLIENT_ARRIVAL_TOWN);
+    CC_CHECK(arrival.road_book_progress == 1.0f);
+    CC_CHECK(arrival.town_progress == 0.0f);
+    CC_CHECK(CcClientArrivalCameraWeight(&arrival) == 0.0f);
+    CcClientArrivalAdvance(&arrival, 0.0f, 10.0f);
+    CC_CHECK(arrival.phase == CC_CLIENT_ARRIVAL_TOWN);
+    CC_CHECK(arrival.town_progress == 0.0f);
+    int arrival_town_updates = 0;
+    while (arrival.phase == CC_CLIENT_ARRIVAL_TOWN &&
+           arrival_town_updates < 1000) {
+        float previous = arrival.town_progress;
+        CcClientArrivalAdvance(&arrival, 1.0f, 1.0f / 60.0f);
+        CC_CHECK(arrival.town_progress >= previous);
+        arrival_town_updates += 1;
+    }
+    CC_CHECK(arrival.phase == CC_CLIENT_ARRIVAL_PARKED);
+    CC_CHECK(arrival.town_progress == 1.0f);
+
+    CcClientArrivalTransition reduced_motion;
+    CcClientArrivalBegin(&reduced_motion);
+    CcClientArrivalAdvance(&reduced_motion, 1.0f, NAN);
+    CC_CHECK(reduced_motion.phase == CC_CLIENT_ARRIVAL_ROAD_BOOK);
+    CC_CHECK(reduced_motion.road_book_progress == 0.0f);
+    CcClientArrivalComplete(&reduced_motion);
+    CC_CHECK(reduced_motion.phase == arrival.phase);
+    CC_CHECK(reduced_motion.road_book_progress == arrival.road_book_progress);
+    CC_CHECK(reduced_motion.town_progress == arrival.town_progress);
+
     float departure = 0.0f;
     for (int frame = 0; frame < 180; ++frame) {
         departure = CcClientConvoyPaceStep(

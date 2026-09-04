@@ -133,6 +133,7 @@ typedef struct CcLocalWorldCarriageState {
     CcId route_id;
     bool visible;
     bool hero_embarked;
+    bool town_arrival;
 } CcLocalWorldCarriageState;
 
 typedef enum CcLocalAtmospherePreset {

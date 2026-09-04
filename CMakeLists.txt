@@ -607,10 +607,40 @@ if(CC_BUILD_CLIENT)
                 -DCC_FILE=${CC_ROADBOOK_REVIEW_DIR}/departure-road-book.png
                 -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/require_nonempty_file.cmake
         COMMAND $<TARGET_FILE:crownless_carriage>
+                --capture-road-arrival 1.00
+                "roadbook-review/arrival-road-book.png"
+        COMMAND ${CMAKE_COMMAND}
+                -DCC_FILE=${CC_ROADBOOK_REVIEW_DIR}/arrival-road-book.png
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/require_nonempty_file.cmake
+        COMMAND $<TARGET_FILE:crownless_carriage>
                 --capture-road-arrival 0.50
                 "roadbook-review/arrival.png"
         COMMAND ${CMAKE_COMMAND}
                 -DCC_FILE=${CC_ROADBOOK_REVIEW_DIR}/arrival.png
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/require_nonempty_file.cmake
+        COMMAND $<TARGET_FILE:crownless_carriage>
+                --capture-road-arrival 0.00
+                "roadbook-review/arrival-gate.png"
+        COMMAND ${CMAKE_COMMAND}
+                -DCC_FILE=${CC_ROADBOOK_REVIEW_DIR}/arrival-gate.png
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/require_nonempty_file.cmake
+        COMMAND $<TARGET_FILE:crownless_carriage>
+                --capture-town-arrival 1 0.00
+                "roadbook-review/arrival-town-gate.png"
+        COMMAND ${CMAKE_COMMAND}
+                -DCC_FILE=${CC_ROADBOOK_REVIEW_DIR}/arrival-town-gate.png
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/require_nonempty_file.cmake
+        COMMAND $<TARGET_FILE:crownless_carriage>
+                --capture-town-arrival 1 0.45
+                "roadbook-review/arrival-town-road.png"
+        COMMAND ${CMAKE_COMMAND}
+                -DCC_FILE=${CC_ROADBOOK_REVIEW_DIR}/arrival-town-road.png
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/require_nonempty_file.cmake
+        COMMAND $<TARGET_FILE:crownless_carriage>
+                --capture-town-arrival 1 0.90
+                "roadbook-review/arrival-yard.png"
+        COMMAND ${CMAKE_COMMAND}
+                -DCC_FILE=${CC_ROADBOOK_REVIEW_DIR}/arrival-yard.png
                 -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/require_nonempty_file.cmake
         COMMAND $<TARGET_FILE:crownless_carriage>
                 --benchmark-render 360
@@ -832,6 +862,8 @@ if(BUILD_TESTING)
                  COMMAND crownless_carriage --test-town-arrival-parking)
         add_test(NAME town_departure_to_road_book
                  COMMAND crownless_carriage --test-town-departure)
+        add_test(NAME roadbook_arrival_transition
+                 COMMAND crownless_carriage --test-roadbook-arrival)
 
         add_executable(npc_appearance_tests
             tests/npc_appearance_tests.c

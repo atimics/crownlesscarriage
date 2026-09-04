@@ -2,4 +2,4 @@
 invalidPrintfArgType_s|src/client/local3d/asset_loading.inc|740|Cppcheck does not know that the CMake-provided CC_ASSET_SOURCE_ROOT macro is a string literal.
 invalidPrintfArgType_s|src/client/main.c|427|Cppcheck does not know that the CMake-provided CC_ASSET_SOURCE_ROOT macro is a string literal.
 internalAstError|src/client/main.c|304|Older Cppcheck releases cannot parse JavaScript inside Emscripten EM_ASYNC_JS.
-syntaxError|src/client/main.c|305|Emscripten EM_ASYNC_JS contains JavaScript that Cppcheck reads as C.
+syntaxError|src/client/main.c|306|Emscripten EM_ASYNC_JS contains JavaScript that Cppcheck reads as C.

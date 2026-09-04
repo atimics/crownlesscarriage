@@ -44,6 +44,53 @@ void CcClientDepartureAdvance(CcClientDepartureTransition *transition,
     }
 }
 
+void CcClientArrivalBegin(CcClientArrivalTransition *transition)
+{
+    if (transition == NULL) return;
+    *transition = (CcClientArrivalTransition){
+        .phase = CC_CLIENT_ARRIVAL_ROAD_BOOK,
+    };
+}
+
+void CcClientArrivalAdvance(CcClientArrivalTransition *transition,
+                            float pace, float delta_time)
+{
+    if (transition == NULL || transition->phase == CC_CLIENT_ARRIVAL_PARKED) {
+        return;
+    }
+    float step = isfinite(delta_time) ? fmaxf(0.0f, delta_time) : 0.0f;
+    if (transition->phase == CC_CLIENT_ARRIVAL_ROAD_BOOK) {
+        transition->road_book_progress = ClampUnit(
+            transition->road_book_progress + step * 1.35f);
+        if (transition->road_book_progress >= 1.0f) {
+            transition->phase = CC_CLIENT_ARRIVAL_TOWN;
+        }
+        return;
+    }
+    transition->town_progress = ClampUnit(
+        transition->town_progress + ClampPace(pace) * step * 0.13f);
+    if (transition->town_progress >= 1.0f) {
+        transition->phase = CC_CLIENT_ARRIVAL_PARKED;
+    }
+}
+
+void CcClientArrivalComplete(CcClientArrivalTransition *transition)
+{
+    if (transition == NULL) return;
+    *transition = (CcClientArrivalTransition){
+        .phase = CC_CLIENT_ARRIVAL_PARKED,
+        .road_book_progress = 1.0f,
+        .town_progress = 1.0f,
+    };
+}
+
+float CcClientArrivalCameraWeight(
+    const CcClientArrivalTransition *transition)
+{
+    if (transition == NULL) return 0.0f;
+    return 1.0f - ClampUnit(transition->road_book_progress);
+}
+
 float CcClientConvoyPaceStep(float pace, bool road_phase,
                              bool urge, bool rein_in, bool stopped,
                              float delta_time)

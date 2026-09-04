@@ -721,6 +721,7 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
     CcLocalBindOpenWorld(stream);
     float state_camera_weight = carriage != NULL ?
         fmaxf(0.0f, fminf(1.0f, carriage->camera_weight)) : 0.0f;
+    bool town_arrival = carriage != NULL && carriage->town_arrival;
     bool kingdom_view = CcLocalOpenWorldUsesKingdomMarkers(
         state_camera_weight);
     float camera_weight = SmoothStep01(state_camera_weight);
@@ -745,21 +746,54 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
     };
     kingdom_focus.y += CcWorldTerrainHeight(
         &stream->manifest, kingdom_focus.x, kingdom_focus.z);
-    Vector3 focus = Vector3Lerp(foot_focus, kingdom_focus, camera_weight);
     Vector3 close_offset = {18.0f, 22.0f, 25.0f};
     Vector3 road_offset = {kingdom_span * 0.22f,
                            kingdom_span * 0.29f,
                            kingdom_span * 0.34f};
-    Vector3 camera_offset = Vector3Lerp(
-        close_offset, road_offset, camera_weight);
+    Vector3 close_focus = foot_focus;
+    Vector3 close_position = Vector3Add(close_focus, close_offset);
+    const CcWorldSettlementPlacement *arrival_place =
+        town_arrival && carriage != NULL ?
+        CcWorldSettlementPlacementForId(
+            &stream->manifest, sim->journey.destination_id) : NULL;
+    if (arrival_place != NULL) {
+        float scale = fmaxf(0.1f, arrival_place->profile_scale);
+        float heading = carriage->heading_yaw;
+        Vector3 forward = {sinf(heading), 0.0f, cosf(heading)};
+        Vector3 right = {cosf(heading), 0.0f, -sinf(heading)};
+        close_focus = Vector3Add(
+            carriage->position,
+            Vector3Add(Vector3Scale(forward, 5.2f * scale),
+                       (Vector3){0.0f, 1.55f * scale, 0.0f}));
+        close_position = Vector3Add(
+            carriage->position,
+            Vector3Add(Vector3Scale(forward, -10.5f * scale),
+                       Vector3Add(Vector3Scale(right, 3.8f * scale),
+                                  (Vector3){0.0f, 5.2f * scale, 0.0f})));
+    }
+    Vector3 focus = Vector3Lerp(
+        close_focus, kingdom_focus, camera_weight);
+    Vector3 road_position = Vector3Add(kingdom_focus, road_offset);
     float kingdom_fovy = fmaxf(
         54.0f, fmaxf(world_width * 0.82f, world_depth * 1.10f));
+    float camera_fovy = 31.0f +
+        (kingdom_fovy - 31.0f) * camera_weight;
+    int32_t camera_projection = CAMERA_ORTHOGRAPHIC;
+    if (arrival_place != NULL) {
+        float road_distance = Vector3Distance(
+            road_position, kingdom_focus);
+        float road_fovy = 2.0f * atanf(
+            kingdom_fovy * 0.5f / fmaxf(1.0f, road_distance)) * RAD2DEG;
+        camera_fovy = 43.0f + (road_fovy - 43.0f) * camera_weight;
+        camera_projection = CAMERA_PERSPECTIVE;
+    }
     Camera3D camera = {
-        .position = Vector3Add(focus, camera_offset),
+        .position = Vector3Lerp(
+            close_position, road_position, camera_weight),
         .target = focus,
         .up = {0.0f, 1.0f, 0.0f},
-        .fovy = 31.0f + (kingdom_fovy - 31.0f) * camera_weight,
-        .projection = CAMERA_ORTHOGRAPHIC,
+        .fovy = camera_fovy,
+        .projection = camera_projection,
     };
     camera = SnapCameraToArtPixels(camera, target.texture.height);
     RememberPresentedCamera(CC_LOCAL_SCENE_STREET, camera, agent,
@@ -794,9 +828,19 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
         if (carriage->pace > 0.02f) {
             carriage_base.y += 0.025f + sinf(clock * 5.0f) * 0.018f;
         }
+        float carriage_scale = 1.0f;
+        if (arrival_place != NULL) {
+            carriage_scale = arrival_place->profile_scale +
+                (1.0f - arrival_place->profile_scale) * camera_weight;
+        }
+        rlPushMatrix();
+        rlTranslatef(carriage_base.x, carriage_base.y, carriage_base.z);
+        rlScalef(carriage_scale, carriage_scale, carriage_scale);
+        rlTranslatef(-carriage_base.x, -carriage_base.y, -carriage_base.z);
         DrawRoadCarriage(carriage_base, &sim->player, clock,
                          carriage->pace, carriage->heading_yaw,
                          true, false);
+        rlPopMatrix();
         if (kingdom_view) {
             float marker_radius = fmaxf(2.8f, kingdom_span * 0.0055f);
             DrawCylinder((Vector3){carriage_base.x,
@@ -852,6 +896,7 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
     DrawViewportText(
         TextFormat("%s  ·  KNOWN ROADS ONLY  ·  FOG HIDES THE REST",
                    kingdom_view ? "THE CROWNLESS ROAD BOOK" :
+                   town_arrival ? "ARRIVING AT THE TOWN GATE" :
                                   "LEAVING THE TOWN GATE"),
         destination, 18, 18, 10, WORLD_MUTED);
 }
