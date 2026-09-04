@@ -330,8 +330,6 @@ int main(void)
     CC_CHECK(CcMetagameExecute(&metagame, "buy tools 2", output,
                                sizeof(output)));
     ExecuteNumber(&metagame, "accept", dungeon_number, output, sizeof(output));
-    /* The text-client suite checks the strategic choice after a completed
-       delve; underroad_tests covers navigation and threshold discovery. */
     metagame.sim.dungeons[0].rooms[19].state_flags |=
         CC_DUNGEON_ROOM_OBJECTIVE_REACHED;
     for (int32_t i = 0; i < metagame.sim.dungeons[0].link_count; ++i) {
@@ -602,7 +600,6 @@ int main(void)
     CC_CHECK(dragon.sim.goblins.tribute_phase ==
              CC_GOBLIN_TRIBUTE_IDLE);
 
-    /* mark: player-facing counterfactual wrapper */
     CcMetagame marked;
     CcMetagameInit(&marked, UINT32_C(0x5eed));
     CC_CHECK(CcMetagameExecute(&marked, "accept 1", output, sizeof(output)));
@@ -615,7 +612,6 @@ int main(void)
                     "Consequences present only in the courier branch") !=
              NULL);
     CC_CHECK(strstr(output, "branch differences") != NULL);
-    /* Early campaign, same seed: a couple of trades must diverge somewhere. */
     CC_CHECK(strstr(output, "Actual state") != NULL);
 
     puts("Text-first metagame tests passed");

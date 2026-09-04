@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Validate the shared Crownless action-figure world kit."""
 
 from __future__ import annotations
 
@@ -347,7 +346,7 @@ def validate(require_review_previews: bool = False) -> int:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description='Validate the Crownless world kit.')
     parser.add_argument(
         "--review-previews",
         action="store_true",

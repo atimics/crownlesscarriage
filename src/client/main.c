@@ -386,9 +386,6 @@ static void ClientTakeScreenshot(const char *path)
 {
     TakeScreenshot(path);
 #if defined(PLATFORM_WEB)
-    /* Browser capture files live in MEMFS and cannot be collected by the
-       desktop art pipeline. Discard each one after raylib has encoded it so
-       long diagnostic reels do not grow the page until it is killed. */
     (void)remove(path);
 #endif
 }
@@ -2112,7 +2109,6 @@ static bool RestoreLocalSession(const char *path, const CcSim *sim,
         sim->player.reputation != 0) {
         local->opening_step = CC_LOCAL_OPENING_COMPLETE;
     } else if (local->opening_step != CC_LOCAL_OPENING_COMPLETE) {
-        /* Old saves may still contain the removed Jory tutorial step. */
         local->opening_step = CC_LOCAL_OPENING_MEET_MARA;
     }
     return true;
@@ -9483,9 +9479,6 @@ int main(int argc, char **argv)
     if (map_textures.economic_goods.id != 0U) {
         SetTextureFilter(map_textures.economic_goods, TEXTURE_FILTER_POINT);
     }
-    /* The playable world is authored against a fixed 2x art-pixel grid.
-       Render it at half the presentation size, then enlarge with point
-       sampling. Screen-space labels and HUD are drawn after presentation. */
     RenderTexture2D local_target = LoadRenderTexture(630, 320);
     SetTextureFilter(local_target.texture, TEXTURE_FILTER_POINT);
     CcLocalRendererSetScreenFirstHero(screen_first_hero);

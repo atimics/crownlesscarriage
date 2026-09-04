@@ -101,9 +101,6 @@ void main()
     float foreground = max(foregroundBand, foregroundMass * 0.55);
     float detailPresence = 1.0 - backgroundBand * depthStrength * 0.86;
 
-    /* Land is painted as stacked, hard-edged material layers. Two crossed
-       grids keep the shapes irregular without interpolating between samples;
-       a third, tighter grid adds sparse pixel-sized chips. */
     vec2 terrainPoint = fragPosition.xz;
     vec2 crossedTerrainPoint = vec2(
         terrainPoint.x + terrainPoint.y * 0.46,
@@ -124,9 +121,6 @@ void main()
     float terrainDarkChip = 1.0 - step(0.10, fineTerrain);
     float terrainLightChip = step(0.88, fineTerrain);
 
-    /* A cool sky fill and a faint warm ground bounce keep all three major
-       plane families distinct. This is deliberately broad lighting rather
-       than a smooth miniature render: it survives the final art-pixel grid. */
     float terrainHemisphere = hemisphere < 0.72 ? 0.64 :
                               hemisphere < 0.91 ? 0.82 : 1.0;
     float paintedHemisphere = mix(hemisphere, terrainHemisphere, isTerrain);
@@ -136,8 +130,6 @@ void main()
     light += vec3(0.19, 0.11, 0.065) * max(-normal.y, 0.0) * 0.07;
     float smoothDiffuse = key * 0.48 + wrap * 0.20;
     float diffuse = smoothDiffuse;
-    /* Three explicit paint values give roofs, facades, and inset planes a
-       stronger hierarchy without adding noisy texture detail. */
     float paintedDiffuse = diffuse < 0.18 ? 0.0 :
                            diffuse < 0.48 ? 0.34 : 0.68;
     float terrainDiffuse = smoothDiffuse < 0.18 ? 0.08 :
@@ -152,8 +144,6 @@ void main()
                      smoothstep(0.10, 0.70, key) * 0.11;
     float rim = pow(1.0 - max(dot(normal, viewDirection), 0.0), 3.0);
 
-    /* Low-frequency value breakup keeps large procedural surfaces from
-       reading as single-color slabs without introducing noisy textures. */
     float blockVariation = hash21(floor(fragPosition.xz * 0.48)) - 0.5;
     float structureVertical = 1.0 - abs(normal.y);
     vec2 facadeCoordinate = abs(normal.x) > abs(normal.z) ?
@@ -180,10 +170,6 @@ void main()
     color *= mix(vec3(1.0), terrainTint,
                  isTerrain * detailPresence);
 
-    /* Near ground occupies a large part of the close authored shots. Give it
-       two broad scumbled values so it frames the action as painted earth
-       instead of collapsing into one empty dark polygon after palette
-       lookup. The pattern is world-locked and therefore does not shimmer. */
     float foregroundTerrain = foreground * isTerrain * detailPresence;
     float foregroundScumble = cellNoise(
         crossedTerrainPoint * 0.17 + vec2(73.0, 29.0));
@@ -193,10 +179,6 @@ void main()
     color += albedo.rgb * vec3(0.12, 0.14, 0.12) *
              foregroundTerrain * foregroundLift * 0.16;
 
-    /* Add one more authored-looking pixel layer after the broad form reads.
-       These marks stay in world space, gather into short clusters, and fade
-       with depth. They suggest laid shingles, worked wall courses, and small
-       ground marks without relying on a screen-space noise texture. */
     if (isTerrain > 0.5) {
         vec2 groundMarkPoint = crossedTerrainPoint * 2.08 +
                                vec2(5.0, 17.0);
@@ -288,27 +270,17 @@ void main()
     color += vec3(0.20, 0.46, 0.48) * rim *
              mix(0.052, 0.018, isTerrain) * detailPresence;
 
-    /* Darken the foot of vertical structures where they meet the terrain.
-       This inexpensive contact cue grounds walls, carts, and scenery without
-       requiring a crawling screen-space shadow pass. Horizontal ground and
-       roof planes remain untouched. */
     float verticalSurface = structureVertical;
     float foundation = (1.0 - smoothstep(0.04, 0.92, fragPosition.y)) *
                        verticalSurface * (1.0 - isTerrain);
     color *= mix(1.0, 0.79, foundation);
 
-    /* A view-stable colored edge keeps large structural silhouettes legible
-       without a screen-space outline pass that would crawl between pixels. */
     float viewFacing = abs(dot(normal, viewDirection));
     float edgeInk = (1.0 - step(0.13, viewFacing)) * (1.0 - isTerrain);
     vec3 coloredInk = mix(vec3(0.020, 0.031, 0.034),
                           albedo.rgb * 0.20, 0.28);
     color = mix(color, coloredInk, edgeInk * 0.72 * detailPresence);
 
-    /* Foreground classification happens per complete house on the CPU. The
-       cut line moves down from above the roof instead of dissolving a whole
-       wall into screen-door dots. This reads as a deliberate architectural
-       wipe at the final pixel resolution. */
     float fragmentCameraDistance = viewDepth;
     float revealAmount = clamp(foregroundReveal, 0.0, 1.0);
     if (revealAmount > 0.001) {
@@ -321,9 +293,6 @@ void main()
                         belowCut;
         color = mix(color, coloredInk, cutBand * 0.72 * revealAmount);
     }
-    /* Camera-forward bands make distance a designed layer instead of a side
-       effect of radial fog. The far layer loses chips and ink, cools, and
-       moves toward the background value. A nearby framing mass is darker. */
     float backgroundWeight = backgroundBand * depthStrength;
     float luminance = perceivedGray(color);
     vec3 quietBackground = mix(vec3(luminance) * vec3(0.84, 0.94, 1.06),

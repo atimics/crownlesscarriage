@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Add the authored paint-channel contract to the shipped market GLB only."""
 
 from __future__ import annotations
 

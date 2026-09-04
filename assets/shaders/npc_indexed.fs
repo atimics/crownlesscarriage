@@ -29,9 +29,6 @@ void main()
     int paletteIndex = clamp(int(floor(fragColor.r * 9.0)), 0, 8);
     vec4 paint = characterPalette[paletteIndex];
     if (bodySkinRemap > 0.5 && paletteIndex == 0) {
-        /* The watertight animated body is a foundation under fitted rigid
-           head, hand, garment, and boot modules. Paint the foundation as
-           underclothes instead of exposing its all-skin export color. */
         paletteIndex = fragPosition.y < heroHeadPosition.y - 0.82 ? 4 : 2;
         paint = characterPalette[paletteIndex];
     }
@@ -43,9 +40,6 @@ void main()
     float facing = dot(normal, toLight);
     float wrapped = clamp((facing + 0.32) / 1.32, 0.0, 1.0);
     float lightBand = step(0.48, wrapped);
-    /* Faces are authored for recognition, not for accidental full shadow.
-       Keep the crowned head in the key-light band, like a hand-adjusted face
-       normal in a cel-shaded character pipeline. */
     lightBand = max(lightBand, step(0.30, headFocus));
 
     bool isSkin = paletteIndex == 0;
@@ -60,9 +54,6 @@ void main()
     vec3 lightTemperature = vec3(1.035, 1.01, 0.95);
     vec3 temperature = mix(shadowTemperature, lightTemperature, lightBand);
     float normalValue = mix(darkValue, lightValue, lightBand);
-    /* Keep the cel boundary in charge of the large form. Authored vertex
-       values provide folds, but no longer overpower the light band on the
-       featured hero. */
     float authoredWeight = mix(0.72, 0.46, heroEmphasis);
     vec3 color = paint.rgb * mix(normalValue, authoredValue, authoredWeight) *
                  temperature;
@@ -70,8 +61,6 @@ void main()
                        fragColor.b;
     color *= 1.0 - foldShadow * 0.11;
 
-    /* Match the hero's restrained cool fill so background figures retain
-       role-defining headwear, tools, and garment layers in dark streets. */
     float skyExposure = smoothstep(-0.30, 0.82, normal.y);
     color += paint.rgb * vec3(0.74, 0.91, 1.04) * skyExposure *
              (1.0 - lightBand) * 0.052;
@@ -85,9 +74,6 @@ void main()
     float litEdge = edgeInk * smoothstep(0.08, 0.68, facing) * lightBand;
     color += vec3(0.18, 0.27, 0.28) * litEdge * 0.050;
 
-    /* A narrow colored rim separates the hero from similarly dark combatants.
-       Its head bias protects identity at the tiny gameplay scale without
-       outlining every internal polygon. */
     float silhouette = smoothstep(0.70, 0.94, 1.0 - viewFacing);
     float castRim = silhouette * (0.020 + heroEmphasis * 0.050) *
                     (0.58 + skyExposure * 0.42) * characterRimStrength;

@@ -1,4 +1,3 @@
-/* Road-book, fork, remote-site, and local scene presentation. */
 static const char *RoadArchetypeName(const CcRoute *route)
 {
     if (route == NULL) return "UNKNOWN ROAD";

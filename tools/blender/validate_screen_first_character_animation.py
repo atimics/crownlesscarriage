@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Fail when the V05 screen-first character render is missing or blank."""
 
 from __future__ import annotations
 
@@ -20,7 +19,6 @@ EXPECTED_SIZE = (360, 360)
 
 
 def is_character_color(pixel: tuple[int, int, int]) -> bool:
-    """Keep the warm costume/skin and blue-green scarf, but reject the ground."""
     red, green, blue = pixel
     high = max(pixel)
     low = min(pixel)
@@ -94,7 +92,7 @@ def validate_clip(frame_root: Path, clip: str, frames: range) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description='Validate the screen-first character render.')
     parser.add_argument("--frame-root", type=Path, default=DEFAULT_FRAME_ROOT)
     args = parser.parse_args()
     try:

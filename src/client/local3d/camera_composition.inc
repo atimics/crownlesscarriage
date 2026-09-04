@@ -1,4 +1,3 @@
-/* Street, road, combat, and conversation camera composition. */
 static Camera3D ExteriorCameraAt(Vector3 target, float fovy)
 {
     return ExteriorCameraComposed(

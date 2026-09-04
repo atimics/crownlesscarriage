@@ -1,17 +1,4 @@
 #!/usr/bin/env python3
-"""Build the silhouette-first Crownless creature library.
-
-The library expands the human cast with three body-plan families:
-
-* goblins, using the existing biped stepped-pose contract;
-* horses, cows, and sheep, sharing one quadruped locomotion contract;
-* four dragon growth stages, using a quadruped base with authored neck, tail,
-  jaw, and wings.
-
-Every runtime file is one mesh with one indexed material. Goblins and dragons
-keep held pose GLBs. Horses, cows, and sheep use one rigid-weighted skin each,
-driven by the game's shared quadruped bone pose at runtime.
-"""
 
 from __future__ import annotations
 
@@ -416,12 +403,6 @@ def add_lateral_prism(
     spec: CreatureSpec,
     part: str,
 ) -> bpy.types.Object:
-    """Build a graphic side-view wedge with thickness across the body.
-
-    Character hair reads more clearly as a few designed wedges than as a
-    chain of equal spheres. The existing prism helper extrudes vertically;
-    this version keeps a supplied Y/Z outline and extrudes it along X.
-    """
     count = len(points)
     vertices = [(x - thickness * 0.5, y, z) for x, y, z in points]
     vertices += [(x + thickness * 0.5, y, z) for x, y, z in points]

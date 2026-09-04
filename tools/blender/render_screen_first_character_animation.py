@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Animate the painted screen-first character as rigid low-poly body masses."""
 
 from __future__ import annotations
 

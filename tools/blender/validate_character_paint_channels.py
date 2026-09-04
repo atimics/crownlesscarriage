@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Validate authored value and fold channels on runtime hero skins."""
 
 from __future__ import annotations
 

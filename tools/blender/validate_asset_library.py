@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Validate the generated Crownless Carriage Blender library."""
 
 from __future__ import annotations
 

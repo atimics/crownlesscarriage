@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Compose the four V08 review angles into one character sheet."""
 
 from __future__ import annotations
 

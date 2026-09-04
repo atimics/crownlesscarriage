@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-"""Render small, screen-first character prototypes for the pixel pipeline.
-
-The production hero is intentionally not changed by this experiment.  These
-proxies test how few large masses are needed for Crownless identity to survive
-at roughly 60 art pixels tall.
-"""
 
 from __future__ import annotations
 
@@ -144,7 +138,6 @@ def add_prism(
     depth: float,
     material: bpy.types.Material,
 ) -> bpy.types.Object:
-    """Extrude a front-facing x/z polygon along y."""
     front_y = center_y - depth * 0.5
     back_y = center_y + depth * 0.5
     vertices = [
@@ -314,12 +307,6 @@ def add_painted_definition(
     materials: dict[str, bpy.types.Material],
     accent_level: int,
 ) -> None:
-    """Attach a few broad, local paint shapes to the model surface.
-
-    These stand in for production vertex paint.  They move with the character
-    and deliberately describe value grouping that normal-based lighting cannot
-    infer, such as the reference's diagonal tunic wedge and scarf lip.
-    """
     add_prism(
         f"{prefix}_Paint_TunicLightWedge",
         ((-0.365, 0.91), (-0.365, 1.69), (-0.22, 1.77),
@@ -436,7 +423,6 @@ def render(path: Path, width: int, height: int, percentage: int = 100) -> None:
 
 
 def render_model_views() -> None:
-    """Render one unchanged mesh from three angles to prove its 3D read."""
     scene = bpy.context.scene
     camera = scene.camera
     original_location = camera.location.copy()

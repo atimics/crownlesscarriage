@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Render the economic cargo models for the fixed-pixel icon atlas."""
 
 from __future__ import annotations
 

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Compose the V09 proportion blockout into a review sheet."""
 
 from __future__ import annotations
 

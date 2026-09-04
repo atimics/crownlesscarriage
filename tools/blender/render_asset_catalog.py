@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Render one review thumbnail for every asset in the generated library."""
 
 from __future__ import annotations
 

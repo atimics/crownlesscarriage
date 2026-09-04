@@ -706,7 +706,6 @@ static void CompactEventLedger(CcSim *sim, CcId incoming_parent)
 static void LearnPlayerKnowledgeFromEvent(
     CcSim *sim, const CcEvent *event, CcPlayerKnowledgeSource source);
 
-/* The fixed event ledger always has a writable slot. Insertion returns it. */
 static CcEvent *PushEventRecord(CcSim *sim, CcEventKind kind, CcId subject,
                                 CcId location, CcId parent,
                                 int32_t magnitude, const char *text)
@@ -4152,7 +4151,6 @@ void CcSimInitializeMaterialChain(CcSim *sim)
         place->production[CC_GOOD_PAPER] = 0;
         if (CcSettlementIsAbandoned(place)) continue;
         if (place->function == CC_SETTLEMENT_FARMING) {
-            /* Cover the paper-era grain demand while preserving civilian food. */
             place->production[CC_GOOD_WHEAT] = MaximumI32(
                 place->production[CC_GOOD_WHEAT], 60);
         } else if (place->function == CC_SETTLEMENT_MARKET) {
@@ -4176,7 +4174,7 @@ void CcSimInit(CcSim *sim, uint32_t seed)
     sim->random_state = sim->world_seed;
     sim->current_day = 1;
     sim->next_entity_serial = 1U;
-    sim->archives.scribes = 2; /* the scriptorium opens with the world */
+    sim->archives.scribes = 2;
     sim->archives.lore_ceiling = 75;
 
     static const char *kingdom_sets[][3] = {
@@ -4218,9 +4216,6 @@ void CcSimInit(CcSim *sim, uint32_t seed)
     for (int32_t i = 0; i < CC_MAX_SETTLEMENTS; ++i) {
         GeneratePlaceName(sim, place_names[i], (CcSettlementFunction)i);
     }
-    /* Generator 22 fixes the random draw order. Apple Clang historically
-       evaluated the x argument first, so that order is now the shared
-       canonical layout for native and WebAssembly builds. */
     int32_t map_x = Jitter(sim, 125, 22);
     int32_t map_y = Jitter(sim, 500, 20);
     InitSettlement(sim, 0, 0, "Thornford", CC_SETTLEMENT_FARMING,
@@ -4543,8 +4538,6 @@ static void WearOneTool(CcSettlement *settlement, int32_t *wear,
 
 static CcTreasure *AllocateTreasure(CcSim *sim)
 {
-    /* Reuse a destroyed slot first: destroyed treasures keep their row
-       for save-schema stability but their physical slot is free. */
     for (int32_t i = 0; i < sim->treasure_count; ++i) {
         if (sim->treasures[i].destroyed) {
             CcTreasure *treasure = &sim->treasures[i];
@@ -5436,7 +5429,6 @@ static void AdvanceCoronationLaw(CcSim *sim, bool scriptorium_ready,
         kingdom->unsanctioned_weeks += 1;
         if (kingdom->unsanctioned_weeks < 52) continue;
         if (!kingdom->anointed) {
-            /* A new pretender needs a ruler to be anointed again first. */
             kingdom->unsanctioned_weeks = 51;
             continue;
         }
@@ -5551,23 +5543,18 @@ void CcSimUpgradeHistoryOffices(CcSim *sim)
     }
 }
 
-/* Archive law: the scriptorium records notable events as durable lore.
-   Funding follows the monastery reserve; unfunded lore decays.
-   This is the world's memory of itself - without it, the ledger
-   is a drawer no one opens. */
 static void AdvanceArchives(CcSim *sim)
 {
     if (sim == NULL || sim->current_day % 7 != 0) return;
     CcArchives *archives = &sim->archives;
 
-    /* Funding: the monastery hires scribes when it can pay them. */
     int32_t target_scribes = sim->iron_ledger_reserve >= 300 ? CC_MAX_SCRIBES :
         sim->iron_ledger_reserve >= 150 ? 2 :
         sim->iron_ledger_reserve >= 50 ? 1 : 0;
     if (target_scribes > archives->scribes) {
         archives->scribes = target_scribes;
     } else if (target_scribes < archives->scribes) {
-        archives->scribes -= 1; /* scribes leave gradually, not all at once */
+        archives->scribes -= 1;
     }
 
     CcSettlement *scriptorium = NULL;
@@ -5591,9 +5578,6 @@ static void AdvanceArchives(CcSim *sim)
             scriptorium->stock[CC_GOOD_TOOLS] > 0;
     }
 
-    /* Record: each scribe preserves one notable recent event per week.
-       Scan first, push after: PushEvent mutates the ledger ring while
-       we iterate it, which would orphan parents mid-scan. */
     CcId noted[CC_MAX_SCRIBES];
     CcId noted_location[CC_MAX_SCRIBES];
     char noted_text[CC_MAX_SCRIBES][CC_EVENT_TEXT_CAPACITY];
@@ -5631,8 +5615,6 @@ static void AdvanceArchives(CcSim *sim)
             (scriptorium == NULL ||
              scriptorium->stock[CC_GOOD_PAPER] <= 0 ||
              scriptorium->stock[CC_GOOD_TOOLS] <= 0)) break;
-        /* Physical memory is bound into a tome. The vault supplies its
-           gold and gem seal. The scriptorium supplies Paper and kit. */
         if (!BindArchiveTome(sim)) break;
         archives->lore_stored += 1;
         archives->last_recorded_day = sim->current_day;
@@ -5649,10 +5631,6 @@ static void AdvanceArchives(CcSim *sim)
         RefreshSettlementGoodPrice(sim, scriptorium, CC_GOOD_TOOLS);
     }
 
-    /* Vault conservation: the treasure array is finite. When it nears
-       capacity, scribes consolidate the oldest tomes into a codex - four
-       chronicles bound into one, carrying their combined lore. Archives
-       in the real world weed and rebind; so does this one. */
     if (sim->treasure_count >= CC_MAX_TREASURES - 4) {
         int32_t tome_slots[4];
         if (FindArchiveVolumesToBind(sim, tome_slots)) {
@@ -5674,8 +5652,6 @@ static void AdvanceArchives(CcSim *sim)
                 combined_value += t->appraised_value;
                 t->destroyed = true;
             }
-            /* Rebind in place: the first tome slot becomes the codex.
-               No new slot is needed; the vault's stock is conserved. */
             CcTreasure *codex = &sim->treasures[tome_slots[0]];
             *codex = (CcTreasure){0};
             (void)snprintf(codex->name, sizeof(codex->name),
@@ -5700,11 +5676,6 @@ static void AdvanceArchives(CcSim *sim)
         }
     }
 
-    /* Memory is politically load-bearing. Archive health sets each realm's
-       trust ceiling: lore remembered raises what the realm can sustain,
-       lore lost lowers it. Drift is slow - one step per week - so the
-       political effect of defunding the scriptorium arrives a generation
-       after the scribes leave, like real institutional decay. */
     int32_t lore_ceiling = archives->lore_lost_total == 0 ? 75 :
         40 + MinimumI32(35, archives->lore_stored / 200);
     int32_t lore_floor = 25;
@@ -5728,7 +5699,6 @@ static void AdvanceArchives(CcSim *sim)
         sim, scriptorium_ready,
         scriptorium != NULL ? scriptorium->id : 0U);
 
-    /* Decay: unfunded archives lose lore. Memory is load-bearing. */
     if (archives->scribes == 0 && archives->lore_stored > 0) {
         archives->lore_stored -= 1;
         archives->lore_lost_total += 1;
@@ -7530,9 +7500,6 @@ static void AdvanceDragonEcology(CcSim *sim)
         ChangeDragonStage(sim, CC_DRAGON_STAGE_DEEP_WYRM,
                           CC_EVENT_DRAGON_CROWNED,
                           "centuries of possession bind wyrm, hoard, and mountain");
-        /* Relic law, dark mirror: five centuries of hoarding leaves an
-           artifact of the wyrm itself - the mountain's own crown-gem,
-           owned by the dragon, waiting in the lair for a thief. */
         CcSettlement *lair = CcSimSettlementMutable(
             sim, dragon->lair_settlement_id);
         CcTreasure *gem = lair != NULL ? AllocateTreasure(sim) : NULL;
@@ -9945,15 +9912,12 @@ static void ResolveWarSettlement(CcSim *sim, int32_t first,
         sim->kingdoms[winner].legitimacy + 5, 0, 100);
     sim->kingdoms[loser].legitimacy = ClampI32(
         sim->kingdoms[loser].legitimacy - 12, 0, 100);
-    /* Sack of the archive: tomes stored in the ceded settlement change
-       hands. The winner captures the loser's chronicles - the history
-       of the war is now told by the victor's vault. */
     int32_t captured = 0;
     for (int32_t i = 0; i < sim->treasure_count; ++i) {
         CcTreasure *t = &sim->treasures[i];
         if (!TreasureIsArchiveVolume(t) ||
             t->location_id != ceded->id) continue;
-        captured += 1;  /* vault contents now belong to the victor's realm */
+        captured += 1;
     }
     if (captured > 0) {
         char sack[CC_EVENT_TEXT_CAPACITY];
@@ -10819,10 +10783,6 @@ static void AdvanceDragonCampaign(CcSim *sim)
         sim->dragon.lair_settlement_id, campaign->cause_event_id,
         attack - defense, text);
     CcId battle_event_id = battle->id;
-    /* Relic law: a world-historical deed leaves a named artifact whose
-       provenance IS the event that made it. The bane-blade is forged in
-       the moment of the slaying, held at the campaign's origin - the
-       OSR principle that unique treasures carry unique history. */
     {
         CcSettlement *origin = CcSimSettlementMutable(
             sim, campaign->origin_settlement_id);
@@ -11472,11 +11432,6 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
                 kingdom->iron_ledger_debt = 0;
                 kingdom->legitimacy = ClampI32(
                     kingdom->legitimacy - 25, 0, 100);
-                /* Debt is written in the kingdom's own chronicles. A
-                   repudiation burns the vault: half the stored tomes are
-                   destroyed, because the record of what was borrowed is
-                   the record of what was broken. Debt survives in the
-                   monastery's copies; the kingdom's own history does not. */
                 int32_t burned = 0;
                 int32_t held = 0;
                 int32_t lore_burned = 0;
@@ -15921,9 +15876,6 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         SetError(error, error_capacity, "Simulation is missing.");
         return false;
     }
-    /* Save compatibility: every schema version ever shipped stays
-       loadable. Adding a schema bump means extending this table and the
-       per-version branches below, verified by persistence_tests. */
     bool legacy_schema = sim->schema_version == 2U ||
                          sim->schema_version == 3U ||
                          sim->schema_version == 4U ||
@@ -15957,8 +15909,6 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                          sim->schema_version == 32U ||
                          sim->schema_version == 33U ||
                          sim->schema_version == 34U;
-    /* Older saves carry authoritative settlement coordinates while their
-       economies and road districts are upgraded. */
     bool supported_generator =
         (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
          sim->generator_version == CC_GENERATOR_VERSION) ||

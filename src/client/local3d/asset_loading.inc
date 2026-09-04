@@ -1,4 +1,3 @@
-/* Runtime model, shader, palette, and renderer resource ownership. */
 typedef struct SphereModelCache {
     Model small;
     Model character;
@@ -870,13 +869,7 @@ static void ReleaseUploadedModelCpuData(Model *model)
         CC_RELEASE_UPLOADED_BUFFER(animVertices);
         CC_RELEASE_UPLOADED_BUFFER(animNormals);
 #undef CC_RELEASE_UPLOADED_BUFFER
-        /* DrawMesh uses this pointer as the indexed-draw flag, even after the
-           index data has been uploaded, so it must remain allocated. */
     }
-    /* Loading every model in one uninterrupted browser task keeps temporary
-       decoder arrays and graphics-driver staging allocations alive together.
-       Yield after each upload so a reload does not approach the renderer's
-       page-memory limit before those temporary allocations can be reclaimed. */
     emscripten_sleep(0);
 #else
     (void)model;
@@ -1044,9 +1037,6 @@ static void LoadNpcArchetypes(void)
     for (int32_t role = 0; role < CC_NPC_ROLE_COUNT; ++role) {
         for (int32_t pose = 0; pose < CC_NPC_ARCHETYPE_POSE_COUNT; ++pose) {
 #if defined(PLATFORM_WEB)
-            /* Browser actors share the idle silhouette for stepped motion.
-               Keeping 90 additional uploaded poses made combat exceed the
-               browser's page-memory budget on constrained devices. */
             if (pose != 0) continue;
 #endif
             char path[256];
@@ -1091,8 +1081,6 @@ static void LoadCreatureModels(void)
         }
         int32_t loaded_count = 0;
         for (int32_t pose = 0; pose < CC_CREATURE_POSE_COUNT; ++pose) {
-            /* Runtime-skinned creatures animate one uploaded rest mesh. Their
-               authored pose files are reference outputs, not draw inputs. */
             if (pose != CC_CREATURE_POSE_IDLE) continue;
             const char *path = CcCreatureAssetPath(
                 (CcCreatureVariant)variant, (CcCreaturePose)pose);
@@ -1192,8 +1180,6 @@ static void LoadNpcBodySkins(void)
             for (int32_t tissue = 0; tissue < CC_NPC_BODY_TISSUE_COUNT;
                  ++tissue) {
 #if defined(PLATFORM_WEB)
-                /* A shared body retains skinned combat motion without keeping
-                   all 36 body recipes resident in browser GPU memory. */
                 if (frame != 1 || muscle != 1 || tissue != 1) continue;
 #endif
                 NpcBodySkinCache *body =
@@ -3695,7 +3681,6 @@ static Model BuildTreeCrownModel(TreeCrownShape shape)
     }
     UploadMesh(&mesh, false);
     Model model = LoadModelFromMesh(mesh);
-    /* Tree batches rebuild from these small CPU meshes when scenery changes. */
     return model;
 }
 
@@ -3739,7 +3724,6 @@ void CcLocalRendererInit(void)
     sphere_models.small = LoadModelFromMesh(GenMeshSphere(1.0f, 6, 8));
     sphere_models.character = LoadModelFromMesh(GenMeshSphere(1.0f, 8, 8));
     sphere_models.scenery = LoadModelFromMesh(GenMeshSphere(1.0f, 10, 12));
-    /* The small sphere also supplies tree shadows to the static batch. */
     ReleaseUploadedModelCpuData(&sphere_models.character);
     ReleaseUploadedModelCpuData(&sphere_models.scenery);
     sphere_models.ready = true;

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Compose the V08 hair walk contact sheet and looping preview."""
 
 from __future__ import annotations
 

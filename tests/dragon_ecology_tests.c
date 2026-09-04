@@ -151,7 +151,6 @@ int main(void)
     CC_CHECK(deep_wyrm.dragon.crown_strength >= 60);
     CC_CHECK(deep_wyrm.dragon.life_stage == CC_DRAGON_STAGE_DEEP_WYRM);
 
-    /* Relic: Deep Wyrm ascension leaves the Wyrmheart in the lair. */
     CcSim wyrm;
     CcSimInit(&wyrm, UINT32_C(0xdee00002));
     wyrm.dragon.hoard = 5000;
@@ -247,8 +246,6 @@ int main(void)
         &stockpile, stockpile.dragon_campaign.hero_character_id) != NULL);
     CC_CHECK(patron_named);
 
-    /* Relic: slaying the dragon in a campaign forges the Bane blade with
-       provenance chained to the slaying event and held by the champion. */
     CcSim bane;
     CcSimInit(&bane, UINT32_C(0xba4e0001));
     CcSettlement *origin = CcSimSettlementMutable(&bane,

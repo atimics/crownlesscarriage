@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Run the Cppcheck rules that guard against dead generated code."""
 
 from __future__ import annotations
 

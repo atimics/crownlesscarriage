@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Render the V08 clump hair on the production walk action."""
 
 from __future__ import annotations
 
@@ -93,7 +92,6 @@ def configure_scene(combined: bpy.types.Object, rig: bpy.types.Object) -> None:
 
 
 def pose_hair(rig: bpy.types.Object, frame: int) -> None:
-    """Give the weighted tips a small delayed response to the walk."""
     phase = math.tau * (frame - 1) / 47.0
     long_lock = rig.pose.bones["hair.long"]
     rear = rig.pose.bones["hair.rear"]

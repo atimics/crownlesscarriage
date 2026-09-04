@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Compose the assembled, anatomical, and exploded Blender hero renders."""
 
 from pathlib import Path
 

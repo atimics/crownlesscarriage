@@ -1,5 +1,3 @@
-"""Shared authored value-channel helpers for Crownless character exports."""
-
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -56,7 +54,6 @@ def add_indexed_paint_channels(
     polygon_indices: Sequence[int],
     semantic_names: Sequence[str],
 ) -> bpy.types.ByteColorAttribute:
-    """Write palette index, broad value, and fold strength into COLOR_0."""
     mesh = obj.data
     if len(polygon_indices) != len(mesh.polygons):
         raise RuntimeError(f"{obj.name} paint indices do not match polygons")

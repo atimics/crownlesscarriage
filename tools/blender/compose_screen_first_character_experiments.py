@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Compose the high-resolution and art-grid character experiment renders."""
 
 from __future__ import annotations
 

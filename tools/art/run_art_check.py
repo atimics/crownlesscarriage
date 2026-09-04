@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Capture and validate the complete Crownless painterly art stack."""
 
 from __future__ import annotations
 
@@ -18,10 +17,6 @@ from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont, ImageOps, 
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = ROOT / "out" / "art-check"
-# These thresholds encode the painterly art contract enforced by `make
-# art-check`: a disciplined palette (no single dominant color), luminance
-# spread, and mood scenes measurably softer than gameplay scenes. They are
-# tuned by hand to catch regressions, not derived from theory.
 WORLD_CROP = (17, 81, 931, 651)
 ART_SIZE = (457, 285)
 EXPECTED_SCREEN_SIZE = (1280, 760)
@@ -540,7 +535,7 @@ def write_report(output_root: Path, capture_results: list[dict[str, object]],
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description='Capture and validate Crownless art.')
     parser.add_argument("--app", type=Path)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument(

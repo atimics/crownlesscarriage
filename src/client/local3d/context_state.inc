@@ -1,4 +1,3 @@
-/* Shared renderer definitions, configuration, and frame state. */
 #if !defined(CC_LOCAL3D_UNITY_BUILD)
 #error "Include local renderer modules through client/cc_local3d.c"
 #endif

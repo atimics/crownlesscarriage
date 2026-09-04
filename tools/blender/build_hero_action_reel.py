@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Build and animate a self-contained Crownless hero action reel in Blender."""
 
 from __future__ import annotations
 

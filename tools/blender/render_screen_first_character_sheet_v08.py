@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Render the V08 production hero from four review angles."""
 
 from __future__ import annotations
 
