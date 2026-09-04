@@ -6691,13 +6691,14 @@ static int RunWorldSessionStartupRegression(void)
             session_path, "Version 3 gate heading chose the wrong branch.");
     }
 
-    const CcWorldPoint legacy_gate_position = {
-        264.23111f, 275.641754f
-    };
+    CcWorldPoint legacy_gate_position = {0};
     const float legacy_gate_heading = 2.15923429f;
     CcWorldPoint migrated_gate_position;
     float migrated_gate_heading = 0.0f;
     if (route->id != UINT64_C(216172782113783819) ||
+        !LegacyVersionThreeRoadGatePosition(
+            &restored.world_stream.manifest, route_placement,
+            sim.player.location_id, &legacy_gate_position) ||
         !CcWorldRoutePose(
             route_placement, sim.player.location_id,
             junction_journey_amount,
