@@ -65,8 +65,10 @@ async function retryPending() {
 }
 async function command(action, values = {}) {
   if (!world || busy) return;
+  const id = world.id;
   await withCommandLock(async () => {
-    const key = `cc-coop-pending-${world.id}`;
+    if (world?.id !== id) return;
+    const key = `cc-coop-pending-${id}`;
     if (localStorage.getItem(key)) { await retryPending(); return; }
     localStorage.setItem(key, JSON.stringify({ protocol: 1, sequence: world.next_sequence, action_revision: world.action_revision, action, ...values }));
     await retryPending();

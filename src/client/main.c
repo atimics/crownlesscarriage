@@ -9766,7 +9766,7 @@ int main(int argc, char **argv)
     if (normal_play && CcCoopClientActive()) {
         char error[256] = "Connect through the company road book to join this world.";
         if (CcCoopClientConnect(&sim, error, sizeof(error))) {
-            journal = CcJournalRestart(save_path, &sim, error, sizeof(error));
+            journal = CcJournalStart(save_path, &sim, error, sizeof(error));
             resuming_campaign = true;
         }
         (void)snprintf(startup_message, sizeof(startup_message), "%s",

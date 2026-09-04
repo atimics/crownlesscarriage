@@ -54,6 +54,8 @@
   Module.ccCoop = { enabled, connect, apply, poll, take() { const value = pending; pending = null; return value; } };
   if (enabled && typeof document !== 'undefined') {
     const attach = () => {
+      const hint = document.getElementById('hint');
+      if (hint) hint.textContent = 'Click the game, then use the mouse and keyboard. Your company and clock are saved on the host.';
       const bar = document.createElement('div');
       bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;display:flex;justify-content:space-between;padding:7px 16px;background:#20392f;color:#f5f0e4;font:12px system-ui';
       status = document.createElement('span'); status.textContent = 'Joining the shared carriage…';
