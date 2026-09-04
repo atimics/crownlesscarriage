@@ -832,6 +832,8 @@ if(BUILD_TESTING)
                  COMMAND crownless_carriage --test-town-arrival-parking)
         add_test(NAME town_departure_to_road_book
                  COMMAND crownless_carriage --test-town-departure)
+        add_test(NAME roadbook_arrival_transition
+                 COMMAND crownless_carriage --test-roadbook-arrival)
 
         add_executable(npc_appearance_tests
             tests/npc_appearance_tests.c
