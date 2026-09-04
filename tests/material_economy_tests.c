@@ -2,6 +2,7 @@
 
 #include "test_support.h"
 #include <stdio.h>
+#include <string.h>
 
 static uint32_t Service(CcServiceKind service)
 {
@@ -50,6 +51,34 @@ static CcSettlement *IsolatedSettlement(CcSim *sim)
 
 int main(void)
 {
+    CC_CHECK(CC_GOOD_BREAD == 0);
+    CC_CHECK(CC_GOOD_FOOD == CC_GOOD_BREAD);
+    CC_CHECK(CC_GOOD_IRON == 1);
+    CC_CHECK(CC_GOOD_TOOLS == 2);
+    CC_CHECK(CC_GOOD_WEAPONS == 3);
+    CC_CHECK(CC_GOOD_GOLD == 4);
+    CC_CHECK(CC_GOOD_GEMS == 5);
+    CC_CHECK(CC_GOOD_WOOD == 6);
+    CC_CHECK(CC_GOOD_WHEAT == 7);
+    CC_CHECK(CC_GOOD_MEAT == 8);
+    CC_CHECK(CC_GOOD_WOOL == 9);
+    CC_CHECK(CC_GOOD_STONE == 10);
+    CC_CHECK(CC_GOOD_COUNT == 11);
+    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        const CcGoodDefinition *definition = CcGoodDefinitionFor(
+            (CcGood)good);
+        CC_CHECK(definition != NULL);
+        CC_CHECK(strcmp(definition->name, CcGoodName((CcGood)good)) == 0);
+        CC_CHECK(definition->base_price > 0);
+        CC_CHECK(definition->freight_units_per_slot > 0);
+        CC_CHECK(definition->player_units_per_slot > 0);
+        CC_CHECK(definition->minimum_trade_units > 0);
+        CC_CHECK(definition->raid_capacity > 0);
+    }
+    CC_CHECK(!CcGoodIsValid((CcGood)-1));
+    CC_CHECK(!CcGoodIsValid(CC_GOOD_COUNT));
+    CC_CHECK(CcGoodDefinitionFor(CC_GOOD_COUNT) == NULL);
+
     CcSim no_farm;
     CcSettlement *place = IsolatedSettlement(&no_farm);
     place->field_yield = 100;

@@ -208,8 +208,10 @@ static void CheckForgedExtremeStateRejected(char *error,
                   database, "could not open extreme-state fixture");
     char *sql = sqlite3_mprintf(
         "UPDATE settlement SET food_stock=%d WHERE slot=0;"
+        "UPDATE settlement_good SET stock=%d "
+        "WHERE settlement_slot=0 AND good=%d;"
         "UPDATE meta SET state_hash=%Q WHERE id=1;",
-        INT32_MAX, forged_hash);
+        INT32_MAX, INT32_MAX, CC_GOOD_BREAD, forged_hash);
     CC_CHECK(sql != NULL);
     ExecuteFixtureSql(database, sql,
                       "could not forge extreme-state fixture");
@@ -507,7 +509,7 @@ static void CheckLegacyJournalMigration(char *error,
              legacy_generation);
     CC_CHECK(ReadSqliteInteger(
                  path, "SELECT journal_cursor FROM meta WHERE id=1;") == 0);
-    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 21);
+    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 22);
     CC_CHECK(CcJournalAdvanceDays(journal, &resumed, 2,
                                   error, error_capacity));
     uint64_t expected_hash = CcSimHash(&resumed);
@@ -1664,6 +1666,102 @@ static void CheckSchema24Compatibility(char *error, size_t error_capacity)
     RemoveDatabase(path);
 }
 
+static void CheckSchema25Compatibility(char *error, size_t error_capacity)
+{
+    const char *path = "persistence-legacy-v25-test.ccsave";
+    RemoveDatabase(path);
+    CcSim legacy;
+    CcSimInit(&legacy, UINT32_C(0x1e9ac25));
+    CcCommand travel = {
+        .kind = CC_COMMAND_TRAVEL,
+        .target_id = legacy.settlements[1].id
+    };
+    CC_CHECK(CcSimApply(&legacy, &travel, error, error_capacity));
+    legacy.journey.ambush_pending = false;
+    CcSimAdvanceRuntimeTicks(&legacy, 480);
+    int32_t journey_total = legacy.journey.total_subticks;
+    int32_t journey_progress = legacy.carriage.progress_milli;
+    legacy.schema_version = 25U;
+    CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
+
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.journey.total_subticks == journey_total);
+    CC_CHECK(restored.carriage.progress_milli == journey_progress);
+    for (int32_t settlement = 0;
+         settlement < restored.settlement_count; ++settlement) {
+        for (int32_t good = CC_LEGACY_GOOD_COUNT;
+             good < CC_GOOD_COUNT; ++good) {
+            CC_CHECK(restored.settlements[settlement].stock[good] == 0);
+            CC_CHECK(restored.settlements[settlement].reserve_target[good] == 0);
+            CC_CHECK(restored.settlements[settlement].production[good] == 0);
+            CC_CHECK(restored.settlements[settlement].consumption[good] == 0);
+            CC_CHECK(restored.settlements[settlement].price[good] ==
+                     CcGoodDefinitionFor((CcGood)good)->base_price);
+        }
+    }
+    CC_CHECK(CcSimValidate(&restored, error, error_capacity));
+    RemoveDatabase(path);
+}
+
+static void CheckSchema26Compatibility(char *error, size_t error_capacity)
+{
+    const char *path = "persistence-legacy-v26-test.ccsave";
+    RemoveDatabase(path);
+    CcSim legacy;
+    CcSimInit(&legacy, UINT32_C(0x1e9ac26));
+    legacy.schema_version = 26U;
+    legacy.generator_version = 21U;
+    CcId first_character_id = legacy.characters[0].id;
+    int32_t first_birth_day = legacy.characters[0].birth_day;
+    int32_t first_death_day = legacy.characters[0].death_day;
+    for (int32_t settlement = 0;
+         settlement < legacy.settlement_count; ++settlement) {
+        for (int32_t good = CC_LEGACY_GOOD_COUNT;
+             good < CC_GOOD_COUNT; ++good) {
+            legacy.settlements[settlement].stock[good] = 0;
+            legacy.settlements[settlement].reserve_target[good] = 0;
+            legacy.settlements[settlement].production[good] = 0;
+            legacy.settlements[settlement].consumption[good] = 0;
+            legacy.settlements[settlement].price[good] = 0;
+        }
+    }
+    CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
+
+    sqlite3 *database = NULL;
+    RequireSqlite(sqlite3_open_v2(path, &database,
+                                  SQLITE_OPEN_READWRITE, NULL),
+                  database, "could not open schema 26 fixture");
+    ExecuteFixtureSql(database,
+                      "DELETE FROM settlement_good;"
+                      "DELETE FROM player_good;"
+                      "DELETE FROM goblin_good;"
+                      "DELETE FROM dragon_good;"
+                      "DELETE FROM dragon_campaign_good;",
+                      "could not remove future goods rows");
+    sqlite3_close(database);
+
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.generator_version == CC_GENERATOR_VERSION);
+    CC_CHECK(restored.characters[0].id == first_character_id);
+    CC_CHECK(restored.characters[0].birth_day == first_birth_day);
+    CC_CHECK(restored.characters[0].death_day == first_death_day);
+    for (int32_t settlement = 0;
+         settlement < restored.settlement_count; ++settlement) {
+        for (int32_t good = CC_LEGACY_GOOD_COUNT;
+             good < CC_GOOD_COUNT; ++good) {
+            CC_CHECK(restored.settlements[settlement].stock[good] == 0);
+            CC_CHECK(restored.settlements[settlement].price[good] ==
+                     CcGoodDefinitionFor((CcGood)good)->base_price);
+        }
+    }
+    CC_CHECK(CcSimValidate(&restored, error, error_capacity));
+    RemoveDatabase(path);
+}
+
 static void CheckJourneyStopPersistence(char *error, size_t error_capacity)
 {
     const char *path = "persistence-journey-stop-test.ccsave";
@@ -1796,6 +1894,8 @@ int main(void)
     CheckSchema22Compatibility(error, sizeof(error));
     CheckSchema23Compatibility(error, sizeof(error));
     CheckSchema24Compatibility(error, sizeof(error));
+    CheckSchema25Compatibility(error, sizeof(error));
+    CheckSchema26Compatibility(error, sizeof(error));
     CheckJourneyStopPersistence(error, sizeof(error));
     CheckLegacyLifecycleJournalCompatibility(24U, error, sizeof(error));
     CheckLegacyLifecycleJournalCompatibility(25U, error, sizeof(error));
@@ -1862,8 +1962,44 @@ int main(void)
                                        error, sizeof(error)));
     }
     CC_CHECK(original.bandits[0].raid_phase != CC_BANDIT_RAID_IDLE);
+    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        original.player.cargo[good] = 0;
+    }
+    for (int32_t good = CC_LEGACY_GOOD_COUNT;
+         good < CC_GOOD_COUNT; ++good) {
+        original.player.cargo[good] = 1;
+        original.goblins.carried_goods[good] = 0;
+        original.goblins.lair_stock[good] = good + 2;
+        original.dragon.hoard_goods[good] = good + 3;
+        original.dragon_campaign.supplies[good] = good + 4;
+        for (int32_t settlement = 0;
+             settlement < original.settlement_count; ++settlement) {
+            CcSettlement *place = &original.settlements[settlement];
+            place->stock[good] = 10 + settlement + good;
+            place->reserve_target[good] = 20 + settlement + good;
+            place->production[good] = settlement + 1;
+            place->consumption[good] = settlement;
+            place->price[good] =
+                CcGoodDefinitionFor((CcGood)good)->base_price + settlement;
+        }
+    }
     uint64_t expected = CcSimHash(&original);
     CC_CHECK(CcSaveWrite(path, &original, error, sizeof(error)));
+    CC_CHECK(ReadSqliteInteger(
+                 path, "SELECT COUNT(*) FROM settlement_good;") ==
+             original.settlement_count * CC_GOOD_COUNT);
+    CC_CHECK(ReadSqliteInteger(
+                 path, "SELECT COUNT(*) FROM player_good;") ==
+             CC_GOOD_COUNT);
+    CC_CHECK(ReadSqliteInteger(
+                 path, "SELECT COUNT(*) FROM goblin_good;") ==
+             CC_GOOD_COUNT);
+    CC_CHECK(ReadSqliteInteger(
+                 path, "SELECT COUNT(*) FROM dragon_good;") ==
+             CC_GOOD_COUNT);
+    CC_CHECK(ReadSqliteInteger(
+                 path, "SELECT COUNT(*) FROM dragon_campaign_good;") ==
+             CC_GOOD_COUNT);
 
     CcSim restored;
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
@@ -1932,6 +2068,32 @@ int main(void)
     CC_CHECK(restored.maps[0].recorded_danger ==
              original.maps[0].recorded_danger);
     CC_CHECK(restored.event_count == original.event_count);
+    for (int32_t good = CC_LEGACY_GOOD_COUNT;
+         good < CC_GOOD_COUNT; ++good) {
+        CC_CHECK(restored.player.cargo[good] ==
+                 original.player.cargo[good]);
+        CC_CHECK(restored.goblins.carried_goods[good] ==
+                 original.goblins.carried_goods[good]);
+        CC_CHECK(restored.goblins.lair_stock[good] ==
+                 original.goblins.lair_stock[good]);
+        CC_CHECK(restored.dragon.hoard_goods[good] ==
+                 original.dragon.hoard_goods[good]);
+        CC_CHECK(restored.dragon_campaign.supplies[good] ==
+                 original.dragon_campaign.supplies[good]);
+        for (int32_t settlement = 0;
+             settlement < original.settlement_count; ++settlement) {
+            CC_CHECK(restored.settlements[settlement].stock[good] ==
+                     original.settlements[settlement].stock[good]);
+            CC_CHECK(restored.settlements[settlement].reserve_target[good] ==
+                     original.settlements[settlement].reserve_target[good]);
+            CC_CHECK(restored.settlements[settlement].production[good] ==
+                     original.settlements[settlement].production[good]);
+            CC_CHECK(restored.settlements[settlement].consumption[good] ==
+                     original.settlements[settlement].consumption[good]);
+            CC_CHECK(restored.settlements[settlement].price[good] ==
+                     original.settlements[settlement].price[good]);
+        }
+    }
 
     RemoveDatabase(path);
     puts("SQLite persistence tests passed");

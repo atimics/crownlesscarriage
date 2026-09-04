@@ -227,7 +227,7 @@ typedef struct ContextAction {
 } ContextAction;
 
 typedef struct ContextActionSet {
-    ContextAction items[8];
+    ContextAction items[CC_GOOD_COUNT + 4];
     int32_t count;
 } ContextActionSet;
 
@@ -4049,13 +4049,19 @@ static Rectangle ContextActionBounds(int32_t index, int32_t count)
 {
     const float gap = 8.0f;
     const float margin = 22.0f;
+    int32_t rows = count > 6 ? 2 : 1;
+    int32_t columns = (count + rows - 1) / rows;
+    int32_t row = index / columns;
+    int32_t column = index % columns;
     float width = ((float)GetScreenWidth() - margin * 2.0f -
-                   (float)(count - 1) * gap) / (float)count;
+                   (float)(columns - 1) * gap) / (float)columns;
     if (width > 220.0f) width = 220.0f;
-    float total = (float)count * width + (float)(count - 1) * gap;
+    float total = (float)columns * width + (float)(columns - 1) * gap;
     return (Rectangle){((float)GetScreenWidth() - total) * 0.5f +
-                           (float)index * (width + gap),
-                       (float)GetScreenHeight() - 78.0f, width, 58.0f};
+                           (float)column * (width + gap),
+                       (float)GetScreenHeight() - 78.0f -
+                           (float)(rows - 1 - row) * 66.0f,
+                       width, 58.0f};
 }
 
 static Color ContextActionColor(ContextActionKind kind)
@@ -4116,7 +4122,9 @@ static void DrawContextActionTray(const CcSim *sim, const LocalState *local,
         int width = CcOverlayMeasureText("LEFT BUY · RIGHT SELL", 9);
         CcOverlayDrawText("LEFT BUY · RIGHT SELL",
                           (GetScreenWidth() - width) / 2,
-                          GetScreenHeight() - 94, 9, MUTED);
+                          GetScreenHeight() -
+                              (actions.count > 6 ? 160 : 94),
+                          9, MUTED);
     }
     for (int32_t i = 0; i < actions.count; ++i) {
         Rectangle bounds = ContextActionBounds(i, actions.count);
@@ -5050,22 +5058,25 @@ static void DrawCarriageScreen(const CcSim *sim, const LocalState *local)
                    sim->player.cargo_capacity),
         276, 226, 9, INK);
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
-        int32_t y = 260 + good * 54;
-        Rectangle slot = {72.0f, (float)y, 310.0f, 43.0f};
+        int32_t column = good % 2;
+        int32_t row = good / 2;
+        int32_t x = 72 + column * 157;
+        int32_t y = 260 + row * 54;
+        Rectangle slot = {(float)x, (float)y, 149.0f, 43.0f};
         DrawRectangleRounded(slot, 0.14f, 4, Fade(PANEL_HOVER, 0.54f));
         DrawRectangleRoundedLinesEx(
             slot, 0.14f, 4, 1.0f,
             sim->player.cargo[good] > 0 ? Fade(TEAL, 0.72f) :
                                           Fade(MUTED, 0.24f));
-        CcOverlayDrawText(TextFormat("SLOT %d", good + 1),
-                          84, y + 8, 7, MUTED);
+        CcOverlayDrawText(TextFormat("%d", good + 1),
+                          x + 9, y + 8, 7, MUTED);
         CcOverlayDrawText((CcGood)good == CC_GOOD_FOOD ?
                               "FOOD BOXES" : CcGoodName((CcGood)good),
-                          144, y + 12, 10, INK);
+                          x + 27, y + 12, 9, INK);
         const char *quantity = TextFormat("x%d", sim->player.cargo[good]);
-        int32_t quantity_width = CcOverlayMeasureText(quantity, 11);
-        CcOverlayDrawText(quantity, 368 - quantity_width,
-                          y + 11, 11,
+        int32_t quantity_width = CcOverlayMeasureText(quantity, 9);
+        CcOverlayDrawText(quantity, x + 140 - quantity_width,
+                          y + 12, 9,
                           sim->player.cargo[good] > 0 ? CC_GOLD : MUTED);
     }
 
@@ -8293,7 +8304,8 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                                    message_capacity);
             }
             bool shift = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
-            for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+            for (int32_t good = 0; good < CC_GOOD_COUNT && good < 9;
+                 ++good) {
                 if (!ClientKeyPressed(KEY_ONE + good)) continue;
                 CcCommand trade = {
                     .kind = CC_COMMAND_TRADE,

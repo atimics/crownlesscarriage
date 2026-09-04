@@ -23,7 +23,6 @@ static void UpdateRoyalDiplomacy(CcSim *sim);
 static void AdvanceDragonCampaign(CcSim *sim);
 static void AdvanceHorseTeam(CcSim *sim);
 static void AdvanceRuins(CcSim *sim);
-static int32_t BasePrice(CcGood good);
 static int32_t SettlementSlotById(const CcSim *sim, CcId id);
 static int32_t CalculateDragonCrownStrength(const CcSim *sim);
 
@@ -691,18 +690,41 @@ static CcEvent *PushSocialEvent(CcSim *sim, CcEventKind kind, CcId subject,
     return event;
 }
 
+static const CcGoodDefinition GOOD_DEFINITIONS[CC_GOOD_COUNT] = {
+    [CC_GOOD_BREAD] = {"Food", 4, 8, 1, 4, 16},
+    [CC_GOOD_IRON] = {"Iron", 8, 4, 1, 4, 8},
+    [CC_GOOD_TOOLS] = {"Tools", 14, 2, 1, 1, 4},
+    [CC_GOOD_WEAPONS] = {"Weapons", 24, 2, 1, 1, 4},
+    [CC_GOOD_GOLD] = {"Raw Gold", 40, 1, 1, 1, 2},
+    [CC_GOOD_GEMS] = {"Gems", 70, 1, 1, 1, 1},
+    [CC_GOOD_WOOD] = {"Wood", 6, 6, 1, 4, 12},
+    [CC_GOOD_WHEAT] = {"Wheat", 3, 10, 1, 4, 20},
+    [CC_GOOD_MEAT] = {"Meat", 7, 6, 1, 4, 12},
+    [CC_GOOD_WOOL] = {"Wool", 9, 8, 1, 4, 16},
+    [CC_GOOD_STONE] = {"Stone", 7, 4, 1, 4, 8}
+};
+
+static int32_t GoodCountForSchema(uint32_t schema_version)
+{
+    if (schema_version >= 27U) return CC_GOOD_COUNT;
+    if (schema_version >= 9U) return CC_LEGACY_GOOD_COUNT;
+    return 3;
+}
+
+bool CcGoodIsValid(CcGood good)
+{
+    return good >= CC_GOOD_BREAD && good < CC_GOOD_COUNT;
+}
+
+const CcGoodDefinition *CcGoodDefinitionFor(CcGood good)
+{
+    return CcGoodIsValid(good) ? &GOOD_DEFINITIONS[good] : NULL;
+}
+
 const char *CcGoodName(CcGood good)
 {
-    switch (good) {
-        case CC_GOOD_FOOD: return "Food";
-        case CC_GOOD_IRON: return "Iron";
-        case CC_GOOD_TOOLS: return "Tools";
-        case CC_GOOD_WEAPONS: return "Weapons";
-        case CC_GOOD_GOLD: return "Raw Gold";
-        case CC_GOOD_GEMS: return "Gems";
-        case CC_GOOD_COUNT: break;
-    }
-    return "Unknown";
+    const CcGoodDefinition *definition = CcGoodDefinitionFor(good);
+    return definition != NULL ? definition->name : "Unknown";
 }
 
 const char *CcSettlementFunctionName(CcSettlementFunction function)
@@ -1748,8 +1770,9 @@ static void RefreshSettlementGoodPrice(const CcSim *sim,
     int32_t shortage = target > 0 ?
         (target - expected_stock) * 100 / target : 0;
     int32_t pressure = ClampI32(shortage, -35, 220);
+    const CcGoodDefinition *definition = CcGoodDefinitionFor(good);
     settlement->price[good] = MinimumI32(
-        99, BasePrice(good) * (100 + pressure) / 100);
+        99, definition->base_price * (100 + pressure) / 100);
     if (settlement->price[good] < 1) settlement->price[good] = 1;
 }
 
@@ -2726,28 +2749,37 @@ int32_t CcPlayerCargoUsed(const CcPlayerCompany *player)
     if (player == NULL) return 0;
     int32_t used = player->treasure_cargo_slots;
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
-        if (player->cargo[good] > 0) used += player->cargo[good];
+        if (player->cargo[good] > 0) {
+            const CcGoodDefinition *definition = CcGoodDefinitionFor(
+                (CcGood)good);
+            used += (player->cargo[good] +
+                     definition->player_units_per_slot - 1) /
+                    definition->player_units_per_slot;
+        }
     }
     return used;
 }
 
 static int32_t PlayerCargoBoxes(CcGood good, int32_t quantity)
 {
-    if (good < 0 || good >= CC_GOOD_COUNT || quantity <= 0) return 0;
-    return quantity;
+    const CcGoodDefinition *definition = CcGoodDefinitionFor(good);
+    if (definition == NULL || quantity <= 0) return 0;
+    return (quantity + definition->player_units_per_slot - 1) /
+           definition->player_units_per_slot;
 }
 
 static int32_t FreightCargoSlots(CcGood good, int32_t quantity)
 {
-    static const int32_t per_slot[CC_GOOD_COUNT] = {8, 4, 2, 2, 1, 1};
-    if (good < 0 || good >= CC_GOOD_COUNT || quantity <= 0) return 0;
-    return (quantity + per_slot[good] - 1) / per_slot[good];
+    const CcGoodDefinition *definition = CcGoodDefinitionFor(good);
+    if (definition == NULL || quantity <= 0) return 0;
+    return (quantity + definition->freight_units_per_slot - 1) /
+           definition->freight_units_per_slot;
 }
 
 static int32_t FreightUnitsPerCargoSlot(CcGood good)
 {
-    static const int32_t per_slot[CC_GOOD_COUNT] = {8, 4, 2, 2, 1, 1};
-    return good >= 0 && good < CC_GOOD_COUNT ? per_slot[good] : 1;
+    const CcGoodDefinition *definition = CcGoodDefinitionFor(good);
+    return definition != NULL ? definition->freight_units_per_slot : 1;
 }
 
 const CcTreasure *CcSimTreasure(const CcSim *sim, CcId id)
@@ -2832,7 +2864,8 @@ static void InitSettlement(CcSim *sim, int32_t slot, int32_t kingdom_slot,
     settlement->market_coins = 60 + population / 20 + prosperity * 2;
     settlement->war_chest = 0;
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
-        settlement->price[good] = BasePrice((CcGood)good);
+        settlement->price[good] =
+            CcGoodDefinitionFor((CcGood)good)->base_price;
     }
 }
 
@@ -3109,13 +3142,17 @@ static void ConfigureSettlementEconomies(CcSim *sim)
             (int32_t)(NextRandom(sim) % 15U) - 7, 20, 92);
         settlement->prosperity = ClampI32(settlement->prosperity +
             (int32_t)(NextRandom(sim) % 15U) - 7, 20, 88);
-        int32_t settlement_good_count =
-            sim->schema_version >= 9U ? CC_GOOD_COUNT : 3;
+        int32_t settlement_good_count = CC_LEGACY_GOOD_COUNT;
         for (int32_t good = 0; good < settlement_good_count; ++good) {
-            int32_t floor = good <= CC_GOOD_TOOLS ? 1 : 0;
+            bool legacy_bulk_good = good == CC_GOOD_BREAD ||
+                                    good == CC_GOOD_IRON ||
+                                    good == CC_GOOD_TOOLS;
+            bool precious_good = good == CC_GOOD_GOLD ||
+                                 good == CC_GOOD_GEMS;
+            int32_t floor = legacy_bulk_good ? 1 : 0;
             settlement->stock[good] = MaximumI32(floor, settlement->stock[good] +
-                (int32_t)(NextRandom(sim) % (good >= CC_GOOD_GOLD ? 3U : 13U)) -
-                (good >= CC_GOOD_GOLD ? 1 : 6));
+                (int32_t)(NextRandom(sim) % (precious_good ? 3U : 13U)) -
+                (precious_good ? 1 : 6));
             settlement->production[good] = MaximumI32(0, settlement->production[good] +
                 (settlement->production[good] > 0 ? (int32_t)(NextRandom(sim) % 3U) - 1 : 0));
         }
@@ -3314,20 +3351,6 @@ void CcSimInit(CcSim *sim, uint32_t seed)
     CcSimInitializeAnimalEconomy(sim);
 }
 
-static int32_t BasePrice(CcGood good)
-{
-    switch (good) {
-        case CC_GOOD_FOOD: return 4;
-        case CC_GOOD_IRON: return 8;
-        case CC_GOOD_TOOLS: return 14;
-        case CC_GOOD_WEAPONS: return 24;
-        case CC_GOOD_GOLD: return 40;
-        case CC_GOOD_GEMS: return 70;
-        case CC_GOOD_COUNT: break;
-    }
-    return 1;
-}
-
 static CcDungeon *DungeonByIdMutable(CcSim *sim, CcId id)
 {
     for (int32_t i = 0; i < sim->dungeon_count; ++i) {
@@ -3403,7 +3426,7 @@ static int32_t EffectiveProduction(const CcSim *sim,
         }
         production = MinimumI32(production, settlement->iron_deposit);
     }
-    if (good >= CC_GOOD_TOOLS) return 0;
+    if (good != CC_GOOD_BREAD && good != CC_GOOD_IRON) return 0;
     return MaximumI32(0, production);
 }
 
@@ -4634,7 +4657,6 @@ static void AdvanceGoblinTribute(CcSim *sim)
     if (goblins->tribute_days_remaining > 0) return;
 
     if (goblins->tribute_phase == CC_GOBLIN_TRIBUTE_OUTBOUND) {
-        static const int32_t raid_capacity[CC_GOOD_COUNT] = {16, 8, 4, 4, 2, 1};
         CcGood chosen = CC_GOOD_FOOD;
         if (goblins->raid_motive == CC_GOBLIN_RAID_EQUIPMENT) {
             chosen = target->stock[CC_GOOD_WEAPONS] > 0 ?
@@ -4651,7 +4673,7 @@ static void AdvanceGoblinTribute(CcSim *sim)
                      target->stock[CC_GOOD_GOLD] > 0 ? CC_GOOD_GOLD :
                      CC_GOOD_FOOD;
         }
-        int32_t capacity = raid_capacity[chosen];
+        int32_t capacity = CcGoodDefinitionFor(chosen)->raid_capacity;
         if (goblins->target_warned) capacity = MaximumI32(1, capacity / 2);
         int32_t taken_goods = MinimumI32(target->stock[chosen], capacity);
         target->stock[chosen] -= taken_goods;
@@ -6190,8 +6212,8 @@ static void CreateTradeShipment(CcSim *sim, int32_t route_slot, CcId next_hop_id
                          INT32_MAX :
                          (int32_t)((purchasing_power - toll) / unit_price);
     quantity = MinimumI32(quantity, affordable);
-    int32_t minimum_load = good >= CC_GOOD_GOLD ? 1 :
-                           good >= CC_GOOD_TOOLS ? 1 : 4;
+    int32_t minimum_load =
+        CcGoodDefinitionFor(good)->minimum_trade_units;
     if (quantity < minimum_load) return;
     CcShipment *shipment = AllocateShipment(sim);
     if (shipment == NULL) return;
@@ -6272,8 +6294,8 @@ static void CreateTradeShipment(CcSim *sim, int32_t route_slot, CcId next_hop_id
 static void PlanTrade(CcSim *sim)
 {
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
-        int32_t minimum_load = good >= CC_GOOD_GOLD ? 1 :
-                               good >= CC_GOOD_TOOLS ? 1 : 4;
+        int32_t minimum_load = CcGoodDefinitionFor(
+            (CcGood)good)->minimum_trade_units;
         int32_t route_used[CC_MAX_ROUTES] = {0};
         for (int32_t transfer = 0; transfer < sim->settlement_count * 2; ++transfer) {
             int32_t best_score = 0;
@@ -13444,7 +13466,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                          sim->schema_version == 22U ||
                          sim->schema_version == 23U ||
                          sim->schema_version == 24U ||
-                         sim->schema_version == 25U;
+                         sim->schema_version == 25U ||
+                         sim->schema_version == 26U;
     bool supported_generator = sim->generator_version == CC_GENERATOR_VERSION ||
         (legacy_schema && (sim->generator_version == 3U ||
                            sim->generator_version == 5U ||
@@ -13643,8 +13666,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             SetError(error, error_capacity, "Settlement state is invalid.");
             return false;
         }
-        int32_t saved_good_count = sim->schema_version >= 9U ?
-                                   CC_GOOD_COUNT : 3;
+        int32_t saved_good_count = GoodCountForSchema(sim->schema_version);
         for (int32_t good = 0; good < saved_good_count; ++good) {
             if (settlement->stock[good] < 0 ||
                 settlement->stock[good] > CC_SIM_MAX_UNITS ||
@@ -15128,7 +15150,7 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(item->service_project);
             HASH_VALUE(item->service_project_days);
         }
-        int32_t good_count = sim->schema_version >= 9U ? CC_GOOD_COUNT : 3;
+        int32_t good_count = GoodCountForSchema(sim->schema_version);
         for (int32_t good = 0; good < good_count; ++good) {
             HASH_VALUE(item->stock[good]); HASH_VALUE(item->reserve_target[good]);
             HASH_VALUE(item->production[good]); HASH_VALUE(item->consumption[good]);
@@ -15252,7 +15274,8 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(goblins->raid_motive);
             HASH_VALUE(goblins->lair_coins);
             HASH_VALUE(goblins->carried_treasure_id);
-            for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+            int32_t good_count = GoodCountForSchema(sim->schema_version);
+            for (int32_t good = 0; good < good_count; ++good) {
                 HASH_VALUE(goblins->carried_goods[good]);
                 HASH_VALUE(goblins->lair_stock[good]);
             }
@@ -15296,7 +15319,8 @@ uint64_t CcSimHash(const CcSim *sim)
         }
         if (sim->schema_version >= 9U) {
             HASH_VALUE(dragon->stolen_treasure_id);
-            for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+            int32_t good_count = GoodCountForSchema(sim->schema_version);
+            for (int32_t good = 0; good < good_count; ++good) {
                 HASH_VALUE(dragon->hoard_goods[good]);
             }
         }
@@ -15327,7 +15351,8 @@ uint64_t CcSimHash(const CcSim *sim)
         HASH_VALUE(campaign->cause_event_id);
         HASH_VALUE(campaign->days_remaining);
         HASH_VALUE(campaign->cooldown_days);
-        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        int32_t good_count = GoodCountForSchema(sim->schema_version);
+        for (int32_t good = 0; good < good_count; ++good) {
             HASH_VALUE(campaign->supplies[good]);
         }
         HASH_VALUE(campaign->recovered_coins);
@@ -15697,7 +15722,7 @@ uint64_t CcSimHash(const CcSim *sim)
             }
         }
     }
-    int32_t player_good_count = sim->schema_version >= 9U ? CC_GOOD_COUNT : 3;
+    int32_t player_good_count = GoodCountForSchema(sim->schema_version);
     for (int32_t good = 0; good < player_good_count; ++good) {
         HASH_VALUE(sim->player.cargo[good]);
     }
