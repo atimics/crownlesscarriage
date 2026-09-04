@@ -551,7 +551,8 @@ static bool OpenWorldPointClearsSettlements(
 }
 
 static void DrawOpenWorldGateConnectors(const CcSim *sim,
-                                        const CcWorldManifest *manifest)
+                                        const CcWorldManifest *manifest,
+                                        bool kingdom_view)
 {
     if (sim == NULL || manifest == NULL) return;
     for (int32_t i = 0; i < manifest->settlement_count; ++i) {
@@ -559,14 +560,16 @@ static void DrawOpenWorldGateConnectors(const CcSim *sim,
             &manifest->settlements[i];
         if (!OpenWorldSettlementRevealed(
                 sim, settlement->settlement_id)) continue;
+        CcWorldPoint gate = kingdom_view ? settlement->center :
+                                           settlement->gate;
         DrawOpenWorldRibbonSegment(
-            manifest, settlement->gate, settlement->junction,
+            manifest, gate, settlement->junction,
             11.0f, 0.04f, Fade(WORLD_EARTH_LIGHT, 0.96f));
         DrawOpenWorldRibbonSegment(
-            manifest, settlement->gate, settlement->junction,
+            manifest, gate, settlement->junction,
             7.5f, 0.08f, Fade(WORLD_GRASS_LIGHT, 0.98f));
         DrawOpenWorldRibbonSegment(
-            manifest, settlement->gate, settlement->junction,
+            manifest, gate, settlement->junction,
             5.6f, 0.13f, WORLD_ROAD_LIGHT);
     }
 }
@@ -576,8 +579,7 @@ static void DrawOpenWorldRouteNetwork(const CcSim *sim,
                                       bool kingdom_view)
 {
     if (sim == NULL || manifest == NULL) return;
-    (void)kingdom_view;
-    DrawOpenWorldGateConnectors(sim, manifest);
+    DrawOpenWorldGateConnectors(sim, manifest, kingdom_view);
     for (int32_t route_index = 0;
          route_index < manifest->route_count; ++route_index) {
         const CcWorldRoutePlacement *placement =
