@@ -49,7 +49,7 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 26
+#define CC_SIM_SCHEMA_VERSION 27
 #define CC_GENERATOR_VERSION 21
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
@@ -87,7 +87,10 @@ typedef enum CcEntityKind {
 } CcEntityKind;
 
 typedef enum CcGood {
-    CC_GOOD_FOOD = 0,
+    CC_GOOD_BREAD = 0,
+
+    /* Legacy alias: FOOD names BREAD in older saves and callers. */
+    CC_GOOD_FOOD = CC_GOOD_BREAD,
     CC_GOOD_IRON = 1,
 
     /* Legacy alias: MATERIAL names IRON in older saves and callers. */
@@ -96,8 +99,24 @@ typedef enum CcGood {
     CC_GOOD_WEAPONS = 3,
     CC_GOOD_GOLD = 4,
     CC_GOOD_GEMS = 5,
+    CC_GOOD_WOOD = 6,
+    CC_GOOD_WHEAT = 7,
+    CC_GOOD_MEAT = 8,
+    CC_GOOD_WOOL = 9,
+    CC_GOOD_STONE = 10,
     CC_GOOD_COUNT
 } CcGood;
+
+#define CC_LEGACY_GOOD_COUNT 6
+
+typedef struct CcGoodDefinition {
+    const char *name;
+    int32_t base_price;
+    int32_t freight_units_per_slot;
+    int32_t player_units_per_slot;
+    int32_t minimum_trade_units;
+    int32_t raid_capacity;
+} CcGoodDefinition;
 
 typedef enum CcSettlementFunction {
     CC_SETTLEMENT_FARMING,
@@ -1379,6 +1398,8 @@ bool CcHorseWorkingReady(const CcHorse *horse);
 
 CcId CcMakeId(CcEntityKind kind, uint64_t serial);
 CcEntityKind CcIdKind(CcId id);
+bool CcGoodIsValid(CcGood good);
+const CcGoodDefinition *CcGoodDefinitionFor(CcGood good);
 const char *CcGoodName(CcGood good);
 const char *CcSettlementFunctionName(CcSettlementFunction function);
 const char *CcSettlementSizeName(CcSettlementSize size);

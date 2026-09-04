@@ -2220,6 +2220,11 @@ static Color CargoBoxColor(CcGood good)
         case CC_GOOD_WEAPONS: return WORLD_DANGER;
         case CC_GOOD_GOLD: return WORLD_GOLD;
         case CC_GOOD_GEMS: return WORLD_VIOLET;
+        case CC_GOOD_WOOD: return WORLD_WOOD_LIGHT;
+        case CC_GOOD_WHEAT: return WORLD_CROP_LIGHT;
+        case CC_GOOD_MEAT: return (Color){142, 67, 62, 255};
+        case CC_GOOD_WOOL: return (Color){218, 211, 190, 255};
+        case CC_GOOD_STONE: return (Color){123, 126, 130, 255};
         case CC_GOOD_COUNT: break;
     }
     return WORLD_WOOD;

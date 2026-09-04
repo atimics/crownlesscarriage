@@ -9,7 +9,7 @@
 #include <string.h>
 
 #define CC_SQLITE_APPLICATION_ID 1128481362
-#define CC_SQLITE_USER_VERSION 21
+#define CC_SQLITE_USER_VERSION 22
 #define CC_JOURNAL_RECORD_VERSION 1
 #define CC_JOURNAL_RUNTIME_FLUSH_TICKS 6
 #define CC_JOURNAL_MAX_DAY_ADVANCE 3650
@@ -1110,6 +1110,21 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " gem_content INTEGER NOT NULL, craft_work INTEGER NOT NULL,"
         " appraised_value INTEGER NOT NULL, created_day INTEGER NOT NULL,"
         " destroyed INTEGER NOT NULL);";
+    const char *goods_schema =
+        "CREATE TABLE IF NOT EXISTS settlement_good ("
+        " settlement_slot INTEGER NOT NULL, good INTEGER NOT NULL,"
+        " stock INTEGER NOT NULL, reserve_target INTEGER NOT NULL,"
+        " production INTEGER NOT NULL, consumption INTEGER NOT NULL,"
+        " price INTEGER NOT NULL, PRIMARY KEY(settlement_slot,good));"
+        "CREATE TABLE IF NOT EXISTS player_good ("
+        " good INTEGER PRIMARY KEY, quantity INTEGER NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS goblin_good ("
+        " good INTEGER PRIMARY KEY, carried INTEGER NOT NULL,"
+        " lair INTEGER NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS dragon_good ("
+        " good INTEGER PRIMARY KEY, hoard INTEGER NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS dragon_campaign_good ("
+        " good INTEGER PRIMARY KEY, supplies INTEGER NOT NULL);";
     const char *journal_schema =
         "CREATE TABLE IF NOT EXISTS journal_epoch ("
         " generation INTEGER PRIMARY KEY AUTOINCREMENT,"
@@ -1175,6 +1190,7 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
            Execute(database, character_schema, error, error_capacity) &&
            Execute(database, legend_schema, error, error_capacity) &&
            Execute(database, material_schema, error, error_capacity) &&
+           Execute(database, goods_schema, error, error_capacity) &&
            Execute(database, journal_schema, error, error_capacity) &&
            Execute(database, underroad_schema, error, error_capacity) &&
            EnsureJourneyColumns(database, error, error_capacity) &&
@@ -1390,19 +1406,24 @@ static bool SaveMaterialEconomy(sqlite3 *database, const CcSim *sim,
         const CcSettlement *s = &sim->settlements[i];
         int column = 1;
         BindInt(statement, column++, i);
-        for (int32_t good = CC_GOOD_WEAPONS; good < CC_GOOD_COUNT; ++good) {
+        for (int32_t good = CC_GOOD_WEAPONS;
+             good < CC_LEGACY_GOOD_COUNT; ++good) {
             BindInt(statement, column++, s->stock[good]);
         }
-        for (int32_t good = CC_GOOD_WEAPONS; good < CC_GOOD_COUNT; ++good) {
+        for (int32_t good = CC_GOOD_WEAPONS;
+             good < CC_LEGACY_GOOD_COUNT; ++good) {
             BindInt(statement, column++, s->reserve_target[good]);
         }
-        for (int32_t good = CC_GOOD_WEAPONS; good < CC_GOOD_COUNT; ++good) {
+        for (int32_t good = CC_GOOD_WEAPONS;
+             good < CC_LEGACY_GOOD_COUNT; ++good) {
             BindInt(statement, column++, s->production[good]);
         }
-        for (int32_t good = CC_GOOD_WEAPONS; good < CC_GOOD_COUNT; ++good) {
+        for (int32_t good = CC_GOOD_WEAPONS;
+             good < CC_LEGACY_GOOD_COUNT; ++good) {
             BindInt(statement, column++, s->consumption[good]);
         }
-        for (int32_t good = CC_GOOD_WEAPONS; good < CC_GOOD_COUNT; ++good) {
+        for (int32_t good = CC_GOOD_WEAPONS;
+             good < CC_LEGACY_GOOD_COUNT; ++good) {
             BindInt(statement, column++, s->price[good]);
         }
         BindInt(statement, column++, s->field_yield);
@@ -1444,10 +1465,10 @@ static bool SaveMaterialEconomy(sqlite3 *database, const CcSim *sim,
     BindInt(statement, column++, (int32_t)sim->goblins.raid_motive);
     BindMoney(statement, column++, sim->goblins.lair_coins);
     BindId(statement, column++, sim->goblins.carried_treasure_id);
-    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+    for (int32_t good = 0; good < CC_LEGACY_GOOD_COUNT; ++good) {
         BindInt(statement, column++, sim->goblins.carried_goods[good]);
     }
-    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+    for (int32_t good = 0; good < CC_LEGACY_GOOD_COUNT; ++good) {
         BindInt(statement, column++, sim->goblins.lair_stock[good]);
     }
     result = StepDone(database, statement, error, error_capacity);
@@ -1458,7 +1479,7 @@ static bool SaveMaterialEconomy(sqlite3 *database, const CcSim *sim,
             "INSERT INTO dragon_material_economy VALUES(1,?,?,?,?,?,?,?);",
             &statement, error, error_capacity)) return false;
     BindId(statement, 1, sim->dragon.stolen_treasure_id);
-    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+    for (int32_t good = 0; good < CC_LEGACY_GOOD_COUNT; ++good) {
         BindInt(statement, good + 2, sim->dragon.hoard_goods[good]);
     }
     result = StepDone(database, statement, error, error_capacity);
@@ -1482,6 +1503,91 @@ static bool SaveMaterialEconomy(sqlite3 *database, const CcSim *sim,
         BindInt(statement, 10, treasure->appraised_value);
         BindInt(statement, 11, treasure->created_day);
         BindInt(statement, 12, treasure->destroyed ? 1 : 0);
+        if (!StepDone(database, statement, error, error_capacity) ||
+            !ResetStatement(database, statement, error, error_capacity)) {
+            sqlite3_finalize(statement);
+            return false;
+        }
+    }
+    sqlite3_finalize(statement);
+    return true;
+}
+
+static bool SaveGoods(sqlite3 *database, const CcSim *sim,
+                      char *error, size_t error_capacity)
+{
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database,
+                 "INSERT INTO settlement_good "
+                 "(settlement_slot,good,stock,reserve_target,production,"
+                 "consumption,price) VALUES(?,?,?,?,?,?,?);",
+                 &statement, error, error_capacity)) return false;
+    for (int32_t settlement = 0;
+         settlement < sim->settlement_count; ++settlement) {
+        const CcSettlement *place = &sim->settlements[settlement];
+        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+            BindInt(statement, 1, settlement);
+            BindInt(statement, 2, good);
+            BindInt(statement, 3, place->stock[good]);
+            BindInt(statement, 4, place->reserve_target[good]);
+            BindInt(statement, 5, place->production[good]);
+            BindInt(statement, 6, place->consumption[good]);
+            BindInt(statement, 7, place->price[good]);
+            if (!StepDone(database, statement, error, error_capacity) ||
+                !ResetStatement(database, statement, error, error_capacity)) {
+                sqlite3_finalize(statement);
+                return false;
+            }
+        }
+    }
+    sqlite3_finalize(statement);
+
+    if (!Prepare(database, "INSERT INTO player_good VALUES(?,?);",
+                 &statement, error, error_capacity)) return false;
+    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        BindInt(statement, 1, good);
+        BindInt(statement, 2, sim->player.cargo[good]);
+        if (!StepDone(database, statement, error, error_capacity) ||
+            !ResetStatement(database, statement, error, error_capacity)) {
+            sqlite3_finalize(statement);
+            return false;
+        }
+    }
+    sqlite3_finalize(statement);
+
+    if (!Prepare(database, "INSERT INTO goblin_good VALUES(?,?,?);",
+                 &statement, error, error_capacity)) return false;
+    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        BindInt(statement, 1, good);
+        BindInt(statement, 2, sim->goblins.carried_goods[good]);
+        BindInt(statement, 3, sim->goblins.lair_stock[good]);
+        if (!StepDone(database, statement, error, error_capacity) ||
+            !ResetStatement(database, statement, error, error_capacity)) {
+            sqlite3_finalize(statement);
+            return false;
+        }
+    }
+    sqlite3_finalize(statement);
+
+    if (!Prepare(database, "INSERT INTO dragon_good VALUES(?,?);",
+                 &statement, error, error_capacity)) return false;
+    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        BindInt(statement, 1, good);
+        BindInt(statement, 2, sim->dragon.hoard_goods[good]);
+        if (!StepDone(database, statement, error, error_capacity) ||
+            !ResetStatement(database, statement, error, error_capacity)) {
+            sqlite3_finalize(statement);
+            return false;
+        }
+    }
+    sqlite3_finalize(statement);
+
+    if (!Prepare(database,
+                 "INSERT INTO dragon_campaign_good VALUES(?,?);",
+                 &statement, error, error_capacity)) return false;
+    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        BindInt(statement, 1, good);
+        BindInt(statement, 2, sim->dragon_campaign.supplies[good]);
         if (!StepDone(database, statement, error, error_capacity) ||
             !ResetStatement(database, statement, error, error_capacity)) {
             sqlite3_finalize(statement);
@@ -1946,7 +2052,7 @@ static bool SaveLegends(sqlite3 *database, const CcSim *sim,
         BindId(statement, column++, campaign->cause_event_id);
         BindInt(statement, column++, campaign->days_remaining);
         BindInt(statement, column++, campaign->cooldown_days);
-        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        for (int32_t good = 0; good < CC_LEGACY_GOOD_COUNT; ++good) {
             BindInt(statement, column++, campaign->supplies[good]);
         }
         BindMoney(statement, column++, campaign->recovered_coins);
@@ -2525,7 +2631,10 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
             "DELETE FROM delayed_echo; DELETE FROM material_economy;"
             "DELETE FROM player_material_economy;"
             "DELETE FROM goblin_material_economy;"
-            "DELETE FROM dragon_material_economy; DELETE FROM treasure;",
+            "DELETE FROM dragon_material_economy; DELETE FROM treasure;"
+            "DELETE FROM settlement_good; DELETE FROM player_good;"
+            "DELETE FROM goblin_good; DELETE FROM dragon_good;"
+            "DELETE FROM dragon_campaign_good;",
             error, error_capacity) &&
         SaveMeta(database, sim, journal_generation, journal_cursor,
                  error, error_capacity) &&
@@ -2534,6 +2643,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
         SaveHorseTeam(database, sim, error, error_capacity) &&
         SaveStableHorses(database, sim, error, error_capacity) &&
         SaveMaterialEconomy(database, sim, error, error_capacity) &&
+        SaveGoods(database, sim, error, error_capacity) &&
         SaveRoutes(database, sim, error, error_capacity) &&
         SaveMaps(database, sim, error, error_capacity) &&
         SaveMapCollection(database, sim, error, error_capacity) &&
@@ -2932,19 +3042,24 @@ static bool ReadMaterialEconomy(sqlite3 *database, CcSim *sim,
         }
         CcSettlement *s = &sim->settlements[slot];
         int column = 1;
-        for (int32_t good = CC_GOOD_WEAPONS; good < CC_GOOD_COUNT; ++good) {
+        for (int32_t good = CC_GOOD_WEAPONS;
+             good < CC_LEGACY_GOOD_COUNT; ++good) {
             s->stock[good] = sqlite3_column_int(statement, column++);
         }
-        for (int32_t good = CC_GOOD_WEAPONS; good < CC_GOOD_COUNT; ++good) {
+        for (int32_t good = CC_GOOD_WEAPONS;
+             good < CC_LEGACY_GOOD_COUNT; ++good) {
             s->reserve_target[good] = sqlite3_column_int(statement, column++);
         }
-        for (int32_t good = CC_GOOD_WEAPONS; good < CC_GOOD_COUNT; ++good) {
+        for (int32_t good = CC_GOOD_WEAPONS;
+             good < CC_LEGACY_GOOD_COUNT; ++good) {
             s->production[good] = sqlite3_column_int(statement, column++);
         }
-        for (int32_t good = CC_GOOD_WEAPONS; good < CC_GOOD_COUNT; ++good) {
+        for (int32_t good = CC_GOOD_WEAPONS;
+             good < CC_LEGACY_GOOD_COUNT; ++good) {
             s->consumption[good] = sqlite3_column_int(statement, column++);
         }
-        for (int32_t good = CC_GOOD_WEAPONS; good < CC_GOOD_COUNT; ++good) {
+        for (int32_t good = CC_GOOD_WEAPONS;
+             good < CC_LEGACY_GOOD_COUNT; ++good) {
             s->price[good] = sqlite3_column_int(statement, column++);
         }
         s->field_yield = sqlite3_column_int(statement, column++);
@@ -2999,11 +3114,11 @@ static bool ReadMaterialEconomy(sqlite3 *database, CcSim *sim,
         (CcMoney)sqlite3_column_int64(statement, column++);
     sim->goblins.carried_treasure_id =
         (CcId)sqlite3_column_int64(statement, column++);
-    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+    for (int32_t good = 0; good < CC_LEGACY_GOOD_COUNT; ++good) {
         sim->goblins.carried_goods[good] =
             sqlite3_column_int(statement, column++);
     }
-    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+    for (int32_t good = 0; good < CC_LEGACY_GOOD_COUNT; ++good) {
         sim->goblins.lair_stock[good] =
             sqlite3_column_int(statement, column++);
     }
@@ -3019,7 +3134,7 @@ static bool ReadMaterialEconomy(sqlite3 *database, CcSim *sim,
     }
     sim->dragon.stolen_treasure_id =
         (CcId)sqlite3_column_int64(statement, 1);
-    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+    for (int32_t good = 0; good < CC_LEGACY_GOOD_COUNT; ++good) {
         sim->dragon.hoard_goods[good] =
             sqlite3_column_int(statement, good + 2);
     }
@@ -3057,6 +3172,130 @@ static bool ReadMaterialEconomy(sqlite3 *database, CcSim *sim,
         sim->treasure_count += 1;
     }
     sqlite3_finalize(statement);
+    return true;
+}
+
+static bool ReadGoods(sqlite3 *database, CcSim *sim,
+                      char *error, size_t error_capacity)
+{
+    if (sim->schema_version < 27U) return true;
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database,
+                 "SELECT settlement_slot,good,stock,reserve_target,production,"
+                 "consumption,price FROM settlement_good "
+                 "ORDER BY settlement_slot,good;",
+                 &statement, error, error_capacity)) return false;
+    int32_t rows = 0;
+    while (sqlite3_step(statement) == SQLITE_ROW) {
+        int32_t settlement = sqlite3_column_int(statement, 0);
+        int32_t good = sqlite3_column_int(statement, 1);
+        if (settlement != rows / CC_GOOD_COUNT ||
+            good != rows % CC_GOOD_COUNT ||
+            settlement >= sim->settlement_count) {
+            sqlite3_finalize(statement);
+            SetError(error, error_capacity,
+                     "Settlement good rows are invalid.");
+            return false;
+        }
+        CcSettlement *place = &sim->settlements[settlement];
+        place->stock[good] = sqlite3_column_int(statement, 2);
+        place->reserve_target[good] = sqlite3_column_int(statement, 3);
+        place->production[good] = sqlite3_column_int(statement, 4);
+        place->consumption[good] = sqlite3_column_int(statement, 5);
+        place->price[good] = sqlite3_column_int(statement, 6);
+        rows += 1;
+    }
+    sqlite3_finalize(statement);
+    if (rows != sim->settlement_count * CC_GOOD_COUNT) {
+        SetError(error, error_capacity,
+                 "Settlement good rows are incomplete.");
+        return false;
+    }
+
+    if (!Prepare(database,
+                 "SELECT good,quantity FROM player_good ORDER BY good;",
+                 &statement, error, error_capacity)) return false;
+    rows = 0;
+    while (sqlite3_step(statement) == SQLITE_ROW) {
+        int32_t good = sqlite3_column_int(statement, 0);
+        if (good != rows || good >= CC_GOOD_COUNT) {
+            sqlite3_finalize(statement);
+            SetError(error, error_capacity, "Player good rows are invalid.");
+            return false;
+        }
+        sim->player.cargo[good] = sqlite3_column_int(statement, 1);
+        rows += 1;
+    }
+    sqlite3_finalize(statement);
+    if (rows != CC_GOOD_COUNT) {
+        SetError(error, error_capacity, "Player good rows are incomplete.");
+        return false;
+    }
+
+    if (!Prepare(database,
+                 "SELECT good,carried,lair FROM goblin_good ORDER BY good;",
+                 &statement, error, error_capacity)) return false;
+    rows = 0;
+    while (sqlite3_step(statement) == SQLITE_ROW) {
+        int32_t good = sqlite3_column_int(statement, 0);
+        if (good != rows || good >= CC_GOOD_COUNT) {
+            sqlite3_finalize(statement);
+            SetError(error, error_capacity, "Goblin good rows are invalid.");
+            return false;
+        }
+        sim->goblins.carried_goods[good] = sqlite3_column_int(statement, 1);
+        sim->goblins.lair_stock[good] = sqlite3_column_int(statement, 2);
+        rows += 1;
+    }
+    sqlite3_finalize(statement);
+    if (rows != CC_GOOD_COUNT) {
+        SetError(error, error_capacity, "Goblin good rows are incomplete.");
+        return false;
+    }
+
+    if (!Prepare(database,
+                 "SELECT good,hoard FROM dragon_good ORDER BY good;",
+                 &statement, error, error_capacity)) return false;
+    rows = 0;
+    while (sqlite3_step(statement) == SQLITE_ROW) {
+        int32_t good = sqlite3_column_int(statement, 0);
+        if (good != rows || good >= CC_GOOD_COUNT) {
+            sqlite3_finalize(statement);
+            SetError(error, error_capacity, "Dragon good rows are invalid.");
+            return false;
+        }
+        sim->dragon.hoard_goods[good] = sqlite3_column_int(statement, 1);
+        rows += 1;
+    }
+    sqlite3_finalize(statement);
+    if (rows != CC_GOOD_COUNT) {
+        SetError(error, error_capacity, "Dragon good rows are incomplete.");
+        return false;
+    }
+
+    if (!Prepare(database,
+                 "SELECT good,supplies FROM dragon_campaign_good "
+                 "ORDER BY good;",
+                 &statement, error, error_capacity)) return false;
+    rows = 0;
+    while (sqlite3_step(statement) == SQLITE_ROW) {
+        int32_t good = sqlite3_column_int(statement, 0);
+        if (good != rows || good >= CC_GOOD_COUNT) {
+            sqlite3_finalize(statement);
+            SetError(error, error_capacity,
+                     "Dragon campaign good rows are invalid.");
+            return false;
+        }
+        sim->dragon_campaign.supplies[good] =
+            sqlite3_column_int(statement, 1);
+        rows += 1;
+    }
+    sqlite3_finalize(statement);
+    if (rows != CC_GOOD_COUNT) {
+        SetError(error, error_capacity,
+                 "Dragon campaign good rows are incomplete.");
+        return false;
+    }
     return true;
 }
 
@@ -3633,7 +3872,7 @@ static bool ReadLegends(sqlite3 *database, CcSim *sim,
             (CcId)sqlite3_column_int64(statement, column++);
         campaign->days_remaining = sqlite3_column_int(statement, column++);
         campaign->cooldown_days = sqlite3_column_int(statement, column++);
-        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        for (int32_t good = 0; good < CC_LEGACY_GOOD_COUNT; ++good) {
             campaign->supplies[good] =
                 sqlite3_column_int(statement, column++);
         }
@@ -4659,6 +4898,19 @@ static void FinishLegacyRuntimeUpgrade(CcSim *sim)
     sim->generator_version = CC_GENERATOR_VERSION;
 }
 
+static void InitializeExtendedGoods(CcSim *sim)
+{
+    for (int32_t settlement = 0;
+         settlement < sim->settlement_count; ++settlement) {
+        CcSettlement *place = &sim->settlements[settlement];
+        for (int32_t good = CC_LEGACY_GOOD_COUNT;
+             good < CC_GOOD_COUNT; ++good) {
+            place->price[good] =
+                CcGoodDefinitionFor((CcGood)good)->base_price;
+        }
+    }
+}
+
 static bool UpgradeLegacyRuntime(CcSim *sim,
                                  char *error, size_t error_capacity)
 {
@@ -4674,7 +4926,8 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
         legacy_version != 19U && legacy_version != 20U &&
         legacy_version != 21U && legacy_version != 22U &&
         legacy_version != 23U && legacy_version != 24U &&
-        legacy_version != 25U) return true;
+        legacy_version != 25U && legacy_version != 26U) return true;
+    InitializeExtendedGoods(sim);
     if (legacy_version == 17U) {
         for (int32_t i = 0; i < CC_MAX_EVENTS; ++i) {
             if ((int32_t)sim->events[i].kind ==
@@ -4709,6 +4962,11 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
                     (int32_t)CC_EVENT_FRONT_CREATED + kind - old_first);
             }
         }
+    }
+    if (legacy_version == 26U) {
+        sim->schema_version = CC_SIM_SCHEMA_VERSION;
+        sim->generator_version = CC_GENERATOR_VERSION;
+        return true;
     }
     if (legacy_version == 25U) {
         CcSimUpgradeCharacterLifecycles(sim);
@@ -5062,6 +5320,7 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
               ReadPlayerRouteKnowledge(database, sim,
                                        error, error_capacity) &&
               ReadMaterialEconomy(database, sim, error, error_capacity) &&
+              ReadGoods(database, sim, error, error_capacity) &&
               ReadPlayerCommitment(database, sim, error, error_capacity) &&
               ReadJourneyState(database, sim, error, error_capacity);
     if (!ok) {
