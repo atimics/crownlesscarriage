@@ -125,6 +125,7 @@ CcNpcAppearance CcNpcAppearanceGenerate(uint32_t seed, CcNpcRole role,
                                         Color accent);
 
 CcNpcAppearance CcNpcCrownlessAppearance(void);
+CcNpcAppearance CcNpcPlayerAppearance(uint32_t choices);
 CcNpcAppearance CcNpcMaraAppearance(void);
 const char *CcNpcRoleName(CcNpcRole role);
 bool CcNpcAppearanceEqual(const CcNpcAppearance *first,

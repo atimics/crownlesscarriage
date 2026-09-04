@@ -5,7 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define CC_CLIENT_SESSION_VERSION UINT32_C(6)
+#define CC_CLIENT_SESSION_VERSION UINT32_C(7)
 #define CC_CLIENT_SESSION_GUARD_COUNT 3
 #define CC_CLIENT_SESSION_RAIDER_COUNT 2
 #define CC_CLIENT_SESSION_SKILL_COUNT 3
@@ -28,7 +28,8 @@ typedef enum CcClientSessionCoordinateSpace {
 typedef enum CcClientRoadEncounterMode {
     CC_CLIENT_ROAD_ENCOUNTER_NONE = 0,
     CC_CLIENT_ROAD_ENCOUNTER_FIGHT = 1,
-    CC_CLIENT_ROAD_ENCOUNTER_PARLEY = 2
+    CC_CLIENT_ROAD_ENCOUNTER_PARLEY = 2,
+    CC_CLIENT_ROAD_ENCOUNTER_LOCAL = 3
 } CcClientRoadEncounterMode;
 
 typedef struct CcClientEncounterActor {
@@ -100,6 +101,9 @@ typedef struct CcClientSession {
     float position_z;
     float facing_yaw;
     uint32_t opening_step;
+    float site_travel_progress;
+    bool site_travel_active;
+    bool site_returning;
     CcClientAthleticProfile athletics;
     CcClientRoadEncounter road_encounter;
 } CcClientSession;

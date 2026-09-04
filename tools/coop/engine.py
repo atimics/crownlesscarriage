@@ -18,6 +18,7 @@ class Engine:
         signatures = {
             "CcCoopApply": [pointer, text, c.c_uint64, c.c_int32, c.c_int32, text, size],
             "CcCoopAdvance": [pointer, c.c_int32, text, size],
+            "CcCoopAdvanceAway": [pointer, c.c_int32, text, size],
             "CcCoopSnapshot": [pointer, text, size],
             "CcCoopEncode": [pointer, c.POINTER(pointer), c.POINTER(size), text, size],
             "CcCoopDecode": [pointer, text, size, text, size],
@@ -78,3 +79,7 @@ class Campaign:
     def advance(self, ticks):
         if not self.lib.CcCoopAdvance(self.handle, ticks, self.error, len(self.error)):
             raise RuntimeError("Campaign clock failed: " + self.error.value.decode("utf-8"))
+
+    def advance_away(self, days):
+        if not self.lib.CcCoopAdvanceAway(self.handle, days, self.error, len(self.error)):
+            raise RuntimeError("Away clock failed: " + self.error.value.decode("utf-8"))

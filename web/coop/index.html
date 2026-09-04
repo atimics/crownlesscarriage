@@ -4,10 +4,10 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Crownless · A shared carriage</title>
   <meta name="theme-color" content="#20392f">
-  <link rel="stylesheet" href="/coop.css"><script src="/coop.js" defer></script>
+  <link rel="stylesheet" href="/coop.css"><script src="/avatar.js" defer></script><script src="/coop.js" defer></script>
 </head>
 <body>
-  <header><a href="/" class="brand">CROWNLESS <span>CARriage & company</span></a><span id="connection">Finding the road…</span></header>
+  <header><a href="/" class="brand">CROWNLESS <span>Carriage & company</span></a><span id="connection">Finding the road…</span></header>
   <main>
     <section id="lobby">
       <p class="eyebrow">A ROAD STORY, TOGETHER</p>
@@ -28,19 +28,31 @@
         </form>
         <section class="paper" id="saved-worlds"><h2>Your roads</h2><div id="world-list"></div></section>
       </div>
-      <p class="quiet">Up to eight people share one company, one carriage, and one clock. Your journey is saved on this host. The carriage waits when everyone leaves.</p>
+      <p class="quiet">Up to eight people share one company, one carriage, and one clock. Time gathers speed while everyone is away. Return to your place in a world that has grown older.</p>
     </section>
     <section id="world" hidden>
-      <div class="title-row"><div><p class="eyebrow">THE COMPANY ROAD BOOK</p><h1 id="world-name"></h1></div><div class="tools"><button id="invite" class="secondary" hidden>Invite crew</button><button id="pause" class="secondary" hidden>Pause world</button><a id="game-link" class="button secondary" hidden>Enter the 3D world ↗</a><button id="leave" class="secondary">Worlds</button></div></div>
-      <div id="crew" class="crew" aria-label="Carriage crew"></div>
-      <div class="company-bar"><span><small>COMMON PURSE</small><strong id="coins"></strong> crowns</span><span><small>SHARED CARGO</small><strong id="cargo"></strong> boxes</span><span><small>WORLD TIME</small><strong id="day"></strong></span><span><small>THE ROAD AHEAD</small><strong id="location"></strong></span></div>
-      <div class="world-grid">
-        <div class="map-paper"><div class="map-heading"><span class="eyebrow">ROADS WE KNOW</span><span id="journey-label"></span></div><svg id="map" viewBox="70 60 820 520" role="img" aria-label="Known towns and the shared carriage"></svg><div id="journey-controls"></div></div>
-        <section class="paper ledger"><nav aria-label="Company book"><button data-tab="market" aria-selected="true">Market</button><button data-tab="road">Road</button><button data-tab="charters">Charters</button><button data-tab="history">History</button></nav><div id="panel"></div></section>
+      <div class="title-row"><div><p class="eyebrow" id="world-name"></p><h1>Your traveller.</h1></div><button id="leave" class="secondary">Worlds</button></div>
+      <p class="intro">Choose your look. Your company is waiting in the world.</p>
+      <div class="avatar-layout">
+        <section class="avatar-stage" aria-label="Your avatar preview">
+          <iframe id="avatar-preview" title="Live avatar preview" hidden></iframe>
+          <p id="preview-status">Preparing your traveller…</p>
+          <div class="preview-caption"><span id="player-name"></span><span>THE CROWNLESS COMPANY</span></div>
+        </section>
+        <form id="appearance-form" class="paper">
+          <h2>A face for the road</h2>
+          <fieldset id="skin-options"><legend>Skin tone</legend></fieldset>
+          <div class="appearance-fields"><label>Face<select id="face" name="face"></select></label><label>Hair style<select id="style" name="style"></select></label></div>
+          <fieldset id="hair-options"><legend>Hair colour</legend></fieldset>
+          <fieldset id="coat-options"><legend>Coat colour</legend></fieldset>
+          <div class="appearance-save"><button id="save-appearance" class="secondary" type="submit">Save appearance</button><span id="appearance-status" role="status">Saved</span></div>
+          <a id="game-link" class="button" hidden>Enter the world <span>↗</span></a>
+        </form>
       </div>
-      <p class="quiet">Every choice belongs to the company. Town business and road stops share the same saved clock.</p>
+      <section class="crew-section"><div class="crew-heading"><h2>Your company</h2><button id="invite" class="secondary" hidden>Invite crew</button></div><div id="crew" class="crew" aria-label="Carriage crew"></div></section>
+      <p class="quiet">One company. One carriage. One shared clock. Your journey continues in the world.</p>
     </section>
-    <div id="notice" role="status" aria-live="polite" hidden><span></span><button id="retry" class="secondary" hidden>Retry saved action</button><button id="dismiss" aria-label="Dismiss message">×</button></div>
+    <div id="notice" role="status" aria-live="polite" hidden><span></span><button id="dismiss" aria-label="Dismiss message">×</button></div>
     <dialog id="invite-dialog"><h2>Gather the crew</h2><p>Send this invitation to a friend.</p><label>Invitation link<input id="invite-url" readonly></label><div class="tools"><button id="copy-invite">Copy invitation</button><button id="close-invite" class="secondary">Close</button></div></dialog>
   </main>
   <footer>Crownless Carriage <span>Good roads leave a story.</span></footer>
