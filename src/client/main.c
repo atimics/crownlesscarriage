@@ -8933,7 +8933,7 @@ int main(int argc, char **argv)
             render_benchmark_p95_budget :
             (render_benchmark_minimum_fps > 0.0 ?
                 1500.0 / render_benchmark_minimum_fps : 0.0);
-        (void)printf("render: scene=%s frames=%d seconds=%.6f ms/frame=%.3f fps=%.1f p95=%.3f p95_budget=%.3f p99=%.3f max=%.3f hitches=%d skin_updates=%d skinned_meshes=%d hero_skin_updates=%d hero_skinned_meshes=%d npc_skin_updates=%d npc_skinned_meshes=%d creature_skin_updates=%d creature_skinned_meshes=%d high_detail=%d lod=%d static_batch_draws=%d static_batch_instances=%d\n",
+        (void)printf("render: scene=%s frames=%d seconds=%.6f ms/frame=%.3f fps=%.1f p95=%.3f p95_budget=%.3f p99=%.3f max=%.3f hitches=%d skin_updates=%d skinned_meshes=%d hero_skin_updates=%d hero_skinned_meshes=%d npc_skin_updates=%d npc_skinned_meshes=%d creature_skin_updates=%d creature_skinned_meshes=%d high_detail=%d lod=%d static_batch_draws=%d static_batch_instances=%d static_batch_vertices=%d\n",
                      render_benchmark_scene, render_benchmark_count,
                      render_benchmark_elapsed,
                      render_benchmark_elapsed * 1000.0 /
@@ -8955,7 +8955,8 @@ int main(int argc, char **argv)
                      final_renderer_stats.high_detail_characters,
                      final_renderer_stats.low_detail_characters,
                      final_renderer_stats.static_batch_draws,
-                     final_renderer_stats.static_batch_instances);
+                     final_renderer_stats.static_batch_instances,
+                     final_renderer_stats.static_batch_vertices);
         bool performance_failed = render_benchmark_minimum_fps > 0.0 &&
                                   frames_per_second <
                                       render_benchmark_minimum_fps;

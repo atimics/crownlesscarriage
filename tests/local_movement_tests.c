@@ -2617,7 +2617,7 @@ int main(void)
     CcLocalRendererRecordCreatureSkinUpdate(1);
     CcLocalRendererRecordHeroSkinUpdate(3);
     CcLocalRendererRecordNpcSkinUpdate(2);
-    CcLocalRendererRecordStaticBatch(2, 113);
+    CcLocalRendererRecordStaticBatch(2, 113, 8192);
     CcLocalRendererStats performance = CcLocalRendererGetStats();
     if (performance.p95_frame_milliseconds < 9.9f ||
         performance.p95_frame_milliseconds > 10.1f ||
@@ -2631,7 +2631,8 @@ int main(void)
         performance.creature_skin_updates != 1 ||
         performance.creature_skinned_meshes != 1 ||
         performance.static_batch_draws != 2 ||
-        performance.static_batch_instances != 113) {
+        performance.static_batch_instances != 113 ||
+        performance.static_batch_vertices != 8192) {
         (void)fprintf(stderr,
                       "renderer hitch or hero skin metrics were incorrect\n");
         return 1;

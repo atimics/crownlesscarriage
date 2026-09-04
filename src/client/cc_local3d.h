@@ -411,6 +411,7 @@ typedef struct CcLocalRendererStats {
     int32_t creature_skinned_meshes;
     int32_t static_batch_draws;
     int32_t static_batch_instances;
+    int32_t static_batch_vertices;
 } CcLocalRendererStats;
 
 
