@@ -788,6 +788,12 @@ if(BUILD_TESTING)
     add_test(NAME generated_creature_catalog COMMAND creature_catalog_tests)
 
     if(CC_BUILD_CLIENT)
+        target_compile_definitions(crownless_carriage PRIVATE
+            CC_CLIENT_SELF_TESTS=1
+        )
+        add_test(NAME town_arrival_parking
+                 COMMAND crownless_carriage --test-town-arrival-parking)
+
         add_executable(npc_appearance_tests
             tests/npc_appearance_tests.c
         )

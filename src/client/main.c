@@ -5298,6 +5298,116 @@ static bool HandleExpedition(CcJournal *journal, CcSim *sim,
     return true;
 }
 
+static void FinishTownArrivalState(const CcSim *sim, LocalState *local,
+                                   int32_t *selected, char *message,
+                                   size_t message_capacity)
+{
+    *selected = FirstOutgoingRouteIndex(sim);
+    ResetLocalState(local);
+    (void)snprintf(message, message_capacity,
+                   "The team is watered and stabled.");
+}
+
+static bool HandleTownArrivalAction(
+    const CcSim *sim, LocalState *local, int32_t *selected,
+    ContextActionKind context_action, bool enter_pressed,
+    char *message, size_t message_capacity)
+{
+    bool parking_requested =
+        context_action == CONTEXT_ACTION_SKIP_TRAVEL || enter_pressed;
+    if (!parking_requested || sim == NULL || sim->journey.active ||
+        local == NULL || !local->journey_travel_active ||
+        local->convoy.phase != CC_LOCAL_CONVOY_ARRIVING) {
+        return false;
+    }
+    FinishTownArrivalState(
+        sim, local, selected, message, message_capacity);
+    return true;
+}
+
+#if defined(CC_CLIENT_SELF_TESTS)
+static int RunTownArrivalParkingRegression(void)
+{
+    CcSim sim;
+    CcSimInit(&sim, UINT32_C(0xc0a71a9e));
+    LocalState skipped = {0};
+    ResetLocalState(&skipped);
+    skipped.journey_travel_active = true;
+    skipped.convoy.phase = CC_LOCAL_CONVOY_ARRIVING;
+    skipped.convoy.phase_progress = 0.47f;
+    skipped.convoy.pace = 0.48f;
+
+    ContextActionSet actions = BuildContextActions(
+        &sim, &skipped, VIEW_LOCAL, -1, -1);
+    ContextAction park = {.kind = CONTEXT_ACTION_NONE};
+    for (int32_t i = 0; i < actions.count; ++i) {
+        if (actions.items[i].kind == CONTEXT_ACTION_SKIP_TRAVEL) {
+            park = actions.items[i];
+            break;
+        }
+    }
+    if (park.kind != CONTEXT_ACTION_SKIP_TRAVEL ||
+        strcmp(park.label, "Park carriage") != 0) {
+        (void)fprintf(stderr,
+                      "Partial arrival did not offer Park carriage.\n");
+        return 1;
+    }
+
+    int32_t selected = -1;
+    char message[96] = "";
+    if (!HandleTownArrivalAction(
+            &sim, &skipped, &selected, park.kind, false,
+            message, sizeof(message))) {
+        (void)fprintf(stderr, "Park carriage was not handled.\n");
+        return 1;
+    }
+    if (skipped.journey_travel_active ||
+        skipped.convoy.phase != CC_LOCAL_CONVOY_PARKED ||
+        skipped.convoy.phase_progress != 0.0f ||
+        selected != FirstOutgoingRouteIndex(&sim) ||
+        strcmp(message, "The team is watered and stabled.") != 0) {
+        (void)fprintf(stderr,
+                      "Park carriage did not reach the parked town state.\n");
+        return 1;
+    }
+
+    int32_t parked_selection = selected;
+    if (HandleTownArrivalAction(
+            &sim, &skipped, &selected, park.kind, true,
+            message, sizeof(message)) ||
+        skipped.journey_travel_active ||
+        skipped.convoy.phase != CC_LOCAL_CONVOY_PARKED ||
+        skipped.convoy.phase_progress != 0.0f ||
+        selected != parked_selection) {
+        (void)fprintf(stderr, "Repeated Enter changed the parked state.\n");
+        return 1;
+    }
+
+    LocalState natural = {0};
+    ResetLocalState(&natural);
+    natural.journey_travel_active = true;
+    natural.convoy.phase = CC_LOCAL_CONVOY_ARRIVING;
+    natural.convoy.phase_progress = 1.0f;
+    int32_t natural_selection = -1;
+    char natural_message[96] = "";
+    FinishTownArrivalState(
+        &sim, &natural, &natural_selection,
+        natural_message, sizeof(natural_message));
+    if (natural.journey_travel_active != skipped.journey_travel_active ||
+        natural.convoy.phase != skipped.convoy.phase ||
+        natural.convoy.phase_progress != skipped.convoy.phase_progress ||
+        natural_selection != selected ||
+        strcmp(natural_message, message) != 0) {
+        (void)fprintf(stderr,
+                      "Natural and skipped arrival finished differently.\n");
+        return 1;
+    }
+
+    (void)puts("Town arrival parking regression passed");
+    return 0;
+}
+#endif
+
 static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                         int32_t *selected_situation, ClientView *view,
                         ClientView *return_view, LocalState *local,
@@ -5881,8 +5991,15 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                     return;
                 }
             }
-            if (context_action == CONTEXT_ACTION_SKIP_TRAVEL ||
-                ClientKeyPressed(KEY_ENTER)) {
+            bool enter_pressed = ClientKeyPressed(KEY_ENTER);
+            if (HandleTownArrivalAction(
+                    sim, local, selected, context_action, enter_pressed,
+                    message, message_capacity)) {
+                return;
+            }
+            if (sim->journey.active &&
+                (context_action == CONTEXT_ACTION_SKIP_TRAVEL ||
+                 enter_pressed)) {
                 char error[256];
                 bool advanced = true;
                 bool warning_reached = false;
@@ -5924,10 +6041,8 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             ConvoyUpdateResult convoy_update = UpdateDrivenConvoy(
                 local, sim, delta_time);
             if (convoy_update == CONVOY_UPDATE_PARKED) {
-                *selected = FirstOutgoingRouteIndex(sim);
-                ResetLocalState(local);
-                (void)snprintf(message, message_capacity,
-                               "The team is watered and stabled.");
+                FinishTownArrivalState(
+                    sim, local, selected, message, message_capacity);
                 return;
             }
             if (convoy_update == CONVOY_UPDATE_ENTER_ROAD) {
@@ -6797,6 +6912,12 @@ static Rectangle LocalViewportBounds(void)
 
 int main(int argc, char **argv)
 {
+#if defined(CC_CLIENT_SELF_TESTS)
+    if (argc == 2 &&
+        strcmp(argv[1], "--test-town-arrival-parking") == 0) {
+        return RunTownArrivalParkingRegression();
+    }
+#endif
     bool screen_first_hero = true;
     for (int32_t argument = 1; argument < argc; ++argument) {
         if (strcmp(argv[argument], "--screen-first-hero") == 0) {
