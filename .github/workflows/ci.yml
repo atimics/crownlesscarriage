@@ -146,14 +146,42 @@ jobs:
           -DCMAKE_BUILD_TYPE=Debug
           -DCC_BUILD_CLIENT=OFF
           -DCC_WARNINGS_AS_ERRORS=ON
-          -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
-          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+          -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=undefined"
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=undefined"
       - name: Build
         run: cmake --build build --parallel
+      - name: Check undefined behavior exits with failure
+        env:
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: |
+          clang \
+            -fsanitize=undefined \
+            -fno-sanitize-recover=undefined \
+            tests/sanitizer_ub_fixture.c \
+            -o "$RUNNER_TEMP/sanitizer_ub_fixture"
+          set +e
+          "$RUNNER_TEMP/sanitizer_ub_fixture" \
+            > sanitizer-self-check.log 2>&1
+          fixture_status=$?
+          set -e
+          cat sanitizer-self-check.log
+          test "$fixture_status" -ne 0
+          grep -q "runtime error: signed integer overflow" \
+            sanitizer-self-check.log
       - name: Test
         env:
-          ASAN_OPTIONS: detect_leaks=1
-          UBSAN_OPTIONS: print_stacktrace=1
-        run: >-
-          ctest --test-dir build --output-on-failure
-          -E '^headless_performance_budget$'
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: |
+          ctest --test-dir build --output-on-failure \
+            -E '^headless_performance_budget$' \
+            2>&1 | tee sanitizer-tests.log
+      - name: Upload sanitizer logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sanitizer-logs
+          path: |
+            sanitizer-self-check.log
+            sanitizer-tests.log
+          if-no-files-found: error
