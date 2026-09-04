@@ -328,6 +328,7 @@ typedef struct CcArchives {
     int32_t kit_tool_wear;
     CcId abbot_character_id;
     int32_t stewardship_rank;
+    int32_t dead_since_day;
 } CcArchives;
 
 typedef enum CcMaterialChainBlocker {

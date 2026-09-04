@@ -5568,8 +5568,33 @@ static void AdvanceArchives(CcSim *sim)
     int32_t target_scribes = sim->iron_ledger_reserve >= 300 ? CC_MAX_SCRIBES :
         sim->iron_ledger_reserve >= 150 ? 2 :
         sim->iron_ledger_reserve >= 50 ? 1 : 0;
+    if (archives->scribes <= 0) {
+        archives->dead_since_day = archives->dead_since_day > 0 ?
+            archives->dead_since_day : sim->current_day;
+    } else {
+        archives->dead_since_day = 0;
+    }
+    if (target_scribes <= 0 && archives->dead_since_day > 0 &&
+        sim->current_day - archives->dead_since_day >= 1820 &&
+        sim->iron_ledger_reserve >= 40) {
+        int32_t funded_kingdoms = 0;
+        for (int32_t i = 0; i < sim->kingdom_count; ++i) {
+            if (sim->kingdoms[i].treasury >= 800) funded_kingdoms += 1;
+        }
+        if (funded_kingdoms >= 2 && sim->route_count >= 2) {
+            target_scribes = 1;
+        }
+    }
     if (target_scribes > archives->scribes) {
         archives->scribes = target_scribes;
+        if (archives->dead_since_day > 0) {
+            archives->dead_since_day = 0;
+            char recovery_text[CC_EVENT_TEXT_CAPACITY];
+            (void)snprintf(recovery_text, sizeof(recovery_text),
+                "The kingdom treasuries fund a lone scribe; the archive stirs after silence.");
+            (void)PushEvent(sim, CC_EVENT_LORE_RECORDED, 0U, 0U, 0U, 1,
+                recovery_text);
+        }
     } else if (target_scribes < archives->scribes) {
         archives->scribes -= 1;
     }
