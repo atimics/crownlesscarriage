@@ -16,6 +16,7 @@
 #include <emscripten.h>
 #endif
 
+#include <float.h>
 #include <inttypes.h>
 #include <math.h>
 #include <stdbool.h>
@@ -1033,6 +1034,140 @@ static int32_t OpenWorldRouteIndex(const CcSim *sim, CcId route_id)
     return -1;
 }
 
+static float SessionAngleDistance(float first, float second)
+{
+    float difference = first - second;
+    while (difference > PI) difference -= 2.0f * PI;
+    while (difference < -PI) difference += 2.0f * PI;
+    return fabsf(difference);
+}
+
+static float SessionPointSegmentDistanceSquared(
+    CcWorldPoint point, CcWorldPoint first, CcWorldPoint second,
+    float *segment_amount)
+{
+    float dx = second.x - first.x;
+    float dz = second.z - first.z;
+    float length_squared = dx * dx + dz * dz;
+    float amount = length_squared > 0.0001f ?
+        ((point.x - first.x) * dx + (point.z - first.z) * dz) /
+            length_squared : 0.0f;
+    amount = ClampUnit(amount);
+    if (segment_amount != NULL) *segment_amount = amount;
+    float nearest_x = first.x + dx * amount;
+    float nearest_z = first.z + dz * amount;
+    float offset_x = point.x - nearest_x;
+    float offset_z = point.z - nearest_z;
+    return offset_x * offset_x + offset_z * offset_z;
+}
+
+static bool WorldSessionRouteScore(
+    const CcWorldRoutePlacement *route, CcId settlement_id,
+    CcWorldPoint position, float facing_yaw,
+    float *distance_squared, float *heading_distance)
+{
+    if (route == NULL || distance_squared == NULL ||
+        heading_distance == NULL ||
+        (route->from_id != settlement_id &&
+         route->to_id != settlement_id)) {
+        return false;
+    }
+    float total_length = CcWorldRouteLength(route);
+    if (total_length <= 0.0001f) return false;
+    float best_distance = FLT_MAX;
+    float best_heading = FLT_MAX;
+    float travelled = 0.0f;
+    for (int32_t sample = 0;
+         sample < CC_WORLD_ROUTE_SAMPLE_COUNT - 1; ++sample) {
+        CcWorldPoint first = route->samples[sample];
+        CcWorldPoint second = route->samples[sample + 1];
+        float dx = second.x - first.x;
+        float dz = second.z - first.z;
+        float segment_length = sqrtf(dx * dx + dz * dz);
+        float segment_amount = 0.0f;
+        float candidate_distance = SessionPointSegmentDistanceSquared(
+            position, first, second, &segment_amount);
+        float route_amount = (travelled + segment_length * segment_amount) /
+            total_length;
+        float journey_amount = route->from_id == settlement_id ?
+            route_amount : 1.0f - route_amount;
+        CcWorldPoint ignored_position;
+        float heading = 0.0f;
+        bool has_pose = CcWorldRoutePose(
+            route, settlement_id, journey_amount,
+            &ignored_position, &heading);
+        float candidate_heading = has_pose ?
+            SessionAngleDistance(heading, facing_yaw) : FLT_MAX;
+        if (candidate_distance < best_distance - 0.0001f ||
+            (fabsf(candidate_distance - best_distance) <= 0.0001f &&
+             candidate_heading < best_heading)) {
+            best_distance = candidate_distance;
+            best_heading = candidate_heading;
+        }
+        travelled += segment_length;
+    }
+    int32_t gate_sample = route->from_id == settlement_id ?
+        0 : CC_WORLD_ROUTE_SAMPLE_COUNT - 1;
+    int32_t junction_sample = route->from_id == settlement_id ?
+        CC_WORLD_ROUTE_FROM_JUNCTION_SAMPLE :
+        CC_WORLD_ROUTE_TO_JUNCTION_SAMPLE;
+    float connector_distance = SessionPointSegmentDistanceSquared(
+        position, route->samples[gate_sample],
+        route->samples[junction_sample], NULL);
+    if (connector_distance <= best_distance + 0.0001f) {
+        float route_amount = CcWorldRouteSampleAmount(
+            route, junction_sample);
+        float journey_amount = route->from_id == settlement_id ?
+            route_amount : 1.0f - route_amount;
+        CcWorldPoint ignored_position;
+        float departure_heading = 0.0f;
+        if (CcWorldRoutePose(
+                route, settlement_id, journey_amount,
+                &ignored_position, &departure_heading)) {
+            best_heading = SessionAngleDistance(
+                departure_heading, facing_yaw);
+        }
+    }
+    *distance_squared = best_distance;
+    *heading_distance = best_heading;
+    return best_distance < FLT_MAX;
+}
+
+static const CcRoute *InferWorldSessionRoute(
+    const CcSim *sim, const CcWorldManifest *manifest,
+    const CcClientSession *session)
+{
+    if (sim == NULL || manifest == NULL || session == NULL) return NULL;
+    const CcRoute *best_route = NULL;
+    float best_distance = FLT_MAX;
+    float best_heading = FLT_MAX;
+    CcWorldPoint position = {session->position_x, session->position_z};
+    for (int32_t i = 0; i < sim->route_count; ++i) {
+        const CcRoute *route = &sim->routes[i];
+        if (route->from_id != session->location_id &&
+            route->to_id != session->location_id) {
+            continue;
+        }
+        const CcWorldRoutePlacement *placement =
+            CcWorldRoutePlacementForId(manifest, route->id);
+        float distance = FLT_MAX;
+        float heading = FLT_MAX;
+        if (!WorldSessionRouteScore(
+                placement, session->location_id, position,
+                session->facing_yaw, &distance, &heading)) {
+            continue;
+        }
+        if (distance < best_distance - 0.0001f ||
+            (fabsf(distance - best_distance) <= 0.0001f &&
+             heading < best_heading)) {
+            best_route = route;
+            best_distance = distance;
+            best_heading = heading;
+        }
+    }
+    return best_distance <= 49.0f ? best_route : NULL;
+}
+
 static bool SetOpenWorldCarriageOnRoute(
     const CcSim *sim, LocalState *local, CcId route_id, CcId origin_id,
     float distance_from_origin, float pace, bool hero_embarked)
@@ -1465,12 +1600,24 @@ static bool WorldStreamCanRestoreSession(
     }
     const CcRoute *restored_route = session->route_id != 0U ?
         CcSimRoute(sim, session->route_id) :
-        OpenWorldRouteFromSettlement(sim, session->location_id);
+        InferWorldSessionRoute(
+            sim, &local->world_stream.manifest, session);
     if (restored_route == NULL ||
         (restored_route->from_id != session->location_id &&
          restored_route->to_id != session->location_id) ||
         CcWorldRoutePlacementForId(
             &local->world_stream.manifest, restored_route->id) == NULL) {
+        return false;
+    }
+    const CcWorldRoutePlacement *placement = CcWorldRoutePlacementForId(
+        &local->world_stream.manifest, restored_route->id);
+    float road_distance = FLT_MAX;
+    float heading_distance = FLT_MAX;
+    if (!WorldSessionRouteScore(
+            placement, session->location_id,
+            (CcWorldPoint){session->position_x, session->position_z},
+            session->facing_yaw, &road_distance, &heading_distance) ||
+        road_distance > 49.0f) {
         return false;
     }
     if (route != NULL) *route = restored_route;
@@ -6022,6 +6169,22 @@ static int SessionStartupTestFailed(const char *path, const char *message)
     return 1;
 }
 
+static bool WriteVersionThreeWorldSession(
+    const char *path, const CcSim *sim,
+    CcWorldPoint position, float facing_yaw)
+{
+    FILE *file = fopen(path, "wb");
+    bool written = file != NULL &&
+        fprintf(file,
+                "CROWNLESS_SESSION 3\n%u %llu 0 1 %.9g %.9g %.9g 2\n",
+                sim->world_seed,
+                (unsigned long long)sim->player.location_id,
+                (double)position.x, (double)position.z,
+                (double)facing_yaw) > 0;
+    if (file != NULL && fclose(file) != 0) written = false;
+    return written;
+}
+
 static int RunWorldSessionStartupRegression(void)
 {
     const char *session_path = "world-session-startup-test.state";
@@ -6223,18 +6386,17 @@ static int RunWorldSessionStartupRegression(void)
             session_path, "World restore accepted an unprepared stream.");
     }
 
-    FILE *version_three = fopen(session_path, "wb");
-    bool version_three_written = version_three != NULL &&
-        fprintf(version_three,
-                "CROWNLESS_SESSION 3\n%u %llu 0 1 %.9g %.9g %.9g 2\n",
-                sim.world_seed,
-                (unsigned long long)sim.player.location_id,
-                (double)saved_x, (double)saved_z,
-                (double)saved_yaw) > 0;
-    if (version_three != NULL && fclose(version_three) != 0) {
-        version_three_written = false;
-    }
-    if (!version_three_written) {
+    const CcWorldRoutePlacement *route_placement =
+        CcWorldRoutePlacementForId(
+            &restored.world_stream.manifest, route->id);
+    CcWorldPoint branch_position;
+    float branch_heading = 0.0f;
+    if (route_placement == NULL ||
+        !CcWorldRoutePose(
+            route_placement, sim.player.location_id, 0.18f,
+            &branch_position, &branch_heading) ||
+        !WriteVersionThreeWorldSession(
+            session_path, &sim, branch_position, branch_heading)) {
         return SessionStartupTestFailed(
             session_path, "Version 3 world session setup failed.");
     }
@@ -6244,20 +6406,91 @@ static int RunWorldSessionStartupRegression(void)
         return SessionStartupTestFailed(
             session_path, "Version 3 world stream setup failed.");
     }
-    const CcRoute *first_route = OpenWorldRouteFromSettlement(
-        &sim, sim.player.location_id);
     view = VIEW_LOCAL;
     int32_t version_three_selected = -1;
-    if (first_route == NULL ||
-        !RestoreClientStartupSession(
+    if (!RestoreClientStartupSession(
             session_path, &sim, &version_three_restore, &view,
             &version_three_selected) ||
         view != VIEW_ROADS || !version_three_restore.open_world ||
-        version_three_restore.world_carriage.route_id != first_route->id ||
-        version_three_selected != OpenWorldRouteIndex(
-            &sim, first_route->id)) {
+        version_three_restore.world_carriage.route_id != route->id ||
+        version_three_selected != route_index ||
+        !SessionTestFloatMatches(
+            version_three_restore.agent.position.x, branch_position.x) ||
+        !SessionTestFloatMatches(
+            version_three_restore.agent.position.z, branch_position.z)) {
         return SessionStartupTestFailed(
-            session_path, "Version 3 world session did not use its old fallback.");
+            session_path, "Version 3 world session chose the wrong branch.");
+    }
+
+    int32_t junction_sample = route->from_id == sim.player.location_id ?
+        CC_WORLD_ROUTE_FROM_JUNCTION_SAMPLE :
+        CC_WORLD_ROUTE_TO_JUNCTION_SAMPLE;
+    float junction_route_amount = CcWorldRouteSampleAmount(
+        route_placement, junction_sample);
+    float junction_journey_amount =
+        route->from_id == sim.player.location_id ?
+            junction_route_amount : 1.0f - junction_route_amount;
+    CcWorldPoint shared_gate_position;
+    float shared_gate_heading = 0.0f;
+    const CcWorldSettlementPlacement *branch_place =
+        CcWorldSettlementPlacementForId(
+            &restored.world_stream.manifest, sim.player.location_id);
+    if (branch_place == NULL ||
+        !CcWorldRoutePose(
+            route_placement, sim.player.location_id,
+            junction_journey_amount,
+            &shared_gate_position, &shared_gate_heading) ||
+        !SessionTestFloatMatches(
+            shared_gate_position.x, branch_place->junction.x) ||
+        !SessionTestFloatMatches(
+            shared_gate_position.z, branch_place->junction.z) ||
+        !WriteVersionThreeWorldSession(
+            session_path, &sim, branch_place->gate,
+            shared_gate_heading)) {
+        return SessionStartupTestFailed(
+            session_path, "Version 3 shared gate setup failed.");
+    }
+    LocalState shared_gate_restore = {0};
+    ResetLocalState(&shared_gate_restore);
+    if (!InitializeOpenWorld(&sim, &shared_gate_restore, false)) {
+        return SessionStartupTestFailed(
+            session_path, "Version 3 shared gate stream setup failed.");
+    }
+    view = VIEW_LOCAL;
+    int32_t shared_gate_selected = -1;
+    if (!RestoreClientStartupSession(
+            session_path, &sim, &shared_gate_restore, &view,
+            &shared_gate_selected) ||
+        view != VIEW_ROADS || !shared_gate_restore.open_world ||
+        shared_gate_restore.world_carriage.route_id != route->id ||
+        shared_gate_selected != route_index ||
+        !SessionTestFloatMatches(
+            shared_gate_restore.agent.position.x, branch_place->gate.x) ||
+        !SessionTestFloatMatches(
+            shared_gate_restore.agent.position.z, branch_place->gate.z)) {
+        return SessionStartupTestFailed(
+            session_path, "Version 3 gate heading chose the wrong branch.");
+    }
+
+    if (!WriteVersionThreeWorldSession(
+            session_path, &sim, branch_place->center,
+            shared_gate_heading)) {
+        return SessionStartupTestFailed(
+            session_path, "Version 3 off-road setup failed.");
+    }
+    LocalState off_road_restore = {0};
+    ResetLocalState(&off_road_restore);
+    if (!InitializeOpenWorld(&sim, &off_road_restore, false)) {
+        return SessionStartupTestFailed(
+            session_path, "Version 3 off-road stream setup failed.");
+    }
+    view = VIEW_LOCAL;
+    int32_t off_road_selected = -1;
+    if (RestoreClientStartupSession(
+            session_path, &sim, &off_road_restore, &view,
+            &off_road_selected) || off_road_restore.open_world) {
+        return SessionStartupTestFailed(
+            session_path, "Version 3 restore accepted an off-road point.");
     }
 
     CcLocalBindOpenWorld(NULL);
