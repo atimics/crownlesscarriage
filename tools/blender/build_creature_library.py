@@ -79,15 +79,15 @@ FAMILY_PALETTES = {
         "eye": (0.88, 0.66, 0.13, 1.0),
     },
     "horse": {
-        "skin": (0.36, 0.17, 0.075, 1.0),
-        "secondary": (0.075, 0.050, 0.035, 1.0),
-        "hide": (0.64, 0.39, 0.18, 1.0),
-        "cloth": (0.12, 0.30, 0.29, 1.0),
-        "leather": (0.14, 0.070, 0.035, 1.0),
-        "horn": (0.62, 0.55, 0.39, 1.0),
-        "metal": (0.31, 0.36, 0.36, 1.0),
-        "accent": (0.62, 0.20, 0.18, 1.0),
-        "eye": (0.018, 0.016, 0.013, 1.0),
+        "skin": (0.965, 0.592, 0.808, 1.0),
+        "secondary": (0.729, 0.188, 0.545, 1.0),
+        "hide": (0.976, 0.710, 0.863, 1.0),
+        "cloth": (0.443, 0.906, 0.886, 1.0),
+        "leather": (0.227, 0.145, 0.318, 1.0),
+        "horn": (1.0, 0.984, 0.957, 1.0),
+        "metal": (0.318, 0.545, 0.847, 1.0),
+        "accent": (0.443, 0.906, 0.886, 1.0),
+        "eye": (0.090, 0.067, 0.176, 1.0),
     },
     "cow": {
         "skin": (0.68, 0.61, 0.47, 1.0),
@@ -156,7 +156,7 @@ CREATURES = (
                  "broad burdened carrier framing a bright offering",
                  "biped", "npc_stepped", ("offering", "harness")),
     CreatureSpec("horse", "horse", 3,
-                 "short sturdy pony with a round body and heavy hair",
+                 "colorful storybook pony with big eyes and a ribbon mane",
                  "quadruped", "quadruped_runtime_skin",
                  ("thick_mane", "bushy_tail", "feathered_hooves")),
     CreatureSpec("cow", "cow", 4,
@@ -741,7 +741,7 @@ def build_quadruped(spec: CreatureSpec,
         add_ellipsoid("HORSE_Head", head, (0.34, 0.36, 0.35), "skin",
                       collection, spec, "head", subdivisions=2)
         add_ellipsoid("HORSE_Muzzle", head + Vector((0.0, -0.25, -0.08)),
-                      (0.25, 0.17, 0.18), "secondary", collection, spec,
+                      (0.25, 0.17, 0.18), "hide", collection, spec,
                       "muzzle")
         add_ellipsoid("HORSE_Blaze", head + Vector((0.0, -0.328, 0.10)),
                       (0.075, 0.045, 0.19), "horn", collection, spec, "head")
@@ -750,13 +750,21 @@ def build_quadruped(spec: CreatureSpec,
             add_ellipsoid(f"HORSE_Nostril_{side}",
                           head + Vector((0.13 * sign, -0.402, -0.065)),
                           (0.044, 0.022, 0.032), "eye", collection, spec, "muzzle")
-            add_ellipsoid(f"HORSE_Eye_{side}",
-                          head + Vector((0.25 * sign, -0.17, 0.10)),
-                          (0.078, 0.032, 0.086), "eye", collection, spec,
+            add_ellipsoid(f"PONY_EyeWhite_{side}",
+                          head + Vector((0.27 * sign, -0.20, 0.115)),
+                          (0.116, 0.067, 0.145), "horn", collection, spec,
+                          f"eye_{side.lower()}", subdivisions=2)
+            add_ellipsoid(f"PONY_Iris_{side}",
+                          head + Vector((0.315 * sign, -0.252, 0.115)),
+                          (0.070, 0.026, 0.103), "metal", collection, spec,
+                          f"eye_{side.lower()}", subdivisions=2)
+            add_ellipsoid(f"PONY_Pupil_{side}",
+                          head + Vector((0.321 * sign, -0.273, 0.12)),
+                          (0.036, 0.014, 0.073), "eye", collection, spec,
                           f"eye_{side.lower()}")
             add_ellipsoid(f"PONY_EyeGlint_{side}",
-                          head + Vector((0.286 * sign, -0.199, 0.132)),
-                          (0.018, 0.009, 0.021), "horn", collection, spec,
+                          head + Vector((0.31 * sign, -0.285, 0.163)),
+                          (0.020, 0.011, 0.025), "horn", collection, spec,
                           f"eye_{side.lower()}")
             add_ellipsoid(
                 f"PONY_Cheek_{side}",
@@ -781,7 +789,8 @@ def build_quadruped(spec: CreatureSpec,
         )
         for index, (points, thickness, part) in enumerate(mane_wedges):
             add_lateral_prism(f"PONY_ManeWedge_{index}", points, thickness,
-                              "secondary", collection, spec, part)
+                              "secondary" if index % 2 == 0 else "cloth",
+                              collection, spec, part)
 
     if sheep:
         tail_base = Vector((0.0, 0.60, body_z + 0.14))
@@ -820,7 +829,7 @@ def build_quadruped(spec: CreatureSpec,
             add_segment(f"PONY_TailFlow_{index}",
                         plume_points[index], plume_points[index + 1],
                         plume_radii[index], plume_radii[index + 1],
-                        "secondary", collection, spec,
+                        "secondary" if index % 2 == 0 else "cloth", collection, spec,
                         "tail_root" if index == 0 else "tail", sides=7)
         # Enlarge the whole face together, including its eyes and markings.
         # The head bone stays at the shared gait pivot.
