@@ -1,10 +1,47 @@
 #include "client/cc_client_policy.h"
 
 #include <math.h>
+#include <stddef.h>
 
 static float ClampPace(float pace)
 {
     return fmaxf(0.0f, fminf(1.0f, pace));
+}
+
+static float ClampUnit(float value)
+{
+    return fmaxf(0.0f, fminf(1.0f, value));
+}
+
+void CcClientDepartureBegin(CcClientDepartureTransition *transition)
+{
+    if (transition == NULL) return;
+    *transition = (CcClientDepartureTransition){
+        .phase = CC_CLIENT_DEPARTURE_TOWN,
+    };
+}
+
+void CcClientDepartureAdvance(CcClientDepartureTransition *transition,
+                              float pace, float delta_time)
+{
+    if (transition == NULL || transition->phase == CC_CLIENT_DEPARTURE_READY) {
+        return;
+    }
+    float step = isfinite(delta_time) ? fmaxf(0.0f, delta_time) : 0.0f;
+    if (transition->phase == CC_CLIENT_DEPARTURE_TOWN) {
+        transition->town_progress = ClampUnit(
+            transition->town_progress + ClampPace(pace) * step * 0.11f);
+        if (transition->town_progress >= 1.0f) {
+            transition->phase = CC_CLIENT_DEPARTURE_ROAD_BOOK;
+            transition->road_book_progress = 0.0f;
+        }
+        return;
+    }
+    transition->road_book_progress = ClampUnit(
+        transition->road_book_progress + step * 1.35f);
+    if (transition->road_book_progress >= 1.0f) {
+        transition->phase = CC_CLIENT_DEPARTURE_READY;
+    }
 }
 
 float CcClientConvoyPaceStep(float pace, bool road_phase,

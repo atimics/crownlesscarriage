@@ -6,6 +6,43 @@
 
 int main(void)
 {
+    CcClientDepartureTransition town_exit;
+    CcClientDepartureBegin(&town_exit);
+    CC_CHECK(town_exit.phase == CC_CLIENT_DEPARTURE_TOWN);
+    CC_CHECK(town_exit.town_progress == 0.0f);
+    CC_CHECK(town_exit.road_book_progress == 0.0f);
+    int departure_updates = 0;
+    while (town_exit.phase == CC_CLIENT_DEPARTURE_TOWN &&
+           departure_updates < 1000) {
+        float previous = town_exit.town_progress;
+        CcClientDepartureAdvance(&town_exit, 1.0f, 1.0f / 60.0f);
+        CC_CHECK(town_exit.town_progress >= previous);
+        departure_updates += 1;
+    }
+    CC_CHECK(town_exit.phase == CC_CLIENT_DEPARTURE_ROAD_BOOK);
+    CC_CHECK(town_exit.town_progress == 1.0f);
+    CC_CHECK(town_exit.road_book_progress == 0.0f);
+    int camera_updates = 0;
+    while (town_exit.phase == CC_CLIENT_DEPARTURE_ROAD_BOOK &&
+           camera_updates < 120) {
+        float previous = town_exit.road_book_progress;
+        CcClientDepartureAdvance(&town_exit, 1.0f, 1.0f / 60.0f);
+        CC_CHECK(town_exit.road_book_progress >= previous);
+        camera_updates += 1;
+    }
+    CC_CHECK(town_exit.phase == CC_CLIENT_DEPARTURE_READY);
+    CC_CHECK(town_exit.road_book_progress == 1.0f);
+    CcClientDepartureAdvance(&town_exit, 0.0f, 10.0f);
+    CC_CHECK(town_exit.phase == CC_CLIENT_DEPARTURE_READY);
+    CC_CHECK(town_exit.town_progress == 1.0f);
+    CC_CHECK(town_exit.road_book_progress == 1.0f);
+
+    CcClientDepartureTransition paused_exit;
+    CcClientDepartureBegin(&paused_exit);
+    CcClientDepartureAdvance(&paused_exit, 0.0f, 10.0f);
+    CC_CHECK(paused_exit.phase == CC_CLIENT_DEPARTURE_TOWN);
+    CC_CHECK(paused_exit.town_progress == 0.0f);
+
     float departure = 0.0f;
     for (int frame = 0; frame < 180; ++frame) {
         departure = CcClientConvoyPaceStep(

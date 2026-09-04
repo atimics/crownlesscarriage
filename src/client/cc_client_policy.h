@@ -18,6 +18,18 @@ typedef enum CcClientCampaignAccess {
     CC_CLIENT_CAMPAIGN_BLOCKED
 } CcClientCampaignAccess;
 
+typedef enum CcClientDeparturePhase {
+    CC_CLIENT_DEPARTURE_TOWN = 0,
+    CC_CLIENT_DEPARTURE_ROAD_BOOK,
+    CC_CLIENT_DEPARTURE_READY
+} CcClientDeparturePhase;
+
+typedef struct CcClientDepartureTransition {
+    CcClientDeparturePhase phase;
+    float town_progress;
+    float road_book_progress;
+} CcClientDepartureTransition;
+
 float CcClientConvoyPaceStep(float pace, bool road_phase,
                              bool urge, bool rein_in, bool stopped,
                              float delta_time);
@@ -38,5 +50,8 @@ bool CcClientInteractionActivated(bool requested, float distance,
                                   float maximum_distance);
 CcClientCampaignAccess CcClientCampaignAccessFor(bool normal_play,
                                                  bool journal_available);
+void CcClientDepartureBegin(CcClientDepartureTransition *transition);
+void CcClientDepartureAdvance(CcClientDepartureTransition *transition,
+                              float pace, float delta_time);
 
 #endif

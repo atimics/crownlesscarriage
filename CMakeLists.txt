@@ -577,6 +577,18 @@ if(CC_BUILD_CLIENT)
                 -DCC_FILE=${CC_ROADBOOK_REVIEW_DIR}/fork.png
                 -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/require_nonempty_file.cmake
         COMMAND $<TARGET_FILE:crownless_carriage>
+                --capture-road-departure 0.00
+                "roadbook-review/departure-gate.png"
+        COMMAND ${CMAKE_COMMAND}
+                -DCC_FILE=${CC_ROADBOOK_REVIEW_DIR}/departure-gate.png
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/require_nonempty_file.cmake
+        COMMAND $<TARGET_FILE:crownless_carriage>
+                --capture-road-departure 0.35
+                "roadbook-review/departure-rise.png"
+        COMMAND ${CMAKE_COMMAND}
+                -DCC_FILE=${CC_ROADBOOK_REVIEW_DIR}/departure-rise.png
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/require_nonempty_file.cmake
+        COMMAND $<TARGET_FILE:crownless_carriage>
                 --capture-road-departure 0.50
                 "roadbook-review/departure.png"
         COMMAND ${CMAKE_COMMAND}
@@ -587,6 +599,12 @@ if(CC_BUILD_CLIENT)
                 "roadbook-review/kingdom-marker.png"
         COMMAND ${CMAKE_COMMAND}
                 -DCC_FILE=${CC_ROADBOOK_REVIEW_DIR}/kingdom-marker.png
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/require_nonempty_file.cmake
+        COMMAND $<TARGET_FILE:crownless_carriage>
+                --capture-road-departure 1.00
+                "roadbook-review/departure-road-book.png"
+        COMMAND ${CMAKE_COMMAND}
+                -DCC_FILE=${CC_ROADBOOK_REVIEW_DIR}/departure-road-book.png
                 -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/require_nonempty_file.cmake
         COMMAND $<TARGET_FILE:crownless_carriage>
                 --capture-road-arrival 0.50
@@ -812,6 +830,8 @@ if(BUILD_TESTING)
         )
         add_test(NAME town_arrival_parking
                  COMMAND crownless_carriage --test-town-arrival-parking)
+        add_test(NAME town_departure_to_road_book
+                 COMMAND crownless_carriage --test-town-departure)
 
         add_executable(npc_appearance_tests
             tests/npc_appearance_tests.c
