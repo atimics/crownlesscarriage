@@ -74,6 +74,17 @@ class CoopTests(unittest.TestCase):
             self.assertEqual(sum(pool.map(apply, bodies)), 1)
         self.assertEqual(self.worlds.view(self.id, self.a)['state']['company']['cargo'][0], 1)
 
+    def test_road_and_pony_actions_reach_the_simulation(self):
+        for action in ('camp_road_site', 'pass_road_site', 'meet_pony',
+                       'help_pony', 'swap_pony', 'leave_pony'):
+            with self.subTest(action=action):
+                before = self.worlds.view(self.id, self.a)['state']
+                body = self.command(self.a, action, target=1)
+                result = self.worlds.command(self.id, self.a, body)
+                self.assertFalse(result['accepted'])
+                self.assertEqual(result['world']['state'], before)
+                self.assertTrue(self.worlds.command(self.id, self.a, body)['duplicate'])
+
     def test_failed_command_is_atomic_and_has_a_receipt(self):
         before = self.worlds.view(self.id, self.a)['state']
         body = self.command(self.a, amount=1000000, good=0)
