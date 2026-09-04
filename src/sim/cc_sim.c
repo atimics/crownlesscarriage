@@ -29,6 +29,7 @@ static CcId LatestLocalCause(const CcSim *sim, CcId location);
 static uint32_t RoadHouseSeed(const CcSim *sim, CcId route_id);
 static const char *GeneratedRoadHouseName(const CcSim *sim, CcId route_id);
 static const CcSettlement *Scriptorium(const CcSim *sim);
+static void AssignHistoryOffices(CcSim *sim, bool announce);
 
 static int32_t ClampI32(int32_t value, int32_t minimum, int32_t maximum)
 {
@@ -1149,6 +1150,10 @@ const char *CcEventKindName(CcEventKind kind)
         case CC_EVENT_PAPER_MILLED: return "PAPER MILL";
         case CC_EVENT_KING_ANOINTED: return "CORONATION";
         case CC_EVENT_PRETENDER_CRISIS: return "PRETENDER";
+        case CC_EVENT_MONASTIC_SUCCESSION: return "NEW ABBOT";
+        case CC_EVENT_ROYAL_SUCCESSION: return "NEW RULER";
+        case CC_EVENT_DRAGON_PATRON_NAMED: return "DRAGON VOW";
+        case CC_EVENT_DRAGON_TERRITORY_LOST: return "CROWN BROKEN";
     }
     return "EVENT";
 }
@@ -4374,6 +4379,7 @@ void CcSimInit(CcSim *sim, uint32_t seed)
                     sim->monsters[0].pressure, text);
     GenerateSituations(sim);
     CcSimInitializeCharacters(sim);
+    CcSimUpgradeHistoryOffices(sim);
     CcSimInitializeAnimalEconomy(sim);
     CcSimInitializeRoadSites(sim);
 }
@@ -5372,18 +5378,54 @@ static void AdvanceCoronationLaw(CcSim *sim, bool scriptorium_ready,
                                  CcId scriptorium_id)
 {
     if (sim == NULL || sim->schema_version < 34U) return;
+    if (sim->schema_version >= 35U) {
+        AssignHistoryOffices(sim, true);
+        CcArchives *archives = &sim->archives;
+        int32_t rank_target = archives->scribes * 18 +
+            MinimumI32(20, archives->lore_stored / 100) +
+            (scriptorium_ready ? 8 : 0);
+        rank_target = ClampI32(rank_target, 12, 100);
+        if (archives->stewardship_rank < rank_target) {
+            archives->stewardship_rank += 1;
+        } else if (archives->stewardship_rank > rank_target) {
+            archives->stewardship_rank -= 1;
+        }
+    }
     for (int32_t i = 0; i < sim->kingdom_count; ++i) {
         CcKingdom *kingdom = &sim->kingdoms[i];
         if (scriptorium_ready) {
             kingdom->sanction = ClampI32(kingdom->sanction + 2, 0, 100);
             kingdom->unsanctioned_weeks = 0;
-            if (kingdom->anointed || kingdom->sanction < 60) continue;
+            if (kingdom->anointed || kingdom->sanction < 60) {
+                if (sim->schema_version >= 35U && kingdom->anointed) {
+                    kingdom->anointed_by_character_id =
+                        sim->archives.abbot_character_id;
+                }
+                continue;
+            }
             kingdom->anointed = true;
+            if (sim->schema_version >= 35U) {
+                kingdom->anointed_by_character_id =
+                    sim->archives.abbot_character_id;
+            }
+            const CcCharacter *abbot = CcSimCharacter(
+                sim, sim->archives.abbot_character_id);
+            const CcCharacter *ruler = CcSimCharacter(
+                sim, kingdom->ruler_character_id);
             char text[CC_EVENT_TEXT_CAPACITY];
-            (void)snprintf(
-                text, sizeof(text),
-                "Fed and papered scribes anoint the true ruler of %.72s.",
-                kingdom->name);
+            if (sim->schema_version >= 35U) {
+                (void)snprintf(
+                    text, sizeof(text),
+                    "%.20s anoints %.20s of %.20s; the crown becomes lawful.",
+                    abbot != NULL ? abbot->name : "The abbot",
+                    ruler != NULL ? ruler->name : "the ruler",
+                    kingdom->name);
+            } else {
+                (void)snprintf(
+                    text, sizeof(text),
+                    "Fed and papered scribes anoint the true ruler of %.72s.",
+                    kingdom->name);
+            }
             (void)PushEvent(
                 sim, CC_EVENT_KING_ANOINTED, kingdom->id,
                 scriptorium_id, LatestLocalCause(sim, scriptorium_id),
@@ -5400,6 +5442,9 @@ static void AdvanceCoronationLaw(CcSim *sim, bool scriptorium_ready,
         }
         kingdom->unsanctioned_weeks = 0;
         kingdom->anointed = false;
+        if (sim->schema_version >= 35U) {
+            kingdom->anointed_by_character_id = 0U;
+        }
         kingdom->legitimacy = MaximumI32(0, kingdom->legitimacy - 15);
         kingdom->pretender_crises += 1;
         char text[CC_EVENT_TEXT_CAPACITY];
@@ -5411,6 +5456,98 @@ static void AdvanceCoronationLaw(CcSim *sim, bool scriptorium_ready,
             sim, CC_EVENT_PRETENDER_CRISIS, kingdom->id,
             scriptorium_id, LatestLocalCause(sim, scriptorium_id),
             -15, text);
+    }
+}
+
+static int32_t CharacterKingdomSlot(const CcSim *sim,
+                                    const CcCharacter *character)
+{
+    if (sim == NULL || character == NULL) return -1;
+    const CcSettlement *home = CcSimSettlement(
+        sim, character->home_settlement_id);
+    return home == NULL ? -1 : KingdomSlotById(sim, home->kingdom_id);
+}
+
+static CcCharacter *BestOfficeHolder(CcSim *sim, int32_t kingdom_slot,
+                                     CcId except_id, bool abbot)
+{
+    CcCharacter *best = NULL;
+    int32_t best_score = INT32_MIN;
+    for (int32_t i = 0; i < sim->character_count; ++i) {
+        CcCharacter *candidate = &sim->characters[i];
+        int32_t candidate_kingdom = CharacterKingdomSlot(sim, candidate);
+        if (candidate->id == except_id ||
+            (!abbot && candidate_kingdom != kingdom_slot)) continue;
+        const CcSettlement *home = CcSimSettlement(
+            sim, candidate->home_settlement_id);
+        int32_t score = candidate->courage;
+        if (candidate->role == CC_CHARACTER_OFFICIAL) score += 100;
+        if (home != NULL && home->function == CC_SETTLEMENT_CAPITAL) {
+            score += abbot ? 80 : 30;
+        }
+        if (candidate->current_settlement_id ==
+            candidate->home_settlement_id) score += 5;
+        if (best == NULL || score > best_score ||
+            (score == best_score && candidate->id < best->id)) {
+            best = candidate;
+            best_score = score;
+        }
+    }
+    return best;
+}
+
+static void AssignHistoryOffices(CcSim *sim, bool announce)
+{
+    if (sim == NULL || sim->character_count == 0) return;
+    CcArchives *archives = &sim->archives;
+    if (CcSimCharacter(sim, archives->abbot_character_id) == NULL) {
+        CcCharacter *abbot = BestOfficeHolder(sim, -1, 0U, true);
+        archives->abbot_character_id = abbot != NULL ? abbot->id : 0U;
+        if (announce && abbot != NULL) {
+            char text[CC_EVENT_TEXT_CAPACITY];
+            (void)snprintf(text, sizeof(text),
+                           "%.24s becomes Abbot of the Scriptorium and keeps the anointing roll.",
+                           abbot->name);
+            (void)PushEvent(sim, CC_EVENT_MONASTIC_SUCCESSION, abbot->id,
+                            abbot->home_settlement_id, 0U, 30, text);
+        }
+    }
+    for (int32_t slot = 0; slot < sim->kingdom_count; ++slot) {
+        CcKingdom *kingdom = &sim->kingdoms[slot];
+        const CcCharacter *ruler = CcSimCharacter(
+            sim, kingdom->ruler_character_id);
+        if (ruler == NULL || CharacterKingdomSlot(sim, ruler) != slot) {
+            CcCharacter *chosen = BestOfficeHolder(sim, slot, 0U, false);
+            kingdom->ruler_character_id = chosen != NULL ? chosen->id : 0U;
+            if (announce && chosen != NULL) {
+                char text[CC_EVENT_TEXT_CAPACITY];
+                (void)snprintf(text, sizeof(text),
+                               "%.24s takes the rule of %.24s and seeks the abbot's blessing.",
+                               chosen->name, kingdom->name);
+                (void)PushEvent(sim, CC_EVENT_ROYAL_SUCCESSION, chosen->id,
+                                chosen->home_settlement_id, 0U, 25, text);
+            }
+        }
+        if (CcSimCharacter(sim, kingdom->monastery_patron_id) == NULL ||
+            CharacterKingdomSlot(
+                sim, CcSimCharacter(sim, kingdom->monastery_patron_id)) !=
+                slot) {
+            kingdom->monastery_patron_id = kingdom->ruler_character_id;
+        }
+    }
+}
+
+void CcSimUpgradeHistoryOffices(CcSim *sim)
+{
+    if (sim == NULL) return;
+    if (sim->archives.stewardship_rank == 0) {
+        sim->archives.stewardship_rank = 60;
+    }
+    AssignHistoryOffices(sim, true);
+    for (int32_t i = 0; i < sim->kingdom_count; ++i) {
+        CcKingdom *kingdom = &sim->kingdoms[i];
+        kingdom->anointed_by_character_id = kingdom->anointed ?
+            sim->archives.abbot_character_id : 0U;
     }
 }
 
@@ -6000,7 +6137,8 @@ static CcId StartDragonTheft(CcSim *sim, CcId thief_id,
             (int32_t)(((int64_t)amount * 100) / hoard_before) : 55);
     sim->dragon.memory_integrity = ClampI32(
         sim->dragon.memory_integrity - wound, 0, 100);
-    sim->dragon.crown_continuity_days = 0;
+    sim->dragon.crown_continuity_days = MaximumI32(
+        0, sim->dragon.crown_continuity_days - 182);
     sim->dragon.activity = CC_DRAGON_ACTIVITY_RETALIATING;
     CcEvent *theft = PushEvent(
         sim, CC_EVENT_DRAGON_HOARD_STOLEN, thief_id,
@@ -6603,7 +6741,8 @@ static void AdvanceHoardRaid(CcSim *sim)
     raiders->cause_event_id = 0U;
     raiders->carried_treasure = 0;
     raiders->days_remaining = 0;
-    raiders->cooldown_days = 280 + (int32_t)(NextRandom(sim) % 86U);
+    raiders->cooldown_days =
+        3 * 364 + (int32_t)(NextRandom(sim) % (3U * 364U));
     CopyName(raiders->name, "The Ash-Poor Company");
 }
 
@@ -6788,6 +6927,7 @@ static void HatchDragonSuccessor(CcSim *sim)
     CcDragon *dragon = &sim->dragon;
     if (!dragon->slain || dragon->egg_count <= 0) return;
     int32_t clutch = dragon->egg_count;
+    CcId former_dragon_id = dragon->id;
     char former_name[CC_NAME_CAPACITY];
     CopyName(former_name, dragon->name);
     dragon->whelps_dispersed += MaximumI32(0, clutch - 1);
@@ -6809,14 +6949,22 @@ static void HatchDragonSuccessor(CcSim *sim)
     dragon->regional_influence = MaximumI32(24,
         dragon->regional_influence / 2);
     dragon->crown_continuity_days = 0;
+    dragon->territoryless_days = 0;
     dragon->hunt_cooldown_days = 7;
     dragon->egg_count = 0;
     dragon->brood_days_remaining = 0;
     dragon->brood_cooldown_days =
         (220 + (int32_t)(NextRandom(sim) % 121U)) * 365;
     dragon->afterdeath_days = 0;
-    dragon->crown_strength = CalculateDragonCrownStrength(sim);
+    for (int32_t i = 0; i < sim->treasure_count; ++i) {
+        CcTreasure *treasure = &sim->treasures[i];
+        if (treasure->owner_id == former_dragon_id) {
+            treasure->owner_id = dragon->id;
+            treasure->location_id = dragon->lair_settlement_id;
+        }
+    }
     sim->goblins.devotion = MaximumI32(sim->goblins.devotion, 28);
+    dragon->crown_strength = CalculateDragonCrownStrength(sim);
     sim->goblins.dragon_seed_phase = CC_GOBLIN_DRAGON_SEED_NONE;
     sim->goblins.dragon_seed_days_remaining = 0;
     char text[CC_EVENT_TEXT_CAPACITY];
@@ -6877,6 +7025,141 @@ static void ChangeDragonStage(CcSim *sim, CcDragonLifeStage stage,
     dragon->lifecycle_event_id = event->id;
 }
 
+static void GatherDragonSeedOfferings(CcSim *sim)
+{
+    CcGoblinCult *goblins = &sim->goblins;
+    CcDragon *dragon = &sim->dragon;
+    if (dragon->afterdeath_days < 100 * 365 ||
+        dragon->afterdeath_days % 365 != 0) return;
+
+    CcSettlement *donor = NULL;
+    CcMoney best_wealth = -1;
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        CcSettlement *place = &sim->settlements[i];
+        if (CcSettlementIsAbandoned(place)) continue;
+        CcKingdom *kingdom = KingdomMutable(sim, place->kingdom_id);
+        CcMoney wealth = place->market_coins +
+            (kingdom != NULL ? kingdom->treasury : 0);
+        if (donor == NULL || wealth > best_wealth) {
+            donor = place;
+            best_wealth = wealth;
+        }
+    }
+    if (donor == NULL) return;
+
+    int32_t saved_coins = goblins->lair_coins >= 120 ?
+        120 : (int32_t)goblins->lair_coins;
+    CcMoney coin_need = MaximumI32(0, 120 - saved_coins);
+    CcMoney coin_taken = coin_need < 30 ? coin_need : 30;
+    CcMoney market_take = donor->market_coins < coin_taken ?
+        donor->market_coins : coin_taken;
+    donor->market_coins -= market_take;
+    coin_taken -= market_take;
+    CcMoney crown_take = 0;
+    for (int32_t i = 0; i < sim->kingdom_count && coin_taken > 0; ++i) {
+        CcMoney taken = sim->kingdoms[i].treasury < coin_taken ?
+            sim->kingdoms[i].treasury : coin_taken;
+        sim->kingdoms[i].treasury -= taken;
+        coin_taken -= taken;
+        crown_take += taken;
+    }
+    CcMoney gathered_coins = market_take + crown_take;
+    goblins->lair_coins += gathered_coins;
+
+    int32_t weekly_rations = 1 + (goblins->members - 1) / 24;
+    int32_t nutrition_need = MaximumI32(
+        0, 60 * weekly_rations * CC_NUTRITION_PER_RATION -
+           CcNutritionAvailable(
+               goblins->lair_stock, CC_NUTRITION_CIVILIAN));
+    for (int32_t i = 0;
+         i < sim->settlement_count && nutrition_need > 0; ++i) {
+        CcSettlement *place = &sim->settlements[i];
+        if (CcSettlementIsAbandoned(place)) continue;
+        int32_t before[CC_GOOD_COUNT];
+        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+            before[good] = place->stock[good];
+        }
+        int32_t gathered = CcNutritionConsume(
+            place->stock, CC_NUTRITION_CIVILIAN, nutrition_need);
+        nutrition_need -= gathered;
+        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+            goblins->lair_stock[good] +=
+                before[good] - place->stock[good];
+        }
+    }
+
+    int32_t relics = goblins->lair_stock[CC_GOOD_GOLD] +
+                     goblins->lair_stock[CC_GOOD_GEMS];
+    if (relics < 2) {
+        CcSettlement *relic_donor = NULL;
+        CcGood rare_good = CC_GOOD_GEMS;
+        for (int32_t pass = 0; pass < 2 && relic_donor == NULL; ++pass) {
+            CcGood candidate_good = pass == 0 ?
+                CC_GOOD_GEMS : CC_GOOD_GOLD;
+            for (int32_t i = 0; i < sim->settlement_count; ++i) {
+                CcSettlement *place = &sim->settlements[i];
+                if (!CcSettlementIsAbandoned(place) &&
+                    place->stock[candidate_good] > 0) {
+                    relic_donor = place;
+                    rare_good = candidate_good;
+                    break;
+                }
+            }
+        }
+        if (relic_donor != NULL) {
+            relic_donor->stock[rare_good] -= 1;
+            goblins->lair_stock[rare_good] += 1;
+        }
+    }
+
+    for (int32_t good = CC_GOOD_TOOLS;
+         good <= CC_GOOD_WEAPONS; ++good) {
+        int32_t target = good == CC_GOOD_TOOLS ? 2 : 3;
+        int32_t need = MaximumI32(0, target - goblins->lair_stock[good]);
+        for (int32_t i = 0;
+             i < sim->settlement_count && need > 0; ++i) {
+            CcSettlement *place = &sim->settlements[i];
+            int32_t taken = MinimumI32(need, place->stock[good]);
+            place->stock[good] -= taken;
+            goblins->lair_stock[good] += taken;
+            need -= taken;
+        }
+        if (need > 0) {
+            int32_t iron_per_item = good == CC_GOOD_TOOLS ? 2 : 3;
+            int32_t crafted = MinimumI32(
+                need, goblins->lair_stock[CC_GOOD_IRON] / iron_per_item);
+            goblins->lair_stock[CC_GOOD_IRON] -=
+                crafted * iron_per_item;
+            goblins->lair_stock[good] += crafted;
+            need -= crafted;
+        }
+        if (need > 0) {
+            int32_t wood_per_item = good == CC_GOOD_TOOLS ? 4 : 5;
+            for (int32_t i = 0;
+                 i < sim->settlement_count && need > 0; ++i) {
+                CcSettlement *place = &sim->settlements[i];
+                if (CcSettlementIsAbandoned(place)) continue;
+                int32_t crafted = MinimumI32(
+                    need, place->stock[CC_GOOD_WOOD] / wood_per_item);
+                place->stock[CC_GOOD_WOOD] -= crafted * wood_per_item;
+                goblins->lair_stock[good] += crafted;
+                need -= crafted;
+            }
+        }
+    }
+
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(
+        text, sizeof(text),
+        "The Ashkeepers gather %" PRId64 " crowns and grave gifts at %.24s for the hidden dragon seed.",
+        gathered_coins, donor->name);
+    (void)PushEvent(
+        sim, CC_EVENT_GOBLIN_DRAGON_SEED_PREPARED, goblins->id,
+        donor->id, dragon->lifecycle_event_id,
+        gathered_coins > INT32_MAX ? INT32_MAX : (int32_t)gathered_coins,
+        text);
+}
+
 static void AdvanceAfterdragonCult(CcSim *sim)
 {
     CcDragon *dragon = &sim->dragon;
@@ -6885,13 +7168,22 @@ static void AdvanceAfterdragonCult(CcSim *sim)
         dragon->afterdeath_days % 365 != 0 ||
         goblins->tribute_phase != CC_GOBLIN_TRIBUTE_IDLE) return;
 
+    GatherDragonSeedOfferings(sim);
+
     bool provisioned = NutritionRations(
         goblins->lair_stock, CC_NUTRITION_CIVILIAN) >= 8;
     bool armed = goblins->lair_stock[CC_GOOD_TOOLS] >= 2 &&
                  goblins->lair_stock[CC_GOOD_WEAPONS] >= 3;
-    int32_t cult_limit = goblins->cohesion < 35 ? 24 : armed ? 84 :
+    bool preserve_clutch_provisions =
+        goblins->dragon_seed_phase == CC_GOBLIN_DRAGON_SEED_PREPARING &&
+        goblins->dragon_seed_days_remaining <= 0 &&
+        goblins->members >= 48 && goblins->devotion >= 75 &&
+        goblins->cohesion >= 75;
+    int32_t cult_limit = goblins->cohesion < 35 ?
+        (armed && provisioned ? 36 : 24) : armed ? 84 :
         goblins->devotion >= 60 ? 48 : 24;
-    if (provisioned && goblins->members < cult_limit) {
+    if (!preserve_clutch_provisions && provisioned &&
+        goblins->members < cult_limit) {
         int32_t recruits = armed ? 1 + goblins->devotion / 40 : 1;
         recruits = MinimumI32(
             recruits, cult_limit - goblins->members);
@@ -6916,11 +7208,14 @@ static void AdvanceAfterdragonCult(CcSim *sim)
                 goblins->lair_settlement_id, dragon->lifecycle_event_id,
                 recruits, text);
         }
-    } else if (!provisioned) {
+    } else if (!preserve_clutch_provisions && !provisioned) {
         goblins->devotion = MaximumI32(20, goblins->devotion - 1);
         goblins->cohesion = MaximumI32(0, goblins->cohesion - 2);
-    } else {
+    } else if (!preserve_clutch_provisions) {
         goblins->devotion = ClampI32(goblins->devotion + 1, 0, 100);
+        if (provisioned && goblins->cohesion < 50) {
+            goblins->cohesion += 1;
+        }
     }
 
     if (dragon->egg_count != 0) return;
@@ -7106,7 +7401,8 @@ static void AdvanceDragonEcology(CcSim *sim)
         0, dragon->hunt_cooldown_days - 1);
     dragon->brood_cooldown_days = MaximumI32(
         0, dragon->brood_cooldown_days - 1);
-    if (dragon->stolen_outstanding == 0) {
+    if (dragon->stolen_outstanding == 0 &&
+        dragon->territory_stability > 0) {
         dragon->crown_continuity_days += 1;
     }
     if (sim->current_day % 28 == 0) {
@@ -7128,6 +7424,29 @@ static void AdvanceDragonEcology(CcSim *sim)
         if (DragonTerritoryAtWar(sim)) stability_change -= 1;
         dragon->territory_stability = ClampI32(
             dragon->territory_stability + stability_change, 0, 100);
+    }
+    if (dragon->territory_stability == 0) {
+        dragon->territoryless_days += 1;
+        if (dragon->territoryless_days == 1) {
+            char text[CC_EVENT_TEXT_CAPACITY];
+            (void)snprintf(
+                text, sizeof(text),
+                "%.24s loses the last ground that answers to the dragon crown.",
+                dragon->name);
+            CcEvent *event = PushEvent(
+                sim, CC_EVENT_DRAGON_TERRITORY_LOST, dragon->id,
+                dragon->lair_settlement_id, dragon->lifecycle_event_id,
+                -100, text);
+            dragon->lifecycle_event_id = event->id;
+        }
+        if (sim->current_day % 28 == 0) {
+            dragon->body_condition = MaximumI32(
+                0, dragon->body_condition - 1);
+            dragon->regional_influence = MaximumI32(
+                0, dragon->regional_influence - 2);
+        }
+    } else {
+        dragon->territoryless_days = 0;
     }
     dragon->crown_strength = CalculateDragonCrownStrength(sim);
     int32_t influence_target = dragon->life_stage ==
@@ -7177,6 +7496,12 @@ static void AdvanceDragonEcology(CcSim *sim)
     }
 
     if ((dragon->life_stage == CC_DRAGON_STAGE_CROWNED ||
+         dragon->life_stage == CC_DRAGON_STAGE_DEEP_WYRM) &&
+        dragon->territoryless_days >= 5 * 364) {
+        ChangeDragonStage(sim, CC_DRAGON_STAGE_UNCROWNED,
+                          CC_EVENT_DRAGON_UNCROWNED,
+                          "five landless years break the dragon crown");
+    } else if ((dragon->life_stage == CC_DRAGON_STAGE_CROWNED ||
          dragon->life_stage == CC_DRAGON_STAGE_DEEP_WYRM) &&
         (dragon->crown_strength < 12 || dragon->memory_integrity < 25)) {
         ChangeDragonStage(sim, CC_DRAGON_STAGE_UNCROWNED,
@@ -8527,6 +8852,55 @@ static void RecastSituationsAfterDeath(CcSim *sim, CcId character_id)
     }
 }
 
+static void TransferHistoricalTitles(CcSim *sim,
+                                     const CcCharacter *dead,
+                                     const CcCharacter *successor)
+{
+    if (sim->archives.abbot_character_id == dead->id) {
+        sim->archives.abbot_character_id = successor->id;
+        char text[CC_EVENT_TEXT_CAPACITY];
+        (void)snprintf(text, sizeof(text),
+                       "%.24s succeeds %.24s as Abbot of the Scriptorium.",
+                       successor->name, dead->name);
+        (void)PushEvent(sim, CC_EVENT_MONASTIC_SUCCESSION,
+                        successor->id, successor->home_settlement_id,
+                        0U, 30, text);
+    }
+    for (int32_t i = 0; i < sim->kingdom_count; ++i) {
+        CcKingdom *kingdom = &sim->kingdoms[i];
+        if (kingdom->ruler_character_id == dead->id) {
+            kingdom->ruler_character_id = successor->id;
+            kingdom->anointed_by_character_id = 0U;
+            char text[CC_EVENT_TEXT_CAPACITY];
+            (void)snprintf(text, sizeof(text),
+                           "%.20s succeeds %.20s as ruler of %.20s.",
+                           successor->name, dead->name, kingdom->name);
+            (void)PushEvent(sim, CC_EVENT_ROYAL_SUCCESSION,
+                            successor->id, successor->home_settlement_id,
+                            0U, 25, text);
+        }
+        if (kingdom->monastery_patron_id == dead->id) {
+            kingdom->monastery_patron_id = successor->id;
+        }
+        if (kingdom->anointed_by_character_id == dead->id) {
+            kingdom->anointed_by_character_id = successor->id;
+        }
+    }
+    if (sim->dragon_campaign.patron_character_id == dead->id) {
+        sim->dragon_campaign.patron_character_id = successor->id;
+    }
+    if (sim->dragon_campaign.hero_character_id == dead->id) {
+        sim->dragon_campaign.hero_character_id = successor->id;
+    }
+    for (int32_t i = 0; i < sim->treasure_count; ++i) {
+        CcTreasure *treasure = &sim->treasures[i];
+        if (!treasure->destroyed && treasure->owner_id == dead->id) {
+            treasure->owner_id = successor->id;
+            treasure->location_id = successor->home_settlement_id;
+        }
+    }
+}
+
 static void ReplaceDeadCharacter(CcSim *sim, int32_t slot)
 {
     CcCharacter dead = sim->characters[slot];
@@ -8547,8 +8921,8 @@ static void ReplaceDeadCharacter(CcSim *sim, int32_t slot)
     successor.id = NextId(sim, CC_ENTITY_CHARACTER);
     successor.home_settlement_id = dead.home_settlement_id;
     successor.current_settlement_id = dead.home_settlement_id;
-    successor.role = CC_CHARACTER_LABORER;
-    successor.goal = CC_CHARACTER_GOAL_SECURE_LIVELIHOOD;
+    successor.role = dead.role;
+    successor.goal = dead.goal;
     successor.activity = CC_CHARACTER_ACTIVITY_WORKING;
     successor.appearance_seed = (uint32_t)(
         successor.id ^ (successor.id >> 32U) ^ sim->world_seed ^
@@ -8562,6 +8936,7 @@ static void ReplaceDeadCharacter(CcSim *sim, int32_t slot)
         sim, &successor, dead.id, dead.generation + 1, 0);
     sim->characters[slot] = successor;
     sim->character_births += 1;
+    TransferHistoricalTitles(sim, &dead, &sim->characters[slot]);
 
     char birth_text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(birth_text, sizeof(birth_text),
@@ -9959,6 +10334,23 @@ static int32_t MaskCount(uint32_t mask)
     return count;
 }
 
+static int32_t TakeAllianceGood(CcSim *sim, uint32_t mask, CcGood good,
+                                int32_t quantity)
+{
+    int32_t taken_total = 0;
+    for (int32_t i = 0; i < sim->settlement_count && quantity > 0; ++i) {
+        CcSettlement *place = &sim->settlements[i];
+        int32_t slot = KingdomSlotById(sim, place->kingdom_id);
+        if (slot < 0 ||
+            (mask & (UINT32_C(1) << (uint32_t)slot)) == 0U) continue;
+        int32_t taken = MinimumI32(quantity, place->stock[good]);
+        place->stock[good] -= taken;
+        quantity -= taken;
+        taken_total += taken;
+    }
+    return taken_total;
+}
+
 static int32_t AllianceGoodAvailable(const CcSim *sim, uint32_t mask,
                                      CcGood good)
 {
@@ -9973,33 +10365,17 @@ static int32_t AllianceGoodAvailable(const CcSim *sim, uint32_t mask,
     return total;
 }
 
-static int32_t AllianceNutritionAvailable(const CcSim *sim, uint32_t mask)
+static bool AllianceHasSmithy(const CcSim *sim, uint32_t mask)
 {
-    int64_t total = 0;
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         const CcSettlement *place = &sim->settlements[i];
         int32_t slot = KingdomSlotById(sim, place->kingdom_id);
         if (slot >= 0 &&
-            (mask & (UINT32_C(1) << (uint32_t)slot)) != 0U) {
-            total += CcNutritionAvailable(
-                place->stock, CC_NUTRITION_CIVILIAN);
-        }
+            (mask & (UINT32_C(1) << (uint32_t)slot)) != 0U &&
+            !CcSettlementIsAbandoned(place) &&
+            CcSettlementHasService(place, CC_SERVICE_SMITHY)) return true;
     }
-    return total > INT32_MAX ? INT32_MAX : (int32_t)total;
-}
-
-static void TakeAllianceGood(CcSim *sim, uint32_t mask, CcGood good,
-                             int32_t quantity)
-{
-    for (int32_t i = 0; i < sim->settlement_count && quantity > 0; ++i) {
-        CcSettlement *place = &sim->settlements[i];
-        int32_t slot = KingdomSlotById(sim, place->kingdom_id);
-        if (slot < 0 ||
-            (mask & (UINT32_C(1) << (uint32_t)slot)) == 0U) continue;
-        int32_t taken = MinimumI32(quantity, place->stock[good]);
-        place->stock[good] -= taken;
-        quantity -= taken;
-    }
+    return false;
 }
 
 static void TakeAllianceNutrition(
@@ -10038,43 +10414,218 @@ static int32_t DragonCampaignTravelDays(const CcSim *sim,
         5, 12);
 }
 
+static CcCharacter *BestCampaignHero(CcSim *sim, uint32_t mask,
+                                     CcId patron_id)
+{
+    CcCharacter *best = NULL;
+    int32_t best_score = INT32_MIN;
+    for (int32_t i = 0; i < sim->character_count; ++i) {
+        CcCharacter *candidate = &sim->characters[i];
+        int32_t slot = CharacterKingdomSlot(sim, candidate);
+        if (candidate->id == patron_id || slot < 0 ||
+            (mask & (UINT32_C(1) << (uint32_t)slot)) == 0U) continue;
+        int32_t score = candidate->courage +
+            (candidate->role == CC_CHARACTER_SCOUT ? 25 : 0) +
+            (candidate->role == CC_CHARACTER_OFFICIAL ? 8 : 0);
+        if (best == NULL || score > best_score ||
+            (score == best_score && candidate->id < best->id)) {
+            best = candidate;
+            best_score = score;
+        }
+    }
+    return best;
+}
+
+static void NameDragonCampaignLeaders(CcSim *sim, uint32_t mask)
+{
+    CcDragonCampaign *campaign = &sim->dragon_campaign;
+    CcId old_patron = campaign->patron_character_id;
+    CcId old_hero = campaign->hero_character_id;
+    int32_t patron_slot = -1;
+    int32_t best_sanction = INT32_MIN;
+    for (int32_t i = 0; i < sim->kingdom_count; ++i) {
+        if ((mask & (UINT32_C(1) << (uint32_t)i)) == 0U) continue;
+        if (patron_slot < 0 ||
+            sim->kingdoms[i].sanction > best_sanction) {
+            patron_slot = i;
+            best_sanction = sim->kingdoms[i].sanction;
+        }
+    }
+    campaign->patron_character_id = patron_slot >= 0 ?
+        sim->kingdoms[patron_slot].monastery_patron_id : 0U;
+    CcCharacter *hero = BestCampaignHero(
+        sim, mask, campaign->patron_character_id);
+    campaign->hero_character_id = hero != NULL ? hero->id : 0U;
+    if (campaign->patron_character_id == old_patron &&
+        campaign->hero_character_id == old_hero) return;
+    const CcCharacter *patron = CcSimCharacter(
+        sim, campaign->patron_character_id);
+    if (patron == NULL || hero == NULL) return;
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(
+        text, sizeof(text),
+        "%.24s funds the dragon host and names %.24s as its champion.",
+        patron->name, hero->name);
+    CcEvent *event = PushEvent(
+        sim, CC_EVENT_DRAGON_PATRON_NAMED, patron->id,
+        patron->home_settlement_id, campaign->cause_event_id,
+        hero->courage, text);
+    campaign->cause_event_id = event->id;
+}
+
+static void StockDragonCampaign(CcSim *sim, uint32_t mask)
+{
+    CcDragonCampaign *campaign = &sim->dragon_campaign;
+    int32_t nutrition_needed = MaximumI32(
+        0, 32 * CC_NUTRITION_PER_RATION -
+           CcNutritionAvailable(
+               campaign->supplies, CC_NUTRITION_CIVILIAN));
+    TakeAllianceNutrition(sim, mask, nutrition_needed,
+                          campaign->supplies);
+
+    int32_t tool_need = MaximumI32(
+        0, 8 - campaign->supplies[CC_GOOD_TOOLS]);
+    int32_t tools_taken = TakeAllianceGood(
+        sim, mask, CC_GOOD_TOOLS, tool_need);
+    campaign->supplies[CC_GOOD_TOOLS] += tools_taken;
+    tool_need -= tools_taken;
+    if (tool_need > 0 && AllianceHasSmithy(sim, mask)) {
+        int32_t commissioned = MinimumI32(
+            MinimumI32(2, tool_need),
+            MinimumI32(
+                AllianceGoodAvailable(sim, mask, CC_GOOD_IRON) / 2,
+                AllianceGoodAvailable(sim, mask, CC_GOOD_WOOD)));
+        if (commissioned > 0) {
+            (void)TakeAllianceGood(
+                sim, mask, CC_GOOD_IRON, commissioned * 2);
+            (void)TakeAllianceGood(
+                sim, mask, CC_GOOD_WOOD, commissioned);
+            campaign->supplies[CC_GOOD_TOOLS] += commissioned;
+            tool_need -= commissioned;
+        }
+    }
+    if (tool_need > 0 && campaign->patron_character_id != 0U &&
+        sim->archives.stewardship_rank >= 60) {
+        int32_t commissioned = MinimumI32(
+            MinimumI32(2, tool_need),
+            MinimumI32(
+                AllianceGoodAvailable(sim, mask, CC_GOOD_WOOD) / 2,
+                AllianceGoodAvailable(sim, mask, CC_GOOD_STONE) / 2));
+        if (commissioned > 0) {
+            (void)TakeAllianceGood(
+                sim, mask, CC_GOOD_WOOD, commissioned * 2);
+            (void)TakeAllianceGood(
+                sim, mask, CC_GOOD_STONE, commissioned * 2);
+            campaign->supplies[CC_GOOD_TOOLS] += commissioned;
+            tool_need -= commissioned;
+        }
+    }
+    if (tool_need > 0 && campaign->patron_character_id != 0U &&
+        sim->archives.stewardship_rank >= 60) {
+        int32_t commissioned = MinimumI32(
+            MinimumI32(2, tool_need),
+            AllianceGoodAvailable(sim, mask, CC_GOOD_WOOD) / 4);
+        if (commissioned > 0) {
+            (void)TakeAllianceGood(
+                sim, mask, CC_GOOD_WOOD, commissioned * 4);
+            campaign->supplies[CC_GOOD_TOOLS] += commissioned;
+        }
+    }
+
+    int32_t weapon_need = MaximumI32(
+        0, 12 - campaign->supplies[CC_GOOD_WEAPONS]);
+    int32_t weapons_taken = TakeAllianceGood(
+        sim, mask, CC_GOOD_WEAPONS, weapon_need);
+    campaign->supplies[CC_GOOD_WEAPONS] += weapons_taken;
+    weapon_need -= weapons_taken;
+    if (weapon_need > 0 && AllianceHasSmithy(sim, mask)) {
+        int32_t commissioned = MinimumI32(
+            MinimumI32(2, weapon_need),
+            MinimumI32(
+                AllianceGoodAvailable(sim, mask, CC_GOOD_IRON) / 3,
+                AllianceGoodAvailable(sim, mask, CC_GOOD_WOOD) / 2));
+        if (commissioned > 0) {
+            (void)TakeAllianceGood(
+                sim, mask, CC_GOOD_IRON, commissioned * 3);
+            (void)TakeAllianceGood(
+                sim, mask, CC_GOOD_WOOD, commissioned * 2);
+            campaign->supplies[CC_GOOD_WEAPONS] += commissioned;
+            weapon_need -= commissioned;
+        }
+    }
+    if (weapon_need > 0 && campaign->patron_character_id != 0U &&
+        sim->archives.stewardship_rank >= 60) {
+        int32_t commissioned = MinimumI32(
+            MinimumI32(2, weapon_need),
+            MinimumI32(
+                AllianceGoodAvailable(sim, mask, CC_GOOD_WOOD) / 3,
+                AllianceGoodAvailable(sim, mask, CC_GOOD_STONE)));
+        if (commissioned > 0) {
+            (void)TakeAllianceGood(
+                sim, mask, CC_GOOD_WOOD, commissioned * 3);
+            (void)TakeAllianceGood(
+                sim, mask, CC_GOOD_STONE, commissioned);
+            campaign->supplies[CC_GOOD_WEAPONS] += commissioned;
+            weapon_need -= commissioned;
+        }
+    }
+    if (weapon_need > 0 && campaign->patron_character_id != 0U &&
+        sim->archives.stewardship_rank >= 60) {
+        int32_t commissioned = MinimumI32(
+            MinimumI32(2, weapon_need),
+            AllianceGoodAvailable(sim, mask, CC_GOOD_WOOD) / 5);
+        if (commissioned > 0) {
+            (void)TakeAllianceGood(
+                sim, mask, CC_GOOD_WOOD, commissioned * 5);
+            campaign->supplies[CC_GOOD_WEAPONS] += commissioned;
+        }
+    }
+}
+
 static void TryLaunchDragonCampaign(CcSim *sim)
 {
     CcDragonCampaign *campaign = &sim->dragon_campaign;
     uint32_t mask = campaign->pledged_kingdom_mask;
     if (campaign->phase != CC_DRAGON_CAMPAIGN_IDLE ||
         campaign->cooldown_days > 0 || sim->dragon.slain ||
-        MaskCount(mask) < 2 ||
-        AllianceNutritionAvailable(sim, mask) <
-            32 * CC_NUTRITION_PER_RATION ||
-        AllianceGoodAvailable(sim, mask, CC_GOOD_TOOLS) < 8 ||
-        AllianceGoodAvailable(sim, mask, CC_GOOD_WEAPONS) < 12) return;
-    int32_t leader_slot = 0;
-    while (leader_slot < sim->kingdom_count &&
-           (mask & (UINT32_C(1) << (uint32_t)leader_slot)) == 0U) {
-        leader_slot += 1;
+        MaskCount(mask) < 2) return;
+    if (sim->dragon.age_days < 500 * 365 &&
+        sim->dragon.life_stage != CC_DRAGON_STAGE_DEEP_WYRM) return;
+    NameDragonCampaignLeaders(sim, mask);
+    StockDragonCampaign(sim, mask);
+    if (NutritionRations(
+            campaign->supplies, CC_NUTRITION_CIVILIAN) < 32 ||
+        campaign->supplies[CC_GOOD_TOOLS] < 8 ||
+        campaign->supplies[CC_GOOD_WEAPONS] < 12 ||
+        campaign->patron_character_id == 0U ||
+        campaign->hero_character_id == 0U) return;
+    int32_t leader_slot = -1;
+    CcSettlement *origin = NULL;
+    for (int32_t i = 0; i < sim->kingdom_count; ++i) {
+        if ((mask & (UINT32_C(1) << (uint32_t)i)) == 0U) continue;
+        CcSettlement *candidate = KingdomSeat(sim, i);
+        if (candidate != NULL) {
+            leader_slot = i;
+            origin = candidate;
+            break;
+        }
     }
-    CcSettlement *origin = KingdomSeat(sim, leader_slot);
-    if (origin == NULL) return;
-    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
-        campaign->supplies[good] = 0;
-    }
-    TakeAllianceNutrition(
-        sim, mask, 32 * CC_NUTRITION_PER_RATION, campaign->supplies);
-    TakeAllianceGood(sim, mask, CC_GOOD_TOOLS, 8);
-    TakeAllianceGood(sim, mask, CC_GOOD_WEAPONS, 12);
+    if (leader_slot < 0 || origin == NULL) return;
     campaign->phase = CC_DRAGON_CAMPAIGN_OUTBOUND;
     campaign->alliance_kingdom_mask = mask;
     campaign->origin_settlement_id = origin->id;
     campaign->days_remaining = DragonCampaignTravelDays(sim, origin->id);
-    campaign->supplies[CC_GOOD_TOOLS] = 8;
-    campaign->supplies[CC_GOOD_WEAPONS] = 12;
     campaign->attempts += 1;
+    const CcCharacter *patron = CcSimCharacter(
+        sim, campaign->patron_character_id);
+    const CcCharacter *hero = CcSimCharacter(
+        sim, campaign->hero_character_id);
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(
         text, sizeof(text),
-        "An allied host leaves %s with 32 Food, 8 Tools, and 12 Weapons for the dragon cave.",
-        origin->name);
+        "%.20s sends the host from %.20s under %.20s: 32 food, 8 tools, 12 weapons.",
+        patron != NULL ? patron->name : "The patron",
+        origin->name, hero != NULL ? hero->name : "its champion");
     CcEvent *event = PushEvent(
         sim, CC_EVENT_DRAGON_MUSTERED, sim->kingdoms[leader_slot].id,
         origin->id, campaign->cause_event_id, MaskCount(mask), text);
@@ -10148,12 +10699,21 @@ static void AdvanceDragonCampaign(CcSim *sim)
     }
     int32_t allies = MaskCount(campaign->alliance_kingdom_mask);
     int32_t campaign_experience = CcDragonCampaignExperience(sim);
+    const CcCharacter *hero = CcSimCharacter(
+        sim, campaign->hero_character_id);
+    const CcCharacter *patron = CcSimCharacter(
+        sim, campaign->patron_character_id);
+    int32_t patron_slot = patron != NULL ?
+        CharacterKingdomSlot(sim, patron) : -1;
+    int32_t named_leadership = (hero != NULL ? hero->courage / 2 : 0) +
+        (patron_slot >= 0 ?
+             sim->kingdoms[patron_slot].sanction / 4 : 0);
     int32_t attack = campaign->supplies[CC_GOOD_WEAPONS] * 4 +
                      campaign->supplies[CC_GOOD_TOOLS] * 2 +
                      NutritionRations(
                          campaign->supplies,
                          CC_NUTRITION_CIVILIAN) / 4 +
-                     allies * 12 + campaign_experience +
+                     allies * 12 + campaign_experience + named_leadership +
                      (int32_t)(NextRandom(sim) % 21U);
     int32_t defense = CcSimDragonBattleStrength(sim) +
                       sim->goblins.members / 2 +
@@ -10190,8 +10750,8 @@ static void AdvanceDragonCampaign(CcSim *sim)
             0, sim->dragon.territory_stability - 8);
         (void)snprintf(
             text, sizeof(text),
-            "The allied dragon host breaks at the cave: strength %d against %d, but survivors carry hard-won knowledge home.",
-            attack, defense);
+            "%.24s's host breaks: %d against %d; survivors bring knowledge home.",
+            hero != NULL ? hero->name : "The champion", attack, defense);
         CcEvent *battle = PushEvent(
             sim, CC_EVENT_DRAGON_BATTLE, sim->dragon.id,
             campaign->origin_settlement_id, campaign->cause_event_id,
@@ -10214,6 +10774,7 @@ static void AdvanceDragonCampaign(CcSim *sim)
     sim->dragon.body_condition = 0;
     sim->dragon.crown_strength = 0;
     sim->dragon.afterdeath_days = 0;
+    sim->dragon.territoryless_days = 0;
     sim->dragon.stolen_outstanding = 0;
     sim->dragon.stolen_treasure_id = 0U;
     sim->dragon.theft_actor_id = 0U;
@@ -10249,8 +10810,10 @@ static void AdvanceDragonCampaign(CcSim *sim)
         12, sim->goblins.members * 3 / 4);
     (void)snprintf(
         text, sizeof(text),
-        "The allied host slays %s: strength %d against %d; the real hoard begins its journey home.",
-        sim->dragon.name, attack, defense);
+        "%.20s slays %.20s for %.20s: %d against %d; the hoard goes home.",
+        hero != NULL ? hero->name : "The champion", sim->dragon.name,
+        patron != NULL ? patron->name : "the allied realms",
+        attack, defense);
     CcEvent *battle = PushEvent(
         sim, CC_EVENT_DRAGON_SLAIN, sim->dragon.id,
         sim->dragon.lair_settlement_id, campaign->cause_event_id,
@@ -10268,7 +10831,7 @@ static void AdvanceDragonCampaign(CcSim *sim)
             (void)snprintf(relic->name, sizeof(relic->name),
                            "Bane of %.24s", sim->dragon.name);
             relic->maker_settlement_id = origin->id;
-            relic->owner_id = origin->id;
+            relic->owner_id = hero != NULL ? hero->id : origin->id;
             relic->location_id = origin->id;
             relic->gold_content = 3;
             relic->gem_content = 2;
@@ -10278,8 +10841,8 @@ static void AdvanceDragonCampaign(CcSim *sim)
             relic->created_day = sim->current_day;
             char relic_text[CC_EVENT_TEXT_CAPACITY];
             (void)snprintf(relic_text, sizeof(relic_text),
-                           "From the hoard-fire the host raises "
-                           "%.24s, bane of %.24s, day %d.",
+                           "From the hoard-fire %.20s raises %.20s, bane of %.20s, day %d.",
+                           hero != NULL ? hero->name : "the host",
                            relic->name, sim->dragon.name,
                            sim->current_day);
             (void)PushEvent(sim, CC_EVENT_TREASURE_CRAFTED,
@@ -10298,9 +10861,38 @@ static void UpdateRoyalDiplomacy(CcSim *sim)
 {
     if (sim == NULL || sim->current_day % 28 != 0) return;
     CcMoney tracked_gold = CcSimTrackedGold(sim);
-    bool dragon_crisis = !sim->dragon.slain &&
+    bool campaign_age = sim->dragon.age_days >= 500 * 365 ||
+        sim->dragon.life_stage == CC_DRAGON_STAGE_DEEP_WYRM;
+    bool dragon_crisis = !sim->dragon.slain && campaign_age &&
         ((tracked_gold > 0 && sim->dragon.hoard * 3 >= tracked_gold) ||
-         sim->dragon.regional_influence >= 60);
+         sim->dragon.regional_influence >= 60 ||
+         (sim->dragon.age_days >= 500 * 365 &&
+          sim->dragon.territory_stability < 50));
+    CcDragonCampaign *campaign = &sim->dragon_campaign;
+    bool abbot_calls_host = dragon_crisis &&
+        campaign->phase == CC_DRAGON_CAMPAIGN_IDLE &&
+        campaign->cooldown_days == 0 &&
+        (sim->dragon.life_stage == CC_DRAGON_STAGE_DEEP_WYRM ||
+         (sim->dragon.age_days >= 500 * 365 &&
+          sim->current_day % (5 * 364) == 0));
+    if (abbot_calls_host &&
+        MaskCount(campaign->pledged_kingdom_mask) < 2) {
+        uint32_t mask = 0U;
+        for (int32_t i = 0; i < sim->kingdom_count; ++i) {
+            if (sim->kingdoms[i].sanction >= 40) {
+                mask |= UINT32_C(1) << (uint32_t)i;
+            }
+        }
+        if (MaskCount(mask) < 2) {
+            mask = (UINT32_C(1) << (uint32_t)sim->kingdom_count) - 1U;
+        }
+        campaign->pledged_kingdom_mask = mask;
+        NameDragonCampaignLeaders(sim, mask);
+    }
+    if (dragon_crisis && MaskCount(campaign->pledged_kingdom_mask) >= 2) {
+        TryLaunchDragonCampaign(sim);
+        if (campaign->phase != CC_DRAGON_CAMPAIGN_IDLE) return;
+    }
     if (sim->current_day % 112 == 0 &&
         sim->dragon_campaign.cooldown_days == 0) {
         for (int32_t first = 0; first < sim->kingdom_count; ++first) {
@@ -15363,7 +15955,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                          sim->schema_version == 30U ||
                          sim->schema_version == 31U ||
                          sim->schema_version == 32U ||
-                         sim->schema_version == 33U;
+                         sim->schema_version == 33U ||
+                         sim->schema_version == 34U;
     /* Older saves carry authoritative settlement coordinates while their
        economies and road districts are upgraded. */
     bool supported_generator =
@@ -15371,9 +15964,9 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
          sim->generator_version == CC_GENERATOR_VERSION) ||
         (legacy_schema && sim->schema_version <= 27U &&
          sim->generator_version == CC_GENERATOR_VERSION) ||
+        (sim->schema_version == 34U && sim->generator_version == 25U) ||
         (sim->schema_version == 33U && sim->generator_version == 25U) ||
         (sim->schema_version == 32U && sim->generator_version == 25U) ||
-        (sim->schema_version == 33U && sim->generator_version == 25U) ||
         (sim->schema_version == 31U && sim->generator_version == 24U) ||
         (sim->schema_version == 27U && sim->generator_version == 21U) ||
         (sim->schema_version == 27U && sim->generator_version == 22U) ||
@@ -15430,6 +16023,9 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
          sim->archives.lore_ceiling > 100 ||
          sim->archives.kit_tool_wear < 0 ||
          sim->archives.kit_tool_wear >= 8 ||
+         CcSimCharacter(sim, sim->archives.abbot_character_id) == NULL ||
+         sim->archives.stewardship_rank < 0 ||
+         sim->archives.stewardship_rank > 100 ||
          sim->archives.last_recorded_day < 0 ||
          sim->archives.last_recorded_day > sim->current_day)) {
         SetError(error, error_capacity,
@@ -15481,6 +16077,10 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
     if (!ValidateIdentityState(sim, error, error_capacity)) return false;
     for (int32_t i = 0; i < sim->kingdom_count; ++i) {
         const CcKingdom *kingdom = &sim->kingdoms[i];
+        const CcCharacter *ruler = CcSimCharacter(
+            sim, kingdom->ruler_character_id);
+        const CcCharacter *patron = CcSimCharacter(
+            sim, kingdom->monastery_patron_id);
         if (CcIdKind(kingdom->id) != CC_ENTITY_KINGDOM ||
             !ValidBoundedText(kingdom->name, sizeof(kingdom->name)) ||
             kingdom->treasury < 0 ||
@@ -15494,7 +16094,15 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
               kingdom->unsanctioned_weeks < 0 ||
               kingdom->unsanctioned_weeks >= 52 ||
               kingdom->pretender_crises < 0 ||
-              kingdom->pretender_crises > CC_SIM_MAX_UNITS))) {
+              kingdom->pretender_crises > CC_SIM_MAX_UNITS ||
+              ruler == NULL || patron == NULL ||
+              CharacterKingdomSlot(sim, ruler) != i ||
+              CharacterKingdomSlot(sim, patron) != i ||
+              (kingdom->anointed &&
+               kingdom->anointed_by_character_id !=
+                   sim->archives.abbot_character_id) ||
+              (!kingdom->anointed &&
+               kingdom->anointed_by_character_id != 0U)))) {
             SetError(error, error_capacity, "Kingdom accounts are invalid.");
             return false;
         }
@@ -15526,7 +16134,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 !ValidBoundedText(event->text, sizeof(event->text)) ||
                 event->day < 1 || event->day > sim->current_day ||
                 event->kind < CC_EVENT_HARVEST_FAILED ||
-                event->kind > CC_EVENT_PRETENDER_CRISIS ||
+                event->kind > CC_EVENT_DRAGON_TERRITORY_LOST ||
                 event->parent_id == event->id ||
                 (event->parent_id != 0U &&
                  CcSimEvent(sim, event->parent_id) == NULL) ||
@@ -15850,6 +16458,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
     for (int32_t i = 0; i < sim->treasure_count; ++i) {
         const CcTreasure *treasure = &sim->treasures[i];
         bool valid_owner = CcSimSettlement(sim, treasure->owner_id) != NULL ||
+            CcSimCharacter(sim, treasure->owner_id) != NULL ||
             treasure->owner_id == sim->goblins.id ||
             treasure->owner_id == sim->dragon.id ||
             treasure->owner_id == sim->player.id ||
@@ -16296,6 +16905,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             dragon->memory_integrity > 100 ||
             dragon->territory_stability < 0 ||
             dragon->territory_stability > 100 ||
+            dragon->territoryless_days < 0 ||
+            dragon->territoryless_days > CC_SIM_MAX_DAY ||
             dragon->regional_influence < 0 ||
             dragon->regional_influence > 100 ||
             dragon->crown_continuity_days < 0 ||
@@ -16340,6 +16951,10 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             campaign->victories > CC_SIM_MAX_UNITS ||
             campaign->defeats < 0 ||
             campaign->defeats > CC_SIM_MAX_UNITS ||
+            (campaign->patron_character_id != 0U &&
+             CcSimCharacter(sim, campaign->patron_character_id) == NULL) ||
+            (campaign->hero_character_id != 0U &&
+             CcSimCharacter(sim, campaign->hero_character_id) == NULL) ||
             (int64_t)campaign->victories + campaign->defeats >
                 campaign->attempts ||
             !campaign_trip_valid ||
@@ -17172,6 +17787,11 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(item->pretender_crises);
             HASH_VALUE(item->anointed);
         }
+        if (sim->schema_version >= 35U) {
+            HASH_VALUE(item->ruler_character_id);
+            HASH_VALUE(item->monastery_patron_id);
+            HASH_VALUE(item->anointed_by_character_id);
+        }
     }
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         const CcSettlement *item = &sim->settlements[i];
@@ -17367,6 +17987,9 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(dragon->crown_strength);
             HASH_VALUE(dragon->memory_integrity);
             HASH_VALUE(dragon->territory_stability);
+            if (sim->schema_version >= 35U) {
+                HASH_VALUE(dragon->territoryless_days);
+            }
             HASH_VALUE(dragon->regional_influence);
             HASH_VALUE(dragon->crown_continuity_days);
             HASH_VALUE(dragon->hunt_cooldown_days);
@@ -17411,6 +18034,10 @@ uint64_t CcSimHash(const CcSim *sim)
         HASH_VALUE(campaign->alliance_kingdom_mask);
         HASH_VALUE(campaign->origin_settlement_id);
         HASH_VALUE(campaign->cause_event_id);
+        if (sim->schema_version >= 35U) {
+            HASH_VALUE(campaign->patron_character_id);
+            HASH_VALUE(campaign->hero_character_id);
+        }
         HASH_VALUE(campaign->days_remaining);
         HASH_VALUE(campaign->cooldown_days);
         int32_t good_count = CcGoodCountForSchema(sim->schema_version);
@@ -17828,6 +18455,10 @@ uint64_t CcSimHash(const CcSim *sim)
         HASH_VALUE(sim->archives.lore_ceiling);
         if (sim->schema_version >= 34U) {
             HASH_VALUE(sim->archives.kit_tool_wear);
+        }
+        if (sim->schema_version >= 35U) {
+            HASH_VALUE(sim->archives.abbot_character_id);
+            HASH_VALUE(sim->archives.stewardship_rank);
         }
     }
 #undef HASH_VALUE

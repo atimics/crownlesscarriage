@@ -58,7 +58,7 @@ must restore the same generated route pose and simulation progress.
 
 ## Save compatibility
 
-`CC_SIM_SCHEMA_VERSION` (34) and `CC_GENERATOR_VERSION` (25) version every
+`CC_SIM_SCHEMA_VERSION` (35) and `CC_GENERATOR_VERSION` (25) version every
 save file and command journal. The policy: **every schema version ever
 shipped stays loadable**. The legacy table in `cc_sim.c` (`legacy_schema`,
 with the per-version branches below it) is the implementation, and

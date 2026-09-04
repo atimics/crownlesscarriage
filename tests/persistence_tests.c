@@ -526,7 +526,7 @@ static void CheckLegacyJournalMigration(char *error,
              legacy_generation);
     CC_CHECK(ReadSqliteInteger(
                  path, "SELECT journal_cursor FROM meta WHERE id=1;") == 0);
-    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 24);
+    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 25);
     CC_CHECK(CcJournalAdvanceDays(journal, &resumed, 2,
                                   error, error_capacity));
     uint64_t expected_hash = CcSimHash(&resumed);
@@ -644,7 +644,12 @@ static void CheckDiplomacyPersistence(char *error, size_t error_capacity)
     sim.dragon_campaign.victories = 1;
     sim.dragon_campaign.defeats = 2;
     sim.dragon_campaign.cooldown_days = 123;
+    sim.dragon_campaign.patron_character_id =
+        sim.kingdoms[0].monastery_patron_id;
+    sim.dragon_campaign.hero_character_id = sim.characters[1].id;
+    sim.dragon.age_days = 500 * 365;
     CcSimAdvanceDays(&sim, 27);
+    sim.dragon.territoryless_days = 17;
     CC_CHECK(sim.courier_count > 0);
     CC_CHECK(sim.couriers[0].status == CC_COURIER_WAITING);
     CC_CHECK(CcSaveWrite(path, &sim, error, error_capacity));
@@ -659,6 +664,21 @@ static void CheckDiplomacyPersistence(char *error, size_t error_capacity)
     CC_CHECK(restored.dragon_campaign.attempts == 3);
     CC_CHECK(restored.dragon_campaign.victories == 1);
     CC_CHECK(restored.dragon_campaign.defeats == 2);
+    CC_CHECK(restored.archives.abbot_character_id ==
+             sim.archives.abbot_character_id);
+    CC_CHECK(restored.archives.stewardship_rank ==
+             sim.archives.stewardship_rank);
+    CC_CHECK(restored.kingdoms[0].ruler_character_id ==
+             sim.kingdoms[0].ruler_character_id);
+    CC_CHECK(restored.kingdoms[0].monastery_patron_id ==
+             sim.kingdoms[0].monastery_patron_id);
+    CC_CHECK(restored.kingdoms[0].sanction ==
+             sim.kingdoms[0].sanction);
+    CC_CHECK(restored.dragon.territoryless_days == 17);
+    CC_CHECK(restored.dragon_campaign.patron_character_id ==
+             sim.dragon_campaign.patron_character_id);
+    CC_CHECK(restored.dragon_campaign.hero_character_id ==
+             sim.dragon_campaign.hero_character_id);
     RemoveDatabase(path);
 }
 
@@ -2398,7 +2418,7 @@ static void CheckShippedSaveCompatibility(char *error,
         {22U, 20U}, {23U, 20U}, {24U, 20U}, {25U, 20U},
         {26U, 21U}, {27U, 21U}, {27U, 22U}, {28U, 22U},
         {29U, 23U}, {30U, 23U}, {31U, 24U}, {32U, 25U},
-        {33U, 25U}
+        {33U, 25U}, {34U, 25U}
     };
     for (size_t i = 0; i < sizeof(fixtures) / sizeof(fixtures[0]); ++i) {
         const ShippedSaveFixture *fixture = &fixtures[i];

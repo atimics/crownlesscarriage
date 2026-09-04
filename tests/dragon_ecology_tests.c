@@ -29,6 +29,29 @@ static int32_t TotalHuntFood(const CcSim *sim)
 int main(void)
 {
     char error[256];
+    CcSim offices;
+    CcSimInit(&offices, UINT32_C(0xab807001));
+    CC_CHECK(CcSimCharacter(
+        &offices, offices.archives.abbot_character_id) != NULL);
+    for (int32_t i = 0; i < offices.kingdom_count; ++i) {
+        CC_CHECK(CcSimCharacter(
+            &offices, offices.kingdoms[i].ruler_character_id) != NULL);
+        CC_CHECK(CcSimCharacter(
+            &offices, offices.kingdoms[i].monastery_patron_id) != NULL);
+        CC_CHECK(offices.kingdoms[i].sanction >= 35);
+    }
+    CcSimAdvanceDays(&offices, 7);
+    int32_t anointed_realms = 0;
+    for (int32_t i = 0; i < offices.kingdom_count; ++i) {
+        if (offices.kingdoms[i].anointed_by_character_id != 0U) {
+            anointed_realms += 1;
+            CC_CHECK(offices.kingdoms[i].anointed_by_character_id ==
+                     offices.archives.abbot_character_id);
+        }
+    }
+    CC_CHECK(anointed_realms == 1);
+    CC_CHECK(CountEvents(&offices, CC_EVENT_KING_ANOINTED) == 1);
+
     CcSim sim;
     CcSimInit(&sim, UINT32_C(0xd2a60ec0));
     CC_CHECK(sim.dragon.life_stage == CC_DRAGON_STAGE_CROWNED);
@@ -57,13 +80,15 @@ int main(void)
     sim.player.location_id = sim.dragon.lair_settlement_id;
     sim.carriage.location_id = sim.player.location_id;
     int32_t memory_before = sim.dragon.memory_integrity;
+    int32_t continuity_before = sim.dragon.crown_continuity_days;
     CcCommand steal = {
         .kind = CC_COMMAND_STEAL_DRAGON_HOARD,
         .amount = 20
     };
     CC_CHECK(CcSimApply(&sim, &steal, error, sizeof(error)));
     CC_CHECK(sim.dragon.memory_integrity < memory_before);
-    CC_CHECK(sim.dragon.crown_continuity_days == 0);
+    CC_CHECK(sim.dragon.crown_continuity_days ==
+             continuity_before - 182);
     CC_CHECK(sim.dragon.activity == CC_DRAGON_ACTIVITY_RETALIATING);
     CcCommand restore = {
         .kind = CC_COMMAND_RETURN_DRAGON_TREASURE,
@@ -172,8 +197,58 @@ int main(void)
     CC_CHECK(brood.dragon.broods_laid == 1);
     CC_CHECK(CountEvents(&brood, CC_EVENT_DRAGON_BROOD) == 1);
 
+    CcSim dispossessed;
+    CcSimInit(&dispossessed, UINT32_C(0xd155055e));
+    dispossessed.dragon.territory_stability = 0;
+    dispossessed.dragon.territoryless_days = 0;
+    CcSimAdvanceDays(&dispossessed, 1);
+    CC_CHECK(dispossessed.dragon.territoryless_days == 1);
+    CC_CHECK(CountEvents(
+        &dispossessed, CC_EVENT_DRAGON_TERRITORY_LOST) == 1);
+    dispossessed.dragon.life_stage = CC_DRAGON_STAGE_CROWNED;
+    dispossessed.dragon.territoryless_days = 5 * 364 - 1;
+    CcSimAdvanceDays(&dispossessed, 1);
+    CC_CHECK(dispossessed.dragon.life_stage ==
+             CC_DRAGON_STAGE_UNCROWNED);
+    CC_CHECK(CountEvents(
+        &dispossessed, CC_EVENT_DRAGON_UNCROWNED) == 1);
+
+    CcSim stockpile;
+    CcSimInit(&stockpile, UINT32_C(0x570c901e));
+    stockpile.dragon.age_days = 500 * 365;
+    stockpile.dragon.regional_influence = 80;
+    stockpile.dragon_campaign.pledged_kingdom_mask = UINT32_C(7);
+    for (int32_t i = 0; i < stockpile.settlement_count; ++i) {
+        if (stockpile.settlements[i].kingdom_id ==
+            stockpile.kingdoms[0].id) {
+            stockpile.settlements[i].population = 0;
+        }
+        stockpile.settlements[i].stock[CC_GOOD_FOOD] += 100;
+        stockpile.settlements[i].stock[CC_GOOD_IRON] = 0;
+        stockpile.settlements[i].stock[CC_GOOD_WOOD] += 100;
+        stockpile.settlements[i].stock[CC_GOOD_STONE] = 0;
+        stockpile.settlements[i].stock[CC_GOOD_TOOLS] = 0;
+        stockpile.settlements[i].stock[CC_GOOD_WEAPONS] = 0;
+    }
+    bool patron_named = false;
+    for (int32_t day = 0;
+         day < 220 && stockpile.dragon_campaign.attempts == 0; ++day) {
+        CcSimAdvanceDays(&stockpile, 1);
+        if (CountEvents(
+                &stockpile, CC_EVENT_DRAGON_PATRON_NAMED) > 0) {
+            patron_named = true;
+        }
+    }
+    CC_CHECK(stockpile.dragon_campaign.attempts >= 1);
+    CC_CHECK(CcSimCharacter(
+        &stockpile,
+        stockpile.dragon_campaign.patron_character_id) != NULL);
+    CC_CHECK(CcSimCharacter(
+        &stockpile, stockpile.dragon_campaign.hero_character_id) != NULL);
+    CC_CHECK(patron_named);
+
     /* Relic: slaying the dragon in a campaign forges the Bane blade with
-       provenance chained to the slaying event, held at the origin. */
+       provenance chained to the slaying event and held by the champion. */
     CcSim bane;
     CcSimInit(&bane, UINT32_C(0xba4e0001));
     CcSettlement *origin = CcSimSettlementMutable(&bane,
@@ -185,21 +260,37 @@ int main(void)
     bane.dragon_campaign.pledged_kingdom_mask = 1U;
     bane.dragon_campaign.alliance_kingdom_mask = 7U;
     bane.dragon_campaign.cause_event_id = 0U;
+    bane.dragon_campaign.patron_character_id =
+        bane.kingdoms[0].monastery_patron_id;
+    bane.dragon_campaign.hero_character_id = bane.characters[1].id;
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
         bane.dragon_campaign.supplies[good] = 400;
     }
     CcSimAdvanceDays(&bane, 1);
     CC_CHECK(bane.dragon.slain);
     bool bane_found = false;
+    int32_t bane_slot = -1;
     for (int32_t i = 0; i < bane.treasure_count; ++i) {
         const CcTreasure *t = &bane.treasures[i];
         if (strncmp(t->name, "Bane of ", 8) == 0 && !t->destroyed) {
             bane_found = true;
+            bane_slot = i;
             CC_CHECK(t->gold_content == 3);
-            CC_CHECK(t->owner_id == origin->id);
+            CC_CHECK(t->owner_id ==
+                     bane.dragon_campaign.hero_character_id);
         }
     }
     CC_CHECK(bane_found);
+    CcId first_bearer = bane.treasures[bane_slot].owner_id;
+    CcCharacter *bearer = (CcCharacter *)CcSimCharacter(
+        &bane, first_bearer);
+    CC_CHECK(bearer != NULL);
+    bearer->death_day = bane.current_day;
+    CcSimAdvanceDays(&bane, 1);
+    const CcCharacter *heir = CcSimCharacter(
+        &bane, bane.treasures[bane_slot].owner_id);
+    CC_CHECK(heir != NULL);
+    CC_CHECK(heir->ancestor_id == first_bearer);
 
     const char *path = "/tmp/crownless-dragon-ecology-tests.ccsave";
     (void)remove(path);
@@ -225,10 +316,26 @@ int main(void)
     restored.dragon.egg_count = 2;
     restored.dragon.brood_days_remaining = 1;
     CcId dead_dragon_id = restored.dragon.id;
+    CcTreasure *inherited = &restored.treasures[restored.treasure_count++];
+    *inherited = (CcTreasure){
+        .id = CcMakeId(
+            CC_ENTITY_TREASURE, restored.next_entity_serial++),
+        .maker_settlement_id = restored.dragon.lair_settlement_id,
+        .owner_id = dead_dragon_id,
+        .location_id = restored.dragon.lair_settlement_id,
+        .gold_content = 1,
+        .gem_content = 1,
+        .craft_work = 1,
+        .appraised_value = 90,
+        .created_day = 1
+    };
+    (void)snprintf(inherited->name, sizeof(inherited->name),
+                   "The Inherited Scale");
     CcSimAdvanceDays(&restored, 1);
     CC_CHECK(!restored.dragon.slain);
     CC_CHECK(restored.dragon.id != dead_dragon_id);
     CC_CHECK(restored.dragon.life_stage == CC_DRAGON_STAGE_WHELP);
+    CC_CHECK(restored.treasures[0].owner_id == restored.dragon.id);
     CC_CHECK(restored.dragon.egg_count == 0);
     CC_CHECK(CountEvents(&restored, CC_EVENT_DRAGON_SUCCESSOR) == 1);
     CC_CHECK(CcSimValidate(&restored, error, sizeof(error)));
@@ -265,6 +372,30 @@ int main(void)
     CC_CHECK(cult.goblins.members > cult_members);
     CC_CHECK(cult.goblins.devotion > 50);
     CC_CHECK(CountEvents(&cult, CC_EVENT_GOBLIN_CULT_RALLIED) == 1);
+
+    CcSim offering_recovery;
+    CcSimInit(&offering_recovery, UINT32_C(0x0ffee110));
+    offering_recovery.dragon.slain = true;
+    offering_recovery.dragon.life_stage = CC_DRAGON_STAGE_AFTERDRAGON;
+    offering_recovery.dragon.activity = CC_DRAGON_ACTIVITY_AFTERMATH;
+    offering_recovery.dragon.afterdeath_days = 100 * 365 - 1;
+    offering_recovery.current_day = 100 * 365 - 1;
+    offering_recovery.settlements[0].market_coins = 1000;
+    for (int32_t i = 0; i < offering_recovery.settlement_count; ++i) {
+        offering_recovery.settlements[i].stock[CC_GOOD_GOLD] = 0;
+        offering_recovery.settlements[i].stock[CC_GOOD_GEMS] = 0;
+    }
+    offering_recovery.settlements[1].stock[CC_GOOD_GOLD] = 2;
+    offering_recovery.goblins.lair_stock[CC_GOOD_GOLD] = 0;
+    offering_recovery.goblins.lair_stock[CC_GOOD_GEMS] = 0;
+    offering_recovery.goblins.lair_stock[CC_GOOD_IRON] = 0;
+    offering_recovery.goblins.lair_stock[CC_GOOD_TOOLS] = 0;
+    offering_recovery.goblins.lair_stock[CC_GOOD_WEAPONS] = 0;
+    offering_recovery.goblins.tribute_cooldown_days = 1000;
+    CcSimAdvanceDays(&offering_recovery, 1);
+    CC_CHECK(offering_recovery.goblins.lair_stock[CC_GOOD_GOLD] == 1);
+    CC_CHECK(offering_recovery.goblins.lair_stock[CC_GOOD_TOOLS] == 2);
+    CC_CHECK(offering_recovery.goblins.lair_stock[CC_GOOD_WEAPONS] == 3);
 
     cult.current_day = 120 * 365;
     cult.dragon.afterdeath_days = 120 * 365 - 1;
@@ -310,6 +441,40 @@ int main(void)
     CC_CHECK(CcSimTrackedGood(&cult, CC_GOOD_GEMS) == cult_gems);
     CC_CHECK(CountEvents(&cult, CC_EVENT_GOBLIN_DRAGON_SEED) == 1);
     CC_CHECK(CcSimValidate(&cult, error, sizeof(error)));
+
+    CcSim offerings;
+    CcSimInit(&offerings, UINT32_C(0x0ffe7106));
+    offerings.dragon.slain = true;
+    offerings.dragon.slain_day = 1;
+    offerings.dragon.life_stage = CC_DRAGON_STAGE_AFTERDRAGON;
+    offerings.dragon.activity = CC_DRAGON_ACTIVITY_AFTERMATH;
+    offerings.dragon.body_condition = 0;
+    offerings.dragon.crown_strength = 0;
+    offerings.goblins.dragon_seed_phase =
+        CC_GOBLIN_DRAGON_SEED_PREPARING;
+    offerings.goblins.dragon_seed_days_remaining = 0;
+    offerings.goblins.members = 84;
+    offerings.goblins.devotion = 90;
+    offerings.goblins.cohesion = 90;
+    offerings.goblins.lair_coins = 0;
+    offerings.goblins.lair_stock[CC_GOOD_FOOD] = 24;
+    offerings.goblins.lair_stock[CC_GOOD_TOOLS] = 2;
+    offerings.goblins.lair_stock[CC_GOOD_WEAPONS] = 3;
+    offerings.goblins.lair_stock[CC_GOOD_GOLD] = 0;
+    offerings.goblins.lair_stock[CC_GOOD_GEMS] = 0;
+    for (int32_t i = 0; i < offerings.settlement_count; ++i) {
+        offerings.settlements[i].stock[CC_GOOD_GOLD] += 1;
+    }
+    for (int32_t offering = 1; offering <= 4; ++offering) {
+        offerings.current_day = (190 + offering * 10) * 365 - 1;
+        offerings.dragon.afterdeath_days =
+            (190 + offering * 10) * 365 - 1;
+        CcSimAdvanceDays(&offerings, 1);
+    }
+    CC_CHECK(offerings.dragon.egg_count >= 1);
+    CC_CHECK(offerings.goblins.lair_coins == 0);
+    CC_CHECK(CountEvents(
+        &offerings, CC_EVENT_GOBLIN_DRAGON_SEED) == 1);
 
     CcSim living_cult;
     CcSimInit(&living_cult, UINT32_C(0xc0171a1e));
