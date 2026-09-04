@@ -201,22 +201,6 @@ static void BeginRealJourney(CcSim *sim, int32_t route_index, bool reverse,
     sim->journey.ambush_pending = false;
 }
 
-static float RenderedJourneyAmount(const CcWorldRoutePlacement *route,
-                                   const CcSim *sim, float progress)
-{
-    float from_junction_amount = CcWorldRouteSampleAmount(
-        route, CC_WORLD_ROUTE_FROM_JUNCTION_SAMPLE);
-    float to_junction_amount = CcWorldRouteSampleAmount(
-        route, CC_WORLD_ROUTE_TO_JUNCTION_SAMPLE);
-    bool forward = sim->journey.origin_id == route->from_id;
-    float start_amount = forward ? from_junction_amount :
-                                   1.0f - to_junction_amount;
-    float end_amount = forward ? 1.0f - to_junction_amount :
-                                 from_junction_amount;
-    return start_amount + progress *
-        fmaxf(0.0f, 1.0f - start_amount - end_amount);
-}
-
 static void CheckRealJourneySight(bool reverse)
 {
     CcSim sim;
@@ -238,7 +222,8 @@ static void CheckRealJourneySight(bool reverse)
     int32_t departure_reveal = reverse ? knowledge->to_reveal_milli :
                                          knowledge->from_reveal_milli;
     CC_CHECK(departure_reveal == 280);
-    float journey_amount = RenderedJourneyAmount(placement, &sim, 0.0f);
+    float journey_amount = CcWorldRouteJourneyAmount(
+        placement, sim.journey.origin_id, 0.0f);
     float junction_amount = reverse ?
         1.0f - CcWorldRouteSampleAmount(
             placement, CC_WORLD_ROUTE_TO_JUNCTION_SAMPLE) :
@@ -254,6 +239,34 @@ static void CheckRealJourneySight(bool reverse)
     CC_CHECK(fabsf((reverse ? view.to_reveal : view.from_reveal) - 0.28f) <
              0.0001f);
 
+    float from_junction = CcWorldRouteSampleAmount(
+        placement, CC_WORLD_ROUTE_FROM_JUNCTION_SAMPLE);
+    float to_junction = CcWorldRouteSampleAmount(
+        placement, CC_WORLD_ROUTE_TO_JUNCTION_SAMPLE);
+    float near_arrival_amount = reverse ?
+        from_junction + 5.0f / route_length :
+        to_junction - 5.0f / route_length;
+    CcRoadBookRouteView near_arrival = {0};
+    CC_CHECK(CcRoadBookReadRouteAtCarriage(
+        &sim, sim.journey.route_id, near_arrival_amount,
+        route_length, &near_arrival));
+    CcRoadBookRouteSpan connector_spans[2];
+    int32_t connector_count = reverse ?
+        CcRoadBookVisibleRouteSpans(
+            &near_arrival, 0.0f, from_junction, connector_spans) :
+        CcRoadBookVisibleRouteSpans(
+            &near_arrival, to_junction, 1.0f, connector_spans);
+    CC_CHECK(connector_count == 1);
+    if (reverse) {
+        CC_CHECK(connector_spans[0].from_amount < from_junction);
+        CC_CHECK(fabsf(connector_spans[0].to_amount - from_junction) <
+                 0.0001f);
+    } else {
+        CC_CHECK(fabsf(connector_spans[0].from_amount - to_junction) <
+                 0.0001f);
+        CC_CHECK(connector_spans[0].to_amount > to_junction);
+    }
+
     int32_t progress_ticks =
         (sim.journey.total_subticks * 35 / 100) / 30;
     CcSimAdvanceRuntimeTicks(&sim, progress_ticks);
@@ -263,7 +276,8 @@ static void CheckRealJourneySight(bool reverse)
     CC_CHECK(knowledge != NULL);
     CC_CHECK((reverse ? knowledge->to_reveal_milli :
                         knowledge->from_reveal_milli) == 350);
-    journey_amount = RenderedJourneyAmount(placement, &sim, 0.35f);
+    journey_amount = CcWorldRouteJourneyAmount(
+        placement, sim.journey.origin_id, 0.35f);
     carriage_amount = reverse ? 1.0f - journey_amount : journey_amount;
     CC_CHECK(CcRoadBookReadRouteAtCarriage(
         &sim, sim.journey.route_id, carriage_amount, route_length, &view));
