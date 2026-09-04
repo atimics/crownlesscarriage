@@ -993,6 +993,7 @@ const char *CcEventKindName(CcEventKind kind)
         case CC_EVENT_ROAD_HOUSE_LODGING: return "ROAD HOUSE";
         case CC_EVENT_CHARACTER_BORN: return "BIRTH";
         case CC_EVENT_CHARACTER_DIED: return "DEATH";
+        case CC_EVENT_WOODLOT_HARVEST: return "WOODLOT";
     }
     return "EVENT";
 }
@@ -2084,16 +2085,19 @@ bool CcSimStartServiceProject(CcSim *sim, CcId settlement_id,
         return false;
     }
     CcKingdom *kingdom = KingdomMutable(sim, settlement->kingdom_id);
-    const int32_t material_cost = 12;
+    const int32_t wood_cost = 8;
+    const int32_t material_cost = 6;
     const int32_t tool_cost = 5;
     const CcMoney money_cost = 80;
-    if (kingdom == NULL || settlement->stock[CC_GOOD_MATERIAL] < material_cost ||
+    if (kingdom == NULL || settlement->stock[CC_GOOD_WOOD] < wood_cost ||
+        settlement->stock[CC_GOOD_MATERIAL] < material_cost ||
         settlement->stock[CC_GOOD_TOOLS] < tool_cost ||
         kingdom->treasury < money_cost) {
         SetError(error, error_capacity,
-                 "The town needs 12 Iron, 5 Tools, and 80 crowns.");
+                 "The town needs 8 Wood, 6 Iron, 5 Tools, and 80 crowns.");
         return false;
     }
+    settlement->stock[CC_GOOD_WOOD] -= wood_cost;
     settlement->stock[CC_GOOD_MATERIAL] -= material_cost;
     settlement->stock[CC_GOOD_TOOLS] -= tool_cost;
     kingdom->treasury -= money_cost;
@@ -3160,6 +3164,55 @@ static void ConfigureSettlementEconomies(CcSim *sim)
     }
 }
 
+void CcSimInitializeWoodEconomy(CcSim *sim)
+{
+    if (sim == NULL) return;
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        CcSettlement *place = &sim->settlements[i];
+        int32_t stock = 0;
+        int32_t reserve = 0;
+        int32_t production = 0;
+        switch (place->function) {
+            case CC_SETTLEMENT_FARMING:
+                stock = 28;
+                reserve = 18;
+                production = 12;
+                break;
+            case CC_SETTLEMENT_MARKET:
+                stock = 18;
+                reserve = 24;
+                production = 3;
+                break;
+            case CC_SETTLEMENT_FORTRESS:
+                stock = 20;
+                reserve = 22;
+                production = 4;
+                break;
+            case CC_SETTLEMENT_MINING:
+                stock = 8;
+                reserve = 18;
+                production = 1;
+                break;
+            case CC_SETTLEMENT_CAPITAL:
+                stock = 24;
+                reserve = 28;
+                production = 4;
+                break;
+            case CC_SETTLEMENT_DUNGEON_TOWN:
+                stock = 36;
+                reserve = 16;
+                production = 14;
+                break;
+        }
+        place->stock[CC_GOOD_WOOD] = stock;
+        place->reserve_target[CC_GOOD_WOOD] = reserve;
+        place->production[CC_GOOD_WOOD] = production;
+        place->consumption[CC_GOOD_WOOD] = 0;
+        place->price[CC_GOOD_WOOD] =
+            CcGoodDefinitionFor(CC_GOOD_WOOD)->base_price;
+    }
+}
+
 void CcSimInit(CcSim *sim, uint32_t seed)
 {
     if (sim == NULL) return;
@@ -3244,6 +3297,7 @@ void CcSimInit(CcSim *sim, uint32_t seed)
                    map_x, map_y, 1280, 46, 45);
     sim->settlement_count = CC_MAX_SETTLEMENTS;
     ConfigureSettlementEconomies(sim);
+    CcSimInitializeWoodEconomy(sim);
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         SeedSettlementServices(&sim->settlements[i]);
     }
@@ -3441,7 +3495,11 @@ static int32_t EffectiveProduction(const CcSim *sim,
         }
         production = MinimumI32(production, settlement->iron_deposit);
     }
-    if (good != CC_GOOD_BREAD && good != CC_GOOD_IRON) return 0;
+    if (good == CC_GOOD_WOOD && settlement->stock[CC_GOOD_TOOLS] <= 0) {
+        production = MaximumI32(1, production / 4);
+    }
+    if (good != CC_GOOD_BREAD && good != CC_GOOD_IRON &&
+        good != CC_GOOD_WOOD) return 0;
     return MaximumI32(0, production);
 }
 
@@ -3603,13 +3661,16 @@ static void RunSmithy(CcSim *sim, CcSettlement *settlement)
 {
     if (!CcSettlementHasService(settlement, CC_SERVICE_SMITHY)) return;
     int32_t iron_before = settlement->stock[CC_GOOD_IRON];
+    int32_t wood_before = settlement->stock[CC_GOOD_WOOD];
     int32_t tools_made = 0;
     int32_t tool_gap = MaximumI32(0, settlement->reserve_target[CC_GOOD_TOOLS] * 2 -
                                      settlement->stock[CC_GOOD_TOOLS]);
     int32_t tool_capacity = MaximumI32(0, settlement->production[CC_GOOD_TOOLS]);
     tools_made = MinimumI32(tool_capacity,
-        MinimumI32(tool_gap, settlement->stock[CC_GOOD_IRON] / 2));
+        MinimumI32(tool_gap, MinimumI32(settlement->stock[CC_GOOD_IRON] / 2,
+                                       settlement->stock[CC_GOOD_WOOD])));
     settlement->stock[CC_GOOD_IRON] -= tools_made * 2;
+    settlement->stock[CC_GOOD_WOOD] -= tools_made;
     settlement->stock[CC_GOOD_TOOLS] += tools_made;
 
     int32_t weapons_made = 0;
@@ -3619,8 +3680,10 @@ static void RunSmithy(CcSim *sim, CcSettlement *settlement)
     int32_t weapon_capacity = MaximumI32(
         0, settlement->production[CC_GOOD_WEAPONS]);
     weapons_made = MinimumI32(weapon_capacity,
-        MinimumI32(weapon_gap, settlement->stock[CC_GOOD_IRON] / 3));
+        MinimumI32(weapon_gap, MinimumI32(settlement->stock[CC_GOOD_IRON] / 3,
+                                         settlement->stock[CC_GOOD_WOOD] / 2)));
     settlement->stock[CC_GOOD_IRON] -= weapons_made * 3;
+    settlement->stock[CC_GOOD_WOOD] -= weapons_made * 2;
     settlement->stock[CC_GOOD_WEAPONS] += weapons_made;
 
     int32_t smith_batches = tools_made + weapons_made;
@@ -3630,9 +3693,10 @@ static void RunSmithy(CcSim *sim, CcSettlement *settlement)
     if (smith_batches > 0) {
         char text[CC_EVENT_TEXT_CAPACITY];
         (void)snprintf(text, sizeof(text),
-                       "%s's smithy turns %d Iron into %d Tools and %d Weapons.",
+                       "%s's smithy uses %d Iron and %d Wood to make %d Tools and %d Weapons.",
                        settlement->name,
                        iron_before - settlement->stock[CC_GOOD_IRON],
+                       wood_before - settlement->stock[CC_GOOD_WOOD],
                        tools_made, weapons_made);
         (void)PushEvent(sim, CC_EVENT_SMITH_PRODUCTION, settlement->id,
                         settlement->id, LatestLocalCause(sim, settlement->id),
@@ -3823,6 +3887,21 @@ static void UpdateSettlement(CcSim *sim, int32_t index)
     if (produced[CC_GOOD_IRON] > 0) {
         AdvanceRareMineWork(sim, settlement, produced[CC_GOOD_IRON]);
         WearOneTool(settlement, &settlement->mine_tool_wear, 3);
+    }
+    if (produced[CC_GOOD_WOOD] > 0 && sim->current_day % 84 == 0) {
+        bool used_tools = settlement->stock[CC_GOOD_TOOLS] > 0;
+        if (used_tools) settlement->stock[CC_GOOD_TOOLS] -= 1;
+        char text[CC_EVENT_TEXT_CAPACITY];
+        (void)snprintf(
+            text, sizeof(text),
+            used_tools ?
+                "%s's woodlot cuts %d Wood and wears one Tools bundle." :
+                "%s's hand crews cut %d Wood without working tools.",
+            settlement->name, produced[CC_GOOD_WOOD]);
+        (void)PushEvent(
+            sim, CC_EVENT_WOODLOT_HARVEST, settlement->id, settlement->id,
+            LatestLocalCause(sim, settlement->id),
+            produced[CC_GOOD_WOOD], text);
     }
     RunSmithy(sim, settlement);
     int32_t war_burden = CcSimWarBurdenAtSettlement(sim, settlement->id);
@@ -9010,8 +9089,10 @@ static CcSettlement *RepairBaseForKingdom(CcSim *sim,
     if (to != NULL && !CcSettlementIsAbandoned(to) &&
         to->kingdom_id == kingdom_id &&
         (best == NULL ||
-         to->stock[CC_GOOD_TOOLS] + to->stock[CC_GOOD_FOOD] >
-         best->stock[CC_GOOD_TOOLS] + best->stock[CC_GOOD_FOOD])) {
+         to->stock[CC_GOOD_TOOLS] + to->stock[CC_GOOD_FOOD] +
+             to->stock[CC_GOOD_WOOD] >
+         best->stock[CC_GOOD_TOOLS] + best->stock[CC_GOOD_FOOD] +
+             best->stock[CC_GOOD_WOOD])) {
         best = to;
     }
     return best;
@@ -9063,12 +9144,16 @@ static void AdvanceRoadsideRecovery(CcSim *sim, CcRoute *route)
     CcSettlement *labor_base = from->population >= to->population ?
                                from : to;
     CcSettlement *supplier =
-        from->stock[CC_GOOD_FOOD] + from->stock[CC_GOOD_TOOLS] >=
-        to->stock[CC_GOOD_FOOD] + to->stock[CC_GOOD_TOOLS] ? from : to;
+        from->stock[CC_GOOD_FOOD] + from->stock[CC_GOOD_TOOLS] +
+            from->stock[CC_GOOD_WOOD] >=
+        to->stock[CC_GOOD_FOOD] + to->stock[CC_GOOD_TOOLS] +
+            to->stock[CC_GOOD_WOOD] ? from : to;
     if (labor_base->population < 220 ||
         supplier->stock[CC_GOOD_FOOD] < 4 ||
+        supplier->stock[CC_GOOD_WOOD] < 2 ||
         supplier->stock[CC_GOOD_TOOLS] < 1) return;
     supplier->stock[CC_GOOD_FOOD] -= 4;
+    supplier->stock[CC_GOOD_WOOD] -= 2;
     supplier->stock[CC_GOOD_TOOLS] -= 1;
     int32_t effort = 6 + distress / 20 +
                      (route->smuggler_route ? 1 : 0);
@@ -9154,16 +9239,28 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
             AdvanceRoadsideRecovery(sim, route);
         }
         if (!route->closed && sim->current_day % 28 == 0) {
-            const CcSettlement *route_from = CcSimSettlement(
+            CcSettlement *route_from = CcSimSettlementMutable(
                 sim, route->from_id);
-            const CcSettlement *route_to = CcSimSettlement(
+            CcSettlement *route_to = CcSimSettlementMutable(
                 sim, route->to_id);
+            CcSettlement *wood_source = route_from;
+            if (wood_source == NULL ||
+                (route_to != NULL &&
+                 route_to->stock[CC_GOOD_WOOD] >
+                     wood_source->stock[CC_GOOD_WOOD])) {
+                wood_source = route_to;
+            }
             bool locally_maintained = !route->smuggler_route &&
                 route_from != NULL && route_to != NULL &&
                 !CcSettlementIsAbandoned(route_from) &&
                 !CcSettlementIsAbandoned(route_to) &&
                 MaximumI32(route_from->hunger, route_to->hunger) < 30 &&
-                (route_from->prosperity + route_to->prosperity) / 2 >= 45;
+                (route_from->prosperity + route_to->prosperity) / 2 >= 45 &&
+                wood_source != NULL &&
+                wood_source->stock[CC_GOOD_WOOD] > 0;
+            if (locally_maintained) {
+                wood_source->stock[CC_GOOD_WOOD] -= 1;
+            }
             int32_t decay = locally_maintained ? 0 :
                             route->smuggler_route ? 2 : 1;
             route->condition = ClampI32(route->condition - decay, 0, 100);
@@ -9517,11 +9614,14 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
                 repair_base = base;
             }
             bool crown_funded = best_route != NULL &&
+                                repair_base->stock[CC_GOOD_WOOD] >= 2 &&
                                 kingdom->treasury >= 24;
             bool locally_funded = best_route != NULL && !crown_funded &&
+                                  repair_base->stock[CC_GOOD_WOOD] >= 2 &&
                                   repair_base->stock[CC_GOOD_TOOLS] >= 1 &&
                                   repair_base->stock[CC_GOOD_FOOD] >= 4;
             if (crown_funded || locally_funded) {
+                repair_base->stock[CC_GOOD_WOOD] -= 2;
                 if (crown_funded) {
                     kingdom->treasury -= 24;
                     repair_base->market_coins += 24;
@@ -9542,7 +9642,8 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
                 (void)snprintf(text, sizeof(text),
                                "%s uses %s; road condition rises to %d.",
                                crown_funded ? kingdom->name : repair_base->name,
-                               crown_funded ? "paid crews" : "local Food and Tools",
+                               crown_funded ? "paid crews and local Wood" :
+                                   "local Food, Wood, and Tools",
                                best_route->condition);
                 (void)PushEvent(
                     sim, CC_EVENT_KINGDOM_ACTION, kingdom->id, best_route->id,
@@ -9557,9 +9658,11 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
                 CcSettlement *to = CcSimSettlementMutable(sim, route->to_id);
                 if (route->closed || route->condition >= 58 || to == NULL ||
                     CcSettlementIsAbandoned(to) ||
-                    to->kingdom_id != kingdom->id) continue;
+                    to->kingdom_id != kingdom->id ||
+                    to->stock[CC_GOOD_WOOD] < 1) continue;
                 kingdom->treasury -= 12;
                 to->market_coins += 12;
+                to->stock[CC_GOOD_WOOD] -= 1;
                 route->condition = ClampI32(route->condition + 16, 0, 100);
                 route->security = ClampI32(route->security + 2, 0, 100);
                 if (route->condition < 45) {
@@ -12227,7 +12330,9 @@ static bool ApplyRepair(CcSim *sim, const CcCommand *command,
         return false;
     }
     bool use_tools = command->amount == 1 ||
-        (command->amount == 0 && sim->player.cargo[CC_GOOD_TOOLS] >= 2);
+        (command->amount == 0 &&
+         sim->player.cargo[CC_GOOD_TOOLS] >= 2 &&
+         sim->player.cargo[CC_GOOD_WOOD] >= 2);
     bool use_cash = command->amount == 2 ||
         (command->amount == 0 && !use_tools);
     if (command->amount < 0 || command->amount > 2) {
@@ -12235,13 +12340,15 @@ static bool ApplyRepair(CcSim *sim, const CcCommand *command,
                  "Choose a tools repair or a cash repair.");
         return false;
     }
-    if (use_tools && sim->player.cargo[CC_GOOD_TOOLS] >= 2) {
+    if (use_tools && sim->player.cargo[CC_GOOD_TOOLS] >= 2 &&
+        sim->player.cargo[CC_GOOD_WOOD] >= 2) {
         sim->player.cargo[CC_GOOD_TOOLS] -= 2;
+        sim->player.cargo[CC_GOOD_WOOD] -= 2;
     } else if (use_cash && sim->player.coins >= 18) {
         sim->player.coins -= 18;
     } else {
         SetError(error, error_capacity, use_tools ?
-                 "The tools repair requires 2 tools." :
+                 "The tools repair requires 2 Tools and 2 Wood." :
                  "The cash repair requires 18 crowns.");
         return false;
     }
@@ -12263,7 +12370,7 @@ static bool ApplyRepair(CcSim *sim, const CcCommand *command,
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(text, sizeof(text),
                    use_tools ?
-                   "Local crews use the company's tools to reopen the treaty bridge." :
+                   "Local crews use the company's Tools and Wood to reopen the treaty bridge." :
                    "Paid officials reopen the treaty bridge after three days of fees and delay.");
     (void)PushEvent(sim, CC_EVENT_ROUTE_REPAIRED, route->id,
                     sim->player.location_id, 0, route->condition, text);
@@ -13482,7 +13589,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                          sim->schema_version == 23U ||
                          sim->schema_version == 24U ||
                          sim->schema_version == 25U ||
-                         sim->schema_version == 26U;
+                         sim->schema_version == 26U ||
+                         sim->schema_version == 27U;
     /* Schema 27 generator 21 saves carry their authoritative settlement
        coordinates. Keep them valid without rebuilding their road layout. */
     bool supported_generator = sim->generator_version == CC_GENERATOR_VERSION ||
@@ -13619,7 +13727,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 !ValidBoundedText(event->text, sizeof(event->text)) ||
                 event->day < 1 || event->day > sim->current_day ||
                 event->kind < CC_EVENT_HARVEST_FAILED ||
-                event->kind > CC_EVENT_CHARACTER_DIED ||
+                event->kind > CC_EVENT_WOODLOT_HARVEST ||
                 event->parent_id == event->id ||
                 (event->parent_id != 0U &&
                  CcSimEvent(sim, event->parent_id) == NULL) ||

@@ -2234,6 +2234,7 @@ static Color CargoBoxBandColor(CcGood good)
 {
     if (good == CC_GOOD_FOOD) return WORLD_CROP_LIGHT;
     if (good == CC_GOOD_IRON) return WORLD_METAL_LIGHT;
+    if (good == CC_GOOD_WOOD) return WORLD_WOOD_SHADOW;
     return WORLD_INK;
 }
 

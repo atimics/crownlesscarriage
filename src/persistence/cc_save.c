@@ -4909,6 +4909,7 @@ static void InitializeExtendedGoods(CcSim *sim)
                 CcGoodDefinitionFor((CcGood)good)->base_price;
         }
     }
+    CcSimInitializeWoodEconomy(sim);
 }
 
 static bool UpgradeLegacyRuntime(CcSim *sim,
@@ -4926,7 +4927,14 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
         legacy_version != 19U && legacy_version != 20U &&
         legacy_version != 21U && legacy_version != 22U &&
         legacy_version != 23U && legacy_version != 24U &&
-        legacy_version != 25U && legacy_version != 26U) return true;
+        legacy_version != 25U && legacy_version != 26U &&
+        legacy_version != 27U) return true;
+    if (legacy_version == 27U) {
+        CcSimInitializeWoodEconomy(sim);
+        sim->schema_version = CC_SIM_SCHEMA_VERSION;
+        sim->generator_version = CC_GENERATOR_VERSION;
+        return true;
+    }
     InitializeExtendedGoods(sim);
     if (legacy_version == 17U) {
         for (int32_t i = 0; i < CC_MAX_EVENTS; ++i) {

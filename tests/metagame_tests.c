@@ -515,6 +515,9 @@ int main(void)
     CC_CHECK(CcMetagameExecute(&dragon, "economy", output, sizeof(output)));
     CC_CHECK(strstr(output, "Material economy") != NULL);
     CC_CHECK(strstr(output, "Weapons") != NULL);
+    CC_CHECK(strstr(output, "Wood") != NULL);
+    CC_CHECK(strstr(output, "woodlot") != NULL);
+    CC_CHECK(strstr(output, "2 Iron and 1 Wood") != NULL);
     CC_CHECK(strstr(output, "mountain Iron") != NULL);
 
     CcSettlement *treasure_market = &dragon.sim.settlements[4];
