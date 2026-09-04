@@ -3252,14 +3252,13 @@ static void DrawTargetAtmosphere(RenderTexture2D target, float clock)
        the upper planes, without adding a smooth full-resolution effect. */
     if (atmosphere.horizon_warmth > 0.01f) {
         float warmth = atmosphere.horizon_warmth;
-        int32_t horizon_y = height * 2 / 5;
-        int32_t horizon_height = height * 2 / 5;
+        int32_t horizon_size = height * 2 / 5;
         Color clear = Fade(WORLD_GOLD, 0.0f);
         Color warm = Fade(WORLD_GOLD, warmth * 0.065f);
-        DrawRectangleGradientV(0, horizon_y, width, horizon_height,
+        DrawRectangleGradientV(0, horizon_size, width, horizon_size,
                                clear, warm);
-        DrawRectangleGradientV(0, horizon_y + horizon_height,
-                               width, height - horizon_y - horizon_height,
+        DrawRectangleGradientV(0, horizon_size * 2,
+                               width, height - horizon_size * 2,
                                warm, clear);
         DrawTriangle((Vector2){0.0f, (float)height * 0.36f},
                      (Vector2){(float)width * 0.62f,

@@ -2630,8 +2630,7 @@ const char *CcLocalAgentNavigationName(const CcLocalAgent *agent)
                                     agent->navigation_destination_room);
     }
     int32_t exit_index = -1 - agent->navigation_destination_room;
-    if (exit_index < 0 ||
-        exit_index >= (int32_t)(sizeof(STREET_BOUNDARY_EXITS) /
+    if (exit_index >= (int32_t)(sizeof(STREET_BOUNDARY_EXITS) /
                                 sizeof(STREET_BOUNDARY_EXITS[0]))) return NULL;
     return STREET_BOUNDARY_EXITS[exit_index].name;
 }

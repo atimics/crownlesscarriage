@@ -1267,7 +1267,6 @@ static bool CombatCameraSubjectsNeedReframe(const CcLocalAgent *player,
     Vector3 intended_target = Vector3Add(
         player->position,
         Vector3Scale(fight_line, fminf(live_span * 0.72f, 3.30f)));
-    intended_target.y = player->position.y + 1.32f;
     float target_x = intended_target.x - combat_camera_rig.locked_target.x;
     float target_z = intended_target.z - combat_camera_rig.locked_target.z;
     if (target_x * target_x + target_z * target_z > 1.35f * 1.35f) {

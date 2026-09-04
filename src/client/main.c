@@ -843,11 +843,12 @@ static void SetConvoyTownPose(CcLocalConvoyState *convoy, float delta_time)
         {63.8f, 34.0f}, {48.0f, 36.0f}, {38.2f, 35.8f},
         {CC_LOCAL_CARRIAGE_X, CC_LOCAL_CARRIAGE_Z}
     };
+    _Static_assert(sizeof(departure_path) == sizeof(arrival_path),
+                   "Convoy town paths must have the same point count.");
     const Vector2 *path = convoy->phase == CC_LOCAL_CONVOY_ARRIVING ?
         arrival_path : departure_path;
-    int32_t count = convoy->phase == CC_LOCAL_CONVOY_ARRIVING ?
-        (int32_t)(sizeof(arrival_path) / sizeof(arrival_path[0])) :
-        (int32_t)(sizeof(departure_path) / sizeof(departure_path[0]));
+    int32_t count = (int32_t)(sizeof(departure_path) /
+                              sizeof(departure_path[0]));
     Vector2 position = {0};
     float heading = convoy->town_heading_yaw;
     SampleConvoyPath(path, count, convoy->phase_progress,
@@ -5517,8 +5518,6 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                     if (accepted_opening) {
                         local->opening_step = CC_LOCAL_OPENING_COMPLETE;
                         *selected_situation = opening_index;
-                    }
-                    if (accepted_opening) {
                         (void)snprintf(
                             message, message_capacity,
                             "Mara loads %d food boxes and gives you the carriage key.",
@@ -7735,7 +7734,7 @@ int main(int argc, char **argv)
             LocalAtmosphereForSimulation(&sim),
         0.0f);
 
-    Rectangle local_bounds = LocalViewportBounds();
+    Rectangle local_bounds;
     while (render_benchmark || !WindowShouldClose()) {
 #if defined(PLATFORM_WEB)
         ClientWaitForAnimationFrame();

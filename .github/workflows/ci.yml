@@ -8,6 +8,29 @@ permissions:
   contents: read
 
 jobs:
+  static-analysis:
+    name: Static analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build pinned Cppcheck
+        env:
+          CPPCHECK_COMMIT: e73bf44c3e49686b7495fab352d03a6c6075516b
+        run: |
+          git clone --depth 1 --branch 2.21.0 \
+            https://github.com/cppcheck-opensource/cppcheck.git \
+            "$RUNNER_TEMP/cppcheck"
+          test "$(git -C "$RUNNER_TEMP/cppcheck" rev-parse HEAD)" = \
+            "$CPPCHECK_COMMIT"
+          make -C "$RUNNER_TEMP/cppcheck" -j2 \
+            MATCHCOMPILER=yes \
+            FILESDIR="$RUNNER_TEMP/cppcheck" \
+            CXXOPTS="-O2" CPPOPTS="-DNDEBUG"
+      - name: Check for dead and repeated logic
+        env:
+          CC_CPPCHECK_EXECUTABLE: ${{ runner.temp }}/cppcheck/cppcheck
+        run: make static-analysis
+
   assets:
     name: Shipped assets and shaders
     runs-on: ubuntu-latest

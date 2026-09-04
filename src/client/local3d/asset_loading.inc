@@ -998,9 +998,8 @@ static void LoadCreatureModels(void)
                 continue;
             }
             Model model = LoadModel(resolved);
-            int32_t expected_bones = CC_QUADRUPED_BONE_COUNT;
             if (model.meshCount != 1 || model.materialCount < 1 ||
-                model.skeleton.boneCount != expected_bones) {
+                model.skeleton.boneCount != CC_QUADRUPED_BONE_COUNT) {
                 TraceLog(LOG_WARNING,
                          "CREATURE: invalid %s (%d meshes, %d materials, %d bones)",
                          path, model.meshCount, model.materialCount,
@@ -1010,39 +1009,36 @@ static void LoadCreatureModels(void)
             }
             CreatureModelCache *cached = &creature_models[variant][pose];
             cached->model = model;
-            if (expected_bones > 0) {
-                bool found[CC_QUADRUPED_BONE_COUNT] = {false};
-                bool valid_skin = true;
-                for (int32_t bone = 0; bone < expected_bones; ++bone) {
-                    int32_t quadruped_bone = CcQuadrupedBoneFind(
-                        model.skeleton.bones[bone].name);
-                    cached->quadruped_bone[bone] = quadruped_bone;
-                    if (quadruped_bone < 0) {
-                        valid_skin = false;
-                    } else {
-                        found[quadruped_bone] = true;
-                    }
+            bool found[CC_QUADRUPED_BONE_COUNT] = {false};
+            bool valid_skin = true;
+            for (int32_t bone = 0; bone < CC_QUADRUPED_BONE_COUNT; ++bone) {
+                int32_t quadruped_bone = CcQuadrupedBoneFind(
+                    model.skeleton.bones[bone].name);
+                cached->quadruped_bone[bone] = quadruped_bone;
+                if (quadruped_bone < 0) {
+                    valid_skin = false;
+                } else {
+                    found[quadruped_bone] = true;
                 }
-                for (int32_t bone = 0; bone < CC_QUADRUPED_BONE_COUNT;
-                     ++bone) {
-                    if (!found[bone]) valid_skin = false;
-                }
-                if (!valid_skin) {
-                    TraceLog(LOG_WARNING,
-                             "CREATURE: %s has the wrong quadruped bones",
-                             path);
-                    UnloadModel(cached->model);
-                    *cached = (CreatureModelCache){0};
-                    continue;
-                }
-                cached->frames[0] = cached->pose;
-                cached->animation.boneCount = expected_bones;
-                cached->animation.keyframeCount = 1;
-                cached->animation.keyframePoses = cached->frames;
-                (void)snprintf(cached->animation.name,
-                               sizeof(cached->animation.name),
-                               "quadruped-runtime");
             }
+            for (int32_t bone = 0; bone < CC_QUADRUPED_BONE_COUNT; ++bone) {
+                if (!found[bone]) valid_skin = false;
+            }
+            if (!valid_skin) {
+                TraceLog(LOG_WARNING,
+                         "CREATURE: %s has the wrong quadruped bones",
+                         path);
+                UnloadModel(cached->model);
+                *cached = (CreatureModelCache){0};
+                continue;
+            }
+            cached->frames[0] = cached->pose;
+            cached->animation.boneCount = CC_QUADRUPED_BONE_COUNT;
+            cached->animation.keyframeCount = 1;
+            cached->animation.keyframePoses = cached->frames;
+            (void)snprintf(cached->animation.name,
+                           sizeof(cached->animation.name),
+                           "quadruped-runtime");
             ReleaseUploadedModelCpuData(&cached->model);
             cached->ready = true;
             loaded_count += 1;
@@ -1824,7 +1820,6 @@ static void DrawFarmAnimalRig(CcCreatureVariant variant,
                               float yaw, float scale)
 {
     Vector3 body = FromLimbVector(rig->body);
-    bool horse = variant == CC_CREATURE_HORSE;
     bool sheep = variant == CC_CREATURE_SHEEP;
     float breathing = 1.0f + rig->mean_activation * 0.22f;
     if (sheep) {
@@ -1878,7 +1873,7 @@ static void DrawFarmAnimalRig(CcCreatureVariant variant,
                        0.055f * scale, 6, palette->cloth);
         return;
     }
-    if (horse) {
+    if (variant == CC_CREATURE_HORSE) {
         DrawCharacterEllipsoid(
             body, (Vector3){0.61f * scale * breathing,
                             0.48f * scale * breathing,
@@ -1943,64 +1938,50 @@ static void DrawFarmAnimalRig(CcCreatureVariant variant,
                               rig->body_length},
                     yaw, palette->hide);
     Vector3 neck_base = LocalPoint(
-        body, 0.0f, horse ? 0.16f * scale : 0.04f * scale,
+        body, 0.0f, 0.04f * scale,
         rig->body_length * 0.42f, yaw);
     Vector3 neck = LocalPoint(
-        body, 0.0f, horse ? 0.58f * scale : -0.06f * scale,
+        body, 0.0f, -0.06f * scale,
         rig->body_length * 0.62f, yaw);
     Vector3 head = LocalPoint(
-        body, 0.0f, horse ? 0.72f * scale : -0.10f * scale,
+        body, 0.0f, -0.10f * scale,
         rig->body_length * 0.82f, yaw);
-    DrawCylinderEx(neck_base, neck,
-                   (horse ? 0.19f : 0.25f) * scale,
-                   (horse ? 0.15f : 0.21f) * scale,
+    DrawCylinderEx(neck_base, neck, 0.25f * scale, 0.21f * scale,
                    7, palette->hide);
     DrawCharacterEllipsoid(
-        head,
-        horse ? (Vector3){0.20f * scale, 0.23f * scale, 0.34f * scale} :
-                (Vector3){0.31f * scale, 0.25f * scale, 0.34f * scale},
-        horse ? palette->skin : palette->hide);
+        head, (Vector3){0.31f * scale, 0.25f * scale, 0.34f * scale},
+        palette->hide);
     for (int32_t side = -1; side <= 1; side += 2) {
         Vector3 eye = LocalPoint(
-            head, (float)side * (horse ? 0.14f : 0.20f) * scale,
+            head, (float)side * 0.20f * scale,
             0.045f * scale, 0.24f * scale, yaw);
         DrawCharacterSphere(eye, 0.028f * scale, palette->eye);
         Vector3 ear_root = LocalPoint(
             head, (float)side * 0.11f * scale, 0.18f * scale,
             -0.02f * scale, yaw);
         Vector3 ear_tip = LocalPoint(
-            head, (float)side * (horse ? 0.14f : 0.24f) * scale,
-            (horse ? 0.38f : 0.29f) * scale, 0.0f, yaw);
+            head, (float)side * 0.24f * scale,
+            0.29f * scale, 0.0f, yaw);
         DrawCylinderEx(ear_root, ear_tip, 0.045f * scale,
                        0.012f * scale, 5, palette->secondary);
-        if (!horse) {
-            Vector3 horn_tip = LocalPoint(
-                head, (float)side * 0.40f * scale, 0.30f * scale,
-                0.02f * scale, yaw);
-            DrawCylinderEx(ear_root, horn_tip, 0.055f * scale, 0.0f, 6,
-                           palette->horn);
-        }
+        Vector3 horn_tip = LocalPoint(
+            head, (float)side * 0.40f * scale, 0.30f * scale,
+            0.02f * scale, yaw);
+        DrawCylinderEx(ear_root, horn_tip, 0.055f * scale, 0.0f, 6,
+                       palette->horn);
     }
     Vector3 tail_root = LocalPoint(body, 0.0f, 0.22f * scale,
                                    -rig->body_length * 0.48f, yaw);
     Vector3 tail_tip = LocalPoint(body, 0.0f, -0.40f * scale,
                                   -rig->body_length * 0.70f, yaw);
-    DrawCylinderEx(tail_root, tail_tip,
-                   (horse ? 0.065f : 0.045f) * scale,
+    DrawCylinderEx(tail_root, tail_tip, 0.045f * scale,
                    0.018f * scale, 6, palette->secondary);
-    if (horse) {
-        Vector3 mane_top = LocalPoint(body, 0.0f, 0.72f * scale,
-                                      rig->body_length * 0.50f, yaw);
-        DrawCylinderEx(neck_base, mane_top, 0.08f * scale, 0.04f * scale,
-                       6, palette->secondary);
-    } else {
-        Vector3 udder = LocalPoint(body, 0.0f, -0.48f * scale,
-                                   -0.10f * scale, yaw);
-        DrawCharacterEllipsoid(udder,
-                               (Vector3){0.20f * scale, 0.12f * scale,
-                                         0.22f * scale},
-                               palette->accent);
-    }
+    Vector3 udder = LocalPoint(body, 0.0f, -0.48f * scale,
+                               -0.10f * scale, yaw);
+    DrawCharacterEllipsoid(udder,
+                           (Vector3){0.20f * scale, 0.12f * scale,
+                                     0.22f * scale},
+                           palette->accent);
 }
 
 static void DrawDoubleSidedTriangle(Vector3 a, Vector3 b, Vector3 c,
@@ -3346,9 +3327,7 @@ static bool DrawHeroSkin(const CcHumanoidSkinPose *skin,
         float gameplay_scale =
             (skin_bone == CC_HUMANOID_SKIN_HEAD || hair_bone >= 0) ? 1.32f :
             (skin_bone == CC_HUMANOID_SKIN_HAND_LEFT ||
-             skin_bone == CC_HUMANOID_SKIN_HAND_RIGHT) ? 0.90f :
-            (skin_bone == CC_HUMANOID_SKIN_FOOT_LEFT ||
-             skin_bone == CC_HUMANOID_SKIN_FOOT_RIGHT) ? 1.00f : 1.0f;
+             skin_bone == CC_HUMANOID_SKIN_HAND_RIGHT) ? 0.90f : 1.0f;
         hero_skin.pose[bone].scale = Vector3Scale(
             hero_skin.pose[bone].scale, gameplay_scale);
     }

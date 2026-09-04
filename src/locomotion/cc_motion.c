@@ -188,8 +188,8 @@ void CcMotionPlayerAdvance(CcMotionPlayer *player, float delta_time)
         player->time += advance;
         remaining -= advance;
         if (player->time + 0.000001f < clip->duration) break;
-        player->time = clip->duration;
         if (!clip->loop) {
+            player->time = clip->duration;
             player->finished = true;
             break;
         }
