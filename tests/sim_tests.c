@@ -167,6 +167,96 @@ static void CheckArchiveRecording(void)
     CC_CHECK(CountLoreRecordsForParent(&funded, recorded_parent) == 1);
 }
 
+static int32_t CountCharacterLifeEvents(const CcSim *sim,
+                                        CcEventKind kind)
+{
+    int32_t count = 0;
+    for (int32_t i = 0; i < sim->event_count; ++i) {
+        const CcEvent *event = CcSimRecentEvent(sim, i);
+        if (event != NULL && event->kind == kind) count += 1;
+    }
+    return count;
+}
+
+static void CheckCharacterLifecycles(void)
+{
+    char first_name[CC_NAME_CAPACITY];
+    char repeated_name[CC_NAME_CAPACITY];
+    char second_name[CC_NAME_CAPACITY];
+    CcGenerateCharacterName(UINT32_C(0x1a2b3c4d),
+                            CcMakeId(CC_ENTITY_SETTLEMENT, 7U),
+                            3, 11U, first_name);
+    CcGenerateCharacterName(UINT32_C(0x1a2b3c4d),
+                            CcMakeId(CC_ENTITY_SETTLEMENT, 7U),
+                            3, 11U, repeated_name);
+    CcGenerateCharacterName(UINT32_C(0x1a2b3c4d),
+                            CcMakeId(CC_ENTITY_SETTLEMENT, 7U),
+                            3, 12U, second_name);
+    CC_CHECK(strcmp(first_name, repeated_name) == 0);
+    CC_CHECK(strchr(first_name, ' ') != NULL);
+    CC_CHECK(strcmp(first_name, second_name) != 0);
+
+    CcSim first;
+    CcSim second;
+    CcSimInit(&first, UINT32_C(0x11fe71fe));
+    CcSimInit(&second, UINT32_C(0x11fe71fe));
+    CC_CHECK(first.character_count == CC_MAX_CHARACTERS);
+    for (int32_t i = 0; i < first.character_count; ++i) {
+        CC_CHECK(first.characters[i].birth_day <= first.current_day);
+        CC_CHECK(first.characters[i].death_day > first.current_day);
+        CC_CHECK(CcCharacterAgeYears(&first, &first.characters[i]) >= 22);
+    }
+
+    int32_t slot = first.character_count - 1;
+    CcId ancestor_id = first.characters[slot].id;
+    int32_t ancestor_generation = first.characters[slot].generation;
+    char ancestor_name[CC_NAME_CAPACITY];
+    (void)snprintf(ancestor_name, sizeof(ancestor_name), "%s",
+                   first.characters[slot].name);
+    first.characters[slot].death_day = first.current_day + 1;
+    second.characters[slot].death_day = second.current_day + 1;
+    CcSimAdvanceDays(&first, 1);
+    CcSimAdvanceDays(&second, 1);
+    const CcCharacter *successor = &first.characters[slot];
+    const char *ancestor_family = strrchr(ancestor_name, ' ');
+    const char *successor_family = strrchr(successor->name, ' ');
+    CC_CHECK(CcSimHash(&first) == CcSimHash(&second));
+    CC_CHECK(successor->id != ancestor_id);
+    CC_CHECK(successor->ancestor_id == ancestor_id);
+    CC_CHECK(successor->generation == ancestor_generation + 1);
+    CC_CHECK(successor->birth_day == first.current_day);
+    CC_CHECK(CcCharacterAgeYears(&first, successor) == 0);
+    CC_CHECK(ancestor_family != NULL && successor_family != NULL);
+    CC_CHECK(strcmp(ancestor_family, successor_family) == 0);
+    CC_CHECK(first.character_births == 1);
+    CC_CHECK(first.character_deaths == 1);
+    CC_CHECK(CountCharacterLifeEvents(
+                 &first, CC_EVENT_CHARACTER_BORN) == 1);
+    CC_CHECK(CountCharacterLifeEvents(
+                 &first, CC_EVENT_CHARACTER_DIED) == 1);
+    char error[160];
+    CC_CHECK(CcSimValidate(&first, error, sizeof(error)));
+
+    CcSim forged = first;
+    bool found_death = false;
+    for (int32_t i = 0; i < CC_MAX_EVENTS; ++i) {
+        if (forged.events[i].id != 0U &&
+            forged.events[i].kind == CC_EVENT_CHARACTER_DIED) {
+            forged.events[i].actor_id = CcMakeId(
+                CC_ENTITY_CHARACTER, forged.next_entity_serial + 4U);
+            found_death = true;
+            break;
+        }
+    }
+    CC_CHECK(found_death);
+    CC_CHECK(!CcSimValidate(&forged, error, sizeof(error)));
+
+    forged = first;
+    forged.characters[slot].ancestor_id = CcMakeId(
+        CC_ENTITY_CHARACTER, forged.next_entity_serial + 5U);
+    CC_CHECK(!CcSimValidate(&forged, error, sizeof(error)));
+}
+
 int main(void)
 {
     CcSim first;
@@ -176,6 +266,7 @@ int main(void)
     CcSimInit(&second, UINT32_C(0x12345678));
     CC_CHECK(CcSimHash(&first) == CcSimHash(&second));
     CheckArchiveRecording();
+    CheckCharacterLifecycles();
     CC_CHECK(first.character_count > 0);
     CC_CHECK(first.character_count == second.character_count);
     CC_CHECK(first.characters[0].id == second.characters[0].id);

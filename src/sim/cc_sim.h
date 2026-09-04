@@ -49,8 +49,8 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 25
-#define CC_GENERATOR_VERSION 20
+#define CC_SIM_SCHEMA_VERSION 26
+#define CC_GENERATOR_VERSION 21
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
 #define CC_WORLD_DAY_SUBTICKS (24 * 60 * CC_WORLD_MINUTE_SUBTICKS)
@@ -272,7 +272,9 @@ typedef enum CcEventKind {
     CC_EVENT_LORE_LOST = 110,
     CC_EVENT_JOURNEY_BREAK = 111,
     CC_EVENT_JOURNEY_CAMP = 112,
-    CC_EVENT_ROAD_HOUSE_LODGING = 113
+    CC_EVENT_ROAD_HOUSE_LODGING = 113,
+    CC_EVENT_CHARACTER_BORN = 114,
+    CC_EVENT_CHARACTER_DIED = 115
 } CcEventKind;
 
 typedef struct CcArchives {
@@ -1023,6 +1025,10 @@ typedef struct CcCharacterKnowledge {
 typedef struct CcCharacter {
     CcId id;
     char name[CC_NAME_CAPACITY];
+    CcId ancestor_id;
+    int32_t birth_day;
+    int32_t death_day;
+    int32_t generation;
     CcId home_settlement_id;
     CcId current_settlement_id;
     CcId faction_id;
@@ -1314,6 +1320,8 @@ typedef struct CcSim {
     int32_t front_count;
     int32_t quest_outcome_count;
     int32_t character_count;
+    int32_t character_births;
+    int32_t character_deaths;
     int32_t event_count;
     int32_t event_write_index;
     int32_t courier_count;
@@ -1332,12 +1340,18 @@ void CcSimInitializeHoardRaiders(CcSim *sim);
 void CcSimInitializeAnimalEconomy(CcSim *sim);
 void CcSimInitializeHorseStableSystem(CcSim *sim);
 void CcSimInitializeCharacters(CcSim *sim);
+void CcSimUpgradeCharacterLifecycles(CcSim *sim);
 void CcSimUpgradeQuestArchitecture(CcSim *sim);
 void CcSimInitializeUnderroad(CcSim *sim);
 void CcSimAdvanceDays(CcSim *sim, int32_t days);
 bool CcSettlementIsAbandoned(const CcSettlement *settlement);
 int32_t CcSimClimateFactor(const CcSim *sim);
 int32_t CcDragonCampaignExperience(const CcSim *sim);
+int32_t CcCharacterAgeYears(const CcSim *sim,
+                            const CcCharacter *character);
+void CcGenerateCharacterName(uint32_t world_seed, CcId settlement_id,
+                             int32_t generation, uint32_t ordinal,
+                             char output[CC_NAME_CAPACITY]);
 
 void CcSimAdvanceRuntimeTicks(CcSim *sim, int32_t ticks);
 bool CcSimApply(CcSim *sim, const CcCommand *command,
