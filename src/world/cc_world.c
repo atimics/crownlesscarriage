@@ -195,6 +195,26 @@ CcWorldPoint CcWorldRoutePoint(const CcWorldRoutePlacement *route, float amount)
     };
 }
 
+float CcWorldRouteJourneyAmount(const CcWorldRoutePlacement *route,
+                                CcId origin_id, float progress)
+{
+    if (route == NULL ||
+        (origin_id != route->from_id && origin_id != route->to_id)) {
+        return 0.0f;
+    }
+    float from_junction_amount = CcWorldRouteSampleAmount(
+        route, CC_WORLD_ROUTE_FROM_JUNCTION_SAMPLE);
+    float to_junction_amount = CcWorldRouteSampleAmount(
+        route, CC_WORLD_ROUTE_TO_JUNCTION_SAMPLE);
+    bool forward = origin_id == route->from_id;
+    float start_amount = forward ? from_junction_amount :
+                                   1.0f - to_junction_amount;
+    float end_amount = forward ? 1.0f - to_junction_amount :
+                                 from_junction_amount;
+    return start_amount + ClampUnit(progress) *
+        fmaxf(0.0f, 1.0f - start_amount - end_amount);
+}
+
 bool CcWorldRoutePose(const CcWorldRoutePlacement *route, CcId origin_id,
                       float journey_amount, CcWorldPoint *position,
                       float *heading_yaw)

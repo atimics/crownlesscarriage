@@ -4593,7 +4593,8 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
         legacy_version != 15U && legacy_version != 16U &&
         legacy_version != 17U && legacy_version != 18U &&
         legacy_version != 19U && legacy_version != 20U &&
-        legacy_version != 21U && legacy_version != 22U) return true;
+        legacy_version != 21U && legacy_version != 22U &&
+        legacy_version != 23U) return true;
     if (legacy_version == 17U) {
         for (int32_t i = 0; i < CC_MAX_EVENTS; ++i) {
             if ((int32_t)sim->events[i].kind ==
@@ -4628,6 +4629,11 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
                     (int32_t)CC_EVENT_FRONT_CREATED + kind - old_first);
             }
         }
+    }
+    if (legacy_version == 23U) {
+        sim->schema_version = CC_SIM_SCHEMA_VERSION;
+        sim->generator_version = CC_GENERATOR_VERSION;
+        return true;
     }
     if (legacy_version == 22U) {
         FinishLegacyRuntimeUpgrade(sim);

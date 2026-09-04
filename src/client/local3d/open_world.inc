@@ -447,17 +447,22 @@ static void DrawOpenWorldFogEdge(const CcWorldManifest *manifest,
 static void DrawOpenWorldRibbonSegment(const CcWorldManifest *manifest,
                                        CcWorldPoint first,
                                        CcWorldPoint second, float width,
-                                       float lift, Color color)
+                                       float lift, Color color,
+                                       bool extend_first, bool extend_second)
 {
     float dx = second.x - first.x;
     float dz = second.z - first.z;
     float length = sqrtf(dx * dx + dz * dz);
     if (manifest == NULL || length < 0.01f) return;
     float extension = fminf(3.6f, width * 0.16f);
-    first.x -= dx / length * extension;
-    first.z -= dz / length * extension;
-    second.x += dx / length * extension;
-    second.z += dz / length * extension;
+    if (extend_first) {
+        first.x -= dx / length * extension;
+        first.z -= dz / length * extension;
+    }
+    if (extend_second) {
+        second.x += dx / length * extension;
+        second.z += dz / length * extension;
+    }
     float side_x = -dz / length * width * 0.5f;
     float side_z = dx / length * width * 0.5f;
     Vector3 points[4] = {
@@ -511,18 +516,82 @@ static void DrawOpenWorldGateConnectors(const CcSim *sim,
                                            settlement->gate;
         DrawOpenWorldRibbonSegment(
             manifest, gate, settlement->junction,
-            11.0f, 0.04f, Fade(WORLD_EARTH_LIGHT, 0.96f));
+            11.0f, 0.04f, Fade(WORLD_EARTH_LIGHT, 0.96f), true, true);
         DrawOpenWorldRibbonSegment(
             manifest, gate, settlement->junction,
-            7.5f, 0.08f, Fade(WORLD_GRASS_LIGHT, 0.98f));
+            7.5f, 0.08f, Fade(WORLD_GRASS_LIGHT, 0.98f), true, true);
         DrawOpenWorldRibbonSegment(
             manifest, gate, settlement->junction,
-            5.6f, 0.13f, WORLD_ROAD_LIGHT);
+            5.6f, 0.13f, WORLD_ROAD_LIGHT, true, true);
+    }
+}
+
+static bool OpenWorldReadRouteView(
+    const CcSim *sim, const CcWorldRoutePlacement *placement,
+    const CcLocalWorldCarriageState *carriage,
+    CcRoadBookRouteView *view)
+{
+    if (placement == NULL) return false;
+    if (carriage != NULL && carriage->visible &&
+        carriage->route_id == placement->route_id) {
+        return CcRoadBookReadRouteAtCarriage(
+            sim, placement->route_id, carriage->route_amount,
+            CcWorldRouteLength(placement), view);
+    }
+    return CcRoadBookReadRoute(sim, placement->route_id, view);
+}
+
+static bool OpenWorldRouteVisibleBefore(
+    const CcRoadBookRouteView *view, float amount)
+{
+    return amount <= 0.00001f ||
+           CcRoadBookShowsRouteAmount(view, amount - 0.00001f);
+}
+
+static bool OpenWorldRouteVisibleAfter(
+    const CcRoadBookRouteView *view, float amount)
+{
+    return amount >= 0.99999f ||
+           CcRoadBookShowsRouteAmount(view, amount + 0.00001f);
+}
+
+static void DrawOpenWorldActiveConnector(
+    const CcWorldManifest *manifest,
+    const CcWorldRoutePlacement *placement,
+    const CcRoadBookRouteView *visibility, int32_t sample, Color road)
+{
+    float segment_from = CcWorldRouteSampleAmount(placement, sample);
+    float segment_to = CcWorldRouteSampleAmount(placement, sample + 1);
+    CcRoadBookRouteSpan spans[2];
+    int32_t span_count = CcRoadBookVisibleRouteSpans(
+        visibility, segment_from, segment_to, spans);
+    for (int32_t span_index = 0;
+         span_index < span_count; ++span_index) {
+        CcWorldPoint first = CcWorldRoutePoint(
+            placement, spans[span_index].from_amount);
+        CcWorldPoint second = CcWorldRoutePoint(
+            placement, spans[span_index].to_amount);
+        bool extend_first = OpenWorldRouteVisibleBefore(
+            visibility, spans[span_index].from_amount);
+        bool extend_second = OpenWorldRouteVisibleAfter(
+            visibility, spans[span_index].to_amount);
+        DrawOpenWorldRibbonSegment(
+            manifest, first, second, 11.0f, 0.04f,
+            Fade(WORLD_EARTH_LIGHT, 0.96f),
+            extend_first, extend_second);
+        DrawOpenWorldRibbonSegment(
+            manifest, first, second, 7.5f, 0.08f,
+            Fade(WORLD_GRASS_LIGHT, 0.98f),
+            extend_first, extend_second);
+        DrawOpenWorldRibbonSegment(
+            manifest, first, second, 5.6f, 0.13f, road,
+            extend_first, extend_second);
     }
 }
 
 static void DrawOpenWorldRouteNetwork(const CcSim *sim,
                                       const CcWorldManifest *manifest,
+                                      const CcLocalWorldCarriageState *carriage,
                                       bool kingdom_view)
 {
     if (sim == NULL || manifest == NULL) return;
@@ -534,58 +603,78 @@ static void DrawOpenWorldRouteNetwork(const CcSim *sim,
         const CcRoute *route = CcSimRoute(sim, placement->route_id);
         CcRoadBookRouteView visibility = {0};
         if (route == NULL ||
-            !CcRoadBookReadRoute(sim, route->id, &visibility)) continue;
+            !OpenWorldReadRouteView(
+                sim, placement, carriage, &visibility)) continue;
         Color road = route->closed ? WORLD_DANGER :
                      route->smuggler_route ? WORLD_VIOLET :
                                              WORLD_ROAD_LIGHT;
         for (int32_t sample = CC_WORLD_ROUTE_FROM_JUNCTION_SAMPLE;
              sample < CC_WORLD_ROUTE_TO_JUNCTION_SAMPLE; ++sample) {
-            float midpoint = 0.5f * (
-                CcWorldRouteSampleAmount(placement, sample) +
-                CcWorldRouteSampleAmount(placement, sample + 1));
-            if (!CcRoadBookShowsRouteAmount(&visibility, midpoint)) {
-                continue;
-            }
             if (route->smuggler_route && (sample & 1) != 0) continue;
-            CcWorldPoint first = placement->samples[sample];
-            CcWorldPoint second = placement->samples[sample + 1];
-            Vector3 along = {second.x - first.x, 0.0f,
-                             second.z - first.z};
-            float length = sqrtf(along.x * along.x + along.z * along.z);
-            Vector3 center = {
-                (first.x + second.x) * 0.5f,
-                (CcWorldTerrainHeight(manifest, first.x, first.z) +
-                 CcWorldTerrainHeight(manifest, second.x, second.z)) * 0.5f +
-                    0.08f,
-                (first.z + second.z) * 0.5f,
-            };
+            float segment_from =
+                CcWorldRouteSampleAmount(placement, sample);
+            float segment_to =
+                CcWorldRouteSampleAmount(placement, sample + 1);
+            CcRoadBookRouteSpan spans[2];
+            int32_t span_count = CcRoadBookVisibleRouteSpans(
+                &visibility, segment_from, segment_to, spans);
+            if (span_count <= 0) continue;
             float variation = 1.0f +
                 0.08f * sinf((float)sample * 1.7f +
                               (float)(placement->seed & 31U));
             bool corridor = sample >=
                                 CC_WORLD_ROUTE_FROM_CORRIDOR_SAMPLE &&
                             sample < CC_WORLD_ROUTE_TO_CORRIDOR_SAMPLE;
-            if (corridor) {
+            for (int32_t span_index = 0;
+                 span_index < span_count; ++span_index) {
+                CcWorldPoint first = CcWorldRoutePoint(
+                    placement, spans[span_index].from_amount);
+                CcWorldPoint second = CcWorldRoutePoint(
+                    placement, spans[span_index].to_amount);
+                bool extend_first = OpenWorldRouteVisibleBefore(
+                    &visibility, spans[span_index].from_amount);
+                bool extend_second = OpenWorldRouteVisibleAfter(
+                    &visibility, spans[span_index].to_amount);
+                if (corridor) {
+                    DrawOpenWorldRibbonSegment(
+                        manifest, first, second, 30.0f * variation, 0.04f,
+                        Fade(WORLD_EARTH_LIGHT, 0.96f),
+                        extend_first, extend_second);
+                    DrawOpenWorldRibbonSegment(
+                        manifest, first, second, 22.0f * variation, 0.08f,
+                        Fade(WORLD_GRASS_LIGHT, 0.98f),
+                        extend_first, extend_second);
+                } else {
+                    DrawOpenWorldRibbonSegment(
+                        manifest, first, second, 9.0f, 0.08f,
+                        Fade(WORLD_GRASS_LIGHT, 0.98f),
+                        extend_first, extend_second);
+                }
                 DrawOpenWorldRibbonSegment(
-                    manifest, first, second, 30.0f * variation, 0.04f,
-                    Fade(WORLD_EARTH_LIGHT, 0.96f));
-                DrawOpenWorldRibbonSegment(
-                    manifest, first, second, 22.0f * variation, 0.08f,
-                    Fade(WORLD_GRASS_LIGHT, 0.98f));
-            } else {
-                DrawOpenWorldRibbonSegment(
-                    manifest, first, second, 9.0f, 0.08f,
-                    Fade(WORLD_GRASS_LIGHT, 0.98f));
+                    manifest, first, second,
+                    (visibility.charted ? 6.2f : 5.2f) * variation,
+                    0.13f, road, extend_first, extend_second);
             }
-            DrawOpenWorldRibbonSegment(
-                manifest, first, second,
-                (visibility.charted ? 6.2f : 5.2f) * variation,
-                0.13f, road);
-            if (corridor && (sample & 1) == 0 && length > 0.01f) {
+
+            float midpoint = 0.5f * (segment_from + segment_to);
+            CcWorldPoint first = placement->samples[sample];
+            CcWorldPoint second = placement->samples[sample + 1];
+            Vector3 along = {second.x - first.x, 0.0f,
+                             second.z - first.z};
+            float length = sqrtf(along.x * along.x + along.z * along.z);
+            if (corridor && (sample & 1) == 0 && length > 0.01f &&
+                CcRoadBookShowsRouteAmount(&visibility, midpoint)) {
                 float inverse = 1.0f / length;
                 Vector3 side = {-along.z * inverse, 0.0f,
                                  along.x * inverse};
                 float side_amount = (sample & 2) == 0 ? 12.5f : -12.5f;
+                Vector3 center = {
+                    (first.x + second.x) * 0.5f,
+                    (CcWorldTerrainHeight(manifest, first.x, first.z) +
+                     CcWorldTerrainHeight(manifest, second.x, second.z)) *
+                        0.5f + 0.08f,
+                    (first.z + second.z) * 0.5f,
+                };
                 Vector3 tree = Vector3Add(
                     center, Vector3Scale(side, side_amount));
                 if (!OpenWorldPointClearsSettlements(
@@ -598,6 +687,19 @@ static void DrawOpenWorldRouteNetwork(const CcSim *sim,
                 DrawSmallSphere((Vector3){tree.x, tree.y + 2.85f, tree.z},
                                 2.25f, WORLD_FOLIAGE_LIGHT);
             }
+        }
+        bool active_route = carriage != NULL && carriage->visible &&
+            carriage->route_id == placement->route_id;
+        if (active_route && !OpenWorldSettlementRevealed(
+                sim, placement->from_id)) {
+            DrawOpenWorldActiveConnector(
+                manifest, placement, &visibility, 0, road);
+        }
+        if (active_route && !OpenWorldSettlementRevealed(
+                sim, placement->to_id)) {
+            DrawOpenWorldActiveConnector(
+                manifest, placement, &visibility,
+                CC_WORLD_ROUTE_TO_JUNCTION_SAMPLE, road);
         }
         if (!visibility.charted &&
             !CcRoadBookShowsWholeRoute(&visibility)) {
@@ -648,6 +750,7 @@ static void DrawOpenWorldSites(const CcSim *sim,
 
 static void OpenWorldRevealedBounds(const CcSim *sim,
                                     const CcWorldManifest *manifest,
+                                    const CcLocalWorldCarriageState *carriage,
                                     float *minimum_x, float *minimum_z,
                                     float *maximum_x, float *maximum_z)
 {
@@ -663,7 +766,8 @@ static void OpenWorldRevealedBounds(const CcSim *sim,
         const CcRoute *route = CcSimRoute(sim, placement->route_id);
         CcRoadBookRouteView visibility = {0};
         if (route == NULL ||
-            !CcRoadBookReadRoute(sim, route->id, &visibility)) continue;
+            !OpenWorldReadRouteView(
+                sim, placement, carriage, &visibility)) continue;
         for (int32_t sample = 0;
              sample < CC_WORLD_ROUTE_SAMPLE_COUNT; ++sample) {
             float amount = CcWorldRouteSampleAmount(placement, sample);
@@ -732,7 +836,7 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
     float revealed_maximum_x = 0.0f;
     float revealed_maximum_z = 0.0f;
     OpenWorldRevealedBounds(
-        sim, &stream->manifest,
+        sim, &stream->manifest, carriage,
         &revealed_minimum_x, &revealed_minimum_z,
         &revealed_maximum_x, &revealed_maximum_z);
     float world_width = revealed_maximum_x - revealed_minimum_x;
@@ -807,7 +911,8 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
     ClearBackground(ArtLightBackground(art.light_profile));
     BeginMode3D(camera);
     BeginWorldLighting(camera, &art);
-    DrawOpenWorldRouteNetwork(sim, &stream->manifest, kingdom_view);
+    DrawOpenWorldRouteNetwork(
+        sim, &stream->manifest, carriage, kingdom_view);
     for (int32_t i = 0; i < stream->manifest.settlement_count; ++i) {
         if (!OpenWorldSettlementRevealed(
                 sim, stream->manifest.settlements[i].settlement_id)) {
