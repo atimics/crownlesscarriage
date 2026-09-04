@@ -7535,8 +7535,8 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 *sim = restored_sim;
                 (void)snprintf(
                     message, message_capacity,
-                    "%s Your previous campaign is still active.",
-                    restart_error);
+                    "A new campaign could not start. "
+                    "Your previous campaign is still active.");
                 *view = VIEW_LOCAL;
                 return;
             }
@@ -7553,8 +7553,8 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 *view = VIEW_LOCAL;
                 (void)snprintf(
                     message, message_capacity,
-                    "The browser could not store the new campaign. %s",
-                    error);
+                    "The browser could not store the new campaign. "
+                    "Reload to recover your previous campaign.");
                 return;
             }
             *journal = restored_journal;
