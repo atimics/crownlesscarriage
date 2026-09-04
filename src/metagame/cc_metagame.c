@@ -214,6 +214,18 @@ static void MineObjective(const CcSituation *situation,
     (void)snprintf(buffer, capacity, "Talk to %s.", name);
 }
 
+static const char *GivenName(const char *name,
+                             char output[CC_NAME_CAPACITY])
+{
+    if (name == NULL || name[0] == '\0') return "someone";
+    const char *space = strchr(name, ' ');
+    size_t length = space != NULL ? (size_t)(space - name) : strlen(name);
+    if (length >= CC_NAME_CAPACITY) length = CC_NAME_CAPACITY - 1U;
+    memcpy(output, name, length);
+    output[length] = '\0';
+    return output;
+}
+
 static bool IsNamedSettlement(const CcSim *sim,
                               const CcSettlement *place, int32_t slot)
 {
@@ -464,8 +476,23 @@ static void DescribeRumors(const CcMetagame *metagame,
                "  The harvest failed. People are watching the eastern road for food.\n"
                "  The treaty bridge is closed, and the relief wagons are late.\n");
     } else if (place != NULL && place->id == sim->settlements[3].id) {
+        const CcSituation *mine = NULL;
+        for (int32_t i = 0; i < sim->situation_count; ++i) {
+            if (sim->situations[i].status == CC_SITUATION_ACTIVE &&
+                sim->situations[i].kind ==
+                    CC_SITUATION_MONSTER_EXPEDITION) {
+                mine = &sim->situations[i];
+                break;
+            }
+        }
+        const CcCharacter *witness = mine != NULL ? CcSimCharacter(
+            sim, mine->witness_character_id) : NULL;
+        const CcCharacter *participant = mine != NULL ? CcSimCharacter(
+            sim, mine->affected_character_id) : NULL;
         Append(output, capacity,
-               "  Bren Alder ran out of the west gallery and left his lamp behind. Jory is looking for him.\n");
+               "  %s ran out of the west gallery and left a lamp behind. %s is seeking the truth.\n",
+               witness != NULL ? witness->name : "A miner",
+               participant != NULL ? participant->name : "Another miner");
     } else {
         Append(output, capacity,
                "  Road talk points back toward the hungry market and the tolled bridge.\n");
@@ -575,7 +602,7 @@ static void DescribeCharters(const CcMetagame *metagame,
                "  No fresh paper waits here. That does not mean nobody needs help.\n");
     }
     Append(output, capacity,
-           "Use 'talk NUMBER' to ask about an objective. Use 'tell NUMBER' to tell Mara, or 'keep NUMBER' to keep it between you and Jory.\n");
+           "Use 'talk NUMBER' to ask about an objective. Mine leads can also use 'tell NUMBER' or 'keep NUMBER'.\n");
 }
 
 static bool TalkToSituation(CcMetagame *metagame, int32_t index,
@@ -617,26 +644,48 @@ static bool TalkToSituation(CcMetagame *metagame, int32_t index,
     }
 
     if (situation->kind == CC_SITUATION_MONSTER_EXPEDITION) {
+        const CcCharacter *participant = CcSimCharacter(
+            sim, situation->affected_character_id);
+        const CcCharacter *witness = CcSimCharacter(
+            sim, situation->witness_character_id);
+        const CcCharacter *sponsor = CcSimCharacter(
+            sim, situation->sponsor_character_id);
+        const char *participant_name = participant != NULL ?
+            participant->name : "the miner";
+        const char *witness_name = witness != NULL ?
+            witness->name : "the witness";
+        const char *sponsor_name = sponsor != NULL ?
+            sponsor->name : "the mine official";
+        char participant_given[CC_NAME_CAPACITY];
+        char witness_given[CC_NAME_CAPACITY];
+        char sponsor_given[CC_NAME_CAPACITY];
+        const char *participant_label = GivenName(
+            participant_name, participant_given);
+        const char *witness_label = GivenName(
+            witness_name, witness_given);
+        const char *sponsor_label = GivenName(
+            sponsor_name, sponsor_given);
         if (stage_before == CC_DISCOVERY_RUMOR) {
             Append(output, capacity,
-                   "Jory: \"%s\"\n"
-                   "New objective: Talk to Bren.\n",
-                   spoken_text);
+                   "%s: \"%s\"\n"
+                   "New objective: Talk to %s.\n",
+                   participant_label, spoken_text, witness_name);
         } else if (stage_before == CC_DISCOVERY_WITNESS) {
             Append(output, capacity,
-                   "Bren: \"%s\"\n"
-                   "New objective: Talk to Jory.\n",
-                   spoken_text);
+                   "%s: \"%s\"\n"
+                   "New objective: Talk to %s.\n",
+                   witness_label, spoken_text, participant_name);
         } else if (stage_before == CC_DISCOVERY_DECISION) {
             Append(output, capacity,
-                   "Jory: \"%s\"\n"
-                   "Choose: 'tell %d' to tell Mara, or 'keep %d' to keep it between you and Jory.\n",
-                   spoken_text, index + 1, index + 1);
+                   "%s: \"%s\"\n"
+                   "Choose: 'tell %d' to tell %s, or 'keep %d' to keep it between you and %s.\n",
+                   participant_label, spoken_text, index + 1, sponsor_label,
+                   index + 1, participant_label);
         } else if (stage_before == CC_DISCOVERY_AUTHORITY) {
             Append(output, capacity,
-                   "Mara: \"%s\"\n"
+                   "%s: \"%s\"\n"
                    "New job: Find Cera in the west gallery. Use 'accept %d' to take the job.\n",
-                   spoken_text, index + 1);
+                   sponsor_label, spoken_text, index + 1);
         } else {
             Append(output, capacity, "%s says, \"%s\"\n",
                    speaker->name, spoken_text);

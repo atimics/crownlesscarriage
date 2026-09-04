@@ -366,6 +366,59 @@ static void AddSchema23RuntimeJournalSuffix(const char *path,
     sqlite3_close(database);
 }
 
+static void ClearLegacyCharacterLifecycles(CcSim *sim)
+{
+    sim->character_births = 0;
+    sim->character_deaths = 0;
+    for (int32_t i = 0; i < sim->character_count; ++i) {
+        sim->characters[i].ancestor_id = 0U;
+        sim->characters[i].birth_day = 0;
+        sim->characters[i].death_day = 0;
+        sim->characters[i].generation = 0;
+    }
+}
+
+static void AddLegacyDayJournalSuffix(const char *path,
+                                      const CcSim *before,
+                                      const CcSim *after,
+                                      uint32_t schema_version,
+                                      uint32_t generator_version)
+{
+    sqlite3 *database = NULL;
+    RequireSqlite(sqlite3_open_v2(path, &database,
+                                  SQLITE_OPEN_READWRITE, NULL),
+                  database, "could not open lifecycle journal fixture");
+    char pre_hash[24];
+    char post_hash[24];
+    (void)snprintf(pre_hash, sizeof(pre_hash), "%016" PRIx64,
+                   CcSimHash(before));
+    (void)snprintf(post_hash, sizeof(post_hash), "%016" PRIx64,
+                   CcSimHash(after));
+    char *sql = sqlite3_mprintf(
+        "BEGIN IMMEDIATE;"
+        "INSERT INTO journal_epoch "
+        "(record_version,world_seed,initial_state_hash,created_tick) "
+        "VALUES(1,%u,%Q,%llu);"
+        "INSERT INTO action_journal "
+        "(generation,ordinal,record_version,operation_kind,command_kind,"
+        "target_id,good,amount,dungeon_state,step_count,sim_schema_version,"
+        "generator_version,pre_state_hash,post_state_hash,committed_tick) "
+        "VALUES(last_insert_rowid(),1,1,2,0,0,0,0,0,1,%u,%u,%Q,%Q,%llu);"
+        "UPDATE meta SET journal_generation="
+        "(SELECT MAX(generation) FROM journal_epoch),"
+        "journal_cursor=0 WHERE id=1;"
+        "COMMIT;",
+        before->world_seed, pre_hash,
+        (unsigned long long)before->clock.tick,
+        schema_version, generator_version, pre_hash, post_hash,
+        (unsigned long long)after->clock.tick);
+    CC_CHECK(sql != NULL);
+    ExecuteFixtureSql(database, sql,
+                      "could not create lifecycle journal suffix");
+    sqlite3_free(sql);
+    sqlite3_close(database);
+}
+
 static void AddSchema12NamedTreasureJournalSuffix(
     const char *path, const CcSim *before, const CcSim *after_steal,
     const CcSim *after_return, CcId treasure_id)
@@ -1270,6 +1323,13 @@ static void CheckCharacterPersistence(char *error, size_t error_capacity)
         .amount = CC_CHARACTER_RESPONSE_LISTEN
     };
     CC_CHECK(CcSimApply(&original, &listen, error, error_capacity));
+    int32_t successor_slot = original.character_count - 1;
+    CcId ancestor_id = original.characters[successor_slot].id;
+    original.characters[successor_slot].death_day =
+        original.current_day + 1;
+    CcSimAdvanceDays(&original, 1);
+    CcId successor_id = original.characters[successor_slot].id;
+    CC_CHECK(successor_id != ancestor_id);
     uint64_t expected_hash = CcSimHash(&original);
     CC_CHECK(CcSaveWrite(path, &original, error, error_capacity));
     CcSim restored;
@@ -1282,6 +1342,12 @@ static void CheckCharacterPersistence(char *error, size_t error_capacity)
     CC_CHECK(remembering->player_disposition == 2);
     CC_CHECK(CcCharacterRemembers(
         remembering, CC_CHARACTER_MEMORY_MET_PLAYER, situation_id));
+    const CcCharacter *successor = CcSimCharacter(&restored, successor_id);
+    CC_CHECK(successor != NULL);
+    CC_CHECK(successor->ancestor_id == ancestor_id);
+    CC_CHECK(successor->generation == 1);
+    CC_CHECK(restored.character_births == 1);
+    CC_CHECK(restored.character_deaths == 1);
     RemoveDatabase(path);
 }
 
@@ -1478,6 +1544,7 @@ static void CheckSchema23Compatibility(char *error, size_t error_capacity)
     RemoveDatabase(path);
     CcSim legacy;
     CcSimInit(&legacy, UINT32_C(0x12823));
+    legacy.generator_version = 20U;
     CcRoute *route = &legacy.routes[0];
     for (int32_t i = 0; i < legacy.map_count; ++i) {
         CcMap *map = &legacy.maps[i];
@@ -1552,6 +1619,10 @@ static void CheckSchema24Compatibility(char *error, size_t error_capacity)
     RemoveDatabase(path);
     CcSim legacy;
     CcSimInit(&legacy, UINT32_C(0x1e9ac24));
+    CcId first_character_id = legacy.characters[0].id;
+    char first_character_name[CC_NAME_CAPACITY];
+    (void)snprintf(first_character_name, sizeof(first_character_name), "%s",
+                   legacy.characters[0].name);
     CcTravelPreview preview = {0};
     CC_CHECK(CcSimTravelPreview(
         &legacy, legacy.settlements[1].id, &preview,
@@ -1567,6 +1638,8 @@ static void CheckSchema24Compatibility(char *error, size_t error_capacity)
     CcSimAdvanceRuntimeTicks(&legacy, 480);
     int32_t legacy_progress = legacy.carriage.progress_milli;
     legacy.schema_version = 24U;
+    legacy.generator_version = 20U;
+    ClearLegacyCharacterLifecycles(&legacy);
     CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
 
     CcSim restored;
@@ -1578,6 +1651,15 @@ static void CheckSchema24Compatibility(char *error, size_t error_capacity)
              (preview.travel_days * 2 < 3 ? 3 : preview.travel_days * 2) *
                  CC_WORLD_WATCH_SUBTICKS);
     CC_CHECK(restored.carriage.progress_milli == legacy_progress);
+    CC_CHECK(restored.character_count == CC_MAX_CHARACTERS);
+    CC_CHECK(restored.characters[0].id == first_character_id);
+    CC_CHECK(strcmp(restored.characters[0].name,
+                    first_character_name) == 0);
+    for (int32_t i = 0; i < restored.character_count; ++i) {
+        CC_CHECK(restored.characters[i].birth_day <= restored.current_day);
+        CC_CHECK(restored.characters[i].death_day > restored.current_day);
+        CC_CHECK(restored.characters[i].generation == 0);
+    }
     CC_CHECK(CcSimValidate(&restored, error, error_capacity));
     RemoveDatabase(path);
 }
@@ -1612,6 +1694,51 @@ static void CheckJourneyStopPersistence(char *error, size_t error_capacity)
     CC_CHECK(restored.journey.active);
     CC_CHECK(restored.journey.phase == CC_JOURNEY_PHASE_RESTING);
     CC_CHECK(CcSimJourneyStop(&restored) == CC_JOURNEY_STOP_MIDDAY);
+    CC_CHECK(CcSimValidate(&restored, error, error_capacity));
+    RemoveDatabase(path);
+}
+
+static void CheckLegacyLifecycleJournalCompatibility(
+    uint32_t schema_version, char *error, size_t error_capacity)
+{
+    char path[64];
+    (void)snprintf(path, sizeof(path),
+                   "persistence-legacy-lifecycle-v%u-test.ccsave",
+                   schema_version);
+    RemoveDatabase(path);
+    CcSim legacy;
+    CcSimInit(&legacy, UINT32_C(0x11fec000) ^ schema_version);
+    legacy.schema_version = schema_version;
+    legacy.generator_version = 20U;
+    ClearLegacyCharacterLifecycles(&legacy);
+    CcId first_character_id = legacy.characters[0].id;
+    uint64_t first_unused_serial = legacy.next_entity_serial;
+
+    CcSim suffix = legacy;
+    for (int32_t i = 0; i < suffix.character_count; ++i) {
+        suffix.characters[i].death_day = CC_SIM_MAX_DAY;
+    }
+    CcSimAdvanceDays(&suffix, 1);
+    ClearLegacyCharacterLifecycles(&suffix);
+    CC_CHECK(suffix.characters[0].id == first_character_id);
+    CC_CHECK(suffix.next_entity_serial == first_unused_serial);
+
+    CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
+    AddLegacyDayJournalSuffix(path, &legacy, &suffix,
+                              schema_version, 20U);
+
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.generator_version == CC_GENERATOR_VERSION);
+    CC_CHECK(restored.current_day == suffix.current_day);
+    CC_CHECK(restored.characters[0].id == first_character_id);
+    CC_CHECK(restored.next_entity_serial == first_unused_serial);
+    CC_CHECK(restored.character_births == 0);
+    CC_CHECK(restored.character_deaths == 0);
+    for (int32_t i = 0; i < restored.character_count; ++i) {
+        CC_CHECK(restored.characters[i].death_day > restored.current_day);
+    }
     CC_CHECK(CcSimValidate(&restored, error, error_capacity));
     RemoveDatabase(path);
 }
@@ -1670,6 +1797,8 @@ int main(void)
     CheckSchema23Compatibility(error, sizeof(error));
     CheckSchema24Compatibility(error, sizeof(error));
     CheckJourneyStopPersistence(error, sizeof(error));
+    CheckLegacyLifecycleJournalCompatibility(24U, error, sizeof(error));
+    CheckLegacyLifecycleJournalCompatibility(25U, error, sizeof(error));
     CheckDiplomacyPersistence(error, sizeof(error));
     CheckJournalRecovery(error, sizeof(error));
     CheckJournalCheckpointAndTamper(error, sizeof(error));

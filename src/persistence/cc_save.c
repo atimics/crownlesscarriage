@@ -402,6 +402,30 @@ static bool EnsureSocialColumns(sqlite3 *database,
             error, error_capacity);
 }
 
+static bool EnsureCharacterLifecycleColumns(sqlite3 *database,
+                                            char *error,
+                                            size_t error_capacity)
+{
+    return EnsureColumn(database, "npc_character", "ancestor_id",
+            "ALTER TABLE npc_character ADD COLUMN ancestor_id INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "npc_character", "birth_day",
+            "ALTER TABLE npc_character ADD COLUMN birth_day INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "npc_character", "death_day",
+            "ALTER TABLE npc_character ADD COLUMN death_day INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "npc_character", "generation",
+            "ALTER TABLE npc_character ADD COLUMN generation INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "meta", "character_births",
+            "ALTER TABLE meta ADD COLUMN character_births INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "meta", "character_deaths",
+            "ALTER TABLE meta ADD COLUMN character_deaths INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity);
+}
+
 static bool Prepare(sqlite3 *database, const char *sql, sqlite3_stmt **statement,
                     char *error, size_t error_capacity)
 {
@@ -979,7 +1003,11 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " stress INTEGER NOT NULL, courage INTEGER NOT NULL,"
         " memory_count INTEGER NOT NULL, memory_write_index INTEGER NOT NULL,"
         " knowledge_count INTEGER NOT NULL DEFAULT 0,"
-        " knowledge_write_index INTEGER NOT NULL DEFAULT 0);"
+        " knowledge_write_index INTEGER NOT NULL DEFAULT 0,"
+        " ancestor_id INTEGER NOT NULL DEFAULT 0,"
+        " birth_day INTEGER NOT NULL DEFAULT 0,"
+        " death_day INTEGER NOT NULL DEFAULT 0,"
+        " generation INTEGER NOT NULL DEFAULT 0);"
         "CREATE TABLE IF NOT EXISTS character_memory ("
         " character_slot INTEGER NOT NULL, memory_slot INTEGER NOT NULL,"
         " kind INTEGER NOT NULL, subject_id INTEGER NOT NULL,"
@@ -1151,7 +1179,8 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
            Execute(database, underroad_schema, error, error_capacity) &&
            EnsureJourneyColumns(database, error, error_capacity) &&
            EnsureSocialColumns(database, error, error_capacity) &&
-           EnsureJournalMetaColumns(database, error, error_capacity);
+           EnsureJournalMetaColumns(database, error, error_capacity) &&
+           EnsureCharacterLifecycleColumns(database, error, error_capacity);
 }
 
 static bool SaveMeta(sqlite3 *database, const CcSim *sim,
@@ -1166,8 +1195,9 @@ static bool SaveMeta(sqlite3 *database, const CcSim *sim,
         "bandit_count,monster_count,dungeon_count,event_count,"
         "event_write_index,state_hash,journal_generation,journal_cursor,"
         "iron_ledger_reserve,archive_scribes,archive_lore_stored,"
-        "archive_lore_lost_total,archive_last_recorded_day,archive_lore_ceiling) "
-        "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);";
+        "archive_lore_lost_total,archive_last_recorded_day,archive_lore_ceiling,"
+        "character_births,character_deaths) "
+        "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);";
     if (!Prepare(database, sql, &statement, error, error_capacity)) return false;
     char hash[24];
     (void)snprintf(hash, sizeof(hash), "%016" PRIx64, CcSimHash(sim));
@@ -1196,6 +1226,8 @@ static bool SaveMeta(sqlite3 *database, const CcSim *sim,
     BindInt(statement, 23, sim->archives.lore_lost_total);
     BindInt(statement, 24, sim->archives.last_recorded_day);
     BindInt(statement, 25, sim->archives.lore_ceiling);
+    BindInt(statement, 26, sim->character_births);
+    BindInt(statement, 27, sim->character_deaths);
     bool result = StepDone(database, statement, error, error_capacity);
     sqlite3_finalize(statement);
     return result;
@@ -2221,7 +2253,8 @@ static bool SaveCharacters(sqlite3 *database, const CcSim *sim,
                  "(slot,id,name,home_settlement_id,current_settlement_id,faction_id,"
                  "role,goal,activity,appearance_seed,player_disposition,stress,courage,"
                  "memory_count,memory_write_index,knowledge_count,"
-                 "knowledge_write_index) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
+                 "knowledge_write_index,ancestor_id,birth_day,death_day,generation) "
+                 "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
                  &character_statement, error, error_capacity) ||
         !Prepare(database,
                  "INSERT INTO character_memory VALUES(?,?,?,?,?,?);",
@@ -2265,6 +2298,10 @@ static bool SaveCharacters(sqlite3 *database, const CcSim *sim,
         BindInt(character_statement, column++, character->memory_write_index);
         BindInt(character_statement, column++, character->knowledge_count);
         BindInt(character_statement, column++, character->knowledge_write_index);
+        BindId(character_statement, column++, character->ancestor_id);
+        BindInt(character_statement, column++, character->birth_day);
+        BindInt(character_statement, column++, character->death_day);
+        BindInt(character_statement, column++, character->generation);
         if (!StepDone(database, character_statement, error, error_capacity) ||
             !ResetStatement(database, character_statement,
                             error, error_capacity)) goto failed;
@@ -2528,6 +2565,7 @@ static bool SaveSnapshot(sqlite3 *database, const CcSim *sim,
         EnsureJourneyColumns(database, error, error_capacity) &&
         EnsureLegendColumns(database, error, error_capacity) &&
         EnsureSocialColumns(database, error, error_capacity) &&
+        EnsureCharacterLifecycleColumns(database, error, error_capacity) &&
         Execute(database, "BEGIN IMMEDIATE;", error, error_capacity);
     if (ok) {
         ok = SaveSnapshotContents(database, sim, journal_generation,
@@ -2572,7 +2610,8 @@ static bool ReadMeta(sqlite3 *database, CcSim *sim, uint64_t *expected_hash,
         "shipment_count,bandit_count,monster_count,dungeon_count,event_count,"
         "event_write_index,state_hash,journal_generation,journal_cursor,"
         "iron_ledger_reserve,archive_scribes,archive_lore_stored,"
-        "archive_lore_lost_total,archive_last_recorded_day,archive_lore_ceiling "
+        "archive_lore_lost_total,archive_last_recorded_day,archive_lore_ceiling,"
+        "character_births,character_deaths "
         "FROM meta WHERE id=1;", &statement, error, error_capacity)) return false;
     if (sqlite3_step(statement) != SQLITE_ROW) {
         SetError(error, error_capacity, "Campaign metadata is missing.");
@@ -2608,6 +2647,8 @@ static bool ReadMeta(sqlite3 *database, CcSim *sim, uint64_t *expected_hash,
     sim->archives.lore_lost_total = sqlite3_column_int(statement, 22);
     sim->archives.last_recorded_day = sqlite3_column_int(statement, 23);
     sim->archives.lore_ceiling = sqlite3_column_int(statement, 24);
+    sim->character_births = sqlite3_column_int(statement, 25);
+    sim->character_deaths = sqlite3_column_int(statement, 26);
     sqlite3_finalize(statement);
     return true;
 }
@@ -4044,6 +4085,11 @@ static bool ReadCharacters(sqlite3 *database, CcSim *sim,
             character->knowledge_count = sqlite3_column_int(statement, 15);
             character->knowledge_write_index = sqlite3_column_int(statement, 16);
         }
+        character->ancestor_id =
+            (CcId)sqlite3_column_int64(statement, 17);
+        character->birth_day = sqlite3_column_int(statement, 18);
+        character->death_day = sqlite3_column_int(statement, 19);
+        character->generation = sqlite3_column_int(statement, 20);
         rows += 1;
     }
     sqlite3_finalize(statement);
@@ -4608,6 +4654,7 @@ static void FinishLegacyRuntimeUpgrade(CcSim *sim)
     if (!HasQuestArchitecture(sim)) CcSimUpgradeQuestArchitecture(sim);
     CcSimInitializePlayerRouteKnowledge(sim);
     UpgradeLegacyJourneyRhythm(sim);
+    CcSimUpgradeCharacterLifecycles(sim);
     sim->schema_version = CC_SIM_SCHEMA_VERSION;
     sim->generator_version = CC_GENERATOR_VERSION;
 }
@@ -4626,7 +4673,8 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
         legacy_version != 17U && legacy_version != 18U &&
         legacy_version != 19U && legacy_version != 20U &&
         legacy_version != 21U && legacy_version != 22U &&
-        legacy_version != 23U && legacy_version != 24U) return true;
+        legacy_version != 23U && legacy_version != 24U &&
+        legacy_version != 25U) return true;
     if (legacy_version == 17U) {
         for (int32_t i = 0; i < CC_MAX_EVENTS; ++i) {
             if ((int32_t)sim->events[i].kind ==
@@ -4662,10 +4710,18 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
             }
         }
     }
-    if (legacy_version == 24U || legacy_version == 23U) {
-        UpgradeLegacyJourneyRhythm(sim);
+    if (legacy_version == 25U) {
+        CcSimUpgradeCharacterLifecycles(sim);
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         sim->generator_version = CC_GENERATOR_VERSION;
+        return true;
+    }
+    if (legacy_version == 24U) {
+        FinishLegacyRuntimeUpgrade(sim);
+        return true;
+    }
+    if (legacy_version == 23U) {
+        FinishLegacyRuntimeUpgrade(sim);
         return true;
     }
     if (legacy_version == 22U) {
@@ -4977,6 +5033,8 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
               EnsureJourneyColumns(database, error, error_capacity) &&
               EnsureLegendColumns(database, error, error_capacity) &&
               EnsureSocialColumns(database, error, error_capacity) &&
+              EnsureCharacterLifecycleColumns(database,
+                                              error, error_capacity) &&
               ReadMeta(database, sim, &expected_hash,
                        &journal_generation, &journal_cursor,
                        error, error_capacity) &&

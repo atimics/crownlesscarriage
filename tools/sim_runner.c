@@ -18,6 +18,7 @@ static void PrintSummary(const CcSim *sim, bool detail)
     int32_t alliances = 0;
     int32_t active_couriers = 0;
     int32_t abandoned_settlements = 0;
+    int32_t maximum_generation = 0;
     CcMoney debt = 0;
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         if (CcSettlementIsAbandoned(&sim->settlements[i])) {
@@ -52,6 +53,11 @@ static void PrintSummary(const CcSim *sim, bool detail)
             status == CC_COURIER_TRAVELLING ||
             status == CC_COURIER_WITH_PLAYER) active_couriers += 1;
     }
+    for (int32_t i = 0; i < sim->character_count; ++i) {
+        if (sim->characters[i].generation > maximum_generation) {
+            maximum_generation = sim->characters[i].generation;
+        }
+    }
     (void)printf("day=%d hash=%016" PRIx64
                  " average_hunger=%d maximum_hunger=%d shipments=%d events=%d"
                  " open_routes=%d/%d legitimacy=%d live_situations=%d"
@@ -66,7 +72,8 @@ static void PrintSummary(const CcSim *sim, bool detail)
                  " memory=%d territory=%d shadow=%d eggs=%d hunts=%d"
                  " broods=%d whelps=%d afterdeath=%d ruins=%d climate=%d"
                  " campaign_experience=%d"
-                 " lore=%d lore_lost=%d scribes=%d\n",
+                 " lore=%d lore_lost=%d scribes=%d"
+                 " people=%d births=%d deaths=%d generation=%d\n",
                  sim->current_day, CcSimHash(sim),
                  total_hunger / sim->settlement_count, maximum_hunger,
                  travelling, sim->event_count,
@@ -100,7 +107,9 @@ static void PrintSummary(const CcSim *sim, bool detail)
                  CcDragonCampaignExperience(sim),
                  sim->archives.lore_stored,
                  sim->archives.lore_lost_total,
-                 sim->archives.scribes);
+                 sim->archives.scribes,
+                 sim->character_count, sim->character_births,
+                 sim->character_deaths, maximum_generation);
     if (detail) {
         for (int32_t i = 0; i < sim->settlement_count; ++i) {
             const CcSettlement *place = &sim->settlements[i];
@@ -117,6 +126,15 @@ static void PrintSummary(const CcSim *sim, bool detail)
                          place->price[CC_GOOD_TOOLS],
                          place->price[CC_GOOD_WEAPONS],
                          place->price[CC_GOOD_GOLD], place->price[CC_GOOD_GEMS]);
+        }
+        for (int32_t i = 0; i < sim->character_count; ++i) {
+            const CcCharacter *person = &sim->characters[i];
+            const CcSettlement *home = CcSimSettlement(
+                sim, person->home_settlement_id);
+            (void)printf("  %-22s age=%3d generation=%2d home=%s\n",
+                         person->name, CcCharacterAgeYears(sim, person),
+                         person->generation,
+                         home != NULL ? home->name : "unknown");
         }
     }
 }

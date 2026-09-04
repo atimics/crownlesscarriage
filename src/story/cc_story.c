@@ -515,6 +515,40 @@ bool CcStoryCharacterText(
     }
     const CcStoryLine *line = CcStoryCharacterLine(
         sim, situation, character);
+    if (line == NULL && situation->kind ==
+        CC_SITUATION_MONSTER_EXPEDITION) {
+        const CcCharacter *witness = CcSimCharacter(
+            sim, situation->witness_character_id);
+        const CcCharacter *participant = CcSimSituationAffectedCharacter(
+            sim, situation);
+        const char *witness_name = witness != NULL ?
+            witness->name : "a mine witness";
+        const char *participant_name = participant != NULL ?
+            participant->name : "a miner";
+        if (role == CC_STORY_SPEAKER_AFFECTED &&
+            beat == CC_STORY_BEAT_LEAD) {
+            (void)snprintf(text, text_capacity,
+                           "%s fled the west gallery. Help me learn why.",
+                           witness_name);
+            return true;
+        }
+        if (role == CC_STORY_SPEAKER_WITNESS) {
+            (void)snprintf(text, text_capacity,
+                           "I heard stone moving behind the old wall. Tell %s.",
+                           participant_name);
+            return true;
+        }
+        if (role == CC_STORY_SPEAKER_AFFECTED) {
+            (void)snprintf(text, text_capacity,
+                           "The mine official must hear this. I trust your choice.");
+            return true;
+        }
+        if (role == CC_STORY_SPEAKER_SPONSOR) {
+            (void)snprintf(text, text_capacity,
+                           "Take tools into the west gallery and bring our people home.");
+            return true;
+        }
+    }
     if (line == NULL) return false;
     (void)snprintf(text, text_capacity, "%s", line->text);
     return true;
