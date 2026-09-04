@@ -1363,6 +1363,21 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
 
     const CcHumanoidSkinBonePose *head_bone =
         &skin->bones[CC_HUMANOID_SKIN_HEAD];
+    if (featured_hero || appearance->role == CC_NPC_ROLE_GUARD) {
+        const CcHumanoidSkinBone hands[] = {
+            CC_HUMANOID_SKIN_HAND_LEFT, CC_HUMANOID_SKIN_HAND_RIGHT,
+        };
+        for (int32_t side = 0; side < 2; ++side) {
+            const CcHumanoidSkinBonePose *hand = &skin->bones[hands[side]];
+            Vector3 center = Vector3Lerp(FromLimbVector(hand->head),
+                                         FromLimbVector(hand->tail), 0.5f);
+            drew = DrawNpcDynamicModule(NPC_DYNAMIC_HAND,
+                NpcModuleTransform(center, FromLimbVector(hand->right),
+                    FromLimbVector(hand->up), FromLimbVector(hand->forward),
+                    (Vector3){0.18f * mass, 0.22f, 0.16f * mass}),
+                appearance->skin) && drew;
+        }
+    }
     Vector3 head = FromLimbVector(
         skin->sockets[CC_HUMANOID_SOCKET_HEAD].position);
     Vector3 head_right = FromLimbVector(head_bone->right);
@@ -1438,7 +1453,7 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
                                    FromLimbVector(shoulder->right),
                                    FromLimbVector(shoulder->up),
                                    FromLimbVector(shoulder->forward),
-                                   (Vector3){(featured_hero ? 0.15f : 0.22f) *
+                                   (Vector3){(featured_hero ? 0.17f : 0.24f) *
                                                  mass * shoulder_scale,
                                              (featured_hero ? 0.15f : 0.20f) *
                                                  shoulder_scale,

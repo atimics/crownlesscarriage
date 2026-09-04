@@ -104,13 +104,13 @@ static void BuildAdventureTargets(const CcSim *sim, LocalState *local,
             for (int32_t j = 0; j < local->interactions.count; ++j) {
                 const CcInteractionTarget *other = &local->interactions.targets[j];
                 if (other->key.kind == CC_INTERACTION_PERSON &&
-                    (other->key.object == (people[i].seed | 0x80000000U) ||
+                    (other->key.object == (UINT64_C(0x100000000) | (uint64_t)people[i].seed) ||
                     GridDistance((Vector2){other->x, other->z},
                         (Vector2){people[i].position.x, people[i].position.z}) < 0.65f)) duplicate = true;
             }
             if (duplicate || people[i].role == CC_NPC_ROLE_RAIDER) continue;
             (void)AdventureTarget(local, sim, CC_INTERACTION_PERSON,
-                people[i].seed | 0x80000000U, AdventureRoleName(people[i].role), "Talk",
+                UINT64_C(0x100000000) | (uint64_t)people[i].seed, AdventureRoleName(people[i].role), "Talk",
                 (Vector3){people[i].position.x, 0, people[i].position.z},
                 0.9f, 2.0f, 0.7f,
                 (Vector2){people[i].position.x, people[i].position.z}, 1.8f);

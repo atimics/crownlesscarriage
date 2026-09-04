@@ -70,8 +70,8 @@ uint32_t CcSoundscapeStep(CcSoundscape *state, CcSoundFrame frame, float dt)
 size_t CcSoundSampleCount(CcSoundCue cue)
 {
     static const float seconds[CC_SOUND_COUNT] = {
-        0.16f, 0.18f, 0.19f, 0.30f, 0.23f, 0.50f, 0.18f,
-        0.26f, 0.24f, 0.22f, 0.36f, 0.20f, 0.42f, 0.65f
+        0.13f, 0.15f, 0.15f, 0.24f, 0.20f, 0.38f, 0.16f,
+        0.21f, 0.18f, 0.18f, 0.28f, 0.14f, 0.32f, 0.48f
     };
     if (cue < 0 || cue >= CC_SOUND_COUNT) return 0U;
     return (size_t)(seconds[cue] * (float)CC_SOUND_SAMPLE_RATE);
@@ -88,6 +88,16 @@ static float Ring(float time, float frequency, float decay)
     return sinf(TAU * frequency * time) * expf(-decay * time);
 }
 
+static float ChipNote(float time, float frequency, float decay)
+{
+    if (time <= 0.0f) return 0.0f;
+    float phase = fmodf(time * frequency, 1.0f);
+    float triangle = 1.0f - 4.0f * fabsf(phase - 0.5f);
+    float pulse = phase < 0.25f ? 0.75f : -0.25f;
+    return (0.82f * triangle + 0.18f * pulse) * expf(-decay * time) *
+           fminf(1.0f, time / 0.003f);
+}
+
 bool CcSoundSynthesize(CcSoundCue cue, uint32_t variation,
                        int16_t *samples, size_t capacity)
 {
@@ -96,6 +106,7 @@ bool CcSoundSynthesize(CcSoundCue cue, uint32_t variation,
     uint32_t seed = UINT32_C(0x7193ac51) ^ variation ^ (uint32_t)cue;
     float pitch = 0.94f + (float)(variation % 13U) * 0.01f;
     float low = 0.0f;
+    float held = 0.0f;
     for (size_t i = 0; i < count; ++i) {
         float time = (float)i / (float)CC_SOUND_SAMPLE_RATE;
         float noise = Noise(&seed);
@@ -126,8 +137,12 @@ bool CcSoundSynthesize(CcSoundCue cue, uint32_t variation,
             case CC_SOUND_WHEEL:
                 sample = 0.23f * low * (0.6f + 0.4f * sinf(TAU * 19.0f * time)) +
                          0.10f * sinf(TAU * (88.0f * time + 8.0f * time * time)) *
-                         sinf(3.14159265f * time / 0.50f); break;
+                         sinf(3.14159265f * (float)i / (float)count); break;
             case CC_SOUND_JUMP:
+                sample = 0.22f * ChipNote(time, 220.0f * pitch, 42.0f) +
+                         0.19f * ChipNote(time - 0.04f, 293.66f * pitch, 42.0f) +
+                         0.16f * ChipNote(time - 0.08f, 392.0f * pitch, 42.0f) +
+                         0.20f * low * expf(-24.0f * time); break;
             case CC_SOUND_SWING:
             case CC_SOUND_PAGE:
                 sample = (cue == CC_SOUND_PAGE ? 0.28f * noise : 0.68f * low) *
@@ -143,15 +158,17 @@ bool CcSoundSynthesize(CcSoundCue cue, uint32_t variation,
                          0.21f * Ring(time, 1423.0f * pitch, 24.0f) +
                          0.20f * noise * expf(-95.0f * time); break;
             case CC_SOUND_COINS: {
-                float second = fmaxf(0.0f, time - 0.09f);
-                sample = 0.27f * Ring(time, 1870.0f * pitch, 25.0f) +
-                         0.22f * Ring(second, 2460.0f * pitch, 21.0f); break;
+                sample = 0.27f * ChipNote(time, 1568.0f * pitch, 25.0f) +
+                         0.22f * ChipNote(time - 0.07f, 2093.0f * pitch, 25.0f); break;
             }
             case CC_SOUND_PROMISE:
-                sample = 0.27f * Ring(time, 392.0f, 7.0f) +
-                         0.19f * Ring(fmaxf(0.0f, time - 0.12f), 587.33f, 8.0f); break;
+                sample = 0.27f * ChipNote(time, 392.0f, 9.0f) +
+                         0.19f * ChipNote(time - 0.10f, 587.33f, 10.0f); break;
             default: break;
         }
+        /* Mix a quiet 8-bit, 7.35 kHz layer into each material or note. */
+        if (i % 3U == 0U) held = roundf(sample * 127.0f) / 127.0f;
+        sample = 0.65f * sample + 0.35f * held;
         /* A short fade at both ends keeps each cue smooth at its boundary. */
         float fade = fminf(1.0f, (float)i / 44.0f) *
                      fminf(1.0f, (float)(count - 1U - i) / 440.0f);

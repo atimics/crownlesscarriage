@@ -8,7 +8,15 @@
     "skinned_objects": 1,
     "strategy": "joined skin with rigid body weights and quadratic hair tip blends"
   },
-  "paint_contract": "COLOR_0 stores material index, authored value, and fold strength",
+  "paint_contract": "COLOR_0:palette,value,fold,surface; surface=(id+0.5)/8",
+  "surface_classes": [
+    "skin",
+    "cloth",
+    "leather",
+    "hair",
+    "metal",
+    "eye"
+  ],
   "hair_contract": {
     "scalp_cores": 1,
     "opaque_clumps": 6,

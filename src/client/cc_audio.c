@@ -93,6 +93,12 @@ void CcAudioSetFocused(bool focused)
     audio.focused = focused;
 }
 
+float CcAudioMusicGain(void)
+{
+    if (!audio.ready || !audio.focused || audio.mode > 0) return 0.0f;
+    return audio.voice_loaded && IsMusicStreamPlaying(audio.voice) ? 0.36f : 1.0f;
+}
+
 static float CueVolume(CcSoundCue cue)
 {
     float volume = cue <= CC_SOUND_WHEEL ? 0.32f : 0.48f;

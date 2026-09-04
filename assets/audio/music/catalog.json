@@ -1,0 +1,1626 @@
+{
+  "version": 1,
+  "cues": [
+    {
+      "number": 1,
+      "title": "Crownless",
+      "theme": "travel",
+      "secondary": "relief",
+      "region": -1,
+      "combat": false,
+      "place": ""
+    },
+    {
+      "number": 2,
+      "title": "A Horse, a Cart, a Promise",
+      "theme": "travel",
+      "secondary": "town",
+      "region": -1,
+      "combat": false,
+      "place": ""
+    },
+    {
+      "number": 3,
+      "title": "Miles Before Supper",
+      "theme": "travel",
+      "secondary": "none",
+      "region": -1,
+      "combat": false,
+      "place": ""
+    },
+    {
+      "number": 4,
+      "title": "Rain on the Canvas",
+      "theme": "rain",
+      "secondary": "travel",
+      "region": -1,
+      "combat": false,
+      "place": ""
+    },
+    {
+      "number": 5,
+      "title": "The Road After Sunset",
+      "theme": "night",
+      "secondary": "travel",
+      "region": -1,
+      "combat": false,
+      "place": ""
+    },
+    {
+      "number": 6,
+      "title": "Keep the Fire Until Morning",
+      "theme": "camp",
+      "secondary": "night",
+      "region": -1,
+      "combat": false,
+      "place": ""
+    },
+    {
+      "number": 7,
+      "title": "Fields Beyond Thornford",
+      "theme": "travel",
+      "secondary": "farm",
+      "region": 0,
+      "combat": false,
+      "place": ""
+    },
+    {
+      "number": 8,
+      "title": "Thornford - Bread for Tomorrow",
+      "theme": "town",
+      "secondary": "farm",
+      "region": 0,
+      "combat": false,
+      "place": "Thornford"
+    },
+    {
+      "number": 9,
+      "title": "Stag's Mill",
+      "theme": "mill",
+      "secondary": "farm",
+      "region": 0,
+      "combat": false,
+      "place": "Stag's Mill"
+    },
+    {
+      "number": 10,
+      "title": "Last Light on the Granary",
+      "theme": "night",
+      "secondary": "town",
+      "region": 0,
+      "combat": false,
+      "place": ""
+    },
+    {
+      "number": 11,
+      "title": "All Roads to Gloamgate",
+      "theme": "travel",
+      "secondary": "market",
+      "region": 2,
+      "combat": false,
+      "place": ""
+    },
+    {
+      "number": 12,
+      "title": "Gloamgate - Weights and Promises",
+      "theme": "town",
+      "secondary": "market",
+      "region": 2,
+      "combat": false,
+      "place": "Gloamgate"
+    },
+    {
+      "number": 13,
+      "title": "Water, Wheat, and Paper",
+      "theme": "mill",
+      "secondary": "market",
+      "region": 2,
+      "combat": false,
+      "place": ""
+    },
+    {
+      "number": 14,
+      "title": "A Table in Coach Court",
+      "theme": "inn",
+      "secondary": "town",
+      "region": 2,
+      "combat": false,
+      "place": "Coach Court"
+    },
+    {
+      "number": 15,
+      "title": "Along the March Road",
+      "theme": "travel",
+      "secondary": "danger",
+      "region": 3,
+      "combat": false,
+      "place": ""
+    },
+    {
+      "number": 16,
+      "title": "Alderwatch - The Contested Bridge",
+      "theme": "town",
+      "secondary": "bridge",
+      "region": 3,
+      "combat": false,
+      "place": "Alderwatch"
+    },
+    {
+      "number": 17,
+      "title": "Names on the Muster Board",
+      "theme": "town",
+      "secondary": "danger",
+      "region": 3,
+      "combat": false,
+      "place": ""
+    },
+    {
+      "number": 18,
+      "title": "After the Watch",
+      "theme": "night",
+      "secondary": "town",
+      "region": 3,
+      "combat": false,
+      "place": ""
+    },
+    {
+      "number": 19,
+      "title": "Ore Wagons at Dawn",
+      "theme": "travel",
+      "secondary": "mine",
+      "region": 1,
+      "combat": false,
+      "place": ""
+    },
+    {
+      "number": 20,
+      "title": "Silverwick - A Day Below",
+      "theme": "town",
+      "secondary": "mine",
+      "region": 1,
+      "combat": false,
+      "place": "Silverwick"
+    },
+    {
+      "number": 21,
+      "title": "Low Silver Pit",
+      "theme": "mine",
+      "secondary": "danger",
+      "region": 1,
+      "combat": false,
+      "place": "Low Silver Pit"
+    },
+    {
+      "number": 22,
+      "title": "Lamps in the Workers' Windows",
+      "theme": "night",
+      "secondary": "town",
+      "region": 1,
+      "combat": false,
+      "place": ""
+    },
+    {
+      "number": 23,
+      "title": "The Road to Rosespire",
+      "theme": "travel",
+      "secondary": "court",
+      "region": 4,
+      "combat": false,
+      "place": ""
+    },
+    {
+      "number": 24,
+      "title": "Rosespire - Petitions and Petals",
+      "theme": "town",
+      "secondary": "court",
+      "region": 4,
+      "combat": false,
+      "place": "Rosespire"
+    },
+    {
+      "number": 25,
+      "title": "Beneath the Crown Palace",
+      "theme": "court",
+      "secondary": "town",
+      "region": 4,
+      "combat": false,
+      "place": "Crown Palace"
+    },
+    {
+      "number": 26,
+      "title": "Bells of the Rose Cloister",
+      "theme": "cloister",
+      "secondary": "town",
+      "region": 4,
+      "combat": false,
+      "place": "Rose Cloister"
+    },
+    {
+      "number": 27,
+      "title": "The Lantern Road",
+      "theme": "travel",
+      "secondary": "dungeon",
+      "region": 5,
+      "combat": false,
+      "place": ""
+    },
+    {
+      "number": 28,
+      "title": "Hollowbarrow - The Last Warm Window",
+      "theme": "town",
+      "secondary": "dungeon",
+      "region": 5,
+      "combat": false,
+      "place": "Hollowbarrow"
+    },
+    {
+      "number": 29,
+      "title": "Rope, Lamp, and Return Bond",
+      "theme": "mine",
+      "secondary": "dungeon",
+      "region": 5,
+      "combat": false,
+      "place": ""
+    },
+    {
+      "number": 30,
+      "title": "The Delvers' Lodge",
+      "theme": "inn",
+      "secondary": "dungeon",
+      "region": 5,
+      "combat": false,
+      "place": "Delvers' Lodge"
+    },
+    {
+      "number": 31,
+      "title": "Nine Furrows",
+      "theme": "farm",
+      "secondary": "town",
+      "region": -1,
+      "combat": false,
+      "place": "Nine Furrows"
+    },
+    {
+      "number": 32,
+      "title": "Sawdust and Sap",
+      "theme": "wood",
+      "secondary": "travel",
+      "region": -1,
+      "combat": false,
+      "place": ""
+    },
+    {
+      "number": 33,
+      "title": "Fellside Quarry",
+      "theme": "quarry",
+      "secondary": "travel",
+      "region": -1,
+      "combat": false,
+      "place": "Fellside Quarry"
+    },
+    {
+      "number": 34,
+      "title": "Crown Forge",
+      "theme": "forge",
+      "secondary": "town",
+      "region": -1,
+      "combat": false,
+      "place": "Crown Forge"
+    },
+    {
+      "number": 35,
+      "title": "Highroad Bakehouse",
+      "theme": "bakery",
+      "secondary": "relief",
+      "region": -1,
+      "combat": false,
+      "place": "Highroad Bakehouse"
+    },
+    {
+      "number": 36,
+      "title": "Abbey Fold",
+      "theme": "farm",
+      "secondary": "cloister",
+      "region": -1,
+      "combat": false,
+      "place": "Abbey Fold"
+    },
+    {
+      "number": 37,
+      "title": "Ink Beneath Stone",
+      "theme": "archive",
+      "secondary": "court",
+      "region": -1,
+      "combat": false,
+      "place": ""
+    },
+    {
+      "number": 38,
+      "title": "Warmth at the Milepost",
+      "theme": "inn",
+      "secondary": "camp",
+      "region": -1,
+      "combat": false,
+      "place": ""
+    },
+    {
+      "number": 39,
+      "title": "The Lower Silverworks",
+      "theme": "dungeon",
+      "secondary": "mine",
+      "region": -1,
+      "combat": false,
+      "place": "The Lower Silverworks"
+    },
+    {
+      "number": 40,
+      "title": "The Flooded Turntable",
+      "theme": "flood",
+      "secondary": "dungeon",
+      "region": -1,
+      "combat": false,
+      "place": "The Flooded Turntable"
+    },
+    {
+      "number": 41,
+      "title": "Chain Bridge",
+      "theme": "bridge",
+      "secondary": "dungeon",
+      "region": -1,
+      "combat": false,
+      "place": "Chain Bridge"
+    },
+    {
+      "number": 42,
+      "title": "The Hall of Ash Clerks",
+      "theme": "archive",
+      "secondary": "dungeon",
+      "region": -1,
+      "combat": false,
+      "place": "The Hall of Ash Clerks"
+    },
+    {
+      "number": 43,
+      "title": "The Ledger Vault",
+      "theme": "archive",
+      "secondary": "dungeon",
+      "region": -1,
+      "combat": false,
+      "place": "The Ledger Vault"
+    },
+    {
+      "number": 44,
+      "title": "The Stoneback Nursery",
+      "theme": "dungeon",
+      "secondary": "danger",
+      "region": -1,
+      "combat": false,
+      "place": "The Stoneback Nursery"
+    },
+    {
+      "number": 45,
+      "title": "The Old Smuggler Cut",
+      "theme": "dungeon",
+      "secondary": "bandit",
+      "region": -1,
+      "combat": false,
+      "place": "The Old Smuggler Cut"
+    },
+    {
+      "number": 46,
+      "title": "The Cinder Tithe",
+      "theme": "goblin",
+      "secondary": "dungeon",
+      "region": -1,
+      "combat": false,
+      "place": "The Cinder Tithe"
+    },
+    {
+      "number": 47,
+      "title": "A Bargain in Cinder Market",
+      "theme": "goblin",
+      "secondary": "market",
+      "region": -1,
+      "combat": false,
+      "place": "Cinder Market"
+    },
+    {
+      "number": 48,
+      "title": "Red Cap Barracks",
+      "theme": "goblin",
+      "secondary": "danger",
+      "region": -1,
+      "combat": false,
+      "place": "Red Cap Barracks"
+    },
+    {
+      "number": 49,
+      "title": "The Tribute Lift",
+      "theme": "dragon",
+      "secondary": "goblin",
+      "region": -1,
+      "combat": false,
+      "place": "The Tribute Lift"
+    },
+    {
+      "number": 50,
+      "title": "Teeth in the Lamplight",
+      "theme": "combat",
+      "secondary": "dungeon",
+      "region": -1,
+      "combat": true,
+      "place": ""
+    },
+    {
+      "number": 51,
+      "title": "Something Below the Bell Shaft",
+      "theme": "combat",
+      "secondary": "danger",
+      "region": -1,
+      "combat": true,
+      "place": "Bell Shaft"
+    },
+    {
+      "number": 52,
+      "title": "The Hoard Threshold",
+      "theme": "dragon",
+      "secondary": "dungeon",
+      "region": -1,
+      "combat": false,
+      "place": "The Hoard Threshold"
+    },
+    {
+      "number": 53,
+      "title": "Varkesh the Unappeased",
+      "theme": "dragon",
+      "secondary": "combat",
+      "region": -1,
+      "combat": true,
+      "place": ""
+    },
+    {
+      "number": 54,
+      "title": "The Price of Appeasement",
+      "theme": "dragon",
+      "secondary": "court",
+      "region": -1,
+      "combat": false,
+      "place": ""
+    },
+    {
+      "number": 55,
+      "title": "Wings Above the Wheat",
+      "theme": "dragon",
+      "secondary": "combat",
+      "region": -1,
+      "combat": true,
+      "place": ""
+    },
+    {
+      "number": 56,
+      "title": "The Furnace Heart",
+      "theme": "dragon",
+      "secondary": "combat",
+      "region": -1,
+      "combat": true,
+      "place": ""
+    },
+    {
+      "number": 57,
+      "title": "A Crown of Fire",
+      "theme": "dragon",
+      "secondary": "combat",
+      "region": -1,
+      "combat": true,
+      "place": ""
+    },
+    {
+      "number": 58,
+      "title": "The Ditch Parliament",
+      "theme": "bandit",
+      "secondary": "danger",
+      "region": -1,
+      "combat": false,
+      "place": ""
+    },
+    {
+      "number": 59,
+      "title": "Reins Between Your Teeth",
+      "theme": "bandit",
+      "secondary": "combat",
+      "region": -1,
+      "combat": true,
+      "place": ""
+    },
+    {
+      "number": 60,
+      "title": "The Gate Under Siege",
+      "theme": "siege",
+      "secondary": "combat",
+      "region": -1,
+      "combat": true,
+      "place": ""
+    },
+    {
+      "number": 61,
+      "title": "The Last Sack of Seed",
+      "theme": "hunger",
+      "secondary": "town",
+      "region": -1,
+      "combat": false,
+      "place": ""
+    },
+    {
+      "number": 62,
+      "title": "Bread at Last",
+      "theme": "relief",
+      "secondary": "town",
+      "region": -1,
+      "combat": false,
+      "place": ""
+    },
+    {
+      "number": 63,
+      "title": "An Empty Seat on the Carriage",
+      "theme": "loss",
+      "secondary": "none",
+      "region": -1,
+      "combat": false,
+      "place": ""
+    },
+    {
+      "number": 64,
+      "title": "The Road Remembers",
+      "theme": "ending",
+      "secondary": "relief",
+      "region": -1,
+      "combat": false,
+      "place": ""
+    }
+  ],
+  "takes": [
+    {
+      "track": 1,
+      "variant": 1,
+      "stem": "01-01",
+      "duration": 185,
+      "weight": 0.45
+    },
+    {
+      "track": 1,
+      "variant": 2,
+      "stem": "01-02",
+      "duration": 169,
+      "weight": 0.45
+    },
+    {
+      "track": 1,
+      "variant": 3,
+      "stem": "01-03",
+      "duration": 174,
+      "weight": 1.0
+    },
+    {
+      "track": 1,
+      "variant": 4,
+      "stem": "01-04",
+      "duration": 201,
+      "weight": 1.0
+    },
+    {
+      "track": 1,
+      "variant": 5,
+      "stem": "01-05",
+      "duration": 193,
+      "weight": 1.0
+    },
+    {
+      "track": 1,
+      "variant": 6,
+      "stem": "01-06",
+      "duration": 415,
+      "weight": 1.0
+    },
+    {
+      "track": 2,
+      "variant": 1,
+      "stem": "02-01",
+      "duration": 169,
+      "weight": 1.0
+    },
+    {
+      "track": 2,
+      "variant": 2,
+      "stem": "02-02",
+      "duration": 193,
+      "weight": 1.0
+    },
+    {
+      "track": 3,
+      "variant": 1,
+      "stem": "03-01",
+      "duration": 113,
+      "weight": 0.45
+    },
+    {
+      "track": 3,
+      "variant": 2,
+      "stem": "03-02",
+      "duration": 122,
+      "weight": 0.45
+    },
+    {
+      "track": 3,
+      "variant": 3,
+      "stem": "03-03",
+      "duration": 160,
+      "weight": 1.0
+    },
+    {
+      "track": 3,
+      "variant": 4,
+      "stem": "03-04",
+      "duration": 149,
+      "weight": 1.0
+    },
+    {
+      "track": 3,
+      "variant": 5,
+      "stem": "03-05",
+      "duration": 163,
+      "weight": 1.0
+    },
+    {
+      "track": 3,
+      "variant": 6,
+      "stem": "03-06",
+      "duration": 165,
+      "weight": 1.0
+    },
+    {
+      "track": 4,
+      "variant": 1,
+      "stem": "04-01",
+      "duration": 149,
+      "weight": 1.0
+    },
+    {
+      "track": 4,
+      "variant": 2,
+      "stem": "04-02",
+      "duration": 209,
+      "weight": 1.0
+    },
+    {
+      "track": 5,
+      "variant": 1,
+      "stem": "05-01",
+      "duration": 174,
+      "weight": 1.0
+    },
+    {
+      "track": 5,
+      "variant": 2,
+      "stem": "05-02",
+      "duration": 245,
+      "weight": 1.0
+    },
+    {
+      "track": 6,
+      "variant": 1,
+      "stem": "06-01",
+      "duration": 159,
+      "weight": 1.0
+    },
+    {
+      "track": 6,
+      "variant": 2,
+      "stem": "06-02",
+      "duration": 202,
+      "weight": 1.0
+    },
+    {
+      "track": 7,
+      "variant": 1,
+      "stem": "07-01",
+      "duration": 164,
+      "weight": 1.0
+    },
+    {
+      "track": 7,
+      "variant": 2,
+      "stem": "07-02",
+      "duration": 150,
+      "weight": 1.0
+    },
+    {
+      "track": 8,
+      "variant": 1,
+      "stem": "08-01",
+      "duration": 111,
+      "weight": 0.45
+    },
+    {
+      "track": 8,
+      "variant": 2,
+      "stem": "08-02",
+      "duration": 153,
+      "weight": 0.45
+    },
+    {
+      "track": 8,
+      "variant": 3,
+      "stem": "08-03",
+      "duration": 122,
+      "weight": 1.0
+    },
+    {
+      "track": 8,
+      "variant": 4,
+      "stem": "08-04",
+      "duration": 169,
+      "weight": 1.0
+    },
+    {
+      "track": 8,
+      "variant": 5,
+      "stem": "08-05",
+      "duration": 154,
+      "weight": 1.0
+    },
+    {
+      "track": 8,
+      "variant": 6,
+      "stem": "08-06",
+      "duration": 166,
+      "weight": 1.0
+    },
+    {
+      "track": 9,
+      "variant": 1,
+      "stem": "09-01",
+      "duration": 165,
+      "weight": 1.0
+    },
+    {
+      "track": 9,
+      "variant": 2,
+      "stem": "09-02",
+      "duration": 167,
+      "weight": 1.0
+    },
+    {
+      "track": 10,
+      "variant": 1,
+      "stem": "10-01",
+      "duration": 174,
+      "weight": 1.0
+    },
+    {
+      "track": 10,
+      "variant": 2,
+      "stem": "10-02",
+      "duration": 149,
+      "weight": 1.0
+    },
+    {
+      "track": 11,
+      "variant": 1,
+      "stem": "11-01",
+      "duration": 182,
+      "weight": 1.0
+    },
+    {
+      "track": 11,
+      "variant": 2,
+      "stem": "11-02",
+      "duration": 208,
+      "weight": 1.0
+    },
+    {
+      "track": 12,
+      "variant": 1,
+      "stem": "12-01",
+      "duration": 181,
+      "weight": 0.45
+    },
+    {
+      "track": 12,
+      "variant": 2,
+      "stem": "12-02",
+      "duration": 173,
+      "weight": 0.45
+    },
+    {
+      "track": 12,
+      "variant": 3,
+      "stem": "12-03",
+      "duration": 159,
+      "weight": 1.0
+    },
+    {
+      "track": 12,
+      "variant": 4,
+      "stem": "12-04",
+      "duration": 194,
+      "weight": 1.0
+    },
+    {
+      "track": 12,
+      "variant": 5,
+      "stem": "12-05",
+      "duration": 158,
+      "weight": 1.0
+    },
+    {
+      "track": 12,
+      "variant": 6,
+      "stem": "12-06",
+      "duration": 137,
+      "weight": 1.0
+    },
+    {
+      "track": 13,
+      "variant": 1,
+      "stem": "13-01",
+      "duration": 136,
+      "weight": 1.0
+    },
+    {
+      "track": 13,
+      "variant": 2,
+      "stem": "13-02",
+      "duration": 210,
+      "weight": 1.0
+    },
+    {
+      "track": 14,
+      "variant": 1,
+      "stem": "14-01",
+      "duration": 182,
+      "weight": 1.0
+    },
+    {
+      "track": 14,
+      "variant": 2,
+      "stem": "14-02",
+      "duration": 177,
+      "weight": 1.0
+    },
+    {
+      "track": 15,
+      "variant": 1,
+      "stem": "15-01",
+      "duration": 258,
+      "weight": 1.0
+    },
+    {
+      "track": 15,
+      "variant": 2,
+      "stem": "15-02",
+      "duration": 239,
+      "weight": 1.0
+    },
+    {
+      "track": 16,
+      "variant": 1,
+      "stem": "16-01",
+      "duration": 193,
+      "weight": 0.45
+    },
+    {
+      "track": 16,
+      "variant": 2,
+      "stem": "16-02",
+      "duration": 179,
+      "weight": 0.45
+    },
+    {
+      "track": 16,
+      "variant": 3,
+      "stem": "16-03",
+      "duration": 194,
+      "weight": 1.0
+    },
+    {
+      "track": 16,
+      "variant": 4,
+      "stem": "16-04",
+      "duration": 189,
+      "weight": 1.0
+    },
+    {
+      "track": 16,
+      "variant": 5,
+      "stem": "16-05",
+      "duration": 175,
+      "weight": 1.0
+    },
+    {
+      "track": 16,
+      "variant": 6,
+      "stem": "16-06",
+      "duration": 175,
+      "weight": 1.0
+    },
+    {
+      "track": 16,
+      "variant": 7,
+      "stem": "16-07",
+      "duration": 184,
+      "weight": 1.0
+    },
+    {
+      "track": 17,
+      "variant": 1,
+      "stem": "17-01",
+      "duration": 170,
+      "weight": 1.0
+    },
+    {
+      "track": 17,
+      "variant": 2,
+      "stem": "17-02",
+      "duration": 124,
+      "weight": 1.0
+    },
+    {
+      "track": 18,
+      "variant": 1,
+      "stem": "18-01",
+      "duration": 194,
+      "weight": 1.0
+    },
+    {
+      "track": 18,
+      "variant": 2,
+      "stem": "18-02",
+      "duration": 194,
+      "weight": 1.0
+    },
+    {
+      "track": 19,
+      "variant": 1,
+      "stem": "19-01",
+      "duration": 210,
+      "weight": 1.0
+    },
+    {
+      "track": 19,
+      "variant": 2,
+      "stem": "19-02",
+      "duration": 219,
+      "weight": 1.0
+    },
+    {
+      "track": 20,
+      "variant": 1,
+      "stem": "20-01",
+      "duration": 159,
+      "weight": 1.0
+    },
+    {
+      "track": 20,
+      "variant": 2,
+      "stem": "20-02",
+      "duration": 203,
+      "weight": 1.0
+    },
+    {
+      "track": 21,
+      "variant": 1,
+      "stem": "21-01",
+      "duration": 213,
+      "weight": 1.0
+    },
+    {
+      "track": 21,
+      "variant": 2,
+      "stem": "21-02",
+      "duration": 174,
+      "weight": 1.0
+    },
+    {
+      "track": 22,
+      "variant": 1,
+      "stem": "22-01",
+      "duration": 167,
+      "weight": 1.0
+    },
+    {
+      "track": 22,
+      "variant": 2,
+      "stem": "22-02",
+      "duration": 224,
+      "weight": 1.0
+    },
+    {
+      "track": 23,
+      "variant": 1,
+      "stem": "23-01",
+      "duration": 199,
+      "weight": 1.0
+    },
+    {
+      "track": 23,
+      "variant": 2,
+      "stem": "23-02",
+      "duration": 253,
+      "weight": 1.0
+    },
+    {
+      "track": 24,
+      "variant": 1,
+      "stem": "24-01",
+      "duration": 200,
+      "weight": 1.0
+    },
+    {
+      "track": 24,
+      "variant": 2,
+      "stem": "24-02",
+      "duration": 208,
+      "weight": 1.0
+    },
+    {
+      "track": 25,
+      "variant": 1,
+      "stem": "25-01",
+      "duration": 191,
+      "weight": 1.0
+    },
+    {
+      "track": 25,
+      "variant": 2,
+      "stem": "25-02",
+      "duration": 479,
+      "weight": 1.0
+    },
+    {
+      "track": 26,
+      "variant": 1,
+      "stem": "26-01",
+      "duration": 159,
+      "weight": 1.0
+    },
+    {
+      "track": 26,
+      "variant": 2,
+      "stem": "26-02",
+      "duration": 163,
+      "weight": 1.0
+    },
+    {
+      "track": 27,
+      "variant": 1,
+      "stem": "27-01",
+      "duration": 203,
+      "weight": 1.0
+    },
+    {
+      "track": 27,
+      "variant": 2,
+      "stem": "27-02",
+      "duration": 183,
+      "weight": 1.0
+    },
+    {
+      "track": 28,
+      "variant": 1,
+      "stem": "28-01",
+      "duration": 215,
+      "weight": 1.0
+    },
+    {
+      "track": 28,
+      "variant": 2,
+      "stem": "28-02",
+      "duration": 193,
+      "weight": 1.0
+    },
+    {
+      "track": 29,
+      "variant": 1,
+      "stem": "29-01",
+      "duration": 219,
+      "weight": 1.0
+    },
+    {
+      "track": 29,
+      "variant": 2,
+      "stem": "29-02",
+      "duration": 178,
+      "weight": 1.0
+    },
+    {
+      "track": 30,
+      "variant": 1,
+      "stem": "30-01",
+      "duration": 175,
+      "weight": 1.0
+    },
+    {
+      "track": 30,
+      "variant": 2,
+      "stem": "30-02",
+      "duration": 122,
+      "weight": 1.0
+    },
+    {
+      "track": 31,
+      "variant": 1,
+      "stem": "31-01",
+      "duration": 195,
+      "weight": 1.0
+    },
+    {
+      "track": 31,
+      "variant": 2,
+      "stem": "31-02",
+      "duration": 194,
+      "weight": 1.0
+    },
+    {
+      "track": 32,
+      "variant": 1,
+      "stem": "32-01",
+      "duration": 203,
+      "weight": 1.0
+    },
+    {
+      "track": 32,
+      "variant": 2,
+      "stem": "32-02",
+      "duration": 190,
+      "weight": 1.0
+    },
+    {
+      "track": 33,
+      "variant": 1,
+      "stem": "33-01",
+      "duration": 208,
+      "weight": 1.0
+    },
+    {
+      "track": 33,
+      "variant": 2,
+      "stem": "33-02",
+      "duration": 194,
+      "weight": 1.0
+    },
+    {
+      "track": 34,
+      "variant": 1,
+      "stem": "34-01",
+      "duration": 139,
+      "weight": 1.0
+    },
+    {
+      "track": 34,
+      "variant": 2,
+      "stem": "34-02",
+      "duration": 188,
+      "weight": 1.0
+    },
+    {
+      "track": 35,
+      "variant": 1,
+      "stem": "35-01",
+      "duration": 198,
+      "weight": 1.0
+    },
+    {
+      "track": 35,
+      "variant": 2,
+      "stem": "35-02",
+      "duration": 194,
+      "weight": 1.0
+    },
+    {
+      "track": 36,
+      "variant": 1,
+      "stem": "36-01",
+      "duration": 215,
+      "weight": 1.0
+    },
+    {
+      "track": 36,
+      "variant": 2,
+      "stem": "36-02",
+      "duration": 165,
+      "weight": 1.0
+    },
+    {
+      "track": 37,
+      "variant": 1,
+      "stem": "37-01",
+      "duration": 199,
+      "weight": 1.0
+    },
+    {
+      "track": 37,
+      "variant": 2,
+      "stem": "37-02",
+      "duration": 237,
+      "weight": 1.0
+    },
+    {
+      "track": 38,
+      "variant": 1,
+      "stem": "38-01",
+      "duration": 179,
+      "weight": 1.0
+    },
+    {
+      "track": 38,
+      "variant": 2,
+      "stem": "38-02",
+      "duration": 197,
+      "weight": 1.0
+    },
+    {
+      "track": 39,
+      "variant": 1,
+      "stem": "39-01",
+      "duration": 184,
+      "weight": 1.0
+    },
+    {
+      "track": 39,
+      "variant": 2,
+      "stem": "39-02",
+      "duration": 145,
+      "weight": 1.0
+    },
+    {
+      "track": 40,
+      "variant": 1,
+      "stem": "40-01",
+      "duration": 229,
+      "weight": 1.0
+    },
+    {
+      "track": 40,
+      "variant": 2,
+      "stem": "40-02",
+      "duration": 189,
+      "weight": 1.0
+    },
+    {
+      "track": 41,
+      "variant": 1,
+      "stem": "41-01",
+      "duration": 175,
+      "weight": 1.0
+    },
+    {
+      "track": 41,
+      "variant": 2,
+      "stem": "41-02",
+      "duration": 137,
+      "weight": 1.0
+    },
+    {
+      "track": 42,
+      "variant": 1,
+      "stem": "42-01",
+      "duration": 230,
+      "weight": 1.0
+    },
+    {
+      "track": 42,
+      "variant": 2,
+      "stem": "42-02",
+      "duration": 185,
+      "weight": 1.0
+    },
+    {
+      "track": 43,
+      "variant": 1,
+      "stem": "43-01",
+      "duration": 158,
+      "weight": 1.0
+    },
+    {
+      "track": 43,
+      "variant": 2,
+      "stem": "43-02",
+      "duration": 180,
+      "weight": 1.0
+    },
+    {
+      "track": 44,
+      "variant": 1,
+      "stem": "44-01",
+      "duration": 158,
+      "weight": 1.0
+    },
+    {
+      "track": 44,
+      "variant": 2,
+      "stem": "44-02",
+      "duration": 185,
+      "weight": 1.0
+    },
+    {
+      "track": 45,
+      "variant": 1,
+      "stem": "45-01",
+      "duration": 180,
+      "weight": 1.0
+    },
+    {
+      "track": 45,
+      "variant": 2,
+      "stem": "45-02",
+      "duration": 164,
+      "weight": 1.0
+    },
+    {
+      "track": 46,
+      "variant": 1,
+      "stem": "46-01",
+      "duration": 173,
+      "weight": 1.0
+    },
+    {
+      "track": 46,
+      "variant": 2,
+      "stem": "46-02",
+      "duration": 148,
+      "weight": 1.0
+    },
+    {
+      "track": 47,
+      "variant": 1,
+      "stem": "47-01",
+      "duration": 235,
+      "weight": 1.0
+    },
+    {
+      "track": 47,
+      "variant": 2,
+      "stem": "47-02",
+      "duration": 168,
+      "weight": 1.0
+    },
+    {
+      "track": 48,
+      "variant": 1,
+      "stem": "48-01",
+      "duration": 242,
+      "weight": 1.0
+    },
+    {
+      "track": 48,
+      "variant": 2,
+      "stem": "48-02",
+      "duration": 242,
+      "weight": 1.0
+    },
+    {
+      "track": 49,
+      "variant": 1,
+      "stem": "49-01",
+      "duration": 168,
+      "weight": 1.0
+    },
+    {
+      "track": 49,
+      "variant": 2,
+      "stem": "49-02",
+      "duration": 164,
+      "weight": 1.0
+    },
+    {
+      "track": 50,
+      "variant": 1,
+      "stem": "50-01",
+      "duration": 190,
+      "weight": 1.0
+    },
+    {
+      "track": 50,
+      "variant": 2,
+      "stem": "50-02",
+      "duration": 217,
+      "weight": 1.0
+    },
+    {
+      "track": 51,
+      "variant": 1,
+      "stem": "51-01",
+      "duration": 195,
+      "weight": 1.0
+    },
+    {
+      "track": 51,
+      "variant": 2,
+      "stem": "51-02",
+      "duration": 225,
+      "weight": 1.0
+    },
+    {
+      "track": 52,
+      "variant": 1,
+      "stem": "52-01",
+      "duration": 173,
+      "weight": 1.0
+    },
+    {
+      "track": 52,
+      "variant": 2,
+      "stem": "52-02",
+      "duration": 164,
+      "weight": 1.0
+    },
+    {
+      "track": 53,
+      "variant": 1,
+      "stem": "53-01",
+      "duration": 190,
+      "weight": 1.0
+    },
+    {
+      "track": 53,
+      "variant": 2,
+      "stem": "53-02",
+      "duration": 228,
+      "weight": 1.0
+    },
+    {
+      "track": 54,
+      "variant": 1,
+      "stem": "54-01",
+      "duration": 164,
+      "weight": 1.0
+    },
+    {
+      "track": 54,
+      "variant": 2,
+      "stem": "54-02",
+      "duration": 180,
+      "weight": 1.0
+    },
+    {
+      "track": 55,
+      "variant": 1,
+      "stem": "55-01",
+      "duration": 147,
+      "weight": 1.0
+    },
+    {
+      "track": 55,
+      "variant": 2,
+      "stem": "55-02",
+      "duration": 183,
+      "weight": 1.0
+    },
+    {
+      "track": 56,
+      "variant": 1,
+      "stem": "56-01",
+      "duration": 177,
+      "weight": 1.0
+    },
+    {
+      "track": 56,
+      "variant": 2,
+      "stem": "56-02",
+      "duration": 215,
+      "weight": 1.0
+    },
+    {
+      "track": 57,
+      "variant": 1,
+      "stem": "57-01",
+      "duration": 204,
+      "weight": 1.0
+    },
+    {
+      "track": 57,
+      "variant": 2,
+      "stem": "57-02",
+      "duration": 249,
+      "weight": 1.0
+    },
+    {
+      "track": 58,
+      "variant": 1,
+      "stem": "58-01",
+      "duration": 186,
+      "weight": 1.0
+    },
+    {
+      "track": 58,
+      "variant": 2,
+      "stem": "58-02",
+      "duration": 184,
+      "weight": 1.0
+    },
+    {
+      "track": 59,
+      "variant": 1,
+      "stem": "59-01",
+      "duration": 185,
+      "weight": 1.0
+    },
+    {
+      "track": 59,
+      "variant": 2,
+      "stem": "59-02",
+      "duration": 164,
+      "weight": 1.0
+    },
+    {
+      "track": 60,
+      "variant": 1,
+      "stem": "60-01",
+      "duration": 204,
+      "weight": 1.0
+    },
+    {
+      "track": 60,
+      "variant": 2,
+      "stem": "60-02",
+      "duration": 198,
+      "weight": 1.0
+    },
+    {
+      "track": 61,
+      "variant": 1,
+      "stem": "61-01",
+      "duration": 213,
+      "weight": 1.0
+    },
+    {
+      "track": 61,
+      "variant": 2,
+      "stem": "61-02",
+      "duration": 195,
+      "weight": 1.0
+    },
+    {
+      "track": 62,
+      "variant": 1,
+      "stem": "62-01",
+      "duration": 174,
+      "weight": 1.0
+    },
+    {
+      "track": 62,
+      "variant": 2,
+      "stem": "62-02",
+      "duration": 179,
+      "weight": 1.0
+    },
+    {
+      "track": 63,
+      "variant": 1,
+      "stem": "63-01",
+      "duration": 193,
+      "weight": 1.0
+    },
+    {
+      "track": 63,
+      "variant": 2,
+      "stem": "63-02",
+      "duration": 159,
+      "weight": 1.0
+    },
+    {
+      "track": 64,
+      "variant": 1,
+      "stem": "64-01",
+      "duration": 244,
+      "weight": 1.0
+    },
+    {
+      "track": 64,
+      "variant": 2,
+      "stem": "64-02",
+      "duration": 269,
+      "weight": 1.0
+    }
+  ]
+}
