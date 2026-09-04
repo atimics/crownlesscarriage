@@ -2,17 +2,18 @@
 static void TestAnimalModels(const char *path)
 {
     const CcCreatureVariant animals[] = {
+        CC_CREATURE_HORSE, CC_CREATURE_HORSE, CC_CREATURE_HORSE,
         CC_CREATURE_HORSE, CC_CREATURE_COW, CC_CREATURE_SHEEP,
     };
     RenderTexture2D scene = LoadRenderTexture(96, 96);
     RequireRenderer(IsRenderTextureValid(scene), "animal target must load");
-    Image sheet = GenImageColor(768, 288, BLACK);
+    Image sheet = GenImageColor(768, 576, BLACK);
     Camera3D camera = {
         .position = {3.0f, 2.4f, 4.0f}, .target = {0.0f, 0.8f, 0.0f},
         .up = {0.0f, 1.0f, 0.0f}, .fovy = 3.5f,
         .projection = CAMERA_ORTHOGRAPHIC,
     };
-    for (int32_t animal = 0; animal < 3; ++animal) {
+    for (int32_t animal = 0; animal < 6; ++animal) {
         CreatureModelCache *model = &creature_models[animals[animal]][CC_CREATURE_POSE_IDLE];
         RequireRenderer(model->ready && model->model.meshCount == 1,
                         "animal review must use the shipped skin");
@@ -24,7 +25,7 @@ static void TestAnimalModels(const char *path)
             BeginWorldLighting(camera, &ROAD_ART_COMPOSITION);
             RequireRenderer(DrawCreatureGait3D(
                 animals[animal], CC_CREATURE_POSE_IDLE, (Vector3){0},
-                (float)(frame / 2) * PI * 0.5f, 1.0f, (Color){0},
+                (float)(frame / 2) * PI * 0.5f, 1.0f, animal < 4 ? PONY_COLORS[animal][0] : (Color){0},
                 (float)(frame % 2) * PI * 0.5f, true, NULL),
                 "animal walking draw must succeed");
             EndWorldLighting();
@@ -71,5 +72,5 @@ static void TestAnimalModels(const char *path)
     RequireRenderer(ExportImage(sheet, output), "animal sheet must be written");
     UnloadImage(sheet);
     UnloadRenderTexture(scene);
-    (void)puts("PASS animal skins: three species, four turns, two walking poses");
+    (void)puts("PASS animal skins: four pony colors and two farm species, four turns, two walking poses");
 }

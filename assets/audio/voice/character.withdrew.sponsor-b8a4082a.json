@@ -1,0 +1,10 @@
+{
+  "id": "character.withdrew.sponsor",
+  "text": "The food did not reach Silverwick.",
+  "speaker": "Mara Venn",
+  "model": "ChatterboxTTS",
+  "seed": 3426483181,
+  "sample_rate": 24000,
+  "reference_sha256": null,
+  "wav_sha256": "c1c805cbc0f77b6478f129ff8aaf2d1720359a11d61bdc270e721d3b5db48f51"
+}
