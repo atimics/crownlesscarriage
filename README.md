@@ -133,6 +133,7 @@ Further technical reading:
 
 - `docs/ASSET_PIPELINE.md` — the Blender make-target DAG and the
   manifest-to-client contract
+- `docs/ART_GALLERY.md` — a small gallery of the current visual direction
 - `docs/INVARIANTS.md` — determinism, save compatibility, performance
   budgets, and the art contract
 

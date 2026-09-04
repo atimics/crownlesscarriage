@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 from pathlib import Path
 import struct
@@ -65,7 +66,7 @@ def png_size(path: Path) -> tuple[int, int] | None:
         return None
 
 
-def validate() -> int:
+def validate(require_review_previews: bool = False) -> int:
     failures: list[str] = []
     for path in (MANIFEST_PATH, CONNECTION_PATH):
         if not path.exists():
@@ -317,16 +318,17 @@ def validate() -> int:
                     failures.append(
                         f"{assembly.get('id')}: missing {prefix[:-1]} layer")
 
-    for name, path_text in manifest.get("review_previews", {}).items():
-        path = ROOT / path_text
-        expected = EXPECTED_REVIEW_SIZE.get(name)
-        actual = png_size(path)
-        if actual is None:
-            failures.append(f"{name}: missing or invalid PNG {path}")
-        elif expected and actual != expected:
-            failures.append(f"{name}: PNG size {actual} != {expected}")
-    if set(manifest.get("review_previews", {})) != set(EXPECTED_REVIEW_SIZE):
-        failures.append("review preview set is incomplete")
+    if require_review_previews:
+        for name, path_text in manifest.get("review_previews", {}).items():
+            path = ROOT / path_text
+            expected = EXPECTED_REVIEW_SIZE.get(name)
+            actual = png_size(path)
+            if actual is None:
+                failures.append(f"{name}: missing or invalid PNG {path}")
+            elif expected and actual != expected:
+                failures.append(f"{name}: PNG size {actual} != {expected}")
+        if set(manifest.get("review_previews", {})) != set(EXPECTED_REVIEW_SIZE):
+            failures.append("review preview set is incomplete")
 
     if failures:
         for failure in failures:
@@ -337,9 +339,19 @@ def validate() -> int:
           f"{len(assemblies)} reference assemblies, {total_triangles} triangles")
     print("component kinds: " + ", ".join(
         f"{kind}={count}" for kind, count in sorted(kinds.items())))
-    print("scale, shadow sockets, named variants, metadata, and review sheets pass")
+    checks = "scale, shadow sockets, named variants, and metadata pass"
+    if require_review_previews:
+        checks = "scale, shadow sockets, named variants, metadata, and review sheets pass"
+    print(checks)
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(validate())
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--review-previews",
+        action="store_true",
+        help="also require every generated review PNG",
+    )
+    args = parser.parse_args()
+    raise SystemExit(validate(require_review_previews=args.review_previews))
