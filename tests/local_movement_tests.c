@@ -2610,6 +2610,18 @@ static void TestOpenWorldSettlementPresentationTransition(void)
 
 int main(void)
 {
+    CcLocalTerrainMeshStatsInternal terrain_mesh =
+        CcLocalTerrainMeshStatsInternalGet();
+    if (terrain_mesh.vertex_count != 41093 ||
+        terrain_mesh.index_count != 241152 ||
+        terrain_mesh.storage_bytes > 2 * 1024 * 1024) {
+        (void)fprintf(stderr,
+                      "terrain mesh memory budget changed: %d vertices, %d indices, %d bytes\n",
+                      terrain_mesh.vertex_count, terrain_mesh.index_count,
+                      terrain_mesh.storage_bytes);
+        return 1;
+    }
+
     for (int32_t frame = 0; frame < 239; ++frame) {
         CcLocalRendererBeginFrame(0.010f);
     }
