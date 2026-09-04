@@ -848,6 +848,7 @@ void CcLocalCourseInit(CcLocalCourse *course)
     course->situation_witness_active = false;
 
     course->alarm_countdown = 24.0f;
+    course->automatic_alarm = true;
     course->raider_attack_cooldown[0] = 0.52f;
     course->raider_attack_cooldown[1] = 0.78f;
 }
@@ -2009,8 +2010,8 @@ void CcLocalCourseFixedStepInternal(CcLocalCourse *course,
     CourseUpdatePlayerCombat(course, player, delta_time);
     if (!course->alarm_active) {
         if (player != NULL) CourseResolveImpact(course, player, NULL);
-        course->alarm_countdown -= delta_time;
-        if (course->alarm_countdown <= 0.0f) {
+        if (course->automatic_alarm) course->alarm_countdown -= delta_time;
+        if (course->automatic_alarm && course->alarm_countdown <= 0.0f) {
             if (course->raider_company_id == 0U) {
                 CcLocalCourseBindRaiderCompany(course, sim);
             }

@@ -763,6 +763,18 @@ static PresentedCameraState presented_camera[3] = {0};
 static CcLocalPresentedPerson presented_people[64];
 static int32_t presented_people_count;
 static bool interaction_ui_enabled;
+static bool conversation_focus_active;
+static CcLocalAgent conversation_focus_agent;
+static uint32_t conversation_focus_seed;
+
+void CcLocalRendererSetConversationFocus(const Vector3 *position, uint32_t seed, float yaw)
+{
+    conversation_focus_active = position != NULL;
+    if (position == NULL) return;
+    conversation_focus_agent.position = *position;
+    conversation_focus_agent.facing_yaw = yaw;
+    conversation_focus_seed = seed;
+}
 
 void CcLocalRendererSetInteractionUI(bool enabled)
 {

@@ -142,6 +142,7 @@ static void AdventureActivate(CcSim *sim, LocalState *local, const CcInteraction
     *return_view = VIEW_LOCAL;
     switch (target->key.kind) {
         case CC_INTERACTION_PERSON:
+            local->conversation_object = target->key.object;
             local->conversation_character_id = target->character_id;
             local->conversation_situation_id = target->situation_id;
             local->conversation_position = (Vector3){target->x, target->y, target->z};
@@ -265,7 +266,7 @@ static int AdventureTextSize(int base)
     return base + (adventure_preferences != NULL ? adventure_preferences->text_size * 2 : 0);
 }
 
-static int AdventureWrap(const char *text, int x, int y, int width, int size, Color color)
+static int AdventureText(const char *text, int x, int y, int width, int size, Color color, bool draw)
 {
     char line[256] = "";
     size_t used = 0;
@@ -279,7 +280,7 @@ static int AdventureWrap(const char *text, int x, int y, int width, int size, Co
         char next[256];
         (void)snprintf(next, sizeof(next), "%s%s%.*s", line, used > 0 ? " " : "", (int)length, cursor);
         if (used > 0 && CcOverlayMeasureText(next, size) > width) {
-            CcOverlayDrawText(line, x, y, size, color);
+            if (draw) CcOverlayDrawText(line, x, y, size, color);
             y += size + 7;
             used = 0;
             line[0] = '\0';
@@ -289,13 +290,18 @@ static int AdventureWrap(const char *text, int x, int y, int width, int size, Co
         memcpy(line + used, cursor, copy); used += copy; line[used] = '\0';
         cursor = end;
         if (*cursor == '\n') {
-            CcOverlayDrawText(line, x, y, size, color); y += size + 7;
+            if (draw) CcOverlayDrawText(line, x, y, size, color); y += size + 7;
             used = 0; line[0] = '\0';
         }
         if (*cursor != '\0') ++cursor;
     }
-    if (used > 0) { CcOverlayDrawText(line, x, y, size, color); y += size + 7; }
+    if (used > 0) { if (draw) CcOverlayDrawText(line, x, y, size, color); y += size + 7; }
     return y - start;
+}
+
+static int AdventureWrap(const char *text, int x, int y, int width, int size, Color color)
+{
+    return AdventureText(text, x, y, width, size, color, true);
 }
 
 static Rectangle AdventurePanel(void)
@@ -530,6 +536,18 @@ static void DrawAdventureBook(const CcSim *sim, const LocalState *local)
             y += AdventureWrap("Visit a notice board or speak to a neighbour to find your next promise.", x, y, width, size + 2, INK) + 24;
         }
         (void)AdventureWrap("The board holds local offers. Your accepted promise appears here. The Journal records the outcome.", x, y, width, size, MUTED);
+        y += 64;
+        int32_t shown = 0;
+        for (int32_t i = sim->quest_outcome_count - 1 - local->book_offset; i >= 0 && shown < 2; --i) {
+            const CcQuestOutcomeRecord *outcome = &sim->quest_outcomes[i];
+            if (y > (int)(panel.y + panel.height) - 120) break;
+            CcOverlayDrawText(TextFormat("%s  #%llu  /  Day %d", CcQuestEndReasonName(outcome->end_reason),
+                outcome->situation_id, outcome->resolved_day), x, y, size, TEAL);
+            y += 28;
+            CcOverlayDrawText(TextFormat("%s  /  Progress %d of %d", SituationTitle(outcome->situation_kind),
+                outcome->progress_value, outcome->progress_limit), x, y, size, INK);
+            y += 42; shown += 1;
+        }
     } else if (local->book_page == 1) {
         int32_t shown = 0, skipped = 0;
         for (int32_t i = 0; i < sim->character_count && shown < 5; ++i) {
@@ -608,12 +626,12 @@ static void DrawAdventurePause(const LocalState *local)
     AdventureButton(AdventureMenuItem(panel, 2), "Company Book  B", true, false);
     if (adventure_preferences != NULL) {
         AdventureButton(AdventureMenuItem(panel, 3), adventure_preferences->reduced_motion ?
-            "Motion: gentle" : "Motion: full", true, false);
-        AdventureButton(AdventureMenuItem(panel, 4), TextFormat("Text size: %s", adventure_preferences->text_size == 0 ?
+            "Motion: gentle  F4" : "Motion: full  F4", true, false);
+        AdventureButton(AdventureMenuItem(panel, 4), TextFormat("Text size: %s  T", adventure_preferences->text_size == 0 ?
             "standard" : adventure_preferences->text_size == 1 ? "large" : "largest"), true, false);
-        AdventureButton(AdventureMenuItem(panel, 5), adventure_preferences->focus_hints ? "Target hints: shown" : "Target hints: focus only", true, false);
-        AdventureButton(AdventureMenuItem(panel, 6), adventure_preferences->audio_mode == 0 ? "Sound: full" :
-            adventure_preferences->audio_mode == 1 ? "Sound: effects" : "Sound: muted", true, false);
+        AdventureButton(AdventureMenuItem(panel, 5), adventure_preferences->focus_hints ? "Target hints: shown  H" : "Target hints: focus only  H", true, false);
+        AdventureButton(AdventureMenuItem(panel, 6), adventure_preferences->audio_mode == 0 ? "Sound: full  F6" :
+            adventure_preferences->audio_mode == 1 ? "Sound: effects  F6" : "Sound: muted  F6", true, false);
     }
     int x = (int)(panel.x + panel.width * 0.53f), y = (int)panel.y + 84;
     CcOverlayDrawText("At your own pace", x, y, AdventureTextSize(20), CC_GOLD);
@@ -640,11 +658,11 @@ static bool HandleAdventurePause(LocalState *local, ClientView *view, ClientView
             adventure_preferences->reduced_motion = !adventure_preferences->reduced_motion;
             adventure_preferences_dirty = true;
         }
-        if (AdventureHit(AdventureMenuItem(panel, 4))) {
+        if (AdventureHit(AdventureMenuItem(panel, 4)) || ClientKeyPressed(KEY_T)) {
             adventure_preferences->text_size = (adventure_preferences->text_size + 1) % 3;
             adventure_preferences_dirty = true;
         }
-        if (AdventureHit(AdventureMenuItem(panel, 5))) {
+        if (AdventureHit(AdventureMenuItem(panel, 5)) || ClientKeyPressed(KEY_H)) {
             adventure_preferences->focus_hints = !adventure_preferences->focus_hints;
             adventure_preferences_dirty = true;
         }
@@ -707,7 +725,10 @@ static void DrawAdventureConversation(const CcSim *sim, const LocalState *local)
         CcStoryCharacterText(sim, situation, person, spoken, sizeof(spoken));
     const char *line = authored ? spoken : local->conversation_line;
     float width = fminf(720.0f, (float)GetScreenWidth() - 80.0f);
-    Rectangle bubble = {((float)GetScreenWidth() - width) * 0.5f, 94.0f, width, 150.0f};
+    float height = 68.0f + (float)AdventureText(line, 0, 0, (int)width - 44,
+        AdventureTextSize(17), INK, false);
+    Rectangle bubble = {((float)GetScreenWidth() - width) * 0.5f,
+        (float)GetScreenHeight() - 108.0f - height, width, height};
     DrawPanel(bubble, Fade(PANEL_DEEP, 0.95f));
     CcOverlayDrawText(name, (int)bubble.x + 22, (int)bubble.y + 16, AdventureTextSize(20), CC_GOLD);
     (void)AdventureWrap(line, (int)bubble.x + 22, (int)bubble.y + 50,
@@ -729,4 +750,60 @@ static void DrawAdventureHeader(const CcSim *sim, const LocalState *local)
         24, 43, AdventureTextSize(13), CC_GOLD);
     CcOverlayDrawText(local->market_interior ? profile->interior_service : profile->identity,
         24, 67, AdventureTextSize(12), MUTED);
+}
+
+static void DrawAdventurePromises(const CcSim *sim, int32_t selected)
+{
+    Rectangle panel = AdventurePanel();
+    panel.height -= 60.0f;
+    panel.y -= 14.0f;
+    AdventurePanelTitle(panel, "Local promises");
+    const CcSituation *promise = SelectedActiveSituation(sim, selected);
+    int x = (int)panel.x + 28, y = (int)panel.y + 85;
+    int width = (int)panel.width - 56;
+    if (promise == NULL) {
+        (void)AdventureWrap("Listen to the people in town for your next lead.", x, y, width, AdventureTextSize(18), INK);
+        return;
+    }
+    bool accepted = promise->id == sim->player.accepted_situation_id;
+    bool offer = CcSimSituationCanAccept(sim, promise);
+    CcOverlayDrawText(TextFormat("%s  #%llu", accepted ? "ACCEPTED" : offer ? "OFFER" : "LEAD", promise->id),
+        x, y, AdventureTextSize(15), accepted ? TEAL : CC_GOLD);
+    y += 38;
+    CcOverlayDrawText(SituationTitle(promise->kind), x, y, AdventureTextSize(24), INK);
+    y += 46;
+    char target[96] = "";
+    SituationTargetLabel(sim, promise, target, sizeof(target));
+    y += AdventureWrap(TextFormat("%s  /  %s", target, promise->affected_name), x, y, width, AdventureTextSize(18), CC_GOLD) + 18;
+    if (offer || accepted) {
+        if (promise->kind == CC_SITUATION_RELIEF_DELIVERY || promise->kind == CC_SITUATION_BLACK_MARKET_DELIVERY) {
+            CcOverlayDrawText(TextFormat("%d %s  /  Progress %d of %d", promise->quantity,
+                CcGoodName(promise->good), promise->progress, promise->quantity), x, y, AdventureTextSize(17), INK);
+            y += 38;
+        }
+        CcOverlayDrawText(TextFormat("Due day %d  /  Reward %" PRId64 " crowns", promise->deadline_day, promise->reward),
+            x, y, AdventureTextSize(17), TEAL);
+        y += 42;
+    }
+    char next[192] = "";
+    SituationNextAction(sim, promise, next, sizeof(next));
+    (void)AdventureWrap(next, x, y, width, AdventureTextSize(17), MUTED);
+}
+
+static void DrawAdventureFeedback(const char *message)
+{
+    int size = AdventureTextSize(14);
+    float width = fminf(800.0f, (float)GetScreenWidth() - 60.0f);
+    float x = ((float)GetScreenWidth() - width) * 0.5f;
+    float y = (float)GetScreenHeight() - 172.0f;
+    DrawPanel((Rectangle){x, y, width, 68.0f}, Fade(PANEL_DEEP, 0.96f));
+    (void)AdventureWrap(message, (int)x + 16, (int)y + 13, (int)width - 32, size, INK);
+}
+
+static Rectangle AdventurePromisesPanel(void)
+{
+    Rectangle panel = AdventurePanel();
+    panel.height -= 60.0f;
+    panel.y -= 14.0f;
+    return panel;
 }

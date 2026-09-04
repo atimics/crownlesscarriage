@@ -95,6 +95,7 @@ typedef struct LocalState {
     bool adventure_ui;
     CcInteractionPlan interactions;
     CcInteractionState interaction;
+    uint64_t conversation_object;
     char conversation_name[64];
     char conversation_line[192];
     Vector3 conversation_position;
@@ -147,6 +148,8 @@ static void DrawAdventureConversation(const CcSim *sim, const LocalState *local)
 static int AdventureTextSize(int base);
 static void DrawAdventureHeader(const CcSim *sim, const LocalState *local);
 static Rectangle AdventureNavBounds(int index);
+static void DrawAdventurePromises(const CcSim *sim, int32_t selected);
+static void DrawAdventureFeedback(const char *message);
 
 typedef struct ActionReelState {
     int32_t stage;
@@ -659,6 +662,10 @@ static void SituationNextAction(const CcSim *sim,
                                 char *label, size_t capacity)
 {
     if (sim == NULL || situation == NULL || label == NULL || capacity == 0U) {
+        return;
+    }
+    if (situation->id != sim->player.accepted_situation_id && CcSimSituationCanAccept(sim, situation)) {
+        (void)snprintf(label, capacity, "Read the offer and accept when you are ready.");
         return;
     }
     CcId destination_id = SituationSettlementId(sim, situation);
@@ -4601,6 +4608,9 @@ static void DrawContextActionTray(const CcSim *sim, const LocalState *local,
                           3, DANGER);
             continue;
         }
+        if (local->adventure_ui && view == VIEW_CHARACTER) {
+            CcOverlayDrawText(TextFormat("%d", i + 1), (int)bounds.x + 9, (int)bounds.y + 6, 12, CC_GOLD);
+        }
         bool detailed = action->detail[0] != '\0' ||
                         action->key_hint[0] != '\0';
         int label_size = local->adventure_ui ? AdventureTextSize(14) : detailed ? 10 : 11;
@@ -7803,6 +7813,10 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         if (HandleAdventurePause(local, view, return_view) ||
             HandleAdventureTrade(*journal, sim, local, view, message, message_capacity) ||
             HandleAdventureBook(local, view, return_view)) return;
+        if (*view == VIEW_SITUATIONS && AdventureHit(AdventureClose(AdventurePromisesPanel()))) {
+            *view = SafeOverlayReturnView(*return_view);
+            return;
+        }
         if (*view == VIEW_LOCAL && (ClientKeyPressed(KEY_ESCAPE) ||
             AdventureHit(AdventureNavBounds(3)))) {
             if (local->interaction.approaching) {
@@ -8048,6 +8062,25 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
              ClientKeyPressed(KEY_TWO) ||
              context_action == CONTEXT_ACTION_PLEDGE_CHARACTER ?
                 CC_CHARACTER_RESPONSE_PLEDGE_HELP : 0);
+        if (local->adventure_ui) {
+            ContextActionSet replies = BuildContextActions(sim, local, VIEW_CHARACTER, *selected, *selected_situation);
+            ContextActionKind chosen_reply = context_action;
+            for (int32_t i = 0; i < replies.count; ++i) {
+                if (replies.items[i].enabled && ClientKeyPressed(KEY_ONE + i)) chosen_reply = replies.items[i].kind;
+            }
+            response = 0;
+            for (int32_t i = 0; i < replies.count; ++i) {
+                if (!replies.items[i].enabled || replies.items[i].kind != chosen_reply) continue;
+                switch (chosen_reply) {
+                    case CONTEXT_ACTION_LISTEN_CHARACTER: response = CC_CHARACTER_RESPONSE_LISTEN; break;
+                    case CONTEXT_ACTION_PLEDGE_CHARACTER: response = CC_CHARACTER_RESPONSE_PLEDGE_HELP; break;
+                    case CONTEXT_ACTION_REPORT_EVIDENCE: response = CC_CHARACTER_RESPONSE_REPORT_EVIDENCE; break;
+                    case CONTEXT_ACTION_KEEP_CONFIDENCE: response = CC_CHARACTER_RESPONSE_KEEP_CONFIDENCE; break;
+                    case CONTEXT_ACTION_CLOSE_VIEW: *view = VIEW_LOCAL; break;
+                    default: break;
+                }
+            }
+        }
         if (response != 0) {
             CcCommand reply = {
                 .kind = CC_COMMAND_CHARACTER_RESPONSE,
@@ -8103,6 +8136,8 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
     }
     if (ClientKeyPressed(KEY_TAB) ||
         command_action == COMMAND_ACTION_LEDGER) {
+        CcInteractionCancel(&local->interaction, "");
+        CcLocalAgentStop(&local->agent);
         ToggleCommandOverlay(VIEW_LEDGER, view, return_view);
         return;
     }
@@ -9410,6 +9445,8 @@ static int ClientRegressionFailure(const char *message)
     return 1;
 }
 
+#include "../../tests/client_interaction_flow.inc"
+
 static int RunMapSaleInputRegression(void)
 {
     static CcSim sim;
@@ -9518,6 +9555,7 @@ static void UpdatePlayAudio(CcSoundscape *soundscape, const CcSim *sim,
 int main(int argc, char **argv)
 {
 #if defined(CC_CLIENT_SELF_TESTS)
+    if (argc == 2 && strcmp(argv[1], "--test-adventure-input") == 0) return RunAdventureInputRegression();
     if (argc == 2 && strcmp(argv[1], "--test-storybook-travel") == 0) {
         return RunStorybookTravelRegression();
     }
@@ -10809,6 +10847,7 @@ int main(int argc, char **argv)
         ClientWaitForAnimationFrame();
 #endif
         local.adventure_ui = normal_play;
+        if (normal_play && AdventureScene(&local)) local.course.automatic_alarm = false;
         adventure_preferences = &preferences;
         CcLocalRendererSetInteractionUI(AdventureScene(&local));
         local_bounds = LocalViewportBounds();
@@ -10859,14 +10898,7 @@ int main(int argc, char **argv)
 #endif
             (void)snprintf(
                 message, sizeof(message), "%s",
-                preferences_saved ?
-                    (change_audio ?
-                        (preferences.audio_mode == 0 ? "Sound: voices and effects. Saved." :
-                         preferences.audio_mode == 1 ? "Sound: effects. Saved." : "Sound: muted. Saved.") :
-                    (preferences.reduced_motion ?
-                        "Reduced motion enabled and saved." :
-                        "Reduced motion disabled and saved.")) :
-                    preferences_error);
+                preferences_saved ? "Settings saved." : preferences_error);
         }
         CcLocalRendererSetAtmosphere(
             capture_atmosphere ? capture_atmosphere_preset :
@@ -10956,6 +10988,11 @@ int main(int argc, char **argv)
         }
 #endif
 
+        CcLocalRendererSetConversationFocus(
+            local.adventure_ui && view == VIEW_CHARACTER && local.conversation_character_id == 0U ?
+                &local.conversation_position : NULL,
+            local.conversation_object < UINT64_C(0x100000000) ? (uint32_t)local.conversation_object & UINT32_C(0x7fffffff) : 0U,
+            local.agent.facing_yaw + PI);
         BeginDrawing();
         ClearBackground(BACKGROUND);
         CcOverlayBegin(1.0f);
@@ -11040,9 +11077,11 @@ int main(int argc, char **argv)
             !capture_road_departure &&
             view == VIEW_LOCAL &&
             !LocalCombatActive(&local) &&
-            message_age < 2.2f &&
+            message_age < (local.adventure_ui ? 7.0f : 2.2f) &&
             message[0] != '\0' &&
             !local.journey_travel_active) {
+            if (local.adventure_ui) DrawAdventureFeedback(message);
+            else {
             const char *toast = TextFormat("%.48s", message);
             int width = CcOverlayMeasureText(toast, 10) + 26;
             if (width > 660) width = 660;
@@ -11057,6 +11096,7 @@ int main(int argc, char **argv)
             CcOverlayDrawText(toast, (int)x + 13,
                               (int)toast_y + 8, 10,
                               Fade(INK, opacity));
+            }
         }
         if (view == VIEW_LEDGER) {
             CcOverlayFlush();
@@ -11072,7 +11112,8 @@ int main(int argc, char **argv)
         }
         if (view == VIEW_SITUATIONS) {
             CcOverlayFlush();
-            DrawSituationBoard(&sim, selected_situation);
+            if (local.adventure_ui) DrawAdventurePromises(&sim, selected_situation);
+            else DrawSituationBoard(&sim, selected_situation);
         }
         if (view == VIEW_CHARACTER) {
             CcOverlayFlush();

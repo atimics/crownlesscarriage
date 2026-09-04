@@ -1672,6 +1672,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         base_camera, camera_subject, course, clock, true,
         target.texture.height);
     const CcLocalAgent *conversation_partner =
+        conversation && conversation_focus_active ? &conversation_focus_agent :
         conversation && course != NULL && course->situation_witness_active ?
             &course->situation_witness : NULL;
     camera = CcLocalConversationCameraInternal(

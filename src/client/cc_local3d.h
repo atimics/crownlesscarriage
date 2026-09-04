@@ -401,6 +401,7 @@ typedef struct CcLocalCourse {
     float combat_event_seconds;
     double world_simulation_accumulator;
     bool alarm_active;
+    bool automatic_alarm;
     bool raiders_retreating;
     bool combat_origin_valid;
     bool raider_response_waypoint_active[CC_LOCAL_RAIDER_COUNT];
@@ -632,4 +633,5 @@ void CcLocalProjectInteraction(const CcLocalAgent *agent,
     struct CcInteractionTarget *target);
 void CcLocalAgentStop(CcLocalAgent *agent);
 void CcLocalRendererSetInteractionUI(bool enabled);
+void CcLocalRendererSetConversationFocus(const Vector3 *position, uint32_t seed, float yaw);
 #endif
