@@ -17,9 +17,45 @@ from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont, ImageOps, 
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = ROOT / "out" / "art-check"
-WORLD_CROP = (17, 81, 931, 651)
-ART_SIZE = (457, 285)
 EXPECTED_SCREEN_SIZE = (1280, 760)
+
+
+def viewport_constants() -> dict[str, int]:
+    source = (ROOT / "src/client/cc_local_viewport.h").read_text()
+    return {
+        name: int(value)
+        for name, value in re.findall(
+            r"^#define (CC_LOCAL_(?:ART|VIEWPORT)_\w+) (\d+)$",
+            source, re.MULTILINE,
+        )
+    }
+
+
+VIEWPORT = viewport_constants()
+ART_SIZE = (VIEWPORT["CC_LOCAL_ART_WIDTH"], VIEWPORT["CC_LOCAL_ART_HEIGHT"])
+
+
+def viewport_crop(screen_size: tuple[int, int]) -> tuple[int, int, int, int]:
+    width, height = screen_size
+    available_width = width - VIEWPORT["CC_LOCAL_VIEWPORT_SIDE_MARGIN"] * 2
+    available_height = height - VIEWPORT["CC_LOCAL_VIEWPORT_TOP_MARGIN"] - \
+        VIEWPORT["CC_LOCAL_VIEWPORT_BOTTOM_MARGIN"]
+    available_scale = min(available_width / ART_SIZE[0],
+                          available_height / ART_SIZE[1])
+    scale = math.floor(available_scale)
+    if scale < 2:
+        scale = available_scale
+    scale = max(0.5, scale)
+    draw_width, draw_height = (dimension * scale for dimension in ART_SIZE)
+    left = (width - draw_width) / 2
+    top = VIEWPORT["CC_LOCAL_VIEWPORT_TOP_MARGIN"] + \
+        (available_height - draw_height) / 2
+    return tuple(round(value) for value in
+                 (left, top, left + draw_width, top + draw_height))
+
+
+WORLD_CROP = viewport_crop(EXPECTED_SCREEN_SIZE)
+
 PALETTE_NEAR_DISTANCE = 0.055
 MAXIMUM_DOMINANT_COLOR_RATIO = 0.60
 MINIMUM_LUMINANCE_STDDEV = 0.04
@@ -497,7 +533,8 @@ def write_report(output_root: Path, capture_results: list[dict[str, object]],
         "",
         f"Capture mode: **{capture_mode}**",
         "",
-        "World metrics use the 457 x 285 art target. The full-screen UI is "
+        f"World metrics use the {ART_SIZE[0]} x {ART_SIZE[1]} art target. "
+        "The full-screen UI is "
         "included in `contact-sheets/full-screen-ui.png` for manual review.",
         "",
         "| View | Palette exact | Palette near | Dominant | Edges | Local contrast | Result |",

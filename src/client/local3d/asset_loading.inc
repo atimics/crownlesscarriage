@@ -462,6 +462,20 @@ typedef struct PaintedEnvironmentStyle {
     bool ready;
 } PaintedEnvironmentStyle;
 
+typedef struct CharacterLightingStyle {
+    Shader shader;
+    int32_t light_direction_location;
+    int32_t camera_position_location;
+    int32_t shadow_color_location;
+    int32_t fog_color_location;
+    int32_t fog_near_location;
+    int32_t fog_far_location;
+    int32_t ink_strength_location;
+    int32_t rim_tint_location;
+    int32_t rim_strength_location;
+    bool ready;
+} CharacterLightingStyle;
+
 typedef struct VisualStyleCache {
     Shader grade;
     Texture2D palette_lut;
@@ -507,17 +521,8 @@ typedef struct VisualStyleCache {
     int32_t foliage_depth_splits_location;
     int32_t foliage_depth_strength_location;
     bool foliage_ready;
-    Shader hero;
-    int32_t hero_light_direction_location;
-    int32_t hero_camera_position_location;
-    int32_t hero_shadow_color_location;
-    int32_t hero_fog_color_location;
-    int32_t hero_fog_near_location;
-    int32_t hero_fog_far_location;
-    int32_t hero_ink_strength_location;
-    int32_t hero_rim_tint_location;
-    int32_t hero_rim_strength_location;
-    bool hero_ready;
+    CharacterLightingStyle hero;
+    CharacterLightingStyle character;
     Shader npc;
     int32_t npc_light_direction_location;
     int32_t npc_camera_position_location;
@@ -775,6 +780,36 @@ static Quaternion HeroRotationBetween(Vector3 from, Vector3 to)
         axis = Vector3CrossProduct(from, (Vector3){0.0f, 0.0f, 1.0f});
     }
     return QuaternionFromAxisAngle(Vector3Normalize(axis), PI);
+}
+
+static Quaternion HumanoidSkinRotation(CcHumanoidSkinBone bone,
+                                        const CcHumanoidSkinBonePose *target,
+                                        Quaternion bind_rotation)
+{
+    Vector3 up = Vector3Normalize(HERO_REST_DIRECTIONS[bone]);
+    bool foot = bone == CC_HUMANOID_SKIN_FOOT_LEFT ||
+                bone == CC_HUMANOID_SKIN_FOOT_RIGHT;
+    Vector3 right = Vector3Normalize(foot ?
+        Vector3CrossProduct((Vector3){0.0f, 1.0f, 0.0f}, up) :
+        Vector3CrossProduct(up, (Vector3){0.0f, 0.0f, 1.0f}));
+    Vector3 forward = Vector3CrossProduct(right, up);
+    Matrix rest_frame = MatrixIdentity();
+    rest_frame.m0 = right.x;
+    rest_frame.m1 = right.y;
+    rest_frame.m2 = right.z;
+    rest_frame.m4 = up.x;
+    rest_frame.m5 = up.y;
+    rest_frame.m6 = up.z;
+    rest_frame.m8 = forward.x;
+    rest_frame.m9 = forward.y;
+    rest_frame.m10 = forward.z;
+    Quaternion target_rotation = {
+        target->world_rotation.x, target->world_rotation.y,
+        target->world_rotation.z, target->world_rotation.w,
+    };
+    Quaternion delta = QuaternionMultiply(
+        target_rotation, QuaternionInvert(QuaternionFromMatrix(rest_frame)));
+    return QuaternionNormalize(QuaternionMultiply(delta, bind_rotation));
 }
 
 static const char *HeroSkinAssetPath(void)
@@ -1361,8 +1396,8 @@ static void ApplyHeroStyle(Model *model)
     if (screen_first_hero_active) {
         for (int32_t material = 0; material < model->materialCount;
              ++material) {
-            model->materials[material].shader = visual_style.hero_ready ?
-                                                 visual_style.hero :
+            model->materials[material].shader = visual_style.hero.ready ?
+                                                 visual_style.hero.shader :
                                                  visual_style.world;
         }
         return;
@@ -1374,14 +1409,14 @@ static void ApplyHeroStyle(Model *model)
     for (int32_t material = 0; material < material_count; ++material) {
         model->materials[material].maps[MATERIAL_MAP_DIFFUSE].color =
             HeroRetroMaterialColor(material);
-        model->materials[material].shader = visual_style.hero_ready ?
-                                             visual_style.hero :
+        model->materials[material].shader = visual_style.hero.ready ?
+                                             visual_style.hero.shader :
                                              visual_style.world;
     }
     for (int32_t material = material_count;
          material < model->materialCount; ++material) {
-        model->materials[material].shader = visual_style.hero_ready ?
-                                             visual_style.hero :
+        model->materials[material].shader = visual_style.hero.ready ?
+                                             visual_style.hero.shader :
                                              visual_style.world;
     }
     if (model->materialCount < CC_HERO_RETRO_MATERIAL_COUNT) {
@@ -1397,8 +1432,8 @@ static void ApplyNpcStyle(Model *model)
     for (int32_t material = 0; material < model->materialCount; ++material) {
         model->materials[material].shader = visual_style.npc_ready ?
                                              visual_style.npc :
-                                             visual_style.hero_ready ?
-                                                visual_style.hero :
+                                             visual_style.character.ready ?
+                                                visual_style.character.shader :
                                                 visual_style.world;
     }
 }
@@ -2704,13 +2739,21 @@ static bool DrawCreature3D(CcCreatureVariant variant, CcCreaturePose pose,
 
 static void UseCharacterLighting(void)
 {
-    if (visual_style.hero_ready) BeginShaderMode(visual_style.hero);
+    if (visual_style.character.ready) {
+        BeginShaderMode(visual_style.character.shader);
+    } else if (visual_style.world_ready) {
+        BeginShaderMode(visual_style.world);
+    } else {
+        EndShaderMode();
+    }
 }
 
 static void RestoreWorldLighting(void)
 {
-    if (visual_style.hero_ready && visual_style.world_ready) {
+    if (visual_style.world_ready) {
         BeginShaderMode(visual_style.world);
+    } else {
+        EndShaderMode();
     }
 }
 
@@ -2885,6 +2928,45 @@ static bool LoadSharedPaletteLookup(void)
              "STYLE: loaded %d-color perceptual lookup (%d protected)",
              palette_count, protected_count);
     return true;
+}
+
+static CharacterLightingStyle LoadCharacterLightingStyle(
+    const char *vertex_path, const char *fragment_path, bool vertex_colors)
+{
+    CharacterLightingStyle style = {0};
+    style.shader = LoadShader(vertex_path, fragment_path);
+    if (!IsShaderValid(style.shader) ||
+        style.shader.id == rlGetShaderIdDefault()) {
+        UnloadShader(style.shader);
+        return (CharacterLightingStyle){0};
+    }
+    style.light_direction_location = GetShaderLocation(
+        style.shader, "lightDirection");
+    style.camera_position_location = GetShaderLocation(
+        style.shader, "cameraPosition");
+    style.shadow_color_location = GetShaderLocation(
+        style.shader, "shadowColor");
+    style.fog_color_location = GetShaderLocation(
+        style.shader, "fogColor");
+    style.fog_near_location = GetShaderLocation(
+        style.shader, "fogNear");
+    style.fog_far_location = GetShaderLocation(
+        style.shader, "fogFar");
+    style.ink_strength_location = GetShaderLocation(
+        style.shader, "inkStrength");
+    style.rim_tint_location = GetShaderLocation(
+        style.shader, "characterRimTint");
+    style.rim_strength_location = GetShaderLocation(
+        style.shader, "characterRimStrength");
+    float ink_strength = CC_HERO_INK_STRENGTH;
+    SetShaderValue(style.shader, style.ink_strength_location,
+                   &ink_strength, SHADER_UNIFORM_FLOAT);
+    float colors_are_albedo = vertex_colors ? 1.0f : 0.0f;
+    SetShaderValue(style.shader,
+                   GetShaderLocation(style.shader, "vertexColorsAreAlbedo"),
+                   &colors_are_albedo, SHADER_UNIFORM_FLOAT);
+    style.ready = true;
+    return style;
 }
 
 static void LoadVisualStyle(void)
@@ -3073,39 +3155,13 @@ static void LoadVisualStyle(void)
     }
 
     char hero_fragment_path[1024];
-    if (skinned_vertex_ready &&
-        ResolveAssetPath(CC_HERO_PIXEL_FRAGMENT_SHADER, hero_fragment_path,
+    if (ResolveAssetPath(CC_HERO_PIXEL_FRAGMENT_SHADER, hero_fragment_path,
                          sizeof(hero_fragment_path))) {
-        visual_style.hero = LoadShader(skinned_vertex_path,
-                                       hero_fragment_path);
-        if (IsShaderValid(visual_style.hero)) {
-            visual_style.hero_light_direction_location = GetShaderLocation(
-                visual_style.hero, "lightDirection");
-            visual_style.hero_camera_position_location = GetShaderLocation(
-                visual_style.hero, "cameraPosition");
-            visual_style.hero_shadow_color_location = GetShaderLocation(
-                visual_style.hero, "shadowColor");
-            visual_style.hero_fog_color_location = GetShaderLocation(
-                visual_style.hero, "fogColor");
-            visual_style.hero_fog_near_location = GetShaderLocation(
-                visual_style.hero, "fogNear");
-            visual_style.hero_fog_far_location = GetShaderLocation(
-                visual_style.hero, "fogFar");
-            visual_style.hero_ink_strength_location = GetShaderLocation(
-                visual_style.hero, "inkStrength");
-            visual_style.hero_rim_tint_location = GetShaderLocation(
-                visual_style.hero, "characterRimTint");
-            visual_style.hero_rim_strength_location = GetShaderLocation(
-                visual_style.hero, "characterRimStrength");
-            float ink_strength = CC_HERO_INK_STRENGTH;
-            SetShaderValue(visual_style.hero,
-                           visual_style.hero_ink_strength_location,
-                           &ink_strength, SHADER_UNIFORM_FLOAT);
-            visual_style.hero_ready = true;
-        } else {
-            visual_style.hero = (Shader){0};
-            TraceLog(LOG_WARNING,
-                     "STYLE: retro hero shader could not be loaded");
+        visual_style.character = LoadCharacterLightingStyle(
+            vertex_path, hero_fragment_path, true);
+        if (skinned_vertex_ready) {
+            visual_style.hero = LoadCharacterLightingStyle(
+                skinned_vertex_path, hero_fragment_path, false);
         }
     } else {
         TraceLog(LOG_WARNING, "STYLE: retro hero shader was not found");
@@ -3404,20 +3460,15 @@ static bool DrawHeroSkin(const CcHumanoidSkinPose *skin,
             hero_skin.pose[bone] = hero_skin.model.skeleton.bindPose[bone];
             continue;
         }
-        Quaternion delta = HeroRotationBetween(
-            rest_direction, target_direction);
-        if (skin_bone == CC_HUMANOID_SKIN_HEAD) {
-
-            const CcHumanoidSkinBonePose *head =
-                &skin->bones[CC_HUMANOID_SKIN_HEAD];
-            delta = (Quaternion){head->world_rotation.x,
-                                 head->world_rotation.y,
-                                 head->world_rotation.z,
-                                 head->world_rotation.w};
-        }
+        Quaternion bind_rotation =
+            hero_skin.model.skeleton.bindPose[bone].rotation;
         hero_skin.pose[bone].translation = target_head;
-        hero_skin.pose[bone].rotation = QuaternionMultiply(
-            delta, hero_skin.model.skeleton.bindPose[bone].rotation);
+        hero_skin.pose[bone].rotation =
+            skin_bone >= 0 && skin_bone < CC_HUMANOID_SKIN_BONE_COUNT ?
+            HumanoidSkinRotation((CcHumanoidSkinBone)skin_bone,
+                                  &skin->bones[skin_bone], bind_rotation) :
+            QuaternionMultiply(HeroRotationBetween(
+                rest_direction, target_direction), bind_rotation);
         hero_skin.pose[bone].scale =
             hero_skin.model.skeleton.bindPose[bone].scale;
         float gameplay_scale =
@@ -3500,17 +3551,10 @@ static bool DrawNpcBodySkin(const CcHumanoidSkinPose *skin,
             continue;
         }
         const CcHumanoidSkinBonePose *target = &skin->bones[skin_bone];
-        Quaternion delta = HeroRotationBetween(
-            HERO_REST_DIRECTIONS[skin_bone], FromLimbVector(target->up));
-        if (skin_bone == CC_HUMANOID_SKIN_HEAD) {
-            delta = (Quaternion){target->world_rotation.x,
-                                 target->world_rotation.y,
-                                 target->world_rotation.z,
-                                 target->world_rotation.w};
-        }
         body->pose[bone].translation = FromLimbVector(target->head);
-        body->pose[bone].rotation = QuaternionMultiply(
-            delta, body->model.skeleton.bindPose[bone].rotation);
+        body->pose[bone].rotation = HumanoidSkinRotation(
+            (CcHumanoidSkinBone)skin_bone, target,
+            body->model.skeleton.bindPose[bone].rotation);
         body->pose[bone].scale = body->model.skeleton.bindPose[bone].scale;
     }
     UpdateModelAnimation(body->model, body->animation, 0.0f);
@@ -3845,7 +3889,10 @@ void CcLocalRendererShutdown(void)
         UnloadShader(visual_style.npc_skinned);
     }
     if (visual_style.npc_ready) UnloadShader(visual_style.npc);
-    if (visual_style.hero_ready) UnloadShader(visual_style.hero);
+    if (visual_style.hero.ready) UnloadShader(visual_style.hero.shader);
+    if (visual_style.character.ready) {
+        UnloadShader(visual_style.character.shader);
+    }
     if (visual_style.foliage_ready) UnloadShader(visual_style.foliage);
     if (visual_style.painted_environment.ready) {
         UnloadShader(visual_style.painted_environment.shader);
