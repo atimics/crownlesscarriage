@@ -2292,8 +2292,7 @@ const CcCharacter *CcSimSituationConversationCharacter(
     CcId offer_settlement = CcSimSituationOfferSettlementId(sim, situation);
 
     if (affected_here &&
-        (situation->kind == CC_SITUATION_MONSTER_EXPEDITION ||
-         situation->kind == CC_SITUATION_COURIER_DELIVERY ||
+        (situation->kind == CC_SITUATION_COURIER_DELIVERY ||
          !sponsor_here || settlement_id != offer_settlement)) {
         return affected;
     }
