@@ -99,6 +99,7 @@ typedef struct LocalState {
     CcClientArrivalTransition arrival;
     float travel_time_blend;
     bool travel_fast_forward;
+    bool pony_book_open;
     bool travel_attention;
     CcLocalMovementPreview movement_preview;
     CcLocalSiteKind site_kind;
@@ -2363,7 +2364,7 @@ static bool AdvanceStorybookTravel(CcJournal *journal, CcSim *sim,
             local->travel_attention = true;
             return false;
         }
-        if (!sim->journey.active ||
+        if (CcPonyOnRoad(sim) >= 0 || !sim->journey.active ||
             sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING ||
             CcSimJourneyRoadSiteStop(sim) != NULL ||
             sim->journey.ambush_warned != warned ||
@@ -5509,7 +5510,7 @@ static void DrawCarriageScreen(const CcSim *sim, const LocalState *local,
     CcOverlayDrawText("TEAM & DEPARTURE", 888, 194, 15, CC_VIOLET);
     for (int32_t horse = 0; horse < CC_CARRIAGE_HORSE_COUNT; ++horse) {
         int32_t y = 232 + horse * 70;
-        CcOverlayDrawText(sim->horse_team[horse].name, 888, y, 13, INK);
+        CcOverlayDrawText(CcPonyName(sim->pony_company.team[horse]), 888, y, 13, INK);
         CcOverlayDrawText(
             TextFormat("HEALTH %d / FATIGUE %d",
                        sim->horse_team[horse].health,
@@ -7690,6 +7691,8 @@ static int RunRoadEncounterSessionRegression(void)
 }
 #endif
 
+#include "pony_ui.inc"
+
 static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                         int32_t *selected_situation, ClientView *view,
                         ClientView *return_view, LocalState *local,
@@ -7784,6 +7787,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             "Journal saved. Local scene checkpoint saved.");
         return;
     }
+    if (HandlePonyInput(*journal, sim, local, *view, message, message_capacity)) return;
     if (*view == VIEW_ENCOUNTER) {
         if (!sim->journey.active ||
             sim->journey.phase != CC_JOURNEY_PHASE_BLOCKED) {
@@ -9655,7 +9659,10 @@ int main(int argc, char **argv)
             return 1;
         }
     }
-    bool capture_travel = capture_storybook || (argc >= 2 &&
+    bool capture_pony_book = argc >= 2 && strcmp(argv[1], "--capture-pony-book") == 0;
+    bool capture_pony_encounter = argc >= 2 && strcmp(argv[1], "--capture-pony-encounter") == 0;
+    bool capture_pony_swap = argc >= 2 && strcmp(argv[1], "--capture-pony-swap") == 0;
+    bool capture_travel = capture_pony_book || capture_pony_encounter || capture_pony_swap || capture_storybook || (argc >= 2 &&
         strcmp(argv[1], "--capture-travel") == 0);
     bool capture_route_sight = argc >= 2 &&
         strcmp(argv[1], "--capture-route-sight") == 0;
@@ -10460,6 +10467,30 @@ int main(int argc, char **argv)
         local.world_carriage.camera_weight = local.travel_time_blend;
         local.world_carriage.camera_target = local.travel_time_blend;
     }
+    if (capture_pony_book || capture_pony_encounter || capture_pony_swap) {
+        int32_t pony = 0;
+        while (pony == sim.pony_company.team[0] || pony == sim.pony_company.team[1]) pony++;
+        sim.pony_company.ponies[pony].route_id = sim.journey.route_id;
+        char pony_error[160];
+        CcCommand meet = {.kind = CC_COMMAND_MEET_PONY, .target_id = (CcId)pony + 1U};
+        if (!CcSimApply(&sim, &meet, pony_error, sizeof(pony_error))) {
+            (void)fprintf(stderr, "Pony capture: %s\n", pony_error);
+            return 1;
+        }
+        if (capture_pony_swap || capture_pony_book) {
+            CcPony *p = &sim.pony_company.ponies[pony];
+            sim.player.cargo[CcPonyQuestGood(p)] = p->quest_amount;
+            if (!CheckPonyInterface(&sim, &local, pony)) return 1;
+            if (capture_pony_book) {
+                queued_key_press[KEY_ONE] = true;
+                if (!HandlePonyInput(NULL, &sim, &local, VIEW_LOCAL,
+                                     pony_error, sizeof(pony_error))) return 1;
+            }
+        }
+        local.pony_book_open = capture_pony_book;
+        local.convoy.pace = 0.0f;
+        local.world_carriage.pace = 0.0f;
+    }
     if (capture_road_arrival) {
         if (EnterOpenWorldAtRoadGate(
                 &sim, &local, sim.journey.route_id)) {
@@ -11065,6 +11096,10 @@ int main(int argc, char **argv)
             view != VIEW_DUNGEON &&
             view != VIEW_CARRIAGE && view != VIEW_CHARACTER) {
             DrawCommandBar(view, &local);
+        }
+        if (view == VIEW_LOCAL || local.pony_book_open || sim.pony_company.encounter >= 0) {
+            CcOverlayFlush();
+            DrawPonyInterface(&sim, &local);
         }
         if (performance_overlay) {
             CcOverlayFlush();

@@ -1626,11 +1626,14 @@ static CcCreatureVariant DragonCreatureForLifeStage(
 }
 
 /* Coat, mane, and ribbon colors stay paired across travel and stable scenes. */
-static const Color PONY_COLORS[4][3] = {
-    {{246, 151, 206, 255}, {186, 48, 139, 255}, {113, 231, 226, 255}},
-    {{183, 156, 247, 255}, {78, 71, 185, 255}, {248, 125, 205, 255}},
-    {{112, 224, 215, 255}, {237, 101, 155, 255}, {255, 222, 130, 255}},
-    {{255, 207, 125, 255}, {153, 76, 207, 255}, {116, 224, 237, 255}},
+static const Color PONY_COLORS[CC_PONY_COUNT][3] = {
+    {{244, 104, 115, 255}, {170, 43, 69, 255}, {255, 206, 123, 255}},
+    {{255, 169, 84, 255}, {196, 87, 42, 255}, {255, 231, 143, 255}},
+    {{255, 229, 110, 255}, {219, 155, 56, 255}, {253, 147, 198, 255}},
+    {{124, 224, 137, 255}, {51, 147, 113, 255}, {253, 226, 146, 255}},
+    {{114, 195, 246, 255}, {63, 113, 207, 255}, {137, 238, 223, 255}},
+    {{135, 139, 224, 255}, {73, 57, 151, 255}, {166, 214, 249, 255}},
+    {{208, 153, 245, 255}, {148, 63, 191, 255}, {255, 160, 218, 255}},
 };
 
 static int32_t PonyColorIndex(Color coat)
@@ -1638,7 +1641,7 @@ static int32_t PonyColorIndex(Color coat)
     if (coat.a == 0) return 0;
     int32_t best = 0;
     int32_t distance = INT32_MAX;
-    for (int32_t index = 0; index < 4; ++index) {
+    for (int32_t index = 0; index < CC_PONY_COUNT; ++index) {
         int32_t r = (int32_t)coat.r - PONY_COLORS[index][0].r;
         int32_t g = (int32_t)coat.g - PONY_COLORS[index][0].g;
         int32_t b = (int32_t)coat.b - PONY_COLORS[index][0].b;

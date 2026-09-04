@@ -4561,6 +4561,7 @@ void CcSimInit(CcSim *sim, uint32_t seed)
     CcSimInitializeAnimalEconomy(sim);
     CcSimInitializeRoadSites(sim);
     CcSimInitializeRoyalCarriages(sim);
+    CcPoniesInit(sim);
 }
 
 static CcDungeon *DungeonByIdMutable(CcSim *sim, CcId id)
@@ -15256,7 +15257,8 @@ static bool ApplyTravel(CcSim *sim, const CcCommand *command,
         (void)snprintf(
             text, sizeof(text),
             "%.16s and %.16s pull from %.16s toward %.16s %sfor %d watches with %d fodder.",
-            sim->horse_team[0].name, sim->horse_team[1].name,
+            sim->schema_version >= 40U ? CcPonyName(sim->pony_company.team[0]) : sim->horse_team[0].name,
+            sim->schema_version >= 40U ? CcPonyName(sim->pony_company.team[1]) : sim->horse_team[1].name,
             origin != NULL ? origin->name : "the waystation",
             destination->name,
             waited_for_morning ? "at first light " : "",
@@ -15818,6 +15820,7 @@ void CcSimAdvanceRuntimeTicks(CcSim *sim, int32_t ticks)
         sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING ||
         sim->clock.tick > UINT64_MAX - (uint64_t)ticks) return;
     for (int32_t tick = 0; tick < ticks; ++tick) {
+        if (sim->schema_version >= 40U && sim->pony_company.encounter >= 0) break;
         if (!sim->journey.active ||
             sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING) break;
         sim->clock.tick += 1U;
@@ -16766,6 +16769,11 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
         SetError(error, error_capacity, "Command target is missing.");
         return false;
     }
+    if (sim->schema_version >= 40U && sim->pony_company.encounter >= 0 &&
+        (command->kind < CC_COMMAND_MEET_PONY || command->kind > CC_COMMAND_LEAVE_PONY)) {
+        SetError(error, error_capacity, "Finish your pony visit before continuing.");
+        return false;
+    }
     bool dungeon_action =
         command->kind == CC_COMMAND_MOVE_DUNGEON ||
         command->kind == CC_COMMAND_SEARCH_DUNGEON ||
@@ -16801,6 +16809,11 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
         return false;
     }
     switch (command->kind) {
+        case CC_COMMAND_MEET_PONY:
+        case CC_COMMAND_HELP_PONY:
+        case CC_COMMAND_SWAP_PONY:
+        case CC_COMMAND_LEAVE_PONY:
+            return CcPoniesApply(sim, command, error, error_capacity);
         case CC_COMMAND_TRADE:
             return ApplyTrade(sim, command, error, error_capacity);
         case CC_COMMAND_TRAVEL:
@@ -17194,12 +17207,14 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                          sim->schema_version == 35U ||
                          sim->schema_version == 36U ||
                          sim->schema_version == 37U ||
-                         sim->schema_version == 38U;
+                         sim->schema_version == 38U ||
+                         sim->schema_version == 39U;
     bool supported_generator =
         (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
          sim->generator_version == CC_GENERATOR_VERSION) ||
         (legacy_schema && sim->schema_version <= 27U &&
          sim->generator_version == CC_GENERATOR_VERSION) ||
+        (sim->schema_version == 39U && sim->generator_version == 25U) ||
         (sim->schema_version == 38U && sim->generator_version == 25U) ||
         (sim->schema_version == 37U && sim->generator_version == 25U) ||
         (sim->schema_version == 36U && sim->generator_version == 25U) ||
@@ -19091,6 +19106,10 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         }
     }
     SetError(error, error_capacity, "");
+    if (sim->schema_version >= 40U && !CcPoniesValidate(sim)) {
+        SetError(error, error_capacity, "Pony company state is invalid.");
+        return false;
+    }
     return true;
 }
 
@@ -19872,6 +19891,27 @@ uint64_t CcSimHash(const CcSim *sim)
         if (sim->schema_version >= 35U) {
             HASH_VALUE(sim->archives.abbot_character_id);
             HASH_VALUE(sim->archives.stewardship_rank);
+        }
+    }
+    if (sim->schema_version >= 40U) {
+        HASH_VALUE(sim->pony_company.team[0]);
+        HASH_VALUE(sim->pony_company.team[1]);
+        HASH_VALUE(sim->pony_company.encounter);
+        for (int32_t i = 0; i < CC_PONY_COUNT; ++i) {
+            const CcPony *pony = &sim->pony_company.ponies[i];
+            HASH_VALUE(pony->route_id);
+            HASH_VALUE(pony->last_seen_route);
+            HASH_VALUE(pony->bond);
+            HASH_VALUE(pony->quests_completed);
+            HASH_VALUE(pony->releases);
+            HASH_VALUE(pony->last_met_day);
+            HASH_VALUE(pony->quest_kind);
+            HASH_VALUE(pony->quest_amount);
+            HASH_VALUE(pony->health);
+            HASH_VALUE(pony->fatigue);
+            HASH_VALUE(pony->hunger);
+            HASH_VALUE(pony->seen);
+            HASH_VALUE(pony->ready);
         }
     }
 #undef HASH_VALUE

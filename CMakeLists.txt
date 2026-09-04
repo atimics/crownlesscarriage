@@ -83,6 +83,7 @@ cc_strict_warnings(crownless_locomotion)
 add_library(crownless_sim
     src/quest/cc_quest.c
     src/sim/cc_sim.c
+    src/sim/cc_ponies.c
 )
 target_include_directories(crownless_sim PUBLIC src)
 cc_strict_warnings(crownless_sim)
@@ -1017,6 +1018,11 @@ if(BUILD_TESTING)
     target_link_libraries(balance_tests PRIVATE crownless_sim)
     cc_strict_warnings(balance_tests)
     add_test(NAME osr_long_run_balance COMMAND balance_tests)
+
+    add_executable(pony_tests tests/pony_tests.c)
+    target_link_libraries(pony_tests PRIVATE crownless_persistence)
+    cc_strict_warnings(pony_tests)
+    add_test(NAME rainbow_pony_companions COMMAND pony_tests)
 
     add_executable(persistence_tests tests/persistence_tests.c)
     target_link_libraries(persistence_tests PRIVATE crownless_persistence)
