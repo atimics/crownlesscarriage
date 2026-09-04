@@ -137,10 +137,14 @@ static void CheckArchiveRecording(void)
 
     CcSim funded;
     PrepareArchiveWeek(&funded, 50, 1);
+    int32_t funded_gold = CcSimTrackedGood(&funded, CC_GOOD_GOLD);
+    int32_t funded_gems = CcSimTrackedGood(&funded, CC_GOOD_GEMS);
     CcSimAdvanceDays(&funded, 1);
     CC_CHECK(funded.archives.scribes == 1);
     CC_CHECK(funded.archives.lore_stored == 1);
     CC_CHECK(funded.archives.last_recorded_day == 7);
+    CC_CHECK(CcSimTrackedGood(&funded, CC_GOOD_GOLD) == funded_gold);
+    CC_CHECK(CcSimTrackedGood(&funded, CC_GOOD_GEMS) == funded_gems);
 
     CcId recorded_parent = 0U;
     for (int32_t i = 0; i < funded.event_count; ++i) {
@@ -165,6 +169,133 @@ static void CheckArchiveRecording(void)
 
     CcSimAdvanceDays(&funded, 7);
     CC_CHECK(CountLoreRecordsForParent(&funded, recorded_parent) == 1);
+
+    CcSim missing_materials;
+    PrepareArchiveWeek(&missing_materials, 50, 1);
+    for (int32_t i = 0; i < missing_materials.settlement_count; ++i) {
+        CcSettlement *settlement = &missing_materials.settlements[i];
+        settlement->stock[CC_GOOD_GOLD] = 0;
+        settlement->stock[CC_GOOD_GEMS] = 0;
+        settlement->gold_seam = false;
+        settlement->gem_seam = false;
+        settlement->gold_progress = 0;
+        settlement->gem_progress = 0;
+        settlement->treasure_gold_committed = 0;
+        settlement->treasure_gems_committed = 0;
+        settlement->treasure_work = 0;
+    }
+    int32_t treasure_count = missing_materials.treasure_count;
+    int32_t missing_gold = CcSimTrackedGood(
+        &missing_materials, CC_GOOD_GOLD);
+    int32_t missing_gems = CcSimTrackedGood(
+        &missing_materials, CC_GOOD_GEMS);
+    CcSimAdvanceDays(&missing_materials, 1);
+    CC_CHECK(missing_materials.archives.lore_stored == 0);
+    CC_CHECK(missing_materials.treasure_count == treasure_count);
+    CC_CHECK(CcSimTrackedGood(&missing_materials, CC_GOOD_GOLD) ==
+             missing_gold);
+    CC_CHECK(CcSimTrackedGood(&missing_materials, CC_GOOD_GEMS) ==
+             missing_gems);
+}
+
+static void CheckArchiveBindingConservation(void)
+{
+    CcSim sim;
+    PrepareArchiveWeek(&sim, 0, 0);
+    sim.treasure_count = CC_MAX_TREASURES - 4;
+    CcSettlement *vault = &sim.settlements[0];
+    CcSettlement *rival_vault = &sim.settlements[1];
+    int32_t archive_gold = 0;
+    int32_t archive_gems = 0;
+    int32_t archive_lore = 0;
+    int32_t archive_value = 0;
+    for (int32_t i = 0; i < sim.treasure_count; ++i) {
+        CcTreasure *treasure = &sim.treasures[i];
+        bool bound_volume = i >= 1 && i <= 4;
+        *treasure = (CcTreasure){
+            .id = CcMakeId(CC_ENTITY_TREASURE,
+                           sim.next_entity_serial++),
+            .maker_settlement_id = vault->id,
+            .owner_id = i == 0 ? rival_vault->id : vault->id,
+            .location_id = vault->id,
+            .gold_content = bound_volume ? i : 1,
+            .gem_content = bound_volume ? i + 1 : 1,
+            .craft_work = bound_volume ? i : 1,
+            .appraised_value = bound_volume ? 20 + i : 1,
+            .created_day = 1
+        };
+        (void)snprintf(treasure->name, sizeof(treasure->name),
+                       i <= 4 ? "Chronicle test %d" : "Vault piece %d", i);
+        if (bound_volume) {
+            archive_gold += treasure->gold_content;
+            archive_gems += treasure->gem_content;
+            archive_lore += treasure->craft_work;
+            archive_value += treasure->appraised_value;
+        }
+    }
+    for (int32_t i = 0; i < sim.settlement_count; ++i) {
+        sim.settlements[i].stock[CC_GOOD_GOLD] = 0;
+        sim.settlements[i].stock[CC_GOOD_GEMS] = 0;
+        sim.settlements[i].gold_seam = false;
+        sim.settlements[i].gem_seam = false;
+        sim.settlements[i].treasure_gold_committed = 0;
+        sim.settlements[i].treasure_gems_committed = 0;
+        sim.settlements[i].treasure_work = 0;
+    }
+    int32_t gold_before = CcSimTrackedGood(&sim, CC_GOOD_GOLD);
+    int32_t gems_before = CcSimTrackedGood(&sim, CC_GOOD_GEMS);
+
+    CcSimAdvanceDays(&sim, 1);
+
+    CC_CHECK(CcSimTrackedGood(&sim, CC_GOOD_GOLD) == gold_before);
+    CC_CHECK(CcSimTrackedGood(&sim, CC_GOOD_GEMS) == gems_before);
+    const CcTreasure *codex = NULL;
+    for (int32_t i = 0; i < sim.treasure_count; ++i) {
+        if (!sim.treasures[i].destroyed &&
+            strncmp(sim.treasures[i].name, "Codex of ", 9) == 0) {
+            codex = &sim.treasures[i];
+            break;
+        }
+    }
+    CC_CHECK(codex != NULL);
+    CC_CHECK(codex->owner_id == vault->id);
+    CC_CHECK(codex->location_id == vault->id);
+    CC_CHECK(codex->gold_content == archive_gold);
+    CC_CHECK(codex->gem_content == archive_gems);
+    CC_CHECK(codex->craft_work == archive_lore);
+    CC_CHECK(codex->appraised_value == archive_value);
+    CC_CHECK(!sim.treasures[0].destroyed);
+    CC_CHECK(sim.treasures[0].owner_id == rival_vault->id);
+    char error[160];
+    CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
+}
+
+static void CheckLongArchiveConservation(void)
+{
+    CcSim sim;
+    CcSimInit(&sim, UINT32_C(42));
+    sim.iron_ledger_reserve = 300;
+    sim.dragon_campaign.cooldown_days = 10000;
+    sim.hoard_raiders.cooldown_days = 10000;
+    for (int32_t i = 0; i < sim.settlement_count; ++i) {
+        CcSettlement *settlement = &sim.settlements[i];
+        settlement->stock[CC_GOOD_GOLD] += 64;
+        settlement->stock[CC_GOOD_GEMS] += 64;
+        settlement->gold_seam = false;
+        settlement->gem_seam = false;
+        settlement->gold_progress = 0;
+        settlement->gem_progress = 0;
+    }
+    int32_t gold_before = CcSimTrackedGood(&sim, CC_GOOD_GOLD);
+    int32_t gems_before = CcSimTrackedGood(&sim, CC_GOOD_GEMS);
+
+    CcSimAdvanceDays(&sim, 364);
+
+    CC_CHECK(sim.archives.lore_stored > 0);
+    CC_CHECK(CcSimTrackedGood(&sim, CC_GOOD_GOLD) == gold_before);
+    CC_CHECK(CcSimTrackedGood(&sim, CC_GOOD_GEMS) == gems_before);
+    char error[160];
+    CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
 }
 
 static int32_t CountCharacterLifeEvents(const CcSim *sim,
@@ -305,6 +436,8 @@ int main(void)
     CcSimInit(&second, UINT32_C(0x12345678));
     CC_CHECK(CcSimHash(&first) == CcSimHash(&second));
     CheckArchiveRecording();
+    CheckArchiveBindingConservation();
+    CheckLongArchiveConservation();
     CheckCharacterLifecycles();
     CC_CHECK(first.character_count > 0);
     CC_CHECK(first.character_count == second.character_count);

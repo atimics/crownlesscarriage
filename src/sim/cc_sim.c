@@ -4167,6 +4167,7 @@ static bool FindArchiveVolumesToBind(const CcSim *sim, int32_t slots[4])
             const CcTreasure *other = &sim->treasures[i];
             if (!TreasureIsArchiveVolume(other) ||
                 other->owner_id == sim->player.id ||
+                other->owner_id != volume->owner_id ||
                 other->location_id != volume->location_id) continue;
             for (int32_t position = 0; position < 4; ++position) {
                 if (!EarlierArchiveVolume(sim, i, candidate[position])) {
@@ -4830,6 +4831,27 @@ static bool EventWasArchived(const CcSim *sim, CcId event_id)
     return false;
 }
 
+static CcSettlement *ArchiveVaultWithBindingMaterials(CcSim *sim,
+                                                       int32_t first_kingdom)
+{
+    if (sim == NULL || sim->kingdom_count <= 0) return NULL;
+    for (int32_t offset = 0; offset < sim->kingdom_count; ++offset) {
+        int32_t kingdom_slot =
+            (first_kingdom + offset) % sim->kingdom_count;
+        CcId kingdom_id = sim->kingdoms[kingdom_slot].id;
+        for (int32_t i = 0; i < sim->settlement_count; ++i) {
+            CcSettlement *vault = &sim->settlements[i];
+            if (vault->kingdom_id == kingdom_id &&
+                !CcSettlementIsAbandoned(vault) &&
+                vault->stock[CC_GOOD_GOLD] > 0 &&
+                vault->stock[CC_GOOD_GEMS] > 0) {
+                return vault;
+            }
+        }
+    }
+    return NULL;
+}
+
 /* Archive law: the scriptorium records notable events as durable lore.
    Funding follows the monastery reserve; unfunded lore decays.
    This is the world's memory of itself - without it, the ledger
@@ -4855,10 +4877,10 @@ static void AdvanceArchives(CcSim *sim)
     CcId noted[CC_MAX_SCRIBES];
     CcId noted_location[CC_MAX_SCRIBES];
     char noted_text[CC_MAX_SCRIBES][CC_EVENT_TEXT_CAPACITY];
-    int32_t recorded = 0;
+    int32_t noted_count = 0;
     int32_t first_day = MaximumI32(1, sim->current_day - 7);
     for (int32_t offset = 0;
-         offset < sim->event_count && recorded < archives->scribes;
+         offset < sim->event_count && noted_count < archives->scribes;
          ++offset) {
         const CcEvent *event = CcSimRecentEvent(sim, offset);
         if (event == NULL || event->day < first_day ||
@@ -4875,52 +4897,49 @@ static void AdvanceArchives(CcSim *sim)
             event->kind == CC_EVENT_SETTLEMENT_RAIDED ||
             event->kind == CC_EVENT_CHARACTER_DIED;
         if (!notable) continue;
-        noted[recorded] = event->id;
-        noted_location[recorded] = event->location_id;
-        (void)snprintf(noted_text[recorded],
-                       sizeof(noted_text[recorded]),
+        noted[noted_count] = event->id;
+        noted_location[noted_count] = event->location_id;
+        (void)snprintf(noted_text[noted_count],
+                       sizeof(noted_text[noted_count]),
                        "The scriptorium records the lore of: %.90s",
                        event->text);
-        recorded += 1;
+        noted_count += 1;
     }
-    for (int32_t i = 0; i < recorded; ++i) {
+    int32_t recorded = 0;
+    for (int32_t i = 0; i < noted_count; ++i) {
+        /* Physical memory: the record is bound into a tome, a real
+           treasure held by a kingdom. A tome can be stored, captured
+           in a war, or burned in a repudiation - the world's memory
+           lives in vaults, not in a counter. Binding waits when no
+           vault can supply both gilding and a gem seal. */
+        static const char *forms[] = {
+            "Chronicle", "Ledger", "Annal", "Register"
+        };
+        int32_t holder = sim->treasure_count % sim->kingdom_count;
+        CcSettlement *vault = ArchiveVaultWithBindingMaterials(sim, holder);
+        CcKingdom *kingdom = vault != NULL ?
+            KingdomMutable(sim, vault->kingdom_id) : NULL;
+        CcTreasure *tome = kingdom != NULL ? AllocateTreasure(sim) : NULL;
+        if (tome == NULL) continue;
+        vault->stock[CC_GOOD_GOLD] -= 1;
+        vault->stock[CC_GOOD_GEMS] -= 1;
+        (void)snprintf(tome->name, sizeof(tome->name),
+                       "%.12s %.18s of %d",
+                       forms[sim->treasure_count % 4],
+                       kingdom->name, sim->current_day / 364);
+        tome->maker_settlement_id = vault->id;
+        tome->owner_id = vault->id;
+        tome->location_id = vault->id;
+        tome->gold_content = 1;
+        tome->gem_content = 1;
+        tome->craft_work = 1;
+        tome->appraised_value = 6;
+        tome->created_day = sim->current_day;
         archives->lore_stored += 1;
         archives->last_recorded_day = sim->current_day;
         (void)PushEvent(sim, CC_EVENT_LORE_RECORDED, noted[i],
                         noted_location[i], noted[i], 1, noted_text[i]);
-        /* Physical memory: the record is bound into a tome, a real
-           treasure held by a kingdom. A tome can be stored, captured
-           in a war, or burned in a repudiation - the world's memory
-           lives in vaults, not in a counter. */
-        static const char *forms[] = {
-            "Chronicle", "Ledger", "Annal", "Register"
-        };
-        int32_t holder = (int32_t)(sim->treasure_count %
-                                   sim->kingdom_count);
-        CcKingdom *kingdom = &sim->kingdoms[holder];
-        CcSettlement *vault = NULL;
-        for (int32_t s = 0; s < sim->settlement_count; ++s) {
-            if (sim->settlements[s].kingdom_id == kingdom->id &&
-                !CcSettlementIsAbandoned(&sim->settlements[s])) {
-                vault = &sim->settlements[s];
-                break;
-            }
-        }
-        CcTreasure *tome = vault != NULL ? AllocateTreasure(sim) : NULL;
-        if (tome != NULL) {
-            (void)snprintf(tome->name, sizeof(tome->name),
-                           "%.12s %.18s of %d",
-                           forms[sim->treasure_count % 4],
-                           kingdom->name, sim->current_day / 364);
-            tome->maker_settlement_id = vault->id;
-            tome->owner_id = vault->id;   /* the vault holds it */
-            tome->location_id = vault->id;
-            tome->gold_content = 1;   /* gilded vellum */
-            tome->gem_content = 1;    /* ink seal */
-            tome->craft_work = 1;     /* one week's record */
-            tome->appraised_value = 6;
-            tome->created_day = sim->current_day;
-        }
+        recorded += 1;
     }
 
     /* Vault conservation: the treasure array is finite. When it nears
@@ -4936,10 +4955,16 @@ static void AdvanceArchives(CcSim *sim)
             CcId oldest_maker =
                 sim->treasures[tome_slots[0]].maker_settlement_id;
             int32_t combined_lore = 0;
+            int32_t combined_gold = 0;
+            int32_t combined_gems = 0;
+            int32_t combined_value = 0;
             CcId eldest_parent = LatestLocalCause(sim, oldest_location);
             for (int32_t i = 0; i < 4; ++i) {
                 CcTreasure *t = &sim->treasures[tome_slots[i]];
                 combined_lore += t->craft_work;
+                combined_gold += t->gold_content;
+                combined_gems += t->gem_content;
+                combined_value += t->appraised_value;
                 t->destroyed = true;
             }
             /* Rebind in place: the first tome slot becomes the codex.
@@ -4952,10 +4977,10 @@ static void AdvanceArchives(CcSim *sim)
             codex->maker_settlement_id = oldest_maker;
             codex->owner_id = oldest_owner;
             codex->location_id = oldest_location;
-            codex->gold_content = 1;
-            codex->gem_content = 1;
+            codex->gold_content = combined_gold;
+            codex->gem_content = combined_gems;
             codex->craft_work = combined_lore;
-            codex->appraised_value = 6 + combined_lore;
+            codex->appraised_value = combined_value;
             codex->created_day = sim->current_day;
             char text[CC_EVENT_TEXT_CAPACITY];
             (void)snprintf(text, sizeof(text),
