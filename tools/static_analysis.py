@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
@@ -51,7 +52,7 @@ def main() -> int:
         return 2
 
     command = [
-        "cppcheck",
+        os.environ.get("CC_CPPCHECK_EXECUTABLE", "cppcheck"),
         "--enable=warning,style",
         "--inconclusive",
         "--std=c17",
