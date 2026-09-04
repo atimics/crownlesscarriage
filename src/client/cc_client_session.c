@@ -25,6 +25,46 @@ static bool SessionFloatInRange(float value, float minimum, float maximum)
     return isfinite(value) && value >= minimum && value <= maximum;
 }
 
+static float AthleticExperienceLimit(int32_t level)
+{
+    return 30.0f + (float)level * 20.0f;
+}
+
+static void AthleticProfileSetDefault(CcClientAthleticProfile *profile)
+{
+    if (profile == NULL) return;
+    *profile = (CcClientAthleticProfile){0};
+    for (int32_t discipline = 0;
+         discipline < CC_CLIENT_SESSION_ATHLETIC_COUNT; ++discipline) {
+        profile->level[discipline] = 1;
+    }
+}
+
+static bool AthleticProfileValidate(
+    const CcClientAthleticProfile *profile)
+{
+    if (profile == NULL ||
+        !isfinite(profile->travel_training_distance) ||
+        profile->travel_training_distance < 0.0f ||
+        profile->travel_training_distance >= 12.0f) {
+        return false;
+    }
+    for (int32_t discipline = 0;
+         discipline < CC_CLIENT_SESSION_ATHLETIC_COUNT; ++discipline) {
+        int32_t level = profile->level[discipline];
+        float experience = profile->experience[discipline];
+        if (level < 1 || level > CC_CLIENT_SESSION_ATHLETIC_MAX_LEVEL ||
+            !isfinite(experience) || experience < 0.0f ||
+            (level == CC_CLIENT_SESSION_ATHLETIC_MAX_LEVEL &&
+             experience != 0.0f) ||
+            (level < CC_CLIENT_SESSION_ATHLETIC_MAX_LEVEL &&
+             experience >= AthleticExperienceLimit(level))) {
+            return false;
+        }
+    }
+    return true;
+}
+
 static bool EncounterActorValidate(const CcClientEncounterActor *actor)
 {
     if (actor == NULL ||
@@ -140,7 +180,20 @@ bool CcClientSessionValidate(const CcClientSession *session)
     return ClientSessionValidateBase(session) &&
            (session->coordinate_space != CC_CLIENT_SESSION_WORLD ||
             session->route_id != 0U) &&
+           AthleticProfileValidate(&session->athletics) &&
            RoadEncounterValidate(session);
+}
+
+static bool WriteAthleticProfile(
+    FILE *file, const CcClientAthleticProfile *profile)
+{
+    return fprintf(
+        file,
+        "ATHLETICS %d %.9g %d %.9g %d %.9g %.9g\n",
+        profile->level[0], (double)profile->experience[0],
+        profile->level[1], (double)profile->experience[1],
+        profile->level[2], (double)profile->experience[2],
+        (double)profile->travel_training_distance) > 0;
 }
 
 static bool WriteEncounterActor(FILE *file,
@@ -205,6 +258,7 @@ bool CcClientSessionWrite(const char *path, const CcClientSession *session,
         (int)session->road_encounter.mode);
     const CcClientRoadEncounter *encounter = &session->road_encounter;
     bool ok = written > 0 &&
+        WriteAthleticProfile(file, &session->athletics) &&
         fprintf(file, "ROAD %.9g %.9g %.9g %d %d %d %d %d\n",
                 (double)encounter->engagement_time,
                 (double)encounter->alarm_countdown,
@@ -344,6 +398,19 @@ static bool ReadRoadEncounter(FILE *file, CcClientRoadEncounter *encounter)
     return true;
 }
 
+static bool ReadAthleticProfile(
+    FILE *file, CcClientAthleticProfile *profile)
+{
+    char marker[16] = "";
+    return fscanf(file, "%15s", marker) == 1 &&
+           strcmp(marker, "ATHLETICS") == 0 &&
+           fscanf(file, "%d %f %d %f %d %f %f",
+                  &profile->level[0], &profile->experience[0],
+                  &profile->level[1], &profile->experience[1],
+                  &profile->level[2], &profile->experience[2],
+                  &profile->travel_training_distance) == 7;
+}
+
 bool CcClientSessionRead(const char *path, CcClientSession *session,
                          char *error, size_t error_capacity)
 {
@@ -372,7 +439,8 @@ bool CcClientSessionRead(const char *path, CcClientSession *session,
     int road_encounter_mode = CC_CLIENT_ROAD_ENCOUNTER_NONE;
     int header_fields = fscanf(file, "%31s %u", marker, &version);
     int body_fields = 0;
-    if (header_fields == 2 && version == CC_CLIENT_SESSION_VERSION) {
+    if (header_fields == 2 &&
+        (version == CC_CLIENT_SESSION_VERSION || version == 5U)) {
         body_fields = fscanf(file, "%u %llu %d %d %llu %f %f %f %u %d",
                              &world_seed, &location_id, &scene,
                              &coordinate_space, &route_id, &position_x,
@@ -410,24 +478,31 @@ bool CcClientSessionRead(const char *path, CcClientSession *session,
     };
     bool current_payload = version == CC_CLIENT_SESSION_VERSION &&
                            body_fields == 10 &&
+                           ReadAthleticProfile(file, &loaded.athletics) &&
                            ReadRoadEncounter(file, &loaded.road_encounter);
+    bool version_five_payload = version == 5U && body_fields == 10 &&
+        ReadRoadEncounter(file, &loaded.road_encounter);
     bool closed = fclose(file) == 0;
     bool version_one = version == 1U && body_fields == 6;
     bool version_two = version == 2U && body_fields == 7;
     bool version_three = version == 3U && body_fields == 8;
     bool version_four = version == 4U && body_fields == 9;
-    if (version_one || version_two || version_three || version_four) {
+    if (version_one || version_two || version_three || version_four ||
+        version_five_payload) {
         loaded.version = CC_CLIENT_SESSION_VERSION;
+        AthleticProfileSetDefault(&loaded.athletics);
         if (version_one || version_two) {
             loaded.coordinate_space = CC_CLIENT_SESSION_LEGACY_LOCAL;
         }
-        if (!version_four) loaded.route_id = 0U;
+        if (version_one || version_two || version_three) {
+            loaded.route_id = 0U;
+        }
         if (version_one) loaded.opening_step = 2U;
     }
-    bool valid = current_payload || version_four ?
+    bool valid = current_payload || version_five_payload || version_four ?
         CcClientSessionValidate(&loaded) : ClientSessionValidateBase(&loaded);
     if ((!version_one && !version_two && !version_three && !version_four &&
-         !current_payload) ||
+         !version_five_payload && !current_payload) ||
         !closed ||
         strcmp(marker, "CROWNLESS_SESSION") != 0 ||
         !valid) {

@@ -1018,6 +1018,43 @@ static void ResetLocalState(LocalState *local)
     CcLocalCourseInit(&local->course);
 }
 
+static void ResetLocalStatePreservingAthletics(LocalState *local)
+{
+    CcAthleticProfile athletics = local->agent.athletics;
+    ResetLocalState(local);
+    local->agent.athletics = athletics;
+}
+
+#if defined(CC_CLIENT_SELF_TESTS)
+static bool AthleticProfilesMatch(const CcAthleticProfile *first,
+                                  const CcAthleticProfile *second)
+{
+    if (first == NULL || second == NULL ||
+        fabsf(first->travel_training_distance -
+              second->travel_training_distance) >= 0.0001f) {
+        return false;
+    }
+    for (int32_t discipline = 0;
+         discipline < CC_ATHLETIC_DISCIPLINE_COUNT; ++discipline) {
+        if (first->level[discipline] != second->level[discipline] ||
+            fabsf(first->experience[discipline] -
+                  second->experience[discipline]) >= 0.0001f) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static CcAthleticProfile NonDefaultAthleticProfile(void)
+{
+    return (CcAthleticProfile){
+        .experience = {12.5f, 23.5f, 34.5f},
+        .travel_training_distance = 8.25f,
+        .level = {2, 3, 4}
+    };
+}
+#endif
+
 static void BeginOpening(LocalState *local)
 {
     if (local == NULL) return;
@@ -1698,6 +1735,36 @@ _Static_assert(CC_CLIENT_SESSION_RAIDER_COUNT == CC_LOCAL_RAIDER_COUNT,
                "session raider count must match the local encounter");
 _Static_assert(CC_CLIENT_SESSION_SKILL_COUNT == CC_COMBAT_SKILL_COUNT,
                "session skill count must match local combat");
+_Static_assert(CC_CLIENT_SESSION_ATHLETIC_COUNT ==
+                   CC_ATHLETIC_DISCIPLINE_COUNT,
+               "session athletic count must match local athletics");
+_Static_assert(CC_CLIENT_SESSION_ATHLETIC_MAX_LEVEL ==
+                   CC_ATHLETIC_MAX_LEVEL,
+               "session athletic maximum must match local athletics");
+
+static void CaptureAthleticProfile(CcClientAthleticProfile *saved,
+                                   const CcAthleticProfile *profile)
+{
+    if (saved == NULL || profile == NULL) return;
+    saved->travel_training_distance = profile->travel_training_distance;
+    for (int32_t discipline = 0;
+         discipline < CC_ATHLETIC_DISCIPLINE_COUNT; ++discipline) {
+        saved->level[discipline] = profile->level[discipline];
+        saved->experience[discipline] = profile->experience[discipline];
+    }
+}
+
+static void RestoreAthleticProfile(CcAthleticProfile *profile,
+                                   const CcClientAthleticProfile *saved)
+{
+    if (profile == NULL || saved == NULL) return;
+    profile->travel_training_distance = saved->travel_training_distance;
+    for (int32_t discipline = 0;
+         discipline < CC_ATHLETIC_DISCIPLINE_COUNT; ++discipline) {
+        profile->level[discipline] = saved->level[discipline];
+        profile->experience[discipline] = saved->experience[discipline];
+    }
+}
 
 static CcClientRoadEncounterMode RoadEncounterMode(
     const LocalState *local)
@@ -1856,6 +1923,7 @@ static bool SaveLocalSession(const char *path, const CcSim *sim,
         .facing_yaw = local->agent.facing_yaw,
         .opening_step = (uint32_t)local->opening_step
     };
+    CaptureAthleticProfile(&session.athletics, &local->agent.athletics);
     CaptureRoadEncounter(&session.road_encounter, local);
     return CcClientSessionWrite(path, &session, error, error_capacity);
 }
@@ -2079,14 +2147,22 @@ static bool RestoreLocalSession(const char *path, const CcSim *sim,
             sim, local,
             session.road_encounter.mode == CC_CLIENT_ROAD_ENCOUNTER_FIGHT);
         RestoreRoadEncounter(local, &session.road_encounter);
+        RestoreAthleticProfile(&local->agent.athletics,
+                               &session.athletics);
         return true;
     }
     if (session.coordinate_space == CC_CLIENT_SESSION_WORLD) {
-        return RestoreWorldSession(sim, local, &session);
+        bool restored = RestoreWorldSession(sim, local, &session);
+        if (restored) {
+            RestoreAthleticProfile(&local->agent.athletics,
+                                   &session.athletics);
+        }
+        return restored;
     }
 
     LeaveOpenWorld(local);
     ResetLocalState(local);
+    RestoreAthleticProfile(&local->agent.athletics, &session.athletics);
     bool market = session.scene == CC_CLIENT_SESSION_MARKET;
     CcLocalSiteKind site = LocalSiteForClientScene(session.scene);
     bool in_bounds = market ?
@@ -2134,12 +2210,10 @@ static bool RestoreClientStartupSession(const char *path, const CcSim *sim,
 static void BeginRoadLocalState(const CcSim *sim, LocalState *local,
                                 bool hostile)
 {
-    CcAthleticProfile athletics = local->agent.athletics;
     float lateral_offset = local->convoy.lateral_offset;
     float pace = local->convoy.pace;
     LeaveOpenWorld(local);
-    ResetLocalState(local);
-    local->agent.athletics = athletics;
+    ResetLocalStatePreservingAthletics(local);
     local->convoy.phase = CC_LOCAL_CONVOY_ROAD;
     local->convoy.lateral_offset = lateral_offset;
     local->convoy.pace = pace;
@@ -2195,11 +2269,9 @@ static void BeginRoadLocalState(const CcSim *sim, LocalState *local,
 
 static void BeginRoadTravelState(const CcSim *sim, LocalState *local)
 {
-    CcAthleticProfile athletics = local->agent.athletics;
     float lateral_offset = local->convoy.lateral_offset;
     float pace = local->convoy.pace;
-    ResetLocalState(local);
-    local->agent.athletics = athletics;
+    ResetLocalStatePreservingAthletics(local);
     local->convoy.phase = CC_LOCAL_CONVOY_ROAD;
     local->convoy.lateral_offset = lateral_offset;
     local->convoy.pace = sim != NULL && sim->journey.active ?
@@ -2225,10 +2297,8 @@ static void BeginRoadTravelState(const CcSim *sim, LocalState *local)
 
 static void BeginRoadChoiceApproachState(LocalState *local, bool from_town)
 {
-    CcAthleticProfile athletics = local->agent.athletics;
     float pace = local->convoy.pace;
-    ResetLocalState(local);
-    local->agent.athletics = athletics;
+    ResetLocalStatePreservingAthletics(local);
     local->road_choice_active = true;
     local->convoy.phase = from_town ? CC_LOCAL_CONVOY_DEPARTING :
                                       CC_LOCAL_CONVOY_ROAD;
@@ -2261,7 +2331,6 @@ static bool UpdateRoadChoiceApproach(LocalState *local, float delta_time)
 
 static void BeginTownArrivalState(LocalState *local)
 {
-    CcAthleticProfile athletics = local->agent.athletics;
     float pace = local->convoy.pace;
     CcClientArrivalTransition arrival = local->arrival;
     if (arrival.phase != CC_CLIENT_ARRIVAL_TOWN) {
@@ -2271,8 +2340,7 @@ static void BeginTownArrivalState(LocalState *local)
         };
     }
     LeaveOpenWorld(local);
-    ResetLocalState(local);
-    local->agent.athletics = athletics;
+    ResetLocalStatePreservingAthletics(local);
     local->arrival = arrival;
     local->convoy.phase = CC_LOCAL_CONVOY_ARRIVING;
     local->convoy.pace = pace > 0.05f ? pace : 0.48f;
@@ -2312,13 +2380,11 @@ typedef enum SiteTravelResult {
 static void BeginSiteTravelState(LocalState *local, CcLocalSiteKind site,
                                  bool returning)
 {
-    CcAthleticProfile athletics = local->agent.athletics;
     CcNpcAppearance appearance = local->agent.appearance;
     CcMorphologyPreset morphology = local->agent.morphology;
     Color tunic_color = local->agent.tunic_color;
     bool crowned = local->agent.crowned;
-    ResetLocalState(local);
-    local->agent.athletics = athletics;
+    ResetLocalStatePreservingAthletics(local);
     local->agent.appearance = appearance;
     local->agent.morphology = morphology;
     local->agent.tunic_color = tunic_color;
@@ -2349,9 +2415,7 @@ static SiteTravelResult UpdateSiteTravelState(LocalState *local,
         delta_time * 0.18f * local->convoy.pace);
     if (local->site_travel_progress < 1.0f) return SITE_TRAVEL_NONE;
     if (local->site_returning) {
-        CcAthleticProfile athletics = local->agent.athletics;
-        ResetLocalState(local);
-        local->agent.athletics = athletics;
+        ResetLocalStatePreservingAthletics(local);
         return SITE_TRAVEL_RETURNED;
     }
     local->site_travel_active = false;
@@ -2371,13 +2435,11 @@ static void EnterSiteFromGoblinTunnel(LocalState *local,
                                       CcLocalSiteKind site,
                                       Vector2 position)
 {
-    CcAthleticProfile athletics = local->agent.athletics;
     CcNpcAppearance appearance = local->agent.appearance;
     CcMorphologyPreset morphology = local->agent.morphology;
     Color tunic_color = local->agent.tunic_color;
     bool crowned = local->agent.crowned;
-    ResetLocalState(local);
-    local->agent.athletics = athletics;
+    ResetLocalStatePreservingAthletics(local);
     local->agent.appearance = appearance;
     local->agent.morphology = morphology;
     local->agent.tunic_color = tunic_color;
@@ -6027,7 +6089,7 @@ static void UpdateGameplayReel(CcSim *sim, LocalState *local,
                 const CcSituation *accepted = CcSimAcceptedSituation(sim);
                 CcId target = SituationSettlementId(sim, accepted);
                 CcLocalBindPlace(sim);
-                ResetLocalState(local);
+                ResetLocalStatePreservingAthletics(local);
                 local->course.alarm_countdown = 1000.0f;
                 if (target != 0U && target != sim->player.location_id &&
                     reel->journey_legs < sim->settlement_count) {
@@ -6094,7 +6156,7 @@ static void UpdateGameplayReel(CcSim *sim, LocalState *local,
                 const CcSituation *accepted = CcSimAcceptedSituation(sim);
                 CcId target = SituationSettlementId(sim, accepted);
                 CcLocalBindPlace(sim);
-                ResetLocalState(local);
+                ResetLocalStatePreservingAthletics(local);
                 local->course.alarm_countdown = 1000.0f;
                 if (target != 0U && target != sim->player.location_id &&
                     reel->journey_legs < sim->settlement_count) {
@@ -6254,7 +6316,7 @@ static void FinishTownArrivalState(const CcSim *sim, LocalState *local,
 {
     *selected = FirstOutgoingRouteIndex(sim);
     LeaveOpenWorld(local);
-    ResetLocalState(local);
+    ResetLocalStatePreservingAthletics(local);
     (void)snprintf(message, message_capacity,
                    "The team is watered and stabled.");
 }
@@ -6590,6 +6652,8 @@ static int RunRoadBookArrivalRegression(void)
         (void)fprintf(stderr, "Arrival world setup failed.\n");
         return 1;
     }
+    CcAthleticProfile expected_athletics = NonDefaultAthleticProfile();
+    natural.agent.athletics = expected_athletics;
     natural.convoy.pace = 0.72f;
     BeginRoadBookArrivalState(&sim, &natural);
     const CcWorldSettlementPlacement *destination =
@@ -6630,6 +6694,8 @@ static int RunRoadBookArrivalRegression(void)
         natural.world_carriage.town_arrival ||
         natural.convoy.phase != CC_LOCAL_CONVOY_ARRIVING ||
         natural.arrival.phase != CC_CLIENT_ARRIVAL_TOWN ||
+        !AthleticProfilesMatch(&natural.agent.athletics,
+                               &expected_athletics) ||
         fabsf(local_gate.x - world_gate.x) > 0.01f ||
         fabsf(local_gate.z - world_gate.z) > 0.01f ||
         fabsf(WrapLocalAngle(transformed_heading - world_heading)) > 0.01f) {
@@ -6653,6 +6719,12 @@ static int RunRoadBookArrivalRegression(void)
     FinishTownArrivalState(
         &sim, &natural, &natural_selection,
         natural_message, sizeof(natural_message));
+    if (!AthleticProfilesMatch(&natural.agent.athletics,
+                               &expected_athletics)) {
+        (void)fprintf(stderr,
+                      "Town parking changed the athletics profile.\n");
+        return 1;
+    }
 
     LocalState reduced_motion = {0};
     ResetLocalState(&reduced_motion);
@@ -6661,6 +6733,7 @@ static int RunRoadBookArrivalRegression(void)
         (void)fprintf(stderr, "Reduced-motion arrival setup failed.\n");
         return 1;
     }
+    reduced_motion.agent.athletics = expected_athletics;
     reduced_motion.convoy.pace = 0.72f;
     BeginRoadBookArrivalState(&sim, &reduced_motion);
     int32_t reduced_selection = -1;
@@ -6678,6 +6751,8 @@ static int RunRoadBookArrivalRegression(void)
             natural.world_carriage.visible ||
         reduced_motion.world_carriage.town_arrival !=
             natural.world_carriage.town_arrival ||
+        !AthleticProfilesMatch(&reduced_motion.agent.athletics,
+                               &expected_athletics) ||
         reduced_selection != natural_selection ||
         strcmp(reduced_message, natural_message) != 0) {
         (void)fprintf(stderr,
@@ -7174,6 +7249,8 @@ static int RunTownSessionStartupRegression(void)
 
     LocalState saved = {0};
     ResetLocalState(&saved);
+    CcAthleticProfile expected_athletics = NonDefaultAthleticProfile();
+    saved.agent.athletics = expected_athletics;
     RepositionHero(&saved, (Vector2){31.25f, 22.75f}, false);
     saved.agent.facing_yaw = -0.45f;
     saved.opening_step = CC_LOCAL_OPENING_COMPLETE;
@@ -7209,6 +7286,8 @@ static int RunTownSessionStartupRegression(void)
             restored.agent.position.z, stored.position_z) ||
         !SessionTestFloatMatches(
             restored.agent.facing_yaw, stored.facing_yaw) ||
+        !AthleticProfilesMatch(&restored.agent.athletics,
+                               &expected_athletics) ||
         restored.agent.scene != CC_LOCAL_SCENE_STREET ||
         restored.course.scene != CC_LOCAL_SCENE_STREET ||
         restored.road_choice_active) {
@@ -7347,6 +7426,8 @@ static int RunRoadEncounterSessionRegression(void)
         LocalState saved = {0};
         ResetLocalState(&saved);
         BeginRoadLocalState(&sim, &saved, hostile);
+        CcAthleticProfile expected_athletics = NonDefaultAthleticProfile();
+        saved.agent.athletics = expected_athletics;
         saved.agent.position.x += 0.75f;
         saved.agent.position.z -= 0.35f;
         saved.agent.velocity.x = 0.42f;
@@ -7396,6 +7477,8 @@ static int RunRoadEncounterSessionRegression(void)
             !restored.course.road_encounter ||
             restored.journey_combat_active != hostile ||
             restored.journey_parley_active == hostile ||
+            !AthleticProfilesMatch(&restored.agent.athletics,
+                                   &expected_athletics) ||
             !RoadEncounterTestMatches(&expected, &actual)) {
             return SessionStartupTestFailed(
                 session_path,
@@ -8247,9 +8330,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             };
             if (ApplyCommand(*journal, sim, withdraw, message,
                              message_capacity)) {
-                CcAthleticProfile athletics = local->agent.athletics;
-                ResetLocalState(local);
-                local->agent.athletics = athletics;
+                ResetLocalStatePreservingAthletics(local);
                 *selected = FirstVisibleMapIndex(sim);
                 *view = VIEW_LOCAL;
             }
@@ -8464,9 +8545,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             };
             if (ApplyCommand(*journal, sim, defeated, message,
                              message_capacity)) {
-                CcAthleticProfile athletics = local->agent.athletics;
-                ResetLocalState(local);
-                local->agent.athletics = athletics;
+                ResetLocalStatePreservingAthletics(local);
                 *selected = FirstVisibleMapIndex(sim);
                 *view = VIEW_LOCAL;
                 (void)snprintf(message, message_capacity,
@@ -8479,7 +8558,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                                  CC_LOCAL_ROAD_PARLEY_Z};
             if (ClientKeyPressed(KEY_BACKSPACE) ||
                 context_action == CONTEXT_ACTION_RETURN_TO_CHOICE) {
-                ResetLocalState(local);
+                ResetLocalStatePreservingAthletics(local);
                 *view = VIEW_ENCOUNTER;
                 (void)snprintf(message, message_capacity,
                                "Back at the carriage.");
