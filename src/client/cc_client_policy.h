@@ -7,6 +7,7 @@
 
 typedef struct CcClientPreferences {
     bool reduced_motion;
+    int32_t audio_mode; /* 0: full, 1: effects, 2: muted */
 } CcClientPreferences;
 
 typedef enum CcClientConvoyGait {

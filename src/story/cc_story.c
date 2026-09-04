@@ -564,6 +564,11 @@ const CcStoryLine *CcStoryAuthoredLineAt(size_t index)
     return index < CcStoryAuthoredLineCount() ? &STORY_LINES[index].line : NULL;
 }
 
+const char *CcStoryAuthoredSpeakerAt(size_t index)
+{
+    return index < CcStoryAuthoredLineCount() ? STORY_LINES[index].character_name : NULL;
+}
+
 const char *CcStoryBeatName(CcStoryBeat beat)
 {
     switch (beat) {

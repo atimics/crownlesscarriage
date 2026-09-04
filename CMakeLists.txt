@@ -125,6 +125,13 @@ add_library(crownless_client_session
 target_include_directories(crownless_client_session PUBLIC src)
 cc_strict_warnings(crownless_client_session)
 
+add_library(crownless_soundscape src/client/cc_soundscape.c)
+target_include_directories(crownless_soundscape PUBLIC src)
+if(NOT MSVC)
+    target_link_libraries(crownless_soundscape PUBLIC m)
+endif()
+cc_strict_warnings(crownless_soundscape)
+
 add_library(crownless_client_policy
     src/client/cc_client_policy.c
 )
@@ -140,6 +147,12 @@ add_library(crownless_road_book
 target_include_directories(crownless_road_book PUBLIC src)
 target_link_libraries(crownless_road_book PUBLIC crownless_sim)
 cc_strict_warnings(crownless_road_book)
+
+if(NOT EMSCRIPTEN)
+    add_executable(crownless_audio_export tools/audio_export.c)
+    target_link_libraries(crownless_audio_export PRIVATE crownless_story crownless_soundscape)
+    cc_strict_warnings(crownless_audio_export)
+endif()
 
 if(EMSCRIPTEN)
     add_library(crownless_sqlite_web INTERFACE)
@@ -257,7 +270,8 @@ if(CC_BUILD_CLIENT)
     )
     cc_strict_warnings(crownless_local_renderer)
 
-    add_executable(crownless_carriage src/client/main.c)
+    file(GLOB CC_VOICE_ASSETS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/assets/audio/voice/*.wav")
+    add_executable(crownless_carriage src/client/main.c src/client/cc_audio.c)
     if(APPLE)
         set_target_properties(crownless_carriage PROPERTIES
             MACOSX_BUNDLE TRUE
@@ -267,11 +281,20 @@ if(CC_BUILD_CLIENT)
             MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
         )
     endif()
+    if(APPLE AND NOT EMSCRIPTEN)
+        add_custom_target(crownless_voice_assets ALL
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${CMAKE_CURRENT_SOURCE_DIR}/assets/audio/voice"
+                "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/assets/audio/voice"
+            DEPENDS ${CC_VOICE_ASSETS}
+            VERBATIM)
+        add_dependencies(crownless_voice_assets crownless_carriage)
+    endif()
     target_link_libraries(crownless_carriage PRIVATE
         crownless_local_renderer
         crownless_persistence crownless_locomotion
         crownless_creature_catalog crownless_local_place
-        crownless_client_session crownless_client_policy crownless_story
+        crownless_client_session crownless_client_policy crownless_story crownless_soundscape
         crownless_world
         raylib
     )
@@ -307,6 +330,7 @@ if(CC_BUILD_CLIENT)
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/glb/economy_cargo_*.glb"
         )
         set(CC_WEB_STARTUP_ASSET_SOURCES
+            ${CC_VOICE_ASSETS}
             ${CC_WEB_NPC_ASSET_SOURCES}
             ${CC_WEB_WORLD_KIT_ASSET_SOURCES}
             ${CC_WEB_SHADER_ASSET_SOURCES}
@@ -856,6 +880,26 @@ endif()
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(soundscape_tests tests/soundscape_tests.c)
+    target_link_libraries(soundscape_tests PRIVATE crownless_soundscape)
+    cc_strict_warnings(soundscape_tests)
+    add_test(NAME soundscape_timing_and_samples COMMAND soundscape_tests)
+    if(CC_BUILD_CLIENT)
+        add_executable(audio_playback_tests tests/audio_playback_tests.c src/client/cc_audio.c)
+        target_include_directories(audio_playback_tests PRIVATE $<TARGET_PROPERTY:raylib,INTERFACE_INCLUDE_DIRECTORIES>)
+        target_link_libraries(audio_playback_tests PRIVATE crownless_soundscape)
+        cc_strict_warnings(audio_playback_tests)
+        add_test(NAME audio_playback_lifetime COMMAND audio_playback_tests)
+    endif()
+    if(NOT EMSCRIPTEN)
+        find_package(Python3 COMPONENTS Interpreter)
+        if(Python3_Interpreter_FOUND)
+            add_test(NAME audio_exports_and_voice_assets
+                COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/audio_export_tests.py
+                    $<TARGET_FILE:crownless_audio_export>)
+        endif()
+    endif()
+
     add_test(
         NAME license_page_contract
         COMMAND ${CMAKE_COMMAND}

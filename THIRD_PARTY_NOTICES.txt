@@ -33,6 +33,14 @@ The raylib project also keeps a
 
 ## Supplied media
 
+The four opening voice clips in `assets/audio/voice` were generated locally
+with Resemble AI Chatterbox TTS 0.1.7 and its built-in voice. The scripts are
+from Crownless Carriage. The clips retain Chatterbox's audio watermark. Each
+clip has a JSON receipt with its text, speaker, seed, and file fingerprint.
+Chatterbox source and model terms are available at
+https://github.com/resemble-ai/chatterbox and
+https://huggingface.co/ResembleAI/chatterbox.
+
 `assets/video/introduction/the-predator-clause.mp3` has embedded metadata that
 credits **The Predator Clause** to **ratimics** and says it was made with
 [Suno](https://suno.com/song/2542d5c2-8755-4000-8764-ba8ad055d591) on
