@@ -51,24 +51,30 @@ must restore the same generated route pose and simulation progress.
 
 ## Save compatibility
 
-`CC_SIM_SCHEMA_VERSION` (31) and `CC_GENERATOR_VERSION` (24) version every
+`CC_SIM_SCHEMA_VERSION` (33) and `CC_GENERATOR_VERSION` (25) version every
 save file and command journal. The policy: **every schema version ever
 shipped stays loadable**. The legacy table in `cc_sim.c` (`legacy_schema`,
 with the per-version branches below it) is the implementation, and
-`persistence_tests` is the guard. When you bump the schema:
+`persistence_tests` is the guard. The exact shipped schema and generator
+pairs, their source commits, and their real save fixtures live in
+`tests/fixtures/shipped/README.md`. When you bump the schema:
 
 1. Extend the legacy table and add the migration branch for the previous
    version.
+2. Keep the assigned `CcCommandKind` and `CcEventKind` values stable. Command
+   journals and causal events persist these numeric ids. The same rule applies
+   to `CcCollectibleMapSlot` and the good aliases.
+3. Add a persistence test that loads a save written by the prior version.
+
+Journal replay uses the rules for the schema that wrote each record. Migration
+runs after every stored hash passes. New periodic rules need a schema gate when
+they can change a legacy replay result.
 
 The client session has its own small version. Version 4 stores whether a
 position is in the shared world or an old scene-local space, plus the selected
 world route. Versions 1 through 3 remain readable and are converted at load
 time. A restored world route must be incident to the saved settlement and
 present in the regenerated manifest.
-2. Keep the assigned `CcCommandKind` and `CcEventKind` values stable. Command
-   journals and causal events persist these numeric ids. The same rule applies
-   to `CcCollectibleMapSlot` and the good aliases.
-3. Add a persistence test that loads a save written by the prior version.
 
 ## Performance budgets
 

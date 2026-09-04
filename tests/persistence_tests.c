@@ -2288,7 +2288,8 @@ static void CheckShippedSaveCompatibility(char *error,
         {18U, 17U}, {19U, 18U}, {20U, 19U}, {21U, 20U},
         {22U, 20U}, {23U, 20U}, {24U, 20U}, {25U, 20U},
         {26U, 21U}, {27U, 21U}, {27U, 22U}, {28U, 22U},
-        {29U, 23U}, {30U, 23U}, {31U, 24U}
+        {29U, 23U}, {30U, 23U}, {31U, 24U}, {32U, 25U},
+        {33U, 25U}
     };
     for (size_t i = 0; i < sizeof(fixtures) / sizeof(fixtures[0]); ++i) {
         const ShippedSaveFixture *fixture = &fixtures[i];
