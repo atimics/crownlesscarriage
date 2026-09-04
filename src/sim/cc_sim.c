@@ -778,6 +778,26 @@ int32_t CcNutritionConsume(int32_t goods[CC_GOOD_COUNT],
     return MinimumI32(delivered, requested_nutrition);
 }
 
+static CcGood PreferredNutritionGood(
+    const int32_t goods[CC_GOOD_COUNT], CcNutritionPurpose purpose)
+{
+    static const CcGood order[] = {
+        CC_GOOD_BREAD, CC_GOOD_MEAT, CC_GOOD_WHEAT
+    };
+    CcGood best = CC_GOOD_BREAD;
+    int64_t best_nutrition = -1;
+    for (size_t i = 0; i < sizeof(order) / sizeof(order[0]); ++i) {
+        CcGood good = order[i];
+        int64_t nutrition = (int64_t)goods[good] *
+            CcGoodNutritionValue(good, purpose);
+        if (nutrition > best_nutrition) {
+            best = good;
+            best_nutrition = nutrition;
+        }
+    }
+    return best;
+}
+
 const char *CcSettlementFunctionName(CcSettlementFunction function)
 {
     switch (function) {
@@ -4841,7 +4861,8 @@ static void PlanGoblinTribute(CcSim *sim)
     if (goblins->tribute_phase != CC_GOBLIN_TRIBUTE_IDLE ||
         goblins->tribute_cooldown_days > 0 ||
         sim->dragon.stolen_outstanding > 0) return;
-    if (goblins->lair_stock[CC_GOOD_FOOD] < 8) {
+    if (NutritionRations(
+            goblins->lair_stock, CC_NUTRITION_CIVILIAN) < 8) {
         goblins->raid_motive = CC_GOBLIN_RAID_HUNGER;
     } else if (goblins->lair_stock[CC_GOOD_TOOLS] < 2 ||
                goblins->lair_stock[CC_GOOD_WEAPONS] < 3) {
@@ -4862,7 +4883,8 @@ static void PlanGoblinTribute(CcSim *sim)
             place->id == goblins->lair_settlement_id) continue;
         int64_t score = -(int64_t)place->security * 2;
         if (goblins->raid_motive == CC_GOBLIN_RAID_HUNGER) {
-            score += place->stock[CC_GOOD_FOOD] * 4;
+            score += NutritionRations(
+                place->stock, CC_NUTRITION_CIVILIAN) * 4;
         } else if (goblins->raid_motive == CC_GOBLIN_RAID_EQUIPMENT) {
             score += place->stock[CC_GOOD_IRON] +
                      place->stock[CC_GOOD_TOOLS] * 10 +
@@ -4912,9 +4934,10 @@ static void AdvanceGoblinTribute(CcSim *sim)
         if (sim->current_day % 7 == 0) {
             int32_t food_needed = sim->dragon.slain ?
                 1 + (goblins->members - 1) / 24 : 1;
-            int32_t food_eaten = MinimumI32(
-                goblins->lair_stock[CC_GOOD_FOOD], food_needed);
-            goblins->lair_stock[CC_GOOD_FOOD] -= food_eaten;
+            int32_t food_eaten = CcNutritionConsume(
+                goblins->lair_stock, CC_NUTRITION_CIVILIAN,
+                food_needed * CC_NUTRITION_PER_RATION) /
+                CC_NUTRITION_PER_RATION;
             int32_t hunger_loss = food_needed - food_eaten;
             goblins->members = MaximumI32(
                 12, goblins->members - hunger_loss);
@@ -4964,7 +4987,8 @@ static void AdvanceGoblinTribute(CcSim *sim)
     if (goblins->tribute_days_remaining > 0) return;
 
     if (goblins->tribute_phase == CC_GOBLIN_TRIBUTE_OUTBOUND) {
-        CcGood chosen = CC_GOOD_FOOD;
+        CcGood chosen = PreferredNutritionGood(
+            target->stock, CC_NUTRITION_CIVILIAN);
         if (goblins->raid_motive == CC_GOBLIN_RAID_EQUIPMENT) {
             chosen = target->stock[CC_GOOD_WEAPONS] > 0 ?
                 CC_GOOD_WEAPONS : target->stock[CC_GOOD_TOOLS] > 0 ?
@@ -4978,7 +5002,8 @@ static void AdvanceGoblinTribute(CcSim *sim)
             }
             chosen = target->stock[CC_GOOD_GEMS] > 0 ? CC_GOOD_GEMS :
                      target->stock[CC_GOOD_GOLD] > 0 ? CC_GOOD_GOLD :
-                     CC_GOOD_FOOD;
+                     PreferredNutritionGood(
+                         target->stock, CC_NUTRITION_CIVILIAN);
         }
         int32_t capacity = CcGoodDefinitionFor(chosen)->raid_capacity;
         if (goblins->target_warned) capacity = MaximumI32(1, capacity / 2);
@@ -4998,7 +5023,8 @@ static void AdvanceGoblinTribute(CcSim *sim)
         }
         target->prosperity = ClampI32(target->prosperity - 2, 0, 100);
         target->security = ClampI32(target->security - 2, 0, 100);
-        if (chosen == CC_GOOD_FOOD) {
+        if (CcGoodNutritionValue(
+                chosen, CC_NUTRITION_CIVILIAN) > 0) {
             target->hunger = ClampI32(target->hunger +
                 MaximumI32(1, taken_goods / 4), 0, 100);
         }
@@ -5517,9 +5543,10 @@ static void DragonHunt(CcSim *sim)
         target->cow_adults, MaximumI32(1, appetite / 4));
     target->cow_adults -= cows_taken;
     int32_t food_wanted = MaximumI32(1, appetite - cows_taken * 3);
-    int32_t food_taken = MinimumI32(
-        food_wanted, target->stock[CC_GOOD_FOOD]);
-    target->stock[CC_GOOD_FOOD] -= food_taken;
+    int32_t food_taken = CcNutritionConsume(
+        target->stock, CC_NUTRITION_CIVILIAN,
+        food_wanted * CC_NUTRITION_PER_RATION) /
+        CC_NUTRITION_PER_RATION;
     int32_t taken = cows_taken * 3 + food_taken;
     target->hunger = ClampI32(target->hunger + MaximumI32(1, taken / 4),
                               0, 100);
@@ -5676,7 +5703,8 @@ static void AdvanceAfterdragonCult(CcSim *sim)
         dragon->afterdeath_days % 365 != 0 ||
         goblins->tribute_phase != CC_GOBLIN_TRIBUTE_IDLE) return;
 
-    bool provisioned = goblins->lair_stock[CC_GOOD_FOOD] >= 8;
+    bool provisioned = NutritionRations(
+        goblins->lair_stock, CC_NUTRITION_CIVILIAN) >= 8;
     bool armed = goblins->lair_stock[CC_GOOD_TOOLS] >= 2 &&
                  goblins->lair_stock[CC_GOOD_WEAPONS] >= 3;
     int32_t cult_limit = goblins->cohesion < 35 ? 24 : armed ? 84 :
@@ -5686,8 +5714,11 @@ static void AdvanceAfterdragonCult(CcSim *sim)
         recruits = MinimumI32(
             recruits, cult_limit - goblins->members);
         int32_t food_cost = 2 + recruits;
-        if (goblins->lair_stock[CC_GOOD_FOOD] >= food_cost) {
-            goblins->lair_stock[CC_GOOD_FOOD] -= food_cost;
+        if (NutritionRations(
+                goblins->lair_stock, CC_NUTRITION_CIVILIAN) >= food_cost) {
+            (void)CcNutritionConsume(
+                goblins->lair_stock, CC_NUTRITION_CIVILIAN,
+                food_cost * CC_NUTRITION_PER_RATION);
             goblins->members += recruits;
             goblins->devotion = ClampI32(
                 goblins->devotion + 2, 0, 100);
@@ -5754,7 +5785,8 @@ static void AdvanceAfterdragonCult(CcSim *sim)
     bool can_reveal_clutch = goblins->members >= 48 &&
         goblins->devotion >= 75 && goblins->cohesion >= 75 &&
         goblins->lair_coins >= 120 && relics >= 2 &&
-        goblins->lair_stock[CC_GOOD_FOOD] >= 12 &&
+        NutritionRations(
+            goblins->lair_stock, CC_NUTRITION_CIVILIAN) >= 12 &&
         goblins->lair_stock[CC_GOOD_TOOLS] >= 2 &&
         goblins->lair_stock[CC_GOOD_WEAPONS] >= 3;
     if (!can_reveal_clutch) return;
@@ -5768,7 +5800,9 @@ static void AdvanceAfterdragonCult(CcSim *sim)
         goblins->lair_stock[good] -= 1;
         dragon->hoard_goods[good] += 1;
     }
-    goblins->lair_stock[CC_GOOD_FOOD] -= 12;
+    (void)CcNutritionConsume(
+        goblins->lair_stock, CC_NUTRITION_CIVILIAN,
+        12 * CC_NUTRITION_PER_RATION);
     goblins->lair_stock[CC_GOOD_TOOLS] -= 1;
     goblins->lair_stock[CC_GOOD_WEAPONS] -= 1;
     dragon->egg_count = goblins->members >= 72 &&
@@ -5798,7 +5832,8 @@ static void AdvanceLivingDragonCult(CcSim *sim)
     if (sim->current_day % (2 * 365) != 0 ||
         goblins->tribute_phase != CC_GOBLIN_TRIBUTE_IDLE ||
         goblins->members >= 48 ||
-        goblins->lair_stock[CC_GOOD_FOOD] < 6 ||
+        NutritionRations(
+            goblins->lair_stock, CC_NUTRITION_CIVILIAN) < 6 ||
         goblins->cohesion < 35) return;
 
     bool armed = goblins->lair_stock[CC_GOOD_TOOLS] >= 2 &&
@@ -5811,7 +5846,9 @@ static void AdvanceLivingDragonCult(CcSim *sim)
     }
     int32_t recruits = 1;
     int32_t food_cost = 3;
-    goblins->lair_stock[CC_GOOD_FOOD] -= food_cost;
+    (void)CcNutritionConsume(
+        goblins->lair_stock, CC_NUTRITION_CIVILIAN,
+        food_cost * CC_NUTRITION_PER_RATION);
     goblins->members += recruits;
     goblins->cohesion = ClampI32(goblins->cohesion + 1, 0, 100);
     char text[CC_EVENT_TEXT_CAPACITY];
@@ -5846,9 +5883,10 @@ static void AdvanceAfterdragon(CcSim *sim)
     AdvanceAfterdragonCult(sim);
     if (dragon->egg_count > 0) {
         if (sim->current_day % 14 == 0) {
-            if (sim->goblins.lair_stock[CC_GOOD_FOOD] > 0) {
-                sim->goblins.lair_stock[CC_GOOD_FOOD] -= 1;
-            } else {
+            if (CcNutritionConsume(
+                    sim->goblins.lair_stock, CC_NUTRITION_CIVILIAN,
+                    CC_NUTRITION_PER_RATION) <
+                CC_NUTRITION_PER_RATION) {
                 dragon->brood_days_remaining += 7;
             }
         }
@@ -5896,11 +5934,13 @@ static void AdvanceDragonEcology(CcSim *sim)
                 dragon->memory_integrity + 1, 0, 100);
         }
         int32_t stability_change = 0;
-        if (sim->goblins.lair_stock[CC_GOOD_FOOD] >= 4 &&
+        if (NutritionRations(
+                sim->goblins.lair_stock, CC_NUTRITION_CIVILIAN) >= 4 &&
             sim->goblins.lair_stock[CC_GOOD_TOOLS] >= 1 &&
             sim->goblins.devotion >= 50 &&
             sim->goblins.cohesion >= 50) stability_change += 1;
-        if (sim->goblins.lair_stock[CC_GOOD_FOOD] == 0) {
+        if (NutritionRations(
+                sim->goblins.lair_stock, CC_NUTRITION_CIVILIAN) == 0) {
             stability_change -= 2;
         }
         if (DragonTerritoryAtWar(sim)) stability_change -= 1;
@@ -5925,9 +5965,10 @@ static void AdvanceDragonEcology(CcSim *sim)
 
     if (dragon->egg_count > 0) {
         if (sim->current_day % 14 == 0) {
-            if (sim->goblins.lair_stock[CC_GOOD_FOOD] > 0) {
-                sim->goblins.lair_stock[CC_GOOD_FOOD] -= 1;
-            } else {
+            if (CcNutritionConsume(
+                    sim->goblins.lair_stock, CC_NUTRITION_CIVILIAN,
+                    CC_NUTRITION_PER_RATION) <
+                CC_NUTRITION_PER_RATION) {
                 dragon->brood_days_remaining += 7;
                 dragon->territory_stability = MaximumI32(
                     0, dragon->territory_stability - 1);
@@ -7793,8 +7834,11 @@ static void GenerateSituations(CcSim *sim)
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         CcSettlement *settlement = &sim->settlements[i];
         if (CcSettlementIsAbandoned(settlement)) continue;
-        int32_t projected = settlement->stock[CC_GOOD_FOOD] +
-                            CcSimIncomingGood(sim, settlement->id, CC_GOOD_FOOD);
+        int32_t projected = NutritionRations(
+            settlement->stock, CC_NUTRITION_CIVILIAN) +
+            IncomingNutrition(sim, settlement->id,
+                              CC_NUTRITION_CIVILIAN) /
+                CC_NUTRITION_PER_RATION;
         int32_t need = settlement->reserve_target[CC_GOOD_FOOD] - projected +
                        settlement->hunger;
         if (need > relief_need && (projected < settlement->reserve_target[CC_GOOD_FOOD] / 2 ||
@@ -7810,8 +7854,11 @@ static void GenerateSituations(CcSim *sim)
         if (shortage == NULL && !HasRecentSituation(
                 sim, CC_SITUATION_RELIEF_DELIVERY, relief_target->id)) {
             char text[CC_EVENT_TEXT_CAPACITY];
-            int32_t food = relief_target->stock[CC_GOOD_FOOD] +
-                CcSimIncomingGood(sim, relief_target->id, CC_GOOD_FOOD);
+            int32_t food = NutritionRations(
+                relief_target->stock, CC_NUTRITION_CIVILIAN) +
+                IncomingNutrition(sim, relief_target->id,
+                                  CC_NUTRITION_CIVILIAN) /
+                    CC_NUTRITION_PER_RATION;
             (void)snprintf(
                 text, sizeof(text),
                 "%s has %d food in store. Its reserve target is %d.",
@@ -10246,10 +10293,15 @@ static bool ApplyTrade(CcSim *sim, const CcCommand *command,
         settlement->stock[command->good] += selling;
         settlement->market_coins -= proceeds;
         sim->player.coins += proceeds;
-        if (command->good == CC_GOOD_FOOD && settlement->hunger > 0) {
-            settlement->hunger = ClampI32(settlement->hunger - selling * 2, 0, 100);
+        int32_t nutrition = CcGoodNutritionValue(
+            command->good, CC_NUTRITION_CIVILIAN);
+        if (nutrition > 0 && settlement->hunger > 0) {
+            settlement->hunger = ClampI32(
+                settlement->hunger - selling * nutrition, 0, 100);
             sim->player.reputation = ClampI32(
-                sim->player.reputation + selling, -100, 100);
+                sim->player.reputation +
+                    selling * nutrition / CC_NUTRITION_PER_RATION,
+                -100, 100);
         }
     }
     char text[CC_EVENT_TEXT_CAPACITY];
@@ -10257,7 +10309,8 @@ static bool ApplyTrade(CcSim *sim, const CcCommand *command,
                    amount > 0 ? "loads" : "delivers", amount > 0 ? amount : -amount,
                    CcGoodName(command->good), settlement->name);
     CcEvent *trade = PushEvent(
-        sim, command->good == CC_GOOD_FOOD && amount < 0 ?
+        sim, CcGoodNutritionValue(
+                 command->good, CC_NUTRITION_CIVILIAN) > 0 && amount < 0 ?
             CC_EVENT_RELIEF : CC_EVENT_PLAYER_TRADE,
         sim->player.id, settlement->id, 0,
         amount > 0 ? amount : -amount, text);
@@ -10274,12 +10327,13 @@ static bool ApplyTrade(CcSim *sim, const CcCommand *command,
 static bool ApplyGoblinTrade(CcSim *sim, const CcCommand *command,
                              char *error, size_t error_capacity)
 {
-    bool useful_good = command->good == CC_GOOD_FOOD ||
+    bool useful_good = CcGoodNutritionValue(
+            command->good, CC_NUTRITION_CIVILIAN) > 0 ||
         command->good == CC_GOOD_TOOLS ||
         command->good == CC_GOOD_WEAPONS;
     if (!useful_good || command->amount <= 0) {
         SetError(error, error_capacity,
-                 "The Cinder Tithe trades only for Food, Tools, or Weapons.");
+                 "The Cinder Tithe trades only for provisions, Tools, or Weapons.");
         return false;
     }
     if (sim->player.location_id != sim->goblins.lair_settlement_id) {
