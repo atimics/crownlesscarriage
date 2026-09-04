@@ -10,8 +10,6 @@ in vec4 vertexBoneWeights;
 uniform mat4 mvp;
 uniform mat4 matModel;
 uniform mat4 matNormal;
-// WebGL2 guarantees 256 vertex uniform vectors. This palette plus the three
-// matrices above uses 140 vectors.
 uniform mat4 boneMatrices[32];
 
 out vec3 fragPosition;

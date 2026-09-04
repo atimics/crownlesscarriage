@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Tests for stable static-analysis finding identities."""
 
 import sys
 import tempfile
@@ -11,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from tools import static_analysis  # noqa: E402
+from tools import static_analysis
 
 
 def report(line: int, message: str) -> ET.Element:

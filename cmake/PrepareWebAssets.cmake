@@ -36,9 +36,6 @@ if(prepare_startup)
         "${asset_output}/ui"
     )
 
-    # The desktop renderer keeps authored stepped poses for every ambient role.
-    # The browser keeps one idle silhouette per role and falls back to it while
-    # walking. Combatants use the shared skinned body and modular pieces below.
     file(GLOB npc_runtime_assets
         "${asset_source}/exports/npc/npc_module_*.glb"
         "${asset_source}/exports/npc/npc_wayfarer_v01.glb"
@@ -87,9 +84,6 @@ if(prepare_startup)
     file(COPY ${world_kit_runtime_assets}
          DESTINATION "${asset_output}/exports/world_kit")
 
-    # Authored source files keep their editable object boundaries. The deployed
-    # copies combine rigid parts by material so WebGL does not allocate hundreds
-    # of tiny vertex arrays and buffers.
     set(startup_batch_assets
         "${asset_output}/exports/glb/carriage_base_v01.glb"
         ${web_economic_cargo_assets}
@@ -135,8 +129,6 @@ if(prepare_lazy)
         "${lazy_asset_output}/maps"
     )
 
-    # Scene-specific rigid models stay available at their normal URLs. The
-    # browser downloads and uploads only the scene it is about to draw.
     foreach(asset IN ITEMS
             environment_bridge_checkpoint_v01.glb
             environment_market_granary_v01.glb

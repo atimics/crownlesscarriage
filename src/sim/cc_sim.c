@@ -5716,10 +5716,16 @@ static void AdvanceArchives(CcSim *sim)
         sim, scriptorium_ready,
         scriptorium != NULL ? scriptorium->id : 0U);
 
-    /* Decay: unfunded archives lose one written piece from the oldest
-       surviving volume. A one-piece tome remains as a ruined object so its
-       gold, gems, and place in the world stay accounted for. */
-    if (archives->scribes == 0 && archives->lore_stored > 0) {
+    if (archives->scribes == 0 && archives->lore_stored > 0 &&
+        sim->schema_version < 36U) {
+        archives->lore_stored -= 1;
+        archives->lore_lost_total += 1;
+        char text[CC_EVENT_TEXT_CAPACITY];
+        (void)snprintf(text, sizeof(text),
+                       "Unfunded and unwatched, part of the archive crumbles; "
+                       "a name is forgotten.");
+        (void)PushEvent(sim, CC_EVENT_LORE_LOST, 0U, 0U, 0U, 1, text);
+    } else if (archives->scribes == 0 && archives->lore_stored > 0) {
         int32_t oldest = -1;
         for (int32_t i = 0; i < sim->treasure_count; ++i) {
             if (TreasureIsArchiveVolume(&sim->treasures[i]) &&
@@ -5796,6 +5802,7 @@ static void AdvanceRuins(CcSim *sim)
         donor->stock[CC_GOOD_TOOLS] -= 2;
         donor->market_coins -= 12;
         ruin->kingdom_id = donor->kingdom_id;
+        if (sim->schema_version >= 36U) AssignHistoryOffices(sim, true);
         ruin->population = 180;
         ruin->security = 15;
         ruin->prosperity = 20;
@@ -9950,6 +9957,7 @@ static void ResolveWarSettlement(CcSim *sim, int32_t first,
     if (ceded == NULL) return;
 
     ceded->kingdom_id = sim->kingdoms[winner].id;
+    if (sim->schema_version >= 36U) AssignHistoryOffices(sim, true);
     ceded->security = MaximumI32(10, ceded->security - 12);
     ceded->prosperity = MaximumI32(0, ceded->prosperity - 8);
     ceded->hunger = ClampI32(ceded->hunger + 8, 0, 100);
@@ -15955,8 +15963,6 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                          sim->schema_version == 33U ||
                          sim->schema_version == 34U ||
                          sim->schema_version == 35U;
-    /* Older saves carry authoritative settlement coordinates while their
-       economies and road districts are upgraded. */
     bool supported_generator =
         (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
          sim->generator_version == CC_GENERATOR_VERSION) ||
@@ -16080,6 +16086,18 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             sim, kingdom->ruler_character_id);
         const CcCharacter *patron = CcSimCharacter(
             sim, kingdom->monastery_patron_id);
+        if (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
+            (ruler == NULL || CharacterKingdomSlot(sim, ruler) != i ||
+             patron == NULL || CharacterKingdomSlot(sim, patron) != i)) {
+            if (error != NULL && error_capacity > 0U) {
+                (void)snprintf(error, error_capacity,
+                               "Kingdom %.48s has an invalid %s home allegiance.",
+                               kingdom->name,
+                               ruler == NULL || CharacterKingdomSlot(sim, ruler) != i ?
+                                   "ruler" : "monastery patron");
+            }
+            return false;
+        }
         if (CcIdKind(kingdom->id) != CC_ENTITY_KINGDOM ||
             !ValidBoundedText(kingdom->name, sizeof(kingdom->name)) ||
             kingdom->treasury < 0 ||
@@ -16094,9 +16112,6 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
               kingdom->unsanctioned_weeks >= 52 ||
               kingdom->pretender_crises < 0 ||
               kingdom->pretender_crises > CC_SIM_MAX_UNITS ||
-              ruler == NULL || patron == NULL ||
-              CharacterKingdomSlot(sim, ruler) != i ||
-              CharacterKingdomSlot(sim, patron) != i ||
               (kingdom->anointed &&
                kingdom->anointed_by_character_id !=
                    sim->archives.abbot_character_id) ||

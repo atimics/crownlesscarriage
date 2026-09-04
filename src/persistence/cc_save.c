@@ -5412,6 +5412,7 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
     ClearMissingLegacyEventReferences(sim);
     MakeLegacyCharacterNamesUnique(sim);
     if (legacy_version == 35U && sim->generator_version == 25U) {
+        CcSimUpgradeHistoryOffices(sim);
         CcSimUpgradeArchivePhysicalLore(sim);
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         sim->generator_version = CC_GENERATOR_VERSION;

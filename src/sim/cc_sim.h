@@ -47,9 +47,6 @@
 #define CC_CROWNLESS_ATLAS_MAP_NAME "The Crownless Atlas"
 #define CC_DRAGON_HOARD_MAP_NAME "The Hoard Vault of Varkesh"
 
-/* Save and journal compatibility contract: every schema/generator version
-   listed in the legacy tables in cc_sim.c remains loadable. Bump these only
-   with matching migration branches and persistence_tests coverage. */
 #define CC_SIM_SCHEMA_VERSION 36
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -323,14 +320,14 @@ typedef enum CcEventKind {
 } CcEventKind;
 
 typedef struct CcArchives {
-    int32_t scribes;            /* 0..CC_MAX_SCRIBES, funded by the monastery */
-    int32_t lore_stored;        /* lore held by surviving physical volumes */
-    int32_t lore_lost_total;    /* written lore lost to decay or burning */
-    int32_t last_recorded_day;  /* day of the most recent archive write */
-    int32_t lore_ceiling;       /* sustained trust ceiling from remembered lore */
-    int32_t kit_tool_wear;      /* one Tools bundle per eight writing weeks */
-    CcId abbot_character_id;    /* named steward of the scriptorium */
-    int32_t stewardship_rank;   /* 0..100, earned by keeping memory alive */
+    int32_t scribes;
+    int32_t lore_stored;
+    int32_t lore_lost_total;
+    int32_t last_recorded_day;
+    int32_t lore_ceiling;
+    int32_t kit_tool_wear;
+    CcId abbot_character_id;
+    int32_t stewardship_rank;
 } CcArchives;
 
 typedef enum CcMaterialChainBlocker {

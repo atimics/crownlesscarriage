@@ -2455,7 +2455,7 @@ static void CheckShippedSaveCompatibility(char *error,
         {22U, 20U}, {23U, 20U}, {24U, 20U}, {25U, 20U},
         {26U, 21U}, {27U, 21U}, {27U, 22U}, {28U, 22U},
         {29U, 23U}, {30U, 23U}, {31U, 24U}, {32U, 25U},
-        {33U, 25U}, {34U, 25U}
+        {33U, 25U}, {34U, 25U}, {35U, 25U}
     };
     for (size_t i = 0; i < sizeof(fixtures) / sizeof(fixtures[0]); ++i) {
         const ShippedSaveFixture *fixture = &fixtures[i];
@@ -2498,6 +2498,16 @@ static void CheckShippedSaveCompatibility(char *error,
         CC_CHECK(restored.player.location_id == (CcId)player_location);
         CC_CHECK(CcSimValidate(&restored, error, error_capacity));
     }
+
+    char decay_file[512];
+    (void)snprintf(decay_file, sizeof(decay_file),
+                   "%s/tests/fixtures/shipped/schema-35-generator-25-decay-journal.ccsave",
+                   CC_TEST_SOURCE_DIR);
+    CcSim decayed;
+    CC_CHECK(CcSaveRead(decay_file, &decayed, error, error_capacity));
+    CC_CHECK(decayed.current_day == 373);
+    CC_CHECK(decayed.archives.lore_stored == CcSimArchivePhysicalLore(&decayed));
+    CC_CHECK(CcSimValidate(&decayed, error, error_capacity));
 
     char journal_file[512];
     (void)snprintf(

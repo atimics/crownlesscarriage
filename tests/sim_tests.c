@@ -498,8 +498,37 @@ static void CheckRoadDistrictSites(void)
     CC_CHECK(!CcSimValidate(&sim, error, sizeof(error)));
 }
 
+static void CheckBorderOfficeSuccession(void)
+{
+    static CcSim sim;
+    char error[160];
+    CcSimInit(&sim, 110U);
+    for (int32_t day = 0; day < 1100; ++day) {
+        CcSimAdvanceDays(&sim, 1);
+        if (!CcSimValidate(&sim, error, sizeof(error))) {
+            (void)fprintf(stderr, "seed 110 day %d: %s\n",
+                          sim.current_day, error);
+            CC_CHECK(false);
+        }
+    }
+    for (int32_t year = 0; year < 997; ++year) {
+        CcSimAdvanceDays(&sim, 365);
+        if (!CcSimValidate(&sim, error, sizeof(error))) {
+            (void)fprintf(stderr, "seed 110 day %d: %s\n",
+                          sim.current_day, error);
+            CC_CHECK(false);
+        }
+    }
+    CcSimInit(&sim, 110U);
+    sim.characters[0].home_settlement_id = sim.settlements[3].id;
+    sim.kingdoms[0].ruler_character_id = sim.characters[0].id;
+    CC_CHECK(!CcSimValidate(&sim, error, sizeof(error)));
+    CC_CHECK(strstr(error, "ruler home allegiance") != NULL);
+}
+
 int main(void)
 {
+    CheckBorderOfficeSuccession();
     CcSim first;
     CcSim second;
     char error[160];

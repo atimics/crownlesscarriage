@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Check the WebGL2 skinning palette and every shipped skinned asset."""
 
 import json
 import re

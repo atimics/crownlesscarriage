@@ -142,14 +142,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y clang libsqlite3-dev
+        run: >-
+          sudo apt-get update && sudo apt-get install -y
+          clang libsqlite3-dev libasound2-dev libgl1-mesa-dev libglu1-mesa-dev
+          libx11-dev libxcursor-dev libxext-dev libxfixes-dev libxi-dev
+          libxinerama-dev libxrandr-dev xvfb
       - name: Configure
         env:
           CC: clang
         run: >-
           cmake -S . -B build
           -DCMAKE_BUILD_TYPE=Debug
-          -DCC_BUILD_CLIENT=OFF
+          -DCC_BUILD_CLIENT=ON
           -DCC_WARNINGS_AS_ERRORS=ON
           -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=undefined"
           -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=undefined"
@@ -181,6 +185,16 @@ jobs:
           ctest --test-dir build --output-on-failure \
             -E '^headless_performance_budget$' \
             2>&1 | tee sanitizer-tests.log
+      - name: Capture the client under sanitizers
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+          LIBGL_ALWAYS_SOFTWARE: 1
+        run: |
+          xvfb-run --auto-servernum ./build/crownless_carriage \
+            --capture-opening sanitizer-opening.png \
+            2>&1 | tee sanitizer-client.log
+          test -s sanitizer-opening.png
       - name: Upload sanitizer logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -189,4 +203,6 @@ jobs:
           path: |
             sanitizer-self-check.log
             sanitizer-tests.log
+            sanitizer-client.log
+            sanitizer-opening.png
           if-no-files-found: error
