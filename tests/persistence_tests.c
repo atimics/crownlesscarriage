@@ -1403,6 +1403,56 @@ static void CheckSchema22Compatibility(char *error, size_t error_capacity)
     RemoveDatabase(path);
 }
 
+static void CheckSchema23Compatibility(char *error, size_t error_capacity)
+{
+    const char *path = "persistence-legacy-v23-test.ccsave";
+    RemoveDatabase(path);
+    CcSim legacy;
+    CcSimInit(&legacy, UINT32_C(0x12823));
+    CcRoute *route = &legacy.routes[0];
+    for (int32_t i = 0; i < legacy.map_count; ++i) {
+        CcMap *map = &legacy.maps[i];
+        if (map->route_id != route->id ||
+            map->owner_id != legacy.player.id) continue;
+        map->owner_id = legacy.player.location_id;
+        legacy.player.map_catalogue_mask &=
+            ~(UINT32_C(1) << (uint32_t)i);
+        legacy.player.map_archive_mask &=
+            ~(UINT32_C(1) << (uint32_t)i);
+    }
+    CcSimInitializePlayerRouteKnowledge(&legacy);
+    legacy.schema_version = 23U;
+    route->closed = false;
+    route->security = 100;
+    route->condition = 100;
+    CcCommand travel = {
+        .kind = CC_COMMAND_TRAVEL,
+        .target_id = route->to_id
+    };
+    CC_CHECK(CcSimApply(&legacy, &travel, error, error_capacity));
+    legacy.journey.ambush_pending = false;
+    CcSimAdvanceRuntimeTicks(&legacy, 2400);
+    const CcRouteKnowledge *knowledge = CcSimPlayerRouteKnowledge(
+        &legacy, route->id);
+    CC_CHECK(knowledge != NULL);
+    int32_t expected_reveal = legacy.carriage.progress_milli + 140;
+    if (expected_reveal < 280) expected_reveal = 280;
+    if (expected_reveal > 1000) expected_reveal = 1000;
+    CC_CHECK(knowledge->from_reveal_milli == expected_reveal);
+    CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
+
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.generator_version == CC_GENERATOR_VERSION);
+    knowledge = CcSimPlayerRouteKnowledge(&restored, route->id);
+    CC_CHECK(knowledge != NULL);
+    CC_CHECK(knowledge->from_reveal_milli == expected_reveal);
+    CC_CHECK(restored.journey.active);
+    CC_CHECK(CcSimValidate(&restored, error, error_capacity));
+    RemoveDatabase(path);
+}
+
 int main(void)
 {
     const char *path = "persistence-test.ccsave";
@@ -1454,6 +1504,7 @@ int main(void)
     CheckSchema18Compatibility(error, sizeof(error));
     CheckSchema21Compatibility(error, sizeof(error));
     CheckSchema22Compatibility(error, sizeof(error));
+    CheckSchema23Compatibility(error, sizeof(error));
     CheckDiplomacyPersistence(error, sizeof(error));
     CheckJournalRecovery(error, sizeof(error));
     CheckJournalCheckpointAndTamper(error, sizeof(error));

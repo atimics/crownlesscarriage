@@ -127,6 +127,7 @@ typedef struct CcLocalConvoyState {
 typedef struct CcLocalWorldCarriageState {
     Vector3 position;
     float heading_yaw;
+    float route_amount;
     float pace;
     float camera_weight;
     float camera_target;

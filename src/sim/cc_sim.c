@@ -2091,7 +2091,7 @@ const CcMap *CcSimMapForRoute(const CcSim *sim, CcId route_id, CcId owner_id)
 
 enum {
     CC_ROUTE_ANCHOR_REVEAL_MILLI = 280,
-    CC_ROUTE_SIGHT_REVEAL_MILLI = 140,
+    CC_LEGACY_ROUTE_SIGHT_REVEAL_MILLI = 140,
     CC_ROUTE_FULL_REVEAL_MILLI = 1000
 };
 
@@ -2170,8 +2170,10 @@ static void RevealJourneyRoad(CcSim *sim)
 {
     if (sim == NULL || !sim->journey.active) return;
     const CcRoute *route = CcSimRoute(sim, sim->journey.route_id);
+    int32_t legacy_sight_milli = sim->schema_version <= 23U ?
+        CC_LEGACY_ROUTE_SIGHT_REVEAL_MILLI : 0;
     int32_t visible_milli = ClampI32(
-        sim->carriage.progress_milli + CC_ROUTE_SIGHT_REVEAL_MILLI,
+        sim->carriage.progress_milli + legacy_sight_milli,
         CC_ROUTE_ANCHOR_REVEAL_MILLI, CC_ROUTE_FULL_REVEAL_MILLI);
     RevealRouteFromAnchor(
         sim, route, sim->journey.origin_id, visible_milli);
@@ -12748,7 +12750,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                          sim->schema_version == 19U ||
                          sim->schema_version == 20U ||
                          sim->schema_version == 21U ||
-                         sim->schema_version == 22U;
+                         sim->schema_version == 22U ||
+                         sim->schema_version == 23U;
     bool supported_generator = sim->generator_version == CC_GENERATOR_VERSION ||
         (legacy_schema && (sim->generator_version == 3U ||
                            sim->generator_version == 5U ||

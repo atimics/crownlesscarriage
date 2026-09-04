@@ -751,7 +751,7 @@ if(BUILD_TESTING)
 
     add_executable(route_knowledge_tests tests/route_knowledge_tests.c)
     target_link_libraries(route_knowledge_tests PRIVATE
-        crownless_persistence crownless_road_book)
+        crownless_persistence crownless_road_book crownless_world)
     cc_strict_warnings(route_knowledge_tests)
     add_test(NAME persistent_route_knowledge COMMAND route_knowledge_tests)
 

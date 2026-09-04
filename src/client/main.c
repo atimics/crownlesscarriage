@@ -1045,6 +1045,8 @@ static bool SetOpenWorldCarriageOnRoute(
         point.z
     };
     local->world_carriage.heading_yaw = heading;
+    local->world_carriage.route_amount =
+        route->from_id == origin_id ? amount : 1.0f - amount;
     local->world_carriage.pace = pace;
     local->world_carriage.route_id = route_id;
     local->world_carriage.visible = true;
@@ -1081,6 +1083,7 @@ static void SetOpenWorldCarriageAtSettlement(const CcSim *sim,
         place->center.z
     };
     local->world_carriage.heading_yaw = 0.0f;
+    local->world_carriage.route_amount = 0.0f;
     local->world_carriage.route_id = 0U;
     local->world_carriage.visible = true;
 }
@@ -1358,6 +1361,8 @@ static void PositionOpenWorldJourney(const CcSim *sim, LocalState *local)
     local->agent.facing_yaw = heading;
     local->world_carriage.position = local->agent.position;
     local->world_carriage.heading_yaw = heading;
+    local->world_carriage.route_amount =
+        route->from_id == sim->journey.origin_id ? amount : 1.0f - amount;
     local->world_carriage.pace = local->convoy.pace;
     local->world_carriage.camera_target = 1.0f;
     local->world_carriage.route_id = sim->journey.route_id;

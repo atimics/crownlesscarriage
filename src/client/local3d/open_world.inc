@@ -521,8 +521,24 @@ static void DrawOpenWorldGateConnectors(const CcSim *sim,
     }
 }
 
+static bool OpenWorldReadRouteView(
+    const CcSim *sim, const CcWorldRoutePlacement *placement,
+    const CcLocalWorldCarriageState *carriage,
+    CcRoadBookRouteView *view)
+{
+    if (placement == NULL) return false;
+    if (carriage != NULL && carriage->visible &&
+        carriage->route_id == placement->route_id) {
+        return CcRoadBookReadRouteAtCarriage(
+            sim, placement->route_id, carriage->route_amount,
+            CcWorldRouteLength(placement), view);
+    }
+    return CcRoadBookReadRoute(sim, placement->route_id, view);
+}
+
 static void DrawOpenWorldRouteNetwork(const CcSim *sim,
                                       const CcWorldManifest *manifest,
+                                      const CcLocalWorldCarriageState *carriage,
                                       bool kingdom_view)
 {
     if (sim == NULL || manifest == NULL) return;
@@ -534,7 +550,8 @@ static void DrawOpenWorldRouteNetwork(const CcSim *sim,
         const CcRoute *route = CcSimRoute(sim, placement->route_id);
         CcRoadBookRouteView visibility = {0};
         if (route == NULL ||
-            !CcRoadBookReadRoute(sim, route->id, &visibility)) continue;
+            !OpenWorldReadRouteView(
+                sim, placement, carriage, &visibility)) continue;
         Color road = route->closed ? WORLD_DANGER :
                      route->smuggler_route ? WORLD_VIOLET :
                                              WORLD_ROAD_LIGHT;
@@ -648,6 +665,7 @@ static void DrawOpenWorldSites(const CcSim *sim,
 
 static void OpenWorldRevealedBounds(const CcSim *sim,
                                     const CcWorldManifest *manifest,
+                                    const CcLocalWorldCarriageState *carriage,
                                     float *minimum_x, float *minimum_z,
                                     float *maximum_x, float *maximum_z)
 {
@@ -663,7 +681,8 @@ static void OpenWorldRevealedBounds(const CcSim *sim,
         const CcRoute *route = CcSimRoute(sim, placement->route_id);
         CcRoadBookRouteView visibility = {0};
         if (route == NULL ||
-            !CcRoadBookReadRoute(sim, route->id, &visibility)) continue;
+            !OpenWorldReadRouteView(
+                sim, placement, carriage, &visibility)) continue;
         for (int32_t sample = 0;
              sample < CC_WORLD_ROUTE_SAMPLE_COUNT; ++sample) {
             float amount = CcWorldRouteSampleAmount(placement, sample);
@@ -732,7 +751,7 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
     float revealed_maximum_x = 0.0f;
     float revealed_maximum_z = 0.0f;
     OpenWorldRevealedBounds(
-        sim, &stream->manifest,
+        sim, &stream->manifest, carriage,
         &revealed_minimum_x, &revealed_minimum_z,
         &revealed_maximum_x, &revealed_maximum_z);
     float world_width = revealed_maximum_x - revealed_minimum_x;
@@ -807,7 +826,8 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
     ClearBackground(ArtLightBackground(art.light_profile));
     BeginMode3D(camera);
     BeginWorldLighting(camera, &art);
-    DrawOpenWorldRouteNetwork(sim, &stream->manifest, kingdom_view);
+    DrawOpenWorldRouteNetwork(
+        sim, &stream->manifest, carriage, kingdom_view);
     for (int32_t i = 0; i < stream->manifest.settlement_count; ++i) {
         if (!OpenWorldSettlementRevealed(
                 sim, stream->manifest.settlements[i].settlement_id)) {
