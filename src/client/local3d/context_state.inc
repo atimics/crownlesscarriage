@@ -5,6 +5,7 @@
 
 #include "client/cc_local3d.h"
 #include "client/cc_local3d_internal.h"
+#include "client/cc_heraldry.h"
 #include "client/cc_client_policy.h"
 #include "client/cc_road_book.h"
 #include "client/cc_local_place.h"
@@ -121,6 +122,8 @@ static float PhysicsLength(Vector3 value);
 static Vector3 PhysicsNormalizeOr(Vector3 value, Vector3 fallback);
 static Color ShadeColor(Color color, float scale);
 static Color BlendColor(Color from, Color to, float amount);
+static void DrawHeraldryBanner3D(CcHeraldryStyle style, Vector3 base,
+                                 float yaw_degrees, float scale, float clock);
 typedef struct WorldLabel {
     Vector3 point;
     const char *text;

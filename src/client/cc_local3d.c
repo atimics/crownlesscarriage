@@ -12,6 +12,7 @@
 #include "client/local3d/camera_composition.inc"
 #include "client/local3d/asset_loading.inc"
 #include "client/local3d/authored_places.inc"
+#include "client/local3d/heraldry.inc"
 #include "client/local3d/actor_rendering.inc"
 #include "client/local3d/road_book.inc"
 #include "client/local3d/open_world.inc"

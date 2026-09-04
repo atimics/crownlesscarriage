@@ -3866,7 +3866,8 @@ static Color CompoundStoneColor(const CcLocalPlaceProfile *profile,
     return stone;
 }
 
-static void DrawCastle(Color kingdom, const CcLocalPlaceProfile *profile,
+static void DrawCastle(const CcSim *sim, const CcSettlement *place,
+                       Color kingdom, const CcLocalPlaceProfile *profile,
                        Vector3 focus, Camera3D camera,
                        Vector3 reveal_world,
                        int32_t render_width, int32_t render_height,
@@ -3919,12 +3920,18 @@ static void DrawCastle(Color kingdom, const CcLocalPlaceProfile *profile,
         DrawBox((Vector3){hall_door_x, 1.20f, hall_door_z},
                 (Vector3){1.35f, 2.40f, 0.06f},
                 WORLD_WOOD_SHADOW);
-        DrawBox((Vector3){76.30f, gate_height + 0.50f, gate_z},
-                (Vector3){0.78f, 2.30f, 0.06f}, kingdom);
-        DrawBox((Vector3){80.70f, gate_height + 0.50f, gate_z},
-                (Vector3){0.78f, 2.30f, 0.06f}, kingdom);
-
-
+        CcId kingdom_id = place != NULL ? place->kingdom_id : 0U;
+        CcFactionKind leading = CcHeraldryLeadingFaction(sim, kingdom_id);
+        CcHeraldryStyle leading_style = CcHeraldryForFaction(
+            sim, kingdom_id, leading);
+        DrawHeraldryBanner3D(
+            leading_style,
+            (Vector3){76.30f, gate_height - 1.58f, gate_z - 0.42f},
+            180.0f, 0.66f, clock);
+        DrawHeraldryBanner3D(
+            leading_style,
+            (Vector3){80.70f, gate_height - 1.58f, gate_z - 0.42f},
+            0.0f, 0.66f, clock + 0.6f);
         Color gate_stone = CompoundStoneColor(
             profile, kingdom, CC_LOCAL_COMPOUND_WALL);
         DrawBox((Vector3){gate_x, gate_height, gate_z},
@@ -3942,6 +3949,14 @@ static void DrawCastle(Color kingdom, const CcLocalPlaceProfile *profile,
                     WORLD_WOOD_SHADOW);
             DrawSmallSphere((Vector3){torch_x, 2.32f, gate_z + 0.36f},
                             0.18f, WORLD_GOLD);
+        }
+        for (int32_t faction = 0; faction < 3; ++faction) {
+            DrawHeraldryBanner3D(
+                CcHeraldryForFaction(
+                    sim, kingdom_id, (CcFactionKind)faction),
+                (Vector3){74.40f + (float)faction * 2.65f,
+                          0.0f, gate_z + 2.35f},
+                0.0f, 0.52f, clock + (float)faction * 0.35f);
         }
     }
     rlPopMatrix();

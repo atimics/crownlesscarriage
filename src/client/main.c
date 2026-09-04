@@ -8815,6 +8815,13 @@ int main(int argc, char **argv)
         strcmp(argv[1], "--capture-face") == 0;
     bool capture_npc_review = argc >= 2 &&
         strcmp(argv[1], "--capture-npc-review") == 0;
+    bool capture_heraldry = argc >= 2 &&
+        strcmp(argv[1], "--capture-heraldry") == 0;
+    if (capture_heraldry && argc < 3) {
+        (void)fprintf(stderr,
+                      "capture heraldry requires a frame path.\n");
+        return 1;
+    }
     int32_t capture_npc_review_view = -1;
     if (capture_npc_review) {
         if (argc < 4) {
@@ -8927,7 +8934,7 @@ int main(int argc, char **argv)
                     capture_town_arrival ||
                     capture_dragon_cave || capture_underroad ||
                     capture_atmosphere || capture_face ||
-                    capture_room || capture_npc_review ||
+                    capture_room || capture_npc_review || capture_heraldry ||
                     capture_creature_media);
     const char *capture_path = capture_creature_media ? argv[3] :
                                capture_room ? argv[4] :
@@ -9838,7 +9845,10 @@ int main(int argc, char **argv)
                     map_textures.collectible_atlas);
             DrawSettlementPanel(&sim, selected);
         } else {
-            if (capture_npc_review) {
+            if (capture_heraldry) {
+                CcLocalDrawHeraldryReview3D(
+                    &sim, clock, local_target, local_bounds);
+            } else if (capture_npc_review) {
                 CcLocalDrawNpcReview3D(capture_npc_review_view, clock,
                                        local_target, local_bounds);
             } else if (local.open_world && !local.market_interior) {
@@ -9876,7 +9886,8 @@ int main(int argc, char **argv)
                                     &local.convoy, clock,
                                     local_target, local_bounds);
             }
-            if (!capture_npc_review && view != VIEW_ENCOUNTER) {
+            if (!capture_npc_review && !capture_heraldry &&
+                view != VIEW_ENCOUNTER) {
                 if (view == VIEW_LOCAL) {
                     DrawLocalMovementReticle(&local, local_bounds);
                 }

@@ -224,6 +224,8 @@ if(CC_BUILD_CLIENT)
     endif()
 
     add_library(crownless_local_renderer STATIC
+        src/client/cc_heraldry.c
+        src/client/cc_heraldry.h
         src/client/cc_overlay.c
         src/client/cc_npc_appearance.c
         src/client/cc_local3d.c
@@ -235,6 +237,7 @@ if(CC_BUILD_CLIENT)
         src/client/local3d/camera_composition.inc
         src/client/local3d/asset_loading.inc
         src/client/local3d/authored_places.inc
+        src/client/local3d/heraldry.inc
         src/client/local3d/actor_rendering.inc
         src/client/local3d/road_book.inc
         src/client/local3d/open_world.inc
@@ -896,6 +899,14 @@ if(BUILD_TESTING)
         target_include_directories(visual_palette_tests PRIVATE src)
         cc_strict_warnings(visual_palette_tests)
         add_test(NAME perceptual_visual_palette COMMAND visual_palette_tests)
+
+        add_executable(heraldry_tests tests/heraldry_tests.c)
+        target_link_libraries(heraldry_tests PRIVATE
+            crownless_local_renderer crownless_sim raylib
+        )
+        target_include_directories(heraldry_tests PRIVATE src)
+        cc_strict_warnings(heraldry_tests)
+        add_test(NAME dynamic_kingdom_heraldry COMMAND heraldry_tests)
 
         add_executable(local_movement_tests tests/local_movement_tests.c)
         target_link_libraries(local_movement_tests PRIVATE
