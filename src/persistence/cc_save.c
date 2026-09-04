@@ -880,6 +880,9 @@ static bool EnsureHistoryOfficeColumns(sqlite3 *database,
 
 static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
 {
+    const char *pony_schema =
+        "CREATE TABLE IF NOT EXISTS pony_company (id INTEGER PRIMARY KEY CHECK(id=1), team0 INTEGER, team1 INTEGER, encounter INTEGER);"
+        "CREATE TABLE IF NOT EXISTS rainbow_pony (id INTEGER PRIMARY KEY, route_id INTEGER NOT NULL, last_seen_route INTEGER NOT NULL, bond INTEGER NOT NULL, quests_completed INTEGER NOT NULL, releases INTEGER NOT NULL, last_met_day INTEGER NOT NULL, quest_kind INTEGER NOT NULL, quest_amount INTEGER NOT NULL, health INTEGER NOT NULL, fatigue INTEGER NOT NULL, hunger INTEGER NOT NULL, seen INTEGER NOT NULL, ready INTEGER NOT NULL);";
     const char *schema =
         "CREATE TABLE IF NOT EXISTS meta ("
         " id INTEGER PRIMARY KEY CHECK(id=1), schema_version INTEGER NOT NULL,"
@@ -1348,7 +1351,8 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " side INTEGER NOT NULL, spur_length INTEGER NOT NULL,"
         " condition INTEGER NOT NULL, blocker INTEGER NOT NULL,"
         " accessible INTEGER NOT NULL);";
-    return Execute(database, schema, error, error_capacity) &&
+    return Execute(database, pony_schema, error, error_capacity) &&
+           Execute(database, schema, error, error_capacity) &&
            Execute(database, royal_carriage_schema, error, error_capacity) &&
            Execute(database, royal_route_usage_schema,
                    error, error_capacity) &&
@@ -1504,6 +1508,88 @@ static bool SaveSettlements(sqlite3 *database, const CcSim *sim,
     }
     sqlite3_finalize(statement);
     return true;
+}
+
+static bool SavePonies(sqlite3 *database, const CcSim *sim,
+                       char *error, size_t error_capacity)
+{
+    if (sim->schema_version < 40U) return true;
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database, "INSERT INTO pony_company VALUES(1,?,?,?);", &statement, error, error_capacity)) return false;
+    BindInt(statement, 1, sim->pony_company.team[0]);
+    BindInt(statement, 2, sim->pony_company.team[1]);
+    BindInt(statement, 3, sim->pony_company.encounter);
+    bool ok = StepDone(database, statement, error, error_capacity);
+    sqlite3_finalize(statement);
+    if (!ok) return false;
+    if (!Prepare(database, "INSERT INTO rainbow_pony VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?);", &statement, error, error_capacity)) return false;
+    for (int32_t i = 0; i < CC_PONY_COUNT; ++i) {
+        const CcPony *pony = &sim->pony_company.ponies[i];
+        BindInt(statement, 1, i);
+        BindId(statement, 2, pony->route_id);
+        BindId(statement, 3, pony->last_seen_route);
+        BindInt(statement, 4, pony->bond);
+        BindInt(statement, 5, pony->quests_completed);
+        BindInt(statement, 6, pony->releases);
+        BindInt(statement, 7, pony->last_met_day);
+        BindInt(statement, 8, pony->quest_kind);
+        BindInt(statement, 9, pony->quest_amount);
+        BindInt(statement, 10, pony->health);
+        BindInt(statement, 11, pony->fatigue);
+        BindInt(statement, 12, pony->hunger);
+        BindInt(statement, 13, pony->seen);
+        BindInt(statement, 14, pony->ready);
+        if (!StepDone(database, statement, error, error_capacity) ||
+            !ResetStatement(database, statement, error, error_capacity)) {
+            sqlite3_finalize(statement);
+            return false;
+        }
+    }
+    sqlite3_finalize(statement);
+    return true;
+}
+
+static bool ReadPonies(sqlite3 *database, CcSim *sim,
+                       char *error, size_t error_capacity)
+{
+    if (sim->schema_version < 40U) return true;
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database, "SELECT team0,team1,encounter FROM pony_company WHERE id=1;", &statement, error, error_capacity)) return false;
+    if (sqlite3_step(statement) != SQLITE_ROW) goto invalid;
+    sim->pony_company.team[0] = sqlite3_column_int(statement, 0);
+    sim->pony_company.team[1] = sqlite3_column_int(statement, 1);
+    sim->pony_company.encounter = sqlite3_column_int(statement, 2);
+    sqlite3_finalize(statement);
+    if (!Prepare(database, "SELECT * FROM rainbow_pony ORDER BY id;", &statement, error, error_capacity)) return false;
+    int32_t rows = 0;
+    int status;
+    while ((status = sqlite3_step(statement)) == SQLITE_ROW) {
+        if (rows >= CC_PONY_COUNT || sqlite3_column_int(statement, 0) != rows) goto invalid;
+        CcPony *pony = &sim->pony_company.ponies[rows];
+        pony->route_id = (CcId)sqlite3_column_int64(statement, 1);
+        pony->last_seen_route = (CcId)sqlite3_column_int64(statement, 2);
+        pony->bond = sqlite3_column_int(statement, 3);
+        pony->quests_completed = sqlite3_column_int(statement, 4);
+        pony->releases = sqlite3_column_int(statement, 5);
+        pony->last_met_day = sqlite3_column_int(statement, 6);
+        pony->quest_kind = sqlite3_column_int(statement, 7);
+        pony->quest_amount = sqlite3_column_int(statement, 8);
+        pony->health = sqlite3_column_int(statement, 9);
+        pony->fatigue = sqlite3_column_int(statement, 10);
+        pony->hunger = sqlite3_column_int(statement, 11);
+        pony->seen = sqlite3_column_int(statement, 12) != 0;
+        pony->ready = sqlite3_column_int(statement, 13) != 0;
+        if (sqlite3_column_int(statement, 12) < 0 || sqlite3_column_int(statement, 12) > 1 ||
+            sqlite3_column_int(statement, 13) < 0 || sqlite3_column_int(statement, 13) > 1) goto invalid;
+        rows++;
+    }
+    if (status != SQLITE_DONE || rows != CC_PONY_COUNT) goto invalid;
+    sqlite3_finalize(statement);
+    return true;
+invalid:
+    sqlite3_finalize(statement);
+    SetError(error, error_capacity, "Pony save rows are incomplete or invalid.");
+    return false;
 }
 
 static bool SaveHorseTeam(sqlite3 *database, const CcSim *sim,
@@ -2950,6 +3036,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
     return Execute(database,
             "DELETE FROM meta; DELETE FROM kingdom; DELETE FROM settlement;"
             "DELETE FROM horse_team; DELETE FROM stable_horse;"
+            "DELETE FROM pony_company; DELETE FROM rainbow_pony;"
             "DELETE FROM route; DELETE FROM road_site;"
             "DELETE FROM map_object; DELETE FROM map_collection;"
             "DELETE FROM player_route_knowledge;"
@@ -2987,6 +3074,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
                  error, error_capacity) &&
         SaveKingdoms(database, sim, error, error_capacity) &&
         SaveSettlements(database, sim, error, error_capacity) &&
+        SavePonies(database, sim, error, error_capacity) &&
         SaveHorseTeam(database, sim, error, error_capacity) &&
         SaveStableHorses(database, sim, error, error_capacity) &&
         SaveMaterialEconomy(database, sim, error, error_capacity) &&
@@ -5590,7 +5678,7 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
                                  char *error, size_t error_capacity)
 {
     uint32_t legacy_version = sim->schema_version;
-    if (legacy_version == 38U && sim->generator_version == 25U) {
+    if ((legacy_version == 38U || legacy_version == 39U) && sim->generator_version == 25U) {
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         return true;
     }
@@ -6100,7 +6188,8 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
               ReadMaterialEconomy(database, sim, error, error_capacity) &&
               ReadGoods(database, sim, error, error_capacity) &&
               ReadPlayerCommitment(database, sim, error, error_capacity) &&
-              ReadJourneyState(database, sim, error, error_capacity);
+              ReadJourneyState(database, sim, error, error_capacity) &&
+              ReadPonies(database, sim, error, error_capacity);
     if (!ok) {
         return false;
     }
@@ -6123,6 +6212,7 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
     uint32_t stored_generator_version = sim->generator_version;
     if (!UpgradeLegacyRuntime(sim, error, error_capacity)) return false;
     if (stored_schema_version < 34U) CcSimUpgradePlayerKnowledge(sim);
+    if (stored_schema_version < 40U) CcPoniesInit(sim);
     if (upgraded != NULL) {
         *upgraded = sim->schema_version != stored_schema_version ||
                     sim->generator_version != stored_generator_version;

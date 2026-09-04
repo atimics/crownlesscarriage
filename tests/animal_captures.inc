@@ -3,17 +3,18 @@ static void TestAnimalModels(const char *path)
 {
     const CcCreatureVariant animals[] = {
         CC_CREATURE_HORSE, CC_CREATURE_HORSE, CC_CREATURE_HORSE,
+        CC_CREATURE_HORSE, CC_CREATURE_HORSE, CC_CREATURE_HORSE,
         CC_CREATURE_HORSE, CC_CREATURE_COW, CC_CREATURE_SHEEP,
     };
     RenderTexture2D scene = LoadRenderTexture(96, 96);
     RequireRenderer(IsRenderTextureValid(scene), "animal target must load");
-    Image sheet = GenImageColor(768, 576, BLACK);
+    Image sheet = GenImageColor(768, 864, BLACK);
     Camera3D camera = {
         .position = {3.0f, 2.4f, 4.0f}, .target = {0.0f, 0.8f, 0.0f},
         .up = {0.0f, 1.0f, 0.0f}, .fovy = 3.5f,
         .projection = CAMERA_ORTHOGRAPHIC,
     };
-    for (int32_t animal = 0; animal < 6; ++animal) {
+    for (int32_t animal = 0; animal < 9; ++animal) {
         CreatureModelCache *model = &creature_models[animals[animal]][CC_CREATURE_POSE_IDLE];
         RequireRenderer(model->ready && model->model.meshCount == 1,
                         "animal review must use the shipped skin");
@@ -25,7 +26,7 @@ static void TestAnimalModels(const char *path)
             BeginWorldLighting(camera, &ROAD_ART_COMPOSITION);
             RequireRenderer(DrawCreatureGait3D(
                 animals[animal], CC_CREATURE_POSE_IDLE, (Vector3){0},
-                (float)(frame / 2) * PI * 0.5f, 1.0f, animal < 4 ? PONY_COLORS[animal][0] : (Color){0},
+                (float)(frame / 2) * PI * 0.5f, 1.0f, animal < CC_PONY_COUNT ? PONY_COLORS[animal][0] : (Color){0},
                 (float)(frame % 2) * PI * 0.5f, true, NULL),
                 "animal walking draw must succeed");
             EndWorldLighting();
@@ -72,5 +73,36 @@ static void TestAnimalModels(const char *path)
     RequireRenderer(ExportImage(sheet, output), "animal sheet must be written");
     UnloadImage(sheet);
     UnloadRenderTexture(scene);
-    (void)puts("PASS animal skins: four pony colors and two farm species, four turns, two walking poses");
+    (void)puts("PASS animal skins: seven pony colors and two farm species, four turns, two walking poses");
+}
+
+static void TestPonyPortraits(void)
+{
+    for (int32_t known = 0; known < 2; ++known) {
+        for (int32_t pony = 0; pony < CC_PONY_COUNT; ++pony) {
+            BeginDrawing();
+            CcLocalDrawPonyPortrait(pony, known != 0, (Rectangle){0, 0, 64, 64});
+            EndDrawing();
+            int32_t index = known ? pony : CC_PONY_COUNT;
+            RequireRenderer(IsRenderTextureValid(pony_portraits[index]), "pony face must render");
+            Image face = LoadImageFromTexture(pony_portraits[index].texture);
+            Color *pixels = LoadImageColors(face);
+            int32_t colorful = 0;
+            int32_t visible = 0;
+            for (int32_t p = 0; p < face.width * face.height; ++p) {
+                int32_t high = pixels[p].r > pixels[p].g ? pixels[p].r : pixels[p].g;
+                high = high > pixels[p].b ? high : pixels[p].b;
+                int32_t low = pixels[p].r < pixels[p].g ? pixels[p].r : pixels[p].g;
+                low = low < pixels[p].b ? low : pixels[p].b;
+                if (high - low > 18) colorful++;
+                if (high > 65) visible++;
+                if (!known) RequireRenderer(high == low, "unmet pony portrait must be gray");
+            }
+            RequireRenderer(visible > 100, "pony portrait must contain visible face geometry");
+            if (known) RequireRenderer(colorful > 100, "met pony face must show its color");
+            UnloadImageColors(pixels);
+            UnloadImage(face);
+        }
+    }
+    (void)puts("PASS pony portraits: seven colored faces and a shared gray mystery face");
 }

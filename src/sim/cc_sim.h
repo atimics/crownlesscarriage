@@ -52,7 +52,7 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 39
+#define CC_SIM_SCHEMA_VERSION 40
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
@@ -404,7 +404,11 @@ typedef enum CcCommandKind {
     CC_COMMAND_MAKE_CAMP = 39,
     CC_COMMAND_LODGE_ROAD_HOUSE = 40,
     CC_COMMAND_CAMP_ROAD_SITE = 41,
-    CC_COMMAND_PASS_ROAD_SITE = 42
+    CC_COMMAND_PASS_ROAD_SITE = 42,
+    CC_COMMAND_MEET_PONY = 43,
+    CC_COMMAND_HELP_PONY = 44,
+    CC_COMMAND_SWAP_PONY = 45,
+    CC_COMMAND_LEAVE_PONY = 46
 } CcCommandKind;
 
 typedef enum CcHorseSex {
@@ -1455,6 +1459,30 @@ typedef struct CcCommand {
     CcDungeonState dungeon_state;
 } CcCommand;
 
+#define CC_PONY_COUNT 7
+
+typedef struct CcPony {
+    CcId route_id;
+    CcId last_seen_route;
+    int32_t bond;
+    int32_t quests_completed;
+    int32_t releases;
+    int32_t last_met_day;
+    int32_t quest_kind;
+    int32_t quest_amount;
+    int32_t health;
+    int32_t fatigue;
+    int32_t hunger;
+    bool seen;
+    bool ready;
+} CcPony;
+
+typedef struct CcPonyCompany {
+    int32_t team[2];
+    int32_t encounter;
+    CcPony ponies[CC_PONY_COUNT];
+} CcPonyCompany;
+
 typedef struct CcSim {
     uint32_t schema_version;
     uint32_t generator_version;
@@ -1491,6 +1519,7 @@ typedef struct CcSim {
     int32_t relationship_count;
     CcEvent events[CC_MAX_EVENTS];
     CcPlayerCompany player;
+    CcPonyCompany pony_company;
     CcHorse horse_team[CC_CARRIAGE_HORSE_COUNT];
     CcHorse stable_horses[CC_MAX_STABLE_HORSES];
     int32_t stable_horse_count;
@@ -1530,6 +1559,15 @@ typedef struct CcSim {
     int32_t last_bandit_level[CC_MAX_BANDITS];
     int32_t last_monster_level[CC_MAX_MONSTERS];
 } CcSim;
+
+const char *CcPonyName(int32_t pony);
+const char *CcPonyPersonality(int32_t pony);
+void CcPonyQuestText(const CcSim *sim, int32_t pony, char *text, size_t capacity);
+CcGood CcPonyQuestGood(const CcPony *pony);
+void CcPoniesInit(CcSim *sim);
+bool CcPoniesValidate(const CcSim *sim);
+int32_t CcPonyOnRoad(const CcSim *sim);
+bool CcPoniesApply(CcSim *sim, const CcCommand *command, char *error, size_t capacity);
 
 void CcSimInit(CcSim *sim, uint32_t seed);
 

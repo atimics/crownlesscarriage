@@ -1413,7 +1413,7 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
         rlTranslatef(carriage_base.x, carriage_base.y, carriage_base.z);
         rlScalef(carriage_scale, carriage_scale, carriage_scale);
         rlTranslatef(-carriage_base.x, -carriage_base.y, -carriage_base.z);
-        DrawRoadCarriage(carriage_base, &sim->player, clock,
+        DrawRoadCarriage(carriage_base, sim, clock,
                          carriage->pace, carriage->heading_yaw,
                          true, false);
         rlPopMatrix();
