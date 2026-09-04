@@ -27,6 +27,12 @@ jobs:
         run: emcmake cmake --preset web
       - name: Build
         run: cmake --build --preset web
+      - name: Check incremental asset refresh
+        run: >-
+          cmake
+          -DCC_SOURCE_DIR=${{ github.workspace }}
+          -DCC_BINARY_DIR=${{ github.workspace }}/out/build/web
+          -P tests/web_incremental_asset_tests.cmake
       - name: Check site output
         run: >-
           test -f out/build/web/site/index.html &&
