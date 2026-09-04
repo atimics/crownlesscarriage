@@ -262,6 +262,14 @@ static void OpenWorldRenderCacheClear(void)
 {
 }
 
+bool CcLocalOpenWorldUsesKingdomMarkers(float camera_weight)
+{
+    camera_weight = fmaxf(0.0f, fminf(1.0f, camera_weight));
+    camera_weight = camera_weight * camera_weight *
+                    (3.0f - 2.0f * camera_weight);
+    return camera_weight > CC_LOCAL_OPEN_WORLD_KINGDOM_VIEW_START;
+}
+
 static void DrawOpenWorldSettlement(const CcSim *sim,
                                     const CcWorldSettlementPlacement *place,
                                     Vector3 focus, bool kingdom_view)
@@ -757,10 +765,11 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
 {
     if (sim == NULL || stream == NULL || agent == NULL) return;
     CcLocalBindOpenWorld(stream);
-    float camera_weight = carriage != NULL ?
+    float state_camera_weight = carriage != NULL ?
         fmaxf(0.0f, fminf(1.0f, carriage->camera_weight)) : 0.0f;
-    camera_weight = SmoothStep01(camera_weight);
-    bool kingdom_view = camera_weight > 0.55f;
+    bool kingdom_view = CcLocalOpenWorldUsesKingdomMarkers(
+        state_camera_weight);
+    float camera_weight = SmoothStep01(state_camera_weight);
     Vector3 foot_focus = agent->position;
     foot_focus.y += 0.85f;
     float revealed_minimum_x = 0.0f;
@@ -817,7 +826,7 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
             continue;
         }
         DrawOpenWorldSettlement(sim, &stream->manifest.settlements[i], focus,
-                                true);
+                                kingdom_view);
     }
     DrawOpenWorldSites(sim, &stream->manifest, focus, clock, kingdom_view);
     bool hero_embarked = carriage != NULL && carriage->hero_embarked;
