@@ -92,13 +92,17 @@ int main(void)
     CC_CHECK(CcJournalClose(&journal, &sim, error, sizeof(error)));
 
     CcSim restored;
-    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CcJournal *resumed_journal = CcJournalResume(
+        path, &restored, error, sizeof(error));
+    CC_CHECK(resumed_journal != NULL);
     CC_CHECK(CcSimHash(&restored) == saved_partial_hash);
     partial = CcSimPlayerRouteKnowledge(&restored, road->id);
     CC_CHECK(partial != NULL);
     CC_CHECK(partial->from_reveal_milli == saved_partial_reveal);
     CC_CHECK(partial->to_reveal_milli == 0);
     CC_CHECK(restored.journey.active);
+    CC_CHECK(CcJournalClose(
+        &resumed_journal, &restored, error, sizeof(error)));
 
     restored.journey.ambush_pending = false;
     AdvanceJourneyToArrival(&restored);
