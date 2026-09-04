@@ -163,6 +163,14 @@ target_link_libraries(crownless_persistence PUBLIC
 )
 cc_strict_warnings(crownless_persistence)
 
+if(NOT EMSCRIPTEN)
+    set_target_properties(crownless_sim crownless_persistence PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    add_library(crownless_coop SHARED src/multiplayer/cc_coop.c)
+    target_include_directories(crownless_coop PUBLIC src)
+    target_link_libraries(crownless_coop PRIVATE crownless_persistence)
+    cc_strict_warnings(crownless_coop)
+endif()
+
 add_library(crownless_metagame
     src/metagame/cc_metagame.c
 )
@@ -916,6 +924,19 @@ if(BUILD_TESTING)
         add_test(NAME webgl2_skinning_uniform_budget
                  COMMAND ${CC_PYTHON3_EXECUTABLE}
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/shader_uniform_budget_tests.py)
+    endif()
+
+    if(NOT EMSCRIPTEN)
+        add_executable(coop_bridge_tests tests/coop_bridge_tests.c)
+        target_link_libraries(coop_bridge_tests PRIVATE crownless_coop crownless_sim)
+        cc_strict_warnings(coop_bridge_tests)
+        add_test(NAME shared_carriage_bridge COMMAND coop_bridge_tests)
+        if(CC_PYTHON3_EXECUTABLE AND NOT CMAKE_C_FLAGS MATCHES "sanitize")
+            add_test(NAME shared_carriage_server
+                COMMAND ${CC_PYTHON3_EXECUTABLE}
+                        ${CMAKE_CURRENT_SOURCE_DIR}/tests/coop_tests.py
+                        $<TARGET_FILE:crownless_coop>)
+        endif()
     endif()
 
     add_executable(client_policy_tests tests/client_policy_tests.c)
