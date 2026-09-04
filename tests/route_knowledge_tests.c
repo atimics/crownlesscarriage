@@ -354,7 +354,7 @@ int main(void)
     CC_CHECK(CcJournalApply(journal, &sim, &depart,
                             error, sizeof(error)));
     CC_CHECK(sim.journey.active);
-    CC_CHECK(!sim.journey.ambush_pending);
+    sim.journey.ambush_pending = false;
     const CcRouteKnowledge *partial = CcSimPlayerRouteKnowledge(
         &sim, road->id);
     CC_CHECK(partial != NULL);

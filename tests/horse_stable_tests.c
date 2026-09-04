@@ -30,7 +30,7 @@ int main(void)
     CC_CHECK(CcHorseWorkingReady(&sim.horse_team[0]));
 
     CcMoney coins_before = sim.player.coins;
-    int32_t food_before = sim.settlements[0].stock[CC_GOOD_FOOD];
+    int32_t wheat_before = sim.settlements[0].stock[CC_GOOD_WHEAT];
     CcCommand breed = {
         .kind = CC_COMMAND_BREED_HORSES,
         .target_id = sim.horse_team[1].id,
@@ -38,7 +38,7 @@ int main(void)
     };
     CC_CHECK(CcSimApply(&sim, &breed, error, sizeof(error)));
     CC_CHECK(sim.player.coins == coins_before - 20);
-    CC_CHECK(sim.settlements[0].stock[CC_GOOD_FOOD] == food_before - 2);
+    CC_CHECK(sim.settlements[0].stock[CC_GOOD_WHEAT] == wheat_before - 2);
     CC_CHECK(sim.horse_team[1].pregnant_by_id == sim.horse_team[0].id);
     CC_CHECK(sim.horse_team[1].pregnancy_days_remaining == 330);
     CC_CHECK(CountEvents(&sim, CC_EVENT_HORSE_BRED) == 1);

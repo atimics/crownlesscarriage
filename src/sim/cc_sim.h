@@ -49,8 +49,8 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 28
-#define CC_GENERATOR_VERSION 22
+#define CC_SIM_SCHEMA_VERSION 29
+#define CC_GENERATOR_VERSION 23
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
 #define CC_WORLD_DAY_SUBTICKS (24 * 60 * CC_WORLD_MINUTE_SUBTICKS)
@@ -118,6 +118,14 @@ typedef struct CcGoodDefinition {
     int32_t raid_capacity;
 } CcGoodDefinition;
 
+#define CC_NUTRITION_PER_RATION 2
+
+typedef enum CcNutritionPurpose {
+    CC_NUTRITION_CIVILIAN,
+    CC_NUTRITION_TRAVEL,
+    CC_NUTRITION_ANIMAL
+} CcNutritionPurpose;
+
 typedef enum CcSettlementFunction {
     CC_SETTLEMENT_FARMING,
     CC_SETTLEMENT_MINING,
@@ -151,6 +159,7 @@ typedef enum CcServiceKind {
     CC_SERVICE_FARM,
     CC_SERVICE_BLACK_MARKET,
     CC_SERVICE_DUNGEON_WARD,
+    CC_SERVICE_BAKERY,
     CC_SERVICE_COUNT
 } CcServiceKind;
 
@@ -294,7 +303,8 @@ typedef enum CcEventKind {
     CC_EVENT_ROAD_HOUSE_LODGING = 113,
     CC_EVENT_CHARACTER_BORN = 114,
     CC_EVENT_CHARACTER_DIED = 115,
-    CC_EVENT_WOODLOT_HARVEST = 116
+    CC_EVENT_WOODLOT_HARVEST = 116,
+    CC_EVENT_BAKERY_PRODUCTION = 117
 } CcEventKind;
 
 typedef struct CcArchives {
@@ -1364,6 +1374,7 @@ void CcSimInitializeCharacters(CcSim *sim);
 void CcSimUpgradeCharacterLifecycles(CcSim *sim);
 void CcSimUpgradeQuestArchitecture(CcSim *sim);
 void CcSimInitializeUnderroad(CcSim *sim);
+void CcSimUpgradeGrainEconomy(CcSim *sim);
 void CcSimAdvanceDays(CcSim *sim, int32_t days);
 bool CcSettlementIsAbandoned(const CcSettlement *settlement);
 int32_t CcSimClimateFactor(const CcSim *sim);
@@ -1403,6 +1414,12 @@ CcEntityKind CcIdKind(CcId id);
 bool CcGoodIsValid(CcGood good);
 const CcGoodDefinition *CcGoodDefinitionFor(CcGood good);
 const char *CcGoodName(CcGood good);
+int32_t CcGoodNutritionValue(CcGood good, CcNutritionPurpose purpose);
+int32_t CcNutritionAvailable(const int32_t goods[CC_GOOD_COUNT],
+                             CcNutritionPurpose purpose);
+int32_t CcNutritionConsume(int32_t goods[CC_GOOD_COUNT],
+                           CcNutritionPurpose purpose,
+                           int32_t requested_nutrition);
 const char *CcSettlementFunctionName(CcSettlementFunction function);
 const char *CcSettlementSizeName(CcSettlementSize size);
 const char *CcServiceName(CcServiceKind service);

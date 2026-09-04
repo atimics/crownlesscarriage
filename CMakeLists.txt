@@ -826,6 +826,11 @@ if(BUILD_TESTING)
     cc_strict_warnings(material_economy_tests)
     add_test(NAME physical_material_economy COMMAND material_economy_tests)
 
+    add_executable(grain_economy_tests tests/grain_economy_tests.c)
+    target_link_libraries(grain_economy_tests PRIVATE crownless_sim)
+    cc_strict_warnings(grain_economy_tests)
+    add_test(NAME grain_food_economy COMMAND grain_economy_tests)
+
     add_executable(metagame_tests tests/metagame_tests.c)
     target_link_libraries(metagame_tests PRIVATE crownless_metagame)
     cc_strict_warnings(metagame_tests)

@@ -60,7 +60,9 @@ static bool ParseAmount(const char *text, int32_t *amount)
 static bool ParseGood(const char *text, CcGood *good)
 {
     if (text == NULL || good == NULL) return false;
-    if (strcmp(text, "food") == 0) *good = CC_GOOD_FOOD;
+    if (strcmp(text, "food") == 0 || strcmp(text, "bread") == 0) {
+        *good = CC_GOOD_BREAD;
+    }
     else if (strcmp(text, "iron") == 0 || strcmp(text, "material") == 0) {
         *good = CC_GOOD_IRON;
     }
@@ -69,6 +71,10 @@ static bool ParseGood(const char *text, CcGood *good)
     else if (strcmp(text, "gold") == 0) *good = CC_GOOD_GOLD;
     else if (strcmp(text, "gems") == 0) *good = CC_GOOD_GEMS;
     else if (strcmp(text, "wood") == 0) *good = CC_GOOD_WOOD;
+    else if (strcmp(text, "wheat") == 0) *good = CC_GOOD_WHEAT;
+    else if (strcmp(text, "meat") == 0) *good = CC_GOOD_MEAT;
+    else if (strcmp(text, "wool") == 0) *good = CC_GOOD_WOOL;
+    else if (strcmp(text, "stone") == 0) *good = CC_GOOD_STONE;
     else return false;
     return true;
 }
@@ -1198,12 +1204,13 @@ static void DescribeEconomy(const CcMetagame *metagame,
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         const CcSettlement *place = &sim->settlements[i];
         Append(output, capacity,
-               "  %s: Food %d, Iron %d, Wood %d, Tools %d, Weapons %d, Gold %d, Gems %d",
-               place->name, place->stock[CC_GOOD_FOOD],
-               place->stock[CC_GOOD_IRON], place->stock[CC_GOOD_WOOD],
-               place->stock[CC_GOOD_TOOLS],
+               "  %s: Bread %d, Wheat %d, Meat %d, Iron %d, Tools %d, Weapons %d, Gold %d, Gems %d, Wood %d, Wool %d, Stone %d",
+               place->name, place->stock[CC_GOOD_BREAD],
+               place->stock[CC_GOOD_WHEAT], place->stock[CC_GOOD_MEAT],
+               place->stock[CC_GOOD_IRON], place->stock[CC_GOOD_TOOLS],
                place->stock[CC_GOOD_WEAPONS], place->stock[CC_GOOD_GOLD],
-               place->stock[CC_GOOD_GEMS]);
+               place->stock[CC_GOOD_GEMS], place->stock[CC_GOOD_WOOD],
+               place->stock[CC_GOOD_WOOL], place->stock[CC_GOOD_STONE]);
         if (place->production[CC_GOOD_WOOD] > 0) {
             Append(output, capacity, "; woodlot %d per week",
                    place->production[CC_GOOD_WOOD]);
@@ -1375,12 +1382,19 @@ static void DescribeStatus(const CcMetagame *metagame,
 {
     const CcSim *sim = &metagame->sim;
     const CcSettlement *place = CurrentPlace(metagame);
+    CcFoodEconomy nutrition = {0};
+    if (place != NULL) {
+        (void)CcSimFoodEconomyAtSettlement(
+            sim, place->id, &nutrition);
+    }
     Append(output, capacity,
-           "Day %d at %s. Food %d/%d, price %d, hunger %d, security %d.\n",
+           "Day %d at %s. Nourishment %d/%d rations; Bread %d at %dc; Wheat %d at %dc; hunger %d, security %d.\n",
            sim->current_day, place != NULL ? place->name : "the road",
-           place != NULL ? place->stock[CC_GOOD_FOOD] : 0,
-           place != NULL ? place->reserve_target[CC_GOOD_FOOD] : 0,
-           place != NULL ? place->price[CC_GOOD_FOOD] : 0,
+           nutrition.stock, nutrition.reserve_target,
+           place != NULL ? place->stock[CC_GOOD_BREAD] : 0,
+           place != NULL ? place->price[CC_GOOD_BREAD] : 0,
+           place != NULL ? place->stock[CC_GOOD_WHEAT] : 0,
+           place != NULL ? place->price[CC_GOOD_WHEAT] : 0,
            place != NULL ? place->hunger : 0,
            place != NULL ? place->security : 0);
     DescribeCargo(metagame, output, capacity);
@@ -1446,7 +1460,7 @@ static void DescribeUnderroad(const CcMetagame *metagame,
         Append(output, capacity, "%d of %d.\n", known, dungeon->room_count);
         if (sim->player.location_id == dungeon->settlement_id) {
             Append(output, capacity,
-                   "The carriage is at the entrance. Carry Food, then use 'underroad enter'.\n");
+                   "The carriage is at the entrance. Carry Bread or Meat, then use 'underroad enter'.\n");
         } else {
             Append(output, capacity,
                    "The entrance is at Silverwick. The carriage must travel there first.\n");
@@ -1515,8 +1529,8 @@ static void DescribeHelp(char *output, size_t capacity)
            "Make commitments:\n"
            "  tell NUMBER, keep NUMBER, accept NUMBER, refuse NUMBER, abandon\n"
            "Move goods and people:\n"
-           "  buy food|iron|tools|weapons|gold|gems|wood COUNT\n"
-           "  sell food|iron|tools|weapons|gold|gems|wood COUNT\n"
+           "  buy bread|wheat|meat|iron|tools|weapons|gold|gems|wood|wool|stone COUNT\n"
+           "  sell bread|wheat|meat|iron|tools|weapons|gold|gems|wood|wool|stone COUNT\n"
            "  buy-map NUMBER, sell-map NUMBER\n"
            "  buy-notes NUMBER, sell-notes NUMBER (aliases)\n"
            "  archive-map NUMBER, retrieve-map NUMBER (in Gloamgate)\n"
@@ -2011,7 +2025,7 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
         if (!ParseGood(first, &good) || !ParseDays(second, &amount) ||
             amount > CC_CARGO_CAPACITY * 8) {
             Append(output, output_capacity,
-                   "Use 'buy food 8' or 'sell weapons 2'; count must fit the carriage.\n");
+                   "Use 'buy bread 8' or 'sell weapons 2'; count must fit the carriage.\n");
             return false;
         }
         if (strcmp(command, "sell") == 0) amount = -amount;
@@ -2681,13 +2695,16 @@ bool CcMetagameAgentCounterfactual(const CcMetagame *metagame,
     for (int32_t i = 0; i < settlement_count; ++i) {
         const CcSettlement *actual = &metagame->sim.settlements[i];
         const CcSettlement *idle = &control->sim.settlements[i];
-        if (actual->stock[CC_GOOD_FOOD] == idle->stock[CC_GOOD_FOOD] &&
+        if (actual->stock[CC_GOOD_BREAD] == idle->stock[CC_GOOD_BREAD] &&
+            actual->stock[CC_GOOD_WHEAT] == idle->stock[CC_GOOD_WHEAT] &&
             actual->hunger == idle->hunger &&
             actual->security == idle->security) continue;
         Append(output, output_capacity,
-               "  %s: Food %d/%d, hunger %d/%d, security %d/%d\n",
-               actual->name, actual->stock[CC_GOOD_FOOD],
-               idle->stock[CC_GOOD_FOOD], actual->hunger, idle->hunger,
+               "  %s: Bread %d/%d, Wheat %d/%d, hunger %d/%d, security %d/%d\n",
+               actual->name, actual->stock[CC_GOOD_BREAD],
+               idle->stock[CC_GOOD_BREAD],
+               actual->stock[CC_GOOD_WHEAT], idle->stock[CC_GOOD_WHEAT],
+               actual->hunger, idle->hunger,
                actual->security, idle->security);
         changed += 1;
     }

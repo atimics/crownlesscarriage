@@ -340,6 +340,8 @@ int main(void)
     CcSettlement *war_supplier = &war.settlements[3];
     CcKingdom *war_kingdom = &war.kingdoms[1];
     fortress->stock[CC_GOOD_FOOD] = 0;
+    fortress->stock[CC_GOOD_WHEAT] = 0;
+    fortress->stock[CC_GOOD_MEAT] = 0;
     fortress->stock[CC_GOOD_TOOLS] = 0;
     fortress->reserve_target[CC_GOOD_FOOD] = 24;
     fortress->reserve_target[CC_GOOD_TOOLS] = 4;
