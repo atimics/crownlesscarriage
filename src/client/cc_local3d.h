@@ -527,6 +527,7 @@ float CcLocalCombatSkillCooldown(const CcLocalAgent *player,
                                  CcCombatSkill skill);
 float CcLocalCombatSkillDuration(CcCombatSkill skill);
 
+/* Renderer lifecycle: configure, init, begin frame, bind, draw, shutdown. */
 void CcLocalRendererInit(void);
 void CcLocalRendererSetScreenFirstHero(bool enabled);
 void CcLocalRendererSetOpeningStep(CcLocalOpeningStep step);
@@ -538,7 +539,6 @@ void CcLocalRendererSetMovementPreview(
     const CcLocalMovementPreview *preview);
 void CcLocalRendererSetAtmosphere(CcLocalAtmospherePreset preset,
                                   float transition_seconds);
-void CcLocalRendererUpdateAtmosphere(float delta_time);
 const char *CcLocalAtmosphereName(CcLocalAtmospherePreset preset);
 void CcLocalRendererShutdown(void);
 void CcLocalDrawNpcPortrait3D(const CcNpcAppearance *appearance,

@@ -7750,14 +7750,13 @@ int main(int argc, char **argv)
         char previous_message[sizeof(message)];
         (void)snprintf(previous_message, sizeof(previous_message), "%s",
                        message);
-        CcLocalRendererBeginFrame(frame_delta_time);
-        CcLocalBindPlace(&sim);
-        BindOpenWorldForLocalState(&local);
         CcLocalRendererSetAtmosphere(
             capture_atmosphere ? capture_atmosphere_preset :
                 LocalAtmosphereForSimulation(&sim),
             2.4f);
-        CcLocalRendererUpdateAtmosphere(frame_delta_time);
+        CcLocalRendererBeginFrame(frame_delta_time);
+        CcLocalBindPlace(&sim);
+        BindOpenWorldForLocalState(&local);
         if (!capture && !render_benchmark && ClientKeyPressed(KEY_F3)) {
             performance_overlay = !performance_overlay;
             (void)snprintf(message, sizeof(message), "%s",
