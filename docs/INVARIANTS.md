@@ -31,6 +31,9 @@ height arrays into authoritative save state.
 
 Open-world carriage presentation must use the generated route pose. Its
 position and heading cannot be maintained by a separate visual road path.
+Every strategic route incident to a settlement must share that settlement's
+authored gate connector and exterior junction. Route dressing begins at the
+junction, outside the authored town footprint.
 The wide view renders generated corridors along revealed routes; it must not
 render a square world floor. Fog is derived from chart knowledge, current
 location, and current journey progress.
