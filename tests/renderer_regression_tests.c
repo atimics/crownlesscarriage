@@ -135,16 +135,25 @@ static void WriteViewportFixture(const char *path)
     UnloadImage(shot);
 }
 
+#include "character_material_captures.inc"
+#include "character_surface_tests.inc"
+
 int main(int argc, char **argv)
 {
     TestSkinTurns();
-    if (argc == 3 && strcmp(argv[1], "--graphics") == 0) {
+    if (argc == 3 && (strcmp(argv[1], "--graphics") == 0 ||
+                      strcmp(argv[1], "--material-captures") == 0)) {
         SetConfigFlags(FLAG_WINDOW_HIDDEN);
         InitWindow(1280, 760, "Renderer regression checks");
         SetTraceLogLevel(LOG_WARNING);
         CcLocalRendererInit();
-        TestCharacterPrimitives();
-        WriteViewportFixture(argv[2]);
+        if (strcmp(argv[1], "--graphics") == 0) {
+            TestCharacterPrimitives();
+            TestCharacterSurfaces();
+            WriteViewportFixture(argv[2]);
+        } else {
+            CaptureCharacterMaterials(argv[2]);
+        }
         CcLocalRendererShutdown();
         CloseWindow();
     }
