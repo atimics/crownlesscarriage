@@ -60,7 +60,7 @@ blender-assets-check:
 
 blender-economic-assets:
 	$(BLENDER) --background --factory-startup --python tools/blender/build_asset_library.py -- --economic-only
-	$(BLENDER) --background assets/blender/crownless_asset_library.blend --python tools/blender/render_asset_catalog.py -- economy_source_grain_v01 economy_source_iron_ore_v01 economy_source_gold_ore_v01 economy_source_timber_v01 economy_source_sheep_v01 economy_source_gem_seam_v01 economy_source_stone_quarry_v01 economy_cargo_food_v01 economy_cargo_iron_v01 economy_cargo_tools_v01 economy_cargo_weapons_v01 economy_cargo_gold_v01 economy_cargo_gems_v01 economy_cargo_wood_v01 economy_cargo_wheat_v01 economy_cargo_meat_v01 economy_cargo_wool_v01 economy_cargo_stone_v01
+	$(BLENDER) --background assets/blender/crownless_asset_library.blend --python tools/blender/render_asset_catalog.py -- economy_source_grain_v01 economy_source_iron_ore_v01 economy_source_gold_ore_v01 economy_source_timber_v01 economy_source_sheep_v01 economy_source_gem_seam_v01 economy_source_stone_quarry_v01 economy_source_paper_mill_v01 economy_cargo_food_v01 economy_cargo_iron_v01 economy_cargo_tools_v01 economy_cargo_weapons_v01 economy_cargo_gold_v01 economy_cargo_gems_v01 economy_cargo_wood_v01 economy_cargo_wheat_v01 economy_cargo_meat_v01 economy_cargo_wool_v01 economy_cargo_stone_v01 economy_cargo_paper_v01 economy_cargo_rotten_meat_v01 economy_cargo_rotten_grain_v01
 	$(BLENDER) --background assets/blender/crownless_asset_library.blend --python tools/blender/render_economic_icons.py
 	python3 tools/blender/compose_economic_assets.py
 

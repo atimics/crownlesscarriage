@@ -4507,10 +4507,13 @@ static void DrawRoadPanel(const CcSim *sim, int32_t selected)
     CcOverlayDrawText(TextFormat("%" PRId64 " CROWNS",
                                  preview.provision_cost),
                       1152, 185, 11, CC_GOLD);
-    CcOverlayDrawText(preview.departure_wait_minutes > 0 ?
-                          "DEPARTS NEXT MORNING / DAILY WATCHES" :
-                          "MORNING / BREAK / AFTERNOON / NIGHT STOP",
-                      998, 208, 8, TEAL);
+    CcOverlayDrawText(preview.rain_expected ?
+                          "RAIN ON ROUTE / WHEAT WILL ROT" :
+                          preview.departure_wait_minutes > 0 ?
+                              "DEPARTS NEXT MORNING / DAILY WATCHES" :
+                              "MORNING / BREAK / AFTERNOON / NIGHT STOP",
+                      998, 208, 8,
+                      preview.rain_expected ? DANGER : TEAL);
     DrawBar(998, 358, 92, "TEAM", preview.horse_readiness, TEAL);
     CcOverlayDrawText(TextFormat("%d FODDER",
                                  preview.horse_feed_required),

@@ -50,7 +50,7 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 32
+#define CC_SIM_SCHEMA_VERSION 33
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
@@ -106,6 +106,9 @@ typedef enum CcGood {
     CC_GOOD_MEAT = 8,
     CC_GOOD_WOOL = 9,
     CC_GOOD_STONE = 10,
+    CC_GOOD_PAPER = 11,
+    CC_GOOD_ROTTEN_MEAT = 12,
+    CC_GOOD_ROTTEN_GRAIN = 13,
     CC_GOOD_COUNT
 } CcGood;
 
@@ -1273,6 +1276,7 @@ typedef struct CcTravelPreview {
     int32_t road_house_distance_miles;
     CcMoney road_house_cost;
     const char *road_house_name;
+    bool rain_expected;
     bool opening_half_day;
     bool charted;
     bool destination_known;
@@ -1421,6 +1425,7 @@ void CcSimInitializeWoodEconomy(CcSim *sim);
 void CcSimInitializeStoneEconomy(CcSim *sim);
 void CcSimInitializeRoadSites(CcSim *sim);
 void CcSimUpgradeFlockEconomy(CcSim *sim);
+void CcSimInitializePaperEconomy(CcSim *sim);
 void CcSimInitializeHorseStableSystem(CcSim *sim);
 void CcSimInitializeCharacters(CcSim *sim);
 void CcSimUpgradeCharacterLifecycles(CcSim *sim);
@@ -1464,6 +1469,7 @@ bool CcHorseWorkingReady(const CcHorse *horse);
 CcId CcMakeId(CcEntityKind kind, uint64_t serial);
 CcEntityKind CcIdKind(CcId id);
 bool CcGoodIsValid(CcGood good);
+int32_t CcGoodCountForSchema(uint32_t schema_version);
 const CcGoodDefinition *CcGoodDefinitionFor(CcGood good);
 const char *CcGoodName(CcGood good);
 int32_t CcGoodNutritionValue(CcGood good, CcNutritionPurpose purpose);

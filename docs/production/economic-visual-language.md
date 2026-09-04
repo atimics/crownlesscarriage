@@ -19,7 +19,7 @@ mine, a market stall, a carriage load, and a ledger entry at a glance.
 
 ## Visual set
 
-The production pass covers all eleven current `CcGood` values. Each gets one
+The production pass covers all fourteen current `CcGood` values. Each gets one
 main cargo shape.
 
 | Good | UI shape | 3D cargo prop | Main colors |
@@ -35,13 +35,22 @@ main cargo shape.
 | Meat | three marked cuts | butcher tray | danger accent, parchment, wood |
 | Wool | soft square with two bands | tied wool bale | parchment, rope |
 | Stone | four offset blocks | strapped masonry bundle | stone, leather |
+| Paper | layered rectangle with cross ties | sealed paper ream | parchment, rope, wax red |
+| Rotten Meat | dark cuts with green spots | stained butcher tray | dark stone, moss, wood |
+| Rotten Grain | slumped sack with wet clumps | spoiled grain sack | old crop, moss, earth |
 
 Food uses the crate as its main shape. The loaf and wheat act as small detail.
 Iron uses flat bars. Tools use several short handles. Weapons use one tall
 spear and a round shield. Raw gold uses irregular nuggets. Gems use one sharp
 violet crystal. Wood stays horizontal. Wheat stays upright. Meat uses rounded
-cuts. Wool uses a pale bale. Stone uses square blocks. These shapes stay
-distinct when color is reduced.
+cuts. Wool uses a pale bale. Stone uses square blocks. Paper uses a flat stack
+with crossed ties and a wax seal. Rotten meat keeps the butcher-tray shape with
+dark cuts and mould spots. Rotten grain becomes a slumped wet sack. These
+shapes stay distinct when color is reduced.
+
+Fresh meat can be loaded in town. It becomes Rotten Meat when the carriage
+departs. Wheat stays sound on a dry road. A route with rain changes it into
+Rotten Grain. The route panel warns about rain before departure.
 
 ## Production sources
 
@@ -57,6 +66,7 @@ market. They are place props and state dressing.
 | Sheep | compact pale body with a dark face and legs | meat and wool supply |
 | Gem seam | dark rock with two modest violet crystals | gem extraction |
 | Stone quarry | cut face with loose masonry blocks | stone extraction |
+| Paper mill | pulp vat and drying rack | wood converted into paper |
 
 ## 3D rules
 
@@ -91,6 +101,9 @@ Suggested footprints:
 | Butcher tray | 0.9 x 0.7 x 0.7 |
 | Wool bale | 0.9 x 0.7 x 0.8 |
 | Stone bundle | 1.0 x 0.7 x 0.7 |
+| Paper ream | 0.9 x 0.7 x 0.4 |
+| Rotten meat tray | 0.9 x 0.7 x 0.7 |
+| Rotten grain sack | 0.8 x 0.7 x 0.7 |
 
 ## Icon rules
 
@@ -139,7 +152,7 @@ models, followed by a fixed 32-pixel reduction.
 
 The client draws one model for every good present on the carriage rack. The
 cargo screen draws the matching atlas frame beside each quantity. Desktop and
-web packages carry all eleven cargo models and the atlas.
+web packages carry all fourteen cargo models and the atlas.
 
 The concept boards set shape, material, camera, and light direction. The
 production board shows the generated Blender assets used by the game.
