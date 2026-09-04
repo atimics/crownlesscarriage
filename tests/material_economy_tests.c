@@ -9,6 +9,22 @@ static uint32_t Service(CcServiceKind service)
     return UINT32_C(1) << (uint32_t)service;
 }
 
+static void ResetRoyalCarriage(CcSim *sim, int32_t kingdom_slot,
+                               CcId location_id)
+{
+    CcRoyalCarriage *carriage =
+        &sim->royal_carriages[kingdom_slot];
+    carriage->location_id = location_id;
+    carriage->route_id = 0U;
+    carriage->destination_id = 0U;
+    carriage->target_id = 0U;
+    carriage->active_shipment_id = 0U;
+    carriage->mode = CC_ROYAL_CARRIAGE_IDLE;
+    carriage->departure_day = 0;
+    carriage->arrival_day = 0;
+    carriage->blocked_since_day = 0;
+}
+
 static CcSettlement *IsolatedSettlement(CcSim *sim)
 {
     CcSimInit(sim, UINT32_C(0xec0a0a01));
@@ -387,6 +403,8 @@ int main(void)
 
     CcSim wood_convoy = tool_convoy;
     wood_convoy.shipment_count = 0;
+    ResetRoyalCarriage(
+        &wood_convoy, 0, wood_convoy.settlements[0].id);
     for (int32_t kingdom = 0;
          kingdom < wood_convoy.kingdom_count; ++kingdom) {
         wood_convoy.kingdoms[kingdom].treasury = 0;
@@ -420,6 +438,8 @@ int main(void)
 
     CcSim stone_convoy = tool_convoy;
     stone_convoy.shipment_count = 0;
+    ResetRoyalCarriage(
+        &stone_convoy, 0, stone_convoy.settlements[0].id);
     for (int32_t kingdom = 0;
          kingdom < stone_convoy.kingdom_count; ++kingdom) {
         stone_convoy.kingdoms[kingdom].treasury = 0;

@@ -526,7 +526,7 @@ static void CheckLegacyJournalMigration(char *error,
              legacy_generation);
     CC_CHECK(ReadSqliteInteger(
                  path, "SELECT journal_cursor FROM meta WHERE id=1;") == 0);
-    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 25);
+    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 26);
     CC_CHECK(CcJournalAdvanceDays(journal, &resumed, 2,
                                   error, error_capacity));
     uint64_t expected_hash = CcSimHash(&resumed);
@@ -2392,7 +2392,8 @@ static void CheckLegacyLifecycleJournalCompatibility(
     CC_CHECK(restored.generator_version == CC_GENERATOR_VERSION);
     CC_CHECK(restored.current_day == suffix.current_day);
     CC_CHECK(restored.characters[0].id == first_character_id);
-    CC_CHECK(restored.next_entity_serial == first_unused_serial);
+    CC_CHECK(restored.next_entity_serial ==
+             first_unused_serial + (uint64_t)restored.kingdom_count);
     CC_CHECK(restored.character_births == 0);
     CC_CHECK(restored.character_deaths == 0);
     for (int32_t i = 0; i < restored.character_count; ++i) {

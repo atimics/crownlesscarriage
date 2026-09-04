@@ -11,6 +11,13 @@ static void PrintSummary(const CcSim *sim, bool detail)
     int32_t total_hunger = 0;
     int32_t maximum_hunger = 0;
     int32_t travelling = 0;
+    int32_t blocked_shipments = 0;
+    int32_t royal_idle = 0;
+    int32_t royal_repositioning = 0;
+    int32_t royal_delivering = 0;
+    int32_t royal_blocked = 0;
+    int32_t royal_trips = 0;
+    int32_t royal_losses = 0;
     int32_t open_routes = 0;
     int32_t smuggler_routes = 0;
     int32_t legitimacy = 0;
@@ -42,6 +49,22 @@ static void PrintSummary(const CcSim *sim, bool detail)
     }
     for (int32_t i = 0; i < sim->shipment_count; ++i) {
         if (sim->shipments[i].status == CC_SHIPMENT_TRAVELLING) travelling += 1;
+        if (sim->shipments[i].status == CC_SHIPMENT_BLOCKED) {
+            blocked_shipments += 1;
+        }
+    }
+    for (int32_t i = 0; i < sim->royal_carriage_count; ++i) {
+        const CcRoyalCarriage *carriage = &sim->royal_carriages[i];
+        if (carriage->mode == CC_ROYAL_CARRIAGE_IDLE) royal_idle += 1;
+        if (carriage->mode == CC_ROYAL_CARRIAGE_REPOSITIONING) {
+            royal_repositioning += 1;
+        }
+        if (carriage->mode == CC_ROYAL_CARRIAGE_DELIVERING) {
+            royal_delivering += 1;
+        }
+        if (carriage->mode == CC_ROYAL_CARRIAGE_BLOCKED) royal_blocked += 1;
+        royal_trips += carriage->trips_completed;
+        royal_losses += carriage->cargo_losses;
     }
     for (int32_t i = 0; i < sim->route_count; ++i) {
         if (!sim->routes[i].closed) open_routes += 1;
@@ -81,6 +104,8 @@ static void PrintSummary(const CcSim *sim, bool detail)
     CcMaterialChainSnapshot chain = CcSimMaterialChainSnapshot(sim);
     (void)printf("day=%d hash=%016" PRIx64
                  " average_hunger=%d maximum_hunger=%d shipments=%d events=%d"
+                 " blocked_shipments=%d royal_carriages=%d/%d/%d/%d"
+                 " royal_trips=%d royal_losses=%d"
                  " open_routes=%d/%d legitimacy=%d live_situations=%d"
                  " bandit_influence=%d monster_pressure=%d"
                  " night_roads=%d monastery_reserve=%" PRId64
@@ -106,6 +131,8 @@ static void PrintSummary(const CcSim *sim, bool detail)
                  sim->current_day, CcSimHash(sim),
                  total_hunger / sim->settlement_count, maximum_hunger,
                  travelling, sim->event_count,
+                 blocked_shipments, royal_idle, royal_repositioning,
+                 royal_delivering, royal_blocked, royal_trips, royal_losses,
                  open_routes, sim->route_count, legitimacy / sim->kingdom_count,
                  CcSimActiveSituationCount(sim),
                  sim->bandit_count > 0 ? sim->bandits[0].influence : 0,

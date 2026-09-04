@@ -14,7 +14,7 @@ static int32_t CountEvents(const CcSim *sim, CcEventKind kind)
     return count;
 }
 
-static bool ShipmentsStayInsideKingdoms(const CcSim *sim)
+static bool ShipmentsFollowRoyalCarriages(const CcSim *sim)
 {
     for (int32_t i = 0; i < sim->shipment_count; ++i) {
         const CcShipment *shipment = &sim->shipments[i];
@@ -23,12 +23,19 @@ static bool ShipmentsStayInsideKingdoms(const CcSim *sim)
             sim, shipment->destination_id);
         const CcSettlement *final = CcSimSettlement(
             sim, shipment->final_destination_id);
-        if (origin == NULL || destination == NULL || final == NULL ||
-            origin->kingdom_id != destination->kingdom_id ||
-            origin->kingdom_id != final->kingdom_id ||
-            CcSimRouteCrossesKingdomBorder(sim, shipment->route_id)) {
+        if (origin == NULL || destination == NULL || final == NULL) {
             return false;
         }
+        if (shipment->status != CC_SHIPMENT_TRAVELLING &&
+            shipment->status != CC_SHIPMENT_BLOCKED) continue;
+        const CcRoyalCarriage *carriage = CcSimRoyalCarriage(
+            sim, final->kingdom_id);
+        if (carriage == NULL ||
+            carriage->active_shipment_id != shipment->id ||
+            shipment->quantity >
+                CC_ROYAL_CARRIAGE_CARGO_SLOTS *
+                    CcGoodDefinitionFor(shipment->good)->
+                        freight_units_per_slot) return false;
     }
     return true;
 }
@@ -199,7 +206,7 @@ int main(void)
 
     CcSimAdvanceDays(&first, 55);
     CC_CHECK(first.shipment_count > 0);
-    CC_CHECK(ShipmentsStayInsideKingdoms(&first));
+    CC_CHECK(ShipmentsFollowRoyalCarriages(&first));
     for (int32_t i = 0; i < first.shipment_count; ++i) {
         const CcShipment *shipment = &first.shipments[i];
         const CcSettlement *origin = CcSimSettlement(&first, shipment->origin_id);
@@ -247,7 +254,7 @@ int main(void)
                                             foreign_route->id));
     CcSimAdvanceDays(&peaceful_smuggling, 55);
     CC_CHECK(peaceful_smuggling.shipment_count > 0);
-    CC_CHECK(ShipmentsStayInsideKingdoms(&peaceful_smuggling));
+    CC_CHECK(ShipmentsFollowRoyalCarriages(&peaceful_smuggling));
 
     int32_t initial_support[CC_MAX_FACTIONS];
     for (int32_t i = 0; i < first.faction_count; ++i) {
