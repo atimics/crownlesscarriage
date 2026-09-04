@@ -60,8 +60,6 @@ def main() -> int:
         "--quiet",
         "--xml",
         "--xml-version=2",
-        "-j",
-        "4",
         "-Isrc",
         "src",
     ]
