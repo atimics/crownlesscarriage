@@ -29,6 +29,10 @@ This keeps the combined power steady across a transition. Three bounded stream
 slots let an attack interrupt an ordinary crossfade at its current volumes.
 Fades use real time, including during fast travel. Losing window focus pauses
 the streams and the director together.
+The shared sound control includes music in full mode. Effects mode and mute
+pause the score. Dialogue lowers music to 36 percent of its usual volume,
+with a smooth return when speech finishes. Sound effects own the audio device;
+music releases its streams before that device closes.
 
 ## Audio files
 

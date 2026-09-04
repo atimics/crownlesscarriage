@@ -5,7 +5,7 @@
 
 /* Playback starts after a play input. Fades advance in real seconds. */
 void CcMusicPlayerUpdate(const CcMusicContext *context, float delta_seconds,
-                         bool focused, bool play_input, uint32_t seed);
+                         bool focused, bool play_input, float volume, uint32_t seed);
 void CcMusicPlayerShutdown(void);
 
 #endif

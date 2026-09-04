@@ -2,6 +2,7 @@
 #include "raylib.h"
 
 #include <stdio.h>
+#include <math.h>
 #include <string.h>
 
 static struct {
@@ -11,8 +12,8 @@ static struct {
     char path[CC_MUSIC_TAKE_COUNT][512];
     bool initialized;
     bool ready;
-    bool owns_device;
     bool focused;
+    float volume;
 } player;
 
 static bool FindTrack(int take, char *path, size_t capacity)
@@ -48,19 +49,17 @@ static void Initialize(uint32_t seed)
         found = found || player.director.available[i];
     }
     if (!found) return;
-    if (!IsAudioDeviceReady()) {
-        InitAudioDevice();
-        player.owns_device = IsAudioDeviceReady();
-    }
     player.ready = IsAudioDeviceReady();
     player.focused = true;
 }
 
 void CcMusicPlayerUpdate(const CcMusicContext *context, float delta_seconds,
-                         bool focused, bool play_input, uint32_t seed)
+                         bool focused, bool play_input, float volume, uint32_t seed)
 {
-    if (!player.initialized && play_input) Initialize(seed);
+    if (!player.initialized && play_input && IsAudioDeviceReady()) Initialize(seed);
     if (!player.ready) return;
+    volume = isfinite(volume) ? fminf(1.0f, fmaxf(0.0f, volume)) : 0.0f;
+    focused = focused && volume > 0.0f;
     if (player.focused != focused) {
         for (int i = 0; i < CC_MUSIC_VOICE_COUNT; ++i) {
             if (player.loaded_take[i] < 0) continue;
@@ -70,6 +69,9 @@ void CcMusicPlayerUpdate(const CcMusicContext *context, float delta_seconds,
         player.focused = focused;
     }
     if (!focused) return;
+    float dt = isfinite(delta_seconds) ? fminf(1.0f, fmaxf(0.0f, delta_seconds)) : 0.0f;
+    float rate = volume < player.volume ? 4.0f : 1.25f;
+    player.volume += (volume - player.volume) * fminf(1.0f, dt * rate);
     CcMusicUpdate(&player.director, context, delta_seconds);
     for (int i = 0; i < CC_MUSIC_VOICE_COUNT; ++i) {
         CcMusicVoice *voice = &player.director.voice[i];
@@ -95,7 +97,7 @@ void CcMusicPlayerUpdate(const CcMusicContext *context, float delta_seconds,
             }
         }
         if (player.loaded_take[i] >= 0) {
-            SetMusicVolume(player.stream[i], voice->gain * 0.55f);
+            SetMusicVolume(player.stream[i], voice->gain * player.volume * 0.55f);
             UpdateMusicStream(player.stream[i]);
         }
     }
@@ -109,6 +111,5 @@ void CcMusicPlayerShutdown(void)
         StopMusicStream(player.stream[i]);
         UnloadMusicStream(player.stream[i]);
     }
-    if (player.owns_device) CloseAudioDevice();
     memset(&player, 0, sizeof(player));
 }

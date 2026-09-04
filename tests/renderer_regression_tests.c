@@ -135,6 +135,8 @@ static void WriteViewportFixture(const char *path)
     UnloadImage(shot);
 }
 
+#include "animal_captures.inc"
+
 int main(int argc, char **argv)
 {
     TestSkinTurns();
@@ -144,6 +146,7 @@ int main(int argc, char **argv)
         SetTraceLogLevel(LOG_WARNING);
         CcLocalRendererInit();
         TestCharacterPrimitives();
+        TestAnimalModels(argv[2]);
         WriteViewportFixture(argv[2]);
         CcLocalRendererShutdown();
         CloseWindow();
