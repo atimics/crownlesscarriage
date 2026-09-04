@@ -8,6 +8,7 @@
 #define CC_MAX_KINGDOMS 3
 #define CC_MAX_SETTLEMENTS 6
 #define CC_MAX_ROUTES 8
+#define CC_MAX_ROAD_SITES 24
 #define CC_MAX_FACTIONS 9
 #define CC_MAX_SHIPMENTS 24
 #define CC_MAX_COURIERS 12
@@ -49,8 +50,8 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 30
-#define CC_GENERATOR_VERSION 23
+#define CC_SIM_SCHEMA_VERSION 31
+#define CC_GENERATOR_VERSION 24
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
 #define CC_WORLD_DAY_SUBTICKS (24 * 60 * CC_WORLD_MINUTE_SUBTICKS)
@@ -83,7 +84,8 @@ typedef enum CcEntityKind {
     CC_ENTITY_HORSE = 18,
     CC_ENTITY_CHARACTER = 19,
     CC_ENTITY_FRONT = 20,
-    CC_ENTITY_QUEST_OUTCOME = 21
+    CC_ENTITY_QUEST_OUTCOME = 21,
+    CC_ENTITY_ROAD_SITE = 22
 } CcEntityKind;
 
 typedef enum CcGood {
@@ -483,6 +485,42 @@ typedef struct CcRoute {
     bool closed;
     bool smuggler_route;
 } CcRoute;
+
+typedef enum CcRoadSiteKind {
+    CC_ROAD_SITE_FARM = 0,
+    CC_ROAD_SITE_PASTURE,
+    CC_ROAD_SITE_WOODLOT,
+    CC_ROAD_SITE_QUARRY,
+    CC_ROAD_SITE_MINE,
+    CC_ROAD_SITE_MILL,
+    CC_ROAD_SITE_BAKERY,
+    CC_ROAD_SITE_SMITHY,
+    CC_ROAD_SITE_ROAD_HOUSE,
+    CC_ROAD_SITE_ROAD_CREW,
+    CC_ROAD_SITE_KIND_COUNT
+} CcRoadSiteKind;
+
+typedef enum CcRoadSiteBlocker {
+    CC_ROAD_SITE_BLOCKER_TREE = 0,
+    CC_ROAD_SITE_BLOCKER_ROCKS,
+    CC_ROAD_SITE_BLOCKER_COUNT
+} CcRoadSiteBlocker;
+
+typedef struct CcRoadSite {
+    CcId id;
+    CcId route_id;
+    CcId home_settlement_id;
+    char name[CC_NAME_CAPACITY];
+    CcRoadSiteKind kind;
+    CcGood input_good;
+    CcGood output_good;
+    int32_t progress_milli;
+    int32_t side;
+    int32_t spur_length;
+    int32_t condition;
+    CcRoadSiteBlocker blocker;
+    bool accessible;
+} CcRoadSite;
 
 typedef struct CcMap {
     CcId id;
@@ -1305,6 +1343,7 @@ typedef struct CcSim {
     CcKingdom kingdoms[CC_MAX_KINGDOMS];
     CcSettlement settlements[CC_MAX_SETTLEMENTS];
     CcRoute routes[CC_MAX_ROUTES];
+    CcRoadSite road_sites[CC_MAX_ROAD_SITES];
     CcMap maps[CC_MAX_MAPS];
     CcTreasure treasures[CC_MAX_TREASURES];
     CcFaction factions[CC_MAX_FACTIONS];
@@ -1341,6 +1380,7 @@ typedef struct CcSim {
     int32_t kingdom_count;
     int32_t settlement_count;
     int32_t route_count;
+    int32_t road_site_count;
     int32_t map_count;
     int32_t treasure_count;
     int32_t faction_count;
@@ -1372,6 +1412,7 @@ void CcSimInitializeHoardRaiders(CcSim *sim);
 void CcSimInitializeAnimalEconomy(CcSim *sim);
 void CcSimInitializeWoodEconomy(CcSim *sim);
 void CcSimInitializeStoneEconomy(CcSim *sim);
+void CcSimInitializeRoadSites(CcSim *sim);
 void CcSimInitializeHorseStableSystem(CcSim *sim);
 void CcSimInitializeCharacters(CcSim *sim);
 void CcSimUpgradeCharacterLifecycles(CcSim *sim);
@@ -1444,6 +1485,10 @@ const char *CcFrontStageName(CcFrontStage stage);
 const CcSettlement *CcSimSettlement(const CcSim *sim, CcId id);
 CcSettlement *CcSimSettlementMutable(CcSim *sim, CcId id);
 const CcRoute *CcSimRoute(const CcSim *sim, CcId id);
+const CcRoadSite *CcSimRoadSite(const CcSim *sim, CcId id);
+const CcRoadSite *CcSimRoadSiteAt(const CcSim *sim, int32_t index);
+const CcRoadSite *CcSimRoadHouseSite(const CcSim *sim, CcId route_id);
+const char *CcRoadSiteKindName(CcRoadSiteKind kind);
 const CcRoute *CcSimRouteBetween(const CcSim *sim, CcId a, CcId b);
 const CcMap *CcSimMap(const CcSim *sim, CcId id);
 const CcMap *CcSimMapForRoute(const CcSim *sim, CcId route_id, CcId owner_id);

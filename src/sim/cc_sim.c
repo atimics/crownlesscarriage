@@ -26,6 +26,8 @@ static void AdvanceRuins(CcSim *sim);
 static int32_t SettlementSlotById(const CcSim *sim, CcId id);
 static int32_t CalculateDragonCrownStrength(const CcSim *sim);
 static CcId LatestLocalCause(const CcSim *sim, CcId location);
+static uint32_t RoadHouseSeed(const CcSim *sim, CcId route_id);
+static const char *GeneratedRoadHouseName(const CcSim *sim, CcId route_id);
 
 static int32_t ClampI32(int32_t value, int32_t minimum, int32_t maximum)
 {
@@ -1232,6 +1234,50 @@ const CcRoute *CcSimRoute(const CcSim *sim, CcId id)
         if (sim->routes[i].id == id) return &sim->routes[i];
     }
     return NULL;
+}
+
+const CcRoadSite *CcSimRoadSite(const CcSim *sim, CcId id)
+{
+    if (sim == NULL || CcIdKind(id) != CC_ENTITY_ROAD_SITE) return NULL;
+    for (int32_t i = 0; i < sim->road_site_count; ++i) {
+        if (sim->road_sites[i].id == id) return &sim->road_sites[i];
+    }
+    return NULL;
+}
+
+const CcRoadSite *CcSimRoadSiteAt(const CcSim *sim, int32_t index)
+{
+    if (sim == NULL || index < 0 || index >= sim->road_site_count) return NULL;
+    return &sim->road_sites[index];
+}
+
+const CcRoadSite *CcSimRoadHouseSite(const CcSim *sim, CcId route_id)
+{
+    if (sim == NULL) return NULL;
+    for (int32_t i = 0; i < sim->road_site_count; ++i) {
+        const CcRoadSite *site = &sim->road_sites[i];
+        if (site->route_id == route_id &&
+            site->kind == CC_ROAD_SITE_ROAD_HOUSE) return site;
+    }
+    return NULL;
+}
+
+const char *CcRoadSiteKindName(CcRoadSiteKind kind)
+{
+    switch (kind) {
+        case CC_ROAD_SITE_FARM: return "farm";
+        case CC_ROAD_SITE_PASTURE: return "pasture";
+        case CC_ROAD_SITE_WOODLOT: return "woodlot";
+        case CC_ROAD_SITE_QUARRY: return "quarry";
+        case CC_ROAD_SITE_MINE: return "mine";
+        case CC_ROAD_SITE_MILL: return "mill";
+        case CC_ROAD_SITE_BAKERY: return "bakery";
+        case CC_ROAD_SITE_SMITHY: return "smithy";
+        case CC_ROAD_SITE_ROAD_HOUSE: return "road house";
+        case CC_ROAD_SITE_ROAD_CREW: return "road crew";
+        case CC_ROAD_SITE_KIND_COUNT: break;
+    }
+    return "working site";
 }
 
 static CcRoute *RouteMutable(CcSim *sim, CcId id)
@@ -3391,6 +3437,99 @@ void CcSimInitializeWoodEconomy(CcSim *sim)
     }
 }
 
+typedef struct CcRoadSiteSeed {
+    int32_t route_slot;
+    const char *name;
+    CcRoadSiteKind kind;
+    CcGood input_good;
+    CcGood output_good;
+    int32_t progress_milli;
+    int32_t side;
+    int32_t spur_length;
+} CcRoadSiteSeed;
+
+void CcSimInitializeRoadSites(CcSim *sim)
+{
+    if (sim == NULL || sim->road_site_count > 0 ||
+        sim->route_count < CC_MAX_ROUTES) return;
+    static const CcRoadSiteSeed seeds[CC_MAX_ROAD_SITES] = {
+        {0, "Nine Furrows", CC_ROAD_SITE_FARM, CC_GOOD_TOOLS,
+         CC_GOOD_WHEAT, 160, -1, 28},
+        {0, NULL, CC_ROAD_SITE_ROAD_HOUSE, CC_GOOD_BREAD,
+         CC_GOOD_COUNT, 0, 1, 22},
+        {0, "Stag's Mill", CC_ROAD_SITE_MILL, CC_GOOD_WHEAT,
+         CC_GOOD_BREAD, 820, 1, 24},
+        {1, "Hook Meadow", CC_ROAD_SITE_FARM, CC_GOOD_TOOLS,
+         CC_GOOD_WHEAT, 170, 1, 26},
+        {1, NULL, CC_ROAD_SITE_ROAD_HOUSE, CC_GOOD_BREAD,
+         CC_GOOD_COUNT, 0, -1, 20},
+        {1, "Treaty Stone Yard", CC_ROAD_SITE_ROAD_CREW, CC_GOOD_STONE,
+         CC_GOOD_COUNT, 830, -1, 25},
+        {2, "Watch Woodlot", CC_ROAD_SITE_WOODLOT, CC_GOOD_TOOLS,
+         CC_GOOD_WOOD, 150, -1, 30},
+        {2, NULL, CC_ROAD_SITE_ROAD_HOUSE, CC_GOOD_BREAD,
+         CC_GOOD_COUNT, 0, 1, 22},
+        {2, "Low Silver Pit", CC_ROAD_SITE_MINE, CC_GOOD_TOOLS,
+         CC_GOOD_IRON, 840, 1, 28},
+        {3, "Fellside Quarry", CC_ROAD_SITE_QUARRY, CC_GOOD_TOOLS,
+         CC_GOOD_STONE, 180, 1, 30},
+        {3, NULL, CC_ROAD_SITE_ROAD_HOUSE, CC_GOOD_BREAD,
+         CC_GOOD_COUNT, 0, -1, 21},
+        {3, "Crown Forge", CC_ROAD_SITE_SMITHY, CC_GOOD_IRON,
+         CC_GOOD_TOOLS, 820, -1, 24},
+        {4, "Abbey Fold", CC_ROAD_SITE_PASTURE, CC_GOOD_WHEAT,
+         CC_GOOD_MEAT, 160, -1, 28},
+        {4, NULL, CC_ROAD_SITE_ROAD_HOUSE, CC_GOOD_BREAD,
+         CC_GOOD_COUNT, 0, 1, 22},
+        {4, "Hollow Woodlot", CC_ROAD_SITE_WOODLOT, CC_GOOD_TOOLS,
+         CC_GOOD_WOOD, 830, 1, 30},
+        {5, "Ashfield Farm", CC_ROAD_SITE_FARM, CC_GOOD_TOOLS,
+         CC_GOOD_WHEAT, 180, 1, 28},
+        {5, NULL, CC_ROAD_SITE_ROAD_HOUSE, CC_GOOD_BREAD,
+         CC_GOOD_COUNT, 0, -1, 20},
+        {5, "Underroad Stone Yard", CC_ROAD_SITE_QUARRY, CC_GOOD_TOOLS,
+         CC_GOOD_STONE, 840, -1, 27},
+        {6, "Black Coppice", CC_ROAD_SITE_WOODLOT, CC_GOOD_TOOLS,
+         CC_GOOD_WOOD, 150, -1, 32},
+        {6, NULL, CC_ROAD_SITE_ROAD_HOUSE, CC_GOOD_BREAD,
+         CC_GOOD_COUNT, 0, 1, 20},
+        {6, "Smugglers' Lime Pit", CC_ROAD_SITE_QUARRY, CC_GOOD_TOOLS,
+         CC_GOOD_STONE, 850, 1, 29},
+        {7, "Muster Farm", CC_ROAD_SITE_FARM, CC_GOOD_TOOLS,
+         CC_GOOD_WHEAT, 170, 1, 27},
+        {7, NULL, CC_ROAD_SITE_ROAD_HOUSE, CC_GOOD_BREAD,
+         CC_GOOD_COUNT, 0, -1, 22},
+        {7, "Highroad Bakehouse", CC_ROAD_SITE_BAKERY, CC_GOOD_WHEAT,
+         CC_GOOD_BREAD, 830, -1, 24}
+    };
+    for (int32_t i = 0; i < CC_MAX_ROAD_SITES; ++i) {
+        const CcRoadSiteSeed *seed = &seeds[i];
+        CcRoute *route = &sim->routes[seed->route_slot];
+        CcRoadSite *site = &sim->road_sites[sim->road_site_count++];
+        site->id = CcMakeId(CC_ENTITY_ROAD_SITE, (uint64_t)i + 1U);
+        site->route_id = route->id;
+        site->kind = seed->kind;
+        site->input_good = seed->input_good;
+        site->output_good = seed->output_good;
+        site->progress_milli = seed->kind == CC_ROAD_SITE_ROAD_HOUSE ?
+            300 + (int32_t)(RoadHouseSeed(sim, route->id) % 401U) :
+            seed->progress_milli;
+        site->side = seed->side;
+        site->spur_length = seed->spur_length;
+        site->condition = 55 + (int32_t)(
+            (sim->world_seed + (uint32_t)(i * 17)) % 41U);
+        site->blocker = seed->kind == CC_ROAD_SITE_QUARRY ||
+            seed->kind == CC_ROAD_SITE_MINE ||
+            seed->kind == CC_ROAD_SITE_ROAD_CREW ?
+            CC_ROAD_SITE_BLOCKER_ROCKS : CC_ROAD_SITE_BLOCKER_TREE;
+        site->accessible = false;
+        site->home_settlement_id = site->progress_milli < 500 ?
+            route->from_id : route->to_id;
+        CopyName(site->name, seed->name != NULL ? seed->name :
+                 GeneratedRoadHouseName(sim, route->id));
+    }
+}
+
 void CcSimUpgradeGrainEconomy(CcSim *sim)
 {
     if (sim == NULL) return;
@@ -3687,6 +3826,7 @@ void CcSimInit(CcSim *sim, uint32_t seed)
     GenerateSituations(sim);
     CcSimInitializeCharacters(sim);
     CcSimInitializeAnimalEconomy(sim);
+    CcSimInitializeRoadSites(sim);
 }
 
 static CcDungeon *DungeonByIdMutable(CcSim *sim, CcId id)
@@ -11886,7 +12026,7 @@ static uint32_t RoadHouseSeed(const CcSim *sim, CcId route_id)
     return seed;
 }
 
-const char *CcSimRoadHouseName(const CcSim *sim, CcId route_id)
+static const char *GeneratedRoadHouseName(const CcSim *sim, CcId route_id)
 {
     static const char *const names[] = {
         "The Lantern and Pike",
@@ -11902,9 +12042,18 @@ const char *CcSimRoadHouseName(const CcSim *sim, CcId route_id)
     return names[seed % (sizeof(names) / sizeof(names[0]))];
 }
 
+const char *CcSimRoadHouseName(const CcSim *sim, CcId route_id)
+{
+    const CcRoadSite *site = CcSimRoadHouseSite(sim, route_id);
+    if (site != NULL) return site->name;
+    return GeneratedRoadHouseName(sim, route_id);
+}
+
 static int32_t RoadHouseTargetProgress(const CcSim *sim, CcId route_id)
 {
-    int32_t progress = 300 + (int32_t)(RoadHouseSeed(sim, route_id) % 401U);
+    const CcRoadSite *site = CcSimRoadHouseSite(sim, route_id);
+    int32_t progress = site != NULL ? site->progress_milli :
+        300 + (int32_t)(RoadHouseSeed(sim, route_id) % 401U);
     const CcRoute *route = CcSimRoute(sim, route_id);
     CcId origin_id = sim != NULL && sim->journey.active ?
         sim->journey.origin_id : sim != NULL ? sim->player.location_id : 0U;
@@ -13924,7 +14073,7 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
 
 #define CC_MAX_TRACKED_IDENTITIES \
     (CC_MAX_KINGDOMS + CC_MAX_SETTLEMENTS + CC_MAX_ROUTES + CC_MAX_MAPS + \
-     CC_MAX_TREASURES + CC_MAX_FACTIONS + CC_MAX_SHIPMENTS + \
+     CC_MAX_ROAD_SITES + CC_MAX_TREASURES + CC_MAX_FACTIONS + CC_MAX_SHIPMENTS + \
      CC_MAX_COURIERS + CC_MAX_BANDITS + CC_MAX_MONSTERS + CC_MAX_DUNGEONS + \
      CC_MAX_SITUATIONS + CC_MAX_FRONTS + CC_MAX_QUEST_OUTCOMES + \
      CC_MAX_CHARACTERS + CC_MAX_EVENTS + \
@@ -13981,6 +14130,10 @@ static bool ValidateIdentityState(const CcSim *sim,
         TRACK_ID(sim->settlements[i].id, CC_ENTITY_SETTLEMENT);
     for (int32_t i = 0; i < sim->route_count; ++i)
         TRACK_ID(sim->routes[i].id, CC_ENTITY_ROUTE);
+    if (sim->schema_version >= 31U) {
+        for (int32_t i = 0; i < sim->road_site_count; ++i)
+            TRACK_ID(sim->road_sites[i].id, CC_ENTITY_ROAD_SITE);
+    }
     for (int32_t i = 0; i < sim->map_count; ++i)
         TRACK_ID(sim->maps[i].id, CC_ENTITY_MAP);
     if (sim->schema_version >= 9U) {
@@ -14081,13 +14234,16 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                          sim->schema_version == 26U ||
                          sim->schema_version == 27U ||
                          sim->schema_version == 28U ||
-                         sim->schema_version == 29U;
+                         sim->schema_version == 29U ||
+                         sim->schema_version == 30U;
     /* Older saves carry authoritative settlement coordinates while their
-       economies are upgraded. */
+       economies and road districts are upgraded. */
     bool supported_generator = sim->generator_version == CC_GENERATOR_VERSION ||
         (sim->schema_version == 27U && sim->generator_version == 21U) ||
         (sim->schema_version == 27U && sim->generator_version == 22U) ||
         (sim->schema_version == 28U && sim->generator_version == 22U) ||
+        (sim->schema_version == 29U && sim->generator_version == 23U) ||
+        (sim->schema_version == 30U && sim->generator_version == 23U) ||
         (legacy_schema && (sim->generator_version == 3U ||
                            sim->generator_version == 5U ||
                            sim->generator_version == 6U ||
@@ -14142,6 +14298,10 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
     if (sim->kingdom_count < 1 || sim->kingdom_count > CC_MAX_KINGDOMS ||
         sim->settlement_count < 1 || sim->settlement_count > CC_MAX_SETTLEMENTS ||
         sim->route_count < 0 || sim->route_count > CC_MAX_ROUTES ||
+        sim->road_site_count < 0 ||
+        sim->road_site_count > CC_MAX_ROAD_SITES ||
+        (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
+         sim->road_site_count != CC_MAX_ROAD_SITES) ||
         sim->map_count < 0 || sim->map_count > CC_MAX_MAPS ||
         (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
          sim->map_count != CC_MAP_COLLECTION_COUNT) ||
@@ -14398,6 +14558,52 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 overlapping_fragments) {
                 SetError(error, error_capacity,
                          "Player route knowledge is invalid.");
+                return false;
+            }
+        }
+    }
+    if (sim->schema_version == CC_SIM_SCHEMA_VERSION) {
+        for (int32_t i = 0; i < sim->road_site_count; ++i) {
+            const CcRoadSite *site = &sim->road_sites[i];
+            const CcRoute *route = CcSimRoute(sim, site->route_id);
+            bool valid_home = route != NULL &&
+                (site->home_settlement_id == route->from_id ||
+                 site->home_settlement_id == route->to_id);
+            bool valid_input = CcGoodIsValid(site->input_good) ||
+                site->input_good == CC_GOOD_COUNT;
+            bool valid_output = CcGoodIsValid(site->output_good) ||
+                site->output_good == CC_GOOD_COUNT;
+            if (!ValidBoundedText(site->name, sizeof(site->name)) ||
+                site->kind < CC_ROAD_SITE_FARM ||
+                site->kind >= CC_ROAD_SITE_KIND_COUNT ||
+                site->blocker < CC_ROAD_SITE_BLOCKER_TREE ||
+                site->blocker >= CC_ROAD_SITE_BLOCKER_COUNT ||
+                route == NULL || !valid_home || !valid_input || !valid_output ||
+                site->progress_milli < 100 || site->progress_milli > 900 ||
+                (site->side != -1 && site->side != 1) ||
+                site->spur_length < 12 || site->spur_length > 48 ||
+                site->condition < 0 || site->condition > 100 ||
+                site->accessible) {
+                SetError(error, error_capacity,
+                         "Road district site data is invalid.");
+                return false;
+            }
+        }
+        for (int32_t route_slot = 0;
+             route_slot < sim->route_count; ++route_slot) {
+            int32_t site_count = 0;
+            int32_t road_house_count = 0;
+            for (int32_t site_slot = 0;
+                 site_slot < sim->road_site_count; ++site_slot) {
+                const CcRoadSite *site = &sim->road_sites[site_slot];
+                if (site->route_id != sim->routes[route_slot].id) continue;
+                site_count += 1;
+                if (site->kind == CC_ROAD_SITE_ROAD_HOUSE)
+                    road_house_count += 1;
+            }
+            if (site_count != 3 || road_house_count != 1) {
+                SetError(error, error_capacity,
+                         "Road district coverage is invalid.");
                 return false;
             }
         }
@@ -15730,6 +15936,7 @@ uint64_t CcSimHash(const CcSim *sim)
     HASH_VALUE(sim->kingdom_count);
     HASH_VALUE(sim->settlement_count);
     HASH_VALUE(sim->route_count);
+    if (sim->schema_version >= 31U) HASH_VALUE(sim->road_site_count);
     HASH_VALUE(sim->map_count);
     if (sim->schema_version >= 9U) HASH_VALUE(sim->treasure_count);
     HASH_VALUE(sim->faction_count);
@@ -15807,6 +16014,19 @@ uint64_t CcSimHash(const CcSim *sim)
         HASH_VALUE(item->id); HASH_VALUE(item->from_id); HASH_VALUE(item->to_id);
         HASH_VALUE(item->travel_days); HASH_VALUE(item->capacity); HASH_VALUE(item->security);
         HASH_VALUE(item->condition); HASH_VALUE(item->closed); HASH_VALUE(item->smuggler_route);
+    }
+    if (sim->schema_version >= 31U) {
+        for (int32_t i = 0; i < sim->road_site_count; ++i) {
+            const CcRoadSite *item = &sim->road_sites[i];
+            HASH_VALUE(item->id); HASH_VALUE(item->route_id);
+            HASH_VALUE(item->home_settlement_id);
+            hash = HashString(hash, item->name);
+            HASH_VALUE(item->kind); HASH_VALUE(item->input_good);
+            HASH_VALUE(item->output_good); HASH_VALUE(item->progress_milli);
+            HASH_VALUE(item->side); HASH_VALUE(item->spur_length);
+            HASH_VALUE(item->condition); HASH_VALUE(item->blocker);
+            HASH_VALUE(item->accessible);
+        }
     }
     for (int32_t i = 0; i < sim->map_count; ++i) {
         const CcMap *item = &sim->maps[i];

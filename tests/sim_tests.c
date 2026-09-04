@@ -257,12 +257,51 @@ static void CheckCharacterLifecycles(void)
     CC_CHECK(!CcSimValidate(&forged, error, sizeof(error)));
 }
 
+static void CheckRoadDistrictSites(void)
+{
+    CcSim sim;
+    CcSimInit(&sim, UINT32_C(0xd15771c7));
+    CC_CHECK(sim.road_site_count == CC_MAX_ROAD_SITES);
+    bool found_farm = false;
+    bool found_quarry = false;
+    bool found_mill = false;
+    for (int32_t route_slot = 0; route_slot < sim.route_count; ++route_slot) {
+        const CcRoute *route = &sim.routes[route_slot];
+        const CcRoadSite *road_house =
+            CcSimRoadHouseSite(&sim, route->id);
+        CC_CHECK(road_house != NULL);
+        CC_CHECK(strcmp(CcSimRoadHouseName(&sim, route->id),
+                        road_house->name) == 0);
+        int32_t route_sites = 0;
+        for (int32_t site_slot = 0;
+             site_slot < sim.road_site_count; ++site_slot) {
+            const CcRoadSite *site = CcSimRoadSiteAt(&sim, site_slot);
+            CC_CHECK(site != NULL);
+            CC_CHECK(CcSimRoadSite(&sim, site->id) == site);
+            if (site->route_id == route->id) route_sites += 1;
+            found_farm = found_farm || site->kind == CC_ROAD_SITE_FARM;
+            found_quarry = found_quarry || site->kind == CC_ROAD_SITE_QUARRY;
+            found_mill = found_mill || site->kind == CC_ROAD_SITE_MILL;
+            CC_CHECK(!site->accessible);
+        }
+        CC_CHECK(route_sites == 3);
+    }
+    CC_CHECK(found_farm && found_quarry && found_mill);
+    uint64_t hash = CcSimHash(&sim);
+    sim.road_sites[0].condition -= 1;
+    CC_CHECK(CcSimHash(&sim) != hash);
+    char error[160];
+    sim.road_sites[0].accessible = true;
+    CC_CHECK(!CcSimValidate(&sim, error, sizeof(error)));
+}
+
 int main(void)
 {
     CcSim first;
     CcSim second;
     char error[160];
     CcSimInit(&first, UINT32_C(0x12345678));
+    CheckRoadDistrictSites();
     CcSimInit(&second, UINT32_C(0x12345678));
     CC_CHECK(CcSimHash(&first) == CcSimHash(&second));
     CheckArchiveRecording();
