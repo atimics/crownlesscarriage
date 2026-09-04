@@ -86,6 +86,13 @@ static void CheckJourneyContext(void)
         CcMetagameAgentObserve(&game, output, sizeof(output));
         CC_CHECK(strstr(output, phases[i]) != NULL);
         CC_CHECK(strstr(output, "travel NUMBER") == NULL);
+        CC_CHECK(strstr(output, "for sale") == NULL);
+        CC_CHECK(strstr(output, "market stock") == NULL);
+        CC_CHECK(CcMetagameAgentExecute(&game, "help", loaded, sizeof(loaded)));
+        CC_CHECK(strstr(loaded, phases[i]) != NULL);
+        CC_CHECK(CcMetagameAgentExecute(&game, "status", loaded, sizeof(loaded)));
+        CC_CHECK(strstr(loaded, phases[i]) != NULL);
+        CC_CHECK(strstr(loaded, "market stock") == NULL);
         CC_CHECK(!CcMetagameAgentExecute(&game, "people", loaded, sizeof(loaded)));
         CC_CHECK(!CcMetagameAgentExecute(&game, "travel 1", loaded, sizeof(loaded)));
     }

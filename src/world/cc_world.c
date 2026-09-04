@@ -895,7 +895,7 @@ void CcWorldStreamFollowRoute(CcWorldStream *stream,
 {
     CcWorldPoint point;
     float heading;
-    if (stream == NULL || !CcWorldRoutePose(route, origin_id, amount,
+    if (stream == NULL || !isfinite(amount) || !CcWorldRoutePose(route, origin_id, amount,
                                            &point, &heading)) return;
     CcWorldStreamUpdate(stream, point.x, point.z, 0);
     float length = CcWorldRouteLength(route);

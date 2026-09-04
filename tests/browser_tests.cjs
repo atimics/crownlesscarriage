@@ -36,6 +36,10 @@ async function main() {
       link.call(this, program);
       const vertex = this.getAttachedShaders(program).find(shader => this.getShaderParameter(shader, this.SHADER_TYPE) === this.VERTEX_SHADER);
       const source = vertex ? this.getShaderSource(vertex) : '';
+      if (source.includes('boneMatrices')) {
+        const fragment = this.getAttachedShaders(program).find(shader => this.getShaderParameter(shader, this.SHADER_TYPE) === this.FRAGMENT_SHADER);
+        window.skinSources = {vertex: source, fragment: this.getShaderSource(fragment)};
+      }
       let vectors = 0;
       for (let i = 0; i < this.getProgramParameter(program, this.ACTIVE_UNIFORMS); i++) {
         const uniform = this.getActiveUniform(program, i);
@@ -56,6 +60,36 @@ async function main() {
     assert(shaders.every(shader => shader.vectors <= 256), JSON.stringify(shaders));
     assert(shaders.some(shader => shader.skinned && shader.vectors === 140), JSON.stringify(shaders));
     await fs.writeFile(path.join(output, 'shaders.json'), JSON.stringify(shaders, null, 2));
+    const minimumBudget = await page.evaluate(() => {
+      const gl = document.createElement('canvas').getContext('webgl2');
+      const limit = gl.getParameter(gl.MAX_VERTEX_UNIFORM_VECTORS);
+      const reserved = limit - 256;
+      const sources = window.skinSources;
+      function linkWithPalette(bones) {
+        let vertex = sources.vertex.replace('boneMatrices[32]', `boneMatrices[${bones}]`);
+        if (reserved > 0) {
+          vertex = vertex.replace('void main()', `uniform vec4 reservedVertexBudget[${reserved}];\nvoid main()`)
+            .replace(/}\s*$/, `gl_Position += reservedVertexBudget[int(abs(vertexPosition.x)) % ${reserved}];\n}`);
+        }
+        const program = gl.createProgram();
+        const compiled = [];
+        for (const [type, source] of [[gl.VERTEX_SHADER, vertex], [gl.FRAGMENT_SHADER, sources.fragment]]) {
+          const shader = gl.createShader(type);
+          gl.shaderSource(shader, source);
+          gl.compileShader(shader);
+          compiled.push(gl.getShaderParameter(shader, gl.COMPILE_STATUS));
+          gl.attachShader(program, shader);
+        }
+        gl.linkProgram(program);
+        const result = {compiled, linked: gl.getProgramParameter(program, gl.LINK_STATUS), log: gl.getProgramInfoLog(program)};
+        gl.deleteProgram(program);
+        return result;
+      }
+      return {limit, reserved, available: 256, shipped: linkWithPalette(32), oversized: linkWithPalette(64)};
+    });
+    assert(minimumBudget.shipped.linked, JSON.stringify(minimumBudget));
+    assert(!minimumBudget.oversized.linked, JSON.stringify(minimumBudget));
+    await fs.writeFile(path.join(output, 'minimum-uniform-budget.json'), JSON.stringify(minimumBudget, null, 2));
     for (const [width, height] of [[800, 600], [1280, 720], [600, 900]]) {
       await page.setViewportSize({width, height});
       await page.locator('#fullscreen').click();

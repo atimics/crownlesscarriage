@@ -875,7 +875,7 @@ static void DescribeMaps(const CcMetagame *metagame,
             Append(output, capacity, "  %d. %s [%s]\n", i + 1,
                    map->name, CcSimMapIsArchived(sim, map) ?
                    "Gloamgate archive" : "carried");
-        } else if (map->owner_id == sim->player.location_id) {
+        } else if (!sim->journey.active && map->owner_id == sim->player.location_id) {
             Append(output, capacity, "  %d. %s [for sale: %d crowns]%s\n",
                    i + 1, map->name, map->ask_price,
                    map->contraband ? " [contraband]" : "");
@@ -887,7 +887,7 @@ static void DescribeCargo(const CcMetagame *metagame,
                           char *output, size_t capacity)
 {
     const CcSim *sim = &metagame->sim;
-    const CcSettlement *place = CurrentPlace(metagame);
+    const CcSettlement *place = sim->journey.active ? NULL : CurrentPlace(metagame);
     Append(output, capacity,
            "Carriage: %d/%d cargo, %" PRId64 " crowns, reputation %d\n",
            CcPlayerCargoUsed(&sim->player), sim->player.cargo_capacity,
@@ -1447,6 +1447,11 @@ static void DescribeStatus(const CcMetagame *metagame,
                            char *output, size_t capacity)
 {
     const CcSim *sim = &metagame->sim;
+    if (sim->journey.active) {
+        DescribeJourney(metagame, output, capacity);
+        DescribeCargo(metagame, output, capacity);
+        return;
+    }
     const CcSettlement *place = CurrentPlace(metagame);
     CcFoodEconomy nutrition = {0};
     if (place != NULL) {
@@ -2475,7 +2480,7 @@ static void DescribeAgentPossessions(const CcMetagame *metagame,
     for (int32_t i = 0; i < sim->treasure_count; ++i) {
         const CcTreasure *treasure = &sim->treasures[i];
         bool carried = treasure->owner_id == sim->player.id;
-        bool for_sale = treasure->owner_id == sim->player.location_id;
+        bool for_sale = !sim->journey.active && treasure->owner_id == sim->player.location_id;
         if (treasure->destroyed || (!carried && !for_sale)) continue;
         Append(output, capacity,
                "  %d. %s — value %d crowns [%s]\n",
@@ -2494,7 +2499,7 @@ static void DescribeAgentConsequences(const CcMetagame *metagame,
     int32_t shown = 0;
     for (int32_t i = 0; i < sim->event_count && shown < 6; ++i) {
         const CcEvent *event = CcSimRecentEvent(sim, i);
-        if (event == NULL || event->location_id != sim->player.location_id) {
+        if (event == NULL || event->location_id != (sim->journey.active ? sim->journey.route_id : sim->player.location_id)) {
             continue;
         }
         Append(output, capacity, "  day %d: %s\n", event->day, event->text);
@@ -2710,6 +2715,7 @@ bool CcMetagameAgentExecute(CcMetagame *metagame, const char *line,
     (void)snprintf(copy, sizeof(copy), "%s", line);
     char *command = strtok(copy, " \t\r\n");
     if (command != NULL && strcmp(command, "help") == 0) {
+        if (metagame->sim.journey.active) DescribeJourney(metagame, output, output_capacity);
         DescribeAgentActions(metagame, output, output_capacity);
         return true;
     }
