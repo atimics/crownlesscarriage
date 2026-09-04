@@ -278,11 +278,126 @@ if(CC_BUILD_CLIENT)
         target_compile_definitions(crownless_local_renderer PRIVATE PLATFORM_WEB)
         set_property(TARGET crownless_local_renderer PROPERTY C_EXTENSIONS ON)
         set(CC_WEB_ASSET_DIR "${CMAKE_CURRENT_BINARY_DIR}/web-runtime")
-        add_custom_target(crownless_web_assets ALL
+        file(GLOB CC_WEB_NPC_ASSET_SOURCES CONFIGURE_DEPENDS
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/npc/npc_module_*.glb"
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/npc/npc_wayfarer_v01.glb"
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/npc/npc_guard_v01.glb"
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/npc/npc_raider_v01.glb"
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/npc/npc_merchant_v01.glb"
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/npc/npc_laborer_v01.glb"
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/npc/npc_traveller_v01.glb"
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/npc/npc_refugee_v01.glb"
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/npc/npc_scout_v01.glb"
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/npc/npc_healer_v01.glb"
+        )
+        file(GLOB CC_WEB_WORLD_KIT_ASSET_SOURCES CONFIGURE_DEPENDS
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/world_kit/wk_body_skin_standard_athletic_balanced_v01.glb"
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/world_kit/wk_head_*.glb"
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/world_kit/wk_hair_*.glb"
+        )
+        file(GLOB CC_WEB_SHADER_ASSET_SOURCES CONFIGURE_DEPENDS
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/*.vs"
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/*.fs"
+        )
+        file(GLOB CC_WEB_ECONOMIC_CARGO_ASSET_SOURCES CONFIGURE_DEPENDS
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/glb/economy_cargo_*.glb"
+        )
+        set(CC_WEB_STARTUP_ASSET_SOURCES
+            ${CC_WEB_NPC_ASSET_SOURCES}
+            ${CC_WEB_WORLD_KIT_ASSET_SOURCES}
+            ${CC_WEB_SHADER_ASSET_SOURCES}
+            ${CC_WEB_ECONOMIC_CARGO_ASSET_SOURCES}
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/glb/carriage_base_v01.glb"
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/economic_goods_v01.png"
+        )
+        foreach(asset IN ITEMS
+                creature_horse_v01.glb
+                creature_cow_v01.glb
+                creature_sheep_v01.glb
+                creature_dragon_v01.glb
+                creature_dragon_whelp_v01.glb
+                creature_dragon_wanderer_v01.glb
+                creature_dragon_deep_wyrm_v01.glb)
+            list(APPEND CC_WEB_STARTUP_ASSET_SOURCES
+                "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/creatures/${asset}")
+        endforeach()
+        set(CC_WEB_LAZY_ASSET_SOURCES)
+        foreach(asset IN ITEMS
+                environment_bridge_checkpoint_v01.glb
+                environment_market_granary_v01.glb
+                environment_mine_entrance_v01.glb
+                state_food_shortage_v01.glb
+                state_harsh_enforcement_v01.glb
+                state_market_recovery_v01.glb)
+            list(APPEND CC_WEB_LAZY_ASSET_SOURCES
+                "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/glb/${asset}")
+        endforeach()
+        list(APPEND CC_WEB_LAZY_ASSET_SOURCES
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/maps/gloamgate_to_alderwatch.png"
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/maps/collectible_map_atlas.png"
+        )
+        set(CC_WEB_STARTUP_ASSET_OUTPUTS)
+        foreach(asset IN LISTS CC_WEB_STARTUP_ASSET_SOURCES)
+            file(RELATIVE_PATH relative_asset
+                "${CMAKE_CURRENT_SOURCE_DIR}/assets" "${asset}")
+            list(APPEND CC_WEB_STARTUP_ASSET_OUTPUTS
+                "${CC_WEB_ASSET_DIR}/assets/${relative_asset}")
+        endforeach()
+        set(CC_WEB_LAZY_ASSET_OUTPUTS)
+        set(CC_WEB_SITE_LAZY_ASSET_OUTPUTS)
+        foreach(asset IN LISTS CC_WEB_LAZY_ASSET_SOURCES)
+            file(RELATIVE_PATH relative_asset
+                "${CMAKE_CURRENT_SOURCE_DIR}/assets" "${asset}")
+            list(APPEND CC_WEB_LAZY_ASSET_OUTPUTS
+                "${CC_WEB_ASSET_DIR}/lazy-assets/${relative_asset}")
+            list(APPEND CC_WEB_SITE_LAZY_ASSET_OUTPUTS
+                "${CMAKE_CURRENT_BINARY_DIR}/site/assets/${relative_asset}")
+        endforeach()
+        set(CC_WEB_STARTUP_ASSET_STAMP
+            "${CC_WEB_ASSET_DIR}/.startup-prepared")
+        set(CC_WEB_LAZY_ASSET_STAMP
+            "${CC_WEB_ASSET_DIR}/.lazy-prepared")
+        set(CC_WEB_LICENSE_OUTPUTS
+            "${CMAKE_CURRENT_BINARY_DIR}/site/licenses.html"
+            "${CMAKE_CURRENT_BINARY_DIR}/site/LICENSE.txt"
+            "${CMAKE_CURRENT_BINARY_DIR}/site/THIRD_PARTY_NOTICES.txt"
+        )
+        add_custom_command(
+            OUTPUT
+                "${CC_WEB_STARTUP_ASSET_STAMP}"
+                ${CC_WEB_STARTUP_ASSET_OUTPUTS}
             COMMAND ${CMAKE_COMMAND}
                 -DCC_WEB_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
                 -DCC_WEB_OUTPUT_DIR=${CC_WEB_ASSET_DIR}
+                -DCC_WEB_ASSET_GROUP=startup
                 -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/PrepareWebAssets.cmake
+            COMMAND ${CMAKE_COMMAND} -E touch
+                "${CC_WEB_STARTUP_ASSET_STAMP}"
+            DEPENDS
+                ${CC_WEB_STARTUP_ASSET_SOURCES}
+                ${CMAKE_CURRENT_SOURCE_DIR}/cmake/PrepareWebAssets.cmake
+                ${CMAKE_CURRENT_SOURCE_DIR}/tools/blender/batch_static_glb.py
+            VERBATIM
+        )
+        add_custom_command(
+            OUTPUT
+                "${CC_WEB_LAZY_ASSET_STAMP}"
+                ${CC_WEB_LAZY_ASSET_OUTPUTS}
+            COMMAND ${CMAKE_COMMAND}
+                -DCC_WEB_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+                -DCC_WEB_OUTPUT_DIR=${CC_WEB_ASSET_DIR}
+                -DCC_WEB_ASSET_GROUP=lazy
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/PrepareWebAssets.cmake
+            COMMAND ${CMAKE_COMMAND} -E touch
+                "${CC_WEB_LAZY_ASSET_STAMP}"
+            DEPENDS
+                ${CC_WEB_LAZY_ASSET_SOURCES}
+                ${CMAKE_CURRENT_SOURCE_DIR}/cmake/PrepareWebAssets.cmake
+                ${CMAKE_CURRENT_SOURCE_DIR}/tools/blender/batch_static_glb.py
+            VERBATIM
+        )
+        add_custom_command(
+            OUTPUT ${CC_WEB_LICENSE_OUTPUTS}
             COMMAND ${CMAKE_COMMAND} -E make_directory
                 "${CMAKE_CURRENT_BINARY_DIR}/site"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -295,21 +410,52 @@ if(CC_BUILD_CLIENT)
                 "${CMAKE_CURRENT_SOURCE_DIR}/THIRD_PARTY_NOTICES.md"
                 "${CMAKE_CURRENT_BINARY_DIR}/site/THIRD_PARTY_NOTICES.txt"
             DEPENDS
-                ${CMAKE_CURRENT_SOURCE_DIR}/cmake/PrepareWebAssets.cmake
-                ${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html
                 ${CMAKE_CURRENT_SOURCE_DIR}/web/licenses.html
-                ${CMAKE_CURRENT_SOURCE_DIR}/web/persistence.js
                 ${CMAKE_CURRENT_SOURCE_DIR}/LICENSE
                 ${CMAKE_CURRENT_SOURCE_DIR}/THIRD_PARTY_NOTICES.md
             VERBATIM
         )
-        add_dependencies(crownless_carriage crownless_web_assets)
+        add_custom_target(crownless_web_assets ALL DEPENDS
+            "${CC_WEB_STARTUP_ASSET_STAMP}"
+            "${CC_WEB_LAZY_ASSET_STAMP}"
+            ${CC_WEB_STARTUP_ASSET_OUTPUTS}
+            ${CC_WEB_LAZY_ASSET_OUTPUTS}
+            ${CC_WEB_LICENSE_OUTPUTS}
+        )
+        set(CC_WEB_LAZY_SITE_STAMP
+            "${CMAKE_CURRENT_BINARY_DIR}/site/.lazy-assets")
+        add_custom_command(
+            OUTPUT
+                "${CC_WEB_LAZY_SITE_STAMP}"
+                "${CMAKE_CURRENT_BINARY_DIR}/site/.nojekyll"
+                ${CC_WEB_SITE_LAZY_ASSET_OUTPUTS}
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+                "${CMAKE_CURRENT_BINARY_DIR}/site"
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${CC_WEB_ASSET_DIR}/lazy-assets"
+                "${CMAKE_CURRENT_BINARY_DIR}/site/assets"
+            COMMAND ${CMAKE_COMMAND} -E touch
+                "${CMAKE_CURRENT_BINARY_DIR}/site/.nojekyll"
+            COMMAND ${CMAKE_COMMAND} -E touch
+                "${CC_WEB_LAZY_SITE_STAMP}"
+            DEPENDS
+                "${CC_WEB_LAZY_ASSET_STAMP}"
+                ${CC_WEB_LAZY_ASSET_OUTPUTS}
+            VERBATIM
+        )
+        add_custom_target(crownless_web_lazy_assets ALL DEPENDS
+            "${CC_WEB_LAZY_SITE_STAMP}"
+            "${CMAKE_CURRENT_BINARY_DIR}/site/.nojekyll"
+            ${CC_WEB_SITE_LAZY_ASSET_OUTPUTS}
+        )
+        add_dependencies(crownless_web_lazy_assets crownless_web_assets)
+        add_dependencies(crownless_carriage crownless_web_lazy_assets)
         set_target_properties(crownless_carriage PROPERTIES
             OUTPUT_NAME index
             SUFFIX ".html"
             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/site"
             LINK_DEPENDS
-                "${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html;${CMAKE_CURRENT_SOURCE_DIR}/web/persistence.js"
+                "${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html;${CMAKE_CURRENT_SOURCE_DIR}/web/persistence.js;${CC_WEB_STARTUP_ASSET_STAMP};${CC_WEB_STARTUP_ASSET_OUTPUTS}"
         )
         target_compile_definitions(crownless_carriage PRIVATE PLATFORM_WEB)
         set_property(TARGET crownless_carriage PROPERTY C_EXTENSIONS ON)
@@ -326,14 +472,6 @@ if(CC_BUILD_CLIENT)
             "--shell-file=${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html"
             "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/persistence.js"
             "SHELL:--preload-file ${CC_WEB_ASSET_DIR}/assets@/assets"
-        )
-        add_custom_command(TARGET crownless_carriage POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_directory
-                "${CC_WEB_ASSET_DIR}/lazy-assets"
-                "${CMAKE_CURRENT_BINARY_DIR}/site/assets"
-            COMMAND ${CMAKE_COMMAND} -E touch
-                "${CMAKE_CURRENT_BINARY_DIR}/site/.nojekyll"
-            VERBATIM
         )
     elseif(APPLE)
         set(CC_HERO_ENGINE_ASSET
