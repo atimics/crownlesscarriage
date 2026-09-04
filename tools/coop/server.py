@@ -7,6 +7,7 @@ import hmac
 import json
 import logging
 import mimetypes
+import os
 from pathlib import Path
 import re
 import secrets
@@ -285,7 +286,8 @@ class Application:
     def route(self, env):
         method, path = env["REQUEST_METHOD"], env.get("PATH_INFO", "/")
         if path == "/healthz":
-            return (503 if self.worlds.failed else 200), {"status": "recovery" if self.worlds.failed else "ready", "protocol": PROTOCOL}, None
+            return (503 if self.worlds.failed else 200), {"status": "recovery" if self.worlds.failed else "ready", "protocol": PROTOCOL,
+                "revision": os.environ.get("CROWNLESS_REVISION", "development")}, None
         if not path.startswith("/api/"):
             require(method in ("GET", "HEAD"), "Use GET for game files.", 405)
             if path in ("/", "/coop.js", "/coop.css"):
