@@ -619,4 +619,17 @@ void CcLocalDrawInterior3D(const CcSim *sim, const CcLocalAgent *agent,
                            Rectangle destination);
 Vector2 CcLocalMove(Vector2 current, Vector2 delta, bool market_interior);
 
+typedef struct CcLocalPresentedPerson {
+    Vector3 position;
+    uint32_t seed;
+    CcNpcRole role;
+    float size;
+} CcLocalPresentedPerson;
+int32_t CcLocalPresentedPeople(CcLocalPresentedPerson *people, int32_t capacity);
+struct CcInteractionTarget;
+void CcLocalProjectInteraction(const CcLocalAgent *agent,
+    RenderTexture2D texture, Rectangle destination,
+    struct CcInteractionTarget *target);
+void CcLocalAgentStop(CcLocalAgent *agent);
+void CcLocalRendererSetInteractionUI(bool enabled);
 #endif

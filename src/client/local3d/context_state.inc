@@ -760,6 +760,30 @@ static FixedCameraRig road_camera_rig = {0};
 static CombatCameraRig combat_camera_rig = {0};
 static ConversationCameraRig conversation_camera_rig = {0};
 static PresentedCameraState presented_camera[3] = {0};
+static CcLocalPresentedPerson presented_people[64];
+static int32_t presented_people_count;
+static bool interaction_ui_enabled;
+
+void CcLocalRendererSetInteractionUI(bool enabled)
+{
+    interaction_ui_enabled = enabled;
+}
+
+static void RememberPresentedPerson(Vector3 position, float size,
+                                    uint32_t seed, CcNpcRole role)
+{
+    if (presented_people_count >= 64) return;
+    presented_people[presented_people_count++] =
+        (CcLocalPresentedPerson){position, seed, role, size};
+}
+
+int32_t CcLocalPresentedPeople(CcLocalPresentedPerson *people, int32_t capacity)
+{
+    int32_t count = capacity < presented_people_count ? capacity : presented_people_count;
+    if (people == NULL || count < 0) return 0;
+    for (int32_t i = 0; i < count; ++i) people[i] = presented_people[i];
+    return count;
+}
 
 static void RememberPresentedCamera(CcLocalSceneKind scene, Camera3D camera,
                                     const CcLocalAgent *agent,
@@ -767,6 +791,7 @@ static void RememberPresentedCamera(CcLocalSceneKind scene, Camera3D camera,
 {
     if (scene < CC_LOCAL_SCENE_STREET || scene > CC_LOCAL_SCENE_ROAD ||
         width <= 0 || height <= 0) return;
+    presented_people_count = 0;
     PresentedCameraState *state = &presented_camera[scene];
     state->camera = camera;
     state->hero_position = agent != NULL ? agent->position : (Vector3){0};

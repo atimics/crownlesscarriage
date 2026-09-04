@@ -134,6 +134,7 @@ cc_strict_warnings(crownless_soundscape)
 
 add_library(crownless_client_policy
     src/client/cc_client_policy.c
+    src/client/cc_interaction.c
 )
 target_include_directories(crownless_client_policy PUBLIC src)
 if(NOT MSVC)
@@ -974,6 +975,11 @@ if(BUILD_TESTING)
                          $<TARGET_FILE:crownless_sim_runner>)
         set_tests_properties(simulation_runner_resume PROPERTIES TIMEOUT 60)
     endif()
+
+    add_executable(interaction_tests tests/interaction_tests.c)
+    target_link_libraries(interaction_tests PRIVATE crownless_client_policy)
+    cc_strict_warnings(interaction_tests)
+    add_test(NAME interaction_planner COMMAND interaction_tests)
 
     add_executable(client_policy_tests tests/client_policy_tests.c)
     target_link_libraries(client_policy_tests PRIVATE crownless_client_policy)

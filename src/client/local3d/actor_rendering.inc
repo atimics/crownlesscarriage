@@ -842,6 +842,7 @@ static void DrawVisibleNpcFigure3D(Vector3 position, float size_hint,
                                    CcTraversalMode mode, Vector3 focus)
 {
     if (!SceneryPointVisible(position.x, position.z, focus)) return;
+    RememberPresentedPerson(position, size_hint, seed, role);
     DrawNpcFigure3D(position, size_hint, yaw, seed, role, accent, phase, mode);
 }
 
@@ -851,6 +852,7 @@ static void DrawVisibleNpcPoseFigure3D(
     int32_t fixed_pose, Vector3 focus)
 {
     if (!SceneryPointVisible(position.x, position.z, focus)) return;
+    RememberPresentedPerson(position, size_hint, seed, role);
     DrawNpcFigurePose3D(position, size_hint, yaw, seed, role, accent, phase,
                         mode, fixed_pose);
 }
