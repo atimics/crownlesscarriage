@@ -44,14 +44,14 @@ static int TestCanonicalRoadManifest(void)
     CcSim sim;
     CcWorldManifest manifest;
     CcSimInit(&sim, UINT32_C(0xc0a7118e));
-    CHECK(sim.generator_version == 22U);
+    CHECK(sim.generator_version == CC_GENERATOR_VERSION);
     CHECK(sim.settlement_count == 6);
     for (int32_t index = 0; index < sim.settlement_count; ++index) {
         CHECK(sim.settlements[index].map_x == expected_map[index][0]);
         CHECK(sim.settlements[index].map_y == expected_map[index][1]);
     }
     CHECK(CcWorldManifestBuild(&manifest, &sim));
-    CHECK(manifest.generator_version == 22U);
+    CHECK(manifest.generator_version == CC_GENERATOR_VERSION);
     CHECK(fabsf(manifest.settlements[1].junction.x - 264.997284f) < 0.0001f);
     CHECK(fabsf(manifest.settlements[1].junction.z - 242.611099f) < 0.0001f);
     CHECK(fabsf(manifest.routes[0].control.x - 147.306854f) < 0.0001f);
