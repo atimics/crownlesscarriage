@@ -60,6 +60,7 @@ int main(void)
     CcAudioPlay(CC_SOUND_PAGE);
     CcAudioVoice("opening.wav");
     CcAudioUpdate();
+    CC_CHECK(CcAudioMusicGain() == 0.0f);
     CcAudioInit();
     CcAudioInit();
     CC_CHECK(device_opens == 1 && allocated == 0 && voices_loaded == 0);
@@ -67,6 +68,7 @@ int main(void)
     device_available = true;
     CcAudioInit();
     CC_CHECK(allocated == CC_SOUND_COUNT * 3);
+    CC_CHECK(CcAudioMusicGain() == 1.0f);
     CcAudioPlay(CC_SOUND_HOOF);
     CC_CHECK(PlayingCount() == 1);
     CcAudioPlay(CC_SOUND_HOOF);
@@ -77,6 +79,7 @@ int main(void)
     CcAudioVoice("opening.wav");
     CcAudioVoice("opening.wav");
     CC_CHECK(voices_loaded == 1 && voice_playing);
+    CC_CHECK(CcAudioMusicGain() == 0.36f);
     CcAudioUpdate();
     CC_CHECK(fabsf(volumes[CC_SOUND_HOOF * 3] - 0.32f * 0.36f) < 0.0001f);
     CcAudioVoice("reply.wav");
@@ -84,16 +87,19 @@ int main(void)
     CcAudioVoice(NULL);
     CcAudioUpdate();
     CC_CHECK(!voice_playing && voices_freed == 2);
+    CC_CHECK(CcAudioMusicGain() == 1.0f);
     CC_CHECK(fabsf(volumes[CC_SOUND_HOOF * 3] - 0.32f) < 0.0001f);
     CcAudioVoice("missing.wav");
     CcAudioVoice("missing.wav");
     CC_CHECK(voices_loaded == 2);
     CcAudioVoice("opening.wav");
     CcAudioSetMode(1);
+    CC_CHECK(CcAudioMusicGain() == 0.0f);
     CC_CHECK(!voice_playing);
     CcAudioVoice("reply.wav");
     CC_CHECK(voices_loaded == 3);
     CcAudioSetMode(2);
+    CC_CHECK(CcAudioMusicGain() == 0.0f);
     CC_CHECK(PlayingCount() == 0);
     clock_seconds += 1.0;
     CcAudioPlay(CC_SOUND_HIT);
@@ -104,6 +110,7 @@ int main(void)
     CcAudioPlay(CC_SOUND_PAGE);
     CC_CHECK(voice_playing && PlayingCount() == 1);
     CcAudioSetFocused(false);
+    CC_CHECK(CcAudioMusicGain() == 0.0f);
     CC_CHECK(!voice_playing && PlayingCount() == 0);
     CcAudioPlay(CC_SOUND_COINS);
     CcAudioVoice("other.wav");

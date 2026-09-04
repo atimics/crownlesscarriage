@@ -8,6 +8,7 @@ void CcAudioInit(void);
 void CcAudioShutdown(void);
 void CcAudioSetMode(int mode); /* 0: full, 1: effects, 2: muted */
 void CcAudioSetFocused(bool focused);
+float CcAudioMusicGain(void);
 void CcAudioPlay(CcSoundCue cue);
 void CcAudioVoice(const char *path);
 void CcAudioUpdate(void);

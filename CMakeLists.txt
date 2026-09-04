@@ -94,6 +94,14 @@ target_include_directories(crownless_story PUBLIC src)
 target_link_libraries(crownless_story PUBLIC crownless_sim)
 cc_strict_warnings(crownless_story)
 
+add_library(crownless_music src/client/cc_music.c)
+target_include_directories(crownless_music PUBLIC src)
+target_link_libraries(crownless_music PUBLIC crownless_sim)
+if(NOT MSVC)
+    target_link_libraries(crownless_music PUBLIC m)
+endif()
+cc_strict_warnings(crownless_music)
+
 add_library(crownless_creature_catalog
     src/client/cc_creature_catalog.c
 )
@@ -271,7 +279,10 @@ if(CC_BUILD_CLIENT)
     cc_strict_warnings(crownless_local_renderer)
 
     file(GLOB CC_VOICE_ASSETS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/assets/audio/voice/*.wav")
-    add_executable(crownless_carriage src/client/main.c src/client/cc_audio.c)
+    add_executable(crownless_carriage src/client/main.c src/client/cc_audio.c
+                   src/client/cc_music_player.c)
+    target_compile_definitions(crownless_carriage PRIVATE
+        CC_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
     if(APPLE)
         set_target_properties(crownless_carriage PROPERTIES
             MACOSX_BUNDLE TRUE
@@ -295,7 +306,7 @@ if(CC_BUILD_CLIENT)
         crownless_persistence crownless_locomotion
         crownless_creature_catalog crownless_local_place
         crownless_client_session crownless_client_policy crownless_story crownless_soundscape
-        crownless_world
+        crownless_world crownless_music
         raylib
     )
     if(NOT EMSCRIPTEN)
@@ -880,6 +891,10 @@ endif()
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(music_tests tests/music_tests.c)
+    target_link_libraries(music_tests PRIVATE crownless_music)
+    cc_strict_warnings(music_tests)
+    add_test(NAME situation_music_and_fades COMMAND music_tests)
     add_executable(soundscape_tests tests/soundscape_tests.c)
     target_link_libraries(soundscape_tests PRIVATE crownless_soundscape)
     cc_strict_warnings(soundscape_tests)
@@ -965,6 +980,9 @@ if(BUILD_TESTING)
 
     find_program(CC_PYTHON3_EXECUTABLE python3)
     if(CC_PYTHON3_EXECUTABLE)
+        add_test(NAME music_catalog_metadata
+                 COMMAND ${CC_PYTHON3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tools/music_catalog.py --check)
         add_test(NAME webgl2_skinning_uniform_budget
                  COMMAND ${CC_PYTHON3_EXECUTABLE}
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/shader_uniform_budget_tests.py)

@@ -3,6 +3,7 @@
 #include "client/cc_client_session.h"
 #include "client/cc_local3d.h"
 #include "client/cc_local_place.h"
+#include "client/cc_music_player.h"
 #include "client/cc_overlay.h"
 #include "client/cc_road_book.h"
 #include "client/cc_visual_style.h"
@@ -9299,6 +9300,65 @@ static CcLocalAtmospherePreset LocalAtmosphereForSimulation(
         sim != NULL ? sim->clock.minute_subticks : 0);
 }
 
+static CcMusicContext LocalMusicContext(const CcSim *sim, const LocalState *local)
+{
+    CcLocalAtmospherePreset atmosphere = LocalAtmosphereForSimulation(sim);
+    bool fighting = LocalCombatActive(local) ||
+        ((local->journey_combat_active || local->course.alarm_active) &&
+         !local->course.raiders_retreating && StandingRaiders(local) > 0);
+    CcMusicScene scene = {
+        .road = local->journey_travel_active || local->journey_combat_active ||
+                local->journey_parley_active || local->site_travel_active ||
+                local->road_choice_active,
+        .market = local->market_interior || local->open_world_market,
+        .bandit_attack = fighting && local->course.road_encounter,
+        .town_attack = fighting && !local->course.road_encounter,
+        .goblin_cave = local->site_kind == CC_LOCAL_SITE_GOBLIN_CAVE &&
+                       !local->site_travel_active,
+        .dragon_cave = local->site_kind == CC_LOCAL_SITE_DRAGON_CAVE &&
+                       !local->site_travel_active,
+        .loss = local->agent.combat.life_state == CC_LIFE_DEAD,
+        .rain = atmosphere == CC_LOCAL_ATMOSPHERE_RAINY_OVERCAST,
+        .night = atmosphere == CC_LOCAL_ATMOSPHERE_MOONLIT_NIGHT,
+    };
+    if (local->site_kind == CC_LOCAL_SITE_DUNGEON && !local->site_travel_active) {
+        scene.nearby_theme = CC_MUSIC_MINE;
+        scene.nearby_weight = 1.0f;
+    }
+    CcMusicContext context = CcMusicContextFor(sim, scene);
+    if (scene.loss) return context;
+    if (atmosphere == CC_LOCAL_ATMOSPHERE_DRAGON_OMEN) {
+        context.theme[CC_MUSIC_DRAGON] = 0.6f;
+        context.theme[CC_MUSIC_DANGER] = 0.8f;
+    }
+    /* Use the same site positions as the road renderer. Each site adds a
+       smooth attraction, so nearby places can overlap. */
+    if (local->open_world && !sim->dungeon_expedition.active &&
+        local->site_kind == CC_LOCAL_SITE_NONE) {
+        Vector3 focus = local->world_carriage.hero_embarked ?
+            local->world_carriage.position : local->agent.position;
+        static const CcMusicTheme site_themes[CC_ROAD_SITE_KIND_COUNT] = {
+            CC_MUSIC_FARM, CC_MUSIC_FARM, CC_MUSIC_WOOD, CC_MUSIC_QUARRY,
+            CC_MUSIC_MINE, CC_MUSIC_MILL, CC_MUSIC_BAKERY, CC_MUSIC_FORGE,
+            CC_MUSIC_INN, CC_MUSIC_TRAVEL
+        };
+        for (int i = 0; i < local->world_stream.manifest.road_site_count; ++i) {
+            const CcWorldRoadSitePlacement *placement =
+                &local->world_stream.manifest.road_sites[i];
+            const CcRoadSite *site = CcSimRoadSite(sim, placement->road_site_id);
+            if (site == NULL || (unsigned int)site->kind >= CC_ROAD_SITE_KIND_COUNT) continue;
+            float dx = focus.x - placement->destination.x;
+            float dz = focus.z - placement->destination.z;
+            float weight = ClampUnit(1.0f - sqrtf(dx * dx + dz * dz) / 28.0f);
+            weight = weight * weight * (3.0f - 2.0f * weight);
+            CcMusicTheme theme = site_themes[site->kind];
+            context.theme[theme] = fmaxf(context.theme[theme], weight);
+            CcMusicAttractPlace(&context, site->name, weight);
+        }
+    }
+    return context;
+}
+
 static Rectangle LocalViewportBounds(void)
 {
     return CcLocalViewportBounds(GetScreenWidth(), GetScreenHeight());
@@ -10702,6 +10762,7 @@ int main(int argc, char **argv)
 #endif
         local_bounds = LocalViewportBounds();
         float frame_delta_time = GetFrameTime();
+        bool music_play_input = false;
         save_feedback_age = fminf(
             SAVE_FEEDBACK_VISIBLE_SECONDS,
             save_feedback_age + frame_delta_time);
@@ -10718,8 +10779,10 @@ int main(int argc, char **argv)
             CheckCollisionPointRec(GetMousePosition(), AudioControlBounds());
         if (normal_play) {
             bool input = ClientMouseButtonPressed(MOUSE_BUTTON_LEFT) ||
-                         ClientMouseButtonPressed(MOUSE_BUTTON_RIGHT);
+                         ClientMouseButtonPressed(MOUSE_BUTTON_RIGHT) ||
+                         GetTouchPointCount() > 0;
             for (int key = 32; key < 349 && !input; ++key) input = ClientKeyPressed(key);
+            music_play_input = input;
             if (input) CcAudioInit();
             CcAudioSetFocused(IsWindowFocused());
         }
@@ -10748,7 +10811,7 @@ int main(int argc, char **argv)
                 message, sizeof(message), "%s",
                 preferences_saved ?
                     (change_audio ?
-                        (preferences.audio_mode == 0 ? "Sound: voices and effects. Saved." :
+                        (preferences.audio_mode == 0 ? "Sound: music, voices and effects. Saved." :
                          preferences.audio_mode == 1 ? "Sound: effects. Saved." : "Sound: muted. Saved.") :
                     (preferences.reduced_motion ?
                         "Reduced motion enabled and saved." :
@@ -10843,6 +10906,12 @@ int main(int argc, char **argv)
         }
 #endif
 
+        if (normal_play) {
+            CcMusicContext music_context = LocalMusicContext(&sim, &local);
+            CcMusicPlayerUpdate(&music_context, frame_delta_time,
+                                IsWindowFocused(), music_play_input,
+                                CcAudioMusicGain(), sim.world_seed);
+        }
         BeginDrawing();
         ClearBackground(BACKGROUND);
         CcOverlayBegin(1.0f);
@@ -11100,6 +11169,7 @@ int main(int argc, char **argv)
         GetTime() - render_benchmark_started : 0.0;
     CcLocalRendererStats final_renderer_stats =
         CcLocalRendererGetStats();
+    CcMusicPlayerShutdown();
     CcAudioShutdown();
     CcLocalRendererShutdown();
     UnloadRenderTexture(local_target);
