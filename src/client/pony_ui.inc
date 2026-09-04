@@ -115,7 +115,7 @@ static void DrawPonyInterface(const CcSim *sim, const LocalState *local)
     int x = GetScreenWidth() / 2 - 330;
     int y = 106;
     DrawPanel((Rectangle){(float)x, (float)y, 660, 466}, (Color){13,18,28,252});
-    CcOverlayDrawText("THE SEVEN RAINBOW PONIES", x + 20, y + 18, 17, INK);
+    CcOverlayDrawText("PONIES", x + 20, y + 18, 17, INK);
     CcOverlayDrawText("Meet them on the roads. Help them. Travel together. [F7 / Esc to close]",
                       x + 20, y + 47, 9, MUTED);
     for (int32_t i = 0; i < CC_PONY_COUNT; ++i) {
