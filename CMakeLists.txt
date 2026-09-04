@@ -184,6 +184,14 @@ target_link_libraries(crownless_persistence PUBLIC
 )
 cc_strict_warnings(crownless_persistence)
 
+if(NOT EMSCRIPTEN)
+    set_target_properties(crownless_sim crownless_persistence PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    add_library(crownless_coop SHARED src/multiplayer/cc_coop.c)
+    target_include_directories(crownless_coop PUBLIC src)
+    target_link_libraries(crownless_coop PRIVATE crownless_persistence)
+    cc_strict_warnings(crownless_coop)
+endif()
+
 add_library(crownless_metagame
     src/metagame/cc_metagame.c
 )
@@ -280,7 +288,7 @@ if(CC_BUILD_CLIENT)
 
     file(GLOB CC_VOICE_ASSETS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/assets/audio/voice/*.wav")
     add_executable(crownless_carriage src/client/main.c src/client/cc_audio.c
-                   src/client/cc_music_player.c)
+                   src/client/cc_music_player.c src/client/cc_coop_client.c)
     target_compile_definitions(crownless_carriage PRIVATE
         CC_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
     if(APPLE)
@@ -494,7 +502,7 @@ if(CC_BUILD_CLIENT)
             SUFFIX ".html"
             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/site"
             LINK_DEPENDS
-                "${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html;${CMAKE_CURRENT_SOURCE_DIR}/web/persistence.js;${CC_WEB_STARTUP_ASSET_STAMP};${CC_WEB_STARTUP_ASSET_OUTPUTS}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html;${CMAKE_CURRENT_SOURCE_DIR}/web/persistence.js;${CMAKE_CURRENT_SOURCE_DIR}/web/coop_game.js;${CC_WEB_STARTUP_ASSET_STAMP};${CC_WEB_STARTUP_ASSET_OUTPUTS}"
         )
         target_compile_definitions(crownless_carriage PRIVATE PLATFORM_WEB)
         set_property(TARGET crownless_carriage PROPERTY C_EXTENSIONS ON)
@@ -509,6 +517,7 @@ if(CC_BUILD_CLIENT)
             "-sMIN_WEBGL_VERSION=2"
             "-sMAX_WEBGL_VERSION=2"
             "--shell-file=${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html"
+            "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/coop_game.js"
             "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/persistence.js"
             "SHELL:--preload-file ${CC_WEB_ASSET_DIR}/assets@/assets"
         )
@@ -981,6 +990,9 @@ if(BUILD_TESTING)
         add_test(NAME browser_persistence_contract
                  COMMAND ${CC_NODE_EXECUTABLE}
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/web_persistence_tests.mjs)
+        add_test(NAME browser_shared_carriage_contract
+                 COMMAND ${CC_NODE_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/web_coop_tests.mjs)
     endif()
 
     find_program(CC_PYTHON3_EXECUTABLE python3)
@@ -996,6 +1008,19 @@ if(BUILD_TESTING)
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/sim_runner_tests.py
                          $<TARGET_FILE:crownless_sim_runner>)
         set_tests_properties(simulation_runner_resume PROPERTIES TIMEOUT 60)
+    endif()
+
+    if(NOT EMSCRIPTEN)
+        add_executable(coop_bridge_tests tests/coop_bridge_tests.c)
+        target_link_libraries(coop_bridge_tests PRIVATE crownless_coop crownless_sim)
+        cc_strict_warnings(coop_bridge_tests)
+        add_test(NAME shared_carriage_bridge COMMAND coop_bridge_tests)
+        if(CC_PYTHON3_EXECUTABLE AND NOT CMAKE_C_FLAGS MATCHES "sanitize")
+            add_test(NAME shared_carriage_server
+                COMMAND ${CC_PYTHON3_EXECUTABLE}
+                        ${CMAKE_CURRENT_SOURCE_DIR}/tests/coop_tests.py
+                        $<TARGET_FILE:crownless_coop>)
+        endif()
     endif()
 
     add_executable(client_policy_tests tests/client_policy_tests.c)

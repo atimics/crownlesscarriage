@@ -1,4 +1,27 @@
 (function () {
+  if (Module.ccCoop && Module.ccCoop.enabled) {
+    Module.crownlessCampaignAccess = 0;
+    Module.crownlessCampaignAccessMessage = "";
+    Module.persistCrownlessSave = async function () {};
+    Module.persistCrownlessNewCampaign = async function () {};
+    const preferencesKey = "cc-coop-preferences";
+    Module.persistCrownlessPreferences = async function (path) {
+      localStorage.setItem(preferencesKey, FS.readFile(path, {encoding: "utf8"}));
+    };
+    Module.preRun = Module.preRun || [];
+    Module.preRun.push(function () {
+      try {
+        const preferences = localStorage.getItem(preferencesKey);
+        if (preferences !== null) {
+          FS.mkdirTree("/tmp");
+          FS.writeFile("/tmp/crownless-coop.ccsave.preferences", preferences);
+        }
+      } catch (error) {
+        console.error("Could not load shared-world preferences", error);
+      }
+    });
+    return;
+  }
   const saveDirectory = "/crownless-save";
   const campaignPath = saveDirectory + "/crownless_campaign.ccsave";
   const sessionPath = campaignPath + ".session";

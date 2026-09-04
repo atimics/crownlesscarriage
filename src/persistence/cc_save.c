@@ -6156,6 +6156,67 @@ bool CcSaveRead(const char *path, CcSim *sim,
     return true;
 }
 
+bool CcSaveEncode(const CcSim *sim, unsigned char **bytes, size_t *length,
+                  char *error, size_t error_capacity)
+{
+    if (bytes == NULL || length == NULL || sim == NULL) return false;
+    *bytes = NULL;
+    *length = 0U;
+    if (!CcSimValidate(sim, error, error_capacity)) return false;
+    sqlite3 *database = NULL;
+    bool ok = sqlite3_open(":memory:", &database) == SQLITE_OK &&
+        CreateSchema(database, error, error_capacity) &&
+        MarkDatabaseCurrent(database, error, error_capacity) &&
+        SaveSnapshot(database, sim, 0U, 0U, error, error_capacity);
+    sqlite3_int64 size = 0;
+    unsigned char *encoded = ok ? sqlite3_serialize(database, "main", &size, 0) : NULL;
+    if (database != NULL) sqlite3_close(database);
+    if (encoded == NULL || size <= 0 || size > 8 * 1024 * 1024) {
+        sqlite3_free(encoded);
+        SetError(error, error_capacity, "Could not encode the campaign snapshot.");
+        return false;
+    }
+    *bytes = encoded;
+    *length = (size_t)size;
+    return true;
+}
+
+bool CcSaveDecode(const unsigned char *bytes, size_t length, CcSim *sim,
+                  char *error, size_t error_capacity)
+{
+    if (bytes == NULL || sim == NULL || length < 100U || length > 8U * 1024U * 1024U ||
+        memcmp(bytes, "SQLite format 3\0", 16U) != 0) {
+        SetError(error, error_capacity, "The campaign snapshot has an invalid format.");
+        return false;
+    }
+    sqlite3 *database = NULL;
+    if (sqlite3_open(":memory:", &database) != SQLITE_OK) {
+        sqlite3_close(database);
+        return false;
+    }
+    unsigned char *copy = sqlite3_malloc64((sqlite3_uint64)length);
+    if (copy == NULL) {
+        sqlite3_close(database);
+        return false;
+    }
+    memcpy(copy, bytes, length);
+    int loaded = sqlite3_deserialize(database, "main", copy,
+        (sqlite3_int64)length, (sqlite3_int64)length,
+        SQLITE_DESERIALIZE_FREEONCLOSE | SQLITE_DESERIALIZE_RESIZEABLE);
+    CcSim *candidate = malloc(sizeof(*candidate));
+    bool ok = loaded == SQLITE_OK && candidate != NULL &&
+        LoadDatabase(database, candidate, NULL, error, error_capacity);
+    if (ok) *sim = *candidate;
+    free(candidate);
+    sqlite3_close(database);
+    return ok;
+}
+
+void CcSaveFreeBuffer(void *bytes)
+{
+    sqlite3_free(bytes);
+}
+
 static bool ReadSnapshotJournalCursor(sqlite3 *database,
                                       uint64_t *generation,
                                       uint64_t *cursor,

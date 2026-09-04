@@ -14,9 +14,14 @@
 	static-analysis \
 	configure-play build-play test-play \
 	configure-release build-release test-release \
-	configure-web build-web
+	configure-web build-web build-coop serve-coop
 
 BLENDER ?= blender
+COOP_BUILD ?= out/build/coop
+COOP_DATABASE ?= out/worlds.sqlite3
+COOP_PORT ?= 8787
+COOP_GAME_DIR ?= out/build/web/site
+COOP_LIBRARY = $(firstword $(wildcard $(COOP_BUILD)/libcrownless_coop.*))
 
 art-assets-check:
 	python3 tools/art/check_asset_inventory.py
@@ -48,6 +53,15 @@ configure-web:
 
 build-web: configure-web
 	cmake --build --preset web
+
+build-coop:
+	cmake -S . -B $(COOP_BUILD) -DCC_BUILD_CLIENT=OFF -DCMAKE_BUILD_TYPE=Release
+	cmake --build $(COOP_BUILD) --target crownless_coop --parallel
+
+serve-coop: build-coop
+	python3 -m venv $(COOP_BUILD)/venv
+	$(COOP_BUILD)/venv/bin/python -m pip install -r tools/coop/requirements.txt
+	$(COOP_BUILD)/venv/bin/python tools/coop/server.py --library $(COOP_LIBRARY) --database $(COOP_DATABASE) --port $(COOP_PORT) $(if $(wildcard $(COOP_GAME_DIR)/index.html),--game-dir $(COOP_GAME_DIR))
 
 blender-assets:
 	$(BLENDER) --background --factory-startup --python tools/blender/build_asset_library.py

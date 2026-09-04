@@ -59,6 +59,29 @@ jobs:
         env:
           CC_PLAYWRIGHT_MODULE: ${{ runner.temp }}/crownless-browser/node_modules/playwright
         run: node tests/browser_tests.cjs out/build/web/site browser-results
+      - name: Build the shared carriage host
+        run: |
+          sudo apt-get update && sudo apt-get install -y libsqlite3-dev
+          cmake -S . -B out/build/coop -DCC_BUILD_CLIENT=OFF -DCMAKE_BUILD_TYPE=Release
+          cmake --build out/build/coop --target crownless_coop --parallel
+          python3 -m venv out/build/coop/venv
+          out/build/coop/venv/bin/python -m pip install -r tools/coop/requirements.txt
+      - name: Test shared browser players
+        env:
+          CC_PLAYWRIGHT_MODULE: ${{ runner.temp }}/crownless-browser/node_modules/playwright
+          CC_COOP_PYTHON: out/build/coop/venv/bin/python
+        run: node tests/coop_browser_tests.cjs out/build/coop/libcrownless_coop.so out/build/web/site
+      - name: Test the shared world release container
+        run: |
+          node tests/coop_edge_tests.mjs
+          docker build --file tools/coop/Dockerfile --build-arg CROWNLESS_REVISION="$GITHUB_SHA" --tag crownless-host-check .
+          node tests/coop_host_tests.mjs crownless-host-check
+      - name: Upload the shared world game
+        uses: actions/upload-artifact@v4
+        with:
+          name: shared-world-game
+          path: out/build/web/site
+          include-hidden-files: true
       - name: Upload browser checks
         if: always()
         uses: actions/upload-artifact@v4
@@ -87,3 +110,33 @@ jobs:
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v5
+
+  deploy-shared-world:
+    name: Deploy shared world to Fly
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.CROWNLESS_FLY_APP != ''
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v4
+        with:
+          name: shared-world-game
+          path: out/build/web/site
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
+      - name: Deploy the tested game and host
+        env:
+          FLY_API_TOKEN: ${{ secrets.CROWNLESS_FLY_API_TOKEN }}
+        run: flyctl deploy --remote-only --ha=false --strategy immediate --build-arg CROWNLESS_REVISION="$GITHUB_SHA" --yes
+      - name: Verify the live revision
+        env:
+          EXPECTED_REVISION: ${{ github.sha }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request
+          for origin in ('https://crownless-ratimics.fly.dev', 'https://crownless.ratimics.com'):
+              with urllib.request.urlopen(origin + '/healthz', timeout=30) as response:
+                  health = json.load(response)
+              assert health['status'] == 'ready', health
+              assert health['revision'] == os.environ['EXPECTED_REVISION'], health
+              print(origin + ' is healthy at the deployed revision.')
+          PY

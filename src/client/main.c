@@ -1,5 +1,6 @@
 #include "client/cc_audio.h"
 #include "client/cc_client_policy.h"
+#include "client/cc_coop_client.h"
 #include "client/cc_client_session.h"
 #include "client/cc_local3d.h"
 #include "client/cc_local_place.h"
@@ -5675,7 +5676,8 @@ static bool ApplyCommand(CcJournal *journal, CcSim *sim, CcCommand command,
                          char *message, size_t message_capacity)
 {
     char error[192];
-    bool applied = journal != NULL ?
+    bool applied = CcCoopClientActive() ?
+        CcCoopClientApply(sim, &command, error, sizeof(error)) : journal != NULL ?
         CcJournalApply(journal, sim, &command, error, sizeof(error)) :
         CcSimApply(sim, &command, error, sizeof(error));
     if (!applied) {
@@ -7718,6 +7720,11 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
     if (command_action == COMMAND_ACTION_SAVE || ClientKeyPressed(KEY_F5) ||
         queued_save_shortcut || (control && ClientKeyPressed(KEY_S))) {
         *save_feedback_age = 0.0f;
+        if (CcCoopClientActive()) {
+            (void)snprintf(save_feedback, save_feedback_capacity,
+                           "The host saves each company action and the shared clock.");
+            return;
+        }
 #if defined(PLATFORM_WEB)
         int32_t browser_access = ClientBrowserCampaignAccess();
         if (browser_access != 0) {
@@ -8153,6 +8160,13 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         return;
     }
 
+    if (CcCoopClientActive() &&
+        (ClientKeyPressed(KEY_F9) || ClientKeyPressed(KEY_N) ||
+         ClientKeyPressed(KEY_PERIOD) || ClientKeyPressed(KEY_K))) {
+        (void)snprintf(message, message_capacity,
+                       "Use the company road book to manage the shared world.");
+        return;
+    }
     if (ClientKeyPressed(KEY_F9)) {
         char error[256];
         if (!CcJournalClose(journal, sim, error, sizeof(error))) {
@@ -8446,6 +8460,48 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             if (sim->journey.active &&
                 (context_action == CONTEXT_ACTION_SKIP_TRAVEL ||
                  enter_pressed)) {
+                if (CcCoopClientActive()) {
+                    char error[256];
+                    bool warning_reached = !sim->journey.ambush_warned;
+                    bool advanced = CcCoopClientSkip(sim, error, sizeof(error));
+                    warning_reached = warning_reached && sim->journey.ambush_warned;
+                    if (!advanced) {
+                        (void)snprintf(message, message_capacity, "%s", error);
+                        return;
+                    }
+                    if (sim->journey.active &&
+                        sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED) {
+                        BeginRoadLocalState(sim, local, false);
+                        *view = VIEW_LOCAL;
+                        (void)snprintf(message, message_capacity,
+                                       "The road is blocked. Walk to the captain or return to the carriage.");
+                    } else if (sim->journey.active &&
+                               sim->journey.phase ==
+                                   CC_JOURNEY_PHASE_RESTING) {
+                        (void)snprintf(
+                            message, message_capacity, "%s",
+                            CcSimJourneyStop(sim) == CC_JOURNEY_STOP_MIDDAY ?
+                                "The morning watch ends. Water the team or press on." :
+                            CcSimJourneyRoadHouseAvailable(sim) ?
+                                "The afternoon watch ends at the road house. Lodge or make camp." :
+                                "The afternoon watch ends. Make camp and set a watch.");
+                    } else if (sim->journey.active && warning_reached) {
+                        const CcEvent *event = CcSimRecentEvent(sim, 0);
+                        (void)snprintf(message, message_capacity, "%s",
+                                       event != NULL ? event->text :
+                                       "Scouts spot riders shadowing the road.");
+                    } else if (sim->journey.active) {
+                        (void)snprintf(message, message_capacity,
+                                       "The company advances along the road.");
+                    } else {
+                        *selected = FirstOutgoingRouteIndex(sim);
+                        CcLocalBindPlace(sim);
+                        BeginRoadBookArrivalState(sim, local);
+                        (void)snprintf(message, message_capacity,
+                                       "The road book closes on the destination gate.");
+                    }
+                    return;
+                }
                 local->travel_fast_forward = !local->travel_fast_forward;
                 local->travel_attention = false;
             }
@@ -8476,7 +8532,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             bool warned_before = sim->journey.ambush_warned;
             bool ambush_resolved_before = sim->journey.ambush_resolved;
             char error[256];
-            bool advanced = AdvanceStorybookTravel(
+            bool advanced = CcCoopClientActive() || AdvanceStorybookTravel(
                 *journal, sim, local, ticks, error, sizeof(error));
             if (!advanced) {
                 (void)snprintf(message, message_capacity, "%s", error);
@@ -9916,6 +9972,7 @@ int main(int argc, char **argv)
                                "architecture-proof.png";
     char save_path[640];
     CampaignSavePath(save_path, sizeof(save_path));
+    if (CcCoopClientActive()) (void)snprintf(save_path, sizeof(save_path), "/tmp/crownless-coop.ccsave");
     char session_path[704];
     char lock_path[704];
     char preferences_path[704];
@@ -10014,7 +10071,16 @@ int main(int argc, char **argv)
     CcJournal *journal = NULL;
     char startup_message[256] = "";
     bool resuming_campaign = normal_play && CampaignSaveExists(save_path);
-    if (capture || render_benchmark) {
+    if (normal_play && CcCoopClientActive()) {
+        char error[256] = "Connect through the company road book to join this world.";
+        if (CcCoopClientConnect(&sim, error, sizeof(error))) {
+            journal = CcJournalStart(save_path, &sim, error, sizeof(error));
+            resuming_campaign = true;
+        }
+        (void)snprintf(startup_message, sizeof(startup_message), "%s",
+                       journal != NULL ? "The company shares this carriage and clock." : error);
+        CcCoopClientReady(journal != NULL ? "" : error);
+    } else if (capture || render_benchmark) {
         CcSimAdvanceDays(&sim, 28);
     } else {
         char error[256];
@@ -10763,6 +10829,31 @@ int main(int argc, char **argv)
 #if defined(PLATFORM_WEB)
         ClientWaitForAnimationFrame();
 #endif
+        if (CcCoopClientActive()) {
+            CcId old_location = sim.player.location_id;
+            CcId old_route = sim.journey.route_id;
+            bool old_journey = sim.journey.active;
+            CcJourneyPhase old_phase = sim.journey.phase;
+            bool old_dungeon = sim.dungeon_expedition.active;
+            char sync_error[256] = "";
+            if (CcCoopClientPoll(&sim, sync_error, sizeof(sync_error)) &&
+                (old_location != sim.player.location_id || old_journey != sim.journey.active ||
+                 old_route != sim.journey.route_id || old_phase != sim.journey.phase ||
+                 old_dungeon != sim.dungeon_expedition.active)) {
+                LeaveOpenWorld(&local);
+                ResetLocalStatePreservingAthletics(&local);
+                CcLocalBindPlace(&sim);
+                (void)InitializeOpenWorld(&sim, &local, false);
+                if (sim.journey.active && sim.journey.phase == CC_JOURNEY_PHASE_BLOCKED) {
+                    BeginRoadLocalState(&sim, &local, false);
+                } else if (sim.journey.active) {
+                    BeginRoadTravelState(&sim, &local);
+                }
+                selected = FirstOutgoingRouteIndex(&sim);
+                selected_situation = FirstActiveSituationIndex(&sim);
+                view = sim.dungeon_expedition.active ? VIEW_DUNGEON : VIEW_LOCAL;
+            }
+        }
         local_bounds = LocalViewportBounds();
         float frame_delta_time = GetFrameTime();
         bool music_play_input = false;
