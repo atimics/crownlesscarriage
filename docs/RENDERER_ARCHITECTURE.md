@@ -44,6 +44,9 @@ Resource caches and shared frame state stay private to the library.
 Visible trees share two static GPU batches: one for wood and shadows, and one
 for foliage. The renderer rebuilds them when terrain, place style, kingdom
 color, or tree visibility changes.
+The wood batch uses 16-bit indices so cylinder rings and repeated source
+vertices share storage. Renderer benchmarks report the total static batch
+vertex count with the draw count.
 
 ## Test interfaces
 

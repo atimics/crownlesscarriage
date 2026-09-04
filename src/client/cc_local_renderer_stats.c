@@ -73,6 +73,7 @@ void CcLocalRendererBeginFrame(float delta_time)
     renderer_stats.creature_skinned_meshes = 0;
     renderer_stats.static_batch_draws = 0;
     renderer_stats.static_batch_instances = 0;
+    renderer_stats.static_batch_vertices = 0;
 }
 
 void CcLocalRendererResetPerformanceMetrics(void)
@@ -126,8 +127,10 @@ void CcLocalRendererRecordCreatureSkinUpdate(int32_t mesh_count)
 }
 
 void CcLocalRendererRecordStaticBatch(int32_t draw_count,
-                                      int32_t instance_count)
+                                      int32_t instance_count,
+                                      int32_t vertex_count)
 {
     renderer_stats.static_batch_draws += draw_count;
     renderer_stats.static_batch_instances += instance_count;
+    renderer_stats.static_batch_vertices += vertex_count;
 }

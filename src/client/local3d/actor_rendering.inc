@@ -2445,8 +2445,10 @@ typedef enum TreeRenderPass {
 
 typedef struct TreeBatchMeshWriter {
     Mesh mesh;
-    int32_t cursor;
+    int32_t vertex_cursor;
+    int32_t index_cursor;
     int32_t source_draw_count;
+    bool indexed;
     bool count_only;
     bool failed;
 } TreeBatchMeshWriter;
@@ -2459,8 +2461,21 @@ typedef struct TreeSceneryBatchCache {
     CcSettlementFunction function;
     Color kingdom;
     int32_t source_draw_count;
+    int32_t vertex_count;
     bool ready;
 } TreeSceneryBatchCache;
+
+#define CC_TREE_BATCH_SOURCE_VERTEX_LIMIT 512
+
+typedef struct TreeBatchSourceIndexCache {
+    const float *vertices;
+    const float *normals;
+    const unsigned char *colors;
+    int32_t vertex_count;
+    int32_t unique_count;
+    int32_t remap[CC_TREE_BATCH_SOURCE_VERTEX_LIMIT];
+    bool ready;
+} TreeBatchSourceIndexCache;
 
 static TreeRenderPass tree_render_pass = TREE_RENDER_FULL;
 static TreeBatchMeshWriter *tree_structure_writer = NULL;
@@ -2468,6 +2483,7 @@ static TreeBatchMeshWriter *tree_foliage_writer = NULL;
 static Vector3 tree_batch_parent_origin = {0};
 static Vector3 tree_batch_parent_scale = {1.0f, 1.0f, 1.0f};
 static TreeSceneryBatchCache tree_scenery_batch = {0};
+static TreeBatchSourceIndexCache tree_batch_source_indices = {0};
 
 static bool TreeBatchColorEqual(Color left, Color right)
 {
@@ -2484,30 +2500,43 @@ static void TreeSceneryBatchClear(void)
         UnloadModel(tree_scenery_batch.foliage);
     }
     tree_scenery_batch = (TreeSceneryBatchCache){0};
+    tree_batch_source_indices = (TreeBatchSourceIndexCache){0};
 }
 
 static bool TreeBatchMeshWriterAllocate(TreeBatchMeshWriter *writer,
-                                        int32_t vertex_count)
+                                        int32_t vertex_count,
+                                        int32_t index_count)
 {
-    if (writer == NULL || vertex_count <= 0 || vertex_count % 3 != 0) {
+    bool indexed = index_count > 0;
+    if (writer == NULL || vertex_count <= 0 ||
+        (indexed && (index_count % 3 != 0 || vertex_count > UINT16_MAX)) ||
+        (!indexed && vertex_count % 3 != 0)) {
         return false;
     }
     *writer = (TreeBatchMeshWriter){0};
+    writer->indexed = indexed;
     writer->mesh.vertexCount = vertex_count;
-    writer->mesh.triangleCount = vertex_count / 3;
+    writer->mesh.triangleCount = indexed ? index_count / 3 :
+                                           vertex_count / 3;
     writer->mesh.vertices = MemAlloc(
         (unsigned int)((size_t)vertex_count * 3U * sizeof(float)));
     writer->mesh.normals = MemAlloc(
         (unsigned int)((size_t)vertex_count * 3U * sizeof(float)));
     writer->mesh.colors = MemAlloc(
         (unsigned int)((size_t)vertex_count * 4U * sizeof(unsigned char)));
+    if (indexed) {
+        writer->mesh.indices = MemAlloc(
+            (unsigned int)((size_t)index_count * sizeof(unsigned short)));
+    }
     if (writer->mesh.vertices != NULL && writer->mesh.normals != NULL &&
-        writer->mesh.colors != NULL) {
+        writer->mesh.colors != NULL &&
+        (!indexed || writer->mesh.indices != NULL)) {
         return true;
     }
     if (writer->mesh.vertices != NULL) MemFree(writer->mesh.vertices);
     if (writer->mesh.normals != NULL) MemFree(writer->mesh.normals);
     if (writer->mesh.colors != NULL) MemFree(writer->mesh.colors);
+    if (writer->mesh.indices != NULL) MemFree(writer->mesh.indices);
     *writer = (TreeBatchMeshWriter){0};
     return false;
 }
@@ -2581,15 +2610,16 @@ static Color TreeBatchTint(Color source, Color tint)
     };
 }
 
-static void TreeBatchMeshWriteVertex(TreeBatchMeshWriter *writer,
-                                     Vector3 point, Vector3 normal,
-                                     Color color)
+static int32_t TreeBatchMeshWriteVertex(TreeBatchMeshWriter *writer,
+                                        Vector3 point, Vector3 normal,
+                                        Color color)
 {
-    if (writer == NULL || writer->cursor >= writer->mesh.vertexCount) {
+    if (writer == NULL ||
+        writer->vertex_cursor >= writer->mesh.vertexCount) {
         if (writer != NULL) writer->failed = true;
-        return;
+        return -1;
     }
-    int32_t vertex = writer->cursor++;
+    int32_t vertex = writer->vertex_cursor++;
     writer->mesh.vertices[vertex * 3 + 0] = point.x;
     writer->mesh.vertices[vertex * 3 + 1] = point.y;
     writer->mesh.vertices[vertex * 3 + 2] = point.z;
@@ -2600,18 +2630,29 @@ static void TreeBatchMeshWriteVertex(TreeBatchMeshWriter *writer,
     writer->mesh.colors[vertex * 4 + 1] = color.g;
     writer->mesh.colors[vertex * 4 + 2] = color.b;
     writer->mesh.colors[vertex * 4 + 3] = color.a;
+    return vertex;
 }
 
-static void TreeBatchMeshWriteTriangle(TreeBatchMeshWriter *writer,
-                                       Vector3 a, Vector3 b, Vector3 c,
-                                       Vector3 normal, Color color)
+static void TreeBatchMeshWriteIndex(TreeBatchMeshWriter *writer,
+                                    int32_t vertex)
 {
-    TreeBatchMeshWriteVertex(
-        writer, TreeBatchTransformParentPoint(a), normal, color);
-    TreeBatchMeshWriteVertex(
-        writer, TreeBatchTransformParentPoint(b), normal, color);
-    TreeBatchMeshWriteVertex(
-        writer, TreeBatchTransformParentPoint(c), normal, color);
+    int32_t index_count = writer != NULL ?
+        writer->mesh.triangleCount * 3 : 0;
+    if (writer == NULL || !writer->indexed || vertex < 0 ||
+        vertex > UINT16_MAX || writer->index_cursor >= index_count) {
+        if (writer != NULL) writer->failed = true;
+        return;
+    }
+    writer->mesh.indices[writer->index_cursor++] = (unsigned short)vertex;
+}
+
+static void TreeBatchMeshWriteIndexedTriangle(TreeBatchMeshWriter *writer,
+                                              int32_t a, int32_t b,
+                                              int32_t c)
+{
+    TreeBatchMeshWriteIndex(writer, a);
+    TreeBatchMeshWriteIndex(writer, b);
+    TreeBatchMeshWriteIndex(writer, c);
 }
 
 static void TreeBatchMeshAppendCylinder(TreeBatchMeshWriter *writer,
@@ -2624,12 +2665,19 @@ static void TreeBatchMeshAppendCylinder(TreeBatchMeshWriter *writer,
     if (sides < 3) sides = 3;
     Vector3 direction = Vector3Subtract(end, start);
     if (Vector3LengthSqr(direction) <= 0.0f) return;
-    int32_t vertex_count = sides * 6;
-    if (start_radius > 0.0f) vertex_count += sides * 3;
-    if (end_radius > 0.0f) vertex_count += sides * 3;
+    int32_t triangle_index_count = sides * 6;
+    if (start_radius > 0.0f) triangle_index_count += sides * 3;
+    if (end_radius > 0.0f) triangle_index_count += sides * 3;
     writer->source_draw_count += 1;
+    if (!writer->indexed) {
+        writer->failed = true;
+        return;
+    }
     if (writer->count_only) {
-        writer->cursor += vertex_count;
+        writer->vertex_cursor += sides * 2;
+        writer->vertex_cursor += start_radius > 0.0f ? 1 : 0;
+        writer->vertex_cursor += end_radius > 0.0f ? 1 : 0;
+        writer->index_cursor += triangle_index_count;
         return;
     }
 
@@ -2638,39 +2686,191 @@ static void TreeBatchMeshAppendCylinder(TreeBatchMeshWriter *writer,
         Vector3CrossProduct(basis_one, direction));
     float angle_step = 2.0f * PI / (float)sides;
     const Vector3 retained_normal = {-1.0f, 0.0f, 0.0f};
+    int32_t start_center = -1;
+    int32_t end_center = -1;
+    if (start_radius > 0.0f) {
+        start_center = TreeBatchMeshWriteVertex(
+            writer, TreeBatchTransformParentPoint(start), retained_normal,
+            color);
+    }
+    if (end_radius > 0.0f) {
+        end_center = TreeBatchMeshWriteVertex(
+            writer, TreeBatchTransformParentPoint(end), retained_normal,
+            color);
+    }
+    int32_t start_ring = writer->vertex_cursor;
     for (int32_t side = 0; side < sides; ++side) {
-        float first_sine = sinf(angle_step * (float)side);
-        float first_cosine = cosf(angle_step * (float)side);
-        float next_sine = sinf(angle_step * (float)(side + 1));
-        float next_cosine = cosf(angle_step * (float)(side + 1));
-        Vector3 first_start = Vector3Add(
+        float sine = sinf(angle_step * (float)side);
+        float cosine = cosf(angle_step * (float)side);
+        Vector3 point = Vector3Add(
             start, Vector3Add(
-                Vector3Scale(basis_one, first_sine * start_radius),
-                Vector3Scale(basis_two, first_cosine * start_radius)));
-        Vector3 next_start = Vector3Add(
-            start, Vector3Add(
-                Vector3Scale(basis_one, next_sine * start_radius),
-                Vector3Scale(basis_two, next_cosine * start_radius)));
-        Vector3 first_end = Vector3Add(
+                Vector3Scale(basis_one, sine * start_radius),
+                Vector3Scale(basis_two, cosine * start_radius)));
+        (void)TreeBatchMeshWriteVertex(
+            writer, TreeBatchTransformParentPoint(point), retained_normal,
+            color);
+    }
+    int32_t end_ring = writer->vertex_cursor;
+    for (int32_t side = 0; side < sides; ++side) {
+        float sine = sinf(angle_step * (float)side);
+        float cosine = cosf(angle_step * (float)side);
+        Vector3 point = Vector3Add(
             end, Vector3Add(
-                Vector3Scale(basis_one, first_sine * end_radius),
-                Vector3Scale(basis_two, first_cosine * end_radius)));
-        Vector3 next_end = Vector3Add(
-            end, Vector3Add(
-                Vector3Scale(basis_one, next_sine * end_radius),
-                Vector3Scale(basis_two, next_cosine * end_radius)));
+                Vector3Scale(basis_one, sine * end_radius),
+                Vector3Scale(basis_two, cosine * end_radius)));
+        (void)TreeBatchMeshWriteVertex(
+            writer, TreeBatchTransformParentPoint(point), retained_normal,
+            color);
+    }
+    for (int32_t side = 0; side < sides; ++side) {
+        int32_t next = (side + 1) % sides;
+        int32_t first_start = start_ring + side;
+        int32_t next_start = start_ring + next;
+        int32_t first_end = end_ring + side;
+        int32_t next_end = end_ring + next;
         if (start_radius > 0.0f) {
-            TreeBatchMeshWriteTriangle(writer, start, next_start,
-                                       first_start, retained_normal, color);
+            TreeBatchMeshWriteIndexedTriangle(
+                writer, start_center, next_start, first_start);
         }
-        TreeBatchMeshWriteTriangle(writer, first_start, next_start,
-                                   first_end, retained_normal, color);
-        TreeBatchMeshWriteTriangle(writer, next_start, next_end,
-                                   first_end, retained_normal, color);
+        TreeBatchMeshWriteIndexedTriangle(
+            writer, first_start, next_start, first_end);
+        TreeBatchMeshWriteIndexedTriangle(
+            writer, next_start, next_end, first_end);
         if (end_radius > 0.0f) {
-            TreeBatchMeshWriteTriangle(writer, end, first_end, next_end,
-                                       retained_normal, color);
+            TreeBatchMeshWriteIndexedTriangle(
+                writer, end_center, first_end, next_end);
         }
+    }
+}
+
+static void TreeBatchMeshAppendModelVertex(
+    TreeBatchMeshWriter *writer, const Mesh *mesh, int32_t source,
+    Vector3 center, Vector3 scale, float turn, Color tint)
+{
+    if (source < 0 || source >= mesh->vertexCount) {
+        writer->failed = true;
+        return;
+    }
+    Vector3 point = {
+        mesh->vertices[source * 3 + 0],
+        mesh->vertices[source * 3 + 1],
+        mesh->vertices[source * 3 + 2],
+    };
+    Vector3 normal = {
+        mesh->normals[source * 3 + 0],
+        mesh->normals[source * 3 + 1],
+        mesh->normals[source * 3 + 2],
+    };
+    Color source_color = WHITE;
+    if (mesh->colors != NULL) {
+        source_color = (Color){
+            mesh->colors[source * 4 + 0],
+            mesh->colors[source * 4 + 1],
+            mesh->colors[source * 4 + 2],
+            mesh->colors[source * 4 + 3],
+        };
+    }
+    point = TreeBatchTransformPoint(point, center, scale, turn);
+    normal = TreeBatchTransformNormal(normal, scale, turn);
+    (void)TreeBatchMeshWriteVertex(
+        writer, point, normal, TreeBatchTint(source_color, tint));
+}
+
+static bool TreeBatchMeshSourceVertexEqual(const Mesh *mesh,
+                                           int32_t left, int32_t right)
+{
+    for (int32_t component = 0; component < 3; ++component) {
+        if (mesh->vertices[left * 3 + component] !=
+                mesh->vertices[right * 3 + component] ||
+            mesh->normals[left * 3 + component] !=
+                mesh->normals[right * 3 + component]) {
+            return false;
+        }
+    }
+    if (mesh->colors == NULL) return true;
+    for (int32_t component = 0; component < 4; ++component) {
+        if (mesh->colors[left * 4 + component] !=
+            mesh->colors[right * 4 + component]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static const TreeBatchSourceIndexCache *TreeBatchMeshSourceIndexMap(
+    const Mesh *mesh)
+{
+    if (mesh == NULL || mesh->vertices == NULL || mesh->normals == NULL ||
+        mesh->indices != NULL || mesh->vertexCount <= 0 ||
+        mesh->vertexCount > CC_TREE_BATCH_SOURCE_VERTEX_LIMIT) {
+        return NULL;
+    }
+    if (tree_batch_source_indices.ready &&
+        tree_batch_source_indices.vertices == mesh->vertices &&
+        tree_batch_source_indices.normals == mesh->normals &&
+        tree_batch_source_indices.colors == mesh->colors &&
+        tree_batch_source_indices.vertex_count == mesh->vertexCount) {
+        return &tree_batch_source_indices;
+    }
+
+    tree_batch_source_indices = (TreeBatchSourceIndexCache){
+        .vertices = mesh->vertices,
+        .normals = mesh->normals,
+        .colors = mesh->colors,
+        .vertex_count = mesh->vertexCount,
+    };
+    for (int32_t source = 0; source < mesh->vertexCount; ++source) {
+        int32_t matching_source = -1;
+        for (int32_t prior = 0; prior < source; ++prior) {
+            if (TreeBatchMeshSourceVertexEqual(mesh, source, prior)) {
+                matching_source = prior;
+                break;
+            }
+        }
+        if (matching_source >= 0) {
+            tree_batch_source_indices.remap[source] =
+                tree_batch_source_indices.remap[matching_source];
+        } else {
+            tree_batch_source_indices.remap[source] =
+                tree_batch_source_indices.unique_count++;
+        }
+    }
+    tree_batch_source_indices.ready = true;
+    return &tree_batch_source_indices;
+}
+
+static void TreeBatchMeshAppendIndexedModel(
+    TreeBatchMeshWriter *writer, const Mesh *mesh, Vector3 center,
+    Vector3 scale, float turn, Color tint)
+{
+    int32_t base_vertex = writer->vertex_cursor;
+    const TreeBatchSourceIndexCache *source_indices =
+        TreeBatchMeshSourceIndexMap(mesh);
+    if (source_indices == NULL) {
+        for (int32_t source = 0; source < mesh->vertexCount; ++source) {
+            TreeBatchMeshAppendModelVertex(
+                writer, mesh, source, center, scale, turn, tint);
+        }
+        int32_t output_count = mesh->indices != NULL ?
+            mesh->triangleCount * 3 : mesh->vertexCount;
+        for (int32_t output = 0; output < output_count; ++output) {
+            int32_t source = mesh->indices != NULL ?
+                (int32_t)mesh->indices[output] : output;
+            TreeBatchMeshWriteIndex(writer, base_vertex + source);
+        }
+        return;
+    }
+
+    int32_t next_unique = 0;
+    for (int32_t source = 0; source < mesh->vertexCount; ++source) {
+        if (source_indices->remap[source] != next_unique) continue;
+        TreeBatchMeshAppendModelVertex(
+            writer, mesh, source, center, scale, turn, tint);
+        next_unique += 1;
+    }
+    for (int32_t output = 0; output < mesh->vertexCount; ++output) {
+        TreeBatchMeshWriteIndex(
+            writer, base_vertex + source_indices->remap[output]);
     }
 }
 
@@ -2682,47 +2882,31 @@ static void TreeBatchMeshAppendModel(TreeBatchMeshWriter *writer, Model model,
     writer->source_draw_count += 1;
     for (int32_t mesh_index = 0; mesh_index < model.meshCount; ++mesh_index) {
         const Mesh *mesh = &model.meshes[mesh_index];
-        int32_t vertex_count = mesh->indices != NULL ?
+        int32_t output_count = mesh->indices != NULL ?
             mesh->triangleCount * 3 : mesh->vertexCount;
-        if (writer->count_only) {
-            writer->cursor += vertex_count;
-            continue;
-        }
         if (mesh->vertices == NULL || mesh->normals == NULL) {
             writer->failed = true;
             continue;
         }
-        for (int32_t output = 0; output < vertex_count; ++output) {
+        if (writer->count_only) {
+            const TreeBatchSourceIndexCache *source_indices =
+                writer->indexed ? TreeBatchMeshSourceIndexMap(mesh) : NULL;
+            writer->vertex_cursor += source_indices != NULL ?
+                source_indices->unique_count :
+                writer->indexed ? mesh->vertexCount : output_count;
+            if (writer->indexed) writer->index_cursor += output_count;
+            continue;
+        }
+        if (writer->indexed) {
+            TreeBatchMeshAppendIndexedModel(
+                writer, mesh, center, scale, turn, tint);
+            continue;
+        }
+        for (int32_t output = 0; output < output_count; ++output) {
             int32_t source = mesh->indices != NULL ?
                 (int32_t)mesh->indices[output] : output;
-            if (source < 0 || source >= mesh->vertexCount ||
-                writer->cursor >= writer->mesh.vertexCount) {
-                writer->failed = true;
-                continue;
-            }
-            Vector3 point = {
-                mesh->vertices[source * 3 + 0],
-                mesh->vertices[source * 3 + 1],
-                mesh->vertices[source * 3 + 2],
-            };
-            Vector3 normal = {
-                mesh->normals[source * 3 + 0],
-                mesh->normals[source * 3 + 1],
-                mesh->normals[source * 3 + 2],
-            };
-            Color source_color = WHITE;
-            if (mesh->colors != NULL) {
-                source_color = (Color){
-                    mesh->colors[source * 4 + 0],
-                    mesh->colors[source * 4 + 1],
-                    mesh->colors[source * 4 + 2],
-                    mesh->colors[source * 4 + 3],
-                };
-            }
-            point = TreeBatchTransformPoint(point, center, scale, turn);
-            normal = TreeBatchTransformNormal(normal, scale, turn);
-            Color color = TreeBatchTint(source_color, tint);
-            TreeBatchMeshWriteVertex(writer, point, normal, color);
+            TreeBatchMeshAppendModelVertex(
+                writer, mesh, source, center, scale, turn, tint);
         }
     }
 }
@@ -2731,7 +2915,9 @@ static bool TreeBatchMeshUpload(TreeBatchMeshWriter *writer, bool foliage,
                                 Model *model)
 {
     if (writer == NULL || model == NULL || writer->failed ||
-        writer->cursor != writer->mesh.vertexCount) {
+        writer->vertex_cursor != writer->mesh.vertexCount ||
+        (writer->indexed &&
+         writer->index_cursor != writer->mesh.triangleCount * 3)) {
         if (writer != NULL && writer->mesh.vertices != NULL) {
             UnloadMesh(writer->mesh);
             writer->mesh = (Mesh){0};
@@ -3083,25 +3269,31 @@ static bool TreeSceneryBatchBuild(uint32_t visibility_mask, Color kingdom,
     TreeSceneryBatchClear();
     rlDrawRenderBatchActive();
 
-    TreeBatchMeshWriter structure_counter = {.count_only = true};
+    TreeBatchMeshWriter structure_counter = {
+        .indexed = true,
+        .count_only = true,
+    };
     TreeBatchMeshWriter foliage_counter = {.count_only = true};
     tree_render_pass = TREE_RENDER_BATCH_BUILD;
     tree_structure_writer = &structure_counter;
     tree_foliage_writer = &foliage_counter;
     EmitWorldTreeMask(visibility_mask, regional_style);
     TreeBatchFinishBuildPass();
-    if (structure_counter.cursor <= 0 || foliage_counter.cursor <= 0) {
+    if (structure_counter.vertex_cursor <= 0 ||
+        structure_counter.index_cursor <= 0 ||
+        foliage_counter.vertex_cursor <= 0) {
         return false;
     }
 
     TreeBatchMeshWriter structure_writer;
     TreeBatchMeshWriter foliage_writer;
     if (!TreeBatchMeshWriterAllocate(&structure_writer,
-                                     structure_counter.cursor)) {
+                                     structure_counter.vertex_cursor,
+                                     structure_counter.index_cursor)) {
         return false;
     }
     if (!TreeBatchMeshWriterAllocate(&foliage_writer,
-                                     foliage_counter.cursor)) {
+                                     foliage_counter.vertex_cursor, 0)) {
         UnloadMesh(structure_writer.mesh);
         return false;
     }
@@ -3128,11 +3320,13 @@ static bool TreeSceneryBatchBuild(uint32_t visibility_mask, Color kingdom,
     tree_scenery_batch.source_draw_count =
         structure_counter.source_draw_count +
         foliage_counter.source_draw_count;
+    tree_scenery_batch.vertex_count = structure_counter.vertex_cursor +
+                                      foliage_counter.vertex_cursor;
     tree_scenery_batch.ready = true;
     TraceLog(LOG_INFO,
              "TREE: batched %d model draws into 2 GPU meshes (%d vertices)",
              tree_scenery_batch.source_draw_count,
-             structure_counter.cursor + foliage_counter.cursor);
+             tree_scenery_batch.vertex_count);
     return true;
 }
 
@@ -3153,7 +3347,8 @@ static void DrawWorldTrees(Vector3 focus, Color kingdom)
     DrawModel(tree_scenery_batch.foliage, (Vector3){0}, 1.0f, WHITE);
     draw_count += 1;
     CcLocalRendererRecordStaticBatch(
-        draw_count, tree_scenery_batch.source_draw_count);
+        draw_count, tree_scenery_batch.source_draw_count,
+        tree_scenery_batch.vertex_count);
 }
 
 static Rectangle ViewportRectangle(Rectangle viewport, float x, float y,
