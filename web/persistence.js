@@ -60,6 +60,20 @@
     });
   };
 
+  Module.persistCrownlessNewCampaign = async function (campaignFile) {
+    const database = await openDatabase();
+    const campaign = FS.readFile(campaignFile).slice();
+    await new Promise(function (resolve, reject) {
+      const transaction = database.transaction(storeName, "readwrite");
+      transaction.oncomplete = function () { resolve(); };
+      transaction.onerror = function () { reject(transaction.error); };
+      transaction.onabort = function () { reject(transaction.error); };
+      const store = transaction.objectStore(storeName);
+      store.put(campaign, campaignPath);
+      store.delete(sessionPath);
+    });
+  };
+
   Module.preRun = Module.preRun || [];
   Module.preRun.push(function () {
     FS.mkdir(saveDirectory);
