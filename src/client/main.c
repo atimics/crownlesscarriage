@@ -1654,8 +1654,8 @@ static void BeginTownArrivalState(LocalState *local)
 
 static void BeginRoadBookArrivalState(const CcSim *sim, LocalState *local)
 {
-    if (sim == NULL || local == NULL || !local->open_world ||
-        sim->journey.route_id == 0U) {
+    if (local == NULL) return;
+    if (sim == NULL || !local->open_world || sim->journey.route_id == 0U) {
         BeginTownArrivalState(local);
         return;
     }
