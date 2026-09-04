@@ -7353,7 +7353,8 @@ int main(int argc, char **argv)
     if (render_benchmark_roadbook_network) {
         uint32_t catalogue_mask = 0U;
         for (int32_t map_index = 0;
-             map_index < sim.map_count && map_index < 32; ++map_index) {
+             map_index < sim.map_count && map_index < CC_MAX_MAPS &&
+             map_index < 32; ++map_index) {
             sim.maps[map_index].owner_id = sim.player.id;
             catalogue_mask |= UINT32_C(1) << (uint32_t)map_index;
         }
