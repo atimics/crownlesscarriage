@@ -6,9 +6,9 @@
   const key = `cc-coop-pending-${worldId}`;
   let status, startupError = '';
   function say(message) { if (status) status.textContent = startupError || message; }
-  function accept(next) {
+  function accept(next, forceSnapshot = false) {
     if (state && next.revision < state.revision) return;
-    if (!state || next.revision !== state.revision) pending = next.campaign;
+    if (!state || next.revision !== state.revision || forceSnapshot) pending = next.campaign;
     state = next;
     say(next.paused ? 'Company paused' : `${next.crew.filter(p => p.online).length} aboard · shared carriage · saved`);
   }
@@ -20,7 +20,7 @@
   }
   async function connect() {
     if (!/^[a-f0-9]{64}$/.test(token || '')) throw new Error('Join the company from the shared road book.');
-    const next = await request('state?campaign=1'); accept(next); pending = next.campaign;
+    const next = await request('state?campaign=1'); accept(next, true);
   }
   async function apply(action, target, good, amount) {
     const run = async () => {
@@ -36,7 +36,7 @@
         }
         const result = await request('command', { ...body, campaign: true });
         localStorage.removeItem(key);
-        accept(result.world); pending = result.world.campaign;
+        accept(result.world, true);
         if (recoveringOtherAction) throw new Error('Earlier company action recovered. Choose your next action again.');
         return result;
       } catch (error) {
