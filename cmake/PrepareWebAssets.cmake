@@ -15,6 +15,7 @@ file(MAKE_DIRECTORY
     "${asset_output}/exports/npc"
     "${asset_output}/exports/world_kit"
     "${asset_output}/shaders"
+    "${asset_output}/ui"
     "${lazy_asset_output}/exports/glb"
     "${lazy_asset_output}/maps"
 )
@@ -51,6 +52,16 @@ endforeach()
 
 file(COPY "${asset_source}/exports/glb/carriage_base_v01.glb"
      DESTINATION "${asset_output}/exports/glb")
+file(GLOB economic_cargo_assets
+    "${asset_source}/exports/glb/economy_cargo_*.glb"
+)
+file(COPY ${economic_cargo_assets}
+     DESTINATION "${asset_output}/exports/glb")
+file(COPY "${asset_source}/ui/economic_goods_v01.png"
+     DESTINATION "${asset_output}/ui")
+file(GLOB web_economic_cargo_assets
+    "${asset_output}/exports/glb/economy_cargo_*.glb"
+)
 
 # Scene-specific rigid models stay available at their normal URLs, but are not
 # copied into the startup data package. The browser downloads and uploads only
@@ -79,6 +90,7 @@ file(COPY ${world_kit_runtime_assets}
 # of tiny vertex arrays and buffers.
 set(web_batch_assets
     "${asset_output}/exports/glb/carriage_base_v01.glb"
+    ${web_economic_cargo_assets}
 )
 file(GLOB web_head_hair_assets
     "${asset_output}/exports/world_kit/wk_head_*.glb"

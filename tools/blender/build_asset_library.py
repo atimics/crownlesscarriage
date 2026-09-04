@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import math
+import sys
 from pathlib import Path
 
 import bpy
@@ -62,6 +63,11 @@ PALETTE = {
     "cloth_white": (0.72, 0.73, 0.67, 1.0),
     "glass": (0.035, 0.12, 0.16, 1.0),
     "food": (0.55, 0.23, 0.055, 1.0),
+    "rust": (0.42, 0.12, 0.045, 1.0),
+    "gold": (0.78, 0.48, 0.12, 1.0),
+    "gem": (0.45, 0.22, 0.58, 1.0),
+    "wool": (0.78, 0.74, 0.64, 1.0),
+    "rope": (0.44, 0.28, 0.12, 1.0),
     "black": (0.012, 0.014, 0.015, 1.0),
 }
 
@@ -133,7 +139,7 @@ def material(
 
 def make_palette() -> None:
     for name, color in PALETTE.items():
-        metallic = 0.75 if name in {"iron", "steel", "brass"} else 0.0
+        metallic = 0.75 if name in {"iron", "steel", "brass", "gold"} else 0.0
         roughness = 0.3 if metallic else 0.68
         if name == "glass":
             roughness = 0.22
@@ -368,6 +374,41 @@ def add_uv_sphere(
     obj.data.materials.append(MATERIALS[mat])
     move_to_collection(obj, collection)
     tag_object(obj, asset_id=asset_id, role=role, layer_group=collection.get("cc_layer_group", "presentation"))
+    return obj
+
+
+def add_cone(
+    name: str,
+    location: tuple[float, float, float],
+    radius: float,
+    depth: float,
+    mat: str,
+    collection: bpy.types.Collection,
+    asset_id: str,
+    role: str,
+    *,
+    rotation: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    vertices: int = 6,
+) -> bpy.types.Object:
+    bpy.ops.mesh.primitive_cone_add(
+        vertices=vertices,
+        radius1=radius,
+        radius2=0.0,
+        depth=depth,
+        location=location,
+        rotation=rotation,
+    )
+    obj = bpy.context.object
+    obj.name = name
+    obj.data.name = obj.name
+    obj.data.materials.append(MATERIALS[mat])
+    move_to_collection(obj, collection)
+    tag_object(
+        obj,
+        asset_id=asset_id,
+        role=role,
+        layer_group=collection.get("cc_layer_group", "presentation"),
+    )
     return obj
 
 
@@ -737,6 +778,371 @@ def build_passenger_bench(parent: bpy.types.Collection) -> bpy.types.Collection:
     return col
 
 
+def new_economy_collection(
+    parent: bpy.types.Collection,
+    collection_name: str,
+    asset_id: str,
+    kind: str,
+) -> bpy.types.Collection:
+    return new_collection(
+        collection_name,
+        parent,
+        asset_id=asset_id,
+        kind=kind,
+        layer_group=kind,
+    )
+
+
+def build_economy_source_grain(
+    parent: bpy.types.Collection,
+) -> bpy.types.Collection:
+    asset_id = "economy_source_grain_v01"
+    col = new_economy_collection(
+        parent, "CC_ECONOMY_SOURCE_GRAIN", asset_id, "economy_source")
+    stalks = (
+        (-0.72, -0.38, 0.72), (-0.48, -0.15, 0.88),
+        (-0.25, -0.42, 0.78), (0.02, -0.20, 0.92),
+        (0.28, -0.40, 0.76), (0.55, -0.16, 0.86),
+        (0.76, -0.34, 0.70), (-0.62, 0.26, 0.80),
+        (-0.31, 0.38, 0.73), (0.00, 0.26, 0.84),
+        (0.34, 0.36, 0.78), (0.66, 0.22, 0.74),
+    )
+    for index, (x, y, height) in enumerate(stalks):
+        add_cylinder(
+            f"GEO_GrainStalk_{index:02d}", (x, y, height * 0.48),
+            0.018, height * 0.82, "dry_grass", col, asset_id, "grain_stalk",
+            vertices=6, bevel_width=0.0)
+        add_cone(
+            f"GEO_GrainHead_{index:02d}",
+            (x, y, height * 0.90), 0.060, height * 0.26,
+            "cream", col, asset_id, "grain_head", vertices=5)
+    add_uv_sphere(
+        "GEO_GrainEarth", (0.0, 0.0, 0.04), (1.0, 0.72, 0.09),
+        "earth_dark", col, asset_id, "field_patch")
+    return col
+
+
+def build_economy_source_iron(
+    parent: bpy.types.Collection,
+) -> bpy.types.Collection:
+    asset_id = "economy_source_iron_ore_v01"
+    col = new_economy_collection(
+        parent, "CC_ECONOMY_SOURCE_IRON_ORE", asset_id, "economy_source")
+    rocks = (
+        ((-0.20, 0.08, 0.52), (0.72, 0.54, 0.66)),
+        ((0.38, 0.10, 0.34), (0.48, 0.42, 0.46)),
+        ((-0.48, -0.22, 0.24), (0.38, 0.32, 0.30)),
+    )
+    for index, (location, scale) in enumerate(rocks):
+        rock = add_uv_sphere(
+            f"GEO_IronRock_{index:02d}", location, scale, "stone_dark",
+            col, asset_id, "ore_host")
+        rock.rotation_euler = (0.0, 0.16 * index, 0.25 * index)
+    for index, (location, scale) in enumerate((
+        ((-0.34, -0.48, 0.60), (0.24, 0.07, 0.20)),
+        ((0.06, -0.52, 0.83), (0.18, 0.06, 0.16)),
+        ((0.42, -0.34, 0.36), (0.16, 0.06, 0.13)),
+    )):
+        add_uv_sphere(
+            f"GEO_IronFacet_{index:02d}", location, scale, "rust",
+            col, asset_id, "iron_vein")
+    return col
+
+
+def build_economy_source_gold(
+    parent: bpy.types.Collection,
+) -> bpy.types.Collection:
+    asset_id = "economy_source_gold_ore_v01"
+    col = new_economy_collection(
+        parent, "CC_ECONOMY_SOURCE_GOLD_ORE", asset_id, "economy_source")
+    add_uv_sphere(
+        "GEO_GoldHost", (0.0, 0.0, 0.46), (0.72, 0.52, 0.58),
+        "stone", col, asset_id, "ore_host")
+    seam = (
+        ((-0.34, -0.48, 0.20), (-0.10, -0.54, 0.52)),
+        ((-0.10, -0.54, 0.52), (0.14, -0.50, 0.72)),
+        ((0.14, -0.50, 0.72), (0.34, -0.42, 0.92)),
+    )
+    for index, (start, end) in enumerate(seam):
+        add_beam_between(
+            f"GEO_GoldSeam_{index:02d}", start, end, 0.075, "gold",
+            col, asset_id, "gold_vein")
+    return col
+
+
+def build_economy_source_timber(
+    parent: bpy.types.Collection,
+) -> bpy.types.Collection:
+    asset_id = "economy_source_timber_v01"
+    col = new_economy_collection(
+        parent, "CC_ECONOMY_SOURCE_TIMBER", asset_id, "economy_source")
+    for index, (y, z, x_offset) in enumerate(
+        ((-0.25, 0.19, -0.06), (0.25, 0.19, 0.04),
+         (-0.25, 0.50, 0.05), (0.25, 0.50, -0.04),
+         (0.0, 0.79, 0.02))):
+        add_cylinder(
+            f"GEO_TimberLog_{index:02d}", (x_offset, y, z),
+            0.20, 1.48, "wood", col, asset_id, "log",
+            rotation=(0.0, math.radians(90), 0.0), vertices=10,
+            bevel_width=0.025)
+        for side in (-1.0, 1.0):
+            add_cylinder(
+                f"GEO_TimberEnd_{index:02d}_{'L' if side < 0 else 'R'}",
+                (x_offset + side * 0.75, y, z), 0.17, 0.025,
+                "wood_light", col, asset_id, "cut_end",
+                rotation=(0.0, math.radians(90), 0.0), vertices=10,
+                bevel_width=0.0)
+    for x in (-0.42, 0.42):
+        add_torus(
+            "GEO_TimberBinding", (x, 0.0, 0.48), 0.43, 0.035, "rope",
+            col, asset_id, "binding", rotation=(0.0, math.radians(90), 0.0))
+    return col
+
+
+def build_economy_source_sheep(
+    parent: bpy.types.Collection,
+) -> bpy.types.Collection:
+    asset_id = "economy_source_sheep_v01"
+    col = new_economy_collection(
+        parent, "CC_ECONOMY_SOURCE_SHEEP", asset_id, "economy_source")
+    add_uv_sphere(
+        "GEO_SheepBody", (0.0, 0.0, 0.61), (0.62, 0.34, 0.42),
+        "wool", col, asset_id, "fleece")
+    add_uv_sphere(
+        "GEO_SheepShoulder", (0.34, 0.0, 0.64), (0.34, 0.30, 0.34),
+        "wool", col, asset_id, "fleece")
+    add_uv_sphere(
+        "GEO_SheepHead", (0.55, -0.01, 0.57), (0.25, 0.21, 0.25),
+        "stone_dark", col, asset_id, "head")
+    add_uv_sphere(
+        "GEO_SheepMuzzle", (0.73, -0.01, 0.50), (0.16, 0.17, 0.13),
+        "iron", col, asset_id, "muzzle")
+    for x in (-0.35, 0.34):
+        for y in (-0.20, 0.20):
+            add_cube(
+                "GEO_SheepLeg", (x, y, 0.25), (0.09, 0.09, 0.50),
+                "stone_dark", col, asset_id, "leg", bevel_width=0.02)
+    add_beam_between(
+        "GEO_SheepEar_L", (0.56, -0.12, 0.69), (0.52, -0.32, 0.76),
+        0.065, "stone_dark", col, asset_id, "ear")
+    add_beam_between(
+        "GEO_SheepEar_R", (0.56, 0.12, 0.69), (0.52, 0.32, 0.76),
+        0.065, "stone_dark", col, asset_id, "ear")
+    add_uv_sphere(
+        "GEO_SheepTail", (-0.59, 0.0, 0.69), (0.16, 0.15, 0.17),
+        "wool", col, asset_id, "tail")
+    return col
+
+
+def build_economy_source_gems(
+    parent: bpy.types.Collection,
+) -> bpy.types.Collection:
+    asset_id = "economy_source_gem_seam_v01"
+    col = new_economy_collection(
+        parent, "CC_ECONOMY_SOURCE_GEM_SEAM", asset_id, "economy_source")
+    add_uv_sphere(
+        "GEO_GemHost", (0.0, 0.0, 0.34), (0.68, 0.54, 0.46),
+        "stone_dark", col, asset_id, "ore_host")
+    add_cone(
+        "GEO_GemCrystalTall", (-0.20, -0.05, 0.79), 0.22, 0.84,
+        "gem", col, asset_id, "gem_crystal", rotation=(0.08, 0.12, -0.14),
+        vertices=6)
+    add_cone(
+        "GEO_GemCrystalShort", (0.30, -0.04, 0.62), 0.18, 0.58,
+        "purple", col, asset_id, "gem_crystal",
+        rotation=(-0.10, 0.16, 0.18), vertices=6)
+    return col
+
+
+def add_small_grain_detail(
+    col: bpy.types.Collection, asset_id: str,
+) -> None:
+    for index, x in enumerate((-0.18, -0.08, 0.02)):
+        add_cylinder(
+            f"GEO_FoodGrainStalk_{index}", (x, -0.18, 0.70),
+            0.012, 0.34, "dry_grass", col, asset_id, "grain_detail",
+            vertices=6, bevel_width=0.0)
+        add_cone(
+            f"GEO_FoodGrainHead_{index}", (x, -0.18, 0.90),
+            0.035, 0.16, "cream", col, asset_id, "grain_detail",
+            vertices=5)
+
+
+def build_economy_cargo_food(
+    parent: bpy.types.Collection,
+) -> bpy.types.Collection:
+    asset_id = "economy_cargo_food_v01"
+    col = new_economy_collection(
+        parent, "CC_ECONOMY_CARGO_FOOD", asset_id, "economy_cargo")
+    add_cube(
+        "GEO_FoodCrate", (0.0, 0.0, 0.29), (0.82, 0.64, 0.56),
+        "wood", col, asset_id, "crate", bevel_width=0.055)
+    for x in (-0.38, 0.38):
+        for y in (-0.29, 0.29):
+            add_cube(
+                "GEO_FoodCratePost", (x, y, 0.31), (0.07, 0.07, 0.62),
+                "wood_dark", col, asset_id, "crate_frame",
+                bevel_width=0.012)
+    add_cube(
+        "GEO_FoodCrateLid", (-0.10, 0.04, 0.68), (0.84, 0.66, 0.08),
+        "wood_light", col, asset_id, "crate_lid",
+        rotation=(0.0, math.radians(-12), 0.0), bevel_width=0.025)
+    add_uv_sphere(
+        "GEO_FoodLoaf", (0.16, 0.03, 0.68), (0.25, 0.18, 0.17),
+        "food", col, asset_id, "bread")
+    add_small_grain_detail(col, asset_id)
+    return col
+
+
+def build_economy_cargo_iron(
+    parent: bpy.types.Collection,
+) -> bpy.types.Collection:
+    asset_id = "economy_cargo_iron_v01"
+    col = new_economy_collection(
+        parent, "CC_ECONOMY_CARGO_IRON", asset_id, "economy_cargo")
+    placements = ((-0.17, -0.13, 0.10), (0.17, 0.13, 0.10),
+                  (0.0, 0.0, 0.28))
+    for index, (x, y, z) in enumerate(placements):
+        add_cube(
+            f"GEO_IronIngot_{index}", (x, y, z), (0.68, 0.22, 0.17),
+            "steel" if index == 2 else "iron", col, asset_id, "ingot",
+            bevel_width=0.055)
+    for x in (-0.22, 0.22):
+        add_cube(
+            "GEO_IronBinding", (x, 0.0, 0.23), (0.065, 0.60, 0.48),
+            "leather", col, asset_id, "binding", bevel_width=0.015)
+    return col
+
+
+def build_economy_cargo_tools(
+    parent: bpy.types.Collection,
+) -> bpy.types.Collection:
+    asset_id = "economy_cargo_tools_v01"
+    col = new_economy_collection(
+        parent, "CC_ECONOMY_CARGO_TOOLS", asset_id, "economy_cargo")
+    add_cube(
+        "GEO_ToolBasket", (0.0, 0.0, 0.22), (0.72, 0.56, 0.42),
+        "wood", col, asset_id, "tool_basket", bevel_width=0.045)
+    add_cube(
+        "GEO_ToolBasketRim", (0.0, 0.0, 0.45), (0.78, 0.62, 0.08),
+        "wood_dark", col, asset_id, "tool_basket", bevel_width=0.02)
+    add_beam_between(
+        "GEO_HammerHandle", (-0.20, 0.0, 0.30), (-0.30, 0.0, 0.92),
+        0.065, "wood_light", col, asset_id, "hammer")
+    add_cube(
+        "GEO_HammerHead", (-0.30, 0.0, 0.94), (0.34, 0.16, 0.15),
+        "steel", col, asset_id, "hammer", bevel_width=0.03)
+    add_beam_between(
+        "GEO_PickHandle", (0.18, 0.14, 0.30), (0.30, 0.14, 0.88),
+        0.060, "wood_light", col, asset_id, "pick")
+    add_beam_between(
+        "GEO_PickHead", (0.08, 0.14, 0.91), (0.52, 0.14, 0.91),
+        0.075, "steel", col, asset_id, "pick")
+    add_beam_between(
+        "GEO_Tongs_L", (0.02, -0.16, 0.30), (-0.02, -0.20, 0.82),
+        0.045, "iron", col, asset_id, "tongs")
+    add_beam_between(
+        "GEO_Tongs_R", (0.10, -0.16, 0.30), (0.17, -0.20, 0.82),
+        0.045, "iron", col, asset_id, "tongs")
+    return col
+
+
+def build_economy_cargo_weapons(
+    parent: bpy.types.Collection,
+) -> bpy.types.Collection:
+    asset_id = "economy_cargo_weapons_v01"
+    col = new_economy_collection(
+        parent, "CC_ECONOMY_CARGO_WEAPONS", asset_id, "economy_cargo")
+    add_cube(
+        "GEO_WeaponRackBase", (0.0, 0.0, 0.07), (0.86, 0.52, 0.14),
+        "wood_dark", col, asset_id, "weapon_rack", bevel_width=0.025)
+    for x in (-0.34, 0.34):
+        add_cube(
+            "GEO_WeaponRackPost", (x, 0.0, 0.46), (0.08, 0.08, 0.82),
+            "wood", col, asset_id, "weapon_rack", bevel_width=0.015)
+    add_cube(
+        "GEO_WeaponRackRail", (0.0, 0.0, 0.64), (0.78, 0.09, 0.10),
+        "wood_light", col, asset_id, "weapon_rack", bevel_width=0.02)
+    add_cylinder(
+        "GEO_Shield", (0.0, -0.18, 0.48), 0.31, 0.10, "wood",
+        col, asset_id, "shield", rotation=(math.radians(90), 0.0, 0.0),
+        vertices=12, bevel_width=0.025)
+    add_torus(
+        "GEO_ShieldRim", (0.0, -0.24, 0.48), 0.26, 0.035, "steel",
+        col, asset_id, "shield", rotation=(math.radians(90), 0.0, 0.0))
+    add_cylinder(
+        "GEO_ShieldBoss", (0.0, -0.26, 0.48), 0.085, 0.08, "steel",
+        col, asset_id, "shield", rotation=(math.radians(90), 0.0, 0.0),
+        vertices=10, bevel_width=0.015)
+    add_beam_between(
+        "GEO_SwordBlade", (-0.21, 0.08, 0.30), (-0.30, 0.08, 1.08),
+        0.070, "steel", col, asset_id, "sword")
+    add_cube(
+        "GEO_SwordGuard", (-0.21, 0.08, 0.34), (0.30, 0.08, 0.07),
+        "gold", col, asset_id, "sword", bevel_width=0.015)
+    add_beam_between(
+        "GEO_SpearShaft", (0.28, 0.10, 0.20), (0.34, 0.10, 1.18),
+        0.050, "wood_light", col, asset_id, "spear")
+    add_cone(
+        "GEO_SpearHead", (0.35, 0.10, 1.30), 0.105, 0.28, "steel",
+        col, asset_id, "spear", vertices=5)
+    return col
+
+
+def build_economy_cargo_gold(
+    parent: bpy.types.Collection,
+) -> bpy.types.Collection:
+    asset_id = "economy_cargo_gold_v01"
+    col = new_economy_collection(
+        parent, "CC_ECONOMY_CARGO_GOLD", asset_id, "economy_cargo")
+    add_uv_sphere(
+        "GEO_GoldPouch", (-0.10, 0.0, 0.30), (0.34, 0.27, 0.31),
+        "leather", col, asset_id, "sealed_pouch")
+    add_cube(
+        "GEO_GoldPouchNeck", (-0.10, 0.0, 0.55), (0.24, 0.20, 0.18),
+        "leather", col, asset_id, "sealed_pouch", bevel_width=0.065)
+    add_torus(
+        "GEO_GoldPouchTie", (-0.10, 0.0, 0.48), 0.14, 0.025, "rope",
+        col, asset_id, "pouch_tie")
+    for index, (x, y, z, scale) in enumerate((
+        (0.30, -0.08, 0.12, (0.15, 0.12, 0.10)),
+        (0.42, 0.08, 0.18, (0.12, 0.10, 0.13)),
+        (0.25, 0.13, 0.24, (0.10, 0.09, 0.08)),
+    )):
+        nugget = add_uv_sphere(
+            f"GEO_GoldNugget_{index}", (x, y, z), scale, "gold",
+            col, asset_id, "raw_gold")
+        nugget.rotation_euler = (0.15 * index, 0.25 * index, 0.12)
+    return col
+
+
+def build_economy_cargo_gems(
+    parent: bpy.types.Collection,
+) -> bpy.types.Collection:
+    asset_id = "economy_cargo_gems_v01"
+    col = new_economy_collection(
+        parent, "CC_ECONOMY_CARGO_GEMS", asset_id, "economy_cargo")
+    add_cube(
+        "GEO_GemCasket", (0.0, 0.0, 0.25), (0.72, 0.54, 0.48),
+        "wood_dark", col, asset_id, "gem_casket", bevel_width=0.055)
+    add_cube(
+        "GEO_GemCasketLid", (-0.06, 0.05, 0.57), (0.75, 0.56, 0.12),
+        "wood", col, asset_id, "gem_casket_lid",
+        rotation=(0.0, math.radians(-16), 0.0), bevel_width=0.035)
+    for x in (-0.31, 0.31):
+        add_cube(
+            "GEO_GemCasketBand", (x, -0.28, 0.28), (0.07, 0.035, 0.50),
+            "steel", col, asset_id, "casket_hardware",
+            bevel_width=0.010)
+    add_cube(
+        "GEO_GemCasketLock", (0.0, -0.30, 0.28), (0.15, 0.05, 0.18),
+        "steel", col, asset_id, "casket_hardware", bevel_width=0.02)
+    add_cone(
+        "GEO_GemCargoCrystal", (0.02, -0.06, 0.57), 0.15, 0.42, "gem",
+        col, asset_id, "gem", rotation=(0.04, -0.10, 0.08), vertices=6)
+    return col
+
+
 def build_road_kit(parent: bpy.types.Collection) -> bpy.types.Collection:
     asset_id = "environment_road_straight_v01"
     col = new_collection("CC_ENV_ROAD_STRAIGHT", parent, asset_id=asset_id, kind="environment_kit", layer_group="environment_base")
@@ -1065,14 +1471,23 @@ def build_scene_structure() -> dict[str, bpy.types.Collection]:
     guides = bpy.data.collections.new("00_GUIDES")
     core = bpy.data.collections.new("10_CARRIAGE_CORE")
     modules = bpy.data.collections.new("20_CARRIAGE_MODULES")
+    economy = bpy.data.collections.new("25_ECONOMY_PROPS")
     environments = bpy.data.collections.new("30_ENVIRONMENT_KITS")
     states = bpy.data.collections.new("40_STATE_LAYERS")
-    for collection in (guides, core, modules, environments, states):
+    for collection in (guides, core, modules, economy, environments, states):
         library.children.link(collection)
 
     staging = bpy.data.collections.new("90_PRESENTATION")
     scene_root.children.link(staging)
-    return {"guides": guides, "core": core, "modules": modules, "environments": environments, "states": states, "staging": staging}
+    return {
+        "guides": guides,
+        "core": core,
+        "modules": modules,
+        "economy": economy,
+        "environments": environments,
+        "states": states,
+        "staging": staging,
+    }
 
 
 def build_assets(groups: dict[str, bpy.types.Collection]) -> None:
@@ -1086,6 +1501,18 @@ def build_assets(groups: dict[str, bpy.types.Collection]) -> None:
     build_monster_cage(groups["modules"])
     build_relic_module(groups["modules"])
     build_document_safe(groups["modules"])
+    build_economy_source_grain(groups["economy"])
+    build_economy_source_iron(groups["economy"])
+    build_economy_source_gold(groups["economy"])
+    build_economy_source_timber(groups["economy"])
+    build_economy_source_sheep(groups["economy"])
+    build_economy_source_gems(groups["economy"])
+    build_economy_cargo_food(groups["economy"])
+    build_economy_cargo_iron(groups["economy"])
+    build_economy_cargo_tools(groups["economy"])
+    build_economy_cargo_weapons(groups["economy"])
+    build_economy_cargo_gold(groups["economy"])
+    build_economy_cargo_gems(groups["economy"])
     build_road_kit(groups["environments"])
     build_bridge_checkpoint(groups["environments"])
     build_mine_entrance(groups["environments"])
@@ -1163,6 +1590,14 @@ def create_view_layers() -> None:
         "CC_Bridge_Checkpoint": {"CC_ENV_BRIDGE_CHECKPOINT"},
         "CC_Mine_Entrance": {"CC_ENV_MINE_ENTRANCE"},
         "CC_Road": {"CC_ENV_ROAD_STRAIGHT"},
+        "CC_Economy_Cargo": {
+            "CC_ECONOMY_CARGO_FOOD",
+            "CC_ECONOMY_CARGO_IRON",
+            "CC_ECONOMY_CARGO_TOOLS",
+            "CC_ECONOMY_CARGO_WEAPONS",
+            "CC_ECONOMY_CARGO_GOLD",
+            "CC_ECONOMY_CARGO_GEMS",
+        },
     }
     for name in presets:
         if name != default.name:
@@ -1252,6 +1687,65 @@ def write_manifest() -> None:
             "armoured": ["carriage_base_v01", "module_armoured_body_v01"],
             "medical": ["carriage_base_v01", "module_medical_bunk_v01"],
         },
+        "economic_goods": [
+            {
+                "good": "food",
+                "sim_id": 0,
+                "enum": "CC_GOOD_FOOD",
+                "cargo_asset": "economy_cargo_food_v01",
+                "icon_frame": 0,
+            },
+            {
+                "good": "iron",
+                "sim_id": 1,
+                "enum": "CC_GOOD_IRON",
+                "cargo_asset": "economy_cargo_iron_v01",
+                "icon_frame": 1,
+            },
+            {
+                "good": "tools",
+                "sim_id": 2,
+                "enum": "CC_GOOD_TOOLS",
+                "cargo_asset": "economy_cargo_tools_v01",
+                "icon_frame": 2,
+            },
+            {
+                "good": "weapons",
+                "sim_id": 3,
+                "enum": "CC_GOOD_WEAPONS",
+                "cargo_asset": "economy_cargo_weapons_v01",
+                "icon_frame": 3,
+            },
+            {
+                "good": "raw_gold",
+                "sim_id": 4,
+                "enum": "CC_GOOD_GOLD",
+                "cargo_asset": "economy_cargo_gold_v01",
+                "icon_frame": 4,
+            },
+            {
+                "good": "gems",
+                "sim_id": 5,
+                "enum": "CC_GOOD_GEMS",
+                "cargo_asset": "economy_cargo_gems_v01",
+                "icon_frame": 5,
+            },
+        ],
+        "economic_sources": [
+            {"source": "grain", "asset": "economy_source_grain_v01", "supports_good": "food"},
+            {"source": "iron_ore", "asset": "economy_source_iron_ore_v01", "supports_good": "iron"},
+            {"source": "gold_ore", "asset": "economy_source_gold_ore_v01", "supports_good": "raw_gold"},
+            {"source": "timber", "asset": "economy_source_timber_v01", "supports_good": "tools"},
+            {"source": "sheep", "asset": "economy_source_sheep_v01", "supports_good": "food"},
+            {"source": "gem_seam", "asset": "economy_source_gem_seam_v01", "supports_good": "gems"},
+        ],
+        "economic_icon_atlas": {
+            "path": "ui/economic_goods_v01.png",
+            "frame_width": 32,
+            "frame_height": 32,
+            "columns": 6,
+            "rows": 1,
+        },
     }
     MANIFEST_PATH.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 
@@ -1269,6 +1763,18 @@ def validate() -> None:
         "CC_STATE_FOOD_SHORTAGE",
         "CC_STATE_HARSH_ENFORCEMENT",
         "CC_STATE_MARKET_RECOVERY",
+        "CC_ECONOMY_SOURCE_GRAIN",
+        "CC_ECONOMY_SOURCE_IRON_ORE",
+        "CC_ECONOMY_SOURCE_GOLD_ORE",
+        "CC_ECONOMY_SOURCE_TIMBER",
+        "CC_ECONOMY_SOURCE_SHEEP",
+        "CC_ECONOMY_SOURCE_GEM_SEAM",
+        "CC_ECONOMY_CARGO_FOOD",
+        "CC_ECONOMY_CARGO_IRON",
+        "CC_ECONOMY_CARGO_TOOLS",
+        "CC_ECONOMY_CARGO_WEAPONS",
+        "CC_ECONOMY_CARGO_GOLD",
+        "CC_ECONOMY_CARGO_GEMS",
     }
     missing = required - set(LEAF_COLLECTIONS)
     if missing:
@@ -1288,6 +1794,7 @@ def validate() -> None:
 
 
 def main() -> None:
+    economic_only = "--economic-only" in sys.argv
     EXPORT_DIR.mkdir(parents=True, exist_ok=True)
     PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
     BLEND_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -1299,6 +1806,8 @@ def main() -> None:
     validate()
 
     for record in ASSET_RECORDS:
+        if economic_only and not str(record["id"]).startswith("economy_"):
+            continue
         collection = LEAF_COLLECTIONS[str(record["collection"])]
         export_collection(collection, EXPORT_DIR / f"{record['id']}.glb")
     write_manifest()

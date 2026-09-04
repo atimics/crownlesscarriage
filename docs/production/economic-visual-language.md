@@ -3,6 +3,10 @@
 This design gives each economic value one clear shape across the world, cargo,
 markets, and the fixed-pixel interface.
 
+![Production economic assets](../images/economic-assets-v01.png)
+
+The production models use the same source and cargo order as the simulation.
+
 ![Economic world sources and carried goods](../images/economic-props-concept-v01.png)
 
 The top row shows production sources. The bottom row shows goods that can be
@@ -23,13 +27,13 @@ mine, a market stall, a carriage load, and a ledger entry at a glance.
 | Iron | three strapped bars | iron ingot bundle | metal, leather |
 | Tools | hammer, tongs, pick | tool basket or low tool crate | metal, wood |
 | Weapons | shield, sword, spear | short weapon rack | metal, wood, danger accent |
-| Gold | purse and two coins | sealed purse with coin pair | gold, leather |
+| Raw Gold | pouch and rough nuggets | sealed raw-gold pouch | gold, leather |
 | Gems | casket with one crystal | reinforced gem casket | violet, metal, wood |
 
 Food uses the crate as its main shape. The loaf and wheat act as small detail.
 Iron uses flat bars. Tools use several short handles. Weapons use one tall
-spear and a round shield. Gold uses round coins. Gems use one sharp violet
-crystal. These shapes stay distinct when color is reduced.
+spear and a round shield. Raw gold uses irregular nuggets. Gems use one sharp
+violet crystal. These shapes stay distinct when color is reduced.
 
 ## Production sources
 
@@ -116,11 +120,15 @@ the amount changes.
 
 ## Asset handoff
 
-The first production pass should add these props to the generated general asset
-library. Each prop should use a stable `economy_source_*_v01` or
-`economy_cargo_*_v01` ID. A small manifest can map each `CcGood` value to its
-cargo asset and icon frame. The icon atlas should come from an orthographic
-render of the same cargo models, followed by a fixed 32-pixel reduction.
+The production pass adds these props to the generated general asset library.
+Each prop uses a stable `economy_source_*_v01` or `economy_cargo_*_v01` ID.
+`assets/asset_manifest.json` maps each `CcGood` value to its cargo asset and
+icon frame. The icon atlas comes from an orthographic render of the same cargo
+models, followed by a fixed 32-pixel reduction.
 
-The two boards above are visual targets. They set shape, material, camera, and
-light direction for the Blender pass.
+The client draws one model for every good present on the carriage rack. The
+cargo screen draws the matching atlas frame beside its quantity. Desktop and
+web packages carry the six cargo models and the atlas.
+
+The concept boards set shape, material, camera, and light direction. The
+production board shows the generated Blender assets used by the game.

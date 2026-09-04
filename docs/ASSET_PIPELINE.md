@@ -37,6 +37,8 @@ Environment and population chains (independent of the hero chain):
 
 - `blender-assets` / `blender-assets-catalog` / `blender-assets-check` —
   the general asset library (`crownless_asset_library.blend`)
+- `blender-economic-assets` — the focused economic GLBs, icon atlas, and
+  review sheet
 - `blender-painted-market-pilot` — painted market/granary environment
 - `blender-npc-assets` + `blender-npc-assets-check` — NPC archetype and
   dynamic-module libraries

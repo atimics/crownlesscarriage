@@ -28,6 +28,7 @@ The library has five authoring bands:
 | `00_GUIDES` | Shared socket empties and orientation guides |
 | `10_CARRIAGE_CORE` | Stable vehicle body and hitch geometry |
 | `20_CARRIAGE_MODULES` | Optional capacity and opportunity modules |
+| `25_ECONOMY_PROPS` | Production sources and carried trade goods |
 | `30_ENVIRONMENT_KITS` | Neutral route, bridge, mine, and market structures |
 | `40_STATE_LAYERS` | Additive visual projections such as shortage or recovery |
 
@@ -109,6 +110,12 @@ State layers project simulation conditions without rebuilding those shells:
 
 This directly supports the design rule that strategic variables affect visible
 places while keeping the number of authored city grammars bounded.
+
+Economic props pair six production sources with the six stable `CcGood`
+values. `assets/asset_manifest.json` records the source links, cargo asset IDs,
+and fixed 32-pixel atlas frames. Run `make blender-economic-assets` to rebuild
+the general library, twelve economic GLBs, icon atlas, and production review
+sheet.
 
 ## Rebuild and validate
 

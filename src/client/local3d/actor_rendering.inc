@@ -2238,27 +2238,9 @@ static Color CargoBoxBandColor(CcGood good)
     return WORLD_INK;
 }
 
-static void DrawCarriedCargoBoxes(const CcPlayerCompany *player,
-                                  Vector3 base, float yaw)
+static void DrawFallbackCargoBoxes(const CcPlayerCompany *player,
+                                   Vector3 base, float yaw, int32_t limit)
 {
-    int32_t limit = CcLocalCargoBoxCountInternal(player);
-    if (limit <= 0) return;
-    const Vector3 rack_center = {-0.30f, 2.21f, 0.0f};
-    DrawOrientedBox(base, rack_center,
-                    (Vector3){2.92f, 0.10f, 1.42f}, yaw,
-                    WORLD_WOOD_LIGHT);
-    DrawOrientedBox(base, (Vector3){rack_center.x, 2.42f, -0.73f},
-                    (Vector3){2.98f, 0.42f, 0.07f}, yaw,
-                    WORLD_WOOD_SHADOW);
-    DrawOrientedBox(base, (Vector3){rack_center.x, 2.42f, 0.73f},
-                    (Vector3){2.98f, 0.42f, 0.07f}, yaw,
-                    WORLD_WOOD_SHADOW);
-    DrawOrientedBox(base, (Vector3){-1.78f, 2.42f, 0.0f},
-                    (Vector3){0.07f, 0.42f, 1.52f}, yaw,
-                    WORLD_WOOD_SHADOW);
-    DrawOrientedBox(base, (Vector3){1.18f, 2.42f, 0.0f},
-                    (Vector3){0.07f, 0.42f, 1.52f}, yaw,
-                    WORLD_WOOD_SHADOW);
     int32_t drawn = 0;
     for (int32_t good = 0;
          good < CC_GOOD_COUNT && drawn < limit; ++good) {
@@ -2288,6 +2270,58 @@ static void DrawCarriedCargoBoxes(const CcPlayerCompany *player,
                 (Vector3){0.15f, 0.32f, 0.022f}, yaw,
                 Fade(band, 0.92f));
         }
+    }
+}
+
+static void DrawCarriedCargoBoxes(const CcPlayerCompany *player,
+                                  Vector3 base, float yaw)
+{
+    int32_t limit = CcLocalCargoBoxCountInternal(player);
+    if (limit <= 0) return;
+    const Vector3 rack_center = {-0.30f, 2.21f, 0.0f};
+    DrawOrientedBox(base, rack_center,
+                    (Vector3){2.92f, 0.10f, 1.42f}, yaw,
+                    WORLD_WOOD_LIGHT);
+    DrawOrientedBox(base, (Vector3){rack_center.x, 2.42f, -0.73f},
+                    (Vector3){2.98f, 0.42f, 0.07f}, yaw,
+                    WORLD_WOOD_SHADOW);
+    DrawOrientedBox(base, (Vector3){rack_center.x, 2.42f, 0.73f},
+                    (Vector3){2.98f, 0.42f, 0.07f}, yaw,
+                    WORLD_WOOD_SHADOW);
+    DrawOrientedBox(base, (Vector3){-1.78f, 2.42f, 0.0f},
+                    (Vector3){0.07f, 0.42f, 1.52f}, yaw,
+                    WORLD_WOOD_SHADOW);
+    DrawOrientedBox(base, (Vector3){1.18f, 2.42f, 0.0f},
+                    (Vector3){0.07f, 0.42f, 1.52f}, yaw,
+                    WORLD_WOOD_SHADOW);
+
+    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        if (player != NULL && player->cargo[good] > 0 &&
+            !economic_cargo_assets[good].ready) {
+            DrawFallbackCargoBoxes(player, base, yaw, limit);
+            return;
+        }
+    }
+
+    static const float scales[CC_GOOD_COUNT] = {
+        0.58f, 0.66f, 0.56f, 0.53f, 0.70f, 0.62f,
+    };
+    int32_t shown = 0;
+    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        if (player == NULL || player->cargo[good] <= 0) continue;
+        int32_t column = shown % 3;
+        int32_t row = shown / 3;
+        Vector3 position = LocalPoint(
+            base,
+            -1.12f + (float)column * 0.82f,
+            2.25f,
+            -0.34f + (float)row * 0.68f,
+            yaw);
+        float scale = scales[good];
+        DrawModelEx(economic_cargo_assets[good].model, position,
+                    (Vector3){0.0f, 1.0f, 0.0f}, yaw * RAD2DEG,
+                    (Vector3){scale, scale, scale}, WHITE);
+        shown += 1;
     }
 }
 
