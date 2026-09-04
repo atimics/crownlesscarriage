@@ -1197,6 +1197,17 @@ static const CcRoute *InferWorldSessionRoute(
     const float distance_epsilon = 0.0001f;
     const float heading_epsilon = 0.001f;
     if (sim == NULL || manifest == NULL || session == NULL) return NULL;
+    const CcWorldSettlementPlacement *settlement =
+        CcWorldSettlementPlacementForId(manifest, session->location_id);
+    if (session->version == 3U &&
+        session->coordinate_space == CC_CLIENT_SESSION_WORLD &&
+        session->route_id == 0U && settlement != NULL) {
+        float gate_dx = session->position_x - settlement->gate.x;
+        float gate_dz = session->position_z - settlement->gate.z;
+        if (gate_dx * gate_dx + gate_dz * gate_dz <= distance_epsilon) {
+            return OpenWorldRouteFromSettlement(sim, session->location_id);
+        }
+    }
     const CcRoute *best_route = NULL;
     float best_distance = INFINITY;
     float best_heading = INFINITY;
@@ -6657,10 +6668,11 @@ static int RunWorldSessionStartupRegression(void)
     int32_t shared_gate_selected = -1;
     float shared_gate_route_amount =
         fallback_route->from_id == sim.player.location_id ? 0.0f : 1.0f;
-    if (!RestoreClientStartupSession(
+    bool shared_gate_restored = RestoreClientStartupSession(
             session_path, &sim, &shared_gate_restore, &view,
-            &shared_gate_selected) ||
-        view != VIEW_ROADS || !shared_gate_restore.open_world ||
+            &shared_gate_selected);
+    if (!shared_gate_restored || view != VIEW_ROADS ||
+        !shared_gate_restore.open_world ||
         shared_gate_restore.world_carriage.route_id != fallback_route->id ||
         !SessionTestFloatMatches(
             shared_gate_restore.world_carriage.route_amount,
@@ -6670,6 +6682,16 @@ static int RunWorldSessionStartupRegression(void)
             shared_gate_restore.agent.position.x, branch_place->gate.x) ||
         !SessionTestFloatMatches(
             shared_gate_restore.agent.position.z, branch_place->gate.z)) {
+        (void)fprintf(
+            stderr,
+            "Version 3 shared gate: restored=%d route=%llu expected=%llu "
+            "selected=%d expected_selected=%d amount=%.9g expected_amount=%.9g\n",
+            shared_gate_restored ? 1 : 0,
+            (unsigned long long)shared_gate_restore.world_carriage.route_id,
+            (unsigned long long)fallback_route->id,
+            shared_gate_selected, fallback_route_index,
+            shared_gate_restore.world_carriage.route_amount,
+            shared_gate_route_amount);
         return SessionStartupTestFailed(
             session_path, "Version 3 gate heading chose the wrong branch.");
     }
