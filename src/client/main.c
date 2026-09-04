@@ -1194,6 +1194,8 @@ static const CcRoute *InferWorldSessionRoute(
     const CcSim *sim, const CcWorldManifest *manifest,
     const CcClientSession *session)
 {
+    const float distance_epsilon = 0.0001f;
+    const float heading_epsilon = 0.001f;
     if (sim == NULL || manifest == NULL || session == NULL) return NULL;
     const CcRoute *best_route = NULL;
     float best_distance = INFINITY;
@@ -1214,9 +1216,9 @@ static const CcRoute *InferWorldSessionRoute(
                 session->facing_yaw, &distance, &heading, NULL)) {
             continue;
         }
-        if (distance < best_distance - 0.0001f ||
-            (fabsf(distance - best_distance) <= 0.0001f &&
-             heading < best_heading)) {
+        if (distance < best_distance - distance_epsilon ||
+            (fabsf(distance - best_distance) <= distance_epsilon &&
+             heading < best_heading - heading_epsilon)) {
             best_route = route;
             best_distance = distance;
             best_heading = heading;
