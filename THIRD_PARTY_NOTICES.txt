@@ -35,7 +35,9 @@ The raylib project also keeps a
 
 The four opening voice clips in `assets/audio/voice` were generated locally
 with Resemble AI Chatterbox TTS 0.1.7 and its built-in voice. The scripts are
-from Crownless Carriage. The clips retain Chatterbox's audio watermark. Each
+from Crownless Carriage. Clean masters in `tools/audio/masters` retain
+Chatterbox's audio watermark. The shipped voices have a light retro texture;
+their receipts record the source fingerprint and processing settings. Each
 clip has a JSON receipt with its text, speaker, seed, and file fingerprint.
 Chatterbox source and model terms are available at
 https://github.com/resemble-ai/chatterbox and
