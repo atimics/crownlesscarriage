@@ -60,6 +60,7 @@ Camera3D CcLocalCameraClearSightlinesInternal(Camera3D camera,
                                               Vector3 second_subject,
                                               float preferred_angle,
                                               float *chosen_angle);
+bool CcLocalRayMissesBoxParallelSlabInternal(Ray ray, BoundingBox box);
 bool CcLocalBuildingObscuresHeroInternal(Rectangle footprint, float height,
                                          Camera3D camera,
                                          Vector3 hero_center,

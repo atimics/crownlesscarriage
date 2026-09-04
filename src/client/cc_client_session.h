@@ -5,10 +5,12 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define CC_CLIENT_SESSION_VERSION UINT32_C(5)
+#define CC_CLIENT_SESSION_VERSION UINT32_C(6)
 #define CC_CLIENT_SESSION_GUARD_COUNT 3
 #define CC_CLIENT_SESSION_RAIDER_COUNT 2
 #define CC_CLIENT_SESSION_SKILL_COUNT 3
+#define CC_CLIENT_SESSION_ATHLETIC_COUNT 3
+#define CC_CLIENT_SESSION_ATHLETIC_MAX_LEVEL 5
 
 typedef enum CcClientSessionScene {
     CC_CLIENT_SESSION_STREET = 0,
@@ -81,6 +83,12 @@ typedef struct CcClientRoadEncounter {
     bool raiders_retreating;
 } CcClientRoadEncounter;
 
+typedef struct CcClientAthleticProfile {
+    float experience[CC_CLIENT_SESSION_ATHLETIC_COUNT];
+    float travel_training_distance;
+    int32_t level[CC_CLIENT_SESSION_ATHLETIC_COUNT];
+} CcClientAthleticProfile;
+
 typedef struct CcClientSession {
     uint32_t version;
     uint32_t world_seed;
@@ -92,6 +100,7 @@ typedef struct CcClientSession {
     float position_z;
     float facing_yaw;
     uint32_t opening_step;
+    CcClientAthleticProfile athletics;
     CcClientRoadEncounter road_encounter;
 } CcClientSession;
 

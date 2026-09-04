@@ -2,6 +2,7 @@
   const saveDirectory = "/crownless-save";
   const campaignPath = saveDirectory + "/crownless_campaign.ccsave";
   const sessionPath = campaignPath + ".session";
+  const preferencesPath = campaignPath + ".preferences";
   const databaseName = "crownless-carriage";
   const storeName = "campaign-files";
   const revisionPath = campaignPath + ".revision";
@@ -180,10 +181,12 @@
     const files = await Promise.all([
       readStoredFile(database, campaignPath),
       readStoredFile(database, sessionPath),
-      readStoredFile(database, revisionPath)
+      readStoredFile(database, revisionPath),
+      readStoredFile(database, preferencesPath)
     ]);
     if (files[0]) FS.writeFile(campaignPath, files[0]);
     if (files[1]) FS.writeFile(sessionPath, files[1]);
+    if (files[3]) FS.writeFile(preferencesPath, files[3]);
     Module.crownlessCampaignRestored = Boolean(files[0]);
     Module.crownlessSaveRevision = storedRevision(files[2]);
     console.info(Module.crownlessCampaignAccess === 0
@@ -253,6 +256,25 @@
   Module.persistCrownlessNewCampaign = async function (campaignFile) {
     const campaign = FS.readFile(campaignFile).slice();
     await persistCampaign(campaign, null, true);
+  };
+
+  Module.persistCrownlessPreferences = async function (preferencesFile) {
+    const preferences = FS.readFile(preferencesFile).slice();
+    const database = await openDatabase();
+    await new Promise(function (resolve, reject) {
+      const transaction = database.transaction(storeName, "readwrite");
+      transaction.oncomplete = function () { resolve(); };
+      transaction.onerror = function () {
+        reject(transaction.error ||
+          new Error("Browser preferences transaction failed."));
+      };
+      transaction.onabort = function () {
+        reject(transaction.error ||
+          new Error("Browser preferences transaction was cancelled."));
+      };
+      transaction.objectStore(storeName).put(
+        preferences, preferencesPath);
+    });
   };
 
   Module.acquireCrownlessCampaignLock = acquireCampaignLock;

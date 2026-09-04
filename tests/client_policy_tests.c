@@ -3,9 +3,43 @@
 
 #include <math.h>
 #include <stdio.h>
+#include <string.h>
 
 int main(void)
 {
+    const char *preferences_path = "client-policy-test.preferences";
+    (void)remove(preferences_path);
+    CcClientPreferences preferences;
+    char preferences_error[160];
+    CC_CHECK(CcClientPreferencesLoad(
+        preferences_path, &preferences,
+        preferences_error, sizeof(preferences_error)));
+    CC_CHECK(!preferences.reduced_motion);
+    preferences.reduced_motion = true;
+    CC_CHECK(CcClientPreferencesSave(
+        preferences_path, &preferences,
+        preferences_error, sizeof(preferences_error)));
+    preferences.reduced_motion = false;
+    CC_CHECK(CcClientPreferencesLoad(
+        preferences_path, &preferences,
+        preferences_error, sizeof(preferences_error)));
+    CC_CHECK(preferences.reduced_motion);
+    FILE *invalid_preferences = fopen(preferences_path, "wb");
+    CC_CHECK(invalid_preferences != NULL);
+    CC_CHECK(fputs("CROWNLESS_PREFERENCES 1\nreduced_motion 7\n",
+                   invalid_preferences) >= 0);
+    CC_CHECK(fclose(invalid_preferences) == 0);
+    CC_CHECK(!CcClientPreferencesLoad(
+        preferences_path, &preferences,
+        preferences_error, sizeof(preferences_error)));
+    CC_CHECK(!preferences.reduced_motion);
+    CC_CHECK(strstr(preferences_error, "invalid") != NULL);
+    CC_CHECK(!CcClientHitEffectVisible(true, 0.22f));
+    CC_CHECK(CcClientHitEffectVisible(false, 0.22f));
+    CC_CHECK(!CcClientHitEffectVisible(false, 0.0f));
+    CC_CHECK(!CcClientHitEffectVisible(false, NAN));
+    (void)remove(preferences_path);
+
     CcClientDepartureTransition town_exit;
     CcClientDepartureBegin(&town_exit);
     CC_CHECK(town_exit.phase == CC_CLIENT_DEPARTURE_TOWN);

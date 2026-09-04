@@ -5371,6 +5371,7 @@ static void FinishMaterialChainUpgrade(CcSim *sim)
 {
     CcSimInitializeMaterialChain(sim);
     CcSimUpgradeHistoryOffices(sim);
+    CcSimUpgradeArchivePhysicalLore(sim);
     sim->schema_version = CC_SIM_SCHEMA_VERSION;
     sim->generator_version = CC_GENERATOR_VERSION;
 }
@@ -5410,8 +5411,16 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
     uint32_t legacy_version = sim->schema_version;
     ClearMissingLegacyEventReferences(sim);
     MakeLegacyCharacterNamesUnique(sim);
+    if (legacy_version == 35U && sim->generator_version == 25U) {
+        CcSimUpgradeHistoryOffices(sim);
+        CcSimUpgradeArchivePhysicalLore(sim);
+        sim->schema_version = CC_SIM_SCHEMA_VERSION;
+        sim->generator_version = CC_GENERATOR_VERSION;
+        return true;
+    }
     if (legacy_version == 34U && sim->generator_version == 25U) {
         CcSimUpgradeHistoryOffices(sim);
+        CcSimUpgradeArchivePhysicalLore(sim);
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         sim->generator_version = CC_GENERATOR_VERSION;
         return true;
@@ -5471,7 +5480,8 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
         legacy_version != 27U && legacy_version != 28U &&
         legacy_version != 29U && legacy_version != 30U &&
         legacy_version != 31U && legacy_version != 32U &&
-        legacy_version != 33U && legacy_version != 34U) return true;
+        legacy_version != 33U && legacy_version != 34U &&
+        legacy_version != 35U) return true;
     if (legacy_version == 27U) {
         CcSimInitializeWoodEconomy(sim);
         if (sim->generator_version != 23U) {

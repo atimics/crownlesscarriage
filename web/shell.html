@@ -66,6 +66,18 @@
         outline: none;
         background: #0b0a09;
       }
+      #stage:fullscreen {
+        display: grid;
+        place-items: center;
+        width: 100vw;
+        height: 100vh;
+        border: 0;
+        border-radius: 0;
+      }
+      #stage:fullscreen canvas {
+        width: min(100vw, calc(100vh * 16 / 9));
+        height: min(100vh, calc(100vw * 9 / 16));
+      }
       #loading {
         position: absolute;
         inset: 0;

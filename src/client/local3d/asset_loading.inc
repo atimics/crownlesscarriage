@@ -23,7 +23,7 @@ typedef struct TreeCrownModelCache {
 
 static TreeCrownModelCache tree_crown_models = {0};
 
-#define CC_HERO_SKIN_MAX_BONES 64
+#define CC_HERO_SKIN_MAX_BONES 32
 #define CC_HERO_CAPE_BONE_COUNT 4
 #define CC_HERO_HAIR_BONE_COUNT 2
 #define CC_HERO_SKIN_ASSET \
@@ -3792,6 +3792,11 @@ void CcLocalRendererSetScreenFirstHero(bool enabled)
 {
     if (sphere_models.ready) return;
     screen_first_hero_requested = enabled;
+}
+
+void CcLocalRendererSetReducedMotion(bool enabled)
+{
+    reduced_motion_enabled = enabled;
 }
 
 void CcLocalRendererSetOpeningStep(CcLocalOpeningStep step)

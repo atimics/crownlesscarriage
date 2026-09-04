@@ -10,6 +10,58 @@
 #include <unistd.h>
 #endif
 
+static bool AthleticProfilesMatch(const CcClientAthleticProfile *first,
+                                  const CcClientAthleticProfile *second)
+{
+    if (fabsf(first->travel_training_distance -
+              second->travel_training_distance) >= 0.0001f) {
+        return false;
+    }
+    for (int32_t discipline = 0;
+         discipline < CC_CLIENT_SESSION_ATHLETIC_COUNT; ++discipline) {
+        if (first->level[discipline] != second->level[discipline] ||
+            fabsf(first->experience[discipline] -
+                  second->experience[discipline]) >= 0.0001f) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool AthleticProfileIsDefault(
+    const CcClientAthleticProfile *profile)
+{
+    CcClientAthleticProfile expected = {0};
+    for (int32_t discipline = 0;
+         discipline < CC_CLIENT_SESSION_ATHLETIC_COUNT; ++discipline) {
+        expected.level[discipline] = 1;
+    }
+    return AthleticProfilesMatch(profile, &expected);
+}
+
+static bool RewriteSessionAsVersionFive(const char *path)
+{
+    const char *temporary = "client-session-version-five.tmp";
+    FILE *source = fopen(path, "rb");
+    FILE *target = fopen(temporary, "wb");
+    char line[2048];
+    bool ok = source != NULL && target != NULL &&
+        fgets(line, sizeof(line), source) != NULL &&
+        fputs("CROWNLESS_SESSION 5\n", target) >= 0 &&
+        fgets(line, sizeof(line), source) != NULL &&
+        fputs(line, target) >= 0 &&
+        fgets(line, sizeof(line), source) != NULL &&
+        strncmp(line, "ATHLETICS ", 10U) == 0;
+    while (ok && fgets(line, sizeof(line), source) != NULL) {
+        ok = fputs(line, target) >= 0;
+    }
+    if (source != NULL && fclose(source) != 0) ok = false;
+    if (target != NULL && fclose(target) != 0) ok = false;
+    if (ok) ok = remove(path) == 0 && rename(temporary, path) == 0;
+    if (!ok) (void)remove(temporary);
+    return ok;
+}
+
 int main(void)
 {
     const char *session_path = "client-session-test.state";
@@ -27,7 +79,12 @@ int main(void)
         .position_x = 6.25f,
         .position_z = 2.75f,
         .facing_yaw = -0.35f,
-        .opening_step = 1U
+        .opening_step = 1U,
+        .athletics = {
+            .experience = {12.5f, 23.5f, 34.5f},
+            .travel_training_distance = 8.25f,
+            .level = {2, 3, 4}
+        }
     };
     char error[256];
     CC_CHECK(CcClientSessionValidate(&original));
@@ -47,6 +104,14 @@ int main(void)
     CC_CHECK(fabsf(restored.position_z - original.position_z) < 0.0001f);
     CC_CHECK(fabsf(restored.facing_yaw - original.facing_yaw) < 0.0001f);
     CC_CHECK(restored.opening_step == original.opening_step);
+    CC_CHECK(AthleticProfilesMatch(&restored.athletics,
+                                   &original.athletics));
+
+    CC_CHECK(RewriteSessionAsVersionFive(session_path));
+    CC_CHECK(CcClientSessionRead(session_path, &restored,
+                                 error, sizeof(error)));
+    CC_CHECK(restored.version == CC_CLIENT_SESSION_VERSION);
+    CC_CHECK(AthleticProfileIsDefault(&restored.athletics));
 
     CcClientSession encounter = original;
     encounter.scene = CC_CLIENT_SESSION_STREET;
@@ -109,6 +174,15 @@ int main(void)
     invalid = original;
     invalid.route_id = 0U;
     CC_CHECK(!CcClientSessionValidate(&invalid));
+    invalid = original;
+    invalid.athletics.level[0] = 0;
+    CC_CHECK(!CcClientSessionValidate(&invalid));
+    invalid = original;
+    invalid.athletics.experience[1] = INFINITY;
+    CC_CHECK(!CcClientSessionValidate(&invalid));
+    invalid = original;
+    invalid.athletics.travel_training_distance = 12.0f;
+    CC_CHECK(!CcClientSessionValidate(&invalid));
     CC_CHECK(!CcClientSessionWrite(session_path, &invalid,
                                    error, sizeof(error)));
 
@@ -133,6 +207,7 @@ int main(void)
     CC_CHECK(restored.route_id == 77U);
     CC_CHECK(restored.road_encounter.mode ==
              CC_CLIENT_ROAD_ENCOUNTER_NONE);
+    CC_CHECK(AthleticProfileIsDefault(&restored.athletics));
 
     FILE *legacy = fopen(session_path, "wb");
     CC_CHECK(legacy != NULL);
@@ -146,6 +221,7 @@ int main(void)
     CC_CHECK(restored.opening_step == 2U);
     CC_CHECK(restored.coordinate_space == CC_CLIENT_SESSION_LEGACY_LOCAL);
     CC_CHECK(restored.route_id == 0U);
+    CC_CHECK(AthleticProfileIsDefault(&restored.athletics));
 
     FILE *version_two = fopen(session_path, "wb");
     CC_CHECK(version_two != NULL);

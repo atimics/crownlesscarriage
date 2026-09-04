@@ -2506,6 +2506,21 @@ static void TestRoadBridgeSupport(void)
 
 static void TestBuildingCutawaySelection(void)
 {
+    Ray parallel_outside = {
+        .position = {0.0f, 3.0f, 10.0f},
+        .direction = {0.0f, -0.191394329f, -0.981513261f},
+    };
+    BoundingBox shoulder_box = {
+        .min = {0.18f, 0.44f, 3.0f},
+        .max = {0.90f, 4.44f, 5.0f},
+    };
+    if (!CcLocalRayMissesBoxParallelSlabInternal(
+            parallel_outside, shoulder_box)) {
+        (void)fprintf(stderr,
+                      "parallel outside ray reached the unsafe box test\n");
+        exit(1);
+    }
+
     Camera3D camera = {
         .position = {0.0f, 3.0f, 10.0f},
         .target = {0.0f, 1.0f, 0.0f},

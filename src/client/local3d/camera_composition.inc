@@ -1408,7 +1408,8 @@ Camera3D CcLocalCombatCameraInternal(Camera3D base,
     bool combat_view = active || combat_camera_rig.combat_weight > 0.0001f;
     camera.fovy = combat_view ? combat_camera_rig.displayed_fovy : base.fovy;
     camera.projection = combat_view ? CAMERA_PERSPECTIVE : base.projection;
-    if (active && player->combat.hit_flash_seconds > 0.0f) {
+    if (active && CcClientHitEffectVisible(
+            reduced_motion_enabled, player->combat.hit_flash_seconds)) {
         float pulse = player->combat.hit_flash_seconds * 8.0f;
         float shake = fminf(0.055f, pulse * 0.055f);
         camera.target.x += sinf(clock * 71.0f) * shake;
