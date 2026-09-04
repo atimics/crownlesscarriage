@@ -1063,7 +1063,8 @@ static float SessionPointSegmentDistanceSquared(
 static bool WorldSessionRouteScore(
     const CcWorldRoutePlacement *route, CcId settlement_id,
     CcWorldPoint position, float facing_yaw,
-    float *distance_squared, float *heading_distance)
+    float *distance_squared, float *heading_distance,
+    float *nearest_route_amount)
 {
     if (route == NULL || distance_squared == NULL ||
         heading_distance == NULL ||
@@ -1075,6 +1076,7 @@ static bool WorldSessionRouteScore(
     if (total_length <= 0.0001f) return false;
     float best_distance = INFINITY;
     float best_heading = INFINITY;
+    float best_route_amount = 0.0f;
     float travelled = 0.0f;
     for (int32_t sample = 0;
          sample < CC_WORLD_ROUTE_SAMPLE_COUNT - 1; ++sample) {
@@ -1102,6 +1104,7 @@ static bool WorldSessionRouteScore(
              candidate_heading < best_heading)) {
             best_distance = candidate_distance;
             best_heading = candidate_heading;
+            best_route_amount = route_amount;
         }
         travelled += segment_length;
     }
@@ -1129,6 +1132,9 @@ static bool WorldSessionRouteScore(
     }
     *distance_squared = best_distance;
     *heading_distance = best_heading;
+    if (nearest_route_amount != NULL) {
+        *nearest_route_amount = ClampUnit(best_route_amount);
+    }
     return isfinite(best_distance);
 }
 
@@ -1153,7 +1159,7 @@ static const CcRoute *InferWorldSessionRoute(
         float heading = INFINITY;
         if (!WorldSessionRouteScore(
                 placement, session->location_id, position,
-                session->facing_yaw, &distance, &heading)) {
+                session->facing_yaw, &distance, &heading, NULL)) {
             continue;
         }
         if (distance < best_distance - 0.0001f ||
@@ -1584,7 +1590,8 @@ static bool SaveLocalSession(const char *path, const CcSim *sim,
 
 static bool WorldStreamCanRestoreSession(
     const CcSim *sim, const LocalState *local,
-    const CcClientSession *session, const CcRoute **route)
+    const CcClientSession *session, const CcRoute **route,
+    float *route_amount)
 {
     if (sim == NULL || local == NULL || session == NULL ||
         local->world_stream.manifest.world_seed != sim->world_seed ||
@@ -1610,16 +1617,19 @@ static bool WorldStreamCanRestoreSession(
     }
     const CcWorldRoutePlacement *placement = CcWorldRoutePlacementForId(
         &local->world_stream.manifest, restored_route->id);
-    float road_distance = INFINITY;
+    float road_distance_squared = INFINITY;
     float heading_distance = INFINITY;
+    float restored_route_amount = 0.0f;
     if (!WorldSessionRouteScore(
             placement, session->location_id,
             (CcWorldPoint){session->position_x, session->position_z},
-            session->facing_yaw, &road_distance, &heading_distance) ||
-        road_distance > 49.0f) {
+            session->facing_yaw, &road_distance_squared,
+            &heading_distance, &restored_route_amount) ||
+        road_distance_squared > 49.0f) {
         return false;
     }
     if (route != NULL) *route = restored_route;
+    if (route_amount != NULL) *route_amount = restored_route_amount;
     return true;
 }
 
@@ -1627,7 +1637,9 @@ static bool RestoreWorldSession(const CcSim *sim, LocalState *local,
                                 const CcClientSession *session)
 {
     const CcRoute *route = NULL;
-    if (!WorldStreamCanRestoreSession(sim, local, session, &route)) {
+    float route_amount = 0.0f;
+    if (!WorldStreamCanRestoreSession(
+            sim, local, session, &route, &route_amount)) {
         return false;
     }
 
@@ -1659,6 +1671,7 @@ static bool RestoreWorldSession(const CcSim *sim, LocalState *local,
     local->world_carriage = (CcLocalWorldCarriageState){
         .position = local->agent.position,
         .heading_yaw = session->facing_yaw,
+        .route_amount = route_amount,
         .pace = 0.0f,
         .camera_weight = 1.0f,
         .camera_target = 1.0f,
@@ -6242,12 +6255,37 @@ static int RunWorldSessionStartupRegression(void)
         return SessionStartupTestFailed(
             session_path, "World session needs a second road branch.");
     }
+    const CcWorldRoutePlacement *route_placement =
+        CcWorldRoutePlacementForId(
+            &saved.world_stream.manifest, route->id);
+    CcWorldPoint saved_position;
+    float saved_heading = 0.0f;
+    const float saved_journey_amount = 0.34f;
+    if (route_placement == NULL ||
+        !CcWorldRoutePose(
+            route_placement, sim.player.location_id,
+            saved_journey_amount, &saved_position, &saved_heading)) {
+        return SessionStartupTestFailed(
+            session_path, "World session road pose setup failed.");
+    }
+    saved.world_carriage.position = (Vector3){
+        saved_position.x,
+        CcWorldStreamHeightAt(
+            &saved.world_stream, saved_position.x, saved_position.z),
+        saved_position.z
+    };
+    saved.world_carriage.heading_yaw = saved_heading;
+    saved.world_carriage.route_amount =
+        route->from_id == sim.player.location_id ?
+            saved_journey_amount : 1.0f - saved_journey_amount;
+    saved.agent.position = saved.world_carriage.position;
+    saved.agent.facing_yaw = saved_heading;
     saved.world_carriage.camera_weight = 1.0f;
     saved.world_carriage.camera_target = 1.0f;
-    saved.agent.facing_yaw = saved.world_carriage.heading_yaw;
     const float saved_x = saved.agent.position.x;
     const float saved_z = saved.agent.position.z;
     const float saved_yaw = saved.agent.facing_yaw;
+    const float saved_route_amount = saved.world_carriage.route_amount;
 
     char error[192];
     if (!SaveLocalSession(session_path, &sim, &saved,
@@ -6300,12 +6338,16 @@ static int RunWorldSessionStartupRegression(void)
         restored.departure.phase != CC_CLIENT_DEPARTURE_READY ||
         restored.departure.town_progress != 1.0f ||
         restored.departure.road_book_progress != 1.0f ||
+        restored.arrival.phase != CC_CLIENT_ARRIVAL_PARKED ||
         restored.convoy.phase != CC_LOCAL_CONVOY_ROAD ||
         restored.convoy.phase_progress != 1.0f ||
         restored.convoy.pace != 0.0f ||
         !restored.world_carriage.visible ||
         !restored.world_carriage.hero_embarked ||
+        restored.world_carriage.town_arrival ||
         restored.world_carriage.route_id != route->id ||
+        !SessionTestFloatMatches(
+            restored.world_carriage.route_amount, saved_route_amount) ||
         restored.world_carriage.camera_weight != 1.0f ||
         restored.world_carriage.camera_target != 1.0f ||
         !SessionTestFloatMatches(
@@ -6385,14 +6427,15 @@ static int RunWorldSessionStartupRegression(void)
             session_path, "World restore accepted an unprepared stream.");
     }
 
-    const CcWorldRoutePlacement *route_placement =
-        CcWorldRoutePlacementForId(
-            &restored.world_stream.manifest, route->id);
     CcWorldPoint branch_position;
     float branch_heading = 0.0f;
+    const float branch_journey_amount = 0.18f;
+    const float branch_route_amount =
+        route->from_id == sim.player.location_id ?
+            branch_journey_amount : 1.0f - branch_journey_amount;
     if (route_placement == NULL ||
         !CcWorldRoutePose(
-            route_placement, sim.player.location_id, 0.18f,
+            route_placement, sim.player.location_id, branch_journey_amount,
             &branch_position, &branch_heading) ||
         !WriteVersionThreeWorldSession(
             session_path, &sim, branch_position, branch_heading)) {
@@ -6412,6 +6455,9 @@ static int RunWorldSessionStartupRegression(void)
             &version_three_selected) ||
         view != VIEW_ROADS || !version_three_restore.open_world ||
         version_three_restore.world_carriage.route_id != route->id ||
+        !SessionTestFloatMatches(
+            version_three_restore.world_carriage.route_amount,
+            branch_route_amount) ||
         version_three_selected != route_index ||
         !SessionTestFloatMatches(
             version_three_restore.agent.position.x, branch_position.x) ||
@@ -6457,11 +6503,16 @@ static int RunWorldSessionStartupRegression(void)
     }
     view = VIEW_LOCAL;
     int32_t shared_gate_selected = -1;
+    float shared_gate_route_amount =
+        route->from_id == sim.player.location_id ? 0.0f : 1.0f;
     if (!RestoreClientStartupSession(
             session_path, &sim, &shared_gate_restore, &view,
             &shared_gate_selected) ||
         view != VIEW_ROADS || !shared_gate_restore.open_world ||
         shared_gate_restore.world_carriage.route_id != route->id ||
+        !SessionTestFloatMatches(
+            shared_gate_restore.world_carriage.route_amount,
+            shared_gate_route_amount) ||
         shared_gate_selected != route_index ||
         !SessionTestFloatMatches(
             shared_gate_restore.agent.position.x, branch_place->gate.x) ||
