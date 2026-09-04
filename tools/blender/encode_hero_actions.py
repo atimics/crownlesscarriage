@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Package rendered hero actions as individual GIFs and a combined reel."""
 
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont

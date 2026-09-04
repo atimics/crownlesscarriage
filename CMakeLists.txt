@@ -208,7 +208,6 @@ if(CC_BUILD_CLIENT)
     FetchContent_Declare(
         raylib
         GIT_REPOSITORY https://github.com/raysan5/raylib.git
-        # Exact commit for the signed raylib 6.0 release tag.
         GIT_TAG dbc56a87da87d973a9c5baa4e7438a9d20121d28
         GIT_SHALLOW TRUE
     )
@@ -292,7 +291,7 @@ if(CC_BUILD_CLIENT)
                 "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
                 "${CMAKE_CURRENT_BINARY_DIR}/site/LICENSE.txt"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${CMAKE_CURRENT_SOURCE_DIR}/THIRD_PARTY_NOTICES.md"
+                "${CMAKE_CURRENT_SOURCE_DIR}/THIRD_PARTY_NOTICES.txt"
                 "${CMAKE_CURRENT_BINARY_DIR}/site/THIRD_PARTY_NOTICES.txt"
             DEPENDS
                 ${CMAKE_CURRENT_SOURCE_DIR}/cmake/PrepareWebAssets.cmake
@@ -300,7 +299,7 @@ if(CC_BUILD_CLIENT)
                 ${CMAKE_CURRENT_SOURCE_DIR}/web/licenses.html
                 ${CMAKE_CURRENT_SOURCE_DIR}/web/persistence.js
                 ${CMAKE_CURRENT_SOURCE_DIR}/LICENSE
-                ${CMAKE_CURRENT_SOURCE_DIR}/THIRD_PARTY_NOTICES.md
+                ${CMAKE_CURRENT_SOURCE_DIR}/THIRD_PARTY_NOTICES.txt
             VERBATIM
         )
         add_dependencies(crownless_carriage crownless_web_assets)
@@ -453,7 +452,7 @@ if(CC_BUILD_CLIENT)
                 "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/LICENSE.txt"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${CMAKE_CURRENT_SOURCE_DIR}/THIRD_PARTY_NOTICES.md"
+                "${CMAKE_CURRENT_SOURCE_DIR}/THIRD_PARTY_NOTICES.txt"
                 "$<TARGET_BUNDLE_CONTENT_DIR:crownless_carriage>/Resources/THIRD_PARTY_NOTICES.txt"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${CC_HERO_ENGINE_ASSET}"
@@ -567,7 +566,7 @@ if(CC_BUILD_CLIENT)
                     "${CC_COLLECTIBLE_MAP_ATLAS_ASSET}"
                     "${CC_ECONOMIC_GOODS_ATLAS_ASSET}"
                     "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
-                    "${CMAKE_CURRENT_SOURCE_DIR}/THIRD_PARTY_NOTICES.md"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/THIRD_PARTY_NOTICES.txt"
             VERBATIM
         )
         add_dependencies(crownless_carriage crownless_hero_assets)
@@ -575,7 +574,6 @@ if(CC_BUILD_CLIENT)
     cc_strict_warnings(crownless_carriage)
     set(CC_ROADBOOK_REVIEW_DIR
         "${CMAKE_CURRENT_BINARY_DIR}/roadbook-review")
-    # These limits include headroom for the Linux CI software renderer.
     set(CC_ROADBOOK_ROUTE_MINIMUM_FPS 25)
     set(CC_ROADBOOK_ROUTE_P95_BUDGET_MS 40)
     set(CC_ROADBOOK_NETWORK_MINIMUM_FPS 21)
@@ -716,8 +714,6 @@ if(BUILD_TESTING)
 
     if(CC_BUILD_BENCHMARKS)
         set(CC_BENCHMARK_TEST_ARGUMENTS --quick)
-        # Debug builds keep the benchmark as a functional smoke test, but
-        # compiler instrumentation makes a release timing budget unreliable.
         if(CMAKE_BUILD_TYPE MATCHES "^(Release|RelWithDebInfo|MinSizeRel)$")
             list(APPEND CC_BENCHMARK_TEST_ARGUMENTS --assert-budget)
         endif()

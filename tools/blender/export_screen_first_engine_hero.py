@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Export the screen-first character on the production engine skeleton."""
 
 from __future__ import annotations
 
@@ -55,7 +54,6 @@ def remove_previous_export() -> None:
 
 
 def ensure_hair_bones(rig: bpy.types.Object) -> None:
-    """Add two small secondary controls without changing the body rig."""
     bpy.ops.object.select_all(action="DESELECT")
     rig.hide_set(False)
     rig.hide_viewport = False
@@ -128,7 +126,6 @@ def build_materials() -> dict[str, bpy.types.Material]:
 
 
 def add_segmented_tunic(materials: dict[str, bpy.types.Material]) -> None:
-    """Build one tunic volume with non-overlapping authored front values."""
     points = (
         (-0.28, 0.83), (-0.34, 1.49), (-0.28, 1.67), (0.28, 1.67),
         (0.34, 1.49), (0.28, 0.83), (0.07, 0.80), (-0.08, 0.82),
@@ -232,7 +229,6 @@ def add_hair_clump(
     material: bpy.types.Material,
     secondary_bone: str | None = None,
 ) -> bpy.types.Object:
-    """Build one flat-shaded diamond clump along a root-to-tip path."""
     if not (3 <= len(path) <= 5):
         raise ValueError(f"{name}: hair clumps need 3 to 5 cross-sections")
     if len(path) != len(widths) or len(path) != len(depths):
@@ -287,7 +283,6 @@ def add_hair_clump(
 
 
 def add_scalp_core(material: bpy.types.Material) -> bpy.types.Object:
-    """Make a small core that is covered by the six clump roots."""
     bpy.ops.mesh.primitive_ico_sphere_add(
         subdivisions=2, radius=1.0, location=(0.0, 0.080, 2.110))
     obj = bpy.context.object
@@ -300,7 +295,6 @@ def add_scalp_core(material: bpy.types.Material) -> bpy.types.Object:
 
 
 def add_hair_highlight(material: bpy.types.Material) -> bpy.types.Object:
-    """Add one small opaque highlight on the long lock, away from its edge."""
     vertices = (
         (-0.224, -0.132, 2.090),
         (-0.190, -0.138, 2.115),
@@ -318,7 +312,6 @@ def add_hair_highlight(material: bpy.types.Material) -> bpy.types.Object:
 
 
 def add_faceted_head(skin_material: bpy.types.Material) -> bpy.types.Object:
-    """Build a clean anime face plane with a rounded rear skull."""
 
 
 
@@ -371,7 +364,6 @@ def add_faceted_head(skin_material: bpy.types.Material) -> bpy.types.Object:
 
 
 def build_hair(materials: dict[str, bpy.types.Material]) -> None:
-    """Build the V08 silhouette from six broad, separated hair clumps."""
     add_scalp_core(materials["hair"])
     add_hair_clump(
         f"{PREFIX}HairBang_L",
@@ -576,7 +568,6 @@ def consolidate(objects: list[bpy.types.Object],
 
 def render_silhouette(combined: bpy.types.Object,
                       rig: bpy.types.Object) -> None:
-    """Render the whole hero as a 60-pixel black silhouette."""
     scene = bpy.context.scene
     hidden = {obj: obj.hide_render for obj in scene.objects}
     for obj in scene.objects:

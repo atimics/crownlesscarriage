@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-"""Build rigid NPC modules for physics-driven humanoids.
-
-The runtime attaches these unskinned GLBs to the authoritative biomechanical
-skeleton one bone at a time.  This preserves contacts, climbing, combat, and
-ragdolls without a CPU skin/deformed-vertex upload for every dynamic actor.
-"""
 
 from __future__ import annotations
 
@@ -104,7 +98,6 @@ def finish(obj: bpy.types.Object, collection: bpy.types.Collection,
 
 
 def paint(obj: bpy.types.Object, palette_slot: str) -> bpy.types.Object:
-    """Assign one indexed runtime palette slot to generated geometry."""
     obj["cc_palette_slot"] = palette_slot
     return obj
 
@@ -165,7 +158,6 @@ def add_loft(name: str,
              rings: tuple[tuple[float, float, float], ...],
              collection: bpy.types.Collection, material: bpy.types.Material,
              *, sides: int = 8) -> bpy.types.Object:
-    """Create a +Z unit module from (height, x radius, y radius) rings."""
     vertices: list[tuple[float, float, float]] = []
     for height, radius_x, radius_y in rings:
         for index in range(sides):
@@ -215,7 +207,6 @@ def add_hair_clump(
     collection: bpy.types.Collection,
     material: bpy.types.Material,
 ) -> bpy.types.Object:
-    """Build one broad-root, narrow-tip module clump."""
     if len(path) < 3 or len(path) > 5:
         raise ValueError(f"{name}: hair clumps need 3 to 5 sections")
     if len(path) != len(widths) or len(path) != len(depths):

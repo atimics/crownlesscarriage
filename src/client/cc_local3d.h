@@ -548,7 +548,6 @@ float CcLocalCombatSkillCooldown(const CcLocalAgent *player,
                                  CcCombatSkill skill);
 float CcLocalCombatSkillDuration(CcCombatSkill skill);
 
-/* Renderer lifecycle: configure, init, begin frame, bind, draw, shutdown. */
 void CcLocalRendererInit(void);
 void CcLocalRendererSetScreenFirstHero(bool enabled);
 void CcLocalRendererSetOpeningStep(CcLocalOpeningStep step);

@@ -27,8 +27,6 @@ typedef struct CcRoadBookRouteSpan {
 bool CcRoadBookReadRoute(const CcSim *sim, CcId route_id,
                          CcRoadBookRouteView *view);
 CcId CcRoadBookSettlementKingdom(const CcSim *sim, CcId settlement_id);
-/* The carriage amount runs from the route's from end at 0 to its to end at 1.
-   Route length and forward sight use world units. */
 bool CcRoadBookReadRouteAtCarriage(const CcSim *sim, CcId route_id,
                                    float carriage_route_amount,
                                    float route_length,

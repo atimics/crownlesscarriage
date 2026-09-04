@@ -1,8 +1,6 @@
 #ifndef CROWNLESS_LOCAL3D_INTERNAL_H
 #define CROWNLESS_LOCAL3D_INTERNAL_H
 
-/* Narrow test and cross-source seams for crownless_local_renderer. */
-
 #include "client/cc_local3d.h"
 
 typedef enum CcLocalFaceLodInternal {

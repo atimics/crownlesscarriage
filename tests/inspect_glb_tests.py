@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Focused corruption tests for the shipped GLB validator."""
 
 from __future__ import annotations
 

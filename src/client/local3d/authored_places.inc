@@ -1,4 +1,3 @@
-/* Terrain presentation and authored settlement structures. */
 static void DrawSphereModel(Model model, Vector3 center, float radius, Color color)
 {
     DrawModelEx(model, center, (Vector3){0.0f, 1.0f, 0.0f}, 0.0f,

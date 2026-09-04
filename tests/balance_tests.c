@@ -300,8 +300,6 @@ int main(void)
     CC_CHECK(collapse_samples < samples / 5);
     CC_CHECK(crisis_samples > samples / 10);
 
-    /* A ruined settlement can retain old hunger after its people have gone.
-       At least one year in twelve should still stay calm across the realm. */
     CC_CHECK(quiet_samples * 12 >= samples);
     CC_CHECK(scarred_samples > 0);
     CC_CHECK(war_samples > 0);

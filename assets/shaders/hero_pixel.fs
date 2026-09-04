@@ -27,8 +27,6 @@ void main()
     vec3 toCamera = normalize(cameraPosition - fragPosition);
     float facing = dot(normal, toLight);
 
-    /* The figure gets exactly two broad paint values. The decision is stable
-       in object space; the whole-scene nearest upscale supplies the pixels. */
     float wrapped = clamp((facing + 0.30) / 1.30, 0.0, 1.0);
     float lightBand = step(0.47, wrapped);
     float shade = mix(0.70, 1.03, lightBand);
@@ -55,10 +53,6 @@ void main()
                        foldStrength;
     color *= 1.0 - foldShadow * 0.11;
 
-    /* A small sky fill keeps the shadow side of the crown, hands, and cape
-       readable against dark architecture while retaining the two-value paint
-       treatment. It is normal-driven, so it never creates a second pixel
-       grid or an unstable screen-space halo. */
     float skyExposure = smoothstep(-0.30, 0.82, normal.y);
     color += albedo.rgb * vec3(0.74, 0.91, 1.04) * skyExposure *
              (1.0 - lightBand) * 0.095;
@@ -68,9 +62,6 @@ void main()
     paintedHighlight = step(0.62, paintedHighlight) * lightBand;
     color += vec3(1.0, 0.91, 0.76) * paintedHighlight * 0.038;
 
-    /* Edge-facing fragments become colored ink. This is deliberately inside
-       the silhouette, so it remains stable on the coarse world target and
-       does not grow or crawl as an inverted-hull outline would. */
     float viewFacing = abs(dot(normal, toCamera));
     float edgeInk = 1.0 - step(0.105, viewFacing);
     vec3 ink = mix(vec3(0.025, 0.032, 0.034), albedo.rgb * 0.22, 0.34);
@@ -78,9 +69,6 @@ void main()
     float litEdge = edgeInk * smoothstep(0.08, 0.68, facing) * lightBand;
     color += vec3(0.19, 0.28, 0.28) * litEdge * 0.055;
 
-    /* The player keeps one narrow, in-silhouette brass/cool rim. It protects
-       the crown, shoulders, and weapon at the 35-pixel gameplay size without
-       giving every internal polygon a noisy outline. */
     float silhouette = smoothstep(0.70, 0.94, 1.0 - viewFacing);
     float heroRim = silhouette * (0.065 + skyExposure * 0.105) *
                     characterRimStrength;

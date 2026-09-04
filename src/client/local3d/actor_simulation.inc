@@ -1,4 +1,3 @@
-/* Agent movement, combat, traversal, and render-pose simulation. */
 static float CombatClamp(float value, float minimum, float maximum)
 {
     return fmaxf(minimum, fminf(value, maximum));
@@ -2682,9 +2681,6 @@ static bool AgentCanAdvanceNavigation(const CcLocalAgent *agent,
         agent->scene != CC_LOCAL_SCENE_STREET) {
         return true;
     }
-    /* A path corner is safe at its planned point, not throughout the broad
-       waypoint acceptance radius. Only cut the corner when the body has a
-       clear corridor from its current position to the following node. */
     Vector3 next = agent->navigation_point[next_index];
     return StreetSegmentClear(
         (Vector2){agent->position.x, agent->position.z},
@@ -5269,9 +5265,6 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
             (agent->position.z - previous_position.z));
     bool requested_progress = agent->crowned && agent->exact_target_valid &&
         target_distance > 0.18f && maximum_speed > 0.01f;
-    /* Sideways collision escape is motion, but it is not progress toward the
-       active waypoint. Give physical starts and turns time to settle, then
-       replan or cancel a command that still cannot move forward. */
     if (requested_progress && forward_stalled) {
         agent->movement_stall_seconds += delta_time;
     } else {

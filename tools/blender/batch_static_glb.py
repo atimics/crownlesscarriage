@@ -1,11 +1,4 @@
 #!/usr/bin/env python3
-"""Batch rigid GLB primitives by material for the browser build.
-
-The authored libraries keep one object per editable part.  WebGL pays a large
-per-object cost, so the web build flattens those objects and emits one primitive
-per material and vertex layout.  Skins, animation, and morph targets are
-deliberately rejected: this tool is only for rigid scenery and attachments.
-"""
 
 from __future__ import annotations
 
@@ -409,7 +402,7 @@ def batch_static_glb(source_path: Path, destination_path: Path) -> tuple[int, in
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description='Batch rigid GLB primitives by material for the browser build.')
     parser.add_argument("source", type=Path)
     parser.add_argument("destination", nargs="?", type=Path)
     args = parser.parse_args(argv)

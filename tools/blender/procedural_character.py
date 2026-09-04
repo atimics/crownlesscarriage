@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-"""Reusable procedural profiles for Crownless humanoids and wearable shells.
-
-This module intentionally has no Blender dependency.  It owns the parametric
-shape grammar; Blender scripts consume the resulting cross-sections to create
-meshes, assign materials, and attach them to a rig.
-"""
 
 from __future__ import annotations
 
@@ -15,7 +9,6 @@ from typing import Iterable
 
 @dataclass(frozen=True)
 class CrossSection:
-    """An elliptical section along a normalized limb or absolute torso axis."""
 
     position: float
     width: float
@@ -31,11 +24,6 @@ class CrossSection:
 
 @dataclass(frozen=True)
 class BodyParameters:
-    """Continuous controls for one body on the canonical humanoid skeleton.
-
-    Version 1 varies surface proportions without moving the runtime bones.  A
-    future recipe version can derive a matching skeleton from the same values.
-    """
 
     name: str
     muscularity: float = 0.65
@@ -68,7 +56,6 @@ class BodyParameters:
 
 @dataclass(frozen=True)
 class ShellRecipe:
-    """Fit controls used to derive a wearable shell from a body profile."""
 
     name: str
     kind: str
@@ -94,7 +81,6 @@ class ShellRecipe:
 
 @dataclass(frozen=True)
 class CharacterRecipe:
-    """Serializable recipe tying one body preset to basic wearable layers."""
 
     schema_version: int
     body: BodyParameters
@@ -194,7 +180,6 @@ def _sections(rows: Iterable[tuple[float, float, float]]) -> tuple[CrossSection,
 
 
 def body_profiles(parameters: BodyParameters) -> dict[str, tuple[CrossSection, ...]]:
-    """Generate canonical anatomical profiles for a humanoid body preset."""
     muscle, fat = _deltas(parameters)
     shoulder = parameters.shoulder_scale * (1.0 + muscle * 0.14 + fat * 0.04)
     chest = parameters.chest_scale * (1.0 + muscle * 0.11 + fat * 0.12)
@@ -257,13 +242,6 @@ def derive_shell(
     source: Iterable[CrossSection],
     recipe: ShellRecipe,
 ) -> tuple[CrossSection, ...]:
-    """Derive a fitted shell that contains the exported anatomical surface.
-
-    Compression reduces the layer's fit allowance.  It does not shrink the
-    shell through the undeformed body: recipes that eventually compress flesh
-    must pair that behavior with an explicit body-deformation or body-culling
-    pass.
-    """
     sections = tuple(source)
     if len(sections) < 2:
         raise ValueError("a shell requires at least two source sections")
@@ -293,7 +271,6 @@ def sample_profile(
     sections: Iterable[CrossSection],
     position: float,
 ) -> CrossSection:
-    """Linearly sample an ordered profile at an in-range position."""
     profile = tuple(sections)
     if not profile:
         raise ValueError("cannot sample an empty profile")
@@ -322,7 +299,6 @@ def clip_profile(
     *,
     normalize: bool = False,
 ) -> tuple[CrossSection, ...]:
-    """Clip a profile to a coverage interval, optionally renormalizing it."""
     if end <= start:
         raise ValueError("profile clip end must be greater than start")
     profile = tuple(sections)
@@ -340,7 +316,6 @@ def clip_profile(
 
 
 def loft_rows(sections: Iterable[CrossSection]) -> list[tuple[float, float, float, float]]:
-    """Convert sections into the torso-loft format used by the Blender builder."""
     return [
         (section.position, section.width, section.depth, section.center_depth)
         for section in sections
@@ -348,7 +323,6 @@ def loft_rows(sections: Iterable[CrossSection]) -> list[tuple[float, float, floa
 
 
 def sweep_rows(sections: Iterable[CrossSection]) -> list[tuple[float, float, float, float]]:
-    """Convert sections into normalized limb-sweep rows."""
     return [
         (section.position, section.width, section.depth, section.center_depth)
         for section in sections
@@ -367,7 +341,6 @@ def validate_profiles(profiles: dict[str, tuple[CrossSection, ...]]) -> None:
 
 
 def validate_library() -> None:
-    """Fast dependency-free contract check for presets and derived shells."""
     for preset in (ACTION_FIGURE_WAYFARER, LEAN_SCOUT, HEAVY_VANGUARD):
         profiles = body_profiles(preset)
         for recipe in WAYFARER_RECIPE.garments + WAYFARER_RECIPE.equipment:

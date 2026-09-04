@@ -1,13 +1,4 @@
 #!/usr/bin/env python3
-"""Build the Crownless Carriage modular hero prototype in Blender.
-
-Run from the repository root:
-    blender --background --factory-startup \
-        --python tools/blender/build_hero_component_library.py
-
-The generated blockout follows the concept image while keeping every garment,
-cloth panel, armor piece, and accessory independently toggleable and exportable.
-"""
 
 from __future__ import annotations
 
@@ -359,7 +350,6 @@ def add_box_between(
     *,
     bevel_width: float = 0.008,
 ) -> bpy.types.Object:
-    """Create a beveled rectangular strip aligned between two points."""
     a = Vector(start)
     b = Vector(end)
     delta = b - a
@@ -454,7 +444,6 @@ def add_limb_loft(
     segments: int = 10,
     bevel_width: float = 0.010,
 ) -> bpy.types.Object:
-    """Create an elliptical, muscle-shaped volume along an arbitrary bone."""
     a = Vector(start)
     b = Vector(end)
     axis = (b - a).normalized()
@@ -503,7 +492,6 @@ def add_boot_loft(
     role: str,
     scale: float = 1.0,
 ) -> bpy.types.Object:
-    """Create a tapered ankle-to-toe boot shell instead of a block foot."""
     rings = (
         (0.055, 0.080, 0.135, 0.075),
         (-0.035, 0.092, 0.150, 0.095),
@@ -548,7 +536,6 @@ def add_boot_sole(
     role: str,
     scale: float = 1.0,
 ) -> bpy.types.Object:
-    """Create a close-cut outsole that follows the boot, not a toy-like slab."""
     outline = (
         (-0.292, -0.076), (-0.282, 0.076), (-0.180, 0.103),
         (-0.060, 0.101), (0.065, 0.079), (0.075, -0.079),
@@ -642,7 +629,6 @@ def skin_cape_to_armature(
     columns: int,
     rows: int,
 ) -> None:
-    """Blend the authored cloth rows across the four runtime cape bones."""
     cape.parent = armature
     cape.matrix_parent_inverse = armature.matrix_world.inverted()
     modifier = cape.modifiers.new("CC_Armature", "ARMATURE")

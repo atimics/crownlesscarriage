@@ -1,4 +1,3 @@
-/* Hero, NPC, creature, carriage, and combat presentation. */
 static Vector3 Add3(Vector3 a, Vector3 b)
 {
     return (Vector3){a.x + b.x, a.y + b.y, a.z + b.z};
@@ -3976,10 +3975,6 @@ static void DrawTargetAtmosphere(RenderTexture2D target, float clock)
     int32_t width = target.texture.width;
     int32_t height = target.texture.height;
 
-    /* These broad transparent washes are painted into the low-resolution
-       world target before the palette pass. They behave like a traditional
-       animation background: dusk warms the horizon while moonlight cools
-       the upper planes, without adding a smooth full-resolution effect. */
     if (atmosphere.horizon_warmth > 0.01f) {
         float warmth = atmosphere.horizon_warmth;
         int32_t horizon_size = height * 2 / 5;

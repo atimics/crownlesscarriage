@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Validate the shipped procedural creature manifest and GLB files."""
 
 from __future__ import annotations
 

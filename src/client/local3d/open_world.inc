@@ -1,4 +1,3 @@
-/* Open-world render caches, routes, sites, and settlements. */
 #if 0
 typedef struct OpenWorldRenderChunk {
     int32_t x;

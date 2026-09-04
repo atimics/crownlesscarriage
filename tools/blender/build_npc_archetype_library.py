@@ -1,14 +1,4 @@
 #!/usr/bin/env python3
-"""Build the silhouette-first procedural NPC archetype library.
-
-Run from the repository root:
-    blender --background --factory-startup --python \
-        tools/blender/build_npc_archetype_library.py
-
-The library deliberately bakes curated procedural geometry to static GLBs.
-Runtime code supplies deterministic color, scale, and role selection without
-paying an animated skin update for every background person.
-"""
 
 from __future__ import annotations
 

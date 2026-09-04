@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Validate the shipped rigid NPC module library."""
 
 from __future__ import annotations
 
