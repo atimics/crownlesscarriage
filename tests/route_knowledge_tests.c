@@ -232,15 +232,17 @@ static void CheckRealJourneySight(bool reverse)
     CC_CHECK(fabsf((reverse ? view.to_reveal : view.from_reveal) - 0.28f) <
              0.0001f);
 
-    CcSimAdvanceRuntimeTicks(&sim, sim.journey.total_subticks / 60);
+    int32_t progress_ticks =
+        (sim.journey.total_subticks * 35 / 100) / 30;
+    CcSimAdvanceRuntimeTicks(&sim, progress_ticks);
     CC_CHECK(sim.journey.active);
-    CC_CHECK(sim.carriage.progress_milli == 500);
+    CC_CHECK(sim.carriage.progress_milli == 350);
     knowledge = CcSimPlayerRouteKnowledge(&sim, sim.journey.route_id);
     CC_CHECK(knowledge != NULL);
     CC_CHECK((reverse ? knowledge->to_reveal_milli :
-                        knowledge->from_reveal_milli) == 500);
+                        knowledge->from_reveal_milli) == 350);
     journey_amount = RenderedJourneyAmount(
-        &manifest, placement, &sim, 0.50f);
+        &manifest, placement, &sim, 0.35f);
     carriage_amount = reverse ? 1.0f - journey_amount : journey_amount;
     CC_CHECK(CcRoadBookReadRouteAtCarriage(
         &sim, sim.journey.route_id, carriage_amount, route_length, &view));
