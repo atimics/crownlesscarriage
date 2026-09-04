@@ -1,2 +1,2 @@
-# id|file|line|reason
-syntaxError|src/client/main.c|315|Emscripten EM_ASYNC_JS contains JavaScript that Cppcheck reads as C.
+# id|file|line|fingerprint|reason
+syntaxError|src/client/main.c|315|b4e7f2b2f2471ba4093bd0c8d690907e4f6d0d0573b5883c2026c380b658144a|Emscripten EM_ASYNC_JS contains JavaScript that Cppcheck reads as C.
