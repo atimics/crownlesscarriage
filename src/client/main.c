@@ -1127,10 +1127,11 @@ static void PositionOpenWorldDeparture(const CcSim *sim, LocalState *local)
     float junction_amount = forward ? route_amount : 1.0f - route_amount;
     float progress = ClampUnit(local->departure.road_book_progress);
     float movement = progress * progress * (3.0f - 2.0f * progress);
+    float journey_amount = junction_amount * movement;
     CcWorldPoint point;
     float heading = 0.0f;
     if (!CcWorldRoutePose(
-            route, sim->player.location_id, junction_amount * movement,
+            route, sim->player.location_id, journey_amount,
             &point, &heading)) {
         return;
     }
@@ -1140,6 +1141,8 @@ static void PositionOpenWorldDeparture(const CcSim *sim, LocalState *local)
         point.z
     };
     local->world_carriage.heading_yaw = heading;
+    local->world_carriage.route_amount = forward ? journey_amount :
+                                                  1.0f - journey_amount;
     local->world_carriage.pace = local->departure.phase ==
             CC_CLIENT_DEPARTURE_READY ? 0.0f : local->convoy.pace;
     local->agent.position = local->world_carriage.position;
@@ -1187,6 +1190,8 @@ static bool PositionOpenWorldArrival(const CcSim *sim, LocalState *local)
         point.z
     };
     local->world_carriage.heading_yaw = heading;
+    local->world_carriage.route_amount = origin_id == route->from_id ?
+        journey_amount : 1.0f - journey_amount;
     local->world_carriage.pace = local->convoy.pace;
     local->world_carriage.route_id = route->route_id;
     local->world_carriage.visible = true;
@@ -1333,17 +1338,15 @@ static void PositionOpenWorldJourney(const CcSim *sim, LocalState *local)
     const CcWorldRoutePlacement *route = CcWorldRoutePlacementForId(
         &local->world_stream.manifest, sim->journey.route_id);
     if (route == NULL) return;
-    const CcWorldSettlementPlacement *origin =
-        CcWorldSettlementPlacementForId(
-            &local->world_stream.manifest, sim->journey.origin_id);
-    const CcWorldSettlementPlacement *destination =
-        CcWorldSettlementPlacementForId(
-            &local->world_stream.manifest, sim->journey.destination_id);
-    float length = CcWorldRouteLength(route);
-    float start_amount = length > 0.001f && origin != NULL ?
-        fminf(0.22f, (origin->radius + 5.0f) / length) : 0.0f;
-    float end_amount = length > 0.001f && destination != NULL ?
-        fminf(0.22f, (destination->radius + 5.0f) / length) : 0.0f;
+    float from_junction_amount = CcWorldRouteSampleAmount(
+        route, CC_WORLD_ROUTE_FROM_JUNCTION_SAMPLE);
+    float to_junction_amount = CcWorldRouteSampleAmount(
+        route, CC_WORLD_ROUTE_TO_JUNCTION_SAMPLE);
+    bool forward = route->from_id == sim->journey.origin_id;
+    float start_amount = forward ? from_junction_amount :
+                                   1.0f - to_junction_amount;
+    float end_amount = forward ? 1.0f - to_junction_amount :
+                                 from_junction_amount;
     float progress = ClampUnit(
         (float)sim->carriage.progress_milli / 1000.0f);
     float amount = start_amount +
@@ -5610,6 +5613,56 @@ static float TownDepartureDistance(Vector3 first, Vector3 second)
     return sqrtf(x * x + z * z);
 }
 
+static bool FirstJourneyPoseContinuesFromJunction(bool reverse)
+{
+    CcSim sim;
+    CcSimInit(&sim, UINT32_C(0xc0a7137e));
+    CcRoute *route = &sim.routes[0];
+    CcId origin_id = reverse ? route->to_id : route->from_id;
+    CcId destination_id = reverse ? route->from_id : route->to_id;
+    sim.player.location_id = origin_id;
+    sim.carriage.location_id = origin_id;
+    CcSimInitializePlayerRouteKnowledge(&sim);
+    route->closed = false;
+    route->security = 100;
+    route->condition = 100;
+
+    LocalState local = {0};
+    ResetLocalState(&local);
+    if (!InitializeOpenWorld(&sim, &local, false) ||
+        !EnterOpenWorldAtRoadGate(&sim, &local, route->id)) {
+        return false;
+    }
+    local.departure = (CcClientDepartureTransition){
+        .phase = CC_CLIENT_DEPARTURE_READY,
+        .town_progress = 1.0f,
+        .road_book_progress = 1.0f,
+    };
+    PositionOpenWorldDeparture(&sim, &local);
+    Vector3 junction_position = local.world_carriage.position;
+    float junction_route_amount = local.world_carriage.route_amount;
+    float junction_heading = local.world_carriage.heading_yaw;
+
+    CcCommand travel = {
+        .kind = CC_COMMAND_TRAVEL,
+        .target_id = destination_id
+    };
+    char error[160];
+    if (!CcSimApply(&sim, &travel, error, sizeof(error))) return false;
+    BeginRoadTravelState(&sim, &local);
+    float dx = local.world_carriage.position.x - junction_position.x;
+    float dy = local.world_carriage.position.y - junction_position.y;
+    float dz = local.world_carriage.position.z - junction_position.z;
+    float pose_distance = sqrtf(dx * dx + dy * dy + dz * dz);
+    float heading_difference =
+        local.world_carriage.heading_yaw - junction_heading;
+    return local.open_world && local.world_carriage.visible &&
+           pose_distance <= 0.001f &&
+           fabsf(local.world_carriage.route_amount - junction_route_amount) <=
+               0.0001f &&
+           cosf(heading_difference) >= 0.9999f;
+}
+
 static int RunTownDepartureRegression(void)
 {
     CcSim sim;
@@ -5708,6 +5761,12 @@ static int RunTownDepartureRegression(void)
             local.world_carriage.position, settled_position) > 0.001f) {
         (void)fprintf(stderr,
                       "Completed road-book departure moved twice.\n");
+        return 1;
+    }
+    if (!FirstJourneyPoseContinuesFromJunction(false) ||
+        !FirstJourneyPoseContinuesFromJunction(true)) {
+        (void)fprintf(stderr,
+                      "Active travel did not continue from its departure junction.\n");
         return 1;
     }
     (void)puts("Town departure regression passed");
