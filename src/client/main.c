@@ -339,6 +339,19 @@ EM_ASYNC_JS(int, ClientFlushNewBrowserCampaign,
         return 0;
     }
 });
+EM_ASYNC_JS(int, ClientFlushBrowserPreferences,
+            (const char *preferences_path), {
+    try {
+        await Module.persistCrownlessPreferences(
+            UTF8ToString(preferences_path));
+        console.info("Crownless Carriage preferences stored.");
+        return 1;
+    } catch (error) {
+        console.error("Could not store Crownless Carriage preferences",
+                      error);
+        return 0;
+    }
+});
 EM_JS(int, ClientBrowserCampaignAccess, (), {
     return Number.isInteger(Module.crownlessCampaignAccess)
         ? Module.crownlessCampaignAccess : 1;
@@ -9436,14 +9449,27 @@ int main(int argc, char **argv)
     CampaignSavePath(save_path, sizeof(save_path));
     char session_path[704];
     char lock_path[704];
+    char preferences_path[704];
     if (!CampaignCompanionPath(save_path, ".session", session_path,
                                sizeof(session_path)) ||
         !CampaignCompanionPath(save_path, ".lock", lock_path,
-                               sizeof(lock_path))) {
+                               sizeof(lock_path)) ||
+        !CampaignCompanionPath(save_path, ".preferences", preferences_path,
+                               sizeof(preferences_path))) {
         (void)fprintf(stderr, "Campaign companion path is too long.\n");
         return 1;
     }
     bool normal_play = !capture && !render_benchmark;
+    CcClientPreferences preferences;
+    CcClientPreferencesDefault(&preferences);
+    if (normal_play) {
+        char preferences_error[192];
+        if (!CcClientPreferencesLoad(
+                preferences_path, &preferences,
+                preferences_error, sizeof(preferences_error))) {
+            (void)fprintf(stderr, "%s\n", preferences_error);
+        }
+    }
     CcClientInstanceLock instance_lock = {.descriptor = -1};
     if (normal_play) {
         char lock_error[192];
@@ -9489,6 +9515,7 @@ int main(int argc, char **argv)
     RenderTexture2D local_target = LoadRenderTexture(630, 320);
     SetTextureFilter(local_target.texture, TEXTURE_FILTER_POINT);
     CcLocalRendererSetScreenFirstHero(screen_first_hero);
+    CcLocalRendererSetReducedMotion(preferences.reduced_motion);
     CcLocalRendererInit();
 #if defined(PLATFORM_WEB)
     int32_t released_asset_bytes = ClientReleaseBrowserAssets();
@@ -10248,6 +10275,30 @@ int main(int argc, char **argv)
         char previous_message[sizeof(message)];
         (void)snprintf(previous_message, sizeof(previous_message), "%s",
                        message);
+        if (normal_play && ClientKeyPressed(KEY_F4)) {
+            preferences.reduced_motion = !preferences.reduced_motion;
+            CcLocalRendererSetReducedMotion(preferences.reduced_motion);
+            char preferences_error[192];
+            bool preferences_saved = CcClientPreferencesSave(
+                preferences_path, &preferences,
+                preferences_error, sizeof(preferences_error));
+#if defined(PLATFORM_WEB)
+            if (preferences_saved &&
+                ClientFlushBrowserPreferences(preferences_path) == 0) {
+                preferences_saved = false;
+                (void)snprintf(
+                    preferences_error, sizeof(preferences_error),
+                    "The browser could not store client preferences.");
+            }
+#endif
+            (void)snprintf(
+                message, sizeof(message), "%s",
+                preferences_saved ?
+                    (preferences.reduced_motion ?
+                        "Reduced motion enabled and saved." :
+                        "Reduced motion disabled and saved.") :
+                    preferences_error);
+        }
         CcLocalRendererSetAtmosphere(
             capture_atmosphere ? capture_atmosphere_preset :
                 LocalAtmosphereForSimulation(&sim),

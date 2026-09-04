@@ -551,6 +551,7 @@ float CcLocalCombatSkillDuration(CcCombatSkill skill);
 /* Renderer lifecycle: configure, init, begin frame, bind, draw, shutdown. */
 void CcLocalRendererInit(void);
 void CcLocalRendererSetScreenFirstHero(bool enabled);
+void CcLocalRendererSetReducedMotion(bool enabled);
 void CcLocalRendererSetOpeningStep(CcLocalOpeningStep step);
 void CcLocalRendererBeginFrame(float delta_time);
 void CcLocalRendererResetPerformanceMetrics(void);

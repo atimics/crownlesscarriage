@@ -1238,7 +1238,9 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
         outer = BlendColor(outer, (Color){50, 49, 52, 255}, defeat_drain);
         trousers = BlendColor(trousers, (Color){42, 42, 44, 255},
                                defeat_drain);
-    } else if (agent->combat.hit_flash_seconds > 0.0f) {
+    } else if (CcClientHitEffectVisible(
+                   reduced_motion_enabled,
+                   agent->combat.hit_flash_seconds)) {
         outer = BlendColor(outer, WORLD_INK, 0.72f);
     }
     CcNpcAppearance palette_appearance = *appearance;
@@ -1666,7 +1668,9 @@ static void DrawBiomechanicalBiped(const CcLocalAgent *agent)
     cape_center = PhysicsAdd(cape_center, posture_offset);
     Color tunic = appearance->outer;
     if (CombatIsDefeated(&agent->combat)) tunic = (Color){61, 57, 62, 255};
-    else if (agent->combat.hit_flash_seconds > 0.0f) tunic = WORLD_INK;
+    else if (CcClientHitEffectVisible(
+                 reduced_motion_enabled,
+                 agent->combat.hit_flash_seconds)) tunic = WORLD_INK;
     Color trousers = CombatIsDefeated(&agent->combat) ?
                       (Color){50, 49, 51, 255} : appearance->trousers;
     Color leather = appearance->leather;
@@ -3619,7 +3623,8 @@ static void DrawPaintedOverheadDiamond(Vector3 center, float radius,
 
 static void DrawCombatImpact(const CcLocalAgent *agent)
 {
-    if (agent->combat.hit_flash_seconds <= 0.0f) return;
+    if (!CcClientHitEffectVisible(
+            reduced_motion_enabled, agent->combat.hit_flash_seconds)) return;
     float pulse = 0.13f + agent->combat.hit_flash_seconds * 1.05f;
     Vector3 point = agent->combat.impact_valid ? agent->combat.impact_point :
         (Vector3){agent->position.x, agent->position.y + 1.02f,

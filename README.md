@@ -22,6 +22,9 @@ make test-play        # configure + build + run tests (RelWithDebInfo)
 ./out/build/play/crownless_metagame_playtest     # headless REPL (type help)
 ```
 
+During play, press F4 to switch reduced motion on or off. This saved setting
+removes combat camera shake, character flashes, and impact flashes.
+
 Presets: `development` (Debug), `play` (RelWithDebInfo), `release`
 (Release), each with strict warnings (`-Wall -Wextra -Wpedantic -Wshadow
 -Wconversion`) and warnings-as-errors. The Makefile wraps them:
