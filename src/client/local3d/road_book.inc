@@ -844,6 +844,29 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
                 -0.56f * PI, 0.78f, (Color){118, 86, 66, 255});
         }
     }
+    int32_t roadside_sheep = 0;
+    if (origin != NULL) {
+        roadside_sheep += origin->sheep_adults + origin->sheep_lambs;
+    }
+    if (destination_place != NULL) {
+        roadside_sheep += destination_place->sheep_adults +
+                          destination_place->sheep_lambs;
+    }
+    if (roadside_sheep > 0) {
+        (void)DrawCreatureGait3D(
+            CC_CREATURE_SHEEP,
+            CcCreatureSteppedPose(
+                CC_CREATURE_SHEEP, clock * 1.42f, travelling),
+            (Vector3){carriage_x + 5.10f, 0.0f, 35.10f},
+            -0.60f * PI, 0.44f, (Color){228, 220, 185, 255},
+            clock * 1.42f, travelling, NULL);
+        if (roadside_sheep >= 32) {
+            (void)DrawCreature3D(
+                CC_CREATURE_SHEEP, CC_CREATURE_POSE_IDLE,
+                (Vector3){carriage_x + 6.10f, 0.0f, 34.35f},
+                -0.48f * PI, 0.39f, (Color){206, 198, 169, 255});
+        }
+    }
 
     if (!combat_presentation) {
         if (travelling) {
@@ -1530,10 +1553,22 @@ static void DrawSettlementCreatures(const CcSim *sim,
             TerrainWorldPoint(63.0f, 38.3f), 0.72f * PI, 0.84f,
             (Color){177, 162, 132, 255}, clock * 1.25f, true,
             controlled ? &controlled_cow : NULL);
+    }
+
+    if (place->sheep_adults + place->sheep_lambs > 0 &&
+        SceneryPointVisible(61.65f, 39.15f, scenery_focus)) {
         (void)DrawCreatureGait3D(
-            CC_CREATURE_SHEEP, CC_CREATURE_POSE_IDLE,
-            TerrainWorldPoint(61.65f, 39.15f), 0.58f * PI, 0.38f,
+            CC_CREATURE_SHEEP,
+            CcCreatureSteppedPose(CC_CREATURE_SHEEP,
+                                   clock * 1.42f, true),
+            TerrainWorldPoint(61.65f, 39.15f), 0.58f * PI, 0.42f,
             (Color){228, 220, 185, 255}, clock * 1.42f, true, NULL);
+        if (place->sheep_adults + place->sheep_lambs >= 32) {
+            (void)DrawCreature3D(
+                CC_CREATURE_SHEEP, CC_CREATURE_POSE_IDLE,
+                TerrainWorldPoint(60.55f, 38.75f), 0.45f * PI, 0.37f,
+                (Color){207, 200, 174, 255});
+        }
     }
 
     bool raid_at_place = goblins->tribute_target_id == place->id &&

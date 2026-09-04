@@ -9,7 +9,7 @@
 #include <string.h>
 
 #define CC_SQLITE_APPLICATION_ID 1128481362
-#define CC_SQLITE_USER_VERSION 22
+#define CC_SQLITE_USER_VERSION 23
 #define CC_JOURNAL_RECORD_VERSION 1
 #define CC_JOURNAL_RUNTIME_FLUSH_TICKS 6
 #define CC_JOURNAL_MAX_DAY_ADVANCE 3650
@@ -217,6 +217,18 @@ static bool EnsureAnimalColumns(sqlite3 *database,
             error, error_capacity) &&
         EnsureColumn(database, "settlement", "cow_hunger",
             "ALTER TABLE settlement ADD COLUMN cow_hunger INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "settlement", "sheep_adults",
+            "ALTER TABLE settlement ADD COLUMN sheep_adults INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "settlement", "sheep_lambs",
+            "ALTER TABLE settlement ADD COLUMN sheep_lambs INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "settlement", "sheep_condition",
+            "ALTER TABLE settlement ADD COLUMN sheep_condition INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "settlement", "sheep_hunger",
+            "ALTER TABLE settlement ADD COLUMN sheep_hunger INTEGER NOT NULL DEFAULT 0;",
             error, error_capacity);
 }
 
@@ -854,7 +866,11 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " cow_adults INTEGER NOT NULL DEFAULT 0,"
         " cow_calves INTEGER NOT NULL DEFAULT 0,"
         " cow_condition INTEGER NOT NULL DEFAULT 0,"
-        " cow_hunger INTEGER NOT NULL DEFAULT 0);"
+        " cow_hunger INTEGER NOT NULL DEFAULT 0,"
+        " sheep_adults INTEGER NOT NULL DEFAULT 0,"
+        " sheep_lambs INTEGER NOT NULL DEFAULT 0,"
+        " sheep_condition INTEGER NOT NULL DEFAULT 0,"
+        " sheep_hunger INTEGER NOT NULL DEFAULT 0);"
         "CREATE TABLE IF NOT EXISTS horse_team ("
         " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL UNIQUE,"
         " name TEXT NOT NULL, age_days INTEGER NOT NULL,"
@@ -1288,7 +1304,7 @@ static bool SaveSettlements(sqlite3 *database, const CcSim *sim,
                             char *error, size_t error_capacity)
 {
     sqlite3_stmt *statement = NULL;
-    const char *sql = "INSERT INTO settlement VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);";
+    const char *sql = "INSERT INTO settlement VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);";
     if (!Prepare(database, sql, &statement, error, error_capacity)) return false;
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         const CcSettlement *s = &sim->settlements[i];
@@ -1314,6 +1330,10 @@ static bool SaveSettlements(sqlite3 *database, const CcSim *sim,
         BindInt(statement, column++, s->cow_calves);
         BindInt(statement, column++, s->cow_condition);
         BindInt(statement, column++, s->cow_hunger);
+        BindInt(statement, column++, s->sheep_adults);
+        BindInt(statement, column++, s->sheep_lambs);
+        BindInt(statement, column++, s->sheep_condition);
+        BindInt(statement, column++, s->sheep_hunger);
         if (!StepDone(database, statement, error, error_capacity) ||
             !ResetStatement(database, statement, error, error_capacity)) {
             sqlite3_finalize(statement); return false;
@@ -2961,6 +2981,12 @@ static bool ReadSettlements(sqlite3 *database, CcSim *sim,
             s->cow_calves = sqlite3_column_int(statement, column++);
             s->cow_condition = sqlite3_column_int(statement, column++);
             s->cow_hunger = sqlite3_column_int(statement, column++);
+        }
+        if (sim->schema_version >= 31U) {
+            s->sheep_adults = sqlite3_column_int(statement, column++);
+            s->sheep_lambs = sqlite3_column_int(statement, column++);
+            s->sheep_condition = sqlite3_column_int(statement, column++);
+            s->sheep_hunger = sqlite3_column_int(statement, column++);
         }
         rows += 1;
     }
@@ -4989,6 +5015,7 @@ static void FinishLegacyRuntimeUpgrade(CcSim *sim)
     CcSimUpgradeCharacterLifecycles(sim);
     CcSimUpgradeGrainEconomy(sim);
     CcSimInitializeRoadSites(sim);
+    CcSimUpgradeFlockEconomy(sim);
     sim->schema_version = CC_SIM_SCHEMA_VERSION;
     sim->generator_version = CC_GENERATOR_VERSION;
 }
@@ -5012,8 +5039,15 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
                                  char *error, size_t error_capacity)
 {
     uint32_t legacy_version = sim->schema_version;
+    if (legacy_version == 31U && sim->generator_version == 24U) {
+        CcSimUpgradeFlockEconomy(sim);
+        sim->schema_version = CC_SIM_SCHEMA_VERSION;
+        sim->generator_version = CC_GENERATOR_VERSION;
+        return true;
+    }
     if (legacy_version == 30U && sim->generator_version == 23U) {
         CcSimInitializeRoadSites(sim);
+        CcSimUpgradeFlockEconomy(sim);
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         sim->generator_version = CC_GENERATOR_VERSION;
         return true;
@@ -5021,6 +5055,7 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
     if (legacy_version == 29U) {
         CcSimInitializeStoneEconomy(sim);
         CcSimInitializeRoadSites(sim);
+        CcSimUpgradeFlockEconomy(sim);
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         sim->generator_version = CC_GENERATOR_VERSION;
         return true;
@@ -5029,6 +5064,7 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
         CcSimUpgradeGrainEconomy(sim);
         CcSimInitializeStoneEconomy(sim);
         CcSimInitializeRoadSites(sim);
+        CcSimUpgradeFlockEconomy(sim);
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         sim->generator_version = CC_GENERATOR_VERSION;
         return true;
@@ -5046,17 +5082,29 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
         legacy_version != 23U && legacy_version != 24U &&
         legacy_version != 25U && legacy_version != 26U &&
         legacy_version != 27U && legacy_version != 28U &&
-        legacy_version != 29U && legacy_version != 30U) return true;
+        legacy_version != 29U && legacy_version != 30U &&
+        legacy_version != 31U) return true;
     if (legacy_version == 27U) {
         CcSimInitializeWoodEconomy(sim);
-        CcSimUpgradeGrainEconomy(sim);
+        if (sim->generator_version != 23U) {
+            CcSimUpgradeGrainEconomy(sim);
+        }
         CcSimInitializeStoneEconomy(sim);
         CcSimInitializeRoadSites(sim);
+        CcSimUpgradeFlockEconomy(sim);
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         sim->generator_version = CC_GENERATOR_VERSION;
         return true;
     }
     InitializeExtendedGoods(sim);
+    if (legacy_version == 26U) {
+        CcSimUpgradeGrainEconomy(sim);
+        CcSimInitializeRoadSites(sim);
+        CcSimUpgradeFlockEconomy(sim);
+        sim->schema_version = CC_SIM_SCHEMA_VERSION;
+        sim->generator_version = CC_GENERATOR_VERSION;
+        return true;
+    }
     if (legacy_version == 17U) {
         for (int32_t i = 0; i < CC_MAX_EVENTS; ++i) {
             if ((int32_t)sim->events[i].kind ==
@@ -5092,17 +5140,11 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
             }
         }
     }
-    if (legacy_version == 26U) {
-        CcSimUpgradeGrainEconomy(sim);
-        CcSimInitializeRoadSites(sim);
-        sim->schema_version = CC_SIM_SCHEMA_VERSION;
-        sim->generator_version = CC_GENERATOR_VERSION;
-        return true;
-    }
     if (legacy_version == 25U) {
         CcSimUpgradeCharacterLifecycles(sim);
         CcSimUpgradeGrainEconomy(sim);
         CcSimInitializeRoadSites(sim);
+        CcSimUpgradeFlockEconomy(sim);
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         sim->generator_version = CC_GENERATOR_VERSION;
         return true;

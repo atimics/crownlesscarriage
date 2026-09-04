@@ -763,7 +763,7 @@ if(BUILD_TESTING)
     add_executable(animal_economy_tests tests/animal_economy_tests.c)
     target_link_libraries(animal_economy_tests PRIVATE crownless_persistence)
     cc_strict_warnings(animal_economy_tests)
-    add_test(NAME horse_and_cow_economy COMMAND animal_economy_tests)
+    add_test(NAME horse_cattle_and_flock_economy COMMAND animal_economy_tests)
 
     add_executable(horse_stable_tests tests/horse_stable_tests.c)
     target_link_libraries(horse_stable_tests PRIVATE crownless_persistence)

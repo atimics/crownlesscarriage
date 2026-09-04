@@ -50,8 +50,8 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 31
-#define CC_GENERATOR_VERSION 24
+#define CC_SIM_SCHEMA_VERSION 32
+#define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
 #define CC_WORLD_DAY_SUBTICKS (24 * 60 * CC_WORLD_MINUTE_SUBTICKS)
@@ -308,7 +308,10 @@ typedef enum CcEventKind {
     CC_EVENT_WOODLOT_HARVEST = 116,
     CC_EVENT_BAKERY_PRODUCTION = 117,
     CC_EVENT_QUARRY_OUTPUT = 118,
-    CC_EVENT_MASONRY_REPAIR = 119
+    CC_EVENT_MASONRY_REPAIR = 119,
+    CC_EVENT_SHEEP_BRED = 120,
+    CC_EVENT_SHEEP_SHEARED = 121,
+    CC_EVENT_SHEEP_SLAUGHTERED = 122
 } CcEventKind;
 
 typedef struct CcArchives {
@@ -441,6 +444,10 @@ typedef struct CcSettlement {
     int32_t cow_calves;
     int32_t cow_condition;
     int32_t cow_hunger;
+    int32_t sheep_adults;
+    int32_t sheep_lambs;
+    int32_t sheep_condition;
+    int32_t sheep_hunger;
 } CcSettlement;
 
 typedef struct CcFoodEconomy {
@@ -1413,6 +1420,7 @@ void CcSimInitializeAnimalEconomy(CcSim *sim);
 void CcSimInitializeWoodEconomy(CcSim *sim);
 void CcSimInitializeStoneEconomy(CcSim *sim);
 void CcSimInitializeRoadSites(CcSim *sim);
+void CcSimUpgradeFlockEconomy(CcSim *sim);
 void CcSimInitializeHorseStableSystem(CcSim *sim);
 void CcSimInitializeCharacters(CcSim *sim);
 void CcSimUpgradeCharacterLifecycles(CcSim *sim);

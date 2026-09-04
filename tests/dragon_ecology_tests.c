@@ -15,11 +15,13 @@ static int32_t CountEvents(const CcSim *sim, CcEventKind kind)
     return count;
 }
 
-static int32_t TotalFood(const CcSim *sim)
+static int32_t TotalHuntFood(const CcSim *sim)
 {
     int32_t total = 0;
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         total += sim->settlements[i].stock[CC_GOOD_FOOD];
+        total += sim->settlements[i].cow_adults * 3;
+        total += sim->settlements[i].sheep_adults;
     }
     return total;
 }
@@ -42,12 +44,12 @@ int main(void)
     CcSimAdvanceDays(&sim, 1);
     CC_CHECK(sim.dragon.crown_strength > crown_before);
 
-    int32_t food_before = TotalFood(&sim);
+    int32_t food_before = TotalHuntFood(&sim);
     sim.dragon.body_condition = 20;
     sim.dragon.hunt_cooldown_days = 0;
     CcSimAdvanceDays(&sim, 1);
     CC_CHECK(sim.dragon.hunts == 1);
-    CC_CHECK(TotalFood(&sim) < food_before);
+    CC_CHECK(TotalHuntFood(&sim) < food_before);
     CC_CHECK(sim.dragon.retaliations == 0);
     CC_CHECK(CountEvents(&sim, CC_EVENT_DRAGON_HUNT) == 1);
     CC_CHECK(CountEvents(&sim, CC_EVENT_DRAGON_RETALIATION) == 0);

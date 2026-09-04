@@ -23,6 +23,10 @@ static void QuietWorld(CcSim *sim, uint32_t seed)
         sim->settlements[i].cow_calves = 0;
         sim->settlements[i].cow_condition = 0;
         sim->settlements[i].cow_hunger = 0;
+        sim->settlements[i].sheep_adults = 0;
+        sim->settlements[i].sheep_lambs = 0;
+        sim->settlements[i].sheep_condition = 0;
+        sim->settlements[i].sheep_hunger = 0;
     }
     for (int32_t kingdom = 0;
          kingdom < sim->kingdom_count; ++kingdom) {

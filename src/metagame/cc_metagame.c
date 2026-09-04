@@ -912,6 +912,15 @@ static void DescribeAnimals(const CcMetagame *metagame,
                place->name, place->cow_adults, place->cow_calves,
                place->cow_condition, place->cow_hunger);
     }
+    Append(output, capacity, "Sheep flocks:\n");
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        const CcSettlement *place = &sim->settlements[i];
+        if (place->sheep_adults + place->sheep_lambs <= 0) continue;
+        Append(output, capacity,
+               "  %s: %d sheep, %d lambs, condition %d, hunger %d\n",
+               place->name, place->sheep_adults, place->sheep_lambs,
+               place->sheep_condition, place->sheep_hunger);
+    }
 }
 
 static void DescribeTreasures(const CcMetagame *metagame,
@@ -1200,17 +1209,15 @@ static void DescribeEconomy(const CcMetagame *metagame,
 {
     const CcSim *sim = &metagame->sim;
     Append(output, capacity,
-           "Material economy (goods only appear at a source or through a recipe):\n");
+           "Goods economy (goods appear at a source or through a recipe):\n");
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         const CcSettlement *place = &sim->settlements[i];
-        Append(output, capacity,
-               "  %s: Bread %d, Wheat %d, Meat %d, Iron %d, Tools %d, Weapons %d, Gold %d, Gems %d, Wood %d, Wool %d, Stone %d",
-               place->name, place->stock[CC_GOOD_BREAD],
-               place->stock[CC_GOOD_WHEAT], place->stock[CC_GOOD_MEAT],
-               place->stock[CC_GOOD_IRON], place->stock[CC_GOOD_TOOLS],
-               place->stock[CC_GOOD_WEAPONS], place->stock[CC_GOOD_GOLD],
-               place->stock[CC_GOOD_GEMS], place->stock[CC_GOOD_WOOD],
-               place->stock[CC_GOOD_WOOL], place->stock[CC_GOOD_STONE]);
+        Append(output, capacity, "  %s: ", place->name);
+        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+            Append(output, capacity, "%s%s %d",
+                   good > 0 ? ", " : "", CcGoodName((CcGood)good),
+                   place->stock[good]);
+        }
         if (place->production[CC_GOOD_WOOD] > 0) {
             Append(output, capacity, "; woodlot %d per week",
                    place->production[CC_GOOD_WOOD]);
@@ -1221,9 +1228,10 @@ static void DescribeEconomy(const CcMetagame *metagame,
         }
         if (CcSettlementHasService(place, CC_SERVICE_FARM)) {
             Append(output, capacity,
-                   "; fields %d%%, cattle %d + %d calves",
+                   "; fields %d%%, cattle %d + %d calves, sheep %d + %d lambs",
                    place->field_yield, place->cow_adults,
-                   place->cow_calves);
+                   place->cow_calves, place->sheep_adults,
+                   place->sheep_lambs);
         }
         if (CcSettlementHasService(place, CC_SERVICE_MINE)) {
             Append(output, capacity,
