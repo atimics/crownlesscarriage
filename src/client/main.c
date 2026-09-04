@@ -655,7 +655,7 @@ static void SituationNextAction(const CcSim *sim,
             (sim->player.location_id == route->from_id ||
              sim->player.location_id == route->to_id);
         (void)snprintf(label, capacity, at_route ?
-                       "Repair this road: 2 Tools and 2 Wood, or 18 crowns." :
+                       "Repair: 2 Tools, 2 Wood, and 2 Stone, or 18 crowns." :
                        "Travel to either end of this road.");
         return;
     }

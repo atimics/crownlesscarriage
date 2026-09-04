@@ -1711,13 +1711,19 @@ static void CheckSchema25Compatibility(char *error, size_t error_capacity)
          settlement < restored.settlement_count; ++settlement) {
         for (int32_t good = CC_LEGACY_GOOD_COUNT;
              good < CC_GOOD_COUNT; ++good) {
-            if (good == CC_GOOD_WOOD || good == CC_GOOD_WHEAT) {
+            if (good == CC_GOOD_WOOD || good == CC_GOOD_WHEAT ||
+                good == CC_GOOD_STONE) {
                 CC_CHECK(restored.settlements[settlement].stock[good] > 0);
                 CC_CHECK(restored.settlements[settlement]
                              .reserve_target[good] > 0);
                 if (good == CC_GOOD_WOOD) {
                     CC_CHECK(restored.settlements[settlement]
                                  .production[good] > 0);
+                } else if (good == CC_GOOD_STONE) {
+                    CC_CHECK(restored.settlements[settlement]
+                                 .production[good] ==
+                             (restored.settlements[settlement].function ==
+                                  CC_SETTLEMENT_MINING ? 12 : 0));
                 }
             } else {
                 CC_CHECK(restored.settlements[settlement].stock[good] == 0);
@@ -1783,7 +1789,8 @@ static void CheckSchema26Compatibility(char *error, size_t error_capacity)
          settlement < restored.settlement_count; ++settlement) {
         for (int32_t good = CC_LEGACY_GOOD_COUNT;
              good < CC_GOOD_COUNT; ++good) {
-            if (good == CC_GOOD_WOOD || good == CC_GOOD_WHEAT) {
+            if (good == CC_GOOD_WOOD || good == CC_GOOD_WHEAT ||
+                good == CC_GOOD_STONE) {
                 CC_CHECK(restored.settlements[settlement].stock[good] > 0);
             } else {
                 CC_CHECK(restored.settlements[settlement].stock[good] == 0);
@@ -1899,6 +1906,62 @@ static void CheckSchema27WoodCompatibility(char *error,
         CC_CHECK(place->stock[CC_GOOD_WHEAT] == wheat_stock[settlement]);
         CC_CHECK(place->price[CC_GOOD_WHEAT] ==
                  CcGoodDefinitionFor(CC_GOOD_WHEAT)->base_price);
+    }
+    CC_CHECK(CcSimValidate(&restored, error, error_capacity));
+    RemoveDatabase(path);
+}
+
+static void CheckSchema29StoneMigration(char *error,
+                                        size_t error_capacity)
+{
+    const char *path = "persistence-schema29-stone-test.ccsave";
+    RemoveDatabase(path);
+    CcSim legacy;
+    CcSimInit(&legacy, UINT32_C(0x1e9ac29));
+    legacy.schema_version = 29U;
+    legacy.generator_version = 23U;
+    int32_t wood_stock[CC_MAX_SETTLEMENTS];
+    int32_t wood_reserve[CC_MAX_SETTLEMENTS];
+    int32_t wheat_stock[CC_MAX_SETTLEMENTS];
+    int32_t wheat_price[CC_MAX_SETTLEMENTS];
+    int32_t map_x[CC_MAX_SETTLEMENTS];
+    int32_t map_y[CC_MAX_SETTLEMENTS];
+    for (int32_t settlement = 0;
+         settlement < legacy.settlement_count; ++settlement) {
+        CcSettlement *place = &legacy.settlements[settlement];
+        wood_stock[settlement] = place->stock[CC_GOOD_WOOD];
+        wood_reserve[settlement] = place->reserve_target[CC_GOOD_WOOD];
+        wheat_stock[settlement] = place->stock[CC_GOOD_WHEAT];
+        wheat_price[settlement] = place->price[CC_GOOD_WHEAT];
+        map_x[settlement] = place->map_x;
+        map_y[settlement] = place->map_y;
+        place->stock[CC_GOOD_STONE] = 0;
+        place->reserve_target[CC_GOOD_STONE] = 0;
+        place->production[CC_GOOD_STONE] = 0;
+        place->consumption[CC_GOOD_STONE] = 0;
+        place->price[CC_GOOD_STONE] =
+            CcGoodDefinitionFor(CC_GOOD_STONE)->base_price;
+    }
+    CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
+
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.generator_version == CC_GENERATOR_VERSION);
+    for (int32_t settlement = 0;
+         settlement < restored.settlement_count; ++settlement) {
+        const CcSettlement *place = &restored.settlements[settlement];
+        CC_CHECK(place->stock[CC_GOOD_STONE] > 0);
+        CC_CHECK(place->reserve_target[CC_GOOD_STONE] > 0);
+        CC_CHECK(place->production[CC_GOOD_STONE] ==
+                 (place->function == CC_SETTLEMENT_MINING ? 12 : 0));
+        CC_CHECK(place->stock[CC_GOOD_WOOD] == wood_stock[settlement]);
+        CC_CHECK(place->reserve_target[CC_GOOD_WOOD] ==
+                 wood_reserve[settlement]);
+        CC_CHECK(place->stock[CC_GOOD_WHEAT] == wheat_stock[settlement]);
+        CC_CHECK(place->price[CC_GOOD_WHEAT] == wheat_price[settlement]);
+        CC_CHECK(place->map_x == map_x[settlement]);
+        CC_CHECK(place->map_y == map_y[settlement]);
     }
     CC_CHECK(CcSimValidate(&restored, error, error_capacity));
     RemoveDatabase(path);
@@ -2040,6 +2103,7 @@ int main(void)
     CheckSchema26Compatibility(error, sizeof(error));
     CheckSchema27WoodCompatibility(error, sizeof(error));
     CheckSchema28GrainMigration(error, sizeof(error));
+    CheckSchema29StoneMigration(error, sizeof(error));
     CheckJourneyStopPersistence(error, sizeof(error));
     CheckLegacyLifecycleJournalCompatibility(24U, error, sizeof(error));
     CheckLegacyLifecycleJournalCompatibility(25U, error, sizeof(error));

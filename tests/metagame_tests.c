@@ -516,9 +516,23 @@ int main(void)
     CC_CHECK(strstr(output, "Material economy") != NULL);
     CC_CHECK(strstr(output, "Weapons") != NULL);
     CC_CHECK(strstr(output, "Wood") != NULL);
+    CC_CHECK(strstr(output, "Stone") != NULL);
     CC_CHECK(strstr(output, "woodlot") != NULL);
+    CC_CHECK(strstr(output, "quarry") != NULL);
     CC_CHECK(strstr(output, "2 Iron and 1 Wood") != NULL);
     CC_CHECK(strstr(output, "mountain Iron") != NULL);
+
+    CcMetagame stone_trade;
+    CcMetagameInit(&stone_trade, UINT32_C(0x5700e));
+    stone_trade.sim.player.location_id = stone_trade.sim.settlements[3].id;
+    stone_trade.sim.carriage.location_id = stone_trade.sim.player.location_id;
+    stone_trade.sim.player.coins = 100;
+    int32_t stone_stock = stone_trade.sim.settlements[3].stock[CC_GOOD_STONE];
+    CC_CHECK(CcMetagameExecute(&stone_trade, "buy stone 4", output,
+                               sizeof(output)));
+    CC_CHECK(stone_trade.sim.player.cargo[CC_GOOD_STONE] == 4);
+    CC_CHECK(stone_trade.sim.settlements[3].stock[CC_GOOD_STONE] ==
+             stone_stock - 4);
 
     CcSettlement *treasure_market = &dragon.sim.settlements[4];
     dragon.sim.goblins.tribute_cooldown_days = 1000;

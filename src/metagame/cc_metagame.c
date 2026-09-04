@@ -590,7 +590,7 @@ static void DescribeCharters(const CcMetagame *metagame,
                    situation->affected_name);
         } else if (situation->kind == CC_SITUATION_ROUTE_REPAIR) {
             Append(output, capacity,
-                   "     Reopen the road with 2 tools and 2 wood, or 18 crowns. Materials are faster and last longer.\n");
+                   "     Reopen the road with 2 tools, 2 wood, and 2 stone, or 18 crowns. Materials are faster and last longer.\n");
         } else if (situation->kind == CC_SITUATION_MONSTER_EXPEDITION) {
             if (CcSimSituationCanAccept(sim, situation)) {
                 Append(output, capacity,
@@ -714,7 +714,7 @@ static bool TalkToSituation(CcMetagame *metagame, int32_t index,
                sponsor_here) {
         Append(output, capacity,
                "%s sets an iron bridge key on the table. \"%s\"\n"
-               "Two crates each of tools and wood would let her crew call the closed gate a repair. Eighteen crowns would buy the guards' silence.\n"
+               "Two crates each of tools, wood, and stone would let her crew call the closed gate a repair. Eighteen crowns would buy the guards' silence.\n"
                "She watches the hungry boy on the wall finish his soup. \"If I open the gate, I am responsible for every food box that crosses.\"\n",
                situation->sponsor_name, spoken_text);
     } else if (situation->kind == CC_SITUATION_RELIEF_DELIVERY) {
@@ -1215,6 +1215,10 @@ static void DescribeEconomy(const CcMetagame *metagame,
             Append(output, capacity, "; woodlot %d per week",
                    place->production[CC_GOOD_WOOD]);
         }
+        if (place->production[CC_GOOD_STONE] > 0) {
+            Append(output, capacity, "; quarry %d per week",
+                   place->production[CC_GOOD_STONE]);
+        }
         if (CcSettlementHasService(place, CC_SERVICE_FARM)) {
             Append(output, capacity,
                    "; fields %d%%, cattle %d + %d calves",
@@ -1233,6 +1237,8 @@ static void DescribeEconomy(const CcMetagame *metagame,
     }
     Append(output, capacity,
            "A smith spends 2 Iron and 1 Wood per Tools bundle. Weapons use 3 Iron and 2 Wood. A market or capital smith may spend 1 Raw Gold, 1 Gem, and 3 weeks of work on one named one-slot treasure.\n");
+    Append(output, capacity,
+           "Mining-town quarries supply Stone for public masonry, new services, roads, and bridges.\n");
     Append(output, capacity,
            "The copied monastery ledger holds %" PRId64 " crowns. It lends real deposited coin for famine grain and productive Tools; realms repay from treasury and market tithes.\n",
            sim->iron_ledger_reserve);
