@@ -34,7 +34,13 @@ if(prepare_startup)
         "${asset_output}/exports/world_kit"
         "${asset_output}/shaders"
         "${asset_output}/ui"
+        "${asset_output}/audio/voice"
     )
+
+    file(GLOB voice_assets "${asset_source}/audio/voice/*.wav")
+    if(voice_assets)
+        file(COPY ${voice_assets} DESTINATION "${asset_output}/audio/voice")
+    endif()
 
     file(GLOB npc_runtime_assets
         "${asset_source}/exports/npc/npc_module_*.glb"

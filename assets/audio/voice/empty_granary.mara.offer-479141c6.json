@@ -1,0 +1,10 @@
+{
+  "id": "empty_granary.mara.offer",
+  "text": "Silverwick is running out of food.",
+  "speaker": "Mara Venn",
+  "model": "ChatterboxTTS",
+  "seed": 3942313164,
+  "sample_rate": 24000,
+  "reference_sha256": null,
+  "wav_sha256": "e9ca3142932dffc5b999afe7802bbdbded27166e91d0ace0b51288e471f3cd29"
+}
