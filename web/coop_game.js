@@ -118,7 +118,10 @@
       pauseControl = document.createElement('button'); pauseControl.hidden = true;
       pauseControl.onclick = async () => {
         pauseControl.disabled = true;
-        try { accept(await request('host', {action:state.paused ? 'resume' : 'pause'})); }
+        try {
+          await request('host', {action:state.paused ? 'resume' : 'pause'});
+          accept(await request('state?campaign=1'), true);
+        }
         catch (error) { say(error.message); }
         finally { pauseControl.disabled = false; }
       };
