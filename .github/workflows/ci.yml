@@ -104,7 +104,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-14]
     steps:
       - uses: actions/checkout@v4
       - name: Install Linux client development files
@@ -123,6 +123,11 @@ jobs:
         run: cmake --build build --parallel
       - name: Test
         run: ctest --test-dir build --output-on-failure
+      - name: Launch macOS app smoke
+        if: runner.os == 'macOS'
+        run: >-
+          ./build/crownless_carriage.app/Contents/MacOS/crownless_carriage
+          --test-town-arrival-parking
       - name: Check road-book captures and render budgets
         if: runner.os == 'Linux'
         env:

@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 3.24)
 
+if(APPLE AND NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "14.0" CACHE STRING
+        "Oldest supported macOS version")
+endif()
+
 project(crownless_carriage VERSION 0.1.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 17)
@@ -713,6 +718,16 @@ if(BUILD_TESTING)
             -DCC_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/license_page_tests.cmake
     )
+
+    if(APPLE AND CC_BUILD_CLIENT)
+        add_test(
+            NAME macos_deployment_target
+            COMMAND ${CMAKE_COMMAND}
+                -DCC_BINARY=$<TARGET_FILE:crownless_carriage>
+                -DCC_EXPECTED_MINOS=14.0
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/macos_deployment_target_tests.cmake
+        )
+    endif()
 
     if(CC_BUILD_BENCHMARKS)
         set(CC_BENCHMARK_TEST_ARGUMENTS --quick)

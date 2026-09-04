@@ -12,7 +12,7 @@ top of that simulation.
 ## Quick start
 
 Prerequisites: a C17 toolchain, CMake >= 3.24, SQLite3 development files,
-and (for the desktop client) a macOS setup. raylib is fetched and built
+and macOS 14 or newer for the desktop client. raylib is fetched and built
 automatically at a pinned commit. Blender is only needed for asset work
 (see `docs/ASSET_PIPELINE.md`).
 
@@ -114,7 +114,7 @@ git push origin v0.1.0
 The tag must use `vMAJOR.MINOR.PATCH`, match the CMake project version, and
 point to a commit on `main`. The release workflow then:
 
-1. builds and tests the macOS app;
+1. builds, checks, and launches the macOS 14 app;
 2. builds the browser version;
 3. packages both builds and writes SHA-256 checksums; and
 4. publishes a GitHub Release with generated release notes.
