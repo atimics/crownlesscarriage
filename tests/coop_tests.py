@@ -79,7 +79,7 @@ class CoopTests(unittest.TestCase):
                        'help_pony', 'swap_pony', 'leave_pony'):
             with self.subTest(action=action):
                 before = self.worlds.view(self.id, self.a)['state']
-                body = self.command(self.a, action, target=1)
+                body = self.command(self.a, action, target='1')
                 result = self.worlds.command(self.id, self.a, body)
                 self.assertFalse(result['accepted'])
                 self.assertEqual(result['world']['state'], before)
