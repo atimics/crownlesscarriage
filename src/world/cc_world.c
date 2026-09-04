@@ -278,6 +278,18 @@ const CcWorldRoutePlacement *CcWorldRoutePlacementForId(
     return NULL;
 }
 
+const CcWorldRoadSitePlacement *CcWorldRoadSitePlacementForId(
+    const CcWorldManifest *manifest, CcId road_site_id)
+{
+    if (manifest == NULL || road_site_id == 0U) return NULL;
+    for (int32_t i = 0; i < manifest->road_site_count; ++i) {
+        if (manifest->road_sites[i].road_site_id == road_site_id) {
+            return &manifest->road_sites[i];
+        }
+    }
+    return NULL;
+}
+
 const CcWorldSitePlacement *CcWorldSitePlacementForKind(
     const CcWorldManifest *manifest, CcWorldSiteKind kind)
 {
@@ -486,7 +498,9 @@ bool CcWorldManifestBuild(CcWorldManifest *manifest, const CcSim *sim)
 {
     if (manifest == NULL || sim == NULL || sim->settlement_count <= 0 ||
         sim->settlement_count > CC_MAX_SETTLEMENTS ||
-        sim->route_count < 0 || sim->route_count > CC_MAX_ROUTES) {
+        sim->route_count < 0 || sim->route_count > CC_MAX_ROUTES ||
+        sim->road_site_count < 0 ||
+        sim->road_site_count > CC_MAX_ROAD_SITES) {
         return false;
     }
     *manifest = (CcWorldManifest){0};
@@ -495,17 +509,11 @@ bool CcWorldManifestBuild(CcWorldManifest *manifest, const CcSim *sim)
 
     int32_t minimum_map_x = sim->settlements[0].map_x;
     int32_t minimum_map_z = sim->settlements[0].map_y;
-    int32_t maximum_map_x = minimum_map_x;
-    int32_t maximum_map_z = minimum_map_z;
     for (int32_t i = 1; i < sim->settlement_count; ++i) {
         minimum_map_x = sim->settlements[i].map_x < minimum_map_x ?
             sim->settlements[i].map_x : minimum_map_x;
         minimum_map_z = sim->settlements[i].map_y < minimum_map_z ?
             sim->settlements[i].map_y : minimum_map_z;
-        maximum_map_x = sim->settlements[i].map_x > maximum_map_x ?
-            sim->settlements[i].map_x : maximum_map_x;
-        maximum_map_z = sim->settlements[i].map_y > maximum_map_z ?
-            sim->settlements[i].map_y : maximum_map_z;
     }
 
     manifest->settlement_count = sim->settlement_count;
@@ -568,6 +576,51 @@ bool CcWorldManifestBuild(CcWorldManifest *manifest, const CcSim *sim)
         BuildRouteSamples(placement, from, to);
     }
 
+    manifest->road_site_count = sim->road_site_count;
+    for (int32_t i = 0; i < sim->road_site_count; ++i) {
+        const CcRoadSite *site = &sim->road_sites[i];
+        const CcWorldRoutePlacement *route =
+            CcWorldRoutePlacementForId(manifest, site->route_id);
+        if (route == NULL) return false;
+        CcWorldRoadSitePlacement *placement = &manifest->road_sites[i];
+        placement->road_site_id = site->id;
+        placement->route_id = site->route_id;
+        placement->kind = site->kind;
+        placement->blocker = site->blocker;
+        placement->seed = MixBits(
+            sim->world_seed ^ (uint32_t)site->id ^
+            (uint32_t)(site->id >> 32U));
+        float amount = (float)site->progress_milli / 1000.0f;
+        float route_heading = 0.0f;
+        if (!CcWorldRoutePose(route, route->from_id, amount,
+                              &placement->junction, &route_heading)) {
+            return false;
+        }
+        float forward_x = sinf(route_heading);
+        float forward_z = cosf(route_heading);
+        float right_x = cosf(route_heading) * (float)site->side;
+        float right_z = -sinf(route_heading) * (float)site->side;
+        float length = (float)site->spur_length;
+        placement->bend = (CcWorldPoint){
+            placement->junction.x + forward_x * 2.5f +
+                right_x * length * 0.46f,
+            placement->junction.z + forward_z * 2.5f +
+                right_z * length * 0.46f,
+        };
+        placement->destination = (CcWorldPoint){
+            placement->junction.x + forward_x * 5.0f + right_x * length,
+            placement->junction.z + forward_z * 5.0f + right_z * length,
+        };
+        const float blocker_amount = 0.58f;
+        float tangent_x = placement->destination.x - placement->bend.x;
+        float tangent_z = placement->destination.z - placement->bend.z;
+        placement->blocker_position = (CcWorldPoint){
+            placement->bend.x + tangent_x * blocker_amount,
+            placement->bend.z + tangent_z * blocker_amount,
+        };
+        placement->blocker_heading_yaw = atan2f(tangent_x, tangent_z);
+    }
+
     const CcWorldSettlementPlacement *underroad =
         sim->dungeon_count > 0 ? CcWorldSettlementPlacementForId(
             manifest, sim->dungeons[0].settlement_id) : NULL;
@@ -597,12 +650,26 @@ bool CcWorldManifestBuild(CcWorldManifest *manifest, const CcSim *sim)
         };
     }
 
-    float maximum_world_x = CC_WORLD_MARGIN +
-        (float)(maximum_map_x - minimum_map_x) * CC_WORLD_MAP_SCALE;
-    float maximum_world_z = CC_WORLD_MARGIN +
-        (float)(maximum_map_z - minimum_map_z) * CC_WORLD_MAP_SCALE;
-    manifest->minimum_x = AlignDown(0.0f);
-    manifest->minimum_z = AlignDown(0.0f);
+    float minimum_world_x = manifest->settlements[0].center.x;
+    float minimum_world_z = manifest->settlements[0].center.z;
+    float maximum_world_x = minimum_world_x;
+    float maximum_world_z = minimum_world_z;
+    for (int32_t i = 0; i < manifest->settlement_count; ++i) {
+        const CcWorldPoint point = manifest->settlements[i].center;
+        minimum_world_x = fminf(minimum_world_x, point.x);
+        minimum_world_z = fminf(minimum_world_z, point.z);
+        maximum_world_x = fmaxf(maximum_world_x, point.x);
+        maximum_world_z = fmaxf(maximum_world_z, point.z);
+    }
+    for (int32_t i = 0; i < manifest->road_site_count; ++i) {
+        const CcWorldPoint point = manifest->road_sites[i].destination;
+        minimum_world_x = fminf(minimum_world_x, point.x);
+        minimum_world_z = fminf(minimum_world_z, point.z);
+        maximum_world_x = fmaxf(maximum_world_x, point.x);
+        maximum_world_z = fmaxf(maximum_world_z, point.z);
+    }
+    manifest->minimum_x = AlignDown(minimum_world_x - CC_WORLD_MARGIN);
+    manifest->minimum_z = AlignDown(minimum_world_z - CC_WORLD_MARGIN);
     manifest->maximum_x = AlignUp(maximum_world_x + CC_WORLD_MARGIN);
     manifest->maximum_z = AlignUp(maximum_world_z + CC_WORLD_MARGIN);
     return true;

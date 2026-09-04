@@ -65,6 +65,19 @@ typedef struct CcWorldSitePlacement {
     uint32_t seed;
 } CcWorldSitePlacement;
 
+typedef struct CcWorldRoadSitePlacement {
+    CcId road_site_id;
+    CcId route_id;
+    CcRoadSiteKind kind;
+    CcRoadSiteBlocker blocker;
+    CcWorldPoint junction;
+    CcWorldPoint bend;
+    CcWorldPoint blocker_position;
+    CcWorldPoint destination;
+    float blocker_heading_yaw;
+    uint32_t seed;
+} CcWorldRoadSitePlacement;
+
 typedef struct CcWorldManifest {
     uint32_t world_seed;
     uint32_t generator_version;
@@ -76,6 +89,8 @@ typedef struct CcWorldManifest {
     int32_t settlement_count;
     CcWorldRoutePlacement routes[CC_MAX_ROUTES];
     int32_t route_count;
+    CcWorldRoadSitePlacement road_sites[CC_MAX_ROAD_SITES];
+    int32_t road_site_count;
     CcWorldSitePlacement sites[CC_WORLD_SITE_COUNT];
     int32_t site_count;
 } CcWorldManifest;
@@ -118,6 +133,8 @@ const CcWorldSettlementPlacement *CcWorldSettlementPlacementForId(
     const CcWorldManifest *manifest, CcId settlement_id);
 const CcWorldRoutePlacement *CcWorldRoutePlacementForId(
     const CcWorldManifest *manifest, CcId route_id);
+const CcWorldRoadSitePlacement *CcWorldRoadSitePlacementForId(
+    const CcWorldManifest *manifest, CcId road_site_id);
 const CcWorldSitePlacement *CcWorldSitePlacementForKind(
     const CcWorldManifest *manifest, CcWorldSiteKind kind);
 const CcWorldSettlementPlacement *CcWorldNearestSettlement(

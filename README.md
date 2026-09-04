@@ -3,10 +3,11 @@
 A seed-driven carriage-courier fantasy world simulation with a raylib
 fixed-pixel, three-quarter 3D client. Authored storybook towns are joined by
 a finite carriage road book whose generated corridors and fog reflect what
-the player has learned. The core is a deterministic headless simulation in
-C17 with SQLite-persisted saves; the desktop and browser
-clients, locomotion, and asset pipeline are all built on top of that
-simulation.
+the player has learned. Named farms, quarries, mills, woodlots, workshops,
+and road houses sit on short side roads between those towns. The core is a
+deterministic headless simulation in C17 with SQLite-persisted saves; the
+desktop and browser clients, locomotion, and asset pipeline are all built on
+top of that simulation.
 
 ## Quick start
 
