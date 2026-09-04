@@ -333,6 +333,23 @@ def add_loft(name: str,
     return obj
 
 
+def add_panel(name: str, points: tuple[tuple[float, float, float], ...],
+              material: str, collection: bpy.types.Collection,
+              spec: Archetype, part: str, *, thickness: float = 0.040,
+              edge: float = 0.010) -> bpy.types.Object:
+    mesh = bpy.data.meshes.new(name)
+    mesh.from_pydata(points, [], [tuple(range(len(points)))])
+    mesh.update()
+    obj = bpy.data.objects.new(name, mesh)
+    collection.objects.link(obj)
+    assign(obj, material)
+    tag(obj, spec, part)
+    solidify = obj.modifiers.new("CC_ArmorThickness", "SOLIDIFY")
+    solidify.thickness = thickness
+    add_bevel(obj, edge)
+    return obj
+
+
 def add_cloak(name: str, width_left: float, width_right: float,
               top_z: float, bottom_z: float, material: str,
               collection: bpy.types.Collection, spec: Archetype,
@@ -612,11 +629,6 @@ def build_body(spec: Archetype, collection: bpy.types.Collection) -> None:
                 bevel=0.018)
 
     if "armor" in spec.equipment or "half_armor" in spec.equipment:
-
-
-
-
-
         full_armor = "armor" in spec.equipment
         plate_x = 0.0 if full_armor else -0.08
         width_scale = 1.0 if full_armor else 0.73
@@ -630,16 +642,132 @@ def build_body(spec: Archetype, collection: bpy.types.Collection) -> None:
             (plate_x, -0.012, 1.56,
              0.252 * shoulder * width_scale, 0.170 * mass),
         ), "metal", collection, spec, "armor", sides=10)
-        add_box(f"GEO_{spec.role}_chest_ridge",
-                (plate_x, -0.192 * mass, 1.365),
-                (0.055, 0.040, 0.285), "metal", collection, spec, "armor",
-                bevel=0.009)
+        if full_armor:
+            plate_front = -0.220 * mass
+            half = 0.270 * shoulder
+            inner = 0.065 * shoulder
+            for name, plate_points in (
+                ("upper_l", (
+                    (-half, plate_front, 1.575),
+                    (-inner, plate_front, 1.615),
+                    (0.0, plate_front, 1.455),
+                    (0.0, plate_front, 1.365),
+                    (-half * 0.91, plate_front, 1.395),
+                )),
+                ("upper_r", (
+                    (inner, plate_front, 1.615),
+                    (half, plate_front, 1.575),
+                    (half * 0.91, plate_front, 1.395),
+                    (0.0, plate_front, 1.365),
+                    (0.0, plate_front, 1.455),
+                )),
+                ("middle", (
+                    (-half * 0.92, plate_front - 0.012, 1.405),
+                    (half * 0.92, plate_front - 0.012, 1.405),
+                    (half * 0.82, plate_front - 0.012, 1.235),
+                    (-half * 0.82, plate_front - 0.012, 1.235),
+                )),
+                ("lower", (
+                    (-half * 0.83, plate_front - 0.024, 1.255),
+                    (half * 0.83, plate_front - 0.024, 1.255),
+                    (half * 0.68, plate_front - 0.024, 1.095),
+                    (-half * 0.68, plate_front - 0.024, 1.095),
+                )),
+            ):
+                add_panel(f"GEO_{spec.role}_plate_{name}", plate_points,
+                          "metal", collection, spec, "armor_plate",
+                          thickness=0.052, edge=0.012)
+            for side in (-1.0, 1.0):
+                add_box(
+                    f"GEO_{spec.role}_harness_{side:+.0f}",
+                    (side * 0.195, -0.232 * mass, 1.355),
+                    (0.050, 0.036, 0.500), "leather", collection,
+                    spec, "armor_strap",
+                    rotation=(0.0, side * 0.10, 0.0), bevel=0.008,
+                )
+            add_box(f"GEO_{spec.role}_chest_ridge",
+                    (0.0, -0.242 * mass, 1.360),
+                    (0.052, 0.036, 0.430), "accent", collection,
+                    spec, "armor_trim", bevel=0.008)
+        else:
+            plate_front = -0.225 * mass
+            add_panel(f"GEO_{spec.role}_scavenged_plate", (
+                (-0.285, plate_front, 1.590),
+                (-0.035, plate_front - 0.018, 1.610),
+                (0.015, plate_front - 0.024, 1.185),
+                (-0.250, plate_front, 1.135),
+            ), "metal", collection, spec, "armor_plate",
+                thickness=0.065, edge=0.014)
+            add_panel(f"GEO_{spec.role}_repair_plate", (
+                (0.030, plate_front - 0.030, 1.465),
+                (0.205, plate_front - 0.018, 1.405),
+                (0.160, plate_front - 0.026, 1.245),
+                (0.010, plate_front - 0.035, 1.285),
+            ), "accent", collection, spec, "armor_repair",
+                thickness=0.040, edge=0.010)
+            add_box(f"GEO_{spec.role}_cross_strap",
+                    (0.015, -0.244 * mass, 1.355),
+                    (0.060, 0.042, 0.620), "leather", collection,
+                    spec, "armor_strap", rotation=(0.0, -0.30, 0.0),
+                    bevel=0.009)
+        add_box(f"GEO_{spec.role}_armor_belt",
+                (0.0, -0.205 * mass, 1.105),
+                (0.500 * mass, 0.070, 0.075), "leather", collection,
+                spec, "armor_belt", bevel=0.012)
+        tasset_sides = (-1.0, 1.0) if full_armor else (-1.0,)
+        for side in tasset_sides:
+            outer = side * 0.225
+            inner = side * 0.025
+            lower_outer = side * 0.195
+            lower_inner = side * 0.050
+            bottom = 0.775 if full_armor else 0.735
+            add_panel(f"GEO_{spec.role}_tasset_{side:+.0f}", (
+                (inner, -0.190 * mass, 1.080),
+                (outer, -0.190 * mass, 1.060),
+                (lower_outer, -0.185 * mass, bottom),
+                (lower_inner, -0.185 * mass, bottom - 0.025),
+            ), "metal", collection, spec, "armor_tasset",
+                thickness=0.050, edge=0.012)
+        if not full_armor:
+            add_panel(f"GEO_{spec.role}_leather_tasset", (
+                (0.025, -0.175 * mass, 1.070),
+                (0.185, -0.175 * mass, 1.040),
+                (0.220, -0.170 * mass, 0.790),
+                (0.055, -0.170 * mass, 0.750),
+            ), "leather", collection, spec, "armor_tasset",
+                thickness=0.045, edge=0.010)
+        rivets = (
+            (-0.205 if full_armor else -0.185, 1.500),
+            (0.205 if full_armor else -0.020, 1.480),
+            (-0.180, 1.280), (0.180 if full_armor else 0.145, 1.260),
+        )
+        for index, (x, z) in enumerate(rivets):
+            add_ellipsoid(
+                f"GEO_{spec.role}_armor_rivet_{index}",
+                (x, -0.258 * mass, z), (0.026, 0.018, 0.026),
+                "accent", collection, spec, "armor_rivet", subdivisions=1,
+            )
         pauldron_side = ("l", "r") if "armor" in spec.equipment else ("l",)
         for side in pauldron_side:
             shoulder_point = points[f"shoulder_{side}"]
+            pad = Vector(shoulder_point)
+            pad.y += 0.018
+            add_ellipsoid(f"GEO_{spec.role}_shoulder_pad_{side}", tuple(pad),
+                          (0.140, 0.120, 0.115), "leather", collection,
+                          spec, "armor_pad", subdivisions=1)
             add_ellipsoid(f"GEO_{spec.role}_pauldron_{side}", tuple(shoulder_point),
-                          (0.125, 0.112, 0.105), "metal", collection, spec,
+                          (0.135 if full_armor else 0.150,
+                           0.118, 0.110), "metal", collection, spec,
                           "armor", subdivisions=1)
+            sign = -1.0 if side == "l" else 1.0
+            lip = Vector(shoulder_point)
+            lip.x += sign * 0.018
+            lip.y -= 0.105
+            lip.z -= 0.055
+            add_box(f"GEO_{spec.role}_pauldron_lip_{side}", tuple(lip),
+                    (0.225, 0.045, 0.050), "accent", collection, spec,
+                    "armor_trim", rotation=(0.0, sign * 0.04, 0.0),
+                    bevel=0.008)
 
     if "apron" in spec.equipment:
 

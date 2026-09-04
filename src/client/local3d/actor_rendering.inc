@@ -1172,6 +1172,29 @@ static bool NpcDynamicCoreReady(const CcNpcAppearance *appearance)
     return npc_dynamic_modules[NPC_DYNAMIC_HAIR_0 + hair].ready;
 }
 
+static NpcDynamicModuleId NpcChestArmorModule(
+    const CcNpcAppearance *appearance, bool featured_hero)
+{
+    if (featured_hero) return NPC_DYNAMIC_CHEST_PLATE_HERO;
+    if (appearance != NULL && appearance->role == CC_NPC_ROLE_RAIDER) {
+        return NPC_DYNAMIC_CHEST_PLATE_RAIDER;
+    }
+    return NPC_DYNAMIC_CHEST_PLATE;
+}
+
+static NpcDynamicModuleId NpcShoulderArmorModule(
+    const CcNpcAppearance *appearance, bool featured_hero, int32_t side)
+{
+    if (featured_hero) {
+        return side == 0 ? NPC_DYNAMIC_PAULDRON_HERO :
+                           NPC_DYNAMIC_PAULDRON_RAIDER;
+    }
+    if (appearance != NULL && appearance->role == CC_NPC_ROLE_RAIDER) {
+        return NPC_DYNAMIC_PAULDRON_RAIDER;
+    }
+    return NPC_DYNAMIC_PAULDRON;
+}
+
 static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
                                   const CcHumanoidSkinPose *skin,
                                   const CcNpcAppearance *appearance)
@@ -1376,7 +1399,7 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
         Vector3 chest_front = FromLimbVector(
             skin->sockets[CC_HUMANOID_SOCKET_CHEST_FRONT].position);
         (void)DrawNpcDynamicModule(
-            NPC_DYNAMIC_CHEST_PLATE,
+            NpcChestArmorModule(appearance, featured_hero),
             NpcModuleTransform(chest_front, gear_right, gear_up,
                                gear_forward,
                                (Vector3){(featured_hero ? 0.34f : 0.46f) *
@@ -1386,19 +1409,25 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
                                              mass}),
             appearance->metal);
         for (int32_t side = 0; side < 2; ++side) {
+            if (!featured_hero && appearance->role == CC_NPC_ROLE_RAIDER &&
+                side != (int32_t)(appearance->seed & UINT32_C(1))) {
+                continue;
+            }
             const CcHumanoidSkinBonePose *shoulder =
                 &skin->bones[upper_arms[side]];
+            float shoulder_scale = featured_hero && side == 1 ? 0.78f : 1.0f;
             (void)DrawNpcDynamicModule(
-                NPC_DYNAMIC_PAULDRON,
+                NpcShoulderArmorModule(appearance, featured_hero, side),
                 NpcModuleTransform(FromLimbVector(shoulder->head),
                                    FromLimbVector(shoulder->right),
                                    FromLimbVector(shoulder->up),
                                    FromLimbVector(shoulder->forward),
                                    (Vector3){(featured_hero ? 0.15f : 0.22f) *
-                                                 mass,
-                                             featured_hero ? 0.15f : 0.20f,
+                                                 mass * shoulder_scale,
+                                             (featured_hero ? 0.15f : 0.20f) *
+                                                 shoulder_scale,
                                              (featured_hero ? 0.14f : 0.21f) *
-                                                 mass}),
+                                                 mass * shoulder_scale}),
                 appearance->metal);
         }
     }

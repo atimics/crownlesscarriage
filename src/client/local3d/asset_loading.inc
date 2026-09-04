@@ -236,7 +236,11 @@ typedef enum NpcDynamicModuleId {
     NPC_DYNAMIC_MANTLE,
     NPC_DYNAMIC_COAT_TAIL,
     NPC_DYNAMIC_CHEST_PLATE,
+    NPC_DYNAMIC_CHEST_PLATE_RAIDER,
+    NPC_DYNAMIC_CHEST_PLATE_HERO,
     NPC_DYNAMIC_PAULDRON,
+    NPC_DYNAMIC_PAULDRON_RAIDER,
+    NPC_DYNAMIC_PAULDRON_HERO,
     NPC_DYNAMIC_APRON,
     NPC_DYNAMIC_PACK,
     NPC_DYNAMIC_SATCHEL,
@@ -300,10 +304,22 @@ static NpcDynamicModuleCache npc_dynamic_modules[NPC_DYNAMIC_MODULE_COUNT] = {
         .label = "coat tail"},
     [NPC_DYNAMIC_CHEST_PLATE] = {
         .path = "assets/exports/npc/npc_module_chest_plate_v01.glb",
-        .label = "chest plate"},
+        .label = "guard chest plate"},
+    [NPC_DYNAMIC_CHEST_PLATE_RAIDER] = {
+        .path = "assets/exports/npc/npc_module_chest_plate_raider_v01.glb",
+        .label = "raider chest plate"},
+    [NPC_DYNAMIC_CHEST_PLATE_HERO] = {
+        .path = "assets/exports/npc/npc_module_chest_plate_hero_v01.glb",
+        .label = "hero chest plate"},
     [NPC_DYNAMIC_PAULDRON] = {
         .path = "assets/exports/npc/npc_module_pauldron_v01.glb",
-        .label = "pauldron"},
+        .label = "guard pauldron"},
+    [NPC_DYNAMIC_PAULDRON_RAIDER] = {
+        .path = "assets/exports/npc/npc_module_pauldron_raider_v01.glb",
+        .label = "raider pauldron"},
+    [NPC_DYNAMIC_PAULDRON_HERO] = {
+        .path = "assets/exports/npc/npc_module_pauldron_hero_v01.glb",
+        .label = "hero pauldron"},
     [NPC_DYNAMIC_APRON] = {
         .path = "assets/exports/npc/npc_module_apron_v01.glb",
         .label = "apron"},

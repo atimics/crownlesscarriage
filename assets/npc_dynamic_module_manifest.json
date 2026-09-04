@@ -99,7 +99,23 @@
       "anchor": "chest_front_socket",
       "material": "metal",
       "export": "assets/exports/npc/npc_module_chest_plate_v01.glb",
-      "shape_contract": "closed torso volume"
+      "shape_contract": "layered closed torso armor"
+    },
+    {
+      "id": "npc_module_chest_plate_raider_v01",
+      "slot": "chest_plate_raider",
+      "anchor": "chest_front_socket",
+      "material": "metal",
+      "export": "assets/exports/npc/npc_module_chest_plate_raider_v01.glb",
+      "shape_contract": "layered closed torso armor"
+    },
+    {
+      "id": "npc_module_chest_plate_hero_v01",
+      "slot": "chest_plate_hero",
+      "anchor": "chest_front_socket",
+      "material": "metal",
+      "export": "assets/exports/npc/npc_module_chest_plate_hero_v01.glb",
+      "shape_contract": "layered closed torso armor"
     },
     {
       "id": "npc_module_pauldron_v01",
@@ -107,7 +123,23 @@
       "anchor": "shoulder_socket",
       "material": "metal",
       "export": "assets/exports/npc/npc_module_pauldron_v01.glb",
-      "shape_contract": "rigid fitted module"
+      "shape_contract": "layered shoulder armor"
+    },
+    {
+      "id": "npc_module_pauldron_raider_v01",
+      "slot": "pauldron_raider",
+      "anchor": "shoulder_socket",
+      "material": "metal",
+      "export": "assets/exports/npc/npc_module_pauldron_raider_v01.glb",
+      "shape_contract": "layered shoulder armor"
+    },
+    {
+      "id": "npc_module_pauldron_hero_v01",
+      "slot": "pauldron_hero",
+      "anchor": "shoulder_socket",
+      "material": "metal",
+      "export": "assets/exports/npc/npc_module_pauldron_hero_v01.glb",
+      "shape_contract": "layered shoulder armor"
     },
     {
       "id": "npc_module_apron_v01",
