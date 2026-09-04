@@ -43,13 +43,24 @@ Environment and population chains (independent of the hero chain):
   `tools/blender/generate_creature_catalog.py`. Never hand-edit that file;
   run `make blender-creature-assets` and commit the result.
 - `blender-world-kit` + `blender-world-kit-check` — world kit pieces and
-  connections
+  connections. Run `blender-world-kit-review-check` after generation when you
+  also want to validate every review image.
 
 `make art-check` is the full validation gate: it builds and tests the
 game (`test-play`), runs the pure-Python validators, and then
 `tools/art/run_art_check.py`, which launches the client to capture
 screenshots and enforces the painterly art thresholds documented in that
 script (and in `docs/INVARIANTS.md`).
+
+Generated contact sheets, comparison images, and reels live under the ignored
+`assets/previews` directory. They are review output rather than runtime input.
+Attach useful outputs to the related pull request or release. Keep only a
+small, current gallery under `docs/images`, with every retained file linked
+from `docs/ART_GALLERY.md`.
+
+`make art-assets-check` reports the size of tracked art, rejects tracked review
+output, and finds binary assets with no reference from the project. The main
+tree has a 64 MiB tracked-art budget and an 8 MiB per-file budget.
 
 ## Which targets need what
 
@@ -58,7 +69,8 @@ script (and in `docs/INVARIANTS.md`).
   all `render_*`-backed targets, and the `blender-*-engine` exporters.
 - Pure Python (fine on any machine): `blender-exports-check`,
   `blender-character-animations-check`, `blender-npc-assets-check`,
-  `blender-creature-assets-check`, `blender-world-kit-check`.
+  `blender-creature-assets-check`, `blender-world-kit-check`, and
+  `blender-world-kit-review-check` after its preview images are generated.
 - CI runs the pure-Python checks plus shader compilation with `glslc`
   (`assets/shaders/*.vs` / `*.fs`); it does not run Blender.
 

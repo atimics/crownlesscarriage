@@ -1,10 +1,10 @@
-.PHONY: blender-assets blender-assets-catalog blender-assets-check \
+.PHONY: art-assets-check blender-assets blender-assets-catalog blender-assets-check \
 	blender-exports-check blender-hero-assets blender-hero-assets-check blender-hero-animation \
 	blender-hero-actions blender-hero-engine blender-hero-procedural-preview \
 	blender-hero-procedural-check blender-hero-paint-channels \
 	blender-npc-assets blender-npc-assets-check \
 	blender-creature-assets blender-creature-assets-check \
-	blender-world-kit blender-world-kit-check \
+	blender-world-kit blender-world-kit-check blender-world-kit-review-check \
 	blender-character-experiments blender-character-animations blender-character-animations-check \
 	blender-character-hair-v08 \
 	blender-painted-market-pilot \
@@ -15,6 +15,9 @@
 	configure-web build-web
 
 BLENDER ?= blender
+
+art-assets-check:
+	python3 tools/art/check_asset_inventory.py
 
 configure-play:
 	cmake --preset play
@@ -129,6 +132,9 @@ blender-world-kit:
 blender-world-kit-check:
 	python3 tools/blender/validate_world_kit.py
 
-art-check: test-play blender-character-animations-check blender-npc-assets-check blender-creature-assets-check blender-world-kit-check
+blender-world-kit-review-check:
+	python3 tools/blender/validate_world_kit.py --review-previews
+
+art-check: art-assets-check test-play blender-character-animations-check blender-npc-assets-check blender-creature-assets-check blender-world-kit-check
 	python3 tools/blender/validate_character_paint_channels.py
 	python3 tools/art/run_art_check.py

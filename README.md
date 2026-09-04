@@ -129,11 +129,11 @@ second release. GitHub Pages continues to publish every merge to `main`.
   specification
 - `assets` — manifests, shaders, and exported GLB meshes
 
-Further reading — only two more docs, covering what the code cannot say
-about itself:
+Further reading:
 
 - `docs/ASSET_PIPELINE.md` — the Blender make-target DAG and the
   manifest-to-client contract
+- `docs/ART_GALLERY.md` — a small gallery of the current visual direction
 - `docs/INVARIANTS.md` — determinism, save compatibility, performance
   budgets, and the art contract
 
