@@ -129,13 +129,25 @@ second release. GitHub Pages continues to publish every merge to `main`.
   specification
 - `assets` — manifests, shaders, and exported GLB meshes
 
-Further reading — only two more docs, covering what the code cannot say
-about itself:
+Further technical reading:
 
 - `docs/ASSET_PIPELINE.md` — the Blender make-target DAG and the
   manifest-to-client contract
+- `docs/ART_GALLERY.md` — a small gallery of the current visual direction
 - `docs/INVARIANTS.md` — determinism, save compatibility, performance
   budgets, and the art contract
+
+## Licensing
+
+Original Crownless Carriage code and creative material are copyright © 2026
+the Crownless Carriage contributors. All rights are reserved. Public access
+allows source review; other use needs permission from the relevant rights
+holder, apart from rights already provided by law.
+
+Third-party components keep their own permissive terms. See `LICENSE` for the
+project terms and `THIRD_PARTY_NOTICES.md` for the component inventory, license
+texts, and the supplied-media record. Browser and macOS packages include
+these notices.
 
 ## CI
 

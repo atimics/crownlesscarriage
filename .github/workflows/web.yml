@@ -32,6 +32,9 @@ jobs:
           test -f out/build/web/site/index.html &&
           test -f out/build/web/site/index.wasm &&
           test -f out/build/web/site/index.data &&
+          test -f out/build/web/site/licenses.html &&
+          test -f out/build/web/site/LICENSE.txt &&
+          test -f out/build/web/site/THIRD_PARTY_NOTICES.txt &&
           test "$(stat -c%s out/build/web/site/index.data)" -le 10485760 &&
           test -f out/build/web/web-runtime/assets/exports/glb/carriage_base_v01.glb &&
           test -f out/build/web/site/assets/exports/glb/environment_bridge_checkpoint_v01.glb &&

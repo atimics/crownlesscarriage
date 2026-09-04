@@ -4,6 +4,8 @@ build-*/
 out/
 .worktrees/
 *.tmp
+assets/previews/
+/.merge_file_*
 
 # Blender recovery and cache files
 *.blend1

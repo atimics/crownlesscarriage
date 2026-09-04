@@ -86,7 +86,12 @@ jobs:
       - name: Build
         run: cmake --build --preset web
       - name: Check site output
-        run: test -f out/build/web/site/index.html && test -f out/build/web/site/index.wasm
+        run: >-
+          test -f out/build/web/site/index.html &&
+          test -f out/build/web/site/index.wasm &&
+          test -f out/build/web/site/licenses.html &&
+          test -f out/build/web/site/LICENSE.txt &&
+          test -f out/build/web/site/THIRD_PARTY_NOTICES.txt
       - name: Package browser build
         working-directory: out/build/web/site
         run: >-

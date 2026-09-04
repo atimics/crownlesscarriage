@@ -87,6 +87,20 @@
         text-align: center;
         font: 0.82rem system-ui, sans-serif;
       }
+      footer {
+        display: flex;
+        justify-content: center;
+        gap: 16px;
+        margin-top: 8px;
+        font: 0.76rem system-ui, sans-serif;
+      }
+      footer a { color: #a99b80; text-underline-offset: 0.2em; }
+      footer a:hover { color: #e8dfc9; }
+      footer a:focus-visible {
+        outline: 2px solid #c7a96b;
+        outline-offset: 3px;
+        border-radius: 2px;
+      }
       @media (max-width: 680px) {
         main { padding: 10px; }
         header { align-items: start; }
@@ -113,6 +127,10 @@
         </div>
       </div>
       <p id="hint">Click the game, then use the mouse and keyboard. Saves stay in this browser.</p>
+      <footer aria-label="Project information">
+        <a href="licenses.html">Licenses &amp; credits</a>
+        <a href="https://github.com/atimics/crownlesscarriage">Source</a>
+      </footer>
     </main>
     <script>
       const canvas = document.querySelector("#canvas");
