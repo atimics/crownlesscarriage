@@ -8,8 +8,11 @@ const world = '1'.repeat(32), key = `cc-coop-pending-${world}`;
 const storage = new Map([['cc-coop-token', 'a'.repeat(64)]]);
 const requests = [], responses = [];
 function client() {
+  const files = new Map();
   const context = vm.createContext({
-    Module: {}, location: { search: `?world=${world}` }, URLSearchParams, AbortSignal,
+    Module: {}, console,
+    FS: { mkdirTree() {}, readFile: path => files.get(path), writeFile: (path, text) => files.set(path, text) },
+    location: { search: `?world=${world}` }, URLSearchParams, AbortSignal,
     localStorage: { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) },
     navigator: { locks: { request: (_key, callback) => callback() } },
     performance: { now: () => 2000 },
@@ -25,7 +28,13 @@ function client() {
   vm.runInContext(persistence, context);
   assert.equal(context.Module.crownlessCampaignAccess, 0);
   assert.equal(typeof context.Module.persistCrownlessSave, 'function');
-  assert.equal(context.Module.preRun, undefined, 'Shared worlds acquire their campaign from the host');
+  context.Module.preRun.forEach(run => run());
+  const preferencesPath = '/tmp/crownless-coop.ccsave.preferences';
+  assert.equal(files.get(preferencesPath), storage.get('cc-coop-preferences'));
+  const preferences = 'CROWNLESS_PREFERENCES 2\nreduced_motion 1\naudio_mode 2\n';
+  files.set(preferencesPath, preferences);
+  context.Module.persistCrownlessPreferences(preferencesPath);
+  assert.equal(storage.get('cc-coop-preferences'), preferences);
   return context.Module.ccCoop;
 }
 const state = revision => ({ id: world, revision, action_revision: revision, next_sequence: revision + 1,
