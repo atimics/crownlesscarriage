@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = ROOT / "out" / "art-check"
 EXPECTED_SCREEN_SIZE = (1280, 760)
 
+
 def viewport_constants() -> dict[str, int]:
     source = (ROOT / "src/client/cc_local_viewport.h").read_text()
     return {
@@ -532,7 +533,8 @@ def write_report(output_root: Path, capture_results: list[dict[str, object]],
         "",
         f"Capture mode: **{capture_mode}**",
         "",
-        "World metrics use the 457 x 285 art target. The full-screen UI is "
+        f"World metrics use the {ART_SIZE[0]} x {ART_SIZE[1]} art target. "
+        "The full-screen UI is "
         "included in `contact-sheets/full-screen-ui.png` for manual review.",
         "",
         "| View | Palette exact | Palette near | Dominant | Edges | Local contrast | Result |",
