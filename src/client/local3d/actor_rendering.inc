@@ -2438,6 +2438,318 @@ static TreeFamily RegionalTreeFamily(TreeFamily family, int32_t tree_index,
     return family;
 }
 
+typedef enum TreeRenderPass {
+    TREE_RENDER_FULL = 0,
+    TREE_RENDER_BATCH_BUILD
+} TreeRenderPass;
+
+typedef struct TreeBatchMeshWriter {
+    Mesh mesh;
+    int32_t cursor;
+    int32_t source_draw_count;
+    bool count_only;
+    bool failed;
+} TreeBatchMeshWriter;
+
+typedef struct TreeSceneryBatchCache {
+    Model structure;
+    Model foliage;
+    uint32_t seed;
+    uint32_t visibility_mask;
+    CcSettlementFunction function;
+    Color kingdom;
+    int32_t source_draw_count;
+    bool ready;
+} TreeSceneryBatchCache;
+
+static TreeRenderPass tree_render_pass = TREE_RENDER_FULL;
+static TreeBatchMeshWriter *tree_structure_writer = NULL;
+static TreeBatchMeshWriter *tree_foliage_writer = NULL;
+static Vector3 tree_batch_parent_origin = {0};
+static Vector3 tree_batch_parent_scale = {1.0f, 1.0f, 1.0f};
+static TreeSceneryBatchCache tree_scenery_batch = {0};
+
+static bool TreeBatchColorEqual(Color left, Color right)
+{
+    return left.r == right.r && left.g == right.g && left.b == right.b &&
+           left.a == right.a;
+}
+
+static void TreeSceneryBatchClear(void)
+{
+    if (IsModelValid(tree_scenery_batch.structure)) {
+        UnloadModel(tree_scenery_batch.structure);
+    }
+    if (IsModelValid(tree_scenery_batch.foliage)) {
+        UnloadModel(tree_scenery_batch.foliage);
+    }
+    tree_scenery_batch = (TreeSceneryBatchCache){0};
+}
+
+static bool TreeBatchMeshWriterAllocate(TreeBatchMeshWriter *writer,
+                                        int32_t vertex_count)
+{
+    if (writer == NULL || vertex_count <= 0 || vertex_count % 3 != 0) {
+        return false;
+    }
+    *writer = (TreeBatchMeshWriter){0};
+    writer->mesh.vertexCount = vertex_count;
+    writer->mesh.triangleCount = vertex_count / 3;
+    writer->mesh.vertices = MemAlloc(
+        (unsigned int)((size_t)vertex_count * 3U * sizeof(float)));
+    writer->mesh.normals = MemAlloc(
+        (unsigned int)((size_t)vertex_count * 3U * sizeof(float)));
+    writer->mesh.colors = MemAlloc(
+        (unsigned int)((size_t)vertex_count * 4U * sizeof(unsigned char)));
+    if (writer->mesh.vertices != NULL && writer->mesh.normals != NULL &&
+        writer->mesh.colors != NULL) {
+        return true;
+    }
+    if (writer->mesh.vertices != NULL) MemFree(writer->mesh.vertices);
+    if (writer->mesh.normals != NULL) MemFree(writer->mesh.normals);
+    if (writer->mesh.colors != NULL) MemFree(writer->mesh.colors);
+    *writer = (TreeBatchMeshWriter){0};
+    return false;
+}
+
+static Vector3 TreeBatchTransformPoint(Vector3 point, Vector3 center,
+                                       Vector3 scale, float turn)
+{
+    float cosine = cosf(turn);
+    float sine = sinf(turn);
+    float local_x = point.x * scale.x;
+    float local_z = point.z * scale.z;
+    Vector3 world = {
+        center.x + local_x * cosine + local_z * sine,
+        center.y + point.y * scale.y,
+        center.z - local_x * sine + local_z * cosine,
+    };
+    return (Vector3){
+        tree_batch_parent_origin.x +
+            (world.x - tree_batch_parent_origin.x) *
+                tree_batch_parent_scale.x,
+        tree_batch_parent_origin.y +
+            (world.y - tree_batch_parent_origin.y) *
+                tree_batch_parent_scale.y,
+        tree_batch_parent_origin.z +
+            (world.z - tree_batch_parent_origin.z) *
+                tree_batch_parent_scale.z,
+    };
+}
+
+static Vector3 TreeBatchTransformParentPoint(Vector3 point)
+{
+    return (Vector3){
+        tree_batch_parent_origin.x +
+            (point.x - tree_batch_parent_origin.x) *
+                tree_batch_parent_scale.x,
+        tree_batch_parent_origin.y +
+            (point.y - tree_batch_parent_origin.y) *
+                tree_batch_parent_scale.y,
+        tree_batch_parent_origin.z +
+            (point.z - tree_batch_parent_origin.z) *
+                tree_batch_parent_scale.z,
+    };
+}
+
+static Vector3 TreeBatchTransformNormal(Vector3 normal, Vector3 scale,
+                                        float turn)
+{
+    float cosine = cosf(turn);
+    float sine = sinf(turn);
+    float local_x = normal.x / scale.x;
+    float local_y = normal.y / scale.y;
+    float local_z = normal.z / scale.z;
+    Vector3 world = {
+        local_x * cosine + local_z * sine,
+        local_y,
+        -local_x * sine + local_z * cosine,
+    };
+    world.x /= tree_batch_parent_scale.x;
+    world.y /= tree_batch_parent_scale.y;
+    world.z /= tree_batch_parent_scale.z;
+    return Vector3Normalize(world);
+}
+
+static Color TreeBatchTint(Color source, Color tint)
+{
+    return (Color){
+        (unsigned char)(((int32_t)source.r * (int32_t)tint.r) / 255),
+        (unsigned char)(((int32_t)source.g * (int32_t)tint.g) / 255),
+        (unsigned char)(((int32_t)source.b * (int32_t)tint.b) / 255),
+        (unsigned char)(((int32_t)source.a * (int32_t)tint.a) / 255),
+    };
+}
+
+static void TreeBatchMeshWriteVertex(TreeBatchMeshWriter *writer,
+                                     Vector3 point, Vector3 normal,
+                                     Color color)
+{
+    if (writer == NULL || writer->cursor >= writer->mesh.vertexCount) {
+        if (writer != NULL) writer->failed = true;
+        return;
+    }
+    int32_t vertex = writer->cursor++;
+    writer->mesh.vertices[vertex * 3 + 0] = point.x;
+    writer->mesh.vertices[vertex * 3 + 1] = point.y;
+    writer->mesh.vertices[vertex * 3 + 2] = point.z;
+    writer->mesh.normals[vertex * 3 + 0] = normal.x;
+    writer->mesh.normals[vertex * 3 + 1] = normal.y;
+    writer->mesh.normals[vertex * 3 + 2] = normal.z;
+    writer->mesh.colors[vertex * 4 + 0] = color.r;
+    writer->mesh.colors[vertex * 4 + 1] = color.g;
+    writer->mesh.colors[vertex * 4 + 2] = color.b;
+    writer->mesh.colors[vertex * 4 + 3] = color.a;
+}
+
+static void TreeBatchMeshWriteTriangle(TreeBatchMeshWriter *writer,
+                                       Vector3 a, Vector3 b, Vector3 c,
+                                       Vector3 normal, Color color)
+{
+    TreeBatchMeshWriteVertex(
+        writer, TreeBatchTransformParentPoint(a), normal, color);
+    TreeBatchMeshWriteVertex(
+        writer, TreeBatchTransformParentPoint(b), normal, color);
+    TreeBatchMeshWriteVertex(
+        writer, TreeBatchTransformParentPoint(c), normal, color);
+}
+
+static void TreeBatchMeshAppendCylinder(TreeBatchMeshWriter *writer,
+                                        Vector3 start, Vector3 end,
+                                        float start_radius,
+                                        float end_radius, int32_t sides,
+                                        Color color)
+{
+    if (writer == NULL) return;
+    if (sides < 3) sides = 3;
+    Vector3 direction = Vector3Subtract(end, start);
+    if (Vector3LengthSqr(direction) <= 0.0f) return;
+    int32_t vertex_count = sides * 6;
+    if (start_radius > 0.0f) vertex_count += sides * 3;
+    if (end_radius > 0.0f) vertex_count += sides * 3;
+    writer->source_draw_count += 1;
+    if (writer->count_only) {
+        writer->cursor += vertex_count;
+        return;
+    }
+
+    Vector3 basis_one = Vector3Normalize(Vector3Perpendicular(direction));
+    Vector3 basis_two = Vector3Normalize(
+        Vector3CrossProduct(basis_one, direction));
+    float angle_step = 2.0f * PI / (float)sides;
+    const Vector3 retained_normal = {-1.0f, 0.0f, 0.0f};
+    for (int32_t side = 0; side < sides; ++side) {
+        float first_sine = sinf(angle_step * (float)side);
+        float first_cosine = cosf(angle_step * (float)side);
+        float next_sine = sinf(angle_step * (float)(side + 1));
+        float next_cosine = cosf(angle_step * (float)(side + 1));
+        Vector3 first_start = Vector3Add(
+            start, Vector3Add(
+                Vector3Scale(basis_one, first_sine * start_radius),
+                Vector3Scale(basis_two, first_cosine * start_radius)));
+        Vector3 next_start = Vector3Add(
+            start, Vector3Add(
+                Vector3Scale(basis_one, next_sine * start_radius),
+                Vector3Scale(basis_two, next_cosine * start_radius)));
+        Vector3 first_end = Vector3Add(
+            end, Vector3Add(
+                Vector3Scale(basis_one, first_sine * end_radius),
+                Vector3Scale(basis_two, first_cosine * end_radius)));
+        Vector3 next_end = Vector3Add(
+            end, Vector3Add(
+                Vector3Scale(basis_one, next_sine * end_radius),
+                Vector3Scale(basis_two, next_cosine * end_radius)));
+        if (start_radius > 0.0f) {
+            TreeBatchMeshWriteTriangle(writer, start, next_start,
+                                       first_start, retained_normal, color);
+        }
+        TreeBatchMeshWriteTriangle(writer, first_start, next_start,
+                                   first_end, retained_normal, color);
+        TreeBatchMeshWriteTriangle(writer, next_start, next_end,
+                                   first_end, retained_normal, color);
+        if (end_radius > 0.0f) {
+            TreeBatchMeshWriteTriangle(writer, end, first_end, next_end,
+                                       retained_normal, color);
+        }
+    }
+}
+
+static void TreeBatchMeshAppendModel(TreeBatchMeshWriter *writer, Model model,
+                                     Vector3 center, Vector3 scale,
+                                     float turn, Color tint)
+{
+    if (writer == NULL) return;
+    writer->source_draw_count += 1;
+    for (int32_t mesh_index = 0; mesh_index < model.meshCount; ++mesh_index) {
+        const Mesh *mesh = &model.meshes[mesh_index];
+        int32_t vertex_count = mesh->indices != NULL ?
+            mesh->triangleCount * 3 : mesh->vertexCount;
+        if (writer->count_only) {
+            writer->cursor += vertex_count;
+            continue;
+        }
+        if (mesh->vertices == NULL || mesh->normals == NULL) {
+            writer->failed = true;
+            continue;
+        }
+        for (int32_t output = 0; output < vertex_count; ++output) {
+            int32_t source = mesh->indices != NULL ?
+                (int32_t)mesh->indices[output] : output;
+            if (source < 0 || source >= mesh->vertexCount ||
+                writer->cursor >= writer->mesh.vertexCount) {
+                writer->failed = true;
+                continue;
+            }
+            Vector3 point = {
+                mesh->vertices[source * 3 + 0],
+                mesh->vertices[source * 3 + 1],
+                mesh->vertices[source * 3 + 2],
+            };
+            Vector3 normal = {
+                mesh->normals[source * 3 + 0],
+                mesh->normals[source * 3 + 1],
+                mesh->normals[source * 3 + 2],
+            };
+            Color source_color = WHITE;
+            if (mesh->colors != NULL) {
+                source_color = (Color){
+                    mesh->colors[source * 4 + 0],
+                    mesh->colors[source * 4 + 1],
+                    mesh->colors[source * 4 + 2],
+                    mesh->colors[source * 4 + 3],
+                };
+            }
+            point = TreeBatchTransformPoint(point, center, scale, turn);
+            normal = TreeBatchTransformNormal(normal, scale, turn);
+            Color color = TreeBatchTint(source_color, tint);
+            TreeBatchMeshWriteVertex(writer, point, normal, color);
+        }
+    }
+}
+
+static bool TreeBatchMeshUpload(TreeBatchMeshWriter *writer, bool foliage,
+                                Model *model)
+{
+    if (writer == NULL || model == NULL || writer->failed ||
+        writer->cursor != writer->mesh.vertexCount) {
+        if (writer != NULL && writer->mesh.vertices != NULL) {
+            UnloadMesh(writer->mesh);
+            writer->mesh = (Mesh){0};
+        }
+        return false;
+    }
+    UploadMesh(&writer->mesh, false);
+    *model = LoadModelFromMesh(writer->mesh);
+    if (!IsModelValid(*model)) return false;
+    if (foliage && tree_crown_models.ready) {
+        ApplyTreeFoliageShader(model);
+    } else {
+        ApplyWorldShader(model);
+    }
+    ReleaseUploadedModelCpuData(model);
+    return true;
+}
+
 static Model TreeCrownModel(TreeCrownShape shape)
 {
     switch (shape) {
@@ -2453,6 +2765,11 @@ static void DrawTreeFoliageMass(TreeCrownShape shape, Vector3 center,
 {
     Model model = tree_crown_models.ready ? TreeCrownModel(shape) :
                                            sphere_models.small;
+    if (tree_render_pass == TREE_RENDER_BATCH_BUILD) {
+        TreeBatchMeshAppendModel(tree_foliage_writer, model, center, radius,
+                                 turn, color);
+        return;
+    }
     DrawModelEx(model, center, (Vector3){0.0f, 1.0f, 0.0f},
                 turn * RAD2DEG, radius, color);
 }
@@ -2463,6 +2780,17 @@ static void DrawTreeShadow(Vector3 root, float turn, float width, float depth)
                                -depth * 0.20f, turn);
     Vector3 branch = LocalPoint(root, width * 0.54f, 0.020f,
                                 -depth * 0.42f, turn);
+    if (tree_render_pass == TREE_RENDER_BATCH_BUILD) {
+        TreeBatchMeshAppendModel(
+            tree_structure_writer, sphere_models.small, broad,
+            (Vector3){width, 0.018f, depth}, turn,
+            Fade(WORLD_VOID, 0.26f));
+        TreeBatchMeshAppendModel(
+            tree_structure_writer, sphere_models.small, branch,
+            (Vector3){width * 0.62f, 0.020f, depth * 0.45f},
+            turn - 0.38f, Fade(WORLD_VOID, 0.20f));
+        return;
+    }
     DrawModelEx(sphere_models.small, broad, (Vector3){0.0f, 1.0f, 0.0f},
                 turn * RAD2DEG, (Vector3){width, 0.018f, depth},
                 Fade(WORLD_VOID, 0.26f));
@@ -2470,6 +2798,18 @@ static void DrawTreeShadow(Vector3 root, float turn, float width, float depth)
                 (turn - 0.38f) * RAD2DEG,
                 (Vector3){width * 0.62f, 0.020f, depth * 0.45f},
                 Fade(WORLD_VOID, 0.20f));
+}
+
+static void DrawTreeCylinder(Vector3 start, Vector3 end,
+                             float start_radius, float end_radius,
+                             int32_t sides, Color color)
+{
+    if (tree_render_pass == TREE_RENDER_BATCH_BUILD) {
+        TreeBatchMeshAppendCylinder(tree_structure_writer, start, end,
+                                    start_radius, end_radius, sides, color);
+        return;
+    }
+    DrawCylinderEx(start, end, start_radius, end_radius, sides, color);
 }
 
 static void DrawTreeRootFlare(Vector3 root, float turn, float radius,
@@ -2484,8 +2824,8 @@ static void DrawTreeRootFlare(Vector3 root, float turn, float radius,
             root.y + 0.025f,
             root.z + sinf(angle) * radius * 2.35f
         };
-        DrawCylinderEx(start, end, radius * 0.56f, 0.025f, 6,
-                       ShadeColor(bark, root_index & 1 ? 0.76f : 0.88f));
+        DrawTreeCylinder(start, end, radius * 0.56f, 0.025f, 6,
+                         ShadeColor(bark, root_index & 1 ? 0.76f : 0.88f));
     }
 }
 
@@ -2511,12 +2851,12 @@ static void DrawAlderTree(Vector3 root, float turn, float shape, Color leaves)
 
     DrawTreeShadow(root, turn, 1.18f * scale, 0.90f * scale);
     DrawTreeRootFlare(root, turn, 0.25f * scale, bark);
-    DrawCylinderEx(root, fork, 0.27f * scale, 0.15f * scale, 7, bark);
-    DrawCylinderEx(fork, left, 0.14f * scale, 0.055f * scale, 6,
-                   ShadeColor(bark, 0.88f));
-    DrawCylinderEx(fork, right, 0.13f * scale, 0.050f * scale, 6,
-                   ShadeColor(bark, 0.94f));
-    DrawCylinderEx(fork, top, 0.15f * scale, 0.040f * scale, 6, bark);
+    DrawTreeCylinder(root, fork, 0.27f * scale, 0.15f * scale, 7, bark);
+    DrawTreeCylinder(fork, left, 0.14f * scale, 0.055f * scale, 6,
+                     ShadeColor(bark, 0.88f));
+    DrawTreeCylinder(fork, right, 0.13f * scale, 0.050f * scale, 6,
+                     ShadeColor(bark, 0.94f));
+    DrawTreeCylinder(fork, top, 0.15f * scale, 0.040f * scale, 6, bark);
 
     DrawTreeFoliageMass(TREE_CROWN_ALDER, left,
                         (Vector3){0.86f, 0.68f, 0.72f}, turn + 0.18f, deep);
@@ -2559,14 +2899,14 @@ static void DrawOakTree(Vector3 root, float turn, float shape, Color leaves)
 
     DrawTreeShadow(root, turn, 2.10f * scale, 1.42f * scale);
     DrawTreeRootFlare(root, turn, 0.38f * scale, bark);
-    DrawCylinderEx(root, fork, 0.43f * scale, 0.28f * scale, 7, bark);
-    DrawCylinderEx(fork, left, 0.27f * scale, 0.075f * scale, 7,
-                   ShadeColor(bark, 0.86f));
-    DrawCylinderEx(fork, right, 0.25f * scale, 0.070f * scale, 7, bark);
-    DrawCylinderEx(fork, upper, 0.24f * scale, 0.060f * scale, 7,
-                   ShadeColor(bark, 0.94f));
-    DrawCylinderEx(right, dead_tip, 0.065f * scale, 0.025f * scale, 5,
-                   ShadeColor(bark, 1.08f));
+    DrawTreeCylinder(root, fork, 0.43f * scale, 0.28f * scale, 7, bark);
+    DrawTreeCylinder(fork, left, 0.27f * scale, 0.075f * scale, 7,
+                     ShadeColor(bark, 0.86f));
+    DrawTreeCylinder(fork, right, 0.25f * scale, 0.070f * scale, 7, bark);
+    DrawTreeCylinder(fork, upper, 0.24f * scale, 0.060f * scale, 7,
+                     ShadeColor(bark, 0.94f));
+    DrawTreeCylinder(right, dead_tip, 0.065f * scale, 0.025f * scale, 5,
+                     ShadeColor(bark, 1.08f));
 
     DrawTreeFoliageMass(TREE_CROWN_OAK, left,
                         (Vector3){1.20f, 0.68f, 0.94f}, turn + 0.18f, deep);
@@ -2611,7 +2951,7 @@ static void DrawPollardTree(Vector3 root, float turn, float shape,
 
     DrawTreeShadow(root, turn, 1.34f * scale, 1.00f * scale);
     DrawTreeRootFlare(root, turn, 0.31f * scale, bark);
-    DrawCylinderEx(root, head, 0.34f * scale, 0.27f * scale, 7, bark);
+    DrawTreeCylinder(root, head, 0.34f * scale, 0.27f * scale, 7, bark);
     DrawTreeFoliageMass(TREE_CROWN_POLLARD, head,
                         (Vector3){0.40f, 0.32f, 0.38f}, turn,
                         ShadeColor(bark, 0.82f));
@@ -2620,8 +2960,8 @@ static void DrawPollardTree(Vector3 root, float turn, float shape,
         Vector3 tip = LocalPoint(root, stem_x[stem] * scale,
                                  height * stem_height[stem],
                                  stem_z[stem] * scale, turn);
-        DrawCylinderEx(head, tip, 0.090f * scale, 0.030f * scale, 6,
-                       ShadeColor(bark, 0.86f + (float)stem * 0.025f));
+        DrawTreeCylinder(head, tip, 0.090f * scale, 0.030f * scale, 6,
+                         ShadeColor(bark, 0.86f + (float)stem * 0.025f));
         Color stem_leaves = stem == 2 ? light :
                             (stem & 1) != 0 ? middle : deep;
         DrawTreeFoliageMass(TREE_CROWN_POLLARD, tip,
@@ -2647,12 +2987,17 @@ static void DrawTree(float x, float z, TreeFamily family, Color leaves,
                         regional_style.foliage_mix);
 
 
-    rlPushMatrix();
-    rlTranslatef(root.x, root.y, root.z);
-    rlScalef(regional_style.proportions.x,
-             regional_style.proportions.y,
-             regional_style.proportions.z);
-    rlTranslatef(-root.x, -root.y, -root.z);
+    if (tree_render_pass == TREE_RENDER_BATCH_BUILD) {
+        tree_batch_parent_origin = root;
+        tree_batch_parent_scale = regional_style.proportions;
+    } else {
+        rlPushMatrix();
+        rlTranslatef(root.x, root.y, root.z);
+        rlScalef(regional_style.proportions.x,
+                 regional_style.proportions.y,
+                 regional_style.proportions.z);
+        rlTranslatef(-root.x, -root.y, -root.z);
+    }
 
     switch (family) {
         case TREE_FAMILY_OAK:
@@ -2666,16 +3011,32 @@ static void DrawTree(float x, float z, TreeFamily family, Color leaves,
             DrawAlderTree(root, turn, shape, leaves);
             break;
     }
-    rlPopMatrix();
+    if (tree_render_pass != TREE_RENDER_BATCH_BUILD) rlPopMatrix();
 }
 
-static void DrawWorldTrees(Vector3 focus, Color kingdom)
+static void DrawWorldTreeAt(int32_t index, TreeRegionalStyle regional_style)
 {
-    TreeRegionalStyle regional_style = TreeStyleForKingdom(kingdom);
+    Vector2 position = WORLD_TREES[index].position;
+    position.x += (index & 1) != 0 ? -regional_style.cluster_pull :
+                                     regional_style.cluster_pull;
+    TreeFamily family = RegionalTreeFamily(WORLD_TREES[index].family, index,
+                                           regional_style);
+    Color leaves = (index & 1) != 0 ? WORLD_FOLIAGE : WORLD_FOLIAGE_LIGHT;
+    if (family == TREE_FAMILY_OAK) {
+        leaves = ShadeColor(leaves, 0.86f);
+    } else if (family == TREE_FAMILY_POLLARD) {
+        leaves = BlendColor(leaves, WORLD_GRASS_LIGHT, 0.18f);
+    }
+    DrawTree(position.x, position.y, family, leaves, regional_style);
+}
+
+static uint32_t WorldTreeVisibilityMask(Vector3 focus,
+                                        TreeRegionalStyle regional_style)
+{
+    uint32_t mask = 0U;
     int32_t scene = street_camera_rig.shot;
     for (int32_t i = 0;
          i < (int32_t)(sizeof(WORLD_TREES) / sizeof(WORLD_TREES[0])); ++i) {
-
         if (active_place_function == CC_SETTLEMENT_MINING &&
             scene == CC_LOCAL_TOWN_SCENE_LANDMARK &&
             (i == 4 || i == 25)) continue;
@@ -2683,17 +3044,116 @@ static void DrawWorldTrees(Vector3 focus, Color kingdom)
         position.x += (i & 1) != 0 ? -regional_style.cluster_pull :
                                      regional_style.cluster_pull;
         if (!SceneryPointVisible(position.x, position.y, focus)) continue;
-        TreeFamily family = RegionalTreeFamily(WORLD_TREES[i].family, i,
-                                               regional_style);
-        Color leaves = (i & 1) != 0 ? WORLD_FOLIAGE :
-                                      WORLD_FOLIAGE_LIGHT;
-        if (family == TREE_FAMILY_OAK) {
-            leaves = ShadeColor(leaves, 0.86f);
-        } else if (family == TREE_FAMILY_POLLARD) {
-            leaves = BlendColor(leaves, WORLD_GRASS_LIGHT, 0.18f);
-        }
-        DrawTree(position.x, position.y, family, leaves, regional_style);
+        mask |= UINT32_C(1) << (uint32_t)i;
     }
+    return mask;
+}
+
+static void EmitWorldTreeMask(uint32_t visibility_mask,
+                              TreeRegionalStyle regional_style)
+{
+    for (int32_t i = 0;
+         i < (int32_t)(sizeof(WORLD_TREES) / sizeof(WORLD_TREES[0])); ++i) {
+        if ((visibility_mask & (UINT32_C(1) << (uint32_t)i)) == 0U) continue;
+        DrawWorldTreeAt(i, regional_style);
+    }
+}
+
+static bool TreeSceneryBatchMatches(uint32_t visibility_mask, Color kingdom)
+{
+    return tree_scenery_batch.ready &&
+           tree_scenery_batch.seed == street_terrain_seed &&
+           tree_scenery_batch.visibility_mask == visibility_mask &&
+           tree_scenery_batch.function == active_place_function &&
+           TreeBatchColorEqual(tree_scenery_batch.kingdom, kingdom);
+}
+
+static void TreeBatchFinishBuildPass(void)
+{
+    tree_render_pass = TREE_RENDER_FULL;
+    tree_structure_writer = NULL;
+    tree_foliage_writer = NULL;
+    tree_batch_parent_origin = (Vector3){0};
+    tree_batch_parent_scale = (Vector3){1.0f, 1.0f, 1.0f};
+}
+
+static bool TreeSceneryBatchBuild(uint32_t visibility_mask, Color kingdom,
+                                  TreeRegionalStyle regional_style)
+{
+    TreeSceneryBatchClear();
+    rlDrawRenderBatchActive();
+
+    TreeBatchMeshWriter structure_counter = {.count_only = true};
+    TreeBatchMeshWriter foliage_counter = {.count_only = true};
+    tree_render_pass = TREE_RENDER_BATCH_BUILD;
+    tree_structure_writer = &structure_counter;
+    tree_foliage_writer = &foliage_counter;
+    EmitWorldTreeMask(visibility_mask, regional_style);
+    TreeBatchFinishBuildPass();
+    if (structure_counter.cursor <= 0 || foliage_counter.cursor <= 0) {
+        return false;
+    }
+
+    TreeBatchMeshWriter structure_writer;
+    TreeBatchMeshWriter foliage_writer;
+    if (!TreeBatchMeshWriterAllocate(&structure_writer,
+                                     structure_counter.cursor)) {
+        return false;
+    }
+    if (!TreeBatchMeshWriterAllocate(&foliage_writer,
+                                     foliage_counter.cursor)) {
+        UnloadMesh(structure_writer.mesh);
+        return false;
+    }
+
+    tree_render_pass = TREE_RENDER_BATCH_BUILD;
+    tree_structure_writer = &structure_writer;
+    tree_foliage_writer = &foliage_writer;
+    EmitWorldTreeMask(visibility_mask, regional_style);
+    TreeBatchFinishBuildPass();
+
+    bool structure_ready = TreeBatchMeshUpload(
+        &structure_writer, false, &tree_scenery_batch.structure);
+    bool foliage_ready = TreeBatchMeshUpload(
+        &foliage_writer, true, &tree_scenery_batch.foliage);
+    if (!structure_ready || !foliage_ready) {
+        TreeSceneryBatchClear();
+        return false;
+    }
+
+    tree_scenery_batch.seed = street_terrain_seed;
+    tree_scenery_batch.visibility_mask = visibility_mask;
+    tree_scenery_batch.function = active_place_function;
+    tree_scenery_batch.kingdom = kingdom;
+    tree_scenery_batch.source_draw_count =
+        structure_counter.source_draw_count +
+        foliage_counter.source_draw_count;
+    tree_scenery_batch.ready = true;
+    TraceLog(LOG_INFO,
+             "TREE: batched %d model draws into 2 GPU meshes (%d vertices)",
+             tree_scenery_batch.source_draw_count,
+             structure_counter.cursor + foliage_counter.cursor);
+    return true;
+}
+
+static void DrawWorldTrees(Vector3 focus, Color kingdom)
+{
+    TreeRegionalStyle regional_style = TreeStyleForKingdom(kingdom);
+    uint32_t visibility_mask = WorldTreeVisibilityMask(focus, regional_style);
+    if (visibility_mask == 0U) return;
+    if (!TreeSceneryBatchMatches(visibility_mask, kingdom) &&
+        !TreeSceneryBatchBuild(visibility_mask, kingdom, regional_style)) {
+        EmitWorldTreeMask(visibility_mask, regional_style);
+        return;
+    }
+
+    int32_t draw_count = 0;
+    DrawModel(tree_scenery_batch.structure, (Vector3){0}, 1.0f, WHITE);
+    draw_count += 1;
+    DrawModel(tree_scenery_batch.foliage, (Vector3){0}, 1.0f, WHITE);
+    draw_count += 1;
+    CcLocalRendererRecordStaticBatch(
+        draw_count, tree_scenery_batch.source_draw_count);
 }
 
 static Rectangle ViewportRectangle(Rectangle viewport, float x, float y,

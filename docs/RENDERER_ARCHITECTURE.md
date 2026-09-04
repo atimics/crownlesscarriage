@@ -41,6 +41,9 @@ Renderer state follows this order:
 6. Call `CcLocalRendererShutdown` once while the graphics context is active.
 
 Resource caches and shared frame state stay private to the library.
+Visible trees share two static GPU batches: one for wood and shadows, and one
+for foliage. The renderer rebuilds them when terrain, place style, kingdom
+color, or tree visibility changes.
 
 ## Test interfaces
 

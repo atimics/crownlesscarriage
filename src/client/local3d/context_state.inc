@@ -107,6 +107,7 @@ static BridgeCheckpointStatus bridge_checkpoint_status =
 
 static bool RoadUsesAuthoredCheckpoint(void);
 static void OpenWorldRenderCacheClear(void);
+static void TreeSceneryBatchClear(void);
 static void DrawBox(Vector3 center, Vector3 size, Color color);
 static void DrawCharacterSphere(Vector3 center, float radius, Color color);
 static void DrawCharacterEllipsoid(Vector3 center, Vector3 radius, Color color);
