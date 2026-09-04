@@ -5154,6 +5154,12 @@ static void UpdateSettlement(CcSim *sim, int32_t index,
         settlement->stock[good] -= consumed;
     }
     (void)SpoilStoredNutrition(sim, settlement);
+    if (sim->schema_version >= 36U && settlement->stock[CC_GOOD_PAPER] > 10 &&
+        sim->current_day % 91 == 0) {
+        int32_t decay = settlement->stock[CC_GOOD_PAPER] / 100;
+        if (decay <= 0) decay = 1;
+        settlement->stock[CC_GOOD_PAPER] -= decay;
+    }
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
         RefreshSettlementGoodPrice(sim, settlement, (CcGood)good);
     }
