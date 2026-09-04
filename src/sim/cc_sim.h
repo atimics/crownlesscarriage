@@ -50,7 +50,7 @@
 /* Save and journal compatibility contract: every schema/generator version
    listed in the legacy tables in cc_sim.c remains loadable. Bump these only
    with matching migration branches and persistence_tests coverage. */
-#define CC_SIM_SCHEMA_VERSION 33
+#define CC_SIM_SCHEMA_VERSION 34
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
@@ -532,6 +532,23 @@ typedef struct CcRoadSite {
     bool accessible;
 } CcRoadSite;
 
+typedef enum CcPlayerKnowledgeSource {
+    CC_PLAYER_KNOWLEDGE_NONE = 0,
+    CC_PLAYER_KNOWLEDGE_CHART,
+    CC_PLAYER_KNOWLEDGE_RUMOR,
+    CC_PLAYER_KNOWLEDGE_EVENT,
+    CC_PLAYER_KNOWLEDGE_WITNESS,
+    CC_PLAYER_KNOWLEDGE_TRAVEL,
+    CC_PLAYER_KNOWLEDGE_LEGACY
+} CcPlayerKnowledgeSource;
+
+typedef enum CcRoadBookSiteKind {
+    CC_ROAD_BOOK_SITE_UNDERROAD = 0,
+    CC_ROAD_BOOK_SITE_GOBLIN_TRAIL,
+    CC_ROAD_BOOK_SITE_DRAGON_ROOST,
+    CC_ROAD_BOOK_SITE_COUNT
+} CcRoadBookSiteKind;
+
 typedef struct CcMap {
     CcId id;
     CcId route_id;
@@ -542,7 +559,11 @@ typedef struct CcMap {
     int32_t accuracy;
     int32_t recorded_condition;
     int32_t recorded_danger;
+    CcId recorded_from_kingdom_id;
+    CcId recorded_to_kingdom_id;
     int32_t ask_price;
+    bool recorded_closed;
+    bool recorded_smuggler_route;
     bool contraband;
 } CcMap;
 
@@ -550,7 +571,20 @@ typedef struct CcRouteKnowledge {
     CcId route_id;
     int32_t from_reveal_milli;
     int32_t to_reveal_milli;
+    int32_t learned_day;
+    int32_t recorded_condition;
+    int32_t recorded_danger;
+    CcPlayerKnowledgeSource source;
+    bool recorded_closed;
+    bool recorded_smuggler_route;
 } CcRouteKnowledge;
+
+typedef struct CcSettlementKnowledge {
+    CcId settlement_id;
+    CcId kingdom_id;
+    int32_t learned_day;
+    CcPlayerKnowledgeSource source;
+} CcSettlementKnowledge;
 
 typedef struct CcFaction {
     CcId id;
@@ -1331,7 +1365,9 @@ typedef struct CcPlayerCompany {
     int32_t reputation;
     uint32_t map_catalogue_mask;
     uint32_t map_archive_mask;
+    uint32_t road_book_site_discovery_mask;
     CcRouteKnowledge route_knowledge[CC_MAX_ROUTES];
+    CcSettlementKnowledge settlement_knowledge[CC_MAX_SETTLEMENTS];
     CcId accepted_situation_id;
 } CcPlayerCompany;
 
@@ -1508,12 +1544,17 @@ const CcMap *CcSimMap(const CcSim *sim, CcId id);
 const CcMap *CcSimMapForRoute(const CcSim *sim, CcId route_id, CcId owner_id);
 const CcRouteKnowledge *CcSimPlayerRouteKnowledge(const CcSim *sim,
                                                   CcId route_id);
+const CcSettlementKnowledge *CcSimPlayerSettlementKnowledge(
+    const CcSim *sim, CcId settlement_id);
 bool CcSimPlayerRouteReveal(const CcSim *sim, CcId route_id,
                             int32_t *from_reveal_milli,
                             int32_t *to_reveal_milli,
                             bool *charted);
 bool CcSimPlayerKnowsSettlement(const CcSim *sim, CcId settlement_id);
+bool CcSimPlayerKnowsRoadBookSite(const CcSim *sim,
+                                  CcRoadBookSiteKind kind);
 void CcSimInitializePlayerRouteKnowledge(CcSim *sim);
+void CcSimUpgradePlayerKnowledge(CcSim *sim);
 bool CcSimTravelPreview(const CcSim *sim, CcId destination_id,
                         CcTravelPreview *preview, char *error,
                         size_t error_capacity);

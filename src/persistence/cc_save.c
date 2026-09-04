@@ -9,7 +9,7 @@
 #include <string.h>
 
 #define CC_SQLITE_APPLICATION_ID 1128481362
-#define CC_SQLITE_USER_VERSION 23
+#define CC_SQLITE_USER_VERSION 24
 #define CC_JOURNAL_RECORD_VERSION 1
 #define CC_JOURNAL_RUNTIME_FLUSH_TICKS 6
 #define CC_JOURNAL_MAX_DAY_ADVANCE 3650
@@ -151,6 +151,42 @@ static bool EnsureColumn(sqlite3 *database, const char *table,
     return ColumnExists(database, table, column, &exists,
                         error, error_capacity) &&
         (exists || Execute(database, alter_sql, error, error_capacity));
+}
+
+static bool EnsurePlayerKnowledgeColumns(sqlite3 *database,
+                                         char *error,
+                                         size_t error_capacity)
+{
+    return EnsureColumn(database, "map_object", "recorded_from_kingdom_id",
+            "ALTER TABLE map_object ADD COLUMN recorded_from_kingdom_id INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "map_object", "recorded_to_kingdom_id",
+            "ALTER TABLE map_object ADD COLUMN recorded_to_kingdom_id INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "map_object", "recorded_closed",
+            "ALTER TABLE map_object ADD COLUMN recorded_closed INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "map_object", "recorded_smuggler_route",
+            "ALTER TABLE map_object ADD COLUMN recorded_smuggler_route INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "player_route_knowledge", "learned_day",
+            "ALTER TABLE player_route_knowledge ADD COLUMN learned_day INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "player_route_knowledge", "recorded_condition",
+            "ALTER TABLE player_route_knowledge ADD COLUMN recorded_condition INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "player_route_knowledge", "recorded_danger",
+            "ALTER TABLE player_route_knowledge ADD COLUMN recorded_danger INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "player_route_knowledge", "source",
+            "ALTER TABLE player_route_knowledge ADD COLUMN source INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "player_route_knowledge", "recorded_closed",
+            "ALTER TABLE player_route_knowledge ADD COLUMN recorded_closed INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "player_route_knowledge", "recorded_smuggler_route",
+            "ALTER TABLE player_route_knowledge ADD COLUMN recorded_smuggler_route INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity);
 }
 
 static bool EnsureRealmColumns(sqlite3 *database,
@@ -970,14 +1006,30 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " maker_settlement_id INTEGER NOT NULL, owner_id INTEGER NOT NULL, name TEXT NOT NULL,"
         " surveyed_day INTEGER NOT NULL, accuracy INTEGER NOT NULL,"
         " recorded_condition INTEGER NOT NULL, recorded_danger INTEGER NOT NULL,"
-        " ask_price INTEGER NOT NULL, contraband INTEGER NOT NULL);"
+        " ask_price INTEGER NOT NULL, contraband INTEGER NOT NULL,"
+        " recorded_from_kingdom_id INTEGER NOT NULL,"
+        " recorded_to_kingdom_id INTEGER NOT NULL,"
+        " recorded_closed INTEGER NOT NULL,"
+        " recorded_smuggler_route INTEGER NOT NULL);"
         "CREATE TABLE IF NOT EXISTS map_collection ("
         " id INTEGER PRIMARY KEY CHECK(id=1),"
         " catalogue_mask INTEGER NOT NULL, archive_mask INTEGER NOT NULL);"
         "CREATE TABLE IF NOT EXISTS player_route_knowledge ("
         " slot INTEGER PRIMARY KEY, route_id INTEGER NOT NULL UNIQUE,"
         " from_reveal_milli INTEGER NOT NULL,"
-        " to_reveal_milli INTEGER NOT NULL);";
+        " to_reveal_milli INTEGER NOT NULL,"
+        " learned_day INTEGER NOT NULL,"
+        " recorded_condition INTEGER NOT NULL,"
+        " recorded_danger INTEGER NOT NULL, source INTEGER NOT NULL,"
+        " recorded_closed INTEGER NOT NULL,"
+        " recorded_smuggler_route INTEGER NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS player_settlement_knowledge ("
+        " slot INTEGER PRIMARY KEY, settlement_id INTEGER NOT NULL UNIQUE,"
+        " kingdom_id INTEGER NOT NULL, learned_day INTEGER NOT NULL,"
+        " source INTEGER NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS player_site_knowledge ("
+        " id INTEGER PRIMARY KEY CHECK(id=1),"
+        " discovery_mask INTEGER NOT NULL);";
     const char *commitment_schema =
         "CREATE TABLE IF NOT EXISTS player_commitment ("
         " id INTEGER PRIMARY KEY CHECK(id=1), situation_id INTEGER NOT NULL);"
@@ -1219,6 +1271,7 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
            Execute(database, journal_schema, error, error_capacity) &&
            Execute(database, underroad_schema, error, error_capacity) &&
            Execute(database, road_site_schema, error, error_capacity) &&
+           EnsurePlayerKnowledgeColumns(database, error, error_capacity) &&
            EnsureJourneyColumns(database, error, error_capacity) &&
            EnsureSocialColumns(database, error, error_capacity) &&
            EnsureJournalMetaColumns(database, error, error_capacity) &&
@@ -1688,7 +1741,7 @@ static bool SaveMaps(sqlite3 *database, const CcSim *sim,
                      char *error, size_t error_capacity)
 {
     sqlite3_stmt *statement = NULL;
-    if (!Prepare(database, "INSERT INTO map_object VALUES(?,?,?,?,?,?,?,?,?,?,?,?);",
+    if (!Prepare(database, "INSERT INTO map_object VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
                  &statement, error, error_capacity)) return false;
     for (int32_t i = 0; i < sim->map_count; ++i) {
         const CcMap *map = &sim->maps[i];
@@ -1701,6 +1754,11 @@ static bool SaveMaps(sqlite3 *database, const CcSim *sim,
         BindInt(statement, 10, map->recorded_danger);
         BindInt(statement, 11, map->ask_price);
         BindInt(statement, 12, map->contraband ? 1 : 0);
+        BindId(statement, 13, map->recorded_from_kingdom_id);
+        BindId(statement, 14, map->recorded_to_kingdom_id);
+        BindInt(statement, 15, map->recorded_closed ? 1 : 0);
+        BindInt(statement, 16,
+                map->recorded_smuggler_route ? 1 : 0);
         if (!StepDone(database, statement, error, error_capacity) ||
             !ResetStatement(database, statement, error, error_capacity)) {
             sqlite3_finalize(statement); return false;
@@ -1730,7 +1788,8 @@ static bool SavePlayerRouteKnowledge(sqlite3 *database, const CcSim *sim,
     if (sim->schema_version < 23U) return true;
     sqlite3_stmt *statement = NULL;
     if (!Prepare(database,
-                 "INSERT INTO player_route_knowledge VALUES(?,?,?,?);",
+                 "INSERT INTO player_route_knowledge "
+                 "VALUES(?,?,?,?,?,?,?,?,?,?);",
                  &statement, error, error_capacity)) return false;
     for (int32_t i = 0; i < sim->route_count; ++i) {
         const CcRouteKnowledge *knowledge =
@@ -1739,6 +1798,13 @@ static bool SavePlayerRouteKnowledge(sqlite3 *database, const CcSim *sim,
         BindId(statement, 2, knowledge->route_id);
         BindInt(statement, 3, knowledge->from_reveal_milli);
         BindInt(statement, 4, knowledge->to_reveal_milli);
+        BindInt(statement, 5, knowledge->learned_day);
+        BindInt(statement, 6, knowledge->recorded_condition);
+        BindInt(statement, 7, knowledge->recorded_danger);
+        BindInt(statement, 8, (int32_t)knowledge->source);
+        BindInt(statement, 9, knowledge->recorded_closed ? 1 : 0);
+        BindInt(statement, 10,
+                knowledge->recorded_smuggler_route ? 1 : 0);
         if (!StepDone(database, statement, error, error_capacity) ||
             !ResetStatement(database, statement, error, error_capacity)) {
             sqlite3_finalize(statement);
@@ -1747,6 +1813,42 @@ static bool SavePlayerRouteKnowledge(sqlite3 *database, const CcSim *sim,
     }
     sqlite3_finalize(statement);
     return true;
+}
+
+static bool SavePlayerSettlementKnowledge(sqlite3 *database,
+                                          const CcSim *sim,
+                                          char *error,
+                                          size_t error_capacity)
+{
+    if (sim->schema_version < 34U) return true;
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database,
+                 "INSERT INTO player_settlement_knowledge "
+                 "VALUES(?,?,?,?,?);",
+                 &statement, error, error_capacity)) return false;
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        const CcSettlementKnowledge *knowledge =
+            &sim->player.settlement_knowledge[i];
+        BindInt(statement, 1, i);
+        BindId(statement, 2, knowledge->settlement_id);
+        BindId(statement, 3, knowledge->kingdom_id);
+        BindInt(statement, 4, knowledge->learned_day);
+        BindInt(statement, 5, (int32_t)knowledge->source);
+        if (!StepDone(database, statement, error, error_capacity) ||
+            !ResetStatement(database, statement, error, error_capacity)) {
+            sqlite3_finalize(statement);
+            return false;
+        }
+    }
+    sqlite3_finalize(statement);
+    if (!Prepare(database,
+                 "INSERT INTO player_site_knowledge VALUES(1,?);",
+                 &statement, error, error_capacity)) return false;
+    BindInt(statement, 1,
+            (int32_t)sim->player.road_book_site_discovery_mask);
+    bool result = StepDone(database, statement, error, error_capacity);
+    sqlite3_finalize(statement);
+    return result;
 }
 
 static bool SaveFactions(sqlite3 *database, const CcSim *sim,
@@ -2675,6 +2777,8 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
             "DELETE FROM route; DELETE FROM road_site;"
             "DELETE FROM map_object; DELETE FROM map_collection;"
             "DELETE FROM player_route_knowledge;"
+            "DELETE FROM player_settlement_knowledge;"
+            "DELETE FROM player_site_knowledge;"
             "DELETE FROM faction; DELETE FROM shipment;"
             "DELETE FROM shipment_intent; DELETE FROM diplomacy; DELETE FROM courier;"
             "DELETE FROM bandit_group; DELETE FROM monster_population;"
@@ -2714,6 +2818,8 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
         SaveMaps(database, sim, error, error_capacity) &&
         SaveMapCollection(database, sim, error, error_capacity) &&
         SavePlayerRouteKnowledge(database, sim, error, error_capacity) &&
+        SavePlayerSettlementKnowledge(database, sim,
+                                      error, error_capacity) &&
         SaveFactions(database, sim, error, error_capacity) &&
         SaveShipments(database, sim, error, error_capacity) &&
         SaveDiplomacyAndCouriers(database, sim, error, error_capacity) &&
@@ -2742,6 +2848,7 @@ static bool SaveSnapshot(sqlite3 *database, const CcSim *sim,
         EnsureLegendColumns(database, error, error_capacity) &&
         EnsureSocialColumns(database, error, error_capacity) &&
         EnsureCharacterLifecycleColumns(database, error, error_capacity) &&
+        EnsurePlayerKnowledgeColumns(database, error, error_capacity) &&
         Execute(database, "BEGIN IMMEDIATE;", error, error_capacity);
     if (ok) {
         ok = SaveSnapshotContents(database, sim, journal_generation,
@@ -3448,7 +3555,12 @@ static bool ReadMaps(sqlite3 *database, CcSim *sim,
                      char *error, size_t error_capacity)
 {
     sqlite3_stmt *statement = NULL;
-    if (!Prepare(database, "SELECT * FROM map_object ORDER BY slot;",
+    if (!Prepare(database,
+                 "SELECT slot,id,route_id,maker_settlement_id,owner_id,name,"
+                 "surveyed_day,accuracy,recorded_condition,recorded_danger,"
+                 "ask_price,contraband,recorded_from_kingdom_id,"
+                 "recorded_to_kingdom_id,recorded_closed,"
+                 "recorded_smuggler_route FROM map_object ORDER BY slot;",
                  &statement, error, error_capacity)) return false;
     int32_t rows = 0;
     while (sqlite3_step(statement) == SQLITE_ROW) {
@@ -3474,6 +3586,13 @@ static bool ReadMaps(sqlite3 *database, CcSim *sim,
         map->recorded_danger = sqlite3_column_int(statement, 9);
         map->ask_price = sqlite3_column_int(statement, 10);
         map->contraband = sqlite3_column_int(statement, 11) != 0;
+        map->recorded_from_kingdom_id =
+            (CcId)sqlite3_column_int64(statement, 12);
+        map->recorded_to_kingdom_id =
+            (CcId)sqlite3_column_int64(statement, 13);
+        map->recorded_closed = sqlite3_column_int(statement, 14) != 0;
+        map->recorded_smuggler_route =
+            sqlite3_column_int(statement, 15) != 0;
         rows += 1;
     }
     sqlite3_finalize(statement);
@@ -3511,7 +3630,9 @@ static bool ReadPlayerRouteKnowledge(sqlite3 *database, CcSim *sim,
     if (sim->schema_version < 23U) return true;
     sqlite3_stmt *statement = NULL;
     if (!Prepare(database,
-                 "SELECT slot,route_id,from_reveal_milli,to_reveal_milli "
+                 "SELECT slot,route_id,from_reveal_milli,to_reveal_milli,"
+                 "learned_day,recorded_condition,recorded_danger,source,"
+                 "recorded_closed,recorded_smuggler_route "
                  "FROM player_route_knowledge ORDER BY slot;",
                  &statement, error, error_capacity)) return false;
     int32_t rows = 0;
@@ -3532,6 +3653,15 @@ static bool ReadPlayerRouteKnowledge(sqlite3 *database, CcSim *sim,
             sqlite3_column_int(statement, 2);
         knowledge->to_reveal_milli =
             sqlite3_column_int(statement, 3);
+        knowledge->learned_day = sqlite3_column_int(statement, 4);
+        knowledge->recorded_condition = sqlite3_column_int(statement, 5);
+        knowledge->recorded_danger = sqlite3_column_int(statement, 6);
+        knowledge->source =
+            (CcPlayerKnowledgeSource)sqlite3_column_int(statement, 7);
+        knowledge->recorded_closed =
+            sqlite3_column_int(statement, 8) != 0;
+        knowledge->recorded_smuggler_route =
+            sqlite3_column_int(statement, 9) != 0;
         rows += 1;
     }
     sqlite3_finalize(statement);
@@ -3545,6 +3675,60 @@ static bool ReadPlayerRouteKnowledge(sqlite3 *database, CcSim *sim,
                  "Player route knowledge rows are incomplete.");
         return false;
     }
+    return true;
+}
+
+static bool ReadPlayerSettlementKnowledge(sqlite3 *database, CcSim *sim,
+                                          char *error,
+                                          size_t error_capacity)
+{
+    if (sim->schema_version < 34U) return true;
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database,
+                 "SELECT slot,settlement_id,kingdom_id,learned_day,source "
+                 "FROM player_settlement_knowledge ORDER BY slot;",
+                 &statement, error, error_capacity)) return false;
+    int32_t rows = 0;
+    int result = SQLITE_ROW;
+    while ((result = sqlite3_step(statement)) == SQLITE_ROW) {
+        int32_t slot = sqlite3_column_int(statement, 0);
+        if (slot != rows || slot < 0 || slot >= sim->settlement_count) {
+            SetError(error, error_capacity,
+                     "Player settlement knowledge rows are invalid.");
+            sqlite3_finalize(statement);
+            return false;
+        }
+        CcSettlementKnowledge *knowledge =
+            &sim->player.settlement_knowledge[slot];
+        knowledge->settlement_id =
+            (CcId)sqlite3_column_int64(statement, 1);
+        knowledge->kingdom_id =
+            (CcId)sqlite3_column_int64(statement, 2);
+        knowledge->learned_day = sqlite3_column_int(statement, 3);
+        knowledge->source =
+            (CcPlayerKnowledgeSource)sqlite3_column_int(statement, 4);
+        rows += 1;
+    }
+    sqlite3_finalize(statement);
+    if (result != SQLITE_DONE || rows != sim->settlement_count) {
+        SetError(error, error_capacity,
+                 "Player settlement knowledge rows are incomplete.");
+        return false;
+    }
+    if (!Prepare(database,
+                 "SELECT discovery_mask FROM player_site_knowledge "
+                 "WHERE id=1;",
+                 &statement, error, error_capacity)) return false;
+    result = sqlite3_step(statement);
+    if (result != SQLITE_ROW) {
+        SetError(error, error_capacity,
+                 "Player site knowledge is missing.");
+        sqlite3_finalize(statement);
+        return false;
+    }
+    sim->player.road_book_site_discovery_mask =
+        (uint32_t)sqlite3_column_int(statement, 0);
+    sqlite3_finalize(statement);
     return true;
 }
 
@@ -5098,6 +5282,11 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
     uint32_t legacy_version = sim->schema_version;
     ClearMissingLegacyEventReferences(sim);
     MakeLegacyCharacterNamesUnique(sim);
+    if (legacy_version == 33U && sim->generator_version == 25U) {
+        sim->schema_version = CC_SIM_SCHEMA_VERSION;
+        sim->generator_version = CC_GENERATOR_VERSION;
+        return true;
+    }
     if (legacy_version == 32U && sim->generator_version == 25U) {
         CcSimInitializePaperEconomy(sim);
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
@@ -5153,7 +5342,8 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
         legacy_version != 25U && legacy_version != 26U &&
         legacy_version != 27U && legacy_version != 28U &&
         legacy_version != 29U && legacy_version != 30U &&
-        legacy_version != 31U && legacy_version != 32U) return true;
+        legacy_version != 31U && legacy_version != 32U &&
+        legacy_version != 33U) return true;
     if (legacy_version == 27U) {
         CcSimInitializeWoodEconomy(sim);
         if (sim->generator_version != 23U) {
@@ -5542,6 +5732,8 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
               EnsureSocialColumns(database, error, error_capacity) &&
               EnsureCharacterLifecycleColumns(database,
                                               error, error_capacity) &&
+              EnsurePlayerKnowledgeColumns(database,
+                                           error, error_capacity) &&
               ReadMeta(database, sim, &expected_hash,
                        &journal_generation, &journal_cursor,
                        error, error_capacity) &&
@@ -5569,6 +5761,8 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
               ReadMapCollection(database, sim, error, error_capacity) &&
               ReadPlayerRouteKnowledge(database, sim,
                                        error, error_capacity) &&
+              ReadPlayerSettlementKnowledge(database, sim,
+                                            error, error_capacity) &&
               ReadMaterialEconomy(database, sim, error, error_capacity) &&
               ReadGoods(database, sim, error, error_capacity) &&
               ReadPlayerCommitment(database, sim, error, error_capacity) &&
@@ -5594,6 +5788,7 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
     uint32_t stored_schema_version = sim->schema_version;
     uint32_t stored_generator_version = sim->generator_version;
     if (!UpgradeLegacyRuntime(sim, error, error_capacity)) return false;
+    if (stored_schema_version < 34U) CcSimUpgradePlayerKnowledge(sim);
     if (upgraded != NULL) {
         *upgraded = sim->schema_version != stored_schema_version ||
                     sim->generator_version != stored_generator_version;

@@ -315,6 +315,136 @@ static void CheckRealJourneySight(bool reverse)
     RemoveDatabase(path);
 }
 
+static CcMap *CatalogueChartForRoute(CcSim *sim, CcId route_id)
+{
+    for (int32_t i = 0; i < sim->map_count; ++i) {
+        CcMap *map = &sim->maps[i];
+        if (map->route_id != route_id) continue;
+        map->owner_id = sim->player.id;
+        sim->player.map_catalogue_mask |=
+            UINT32_C(1) << (uint32_t)i;
+        return map;
+    }
+    return NULL;
+}
+
+static CcMap *CatalogueChartForSettlement(CcSim *sim, CcId settlement_id)
+{
+    for (int32_t i = 0; i < sim->map_count; ++i) {
+        const CcRoute *route = CcSimRoute(sim, sim->maps[i].route_id);
+        if (route == NULL ||
+            (route->from_id != settlement_id &&
+             route->to_id != settlement_id)) continue;
+        return CatalogueChartForRoute(sim, route->id);
+    }
+    return NULL;
+}
+
+static void CheckAgedChartKeepsItsRoadSnapshot(void)
+{
+    const char *path = "road-book-chart-snapshot-test.ccsave";
+    RemoveDatabase(path);
+    CcSim sim;
+    CcSimInit(&sim, UINT32_C(0x140));
+    CcRoute *route = &sim.routes[2];
+    CcMap *chart = CatalogueChartForRoute(&sim, route->id);
+    CC_CHECK(chart != NULL);
+    chart->surveyed_day = sim.current_day - 9;
+    chart->recorded_condition = 73;
+    chart->recorded_danger = 21;
+    chart->recorded_closed = false;
+    chart->recorded_smuggler_route = false;
+    CcSimInitializePlayerRouteKnowledge(&sim);
+
+    CcRoadBookRouteView view = {0};
+    CC_CHECK(CcRoadBookReadRoute(&sim, route->id, &view));
+    CC_CHECK(view.charted);
+    CC_CHECK(view.source == CC_PLAYER_KNOWLEDGE_CHART);
+    CC_CHECK(view.learned_day == chart->surveyed_day);
+    CC_CHECK(!view.recorded_closed);
+    CC_CHECK(!view.recorded_smuggler_route);
+
+    route->closed = true;
+    route->condition = 12;
+    sim.current_day += 5;
+    CC_CHECK(CcRoadBookReadRoute(&sim, route->id, &view));
+    CC_CHECK(!view.recorded_closed);
+    CC_CHECK(view.recorded_condition == 73);
+
+    route->closed = false;
+    route->smuggler_route = true;
+    route->condition = 48;
+    sim.current_day += 5;
+    CC_CHECK(CcRoadBookReadRoute(&sim, route->id, &view));
+    CC_CHECK(!view.recorded_closed);
+    CC_CHECK(!view.recorded_smuggler_route);
+    CC_CHECK(view.recorded_condition == 73);
+    CC_CHECK(view.recorded_danger == 21);
+
+    char error[256];
+    CC_CHECK(CcSaveWrite(path, &sim, error, sizeof(error)));
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(CcRoadBookReadRoute(&restored, route->id, &view));
+    CC_CHECK(view.source == CC_PLAYER_KNOWLEDGE_CHART);
+    CC_CHECK(!view.recorded_closed);
+    CC_CHECK(!view.recorded_smuggler_route);
+    CC_CHECK(view.recorded_condition == 73);
+    RemoveDatabase(path);
+}
+
+static void CheckSiteDiscoveryAndPoliticalKnowledge(void)
+{
+    const char *path = "road-book-world-knowledge-test.ccsave";
+    RemoveDatabase(path);
+    CcSim sim;
+    CcSimInit(&sim, UINT32_C(42));
+    CcId underroad_settlement = sim.dungeons[0].settlement_id;
+    CcMap *chart = CatalogueChartForSettlement(
+        &sim, underroad_settlement);
+    CC_CHECK(chart != NULL);
+    CcSimInitializePlayerRouteKnowledge(&sim);
+    CC_CHECK(CcSimPlayerKnowsSettlement(&sim, underroad_settlement));
+    CC_CHECK(!CcSimPlayerKnowsRoadBookSite(
+        &sim, CC_ROAD_BOOK_SITE_UNDERROAD));
+
+    CcId known_kingdom = CcRoadBookSettlementKingdom(
+        &sim, underroad_settlement);
+    CC_CHECK(known_kingdom != 0U);
+    CcSettlement *remote = CcSimSettlementMutable(
+        &sim, underroad_settlement);
+    CC_CHECK(remote != NULL);
+    CcId ceded_to = known_kingdom == sim.kingdoms[0].id ?
+        sim.kingdoms[1].id : sim.kingdoms[0].id;
+    remote->kingdom_id = ceded_to;
+    sim.current_day += 7;
+    CC_CHECK(CcRoadBookSettlementKingdom(
+        &sim, underroad_settlement) == known_kingdom);
+
+    char error[256];
+    CC_CHECK(CcSaveWrite(path, &sim, error, sizeof(error)));
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(CcRoadBookSettlementKingdom(
+        &restored, underroad_settlement) == known_kingdom);
+    CC_CHECK(!CcSimPlayerKnowsRoadBookSite(
+        &restored, CC_ROAD_BOOK_SITE_UNDERROAD));
+
+    restored.player.location_id = underroad_settlement;
+    restored.carriage.location_id = underroad_settlement;
+    CcSimInitializePlayerRouteKnowledge(&restored);
+    CC_CHECK(CcRoadBookSettlementKingdom(
+        &restored, underroad_settlement) == ceded_to);
+    CC_CHECK(CcSimPlayerKnowsRoadBookSite(
+        &restored, CC_ROAD_BOOK_SITE_UNDERROAD));
+    CC_CHECK(CcSaveWrite(path, &restored, error, sizeof(error)));
+    CcSim discovered;
+    CC_CHECK(CcSaveRead(path, &discovered, error, sizeof(error)));
+    CC_CHECK(CcSimPlayerKnowsRoadBookSite(
+        &discovered, CC_ROAD_BOOK_SITE_UNDERROAD));
+    RemoveDatabase(path);
+}
+
 int main(void)
 {
     const char *path = "route-knowledge-test.ccsave";
@@ -459,6 +589,8 @@ int main(void)
     CheckCarriageSightForRouteLengths();
     CheckRealJourneySight(false);
     CheckRealJourneySight(true);
+    CheckAgedChartKeepsItsRoadSnapshot();
+    CheckSiteDiscoveryAndPoliticalKnowledge();
 
     RemoveDatabase(path);
     puts("Persistent route knowledge tests passed");

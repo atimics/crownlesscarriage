@@ -19,6 +19,37 @@ static float Minimum(float first, float second)
     return first < second ? first : second;
 }
 
+static void ReadRecordedRouteFacts(const CcSim *sim, CcId route_id,
+                                   CcRoadBookRouteView *view)
+{
+    const CcRouteKnowledge *knowledge =
+        CcSimPlayerRouteKnowledge(sim, route_id);
+    if (knowledge != NULL &&
+        knowledge->source != CC_PLAYER_KNOWLEDGE_NONE) {
+        view->learned_day = knowledge->learned_day;
+        view->recorded_condition = knowledge->recorded_condition;
+        view->recorded_danger = knowledge->recorded_danger;
+        view->source = knowledge->source;
+        view->recorded_closed = knowledge->recorded_closed;
+        view->recorded_smuggler_route =
+            knowledge->recorded_smuggler_route;
+    }
+    for (int32_t i = 0; sim != NULL && i < sim->map_count; ++i) {
+        const CcMap *map = &sim->maps[i];
+        if (map->route_id != route_id ||
+            map->owner_id != sim->player.id ||
+            !CcSimMapIsCatalogued(sim, map) ||
+            (view->source != CC_PLAYER_KNOWLEDGE_NONE &&
+             map->surveyed_day <= view->learned_day)) continue;
+        view->learned_day = map->surveyed_day;
+        view->recorded_condition = map->recorded_condition;
+        view->recorded_danger = map->recorded_danger;
+        view->source = CC_PLAYER_KNOWLEDGE_CHART;
+        view->recorded_closed = map->recorded_closed;
+        view->recorded_smuggler_route = map->recorded_smuggler_route;
+    }
+}
+
 bool CcRoadBookReadRoute(const CcSim *sim, CcId route_id,
                          CcRoadBookRouteView *view)
 {
@@ -31,7 +62,15 @@ bool CcRoadBookReadRoute(const CcSim *sim, CcId route_id,
         &view->charted);
     view->from_reveal = (float)from_reveal_milli / 1000.0f;
     view->to_reveal = (float)to_reveal_milli / 1000.0f;
+    ReadRecordedRouteFacts(sim, route_id, view);
     return visible;
+}
+
+CcId CcRoadBookSettlementKingdom(const CcSim *sim, CcId settlement_id)
+{
+    const CcSettlementKnowledge *knowledge =
+        CcSimPlayerSettlementKnowledge(sim, settlement_id);
+    return knowledge != NULL ? knowledge->kingdom_id : 0U;
 }
 
 bool CcRoadBookReadRouteAtCarriage(const CcSim *sim, CcId route_id,

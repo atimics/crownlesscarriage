@@ -43,6 +43,13 @@ The wide view renders generated corridors along revealed routes; it must not
 render a square world floor. Fog is derived from chart knowledge, current
 location, and current journey progress.
 
+Road-book facts belong to the player, with a learned day and source. Charts
+keep the road state and political borders recorded by their survey. Direct
+travel, witnessed events, and received reports may replace that snapshot.
+Remote world changes stay hidden until one of those sources reaches the
+player. The Underroad, goblin trail, and dragon roost each require their own
+persisted discovery bit; knowing the nearby settlement is not discovery.
+
 Authored town play uses `CcLocalPlaceProfile` in legacy-local coordinates.
 The open world is carriage-only. Entering an authored town must leave the
 world coordinate space before local movement, collision, or session saving.
@@ -51,7 +58,7 @@ must restore the same generated route pose and simulation progress.
 
 ## Save compatibility
 
-`CC_SIM_SCHEMA_VERSION` (33) and `CC_GENERATOR_VERSION` (25) version every
+`CC_SIM_SCHEMA_VERSION` (34) and `CC_GENERATOR_VERSION` (25) version every
 save file and command journal. The policy: **every schema version ever
 shipped stays loadable**. The legacy table in `cc_sim.c` (`legacy_schema`,
 with the per-version branches below it) is the implementation, and
