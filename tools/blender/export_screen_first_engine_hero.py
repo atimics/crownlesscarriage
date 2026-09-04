@@ -552,7 +552,7 @@ def consolidate(objects: list[bpy.types.Object],
     polygon_materials = [polygon.material_index
                          for polygon in combined.data.polygons]
     paint_channels.add_indexed_paint_channels(
-        combined, polygon_materials, material_names)
+        combined, polygon_materials, material_names, surface_labels=True)
     combined.parent = rig
     armatures = [modifier for modifier in combined.modifiers
                  if modifier.type == "ARMATURE"]
@@ -673,7 +673,8 @@ def export() -> None:
             "skinned_objects": 1,
             "strategy": "joined skin with rigid body weights and quadratic hair tip blends",
         },
-        "paint_contract": "COLOR_0 stores material index, authored value, and fold strength",
+        "paint_contract": paint_channels.SURFACE_CONTRACT,
+        "surface_classes": list(paint_channels.SURFACE_CLASSES),
         "hair_contract": {
             "scalp_cores": 1,
             "opaque_clumps": 6,

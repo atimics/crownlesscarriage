@@ -567,6 +567,7 @@ typedef struct VisualStyleCache {
     int32_t npc_hero_head_position_location;
     int32_t npc_rim_tint_location;
     int32_t npc_rim_strength_location;
+    int32_t npc_material_style_location;
     bool npc_ready;
     Shader npc_skinned;
     int32_t npc_skinned_light_direction_location;
@@ -583,6 +584,7 @@ typedef struct VisualStyleCache {
     int32_t npc_skinned_body_skin_remap_location;
     int32_t npc_skinned_rim_tint_location;
     int32_t npc_skinned_rim_strength_location;
+    int32_t npc_skinned_material_style_location;
     bool npc_skinned_ready;
     ArtAtmosphereDefinition presentation_atmosphere;
     float presentation_practical_glow;
@@ -1491,7 +1493,8 @@ static void ApplyNpcBodyStyle(Model *model)
 
 static void SetIndexedPalette(
     const Color colors[CC_NPC_ARCHETYPE_MATERIAL_COUNT],
-    float ink_strength, bool hero_emphasis, Vector3 hero_head_position)
+    float ink_strength, bool hero_emphasis, Vector3 hero_head_position,
+    bool material_style)
 {
     if (!visual_style.npc_ready || colors == NULL) return;
     float palette[CC_NPC_ARCHETYPE_MATERIAL_COUNT * 4];
@@ -1517,6 +1520,9 @@ static void SetIndexedPalette(
                    visual_style.npc_ink_strength_location,
                    &ink_strength, SHADER_UNIFORM_FLOAT);
     float hero = hero_emphasis ? 1.0f : 0.0f;
+    float surface_style = material_style ? 1.0f : 0.0f;
+    SetShaderValue(visual_style.npc, visual_style.npc_material_style_location,
+                   &surface_style, SHADER_UNIFORM_FLOAT);
     SetShaderValue(visual_style.npc,
                    visual_style.npc_hero_emphasis_location,
                    &hero, SHADER_UNIFORM_FLOAT);
@@ -1524,6 +1530,9 @@ static void SetIndexedPalette(
                    visual_style.npc_hero_head_position_location,
                    &hero_head_position, SHADER_UNIFORM_VEC3);
     if (visual_style.npc_skinned_ready) {
+        SetShaderValue(visual_style.npc_skinned,
+                        visual_style.npc_skinned_material_style_location,
+                        &surface_style, SHADER_UNIFORM_FLOAT);
         SetShaderValueV(visual_style.npc_skinned,
                         visual_style.npc_skinned_palette_location,
                         palette, SHADER_UNIFORM_VEC4,
@@ -1561,7 +1570,8 @@ static void SetNpcPalette(const CcNpcAppearance *appearance,
         ShadeColor(appearance->hair, 0.62f),
     };
     SetIndexedPalette(colors, ink_strength, hero_emphasis,
-                      hero_head_position);
+                      hero_head_position,
+                      hero_emphasis || appearance->role == CC_NPC_ROLE_GUARD);
 }
 
 typedef struct CreatureRenderPalette {
@@ -1615,6 +1625,32 @@ static CcCreatureVariant DragonCreatureForLifeStage(
     }
 }
 
+/* Coat, mane, and ribbon colors stay paired across travel and stable scenes. */
+static const Color PONY_COLORS[4][3] = {
+    {{246, 151, 206, 255}, {186, 48, 139, 255}, {113, 231, 226, 255}},
+    {{183, 156, 247, 255}, {78, 71, 185, 255}, {248, 125, 205, 255}},
+    {{112, 224, 215, 255}, {237, 101, 155, 255}, {255, 222, 130, 255}},
+    {{255, 207, 125, 255}, {153, 76, 207, 255}, {116, 224, 237, 255}},
+};
+
+static int32_t PonyColorIndex(Color coat)
+{
+    if (coat.a == 0) return 0;
+    int32_t best = 0;
+    int32_t distance = INT32_MAX;
+    for (int32_t index = 0; index < 4; ++index) {
+        int32_t r = (int32_t)coat.r - PONY_COLORS[index][0].r;
+        int32_t g = (int32_t)coat.g - PONY_COLORS[index][0].g;
+        int32_t b = (int32_t)coat.b - PONY_COLORS[index][0].b;
+        int32_t candidate = r * r + g * g + b * b;
+        if (candidate < distance) {
+            distance = candidate;
+            best = index;
+        }
+    }
+    return best;
+}
+
 static CreatureRenderPalette CreaturePalette(CcCreatureVariant variant,
                                               Color primary)
 {
@@ -1638,16 +1674,16 @@ static CreatureRenderPalette CreaturePalette(CcCreatureVariant variant,
             colors[7] = (Color){220, 158, 54, 255};
             break;
         case CC_CREATURE_HORSE: {
-            Color coat = primary.a > 0 ? primary :
-                                         (Color){104, 78, 59, 255};
-            colors[0] = coat;
-            colors[1] = ShadeColor(coat, 0.54f);
-            colors[2] = ShadeColor(coat, 0.82f);
-            colors[3] = (Color){72, 48, 38, 255};
-            colors[4] = (Color){50, 37, 32, 255};
-            colors[7] = (Color){128, 88, 52, 255};
-            colors[5] = (Color){224, 208, 172, 255};
-            colors[8] = (Color){12, 10, 9, 255};
+            const Color *pony = PONY_COLORS[PonyColorIndex(primary)];
+            colors[0] = pony[0];
+            colors[1] = pony[1];
+            colors[2] = BlendColor(pony[0], (Color){255, 244, 250, 255}, 0.32f);
+            colors[3] = pony[2];
+            colors[4] = (Color){58, 37, 81, 255};
+            colors[5] = (Color){255, 251, 244, 255};
+            colors[6] = (Color){81, 139, 216, 255};
+            colors[7] = pony[2];
+            colors[8] = (Color){23, 17, 45, 255};
             break;
         }
         case CC_CREATURE_COW: {
@@ -2726,7 +2762,7 @@ static bool DrawCreatureGait3D(CcCreatureVariant variant,
                 palette.cloth, palette.leather, palette.horn,
                 palette.metal, palette.accent, palette.eye,
             };
-            SetIndexedPalette(colors, 0.54f, false, (Vector3){0});
+            SetIndexedPalette(colors, 0.54f, false, (Vector3){0}, false);
             if (visual_style.npc_skinned_ready) {
                 float body_skin_remap = 0.0f;
                 SetShaderValue(
@@ -3235,6 +3271,8 @@ static void LoadVisualStyle(void)
             visual_style.npc_rim_strength_location = GetShaderLocation(
                 visual_style.npc, "characterRimStrength");
             visual_style.npc_ready = true;
+            visual_style.npc_material_style_location = GetShaderLocation(
+                visual_style.npc, "materialStyle");
         } else {
             visual_style.npc = (Shader){0};
             TraceLog(LOG_WARNING,
@@ -3284,6 +3322,8 @@ static void LoadVisualStyle(void)
                     GetShaderLocation(visual_style.npc_skinned,
                                       "characterRimStrength");
                 visual_style.npc_skinned_ready = true;
+                visual_style.npc_skinned_material_style_location =
+                    GetShaderLocation(visual_style.npc_skinned, "materialStyle");
             } else {
                 visual_style.npc_skinned = (Shader){0};
                 TraceLog(LOG_WARNING,

@@ -11,6 +11,14 @@ static void PrintSummary(const CcSim *sim, bool detail)
     int32_t total_hunger = 0;
     int32_t maximum_hunger = 0;
     int32_t travelling = 0;
+    int32_t blocked_shipments = 0;
+    int32_t royal_idle = 0;
+    int32_t royal_repositioning = 0;
+    int32_t royal_delivering = 0;
+    int32_t royal_blocked = 0;
+    int32_t royal_waiting_capacity = 0;
+    int32_t royal_trips = 0;
+    int32_t royal_losses = 0;
     int32_t open_routes = 0;
     int32_t smuggler_routes = 0;
     int32_t legitimacy = 0;
@@ -42,6 +50,25 @@ static void PrintSummary(const CcSim *sim, bool detail)
     }
     for (int32_t i = 0; i < sim->shipment_count; ++i) {
         if (sim->shipments[i].status == CC_SHIPMENT_TRAVELLING) travelling += 1;
+        if (sim->shipments[i].status == CC_SHIPMENT_BLOCKED) {
+            blocked_shipments += 1;
+        }
+    }
+    for (int32_t i = 0; i < sim->royal_carriage_count; ++i) {
+        const CcRoyalCarriage *carriage = &sim->royal_carriages[i];
+        if (carriage->mode == CC_ROYAL_CARRIAGE_IDLE) royal_idle += 1;
+        if (carriage->mode == CC_ROYAL_CARRIAGE_REPOSITIONING) {
+            royal_repositioning += 1;
+        }
+        if (carriage->mode == CC_ROYAL_CARRIAGE_DELIVERING) {
+            royal_delivering += 1;
+        }
+        if (carriage->mode == CC_ROYAL_CARRIAGE_BLOCKED) royal_blocked += 1;
+        if (carriage->mode == CC_ROYAL_CARRIAGE_WAITING_CAPACITY) {
+            royal_waiting_capacity += 1;
+        }
+        royal_trips += carriage->trips_completed;
+        royal_losses += carriage->cargo_losses;
     }
     for (int32_t i = 0; i < sim->route_count; ++i) {
         if (!sim->routes[i].closed) open_routes += 1;
@@ -81,6 +108,8 @@ static void PrintSummary(const CcSim *sim, bool detail)
     CcMaterialChainSnapshot chain = CcSimMaterialChainSnapshot(sim);
     (void)printf("day=%d hash=%016" PRIx64
                  " average_hunger=%d maximum_hunger=%d shipments=%d events=%d"
+                 " blocked_shipments=%d royal_carriages=%d/%d/%d/%d/%d"
+                 " royal_trips=%d royal_losses=%d"
                  " open_routes=%d/%d legitimacy=%d live_situations=%d"
                  " bandit_influence=%d monster_pressure=%d"
                  " night_roads=%d monastery_reserve=%" PRId64
@@ -106,6 +135,9 @@ static void PrintSummary(const CcSim *sim, bool detail)
                  sim->current_day, CcSimHash(sim),
                  total_hunger / sim->settlement_count, maximum_hunger,
                  travelling, sim->event_count,
+                 blocked_shipments, royal_idle, royal_repositioning,
+                 royal_delivering, royal_blocked, royal_waiting_capacity,
+                 royal_trips, royal_losses,
                  open_routes, sim->route_count, legitimacy / sim->kingdom_count,
                  CcSimActiveSituationCount(sim),
                  sim->bandit_count > 0 ? sim->bandits[0].influence : 0,
@@ -180,6 +212,23 @@ static void PrintSummary(const CcSim *sim, bool detail)
                          person->generation,
                          home != NULL ? home->name : "unknown");
         }
+        for (int32_t i = 0; i < sim->royal_carriage_count; ++i) {
+            const CcRoyalCarriage *carriage = &sim->royal_carriages[i];
+            (void)printf(
+                "  royal[%d] mode=%s location=%llu route=%llu next=%llu"
+                " target=%llu shipment=%llu depart=%d arrive=%d blocked=%d"
+                " next_dispatch=%d condition=%d trips=%d losses=%d\n",
+                i, CcRoyalCarriageModeName(carriage->mode),
+                (unsigned long long)carriage->location_id,
+                (unsigned long long)carriage->route_id,
+                (unsigned long long)carriage->destination_id,
+                (unsigned long long)carriage->target_id,
+                (unsigned long long)carriage->active_shipment_id,
+                carriage->departure_day, carriage->arrival_day,
+                carriage->blocked_since_day, carriage->next_dispatch_day,
+                carriage->condition, carriage->trips_completed,
+                carriage->cargo_losses);
+        }
     }
 }
 int main(int argc, char **argv)
@@ -238,6 +287,7 @@ int main(int argc, char **argv)
         CcSimAdvanceDays(&sim, 365);
         if (!CcSimValidate(&sim, error, sizeof(error))) {
             (void)fprintf(stderr, "validation failed in year %d: %s\n", year + 1, error);
+            if (detail) PrintSummary(&sim, true);
             return 1;
         }
         if (checkpoint_every > 0 && (year + 1) % checkpoint_every == 0 &&

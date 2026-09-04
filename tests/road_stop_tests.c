@@ -132,20 +132,28 @@ static void CheckPersistence(void)
         CC_CHECK(CcJournalClose(&journal, &restored, error, sizeof(error)));
         (void)remove(path);
     }
-    PrepareStop(0, false);
-    sim.schema_version = 37U;
-    CC_CHECK(CcSaveWrite(path, &sim, error, sizeof(error)));
-    sqlite3 *database = NULL;
-    CC_CHECK(sqlite3_open(path, &database) == SQLITE_OK);
-    CC_CHECK(sqlite3_exec(database,
-        "ALTER TABLE runtime_state DROP COLUMN road_site_stop_mask;",
-        NULL, NULL, NULL) == SQLITE_OK);
-    CC_CHECK(sqlite3_close(database) == SQLITE_OK);
-    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
-    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
-    CC_CHECK(restored.journey.road_site_stop_mask == 0U);
-    CC_CHECK(CcSimJourneyRoadSiteStop(&restored) != NULL);
-    (void)remove(path);
+    for (uint32_t version = 37U; version <= 38U; ++version) {
+        PrepareStop(0, false);
+        CcSimAdvanceDays(&sim, 2);
+        sim.schema_version = version;
+        uint64_t legacy_hash = CcSimHash(&sim);
+        CC_CHECK(CcSaveWrite(path, &sim, error, sizeof(error)));
+        sqlite3 *database = NULL;
+        CC_CHECK(sqlite3_open(path, &database) == SQLITE_OK);
+        CC_CHECK(sqlite3_exec(database,
+            "ALTER TABLE runtime_state DROP COLUMN road_site_stop_mask;",
+            NULL, NULL, NULL) == SQLITE_OK);
+        CC_CHECK(sqlite3_close(database) == SQLITE_OK);
+        CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+        CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+        CC_CHECK(restored.journey.road_site_stop_mask == 0U);
+        CC_CHECK(CcSimJourneyRoadSiteStop(&restored) != NULL);
+        if (version == 38U) {
+            restored.schema_version = version;
+            CC_CHECK(CcSimHash(&restored) == legacy_hash);
+        }
+        (void)remove(path);
+    }
 }
 
 int main(void)

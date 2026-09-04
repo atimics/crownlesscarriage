@@ -1,0 +1,3 @@
+chatterbox-tts==0.1.7
+# Perth uses pkg_resources for its packaged watermark model.
+setuptools<81

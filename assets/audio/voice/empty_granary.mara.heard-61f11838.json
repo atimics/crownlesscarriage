@@ -1,0 +1,17 @@
+{
+  "id": "empty_granary.mara.heard",
+  "text": "8 boxes of food. I will load them.",
+  "speaker": "Mara Venn",
+  "model": "ChatterboxTTS",
+  "seed": 3099866863,
+  "sample_rate": 24000,
+  "reference_sha256": null,
+  "wav_sha256": "9cbb11c9b3b4fa7b1a64b0dbc38ad64962f388b9171ad4763efefc68f2c90cd3",
+  "master_sha256": "b4b57670ed46bd24b8bc9b747ad4d6efae2fd26c35b02a9b99299c2373e857c3",
+  "processing": {
+    "style": "pixel-v1",
+    "bits": 8,
+    "mix": 0.4,
+    "texture_sample_rate": 12000.0
+  }
+}
