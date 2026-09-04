@@ -25,6 +25,7 @@ static void AdvanceHorseTeam(CcSim *sim);
 static void AdvanceRuins(CcSim *sim);
 static int32_t SettlementSlotById(const CcSim *sim, CcId id);
 static int32_t CalculateDragonCrownStrength(const CcSim *sim);
+static bool DragonIsAliveAndUncrowned(const CcSim *sim);
 static CcId LatestLocalCause(const CcSim *sim, CcId location);
 static uint32_t RoadHouseSeed(const CcSim *sim, CcId route_id);
 static const char *GeneratedRoadHouseName(const CcSim *sim, CcId route_id);
@@ -5454,18 +5455,49 @@ static void AdvanceCoronationLaw(CcSim *sim, bool scriptorium_ready,
         if (sim->schema_version >= 35U) {
             kingdom->anointed_by_character_id = 0U;
         }
-        kingdom->legitimacy = MaximumI32(0, kingdom->legitimacy - 15);
+        bool live_uncrowned_dragon = DragonIsAliveAndUncrowned(sim);
+        int32_t legitimacy_loss = live_uncrowned_dragon ? 8 : 15;
+        kingdom->legitimacy = MaximumI32(0, kingdom->legitimacy - legitimacy_loss);
         kingdom->pretender_crises += 1;
         char text[CC_EVENT_TEXT_CAPACITY];
-        (void)snprintf(
-            text, sizeof(text),
-            "A year of abbey silence breeds a pretender in %.72s.",
-            kingdom->name);
+        if (live_uncrowned_dragon) {
+            (void)snprintf(
+                text, sizeof(text),
+                "A pretender rises in %.60s, vowing to slay %.30s.",
+                kingdom->name, sim->dragon.name);
+            if (sim->dragon_campaign.phase == CC_DRAGON_CAMPAIGN_OUTBOUND &&
+                ((sim->dragon_campaign.pledged_kingdom_mask >> i) & 1U) != 0) {
+                sim->dragon_campaign.supplies[CC_GOOD_TOOLS] =
+                    MinimumI32(CC_SIM_MAX_UNITS,
+                        sim->dragon_campaign.supplies[CC_GOOD_TOOLS] + 3);
+                sim->dragon_campaign.recovered_coins += 40;
+            }
+            if (sim->dragon_campaign.phase == CC_DRAGON_CAMPAIGN_IDLE &&
+                sim->dragon_campaign.cooldown_days > 0) {
+                sim->dragon_campaign.cooldown_days =
+                    MaximumI32(0, sim->dragon_campaign.cooldown_days - 60);
+            }
+        } else {
+            (void)snprintf(
+                text, sizeof(text),
+                "A year of abbey silence breeds a pretender in %.72s.",
+                kingdom->name);
+        }
         (void)PushEvent(
             sim, CC_EVENT_PRETENDER_CRISIS, kingdom->id,
             scriptorium_id, LatestLocalCause(sim, scriptorium_id),
-            -15, text);
+            -legitimacy_loss, text);
     }
+}
+
+static bool DragonIsAliveAndUncrowned(const CcSim *sim)
+{
+    if (sim == NULL || sim->dragon.id == 0U || sim->dragon.slain) return false;
+    return sim->dragon.life_stage == CC_DRAGON_STAGE_EGG ||
+           sim->dragon.life_stage == CC_DRAGON_STAGE_WHELP ||
+           sim->dragon.life_stage == CC_DRAGON_STAGE_WANDERER ||
+           sim->dragon.life_stage == CC_DRAGON_STAGE_UNCROWNED ||
+           sim->dragon.life_stage == CC_DRAGON_STAGE_DEEP_WYRM;
 }
 
 static int32_t CharacterKingdomSlot(const CcSim *sim,
