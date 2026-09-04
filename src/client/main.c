@@ -9951,6 +9951,7 @@ int main(int argc, char **argv)
         }
         (void)snprintf(startup_message, sizeof(startup_message), "%s",
                        journal != NULL ? "The company shares this carriage and clock." : error);
+        CcCoopClientReady(journal != NULL ? "" : error);
     } else if (capture || render_benchmark) {
         CcSimAdvanceDays(&sim, 28);
     } else {

@@ -14,6 +14,8 @@
 #endif
 
 EM_JS(int, CoopEnabled, (), { return Module.ccCoop && Module.ccCoop.enabled ? 1 : 0; });
+EM_JS(void, CoopReady, (const char *error), { Module.ccCoop.ready(UTF8ToString(error)); });
+EM_JS(void, CoopSynced, (const char *hash), { document.body.dataset.companyHash = UTF8ToString(hash); });
 EM_ASYNC_JS(int, CoopConnect, (char *error, int capacity), {
     try { await Module.ccCoop.connect(); return 1; }
     catch (failure) { stringToUTF8(failure.message, error, capacity); return 0; }
@@ -45,6 +47,7 @@ EM_JS(unsigned char *, CoopTake, (int *length), {
 #endif
 
 bool CcCoopClientActive(void) { return CoopEnabled() != 0; }
+void CcCoopClientReady(const char *error) { CoopReady(error); }
 
 bool CcCoopClientPoll(CcSim *sim, char *error, size_t capacity)
 {
@@ -53,6 +56,11 @@ bool CcCoopClientPoll(CcSim *sim, char *error, size_t capacity)
     if (bytes == NULL) return false;
     bool ok = CcSaveDecode(bytes, (size_t)length, sim, error, capacity);
     free(bytes);
+    if (ok) {
+        char hash[24];
+        (void)snprintf(hash, sizeof(hash), "%016" PRIx64, CcSimHash(sim));
+        CoopSynced(hash);
+    }
     return ok;
 }
 
@@ -89,6 +97,7 @@ bool CcCoopClientSkip(CcSim *sim, char *error, size_t capacity)
     (void)sim; (void)error; (void)capacity; return false;
 }
 bool CcCoopClientActive(void) { return false; }
+void CcCoopClientReady(const char *error) { (void)error; }
 bool CcCoopClientConnect(CcSim *sim, char *error, size_t capacity)
 {
     (void)sim; (void)error; (void)capacity; return false;

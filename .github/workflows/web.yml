@@ -59,6 +59,18 @@ jobs:
         env:
           CC_PLAYWRIGHT_MODULE: ${{ runner.temp }}/crownless-browser/node_modules/playwright
         run: node tests/browser_tests.cjs out/build/web/site browser-results
+      - name: Build the shared carriage host
+        run: |
+          sudo apt-get update && sudo apt-get install -y libsqlite3-dev
+          cmake -S . -B out/build/coop -DCC_BUILD_CLIENT=OFF -DCMAKE_BUILD_TYPE=Release
+          cmake --build out/build/coop --target crownless_coop --parallel
+          python3 -m venv out/build/coop/venv
+          out/build/coop/venv/bin/python -m pip install -r tools/coop/requirements.txt
+      - name: Test shared browser players
+        env:
+          CC_PLAYWRIGHT_MODULE: ${{ runner.temp }}/crownless-browser/node_modules/playwright
+          CC_COOP_PYTHON: out/build/coop/venv/bin/python
+        run: node tests/coop_browser_tests.cjs out/build/coop/libcrownless_coop.so out/build/web/site
       - name: Upload browser checks
         if: always()
         uses: actions/upload-artifact@v4

@@ -4,8 +4,8 @@
   let state = null, pending = null, lastPoll = 0, inFlight = false, applying = false;
   const token = enabled ? localStorage.getItem('cc-coop-token') : '';
   const key = `cc-coop-pending-${worldId}`;
-  let status;
-  function say(message) { if (status) status.textContent = message; }
+  let status, startupError = '';
+  function say(message) { if (status) status.textContent = startupError || message; }
   function accept(next) {
     if (state && next.revision < state.revision) return;
     if (!state || next.revision !== state.revision) pending = next.campaign;
@@ -51,7 +51,9 @@
     lastPoll = performance.now(); inFlight = true;
     request(`state?campaign=1&after=${state ? state.revision : -1}`).then(accept).catch(error => say(error.message)).finally(() => { inFlight = false; });
   }
-  Module.ccCoop = { enabled, connect, apply, poll, take() { const value = pending; pending = null; return value; } };
+  Module.ccCoop = { enabled, connect, apply, poll,
+    ready(error) { startupError = error; document.body.dataset.companyReady = error ? 'error' : 'ready'; if (error) say(error); },
+    take() { const value = pending; pending = null; return value; } };
   if (enabled && typeof document !== 'undefined') {
     const attach = () => {
       const hint = document.getElementById('hint');
