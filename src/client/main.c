@@ -1108,28 +1108,6 @@ static bool WorldSessionRouteScore(
         }
         travelled += segment_length;
     }
-    int32_t gate_sample = route->from_id == settlement_id ?
-        0 : CC_WORLD_ROUTE_SAMPLE_COUNT - 1;
-    int32_t junction_sample = route->from_id == settlement_id ?
-        CC_WORLD_ROUTE_FROM_JUNCTION_SAMPLE :
-        CC_WORLD_ROUTE_TO_JUNCTION_SAMPLE;
-    float connector_distance = SessionPointSegmentDistanceSquared(
-        position, route->samples[gate_sample],
-        route->samples[junction_sample], NULL);
-    if (connector_distance <= best_distance + 0.0001f) {
-        float route_amount = CcWorldRouteSampleAmount(
-            route, junction_sample);
-        float journey_amount = route->from_id == settlement_id ?
-            route_amount : 1.0f - route_amount;
-        CcWorldPoint ignored_position;
-        float departure_heading = 0.0f;
-        if (CcWorldRoutePose(
-                route, settlement_id, journey_amount,
-                &ignored_position, &departure_heading)) {
-            best_heading = SessionAngleDistance(
-                departure_heading, facing_yaw);
-        }
-    }
     *distance_squared = best_distance;
     *heading_distance = best_heading;
     if (nearest_route_amount != NULL) {
@@ -6248,6 +6226,8 @@ static int RunWorldSessionStartupRegression(void)
         return SessionStartupTestFailed(
             session_path, "World session setup failed.");
     }
+    const CcRoute *fallback_route = NULL;
+    int32_t fallback_route_index = -1;
     const CcRoute *route = NULL;
     int32_t route_index = -1;
     int32_t incident_routes = 0;
@@ -6257,13 +6237,17 @@ static int RunWorldSessionStartupRegression(void)
             continue;
         }
         incident_routes += 1;
+        if (incident_routes == 1) {
+            fallback_route = &sim.routes[i];
+            fallback_route_index = i;
+        }
         if (incident_routes == 2) {
             route = &sim.routes[i];
             route_index = i;
             break;
         }
     }
-    if (route == NULL) {
+    if (fallback_route == NULL || route == NULL) {
         return SessionStartupTestFailed(
             session_path, "World session needs a second road branch.");
     }
@@ -6447,7 +6431,16 @@ static int RunWorldSessionStartupRegression(void)
 
     CcWorldPoint branch_position;
     float branch_heading = 0.0f;
-    const float branch_journey_amount = 0.18f;
+    int32_t junction_sample = route->from_id == sim.player.location_id ?
+        CC_WORLD_ROUTE_FROM_JUNCTION_SAMPLE :
+        CC_WORLD_ROUTE_TO_JUNCTION_SAMPLE;
+    float junction_route_amount = CcWorldRouteSampleAmount(
+        route_placement, junction_sample);
+    float junction_journey_amount =
+        route->from_id == sim.player.location_id ?
+            junction_route_amount : 1.0f - junction_route_amount;
+    const float branch_journey_amount = junction_journey_amount +
+        (1.0f - junction_journey_amount) * 0.18f;
     const float branch_route_amount =
         route->from_id == sim.player.location_id ?
             branch_journey_amount : 1.0f - branch_journey_amount;
@@ -6485,14 +6478,6 @@ static int RunWorldSessionStartupRegression(void)
             session_path, "Version 3 world session chose the wrong branch.");
     }
 
-    int32_t junction_sample = route->from_id == sim.player.location_id ?
-        CC_WORLD_ROUTE_FROM_JUNCTION_SAMPLE :
-        CC_WORLD_ROUTE_TO_JUNCTION_SAMPLE;
-    float junction_route_amount = CcWorldRouteSampleAmount(
-        route_placement, junction_sample);
-    float junction_journey_amount =
-        route->from_id == sim.player.location_id ?
-            junction_route_amount : 1.0f - junction_route_amount;
     CcWorldPoint shared_gate_position;
     float shared_gate_heading = 0.0f;
     const CcWorldSettlementPlacement *branch_place =
@@ -6501,14 +6486,14 @@ static int RunWorldSessionStartupRegression(void)
     if (branch_place == NULL ||
         !CcWorldRoutePose(
             route_placement, sim.player.location_id,
-            junction_journey_amount,
+            0.0f,
             &shared_gate_position, &shared_gate_heading) ||
         !SessionTestFloatMatches(
-            shared_gate_position.x, branch_place->junction.x) ||
+            shared_gate_position.x, branch_place->gate.x) ||
         !SessionTestFloatMatches(
-            shared_gate_position.z, branch_place->junction.z) ||
+            shared_gate_position.z, branch_place->gate.z) ||
         !WriteVersionThreeWorldSession(
-            session_path, &sim, branch_place->gate,
+            session_path, &sim, shared_gate_position,
             shared_gate_heading)) {
         return SessionStartupTestFailed(
             session_path, "Version 3 shared gate setup failed.");
@@ -6522,16 +6507,16 @@ static int RunWorldSessionStartupRegression(void)
     view = VIEW_LOCAL;
     int32_t shared_gate_selected = -1;
     float shared_gate_route_amount =
-        route->from_id == sim.player.location_id ? 0.0f : 1.0f;
+        fallback_route->from_id == sim.player.location_id ? 0.0f : 1.0f;
     if (!RestoreClientStartupSession(
             session_path, &sim, &shared_gate_restore, &view,
             &shared_gate_selected) ||
         view != VIEW_ROADS || !shared_gate_restore.open_world ||
-        shared_gate_restore.world_carriage.route_id != route->id ||
+        shared_gate_restore.world_carriage.route_id != fallback_route->id ||
         !SessionTestFloatMatches(
             shared_gate_restore.world_carriage.route_amount,
             shared_gate_route_amount) ||
-        shared_gate_selected != route_index ||
+        shared_gate_selected != fallback_route_index ||
         !SessionTestFloatMatches(
             shared_gate_restore.agent.position.x, branch_place->gate.x) ||
         !SessionTestFloatMatches(

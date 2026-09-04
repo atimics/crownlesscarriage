@@ -20,7 +20,7 @@ static void SetSessionError(char *error, size_t capacity,
     (void)snprintf(error, capacity, "%s", message != NULL ? message : "");
 }
 
-bool CcClientSessionValidate(const CcClientSession *session)
+static bool ClientSessionValidateBase(const CcClientSession *session)
 {
     return session != NULL &&
            session->version == CC_CLIENT_SESSION_VERSION &&
@@ -35,6 +35,13 @@ bool CcClientSessionValidate(const CcClientSession *session)
            fabsf(session->position_z) <= 100000.0f &&
            fabsf(session->facing_yaw) <= 100000.0f &&
            session->opening_step <= 2U;
+}
+
+bool CcClientSessionValidate(const CcClientSession *session)
+{
+    return ClientSessionValidateBase(session) &&
+           (session->coordinate_space != CC_CLIENT_SESSION_WORLD ||
+            session->route_id != 0U);
 }
 
 bool CcClientSessionWrite(const char *path, const CcClientSession *session,
@@ -152,10 +159,12 @@ bool CcClientSessionRead(const char *path, CcClientSession *session,
         loaded.route_id = 0U;
         if (version_one) loaded.opening_step = 2U;
     }
+    bool valid = current ? CcClientSessionValidate(&loaded) :
+                           ClientSessionValidateBase(&loaded);
     if ((!version_one && !version_two && !version_three && !current) ||
         !closed ||
         strcmp(marker, "CROWNLESS_SESSION") != 0 ||
-        !CcClientSessionValidate(&loaded)) {
+        !valid) {
         SetSessionError(error, error_capacity,
                         "Saved local session is invalid or unsupported.");
         return false;

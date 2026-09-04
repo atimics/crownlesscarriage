@@ -65,6 +65,20 @@ int main(void)
     invalid = original;
     invalid.opening_step = 3U;
     CC_CHECK(!CcClientSessionValidate(&invalid));
+    invalid = original;
+    invalid.route_id = 0U;
+    CC_CHECK(!CcClientSessionValidate(&invalid));
+    CC_CHECK(!CcClientSessionWrite(session_path, &invalid,
+                                   error, sizeof(error)));
+
+    FILE *version_four_without_route = fopen(session_path, "wb");
+    CC_CHECK(version_four_without_route != NULL);
+    CC_CHECK(fputs(
+        "CROWNLESS_SESSION 4\n3232176798 42 0 1 0 17.5 12.5 -0.5 2\n",
+        version_four_without_route) >= 0);
+    CC_CHECK(fclose(version_four_without_route) == 0);
+    CC_CHECK(!CcClientSessionRead(session_path, &restored,
+                                  error, sizeof(error)));
 
     FILE *legacy = fopen(session_path, "wb");
     CC_CHECK(legacy != NULL);
