@@ -1197,17 +1197,6 @@ static const CcRoute *InferWorldSessionRoute(
     const float distance_epsilon = 0.0001f;
     const float heading_epsilon = 0.001f;
     if (sim == NULL || manifest == NULL || session == NULL) return NULL;
-    const CcWorldSettlementPlacement *settlement =
-        CcWorldSettlementPlacementForId(manifest, session->location_id);
-    if (session->version == 3U &&
-        session->coordinate_space == CC_CLIENT_SESSION_WORLD &&
-        session->route_id == 0U && settlement != NULL) {
-        float gate_dx = session->position_x - settlement->gate.x;
-        float gate_dz = session->position_z - settlement->gate.z;
-        if (gate_dx * gate_dx + gate_dz * gate_dz <= distance_epsilon) {
-            return OpenWorldRouteFromSettlement(sim, session->location_id);
-        }
-    }
     const CcRoute *best_route = NULL;
     float best_distance = INFINITY;
     float best_heading = INFINITY;
@@ -1251,6 +1240,8 @@ static bool LegacyVersionThreeGateRestorePose(
     }
     CcWorldPoint saved = {session->position_x, session->position_z};
     const CcRoute *matched_route = NULL;
+    float matched_distance_squared = INFINITY;
+    const float distance_tie_epsilon = 0.000001f;
     for (int32_t i = 0; i < sim->route_count; ++i) {
         const CcRoute *candidate = &sim->routes[i];
         if (candidate->from_id != session->location_id &&
@@ -1267,12 +1258,16 @@ static bool LegacyVersionThreeGateRestorePose(
         }
         float dx = saved.x - legacy_gate.x;
         float dz = saved.z - legacy_gate.z;
-        if (dx * dx + dz * dz <= 0.01f) {
+        float distance_squared = dx * dx + dz * dz;
+        if (distance_squared <
+                matched_distance_squared - distance_tie_epsilon) {
             matched_route = candidate;
-            break;
+            matched_distance_squared = distance_squared;
         }
     }
-    if (matched_route == NULL) return false;
+    if (matched_route == NULL || matched_distance_squared > 0.01f) {
+        return false;
+    }
 
     const CcWorldRoutePlacement *matched_placement =
         CcWorldRoutePlacementForId(manifest, matched_route->id);
@@ -6725,10 +6720,11 @@ static int RunWorldSessionStartupRegression(void)
     }
     view = VIEW_LOCAL;
     int32_t legacy_gate_selected = -1;
-    if (!RestoreClientStartupSession(
+    bool legacy_gate_restored = RestoreClientStartupSession(
             session_path, &sim, &legacy_gate_restore, &view,
-            &legacy_gate_selected) ||
-        view != VIEW_ROADS || !legacy_gate_restore.open_world ||
+            &legacy_gate_selected);
+    if (!legacy_gate_restored || view != VIEW_ROADS ||
+        !legacy_gate_restore.open_world ||
         legacy_gate_restore.world_carriage.route_id != route->id ||
         !SessionTestFloatMatches(
             legacy_gate_restore.world_carriage.route_amount,
@@ -6743,6 +6739,24 @@ static int RunWorldSessionStartupRegression(void)
         !SessionTestFloatMatches(
             legacy_gate_restore.agent.facing_yaw,
             migrated_gate_heading)) {
+        (void)fprintf(
+            stderr,
+            "Legacy version 3 gate: restored=%d view=%d world=%d "
+            "route=%llu expected=%llu selected=%d expected_selected=%d\n"
+            "amount=%.9g expected_amount=%.9g position=(%.9g, %.9g) "
+            "expected_position=(%.9g, %.9g) yaw=%.9g expected_yaw=%.9g\n",
+            legacy_gate_restored ? 1 : 0, (int)view,
+            legacy_gate_restore.open_world ? 1 : 0,
+            (unsigned long long)legacy_gate_restore.world_carriage.route_id,
+            (unsigned long long)route->id,
+            legacy_gate_selected, route_index,
+            legacy_gate_restore.world_carriage.route_amount,
+            junction_route_amount,
+            legacy_gate_restore.agent.position.x,
+            legacy_gate_restore.agent.position.z,
+            migrated_gate_position.x, migrated_gate_position.z,
+            legacy_gate_restore.agent.facing_yaw,
+            migrated_gate_heading);
         return SessionStartupTestFailed(
             session_path, "Legacy version 3 gate did not migrate.");
     }
