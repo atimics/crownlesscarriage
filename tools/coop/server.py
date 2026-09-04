@@ -207,7 +207,7 @@ class Worlds:
                                 (world, name, digest(token), nonce, digest(invitation), saved, view))
                 self.db.execute("INSERT INTO members(world,token_hash,id,name) VALUES(?,?,?,?)",
                                 (world, digest(token), secrets.token_hex(8), player))
-        return self.view(world, token)
+        return self.view(world, token, present=False)
 
     def session_context(self, world, row):
         state = json.loads(row["view"])
@@ -268,7 +268,7 @@ class Worlds:
                 require(active < MAX_MEMBERS and total < 64, "This carriage has reached its crew limit.", 409)
                 self.db.execute("INSERT INTO members(world,token_hash,id,name) VALUES(?,?,?,?)",
                                 (world, digest(token), secrets.token_hex(8), name))
-        return self.view(world, token)
+        return self.view(world, token, present=False)
 
     def appearance(self, world, token, body):
         require(set(body) == {"appearance"}, "Send your avatar appearance.")

@@ -169,6 +169,16 @@ class CoopTests(unittest.TestCase):
             self.assertEqual(resumed['away_clock']['days_pending'], 0)
             self.assertEqual(self.worlds.view(self.id, self.a)['state']['day'], before['state']['day'])
 
+    def test_invitation_and_avatar_panel_preserve_away_speed(self):
+        base = self.worlds.db.execute('SELECT last_human FROM away_clocks WHERE world=?', (self.id,)).fetchone()[0]
+        with patch('server.time.time', return_value=base+AWAY_GRACE+AWAY_RAMP):
+            joined = self.worlds.join(self.id, self.b, {'player':'Bren', 'invite':self.invite})
+            self.assertEqual(joined['away_clock']['absent_seconds'], AWAY_RAMP)
+            self.assertAlmostEqual(joined['away_clock']['years_per_real_day'], 100)
+            self.assertTrue(all(not member['online'] for member in joined['crew']))
+            edited = self.worlds.appearance(self.id, self.b, {'appearance':joined['appearance']})
+            self.assertEqual(edited['away_clock'], joined['away_clock'])
+
     def test_away_clock_survives_restart_and_return_stops_acceleration(self):
         before = self.worlds.view(self.id, self.a)
         base = self.worlds.db.execute('SELECT last_human FROM away_clocks WHERE world=?', (self.id,)).fetchone()[0]
