@@ -20,7 +20,7 @@ static void SetSessionError(char *error, size_t capacity,
     (void)snprintf(error, capacity, "%s", message != NULL ? message : "");
 }
 
-bool CcClientSessionValidate(const CcClientSession *session)
+static bool ClientSessionValidateBase(const CcClientSession *session)
 {
     return session != NULL &&
            session->version == CC_CLIENT_SESSION_VERSION &&
@@ -35,6 +35,13 @@ bool CcClientSessionValidate(const CcClientSession *session)
            fabsf(session->position_z) <= 100000.0f &&
            fabsf(session->facing_yaw) <= 100000.0f &&
            session->opening_step <= 2U;
+}
+
+bool CcClientSessionValidate(const CcClientSession *session)
+{
+    return ClientSessionValidateBase(session) &&
+           (session->coordinate_space != CC_CLIENT_SESSION_WORLD ||
+            session->route_id != 0U);
 }
 
 bool CcClientSessionWrite(const char *path, const CcClientSession *session,
@@ -59,10 +66,12 @@ bool CcClientSessionWrite(const char *path, const CcClientSession *session,
         return false;
     }
     int written = fprintf(
-        file, "CROWNLESS_SESSION %u\n%u %llu %d %d %.9g %.9g %.9g %u\n",
+        file,
+        "CROWNLESS_SESSION %u\n%u %llu %d %d %llu %.9g %.9g %.9g %u\n",
         session->version, session->world_seed,
         (unsigned long long)session->location_id, (int)session->scene,
         (int)session->coordinate_space,
+        (unsigned long long)session->route_id,
         (double)session->position_x, (double)session->position_z,
         (double)session->facing_yaw, session->opening_step);
     bool ok = written > 0 && fflush(file) == 0;
@@ -102,6 +111,7 @@ bool CcClientSessionRead(const char *path, CcClientSession *session,
     unsigned long long location_id = 0U;
     int scene = -1;
     int coordinate_space = CC_CLIENT_SESSION_LEGACY_LOCAL;
+    unsigned long long route_id = 0U;
     float position_x = 0.0f;
     float position_z = 0.0f;
     float facing_yaw = 0.0f;
@@ -109,6 +119,11 @@ bool CcClientSessionRead(const char *path, CcClientSession *session,
     int header_fields = fscanf(file, "%31s %u", marker, &version);
     int body_fields = 0;
     if (header_fields == 2 && version == CC_CLIENT_SESSION_VERSION) {
+        body_fields = fscanf(file, "%u %llu %d %d %llu %f %f %f %u",
+                             &world_seed, &location_id, &scene,
+                             &coordinate_space, &route_id, &position_x,
+                             &position_z, &facing_yaw, &opening_step);
+    } else if (header_fields == 2 && version == 3U) {
         body_fields = fscanf(file, "%u %llu %d %d %f %f %f %u",
                              &world_seed, &location_id, &scene,
                              &coordinate_space, &position_x, &position_z,
@@ -126,6 +141,7 @@ bool CcClientSessionRead(const char *path, CcClientSession *session,
         .location_id = (uint64_t)location_id,
         .scene = (CcClientSessionScene)scene,
         .coordinate_space = (CcClientSessionCoordinateSpace)coordinate_space,
+        .route_id = (uint64_t)route_id,
         .position_x = position_x,
         .position_z = position_z,
         .facing_yaw = facing_yaw,
@@ -133,15 +149,22 @@ bool CcClientSessionRead(const char *path, CcClientSession *session,
     };
     bool version_one = version == 1U && body_fields == 6;
     bool version_two = version == 2U && body_fields == 7;
-    bool current = version == CC_CLIENT_SESSION_VERSION && body_fields == 8;
-    if (version_one || version_two) {
+    bool version_three = version == 3U && body_fields == 8;
+    bool current = version == CC_CLIENT_SESSION_VERSION && body_fields == 9;
+    if (version_one || version_two || version_three) {
         loaded.version = CC_CLIENT_SESSION_VERSION;
-        loaded.coordinate_space = CC_CLIENT_SESSION_LEGACY_LOCAL;
+        if (version_one || version_two) {
+            loaded.coordinate_space = CC_CLIENT_SESSION_LEGACY_LOCAL;
+        }
+        loaded.route_id = 0U;
         if (version_one) loaded.opening_step = 2U;
     }
-    if ((!version_one && !version_two && !current) || !closed ||
+    bool valid = current ? CcClientSessionValidate(&loaded) :
+                           ClientSessionValidateBase(&loaded);
+    if ((!version_one && !version_two && !version_three && !current) ||
+        !closed ||
         strcmp(marker, "CROWNLESS_SESSION") != 0 ||
-        !CcClientSessionValidate(&loaded)) {
+        !valid) {
         SetSessionError(error, error_capacity,
                         "Saved local session is invalid or unsupported.");
         return false;

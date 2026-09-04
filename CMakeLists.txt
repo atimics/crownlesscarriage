@@ -876,6 +876,10 @@ if(BUILD_TESTING)
                  COMMAND crownless_carriage --test-town-departure)
         add_test(NAME roadbook_arrival_transition
                  COMMAND crownless_carriage --test-roadbook-arrival)
+        add_test(NAME world_session_startup_restore
+                 COMMAND crownless_carriage --test-world-session-startup)
+        add_test(NAME town_session_startup_restore
+                 COMMAND crownless_carriage --test-town-session-startup)
 
         add_executable(npc_appearance_tests
             tests/npc_appearance_tests.c

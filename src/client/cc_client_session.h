@@ -5,7 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define CC_CLIENT_SESSION_VERSION UINT32_C(3)
+#define CC_CLIENT_SESSION_VERSION UINT32_C(4)
 
 typedef enum CcClientSessionScene {
     CC_CLIENT_SESSION_STREET = 0,
@@ -26,6 +26,7 @@ typedef struct CcClientSession {
     uint64_t location_id;
     CcClientSessionScene scene;
     CcClientSessionCoordinateSpace coordinate_space;
+    uint64_t route_id;
     float position_x;
     float position_z;
     float facing_yaw;

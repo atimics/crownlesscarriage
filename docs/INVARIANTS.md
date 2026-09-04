@@ -55,9 +55,11 @@ with the per-version branches below it) is the implementation, and
 1. Extend the legacy table and add the migration branch for the previous
    version.
 
-The client session has its own small version. Version 3 stores whether a
-position is in the shared world or an old scene-local space. Versions 1 and 2
-remain readable and are converted at load time.
+The client session has its own small version. Version 4 stores whether a
+position is in the shared world or an old scene-local space, plus the selected
+world route. Versions 1 through 3 remain readable and are converted at load
+time. A restored world route must be incident to the saved settlement and
+present in the regenerated manifest.
 2. Keep the assigned `CcCommandKind` and `CcEventKind` values stable. Command
    journals and causal events persist these numeric ids. The same rule applies
    to `CcCollectibleMapSlot` and the good aliases.
