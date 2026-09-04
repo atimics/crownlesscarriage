@@ -373,8 +373,8 @@ void CcLocalDrawFork3D(const CcSim *sim, int32_t selected_route,
         if (selected) {
             selected_branch_end = branch_end;
             selected_branch_found = true;
+            road = BlendColor(road, WORLD_GOLD, 0.30f);
         }
-        if (selected) road = BlendColor(road, WORLD_GOLD, 0.30f);
         float width = (route->smuggler_route ? 2.8f : 4.2f) +
                       (selected ? 0.65f : 0.0f);
         DrawForkRoadSegment(junction, branch_end, width, road, true);
@@ -1233,9 +1233,7 @@ static void DrawRemoteSiteEntrance(const CcSim *sim, CcLocalSiteKind site,
         DrawDragonCliffRoost(sim);
         return;
     }
-    Color rock = site == CC_LOCAL_SITE_DRAGON_CAVE ?
-        BlendColor(WORLD_STONE_SHADOW, WORLD_DANGER, 0.20f) :
-        site == CC_LOCAL_SITE_GOBLIN_CAVE ?
+    Color rock = site == CC_LOCAL_SITE_GOBLIN_CAVE ?
         BlendColor(WORLD_STONE_SHADOW, WORLD_VIOLET, 0.18f) :
         WORLD_STONE_SHADOW;
     if (site == CC_LOCAL_SITE_DUNGEON) {

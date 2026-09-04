@@ -10,6 +10,7 @@
 	blender-painted-market-pilot \
 	blender-character-engine \
 	art-check \
+	static-analysis \
 	configure-play build-play test-play \
 	configure-release build-release test-release \
 	configure-web build-web
@@ -18,6 +19,9 @@ BLENDER ?= blender
 
 art-assets-check:
 	python3 tools/art/check_asset_inventory.py
+
+static-analysis:
+	python3 tools/static_analysis.py
 
 configure-play:
 	cmake --preset play

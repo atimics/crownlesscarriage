@@ -600,6 +600,7 @@ static void CompactEventLedger(CcSim *sim, CcId incoming_parent)
     sim->event_write_index = sim->event_count;
 }
 
+/* The fixed event ledger always has a writable slot. Insertion returns it. */
 static CcEvent *PushEvent(CcSim *sim, CcEventKind kind, CcId subject,
                           CcId location, CcId parent, int32_t magnitude,
                           const char *text)
@@ -630,7 +631,6 @@ static CcEvent *PushSocialEvent(CcSim *sim, CcEventKind kind, CcId subject,
 {
     CcEvent *event = PushEvent(sim, kind, subject, location, parent,
                                magnitude, text);
-    if (event == NULL) return NULL;
     event->actor_id = actor;
     event->target_id = target;
     event->beneficiary_id = beneficiary;
@@ -3577,12 +3577,13 @@ static void UpdateSettlement(CcSim *sim, int32_t index)
     if (CcSettlementHasService(settlement, CC_SERVICE_HEALER)) {
         settlement->hunger = ClampI32(settlement->hunger - 1, 0, 100);
     }
+    bool prosperity_recovering =
+        (coverage >= 8 && settlement->prosperity < 78) ||
+        (settlement->hunger < 20 && coverage >= 3 &&
+         settlement->prosperity < 45);
     int32_t prosperity_change = settlement->hunger > 55 ? -2 :
                                 settlement->hunger > 30 ? -1 :
-                                coverage >= 8 &&
-                                settlement->prosperity < 78 ? 1 :
-                                settlement->hunger < 20 && coverage >= 3 &&
-                                settlement->prosperity < 45 ? 1 : 0;
+                                prosperity_recovering ? 1 : 0;
     settlement->prosperity = ClampI32(
         settlement->prosperity + prosperity_change, 0, 100);
     if (CcSettlementHasService(settlement, CC_SERVICE_MARKET) &&
@@ -3590,12 +3591,12 @@ static void UpdateSettlement(CcSim *sim, int32_t index)
         settlement->prosperity = ClampI32(settlement->prosperity + 1, 0, 100);
     }
     int32_t local_threat = MonsterPressureAtSettlement(sim, settlement->id);
+    bool security_recovering =
+        (settlement->security < 45 && settlement->hunger < 35) ||
+        (settlement->prosperity > 70 && settlement->hunger < 15 &&
+         settlement->security < 80);
     int32_t security_change = settlement->hunger > 50 || local_threat > 60 ? -1 :
-                              settlement->security < 45 &&
-                              settlement->hunger < 35 ? 1 :
-                              settlement->prosperity > 70 &&
-                              settlement->hunger < 15 &&
-                              settlement->security < 80 ? 1 : 0;
+                              security_recovering ? 1 : 0;
     settlement->security = ClampI32(
         settlement->security + security_change, 0, 100);
     if (CcSettlementHasService(settlement, CC_SERVICE_BARRACKS)) {
@@ -3797,28 +3798,26 @@ static void AdvanceArchives(CcSim *sim)
             /* Rebind in place: the first tome slot becomes the codex.
                No new slot is needed; the vault's stock is conserved. */
             CcTreasure *codex = &sim->treasures[tome_slots[0]];
-            if (codex != NULL) {
-                *codex = (CcTreasure){0};
-                (void)snprintf(codex->name, sizeof(codex->name),
-                               "Codex of the Scriptorium");
-                codex->id = NextId(sim, CC_ENTITY_TREASURE);
-                codex->maker_settlement_id = oldest_maker;
-                codex->owner_id = oldest_owner;
-                codex->location_id = oldest_location;
-                codex->gold_content = 1;
-                codex->gem_content = 1;
-                codex->craft_work = combined_lore;
-                codex->appraised_value = 6 + combined_lore;
-                codex->created_day = sim->current_day;
-                char text[CC_EVENT_TEXT_CAPACITY];
-                (void)snprintf(text, sizeof(text),
-                               "The scriptorium binds four chronicles into "
-                               "the Codex of the Scriptorium; nothing is "
-                               "lost that was written.");
-                (void)PushEvent(sim, CC_EVENT_LORE_RECORDED, codex->id,
-                                oldest_location, eldest_parent,
-                                combined_lore, text);
-            }
+            *codex = (CcTreasure){0};
+            (void)snprintf(codex->name, sizeof(codex->name),
+                           "Codex of the Scriptorium");
+            codex->id = NextId(sim, CC_ENTITY_TREASURE);
+            codex->maker_settlement_id = oldest_maker;
+            codex->owner_id = oldest_owner;
+            codex->location_id = oldest_location;
+            codex->gold_content = 1;
+            codex->gem_content = 1;
+            codex->craft_work = combined_lore;
+            codex->appraised_value = 6 + combined_lore;
+            codex->created_day = sim->current_day;
+            char text[CC_EVENT_TEXT_CAPACITY];
+            (void)snprintf(text, sizeof(text),
+                           "The scriptorium binds four chronicles into "
+                           "the Codex of the Scriptorium; nothing is "
+                           "lost that was written.");
+            (void)PushEvent(sim, CC_EVENT_LORE_RECORDED, codex->id,
+                            oldest_location, eldest_parent,
+                            combined_lore, text);
         }
     }
 
@@ -4259,16 +4258,15 @@ static CcEvent *StartDragonTheft(CcSim *sim, CcId thief_id,
         sim, CC_EVENT_DRAGON_HOARD_STOLEN, thief_id,
         sim->dragon.lair_settlement_id, parent_event_id,
         amount, theft_text);
-    sim->dragon.hoard_event_id = theft != NULL ? theft->id :
-                                 sim->dragon.hoard_event_id;
+    sim->dragon.hoard_event_id = theft->id;
     char omen_text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(omen_text, sizeof(omen_text),
                    "Smoke falls into %s's chimneys; old readers count 14 nights until %s comes.",
                    target->name, sim->dragon.name);
     CcEvent *omen = PushEvent(
         sim, CC_EVENT_DRAGON_OMEN, sim->dragon.id, target->id,
-        theft != NULL ? theft->id : 0U, 14, omen_text);
-    sim->dragon.omen_event_id = omen != NULL ? omen->id : 0U;
+        theft->id, 14, omen_text);
+    sim->dragon.omen_event_id = omen->id;
     return theft;
 }
 
@@ -4297,7 +4295,7 @@ static void PlanGoblinTribute(CcSim *sim)
         if (CcSettlementIsAbandoned(place) ||
             place->id == sim->dragon.lair_settlement_id ||
             place->id == goblins->lair_settlement_id) continue;
-        int64_t score = -place->security * 2;
+        int64_t score = -(int64_t)place->security * 2;
         if (goblins->raid_motive == CC_GOBLIN_RAID_HUNGER) {
             score += place->stock[CC_GOOD_FOOD] * 4;
         } else if (goblins->raid_motive == CC_GOBLIN_RAID_EQUIPMENT) {
@@ -4339,7 +4337,7 @@ static void PlanGoblinTribute(CcSim *sim)
         sim, CC_EVENT_GOBLIN_RAID_PREPARED, goblins->id,
         target->id, LatestLocalCause(sim, target->id),
         goblins->tribute_days_remaining, text);
-    goblins->tribute_event_id = event != NULL ? event->id : 0U;
+    goblins->tribute_event_id = event->id;
 }
 
 static void AdvanceGoblinTribute(CcSim *sim)
@@ -4393,8 +4391,7 @@ static void AdvanceGoblinTribute(CcSim *sim)
             sim, CC_EVENT_GOBLIN_RAID_DEPARTED, goblins->id,
             target->id, goblins->tribute_event_id,
             goblins->tribute_days_remaining, text);
-        goblins->tribute_event_id = event != NULL ? event->id :
-                                      goblins->tribute_event_id;
+        goblins->tribute_event_id = event->id;
     }
 
     goblins->tribute_days_remaining = MaximumI32(
@@ -4453,8 +4450,7 @@ static void AdvanceGoblinTribute(CcSim *sim)
         CcEvent *event = PushEvent(
             sim, CC_EVENT_GOBLIN_RAIDED, goblins->id, target->id,
             goblins->tribute_event_id, taken_goods + (int32_t)taken_coins, text);
-        goblins->tribute_event_id = event != NULL ? event->id :
-                                      goblins->tribute_event_id;
+        goblins->tribute_event_id = event->id;
         goblins->target_warned = false;
         return;
     }
@@ -4488,8 +4484,7 @@ static void AdvanceGoblinTribute(CcSim *sim)
             sim, CC_EVENT_GOBLIN_RAID_RETURNED, goblins->id,
             goblins->lair_settlement_id, goblins->tribute_event_id,
             goblins->members, text);
-        goblins->tribute_event_id = event != NULL ? event->id :
-                                      goblins->tribute_event_id;
+        goblins->tribute_event_id = event->id;
 
         if (sim->dragon.slain) {
             bool relic_raid = goblins->raid_motive ==
@@ -4543,8 +4538,7 @@ static void AdvanceGoblinTribute(CcSim *sim)
                               goblins->id, sim->dragon.lair_settlement_id,
                               goblins->tribute_event_id,
                               goblins->tribute_days_remaining, text);
-            goblins->tribute_event_id = event != NULL ? event->id :
-                                          goblins->tribute_event_id;
+            goblins->tribute_event_id = event->id;
             return;
         }
         goblins->carried_treasure_id = 0U;
@@ -4574,8 +4568,7 @@ static void AdvanceGoblinTribute(CcSim *sim)
             sim, CC_EVENT_GOBLIN_TRIBUTE_DELIVERED, goblins->id,
             sim->dragon.lair_settlement_id, goblins->tribute_event_id,
             (int32_t)delivered, text);
-        sim->dragon.hoard_event_id = event != NULL ? event->id :
-                                     sim->dragon.hoard_event_id;
+        sim->dragon.hoard_event_id = event->id;
     }
     goblins->tribute_phase = CC_GOBLIN_TRIBUTE_IDLE;
     goblins->raid_motive = CC_GOBLIN_RAID_NONE;
@@ -4708,12 +4701,12 @@ static void PlanHoardRaid(CcSim *sim)
     }
     CcEvent *departure = PushEvent(
         sim, CC_EVENT_HOARD_HEIST_DEPARTED, raiders->id, origin->id,
-        pressure != NULL ? pressure->id : 0U,
+        pressure->id,
         GoblinTravelDays(sim, origin->id), text);
     raiders->phase = CC_HOARD_RAIDERS_OUTBOUND;
     raiders->motive = motive;
     raiders->origin_settlement_id = origin->id;
-    raiders->cause_event_id = departure != NULL ? departure->id : 0U;
+    raiders->cause_event_id = departure->id;
     raiders->carried_treasure = 0;
     raiders->days_remaining = GoblinTravelDays(sim, origin->id);
 }
@@ -4792,7 +4785,7 @@ static void AdvanceHoardRaid(CcSim *sim)
                 sim, CC_EVENT_GOBLIN_HOARD_DEFENDED, sim->goblins.id,
                 sim->dragon.lair_settlement_id, raiders->cause_event_id,
                 defended, text);
-            if (defense != NULL) theft_parent_id = defense->id;
+            theft_parent_id = defense->id;
             stolen -= defended;
         }
         if (raiders->motive == CC_HOARD_RAID_WAR_FINANCE) {
@@ -4991,8 +4984,7 @@ static void DragonHunt(CcSim *sim)
     CcEvent *event = PushEvent(
         sim, CC_EVENT_DRAGON_HUNT, dragon->id, target->id,
         LatestLocalCause(sim, target->id), taken, text);
-    dragon->lifecycle_event_id = event != NULL ? event->id :
-                                 dragon->lifecycle_event_id;
+    dragon->lifecycle_event_id = event->id;
 }
 
 static void HatchDragonBrood(CcSim *sim)
@@ -5015,8 +5007,7 @@ static void HatchDragonBrood(CcSim *sim)
         sim, CC_EVENT_DRAGON_WHELP_DISPERSED, dragon->id,
         dragon->lair_settlement_id, dragon->lifecycle_event_id,
         whelps, text);
-    dragon->lifecycle_event_id = event != NULL ? event->id :
-                                 dragon->lifecycle_event_id;
+    dragon->lifecycle_event_id = event->id;
 }
 
 static void HatchDragonSuccessor(CcSim *sim)
@@ -5065,7 +5056,7 @@ static void HatchDragonSuccessor(CcSim *sim)
         sim, CC_EVENT_DRAGON_SUCCESSOR, dragon->id,
         dragon->lair_settlement_id, dragon->lifecycle_event_id,
         clutch, text);
-    dragon->lifecycle_event_id = event != NULL ? event->id : 0U;
+    dragon->lifecycle_event_id = event->id;
     dragon->hoard_event_id = dragon->lifecycle_event_id;
 }
 
@@ -5095,8 +5086,7 @@ static void BeginDragonBrood(CcSim *sim)
         sim, CC_EVENT_DRAGON_BROOD, dragon->id,
         dragon->lair_settlement_id, dragon->hoard_event_id,
         dragon->egg_count, text);
-    dragon->lifecycle_event_id = event != NULL ? event->id :
-                                 dragon->lifecycle_event_id;
+    dragon->lifecycle_event_id = event->id;
 }
 
 static void ChangeDragonStage(CcSim *sim, CcDragonLifeStage stage,
@@ -5111,8 +5101,7 @@ static void ChangeDragonStage(CcSim *sim, CcDragonLifeStage stage,
     CcEvent *event = PushEvent(
         sim, event_kind, dragon->id, dragon->lair_settlement_id,
         dragon->lifecycle_event_id, dragon->crown_strength, text);
-    dragon->lifecycle_event_id = event != NULL ? event->id :
-                                 dragon->lifecycle_event_id;
+    dragon->lifecycle_event_id = event->id;
 }
 
 static void AdvanceAfterdragonCult(CcSim *sim)
@@ -5174,8 +5163,7 @@ static void AdvanceAfterdragonCult(CcSim *sim)
             sim, CC_EVENT_GOBLIN_DRAGON_SEED_RUMORED, goblins->id,
             dragon->lair_settlement_id, dragon->lifecycle_event_id,
             goblins->dragon_seed_days_remaining, text);
-        dragon->lifecycle_event_id = event != NULL ? event->id :
-                                      dragon->lifecycle_event_id;
+        dragon->lifecycle_event_id = event->id;
         return;
     }
 
@@ -5193,8 +5181,7 @@ static void AdvanceAfterdragonCult(CcSim *sim)
             sim, CC_EVENT_GOBLIN_DRAGON_SEED_PREPARED, goblins->id,
             dragon->lair_settlement_id, dragon->lifecycle_event_id,
             goblins->dragon_seed_days_remaining, text);
-        dragon->lifecycle_event_id = event != NULL ? event->id :
-                                      dragon->lifecycle_event_id;
+        dragon->lifecycle_event_id = event->id;
     }
     if (goblins->dragon_seed_days_remaining > 0) return;
 
@@ -5235,8 +5222,7 @@ static void AdvanceAfterdragonCult(CcSim *sim)
         sim, CC_EVENT_GOBLIN_DRAGON_SEED, goblins->id,
         dragon->lair_settlement_id, dragon->lifecycle_event_id,
         dragon->egg_count, text);
-    dragon->lifecycle_event_id = event != NULL ? event->id :
-                                  dragon->lifecycle_event_id;
+    dragon->lifecycle_event_id = event->id;
     goblins->dragon_seed_phase = CC_GOBLIN_DRAGON_SEED_NONE;
     goblins->dragon_seed_days_remaining = 0;
 }
@@ -5261,7 +5247,6 @@ static void AdvanceLivingDragonCult(CcSim *sim)
     }
     int32_t recruits = 1;
     int32_t food_cost = 3;
-    if (goblins->lair_stock[CC_GOOD_FOOD] < food_cost) return;
     goblins->lair_stock[CC_GOOD_FOOD] -= food_cost;
     goblins->members += recruits;
     goblins->cohesion = ClampI32(goblins->cohesion + 1, 0, 100);
@@ -5320,8 +5305,7 @@ static void AdvanceAfterdragon(CcSim *sim)
             sim, CC_EVENT_DRAGON_AFTERSHOCK, dragon->id,
             dragon->lair_settlement_id, dragon->lifecycle_event_id,
             dragon->regional_influence, text);
-        dragon->lifecycle_event_id = event != NULL ? event->id :
-                                     dragon->lifecycle_event_id;
+        dragon->lifecycle_event_id = event->id;
     }
 }
 
@@ -5609,9 +5593,8 @@ static void AdvanceDragonRetaliation(CcSim *sim)
         CcEvent *restitution = PushEvent(
             sim, CC_EVENT_DRAGON_TREASURE_RETURNED, kingdom->id,
             dragon->lair_settlement_id,
-            fire != NULL ? fire->id : 0U, (int32_t)payment, text);
-        dragon->hoard_event_id = restitution != NULL ? restitution->id :
-                                 dragon->hoard_event_id;
+            fire->id, (int32_t)payment, text);
+        dragon->hoard_event_id = restitution->id;
         if (dragon->stolen_outstanding == 0) {
             dragon->memory_integrity = MaximumI32(
                 dragon->memory_integrity, 75);
@@ -5632,9 +5615,8 @@ static void AdvanceDragonRetaliation(CcSim *sim)
                        target->name, dragon->name);
         CcEvent *omen = PushEvent(
             sim, CC_EVENT_DRAGON_OMEN, dragon->id, target->id,
-            fire != NULL ? fire->id : 0U, 28, text);
-        dragon->omen_event_id = omen != NULL ? omen->id :
-                                dragon->omen_event_id;
+            fire->id, 28, text);
+        dragon->omen_event_id = omen->id;
     }
 }
 
@@ -6333,7 +6315,7 @@ static void InitializeMineSocialThread(CcSim *sim, CcSituation *situation,
             sim, CC_EVENT_RELATIONSHIP_HISTORY, situation->id,
             jory->home_settlement_id, situation->cause_event_id,
             jory->id, mara->id, 0U, 0U, 0, history_text);
-        CcId history_event_id = history_event != NULL ? history_event->id : 0U;
+        CcId history_event_id = history_event->id;
         (void)EnsureRelationship(
             sim, jory->id, mara->id, history, affinity, trust,
             obligation, history_event_id);
@@ -6357,8 +6339,7 @@ static void InitializeMineSocialThread(CcSim *sim, CcSituation *situation,
             sim, CC_EVENT_RUMOR_SHARED, situation->id,
             jory->home_settlement_id, situation->cause_event_id,
             bren->id, jory->id, jory->id, bren->id, 1, text);
-        situation->lead_event_id = rumor != NULL ? rumor->id :
-            situation->cause_event_id;
+        situation->lead_event_id = rumor->id;
     }
     RememberKnowledge(bren, CC_KNOWLEDGE_WITNESS_ACCOUNT, situation->id,
                       bren->id, situation->cause_event_id,
@@ -6594,7 +6575,7 @@ static CcFront *CreateFrontForSituation(CcSim *sim,
             sim, CC_EVENT_FRONT_CREATED, front->id,
             CcSimSituationOfferSettlementId(sim, situation),
             situation->cause_event_id, front->portent.limit, text);
-        front->created_event_id = event != NULL ? event->id : 0U;
+        front->created_event_id = event->id;
         front->portent.created_by_event_id = front->created_event_id;
     }
     return front;
@@ -6681,7 +6662,6 @@ static void ArchiveSituationOutcome(CcSim *sim,
     if (sim == NULL || situation == NULL ||
         CcSimQuestOutcome(sim, situation->id) != NULL) return;
     CcQuestOutcomeRecord *record = AllocateQuestOutcome(sim);
-    if (record == NULL) return;
     const CcFront *front = CcSimSituationFront(sim, situation);
     *record = (CcQuestOutcomeRecord){
         .id = NextId(sim, CC_ENTITY_QUEST_OUTCOME),
@@ -6751,8 +6731,7 @@ static void FinishFrontAfterSituation(CcSim *sim,
     CcEvent *event = PushEvent(sim, event_kind, front->id, front->anchor_id,
                                situation_event_id,
                                (int32_t)front->outcome, text);
-    front->resolved_event_id = event != NULL ? event->id :
-                               situation_event_id;
+    front->resolved_event_id = event->id;
     front->portent.resolved_by_event_id = front->resolved_event_id;
 }
 
@@ -6912,8 +6891,7 @@ static CcSituation *CreateSituation(
     CcEvent *created = PushEvent(
         sim, CC_EVENT_SITUATION_CREATED, situation->id, target,
         cause, quantity, text);
-    InitializeSituationObjective(
-        situation, created != NULL ? created->id : cause);
+    InitializeSituationObjective(situation, created->id);
     AttachSituationToFront(sim, situation, true);
     return situation;
 }
@@ -7103,8 +7081,7 @@ static void ResolveSituation(CcSim *sim, CcSituation *situation)
         sim, CC_EVENT_SITUATION_RESOLVED, situation->id,
         situation->target_id, situation->cause_event_id,
         accepted ? (int32_t)reward_paid : 0, text);
-    CcId resolution_id = resolution != NULL ? resolution->id :
-                           situation->objective.progress.resolved_by_event_id;
+    CcId resolution_id = resolution->id;
     CcCharacter *sponsor = CharacterMutable(
         sim, situation->sponsor_character_id);
     CcCharacter *affected = CharacterMutable(
@@ -7161,7 +7138,7 @@ static void ResolveSituation(CcSim *sim, CcSituation *situation)
                 .active = true,
                 .situation_id = situation->id,
                 .settlement_id = echo_settlement,
-                .parent_event_id = resolution != NULL ? resolution->id : 0U,
+                .parent_event_id = resolution->id,
                 .outcome = sim->resolved_journey_outcome !=
                         CC_JOURNEY_OUTCOME_NONE ?
                     sim->resolved_journey_outcome :
@@ -7223,8 +7200,7 @@ static void SupersedeTargetSituations(CcSim *sim, CcSituationKind kind, CcId tar
         CcEvent *failure = PushEvent(
             sim, CC_EVENT_SITUATION_FAILED, situation->id,
             situation->target_id, situation->cause_event_id, 0, text);
-        CcId failure_id = failure != NULL ? failure->id :
-                          situation->cause_event_id;
+        CcId failure_id = failure->id;
         FinishFrontAfterSituation(sim, situation, failure_id);
         ArchiveSituationOutcome(sim, situation, failure_id);
         RefreshSituationCharacterActivities(sim, situation);
@@ -7266,8 +7242,7 @@ static void SupersedeCompetingCrisisSituations(CcSim *sim,
         CcEvent *failure = PushEvent(
             sim, CC_EVENT_SITUATION_FAILED, other->id,
             other->target_id, other->cause_event_id, -3, text);
-        CcId failure_id = failure != NULL ? failure->id :
-                          other->cause_event_id;
+        CcId failure_id = failure->id;
         ArchiveSituationOutcome(sim, other, failure_id);
         RefreshSituationCharacterActivities(sim, other);
     }
@@ -7302,8 +7277,7 @@ static void ExpireSituations(CcSim *sim)
         CcEvent *failure = PushEvent(
             sim, CC_EVENT_SITUATION_FAILED, situation->id,
             situation->target_id, situation->cause_event_id, 0, text);
-        CcId failure_id = failure != NULL ? failure->id :
-                          situation->cause_event_id;
+        CcId failure_id = failure->id;
         situation->objective.danger.resolved_by_event_id = failure_id;
         if (accepted) {
             CcCharacter *sponsor = CharacterMutable(
@@ -7710,8 +7684,7 @@ static void DeliverCourier(CcSim *sim, CcCourier *courier,
         sim, CC_EVENT_COURIER_ARRIVED, courier->id,
         courier->destination_settlement_id, courier->cause_event_id,
         courier->reliability, text);
-    ApplyCourierMessage(sim, courier,
-                        arrival != NULL ? arrival->id : courier->cause_event_id);
+    ApplyCourierMessage(sim, courier, arrival->id);
     CcSituation *situation = (CcSituation *)CcSimSituation(
         sim, courier->situation_id);
     if (carried_by_player && situation != NULL &&
@@ -7762,8 +7735,7 @@ static void StartCourierLeg(CcSim *sim, CcCourier *courier)
         sim, CC_EVENT_COURIER_DEPARTED, courier->id,
         courier->current_settlement_id, courier->cause_event_id,
         route->travel_days, text);
-    courier->cause_event_id = departure != NULL ? departure->id :
-                               courier->cause_event_id;
+    courier->cause_event_id = departure->id;
 }
 
 static CcCourier *LaunchCourier(CcSim *sim, CcCourierKind kind,
@@ -7938,7 +7910,7 @@ static void TryLaunchDragonCampaign(CcSim *sim)
     CcEvent *event = PushEvent(
         sim, CC_EVENT_DRAGON_MUSTERED, sim->kingdoms[leader_slot].id,
         origin->id, campaign->cause_event_id, MaskCount(mask), text);
-    campaign->cause_event_id = event != NULL ? event->id : 0U;
+    campaign->cause_event_id = event->id;
 }
 
 static void RecoverDragonHoard(CcSim *sim)
@@ -8022,7 +7994,7 @@ static void AdvanceDragonCampaign(CcSim *sim)
         campaign->supplies[good] = 0;
     }
     char text[CC_EVENT_TEXT_CAPACITY];
-    CcEvent *battle = NULL;
+    CcEvent *battle;
     if (attack < defense) {
         campaign->defeats += 1;
         campaign->phase = CC_DRAGON_CAMPAIGN_IDLE;
@@ -8055,7 +8027,7 @@ static void AdvanceDragonCampaign(CcSim *sim)
             sim, CC_EVENT_DRAGON_BATTLE, sim->dragon.id,
             campaign->origin_settlement_id, campaign->cause_event_id,
             attack - defense, text);
-        campaign->cause_event_id = battle != NULL ? battle->id : 0U;
+        campaign->cause_event_id = battle->id;
         campaign->origin_settlement_id = 0U;
         return;
     }
@@ -8121,8 +8093,7 @@ static void AdvanceDragonCampaign(CcSim *sim)
     {
         CcSettlement *origin = CcSimSettlementMutable(
             sim, campaign->origin_settlement_id);
-        CcTreasure *relic = origin != NULL && battle != NULL ?
-            AllocateTreasure(sim) : NULL;
+        CcTreasure *relic = origin != NULL ? AllocateTreasure(sim) : NULL;
         if (relic != NULL) {
             (void)snprintf(relic->name, sizeof(relic->name),
                            "Bane of %.24s", sim->dragon.name);
@@ -8146,9 +8117,8 @@ static void AdvanceDragonCampaign(CcSim *sim)
                             relic->appraised_value, relic_text);
         }
     }
-    campaign->cause_event_id = battle != NULL ? battle->id : 0U;
-    sim->dragon.lifecycle_event_id = battle != NULL ? battle->id :
-                                      sim->dragon.lifecycle_event_id;
+    campaign->cause_event_id = battle->id;
+    sim->dragon.lifecycle_event_id = battle->id;
     campaign->phase = CC_DRAGON_CAMPAIGN_RETURNING;
     campaign->days_remaining = DragonCampaignTravelDays(
         sim, campaign->origin_settlement_id);
@@ -8264,9 +8234,12 @@ static void UpdateRoyalDiplomacy(CcSim *sim)
                                    first_pressure : second_pressure;
                 int32_t issuer_hunger = issuer == first ?
                                          first_hunger : second_hunger;
+                int32_t issuer_legitimacy = issuer == first ?
+                    sim->kingdoms[first].legitimacy :
+                    sim->kingdoms[second].legitimacy;
                 if (pressure >= 110 && issuer_hunger >= 25 &&
                     issuer_hunger <= 55 &&
-                    sim->kingdoms[issuer].legitimacy >= 30 &&
+                    issuer_legitimacy >= 30 &&
                     KingdomAverageProsperity(sim, recipient) >=
                         KingdomAverageProsperity(sim, issuer)) {
                     (void)LaunchCourier(
@@ -8763,7 +8736,7 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
                     (void)PushEvent(
                         sim, CC_EVENT_LORE_LOST, kingdom->id,
                         worst != NULL ? worst->id : kingdom->id,
-                        repudiation != NULL ? repudiation->id : 0U,
+                        repudiation->id,
                         newly_lost, lore_text);
                 }
             }
@@ -9400,7 +9373,7 @@ static bool ApplyTrade(CcSim *sim, const CcCommand *command,
     if (amount < 0) {
         ProgressDeliverySituations(
             sim, settlement->id, command->good, -amount,
-            trade != NULL ? trade->id : 0U);
+            trade->id);
     }
     RefreshSettlementGoodPrice(sim, settlement, command->good);
     SetError(error, error_capacity, "");
@@ -9504,7 +9477,7 @@ static bool ApplyGoblinWarning(CcSim *sim,
     CcEvent *event = PushEvent(
         sim, CC_EVENT_GOBLIN_TARGET_WARNED, sim->player.id,
         target->id, goblins->tribute_event_id, 6, text);
-    if (event != NULL) goblins->tribute_event_id = event->id;
+    goblins->tribute_event_id = event->id;
     SetError(error, error_capacity, "");
     return true;
 }
@@ -9839,16 +9812,15 @@ static bool ApplyStealDragonNamedTreasure(
         sim, CC_EVENT_DRAGON_HOARD_STOLEN, sim->player.id,
         sim->dragon.lair_settlement_id, sim->dragon.hoard_event_id,
         treasure->appraised_value, text);
-    sim->dragon.hoard_event_id = theft != NULL ? theft->id :
-                                 sim->dragon.hoard_event_id;
+    sim->dragon.hoard_event_id = theft->id;
     (void)snprintf(
         text, sizeof(text),
         "Smoke falls over %.16s; old readers count 14 nights until %.16s comes for %.20s.",
         target->name, sim->dragon.name, treasure->name);
     CcEvent *omen = PushEvent(
         sim, CC_EVENT_DRAGON_OMEN, sim->dragon.id, target->id,
-        theft != NULL ? theft->id : 0U, 14, text);
-    sim->dragon.omen_event_id = omen != NULL ? omen->id : 0U;
+        theft->id, 14, text);
+    sim->dragon.omen_event_id = omen->id;
     sim->player.reputation = ClampI32(
         sim->player.reputation - 8, -100, 100);
     SetError(error, error_capacity, "");
@@ -9895,8 +9867,7 @@ static bool ApplyReturnDragonNamedTreasure(
         sim, CC_EVENT_DRAGON_TREASURE_RETURNED, sim->player.id,
         sim->dragon.lair_settlement_id, sim->dragon.omen_event_id,
         treasure->appraised_value, text);
-    sim->dragon.hoard_event_id = returned != NULL ? returned->id :
-                                 sim->dragon.hoard_event_id;
+    sim->dragon.hoard_event_id = returned->id;
     sim->dragon.theft_actor_id = 0U;
     sim->dragon.retaliation_target_id = 0U;
     sim->dragon.omen_event_id = 0U;
@@ -10086,7 +10057,7 @@ static bool AcceptSituation(CcSim *sim, const CcSituation *situation,
             situation->sponsor_name, relief_load, relief_origin->name);
         (void)PushEvent(
             sim, CC_EVENT_PLAYER_TRADE, sim->player.id,
-            relief_origin->id, accepted != NULL ? accepted->id : 0U,
+            relief_origin->id, accepted->id,
             relief_load, text);
     }
     RefreshSituationCharacterActivities(sim, (CcSituation *)situation);
@@ -10144,8 +10115,7 @@ static bool ApplyRefuseSituation(CcSim *sim, const CcCommand *command,
     CcEvent *failure = PushEvent(
         sim, CC_EVENT_SITUATION_FAILED, situation->id,
         situation->target_id, situation->cause_event_id, -2, text);
-    CcId failure_id = failure != NULL ? failure->id :
-                      situation->cause_event_id;
+    CcId failure_id = failure->id;
     CcCharacter *sponsor = CharacterMutable(
         sim, situation->sponsor_character_id);
     if (sponsor != NULL) {
@@ -10194,13 +10164,11 @@ static bool ApplyAbandonSituation(CcSim *sim, const CcCommand *command,
     CcCharacter *sponsor = CharacterMutable(
         sim, situation->sponsor_character_id);
     RememberCharacter(affected, CC_CHARACTER_MEMORY_PLAYER_WITHDREW,
-                      situation->id,
-                      withdrawal != NULL ? withdrawal->id : 0U,
+                      situation->id, withdrawal->id,
                       sim->current_day);
     if (sponsor != affected) {
         RememberCharacter(sponsor, CC_CHARACTER_MEMORY_PLAYER_WITHDREW,
-                          situation->id,
-                          withdrawal != NULL ? withdrawal->id : 0U,
+                          situation->id, withdrawal->id,
                           sim->current_day);
     }
     if (affected != NULL) {
@@ -10252,7 +10220,7 @@ static void ShiftRelationshipTrust(CcSim *sim, CcRelationship *relationship,
         from != NULL ? from->current_settlement_id : 0U,
         parent_event_id, relationship->from_character_id,
         relationship->to_character_id, 0U, sim->player.id, amount, text);
-    if (event != NULL) relationship->cause_event_id = event->id;
+    relationship->cause_event_id = event->id;
 }
 
 static bool ApplyCharacterResponse(CcSim *sim, const CcCommand *command,
@@ -10360,7 +10328,7 @@ static bool ApplyCharacterResponse(CcSim *sim, const CcCommand *command,
             (response == CC_CHARACTER_RESPONSE_REPORT_EVIDENCE ? 1 : -1) :
         response == CC_CHARACTER_RESPONSE_LISTEN ? 2 : 8,
         text);
-    CcId event_id = event != NULL ? event->id : 0U;
+    CcId event_id = event->id;
     if (memory_kind != CC_CHARACTER_MEMORY_NONE) {
         RememberCharacter(character, memory_kind, situation->id,
                           event_id, sim->current_day);
@@ -10511,8 +10479,7 @@ static void DeliverDelayedEchoIfReady(CcSim *sim)
                               sim->current_day - sim->delayed_echo.due_day,
                               text);
     if (prior_echoes == 0) {
-        sim->delayed_echo.parent_event_id = echo != NULL ? echo->id :
-            sim->delayed_echo.parent_event_id;
+        sim->delayed_echo.parent_event_id = echo->id;
         sim->delayed_echo.due_day = sim->current_day + 30;
     } else {
         sim->delayed_echo.active = false;
@@ -10579,7 +10546,7 @@ static void WarnJourneyAmbush(CcSim *sim)
         sim, CC_EVENT_JOURNEY_WARNING, sim->player.id,
         sim->journey.route_id, sim->journey.parent_event_id,
         sim->journey.danger, text);
-    if (event != NULL) sim->journey.parent_event_id = event->id;
+    sim->journey.parent_event_id = event->id;
     sim->journey.ambush_warned = true;
 }
 
@@ -10598,7 +10565,7 @@ static void ResolveWarnedJourneyAmbush(CcSim *sim)
         CcEvent *event = PushEvent(
             sim, CC_EVENT_AMBUSH_EVADED, sim->player.id,
             sim->journey.route_id, sim->journey.parent_event_id, 0, text);
-        if (event != NULL) sim->journey.parent_event_id = event->id;
+        sim->journey.parent_event_id = event->id;
         sim->journey.ambush_pending = false;
         sim->journey.ambush_resolved = true;
         return;
@@ -10717,7 +10684,7 @@ static void InterruptJourney(CcSim *sim)
         sim, CC_EVENT_JOURNEY_ENCOUNTER, sim->journey.situation_id,
         sim->journey.route_id, sim->journey.parent_event_id,
         sim->journey.danger, text);
-    if (event != NULL) sim->journey.parent_event_id = event->id;
+    sim->journey.parent_event_id = event->id;
     sim->journey.encounter_triggered = true;
     sim->journey.phase = CC_JOURNEY_PHASE_BLOCKED;
     sim->clock.game_minutes_per_second = 0;
@@ -10997,7 +10964,7 @@ static bool ApplyTravel(CcSim *sim, const CcCommand *command,
     CcEvent *departure = PushEvent(
         sim, CC_EVENT_JOURNEY_DEPARTED, sim->player.id, route->id,
         parent_event_id, days, text);
-    if (departure != NULL) sim->journey.parent_event_id = departure->id;
+    sim->journey.parent_event_id = departure->id;
     SetError(error, error_capacity, "");
     return true;
 }
@@ -11085,8 +11052,7 @@ static void RollEncounterLoot(CcSim *sim, CcBanditGroup *bandits,
     }
 
     if (length > 0) {
-        length += (size_t)snprintf(
-            text + length, sizeof(text) - length, ".");
+        (void)snprintf(text + length, sizeof(text) - length, ".");
         (void)PushEvent(sim, CC_EVENT_ENCOUNTER_LOOT, journey->situation_id,
                         journey->route_id,
                         combat_event != NULL ? combat_event->id : 0U,
@@ -11202,8 +11168,7 @@ static bool ApplyResolveEncounter(CcSim *sim, CcJourneyOutcome outcome,
         sim, event_kind, journey.situation_id, journey.route_id,
         journey.parent_event_id, magnitude, text);
     sim->journey.phase = CC_JOURNEY_PHASE_TRAVELLING;
-    sim->journey.parent_event_id = outcome_event != NULL ?
-        outcome_event->id : journey.parent_event_id;
+    sim->journey.parent_event_id = outcome_event->id;
     if (outcome == CC_JOURNEY_OUTCOME_COMBAT) {
         RollEncounterLoot(sim, bandits, &journey, outcome_event);
     }
@@ -11215,8 +11180,7 @@ static bool ApplyResolveEncounter(CcSim *sim, CcJourneyOutcome outcome,
     sim->carriage.speed_milli_per_second =
         JourneyCarriageSpeedForPace(
             sim->journey.total_subticks, sim->journey.pace);
-    CreateJourneyTraffic(sim, &journey,
-                         outcome_event != NULL ? outcome_event->id : 0U);
+    CreateJourneyTraffic(sim, &journey, outcome_event->id);
     SetError(error, error_capacity, "");
     return true;
 }
@@ -12439,8 +12403,7 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
                 sim, CC_EVENT_DRAGON_TREASURE_RETURNED, sim->player.id,
                 sim->dragon.lair_settlement_id,
                 sim->dragon.omen_event_id, command->amount, text);
-            sim->dragon.hoard_event_id = returned != NULL ? returned->id :
-                                         sim->dragon.hoard_event_id;
+            sim->dragon.hoard_event_id = returned->id;
             if (sim->dragon.stolen_outstanding == 0) {
                 sim->dragon.memory_integrity = MaximumI32(
                     sim->dragon.memory_integrity, 75);
@@ -12724,8 +12687,6 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 }
             }
         }
-    }
-    if (sim->schema_version == CC_SIM_SCHEMA_VERSION) {
         for (int32_t i = 0; i < sim->event_count; ++i) {
             const CcEvent *event = CcSimRecentEvent(sim, i);
             if (event == NULL || CcIdKind(event->id) != CC_ENTITY_EVENT ||

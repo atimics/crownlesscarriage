@@ -1312,6 +1312,7 @@ static void StreetPathHeapSwap(StreetPathSearch *search,
 static void StreetPathHeapSiftUp(StreetPathSearch *search,
                                  int32_t position, int32_t goal)
 {
+    if (position <= 0 || position >= STREET_PATH_NODE_COUNT) return;
     while (position > 0) {
         int32_t parent = (position - 1) / 2;
         if (!StreetPathHeapLess(search, search->heap[position],
@@ -1329,6 +1330,7 @@ static void StreetPathHeapPushOrDecrease(StreetPathSearch *search,
         StreetPathHeapSiftUp(search, position, goal);
         return;
     }
+    if (search->heap_count >= STREET_PATH_NODE_COUNT) return;
     position = search->heap_count++;
     search->heap[position] = node;
     search->heap_position[node] = position;
