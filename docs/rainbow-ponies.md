@@ -16,9 +16,9 @@ condition. They move to another road with a fresh request. **Keep travelling**
 or **Esc** leaves the meeting; a completed request remains ready for a later visit.
 Ponies greet the carriage at most once per game day.
 
-Open the **Pony book** with its button or **F7**. It lists all seven names and
-personalities, your current pair, bonds, completed quests, releases, and last
-seen roads. The carriage and stable show the colors of your current companions.
+Open the **Pony book** with its button or **F7**. Met ponies show their faces, names,
+personalities, bonds, completed quests, releases, and last seen roads.
+Unmet ponies show a shared gray face and **??** until you meet them. The carriage and stable show the colors of your current companions.
 
 ## Save and replay
 

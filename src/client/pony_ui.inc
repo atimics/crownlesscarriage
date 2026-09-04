@@ -122,8 +122,15 @@ static void DrawPonyInterface(const CcSim *sim, const LocalState *local)
         const CcPony *p = &sim->pony_company.ponies[i];
         bool team = i == sim->pony_company.team[0] || i == sim->pony_company.team[1];
         int row = y + 83 + i * 51;
-        CcOverlayDrawText(CcPonyName(i), x + 20, row, 13, colors[i]);
-        CcOverlayDrawText(CcPonyPersonality(i), x + 155, row, 10, INK);
+        CcLocalDrawPonyPortrait(i, p->seen,
+            (Rectangle){(float)x + 18, (float)row - 5, 42, 42});
+        if (!p->seen) {
+            CcOverlayDrawText("??", x + 73, row, 13, MUTED);
+            CcOverlayDrawText("Yet to meet", x + 532, row, 9, MUTED);
+            continue;
+        }
+        CcOverlayDrawText(CcPonyName(i), x + 73, row, 13, colors[i]);
+        CcOverlayDrawText(CcPonyPersonality(i), x + 210, row, 10, INK);
         CcOverlayDrawText(team ? "With you" : p->seen ? "Roaming" : "Yet to meet", x + 532, row, 9, colors[i]);
         const CcRoute *road = CcSimRoute(sim, p->last_seen_route);
         const CcSettlement *from = road ? CcSimSettlement(sim, road->from_id) : NULL;
@@ -131,7 +138,7 @@ static void DrawPonyInterface(const CcSim *sim, const LocalState *local)
         CcOverlayDrawText(TextFormat("Bond %d / Quests %d / Released %d / %s",
             p->bond, p->quests_completed, p->releases,
             from && to ? TextFormat("Seen: %s - %s", from->name, to->name) : "New adventures await"),
-            x + 20, row + 23, 8, MUTED);
+            x + 73, row + 23, 8, MUTED);
     }
 }
 

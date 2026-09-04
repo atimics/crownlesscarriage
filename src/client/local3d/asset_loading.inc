@@ -24,6 +24,8 @@ typedef struct TreeCrownModelCache {
 
 static TreeCrownModelCache tree_crown_models = {0};
 
+static RenderTexture2D pony_portraits[CC_PONY_COUNT + 1];
+
 #define CC_HERO_SKIN_MAX_BONES 32
 #define CC_HERO_CAPE_BONE_COUNT 4
 #define CC_HERO_HAIR_BONE_COUNT 2
@@ -3899,6 +3901,10 @@ void CcLocalRendererSetMovementPreview(
 
 void CcLocalRendererShutdown(void)
 {
+    for (int32_t i = 0; i <= CC_PONY_COUNT; ++i) {
+        if (IsRenderTextureValid(pony_portraits[i])) UnloadRenderTexture(pony_portraits[i]);
+        pony_portraits[i] = (RenderTexture2D){0};
+    }
     if (!sphere_models.ready) return;
     OpenWorldRenderCacheClear();
     TerrainRenderCacheClear();

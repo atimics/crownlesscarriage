@@ -152,6 +152,7 @@ int main(int argc, char **argv)
             TestCharacterPrimitives();
             TestCharacterSurfaces();
             TestAnimalModels(argv[2]);
+            TestPonyPortraits();
             WriteViewportFixture(argv[2]);
         } else {
             CaptureCharacterMaterials(argv[2]);

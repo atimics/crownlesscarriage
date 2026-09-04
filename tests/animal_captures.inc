@@ -75,3 +75,34 @@ static void TestAnimalModels(const char *path)
     UnloadRenderTexture(scene);
     (void)puts("PASS animal skins: seven pony colors and two farm species, four turns, two walking poses");
 }
+
+static void TestPonyPortraits(void)
+{
+    for (int32_t known = 0; known < 2; ++known) {
+        for (int32_t pony = 0; pony < CC_PONY_COUNT; ++pony) {
+            BeginDrawing();
+            CcLocalDrawPonyPortrait(pony, known != 0, (Rectangle){0, 0, 64, 64});
+            EndDrawing();
+            int32_t index = known ? pony : CC_PONY_COUNT;
+            RequireRenderer(IsRenderTextureValid(pony_portraits[index]), "pony face must render");
+            Image face = LoadImageFromTexture(pony_portraits[index].texture);
+            Color *pixels = LoadImageColors(face);
+            int32_t colorful = 0;
+            int32_t visible = 0;
+            for (int32_t p = 0; p < face.width * face.height; ++p) {
+                int32_t high = pixels[p].r > pixels[p].g ? pixels[p].r : pixels[p].g;
+                high = high > pixels[p].b ? high : pixels[p].b;
+                int32_t low = pixels[p].r < pixels[p].g ? pixels[p].r : pixels[p].g;
+                low = low < pixels[p].b ? low : pixels[p].b;
+                if (high - low > 18) colorful++;
+                if (high > 65) visible++;
+                if (!known) RequireRenderer(high == low, "unmet pony portrait must be gray");
+            }
+            RequireRenderer(visible > 100, "pony portrait must contain visible face geometry");
+            if (known) RequireRenderer(colorful > 100, "met pony face must show its color");
+            UnloadImageColors(pixels);
+            UnloadImage(face);
+        }
+    }
+    (void)puts("PASS pony portraits: seven colored faces and a shared gray mystery face");
+}
