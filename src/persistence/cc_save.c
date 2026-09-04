@@ -337,6 +337,9 @@ static bool EnsureJourneyColumns(sqlite3 *database,
             error, error_capacity) &&
         EnsureColumn(database, "runtime_state", "ambush_warned",
             "ALTER TABLE runtime_state ADD COLUMN ambush_warned INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "runtime_state", "road_site_stop_mask",
+            "ALTER TABLE runtime_state ADD COLUMN road_site_stop_mask INTEGER NOT NULL DEFAULT 0;",
             error, error_capacity);
 }
 
@@ -1137,7 +1140,8 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " carriage_destination_id INTEGER NOT NULL, carriage_progress_milli INTEGER NOT NULL,"
         " carriage_speed_milli_per_second INTEGER NOT NULL, carriage_condition INTEGER NOT NULL,"
         " journey_pace INTEGER NOT NULL DEFAULT 1,"
-        " ambush_warned INTEGER NOT NULL DEFAULT 0);"
+        " ambush_warned INTEGER NOT NULL DEFAULT 0,"
+        " road_site_stop_mask INTEGER NOT NULL DEFAULT 0);"
         "CREATE TABLE IF NOT EXISTS delayed_echo ("
         " id INTEGER PRIMARY KEY CHECK(id=1), active INTEGER NOT NULL,"
         " situation_id INTEGER NOT NULL, settlement_id INTEGER NOT NULL,"
@@ -2884,8 +2888,8 @@ static bool SaveJourneyState(sqlite3 *database, const CcSim *sim,
                  "carriage_location_id,carriage_route_id,carriage_origin_id,"
                  "carriage_destination_id,carriage_progress_milli,"
                  "carriage_speed_milli_per_second,carriage_condition,"
-                 "journey_pace,ambush_warned) "
-                 "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
+                 "journey_pace,ambush_warned,road_site_stop_mask) "
+                 "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
                  &statement, error, error_capacity)) return false;
     int column = 1;
     BindId(statement, column++, sim->clock.tick);
@@ -2911,6 +2915,7 @@ static bool SaveJourneyState(sqlite3 *database, const CcSim *sim,
     BindInt(statement, column++, sim->carriage.condition);
     BindInt(statement, column++, (int32_t)sim->journey.pace);
     BindInt(statement, column++, sim->journey.ambush_warned ? 1 : 0);
+    BindInt(statement, column++, (int32_t)sim->journey.road_site_stop_mask);
     result = StepDone(database, statement, error, error_capacity);
     sqlite3_finalize(statement);
     if (!result) return false;
@@ -5170,7 +5175,7 @@ static bool ReadJourneyState(sqlite3 *database, CcSim *sim,
                  "carriage_location_id,carriage_route_id,carriage_origin_id,"
                  "carriage_destination_id,carriage_progress_milli,"
                  "carriage_speed_milli_per_second,carriage_condition,"
-                 "journey_pace,ambush_warned "
+                 "journey_pace,ambush_warned,road_site_stop_mask "
                  "FROM runtime_state WHERE id=1;",
                  &statement, error, error_capacity)) return false;
     result = sqlite3_step(statement);
@@ -5215,6 +5220,8 @@ static bool ReadJourneyState(sqlite3 *database, CcSim *sim,
             (CcJourneyPace)sqlite3_column_int(statement, column++);
         sim->journey.ambush_warned =
             sqlite3_column_int(statement, column++) != 0;
+        sim->journey.road_site_stop_mask =
+            (uint32_t)sqlite3_column_int(statement, column++);
     } else if (result != SQLITE_DONE) {
         SetSqlError(error, error_capacity, database,
                     "Could not read world runtime state");
@@ -5583,6 +5590,10 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
                                  char *error, size_t error_capacity)
 {
     uint32_t legacy_version = sim->schema_version;
+    if (legacy_version == 38U && sim->generator_version == 25U) {
+        sim->schema_version = CC_SIM_SCHEMA_VERSION;
+        return true;
+    }
     if ((legacy_version == 36U || legacy_version == 37U) &&
         sim->generator_version == 25U) {
         CcSimInitializeRoyalCarriages(sim);

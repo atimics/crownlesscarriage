@@ -870,7 +870,8 @@ static void DrawOpenWorldRoadSites(
             !OpenWorldReadRouteView(
                 sim, route, carriage, &visibility) ||
             !CcRoadBookShowsRouteAmount(
-                &visibility, (float)site->progress_milli / 1000.0f)) {
+                &visibility, CcWorldRouteJourneyAmount(route, route->from_id,
+                    (float)site->progress_milli / 1000.0f))) {
             continue;
         }
         float dx = placement->junction.x - focus.x;
@@ -998,7 +999,8 @@ static void OpenWorldRevealedBounds(const CcSim *sim,
                 sim, route, carriage, &visibility) ||
             !CcRoadBookShowsRouteAmount(
                 &visibility,
-                (float)site->progress_milli / 1000.0f)) continue;
+                CcWorldRouteJourneyAmount(route, route->from_id,
+                    (float)site->progress_milli / 1000.0f))) continue;
         CcWorldPoint edge = site_placement->destination;
         left = fminf(left, edge.x);
         near = fminf(near, edge.z);
@@ -1485,7 +1487,8 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
                     sim, route, carriage, &visibility) ||
                 !CcRoadBookShowsRouteAmount(
                     &visibility,
-                    (float)site->progress_milli / 1000.0f)) continue;
+                    CcWorldRouteJourneyAmount(route, route->from_id,
+                    (float)site->progress_milli / 1000.0f))) continue;
             float ground = CcWorldTerrainHeight(
                 &stream->manifest, placement->blocker_position.x,
                 placement->blocker_position.z);
