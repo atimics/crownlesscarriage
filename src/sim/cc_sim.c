@@ -3325,7 +3325,7 @@ static const CcSettlement *Scriptorium(const CcSim *sim)
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         const CcSettlement *place = &sim->settlements[i];
         if (CcSettlementIsAbandoned(place)) continue;
-        if (strcmp(place->name, "Gloamgate") == 0) return place;
+        if (CcSettlementHasService(place, CC_SERVICE_MILL)) return place;
         if (fallback == NULL &&
             (place->function == CC_SETTLEMENT_MARKET ||
              place->function == CC_SETTLEMENT_CAPITAL)) {
