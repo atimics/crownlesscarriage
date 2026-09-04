@@ -4563,6 +4563,23 @@ static bool TreasureIsArchiveVolume(const CcTreasure *treasure)
            strncmp(treasure->name, "Codex of ", 9) == 0;
 }
 
+int32_t CcSimArchivePhysicalLore(const CcSim *sim)
+{
+    if (sim == NULL) return 0;
+    int64_t lore = 0;
+    for (int32_t i = 0; i < sim->treasure_count; ++i) {
+        const CcTreasure *volume = &sim->treasures[i];
+        if (TreasureIsArchiveVolume(volume)) lore += volume->craft_work;
+    }
+    return lore > INT32_MAX ? INT32_MAX : (int32_t)lore;
+}
+
+void CcSimUpgradeArchivePhysicalLore(CcSim *sim)
+{
+    if (sim == NULL) return;
+    sim->archives.lore_stored = CcSimArchivePhysicalLore(sim);
+}
+
 static bool EarlierArchiveVolume(const CcSim *sim, int32_t first,
                                  int32_t second)
 {
@@ -5699,14 +5716,42 @@ static void AdvanceArchives(CcSim *sim)
         sim, scriptorium_ready,
         scriptorium != NULL ? scriptorium->id : 0U);
 
+    /* Decay: unfunded archives lose one written piece from the oldest
+       surviving volume. A one-piece tome remains as a ruined object so its
+       gold, gems, and place in the world stay accounted for. */
     if (archives->scribes == 0 && archives->lore_stored > 0) {
-        archives->lore_stored -= 1;
-        archives->lore_lost_total += 1;
-        char text[CC_EVENT_TEXT_CAPACITY];
-        (void)snprintf(text, sizeof(text),
-                       "Unfunded and unwatched, part of the archive crumbles; "
-                       "a name is forgotten.");
-        (void)PushEvent(sim, CC_EVENT_LORE_LOST, 0U, 0U, 0U, 1, text);
+        int32_t oldest = -1;
+        for (int32_t i = 0; i < sim->treasure_count; ++i) {
+            if (TreasureIsArchiveVolume(&sim->treasures[i]) &&
+                EarlierArchiveVolume(sim, i, oldest)) {
+                oldest = i;
+            }
+        }
+        if (oldest >= 0) {
+            CcTreasure *volume = &sim->treasures[oldest];
+            char former_name[CC_MAP_NAME_CAPACITY];
+            (void)snprintf(former_name, sizeof(former_name), "%s",
+                           volume->name);
+            bool ruined = volume->craft_work == 1;
+            if (ruined) {
+                (void)snprintf(volume->name, sizeof(volume->name),
+                               "Ruined %.40s", former_name);
+            } else {
+                volume->craft_work -= 1;
+            }
+            archives->lore_stored -= 1;
+            archives->lore_lost_total += 1;
+            char text[CC_EVENT_TEXT_CAPACITY];
+            (void)snprintf(
+                text, sizeof(text),
+                ruined ?
+                    "Unfunded and unwatched, %.48s falls into ruin; its lore is lost." :
+                    "Unfunded and unwatched, a page of %.48s crumbles; part of its lore is lost.",
+                former_name);
+            CcId parent = LatestLocalCause(sim, volume->location_id);
+            (void)PushEvent(sim, CC_EVENT_LORE_LOST, volume->id,
+                            volume->location_id, parent, 1, text);
+        }
     }
 }
 
@@ -15908,12 +15953,16 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                          sim->schema_version == 31U ||
                          sim->schema_version == 32U ||
                          sim->schema_version == 33U ||
-                         sim->schema_version == 34U;
+                         sim->schema_version == 34U ||
+                         sim->schema_version == 35U;
+    /* Older saves carry authoritative settlement coordinates while their
+       economies and road districts are upgraded. */
     bool supported_generator =
         (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
          sim->generator_version == CC_GENERATOR_VERSION) ||
         (legacy_schema && sim->schema_version <= 27U &&
          sim->generator_version == CC_GENERATOR_VERSION) ||
+        (sim->schema_version == 35U && sim->generator_version == 25U) ||
         (sim->schema_version == 34U && sim->generator_version == 25U) ||
         (sim->schema_version == 33U && sim->generator_version == 25U) ||
         (sim->schema_version == 32U && sim->generator_version == 25U) ||
@@ -16439,6 +16488,12 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             }
             player_treasure_count += 1;
         }
+    }
+    if (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
+        sim->archives.lore_stored != CcSimArchivePhysicalLore(sim)) {
+        SetError(error, error_capacity,
+                 "Archive lore and physical volumes disagree.");
+        return false;
     }
     for (int32_t i = 0; i < sim->shipment_count; ++i) {
         const CcShipment *shipment = &sim->shipments[i];

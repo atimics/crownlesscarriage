@@ -148,6 +148,8 @@ static void CheckArchiveRecording(void)
     CcSimAdvanceDays(&funded, 1);
     CC_CHECK(funded.archives.scribes == 1);
     CC_CHECK(funded.archives.lore_stored == 1);
+    CC_CHECK(CcSimArchivePhysicalLore(&funded) ==
+             funded.archives.lore_stored);
     CC_CHECK(funded.archives.last_recorded_day == 7);
     CC_CHECK(CcSimTrackedGood(&funded, CC_GOOD_GOLD) == funded_gold);
     CC_CHECK(CcSimTrackedGood(&funded, CC_GOOD_GEMS) == funded_gems);
@@ -204,6 +206,54 @@ static void CheckArchiveRecording(void)
              missing_gems);
 }
 
+static void CheckArchiveDecayChangesVolume(void)
+{
+    CcSim sim;
+    PrepareArchiveWeek(&sim, 50, 1);
+    CcSimAdvanceDays(&sim, 1);
+    CC_CHECK(sim.archives.lore_stored == 1);
+
+    CcTreasure *volume = NULL;
+    for (int32_t i = 0; i < sim.treasure_count; ++i) {
+        if (IsArchiveVolumeName(sim.treasures[i].name) &&
+            !sim.treasures[i].destroyed) {
+            volume = &sim.treasures[i];
+            break;
+        }
+    }
+    CC_CHECK(volume != NULL);
+    CcId volume_id = volume->id;
+    int32_t gold_before = CcSimTrackedGood(&sim, CC_GOOD_GOLD);
+    int32_t gems_before = CcSimTrackedGood(&sim, CC_GOOD_GEMS);
+
+    sim.iron_ledger_reserve = 0;
+    sim.archives.scribes = 0;
+    CcSimAdvanceDays(&sim, 7);
+
+    CC_CHECK(sim.archives.lore_stored == 0);
+    CC_CHECK(sim.archives.lore_lost_total == 1);
+    CC_CHECK(CcSimArchivePhysicalLore(&sim) == 0);
+    CC_CHECK(volume->id == volume_id && !volume->destroyed);
+    CC_CHECK(strncmp(volume->name, "Ruined ", 7) == 0);
+    CC_CHECK(volume->gold_content == 1 && volume->gem_content == 1);
+    CC_CHECK(CcSimTrackedGood(&sim, CC_GOOD_GOLD) == gold_before);
+    CC_CHECK(CcSimTrackedGood(&sim, CC_GOOD_GEMS) == gems_before);
+    const CcEvent *loss = NULL;
+    for (int32_t i = 0; i < sim.event_count; ++i) {
+        const CcEvent *candidate = CcSimRecentEvent(&sim, i);
+        if (candidate != NULL && candidate->kind == CC_EVENT_LORE_LOST &&
+            candidate->subject_id == volume_id) {
+            loss = candidate;
+            break;
+        }
+    }
+    CC_CHECK(loss != NULL && loss->kind == CC_EVENT_LORE_LOST);
+    CC_CHECK(loss->subject_id == volume_id);
+    CC_CHECK(loss->location_id == volume->location_id);
+    char error[160];
+    CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
+}
+
 static void CheckArchiveBindingConservation(void)
 {
     CcSim sim;
@@ -239,6 +289,9 @@ static void CheckArchiveBindingConservation(void)
             archive_value += treasure->appraised_value;
         }
     }
+    sim.archives.lore_stored = CcSimArchivePhysicalLore(&sim);
+    sim.iron_ledger_reserve = 50;
+    sim.archives.scribes = 1;
     for (int32_t i = 0; i < sim.settlement_count; ++i) {
         sim.settlements[i].stock[CC_GOOD_GOLD] = 0;
         sim.settlements[i].stock[CC_GOOD_GEMS] = 0;
@@ -273,7 +326,9 @@ static void CheckArchiveBindingConservation(void)
     CC_CHECK(!sim.treasures[0].destroyed);
     CC_CHECK(sim.treasures[0].owner_id == rival_vault->id);
     char error[160];
-    CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
+    bool valid = CcSimValidate(&sim, error, sizeof(error));
+    if (!valid) (void)fprintf(stderr, "archive binding: %s\n", error);
+    CC_CHECK(valid);
 }
 
 static void CheckLongArchiveConservation(void)
@@ -298,10 +353,21 @@ static void CheckLongArchiveConservation(void)
     CcSimAdvanceDays(&sim, 364);
 
     CC_CHECK(sim.archives.lore_stored > 0);
+    CC_CHECK(CcSimArchivePhysicalLore(&sim) ==
+             sim.archives.lore_stored);
     CC_CHECK(CcSimTrackedGood(&sim, CC_GOOD_GOLD) == gold_before);
     CC_CHECK(CcSimTrackedGood(&sim, CC_GOOD_GEMS) == gems_before);
     char error[160];
     CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
+
+    CcSim century;
+    CcSimInit(&century, UINT32_C(42));
+    for (int32_t week = 0; week < 100 * 52; ++week) {
+        CcSimAdvanceDays(&century, 7);
+        CC_CHECK(CcSimArchivePhysicalLore(&century) ==
+                 century.archives.lore_stored);
+    }
+    CC_CHECK(CcSimValidate(&century, error, sizeof(error)));
 }
 
 static int32_t CountCharacterLifeEvents(const CcSim *sim,
@@ -442,6 +508,7 @@ int main(void)
     CcSimInit(&second, UINT32_C(0x12345678));
     CC_CHECK(CcSimHash(&first) == CcSimHash(&second));
     CheckArchiveRecording();
+    CheckArchiveDecayChangesVolume();
     CheckArchiveBindingConservation();
     CheckLongArchiveConservation();
     CheckCharacterLifecycles();

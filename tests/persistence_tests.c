@@ -2323,6 +2323,43 @@ static void CheckMaterialChainMigration(char *error, size_t error_capacity)
     RemoveDatabase(path);
 }
 
+static void CheckArchivePhysicalLoreMigration(char *error,
+                                              size_t error_capacity)
+{
+    const char *path = "persistence-schema35-archive-lore-test.ccsave";
+    RemoveDatabase(path);
+    CcSim legacy;
+    CcSimInit(&legacy, UINT32_C(0xa4c417e));
+    legacy.current_day = 6;
+    legacy.iron_ledger_reserve = 50;
+    legacy.archives.scribes = 1;
+    CcSettlement *scriptorium = &legacy.settlements[1];
+    scriptorium->stock[CC_GOOD_WHEAT] = 100;
+    scriptorium->stock[CC_GOOD_PAPER] = 1;
+    scriptorium->stock[CC_GOOD_TOOLS] = 1;
+    for (int32_t i = 0; i < legacy.event_count; ++i) {
+        legacy.events[i].magnitude = 0;
+    }
+    legacy.events[0].day = 6;
+    legacy.events[0].kind = CC_EVENT_KINGDOM_ACTION;
+    legacy.events[0].magnitude = 40;
+    CcSimAdvanceDays(&legacy, 1);
+    CC_CHECK(CcSimArchivePhysicalLore(&legacy) == 1);
+
+    legacy.schema_version = 35U;
+    legacy.generator_version = 25U;
+    legacy.archives.lore_stored = 0;
+    CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
+
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.archives.lore_stored == 1);
+    CC_CHECK(CcSimArchivePhysicalLore(&restored) == 1);
+    CC_CHECK(CcSimValidate(&restored, error, error_capacity));
+    RemoveDatabase(path);
+}
+
 static void CheckJourneyStopPersistence(char *error, size_t error_capacity)
 {
     const char *path = "persistence-journey-stop-test.ccsave";
@@ -2571,6 +2608,7 @@ int main(void)
                             "persistence-schema32-paper-test.ccsave",
                             error, sizeof(error));
     CheckMaterialChainMigration(error, sizeof(error));
+    CheckArchivePhysicalLoreMigration(error, sizeof(error));
     CheckJourneyStopPersistence(error, sizeof(error));
     CheckLegacyLifecycleJournalCompatibility(24U, error, sizeof(error));
     CheckLegacyLifecycleJournalCompatibility(25U, error, sizeof(error));
