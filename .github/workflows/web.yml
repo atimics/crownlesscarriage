@@ -51,6 +51,21 @@ jobs:
           test -f out/build/web/site/assets/exports/glb/state_market_recovery_v01.glb &&
           test -f out/build/web/site/assets/maps/gloamgate_to_alderwatch.png &&
           test -f out/build/web/site/assets/maps/collectible_map_atlas.png
+      - name: Install browser test runtime
+        run: |
+          npm install --prefix "$RUNNER_TEMP/crownless-browser" --no-package-lock playwright@1.62.1
+          node "$RUNNER_TEMP/crownless-browser/node_modules/playwright/cli.js" install --with-deps chromium
+      - name: Test the built game in Chromium
+        env:
+          CC_PLAYWRIGHT_MODULE: ${{ runner.temp }}/crownless-browser/node_modules/playwright
+        run: node tests/browser_tests.cjs out/build/web/site browser-results
+      - name: Upload browser checks
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-results
+          path: browser-results
+          if-no-files-found: ignore
       - name: Upload Pages site
         if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v5

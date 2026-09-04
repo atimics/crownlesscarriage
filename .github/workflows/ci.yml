@@ -136,6 +136,23 @@ jobs:
           xvfb-run --auto-servernum
           cmake --build build --target run_roadbook_qa
 
+      - name: Capture supported road-panel widths
+        if: runner.os == 'Linux'
+        env:
+          LIBGL_ALWAYS_SOFTWARE: 1
+        run: |
+          for width in 1040 1200 1280; do
+            xvfb-run --auto-servernum ./build/crownless_carriage \
+              --capture-road-fork "road-fork-$width.png" "$width"
+            test -s "road-fork-$width.png"
+          done
+      - name: Upload road-panel captures
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: road-panel-widths
+          path: road-fork-*.png
+
   sanitizers:
     name: Address and undefined behavior sanitizers
     runs-on: ubuntu-latest

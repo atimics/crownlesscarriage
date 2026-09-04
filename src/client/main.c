@@ -114,6 +114,7 @@ typedef struct LocalState {
     bool open_world;
     bool open_world_market;
     CcLocalOpeningStep opening_step;
+    CcId pending_map_sale_id;
     CcId conversation_character_id;
     CcId conversation_situation_id;
 } LocalState;
@@ -174,6 +175,8 @@ typedef enum ContextActionKind {
     CONTEXT_ACTION_TRAVEL,
     CONTEXT_ACTION_NEXT_BRANCH,
     CONTEXT_ACTION_BUY_MAP,
+    CONTEXT_ACTION_SELL_MAP,
+    CONTEXT_ACTION_CONFIRM_MAP_SALE,
     CONTEXT_ACTION_REPAIR_ROUTE,
     CONTEXT_ACTION_PAY_COLLECTOR,
     CONTEXT_ACTION_OFFER_PROVISIONS,
@@ -1391,6 +1394,7 @@ static bool SetOpenWorldCarriageOnRoute(
     if (!CcWorldRoutePose(route, origin_id, amount, &point, &heading)) {
         return false;
     }
+    CcWorldStreamFollowRoute(&local->world_stream, route, origin_id, amount, 4);
     local->world_carriage.position = (Vector3){
         point.x,
         CcWorldStreamHeightAt(&local->world_stream, point.x, point.z),
@@ -1487,6 +1491,7 @@ static void PositionOpenWorldDeparture(const CcSim *sim, LocalState *local)
             &point, &heading)) {
         return;
     }
+    CcWorldStreamFollowRoute(&local->world_stream, route, sim->player.location_id, journey_amount, 4);
     local->world_carriage.position = (Vector3){
         point.x,
         CcWorldStreamHeightAt(&local->world_stream, point.x, point.z),
@@ -1536,6 +1541,7 @@ static bool PositionOpenWorldArrival(const CcSim *sim, LocalState *local)
                           &point, &heading)) {
         return false;
     }
+    CcWorldStreamFollowRoute(&local->world_stream, route, origin_id, journey_amount, 4);
     local->world_carriage.position = (Vector3){
         point.x,
         CcWorldStreamHeightAt(&local->world_stream, point.x, point.z),
@@ -1698,6 +1704,7 @@ static void PositionOpenWorldJourney(const CcSim *sim, LocalState *local)
     float heading = 0.0f;
     if (!CcWorldRoutePose(route, sim->journey.origin_id, amount,
                           &point, &heading)) return;
+    CcWorldStreamFollowRoute(&local->world_stream, route, sim->journey.origin_id, amount, 4);
     local->agent.position.x = point.x;
     local->agent.position.z = point.z;
     local->agent.position.y = CcWorldStreamHeightAt(
@@ -4055,6 +4062,14 @@ static ContextActionSet BuildContextActions(
                              TextFormat("Buy map — %d crowns",
                                         map->ask_price));
         }
+        if (map != NULL && map->owner_id == sim->player.id) {
+            bool confirming = local->pending_map_sale_id == map->id;
+            AddDetailedContextAction(
+                &set, confirming ? CONTEXT_ACTION_CONFIRM_MAP_SALE : CONTEXT_ACTION_SELL_MAP,
+                confirming ? "Confirm chart sale" : "Sell chart",
+                confirming ? "ENTER" : "S",
+                "GIVE UP THIS CHART'S ROUTE GUIDANCE", true, confirming);
+        }
         AddDetailedContextAction(
             &set, CONTEXT_ACTION_CLOSE_VIEW, "Close map case", "ESC",
             "RETURN TO THE CARRIAGE", true, false);
@@ -4796,7 +4811,8 @@ static void RoadChoiceLabel(const CcSim *sim, const CcRoute *route,
 
 static void DrawRoadPanel(const CcSim *sim, int32_t selected)
 {
-    Rectangle panel = {978.0f, 82.0f, 282.0f, 322.0f};
+    Rectangle panel = {(float)GetScreenWidth() - 302.0f, 82.0f, 282.0f, 322.0f};
+    int32_t content_x = (int32_t)panel.x + 20;
     DrawPanel(panel, (Color){8, 16, 20, 226});
     const CcRoute *route = SelectedOutgoingRoute(sim, selected);
     int32_t ordinal = OutgoingRouteOrdinal(sim, selected);
@@ -4805,9 +4821,9 @@ static void DrawRoadPanel(const CcSim *sim, int32_t selected)
             TextFormat("VISIBLE BRANCH %d OF %d", ordinal + 1,
                        OutgoingRouteCount(sim)) :
             "VISIBLE BRANCH",
-        998, 102, 9, TEAL);
+        content_x, 102, 9, TEAL);
     if (route == NULL) {
-        CcOverlayDrawText("NO ROAD", 998, 128, 15, MUTED);
+        CcOverlayDrawText("NO ROAD", content_x, 128, 15, MUTED);
         return;
     }
     CcId destination_id = RouteOtherEnd(route, sim->player.location_id);
@@ -4815,60 +4831,60 @@ static void DrawRoadPanel(const CcSim *sim, int32_t selected)
     (void)CcSimTravelPreview(sim, destination_id, &preview, NULL, 0U);
     char road_label[64];
     RoadChoiceLabel(sim, route, road_label, sizeof(road_label));
-    CcOverlayDrawText(road_label, 998, 126, 18,
+    CcOverlayDrawText(road_label, content_x, 126, 18,
                       preview.destination_known ? INK : CC_VIOLET);
     CcOverlayDrawText(route->smuggler_route ? "FAINT WHEEL RUTS" :
                       route->closed ? "GUARDED CROSSING" : "SIGNED ROAD",
-                      998, 151, 8, MUTED);
+                      content_x, 151, 8, MUTED);
     CcOverlayDrawText(
         TextFormat("%.22s / %d MI / %d CROWNS",
                    preview.road_house_name,
                    preview.road_house_distance_miles,
                    (int32_t)preview.road_house_cost),
-        998, 166, 7, TEAL);
+        content_x, 166, 7, TEAL);
 
     CcOverlayDrawText(
         preview.opening_half_day ? "OPENING HALF-DAY" :
             TextFormat("%d WATCHES / %d NIGHTS",
                        preview.travel_watches, preview.overnight_stops),
-        998, 185, 12, CC_GOLD);
+        content_x, 185, 12, CC_GOLD);
     CcOverlayDrawText(TextFormat("%" PRId64 " CROWNS",
                                  preview.provision_cost),
-                      1152, 185, 11, CC_GOLD);
+                      content_x + 154, 185, 11, CC_GOLD);
     CcOverlayDrawText(preview.rain_expected ?
                           "RAIN ON ROUTE / WHEAT WILL ROT" :
                           preview.departure_wait_minutes > 0 ?
                               "DEPARTS NEXT MORNING / DAILY WATCHES" :
                               "MORNING / BREAK / AFTERNOON / NIGHT STOP",
-                      998, 208, 8,
+                      content_x, 208, 8,
                       preview.rain_expected ? DANGER : TEAL);
-    DrawBar(998, 358, 92, "TEAM", preview.horse_readiness, TEAL);
+    DrawBar(content_x, 358, 92, "TEAM", preview.horse_readiness, TEAL);
     CcOverlayDrawText(TextFormat("%d FODDER",
                                  preview.horse_feed_required),
-                      1105, 362, 9, INK);
+                      content_x + 160, 383, 9, INK);
     CcOverlayDrawText(TextFormat("%.10s + %.10s",
                                  sim->horse_team[0].name,
                                  sim->horse_team[1].name),
-                      998, 383, 8, MUTED);
+                      content_x, 383, 8, MUTED);
 
     const CcMap *map = VisibleMapForRoute(sim, route->id);
-    CcOverlayDrawText("NOTES", 998, 225, 9, TEAL);
+    CcOverlayDrawText("NOTES", content_x, 225, 9, TEAL);
     if (map != NULL && map->owner_id == sim->player.id) {
         CcOverlayDrawText(TextFormat("SURVEY %d DAYS OLD",
                                      sim->current_day - map->surveyed_day),
-                          998, 246, 9, INK);
-        DrawBar(998, 273, 92, "ROAD", map->recorded_condition, CC_GOLD);
-        DrawBar(998, 300, 92, "DANGER", map->recorded_danger, DANGER);
-        DrawBar(998, 327, 92, "TRUST", map->accuracy, TEAL);
+                          content_x, 246, 9, INK);
+        DrawBar(content_x, 273, 92, "ROAD", map->recorded_condition, CC_GOLD);
+        DrawBar(content_x, 300, 92, "DANGER", map->recorded_danger, DANGER);
+        DrawBar(content_x, 327, 92, "TRUST", map->accuracy, TEAL);
     } else if (preview.sponsored_guide) {
-        CcOverlayDrawText("LOCAL GUIDE", 998, 250, 11, INK);
+        CcOverlayDrawText("LOCAL GUIDE", content_x, 250, 11, INK);
     } else if (map != NULL) {
         CcOverlayDrawText(TextFormat("FOR SALE  %d CROWNS",
                                      map->ask_price),
-                          998, 250, 10, CC_GOLD);
+                          content_x, 250, 10, CC_GOLD);
     } else {
-        CcOverlayDrawText("NONE", 998, 250, 11, MUTED);
-        CcOverlayDrawText("+2 DAYS   +20 RISK", 998, 274, 9, DANGER);
+        CcOverlayDrawText("NONE", content_x, 250, 11, MUTED);
+        CcOverlayDrawText("+2 DAYS   +20 RISK", content_x, 274, 9, DANGER);
     }
 }
 
@@ -7546,6 +7562,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         }
         return;
     }
+    if (*view != VIEW_MAP) local->pending_map_sale_id = 0U;
     ContextAction pressed_action = PressedContextAction(
         sim, local, *view, *selected, *selected_situation);
     ContextActionKind context_action = pressed_action.kind;
@@ -7863,6 +7880,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
     }
     if (map_requested) {
         if (*view == VIEW_MAP) {
+            local->pending_map_sale_id = 0U;
             *view = *return_view == VIEW_CARRIAGE ?
                 VIEW_CARRIAGE : VIEW_LOCAL;
             *selected = FirstOutgoingRouteIndex(sim);
@@ -9017,8 +9035,12 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         }
 
         const CcMap *selected_map = SelectedVisibleMap(sim, *selected);
-        if (selected_map == NULL) return;
+        if (selected_map == NULL) {
+            local->pending_map_sale_id = 0U;
+            return;
+        }
         CcId map_id = selected_map->id;
+        if (local->pending_map_sale_id != map_id) local->pending_map_sale_id = 0U;
         if ((ClientKeyPressed(KEY_B) ||
              context_action == CONTEXT_ACTION_BUY_MAP) &&
             selected_map->owner_id == sim->player.location_id) {
@@ -9030,14 +9052,19 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                                message_capacity);
             return;
         }
-        if (ClientKeyPressed(KEY_S) &&
-            selected_map->owner_id == sim->player.id) {
-            CcCommand sell = {
-                .kind = CC_COMMAND_SELL_MAP,
-                .target_id = map_id
-            };
-            (void)ApplyCommand(*journal, sim, sell, message,
-                               message_capacity);
+        if (selected_map->owner_id == sim->player.id &&
+            local->pending_map_sale_id == map_id &&
+            (ClientKeyPressed(KEY_ENTER) || context_action == CONTEXT_ACTION_CONFIRM_MAP_SALE)) {
+            CcCommand sell = {.kind = CC_COMMAND_SELL_MAP, .target_id = map_id};
+            (void)ApplyCommand(*journal, sim, sell, message, message_capacity);
+            local->pending_map_sale_id = 0U;
+            return;
+        }
+        if (selected_map->owner_id == sim->player.id &&
+            (ClientKeyPressed(KEY_S) || context_action == CONTEXT_ACTION_SELL_MAP)) {
+            local->pending_map_sale_id = map_id;
+            (void)snprintf(message, message_capacity,
+                           "Sell this chart and give up its route guidance? Enter confirms; Esc closes the case.");
             return;
         }
         if (ClientKeyPressed(KEY_A) &&
@@ -9094,12 +9121,6 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         map->owner_id == sim->player.location_id) {
         CcCommand buy = {.kind = CC_COMMAND_BUY_MAP, .target_id = map->id};
         (void)ApplyCommand(*journal, sim, buy, message, message_capacity);
-        return;
-    }
-    if (map != NULL && ClientKeyPressed(KEY_S) &&
-        map->owner_id == sim->player.id) {
-        CcCommand sell = {.kind = CC_COMMAND_SELL_MAP, .target_id = map->id};
-        (void)ApplyCommand(*journal, sim, sell, message, message_capacity);
         return;
     }
     CcId destination_id = RouteOtherEnd(route, sim->player.location_id);
@@ -9165,9 +9186,79 @@ static Rectangle LocalViewportBounds(void)
                        width, height};
 }
 
+#if defined(CC_CLIENT_SELF_TESTS)
+static int ClientRegressionFailure(const char *message)
+{
+    (void)fprintf(stderr, "%s\n", message);
+    return 1;
+}
+
+static int RunMapSaleInputRegression(void)
+{
+    static CcSim sim;
+    static LocalState local;
+    const char *path = "map-sale-input.ccsave";
+    char message[256] = {0}, feedback[256] = {0}, error[192];
+    float feedback_age = 0.0f;
+    int32_t selected = 0, selected_situation = 0;
+    ClientView view = VIEW_ROADS, return_view = VIEW_LOCAL;
+    CcSimInit(&sim, 42U);
+    ResetLocalState(&local);
+    sim.maps[0].owner_id = sim.player.id;
+    for (int32_t i = 0; i < sim.route_count; ++i) {
+        if (sim.routes[i].id == sim.maps[0].route_id) selected = i;
+    }
+    (void)remove(path);
+    CcJournal *journal = CcJournalStart(path, &sim, error, sizeof(error));
+    if (journal == NULL) return ClientRegressionFailure(error);
+    uint64_t before = CcSimHash(&sim);
+    queued_key_press[KEY_S] = true;
+    HandleInput(&journal, &sim, &selected, &selected_situation, &view, &return_view,
+                &local, (RenderTexture2D){0}, (Rectangle){0}, 0.0f, path, "",
+                message, sizeof(message), feedback, sizeof(feedback), &feedback_age);
+    ClientInputClearPressed();
+    if (CcSimHash(&sim) != before) return ClientRegressionFailure("Road S changed the campaign.");
+    view = VIEW_MAP;
+    selected = 0;
+    ContextActionSet actions = BuildContextActions(&sim, &local, view, selected, 0);
+    if (actions.count < 1 || actions.items[0].kind != CONTEXT_ACTION_SELL_MAP) {
+        return ClientRegressionFailure("The map case needs a labelled sale action.");
+    }
+    queued_key_press[KEY_S] = true;
+    HandleInput(&journal, &sim, &selected, &selected_situation, &view, &return_view,
+                &local, (RenderTexture2D){0}, (Rectangle){0}, 0.0f, path, "",
+                message, sizeof(message), feedback, sizeof(feedback), &feedback_age);
+    ClientInputClearPressed();
+    if (CcSimHash(&sim) != before || local.pending_map_sale_id != sim.maps[0].id) {
+        return ClientRegressionFailure("Chart sale must wait for confirmation.");
+    }
+    actions = BuildContextActions(&sim, &local, view, selected, 0);
+    if (actions.items[0].kind != CONTEXT_ACTION_CONFIRM_MAP_SALE ||
+        strstr(actions.items[0].detail, "ROUTE GUIDANCE") == NULL) {
+        return ClientRegressionFailure("Chart confirmation needs its navigation cost.");
+    }
+    CcMoney coins = sim.player.coins;
+    queued_key_press[KEY_ENTER] = true;
+    HandleInput(&journal, &sim, &selected, &selected_situation, &view, &return_view,
+                &local, (RenderTexture2D){0}, (Rectangle){0}, 0.0f, path, "",
+                message, sizeof(message), feedback, sizeof(feedback), &feedback_age);
+    ClientInputClearPressed();
+    if (sim.maps[0].owner_id != sim.player.location_id || sim.player.coins <= coins) {
+        return ClientRegressionFailure("Confirmed chart sale must transfer the chart and coins.");
+    }
+    if (!CcJournalClose(&journal, &sim, error, sizeof(error))) return ClientRegressionFailure(error);
+    (void)remove(path);
+    (void)puts("Chart sale input regression passed");
+    return 0;
+}
+#endif
+
 int main(int argc, char **argv)
 {
 #if defined(CC_CLIENT_SELF_TESTS)
+    if (argc == 2 && strcmp(argv[1], "--test-map-sale-input") == 0) {
+        return RunMapSaleInputRegression();
+    }
     if (argc == 2 &&
         strcmp(argv[1], "--test-town-arrival-parking") == 0) {
         return RunTownArrivalParkingRegression();
@@ -9614,6 +9705,20 @@ int main(int argc, char **argv)
                    (capture ? FLAG_WINDOW_HIDDEN : 0U));
     int32_t initial_width = normal_play ? 1200 : 1280;
     int32_t initial_height = normal_play ? 700 : 760;
+#if defined(PLATFORM_WEB)
+    initial_width = 1280;
+    initial_height = 720;
+#endif
+    if (capture_road_fork && argc >= 4) {
+        char *end = NULL;
+        long width = strtol(argv[3], &end, 10);
+        if (*end != '\0' || (width != 1040 && width != 1200 && width != 1280)) {
+            (void)fprintf(stderr, "Choose capture width 1040, 1200, or 1280.\n");
+            return 1;
+        }
+        initial_width = (int32_t)width;
+        initial_height = 700;
+    }
     InitWindow(initial_width, initial_height,
                "Crownless Carriage — living world spine");
     if (!IsWindowReady()) {
@@ -9624,8 +9729,8 @@ int main(int argc, char **argv)
     }
     ClientInputInstall();
 
-    SetWindowMinSize(normal_play ? 1040 : 1280,
-                     normal_play ? 620 : 760);
+    SetWindowMinSize(normal_play || capture_road_fork ? 1040 : 1280,
+                     normal_play || capture_road_fork ? 620 : 760);
     SetTargetFPS(render_benchmark || capture_action_reel ||
                  capture_gameplay_reel || capture_creature_reel ? 0 : 60);
     ClientMapTextures map_textures = {0};

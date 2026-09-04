@@ -1065,6 +1065,8 @@ if(BUILD_TESTING)
         target_compile_definitions(crownless_carriage PRIVATE
             CC_CLIENT_SELF_TESTS=1
         )
+        add_test(NAME map_sale_input
+                 COMMAND crownless_carriage --test-map-sale-input)
         add_test(NAME town_arrival_parking
                  COMMAND crownless_carriage --test-town-arrival-parking)
         add_test(NAME town_departure_to_road_book
