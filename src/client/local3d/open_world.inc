@@ -263,9 +263,19 @@ static uint32_t storybook_seed = 0;
 static uint32_t storybook_generator = 0;
 static Vector2 storybook_center = {0};
 static bool storybook_ground_ready = false;
+static TreeSceneryBatchCache storybook_forest = {0};
+static uint64_t storybook_forest_key = 0;
+
+static void ClearStorybookForest(void)
+{
+    if (IsModelValid(storybook_forest.structure)) UnloadModel(storybook_forest.structure);
+    if (IsModelValid(storybook_forest.foliage)) UnloadModel(storybook_forest.foliage);
+    storybook_forest = (TreeSceneryBatchCache){0};
+}
 
 static void OpenWorldRenderCacheClear(void)
 {
+    ClearStorybookForest();
     if (storybook_ground_ready) UnloadModel(storybook_ground);
     storybook_ground = (Model){0};
     storybook_ground_ready = false;
@@ -329,7 +339,9 @@ static void DrawStorybookGround(const CcWorldManifest *manifest, Vector3 focus)
         storybook_center = center;
     }
     if (storybook_ground_ready) {
+        SetWorldTerrainSurface(true);
         DrawModel(storybook_ground, (Vector3){0}, 1.0f, WHITE);
+        SetWorldTerrainSurface(false);
     }
 }
 
@@ -556,7 +568,13 @@ static void DrawOpenWorldRibbonSegment(const CcWorldManifest *manifest,
                               second.z + side_z) + lift,
          second.z + side_z},
     };
+    Vector3 normal = Vector3Normalize(Vector3CrossProduct(
+        Vector3Subtract(points[2], points[0]), Vector3Subtract(points[1], points[0])));
+    rlNormal3f(normal.x, normal.y, normal.z);
     DrawTriangle3D(points[0], points[2], points[1], color);
+    normal = Vector3Normalize(Vector3CrossProduct(
+        Vector3Subtract(points[3], points[0]), Vector3Subtract(points[2], points[0])));
+    rlNormal3f(normal.x, normal.y, normal.z);
     DrawTriangle3D(points[0], points[3], points[2], color);
 }
 
@@ -1004,7 +1022,7 @@ static Camera3D StorybookCamera(const CcWorldManifest *manifest,
                                  const CcLocalWorldCarriageState *carriage)
 {
     float wide = SmoothStep01(carriage->camera_weight);
-    float heading = carriage->heading_yaw;
+    float heading = carriage->camera_heading_yaw;
     Vector3 forward = {sinf(heading), 0.0f, cosf(heading)};
     Vector3 right = {cosf(heading), 0.0f, -sinf(heading)};
     Vector3 focus = Vector3Add(carriage->position,
@@ -1021,6 +1039,40 @@ static Camera3D StorybookCamera(const CcWorldManifest *manifest,
         .projection = CAMERA_PERSPECTIVE};
 }
 
+static Vector2 StorybookRoadSide(const CcWorldRoutePlacement *route,
+                                  float amount, float span)
+{
+    CcWorldPoint before = CcWorldRoutePoint(route, fmaxf(0.0f, amount - span));
+    CcWorldPoint after = CcWorldRoutePoint(route, fminf(1.0f, amount + span));
+    float length = fmaxf(0.001f, hypotf(after.x - before.x, after.z - before.z));
+    return (Vector2){-(after.z - before.z) / length, (after.x - before.x) / length};
+}
+
+static void DrawStorybookStrip(CcWorldPoint first, CcWorldPoint second,
+                                Vector2 first_side, Vector2 second_side,
+                                float first_height, float second_height,
+                                float width, float offset, float lift, Color color)
+{
+    Vector3 points[4];
+    for (int corner = 0; corner < 4; ++corner) {
+        CcWorldPoint end = corner < 2 ? first : second;
+        Vector2 side = corner < 2 ? first_side : second_side;
+        float across = offset + ((corner == 0 || corner == 3) ? width : -width) * 0.5f;
+        float x = end.x + side.x * across;
+        float z = end.z + side.y * across;
+        points[corner] = (Vector3){x,
+            (corner < 2 ? first_height : second_height) + lift, z};
+    }
+    Vector3 normal = Vector3Normalize(Vector3CrossProduct(
+        Vector3Subtract(points[2], points[0]), Vector3Subtract(points[1], points[0])));
+    rlNormal3f(normal.x, normal.y, normal.z);
+    DrawTriangle3D(points[0], points[2], points[1], color);
+    normal = Vector3Normalize(Vector3CrossProduct(
+        Vector3Subtract(points[3], points[0]), Vector3Subtract(points[2], points[0])));
+    rlNormal3f(normal.x, normal.y, normal.z);
+    DrawTriangle3D(points[0], points[3], points[2], color);
+}
+
 static void DrawStorybookRoads(const CcSim *sim,
                                 const CcWorldManifest *manifest,
                                 const CcLocalWorldCarriageState *carriage)
@@ -1029,6 +1081,7 @@ static void DrawStorybookRoads(const CcSim *sim,
         const CcWorldRoutePlacement *route = &manifest->routes[index];
         CcRoadBookRouteView view = {0};
         if (!OpenWorldReadRouteView(sim, route, carriage, &view)) continue;
+        float tangent_span = 0.6f / fmaxf(1.0f, CcWorldRouteLength(route));
         for (int32_t sample = 0; sample < CC_WORLD_ROUTE_SAMPLE_COUNT - 1;
              ++sample) {
             CcRoadBookRouteSpan spans[2];
@@ -1049,25 +1102,24 @@ static void DrawStorybookRoads(const CcSim *sim,
                                            start.z + (end.z - start.z) * b};
                     if (hypotf(first.x - carriage->position.x,
                                first.z - carriage->position.z) > 135.0f) continue;
-                    bool extend_first = step > 0 ||
-                        OpenWorldRouteVisibleBefore(&view, spans[span].from_amount);
-                    bool extend_second = step + 1 < steps ||
-                        OpenWorldRouteVisibleAfter(&view, spans[span].to_amount);
-                    DrawOpenWorldRibbonSegment(manifest, first, second,
-                        8.4f, 0.03f, (Color){115, 116, 70, 255},
-                        extend_first, extend_second);
-                    DrawOpenWorldRibbonSegment(manifest, first, second,
-                        5.8f, 0.13f, (Color){165, 141, 94, 255},
-                        extend_first, extend_second);
-                    float inverse = 1.0f / fmaxf(0.01f, length);
+                    float amount_span = spans[span].to_amount - spans[span].from_amount;
+                    Vector2 first_side = StorybookRoadSide(route,
+                        spans[span].from_amount + amount_span * a, tangent_span);
+                    Vector2 second_side = StorybookRoadSide(route,
+                        spans[span].from_amount + amount_span * b, tangent_span);
+                    float first_height = CcWorldTerrainHeight(manifest, first.x, first.z);
+                    float second_height = CcWorldTerrainHeight(manifest, second.x, second.z);
+                    DrawStorybookStrip(first, second, first_side, second_side,
+                        first_height, second_height,
+                        8.4f, 0.0f, 0.03f, (Color){115, 116, 70, 255});
+                    DrawStorybookStrip(first, second, first_side, second_side,
+                        first_height, second_height,
+                        5.8f, 0.0f, 0.13f, (Color){150, 127, 88, 255});
                     for (int side = -1; side <= 1; side += 2) {
-                        float x = -(end.z - start.z) * inverse * (float)side * 1.35f;
-                        float z = (end.x - start.x) * inverse * (float)side * 1.35f;
-                        DrawOpenWorldRibbonSegment(manifest,
-                            (CcWorldPoint){first.x + x, first.z + z},
-                            (CcWorldPoint){second.x + x, second.z + z},
-                            0.24f, 0.15f, (Color){121, 101, 68, 255},
-                            extend_first, extend_second);
+                        DrawStorybookStrip(first, second, first_side, second_side,
+                            first_height, second_height,
+                            0.24f, (float)side * 1.35f, 0.15f,
+                            (Color){112, 94, 68, 255});
                     }
                 }
             }
@@ -1075,12 +1127,71 @@ static void DrawStorybookRoads(const CcSim *sim,
     }
 }
 
-static void DrawStorybookScenery(const CcWorldManifest *manifest, Vector3 focus)
+typedef struct StorybookTree {
+    float x;
+    float z;
+    float shade;
+} StorybookTree;
+
+static void EmitStorybookTrees(const StorybookTree *trees, int count,
+                                TreeRegionalStyle style)
+{
+    for (int index = 0; index < count; ++index) {
+        const StorybookTree *tree = &trees[index];
+        DrawTree(tree->x, tree->z,
+            tree->shade > 0.84f ? TREE_FAMILY_OAK : TREE_FAMILY_ALDER,
+            BlendColor(WORLD_FOLIAGE, WORLD_FOLIAGE_LIGHT, tree->shade), style);
+    }
+}
+
+static bool BuildStorybookForest(const StorybookTree *trees, int count,
+                                  TreeRegionalStyle style, uint64_t key)
+{
+    ClearStorybookForest();
+    rlDrawRenderBatchActive();
+    TreeBatchMeshWriter structure = {.indexed = true, .count_only = true};
+    TreeBatchMeshWriter foliage = {.count_only = true};
+    tree_render_pass = TREE_RENDER_BATCH_BUILD;
+    tree_structure_writer = &structure;
+    tree_foliage_writer = &foliage;
+    EmitStorybookTrees(trees, count, style);
+    TreeBatchFinishBuildPass();
+    int source_draws = structure.source_draw_count + foliage.source_draw_count;
+    int vertices = structure.vertex_cursor + foliage.vertex_cursor;
+    if (!TreeBatchMeshWriterAllocate(&structure, structure.vertex_cursor,
+                                      structure.index_cursor)) return false;
+    if (!TreeBatchMeshWriterAllocate(&foliage, foliage.vertex_cursor, 0)) {
+        UnloadMesh(structure.mesh);
+        return false;
+    }
+    tree_render_pass = TREE_RENDER_BATCH_BUILD;
+    tree_structure_writer = &structure;
+    tree_foliage_writer = &foliage;
+    EmitStorybookTrees(trees, count, style);
+    TreeBatchFinishBuildPass();
+    bool trunk_ready = TreeBatchMeshUpload(&structure, false, &storybook_forest.structure);
+    bool leaves_ready = TreeBatchMeshUpload(&foliage, true, &storybook_forest.foliage);
+    if (!trunk_ready || !leaves_ready) {
+        ClearStorybookForest();
+        return false;
+    }
+    storybook_forest.ready = true;
+    storybook_forest.source_draw_count = source_draws;
+    storybook_forest.vertex_count = vertices;
+    storybook_forest_key = key;
+    return true;
+}
+
+static void DrawStorybookScenery(const CcWorldManifest *manifest, Vector3 focus,
+                                  Camera3D camera)
 {
     int32_t origin_x = (int32_t)floorf(focus.x / 20.0f);
     int32_t origin_z = (int32_t)floorf(focus.z / 20.0f);
     TreeRegionalStyle style = TreeStyleForKingdom(WORLD_GRASS);
     style.proportions = (Vector3){1.5f, 1.6f, 1.5f};
+    StorybookTree trees[169];
+    int count = 0;
+    uint64_t key = manifest->world_seed;
     for (int32_t row = -6; row <= 6; ++row) {
         for (int32_t col = -6; col <= 6; ++col) {
             int32_t gx = origin_x + col;
@@ -1089,14 +1200,21 @@ static void DrawStorybookScenery(const CcWorldManifest *manifest, Vector3 focus)
             if (scatter < 0.54f) continue;
             float x = ((float)gx + 0.2f + scatter * 0.6f) * 20.0f;
             float z = ((float)gz + TerrainScatter01(gx, gz, 813U)) * 20.0f;
+            float view_x = camera.position.x - focus.x;
+            float view_z = camera.position.z - focus.z;
+            float along_view = ((x - focus.x) * view_x + (z - focus.z) * view_z) /
+                fmaxf(0.01f, view_x * view_x + view_z * view_z);
+            if (along_view > 0.0f && along_view < 1.0f &&
+                hypotf(x - focus.x - view_x * along_view,
+                       z - focus.z - view_z * along_view) < 4.5f) continue;
             if (hypotf(x - focus.x, z - focus.z) > 122.0f ||
                 CcWorldSurfaceAt(manifest, x, z) != CC_WORLD_SURFACE_WILDERNESS ||
                 !OpenWorldPointClearsSettlements(manifest,
                     (CcWorldPoint){x, z}, 5.0f)) continue;
             if (scatter > 0.66f) {
-                DrawTree(x, z, scatter > 0.84f ? TREE_FAMILY_OAK : TREE_FAMILY_ALDER,
-                          BlendColor(WORLD_FOLIAGE, WORLD_FOLIAGE_LIGHT,
-                                     scatter), style);
+                trees[count++] = (StorybookTree){x, z, scatter};
+                key = (key ^ (uint32_t)gx) * UINT64_C(1099511628211);
+                key = (key ^ (uint32_t)gz) * UINT64_C(1099511628211);
             } else {
                 float y = CcWorldTerrainHeight(manifest, x, z);
                 DrawScenerySphere((Vector3){x, y + 0.4f, z}, 0.9f,
@@ -1104,6 +1222,16 @@ static void DrawStorybookScenery(const CcWorldManifest *manifest, Vector3 focus)
             }
         }
     }
+    if (count == 0) return;
+    if ((!storybook_forest.ready || storybook_forest_key != key) &&
+        !BuildStorybookForest(trees, count, style, key)) {
+        EmitStorybookTrees(trees, count, style);
+        return;
+    }
+    DrawModel(storybook_forest.structure, (Vector3){0}, 1.0f, WHITE);
+    DrawModel(storybook_forest.foliage, (Vector3){0}, 1.0f, WHITE);
+    CcLocalRendererRecordStaticBatch(2, storybook_forest.source_draw_count,
+                                    storybook_forest.vertex_count);
 }
 
 void CcLocalDrawOpenWorld3D(const CcSim *sim,
@@ -1194,7 +1322,13 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
         .projection = camera_projection,
     };
     if (storybook) {
-        camera = StorybookCamera(&stream->manifest, carriage);
+        CcLocalWorldCarriageState travel_camera = *carriage;
+        if (town_arrival) travel_camera.camera_weight = carriage->arrival_travel_weight;
+        camera = StorybookCamera(&stream->manifest, &travel_camera);
+        if (town_arrival) {
+            camera.position = Vector3Lerp(close_position, camera.position, camera_weight);
+            camera.target = Vector3Lerp(close_focus, camera.target, camera_weight);
+        }
         focus = camera.target;
     } else {
         camera = SnapCameraToArtPixels(camera, target.texture.height);
@@ -1209,12 +1343,30 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
     SetFaceRenderContext(camera, target.texture.width, target.texture.height);
     BeginTextureMode(target);
     ClearBackground(ArtLightBackground(art.light_profile));
+    if (storybook) {
+        Color horizon = ArtLightBackground(art.light_profile);
+        DrawRectangleGradientV(0, 0, target.texture.width, target.texture.height,
+            BlendColor(horizon, (Color){81, 116, 143, 255}, 0.28f), horizon);
+        for (int cloud = 0; cloud < 4; ++cloud) {
+            float span = (float)target.texture.width + 140.0f;
+            float x = fmodf((float)cloud * 197.0f + clock * 0.8f, span) - 70.0f;
+            float y = 17.0f + (float)(cloud % 3) * 11.0f;
+            Color mist = Fade(BlendColor(horizon, CC_STYLE_PARCHMENT, 0.45f), 0.16f);
+            DrawEllipse((int)x, (int)y, 42.0f, 7.0f, mist);
+            DrawEllipse((int)x + 25, (int)y + 3, 34.0f, 5.0f, mist);
+        }
+    }
     BeginMode3D(camera);
     BeginWorldLighting(camera, &art);
     if (storybook) {
         DrawStorybookGround(&stream->manifest, carriage->position);
         DrawStorybookRoads(sim, &stream->manifest, carriage);
-        DrawStorybookScenery(&stream->manifest, carriage->position);
+        /* Finish world-space ribbons before tree models change the transform. */
+        rlDrawRenderBatchActive();
+        float scenery_fog = 0.0f;
+        SetShaderValue(visual_style.world, visual_style.horizon_fog_location,
+                       &scenery_fog, SHADER_UNIFORM_FLOAT);
+        DrawStorybookScenery(&stream->manifest, carriage->position, camera);
     } else {
         DrawOpenWorldRouteNetwork(
             sim, &stream->manifest, carriage, kingdom_view);

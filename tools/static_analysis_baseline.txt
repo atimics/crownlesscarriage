@@ -1,1 +1,1 @@
-syntaxError|src/client/main.c|315|https://github.com/atimics/crownlesscarriage/issues/174
+syntaxError|src/client/main.c|318|https://github.com/atimics/crownlesscarriage/issues/174

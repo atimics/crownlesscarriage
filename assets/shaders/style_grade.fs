@@ -155,6 +155,8 @@ void main()
     vec3 color = linearToSrgb(clamp(oklabToLinearSrgb(perceptual),
                                     0.0, 1.0));
 
-    color = nearestPaletteColor(clamp(color, 0.0, 1.0));
+    // Retain painted shading between the shared palette's anchor colours.
+    color = mix(clamp(color, 0.0, 1.0),
+                nearestPaletteColor(clamp(color, 0.0, 1.0)), 0.30);
     finalColor = vec4(color, 1.0);
 }

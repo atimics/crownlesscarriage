@@ -4189,6 +4189,9 @@ static void BeginWorldLighting(Camera3D camera,
                           (float)atmosphere_fog.b / 255.0f};
     float fog_near = profile->fog_near * atmosphere.fog_distance_scale;
     float fog_far = profile->fog_far * atmosphere.fog_distance_scale;
+    float horizon_fog = profile_id == ART_LIGHT_STORYBOOK ? 1.0f : 0.0f;
+    SetShaderValue(visual_style.world, visual_style.horizon_fog_location,
+                   &horizon_fog, SHADER_UNIFORM_FLOAT);
     float depth_strength = profile->depth_strength * atmosphere.depth_scale;
     float focal_contrast = profile->focal_contrast * atmosphere.focal_scale;
     float character_rim_tint[3] = {
