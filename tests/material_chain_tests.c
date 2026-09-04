@@ -154,6 +154,8 @@ static void PrepareMill(CcSim *sim, CcSettlement **place)
     (*place)->stock[CC_GOOD_BREAD] = 100;
     (*place)->stock[CC_GOOD_WHEAT] = 8;
     (*place)->reserve_target[CC_GOOD_WHEAT] = 2;
+    (*place)->stock[CC_GOOD_WOOD] = 8;
+    (*place)->reserve_target[CC_GOOD_WOOD] = 2;
     (*place)->stock[CC_GOOD_TOOLS] = 1;
     (*place)->reserve_target[CC_GOOD_PAPER] = 10;
     (*place)->production[CC_GOOD_PAPER] = 8;
@@ -166,7 +168,8 @@ static void CheckPaperMillGates(void)
     PrepareMill(&sim, &place);
     CcSimAdvanceDays(&sim, 1);
     CC_CHECK(place->stock[CC_GOOD_PAPER] == 8);
-    CC_CHECK(place->stock[CC_GOOD_WHEAT] == 6);
+    CC_CHECK(place->stock[CC_GOOD_WOOD] == 6);
+    CC_CHECK(place->stock[CC_GOOD_WHEAT] == 8);
     CC_CHECK(place->paper_tool_wear == 1);
     CC_CHECK(CountEvents(&sim, CC_EVENT_PAPER_MILLED) == 1);
 
@@ -176,9 +179,28 @@ static void CheckPaperMillGates(void)
     CC_CHECK(place->stock[CC_GOOD_PAPER] == 0);
 
     PrepareMill(&sim, &place);
-    place->stock[CC_GOOD_WHEAT] = place->reserve_target[CC_GOOD_WHEAT];
+    place->stock[CC_GOOD_WOOD] = place->reserve_target[CC_GOOD_WOOD];
     CcSimAdvanceDays(&sim, 1);
     CC_CHECK(place->stock[CC_GOOD_PAPER] == 0);
+    CC_CHECK(place->stock[CC_GOOD_WHEAT] == 8);
+
+    PrepareMill(&sim, &place);
+    place->stock[CC_GOOD_WHEAT] = 0;
+    CcSimAdvanceDays(&sim, 1);
+    CC_CHECK(place->stock[CC_GOOD_PAPER] == 8);
+    CC_CHECK(place->stock[CC_GOOD_WOOD] == 6);
+
+    PrepareMill(&sim, &place);
+    place->stock[CC_GOOD_WOOD] = place->reserve_target[CC_GOOD_WOOD] + 1;
+    CcSimAdvanceDays(&sim, 1);
+    CC_CHECK(place->stock[CC_GOOD_PAPER] == 4);
+    CC_CHECK(place->stock[CC_GOOD_WOOD] == 2);
+
+    PrepareMill(&sim, &place);
+    place->production[CC_GOOD_PAPER] = 3;
+    CcSimAdvanceDays(&sim, 1);
+    CC_CHECK(place->stock[CC_GOOD_PAPER] == 3);
+    CC_CHECK(place->stock[CC_GOOD_WOOD] == 7);
 
     PrepareMill(&sim, &place);
     place->stock[CC_GOOD_TOOLS] = 0;
@@ -189,6 +211,38 @@ static void CheckPaperMillGates(void)
     place->hunger = 40;
     CcSimAdvanceDays(&sim, 1);
     CC_CHECK(place->stock[CC_GOOD_PAPER] == 0);
+}
+
+static void CheckLegacyPaperRecipe(void)
+{
+    for (uint32_t version = 34U; version <= 36U; ++version) {
+        CcSim sim;
+        CcSettlement *place = NULL;
+        PrepareMill(&sim, &place);
+        sim.schema_version = version;
+        place->stock[CC_GOOD_WOOD] = 0;
+        CcSimAdvanceDays(&sim, 1);
+        CC_CHECK(place->stock[CC_GOOD_PAPER] == 8);
+        CC_CHECK(place->stock[CC_GOOD_WHEAT] == 6);
+        CC_CHECK(place->stock[CC_GOOD_WOOD] == 0);
+    }
+}
+
+static void CheckWoodFeedsPaperAndWheatFeedsScribes(void)
+{
+    CcSim sim;
+    CcSettlement *place = NULL;
+    PrepareMill(&sim, &place);
+    sim.iron_ledger_reserve = 50;
+    sim.archives.scribes = 1;
+    place->stock[CC_GOOD_WHEAT] = 4;
+    AddNotableEvent(&sim);
+    CcSimAdvanceDays(&sim, 1);
+    CC_CHECK(place->stock[CC_GOOD_WOOD] == 6);
+    CC_CHECK(place->stock[CC_GOOD_WHEAT] == 2);
+    CC_CHECK(place->stock[CC_GOOD_PAPER] == 7);
+    CC_CHECK(CountArchiveVolumes(&sim) == 1);
+    CC_CHECK(sim.archives.lore_stored == 1);
 }
 
 static void CheckPaperOwnsTheTome(void)
@@ -386,6 +440,8 @@ int main(void)
     CC_CHECK(CC_EVENT_KING_ANOINTED == 124);
     CC_CHECK(CC_EVENT_PRETENDER_CRISIS == 125);
     CheckPaperMillGates();
+    CheckLegacyPaperRecipe();
+    CheckWoodFeedsPaperAndWheatFeedsScribes();
     CheckPaperOwnsTheTome();
     CheckBindingMaterialsOwnTheTome();
     CheckScribesAnointTheCrown();
