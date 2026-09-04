@@ -755,6 +755,13 @@ if(BUILD_TESTING)
     cc_strict_warnings(client_session_tests)
     add_test(NAME local_session_round_trip COMMAND client_session_tests)
 
+    find_program(CC_NODE_EXECUTABLE node)
+    if(CC_NODE_EXECUTABLE)
+        add_test(NAME browser_persistence_contract
+                 COMMAND ${CC_NODE_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/web_persistence_tests.mjs)
+    endif()
+
     add_executable(client_policy_tests tests/client_policy_tests.c)
     target_link_libraries(client_policy_tests PRIVATE crownless_client_policy)
     cc_strict_warnings(client_policy_tests)

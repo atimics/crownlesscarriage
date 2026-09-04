@@ -326,6 +326,19 @@ EM_ASYNC_JS(int, ClientFlushBrowserSaves,
         return 0;
     }
 });
+EM_ASYNC_JS(int, ClientFlushNewBrowserCampaign,
+            (const char *campaign_path), {
+    try {
+        await Module.persistCrownlessNewCampaign(
+            UTF8ToString(campaign_path));
+        console.info("Crownless Carriage new campaign stored.");
+        return 1;
+    } catch (error) {
+        console.error("Could not store the new Crownless Carriage campaign",
+                      error);
+        return 0;
+    }
+});
 EM_JS(int, ClientReleaseBrowserAssets, (), {
     let releasedBytes = 0;
     const removeTree = (path) => {
@@ -7512,10 +7525,47 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         CcJournal *replacement_journal = CcJournalRestart(
             save_path, &replacement, error, sizeof(error));
         if (replacement_journal == NULL) {
+            char restart_error[256];
+            (void)snprintf(restart_error, sizeof(restart_error), "%s", error);
+            CcSim restored_sim;
+            CcJournal *restored_journal = CcJournalResume(
+                save_path, &restored_sim, error, sizeof(error));
+            if (restored_journal != NULL) {
+                *journal = restored_journal;
+                *sim = restored_sim;
+                (void)snprintf(
+                    message, message_capacity,
+                    "%s Your previous campaign is still active.",
+                    restart_error);
+                *view = VIEW_LOCAL;
+                return;
+            }
             *view = VIEW_LOCAL;
-            (void)snprintf(message, message_capacity, "%s", error);
+            (void)snprintf(message, message_capacity, "%s", restart_error);
             return;
         }
+#if defined(PLATFORM_WEB)
+        if (ClientFlushNewBrowserCampaign(save_path) == 0) {
+            CcJournalAbandon(&replacement_journal);
+            CcJournal *restored_journal = CcJournalRestart(
+                save_path, sim, error, sizeof(error));
+            if (restored_journal == NULL) {
+                *view = VIEW_LOCAL;
+                (void)snprintf(
+                    message, message_capacity,
+                    "The browser could not store the new campaign. %s",
+                    error);
+                return;
+            }
+            *journal = restored_journal;
+            *view = VIEW_LOCAL;
+            (void)snprintf(
+                message, message_capacity,
+                "The browser could not store the new campaign. "
+                "Your previous campaign is still active.");
+            return;
+        }
+#endif
         *journal = replacement_journal;
         *sim = replacement;
         *selected = FirstOutgoingRouteIndex(sim);
