@@ -590,7 +590,8 @@ bool CcWorldManifestBuild(CcWorldManifest *manifest, const CcSim *sim)
         placement->seed = MixBits(
             sim->world_seed ^ (uint32_t)site->id ^
             (uint32_t)(site->id >> 32U));
-        float amount = (float)site->progress_milli / 1000.0f;
+        float amount = CcWorldRouteJourneyAmount(
+            route, route->from_id, (float)site->progress_milli / 1000.0f);
         float route_heading = 0.0f;
         if (!CcWorldRoutePose(route, route->from_id, amount,
                               &placement->junction, &route_heading)) {

@@ -47,7 +47,7 @@
 #define CC_CROWNLESS_ATLAS_MAP_NAME "The Crownless Atlas"
 #define CC_DRAGON_HOARD_MAP_NAME "The Hoard Vault of Varkesh"
 
-#define CC_SIM_SCHEMA_VERSION 37
+#define CC_SIM_SCHEMA_VERSION 38
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
@@ -394,7 +394,9 @@ typedef enum CcCommandKind {
     CC_COMMAND_TAKE_JOURNEY_BREAK = 37,
     CC_COMMAND_PRESS_ON = 38,
     CC_COMMAND_MAKE_CAMP = 39,
-    CC_COMMAND_LODGE_ROAD_HOUSE = 40
+    CC_COMMAND_LODGE_ROAD_HOUSE = 40,
+    CC_COMMAND_CAMP_ROAD_SITE = 41,
+    CC_COMMAND_PASS_ROAD_SITE = 42
 } CcCommandKind;
 
 typedef enum CcHorseSex {
@@ -1329,6 +1331,7 @@ typedef struct CcJourneyEncounter {
     bool ambush_pending;
     bool ambush_warned;
     bool ambush_resolved;
+    uint32_t road_site_stop_mask;
     CcId parent_event_id;
 } CcJourneyEncounter;
 
@@ -1581,6 +1584,7 @@ const CcRoadSite *CcSimRoadSite(const CcSim *sim, CcId id);
 const CcRoadSite *CcSimRoadSiteAt(const CcSim *sim, int32_t index);
 const CcRoadSite *CcSimRoadHouseSite(const CcSim *sim, CcId route_id);
 const char *CcRoadSiteKindName(CcRoadSiteKind kind);
+const CcRoadSite *CcSimJourneyRoadSiteStop(const CcSim *sim);
 const CcRoute *CcSimRouteBetween(const CcSim *sim, CcId a, CcId b);
 const CcMap *CcSimMap(const CcSim *sim, CcId id);
 const CcMap *CcSimMapForRoute(const CcSim *sim, CcId route_id, CcId owner_id);

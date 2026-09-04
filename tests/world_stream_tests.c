@@ -173,7 +173,9 @@ static int TestRoadDistrictSites(void)
         CHECK(placement != NULL);
         CHECK(route != NULL);
         CcWorldPoint expected_junction = CcWorldRoutePoint(
-            route, (float)site->progress_milli / 1000.0f);
+            route, CcWorldRouteJourneyAmount(
+                route, route->from_id,
+                (float)site->progress_milli / 1000.0f));
         CHECK(PointDistance(expected_junction, placement->junction) < 0.001f);
         float blocker_distance = PointDistance(
             placement->junction, placement->blocker_position);

@@ -14543,6 +14543,59 @@ static void AdvanceJourneyRestWatch(CcSim *sim)
     }
 }
 
+const CcRoadSite *CcSimJourneyRoadSiteStop(const CcSim *sim)
+{
+    if (sim == NULL || sim->schema_version < 38U ||
+        !sim->journey.active ||
+        sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING) return NULL;
+    const CcRoute *route = CcSimRoute(sim, sim->journey.route_id);
+    if (route == NULL) return NULL;
+    for (int32_t i = 0; i < sim->road_site_count; ++i) {
+        const CcRoadSite *site = &sim->road_sites[i];
+        if (site->route_id != route->id ||
+            (sim->journey.road_site_stop_mask & (UINT32_C(1) << i)) != 0U)
+            continue;
+        int32_t progress = sim->journey.origin_id == route->from_id ?
+            site->progress_milli : 1000 - site->progress_milli;
+        int32_t distance = sim->carriage.progress_milli - progress;
+        if (distance >= 0 && distance <= 10) return site;
+    }
+    return NULL;
+}
+
+static bool ApplyRoadSiteStop(CcSim *sim, const CcCommand *command,
+                              char *error, size_t error_capacity)
+{
+    const CcRoadSite *site = CcSimJourneyRoadSiteStop(sim);
+    if (site == NULL || site->id != command->target_id) {
+        SetError(error, error_capacity, "Reach this roadside stop first.");
+        return false;
+    }
+    int32_t slot = (int32_t)(site - sim->road_sites);
+    sim->journey.road_site_stop_mask |= UINT32_C(1) << slot;
+    bool camping = command->kind == CC_COMMAND_CAMP_ROAD_SITE;
+    char text[CC_EVENT_TEXT_CAPACITY];
+    if (camping) {
+        RecoverJourneyTeam(sim, 8, 5);
+        sim->journey.danger = ClampI32(sim->journey.danger + 3, 0, 95);
+        AdvanceJourneyRestWatch(sim);
+        (void)snprintf(text, sizeof(text),
+            "The company camps beside %.40s for one watch. The team rests while a guard keeps watch by the carriage.",
+            site->name);
+    } else {
+        (void)snprintf(text, sizeof(text),
+            "The company passes the turn to %.40s and follows the main road.",
+            site->name);
+    }
+    CcEvent *event = PushEvent(sim,
+        camping ? CC_EVENT_JOURNEY_CAMP : CC_EVENT_JOURNEY_BREAK,
+        sim->player.id, sim->journey.route_id,
+        sim->journey.parent_event_id, camping ? 3 : 0, text);
+    sim->journey.parent_event_id = event->id;
+    SetError(error, error_capacity, "");
+    return true;
+}
+
 static bool ApplyJourneyStopAction(CcSim *sim, const CcCommand *command,
                                    char *error, size_t error_capacity)
 {
@@ -15685,6 +15738,9 @@ bool CcSimApply(CcSim *sim, const CcCommand *command,
         case CC_COMMAND_LODGE_ROAD_HOUSE:
             return ApplyJourneyStopAction(
                 sim, command, error, error_capacity);
+        case CC_COMMAND_CAMP_ROAD_SITE:
+        case CC_COMMAND_PASS_ROAD_SITE:
+            return ApplyRoadSiteStop(sim, command, error, error_capacity);
         case CC_COMMAND_TRAVERSE_GOBLIN_TUNNEL:
             return ApplyGoblinTunnelTraversal(
                 sim, command, error, error_capacity);
@@ -15996,12 +16052,14 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                          sim->schema_version == 33U ||
                          sim->schema_version == 34U ||
                          sim->schema_version == 35U ||
-                         sim->schema_version == 36U;
+                         sim->schema_version == 36U ||
+                         sim->schema_version == 37U;
     bool supported_generator =
         (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
          sim->generator_version == CC_GENERATOR_VERSION) ||
         (legacy_schema && sim->schema_version <= 27U &&
          sim->generator_version == CC_GENERATOR_VERSION) ||
+        (sim->schema_version == 37U && sim->generator_version == 25U) ||
         (sim->schema_version == 36U && sim->generator_version == 25U) ||
         (sim->schema_version == 35U && sim->generator_version == 25U) ||
         (sim->schema_version == 34U && sim->generator_version == 25U) ||
@@ -17616,6 +17674,11 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             SetError(error, error_capacity, "World clock state is invalid.");
             return false;
         }
+        if (sim->schema_version >= 38U &&
+            (sim->journey.road_site_stop_mask >> CC_MAX_ROAD_SITES) != 0U) {
+            SetError(error, error_capacity, "Roadside stop history is invalid.");
+            return false;
+        }
         if (sim->journey.active) {
             bool situation_valid = sim->journey.situation_id == 0U ||
                 CcSimSituation(sim, sim->journey.situation_id) != NULL;
@@ -18453,6 +18516,9 @@ uint64_t CcSimHash(const CcSim *sim)
         if (sim->schema_version >= 18U) {
             HASH_VALUE(sim->journey.pace);
             HASH_VALUE(sim->journey.ambush_warned);
+        }
+        if (sim->schema_version >= 38U) {
+            HASH_VALUE(sim->journey.road_site_stop_mask);
         }
         HASH_VALUE(sim->journey.parent_event_id);
         HASH_VALUE(sim->carriage.mode);
