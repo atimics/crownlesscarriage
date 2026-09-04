@@ -7,10 +7,11 @@ import tempfile
 import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools' / 'coop'))
 from engine import Engine
-from server import ApiError, Application, Worlds
+from server import ApiError, Application, Worlds, away_days, AWAY_GRACE, AWAY_RAMP
 
 LIBRARY = sys.argv.pop(1)
 
@@ -48,6 +49,45 @@ class CoopTests(unittest.TestCase):
             self.assertEqual(a['state'], sim.snapshot())
         with self.assertRaises(RuntimeError):
             self.engine.open(saved=b'broken save')
+
+    def test_appearance_is_personal_and_survives_restart(self):
+        before = self.worlds.view(self.id, self.a)
+        appearance = dict(skin=4, hair=2, style=3, face=1, coat=5)
+        saved = self.worlds.appearance(self.id, self.a, {'appearance': appearance})
+        self.assertEqual(saved['appearance'], appearance)
+        self.assertEqual(saved['state'], before['state'])
+        self.assertEqual(saved['action_revision'], before['action_revision'])
+        self.assertEqual(saved['next_sequence'], before['next_sequence'])
+        self.assertEqual(self.worlds.view(self.id, self.b)['appearance'], dict(skin=0, hair=0, style=0, face=0, coat=0))
+        for invalid in (dict(appearance, skin=6), dict(appearance, coat=True), {'skin': 1}):
+            with self.assertRaises(ApiError):
+                self.worlds.appearance(self.id, self.a, {'appearance': invalid})
+        self.worlds.close()
+        self.worlds = Worlds(self.path, self.engine)
+        self.assertEqual(self.worlds.view(self.id, self.a)['appearance'], appearance)
+
+    def test_player_session_order_isolation_and_scene_changes(self):
+        before = self.worlds.view(self.id, self.a)
+        saved = dict(sequence=3, context=before['session_context'], session='CROWNLESS_SESSION 7\nlaunch test\n')
+        self.worlds.save_session(self.id, self.a, saved)
+        self.worlds.save_session(self.id, self.a, saved)
+        self.assertIsNone(self.worlds.view(self.id, self.b, campaign=True)['session'])
+        self.assertEqual(self.worlds.view(self.id, self.a)['state'], before['state'])
+        for invalid in (dict(saved, sequence=2), dict(saved, session=saved['session']+'changed'), dict(saved, sequence=True)):
+            with self.assertRaises(ApiError):
+                self.worlds.save_session(self.id, self.a, invalid)
+        self.worlds.close()
+        self.worlds = Worlds(self.path, self.engine)
+        self.assertEqual(self.worlds.view(self.id, self.a, campaign=True)['session'], saved)
+        self.worlds.command(self.id, self.a, self.command(self.a, amount=1, good=0))
+        self.assertEqual(self.worlds.view(self.id, self.a)['session_context'], saved['context'])
+        target = before['state']['travel'][0]['id']
+        self.worlds.command(self.id, self.a, self.command(self.a, 'travel', target=target))
+        self.assertNotEqual(self.worlds.view(self.id, self.a)['session_context'], saved['context'])
+        with self.assertRaises(ApiError):
+            self.worlds.save_session(self.id, self.a, dict(saved, sequence=4))
+        with self.assertRaises(ApiError):
+            self.worlds.save_session(self.id, 'c'*64, dict(saved, sequence=4))
 
     def test_retry_survives_server_restart(self):
         body = self.command(self.a, amount=1, good=0)
@@ -113,6 +153,72 @@ class CoopTests(unittest.TestCase):
         self.worlds.tick(now + 100)
         self.assertEqual(self.worlds.view(self.id, self.a)['state']['tick'], 30)
 
+    def test_away_clock_ramp_and_century_rate(self):
+        self.assertEqual(away_days(-1), 0)
+        self.assertGreater(away_days(7200)-away_days(3600), away_days(3600))
+        self.assertAlmostEqual(away_days(AWAY_RAMP+86400)-away_days(AWAY_RAMP), 36500)
+
+    def test_paused_time_survives_restart_and_resume(self):
+        before = self.worlds.owner_action(self.id, self.a, 'pause')
+        base = self.worlds.db.execute('SELECT accounted_at FROM away_clocks WHERE world=?', (self.id,)).fetchone()[0]
+        self.worlds.close()
+        self.worlds = Worlds(self.path, self.engine)
+        with patch('server.time.time', return_value=base+86400):
+            resumed = self.worlds.owner_action(self.id, self.a, 'resume')
+            self.worlds.tick(wall_now=base+86400)
+            self.assertEqual(resumed['away_clock']['days_pending'], 0)
+            self.assertEqual(self.worlds.view(self.id, self.a)['state']['day'], before['state']['day'])
+
+    def test_invitation_and_avatar_panel_preserve_away_speed(self):
+        base = self.worlds.db.execute('SELECT last_human FROM away_clocks WHERE world=?', (self.id,)).fetchone()[0]
+        with patch('server.time.time', return_value=base+AWAY_GRACE+AWAY_RAMP):
+            joined = self.worlds.join(self.id, self.b, {'player':'Bren', 'invite':self.invite})
+            self.assertEqual(joined['away_clock']['absent_seconds'], AWAY_RAMP)
+            self.assertAlmostEqual(joined['away_clock']['years_per_real_day'], 100)
+            self.assertTrue(all(not member['online'] for member in joined['crew']))
+            edited = self.worlds.appearance(self.id, self.b, {'appearance':joined['appearance']})
+            self.assertEqual(edited['away_clock'], joined['away_clock'])
+
+    def test_away_clock_survives_restart_and_return_stops_acceleration(self):
+        before = self.worlds.view(self.id, self.a)
+        base = self.worlds.db.execute('SELECT last_human FROM away_clocks WHERE world=?', (self.id,)).fetchone()[0]
+        self.worlds.seen.clear()
+        future = base + AWAY_GRACE + AWAY_RAMP + 86400
+        expected = int(away_days(AWAY_RAMP + 86400))
+        with patch('server.time.time', return_value=future):
+            self.worlds.tick(wall_now=future)
+            partial = self.worlds.view(self.id, self.a, present=False)
+            self.assertEqual(partial['state']['day'], before['state']['day'] + 8*365)
+            self.assertTrue(partial['catching_up'])
+            self.worlds.close()
+            self.worlds = Worlds(self.path, self.engine)
+            returned = self.worlds.view(self.id, self.a, campaign=True)
+            self.assertEqual(returned['away_clock']['days_pending'], expected - 8*365)
+            for _ in range(30):
+                self.worlds.tick(wall_now=future)
+            settled = self.worlds.view(self.id, self.a, campaign=True)
+            self.assertFalse(settled['catching_up'])
+            self.assertEqual(settled['state']['day'], before['state']['day'] + expected)
+            self.assertEqual(settled['state']['company']['location'], before['state']['company']['location'])
+            self.assertEqual(settled['session_context'], before['session_context'])
+            self.worlds.tick(wall_now=future+1)
+            self.assertEqual(self.worlds.view(self.id, self.a)['state']['day'], settled['state']['day'])
+
+    def test_away_clock_batch_failure_keeps_elapsed_time_for_retry(self):
+        self.worlds.view(self.id, self.a)
+        base = self.worlds.db.execute('SELECT last_human FROM away_clocks WHERE world=?', (self.id,)).fetchone()[0]
+        self.worlds.seen.clear()
+        self.worlds.db.execute("CREATE TRIGGER failed_world_write BEFORE UPDATE OF state ON worlds BEGIN SELECT RAISE(ABORT,'disk failure'); END")
+        with self.assertLogs(level='ERROR'):
+            self.worlds.tick(wall_now=base+3600)
+        self.assertIn(self.id, self.worlds.failed)
+        self.assertEqual(self.worlds.db.execute('SELECT accounted_at FROM away_clocks WHERE world=?', (self.id,)).fetchone()[0], base)
+        self.worlds.db.execute('DROP TRIGGER failed_world_write')
+        self.worlds.close()
+        self.worlds = Worlds(self.path, self.engine)
+        self.worlds.tick(wall_now=base+3600)
+        self.assertGreater(self.worlds.view(self.id, self.a, present=False)['state']['day'], 1)
+
     def test_travel_resume_and_tick_batch_equivalence(self):
         with self.engine.open(0xc0a71a9e) as a:
             target = a.snapshot()['travel'][0]['id']
@@ -164,6 +270,10 @@ class CoopTests(unittest.TestCase):
 
     def test_owner_deletes_only_their_world(self):
         self.worlds.command(self.id, self.a, self.command(self.a, amount=1, good=0))
+        view = self.worlds.appearance(self.id, self.a,
+            {'appearance': dict(skin=1, hair=2, style=3, face=1, coat=4)})
+        self.worlds.save_session(self.id, self.a, dict(sequence=1,
+            context=view['session_context'], session='CROWNLESS_SESSION 7\nlaunch test\n'))
         other = '2' * 32
         self.worlds.create(self.a, {'id': other, 'name': 'Other Road', 'player': 'Mara'})
         path = f'/api/worlds/{self.id}/host'
@@ -173,7 +283,9 @@ class CoopTests(unittest.TestCase):
         status, result = self.request(path, {'action': 'delete'})
         self.assertEqual(status, 200)
         self.assertEqual(result, {'deleted': True})
-        for table, column in [('worlds', 'id'), ('members', 'world'), ('receipts', 'world')]:
+        for table, column in [('worlds', 'id'), ('members', 'world'), ('receipts', 'world'),
+                              ('sessions', 'world'), ('appearances', 'world'),
+                              ('scene_contexts', 'world'), ('away_clocks', 'world')]:
             self.assertEqual(self.worlds.db.execute(f'SELECT count(*) FROM {table} WHERE {column}=?', (self.id,)).fetchone()[0], 0)
         self.assertFalse(any(key[0] == self.id for key in self.worlds.seen))
         self.assertNotIn(self.id, self.worlds.last_tick)

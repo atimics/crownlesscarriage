@@ -22,6 +22,16 @@ EM_ASYNC_JS(int, CoopDelete, (char *error, int capacity), {
     try { await Module.ccCoop.deleteWorld(); return 1; }
     catch (failure) { stringToUTF8(failure.message, error, capacity); return 0; }
 });
+EM_JS(int, CoopPreview, (), { return Module.ccCoop && Module.ccCoop.preview ? 1 : 0; });
+EM_JS(int, CoopHasSession, (), { return Module.ccCoop && Module.ccCoop.hasSession() ? 1 : 0; });
+EM_JS(void, CoopCheckpoint, (const char *path), {
+    Module.ccCoop.checkpoint(FS.readFile(UTF8ToString(path), {encoding:'utf8'}));
+});
+EM_JS(int, CoopAppearance, (), {
+    const value = Module.ccCoop ? Module.ccCoop.avatar() : 0;
+    document.body.dataset.avatar = String(value);
+    return value;
+});
 EM_JS(void, CoopReady, (const char *error), { Module.ccCoop.ready(UTF8ToString(error)); });
 EM_JS(void, CoopSynced, (const char *hash), { document.body.dataset.companyHash = UTF8ToString(hash); });
 EM_ASYNC_JS(int, CoopConnect, (char *error, int capacity), {
@@ -59,6 +69,10 @@ bool CcCoopClientOwner(void) { return CoopOwner() != 0; }
 bool CcCoopClientDelete(char *error, size_t capacity) { return CoopDelete(error, (int)capacity) != 0; }
 void CcCoopClientOpenLobby(void) { CoopLobby(); }
 void CcCoopClientReturnToTitle(void) { CoopTitle(); }
+bool CcCoopClientPreview(void) { return CoopPreview() != 0; }
+uint32_t CcCoopClientAppearance(void) { return (uint32_t)CoopAppearance(); }
+bool CcCoopClientHasSession(void) { return CoopHasSession() != 0; }
+void CcCoopClientCheckpoint(const char *path) { CoopCheckpoint(path); }
 void CcCoopClientReady(const char *error) { CoopReady(error); }
 
 bool CcCoopClientPoll(CcSim *sim, char *error, size_t capacity)
@@ -113,6 +127,10 @@ bool CcCoopClientOwner(void) { return false; }
 bool CcCoopClientDelete(char *error, size_t capacity) { (void)error; (void)capacity; return false; }
 void CcCoopClientOpenLobby(void) { OpenURL("https://crownless.ratimics.com/"); }
 void CcCoopClientReturnToTitle(void) {}
+bool CcCoopClientPreview(void) { return false; }
+uint32_t CcCoopClientAppearance(void) { return 0U; }
+bool CcCoopClientHasSession(void) { return false; }
+void CcCoopClientCheckpoint(const char *path) { (void)path; }
 void CcCoopClientReady(const char *error) { (void)error; }
 bool CcCoopClientConnect(CcSim *sim, char *error, size_t capacity)
 {

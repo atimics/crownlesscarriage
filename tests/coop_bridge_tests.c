@@ -33,6 +33,20 @@ int main(void)
     free(json);
     CC_CHECK(!CcCoopAdvance(first, -1, error, sizeof(error)));
     CC_CHECK(!CcCoopAdvance(first, 3601, error, sizeof(error)));
+    initial = CcSimHash(first);
+    CC_CHECK(!CcCoopAdvanceAway(first, -1, error, sizeof(error)));
+    CC_CHECK(!CcCoopAdvanceAway(first, 366, error, sizeof(error)));
+    CC_CHECK(CcSimHash(first) == initial);
+    int32_t day = first->current_day;
+    CcId location = first->player.location_id;
+    for (int year = 0; year < 100; ++year)
+        CC_CHECK(CcCoopAdvanceAway(first, 365, error, sizeof(error)));
+    CC_CHECK(first->current_day == day + 36500);
+    CC_CHECK(first->player.location_id == location);
+    CC_CHECK(CcCoopEncode(first, &bytes, &length, error, sizeof(error)));
+    CC_CHECK(CcCoopDecode(second, bytes, length, error, sizeof(error)));
+    CC_CHECK(CcSimHash(first) == CcSimHash(second));
+    CcCoopFree(bytes);
     CcCoopDestroy(first);
     CcCoopDestroy(second);
     return 0;

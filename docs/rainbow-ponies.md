@@ -13,7 +13,7 @@ allows recruitment.
 Choose **Release [name]** or press **1** or **2** to swap that companion for the
 pony you helped. The outgoing pony keeps their bond, completed quest count, and
 condition. They move to another road with a fresh request. **Keep travelling**
-or **Esc** leaves the meeting; a completed request remains ready for a later visit.
+or **Backspace** leaves the meeting; a completed request remains ready for a later visit.
 Ponies greet the carriage at most once per game day.
 
 Open the **Pony book** with its button or **F7**. Met ponies show their faces, names,

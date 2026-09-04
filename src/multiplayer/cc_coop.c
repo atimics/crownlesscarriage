@@ -72,6 +72,20 @@ bool CcCoopApply(CcSim *sim, const char *action, CcId target,
     return ok;
 }
 
+bool CcCoopAdvanceAway(CcSim *sim, int32_t days, char *error, size_t capacity)
+{
+    if (sim == NULL || days < 0 || days > 365 ||
+        days > CC_SIM_MAX_DAY - sim->current_day) return false;
+    CcSim *candidate = malloc(sizeof(*candidate));
+    if (candidate == NULL) return false;
+    *candidate = *sim;
+    CcSimAdvanceDays(candidate, days);
+    bool ok = CcSimValidate(candidate, error, capacity);
+    if (ok) *sim = *candidate;
+    free(candidate);
+    return ok;
+}
+
 bool CcCoopAdvance(CcSim *sim, int32_t ticks, char *error, size_t capacity)
 {
     if (sim == NULL || ticks < 0 || ticks > 3600 ||

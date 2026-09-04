@@ -412,12 +412,19 @@ static int RunFrontendRegression(void)
     FRONTEND_ACT(FRONTEND_ACTION_RESUME);
     FRONTEND_CHECK(state.screen == FRONTEND_PLAYING && view == VIEW_MAP);
     FrontendOpen(&state, FRONTEND_PAUSED);
-    local.site_travel_active = true;
+    local.road_choice_active = true;
     FRONTEND_ACT(FRONTEND_ACTION_TITLE);
     FRONTEND_CHECK(state.screen == FRONTEND_PAUSED && state.feedback[0] != '\0');
-    local.site_travel_active = false;
+    local.road_choice_active = false;
+    local.site_travel_active = true;
+    local.site_travel_progress = 0.5f;
     FRONTEND_ACT(FRONTEND_ACTION_TITLE);
     FRONTEND_CHECK(state.screen == FRONTEND_TITLE && CampaignSaveExists(session_path));
+    CcClientSession travel_session;
+    FRONTEND_CHECK(CcClientSessionRead(session_path, &travel_session,
+        state.feedback, sizeof(state.feedback)));
+    FRONTEND_CHECK(travel_session.site_travel_active && travel_session.site_travel_progress == 0.5f);
+    local.site_travel_active = false;
     FRONTEND_ACT(FRONTEND_ACTION_PLAY);
     FRONTEND_CHECK(state.screen == FRONTEND_PLAYING && sim.world_seed == first_seed);
     CcClientPreferences preferences = {.reduced_motion = true, .audio_mode = 2};

@@ -23,6 +23,19 @@ PROTOCOL = 1
 MAX_MEMBERS = 8
 MAX_WORLDS = 16
 MAX_BODY = 8192
+AWAY_GRACE = 15.0
+AWAY_RAMP = 6 * 3600.0
+AWAY_BASE_RATE = 30 / 1440.0
+AWAY_MAX_RATE = 100 * 365 / 86400.0
+
+
+def away_days(seconds):
+    """Integral of a six-hour ramp, then about a century per real day."""
+    age = max(0.0, seconds)
+    ramp = min(age, AWAY_RAMP)
+    return AWAY_BASE_RATE * ramp + (AWAY_MAX_RATE - AWAY_BASE_RATE) * ramp * ramp / (2 * AWAY_RAMP) + AWAY_MAX_RATE * max(0.0, age - AWAY_RAMP)
+
+
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 WORLD_ID = re.compile(r"^[0-9a-f]{32}$")
 NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 '\-]{0,30}$")
@@ -93,6 +106,19 @@ class Worlds:
           payload_hash TEXT NOT NULL, result TEXT NOT NULL,
           PRIMARY KEY(world,member,sequence),
           FOREIGN KEY(world,member) REFERENCES members(world,id));
+        CREATE TABLE IF NOT EXISTS appearances (
+          world TEXT NOT NULL, member TEXT NOT NULL, appearance TEXT NOT NULL,
+          PRIMARY KEY(world,member),
+          FOREIGN KEY(world,member) REFERENCES members(world,id));
+        CREATE TABLE IF NOT EXISTS scene_contexts (
+          world TEXT PRIMARY KEY REFERENCES worlds(id), signature TEXT NOT NULL, context TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS sessions (
+          world TEXT NOT NULL, member TEXT NOT NULL, sequence INTEGER NOT NULL,
+          context TEXT NOT NULL, session TEXT NOT NULL, PRIMARY KEY(world,member),
+          FOREIGN KEY(world,member) REFERENCES members(world,id));
+        CREATE TABLE IF NOT EXISTS away_clocks (
+          world TEXT PRIMARY KEY REFERENCES worlds(id), last_human REAL NOT NULL,
+          accounted_at REAL NOT NULL, owed_days REAL NOT NULL DEFAULT 0);
         PRAGMA user_version=1;
         """)
         self.seen, self.last_tick, self.failed = {}, {}, set()
@@ -119,11 +145,23 @@ class Worlds:
         require(row is not None, "Join this carriage with an invitation.", 403)
         return row
 
-    def view(self, world, token, campaign=False, after=None):
+    def account_away(self, world, wall, present=False, paused=False):
+        self.db.execute("INSERT OR IGNORE INTO away_clocks(world,last_human,accounted_at) VALUES(?,?,?)", (world, wall, wall))
+        previous = self.db.execute("SELECT * FROM away_clocks WHERE world=?", (world,)).fetchone()
+        wall = max(wall, previous["accounted_at"])
+        start = previous["last_human"] + AWAY_GRACE
+        credit = 0.0 if paused else max(0.0, away_days(wall - start) - away_days(previous["accounted_at"] - start))
+        owed = previous["owed_days"] + credit
+        last_human = wall if present or paused else previous["last_human"]
+        self.db.execute("UPDATE away_clocks SET last_human=?,accounted_at=?,owed_days=? WHERE world=?", (last_human, wall, owed, world))
+        return owed, max(0.0, wall - last_human - AWAY_GRACE)
+
+    def view(self, world, token, campaign=False, after=None, present=True):
         with self.lock:
             member = self.member(world, token)
             row = self.db.execute("SELECT * FROM worlds WHERE id=?", (world,)).fetchone()
-            self.seen[(world, member["id"])] = time.monotonic()
+            if present:
+                self.seen[(world, member["id"])] = time.monotonic()
             if world not in self.last_tick:
                 self.last_tick[world] = time.monotonic()
             result = dict(protocol=PROTOCOL, id=world, name=row["name"], revision=row["revision"],
@@ -131,9 +169,19 @@ class Worlds:
                           owner=row["owner"] == digest(token), member=member["id"],
                           next_sequence=member["sequence"] + 1, state=json.loads(row["view"]),
                           recovery_required=world in self.failed)
+            owed, absent = self.account_away(world, time.time(), present, bool(row["paused"]))
+            result["catching_up"] = owed >= 1.0
+            result["away_clock"] = {"days_pending": int(owed), "absent_seconds": int(absent),
+                "years_per_real_day": (AWAY_BASE_RATE + (AWAY_MAX_RATE - AWAY_BASE_RATE) * min(absent / AWAY_RAMP, 1)) * 86400 / 365}
             result["crew"] = [dict(id=m["id"], name=m["name"],
+                appearance=json.loads(m["appearance"]) if m["appearance"] else dict(skin=0, hair=0, style=0, face=0, coat=0),
                 online=time.monotonic() - self.seen.get((world, m["id"]), -100) < 15)
-                for m in self.db.execute("SELECT id,name FROM members WHERE world=? AND revoked=0 ORDER BY rowid", (world,))]
+                for m in self.db.execute("SELECT m.id,m.name,a.appearance FROM members m LEFT JOIN appearances a ON a.world=m.world AND a.member=m.id WHERE m.world=? AND m.revoked=0 ORDER BY m.rowid", (world,))]
+            result["appearance"] = next(m["appearance"] for m in result["crew"] if m["id"] == member["id"])
+            result["session_context"] = self.session_context(world, row)
+            if campaign and after is None:
+                saved = self.db.execute("SELECT sequence,context,session FROM sessions WHERE world=? AND member=?", (world, member["id"])).fetchone()
+                result["session"] = dict(saved) if saved else None
             if campaign and after != str(row["revision"]):
                 result["campaign"] = base64.b64encode(row["state"]).decode("ascii")
             return result
@@ -159,7 +207,40 @@ class Worlds:
                                 (world, name, digest(token), nonce, digest(invitation), saved, view))
                 self.db.execute("INSERT INTO members(world,token_hash,id,name) VALUES(?,?,?,?)",
                                 (world, digest(token), secrets.token_hex(8), player))
-        return self.view(world, token)
+        return self.view(world, token, present=False)
+
+    def session_context(self, world, row):
+        state = json.loads(row["view"])
+        journey = state["journey"]
+        signature = json.dumps([state["company"]["location"],
+            *[journey[key] for key in ("active", "phase", "route", "watch")]])
+        previous = self.db.execute("SELECT signature,context FROM scene_contexts WHERE world=?", (world,)).fetchone()
+        if previous and previous["signature"] == signature:
+            return previous["context"]
+        context = digest(signature + ':' + str(row["revision"]))
+        self.db.execute("INSERT INTO scene_contexts(world,signature,context) VALUES(?,?,?) ON CONFLICT(world) DO UPDATE SET signature=excluded.signature,context=excluded.context", (world, signature, context))
+        return context
+
+    def save_session(self, world, token, body):
+        require(set(body) == {"sequence", "context", "session"}, "Send your saved place in the world.")
+        sequence = number(body["sequence"], 1, 2**53 - 1, "session sequence")
+        session = body["session"]
+        require(isinstance(session, str) and session.startswith("CROWNLESS_SESSION 7\n") and
+                len(session) <= 6000 and session.isascii() and '\0' not in session,
+                "Send a complete player session.")
+        with self.transaction():
+            member = self.member(world, token)
+            row = self.db.execute("SELECT * FROM worlds WHERE id=?", (world,)).fetchone()
+            context = self.session_context(world, row)
+            require(body["context"] == context, "The company has moved. Refresh your place in the world.", 409)
+            saved = self.db.execute("SELECT * FROM sessions WHERE world=? AND member=?", (world, member["id"])).fetchone()
+            if saved and sequence <= saved["sequence"]:
+                require(sequence == saved["sequence"] and saved["context"] == context and saved["session"] == session,
+                        "A newer player session is already saved.", 409)
+            else:
+                self.db.execute("INSERT INTO sessions(world,member,sequence,context,session) VALUES(?,?,?,?,?) ON CONFLICT(world,member) DO UPDATE SET sequence=excluded.sequence,context=excluded.context,session=excluded.session",
+                                (world, member["id"], sequence, context, session))
+        return {"sequence": sequence, "saved": True}
 
     def invite(self, world, token, rotate=False):
         with self.transaction():
@@ -187,7 +268,19 @@ class Worlds:
                 require(active < MAX_MEMBERS and total < 64, "This carriage has reached its crew limit.", 409)
                 self.db.execute("INSERT INTO members(world,token_hash,id,name) VALUES(?,?,?,?)",
                                 (world, digest(token), secrets.token_hex(8), name))
-        return self.view(world, token)
+        return self.view(world, token, present=False)
+
+    def appearance(self, world, token, body):
+        require(set(body) == {"appearance"}, "Send your avatar appearance.")
+        values = body["appearance"]
+        limits = dict(skin=5, hair=5, style=5, face=3, coat=5)
+        require(isinstance(values, dict) and set(values) == set(limits), "Choose each avatar option.")
+        checked = {key: number(values[key], 0, limit, "avatar " + key) for key, limit in limits.items()}
+        with self.transaction():
+            member = self.member(world, token)
+            self.db.execute("INSERT INTO appearances(world,member,appearance) VALUES(?,?,?) ON CONFLICT(world,member) DO UPDATE SET appearance=excluded.appearance",
+                            (world, member["id"], json.dumps(checked)))
+        return self.view(world, token, present=False)
 
     def command(self, world, token, body):
         require(set(body) <= {"protocol", "sequence", "action_revision", "action", "target", "good", "amount", "campaign"},
@@ -218,6 +311,8 @@ class Worlds:
                 require(revision == row["action_revision"], "The company has changed. Review the latest state and choose again.", 409)
                 require(world not in self.failed, "This world needs recovery before play resumes.", 503)
                 require(not row["paused"], "Resume the world before taking a company action.", 409)
+                owed, _ = self.account_away(world, time.time(), present=True)
+                require(owed < 1, "The world is catching up. Your company can act when it is ready.", 409)
                 with self.engine.open(saved=row["state"]) as sim:
                     accepted, message = sim.apply(action, target, good, amount)
                     if accepted:
@@ -231,24 +326,35 @@ class Worlds:
         result["world"] = self.view(world, token, body.get("campaign") is True)
         return result
 
-    def tick(self, now=None):
+    def tick(self, now=None, wall_now=None):
         now = time.monotonic() if now is None else now
+        wall = time.time() if wall_now is None else wall_now
         with self.lock:
             for row in list(self.db.execute("SELECT id,paused FROM worlds")):
                 world = row["id"]
                 previous = self.last_tick.get(world, now)
                 online = any(w == world and now - seen < 15 for (w, _), seen in self.seen.items())
-                if row["paused"] or not online or world in self.failed:
-                    self.last_tick[world] = now
-                    continue
                 ticks = min(60, int(max(0, now - previous) * 60))
-                if ticks < 1:
-                    continue
                 try:
                     with self.transaction():
+                        owed, _ = self.account_away(world, wall, paused=bool(row["paused"]))
+                        if row["paused"] or world in self.failed:
+                            self.last_tick[world] = now
+                            continue
                         saved = self.db.execute("SELECT state,view FROM worlds WHERE id=?", (world,)).fetchone()
                         before = json.loads(saved["view"])
-                        if before["journey"]["active"] and before["journey"]["phase"] == 1:
+                        days = min(int(owed), 8 * 365, 2147000000 - before["day"])
+                        if days > 0:
+                            with self.engine.open(saved=saved["state"]) as sim:
+                                remaining = days
+                                while remaining:
+                                    batch = min(remaining, 365)
+                                    sim.advance_away(batch)
+                                    remaining -= batch
+                                self.db.execute("UPDATE worlds SET state=?,view=?,revision=revision+1,action_revision=action_revision+1 WHERE id=?",
+                                                (sim.save(), json.dumps(sim.snapshot()), world))
+                                self.db.execute("UPDATE away_clocks SET owed_days=owed_days-? WHERE world=?", (days, world))
+                        elif online and ticks > 0 and before["journey"]["active"] and before["journey"]["phase"] == 1:
                             with self.engine.open(saved=saved["state"]) as sim:
                                 sim.advance(ticks)
                                 self.db.execute("UPDATE worlds SET state=?,view=?,revision=revision+1 WHERE id=?",
@@ -265,6 +371,10 @@ class Worlds:
                 require(row is not None and row["owner"] == digest(token),
                         "The host can delete this world.", 403)
                 self.db.execute("DELETE FROM receipts WHERE world=?", (world,))
+                self.db.execute("DELETE FROM sessions WHERE world=?", (world,))
+                self.db.execute("DELETE FROM appearances WHERE world=?", (world,))
+                self.db.execute("DELETE FROM scene_contexts WHERE world=?", (world,))
+                self.db.execute("DELETE FROM away_clocks WHERE world=?", (world,))
                 self.db.execute("DELETE FROM members WHERE world=?", (world,))
                 self.db.execute("DELETE FROM worlds WHERE id=?", (world,))
             self.seen = {key: value for key, value in self.seen.items() if key[0] != world}
@@ -276,9 +386,10 @@ class Worlds:
         if action == "delete":
             return self.delete_world(world, token)
         with self.transaction():
-            row = self.db.execute("SELECT owner FROM worlds WHERE id=?", (world,)).fetchone()
+            row = self.db.execute("SELECT owner,paused FROM worlds WHERE id=?", (world,)).fetchone()
             require(row is not None and row["owner"] == digest(token), "The world host manages the crew and pause control.", 403)
             if action in ("pause", "resume"):
+                self.account_away(world, time.time(), present=True, paused=bool(row["paused"]))
                 self.db.execute("UPDATE worlds SET paused=?,revision=revision+1 WHERE id=?", (int(action == "pause"), world))
                 self.last_tick[world] = time.monotonic()
             elif action == "remove":
@@ -306,7 +417,7 @@ class Application:
                 "revision": os.environ.get("CROWNLESS_REVISION", "development")}, None
         if not path.startswith("/api/"):
             require(method in ("GET", "HEAD"), "Use GET for game files.", 405)
-            if path in ("/", "/coop.js", "/coop.css"):
+            if path in ("/", "/coop.js", "/coop.css", "/avatar.js"):
                 file = self.static / ("index.html" if path == "/" else path[1:])
             elif self.game_dir and path.startswith("/game/"):
                 file = (self.game_dir / (path[6:] or "index.html")).resolve()
@@ -350,17 +461,21 @@ class Application:
             with self.worlds.lock:
                 rows = self.worlds.db.execute("SELECT w.id,w.name FROM worlds w JOIN members m ON w.id=m.world WHERE m.token_hash=? AND m.revoked=0", (identity,))
                 return 200, {"worlds": [dict(row) for row in rows], "game_available": self.game_dir is not None}, None
-        match = re.fullmatch(r"/api/worlds/([0-9a-f]{32})(?:/(state|join|command|invite|host))?", path)
+        match = re.fullmatch(r"/api/worlds/([0-9a-f]{32})(?:/(state|join|command|invite|host|appearance|session))?", path)
         require(match is not None, "Choose a world on this host.", 404)
         world, operation = match.group(1), match.group(2) or "state"
         if operation == "state" and method == "GET":
             query = parse_qs(env.get("QUERY_STRING", ""))
             campaign = query.get("campaign") == ["1"]
-            return 200, self.worlds.view(world, token, campaign, query.get("after", [None])[0]), None
+            return 200, self.worlds.view(world, token, campaign, query.get("after", [None])[0], present=campaign), None
         if operation == "join" and method == "POST":
             return 200, self.worlds.join(world, token, body), None
         if operation == "command" and method == "POST":
             return 200, self.worlds.command(world, token, body), None
+        if operation == "appearance" and method == "POST":
+            return 200, self.worlds.appearance(world, token, body), None
+        if operation == "session" and method == "POST":
+            return 200, self.worlds.save_session(world, token, body), None
         if operation == "invite" and method in ("GET", "POST"):
             return 200, self.worlds.invite(world, token, method == "POST"), None
         if operation == "host" and method == "POST":
