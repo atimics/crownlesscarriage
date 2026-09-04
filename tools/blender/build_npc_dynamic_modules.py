@@ -103,6 +103,12 @@ def finish(obj: bpy.types.Object, collection: bpy.types.Collection,
     return obj
 
 
+def paint(obj: bpy.types.Object, palette_slot: str) -> bpy.types.Object:
+    """Assign one indexed runtime palette slot to generated geometry."""
+    obj["cc_palette_slot"] = palette_slot
+    return obj
+
+
 def bevel(obj: bpy.types.Object, width: float) -> None:
     modifier = obj.modifiers.new("CC_ModuleBevel", "BEVEL")
     modifier.width = width
@@ -254,6 +260,227 @@ def add_hair_clump(
     return obj
 
 
+def add_armor_rivets(
+    prefix: str,
+    positions: tuple[tuple[float, float], ...],
+    front: float,
+    collection: bpy.types.Collection,
+    material: bpy.types.Material,
+) -> None:
+    for index, (x, z) in enumerate(positions):
+        paint(add_ico(
+            f"{prefix}Rivet{index}", (x, front, z),
+            (0.038, 0.026, 0.038), collection, material,
+            subdivisions=1,
+        ), "accent")
+
+
+def add_guard_armor(collection: bpy.types.Collection,
+                    material: bpy.types.Material) -> None:
+    paint(add_loft("GEO_ModuleGuardPadding", (
+        (-0.54, 0.38, 0.35), (-0.22, 0.47, 0.40),
+        (0.18, 0.51, 0.42), (0.48, 0.43, 0.36),
+    ), collection, material, sides=10), "underlayer")
+    for name, points in (
+        ("UpperLeft", (
+            (-0.48, -0.43, 0.43), (-0.10, -0.43, 0.50),
+            (0.0, -0.43, 0.29), (-0.40, -0.43, 0.17),
+        )),
+        ("UpperRight", (
+            (0.10, -0.43, 0.50), (0.48, -0.43, 0.43),
+            (0.40, -0.43, 0.17), (0.0, -0.43, 0.29),
+        )),
+        ("Middle", (
+            (-0.41, -0.46, 0.19), (0.41, -0.46, 0.19),
+            (0.37, -0.46, -0.08), (-0.37, -0.46, -0.08),
+        )),
+        ("Lower", (
+            (-0.37, -0.49, -0.05), (0.37, -0.49, -0.05),
+            (0.30, -0.49, -0.38), (-0.30, -0.49, -0.38),
+        )),
+    ):
+        paint(add_panel(f"GEO_ModuleGuardPlate{name}", points,
+                        collection, material, thickness=0.055), "metal")
+    paint(add_box("GEO_ModuleGuardCenterRidge", (0.0, -0.515, 0.04),
+                  (0.060, 0.050, 0.72), collection, material,
+                  width=0.012), "accent")
+    paint(add_box("GEO_ModuleGuardBelt", (0.0, -0.49, -0.40),
+                  (0.88, 0.10, 0.105), collection, material,
+                  width=0.018), "leather")
+    for side in (-1.0, 1.0):
+        paint(add_box(
+            f"GEO_ModuleGuardStrap{side:+.0f}",
+            (side * 0.32, -0.49, 0.02), (0.075, 0.055, 0.73),
+            collection, material, width=0.012,
+            rotation=(0.0, side * 0.10, 0.0),
+        ), "leather")
+        paint(add_panel(
+            f"GEO_ModuleGuardTasset{side:+.0f}", (
+                (side * 0.04, -0.38, -0.42),
+                (side * 0.31, -0.38, -0.42),
+                (side * 0.29, -0.38, -0.78),
+                (side * 0.07, -0.38, -0.84),
+            ), collection, material, thickness=0.060,
+        ), "metal")
+    add_armor_rivets("GEO_ModuleGuard", (
+        (-0.39, 0.34), (0.39, 0.34), (-0.34, 0.04), (0.34, 0.04),
+        (-0.27, -0.27), (0.27, -0.27),
+    ), -0.53, collection, material)
+
+
+def add_raider_armor(collection: bpy.types.Collection,
+                     material: bpy.types.Material) -> None:
+    paint(add_loft("GEO_ModuleRaiderPadding", (
+        (-0.54, 0.36, 0.34), (-0.20, 0.45, 0.39),
+        (0.17, 0.49, 0.41), (0.46, 0.42, 0.35),
+    ), collection, material, sides=9), "outer")
+    paint(add_panel("GEO_ModuleRaiderPlateLeft", (
+        (-0.48, -0.45, 0.43), (-0.04, -0.48, 0.48),
+        (-0.01, -0.49, -0.13), (-0.39, -0.46, -0.23),
+    ), collection, material, thickness=0.070), "metal")
+    paint(add_panel("GEO_ModuleRaiderPlateRight", (
+        (0.06, -0.44, 0.31), (0.42, -0.42, 0.20),
+        (0.34, -0.45, -0.12), (0.04, -0.48, -0.05),
+    ), collection, material, thickness=0.060), "metal")
+    paint(add_panel("GEO_ModuleRaiderRepair", (
+        (0.15, -0.50, 0.18), (0.36, -0.48, 0.11),
+        (0.29, -0.50, -0.03), (0.11, -0.51, 0.01),
+    ), collection, material, thickness=0.035), "accent")
+    paint(add_box("GEO_ModuleRaiderCrossStrap", (0.02, -0.53, 0.00),
+                  (0.105, 0.060, 1.10), collection, material,
+                  width=0.016, rotation=(0.0, -0.30, 0.0)), "leather")
+    paint(add_box("GEO_ModuleRaiderBelt", (0.0, -0.48, -0.40),
+                  (0.90, 0.11, 0.12), collection, material,
+                  width=0.018, rotation=(0.0, 0.0, 0.035)), "leather")
+    paint(add_panel("GEO_ModuleRaiderTassetMetal", (
+        (-0.35, -0.39, -0.40), (-0.05, -0.39, -0.43),
+        (-0.10, -0.39, -0.84), (-0.31, -0.39, -0.76),
+    ), collection, material, thickness=0.065), "metal")
+    paint(add_panel("GEO_ModuleRaiderTassetLeather", (
+        (0.05, -0.36, -0.42), (0.25, -0.36, -0.39),
+        (0.31, -0.36, -0.71), (0.09, -0.36, -0.81),
+    ), collection, material, thickness=0.055), "leather")
+    add_armor_rivets("GEO_ModuleRaider", (
+        (-0.38, 0.34), (-0.10, 0.36), (-0.33, -0.11),
+        (0.31, 0.14), (0.20, -0.02),
+    ), -0.55, collection, material)
+
+
+def add_hero_armor(collection: bpy.types.Collection,
+                   material: bpy.types.Material) -> None:
+    paint(add_loft("GEO_ModuleHeroPadding", (
+        (-0.56, 0.37, 0.35), (-0.22, 0.47, 0.40),
+        (0.18, 0.51, 0.42), (0.48, 0.43, 0.36),
+    ), collection, material, sides=10), "outer")
+    for name, points in (
+        ("UpperLeft", (
+            (-0.48, -0.44, 0.43), (-0.11, -0.46, 0.50),
+            (-0.01, -0.49, 0.27), (-0.41, -0.46, 0.15),
+        )),
+        ("UpperRight", (
+            (0.11, -0.46, 0.50), (0.48, -0.44, 0.43),
+            (0.41, -0.46, 0.15), (0.01, -0.49, 0.27),
+        )),
+        ("Middle", (
+            (-0.41, -0.48, 0.17), (0.41, -0.48, 0.17),
+            (0.36, -0.50, -0.09), (-0.36, -0.50, -0.09),
+        )),
+        ("Lower", (
+            (-0.36, -0.51, -0.06), (0.36, -0.51, -0.06),
+            (0.29, -0.50, -0.38), (-0.29, -0.50, -0.38),
+        )),
+    ):
+        paint(add_panel(f"GEO_ModuleHeroPlate{name}", points,
+                        collection, material, thickness=0.060), "metal")
+    for side in (-1.0, 1.0):
+        paint(add_box(
+            f"GEO_ModuleHeroHarness{side:+.0f}",
+            (side * 0.20, -0.54, -0.01), (0.085, 0.055, 0.92),
+            collection, material, width=0.014,
+            rotation=(0.0, side * 0.24, 0.0),
+        ), "leather")
+    paint(add_box("GEO_ModuleHeroBelt", (0.0, -0.50, -0.40),
+                  (0.90, 0.11, 0.11), collection, material,
+                  width=0.018), "leather")
+    paint(add_box("GEO_ModuleBrokenCrownBase", (0.0, -0.565, 0.06),
+                  (0.34, 0.045, 0.060), collection, material,
+                  width=0.010, rotation=(0.0, 0.0, -0.035)), "accent")
+    for index, (x, height, lean) in enumerate((
+        (-0.12, 0.15, -0.18), (0.0, 0.21, 0.04), (0.12, 0.12, 0.22),
+    )):
+        paint(add_box(
+            f"GEO_ModuleBrokenCrownTooth{index}",
+            (x, -0.565, 0.12 + height * 0.5), (0.055, 0.045, height),
+            collection, material, width=0.009,
+            rotation=(0.0, lean, 0.0),
+        ), "accent")
+    paint(add_panel("GEO_ModuleHeroTassetLeft", (
+        (-0.32, -0.39, -0.41), (-0.04, -0.39, -0.42),
+        (-0.07, -0.39, -0.84), (-0.29, -0.39, -0.78),
+    ), collection, material, thickness=0.065), "metal")
+    paint(add_panel("GEO_ModuleHeroTassetRight", (
+        (0.04, -0.37, -0.42), (0.28, -0.37, -0.40),
+        (0.31, -0.37, -0.72), (0.08, -0.37, -0.82),
+    ), collection, material, thickness=0.055), "outer")
+    add_armor_rivets("GEO_ModuleHero", (
+        (-0.39, 0.34), (0.39, 0.34), (-0.34, 0.01), (0.34, 0.01),
+        (-0.26, -0.28), (0.26, -0.28),
+    ), -0.57, collection, material)
+
+
+def add_guard_pauldron(collection: bpy.types.Collection,
+                       material: bpy.types.Material) -> None:
+    paint(add_ico("GEO_ModuleGuardShoulderPad", (0.0, 0.02, -0.02),
+                  (0.62, 0.50, 0.48), collection, material,
+                  subdivisions=1), "outer")
+    paint(add_ico("GEO_ModuleGuardPauldron", (0.0, -0.05, 0.02),
+                  (0.57, 0.44, 0.42), collection, material,
+                  subdivisions=1), "metal")
+    paint(add_box("GEO_ModuleGuardPauldronLip", (0.0, -0.35, -0.18),
+                  (0.95, 0.13, 0.18), collection, material,
+                  width=0.035), "accent")
+    paint(add_box("GEO_ModuleGuardPauldronStrap", (0.0, 0.25, -0.24),
+                  (0.72, 0.12, 0.16), collection, material,
+                  width=0.025), "leather")
+
+
+def add_raider_pauldron(collection: bpy.types.Collection,
+                        material: bpy.types.Material) -> None:
+    paint(add_ico("GEO_ModuleRaiderShoulderPad", (0.0, 0.03, -0.04),
+                  (0.62, 0.47, 0.46), collection, material,
+                  subdivisions=1), "leather")
+    paint(add_panel("GEO_ModuleRaiderPauldron", (
+        (-0.55, -0.25, 0.22), (0.45, -0.32, 0.13),
+        (0.36, -0.36, -0.31), (-0.31, -0.31, -0.40),
+        (-0.61, -0.25, -0.09),
+    ), collection, material, thickness=0.095), "metal")
+    paint(add_box("GEO_ModuleRaiderPauldronPatch", (-0.15, -0.39, -0.04),
+                  (0.38, 0.065, 0.20), collection, material,
+                  width=0.025, rotation=(0.0, -0.18, 0.04)), "accent")
+    paint(add_box("GEO_ModuleRaiderPauldronStrap", (0.0, 0.23, -0.25),
+                  (0.78, 0.13, 0.17), collection, material,
+                  width=0.025, rotation=(0.0, 0.0, 0.07)), "leather")
+
+
+def add_hero_pauldron(collection: bpy.types.Collection,
+                      material: bpy.types.Material) -> None:
+    paint(add_ico("GEO_ModuleHeroShoulderPad", (0.0, 0.03, -0.03),
+                  (0.64, 0.50, 0.49), collection, material,
+                  subdivisions=1), "outer")
+    paint(add_ico("GEO_ModuleHeroPauldron", (0.0, -0.05, 0.04),
+                  (0.62, 0.47, 0.45), collection, material,
+                  subdivisions=1), "metal")
+    paint(add_box("GEO_ModuleHeroPauldronLowerLip", (0.0, -0.36, -0.20),
+                  (1.00, 0.13, 0.18), collection, material,
+                  width=0.034), "accent")
+    paint(add_box("GEO_ModuleHeroPauldronCrest", (-0.10, -0.12, 0.38),
+                  (0.15, 0.18, 0.38), collection, material,
+                  width=0.025, rotation=(0.0, -0.10, -0.06)), "accent")
+    paint(add_box("GEO_ModuleHeroPauldronStrap", (0.0, 0.25, -0.25),
+                  (0.76, 0.12, 0.17), collection, material,
+                  width=0.025), "leather")
+
+
 def build_geometry(slot: str, collection: bpy.types.Collection,
                    material: bpy.types.Material) -> None:
     if slot == "torso":
@@ -326,21 +553,17 @@ def build_geometry(slot: str, collection: bpy.types.Collection,
                 (0.78, 0.20, 1.0), collection, material, width=0.08,
                 rotation=(0.05, 0.0, 0.0))
     elif slot == "chest_plate":
-
-
-        add_loft("GEO_ModuleChestPlate", (
-            (-0.50, 0.36, 0.34),
-            (-0.24, 0.46, 0.39),
-            (0.16, 0.50, 0.41),
-            (0.46, 0.42, 0.35),
-        ), collection, material, sides=10)
-        add_box("GEO_ModuleChestRidge", (0.0, -0.39, 0.02),
-                (0.10, 0.08, 0.66), collection, material, width=0.020)
+        add_guard_armor(collection, material)
+    elif slot == "chest_plate_raider":
+        add_raider_armor(collection, material)
+    elif slot == "chest_plate_hero":
+        add_hero_armor(collection, material)
     elif slot == "pauldron":
-        add_ico("GEO_ModulePauldron", (0.0, 0.0, 0.0),
-                (0.58, 0.48, 0.50), collection, material, subdivisions=1)
-        add_box("GEO_ModulePauldronLip", (0.0, -0.26, -0.18),
-                (0.94, 0.14, 0.22), collection, material, width=0.05)
+        add_guard_pauldron(collection, material)
+    elif slot == "pauldron_raider":
+        add_raider_pauldron(collection, material)
+    elif slot == "pauldron_hero":
+        add_hero_pauldron(collection, material)
     elif slot == "apron":
         add_box("GEO_ModuleApronBib", (0.0, -0.05, 0.28),
                 (0.62, 0.12, 0.38), collection, material, width=0.06)
@@ -572,7 +795,13 @@ def build() -> None:
         ("mantle", "mantle", "back_socket", "trousers"),
         ("coat_tail", "coat_tail", "pelvis", "outer_shadow"),
         ("chest_plate", "chest_plate", "chest_front_socket", "metal"),
+        ("chest_plate_raider", "chest_plate_raider", "chest_front_socket",
+         "metal"),
+        ("chest_plate_hero", "chest_plate_hero", "chest_front_socket",
+         "metal"),
         ("pauldron", "pauldron", "shoulder_socket", "metal"),
+        ("pauldron_raider", "pauldron_raider", "shoulder_socket", "metal"),
+        ("pauldron_hero", "pauldron_hero", "shoulder_socket", "metal"),
         ("apron", "apron", "pelvis", "underlayer"),
         ("pack", "pack", "back_socket", "leather"),
         ("satchel", "satchel", "pelvis", "leather"),
@@ -594,8 +823,10 @@ def build() -> None:
         records.append(ModuleRecord(
             id=asset_id, slot=slot, anchor=anchor, material=palette,
             export=str(path.relative_to(ROOT)),
-            shape_contract="closed torso volume"
-            if slot == "chest_plate" else
+            shape_contract="layered closed torso armor"
+            if slot.startswith("chest_plate") else
+            "layered shoulder armor"
+            if slot.startswith("pauldron") else
             "fitted bib with split skirt"
             if slot == "apron" else "rigid fitted module"))
     manifest = {

@@ -11,7 +11,12 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from inspect_glb import accessor_first_values, collect_stats, parse_glb
+from inspect_glb import (
+    accessor_first_values,
+    accessor_values,
+    collect_stats,
+    parse_glb,
+)
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -19,8 +24,9 @@ MANIFEST = ROOT / "assets" / "npc_dynamic_module_manifest.json"
 EXPECTED_SLOTS = (
     "torso", "pelvis", "upper_arm", "forearm", "thigh", "shin",
     "hand", "foot", "head", "mantle", "coat_tail", "chest_plate",
-    "pauldron", "apron", "pack", "satchel", "helmet", "hat", "hood",
-    "headwrap",
+    "chest_plate_raider", "chest_plate_hero", "pauldron",
+    "pauldron_raider", "pauldron_hero", "apron", "pack", "satchel",
+    "helmet", "hat", "hood", "headwrap",
     "tool_shaft", "tool_head",
 ) + tuple(f"hair_{index}" for index in range(8))
 
@@ -39,10 +45,19 @@ def validate() -> int:
             "bone-frame instancing without skins or animations":
         failures.append("runtime strategy contract changed")
     chest_entries = [entry for entry in entries
-                     if entry.get("slot") == "chest_plate"]
-    if len(chest_entries) != 1 or \
-            chest_entries[0].get("shape_contract") != "closed torso volume":
-        failures.append("chest plate must declare a closed torso volume")
+                     if str(entry.get("slot", "")).startswith("chest_plate")]
+    if len(chest_entries) != 3 or any(
+            entry.get("shape_contract") != "layered closed torso armor"
+            for entry in chest_entries):
+        failures.append("three chest plates must declare layered torso armor")
+    shoulder_entries = [
+        entry for entry in entries
+        if str(entry.get("slot", "")).startswith("pauldron")
+    ]
+    if len(shoulder_entries) != 3 or any(
+            entry.get("shape_contract") != "layered shoulder armor"
+            for entry in shoulder_entries):
+        failures.append("three pauldrons must declare layered shoulder armor")
     apron_entries = [entry for entry in entries if entry.get("slot") == "apron"]
     if len(apron_entries) != 1 or apron_entries[0].get("shape_contract") != \
             "fitted bib with split skirt":
@@ -92,16 +107,29 @@ def validate() -> int:
                                    abs(sample[1] - sample[2]) < 0.01):
                 failures.append(
                     f"{entry['slot']}: COLOR_0 has no authored value/fold channels")
+            if str(entry["slot"]).startswith(("chest_plate", "pauldron")):
+                colors = accessor_values(gltf, binary, color)
+                palette_indices = {
+                    int(value[0] * 9.0) for value in colors if value
+                }
+                if not {5, 6, 7}.issubset(palette_indices):
+                    failures.append(
+                        f"{entry['slot']}: armor needs leather, metal, and "
+                        "accent palette zones")
+                if str(entry["slot"]).startswith("chest_plate") and not \
+                        {2, 3}.intersection(palette_indices):
+                    failures.append(
+                        f"{entry['slot']}: armor needs a visible cloth layer")
         if stats.triangles > 900:
             failures.append(
                 f"{entry['slot']}: {stats.triangles} triangles > 900")
-        if entry["slot"] == "chest_plate" and \
+        if str(entry["slot"]).startswith("chest_plate") and \
                 stats.bounds_min and stats.bounds_max:
             width = stats.bounds_max[0] - stats.bounds_min[0]
             depth = stats.bounds_max[2] - stats.bounds_min[2]
             if depth < width * 0.28:
                 failures.append(
-                    f"chest_plate: depth {depth:.3f} is too flat for "
+                    f"{entry['slot']}: depth {depth:.3f} is too flat for "
                     f"width {width:.3f}")
         print(f"{entry['slot']:<14} {stats.triangles:>4} tris  "
               f"{stats.vertices:>4} verts  {stats.primitives} material")
