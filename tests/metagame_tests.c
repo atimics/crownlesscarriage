@@ -489,6 +489,8 @@ int main(void)
     CC_CHECK(CcMetagameExecute(&horses, "animals", output,
                                sizeof(output)));
     CC_CHECK(strstr(output, "traits: strength") != NULL);
+    CC_CHECK(strstr(output, "Sheep flocks") != NULL);
+    CC_CHECK(strstr(output, "lambs, condition") != NULL);
     CC_CHECK(CcMetagameExecute(&horses, "stable breed 2 1", output,
                                sizeof(output)));
     CC_CHECK(strstr(output, "due in 330 days") != NULL);
@@ -513,13 +515,16 @@ int main(void)
     CC_CHECK(strstr(output, "Crown strength") != NULL);
     CC_CHECK(strstr(output, "Hoardkeepers") != NULL);
     CC_CHECK(CcMetagameExecute(&dragon, "economy", output, sizeof(output)));
-    CC_CHECK(strstr(output, "Material economy") != NULL);
+    CC_CHECK(strstr(output, "Goods economy") != NULL);
     CC_CHECK(strstr(output, "Weapons") != NULL);
     CC_CHECK(strstr(output, "Wood") != NULL);
     CC_CHECK(strstr(output, "Stone") != NULL);
     CC_CHECK(strstr(output, "woodlot") != NULL);
     CC_CHECK(strstr(output, "quarry") != NULL);
     CC_CHECK(strstr(output, "2 Iron and 1 Wood") != NULL);
+    CC_CHECK(strstr(output, "Meat") != NULL);
+    CC_CHECK(strstr(output, "Wool") != NULL);
+    CC_CHECK(strstr(output, "sheep") != NULL);
     CC_CHECK(strstr(output, "mountain Iron") != NULL);
 
     CcMetagame stone_trade;

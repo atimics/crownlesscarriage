@@ -526,7 +526,7 @@ static void CheckLegacyJournalMigration(char *error,
              legacy_generation);
     CC_CHECK(ReadSqliteInteger(
                  path, "SELECT journal_cursor FROM meta WHERE id=1;") == 0);
-    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 22);
+    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 23);
     CC_CHECK(CcJournalAdvanceDays(journal, &resumed, 2,
                                   error, error_capacity));
     uint64_t expected_hash = CcSimHash(&resumed);
@@ -1725,6 +1725,16 @@ static void CheckSchema25Compatibility(char *error, size_t error_capacity)
                              (restored.settlements[settlement].function ==
                                   CC_SETTLEMENT_MINING ? 12 : 0));
                 }
+            } else if (good == CC_GOOD_MEAT ||
+                       good == CC_GOOD_WOOL) {
+                CC_CHECK(restored.settlements[settlement].reserve_target[good] > 0);
+                if (CcSettlementHasService(
+                        &restored.settlements[settlement],
+                        CC_SERVICE_FARM)) {
+                    CC_CHECK(restored.settlements[settlement].stock[good] > 0);
+                } else {
+                    CC_CHECK(restored.settlements[settlement].stock[good] == 0);
+                }
             } else {
                 CC_CHECK(restored.settlements[settlement].stock[good] == 0);
                 CC_CHECK(restored.settlements[settlement]
@@ -1762,6 +1772,10 @@ static void CheckSchema26Compatibility(char *error, size_t error_capacity)
             legacy.settlements[settlement].consumption[good] = 0;
             legacy.settlements[settlement].price[good] = 0;
         }
+        legacy.settlements[settlement].sheep_adults = 0;
+        legacy.settlements[settlement].sheep_lambs = 0;
+        legacy.settlements[settlement].sheep_condition = 0;
+        legacy.settlements[settlement].sheep_hunger = 0;
     }
     CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
 
@@ -1777,7 +1791,6 @@ static void CheckSchema26Compatibility(char *error, size_t error_capacity)
                       "DELETE FROM dragon_campaign_good;",
                       "could not remove future goods rows");
     sqlite3_close(database);
-
     CcSim restored;
     CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
@@ -1792,6 +1805,15 @@ static void CheckSchema26Compatibility(char *error, size_t error_capacity)
             if (good == CC_GOOD_WOOD || good == CC_GOOD_WHEAT ||
                 good == CC_GOOD_STONE) {
                 CC_CHECK(restored.settlements[settlement].stock[good] > 0);
+            } else if (good == CC_GOOD_MEAT ||
+                       good == CC_GOOD_WOOL) {
+                if (CcSettlementHasService(
+                        &restored.settlements[settlement],
+                        CC_SERVICE_FARM)) {
+                    CC_CHECK(restored.settlements[settlement].stock[good] > 0);
+                } else {
+                    CC_CHECK(restored.settlements[settlement].stock[good] == 0);
+                }
             } else {
                 CC_CHECK(restored.settlements[settlement].stock[good] == 0);
             }
@@ -1799,6 +1821,11 @@ static void CheckSchema26Compatibility(char *error, size_t error_capacity)
                      CcGoodDefinitionFor((CcGood)good)->base_price);
         }
     }
+    CC_CHECK(restored.settlements[0].sheep_adults > 0);
+    CC_CHECK(restored.settlements[0].sheep_lambs > 0);
+    CC_CHECK(restored.settlements[0].sheep_condition == 88);
+    CC_CHECK(restored.settlements[0].reserve_target[CC_GOOD_MEAT] > 0);
+    CC_CHECK(restored.settlements[0].reserve_target[CC_GOOD_WOOL] > 0);
     CC_CHECK(CcSimValidate(&restored, error, error_capacity));
     RemoveDatabase(path);
 }
@@ -1837,6 +1864,10 @@ static void CheckSchema28GrainMigration(char *error,
             legacy.settlements[index].reserve_target[CC_GOOD_WOOD];
         wood_production[index] =
             legacy.settlements[index].production[CC_GOOD_WOOD];
+        legacy.settlements[index].sheep_adults = 0;
+        legacy.settlements[index].sheep_lambs = 0;
+        legacy.settlements[index].sheep_condition = 0;
+        legacy.settlements[index].sheep_hunger = 0;
     }
     CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
 
@@ -1863,6 +1894,113 @@ static void CheckSchema28GrainMigration(char *error,
         CC_CHECK(restored.settlements[index].production[CC_GOOD_WOOD] ==
                  wood_production[index]);
     }
+    CC_CHECK(restored.settlements[0].sheep_adults > 0);
+    CC_CHECK(restored.settlements[0].sheep_lambs > 0);
+    CC_CHECK(restored.settlements[0].sheep_condition == 88);
+    CC_CHECK(restored.settlements[0].reserve_target[CC_GOOD_MEAT] > 0);
+    CC_CHECK(restored.settlements[0].reserve_target[CC_GOOD_WOOL] > 0);
+    CC_CHECK(CcSimValidate(&restored, error, error_capacity));
+    RemoveDatabase(path);
+}
+
+static void CheckFlockMigration(uint32_t schema_version,
+                                uint32_t generator_version,
+                                const char *path,
+                                char *error, size_t error_capacity)
+{
+    RemoveDatabase(path);
+    CcSim legacy;
+    CcSimInit(&legacy, UINT32_C(0xf10cc29));
+    legacy.schema_version = schema_version;
+    legacy.generator_version = generator_version;
+    int32_t wheat_stock = legacy.settlements[0].stock[CC_GOOD_WHEAT];
+    int32_t wood_stock = legacy.settlements[0].stock[CC_GOOD_WOOD];
+    int32_t bread_production =
+        legacy.settlements[0].production[CC_GOOD_BREAD];
+    for (int32_t index = 0; index < legacy.settlement_count; ++index) {
+        legacy.settlements[index].sheep_adults = 0;
+        legacy.settlements[index].sheep_lambs = 0;
+        legacy.settlements[index].sheep_condition = 0;
+        legacy.settlements[index].sheep_hunger = 0;
+        legacy.settlements[index].stock[CC_GOOD_MEAT] = 0;
+        legacy.settlements[index].stock[CC_GOOD_WOOL] = 0;
+        legacy.settlements[index].reserve_target[CC_GOOD_MEAT] = 0;
+        legacy.settlements[index].reserve_target[CC_GOOD_WOOL] = 0;
+    }
+    CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
+
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.generator_version == CC_GENERATOR_VERSION);
+    CC_CHECK(restored.settlements[0].stock[CC_GOOD_WHEAT] == wheat_stock);
+    CC_CHECK(restored.settlements[0].stock[CC_GOOD_WOOD] == wood_stock);
+    CC_CHECK(restored.settlements[0].production[CC_GOOD_BREAD] ==
+             bread_production);
+    CC_CHECK(restored.settlements[0].sheep_adults > 0);
+    CC_CHECK(restored.settlements[0].sheep_lambs > 0);
+    CC_CHECK(restored.settlements[0].sheep_condition == 88);
+    CC_CHECK(restored.settlements[0].reserve_target[CC_GOOD_MEAT] > 0);
+    CC_CHECK(restored.settlements[0].reserve_target[CC_GOOD_WOOL] > 0);
+    CC_CHECK(CcSimValidate(&restored, error, error_capacity));
+    RemoveDatabase(path);
+}
+
+static void CheckSchema30JournalMigration(char *error,
+                                          size_t error_capacity)
+{
+    const char *path = "persistence-schema30-journal-test.ccsave";
+    RemoveDatabase(path);
+    CcSim legacy;
+    CcSimInit(&legacy, UINT32_C(0x30a0c0de));
+    legacy.schema_version = 30U;
+    legacy.generator_version = 23U;
+    legacy.current_day = 272;
+    legacy.shipment_count = 0;
+    legacy.dragon.hunt_cooldown_days = 1000;
+    legacy.goblins.tribute_cooldown_days = 1000;
+    legacy.hoard_raiders.cooldown_days = 1000;
+    for (int32_t i = 0; i < legacy.settlement_count; ++i) {
+        legacy.settlements[i].stock[CC_GOOD_MEAT] = 0;
+        legacy.settlements[i].stock[CC_GOOD_WOOL] = 0;
+        legacy.settlements[i].reserve_target[CC_GOOD_MEAT] = 0;
+        legacy.settlements[i].reserve_target[CC_GOOD_WOOL] = 0;
+        legacy.settlements[i].consumption[CC_GOOD_WOOL] = 0;
+    }
+    CcSettlement *farm = &legacy.settlements[0];
+    farm->cow_adults = 3;
+    farm->cow_calves = 0;
+    farm->cow_condition = 50;
+    farm->cow_hunger = 64;
+    farm->stock[CC_GOOD_WHEAT] = 0;
+    farm->stock[CC_GOOD_WOOL] = 10;
+    int32_t meat_before = farm->stock[CC_GOOD_MEAT];
+    CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
+
+    CcSim suffix = legacy;
+    CcSimAdvanceDays(&suffix, 1);
+    CC_CHECK(suffix.settlements[0].stock[CC_GOOD_MEAT] == meat_before);
+    CC_CHECK(suffix.settlements[0].stock[CC_GOOD_WOOL] == 10);
+    const CcEvent *slaughter = NULL;
+    for (int32_t i = 0; i < suffix.event_count; ++i) {
+        const CcEvent *event = CcSimRecentEvent(&suffix, i);
+        if (event != NULL && event->kind == CC_EVENT_COW_SLAUGHTERED) {
+            slaughter = event;
+            break;
+        }
+    }
+    CC_CHECK(slaughter != NULL);
+    CC_CHECK(slaughter->kind == CC_EVENT_COW_SLAUGHTERED);
+    CC_CHECK(slaughter->magnitude == 1);
+    CC_CHECK(strstr(slaughter->text, "4 Food") != NULL);
+    AddLegacyDayJournalSuffix(path, &legacy, &suffix, 30U, 23U);
+
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.generator_version == CC_GENERATOR_VERSION);
+    CC_CHECK(restored.current_day == suffix.current_day);
+    CC_CHECK(restored.settlements[0].sheep_adults > 0);
     CC_CHECK(CcSimValidate(&restored, error, error_capacity));
     RemoveDatabase(path);
 }
@@ -1936,6 +2074,11 @@ static void CheckSchema27WoodCompatibility(char *error,
         CC_CHECK(place->price[CC_GOOD_WHEAT] ==
                  CcGoodDefinitionFor(CC_GOOD_WHEAT)->base_price);
     }
+    CC_CHECK(restored.settlements[0].sheep_adults > 0);
+    CC_CHECK(restored.settlements[0].sheep_lambs > 0);
+    CC_CHECK(restored.settlements[0].sheep_condition == 88);
+    CC_CHECK(restored.settlements[0].reserve_target[CC_GOOD_MEAT] > 0);
+    CC_CHECK(restored.settlements[0].reserve_target[CC_GOOD_WOOL] > 0);
     CC_CHECK(CcSimValidate(&restored, error, error_capacity));
     RemoveDatabase(path);
 }
@@ -2134,6 +2277,13 @@ int main(void)
     CheckSchema28GrainMigration(error, sizeof(error));
     CheckSchema29StoneMigration(error, sizeof(error));
     CheckSchema30RoadDistrictMigration(error, sizeof(error));
+    CheckFlockMigration(30U, 23U,
+                        "persistence-schema30-flock-test.ccsave",
+                        error, sizeof(error));
+    CheckFlockMigration(31U, 24U,
+                        "persistence-schema31-flock-test.ccsave",
+                        error, sizeof(error));
+    CheckSchema30JournalMigration(error, sizeof(error));
     CheckJourneyStopPersistence(error, sizeof(error));
     CheckLegacyLifecycleJournalCompatibility(24U, error, sizeof(error));
     CheckLegacyLifecycleJournalCompatibility(25U, error, sizeof(error));

@@ -294,6 +294,52 @@ void CcSimInitializeAnimalEconomy(CcSim *sim)
         }
         place->cow_condition = 88;
     }
+    CcSimUpgradeFlockEconomy(sim);
+}
+
+void CcSimUpgradeFlockEconomy(CcSim *sim)
+{
+    if (sim == NULL) return;
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        CcSettlement *place = &sim->settlements[i];
+        place->reserve_target[CC_GOOD_MEAT] = MaximumI32(
+            place->reserve_target[CC_GOOD_MEAT],
+            MaximumI32(4, place->population / 600));
+        place->reserve_target[CC_GOOD_WOOL] = MaximumI32(
+            place->reserve_target[CC_GOOD_WOOL],
+            MaximumI32(4, place->population / 500));
+        if (!CcSettlementHasService(place, CC_SERVICE_FARM)) continue;
+        switch (place->function) {
+            case CC_SETTLEMENT_FARMING:
+                place->sheep_adults = 42;
+                place->sheep_lambs = 10;
+                break;
+            case CC_SETTLEMENT_CAPITAL:
+                place->sheep_adults = 30;
+                place->sheep_lambs = 7;
+                break;
+            case CC_SETTLEMENT_FORTRESS:
+                place->sheep_adults = 24;
+                place->sheep_lambs = 6;
+                break;
+            case CC_SETTLEMENT_MINING:
+                place->sheep_adults = 14;
+                place->sheep_lambs = 3;
+                break;
+            case CC_SETTLEMENT_MARKET:
+            case CC_SETTLEMENT_DUNGEON_TOWN:
+                place->sheep_adults = 12;
+                place->sheep_lambs = 3;
+                break;
+        }
+        place->sheep_condition = 88;
+        place->sheep_hunger = 0;
+        place->stock[CC_GOOD_WOOL] = MaximumI32(
+            place->stock[CC_GOOD_WOOL], place->sheep_adults / 8);
+        place->stock[CC_GOOD_MEAT] = MaximumI32(
+            place->stock[CC_GOOD_MEAT],
+            MaximumI32(1, place->sheep_adults / 16));
+    }
 }
 
 void CcSimInitializeHorseStableSystem(CcSim *sim)
@@ -1072,6 +1118,9 @@ const char *CcEventKindName(CcEventKind kind)
         case CC_EVENT_BAKERY_PRODUCTION: return "BAKERY";
         case CC_EVENT_QUARRY_OUTPUT: return "QUARRY";
         case CC_EVENT_MASONRY_REPAIR: return "MASONRY";
+        case CC_EVENT_SHEEP_BRED: return "LAMBING";
+        case CC_EVENT_SHEEP_SHEARED: return "SHEARING";
+        case CC_EVENT_SHEEP_SLAUGHTERED: return "FLOCK CULL";
     }
     return "EVENT";
 }
@@ -1800,6 +1849,11 @@ static bool IsWarSeat(const CcSettlement *place)
          place->function == CC_SETTLEMENT_CAPITAL);
 }
 
+static bool IsWinter(const CcSim *sim)
+{
+    return sim != NULL && (sim->current_day / 7) % 52 >= 39;
+}
+
 static int32_t WarWeeklyNeed(const CcSim *sim, const CcSettlement *place,
                              CcGood good)
 {
@@ -1818,6 +1872,9 @@ static int32_t WarWeeklyNeed(const CcSim *sim, const CcSettlement *place,
     if (good == CC_GOOD_WEAPONS) {
         return burden >= 20 ? 1 + burden / 35 : 0;
     }
+    if (good == CC_GOOD_WOOL && sim->schema_version >= 31U) {
+        return 1 + burden / 50;
+    }
     return 0;
 }
 
@@ -1830,6 +1887,9 @@ static int32_t WarExtraConsumption(const CcSim *sim,
     if (burden < 20) return 0;
     if (good == CC_GOOD_FOOD) return MaximumI32(1, burden / 25);
     if (good == CC_GOOD_TOOLS) return burden >= 50 ? 1 : 0;
+    if (good == CC_GOOD_WOOL && sim->schema_version >= 31U) {
+        return 1 + burden / 50;
+    }
     return 0;
 }
 
@@ -1852,6 +1912,14 @@ static int32_t CivilianFoodUse(const CcSettlement *place)
         1, (place->population + 299) / 300);
     return MinimumI32(
         place->consumption[CC_GOOD_FOOD], population_use);
+}
+
+static int32_t CivilianWoolUse(const CcSim *sim,
+                               const CcSettlement *place)
+{
+    if (sim == NULL || sim->schema_version < 31U || !IsWinter(sim) ||
+        place == NULL || place->population <= 0) return 0;
+    return MaximumI32(1, (place->population + 1199) / 1200);
 }
 
 static int32_t SettlementPopulationCapacity(const CcSettlement *place)
@@ -3929,12 +3997,12 @@ bool CcSimFoodEconomyAtSettlement(const CcSim *sim, CcId settlement_id,
     if (slot < 0) return false;
     int32_t grain_production = EffectiveProduction(
         sim, settlement, slot, CC_GOOD_WHEAT);
-    int32_t herd_food = grain_production > 0 &&
-        sim->schema_version >= 14U &&
+    int32_t dairy_nutrition = sim->schema_version >= 14U &&
         CcSettlementHasService(settlement, CC_SERVICE_FARM) &&
-        (settlement->cow_adults + settlement->cow_calves) > 0 ?
+        settlement->cow_adults > 0 ?
         MaximumI32(
-            1, settlement->cow_adults * settlement->cow_condition / 1200) :
+            1, settlement->cow_adults * settlement->cow_condition / 1200) *
+            CC_NUTRITION_PER_RATION :
         0;
     int32_t bakery_input = MinimumI32(
         BakeryCapacity(settlement),
@@ -3942,7 +4010,7 @@ bool CcSimFoodEconomyAtSettlement(const CcSim *sim, CcId settlement_id,
     int32_t production_nutrition =
         bakery_input * CC_NUTRITION_PER_RATION +
         MaximumI32(0, grain_production - bakery_input) +
-        herd_food * CC_NUTRITION_PER_RATION;
+        dairy_nutrition;
     int32_t storage_nutrition =
         NutritionStorageCapacity(sim, settlement, CC_GOOD_BREAD) *
             CC_NUTRITION_PER_RATION +
@@ -4264,21 +4332,163 @@ static int32_t AdvanceCowHerd(CcSim *sim, CcSettlement *settlement)
 
     if (settlement->cow_hunger >= 65 && settlement->cow_adults > 0) {
         settlement->cow_adults -= 1;
-        settlement->stock[CC_GOOD_FOOD] += 4;
         settlement->cow_hunger = ClampI32(
             settlement->cow_hunger - 12, 0, 100);
         char text[CC_EVENT_TEXT_CAPACITY];
-        (void)snprintf(
-            text, sizeof(text),
-            "%s slaughters one cow after the herd's fodder runs short; 4 Food enters the local store.",
-            settlement->name);
-        (void)PushEvent(
-            sim, CC_EVENT_COW_SLAUGHTERED, settlement->id, settlement->id,
-            LatestLocalCause(sim, settlement->id), 1, text);
+        if (sim->schema_version >= 31U) {
+            int32_t beef = MinimumI32(
+                4, CC_SIM_MAX_UNITS - settlement->stock[CC_GOOD_MEAT]);
+            settlement->stock[CC_GOOD_MEAT] += beef;
+            (void)snprintf(
+                text, sizeof(text),
+                "%s slaughters one cow after the herd's fodder runs short; %d Meat enters the local store as beef.",
+                settlement->name, beef);
+            (void)PushEvent(
+                sim, CC_EVENT_COW_SLAUGHTERED, settlement->id,
+                settlement->id, LatestLocalCause(sim, settlement->id),
+                beef, text);
+        } else {
+            settlement->stock[CC_GOOD_FOOD] += 4;
+            (void)snprintf(
+                text, sizeof(text),
+                "%s slaughters one cow after the herd's fodder runs short; 4 Food enters the local store.",
+                settlement->name);
+            (void)PushEvent(
+                sim, CC_EVENT_COW_SLAUGHTERED, settlement->id,
+                settlement->id, LatestLocalCause(sim, settlement->id),
+                1, text);
+        }
     }
 
-    return MaximumI32(
+    if (settlement->cow_adults <= 0) return 0;
+    int32_t dairy_rations = MaximumI32(
         1, settlement->cow_adults * settlement->cow_condition / 1200);
+    return sim->schema_version >= 31U ?
+        dairy_rations * CC_NUTRITION_PER_RATION : dairy_rations;
+}
+
+static int32_t SheepCapacity(const CcSettlement *settlement)
+{
+    return MaximumI32(12, settlement->population / 20);
+}
+
+static int32_t StoreMutton(CcSettlement *settlement, int32_t sheep)
+{
+    int32_t wanted = sheep * 2;
+    int32_t stored = MinimumI32(
+        wanted, CC_SIM_MAX_UNITS - settlement->stock[CC_GOOD_MEAT]);
+    settlement->stock[CC_GOOD_MEAT] += stored;
+    return stored;
+}
+
+static void RecordSheepCull(CcSim *sim, CcSettlement *settlement,
+                            int32_t sheep, int32_t meat,
+                            const char *reason)
+{
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(
+        text, sizeof(text),
+        "%s slaughters %d sheep %s; %d Meat enters the local store as mutton.",
+        settlement->name, sheep, reason, meat);
+    (void)PushEvent(
+        sim, CC_EVENT_SHEEP_SLAUGHTERED, settlement->id, settlement->id,
+        0U, meat, text);
+}
+
+static void AdvanceSheepFlock(CcSim *sim, CcSettlement *settlement)
+{
+    if (sim->schema_version < 31U ||
+        !CcSettlementHasService(settlement, CC_SERVICE_FARM)) return;
+    int32_t flock = settlement->sheep_adults + settlement->sheep_lambs;
+    if (flock <= 0) return;
+
+    if (IsWinter(sim)) {
+        int32_t feed_required = MaximumI32(1, (flock + 23) / 24);
+        int32_t feed_eaten = CcNutritionConsume(
+            settlement->stock, CC_NUTRITION_ANIMAL,
+            feed_required * CC_NUTRITION_PER_RATION) /
+            CC_NUTRITION_PER_RATION;
+        int32_t feed_shortfall = feed_required - feed_eaten;
+        if (feed_shortfall > 0) {
+            settlement->sheep_hunger = ClampI32(
+                settlement->sheep_hunger + feed_shortfall * 14, 0, 100);
+            settlement->sheep_condition = ClampI32(
+                settlement->sheep_condition - feed_shortfall * 4, 1, 100);
+        } else {
+            settlement->sheep_hunger = ClampI32(
+                settlement->sheep_hunger - 12, 0, 100);
+            settlement->sheep_condition = ClampI32(
+                settlement->sheep_condition + 2, 1, 100);
+        }
+    } else {
+        settlement->sheep_hunger = ClampI32(
+            settlement->sheep_hunger - 8, 0, 100);
+        settlement->sheep_condition = ClampI32(
+            settlement->sheep_condition + 2, 1, 100);
+    }
+
+    int32_t year_day = sim->current_day % 364;
+    if (year_day == 91 && settlement->sheep_adults > 0) {
+        int32_t wool = MaximumI32(1, settlement->sheep_adults / 4);
+        wool = MinimumI32(
+            wool, CC_SIM_MAX_UNITS - settlement->stock[CC_GOOD_WOOL]);
+        settlement->stock[CC_GOOD_WOOL] += wool;
+        if (wool > 0) {
+            char text[CC_EVENT_TEXT_CAPACITY];
+            (void)snprintf(
+                text, sizeof(text),
+                "%s shears the spring flock and stores %d Wool.",
+                settlement->name, wool);
+            (void)PushEvent(
+                sim, CC_EVENT_SHEEP_SHEARED, settlement->id,
+                settlement->id, 0U, wool, text);
+        }
+
+        if (settlement->sheep_condition >= 65 &&
+            settlement->sheep_hunger <= 30) {
+            int32_t matured = settlement->sheep_lambs;
+            settlement->sheep_lambs = 0;
+            settlement->sheep_adults += matured;
+            int32_t room = MaximumI32(
+                0, SheepCapacity(settlement) - settlement->sheep_adults);
+            int32_t births = MinimumI32(
+                room, MaximumI32(1, settlement->sheep_adults / 5));
+            settlement->sheep_lambs += births;
+            if (births > 0) {
+                char text[CC_EVENT_TEXT_CAPACITY];
+                (void)snprintf(
+                    text, sizeof(text),
+                    "%s's flock raises %d new lamb%s; %d yearling%s join the adult flock.",
+                    settlement->name, births, births == 1 ? "" : "s",
+                    matured, matured == 1 ? "" : "s");
+                (void)PushEvent(
+                    sim, CC_EVENT_SHEEP_BRED, settlement->id,
+                    settlement->id, 0U, births, text);
+            }
+        }
+    }
+
+    flock = settlement->sheep_adults + settlement->sheep_lambs;
+    int32_t capacity = SheepCapacity(settlement);
+    if (year_day == 273 && settlement->sheep_adults > 8 &&
+        flock >= capacity * 3 / 4) {
+        int32_t planned = MaximumI32(1, settlement->sheep_adults / 12);
+        planned = MinimumI32(planned, settlement->sheep_adults - 8);
+        settlement->sheep_adults -= planned;
+        int32_t meat = StoreMutton(settlement, planned);
+        RecordSheepCull(
+            sim, settlement, planned, meat, "in the autumn cull");
+    }
+
+    if (settlement->sheep_hunger >= 65 &&
+        settlement->sheep_adults > 0) {
+        settlement->sheep_adults -= 1;
+        int32_t meat = StoreMutton(settlement, 1);
+        settlement->sheep_hunger = ClampI32(
+            settlement->sheep_hunger - 14, 0, 100);
+        RecordSheepCull(
+            sim, settlement, 1, meat, "after winter fodder runs short");
+    }
 }
 
 static void MaintainSettlementStonework(CcSim *sim,
@@ -4315,7 +4525,8 @@ static void UpdateSettlement(CcSim *sim, int32_t index)
     CcSettlement *settlement = &sim->settlements[index];
     if (CcSettlementIsAbandoned(settlement)) return;
     int32_t produced[CC_GOOD_COUNT] = {0};
-    int32_t cow_food = AdvanceCowHerd(sim, settlement);
+    int32_t cow_output = AdvanceCowHerd(sim, settlement);
+    AdvanceSheepFlock(sim, settlement);
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
         int32_t production = EffectiveProduction(sim, settlement, index, (CcGood)good);
         produced[good] = production;
@@ -4329,21 +4540,30 @@ static void UpdateSettlement(CcSim *sim, int32_t index)
                                   replenished < 0 ? 0 :
                                   (int32_t)replenished;
     }
-    int32_t cow_bread = MinimumI32(
-        cow_food, CC_SIM_MAX_UNITS - settlement->stock[CC_GOOD_BREAD]);
-    settlement->stock[CC_GOOD_BREAD] += cow_bread;
-    produced[CC_GOOD_BREAD] += cow_bread;
+    if (sim->schema_version < 31U) {
+        int32_t cow_bread = MinimumI32(
+            cow_output,
+            CC_SIM_MAX_UNITS - settlement->stock[CC_GOOD_BREAD]);
+        settlement->stock[CC_GOOD_BREAD] += cow_bread;
+        produced[CC_GOOD_BREAD] += cow_bread;
+    }
     produced[CC_GOOD_BREAD] += RunBakery(sim, settlement);
 
     int32_t food_required = MaximumI32(
         1, WeeklyFoodUse(sim, settlement)) * CC_NUTRITION_PER_RATION;
-    int32_t food_eaten = CcNutritionConsume(
-        settlement->stock, CC_NUTRITION_CIVILIAN, food_required);
+    int32_t food_eaten = sim->schema_version >= 31U ?
+        MinimumI32(food_required, cow_output) : 0;
+    food_eaten += CcNutritionConsume(
+        settlement->stock, CC_NUTRITION_CIVILIAN,
+        food_required - food_eaten);
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
         if (CcGoodNutritionValue(
                 (CcGood)good, CC_NUTRITION_CIVILIAN) > 0) continue;
         int32_t consumption = settlement->consumption[good] +
             WarExtraConsumption(sim, settlement, (CcGood)good);
+        if ((CcGood)good == CC_GOOD_WOOL) {
+            consumption += CivilianWoolUse(sim, settlement);
+        }
         int32_t consumed = MinimumI32(settlement->stock[good], consumption);
         settlement->stock[good] -= consumed;
     }
@@ -5768,10 +5988,12 @@ static CcSettlement *DragonHuntTarget(CcSim *sim)
             place->id == sim->dragon.lair_settlement_id ||
             (NutritionRations(
                  place->stock, CC_NUTRITION_CIVILIAN) <= 0 &&
-             place->cow_adults <= 0)) continue;
+             place->cow_adults <= 0 &&
+             place->sheep_adults <= 0)) continue;
         int32_t score = NutritionRations(
                             place->stock, CC_NUTRITION_CIVILIAN) * 3 +
-                        place->cow_adults * 8 - place->security;
+                        place->cow_adults * 8 +
+                        place->sheep_adults * 3 - place->security;
         if (place->function == CC_SETTLEMENT_FARMING ||
             CcSettlementHasService(place, CC_SERVICE_FARM)) score += 40;
         if (best == NULL || score > best_score) {
@@ -5800,12 +6022,19 @@ static void DragonHunt(CcSim *sim)
     int32_t cows_taken = MinimumI32(
         target->cow_adults, MaximumI32(1, appetite / 4));
     target->cow_adults -= cows_taken;
-    int32_t food_wanted = MaximumI32(1, appetite - cows_taken * 3);
+    int32_t sheep_wanted = sim->schema_version >= 31U ?
+        MaximumI32(0, appetite - cows_taken * 3) : 0;
+    int32_t sheep_taken = MinimumI32(
+        target->sheep_adults, sheep_wanted);
+    target->sheep_adults -= sheep_taken;
+    int32_t food_wanted = sim->schema_version >= 31U ?
+        MaximumI32(0, appetite - cows_taken * 3 - sheep_taken) :
+        MaximumI32(1, appetite - cows_taken * 3);
     int32_t food_taken = CcNutritionConsume(
         target->stock, CC_NUTRITION_CIVILIAN,
         food_wanted * CC_NUTRITION_PER_RATION) /
         CC_NUTRITION_PER_RATION;
-    int32_t taken = cows_taken * 3 + food_taken;
+    int32_t taken = cows_taken * 3 + sheep_taken + food_taken;
     target->hunger = ClampI32(target->hunger + MaximumI32(1, taken / 4),
                               0, 100);
     target->prosperity = ClampI32(target->prosperity - 1, 0, 100);
@@ -5818,7 +6047,14 @@ static void DragonHunt(CcSim *sim)
     dragon->hunts += 1;
     dragon->activity = CC_DRAGON_ACTIVITY_HUNTING;
     char text[CC_EVENT_TEXT_CAPACITY];
-    if (sim->schema_version >= 14U) {
+    if (sim->schema_version >= 31U) {
+        (void)snprintf(
+            text, sizeof(text),
+            "%s takes %d cow%s, %d sheep, and %d ration%s from %s.",
+            dragon->name, cows_taken, cows_taken == 1 ? "" : "s",
+            sheep_taken, food_taken, food_taken == 1 ? "" : "s",
+            target->name);
+    } else if (sim->schema_version >= 14U) {
         (void)snprintf(
             text, sizeof(text),
             "%s takes %d cow%s and %d Food from %s and leaves the roofs untouched.",
@@ -10069,10 +10305,13 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
             int32_t tool_need = WarWeeklyNeed(sim, front, CC_GOOD_TOOLS);
             int32_t weapon_need = WarWeeklyNeed(
                 sim, front, CC_GOOD_WEAPONS);
+            int32_t wool_need = WarWeeklyNeed(
+                sim, front, CC_GOOD_WOOL);
             CcMoney desired_chest = wage * 4 +
                 (CcMoney)food_need * front->price[CC_GOOD_FOOD] * 2 +
                 (CcMoney)tool_need * front->price[CC_GOOD_TOOLS] * 2 +
-                (CcMoney)weapon_need * front->price[CC_GOOD_WEAPONS] * 2;
+                (CcMoney)weapon_need * front->price[CC_GOOD_WEAPONS] * 2 +
+                (CcMoney)wool_need * front->price[CC_GOOD_WOOL] * 2;
             desired_chest = desired_chest > 120 ? 120 : desired_chest;
             CcMoney transfer = front->war_chest < desired_chest ?
                                desired_chest - front->war_chest : 0;
@@ -14235,12 +14474,19 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                          sim->schema_version == 27U ||
                          sim->schema_version == 28U ||
                          sim->schema_version == 29U ||
-                         sim->schema_version == 30U;
+                         sim->schema_version == 30U ||
+                         sim->schema_version == 31U;
     /* Older saves carry authoritative settlement coordinates while their
        economies and road districts are upgraded. */
-    bool supported_generator = sim->generator_version == CC_GENERATOR_VERSION ||
+    bool supported_generator =
+        (sim->schema_version == CC_SIM_SCHEMA_VERSION &&
+         sim->generator_version == CC_GENERATOR_VERSION) ||
+        (legacy_schema && sim->schema_version <= 27U &&
+         sim->generator_version == CC_GENERATOR_VERSION) ||
+        (sim->schema_version == 31U && sim->generator_version == 24U) ||
         (sim->schema_version == 27U && sim->generator_version == 21U) ||
         (sim->schema_version == 27U && sim->generator_version == 22U) ||
+        (sim->schema_version == 27U && sim->generator_version == 23U) ||
         (sim->schema_version == 28U && sim->generator_version == 22U) ||
         (sim->schema_version == 29U && sim->generator_version == 23U) ||
         (sim->schema_version == 30U && sim->generator_version == 23U) ||
@@ -14380,7 +14626,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 !ValidBoundedText(event->text, sizeof(event->text)) ||
                 event->day < 1 || event->day > sim->current_day ||
                 event->kind < CC_EVENT_HARVEST_FAILED ||
-                event->kind > CC_EVENT_MASONRY_REPAIR ||
+                event->kind > CC_EVENT_SHEEP_SLAUGHTERED ||
                 event->parent_id == event->id ||
                 (event->parent_id != 0U &&
                  CcSimEvent(sim, event->parent_id) == NULL) ||
@@ -14513,6 +14759,14 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 settlement->cow_condition > 100 ||
                 settlement->cow_hunger < 0 ||
                 settlement->cow_hunger > 100 ||
+                settlement->sheep_adults < 0 ||
+                settlement->sheep_adults > CC_SIM_MAX_UNITS ||
+                settlement->sheep_lambs < 0 ||
+                settlement->sheep_lambs > CC_SIM_MAX_UNITS ||
+                settlement->sheep_condition < 0 ||
+                settlement->sheep_condition > 100 ||
+                settlement->sheep_hunger < 0 ||
+                settlement->sheep_hunger > 100 ||
                 (settlement->service_mask & ~known_services) != 0U ||
                 CcSettlementServiceCount(settlement) >
                     CcSettlementServiceCapacity(settlement->size) ||
@@ -16006,6 +16260,12 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(item->cow_calves);
             HASH_VALUE(item->cow_condition);
             HASH_VALUE(item->cow_hunger);
+        }
+        if (sim->schema_version >= 31U) {
+            HASH_VALUE(item->sheep_adults);
+            HASH_VALUE(item->sheep_lambs);
+            HASH_VALUE(item->sheep_condition);
+            HASH_VALUE(item->sheep_hunger);
         }
         HASH_VALUE(sim->last_shortage_level[i]);
     }
