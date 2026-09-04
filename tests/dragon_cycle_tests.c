@@ -3,6 +3,7 @@
 
 #include "test_support.h"
 #include <stdio.h>
+#include <string.h>
 
 static int32_t CountEvents(const CcSim *sim, CcEventKind kind)
 {
@@ -21,6 +22,121 @@ static const CcEvent *LatestKind(const CcSim *sim, CcEventKind kind)
         if (event != NULL && event->kind == kind) return event;
     }
     return NULL;
+}
+
+static void FillEventLedger(CcSim *sim)
+{
+    while (sim->event_count < CC_MAX_EVENTS) {
+        CcEvent *event = &sim->events[sim->event_count];
+        *event = (CcEvent){
+            .id = CcMakeId(CC_ENTITY_EVENT, sim->next_entity_serial++),
+            .day = sim->current_day,
+            .kind = CC_EVENT_HARVEST_FAILED,
+            .subject_id = sim->settlements[0].id,
+            .location_id = sim->settlements[0].id
+        };
+        (void)snprintf(event->text, sizeof(event->text),
+                       "Ledger boundary event %d.", sim->event_count);
+        sim->event_count += 1;
+        sim->event_write_index = sim->event_count % CC_MAX_EVENTS;
+    }
+}
+
+static void CheckFullLedgerDragonTheft(void)
+{
+    CcSim sim;
+    CcSimInit(&sim, UINT32_C(0x1297e157));
+    FillEventLedger(&sim);
+
+    CcSettlement *origin = &sim.settlements[0];
+    sim.hoard_raiders.phase = CC_HOARD_RAIDERS_OUTBOUND;
+    sim.hoard_raiders.motive = CC_HOARD_RAID_SOCIAL_RELIEF;
+    sim.hoard_raiders.origin_settlement_id = origin->id;
+    sim.hoard_raiders.cause_event_id = 0U;
+    sim.hoard_raiders.days_remaining = 1;
+    sim.dragon.hoard = 100;
+    sim.dragon.stolen_outstanding = 0;
+    sim.goblins.members = 12;
+    sim.goblins.devotion = 0;
+    sim.goblins.hoard_defenses = 0;
+
+    CcSimAdvanceDays(&sim, 1);
+
+    const CcEvent *theft = CcSimEvent(
+        &sim, sim.hoard_raiders.cause_event_id);
+    const CcEvent *omen = CcSimEvent(&sim, sim.dragon.omen_event_id);
+    CC_CHECK(theft != NULL);
+    CC_CHECK(theft->kind == CC_EVENT_DRAGON_HOARD_STOLEN);
+    CC_CHECK(omen != NULL);
+    CC_CHECK(omen->kind == CC_EVENT_DRAGON_OMEN);
+    CC_CHECK(omen->parent_id == theft->id);
+    char error[256];
+    CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
+}
+
+static void CheckFullLedgerDragonSlaying(void)
+{
+    CcSim sim;
+    CcSimInit(&sim, UINT32_C(0x12951a17));
+    FillEventLedger(&sim);
+
+    CcSettlement *origin = &sim.settlements[0];
+    sim.dragon_campaign.phase = CC_DRAGON_CAMPAIGN_OUTBOUND;
+    sim.dragon_campaign.pledged_kingdom_mask = 1U;
+    sim.dragon_campaign.alliance_kingdom_mask = 7U;
+    sim.dragon_campaign.origin_settlement_id = origin->id;
+    sim.dragon_campaign.cause_event_id = 0U;
+    sim.dragon_campaign.days_remaining = 1;
+    sim.dragon_campaign.attempts = 1;
+    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        sim.dragon_campaign.supplies[good] = 400;
+    }
+    sim.goblins.members = 12;
+    sim.goblins.devotion = 0;
+    sim.goblins.cohesion = 0;
+    sim.goblins.hoard_defenses = 0;
+    sim.dragon.body_condition = 1;
+    sim.dragon.crown_strength = 0;
+    sim.dragon.memory_integrity = 0;
+    sim.dragon.territory_stability = 0;
+    if (sim.treasure_count >= CC_MAX_TREASURES) {
+        sim.treasures[sim.treasure_count - 1].destroyed = true;
+    }
+
+    CcSimAdvanceDays(&sim, 1);
+
+    const CcEvent *slaying = CcSimEvent(
+        &sim, sim.dragon_campaign.cause_event_id);
+    CC_CHECK(slaying != NULL);
+    CC_CHECK(slaying->kind == CC_EVENT_DRAGON_SLAIN);
+    CC_CHECK(sim.dragon.lifecycle_event_id == slaying->id);
+
+    const CcTreasure *bane = NULL;
+    for (int32_t i = 0; i < sim.treasure_count; ++i) {
+        if (!sim.treasures[i].destroyed &&
+            strncmp(sim.treasures[i].name, "Bane of ", 8) == 0) {
+            bane = &sim.treasures[i];
+            break;
+        }
+    }
+    CC_CHECK(bane != NULL);
+    const CcEvent *forging = NULL;
+    for (int32_t i = 0; i < sim.event_count; ++i) {
+        const CcEvent *event = CcSimRecentEvent(&sim, i);
+        if (event != NULL && event->kind == CC_EVENT_TREASURE_CRAFTED &&
+            event->subject_id == bane->id) {
+            forging = event;
+            break;
+        }
+    }
+    CC_CHECK(forging != NULL);
+    CC_CHECK(forging->parent_id == slaying->id);
+    char error[256];
+    if (!CcSimValidate(&sim, error, sizeof(error))) {
+        (void)fprintf(stderr, "full-ledger slaying validation failed: %s\n",
+                      error);
+        CC_CHECK(false);
+    }
 }
 
 int main(void)
@@ -646,6 +762,9 @@ int main(void)
             CC_COURIER_WAR_DECLARATION) feud_sent = true;
     }
     CC_CHECK(feud_sent);
+
+    CheckFullLedgerDragonTheft();
+    CheckFullLedgerDragonSlaying();
 
     puts("Goblin tribute, war finance, and dragon retaliation tests passed");
     return 0;
