@@ -135,6 +135,7 @@ int main(void)
         dispatch.kingdoms[kingdom].treasury = 0;
         dispatch.kingdoms[kingdom].legitimacy = 100;
     }
+    dispatch.dragon.age_days = 500 * 365;
     CcSimAdvanceDays(&dispatch, 27);
     CC_CHECK(dispatch.courier_count > 0);
     CcCourier *seal = &dispatch.couriers[0];
