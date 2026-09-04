@@ -23,6 +23,7 @@ int main(void)
         .location_id = UINT64_C(42),
         .scene = CC_CLIENT_SESSION_MARKET,
         .coordinate_space = CC_CLIENT_SESSION_WORLD,
+        .route_id = UINT64_C(77),
         .position_x = 6.25f,
         .position_z = 2.75f,
         .facing_yaw = -0.35f,
@@ -41,6 +42,7 @@ int main(void)
     CC_CHECK(restored.location_id == original.location_id);
     CC_CHECK(restored.scene == original.scene);
     CC_CHECK(restored.coordinate_space == original.coordinate_space);
+    CC_CHECK(restored.route_id == original.route_id);
     CC_CHECK(fabsf(restored.position_x - original.position_x) < 0.0001f);
     CC_CHECK(fabsf(restored.position_z - original.position_z) < 0.0001f);
     CC_CHECK(fabsf(restored.facing_yaw - original.facing_yaw) < 0.0001f);
@@ -75,6 +77,7 @@ int main(void)
     CC_CHECK(restored.version == CC_CLIENT_SESSION_VERSION);
     CC_CHECK(restored.opening_step == 2U);
     CC_CHECK(restored.coordinate_space == CC_CLIENT_SESSION_LEGACY_LOCAL);
+    CC_CHECK(restored.route_id == 0U);
 
     FILE *version_two = fopen(session_path, "wb");
     CC_CHECK(version_two != NULL);
@@ -87,6 +90,19 @@ int main(void)
     CC_CHECK(restored.version == CC_CLIENT_SESSION_VERSION);
     CC_CHECK(restored.opening_step == 1U);
     CC_CHECK(restored.coordinate_space == CC_CLIENT_SESSION_LEGACY_LOCAL);
+    CC_CHECK(restored.route_id == 0U);
+
+    FILE *version_three = fopen(session_path, "wb");
+    CC_CHECK(version_three != NULL);
+    CC_CHECK(fputs(
+        "CROWNLESS_SESSION 3\n3232176798 42 0 1 17.5 12.5 -0.5 2\n",
+        version_three) >= 0);
+    CC_CHECK(fclose(version_three) == 0);
+    CC_CHECK(CcClientSessionRead(session_path, &restored,
+                                 error, sizeof(error)));
+    CC_CHECK(restored.version == CC_CLIENT_SESSION_VERSION);
+    CC_CHECK(restored.coordinate_space == CC_CLIENT_SESSION_WORLD);
+    CC_CHECK(restored.route_id == 0U);
 
     FILE *corrupt = fopen(session_path, "wb");
     CC_CHECK(corrupt != NULL);

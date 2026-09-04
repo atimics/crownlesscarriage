@@ -1024,6 +1024,15 @@ static const CcRoute *OpenWorldRouteFromSettlement(const CcSim *sim,
     return NULL;
 }
 
+static int32_t OpenWorldRouteIndex(const CcSim *sim, CcId route_id)
+{
+    if (sim == NULL || route_id == 0U) return -1;
+    for (int32_t i = 0; i < sim->route_count; ++i) {
+        if (sim->routes[i].id == route_id) return i;
+    }
+    return -1;
+}
+
 static bool SetOpenWorldCarriageOnRoute(
     const CcSim *sim, LocalState *local, CcId route_id, CcId origin_id,
     float distance_from_origin, float pace, bool hero_embarked)
@@ -1429,12 +1438,89 @@ static bool SaveLocalSession(const char *path, const CcSim *sim,
         .scene = ClientSceneForLocalState(local),
         .coordinate_space = local->open_world ?
             CC_CLIENT_SESSION_WORLD : CC_CLIENT_SESSION_LEGACY_LOCAL,
+        .route_id = local->open_world ?
+            local->world_carriage.route_id : 0U,
         .position_x = local->agent.position.x,
         .position_z = local->agent.position.z,
         .facing_yaw = local->agent.facing_yaw,
         .opening_step = (uint32_t)local->opening_step
     };
     return CcClientSessionWrite(path, &session, error, error_capacity);
+}
+
+static bool WorldStreamCanRestoreSession(
+    const CcSim *sim, const LocalState *local,
+    const CcClientSession *session, const CcRoute **route)
+{
+    if (sim == NULL || local == NULL || session == NULL ||
+        local->world_stream.manifest.world_seed != sim->world_seed ||
+        local->world_stream.manifest.generator_version !=
+            sim->generator_version ||
+        CcWorldSettlementPlacementForId(
+            &local->world_stream.manifest, session->location_id) == NULL ||
+        !CcWorldManifestContains(&local->world_stream.manifest,
+                                 session->position_x,
+                                 session->position_z)) {
+        return false;
+    }
+    const CcRoute *restored_route = session->route_id != 0U ?
+        CcSimRoute(sim, session->route_id) :
+        OpenWorldRouteFromSettlement(sim, session->location_id);
+    if (restored_route == NULL ||
+        (restored_route->from_id != session->location_id &&
+         restored_route->to_id != session->location_id) ||
+        CcWorldRoutePlacementForId(
+            &local->world_stream.manifest, restored_route->id) == NULL) {
+        return false;
+    }
+    if (route != NULL) *route = restored_route;
+    return true;
+}
+
+static bool RestoreWorldSession(const CcSim *sim, LocalState *local,
+                                const CcClientSession *session)
+{
+    const CcRoute *route = NULL;
+    if (!WorldStreamCanRestoreSession(sim, local, session, &route)) {
+        return false;
+    }
+
+    LeaveOpenWorld(local);
+    ResetLocalState(local);
+    local->world_carriage = (CcLocalWorldCarriageState){0};
+    local->open_world = true;
+    BindOpenWorldForLocalState(local);
+    CcWorldStreamUpdate(&local->world_stream,
+                        session->position_x, session->position_z,
+                        CC_WORLD_STREAM_CAPACITY);
+    RepositionHero(local,
+                   (Vector2){session->position_x, session->position_z}, false);
+    CcLocalAgentSetScene(&local->agent, CC_LOCAL_SCENE_STREET);
+    local->course.scene = CC_LOCAL_SCENE_STREET;
+    local->course.alarm_countdown = 1000.0f;
+    local->agent.facing_yaw = session->facing_yaw;
+    local->opening_step = CC_LOCAL_OPENING_COMPLETE;
+    local->road_choice_active = true;
+    local->fork_turn_progress = 1.0f;
+    local->departure = (CcClientDepartureTransition){
+        .phase = CC_CLIENT_DEPARTURE_READY,
+        .town_progress = 1.0f,
+        .road_book_progress = 1.0f,
+    };
+    local->convoy.phase = CC_LOCAL_CONVOY_ROAD;
+    local->convoy.phase_progress = 1.0f;
+    local->convoy.pace = 0.0f;
+    local->world_carriage = (CcLocalWorldCarriageState){
+        .position = local->agent.position,
+        .heading_yaw = session->facing_yaw,
+        .pace = 0.0f,
+        .camera_weight = 1.0f,
+        .camera_target = 1.0f,
+        .route_id = route->id,
+        .visible = true,
+        .hero_embarked = true,
+    };
+    return true;
 }
 
 static bool RestoreLocalSession(const char *path, const CcSim *sim,
@@ -1447,31 +1533,14 @@ static bool RestoreLocalSession(const char *path, const CcSim *sim,
         session.location_id != sim->player.location_id) {
         return false;
     }
+    if (session.coordinate_space == CC_CLIENT_SESSION_WORLD) {
+        return RestoreWorldSession(sim, local, &session);
+    }
+
+    LeaveOpenWorld(local);
+    ResetLocalState(local);
     bool market = session.scene == CC_CLIENT_SESSION_MARKET;
     CcLocalSiteKind site = LocalSiteForClientScene(session.scene);
-    if (local->open_world) {
-        CcWorldPoint position = {session.position_x, session.position_z};
-        if (session.coordinate_space == CC_CLIENT_SESSION_LEGACY_LOCAL) {
-            position = CcWorldSettlementLocalPoint(
-                &local->world_stream.manifest, session.location_id,
-                session.scene == CC_CLIENT_SESSION_MARKET ? 48.0f :
-                                                           session.position_x,
-                session.scene == CC_CLIENT_SESSION_MARKET ? 46.0f :
-                                                           session.position_z);
-        }
-        if (!CcWorldManifestContains(&local->world_stream.manifest,
-                                     position.x, position.z)) return false;
-        BindOpenWorldForLocalState(local);
-        RepositionHero(local, (Vector2){position.x, position.z}, false);
-        CcLocalAgentSetScene(&local->agent, CC_LOCAL_SCENE_STREET);
-        local->course.scene = CC_LOCAL_SCENE_STREET;
-        local->agent.facing_yaw = session.facing_yaw;
-        local->opening_step = CC_LOCAL_OPENING_COMPLETE;
-        CcWorldStreamUpdate(&local->world_stream, position.x, position.z,
-                            CC_WORLD_STREAM_CAPACITY);
-        SetOpenWorldCarriageAtSettlement(sim, local);
-        return true;
-    }
     bool in_bounds = market ?
         session.position_x >= 0.5f && session.position_x <= 12.0f &&
         session.position_z >= 0.5f && session.position_z <= 8.0f :
@@ -1497,6 +1566,19 @@ static bool RestoreLocalSession(const char *path, const CcSim *sim,
     } else if (local->opening_step != CC_LOCAL_OPENING_COMPLETE) {
         /* Old saves may still contain the removed Jory tutorial step. */
         local->opening_step = CC_LOCAL_OPENING_MEET_MARA;
+    }
+    return true;
+}
+
+static bool RestoreClientStartupSession(const char *path, const CcSim *sim,
+                                        LocalState *local, ClientView *view,
+                                        int32_t *selected)
+{
+    if (view == NULL || !RestoreLocalSession(path, sim, local)) return false;
+    *view = local->open_world ? VIEW_ROADS : VIEW_LOCAL;
+    if (local->open_world && selected != NULL) {
+        *selected = OpenWorldRouteIndex(
+            sim, local->world_carriage.route_id);
     }
     return true;
 }
@@ -5926,6 +6008,360 @@ static int RunRoadBookArrivalRegression(void)
     (void)puts("Road-book arrival regression passed");
     return 0;
 }
+
+static bool SessionTestFloatMatches(float first, float second)
+{
+    return fabsf(first - second) < 0.0001f;
+}
+
+static int SessionStartupTestFailed(const char *path, const char *message)
+{
+    CcLocalBindOpenWorld(NULL);
+    (void)remove(path);
+    (void)fprintf(stderr, "%s\n", message);
+    return 1;
+}
+
+static int RunWorldSessionStartupRegression(void)
+{
+    const char *session_path = "world-session-startup-test.state";
+    (void)remove(session_path);
+    CcSim sim;
+    CcSimInit(&sim, UINT32_C(0xc0a7118e));
+    CcId branch_location_id = 0U;
+    for (int32_t settlement = 0;
+         settlement < sim.settlement_count; ++settlement) {
+        int32_t route_count = 0;
+        for (int32_t route_slot = 0;
+             route_slot < sim.route_count; ++route_slot) {
+            if (sim.routes[route_slot].from_id ==
+                    sim.settlements[settlement].id ||
+                sim.routes[route_slot].to_id ==
+                    sim.settlements[settlement].id) {
+                route_count += 1;
+            }
+        }
+        if (route_count >= 2) {
+            branch_location_id = sim.settlements[settlement].id;
+            break;
+        }
+    }
+    if (branch_location_id == 0U) {
+        return SessionStartupTestFailed(
+            session_path, "World session needs a branching settlement.");
+    }
+    sim.player.location_id = branch_location_id;
+    sim.carriage.location_id = branch_location_id;
+    CcLocalBindPlace(&sim);
+
+    LocalState saved = {0};
+    ResetLocalState(&saved);
+    if (!InitializeOpenWorld(&sim, &saved, false)) {
+        return SessionStartupTestFailed(
+            session_path, "World session setup failed.");
+    }
+    const CcRoute *route = NULL;
+    int32_t route_index = -1;
+    int32_t incident_routes = 0;
+    for (int32_t i = 0; i < sim.route_count; ++i) {
+        if (sim.routes[i].from_id != sim.player.location_id &&
+            sim.routes[i].to_id != sim.player.location_id) {
+            continue;
+        }
+        incident_routes += 1;
+        if (incident_routes == 2) {
+            route = &sim.routes[i];
+            route_index = i;
+            break;
+        }
+    }
+    if (route == NULL ||
+        !EnterOpenWorldAtRoadGate(&sim, &saved, route->id)) {
+        return SessionStartupTestFailed(
+            session_path, "World session needs a second road branch.");
+    }
+    saved.world_carriage.camera_weight = 1.0f;
+    saved.world_carriage.camera_target = 1.0f;
+    saved.agent.facing_yaw = saved.world_carriage.heading_yaw;
+    const float saved_x = saved.agent.position.x;
+    const float saved_z = saved.agent.position.z;
+    const float saved_yaw = saved.agent.facing_yaw;
+
+    char error[192];
+    if (!SaveLocalSession(session_path, &sim, &saved,
+                          error, sizeof(error))) {
+        return SessionStartupTestFailed(session_path, error);
+    }
+    CcClientSession stored = {0};
+    if (!CcClientSessionRead(session_path, &stored,
+                             error, sizeof(error)) ||
+        stored.coordinate_space != CC_CLIENT_SESSION_WORLD ||
+        stored.route_id != route->id ||
+        !SessionTestFloatMatches(stored.position_x, saved_x) ||
+        !SessionTestFloatMatches(stored.position_z, saved_z)) {
+        return SessionStartupTestFailed(
+            session_path, "World session was saved in the wrong space.");
+    }
+
+    LocalState restored = {0};
+    ResetLocalState(&restored);
+    if (!InitializeOpenWorld(&sim, &restored, false)) {
+        return SessionStartupTestFailed(
+            session_path, "World restore stream setup failed.");
+    }
+    ClientView view = VIEW_LOCAL;
+    int32_t selected = -1;
+    if (!RestoreClientStartupSession(
+            session_path, &sim, &restored, &view, &selected)) {
+        return SessionStartupTestFailed(
+            session_path, "World session startup restore failed.");
+    }
+    const CcWorldChunk *focus = CcWorldStreamChunkAt(
+        &restored.world_stream,
+        restored.world_stream.focus_chunk_x,
+        restored.world_stream.focus_chunk_z);
+    if (view != VIEW_ROADS || !restored.open_world ||
+        selected != route_index ||
+        !SessionTestFloatMatches(restored.agent.position.x, saved_x) ||
+        !SessionTestFloatMatches(restored.agent.position.z, saved_z) ||
+        !SessionTestFloatMatches(restored.agent.facing_yaw, saved_yaw) ||
+        !SessionTestFloatMatches(
+            restored.agent.position.y,
+            CcWorldStreamHeightAt(
+                &restored.world_stream, saved_x, saved_z)) ||
+        !SessionTestFloatMatches(
+            restored.agent.position.y,
+            CcLocalTerrainHeightAt(saved_x, saved_z)) ||
+        restored.agent.scene != CC_LOCAL_SCENE_STREET ||
+        restored.course.scene != CC_LOCAL_SCENE_STREET ||
+        !restored.road_choice_active ||
+        restored.departure.phase != CC_CLIENT_DEPARTURE_READY ||
+        restored.departure.town_progress != 1.0f ||
+        restored.departure.road_book_progress != 1.0f ||
+        restored.convoy.phase != CC_LOCAL_CONVOY_ROAD ||
+        restored.convoy.phase_progress != 1.0f ||
+        restored.convoy.pace != 0.0f ||
+        !restored.world_carriage.visible ||
+        !restored.world_carriage.hero_embarked ||
+        restored.world_carriage.route_id != route->id ||
+        restored.world_carriage.camera_weight != 1.0f ||
+        restored.world_carriage.camera_target != 1.0f ||
+        !SessionTestFloatMatches(
+            restored.world_carriage.position.x, saved_x) ||
+        !SessionTestFloatMatches(
+            restored.world_carriage.position.z, saved_z) ||
+        !SessionTestFloatMatches(
+            restored.world_carriage.heading_yaw, saved_yaw) ||
+        focus == NULL || focus->state != CC_WORLD_CHUNK_READY) {
+        return SessionStartupTestFailed(
+            session_path, "World session restored an invalid road-book state.");
+    }
+
+    CcClientSession outside = stored;
+    outside.position_x = restored.world_stream.manifest.maximum_x + 1.0f;
+    if (!CcClientSessionWrite(session_path, &outside,
+                              error, sizeof(error))) {
+        return SessionStartupTestFailed(session_path, error);
+    }
+    LocalState rejected = {0};
+    ResetLocalState(&rejected);
+    if (!InitializeOpenWorld(&sim, &rejected, false)) {
+        return SessionStartupTestFailed(
+            session_path, "World bounds test setup failed.");
+    }
+    view = VIEW_LOCAL;
+    int32_t rejected_selected = -1;
+    if (RestoreClientStartupSession(
+            session_path, &sim, &rejected, &view,
+            &rejected_selected) || rejected.open_world) {
+        return SessionStartupTestFailed(
+            session_path, "World restore accepted a point beyond the kingdom.");
+    }
+
+    CcClientSession wrong_road = stored;
+    for (int32_t i = 0; i < sim.route_count; ++i) {
+        if (sim.routes[i].from_id != sim.player.location_id &&
+            sim.routes[i].to_id != sim.player.location_id) {
+            wrong_road.route_id = sim.routes[i].id;
+            break;
+        }
+    }
+    if (wrong_road.route_id == stored.route_id ||
+        !CcClientSessionWrite(session_path, &wrong_road,
+                              error, sizeof(error))) {
+        return SessionStartupTestFailed(
+            session_path, "World road validation setup failed.");
+    }
+    LocalState wrong_road_restore = {0};
+    ResetLocalState(&wrong_road_restore);
+    if (!InitializeOpenWorld(&sim, &wrong_road_restore, false)) {
+        return SessionStartupTestFailed(
+            session_path, "World road restore setup failed.");
+    }
+    view = VIEW_LOCAL;
+    int32_t wrong_road_selected = -1;
+    if (RestoreClientStartupSession(
+            session_path, &sim, &wrong_road_restore, &view,
+            &wrong_road_selected) || wrong_road_restore.open_world) {
+        return SessionStartupTestFailed(
+            session_path, "World restore accepted an unrelated road.");
+    }
+
+    if (!CcClientSessionWrite(session_path, &stored,
+                              error, sizeof(error))) {
+        return SessionStartupTestFailed(session_path, error);
+    }
+    LocalState missing_stream = {0};
+    ResetLocalState(&missing_stream);
+    view = VIEW_LOCAL;
+    int32_t missing_selected = -1;
+    if (RestoreClientStartupSession(
+            session_path, &sim, &missing_stream, &view,
+            &missing_selected) ||
+        missing_stream.open_world) {
+        return SessionStartupTestFailed(
+            session_path, "World restore accepted an unprepared stream.");
+    }
+
+    FILE *version_three = fopen(session_path, "wb");
+    bool version_three_written = version_three != NULL &&
+        fprintf(version_three,
+                "CROWNLESS_SESSION 3\n%u %llu 0 1 %.9g %.9g %.9g 2\n",
+                sim.world_seed,
+                (unsigned long long)sim.player.location_id,
+                (double)saved_x, (double)saved_z,
+                (double)saved_yaw) > 0;
+    if (version_three != NULL && fclose(version_three) != 0) {
+        version_three_written = false;
+    }
+    if (!version_three_written) {
+        return SessionStartupTestFailed(
+            session_path, "Version 3 world session setup failed.");
+    }
+    LocalState version_three_restore = {0};
+    ResetLocalState(&version_three_restore);
+    if (!InitializeOpenWorld(&sim, &version_three_restore, false)) {
+        return SessionStartupTestFailed(
+            session_path, "Version 3 world stream setup failed.");
+    }
+    const CcRoute *first_route = OpenWorldRouteFromSettlement(
+        &sim, sim.player.location_id);
+    view = VIEW_LOCAL;
+    int32_t version_three_selected = -1;
+    if (first_route == NULL ||
+        !RestoreClientStartupSession(
+            session_path, &sim, &version_three_restore, &view,
+            &version_three_selected) ||
+        view != VIEW_ROADS || !version_three_restore.open_world ||
+        version_three_restore.world_carriage.route_id != first_route->id ||
+        version_three_selected != OpenWorldRouteIndex(
+            &sim, first_route->id)) {
+        return SessionStartupTestFailed(
+            session_path, "Version 3 world session did not use its old fallback.");
+    }
+
+    CcLocalBindOpenWorld(NULL);
+    (void)remove(session_path);
+    (void)puts("World session startup regression passed");
+    return 0;
+}
+
+static int RunTownSessionStartupRegression(void)
+{
+    const char *session_path = "town-session-startup-test.state";
+    (void)remove(session_path);
+    CcSim sim;
+    CcSimInit(&sim, UINT32_C(0xc0a7118f));
+    CcLocalBindPlace(&sim);
+
+    LocalState saved = {0};
+    ResetLocalState(&saved);
+    RepositionHero(&saved, (Vector2){31.25f, 22.75f}, false);
+    saved.agent.facing_yaw = -0.45f;
+    saved.opening_step = CC_LOCAL_OPENING_COMPLETE;
+    char error[192];
+    if (!SaveLocalSession(session_path, &sim, &saved,
+                          error, sizeof(error))) {
+        return SessionStartupTestFailed(session_path, error);
+    }
+    CcClientSession stored = {0};
+    if (!CcClientSessionRead(session_path, &stored,
+                             error, sizeof(error)) ||
+        stored.coordinate_space != CC_CLIENT_SESSION_LEGACY_LOCAL) {
+        return SessionStartupTestFailed(
+            session_path, "Town session was saved in the wrong space.");
+    }
+
+    LocalState restored = {0};
+    ResetLocalState(&restored);
+    if (!InitializeOpenWorld(&sim, &restored, false)) {
+        return SessionStartupTestFailed(
+            session_path, "Town restore stream setup failed.");
+    }
+    ClientView view = VIEW_ROADS;
+    int32_t selected = -1;
+    if (!RestoreClientStartupSession(
+            session_path, &sim, &restored, &view, &selected) ||
+        view != VIEW_LOCAL || restored.open_world ||
+        restored.world_carriage.visible ||
+        restored.world_carriage.camera_weight != 0.0f ||
+        !SessionTestFloatMatches(
+            restored.agent.position.x, stored.position_x) ||
+        !SessionTestFloatMatches(
+            restored.agent.position.z, stored.position_z) ||
+        !SessionTestFloatMatches(
+            restored.agent.facing_yaw, stored.facing_yaw) ||
+        restored.agent.scene != CC_LOCAL_SCENE_STREET ||
+        restored.course.scene != CC_LOCAL_SCENE_STREET ||
+        restored.road_choice_active) {
+        return SessionStartupTestFailed(
+            session_path, "Town session left the authored town layout.");
+    }
+
+    FILE *legacy = fopen(session_path, "wb");
+    bool legacy_written = legacy != NULL &&
+        fprintf(legacy,
+                "CROWNLESS_SESSION 2\n%u %llu 0 18.5 14.25 0.35 2\n",
+                sim.world_seed,
+                (unsigned long long)sim.player.location_id) > 0;
+    if (legacy != NULL && fclose(legacy) != 0) legacy_written = false;
+    if (!legacy_written) {
+        return SessionStartupTestFailed(
+            session_path, "Legacy town session setup failed.");
+    }
+    LocalState legacy_restored = {0};
+    ResetLocalState(&legacy_restored);
+    if (!InitializeOpenWorld(&sim, &legacy_restored, false)) {
+        return SessionStartupTestFailed(
+            session_path, "Legacy town stream setup failed.");
+    }
+    const CcRoute *route = OpenWorldRouteFromSettlement(
+        &sim, sim.player.location_id);
+    if (route == NULL ||
+        !EnterOpenWorldAtRoadGate(&sim, &legacy_restored, route->id)) {
+        return SessionStartupTestFailed(
+            session_path, "Legacy town mode setup failed.");
+    }
+    view = VIEW_ROADS;
+    if (!RestoreClientStartupSession(
+            session_path, &sim, &legacy_restored, &view, &selected) ||
+        view != VIEW_LOCAL || legacy_restored.open_world ||
+        legacy_restored.world_carriage.visible ||
+        !SessionTestFloatMatches(
+            legacy_restored.agent.position.x, 18.5f) ||
+        !SessionTestFloatMatches(
+            legacy_restored.agent.position.z, 14.25f) ||
+        !SessionTestFloatMatches(
+            legacy_restored.agent.facing_yaw, 0.35f)) {
+        return SessionStartupTestFailed(
+            session_path, "Legacy session did not return to the authored town.");
+    }
+
+    CcLocalBindOpenWorld(NULL);
+    (void)remove(session_path);
+    (void)puts("Town session startup regression passed");
+    return 0;
+}
 #endif
 
 static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
@@ -6372,13 +6808,16 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             } else {
                 if (sim->journey.active) {
                     BeginRoadTravelState(sim, local);
+                    *view = VIEW_LOCAL;
                 } else {
-                    if (!RestoreLocalSession(session_path, sim, local) &&
-                        OpeningRequired(sim) && !local->open_world) {
-                        BeginOpening(local);
+                    if (!RestoreClientStartupSession(
+                            session_path, sim, local, view, selected)) {
+                        if (OpeningRequired(sim) && !local->open_world) {
+                            BeginOpening(local);
+                        }
+                        *view = VIEW_LOCAL;
                     }
                 }
-                *view = VIEW_LOCAL;
             }
         }
         return;
@@ -7438,6 +7877,14 @@ int main(int argc, char **argv)
         strcmp(argv[1], "--test-roadbook-arrival") == 0) {
         return RunRoadBookArrivalRegression();
     }
+    if (argc == 2 &&
+        strcmp(argv[1], "--test-world-session-startup") == 0) {
+        return RunWorldSessionStartupRegression();
+    }
+    if (argc == 2 &&
+        strcmp(argv[1], "--test-town-session-startup") == 0) {
+        return RunTownSessionStartupRegression();
+    }
 #endif
     bool screen_first_hero = true;
     for (int32_t argument = 1; argument < argc; ++argument) {
@@ -8186,13 +8633,16 @@ int main(int argc, char **argv)
             view = VIEW_LOCAL;
         }
     } else if (resuming_campaign && journal != NULL) {
-        if (RestoreLocalSession(session_path, &sim, &local)) {
+        if (RestoreClientStartupSession(
+                session_path, &sim, &local, &view, &selected)) {
             (void)snprintf(startup_message, sizeof(startup_message),
                            "Campaign resumed where you left off.");
-        } else if (OpeningRequired(&sim) && !local.open_world) {
-            BeginOpening(&local);
+        } else {
+            if (OpeningRequired(&sim) && !local.open_world) {
+                BeginOpening(&local);
+            }
+            view = VIEW_LOCAL;
         }
-        view = VIEW_LOCAL;
     }
     if (!capture && sim.dungeon_expedition.active) {
         local.site_kind = CC_LOCAL_SITE_DUNGEON;
