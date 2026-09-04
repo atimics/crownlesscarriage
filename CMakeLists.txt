@@ -1002,6 +1002,14 @@ if(BUILD_TESTING)
     cc_strict_warnings(persistence_tests)
     add_test(NAME sqlite_round_trip COMMAND persistence_tests)
 
+    add_executable(royal_carriage_trade_tests
+        tests/royal_carriage_trade_tests.c)
+    target_link_libraries(royal_carriage_trade_tests PRIVATE
+        crownless_persistence)
+    cc_strict_warnings(royal_carriage_trade_tests)
+    cc_large_sim_stack(royal_carriage_trade_tests)
+    add_test(NAME royal_carriage_trade COMMAND royal_carriage_trade_tests)
+
     add_executable(route_knowledge_tests tests/route_knowledge_tests.c)
     target_link_libraries(route_knowledge_tests PRIVATE
         crownless_persistence crownless_road_book crownless_world)

@@ -53,6 +53,11 @@ static void TravelAndArrive(CcSim *sim, CcId destination, char *error,
         .target_id = destination
     };
     CC_CHECK(CcSimApply(sim, &travel, error, error_capacity));
+    CcCommand careful = {
+        .kind = CC_COMMAND_SET_JOURNEY_PACE,
+        .amount = CC_JOURNEY_PACE_CAREFUL
+    };
+    CC_CHECK(CcSimApply(sim, &careful, error, error_capacity));
     AdvanceUntilStop(sim);
     CC_CHECK(!sim->journey.active);
 }

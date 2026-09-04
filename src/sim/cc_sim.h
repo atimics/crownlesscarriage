@@ -37,6 +37,8 @@
 #define CC_MAP_NAME_CAPACITY 48
 #define CC_EVENT_TEXT_CAPACITY 144
 #define CC_CARGO_CAPACITY 12
+#define CC_ROYAL_TRADE_SUPPORT_FLOOR 35
+#define CC_ROYAL_CARRIAGE_CARGO_SLOTS CC_CARGO_CAPACITY
 #define CC_MAP_CAPACITY 3
 #define CC_MAP_COLLECTION_COUNT 13
 #define CC_SIM_MAX_DAY INT32_C(2147000000)
@@ -47,7 +49,10 @@
 #define CC_CROWNLESS_ATLAS_MAP_NAME "The Crownless Atlas"
 #define CC_DRAGON_HOARD_MAP_NAME "The Hoard Vault of Varkesh"
 
-#define CC_SIM_SCHEMA_VERSION 37
+/* Save and journal compatibility contract: every schema/generator version
+   listed in the legacy tables in cc_sim.c remains loadable. Bump these only
+   with matching migration branches and persistence_tests coverage. */
+#define CC_SIM_SCHEMA_VERSION 38
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
 #define CC_WORLD_MINUTE_SUBTICKS 60
@@ -82,7 +87,8 @@ typedef enum CcEntityKind {
     CC_ENTITY_CHARACTER = 19,
     CC_ENTITY_FRONT = 20,
     CC_ENTITY_QUEST_OUTCOME = 21,
-    CC_ENTITY_ROAD_SITE = 22
+    CC_ENTITY_ROAD_SITE = 22,
+    CC_ENTITY_ROYAL_CARRIAGE = 23
 } CcEntityKind;
 
 typedef enum CcGood {
@@ -316,7 +322,9 @@ typedef enum CcEventKind {
     CC_EVENT_MONASTIC_SUCCESSION = 126,
     CC_EVENT_ROYAL_SUCCESSION = 127,
     CC_EVENT_DRAGON_PATRON_NAMED = 128,
-    CC_EVENT_DRAGON_TERRITORY_LOST = 129
+    CC_EVENT_DRAGON_TERRITORY_LOST = 129,
+    CC_EVENT_ROYAL_CARRIAGE_BLOCKED = 130,
+    CC_EVENT_ROYAL_CARRIAGE_REROUTED = 131
 } CcEventKind;
 
 typedef struct CcArchives {
@@ -634,7 +642,8 @@ typedef enum CcShipmentStatus {
     CC_SHIPMENT_UNUSED,
     CC_SHIPMENT_TRAVELLING,
     CC_SHIPMENT_ARRIVED,
-    CC_SHIPMENT_LOST
+    CC_SHIPMENT_LOST,
+    CC_SHIPMENT_BLOCKED
 } CcShipmentStatus;
 
 typedef struct CcShipment {
@@ -649,6 +658,32 @@ typedef struct CcShipment {
     int32_t arrival_day;
     CcShipmentStatus status;
 } CcShipment;
+
+typedef enum CcRoyalCarriageMode {
+    CC_ROYAL_CARRIAGE_IDLE = 0,
+    CC_ROYAL_CARRIAGE_REPOSITIONING,
+    CC_ROYAL_CARRIAGE_DELIVERING,
+    CC_ROYAL_CARRIAGE_BLOCKED,
+    CC_ROYAL_CARRIAGE_WAITING_CAPACITY
+} CcRoyalCarriageMode;
+
+typedef struct CcRoyalCarriage {
+    CcId id;
+    CcId kingdom_id;
+    CcId location_id;
+    CcId route_id;
+    CcId destination_id;
+    CcId target_id;
+    CcId active_shipment_id;
+    CcRoyalCarriageMode mode;
+    int32_t departure_day;
+    int32_t arrival_day;
+    int32_t blocked_since_day;
+    int32_t next_dispatch_day;
+    int32_t condition;
+    int32_t trips_completed;
+    int32_t cargo_losses;
+} CcRoyalCarriage;
 
 typedef enum CcCourierKind {
     CC_COURIER_WAR_DECLARATION,
@@ -1433,6 +1468,9 @@ typedef struct CcSim {
     CcTreasure treasures[CC_MAX_TREASURES];
     CcFaction factions[CC_MAX_FACTIONS];
     CcShipment shipments[CC_MAX_SHIPMENTS];
+    CcRoyalCarriage royal_carriages[CC_MAX_KINGDOMS];
+    int32_t royal_trade_week;
+    int32_t royal_route_slots_used[CC_MAX_ROUTES];
     CcCourier couriers[CC_MAX_COURIERS];
     CcBanditGroup bandits[CC_MAX_BANDITS];
     CcGoblinCult goblins;
@@ -1470,6 +1508,7 @@ typedef struct CcSim {
     int32_t treasure_count;
     int32_t faction_count;
     int32_t shipment_count;
+    int32_t royal_carriage_count;
     int32_t bandit_count;
     int32_t monster_count;
     int32_t dungeon_count;
@@ -1501,6 +1540,7 @@ void CcSimInitializeRoadSites(CcSim *sim);
 void CcSimUpgradeFlockEconomy(CcSim *sim);
 void CcSimInitializePaperEconomy(CcSim *sim);
 void CcSimInitializeMaterialChain(CcSim *sim);
+void CcSimInitializeRoyalCarriages(CcSim *sim);
 void CcSimInitializeHorseStableSystem(CcSim *sim);
 void CcSimInitializeCharacters(CcSim *sim);
 void CcSimUpgradeCharacterLifecycles(CcSim *sim);
@@ -1560,6 +1600,7 @@ const char *CcSettlementFunctionName(CcSettlementFunction function);
 const char *CcSettlementSizeName(CcSettlementSize size);
 const char *CcServiceName(CcServiceKind service);
 const char *CcFactionKindName(CcFactionKind kind);
+const char *CcRoyalCarriageModeName(CcRoyalCarriageMode mode);
 const char *CcKingdomCallingName(CcKingdomCalling calling);
 const char *CcBanditCampSizeName(CcBanditCampSize size);
 const char *CcBanditRaidPhaseName(CcBanditRaidPhase phase);
@@ -1681,6 +1722,11 @@ bool CcSimStartServiceProject(CcSim *sim, CcId settlement_id,
                               char *error, size_t error_capacity);
 bool CcSimKingdomsAtWar(const CcSim *sim, CcId first, CcId second);
 bool CcSimKingdomsAllied(const CcSim *sim, CcId first, CcId second);
+const CcRoyalCarriage *CcSimRoyalCarriage(const CcSim *sim,
+                                          CcId kingdom_id);
+bool CcSimRoyalCarriageCanUseRoute(const CcSim *sim,
+                                   CcId carriage_kingdom_id,
+                                   CcId route_id);
 CcKingdomCalling CcSimKingdomCalling(const CcSim *sim, CcId kingdom_id);
 int32_t CcSimKingdomPressure(const CcSim *sim, CcId kingdom_id);
 const char *CcDiplomaticStateName(CcDiplomaticState state);

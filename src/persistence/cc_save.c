@@ -9,7 +9,7 @@
 #include <string.h>
 
 #define CC_SQLITE_APPLICATION_ID 1128481362
-#define CC_SQLITE_USER_VERSION 25
+#define CC_SQLITE_USER_VERSION 26
 #define CC_JOURNAL_RECORD_VERSION 1
 #define CC_JOURNAL_RUNTIME_FLUSH_TICKS 6
 #define CC_JOURNAL_MAX_DAY_ADVANCE 3650
@@ -942,6 +942,21 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " food_cargo INTEGER NOT NULL, material_cargo INTEGER NOT NULL, tools_cargo INTEGER NOT NULL,"
         " cargo_capacity INTEGER NOT NULL, passenger_capacity INTEGER NOT NULL,"
         " reputation INTEGER NOT NULL);";
+    const char *royal_carriage_schema =
+        "CREATE TABLE IF NOT EXISTS royal_carriage ("
+        " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL UNIQUE,"
+        " kingdom_id INTEGER NOT NULL UNIQUE, location_id INTEGER NOT NULL,"
+        " route_id INTEGER NOT NULL, destination_id INTEGER NOT NULL,"
+        " target_id INTEGER NOT NULL, active_shipment_id INTEGER NOT NULL,"
+        " mode INTEGER NOT NULL, departure_day INTEGER NOT NULL,"
+        " arrival_day INTEGER NOT NULL, blocked_since_day INTEGER NOT NULL,"
+        " next_dispatch_day INTEGER NOT NULL,"
+        " condition INTEGER NOT NULL, trips_completed INTEGER NOT NULL,"
+        " cargo_losses INTEGER NOT NULL);";
+    const char *royal_route_usage_schema =
+        "CREATE TABLE IF NOT EXISTS royal_route_usage ("
+        " slot INTEGER PRIMARY KEY, route_id INTEGER NOT NULL UNIQUE,"
+        " trade_week INTEGER NOT NULL, slots_used INTEGER NOT NULL);";
     const char *kingdom_schema =
         "CREATE TABLE IF NOT EXISTS kingdom ("
         " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL UNIQUE, name TEXT NOT NULL,"
@@ -1330,6 +1345,9 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " condition INTEGER NOT NULL, blocker INTEGER NOT NULL,"
         " accessible INTEGER NOT NULL);";
     return Execute(database, schema, error, error_capacity) &&
+           Execute(database, royal_carriage_schema, error, error_capacity) &&
+           Execute(database, royal_route_usage_schema,
+                   error, error_capacity) &&
            Execute(database, kingdom_schema, error, error_capacity) &&
            Execute(database, realm_schema, error, error_capacity) &&
            Execute(database, situation_schema, error, error_capacity) &&
@@ -1988,6 +2006,65 @@ static bool SaveShipments(sqlite3 *database, const CcSim *sim,
         if (!StepDone(database, statement, error, error_capacity) ||
             !ResetStatement(database, statement, error, error_capacity)) {
             sqlite3_finalize(statement); return false;
+        }
+    }
+    sqlite3_finalize(statement);
+    return true;
+}
+
+static bool SaveRoyalCarriages(sqlite3 *database, const CcSim *sim,
+                               char *error, size_t error_capacity)
+{
+    if (sim->schema_version < 38U) return true;
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database,
+                 "INSERT INTO royal_carriage VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
+                 &statement, error, error_capacity)) return false;
+    for (int32_t i = 0; i < sim->royal_carriage_count; ++i) {
+        const CcRoyalCarriage *carriage = &sim->royal_carriages[i];
+        BindInt(statement, 1, i);
+        BindId(statement, 2, carriage->id);
+        BindId(statement, 3, carriage->kingdom_id);
+        BindId(statement, 4, carriage->location_id);
+        BindId(statement, 5, carriage->route_id);
+        BindId(statement, 6, carriage->destination_id);
+        BindId(statement, 7, carriage->target_id);
+        BindId(statement, 8, carriage->active_shipment_id);
+        BindInt(statement, 9, (int32_t)carriage->mode);
+        BindInt(statement, 10, carriage->departure_day);
+        BindInt(statement, 11, carriage->arrival_day);
+        BindInt(statement, 12, carriage->blocked_since_day);
+        BindInt(statement, 13, carriage->next_dispatch_day);
+        BindInt(statement, 14, carriage->condition);
+        BindInt(statement, 15, carriage->trips_completed);
+        BindInt(statement, 16, carriage->cargo_losses);
+        if (!StepDone(database, statement, error, error_capacity) ||
+            !ResetStatement(database, statement, error, error_capacity)) {
+            sqlite3_finalize(statement);
+            return false;
+        }
+    }
+    sqlite3_finalize(statement);
+    return true;
+}
+
+static bool SaveRoyalRouteUsage(sqlite3 *database, const CcSim *sim,
+                                char *error, size_t error_capacity)
+{
+    if (sim->schema_version < 38U) return true;
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database,
+                 "INSERT INTO royal_route_usage VALUES(?,?,?,?);",
+                 &statement, error, error_capacity)) return false;
+    for (int32_t i = 0; i < sim->route_count; ++i) {
+        BindInt(statement, 1, i);
+        BindId(statement, 2, sim->routes[i].id);
+        BindInt(statement, 3, sim->royal_trade_week);
+        BindInt(statement, 4, sim->royal_route_slots_used[i]);
+        if (!StepDone(database, statement, error, error_capacity) ||
+            !ResetStatement(database, statement, error, error_capacity)) {
+            sqlite3_finalize(statement);
+            return false;
         }
     }
     sqlite3_finalize(statement);
@@ -2874,6 +2951,8 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
             "DELETE FROM player_settlement_knowledge;"
             "DELETE FROM player_site_knowledge;"
             "DELETE FROM faction; DELETE FROM shipment;"
+            "DELETE FROM royal_carriage;"
+            "DELETE FROM royal_route_usage;"
             "DELETE FROM shipment_intent; DELETE FROM diplomacy; DELETE FROM courier;"
             "DELETE FROM bandit_group; DELETE FROM monster_population;"
             "DELETE FROM goblin_cult; DELETE FROM dragon_state;"
@@ -2916,6 +2995,8 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
                                       error, error_capacity) &&
         SaveFactions(database, sim, error, error_capacity) &&
         SaveShipments(database, sim, error, error_capacity) &&
+        SaveRoyalCarriages(database, sim, error, error_capacity) &&
+        SaveRoyalRouteUsage(database, sim, error, error_capacity) &&
         SaveDiplomacyAndCouriers(database, sim, error, error_capacity) &&
         SaveThreats(database, sim, error, error_capacity) &&
         SaveDungeons(database, sim, error, error_capacity) &&
@@ -3913,6 +3994,98 @@ static bool ReadShipments(sqlite3 *database, CcSim *sim,
     sqlite3_finalize(statement);
     if (intents != sim->shipment_count) {
         SetError(error, error_capacity, "Shipment intent rows are incomplete.");
+        return false;
+    }
+    return true;
+}
+
+static bool ReadRoyalCarriages(sqlite3 *database, CcSim *sim,
+                               char *error, size_t error_capacity)
+{
+    sim->royal_carriage_count = 0;
+    if (sim->schema_version < 38U) return true;
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database,
+                 "SELECT slot,id,kingdom_id,location_id,route_id,destination_id,"
+                 "target_id,active_shipment_id,mode,departure_day,arrival_day,"
+                 "blocked_since_day,next_dispatch_day,condition,trips_completed,"
+                 "cargo_losses "
+                 "FROM royal_carriage ORDER BY slot;",
+                 &statement, error, error_capacity)) return false;
+    int32_t rows = 0;
+    while (sqlite3_step(statement) == SQLITE_ROW) {
+        int32_t slot = sqlite3_column_int(statement, 0);
+        if (slot != rows || slot < 0 || slot >= CC_MAX_KINGDOMS) {
+            sqlite3_finalize(statement);
+            SetError(error, error_capacity,
+                     "Royal carriage rows are invalid.");
+            return false;
+        }
+        CcRoyalCarriage *carriage = &sim->royal_carriages[slot];
+        carriage->id = (CcId)sqlite3_column_int64(statement, 1);
+        carriage->kingdom_id = (CcId)sqlite3_column_int64(statement, 2);
+        carriage->location_id = (CcId)sqlite3_column_int64(statement, 3);
+        carriage->route_id = (CcId)sqlite3_column_int64(statement, 4);
+        carriage->destination_id = (CcId)sqlite3_column_int64(statement, 5);
+        carriage->target_id = (CcId)sqlite3_column_int64(statement, 6);
+        carriage->active_shipment_id =
+            (CcId)sqlite3_column_int64(statement, 7);
+        carriage->mode =
+            (CcRoyalCarriageMode)sqlite3_column_int(statement, 8);
+        carriage->departure_day = sqlite3_column_int(statement, 9);
+        carriage->arrival_day = sqlite3_column_int(statement, 10);
+        carriage->blocked_since_day = sqlite3_column_int(statement, 11);
+        carriage->next_dispatch_day = sqlite3_column_int(statement, 12);
+        carriage->condition = sqlite3_column_int(statement, 13);
+        carriage->trips_completed = sqlite3_column_int(statement, 14);
+        carriage->cargo_losses = sqlite3_column_int(statement, 15);
+        rows += 1;
+    }
+    sqlite3_finalize(statement);
+    sim->royal_carriage_count = rows;
+    if (rows != sim->kingdom_count) {
+        SetError(error, error_capacity,
+                 "Royal carriage rows are incomplete.");
+        return false;
+    }
+    return true;
+}
+
+static bool ReadRoyalRouteUsage(sqlite3 *database, CcSim *sim,
+                                char *error, size_t error_capacity)
+{
+    sim->royal_trade_week = sim->current_day / 7;
+    for (int32_t i = 0; i < CC_MAX_ROUTES; ++i) {
+        sim->royal_route_slots_used[i] = 0;
+    }
+    if (sim->schema_version < 38U) return true;
+    sqlite3_stmt *statement = NULL;
+    if (!Prepare(database,
+                 "SELECT slot,route_id,trade_week,slots_used "
+                 "FROM royal_route_usage ORDER BY slot;",
+                 &statement, error, error_capacity)) return false;
+    int32_t rows = 0;
+    while (sqlite3_step(statement) == SQLITE_ROW) {
+        int32_t slot = sqlite3_column_int(statement, 0);
+        CcId route_id = (CcId)sqlite3_column_int64(statement, 1);
+        int32_t trade_week = sqlite3_column_int(statement, 2);
+        if (slot != rows || slot < 0 || slot >= sim->route_count ||
+            route_id != sim->routes[slot].id ||
+            (rows > 0 && trade_week != sim->royal_trade_week)) {
+            sqlite3_finalize(statement);
+            SetError(error, error_capacity,
+                     "Royal route usage rows are invalid.");
+            return false;
+        }
+        sim->royal_trade_week = trade_week;
+        sim->royal_route_slots_used[slot] =
+            sqlite3_column_int(statement, 3);
+        rows += 1;
+    }
+    sqlite3_finalize(statement);
+    if (rows != sim->route_count) {
+        SetError(error, error_capacity,
+                 "Royal route usage rows are incomplete.");
         return false;
     }
     return true;
@@ -5372,6 +5545,7 @@ static void FinishMaterialChainUpgrade(CcSim *sim)
     CcSimInitializeMaterialChain(sim);
     CcSimUpgradeHistoryOffices(sim);
     CcSimUpgradeArchivePhysicalLore(sim);
+    CcSimInitializeRoyalCarriages(sim);
     sim->schema_version = CC_SIM_SCHEMA_VERSION;
     sim->generator_version = CC_GENERATOR_VERSION;
 }
@@ -5409,7 +5583,9 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
                                  char *error, size_t error_capacity)
 {
     uint32_t legacy_version = sim->schema_version;
-    if (legacy_version == 36U && sim->generator_version == 25U) {
+    if ((legacy_version == 36U || legacy_version == 37U) &&
+        sim->generator_version == 25U) {
+        CcSimInitializeRoyalCarriages(sim);
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         return true;
     }
@@ -5418,6 +5594,7 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
     if (legacy_version == 35U && sim->generator_version == 25U) {
         CcSimUpgradeHistoryOffices(sim);
         CcSimUpgradeArchivePhysicalLore(sim);
+        CcSimInitializeRoyalCarriages(sim);
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         sim->generator_version = CC_GENERATOR_VERSION;
         return true;
@@ -5425,6 +5602,7 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
     if (legacy_version == 34U && sim->generator_version == 25U) {
         CcSimUpgradeHistoryOffices(sim);
         CcSimUpgradeArchivePhysicalLore(sim);
+        CcSimInitializeRoyalCarriages(sim);
         sim->schema_version = CC_SIM_SCHEMA_VERSION;
         sim->generator_version = CC_GENERATOR_VERSION;
         return true;
@@ -5891,6 +6069,8 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
               ReadMaps(database, sim, error, error_capacity) &&
               ReadFactions(database, sim, error, error_capacity) &&
               ReadShipments(database, sim, error, error_capacity) &&
+              ReadRoyalCarriages(database, sim, error, error_capacity) &&
+              ReadRoyalRouteUsage(database, sim, error, error_capacity) &&
               ReadThreats(database, sim, error, error_capacity) &&
               ReadDungeons(database, sim, error, error_capacity) &&
               ReadUnderroad(database, sim, error, error_capacity) &&

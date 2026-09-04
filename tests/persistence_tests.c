@@ -526,7 +526,7 @@ static void CheckLegacyJournalMigration(char *error,
              legacy_generation);
     CC_CHECK(ReadSqliteInteger(
                  path, "SELECT journal_cursor FROM meta WHERE id=1;") == 0);
-    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 25);
+    CC_CHECK(ReadSqliteInteger(path, "PRAGMA user_version;") == 26);
     CC_CHECK(CcJournalAdvanceDays(journal, &resumed, 2,
                                   error, error_capacity));
     uint64_t expected_hash = CcSimHash(&resumed);
@@ -2378,13 +2378,21 @@ static void CheckWoodPaperJournalMigration(char *error,
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
     CC_CHECK(restored.current_day == 7);
     CC_CHECK(restored.settlements[1].stock[CC_GOOD_WHEAT] == 98);
-    CC_CHECK(restored.settlements[1].stock[CC_GOOD_WOOD] == 0);
+    /* The replay produces 22 wood in transit. Migration completes this
+       extra load because the Crown carriage already holds its food load. */
+    CC_CHECK(restored.settlements[1].stock[CC_GOOD_WOOD] == 22);
+    CC_CHECK(restored.shipments[1].good == CC_GOOD_WOOD);
+    CC_CHECK(restored.shipments[1].quantity == 22);
+    CC_CHECK(restored.shipments[1].status == CC_SHIPMENT_ARRIVED);
     CC_CHECK(restored.settlements[1].stock[CC_GOOD_PAPER] == 8);
     CC_CHECK(CcSimValidate(&restored, error, error_capacity));
 
     /* Captured with main 9ab3a56 before changing the paper recipe. */
     CcSim legacy_view = restored;
     legacy_view.schema_version = 36U;
+    legacy_view.next_entity_serial -= (uint64_t)restored.kingdom_count;
+    legacy_view.settlements[1].stock[CC_GOOD_WOOD] -= 22;
+    legacy_view.shipments[1].status = CC_SHIPMENT_TRAVELLING;
     CC_CHECK(CcSimHash(&legacy_view) == UINT64_C(0x8e390ecaf46cc546));
     CC_CHECK(ReadSqliteInteger(
         fixture, "SELECT schema_version FROM meta WHERE id=1;") == 36);
@@ -2467,7 +2475,8 @@ static void CheckLegacyLifecycleJournalCompatibility(
     CC_CHECK(restored.generator_version == CC_GENERATOR_VERSION);
     CC_CHECK(restored.current_day == suffix.current_day);
     CC_CHECK(restored.characters[0].id == first_character_id);
-    CC_CHECK(restored.next_entity_serial == first_unused_serial);
+    CC_CHECK(restored.next_entity_serial ==
+             first_unused_serial + (uint64_t)restored.kingdom_count);
     CC_CHECK(restored.character_births == 0);
     CC_CHECK(restored.character_deaths == 0);
     for (int32_t i = 0; i < restored.character_count; ++i) {
