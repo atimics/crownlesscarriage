@@ -1060,6 +1060,80 @@ static float SessionPointSegmentDistanceSquared(
     return offset_x * offset_x + offset_z * offset_z;
 }
 
+static CcWorldPoint LegacyVersionThreeRoutePoint(
+    CcWorldPoint first, CcWorldPoint control, CcWorldPoint last,
+    float amount)
+{
+    amount = ClampUnit(amount);
+    float inverse = 1.0f - amount;
+    return (CcWorldPoint){
+        inverse * inverse * first.x +
+            2.0f * inverse * amount * control.x +
+            amount * amount * last.x,
+        inverse * inverse * first.z +
+            2.0f * inverse * amount * control.z +
+            amount * amount * last.z,
+    };
+}
+
+static bool LegacyVersionThreeRoadGatePosition(
+    const CcWorldManifest *manifest,
+    const CcWorldRoutePlacement *route, CcId settlement_id,
+    CcWorldPoint *position)
+{
+    if (manifest == NULL || route == NULL || position == NULL ||
+        (route->from_id != settlement_id &&
+         route->to_id != settlement_id)) {
+        return false;
+    }
+    const CcWorldSettlementPlacement *from =
+        CcWorldSettlementPlacementForId(manifest, route->from_id);
+    const CcWorldSettlementPlacement *to =
+        CcWorldSettlementPlacementForId(manifest, route->to_id);
+    const CcWorldSettlementPlacement *origin =
+        CcWorldSettlementPlacementForId(manifest, settlement_id);
+    if (from == NULL || to == NULL || origin == NULL) return false;
+
+    float dx = to->center.x - from->center.x;
+    float dz = to->center.z - from->center.z;
+    float direct_length = sqrtf(dx * dx + dz * dz);
+    if (direct_length <= 0.001f) return false;
+    float bend_value =
+        (float)(route->seed & UINT32_C(0x00ffffff)) /
+            (float)UINT32_C(0x00ffffff) * 2.0f - 1.0f;
+    float bend = bend_value * fminf(32.0f, direct_length * 0.14f);
+    CcWorldPoint control = {
+        (from->center.x + to->center.x) * 0.5f -
+            dz / direct_length * bend,
+        (from->center.z + to->center.z) * 0.5f +
+            dx / direct_length * bend,
+    };
+    float route_length = 0.0f;
+    CcWorldPoint previous = from->center;
+    const int32_t legacy_sample_count = 17;
+    for (int32_t sample = 1;
+         sample < legacy_sample_count; ++sample) {
+        float sample_amount = (float)sample /
+            (float)(legacy_sample_count - 1);
+        CcWorldPoint current = LegacyVersionThreeRoutePoint(
+            from->center, control, to->center, sample_amount);
+        float segment_x = current.x - previous.x;
+        float segment_z = current.z - previous.z;
+        route_length += sqrtf(
+            segment_x * segment_x + segment_z * segment_z);
+        previous = current;
+    }
+    if (route_length <= 0.001f) return false;
+
+    float journey_amount = fminf(
+        0.22f, ClampUnit((origin->radius + 5.0f) / route_length));
+    bool reverse = route->to_id == settlement_id;
+    float route_amount = reverse ? 1.0f - journey_amount : journey_amount;
+    *position = LegacyVersionThreeRoutePoint(
+        from->center, control, to->center, route_amount);
+    return true;
+}
+
 static bool WorldSessionRouteScore(
     const CcWorldRoutePlacement *route, CcId settlement_id,
     CcWorldPoint position, float facing_yaw,
@@ -1149,6 +1223,62 @@ static const CcRoute *InferWorldSessionRoute(
         }
     }
     return best_distance <= 49.0f ? best_route : NULL;
+}
+
+static bool LegacyVersionThreeGateRestorePose(
+    const CcSim *sim, const CcWorldManifest *manifest,
+    const CcClientSession *session, const CcRoute **route,
+    CcWorldPoint *position, float *heading_yaw)
+{
+    if (sim == NULL || manifest == NULL || session == NULL ||
+        session->coordinate_space != CC_CLIENT_SESSION_WORLD ||
+        session->route_id != 0U || route == NULL ||
+        position == NULL || heading_yaw == NULL) {
+        return false;
+    }
+    CcWorldPoint saved = {session->position_x, session->position_z};
+    const CcRoute *matched_route = NULL;
+    for (int32_t i = 0; i < sim->route_count; ++i) {
+        const CcRoute *candidate = &sim->routes[i];
+        if (candidate->from_id != session->location_id &&
+            candidate->to_id != session->location_id) {
+            continue;
+        }
+        const CcWorldRoutePlacement *candidate_placement =
+            CcWorldRoutePlacementForId(manifest, candidate->id);
+        CcWorldPoint legacy_gate;
+        if (!LegacyVersionThreeRoadGatePosition(
+                manifest, candidate_placement, session->location_id,
+                &legacy_gate)) {
+            continue;
+        }
+        float dx = saved.x - legacy_gate.x;
+        float dz = saved.z - legacy_gate.z;
+        if (dx * dx + dz * dz <= 0.01f) {
+            matched_route = candidate;
+            break;
+        }
+    }
+    if (matched_route == NULL) return false;
+
+    const CcWorldRoutePlacement *matched_placement =
+        CcWorldRoutePlacementForId(manifest, matched_route->id);
+    if (matched_placement == NULL) return false;
+    bool forward = matched_route->from_id == session->location_id;
+    int32_t junction_sample = forward ?
+        CC_WORLD_ROUTE_FROM_JUNCTION_SAMPLE :
+        CC_WORLD_ROUTE_TO_JUNCTION_SAMPLE;
+    float junction_route_amount = CcWorldRouteSampleAmount(
+        matched_placement, junction_sample);
+    float junction_journey_amount = forward ?
+        junction_route_amount : 1.0f - junction_route_amount;
+    if (!CcWorldRoutePose(matched_placement, session->location_id,
+                          junction_journey_amount,
+                          position, heading_yaw)) {
+        return false;
+    }
+    *route = matched_route;
+    return true;
 }
 
 static bool SetOpenWorldCarriageOnRoute(
@@ -1580,23 +1710,36 @@ static bool SaveLocalSession(const char *path, const CcSim *sim,
 static bool WorldStreamCanRestoreSession(
     const CcSim *sim, const LocalState *local,
     const CcClientSession *session, const CcRoute **route,
-    float *route_amount)
+    CcWorldPoint *position, float *facing_yaw, float *route_amount)
 {
+    const CcWorldSettlementPlacement *settlement =
+        sim != NULL && local != NULL && session != NULL ?
+            CcWorldSettlementPlacementForId(
+                &local->world_stream.manifest, session->location_id) : NULL;
     if (sim == NULL || local == NULL || session == NULL ||
         local->world_stream.manifest.world_seed != sim->world_seed ||
         local->world_stream.manifest.generator_version !=
             sim->generator_version ||
-        CcWorldSettlementPlacementForId(
-            &local->world_stream.manifest, session->location_id) == NULL ||
+        settlement == NULL ||
         !CcWorldManifestContains(&local->world_stream.manifest,
                                  session->position_x,
                                  session->position_z)) {
         return false;
     }
-    const CcRoute *restored_route = session->route_id != 0U ?
-        CcSimRoute(sim, session->route_id) :
-        InferWorldSessionRoute(
-            sim, &local->world_stream.manifest, session);
+    CcWorldPoint restored_position = {
+        session->position_x, session->position_z
+    };
+    float restored_facing_yaw = session->facing_yaw;
+    const CcRoute *restored_route = NULL;
+    bool migrated_legacy_gate = LegacyVersionThreeGateRestorePose(
+        sim, &local->world_stream.manifest, session,
+        &restored_route, &restored_position, &restored_facing_yaw);
+    if (!migrated_legacy_gate) {
+        restored_route = session->route_id != 0U ?
+            CcSimRoute(sim, session->route_id) :
+            InferWorldSessionRoute(
+                sim, &local->world_stream.manifest, session);
+    }
     if (restored_route == NULL ||
         (restored_route->from_id != session->location_id &&
          restored_route->to_id != session->location_id) ||
@@ -1610,14 +1753,15 @@ static bool WorldStreamCanRestoreSession(
     float heading_distance = INFINITY;
     float restored_route_amount = 0.0f;
     if (!WorldSessionRouteScore(
-            placement, session->location_id,
-            (CcWorldPoint){session->position_x, session->position_z},
-            session->facing_yaw, &road_distance_squared,
+            placement, session->location_id, restored_position,
+            restored_facing_yaw, &road_distance_squared,
             &heading_distance, &restored_route_amount) ||
         road_distance_squared > 49.0f) {
         return false;
     }
     if (route != NULL) *route = restored_route;
+    if (position != NULL) *position = restored_position;
+    if (facing_yaw != NULL) *facing_yaw = restored_facing_yaw;
     if (route_amount != NULL) *route_amount = restored_route_amount;
     return true;
 }
@@ -1626,9 +1770,12 @@ static bool RestoreWorldSession(const CcSim *sim, LocalState *local,
                                 const CcClientSession *session)
 {
     const CcRoute *route = NULL;
+    CcWorldPoint position = {0};
+    float facing_yaw = 0.0f;
     float route_amount = 0.0f;
     if (!WorldStreamCanRestoreSession(
-            sim, local, session, &route, &route_amount)) {
+            sim, local, session, &route, &position,
+            &facing_yaw, &route_amount)) {
         return false;
     }
 
@@ -1638,14 +1785,14 @@ static bool RestoreWorldSession(const CcSim *sim, LocalState *local,
     local->open_world = true;
     BindOpenWorldForLocalState(local);
     CcWorldStreamUpdate(&local->world_stream,
-                        session->position_x, session->position_z,
+                        position.x, position.z,
                         CC_WORLD_STREAM_CAPACITY);
     RepositionHero(local,
-                   (Vector2){session->position_x, session->position_z}, false);
+                   (Vector2){position.x, position.z}, false);
     CcLocalAgentSetScene(&local->agent, CC_LOCAL_SCENE_STREET);
     local->course.scene = CC_LOCAL_SCENE_STREET;
     local->course.alarm_countdown = 1000.0f;
-    local->agent.facing_yaw = session->facing_yaw;
+    local->agent.facing_yaw = facing_yaw;
     local->opening_step = CC_LOCAL_OPENING_COMPLETE;
     local->road_choice_active = true;
     local->fork_turn_progress = 1.0f;
@@ -1659,7 +1806,7 @@ static bool RestoreWorldSession(const CcSim *sim, LocalState *local,
     local->convoy.pace = 0.0f;
     local->world_carriage = (CcLocalWorldCarriageState){
         .position = local->agent.position,
-        .heading_yaw = session->facing_yaw,
+        .heading_yaw = facing_yaw,
         .route_amount = route_amount,
         .pace = 0.0f,
         .camera_weight = 1.0f,
@@ -6523,6 +6670,57 @@ static int RunWorldSessionStartupRegression(void)
             shared_gate_restore.agent.position.z, branch_place->gate.z)) {
         return SessionStartupTestFailed(
             session_path, "Version 3 gate heading chose the wrong branch.");
+    }
+
+    const CcWorldPoint legacy_gate_position = {
+        264.23111f, 275.641754f
+    };
+    const float legacy_gate_heading = 2.15923429f;
+    CcWorldPoint migrated_gate_position;
+    float migrated_gate_heading = 0.0f;
+    if (route->id != UINT64_C(216172782113783819) ||
+        !CcWorldRoutePose(
+            route_placement, sim.player.location_id,
+            junction_journey_amount,
+            &migrated_gate_position, &migrated_gate_heading) ||
+        !SessionTestFloatMatches(
+            migrated_gate_position.x, branch_place->junction.x) ||
+        !SessionTestFloatMatches(
+            migrated_gate_position.z, branch_place->junction.z) ||
+        !WriteVersionThreeWorldSession(
+            session_path, &sim, legacy_gate_position,
+            legacy_gate_heading)) {
+        return SessionStartupTestFailed(
+            session_path, "Legacy version 3 gate setup failed.");
+    }
+    LocalState legacy_gate_restore = {0};
+    ResetLocalState(&legacy_gate_restore);
+    if (!InitializeOpenWorld(&sim, &legacy_gate_restore, false)) {
+        return SessionStartupTestFailed(
+            session_path, "Legacy version 3 stream setup failed.");
+    }
+    view = VIEW_LOCAL;
+    int32_t legacy_gate_selected = -1;
+    if (!RestoreClientStartupSession(
+            session_path, &sim, &legacy_gate_restore, &view,
+            &legacy_gate_selected) ||
+        view != VIEW_ROADS || !legacy_gate_restore.open_world ||
+        legacy_gate_restore.world_carriage.route_id != route->id ||
+        !SessionTestFloatMatches(
+            legacy_gate_restore.world_carriage.route_amount,
+            junction_route_amount) ||
+        legacy_gate_selected != route_index ||
+        !SessionTestFloatMatches(
+            legacy_gate_restore.agent.position.x,
+            migrated_gate_position.x) ||
+        !SessionTestFloatMatches(
+            legacy_gate_restore.agent.position.z,
+            migrated_gate_position.z) ||
+        !SessionTestFloatMatches(
+            legacy_gate_restore.agent.facing_yaw,
+            migrated_gate_heading)) {
+        return SessionStartupTestFailed(
+            session_path, "Legacy version 3 gate did not migrate.");
     }
 
     if (!WriteVersionThreeWorldSession(
