@@ -2762,6 +2762,92 @@ static void TreeBatchMeshAppendModelVertex(
         writer, point, normal, TreeBatchTint(source_color, tint));
 }
 
+#define CC_TREE_BATCH_SOURCE_VERTEX_LIMIT 512
+
+static bool TreeBatchMeshSourceVertexEqual(const Mesh *mesh,
+                                           int32_t left, int32_t right)
+{
+    for (int32_t component = 0; component < 3; ++component) {
+        if (mesh->vertices[left * 3 + component] !=
+                mesh->vertices[right * 3 + component] ||
+            mesh->normals[left * 3 + component] !=
+                mesh->normals[right * 3 + component]) {
+            return false;
+        }
+    }
+    if (mesh->colors == NULL) return true;
+    for (int32_t component = 0; component < 4; ++component) {
+        if (mesh->colors[left * 4 + component] !=
+            mesh->colors[right * 4 + component]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static int32_t TreeBatchMeshUniqueVertexCount(const Mesh *mesh)
+{
+    if (mesh->indices != NULL ||
+        mesh->vertexCount > CC_TREE_BATCH_SOURCE_VERTEX_LIMIT) {
+        return mesh->vertexCount;
+    }
+    int32_t unique_count = 0;
+    for (int32_t source = 0; source < mesh->vertexCount; ++source) {
+        bool duplicate = false;
+        for (int32_t prior = 0; prior < source; ++prior) {
+            if (TreeBatchMeshSourceVertexEqual(mesh, source, prior)) {
+                duplicate = true;
+                break;
+            }
+        }
+        if (!duplicate) unique_count += 1;
+    }
+    return unique_count;
+}
+
+static void TreeBatchMeshAppendIndexedModel(
+    TreeBatchMeshWriter *writer, const Mesh *mesh, Vector3 center,
+    Vector3 scale, float turn, Color tint)
+{
+    int32_t base_vertex = writer->vertex_cursor;
+    if (mesh->indices != NULL ||
+        mesh->vertexCount > CC_TREE_BATCH_SOURCE_VERTEX_LIMIT) {
+        for (int32_t source = 0; source < mesh->vertexCount; ++source) {
+            TreeBatchMeshAppendModelVertex(
+                writer, mesh, source, center, scale, turn, tint);
+        }
+        int32_t output_count = mesh->indices != NULL ?
+            mesh->triangleCount * 3 : mesh->vertexCount;
+        for (int32_t output = 0; output < output_count; ++output) {
+            int32_t source = mesh->indices != NULL ?
+                (int32_t)mesh->indices[output] : output;
+            TreeBatchMeshWriteIndex(writer, base_vertex + source);
+        }
+        return;
+    }
+
+    int32_t remap[CC_TREE_BATCH_SOURCE_VERTEX_LIMIT];
+    for (int32_t source = 0; source < mesh->vertexCount; ++source) {
+        int32_t matching_source = -1;
+        for (int32_t prior = 0; prior < source; ++prior) {
+            if (TreeBatchMeshSourceVertexEqual(mesh, source, prior)) {
+                matching_source = prior;
+                break;
+            }
+        }
+        if (matching_source >= 0) {
+            remap[source] = remap[matching_source];
+        } else {
+            remap[source] = writer->vertex_cursor;
+            TreeBatchMeshAppendModelVertex(
+                writer, mesh, source, center, scale, turn, tint);
+        }
+    }
+    for (int32_t output = 0; output < mesh->vertexCount; ++output) {
+        TreeBatchMeshWriteIndex(writer, remap[output]);
+    }
+}
+
 static void TreeBatchMeshAppendModel(TreeBatchMeshWriter *writer, Model model,
                                      Vector3 center, Vector3 scale,
                                      float turn, Color tint)
@@ -2773,8 +2859,8 @@ static void TreeBatchMeshAppendModel(TreeBatchMeshWriter *writer, Model model,
         int32_t output_count = mesh->indices != NULL ?
             mesh->triangleCount * 3 : mesh->vertexCount;
         if (writer->count_only) {
-            writer->vertex_cursor += writer->indexed ? mesh->vertexCount :
-                                                       output_count;
+            writer->vertex_cursor += writer->indexed ?
+                TreeBatchMeshUniqueVertexCount(mesh) : output_count;
             if (writer->indexed) writer->index_cursor += output_count;
             continue;
         }
@@ -2783,16 +2869,8 @@ static void TreeBatchMeshAppendModel(TreeBatchMeshWriter *writer, Model model,
             continue;
         }
         if (writer->indexed) {
-            int32_t base_vertex = writer->vertex_cursor;
-            for (int32_t source = 0; source < mesh->vertexCount; ++source) {
-                TreeBatchMeshAppendModelVertex(
-                    writer, mesh, source, center, scale, turn, tint);
-            }
-            for (int32_t output = 0; output < output_count; ++output) {
-                int32_t source = mesh->indices != NULL ?
-                    (int32_t)mesh->indices[output] : output;
-                TreeBatchMeshWriteIndex(writer, base_vertex + source);
-            }
+            TreeBatchMeshAppendIndexedModel(
+                writer, mesh, center, scale, turn, tint);
             continue;
         }
         for (int32_t output = 0; output < output_count; ++output) {
