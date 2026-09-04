@@ -188,6 +188,7 @@ int CcMusicChoose(CcMusicDirector *director, const CcMusicContext *context)
     for (int i = 0; i < CC_MUSIC_TAKE_COUNT; ++i) {
         if (!director->available[i]) continue;
         int cue = cc_music_takes[i].cue;
+        if ((unsigned int)cue >= CC_MUSIC_CUE_COUNT) continue;
         available[cue] = true;
         variants[cue] += 1;
         if (cc_music_cues[cue].combat && CcMusicScore(context, cue) > 0.0f)
@@ -294,6 +295,7 @@ void CcMusicUpdate(CcMusicDirector *director, const CcMusicContext *context,
         for (int i = 0; i < CC_MUSIC_TAKE_COUNT; ++i) {
             if (!director->available[i]) continue;
             int candidate = cc_music_takes[i].cue;
+            if ((unsigned int)candidate >= CC_MUSIC_CUE_COUNT) continue;
             float candidate_score = CcMusicScore(&effective, candidate);
             best = fmaxf(best, candidate_score);
             if (cc_music_cues[candidate].combat && candidate_score > 0.0f)
