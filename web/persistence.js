@@ -260,7 +260,8 @@
           return;
         }
         nextRevision = revision + 1;
-        store.put(campaign, campaignPath);
+        if (campaign === null) store.delete(campaignPath);
+        else store.put(campaign, campaignPath);
         if (clearSession) store.delete(sessionPath);
         else if (session) store.put(session, sessionPath);
         store.put(nextRevision, revisionPath);
@@ -279,6 +280,11 @@
   Module.persistCrownlessNewCampaign = async function (campaignFile) {
     const campaign = FS.readFile(campaignFile).slice();
     await persistCampaign(campaign, null, true);
+  };
+
+  Module.deleteCrownlessCampaign = async function () {
+    await persistCampaign(null, null, true);
+    Module.crownlessCampaignRestored = false;
   };
 
   Module.persistCrownlessPreferences = async function (preferencesFile) {

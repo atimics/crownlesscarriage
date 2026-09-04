@@ -1180,6 +1180,8 @@ if(BUILD_TESTING)
         )
         add_test(NAME storybook_travel_boundaries
                  COMMAND crownless_carriage --test-storybook-travel)
+        add_test(NAME title_and_pause_menu
+                 COMMAND crownless_carriage --test-frontend)
         add_test(NAME map_sale_input
                  COMMAND crownless_carriage --test-map-sale-input)
         add_test(NAME town_arrival_parking
