@@ -535,9 +535,9 @@ static void DrawOpenWorldRouteNetwork(const CcSim *sim,
         CcRoadBookRouteView visibility = {0};
         if (route == NULL ||
             !CcRoadBookReadRoute(sim, route->id, &visibility)) continue;
-        Color road = route != NULL && route->closed ? WORLD_DANGER :
-                     route != NULL && route->smuggler_route ? WORLD_VIOLET :
-                                                              WORLD_ROAD_LIGHT;
+        Color road = route->closed ? WORLD_DANGER :
+                     route->smuggler_route ? WORLD_VIOLET :
+                                             WORLD_ROAD_LIGHT;
         for (int32_t sample = CC_WORLD_ROUTE_FROM_JUNCTION_SAMPLE;
              sample < CC_WORLD_ROUTE_TO_JUNCTION_SAMPLE; ++sample) {
             float midpoint = 0.5f * (
@@ -546,8 +546,7 @@ static void DrawOpenWorldRouteNetwork(const CcSim *sim,
             if (!CcRoadBookShowsRouteAmount(&visibility, midpoint)) {
                 continue;
             }
-            if (route != NULL && route->smuggler_route &&
-                (sample & 1) != 0) continue;
+            if (route->smuggler_route && (sample & 1) != 0) continue;
             CcWorldPoint first = placement->samples[sample];
             CcWorldPoint second = placement->samples[sample + 1];
             Vector3 along = {second.x - first.x, 0.0f,
