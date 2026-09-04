@@ -22,6 +22,12 @@ typedef enum CcJournalOperationKind {
     CC_JOURNAL_OPERATION_ADVANCE_RUNTIME_TICKS = 3
 } CcJournalOperationKind;
 
+enum {
+    CC_SCHEMA12_COMMAND_STEAL_DRAGON_NAMED_TREASURE = 16,
+    CC_SCHEMA12_COMMAND_RETURN_DRAGON_NAMED_TREASURE = 17,
+    CC_SCHEMA17_EVENT_ENCOUNTER_LOOT = 90
+};
+
 struct CcJournal {
     sqlite3 *database;
     uint64_t generation;
@@ -33,6 +39,22 @@ struct CcJournal {
 static bool Prepare(sqlite3 *database, const char *sql,
                     sqlite3_stmt **statement,
                     char *error, size_t error_capacity);
+
+static CcCommandKind ReadCommandKind(uint32_t schema_version,
+                                     int32_t stored_kind)
+{
+    if (schema_version == 12U) {
+        if (stored_kind ==
+            CC_SCHEMA12_COMMAND_STEAL_DRAGON_NAMED_TREASURE) {
+            return CC_COMMAND_STEAL_DRAGON_NAMED_TREASURE;
+        }
+        if (stored_kind ==
+            CC_SCHEMA12_COMMAND_RETURN_DRAGON_NAMED_TREASURE) {
+            return CC_COMMAND_RETURN_DRAGON_NAMED_TREASURE;
+        }
+    }
+    return (CcCommandKind)stored_kind;
+}
 
 static void SetError(char *error, size_t capacity, const char *message)
 {
@@ -4356,19 +4378,20 @@ static bool ReplayJournal(sqlite3 *database, CcSim *sim,
         int32_t version = sqlite3_column_int(statement, 1);
         CcJournalOperationKind operation =
             (CcJournalOperationKind)sqlite3_column_int(statement, 2);
+        int32_t stored_command_kind = sqlite3_column_int(statement, 3);
+        int32_t step_count = sqlite3_column_int(statement, 8);
+        uint32_t schema_version =
+            (uint32_t)sqlite3_column_int(statement, 9);
+        uint32_t generator_version =
+            (uint32_t)sqlite3_column_int(statement, 10);
         CcCommand command = {
-            .kind = (CcCommandKind)sqlite3_column_int(statement, 3),
+            .kind = ReadCommandKind(schema_version, stored_command_kind),
             .target_id = (CcId)sqlite3_column_int64(statement, 4),
             .good = (CcGood)sqlite3_column_int(statement, 5),
             .amount = sqlite3_column_int(statement, 6),
             .dungeon_state =
                 (CcDungeonState)sqlite3_column_int(statement, 7)
         };
-        int32_t step_count = sqlite3_column_int(statement, 8);
-        uint32_t schema_version =
-            (uint32_t)sqlite3_column_int(statement, 9);
-        uint32_t generator_version =
-            (uint32_t)sqlite3_column_int(statement, 10);
         uint64_t pre_hash = 0U;
         uint64_t post_hash = 0U;
         bool hashes_valid =
@@ -4496,6 +4519,14 @@ static bool UpgradeLegacyRuntime(CcSim *sim,
         legacy_version != 17U && legacy_version != 18U &&
         legacy_version != 19U && legacy_version != 20U &&
         legacy_version != 21U) return true;
+    if (legacy_version == 17U) {
+        for (int32_t i = 0; i < CC_MAX_EVENTS; ++i) {
+            if ((int32_t)sim->events[i].kind ==
+                CC_SCHEMA17_EVENT_ENCOUNTER_LOOT) {
+                sim->events[i].kind = CC_EVENT_ENCOUNTER_LOOT;
+            }
+        }
+    }
     bool social_schema_19 = legacy_version == 19U &&
         sim->relationship_count > 0;
     bool quest_schema_19 = legacy_version == 19U &&

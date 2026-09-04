@@ -7,6 +7,12 @@
 #include <stdio.h>
 #include <string.h>
 
+enum {
+    CC_TEST_SCHEMA12_COMMAND_STEAL_DRAGON_NAMED_TREASURE = 16,
+    CC_TEST_SCHEMA12_COMMAND_RETURN_DRAGON_NAMED_TREASURE = 17,
+    CC_TEST_SCHEMA17_EVENT_ENCOUNTER_LOOT = 90
+};
+
 static void RequireSqlite(int result, sqlite3 *database, const char *context)
 {
     if (result == SQLITE_OK) return;
@@ -320,6 +326,60 @@ static void AddLegacyJournalSuffix(const char *path,
     sqlite3_close(database);
 }
 
+static void AddSchema12NamedTreasureJournalSuffix(
+    const char *path, const CcSim *before, const CcSim *after_steal,
+    const CcSim *after_return, CcId treasure_id)
+{
+    sqlite3 *database = NULL;
+    RequireSqlite(sqlite3_open_v2(path, &database,
+                                  SQLITE_OPEN_READWRITE, NULL),
+                  database, "could not open schema 12 command fixture");
+    char pre_hash[24];
+    char steal_hash[24];
+    char return_hash[24];
+    (void)snprintf(pre_hash, sizeof(pre_hash), "%016" PRIx64,
+                   CcSimHash(before));
+    (void)snprintf(steal_hash, sizeof(steal_hash), "%016" PRIx64,
+                   CcSimHash(after_steal));
+    (void)snprintf(return_hash, sizeof(return_hash), "%016" PRIx64,
+                   CcSimHash(after_return));
+    char *sql = sqlite3_mprintf(
+        "BEGIN IMMEDIATE;"
+        "INSERT INTO journal_epoch "
+        "(record_version,world_seed,initial_state_hash,created_tick) "
+        "VALUES(1,%u,%Q,%llu);"
+        "INSERT INTO action_journal "
+        "(generation,ordinal,record_version,operation_kind,command_kind,"
+        "target_id,good,amount,dungeon_state,step_count,sim_schema_version,"
+        "generator_version,pre_state_hash,post_state_hash,committed_tick) "
+        "VALUES((SELECT MAX(generation) FROM journal_epoch),1,1,1,%d,%llu,"
+        "0,0,0,0,12,12,%Q,%Q,%llu);"
+        "INSERT INTO action_journal "
+        "(generation,ordinal,record_version,operation_kind,command_kind,"
+        "target_id,good,amount,dungeon_state,step_count,sim_schema_version,"
+        "generator_version,pre_state_hash,post_state_hash,committed_tick) "
+        "VALUES((SELECT MAX(generation) FROM journal_epoch),2,1,1,%d,%llu,"
+        "0,0,0,0,12,12,%Q,%Q,%llu);"
+        "UPDATE meta SET journal_generation="
+        "(SELECT MAX(generation) FROM journal_epoch),"
+        "journal_cursor=0 WHERE id=1;"
+        "PRAGMA user_version=12;"
+        "COMMIT;",
+        before->world_seed, pre_hash,
+        (unsigned long long)before->clock.tick,
+        CC_TEST_SCHEMA12_COMMAND_STEAL_DRAGON_NAMED_TREASURE,
+        (unsigned long long)treasure_id, pre_hash, steal_hash,
+        (unsigned long long)after_steal->clock.tick,
+        CC_TEST_SCHEMA12_COMMAND_RETURN_DRAGON_NAMED_TREASURE,
+        (unsigned long long)treasure_id, steal_hash, return_hash,
+        (unsigned long long)after_return->clock.tick);
+    CC_CHECK(sql != NULL);
+    ExecuteFixtureSql(database, sql,
+                      "could not create schema 12 command fixture");
+    sqlite3_free(sql);
+    sqlite3_close(database);
+}
+
 static void CheckLegacyJournalMigration(char *error,
                                         size_t error_capacity)
 {
@@ -579,6 +639,88 @@ static void CheckSchema12Compatibility(char *error, size_t error_capacity)
     RemoveDatabase(path);
 }
 
+static void CheckSchema12CommandKindCompatibility(char *error,
+                                                   size_t error_capacity)
+{
+    const char *path = "persistence-legacy-v12-command-test.ccsave";
+    RemoveDatabase(path);
+    CcSim legacy;
+    CcSimInit(&legacy, UINT32_C(0x1e9ac120));
+    legacy.map_count = CC_MAX_ROUTES;
+    legacy.player.map_catalogue_mask = 0U;
+    legacy.player.map_archive_mask = 0U;
+    legacy.player.location_id = legacy.dragon.lair_settlement_id;
+    legacy.carriage.location_id = legacy.player.location_id;
+    CcTreasure *treasure = &legacy.treasures[legacy.treasure_count++];
+    *treasure = (CcTreasure){
+        .id = CcMakeId(CC_ENTITY_TREASURE, legacy.next_entity_serial++),
+        .maker_settlement_id = legacy.settlements[0].id,
+        .owner_id = legacy.dragon.id,
+        .location_id = legacy.dragon.lair_settlement_id,
+        .gold_content = 2,
+        .gem_content = 2,
+        .craft_work = 3,
+        .appraised_value = 240,
+        .created_day = 1
+    };
+    (void)snprintf(treasure->name, sizeof(treasure->name),
+                   "The First Crown's Seal");
+    CcId treasure_id = treasure->id;
+    legacy.schema_version = 12U;
+    legacy.generator_version = 12U;
+    CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
+
+    CcSim after_steal = legacy;
+    CcCommand steal = {
+        .kind = CC_COMMAND_STEAL_DRAGON_NAMED_TREASURE,
+        .target_id = treasure_id
+    };
+    CC_CHECK(CcSimApply(&after_steal, &steal, error, error_capacity));
+    CcSim after_return = after_steal;
+    CcCommand return_treasure = {
+        .kind = CC_COMMAND_RETURN_DRAGON_NAMED_TREASURE,
+        .target_id = treasure_id
+    };
+    CC_CHECK(CcSimApply(&after_return, &return_treasure,
+                        error, error_capacity));
+    AddSchema12NamedTreasureJournalSuffix(
+        path, &legacy, &after_steal, &after_return, treasure_id);
+    CC_CHECK(ReadSqliteInteger(
+                 path,
+                 "SELECT command_kind FROM action_journal "
+                 "WHERE ordinal=1;") ==
+             CC_TEST_SCHEMA12_COMMAND_STEAL_DRAGON_NAMED_TREASURE);
+    CC_CHECK(ReadSqliteInteger(
+                 path,
+                 "SELECT command_kind FROM action_journal "
+                 "WHERE ordinal=2;") ==
+             CC_TEST_SCHEMA12_COMMAND_RETURN_DRAGON_NAMED_TREASURE);
+
+    CcSim restored;
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    const CcTreasure *restored_treasure = CcSimTreasure(
+        &restored, treasure_id);
+    CC_CHECK(restored_treasure != NULL);
+    CC_CHECK(restored_treasure->owner_id == restored.dragon.id);
+    CC_CHECK(restored.dragon.stolen_treasure_id == 0U);
+    bool found_theft = false;
+    bool found_return = false;
+    for (int32_t i = 0; i < restored.event_count; ++i) {
+        const CcEvent *event = CcSimRecentEvent(&restored, i);
+        if (event != NULL && event->kind == CC_EVENT_DRAGON_HOARD_STOLEN) {
+            found_theft = true;
+        }
+        if (event != NULL &&
+            event->kind == CC_EVENT_DRAGON_TREASURE_RETURNED) {
+            found_return = true;
+        }
+    }
+    CC_CHECK(found_theft);
+    CC_CHECK(found_return);
+    CC_CHECK(CcSimValidate(&restored, error, error_capacity));
+    RemoveDatabase(path);
+}
+
 static void CheckSchema13Compatibility(char *error, size_t error_capacity)
 {
     const char *path = "persistence-legacy-v13-test.ccsave";
@@ -688,6 +830,15 @@ static void CheckSchema17Compatibility(char *error, size_t error_capacity)
     legacy.maps[CC_MAP_DRAGON_HOARD] = (CcMap){0};
     legacy.goblins.cohesion = 47;
     legacy.goblins.expeditions_intercepted = 3;
+    const CcEvent *recent = CcSimRecentEvent(&legacy, 0);
+    CC_CHECK(recent != NULL);
+    CcId legacy_loot_event_id = recent->id;
+    for (int32_t i = 0; i < CC_MAX_EVENTS; ++i) {
+        if (legacy.events[i].id == legacy_loot_event_id) {
+            legacy.events[i].kind =
+                (CcEventKind)CC_TEST_SCHEMA17_EVENT_ENCOUNTER_LOOT;
+        }
+    }
     legacy.schema_version = 17U;
     legacy.generator_version = 16U;
     CC_CHECK(CcSaveWrite(path, &legacy, error, error_capacity));
@@ -725,6 +876,10 @@ static void CheckSchema17Compatibility(char *error, size_t error_capacity)
     CC_CHECK(restored.goblins.expeditions_intercepted == 3);
     CC_CHECK(restored.journey.pace == CC_JOURNEY_PACE_STEADY);
     CC_CHECK(!restored.journey.ambush_warned);
+    const CcEvent *restored_loot = CcSimEvent(
+        &restored, legacy_loot_event_id);
+    CC_CHECK(restored_loot != NULL);
+    CC_CHECK(restored_loot->kind == CC_EVENT_ENCOUNTER_LOOT);
     CC_CHECK(CcSimValidate(&restored, error, error_capacity));
     RemoveDatabase(path);
 }
@@ -1248,6 +1403,7 @@ int main(void)
     CheckSchema10Compatibility(error, sizeof(error));
     CheckSchema11Compatibility(error, sizeof(error));
     CheckSchema12Compatibility(error, sizeof(error));
+    CheckSchema12CommandKindCompatibility(error, sizeof(error));
     CheckSchema13Compatibility(error, sizeof(error));
     CheckSchema14Compatibility(error, sizeof(error));
     CheckSchema15Compatibility(error, sizeof(error));
