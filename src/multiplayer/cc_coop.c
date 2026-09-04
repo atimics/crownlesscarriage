@@ -1,4 +1,5 @@
 #include "multiplayer/cc_coop.h"
+#include "multiplayer/cc_coop_commands.h"
 #include "persistence/cc_save.h"
 
 #include <inttypes.h>
@@ -32,30 +33,29 @@ bool CcCoopDecode(CcSim *sim, const unsigned char *bytes, size_t length,
 bool CcCoopApply(CcSim *sim, const char *action, CcId target,
                   int32_t good, int32_t amount, char *error, size_t capacity)
 {
-    static const struct { const char *name; CcCommandKind kind; } actions[] = {
-        {"trade", CC_COMMAND_TRADE}, {"travel", CC_COMMAND_TRAVEL},
-        {"repair", CC_COMMAND_REPAIR_ROUTE}, {"buy_map", CC_COMMAND_BUY_MAP},
-        {"sell_map", CC_COMMAND_SELL_MAP}, {"accept", CC_COMMAND_ACCEPT_SITUATION},
-        {"abandon", CC_COMMAND_ABANDON_SITUATION},
-        {"negotiate", CC_COMMAND_RESOLVE_ENCOUNTER_NEGOTIATE},
-        {"provisions", CC_COMMAND_RESOLVE_ENCOUNTER_PROVISIONS},
-        {"withdraw", CC_COMMAND_WITHDRAW_ENCOUNTER},
-        {"pace", CC_COMMAND_SET_JOURNEY_PACE},
-        {"break", CC_COMMAND_TAKE_JOURNEY_BREAK},
-        {"press_on", CC_COMMAND_PRESS_ON}, {"camp", CC_COMMAND_MAKE_CAMP},
-        {"lodge", CC_COMMAND_LODGE_ROAD_HOUSE},
-        {"talk", CC_COMMAND_CHARACTER_RESPONSE},
-        {"buy_treasure", CC_COMMAND_BUY_TREASURE},
-        {"sell_treasure", CC_COMMAND_SELL_TREASURE},
-        {"archive_map", CC_COMMAND_ARCHIVE_MAP},
-        {"retrieve_map", CC_COMMAND_RETRIEVE_MAP}
-    };
+    if (sim != NULL && action != NULL && strcmp(action, "skip_watch") == 0) {
+        if (!sim->journey.active || sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING) return false;
+        CcSim *candidate = malloc(sizeof(*candidate));
+        if (candidate == NULL) return false;
+        *candidate = *sim;
+        bool warned = candidate->journey.ambush_warned;
+        for (int32_t tick = 0; tick < 3600 && candidate->journey.active &&
+             candidate->journey.phase == CC_JOURNEY_PHASE_TRAVELLING; ++tick) {
+            CcSimAdvanceRuntimeTicks(candidate, 1);
+            if (!warned && candidate->journey.ambush_warned) break;
+        }
+        bool ok = CcSimValidate(candidate, error, capacity);
+        if (ok) *sim = *candidate;
+        free(candidate);
+        return ok;
+    }
     CcCommand command = { .target_id = target, .good = (CcGood)good, .amount = amount };
     if (action != NULL) {
-        for (size_t i = 0; i < sizeof(actions) / sizeof(actions[0]); ++i) {
-            if (strcmp(action, actions[i].name) == 0) command.kind = actions[i].kind;
+        for (int32_t i = 1; i <= (int32_t)CC_COMMAND_LODGE_ROAD_HOUSE; ++i) {
+            if (strcmp(action, CcCoopActionName((CcCommandKind)i)) == 0) command.kind = (CcCommandKind)i;
         }
     }
+    if (command.kind == CC_COMMAND_CHANGE_DUNGEON) command.dungeon_state = (CcDungeonState)amount;
     if (sim == NULL || command.kind == CC_COMMAND_NONE ||
         good < 0 || good >= CC_GOOD_COUNT ||
         amount < -CC_SIM_MAX_UNITS || amount > CC_SIM_MAX_UNITS) {

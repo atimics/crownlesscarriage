@@ -1,4 +1,12 @@
 (function () {
+  if (Module.ccCoop && Module.ccCoop.enabled) {
+    Module.crownlessCampaignAccess = 0;
+    Module.crownlessCampaignAccessMessage = "";
+    Module.persistCrownlessSave = async function () {};
+    Module.persistCrownlessNewCampaign = async function () {};
+    Module.persistCrownlessPreferences = async function () {};
+    return;
+  }
   const saveDirectory = "/crownless-save";
   const campaignPath = saveDirectory + "/crownless_campaign.ccsave";
   const sessionPath = campaignPath + ".session";

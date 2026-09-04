@@ -6911,7 +6911,7 @@ static void DragonHunt(CcSim *sim)
     } else if (sim->schema_version >= 14U) {
         (void)snprintf(
             text, sizeof(text),
-            "%s takes %d cow%s and %d Food from %s and leaves the roofs untouched.",
+            "%s takes %d cow%s and %d Food from %s, sparing the roofs.",
             dragon->name, cows_taken, cows_taken == 1 ? "" : "s",
             food_taken, target->name);
     } else {

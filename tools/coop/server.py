@@ -25,9 +25,7 @@ MAX_BODY = 8192
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 WORLD_ID = re.compile(r"^[0-9a-f]{32}$")
 NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 '\-]{0,30}$")
-ACTIONS = {"trade", "travel", "repair", "buy_map", "sell_map", "accept", "abandon",
-           "negotiate", "provisions", "withdraw", "pace", "break", "press_on", "camp", "lodge",
-           "talk", "buy_treasure", "sell_treasure", "archive_map", "retrieve_map"}
+ACTIONS = {'skip_watch', 'negotiate', 'refuse', 'retrieve_map', 'return_treasure', 'goblin_intercept', 'provisions', 'pace', 'abandon', 'fight', 'withdraw', 'breed_horses', 'buy_map', 'dungeon_encounter', 'goblin_trade', 'enter_dungeon', 'press_on', 'trade', 'goblin_warn', 'goblin_tunnel', 'sell_map', 'intercept_tribute', 'search_dungeon', 'break', 'accept', 'open_shortcut', 'return_named_treasure', 'change_dungeon', 'camp', 'repair', 'archive_map', 'assign_horse', 'lodge', 'sell_treasure', 'talk', 'buy_treasure', 'leave_dungeon', 'move_dungeon', 'steal_named_treasure', 'travel', 'steal_hoard'}
 
 
 class ApiError(Exception):
@@ -120,7 +118,7 @@ class Worlds:
         require(row is not None, "Join this carriage with an invitation.", 403)
         return row
 
-    def view(self, world, token, campaign=False):
+    def view(self, world, token, campaign=False, after=None):
         with self.lock:
             member = self.member(world, token)
             row = self.db.execute("SELECT * FROM worlds WHERE id=?", (world,)).fetchone()
@@ -135,7 +133,7 @@ class Worlds:
             result["crew"] = [dict(id=m["id"], name=m["name"],
                 online=time.monotonic() - self.seen.get((world, m["id"]), -100) < 15)
                 for m in self.db.execute("SELECT id,name FROM members WHERE world=? AND revoked=0 ORDER BY rowid", (world,))]
-            if campaign:
+            if campaign and after != str(row["revision"]):
                 result["campaign"] = base64.b64encode(row["state"]).decode("ascii")
             return result
 
@@ -193,7 +191,7 @@ class Worlds:
     def command(self, world, token, body):
         require(set(body) <= {"protocol", "sequence", "action_revision", "action", "target", "good", "amount", "campaign"},
                 "Use the shared-carriage command fields.")
-        require(body.get("protocol") == PROTOCOL, "Refresh the game to use this host's protocol.", 409)
+        require(type(body.get("protocol")) is int and body.get("protocol") == PROTOCOL, "Refresh the game to use this host's protocol.", 409)
         sequence = number(body.get("sequence"), 1, 2**53 - 1, "command sequence")
         revision = number(body.get("action_revision"), 0, 2**53 - 1, "company revision")
         action = body.get("action")
@@ -338,8 +336,9 @@ class Application:
         require(match is not None, "Choose a world on this host.", 404)
         world, operation = match.group(1), match.group(2) or "state"
         if operation == "state" and method == "GET":
-            campaign = parse_qs(env.get("QUERY_STRING", "")).get("campaign") == ["1"]
-            return 200, self.worlds.view(world, token, campaign), None
+            query = parse_qs(env.get("QUERY_STRING", ""))
+            campaign = query.get("campaign") == ["1"]
+            return 200, self.worlds.view(world, token, campaign, query.get("after", [None])[0]), None
         if operation == "join" and method == "POST":
             return 200, self.worlds.join(world, token, body), None
         if operation == "command" and method == "POST":

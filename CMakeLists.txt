@@ -265,7 +265,7 @@ if(CC_BUILD_CLIENT)
     )
     cc_strict_warnings(crownless_local_renderer)
 
-    add_executable(crownless_carriage src/client/main.c)
+    add_executable(crownless_carriage src/client/main.c src/client/cc_coop_client.c)
     if(APPLE)
         set_target_properties(crownless_carriage PROPERTIES
             MACOSX_BUNDLE TRUE
@@ -467,7 +467,7 @@ if(CC_BUILD_CLIENT)
             SUFFIX ".html"
             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/site"
             LINK_DEPENDS
-                "${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html;${CMAKE_CURRENT_SOURCE_DIR}/web/persistence.js;${CC_WEB_STARTUP_ASSET_STAMP};${CC_WEB_STARTUP_ASSET_OUTPUTS}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html;${CMAKE_CURRENT_SOURCE_DIR}/web/persistence.js;${CMAKE_CURRENT_SOURCE_DIR}/web/coop_game.js;${CC_WEB_STARTUP_ASSET_STAMP};${CC_WEB_STARTUP_ASSET_OUTPUTS}"
         )
         target_compile_definitions(crownless_carriage PRIVATE PLATFORM_WEB)
         set_property(TARGET crownless_carriage PROPERTY C_EXTENSIONS ON)
@@ -482,6 +482,7 @@ if(CC_BUILD_CLIENT)
             "-sMIN_WEBGL_VERSION=2"
             "-sMAX_WEBGL_VERSION=2"
             "--shell-file=${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html"
+            "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/coop_game.js"
             "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/persistence.js"
             "SHELL:--preload-file ${CC_WEB_ASSET_DIR}/assets@/assets"
         )
@@ -917,6 +918,9 @@ if(BUILD_TESTING)
         add_test(NAME browser_persistence_contract
                  COMMAND ${CC_NODE_EXECUTABLE}
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/web_persistence_tests.mjs)
+        add_test(NAME browser_shared_carriage_contract
+                 COMMAND ${CC_NODE_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/web_coop_tests.mjs)
     endif()
 
     find_program(CC_PYTHON3_EXECUTABLE python3)

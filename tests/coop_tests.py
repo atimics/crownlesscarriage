@@ -104,6 +104,8 @@ class CoopTests(unittest.TestCase):
         self.assertEqual(a['state']['tick'], 30)
         self.assertEqual(a['state'], b['state'])
         self.worlds.owner_action(self.id, self.a, 'pause')
+        with self.assertRaises(ApiError):
+            self.worlds.command(self.id, self.a, self.command(self.a, 'skip_watch'))
         self.worlds.tick(now + 1)
         self.assertEqual(self.worlds.view(self.id, self.a)['state']['tick'], 30)
         self.worlds.owner_action(self.id, self.a, 'resume')
@@ -165,10 +167,22 @@ class CoopTests(unittest.TestCase):
         self.assertEqual(self.request(path, self.command(self.a, 'advance'))[0], 400)
         self.assertEqual(self.request(path, dict(self.command(self.a), actor=self.b))[0], 400)
         self.assertEqual(self.request(path, dict(self.command(self.a), protocol=2))[0], 409)
+        self.assertEqual(self.request(path, dict(self.command(self.a), protocol=True))[0], 409)
         self.assertEqual(self.request(path, self.command(self.a), origin='https://elsewhere.test')[0], 403)
         self.assertEqual(self.request(f'/api/worlds/{self.id}/state', token='c' * 64)[0], 403)
         self.assertEqual(self.request(path, dict(self.command(self.a), amount=True))[0], 400)
         self.assertEqual(self.request(path, dict(self.command(self.a), target='18446744073709551616'))[0], 400)
+
+    def test_campaign_poll_and_shared_skip(self):
+        view = self.worlds.view(self.id, self.a, campaign=True)
+        self.assertIn('campaign', view)
+        self.assertNotIn('campaign', self.worlds.view(self.id, self.b, True, str(view['revision'])))
+        target = view['state']['travel'][0]['id']
+        self.assertTrue(self.worlds.command(self.id, self.a, self.command(self.a, 'travel', target=target))['accepted'])
+        skipped = self.worlds.command(self.id, self.b, self.command(self.b, 'skip_watch'))
+        self.assertTrue(skipped['accepted'])
+        self.assertEqual(skipped['world']['state'], self.worlds.view(self.id, self.a)['state'])
+        self.assertNotEqual(skipped['world']['state']['hash'], view['state']['hash'])
 
 
 if __name__ == '__main__':
