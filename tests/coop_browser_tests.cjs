@@ -52,6 +52,7 @@ async function main() {
     await crew.getByRole('button', {name:'Depart', exact:true}).click();
     await owner.waitForFunction(() => document.querySelector('#location').textContent.includes('→'));
     await owner.getByRole('button', {name:'Pause world'}).click();
+    await owner.getByRole('button', {name:'Resume world'}).waitFor();
     const travelling = await state();
     assert.equal(travelling.state.journey.active, true);
     await game.waitForFunction(hash => document.body.dataset.companyHash === hash, travelling.state.hash);
